@@ -19,6 +19,7 @@
 #include "Targets/ARM.h"
 #include "Targets/AVR.h"
 #include "Targets/BPF.h"
+#include "Targets/Capstone.h"
 #include "Targets/CSKY.h"
 #include "Targets/DirectX.h"
 #include "Targets/Hexagon.h"
@@ -118,6 +119,9 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
 
   case llvm::Triple::arc:
     return std::make_unique<ARCTargetInfo>(Triple, Opts);
+
+  case llvm::Triple::capstone:
+    return std::make_unique<CapstoneTargetInfo>(Triple, Opts);
 
   case llvm::Triple::xcore:
     return std::make_unique<XCoreTargetInfo>(Triple, Opts);
