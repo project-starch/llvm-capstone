@@ -1,10 +1,10 @@
 add_llvm_component_group(Capstone)
 
-#set(LLVM_TARGET_DEFINITIONS Capstone.td)
+set(LLVM_TARGET_DEFINITIONS Capstone.td)
 
-#tablegen(LLVM CapstoneGenSubtargetInfo.inc -gen-subtarget)
+tablegen(LLVM CapstoneGenSubtargetInfo.inc -gen-subtarget)
 
-#add_public_tablegen_target(CapstoneCommonTableGen)
+add_public_tablegen_target(CapstoneCommonTableGen)
 
 add_llvm_target(CapstoneCodeGen
   CapstoneISelLowering.cpp

@@ -35,12 +35,21 @@ public:
         "p:16:16:16-"
         // Supports natively 16-bit and 32-bit integer.
         "n16:32-"
-        // i32 are aligned on 32, i16 on 16 and i1 on 8.
-        "i32:32:32-i16:16:16-i1:8:8-"
+        // i64 are aligned on 64, i32 on 32, i16 on 16 and i1 on 8.
+        "i64:64:64-i32:32:32-i16:16:16-i1:8:8-"
         // f32 aligned on 32-bit.
         "f32:32:32-"
         // v32 aligned on 32-bit.
         "v32:32:32");
+
+    PointerWidth = 16;
+    PointerAlign = 16;
+    // IntWidth = 16;
+    // IntAlign = 16;
+    // LongWidth = 32;
+    // LongAlign = 32;
+    // LongLongWidth = 64;
+    // LongLongAlign = 64;
   }
 
   /// Appends the target-specific \#define values for this

@@ -14,11 +14,11 @@
 
 #include "CapstoneTargetTransformInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
-// #include "llvm/IR/IntrinsicsCapstone.h"
+#include "llvm/IR/IntrinsicsCapstone.h"
 
 using namespace llvm;
 
-#define DEBUG_TYPE "h2blbtti"
+#define DEBUG_TYPE "capstonetti"
 
 unsigned CapstoneTTIImpl::getLoadVectorFactor(unsigned VF, unsigned LoadSize,
                                            unsigned ChainSizeInBytes,
@@ -34,14 +34,12 @@ unsigned CapstoneTTIImpl::getLoadVectorFactor(unsigned VF, unsigned LoadSize,
 InstructionCost
 CapstoneTTIImpl::getIntrinsicInstrCost(const IntrinsicCostAttributes &ICA,
                                     TTI::TargetCostKind CostKind) const {
-  /*
   // Extending the input values of a widening multiply is more expensive than a
   // regular instruction.
   // For code size, though, this is the same.
   if (CostKind != TargetTransformInfo::TCK_CodeSize &&
       ICA.getID() == Intrinsic::capstone_widening_smul)
     return TargetTransformInfo::TCC_Expensive;
-    */
 
   return BaseT::getIntrinsicInstrCost(ICA, CostKind);
 }

@@ -418,6 +418,16 @@ namespace clang {
     bool isFlagSet(uint64_t Flag) const { return Flags & Flag; }
   };
 
+  /// Capstone builtins
+  namespace Capstone {
+  enum {
+    LastTIBuiltin = clang::Builtin::FirstTSBuiltin - 1,
+  #define BUILTIN(ID, TYPE, ATTRS) BI##ID,
+  #include "clang/Basic/BuiltinsCapstone.inc"
+    LastTSBuiltin
+  };
+  } // namespace Capstone
+
   /// Hexagon builtins
   namespace Hexagon {
   enum {

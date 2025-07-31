@@ -43,7 +43,7 @@ static std::unique_ptr<TargetLoweringObjectFile> createTLOF(const Triple &TT) {
 
 // TODO: Share this with Clang.
 static const char *CapstoneDataLayoutStr =
-    "e-p:16:16:16-n16:32-i32:32:32-i16:16:16-i1:8:8-f32:32:32-v32:32:32";
+    "e-p:16:16:16-n16:32-i64:64:64-i32:32:32-i16:16:16-i1:8:8-f32:32:32-v32:32:32";
 
 CapstoneTargetMachine::CapstoneTargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,

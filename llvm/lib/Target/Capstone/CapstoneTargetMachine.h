@@ -10,8 +10,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_Capstone_CapstoneTARGETMACHINE_H
-#define LLVM_LIB_TARGET_Capstone_CapstoneTARGETMACHINE_H
+#ifndef LLVM_LIB_TARGET_CAPSTONE_CAPSTONETARGETMACHINE_H
+#define LLVM_LIB_TARGET_CAPSTONE_CAPSTONETARGETMACHINE_H
 
 #include "CapstoneSubtarget.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
