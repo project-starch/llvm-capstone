@@ -8,7 +8,7 @@ add_public_tablegen_target(CapstoneCommonTableGen)
 
 add_llvm_target(CapstoneCodeGen
   CapstoneISelLowering.cpp
-#  CapstoneSimpleConstantPropagation.cpp
+  CapstoneSimpleConstantPropagation.cpp
   CapstoneSubtarget.cpp
   CapstoneTargetMachine.cpp
   CapstoneTargetObjectFile.cpp

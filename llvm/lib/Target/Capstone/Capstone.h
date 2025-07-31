@@ -20,7 +20,6 @@ class Function;
 class Pass;
 class PassRegistry;
 
-/*
 class CapstoneSimpleConstantPropagationNewPass
     : public llvm::PassInfoMixin<CapstoneSimpleConstantPropagationNewPass> {
 public:
@@ -30,6 +29,5 @@ public:
 
 void initializeCapstoneSimpleConstantPropagationPass(PassRegistry &);
 Pass *createCapstoneSimpleConstantPropagationPassForLegacyPM();
-*/
 } // end namespace llvm.
 #endif

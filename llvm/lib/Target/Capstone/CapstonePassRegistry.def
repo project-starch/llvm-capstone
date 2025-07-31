@@ -18,14 +18,12 @@
 #endif
 #undef MODULE_PASS
 
-/*
 #ifndef FUNCTION_PASS
 #define FUNCTION_PASS(NAME, CREATE_PASS)
 #endif
 FUNCTION_PASS("capstone-simple-cst-prop",
               CapstoneSimpleConstantPropagationNewPass())
 #undef FUNCTION_PASS
-*/
 
 #ifndef FUNCTION_ANALYSIS
 #define FUNCTION_ANALYSIS(NAME, CREATE_PASS)

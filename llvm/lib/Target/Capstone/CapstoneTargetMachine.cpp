@@ -28,8 +28,8 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget() {
   // Register the target so that external tools can instantiate it.
   RegisterTargetMachine<CapstoneTargetMachine> X(getTheCapstoneTarget());
 
-  // PassRegistry &PR = *PassRegistry::getPassRegistry();
-  // initializeCapstoneSimpleConstantPropagationPass(PR);
+  PassRegistry &PR = *PassRegistry::getPassRegistry();
+  initializeCapstoneSimpleConstantPropagationPass(PR);
 }
 
 static std::unique_ptr<TargetLoweringObjectFile> createTLOF(const Triple &TT) {
@@ -86,10 +86,9 @@ CapstoneTargetMachine::getTargetTransformInfo(const Function &F) const {
 }
 
 void CapstoneTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
-// #define GET_PASS_REGISTRY "CapstonePassRegistry.def"
-// #include "llvm/Passes/TargetPassRegistry.inc"
+#define GET_PASS_REGISTRY "CapstonePassRegistry.def"
+#include "llvm/Passes/TargetPassRegistry.inc"
 
-  /*
   PB.registerPipelineStartEPCallback(
       [](ModulePassManager &MPM, OptimizationLevel OptLevel) {
         // Do not add optimization passes if we are in O0.
@@ -99,7 +98,6 @@ void CapstoneTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
         FPM.addPass(CapstoneSimpleConstantPropagationNewPass());
         MPM.addPass(createModuleToFunctionPassAdaptor(std::move(FPM)));
       });
-      */
 }
 
 TargetPassConfig *CapstoneTargetMachine::createPassConfig(PassManagerBase &PM) {
@@ -115,10 +113,8 @@ bool CapstonePassConfig::addInstSelector() {
 }
 
 void CapstonePassConfig::addIRPasses() {
-  /*
   // Add the regular IR passes before putting our passes.
   TargetPassConfig::addIRPasses();
   if (getOptLevel() != CodeGenOptLevel::None)
     addPass(createCapstoneSimpleConstantPropagationPassForLegacyPM());
-    */
 }
