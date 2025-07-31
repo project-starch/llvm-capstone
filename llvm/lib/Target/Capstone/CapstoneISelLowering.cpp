@@ -17,7 +17,7 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "h2blb-lowering"
+#define DEBUG_TYPE "capstone-lowering"
 
 CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM)
     : TargetLowering(TM) {}

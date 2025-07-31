@@ -22,5 +22,5 @@ extern "C" LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTargetInfo() {
   RegisterTarget<Triple::capstone, /*HasJIT=*/false> X(
       getTheCapstoneTarget(), /*Name=*/"capstone",
       /*Desc=*/"Capstone project compiler",
-      /*BackendName=*/"H2BLB");
+      /*BackendName=*/"Capstone");
 }

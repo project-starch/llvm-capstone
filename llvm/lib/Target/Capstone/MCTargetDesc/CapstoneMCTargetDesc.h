@@ -15,6 +15,6 @@
 #define LLVM_LIB_TARGET_CAPSTONE_MCTARGETDESC_CAPSTONEMCTARGETDESC_H
 
 #define GET_SUBTARGETINFO_ENUM
-//#include "CapstoneGenSubtargetInfo.inc"
+#include "CapstoneGenSubtargetInfo.inc"
 
 #endif

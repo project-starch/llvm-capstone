@@ -1,4 +1,4 @@
-//===-- H2BLB.td - Describe the H2BLB Target Machine ------*- tablegen -*--===//
+//===-- Capstone.td - Describe the Capstone Target Machine ------*- tablegen -*--===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This is the top level entry point for the H2BLB target.
+// This is the top level entry point for the Capstone target.
 //
 //===----------------------------------------------------------------------===//
 
@@ -15,8 +15,8 @@ include "llvm/Target/Target.td"
 
 def : ProcessorModel<"generic", NoSchedModel, /*Features=*/[]>;
 
-def H2BLBInstrInfo : InstrInfo;
+def CapstoneInstrInfo : InstrInfo;
 
-def H2BLB : Target {
-  let InstructionSet = H2BLBInstrInfo;
+def Capstone : Target {
+  let InstructionSet = CapstoneInstrInfo;
 }

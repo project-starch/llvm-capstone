@@ -28,4 +28,4 @@ public:
 
 } // end namespace llvm
 
-#endif // LLVM_LIB_TARGET_Capstone_CapstoneISELLOWERING_H
+#endif // LLVM_LIB_TARGET_CAPSTONE_CAPSTONEISELLOWERING_H

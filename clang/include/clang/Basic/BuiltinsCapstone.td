@@ -1,4 +1,4 @@
-//===-- BuiltinsH2BLB.td - H2BLB Builtin function database --*- tablegen -*-==//
+//===-- BuiltinsCapstone.td - Capstone Builtin function database --*- tablegen -*-==//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file defines the H2BLB-specific builtin function database. Users of
+// This file defines the Capstone-specific builtin function database. Users of
 // this file must define the BUILTIN macro to make use of this information.
 //
 //===----------------------------------------------------------------------===//

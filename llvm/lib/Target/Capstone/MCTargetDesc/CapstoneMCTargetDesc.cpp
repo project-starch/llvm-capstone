@@ -24,7 +24,7 @@
 using namespace llvm;
 
 #define GET_SUBTARGETINFO_MC_DESC
-//#include "CapstoneGenSubtargetInfo.inc"
+#include "CapstoneGenSubtargetInfo.inc"
 
 static MCRegisterInfo *createCapstoneMCRegisterInfo(const Triple &Triple) {
   MCRegisterInfo *X = new MCRegisterInfo();
@@ -40,8 +40,7 @@ static MCInstrInfo *createCapstoneMCInstrInfo() {
 
 static MCSubtargetInfo *
 createCapstoneMCSubtargetInfo(const Triple &TT, StringRef CPU, StringRef FS) {
-  //return createCapstoneMCSubtargetInfoImpl(TT, CPU, /*TuneCPU*/ CPU, FS);
-  return nullptr;
+  return createCapstoneMCSubtargetInfoImpl(TT, CPU, /*TuneCPU*/ CPU, FS);
 }
 
 static MCAsmInfo *createCapstoneMCAsmInfo(const MCRegisterInfo &MRI,
