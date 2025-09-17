@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoA.td - RISC-V 'A' instructions -------*- tablegen -*-===//
+//===-- CapstoneInstrInfoA.td - Capstone 'A' instructions -------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard 'A', Atomic
+// This file describes the Capstone instructions from the standard 'A', Atomic
 // Instructions extension.
 //
 //===----------------------------------------------------------------------===//
@@ -160,7 +160,7 @@ class seq_cst_store<PatFrag base>
 
 // Atomic load/store are available under both +a and +force-atomics.
 // Fences will be inserted for atomic load/stores according to the logic in
-// RISCVTargetLowering::{emitLeadingFence,emitTrailingFence}.
+// CapstoneTargetLowering::{emitLeadingFence,emitTrailingFence}.
 // The normal loads/stores are relaxed (unordered) loads/stores that don't have
 // any ordering. This is necessary because AtomicExpandPass has added fences to
 // atomic load/stores and changed them to unordered ones.
@@ -327,21 +327,21 @@ let Size = 36 in {
  def PseudoMaskedAtomicLoadUMin32 : PseudoMaskedAMOUMinUMax;
 }
 
-def : PseudoMaskedAMOPat<int_riscv_masked_atomicrmw_xchg,
+def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_xchg,
                          PseudoMaskedAtomicSwap32>;
-def : PseudoMaskedAMOPat<int_riscv_masked_atomicrmw_add,
+def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_add,
                          PseudoMaskedAtomicLoadAdd32>;
-def : PseudoMaskedAMOPat<int_riscv_masked_atomicrmw_sub,
+def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_sub,
                          PseudoMaskedAtomicLoadSub32>;
-def : PseudoMaskedAMOPat<int_riscv_masked_atomicrmw_nand,
+def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_nand,
                          PseudoMaskedAtomicLoadNand32>;
-def : PseudoMaskedAMOMinMaxPat<int_riscv_masked_atomicrmw_max,
+def : PseudoMaskedAMOMinMaxPat<int_capstone_masked_atomicrmw_max,
                                PseudoMaskedAtomicLoadMax32>;
-def : PseudoMaskedAMOMinMaxPat<int_riscv_masked_atomicrmw_min,
+def : PseudoMaskedAMOMinMaxPat<int_capstone_masked_atomicrmw_min,
                                PseudoMaskedAtomicLoadMin32>;
-def : PseudoMaskedAMOPat<int_riscv_masked_atomicrmw_umax,
+def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_umax,
                          PseudoMaskedAtomicLoadUMax32>;
-def : PseudoMaskedAMOPat<int_riscv_masked_atomicrmw_umin,
+def : PseudoMaskedAMOPat<int_capstone_masked_atomicrmw_umin,
                          PseudoMaskedAtomicLoadUMin32>;
 } // Predicates = [HasStdExtA]
 
@@ -403,7 +403,7 @@ def PseudoMaskedCmpXchg32
   let Size = 32;
 }
 
-def : Pat<(XLenVT (int_riscv_masked_cmpxchg
+def : Pat<(XLenVT (int_capstone_masked_cmpxchg
             (XLenVT GPR:$addr), (XLenVT GPR:$cmpval), (XLenVT GPR:$newval),
             (XLenVT GPR:$mask), (XLenVT timm:$ordering))),
           (PseudoMaskedCmpXchg32

@@ -1,4 +1,4 @@
-//===-- RISCVTargetInfo.h - RISC-V Target Implementation --------*- C++ -*-===//
+//===-- CapstoneTargetInfo.h - Capstone Target Implementation --------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,18 +6,18 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_TARGETINFO_RISCVTARGETINFO_H
-#define LLVM_LIB_TARGET_RISCV_TARGETINFO_RISCVTARGETINFO_H
+#ifndef LLVM_LIB_TARGET_Capstone_TARGETINFO_CapstoneTARGETINFO_H
+#define LLVM_LIB_TARGET_Capstone_TARGETINFO_CapstoneTARGETINFO_H
 
 namespace llvm {
 
 class Target;
 
-Target &getTheRISCV32Target();
-Target &getTheRISCV64Target();
-Target &getTheRISCV32beTarget();
-Target &getTheRISCV64beTarget();
+Target &getTheCapstone32Target();
+Target &getTheCapstone64Target();
+Target &getTheCapstone32beTarget();
+Target &getTheCapstone64beTarget();
 
 } // namespace llvm
 
-#endif // LLVM_LIB_TARGET_RISCV_TARGETINFO_RISCVTARGETINFO_H
+#endif // LLVM_LIB_TARGET_Capstone_TARGETINFO_CapstoneTARGETINFO_H

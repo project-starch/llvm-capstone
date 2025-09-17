@@ -1,4 +1,4 @@
-//==- RISCVSchedSyntacoreSCR345.td - SCR3/4/5 Sched Defs -----*- tablegen -*-=//
+//==- CapstoneSchedSyntacoreSCR345.td - SCR3/4/5 Sched Defs -----*- tablegen -*-=//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.

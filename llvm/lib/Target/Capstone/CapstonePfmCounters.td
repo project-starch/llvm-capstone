@@ -1,4 +1,4 @@
-//===---- RISCVPfmCounters.td - RISC-V Hardware Counters ---*- tablegen -*-===//
+//===---- CapstonePfmCounters.td - Capstone Hardware Counters ---*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This describes the available hardware counters for RISC-V.
+// This describes the available hardware counters for Capstone.
 //
 //===----------------------------------------------------------------------===//
 

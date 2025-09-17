@@ -1,4 +1,4 @@
-//===-- RISCVMCAsmInfo.cpp - RISC-V Asm properties ------------------------===//
+//===-- CapstoneMCAsmInfo.cpp - Capstone Asm properties ------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,11 +6,11 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains the declarations of the RISCVMCAsmInfo properties.
+// This file contains the declarations of the CapstoneMCAsmInfo properties.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVMCAsmInfo.h"
+#include "CapstoneMCAsmInfo.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCExpr.h"
@@ -18,9 +18,9 @@
 #include "llvm/TargetParser/Triple.h"
 using namespace llvm;
 
-void RISCVMCAsmInfo::anchor() {}
+void CapstoneMCAsmInfo::anchor() {}
 
-RISCVMCAsmInfo::RISCVMCAsmInfo(const Triple &TT) {
+CapstoneMCAsmInfo::CapstoneMCAsmInfo(const Triple &TT) {
   IsLittleEndian = TT.isLittleEndian();
   CodePointerSize = CalleeSaveStackSlotSize = TT.isArch64Bit() ? 8 : 4;
   CommentString = "#";
@@ -32,7 +32,7 @@ RISCVMCAsmInfo::RISCVMCAsmInfo(const Triple &TT) {
   Data32bitsDirective = "\t.word\t";
 }
 
-const MCExpr *RISCVMCAsmInfo::getExprForFDESymbol(const MCSymbol *Sym,
+const MCExpr *CapstoneMCAsmInfo::getExprForFDESymbol(const MCSymbol *Sym,
                                                   unsigned Encoding,
                                                   MCStreamer &Streamer) const {
   if (!(Encoding & dwarf::DW_EH_PE_pcrel))
@@ -40,20 +40,20 @@ const MCExpr *RISCVMCAsmInfo::getExprForFDESymbol(const MCSymbol *Sym,
 
   // The default symbol subtraction results in an ADD/SUB relocation pair.
   // Processing this relocation pair is problematic when linker relaxation is
-  // enabled, so we follow binutils in using the R_RISCV_32_PCREL relocation
+  // enabled, so we follow binutils in using the R_Capstone_32_PCREL relocation
   // for the FDE initial location.
   MCContext &Ctx = Streamer.getContext();
   const MCExpr *ME = MCSymbolRefExpr::create(Sym, Ctx);
   assert(Encoding & dwarf::DW_EH_PE_sdata4 && "Unexpected encoding");
-  return MCSpecifierExpr::create(ME, ELF::R_RISCV_32_PCREL, Ctx);
+  return MCSpecifierExpr::create(ME, ELF::R_Capstone_32_PCREL, Ctx);
 }
 
-void RISCVMCAsmInfo::printSpecifierExpr(raw_ostream &OS,
+void CapstoneMCAsmInfo::printSpecifierExpr(raw_ostream &OS,
                                         const MCSpecifierExpr &Expr) const {
   auto S = Expr.getSpecifier();
-  bool HasSpecifier = S != 0 && S != ELF::R_RISCV_CALL_PLT;
+  bool HasSpecifier = S != 0 && S != ELF::R_Capstone_CALL_PLT;
   if (HasSpecifier)
-    OS << '%' << RISCV::getSpecifierName(S) << '(';
+    OS << '%' << Capstone::getSpecifierName(S) << '(';
   printExpr(OS, *Expr.getSubExpr());
   if (HasSpecifier)
     OS << ')';

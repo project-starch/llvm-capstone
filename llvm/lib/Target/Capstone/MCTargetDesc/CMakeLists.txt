@@ -1,23 +1,23 @@
-add_llvm_component_library(LLVMRISCVDesc
-  RISCVAsmBackend.cpp
-  RISCVBaseInfo.cpp
-  RISCVELFObjectWriter.cpp
-  RISCVInstPrinter.cpp
-  RISCVMCAsmInfo.cpp
-  RISCVMCCodeEmitter.cpp
-  RISCVMCExpr.cpp
-  RISCVMCObjectFileInfo.cpp
-  RISCVMCTargetDesc.cpp
-  RISCVMatInt.cpp
-  RISCVTargetStreamer.cpp
-  RISCVELFStreamer.cpp
+add_llvm_component_library(LLVMCapstoneDesc
+  CapstoneAsmBackend.cpp
+  CapstoneBaseInfo.cpp
+  CapstoneELFObjectWriter.cpp
+  CapstoneInstPrinter.cpp
+  CapstoneMCAsmInfo.cpp
+  CapstoneMCCodeEmitter.cpp
+  CapstoneMCExpr.cpp
+  CapstoneMCObjectFileInfo.cpp
+  CapstoneMCTargetDesc.cpp
+  CapstoneMatInt.cpp
+  CapstoneTargetStreamer.cpp
+  CapstoneELFStreamer.cpp
 
   LINK_COMPONENTS
   MC
-  RISCVInfo
+  CapstoneInfo
   Support
   TargetParser
 
   ADD_TO_COMPONENT
-  RISCV
+  Capstone
 )

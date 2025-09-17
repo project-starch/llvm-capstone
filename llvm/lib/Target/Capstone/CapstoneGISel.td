@@ -1,4 +1,4 @@
-//===-- RISCVGIsel.td - RISC-V GlobalISel Patterns ---------*- tablegen -*-===//
+//===-- CapstoneGIsel.td - Capstone GlobalISel Patterns ---------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -13,8 +13,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-include "RISCV.td"
-include "RISCVCombine.td"
+include "Capstone.td"
+include "CapstoneCombine.td"
 
 def simm12Plus1 : ImmLeaf<XLenVT, [{
     return (isInt<12>(Imm) && Imm != -2048) || Imm == 2048;}]>;
@@ -51,7 +51,7 @@ def : Pat<(XLenVT (setlt (PtrVT GPR:$rs1), (PtrVT GPR:$rs2))),
           (SLT GPR:$rs1, GPR:$rs2)>;
 
 // Define pattern expansions for setcc operations that aren't directly
-// handled by a RISC-V instruction.
+// handled by a Capstone instruction.
 foreach Ty = [PtrVT, XLenVT] in {
 def : Pat<(XLenVT (seteq (Ty GPR:$rs1), (Ty 0))), (SLTIU GPR:$rs1, 1)>;
 def : Pat<(XLenVT (seteq (Ty GPR:$rs1), (Ty simm12Plus1:$imm12))),

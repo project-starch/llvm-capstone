@@ -1,13 +1,13 @@
-add_llvm_component_library(LLVMRISCVDisassembler
-  RISCVDisassembler.cpp
+add_llvm_component_library(LLVMCapstoneDisassembler
+  CapstoneDisassembler.cpp
 
   LINK_COMPONENTS
   MC
   MCDisassembler
-  RISCVDesc
-  RISCVInfo
+  CapstoneDesc
+  CapstoneInfo
   Support
 
   ADD_TO_COMPONENT
-  RISCV
+  Capstone
   )

@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZfa.td - RISC-V 'Zfa' instructions ---*- tablegen -*-===//
+//===-- CapstoneInstrInfoZfa.td - Capstone 'Zfa' instructions ---*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,20 +6,20 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard 'Zfa'
+// This file describes the Capstone instructions from the standard 'Zfa'
 // additional floating-point extension, version 1.0.
 //
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
-// RISC-V specific DAG Nodes.
+// Capstone specific DAG Nodes.
 //===----------------------------------------------------------------------===//
 
-def SDT_RISCVFLI
+def SDT_CapstoneFLI
     : SDTypeProfile<1, 1, [SDTCisFP<0>, SDTCisVT<1, XLenVT>]>;
 
 // Zfa fli instruction for constant materialization.
-def riscv_fli : RVSDNode<"FLI", SDT_RISCVFLI>;
+def capstone_fli : RVSDNode<"FLI", SDT_CapstoneFLI>;
 
 //===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.
@@ -38,7 +38,7 @@ def loadfpimm : Operand<XLenVT> {
   let ParserMatchClass = LoadFPImmOperand;
   let PrintMethod = "printFPImmOperand";
   let OperandType = "OPERAND_UIMM5";
-  let OperandNamespace = "RISCVOp";
+  let OperandNamespace = "CapstoneOp";
 }
 
 def RTZArg : AsmOperandClass {
@@ -54,7 +54,7 @@ def rtzarg : Operand<XLenVT> {
   let PrintMethod = "printFRMArg";
   let DecoderMethod = "decodeRTZArg";
   let OperandType = "OPERAND_RTZARG";
-  let OperandNamespace = "RISCVOp";
+  let OperandNamespace = "CapstoneOp";
 }
 
 //===----------------------------------------------------------------------===//
@@ -241,7 +241,7 @@ def : InstAlias<"fgeq.q $rd, $rs, $rt",
 //===----------------------------------------------------------------------===//
 
 let Predicates = [HasStdExtZfa] in {
-def: Pat<(f32 (riscv_fli timm:$imm)), (FLI_S timm:$imm)>;
+def: Pat<(f32 (capstone_fli timm:$imm)), (FLI_S timm:$imm)>;
 
 def: PatFprFpr<fminimum, FMINM_S, FPR32, f32>;
 def: PatFprFpr<fmaximum, FMAXM_S, FPR32, f32>;
@@ -266,7 +266,7 @@ def: PatSetCC<FPR32, strict_fsetcc, SETOLE, FLEQ_S, f32>;
 } // Predicates = [HasStdExtZfa]
 
 let Predicates = [HasStdExtZfa, HasStdExtD] in {
-def: Pat<(f64 (riscv_fli timm:$imm)), (FLI_D timm:$imm)>;
+def: Pat<(f64 (capstone_fli timm:$imm)), (FLI_D timm:$imm)>;
 
 def: PatFprFpr<fminimum, FMINM_D, FPR64, f64>;
 def: PatFprFpr<fmaximum, FMAXM_D, FPR64, f64>;
@@ -291,12 +291,12 @@ def: PatSetCC<FPR64, strict_fsetcc, SETOLE, FLEQ_D, f64>;
 } // Predicates = [HasStdExtZfa, HasStdExtD]
 
 let Predicates = [HasStdExtZfa, HasStdExtD, IsRV32] in {
-def : Pat<(RISCVBuildPairF64 GPR:$rs1, GPR:$rs2),
+def : Pat<(CapstoneBuildPairF64 GPR:$rs1, GPR:$rs2),
           (FMVP_D_X GPR:$rs1, GPR:$rs2)>;
 }
 
 let Predicates = [HasStdExtZfa, HasStdExtZfh] in {
-def: Pat<(f16 (riscv_fli timm:$imm)), (FLI_H timm:$imm)>;
+def: Pat<(f16 (capstone_fli timm:$imm)), (FLI_H timm:$imm)>;
 
 def: PatFprFpr<fminimum, FMINM_H, FPR16, f16>;
 def: PatFprFpr<fmaximum, FMAXM_H, FPR16, f16>;

@@ -1,4 +1,4 @@
-//===---------------- RISCVInstrInfoXQci.td ----------------*- tablegen -*-===//
+//===---------------- CapstoneInstrInfoXQci.td ----------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -31,7 +31,7 @@ def qc_insb : RVSDNode<"QC_INSB", SDTypeProfile<1, 4, [SDTCisSameAs<0, 1>,
 
 def qc_e_li : RVSDNode<"QC_E_LI", SDTIntUnaryOp>;
 
-def uimm5nonzero : RISCVOp<XLenVT>,
+def uimm5nonzero : CapstoneOp<XLenVT>,
                    ImmLeaf<XLenVT, [{return (Imm != 0) && isUInt<5>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<5, "NonZero">;
   let DecoderMethod = "decodeUImmNonZeroOperand<5>";
@@ -46,7 +46,7 @@ def uimm5nonzero : RISCVOp<XLenVT>,
 
 def tuimm5nonzero : TImmLeaf<XLenVT, [{return (Imm != 0) && isUInt<5>(Imm);}]>;
 
-def uimm5gt3 : RISCVOp<XLenVT>, ImmLeaf<XLenVT,
+def uimm5gt3 : CapstoneOp<XLenVT>, ImmLeaf<XLenVT,
   [{return (Imm > 3) && isUInt<5>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<5, "GT3">;
   let DecoderMethod = "decodeUImmOperandGE<5, 4>";
@@ -59,7 +59,7 @@ def UImm5Plus1AsmOperand : AsmOperandClass {
   let DiagnosticType = "InvalidUImm5Plus1";
 }
 
-def uimm5_plus1 : RISCVOp, ImmLeaf<XLenVT,
+def uimm5_plus1 : CapstoneOp, ImmLeaf<XLenVT,
   [{return (isUInt<5>(Imm) && (Imm != 0)) || (Imm == 32);}]> {
   let ParserMatchClass = UImm5Plus1AsmOperand;
   let EncoderMethod = "getImmOpValueMinus1";
@@ -73,7 +73,7 @@ def uimm5_plus1 : RISCVOp, ImmLeaf<XLenVT,
   }];
 }
 
-def uimm5ge6_plus1 : RISCVOp<XLenVT>, ImmLeaf<XLenVT,
+def uimm5ge6_plus1 : CapstoneOp<XLenVT>, ImmLeaf<XLenVT,
   [{return (Imm >= 6) && (isUInt<5>(Imm) || (Imm == 32));}]> {
   let ParserMatchClass = UImmAsmOperand<5, "GE6Plus1">;
   let EncoderMethod = "getImmOpValueMinus1";
@@ -87,7 +87,7 @@ def uimm5ge6_plus1 : RISCVOp<XLenVT>, ImmLeaf<XLenVT,
   }];
 }
 
-def uimm5slist : RISCVOp<XLenVT>, ImmLeaf<XLenVT,
+def uimm5slist : CapstoneOp<XLenVT>, ImmLeaf<XLenVT,
   [{return ((Imm == 0)  ||
             (Imm == 1)  ||
             (Imm == 2)  ||
@@ -113,12 +113,12 @@ def uimm5slist : RISCVOp<XLenVT>, ImmLeaf<XLenVT,
 
 def tuimm7_lsb00 : TImmLeaf<XLenVT,[{return isShiftedUInt<5, 2>(Imm);}]>;
 
-def uimm10 : RISCVUImmLeafOp<10>;
+def uimm10 : CapstoneUImmLeafOp<10>;
 
-def uimm11 : RISCVUImmLeafOp<11>;
+def uimm11 : CapstoneUImmLeafOp<11>;
 
 // A 14-bit unsigned immediate where the least significant two bits are zero.
-def uimm14lsb00 : RISCVOp,
+def uimm14lsb00 : CapstoneOp,
                   ImmLeaf<XLenVT, [{return isShiftedUInt<12, 2>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<14, "Lsb00">;
   let EncoderMethod = "getImmOpValue";
@@ -126,14 +126,14 @@ def uimm14lsb00 : RISCVOp,
   let OperandType = "OPERAND_UIMM14_LSB00";
 }
 
-def uimm16nonzero : RISCVOp<XLenVT>,
+def uimm16nonzero : CapstoneOp<XLenVT>,
                     ImmLeaf<XLenVT, [{return (Imm != 0) && isUInt<16>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<16, "NonZero">;
   let DecoderMethod = "decodeUImmNonZeroOperand<16>";
   let OperandType = "OPERAND_UIMM16_NONZERO";
 }
 
-def simm5nonzero : RISCVOp<XLenVT>,
+def simm5nonzero : CapstoneOp<XLenVT>,
                    ImmLeaf<XLenVT, [{return (Imm != 0) && isInt<5>(Imm);}]> {
   let ParserMatchClass = SImmAsmOperand<5, "NonZero">;
   let DecoderMethod = "decodeSImmNonZeroOperand<5>";
@@ -146,18 +146,18 @@ def simm5nonzero : RISCVOp<XLenVT>,
   }];
 }
 
-def simm11 : RISCVSImmLeafOp<11>;
+def simm11 : CapstoneSImmLeafOp<11>;
 
-def simm16 : RISCVSImmOp<16>;
+def simm16 : CapstoneSImmOp<16>;
 
-def simm16nonzero : RISCVOp<XLenVT>,
+def simm16nonzero : CapstoneOp<XLenVT>,
                     ImmLeaf<XLenVT, [{return (Imm != 0) && isInt<16>(Imm);}]> {
   let ParserMatchClass = SImmAsmOperand<16, "NonZero">;
   let DecoderMethod = "decodeSImmNonZeroOperand<16>";
   let OperandType = "OPERAND_SIMM16_NONZERO";
 }
 
-def simm20_li : RISCVOp<XLenVT>,
+def simm20_li : CapstoneOp<XLenVT>,
                 ImmLeaf<XLenVT, [{return isInt<20>(Imm);}]>{
   let ParserMatchClass = SImmAsmOperand<20, "LI">;
   let EncoderMethod = "getImmOpValue";
@@ -171,7 +171,7 @@ def simm20_li : RISCVOp<XLenVT>,
   }];
 }
 
-def simm26 : RISCVSImmLeafOp<26>;
+def simm26 : CapstoneSImmLeafOp<26>;
 
 def simm26_nosimm12 : ImmLeaf<XLenVT, [{
   return isInt<26>(Imm) && !isInt<12>(Imm);}]>;
@@ -186,7 +186,7 @@ class BareSImmNAsmOperand<int width>
 
 // 32-bit Immediate, used by RV32 Instructions in 32-bit operations, so no
 // sign-/zero-extension. This is represented internally as a signed 32-bit value.
-def bare_simm32 : RISCVOp<XLenVT> {
+def bare_simm32 : CapstoneOp<XLenVT> {
   let ParserMatchClass = BareSImmNAsmOperand<32>;
   let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeSImmOperand<32>";
@@ -1390,13 +1390,13 @@ class QCILICCIPatInv<CondCode Cond, QCILICC Inst, DAGOperand InTyImm>
     : Pat<(select (XLenVT (setcc (XLenVT GPRNoX0:$rs1), InTyImm:$imm, Cond)), (XLenVT GPRNoX0:$rd), simm5:$simm),
           (Inst GPRNoX0:$rd, GPRNoX0:$rs1, InTyImm:$imm, simm5:$simm)>;
 
-// Match `riscv_brcc` and lower to the appropriate XQCIBI branch instruction.
+// Match `capstone_brcc` and lower to the appropriate XQCIBI branch instruction.
 class BcciPat<CondCode Cond, QCIBranchInst_rii Inst, DAGOperand InTyImm>
-    : Pat<(riscv_brcc (i32 GPRNoX0:$rs1), InTyImm:$rs2, Cond, bb:$imm12),
+    : Pat<(capstone_brcc (i32 GPRNoX0:$rs1), InTyImm:$rs2, Cond, bb:$imm12),
           (Inst GPRNoX0:$rs1, InTyImm:$rs2, bare_simm13_lsb0_bb:$imm12)>;
 
 class Bcci48Pat<CondCode Cond, QCIBranchInst48_rii Inst, DAGOperand InTyImm>
-    : Pat<(riscv_brcc (i32 GPRNoX0:$rs1), InTyImm:$rs2, Cond, bb:$imm12),
+    : Pat<(capstone_brcc (i32 GPRNoX0:$rs1), InTyImm:$rs2, Cond, bb:$imm12),
           (Inst GPRNoX0:$rs1, InTyImm:$rs2, bare_simm13_lsb0_bb:$imm12)>;
 
 defm CC_SImm5NonZero_QC  : SelectCC_GPR_riirr<GPRNoX0, simm5nonzero>;
@@ -1405,17 +1405,17 @@ defm CC_SImm16NonZero_QC : SelectCC_GPR_riirr<GPRNoX0, simm16nonzero>;
 defm CC_UImm16NonZero_QC : SelectCC_GPR_riirr<GPRNoX0, uimm16nonzero>;
 
 class SelectQCbi<CondCode Cond, DAGOperand InTyImm, Pseudo OpNode >
-    : Pat<(riscv_selectcc_frag:$cc (i32 GPRNoX0:$lhs), InTyImm:$Constant, Cond,
+    : Pat<(capstone_selectcc_frag:$cc (i32 GPRNoX0:$lhs), InTyImm:$Constant, Cond,
                                    (i32 GPRNoX0:$truev), GPRNoX0:$falsev),
           (OpNode GPRNoX0:$lhs, InTyImm:$Constant,
-           (IntCCtoRISCVCC $cc), GPRNoX0:$truev, GPRNoX0:$falsev)>;
+           (IntCCtoCapstoneCC $cc), GPRNoX0:$truev, GPRNoX0:$falsev)>;
 
 let Predicates = [HasVendorXqciac, IsRV32] in {
 def : Pat<(i32 (add GPRNoX0:$rd, (mul GPRNoX0:$rs1, simm12:$imm12))),
           (QC_MULIADD GPRNoX0:$rd, GPRNoX0:$rs1, simm12:$imm12)>;
 def : Pat<(i32 (add_like_non_imm12 (shl GPRNoX0:$rs1, uimm5gt3:$imm), GPRNoX0:$rs2)),
           (QC_SHLADD GPRNoX0:$rs1, GPRNoX0:$rs2, uimm5gt3:$imm)>;
-def : Pat<(i32 (riscv_shl_add GPRNoX0:$rs1, uimm5gt3:$imm, GPRNoX0:$rs2)),
+def : Pat<(i32 (capstone_shl_add GPRNoX0:$rs1, uimm5gt3:$imm, GPRNoX0:$rs2)),
           (QC_SHLADD GPRNoX0:$rs1, GPRNoX0:$rs2, uimm5gt3:$imm)>;
 } // Predicates = [HasVendorXqciac, IsRV32]
 
@@ -1536,7 +1536,7 @@ def: Pat<(i32 (ctlz (not (i32 GPR:$rs1)))), (QC_CLO GPR:$rs1)>;
 } // Predicates = [HasVendorXqcibm, HasStdExtZbb, IsRV32]
 
 let Predicates = [HasVendorXqciint, IsRV32] in
-def : Pat<(riscv_mileaveret_glue), (QC_C_MILEAVERET)>;
+def : Pat<(capstone_mileaveret_glue), (QC_C_MILEAVERET)>;
 
 let Predicates = [HasVendorXqcicm, IsRV32] in {
 def : Pat<(select (i32 GPRNoX0:$rs1), (i32 GPRNoX0:$rd),(i32 GPRNoX0:$rs3)),
@@ -1812,7 +1812,7 @@ def : CompressPat<(QC_E_BLTUI GPRNoX0:$rs1, uimm5nonzero:$imm5, bare_simm13_lsb0
 // - Binary Code emission didn't know how to create a fixup for a CI-type
 //   instruction containing a bare symbol.
 //
-// The solution to the last bullet is that we added the `fixup_riscv_rvc_imm`,
+// The solution to the last bullet is that we added the `fixup_capstone_rvc_imm`,
 // so that we could proceed past the last error, and then use Assembler Relaxation
 // to turn the `C.LI` with a bare symbol back into a `QC.E.LI`.
 //
@@ -1821,7 +1821,7 @@ def : CompressPat<(QC_E_BLTUI GPRNoX0:$rs1, uimm5nonzero:$imm5, bare_simm13_lsb0
 // 
 // Emitting an instruction to assembly proceeds as:
 // - Compression (in emitInstruction)
-// - Decompression (in RISCVInstPrinter::printInst)
+// - Decompression (in CapstoneInstPrinter::printInst)
 // - InstAliases are applied
 //
 // So in the case of `QC.E.LI` with a bare symbol, first it is compressed to
@@ -1845,7 +1845,7 @@ def : CompressPat<(QC_E_BLTUI GPRNoX0:$rs1, uimm5nonzero:$imm5, bare_simm13_lsb0
 // as both an immediate, and a bare symbol).
 //
 // This is fairly unpleasant, but it's the least disruptive thing we can do
-// and keeps all the hacks confined to the RISC-V backend code.
+// and keeps all the hacks confined to the Capstone backend code.
 
 def BareSymbolQC_E_LI : AsmOperandClass {
   let Name = "BareSymbolQC_E_LI";

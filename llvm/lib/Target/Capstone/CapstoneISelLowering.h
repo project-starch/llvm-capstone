@@ -1,4 +1,4 @@
-//===-- RISCVISelLowering.h - RISC-V DAG Lowering Interface -----*- C++ -*-===//
+//===-- CapstoneISelLowering.h - Capstone DAG Lowering Interface -----*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,16 +6,16 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file defines the interfaces that RISC-V uses to lower LLVM code into a
+// This file defines the interfaces that Capstone uses to lower LLVM code into a
 // selection DAG.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCVISELLOWERING_H
-#define LLVM_LIB_TARGET_RISCV_RISCVISELLOWERING_H
+#ifndef LLVM_LIB_TARGET_Capstone_CapstoneISELLOWERING_H
+#define LLVM_LIB_TARGET_Capstone_CapstoneISELLOWERING_H
 
-#include "RISCV.h"
-#include "RISCVCallingConv.h"
+#include "Capstone.h"
+#include "CapstoneCallingConv.h"
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/CodeGen/TargetLowering.h"
@@ -23,17 +23,17 @@
 
 namespace llvm {
 class InstructionCost;
-class RISCVSubtarget;
-struct RISCVRegisterInfo;
+class CapstoneSubtarget;
+struct CapstoneRegisterInfo;
 
-class RISCVTargetLowering : public TargetLowering {
-  const RISCVSubtarget &Subtarget;
+class CapstoneTargetLowering : public TargetLowering {
+  const CapstoneSubtarget &Subtarget;
 
 public:
-  explicit RISCVTargetLowering(const TargetMachine &TM,
-                               const RISCVSubtarget &STI);
+  explicit CapstoneTargetLowering(const TargetMachine &TM,
+                               const CapstoneSubtarget &STI);
 
-  const RISCVSubtarget &getSubtarget() const { return Subtarget; }
+  const CapstoneSubtarget &getSubtarget() const { return Subtarget; }
 
   bool getTgtMemIntrinsic(IntrinsicInfo &Info, const CallInst &I,
                           MachineFunction &MF,
@@ -228,7 +228,7 @@ public:
   bool preferZeroCompareBranch() const override { return true; }
 
   // Note that one specific case requires fence insertion for an
-  // AtomicCmpXchgInst but is handled via the RISCVZacasABIFix pass rather
+  // AtomicCmpXchgInst but is handled via the CapstoneZacasABIFix pass rather
   // than this hook due to limitations in the interface here.
   bool shouldInsertFencesForAtomic(const Instruction *I) const override;
 
@@ -347,38 +347,38 @@ public:
   // Return the value of VLMax for the given vector type (i.e. SEW and LMUL)
   SDValue computeVLMax(MVT VecVT, const SDLoc &DL, SelectionDAG &DAG) const;
 
-  static RISCVVType::VLMUL getLMUL(MVT VT);
+  static CapstoneVType::VLMUL getLMUL(MVT VT);
   inline static unsigned computeVLMAX(unsigned VectorBits, unsigned EltSize,
                                       unsigned MinSize) {
     // Original equation:
     //   VLMAX = (VectorBits / EltSize) * LMUL
-    //   where LMUL = MinSize / RISCV::RVVBitsPerBlock
+    //   where LMUL = MinSize / Capstone::RVVBitsPerBlock
     // The following equations have been reordered to prevent loss of precision
     // when calculating fractional LMUL.
-    return ((VectorBits / EltSize) * MinSize) / RISCV::RVVBitsPerBlock;
+    return ((VectorBits / EltSize) * MinSize) / Capstone::RVVBitsPerBlock;
   }
 
   // Return inclusive (low, high) bounds on the value of VLMAX for the
   // given scalable container type given known bounds on VLEN.
   static std::pair<unsigned, unsigned>
-  computeVLMAXBounds(MVT ContainerVT, const RISCVSubtarget &Subtarget);
+  computeVLMAXBounds(MVT ContainerVT, const CapstoneSubtarget &Subtarget);
 
   /// Given a vector (either fixed or scalable), return the scalable vector
   /// corresponding to a vector register (i.e. an m1 register group).
   static MVT getM1VT(MVT VT) {
     unsigned EltSizeInBits = VT.getVectorElementType().getSizeInBits();
-    assert(EltSizeInBits <= RISCV::RVVBitsPerBlock && "Unexpected vector MVT");
+    assert(EltSizeInBits <= Capstone::RVVBitsPerBlock && "Unexpected vector MVT");
     return MVT::getScalableVectorVT(VT.getVectorElementType(),
-                                    RISCV::RVVBitsPerBlock / EltSizeInBits);
+                                    Capstone::RVVBitsPerBlock / EltSizeInBits);
   }
 
-  static unsigned getRegClassIDForLMUL(RISCVVType::VLMUL LMul);
+  static unsigned getRegClassIDForLMUL(CapstoneVType::VLMUL LMul);
   static unsigned getSubregIndexByMVT(MVT VT, unsigned Index);
   static unsigned getRegClassIDForVecVT(MVT VT);
   static std::pair<unsigned, unsigned>
   decomposeSubvectorInsertExtractToSubRegs(MVT VecVT, MVT SubVecVT,
                                            unsigned InsertExtractIdx,
-                                           const RISCVRegisterInfo *TRI);
+                                           const CapstoneRegisterInfo *TRI);
   MVT getContainerForFixedLengthVector(MVT VT) const;
 
   bool shouldRemoveExtendFromGSIndex(SDValue Extend, EVT DataVT) const override;
@@ -473,11 +473,11 @@ public:
 private:
   void analyzeInputArgs(MachineFunction &MF, CCState &CCInfo,
                         const SmallVectorImpl<ISD::InputArg> &Ins, bool IsRet,
-                        RISCVCCAssignFn Fn) const;
+                        CapstoneCCAssignFn Fn) const;
   void analyzeOutputArgs(MachineFunction &MF, CCState &CCInfo,
                          const SmallVectorImpl<ISD::OutputArg> &Outs,
                          bool IsRet, CallLoweringInfo *CLI,
-                         RISCVCCAssignFn Fn) const;
+                         CapstoneCCAssignFn Fn) const;
 
   template <class NodeTy>
   SDValue getAddr(NodeTy *N, SelectionDAG &DAG, bool IsLocal = true,
@@ -605,7 +605,7 @@ private:
   /// Disable normalizing
   /// select(N0&N1, X, Y) => select(N0, select(N1, X, Y), Y) and
   /// select(N0|N1, X, Y) => select(N0, select(N1, X, Y, Y))
-  /// RISC-V doesn't have flags so it's better to perform the and/or in a GPR.
+  /// Capstone doesn't have flags so it's better to perform the and/or in a GPR.
   bool shouldNormalizeToSelectSequence(LLVMContext &, EVT) const override {
     return false;
   }
@@ -636,29 +636,29 @@ private:
   findRepresentativeClass(const TargetRegisterInfo *TRI, MVT VT) const override;
 };
 
-namespace RISCVVIntrinsicsTable {
+namespace CapstoneVIntrinsicsTable {
 
-struct RISCVVIntrinsicInfo {
+struct CapstoneVIntrinsicInfo {
   unsigned IntrinsicID;
   uint8_t ScalarOperand;
   uint8_t VLOperand;
   bool hasScalarOperand() const {
-    // 0xF is not valid. See NoScalarOperand in IntrinsicsRISCV.td.
+    // 0xF is not valid. See NoScalarOperand in IntrinsicsCapstone.td.
     return ScalarOperand != 0xF;
   }
   bool hasVLOperand() const {
-    // 0x1F is not valid. See NoVLOperand in IntrinsicsRISCV.td.
+    // 0x1F is not valid. See NoVLOperand in IntrinsicsCapstone.td.
     return VLOperand != 0x1F;
   }
 };
 
-using namespace RISCV;
+using namespace Capstone;
 
-#define GET_RISCVVIntrinsicsTable_DECL
-#include "RISCVGenSearchableTables.inc"
-#undef GET_RISCVVIntrinsicsTable_DECL
+#define GET_CapstoneVIntrinsicsTable_DECL
+#include "CapstoneGenSearchableTables.inc"
+#undef GET_CapstoneVIntrinsicsTable_DECL
 
-} // end namespace RISCVVIntrinsicsTable
+} // end namespace CapstoneVIntrinsicsTable
 
 } // end namespace llvm
 

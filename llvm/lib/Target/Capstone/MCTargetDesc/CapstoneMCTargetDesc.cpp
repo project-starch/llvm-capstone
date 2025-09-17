@@ -1,4 +1,4 @@
-//===-- RISCVMCTargetDesc.cpp - RISC-V Target Descriptions ----------------===//
+//===-- CapstoneMCTargetDesc.cpp - Capstone Target Descriptions ----------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,17 +6,17 @@
 //
 //===----------------------------------------------------------------------===//
 ///
-/// This file provides RISC-V specific target descriptions.
+/// This file provides Capstone specific target descriptions.
 ///
 //===----------------------------------------------------------------------===//
 
-#include "RISCVMCTargetDesc.h"
-#include "RISCVELFStreamer.h"
-#include "RISCVInstPrinter.h"
-#include "RISCVMCAsmInfo.h"
-#include "RISCVMCObjectFileInfo.h"
-#include "RISCVTargetStreamer.h"
-#include "TargetInfo/RISCVTargetInfo.h"
+#include "CapstoneMCTargetDesc.h"
+#include "CapstoneELFStreamer.h"
+#include "CapstoneInstPrinter.h"
+#include "CapstoneMCAsmInfo.h"
+#include "CapstoneMCObjectFileInfo.h"
+#include "CapstoneTargetStreamer.h"
+#include "TargetInfo/CapstoneTargetInfo.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCCodeEmitter.h"
@@ -35,34 +35,34 @@
 
 #define GET_INSTRINFO_MC_DESC
 #define ENABLE_INSTR_PREDICATE_VERIFIER
-#include "RISCVGenInstrInfo.inc"
+#include "CapstoneGenInstrInfo.inc"
 
 #define GET_REGINFO_MC_DESC
-#include "RISCVGenRegisterInfo.inc"
+#include "CapstoneGenRegisterInfo.inc"
 
 #define GET_SUBTARGETINFO_MC_DESC
-#include "RISCVGenSubtargetInfo.inc"
+#include "CapstoneGenSubtargetInfo.inc"
 
 using namespace llvm;
 
-static MCInstrInfo *createRISCVMCInstrInfo() {
+static MCInstrInfo *createCapstoneMCInstrInfo() {
   MCInstrInfo *X = new MCInstrInfo();
-  InitRISCVMCInstrInfo(X);
+  InitCapstoneMCInstrInfo(X);
   return X;
 }
 
-static MCRegisterInfo *createRISCVMCRegisterInfo(const Triple &TT) {
+static MCRegisterInfo *createCapstoneMCRegisterInfo(const Triple &TT) {
   MCRegisterInfo *X = new MCRegisterInfo();
-  InitRISCVMCRegisterInfo(X, RISCV::X1);
+  InitCapstoneMCRegisterInfo(X, Capstone::X1);
   return X;
 }
 
-static MCAsmInfo *createRISCVMCAsmInfo(const MCRegisterInfo &MRI,
+static MCAsmInfo *createCapstoneMCAsmInfo(const MCRegisterInfo &MRI,
                                        const Triple &TT,
                                        const MCTargetOptions &Options) {
-  MCAsmInfo *MAI = new RISCVMCAsmInfo(TT);
+  MCAsmInfo *MAI = new CapstoneMCAsmInfo(TT);
 
-  unsigned SP = MRI.getDwarfRegNum(RISCV::X2, true);
+  unsigned SP = MRI.getDwarfRegNum(Capstone::X2, true);
   MCCFIInstruction Inst = MCCFIInstruction::cfiDefCfa(nullptr, SP, 0);
   MAI->addInitialFrameState(Inst);
 
@@ -70,79 +70,79 @@ static MCAsmInfo *createRISCVMCAsmInfo(const MCRegisterInfo &MRI,
 }
 
 static MCObjectFileInfo *
-createRISCVMCObjectFileInfo(MCContext &Ctx, bool PIC,
+createCapstoneMCObjectFileInfo(MCContext &Ctx, bool PIC,
                             bool LargeCodeModel = false) {
-  MCObjectFileInfo *MOFI = new RISCVMCObjectFileInfo();
+  MCObjectFileInfo *MOFI = new CapstoneMCObjectFileInfo();
   MOFI->initMCObjectFileInfo(Ctx, PIC, LargeCodeModel);
   return MOFI;
 }
 
-static MCSubtargetInfo *createRISCVMCSubtargetInfo(const Triple &TT,
+static MCSubtargetInfo *createCapstoneMCSubtargetInfo(const Triple &TT,
                                                    StringRef CPU, StringRef FS) {
   if (CPU.empty() || CPU == "generic")
     CPU = TT.isArch64Bit() ? "generic-rv64" : "generic-rv32";
 
   MCSubtargetInfo *X =
-      createRISCVMCSubtargetInfoImpl(TT, CPU, /*TuneCPU*/ CPU, FS);
+      createCapstoneMCSubtargetInfoImpl(TT, CPU, /*TuneCPU*/ CPU, FS);
 
   // If the CPU is "help" fill in 64 or 32 bit feature so we can pass
-  // RISCVFeatures::validate.
+  // CapstoneFeatures::validate.
   // FIXME: Why does llvm-mc still expect a source file with -mcpu=help?
   if (CPU == "help") {
     llvm::FeatureBitset Features = X->getFeatureBits();
     if (TT.isArch64Bit())
-      Features.set(RISCV::Feature64Bit);
+      Features.set(Capstone::Feature64Bit);
     else
-      Features.set(RISCV::Feature32Bit);
+      Features.set(Capstone::Feature32Bit);
     X->setFeatureBits(Features);
   }
 
   return X;
 }
 
-static MCInstPrinter *createRISCVMCInstPrinter(const Triple &T,
+static MCInstPrinter *createCapstoneMCInstPrinter(const Triple &T,
                                                unsigned SyntaxVariant,
                                                const MCAsmInfo &MAI,
                                                const MCInstrInfo &MII,
                                                const MCRegisterInfo &MRI) {
-  return new RISCVInstPrinter(MAI, MII, MRI);
+  return new CapstoneInstPrinter(MAI, MII, MRI);
 }
 
 static MCTargetStreamer *
-createRISCVObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
+createCapstoneObjectTargetStreamer(MCStreamer &S, const MCSubtargetInfo &STI) {
   const Triple &TT = STI.getTargetTriple();
   if (TT.isOSBinFormatELF())
-    return new RISCVTargetELFStreamer(S, STI);
+    return new CapstoneTargetELFStreamer(S, STI);
   return nullptr;
 }
 
 static MCTargetStreamer *
-createRISCVAsmTargetStreamer(MCStreamer &S, formatted_raw_ostream &OS,
+createCapstoneAsmTargetStreamer(MCStreamer &S, formatted_raw_ostream &OS,
                              MCInstPrinter *InstPrint) {
-  return new RISCVTargetAsmStreamer(S, OS);
+  return new CapstoneTargetAsmStreamer(S, OS);
 }
 
-static MCTargetStreamer *createRISCVNullTargetStreamer(MCStreamer &S) {
-  return new RISCVTargetStreamer(S);
+static MCTargetStreamer *createCapstoneNullTargetStreamer(MCStreamer &S) {
+  return new CapstoneTargetStreamer(S);
 }
 
 namespace {
 
-class RISCVMCInstrAnalysis : public MCInstrAnalysis {
+class CapstoneMCInstrAnalysis : public MCInstrAnalysis {
   int64_t GPRState[31] = {};
   std::bitset<31> GPRValidMask;
 
   static bool isGPR(MCRegister Reg) {
-    return Reg >= RISCV::X0 && Reg <= RISCV::X31;
+    return Reg >= Capstone::X0 && Reg <= Capstone::X31;
   }
 
   static unsigned getRegIndex(MCRegister Reg) {
-    assert(isGPR(Reg) && Reg != RISCV::X0 && "Invalid GPR reg");
-    return Reg - RISCV::X1;
+    assert(isGPR(Reg) && Reg != Capstone::X0 && "Invalid GPR reg");
+    return Reg - Capstone::X1;
   }
 
   void setGPRState(MCRegister Reg, std::optional<int64_t> Value) {
-    if (Reg == RISCV::X0)
+    if (Reg == Capstone::X0)
       return;
 
     auto Index = getRegIndex(Reg);
@@ -156,7 +156,7 @@ class RISCVMCInstrAnalysis : public MCInstrAnalysis {
   }
 
   std::optional<int64_t> getGPRState(MCRegister Reg) const {
-    if (Reg == RISCV::X0)
+    if (Reg == Capstone::X0)
       return 0;
 
     auto Index = getRegIndex(Reg);
@@ -167,7 +167,7 @@ class RISCVMCInstrAnalysis : public MCInstrAnalysis {
   }
 
 public:
-  explicit RISCVMCInstrAnalysis(const MCInstrInfo *Info)
+  explicit CapstoneMCInstrAnalysis(const MCInstrInfo *Info)
       : MCInstrAnalysis(Info) {}
 
   void resetState() override { GPRValidMask.reset(); }
@@ -195,7 +195,7 @@ public:
       }
       break;
     }
-    case RISCV::AUIPC:
+    case Capstone::AUIPC:
       setGPRState(Inst.getOperand(0).getReg(),
                   Addr + SignExtend64<32>(Inst.getOperand(1).getImm() << 12));
       break;
@@ -215,16 +215,16 @@ public:
     }
 
     switch (Inst.getOpcode()) {
-    case RISCV::C_J:
-    case RISCV::C_JAL:
-    case RISCV::QC_E_J:
-    case RISCV::QC_E_JAL:
+    case Capstone::C_J:
+    case Capstone::C_JAL:
+    case Capstone::QC_E_J:
+    case Capstone::QC_E_JAL:
       Target = Addr + Inst.getOperand(0).getImm();
       return true;
-    case RISCV::JAL:
+    case Capstone::JAL:
       Target = Addr + Inst.getOperand(1).getImm();
       return true;
-    case RISCV::JALR: {
+    case Capstone::JALR: {
       if (auto TargetRegState = getGPRState(Inst.getOperand(1).getReg())) {
         Target = *TargetRegState + Inst.getOperand(2).getImm();
         return true;
@@ -243,9 +243,9 @@ public:
     switch (Inst.getOpcode()) {
     default:
       return false;
-    case RISCV::JAL:
-    case RISCV::JALR:
-      return Inst.getOperand(0).getReg() == RISCV::X0;
+    case Capstone::JAL:
+    case Capstone::JALR:
+      return Inst.getOperand(0).getReg() == Capstone::X0;
     }
   }
 
@@ -256,9 +256,9 @@ public:
     switch (Inst.getOpcode()) {
     default:
       return false;
-    case RISCV::JAL:
-    case RISCV::JALR:
-      return Inst.getOperand(0).getReg() != RISCV::X0;
+    case Capstone::JAL:
+    case Capstone::JALR:
+      return Inst.getOperand(0).getReg() != Capstone::X0;
     }
   }
 
@@ -269,10 +269,10 @@ public:
     switch (Inst.getOpcode()) {
     default:
       return false;
-    case RISCV::JALR:
-      return Inst.getOperand(0).getReg() == RISCV::X0 &&
+    case Capstone::JALR:
+      return Inst.getOperand(0).getReg() == Capstone::X0 &&
              maybeReturnAddress(Inst.getOperand(1).getReg());
-    case RISCV::C_JR:
+    case Capstone::C_JR:
       return maybeReturnAddress(Inst.getOperand(0).getReg());
     }
   }
@@ -298,10 +298,10 @@ public:
     switch (Inst.getOpcode()) {
     default:
       return false;
-    case RISCV::JALR:
-      return Inst.getOperand(0).getReg() == RISCV::X0 &&
+    case Capstone::JALR:
+      return Inst.getOperand(0).getReg() == Capstone::X0 &&
              !maybeReturnAddress(Inst.getOperand(1).getReg());
-    case RISCV::C_JR:
+    case Capstone::C_JR:
       return !maybeReturnAddress(Inst.getOperand(0).getReg());
     }
   }
@@ -311,9 +311,9 @@ public:
   findPltEntries(uint64_t PltSectionVA, ArrayRef<uint8_t> PltContents,
                  const MCSubtargetInfo &STI) const override {
     uint32_t LoadInsnOpCode;
-    if (const Triple &T = STI.getTargetTriple(); T.isRISCV64())
+    if (const Triple &T = STI.getTargetTriple(); T.isCapstone64())
       LoadInsnOpCode = 0x3003; // ld
-    else if (T.isRISCV32())
+    else if (T.isCapstone32())
       LoadInsnOpCode = 0x2003; // lw
     else
       return {};
@@ -350,19 +350,19 @@ public:
 private:
   static bool maybeReturnAddress(MCRegister Reg) {
     // X1 is used for normal returns, X5 for returns from outlined functions.
-    return Reg == RISCV::X1 || Reg == RISCV::X5;
+    return Reg == Capstone::X1 || Reg == Capstone::X5;
   }
 
   static bool isBranchImpl(const MCInst &Inst) {
     switch (Inst.getOpcode()) {
     default:
       return false;
-    case RISCV::JAL:
-      return Inst.getOperand(0).getReg() == RISCV::X0;
-    case RISCV::JALR:
-      return Inst.getOperand(0).getReg() == RISCV::X0 &&
+    case Capstone::JAL:
+      return Inst.getOperand(0).getReg() == Capstone::X0;
+    case Capstone::JALR:
+      return Inst.getOperand(0).getReg() == Capstone::X0 &&
              !maybeReturnAddress(Inst.getOperand(1).getReg());
-    case RISCV::C_JR:
+    case Capstone::C_JR:
       return !maybeReturnAddress(Inst.getOperand(0).getReg());
     }
   }
@@ -370,31 +370,31 @@ private:
 
 } // end anonymous namespace
 
-static MCInstrAnalysis *createRISCVInstrAnalysis(const MCInstrInfo *Info) {
-  return new RISCVMCInstrAnalysis(Info);
+static MCInstrAnalysis *createCapstoneInstrAnalysis(const MCInstrInfo *Info) {
+  return new CapstoneMCInstrAnalysis(Info);
 }
 
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void
-LLVMInitializeRISCVTargetMC() {
-  for (Target *T : {&getTheRISCV32Target(), &getTheRISCV64Target(),
-                    &getTheRISCV32beTarget(), &getTheRISCV64beTarget()}) {
-    TargetRegistry::RegisterMCAsmInfo(*T, createRISCVMCAsmInfo);
-    TargetRegistry::RegisterMCObjectFileInfo(*T, createRISCVMCObjectFileInfo);
-    TargetRegistry::RegisterMCInstrInfo(*T, createRISCVMCInstrInfo);
-    TargetRegistry::RegisterMCRegInfo(*T, createRISCVMCRegisterInfo);
-    TargetRegistry::RegisterMCAsmBackend(*T, createRISCVAsmBackend);
-    TargetRegistry::RegisterMCCodeEmitter(*T, createRISCVMCCodeEmitter);
-    TargetRegistry::RegisterMCInstPrinter(*T, createRISCVMCInstPrinter);
-    TargetRegistry::RegisterMCSubtargetInfo(*T, createRISCVMCSubtargetInfo);
-    TargetRegistry::RegisterELFStreamer(*T, createRISCVELFStreamer);
+LLVMInitializeCapstoneTargetMC() {
+  for (Target *T : {&getTheCapstone32Target(), &getTheCapstone64Target(),
+                    &getTheCapstone32beTarget(), &getTheCapstone64beTarget()}) {
+    TargetRegistry::RegisterMCAsmInfo(*T, createCapstoneMCAsmInfo);
+    TargetRegistry::RegisterMCObjectFileInfo(*T, createCapstoneMCObjectFileInfo);
+    TargetRegistry::RegisterMCInstrInfo(*T, createCapstoneMCInstrInfo);
+    TargetRegistry::RegisterMCRegInfo(*T, createCapstoneMCRegisterInfo);
+    TargetRegistry::RegisterMCAsmBackend(*T, createCapstoneAsmBackend);
+    TargetRegistry::RegisterMCCodeEmitter(*T, createCapstoneMCCodeEmitter);
+    TargetRegistry::RegisterMCInstPrinter(*T, createCapstoneMCInstPrinter);
+    TargetRegistry::RegisterMCSubtargetInfo(*T, createCapstoneMCSubtargetInfo);
+    TargetRegistry::RegisterELFStreamer(*T, createCapstoneELFStreamer);
     TargetRegistry::RegisterObjectTargetStreamer(
-        *T, createRISCVObjectTargetStreamer);
-    TargetRegistry::RegisterMCInstrAnalysis(*T, createRISCVInstrAnalysis);
+        *T, createCapstoneObjectTargetStreamer);
+    TargetRegistry::RegisterMCInstrAnalysis(*T, createCapstoneInstrAnalysis);
 
     // Register the asm target streamer.
-    TargetRegistry::RegisterAsmTargetStreamer(*T, createRISCVAsmTargetStreamer);
+    TargetRegistry::RegisterAsmTargetStreamer(*T, createCapstoneAsmTargetStreamer);
     // Register the null target streamer.
     TargetRegistry::RegisterNullTargetStreamer(*T,
-                                               createRISCVNullTargetStreamer);
+                                               createCapstoneNullTargetStreamer);
   }
 }

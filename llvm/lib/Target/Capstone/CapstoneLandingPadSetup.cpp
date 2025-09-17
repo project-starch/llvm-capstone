@@ -1,4 +1,4 @@
-//===------------ RISCVLandingPadSetup.cpp ---------------------------------==//
+//===------------ CapstoneLandingPadSetup.cpp ---------------------------------==//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,31 +6,31 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This is a RISC-V pass to setup landing pad labels for indirect jumps.
+// This is a Capstone pass to setup landing pad labels for indirect jumps.
 // Currently this pass only supports fixed labels.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVInstrInfo.h"
-#include "RISCVSubtarget.h"
+#include "Capstone.h"
+#include "CapstoneInstrInfo.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-lpad-setup"
-#define PASS_NAME "RISC-V Landing Pad Setup"
+#define DEBUG_TYPE "capstone-lpad-setup"
+#define PASS_NAME "Capstone Landing Pad Setup"
 
 extern cl::opt<uint32_t> PreferredLandingPadLabel;
 
 namespace {
 
-class RISCVLandingPadSetup : public MachineFunctionPass {
+class CapstoneLandingPadSetup : public MachineFunctionPass {
 public:
   static char ID;
 
-  RISCVLandingPadSetup() : MachineFunctionPass(ID) {}
+  CapstoneLandingPadSetup() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &F) override;
 
@@ -44,9 +44,9 @@ public:
 
 } // end anonymous namespace
 
-bool RISCVLandingPadSetup::runOnMachineFunction(MachineFunction &MF) {
-  const auto &STI = MF.getSubtarget<RISCVSubtarget>();
-  const RISCVInstrInfo &TII = *STI.getInstrInfo();
+bool CapstoneLandingPadSetup::runOnMachineFunction(MachineFunction &MF) {
+  const auto &STI = MF.getSubtarget<CapstoneSubtarget>();
+  const CapstoneInstrInfo &TII = *STI.getInstrInfo();
 
   if (!STI.hasStdExtZicfilp())
     return false;
@@ -54,7 +54,7 @@ bool RISCVLandingPadSetup::runOnMachineFunction(MachineFunction &MF) {
   uint32_t Label = 0;
   if (PreferredLandingPadLabel.getNumOccurrences() > 0) {
     if (!isUInt<20>(PreferredLandingPadLabel))
-      report_fatal_error("riscv-landing-pad-label=<val>, <val> needs to fit in "
+      report_fatal_error("capstone-landing-pad-label=<val>, <val> needs to fit in "
                          "unsigned 20-bits");
     Label = PreferredLandingPadLabel;
   }
@@ -66,23 +66,23 @@ bool RISCVLandingPadSetup::runOnMachineFunction(MachineFunction &MF) {
   bool Changed = false;
   for (MachineBasicBlock &MBB : MF)
     for (MachineInstr &MI : llvm::make_early_inc_range(MBB)) {
-      if (MI.getOpcode() != RISCV::PseudoBRINDNonX7 &&
-          MI.getOpcode() != RISCV::PseudoCALLIndirectNonX7 &&
-          MI.getOpcode() != RISCV::PseudoTAILIndirectNonX7)
+      if (MI.getOpcode() != Capstone::PseudoBRINDNonX7 &&
+          MI.getOpcode() != Capstone::PseudoCALLIndirectNonX7 &&
+          MI.getOpcode() != Capstone::PseudoTAILIndirectNonX7)
         continue;
-      BuildMI(MBB, MI, MI.getDebugLoc(), TII.get(RISCV::LUI), RISCV::X7)
+      BuildMI(MBB, MI, MI.getDebugLoc(), TII.get(Capstone::LUI), Capstone::X7)
           .addImm(Label);
-      MachineInstrBuilder(MF, &MI).addUse(RISCV::X7, RegState::ImplicitKill);
+      MachineInstrBuilder(MF, &MI).addUse(Capstone::X7, RegState::ImplicitKill);
       Changed = true;
     }
 
   return Changed;
 }
 
-INITIALIZE_PASS(RISCVLandingPadSetup, DEBUG_TYPE, PASS_NAME, false, false)
+INITIALIZE_PASS(CapstoneLandingPadSetup, DEBUG_TYPE, PASS_NAME, false, false)
 
-char RISCVLandingPadSetup::ID = 0;
+char CapstoneLandingPadSetup::ID = 0;
 
-FunctionPass *llvm::createRISCVLandingPadSetupPass() {
-  return new RISCVLandingPadSetup();
+FunctionPass *llvm::createCapstoneLandingPadSetupPass() {
+  return new CapstoneLandingPadSetup();
 }

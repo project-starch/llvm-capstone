@@ -1,4 +1,4 @@
-//===-- RISCVSubtarget.h - Define Subtarget for the RISC-V ------*- C++ -*-===//
+//===-- CapstoneSubtarget.h - Define Subtarget for the Capstone ------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,18 +6,18 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file declares the RISC-V specific subclass of TargetSubtargetInfo.
+// This file declares the Capstone specific subclass of TargetSubtargetInfo.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCVSUBTARGET_H
-#define LLVM_LIB_TARGET_RISCV_RISCVSUBTARGET_H
+#ifndef LLVM_LIB_TARGET_Capstone_CapstoneSUBTARGET_H
+#define LLVM_LIB_TARGET_Capstone_CapstoneSUBTARGET_H
 
-#include "GISel/RISCVRegisterBankInfo.h"
-#include "MCTargetDesc/RISCVBaseInfo.h"
-#include "RISCVFrameLowering.h"
-#include "RISCVISelLowering.h"
-#include "RISCVInstrInfo.h"
+#include "GISel/CapstoneRegisterBankInfo.h"
+#include "MCTargetDesc/CapstoneBaseInfo.h"
+#include "CapstoneFrameLowering.h"
+#include "CapstoneISelLowering.h"
+#include "CapstoneInstrInfo.h"
 #include "llvm/CodeGen/GlobalISel/CallLowering.h"
 #include "llvm/CodeGen/GlobalISel/InstructionSelector.h"
 #include "llvm/CodeGen/GlobalISel/LegalizerInfo.h"
@@ -28,18 +28,18 @@
 #include "llvm/Target/TargetMachine.h"
 #include <bitset>
 
-#define GET_RISCV_MACRO_FUSION_PRED_DECL
-#include "RISCVGenMacroFusion.inc"
+#define GET_Capstone_MACRO_FUSION_PRED_DECL
+#include "CapstoneGenMacroFusion.inc"
 
 #define GET_SUBTARGETINFO_HEADER
-#include "RISCVGenSubtargetInfo.inc"
+#include "CapstoneGenSubtargetInfo.inc"
 
 namespace llvm {
 class StringRef;
 
-namespace RISCVTuneInfoTable {
+namespace CapstoneTuneInfoTable {
 
-struct RISCVTuneInfo {
+struct CapstoneTuneInfo {
   const char *Name;
   uint8_t PrefFunctionAlignment;
   uint8_t PrefLoopAlignment;
@@ -72,21 +72,21 @@ struct RISCVTuneInfo {
   MISched::Direction PostRASchedDirection;
 };
 
-#define GET_RISCVTuneInfoTable_DECL
-#include "RISCVGenSearchableTables.inc"
-} // namespace RISCVTuneInfoTable
+#define GET_CapstoneTuneInfoTable_DECL
+#include "CapstoneGenSearchableTables.inc"
+} // namespace CapstoneTuneInfoTable
 
-class RISCVSubtarget : public RISCVGenSubtargetInfo {
+class CapstoneSubtarget : public CapstoneGenSubtargetInfo {
 public:
   // clang-format off
-  enum RISCVProcFamilyEnum : uint8_t {
+  enum CapstoneProcFamilyEnum : uint8_t {
     Others,
     SiFive7,
     VentanaVeyron,
     MIPSP8700,
     Andes45,
   };
-  enum RISCVVRGatherCostModelEnum : uint8_t {
+  enum CapstoneVRGatherCostModelEnum : uint8_t {
     Quadratic,
     NLog2N,
   };
@@ -94,30 +94,30 @@ public:
 private:
   virtual void anchor();
 
-  RISCVProcFamilyEnum RISCVProcFamily = Others;
-  RISCVVRGatherCostModelEnum RISCVVRGatherCostModel = Quadratic;
+  CapstoneProcFamilyEnum CapstoneProcFamily = Others;
+  CapstoneVRGatherCostModelEnum CapstoneVRGatherCostModel = Quadratic;
 
 #define GET_SUBTARGETINFO_MACRO(ATTRIBUTE, DEFAULT, GETTER) \
   bool ATTRIBUTE = DEFAULT;
-#include "RISCVGenSubtargetInfo.inc"
+#include "CapstoneGenSubtargetInfo.inc"
 
   unsigned XSfmmTE = 0;
   unsigned ZvlLen = 0;
   unsigned RVVVectorBitsMin;
   unsigned RVVVectorBitsMax;
   uint8_t MaxInterleaveFactor = 2;
-  RISCVABI::ABI TargetABI = RISCVABI::ABI_Unknown;
-  std::bitset<RISCV::NUM_TARGET_REGS> UserReservedRegister;
-  const RISCVTuneInfoTable::RISCVTuneInfo *TuneInfo;
+  CapstoneABI::ABI TargetABI = CapstoneABI::ABI_Unknown;
+  std::bitset<Capstone::NUM_TARGET_REGS> UserReservedRegister;
+  const CapstoneTuneInfoTable::CapstoneTuneInfo *TuneInfo;
 
-  RISCVFrameLowering FrameLowering;
-  RISCVInstrInfo InstrInfo;
-  RISCVRegisterInfo RegInfo;
-  RISCVTargetLowering TLInfo;
+  CapstoneFrameLowering FrameLowering;
+  CapstoneInstrInfo InstrInfo;
+  CapstoneRegisterInfo RegInfo;
+  CapstoneTargetLowering TLInfo;
 
   /// Initializes using the passed in CPU and feature strings so that we can
   /// use initializer lists for subtarget initialization.
-  RISCVSubtarget &initializeSubtargetDependencies(const Triple &TT,
+  CapstoneSubtarget &initializeSubtargetDependencies(const Triple &TT,
                                                   StringRef CPU,
                                                   StringRef TuneCPU,
                                                   StringRef FS,
@@ -125,24 +125,24 @@ private:
 
 public:
   // Initializes the data members to match that of the specified triple.
-  RISCVSubtarget(const Triple &TT, StringRef CPU, StringRef TuneCPU,
+  CapstoneSubtarget(const Triple &TT, StringRef CPU, StringRef TuneCPU,
                  StringRef FS, StringRef ABIName, unsigned RVVVectorBitsMin,
                  unsigned RVVVectorLMULMax, const TargetMachine &TM);
 
-  ~RISCVSubtarget() override;
+  ~CapstoneSubtarget() override;
 
   // Parses features string setting specified subtarget options. The
   // definition of this function is auto-generated by tblgen.
   void ParseSubtargetFeatures(StringRef CPU, StringRef TuneCPU, StringRef FS);
 
-  const RISCVFrameLowering *getFrameLowering() const override {
+  const CapstoneFrameLowering *getFrameLowering() const override {
     return &FrameLowering;
   }
-  const RISCVInstrInfo *getInstrInfo() const override { return &InstrInfo; }
-  const RISCVRegisterInfo *getRegisterInfo() const override {
+  const CapstoneInstrInfo *getInstrInfo() const override { return &InstrInfo; }
+  const CapstoneRegisterInfo *getRegisterInfo() const override {
     return &RegInfo;
   }
-  const RISCVTargetLowering *getTargetLowering() const override {
+  const CapstoneTargetLowering *getTargetLowering() const override {
     return &TLInfo;
   }
 
@@ -157,17 +157,17 @@ public:
     return Align(TuneInfo->PrefLoopAlignment);
   }
 
-  /// Returns RISC-V processor family.
+  /// Returns Capstone processor family.
   /// Avoid this function! CPU specifics should be kept local to this class
   /// and preferably modeled with SubtargetFeatures or properties in
   /// initializeProperties().
-  RISCVProcFamilyEnum getProcFamily() const { return RISCVProcFamily; }
+  CapstoneProcFamilyEnum getProcFamily() const { return CapstoneProcFamily; }
 
-  RISCVVRGatherCostModelEnum getVRGatherCostModel() const { return RISCVVRGatherCostModel; }
+  CapstoneVRGatherCostModelEnum getVRGatherCostModel() const { return CapstoneVRGatherCostModel; }
 
 #define GET_SUBTARGETINFO_MACRO(ATTRIBUTE, DEFAULT, GETTER) \
   bool GETTER() const { return ATTRIBUTE; }
-#include "RISCVGenSubtargetInfo.inc"
+#include "CapstoneGenSubtargetInfo.inc"
 
   LLVM_DEPRECATED("Now Equivalent to hasStdExtZca", "hasStdExtZca")
   bool hasStdExtCOrZca() const { return HasStdExtZca; }
@@ -263,20 +263,20 @@ public:
   /// returns \p X unmodified.
   template <typename Quantity> Quantity expandVScale(Quantity X) const {
     if (auto VLen = getRealVLen(); VLen && X.isScalable()) {
-      const unsigned VScale = *VLen / RISCV::RVVBitsPerBlock;
+      const unsigned VScale = *VLen / Capstone::RVVBitsPerBlock;
       X = Quantity::getFixed(X.getKnownMinValue() * VScale);
     }
     return X;
   }
 
-  RISCVABI::ABI getTargetABI() const { return TargetABI; }
+  CapstoneABI::ABI getTargetABI() const { return TargetABI; }
   bool isSoftFPABI() const {
-    return TargetABI == RISCVABI::ABI_LP64 ||
-           TargetABI == RISCVABI::ABI_ILP32 ||
-           TargetABI == RISCVABI::ABI_ILP32E;
+    return TargetABI == CapstoneABI::ABI_LP64 ||
+           TargetABI == CapstoneABI::ABI_ILP32 ||
+           TargetABI == CapstoneABI::ABI_ILP32E;
   }
   bool isRegisterReservedByUser(Register i) const override {
-    assert(i.id() < RISCV::NUM_TARGET_REGS && "Register out of range");
+    assert(i.id() < Capstone::NUM_TARGET_REGS && "Register out of range");
     return UserReservedRegister[i.id()];
   }
 
@@ -335,7 +335,7 @@ protected:
   mutable std::unique_ptr<CallLowering> CallLoweringInfo;
   mutable std::unique_ptr<InstructionSelector> InstSelector;
   mutable std::unique_ptr<LegalizerInfo> Legalizer;
-  mutable std::unique_ptr<RISCVRegisterBankInfo> RegBankInfo;
+  mutable std::unique_ptr<CapstoneRegisterBankInfo> RegBankInfo;
 
   // Return the known range for the bit length of RVV data registers as set
   // at the command line. A value of 0 means nothing is known about that particular
@@ -349,7 +349,7 @@ public:
   const CallLowering *getCallLowering() const override;
   InstructionSelector *getInstructionSelector() const override;
   const LegalizerInfo *getLegalizerInfo() const override;
-  const RISCVRegisterBankInfo *getRegBankInfo() const override;
+  const CapstoneRegisterBankInfo *getRegBankInfo() const override;
 
   bool isTargetAndroid() const { return getTargetTriple().isAndroid(); }
   bool isTargetFuchsia() const { return getTargetTriple().isOSFuchsia(); }

@@ -1,4 +1,4 @@
-//===-- RISCVTargetMachine.h - Define TargetMachine for RISC-V --*- C++ -*-===//
+//===-- CapstoneTargetMachine.h - Define TargetMachine for Capstone --*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,36 +6,36 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file declares the RISC-V specific subclass of TargetMachine.
+// This file declares the Capstone specific subclass of TargetMachine.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCVTARGETMACHINE_H
-#define LLVM_LIB_TARGET_RISCV_RISCVTARGETMACHINE_H
+#ifndef LLVM_LIB_TARGET_Capstone_CapstoneTARGETMACHINE_H
+#define LLVM_LIB_TARGET_Capstone_CapstoneTARGETMACHINE_H
 
-#include "MCTargetDesc/RISCVMCTargetDesc.h"
-#include "RISCVSubtarget.h"
+#include "MCTargetDesc/CapstoneMCTargetDesc.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/CodeGen/CodeGenTargetMachineImpl.h"
 #include "llvm/IR/DataLayout.h"
 #include <optional>
 
 namespace llvm {
-class RISCVTargetMachine : public CodeGenTargetMachineImpl {
+class CapstoneTargetMachine : public CodeGenTargetMachineImpl {
   std::unique_ptr<TargetLoweringObjectFile> TLOF;
-  mutable StringMap<std::unique_ptr<RISCVSubtarget>> SubtargetMap;
+  mutable StringMap<std::unique_ptr<CapstoneSubtarget>> SubtargetMap;
 
 public:
-  RISCVTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
+  CapstoneTargetMachine(const Target &T, const Triple &TT, StringRef CPU,
                      StringRef FS, const TargetOptions &Options,
                      std::optional<Reloc::Model> RM,
                      std::optional<CodeModel::Model> CM, CodeGenOptLevel OL,
                      bool JIT);
 
-  const RISCVSubtarget *getSubtargetImpl(const Function &F) const override;
+  const CapstoneSubtarget *getSubtargetImpl(const Function &F) const override;
   // DO NOT IMPLEMENT: There is no such thing as a valid default subtarget,
   // subtargets are per-function entities based on the target-specific
   // attributes of each function.
-  const RISCVSubtarget *getSubtargetImpl() const = delete;
+  const CapstoneSubtarget *getSubtargetImpl() const = delete;
 
   TargetPassConfig *createPassConfig(PassManagerBase &PM) override;
 
@@ -66,7 +66,7 @@ public:
 };
 
 std::unique_ptr<ScheduleDAGMutation>
-createRISCVVectorMaskDAGMutation(const TargetRegisterInfo *TRI);
+createCapstoneVectorMaskDAGMutation(const TargetRegisterInfo *TRI);
 
 } // namespace llvm
 

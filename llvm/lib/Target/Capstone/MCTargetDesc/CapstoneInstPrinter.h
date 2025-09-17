@@ -1,4 +1,4 @@
-//===-- RISCVInstPrinter.h - Convert RISC-V MCInst to asm syntax --*- C++ -*--//
+//===-- CapstoneInstPrinter.h - Convert Capstone MCInst to asm syntax --*- C++ -*--//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,21 +6,21 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This class prints a RISC-V MCInst to a .s file.
+// This class prints a Capstone MCInst to a .s file.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVINSTPRINTER_H
-#define LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVINSTPRINTER_H
+#ifndef LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneINSTPRINTER_H
+#define LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneINSTPRINTER_H
 
-#include "MCTargetDesc/RISCVMCTargetDesc.h"
+#include "MCTargetDesc/CapstoneMCTargetDesc.h"
 #include "llvm/MC/MCInstPrinter.h"
 
 namespace llvm {
 
-class RISCVInstPrinter : public MCInstPrinter {
+class CapstoneInstPrinter : public MCInstPrinter {
 public:
-  RISCVInstPrinter(const MCAsmInfo &MAI, const MCInstrInfo &MII,
+  CapstoneInstPrinter(const MCAsmInfo &MAI, const MCInstrInfo &MII,
                    const MCRegisterInfo &MRI)
       : MCInstPrinter(MAI, MII, MRI) {}
 

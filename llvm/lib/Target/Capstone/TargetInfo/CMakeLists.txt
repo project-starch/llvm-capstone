@@ -1,10 +1,10 @@
-add_llvm_component_library(LLVMRISCVInfo
-  RISCVTargetInfo.cpp
+add_llvm_component_library(LLVMCapstoneInfo
+  CapstoneTargetInfo.cpp
 
   LINK_COMPONENTS
   MC
   Support
 
   ADD_TO_COMPONENT
-  RISCV
+  Capstone
   )

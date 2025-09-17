@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfo.td - Target Description for RISC-V --*- tablegen -*-===//
+//===-- CapstoneInstrInfo.td - Target Description for Capstone --*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,17 +6,17 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions in TableGen format.
+// This file describes the Capstone instructions in TableGen format.
 //
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
-// RISC-V specific DAG Nodes.
+// Capstone specific DAG Nodes.
 //===----------------------------------------------------------------------===//
 
 class RVSDNode<string opcode, SDTypeProfile type_profile,
                list<SDNodeProperty> properties = []>
-    : SDNode<"RISCVISD::" # opcode, type_profile, properties> {
+    : SDNode<"CapstoneISD::" # opcode, type_profile, properties> {
   bit HasPassthruOp = false;
   bit HasMaskOp = false;
   let TSFlags{0} = HasPassthruOp;
@@ -30,21 +30,21 @@ def SDT_CallSeqEnd   : SDCallSeqEnd<[SDTCisVT<0, i32>,
                                      SDTCisVT<1, i32>]>;
 
 // Target-dependent type requirements.
-def SDT_RISCVCall     : SDTypeProfile<0, -1, [SDTCisVT<0, XLenVT>]>;
-def SDT_RISCVSelectCC : SDTypeProfile<1, 5, [SDTCisSameAs<1, 2>,
+def SDT_CapstoneCall     : SDTypeProfile<0, -1, [SDTCisVT<0, XLenVT>]>;
+def SDT_CapstoneSelectCC : SDTypeProfile<1, 5, [SDTCisSameAs<1, 2>,
                                              SDTCisVT<3, OtherVT>,
                                              SDTCisSameAs<0, 4>,
                                              SDTCisSameAs<4, 5>]>;
-def SDT_RISCVBrCC : SDTypeProfile<0, 4, [SDTCisSameAs<0, 1>,
+def SDT_CapstoneBrCC : SDTypeProfile<0, 4, [SDTCisSameAs<0, 1>,
                                          SDTCisVT<2, OtherVT>,
                                          SDTCisVT<3, OtherVT>]>;
-def SDT_RISCVIntUnaryOpW : SDTypeProfile<1, 1, [
+def SDT_CapstoneIntUnaryOpW : SDTypeProfile<1, 1, [
   SDTCisSameAs<0, 1>, SDTCisVT<0, i64>
 ]>;
-def SDT_RISCVIntBinOpW : SDTypeProfile<1, 2, [
+def SDT_CapstoneIntBinOpW : SDTypeProfile<1, 2, [
   SDTCisSameAs<0, 1>, SDTCisSameAs<0, 2>, SDTCisVT<0, i64>
 ]>;
-def SDT_RISCVIntShiftDOpW : SDTypeProfile<1, 3, [
+def SDT_CapstoneIntShiftDOpW : SDTypeProfile<1, 3, [
   SDTCisSameAs<0, 1>, SDTCisSameAs<0, 2>, SDTCisVT<0, i64>, SDTCisVT<3, i64>
 ]>;
 
@@ -54,30 +54,30 @@ def callseq_start : SDNode<"ISD::CALLSEQ_START", SDT_CallSeqStart,
 def callseq_end   : SDNode<"ISD::CALLSEQ_END", SDT_CallSeqEnd,
                            [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue]>;
 
-def riscv_call      : RVSDNode<"CALL", SDT_RISCVCall,
+def capstone_call      : RVSDNode<"CALL", SDT_CapstoneCall,
                                [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
                                 SDNPVariadic]>;
-def riscv_tail      : RVSDNode<"TAIL", SDT_RISCVCall,
+def capstone_tail      : RVSDNode<"TAIL", SDT_CapstoneCall,
                                [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
                                 SDNPVariadic]>;
 
 // Software guarded calls for large code model
-def riscv_sw_guarded_call : RVSDNode<"SW_GUARDED_CALL", SDT_RISCVCall,
+def capstone_sw_guarded_call : RVSDNode<"SW_GUARDED_CALL", SDT_CapstoneCall,
                                      [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
                                       SDNPVariadic]>;
-def riscv_sw_guarded_tail : RVSDNode<"SW_GUARDED_TAIL", SDT_RISCVCall,
+def capstone_sw_guarded_tail : RVSDNode<"SW_GUARDED_TAIL", SDT_CapstoneCall,
                                      [SDNPHasChain, SDNPOptInGlue, SDNPOutGlue,
                                       SDNPVariadic]>;
 
-def riscv_ret_glue  : RVSDNode<"RET_GLUE", SDTNone,
+def capstone_ret_glue  : RVSDNode<"RET_GLUE", SDTNone,
                                [SDNPHasChain, SDNPOptInGlue, SDNPVariadic]>;
-def riscv_sret_glue : RVSDNode<"SRET_GLUE", SDTNone,
+def capstone_sret_glue : RVSDNode<"SRET_GLUE", SDTNone,
                                [SDNPHasChain, SDNPOptInGlue]>;
-def riscv_mret_glue : RVSDNode<"MRET_GLUE", SDTNone,
+def capstone_mret_glue : RVSDNode<"MRET_GLUE", SDTNone,
                                [SDNPHasChain, SDNPOptInGlue]>;
-def riscv_mnret_glue : RVSDNode<"MNRET_GLUE", SDTNone,
+def capstone_mnret_glue : RVSDNode<"MNRET_GLUE", SDTNone,
                                 [SDNPHasChain, SDNPOptInGlue]>;
-def riscv_mileaveret_glue : RVSDNode<"QC_C_MILEAVERET_GLUE", SDTNone,
+def capstone_mileaveret_glue : RVSDNode<"QC_C_MILEAVERET_GLUE", SDTNone,
                                      [SDNPHasChain, SDNPOptInGlue]>;
 
 // Select with condition operator - This selects between a true value and
@@ -86,29 +86,29 @@ def riscv_mileaveret_glue : RVSDNode<"QC_C_MILEAVERET_GLUE", SDTNone,
 // condition code in op #2, a XLenVT constant from the ISD::CondCode enum.
 // The lhs and rhs are XLenVT integers. The true and false values can be
 // integer or floating point.
-def riscv_selectcc  : RVSDNode<"SELECT_CC", SDT_RISCVSelectCC>;
-def riscv_brcc      : RVSDNode<"BR_CC", SDT_RISCVBrCC,
+def capstone_selectcc  : RVSDNode<"SELECT_CC", SDT_CapstoneSelectCC>;
+def capstone_brcc      : RVSDNode<"BR_CC", SDT_CapstoneBrCC,
                                [SDNPHasChain]>;
 
 // Software guarded BRIND node. Operand is the target address.
-def riscv_sw_guarded_brind : RVSDNode<"SW_GUARDED_BRIND",
+def capstone_sw_guarded_brind : RVSDNode<"SW_GUARDED_BRIND",
                                       SDTBrind, [SDNPHasChain]>;
 
-// RV64I shifts, directly matching the semantics of the named RISC-V
+// RV64I shifts, directly matching the semantics of the named Capstone
 // instructions.
-def riscv_sllw      : RVSDNode<"SLLW", SDT_RISCVIntBinOpW>;
-def riscv_sraw      : RVSDNode<"SRAW", SDT_RISCVIntBinOpW>;
-def riscv_srlw      : RVSDNode<"SRLW", SDT_RISCVIntBinOpW>;
+def capstone_sllw      : RVSDNode<"SLLW", SDT_CapstoneIntBinOpW>;
+def capstone_sraw      : RVSDNode<"SRAW", SDT_CapstoneIntBinOpW>;
+def capstone_srlw      : RVSDNode<"SRLW", SDT_CapstoneIntBinOpW>;
 
 // Reads value of CSR. The first operand is the address of the required CSR.
 // The result is the read value.
-def riscv_read_csr  : RVSDNode<"READ_CSR",
+def capstone_read_csr  : RVSDNode<"READ_CSR",
                                SDTypeProfile<1, 1, [SDTCisInt<0>,
                                                     SDTCisInt<1>]>,
                                [SDNPHasChain]>;
 // Write value to CSR. The first operand is the address of the required CSR,
 // the second is the value to write.
-def riscv_write_csr : RVSDNode<"WRITE_CSR",
+def capstone_write_csr : RVSDNode<"WRITE_CSR",
                                SDTypeProfile<0, 2, [SDTCisInt<0>,
                                                     SDTCisInt<1>]>,
                                [SDNPHasChain]>;
@@ -116,7 +116,7 @@ def riscv_write_csr : RVSDNode<"WRITE_CSR",
 // Read and write value of CSR. The first operand is the address of the
 // required CSR, the second is the value to write, and the result is the
 // read value (before modification).
-def riscv_swap_csr  : RVSDNode<"SWAP_CSR",
+def capstone_swap_csr  : RVSDNode<"SWAP_CSR",
                                SDTypeProfile<1, 2, [SDTCisInt<0>,
                                                     SDTCisInt<1>,
                                                     SDTCisInt<2>]>,
@@ -124,14 +124,14 @@ def riscv_swap_csr  : RVSDNode<"SWAP_CSR",
 
 // Clear bits of CSR. The first operand is the address of the required CSR,
 // the second is the bitmask of cleared bits.
-def riscv_clear_csr  : RVSDNode<"CLEAR_CSR",
+def capstone_clear_csr  : RVSDNode<"CLEAR_CSR",
                                SDTypeProfile<0, 2, [SDTCisInt<0>,
                                                     SDTCisInt<1>]>,
                                [SDNPHasChain]>;
 
 // Set bits of CSR. The first operand is the address of the required CSR,
 // the second is the bitmask of bits to set.
-def riscv_set_csr  : RVSDNode<"SET_CSR",
+def capstone_set_csr  : RVSDNode<"SET_CSR",
                                SDTypeProfile<0, 2, [SDTCisInt<0>,
                                                     SDTCisInt<1>]>,
                                [SDNPHasChain]>;
@@ -139,7 +139,7 @@ def riscv_set_csr  : RVSDNode<"SET_CSR",
 // A read of the 64-bit counter CSR on a 32-bit target (returns (Lo, Hi)).
 // It takes a chain operand and another two target constant operands (the
 // CSR numbers of the low and high parts of the counter).
-def riscv_read_counter_wide : RVSDNode<"READ_COUNTER_WIDE",
+def capstone_read_counter_wide : RVSDNode<"READ_COUNTER_WIDE",
                                        SDTypeProfile<2, 2, [SDTCisVT<0, i32>,
                                                             SDTCisVT<1, i32>,
                                                             SDTCisInt<2>,
@@ -147,16 +147,16 @@ def riscv_read_counter_wide : RVSDNode<"READ_COUNTER_WIDE",
                                        [SDNPHasChain, SDNPSideEffect]>;
 
 // Add the Lo 12 bits from an address. Selected to ADDI.
-def riscv_add_lo : RVSDNode<"ADD_LO", SDTIntBinOp>;
+def capstone_add_lo : RVSDNode<"ADD_LO", SDTIntBinOp>;
 
 // Get the Hi 20 bits from an address. Selected to LUI.
-def riscv_hi : RVSDNode<"HI", SDTIntUnaryOp>;
+def capstone_hi : RVSDNode<"HI", SDTIntUnaryOp>;
 
 // Represents an AUIPC+ADDI pair. Selected to PseudoLLA.
-def riscv_lla : RVSDNode<"LLA", SDTIntUnaryOp>;
+def capstone_lla : RVSDNode<"LLA", SDTIntUnaryOp>;
 
 // Selected as PseudoAddTPRel. Used to emit a TP-relative relocation.
-def riscv_add_tprel : RVSDNode<"ADD_TPREL",
+def capstone_add_tprel : RVSDNode<"ADD_TPREL",
                                SDTypeProfile<1, 3, [SDTCisSameAs<0, 1>,
                                                     SDTCisSameAs<0, 2>,
                                                     SDTCisSameAs<0, 3>,
@@ -164,7 +164,7 @@ def riscv_add_tprel : RVSDNode<"ADD_TPREL",
 
 // To avoid stack clash, allocation is performed by block and each block is
 // probed.
-def riscv_probed_alloca : RVSDNode<"PROBED_ALLOCA",
+def capstone_probed_alloca : RVSDNode<"PROBED_ALLOCA",
                                    SDTypeProfile<0, 1, [SDTCisPtrTy<0>]>,
                                    [SDNPHasChain, SDNPMayStore]>;
 
@@ -175,7 +175,7 @@ defvar GPRPairVT = untyped;
 /// - Output: `untyped` even-odd register pair
 /// - Input 0: `i<xlen>` low-order bits, for even register.
 /// - Input 1: `i<xlen>` high-order bits, for odd register.
-def riscv_build_gpr_pair : RVSDNode<"BuildGPRPair",
+def capstone_build_gpr_pair : RVSDNode<"BuildGPRPair",
                                     SDTypeProfile<1, 2, [SDTCisVT<0, GPRPairVT>,
                                                          SDTCisVT<1, XLenVT>,
                                                          SDTCisVT<2, XLenVT>]>>;
@@ -184,7 +184,7 @@ def riscv_build_gpr_pair : RVSDNode<"BuildGPRPair",
 /// - Output 0: `i<xlen>` low-order bits, from even register.
 /// - Output 1: `i<xlen>` high-order bits, from odd register.
 /// - Input: `untyped` even-odd register pair
-def riscv_split_gpr_pair : RVSDNode<"SplitGPRPair",
+def capstone_split_gpr_pair : RVSDNode<"SplitGPRPair",
                                     SDTypeProfile<2, 1, [SDTCisVT<0, XLenVT>,
                                                          SDTCisVT<1, XLenVT>,
                                                          SDTCisVT<2, GPRPairVT>]>>;
@@ -248,11 +248,11 @@ class BareSImmNLsb0AsmOperand<int width>
   let PredicateMethod = "isBareSimmNLsb0<" # width # ">";
 }
 
-class RISCVOp<ValueType vt = XLenVT> : Operand<vt> {
-  let OperandNamespace = "RISCVOp";
+class CapstoneOp<ValueType vt = XLenVT> : Operand<vt> {
+  let OperandNamespace = "CapstoneOp";
 }
 
-class RISCVUImmOp<int bitsNum> : RISCVOp {
+class CapstoneUImmOp<int bitsNum> : CapstoneOp {
   let ParserMatchClass = UImmAsmOperand<bitsNum>;
   let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeUImmOperand<" # bitsNum # ">";
@@ -265,10 +265,10 @@ class RISCVUImmOp<int bitsNum> : RISCVOp {
   }];
 }
 
-class RISCVUImmLeafOp<int bitsNum> :
-  RISCVUImmOp<bitsNum>, ImmLeaf<XLenVT, "return isUInt<" # bitsNum # ">(Imm);">;
+class CapstoneUImmLeafOp<int bitsNum> :
+  CapstoneUImmOp<bitsNum>, ImmLeaf<XLenVT, "return isUInt<" # bitsNum # ">(Imm);">;
 
-class RISCVSImmOp<int bitsNum> : RISCVOp {
+class CapstoneSImmOp<int bitsNum> : CapstoneOp {
   let ParserMatchClass = SImmAsmOperand<bitsNum>;
   let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeSImmOperand<" # bitsNum # ">";
@@ -281,8 +281,8 @@ class RISCVSImmOp<int bitsNum> : RISCVOp {
   }];
 }
 
-class RISCVSImmLeafOp<int bitsNum> :
-  RISCVSImmOp<bitsNum>, ImmLeaf<XLenVT, "return isInt<" # bitsNum # ">(Imm);">;
+class CapstoneSImmLeafOp<int bitsNum> :
+  CapstoneSImmOp<bitsNum>, ImmLeaf<XLenVT, "return isInt<" # bitsNum # ">(Imm);">;
 
 def FenceArg : AsmOperandClass {
   let Name = "FenceArg";
@@ -290,7 +290,7 @@ def FenceArg : AsmOperandClass {
   let ParserMethod = "parseFenceArg";
 }
 
-def fencearg : RISCVOp {
+def fencearg : CapstoneOp {
   let ParserMatchClass = FenceArg;
   let PrintMethod = "printFenceArg";
   let DecoderMethod = "decodeUImmOperand<4>";
@@ -303,7 +303,7 @@ def UImmLog2XLenAsmOperand : AsmOperandClass {
   let DiagnosticType = "InvalidUImmLog2XLen";
 }
 
-def uimmlog2xlen : RISCVOp, ImmLeaf<XLenVT, [{
+def uimmlog2xlen : CapstoneOp, ImmLeaf<XLenVT, [{
   if (Subtarget->is64Bit())
     return isUInt<6>(Imm);
   return isUInt<5>(Imm);
@@ -328,22 +328,22 @@ def InsnDirectiveOpcode : AsmOperandClass {
   let PredicateMethod = "isImm";
 }
 
-def uimm1 : RISCVUImmLeafOp<1>;
-def uimm2 : RISCVUImmLeafOp<2>;
-def uimm3 : RISCVUImmLeafOp<3>;
-def uimm4 : RISCVUImmLeafOp<4>;
-def uimm5 : RISCVUImmLeafOp<5>;
-def uimm6 : RISCVUImmLeafOp<6>;
-def uimm7_opcode : RISCVUImmOp<7> {
+def uimm1 : CapstoneUImmLeafOp<1>;
+def uimm2 : CapstoneUImmLeafOp<2>;
+def uimm3 : CapstoneUImmLeafOp<3>;
+def uimm4 : CapstoneUImmLeafOp<4>;
+def uimm5 : CapstoneUImmLeafOp<5>;
+def uimm6 : CapstoneUImmLeafOp<6>;
+def uimm7_opcode : CapstoneUImmOp<7> {
   let ParserMatchClass = InsnDirectiveOpcode;
 }
-def uimm7 : RISCVUImmLeafOp<7>;
-def uimm8 : RISCVUImmOp<8>;
-def uimm16 : RISCVUImmOp<16>;
-def uimm32 : RISCVUImmOp<32>;
-def uimm48 : RISCVUImmOp<48>;
-def uimm64 : RISCVUImmOp<64>;
-def simm12 : RISCVSImmLeafOp<12> {
+def uimm7 : CapstoneUImmLeafOp<7>;
+def uimm8 : CapstoneUImmOp<8>;
+def uimm16 : CapstoneUImmOp<16>;
+def uimm32 : CapstoneUImmOp<32>;
+def uimm48 : CapstoneUImmOp<48>;
+def uimm64 : CapstoneUImmOp<64>;
+def simm12 : CapstoneSImmLeafOp<12> {
   let MCOperandPredicate = [{
     int64_t Imm;
     if (MCOp.evaluateAsConstantImm(Imm))
@@ -369,7 +369,7 @@ class BareSImm13Lsb0MaybeSym : Operand<OtherVT> {
 // A 13-bit signed immediate where the least significant bit is zero. The ImmLeaf
 // is needed so that the CompressInstEmitter can correctly add checks for the
 // compress patterns that involve instructions that use this operand. Similar to
-// bare_simm9_lsb0 in RISCVInstrInfoC.td.
+// bare_simm9_lsb0 in CapstoneInstrInfoC.td.
 def bare_simm13_lsb0 : BareSImm13Lsb0MaybeSym,
                        ImmLeaf<XLenVT, [{return isShiftedInt<12, 1>(Imm);}]> {
   let ParserMatchClass = BareSImmNLsb0AsmOperand<13>;
@@ -384,7 +384,7 @@ def bare_simm13_lsb0 : BareSImm13Lsb0MaybeSym,
 // is used to match with a basic block (eg. BccPat<>).
 def bare_simm13_lsb0_bb : BareSImm13Lsb0MaybeSym;
 
-class UImm20OperandMaybeSym : RISCVUImmOp<20> {
+class UImm20OperandMaybeSym : CapstoneUImmOp<20> {
   let MCOperandPredicate = [{
     int64_t Imm;
     if (MCOp.evaluateAsConstantImm(Imm))
@@ -400,7 +400,7 @@ def uimm20_auipc : UImm20OperandMaybeSym {
   let ParserMatchClass = UImmAsmOperand<20, "AUIPC">;
 }
 
-def uimm20 : RISCVUImmOp<20>;
+def uimm20 : CapstoneUImmOp<20>;
 
 def Simm21Lsb0JALAsmOperand : BareSImmNLsb0AsmOperand<21> {
   let ParserMethod = "parseJALOffset";
@@ -480,7 +480,7 @@ def CSRSystemRegister : AsmOperandClass {
   let DiagnosticType = "InvalidCSRSystemRegister";
 }
 
-def csr_sysreg : RISCVOp, TImmLeaf<XLenVT, "return isUInt<12>(Imm);"> {
+def csr_sysreg : CapstoneOp, TImmLeaf<XLenVT, "return isUInt<12>(Imm);"> {
   let ParserMatchClass = CSRSystemRegister;
   let PrintMethod = "printCSRSystemRegister";
   let DecoderMethod = "decodeUImmOperand<12>";
@@ -491,7 +491,7 @@ def csr_sysreg : RISCVOp, TImmLeaf<XLenVT, "return isUInt<12>(Imm);"> {
 def ixlenimm : Operand<XLenVT>;
 
 // Condition code used by select and short forward branch pseudos.
-def cond_code : RISCVOp {
+def cond_code : CapstoneOp {
   let OperandType = "OPERAND_COND_CODE";
 }
 
@@ -623,9 +623,9 @@ def LeadingOnesWMask : ImmLeaf<XLenVT, [{
 // Instruction Formats
 //===----------------------------------------------------------------------===//
 
-include "RISCVInstrFormats.td"
-include "RISCVInstrFormatsC.td"
-include "RISCVInstrFormatsV.td"
+include "CapstoneInstrFormats.td"
+include "CapstoneInstrFormatsC.td"
+include "CapstoneInstrFormatsV.td"
 
 //===----------------------------------------------------------------------===//
 // Instruction Class Templates
@@ -1467,17 +1467,17 @@ def : PatGprUimmLog2XLen<sra, SRAI>;
 
 // Select 'or' as ADDI if the immediate bits are known to be 0 in $rs1. This
 // can improve compressibility.
-def riscv_or_disjoint : PatFrag<(ops node:$lhs, node:$rhs), (or node:$lhs, node:$rhs),[{
+def capstone_or_disjoint : PatFrag<(ops node:$lhs, node:$rhs), (or node:$lhs, node:$rhs),[{
   return orDisjoint(N);
 }]>;
-def : PatGprSimm12<riscv_or_disjoint, ADDI>;
+def : PatGprSimm12<capstone_or_disjoint, ADDI>;
 
 def add_like : PatFrags<(ops node:$lhs, node:$rhs),
-                        [(riscv_or_disjoint node:$lhs, node:$rhs),
+                        [(capstone_or_disjoint node:$lhs, node:$rhs),
                          (add  node:$lhs, node:$rhs)]>;
 
-def riscv_xor_like : PatFrags<(ops node:$lhs, node:$rhs),
-                              [(riscv_or_disjoint node:$lhs, node:$rhs),
+def capstone_xor_like : PatFrags<(ops node:$lhs, node:$rhs),
+                              [(capstone_or_disjoint node:$lhs, node:$rhs),
                                (xor  node:$lhs, node:$rhs)]>;
 
 // negate of low bit can be done via two (compressible) shifts.  The negate
@@ -1497,7 +1497,7 @@ def : Pat<(XLenVT (and GPR:$rs, immop_oneuse<TrailingOnesMask>:$mask)),
 
 // Match both a plain shift and one where the shift amount is masked (this is
 // typically introduced when the legalizer promotes the shift amount and
-// zero-extends it). For RISC-V, the mask is unnecessary as shifts in the base
+// zero-extends it). For Capstone, the mask is unnecessary as shifts in the base
 // ISA only read the least significant 5 bits (RV32I) or 6 bits (RV64I).
 def shiftMaskXLen : ComplexPattern<XLenVT, 1, "selectShiftMaskXLen", [], [], 0>;
 def shiftMask32   : ComplexPattern<i64, 1, "selectShiftMask32", [], [], 0>;
@@ -1569,7 +1569,7 @@ def PROBED_STACKALLOC_RVV : Pseudo<(outs),
 let usesCustomInserter = 1 in
 def PROBED_STACKALLOC_DYN : Pseudo<(outs),
                                (ins GPR:$target),
-                               [(riscv_probed_alloca GPR:$target)]>,
+                               [(capstone_probed_alloca GPR:$target)]>,
                                Sched<[]>;
 }
 
@@ -1582,9 +1582,9 @@ let Size = 8, isReMaterializable = 1 in
 def PseudoMovAddr : Pseudo<(outs GPR:$dst), (ins uimm20_lui:$hi, simm12:$lo), []>,
                     Sched<[WriteIALU]>;
 
-def riscv_hi_oneuse : unop_oneuse<riscv_hi>;
+def capstone_hi_oneuse : unop_oneuse<capstone_hi>;
 def addr_hi_lo : PatFrag<(ops node:$hi, node:$lo),
-                         (riscv_add_lo (riscv_hi_oneuse node:$hi), node:$lo)>;
+                         (capstone_add_lo (capstone_hi_oneuse node:$hi), node:$lo)>;
 
 def : Pat<(addr_hi_lo tglobaladdr:$hi, tglobaladdr:$lo),
           (PseudoMovAddr tglobaladdr:$hi, tglobaladdr:$lo)>;
@@ -1595,26 +1595,26 @@ def : Pat<(addr_hi_lo tjumptable:$hi, tjumptable:$lo),
 def : Pat<(addr_hi_lo tconstpool:$hi, tconstpool:$lo),
           (PseudoMovAddr tconstpool:$hi, tconstpool:$lo)>;
 
-def : Pat<(riscv_hi tglobaladdr:$in), (LUI tglobaladdr:$in)>;
-def : Pat<(riscv_hi tblockaddress:$in), (LUI tblockaddress:$in)>;
-def : Pat<(riscv_hi tjumptable:$in), (LUI tjumptable:$in)>;
-def : Pat<(riscv_hi tconstpool:$in), (LUI tconstpool:$in)>;
+def : Pat<(capstone_hi tglobaladdr:$in), (LUI tglobaladdr:$in)>;
+def : Pat<(capstone_hi tblockaddress:$in), (LUI tblockaddress:$in)>;
+def : Pat<(capstone_hi tjumptable:$in), (LUI tjumptable:$in)>;
+def : Pat<(capstone_hi tconstpool:$in), (LUI tconstpool:$in)>;
 
-def : Pat<(riscv_add_lo GPR:$hi, tglobaladdr:$lo),
+def : Pat<(capstone_add_lo GPR:$hi, tglobaladdr:$lo),
           (ADDI GPR:$hi, tglobaladdr:$lo)>;
-def : Pat<(riscv_add_lo GPR:$hi, tblockaddress:$lo),
+def : Pat<(capstone_add_lo GPR:$hi, tblockaddress:$lo),
           (ADDI GPR:$hi, tblockaddress:$lo)>;
-def : Pat<(riscv_add_lo GPR:$hi, tjumptable:$lo),
+def : Pat<(capstone_add_lo GPR:$hi, tjumptable:$lo),
           (ADDI GPR:$hi, tjumptable:$lo)>;
-def : Pat<(riscv_add_lo GPR:$hi, tconstpool:$lo),
+def : Pat<(capstone_add_lo GPR:$hi, tconstpool:$lo),
           (ADDI GPR:$hi, tconstpool:$lo)>;
 
 /// TLS address nodes.
 
-def : Pat<(riscv_hi tglobaltlsaddr:$in), (LUI tglobaltlsaddr:$in)>;
-def : Pat<(riscv_add_tprel GPR:$rs1, GPR:$rs2, tglobaltlsaddr:$src),
+def : Pat<(capstone_hi tglobaltlsaddr:$in), (LUI tglobaltlsaddr:$in)>;
+def : Pat<(capstone_add_tprel GPR:$rs1, GPR:$rs2, tglobaltlsaddr:$src),
           (PseudoAddTPRel GPR:$rs1, GPR:$rs2, tglobaltlsaddr:$src)>;
-def : Pat<(riscv_add_lo GPR:$src, tglobaltlsaddr:$lo),
+def : Pat<(capstone_add_lo GPR:$src, tglobaltlsaddr:$lo),
           (ADDI GPR:$src, tglobaltlsaddr:$lo)>;
 
 /// Setcc
@@ -1624,35 +1624,35 @@ def : PatGprSimm12<setlt, SLTI>;
 def : PatGprGpr<setult, SLTU>;
 def : PatGprSimm12<setult, SLTIU>;
 
-// RISC-V doesn't have general instructions for integer setne/seteq, but we can
+// Capstone doesn't have general instructions for integer setne/seteq, but we can
 // check for equality with 0. These ComplexPatterns rewrite the setne/seteq into
 // something that can be compared with 0.
 // These ComplexPatterns must be used in pairs.
-def riscv_setne : ComplexPattern<XLenVT, 1, "selectSETNE", [setcc]>;
-def riscv_seteq : ComplexPattern<XLenVT, 1, "selectSETEQ", [setcc]>;
+def capstone_setne : ComplexPattern<XLenVT, 1, "selectSETNE", [setcc]>;
+def capstone_seteq : ComplexPattern<XLenVT, 1, "selectSETEQ", [setcc]>;
 
 // Define pattern expansions for setcc operations that aren't directly
-// handled by a RISC-V instruction.
-def : Pat<(riscv_seteq (XLenVT GPR:$rs1)), (SLTIU GPR:$rs1, 1)>;
-def : Pat<(riscv_setne (XLenVT GPR:$rs1)), (SLTU (XLenVT X0), GPR:$rs1)>;
+// handled by a Capstone instruction.
+def : Pat<(capstone_seteq (XLenVT GPR:$rs1)), (SLTIU GPR:$rs1, 1)>;
+def : Pat<(capstone_setne (XLenVT GPR:$rs1)), (SLTU (XLenVT X0), GPR:$rs1)>;
 def : Pat<(XLenVT (setne (XLenVT GPR:$rs1), -1)), (SLTIU GPR:$rs1, -1)>;
 def : Pat<(XLenVT (seteq (XLenVT (and GPR:$rs, immop_oneuse<TrailingOnesMask>:$mask)), 0)),
           (SLTIU (XLenVT (SLLI GPR:$rs, (XLenSubTrailingOnes imm:$mask))), 1)>;
 def : Pat<(XLenVT (setne (XLenVT (and GPR:$rs, immop_oneuse<TrailingOnesMask>:$mask)), 0)),
           (SLTU (XLenVT X0), (XLenVT (SLLI GPR:$rs, (XLenSubTrailingOnes imm:$mask))))>;
 
-def IntCCtoRISCVCC : SDNodeXForm<riscv_selectcc, [{
+def IntCCtoCapstoneCC : SDNodeXForm<capstone_selectcc, [{
   ISD::CondCode CC = cast<CondCodeSDNode>(N->getOperand(2))->get();
-  RISCVCC::CondCode BrCC = getRISCVCCForIntCC(CC);
+  CapstoneCC::CondCode BrCC = getCapstoneCCForIntCC(CC);
   return CurDAG->getTargetConstant(BrCC, SDLoc(N), Subtarget->getXLenVT());
 }]>;
 
-def riscv_selectcc_frag : PatFrag<(ops node:$lhs, node:$rhs, node:$cc,
+def capstone_selectcc_frag : PatFrag<(ops node:$lhs, node:$rhs, node:$cc,
                                        node:$truev, node:$falsev),
-                                  (riscv_selectcc node:$lhs, node:$rhs,
+                                  (capstone_selectcc node:$lhs, node:$rhs,
                                                   node:$cc, node:$truev,
                                                   node:$falsev), [{}],
-                                  IntCCtoRISCVCC>;
+                                  IntCCtoCapstoneCC>;
 
 multiclass SelectCC_GPR_rrirr<DAGOperand valty, ValueType vt> {
   let usesCustomInserter = 1 in
@@ -1660,24 +1660,24 @@ multiclass SelectCC_GPR_rrirr<DAGOperand valty, ValueType vt> {
                              (ins GPR:$lhs, GPR:$rhs, cond_code:$cc,
                               valty:$truev, valty:$falsev),
                              [(set valty:$dst,
-                               (riscv_selectcc_frag:$cc (XLenVT GPR:$lhs), GPR:$rhs, cond,
+                               (capstone_selectcc_frag:$cc (XLenVT GPR:$lhs), GPR:$rhs, cond,
                                                         (vt valty:$truev), valty:$falsev))]>;
   // Explicitly select 0 in the condition to X0. The register coalescer doesn't
   // always do it.
-  def : Pat<(riscv_selectcc_frag:$cc (XLenVT GPR:$lhs), 0, cond, (vt valty:$truev),
+  def : Pat<(capstone_selectcc_frag:$cc (XLenVT GPR:$lhs), 0, cond, (vt valty:$truev),
                                      valty:$falsev),
             (!cast<Instruction>(NAME#"_Using_CC_GPR") GPR:$lhs, (XLenVT X0),
-             (IntCCtoRISCVCC $cc), valty:$truev, valty:$falsev)>;
+             (IntCCtoCapstoneCC $cc), valty:$truev, valty:$falsev)>;
 }
 
 let Predicates = [NoConditionalMoveFusion] in
 defm Select_GPR : SelectCC_GPR_rrirr<GPR, XLenVT>;
 
 class SelectCompressOpt<CondCode Cond>
-    : Pat<(riscv_selectcc_frag:$select (XLenVT GPR:$lhs), simm12_no6:$Constant, Cond,
+    : Pat<(capstone_selectcc_frag:$select (XLenVT GPR:$lhs), simm12_no6:$Constant, Cond,
                                        (XLenVT GPR:$truev), GPR:$falsev),
     (Select_GPR_Using_CC_GPR (XLenVT (ADDI GPR:$lhs, (NegImm simm12:$Constant))), (XLenVT X0),
-                          (IntCCtoRISCVCC $select), GPR:$truev, GPR:$falsev)>;
+                          (IntCCtoCapstoneCC $select), GPR:$truev, GPR:$falsev)>;
 
 def OptForMinSize : Predicate<"MF ? MF->getFunction().hasMinSize() : false">;
 
@@ -1704,17 +1704,17 @@ def : Pat<(i64 (setlt (sext_inreg GPR:$rs1, i32), 0)), (SRLIW GPR:$rs1, 31)>;
 
 /// Branches and jumps
 
-// Match `riscv_brcc` and lower to the appropriate RISC-V branch instruction.
+// Match `capstone_brcc` and lower to the appropriate Capstone branch instruction.
 multiclass BccPat<CondCode Cond, RVInstB Inst> {
-  def : Pat<(riscv_brcc (XLenVT GPR:$rs1), GPR:$rs2, Cond, bb:$imm12),
+  def : Pat<(capstone_brcc (XLenVT GPR:$rs1), GPR:$rs2, Cond, bb:$imm12),
             (Inst GPR:$rs1, GPR:$rs2, bare_simm13_lsb0_bb:$imm12)>;
   // Explicitly select 0 to X0. The register coalescer doesn't always do it.
-  def : Pat<(riscv_brcc (XLenVT GPR:$rs1), 0, Cond, bb:$imm12),
+  def : Pat<(capstone_brcc (XLenVT GPR:$rs1), 0, Cond, bb:$imm12),
             (Inst GPR:$rs1, (XLenVT X0), bare_simm13_lsb0_bb:$imm12)>;
 }
 
 class BrccCompressOpt<CondCode Cond, RVInstB Inst>
-    : Pat<(riscv_brcc GPR:$lhs, simm12_no6:$Constant, Cond, bb:$place),
+    : Pat<(capstone_brcc GPR:$lhs, simm12_no6:$Constant, Cond, bb:$place),
           (Inst (XLenVT (ADDI GPR:$lhs, (NegImm simm12:$Constant))),
                 (XLenVT X0), bb:$place)>;
 
@@ -1774,8 +1774,8 @@ def : Pat<(brind GPRJALRNonX7:$rs1), (PseudoBRINDNonX7 GPRJALRNonX7:$rs1, 0)>;
 def : Pat<(brind (add GPRJALRNonX7:$rs1, simm12:$imm12)),
           (PseudoBRINDNonX7 GPRJALRNonX7:$rs1, simm12:$imm12)>;
 
-def : Pat<(riscv_sw_guarded_brind GPRX7:$rs1), (PseudoBRINDX7 GPRX7:$rs1, 0)>;
-def : Pat<(riscv_sw_guarded_brind (add GPRX7:$rs1, simm12:$imm12)),
+def : Pat<(capstone_sw_guarded_brind GPRX7:$rs1), (PseudoBRINDX7 GPRX7:$rs1, 0)>;
+def : Pat<(capstone_sw_guarded_brind (add GPRX7:$rs1, simm12:$imm12)),
           (PseudoBRINDX7 GPRX7:$rs1, simm12:$imm12)>;
 }
 
@@ -1798,7 +1798,7 @@ def PseudoCALLReg : Pseudo<(outs GPR:$rd), (ins call_symbol:$func), [],
 
 // PseudoCALL is a pseudo instruction which will eventually expand to auipc
 // and jalr while encoding. This is desirable, as an auipc+jalr pair with
-// R_RISCV_CALL and R_RISCV_RELAX relocations can be be relaxed by the linker
+// R_Capstone_CALL and R_Capstone_RELAX relocations can be be relaxed by the linker
 // if the offset fits in a signed 21-bit immediate.
 // Define AsmString to print "call" when compile with -S flag.
 // Define isCodeGenOnly = 0 to support parsing assembly "call" instruction.
@@ -1807,32 +1807,32 @@ def PseudoCALL : Pseudo<(outs), (ins call_symbol:$func), [],
                         "call", "$func">,
                  Sched<[WriteIALU, WriteJalr, ReadJalr]>;
 
-def : Pat<(riscv_call tglobaladdr:$func), (PseudoCALL tglobaladdr:$func)>;
-def : Pat<(riscv_call texternalsym:$func), (PseudoCALL texternalsym:$func)>;
+def : Pat<(capstone_call tglobaladdr:$func), (PseudoCALL tglobaladdr:$func)>;
+def : Pat<(capstone_call texternalsym:$func), (PseudoCALL texternalsym:$func)>;
 
-def : Pat<(riscv_sret_glue), (SRET)>;
-def : Pat<(riscv_mret_glue), (MRET)>;
+def : Pat<(capstone_sret_glue), (SRET)>;
+def : Pat<(capstone_mret_glue), (MRET)>;
 let Predicates = [HasStdExtSmrnmi] in
-def : Pat<(riscv_mnret_glue), (MNRET)>;
+def : Pat<(capstone_mnret_glue), (MNRET)>;
 
 let isCall = 1, Defs = [X1] in {
 let Predicates = [NoStdExtZicfilp] in
 def PseudoCALLIndirect : Pseudo<(outs), (ins GPRJALR:$rs1),
-                                [(riscv_call GPRJALR:$rs1)]>,
+                                [(capstone_call GPRJALR:$rs1)]>,
                          PseudoInstExpansion<(JALR X1, GPR:$rs1, 0)>;
 let Predicates = [HasStdExtZicfilp] in {
 def PseudoCALLIndirectNonX7 : Pseudo<(outs), (ins GPRJALRNonX7:$rs1),
-                                     [(riscv_call GPRJALRNonX7:$rs1)]>,
+                                     [(capstone_call GPRJALRNonX7:$rs1)]>,
                               PseudoInstExpansion<(JALR X1, GPR:$rs1, 0)>;
 // For large code model, non-indirect calls could be software-guarded
 def PseudoCALLIndirectX7 : Pseudo<(outs), (ins GPRX7:$rs1),
-                                  [(riscv_sw_guarded_call GPRX7:$rs1)]>,
+                                  [(capstone_sw_guarded_call GPRX7:$rs1)]>,
                            PseudoInstExpansion<(JALR X1, GPR:$rs1, 0)>;
 }
 }
 
 let isBarrier = 1, isReturn = 1, isTerminator = 1 in
-def PseudoRET : Pseudo<(outs), (ins), [(riscv_ret_glue)]>,
+def PseudoRET : Pseudo<(outs), (ins), [(capstone_ret_glue)]>,
                 PseudoInstExpansion<(JALR X0, X1, 0)>;
 
 // PseudoTAIL is a pseudo instruction similar to PseudoCALL and will eventually
@@ -1847,22 +1847,22 @@ def PseudoTAIL : Pseudo<(outs), (ins call_symbol:$dst), [],
 let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [X2] in {
 let Predicates = [NoStdExtZicfilp] in
 def PseudoTAILIndirect : Pseudo<(outs), (ins GPRTC:$rs1),
-                                [(riscv_tail GPRTC:$rs1)]>,
+                                [(capstone_tail GPRTC:$rs1)]>,
                          PseudoInstExpansion<(JALR X0, GPR:$rs1, 0)>;
 let Predicates = [HasStdExtZicfilp] in {
 def PseudoTAILIndirectNonX7 : Pseudo<(outs), (ins GPRTCNonX7:$rs1),
-                                     [(riscv_tail GPRTCNonX7:$rs1)]>,
+                                     [(capstone_tail GPRTCNonX7:$rs1)]>,
                               PseudoInstExpansion<(JALR X0, GPR:$rs1, 0)>;
 // For large code model, non-indirect calls could be software-guarded
 def PseudoTAILIndirectX7 : Pseudo<(outs), (ins GPRX7:$rs1),
-                                  [(riscv_sw_guarded_tail GPRX7:$rs1)]>,
+                                  [(capstone_sw_guarded_tail GPRX7:$rs1)]>,
                            PseudoInstExpansion<(JALR X0, GPR:$rs1, 0)>;
 }
 }
 
-def : Pat<(riscv_tail (iPTR tglobaladdr:$dst)),
+def : Pat<(capstone_tail (iPTR tglobaladdr:$dst)),
           (PseudoTAIL tglobaladdr:$dst)>;
-def : Pat<(riscv_tail (iPTR texternalsym:$dst)),
+def : Pat<(capstone_tail (iPTR texternalsym:$dst)),
           (PseudoTAIL texternalsym:$dst)>;
 
 let isCall = 0, isBarrier = 1, isBranch = 1, isTerminator = 1, Size = 8,
@@ -1873,7 +1873,7 @@ def PseudoJump : Pseudo<(outs GPR:$rd), (ins pseudo_jump_symbol:$target), [],
 
 // Pseudo for a rematerializable constant materialization sequence.
 // This is an experimental feature enabled by
-// -riscv-use-rematerializable-movimm in RISCVISelDAGToDAG.cpp
+// -capstone-use-rematerializable-movimm in CapstoneISelDAGToDAG.cpp
 // It will be expanded after register allocation.
 // FIXME: The scheduling information does not reflect the multiple instructions.
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 8,
@@ -1891,10 +1891,10 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 8, isCodeGenOnly = 0,
     isAsmParserOnly = 1 in
 def PseudoLLAImm : Pseudo<(outs GPR:$dst), (ins ixlenimm_li_restricted:$imm), [],
                           "lla", "$dst, $imm">;
-def : Pat<(riscv_lla tglobaladdr:$in), (PseudoLLA tglobaladdr:$in)>;
-def : Pat<(riscv_lla tblockaddress:$in), (PseudoLLA tblockaddress:$in)>;
-def : Pat<(riscv_lla tjumptable:$in), (PseudoLLA tjumptable:$in)>;
-def : Pat<(riscv_lla tconstpool:$in), (PseudoLLA tconstpool:$in)>;
+def : Pat<(capstone_lla tglobaladdr:$in), (PseudoLLA tglobaladdr:$in)>;
+def : Pat<(capstone_lla tblockaddress:$in), (PseudoLLA tblockaddress:$in)>;
+def : Pat<(capstone_lla tjumptable:$in), (PseudoLLA tjumptable:$in)>;
+def : Pat<(capstone_lla tconstpool:$in), (PseudoLLA tconstpool:$in)>;
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0, Size = 8, isCodeGenOnly = 0,
     isAsmParserOnly = 1 in
@@ -1999,7 +1999,7 @@ def : StPat<store, SW, GPR, i32>;
 
 /// Fences
 
-// Refer to Table A.6 in the version 2.3 draft of the RISC-V Instruction Set
+// Refer to Table A.6 in the version 2.3 draft of the Capstone Instruction Set
 // Manual: Volume I.
 
 // fence acquire -> fence r, rw
@@ -2011,7 +2011,7 @@ def : Pat<(atomic_fence (XLenVT 6), (timm)), (FENCE_TSO)>;
 // fence seq_cst -> fence rw, rw
 def : Pat<(atomic_fence (XLenVT 7), (timm)), (FENCE 0b11, 0b11)>;
 
-// Lowering for atomic load and store is defined in RISCVInstrInfoA.td.
+// Lowering for atomic load and store is defined in CapstoneInstrInfoA.td.
 // Although these are lowered to fence+load/store instructions defined in the
 // base RV32I/RV64I ISA, this lowering is only used when the A extension is
 // present. This is necessary as it isn't valid to mix __atomic_* libcalls
@@ -2025,7 +2025,7 @@ def : Pat<(atomic_fence (XLenVT 7), (timm)), (FENCE 0b11, 0b11)>;
 
 class ReadSysReg<SysReg SR, list<Register> Regs>
   : Pseudo<(outs GPR:$rd), (ins),
-           [(set GPR:$rd, (XLenVT (riscv_read_csr (XLenVT SR.Encoding))))]>,
+           [(set GPR:$rd, (XLenVT (capstone_read_csr (XLenVT SR.Encoding))))]>,
     PseudoInstExpansion<(CSRRS GPR:$rd, SR.Encoding, X0)> {
   let hasSideEffects = 0;
   let Uses = Regs;
@@ -2033,7 +2033,7 @@ class ReadSysReg<SysReg SR, list<Register> Regs>
 
 class WriteSysReg<SysReg SR, list<Register> Regs>
   : Pseudo<(outs), (ins GPR:$val),
-           [(riscv_write_csr (XLenVT SR.Encoding), (XLenVT GPR:$val))]>,
+           [(capstone_write_csr (XLenVT SR.Encoding), (XLenVT GPR:$val))]>,
     PseudoInstExpansion<(CSRRW X0, SR.Encoding, GPR:$val)> {
   let hasSideEffects = 0;
   let Defs = Regs;
@@ -2041,7 +2041,7 @@ class WriteSysReg<SysReg SR, list<Register> Regs>
 
 class WriteSysRegImm<SysReg SR, list<Register> Regs>
   : Pseudo<(outs), (ins uimm5:$val),
-           [(riscv_write_csr (XLenVT SR.Encoding), uimm5:$val)]>,
+           [(capstone_write_csr (XLenVT SR.Encoding), uimm5:$val)]>,
     PseudoInstExpansion<(CSRRWI X0, SR.Encoding, uimm5:$val)> {
   let hasSideEffects = 0;
   let Defs = Regs;
@@ -2049,7 +2049,7 @@ class WriteSysRegImm<SysReg SR, list<Register> Regs>
 
 class SwapSysReg<SysReg SR, list<Register> Regs>
   : Pseudo<(outs GPR:$rd), (ins GPR:$val),
-           [(set GPR:$rd, (riscv_swap_csr (XLenVT SR.Encoding), (XLenVT GPR:$val)))]>,
+           [(set GPR:$rd, (capstone_swap_csr (XLenVT SR.Encoding), (XLenVT GPR:$val)))]>,
     PseudoInstExpansion<(CSRRW GPR:$rd, SR.Encoding, GPR:$val)> {
   let hasSideEffects = 0;
   let Uses = Regs;
@@ -2058,7 +2058,7 @@ class SwapSysReg<SysReg SR, list<Register> Regs>
 
 class SwapSysRegImm<SysReg SR, list<Register> Regs>
   : Pseudo<(outs GPR:$rd), (ins uimm5:$val),
-           [(set GPR:$rd, (XLenVT (riscv_swap_csr (XLenVT SR.Encoding), uimm5:$val)))]>,
+           [(set GPR:$rd, (XLenVT (capstone_swap_csr (XLenVT SR.Encoding), uimm5:$val)))]>,
     PseudoInstExpansion<(CSRRWI GPR:$rd, SR.Encoding, uimm5:$val)> {
   let hasSideEffects = 0;
   let Uses = Regs;
@@ -2067,7 +2067,7 @@ class SwapSysRegImm<SysReg SR, list<Register> Regs>
 
 class ClearSysReg<SysReg SR, list<Register> Regs>
   : Pseudo<(outs), (ins GPR:$val),
-           [(riscv_clear_csr (XLenVT SR.Encoding), (XLenVT GPR:$val))]>,
+           [(capstone_clear_csr (XLenVT SR.Encoding), (XLenVT GPR:$val))]>,
     PseudoInstExpansion<(CSRRC X0, SR.Encoding, GPR:$val)> {
   let hasSideEffects = 0;
   let Uses = Regs;
@@ -2076,7 +2076,7 @@ class ClearSysReg<SysReg SR, list<Register> Regs>
 
 class ClearSysRegImm<SysReg SR, list<Register> Regs>
   : Pseudo<(outs), (ins uimm5:$val),
-           [(riscv_clear_csr (XLenVT SR.Encoding), uimm5:$val)]>,
+           [(capstone_clear_csr (XLenVT SR.Encoding), uimm5:$val)]>,
     PseudoInstExpansion<(CSRRCI X0, SR.Encoding, uimm5:$val)> {
   let hasSideEffects = 0;
   let Uses = Regs;
@@ -2085,7 +2085,7 @@ class ClearSysRegImm<SysReg SR, list<Register> Regs>
 
 class SetSysReg<SysReg SR, list<Register> Regs>
   : Pseudo<(outs), (ins GPR:$val),
-           [(riscv_set_csr (XLenVT SR.Encoding), (XLenVT GPR:$val))]>,
+           [(capstone_set_csr (XLenVT SR.Encoding), (XLenVT GPR:$val))]>,
     PseudoInstExpansion<(CSRRS X0, SR.Encoding, GPR:$val)> {
   let hasSideEffects = 0;
   let Uses = Regs;
@@ -2094,7 +2094,7 @@ class SetSysReg<SysReg SR, list<Register> Regs>
 
 class SetSysRegImm<SysReg SR, list<Register> Regs>
   : Pseudo<(outs), (ins uimm5:$val),
-           [(riscv_set_csr (XLenVT SR.Encoding), uimm5:$val)]>,
+           [(capstone_set_csr (XLenVT SR.Encoding), uimm5:$val)]>,
     PseudoInstExpansion<(CSRRSI X0, SR.Encoding, uimm5:$val)> {
   let hasSideEffects = 0;
   let Uses = Regs;
@@ -2203,9 +2203,9 @@ def : Pat<(sra (sext_inreg GPR:$rs1, i32), uimm5:$shamt),
 def : Pat<(i64 (sra (shl GPR:$rs1, (i64 32)), uimm6gt32:$shamt)),
           (SRAIW GPR:$rs1, (ImmSub32 uimm6gt32:$shamt))>;
 
-def : PatGprGpr<shiftopw<riscv_sllw>, SLLW>;
-def : PatGprGpr<shiftopw<riscv_srlw>, SRLW>;
-def : PatGprGpr<shiftopw<riscv_sraw>, SRAW>;
+def : PatGprGpr<shiftopw<capstone_sllw>, SLLW>;
+def : PatGprGpr<shiftopw<capstone_srlw>, SRLW>;
+def : PatGprGpr<shiftopw<capstone_sraw>, SRAW>;
 
 // Select W instructions if only the lower 32 bits of the result are used.
 def : PatGprGpr<binop_allwusers<add>, ADDW>;
@@ -2230,8 +2230,8 @@ def : PatGprImm<binop_allwusers<xor>, XORI, u32simm12>;
 
 // Select 'or' as ADDIW if the immediate bits are known to be 0 in $rs1 and
 // $rs1 is sign extended. This can improve compressibility. Using ADDIW gives
-// more power to RISCVOptWInstrs.
-def : Pat<(riscv_or_disjoint 33signbits_node:$rs1, simm12:$imm),
+// more power to CapstoneOptWInstrs.
+def : Pat<(capstone_or_disjoint 33signbits_node:$rs1, simm12:$imm),
           (ADDIW $rs1, simm12:$imm)>;
 
 /// Loads
@@ -2260,7 +2260,7 @@ def : Pat<(i64 (readsteadycounter)), (CSRRS TIME.Encoding, (XLenVT X0))>;
 let Predicates = [IsRV32], usesCustomInserter = 1, hasNoSchedulingInfo = 1 in
 def ReadCounterWide : Pseudo<(outs GPR:$lo, GPR:$hi), (ins i32imm:$csr_lo, i32imm:$csr_hi),
                              [(set GPR:$lo, GPR:$hi,
-                              (riscv_read_counter_wide csr_sysreg:$csr_lo, csr_sysreg:$csr_hi))],
+                              (capstone_read_counter_wide csr_sysreg:$csr_lo, csr_sysreg:$csr_hi))],
                              "", "">;
 
 /// traps
@@ -2310,78 +2310,78 @@ def : Pat<(i64 (add GPR:$rs1, negImm:$rs2)), (SUB GPR:$rs1, negImm:$rs2)>;
 
 // Zihintpause
 let Predicates = [HasStdExtZihintpause] in
-def : Pat<(int_riscv_pause), (FENCE 0x1, 0x0)>;
+def : Pat<(int_capstone_pause), (FENCE 0x1, 0x0)>;
 
 //===----------------------------------------------------------------------===//
 // Standard extensions
 //===----------------------------------------------------------------------===//
 
 // Multiply and Division
-include "RISCVInstrInfoM.td"
+include "CapstoneInstrInfoM.td"
 
 // Atomic
-include "RISCVInstrInfoA.td"
-include "RISCVInstrInfoZa.td"
-include "RISCVInstrInfoZalasr.td"
+include "CapstoneInstrInfoA.td"
+include "CapstoneInstrInfoZa.td"
+include "CapstoneInstrInfoZalasr.td"
 
 // Integer
-include "RISCVInstrInfoZimop.td"
-include "RISCVInstrInfoZicbo.td"
-include "RISCVInstrInfoZicond.td"
-include "RISCVInstrInfoZilsd.td"
-include "RISCVInstrInfoZibi.td"
+include "CapstoneInstrInfoZimop.td"
+include "CapstoneInstrInfoZicbo.td"
+include "CapstoneInstrInfoZicond.td"
+include "CapstoneInstrInfoZilsd.td"
+include "CapstoneInstrInfoZibi.td"
 
 // Scalar FP
-include "RISCVInstrInfoF.td"
-include "RISCVInstrInfoD.td"
-include "RISCVInstrInfoQ.td"
-include "RISCVInstrInfoZfh.td"
-include "RISCVInstrInfoZfbfmin.td"
-include "RISCVInstrInfoZfa.td"
+include "CapstoneInstrInfoF.td"
+include "CapstoneInstrInfoD.td"
+include "CapstoneInstrInfoQ.td"
+include "CapstoneInstrInfoZfh.td"
+include "CapstoneInstrInfoZfbfmin.td"
+include "CapstoneInstrInfoZfa.td"
 
 // Scalar bitmanip and cryptography
-include "RISCVInstrInfoZb.td"
-include "RISCVInstrInfoZk.td"
+include "CapstoneInstrInfoZb.td"
+include "CapstoneInstrInfoZk.td"
 
 // Vector
-include "RISCVInstrInfoV.td"
-include "RISCVInstrInfoZvk.td"
-include "RISCVInstrInfoZvqdotq.td"
+include "CapstoneInstrInfoV.td"
+include "CapstoneInstrInfoZvk.td"
+include "CapstoneInstrInfoZvqdotq.td"
 
 // Packed SIMD
-include "RISCVInstrInfoP.td"
+include "CapstoneInstrInfoP.td"
 
 // Compressed
-include "RISCVInstrInfoC.td"
-include "RISCVInstrInfoZc.td"
-include "RISCVInstrInfoZcmop.td"
-include "RISCVInstrInfoZclsd.td"
+include "CapstoneInstrInfoC.td"
+include "CapstoneInstrInfoZc.td"
+include "CapstoneInstrInfoZcmop.td"
+include "CapstoneInstrInfoZclsd.td"
 
 // Control Flow Integriy, this requires Zimop/Zcmop
-include "RISCVInstrInfoZicfiss.td"
+include "CapstoneInstrInfoZicfiss.td"
 
 // Short Forward Branch
-include "RISCVInstrInfoSFB.td"
+include "CapstoneInstrInfoSFB.td"
 
 //===----------------------------------------------------------------------===//
 // Vendor extensions
 //===----------------------------------------------------------------------===//
 
-include "RISCVInstrInfoXVentana.td"
-include "RISCVInstrInfoXTHead.td"
-include "RISCVInstrInfoXSf.td"
-include "RISCVInstrInfoXSfmm.td"
-include "RISCVInstrInfoXCV.td"
-include "RISCVInstrInfoXwch.td"
-include "RISCVInstrInfoXqci.td"
-include "RISCVInstrInfoXqccmp.td"
-include "RISCVInstrInfoXMips.td"
-include "RISCVInstrInfoXRivos.td"
-include "RISCVInstrInfoXAndes.td"
-include "RISCVInstrInfoXSpacemiT.td"
+include "CapstoneInstrInfoXVentana.td"
+include "CapstoneInstrInfoXTHead.td"
+include "CapstoneInstrInfoXSf.td"
+include "CapstoneInstrInfoXSfmm.td"
+include "CapstoneInstrInfoXCV.td"
+include "CapstoneInstrInfoXwch.td"
+include "CapstoneInstrInfoXqci.td"
+include "CapstoneInstrInfoXqccmp.td"
+include "CapstoneInstrInfoXMips.td"
+include "CapstoneInstrInfoXRivos.td"
+include "CapstoneInstrInfoXAndes.td"
+include "CapstoneInstrInfoXSpacemiT.td"
 
 //===----------------------------------------------------------------------===//
 // Global ISel
 //===----------------------------------------------------------------------===//
 
-include "RISCVInstrGISel.td"
+include "CapstoneInstrGISel.td"

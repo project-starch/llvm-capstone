@@ -1,4 +1,4 @@
-//===------ RISCVProfiles.td - RISC-V Profiles -------------*- tablegen -*-===//
+//===------ CapstoneProfiles.td - Capstone Profiles -------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -138,26 +138,26 @@ defvar RVM23U32Features = [Feature32Bit,
 // Profile Definitions for ISA String
 //===----------------------------------------------------------------------===//
 
-class RISCVProfile<string name, list<SubtargetFeature> features>
+class CapstoneProfile<string name, list<SubtargetFeature> features>
     : SubtargetFeature<name, "Is" # NAME, "true",
-                       "RISC-V " # name # " profile", features> {
+                       "Capstone " # name # " profile", features> {
   // Indicates if the profile is not yet ratified, so should be treated as
   // experimental.
   bit Experimental = false;
 }
-class RISCVExperimentalProfile<string name, list<SubtargetFeature> features>
-    : RISCVProfile<"experimental-"#name, features> {
+class CapstoneExperimentalProfile<string name, list<SubtargetFeature> features>
+    : CapstoneProfile<"experimental-"#name, features> {
   let Experimental = true;
 }
 
-def RVI20U32 : RISCVProfile<"rvi20u32", RVI20U32Features>;
-def RVI20U64 : RISCVProfile<"rvi20u64", RVI20U64Features>;
-def RVA20U64 : RISCVProfile<"rva20u64", RVA20U64Features>;
-def RVA20S64 : RISCVProfile<"rva20s64", RVA20S64Features>;
-def RVA22U64 : RISCVProfile<"rva22u64", RVA22U64Features>;
-def RVA22S64 : RISCVProfile<"rva22s64", RVA22S64Features>;
-def RVA23U64 : RISCVProfile<"rva23u64", RVA23U64Features>;
-def RVA23S64 : RISCVProfile<"rva23s64", RVA23S64Features>;
-def RVB23U64 : RISCVProfile<"rvb23u64", RVB23U64Features>;
-def RVB23S64 : RISCVProfile<"rvb23s64", RVB23S64Features>;
-def RVM23U32 : RISCVExperimentalProfile<"rvm23u32", RVM23U32Features>;
+def RVI20U32 : CapstoneProfile<"rvi20u32", RVI20U32Features>;
+def RVI20U64 : CapstoneProfile<"rvi20u64", RVI20U64Features>;
+def RVA20U64 : CapstoneProfile<"rva20u64", RVA20U64Features>;
+def RVA20S64 : CapstoneProfile<"rva20s64", RVA20S64Features>;
+def RVA22U64 : CapstoneProfile<"rva22u64", RVA22U64Features>;
+def RVA22S64 : CapstoneProfile<"rva22s64", RVA22S64Features>;
+def RVA23U64 : CapstoneProfile<"rva23u64", RVA23U64Features>;
+def RVA23S64 : CapstoneProfile<"rva23s64", RVA23S64Features>;
+def RVB23U64 : CapstoneProfile<"rvb23u64", RVB23U64Features>;
+def RVB23S64 : CapstoneProfile<"rvb23s64", RVB23S64Features>;
+def RVM23U32 : CapstoneExperimentalProfile<"rvm23u32", RVM23U32Features>;

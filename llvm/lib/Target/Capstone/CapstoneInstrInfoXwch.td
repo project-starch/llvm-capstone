@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoXwch.td ------------------------------*- tablegen -*-===//
+//===-- CapstoneInstrInfoXwch.td ------------------------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -26,7 +26,7 @@ class QKStackInst<bits<2> funct2, dag outs, dag ins,
 //===----------------------------------------------------------------------===//
 
 // A 5-bit unsigned immediate where the least significant bit is zero.
-def uimm5_lsb0 : RISCVOp,
+def uimm5_lsb0 : CapstoneOp,
                  ImmLeaf<XLenVT, [{return isShiftedUInt<4, 1>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<5, "Lsb0">;
   let EncoderMethod = "getImmOpValue";
@@ -41,7 +41,7 @@ def uimm5_lsb0 : RISCVOp,
 }
 
 // A 6-bit unsigned immediate where the least significant bit is zero.
-def uimm6_lsb0 : RISCVOp,
+def uimm6_lsb0 : CapstoneOp,
                  ImmLeaf<XLenVT, [{return isShiftedUInt<5, 1>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<6, "Lsb0">;
   let EncoderMethod = "getImmOpValue";

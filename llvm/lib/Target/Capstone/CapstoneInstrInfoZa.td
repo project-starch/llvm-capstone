@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZa.td - RISC-V Atomic instructions ---*- tablegen -*-===//
+//===-- CapstoneInstrInfoZa.td - Capstone Atomic instructions ---*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard atomic 'Za*'
+// This file describes the Capstone instructions from the standard atomic 'Za*'
 // extensions:
 //   - Zawrs (v1.0) : Wait-on-Reservation-Set.
 //   - Zacas (v1.0-rc1) : Atomic Compare-and-Swap.

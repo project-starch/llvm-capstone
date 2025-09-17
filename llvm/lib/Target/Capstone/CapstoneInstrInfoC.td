@@ -1,4 +1,4 @@
-//===- RISCVInstrInfoC.td - Compressed RISC-V instructions -*- tblgen-*----===//
+//===- CapstoneInstrInfoC.td - Compressed Capstone instructions -*- tblgen-*----===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -16,7 +16,7 @@ def UImmLog2XLenNonZeroAsmOperand : AsmOperandClass {
   let DiagnosticType = "InvalidUImmLog2XLenNonZero";
 }
 
-def uimmlog2xlennonzero : RISCVOp, ImmLeaf<XLenVT, [{
+def uimmlog2xlennonzero : CapstoneOp, ImmLeaf<XLenVT, [{
   if (Subtarget->is64Bit())
     return isUInt<6>(Imm) && (Imm != 0);
   return isUInt<5>(Imm) && (Imm != 0);
@@ -34,7 +34,7 @@ def uimmlog2xlennonzero : RISCVOp, ImmLeaf<XLenVT, [{
   }];
 }
 
-def simm6 : RISCVSImmLeafOp<6> {
+def simm6 : CapstoneSImmLeafOp<6> {
   let MCOperandPredicate = [{
     int64_t Imm;
     if (MCOp.evaluateAsConstantImm(Imm))
@@ -43,7 +43,7 @@ def simm6 : RISCVSImmLeafOp<6> {
   }];
 }
 
-def simm6nonzero : RISCVOp,
+def simm6nonzero : CapstoneOp,
                    ImmLeaf<XLenVT, [{return (Imm != 0) && isInt<6>(Imm);}]> {
   let ParserMatchClass = SImmAsmOperand<6, "NonZero">;
   let EncoderMethod = "getImmOpValue";
@@ -65,11 +65,11 @@ def CLUIImmAsmOperand : AsmOperandClass {
 
 
 // c_lui_imm checks the immediate range is in [1, 31] or [0xfffe0, 0xfffff].
-// The RISC-V ISA describes the constraint as [1, 63], with that value being
+// The Capstone ISA describes the constraint as [1, 63], with that value being
 // loaded in to bits 17-12 of the destination register and sign extended from
 // bit 17. Therefore, this 6-bit immediate can represent values in the ranges
 // [1, 31] and [0xfffe0, 0xfffff].
-def c_lui_imm : RISCVOp,
+def c_lui_imm : CapstoneOp,
                 ImmLeaf<XLenVT, [{return (Imm != 0) &&
                                  (isUInt<5>(Imm) ||
                                   (Imm >= 0xfffe0 && Imm <= 0xfffff));}]> {
@@ -87,7 +87,7 @@ def c_lui_imm : RISCVOp,
 }
 
 // A 7-bit unsigned immediate where the least significant two bits are zero.
-def uimm7_lsb00 : RISCVOp,
+def uimm7_lsb00 : CapstoneOp,
                   ImmLeaf<XLenVT, [{return isShiftedUInt<5, 2>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<7, "Lsb00">;
   let EncoderMethod = "getImmOpValue";
@@ -102,7 +102,7 @@ def uimm7_lsb00 : RISCVOp,
 }
 
 // A 8-bit unsigned immediate where the least significant two bits are zero.
-def uimm8_lsb00 : RISCVOp,
+def uimm8_lsb00 : CapstoneOp,
                   ImmLeaf<XLenVT, [{return isShiftedUInt<6, 2>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<8, "Lsb00">;
   let EncoderMethod = "getImmOpValue";
@@ -117,7 +117,7 @@ def uimm8_lsb00 : RISCVOp,
 }
 
 // A 8-bit unsigned immediate where the least significant three bits are zero.
-def uimm8_lsb000 : RISCVOp,
+def uimm8_lsb000 : CapstoneOp,
                    ImmLeaf<XLenVT, [{return isShiftedUInt<5, 3>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<8, "Lsb000">;
   let EncoderMethod = "getImmOpValue";
@@ -148,7 +148,7 @@ def bare_simm9_lsb0 : Operand<OtherVT>,
 }
 
 // A 9-bit unsigned immediate where the least significant three bits are zero.
-def uimm9_lsb000 : RISCVOp,
+def uimm9_lsb000 : CapstoneOp,
                    ImmLeaf<XLenVT, [{return isShiftedUInt<6, 3>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<9, "Lsb000">;
   let EncoderMethod = "getImmOpValue";
@@ -164,7 +164,7 @@ def uimm9_lsb000 : RISCVOp,
 
 // A 10-bit unsigned immediate where the least significant two bits are zero
 // and the immediate can't be zero.
-def uimm10_lsb00nonzero : RISCVOp,
+def uimm10_lsb00nonzero : CapstoneOp,
                           ImmLeaf<XLenVT,
                           [{return isShiftedUInt<8, 2>(Imm) && (Imm != 0);}]> {
   let ParserMatchClass = UImmAsmOperand<10, "Lsb00NonZero">;
@@ -180,7 +180,7 @@ def uimm10_lsb00nonzero : RISCVOp,
 }
 
 // A 10-bit signed immediate where the least significant four bits are zero.
-def simm10_lsb0000nonzero : RISCVOp,
+def simm10_lsb0000nonzero : CapstoneOp,
                             ImmLeaf<XLenVT,
                             [{return (Imm != 0) && isShiftedInt<6, 4>(Imm);}]> {
   let ParserMatchClass = SImmAsmOperand<10, "Lsb0000NonZero">;
@@ -218,7 +218,7 @@ def InsnCDirectiveOpcode : AsmOperandClass {
   let PredicateMethod = "isImm";
 }
 
-def uimm2_opcode : RISCVUImmOp<2> {
+def uimm2_opcode : CapstoneUImmOp<2> {
   let ParserMatchClass = InsnCDirectiveOpcode;
 }
 
@@ -532,7 +532,7 @@ def C_SDSP : CStackStore<0b111, "c.sdsp", GPR, uimm9_lsb000>,
   let Inst{9-7}   = imm{8-6};
 }
 
-// The all zeros pattern isn't a valid RISC-V instruction. It's used by GNU
+// The all zeros pattern isn't a valid Capstone instruction. It's used by GNU
 // binutils as 16-bit instruction known to be unimplemented (i.e., trapping).
 let hasSideEffects = 1, mayLoad = 0, mayStore = 0, isTrap = 1 in
 def C_UNIMP : RVInst16<(outs), (ins), "c.unimp", "", [], InstFormatOther>,

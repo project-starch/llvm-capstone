@@ -1,4 +1,4 @@
-//===-- RISCVCallingConv.cpp - RISC-V Custom CC Routines ------------------===//
+//===-- CapstoneCallingConv.cpp - Capstone Custom CC Routines ------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,12 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains the custom routines for the RISC-V Calling Convention.
+// This file contains the custom routines for the Capstone Calling Convention.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVCallingConv.h"
-#include "RISCVSubtarget.h"
+#include "CapstoneCallingConv.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/MCRegister.h"
@@ -43,190 +43,190 @@ using namespace llvm;
 // register-size fields in the same situations they would be for fixed
 // arguments.
 
-static const MCPhysReg ArgFPR16s[] = {RISCV::F10_H, RISCV::F11_H, RISCV::F12_H,
-                                      RISCV::F13_H, RISCV::F14_H, RISCV::F15_H,
-                                      RISCV::F16_H, RISCV::F17_H};
-static const MCPhysReg ArgFPR32s[] = {RISCV::F10_F, RISCV::F11_F, RISCV::F12_F,
-                                      RISCV::F13_F, RISCV::F14_F, RISCV::F15_F,
-                                      RISCV::F16_F, RISCV::F17_F};
-static const MCPhysReg ArgFPR64s[] = {RISCV::F10_D, RISCV::F11_D, RISCV::F12_D,
-                                      RISCV::F13_D, RISCV::F14_D, RISCV::F15_D,
-                                      RISCV::F16_D, RISCV::F17_D};
+static const MCPhysReg ArgFPR16s[] = {Capstone::F10_H, Capstone::F11_H, Capstone::F12_H,
+                                      Capstone::F13_H, Capstone::F14_H, Capstone::F15_H,
+                                      Capstone::F16_H, Capstone::F17_H};
+static const MCPhysReg ArgFPR32s[] = {Capstone::F10_F, Capstone::F11_F, Capstone::F12_F,
+                                      Capstone::F13_F, Capstone::F14_F, Capstone::F15_F,
+                                      Capstone::F16_F, Capstone::F17_F};
+static const MCPhysReg ArgFPR64s[] = {Capstone::F10_D, Capstone::F11_D, Capstone::F12_D,
+                                      Capstone::F13_D, Capstone::F14_D, Capstone::F15_D,
+                                      Capstone::F16_D, Capstone::F17_D};
 // This is an interim calling convention and it may be changed in the future.
 static const MCPhysReg ArgVRs[] = {
-    RISCV::V8,  RISCV::V9,  RISCV::V10, RISCV::V11, RISCV::V12, RISCV::V13,
-    RISCV::V14, RISCV::V15, RISCV::V16, RISCV::V17, RISCV::V18, RISCV::V19,
-    RISCV::V20, RISCV::V21, RISCV::V22, RISCV::V23};
-static const MCPhysReg ArgVRM2s[] = {RISCV::V8M2,  RISCV::V10M2, RISCV::V12M2,
-                                     RISCV::V14M2, RISCV::V16M2, RISCV::V18M2,
-                                     RISCV::V20M2, RISCV::V22M2};
-static const MCPhysReg ArgVRM4s[] = {RISCV::V8M4, RISCV::V12M4, RISCV::V16M4,
-                                     RISCV::V20M4};
-static const MCPhysReg ArgVRM8s[] = {RISCV::V8M8, RISCV::V16M8};
+    Capstone::V8,  Capstone::V9,  Capstone::V10, Capstone::V11, Capstone::V12, Capstone::V13,
+    Capstone::V14, Capstone::V15, Capstone::V16, Capstone::V17, Capstone::V18, Capstone::V19,
+    Capstone::V20, Capstone::V21, Capstone::V22, Capstone::V23};
+static const MCPhysReg ArgVRM2s[] = {Capstone::V8M2,  Capstone::V10M2, Capstone::V12M2,
+                                     Capstone::V14M2, Capstone::V16M2, Capstone::V18M2,
+                                     Capstone::V20M2, Capstone::V22M2};
+static const MCPhysReg ArgVRM4s[] = {Capstone::V8M4, Capstone::V12M4, Capstone::V16M4,
+                                     Capstone::V20M4};
+static const MCPhysReg ArgVRM8s[] = {Capstone::V8M8, Capstone::V16M8};
 static const MCPhysReg ArgVRN2M1s[] = {
-    RISCV::V8_V9,   RISCV::V9_V10,  RISCV::V10_V11, RISCV::V11_V12,
-    RISCV::V12_V13, RISCV::V13_V14, RISCV::V14_V15, RISCV::V15_V16,
-    RISCV::V16_V17, RISCV::V17_V18, RISCV::V18_V19, RISCV::V19_V20,
-    RISCV::V20_V21, RISCV::V21_V22, RISCV::V22_V23};
+    Capstone::V8_V9,   Capstone::V9_V10,  Capstone::V10_V11, Capstone::V11_V12,
+    Capstone::V12_V13, Capstone::V13_V14, Capstone::V14_V15, Capstone::V15_V16,
+    Capstone::V16_V17, Capstone::V17_V18, Capstone::V18_V19, Capstone::V19_V20,
+    Capstone::V20_V21, Capstone::V21_V22, Capstone::V22_V23};
 static const MCPhysReg ArgVRN3M1s[] = {
-    RISCV::V8_V9_V10,   RISCV::V9_V10_V11,  RISCV::V10_V11_V12,
-    RISCV::V11_V12_V13, RISCV::V12_V13_V14, RISCV::V13_V14_V15,
-    RISCV::V14_V15_V16, RISCV::V15_V16_V17, RISCV::V16_V17_V18,
-    RISCV::V17_V18_V19, RISCV::V18_V19_V20, RISCV::V19_V20_V21,
-    RISCV::V20_V21_V22, RISCV::V21_V22_V23};
+    Capstone::V8_V9_V10,   Capstone::V9_V10_V11,  Capstone::V10_V11_V12,
+    Capstone::V11_V12_V13, Capstone::V12_V13_V14, Capstone::V13_V14_V15,
+    Capstone::V14_V15_V16, Capstone::V15_V16_V17, Capstone::V16_V17_V18,
+    Capstone::V17_V18_V19, Capstone::V18_V19_V20, Capstone::V19_V20_V21,
+    Capstone::V20_V21_V22, Capstone::V21_V22_V23};
 static const MCPhysReg ArgVRN4M1s[] = {
-    RISCV::V8_V9_V10_V11,   RISCV::V9_V10_V11_V12,  RISCV::V10_V11_V12_V13,
-    RISCV::V11_V12_V13_V14, RISCV::V12_V13_V14_V15, RISCV::V13_V14_V15_V16,
-    RISCV::V14_V15_V16_V17, RISCV::V15_V16_V17_V18, RISCV::V16_V17_V18_V19,
-    RISCV::V17_V18_V19_V20, RISCV::V18_V19_V20_V21, RISCV::V19_V20_V21_V22,
-    RISCV::V20_V21_V22_V23};
+    Capstone::V8_V9_V10_V11,   Capstone::V9_V10_V11_V12,  Capstone::V10_V11_V12_V13,
+    Capstone::V11_V12_V13_V14, Capstone::V12_V13_V14_V15, Capstone::V13_V14_V15_V16,
+    Capstone::V14_V15_V16_V17, Capstone::V15_V16_V17_V18, Capstone::V16_V17_V18_V19,
+    Capstone::V17_V18_V19_V20, Capstone::V18_V19_V20_V21, Capstone::V19_V20_V21_V22,
+    Capstone::V20_V21_V22_V23};
 static const MCPhysReg ArgVRN5M1s[] = {
-    RISCV::V8_V9_V10_V11_V12,   RISCV::V9_V10_V11_V12_V13,
-    RISCV::V10_V11_V12_V13_V14, RISCV::V11_V12_V13_V14_V15,
-    RISCV::V12_V13_V14_V15_V16, RISCV::V13_V14_V15_V16_V17,
-    RISCV::V14_V15_V16_V17_V18, RISCV::V15_V16_V17_V18_V19,
-    RISCV::V16_V17_V18_V19_V20, RISCV::V17_V18_V19_V20_V21,
-    RISCV::V18_V19_V20_V21_V22, RISCV::V19_V20_V21_V22_V23};
+    Capstone::V8_V9_V10_V11_V12,   Capstone::V9_V10_V11_V12_V13,
+    Capstone::V10_V11_V12_V13_V14, Capstone::V11_V12_V13_V14_V15,
+    Capstone::V12_V13_V14_V15_V16, Capstone::V13_V14_V15_V16_V17,
+    Capstone::V14_V15_V16_V17_V18, Capstone::V15_V16_V17_V18_V19,
+    Capstone::V16_V17_V18_V19_V20, Capstone::V17_V18_V19_V20_V21,
+    Capstone::V18_V19_V20_V21_V22, Capstone::V19_V20_V21_V22_V23};
 static const MCPhysReg ArgVRN6M1s[] = {
-    RISCV::V8_V9_V10_V11_V12_V13,   RISCV::V9_V10_V11_V12_V13_V14,
-    RISCV::V10_V11_V12_V13_V14_V15, RISCV::V11_V12_V13_V14_V15_V16,
-    RISCV::V12_V13_V14_V15_V16_V17, RISCV::V13_V14_V15_V16_V17_V18,
-    RISCV::V14_V15_V16_V17_V18_V19, RISCV::V15_V16_V17_V18_V19_V20,
-    RISCV::V16_V17_V18_V19_V20_V21, RISCV::V17_V18_V19_V20_V21_V22,
-    RISCV::V18_V19_V20_V21_V22_V23};
+    Capstone::V8_V9_V10_V11_V12_V13,   Capstone::V9_V10_V11_V12_V13_V14,
+    Capstone::V10_V11_V12_V13_V14_V15, Capstone::V11_V12_V13_V14_V15_V16,
+    Capstone::V12_V13_V14_V15_V16_V17, Capstone::V13_V14_V15_V16_V17_V18,
+    Capstone::V14_V15_V16_V17_V18_V19, Capstone::V15_V16_V17_V18_V19_V20,
+    Capstone::V16_V17_V18_V19_V20_V21, Capstone::V17_V18_V19_V20_V21_V22,
+    Capstone::V18_V19_V20_V21_V22_V23};
 static const MCPhysReg ArgVRN7M1s[] = {
-    RISCV::V8_V9_V10_V11_V12_V13_V14,   RISCV::V9_V10_V11_V12_V13_V14_V15,
-    RISCV::V10_V11_V12_V13_V14_V15_V16, RISCV::V11_V12_V13_V14_V15_V16_V17,
-    RISCV::V12_V13_V14_V15_V16_V17_V18, RISCV::V13_V14_V15_V16_V17_V18_V19,
-    RISCV::V14_V15_V16_V17_V18_V19_V20, RISCV::V15_V16_V17_V18_V19_V20_V21,
-    RISCV::V16_V17_V18_V19_V20_V21_V22, RISCV::V17_V18_V19_V20_V21_V22_V23};
-static const MCPhysReg ArgVRN8M1s[] = {RISCV::V8_V9_V10_V11_V12_V13_V14_V15,
-                                       RISCV::V9_V10_V11_V12_V13_V14_V15_V16,
-                                       RISCV::V10_V11_V12_V13_V14_V15_V16_V17,
-                                       RISCV::V11_V12_V13_V14_V15_V16_V17_V18,
-                                       RISCV::V12_V13_V14_V15_V16_V17_V18_V19,
-                                       RISCV::V13_V14_V15_V16_V17_V18_V19_V20,
-                                       RISCV::V14_V15_V16_V17_V18_V19_V20_V21,
-                                       RISCV::V15_V16_V17_V18_V19_V20_V21_V22,
-                                       RISCV::V16_V17_V18_V19_V20_V21_V22_V23};
-static const MCPhysReg ArgVRN2M2s[] = {RISCV::V8M2_V10M2,  RISCV::V10M2_V12M2,
-                                       RISCV::V12M2_V14M2, RISCV::V14M2_V16M2,
-                                       RISCV::V16M2_V18M2, RISCV::V18M2_V20M2,
-                                       RISCV::V20M2_V22M2};
+    Capstone::V8_V9_V10_V11_V12_V13_V14,   Capstone::V9_V10_V11_V12_V13_V14_V15,
+    Capstone::V10_V11_V12_V13_V14_V15_V16, Capstone::V11_V12_V13_V14_V15_V16_V17,
+    Capstone::V12_V13_V14_V15_V16_V17_V18, Capstone::V13_V14_V15_V16_V17_V18_V19,
+    Capstone::V14_V15_V16_V17_V18_V19_V20, Capstone::V15_V16_V17_V18_V19_V20_V21,
+    Capstone::V16_V17_V18_V19_V20_V21_V22, Capstone::V17_V18_V19_V20_V21_V22_V23};
+static const MCPhysReg ArgVRN8M1s[] = {Capstone::V8_V9_V10_V11_V12_V13_V14_V15,
+                                       Capstone::V9_V10_V11_V12_V13_V14_V15_V16,
+                                       Capstone::V10_V11_V12_V13_V14_V15_V16_V17,
+                                       Capstone::V11_V12_V13_V14_V15_V16_V17_V18,
+                                       Capstone::V12_V13_V14_V15_V16_V17_V18_V19,
+                                       Capstone::V13_V14_V15_V16_V17_V18_V19_V20,
+                                       Capstone::V14_V15_V16_V17_V18_V19_V20_V21,
+                                       Capstone::V15_V16_V17_V18_V19_V20_V21_V22,
+                                       Capstone::V16_V17_V18_V19_V20_V21_V22_V23};
+static const MCPhysReg ArgVRN2M2s[] = {Capstone::V8M2_V10M2,  Capstone::V10M2_V12M2,
+                                       Capstone::V12M2_V14M2, Capstone::V14M2_V16M2,
+                                       Capstone::V16M2_V18M2, Capstone::V18M2_V20M2,
+                                       Capstone::V20M2_V22M2};
 static const MCPhysReg ArgVRN3M2s[] = {
-    RISCV::V8M2_V10M2_V12M2,  RISCV::V10M2_V12M2_V14M2,
-    RISCV::V12M2_V14M2_V16M2, RISCV::V14M2_V16M2_V18M2,
-    RISCV::V16M2_V18M2_V20M2, RISCV::V18M2_V20M2_V22M2};
+    Capstone::V8M2_V10M2_V12M2,  Capstone::V10M2_V12M2_V14M2,
+    Capstone::V12M2_V14M2_V16M2, Capstone::V14M2_V16M2_V18M2,
+    Capstone::V16M2_V18M2_V20M2, Capstone::V18M2_V20M2_V22M2};
 static const MCPhysReg ArgVRN4M2s[] = {
-    RISCV::V8M2_V10M2_V12M2_V14M2, RISCV::V10M2_V12M2_V14M2_V16M2,
-    RISCV::V12M2_V14M2_V16M2_V18M2, RISCV::V14M2_V16M2_V18M2_V20M2,
-    RISCV::V16M2_V18M2_V20M2_V22M2};
-static const MCPhysReg ArgVRN2M4s[] = {RISCV::V8M4_V12M4, RISCV::V12M4_V16M4,
-                                       RISCV::V16M4_V20M4};
+    Capstone::V8M2_V10M2_V12M2_V14M2, Capstone::V10M2_V12M2_V14M2_V16M2,
+    Capstone::V12M2_V14M2_V16M2_V18M2, Capstone::V14M2_V16M2_V18M2_V20M2,
+    Capstone::V16M2_V18M2_V20M2_V22M2};
+static const MCPhysReg ArgVRN2M4s[] = {Capstone::V8M4_V12M4, Capstone::V12M4_V16M4,
+                                       Capstone::V16M4_V20M4};
 
-ArrayRef<MCPhysReg> RISCV::getArgGPRs(const RISCVABI::ABI ABI) {
+ArrayRef<MCPhysReg> Capstone::getArgGPRs(const CapstoneABI::ABI ABI) {
   // The GPRs used for passing arguments in the ILP32* and LP64* ABIs, except
   // the ILP32E ABI.
-  static const MCPhysReg ArgIGPRs[] = {RISCV::X10, RISCV::X11, RISCV::X12,
-                                       RISCV::X13, RISCV::X14, RISCV::X15,
-                                       RISCV::X16, RISCV::X17};
+  static const MCPhysReg ArgIGPRs[] = {Capstone::X10, Capstone::X11, Capstone::X12,
+                                       Capstone::X13, Capstone::X14, Capstone::X15,
+                                       Capstone::X16, Capstone::X17};
   // The GPRs used for passing arguments in the ILP32E/LP64E ABI.
-  static const MCPhysReg ArgEGPRs[] = {RISCV::X10, RISCV::X11, RISCV::X12,
-                                       RISCV::X13, RISCV::X14, RISCV::X15};
+  static const MCPhysReg ArgEGPRs[] = {Capstone::X10, Capstone::X11, Capstone::X12,
+                                       Capstone::X13, Capstone::X14, Capstone::X15};
 
-  if (ABI == RISCVABI::ABI_ILP32E || ABI == RISCVABI::ABI_LP64E)
+  if (ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E)
     return ArrayRef(ArgEGPRs);
 
   return ArrayRef(ArgIGPRs);
 }
 
-static ArrayRef<MCPhysReg> getArgGPR16s(const RISCVABI::ABI ABI) {
+static ArrayRef<MCPhysReg> getArgGPR16s(const CapstoneABI::ABI ABI) {
   // The GPRs used for passing arguments in the ILP32* and LP64* ABIs, except
   // the ILP32E ABI.
-  static const MCPhysReg ArgIGPRs[] = {RISCV::X10_H, RISCV::X11_H, RISCV::X12_H,
-                                       RISCV::X13_H, RISCV::X14_H, RISCV::X15_H,
-                                       RISCV::X16_H, RISCV::X17_H};
+  static const MCPhysReg ArgIGPRs[] = {Capstone::X10_H, Capstone::X11_H, Capstone::X12_H,
+                                       Capstone::X13_H, Capstone::X14_H, Capstone::X15_H,
+                                       Capstone::X16_H, Capstone::X17_H};
   // The GPRs used for passing arguments in the ILP32E/LP64E ABI.
-  static const MCPhysReg ArgEGPRs[] = {RISCV::X10_H, RISCV::X11_H,
-                                       RISCV::X12_H, RISCV::X13_H,
-                                       RISCV::X14_H, RISCV::X15_H};
+  static const MCPhysReg ArgEGPRs[] = {Capstone::X10_H, Capstone::X11_H,
+                                       Capstone::X12_H, Capstone::X13_H,
+                                       Capstone::X14_H, Capstone::X15_H};
 
-  if (ABI == RISCVABI::ABI_ILP32E || ABI == RISCVABI::ABI_LP64E)
+  if (ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E)
     return ArrayRef(ArgEGPRs);
 
   return ArrayRef(ArgIGPRs);
 }
 
-static ArrayRef<MCPhysReg> getArgGPR32s(const RISCVABI::ABI ABI) {
+static ArrayRef<MCPhysReg> getArgGPR32s(const CapstoneABI::ABI ABI) {
   // The GPRs used for passing arguments in the ILP32* and LP64* ABIs, except
   // the ILP32E ABI.
-  static const MCPhysReg ArgIGPRs[] = {RISCV::X10_W, RISCV::X11_W, RISCV::X12_W,
-                                       RISCV::X13_W, RISCV::X14_W, RISCV::X15_W,
-                                       RISCV::X16_W, RISCV::X17_W};
+  static const MCPhysReg ArgIGPRs[] = {Capstone::X10_W, Capstone::X11_W, Capstone::X12_W,
+                                       Capstone::X13_W, Capstone::X14_W, Capstone::X15_W,
+                                       Capstone::X16_W, Capstone::X17_W};
   // The GPRs used for passing arguments in the ILP32E/LP64E ABI.
-  static const MCPhysReg ArgEGPRs[] = {RISCV::X10_W, RISCV::X11_W,
-                                       RISCV::X12_W, RISCV::X13_W,
-                                       RISCV::X14_W, RISCV::X15_W};
+  static const MCPhysReg ArgEGPRs[] = {Capstone::X10_W, Capstone::X11_W,
+                                       Capstone::X12_W, Capstone::X13_W,
+                                       Capstone::X14_W, Capstone::X15_W};
 
-  if (ABI == RISCVABI::ABI_ILP32E || ABI == RISCVABI::ABI_LP64E)
+  if (ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E)
     return ArrayRef(ArgEGPRs);
 
   return ArrayRef(ArgIGPRs);
 }
 
-static ArrayRef<MCPhysReg> getFastCCArgGPRs(const RISCVABI::ABI ABI) {
+static ArrayRef<MCPhysReg> getFastCCArgGPRs(const CapstoneABI::ABI ABI) {
   // The GPRs used for passing arguments in the FastCC, X5 and X6 might be used
   // for save-restore libcall, so we don't use them.
   // Don't use X7 for fastcc, since Zicfilp uses X7 as the label register.
   static const MCPhysReg FastCCIGPRs[] = {
-      RISCV::X10, RISCV::X11, RISCV::X12, RISCV::X13, RISCV::X14, RISCV::X15,
-      RISCV::X16, RISCV::X17, RISCV::X28, RISCV::X29, RISCV::X30, RISCV::X31};
+      Capstone::X10, Capstone::X11, Capstone::X12, Capstone::X13, Capstone::X14, Capstone::X15,
+      Capstone::X16, Capstone::X17, Capstone::X28, Capstone::X29, Capstone::X30, Capstone::X31};
 
   // The GPRs used for passing arguments in the FastCC when using ILP32E/LP64E.
-  static const MCPhysReg FastCCEGPRs[] = {RISCV::X10, RISCV::X11, RISCV::X12,
-                                          RISCV::X13, RISCV::X14, RISCV::X15};
+  static const MCPhysReg FastCCEGPRs[] = {Capstone::X10, Capstone::X11, Capstone::X12,
+                                          Capstone::X13, Capstone::X14, Capstone::X15};
 
-  if (ABI == RISCVABI::ABI_ILP32E || ABI == RISCVABI::ABI_LP64E)
+  if (ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E)
     return ArrayRef(FastCCEGPRs);
 
   return ArrayRef(FastCCIGPRs);
 }
 
-static ArrayRef<MCPhysReg> getFastCCArgGPRF16s(const RISCVABI::ABI ABI) {
+static ArrayRef<MCPhysReg> getFastCCArgGPRF16s(const CapstoneABI::ABI ABI) {
   // The GPRs used for passing arguments in the FastCC, X5 and X6 might be used
   // for save-restore libcall, so we don't use them.
   // Don't use X7 for fastcc, since Zicfilp uses X7 as the label register.
   static const MCPhysReg FastCCIGPRs[] = {
-      RISCV::X10_H, RISCV::X11_H, RISCV::X12_H, RISCV::X13_H,
-      RISCV::X14_H, RISCV::X15_H, RISCV::X16_H, RISCV::X17_H,
-      RISCV::X28_H, RISCV::X29_H, RISCV::X30_H, RISCV::X31_H};
+      Capstone::X10_H, Capstone::X11_H, Capstone::X12_H, Capstone::X13_H,
+      Capstone::X14_H, Capstone::X15_H, Capstone::X16_H, Capstone::X17_H,
+      Capstone::X28_H, Capstone::X29_H, Capstone::X30_H, Capstone::X31_H};
 
   // The GPRs used for passing arguments in the FastCC when using ILP32E/LP64E.
-  static const MCPhysReg FastCCEGPRs[] = {RISCV::X10_H, RISCV::X11_H,
-                                          RISCV::X12_H, RISCV::X13_H,
-                                          RISCV::X14_H, RISCV::X15_H};
+  static const MCPhysReg FastCCEGPRs[] = {Capstone::X10_H, Capstone::X11_H,
+                                          Capstone::X12_H, Capstone::X13_H,
+                                          Capstone::X14_H, Capstone::X15_H};
 
-  if (ABI == RISCVABI::ABI_ILP32E || ABI == RISCVABI::ABI_LP64E)
+  if (ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E)
     return ArrayRef(FastCCEGPRs);
 
   return ArrayRef(FastCCIGPRs);
 }
 
-static ArrayRef<MCPhysReg> getFastCCArgGPRF32s(const RISCVABI::ABI ABI) {
+static ArrayRef<MCPhysReg> getFastCCArgGPRF32s(const CapstoneABI::ABI ABI) {
   // The GPRs used for passing arguments in the FastCC, X5 and X6 might be used
   // for save-restore libcall, so we don't use them.
   // Don't use X7 for fastcc, since Zicfilp uses X7 as the label register.
   static const MCPhysReg FastCCIGPRs[] = {
-      RISCV::X10_W, RISCV::X11_W, RISCV::X12_W, RISCV::X13_W,
-      RISCV::X14_W, RISCV::X15_W, RISCV::X16_W, RISCV::X17_W,
-      RISCV::X28_W, RISCV::X29_W, RISCV::X30_W, RISCV::X31_W};
+      Capstone::X10_W, Capstone::X11_W, Capstone::X12_W, Capstone::X13_W,
+      Capstone::X14_W, Capstone::X15_W, Capstone::X16_W, Capstone::X17_W,
+      Capstone::X28_W, Capstone::X29_W, Capstone::X30_W, Capstone::X31_W};
 
   // The GPRs used for passing arguments in the FastCC when using ILP32E/LP64E.
-  static const MCPhysReg FastCCEGPRs[] = {RISCV::X10_W, RISCV::X11_W,
-                                          RISCV::X12_W, RISCV::X13_W,
-                                          RISCV::X14_W, RISCV::X15_W};
+  static const MCPhysReg FastCCEGPRs[] = {Capstone::X10_W, Capstone::X11_W,
+                                          Capstone::X12_W, Capstone::X13_W,
+                                          Capstone::X14_W, Capstone::X15_W};
 
-  if (ABI == RISCVABI::ABI_ILP32E || ABI == RISCVABI::ABI_LP64E)
+  if (ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E)
     return ArrayRef(FastCCEGPRs);
 
   return ArrayRef(FastCCIGPRs);
@@ -234,14 +234,14 @@ static ArrayRef<MCPhysReg> getFastCCArgGPRF32s(const RISCVABI::ABI ABI) {
 
 // Pass a 2*XLEN argument that has been split into two XLEN values through
 // registers or the stack as necessary.
-static bool CC_RISCVAssign2XLen(unsigned XLen, CCState &State, CCValAssign VA1,
+static bool CC_CapstoneAssign2XLen(unsigned XLen, CCState &State, CCValAssign VA1,
                                 ISD::ArgFlagsTy ArgFlags1, unsigned ValNo2,
                                 MVT ValVT2, MVT LocVT2,
                                 ISD::ArgFlagsTy ArgFlags2, bool EABI) {
   unsigned XLenInBytes = XLen / 8;
-  const RISCVSubtarget &STI =
-      State.getMachineFunction().getSubtarget<RISCVSubtarget>();
-  ArrayRef<MCPhysReg> ArgGPRs = RISCV::getArgGPRs(STI.getTargetABI());
+  const CapstoneSubtarget &STI =
+      State.getMachineFunction().getSubtarget<CapstoneSubtarget>();
+  ArrayRef<MCPhysReg> ArgGPRs = Capstone::getArgGPRs(STI.getTargetABI());
 
   if (MCRegister Reg = State.AllocateReg(ArgGPRs)) {
     // At least one half can be passed via register.
@@ -279,56 +279,56 @@ static bool CC_RISCVAssign2XLen(unsigned XLen, CCState &State, CCValAssign VA1,
 }
 
 static MCRegister allocateRVVReg(MVT ValVT, unsigned ValNo, CCState &State,
-                                 const RISCVTargetLowering &TLI) {
+                                 const CapstoneTargetLowering &TLI) {
   const TargetRegisterClass *RC = TLI.getRegClassFor(ValVT);
-  if (RC == &RISCV::VRRegClass) {
+  if (RC == &Capstone::VRRegClass) {
     // Assign the first mask argument to V0.
     // This is an interim calling convention and it may be changed in the
     // future.
     if (ValVT.getVectorElementType() == MVT::i1)
-      if (MCRegister Reg = State.AllocateReg(RISCV::V0))
+      if (MCRegister Reg = State.AllocateReg(Capstone::V0))
         return Reg;
     return State.AllocateReg(ArgVRs);
   }
-  if (RC == &RISCV::VRM2RegClass)
+  if (RC == &Capstone::VRM2RegClass)
     return State.AllocateReg(ArgVRM2s);
-  if (RC == &RISCV::VRM4RegClass)
+  if (RC == &Capstone::VRM4RegClass)
     return State.AllocateReg(ArgVRM4s);
-  if (RC == &RISCV::VRM8RegClass)
+  if (RC == &Capstone::VRM8RegClass)
     return State.AllocateReg(ArgVRM8s);
-  if (RC == &RISCV::VRN2M1RegClass)
+  if (RC == &Capstone::VRN2M1RegClass)
     return State.AllocateReg(ArgVRN2M1s);
-  if (RC == &RISCV::VRN3M1RegClass)
+  if (RC == &Capstone::VRN3M1RegClass)
     return State.AllocateReg(ArgVRN3M1s);
-  if (RC == &RISCV::VRN4M1RegClass)
+  if (RC == &Capstone::VRN4M1RegClass)
     return State.AllocateReg(ArgVRN4M1s);
-  if (RC == &RISCV::VRN5M1RegClass)
+  if (RC == &Capstone::VRN5M1RegClass)
     return State.AllocateReg(ArgVRN5M1s);
-  if (RC == &RISCV::VRN6M1RegClass)
+  if (RC == &Capstone::VRN6M1RegClass)
     return State.AllocateReg(ArgVRN6M1s);
-  if (RC == &RISCV::VRN7M1RegClass)
+  if (RC == &Capstone::VRN7M1RegClass)
     return State.AllocateReg(ArgVRN7M1s);
-  if (RC == &RISCV::VRN8M1RegClass)
+  if (RC == &Capstone::VRN8M1RegClass)
     return State.AllocateReg(ArgVRN8M1s);
-  if (RC == &RISCV::VRN2M2RegClass)
+  if (RC == &Capstone::VRN2M2RegClass)
     return State.AllocateReg(ArgVRN2M2s);
-  if (RC == &RISCV::VRN3M2RegClass)
+  if (RC == &Capstone::VRN3M2RegClass)
     return State.AllocateReg(ArgVRN3M2s);
-  if (RC == &RISCV::VRN4M2RegClass)
+  if (RC == &Capstone::VRN4M2RegClass)
     return State.AllocateReg(ArgVRN4M2s);
-  if (RC == &RISCV::VRN2M4RegClass)
+  if (RC == &Capstone::VRN2M4RegClass)
     return State.AllocateReg(ArgVRN2M4s);
   llvm_unreachable("Unhandled register class for ValueType");
 }
 
-// Implements the RISC-V calling convention. Returns true upon failure.
-bool llvm::CC_RISCV(unsigned ValNo, MVT ValVT, MVT LocVT,
+// Implements the Capstone calling convention. Returns true upon failure.
+bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
                     CCValAssign::LocInfo LocInfo, ISD::ArgFlagsTy ArgFlags,
                     CCState &State, bool IsRet, Type *OrigTy) {
   const MachineFunction &MF = State.getMachineFunction();
   const DataLayout &DL = MF.getDataLayout();
-  const RISCVSubtarget &Subtarget = MF.getSubtarget<RISCVSubtarget>();
-  const RISCVTargetLowering &TLI = *Subtarget.getTargetLowering();
+  const CapstoneSubtarget &Subtarget = MF.getSubtarget<CapstoneSubtarget>();
+  const CapstoneTargetLowering &TLI = *Subtarget.getTargetLowering();
 
   unsigned XLen = Subtarget.getXLen();
   MVT XLenVT = Subtarget.getXLenVT();
@@ -342,11 +342,11 @@ bool llvm::CC_RISCV(unsigned ValNo, MVT ValVT, MVT LocVT,
         MF.getFunction().getParent()->getModuleFlag("cf-protection-branch");
 
     // Normal: t2, Branch control flow protection: t3
-    const auto StaticChainReg = HasCFBranch ? RISCV::X28 : RISCV::X7;
+    const auto StaticChainReg = HasCFBranch ? Capstone::X28 : Capstone::X7;
 
-    RISCVABI::ABI ABI = Subtarget.getTargetABI();
+    CapstoneABI::ABI ABI = Subtarget.getTargetABI();
     if (HasCFBranch &&
-        (ABI == RISCVABI::ABI_ILP32E || ABI == RISCVABI::ABI_LP64E))
+        (ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E))
       reportFatalUsageError(
           "Nested functions with control flow protection are not "
           "usable with ILP32E or LP64E ABI.");
@@ -368,21 +368,21 @@ bool llvm::CC_RISCV(unsigned ValNo, MVT ValVT, MVT LocVT,
   // variadic argument, or if no F64 argument registers are available.
   bool UseGPRForF64 = true;
 
-  RISCVABI::ABI ABI = Subtarget.getTargetABI();
+  CapstoneABI::ABI ABI = Subtarget.getTargetABI();
   switch (ABI) {
   default:
     llvm_unreachable("Unexpected ABI");
-  case RISCVABI::ABI_ILP32:
-  case RISCVABI::ABI_ILP32E:
-  case RISCVABI::ABI_LP64:
-  case RISCVABI::ABI_LP64E:
+  case CapstoneABI::ABI_ILP32:
+  case CapstoneABI::ABI_ILP32E:
+  case CapstoneABI::ABI_LP64:
+  case CapstoneABI::ABI_LP64E:
     break;
-  case RISCVABI::ABI_ILP32F:
-  case RISCVABI::ABI_LP64F:
+  case CapstoneABI::ABI_ILP32F:
+  case CapstoneABI::ABI_LP64F:
     UseGPRForF16_F32 = ArgFlags.isVarArg();
     break;
-  case RISCVABI::ABI_ILP32D:
-  case RISCVABI::ABI_LP64D:
+  case CapstoneABI::ABI_ILP32D:
+  case CapstoneABI::ABI_LP64D:
     UseGPRForF16_F32 = ArgFlags.isVarArg();
     UseGPRForF64 = ArgFlags.isVarArg();
     break;
@@ -423,7 +423,7 @@ bool llvm::CC_RISCV(unsigned ValNo, MVT ValVT, MVT LocVT,
     }
   }
 
-  ArrayRef<MCPhysReg> ArgGPRs = RISCV::getArgGPRs(ABI);
+  ArrayRef<MCPhysReg> ArgGPRs = Capstone::getArgGPRs(ABI);
 
   // Zdinx use GPR without a bitcast when possible.
   if (LocVT == MVT::f64 && XLen == 64 && Subtarget.hasStdExtZdinx()) {
@@ -454,7 +454,7 @@ bool llvm::CC_RISCV(unsigned ValNo, MVT ValVT, MVT LocVT,
     }
   }
 
-  // If this is a variadic argument, the RISC-V calling convention requires
+  // If this is a variadic argument, the Capstone calling convention requires
   // that it is assigned an 'even' or 'aligned' register if it has 8-byte
   // alignment (RV32) or 16-byte alignment (RV64). An aligned register should
   // be used regardless of whether the original argument was split during
@@ -467,7 +467,7 @@ bool llvm::CC_RISCV(unsigned ValNo, MVT ValVT, MVT LocVT,
   unsigned TwoXLenInBytes = (2 * XLen) / 8;
   if (ArgFlags.isVarArg() && ArgFlags.getNonZeroOrigAlign() == TwoXLenInBytes &&
       DL.getTypeAllocSize(OrigTy) == TwoXLenInBytes &&
-      ABI != RISCVABI::ABI_ILP32E) {
+      ABI != CapstoneABI::ABI_ILP32E) {
     unsigned RegIdx = State.getFirstUnallocated(ArgGPRs);
     // Skip 'odd' register if necessary.
     if (RegIdx != std::size(ArgGPRs) && RegIdx % 2 == 1)
@@ -535,9 +535,9 @@ bool llvm::CC_RISCV(unsigned ValNo, MVT ValVT, MVT LocVT,
     ISD::ArgFlagsTy AF = PendingArgFlags[0];
     PendingLocs.clear();
     PendingArgFlags.clear();
-    return CC_RISCVAssign2XLen(
+    return CC_CapstoneAssign2XLen(
         XLen, State, VA, AF, ValNo, ValVT, LocVT, ArgFlags,
-        ABI == RISCVABI::ABI_ILP32E || ABI == RISCVABI::ABI_LP64E);
+        ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E);
   }
 
   // Allocate to a register if possible, or else a stack slot.
@@ -545,7 +545,7 @@ bool llvm::CC_RISCV(unsigned ValNo, MVT ValVT, MVT LocVT,
   unsigned StoreSizeBytes = XLen / 8;
   Align StackAlign = Align(XLen / 8);
 
-  if (ValVT.isVector() || ValVT.isRISCVVectorTuple()) {
+  if (ValVT.isVector() || ValVT.isCapstoneVectorTuple()) {
     Reg = allocateRVVReg(ValVT, ValNo, State, TLI);
     if (Reg) {
       // Fixed-length vectors are located in the corresponding scalable-vector
@@ -604,7 +604,7 @@ bool llvm::CC_RISCV(unsigned ValNo, MVT ValVT, MVT LocVT,
 
   assert(((ValVT.isFloatingPoint() && !ValVT.isVector()) || LocVT == XLenVT ||
           (TLI.getSubtarget().hasVInstructions() &&
-           (ValVT.isVector() || ValVT.isRISCVVectorTuple()))) &&
+           (ValVT.isVector() || ValVT.isCapstoneVectorTuple()))) &&
          "Expected an XLenVT or vector types at this stage");
 
   if (Reg) {
@@ -618,22 +618,22 @@ bool llvm::CC_RISCV(unsigned ValNo, MVT ValVT, MVT LocVT,
 
 // FastCC has less than 1% performance improvement for some particular
 // benchmark. But theoretically, it may have benefit for some cases.
-bool llvm::CC_RISCV_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
+bool llvm::CC_Capstone_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
                            CCValAssign::LocInfo LocInfo,
                            ISD::ArgFlagsTy ArgFlags, CCState &State, bool IsRet,
                            Type *OrigTy) {
   const MachineFunction &MF = State.getMachineFunction();
-  const RISCVSubtarget &Subtarget = MF.getSubtarget<RISCVSubtarget>();
-  const RISCVTargetLowering &TLI = *Subtarget.getTargetLowering();
-  RISCVABI::ABI ABI = Subtarget.getTargetABI();
+  const CapstoneSubtarget &Subtarget = MF.getSubtarget<CapstoneSubtarget>();
+  const CapstoneTargetLowering &TLI = *Subtarget.getTargetLowering();
+  CapstoneABI::ABI ABI = Subtarget.getTargetABI();
 
   if ((LocVT == MVT::f16 && Subtarget.hasStdExtZfhmin()) ||
       (LocVT == MVT::bf16 && Subtarget.hasStdExtZfbfmin())) {
     static const MCPhysReg FPR16List[] = {
-        RISCV::F10_H, RISCV::F11_H, RISCV::F12_H, RISCV::F13_H, RISCV::F14_H,
-        RISCV::F15_H, RISCV::F16_H, RISCV::F17_H, RISCV::F0_H,  RISCV::F1_H,
-        RISCV::F2_H,  RISCV::F3_H,  RISCV::F4_H,  RISCV::F5_H,  RISCV::F6_H,
-        RISCV::F7_H,  RISCV::F28_H, RISCV::F29_H, RISCV::F30_H, RISCV::F31_H};
+        Capstone::F10_H, Capstone::F11_H, Capstone::F12_H, Capstone::F13_H, Capstone::F14_H,
+        Capstone::F15_H, Capstone::F16_H, Capstone::F17_H, Capstone::F0_H,  Capstone::F1_H,
+        Capstone::F2_H,  Capstone::F3_H,  Capstone::F4_H,  Capstone::F5_H,  Capstone::F6_H,
+        Capstone::F7_H,  Capstone::F28_H, Capstone::F29_H, Capstone::F30_H, Capstone::F31_H};
     if (MCRegister Reg = State.AllocateReg(FPR16List)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, LocVT, LocInfo));
       return false;
@@ -642,10 +642,10 @@ bool llvm::CC_RISCV_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
 
   if (LocVT == MVT::f32 && Subtarget.hasStdExtF()) {
     static const MCPhysReg FPR32List[] = {
-        RISCV::F10_F, RISCV::F11_F, RISCV::F12_F, RISCV::F13_F, RISCV::F14_F,
-        RISCV::F15_F, RISCV::F16_F, RISCV::F17_F, RISCV::F0_F,  RISCV::F1_F,
-        RISCV::F2_F,  RISCV::F3_F,  RISCV::F4_F,  RISCV::F5_F,  RISCV::F6_F,
-        RISCV::F7_F,  RISCV::F28_F, RISCV::F29_F, RISCV::F30_F, RISCV::F31_F};
+        Capstone::F10_F, Capstone::F11_F, Capstone::F12_F, Capstone::F13_F, Capstone::F14_F,
+        Capstone::F15_F, Capstone::F16_F, Capstone::F17_F, Capstone::F0_F,  Capstone::F1_F,
+        Capstone::F2_F,  Capstone::F3_F,  Capstone::F4_F,  Capstone::F5_F,  Capstone::F6_F,
+        Capstone::F7_F,  Capstone::F28_F, Capstone::F29_F, Capstone::F30_F, Capstone::F31_F};
     if (MCRegister Reg = State.AllocateReg(FPR32List)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, LocVT, LocInfo));
       return false;
@@ -654,10 +654,10 @@ bool llvm::CC_RISCV_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
 
   if (LocVT == MVT::f64 && Subtarget.hasStdExtD()) {
     static const MCPhysReg FPR64List[] = {
-        RISCV::F10_D, RISCV::F11_D, RISCV::F12_D, RISCV::F13_D, RISCV::F14_D,
-        RISCV::F15_D, RISCV::F16_D, RISCV::F17_D, RISCV::F0_D,  RISCV::F1_D,
-        RISCV::F2_D,  RISCV::F3_D,  RISCV::F4_D,  RISCV::F5_D,  RISCV::F6_D,
-        RISCV::F7_D,  RISCV::F28_D, RISCV::F29_D, RISCV::F30_D, RISCV::F31_D};
+        Capstone::F10_D, Capstone::F11_D, Capstone::F12_D, Capstone::F13_D, Capstone::F14_D,
+        Capstone::F15_D, Capstone::F16_D, Capstone::F17_D, Capstone::F0_D,  Capstone::F1_D,
+        Capstone::F2_D,  Capstone::F3_D,  Capstone::F4_D,  Capstone::F5_D,  Capstone::F6_D,
+        Capstone::F7_D,  Capstone::F28_D, Capstone::F29_D, Capstone::F30_D, Capstone::F31_D};
     if (MCRegister Reg = State.AllocateReg(FPR64List)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, LocVT, LocInfo));
       return false;
@@ -739,7 +739,7 @@ bool llvm::CC_RISCV_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
   return true; // CC didn't match.
 }
 
-bool llvm::CC_RISCV_GHC(unsigned ValNo, MVT ValVT, MVT LocVT,
+bool llvm::CC_Capstone_GHC(unsigned ValNo, MVT ValVT, MVT LocVT,
                         CCValAssign::LocInfo LocInfo, ISD::ArgFlagsTy ArgFlags,
                         Type *OrigTy, CCState &State) {
   if (ArgFlags.isNest()) {
@@ -748,8 +748,8 @@ bool llvm::CC_RISCV_GHC(unsigned ValNo, MVT ValVT, MVT LocVT,
   }
 
   static const MCPhysReg GPRList[] = {
-      RISCV::X9,  RISCV::X18, RISCV::X19, RISCV::X20, RISCV::X21, RISCV::X22,
-      RISCV::X23, RISCV::X24, RISCV::X25, RISCV::X26, RISCV::X27};
+      Capstone::X9,  Capstone::X18, Capstone::X19, Capstone::X20, Capstone::X21, Capstone::X22,
+      Capstone::X23, Capstone::X24, Capstone::X25, Capstone::X26, Capstone::X27};
 
   if (LocVT == MVT::i32 || LocVT == MVT::i64) {
     // Pass in STG registers: Base, Sp, Hp, R1, R2, R3, R4, R5, R6, R7, SpLim
@@ -760,15 +760,15 @@ bool llvm::CC_RISCV_GHC(unsigned ValNo, MVT ValVT, MVT LocVT,
     }
   }
 
-  const RISCVSubtarget &Subtarget =
-      State.getMachineFunction().getSubtarget<RISCVSubtarget>();
+  const CapstoneSubtarget &Subtarget =
+      State.getMachineFunction().getSubtarget<CapstoneSubtarget>();
 
   if (LocVT == MVT::f32 && Subtarget.hasStdExtF()) {
     // Pass in STG registers: F1, ..., F6
     //                        fs0 ... fs5
-    static const MCPhysReg FPR32List[] = {RISCV::F8_F,  RISCV::F9_F,
-                                          RISCV::F18_F, RISCV::F19_F,
-                                          RISCV::F20_F, RISCV::F21_F};
+    static const MCPhysReg FPR32List[] = {Capstone::F8_F,  Capstone::F9_F,
+                                          Capstone::F18_F, Capstone::F19_F,
+                                          Capstone::F20_F, Capstone::F21_F};
     if (MCRegister Reg = State.AllocateReg(FPR32List)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, LocVT, LocInfo));
       return false;
@@ -778,9 +778,9 @@ bool llvm::CC_RISCV_GHC(unsigned ValNo, MVT ValVT, MVT LocVT,
   if (LocVT == MVT::f64 && Subtarget.hasStdExtD()) {
     // Pass in STG registers: D1, ..., D6
     //                        fs6 ... fs11
-    static const MCPhysReg FPR64List[] = {RISCV::F22_D, RISCV::F23_D,
-                                          RISCV::F24_D, RISCV::F25_D,
-                                          RISCV::F26_D, RISCV::F27_D};
+    static const MCPhysReg FPR64List[] = {Capstone::F22_D, Capstone::F23_D,
+                                          Capstone::F24_D, Capstone::F25_D,
+                                          Capstone::F26_D, Capstone::F27_D};
     if (MCRegister Reg = State.AllocateReg(FPR64List)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, LocVT, LocInfo));
       return false;
@@ -789,9 +789,9 @@ bool llvm::CC_RISCV_GHC(unsigned ValNo, MVT ValVT, MVT LocVT,
 
   if (LocVT == MVT::f32 && Subtarget.hasStdExtZfinx()) {
     static const MCPhysReg GPR32List[] = {
-        RISCV::X9_W,  RISCV::X18_W, RISCV::X19_W, RISCV::X20_W,
-        RISCV::X21_W, RISCV::X22_W, RISCV::X23_W, RISCV::X24_W,
-        RISCV::X25_W, RISCV::X26_W, RISCV::X27_W};
+        Capstone::X9_W,  Capstone::X18_W, Capstone::X19_W, Capstone::X20_W,
+        Capstone::X21_W, Capstone::X22_W, Capstone::X23_W, Capstone::X24_W,
+        Capstone::X25_W, Capstone::X26_W, Capstone::X27_W};
     if (MCRegister Reg = State.AllocateReg(GPR32List)) {
       State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, LocVT, LocInfo));
       return false;

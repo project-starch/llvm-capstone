@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoXsfmm.td - SiFive matrix multiply ----*- tablegen -*-===//
+//===-- CapstoneInstrInfoXsfmm.td - SiFive matrix multiply ----*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -17,7 +17,7 @@ def XSfmmVTypeAsmOperand : AsmOperandClass {
   let RenderMethod = "addVTypeIOperands";
 }
 
-def XSfmmVTypeOp : RISCVOp {
+def XSfmmVTypeOp : CapstoneOp {
   let ParserMatchClass = XSfmmVTypeAsmOperand;
   let PrintMethod = "printXSfmmVType";
   let OperandType = "OPERAND_XSFMM_VTYPE";
@@ -27,7 +27,7 @@ def XSfmmVTypeOp : RISCVOp {
       return false;
     if (!isUInt<32>(Imm))
       return false;
-    return RISCVVType::isValidXSfmmVType(Imm);
+    return CapstoneVType::isValidXSfmmVType(Imm);
   }];
 }
 
@@ -48,7 +48,7 @@ class SFInstSetSingle<dag outs, dag ins, bits<5> rs2, string opcodestr,
   let Defs = [VTYPE, VL];
 }
 
-class SFInstTileMemOp<dag outs, dag ins, bits<3> nf, RISCVOpcode opcode,
+class SFInstTileMemOp<dag outs, dag ins, bits<3> nf, CapstoneOpcode opcode,
                       string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
   bits<5> rs2;

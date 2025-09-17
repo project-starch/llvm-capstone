@@ -1,4 +1,4 @@
-//===- RISCVTargetTransformInfo.h - RISC-V specific TTI ---------*- C++ -*-===//
+//===- CapstoneTargetTransformInfo.h - Capstone specific TTI ---------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,17 +7,17 @@
 //===----------------------------------------------------------------------===//
 /// \file
 /// This file defines a TargetTransformInfoImplBase conforming object specific
-/// to the RISC-V target machine. It uses the target's detailed information to
+/// to the Capstone target machine. It uses the target's detailed information to
 /// provide more precise answers to certain TTI queries, while letting the
 /// target independent and default TTI implementations handle the rest.
 ///
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCVTARGETTRANSFORMINFO_H
-#define LLVM_LIB_TARGET_RISCV_RISCVTARGETTRANSFORMINFO_H
+#ifndef LLVM_LIB_TARGET_Capstone_CapstoneTARGETTRANSFORMINFO_H
+#define LLVM_LIB_TARGET_Capstone_CapstoneTARGETTRANSFORMINFO_H
 
-#include "RISCVSubtarget.h"
-#include "RISCVTargetMachine.h"
+#include "CapstoneSubtarget.h"
+#include "CapstoneTargetMachine.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/BasicTTIImpl.h"
 #include "llvm/IR/Function.h"
@@ -25,17 +25,17 @@
 
 namespace llvm {
 
-class RISCVTTIImpl final : public BasicTTIImplBase<RISCVTTIImpl> {
-  using BaseT = BasicTTIImplBase<RISCVTTIImpl>;
+class CapstoneTTIImpl final : public BasicTTIImplBase<CapstoneTTIImpl> {
+  using BaseT = BasicTTIImplBase<CapstoneTTIImpl>;
   using TTI = TargetTransformInfo;
 
   friend BaseT;
 
-  const RISCVSubtarget *ST;
-  const RISCVTargetLowering *TLI;
+  const CapstoneSubtarget *ST;
+  const CapstoneTargetLowering *TLI;
 
-  const RISCVSubtarget *getST() const { return ST; }
-  const RISCVTargetLowering *getTLI() const { return TLI; }
+  const CapstoneSubtarget *getST() const { return ST; }
+  const CapstoneTargetLowering *getTLI() const { return TLI; }
 
   /// This function returns an estimate for VL to be used in VL based terms
   /// of the cost model.  For fixed length vectors, this is simply the
@@ -55,7 +55,7 @@ class RISCVTTIImpl final : public BasicTTIImplBase<RISCVTTIImpl> {
   /// differ, it is important to check the spec to determine whether the vtype
   /// refers to the result or source type.
   /// \param CostKind The type of cost to compute.
-  InstructionCost getRISCVInstructionCost(ArrayRef<unsigned> OpCodes, MVT VT,
+  InstructionCost getCapstoneInstructionCost(ArrayRef<unsigned> OpCodes, MVT VT,
                                           TTI::TargetCostKind CostKind) const;
 
   /// Return the cost of accessing a constant pool entry of the specified
@@ -69,7 +69,7 @@ class RISCVTTIImpl final : public BasicTTIImplBase<RISCVTTIImpl> {
                                TTI::TargetCostKind CostKind) const;
 
 public:
-  explicit RISCVTTIImpl(const RISCVTargetMachine *TM, const Function &F)
+  explicit CapstoneTTIImpl(const CapstoneTargetMachine *TM, const Function &F)
       : BaseT(TM, F.getDataLayout()), ST(TM->getSubtargetImpl(F)),
         TLI(ST->getTargetLowering()) {}
 
@@ -420,18 +420,18 @@ public:
 
   unsigned getMinTripCountTailFoldingThreshold() const override;
 
-  enum RISCVRegisterClass { GPRRC, FPRRC, VRRC };
+  enum CapstoneRegisterClass { GPRRC, FPRRC, VRRC };
   unsigned getNumberOfRegisters(unsigned ClassID) const override {
     switch (ClassID) {
-    case RISCVRegisterClass::GPRRC:
+    case CapstoneRegisterClass::GPRRC:
       // 31 = 32 GPR - x0 (zero register)
       // FIXME: Should we exclude fixed registers like SP, TP or GP?
       return 31;
-    case RISCVRegisterClass::FPRRC:
+    case CapstoneRegisterClass::FPRRC:
       if (ST->hasStdExtF())
         return 32;
       return 0;
-    case RISCVRegisterClass::VRRC:
+    case CapstoneRegisterClass::VRRC:
       // Although there are 32 vector registers, v0 is special in that it is the
       // only register that can be used to hold a mask.
       // FIXME: Should we conservatively return 31 as the number of usable
@@ -447,28 +447,28 @@ public:
   unsigned getRegisterClassForType(bool Vector,
                                    Type *Ty = nullptr) const override {
     if (Vector)
-      return RISCVRegisterClass::VRRC;
+      return CapstoneRegisterClass::VRRC;
     if (!Ty)
-      return RISCVRegisterClass::GPRRC;
+      return CapstoneRegisterClass::GPRRC;
 
     Type *ScalarTy = Ty->getScalarType();
     if ((ScalarTy->isHalfTy() && ST->hasStdExtZfhmin()) ||
         (ScalarTy->isFloatTy() && ST->hasStdExtF()) ||
         (ScalarTy->isDoubleTy() && ST->hasStdExtD())) {
-      return RISCVRegisterClass::FPRRC;
+      return CapstoneRegisterClass::FPRRC;
     }
 
-    return RISCVRegisterClass::GPRRC;
+    return CapstoneRegisterClass::GPRRC;
   }
 
   const char *getRegisterClassName(unsigned ClassID) const override {
     switch (ClassID) {
-    case RISCVRegisterClass::GPRRC:
-      return "RISCV::GPRRC";
-    case RISCVRegisterClass::FPRRC:
-      return "RISCV::FPRRC";
-    case RISCVRegisterClass::VRRC:
-      return "RISCV::VRRC";
+    case CapstoneRegisterClass::GPRRC:
+      return "Capstone::GPRRC";
+    case CapstoneRegisterClass::FPRRC:
+      return "Capstone::FPRRC";
+    case CapstoneRegisterClass::VRRC:
+      return "Capstone::VRRC";
     }
     llvm_unreachable("unknown register class");
   }
@@ -496,4 +496,4 @@ public:
 
 } // end namespace llvm
 
-#endif // LLVM_LIB_TARGET_RISCV_RISCVTARGETTRANSFORMINFO_H
+#endif // LLVM_LIB_TARGET_Capstone_CapstoneTARGETTRANSFORMINFO_H

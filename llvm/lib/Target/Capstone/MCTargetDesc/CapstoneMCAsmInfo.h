@@ -1,4 +1,4 @@
-//===-- RISCVMCAsmInfo.h - RISC-V Asm Info ---------------------*- C++ -*--===//
+//===-- CapstoneMCAsmInfo.h - Capstone Asm Info ---------------------*- C++ -*--===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,12 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains the declaration of the RISCVMCAsmInfo class.
+// This file contains the declaration of the CapstoneMCAsmInfo class.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVMCASMINFO_H
-#define LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVMCASMINFO_H
+#ifndef LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneMCASMINFO_H
+#define LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneMCASMINFO_H
 
 #include "llvm/MC/MCAsmInfoELF.h"
 #include "llvm/MC/MCFixup.h"
@@ -19,11 +19,11 @@
 namespace llvm {
 class Triple;
 
-class RISCVMCAsmInfo : public MCAsmInfoELF {
+class CapstoneMCAsmInfo : public MCAsmInfoELF {
   void anchor() override;
 
 public:
-  explicit RISCVMCAsmInfo(const Triple &TargetTriple);
+  explicit CapstoneMCAsmInfo(const Triple &TargetTriple);
 
   const MCExpr *getExprForFDESymbol(const MCSymbol *Sym, unsigned Encoding,
                                     MCStreamer &Streamer) const override;
@@ -31,7 +31,7 @@ public:
                           const MCSpecifierExpr &Expr) const override;
 };
 
-namespace RISCV {
+namespace Capstone {
 using Specifier = uint16_t;
 // Specifiers mapping to relocation types below FirstTargetFixupKind are
 // encoded literally, with these exceptions:
@@ -48,7 +48,7 @@ enum {
 
 Specifier parseSpecifierName(StringRef name);
 StringRef getSpecifierName(Specifier Kind);
-} // namespace RISCV
+} // namespace Capstone
 
 } // namespace llvm
 

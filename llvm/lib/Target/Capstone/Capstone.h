@@ -1,4 +1,4 @@
-//===-- RISCV.h - Top-level interface for RISC-V ----------------*- C++ -*-===//
+//===-- Capstone.h - Top-level interface for Capstone ----------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,117 +7,117 @@
 //===----------------------------------------------------------------------===//
 //
 // This file contains the entry points for global functions defined in the LLVM
-// RISC-V back-end.
+// Capstone back-end.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCV_H
-#define LLVM_LIB_TARGET_RISCV_RISCV_H
+#ifndef LLVM_LIB_TARGET_Capstone_Capstone_H
+#define LLVM_LIB_TARGET_Capstone_Capstone_H
 
-#include "MCTargetDesc/RISCVBaseInfo.h"
+#include "MCTargetDesc/CapstoneBaseInfo.h"
 #include "llvm/Target/TargetMachine.h"
 
 namespace llvm {
 class FunctionPass;
 class InstructionSelector;
 class PassRegistry;
-class RISCVRegisterBankInfo;
-class RISCVSubtarget;
-class RISCVTargetMachine;
+class CapstoneRegisterBankInfo;
+class CapstoneSubtarget;
+class CapstoneTargetMachine;
 
-FunctionPass *createRISCVCodeGenPreparePass();
-void initializeRISCVCodeGenPreparePass(PassRegistry &);
+FunctionPass *createCapstoneCodeGenPreparePass();
+void initializeCapstoneCodeGenPreparePass(PassRegistry &);
 
-FunctionPass *createRISCVDeadRegisterDefinitionsPass();
-void initializeRISCVDeadRegisterDefinitionsPass(PassRegistry &);
+FunctionPass *createCapstoneDeadRegisterDefinitionsPass();
+void initializeCapstoneDeadRegisterDefinitionsPass(PassRegistry &);
 
-FunctionPass *createRISCVIndirectBranchTrackingPass();
-void initializeRISCVIndirectBranchTrackingPass(PassRegistry &);
+FunctionPass *createCapstoneIndirectBranchTrackingPass();
+void initializeCapstoneIndirectBranchTrackingPass(PassRegistry &);
 
-FunctionPass *createRISCVLandingPadSetupPass();
-void initializeRISCVLandingPadSetupPass(PassRegistry &);
+FunctionPass *createCapstoneLandingPadSetupPass();
+void initializeCapstoneLandingPadSetupPass(PassRegistry &);
 
-FunctionPass *createRISCVISelDag(RISCVTargetMachine &TM,
+FunctionPass *createCapstoneISelDag(CapstoneTargetMachine &TM,
                                  CodeGenOptLevel OptLevel);
 
-FunctionPass *createRISCVLateBranchOptPass();
-void initializeRISCVLateBranchOptPass(PassRegistry &);
+FunctionPass *createCapstoneLateBranchOptPass();
+void initializeCapstoneLateBranchOptPass(PassRegistry &);
 
-FunctionPass *createRISCVMakeCompressibleOptPass();
-void initializeRISCVMakeCompressibleOptPass(PassRegistry &);
+FunctionPass *createCapstoneMakeCompressibleOptPass();
+void initializeCapstoneMakeCompressibleOptPass(PassRegistry &);
 
-FunctionPass *createRISCVGatherScatterLoweringPass();
-void initializeRISCVGatherScatterLoweringPass(PassRegistry &);
+FunctionPass *createCapstoneGatherScatterLoweringPass();
+void initializeCapstoneGatherScatterLoweringPass(PassRegistry &);
 
-FunctionPass *createRISCVVectorPeepholePass();
-void initializeRISCVVectorPeepholePass(PassRegistry &);
+FunctionPass *createCapstoneVectorPeepholePass();
+void initializeCapstoneVectorPeepholePass(PassRegistry &);
 
-FunctionPass *createRISCVOptWInstrsPass();
-void initializeRISCVOptWInstrsPass(PassRegistry &);
+FunctionPass *createCapstoneOptWInstrsPass();
+void initializeCapstoneOptWInstrsPass(PassRegistry &);
 
-FunctionPass *createRISCVFoldMemOffsetPass();
-void initializeRISCVFoldMemOffsetPass(PassRegistry &);
+FunctionPass *createCapstoneFoldMemOffsetPass();
+void initializeCapstoneFoldMemOffsetPass(PassRegistry &);
 
-FunctionPass *createRISCVMergeBaseOffsetOptPass();
-void initializeRISCVMergeBaseOffsetOptPass(PassRegistry &);
+FunctionPass *createCapstoneMergeBaseOffsetOptPass();
+void initializeCapstoneMergeBaseOffsetOptPass(PassRegistry &);
 
-FunctionPass *createRISCVExpandPseudoPass();
-void initializeRISCVExpandPseudoPass(PassRegistry &);
+FunctionPass *createCapstoneExpandPseudoPass();
+void initializeCapstoneExpandPseudoPass(PassRegistry &);
 
-FunctionPass *createRISCVPreRAExpandPseudoPass();
-void initializeRISCVPreRAExpandPseudoPass(PassRegistry &);
+FunctionPass *createCapstonePreRAExpandPseudoPass();
+void initializeCapstonePreRAExpandPseudoPass(PassRegistry &);
 
-FunctionPass *createRISCVExpandAtomicPseudoPass();
-void initializeRISCVExpandAtomicPseudoPass(PassRegistry &);
+FunctionPass *createCapstoneExpandAtomicPseudoPass();
+void initializeCapstoneExpandAtomicPseudoPass(PassRegistry &);
 
-FunctionPass *createRISCVInsertVSETVLIPass();
-void initializeRISCVInsertVSETVLIPass(PassRegistry &);
-extern char &RISCVInsertVSETVLIID;
+FunctionPass *createCapstoneInsertVSETVLIPass();
+void initializeCapstoneInsertVSETVLIPass(PassRegistry &);
+extern char &CapstoneInsertVSETVLIID;
 
-FunctionPass *createRISCVPostRAExpandPseudoPass();
-void initializeRISCVPostRAExpandPseudoPass(PassRegistry &);
-FunctionPass *createRISCVInsertReadWriteCSRPass();
-void initializeRISCVInsertReadWriteCSRPass(PassRegistry &);
+FunctionPass *createCapstonePostRAExpandPseudoPass();
+void initializeCapstonePostRAExpandPseudoPass(PassRegistry &);
+FunctionPass *createCapstoneInsertReadWriteCSRPass();
+void initializeCapstoneInsertReadWriteCSRPass(PassRegistry &);
 
-FunctionPass *createRISCVInsertWriteVXRMPass();
-void initializeRISCVInsertWriteVXRMPass(PassRegistry &);
+FunctionPass *createCapstoneInsertWriteVXRMPass();
+void initializeCapstoneInsertWriteVXRMPass(PassRegistry &);
 
-FunctionPass *createRISCVRedundantCopyEliminationPass();
-void initializeRISCVRedundantCopyEliminationPass(PassRegistry &);
+FunctionPass *createCapstoneRedundantCopyEliminationPass();
+void initializeCapstoneRedundantCopyEliminationPass(PassRegistry &);
 
-FunctionPass *createRISCVMoveMergePass();
-void initializeRISCVMoveMergePass(PassRegistry &);
+FunctionPass *createCapstoneMoveMergePass();
+void initializeCapstoneMoveMergePass(PassRegistry &);
 
-FunctionPass *createRISCVPushPopOptimizationPass();
-void initializeRISCVPushPopOptPass(PassRegistry &);
-FunctionPass *createRISCVLoadStoreOptPass();
-void initializeRISCVLoadStoreOptPass(PassRegistry &);
+FunctionPass *createCapstonePushPopOptimizationPass();
+void initializeCapstonePushPopOptPass(PassRegistry &);
+FunctionPass *createCapstoneLoadStoreOptPass();
+void initializeCapstoneLoadStoreOptPass(PassRegistry &);
 
-FunctionPass *createRISCVZacasABIFixPass();
-void initializeRISCVZacasABIFixPass(PassRegistry &);
+FunctionPass *createCapstoneZacasABIFixPass();
+void initializeCapstoneZacasABIFixPass(PassRegistry &);
 
 InstructionSelector *
-createRISCVInstructionSelector(const RISCVTargetMachine &,
-                               const RISCVSubtarget &,
-                               const RISCVRegisterBankInfo &);
-void initializeRISCVDAGToDAGISelLegacyPass(PassRegistry &);
+createCapstoneInstructionSelector(const CapstoneTargetMachine &,
+                               const CapstoneSubtarget &,
+                               const CapstoneRegisterBankInfo &);
+void initializeCapstoneDAGToDAGISelLegacyPass(PassRegistry &);
 
-FunctionPass *createRISCVPostLegalizerCombiner();
-void initializeRISCVPostLegalizerCombinerPass(PassRegistry &);
+FunctionPass *createCapstonePostLegalizerCombiner();
+void initializeCapstonePostLegalizerCombinerPass(PassRegistry &);
 
-FunctionPass *createRISCVO0PreLegalizerCombiner();
-void initializeRISCVO0PreLegalizerCombinerPass(PassRegistry &);
+FunctionPass *createCapstoneO0PreLegalizerCombiner();
+void initializeCapstoneO0PreLegalizerCombinerPass(PassRegistry &);
 
-FunctionPass *createRISCVPreLegalizerCombiner();
-void initializeRISCVPreLegalizerCombinerPass(PassRegistry &);
+FunctionPass *createCapstonePreLegalizerCombiner();
+void initializeCapstonePreLegalizerCombinerPass(PassRegistry &);
 
-FunctionPass *createRISCVVLOptimizerPass();
-void initializeRISCVVLOptimizerPass(PassRegistry &);
+FunctionPass *createCapstoneVLOptimizerPass();
+void initializeCapstoneVLOptimizerPass(PassRegistry &);
 
-FunctionPass *createRISCVVMV0EliminationPass();
-void initializeRISCVVMV0EliminationPass(PassRegistry &);
+FunctionPass *createCapstoneVMV0EliminationPass();
+void initializeCapstoneVMV0EliminationPass(PassRegistry &);
 
-void initializeRISCVAsmPrinterPass(PassRegistry &);
+void initializeCapstoneAsmPrinterPass(PassRegistry &);
 } // namespace llvm
 
 #endif

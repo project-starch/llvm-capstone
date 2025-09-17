@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfo.h - RISC-V Instruction Information -------*- C++ -*-===//
+//===-- CapstoneInstrInfo.h - Capstone Instruction Information -------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,33 +6,33 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains the RISC-V implementation of the TargetInstrInfo class.
+// This file contains the Capstone implementation of the TargetInstrInfo class.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCVINSTRINFO_H
-#define LLVM_LIB_TARGET_RISCV_RISCVINSTRINFO_H
+#ifndef LLVM_LIB_TARGET_Capstone_CapstoneINSTRINFO_H
+#define LLVM_LIB_TARGET_Capstone_CapstoneINSTRINFO_H
 
-#include "RISCV.h"
-#include "RISCVRegisterInfo.h"
+#include "Capstone.h"
+#include "CapstoneRegisterInfo.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/IR/DiagnosticInfo.h"
 
 #define GET_INSTRINFO_HEADER
 #define GET_INSTRINFO_OPERAND_ENUM
-#include "RISCVGenInstrInfo.inc"
-#include "RISCVGenRegisterInfo.inc"
+#include "CapstoneGenInstrInfo.inc"
+#include "CapstoneGenRegisterInfo.inc"
 
 namespace llvm {
 
-class RISCVSubtarget;
+class CapstoneSubtarget;
 
 static const MachineMemOperand::Flags MONontemporalBit0 =
     MachineMemOperand::MOTargetFlag1;
 static const MachineMemOperand::Flags MONontemporalBit1 =
     MachineMemOperand::MOTargetFlag2;
 
-namespace RISCVCC {
+namespace CapstoneCC {
 
 enum CondCode {
   COND_EQ,
@@ -47,10 +47,10 @@ enum CondCode {
 CondCode getOppositeBranchCondition(CondCode);
 unsigned getBrCond(CondCode CC, unsigned SelectOpc = 0);
 
-} // end of namespace RISCVCC
+} // end of namespace CapstoneCC
 
-// RISCV MachineCombiner patterns
-enum RISCVMachineCombinerPattern : unsigned {
+// Capstone MachineCombiner patterns
+enum CapstoneMachineCombinerPattern : unsigned {
   FMADD_AX = MachineCombinerPattern::TARGET_PATTERN_START,
   FMADD_XA,
   FMSUB,
@@ -59,10 +59,10 @@ enum RISCVMachineCombinerPattern : unsigned {
   SHXADD_ADD_SLLI_OP2,
 };
 
-class RISCVInstrInfo : public RISCVGenInstrInfo {
+class CapstoneInstrInfo : public CapstoneGenInstrInfo {
 
 public:
-  explicit RISCVInstrInfo(const RISCVSubtarget &STI);
+  explicit CapstoneInstrInfo(const CapstoneSubtarget &STI);
 
   MCInst getNop() const override;
 
@@ -78,8 +78,8 @@ public:
   bool isReallyTriviallyReMaterializable(const MachineInstr &MI) const override;
 
   bool shouldBreakCriticalEdgeToSink(MachineInstr &MI) const override {
-    return MI.getOpcode() == RISCV::ADDI && MI.getOperand(1).isReg() &&
-           MI.getOperand(1).getReg() == RISCV::X0;
+    return MI.getOpcode() == Capstone::ADDI && MI.getOperand(1).isReg() &&
+           MI.getOperand(1).getReg() == Capstone::X0;
   }
 
   void copyPhysRegVector(MachineBasicBlock &MBB,
@@ -308,13 +308,13 @@ public:
   static bool isLdStSafeToPair(const MachineInstr &LdSt,
                                const TargetRegisterInfo *TRI);
 #define GET_INSTRINFO_HELPER_DECLS
-#include "RISCVGenInstrInfo.inc"
+#include "CapstoneGenInstrInfo.inc"
 
-  static RISCVCC::CondCode getCondFromBranchOpc(unsigned Opc);
+  static CapstoneCC::CondCode getCondFromBranchOpc(unsigned Opc);
 
   /// Return the result of the evaluation of C0 CC C1, where CC is a
-  /// RISCVCC::CondCode.
-  static bool evaluateCondBranch(RISCVCC::CondCode CC, int64_t C0, int64_t C1);
+  /// CapstoneCC::CondCode.
+  static bool evaluateCondBranch(CapstoneCC::CondCode CC, int64_t C0, int64_t C1);
 
   /// Return true if the operand is a load immediate instruction and
   /// sets Imm to the immediate value.
@@ -322,7 +322,7 @@ public:
                             const MachineOperand &Op, int64_t &Imm);
 
 protected:
-  const RISCVSubtarget &STI;
+  const CapstoneSubtarget &STI;
 
 private:
   unsigned getInstBundleLength(const MachineInstr &MI) const;
@@ -335,7 +335,7 @@ private:
                                     bool &Commuted) const;
 };
 
-namespace RISCV {
+namespace Capstone {
 
 // Returns true if the given MI is an RVV instruction opcode for which we may
 // expect to see a FrameIndex operand.
@@ -378,30 +378,30 @@ static constexpr unsigned FPMASK_Positive_Normal = 0x040;
 static constexpr unsigned FPMASK_Positive_Infinity = 0x080;
 static constexpr unsigned FPMASK_Signaling_NaN = 0x100;
 static constexpr unsigned FPMASK_Quiet_NaN = 0x200;
-} // namespace RISCV
+} // namespace Capstone
 
-namespace RISCVVPseudosTable {
+namespace CapstoneVPseudosTable {
 
 struct PseudoInfo {
   uint16_t Pseudo;
   uint16_t BaseInstr;
 };
 
-#define GET_RISCVVPseudosTable_DECL
-#include "RISCVGenSearchableTables.inc"
+#define GET_CapstoneVPseudosTable_DECL
+#include "CapstoneGenSearchableTables.inc"
 
-} // end namespace RISCVVPseudosTable
+} // end namespace CapstoneVPseudosTable
 
-namespace RISCV {
+namespace Capstone {
 
-struct RISCVMaskedPseudoInfo {
+struct CapstoneMaskedPseudoInfo {
   uint16_t MaskedPseudo;
   uint16_t UnmaskedPseudo;
   uint8_t MaskOpIdx;
 };
-#define GET_RISCVMaskedPseudosTable_DECL
-#include "RISCVGenSearchableTables.inc"
-} // end namespace RISCV
+#define GET_CapstoneMaskedPseudosTable_DECL
+#include "CapstoneGenSearchableTables.inc"
+} // end namespace Capstone
 
 } // end namespace llvm
 #endif

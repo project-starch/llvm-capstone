@@ -1,4 +1,4 @@
-//===-- RISCVInstrFormatsC.td - RISC-V C Instruction Formats -*- tablegen -*-=//
+//===-- CapstoneInstrFormatsC.td - Capstone C Instruction Formats -*- tablegen -*-=//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-//  This file describes the RISC-V C extension instruction formats.
+//  This file describes the Capstone C extension instruction formats.
 //
 //===----------------------------------------------------------------------===//
 

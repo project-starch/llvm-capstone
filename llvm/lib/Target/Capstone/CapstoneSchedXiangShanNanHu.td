@@ -1,4 +1,4 @@
-//==- RISCVSchedXiangShanNanHu.td - XS-NanHu Scheduling Defs -*- tablegen -*-=//
+//==- CapstoneSchedXiangShanNanHu.td - XS-NanHu Scheduling Defs -*- tablegen -*-=//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -8,7 +8,7 @@
 
 //===----------------------------------------------------------------------===//
 
-// XiangShan is a high-performance open-source RISC-V processor developed by
+// XiangShan is a high-performance open-source Capstone processor developed by
 // the Institute of Computing Technology (ICT), Chinese Academy of Sciences.
 // Source: https://github.com/OpenXiangShan/XiangShan
 // Documentation: https://github.com/OpenXiangShan/XiangShan-doc

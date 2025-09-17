@@ -1,4 +1,4 @@
-//===-- RISCVPostRAExpandPseudoInsts.cpp - Expand pseudo instrs ----===//
+//===-- CapstonePostRAExpandPseudoInsts.cpp - Expand pseudo instrs ----===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -12,29 +12,29 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVInstrInfo.h"
+#include "Capstone.h"
+#include "CapstoneInstrInfo.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 
 using namespace llvm;
 
-#define RISCV_POST_RA_EXPAND_PSEUDO_NAME                                       \
-  "RISC-V post-regalloc pseudo instruction expansion pass"
+#define Capstone_POST_RA_EXPAND_PSEUDO_NAME                                       \
+  "Capstone post-regalloc pseudo instruction expansion pass"
 
 namespace {
 
-class RISCVPostRAExpandPseudo : public MachineFunctionPass {
+class CapstonePostRAExpandPseudo : public MachineFunctionPass {
 public:
-  const RISCVInstrInfo *TII;
+  const CapstoneInstrInfo *TII;
   static char ID;
 
-  RISCVPostRAExpandPseudo() : MachineFunctionPass(ID) {}
+  CapstonePostRAExpandPseudo() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   StringRef getPassName() const override {
-    return RISCV_POST_RA_EXPAND_PSEUDO_NAME;
+    return Capstone_POST_RA_EXPAND_PSEUDO_NAME;
   }
 
 private:
@@ -45,17 +45,17 @@ private:
   bool expandMovAddr(MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI);
 };
 
-char RISCVPostRAExpandPseudo::ID = 0;
+char CapstonePostRAExpandPseudo::ID = 0;
 
-bool RISCVPostRAExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
-  TII = static_cast<const RISCVInstrInfo *>(MF.getSubtarget().getInstrInfo());
+bool CapstonePostRAExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
+  TII = static_cast<const CapstoneInstrInfo *>(MF.getSubtarget().getInstrInfo());
   bool Modified = false;
   for (auto &MBB : MF)
     Modified |= expandMBB(MBB);
   return Modified;
 }
 
-bool RISCVPostRAExpandPseudo::expandMBB(MachineBasicBlock &MBB) {
+bool CapstonePostRAExpandPseudo::expandMBB(MachineBasicBlock &MBB) {
   bool Modified = false;
 
   MachineBasicBlock::iterator MBBI = MBB.begin(), E = MBB.end();
@@ -68,20 +68,20 @@ bool RISCVPostRAExpandPseudo::expandMBB(MachineBasicBlock &MBB) {
   return Modified;
 }
 
-bool RISCVPostRAExpandPseudo::expandMI(MachineBasicBlock &MBB,
+bool CapstonePostRAExpandPseudo::expandMI(MachineBasicBlock &MBB,
                                        MachineBasicBlock::iterator MBBI,
                                        MachineBasicBlock::iterator &NextMBBI) {
   switch (MBBI->getOpcode()) {
-  case RISCV::PseudoMovImm:
+  case Capstone::PseudoMovImm:
     return expandMovImm(MBB, MBBI);
-  case RISCV::PseudoMovAddr:
+  case Capstone::PseudoMovAddr:
     return expandMovAddr(MBB, MBBI);
   default:
     return false;
   }
 }
 
-bool RISCVPostRAExpandPseudo::expandMovImm(MachineBasicBlock &MBB,
+bool CapstonePostRAExpandPseudo::expandMovImm(MachineBasicBlock &MBB,
                                            MachineBasicBlock::iterator MBBI) {
   DebugLoc DL = MBBI->getDebugLoc();
 
@@ -98,7 +98,7 @@ bool RISCVPostRAExpandPseudo::expandMovImm(MachineBasicBlock &MBB,
   return true;
 }
 
-bool RISCVPostRAExpandPseudo::expandMovAddr(MachineBasicBlock &MBB,
+bool CapstonePostRAExpandPseudo::expandMovAddr(MachineBasicBlock &MBB,
                                             MachineBasicBlock::iterator MBBI) {
   DebugLoc DL = MBBI->getDebugLoc();
 
@@ -106,10 +106,10 @@ bool RISCVPostRAExpandPseudo::expandMovAddr(MachineBasicBlock &MBB,
   bool DstIsDead = MBBI->getOperand(0).isDead();
   bool Renamable = MBBI->getOperand(0).isRenamable();
 
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::LUI))
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::LUI))
       .addReg(DstReg, RegState::Define | getRenamableRegState(Renamable))
       .add(MBBI->getOperand(1));
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::ADDI))
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::ADDI))
       .addReg(DstReg, RegState::Define | getDeadRegState(DstIsDead) |
                           getRenamableRegState(Renamable))
       .addReg(DstReg, RegState::Kill | getRenamableRegState(Renamable))
@@ -120,12 +120,12 @@ bool RISCVPostRAExpandPseudo::expandMovAddr(MachineBasicBlock &MBB,
 
 } // end of anonymous namespace
 
-INITIALIZE_PASS(RISCVPostRAExpandPseudo, "riscv-post-ra-expand-pseudo",
-                RISCV_POST_RA_EXPAND_PSEUDO_NAME, false, false)
+INITIALIZE_PASS(CapstonePostRAExpandPseudo, "capstone-post-ra-expand-pseudo",
+                Capstone_POST_RA_EXPAND_PSEUDO_NAME, false, false)
 namespace llvm {
 
-FunctionPass *createRISCVPostRAExpandPseudoPass() {
-  return new RISCVPostRAExpandPseudo();
+FunctionPass *createCapstonePostRAExpandPseudoPass() {
+  return new CapstonePostRAExpandPseudo();
 }
 
 } // end of namespace llvm

@@ -1,4 +1,4 @@
-//=== RISCVScheduleZvk.td - RISC-V Scheduling Definitions Zvk -*- tablegen ===//
+//=== CapstoneScheduleZvk.td - Capstone Scheduling Definitions Zvk -*- tablegen ===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -195,7 +195,7 @@ defm "" : LMULReadAdvance<"ReadVSM3MEV", 0>;
 }
 }
 
-// Helper class to define all RISC-V Vector Crypto extensions as unsupported
+// Helper class to define all Capstone Vector Crypto extensions as unsupported
 multiclass UnsupportedSchedZvk {
 defm "" : UnsupportedSchedZvbb;
 defm "" : UnsupportedSchedZvbc;

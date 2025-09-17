@@ -1,4 +1,4 @@
-//===-- RISCVRegisterInfo.td - RISC-V Register defs --------*- tablegen -*-===//
+//===-- CapstoneRegisterInfo.td - Capstone Register defs --------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,47 +7,47 @@
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
-//  Declarations that describe the RISC-V register files
+//  Declarations that describe the Capstone register files
 //===----------------------------------------------------------------------===//
 
-let Namespace = "RISCV" in {
-class RISCVReg<bits<5> Enc, string n, list<string> alt = []> : Register<n> {
+let Namespace = "Capstone" in {
+class CapstoneReg<bits<5> Enc, string n, list<string> alt = []> : Register<n> {
   let HWEncoding{4-0} = Enc;
   let AltNames = alt;
 }
 
-class RISCVRegWithSubRegs<bits<5> Enc, string n, list<Register> subregs,
+class CapstoneRegWithSubRegs<bits<5> Enc, string n, list<Register> subregs,
                           list<string> alt = []>
       : RegisterWithSubRegs<n, subregs> {
   let HWEncoding{4-0} = Enc;
   let AltNames = alt;
 }
 
-class RISCVReg16<bits<5> Enc, string n, list<string> alt = []> : Register<n> {
+class CapstoneReg16<bits<5> Enc, string n, list<string> alt = []> : Register<n> {
   let HWEncoding{4-0} = Enc;
   let AltNames = alt;
 }
 
 def sub_16 : SubRegIndex<16>;
-class RISCVReg32<RISCVReg16 subreg>
-  : RISCVRegWithSubRegs<subreg.HWEncoding{4-0}, subreg.AsmName, [subreg],
+class CapstoneReg32<CapstoneReg16 subreg>
+  : CapstoneRegWithSubRegs<subreg.HWEncoding{4-0}, subreg.AsmName, [subreg],
                         subreg.AltNames> {
   let SubRegIndices = [sub_16];
 }
 
-// Because RISCVReg64 register have AsmName and AltNames that alias with their
-// 16/32-bit sub-register, RISCVAsmParser will need to coerce a register number
-// from a RISCVReg16/RISCVReg32 to the equivalent RISCVReg64 when appropriate.
+// Because CapstoneReg64 register have AsmName and AltNames that alias with their
+// 16/32-bit sub-register, CapstoneAsmParser will need to coerce a register number
+// from a CapstoneReg16/CapstoneReg32 to the equivalent CapstoneReg64 when appropriate.
 def sub_32 : SubRegIndex<32>;
-class RISCVReg64<RISCVReg32 subreg>
-  : RISCVRegWithSubRegs<subreg.HWEncoding{4-0}, subreg.AsmName, [subreg],
+class CapstoneReg64<CapstoneReg32 subreg>
+  : CapstoneRegWithSubRegs<subreg.HWEncoding{4-0}, subreg.AsmName, [subreg],
                         subreg.AltNames> {
   let SubRegIndices = [sub_32];
 }
 
 def sub_64 : SubRegIndex<64>;
-class RISCVReg128<RISCVReg64 subreg>
-    : RISCVRegWithSubRegs<subreg.HWEncoding{4-0}, subreg.AsmName, [subreg],
+class CapstoneReg128<CapstoneReg64 subreg>
+    : CapstoneRegWithSubRegs<subreg.HWEncoding{4-0}, subreg.AsmName, [subreg],
                           subreg.AltNames> {
   let SubRegIndices = [sub_64];
 }
@@ -79,7 +79,7 @@ def sub_gpr_odd  : SubRegIndex<32, 32> {
   let SubRegRanges = SubRegRangeByHwMode<[RV32, RV64],
                                          [SubRegRange<32, 32>, SubRegRange<64, 64>]>;
 }
-} // Namespace = "RISCV"
+} // Namespace = "Capstone"
 
 //===----------------------------------------------------------------------===//
 // General Purpose Registers (aka Integer Registers)
@@ -95,120 +95,120 @@ let RegAltNameIndices = [ABIRegAltName] in {
   // 16-bit sub-registers for use by Zhinx. Having a 16-bit sub-register reduces
   // the spill size for these operations.
   let isConstant = true in
-  def X0_H  : RISCVReg<0, "x0", ["zero"]>;
+  def X0_H  : CapstoneReg<0, "x0", ["zero"]>;
   let CostPerUse = [0, 1] in {
-  def X1_H  : RISCVReg<1, "x1", ["ra"]>;
-  def X2_H  : RISCVReg<2, "x2", ["sp"]>;
-  def X3_H  : RISCVReg<3, "x3", ["gp"]>;
-  def X4_H  : RISCVReg<4, "x4", ["tp"]>;
-  def X5_H  : RISCVReg<5, "x5", ["t0"]>;
-  def X6_H  : RISCVReg<6, "x6", ["t1"]>;
-  def X7_H  : RISCVReg<7, "x7", ["t2"]>;
+  def X1_H  : CapstoneReg<1, "x1", ["ra"]>;
+  def X2_H  : CapstoneReg<2, "x2", ["sp"]>;
+  def X3_H  : CapstoneReg<3, "x3", ["gp"]>;
+  def X4_H  : CapstoneReg<4, "x4", ["tp"]>;
+  def X5_H  : CapstoneReg<5, "x5", ["t0"]>;
+  def X6_H  : CapstoneReg<6, "x6", ["t1"]>;
+  def X7_H  : CapstoneReg<7, "x7", ["t2"]>;
   }
-  def X8_H  : RISCVReg<8, "x8", ["s0", "fp"]>;
-  def X9_H  : RISCVReg<9, "x9", ["s1"]>;
-  def X10_H : RISCVReg<10,"x10", ["a0"]>;
-  def X11_H : RISCVReg<11,"x11", ["a1"]>;
-  def X12_H : RISCVReg<12,"x12", ["a2"]>;
-  def X13_H : RISCVReg<13,"x13", ["a3"]>;
-  def X14_H : RISCVReg<14,"x14", ["a4"]>;
-  def X15_H : RISCVReg<15,"x15", ["a5"]>;
+  def X8_H  : CapstoneReg<8, "x8", ["s0", "fp"]>;
+  def X9_H  : CapstoneReg<9, "x9", ["s1"]>;
+  def X10_H : CapstoneReg<10,"x10", ["a0"]>;
+  def X11_H : CapstoneReg<11,"x11", ["a1"]>;
+  def X12_H : CapstoneReg<12,"x12", ["a2"]>;
+  def X13_H : CapstoneReg<13,"x13", ["a3"]>;
+  def X14_H : CapstoneReg<14,"x14", ["a4"]>;
+  def X15_H : CapstoneReg<15,"x15", ["a5"]>;
   let CostPerUse = [0, 1] in {
-  def X16_H : RISCVReg<16,"x16", ["a6"]>;
-  def X17_H : RISCVReg<17,"x17", ["a7"]>;
-  def X18_H : RISCVReg<18,"x18", ["s2"]>;
-  def X19_H : RISCVReg<19,"x19", ["s3"]>;
-  def X20_H : RISCVReg<20,"x20", ["s4"]>;
-  def X21_H : RISCVReg<21,"x21", ["s5"]>;
-  def X22_H : RISCVReg<22,"x22", ["s6"]>;
-  def X23_H : RISCVReg<23,"x23", ["s7"]>;
-  def X24_H : RISCVReg<24,"x24", ["s8"]>;
-  def X25_H : RISCVReg<25,"x25", ["s9"]>;
-  def X26_H : RISCVReg<26,"x26", ["s10"]>;
-  def X27_H : RISCVReg<27,"x27", ["s11"]>;
-  def X28_H : RISCVReg<28,"x28", ["t3"]>;
-  def X29_H : RISCVReg<29,"x29", ["t4"]>;
-  def X30_H : RISCVReg<30,"x30", ["t5"]>;
-  def X31_H : RISCVReg<31,"x31", ["t6"]>;
+  def X16_H : CapstoneReg<16,"x16", ["a6"]>;
+  def X17_H : CapstoneReg<17,"x17", ["a7"]>;
+  def X18_H : CapstoneReg<18,"x18", ["s2"]>;
+  def X19_H : CapstoneReg<19,"x19", ["s3"]>;
+  def X20_H : CapstoneReg<20,"x20", ["s4"]>;
+  def X21_H : CapstoneReg<21,"x21", ["s5"]>;
+  def X22_H : CapstoneReg<22,"x22", ["s6"]>;
+  def X23_H : CapstoneReg<23,"x23", ["s7"]>;
+  def X24_H : CapstoneReg<24,"x24", ["s8"]>;
+  def X25_H : CapstoneReg<25,"x25", ["s9"]>;
+  def X26_H : CapstoneReg<26,"x26", ["s10"]>;
+  def X27_H : CapstoneReg<27,"x27", ["s11"]>;
+  def X28_H : CapstoneReg<28,"x28", ["t3"]>;
+  def X29_H : CapstoneReg<29,"x29", ["t4"]>;
+  def X30_H : CapstoneReg<30,"x30", ["t5"]>;
+  def X31_H : CapstoneReg<31,"x31", ["t6"]>;
   }
 
   let SubRegIndices = [sub_16] in {
   let isConstant = true in
-  def X0_W  : RISCVRegWithSubRegs<0, "x0", [X0_H], ["zero"]>;
+  def X0_W  : CapstoneRegWithSubRegs<0, "x0", [X0_H], ["zero"]>;
   let CostPerUse = [0, 1] in {
-  def X1_W  : RISCVRegWithSubRegs<1, "x1", [X1_H], ["ra"]>;
-  def X2_W  : RISCVRegWithSubRegs<2, "x2", [X2_H], ["sp"]>;
-  def X3_W  : RISCVRegWithSubRegs<3, "x3", [X3_H], ["gp"]>;
-  def X4_W  : RISCVRegWithSubRegs<4, "x4", [X4_H], ["tp"]>;
-  def X5_W  : RISCVRegWithSubRegs<5, "x5", [X5_H], ["t0"]>;
-  def X6_W  : RISCVRegWithSubRegs<6, "x6", [X6_H], ["t1"]>;
-  def X7_W  : RISCVRegWithSubRegs<7, "x7", [X7_H], ["t2"]>;
+  def X1_W  : CapstoneRegWithSubRegs<1, "x1", [X1_H], ["ra"]>;
+  def X2_W  : CapstoneRegWithSubRegs<2, "x2", [X2_H], ["sp"]>;
+  def X3_W  : CapstoneRegWithSubRegs<3, "x3", [X3_H], ["gp"]>;
+  def X4_W  : CapstoneRegWithSubRegs<4, "x4", [X4_H], ["tp"]>;
+  def X5_W  : CapstoneRegWithSubRegs<5, "x5", [X5_H], ["t0"]>;
+  def X6_W  : CapstoneRegWithSubRegs<6, "x6", [X6_H], ["t1"]>;
+  def X7_W  : CapstoneRegWithSubRegs<7, "x7", [X7_H], ["t2"]>;
   }
-  def X8_W  : RISCVRegWithSubRegs<8, "x8", [X8_H], ["s0", "fp"]>;
-  def X9_W  : RISCVRegWithSubRegs<9, "x9", [X9_H], ["s1"]>;
-  def X10_W : RISCVRegWithSubRegs<10,"x10", [X10_H], ["a0"]>;
-  def X11_W : RISCVRegWithSubRegs<11,"x11", [X11_H], ["a1"]>;
-  def X12_W : RISCVRegWithSubRegs<12,"x12", [X12_H], ["a2"]>;
-  def X13_W : RISCVRegWithSubRegs<13,"x13", [X13_H], ["a3"]>;
-  def X14_W : RISCVRegWithSubRegs<14,"x14", [X14_H], ["a4"]>;
-  def X15_W : RISCVRegWithSubRegs<15,"x15", [X15_H], ["a5"]>;
+  def X8_W  : CapstoneRegWithSubRegs<8, "x8", [X8_H], ["s0", "fp"]>;
+  def X9_W  : CapstoneRegWithSubRegs<9, "x9", [X9_H], ["s1"]>;
+  def X10_W : CapstoneRegWithSubRegs<10,"x10", [X10_H], ["a0"]>;
+  def X11_W : CapstoneRegWithSubRegs<11,"x11", [X11_H], ["a1"]>;
+  def X12_W : CapstoneRegWithSubRegs<12,"x12", [X12_H], ["a2"]>;
+  def X13_W : CapstoneRegWithSubRegs<13,"x13", [X13_H], ["a3"]>;
+  def X14_W : CapstoneRegWithSubRegs<14,"x14", [X14_H], ["a4"]>;
+  def X15_W : CapstoneRegWithSubRegs<15,"x15", [X15_H], ["a5"]>;
   let CostPerUse = [0, 1] in {
-  def X16_W : RISCVRegWithSubRegs<16,"x16", [X16_H], ["a6"]>;
-  def X17_W : RISCVRegWithSubRegs<17,"x17", [X17_H], ["a7"]>;
-  def X18_W : RISCVRegWithSubRegs<18,"x18", [X18_H], ["s2"]>;
-  def X19_W : RISCVRegWithSubRegs<19,"x19", [X19_H], ["s3"]>;
-  def X20_W : RISCVRegWithSubRegs<20,"x20", [X20_H], ["s4"]>;
-  def X21_W : RISCVRegWithSubRegs<21,"x21", [X21_H], ["s5"]>;
-  def X22_W : RISCVRegWithSubRegs<22,"x22", [X22_H], ["s6"]>;
-  def X23_W : RISCVRegWithSubRegs<23,"x23", [X23_H], ["s7"]>;
-  def X24_W : RISCVRegWithSubRegs<24,"x24", [X24_H], ["s8"]>;
-  def X25_W : RISCVRegWithSubRegs<25,"x25", [X25_H], ["s9"]>;
-  def X26_W : RISCVRegWithSubRegs<26,"x26", [X26_H], ["s10"]>;
-  def X27_W : RISCVRegWithSubRegs<27,"x27", [X27_H], ["s11"]>;
-  def X28_W : RISCVRegWithSubRegs<28,"x28", [X28_H], ["t3"]>;
-  def X29_W : RISCVRegWithSubRegs<29,"x29", [X29_H], ["t4"]>;
-  def X30_W : RISCVRegWithSubRegs<30,"x30", [X30_H], ["t5"]>;
-  def X31_W : RISCVRegWithSubRegs<31,"x31", [X31_H], ["t6"]>;
+  def X16_W : CapstoneRegWithSubRegs<16,"x16", [X16_H], ["a6"]>;
+  def X17_W : CapstoneRegWithSubRegs<17,"x17", [X17_H], ["a7"]>;
+  def X18_W : CapstoneRegWithSubRegs<18,"x18", [X18_H], ["s2"]>;
+  def X19_W : CapstoneRegWithSubRegs<19,"x19", [X19_H], ["s3"]>;
+  def X20_W : CapstoneRegWithSubRegs<20,"x20", [X20_H], ["s4"]>;
+  def X21_W : CapstoneRegWithSubRegs<21,"x21", [X21_H], ["s5"]>;
+  def X22_W : CapstoneRegWithSubRegs<22,"x22", [X22_H], ["s6"]>;
+  def X23_W : CapstoneRegWithSubRegs<23,"x23", [X23_H], ["s7"]>;
+  def X24_W : CapstoneRegWithSubRegs<24,"x24", [X24_H], ["s8"]>;
+  def X25_W : CapstoneRegWithSubRegs<25,"x25", [X25_H], ["s9"]>;
+  def X26_W : CapstoneRegWithSubRegs<26,"x26", [X26_H], ["s10"]>;
+  def X27_W : CapstoneRegWithSubRegs<27,"x27", [X27_H], ["s11"]>;
+  def X28_W : CapstoneRegWithSubRegs<28,"x28", [X28_H], ["t3"]>;
+  def X29_W : CapstoneRegWithSubRegs<29,"x29", [X29_H], ["t4"]>;
+  def X30_W : CapstoneRegWithSubRegs<30,"x30", [X30_H], ["t5"]>;
+  def X31_W : CapstoneRegWithSubRegs<31,"x31", [X31_H], ["t6"]>;
   }
   }
 
   let SubRegIndices = [sub_32] in {
   let isConstant = true in
-  def X0  : RISCVRegWithSubRegs<0, "x0", [X0_W], ["zero"]>, DwarfRegNum<[0]>;
+  def X0  : CapstoneRegWithSubRegs<0, "x0", [X0_W], ["zero"]>, DwarfRegNum<[0]>;
   let CostPerUse = [0, 1] in {
-  def X1  : RISCVRegWithSubRegs<1, "x1", [X1_W], ["ra"]>, DwarfRegNum<[1]>;
-  def X2  : RISCVRegWithSubRegs<2, "x2", [X2_W], ["sp"]>, DwarfRegNum<[2]>;
-  def X3  : RISCVRegWithSubRegs<3, "x3", [X3_W], ["gp"]>, DwarfRegNum<[3]>;
-  def X4  : RISCVRegWithSubRegs<4, "x4", [X4_W], ["tp"]>, DwarfRegNum<[4]>;
-  def X5  : RISCVRegWithSubRegs<5, "x5", [X5_W], ["t0"]>, DwarfRegNum<[5]>;
-  def X6  : RISCVRegWithSubRegs<6, "x6", [X6_W], ["t1"]>, DwarfRegNum<[6]>;
-  def X7  : RISCVRegWithSubRegs<7, "x7", [X7_W], ["t2"]>, DwarfRegNum<[7]>;
+  def X1  : CapstoneRegWithSubRegs<1, "x1", [X1_W], ["ra"]>, DwarfRegNum<[1]>;
+  def X2  : CapstoneRegWithSubRegs<2, "x2", [X2_W], ["sp"]>, DwarfRegNum<[2]>;
+  def X3  : CapstoneRegWithSubRegs<3, "x3", [X3_W], ["gp"]>, DwarfRegNum<[3]>;
+  def X4  : CapstoneRegWithSubRegs<4, "x4", [X4_W], ["tp"]>, DwarfRegNum<[4]>;
+  def X5  : CapstoneRegWithSubRegs<5, "x5", [X5_W], ["t0"]>, DwarfRegNum<[5]>;
+  def X6  : CapstoneRegWithSubRegs<6, "x6", [X6_W], ["t1"]>, DwarfRegNum<[6]>;
+  def X7  : CapstoneRegWithSubRegs<7, "x7", [X7_W], ["t2"]>, DwarfRegNum<[7]>;
   }
-  def X8  : RISCVRegWithSubRegs<8, "x8", [X8_W], ["s0", "fp"]>, DwarfRegNum<[8]>;
-  def X9  : RISCVRegWithSubRegs<9, "x9", [X9_W], ["s1"]>, DwarfRegNum<[9]>;
-  def X10 : RISCVRegWithSubRegs<10,"x10", [X10_W], ["a0"]>, DwarfRegNum<[10]>;
-  def X11 : RISCVRegWithSubRegs<11,"x11", [X11_W], ["a1"]>, DwarfRegNum<[11]>;
-  def X12 : RISCVRegWithSubRegs<12,"x12", [X12_W], ["a2"]>, DwarfRegNum<[12]>;
-  def X13 : RISCVRegWithSubRegs<13,"x13", [X13_W], ["a3"]>, DwarfRegNum<[13]>;
-  def X14 : RISCVRegWithSubRegs<14,"x14", [X14_W], ["a4"]>, DwarfRegNum<[14]>;
-  def X15 : RISCVRegWithSubRegs<15,"x15", [X15_W], ["a5"]>, DwarfRegNum<[15]>;
+  def X8  : CapstoneRegWithSubRegs<8, "x8", [X8_W], ["s0", "fp"]>, DwarfRegNum<[8]>;
+  def X9  : CapstoneRegWithSubRegs<9, "x9", [X9_W], ["s1"]>, DwarfRegNum<[9]>;
+  def X10 : CapstoneRegWithSubRegs<10,"x10", [X10_W], ["a0"]>, DwarfRegNum<[10]>;
+  def X11 : CapstoneRegWithSubRegs<11,"x11", [X11_W], ["a1"]>, DwarfRegNum<[11]>;
+  def X12 : CapstoneRegWithSubRegs<12,"x12", [X12_W], ["a2"]>, DwarfRegNum<[12]>;
+  def X13 : CapstoneRegWithSubRegs<13,"x13", [X13_W], ["a3"]>, DwarfRegNum<[13]>;
+  def X14 : CapstoneRegWithSubRegs<14,"x14", [X14_W], ["a4"]>, DwarfRegNum<[14]>;
+  def X15 : CapstoneRegWithSubRegs<15,"x15", [X15_W], ["a5"]>, DwarfRegNum<[15]>;
   let CostPerUse = [0, 1] in {
-  def X16 : RISCVRegWithSubRegs<16,"x16", [X16_W], ["a6"]>, DwarfRegNum<[16]>;
-  def X17 : RISCVRegWithSubRegs<17,"x17", [X17_W], ["a7"]>, DwarfRegNum<[17]>;
-  def X18 : RISCVRegWithSubRegs<18,"x18", [X18_W], ["s2"]>, DwarfRegNum<[18]>;
-  def X19 : RISCVRegWithSubRegs<19,"x19", [X19_W], ["s3"]>, DwarfRegNum<[19]>;
-  def X20 : RISCVRegWithSubRegs<20,"x20", [X20_W], ["s4"]>, DwarfRegNum<[20]>;
-  def X21 : RISCVRegWithSubRegs<21,"x21", [X21_W], ["s5"]>, DwarfRegNum<[21]>;
-  def X22 : RISCVRegWithSubRegs<22,"x22", [X22_W], ["s6"]>, DwarfRegNum<[22]>;
-  def X23 : RISCVRegWithSubRegs<23,"x23", [X23_W], ["s7"]>, DwarfRegNum<[23]>;
-  def X24 : RISCVRegWithSubRegs<24,"x24", [X24_W], ["s8"]>, DwarfRegNum<[24]>;
-  def X25 : RISCVRegWithSubRegs<25,"x25", [X25_W], ["s9"]>, DwarfRegNum<[25]>;
-  def X26 : RISCVRegWithSubRegs<26,"x26", [X26_W], ["s10"]>, DwarfRegNum<[26]>;
-  def X27 : RISCVRegWithSubRegs<27,"x27", [X27_W], ["s11"]>, DwarfRegNum<[27]>;
-  def X28 : RISCVRegWithSubRegs<28,"x28", [X28_W], ["t3"]>, DwarfRegNum<[28]>;
-  def X29 : RISCVRegWithSubRegs<29,"x29", [X29_W], ["t4"]>, DwarfRegNum<[29]>;
-  def X30 : RISCVRegWithSubRegs<30,"x30", [X30_W], ["t5"]>, DwarfRegNum<[30]>;
-  def X31 : RISCVRegWithSubRegs<31,"x31", [X31_W], ["t6"]>, DwarfRegNum<[31]>;
+  def X16 : CapstoneRegWithSubRegs<16,"x16", [X16_W], ["a6"]>, DwarfRegNum<[16]>;
+  def X17 : CapstoneRegWithSubRegs<17,"x17", [X17_W], ["a7"]>, DwarfRegNum<[17]>;
+  def X18 : CapstoneRegWithSubRegs<18,"x18", [X18_W], ["s2"]>, DwarfRegNum<[18]>;
+  def X19 : CapstoneRegWithSubRegs<19,"x19", [X19_W], ["s3"]>, DwarfRegNum<[19]>;
+  def X20 : CapstoneRegWithSubRegs<20,"x20", [X20_W], ["s4"]>, DwarfRegNum<[20]>;
+  def X21 : CapstoneRegWithSubRegs<21,"x21", [X21_W], ["s5"]>, DwarfRegNum<[21]>;
+  def X22 : CapstoneRegWithSubRegs<22,"x22", [X22_W], ["s6"]>, DwarfRegNum<[22]>;
+  def X23 : CapstoneRegWithSubRegs<23,"x23", [X23_W], ["s7"]>, DwarfRegNum<[23]>;
+  def X24 : CapstoneRegWithSubRegs<24,"x24", [X24_W], ["s8"]>, DwarfRegNum<[24]>;
+  def X25 : CapstoneRegWithSubRegs<25,"x25", [X25_W], ["s9"]>, DwarfRegNum<[25]>;
+  def X26 : CapstoneRegWithSubRegs<26,"x26", [X26_W], ["s10"]>, DwarfRegNum<[26]>;
+  def X27 : CapstoneRegWithSubRegs<27,"x27", [X27_W], ["s11"]>, DwarfRegNum<[27]>;
+  def X28 : CapstoneRegWithSubRegs<28,"x28", [X28_W], ["t3"]>, DwarfRegNum<[28]>;
+  def X29 : CapstoneRegWithSubRegs<29,"x29", [X29_W], ["t4"]>, DwarfRegNum<[29]>;
+  def X30 : CapstoneRegWithSubRegs<30,"x30", [X30_W], ["t5"]>, DwarfRegNum<[30]>;
+  def X31 : CapstoneRegWithSubRegs<31,"x31", [X31_W], ["t6"]>, DwarfRegNum<[31]>;
   }
   }
 }
@@ -226,8 +226,8 @@ def XLenRI : RegInfoByHwMode<
       [RV32,              RV64],
       [RegInfo<32,32,32>, RegInfo<64,64,64>]>;
 
-class RISCVRegisterClass<list<ValueType> regTypes, int align, dag regList>
-    : RegisterClass<"RISCV", regTypes, align, regList> {
+class CapstoneRegisterClass<list<ValueType> regTypes, int align, dag regList>
+    : RegisterClass<"Capstone", regTypes, align, regList> {
   bit IsVRegClass = 0;
   int VLMul = 1;
   int NF = 1;
@@ -238,7 +238,7 @@ class RISCVRegisterClass<list<ValueType> regTypes, int align, dag regList>
 }
 
 class GPRRegisterClass<dag regList>
-    : RISCVRegisterClass<[XLenVT, XLenFVT, i32, i16], 32, regList> {
+    : CapstoneRegisterClass<[XLenVT, XLenFVT, i32, i16], 32, regList> {
   let RegInfos = XLenRI;
 }
 
@@ -329,7 +329,7 @@ def XLenPairRI : RegInfoByHwMode<
 
 // Dummy zero register for use in the register pair containing X0 (as X1 is
 // not read to or written when the X0 register pair is used).
-def DUMMY_REG_PAIR_WITH_X0 : RISCVReg<0, "0">;
+def DUMMY_REG_PAIR_WITH_X0 : CapstoneReg<0, "0">;
 
 // Must add DUMMY_REG_PAIR_WITH_X0 to a separate register class to prevent the
 // register's existence from changing codegen (due to the regPressureSetLimit
@@ -337,7 +337,7 @@ def DUMMY_REG_PAIR_WITH_X0 : RISCVReg<0, "0">;
 def GPRAll : GPRRegisterClass<(add GPR, DUMMY_REG_PAIR_WITH_X0)>;
 
 let RegAltNameIndices = [ABIRegAltName] in {
-  def X0_Pair : RISCVRegWithSubRegs<0, X0.AsmName,
+  def X0_Pair : CapstoneRegWithSubRegs<0, X0.AsmName,
                                     [X0, DUMMY_REG_PAIR_WITH_X0],
                                     X0.AltNames> {
     let SubRegIndices = [sub_gpr_even, sub_gpr_odd];
@@ -348,7 +348,7 @@ let RegAltNameIndices = [ABIRegAltName] in {
     defvar IndexP1 = !add(Index, 1);
     defvar Reg = !cast<Register>("X"#Index);
     defvar RegP1 = !cast<Register>("X"#IndexP1);
-    def "X" # Index #"_X" # IndexP1 : RISCVRegWithSubRegs<Index,
+    def "X" # Index #"_X" # IndexP1 : CapstoneRegWithSubRegs<Index,
                                                           Reg.AsmName,
                                                           [Reg, RegP1],
                                                           Reg.AltNames> {
@@ -359,7 +359,7 @@ let RegAltNameIndices = [ABIRegAltName] in {
 }
 
 let RegInfos = XLenPairRI, CopyCost = 2 in {
-def GPRPair : RISCVRegisterClass<[XLenPairVT, XLenPairFVT], 64, (add
+def GPRPair : CapstoneRegisterClass<[XLenPairVT, XLenPairFVT], 64, (add
     X10_X11, X12_X13, X14_X15, X16_X17,
     X6_X7,
     X28_X29, X30_X31,
@@ -368,9 +368,9 @@ def GPRPair : RISCVRegisterClass<[XLenPairVT, XLenPairFVT], 64, (add
     X0_Pair, X2_X3, X4_X5
 )>;
 
-def GPRPairNoX0 : RISCVRegisterClass<[XLenPairVT, XLenPairFVT], 64, (sub GPRPair, X0_Pair)>;
+def GPRPairNoX0 : CapstoneRegisterClass<[XLenPairVT, XLenPairFVT], 64, (sub GPRPair, X0_Pair)>;
 
-def GPRPairC : RISCVRegisterClass<[XLenPairVT, XLenPairFVT], 64, (add
+def GPRPairC : CapstoneRegisterClass<[XLenPairVT, XLenPairFVT], 64, (add
   X10_X11, X12_X13, X14_X15, X8_X9
 )>;
 } // let RegInfos = XLenPairRI, CopyCost = 2
@@ -380,51 +380,51 @@ def GPRPairC : RISCVRegisterClass<[XLenPairVT, XLenPairFVT], 64, (add
 //===----------------------------------------------------------------------===//
 
 let RegAltNameIndices = [ABIRegAltName] in {
-  def F0_H  : RISCVReg16<0, "f0", ["ft0"]>, DwarfRegNum<[32]>;
-  def F1_H  : RISCVReg16<1, "f1", ["ft1"]>, DwarfRegNum<[33]>;
-  def F2_H  : RISCVReg16<2, "f2", ["ft2"]>, DwarfRegNum<[34]>;
-  def F3_H  : RISCVReg16<3, "f3", ["ft3"]>, DwarfRegNum<[35]>;
-  def F4_H  : RISCVReg16<4, "f4", ["ft4"]>, DwarfRegNum<[36]>;
-  def F5_H  : RISCVReg16<5, "f5", ["ft5"]>, DwarfRegNum<[37]>;
-  def F6_H  : RISCVReg16<6, "f6", ["ft6"]>, DwarfRegNum<[38]>;
-  def F7_H  : RISCVReg16<7, "f7", ["ft7"]>, DwarfRegNum<[39]>;
-  def F8_H  : RISCVReg16<8, "f8", ["fs0"]>, DwarfRegNum<[40]>;
-  def F9_H  : RISCVReg16<9, "f9", ["fs1"]>, DwarfRegNum<[41]>;
-  def F10_H : RISCVReg16<10,"f10", ["fa0"]>, DwarfRegNum<[42]>;
-  def F11_H : RISCVReg16<11,"f11", ["fa1"]>, DwarfRegNum<[43]>;
-  def F12_H : RISCVReg16<12,"f12", ["fa2"]>, DwarfRegNum<[44]>;
-  def F13_H : RISCVReg16<13,"f13", ["fa3"]>, DwarfRegNum<[45]>;
-  def F14_H : RISCVReg16<14,"f14", ["fa4"]>, DwarfRegNum<[46]>;
-  def F15_H : RISCVReg16<15,"f15", ["fa5"]>, DwarfRegNum<[47]>;
-  def F16_H : RISCVReg16<16,"f16", ["fa6"]>, DwarfRegNum<[48]>;
-  def F17_H : RISCVReg16<17,"f17", ["fa7"]>, DwarfRegNum<[49]>;
-  def F18_H : RISCVReg16<18,"f18", ["fs2"]>, DwarfRegNum<[50]>;
-  def F19_H : RISCVReg16<19,"f19", ["fs3"]>, DwarfRegNum<[51]>;
-  def F20_H : RISCVReg16<20,"f20", ["fs4"]>, DwarfRegNum<[52]>;
-  def F21_H : RISCVReg16<21,"f21", ["fs5"]>, DwarfRegNum<[53]>;
-  def F22_H : RISCVReg16<22,"f22", ["fs6"]>, DwarfRegNum<[54]>;
-  def F23_H : RISCVReg16<23,"f23", ["fs7"]>, DwarfRegNum<[55]>;
-  def F24_H : RISCVReg16<24,"f24", ["fs8"]>, DwarfRegNum<[56]>;
-  def F25_H : RISCVReg16<25,"f25", ["fs9"]>, DwarfRegNum<[57]>;
-  def F26_H : RISCVReg16<26,"f26", ["fs10"]>, DwarfRegNum<[58]>;
-  def F27_H : RISCVReg16<27,"f27", ["fs11"]>, DwarfRegNum<[59]>;
-  def F28_H : RISCVReg16<28,"f28", ["ft8"]>, DwarfRegNum<[60]>;
-  def F29_H : RISCVReg16<29,"f29", ["ft9"]>, DwarfRegNum<[61]>;
-  def F30_H : RISCVReg16<30,"f30", ["ft10"]>, DwarfRegNum<[62]>;
-  def F31_H : RISCVReg16<31,"f31", ["ft11"]>, DwarfRegNum<[63]>;
+  def F0_H  : CapstoneReg16<0, "f0", ["ft0"]>, DwarfRegNum<[32]>;
+  def F1_H  : CapstoneReg16<1, "f1", ["ft1"]>, DwarfRegNum<[33]>;
+  def F2_H  : CapstoneReg16<2, "f2", ["ft2"]>, DwarfRegNum<[34]>;
+  def F3_H  : CapstoneReg16<3, "f3", ["ft3"]>, DwarfRegNum<[35]>;
+  def F4_H  : CapstoneReg16<4, "f4", ["ft4"]>, DwarfRegNum<[36]>;
+  def F5_H  : CapstoneReg16<5, "f5", ["ft5"]>, DwarfRegNum<[37]>;
+  def F6_H  : CapstoneReg16<6, "f6", ["ft6"]>, DwarfRegNum<[38]>;
+  def F7_H  : CapstoneReg16<7, "f7", ["ft7"]>, DwarfRegNum<[39]>;
+  def F8_H  : CapstoneReg16<8, "f8", ["fs0"]>, DwarfRegNum<[40]>;
+  def F9_H  : CapstoneReg16<9, "f9", ["fs1"]>, DwarfRegNum<[41]>;
+  def F10_H : CapstoneReg16<10,"f10", ["fa0"]>, DwarfRegNum<[42]>;
+  def F11_H : CapstoneReg16<11,"f11", ["fa1"]>, DwarfRegNum<[43]>;
+  def F12_H : CapstoneReg16<12,"f12", ["fa2"]>, DwarfRegNum<[44]>;
+  def F13_H : CapstoneReg16<13,"f13", ["fa3"]>, DwarfRegNum<[45]>;
+  def F14_H : CapstoneReg16<14,"f14", ["fa4"]>, DwarfRegNum<[46]>;
+  def F15_H : CapstoneReg16<15,"f15", ["fa5"]>, DwarfRegNum<[47]>;
+  def F16_H : CapstoneReg16<16,"f16", ["fa6"]>, DwarfRegNum<[48]>;
+  def F17_H : CapstoneReg16<17,"f17", ["fa7"]>, DwarfRegNum<[49]>;
+  def F18_H : CapstoneReg16<18,"f18", ["fs2"]>, DwarfRegNum<[50]>;
+  def F19_H : CapstoneReg16<19,"f19", ["fs3"]>, DwarfRegNum<[51]>;
+  def F20_H : CapstoneReg16<20,"f20", ["fs4"]>, DwarfRegNum<[52]>;
+  def F21_H : CapstoneReg16<21,"f21", ["fs5"]>, DwarfRegNum<[53]>;
+  def F22_H : CapstoneReg16<22,"f22", ["fs6"]>, DwarfRegNum<[54]>;
+  def F23_H : CapstoneReg16<23,"f23", ["fs7"]>, DwarfRegNum<[55]>;
+  def F24_H : CapstoneReg16<24,"f24", ["fs8"]>, DwarfRegNum<[56]>;
+  def F25_H : CapstoneReg16<25,"f25", ["fs9"]>, DwarfRegNum<[57]>;
+  def F26_H : CapstoneReg16<26,"f26", ["fs10"]>, DwarfRegNum<[58]>;
+  def F27_H : CapstoneReg16<27,"f27", ["fs11"]>, DwarfRegNum<[59]>;
+  def F28_H : CapstoneReg16<28,"f28", ["ft8"]>, DwarfRegNum<[60]>;
+  def F29_H : CapstoneReg16<29,"f29", ["ft9"]>, DwarfRegNum<[61]>;
+  def F30_H : CapstoneReg16<30,"f30", ["ft10"]>, DwarfRegNum<[62]>;
+  def F31_H : CapstoneReg16<31,"f31", ["ft11"]>, DwarfRegNum<[63]>;
 
   foreach Index = 0-31 in {
-    def F#Index#_F : RISCVReg32<!cast<RISCVReg16>("F"#Index#"_H")>,
+    def F#Index#_F : CapstoneReg32<!cast<CapstoneReg16>("F"#Index#"_H")>,
       DwarfRegAlias<!cast<Register>("F"#Index#"_H")>;
   }
 
   foreach Index = 0-31 in {
-    def F#Index#_D : RISCVReg64<!cast<RISCVReg32>("F"#Index#"_F")>,
+    def F#Index#_D : CapstoneReg64<!cast<CapstoneReg32>("F"#Index#"_F")>,
       DwarfRegAlias<!cast<Register>("F"#Index#"_H")>;
   }
 
   foreach Index = 0-31 in {
-    def F#Index#_Q : RISCVReg128<!cast<RISCVReg64>("F"#Index#"_D")>,
+    def F#Index#_Q : CapstoneReg128<!cast<CapstoneReg64>("F"#Index#"_D")>,
       DwarfRegAlias<!cast<Register>("F"#Index#"_H")>;
   }
 }
@@ -433,7 +433,7 @@ let RegAltNameIndices = [ABIRegAltName] in {
 // meaning caller-save regs are listed before callee-save.
 // We start by allocating argument registers in reverse order since they are
 // compressible.
-def FPR16 : RISCVRegisterClass<[f16, bf16], 16, (add
+def FPR16 : CapstoneRegisterClass<[f16, bf16], 16, (add
     (sequence "F%u_H", 15, 10), // fa5-fa0
     (sequence "F%u_H", 0, 7),   // ft0-f7
     (sequence "F%u_H", 16, 17), // fa6-fa7
@@ -442,12 +442,12 @@ def FPR16 : RISCVRegisterClass<[f16, bf16], 16, (add
     (sequence "F%u_H", 18, 27)  // fs2-fs11
 )>;
 
-def FPR16C : RISCVRegisterClass<[f16, bf16], 16, (add
+def FPR16C : CapstoneRegisterClass<[f16, bf16], 16, (add
     (sequence "F%u_H", 15, 10),
     (sequence "F%u_H", 8, 9)
 )>;
 
-def FPR32 : RISCVRegisterClass<[f32], 32, (add
+def FPR32 : CapstoneRegisterClass<[f32], 32, (add
     (sequence "F%u_F", 15, 10),
     (sequence "F%u_F", 0, 7),
     (sequence "F%u_F", 16, 17),
@@ -456,14 +456,14 @@ def FPR32 : RISCVRegisterClass<[f32], 32, (add
     (sequence "F%u_F", 18, 27)
 )>;
 
-def FPR32C : RISCVRegisterClass<[f32], 32, (add
+def FPR32C : CapstoneRegisterClass<[f32], 32, (add
   (sequence "F%u_F", 15, 10),
   (sequence "F%u_F", 8, 9)
 )>;
 
 // The order of registers represents the preferred allocation sequence,
 // meaning caller-save regs are listed before callee-save.
-def FPR64 : RISCVRegisterClass<[f64], 64, (add
+def FPR64 : CapstoneRegisterClass<[f64], 64, (add
     (sequence "F%u_D", 15, 10),
     (sequence "F%u_D", 0, 7),
     (sequence "F%u_D", 16, 17),
@@ -472,12 +472,12 @@ def FPR64 : RISCVRegisterClass<[f64], 64, (add
     (sequence "F%u_D", 18, 27)
 )>;
 
-def FPR64C : RISCVRegisterClass<[f64], 64, (add
+def FPR64C : CapstoneRegisterClass<[f64], 64, (add
   (sequence "F%u_D", 15, 10),
   (sequence "F%u_D", 8, 9)
 )>;
 
-def FPR128 : RISCVRegisterClass<[f128], 128, (add
+def FPR128 : CapstoneRegisterClass<[f128], 128, (add
     (sequence "F%u_Q", 15, 10),
     (sequence "F%u_Q", 0, 7),
     (sequence "F%u_Q", 16, 17),
@@ -491,25 +491,25 @@ def FPR128 : RISCVRegisterClass<[f128], 128, (add
 //===----------------------------------------------------------------------===//
 
 // 16-bit GPR sub-register class used by Zhinx instructions.
-def GPRF16 : RISCVRegisterClass<[f16], 16, (add (sequence "X%u_H", 10, 17),
+def GPRF16 : CapstoneRegisterClass<[f16], 16, (add (sequence "X%u_H", 10, 17),
                                                 (sequence "X%u_H", 5, 7),
                                                 (sequence "X%u_H", 28, 31),
                                                 (sequence "X%u_H", 8, 9),
                                                 (sequence "X%u_H", 18, 27),
                                                 (sequence "X%u_H", 0, 4))>;
-def GPRF16C : RISCVRegisterClass<[f16], 16, (add (sequence "X%u_H", 10, 15),
+def GPRF16C : CapstoneRegisterClass<[f16], 16, (add (sequence "X%u_H", 10, 15),
                                                  (sequence "X%u_H", 8, 9))>;
-def GPRF16NoX0 : RISCVRegisterClass<[f16], 16, (sub GPRF16, X0_H)>;
+def GPRF16NoX0 : CapstoneRegisterClass<[f16], 16, (sub GPRF16, X0_H)>;
 
-def GPRF32 : RISCVRegisterClass<[f32], 32, (add (sequence "X%u_W", 10, 17),
+def GPRF32 : CapstoneRegisterClass<[f32], 32, (add (sequence "X%u_W", 10, 17),
                                                 (sequence "X%u_W", 5, 7),
                                                 (sequence "X%u_W", 28, 31),
                                                 (sequence "X%u_W", 8, 9),
                                                 (sequence "X%u_W", 18, 27),
                                                 (sequence "X%u_W", 0, 4))>;
-def GPRF32C : RISCVRegisterClass<[f32], 32, (add (sequence "X%u_W", 10, 15),
+def GPRF32C : CapstoneRegisterClass<[f32], 32, (add (sequence "X%u_W", 10, 15),
                                                  (sequence "X%u_W", 8, 9))>;
-def GPRF32NoX0 : RISCVRegisterClass<[f32], 32, (sub GPRF32, X0_W)>;
+def GPRF32NoX0 : CapstoneRegisterClass<[f32], 32, (sub GPRF32, X0_W)>;
 
 //===----------------------------------------------------------------------===//
 // Vector type mapping to LLVM types.
@@ -679,11 +679,11 @@ class VRegList<list<dag> LIn, int start, int nf, int lmul, bit isV0> {
 //===----------------------------------------------------------------------===//
 
 foreach Index = !range(0, 32, 1) in {
-  def V#Index : RISCVReg<Index, "v"#Index>, DwarfRegNum<[!add(Index, 96)]>;
+  def V#Index : CapstoneReg<Index, "v"#Index>, DwarfRegNum<[!add(Index, 96)]>;
 }
 
 foreach Index = !range(0, 32, 2) in {
-  def V#Index#M2 : RISCVRegWithSubRegs<Index, "v"#Index,
+  def V#Index#M2 : CapstoneRegWithSubRegs<Index, "v"#Index,
                      [!cast<Register>("V"#Index),
                       !cast<Register>("V"#!add(Index, 1))]>,
                    DwarfRegAlias<!cast<Register>("V"#Index)> {
@@ -692,7 +692,7 @@ foreach Index = !range(0, 32, 2) in {
 }
 
 foreach Index = !range(0, 32, 4) in {
-  def V#Index#M4 : RISCVRegWithSubRegs<Index, "v"#Index,
+  def V#Index#M4 : CapstoneRegWithSubRegs<Index, "v"#Index,
                      [!cast<Register>("V"#Index#"M2"),
                       !cast<Register>("V"#!add(Index, 2)#"M2")]>,
                    DwarfRegAlias<!cast<Register>("V"#Index)> {
@@ -701,7 +701,7 @@ foreach Index = !range(0, 32, 4) in {
 }
 
 foreach Index = !range(0, 32, 8) in {
-  def V#Index#M8 : RISCVRegWithSubRegs<Index, "v"#Index,
+  def V#Index#M8 : CapstoneRegWithSubRegs<Index, "v"#Index,
                      [!cast<Register>("V"#Index#"M4"),
                       !cast<Register>("V"#!add(Index, 4)#"M4")]>,
                    DwarfRegAlias<!cast<Register>("V"#Index)> {
@@ -709,15 +709,15 @@ foreach Index = !range(0, 32, 8) in {
   }
 }
 
-def VTYPE  : RISCVReg<0, "vtype">;
-def VL     : RISCVReg<0, "vl">;
-def VXSAT  : RISCVReg<0, "vxsat">;
-def VXRM   : RISCVReg<0, "vxrm">;
+def VTYPE  : CapstoneReg<0, "vtype">;
+def VL     : CapstoneReg<0, "vl">;
+def VXSAT  : CapstoneReg<0, "vxsat">;
+def VXRM   : CapstoneReg<0, "vxrm">;
 let isConstant = true in
-def VLENB  : RISCVReg<0, "vlenb">,
+def VLENB  : CapstoneReg<0, "vlenb">,
              DwarfRegNum<[!add(4096, SysRegVLENB.Encoding)]>;
 
-def VCSR : RISCVRegisterClass<[XLenVT], 32,
+def VCSR : CapstoneRegisterClass<[XLenVT], 32,
                               (add VTYPE, VL, VLENB)> {
   let RegInfos = XLenRI;
   let isAllocatable = 0;
@@ -740,7 +740,7 @@ foreach m = [1, 2, 4] in {
 }
 
 class VReg<list<ValueType> regTypes, dag regList, int Vlmul, int nf = 1>
-    : RISCVRegisterClass<regTypes,
+    : CapstoneRegisterClass<regTypes,
                          64, // The maximum supported ELEN is 64.
                          regList> {
   let IsVRegClass = 1;
@@ -804,17 +804,17 @@ def VMV0 : VReg<VMaskVTs, (add V0), 1>;
 // The register class is added for inline assembly for vector mask types.
 def VM : VReg<VMaskVTs, (add VR), 1>;
 
-defvar VTupM1N2VTs = [riscv_nxv8i8x2, riscv_nxv4i8x2, riscv_nxv2i8x2, riscv_nxv1i8x2];
-defvar VTupM1N3VTs = [riscv_nxv8i8x3, riscv_nxv4i8x3, riscv_nxv2i8x3, riscv_nxv1i8x3];
-defvar VTupM1N4VTs = [riscv_nxv8i8x4, riscv_nxv4i8x4, riscv_nxv2i8x4, riscv_nxv1i8x4];
-defvar VTupM1N5VTs = [riscv_nxv8i8x5, riscv_nxv4i8x5, riscv_nxv2i8x5, riscv_nxv1i8x5];
-defvar VTupM1N6VTs = [riscv_nxv8i8x6, riscv_nxv4i8x6, riscv_nxv2i8x6, riscv_nxv1i8x6];
-defvar VTupM1N7VTs = [riscv_nxv8i8x7, riscv_nxv4i8x7, riscv_nxv2i8x7, riscv_nxv1i8x7];
-defvar VTupM1N8VTs = [riscv_nxv8i8x8, riscv_nxv4i8x8, riscv_nxv2i8x8, riscv_nxv1i8x8];
-defvar VTupM2N2VTs = [riscv_nxv16i8x2];
-defvar VTupM2N3VTs = [riscv_nxv16i8x3];
-defvar VTupM2N4VTs = [riscv_nxv16i8x4];
-defvar VTupM4N2VTs = [riscv_nxv32i8x2];
+defvar VTupM1N2VTs = [capstone_nxv8i8x2, capstone_nxv4i8x2, capstone_nxv2i8x2, capstone_nxv1i8x2];
+defvar VTupM1N3VTs = [capstone_nxv8i8x3, capstone_nxv4i8x3, capstone_nxv2i8x3, capstone_nxv1i8x3];
+defvar VTupM1N4VTs = [capstone_nxv8i8x4, capstone_nxv4i8x4, capstone_nxv2i8x4, capstone_nxv1i8x4];
+defvar VTupM1N5VTs = [capstone_nxv8i8x5, capstone_nxv4i8x5, capstone_nxv2i8x5, capstone_nxv1i8x5];
+defvar VTupM1N6VTs = [capstone_nxv8i8x6, capstone_nxv4i8x6, capstone_nxv2i8x6, capstone_nxv1i8x6];
+defvar VTupM1N7VTs = [capstone_nxv8i8x7, capstone_nxv4i8x7, capstone_nxv2i8x7, capstone_nxv1i8x7];
+defvar VTupM1N8VTs = [capstone_nxv8i8x8, capstone_nxv4i8x8, capstone_nxv2i8x8, capstone_nxv1i8x8];
+defvar VTupM2N2VTs = [capstone_nxv16i8x2];
+defvar VTupM2N3VTs = [capstone_nxv16i8x3];
+defvar VTupM2N4VTs = [capstone_nxv16i8x4];
+defvar VTupM4N2VTs = [capstone_nxv32i8x2];
 class VTupRegList<int LMUL, int NF> {
   list<ValueType> L = !cond(!and(!eq(LMUL, 1), !eq(NF, 2)): VTupM1N2VTs,
                             !and(!eq(LMUL, 1), !eq(NF, 3)): VTupM1N3VTs,
@@ -847,16 +847,16 @@ foreach m = LMULList in {
 // Special registers
 //===----------------------------------------------------------------------===//
 
-def FFLAGS : RISCVReg<0, "fflags">;
-def FRM    : RISCVReg<0, "frm">;
-def FCSR   : RISCVReg<0, "fcsr">;
+def FFLAGS : CapstoneReg<0, "fflags">;
+def FRM    : CapstoneReg<0, "frm">;
+def FCSR   : CapstoneReg<0, "fcsr">;
 
 // Shadow Stack register
-def SSP    : RISCVReg<0, "ssp">;
+def SSP    : CapstoneReg<0, "ssp">;
 
 // Dummy SiFive VCIX state register
-def SF_VCIX_STATE : RISCVReg<0, "sf.vcix_state">;
-def : RISCVRegisterClass<[XLenVT], 32, (add SF_VCIX_STATE)> {
+def SF_VCIX_STATE : CapstoneReg<0, "sf.vcix_state">;
+def : CapstoneRegisterClass<[XLenVT], 32, (add SF_VCIX_STATE)> {
   let RegInfos = XLenRI;
   let isAllocatable = 0;
 }
@@ -865,11 +865,11 @@ def : RISCVRegisterClass<[XLenVT], 32, (add SF_VCIX_STATE)> {
 // XSfmmbase tiles
 //===----------------------------------------------------------------------===//
 foreach Index = 0-15 in
-  def T#Index : RISCVReg<Index, "mt"#Index, []>,
+  def T#Index : CapstoneReg<Index, "mt"#Index, []>,
                 DwarfRegNum<[!add(Index, 3072)]>;
 
 let RegInfos = XLenRI in {
-  def TR   : RISCVRegisterClass<[untyped], 32, (add (sequence "T%u", 0, 15))>;
-  def TRM2 : RISCVRegisterClass<[untyped], 32, (add (decimate TR, 2))>;
-  def TRM4 : RISCVRegisterClass<[untyped], 32, (add (decimate TR, 4))>;
+  def TR   : CapstoneRegisterClass<[untyped], 32, (add (sequence "T%u", 0, 15))>;
+  def TRM2 : CapstoneRegisterClass<[untyped], 32, (add (decimate TR, 2))>;
+  def TRM4 : CapstoneRegisterClass<[untyped], 32, (add (decimate TR, 4))>;
 }

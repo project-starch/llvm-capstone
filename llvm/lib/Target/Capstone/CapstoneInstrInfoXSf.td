@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoXsf.td - SiFive custom instructions --*- tablegen -*-===//
+//===-- CapstoneInstrInfoXsf.td - SiFive custom instructions --*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -14,8 +14,8 @@
 // XSFVCP extension instructions.
 //===----------------------------------------------------------------------===//
 
-def VCIXVS2    : RISCVVConstraint<VS2Constraint.Value>;
-def VCIXVS2VS1 : RISCVVConstraint<!or(VS2Constraint.Value,
+def VCIXVS2    : CapstoneVConstraint<VS2Constraint.Value>;
+def VCIXVS2VS1 : CapstoneVConstraint<!or(VS2Constraint.Value,
                                       VS1Constraint.Value)>;
 
 class VCIXType<bits<4> val> {
@@ -29,7 +29,7 @@ def VCIX_XVW : VCIXType<0b1111>;
 
 // The payload and tsimm5 operands are all marked as ImmArg in the IR
 // intrinsic and will be target constant, so use TImmLeaf rather than ImmLeaf.
-class PayloadOp<int bitsNum> : RISCVOp, TImmLeaf<XLenVT, "return isUInt<" # bitsNum # ">(Imm);"> {
+class PayloadOp<int bitsNum> : CapstoneOp, TImmLeaf<XLenVT, "return isUInt<" # bitsNum # ">(Imm);"> {
   let OperandType = "OPERAND_UIMM" # bitsNum;
 }
 
@@ -128,7 +128,7 @@ class VCIXInfo<string suffix, VCIXType type, DAGOperand TyRd,
   string Constraints = !if(!not(HaveOutputDst), "",
                            !if(!or(!eq(type, VCIX_XVV),
                                    !eq(type, VCIX_XVW)), "$rd = $rd_wb", ""));
-  RISCVVConstraint RVVConstraint = !if(!or(!not(HaveOutputDst),
+  CapstoneVConstraint RVVConstraint = !if(!or(!not(HaveOutputDst),
                                            !ne(type, VCIX_XVW)), NoConstraint,
                                        !if(!eq(TyRs1, VR), VCIXVS2VS1, VCIXVS2));
 }
@@ -181,7 +181,7 @@ class SiFiveVMACCScheds<string name> {
 }
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
-class CustomSiFiveVMACC<bits<6> funct6, RISCVVFormat opv, string opcodestr>
+class CustomSiFiveVMACC<bits<6> funct6, CapstoneVFormat opv, string opcodestr>
     : RVInstVCCustom2<funct6{5-2}, opv.Value, (outs VR:$rd), (ins VR:$rs1, VR:$rs2),
                       opcodestr, "$rd, $rs1, $rs2">,
       SchedTernaryMC<SiFiveVMACCScheds<NAME>.write,
@@ -193,7 +193,7 @@ class CustomSiFiveVMACC<bits<6> funct6, RISCVVFormat opv, string opcodestr>
 }
 }
 
-class CustomSiFiveVFNRCLIP<bits<6> funct6, RISCVVFormat opv, string opcodestr>
+class CustomSiFiveVFNRCLIP<bits<6> funct6, CapstoneVFormat opv, string opcodestr>
     : VALUVF<funct6, opv, opcodestr>,
       SchedBinaryMC<"WriteSF_VFNRClipV", "ReadSF_VFNRClipV", "ReadSF_VFNRClipF"> {
   let Inst{6-0} = OPC_CUSTOM_2.Value;
@@ -245,7 +245,7 @@ let Predicates = [HasVendorXSfvfnrclipxfqf], DecoderNamespace = "XSfvector",
 }
 
 class VPseudoVC_X<Operand OpClass, DAGOperand RS1Class> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins OpClass:$op1, payload5:$rs2, payload5:$rd, RS1Class:$r1,
                         AVL:$vl, sew:$sew), []> {
   let mayLoad = 0;
@@ -256,7 +256,7 @@ class VPseudoVC_X<Operand OpClass, DAGOperand RS1Class> :
 }
 
 class VPseudoVC_XV<Operand OpClass, VReg RS2Class, DAGOperand RS1Class> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins OpClass:$op1, payload5:$rd, RS2Class:$rs2, RS1Class:$r1,
                         AVL:$vl, sew:$sew), []> {
   let mayLoad = 0;
@@ -268,7 +268,7 @@ class VPseudoVC_XV<Operand OpClass, VReg RS2Class, DAGOperand RS1Class> :
 
 class VPseudoVC_XVV<Operand OpClass, VReg RDClass, VReg RS2Class,
                     DAGOperand RS1Class> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins OpClass:$op1, RDClass:$rd, RS2Class:$rs2, RS1Class:$r1,
                         AVL:$vl, sew:$sew), []> {
   let mayLoad = 0;
@@ -279,7 +279,7 @@ class VPseudoVC_XVV<Operand OpClass, VReg RDClass, VReg RS2Class,
 }
 
 class VPseudoVC_V_X<Operand OpClass, VReg RDClass, DAGOperand RS1Class> :
-      RISCVVPseudo<(outs RDClass:$rd),
+      CapstoneVPseudo<(outs RDClass:$rd),
                    (ins OpClass:$op1, payload5:$rs2, RS1Class:$r1,
                         AVL:$vl, sew:$sew), []> {
   let mayLoad = 0;
@@ -291,7 +291,7 @@ class VPseudoVC_V_X<Operand OpClass, VReg RDClass, DAGOperand RS1Class> :
 
 class VPseudoVC_V_XV<Operand OpClass, VReg RDClass, VReg RS2Class,
                      DAGOperand RS1Class> :
-      RISCVVPseudo<(outs RDClass:$rd),
+      CapstoneVPseudo<(outs RDClass:$rd),
                    (ins OpClass:$op1, RS2Class:$rs2, RS1Class:$r1,
                         AVL:$vl, sew:$sew), []> {
   let mayLoad = 0;
@@ -303,7 +303,7 @@ class VPseudoVC_V_XV<Operand OpClass, VReg RDClass, VReg RS2Class,
 
 class VPseudoVC_V_XVV<Operand OpClass, VReg RDClass, VReg RS2Class,
                       DAGOperand RS1Class> :
-      RISCVVPseudo<(outs RDClass:$rd),
+      CapstoneVPseudo<(outs RDClass:$rd),
                    (ins OpClass:$op1, RDClass:$rs3, RS2Class:$rs2, RS1Class:$r1,
                         AVL:$vl, sew:$sew), []> {
   let mayLoad = 0;
@@ -682,7 +682,7 @@ multiclass VPatVC_X<string intrinsic_suffix, string instruction_suffix,
                          "PseudoSF_VC_V_" # instruction_suffix # "_SE_" # vti.LMul.MX,
                          vti.Vector, XLenVT, type, vti.Log2SEW,
                          payload5, kind>;
-  def : VPatVC_V_OP3<"int_riscv_sf_vc_v_" # intrinsic_suffix,
+  def : VPatVC_V_OP3<"int_capstone_sf_vc_v_" # intrinsic_suffix,
                      "PseudoSF_VC_V_" # instruction_suffix # "_" # vti.LMul.MX,
                      vti.Vector, XLenVT, type, vti.Log2SEW,
                      payload5, kind>;
@@ -699,7 +699,7 @@ multiclass VPatVC_XV<string intrinsic_suffix, string instruction_suffix,
                          "PseudoSF_VC_V_" # instruction_suffix # "_SE_" # vti.LMul.MX,
                          vti.Vector, vti.Vector, type, vti.Log2SEW,
                          vti.RegClass, kind, op1_kind>;
-  def : VPatVC_V_OP3<"int_riscv_sf_vc_v_" # intrinsic_suffix,
+  def : VPatVC_V_OP3<"int_capstone_sf_vc_v_" # intrinsic_suffix,
                      "PseudoSF_VC_V_" # instruction_suffix # "_" # vti.LMul.MX,
                      vti.Vector, vti.Vector, type, vti.Log2SEW,
                      vti.RegClass, kind, op1_kind>;
@@ -716,7 +716,7 @@ multiclass VPatVC_XVV<string intrinsic_suffix, string instruction_suffix,
                      "PseudoSF_VC_V_" # instruction_suffix # "_SE_" # vti.LMul.MX,
                      wti.Vector, wti.Vector, vti.Vector, type, vti.Log2SEW,
                      wti.RegClass, vti.RegClass, kind, op1_kind>;
-  def : VPatVC_V_OP4<"int_riscv_sf_vc_v_" # intrinsic_suffix,
+  def : VPatVC_V_OP4<"int_capstone_sf_vc_v_" # intrinsic_suffix,
                      "PseudoSF_VC_V_" # instruction_suffix # "_" # vti.LMul.MX,
                      wti.Vector, wti.Vector, vti.Vector, type, vti.Log2SEW,
                      wti.RegClass, vti.RegClass, kind, op1_kind>;
@@ -741,7 +741,7 @@ multiclass VPatVMACC<string intrinsic, string instruction, string kind,
     defvar VdInfo = pair.Wti;
     defvar Vs2Info = pair.Vti;
     let Predicates = [HasVInstructions] in
-    def : VPatTernaryNoMaskWithPolicy<"int_riscv_sf_" # intrinsic,
+    def : VPatTernaryNoMaskWithPolicy<"int_capstone_sf_" # intrinsic,
                                       "Pseudo" # instruction, kind, VdInfo.Vector,
                                       vec_m1, Vs2Info.Vector,
                                       Vs2Info.Log2SEW, Vs2Info.LMul,
@@ -785,7 +785,7 @@ multiclass VPatVFNRCLIP<string intrinsic, string instruction> {
   foreach pair = VFNRCLIPInfoPairs in {
     defvar Vti = pair.Vti;
     defvar Wti = pair.Wti;
-    defm : VPatBinaryRoundingMode<"int_riscv_sf_" # intrinsic,
+    defm : VPatBinaryRoundingMode<"int_capstone_sf_" # intrinsic,
                                   "Pseudo" # instruction # "_" # Vti.LMul.MX,
                                   Vti.Vector, Wti.Vector, Wti.Scalar, Vti.Mask,
                                   Vti.Log2SEW, Vti.RegClass,

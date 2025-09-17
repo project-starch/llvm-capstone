@@ -1,4 +1,4 @@
-//===-- RISCVTargetObjectFile.cpp - RISC-V Object Info --------------------===//
+//===-- CapstoneTargetObjectFile.cpp - Capstone Object Info --------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,9 +6,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVTargetObjectFile.h"
-#include "MCTargetDesc/RISCVMCObjectFileInfo.h"
-#include "RISCVTargetMachine.h"
+#include "CapstoneTargetObjectFile.h"
+#include "MCTargetDesc/CapstoneMCObjectFileInfo.h"
+#include "CapstoneTargetMachine.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/IR/Module.h"
 #include "llvm/MC/MCContext.h"
@@ -17,16 +17,16 @@
 
 using namespace llvm;
 
-unsigned RISCVELFTargetObjectFile::getTextSectionAlignment() const {
-  return RISCVMCObjectFileInfo::getTextSectionAlignment(
+unsigned CapstoneELFTargetObjectFile::getTextSectionAlignment() const {
+  return CapstoneMCObjectFileInfo::getTextSectionAlignment(
       *getContext().getSubtargetInfo());
 }
 
-void RISCVELFTargetObjectFile::Initialize(MCContext &Ctx,
+void CapstoneELFTargetObjectFile::Initialize(MCContext &Ctx,
                                           const TargetMachine &TM) {
   TargetLoweringObjectFileELF::Initialize(Ctx, TM);
 
-  PLTPCRelativeSpecifier = ELF::R_RISCV_PLT32;
+  PLTPCRelativeSpecifier = ELF::R_Capstone_PLT32;
   SupportIndirectSymViaGOTPCRel = true;
 
   SmallDataSection = getContext().getELFSection(
@@ -45,20 +45,20 @@ void RISCVELFTargetObjectFile::Initialize(MCContext &Ctx,
       ".srodata.cst32", ELF::SHT_PROGBITS, ELF::SHF_ALLOC | ELF::SHF_MERGE, 32);
 }
 
-const MCExpr *RISCVELFTargetObjectFile::getIndirectSymViaGOTPCRel(
+const MCExpr *CapstoneELFTargetObjectFile::getIndirectSymViaGOTPCRel(
     const GlobalValue *GV, const MCSymbol *Sym, const MCValue &MV,
     int64_t Offset, MachineModuleInfo *MMI, MCStreamer &Streamer) const {
   auto &Ctx = getContext();
   const MCExpr *Res = MCSymbolRefExpr::create(Sym, Ctx);
   Res = MCBinaryExpr::createAdd(
       Res, MCConstantExpr::create(Offset + MV.getConstant(), Ctx), Ctx);
-  return MCSpecifierExpr::create(Res, ELF::R_RISCV_GOT32_PCREL, Ctx);
+  return MCSpecifierExpr::create(Res, ELF::R_Capstone_GOT32_PCREL, Ctx);
 }
 
 // A address must be loaded from a small section if its size is less than the
 // small section size threshold. Data in this section could be addressed by
 // using gp_rel operator.
-bool RISCVELFTargetObjectFile::isInSmallSection(uint64_t Size) const {
+bool CapstoneELFTargetObjectFile::isInSmallSection(uint64_t Size) const {
   // gcc has traditionally not treated zero-sized objects as small data, so this
   // is effectively part of the ABI.
   return Size > 0 && Size <= SSThreshold;
@@ -66,7 +66,7 @@ bool RISCVELFTargetObjectFile::isInSmallSection(uint64_t Size) const {
 
 // Return true if this global address should be placed into small data/bss
 // section.
-bool RISCVELFTargetObjectFile::isGlobalInSmallSection(
+bool CapstoneELFTargetObjectFile::isGlobalInSmallSection(
     const GlobalObject *GO, const TargetMachine &TM) const {
   // Only global variables, not functions.
   const GlobalVariable *GVA = dyn_cast<GlobalVariable>(GO);
@@ -102,7 +102,7 @@ bool RISCVELFTargetObjectFile::isGlobalInSmallSection(
       GVA->getDataLayout().getTypeAllocSize(Ty));
 }
 
-MCSection *RISCVELFTargetObjectFile::SelectSectionForGlobal(
+MCSection *CapstoneELFTargetObjectFile::SelectSectionForGlobal(
     const GlobalObject *GO, SectionKind Kind, const TargetMachine &TM) const {
   // Handle Small Section classification here.
   if (isGlobalInSmallSection(GO, TM)) {
@@ -138,7 +138,7 @@ MCSection *RISCVELFTargetObjectFile::SelectSectionForGlobal(
   return TargetLoweringObjectFileELF::SelectSectionForGlobal(GO, Kind, TM);
 }
 
-void RISCVELFTargetObjectFile::getModuleMetadata(Module &M) {
+void CapstoneELFTargetObjectFile::getModuleMetadata(Module &M) {
   TargetLoweringObjectFileELF::getModuleMetadata(M);
   SmallVector<Module::ModuleFlagEntry, 8> ModuleFlags;
   M.getModuleFlagsMetadata(ModuleFlags);
@@ -153,12 +153,12 @@ void RISCVELFTargetObjectFile::getModuleMetadata(Module &M) {
 }
 
 /// Return true if this constant should be placed into small data section.
-bool RISCVELFTargetObjectFile::isConstantInSmallSection(
+bool CapstoneELFTargetObjectFile::isConstantInSmallSection(
     const DataLayout &DL, const Constant *CN) const {
   return isInSmallSection(DL.getTypeAllocSize(CN->getType()));
 }
 
-MCSection *RISCVELFTargetObjectFile::getSectionForConstant(
+MCSection *CapstoneELFTargetObjectFile::getSectionForConstant(
     const DataLayout &DL, SectionKind Kind, const Constant *C,
     Align &Alignment) const {
   if (C && isConstantInSmallSection(DL, C)) {

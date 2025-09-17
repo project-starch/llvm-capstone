@@ -1,4 +1,4 @@
-//===-- RISCVInsertReadWriteCSR.cpp - Insert Read/Write of RISC-V CSR -----===//
+//===-- CapstoneInsertReadWriteCSR.cpp - Insert Read/Write of Capstone CSR -----===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 // This file implements the machine function pass to insert read/write of CSR-s
-// of the RISC-V instructions.
+// of the Capstone instructions.
 //
 // Currently the pass implements:
 // -Writing and saving frm before an RVV floating-point instruction with a
@@ -14,29 +14,29 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "MCTargetDesc/RISCVBaseInfo.h"
-#include "RISCV.h"
-#include "RISCVSubtarget.h"
+#include "MCTargetDesc/CapstoneBaseInfo.h"
+#include "Capstone.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-insert-read-write-csr"
-#define RISCV_INSERT_READ_WRITE_CSR_NAME "RISC-V Insert Read/Write CSR Pass"
+#define DEBUG_TYPE "capstone-insert-read-write-csr"
+#define Capstone_INSERT_READ_WRITE_CSR_NAME "Capstone Insert Read/Write CSR Pass"
 
 static cl::opt<bool>
-    DisableFRMInsertOpt("riscv-disable-frm-insert-opt", cl::init(false),
+    DisableFRMInsertOpt("capstone-disable-frm-insert-opt", cl::init(false),
                         cl::Hidden,
                         cl::desc("Disable optimized frm insertion."));
 
 namespace {
 
-class RISCVInsertReadWriteCSR : public MachineFunctionPass {
+class CapstoneInsertReadWriteCSR : public MachineFunctionPass {
   const TargetInstrInfo *TII;
 
 public:
   static char ID;
 
-  RISCVInsertReadWriteCSR() : MachineFunctionPass(ID) {}
+  CapstoneInsertReadWriteCSR() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -46,7 +46,7 @@ public:
   }
 
   StringRef getPassName() const override {
-    return RISCV_INSERT_READ_WRITE_CSR_NAME;
+    return Capstone_INSERT_READ_WRITE_CSR_NAME;
   }
 
 private:
@@ -56,47 +56,47 @@ private:
 
 } // end anonymous namespace
 
-char RISCVInsertReadWriteCSR::ID = 0;
+char CapstoneInsertReadWriteCSR::ID = 0;
 
-INITIALIZE_PASS(RISCVInsertReadWriteCSR, DEBUG_TYPE,
-                RISCV_INSERT_READ_WRITE_CSR_NAME, false, false)
+INITIALIZE_PASS(CapstoneInsertReadWriteCSR, DEBUG_TYPE,
+                Capstone_INSERT_READ_WRITE_CSR_NAME, false, false)
 
 // TODO: Use more accurate rounding mode at the start of MBB.
-bool RISCVInsertReadWriteCSR::emitWriteRoundingModeOpt(MachineBasicBlock &MBB) {
+bool CapstoneInsertReadWriteCSR::emitWriteRoundingModeOpt(MachineBasicBlock &MBB) {
   bool Changed = false;
   MachineInstr *LastFRMChanger = nullptr;
-  unsigned CurrentRM = RISCVFPRndMode::DYN;
+  unsigned CurrentRM = CapstoneFPRndMode::DYN;
   Register SavedFRM;
 
   for (MachineInstr &MI : MBB) {
-    if (MI.getOpcode() == RISCV::SwapFRMImm ||
-        MI.getOpcode() == RISCV::WriteFRMImm) {
+    if (MI.getOpcode() == Capstone::SwapFRMImm ||
+        MI.getOpcode() == Capstone::WriteFRMImm) {
       CurrentRM = MI.getOperand(0).getImm();
       SavedFRM = Register();
       continue;
     }
 
-    if (MI.getOpcode() == RISCV::WriteFRM) {
-      CurrentRM = RISCVFPRndMode::DYN;
+    if (MI.getOpcode() == Capstone::WriteFRM) {
+      CurrentRM = CapstoneFPRndMode::DYN;
       SavedFRM = Register();
       continue;
     }
 
     if (MI.isCall() || MI.isInlineAsm() ||
-        MI.readsRegister(RISCV::FRM, /*TRI=*/nullptr)) {
+        MI.readsRegister(Capstone::FRM, /*TRI=*/nullptr)) {
       // Restore FRM before unknown operations.
       if (SavedFRM.isValid())
-        BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(RISCV::WriteFRM))
+        BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(Capstone::WriteFRM))
             .addReg(SavedFRM);
-      CurrentRM = RISCVFPRndMode::DYN;
+      CurrentRM = CapstoneFPRndMode::DYN;
       SavedFRM = Register();
       continue;
     }
 
-    assert(!MI.modifiesRegister(RISCV::FRM, /*TRI=*/nullptr) &&
+    assert(!MI.modifiesRegister(Capstone::FRM, /*TRI=*/nullptr) &&
            "Expected that MI could not modify FRM.");
 
-    int FRMIdx = RISCVII::getFRMOpNum(MI.getDesc());
+    int FRMIdx = CapstoneII::getFRMOpNum(MI.getDesc());
     if (FRMIdx < 0)
       continue;
     unsigned InstrRM = MI.getOperand(FRMIdx).getImm();
@@ -104,7 +104,7 @@ bool RISCVInsertReadWriteCSR::emitWriteRoundingModeOpt(MachineBasicBlock &MBB) {
     LastFRMChanger = &MI;
 
     // Make MI implicit use FRM.
-    MI.addOperand(MachineOperand::CreateReg(RISCV::FRM, /*IsDef*/ false,
+    MI.addOperand(MachineOperand::CreateReg(Capstone::FRM, /*IsDef*/ false,
                                             /*IsImp*/ true));
     Changed = true;
 
@@ -115,12 +115,12 @@ bool RISCVInsertReadWriteCSR::emitWriteRoundingModeOpt(MachineBasicBlock &MBB) {
     if (!SavedFRM.isValid()) {
       // Save current FRM value to SavedFRM.
       MachineRegisterInfo *MRI = &MBB.getParent()->getRegInfo();
-      SavedFRM = MRI->createVirtualRegister(&RISCV::GPRRegClass);
-      BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(RISCV::SwapFRMImm), SavedFRM)
+      SavedFRM = MRI->createVirtualRegister(&Capstone::GPRRegClass);
+      BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(Capstone::SwapFRMImm), SavedFRM)
           .addImm(InstrRM);
     } else {
       // Don't need to save current FRM when SavedFRM having value.
-      BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(RISCV::WriteFRMImm))
+      BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(Capstone::WriteFRMImm))
           .addImm(InstrRM);
     }
     CurrentRM = InstrRM;
@@ -130,7 +130,7 @@ bool RISCVInsertReadWriteCSR::emitWriteRoundingModeOpt(MachineBasicBlock &MBB) {
   if (SavedFRM.isValid()) {
     assert(LastFRMChanger && "Expected valid pointer.");
     MachineInstrBuilder MIB =
-        BuildMI(*MBB.getParent(), {}, TII->get(RISCV::WriteFRM))
+        BuildMI(*MBB.getParent(), {}, TII->get(Capstone::WriteFRM))
             .addReg(SavedFRM);
     MBB.insertAfter(LastFRMChanger, MIB);
   }
@@ -140,41 +140,41 @@ bool RISCVInsertReadWriteCSR::emitWriteRoundingModeOpt(MachineBasicBlock &MBB) {
 
 // This function also swaps frm and restores it when encountering an RVV
 // floating point instruction with a static rounding mode.
-bool RISCVInsertReadWriteCSR::emitWriteRoundingMode(MachineBasicBlock &MBB) {
+bool CapstoneInsertReadWriteCSR::emitWriteRoundingMode(MachineBasicBlock &MBB) {
   bool Changed = false;
   for (MachineInstr &MI : MBB) {
-    int FRMIdx = RISCVII::getFRMOpNum(MI.getDesc());
+    int FRMIdx = CapstoneII::getFRMOpNum(MI.getDesc());
     if (FRMIdx < 0)
       continue;
 
     unsigned FRMImm = MI.getOperand(FRMIdx).getImm();
 
     // The value is a hint to this pass to not alter the frm value.
-    if (FRMImm == RISCVFPRndMode::DYN)
+    if (FRMImm == CapstoneFPRndMode::DYN)
       continue;
 
     Changed = true;
 
     // Save
     MachineRegisterInfo *MRI = &MBB.getParent()->getRegInfo();
-    Register SavedFRM = MRI->createVirtualRegister(&RISCV::GPRRegClass);
-    BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(RISCV::SwapFRMImm),
+    Register SavedFRM = MRI->createVirtualRegister(&Capstone::GPRRegClass);
+    BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(Capstone::SwapFRMImm),
             SavedFRM)
         .addImm(FRMImm);
-    MI.addOperand(MachineOperand::CreateReg(RISCV::FRM, /*IsDef*/ false,
+    MI.addOperand(MachineOperand::CreateReg(Capstone::FRM, /*IsDef*/ false,
                                             /*IsImp*/ true));
     // Restore
     MachineInstrBuilder MIB =
-        BuildMI(*MBB.getParent(), {}, TII->get(RISCV::WriteFRM))
+        BuildMI(*MBB.getParent(), {}, TII->get(Capstone::WriteFRM))
             .addReg(SavedFRM);
     MBB.insertAfter(MI, MIB);
   }
   return Changed;
 }
 
-bool RISCVInsertReadWriteCSR::runOnMachineFunction(MachineFunction &MF) {
+bool CapstoneInsertReadWriteCSR::runOnMachineFunction(MachineFunction &MF) {
   // Skip if the vector extension is not enabled.
-  const RISCVSubtarget &ST = MF.getSubtarget<RISCVSubtarget>();
+  const CapstoneSubtarget &ST = MF.getSubtarget<CapstoneSubtarget>();
   if (!ST.hasVInstructions())
     return false;
 
@@ -192,6 +192,6 @@ bool RISCVInsertReadWriteCSR::runOnMachineFunction(MachineFunction &MF) {
   return Changed;
 }
 
-FunctionPass *llvm::createRISCVInsertReadWriteCSRPass() {
-  return new RISCVInsertReadWriteCSR();
+FunctionPass *llvm::createCapstoneInsertReadWriteCSRPass() {
+  return new CapstoneInsertReadWriteCSR();
 }

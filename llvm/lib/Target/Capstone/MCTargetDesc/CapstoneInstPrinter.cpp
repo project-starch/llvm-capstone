@@ -1,4 +1,4 @@
-//===-- RISCVInstPrinter.cpp - Convert RISC-V MCInst to asm syntax --------===//
+//===-- CapstoneInstPrinter.cpp - Convert Capstone MCInst to asm syntax --------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,12 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This class prints an RISC-V MCInst to a .s file.
+// This class prints an Capstone MCInst to a .s file.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVInstPrinter.h"
-#include "RISCVBaseInfo.h"
+#include "CapstoneInstPrinter.h"
+#include "CapstoneBaseInfo.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
@@ -26,20 +26,20 @@ using namespace llvm;
 
 // Include the auto-generated portion of the assembly writer.
 #define PRINT_ALIAS_INSTR
-#include "RISCVGenAsmWriter.inc"
+#include "CapstoneGenAsmWriter.inc"
 
 static cl::opt<bool>
-    NoAliases("riscv-no-aliases",
+    NoAliases("capstone-no-aliases",
               cl::desc("Disable the emission of assembler pseudo instructions"),
               cl::init(false), cl::Hidden);
 
-static cl::opt<bool> EmitX8AsFP("riscv-emit-x8-as-fp",
+static cl::opt<bool> EmitX8AsFP("capstone-emit-x8-as-fp",
                                 cl::desc("Emit x8 as fp instead of s0"),
                                 cl::init(false), cl::Hidden);
 
 // Print architectural register names rather than the ABI names (such as x2
 // instead of sp).
-// TODO: Make RISCVInstPrinter::getRegisterName non-static so that this can a
+// TODO: Make CapstoneInstPrinter::getRegisterName non-static so that this can a
 // member.
 static bool ArchRegNames;
 
@@ -48,7 +48,7 @@ static bool ArchRegNames;
 // `llvm-objdump` with `-M` (which matches GNU objdump). There did not seem to
 // be an easier way to allow these options in all these tools, without doing it
 // this way.
-bool RISCVInstPrinter::applyTargetSpecificCLOption(StringRef Opt) {
+bool CapstoneInstPrinter::applyTargetSpecificCLOption(StringRef Opt) {
   if (Opt == "no-aliases") {
     PrintAliases = false;
     return true;
@@ -66,14 +66,14 @@ bool RISCVInstPrinter::applyTargetSpecificCLOption(StringRef Opt) {
   return false;
 }
 
-void RISCVInstPrinter::printInst(const MCInst *MI, uint64_t Address,
+void CapstoneInstPrinter::printInst(const MCInst *MI, uint64_t Address,
                                  StringRef Annot, const MCSubtargetInfo &STI,
                                  raw_ostream &O) {
   bool Res = false;
   const MCInst *NewMI = MI;
   MCInst UncompressedMI;
   if (PrintAliases && !NoAliases)
-    Res = RISCVRVC::uncompress(UncompressedMI, *MI, STI);
+    Res = CapstoneRVC::uncompress(UncompressedMI, *MI, STI);
   if (Res)
     NewMI = &UncompressedMI;
   if (!PrintAliases || NoAliases || !printAliasInstr(NewMI, Address, STI, O))
@@ -81,11 +81,11 @@ void RISCVInstPrinter::printInst(const MCInst *MI, uint64_t Address,
   printAnnotation(O, Annot);
 }
 
-void RISCVInstPrinter::printRegName(raw_ostream &O, MCRegister Reg) {
+void CapstoneInstPrinter::printRegName(raw_ostream &O, MCRegister Reg) {
   markup(O, Markup::Register) << getRegisterName(Reg);
 }
 
-void RISCVInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
                                     const MCSubtargetInfo &STI,
                                     raw_ostream &O) {
   const MCOperand &MO = MI->getOperand(OpNo);
@@ -104,7 +104,7 @@ void RISCVInstPrinter::printOperand(const MCInst *MI, unsigned OpNo,
   MAI.printExpr(O, *MO.getExpr());
 }
 
-void RISCVInstPrinter::printBranchOperand(const MCInst *MI, uint64_t Address,
+void CapstoneInstPrinter::printBranchOperand(const MCInst *MI, uint64_t Address,
                                           unsigned OpNo,
                                           const MCSubtargetInfo &STI,
                                           raw_ostream &O) {
@@ -114,7 +114,7 @@ void RISCVInstPrinter::printBranchOperand(const MCInst *MI, uint64_t Address,
 
   if (PrintBranchImmAsAddress) {
     uint64_t Target = Address + MO.getImm();
-    if (!STI.hasFeature(RISCV::Feature64Bit))
+    if (!STI.hasFeature(Capstone::Feature64Bit))
       Target &= 0xffffffff;
     markup(O, Markup::Target) << formatHex(Target);
   } else {
@@ -122,11 +122,11 @@ void RISCVInstPrinter::printBranchOperand(const MCInst *MI, uint64_t Address,
   }
 }
 
-void RISCVInstPrinter::printCSRSystemRegister(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printCSRSystemRegister(const MCInst *MI, unsigned OpNo,
                                               const MCSubtargetInfo &STI,
                                               raw_ostream &O) {
   unsigned Imm = MI->getOperand(OpNo).getImm();
-  auto Range = RISCVSysReg::lookupSysRegByEncoding(Imm);
+  auto Range = CapstoneSysReg::lookupSysRegByEncoding(Imm);
   for (auto &Reg : Range) {
     if (Reg.IsAltName || Reg.IsDeprecatedName)
       continue;
@@ -138,47 +138,47 @@ void RISCVInstPrinter::printCSRSystemRegister(const MCInst *MI, unsigned OpNo,
   markup(O, Markup::Register) << formatImm(Imm);
 }
 
-void RISCVInstPrinter::printFenceArg(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printFenceArg(const MCInst *MI, unsigned OpNo,
                                      const MCSubtargetInfo &STI,
                                      raw_ostream &O) {
   unsigned FenceArg = MI->getOperand(OpNo).getImm();
   assert (((FenceArg >> 4) == 0) && "Invalid immediate in printFenceArg");
 
-  if ((FenceArg & RISCVFenceField::I) != 0)
+  if ((FenceArg & CapstoneFenceField::I) != 0)
     O << 'i';
-  if ((FenceArg & RISCVFenceField::O) != 0)
+  if ((FenceArg & CapstoneFenceField::O) != 0)
     O << 'o';
-  if ((FenceArg & RISCVFenceField::R) != 0)
+  if ((FenceArg & CapstoneFenceField::R) != 0)
     O << 'r';
-  if ((FenceArg & RISCVFenceField::W) != 0)
+  if ((FenceArg & CapstoneFenceField::W) != 0)
     O << 'w';
   if (FenceArg == 0)
     O << "0";
 }
 
-void RISCVInstPrinter::printFRMArg(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printFRMArg(const MCInst *MI, unsigned OpNo,
                                    const MCSubtargetInfo &STI, raw_ostream &O) {
   auto FRMArg =
-      static_cast<RISCVFPRndMode::RoundingMode>(MI->getOperand(OpNo).getImm());
-  if (PrintAliases && !NoAliases && FRMArg == RISCVFPRndMode::RoundingMode::DYN)
+      static_cast<CapstoneFPRndMode::RoundingMode>(MI->getOperand(OpNo).getImm());
+  if (PrintAliases && !NoAliases && FRMArg == CapstoneFPRndMode::RoundingMode::DYN)
     return;
-  O << ", " << RISCVFPRndMode::roundingModeToString(FRMArg);
+  O << ", " << CapstoneFPRndMode::roundingModeToString(FRMArg);
 }
 
-void RISCVInstPrinter::printFRMArgLegacy(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printFRMArgLegacy(const MCInst *MI, unsigned OpNo,
                                          const MCSubtargetInfo &STI,
                                          raw_ostream &O) {
   auto FRMArg =
-      static_cast<RISCVFPRndMode::RoundingMode>(MI->getOperand(OpNo).getImm());
+      static_cast<CapstoneFPRndMode::RoundingMode>(MI->getOperand(OpNo).getImm());
   // Never print rounding mode if it's the default 'rne'. This ensures the
   // output can still be parsed by older tools that erroneously failed to
   // accept a rounding mode.
-  if (FRMArg == RISCVFPRndMode::RoundingMode::RNE)
+  if (FRMArg == CapstoneFPRndMode::RoundingMode::RNE)
     return;
-  O << ", " << RISCVFPRndMode::roundingModeToString(FRMArg);
+  O << ", " << CapstoneFPRndMode::roundingModeToString(FRMArg);
 }
 
-void RISCVInstPrinter::printFPImmOperand(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printFPImmOperand(const MCInst *MI, unsigned OpNo,
                                          const MCSubtargetInfo &STI,
                                          raw_ostream &O) {
   unsigned Imm = MI->getOperand(OpNo).getImm();
@@ -189,7 +189,7 @@ void RISCVInstPrinter::printFPImmOperand(const MCInst *MI, unsigned OpNo,
   } else if (Imm == 31) {
     markup(O, Markup::Immediate) << "nan";
   } else {
-    float FPVal = RISCVLoadFPImm::getFPImm(Imm);
+    float FPVal = CapstoneLoadFPImm::getFPImm(Imm);
     // If the value is an integer, print a .0 fraction. Otherwise, use %g to
     // which will not print trailing zeros and will use scientific notation
     // if it is shorter than printing as a decimal. The smallest value requires
@@ -201,7 +201,7 @@ void RISCVInstPrinter::printFPImmOperand(const MCInst *MI, unsigned OpNo,
   }
 }
 
-void RISCVInstPrinter::printZeroOffsetMemOp(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printZeroOffsetMemOp(const MCInst *MI, unsigned OpNo,
                                             const MCSubtargetInfo &STI,
                                             raw_ostream &O) {
   const MCOperand &MO = MI->getOperand(OpNo);
@@ -212,83 +212,83 @@ void RISCVInstPrinter::printZeroOffsetMemOp(const MCInst *MI, unsigned OpNo,
   O << ")";
 }
 
-void RISCVInstPrinter::printVTypeI(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printVTypeI(const MCInst *MI, unsigned OpNo,
                                    const MCSubtargetInfo &STI, raw_ostream &O) {
   unsigned Imm = MI->getOperand(OpNo).getImm();
   // Print the raw immediate for reserved values: vlmul[2:0]=4, vsew[2:0]=0b1xx,
   // altfmt=1 without zvfbfa extension, or non-zero in bits 9 and above.
-  if (RISCVVType::getVLMUL(Imm) == RISCVVType::VLMUL::LMUL_RESERVED ||
-      RISCVVType::getSEW(Imm) > 64 ||
-      (RISCVVType::isAltFmt(Imm) &&
-       !STI.hasFeature(RISCV::FeatureStdExtZvfbfa)) ||
+  if (CapstoneVType::getVLMUL(Imm) == CapstoneVType::VLMUL::LMUL_RESERVED ||
+      CapstoneVType::getSEW(Imm) > 64 ||
+      (CapstoneVType::isAltFmt(Imm) &&
+       !STI.hasFeature(Capstone::FeatureStdExtZvfbfa)) ||
       (Imm >> 9) != 0) {
     O << formatImm(Imm);
     return;
   }
   // Print the text form.
-  RISCVVType::printVType(Imm, O);
+  CapstoneVType::printVType(Imm, O);
 }
 
-void RISCVInstPrinter::printXSfmmVType(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printXSfmmVType(const MCInst *MI, unsigned OpNo,
                                        const MCSubtargetInfo &STI,
                                        raw_ostream &O) {
   unsigned Imm = MI->getOperand(OpNo).getImm();
-  assert(RISCVVType::isValidXSfmmVType(Imm));
-  unsigned SEW = RISCVVType::getSEW(Imm);
+  assert(CapstoneVType::isValidXSfmmVType(Imm));
+  unsigned SEW = CapstoneVType::getSEW(Imm);
   O << "e" << SEW;
-  bool AltFmt = RISCVVType::isAltFmt(Imm);
+  bool AltFmt = CapstoneVType::isAltFmt(Imm);
   if (AltFmt)
     O << "alt";
-  unsigned Widen = RISCVVType::getXSfmmWiden(Imm);
+  unsigned Widen = CapstoneVType::getXSfmmWiden(Imm);
   O << ", w" << Widen;
 }
 
 // Print a Zcmp RList. If we are printing architectural register names rather
 // than ABI register names, we need to print "{x1, x8-x9, x18-x27}" for all
 // registers. Otherwise, we print "{ra, s0-s11}".
-void RISCVInstPrinter::printRegList(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printRegList(const MCInst *MI, unsigned OpNo,
                                     const MCSubtargetInfo &STI, raw_ostream &O) {
   unsigned Imm = MI->getOperand(OpNo).getImm();
 
-  assert(Imm >= RISCVZC::RLISTENCODE::RA &&
-         Imm <= RISCVZC::RLISTENCODE::RA_S0_S11 && "Invalid Rlist");
+  assert(Imm >= CapstoneZC::RLISTENCODE::RA &&
+         Imm <= CapstoneZC::RLISTENCODE::RA_S0_S11 && "Invalid Rlist");
 
   O << "{";
-  printRegName(O, RISCV::X1);
+  printRegName(O, Capstone::X1);
 
-  if (Imm >= RISCVZC::RLISTENCODE::RA_S0) {
+  if (Imm >= CapstoneZC::RLISTENCODE::RA_S0) {
     O << ", ";
-    printRegName(O, RISCV::X8);
+    printRegName(O, Capstone::X8);
   }
 
-  if (Imm >= RISCVZC::RLISTENCODE::RA_S0_S1) {
+  if (Imm >= CapstoneZC::RLISTENCODE::RA_S0_S1) {
     O << '-';
-    if (Imm == RISCVZC::RLISTENCODE::RA_S0_S1 || ArchRegNames)
-      printRegName(O, RISCV::X9);
+    if (Imm == CapstoneZC::RLISTENCODE::RA_S0_S1 || ArchRegNames)
+      printRegName(O, Capstone::X9);
   }
 
-  if (Imm >= RISCVZC::RLISTENCODE::RA_S0_S2) {
+  if (Imm >= CapstoneZC::RLISTENCODE::RA_S0_S2) {
     if (ArchRegNames)
       O << ", ";
-    if (Imm == RISCVZC::RLISTENCODE::RA_S0_S2 || ArchRegNames)
-      printRegName(O, RISCV::X18);
+    if (Imm == CapstoneZC::RLISTENCODE::RA_S0_S2 || ArchRegNames)
+      printRegName(O, Capstone::X18);
   }
 
-  if (Imm >= RISCVZC::RLISTENCODE::RA_S0_S3) {
+  if (Imm >= CapstoneZC::RLISTENCODE::RA_S0_S3) {
     if (ArchRegNames)
       O << '-';
-    unsigned Offset = (Imm - RISCVZC::RLISTENCODE::RA_S0_S3);
+    unsigned Offset = (Imm - CapstoneZC::RLISTENCODE::RA_S0_S3);
     // Encodings for S3-S9 are contiguous. There is no encoding for S10, so we
     // must skip to S11(X27).
-    if (Imm == RISCVZC::RLISTENCODE::RA_S0_S11)
+    if (Imm == CapstoneZC::RLISTENCODE::RA_S0_S11)
       ++Offset;
-    printRegName(O, RISCV::X19 + Offset);
+    printRegName(O, Capstone::X19 + Offset);
   }
 
   O << "}";
 }
 
-void RISCVInstPrinter::printRegReg(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printRegReg(const MCInst *MI, unsigned OpNo,
                                    const MCSubtargetInfo &STI, raw_ostream &O) {
   const MCOperand &OffsetMO = MI->getOperand(OpNo + 1);
 
@@ -302,14 +302,14 @@ void RISCVInstPrinter::printRegReg(const MCInst *MI, unsigned OpNo,
   O << ")";
 }
 
-void RISCVInstPrinter::printStackAdj(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printStackAdj(const MCInst *MI, unsigned OpNo,
                                      const MCSubtargetInfo &STI, raw_ostream &O,
                                      bool Negate) {
   int64_t Imm = MI->getOperand(OpNo).getImm();
-  bool IsRV64 = STI.hasFeature(RISCV::Feature64Bit);
+  bool IsRV64 = STI.hasFeature(Capstone::Feature64Bit);
   int64_t StackAdj = 0;
   auto RlistVal = MI->getOperand(0).getImm();
-  auto Base = RISCVZC::getStackAdjBase(RlistVal, IsRV64);
+  auto Base = CapstoneZC::getStackAdjBase(RlistVal, IsRV64);
   StackAdj = Imm + Base;
   assert((StackAdj >= Base && StackAdj <= Base + 48) &&
          "Incorrect stack adjust");
@@ -321,27 +321,27 @@ void RISCVInstPrinter::printStackAdj(const MCInst *MI, unsigned OpNo,
   O << StackAdj;
 }
 
-void RISCVInstPrinter::printVMaskReg(const MCInst *MI, unsigned OpNo,
+void CapstoneInstPrinter::printVMaskReg(const MCInst *MI, unsigned OpNo,
                                      const MCSubtargetInfo &STI,
                                      raw_ostream &O) {
   const MCOperand &MO = MI->getOperand(OpNo);
 
   assert(MO.isReg() && "printVMaskReg can only print register operands");
-  if (MO.getReg() == RISCV::NoRegister)
+  if (MO.getReg() == Capstone::NoRegister)
     return;
   O << ", ";
   printRegName(O, MO.getReg());
   O << ".t";
 }
 
-const char *RISCVInstPrinter::getRegisterName(MCRegister Reg) {
+const char *CapstoneInstPrinter::getRegisterName(MCRegister Reg) {
   // When PrintAliases is enabled, and EmitX8AsFP is enabled, x8 will be printed
   // as fp instead of s0. Note that these similar registers are not replaced:
   // - X8_H: used for f16 register in zhinx
   // - X8_W: used for f32 register in zfinx
   // - X8_X9: used for GPR Pair
-  if (!ArchRegNames && EmitX8AsFP && Reg == RISCV::X8)
+  if (!ArchRegNames && EmitX8AsFP && Reg == Capstone::X8)
     return "fp";
-  return getRegisterName(Reg, ArchRegNames ? RISCV::NoRegAltName
-                                           : RISCV::ABIRegAltName);
+  return getRegisterName(Reg, ArchRegNames ? Capstone::NoRegAltName
+                                           : Capstone::ABIRegAltName);
 }

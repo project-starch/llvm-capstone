@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoXVentana.td --------------------------*- tablegen -*-===//
+//===-- CapstoneInstrInfoXVentana.td --------------------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -29,17 +29,17 @@ def VT_MASKCN : VTMaskedMove<0b111, "vt.maskcn">,
            Sched<[WriteIALU, ReadIALU, ReadIALU]>;
 
 let Predicates = [HasVendorXVentanaCondOps] in {
-def : Pat<(XLenVT (riscv_czero_eqz GPR:$rs1, GPR:$rc)),
+def : Pat<(XLenVT (capstone_czero_eqz GPR:$rs1, GPR:$rc)),
           (VT_MASKC GPR:$rs1, GPR:$rc)>;
-def : Pat<(XLenVT (riscv_czero_nez GPR:$rs1, GPR:$rc)),
+def : Pat<(XLenVT (capstone_czero_nez GPR:$rs1, GPR:$rc)),
           (VT_MASKCN GPR:$rs1, GPR:$rc)>;
 
-def : Pat<(XLenVT (riscv_czero_eqz GPR:$rs1, (riscv_setne (XLenVT GPR:$rc)))),
+def : Pat<(XLenVT (capstone_czero_eqz GPR:$rs1, (capstone_setne (XLenVT GPR:$rc)))),
           (VT_MASKC GPR:$rs1, GPR:$rc)>;
-def : Pat<(XLenVT (riscv_czero_eqz GPR:$rs1, (riscv_seteq (XLenVT GPR:$rc)))),
+def : Pat<(XLenVT (capstone_czero_eqz GPR:$rs1, (capstone_seteq (XLenVT GPR:$rc)))),
           (VT_MASKCN GPR:$rs1, GPR:$rc)>;
-def : Pat<(XLenVT (riscv_czero_nez GPR:$rs1, (riscv_setne (XLenVT GPR:$rc)))),
+def : Pat<(XLenVT (capstone_czero_nez GPR:$rs1, (capstone_setne (XLenVT GPR:$rc)))),
           (VT_MASKCN GPR:$rs1, GPR:$rc)>;
-def : Pat<(XLenVT (riscv_czero_nez GPR:$rs1, (riscv_seteq (XLenVT GPR:$rc)))),
+def : Pat<(XLenVT (capstone_czero_nez GPR:$rs1, (capstone_seteq (XLenVT GPR:$rc)))),
           (VT_MASKC GPR:$rs1, GPR:$rc)>;
 } // Predicates = [HasVendorXVentanaCondOps]

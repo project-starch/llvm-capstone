@@ -1,4 +1,4 @@
-//===-- RISCVFrameLowering.h - Define frame lowering for RISC-V -*- C++ -*-===//
+//===-- CapstoneFrameLowering.h - Define frame lowering for Capstone -*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,22 +6,22 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This class implements RISC-V specific bits of TargetFrameLowering class.
+// This class implements Capstone specific bits of TargetFrameLowering class.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCVFRAMELOWERING_H
-#define LLVM_LIB_TARGET_RISCV_RISCVFRAMELOWERING_H
+#ifndef LLVM_LIB_TARGET_Capstone_CapstoneFRAMELOWERING_H
+#define LLVM_LIB_TARGET_Capstone_CapstoneFRAMELOWERING_H
 
 #include "llvm/CodeGen/TargetFrameLowering.h"
 #include "llvm/Support/TypeSize.h"
 
 namespace llvm {
-class RISCVSubtarget;
+class CapstoneSubtarget;
 
-class RISCVFrameLowering : public TargetFrameLowering {
+class CapstoneFrameLowering : public TargetFrameLowering {
 public:
-  explicit RISCVFrameLowering(const RISCVSubtarget &STI);
+  explicit CapstoneFrameLowering(const CapstoneSubtarget &STI);
 
   void emitPrologue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
   void emitEpilogue(MachineFunction &MF, MachineBasicBlock &MBB) const override;
@@ -73,7 +73,7 @@ public:
   TargetStackID::Value getStackIDForScalableVectors() const override;
 
   bool isStackIdSafeForLocalArea(unsigned StackId) const override {
-    // We don't support putting RISC-V Vector objects into the pre-allocated
+    // We don't support putting Capstone Vector objects into the pre-allocated
     // local frame block at the moment.
     return StackId != TargetStackID::ScalableVector;
   }
@@ -85,7 +85,7 @@ public:
                      MachineInstr::MIFlag Flag) const;
 
 protected:
-  const RISCVSubtarget &STI;
+  const CapstoneSubtarget &STI;
 
   bool hasFPImpl(const MachineFunction &MF) const override;
 

@@ -1,4 +1,4 @@
-//===-- RISCVMakeCompressible.cpp - Make more instructions compressible ---===//
+//===-- CapstoneMakeCompressible.cpp - Make more instructions compressible ---===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -65,8 +65,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVSubtarget.h"
+#include "Capstone.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -74,53 +74,53 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-make-compressible"
-#define RISCV_COMPRESS_INSTRS_NAME "RISC-V Make Compressible"
+#define DEBUG_TYPE "capstone-make-compressible"
+#define Capstone_COMPRESS_INSTRS_NAME "Capstone Make Compressible"
 
 namespace {
 
-struct RISCVMakeCompressibleOpt : public MachineFunctionPass {
+struct CapstoneMakeCompressibleOpt : public MachineFunctionPass {
   static char ID;
 
   bool runOnMachineFunction(MachineFunction &Fn) override;
 
-  RISCVMakeCompressibleOpt() : MachineFunctionPass(ID) {}
+  CapstoneMakeCompressibleOpt() : MachineFunctionPass(ID) {}
 
-  StringRef getPassName() const override { return RISCV_COMPRESS_INSTRS_NAME; }
+  StringRef getPassName() const override { return Capstone_COMPRESS_INSTRS_NAME; }
 };
 } // namespace
 
-char RISCVMakeCompressibleOpt::ID = 0;
-INITIALIZE_PASS(RISCVMakeCompressibleOpt, "riscv-make-compressible",
-                RISCV_COMPRESS_INSTRS_NAME, false, false)
+char CapstoneMakeCompressibleOpt::ID = 0;
+INITIALIZE_PASS(CapstoneMakeCompressibleOpt, "capstone-make-compressible",
+                Capstone_COMPRESS_INSTRS_NAME, false, false)
 
 // Return log2(widthInBytes) of load/store done by Opcode.
 static unsigned log2LdstWidth(unsigned Opcode) {
   switch (Opcode) {
   default:
     llvm_unreachable("Unexpected opcode");
-  case RISCV::LBU:
-  case RISCV::SB:
+  case Capstone::LBU:
+  case Capstone::SB:
     return 0;
-  case RISCV::LH:
-  case RISCV::LH_INX:
-  case RISCV::LHU:
-  case RISCV::SH:
-  case RISCV::SH_INX:
+  case Capstone::LH:
+  case Capstone::LH_INX:
+  case Capstone::LHU:
+  case Capstone::SH:
+  case Capstone::SH_INX:
     return 1;
-  case RISCV::LW:
-  case RISCV::LW_INX:
-  case RISCV::SW:
-  case RISCV::SW_INX:
-  case RISCV::FLW:
-  case RISCV::FSW:
+  case Capstone::LW:
+  case Capstone::LW_INX:
+  case Capstone::SW:
+  case Capstone::SW_INX:
+  case Capstone::FLW:
+  case Capstone::FSW:
     return 2;
-  case RISCV::LD:
-  case RISCV::LD_RV32:
-  case RISCV::SD:
-  case RISCV::SD_RV32:
-  case RISCV::FLD:
-  case RISCV::FSD:
+  case Capstone::LD:
+  case Capstone::LD_RV32:
+  case Capstone::SD:
+  case Capstone::SD_RV32:
+  case Capstone::FLD:
+  case Capstone::FSD:
     return 3;
   }
 }
@@ -130,27 +130,27 @@ static unsigned offsetMask(unsigned Opcode) {
   switch (Opcode) {
   default:
     llvm_unreachable("Unexpected opcode");
-  case RISCV::LBU:
-  case RISCV::SB:
+  case Capstone::LBU:
+  case Capstone::SB:
     return maskTrailingOnes<unsigned>(2U);
-  case RISCV::LH:
-  case RISCV::LH_INX:
-  case RISCV::LHU:
-  case RISCV::SH:
-  case RISCV::SH_INX:
+  case Capstone::LH:
+  case Capstone::LH_INX:
+  case Capstone::LHU:
+  case Capstone::SH:
+  case Capstone::SH_INX:
     return maskTrailingOnes<unsigned>(1U);
-  case RISCV::LW:
-  case RISCV::LW_INX:
-  case RISCV::SW:
-  case RISCV::SW_INX:
-  case RISCV::FLW:
-  case RISCV::FSW:
-  case RISCV::LD:
-  case RISCV::LD_RV32:
-  case RISCV::SD:
-  case RISCV::SD_RV32:
-  case RISCV::FLD:
-  case RISCV::FSD:
+  case Capstone::LW:
+  case Capstone::LW_INX:
+  case Capstone::SW:
+  case Capstone::SW_INX:
+  case Capstone::FLW:
+  case Capstone::FSW:
+  case Capstone::LD:
+  case Capstone::LD_RV32:
+  case Capstone::SD:
+  case Capstone::SD_RV32:
+  case Capstone::FLD:
+  case Capstone::FSD:
     return maskTrailingOnes<unsigned>(5U);
   }
 }
@@ -184,59 +184,59 @@ static int64_t getBaseAdjustForCompression(int64_t Offset, unsigned Opcode) {
 
 // Return true if Reg is in a compressed register class.
 static bool isCompressedReg(Register Reg) {
-  return RISCV::GPRCRegClass.contains(Reg) ||
-         RISCV::GPRF16CRegClass.contains(Reg) ||
-         RISCV::GPRF32CRegClass.contains(Reg) ||
-         RISCV::FPR32CRegClass.contains(Reg) ||
-         RISCV::FPR64CRegClass.contains(Reg) ||
-         RISCV::GPRPairCRegClass.contains(Reg);
+  return Capstone::GPRCRegClass.contains(Reg) ||
+         Capstone::GPRF16CRegClass.contains(Reg) ||
+         Capstone::GPRF32CRegClass.contains(Reg) ||
+         Capstone::FPR32CRegClass.contains(Reg) ||
+         Capstone::FPR64CRegClass.contains(Reg) ||
+         Capstone::GPRPairCRegClass.contains(Reg);
 }
 
 // Return true if MI is a load for which there exists a compressed version.
 static bool isCompressibleLoad(const MachineInstr &MI) {
-  const RISCVSubtarget &STI = MI.getMF()->getSubtarget<RISCVSubtarget>();
+  const CapstoneSubtarget &STI = MI.getMF()->getSubtarget<CapstoneSubtarget>();
 
   switch (MI.getOpcode()) {
   default:
     return false;
-  case RISCV::LBU:
-  case RISCV::LH:
-  case RISCV::LH_INX:
-  case RISCV::LHU:
+  case Capstone::LBU:
+  case Capstone::LH:
+  case Capstone::LH_INX:
+  case Capstone::LHU:
     return STI.hasStdExtZcb();
-  case RISCV::LW:
-  case RISCV::LW_INX:
-  case RISCV::LD:
+  case Capstone::LW:
+  case Capstone::LW_INX:
+  case Capstone::LD:
     return STI.hasStdExtZca();
-  case RISCV::LD_RV32:
+  case Capstone::LD_RV32:
     return STI.hasStdExtZclsd();
-  case RISCV::FLW:
+  case Capstone::FLW:
     return !STI.is64Bit() && STI.hasStdExtCOrZcfOrZce();
-  case RISCV::FLD:
+  case Capstone::FLD:
     return STI.hasStdExtCOrZcd();
   }
 }
 
 // Return true if MI is a store for which there exists a compressed version.
 static bool isCompressibleStore(const MachineInstr &MI) {
-  const RISCVSubtarget &STI = MI.getMF()->getSubtarget<RISCVSubtarget>();
+  const CapstoneSubtarget &STI = MI.getMF()->getSubtarget<CapstoneSubtarget>();
 
   switch (MI.getOpcode()) {
   default:
     return false;
-  case RISCV::SB:
-  case RISCV::SH:
-  case RISCV::SH_INX:
+  case Capstone::SB:
+  case Capstone::SH:
+  case Capstone::SH_INX:
     return STI.hasStdExtZcb();
-  case RISCV::SW:
-  case RISCV::SW_INX:
-  case RISCV::SD:
+  case Capstone::SW:
+  case Capstone::SW_INX:
+  case Capstone::SD:
     return STI.hasStdExtZca();
-  case RISCV::SD_RV32:
+  case Capstone::SD_RV32:
     return STI.hasStdExtZclsd();
-  case RISCV::FSW:
+  case Capstone::FSW:
     return !STI.is64Bit() && STI.hasStdExtCOrZcfOrZce();
-  case RISCV::FSD:
+  case Capstone::FSD:
     return STI.hasStdExtCOrZcd();
   }
 }
@@ -251,7 +251,7 @@ static bool isCompressibleStore(const MachineInstr &MI) {
 //   {Reg, N}               - Reg needs replacing with a compressed register and
 //                            N needs adding to the new register. (Reg may be
 //                            compressed or uncompressed).
-//   {RISCV::NoRegister, 0} - No suitable optimization found for this
+//   {Capstone::NoRegister, 0} - No suitable optimization found for this
 //   instruction.
 static RegImmPair getRegImmPairPreventingCompression(const MachineInstr &MI) {
   const unsigned Opcode = MI.getOpcode();
@@ -259,7 +259,7 @@ static RegImmPair getRegImmPairPreventingCompression(const MachineInstr &MI) {
   if (isCompressibleLoad(MI) || isCompressibleStore(MI)) {
     const MachineOperand &MOImm = MI.getOperand(2);
     if (!MOImm.isImm())
-      return RegImmPair(RISCV::NoRegister, 0);
+      return RegImmPair(Capstone::NoRegister, 0);
 
     int64_t Offset = MOImm.getImm();
     int64_t NewBaseAdjust = getBaseAdjustForCompression(Offset, Opcode);
@@ -267,7 +267,7 @@ static RegImmPair getRegImmPairPreventingCompression(const MachineInstr &MI) {
 
     // Memory accesses via the stack pointer do not have a requirement for
     // either of the registers to be compressible and can take a larger offset.
-    if (RISCV::SPRegClass.contains(Base)) {
+    if (Capstone::SPRegClass.contains(Base)) {
       if (!compressibleSPOffset(Offset, Opcode) && NewBaseAdjust)
         return RegImmPair(Base, NewBaseAdjust);
     } else {
@@ -292,7 +292,7 @@ static RegImmPair getRegImmPairPreventingCompression(const MachineInstr &MI) {
       }
     }
   }
-  return RegImmPair(RISCV::NoRegister, 0);
+  return RegImmPair(Capstone::NoRegister, 0);
 }
 
 // Check all uses after FirstMI of the given register, keeping a vector of
@@ -333,7 +333,7 @@ static Register analyzeCompressibleUses(MachineInstr &FirstMI,
   // then copying the register costs one new c.mv (or c.li Rd, 0 for "copying"
   // the zero register) and therefore two uses are required for a code size
   // reduction. For GPR pairs, we need 2 ADDIs to copy so we need three users.
-  unsigned CopyCost = RISCV::GPRPairRegClass.contains(RegImm.Reg) ? 2 : 1;
+  unsigned CopyCost = Capstone::GPRPairRegClass.contains(RegImm.Reg) ? 2 : 1;
   assert((RegImm.Imm == 0 || CopyCost == 1) && "GPRPair should have zero imm");
   if (MIs.size() <= CopyCost || (RegImm.Imm != 0 && MIs.size() <= 2))
     return Register();
@@ -343,18 +343,18 @@ static Register analyzeCompressibleUses(MachineInstr &FirstMI,
   const TargetRegisterClass *RCToScavenge;
 
   // Work out the compressed register class from which to scavenge.
-  if (RISCV::GPRRegClass.contains(RegImm.Reg))
-    RCToScavenge = &RISCV::GPRCRegClass;
-  else if (RISCV::GPRF16RegClass.contains(RegImm.Reg))
-    RCToScavenge = &RISCV::GPRF16CRegClass;
-  else if (RISCV::GPRF32RegClass.contains(RegImm.Reg))
-    RCToScavenge = &RISCV::GPRF32CRegClass;
-  else if (RISCV::FPR32RegClass.contains(RegImm.Reg))
-    RCToScavenge = &RISCV::FPR32CRegClass;
-  else if (RISCV::FPR64RegClass.contains(RegImm.Reg))
-    RCToScavenge = &RISCV::FPR64CRegClass;
-  else if (RISCV::GPRPairRegClass.contains(RegImm.Reg))
-    RCToScavenge = &RISCV::GPRPairCRegClass;
+  if (Capstone::GPRRegClass.contains(RegImm.Reg))
+    RCToScavenge = &Capstone::GPRCRegClass;
+  else if (Capstone::GPRF16RegClass.contains(RegImm.Reg))
+    RCToScavenge = &Capstone::GPRF16CRegClass;
+  else if (Capstone::GPRF32RegClass.contains(RegImm.Reg))
+    RCToScavenge = &Capstone::GPRF32CRegClass;
+  else if (Capstone::FPR32RegClass.contains(RegImm.Reg))
+    RCToScavenge = &Capstone::FPR32CRegClass;
+  else if (Capstone::FPR64RegClass.contains(RegImm.Reg))
+    RCToScavenge = &Capstone::FPR64CRegClass;
+  else if (Capstone::GPRPairRegClass.contains(RegImm.Reg))
+    RCToScavenge = &Capstone::GPRPairCRegClass;
   else
     return Register();
 
@@ -406,13 +406,13 @@ static void updateOperands(MachineInstr &MI, RegImmPair OldRegImm,
   MOImm.setImm(NewOffset);
 }
 
-bool RISCVMakeCompressibleOpt::runOnMachineFunction(MachineFunction &Fn) {
+bool CapstoneMakeCompressibleOpt::runOnMachineFunction(MachineFunction &Fn) {
   // This is a size optimization.
   if (skipFunction(Fn.getFunction()) || !Fn.getFunction().hasMinSize())
     return false;
 
-  const RISCVSubtarget &STI = Fn.getSubtarget<RISCVSubtarget>();
-  const RISCVInstrInfo &TII = *STI.getInstrInfo();
+  const CapstoneSubtarget &STI = Fn.getSubtarget<CapstoneSubtarget>();
+  const CapstoneInstrInfo &TII = *STI.getInstrInfo();
 
   // This optimization only makes sense if compressed instructions are emitted.
   if (!STI.hasStdExtZca())
@@ -436,9 +436,9 @@ bool RISCVMakeCompressibleOpt::runOnMachineFunction(MachineFunction &Fn) {
         continue;
 
       // Create the appropriate copy and/or offset.
-      if (RISCV::GPRRegClass.contains(RegImm.Reg)) {
+      if (Capstone::GPRRegClass.contains(RegImm.Reg)) {
         assert(isInt<12>(RegImm.Imm));
-        BuildMI(MBB, MI, MI.getDebugLoc(), TII.get(RISCV::ADDI), NewReg)
+        BuildMI(MBB, MI, MI.getDebugLoc(), TII.get(Capstone::ADDI), NewReg)
             .addReg(RegImm.Reg)
             .addImm(RegImm.Imm);
       } else {
@@ -460,6 +460,6 @@ bool RISCVMakeCompressibleOpt::runOnMachineFunction(MachineFunction &Fn) {
 }
 
 /// Returns an instance of the Make Compressible Optimization pass.
-FunctionPass *llvm::createRISCVMakeCompressibleOptPass() {
-  return new RISCVMakeCompressibleOpt();
+FunctionPass *llvm::createCapstoneMakeCompressibleOptPass() {
+  return new CapstoneMakeCompressibleOpt();
 }

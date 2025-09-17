@@ -1,4 +1,4 @@
-//===-- RISCVAsmPrinter.cpp - RISC-V LLVM assembly writer -----------------===//
+//===-- CapstoneAsmPrinter.cpp - Capstone LLVM assembly writer -----------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,20 +7,20 @@
 //===----------------------------------------------------------------------===//
 //
 // This file contains a printer that converts from our internal representation
-// of machine-dependent LLVM code to the RISC-V assembly language.
+// of machine-dependent LLVM code to the Capstone assembly language.
 //
 //===----------------------------------------------------------------------===//
 
-#include "MCTargetDesc/RISCVBaseInfo.h"
-#include "MCTargetDesc/RISCVInstPrinter.h"
-#include "MCTargetDesc/RISCVMCAsmInfo.h"
-#include "MCTargetDesc/RISCVMatInt.h"
-#include "MCTargetDesc/RISCVTargetStreamer.h"
-#include "RISCV.h"
-#include "RISCVConstantPoolValue.h"
-#include "RISCVMachineFunctionInfo.h"
-#include "RISCVRegisterInfo.h"
-#include "TargetInfo/RISCVTargetInfo.h"
+#include "MCTargetDesc/CapstoneBaseInfo.h"
+#include "MCTargetDesc/CapstoneInstPrinter.h"
+#include "MCTargetDesc/CapstoneMCAsmInfo.h"
+#include "MCTargetDesc/CapstoneMatInt.h"
+#include "MCTargetDesc/CapstoneTargetStreamer.h"
+#include "Capstone.h"
+#include "CapstoneConstantPoolValue.h"
+#include "CapstoneMachineFunctionInfo.h"
+#include "CapstoneRegisterInfo.h"
+#include "TargetInfo/CapstoneTargetInfo.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/BinaryFormat/ELF.h"
@@ -40,34 +40,34 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/TargetParser/RISCVISAInfo.h"
+#include "llvm/TargetParser/CapstoneISAInfo.h"
 #include "llvm/Transforms/Instrumentation/HWAddressSanitizer.h"
 
 using namespace llvm;
 
 #define DEBUG_TYPE "asm-printer"
 
-STATISTIC(RISCVNumInstrsCompressed,
-          "Number of RISC-V Compressed instructions emitted");
+STATISTIC(CapstoneNumInstrsCompressed,
+          "Number of Capstone Compressed instructions emitted");
 
 namespace llvm {
-extern const SubtargetFeatureKV RISCVFeatureKV[RISCV::NumSubtargetFeatures];
+extern const SubtargetFeatureKV CapstoneFeatureKV[Capstone::NumSubtargetFeatures];
 } // namespace llvm
 
 namespace {
-class RISCVAsmPrinter : public AsmPrinter {
+class CapstoneAsmPrinter : public AsmPrinter {
 public:
   static char ID;
 
 private:
-  const RISCVSubtarget *STI;
+  const CapstoneSubtarget *STI;
 
 public:
-  explicit RISCVAsmPrinter(TargetMachine &TM,
+  explicit CapstoneAsmPrinter(TargetMachine &TM,
                            std::unique_ptr<MCStreamer> Streamer)
       : AsmPrinter(TM, std::move(Streamer), ID) {}
 
-  StringRef getPassName() const override { return "RISC-V Assembly Printer"; }
+  StringRef getPassName() const override { return "Capstone Assembly Printer"; }
 
   void LowerSTACKMAP(MCStreamer &OutStreamer, StackMaps &SM,
                      const MachineInstr &MI);
@@ -130,7 +130,7 @@ private:
 };
 }
 
-void RISCVAsmPrinter::LowerSTACKMAP(MCStreamer &OutStreamer, StackMaps &SM,
+void CapstoneAsmPrinter::LowerSTACKMAP(MCStreamer &OutStreamer, StackMaps &SM,
                                     const MachineInstr &MI) {
   unsigned NOPBytes = STI->hasStdExtZca() ? 2 : 4;
   unsigned NumNOPBytes = StackMapOpers(&MI).getNumPatchBytes();
@@ -149,7 +149,7 @@ void RISCVAsmPrinter::LowerSTACKMAP(MCStreamer &OutStreamer, StackMaps &SM,
   ++MII;
   while (NumNOPBytes > 0) {
     if (MII == MBB.end() || MII->isCall() ||
-        MII->getOpcode() == RISCV::DBG_VALUE ||
+        MII->getOpcode() == Capstone::DBG_VALUE ||
         MII->getOpcode() == TargetOpcode::PATCHPOINT ||
         MII->getOpcode() == TargetOpcode::STACKMAP)
       break;
@@ -163,7 +163,7 @@ void RISCVAsmPrinter::LowerSTACKMAP(MCStreamer &OutStreamer, StackMaps &SM,
 
 // Lower a patchpoint of the form:
 // [<def>], <id>, <numBytes>, <target>, <numArgs>
-void RISCVAsmPrinter::LowerPATCHPOINT(MCStreamer &OutStreamer, StackMaps &SM,
+void CapstoneAsmPrinter::LowerPATCHPOINT(MCStreamer &OutStreamer, StackMaps &SM,
                                       const MachineInstr &MI) {
   unsigned NOPBytes = STI->hasStdExtZca() ? 2 : 4;
 
@@ -184,14 +184,14 @@ void RISCVAsmPrinter::LowerPATCHPOINT(MCStreamer &OutStreamer, StackMaps &SM,
              "High 16 bits of call target should be zero.");
       // Materialize the jump address:
       SmallVector<MCInst, 8> Seq;
-      RISCVMatInt::generateMCInstSeq(CallTarget, *STI, RISCV::X1, Seq);
+      CapstoneMatInt::generateMCInstSeq(CallTarget, *STI, Capstone::X1, Seq);
       for (MCInst &Inst : Seq) {
         bool Compressed = EmitToStreamer(OutStreamer, Inst);
         EncodedBytes += Compressed ? 2 : 4;
       }
-      bool Compressed = EmitToStreamer(OutStreamer, MCInstBuilder(RISCV::JALR)
-                                                        .addReg(RISCV::X1)
-                                                        .addReg(RISCV::X1)
+      bool Compressed = EmitToStreamer(OutStreamer, MCInstBuilder(Capstone::JALR)
+                                                        .addReg(Capstone::X1)
+                                                        .addReg(Capstone::X1)
                                                         .addImm(0));
       EncodedBytes += Compressed ? 2 : 4;
     }
@@ -199,7 +199,7 @@ void RISCVAsmPrinter::LowerPATCHPOINT(MCStreamer &OutStreamer, StackMaps &SM,
     MCOperand CallTargetMCOp;
     lowerOperand(CalleeMO, CallTargetMCOp);
     EmitToStreamer(OutStreamer,
-                   MCInstBuilder(RISCV::PseudoCALL).addOperand(CallTargetMCOp));
+                   MCInstBuilder(Capstone::PseudoCALL).addOperand(CallTargetMCOp));
     EncodedBytes += 8;
   }
 
@@ -212,7 +212,7 @@ void RISCVAsmPrinter::LowerPATCHPOINT(MCStreamer &OutStreamer, StackMaps &SM,
   emitNops((NumBytes - EncodedBytes) / NOPBytes);
 }
 
-void RISCVAsmPrinter::LowerSTATEPOINT(MCStreamer &OutStreamer, StackMaps &SM,
+void CapstoneAsmPrinter::LowerSTATEPOINT(MCStreamer &OutStreamer, StackMaps &SM,
                                       const MachineInstr &MI) {
   unsigned NOPBytes = STI->hasStdExtZca() ? 2 : 4;
 
@@ -231,18 +231,18 @@ void RISCVAsmPrinter::LowerSTATEPOINT(MCStreamer &OutStreamer, StackMaps &SM,
       lowerOperand(CallTarget, CallTargetMCOp);
       EmitToStreamer(
           OutStreamer,
-          MCInstBuilder(RISCV::PseudoCALL).addOperand(CallTargetMCOp));
+          MCInstBuilder(Capstone::PseudoCALL).addOperand(CallTargetMCOp));
       break;
     case MachineOperand::MO_Immediate:
       CallTargetMCOp = MCOperand::createImm(CallTarget.getImm());
-      EmitToStreamer(OutStreamer, MCInstBuilder(RISCV::JAL)
-                                      .addReg(RISCV::X1)
+      EmitToStreamer(OutStreamer, MCInstBuilder(Capstone::JAL)
+                                      .addReg(Capstone::X1)
                                       .addOperand(CallTargetMCOp));
       break;
     case MachineOperand::MO_Register:
       CallTargetMCOp = MCOperand::createReg(CallTarget.getReg());
-      EmitToStreamer(OutStreamer, MCInstBuilder(RISCV::JALR)
-                                      .addReg(RISCV::X1)
+      EmitToStreamer(OutStreamer, MCInstBuilder(Capstone::JALR)
+                                      .addReg(Capstone::X1)
                                       .addOperand(CallTargetMCOp)
                                       .addImm(0));
       break;
@@ -258,23 +258,23 @@ void RISCVAsmPrinter::LowerSTATEPOINT(MCStreamer &OutStreamer, StackMaps &SM,
   SM.recordStatepoint(*MILabel, MI);
 }
 
-bool RISCVAsmPrinter::EmitToStreamer(MCStreamer &S, const MCInst &Inst,
+bool CapstoneAsmPrinter::EmitToStreamer(MCStreamer &S, const MCInst &Inst,
                                      const MCSubtargetInfo &SubtargetInfo) {
   MCInst CInst;
-  bool Res = RISCVRVC::compress(CInst, Inst, SubtargetInfo);
+  bool Res = CapstoneRVC::compress(CInst, Inst, SubtargetInfo);
   if (Res)
-    ++RISCVNumInstrsCompressed;
+    ++CapstoneNumInstrsCompressed;
   S.emitInstruction(Res ? CInst : Inst, SubtargetInfo);
   return Res;
 }
 
 // Simple pseudo-instructions have their lowering (with expansion to real
 // instructions) auto-generated.
-#include "RISCVGenMCPseudoLowering.inc"
+#include "CapstoneGenMCPseudoLowering.inc"
 
 // If the target supports Zihintntl and the instruction has a nontemporal
 // MachineMemOperand, emit an NTLH hint instruction before it.
-void RISCVAsmPrinter::emitNTLHint(const MachineInstr *MI) {
+void CapstoneAsmPrinter::emitNTLHint(const MachineInstr *MI) {
   if (!STI->hasStdExtZihintntl())
     return;
 
@@ -293,19 +293,19 @@ void RISCVAsmPrinter::emitNTLHint(const MachineInstr *MI) {
 
   MCInst Hint;
   if (STI->hasStdExtZca())
-    Hint.setOpcode(RISCV::C_ADD);
+    Hint.setOpcode(Capstone::C_ADD);
   else
-    Hint.setOpcode(RISCV::ADD);
+    Hint.setOpcode(Capstone::ADD);
 
-  Hint.addOperand(MCOperand::createReg(RISCV::X0));
-  Hint.addOperand(MCOperand::createReg(RISCV::X0));
-  Hint.addOperand(MCOperand::createReg(RISCV::X2 + NontemporalMode));
+  Hint.addOperand(MCOperand::createReg(Capstone::X0));
+  Hint.addOperand(MCOperand::createReg(Capstone::X0));
+  Hint.addOperand(MCOperand::createReg(Capstone::X2 + NontemporalMode));
 
   EmitToStreamer(*OutStreamer, Hint);
 }
 
-void RISCVAsmPrinter::emitInstruction(const MachineInstr *MI) {
-  RISCV_MC::verifyInstructionPredicates(MI->getOpcode(), STI->getFeatureBits());
+void CapstoneAsmPrinter::emitInstruction(const MachineInstr *MI) {
+  Capstone_MC::verifyInstructionPredicates(MI->getOpcode(), STI->getFeatureBits());
 
   emitNTLHint(MI);
 
@@ -316,10 +316,10 @@ void RISCVAsmPrinter::emitInstruction(const MachineInstr *MI) {
   }
 
   switch (MI->getOpcode()) {
-  case RISCV::HWASAN_CHECK_MEMACCESS_SHORTGRANULES:
+  case Capstone::HWASAN_CHECK_MEMACCESS_SHORTGRANULES:
     LowerHWASAN_CHECK_MEMACCESS(*MI);
     return;
-  case RISCV::KCFI_CHECK:
+  case Capstone::KCFI_CHECK:
     LowerKCFI_CHECK(*MI);
     return;
   case TargetOpcode::STACKMAP:
@@ -356,7 +356,7 @@ void RISCVAsmPrinter::emitInstruction(const MachineInstr *MI) {
   EmitToStreamer(*OutStreamer, OutInst);
 }
 
-bool RISCVAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
+bool CapstoneAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
                                       const char *ExtraCode, raw_ostream &OS) {
   // First try the generic code, which knows about modifiers like 'c' and 'n'.
   if (!AsmPrinter::PrintAsmOperand(MI, OpNo, ExtraCode, OS))
@@ -372,7 +372,7 @@ bool RISCVAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
       return true; // Unknown modifier.
     case 'z':      // Print zero register if zero, regular printing otherwise.
       if (MO.isImm() && MO.getImm() == 0) {
-        OS << RISCVInstPrinter::getRegisterName(RISCV::X0);
+        OS << CapstoneInstPrinter::getRegisterName(Capstone::X0);
         return false;
       }
       break;
@@ -384,7 +384,7 @@ bool RISCVAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
       if (!MO.isReg())
         return true;
 
-      const RISCVRegisterInfo *TRI = STI->getRegisterInfo();
+      const CapstoneRegisterInfo *TRI = STI->getRegisterInfo();
       OS << TRI->getEncodingValue(MO.getReg());
       return false;
     }
@@ -395,7 +395,7 @@ bool RISCVAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
     OS << MO.getImm();
     return false;
   case MachineOperand::MO_Register:
-    OS << RISCVInstPrinter::getRegisterName(MO.getReg());
+    OS << CapstoneInstPrinter::getRegisterName(MO.getReg());
     return false;
   case MachineOperand::MO_GlobalAddress:
     PrintSymbolOperand(MO, OS);
@@ -412,7 +412,7 @@ bool RISCVAsmPrinter::PrintAsmOperand(const MachineInstr *MI, unsigned OpNo,
   return true;
 }
 
-bool RISCVAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
+bool CapstoneAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
                                             unsigned OpNo,
                                             const char *ExtraCode,
                                             raw_ostream &OS) {
@@ -423,7 +423,7 @@ bool RISCVAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
   assert(MI->getNumOperands() > OpNo + 1 && "Expected additional operand");
   const MachineOperand &Offset = MI->getOperand(OpNo + 1);
   // All memory operands should have a register and an immediate operand (see
-  // RISCVDAGToDAGISel::SelectInlineAsmMemoryOperand).
+  // CapstoneDAGToDAGISel::SelectInlineAsmMemoryOperand).
   if (!AddrReg.isReg())
     return true;
   if (!Offset.isImm() && !Offset.isGlobal() && !Offset.isBlockAddress() &&
@@ -447,24 +447,24 @@ bool RISCVAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
     MMI->getContext().registerInlineAsmLabel(Sym);
   }
 
-  OS << "(" << RISCVInstPrinter::getRegisterName(AddrReg.getReg()) << ")";
+  OS << "(" << CapstoneInstPrinter::getRegisterName(AddrReg.getReg()) << ")";
   return false;
 }
 
-bool RISCVAsmPrinter::emitDirectiveOptionArch() {
-  RISCVTargetStreamer &RTS =
-      static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
-  SmallVector<RISCVOptionArchArg> NeedEmitStdOptionArgs;
+bool CapstoneAsmPrinter::emitDirectiveOptionArch() {
+  CapstoneTargetStreamer &RTS =
+      static_cast<CapstoneTargetStreamer &>(*OutStreamer->getTargetStreamer());
+  SmallVector<CapstoneOptionArchArg> NeedEmitStdOptionArgs;
   const MCSubtargetInfo &MCSTI = *TM.getMCSubtargetInfo();
-  for (const auto &Feature : RISCVFeatureKV) {
+  for (const auto &Feature : CapstoneFeatureKV) {
     if (STI->hasFeature(Feature.Value) == MCSTI.hasFeature(Feature.Value))
       continue;
 
-    if (!llvm::RISCVISAInfo::isSupportedExtensionFeature(Feature.Key))
+    if (!llvm::CapstoneISAInfo::isSupportedExtensionFeature(Feature.Key))
       continue;
 
-    auto Delta = STI->hasFeature(Feature.Value) ? RISCVOptionArchArgType::Plus
-                                                : RISCVOptionArchArgType::Minus;
+    auto Delta = STI->hasFeature(Feature.Value) ? CapstoneOptionArchArgType::Plus
+                                                : CapstoneOptionArchArgType::Minus;
     NeedEmitStdOptionArgs.emplace_back(Delta, Feature.Key);
   }
   if (!NeedEmitStdOptionArgs.empty()) {
@@ -476,10 +476,10 @@ bool RISCVAsmPrinter::emitDirectiveOptionArch() {
   return false;
 }
 
-bool RISCVAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
-  STI = &MF.getSubtarget<RISCVSubtarget>();
-  RISCVTargetStreamer &RTS =
-      static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
+bool CapstoneAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
+  STI = &MF.getSubtarget<CapstoneSubtarget>();
+  CapstoneTargetStreamer &RTS =
+      static_cast<CapstoneTargetStreamer &>(*OutStreamer->getTargetStreamer());
 
   bool EmittedOptionArch = emitDirectiveOptionArch();
 
@@ -494,19 +494,19 @@ bool RISCVAsmPrinter::runOnMachineFunction(MachineFunction &MF) {
   return false;
 }
 
-void RISCVAsmPrinter::LowerPATCHABLE_FUNCTION_ENTER(const MachineInstr *MI) {
+void CapstoneAsmPrinter::LowerPATCHABLE_FUNCTION_ENTER(const MachineInstr *MI) {
   emitSled(MI, SledKind::FUNCTION_ENTER);
 }
 
-void RISCVAsmPrinter::LowerPATCHABLE_FUNCTION_EXIT(const MachineInstr *MI) {
+void CapstoneAsmPrinter::LowerPATCHABLE_FUNCTION_EXIT(const MachineInstr *MI) {
   emitSled(MI, SledKind::FUNCTION_EXIT);
 }
 
-void RISCVAsmPrinter::LowerPATCHABLE_TAIL_CALL(const MachineInstr *MI) {
+void CapstoneAsmPrinter::LowerPATCHABLE_TAIL_CALL(const MachineInstr *MI) {
   emitSled(MI, SledKind::TAIL_CALL);
 }
 
-void RISCVAsmPrinter::emitSled(const MachineInstr *MI, SledKind Kind) {
+void CapstoneAsmPrinter::emitSled(const MachineInstr *MI, SledKind Kind) {
   // We want to emit the jump instruction and the nops constituting the sled.
   // The format is as follows:
   // .Lxray_sled_N
@@ -534,38 +534,38 @@ void RISCVAsmPrinter::emitSled(const MachineInstr *MI, SledKind Kind) {
   // start of function.
   EmitToStreamer(
       *OutStreamer,
-      MCInstBuilder(RISCV::JAL).addReg(RISCV::X0).addExpr(TargetExpr));
+      MCInstBuilder(Capstone::JAL).addReg(Capstone::X0).addExpr(TargetExpr));
 
   // Emit NOP instructions
   for (int8_t I = 0; I < NoopsInSledCount; ++I)
-    EmitToStreamer(*OutStreamer, MCInstBuilder(RISCV::ADDI)
-                                     .addReg(RISCV::X0)
-                                     .addReg(RISCV::X0)
+    EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::ADDI)
+                                     .addReg(Capstone::X0)
+                                     .addReg(Capstone::X0)
                                      .addImm(0));
 
   OutStreamer->emitLabel(Target);
   recordSled(CurSled, *MI, Kind, 2);
 }
 
-void RISCVAsmPrinter::emitStartOfAsmFile(Module &M) {
-  RISCVTargetStreamer &RTS =
-      static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
+void CapstoneAsmPrinter::emitStartOfAsmFile(Module &M) {
+  CapstoneTargetStreamer &RTS =
+      static_cast<CapstoneTargetStreamer &>(*OutStreamer->getTargetStreamer());
   if (const MDString *ModuleTargetABI =
           dyn_cast_or_null<MDString>(M.getModuleFlag("target-abi")))
-    RTS.setTargetABI(RISCVABI::getTargetABI(ModuleTargetABI->getString()));
+    RTS.setTargetABI(CapstoneABI::getTargetABI(ModuleTargetABI->getString()));
 
   MCSubtargetInfo SubtargetInfo = *TM.getMCSubtargetInfo();
 
   // Use module flag to update feature bits.
-  if (auto *MD = dyn_cast_or_null<MDNode>(M.getModuleFlag("riscv-isa"))) {
+  if (auto *MD = dyn_cast_or_null<MDNode>(M.getModuleFlag("capstone-isa"))) {
     for (auto &ISA : MD->operands()) {
       if (auto *ISAString = dyn_cast_or_null<MDString>(ISA)) {
-        auto ParseResult = llvm::RISCVISAInfo::parseArchString(
+        auto ParseResult = llvm::CapstoneISAInfo::parseArchString(
             ISAString->getString(), /*EnableExperimentalExtension=*/true,
             /*ExperimentalExtensionVersionCheck=*/true);
         if (!errorToBool(ParseResult.takeError())) {
           auto &ISAInfo = *ParseResult;
-          for (const auto &Feature : RISCVFeatureKV) {
+          for (const auto &Feature : CapstoneFeatureKV) {
             if (ISAInfo->hasExtension(Feature.Key) &&
                 !SubtargetInfo.hasFeature(Feature.Value))
               SubtargetInfo.ToggleFeature(Feature.Key);
@@ -581,9 +581,9 @@ void RISCVAsmPrinter::emitStartOfAsmFile(Module &M) {
     emitAttributes(SubtargetInfo);
 }
 
-void RISCVAsmPrinter::emitEndOfAsmFile(Module &M) {
-  RISCVTargetStreamer &RTS =
-      static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
+void CapstoneAsmPrinter::emitEndOfAsmFile(Module &M) {
+  CapstoneTargetStreamer &RTS =
+      static_cast<CapstoneTargetStreamer &>(*OutStreamer->getTargetStreamer());
 
   if (TM.getTargetTriple().isOSBinFormatELF()) {
     RTS.finishAttributeSection();
@@ -592,20 +592,20 @@ void RISCVAsmPrinter::emitEndOfAsmFile(Module &M) {
   EmitHwasanMemaccessSymbols(M);
 }
 
-void RISCVAsmPrinter::emitAttributes(const MCSubtargetInfo &SubtargetInfo) {
-  RISCVTargetStreamer &RTS =
-      static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
+void CapstoneAsmPrinter::emitAttributes(const MCSubtargetInfo &SubtargetInfo) {
+  CapstoneTargetStreamer &RTS =
+      static_cast<CapstoneTargetStreamer &>(*OutStreamer->getTargetStreamer());
   // Use MCSubtargetInfo from TargetMachine. Individual functions may have
   // attributes that differ from other functions in the module and we have no
   // way to know which function is correct.
   RTS.emitTargetAttributes(SubtargetInfo, /*EmitStackAlign*/ true);
 }
 
-void RISCVAsmPrinter::emitFunctionEntryLabel() {
-  const auto *RMFI = MF->getInfo<RISCVMachineFunctionInfo>();
+void CapstoneAsmPrinter::emitFunctionEntryLabel() {
+  const auto *RMFI = MF->getInfo<CapstoneMachineFunctionInfo>();
   if (RMFI->isVectorCall()) {
     auto &RTS =
-        static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
+        static_cast<CapstoneTargetStreamer &>(*OutStreamer->getTargetStreamer());
     RTS.emitDirectiveVariantCC(*CurrentFnSym);
   }
   return AsmPrinter::emitFunctionEntryLabel();
@@ -613,14 +613,14 @@ void RISCVAsmPrinter::emitFunctionEntryLabel() {
 
 // Force static initialization.
 extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void
-LLVMInitializeRISCVAsmPrinter() {
-  RegisterAsmPrinter<RISCVAsmPrinter> X(getTheRISCV32Target());
-  RegisterAsmPrinter<RISCVAsmPrinter> Y(getTheRISCV64Target());
-  RegisterAsmPrinter<RISCVAsmPrinter> A(getTheRISCV32beTarget());
-  RegisterAsmPrinter<RISCVAsmPrinter> B(getTheRISCV64beTarget());
+LLVMInitializeCapstoneAsmPrinter() {
+  RegisterAsmPrinter<CapstoneAsmPrinter> X(getTheCapstone32Target());
+  RegisterAsmPrinter<CapstoneAsmPrinter> Y(getTheCapstone64Target());
+  RegisterAsmPrinter<CapstoneAsmPrinter> A(getTheCapstone32beTarget());
+  RegisterAsmPrinter<CapstoneAsmPrinter> B(getTheCapstone64beTarget());
 }
 
-void RISCVAsmPrinter::LowerHWASAN_CHECK_MEMACCESS(const MachineInstr &MI) {
+void CapstoneAsmPrinter::LowerHWASAN_CHECK_MEMACCESS(const MachineInstr &MI) {
   Register Reg = MI.getOperand(0).getReg();
   uint32_t AccessInfo = MI.getOperand(1).getImm();
   MCSymbol *&Sym =
@@ -630,17 +630,17 @@ void RISCVAsmPrinter::LowerHWASAN_CHECK_MEMACCESS(const MachineInstr &MI) {
     if (!TM.getTargetTriple().isOSBinFormatELF())
       report_fatal_error("llvm.hwasan.check.memaccess only supported on ELF");
 
-    std::string SymName = "__hwasan_check_x" + utostr(Reg - RISCV::X0) + "_" +
+    std::string SymName = "__hwasan_check_x" + utostr(Reg - Capstone::X0) + "_" +
                           utostr(AccessInfo) + "_short";
     Sym = OutContext.getOrCreateSymbol(SymName);
   }
   auto Res = MCSymbolRefExpr::create(Sym, OutContext);
-  auto Expr = MCSpecifierExpr::create(Res, ELF::R_RISCV_CALL_PLT, OutContext);
+  auto Expr = MCSpecifierExpr::create(Res, ELF::R_Capstone_CALL_PLT, OutContext);
 
-  EmitToStreamer(*OutStreamer, MCInstBuilder(RISCV::PseudoCALL).addExpr(Expr));
+  EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::PseudoCALL).addExpr(Expr));
 }
 
-void RISCVAsmPrinter::LowerKCFI_CHECK(const MachineInstr &MI) {
+void CapstoneAsmPrinter::LowerKCFI_CHECK(const MachineInstr &MI) {
   Register AddrReg = MI.getOperand(0).getReg();
   assert(std::next(MI.getIterator())->isCall() &&
          "KCFI_CHECK not followed by a call instruction");
@@ -652,8 +652,8 @@ void RISCVAsmPrinter::LowerKCFI_CHECK(const MachineInstr &MI) {
   // temporary register as the check is immediately followed by the
   // call. The check defaults to X6/X7, but can fall back to X28-X31 if
   // needed.
-  unsigned ScratchRegs[] = {RISCV::X6, RISCV::X7};
-  unsigned NextReg = RISCV::X28;
+  unsigned ScratchRegs[] = {Capstone::X6, Capstone::X7};
+  unsigned NextReg = Capstone::X28;
   auto isRegAvailable = [&](unsigned Reg) {
     return Reg != AddrReg && !STI->isRegisterReservedByUser(Reg);
   };
@@ -663,16 +663,16 @@ void RISCVAsmPrinter::LowerKCFI_CHECK(const MachineInstr &MI) {
     while (!isRegAvailable(NextReg))
       ++NextReg;
     Reg = NextReg++;
-    if (Reg > RISCV::X31)
+    if (Reg > Capstone::X31)
       report_fatal_error("Unable to find scratch registers for KCFI_CHECK");
   }
 
-  if (AddrReg == RISCV::X0) {
+  if (AddrReg == Capstone::X0) {
     // Checking X0 makes no sense. Instead of emitting a load, zero
     // ScratchRegs[0].
-    EmitToStreamer(*OutStreamer, MCInstBuilder(RISCV::ADDI)
+    EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::ADDI)
                                      .addReg(ScratchRegs[0])
-                                     .addReg(RISCV::X0)
+                                     .addReg(Capstone::X0)
                                      .addImm(0));
   } else {
     // Adjust the offset for patchable-function-prefix. This assumes that
@@ -686,7 +686,7 @@ void RISCVAsmPrinter::LowerKCFI_CHECK(const MachineInstr &MI) {
         .getAsInteger(10, PrefixNops);
 
     // Load the target function type hash.
-    EmitToStreamer(*OutStreamer, MCInstBuilder(RISCV::LW)
+    EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::LW)
                                      .addReg(ScratchRegs[0])
                                      .addReg(AddrReg)
                                      .addImm(-(PrefixNops * NopSize + 4)));
@@ -699,13 +699,13 @@ void RISCVAsmPrinter::LowerKCFI_CHECK(const MachineInstr &MI) {
   if (Hi20) {
     EmitToStreamer(
         *OutStreamer,
-        MCInstBuilder(RISCV::LUI).addReg(ScratchRegs[1]).addImm(Hi20));
+        MCInstBuilder(Capstone::LUI).addReg(ScratchRegs[1]).addImm(Hi20));
   }
   if (Lo12 || Hi20 == 0) {
     EmitToStreamer(*OutStreamer,
-                   MCInstBuilder((STI->hasFeature(RISCV::Feature64Bit) && Hi20)
-                                     ? RISCV::ADDIW
-                                     : RISCV::ADDI)
+                   MCInstBuilder((STI->hasFeature(Capstone::Feature64Bit) && Hi20)
+                                     ? Capstone::ADDIW
+                                     : Capstone::ADDI)
                        .addReg(ScratchRegs[1])
                        .addReg(ScratchRegs[1])
                        .addImm(Lo12));
@@ -714,19 +714,19 @@ void RISCVAsmPrinter::LowerKCFI_CHECK(const MachineInstr &MI) {
   // Compare the hashes and trap if there's a mismatch.
   MCSymbol *Pass = OutContext.createTempSymbol();
   EmitToStreamer(*OutStreamer,
-                 MCInstBuilder(RISCV::BEQ)
+                 MCInstBuilder(Capstone::BEQ)
                      .addReg(ScratchRegs[0])
                      .addReg(ScratchRegs[1])
                      .addExpr(MCSymbolRefExpr::create(Pass, OutContext)));
 
   MCSymbol *Trap = OutContext.createTempSymbol();
   OutStreamer->emitLabel(Trap);
-  EmitToStreamer(*OutStreamer, MCInstBuilder(RISCV::EBREAK));
+  EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::EBREAK));
   emitKCFITrapEntry(*MI.getMF(), Trap);
   OutStreamer->emitLabel(Pass);
 }
 
-void RISCVAsmPrinter::EmitHwasanMemaccessSymbols(Module &M) {
+void CapstoneAsmPrinter::EmitHwasanMemaccessSymbols(Module &M) {
   if (HwasanMemaccessSymbols.empty())
     return;
 
@@ -741,13 +741,13 @@ void RISCVAsmPrinter::EmitHwasanMemaccessSymbols(Module &M) {
   // Annotate symbol as one having incompatible calling convention, so
   // run-time linkers can instead eagerly bind this function.
   auto &RTS =
-      static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
+      static_cast<CapstoneTargetStreamer &>(*OutStreamer->getTargetStreamer());
   RTS.emitDirectiveVariantCC(*HwasanTagMismatchV2Sym);
 
   const MCSymbolRefExpr *HwasanTagMismatchV2Ref =
       MCSymbolRefExpr::create(HwasanTagMismatchV2Sym, OutContext);
   auto Expr = MCSpecifierExpr::create(HwasanTagMismatchV2Ref,
-                                      ELF::R_RISCV_CALL_PLT, OutContext);
+                                      ELF::R_Capstone_CALL_PLT, OutContext);
 
   for (auto &P : HwasanMemaccessSymbols) {
     unsigned Reg = std::get<0>(P.first);
@@ -769,96 +769,96 @@ void RISCVAsmPrinter::EmitHwasanMemaccessSymbols(Module &M) {
     // Extract shadow offset from ptr
     EmitToStreamer(
         *OutStreamer,
-        MCInstBuilder(RISCV::SLLI).addReg(RISCV::X6).addReg(Reg).addImm(8),
+        MCInstBuilder(Capstone::SLLI).addReg(Capstone::X6).addReg(Reg).addImm(8),
         MCSTI);
     EmitToStreamer(*OutStreamer,
-                   MCInstBuilder(RISCV::SRLI)
-                       .addReg(RISCV::X6)
-                       .addReg(RISCV::X6)
+                   MCInstBuilder(Capstone::SRLI)
+                       .addReg(Capstone::X6)
+                       .addReg(Capstone::X6)
                        .addImm(12),
                    MCSTI);
     // load shadow tag in X6, X5 contains shadow base
     EmitToStreamer(*OutStreamer,
-                   MCInstBuilder(RISCV::ADD)
-                       .addReg(RISCV::X6)
-                       .addReg(RISCV::X5)
-                       .addReg(RISCV::X6),
+                   MCInstBuilder(Capstone::ADD)
+                       .addReg(Capstone::X6)
+                       .addReg(Capstone::X5)
+                       .addReg(Capstone::X6),
                    MCSTI);
     EmitToStreamer(
         *OutStreamer,
-        MCInstBuilder(RISCV::LBU).addReg(RISCV::X6).addReg(RISCV::X6).addImm(0),
+        MCInstBuilder(Capstone::LBU).addReg(Capstone::X6).addReg(Capstone::X6).addImm(0),
         MCSTI);
     // Extract tag from pointer and compare it with loaded tag from shadow
     EmitToStreamer(
         *OutStreamer,
-        MCInstBuilder(RISCV::SRLI).addReg(RISCV::X7).addReg(Reg).addImm(56),
+        MCInstBuilder(Capstone::SRLI).addReg(Capstone::X7).addReg(Reg).addImm(56),
         MCSTI);
     MCSymbol *HandleMismatchOrPartialSym = OutContext.createTempSymbol();
     // X7 contains tag from the pointer, while X6 contains tag from memory
     EmitToStreamer(*OutStreamer,
-                   MCInstBuilder(RISCV::BNE)
-                       .addReg(RISCV::X7)
-                       .addReg(RISCV::X6)
+                   MCInstBuilder(Capstone::BNE)
+                       .addReg(Capstone::X7)
+                       .addReg(Capstone::X6)
                        .addExpr(MCSymbolRefExpr::create(
                            HandleMismatchOrPartialSym, OutContext)),
                    MCSTI);
     MCSymbol *ReturnSym = OutContext.createTempSymbol();
     OutStreamer->emitLabel(ReturnSym);
     EmitToStreamer(*OutStreamer,
-                   MCInstBuilder(RISCV::JALR)
-                       .addReg(RISCV::X0)
-                       .addReg(RISCV::X1)
+                   MCInstBuilder(Capstone::JALR)
+                       .addReg(Capstone::X0)
+                       .addReg(Capstone::X1)
                        .addImm(0),
                    MCSTI);
     OutStreamer->emitLabel(HandleMismatchOrPartialSym);
 
     EmitToStreamer(*OutStreamer,
-                   MCInstBuilder(RISCV::ADDI)
-                       .addReg(RISCV::X28)
-                       .addReg(RISCV::X0)
+                   MCInstBuilder(Capstone::ADDI)
+                       .addReg(Capstone::X28)
+                       .addReg(Capstone::X0)
                        .addImm(16),
                    MCSTI);
     MCSymbol *HandleMismatchSym = OutContext.createTempSymbol();
     EmitToStreamer(
         *OutStreamer,
-        MCInstBuilder(RISCV::BGEU)
-            .addReg(RISCV::X6)
-            .addReg(RISCV::X28)
+        MCInstBuilder(Capstone::BGEU)
+            .addReg(Capstone::X6)
+            .addReg(Capstone::X28)
             .addExpr(MCSymbolRefExpr::create(HandleMismatchSym, OutContext)),
         MCSTI);
 
     EmitToStreamer(
         *OutStreamer,
-        MCInstBuilder(RISCV::ANDI).addReg(RISCV::X28).addReg(Reg).addImm(0xF),
+        MCInstBuilder(Capstone::ANDI).addReg(Capstone::X28).addReg(Reg).addImm(0xF),
         MCSTI);
 
     if (Size != 1)
       EmitToStreamer(*OutStreamer,
-                     MCInstBuilder(RISCV::ADDI)
-                         .addReg(RISCV::X28)
-                         .addReg(RISCV::X28)
+                     MCInstBuilder(Capstone::ADDI)
+                         .addReg(Capstone::X28)
+                         .addReg(Capstone::X28)
                          .addImm(Size - 1),
                      MCSTI);
     EmitToStreamer(
         *OutStreamer,
-        MCInstBuilder(RISCV::BGE)
-            .addReg(RISCV::X28)
-            .addReg(RISCV::X6)
+        MCInstBuilder(Capstone::BGE)
+            .addReg(Capstone::X28)
+            .addReg(Capstone::X6)
             .addExpr(MCSymbolRefExpr::create(HandleMismatchSym, OutContext)),
         MCSTI);
 
     EmitToStreamer(
         *OutStreamer,
-        MCInstBuilder(RISCV::ORI).addReg(RISCV::X6).addReg(Reg).addImm(0xF),
+        MCInstBuilder(Capstone::ORI).addReg(Capstone::X6).addReg(Reg).addImm(0xF),
         MCSTI);
     EmitToStreamer(
         *OutStreamer,
-        MCInstBuilder(RISCV::LBU).addReg(RISCV::X6).addReg(RISCV::X6).addImm(0),
+        MCInstBuilder(Capstone::LBU).addReg(Capstone::X6).addReg(Capstone::X6).addImm(0),
         MCSTI);
     EmitToStreamer(*OutStreamer,
-                   MCInstBuilder(RISCV::BEQ)
-                       .addReg(RISCV::X6)
-                       .addReg(RISCV::X7)
+                   MCInstBuilder(Capstone::BEQ)
+                       .addReg(Capstone::X6)
+                       .addReg(Capstone::X7)
                        .addExpr(MCSymbolRefExpr::create(ReturnSym, OutContext)),
                    MCSTI);
 
@@ -900,120 +900,120 @@ void RISCVAsmPrinter::EmitHwasanMemaccessSymbols(Module &M) {
 
     // Adjust sp
     EmitToStreamer(*OutStreamer,
-                   MCInstBuilder(RISCV::ADDI)
-                       .addReg(RISCV::X2)
-                       .addReg(RISCV::X2)
+                   MCInstBuilder(Capstone::ADDI)
+                       .addReg(Capstone::X2)
+                       .addReg(Capstone::X2)
                        .addImm(-256),
                    MCSTI);
 
     // store x10(arg0) by new sp
     EmitToStreamer(*OutStreamer,
-                   MCInstBuilder(RISCV::SD)
-                       .addReg(RISCV::X10)
-                       .addReg(RISCV::X2)
+                   MCInstBuilder(Capstone::SD)
+                       .addReg(Capstone::X10)
+                       .addReg(Capstone::X2)
                        .addImm(8 * 10),
                    MCSTI);
     // store x11(arg1) by new sp
     EmitToStreamer(*OutStreamer,
-                   MCInstBuilder(RISCV::SD)
-                       .addReg(RISCV::X11)
-                       .addReg(RISCV::X2)
+                   MCInstBuilder(Capstone::SD)
+                       .addReg(Capstone::X11)
+                       .addReg(Capstone::X2)
                        .addImm(8 * 11),
                    MCSTI);
 
     // store x8(fp) by new sp
     EmitToStreamer(
         *OutStreamer,
-        MCInstBuilder(RISCV::SD).addReg(RISCV::X8).addReg(RISCV::X2).addImm(8 *
+        MCInstBuilder(Capstone::SD).addReg(Capstone::X8).addReg(Capstone::X2).addImm(8 *
                                                                             8),
         MCSTI);
     // store x1(ra) by new sp
     EmitToStreamer(
         *OutStreamer,
-        MCInstBuilder(RISCV::SD).addReg(RISCV::X1).addReg(RISCV::X2).addImm(1 *
+        MCInstBuilder(Capstone::SD).addReg(Capstone::X1).addReg(Capstone::X2).addImm(1 *
                                                                             8),
         MCSTI);
-    if (Reg != RISCV::X10)
+    if (Reg != Capstone::X10)
       EmitToStreamer(
           *OutStreamer,
-          MCInstBuilder(RISCV::ADDI).addReg(RISCV::X10).addReg(Reg).addImm(0),
+          MCInstBuilder(Capstone::ADDI).addReg(Capstone::X10).addReg(Reg).addImm(0),
           MCSTI);
     EmitToStreamer(*OutStreamer,
-                   MCInstBuilder(RISCV::ADDI)
-                       .addReg(RISCV::X11)
-                       .addReg(RISCV::X0)
+                   MCInstBuilder(Capstone::ADDI)
+                       .addReg(Capstone::X11)
+                       .addReg(Capstone::X0)
                        .addImm(AccessInfo & HWASanAccessInfo::RuntimeMask),
                    MCSTI);
 
-    EmitToStreamer(*OutStreamer, MCInstBuilder(RISCV::PseudoCALL).addExpr(Expr),
+    EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::PseudoCALL).addExpr(Expr),
                    MCSTI);
   }
 }
 
-void RISCVAsmPrinter::emitNoteGnuProperty(const Module &M) {
+void CapstoneAsmPrinter::emitNoteGnuProperty(const Module &M) {
   if (const Metadata *const Flag = M.getModuleFlag("cf-protection-return");
       Flag && !mdconst::extract<ConstantInt>(Flag)->isZero()) {
-    RISCVTargetStreamer &RTS =
-        static_cast<RISCVTargetStreamer &>(*OutStreamer->getTargetStreamer());
-    RTS.emitNoteGnuPropertySection(ELF::GNU_PROPERTY_RISCV_FEATURE_1_CFI_SS);
+    CapstoneTargetStreamer &RTS =
+        static_cast<CapstoneTargetStreamer &>(*OutStreamer->getTargetStreamer());
+    RTS.emitNoteGnuPropertySection(ELF::GNU_PROPERTY_Capstone_FEATURE_1_CFI_SS);
   }
 }
 
 static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
                                     const AsmPrinter &AP) {
   MCContext &Ctx = AP.OutContext;
-  RISCV::Specifier Kind;
+  Capstone::Specifier Kind;
 
   switch (MO.getTargetFlags()) {
   default:
     llvm_unreachable("Unknown target flag on GV operand");
-  case RISCVII::MO_None:
-    Kind = RISCV::S_None;
+  case CapstoneII::MO_None:
+    Kind = Capstone::S_None;
     break;
-  case RISCVII::MO_CALL:
-    Kind = ELF::R_RISCV_CALL_PLT;
+  case CapstoneII::MO_CALL:
+    Kind = ELF::R_Capstone_CALL_PLT;
     break;
-  case RISCVII::MO_LO:
-    Kind = RISCV::S_LO;
+  case CapstoneII::MO_LO:
+    Kind = Capstone::S_LO;
     break;
-  case RISCVII::MO_HI:
-    Kind = ELF::R_RISCV_HI20;
+  case CapstoneII::MO_HI:
+    Kind = ELF::R_Capstone_HI20;
     break;
-  case RISCVII::MO_PCREL_LO:
-    Kind = RISCV::S_PCREL_LO;
+  case CapstoneII::MO_PCREL_LO:
+    Kind = Capstone::S_PCREL_LO;
     break;
-  case RISCVII::MO_PCREL_HI:
-    Kind = ELF::R_RISCV_PCREL_HI20;
+  case CapstoneII::MO_PCREL_HI:
+    Kind = ELF::R_Capstone_PCREL_HI20;
     break;
-  case RISCVII::MO_GOT_HI:
-    Kind = ELF::R_RISCV_GOT_HI20;
+  case CapstoneII::MO_GOT_HI:
+    Kind = ELF::R_Capstone_GOT_HI20;
     break;
-  case RISCVII::MO_TPREL_LO:
-    Kind = RISCV::S_TPREL_LO;
+  case CapstoneII::MO_TPREL_LO:
+    Kind = Capstone::S_TPREL_LO;
     break;
-  case RISCVII::MO_TPREL_HI:
-    Kind = ELF::R_RISCV_TPREL_HI20;
+  case CapstoneII::MO_TPREL_HI:
+    Kind = ELF::R_Capstone_TPREL_HI20;
     break;
-  case RISCVII::MO_TPREL_ADD:
-    Kind = ELF::R_RISCV_TPREL_ADD;
+  case CapstoneII::MO_TPREL_ADD:
+    Kind = ELF::R_Capstone_TPREL_ADD;
     break;
-  case RISCVII::MO_TLS_GOT_HI:
-    Kind = ELF::R_RISCV_TLS_GOT_HI20;
+  case CapstoneII::MO_TLS_GOT_HI:
+    Kind = ELF::R_Capstone_TLS_GOT_HI20;
     break;
-  case RISCVII::MO_TLS_GD_HI:
-    Kind = ELF::R_RISCV_TLS_GD_HI20;
+  case CapstoneII::MO_TLS_GD_HI:
+    Kind = ELF::R_Capstone_TLS_GD_HI20;
     break;
-  case RISCVII::MO_TLSDESC_HI:
-    Kind = ELF::R_RISCV_TLSDESC_HI20;
+  case CapstoneII::MO_TLSDESC_HI:
+    Kind = ELF::R_Capstone_TLSDESC_HI20;
     break;
-  case RISCVII::MO_TLSDESC_LOAD_LO:
-    Kind = ELF::R_RISCV_TLSDESC_LOAD_LO12;
+  case CapstoneII::MO_TLSDESC_LOAD_LO:
+    Kind = ELF::R_Capstone_TLSDESC_LOAD_LO12;
     break;
-  case RISCVII::MO_TLSDESC_ADD_LO:
-    Kind = ELF::R_RISCV_TLSDESC_ADD_LO12;
+  case CapstoneII::MO_TLSDESC_ADD_LO:
+    Kind = ELF::R_Capstone_TLSDESC_ADD_LO12;
     break;
-  case RISCVII::MO_TLSDESC_CALL:
-    Kind = ELF::R_RISCV_TLSDESC_CALL;
+  case CapstoneII::MO_TLSDESC_CALL:
+    Kind = ELF::R_Capstone_TLSDESC_CALL;
     break;
   }
 
@@ -1023,12 +1023,12 @@ static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,
     ME = MCBinaryExpr::createAdd(
         ME, MCConstantExpr::create(MO.getOffset(), Ctx), Ctx);
 
-  if (Kind != RISCV::S_None)
+  if (Kind != Capstone::S_None)
     ME = MCSpecifierExpr::create(ME, Kind, Ctx);
   return MCOperand::createExpr(ME);
 }
 
-bool RISCVAsmPrinter::lowerOperand(const MachineOperand &MO,
+bool CapstoneAsmPrinter::lowerOperand(const MachineOperand &MO,
                                    MCOperand &MCOp) const {
   switch (MO.getType()) {
   default:
@@ -1072,11 +1072,11 @@ bool RISCVAsmPrinter::lowerOperand(const MachineOperand &MO,
   return true;
 }
 
-static bool lowerRISCVVMachineInstrToMCInst(const MachineInstr *MI,
+static bool lowerCapstoneVMachineInstrToMCInst(const MachineInstr *MI,
                                             MCInst &OutMI,
-                                            const RISCVSubtarget *STI) {
-  const RISCVVPseudosTable::PseudoInfo *RVV =
-      RISCVVPseudosTable::getPseudoInfo(MI->getOpcode());
+                                            const CapstoneSubtarget *STI) {
+  const CapstoneVPseudosTable::PseudoInfo *RVV =
+      CapstoneVPseudosTable::getPseudoInfo(MI->getOpcode());
   if (!RVV)
     return false;
 
@@ -1092,16 +1092,16 @@ static bool lowerRISCVVMachineInstrToMCInst(const MachineInstr *MI,
 
   // Skip policy, SEW, VL, VXRM/FRM operands which are the last operands if
   // present.
-  if (RISCVII::hasVecPolicyOp(TSFlags))
+  if (CapstoneII::hasVecPolicyOp(TSFlags))
     --NumOps;
-  if (RISCVII::hasSEWOp(TSFlags))
+  if (CapstoneII::hasSEWOp(TSFlags))
     --NumOps;
-  if (RISCVII::hasVLOp(TSFlags))
+  if (CapstoneII::hasVLOp(TSFlags))
     --NumOps;
-  if (RISCVII::hasRoundModeOp(TSFlags))
+  if (CapstoneII::hasRoundModeOp(TSFlags))
     --NumOps;
 
-  bool hasVLOutput = RISCVInstrInfo::isFaultOnlyFirstLoad(*MI);
+  bool hasVLOutput = CapstoneInstrInfo::isFaultOnlyFirstLoad(*MI);
   for (unsigned OpNo = 0; OpNo != NumOps; ++OpNo) {
     const MachineOperand &MO = MI->getOperand(OpNo);
     // Skip vl output. It should be the second output.
@@ -1117,7 +1117,7 @@ static bool lowerRISCVVMachineInstrToMCInst(const MachineInstr *MI,
       // is a _TIED instruction.
       if (OutMCID.getOperandConstraint(OutMI.getNumOperands(), MCOI::TIED_TO) <
               0 &&
-          !RISCVII::isTiedPseudo(TSFlags))
+          !CapstoneII::isTiedPseudo(TSFlags))
         continue;
     }
 
@@ -1128,30 +1128,30 @@ static bool lowerRISCVVMachineInstrToMCInst(const MachineInstr *MI,
     case MachineOperand::MO_Register: {
       Register Reg = MO.getReg();
 
-      if (RISCV::VRM2RegClass.contains(Reg) ||
-          RISCV::VRM4RegClass.contains(Reg) ||
-          RISCV::VRM8RegClass.contains(Reg)) {
-        Reg = TRI->getSubReg(Reg, RISCV::sub_vrm1_0);
+      if (Capstone::VRM2RegClass.contains(Reg) ||
+          Capstone::VRM4RegClass.contains(Reg) ||
+          Capstone::VRM8RegClass.contains(Reg)) {
+        Reg = TRI->getSubReg(Reg, Capstone::sub_vrm1_0);
         assert(Reg && "Subregister does not exist");
-      } else if (RISCV::FPR16RegClass.contains(Reg)) {
+      } else if (Capstone::FPR16RegClass.contains(Reg)) {
         Reg =
-            TRI->getMatchingSuperReg(Reg, RISCV::sub_16, &RISCV::FPR32RegClass);
+            TRI->getMatchingSuperReg(Reg, Capstone::sub_16, &Capstone::FPR32RegClass);
         assert(Reg && "Subregister does not exist");
-      } else if (RISCV::FPR64RegClass.contains(Reg)) {
-        Reg = TRI->getSubReg(Reg, RISCV::sub_32);
+      } else if (Capstone::FPR64RegClass.contains(Reg)) {
+        Reg = TRI->getSubReg(Reg, Capstone::sub_32);
         assert(Reg && "Superregister does not exist");
-      } else if (RISCV::VRN2M1RegClass.contains(Reg) ||
-                 RISCV::VRN2M2RegClass.contains(Reg) ||
-                 RISCV::VRN2M4RegClass.contains(Reg) ||
-                 RISCV::VRN3M1RegClass.contains(Reg) ||
-                 RISCV::VRN3M2RegClass.contains(Reg) ||
-                 RISCV::VRN4M1RegClass.contains(Reg) ||
-                 RISCV::VRN4M2RegClass.contains(Reg) ||
-                 RISCV::VRN5M1RegClass.contains(Reg) ||
-                 RISCV::VRN6M1RegClass.contains(Reg) ||
-                 RISCV::VRN7M1RegClass.contains(Reg) ||
-                 RISCV::VRN8M1RegClass.contains(Reg)) {
-        Reg = TRI->getSubReg(Reg, RISCV::sub_vrm1_0);
+      } else if (Capstone::VRN2M1RegClass.contains(Reg) ||
+                 Capstone::VRN2M2RegClass.contains(Reg) ||
+                 Capstone::VRN2M4RegClass.contains(Reg) ||
+                 Capstone::VRN3M1RegClass.contains(Reg) ||
+                 Capstone::VRN3M2RegClass.contains(Reg) ||
+                 Capstone::VRN4M1RegClass.contains(Reg) ||
+                 Capstone::VRN4M2RegClass.contains(Reg) ||
+                 Capstone::VRN5M1RegClass.contains(Reg) ||
+                 Capstone::VRN6M1RegClass.contains(Reg) ||
+                 Capstone::VRN7M1RegClass.contains(Reg) ||
+                 Capstone::VRN8M1RegClass.contains(Reg)) {
+        Reg = TRI->getSubReg(Reg, Capstone::sub_vrm1_0);
         assert(Reg && "Subregister does not exist");
       }
 
@@ -1170,17 +1170,17 @@ static bool lowerRISCVVMachineInstrToMCInst(const MachineInstr *MI,
   const MCInstrDesc &OutMCID = TII->get(OutMI.getOpcode());
   if (OutMI.getNumOperands() < OutMCID.getNumOperands()) {
     assert(OutMCID.operands()[OutMI.getNumOperands()].RegClass ==
-               RISCV::VMV0RegClassID &&
+               Capstone::VMV0RegClassID &&
            "Expected only mask operand to be missing");
-    OutMI.addOperand(MCOperand::createReg(RISCV::NoRegister));
+    OutMI.addOperand(MCOperand::createReg(Capstone::NoRegister));
   }
 
   assert(OutMI.getNumOperands() == OutMCID.getNumOperands());
   return true;
 }
 
-void RISCVAsmPrinter::lowerToMCInst(const MachineInstr *MI, MCInst &OutMI) {
-  if (lowerRISCVVMachineInstrToMCInst(MI, OutMI, STI))
+void CapstoneAsmPrinter::lowerToMCInst(const MachineInstr *MI, MCInst &OutMI) {
+  if (lowerCapstoneVMachineInstrToMCInst(MI, OutMI, STI))
     return;
 
   OutMI.setOpcode(MI->getOpcode());
@@ -1192,9 +1192,9 @@ void RISCVAsmPrinter::lowerToMCInst(const MachineInstr *MI, MCInst &OutMI) {
   }
 }
 
-void RISCVAsmPrinter::emitMachineConstantPoolValue(
+void CapstoneAsmPrinter::emitMachineConstantPoolValue(
     MachineConstantPoolValue *MCPV) {
-  auto *RCPV = static_cast<RISCVConstantPoolValue *>(MCPV);
+  auto *RCPV = static_cast<CapstoneConstantPoolValue *>(MCPV);
   MCSymbol *MCSym;
 
   if (RCPV->isGlobalValue()) {
@@ -1211,7 +1211,7 @@ void RISCVAsmPrinter::emitMachineConstantPoolValue(
   OutStreamer->emitValue(Expr, Size);
 }
 
-char RISCVAsmPrinter::ID = 0;
+char CapstoneAsmPrinter::ID = 0;
 
-INITIALIZE_PASS(RISCVAsmPrinter, "riscv-asm-printer", "RISC-V Assembly Printer",
+INITIALIZE_PASS(CapstoneAsmPrinter, "capstone-asm-printer", "Capstone Assembly Printer",
                 false, false)

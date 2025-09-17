@@ -1,4 +1,4 @@
-//===- RISCVOptWInstrs.cpp - MI W instruction optimizations ---------------===//
+//===- CapstoneOptWInstrs.cpp - MI W instruction optimizations ---------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -32,9 +32,9 @@
 //    * ld/lwu.
 //===---------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVMachineFunctionInfo.h"
-#include "RISCVSubtarget.h"
+#include "Capstone.h"
+#include "CapstoneMachineFunctionInfo.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -42,8 +42,8 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-opt-w-instrs"
-#define RISCV_OPT_W_INSTRS_NAME "RISC-V Optimize W Instructions"
+#define DEBUG_TYPE "capstone-opt-w-instrs"
+#define Capstone_OPT_W_INSTRS_NAME "Capstone Optimize W Instructions"
 
 STATISTIC(NumRemovedSExtW, "Number of removed sign-extensions");
 STATISTIC(NumTransformedToWInstrs,
@@ -51,26 +51,26 @@ STATISTIC(NumTransformedToWInstrs,
 STATISTIC(NumTransformedToNonWInstrs,
           "Number of instructions transformed to non-W-ops");
 
-static cl::opt<bool> DisableSExtWRemoval("riscv-disable-sextw-removal",
+static cl::opt<bool> DisableSExtWRemoval("capstone-disable-sextw-removal",
                                          cl::desc("Disable removal of sext.w"),
                                          cl::init(false), cl::Hidden);
-static cl::opt<bool> DisableStripWSuffix("riscv-disable-strip-w-suffix",
+static cl::opt<bool> DisableStripWSuffix("capstone-disable-strip-w-suffix",
                                          cl::desc("Disable strip W suffix"),
                                          cl::init(false), cl::Hidden);
 
 namespace {
 
-class RISCVOptWInstrs : public MachineFunctionPass {
+class CapstoneOptWInstrs : public MachineFunctionPass {
 public:
   static char ID;
 
-  RISCVOptWInstrs() : MachineFunctionPass(ID) {}
+  CapstoneOptWInstrs() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
-  bool removeSExtWInstrs(MachineFunction &MF, const RISCVInstrInfo &TII,
-                         const RISCVSubtarget &ST, MachineRegisterInfo &MRI);
-  bool canonicalizeWSuffixes(MachineFunction &MF, const RISCVInstrInfo &TII,
-                             const RISCVSubtarget &ST,
+  bool removeSExtWInstrs(MachineFunction &MF, const CapstoneInstrInfo &TII,
+                         const CapstoneSubtarget &ST, MachineRegisterInfo &MRI);
+  bool canonicalizeWSuffixes(MachineFunction &MF, const CapstoneInstrInfo &TII,
+                             const CapstoneSubtarget &ST,
                              MachineRegisterInfo &MRI);
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
@@ -78,39 +78,39 @@ public:
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
-  StringRef getPassName() const override { return RISCV_OPT_W_INSTRS_NAME; }
+  StringRef getPassName() const override { return Capstone_OPT_W_INSTRS_NAME; }
 };
 
 } // end anonymous namespace
 
-char RISCVOptWInstrs::ID = 0;
-INITIALIZE_PASS(RISCVOptWInstrs, DEBUG_TYPE, RISCV_OPT_W_INSTRS_NAME, false,
+char CapstoneOptWInstrs::ID = 0;
+INITIALIZE_PASS(CapstoneOptWInstrs, DEBUG_TYPE, Capstone_OPT_W_INSTRS_NAME, false,
                 false)
 
-FunctionPass *llvm::createRISCVOptWInstrsPass() {
-  return new RISCVOptWInstrs();
+FunctionPass *llvm::createCapstoneOptWInstrsPass() {
+  return new CapstoneOptWInstrs();
 }
 
 static bool vectorPseudoHasAllNBitUsers(const MachineOperand &UserOp,
                                         unsigned Bits) {
   const MachineInstr &MI = *UserOp.getParent();
-  unsigned MCOpcode = RISCV::getRVVMCOpcode(MI.getOpcode());
+  unsigned MCOpcode = Capstone::getRVVMCOpcode(MI.getOpcode());
 
   if (!MCOpcode)
     return false;
 
   const MCInstrDesc &MCID = MI.getDesc();
   const uint64_t TSFlags = MCID.TSFlags;
-  if (!RISCVII::hasSEWOp(TSFlags))
+  if (!CapstoneII::hasSEWOp(TSFlags))
     return false;
-  assert(RISCVII::hasVLOp(TSFlags));
-  const unsigned Log2SEW = MI.getOperand(RISCVII::getSEWOpNum(MCID)).getImm();
+  assert(CapstoneII::hasVLOp(TSFlags));
+  const unsigned Log2SEW = MI.getOperand(CapstoneII::getSEWOpNum(MCID)).getImm();
 
-  if (UserOp.getOperandNo() == RISCVII::getVLOpNum(MCID))
+  if (UserOp.getOperandNo() == CapstoneII::getVLOpNum(MCID))
     return false;
 
   auto NumDemandedBits =
-      RISCV::getVectorLowDemandedScalarBits(MCOpcode, Log2SEW);
+      Capstone::getVectorLowDemandedScalarBits(MCOpcode, Log2SEW);
   return NumDemandedBits && Bits >= *NumDemandedBits;
 }
 
@@ -118,7 +118,7 @@ static bool vectorPseudoHasAllNBitUsers(const MachineOperand &UserOp,
 // instruction's result.
 // TODO: handle multiple interdependent transformations
 static bool hasAllNBitUsers(const MachineInstr &OrigMI,
-                            const RISCVSubtarget &ST,
+                            const CapstoneSubtarget &ST,
                             const MachineRegisterInfo &MRI, unsigned OrigBits) {
 
   SmallSet<std::pair<const MachineInstr *, unsigned>, 4> Visited;
@@ -152,63 +152,63 @@ static bool hasAllNBitUsers(const MachineInstr &OrigMI,
           break;
         return false;
 
-      case RISCV::ADDIW:
-      case RISCV::ADDW:
-      case RISCV::DIVUW:
-      case RISCV::DIVW:
-      case RISCV::MULW:
-      case RISCV::REMUW:
-      case RISCV::REMW:
-      case RISCV::SLLW:
-      case RISCV::SRAIW:
-      case RISCV::SRAW:
-      case RISCV::SRLIW:
-      case RISCV::SRLW:
-      case RISCV::SUBW:
-      case RISCV::ROLW:
-      case RISCV::RORW:
-      case RISCV::RORIW:
-      case RISCV::CLZW:
-      case RISCV::CTZW:
-      case RISCV::CPOPW:
-      case RISCV::SLLI_UW:
-      case RISCV::FMV_W_X:
-      case RISCV::FCVT_H_W:
-      case RISCV::FCVT_H_W_INX:
-      case RISCV::FCVT_H_WU:
-      case RISCV::FCVT_H_WU_INX:
-      case RISCV::FCVT_S_W:
-      case RISCV::FCVT_S_W_INX:
-      case RISCV::FCVT_S_WU:
-      case RISCV::FCVT_S_WU_INX:
-      case RISCV::FCVT_D_W:
-      case RISCV::FCVT_D_W_INX:
-      case RISCV::FCVT_D_WU:
-      case RISCV::FCVT_D_WU_INX:
+      case Capstone::ADDIW:
+      case Capstone::ADDW:
+      case Capstone::DIVUW:
+      case Capstone::DIVW:
+      case Capstone::MULW:
+      case Capstone::REMUW:
+      case Capstone::REMW:
+      case Capstone::SLLW:
+      case Capstone::SRAIW:
+      case Capstone::SRAW:
+      case Capstone::SRLIW:
+      case Capstone::SRLW:
+      case Capstone::SUBW:
+      case Capstone::ROLW:
+      case Capstone::RORW:
+      case Capstone::RORIW:
+      case Capstone::CLZW:
+      case Capstone::CTZW:
+      case Capstone::CPOPW:
+      case Capstone::SLLI_UW:
+      case Capstone::FMV_W_X:
+      case Capstone::FCVT_H_W:
+      case Capstone::FCVT_H_W_INX:
+      case Capstone::FCVT_H_WU:
+      case Capstone::FCVT_H_WU_INX:
+      case Capstone::FCVT_S_W:
+      case Capstone::FCVT_S_W_INX:
+      case Capstone::FCVT_S_WU:
+      case Capstone::FCVT_S_WU_INX:
+      case Capstone::FCVT_D_W:
+      case Capstone::FCVT_D_W_INX:
+      case Capstone::FCVT_D_WU:
+      case Capstone::FCVT_D_WU_INX:
         if (Bits >= 32)
           break;
         return false;
 
-      case RISCV::SEXT_B:
-      case RISCV::PACKH:
+      case Capstone::SEXT_B:
+      case Capstone::PACKH:
         if (Bits >= 8)
           break;
         return false;
-      case RISCV::SEXT_H:
-      case RISCV::FMV_H_X:
-      case RISCV::ZEXT_H_RV32:
-      case RISCV::ZEXT_H_RV64:
-      case RISCV::PACKW:
+      case Capstone::SEXT_H:
+      case Capstone::FMV_H_X:
+      case Capstone::ZEXT_H_RV32:
+      case Capstone::ZEXT_H_RV64:
+      case Capstone::PACKW:
         if (Bits >= 16)
           break;
         return false;
 
-      case RISCV::PACK:
+      case Capstone::PACK:
         if (Bits >= (ST.getXLen() / 2))
           break;
         return false;
 
-      case RISCV::SRLI: {
+      case Capstone::SRLI: {
         // If we are shifting right by less than Bits, and users don't demand
         // any bits that were shifted into [Bits-1:0], then we can consider this
         // as an N-Bit user.
@@ -222,14 +222,14 @@ static bool hasAllNBitUsers(const MachineInstr &OrigMI,
 
       // these overwrite higher input bits, otherwise the lower word of output
       // depends only on the lower word of input. So check their uses read W.
-      case RISCV::SLLI: {
+      case Capstone::SLLI: {
         unsigned ShAmt = UserMI->getOperand(2).getImm();
         if (Bits >= (ST.getXLen() - ShAmt))
           break;
         Worklist.emplace_back(UserMI, Bits + ShAmt);
         break;
       }
-      case RISCV::SLLIW: {
+      case Capstone::SLLIW: {
         unsigned ShAmt = UserMI->getOperand(2).getImm();
         if (Bits >= 32 - ShAmt)
           break;
@@ -237,14 +237,14 @@ static bool hasAllNBitUsers(const MachineInstr &OrigMI,
         break;
       }
 
-      case RISCV::ANDI: {
+      case Capstone::ANDI: {
         uint64_t Imm = UserMI->getOperand(2).getImm();
         if (Bits >= (unsigned)llvm::bit_width(Imm))
           break;
         Worklist.emplace_back(UserMI, Bits);
         break;
       }
-      case RISCV::ORI: {
+      case Capstone::ORI: {
         uint64_t Imm = UserMI->getOperand(2).getImm();
         if (Bits >= (unsigned)llvm::bit_width<uint64_t>(~Imm))
           break;
@@ -252,10 +252,10 @@ static bool hasAllNBitUsers(const MachineInstr &OrigMI,
         break;
       }
 
-      case RISCV::SLL:
-      case RISCV::BSET:
-      case RISCV::BCLR:
-      case RISCV::BINV:
+      case Capstone::SLL:
+      case Capstone::BSET:
+      case Capstone::BCLR:
+      case Capstone::BINV:
         // Operand 2 is the shift amount which uses log2(xlen) bits.
         if (OpIdx == 2) {
           if (Bits >= Log2_32(ST.getXLen()))
@@ -265,41 +265,41 @@ static bool hasAllNBitUsers(const MachineInstr &OrigMI,
         Worklist.emplace_back(UserMI, Bits);
         break;
 
-      case RISCV::SRA:
-      case RISCV::SRL:
-      case RISCV::ROL:
-      case RISCV::ROR:
+      case Capstone::SRA:
+      case Capstone::SRL:
+      case Capstone::ROL:
+      case Capstone::ROR:
         // Operand 2 is the shift amount which uses 6 bits.
         if (OpIdx == 2 && Bits >= Log2_32(ST.getXLen()))
           break;
         return false;
 
-      case RISCV::ADD_UW:
-      case RISCV::SH1ADD_UW:
-      case RISCV::SH2ADD_UW:
-      case RISCV::SH3ADD_UW:
+      case Capstone::ADD_UW:
+      case Capstone::SH1ADD_UW:
+      case Capstone::SH2ADD_UW:
+      case Capstone::SH3ADD_UW:
         // Operand 1 is implicitly zero extended.
         if (OpIdx == 1 && Bits >= 32)
           break;
         Worklist.emplace_back(UserMI, Bits);
         break;
 
-      case RISCV::BEXTI:
+      case Capstone::BEXTI:
         if (UserMI->getOperand(2).getImm() >= Bits)
           return false;
         break;
 
-      case RISCV::SB:
+      case Capstone::SB:
         // The first argument is the value to store.
         if (OpIdx == 0 && Bits >= 8)
           break;
         return false;
-      case RISCV::SH:
+      case Capstone::SH:
         // The first argument is the value to store.
         if (OpIdx == 0 && Bits >= 16)
           break;
         return false;
-      case RISCV::SW:
+      case Capstone::SW:
         // The first argument is the value to store.
         if (OpIdx == 0 && Bits >= 32)
           break;
@@ -307,39 +307,39 @@ static bool hasAllNBitUsers(const MachineInstr &OrigMI,
 
       // For these, lower word of output in these operations, depends only on
       // the lower word of input. So, we check all uses only read lower word.
-      case RISCV::COPY:
-      case RISCV::PHI:
+      case Capstone::COPY:
+      case Capstone::PHI:
 
-      case RISCV::ADD:
-      case RISCV::ADDI:
-      case RISCV::AND:
-      case RISCV::MUL:
-      case RISCV::OR:
-      case RISCV::SUB:
-      case RISCV::XOR:
-      case RISCV::XORI:
+      case Capstone::ADD:
+      case Capstone::ADDI:
+      case Capstone::AND:
+      case Capstone::MUL:
+      case Capstone::OR:
+      case Capstone::SUB:
+      case Capstone::XOR:
+      case Capstone::XORI:
 
-      case RISCV::ANDN:
-      case RISCV::CLMUL:
-      case RISCV::ORN:
-      case RISCV::SH1ADD:
-      case RISCV::SH2ADD:
-      case RISCV::SH3ADD:
-      case RISCV::XNOR:
-      case RISCV::BSETI:
-      case RISCV::BCLRI:
-      case RISCV::BINVI:
+      case Capstone::ANDN:
+      case Capstone::CLMUL:
+      case Capstone::ORN:
+      case Capstone::SH1ADD:
+      case Capstone::SH2ADD:
+      case Capstone::SH3ADD:
+      case Capstone::XNOR:
+      case Capstone::BSETI:
+      case Capstone::BCLRI:
+      case Capstone::BINVI:
         Worklist.emplace_back(UserMI, Bits);
         break;
 
-      case RISCV::BREV8:
-      case RISCV::ORC_B:
+      case Capstone::BREV8:
+      case Capstone::ORC_B:
         // BREV8 and ORC_B work on bytes. Round Bits down to the nearest byte.
         Worklist.emplace_back(UserMI, alignDown(Bits, 8));
         break;
 
-      case RISCV::PseudoCCMOVGPR:
-      case RISCV::PseudoCCMOVGPRNoX0:
+      case Capstone::PseudoCCMOVGPR:
+      case Capstone::PseudoCCMOVGPRNoX0:
         // Either operand 4 or operand 5 is returned by this instruction. If
         // only the lower word of the result is used, then only the lower word
         // of operand 4 and 5 is used.
@@ -348,16 +348,16 @@ static bool hasAllNBitUsers(const MachineInstr &OrigMI,
         Worklist.emplace_back(UserMI, Bits);
         break;
 
-      case RISCV::CZERO_EQZ:
-      case RISCV::CZERO_NEZ:
-      case RISCV::VT_MASKC:
-      case RISCV::VT_MASKCN:
+      case Capstone::CZERO_EQZ:
+      case Capstone::CZERO_NEZ:
+      case Capstone::VT_MASKC:
+      case Capstone::VT_MASKCN:
         if (OpIdx != 1)
           return false;
         Worklist.emplace_back(UserMI, Bits);
         break;
-      case RISCV::TH_EXT:
-      case RISCV::TH_EXTU:
+      case Capstone::TH_EXT:
+      case Capstone::TH_EXTU:
         unsigned Msb = UserMI->getOperand(2).getImm();
         unsigned Lsb = UserMI->getOperand(3).getImm();
         // Behavior of Msb < Lsb is not well documented.
@@ -371,7 +371,7 @@ static bool hasAllNBitUsers(const MachineInstr &OrigMI,
   return true;
 }
 
-static bool hasAllWUsers(const MachineInstr &OrigMI, const RISCVSubtarget &ST,
+static bool hasAllWUsers(const MachineInstr &OrigMI, const CapstoneSubtarget &ST,
                          const MachineRegisterInfo &MRI) {
   return hasAllNBitUsers(OrigMI, ST, MRI, 32);
 }
@@ -382,47 +382,47 @@ static bool isSignExtendingOpW(const MachineInstr &MI, unsigned OpNo) {
   uint64_t TSFlags = MI.getDesc().TSFlags;
 
   // Instructions that can be determined from opcode are marked in tablegen.
-  if (TSFlags & RISCVII::IsSignExtendingOpWMask)
+  if (TSFlags & CapstoneII::IsSignExtendingOpWMask)
     return true;
 
   // Special cases that require checking operands.
   switch (MI.getOpcode()) {
   // shifting right sufficiently makes the value 32-bit sign-extended
-  case RISCV::SRAI:
+  case Capstone::SRAI:
     return MI.getOperand(2).getImm() >= 32;
-  case RISCV::SRLI:
+  case Capstone::SRLI:
     return MI.getOperand(2).getImm() > 32;
   // The LI pattern ADDI rd, X0, imm is sign extended.
-  case RISCV::ADDI:
-    return MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == RISCV::X0;
+  case Capstone::ADDI:
+    return MI.getOperand(1).isReg() && MI.getOperand(1).getReg() == Capstone::X0;
   // An ANDI with an 11 bit immediate will zero bits 63:11.
-  case RISCV::ANDI:
+  case Capstone::ANDI:
     return isUInt<11>(MI.getOperand(2).getImm());
   // An ORI with an >11 bit immediate (negative 12-bit) will set bits 63:11.
-  case RISCV::ORI:
+  case Capstone::ORI:
     return !isUInt<11>(MI.getOperand(2).getImm());
   // A bseti with X0 is sign extended if the immediate is less than 31.
-  case RISCV::BSETI:
+  case Capstone::BSETI:
     return MI.getOperand(2).getImm() < 31 &&
-           MI.getOperand(1).getReg() == RISCV::X0;
+           MI.getOperand(1).getReg() == Capstone::X0;
   // Copying from X0 produces zero.
-  case RISCV::COPY:
-    return MI.getOperand(1).getReg() == RISCV::X0;
+  case Capstone::COPY:
+    return MI.getOperand(1).getReg() == Capstone::X0;
   // Ignore the scratch register destination.
-  case RISCV::PseudoAtomicLoadNand32:
+  case Capstone::PseudoAtomicLoadNand32:
     return OpNo == 0;
-  case RISCV::PseudoVMV_X_S: {
+  case Capstone::PseudoVMV_X_S: {
     // vmv.x.s has at least 33 sign bits if log2(sew) <= 5.
     int64_t Log2SEW = MI.getOperand(2).getImm();
     assert(Log2SEW >= 3 && Log2SEW <= 6 && "Unexpected Log2SEW");
     return Log2SEW <= 5;
   }
-  case RISCV::TH_EXT: {
+  case Capstone::TH_EXT: {
     unsigned Msb = MI.getOperand(2).getImm();
     unsigned Lsb = MI.getOperand(3).getImm();
     return Msb >= Lsb && (Msb - Lsb + 1) <= 32;
   }
-  case RISCV::TH_EXTU: {
+  case Capstone::TH_EXTU: {
     unsigned Msb = MI.getOperand(2).getImm();
     unsigned Lsb = MI.getOperand(3).getImm();
     return Msb >= Lsb && (Msb - Lsb + 1) < 32;
@@ -432,7 +432,7 @@ static bool isSignExtendingOpW(const MachineInstr &MI, unsigned OpNo) {
   return false;
 }
 
-static bool isSignExtendedW(Register SrcReg, const RISCVSubtarget &ST,
+static bool isSignExtendedW(Register SrcReg, const CapstoneSubtarget &ST,
                             const MachineRegisterInfo &MRI,
                             SmallPtrSetImpl<MachineInstr *> &FixableDef) {
   SmallSet<Register, 4> Visited;
@@ -471,10 +471,10 @@ static bool isSignExtendedW(Register SrcReg, const RISCVSubtarget &ST,
     default:
       // Unknown opcode, give up.
       return false;
-    case RISCV::COPY: {
+    case Capstone::COPY: {
       const MachineFunction *MF = MI->getMF();
-      const RISCVMachineFunctionInfo *RVFI =
-          MF->getInfo<RISCVMachineFunctionInfo>();
+      const CapstoneMachineFunctionInfo *RVFI =
+          MF->getInfo<CapstoneMachineFunctionInfo>();
 
       // If this is the entry block and the register is livein, see if we know
       // it is sign extended.
@@ -485,7 +485,7 @@ static bool isSignExtendedW(Register SrcReg, const RISCVSubtarget &ST,
       }
 
       Register CopySrcReg = MI->getOperand(1).getReg();
-      if (CopySrcReg == RISCV::X10) {
+      if (CopySrcReg == Capstone::X10) {
         // For a method return value, we check the ZExt/SExt flags in attribute.
         // We assume the following code sequence for method call.
         // PseudoCALL @bar, ...
@@ -497,7 +497,7 @@ static bool isSignExtendedW(Register SrcReg, const RISCVSubtarget &ST,
         const MachineBasicBlock *MBB = MI->getParent();
         auto II = MI->getIterator();
         if (II == MBB->instr_begin() ||
-            (--II)->getOpcode() != RISCV::ADJCALLSTACKUP)
+            (--II)->getOpcode() != Capstone::ADJCALLSTACKUP)
           return false;
 
         const MachineInstr &CallMI = *(--II);
@@ -527,17 +527,17 @@ static bool isSignExtendedW(Register SrcReg, const RISCVSubtarget &ST,
     }
 
     // For these, we just need to check if the 1st operand is sign extended.
-    case RISCV::BCLRI:
-    case RISCV::BINVI:
-    case RISCV::BSETI:
+    case Capstone::BCLRI:
+    case Capstone::BINVI:
+    case Capstone::BSETI:
       if (MI->getOperand(2).getImm() >= 31)
         return false;
       [[fallthrough]];
-    case RISCV::REM:
-    case RISCV::ANDI:
-    case RISCV::ORI:
-    case RISCV::XORI:
-    case RISCV::SRAI:
+    case Capstone::REM:
+    case Capstone::ANDI:
+    case Capstone::ORI:
+    case Capstone::XORI:
+    case Capstone::SRAI:
       // |Remainder| is always <= |Dividend|. If D is 32-bit, then so is R.
       // DIV doesn't work because of the edge case 0xf..f 8000 0000 / (long)-1
       // Logical operations use a sign extended 12-bit immediate.
@@ -546,40 +546,40 @@ static bool isSignExtendedW(Register SrcReg, const RISCVSubtarget &ST,
         return false;
 
       break;
-    case RISCV::PseudoCCADDW:
-    case RISCV::PseudoCCADDIW:
-    case RISCV::PseudoCCSUBW:
-    case RISCV::PseudoCCSLLW:
-    case RISCV::PseudoCCSRLW:
-    case RISCV::PseudoCCSRAW:
-    case RISCV::PseudoCCSLLIW:
-    case RISCV::PseudoCCSRLIW:
-    case RISCV::PseudoCCSRAIW:
+    case Capstone::PseudoCCADDW:
+    case Capstone::PseudoCCADDIW:
+    case Capstone::PseudoCCSUBW:
+    case Capstone::PseudoCCSLLW:
+    case Capstone::PseudoCCSRLW:
+    case Capstone::PseudoCCSRAW:
+    case Capstone::PseudoCCSLLIW:
+    case Capstone::PseudoCCSRLIW:
+    case Capstone::PseudoCCSRAIW:
       // Returns operand 4 or an ADDW/SUBW/etc. of operands 5 and 6. We only
       // need to check if operand 4 is sign extended.
       if (!AddRegToWorkList(MI->getOperand(4).getReg()))
         return false;
       break;
-    case RISCV::REMU:
-    case RISCV::AND:
-    case RISCV::OR:
-    case RISCV::XOR:
-    case RISCV::ANDN:
-    case RISCV::ORN:
-    case RISCV::XNOR:
-    case RISCV::MAX:
-    case RISCV::MAXU:
-    case RISCV::MIN:
-    case RISCV::MINU:
-    case RISCV::PseudoCCMOVGPR:
-    case RISCV::PseudoCCMOVGPRNoX0:
-    case RISCV::PseudoCCAND:
-    case RISCV::PseudoCCOR:
-    case RISCV::PseudoCCXOR:
-    case RISCV::PseudoCCANDN:
-    case RISCV::PseudoCCORN:
-    case RISCV::PseudoCCXNOR:
-    case RISCV::PHI: {
+    case Capstone::REMU:
+    case Capstone::AND:
+    case Capstone::OR:
+    case Capstone::XOR:
+    case Capstone::ANDN:
+    case Capstone::ORN:
+    case Capstone::XNOR:
+    case Capstone::MAX:
+    case Capstone::MAXU:
+    case Capstone::MIN:
+    case Capstone::MINU:
+    case Capstone::PseudoCCMOVGPR:
+    case Capstone::PseudoCCMOVGPRNoX0:
+    case Capstone::PseudoCCAND:
+    case Capstone::PseudoCCOR:
+    case Capstone::PseudoCCXOR:
+    case Capstone::PseudoCCANDN:
+    case Capstone::PseudoCCORN:
+    case Capstone::PseudoCCXNOR:
+    case Capstone::PHI: {
       // If all incoming values are sign-extended, the output of AND, OR, XOR,
       // MIN, MAX, or PHI is also sign-extended.
 
@@ -589,21 +589,21 @@ static bool isSignExtendedW(Register SrcReg, const RISCVSubtarget &ST,
       // The input registers for others are operand 1 and 2.
       unsigned B = 1, E = 3, D = 1;
       switch (MI->getOpcode()) {
-      case RISCV::PHI:
+      case Capstone::PHI:
         E = MI->getNumOperands();
         D = 2;
         break;
-      case RISCV::PseudoCCMOVGPR:
-      case RISCV::PseudoCCMOVGPRNoX0:
+      case Capstone::PseudoCCMOVGPR:
+      case Capstone::PseudoCCMOVGPRNoX0:
         B = 4;
         E = 6;
         break;
-      case RISCV::PseudoCCAND:
-      case RISCV::PseudoCCOR:
-      case RISCV::PseudoCCXOR:
-      case RISCV::PseudoCCANDN:
-      case RISCV::PseudoCCORN:
-      case RISCV::PseudoCCXNOR:
+      case Capstone::PseudoCCAND:
+      case Capstone::PseudoCCOR:
+      case Capstone::PseudoCCXOR:
+      case Capstone::PseudoCCANDN:
+      case Capstone::PseudoCCORN:
+      case Capstone::PseudoCCXNOR:
         B = 4;
         E = 7;
         break;
@@ -620,20 +620,20 @@ static bool isSignExtendedW(Register SrcReg, const RISCVSubtarget &ST,
       break;
     }
 
-    case RISCV::CZERO_EQZ:
-    case RISCV::CZERO_NEZ:
-    case RISCV::VT_MASKC:
-    case RISCV::VT_MASKCN:
+    case Capstone::CZERO_EQZ:
+    case Capstone::CZERO_NEZ:
+    case Capstone::VT_MASKC:
+    case Capstone::VT_MASKCN:
       // Instructions return zero or operand 1. Result is sign extended if
       // operand 1 is sign extended.
       if (!AddRegToWorkList(MI->getOperand(1).getReg()))
         return false;
       break;
 
-    case RISCV::ADDI: {
+    case Capstone::ADDI: {
       if (MI->getOperand(1).isReg() && MI->getOperand(1).getReg().isVirtual()) {
         if (MachineInstr *SrcMI = MRI.getVRegDef(MI->getOperand(1).getReg())) {
-          if (SrcMI->getOpcode() == RISCV::LUI &&
+          if (SrcMI->getOpcode() == Capstone::LUI &&
               SrcMI->getOperand(1).isImm()) {
             uint64_t Imm = SrcMI->getOperand(1).getImm();
             Imm = SignExtend64<32>(Imm << 12);
@@ -653,16 +653,16 @@ static bool isSignExtendedW(Register SrcReg, const RISCVSubtarget &ST,
 
     // With these opcode, we can "fix" them with the W-version
     // if we know all users of the result only rely on bits 31:0
-    case RISCV::SLLI:
+    case Capstone::SLLI:
       // SLLIW reads the lowest 5 bits, while SLLI reads lowest 6 bits
       if (MI->getOperand(2).getImm() >= 32)
         return false;
       [[fallthrough]];
-    case RISCV::ADD:
-    case RISCV::LD:
-    case RISCV::LWU:
-    case RISCV::MUL:
-    case RISCV::SUB:
+    case Capstone::ADD:
+    case Capstone::LD:
+    case Capstone::LWU:
+    case Capstone::MUL:
+    case Capstone::SUB:
       if (hasAllWUsers(*MI, ST, MRI)) {
         FixableDef.insert(MI);
         break;
@@ -678,27 +678,27 @@ static bool isSignExtendedW(Register SrcReg, const RISCVSubtarget &ST,
 
 static unsigned getWOp(unsigned Opcode) {
   switch (Opcode) {
-  case RISCV::ADDI:
-    return RISCV::ADDIW;
-  case RISCV::ADD:
-    return RISCV::ADDW;
-  case RISCV::LD:
-  case RISCV::LWU:
-    return RISCV::LW;
-  case RISCV::MUL:
-    return RISCV::MULW;
-  case RISCV::SLLI:
-    return RISCV::SLLIW;
-  case RISCV::SUB:
-    return RISCV::SUBW;
+  case Capstone::ADDI:
+    return Capstone::ADDIW;
+  case Capstone::ADD:
+    return Capstone::ADDW;
+  case Capstone::LD:
+  case Capstone::LWU:
+    return Capstone::LW;
+  case Capstone::MUL:
+    return Capstone::MULW;
+  case Capstone::SLLI:
+    return Capstone::SLLIW;
+  case Capstone::SUB:
+    return Capstone::SUBW;
   default:
     llvm_unreachable("Unexpected opcode for replacement with W variant");
   }
 }
 
-bool RISCVOptWInstrs::removeSExtWInstrs(MachineFunction &MF,
-                                        const RISCVInstrInfo &TII,
-                                        const RISCVSubtarget &ST,
+bool CapstoneOptWInstrs::removeSExtWInstrs(MachineFunction &MF,
+                                        const CapstoneInstrInfo &TII,
+                                        const CapstoneSubtarget &ST,
                                         MachineRegisterInfo &MRI) {
   if (DisableSExtWRemoval)
     return false;
@@ -707,7 +707,7 @@ bool RISCVOptWInstrs::removeSExtWInstrs(MachineFunction &MF,
   for (MachineBasicBlock &MBB : MF) {
     for (MachineInstr &MI : llvm::make_early_inc_range(MBB)) {
       // We're looking for the sext.w pattern ADDIW rd, rs1, 0.
-      if (!RISCVInstrInfo::isSEXT_W(MI))
+      if (!CapstoneInstrInfo::isSEXT_W(MI))
         continue;
 
       Register SrcReg = MI.getOperand(1).getReg();
@@ -750,9 +750,9 @@ bool RISCVOptWInstrs::removeSExtWInstrs(MachineFunction &MF,
 
 // Strips or adds W suffixes to eligible instructions depending on the
 // subtarget preferences.
-bool RISCVOptWInstrs::canonicalizeWSuffixes(MachineFunction &MF,
-                                            const RISCVInstrInfo &TII,
-                                            const RISCVSubtarget &ST,
+bool CapstoneOptWInstrs::canonicalizeWSuffixes(MachineFunction &MF,
+                                            const CapstoneInstrInfo &TII,
+                                            const CapstoneSubtarget &ST,
                                             MachineRegisterInfo &MRI) {
   bool ShouldStripW = !(DisableStripWSuffix || ST.preferWInst());
   bool ShouldPreferW = ST.preferWInst();
@@ -766,42 +766,42 @@ bool RISCVOptWInstrs::canonicalizeWSuffixes(MachineFunction &MF,
       switch (OrigOpc) {
       default:
         continue;
-      case RISCV::ADDW:
-        NonWOpc = RISCV::ADD;
+      case Capstone::ADDW:
+        NonWOpc = Capstone::ADD;
         break;
-      case RISCV::ADDIW:
-        NonWOpc = RISCV::ADDI;
+      case Capstone::ADDIW:
+        NonWOpc = Capstone::ADDI;
         break;
-      case RISCV::MULW:
-        NonWOpc = RISCV::MUL;
+      case Capstone::MULW:
+        NonWOpc = Capstone::MUL;
         break;
-      case RISCV::SLLIW:
-        NonWOpc = RISCV::SLLI;
+      case Capstone::SLLIW:
+        NonWOpc = Capstone::SLLI;
         break;
-      case RISCV::SUBW:
-        NonWOpc = RISCV::SUB;
+      case Capstone::SUBW:
+        NonWOpc = Capstone::SUB;
         break;
-      case RISCV::ADD:
-        WOpc = RISCV::ADDW;
+      case Capstone::ADD:
+        WOpc = Capstone::ADDW;
         break;
-      case RISCV::ADDI:
-        WOpc = RISCV::ADDIW;
+      case Capstone::ADDI:
+        WOpc = Capstone::ADDIW;
         break;
-      case RISCV::SUB:
-        WOpc = RISCV::SUBW;
+      case Capstone::SUB:
+        WOpc = Capstone::SUBW;
         break;
-      case RISCV::MUL:
-        WOpc = RISCV::MULW;
+      case Capstone::MUL:
+        WOpc = Capstone::MULW;
         break;
-      case RISCV::SLLI:
+      case Capstone::SLLI:
         // SLLIW reads the lowest 5 bits, while SLLI reads lowest 6 bits.
         if (MI.getOperand(2).getImm() >= 32)
           continue;
-        WOpc = RISCV::SLLIW;
+        WOpc = Capstone::SLLIW;
         break;
-      case RISCV::LD:
-      case RISCV::LWU:
-        WOpc = RISCV::LW;
+      case Capstone::LD:
+      case Capstone::LWU:
+        WOpc = Capstone::LW;
         break;
       }
 
@@ -815,7 +815,7 @@ bool RISCVOptWInstrs::canonicalizeWSuffixes(MachineFunction &MF,
       }
       // LWU is always converted to LW when possible as 1) LW is compressible
       // and 2) it helps minimise differences vs RV32.
-      if ((ShouldPreferW || OrigOpc == RISCV::LWU) && WOpc.has_value() &&
+      if ((ShouldPreferW || OrigOpc == Capstone::LWU) && WOpc.has_value() &&
           hasAllWUsers(MI, ST, MRI)) {
         LLVM_DEBUG(dbgs() << "Replacing " << MI);
         MI.setDesc(TII.get(WOpc.value()));
@@ -832,13 +832,13 @@ bool RISCVOptWInstrs::canonicalizeWSuffixes(MachineFunction &MF,
   return MadeChange;
 }
 
-bool RISCVOptWInstrs::runOnMachineFunction(MachineFunction &MF) {
+bool CapstoneOptWInstrs::runOnMachineFunction(MachineFunction &MF) {
   if (skipFunction(MF.getFunction()))
     return false;
 
   MachineRegisterInfo &MRI = MF.getRegInfo();
-  const RISCVSubtarget &ST = MF.getSubtarget<RISCVSubtarget>();
-  const RISCVInstrInfo &TII = *ST.getInstrInfo();
+  const CapstoneSubtarget &ST = MF.getSubtarget<CapstoneSubtarget>();
+  const CapstoneInstrInfo &TII = *ST.getInstrInfo();
 
   if (!ST.is64Bit())
     return false;

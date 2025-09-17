@@ -1,4 +1,4 @@
-//===-- RISCVInsertWriteVXRM.cpp - Insert Write of RISC-V VXRM CSR --------===//
+//===-- CapstoneInsertWriteVXRM.cpp - Insert Write of Capstone VXRM CSR --------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -25,16 +25,16 @@
 // reduce the number of VXRM writes in some cases.
 //===----------------------------------------------------------------------===//
 
-#include "MCTargetDesc/RISCVBaseInfo.h"
-#include "RISCV.h"
-#include "RISCVSubtarget.h"
+#include "MCTargetDesc/CapstoneBaseInfo.h"
+#include "Capstone.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include <queue>
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-insert-write-vxrm"
-#define RISCV_INSERT_WRITE_VXRM_NAME "RISC-V Insert Write VXRM Pass"
+#define DEBUG_TYPE "capstone-insert-write-vxrm"
+#define Capstone_INSERT_WRITE_VXRM_NAME "Capstone Insert Write VXRM Pass"
 
 namespace {
 
@@ -191,7 +191,7 @@ struct BlockData {
   BlockData() = default;
 };
 
-class RISCVInsertWriteVXRM : public MachineFunctionPass {
+class CapstoneInsertWriteVXRM : public MachineFunctionPass {
   const TargetInstrInfo *TII;
 
   std::vector<BlockData> BlockInfo;
@@ -200,7 +200,7 @@ class RISCVInsertWriteVXRM : public MachineFunctionPass {
 public:
   static char ID;
 
-  RISCVInsertWriteVXRM() : MachineFunctionPass(ID) {}
+  CapstoneInsertWriteVXRM() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -210,7 +210,7 @@ public:
   }
 
   StringRef getPassName() const override {
-    return RISCV_INSERT_WRITE_VXRM_NAME;
+    return Capstone_INSERT_WRITE_VXRM_NAME;
   }
 
 private:
@@ -222,18 +222,18 @@ private:
 
 } // end anonymous namespace
 
-char RISCVInsertWriteVXRM::ID = 0;
+char CapstoneInsertWriteVXRM::ID = 0;
 
-INITIALIZE_PASS(RISCVInsertWriteVXRM, DEBUG_TYPE, RISCV_INSERT_WRITE_VXRM_NAME,
+INITIALIZE_PASS(CapstoneInsertWriteVXRM, DEBUG_TYPE, Capstone_INSERT_WRITE_VXRM_NAME,
                 false, false)
 
-bool RISCVInsertWriteVXRM::computeVXRMChanges(const MachineBasicBlock &MBB) {
+bool CapstoneInsertWriteVXRM::computeVXRMChanges(const MachineBasicBlock &MBB) {
   BlockData &BBInfo = BlockInfo[MBB.getNumber()];
 
   bool NeedVXRMWrite = false;
   for (const MachineInstr &MI : MBB) {
-    int VXRMIdx = RISCVII::getVXRMOpNum(MI.getDesc());
-    if (VXRMIdx >= 0 && !RISCVInstrInfo::ignoresVXRM(MI)) {
+    int VXRMIdx = CapstoneII::getVXRMOpNum(MI.getDesc());
+    if (VXRMIdx >= 0 && !CapstoneInstrInfo::ignoresVXRM(MI)) {
       unsigned NewVXRMImm = MI.getOperand(VXRMIdx).getImm();
 
       if (!BBInfo.VXRMUse.isValid())
@@ -245,7 +245,7 @@ bool RISCVInsertWriteVXRM::computeVXRMChanges(const MachineBasicBlock &MBB) {
     }
 
     if (MI.isCall() || MI.isInlineAsm() ||
-        MI.modifiesRegister(RISCV::VXRM, /*TRI=*/nullptr)) {
+        MI.modifiesRegister(Capstone::VXRM, /*TRI=*/nullptr)) {
       if (!BBInfo.VXRMUse.isValid())
         BBInfo.VXRMUse.setUnknown();
 
@@ -256,7 +256,7 @@ bool RISCVInsertWriteVXRM::computeVXRMChanges(const MachineBasicBlock &MBB) {
   return NeedVXRMWrite;
 }
 
-void RISCVInsertWriteVXRM::computeAvailable(const MachineBasicBlock &MBB) {
+void CapstoneInsertWriteVXRM::computeAvailable(const MachineBasicBlock &MBB) {
   BlockData &BBInfo = BlockInfo[MBB.getNumber()];
 
   BBInfo.InQueue = false;
@@ -298,9 +298,9 @@ void RISCVInsertWriteVXRM::computeAvailable(const MachineBasicBlock &MBB) {
   }
 }
 
-void RISCVInsertWriteVXRM::computeAnticipated(const MachineFunction &MF, const MachineBasicBlock &MBB) {
+void CapstoneInsertWriteVXRM::computeAnticipated(const MachineFunction &MF, const MachineBasicBlock &MBB) {
   BlockData &BBInfo = BlockInfo[MBB.getNumber()];
-  const RISCVSubtarget &ST = MF.getSubtarget<RISCVSubtarget>();
+  const CapstoneSubtarget &ST = MF.getSubtarget<CapstoneSubtarget>();
 
   BBInfo.InQueue = false;
 
@@ -347,7 +347,7 @@ void RISCVInsertWriteVXRM::computeAnticipated(const MachineFunction &MF, const M
   }
 }
 
-void RISCVInsertWriteVXRM::emitWriteVXRM(MachineBasicBlock &MBB) {
+void CapstoneInsertWriteVXRM::emitWriteVXRM(MachineBasicBlock &MBB) {
   const BlockData &BBInfo = BlockInfo[MBB.getNumber()];
 
   VXRMInfo Info = BBInfo.AvailableIn;
@@ -390,8 +390,8 @@ void RISCVInsertWriteVXRM::emitWriteVXRM(MachineBasicBlock &MBB) {
   }
 
   for (MachineInstr &MI : MBB) {
-    int VXRMIdx = RISCVII::getVXRMOpNum(MI.getDesc());
-    if (VXRMIdx >= 0 && !RISCVInstrInfo::ignoresVXRM(MI)) {
+    int VXRMIdx = CapstoneII::getVXRMOpNum(MI.getDesc());
+    if (VXRMIdx >= 0 && !CapstoneInstrInfo::ignoresVXRM(MI)) {
       unsigned NewVXRMImm = MI.getOperand(VXRMIdx).getImm();
 
       if (PendingInsert || !Info.isStatic() ||
@@ -400,19 +400,19 @@ void RISCVInsertWriteVXRM::emitWriteVXRM(MachineBasicBlock &MBB) {
                 (Info.isStatic() && Info.getVXRMImm() == NewVXRMImm)) &&
                "Pending VXRM insertion mismatch");
         LLVM_DEBUG(dbgs() << "Inserting before "; MI.print(dbgs()));
-        BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(RISCV::WriteVXRMImm))
+        BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(Capstone::WriteVXRMImm))
             .addImm(NewVXRMImm);
         PendingInsert = false;
       }
 
-      MI.addOperand(MachineOperand::CreateReg(RISCV::VXRM, /*IsDef*/ false,
+      MI.addOperand(MachineOperand::CreateReg(Capstone::VXRM, /*IsDef*/ false,
                                               /*IsImp*/ true));
       Info.setVXRMImm(NewVXRMImm);
       continue;
     }
 
     if (MI.isCall() || MI.isInlineAsm() ||
-        MI.modifiesRegister(RISCV::VXRM, /*TRI=*/nullptr))
+        MI.modifiesRegister(Capstone::VXRM, /*TRI=*/nullptr))
       Info.setUnknown();
   }
 
@@ -432,14 +432,14 @@ void RISCVInsertWriteVXRM::emitWriteVXRM(MachineBasicBlock &MBB) {
     LLVM_DEBUG(dbgs() << "Inserting at end of " << printMBBReference(MBB)
                       << " changing to " << BBInfo.AnticipatedOut << "\n");
     BuildMI(MBB, MBB.getFirstTerminator(), DebugLoc(),
-            TII->get(RISCV::WriteVXRMImm))
+            TII->get(Capstone::WriteVXRMImm))
         .addImm(BBInfo.AnticipatedOut.getVXRMImm());
   }
 }
 
-bool RISCVInsertWriteVXRM::runOnMachineFunction(MachineFunction &MF) {
+bool CapstoneInsertWriteVXRM::runOnMachineFunction(MachineFunction &MF) {
   // Skip if the vector extension is not enabled.
-  const RISCVSubtarget &ST = MF.getSubtarget<RISCVSubtarget>();
+  const CapstoneSubtarget &ST = MF.getSubtarget<CapstoneSubtarget>();
   if (!ST.hasVInstructions())
     return false;
 
@@ -489,6 +489,6 @@ bool RISCVInsertWriteVXRM::runOnMachineFunction(MachineFunction &MF) {
   return true;
 }
 
-FunctionPass *llvm::createRISCVInsertWriteVXRMPass() {
-  return new RISCVInsertWriteVXRM();
+FunctionPass *llvm::createCapstoneInsertWriteVXRMPass() {
+  return new CapstoneInsertWriteVXRM();
 }

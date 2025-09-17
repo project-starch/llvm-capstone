@@ -1,4 +1,4 @@
-//===-- RISCVLateBranchOpt.cpp - Late Stage Branch Optimization -----------===//
+//===-- CapstoneLateBranchOpt.cpp - Late Stage Branch Optimization -----------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,27 +6,27 @@
 //
 //===----------------------------------------------------------------------===//
 ///
-/// This file provides RISC-V specific target optimizations, currently it's
+/// This file provides Capstone specific target optimizations, currently it's
 /// limited to convert conditional branches into unconditional branches when
 /// the condition can be statically evaluated.
 ///
 //===----------------------------------------------------------------------===//
 
-#include "RISCVInstrInfo.h"
-#include "RISCVSubtarget.h"
+#include "CapstoneInstrInfo.h"
+#include "CapstoneSubtarget.h"
 
 using namespace llvm;
 
-#define RISCV_LATE_BRANCH_OPT_NAME "RISC-V Late Branch Optimisation Pass"
+#define Capstone_LATE_BRANCH_OPT_NAME "Capstone Late Branch Optimisation Pass"
 
 namespace {
 
-struct RISCVLateBranchOpt : public MachineFunctionPass {
+struct CapstoneLateBranchOpt : public MachineFunctionPass {
   static char ID;
 
-  RISCVLateBranchOpt() : MachineFunctionPass(ID) {}
+  CapstoneLateBranchOpt() : MachineFunctionPass(ID) {}
 
-  StringRef getPassName() const override { return RISCV_LATE_BRANCH_OPT_NAME; }
+  StringRef getPassName() const override { return Capstone_LATE_BRANCH_OPT_NAME; }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     MachineFunctionPass::getAnalysisUsage(AU);
@@ -37,15 +37,15 @@ struct RISCVLateBranchOpt : public MachineFunctionPass {
 private:
   bool runOnBasicBlock(MachineBasicBlock &MBB) const;
 
-  const RISCVInstrInfo *RII = nullptr;
+  const CapstoneInstrInfo *RII = nullptr;
 };
 } // namespace
 
-char RISCVLateBranchOpt::ID = 0;
-INITIALIZE_PASS(RISCVLateBranchOpt, "riscv-late-branch-opt",
-                RISCV_LATE_BRANCH_OPT_NAME, false, false)
+char CapstoneLateBranchOpt::ID = 0;
+INITIALIZE_PASS(CapstoneLateBranchOpt, "capstone-late-branch-opt",
+                Capstone_LATE_BRANCH_OPT_NAME, false, false)
 
-bool RISCVLateBranchOpt::runOnBasicBlock(MachineBasicBlock &MBB) const {
+bool CapstoneLateBranchOpt::runOnBasicBlock(MachineBasicBlock &MBB) const {
   MachineBasicBlock *TBB, *FBB;
   SmallVector<MachineOperand, 4> Cond;
   if (RII->analyzeBranch(MBB, TBB, FBB, Cond, /*AllowModify=*/false))
@@ -54,20 +54,20 @@ bool RISCVLateBranchOpt::runOnBasicBlock(MachineBasicBlock &MBB) const {
   if (!TBB || Cond.size() != 3)
     return false;
 
-  RISCVCC::CondCode CC = RISCVInstrInfo::getCondFromBranchOpc(Cond[0].getImm());
-  assert(CC != RISCVCC::COND_INVALID);
+  CapstoneCC::CondCode CC = CapstoneInstrInfo::getCondFromBranchOpc(Cond[0].getImm());
+  assert(CC != CapstoneCC::COND_INVALID);
 
   MachineRegisterInfo &MRI = MBB.getParent()->getRegInfo();
 
   // Try and convert a conditional branch that can be evaluated statically
   // into an unconditional branch.
   int64_t C0, C1;
-  if (!RISCVInstrInfo::isFromLoadImm(MRI, Cond[1], C0) ||
-      !RISCVInstrInfo::isFromLoadImm(MRI, Cond[2], C1))
+  if (!CapstoneInstrInfo::isFromLoadImm(MRI, Cond[1], C0) ||
+      !CapstoneInstrInfo::isFromLoadImm(MRI, Cond[2], C1))
     return false;
 
   MachineBasicBlock *Folded =
-      RISCVInstrInfo::evaluateCondBranch(CC, C0, C1) ? TBB : FBB;
+      CapstoneInstrInfo::evaluateCondBranch(CC, C0, C1) ? TBB : FBB;
 
   // At this point, its legal to optimize.
   RII->removeBranch(MBB);
@@ -93,11 +93,11 @@ bool RISCVLateBranchOpt::runOnBasicBlock(MachineBasicBlock &MBB) const {
   return true;
 }
 
-bool RISCVLateBranchOpt::runOnMachineFunction(MachineFunction &Fn) {
+bool CapstoneLateBranchOpt::runOnMachineFunction(MachineFunction &Fn) {
   if (skipFunction(Fn.getFunction()))
     return false;
 
-  auto &ST = Fn.getSubtarget<RISCVSubtarget>();
+  auto &ST = Fn.getSubtarget<CapstoneSubtarget>();
   RII = ST.getInstrInfo();
 
   bool Changed = false;
@@ -106,6 +106,6 @@ bool RISCVLateBranchOpt::runOnMachineFunction(MachineFunction &Fn) {
   return Changed;
 }
 
-FunctionPass *llvm::createRISCVLateBranchOptPass() {
-  return new RISCVLateBranchOpt();
+FunctionPass *llvm::createCapstoneLateBranchOptPass() {
+  return new CapstoneLateBranchOpt();
 }

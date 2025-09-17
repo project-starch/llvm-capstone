@@ -1,4 +1,4 @@
-//===-- RISCVAsmBackend.cpp - RISC-V Assembler Backend --------------------===//
+//===-- CapstoneAsmBackend.cpp - Capstone Assembler Backend --------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVAsmBackend.h"
-#include "RISCVFixupKinds.h"
+#include "CapstoneAsmBackend.h"
+#include "CapstoneFixupKinds.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCAssembler.h"
@@ -29,36 +29,36 @@ using namespace llvm;
 // which are abused by DWARF v5 DW_LLE_offset_pair/DW_RLE_offset_pair
 // implemented in Clang/LLVM.
 static cl::opt<bool> ULEB128Reloc(
-    "riscv-uleb128-reloc", cl::init(true), cl::Hidden,
-    cl::desc("Emit R_RISCV_SET_ULEB128/E_RISCV_SUB_ULEB128 if appropriate"));
+    "capstone-uleb128-reloc", cl::init(true), cl::Hidden,
+    cl::desc("Emit R_Capstone_SET_ULEB128/E_Capstone_SUB_ULEB128 if appropriate"));
 
 static cl::opt<bool>
-    AlignRvc("riscv-align-rvc", cl::init(true), cl::Hidden,
-             cl::desc("When generating R_RISCV_ALIGN, insert $alignment-2 "
+    AlignRvc("capstone-align-rvc", cl::init(true), cl::Hidden,
+             cl::desc("When generating R_Capstone_ALIGN, insert $alignment-2 "
                       "bytes of NOPs even in norvc code"));
 
-RISCVAsmBackend::RISCVAsmBackend(const MCSubtargetInfo &STI, uint8_t OSABI,
+CapstoneAsmBackend::CapstoneAsmBackend(const MCSubtargetInfo &STI, uint8_t OSABI,
                                  bool Is64Bit, bool IsLittleEndian,
                                  const MCTargetOptions &Options)
     : MCAsmBackend(IsLittleEndian ? llvm::endianness::little
                                   : llvm::endianness::big),
       STI(STI), OSABI(OSABI), Is64Bit(Is64Bit), TargetOptions(Options) {
-  RISCVFeatures::validate(STI.getTargetTriple(), STI.getFeatureBits());
+  CapstoneFeatures::validate(STI.getTargetTriple(), STI.getFeatureBits());
 }
 
-std::optional<MCFixupKind> RISCVAsmBackend::getFixupKind(StringRef Name) const {
+std::optional<MCFixupKind> CapstoneAsmBackend::getFixupKind(StringRef Name) const {
   if (STI.getTargetTriple().isOSBinFormatELF()) {
     unsigned Type;
     Type = llvm::StringSwitch<unsigned>(Name)
 #define ELF_RELOC(NAME, ID) .Case(#NAME, ID)
-#include "llvm/BinaryFormat/ELFRelocs/RISCV.def"
+#include "llvm/BinaryFormat/ELFRelocs/Capstone.def"
 #undef ELF_RELOC
-#define ELF_RISCV_NONSTANDARD_RELOC(_VENDOR, NAME, ID) .Case(#NAME, ID)
-#include "llvm/BinaryFormat/ELFRelocs/RISCV_nonstandard.def"
-#undef ELF_RISCV_NONSTANDARD_RELOC
-               .Case("BFD_RELOC_NONE", ELF::R_RISCV_NONE)
-               .Case("BFD_RELOC_32", ELF::R_RISCV_32)
-               .Case("BFD_RELOC_64", ELF::R_RISCV_64)
+#define ELF_Capstone_NONSTANDARD_RELOC(_VENDOR, NAME, ID) .Case(#NAME, ID)
+#include "llvm/BinaryFormat/ELFRelocs/Capstone_nonstandard.def"
+#undef ELF_Capstone_NONSTANDARD_RELOC
+               .Case("BFD_RELOC_NONE", ELF::R_Capstone_NONE)
+               .Case("BFD_RELOC_32", ELF::R_Capstone_32)
+               .Case("BFD_RELOC_64", ELF::R_Capstone_64)
                .Default(-1u);
     if (Type != -1u)
       return static_cast<MCFixupKind>(FirstLiteralRelocationKind + Type);
@@ -66,36 +66,36 @@ std::optional<MCFixupKind> RISCVAsmBackend::getFixupKind(StringRef Name) const {
   return std::nullopt;
 }
 
-MCFixupKindInfo RISCVAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
+MCFixupKindInfo CapstoneAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
   const static MCFixupKindInfo Infos[] = {
       // This table *must* be in the order that the fixup_* kinds are defined in
-      // RISCVFixupKinds.h.
+      // CapstoneFixupKinds.h.
       //
       // name                      offset bits  flags
-      {"fixup_riscv_hi20", 12, 20, 0},
-      {"fixup_riscv_lo12_i", 20, 12, 0},
-      {"fixup_riscv_12_i", 20, 12, 0},
-      {"fixup_riscv_lo12_s", 0, 32, 0},
-      {"fixup_riscv_pcrel_hi20", 12, 20, 0},
-      {"fixup_riscv_pcrel_lo12_i", 20, 12, 0},
-      {"fixup_riscv_pcrel_lo12_s", 0, 32, 0},
-      {"fixup_riscv_jal", 12, 20, 0},
-      {"fixup_riscv_branch", 0, 32, 0},
-      {"fixup_riscv_rvc_jump", 2, 11, 0},
-      {"fixup_riscv_rvc_branch", 0, 16, 0},
-      {"fixup_riscv_rvc_imm", 0, 16, 0},
-      {"fixup_riscv_call", 0, 64, 0},
-      {"fixup_riscv_call_plt", 0, 64, 0},
+      {"fixup_capstone_hi20", 12, 20, 0},
+      {"fixup_capstone_lo12_i", 20, 12, 0},
+      {"fixup_capstone_12_i", 20, 12, 0},
+      {"fixup_capstone_lo12_s", 0, 32, 0},
+      {"fixup_capstone_pcrel_hi20", 12, 20, 0},
+      {"fixup_capstone_pcrel_lo12_i", 20, 12, 0},
+      {"fixup_capstone_pcrel_lo12_s", 0, 32, 0},
+      {"fixup_capstone_jal", 12, 20, 0},
+      {"fixup_capstone_branch", 0, 32, 0},
+      {"fixup_capstone_rvc_jump", 2, 11, 0},
+      {"fixup_capstone_rvc_branch", 0, 16, 0},
+      {"fixup_capstone_rvc_imm", 0, 16, 0},
+      {"fixup_capstone_call", 0, 64, 0},
+      {"fixup_capstone_call_plt", 0, 64, 0},
 
-      {"fixup_riscv_qc_e_branch", 0, 48, 0},
-      {"fixup_riscv_qc_e_32", 16, 32, 0},
-      {"fixup_riscv_qc_abs20_u", 0, 32, 0},
-      {"fixup_riscv_qc_e_call_plt", 0, 48, 0},
+      {"fixup_capstone_qc_e_branch", 0, 48, 0},
+      {"fixup_capstone_qc_e_32", 16, 32, 0},
+      {"fixup_capstone_qc_abs20_u", 0, 32, 0},
+      {"fixup_capstone_qc_e_call_plt", 0, 48, 0},
 
       // Andes fixups
-      {"fixup_riscv_nds_branch_10", 0, 32, 0},
+      {"fixup_capstone_nds_branch_10", 0, 32, 0},
   };
-  static_assert((std::size(Infos)) == RISCV::NumTargetFixupKinds,
+  static_assert((std::size(Infos)) == Capstone::NumTargetFixupKinds,
                 "Not all fixup kinds added to Infos array");
 
   // Fixup kinds from raw relocation types and .reloc directives force
@@ -106,12 +106,12 @@ MCFixupKindInfo RISCVAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
   if (Kind < FirstTargetFixupKind)
     return MCAsmBackend::getFixupKindInfo(Kind);
 
-  assert(unsigned(Kind - FirstTargetFixupKind) < RISCV::NumTargetFixupKinds &&
+  assert(unsigned(Kind - FirstTargetFixupKind) < Capstone::NumTargetFixupKinds &&
          "Invalid kind!");
   return Infos[Kind - FirstTargetFixupKind];
 }
 
-bool RISCVAsmBackend::fixupNeedsRelaxationAdvanced(const MCFragment &,
+bool CapstoneAsmBackend::fixupNeedsRelaxationAdvanced(const MCFragment &,
                                                    const MCFixup &Fixup,
                                                    const MCValue &,
                                                    uint64_t Value,
@@ -126,24 +126,24 @@ bool RISCVAsmBackend::fixupNeedsRelaxationAdvanced(const MCFragment &,
   switch (Kind) {
   default:
     return false;
-  case RISCV::fixup_riscv_rvc_branch:
+  case Capstone::fixup_capstone_rvc_branch:
     // For compressed branch instructions the immediate must be
     // in the range [-256, 254].
     return Offset > 254 || Offset < -256;
-  case RISCV::fixup_riscv_rvc_jump:
+  case Capstone::fixup_capstone_rvc_jump:
     // For compressed jump instructions the immediate must be
     // in the range [-2048, 2046].
     return Offset > 2046 || Offset < -2048;
-  case RISCV::fixup_riscv_branch:
-  case RISCV::fixup_riscv_qc_e_branch:
+  case Capstone::fixup_capstone_branch:
+  case Capstone::fixup_capstone_qc_e_branch:
     // For conditional branch instructions the immediate must be
     // in the range [-4096, 4094].
     return Offset > 4094 || Offset < -4096;
-  case RISCV::fixup_riscv_jal:
+  case Capstone::fixup_capstone_jal:
     // For jump instructions the immediate must be in the range
     // [-1048576, 1048574]
     return Offset > 1048574 || Offset < -1048576;
-  case RISCV::fixup_riscv_rvc_imm:
+  case Capstone::fixup_capstone_rvc_imm:
     // This fixup can never be emitted as a relocation, so always needs to be
     // relaxed.
     return true;
@@ -156,17 +156,17 @@ bool RISCVAsmBackend::fixupNeedsRelaxationAdvanced(const MCFragment &,
 static unsigned getRelaxedOpcode(unsigned Opcode, ArrayRef<MCOperand> Operands,
                                  const MCSubtargetInfo &STI) {
   switch (Opcode) {
-  case RISCV::C_BEQZ:
-    return RISCV::BEQ;
-  case RISCV::C_BNEZ:
-    return RISCV::BNE;
-  case RISCV::C_J:
-  case RISCV::C_JAL: // fall through.
+  case Capstone::C_BEQZ:
+    return Capstone::BEQ;
+  case Capstone::C_BNEZ:
+    return Capstone::BNE;
+  case Capstone::C_J:
+  case Capstone::C_JAL: // fall through.
     // This only relaxes one "step" - i.e. from C.J to JAL, not from C.J to
     // QC.E.J, because we can always relax again if needed.
-    return RISCV::JAL;
-  case RISCV::C_LI:
-    if (!STI.hasFeature(RISCV::FeatureVendorXqcili))
+    return Capstone::JAL;
+  case Capstone::C_LI:
+    if (!STI.hasFeature(Capstone::FeatureVendorXqcili))
       break;
     // We only need this because `QC.E.LI` can be compressed into a `C.LI`. This
     // happens because the `simm6` MCOperandPredicate accepts bare symbols, and
@@ -176,130 +176,130 @@ static unsigned getRelaxedOpcode(unsigned Opcode, ArrayRef<MCOperand> Operands,
     //
     // If we have a bare symbol, we need to turn this back to a `QC.E.LI`, as we
     // have no way to emit a relocation on a `C.LI` instruction.
-    return RISCV::QC_E_LI;
-  case RISCV::JAL: {
+    return Capstone::QC_E_LI;
+  case Capstone::JAL: {
     // We can only relax JAL if we have Xqcilb
-    if (!STI.hasFeature(RISCV::FeatureVendorXqcilb))
+    if (!STI.hasFeature(Capstone::FeatureVendorXqcilb))
       break;
 
     // And only if it is using X0 or X1 for rd.
     MCRegister Reg = Operands[0].getReg();
-    if (Reg == RISCV::X0)
-      return RISCV::QC_E_J;
-    if (Reg == RISCV::X1)
-      return RISCV::QC_E_JAL;
+    if (Reg == Capstone::X0)
+      return Capstone::QC_E_J;
+    if (Reg == Capstone::X1)
+      return Capstone::QC_E_JAL;
 
     break;
   }
-  case RISCV::BEQ:
-    return RISCV::PseudoLongBEQ;
-  case RISCV::BNE:
-    return RISCV::PseudoLongBNE;
-  case RISCV::BLT:
-    return RISCV::PseudoLongBLT;
-  case RISCV::BGE:
-    return RISCV::PseudoLongBGE;
-  case RISCV::BLTU:
-    return RISCV::PseudoLongBLTU;
-  case RISCV::BGEU:
-    return RISCV::PseudoLongBGEU;
-  case RISCV::QC_BEQI:
-    return RISCV::PseudoLongQC_BEQI;
-  case RISCV::QC_BNEI:
-    return RISCV::PseudoLongQC_BNEI;
-  case RISCV::QC_BLTI:
-    return RISCV::PseudoLongQC_BLTI;
-  case RISCV::QC_BGEI:
-    return RISCV::PseudoLongQC_BGEI;
-  case RISCV::QC_BLTUI:
-    return RISCV::PseudoLongQC_BLTUI;
-  case RISCV::QC_BGEUI:
-    return RISCV::PseudoLongQC_BGEUI;
-  case RISCV::QC_E_BEQI:
-    return RISCV::PseudoLongQC_E_BEQI;
-  case RISCV::QC_E_BNEI:
-    return RISCV::PseudoLongQC_E_BNEI;
-  case RISCV::QC_E_BLTI:
-    return RISCV::PseudoLongQC_E_BLTI;
-  case RISCV::QC_E_BGEI:
-    return RISCV::PseudoLongQC_E_BGEI;
-  case RISCV::QC_E_BLTUI:
-    return RISCV::PseudoLongQC_E_BLTUI;
-  case RISCV::QC_E_BGEUI:
-    return RISCV::PseudoLongQC_E_BGEUI;
+  case Capstone::BEQ:
+    return Capstone::PseudoLongBEQ;
+  case Capstone::BNE:
+    return Capstone::PseudoLongBNE;
+  case Capstone::BLT:
+    return Capstone::PseudoLongBLT;
+  case Capstone::BGE:
+    return Capstone::PseudoLongBGE;
+  case Capstone::BLTU:
+    return Capstone::PseudoLongBLTU;
+  case Capstone::BGEU:
+    return Capstone::PseudoLongBGEU;
+  case Capstone::QC_BEQI:
+    return Capstone::PseudoLongQC_BEQI;
+  case Capstone::QC_BNEI:
+    return Capstone::PseudoLongQC_BNEI;
+  case Capstone::QC_BLTI:
+    return Capstone::PseudoLongQC_BLTI;
+  case Capstone::QC_BGEI:
+    return Capstone::PseudoLongQC_BGEI;
+  case Capstone::QC_BLTUI:
+    return Capstone::PseudoLongQC_BLTUI;
+  case Capstone::QC_BGEUI:
+    return Capstone::PseudoLongQC_BGEUI;
+  case Capstone::QC_E_BEQI:
+    return Capstone::PseudoLongQC_E_BEQI;
+  case Capstone::QC_E_BNEI:
+    return Capstone::PseudoLongQC_E_BNEI;
+  case Capstone::QC_E_BLTI:
+    return Capstone::PseudoLongQC_E_BLTI;
+  case Capstone::QC_E_BGEI:
+    return Capstone::PseudoLongQC_E_BGEI;
+  case Capstone::QC_E_BLTUI:
+    return Capstone::PseudoLongQC_E_BLTUI;
+  case Capstone::QC_E_BGEUI:
+    return Capstone::PseudoLongQC_E_BGEUI;
   }
 
   // Returning the original opcode means we cannot relax the instruction.
   return Opcode;
 }
 
-void RISCVAsmBackend::relaxInstruction(MCInst &Inst,
+void CapstoneAsmBackend::relaxInstruction(MCInst &Inst,
                                        const MCSubtargetInfo &STI) const {
-  if (STI.hasFeature(RISCV::FeatureExactAssembly))
+  if (STI.hasFeature(Capstone::FeatureExactAssembly))
     return;
 
   MCInst Res;
   switch (Inst.getOpcode()) {
   default:
     llvm_unreachable("Opcode not expected!");
-  case RISCV::C_BEQZ:
-  case RISCV::C_BNEZ:
-  case RISCV::C_J:
-  case RISCV::C_JAL: {
-    [[maybe_unused]] bool Success = RISCVRVC::uncompress(Res, Inst, STI);
+  case Capstone::C_BEQZ:
+  case Capstone::C_BNEZ:
+  case Capstone::C_J:
+  case Capstone::C_JAL: {
+    [[maybe_unused]] bool Success = CapstoneRVC::uncompress(Res, Inst, STI);
     assert(Success && "Can't uncompress instruction");
     assert(Res.getOpcode() ==
                getRelaxedOpcode(Inst.getOpcode(), Inst.getOperands(), STI) &&
            "Branch Relaxation Error");
     break;
   }
-  case RISCV::JAL: {
+  case Capstone::JAL: {
     // This has to be written manually because the QC.E.J -> JAL is
     // compression-only, so that it is not used when printing disassembly.
-    assert(STI.hasFeature(RISCV::FeatureVendorXqcilb) &&
+    assert(STI.hasFeature(Capstone::FeatureVendorXqcilb) &&
            "JAL is only relaxable with Xqcilb");
-    assert((Inst.getOperand(0).getReg() == RISCV::X0 ||
-            Inst.getOperand(0).getReg() == RISCV::X1) &&
+    assert((Inst.getOperand(0).getReg() == Capstone::X0 ||
+            Inst.getOperand(0).getReg() == Capstone::X1) &&
            "JAL only relaxable with rd=x0 or rd=x1");
     Res.setOpcode(getRelaxedOpcode(Inst.getOpcode(), Inst.getOperands(), STI));
     Res.addOperand(Inst.getOperand(1));
     break;
   }
-  case RISCV::C_LI: {
+  case Capstone::C_LI: {
     // This should only be hit when trying to relax a `C.LI` into a `QC.E.LI`
     // because the `C.LI` has a bare symbol. We cannot use
-    // `RISCVRVC::uncompress` because it will use decompression patterns. The
+    // `CapstoneRVC::uncompress` because it will use decompression patterns. The
     // `QC.E.LI` compression pattern to `C.LI` is compression-only (because we
     // don't want `c.li` ever printed as `qc.e.li`, which might be done if the
     // pattern applied to decompression), but that doesn't help much becuase
     // `C.LI` with a bare symbol will decompress to an `ADDI` anyway (because
     // `simm12`'s MCOperandPredicate accepts a bare symbol and that pattern
     // comes first), and we still cannot emit an `ADDI` with a bare symbol.
-    assert(STI.hasFeature(RISCV::FeatureVendorXqcili) &&
+    assert(STI.hasFeature(Capstone::FeatureVendorXqcili) &&
            "C.LI is only relaxable with Xqcili");
     Res.setOpcode(getRelaxedOpcode(Inst.getOpcode(), Inst.getOperands(), STI));
     Res.addOperand(Inst.getOperand(0));
     Res.addOperand(Inst.getOperand(1));
     break;
   }
-  case RISCV::BEQ:
-  case RISCV::BNE:
-  case RISCV::BLT:
-  case RISCV::BGE:
-  case RISCV::BLTU:
-  case RISCV::BGEU:
-  case RISCV::QC_BEQI:
-  case RISCV::QC_BNEI:
-  case RISCV::QC_BLTI:
-  case RISCV::QC_BGEI:
-  case RISCV::QC_BLTUI:
-  case RISCV::QC_BGEUI:
-  case RISCV::QC_E_BEQI:
-  case RISCV::QC_E_BNEI:
-  case RISCV::QC_E_BLTI:
-  case RISCV::QC_E_BGEI:
-  case RISCV::QC_E_BLTUI:
-  case RISCV::QC_E_BGEUI:
+  case Capstone::BEQ:
+  case Capstone::BNE:
+  case Capstone::BLT:
+  case Capstone::BGE:
+  case Capstone::BLTU:
+  case Capstone::BGEU:
+  case Capstone::QC_BEQI:
+  case Capstone::QC_BNEI:
+  case Capstone::QC_BLTI:
+  case Capstone::QC_BGEI:
+  case Capstone::QC_BLTUI:
+  case Capstone::QC_BGEUI:
+  case Capstone::QC_E_BEQI:
+  case Capstone::QC_E_BNEI:
+  case Capstone::QC_E_BLTI:
+  case Capstone::QC_E_BGEI:
+  case Capstone::QC_E_BLTUI:
+  case Capstone::QC_E_BGEUI:
     Res.setOpcode(getRelaxedOpcode(Inst.getOpcode(), Inst.getOperands(), STI));
     Res.addOperand(Inst.getOperand(0));
     Res.addOperand(Inst.getOperand(1));
@@ -309,10 +309,10 @@ void RISCVAsmBackend::relaxInstruction(MCInst &Inst,
   Inst = std::move(Res);
 }
 
-// Check if an R_RISCV_ALIGN relocation is needed for an alignment directive.
+// Check if an R_Capstone_ALIGN relocation is needed for an alignment directive.
 // If conditions are met, compute the padding size and create a fixup encoding
 // the padding size in the addend.
-bool RISCVAsmBackend::relaxAlign(MCFragment &F, unsigned &Size) {
+bool CapstoneAsmBackend::relaxAlign(MCFragment &F, unsigned &Size) {
   // Alignments before the first linker-relaxable instruction have fixed sizes
   // and do not require relocations. Alignments after a linker-relaxable
   // instruction require a relocation, even if the STI specifies norelax.
@@ -327,20 +327,20 @@ bool RISCVAsmBackend::relaxAlign(MCFragment &F, unsigned &Size) {
   // Use default handling unless the alignment is larger than the nop size.
   const MCSubtargetInfo *STI = F.getSubtargetInfo();
   unsigned MinNopLen =
-      AlignRvc || STI->hasFeature(RISCV::FeatureStdExtZca) ? 2 : 4;
+      AlignRvc || STI->hasFeature(Capstone::FeatureStdExtZca) ? 2 : 4;
   if (F.getAlignment() <= MinNopLen)
     return false;
 
   Size = F.getAlignment().value() - MinNopLen;
   auto *Expr = MCConstantExpr::create(Size, getContext());
   MCFixup Fixup =
-      MCFixup::create(0, Expr, FirstLiteralRelocationKind + ELF::R_RISCV_ALIGN);
+      MCFixup::create(0, Expr, FirstLiteralRelocationKind + ELF::R_Capstone_ALIGN);
   F.setVarFixups({Fixup});
   F.setLinkerRelaxable();
   return true;
 }
 
-bool RISCVAsmBackend::relaxDwarfLineAddr(MCFragment &F) const {
+bool CapstoneAsmBackend::relaxDwarfLineAddr(MCFragment &F) const {
   int64_t LineDelta = F.getDwarfLineDelta();
   const MCExpr &AddrDelta = F.getDwarfAddrDelta();
   int64_t Value;
@@ -391,7 +391,7 @@ bool RISCVAsmBackend::relaxDwarfLineAddr(MCFragment &F) const {
   return true;
 }
 
-bool RISCVAsmBackend::relaxDwarfCFA(MCFragment &F) const {
+bool CapstoneAsmBackend::relaxDwarfCFA(MCFragment &F) const {
   const MCExpr &AddrDelta = F.getDwarfAddrDelta();
   SmallVector<MCFixup, 2> Fixups;
   int64_t Value;
@@ -420,19 +420,19 @@ bool RISCVAsmBackend::relaxDwarfCFA(MCFragment &F) const {
   raw_svector_ostream OS(Data);
   if (isUIntN(6, Value)) {
     OS << uint8_t(dwarf::DW_CFA_advance_loc);
-    AddFixups(0, {ELF::R_RISCV_SET6, ELF::R_RISCV_SUB6});
+    AddFixups(0, {ELF::R_Capstone_SET6, ELF::R_Capstone_SUB6});
   } else if (isUInt<8>(Value)) {
     OS << uint8_t(dwarf::DW_CFA_advance_loc1);
     support::endian::write<uint8_t>(OS, 0, Endian);
-    AddFixups(1, {ELF::R_RISCV_SET8, ELF::R_RISCV_SUB8});
+    AddFixups(1, {ELF::R_Capstone_SET8, ELF::R_Capstone_SUB8});
   } else if (isUInt<16>(Value)) {
     OS << uint8_t(dwarf::DW_CFA_advance_loc2);
     support::endian::write<uint16_t>(OS, 0, Endian);
-    AddFixups(1, {ELF::R_RISCV_SET16, ELF::R_RISCV_SUB16});
+    AddFixups(1, {ELF::R_Capstone_SET16, ELF::R_Capstone_SUB16});
   } else if (isUInt<32>(Value)) {
     OS << uint8_t(dwarf::DW_CFA_advance_loc4);
     support::endian::write<uint32_t>(OS, 0, Endian);
-    AddFixups(1, {ELF::R_RISCV_SET32, ELF::R_RISCV_SUB32});
+    AddFixups(1, {ELF::R_Capstone_SET32, ELF::R_Capstone_SUB32});
   } else {
     llvm_unreachable("unsupported CFA encoding");
   }
@@ -441,7 +441,7 @@ bool RISCVAsmBackend::relaxDwarfCFA(MCFragment &F) const {
   return true;
 }
 
-std::pair<bool, bool> RISCVAsmBackend::relaxLEB128(MCFragment &LF,
+std::pair<bool, bool> CapstoneAsmBackend::relaxLEB128(MCFragment &LF,
                                                    int64_t &Value) const {
   if (LF.isLEBSigned())
     return std::make_pair(false, false);
@@ -452,19 +452,19 @@ std::pair<bool, bool> RISCVAsmBackend::relaxLEB128(MCFragment &LF,
   return std::make_pair(Expr.evaluateKnownAbsolute(Value, *Asm), false);
 }
 
-bool RISCVAsmBackend::mayNeedRelaxation(unsigned Opcode,
+bool CapstoneAsmBackend::mayNeedRelaxation(unsigned Opcode,
                                         ArrayRef<MCOperand> Operands,
                                         const MCSubtargetInfo &STI) const {
   // This function has access to two STIs, the member of the AsmBackend, and the
   // one passed as an argument. The latter is more specific, so we query it for
   // specific features.
-  if (STI.hasFeature(RISCV::FeatureExactAssembly))
+  if (STI.hasFeature(Capstone::FeatureExactAssembly))
     return false;
 
   return getRelaxedOpcode(Opcode, Operands, STI) != Opcode;
 }
 
-bool RISCVAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
+bool CapstoneAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
                                    const MCSubtargetInfo *STI) const {
   // We mostly follow binutils' convention here: align to even boundary with a
   // 0-fill padding.  We emit up to 1 2-byte nop, though we use c.nop if RVC is
@@ -486,7 +486,7 @@ bool RISCVAsmBackend::writeNopData(raw_ostream &OS, uint64_t Count,
     Count -= 2;
   }
 
-  // The canonical nop on RISC-V is addi x0, x0, 0.
+  // The canonical nop on Capstone is addi x0, x0, 0.
   for (; Count >= 4; Count -= 4)
     OS.write("\x13\0\0\0", 4);
 
@@ -504,23 +504,23 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   case FK_Data_8:
   case FK_Data_leb128:
     return Value;
-  case RISCV::fixup_riscv_lo12_i:
-  case RISCV::fixup_riscv_pcrel_lo12_i:
+  case Capstone::fixup_capstone_lo12_i:
+  case Capstone::fixup_capstone_pcrel_lo12_i:
     return Value & 0xfff;
-  case RISCV::fixup_riscv_12_i:
+  case Capstone::fixup_capstone_12_i:
     if (!isInt<12>(Value)) {
       Ctx.reportError(Fixup.getLoc(),
                       "operand must be a constant 12-bit integer");
     }
     return Value & 0xfff;
-  case RISCV::fixup_riscv_lo12_s:
-  case RISCV::fixup_riscv_pcrel_lo12_s:
+  case Capstone::fixup_capstone_lo12_s:
+  case Capstone::fixup_capstone_pcrel_lo12_s:
     return (((Value >> 5) & 0x7f) << 25) | ((Value & 0x1f) << 7);
-  case RISCV::fixup_riscv_hi20:
-  case RISCV::fixup_riscv_pcrel_hi20:
+  case Capstone::fixup_capstone_hi20:
+  case Capstone::fixup_capstone_pcrel_hi20:
     // Add 1 if bit 11 is 1, to compensate for low 12 bits being negative.
     return ((Value + 0x800) >> 12) & 0xfffff;
-  case RISCV::fixup_riscv_jal: {
+  case Capstone::fixup_capstone_jal: {
     if (!isInt<21>(Value))
       Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
     if (Value & 0x1)
@@ -537,8 +537,8 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
     Value = (Sbit << 19) | (Lo10 << 9) | (Mid1 << 8) | Hi8;
     return Value;
   }
-  case RISCV::fixup_riscv_qc_e_branch:
-  case RISCV::fixup_riscv_branch: {
+  case Capstone::fixup_capstone_qc_e_branch:
+  case Capstone::fixup_capstone_branch: {
     if (!isInt<13>(Value))
       Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
     if (Value & 0x1)
@@ -556,8 +556,8 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
     Value = (Sbit << 31) | (Mid6 << 25) | (Lo4 << 8) | (Hi1 << 7);
     return Value;
   }
-  case RISCV::fixup_riscv_call:
-  case RISCV::fixup_riscv_call_plt: {
+  case Capstone::fixup_capstone_call:
+  case Capstone::fixup_capstone_call_plt: {
     // Jalr will add UpperImm with the sign-extended 12-bit LowerImm,
     // we need to add 0x800ULL before extract upper bits to reflect the
     // effect of the sign extension.
@@ -565,7 +565,7 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
     uint64_t LowerImm = Value & 0xfffULL;
     return UpperImm | ((LowerImm << 20) << 32);
   }
-  case RISCV::fixup_riscv_rvc_jump: {
+  case Capstone::fixup_capstone_rvc_jump: {
     if (!isInt<12>(Value))
       Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
     // Need to produce offset[11|4|9:8|10|6|7|3:1|5] from the 11-bit Value.
@@ -581,7 +581,7 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
             (Bit6 << 5) | (Bit7 << 4) | (Bit3_1 << 1) | Bit5;
     return Value;
   }
-  case RISCV::fixup_riscv_rvc_branch: {
+  case Capstone::fixup_capstone_rvc_branch: {
     if (!isInt<9>(Value))
       Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
     // Need to produce offset[8|4:3], [reg 3 bit], offset[7:6|2:1|5]
@@ -594,7 +594,7 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
             (Bit5 << 2);
     return Value;
   }
-  case RISCV::fixup_riscv_rvc_imm: {
+  case Capstone::fixup_capstone_rvc_imm: {
     if (!isInt<6>(Value))
       Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
     unsigned Bit5 = (Value >> 5) & 0x1;
@@ -602,12 +602,12 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
     Value = (Bit5 << 12) | (Bit4_0 << 2);
     return Value;
   }
-  case RISCV::fixup_riscv_qc_e_32: {
+  case Capstone::fixup_capstone_qc_e_32: {
     if (!isInt<32>(Value))
       Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
     return Value & 0xffffffffu;
   }
-  case RISCV::fixup_riscv_qc_abs20_u: {
+  case Capstone::fixup_capstone_qc_abs20_u: {
     if (!isInt<20>(Value))
       Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
     unsigned Bit19 = (Value >> 19) & 0x1;
@@ -616,7 +616,7 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
     Value = (Bit19 << 31) | (Bit14_0 << 16) | (Bit18_15 << 12);
     return Value;
   }
-  case RISCV::fixup_riscv_qc_e_call_plt: {
+  case Capstone::fixup_capstone_qc_e_call_plt: {
     if (!isInt<32>(Value))
       Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
     if (Value & 0x1)
@@ -631,7 +631,7 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
             (Bit15_13 << 17) | (Bit4_1 << 8) | (Bit11 << 7);
     return Value;
   }
-  case RISCV::fixup_riscv_nds_branch_10: {
+  case Capstone::fixup_capstone_nds_branch_10: {
     if (!isInt<11>(Value))
       Ctx.reportError(Fixup.getLoc(), "fixup value out of range");
     if (Value & 0x1)
@@ -649,7 +649,7 @@ static uint64_t adjustFixupValue(const MCFixup &Fixup, uint64_t Value,
   }
 }
 
-bool RISCVAsmBackend::isPCRelFixupResolved(const MCSymbol *SymA,
+bool CapstoneAsmBackend::isPCRelFixupResolved(const MCSymbol *SymA,
                                            const MCFragment &F) {
   // If the section does not contain linker-relaxable fragments, PC-relative
   // fixups can be resolved.
@@ -700,17 +700,17 @@ static const MCFixup *getPCRelHiFixup(const MCSpecifierExpr &Expr,
       continue;
     auto Kind = F.getKind();
     if (!mc::isRelocation(F.getKind())) {
-      if (Kind == RISCV::fixup_riscv_pcrel_hi20) {
+      if (Kind == Capstone::fixup_capstone_pcrel_hi20) {
         *DFOut = DF;
         return &F;
       }
       break;
     }
     switch (Kind) {
-    case ELF::R_RISCV_GOT_HI20:
-    case ELF::R_RISCV_TLS_GOT_HI20:
-    case ELF::R_RISCV_TLS_GD_HI20:
-    case ELF::R_RISCV_TLSDESC_HI20:
+    case ELF::R_Capstone_GOT_HI20:
+    case ELF::R_Capstone_TLS_GOT_HI20:
+    case ELF::R_Capstone_TLS_GD_HI20:
+    case ELF::R_Capstone_TLSDESC_HI20:
       *DFOut = DF;
       return &F;
     }
@@ -719,7 +719,7 @@ static const MCFixup *getPCRelHiFixup(const MCSpecifierExpr &Expr,
   return nullptr;
 }
 
-std::optional<bool> RISCVAsmBackend::evaluateFixup(const MCFragment &,
+std::optional<bool> CapstoneAsmBackend::evaluateFixup(const MCFragment &,
                                                    MCFixup &Fixup,
                                                    MCValue &Target,
                                                    uint64_t &Value) {
@@ -730,8 +730,8 @@ std::optional<bool> RISCVAsmBackend::evaluateFixup(const MCFragment &,
   default:
     // Use default handling for `Value` and `IsResolved`.
     return {};
-  case RISCV::fixup_riscv_pcrel_lo12_i:
-  case RISCV::fixup_riscv_pcrel_lo12_s: {
+  case Capstone::fixup_capstone_pcrel_lo12_i:
+  case Capstone::fixup_capstone_pcrel_lo12_s: {
     AUIPCFixup =
         getPCRelHiFixup(cast<MCSpecifierExpr>(*Fixup.getValue()), &AUIPCDF);
     if (!AUIPCFixup) {
@@ -765,24 +765,24 @@ std::optional<bool> RISCVAsmBackend::evaluateFixup(const MCFragment &,
   Value = Asm->getSymbolOffset(SA) + AUIPCTarget.getConstant();
   Value -= Asm->getFragmentOffset(*AUIPCDF) + AUIPCFixup->getOffset();
 
-  return AUIPCFixup->getKind() == RISCV::fixup_riscv_pcrel_hi20 &&
+  return AUIPCFixup->getKind() == Capstone::fixup_capstone_pcrel_hi20 &&
          isPCRelFixupResolved(AUIPCTarget.getAddSym(), *AUIPCDF);
 }
 
-void RISCVAsmBackend::maybeAddVendorReloc(const MCFragment &F,
+void CapstoneAsmBackend::maybeAddVendorReloc(const MCFragment &F,
                                           const MCFixup &Fixup) {
   StringRef VendorIdentifier;
   switch (Fixup.getKind()) {
   default:
     // No Vendor Relocation Required.
     return;
-  case RISCV::fixup_riscv_qc_e_branch:
-  case RISCV::fixup_riscv_qc_abs20_u:
-  case RISCV::fixup_riscv_qc_e_32:
-  case RISCV::fixup_riscv_qc_e_call_plt:
+  case Capstone::fixup_capstone_qc_e_branch:
+  case Capstone::fixup_capstone_qc_abs20_u:
+  case Capstone::fixup_capstone_qc_e_32:
+  case Capstone::fixup_capstone_qc_e_call_plt:
     VendorIdentifier = "QUALCOMM";
     break;
-  case RISCV::fixup_riscv_nds_branch_10:
+  case Capstone::fixup_capstone_nds_branch_10:
     VendorIdentifier = "ANDES";
     break;
   }
@@ -804,7 +804,7 @@ void RISCVAsmBackend::maybeAddVendorReloc(const MCFragment &F,
   }
 
   MCFixup VendorFixup =
-      MCFixup::create(Fixup.getOffset(), nullptr, ELF::R_RISCV_VENDOR);
+      MCFixup::create(Fixup.getOffset(), nullptr, ELF::R_Capstone_VENDOR);
   // Explicitly create MCValue rather than using an MCExpr and evaluating it so
   // that the absolute vendor symbol is not evaluated to constant 0.
   MCValue VendorTarget = MCValue::get(VendorSymbol);
@@ -814,22 +814,22 @@ void RISCVAsmBackend::maybeAddVendorReloc(const MCFragment &F,
 
 static bool relaxableFixupNeedsRelocation(const MCFixupKind Kind) {
   // Some Fixups are marked as LinkerRelaxable by
-  // `RISCVMCCodeEmitter::getImmOpValue` only because they may be
+  // `CapstoneMCCodeEmitter::getImmOpValue` only because they may be
   // (assembly-)relaxed into a linker-relaxable instruction. This function
-  // should return `false` for those fixups so they do not get a `R_RISCV_RELAX`
+  // should return `false` for those fixups so they do not get a `R_Capstone_RELAX`
   // relocation emitted in addition to the relocation.
   switch (Kind) {
   default:
     break;
-  case RISCV::fixup_riscv_rvc_jump:
-  case RISCV::fixup_riscv_rvc_branch:
-  case RISCV::fixup_riscv_jal:
+  case Capstone::fixup_capstone_rvc_jump:
+  case Capstone::fixup_capstone_rvc_branch:
+  case Capstone::fixup_capstone_jal:
     return false;
   }
   return true;
 }
 
-bool RISCVAsmBackend::addReloc(const MCFragment &F, const MCFixup &Fixup,
+bool CapstoneAsmBackend::addReloc(const MCFragment &F, const MCFixup &Fixup,
                                const MCValue &Target, uint64_t &FixedValue,
                                bool IsResolved) {
   uint64_t FixedValueA, FixedValueB;
@@ -839,24 +839,24 @@ bool RISCVAsmBackend::addReloc(const MCFragment &F, const MCFixup &Fixup,
     unsigned TA = 0, TB = 0;
     switch (Fixup.getKind()) {
     case llvm::FK_Data_1:
-      TA = ELF::R_RISCV_ADD8;
-      TB = ELF::R_RISCV_SUB8;
+      TA = ELF::R_Capstone_ADD8;
+      TB = ELF::R_Capstone_SUB8;
       break;
     case llvm::FK_Data_2:
-      TA = ELF::R_RISCV_ADD16;
-      TB = ELF::R_RISCV_SUB16;
+      TA = ELF::R_Capstone_ADD16;
+      TB = ELF::R_Capstone_SUB16;
       break;
     case llvm::FK_Data_4:
-      TA = ELF::R_RISCV_ADD32;
-      TB = ELF::R_RISCV_SUB32;
+      TA = ELF::R_Capstone_ADD32;
+      TB = ELF::R_Capstone_SUB32;
       break;
     case llvm::FK_Data_8:
-      TA = ELF::R_RISCV_ADD64;
-      TB = ELF::R_RISCV_SUB64;
+      TA = ELF::R_Capstone_ADD64;
+      TB = ELF::R_Capstone_SUB64;
       break;
     case llvm::FK_Data_leb128:
-      TA = ELF::R_RISCV_SET_ULEB128;
-      TB = ELF::R_RISCV_SUB_ULEB128;
+      TA = ELF::R_Capstone_SET_ULEB128;
+      TB = ELF::R_Capstone_SUB_ULEB128;
       break;
     default:
       llvm_unreachable("unsupported fixup size");
@@ -892,7 +892,7 @@ bool RISCVAsmBackend::addReloc(const MCFragment &F, const MCFixup &Fixup,
       // Some Fixups get a RELAX relocation, record it (directly) after we add
       // the relocation.
       MCFixup RelaxFixup =
-          MCFixup::create(Fixup.getOffset(), nullptr, ELF::R_RISCV_RELAX);
+          MCFixup::create(Fixup.getOffset(), nullptr, ELF::R_Capstone_RELAX);
       MCValue RelaxTarget = MCValue::get(nullptr);
       uint64_t RelaxValue;
       Asm->getWriter().recordRelocation(F, RelaxFixup, RelaxTarget, RelaxValue);
@@ -903,7 +903,7 @@ bool RISCVAsmBackend::addReloc(const MCFragment &F, const MCFixup &Fixup,
 }
 
 // Data fixups should be swapped for big endian cores.
-// Instruction fixups should not be swapped as RISC-V instructions
+// Instruction fixups should not be swapped as Capstone instructions
 // are always little-endian.
 static bool isDataFixup(unsigned Kind) {
   switch (Kind) {
@@ -918,7 +918,7 @@ static bool isDataFixup(unsigned Kind) {
   }
 }
 
-void RISCVAsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
+void CapstoneAsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
                                  const MCValue &Target, uint8_t *Data,
                                  uint64_t Value, bool IsResolved) {
   IsResolved = addReloc(F, Fixup, Target, Value, IsResolved);
@@ -950,16 +950,16 @@ void RISCVAsmBackend::applyFixup(const MCFragment &F, const MCFixup &Fixup,
 }
 
 std::unique_ptr<MCObjectTargetWriter>
-RISCVAsmBackend::createObjectTargetWriter() const {
-  return createRISCVELFObjectWriter(OSABI, Is64Bit);
+CapstoneAsmBackend::createObjectTargetWriter() const {
+  return createCapstoneELFObjectWriter(OSABI, Is64Bit);
 }
 
-MCAsmBackend *llvm::createRISCVAsmBackend(const Target &T,
+MCAsmBackend *llvm::createCapstoneAsmBackend(const Target &T,
                                           const MCSubtargetInfo &STI,
                                           const MCRegisterInfo &MRI,
                                           const MCTargetOptions &Options) {
   const Triple &TT = STI.getTargetTriple();
   uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(TT.getOS());
-  return new RISCVAsmBackend(STI, OSABI, TT.isArch64Bit(), TT.isLittleEndian(),
+  return new CapstoneAsmBackend(STI, OSABI, TT.isArch64Bit(), TT.isLittleEndian(),
                              Options);
 }

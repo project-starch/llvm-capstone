@@ -1,4 +1,4 @@
-//===- RISCVFoldMemOffset.cpp - Fold ADDI into memory offsets ------------===//
+//===- CapstoneFoldMemOffset.cpp - Fold ADDI into memory offsets ------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -15,23 +15,23 @@
 //
 //===---------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVSubtarget.h"
+#include "Capstone.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include <queue>
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-fold-mem-offset"
-#define RISCV_FOLD_MEM_OFFSET_NAME "RISC-V Fold Memory Offset"
+#define DEBUG_TYPE "capstone-fold-mem-offset"
+#define Capstone_FOLD_MEM_OFFSET_NAME "Capstone Fold Memory Offset"
 
 namespace {
 
-class RISCVFoldMemOffset : public MachineFunctionPass {
+class CapstoneFoldMemOffset : public MachineFunctionPass {
 public:
   static char ID;
 
-  RISCVFoldMemOffset() : MachineFunctionPass(ID) {}
+  CapstoneFoldMemOffset() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -44,7 +44,7 @@ public:
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
-  StringRef getPassName() const override { return RISCV_FOLD_MEM_OFFSET_NAME; }
+  StringRef getPassName() const override { return Capstone_FOLD_MEM_OFFSET_NAME; }
 };
 
 // Wrapper class around a std::optional to allow accumulation.
@@ -72,12 +72,12 @@ public:
 
 } // end anonymous namespace
 
-char RISCVFoldMemOffset::ID = 0;
-INITIALIZE_PASS(RISCVFoldMemOffset, DEBUG_TYPE, RISCV_FOLD_MEM_OFFSET_NAME,
+char CapstoneFoldMemOffset::ID = 0;
+INITIALIZE_PASS(CapstoneFoldMemOffset, DEBUG_TYPE, Capstone_FOLD_MEM_OFFSET_NAME,
                 false, false)
 
-FunctionPass *llvm::createRISCVFoldMemOffsetPass() {
-  return new RISCVFoldMemOffset();
+FunctionPass *llvm::createCapstoneFoldMemOffsetPass() {
+  return new CapstoneFoldMemOffset();
 }
 
 // Walk forward from the ADDI looking for arithmetic instructions we can
@@ -87,7 +87,7 @@ FunctionPass *llvm::createRISCVFoldMemOffsetPass() {
 // calculate the contribution to the output of this instruction.
 // Only addition and left shift are supported.
 // FIXME: Add multiplication by constant. The constant will be in a register.
-bool RISCVFoldMemOffset::foldOffset(
+bool CapstoneFoldMemOffset::foldOffset(
     Register OrigReg, int64_t InitialOffset, const MachineRegisterInfo &MRI,
     DenseMap<MachineInstr *, int64_t> &FoldableInstrs) {
   // Map to hold how much the offset contributes to the value of this register.
@@ -112,7 +112,7 @@ bool RISCVFoldMemOffset::foldOffset(
       switch (User.getOpcode()) {
       default:
         return false;
-      case RISCV::ADD:
+      case Capstone::ADD:
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
             I != RegToOffsetMap.end())
           Offset = I->second;
@@ -120,7 +120,7 @@ bool RISCVFoldMemOffset::foldOffset(
             I != RegToOffsetMap.end())
           Offset += I->second;
         break;
-      case RISCV::SH1ADD:
+      case Capstone::SH1ADD:
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
             I != RegToOffsetMap.end())
           Offset = (uint64_t)I->second << 1;
@@ -128,7 +128,7 @@ bool RISCVFoldMemOffset::foldOffset(
             I != RegToOffsetMap.end())
           Offset += I->second;
         break;
-      case RISCV::SH2ADD:
+      case Capstone::SH2ADD:
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
             I != RegToOffsetMap.end())
           Offset = (uint64_t)I->second << 2;
@@ -136,7 +136,7 @@ bool RISCVFoldMemOffset::foldOffset(
             I != RegToOffsetMap.end())
           Offset += I->second;
         break;
-      case RISCV::SH3ADD:
+      case Capstone::SH3ADD:
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
             I != RegToOffsetMap.end())
           Offset = (uint64_t)I->second << 3;
@@ -144,10 +144,10 @@ bool RISCVFoldMemOffset::foldOffset(
             I != RegToOffsetMap.end())
           Offset += I->second;
         break;
-      case RISCV::ADD_UW:
-      case RISCV::SH1ADD_UW:
-      case RISCV::SH2ADD_UW:
-      case RISCV::SH3ADD_UW:
+      case Capstone::ADD_UW:
+      case Capstone::SH1ADD_UW:
+      case Capstone::SH2ADD_UW:
+      case Capstone::SH3ADD_UW:
         // Don't fold through the zero extended input.
         if (User.getOperand(1).getReg() == Reg)
           return false;
@@ -155,34 +155,34 @@ bool RISCVFoldMemOffset::foldOffset(
             I != RegToOffsetMap.end())
           Offset = I->second;
         break;
-      case RISCV::SLLI: {
+      case Capstone::SLLI: {
         unsigned ShAmt = User.getOperand(2).getImm();
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
             I != RegToOffsetMap.end())
           Offset = (uint64_t)I->second << ShAmt;
         break;
       }
-      case RISCV::LB:
-      case RISCV::LBU:
-      case RISCV::SB:
-      case RISCV::LH:
-      case RISCV::LH_INX:
-      case RISCV::LHU:
-      case RISCV::FLH:
-      case RISCV::SH:
-      case RISCV::SH_INX:
-      case RISCV::FSH:
-      case RISCV::LW:
-      case RISCV::LW_INX:
-      case RISCV::LWU:
-      case RISCV::FLW:
-      case RISCV::SW:
-      case RISCV::SW_INX:
-      case RISCV::FSW:
-      case RISCV::LD:
-      case RISCV::FLD:
-      case RISCV::SD:
-      case RISCV::FSD: {
+      case Capstone::LB:
+      case Capstone::LBU:
+      case Capstone::SB:
+      case Capstone::LH:
+      case Capstone::LH_INX:
+      case Capstone::LHU:
+      case Capstone::FLH:
+      case Capstone::SH:
+      case Capstone::SH_INX:
+      case Capstone::FSH:
+      case Capstone::LW:
+      case Capstone::LW_INX:
+      case Capstone::LWU:
+      case Capstone::FLW:
+      case Capstone::SW:
+      case Capstone::SW_INX:
+      case Capstone::FSW:
+      case Capstone::LD:
+      case Capstone::FLD:
+      case Capstone::SD:
+      case Capstone::FSD: {
         // Can't fold into store value.
         if (User.getOperand(0).getReg() == Reg)
           return false;
@@ -231,7 +231,7 @@ bool RISCVFoldMemOffset::foldOffset(
   return true;
 }
 
-bool RISCVFoldMemOffset::runOnMachineFunction(MachineFunction &MF) {
+bool CapstoneFoldMemOffset::runOnMachineFunction(MachineFunction &MF) {
   if (skipFunction(MF.getFunction()))
     return false;
 
@@ -246,7 +246,7 @@ bool RISCVFoldMemOffset::runOnMachineFunction(MachineFunction &MF) {
     for (MachineInstr &MI : llvm::make_early_inc_range(MBB)) {
       // FIXME: We can support ADDIW from an LUI+ADDIW pair if the result is
       // equivalent to LUI+ADDI.
-      if (MI.getOpcode() != RISCV::ADDI)
+      if (MI.getOpcode() != Capstone::ADDI)
         continue;
 
       // We only want to optimize register ADDIs.
@@ -254,7 +254,7 @@ bool RISCVFoldMemOffset::runOnMachineFunction(MachineFunction &MF) {
         continue;
 
       // Ignore 'li'.
-      if (MI.getOperand(1).getReg() == RISCV::X0)
+      if (MI.getOperand(1).getReg() == Capstone::X0)
         continue;
 
       int64_t Offset = MI.getOperand(2).getImm();

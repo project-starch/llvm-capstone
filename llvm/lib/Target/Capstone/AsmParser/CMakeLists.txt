@@ -1,14 +1,14 @@
-add_llvm_component_library(LLVMRISCVAsmParser
-  RISCVAsmParser.cpp
+add_llvm_component_library(LLVMCapstoneAsmParser
+  CapstoneAsmParser.cpp
 
   LINK_COMPONENTS
   MC
   MCParser
-  RISCVDesc
-  RISCVInfo
+  CapstoneDesc
+  CapstoneInfo
   Support
   TargetParser
 
   ADD_TO_COMPONENT
-  RISCV
+  Capstone
   )

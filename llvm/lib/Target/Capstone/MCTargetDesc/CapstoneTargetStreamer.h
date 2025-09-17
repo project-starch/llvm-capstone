@@ -1,4 +1,4 @@
-//===-- RISCVTargetStreamer.h - RISC-V Target Streamer ---------*- C++ -*--===//
+//===-- CapstoneTargetStreamer.h - Capstone Target Streamer ---------*- C++ -*--===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,10 +6,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVTARGETSTREAMER_H
-#define LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVTARGETSTREAMER_H
+#ifndef LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneTARGETSTREAMER_H
+#define LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneTARGETSTREAMER_H
 
-#include "RISCV.h"
+#include "Capstone.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 
@@ -17,31 +17,31 @@ namespace llvm {
 
 class formatted_raw_ostream;
 
-enum class RISCVOptionArchArgType {
+enum class CapstoneOptionArchArgType {
   Full,
   Plus,
   Minus,
 };
 
-struct RISCVOptionArchArg {
-  RISCVOptionArchArgType Type;
+struct CapstoneOptionArchArg {
+  CapstoneOptionArchArgType Type;
   std::string Value;
 
-  RISCVOptionArchArg(RISCVOptionArchArgType Type, std::string Value)
+  CapstoneOptionArchArg(CapstoneOptionArchArgType Type, std::string Value)
       : Type(Type), Value(Value) {}
 };
 
-class RISCVTargetStreamer : public MCTargetStreamer {
-  RISCVABI::ABI TargetABI = RISCVABI::ABI_Unknown;
+class CapstoneTargetStreamer : public MCTargetStreamer {
+  CapstoneABI::ABI TargetABI = CapstoneABI::ABI_Unknown;
   bool HasRVC = false;
   bool HasTSO = false;
 
 public:
-  RISCVTargetStreamer(MCStreamer &S);
+  CapstoneTargetStreamer(MCStreamer &S);
   void finish() override;
   virtual void reset();
 
-  virtual void emitDirectiveOptionArch(ArrayRef<RISCVOptionArchArg> Args);
+  virtual void emitDirectiveOptionArch(ArrayRef<CapstoneOptionArchArg> Args);
   virtual void emitDirectiveOptionExact();
   virtual void emitDirectiveOptionNoExact();
   virtual void emitDirectiveOptionPIC();
@@ -61,15 +61,15 @@ public:
   void emitNoteGnuPropertySection(const uint32_t Feature1And);
 
   void emitTargetAttributes(const MCSubtargetInfo &STI, bool EmitStackAlign);
-  void setTargetABI(RISCVABI::ABI ABI);
-  RISCVABI::ABI getTargetABI() const { return TargetABI; }
+  void setTargetABI(CapstoneABI::ABI ABI);
+  CapstoneABI::ABI getTargetABI() const { return TargetABI; }
   void setFlagsFromFeatures(const MCSubtargetInfo &STI);
   bool hasRVC() const { return HasRVC; }
   bool hasTSO() const { return HasTSO; }
 };
 
 // This part is for ascii assembly output
-class RISCVTargetAsmStreamer : public RISCVTargetStreamer {
+class CapstoneTargetAsmStreamer : public CapstoneTargetStreamer {
   formatted_raw_ostream &OS;
 
   void finishAttributeSection() override;
@@ -79,9 +79,9 @@ class RISCVTargetAsmStreamer : public RISCVTargetStreamer {
                             StringRef StringValue) override;
 
 public:
-  RISCVTargetAsmStreamer(MCStreamer &S, formatted_raw_ostream &OS);
+  CapstoneTargetAsmStreamer(MCStreamer &S, formatted_raw_ostream &OS);
 
-  void emitDirectiveOptionArch(ArrayRef<RISCVOptionArchArg> Args) override;
+  void emitDirectiveOptionArch(ArrayRef<CapstoneOptionArchArg> Args) override;
   void emitDirectiveOptionExact() override;
   void emitDirectiveOptionNoExact() override;
   void emitDirectiveOptionPIC() override;

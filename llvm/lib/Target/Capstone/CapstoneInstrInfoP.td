@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoP.td - RISC-V 'P' instructions -------*- tablegen -*-===//
+//===-- CapstoneInstrInfoP.td - Capstone 'P' instructions -------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard 'Base P'
+// This file describes the Capstone instructions from the standard 'Base P'
 // Packed SIMD instruction set extension.
 //
 //  This version is still experimental as the 'P' extension hasn't been
@@ -18,7 +18,7 @@
 // Operand and SDNode transformation definitions.
 //===----------------------------------------------------------------------===//
 
-def simm10 : RISCVSImmOp<10>;
+def simm10 : CapstoneSImmOp<10>;
 
 def SImm8UnsignedAsmOperand : SImmAsmOperand<8, "Unsigned"> {
   let RenderMethod = "addSImm8UnsignedOperands";
@@ -26,7 +26,7 @@ def SImm8UnsignedAsmOperand : SImmAsmOperand<8, "Unsigned"> {
 
 // A 8-bit signed immediate allowing range [-128, 255]
 // but represented as [-128, 127].
-def simm8_unsigned : RISCVOp {
+def simm8_unsigned : CapstoneOp {
   let ParserMatchClass = SImm8UnsignedAsmOperand;
   let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeSImmOperand<8>";
@@ -45,7 +45,7 @@ def SImm10UnsignedAsmOperand : SImmAsmOperand<10, "Unsigned"> {
 
 // A 10-bit signed immediate allowing range [-512, 1023]
 // but represented as [-512, 511].
-def simm10_unsigned : RISCVOp {
+def simm10_unsigned : CapstoneOp {
   let ParserMatchClass = SImm10UnsignedAsmOperand;
   let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeSImmOperand<10>";

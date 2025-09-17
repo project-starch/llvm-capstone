@@ -1,4 +1,4 @@
-//===-- RISCVMoveMerger.cpp - RISC-V move merge pass ----------------------===//
+//===-- CapstoneMoveMerger.cpp - Capstone move merge pass ----------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -13,21 +13,21 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVInstrInfo.h"
-#include "RISCVSubtarget.h"
+#include "CapstoneInstrInfo.h"
+#include "CapstoneSubtarget.h"
 
 using namespace llvm;
 
-#define RISCV_MOVE_MERGE_NAME "RISC-V Zcmp move merging pass"
+#define Capstone_MOVE_MERGE_NAME "Capstone Zcmp move merging pass"
 
 namespace {
-struct RISCVMoveMerge : public MachineFunctionPass {
+struct CapstoneMoveMerge : public MachineFunctionPass {
   static char ID;
 
-  RISCVMoveMerge() : MachineFunctionPass(ID) {}
+  CapstoneMoveMerge() : MachineFunctionPass(ID) {}
 
-  const RISCVSubtarget *ST;
-  const RISCVInstrInfo *TII;
+  const CapstoneSubtarget *ST;
+  const CapstoneInstrInfo *TII;
   const TargetRegisterInfo *TRI;
 
   // Track which register units have been modified and used.
@@ -49,60 +49,60 @@ struct RISCVMoveMerge : public MachineFunctionPass {
   bool mergeMoveSARegPair(MachineBasicBlock &MBB);
   bool runOnMachineFunction(MachineFunction &Fn) override;
 
-  StringRef getPassName() const override { return RISCV_MOVE_MERGE_NAME; }
+  StringRef getPassName() const override { return Capstone_MOVE_MERGE_NAME; }
 };
 
-char RISCVMoveMerge::ID = 0;
+char CapstoneMoveMerge::ID = 0;
 
 } // end of anonymous namespace
 
-INITIALIZE_PASS(RISCVMoveMerge, "riscv-move-merge", RISCV_MOVE_MERGE_NAME,
+INITIALIZE_PASS(CapstoneMoveMerge, "capstone-move-merge", Capstone_MOVE_MERGE_NAME,
                 false, false)
 
-static unsigned getMoveFromSToAOpcode(const RISCVSubtarget &ST) {
+static unsigned getMoveFromSToAOpcode(const CapstoneSubtarget &ST) {
   if (ST.hasStdExtZcmp())
-    return RISCV::CM_MVA01S;
+    return Capstone::CM_MVA01S;
 
   if (ST.hasVendorXqccmp())
-    return RISCV::QC_CM_MVA01S;
+    return Capstone::QC_CM_MVA01S;
 
   llvm_unreachable("Unhandled subtarget with paired A to S move.");
 }
 
-static unsigned getMoveFromAToSOpcode(const RISCVSubtarget &ST) {
+static unsigned getMoveFromAToSOpcode(const CapstoneSubtarget &ST) {
   if (ST.hasStdExtZcmp())
-    return RISCV::CM_MVSA01;
+    return Capstone::CM_MVSA01;
 
   if (ST.hasVendorXqccmp())
-    return RISCV::QC_CM_MVSA01;
+    return Capstone::QC_CM_MVSA01;
 
   llvm_unreachable("Unhandled subtarget with paired S to A move");
 }
 
 // Check if registers meet CM.MVA01S constraints.
-bool RISCVMoveMerge::isCandidateToMergeMVA01S(const DestSourcePair &RegPair) {
+bool CapstoneMoveMerge::isCandidateToMergeMVA01S(const DestSourcePair &RegPair) {
   Register Destination = RegPair.Destination->getReg();
   Register Source = RegPair.Source->getReg();
   // If destination is not a0 or a1.
-  if ((Destination == RISCV::X10 || Destination == RISCV::X11) &&
-      RISCV::SR07RegClass.contains(Source))
+  if ((Destination == Capstone::X10 || Destination == Capstone::X11) &&
+      Capstone::SR07RegClass.contains(Source))
     return true;
   return false;
 }
 
 // Check if registers meet CM.MVSA01 constraints.
-bool RISCVMoveMerge::isCandidateToMergeMVSA01(const DestSourcePair &RegPair) {
+bool CapstoneMoveMerge::isCandidateToMergeMVSA01(const DestSourcePair &RegPair) {
   Register Destination = RegPair.Destination->getReg();
   Register Source = RegPair.Source->getReg();
   // If Source is s0 - s7.
-  if ((Source == RISCV::X10 || Source == RISCV::X11) &&
-      RISCV::SR07RegClass.contains(Destination))
+  if ((Source == Capstone::X10 || Source == Capstone::X11) &&
+      Capstone::SR07RegClass.contains(Destination))
     return true;
   return false;
 }
 
 MachineBasicBlock::iterator
-RISCVMoveMerge::mergePairedInsns(MachineBasicBlock::iterator I,
+CapstoneMoveMerge::mergePairedInsns(MachineBasicBlock::iterator I,
                                  MachineBasicBlock::iterator Paired,
                                  bool MoveFromSToA) {
   const MachineOperand *Sreg1, *Sreg2;
@@ -140,13 +140,13 @@ RISCVMoveMerge::mergePairedInsns(MachineBasicBlock::iterator I,
     Opcode = getMoveFromSToAOpcode(*ST);
     Sreg1 = FirstPair.Source;
     Sreg2 = &PairedSource;
-    if (FirstPair.Destination->getReg() != RISCV::X10)
+    if (FirstPair.Destination->getReg() != Capstone::X10)
       std::swap(Sreg1, Sreg2);
   } else {
     Opcode = getMoveFromAToSOpcode(*ST);
     Sreg1 = FirstPair.Destination;
     Sreg2 = PairedRegs.Destination;
-    if (FirstPair.Source->getReg() != RISCV::X10)
+    if (FirstPair.Source->getReg() != Capstone::X10)
       std::swap(Sreg1, Sreg2);
   }
 
@@ -158,7 +158,7 @@ RISCVMoveMerge::mergePairedInsns(MachineBasicBlock::iterator I,
 }
 
 MachineBasicBlock::iterator
-RISCVMoveMerge::findMatchingInst(MachineBasicBlock::iterator &MBBI,
+CapstoneMoveMerge::findMatchingInst(MachineBasicBlock::iterator &MBBI,
                                  bool MoveFromSToA,
                                  const DestSourcePair &RegPair) {
   MachineBasicBlock::iterator E = MBBI->getParent()->end();
@@ -207,7 +207,7 @@ RISCVMoveMerge::findMatchingInst(MachineBasicBlock::iterator &MBBI,
 
 // Finds instructions, which could be represented as C.MV instructions and
 // merged into CM.MVA01S or CM.MVSA01.
-bool RISCVMoveMerge::mergeMoveSARegPair(MachineBasicBlock &MBB) {
+bool CapstoneMoveMerge::mergeMoveSARegPair(MachineBasicBlock &MBB) {
   bool Modified = false;
 
   for (MachineBasicBlock::iterator MBBI = MBB.begin(), E = MBB.end();
@@ -236,11 +236,11 @@ bool RISCVMoveMerge::mergeMoveSARegPair(MachineBasicBlock &MBB) {
   return Modified;
 }
 
-bool RISCVMoveMerge::runOnMachineFunction(MachineFunction &Fn) {
+bool CapstoneMoveMerge::runOnMachineFunction(MachineFunction &Fn) {
   if (skipFunction(Fn.getFunction()))
     return false;
 
-  ST = &Fn.getSubtarget<RISCVSubtarget>();
+  ST = &Fn.getSubtarget<CapstoneSubtarget>();
   if (!ST->hasStdExtZcmp() && !ST->hasVendorXqccmp())
     return false;
 
@@ -257,6 +257,6 @@ bool RISCVMoveMerge::runOnMachineFunction(MachineFunction &Fn) {
   return Modified;
 }
 
-/// createRISCVMoveMergePass - returns an instance of the
+/// createCapstoneMoveMergePass - returns an instance of the
 /// move merge pass.
-FunctionPass *llvm::createRISCVMoveMergePass() { return new RISCVMoveMerge(); }
+FunctionPass *llvm::createCapstoneMoveMergePass() { return new CapstoneMoveMerge(); }

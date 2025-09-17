@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoQ.td - RISC-V 'Q' instructions -------*- tablegen -*-===//
+//===-- CapstoneInstrInfoQ.td - Capstone 'Q' instructions -------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard 'Q',
+// This file describes the Capstone instructions from the standard 'Q',
 // Quad-Precision Floating-Point instruction set extension.
 //
 //===----------------------------------------------------------------------===//

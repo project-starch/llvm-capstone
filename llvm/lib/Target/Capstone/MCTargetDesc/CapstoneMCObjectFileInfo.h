@@ -1,4 +1,4 @@
-//===-- RISCVMCObjectFileInfo.h - RISC-V object file Info ------*- C++ -*--===//
+//===-- CapstoneMCObjectFileInfo.h - Capstone object file Info ------*- C++ -*--===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,19 +6,19 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains the declaration of the RISCVMCObjectFileInfo class.
+// This file contains the declaration of the CapstoneMCObjectFileInfo class.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVMCOBJECTFILEINFO_H
-#define LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVMCOBJECTFILEINFO_H
+#ifndef LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneMCOBJECTFILEINFO_H
+#define LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneMCOBJECTFILEINFO_H
 
 #include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 
 namespace llvm {
 
-class RISCVMCObjectFileInfo : public MCObjectFileInfo {
+class CapstoneMCObjectFileInfo : public MCObjectFileInfo {
 public:
   static unsigned getTextSectionAlignment(const MCSubtargetInfo &STI);
   unsigned getTextSectionAlignment() const override;

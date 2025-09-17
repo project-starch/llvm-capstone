@@ -1,4 +1,4 @@
-//===-- RISCV.td - Describe the RISC-V Target Machine ------*- tablegen -*-===//
+//===-- Capstone.td - Describe the Capstone Target Machine ------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -9,96 +9,96 @@
 include "llvm/Target/Target.td"
 
 //===----------------------------------------------------------------------===//
-// RISC-V subtarget features and instruction predicates.
+// Capstone subtarget features and instruction predicates.
 //===----------------------------------------------------------------------===//
 
-include "RISCVFeatures.td"
+include "CapstoneFeatures.td"
 
 //===----------------------------------------------------------------------===//
-// RISC-V profiles supported.
+// Capstone profiles supported.
 //===----------------------------------------------------------------------===//
 
-include "RISCVProfiles.td"
+include "CapstoneProfiles.td"
 
 //===----------------------------------------------------------------------===//
 // Named operands for CSR instructions.
 //===----------------------------------------------------------------------===//
 
-include "RISCVSystemOperands.td"
+include "CapstoneSystemOperands.td"
 
 //===----------------------------------------------------------------------===//
 // Registers, calling conventions, instruction descriptions.
 //===----------------------------------------------------------------------===//
 
-include "RISCVRegisterInfo.td"
-include "RISCVSchedule.td"
-include "RISCVCallingConv.td"
-include "RISCVInstrInfo.td"
-include "GISel/RISCVRegisterBanks.td"
+include "CapstoneRegisterInfo.td"
+include "CapstoneSchedule.td"
+include "CapstoneCallingConv.td"
+include "CapstoneInstrInfo.td"
+include "GISel/CapstoneRegisterBanks.td"
 
 //===----------------------------------------------------------------------===//
 // Instruction predicates
 //===----------------------------------------------------------------------===//
 
-include "RISCVInstrPredicates.td"
+include "CapstoneInstrPredicates.td"
 
 //===----------------------------------------------------------------------===//
-// RISC-V macro fusions.
+// Capstone macro fusions.
 //===----------------------------------------------------------------------===//
 
-include "RISCVMacroFusion.td"
+include "CapstoneMacroFusion.td"
 
 //===----------------------------------------------------------------------===//
-// RISC-V Scheduling Models
+// Capstone Scheduling Models
 //===----------------------------------------------------------------------===//
-include "RISCVSchedAndes45.td"
-include "RISCVSchedGenericOOO.td"
-include "RISCVSchedMIPSP8700.td"
-include "RISCVSchedRocket.td"
-include "RISCVSchedSiFive7.td"
-include "RISCVSchedSiFiveP400.td"
-include "RISCVSchedSiFiveP500.td"
-include "RISCVSchedSiFiveP600.td"
-include "RISCVSchedSiFiveP800.td"
-include "RISCVSchedSpacemitX60.td"
-include "RISCVSchedSyntacoreSCR1.td"
-include "RISCVSchedSyntacoreSCR345.td"
-include "RISCVSchedSyntacoreSCR7.td"
-include "RISCVSchedTTAscalonD8.td"
-include "RISCVSchedXiangShanNanHu.td"
+include "CapstoneSchedAndes45.td"
+include "CapstoneSchedGenericOOO.td"
+include "CapstoneSchedMIPSP8700.td"
+include "CapstoneSchedRocket.td"
+include "CapstoneSchedSiFive7.td"
+include "CapstoneSchedSiFiveP400.td"
+include "CapstoneSchedSiFiveP500.td"
+include "CapstoneSchedSiFiveP600.td"
+include "CapstoneSchedSiFiveP800.td"
+include "CapstoneSchedSpacemitX60.td"
+include "CapstoneSchedSyntacoreSCR1.td"
+include "CapstoneSchedSyntacoreSCR345.td"
+include "CapstoneSchedSyntacoreSCR7.td"
+include "CapstoneSchedTTAscalonD8.td"
+include "CapstoneSchedXiangShanNanHu.td"
 
 //===----------------------------------------------------------------------===//
-// RISC-V processors supported.
+// Capstone processors supported.
 //===----------------------------------------------------------------------===//
 
-include "RISCVProcessors.td"
+include "CapstoneProcessors.td"
 
 //===----------------------------------------------------------------------===//
 // Pfm Counters
 //===----------------------------------------------------------------------===//
 
-include "RISCVPfmCounters.td"
+include "CapstonePfmCounters.td"
 
 //===----------------------------------------------------------------------===//
-// Define the RISC-V target.
+// Define the Capstone target.
 //===----------------------------------------------------------------------===//
 
-def RISCVInstrInfo : InstrInfo {
+def CapstoneInstrInfo : InstrInfo {
   let guessInstructionProperties = 0;
 }
 
-def RISCVAsmParser : AsmParser {
+def CapstoneAsmParser : AsmParser {
   let ShouldEmitMatchRegisterAltName = 1;
   let AllowDuplicateRegisterNames = 1;
 }
 
-def RISCVAsmWriter : AsmWriter {
+def CapstoneAsmWriter : AsmWriter {
   int PassSubtarget = 1;
 }
 
-def RISCV : Target {
-  let InstructionSet = RISCVInstrInfo;
-  let AssemblyParsers = [RISCVAsmParser];
-  let AssemblyWriters = [RISCVAsmWriter];
+def Capstone : Target {
+  let InstructionSet = CapstoneInstrInfo;
+  let AssemblyParsers = [CapstoneAsmParser];
+  let AssemblyWriters = [CapstoneAsmWriter];
   let AllowRegisterRenaming = 1;
 }

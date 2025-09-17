@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZclsd.td -----------------------------*- tablegen -*-===//
+//===-- CapstoneInstrInfoZclsd.td -----------------------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard 'Zclsd',
+// This file describes the Capstone instructions from the standard 'Zclsd',
 // Compressed Load/Store pair instructions extension.
 //
 //===----------------------------------------------------------------------===//

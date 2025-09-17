@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoXTHead.td ----------------------------*- tablegen -*-===//
+//===-- CapstoneInstrInfoXTHead.td ----------------------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -41,7 +41,7 @@ def ImmThreeAsmOperand : AsmOperandClass {
   let DiagnosticString = "operand must be constant 3";
 }
 
-def immthree : RISCVOp {
+def immthree : CapstoneOp {
   let ParserMatchClass = ImmThreeAsmOperand;
   let OperandType = "OPERAND_THREE";
   let DecoderMethod = "decodeImmThreeOperand";
@@ -54,7 +54,7 @@ def ImmFourAsmOperand : AsmOperandClass {
   let DiagnosticString = "operand must be constant 4";
 }
 
-def immfour : RISCVOp {
+def immfour : CapstoneOp {
   let ParserMatchClass = ImmFourAsmOperand;
   let OperandType = "OPERAND_FOUR";
   let DecoderMethod = "decodeImmFourOperand";
@@ -64,7 +64,7 @@ def immfour : RISCVOp {
 // Instruction class templates
 //===----------------------------------------------------------------------===//
 
-class THInstVdotVV<bits<6> funct6, RISCVVFormat opv, dag outs, dag ins,
+class THInstVdotVV<bits<6> funct6, CapstoneVFormat opv, dag outs, dag ins,
                    string opcodestr, string argstr>
     : RVInstVV<funct6, opv, outs, ins, opcodestr, argstr> {
   let Inst{26} = 0;
@@ -72,7 +72,7 @@ class THInstVdotVV<bits<6> funct6, RISCVVFormat opv, dag outs, dag ins,
   let DecoderNamespace = "XTHead";
 }
 
-class THInstVdotVX<bits<6> funct6, RISCVVFormat opv, dag outs, dag ins,
+class THInstVdotVX<bits<6> funct6, CapstoneVFormat opv, dag outs, dag ins,
                    string opcodestr, string argstr>
     : RVInstVX<funct6, opv, outs, ins, opcodestr, argstr> {
   let Inst{26} = 1;
@@ -82,7 +82,7 @@ class THInstVdotVX<bits<6> funct6, RISCVVFormat opv, dag outs, dag ins,
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 // op vd, vs1, vs2, vm (reverse the order of vs1 and vs2)
-class THVdotALUrVV<bits<6> funct6, RISCVVFormat opv, string opcodestr,
+class THVdotALUrVV<bits<6> funct6, CapstoneVFormat opv, string opcodestr,
                    bit EarlyClobber>
     : THInstVdotVV<funct6, opv, (outs VR:$vd_wb),
                    (ins VR:$vd, VR:$vs1, VR:$vs2, VMaskOp:$vm),
@@ -92,7 +92,7 @@ class THVdotALUrVV<bits<6> funct6, RISCVVFormat opv, string opcodestr,
 }
 
 // op vd, rs1, vs2, vm (reverse the order of rs1 and vs2)
-class THVdotALUrVX<bits<6> funct6, RISCVVFormat opv, string opcodestr,
+class THVdotALUrVX<bits<6> funct6, CapstoneVFormat opv, string opcodestr,
                    bit EarlyClobber>
     : THInstVdotVX<funct6, opv, (outs VR:$vd_wb),
                    (ins VR:$vd, GPR:$rs1, VR:$vs2, VMaskOp:$vm),
@@ -557,7 +557,7 @@ multiclass VPatTernaryVMAQA_VV_VX<string intrinsic, string instruction,
 let Predicates = [HasVendorXTHeadBa] in {
 def : Pat<(add_like_non_imm12 (shl GPR:$rs2, uimm2:$uimm2), (XLenVT GPR:$rs1)),
           (TH_ADDSL GPR:$rs1, GPR:$rs2, uimm2:$uimm2)>;
-def : Pat<(XLenVT (riscv_shl_add GPR:$rs2, uimm2:$uimm2, GPR:$rs1)),
+def : Pat<(XLenVT (capstone_shl_add GPR:$rs2, uimm2:$uimm2, GPR:$rs1)),
           (TH_ADDSL GPR:$rs1, GPR:$rs2, uimm2:$uimm2)>;
 
 // Reuse complex patterns from StdExtZba
@@ -589,8 +589,8 @@ def : PatGpr<bswap, TH_REV>;
 } // Predicates = [HasVendorXTHeadBb]
 
 let Predicates = [HasVendorXTHeadBb, IsRV64] in {
-def : PatGprImm<riscv_rorw, TH_SRRIW, uimm5>;
-def : Pat<(riscv_rolw GPR:$rs1, uimm5:$rs2),
+def : PatGprImm<capstone_rorw, TH_SRRIW, uimm5>;
+def : Pat<(capstone_rolw GPR:$rs1, uimm5:$rs2),
           (TH_SRRIW GPR:$rs1, (ImmSubFrom32 uimm5:$rs2))>;
 def : Pat<(i64 (sra (bswap GPR:$rs1), (i64 32))),
           (TH_REVW GPR:$rs1)>;
@@ -613,17 +613,17 @@ def : Pat<(select (XLenVT GPR:$cond), (XLenVT GPR:$a), (XLenVT 0)),
 def : Pat<(select (XLenVT GPR:$cond), (XLenVT 0), (XLenVT GPR:$b)),
           (TH_MVNEZ GPR:$b, (XLenVT X0), GPR:$cond)>;
 
-def : Pat<(select (riscv_seteq (XLenVT GPR:$cond)), (XLenVT GPR:$a), (XLenVT GPR:$b)),
+def : Pat<(select (capstone_seteq (XLenVT GPR:$cond)), (XLenVT GPR:$a), (XLenVT GPR:$b)),
           (TH_MVNEZ GPR:$a, GPR:$b, GPR:$cond)>;
-def : Pat<(select (riscv_setne (XLenVT GPR:$cond)), (XLenVT GPR:$a), (XLenVT GPR:$b)),
+def : Pat<(select (capstone_setne (XLenVT GPR:$cond)), (XLenVT GPR:$a), (XLenVT GPR:$b)),
           (TH_MVEQZ GPR:$a, GPR:$b, GPR:$cond)>;
-def : Pat<(select (riscv_seteq (XLenVT GPR:$cond)), (XLenVT GPR:$a), (XLenVT 0)),
+def : Pat<(select (capstone_seteq (XLenVT GPR:$cond)), (XLenVT GPR:$a), (XLenVT 0)),
           (TH_MVNEZ GPR:$a, (XLenVT X0), GPR:$cond)>;
-def : Pat<(select (riscv_setne (XLenVT GPR:$cond)), (XLenVT GPR:$a), (XLenVT 0)),
+def : Pat<(select (capstone_setne (XLenVT GPR:$cond)), (XLenVT GPR:$a), (XLenVT 0)),
           (TH_MVEQZ GPR:$a, (XLenVT X0), GPR:$cond)>;
-def : Pat<(select (riscv_seteq (XLenVT GPR:$cond)), (XLenVT 0), (XLenVT GPR:$b)),
+def : Pat<(select (capstone_seteq (XLenVT GPR:$cond)), (XLenVT 0), (XLenVT GPR:$b)),
           (TH_MVEQZ GPR:$b, (XLenVT X0), GPR:$cond)>;
-def : Pat<(select (riscv_setne (XLenVT GPR:$cond)),  (XLenVT 0), (XLenVT GPR:$b)),
+def : Pat<(select (capstone_setne (XLenVT GPR:$cond)),  (XLenVT 0), (XLenVT GPR:$b)),
           (TH_MVNEZ GPR:$b, (XLenVT X0), GPR:$cond)>;
 } // Predicates = [HasVendorXTHeadCondMov]
 
@@ -668,13 +668,13 @@ defm PseudoTH_VMAQAUS    : VPseudoVMAQA_VX;
 }
 
 let Predicates = [HasVendorXTHeadVdot] in {
-defm : VPatTernaryVMAQA_VV_VX<"int_riscv_th_vmaqa",  "PseudoTH_VMAQA",
+defm : VPatTernaryVMAQA_VV_VX<"int_capstone_th_vmaqa",  "PseudoTH_VMAQA",
                               AllQuadWidenableInt8NoVLMulVectors>;
-defm : VPatTernaryVMAQA_VV_VX<"int_riscv_th_vmaqau", "PseudoTH_VMAQAU",
+defm : VPatTernaryVMAQA_VV_VX<"int_capstone_th_vmaqau", "PseudoTH_VMAQAU",
                               AllQuadWidenableInt8NoVLMulVectors>;
-defm : VPatTernaryVMAQA_VV_VX<"int_riscv_th_vmaqasu","PseudoTH_VMAQASU",
+defm : VPatTernaryVMAQA_VV_VX<"int_capstone_th_vmaqasu","PseudoTH_VMAQASU",
                               AllQuadWidenableInt8NoVLMulVectors>;
-defm : VPatTernaryVMAQA_VX<"int_riscv_th_vmaqaus",   "PseudoTH_VMAQAUS",
+defm : VPatTernaryVMAQA_VX<"int_capstone_th_vmaqaus",   "PseudoTH_VMAQAUS",
                            AllQuadWidenableInt8NoVLMulVectors>;
 }
 

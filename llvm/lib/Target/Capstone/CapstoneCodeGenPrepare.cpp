@@ -1,4 +1,4 @@
-//===----- RISCVCodeGenPrepare.cpp ----------------------------------------===//
+//===----- CapstoneCodeGenPrepare.cpp ----------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,15 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This is a RISC-V specific version of CodeGenPrepare.
+// This is a Capstone specific version of CodeGenPrepare.
 // It munges the code in the input function to better prepare it for
 // SelectionDAG-based code generation. This works around limitations in it's
 // basic-block-at-a-time approach.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVTargetMachine.h"
+#include "Capstone.h"
+#include "CapstoneTargetMachine.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
@@ -29,21 +29,21 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-codegenprepare"
-#define PASS_NAME "RISC-V CodeGenPrepare"
+#define DEBUG_TYPE "capstone-codegenprepare"
+#define PASS_NAME "Capstone CodeGenPrepare"
 
 namespace {
 
-class RISCVCodeGenPrepare : public FunctionPass,
-                            public InstVisitor<RISCVCodeGenPrepare, bool> {
+class CapstoneCodeGenPrepare : public FunctionPass,
+                            public InstVisitor<CapstoneCodeGenPrepare, bool> {
   const DataLayout *DL;
   const DominatorTree *DT;
-  const RISCVSubtarget *ST;
+  const CapstoneSubtarget *ST;
 
 public:
   static char ID;
 
-  RISCVCodeGenPrepare() : FunctionPass(ID) {}
+  CapstoneCodeGenPrepare() : FunctionPass(ID) {}
 
   bool runOnFunction(Function &F) override;
 
@@ -67,7 +67,7 @@ public:
 // Try to optimize (i64 (and (zext/sext (i32 X), C1))) if C1 has bit 31 set,
 // but bits 63:32 are zero. If we know that bit 31 of X is 0, we can fill
 // the upper 32 bits with ones.
-bool RISCVCodeGenPrepare::visitAnd(BinaryOperator &BO) {
+bool CapstoneCodeGenPrepare::visitAnd(BinaryOperator &BO) {
   if (!ST->is64Bit())
     return false;
 
@@ -118,7 +118,7 @@ bool RISCVCodeGenPrepare::visitAnd(BinaryOperator &BO) {
 //
 // However RVV doesn't have any tail undisturbed mask instructions and so we
 // need a convoluted sequence of mask instructions to lower the i1 vp.merge: see
-// llvm/test/CodeGen/RISCV/rvv/vpmerge-sdnode.ll.
+// llvm/test/CodeGen/Capstone/rvv/vpmerge-sdnode.ll.
 //
 // To avoid that this widens the i1 vp.merge to an i8 vp.merge, which will
 // generate a single vmerge.vim:
@@ -134,7 +134,7 @@ bool RISCVCodeGenPrepare::visitAnd(BinaryOperator &BO) {
 //
 // The trunc will normally be sunk outside of the loop, but even if there are
 // users inside the loop it is still profitable.
-bool RISCVCodeGenPrepare::widenVPMerge(IntrinsicInst &II) {
+bool CapstoneCodeGenPrepare::widenVPMerge(IntrinsicInst &II) {
   if (!II.getType()->getScalarType()->isIntegerTy(1))
     return false;
 
@@ -175,7 +175,7 @@ bool RISCVCodeGenPrepare::widenVPMerge(IntrinsicInst &II) {
   return true;
 }
 
-// LLVM vector reduction intrinsics return a scalar result, but on RISC-V vector
+// LLVM vector reduction intrinsics return a scalar result, but on Capstone vector
 // reduction instructions write the result in the first element of a vector
 // register. So when a reduction in a loop uses a scalar phi, we end up with
 // unnecessary scalar moves:
@@ -206,7 +206,7 @@ bool RISCVCodeGenPrepare::widenVPMerge(IntrinsicInst &II) {
 //
 // Which eliminates the scalar -> vector -> scalar crossing during instruction
 // selection.
-bool RISCVCodeGenPrepare::visitIntrinsicInst(IntrinsicInst &I) {
+bool CapstoneCodeGenPrepare::visitIntrinsicInst(IntrinsicInst &I) {
   if (expandVPStrideLoad(I))
     return true;
 
@@ -242,9 +242,9 @@ bool RISCVCodeGenPrepare::visitIntrinsicInst(IntrinsicInst &I) {
 }
 
 // Always expand zero strided loads so we match more .vx splat patterns, even if
-// we have +optimized-zero-stride-loads. RISCVDAGToDAGISel::Select will convert
+// we have +optimized-zero-stride-loads. CapstoneDAGToDAGISel::Select will convert
 // it back to a strided load if it's optimized.
-bool RISCVCodeGenPrepare::expandVPStrideLoad(IntrinsicInst &II) {
+bool CapstoneCodeGenPrepare::expandVPStrideLoad(IntrinsicInst &II) {
   Value *BasePtr, *VL;
 
   using namespace PatternMatch;
@@ -273,13 +273,13 @@ bool RISCVCodeGenPrepare::expandVPStrideLoad(IntrinsicInst &II) {
   return true;
 }
 
-bool RISCVCodeGenPrepare::runOnFunction(Function &F) {
+bool CapstoneCodeGenPrepare::runOnFunction(Function &F) {
   if (skipFunction(F))
     return false;
 
   auto &TPC = getAnalysis<TargetPassConfig>();
-  auto &TM = TPC.getTM<RISCVTargetMachine>();
-  ST = &TM.getSubtarget<RISCVSubtarget>(F);
+  auto &TM = TPC.getTM<CapstoneTargetMachine>();
+  ST = &TM.getSubtarget<CapstoneSubtarget>(F);
 
   DL = &F.getDataLayout();
   DT = &getAnalysis<DominatorTreeWrapperPass>().getDomTree();
@@ -292,12 +292,12 @@ bool RISCVCodeGenPrepare::runOnFunction(Function &F) {
   return MadeChange;
 }
 
-INITIALIZE_PASS_BEGIN(RISCVCodeGenPrepare, DEBUG_TYPE, PASS_NAME, false, false)
+INITIALIZE_PASS_BEGIN(CapstoneCodeGenPrepare, DEBUG_TYPE, PASS_NAME, false, false)
 INITIALIZE_PASS_DEPENDENCY(TargetPassConfig)
-INITIALIZE_PASS_END(RISCVCodeGenPrepare, DEBUG_TYPE, PASS_NAME, false, false)
+INITIALIZE_PASS_END(CapstoneCodeGenPrepare, DEBUG_TYPE, PASS_NAME, false, false)
 
-char RISCVCodeGenPrepare::ID = 0;
+char CapstoneCodeGenPrepare::ID = 0;
 
-FunctionPass *llvm::createRISCVCodeGenPreparePass() {
-  return new RISCVCodeGenPrepare();
+FunctionPass *llvm::createCapstoneCodeGenPreparePass() {
+  return new CapstoneCodeGenPrepare();
 }

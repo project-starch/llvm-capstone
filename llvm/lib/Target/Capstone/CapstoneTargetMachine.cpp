@@ -1,4 +1,4 @@
-//===-- RISCVTargetMachine.cpp - Define TargetMachine for RISC-V ----------===//
+//===-- CapstoneTargetMachine.cpp - Define TargetMachine for Capstone ----------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,17 +6,17 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// Implements the info about RISC-V target spec.
+// Implements the info about Capstone target spec.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVTargetMachine.h"
-#include "MCTargetDesc/RISCVBaseInfo.h"
-#include "RISCV.h"
-#include "RISCVMachineFunctionInfo.h"
-#include "RISCVTargetObjectFile.h"
-#include "RISCVTargetTransformInfo.h"
-#include "TargetInfo/RISCVTargetInfo.h"
+#include "CapstoneTargetMachine.h"
+#include "MCTargetDesc/CapstoneBaseInfo.h"
+#include "Capstone.h"
+#include "CapstoneMachineFunctionInfo.h"
+#include "CapstoneTargetObjectFile.h"
+#include "CapstoneTargetTransformInfo.h"
+#include "TargetInfo/CapstoneTargetInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/CodeGen/GlobalISel/CSEInfo.h"
 #include "llvm/CodeGen/GlobalISel/IRTranslator.h"
@@ -43,102 +43,102 @@
 using namespace llvm;
 
 static cl::opt<bool> EnableRedundantCopyElimination(
-    "riscv-enable-copyelim",
+    "capstone-enable-copyelim",
     cl::desc("Enable the redundant copy elimination pass"), cl::init(true),
     cl::Hidden);
 
 // FIXME: Unify control over GlobalMerge.
 static cl::opt<cl::boolOrDefault>
-    EnableGlobalMerge("riscv-enable-global-merge", cl::Hidden,
+    EnableGlobalMerge("capstone-enable-global-merge", cl::Hidden,
                       cl::desc("Enable the global merge pass"));
 
 static cl::opt<bool>
-    EnableMachineCombiner("riscv-enable-machine-combiner",
+    EnableMachineCombiner("capstone-enable-machine-combiner",
                           cl::desc("Enable the machine combiner pass"),
                           cl::init(true), cl::Hidden);
 
 static cl::opt<unsigned> RVVVectorBitsMaxOpt(
-    "riscv-v-vector-bits-max",
+    "capstone-v-vector-bits-max",
     cl::desc("Assume V extension vector registers are at most this big, "
              "with zero meaning no maximum size is assumed."),
     cl::init(0), cl::Hidden);
 
 static cl::opt<int> RVVVectorBitsMinOpt(
-    "riscv-v-vector-bits-min",
+    "capstone-v-vector-bits-min",
     cl::desc("Assume V extension vector registers are at least this big, "
              "with zero meaning no minimum size is assumed. A value of -1 "
              "means use Zvl*b extension. This is primarily used to enable "
              "autovectorization with fixed width vectors."),
     cl::init(-1), cl::Hidden);
 
-static cl::opt<bool> EnableRISCVCopyPropagation(
-    "riscv-enable-copy-propagation",
-    cl::desc("Enable the copy propagation with RISC-V copy instr"),
+static cl::opt<bool> EnableCapstoneCopyPropagation(
+    "capstone-enable-copy-propagation",
+    cl::desc("Enable the copy propagation with Capstone copy instr"),
     cl::init(true), cl::Hidden);
 
-static cl::opt<bool> EnableRISCVDeadRegisterElimination(
-    "riscv-enable-dead-defs", cl::Hidden,
+static cl::opt<bool> EnableCapstoneDeadRegisterElimination(
+    "capstone-enable-dead-defs", cl::Hidden,
     cl::desc("Enable the pass that removes dead"
              " definitions and replaces stores to"
              " them with stores to x0"),
     cl::init(true));
 
 static cl::opt<bool>
-    EnableSinkFold("riscv-enable-sink-fold",
+    EnableSinkFold("capstone-enable-sink-fold",
                    cl::desc("Enable sinking and folding of instruction copies"),
                    cl::init(true), cl::Hidden);
 
 static cl::opt<bool>
-    EnableLoopDataPrefetch("riscv-enable-loop-data-prefetch", cl::Hidden,
+    EnableLoopDataPrefetch("capstone-enable-loop-data-prefetch", cl::Hidden,
                            cl::desc("Enable the loop data prefetch pass"),
                            cl::init(true));
 
 static cl::opt<bool> DisableVectorMaskMutation(
-    "riscv-disable-vector-mask-mutation",
+    "capstone-disable-vector-mask-mutation",
     cl::desc("Disable the vector mask scheduling mutation"), cl::init(false),
     cl::Hidden);
 
 static cl::opt<bool>
-    EnableMachinePipeliner("riscv-enable-pipeliner",
-                           cl::desc("Enable Machine Pipeliner for RISC-V"),
+    EnableMachinePipeliner("capstone-enable-pipeliner",
+                           cl::desc("Enable Machine Pipeliner for Capstone"),
                            cl::init(false), cl::Hidden);
 
-extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeRISCVTarget() {
-  RegisterTargetMachine<RISCVTargetMachine> X(getTheRISCV32Target());
-  RegisterTargetMachine<RISCVTargetMachine> Y(getTheRISCV64Target());
-  RegisterTargetMachine<RISCVTargetMachine> A(getTheRISCV32beTarget());
-  RegisterTargetMachine<RISCVTargetMachine> B(getTheRISCV64beTarget());
+extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget() {
+  RegisterTargetMachine<CapstoneTargetMachine> X(getTheCapstone32Target());
+  RegisterTargetMachine<CapstoneTargetMachine> Y(getTheCapstone64Target());
+  RegisterTargetMachine<CapstoneTargetMachine> A(getTheCapstone32beTarget());
+  RegisterTargetMachine<CapstoneTargetMachine> B(getTheCapstone64beTarget());
   auto *PR = PassRegistry::getPassRegistry();
   initializeGlobalISel(*PR);
-  initializeRISCVO0PreLegalizerCombinerPass(*PR);
-  initializeRISCVPreLegalizerCombinerPass(*PR);
-  initializeRISCVPostLegalizerCombinerPass(*PR);
+  initializeCapstoneO0PreLegalizerCombinerPass(*PR);
+  initializeCapstonePreLegalizerCombinerPass(*PR);
+  initializeCapstonePostLegalizerCombinerPass(*PR);
   initializeKCFIPass(*PR);
-  initializeRISCVDeadRegisterDefinitionsPass(*PR);
-  initializeRISCVLateBranchOptPass(*PR);
-  initializeRISCVMakeCompressibleOptPass(*PR);
-  initializeRISCVGatherScatterLoweringPass(*PR);
-  initializeRISCVCodeGenPreparePass(*PR);
-  initializeRISCVPostRAExpandPseudoPass(*PR);
-  initializeRISCVMergeBaseOffsetOptPass(*PR);
-  initializeRISCVOptWInstrsPass(*PR);
-  initializeRISCVFoldMemOffsetPass(*PR);
-  initializeRISCVPreRAExpandPseudoPass(*PR);
-  initializeRISCVExpandPseudoPass(*PR);
-  initializeRISCVVectorPeepholePass(*PR);
-  initializeRISCVVLOptimizerPass(*PR);
-  initializeRISCVVMV0EliminationPass(*PR);
-  initializeRISCVInsertVSETVLIPass(*PR);
-  initializeRISCVInsertReadWriteCSRPass(*PR);
-  initializeRISCVInsertWriteVXRMPass(*PR);
-  initializeRISCVDAGToDAGISelLegacyPass(*PR);
-  initializeRISCVMoveMergePass(*PR);
-  initializeRISCVPushPopOptPass(*PR);
-  initializeRISCVIndirectBranchTrackingPass(*PR);
-  initializeRISCVLoadStoreOptPass(*PR);
-  initializeRISCVExpandAtomicPseudoPass(*PR);
-  initializeRISCVRedundantCopyEliminationPass(*PR);
-  initializeRISCVAsmPrinterPass(*PR);
+  initializeCapstoneDeadRegisterDefinitionsPass(*PR);
+  initializeCapstoneLateBranchOptPass(*PR);
+  initializeCapstoneMakeCompressibleOptPass(*PR);
+  initializeCapstoneGatherScatterLoweringPass(*PR);
+  initializeCapstoneCodeGenPreparePass(*PR);
+  initializeCapstonePostRAExpandPseudoPass(*PR);
+  initializeCapstoneMergeBaseOffsetOptPass(*PR);
+  initializeCapstoneOptWInstrsPass(*PR);
+  initializeCapstoneFoldMemOffsetPass(*PR);
+  initializeCapstonePreRAExpandPseudoPass(*PR);
+  initializeCapstoneExpandPseudoPass(*PR);
+  initializeCapstoneVectorPeepholePass(*PR);
+  initializeCapstoneVLOptimizerPass(*PR);
+  initializeCapstoneVMV0EliminationPass(*PR);
+  initializeCapstoneInsertVSETVLIPass(*PR);
+  initializeCapstoneInsertReadWriteCSRPass(*PR);
+  initializeCapstoneInsertWriteVXRMPass(*PR);
+  initializeCapstoneDAGToDAGISelLegacyPass(*PR);
+  initializeCapstoneMoveMergePass(*PR);
+  initializeCapstonePushPopOptPass(*PR);
+  initializeCapstoneIndirectBranchTrackingPass(*PR);
+  initializeCapstoneLoadStoreOptPass(*PR);
+  initializeCapstoneExpandAtomicPseudoPass(*PR);
+  initializeCapstoneRedundantCopyEliminationPass(*PR);
+  initializeCapstoneAsmPrinterPass(*PR);
 }
 
 static Reloc::Model getEffectiveRelocModel(const Triple &TT,
@@ -146,7 +146,7 @@ static Reloc::Model getEffectiveRelocModel(const Triple &TT,
   return RM.value_or(Reloc::Static);
 }
 
-RISCVTargetMachine::RISCVTargetMachine(const Target &T, const Triple &TT,
+CapstoneTargetMachine::CapstoneTargetMachine(const Target &T, const Triple &TT,
                                        StringRef CPU, StringRef FS,
                                        const TargetOptions &Options,
                                        std::optional<Reloc::Model> RM,
@@ -156,14 +156,14 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, const Triple &TT,
           T, TT.computeDataLayout(Options.MCOptions.getABIName()), TT, CPU, FS,
           Options, getEffectiveRelocModel(TT, RM),
           getEffectiveCodeModel(CM, CodeModel::Small), OL),
-      TLOF(std::make_unique<RISCVELFTargetObjectFile>()) {
+      TLOF(std::make_unique<CapstoneELFTargetObjectFile>()) {
   initAsmInfo();
 
-  // RISC-V supports the MachineOutliner.
+  // Capstone supports the MachineOutliner.
   setMachineOutliner(true);
   setSupportsDefaultOutlining(true);
 
-  // RISC-V supports the debug entry values.
+  // Capstone supports the debug entry values.
   setSupportsDebugEntryValues(true);
 
   if (TT.isOSFuchsia() && !TT.isArch64Bit())
@@ -172,8 +172,8 @@ RISCVTargetMachine::RISCVTargetMachine(const Target &T, const Triple &TT,
   setCFIFixup(true);
 }
 
-const RISCVSubtarget *
-RISCVTargetMachine::getSubtargetImpl(const Function &F) const {
+const CapstoneSubtarget *
+CapstoneTargetMachine::getSubtargetImpl(const Function &F) const {
   Attribute CPUAttr = F.getFnAttribute("target-cpu");
   Attribute TuneAttr = F.getFnAttribute("tune-cpu");
   Attribute FSAttr = F.getFnAttribute("target-features");
@@ -191,10 +191,10 @@ RISCVTargetMachine::getSubtargetImpl(const Function &F) const {
   Attribute VScaleRangeAttr = F.getFnAttribute(Attribute::VScaleRange);
   if (VScaleRangeAttr.isValid()) {
     if (!RVVVectorBitsMinOpt.getNumOccurrences())
-      RVVBitsMin = VScaleRangeAttr.getVScaleRangeMin() * RISCV::RVVBitsPerBlock;
+      RVVBitsMin = VScaleRangeAttr.getVScaleRangeMin() * Capstone::RVVBitsPerBlock;
     std::optional<unsigned> VScaleMax = VScaleRangeAttr.getVScaleRangeMax();
     if (VScaleMax.has_value() && !RVVVectorBitsMaxOpt.getNumOccurrences())
-      RVVBitsMax = *VScaleMax * RISCV::RVVBitsPerBlock;
+      RVVBitsMax = *VScaleMax * Capstone::RVVBitsPerBlock;
   }
 
   if (RVVBitsMin != -1U) {
@@ -236,43 +236,43 @@ RISCVTargetMachine::getSubtargetImpl(const Function &F) const {
     auto ABIName = Options.MCOptions.getABIName();
     if (const MDString *ModuleTargetABI = dyn_cast_or_null<MDString>(
             F.getParent()->getModuleFlag("target-abi"))) {
-      auto TargetABI = RISCVABI::getTargetABI(ABIName);
-      if (TargetABI != RISCVABI::ABI_Unknown &&
+      auto TargetABI = CapstoneABI::getTargetABI(ABIName);
+      if (TargetABI != CapstoneABI::ABI_Unknown &&
           ModuleTargetABI->getString() != ABIName) {
         report_fatal_error("-target-abi option != target-abi module flag");
       }
       ABIName = ModuleTargetABI->getString();
     }
-    I = std::make_unique<RISCVSubtarget>(
+    I = std::make_unique<CapstoneSubtarget>(
         TargetTriple, CPU, TuneCPU, FS, ABIName, RVVBitsMin, RVVBitsMax, *this);
   }
   return I.get();
 }
 
-MachineFunctionInfo *RISCVTargetMachine::createMachineFunctionInfo(
+MachineFunctionInfo *CapstoneTargetMachine::createMachineFunctionInfo(
     BumpPtrAllocator &Allocator, const Function &F,
     const TargetSubtargetInfo *STI) const {
-  return RISCVMachineFunctionInfo::create<RISCVMachineFunctionInfo>(
-      Allocator, F, static_cast<const RISCVSubtarget *>(STI));
+  return CapstoneMachineFunctionInfo::create<CapstoneMachineFunctionInfo>(
+      Allocator, F, static_cast<const CapstoneSubtarget *>(STI));
 }
 
 TargetTransformInfo
-RISCVTargetMachine::getTargetTransformInfo(const Function &F) const {
-  return TargetTransformInfo(std::make_unique<RISCVTTIImpl>(this, F));
+CapstoneTargetMachine::getTargetTransformInfo(const Function &F) const {
+  return TargetTransformInfo(std::make_unique<CapstoneTTIImpl>(this, F));
 }
 
-// A RISC-V hart has a single byte-addressable address space of 2^XLEN bytes
+// A Capstone hart has a single byte-addressable address space of 2^XLEN bytes
 // for all memory accesses, so it is reasonable to assume that an
 // implementation has no-op address space casts. If an implementation makes a
 // change to this, they can override it here.
-bool RISCVTargetMachine::isNoopAddrSpaceCast(unsigned SrcAS,
+bool CapstoneTargetMachine::isNoopAddrSpaceCast(unsigned SrcAS,
                                              unsigned DstAS) const {
   return true;
 }
 
 ScheduleDAGInstrs *
-RISCVTargetMachine::createMachineScheduler(MachineSchedContext *C) const {
-  const RISCVSubtarget &ST = C->MF->getSubtarget<RISCVSubtarget>();
+CapstoneTargetMachine::createMachineScheduler(MachineSchedContext *C) const {
+  const CapstoneSubtarget &ST = C->MF->getSubtarget<CapstoneSubtarget>();
   ScheduleDAGMILive *DAG = createSchedLive(C);
 
   if (ST.enableMISchedLoadClustering())
@@ -284,14 +284,14 @@ RISCVTargetMachine::createMachineScheduler(MachineSchedContext *C) const {
         DAG->TII, DAG->TRI, /*ReorderWhileClustering=*/true));
 
   if (!DisableVectorMaskMutation && ST.hasVInstructions())
-    DAG->addMutation(createRISCVVectorMaskDAGMutation(DAG->TRI));
+    DAG->addMutation(createCapstoneVectorMaskDAGMutation(DAG->TRI));
 
   return DAG;
 }
 
 ScheduleDAGInstrs *
-RISCVTargetMachine::createPostMachineScheduler(MachineSchedContext *C) const {
-  const RISCVSubtarget &ST = C->MF->getSubtarget<RISCVSubtarget>();
+CapstoneTargetMachine::createPostMachineScheduler(MachineSchedContext *C) const {
+  const CapstoneSubtarget &ST = C->MF->getSubtarget<CapstoneSubtarget>();
   ScheduleDAGMI *DAG = createSchedPostRA(C);
 
   if (ST.enablePostMISchedLoadClustering())
@@ -317,19 +317,19 @@ static bool onlyAllocateRVVReg(const TargetRegisterInfo &TRI,
                                const MachineRegisterInfo &MRI,
                                const Register Reg) {
   const TargetRegisterClass *RC = MRI.getRegClass(Reg);
-  return RISCVRegisterInfo::isRVVRegClass(RC);
+  return CapstoneRegisterInfo::isRVVRegClass(RC);
 }
 
 static FunctionPass *useDefaultRegisterAllocator() { return nullptr; }
 
 static llvm::once_flag InitializeDefaultRVVRegisterAllocatorFlag;
 
-/// -riscv-rvv-regalloc=<fast|basic|greedy> command line option.
+/// -capstone-rvv-regalloc=<fast|basic|greedy> command line option.
 /// This option could designate the rvv register allocator only.
-/// For example: -riscv-rvv-regalloc=basic
+/// For example: -capstone-rvv-regalloc=basic
 static cl::opt<RVVRegisterRegAlloc::FunctionPassCtor, false,
                RegisterPassParser<RVVRegisterRegAlloc>>
-    RVVRegAlloc("riscv-rvv-regalloc", cl::Hidden,
+    RVVRegAlloc("capstone-rvv-regalloc", cl::Hidden,
                 cl::init(&useDefaultRegisterAllocator),
                 cl::desc("Register allocator to use for RVV register."));
 
@@ -364,9 +364,9 @@ static RVVRegisterRegAlloc
 static RVVRegisterRegAlloc fastRegAllocRVVReg("fast", "fast register allocator",
                                               createFastRVVRegisterAllocator);
 
-class RISCVPassConfig : public TargetPassConfig {
+class CapstonePassConfig : public TargetPassConfig {
 public:
-  RISCVPassConfig(RISCVTargetMachine &TM, PassManagerBase &PM)
+  CapstonePassConfig(CapstoneTargetMachine &TM, PassManagerBase &PM)
       : TargetPassConfig(TM, PM) {
     if (TM.getOptLevel() != CodeGenOptLevel::None)
       substitutePass(&PostRASchedulerID, &PostMachineSchedulerID);
@@ -374,8 +374,8 @@ public:
     EnableLoopTermFold = true;
   }
 
-  RISCVTargetMachine &getRISCVTargetMachine() const {
-    return getTM<RISCVTargetMachine>();
+  CapstoneTargetMachine &getCapstoneTargetMachine() const {
+    return getTM<CapstoneTargetMachine>();
   }
 
   void addIRPasses() override;
@@ -404,15 +404,15 @@ public:
 };
 } // namespace
 
-TargetPassConfig *RISCVTargetMachine::createPassConfig(PassManagerBase &PM) {
-  return new RISCVPassConfig(*this, PM);
+TargetPassConfig *CapstoneTargetMachine::createPassConfig(PassManagerBase &PM) {
+  return new CapstonePassConfig(*this, PM);
 }
 
-std::unique_ptr<CSEConfigBase> RISCVPassConfig::getCSEConfig() const {
+std::unique_ptr<CSEConfigBase> CapstonePassConfig::getCSEConfig() const {
   return getStandardCSEConfigForOpt(TM->getOptLevel());
 }
 
-FunctionPass *RISCVPassConfig::createRVVRegAllocPass(bool Optimized) {
+FunctionPass *CapstonePassConfig::createRVVRegAllocPass(bool Optimized) {
   // Initialize the global default.
   llvm::call_once(InitializeDefaultRVVRegisterAllocatorFlag,
                   initializeDefaultRVVRegisterAllocatorOnce);
@@ -427,42 +427,42 @@ FunctionPass *RISCVPassConfig::createRVVRegAllocPass(bool Optimized) {
   return createFastRVVRegisterAllocator();
 }
 
-bool RISCVPassConfig::addRegAssignAndRewriteFast() {
+bool CapstonePassConfig::addRegAssignAndRewriteFast() {
   addPass(createRVVRegAllocPass(false));
-  addPass(createRISCVInsertVSETVLIPass());
+  addPass(createCapstoneInsertVSETVLIPass());
   if (TM->getOptLevel() != CodeGenOptLevel::None &&
-      EnableRISCVDeadRegisterElimination)
-    addPass(createRISCVDeadRegisterDefinitionsPass());
+      EnableCapstoneDeadRegisterElimination)
+    addPass(createCapstoneDeadRegisterDefinitionsPass());
   return TargetPassConfig::addRegAssignAndRewriteFast();
 }
 
-bool RISCVPassConfig::addRegAssignAndRewriteOptimized() {
+bool CapstonePassConfig::addRegAssignAndRewriteOptimized() {
   addPass(createRVVRegAllocPass(true));
   addPass(createVirtRegRewriter(false));
-  addPass(createRISCVInsertVSETVLIPass());
+  addPass(createCapstoneInsertVSETVLIPass());
   if (TM->getOptLevel() != CodeGenOptLevel::None &&
-      EnableRISCVDeadRegisterElimination)
-    addPass(createRISCVDeadRegisterDefinitionsPass());
+      EnableCapstoneDeadRegisterElimination)
+    addPass(createCapstoneDeadRegisterDefinitionsPass());
   return TargetPassConfig::addRegAssignAndRewriteOptimized();
 }
 
-void RISCVPassConfig::addIRPasses() {
+void CapstonePassConfig::addIRPasses() {
   addPass(createAtomicExpandLegacyPass());
-  addPass(createRISCVZacasABIFixPass());
+  addPass(createCapstoneZacasABIFixPass());
 
   if (getOptLevel() != CodeGenOptLevel::None) {
     if (EnableLoopDataPrefetch)
       addPass(createLoopDataPrefetchPass());
 
-    addPass(createRISCVGatherScatterLoweringPass());
+    addPass(createCapstoneGatherScatterLoweringPass());
     addPass(createInterleavedAccessPass());
-    addPass(createRISCVCodeGenPreparePass());
+    addPass(createCapstoneCodeGenPreparePass());
   }
 
   TargetPassConfig::addIRPasses();
 }
 
-bool RISCVPassConfig::addPreISel() {
+bool CapstonePassConfig::addPreISel() {
   if (TM->getOptLevel() != CodeGenOptLevel::None) {
     // Add a barrier before instruction selection so that we will not get
     // deleted block address after enabling default outlining. See D99707 for
@@ -485,92 +485,92 @@ bool RISCVPassConfig::addPreISel() {
   return false;
 }
 
-void RISCVPassConfig::addCodeGenPrepare() {
+void CapstonePassConfig::addCodeGenPrepare() {
   if (getOptLevel() != CodeGenOptLevel::None)
     addPass(createTypePromotionLegacyPass());
   TargetPassConfig::addCodeGenPrepare();
 }
 
-bool RISCVPassConfig::addInstSelector() {
-  addPass(createRISCVISelDag(getRISCVTargetMachine(), getOptLevel()));
+bool CapstonePassConfig::addInstSelector() {
+  addPass(createCapstoneISelDag(getCapstoneTargetMachine(), getOptLevel()));
 
   return false;
 }
 
-bool RISCVPassConfig::addIRTranslator() {
+bool CapstonePassConfig::addIRTranslator() {
   addPass(new IRTranslator(getOptLevel()));
   return false;
 }
 
-void RISCVPassConfig::addPreLegalizeMachineIR() {
+void CapstonePassConfig::addPreLegalizeMachineIR() {
   if (getOptLevel() == CodeGenOptLevel::None) {
-    addPass(createRISCVO0PreLegalizerCombiner());
+    addPass(createCapstoneO0PreLegalizerCombiner());
   } else {
-    addPass(createRISCVPreLegalizerCombiner());
+    addPass(createCapstonePreLegalizerCombiner());
   }
 }
 
-bool RISCVPassConfig::addLegalizeMachineIR() {
+bool CapstonePassConfig::addLegalizeMachineIR() {
   addPass(new Legalizer());
   return false;
 }
 
-void RISCVPassConfig::addPreRegBankSelect() {
+void CapstonePassConfig::addPreRegBankSelect() {
   if (getOptLevel() != CodeGenOptLevel::None)
-    addPass(createRISCVPostLegalizerCombiner());
+    addPass(createCapstonePostLegalizerCombiner());
 }
 
-bool RISCVPassConfig::addRegBankSelect() {
+bool CapstonePassConfig::addRegBankSelect() {
   addPass(new RegBankSelect());
   return false;
 }
 
-bool RISCVPassConfig::addGlobalInstructionSelect() {
+bool CapstonePassConfig::addGlobalInstructionSelect() {
   addPass(new InstructionSelect(getOptLevel()));
   return false;
 }
 
-void RISCVPassConfig::addPreSched2() {
-  addPass(createRISCVPostRAExpandPseudoPass());
+void CapstonePassConfig::addPreSched2() {
+  addPass(createCapstonePostRAExpandPseudoPass());
 
   // Emit KCFI checks for indirect calls.
   addPass(createKCFIPass());
   if (TM->getOptLevel() != CodeGenOptLevel::None)
-    addPass(createRISCVLoadStoreOptPass());
+    addPass(createCapstoneLoadStoreOptPass());
 }
 
-void RISCVPassConfig::addPreEmitPass() {
+void CapstonePassConfig::addPreEmitPass() {
   // TODO: It would potentially be better to schedule copy propagation after
   // expanding pseudos (in addPreEmitPass2). However, performing copy
   // propagation after the machine outliner (which runs after addPreEmitPass)
   // currently leads to incorrect code-gen, where copies to registers within
   // outlined functions are removed erroneously.
   if (TM->getOptLevel() >= CodeGenOptLevel::Default &&
-      EnableRISCVCopyPropagation)
+      EnableCapstoneCopyPropagation)
     addPass(createMachineCopyPropagationPass(true));
   if (TM->getOptLevel() >= CodeGenOptLevel::Default)
-    addPass(createRISCVLateBranchOptPass());
+    addPass(createCapstoneLateBranchOptPass());
   // The IndirectBranchTrackingPass inserts lpad and could have changed the
   // basic block alignment. It must be done before Branch Relaxation to
   // prevent the adjusted offset exceeding the branch range.
-  addPass(createRISCVIndirectBranchTrackingPass());
+  addPass(createCapstoneIndirectBranchTrackingPass());
   addPass(&BranchRelaxationPassID);
-  addPass(createRISCVMakeCompressibleOptPass());
+  addPass(createCapstoneMakeCompressibleOptPass());
 }
 
-void RISCVPassConfig::addPreEmitPass2() {
+void CapstonePassConfig::addPreEmitPass2() {
   if (TM->getOptLevel() != CodeGenOptLevel::None) {
-    addPass(createRISCVMoveMergePass());
+    addPass(createCapstoneMoveMergePass());
     // Schedule PushPop Optimization before expansion of Pseudo instruction,
     // ensuring return instruction is detected correctly.
-    addPass(createRISCVPushPopOptimizationPass());
+    addPass(createCapstonePushPopOptimizationPass());
   }
-  addPass(createRISCVExpandPseudoPass());
+  addPass(createCapstoneExpandPseudoPass());
 
   // Schedule the expansion of AMOs at the last possible moment, avoiding the
   // possibility for other passes to break the requirements for forward
   // progress in the LR/SC block.
-  addPass(createRISCVExpandAtomicPseudoPass());
+  addPass(createCapstoneExpandAtomicPseudoPass());
 
   // KCFI indirect call checks are lowered to a bundle.
   addPass(createUnpackMachineBundles([&](const MachineFunction &MF) {
@@ -578,54 +578,54 @@ void RISCVPassConfig::addPreEmitPass2() {
   }));
 }
 
-void RISCVPassConfig::addMachineSSAOptimization() {
-  addPass(createRISCVVectorPeepholePass());
-  addPass(createRISCVFoldMemOffsetPass());
+void CapstonePassConfig::addMachineSSAOptimization() {
+  addPass(createCapstoneVectorPeepholePass());
+  addPass(createCapstoneFoldMemOffsetPass());
 
   TargetPassConfig::addMachineSSAOptimization();
 
-  if (TM->getTargetTriple().isRISCV64()) {
-    addPass(createRISCVOptWInstrsPass());
+  if (TM->getTargetTriple().isCapstone64()) {
+    addPass(createCapstoneOptWInstrsPass());
   }
 }
 
-void RISCVPassConfig::addPreRegAlloc() {
-  addPass(createRISCVPreRAExpandPseudoPass());
+void CapstonePassConfig::addPreRegAlloc() {
+  addPass(createCapstonePreRAExpandPseudoPass());
   if (TM->getOptLevel() != CodeGenOptLevel::None) {
-    addPass(createRISCVMergeBaseOffsetOptPass());
-    addPass(createRISCVVLOptimizerPass());
+    addPass(createCapstoneMergeBaseOffsetOptPass());
+    addPass(createCapstoneVLOptimizerPass());
   }
 
-  addPass(createRISCVInsertReadWriteCSRPass());
-  addPass(createRISCVInsertWriteVXRMPass());
-  addPass(createRISCVLandingPadSetupPass());
+  addPass(createCapstoneInsertReadWriteCSRPass());
+  addPass(createCapstoneInsertWriteVXRMPass());
+  addPass(createCapstoneLandingPadSetupPass());
 
   if (TM->getOptLevel() != CodeGenOptLevel::None && EnableMachinePipeliner)
     addPass(&MachinePipelinerID);
 
-  addPass(createRISCVVMV0EliminationPass());
+  addPass(createCapstoneVMV0EliminationPass());
 }
 
-void RISCVPassConfig::addFastRegAlloc() {
+void CapstonePassConfig::addFastRegAlloc() {
   addPass(&InitUndefID);
   TargetPassConfig::addFastRegAlloc();
 }
 
 
-void RISCVPassConfig::addPostRegAlloc() {
+void CapstonePassConfig::addPostRegAlloc() {
   if (TM->getOptLevel() != CodeGenOptLevel::None &&
       EnableRedundantCopyElimination)
-    addPass(createRISCVRedundantCopyEliminationPass());
+    addPass(createCapstoneRedundantCopyEliminationPass());
 }
 
-bool RISCVPassConfig::addILPOpts() {
+bool CapstonePassConfig::addILPOpts() {
   if (EnableMachineCombiner)
     addPass(&MachineCombinerID);
 
   return true;
 }
 
-void RISCVTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
+void CapstoneTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
   PB.registerLateLoopOptimizationsEPCallback([=](LoopPassManager &LPM,
                                                  OptimizationLevel Level) {
     if (Level != OptimizationLevel::O0)
@@ -634,21 +634,21 @@ void RISCVTargetMachine::registerPassBuilderCallbacks(PassBuilder &PB) {
 }
 
 yaml::MachineFunctionInfo *
-RISCVTargetMachine::createDefaultFuncInfoYAML() const {
-  return new yaml::RISCVMachineFunctionInfo();
+CapstoneTargetMachine::createDefaultFuncInfoYAML() const {
+  return new yaml::CapstoneMachineFunctionInfo();
 }
 
 yaml::MachineFunctionInfo *
-RISCVTargetMachine::convertFuncInfoToYAML(const MachineFunction &MF) const {
-  const auto *MFI = MF.getInfo<RISCVMachineFunctionInfo>();
-  return new yaml::RISCVMachineFunctionInfo(*MFI);
+CapstoneTargetMachine::convertFuncInfoToYAML(const MachineFunction &MF) const {
+  const auto *MFI = MF.getInfo<CapstoneMachineFunctionInfo>();
+  return new yaml::CapstoneMachineFunctionInfo(*MFI);
 }
 
-bool RISCVTargetMachine::parseMachineFunctionInfo(
+bool CapstoneTargetMachine::parseMachineFunctionInfo(
     const yaml::MachineFunctionInfo &MFI, PerFunctionMIParsingState &PFS,
     SMDiagnostic &Error, SMRange &SourceRange) const {
   const auto &YamlMFI =
-      static_cast<const yaml::RISCVMachineFunctionInfo &>(MFI);
-  PFS.MF.getInfo<RISCVMachineFunctionInfo>()->initializeBaseYamlFields(YamlMFI);
+      static_cast<const yaml::CapstoneMachineFunctionInfo &>(MFI);
+  PFS.MF.getInfo<CapstoneMachineFunctionInfo>()->initializeBaseYamlFields(YamlMFI);
   return false;
 }

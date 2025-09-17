@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZfh.td - RISC-V 'Zfh' instructions ---*- tablegen -*-===//
+//===-- CapstoneInstrInfoZfh.td - Capstone 'Zfh' instructions ---*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,18 +6,18 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard 'Zfh'
+// This file describes the Capstone instructions from the standard 'Zfh'
 // half-precision floating-point extension, version 1.0.
 //
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
-// RISC-V specific DAG Nodes.
+// Capstone specific DAG Nodes.
 //===----------------------------------------------------------------------===//
 
-def SDT_RISCVFMV_H_X
+def SDT_CapstoneFMV_H_X
     : SDTypeProfile<1, 1, [SDTCisFP<0>, SDTCisVT<1, XLenVT>]>;
-def SDT_RISCVFMV_X_EXTH
+def SDT_CapstoneFMV_X_EXTH
     : SDTypeProfile<1, 1, [SDTCisVT<0, XLenVT>, SDTCisFP<1>]>;
 
 // FPR<->GPR transfer operations when the FPR is smaller than XLEN, needed as
@@ -29,12 +29,12 @@ def SDT_RISCVFMV_X_EXTH
 //
 // This is a more convenient semantic for producing dagcombines that remove
 // unnecessary GPR->FPR->GPR moves.
-def riscv_fmv_h_x
-    : RVSDNode<"FMV_H_X", SDT_RISCVFMV_H_X>;
-def riscv_fmv_x_anyexth
-    : RVSDNode<"FMV_X_ANYEXTH", SDT_RISCVFMV_X_EXTH>;
-def riscv_fmv_x_signexth
-    : RVSDNode<"FMV_X_SIGNEXTH", SDT_RISCVFMV_X_EXTH>;
+def capstone_fmv_h_x
+    : RVSDNode<"FMV_H_X", SDT_CapstoneFMV_H_X>;
+def capstone_fmv_x_anyexth
+    : RVSDNode<"FMV_X_ANYEXTH", SDT_CapstoneFMV_X_EXTH>;
+def capstone_fmv_x_signexth
+    : RVSDNode<"FMV_X_SIGNEXTH", SDT_CapstoneFMV_X_EXTH>;
 
 //===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.
@@ -296,10 +296,10 @@ def : Pat<(f16 (any_fsqrt FPR16:$rs1)), (FSQRT_H FPR16:$rs1, FRM_DYN)>;
 def : Pat<(f16 (fneg FPR16:$rs1)), (FSGNJN_H $rs1, $rs1)>;
 def : Pat<(f16 (fabs FPR16:$rs1)), (FSGNJX_H $rs1, $rs1)>;
 
-def : Pat<(riscv_fclass (f16 FPR16:$rs1)), (FCLASS_H $rs1)>;
+def : Pat<(capstone_fclass (f16 FPR16:$rs1)), (FCLASS_H $rs1)>;
 
 def : PatFprFpr<fcopysign, FSGNJ_H, FPR16, f16>;
-def : PatFprFpr<riscv_fsgnjx, FSGNJX_H, FPR16, f16>;
+def : PatFprFpr<capstone_fsgnjx, FSGNJX_H, FPR16, f16>;
 def : Pat<(f16 (fcopysign FPR16:$rs1, (f16 (fneg FPR16:$rs2)))),
           (FSGNJN_H FPR16:$rs1, FPR16:$rs2)>;
 def : Pat<(f16 (fcopysign FPR16:$rs1, FPR32:$rs2)),
@@ -340,10 +340,10 @@ def : Pat<(any_fsqrt FPR16INX:$rs1), (FSQRT_H_INX FPR16INX:$rs1, FRM_DYN)>;
 def : Pat<(fneg FPR16INX:$rs1), (FSGNJN_H_INX $rs1, $rs1)>;
 def : Pat<(fabs FPR16INX:$rs1), (FSGNJX_H_INX $rs1, $rs1)>;
 
-def : Pat<(riscv_fclass FPR16INX:$rs1), (FCLASS_H_INX $rs1)>;
+def : Pat<(capstone_fclass FPR16INX:$rs1), (FCLASS_H_INX $rs1)>;
 
 def : PatFprFpr<fcopysign, FSGNJ_H_INX, FPR16INX, f16>;
-def : PatFprFpr<riscv_fsgnjx, FSGNJX_H_INX, FPR16INX, f16>;
+def : PatFprFpr<capstone_fsgnjx, FSGNJX_H_INX, FPR16INX, f16>;
 def : Pat<(fcopysign FPR16INX:$rs1, (fneg FPR16INX:$rs2)),
           (FSGNJN_H_INX FPR16INX:$rs1, FPR16INX:$rs2)>;
 def : Pat<(fcopysign FPR16INX:$rs1, FPR32INX:$rs2),
@@ -372,14 +372,14 @@ def : Pat<(fneg (any_fma_nsz FPR16INX:$rs1, FPR16INX:$rs2, FPR16INX:$rs3)),
 
 // The ratified 20191213 ISA spec defines fmin and fmax in a way that matches
 // LLVM's fminnum and fmaxnum
-// <https://github.com/riscv/riscv-isa-manual/commit/cd20cee7efd9bac7c5aa127ec3b451749d2b3cce>.
+// <https://github.com/capstone/capstone-isa-manual/commit/cd20cee7efd9bac7c5aa127ec3b451749d2b3cce>.
 foreach Ext = ZfhExts in {
   defm : PatFprFpr_m<fminnum, FMIN_H, Ext>;
   defm : PatFprFpr_m<fmaxnum, FMAX_H, Ext>;
   defm : PatFprFpr_m<fminimumnum, FMIN_H, Ext>;
   defm : PatFprFpr_m<fmaximumnum, FMAX_H, Ext>;
-  defm : PatFprFpr_m<riscv_fmin, FMIN_H, Ext>;
-  defm : PatFprFpr_m<riscv_fmax, FMAX_H, Ext>;
+  defm : PatFprFpr_m<capstone_fmin, FMIN_H, Ext>;
+  defm : PatFprFpr_m<capstone_fmax, FMAX_H, Ext>;
   let Predicates = Ext.Predicates in
   def : Pat<(f16 (fcanonicalize FPR16:$rs1)), (FMIN_H $rs1, $rs1)>;
 }
@@ -471,9 +471,9 @@ def : Pat<(f16 (any_fpround FPR32:$rs1)), (FCVT_H_S FPR32:$rs1, FRM_DYN)>;
 def : Pat<(any_fpextend (f16 FPR16:$rs1)), (FCVT_S_H FPR16:$rs1, FRM_RNE)>;
 
 // Moves (no conversion)
-def : Pat<(f16 (riscv_fmv_h_x GPR:$src)), (FMV_H_X GPR:$src)>;
-def : Pat<(riscv_fmv_x_anyexth (f16 FPR16:$src)), (FMV_X_H FPR16:$src)>;
-def : Pat<(riscv_fmv_x_signexth (f16 FPR16:$src)), (FMV_X_H FPR16:$src)>;
+def : Pat<(f16 (capstone_fmv_h_x GPR:$src)), (FMV_H_X GPR:$src)>;
+def : Pat<(capstone_fmv_x_anyexth (f16 FPR16:$src)), (FMV_X_H FPR16:$src)>;
+def : Pat<(capstone_fmv_x_signexth (f16 FPR16:$src)), (FMV_X_H FPR16:$src)>;
 
 def : Pat<(fcopysign FPR32:$rs1, (f16 FPR16:$rs2)), (FSGNJ_S $rs1, (FCVT_S_H $rs2, FRM_RNE))>;
 } // Predicates = [HasStdExtZfhmin]
@@ -486,8 +486,8 @@ def : Pat<(any_fpround FPR32INX:$rs1), (FCVT_H_S_INX FPR32INX:$rs1, FRM_DYN)>;
 def : Pat<(any_fpextend FPR16INX:$rs1), (FCVT_S_H_INX FPR16INX:$rs1, FRM_RNE)>;
 
 // Moves (no conversion)
-def : Pat<(f16 (riscv_fmv_h_x GPR:$src)), (EXTRACT_SUBREG GPR:$src, sub_16)>;
-def : Pat<(riscv_fmv_x_anyexth FPR16INX:$src), (INSERT_SUBREG (XLenVT (IMPLICIT_DEF)), FPR16INX:$src, sub_16)>;
+def : Pat<(f16 (capstone_fmv_h_x GPR:$src)), (EXTRACT_SUBREG GPR:$src, sub_16)>;
+def : Pat<(capstone_fmv_x_anyexth FPR16INX:$src), (INSERT_SUBREG (XLenVT (IMPLICIT_DEF)), FPR16INX:$src, sub_16)>;
 
 def : Pat<(fcopysign FPR32INX:$rs1, FPR16INX:$rs2), (FSGNJ_S_INX $rs1, (FCVT_S_H_INX $rs2, FRM_RNE))>;
 } // Predicates = [HasStdExtZhinxmin]
@@ -498,8 +498,8 @@ def : Pat<(i32 (any_fp_to_sint (f16 FPR16:$rs1))), (FCVT_W_H $rs1, 0b001)>;
 def : Pat<(i32 (any_fp_to_uint (f16 FPR16:$rs1))), (FCVT_WU_H $rs1, 0b001)>;
 
 // Saturating half->[u]int32.
-def : Pat<(i32 (riscv_fcvt_x (f16 FPR16:$rs1), timm:$frm)), (FCVT_W_H $rs1, timm:$frm)>;
-def : Pat<(i32 (riscv_fcvt_xu (f16 FPR16:$rs1), timm:$frm)), (FCVT_WU_H $rs1, timm:$frm)>;
+def : Pat<(i32 (capstone_fcvt_x (f16 FPR16:$rs1), timm:$frm)), (FCVT_W_H $rs1, timm:$frm)>;
+def : Pat<(i32 (capstone_fcvt_xu (f16 FPR16:$rs1), timm:$frm)), (FCVT_WU_H $rs1, timm:$frm)>;
 
 // half->int32 with current rounding mode.
 def : Pat<(i32 (any_lrint (f16 FPR16:$rs1))), (FCVT_W_H $rs1, FRM_DYN)>;
@@ -518,8 +518,8 @@ def : Pat<(i32 (any_fp_to_sint FPR16INX:$rs1)), (FCVT_W_H_INX $rs1, 0b001)>;
 def : Pat<(i32 (any_fp_to_uint FPR16INX:$rs1)), (FCVT_WU_H_INX $rs1, 0b001)>;
 
 // Saturating float->[u]int32.
-def : Pat<(i32 (riscv_fcvt_x FPR16INX:$rs1, timm:$frm)), (FCVT_W_H_INX $rs1, timm:$frm)>;
-def : Pat<(i32 (riscv_fcvt_xu FPR16INX:$rs1, timm:$frm)), (FCVT_WU_H_INX $rs1, timm:$frm)>;
+def : Pat<(i32 (capstone_fcvt_x FPR16INX:$rs1, timm:$frm)), (FCVT_W_H_INX $rs1, timm:$frm)>;
+def : Pat<(i32 (capstone_fcvt_xu FPR16INX:$rs1, timm:$frm)), (FCVT_WU_H_INX $rs1, timm:$frm)>;
 
 // half->int32 with current rounding mode.
 def : Pat<(i32 (any_lrint FPR16INX:$rs1)), (FCVT_W_H_INX $rs1, FRM_DYN)>;
@@ -536,16 +536,16 @@ let Predicates = [HasStdExtZfh, IsRV64] in {
 // Use target specific isd nodes to help us remember the result is sign
 // extended. Matching sext_inreg+fptoui/fptosi may cause the conversion to be
 // duplicated if it has another user that didn't need the sign_extend.
-def : Pat<(riscv_any_fcvt_w_rv64 (f16 FPR16:$rs1), timm:$frm),  (FCVT_W_H $rs1, timm:$frm)>;
-def : Pat<(riscv_any_fcvt_wu_rv64 (f16 FPR16:$rs1), timm:$frm), (FCVT_WU_H $rs1, timm:$frm)>;
+def : Pat<(capstone_any_fcvt_w_rv64 (f16 FPR16:$rs1), timm:$frm),  (FCVT_W_H $rs1, timm:$frm)>;
+def : Pat<(capstone_any_fcvt_wu_rv64 (f16 FPR16:$rs1), timm:$frm), (FCVT_WU_H $rs1, timm:$frm)>;
 
 // half->[u]int64. Round-to-zero must be used.
 def : Pat<(i64 (any_fp_to_sint (f16 FPR16:$rs1))), (FCVT_L_H $rs1, 0b001)>;
 def : Pat<(i64 (any_fp_to_uint (f16 FPR16:$rs1))), (FCVT_LU_H $rs1, 0b001)>;
 
 // Saturating half->[u]int64.
-def : Pat<(i64 (riscv_fcvt_x (f16 FPR16:$rs1), timm:$frm)), (FCVT_L_H $rs1, timm:$frm)>;
-def : Pat<(i64 (riscv_fcvt_xu (f16 FPR16:$rs1), timm:$frm)), (FCVT_LU_H $rs1, timm:$frm)>;
+def : Pat<(i64 (capstone_fcvt_x (f16 FPR16:$rs1), timm:$frm)), (FCVT_L_H $rs1, timm:$frm)>;
+def : Pat<(i64 (capstone_fcvt_xu (f16 FPR16:$rs1), timm:$frm)), (FCVT_LU_H $rs1, timm:$frm)>;
 
 // half->int64 with current rounding mode.
 def : Pat<(i64 (any_lrint (f16 FPR16:$rs1))), (FCVT_L_H $rs1, FRM_DYN)>;
@@ -566,16 +566,16 @@ let Predicates = [HasStdExtZhinx, IsRV64] in {
 // Use target specific isd nodes to help us remember the result is sign
 // extended. Matching sext_inreg+fptoui/fptosi may cause the conversion to be
 // duplicated if it has another user that didn't need the sign_extend.
-def : Pat<(riscv_any_fcvt_w_rv64 FPR16INX:$rs1, timm:$frm),  (FCVT_W_H_INX $rs1, timm:$frm)>;
-def : Pat<(riscv_any_fcvt_wu_rv64 FPR16INX:$rs1, timm:$frm), (FCVT_WU_H_INX $rs1, timm:$frm)>;
+def : Pat<(capstone_any_fcvt_w_rv64 FPR16INX:$rs1, timm:$frm),  (FCVT_W_H_INX $rs1, timm:$frm)>;
+def : Pat<(capstone_any_fcvt_wu_rv64 FPR16INX:$rs1, timm:$frm), (FCVT_WU_H_INX $rs1, timm:$frm)>;
 
 // half->[u]int64. Round-to-zero must be used.
 def : Pat<(i64 (any_fp_to_sint FPR16INX:$rs1)), (FCVT_L_H_INX $rs1, 0b001)>;
 def : Pat<(i64 (any_fp_to_uint FPR16INX:$rs1)), (FCVT_LU_H_INX $rs1, 0b001)>;
 
 // Saturating float->[u]int64.
-def : Pat<(i64 (riscv_fcvt_x FPR16INX:$rs1, timm:$frm)), (FCVT_L_H_INX $rs1, timm:$frm)>;
-def : Pat<(i64 (riscv_fcvt_xu FPR16INX:$rs1, timm:$frm)), (FCVT_LU_H_INX $rs1, timm:$frm)>;
+def : Pat<(i64 (capstone_fcvt_x FPR16INX:$rs1, timm:$frm)), (FCVT_L_H_INX $rs1, timm:$frm)>;
+def : Pat<(i64 (capstone_fcvt_xu FPR16INX:$rs1, timm:$frm)), (FCVT_LU_H_INX $rs1, timm:$frm)>;
 
 // half->int64 with current rounding mode.
 def : Pat<(i64 (any_lrint FPR16INX:$rs1)), (FCVT_L_H_INX $rs1, FRM_DYN)>;

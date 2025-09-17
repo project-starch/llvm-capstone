@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoXCV.td - CORE-V instructions ---------*- tablegen -*-===//
+//===-- CapstoneInstrInfoXCV.td - CORE-V instructions ---------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -152,7 +152,7 @@ let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 } // hasSideEffects = 0, mayLoad = 0, mayStore = 0
 
 class CVInstSIMDRR<bits<5> funct5, bit F, bit funct1, bits<3> funct3,
-                   RISCVOpcode opcode, dag outs,
+                   CapstoneOpcode opcode, dag outs,
                    dag ins, string opcodestr, string argstr>
     : RVInstRBase<funct3, opcode, outs, ins, opcodestr, argstr> {
   let Inst{31-27} = funct5;
@@ -160,7 +160,7 @@ class CVInstSIMDRR<bits<5> funct5, bit F, bit funct1, bits<3> funct3,
   let Inst{25} = funct1;
 }
 
-class CVInstSIMDRI<bits<5> funct5, bit F, bits<3> funct3, RISCVOpcode opcode,
+class CVInstSIMDRI<bits<5> funct5, bit F, bits<3> funct3, CapstoneOpcode opcode,
                    dag outs, dag ins, string opcodestr, string argstr>
     : RVInstIBase<funct3, opcode, outs, ins, opcodestr, argstr> {
   bits<6> imm6;
@@ -714,35 +714,35 @@ multiclass PatCoreVBitManip<Intrinsic intr> {
 }
 
 let Predicates = [HasVendorXCVbitmanip, IsRV32] in {
-  defm EXTRACT : PatCoreVBitManip<int_riscv_cv_bitmanip_extract>;
-  defm EXTRACTU : PatCoreVBitManip<int_riscv_cv_bitmanip_extractu>;
-  defm BCLR : PatCoreVBitManip<int_riscv_cv_bitmanip_bclr>;
-  defm BSET : PatCoreVBitManip<int_riscv_cv_bitmanip_bset>;
+  defm EXTRACT : PatCoreVBitManip<int_capstone_cv_bitmanip_extract>;
+  defm EXTRACTU : PatCoreVBitManip<int_capstone_cv_bitmanip_extractu>;
+  defm BCLR : PatCoreVBitManip<int_capstone_cv_bitmanip_bclr>;
+  defm BSET : PatCoreVBitManip<int_capstone_cv_bitmanip_bset>;
 
-  def : Pat<(int_riscv_cv_bitmanip_insert GPR:$rs1, GPR:$rs2, GPR:$rd),
+  def : Pat<(int_capstone_cv_bitmanip_insert GPR:$rs1, GPR:$rs2, GPR:$rd),
             (CV_INSERTR GPR:$rd, GPR:$rs1, GPR:$rs2)>;
-  def : Pat<(int_riscv_cv_bitmanip_insert GPR:$rs1, cv_uimm10:$imm, GPR:$rd),
+  def : Pat<(int_capstone_cv_bitmanip_insert GPR:$rs1, cv_uimm10:$imm, GPR:$rd),
             (CV_INSERT GPR:$rd, GPR:$rs1, (CV_HI5 cv_uimm10:$imm),
                                           (CV_LO5 cv_uimm10:$imm))>;
 
   def : PatGpr<cttz, CV_FF1>;
   def : PatGpr<ctlz, CV_FL1>;
-  def : PatGpr<int_riscv_cv_bitmanip_clb, CV_CLB>;
+  def : PatGpr<int_capstone_cv_bitmanip_clb, CV_CLB>;
   def : PatGpr<ctpop, CV_CNT>;
 
   def : PatGprGpr<rotr, CV_ROR>;
 
-  def : Pat<(int_riscv_cv_bitmanip_bitrev GPR:$rs1, cv_tuimm5:$pts,
+  def : Pat<(int_capstone_cv_bitmanip_bitrev GPR:$rs1, cv_tuimm5:$pts,
              cv_tuimm2:$radix),
             (CV_BITREV GPR:$rs1, cv_tuimm2:$radix, cv_tuimm5:$pts)>;
   def : Pat<(bitreverse (XLenVT GPR:$rs)), (CV_BITREV GPR:$rs, 0, 0)>;
 }
 
 class PatCoreVAluGpr<string intr, string asm> :
-  PatGpr<!cast<Intrinsic>("int_riscv_cv_alu_" # intr),
+  PatGpr<!cast<Intrinsic>("int_capstone_cv_alu_" # intr),
             !cast<RVInst>("CV_" # asm)>;
 class PatCoreVAluGprGpr <string intr, string asm> :
-  PatGprGpr<!cast<Intrinsic>("int_riscv_cv_alu_" # intr),
+  PatGprGpr<!cast<Intrinsic>("int_capstone_cv_alu_" # intr),
                !cast<RVInst>("CV_" # asm)>;
 
 multiclass PatCoreVAluGprImm<Intrinsic intr> {
@@ -773,16 +773,16 @@ let Predicates = [HasVendorXCValu, IsRV32], AddedComplexity = 1 in {
   def : Pat<(and (XLenVT GPR:$rs1), 0xffff), (CV_EXTHZ GPR:$rs1)>;
   def : Pat<(and (XLenVT GPR:$rs1), 0xff), (CV_EXTBZ GPR:$rs1)>;
 
-  defm CLIP   : PatCoreVAluGprImm<int_riscv_cv_alu_clip>;
-  defm CLIPU  : PatCoreVAluGprImm<int_riscv_cv_alu_clipu>;
-  defm ADDN   : PatCoreVAluGprGprImm<int_riscv_cv_alu_addN>;
-  defm ADDUN  : PatCoreVAluGprGprImm<int_riscv_cv_alu_adduN>;
-  defm ADDRN  : PatCoreVAluGprGprImm<int_riscv_cv_alu_addRN>;
-  defm ADDURN : PatCoreVAluGprGprImm<int_riscv_cv_alu_adduRN>;
-  defm SUBN   : PatCoreVAluGprGprImm<int_riscv_cv_alu_subN>;
-  defm SUBUN  : PatCoreVAluGprGprImm<int_riscv_cv_alu_subuN>;
-  defm SUBRN  : PatCoreVAluGprGprImm<int_riscv_cv_alu_subRN>;
-  defm SUBURN : PatCoreVAluGprGprImm<int_riscv_cv_alu_subuRN>;
+  defm CLIP   : PatCoreVAluGprImm<int_capstone_cv_alu_clip>;
+  defm CLIPU  : PatCoreVAluGprImm<int_capstone_cv_alu_clipu>;
+  defm ADDN   : PatCoreVAluGprGprImm<int_capstone_cv_alu_addN>;
+  defm ADDUN  : PatCoreVAluGprGprImm<int_capstone_cv_alu_adduN>;
+  defm ADDRN  : PatCoreVAluGprGprImm<int_capstone_cv_alu_addRN>;
+  defm ADDURN : PatCoreVAluGprGprImm<int_capstone_cv_alu_adduRN>;
+  defm SUBN   : PatCoreVAluGprGprImm<int_capstone_cv_alu_subN>;
+  defm SUBUN  : PatCoreVAluGprGprImm<int_capstone_cv_alu_subuN>;
+  defm SUBRN  : PatCoreVAluGprGprImm<int_capstone_cv_alu_subRN>;
+  defm SUBURN : PatCoreVAluGprGprImm<int_capstone_cv_alu_subuRN>;
 } // Predicates = [HasVendorXCValu, IsRV32]
 
 //===----------------------------------------------------------------------===//
@@ -790,31 +790,31 @@ let Predicates = [HasVendorXCValu, IsRV32], AddedComplexity = 1 in {
 //===----------------------------------------------------------------------===//
 
 let Predicates = [HasVendorXCVbi, IsRV32], AddedComplexity = 2 in {
-  def : Pat<(riscv_brcc GPR:$rs1, simm5:$imm5, SETEQ, bb:$imm12),
+  def : Pat<(capstone_brcc GPR:$rs1, simm5:$imm5, SETEQ, bb:$imm12),
             (CV_BEQIMM GPR:$rs1, simm5:$imm5, bare_simm13_lsb0_bb:$imm12)>;
-  def : Pat<(riscv_brcc GPR:$rs1, simm5:$imm5, SETNE, bb:$imm12),
+  def : Pat<(capstone_brcc GPR:$rs1, simm5:$imm5, SETNE, bb:$imm12),
             (CV_BNEIMM GPR:$rs1, simm5:$imm5, bare_simm13_lsb0_bb:$imm12)>;
 
   defm CC_SImm5_CV : SelectCC_GPR_riirr<GPR, simm5>;
 
   class Selectbi<CondCode Cond>
-      : Pat<(riscv_selectcc_frag:$cc (i32 GPR:$lhs), simm5:$Constant, Cond,
+      : Pat<(capstone_selectcc_frag:$cc (i32 GPR:$lhs), simm5:$Constant, Cond,
                                      (i32 GPR:$truev), GPR:$falsev),
             (Select_GPR_Using_CC_SImm5_CV GPR:$lhs, simm5:$Constant,
-             (IntCCtoRISCVCC $cc), GPR:$truev, GPR:$falsev)>;
+             (IntCCtoCapstoneCC $cc), GPR:$truev, GPR:$falsev)>;
 
   def : Selectbi<SETEQ>;
   def : Selectbi<SETNE>;
 }
 
 class PatCoreVMacGprGprGpr <string intr, string asm>
-  : Pat<(!cast<Intrinsic>("int_riscv_cv_mac_" # intr) GPR:$rs1, GPR:$rs2, GPR:$rd),
+  : Pat<(!cast<Intrinsic>("int_capstone_cv_mac_" # intr) GPR:$rs1, GPR:$rs2, GPR:$rd),
         (!cast<RVInst>("CV_" # asm) GPR:$rd, GPR:$rs1, GPR:$rs2)>;
 class PatCoreVMacGprGprGprUimm5 <string intr, string asm>
-  : Pat<(!cast<Intrinsic>("int_riscv_cv_mac_" # intr) GPR:$rs1, GPR:$rs2, GPR:$rd, cv_tuimm5:$imm5),
+  : Pat<(!cast<Intrinsic>("int_capstone_cv_mac_" # intr) GPR:$rs1, GPR:$rs2, GPR:$rd, cv_tuimm5:$imm5),
         (!cast<RVInst>("CV_" # asm) GPR:$rd, GPR:$rs1, GPR:$rs2, cv_tuimm5:$imm5)>;
 class PatCoreVMacGprGprUimm5 <string intr, string asm>
-  : Pat<(!cast<Intrinsic>("int_riscv_cv_mac_" # intr) GPR:$rs1, GPR:$rs2, cv_tuimm5:$imm5),
+  : Pat<(!cast<Intrinsic>("int_capstone_cv_mac_" # intr) GPR:$rs1, GPR:$rs2, cv_tuimm5:$imm5),
         (!cast<RVInst>("CV_" # asm) GPR:$rs1, GPR:$rs2, cv_tuimm5:$imm5)>;
 
 let Predicates = [HasVendorXCVmac] in {

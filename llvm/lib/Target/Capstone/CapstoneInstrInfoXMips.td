@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoXMips.td -----------------------------*- tablegen -*-===//
+//===-- CapstoneInstrInfoXMips.td -----------------------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -15,7 +15,7 @@
 //===----------------------------------------------------------------------===//
 
 // A 7-bit unsigned immediate where the least significant three bits are zero.
-def uimm7_lsb000 : RISCVOp,
+def uimm7_lsb000 : CapstoneOp,
                    ImmLeaf<XLenVT, [{return isShiftedUInt<4, 3>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<7, "Lsb000">;
   let EncoderMethod = "getImmOpValue";
@@ -30,7 +30,7 @@ def uimm7_lsb000 : RISCVOp,
 }
 
 // A 9-bit unsigned offset
-def uimm9 : RISCVUImmOp<9>;
+def uimm9 : CapstoneUImmOp<9>;
 
 // Custom prefetch ADDR selector
 def AddrRegImm9 : ComplexPattern<iPTR, 2, "SelectAddrRegImm9">;
@@ -169,10 +169,10 @@ def MIPS_CCMOV : RVInstR4<0b11, 0b011, OPC_CUSTOM_0, (outs GPR:$rd),
 }
 
 let Predicates = [UseCCMovInsn] in {
-def : Pat<(select (riscv_setne (XLenVT GPR:$rs2)),
+def : Pat<(select (capstone_setne (XLenVT GPR:$rs2)),
                   (XLenVT GPR:$rs1), (XLenVT GPR:$rs3)),
           (MIPS_CCMOV GPR:$rs1, GPR:$rs2, GPR:$rs3)>;
-def : Pat<(select (riscv_seteq (XLenVT GPR:$rs2)),
+def : Pat<(select (capstone_seteq (XLenVT GPR:$rs2)),
                   (XLenVT GPR:$rs3), (XLenVT GPR:$rs1)),
           (MIPS_CCMOV GPR:$rs1, GPR:$rs2, GPR:$rs3)>;
 

@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoM.td - RISC-V 'M' instructions -------*- tablegen -*-===//
+//===-- CapstoneInstrInfoM.td - Capstone 'M' instructions -------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,24 +6,24 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard 'M', Integer
+// This file describes the Capstone instructions from the standard 'M', Integer
 // Multiplication and Division instruction set extension.
 //
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
-// RISC-V specific DAG Nodes.
+// Capstone specific DAG Nodes.
 //===----------------------------------------------------------------------===//
 
 // Multiply high for signedxunsigned.
-def riscv_mulhsu : RVSDNode<"MULHSU", SDTIntBinOp>;
+def capstone_mulhsu : RVSDNode<"MULHSU", SDTIntBinOp>;
 
 // 32-bit operations from RV64M that can't be simply matched with a pattern
 // at instruction selection time. These have undefined behavior for division
 // by 0 or overflow (divw) like their target independent counterparts.
-def riscv_divw  : RVSDNode<"DIVW",  SDT_RISCVIntBinOpW>;
-def riscv_divuw : RVSDNode<"DIVUW", SDT_RISCVIntBinOpW>;
-def riscv_remuw : RVSDNode<"REMUW", SDT_RISCVIntBinOpW>;
+def capstone_divw  : RVSDNode<"DIVW",  SDT_CapstoneIntBinOpW>;
+def capstone_divuw : RVSDNode<"DIVUW", SDT_CapstoneIntBinOpW>;
+def capstone_remuw : RVSDNode<"REMUW", SDT_CapstoneIntBinOpW>;
 
 //===----------------------------------------------------------------------===//
 // Instructions
@@ -75,7 +75,7 @@ let Predicates = [HasStdExtZmmul] in {
 def : PatGprGpr<mul, MUL>;
 def : PatGprGpr<mulhs, MULH>;
 def : PatGprGpr<mulhu, MULHU>;
-def : PatGprGpr<riscv_mulhsu, MULHSU>;
+def : PatGprGpr<capstone_mulhsu, MULHSU>;
 } // Predicates = [HasStdExtZmmul]
 
 let Predicates = [HasStdExtM] in {
@@ -90,17 +90,17 @@ let Predicates = [HasStdExtZmmul, IsRV64] in
 def : PatGprGpr<binop_allwusers<mul>, MULW>;
 
 let Predicates = [HasStdExtM, IsRV64] in {
-def : PatGprGpr<riscv_divw, DIVW>;
-def : PatGprGpr<riscv_divuw, DIVUW>;
-def : PatGprGpr<riscv_remuw, REMUW>;
+def : PatGprGpr<capstone_divw, DIVW>;
+def : PatGprGpr<capstone_divuw, DIVUW>;
+def : PatGprGpr<capstone_remuw, REMUW>;
 
 // Handle the specific cases where using DIVU/REMU would be correct and result
 // in fewer instructions than emitting DIVUW/REMUW then zero-extending the
 // result.
-def : Pat<(and (riscv_divuw (assertzexti32 GPR:$rs1),
+def : Pat<(and (capstone_divuw (assertzexti32 GPR:$rs1),
                             (assertzexti32 GPR:$rs2)), 0xffffffff),
           (DIVU GPR:$rs1, GPR:$rs2)>;
-def : Pat<(and (riscv_remuw (assertzexti32 GPR:$rs1),
+def : Pat<(and (capstone_remuw (assertzexti32 GPR:$rs1),
                             (assertzexti32 GPR:$rs2)), 0xffffffff),
           (REMU GPR:$rs1, GPR:$rs2)>;
 

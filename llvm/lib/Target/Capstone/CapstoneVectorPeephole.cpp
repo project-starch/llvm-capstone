@@ -1,4 +1,4 @@
-//===- RISCVVectorPeephole.cpp - MI Vector Pseudo Peepholes ---------------===//
+//===- CapstoneVectorPeephole.cpp - MI Vector Pseudo Peepholes ---------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -27,8 +27,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVSubtarget.h"
+#include "Capstone.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/TargetInstrInfo.h"
@@ -36,18 +36,18 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-vector-peephole"
+#define DEBUG_TYPE "capstone-vector-peephole"
 
 namespace {
 
-class RISCVVectorPeephole : public MachineFunctionPass {
+class CapstoneVectorPeephole : public MachineFunctionPass {
 public:
   static char ID;
   const TargetInstrInfo *TII;
   MachineRegisterInfo *MRI;
   const TargetRegisterInfo *TRI;
-  const RISCVSubtarget *ST;
-  RISCVVectorPeephole() : MachineFunctionPass(ID) {}
+  const CapstoneSubtarget *ST;
+  CapstoneVectorPeephole() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
   MachineFunctionProperties getRequiredProperties() const override {
@@ -55,7 +55,7 @@ public:
   }
 
   StringRef getPassName() const override {
-    return "RISC-V Vector Peephole Optimization";
+    return "Capstone Vector Peephole Optimization";
   }
 
 private:
@@ -78,28 +78,28 @@ private:
 
 } // namespace
 
-char RISCVVectorPeephole::ID = 0;
+char CapstoneVectorPeephole::ID = 0;
 
-INITIALIZE_PASS(RISCVVectorPeephole, DEBUG_TYPE, "RISC-V Fold Masks", false,
+INITIALIZE_PASS(CapstoneVectorPeephole, DEBUG_TYPE, "Capstone Fold Masks", false,
                 false)
 
 /// Given \p User that has an input operand with EEW=SEW, which uses the dest
 /// operand of \p Src with an unknown EEW, return true if their EEWs match.
-bool RISCVVectorPeephole::hasSameEEW(const MachineInstr &User,
+bool CapstoneVectorPeephole::hasSameEEW(const MachineInstr &User,
                                      const MachineInstr &Src) const {
   unsigned UserLog2SEW =
-      User.getOperand(RISCVII::getSEWOpNum(User.getDesc())).getImm();
+      User.getOperand(CapstoneII::getSEWOpNum(User.getDesc())).getImm();
   unsigned SrcLog2SEW =
-      Src.getOperand(RISCVII::getSEWOpNum(Src.getDesc())).getImm();
-  unsigned SrcLog2EEW = RISCV::getDestLog2EEW(
-      TII->get(RISCV::getRVVMCOpcode(Src.getOpcode())), SrcLog2SEW);
+      Src.getOperand(CapstoneII::getSEWOpNum(Src.getDesc())).getImm();
+  unsigned SrcLog2EEW = Capstone::getDestLog2EEW(
+      TII->get(Capstone::getRVVMCOpcode(Src.getOpcode())), SrcLog2SEW);
   return SrcLog2EEW == UserLog2SEW;
 }
 
 // Attempt to reduce the VL of an instruction whose sole use is feeding a
 // instruction with a narrower VL.  This currently works backwards from the
 // user instruction (which might have a smaller VL).
-bool RISCVVectorPeephole::tryToReduceVL(MachineInstr &MI) const {
+bool CapstoneVectorPeephole::tryToReduceVL(MachineInstr &MI) const {
   // Note that the goal here is a bit multifaceted.
   // 1) For store's reducing the VL of the value being stored may help to
   //    reduce VL toggles.  This is somewhat of an artifact of the fact we
@@ -114,42 +114,42 @@ bool RISCVVectorPeephole::tryToReduceVL(MachineInstr &MI) const {
   // TODO: We can handle a bunch more instructions here, and probably
   // recurse backwards through operands too.
   SmallVector<unsigned, 2> SrcIndices = {0};
-  switch (RISCV::getRVVMCOpcode(MI.getOpcode())) {
+  switch (Capstone::getRVVMCOpcode(MI.getOpcode())) {
   default:
     return false;
-  case RISCV::VSE8_V:
-  case RISCV::VSE16_V:
-  case RISCV::VSE32_V:
-  case RISCV::VSE64_V:
+  case Capstone::VSE8_V:
+  case Capstone::VSE16_V:
+  case Capstone::VSE32_V:
+  case Capstone::VSE64_V:
     break;
-  case RISCV::VMV_V_V:
+  case Capstone::VMV_V_V:
     SrcIndices[0] = 2;
     break;
-  case RISCV::VMERGE_VVM:
+  case Capstone::VMERGE_VVM:
     SrcIndices.assign({2, 3});
     break;
-  case RISCV::VREDSUM_VS:
-  case RISCV::VREDMAXU_VS:
-  case RISCV::VREDMAX_VS:
-  case RISCV::VREDMINU_VS:
-  case RISCV::VREDMIN_VS:
-  case RISCV::VREDAND_VS:
-  case RISCV::VREDOR_VS:
-  case RISCV::VREDXOR_VS:
-  case RISCV::VWREDSUM_VS:
-  case RISCV::VWREDSUMU_VS:
-  case RISCV::VFREDUSUM_VS:
-  case RISCV::VFREDOSUM_VS:
-  case RISCV::VFREDMAX_VS:
-  case RISCV::VFREDMIN_VS:
-  case RISCV::VFWREDUSUM_VS:
-  case RISCV::VFWREDOSUM_VS:
+  case Capstone::VREDSUM_VS:
+  case Capstone::VREDMAXU_VS:
+  case Capstone::VREDMAX_VS:
+  case Capstone::VREDMINU_VS:
+  case Capstone::VREDMIN_VS:
+  case Capstone::VREDAND_VS:
+  case Capstone::VREDOR_VS:
+  case Capstone::VREDXOR_VS:
+  case Capstone::VWREDSUM_VS:
+  case Capstone::VWREDSUMU_VS:
+  case Capstone::VFREDUSUM_VS:
+  case Capstone::VFREDOSUM_VS:
+  case Capstone::VFREDMAX_VS:
+  case Capstone::VFREDMIN_VS:
+  case Capstone::VFWREDUSUM_VS:
+  case Capstone::VFWREDOSUM_VS:
     SrcIndices[0] = 2;
     break;
   }
 
-  MachineOperand &VL = MI.getOperand(RISCVII::getVLOpNum(MI.getDesc()));
-  if (VL.isImm() && VL.getImm() == RISCV::VLMaxSentinel)
+  MachineOperand &VL = MI.getOperand(CapstoneII::getVLOpNum(MI.getDesc()));
+  if (VL.isImm() && VL.getImm() == Capstone::VLMaxSentinel)
     return false;
 
   bool Changed = false;
@@ -162,22 +162,22 @@ bool RISCVVectorPeephole::tryToReduceVL(MachineInstr &MI) const {
     MachineInstr *Src = MRI->getVRegDef(SrcReg);
     if (!Src || Src->hasUnmodeledSideEffects() ||
         Src->getParent() != MI.getParent() || Src->getNumDefs() != 1 ||
-        !RISCVII::hasVLOp(Src->getDesc().TSFlags) ||
-        !RISCVII::hasSEWOp(Src->getDesc().TSFlags))
+        !CapstoneII::hasVLOp(Src->getDesc().TSFlags) ||
+        !CapstoneII::hasSEWOp(Src->getDesc().TSFlags))
       continue;
 
     // Src's dest needs to have the same EEW as MI's input.
     if (!hasSameEEW(MI, *Src))
       continue;
 
-    bool ElementsDependOnVL = RISCVII::elementsDependOnVL(
-        TII->get(RISCV::getRVVMCOpcode(Src->getOpcode())).TSFlags);
+    bool ElementsDependOnVL = CapstoneII::elementsDependOnVL(
+        TII->get(Capstone::getRVVMCOpcode(Src->getOpcode())).TSFlags);
     if (ElementsDependOnVL || Src->mayRaiseFPException())
       continue;
 
     MachineOperand &SrcVL =
-        Src->getOperand(RISCVII::getVLOpNum(Src->getDesc()));
-    if (VL.isIdenticalTo(SrcVL) || !RISCV::isVLKnownLE(VL, SrcVL))
+        Src->getOperand(CapstoneII::getVLOpNum(Src->getDesc()));
+    if (VL.isIdenticalTo(SrcVL) || !Capstone::isVLKnownLE(VL, SrcVL))
       continue;
 
     if (!ensureDominates(VL, *Src))
@@ -198,37 +198,37 @@ bool RISCVVectorPeephole::tryToReduceVL(MachineInstr &MI) const {
 
 /// Check if an operand is an immediate or a materialized ADDI $x0, imm.
 std::optional<unsigned>
-RISCVVectorPeephole::getConstant(const MachineOperand &VL) const {
+CapstoneVectorPeephole::getConstant(const MachineOperand &VL) const {
   if (VL.isImm())
     return VL.getImm();
 
   MachineInstr *Def = MRI->getVRegDef(VL.getReg());
-  if (!Def || Def->getOpcode() != RISCV::ADDI ||
-      Def->getOperand(1).getReg() != RISCV::X0)
+  if (!Def || Def->getOpcode() != Capstone::ADDI ||
+      Def->getOperand(1).getReg() != Capstone::X0)
     return std::nullopt;
   return Def->getOperand(2).getImm();
 }
 
 /// Convert AVLs that are known to be VLMAX to the VLMAX sentinel.
-bool RISCVVectorPeephole::convertToVLMAX(MachineInstr &MI) const {
-  if (!RISCVII::hasVLOp(MI.getDesc().TSFlags) ||
-      !RISCVII::hasSEWOp(MI.getDesc().TSFlags))
+bool CapstoneVectorPeephole::convertToVLMAX(MachineInstr &MI) const {
+  if (!CapstoneII::hasVLOp(MI.getDesc().TSFlags) ||
+      !CapstoneII::hasSEWOp(MI.getDesc().TSFlags))
     return false;
 
-  auto LMUL = RISCVVType::decodeVLMUL(RISCVII::getLMul(MI.getDesc().TSFlags));
+  auto LMUL = CapstoneVType::decodeVLMUL(CapstoneII::getLMul(MI.getDesc().TSFlags));
   // Fixed-point value, denominator=8
   unsigned LMULFixed = LMUL.second ? (8 / LMUL.first) : 8 * LMUL.first;
-  unsigned Log2SEW = MI.getOperand(RISCVII::getSEWOpNum(MI.getDesc())).getImm();
+  unsigned Log2SEW = MI.getOperand(CapstoneII::getSEWOpNum(MI.getDesc())).getImm();
   // A Log2SEW of 0 is an operation on mask registers only
   unsigned SEW = Log2SEW ? 1 << Log2SEW : 8;
-  assert(RISCVVType::isValidSEW(SEW) && "Unexpected SEW");
+  assert(CapstoneVType::isValidSEW(SEW) && "Unexpected SEW");
   assert(8 * LMULFixed / SEW > 0);
 
   // If the exact VLEN is known then we know VLMAX, check if the AVL == VLMAX.
-  MachineOperand &VL = MI.getOperand(RISCVII::getVLOpNum(MI.getDesc()));
+  MachineOperand &VL = MI.getOperand(CapstoneII::getVLOpNum(MI.getDesc()));
   if (auto VLen = ST->getRealVLen(), AVL = getConstant(VL);
       VLen && AVL && (*VLen * LMULFixed) / SEW == *AVL * 8) {
-    VL.ChangeToImmediate(RISCV::VLMaxSentinel);
+    VL.ChangeToImmediate(Capstone::VLMaxSentinel);
     return true;
   }
 
@@ -243,17 +243,17 @@ bool RISCVVectorPeephole::convertToVLMAX(MachineInstr &MI) const {
   // Fixed-point value, denominator=8
   uint64_t ScaleFixed = 8;
   // Check if the VLENB was potentially scaled with slli/srli
-  if (Def->getOpcode() == RISCV::SLLI) {
+  if (Def->getOpcode() == Capstone::SLLI) {
     assert(Def->getOperand(2).getImm() < 64);
     ScaleFixed <<= Def->getOperand(2).getImm();
     Def = MRI->getVRegDef(Def->getOperand(1).getReg());
-  } else if (Def->getOpcode() == RISCV::SRLI) {
+  } else if (Def->getOpcode() == Capstone::SRLI) {
     assert(Def->getOperand(2).getImm() < 64);
     ScaleFixed >>= Def->getOperand(2).getImm();
     Def = MRI->getVRegDef(Def->getOperand(1).getReg());
   }
 
-  if (!Def || Def->getOpcode() != RISCV::PseudoReadVLENB)
+  if (!Def || Def->getOpcode() != Capstone::PseudoReadVLENB)
     return false;
 
   // AVL = (VLENB * Scale)
@@ -266,12 +266,12 @@ bool RISCVVectorPeephole::convertToVLMAX(MachineInstr &MI) const {
   if (ScaleFixed != 8 * LMULFixed / SEW)
     return false;
 
-  VL.ChangeToImmediate(RISCV::VLMaxSentinel);
+  VL.ChangeToImmediate(Capstone::VLMaxSentinel);
 
   return true;
 }
 
-bool RISCVVectorPeephole::isAllOnesMask(const MachineInstr *MaskDef) const {
+bool CapstoneVectorPeephole::isAllOnesMask(const MachineInstr *MaskDef) const {
   while (MaskDef->isCopy() && MaskDef->getOperand(1).getReg().isVirtual())
     MaskDef = MRI->getVRegDef(MaskDef->getOperand(1).getReg());
 
@@ -279,13 +279,13 @@ bool RISCVVectorPeephole::isAllOnesMask(const MachineInstr *MaskDef) const {
   // undefined behaviour if it's the wrong bitwidth, so we could choose to
   // assume that it's all-ones? Same applies to its VL.
   switch (MaskDef->getOpcode()) {
-  case RISCV::PseudoVMSET_M_B1:
-  case RISCV::PseudoVMSET_M_B2:
-  case RISCV::PseudoVMSET_M_B4:
-  case RISCV::PseudoVMSET_M_B8:
-  case RISCV::PseudoVMSET_M_B16:
-  case RISCV::PseudoVMSET_M_B32:
-  case RISCV::PseudoVMSET_M_B64:
+  case Capstone::PseudoVMSET_M_B1:
+  case Capstone::PseudoVMSET_M_B2:
+  case Capstone::PseudoVMSET_M_B4:
+  case Capstone::PseudoVMSET_M_B8:
+  case Capstone::PseudoVMSET_M_B16:
+  case Capstone::PseudoVMSET_M_B32:
+  case Capstone::PseudoVMSET_M_B64:
     return true;
   default:
     return false;
@@ -302,13 +302,13 @@ bool RISCVVectorPeephole::isAllOnesMask(const MachineInstr *MaskDef) const {
 ///
 /// %x = VL1RE8_V %ptr
 /// VS1R_V %v, %ptr
-bool RISCVVectorPeephole::convertToWholeRegister(MachineInstr &MI) const {
+bool CapstoneVectorPeephole::convertToWholeRegister(MachineInstr &MI) const {
 #define CASE_WHOLE_REGISTER_LMUL_SEW(lmul, sew)                                \
-  case RISCV::PseudoVLE##sew##_V_M##lmul:                                      \
-    NewOpc = RISCV::VL##lmul##RE##sew##_V;                                     \
+  case Capstone::PseudoVLE##sew##_V_M##lmul:                                      \
+    NewOpc = Capstone::VL##lmul##RE##sew##_V;                                     \
     break;                                                                     \
-  case RISCV::PseudoVSE##sew##_V_M##lmul:                                      \
-    NewOpc = RISCV::VS##lmul##R_V;                                             \
+  case Capstone::PseudoVSE##sew##_V_M##lmul:                                      \
+    NewOpc = Capstone::VS##lmul##R_V;                                             \
     break;
 #define CASE_WHOLE_REGISTER_LMUL(lmul)                                         \
   CASE_WHOLE_REGISTER_LMUL_SEW(lmul, 8)                                        \
@@ -326,17 +326,17 @@ bool RISCVVectorPeephole::convertToWholeRegister(MachineInstr &MI) const {
     return false;
   }
 
-  MachineOperand &VLOp = MI.getOperand(RISCVII::getVLOpNum(MI.getDesc()));
-  if (!VLOp.isImm() || VLOp.getImm() != RISCV::VLMaxSentinel)
+  MachineOperand &VLOp = MI.getOperand(CapstoneII::getVLOpNum(MI.getDesc()));
+  if (!VLOp.isImm() || VLOp.getImm() != Capstone::VLMaxSentinel)
     return false;
 
   // Whole register instructions aren't pseudos so they don't have
   // policy/SEW/AVL ops, and they don't have passthrus.
-  if (RISCVII::hasVecPolicyOp(MI.getDesc().TSFlags))
-    MI.removeOperand(RISCVII::getVecPolicyOpNum(MI.getDesc()));
-  MI.removeOperand(RISCVII::getSEWOpNum(MI.getDesc()));
-  MI.removeOperand(RISCVII::getVLOpNum(MI.getDesc()));
-  if (RISCVII::isFirstDefTiedToFirstUse(MI.getDesc()))
+  if (CapstoneII::hasVecPolicyOp(MI.getDesc().TSFlags))
+    MI.removeOperand(CapstoneII::getVecPolicyOpNum(MI.getDesc()));
+  MI.removeOperand(CapstoneII::getSEWOpNum(MI.getDesc()));
+  MI.removeOperand(CapstoneII::getVLOpNum(MI.getDesc()));
+  if (CapstoneII::isFirstDefTiedToFirstUse(MI.getDesc()))
     MI.removeOperand(1);
 
   MI.setDesc(TII->get(NewOpc));
@@ -346,8 +346,8 @@ bool RISCVVectorPeephole::convertToWholeRegister(MachineInstr &MI) const {
 
 static unsigned getVMV_V_VOpcodeForVMERGE_VVM(const MachineInstr &MI) {
 #define CASE_VMERGE_TO_VMV(lmul)                                               \
-  case RISCV::PseudoVMERGE_VVM_##lmul:                                         \
-    return RISCV::PseudoVMV_V_V_##lmul;
+  case Capstone::PseudoVMERGE_VVM_##lmul:                                         \
+    return Capstone::PseudoVMV_V_V_##lmul;
   switch (MI.getOpcode()) {
   default:
     return 0;
@@ -366,7 +366,7 @@ static unsigned getVMV_V_VOpcodeForVMERGE_VVM(const MachineInstr &MI) {
 /// %x = PseudoVMERGE_VVM %passthru, %false, %true, %allones, sew, vl
 /// ->
 /// %x = PseudoVMV_V_V %passthru, %true, vl, sew, tu_mu
-bool RISCVVectorPeephole::convertAllOnesVMergeToVMv(MachineInstr &MI) const {
+bool CapstoneVectorPeephole::convertAllOnesVMergeToVMv(MachineInstr &MI) const {
   unsigned NewOpc = getVMV_V_VOpcodeForVMERGE_VVM(MI);
   if (!NewOpc)
     return false;
@@ -377,17 +377,17 @@ bool RISCVVectorPeephole::convertAllOnesVMergeToVMv(MachineInstr &MI) const {
   MI.removeOperand(2); // False operand
   MI.removeOperand(3); // Mask operand
   MI.addOperand(
-      MachineOperand::CreateImm(RISCVVType::TAIL_UNDISTURBED_MASK_UNDISTURBED));
+      MachineOperand::CreateImm(CapstoneVType::TAIL_UNDISTURBED_MASK_UNDISTURBED));
 
   // vmv.v.v doesn't have a mask operand, so we may be able to inflate the
   // register class for the destination and passthru operands e.g. VRNoV0 -> VR
   MRI->recomputeRegClass(MI.getOperand(0).getReg());
-  if (MI.getOperand(1).getReg() != RISCV::NoRegister)
+  if (MI.getOperand(1).getReg() != Capstone::NoRegister)
     MRI->recomputeRegClass(MI.getOperand(1).getReg());
   return true;
 }
 
-bool RISCVVectorPeephole::isKnownSameDefs(Register A, Register B) const {
+bool CapstoneVectorPeephole::isKnownSameDefs(Register A, Register B) const {
   if (A.isPhysical() || B.isPhysical())
     return false;
 
@@ -415,7 +415,7 @@ bool RISCVVectorPeephole::isKnownSameDefs(Register A, Register B) const {
 /// ->
 /// %true = PseudoVADD_VV_M1_MASK %false, %x, %y, %mask, vl1, sew, policy
 /// %x = PseudoVMV_V_V %passthru, %true, vl2, sew, tu_mu
-bool RISCVVectorPeephole::convertSameMaskVMergeToVMv(MachineInstr &MI) {
+bool CapstoneVectorPeephole::convertSameMaskVMergeToVMv(MachineInstr &MI) {
   unsigned NewOpc = getVMV_V_VOpcodeForVMERGE_VVM(MI);
   if (!NewOpc)
     return false;
@@ -424,7 +424,7 @@ bool RISCVVectorPeephole::convertSameMaskVMergeToVMv(MachineInstr &MI) {
   if (!True || True->getParent() != MI.getParent())
     return false;
 
-  auto *TrueMaskedInfo = RISCV::getMaskedPseudoInfo(True->getOpcode());
+  auto *TrueMaskedInfo = Capstone::getMaskedPseudoInfo(True->getOpcode());
   if (!TrueMaskedInfo || !hasSameEEW(MI, *True))
     return false;
 
@@ -437,10 +437,10 @@ bool RISCVVectorPeephole::convertSameMaskVMergeToVMv(MachineInstr &MI) {
   // Masked off lanes past TrueVL will come from False, and converting to vmv
   // will lose these lanes unless MIVL <= TrueVL.
   // TODO: We could relax this for False == Passthru and True policy == TU
-  const MachineOperand &MIVL = MI.getOperand(RISCVII::getVLOpNum(MI.getDesc()));
+  const MachineOperand &MIVL = MI.getOperand(CapstoneII::getVLOpNum(MI.getDesc()));
   const MachineOperand &TrueVL =
-      True->getOperand(RISCVII::getVLOpNum(True->getDesc()));
-  if (!RISCV::isVLKnownLE(MIVL, TrueVL))
+      True->getOperand(CapstoneII::getVLOpNum(True->getDesc()));
+  if (!Capstone::isVLKnownLE(MIVL, TrueVL))
     return false;
 
   // True's passthru needs to be equivalent to False
@@ -448,7 +448,7 @@ bool RISCVVectorPeephole::convertSameMaskVMergeToVMv(MachineInstr &MI) {
   Register FalseReg = MI.getOperand(2).getReg();
   if (TruePassthruReg != FalseReg) {
     // If True's passthru is undef see if we can change it to False
-    if (TruePassthruReg != RISCV::NoRegister ||
+    if (TruePassthruReg != Capstone::NoRegister ||
         !MRI->hasOneUse(MI.getOperand(3).getReg()) ||
         !ensureDominates(MI.getOperand(2), *True))
       return false;
@@ -462,19 +462,19 @@ bool RISCVVectorPeephole::convertSameMaskVMergeToVMv(MachineInstr &MI) {
   MI.removeOperand(2); // False operand
   MI.removeOperand(3); // Mask operand
   MI.addOperand(
-      MachineOperand::CreateImm(RISCVVType::TAIL_UNDISTURBED_MASK_UNDISTURBED));
+      MachineOperand::CreateImm(CapstoneVType::TAIL_UNDISTURBED_MASK_UNDISTURBED));
 
   // vmv.v.v doesn't have a mask operand, so we may be able to inflate the
   // register class for the destination and passthru operands e.g. VRNoV0 -> VR
   MRI->recomputeRegClass(MI.getOperand(0).getReg());
-  if (MI.getOperand(1).getReg() != RISCV::NoRegister)
+  if (MI.getOperand(1).getReg() != Capstone::NoRegister)
     MRI->recomputeRegClass(MI.getOperand(1).getReg());
   return true;
 }
 
-bool RISCVVectorPeephole::convertToUnmasked(MachineInstr &MI) const {
-  const RISCV::RISCVMaskedPseudoInfo *I =
-      RISCV::getMaskedPseudoInfo(MI.getOpcode());
+bool CapstoneVectorPeephole::convertToUnmasked(MachineInstr &MI) const {
+  const Capstone::CapstoneMaskedPseudoInfo *I =
+      Capstone::getMaskedPseudoInfo(MI.getOpcode());
   if (!I)
     return false;
 
@@ -483,27 +483,27 @@ bool RISCVVectorPeephole::convertToUnmasked(MachineInstr &MI) const {
     return false;
 
   // There are two classes of pseudos in the table - compares and
-  // everything else.  See the comment on RISCVMaskedPseudo for details.
+  // everything else.  See the comment on CapstoneMaskedPseudo for details.
   const unsigned Opc = I->UnmaskedPseudo;
   const MCInstrDesc &MCID = TII->get(Opc);
   [[maybe_unused]] const bool HasPolicyOp =
-      RISCVII::hasVecPolicyOp(MCID.TSFlags);
-  const bool HasPassthru = RISCVII::isFirstDefTiedToFirstUse(MCID);
+      CapstoneII::hasVecPolicyOp(MCID.TSFlags);
+  const bool HasPassthru = CapstoneII::isFirstDefTiedToFirstUse(MCID);
   const MCInstrDesc &MaskedMCID = TII->get(MI.getOpcode());
-  assert((RISCVII::hasVecPolicyOp(MaskedMCID.TSFlags) ||
-          !RISCVII::hasVecPolicyOp(MCID.TSFlags)) &&
+  assert((CapstoneII::hasVecPolicyOp(MaskedMCID.TSFlags) ||
+          !CapstoneII::hasVecPolicyOp(MCID.TSFlags)) &&
          "Unmasked pseudo has policy but masked pseudo doesn't?");
   assert(HasPolicyOp == HasPassthru && "Unexpected pseudo structure");
-  assert(!(HasPassthru && !RISCVII::isFirstDefTiedToFirstUse(MaskedMCID)) &&
+  assert(!(HasPassthru && !CapstoneII::isFirstDefTiedToFirstUse(MaskedMCID)) &&
          "Unmasked with passthru but masked with no passthru?");
   (void)HasPolicyOp;
 
   MI.setDesc(MCID);
 
   // Drop the policy operand if unmasked doesn't need it.
-  if (RISCVII::hasVecPolicyOp(MaskedMCID.TSFlags) &&
-      !RISCVII::hasVecPolicyOp(MCID.TSFlags))
-    MI.removeOperand(RISCVII::getVecPolicyOpNum(MaskedMCID));
+  if (CapstoneII::hasVecPolicyOp(MaskedMCID.TSFlags) &&
+      !CapstoneII::hasVecPolicyOp(MCID.TSFlags))
+    MI.removeOperand(CapstoneII::getVecPolicyOpNum(MaskedMCID));
 
   // TODO: Increment all MaskOpIdxs in tablegen by num of explicit defs?
   unsigned MaskOpIdx = I->MaskOpIdx + MI.getNumExplicitDefs();
@@ -514,10 +514,10 @@ bool RISCVVectorPeephole::convertToUnmasked(MachineInstr &MI) const {
   MRI->recomputeRegClass(MI.getOperand(0).getReg());
 
   // If the original masked pseudo had a passthru, relax it or remove it.
-  if (RISCVII::isFirstDefTiedToFirstUse(MaskedMCID)) {
+  if (CapstoneII::isFirstDefTiedToFirstUse(MaskedMCID)) {
     unsigned PassthruOpIdx = MI.getNumExplicitDefs();
     if (HasPassthru) {
-      if (MI.getOperand(PassthruOpIdx).getReg() != RISCV::NoRegister)
+      if (MI.getOperand(PassthruOpIdx).getReg() != Capstone::NoRegister)
         MRI->recomputeRegClass(MI.getOperand(PassthruOpIdx).getReg());
     } else
       MI.removeOperand(PassthruOpIdx);
@@ -573,10 +573,10 @@ static bool dominates(MachineBasicBlock::const_iterator A,
 /// If the register in \p MO doesn't dominate \p Src, try to move \p Src so it
 /// does. Returns false if doesn't dominate and we can't move. \p MO must be in
 /// the same basic block as \Src.
-bool RISCVVectorPeephole::ensureDominates(const MachineOperand &MO,
+bool CapstoneVectorPeephole::ensureDominates(const MachineOperand &MO,
                                           MachineInstr &Src) const {
   assert(MO.getParent()->getParent() == Src.getParent());
-  if (!MO.isReg() || MO.getReg() == RISCV::NoRegister)
+  if (!MO.isReg() || MO.getReg() == Capstone::NoRegister)
     return true;
 
   MachineInstr *Def = MRI->getVRegDef(MO.getReg());
@@ -590,10 +590,10 @@ bool RISCVVectorPeephole::ensureDominates(const MachineOperand &MO,
 }
 
 /// If a PseudoVMV_V_V's passthru is undef then we can replace it with its input
-bool RISCVVectorPeephole::foldUndefPassthruVMV_V_V(MachineInstr &MI) {
-  if (RISCV::getRVVMCOpcode(MI.getOpcode()) != RISCV::VMV_V_V)
+bool CapstoneVectorPeephole::foldUndefPassthruVMV_V_V(MachineInstr &MI) {
+  if (Capstone::getRVVMCOpcode(MI.getOpcode()) != Capstone::VMV_V_V)
     return false;
-  if (MI.getOperand(1).getReg() != RISCV::NoRegister)
+  if (MI.getOperand(1).getReg() != Capstone::NoRegister)
     return false;
 
   // If the input was a pseudo with a policy operand, we can give it a tail
@@ -601,17 +601,17 @@ bool RISCVVectorPeephole::foldUndefPassthruVMV_V_V(MachineInstr &MI) {
   MachineInstr *Src = MRI->getVRegDef(MI.getOperand(2).getReg());
   if (Src && !Src->hasUnmodeledSideEffects() &&
       MRI->hasOneUse(MI.getOperand(2).getReg()) &&
-      RISCVII::hasVLOp(Src->getDesc().TSFlags) &&
-      RISCVII::hasVecPolicyOp(Src->getDesc().TSFlags) && hasSameEEW(MI, *Src)) {
+      CapstoneII::hasVLOp(Src->getDesc().TSFlags) &&
+      CapstoneII::hasVecPolicyOp(Src->getDesc().TSFlags) && hasSameEEW(MI, *Src)) {
     const MachineOperand &MIVL = MI.getOperand(3);
     const MachineOperand &SrcVL =
-        Src->getOperand(RISCVII::getVLOpNum(Src->getDesc()));
+        Src->getOperand(CapstoneII::getVLOpNum(Src->getDesc()));
 
     MachineOperand &SrcPolicy =
-        Src->getOperand(RISCVII::getVecPolicyOpNum(Src->getDesc()));
+        Src->getOperand(CapstoneII::getVecPolicyOpNum(Src->getDesc()));
 
-    if (RISCV::isVLKnownLE(MIVL, SrcVL))
-      SrcPolicy.setImm(SrcPolicy.getImm() | RISCVVType::TAIL_AGNOSTIC);
+    if (Capstone::isVLKnownLE(MIVL, SrcVL))
+      SrcPolicy.setImm(SrcPolicy.getImm() | CapstoneVType::TAIL_AGNOSTIC);
   }
 
   MRI->constrainRegClass(MI.getOperand(2).getReg(),
@@ -632,8 +632,8 @@ bool RISCVVectorPeephole::foldUndefPassthruVMV_V_V(MachineInstr &MI) {
 /// ->
 ///
 /// %y = PseudoVADD_V_V_M1 %passthru, %a, %b, vl1, sew, policy
-bool RISCVVectorPeephole::foldVMV_V_V(MachineInstr &MI) {
-  if (RISCV::getRVVMCOpcode(MI.getOpcode()) != RISCV::VMV_V_V)
+bool CapstoneVectorPeephole::foldVMV_V_V(MachineInstr &MI) {
+  if (Capstone::getRVVMCOpcode(MI.getOpcode()) != Capstone::VMV_V_V)
     return false;
 
   MachineOperand &Passthru = MI.getOperand(1);
@@ -644,8 +644,8 @@ bool RISCVVectorPeephole::foldVMV_V_V(MachineInstr &MI) {
   MachineInstr *Src = MRI->getVRegDef(MI.getOperand(2).getReg());
   if (!Src || Src->hasUnmodeledSideEffects() ||
       Src->getParent() != MI.getParent() ||
-      !RISCVII::isFirstDefTiedToFirstUse(Src->getDesc()) ||
-      !RISCVII::hasVLOp(Src->getDesc().TSFlags))
+      !CapstoneII::isFirstDefTiedToFirstUse(Src->getDesc()) ||
+      !CapstoneII::hasVLOp(Src->getDesc().TSFlags))
     return false;
 
   // Src's dest needs to have the same EEW as MI's input.
@@ -654,15 +654,15 @@ bool RISCVVectorPeephole::foldVMV_V_V(MachineInstr &MI) {
 
   // Src needs to have the same passthru as VMV_V_V
   MachineOperand &SrcPassthru = Src->getOperand(Src->getNumExplicitDefs());
-  if (SrcPassthru.getReg() != RISCV::NoRegister &&
+  if (SrcPassthru.getReg() != Capstone::NoRegister &&
       SrcPassthru.getReg() != Passthru.getReg())
     return false;
 
   // Src VL will have already been reduced if legal (see tryToReduceVL),
   // so we don't need to handle a smaller source VL here.  However, the
   // user's VL may be larger
-  MachineOperand &SrcVL = Src->getOperand(RISCVII::getVLOpNum(Src->getDesc()));
-  if (!RISCV::isVLKnownLE(SrcVL, MI.getOperand(3)))
+  MachineOperand &SrcVL = Src->getOperand(CapstoneII::getVLOpNum(Src->getDesc()));
+  if (!Capstone::isVLKnownLE(SrcVL, MI.getOperand(3)))
     return false;
 
   // If the new passthru doesn't dominate Src, try to move Src so it does.
@@ -672,19 +672,19 @@ bool RISCVVectorPeephole::foldVMV_V_V(MachineInstr &MI) {
   if (SrcPassthru.getReg() != Passthru.getReg()) {
     SrcPassthru.setReg(Passthru.getReg());
     // If Src is masked then its passthru needs to be in VRNoV0.
-    if (Passthru.getReg() != RISCV::NoRegister)
+    if (Passthru.getReg() != Capstone::NoRegister)
       MRI->constrainRegClass(
           Passthru.getReg(),
           TII->getRegClass(Src->getDesc(), SrcPassthru.getOperandNo(), TRI));
   }
 
-  if (RISCVII::hasVecPolicyOp(Src->getDesc().TSFlags)) {
+  if (CapstoneII::hasVecPolicyOp(Src->getDesc().TSFlags)) {
     // If MI was tail agnostic and the VL didn't increase, preserve it.
-    int64_t Policy = RISCVVType::TAIL_UNDISTURBED_MASK_UNDISTURBED;
-    if ((MI.getOperand(5).getImm() & RISCVVType::TAIL_AGNOSTIC) &&
-        RISCV::isVLKnownLE(MI.getOperand(3), SrcVL))
-      Policy |= RISCVVType::TAIL_AGNOSTIC;
-    Src->getOperand(RISCVII::getVecPolicyOpNum(Src->getDesc())).setImm(Policy);
+    int64_t Policy = CapstoneVType::TAIL_UNDISTURBED_MASK_UNDISTURBED;
+    if ((MI.getOperand(5).getImm() & CapstoneVType::TAIL_AGNOSTIC) &&
+        Capstone::isVLKnownLE(MI.getOperand(3), SrcVL))
+      Policy |= CapstoneVType::TAIL_AGNOSTIC;
+    Src->getOperand(CapstoneII::getVecPolicyOpNum(Src->getDesc())).setImm(Policy);
   }
 
   MRI->constrainRegClass(Src->getOperand(0).getReg(),
@@ -713,8 +713,8 @@ bool RISCVVectorPeephole::foldVMV_V_V(MachineInstr &MI) {
 ///
 /// The resulting policy is the effective policy the vmerge would have had,
 /// i.e. whether or not it's passthru operand was implicit-def.
-bool RISCVVectorPeephole::foldVMergeToMask(MachineInstr &MI) const {
-  if (RISCV::getRVVMCOpcode(MI.getOpcode()) != RISCV::VMERGE_VVM)
+bool CapstoneVectorPeephole::foldVMergeToMask(MachineInstr &MI) const {
+  if (Capstone::getRVVMCOpcode(MI.getOpcode()) != Capstone::VMERGE_VVM)
     return false;
 
   Register PassthruReg = MI.getOperand(1).getReg();
@@ -729,8 +729,8 @@ bool RISCVVectorPeephole::foldVMergeToMask(MachineInstr &MI) const {
   MachineInstr *Mask = MRI->getUniqueVRegDef(MaskOp.getReg());
   assert(Mask);
 
-  const RISCV::RISCVMaskedPseudoInfo *Info =
-      RISCV::lookupMaskedIntrinsicByUnmasked(True.getOpcode());
+  const Capstone::CapstoneMaskedPseudoInfo *Info =
+      Capstone::lookupMaskedIntrinsicByUnmasked(True.getOpcode());
   if (!Info)
     return false;
 
@@ -748,7 +748,7 @@ bool RISCVVectorPeephole::foldVMergeToMask(MachineInstr &MI) const {
   // If True has a passthru operand then it needs to be the same as vmerge's
   // False, since False will be used for the result's passthru operand.
   Register TruePassthru = True.getOperand(True.getNumExplicitDefs()).getReg();
-  if (RISCVII::isFirstDefTiedToFirstUse(True.getDesc()) && TruePassthru &&
+  if (CapstoneII::isFirstDefTiedToFirstUse(True.getDesc()) && TruePassthru &&
       !isKnownSameDefs(TruePassthru, FalseReg)) {
     // If True's passthru != False, check if it uses False in another operand
     // and try to commute it.
@@ -768,23 +768,23 @@ bool RISCVVectorPeephole::foldVMergeToMask(MachineInstr &MI) const {
     return false;
 
   const MachineOperand &VMergeVL =
-      MI.getOperand(RISCVII::getVLOpNum(MI.getDesc()));
+      MI.getOperand(CapstoneII::getVLOpNum(MI.getDesc()));
   const MachineOperand &TrueVL =
-      True.getOperand(RISCVII::getVLOpNum(True.getDesc()));
+      True.getOperand(CapstoneII::getVLOpNum(True.getDesc()));
 
   MachineOperand MinVL = MachineOperand::CreateImm(0);
-  if (RISCV::isVLKnownLE(TrueVL, VMergeVL))
+  if (Capstone::isVLKnownLE(TrueVL, VMergeVL))
     MinVL = TrueVL;
-  else if (RISCV::isVLKnownLE(VMergeVL, TrueVL))
+  else if (Capstone::isVLKnownLE(VMergeVL, TrueVL))
     MinVL = VMergeVL;
   else
     return false;
 
   unsigned RVVTSFlags =
-      TII->get(RISCV::getRVVMCOpcode(True.getOpcode())).TSFlags;
-  if (RISCVII::elementsDependOnVL(RVVTSFlags) && !TrueVL.isIdenticalTo(MinVL))
+      TII->get(Capstone::getRVVMCOpcode(True.getOpcode())).TSFlags;
+  if (CapstoneII::elementsDependOnVL(RVVTSFlags) && !TrueVL.isIdenticalTo(MinVL))
     return false;
-  if (RISCVII::elementsDependOnMask(RVVTSFlags) && !isAllOnesMask(Mask))
+  if (CapstoneII::elementsDependOnMask(RVVTSFlags) && !isAllOnesMask(Mask))
     return false;
 
   // Use a tumu policy, relaxing it to tail agnostic provided that the passthru
@@ -794,11 +794,11 @@ bool RISCVVectorPeephole::foldVMergeToMask(MachineInstr &MI) const {
   // elements past VL that were previously in the vmerge's body will have moved
   // to the tail. In that case we always need to use tail undisturbed to
   // preserve them.
-  uint64_t Policy = RISCVVType::TAIL_UNDISTURBED_MASK_UNDISTURBED;
-  if (!PassthruReg && RISCV::isVLKnownLE(VMergeVL, MinVL))
-    Policy |= RISCVVType::TAIL_AGNOSTIC;
+  uint64_t Policy = CapstoneVType::TAIL_UNDISTURBED_MASK_UNDISTURBED;
+  if (!PassthruReg && Capstone::isVLKnownLE(VMergeVL, MinVL))
+    Policy |= CapstoneVType::TAIL_AGNOSTIC;
 
-  assert(RISCVII::hasVecPolicyOp(True.getDesc().TSFlags) &&
+  assert(CapstoneII::hasVecPolicyOp(True.getDesc().TSFlags) &&
          "Foldable unmasked pseudo should have a policy op already");
 
   // Make sure the mask dominates True, otherwise move down True so it does.
@@ -811,7 +811,7 @@ bool RISCVVectorPeephole::foldVMergeToMask(MachineInstr &MI) const {
     [[maybe_unused]] bool Commuted =
         TII->commuteInstruction(True, /*NewMI=*/false, OpIdx1, OpIdx2);
     assert(Commuted && "Failed to commute True?");
-    Info = RISCV::lookupMaskedIntrinsicByUnmasked(True.getOpcode());
+    Info = Capstone::lookupMaskedIntrinsicByUnmasked(True.getOpcode());
   }
 
   True.setDesc(TII->get(Info->MaskedPseudo));
@@ -824,10 +824,10 @@ bool RISCVVectorPeephole::foldVMergeToMask(MachineInstr &MI) const {
 
   // Update the passthru, AVL and policy.
   True.getOperand(True.getNumExplicitDefs()).setReg(FalseReg);
-  True.removeOperand(RISCVII::getVLOpNum(True.getDesc()));
-  True.insert(True.operands_begin() + RISCVII::getVLOpNum(True.getDesc()),
+  True.removeOperand(CapstoneII::getVLOpNum(True.getDesc()));
+  True.insert(True.operands_begin() + CapstoneII::getVLOpNum(True.getDesc()),
               MinVL);
-  True.getOperand(RISCVII::getVecPolicyOpNum(True.getDesc())).setImm(Policy);
+  True.getOperand(CapstoneII::getVecPolicyOpNum(True.getDesc())).setImm(Policy);
 
   MRI->replaceRegWith(True.getOperand(0).getReg(), MI.getOperand(0).getReg());
   // Now that True is masked, constrain its operands from vr -> vrnov0.
@@ -842,12 +842,12 @@ bool RISCVVectorPeephole::foldVMergeToMask(MachineInstr &MI) const {
   return true;
 }
 
-bool RISCVVectorPeephole::runOnMachineFunction(MachineFunction &MF) {
+bool CapstoneVectorPeephole::runOnMachineFunction(MachineFunction &MF) {
   if (skipFunction(MF.getFunction()))
     return false;
 
   // Skip if the vector extension is not enabled.
-  ST = &MF.getSubtarget<RISCVSubtarget>();
+  ST = &MF.getSubtarget<CapstoneSubtarget>();
   if (!ST->hasVInstructions())
     return false;
 
@@ -879,6 +879,6 @@ bool RISCVVectorPeephole::runOnMachineFunction(MachineFunction &MF) {
   return Changed;
 }
 
-FunctionPass *llvm::createRISCVVectorPeepholePass() {
-  return new RISCVVectorPeephole();
+FunctionPass *llvm::createCapstoneVectorPeepholePass() {
+  return new CapstoneVectorPeephole();
 }

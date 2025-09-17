@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZvfbf.td - 'Zvfbf*' instructions -----*- tablegen -*-===//
+//===-- CapstoneInstrInfoZvfbf.td - 'Zvfbf*' instructions -----*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard 'Zvfbfmin'
+// This file describes the Capstone instructions from the standard 'Zvfbfmin'
 // extension, providing vector conversion instructions for BFloat16.
 // This version is still experimental as the 'Zvfbfmin' extension hasn't been
 // ratified yet.

@@ -1,4 +1,4 @@
-//===-- RISCVInstrPredicates.td - Instruction Predicates ---*- tablegen -*-===//
+//===-- CapstoneInstrPredicates.td - Instruction Predicates ---*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instruction predicates.
+// This file describes the Capstone instruction predicates.
 //
 //===----------------------------------------------------------------------===//
 

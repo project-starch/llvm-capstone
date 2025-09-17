@@ -1,4 +1,4 @@
-//===------- RISCVConstantPoolValue.cpp - RISC-V constantpool value -------===//
+//===------- CapstoneConstantPoolValue.cpp - Capstone constantpool value -------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,11 +6,11 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements the RISC-V specific constantpool value class.
+// This file implements the Capstone specific constantpool value class.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVConstantPoolValue.h"
+#include "CapstoneConstantPoolValue.h"
 #include "llvm/ADT/FoldingSet.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalValue.h"
@@ -19,30 +19,30 @@
 
 using namespace llvm;
 
-RISCVConstantPoolValue::RISCVConstantPoolValue(Type *Ty, const GlobalValue *GV)
-    : MachineConstantPoolValue(Ty), GV(GV), Kind(RISCVCPKind::GlobalValue) {}
+CapstoneConstantPoolValue::CapstoneConstantPoolValue(Type *Ty, const GlobalValue *GV)
+    : MachineConstantPoolValue(Ty), GV(GV), Kind(CapstoneCPKind::GlobalValue) {}
 
-RISCVConstantPoolValue::RISCVConstantPoolValue(LLVMContext &C, StringRef S)
+CapstoneConstantPoolValue::CapstoneConstantPoolValue(LLVMContext &C, StringRef S)
     : MachineConstantPoolValue(Type::getInt64Ty(C)), S(S),
-      Kind(RISCVCPKind::ExtSymbol) {}
+      Kind(CapstoneCPKind::ExtSymbol) {}
 
-RISCVConstantPoolValue *RISCVConstantPoolValue::Create(const GlobalValue *GV) {
-  return new RISCVConstantPoolValue(GV->getType(), GV);
+CapstoneConstantPoolValue *CapstoneConstantPoolValue::Create(const GlobalValue *GV) {
+  return new CapstoneConstantPoolValue(GV->getType(), GV);
 }
 
-RISCVConstantPoolValue *RISCVConstantPoolValue::Create(LLVMContext &C,
+CapstoneConstantPoolValue *CapstoneConstantPoolValue::Create(LLVMContext &C,
                                                        StringRef S) {
-  return new RISCVConstantPoolValue(C, S);
+  return new CapstoneConstantPoolValue(C, S);
 }
 
-int RISCVConstantPoolValue::getExistingMachineCPValue(MachineConstantPool *CP,
+int CapstoneConstantPoolValue::getExistingMachineCPValue(MachineConstantPool *CP,
                                                       Align Alignment) {
   const std::vector<MachineConstantPoolEntry> &Constants = CP->getConstants();
   for (unsigned i = 0, e = Constants.size(); i != e; ++i) {
     if (Constants[i].isMachineConstantPoolEntry() &&
         Constants[i].getAlign() >= Alignment) {
       auto *CPV =
-          static_cast<RISCVConstantPoolValue *>(Constants[i].Val.MachineCPVal);
+          static_cast<CapstoneConstantPoolValue *>(Constants[i].Val.MachineCPVal);
       if (equals(CPV))
         return i;
     }
@@ -51,7 +51,7 @@ int RISCVConstantPoolValue::getExistingMachineCPValue(MachineConstantPool *CP,
   return -1;
 }
 
-void RISCVConstantPoolValue::addSelectionDAGCSEId(FoldingSetNodeID &ID) {
+void CapstoneConstantPoolValue::addSelectionDAGCSEId(FoldingSetNodeID &ID) {
   if (isGlobalValue())
     ID.AddPointer(GV);
   else {
@@ -60,7 +60,7 @@ void RISCVConstantPoolValue::addSelectionDAGCSEId(FoldingSetNodeID &ID) {
   }
 }
 
-void RISCVConstantPoolValue::print(raw_ostream &O) const {
+void CapstoneConstantPoolValue::print(raw_ostream &O) const {
   if (isGlobalValue())
     O << GV->getName();
   else {
@@ -69,7 +69,7 @@ void RISCVConstantPoolValue::print(raw_ostream &O) const {
   }
 }
 
-bool RISCVConstantPoolValue::equals(const RISCVConstantPoolValue *A) const {
+bool CapstoneConstantPoolValue::equals(const CapstoneConstantPoolValue *A) const {
   if (isGlobalValue() && A->isGlobalValue())
     return GV == A->GV;
   if (isExtSymbol() && A->isExtSymbol())

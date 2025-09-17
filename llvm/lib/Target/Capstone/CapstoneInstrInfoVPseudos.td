@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoVPseudos.td - RISC-V 'V' Pseudos -----*- tablegen -*-===//
+//===-- CapstoneInstrInfoVPseudos.td - Capstone 'V' Pseudos -----*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -9,7 +9,7 @@
 /// This file contains the required infrastructure to support code generation
 /// for the standard 'V' (Vector) extension, version 1.0.
 ///
-/// This file is included from RISCVInstrInfoV.td
+/// This file is included from CapstoneInstrInfoV.td
 ///
 /// Overview of our vector instruction pseudos.  Many of the instructions
 /// have behavior which depends on the value of VTYPE.  Several core aspects of
@@ -72,36 +72,36 @@
 
 // VMV_X_S matches the semantics of vmv.x.s. The result is always XLenVT sign
 // extended from the vector element size.
-def riscv_vmv_x_s : RVSDNode<"VMV_X_S",
+def capstone_vmv_x_s : RVSDNode<"VMV_X_S",
                              SDTypeProfile<1, 1, [SDTCisInt<0>, SDTCisVec<1>,
                                                   SDTCisInt<1>]>>;
 
 // Read VLENB CSR
-def riscv_read_vlenb : RVSDNode<"READ_VLENB",
+def capstone_read_vlenb : RVSDNode<"READ_VLENB",
                                 SDTypeProfile<1, 0, [SDTCisVT<0, XLenVT>]>>;
 
 // Operand that is allowed to be a register other than X0, a 5 bit unsigned
 // immediate, or -1. -1 means VLMAX. This allows us to pick between VSETIVLI and
 // VSETVLI opcodes using the same pseudo instructions.
 def AVL : RegisterOperand<GPRNoX0> {
-  let OperandNamespace = "RISCVOp";
+  let OperandNamespace = "CapstoneOp";
   let OperandType = "OPERAND_AVL";
 }
 
-def vec_policy : RISCVOp {
+def vec_policy : CapstoneOp {
   let OperandType = "OPERAND_VEC_POLICY";
 }
 
-def sew : RISCVOp {
+def sew : CapstoneOp {
   let OperandType = "OPERAND_SEW";
 }
 
 // SEW for mask only instructions like vmand and vmsbf. Should always be 0.
-def sew_mask : RISCVOp {
+def sew_mask : CapstoneOp {
   let OperandType = "OPERAND_SEW_MASK";
 }
 
-def vec_rm : RISCVOp {
+def vec_rm : CapstoneOp {
   let OperandType = "OPERAND_VEC_RM";
 }
 
@@ -262,7 +262,7 @@ def VLOpFrag : PatFrag<(ops), (XLenVT (VLOp (XLenVT AVL:$vl)))>;
 
 // Output pattern for X0 used to represent VLMAX in the pseudo instructions.
 // We can't use X0 register because the AVL operands use GPRNoX0.
-// This must be kept in sync with RISCV::VLMaxSentinel.
+// This must be kept in sync with Capstone::VLMaxSentinel.
 def VLMax : OutPatFrag<(ops), (XLenVT -1)>;
 
 def SelectScalarFPAsInt : ComplexPattern<fAny, 1, "selectScalarFPAsInt", [], [],
@@ -539,11 +539,11 @@ defset list<VTypeInfoToWide> AllWidenableBFloatToFloatVectors = {
   def : VTypeInfoToWide<VBF16M4, VF32M8>;
 }
 
-// This class holds the record of the RISCVVPseudoTable below.
+// This class holds the record of the CapstoneVPseudoTable below.
 // This represents the information we need in codegen for each pseudo.
 // The definition should be consistent with `struct PseudoInfo` in
-// RISCVInstrInfo.h.
-class RISCVVPseudo<dag outs, dag ins, list<dag> pattern = [], string opcodestr = "", string argstr = "">
+// CapstoneInstrInfo.h.
+class CapstoneVPseudo<dag outs, dag ins, list<dag> pattern = [], string opcodestr = "", string argstr = "">
     : Pseudo<outs, ins, pattern, opcodestr, argstr> {
   Pseudo Pseudo = !cast<Pseudo>(NAME); // Used as a key.
   Instruction BaseInstr = !cast<Instruction>(PseudoToVInst<NAME>.VInst);
@@ -553,8 +553,8 @@ class RISCVVPseudo<dag outs, dag ins, list<dag> pattern = [], string opcodestr =
 }
 
 // The actual table.
-def RISCVVPseudosTable : GenericTable {
-  let FilterClass = "RISCVVPseudo";
+def CapstoneVPseudosTable : GenericTable {
+  let FilterClass = "CapstoneVPseudo";
   let CppTypeName = "PseudoInfo";
   let Fields = [ "Pseudo", "BaseInstr" ];
   let PrimaryKey = [ "Pseudo" ];
@@ -562,8 +562,8 @@ def RISCVVPseudosTable : GenericTable {
   let PrimaryKeyEarlyOut = true;
 }
 
-def RISCVVInversePseudosTable : GenericTable {
-  let FilterClass = "RISCVVPseudo";
+def CapstoneVInversePseudosTable : GenericTable {
+  let FilterClass = "CapstoneVPseudo";
   let FilterClassField = "IncludeInInversePseudoTable";
   let CppTypeName = "PseudoInfo";
   let Fields = [ "Pseudo", "BaseInstr", "VLMul", "SEW"];
@@ -572,12 +572,12 @@ def RISCVVInversePseudosTable : GenericTable {
   let PrimaryKeyEarlyOut = true;
 }
 
-def RISCVVIntrinsicsTable : GenericTable {
-  let FilterClass = "RISCVVIntrinsic";
-  let CppTypeName = "RISCVVIntrinsicInfo";
+def CapstoneVIntrinsicsTable : GenericTable {
+  let FilterClass = "CapstoneVIntrinsic";
+  let CppTypeName = "CapstoneVIntrinsicInfo";
   let Fields = ["IntrinsicID", "ScalarOperand", "VLOperand"];
   let PrimaryKey = ["IntrinsicID"];
-  let PrimaryKeyName = "getRISCVVIntrinsicInfo";
+  let PrimaryKeyName = "getCapstoneVIntrinsicInfo";
 }
 
 // Describes the relation of a masked pseudo to the unmasked variants.
@@ -585,21 +585,21 @@ def RISCVVIntrinsicsTable : GenericTable {
 //    unmasked variant.  For all but compares, both the masked and
 //    unmasked variant have a passthru and policy operand.  For compares,
 //    neither has a policy op, and only the masked version has a passthru.
-class RISCVMaskedPseudo<bits<4> MaskIdx> {
+class CapstoneMaskedPseudo<bits<4> MaskIdx> {
   Pseudo MaskedPseudo = !cast<Pseudo>(NAME);
   Pseudo UnmaskedPseudo = !cast<Pseudo>(!subst("_MASK", "", NAME));
   bits<4> MaskOpIdx = MaskIdx;
 }
 
-def RISCVMaskedPseudosTable : GenericTable {
-  let FilterClass = "RISCVMaskedPseudo";
-  let CppTypeName = "RISCVMaskedPseudoInfo";
+def CapstoneMaskedPseudosTable : GenericTable {
+  let FilterClass = "CapstoneMaskedPseudo";
+  let CppTypeName = "CapstoneMaskedPseudoInfo";
   let Fields = ["MaskedPseudo", "UnmaskedPseudo", "MaskOpIdx"];
   let PrimaryKey = ["MaskedPseudo"];
   let PrimaryKeyName = "getMaskedPseudoInfo";
 }
 
-class RISCVVLE<bit M, bit Str, bit F, bits<3> S, bits<3> L> {
+class CapstoneVLE<bit M, bit Str, bit F, bits<3> S, bits<3> L> {
   bits<1> Masked = M;
   bits<1> Strided = Str;
   bits<1> FF = F;
@@ -609,19 +609,19 @@ class RISCVVLE<bit M, bit Str, bit F, bits<3> S, bits<3> L> {
 }
 
 def lookupMaskedIntrinsicByUnmasked : SearchIndex {
-  let Table = RISCVMaskedPseudosTable;
+  let Table = CapstoneMaskedPseudosTable;
   let Key = ["UnmaskedPseudo"];
 }
 
-def RISCVVLETable : GenericTable {
-  let FilterClass = "RISCVVLE";
+def CapstoneVLETable : GenericTable {
+  let FilterClass = "CapstoneVLE";
   let CppTypeName = "VLEPseudo";
   let Fields = ["Masked", "Strided", "FF", "Log2SEW", "LMUL", "Pseudo"];
   let PrimaryKey = ["Masked", "Strided", "FF", "Log2SEW", "LMUL"];
   let PrimaryKeyName = "getVLEPseudo";
 }
 
-class RISCVVSE<bit M, bit Str, bits<3> S, bits<3> L> {
+class CapstoneVSE<bit M, bit Str, bits<3> S, bits<3> L> {
   bits<1> Masked = M;
   bits<1> Strided = Str;
   bits<3> Log2SEW = S;
@@ -629,15 +629,15 @@ class RISCVVSE<bit M, bit Str, bits<3> S, bits<3> L> {
   Pseudo Pseudo = !cast<Pseudo>(NAME);
 }
 
-def RISCVVSETable : GenericTable {
-  let FilterClass = "RISCVVSE";
+def CapstoneVSETable : GenericTable {
+  let FilterClass = "CapstoneVSE";
   let CppTypeName = "VSEPseudo";
   let Fields = ["Masked", "Strided", "Log2SEW", "LMUL", "Pseudo"];
   let PrimaryKey = ["Masked", "Strided", "Log2SEW", "LMUL"];
   let PrimaryKeyName = "getVSEPseudo";
 }
 
-class RISCVVLX_VSX<bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> {
+class CapstoneVLX_VSX<bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> {
   bits<1> Masked = M;
   bits<1> Ordered = O;
   bits<3> Log2SEW = S;
@@ -646,28 +646,28 @@ class RISCVVLX_VSX<bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> {
   Pseudo Pseudo = !cast<Pseudo>(NAME);
 }
 
-class RISCVVLX<bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> :
-  RISCVVLX_VSX<M, O, S, L, IL>;
-class RISCVVSX<bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> :
-  RISCVVLX_VSX<M, O, S, L, IL>;
+class CapstoneVLX<bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> :
+  CapstoneVLX_VSX<M, O, S, L, IL>;
+class CapstoneVSX<bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> :
+  CapstoneVLX_VSX<M, O, S, L, IL>;
 
-class RISCVVLX_VSXTable : GenericTable {
+class CapstoneVLX_VSXTable : GenericTable {
   let CppTypeName = "VLX_VSXPseudo";
   let Fields = ["Masked", "Ordered", "Log2SEW", "LMUL", "IndexLMUL", "Pseudo"];
   let PrimaryKey = ["Masked", "Ordered", "Log2SEW", "LMUL", "IndexLMUL"];
 }
 
-def RISCVVLXTable : RISCVVLX_VSXTable {
-  let FilterClass = "RISCVVLX";
+def CapstoneVLXTable : CapstoneVLX_VSXTable {
+  let FilterClass = "CapstoneVLX";
   let PrimaryKeyName = "getVLXPseudo";
 }
 
-def RISCVVSXTable : RISCVVLX_VSXTable {
-  let FilterClass = "RISCVVSX";
+def CapstoneVSXTable : CapstoneVLX_VSXTable {
+  let FilterClass = "CapstoneVSX";
   let PrimaryKeyName = "getVSXPseudo";
 }
 
-class RISCVVLSEG<bits<4> N, bit M, bit Str, bit F, bits<3> S, bits<3> L> {
+class CapstoneVLSEG<bits<4> N, bit M, bit Str, bit F, bits<3> S, bits<3> L> {
   bits<4> NF = N;
   bits<1> Masked = M;
   bits<1> Strided = Str;
@@ -677,15 +677,15 @@ class RISCVVLSEG<bits<4> N, bit M, bit Str, bit F, bits<3> S, bits<3> L> {
   Pseudo Pseudo = !cast<Pseudo>(NAME);
 }
 
-def RISCVVLSEGTable : GenericTable {
-  let FilterClass = "RISCVVLSEG";
+def CapstoneVLSEGTable : GenericTable {
+  let FilterClass = "CapstoneVLSEG";
   let CppTypeName = "VLSEGPseudo";
   let Fields = ["NF", "Masked", "Strided", "FF", "Log2SEW", "LMUL", "Pseudo"];
   let PrimaryKey = ["NF", "Masked", "Strided", "FF", "Log2SEW", "LMUL"];
   let PrimaryKeyName = "getVLSEGPseudo";
 }
 
-class RISCVVLXSEG<bits<4> N, bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> {
+class CapstoneVLXSEG<bits<4> N, bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> {
   bits<4> NF = N;
   bits<1> Masked = M;
   bits<1> Ordered = O;
@@ -695,15 +695,15 @@ class RISCVVLXSEG<bits<4> N, bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> {
   Pseudo Pseudo = !cast<Pseudo>(NAME);
 }
 
-def RISCVVLXSEGTable : GenericTable {
-  let FilterClass = "RISCVVLXSEG";
+def CapstoneVLXSEGTable : GenericTable {
+  let FilterClass = "CapstoneVLXSEG";
   let CppTypeName = "VLXSEGPseudo";
   let Fields = ["NF", "Masked", "Ordered", "Log2SEW", "LMUL", "IndexLMUL", "Pseudo"];
   let PrimaryKey = ["NF", "Masked", "Ordered", "Log2SEW", "LMUL", "IndexLMUL"];
   let PrimaryKeyName = "getVLXSEGPseudo";
 }
 
-class RISCVVSSEG<bits<4> N, bit M, bit Str, bits<3> S, bits<3> L> {
+class CapstoneVSSEG<bits<4> N, bit M, bit Str, bits<3> S, bits<3> L> {
   bits<4> NF = N;
   bits<1> Masked = M;
   bits<1> Strided = Str;
@@ -712,15 +712,15 @@ class RISCVVSSEG<bits<4> N, bit M, bit Str, bits<3> S, bits<3> L> {
   Pseudo Pseudo = !cast<Pseudo>(NAME);
 }
 
-def RISCVVSSEGTable : GenericTable {
-  let FilterClass = "RISCVVSSEG";
+def CapstoneVSSEGTable : GenericTable {
+  let FilterClass = "CapstoneVSSEG";
   let CppTypeName = "VSSEGPseudo";
   let Fields = ["NF", "Masked", "Strided", "Log2SEW", "LMUL", "Pseudo"];
   let PrimaryKey = ["NF", "Masked", "Strided", "Log2SEW", "LMUL"];
   let PrimaryKeyName = "getVSSEGPseudo";
 }
 
-class RISCVVSXSEG<bits<4> N, bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> {
+class CapstoneVSXSEG<bits<4> N, bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> {
   bits<4> NF = N;
   bits<1> Masked = M;
   bits<1> Ordered = O;
@@ -730,8 +730,8 @@ class RISCVVSXSEG<bits<4> N, bit M, bit O, bits<3> S, bits<3> L, bits<3> IL> {
   Pseudo Pseudo = !cast<Pseudo>(NAME);
 }
 
-def RISCVVSXSEGTable : GenericTable {
-  let FilterClass = "RISCVVSXSEG";
+def CapstoneVSXSEGTable : GenericTable {
+  let FilterClass = "CapstoneVSXSEG";
   let CppTypeName = "VSXSEGPseudo";
   let Fields = ["NF", "Masked", "Ordered", "Log2SEW", "LMUL", "IndexLMUL", "Pseudo"];
   let PrimaryKey = ["NF", "Masked", "Ordered", "Log2SEW", "LMUL", "IndexLMUL"];
@@ -786,10 +786,10 @@ class GetVTypeMinimalPredicates<VTypeInfo vti> {
 class VPseudoUSLoadNoMask<VReg RetClass,
                           int EEW,
                           DAGOperand sewop = sew> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$dest, GPRMemZeroOffset:$rs1, AVL:$vl,
                         sewop:$sew, vec_policy:$policy)>,
-      RISCVVLE</*Masked*/0, /*Strided*/0, /*FF*/0, !logtwo(EEW), VLMul> {
+      CapstoneVLE</*Masked*/0, /*Strided*/0, /*FF*/0, !logtwo(EEW), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -801,11 +801,11 @@ class VPseudoUSLoadNoMask<VReg RetClass,
 
 class VPseudoUSLoadMask<VReg RetClass,
                         int EEW> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         GPRMemZeroOffset:$rs1, VMaskOp:$vm, AVL:$vl, sew:$sew,
                         vec_policy:$policy)>,
-      RISCVVLE</*Masked*/1, /*Strided*/0, /*FF*/0, !logtwo(EEW), VLMul> {
+      CapstoneVLE</*Masked*/1, /*Strided*/0, /*FF*/0, !logtwo(EEW), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -819,10 +819,10 @@ class VPseudoUSLoadMask<VReg RetClass,
 
 class VPseudoUSLoadFFNoMask<VReg RetClass,
                             int EEW> :
-      RISCVVPseudo<(outs RetClass:$rd, GPR:$vl),
+      CapstoneVPseudo<(outs RetClass:$rd, GPR:$vl),
                    (ins RetClass:$dest, GPRMemZeroOffset:$rs1, AVL:$avl,
                         sew:$sew, vec_policy:$policy)>,
-      RISCVVLE</*Masked*/0, /*Strided*/0, /*FF*/1, !logtwo(EEW), VLMul> {
+      CapstoneVLE</*Masked*/0, /*Strided*/0, /*FF*/1, !logtwo(EEW), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -834,11 +834,11 @@ class VPseudoUSLoadFFNoMask<VReg RetClass,
 
 class VPseudoUSLoadFFMask<VReg RetClass,
                           int EEW> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd, GPR:$vl),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd, GPR:$vl),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         GPRMemZeroOffset:$rs1, VMaskOp:$vm, AVL:$avl, sew:$sew,
                         vec_policy:$policy)>,
-      RISCVVLE</*Masked*/1, /*Strided*/0, /*FF*/1, !logtwo(EEW), VLMul> {
+      CapstoneVLE</*Masked*/1, /*Strided*/0, /*FF*/1, !logtwo(EEW), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -852,10 +852,10 @@ class VPseudoUSLoadFFMask<VReg RetClass,
 
 class VPseudoSLoadNoMask<VReg RetClass,
                          int EEW> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$dest, GPRMemZeroOffset:$rs1, GPR:$rs2,
                         AVL:$vl, sew:$sew, vec_policy:$policy)>,
-      RISCVVLE</*Masked*/0, /*Strided*/1, /*FF*/0, !logtwo(EEW), VLMul> {
+      CapstoneVLE</*Masked*/0, /*Strided*/1, /*FF*/0, !logtwo(EEW), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -867,11 +867,11 @@ class VPseudoSLoadNoMask<VReg RetClass,
 
 class VPseudoSLoadMask<VReg RetClass,
                        int EEW> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         GPRMemZeroOffset:$rs1, GPR:$rs2, VMaskOp:$vm, AVL:$vl,
                         sew:$sew, vec_policy:$policy)>,
-      RISCVVLE</*Masked*/1, /*Strided*/1, /*FF*/0, !logtwo(EEW), VLMul> {
+      CapstoneVLE</*Masked*/1, /*Strided*/1, /*FF*/0, !logtwo(EEW), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -890,10 +890,10 @@ class VPseudoILoadNoMask<VReg RetClass,
                          bit Ordered,
                          bit EarlyClobber,
                          bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$dest, GPRMemZeroOffset:$rs1, IdxClass:$rs2,
                         AVL:$vl, sew:$sew, vec_policy:$policy)>,
-      RISCVVLX</*Masked*/0, Ordered, !logtwo(EEW), VLMul, LMUL> {
+      CapstoneVLX</*Masked*/0, Ordered, !logtwo(EEW), VLMul, LMUL> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -911,11 +911,11 @@ class VPseudoILoadMask<VReg RetClass,
                        bit Ordered,
                        bit EarlyClobber,
                        bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         GPRMemZeroOffset:$rs1, IdxClass:$rs2, VMaskOp:$vm,
                         AVL:$vl, sew:$sew, vec_policy:$policy)>,
-      RISCVVLX</*Masked*/1, Ordered, !logtwo(EEW), VLMul, LMUL> {
+      CapstoneVLX</*Masked*/1, Ordered, !logtwo(EEW), VLMul, LMUL> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -931,10 +931,10 @@ class VPseudoILoadMask<VReg RetClass,
 class VPseudoUSStoreNoMask<VReg StClass,
                            int EEW,
                            DAGOperand sewop = sew> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins StClass:$rd, GPRMemZeroOffset:$rs1, AVL:$vl,
                         sewop:$sew)>,
-      RISCVVSE</*Masked*/0, /*Strided*/0, !logtwo(EEW), VLMul> {
+      CapstoneVSE</*Masked*/0, /*Strided*/0, !logtwo(EEW), VLMul> {
   let mayLoad = 0;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -944,10 +944,10 @@ class VPseudoUSStoreNoMask<VReg StClass,
 
 class VPseudoUSStoreMask<VReg StClass,
                          int EEW> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins StClass:$rd, GPRMemZeroOffset:$rs1,
                         VMaskOp:$vm, AVL:$vl, sew:$sew)>,
-      RISCVVSE</*Masked*/1, /*Strided*/0, !logtwo(EEW), VLMul> {
+      CapstoneVSE</*Masked*/1, /*Strided*/0, !logtwo(EEW), VLMul> {
   let mayLoad = 0;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -958,10 +958,10 @@ class VPseudoUSStoreMask<VReg StClass,
 
 class VPseudoSStoreNoMask<VReg StClass,
                           int EEW> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins StClass:$rd, GPRMemZeroOffset:$rs1, GPR:$rs2,
                         AVL:$vl, sew:$sew)>,
-      RISCVVSE</*Masked*/0, /*Strided*/1, !logtwo(EEW), VLMul> {
+      CapstoneVSE</*Masked*/0, /*Strided*/1, !logtwo(EEW), VLMul> {
   let mayLoad = 0;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -971,10 +971,10 @@ class VPseudoSStoreNoMask<VReg StClass,
 
 class VPseudoSStoreMask<VReg StClass,
                         int EEW> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins StClass:$rd, GPRMemZeroOffset:$rs1, GPR:$rs2,
                         VMaskOp:$vm, AVL:$vl, sew:$sew)>,
-      RISCVVSE</*Masked*/1, /*Strided*/1, !logtwo(EEW), VLMul> {
+      CapstoneVSE</*Masked*/1, /*Strided*/1, !logtwo(EEW), VLMul> {
   let mayLoad = 0;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -984,7 +984,7 @@ class VPseudoSStoreMask<VReg StClass,
 }
 
 class VPseudoNullaryNoMask<VReg RegClass> :
-      RISCVVPseudo<(outs RegClass:$rd),
+      CapstoneVPseudo<(outs RegClass:$rd),
                    (ins RegClass:$passthru,
                         AVL:$vl, sew:$sew, vec_policy:$policy)> {
   let mayLoad = 0;
@@ -997,7 +997,7 @@ class VPseudoNullaryNoMask<VReg RegClass> :
 }
 
 class VPseudoNullaryMask<VReg RegClass> :
-      RISCVVPseudo<(outs GetVRegNoV0<RegClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RegClass>.R:$rd),
                    (ins GetVRegNoV0<RegClass>.R:$passthru,
                         VMaskOp:$vm, AVL:$vl, sew:$sew, vec_policy:$policy),
                    []> {
@@ -1013,9 +1013,9 @@ class VPseudoNullaryMask<VReg RegClass> :
 }
 
 // Nullary for pseudo instructions. They are expanded in
-// RISCVExpandPseudoInsts pass.
+// CapstoneExpandPseudoInsts pass.
 class VPseudoNullaryPseudoM<string BaseInst> :
-      RISCVVPseudo<(outs VR:$rd), (ins AVL:$vl, sew_mask:$sew)> {
+      CapstoneVPseudo<(outs VR:$rd), (ins AVL:$vl, sew_mask:$sew)> {
   let mayLoad = 0;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -1029,7 +1029,7 @@ class VPseudoUnaryNoMask<DAGOperand RetClass,
                          DAGOperand OpClass,
                          string Constraint = "",
                          bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$passthru, OpClass:$rs2,
                         AVL:$vl, sew:$sew, vec_policy:$policy)> {
   let mayLoad = 0;
@@ -1046,7 +1046,7 @@ class VPseudoUnaryNoMaskNoPolicy<DAGOperand RetClass,
                                  DAGOperand OpClass,
                                  string Constraint = "",
                                  bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins OpClass:$rs2, AVL:$vl, sew_mask:$sew)> {
   let mayLoad = 0;
   let mayStore = 0;
@@ -1061,7 +1061,7 @@ class VPseudoUnaryNoMaskRoundingMode<DAGOperand RetClass,
                                      DAGOperand OpClass,
                                      string Constraint = "",
                                      bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$passthru, OpClass:$rs2, vec_rm:$rm,
                         AVL:$vl, sew:$sew, vec_policy:$policy)> {
   let mayLoad = 0;
@@ -1082,7 +1082,7 @@ class VPseudoUnaryMask<VReg RetClass,
                        string Constraint = "",
                        bits<2> TargetConstraintType = 1,
                        DAGOperand sewop = sew> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru, OpClass:$rs2,
                         VMaskOp:$vm, AVL:$vl, sewop:$sew, vec_policy:$policy)> {
   let mayLoad = 0;
@@ -1101,7 +1101,7 @@ class VPseudoUnaryMaskRoundingMode<VReg RetClass,
                                    VReg OpClass,
                                    string Constraint = "",
                                    bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru, OpClass:$rs2,
                         VMaskOp:$vm, vec_rm:$rm,
                         AVL:$vl, sew:$sew, vec_policy:$policy)> {
@@ -1138,7 +1138,7 @@ class VPseudoUnaryMask_NoExcept<VReg RetClass,
 }
 
 class VPseudoUnaryNoMaskGPROut :
-      RISCVVPseudo<(outs GPR:$rd),
+      CapstoneVPseudo<(outs GPR:$rd),
                    (ins VR:$rs2, AVL:$vl, sew_mask:$sew)> {
   let mayLoad = 0;
   let mayStore = 0;
@@ -1148,7 +1148,7 @@ class VPseudoUnaryNoMaskGPROut :
 }
 
 class VPseudoUnaryMaskGPROut :
-      RISCVVPseudo<(outs GPR:$rd),
+      CapstoneVPseudo<(outs GPR:$rd),
                    (ins VR:$rs1, VMaskOp:$vm, AVL:$vl, sew_mask:$sew)> {
   let mayLoad = 0;
   let mayStore = 0;
@@ -1161,7 +1161,7 @@ class VPseudoUnaryMaskGPROut :
 // Mask can be V0~V31
 class VPseudoUnaryAnyMask<VReg RetClass,
                           VReg Op1Class> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$passthru, Op1Class:$rs2,
                         VR:$vm, AVL:$vl, sew:$sew)> {
   let mayLoad = 0;
@@ -1178,7 +1178,7 @@ class VPseudoBinaryNoMask<VReg RetClass,
                           string Constraint,
                           bits<2> TargetConstraintType = 1,
                           DAGOperand sewop = sew> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins Op1Class:$rs2, Op2Class:$rs1, AVL:$vl, sewop:$sew),
                    []> {
   let mayLoad = 0;
@@ -1195,7 +1195,7 @@ class VPseudoBinaryNoMaskPolicy<VReg RetClass,
                                 DAGOperand Op2Class,
                                 string Constraint,
                                 bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$passthru, Op1Class:$rs2, Op2Class:$rs1,
                         AVL:$vl, sew:$sew, vec_policy:$policy)> {
   let mayLoad = 0;
@@ -1214,7 +1214,7 @@ class VPseudoBinaryNoMaskRoundingMode<VReg RetClass,
                                       string Constraint,
                                       bit UsesVXRM_ = 1,
                                       bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$passthru, Op1Class:$rs2, Op2Class:$rs1,
                         vec_rm:$rm, AVL:$vl, sew:$sew, vec_policy:$policy),
                    []> {
@@ -1237,7 +1237,7 @@ class VPseudoBinaryMaskPolicyRoundingMode<VReg RetClass,
                                           string Constraint,
                                           bit UsesVXRM_,
                                           bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         Op1Class:$rs2, Op2Class:$rs1,
                         VMaskOp:$vm, vec_rm:$rm, AVL:$vl,
@@ -1264,7 +1264,7 @@ class VPseudoTiedBinaryNoMask<VReg RetClass,
                               DAGOperand Op2Class,
                               string Constraint,
                               bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$rs2, Op2Class:$rs1, AVL:$vl, sew:$sew,
                         vec_policy:$policy)> {
   let mayLoad = 0;
@@ -1284,7 +1284,7 @@ class VPseudoTiedBinaryNoMaskRoundingMode<VReg RetClass,
                                           DAGOperand Op2Class,
                                           string Constraint,
                                           bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$rs2, Op2Class:$rs1,
                         vec_rm:$rm,
                         AVL:$vl, sew:$sew,
@@ -1307,10 +1307,10 @@ class VPseudoTiedBinaryNoMaskRoundingMode<VReg RetClass,
 
 class VPseudoIStoreNoMask<VReg StClass, VReg IdxClass, int EEW, bits<3> LMUL,
                           bit Ordered>:
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins StClass:$rd, GPRMemZeroOffset:$rs1, IdxClass:$rs2,
                         AVL:$vl, sew:$sew),[]>,
-      RISCVVSX</*Masked*/0, Ordered, !logtwo(EEW), VLMul, LMUL> {
+      CapstoneVSX</*Masked*/0, Ordered, !logtwo(EEW), VLMul, LMUL> {
   let mayLoad = 0;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -1320,10 +1320,10 @@ class VPseudoIStoreNoMask<VReg StClass, VReg IdxClass, int EEW, bits<3> LMUL,
 
 class VPseudoIStoreMask<VReg StClass, VReg IdxClass, int EEW, bits<3> LMUL,
                         bit Ordered>:
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins StClass:$rd, GPRMemZeroOffset:$rs1, IdxClass:$rs2,
                         VMaskOp:$vm, AVL:$vl, sew:$sew),[]>,
-      RISCVVSX</*Masked*/1, Ordered, !logtwo(EEW), VLMul, LMUL> {
+      CapstoneVSX</*Masked*/1, Ordered, !logtwo(EEW), VLMul, LMUL> {
   let mayLoad = 0;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -1337,7 +1337,7 @@ class VPseudoBinaryMaskPolicy<VReg RetClass,
                               DAGOperand Op2Class,
                               string Constraint,
                               bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         Op1Class:$rs2, Op2Class:$rs1,
                         VMaskOp:$vm, AVL:$vl, sew:$sew, vec_policy:$policy),
@@ -1357,7 +1357,7 @@ class VPseudoBinaryMaskPolicy<VReg RetClass,
 class VPseudoTernaryMaskPolicy<VReg RetClass,
                                RegisterClass Op1Class,
                                DAGOperand Op2Class> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         Op1Class:$rs2, Op2Class:$rs1,
                         VMaskOp:$vm, AVL:$vl, sew:$sew, vec_policy:$policy),
@@ -1375,7 +1375,7 @@ class VPseudoTernaryMaskPolicy<VReg RetClass,
 class VPseudoTernaryMaskPolicyRoundingMode<VReg RetClass,
                                            RegisterClass Op1Class,
                                            DAGOperand Op2Class> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         Op1Class:$rs2, Op2Class:$rs1,
                         VMaskOp:$vm,
@@ -1400,7 +1400,7 @@ class VPseudoBinaryMOutMask<VReg RetClass,
                             DAGOperand Op2Class,
                             string Constraint,
                             bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$passthru,
                         Op1Class:$rs2, Op2Class:$rs1,
                         VMaskOp:$vm, AVL:$vl, sew:$sew, vec_policy:$policy),
@@ -1424,7 +1424,7 @@ class VPseudoTiedBinaryMask<VReg RetClass,
                             DAGOperand Op2Class,
                             string Constraint,
                             bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         Op2Class:$rs1,
                         VMaskOp:$vm, AVL:$vl, sew:$sew, vec_policy:$policy),
@@ -1446,7 +1446,7 @@ class VPseudoTiedBinaryMaskRoundingMode<VReg RetClass,
                                         DAGOperand Op2Class,
                                         string Constraint,
                                         bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         Op2Class:$rs1,
                         VMaskOp:$vm,
@@ -1475,7 +1475,7 @@ class VPseudoBinaryCarry<VReg RetClass,
                          bit CarryIn,
                          string Constraint,
                          bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    !if(CarryIn,
                       (ins Op1Class:$rs2, Op2Class:$rs1,
                            VMV0:$carry, AVL:$vl, sew:$sew),
@@ -1496,7 +1496,7 @@ class VPseudoTiedBinaryCarryIn<VReg RetClass,
                                DAGOperand Op2Class,
                                LMULInfo MInfo,
                                bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$passthru, Op1Class:$rs2, Op2Class:$rs1,
                         VMV0:$carry, AVL:$vl, sew:$sew)> {
   let mayLoad = 0;
@@ -1515,7 +1515,7 @@ class VPseudoTernaryNoMaskWithPolicy<VReg RetClass,
                                      DAGOperand Op2Class,
                                      string Constraint = "",
                                      bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$rs3, Op1Class:$rs1, Op2Class:$rs2,
                         AVL:$vl, sew:$sew, vec_policy:$policy)> {
   let mayLoad = 0;
@@ -1533,7 +1533,7 @@ class VPseudoTernaryNoMaskWithPolicyRoundingMode<VReg RetClass,
                                                  DAGOperand Op2Class,
                                                  string Constraint = "",
                                                  bits<2> TargetConstraintType = 1> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$rs3, Op1Class:$rs1, Op2Class:$rs2,
                         vec_rm:$rm, AVL:$vl, sew:$sew, vec_policy:$policy),
                    []> {
@@ -1553,10 +1553,10 @@ class VPseudoTernaryNoMaskWithPolicyRoundingMode<VReg RetClass,
 class VPseudoUSSegLoadNoMask<VReg RetClass,
                              int EEW,
                              bits<4> NF> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$dest, GPRMemZeroOffset:$rs1, AVL:$vl,
                         sew:$sew, vec_policy:$policy)>,
-      RISCVVLSEG<NF, /*Masked*/0, /*Strided*/0, /*FF*/0, !logtwo(EEW), VLMul> {
+      CapstoneVLSEG<NF, /*Masked*/0, /*Strided*/0, /*FF*/0, !logtwo(EEW), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -1569,11 +1569,11 @@ class VPseudoUSSegLoadNoMask<VReg RetClass,
 class VPseudoUSSegLoadMask<VReg RetClass,
                            int EEW,
                            bits<4> NF> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         GPRMemZeroOffset:$rs1, VMaskOp:$vm, AVL:$vl, sew:$sew,
                         vec_policy:$policy)>,
-      RISCVVLSEG<NF, /*Masked*/1, /*Strided*/0, /*FF*/0, !logtwo(EEW), VLMul> {
+      CapstoneVLSEG<NF, /*Masked*/1, /*Strided*/0, /*FF*/0, !logtwo(EEW), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -1588,10 +1588,10 @@ class VPseudoUSSegLoadMask<VReg RetClass,
 class VPseudoUSSegLoadFFNoMask<VReg RetClass,
                                int EEW,
                                bits<4> NF> :
-      RISCVVPseudo<(outs RetClass:$rd, GPR:$vl),
+      CapstoneVPseudo<(outs RetClass:$rd, GPR:$vl),
                    (ins RetClass:$dest, GPRMemZeroOffset:$rs1, AVL:$avl,
                         sew:$sew, vec_policy:$policy)>,
-      RISCVVLSEG<NF, /*Masked*/0, /*Strided*/0, /*FF*/1, !logtwo(EEW), VLMul> {
+      CapstoneVLSEG<NF, /*Masked*/0, /*Strided*/0, /*FF*/1, !logtwo(EEW), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -1604,11 +1604,11 @@ class VPseudoUSSegLoadFFNoMask<VReg RetClass,
 class VPseudoUSSegLoadFFMask<VReg RetClass,
                              int EEW,
                              bits<4> NF> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd, GPR:$vl),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd, GPR:$vl),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         GPRMemZeroOffset:$rs1, VMaskOp:$vm, AVL:$avl, sew:$sew,
                         vec_policy:$policy)>,
-      RISCVVLSEG<NF, /*Masked*/1, /*Strided*/0, /*FF*/1, !logtwo(EEW), VLMul> {
+      CapstoneVLSEG<NF, /*Masked*/1, /*Strided*/0, /*FF*/1, !logtwo(EEW), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -1623,10 +1623,10 @@ class VPseudoUSSegLoadFFMask<VReg RetClass,
 class VPseudoSSegLoadNoMask<VReg RetClass,
                             int EEW,
                             bits<4> NF> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$passthru, GPRMemZeroOffset:$rs1, GPR:$offset,
                         AVL:$vl, sew:$sew, vec_policy:$policy)>,
-      RISCVVLSEG<NF, /*Masked*/0, /*Strided*/1, /*FF*/0, !logtwo(EEW), VLMul> {
+      CapstoneVLSEG<NF, /*Masked*/0, /*Strided*/1, /*FF*/0, !logtwo(EEW), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -1639,11 +1639,11 @@ class VPseudoSSegLoadNoMask<VReg RetClass,
 class VPseudoSSegLoadMask<VReg RetClass,
                           int EEW,
                           bits<4> NF> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         GPRMemZeroOffset:$rs1, GPR:$offset, VMaskOp:$vm,
                         AVL:$vl, sew:$sew, vec_policy:$policy)>,
-      RISCVVLSEG<NF, /*Masked*/1, /*Strided*/1, /*FF*/0, !logtwo(EEW), VLMul> {
+      CapstoneVLSEG<NF, /*Masked*/1, /*Strided*/1, /*FF*/0, !logtwo(EEW), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -1661,11 +1661,11 @@ class VPseudoISegLoadNoMask<VReg RetClass,
                             bits<3> LMUL,
                             bits<4> NF,
                             bit Ordered> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$passthru, GPRMemZeroOffset:$rs1,
                         IdxClass:$offset, AVL:$vl, sew:$sew,
                         vec_policy:$policy)>,
-      RISCVVLXSEG<NF, /*Masked*/0, Ordered, !logtwo(EEW), VLMul, LMUL> {
+      CapstoneVLXSEG<NF, /*Masked*/0, Ordered, !logtwo(EEW), VLMul, LMUL> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -1683,11 +1683,11 @@ class VPseudoISegLoadMask<VReg RetClass,
                           bits<3> LMUL,
                           bits<4> NF,
                           bit Ordered> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         GPRMemZeroOffset:$rs1, IdxClass:$offset, VMaskOp:$vm,
                         AVL:$vl, sew:$sew, vec_policy:$policy)>,
-      RISCVVLXSEG<NF, /*Masked*/1, Ordered, !logtwo(EEW), VLMul, LMUL> {
+      CapstoneVLXSEG<NF, /*Masked*/1, Ordered, !logtwo(EEW), VLMul, LMUL> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -1704,10 +1704,10 @@ class VPseudoISegLoadMask<VReg RetClass,
 class VPseudoUSSegStoreNoMask<VReg ValClass,
                               int EEW,
                               bits<4> NF> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins ValClass:$rd, GPRMemZeroOffset:$rs1, AVL:$vl, sew:$sew),
                    []>,
-      RISCVVSSEG<NF, /*Masked*/0, /*Strided*/0, !logtwo(EEW), VLMul> {
+      CapstoneVSSEG<NF, /*Masked*/0, /*Strided*/0, !logtwo(EEW), VLMul> {
   let mayLoad = 0;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -1718,10 +1718,10 @@ class VPseudoUSSegStoreNoMask<VReg ValClass,
 class VPseudoUSSegStoreMask<VReg ValClass,
                             int EEW,
                             bits<4> NF> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins ValClass:$rd, GPRMemZeroOffset:$rs1,
                         VMaskOp:$vm, AVL:$vl, sew:$sew)>,
-      RISCVVSSEG<NF, /*Masked*/1, /*Strided*/0, !logtwo(EEW), VLMul> {
+      CapstoneVSSEG<NF, /*Masked*/1, /*Strided*/0, !logtwo(EEW), VLMul> {
   let mayLoad = 0;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -1733,10 +1733,10 @@ class VPseudoUSSegStoreMask<VReg ValClass,
 class VPseudoSSegStoreNoMask<VReg ValClass,
                              int EEW,
                              bits<4> NF> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins ValClass:$rd, GPRMemZeroOffset:$rs1, GPR:$offset,
                         AVL:$vl, sew:$sew)>,
-      RISCVVSSEG<NF, /*Masked*/0, /*Strided*/1, !logtwo(EEW), VLMul> {
+      CapstoneVSSEG<NF, /*Masked*/0, /*Strided*/1, !logtwo(EEW), VLMul> {
   let mayLoad = 0;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -1747,10 +1747,10 @@ class VPseudoSSegStoreNoMask<VReg ValClass,
 class VPseudoSSegStoreMask<VReg ValClass,
                            int EEW,
                            bits<4> NF> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins ValClass:$rd, GPRMemZeroOffset:$rs1, GPR: $offset,
                         VMaskOp:$vm, AVL:$vl, sew:$sew)>,
-      RISCVVSSEG<NF, /*Masked*/1, /*Strided*/1, !logtwo(EEW), VLMul> {
+      CapstoneVSSEG<NF, /*Masked*/1, /*Strided*/1, !logtwo(EEW), VLMul> {
   let mayLoad = 0;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -1765,10 +1765,10 @@ class VPseudoISegStoreNoMask<VReg ValClass,
                              bits<3> LMUL,
                              bits<4> NF,
                              bit Ordered> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins ValClass:$rd, GPRMemZeroOffset:$rs1, IdxClass: $index,
                         AVL:$vl, sew:$sew)>,
-      RISCVVSXSEG<NF, /*Masked*/0, Ordered, !logtwo(EEW), VLMul, LMUL> {
+      CapstoneVSXSEG<NF, /*Masked*/0, Ordered, !logtwo(EEW), VLMul, LMUL> {
   let mayLoad = 0;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -1782,10 +1782,10 @@ class VPseudoISegStoreMask<VReg ValClass,
                            bits<3> LMUL,
                            bits<4> NF,
                            bit Ordered> :
-      RISCVVPseudo<(outs),
+      CapstoneVPseudo<(outs),
                    (ins ValClass:$rd, GPRMemZeroOffset:$rs1, IdxClass: $index,
                         VMaskOp:$vm, AVL:$vl, sew:$sew)>,
-      RISCVVSXSEG<NF, /*Masked*/1, Ordered, !logtwo(EEW), VLMul, LMUL> {
+      CapstoneVSXSEG<NF, /*Masked*/1, Ordered, !logtwo(EEW), VLMul, LMUL> {
   let mayLoad = 0;
   let mayStore = 1;
   let hasSideEffects = 0;
@@ -1805,7 +1805,7 @@ multiclass VPseudoUSLoad {
           VLESched<LInfo>;
         def "E" # eew # "_V_" # LInfo # "_MASK" :
           VPseudoUSLoadMask<vreg, eew>,
-          RISCVMaskedPseudo<MaskIdx=2>,
+          CapstoneMaskedPseudo<MaskIdx=2>,
           VLESched<LInfo>;
       }
     }
@@ -1823,7 +1823,7 @@ multiclass VPseudoFFLoad {
           VLFSched<LInfo>;
         def "E" # eew # "FF_V_" # LInfo # "_MASK":
           VPseudoUSLoadFFMask<vreg, eew>,
-          RISCVMaskedPseudo<MaskIdx=2>,
+          CapstoneMaskedPseudo<MaskIdx=2>,
           VLFSched<LInfo>;
       }
     }
@@ -1851,7 +1851,7 @@ multiclass VPseudoSLoad {
                                         VLSSched<eew, LInfo>;
         def "E" # eew # "_V_" # LInfo # "_MASK" :
           VPseudoSLoadMask<vreg, eew>,
-          RISCVMaskedPseudo<MaskIdx=3>,
+          CapstoneMaskedPseudo<MaskIdx=3>,
           VLSSched<eew, LInfo>;
       }
     }
@@ -1881,7 +1881,7 @@ multiclass VPseudoILoad<bit Ordered> {
               VLXSched<dataEEW, Ordered, DataLInfo, IdxLInfo>;
             def "EI" # idxEEW # "_V_" # IdxLInfo # "_" # DataLInfo # "_MASK" :
               VPseudoILoadMask<Vreg, IdxVreg, idxEEW, idxEMUL.value, Ordered, HasConstraint, TypeConstraints>,
-              RISCVMaskedPseudo<MaskIdx=3>,
+              CapstoneMaskedPseudo<MaskIdx=3>,
               VLXSched<dataEEW, Ordered, DataLInfo, IdxLInfo>;
           }
         }
@@ -1899,7 +1899,7 @@ multiclass VPseudoUSStore {
         def "E" # eew # "_V_" # LInfo : VPseudoUSStoreNoMask<vreg, eew>,
                                         VSESched<LInfo>;
         def "E" # eew # "_V_" # LInfo # "_MASK" : VPseudoUSStoreMask<vreg, eew>,
-                                                  RISCVMaskedPseudo<MaskIdx=2>,
+                                                  CapstoneMaskedPseudo<MaskIdx=2>,
                                                   VSESched<LInfo>;
       }
     }
@@ -1926,7 +1926,7 @@ multiclass VPseudoSStore {
         def "E" # eew # "_V_" # LInfo : VPseudoSStoreNoMask<vreg, eew>,
                                         VSSSched<eew, LInfo>;
         def "E" # eew # "_V_" # LInfo # "_MASK" : VPseudoSStoreMask<vreg, eew>,
-                                                  RISCVMaskedPseudo<MaskIdx=3>,
+                                                  CapstoneMaskedPseudo<MaskIdx=3>,
                                                   VSSSched<eew, LInfo>;
       }
     }
@@ -1953,7 +1953,7 @@ multiclass VPseudoIStore<bit Ordered> {
               VSXSched<dataEEW, Ordered, DataLInfo, IdxLInfo>;
             def "EI" # idxEEW # "_V_" # IdxLInfo # "_" # DataLInfo # "_MASK" :
               VPseudoIStoreMask<Vreg, IdxVreg, idxEEW, idxEMUL.value, Ordered>,
-              RISCVMaskedPseudo<MaskIdx=3>,
+              CapstoneMaskedPseudo<MaskIdx=3>,
               VSXSched<dataEEW, Ordered, DataLInfo, IdxLInfo>;
           }
         }
@@ -1969,7 +1969,7 @@ multiclass VPseudoVPOP_M {
       def "_M_" # mti.BX : VPseudoUnaryNoMaskGPROut,
           SchedBinary<"WriteVMPopV", "ReadVMPopV", "ReadVMPopV", mx>;
       def "_M_" # mti.BX # "_MASK" : VPseudoUnaryMaskGPROut,
-          RISCVMaskedPseudo<MaskIdx=1>,
+          CapstoneMaskedPseudo<MaskIdx=1>,
           SchedBinary<"WriteVMPopV", "ReadVMPopV", "ReadVMPopV", mx>;
     }
   }
@@ -1982,7 +1982,7 @@ multiclass VPseudoV1ST_M {
       def "_M_" #mti.BX : VPseudoUnaryNoMaskGPROut,
           SchedBinary<"WriteVMFFSV", "ReadVMFFSV", "ReadVMFFSV", mx>;
       def "_M_" # mti.BX # "_MASK" : VPseudoUnaryMaskGPROut,
-          RISCVMaskedPseudo<MaskIdx=1>,
+          CapstoneMaskedPseudo<MaskIdx=1>,
           SchedBinary<"WriteVMFFSV", "ReadVMFFSV", "ReadVMFFSV", mx>;
     }
   }
@@ -2011,7 +2011,7 @@ multiclass VPseudoVID_V {
       def "_V_" # mx : VPseudoNullaryNoMask<m.vrclass>,
                          SchedNullary<"WriteVIdxV", mx, forcePassthruRead=true>;
       def "_V_" # mx # "_MASK" : VPseudoNullaryMask<m.vrclass>,
-                                   RISCVMaskedPseudo<MaskIdx=1>,
+                                   CapstoneMaskedPseudo<MaskIdx=1>,
                                    SchedNullary<"WriteVIdxV", mx,
                                                 forcePassthruRead=true>;
     }
@@ -2036,7 +2036,7 @@ multiclass VPseudoVIOTA_M {
                        SchedUnary<"WriteVIotaV", "ReadVIotaV", mx,
                                   forcePassthruRead=true>;
       def "_" # mx # "_MASK" : VPseudoUnaryMask<m.vrclass, VR, constraint>,
-                                 RISCVMaskedPseudo<MaskIdx=2>,
+                                 CapstoneMaskedPseudo<MaskIdx=2>,
                                  SchedUnary<"WriteVIotaV", "ReadVIotaV", mx,
                                             forcePassthruRead=true>;
     }
@@ -2073,7 +2073,7 @@ multiclass VPseudoBinary<VReg RetClass,
                                            Constraint, TargetConstraintType>;
     def suffix # "_MASK" : VPseudoBinaryMaskPolicy<RetClass, Op1Class, Op2Class,
                                                    Constraint, TargetConstraintType>,
-                           RISCVMaskedPseudo<MaskIdx=3>;
+                           CapstoneMaskedPseudo<MaskIdx=3>;
   }
 }
 
@@ -2097,7 +2097,7 @@ multiclass VPseudoBinaryRoundingMode<VReg RetClass,
                                                                Constraint,
                                                                UsesVXRM,
                                                                TargetConstraintType>,
-                           RISCVMaskedPseudo<MaskIdx=3>;
+                           CapstoneMaskedPseudo<MaskIdx=3>;
   }
 }
 
@@ -2115,7 +2115,7 @@ multiclass VPseudoBinaryEmul<VReg RetClass,
                                                            Constraint>;
     def suffix # "_" # emul.MX # "_MASK" : VPseudoBinaryMaskPolicy<RetClass, Op1Class, Op2Class,
                                                                           Constraint>,
-                                                  RISCVMaskedPseudo<MaskIdx=3>;
+                                                  CapstoneMaskedPseudo<MaskIdx=3>;
   }
 }
 
@@ -2129,7 +2129,7 @@ multiclass VPseudoTiedBinary<VReg RetClass,
                                                           Constraint, TargetConstraintType>;
     def "_" # MInfo.MX # "_MASK_TIED" : VPseudoTiedBinaryMask<RetClass, Op2Class,
                                                          Constraint, TargetConstraintType>,
-                                        RISCVMaskedPseudo<MaskIdx=2>;
+                                        CapstoneMaskedPseudo<MaskIdx=2>;
   }
 }
 
@@ -2145,7 +2145,7 @@ multiclass VPseudoTiedBinaryRoundingMode<VReg RetClass,
       VPseudoTiedBinaryNoMaskRoundingMode<RetClass, Op2Class, Constraint, TargetConstraintType>;
     def suffix # "_MASK_TIED" :
       VPseudoTiedBinaryMaskRoundingMode<RetClass, Op2Class, Constraint, TargetConstraintType>,
-      RISCVMaskedPseudo<MaskIdx=2>;
+      CapstoneMaskedPseudo<MaskIdx=2>;
   }
 }
 
@@ -2460,7 +2460,7 @@ multiclass VPseudoVCLS_V {
                        SchedUnary<"WriteVFClassV", "ReadVFClassV", mx,
                                   forcePassthruRead=true>;
       def "_V_" # mx # "_MASK" : VPseudoUnaryMask<m.vrclass, m.vrclass>,
-                                 RISCVMaskedPseudo<MaskIdx=2>,
+                                 CapstoneMaskedPseudo<MaskIdx=2>,
                                  SchedUnary<"WriteVFClassV", "ReadVFClassV", mx,
                                             forcePassthruRead=true>;
     }
@@ -2481,7 +2481,7 @@ multiclass VPseudoVSQR_V_RM {
                                          forcePassthruRead=true>;
           def "_V" #suffix # "_MASK"
               : VPseudoUnaryMaskRoundingMode<m.vrclass, m.vrclass>,
-                RISCVMaskedPseudo<MaskIdx = 2>,
+                CapstoneMaskedPseudo<MaskIdx = 2>,
                 SchedUnary<"WriteVFSqrtV", "ReadVFSqrtV", mx, e,
                            forcePassthruRead=true>;
         }
@@ -2499,7 +2499,7 @@ multiclass VPseudoVRCP_V {
               SchedUnary<"WriteVFRecpV", "ReadVFRecpV", mx, e, forcePassthruRead=true>;
         def "_V_" # mx # "_E" # e # "_MASK"
             : VPseudoUnaryMask<m.vrclass, m.vrclass>,
-              RISCVMaskedPseudo<MaskIdx = 2>,
+              CapstoneMaskedPseudo<MaskIdx = 2>,
               SchedUnary<"WriteVFRecpV", "ReadVFRecpV", mx, e, forcePassthruRead=true>;
       }
     }
@@ -2516,7 +2516,7 @@ multiclass VPseudoVRCP_V_RM {
               SchedUnary<"WriteVFRecpV", "ReadVFRecpV", mx, e, forcePassthruRead=true>;
         def "_V_" # mx # "_E" # e # "_MASK"
             : VPseudoUnaryMaskRoundingMode<m.vrclass, m.vrclass>,
-              RISCVMaskedPseudo<MaskIdx = 2>,
+              CapstoneMaskedPseudo<MaskIdx = 2>,
               SchedUnary<"WriteVFRecpV", "ReadVFRecpV", mx, e, forcePassthruRead=true>;
       }
     }
@@ -2533,7 +2533,7 @@ multiclass PseudoVEXT_VF2 {
                      SchedUnary<"WriteVExtV", "ReadVExtV", mx, forcePassthruRead=true>;
       def "_" # mx # "_MASK" :
         VPseudoUnaryMask<m.vrclass, m.f2vrclass, constraints, CurrTypeConstraints>,
-        RISCVMaskedPseudo<MaskIdx=2>,
+        CapstoneMaskedPseudo<MaskIdx=2>,
         SchedUnary<"WriteVExtV", "ReadVExtV", mx, forcePassthruRead=true>;
     }
   }
@@ -2549,7 +2549,7 @@ multiclass PseudoVEXT_VF4 {
                      SchedUnary<"WriteVExtV", "ReadVExtV", mx, forcePassthruRead=true>;
       def "_" # mx # "_MASK" :
         VPseudoUnaryMask<m.vrclass, m.f4vrclass, constraints, CurrTypeConstraints>,
-        RISCVMaskedPseudo<MaskIdx=2>,
+        CapstoneMaskedPseudo<MaskIdx=2>,
         SchedUnary<"WriteVExtV", "ReadVExtV", mx, forcePassthruRead=true>;
     }
   }
@@ -2565,7 +2565,7 @@ multiclass PseudoVEXT_VF8 {
                      SchedUnary<"WriteVExtV", "ReadVExtV", mx, forcePassthruRead=true>;
       def "_" # mx # "_MASK" :
         VPseudoUnaryMask<m.vrclass, m.f8vrclass, constraints, CurrTypeConstraints>,
-        RISCVMaskedPseudo<MaskIdx=2>,
+        CapstoneMaskedPseudo<MaskIdx=2>,
         SchedUnary<"WriteVExtV", "ReadVExtV", mx, forcePassthruRead=true>;
     }
   }
@@ -2592,7 +2592,7 @@ multiclass VPseudoBinaryM<DAGOperand Op2Class, LMULInfo m, bit Commutable = 0> {
       VPseudoBinaryMOutMask<VR, m.vrclass, Op2Class,
                             !if(!ge(m.octuple, 16), "@earlyclobber $rd", ""),
                             TargetConstraintType = 2>,
-      RISCVMaskedPseudo<MaskIdx=3>;
+      CapstoneMaskedPseudo<MaskIdx=3>;
   }
 }
 
@@ -3123,7 +3123,7 @@ multiclass VPseudoTernaryWithTailPolicy<VReg RetClass,
     defvar mx = MInfo.MX;
     def "_" # mx # "_E" # sew : VPseudoTernaryNoMaskWithPolicy<RetClass, Op1Class, Op2Class>;
     def "_" # mx # "_E" # sew # "_MASK" : VPseudoTernaryMaskPolicy<RetClass, Op1Class, Op2Class>,
-                                          RISCVMaskedPseudo<MaskIdx=3>;
+                                          CapstoneMaskedPseudo<MaskIdx=3>;
   }
 }
 
@@ -3140,7 +3140,7 @@ multiclass VPseudoTernaryWithTailPolicyRoundingMode<VReg RetClass,
     def "_" # mx # "_E" # sew # "_MASK"
         : VPseudoTernaryMaskPolicyRoundingMode<RetClass, Op1Class,
                                                Op2Class>,
-          RISCVMaskedPseudo<MaskIdx=3>;
+          CapstoneMaskedPseudo<MaskIdx=3>;
   }
 }
 
@@ -3155,7 +3155,7 @@ multiclass VPseudoTernaryWithPolicy<VReg RetClass,
     let isCommutable = Commutable in
     def "_" # MInfo.MX : VPseudoTernaryNoMaskWithPolicy<RetClass, Op1Class, Op2Class, Constraint, TargetConstraintType>;
     def "_" # MInfo.MX # "_MASK" : VPseudoBinaryMaskPolicy<RetClass, Op1Class, Op2Class, Constraint, TargetConstraintType>,
-                                   RISCVMaskedPseudo<MaskIdx=3>;
+                                   CapstoneMaskedPseudo<MaskIdx=3>;
   }
 }
 
@@ -3179,7 +3179,7 @@ multiclass VPseudoTernaryWithPolicyRoundingMode<VReg RetClass,
                                             Op2Class, Constraint,
                                             UsesVXRM_=0,
                                             TargetConstraintType=TargetConstraintType>,
-                                   RISCVMaskedPseudo<MaskIdx=3>;
+                                   CapstoneMaskedPseudo<MaskIdx=3>;
   }
 }
 
@@ -3240,7 +3240,7 @@ multiclass VPseudoVSLDVWithPolicy<VReg RetClass,
   let VLMul = MInfo.value in {
     def "_" # MInfo.MX : VPseudoTernaryNoMaskWithPolicy<RetClass, Op1Class, Op2Class, Constraint>;
     def "_" # MInfo.MX # "_MASK" : VPseudoBinaryMaskPolicy<RetClass, Op1Class, Op2Class, Constraint>,
-                                   RISCVMaskedPseudo<MaskIdx=3>;
+                                   CapstoneMaskedPseudo<MaskIdx=3>;
   }
 }
 
@@ -3502,7 +3502,7 @@ multiclass VPseudoConversion<VReg RetClass,
     def suffix : VPseudoUnaryNoMask<RetClass, Op1Class, Constraint, TargetConstraintType>;
     def suffix # "_MASK" : VPseudoUnaryMask<RetClass, Op1Class,
                                             Constraint, TargetConstraintType>,
-                           RISCVMaskedPseudo<MaskIdx=2>;
+                           CapstoneMaskedPseudo<MaskIdx=2>;
   }
 }
 
@@ -3518,7 +3518,7 @@ multiclass VPseudoConversionRoundingMode<VReg RetClass,
     def suffix # "_MASK" : VPseudoUnaryMaskRoundingMode<RetClass, Op1Class,
                                                         Constraint,
                                                         TargetConstraintType>,
-                           RISCVMaskedPseudo<MaskIdx=2>;
+                           CapstoneMaskedPseudo<MaskIdx=2>;
   }
 }
 
@@ -3667,7 +3667,7 @@ multiclass VPseudoUSSegLoad {
           def nf # "E" # eew # "_V_" # LInfo :
             VPseudoUSSegLoadNoMask<vreg, eew, nf>, VLSEGSched<nf, eew, LInfo>;
           def nf # "E" # eew # "_V_" # LInfo # "_MASK" :
-            VPseudoUSSegLoadMask<vreg, eew, nf>, RISCVMaskedPseudo<MaskIdx=2>,
+            VPseudoUSSegLoadMask<vreg, eew, nf>, CapstoneMaskedPseudo<MaskIdx=2>,
             VLSEGSched<nf, eew, LInfo>;
         }
       }
@@ -3685,7 +3685,7 @@ multiclass VPseudoUSSegLoadFF {
           def nf # "E" # eew # "FF_V_" # LInfo :
             VPseudoUSSegLoadFFNoMask<vreg, eew, nf>, VLSEGFFSched<nf, eew, LInfo>;
           def nf # "E" # eew # "FF_V_" # LInfo # "_MASK" :
-            VPseudoUSSegLoadFFMask<vreg, eew, nf>, RISCVMaskedPseudo<MaskIdx=2>,
+            VPseudoUSSegLoadFFMask<vreg, eew, nf>, CapstoneMaskedPseudo<MaskIdx=2>,
             VLSEGFFSched<nf, eew, LInfo>;
         }
       }
@@ -3703,7 +3703,7 @@ multiclass VPseudoSSegLoad {
           def nf # "E" # eew # "_V_" # LInfo : VPseudoSSegLoadNoMask<vreg, eew, nf>,
                                                VLSSEGSched<nf, eew, LInfo>;
           def nf # "E" # eew # "_V_" # LInfo # "_MASK" : VPseudoSSegLoadMask<vreg, eew, nf>,
-                                                         RISCVMaskedPseudo<MaskIdx=3>,
+                                                         CapstoneMaskedPseudo<MaskIdx=3>,
                                                          VLSSEGSched<nf, eew, LInfo>;
         }
       }
@@ -3734,7 +3734,7 @@ multiclass VPseudoISegLoad<bit Ordered> {
               def nf # "EI" # idxEEW # "_V_" # IdxLInfo # "_" # DataLInfo # "_MASK" :
                 VPseudoISegLoadMask<Vreg, IdxVreg, idxEEW, idxEMUL.value,
                                     nf, Ordered>,
-                RISCVMaskedPseudo<MaskIdx=3>,
+                CapstoneMaskedPseudo<MaskIdx=3>,
                 VLXSEGSched<nf, dataEEW, Ordered, DataLInfo>;
             }
           }
@@ -3754,7 +3754,7 @@ multiclass VPseudoUSSegStore {
           def nf # "E" # eew # "_V_" # LInfo : VPseudoUSSegStoreNoMask<vreg, eew, nf>,
                                                VSSEGSched<nf, eew, LInfo>;
           def nf # "E" # eew # "_V_" # LInfo # "_MASK" : VPseudoUSSegStoreMask<vreg, eew, nf>,
-                                                         RISCVMaskedPseudo<MaskIdx=2>,
+                                                         CapstoneMaskedPseudo<MaskIdx=2>,
                                                          VSSEGSched<nf, eew, LInfo>;
         }
       }
@@ -3772,7 +3772,7 @@ multiclass VPseudoSSegStore {
           def nf # "E" # eew # "_V_" # LInfo : VPseudoSSegStoreNoMask<vreg, eew, nf>,
                                                VSSSEGSched<nf, eew, LInfo>;
           def nf # "E" # eew # "_V_" # LInfo # "_MASK" : VPseudoSSegStoreMask<vreg, eew, nf>,
-                                                         RISCVMaskedPseudo<MaskIdx=3>,
+                                                         CapstoneMaskedPseudo<MaskIdx=3>,
                                                          VSSSEGSched<nf, eew, LInfo>;
         }
       }
@@ -3803,7 +3803,7 @@ multiclass VPseudoISegStore<bit Ordered> {
               def nf # "EI" # idxEEW # "_V_" # IdxLInfo # "_" # DataLInfo # "_MASK" :
                 VPseudoISegStoreMask<Vreg, IdxVreg, idxEEW, idxEMUL.value,
                                      nf, Ordered>,
-                RISCVMaskedPseudo<MaskIdx=3>,
+                CapstoneMaskedPseudo<MaskIdx=3>,
                 VSXSEGSched<nf, idxEEW, Ordered, DataLInfo>;
             }
           }
@@ -6014,7 +6014,7 @@ let Predicates = [HasVInstructions] in {
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0, isCodeGenOnly = 1 in {
   def PseudoReadVLENB : Pseudo<(outs GPR:$rd), (ins),
-                               [(set GPR:$rd, (riscv_read_vlenb))]>,
+                               [(set GPR:$rd, (capstone_read_vlenb))]>,
                         PseudoInstExpansion<(CSRRS GPR:$rd, SysRegVLENB.Encoding, X0)>,
                         Sched<[WriteRdVLENB]>;
   let Defs = [VL, VTYPE] in {
@@ -6138,7 +6138,7 @@ foreach vti = AllIntegerVectors in {
   // to use a more complex splat sequence. Add the pattern for all VTs for
   // consistency.
   let Predicates = GetVTypePredicates<vti>.Predicates in {
-    def : Pat<(vti.Vector (int_riscv_vrsub (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (int_capstone_vrsub (vti.Vector vti.RegClass:$passthru),
                                            (vti.Vector vti.RegClass:$rs2),
                                            (vti.Vector vti.RegClass:$rs1),
                                            VLOpFrag)),
@@ -6148,7 +6148,7 @@ foreach vti = AllIntegerVectors in {
                                                         vti.RegClass:$rs2,
                                                         GPR:$vl,
                                                         vti.Log2SEW, TU_MU)>;
-    def : Pat<(vti.Vector (int_riscv_vrsub_mask (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (int_capstone_vrsub_mask (vti.Vector vti.RegClass:$passthru),
                                                 (vti.Vector vti.RegClass:$rs2),
                                                 (vti.Vector vti.RegClass:$rs1),
                                                 (vti.Mask VMV0:$vm),
@@ -6164,7 +6164,7 @@ foreach vti = AllIntegerVectors in {
                                                         (XLenVT timm:$policy))>;
 
     // Match VSUB with a small immediate to vadd.vi by negating the immediate.
-    def : Pat<(vti.Vector (int_riscv_vsub (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (int_capstone_vsub (vti.Vector vti.RegClass:$passthru),
                                           (vti.Vector vti.RegClass:$rs1),
                                           (vti.Scalar simm5_plus1:$rs2),
                                           VLOpFrag)),
@@ -6174,7 +6174,7 @@ foreach vti = AllIntegerVectors in {
                                                       (NegImm simm5_plus1:$rs2),
                                                       GPR:$vl,
                                                       vti.Log2SEW, TU_MU)>;
-    def : Pat<(vti.Vector (int_riscv_vsub_mask (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (int_capstone_vsub_mask (vti.Vector vti.RegClass:$passthru),
                                                (vti.Vector vti.RegClass:$rs1),
                                                (vti.Scalar simm5_plus1:$rs2),
                                                (vti.Mask VMV0:$vm),
@@ -6195,7 +6195,7 @@ foreach vti = AllIntegerVectors in {
 defvar I64IntegerVectors = !filter(vti, AllIntegerVectors, !eq(vti.SEW, 64));
 foreach vti = I64IntegerVectors in {
   let Predicates = [HasVInstructionsI64] in {
-    def : Pat<(vti.Vector (int_riscv_vadd (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (int_capstone_vadd (vti.Vector vti.RegClass:$passthru),
                                           (vti.Vector vti.RegClass:$rs1),
                                           (i64 negImm:$rs2),
                                           VLOpFrag)),
@@ -6204,7 +6204,7 @@ foreach vti = I64IntegerVectors in {
                                              vti.RegClass:$rs1,
                                              negImm:$rs2,
                                              GPR:$vl, vti.Log2SEW, TU_MU)>;
-    def : Pat<(vti.Vector (int_riscv_vadd_mask (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (int_capstone_vadd_mask (vti.Vector vti.RegClass:$passthru),
                                                (vti.Vector vti.RegClass:$rs1),
                                                (i64 negImm:$rs2),
                                                (vti.Mask VMV0:$vm),
@@ -6688,11 +6688,11 @@ let Predicates = [HasVInstructions] in {
 let mayLoad = 0, mayStore = 0, hasSideEffects = 0 in {
   let HasSEWOp = 1, BaseInstr = VMV_X_S in
   def PseudoVMV_X_S:
-    RISCVVPseudo<(outs GPR:$rd), (ins VR:$rs2, sew:$sew)>,
+    CapstoneVPseudo<(outs GPR:$rd), (ins VR:$rs2, sew:$sew)>,
     Sched<[WriteVMovXS, ReadVMovXS]>;
   let HasVLOp = 1, HasSEWOp = 1, BaseInstr = VMV_S_X, isReMaterializable = 1,
       Constraints = "$rd = $passthru" in
-  def PseudoVMV_S_X: RISCVVPseudo<(outs VR:$rd),
+  def PseudoVMV_S_X: CapstoneVPseudo<(outs VR:$rd),
                             (ins VR:$passthru, GPR:$rs1, AVL:$vl, sew:$sew),
                             []>,
     Sched<[WriteVMovSX, ReadVMovSX_V, ReadVMovSX_X]>;
@@ -6708,12 +6708,12 @@ let mayLoad = 0, mayStore = 0, hasSideEffects = 0 in {
   foreach f = FPList in {
     let HasSEWOp = 1, BaseInstr = VFMV_F_S in
     def "PseudoVFMV_" # f.FX # "_S" :
-      RISCVVPseudo<(outs f.fprclass:$rd), (ins VR:$rs2, sew:$sew)>,
+      CapstoneVPseudo<(outs f.fprclass:$rd), (ins VR:$rs2, sew:$sew)>,
       Sched<[WriteVMovFS, ReadVMovFS]>;
     let HasVLOp = 1, HasSEWOp = 1, BaseInstr = VFMV_S_F, isReMaterializable = 1,
         Constraints = "$rd = $passthru" in
     def "PseudoVFMV_S_" # f.FX :
-      RISCVVPseudo<(outs VR:$rd),
+      CapstoneVPseudo<(outs VR:$rd),
              (ins VR:$passthru, f.fprclass:$rs1, AVL:$vl, sew:$sew),
              []>,
       Sched<[WriteVMovSF, ReadVMovSF_V, ReadVMovSF_F]>;
@@ -6760,76 +6760,76 @@ defm PseudoVCOMPRESS : VPseudoVCPR_V;
 //===----------------------------------------------------------------------===//
 // 11.1. Vector Single-Width Integer Add and Subtract
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX_VI<"int_riscv_vadd", "PseudoVADD", AllIntegerVectors>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vsub", "PseudoVSUB", AllIntegerVectors>;
-defm : VPatBinaryV_VX_VI<"int_riscv_vrsub", "PseudoVRSUB", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX_VI<"int_capstone_vadd", "PseudoVADD", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX<"int_capstone_vsub", "PseudoVSUB", AllIntegerVectors>;
+defm : VPatBinaryV_VX_VI<"int_capstone_vrsub", "PseudoVRSUB", AllIntegerVectors>;
 
 //===----------------------------------------------------------------------===//
 // 11.2. Vector Widening Integer Add/Subtract
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryW_VV_VX<"int_riscv_vwaddu", "PseudoVWADDU", AllWidenableIntVectors>;
-defm : VPatBinaryW_VV_VX<"int_riscv_vwsubu", "PseudoVWSUBU", AllWidenableIntVectors>;
-defm : VPatBinaryW_VV_VX<"int_riscv_vwadd", "PseudoVWADD", AllWidenableIntVectors>;
-defm : VPatBinaryW_VV_VX<"int_riscv_vwsub", "PseudoVWSUB", AllWidenableIntVectors>;
-defm : VPatBinaryW_WV_WX<"int_riscv_vwaddu_w", "PseudoVWADDU", AllWidenableIntVectors>;
-defm : VPatBinaryW_WV_WX<"int_riscv_vwsubu_w", "PseudoVWSUBU", AllWidenableIntVectors>;
-defm : VPatBinaryW_WV_WX<"int_riscv_vwadd_w", "PseudoVWADD", AllWidenableIntVectors>;
-defm : VPatBinaryW_WV_WX<"int_riscv_vwsub_w", "PseudoVWSUB", AllWidenableIntVectors>;
+defm : VPatBinaryW_VV_VX<"int_capstone_vwaddu", "PseudoVWADDU", AllWidenableIntVectors>;
+defm : VPatBinaryW_VV_VX<"int_capstone_vwsubu", "PseudoVWSUBU", AllWidenableIntVectors>;
+defm : VPatBinaryW_VV_VX<"int_capstone_vwadd", "PseudoVWADD", AllWidenableIntVectors>;
+defm : VPatBinaryW_VV_VX<"int_capstone_vwsub", "PseudoVWSUB", AllWidenableIntVectors>;
+defm : VPatBinaryW_WV_WX<"int_capstone_vwaddu_w", "PseudoVWADDU", AllWidenableIntVectors>;
+defm : VPatBinaryW_WV_WX<"int_capstone_vwsubu_w", "PseudoVWSUBU", AllWidenableIntVectors>;
+defm : VPatBinaryW_WV_WX<"int_capstone_vwadd_w", "PseudoVWADD", AllWidenableIntVectors>;
+defm : VPatBinaryW_WV_WX<"int_capstone_vwsub_w", "PseudoVWSUB", AllWidenableIntVectors>;
 
 //===----------------------------------------------------------------------===//
 // 11.3. Vector Integer Extension
 //===----------------------------------------------------------------------===//
-defm : VPatUnaryV_VF<"int_riscv_vzext", "PseudoVZEXT", "VF2",
+defm : VPatUnaryV_VF<"int_capstone_vzext", "PseudoVZEXT", "VF2",
                      AllFractionableVF2IntVectors>;
-defm : VPatUnaryV_VF<"int_riscv_vzext", "PseudoVZEXT", "VF4",
+defm : VPatUnaryV_VF<"int_capstone_vzext", "PseudoVZEXT", "VF4",
                      AllFractionableVF4IntVectors>;
-defm : VPatUnaryV_VF<"int_riscv_vzext", "PseudoVZEXT", "VF8",
+defm : VPatUnaryV_VF<"int_capstone_vzext", "PseudoVZEXT", "VF8",
                      AllFractionableVF8IntVectors>;
-defm : VPatUnaryV_VF<"int_riscv_vsext", "PseudoVSEXT", "VF2",
+defm : VPatUnaryV_VF<"int_capstone_vsext", "PseudoVSEXT", "VF2",
                      AllFractionableVF2IntVectors>;
-defm : VPatUnaryV_VF<"int_riscv_vsext", "PseudoVSEXT", "VF4",
+defm : VPatUnaryV_VF<"int_capstone_vsext", "PseudoVSEXT", "VF4",
                      AllFractionableVF4IntVectors>;
-defm : VPatUnaryV_VF<"int_riscv_vsext", "PseudoVSEXT", "VF8",
+defm : VPatUnaryV_VF<"int_capstone_vsext", "PseudoVSEXT", "VF8",
                      AllFractionableVF8IntVectors>;
 
 //===----------------------------------------------------------------------===//
 // 11.4. Vector Integer Add-with-Carry / Subtract-with-Borrow Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VM_XM_IM<"int_riscv_vadc", "PseudoVADC">;
-defm : VPatBinaryM_VM_XM_IM<"int_riscv_vmadc_carry_in", "PseudoVMADC">;
-defm : VPatBinaryM_V_X_I<"int_riscv_vmadc", "PseudoVMADC">;
+defm : VPatBinaryV_VM_XM_IM<"int_capstone_vadc", "PseudoVADC">;
+defm : VPatBinaryM_VM_XM_IM<"int_capstone_vmadc_carry_in", "PseudoVMADC">;
+defm : VPatBinaryM_V_X_I<"int_capstone_vmadc", "PseudoVMADC">;
 
-defm : VPatBinaryV_VM_XM<"int_riscv_vsbc", "PseudoVSBC">;
-defm : VPatBinaryM_VM_XM<"int_riscv_vmsbc_borrow_in", "PseudoVMSBC">;
-defm : VPatBinaryM_V_X<"int_riscv_vmsbc", "PseudoVMSBC">;
+defm : VPatBinaryV_VM_XM<"int_capstone_vsbc", "PseudoVSBC">;
+defm : VPatBinaryM_VM_XM<"int_capstone_vmsbc_borrow_in", "PseudoVMSBC">;
+defm : VPatBinaryM_V_X<"int_capstone_vmsbc", "PseudoVMSBC">;
 
 //===----------------------------------------------------------------------===//
 // 11.5. Vector Bitwise Logical Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX_VI<"int_riscv_vand", "PseudoVAND", AllIntegerVectors>;
-defm : VPatBinaryV_VV_VX_VI<"int_riscv_vor", "PseudoVOR", AllIntegerVectors>;
-defm : VPatBinaryV_VV_VX_VI<"int_riscv_vxor", "PseudoVXOR", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX_VI<"int_capstone_vand", "PseudoVAND", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX_VI<"int_capstone_vor", "PseudoVOR", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX_VI<"int_capstone_vxor", "PseudoVXOR", AllIntegerVectors>;
 
 //===----------------------------------------------------------------------===//
 // 11.6. Vector Single-Width Bit Shift Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX_VI<"int_riscv_vsll", "PseudoVSLL", AllIntegerVectors,
+defm : VPatBinaryV_VV_VX_VI<"int_capstone_vsll", "PseudoVSLL", AllIntegerVectors,
                             uimm5>;
-defm : VPatBinaryV_VV_VX_VI<"int_riscv_vsrl", "PseudoVSRL", AllIntegerVectors,
+defm : VPatBinaryV_VV_VX_VI<"int_capstone_vsrl", "PseudoVSRL", AllIntegerVectors,
                             uimm5>;
-defm : VPatBinaryV_VV_VX_VI<"int_riscv_vsra", "PseudoVSRA", AllIntegerVectors,
+defm : VPatBinaryV_VV_VX_VI<"int_capstone_vsra", "PseudoVSRA", AllIntegerVectors,
                             uimm5>;
 
 foreach vti = AllIntegerVectors in {
   // Emit shift by 1 as an add since it might be faster.
   let Predicates = GetVTypePredicates<vti>.Predicates in {
-    def : Pat<(vti.Vector (int_riscv_vsll (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (int_capstone_vsll (vti.Vector vti.RegClass:$passthru),
                                           (vti.Vector vti.RegClass:$rs1),
                                           (XLenVT 1), VLOpFrag)),
               (!cast<Instruction>("PseudoVADD_VV_"#vti.LMul.MX)
                  vti.RegClass:$passthru, vti.RegClass:$rs1,
                  vti.RegClass:$rs1, GPR:$vl, vti.Log2SEW, TU_MU)>;
-    def : Pat<(vti.Vector (int_riscv_vsll_mask (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (int_capstone_vsll_mask (vti.Vector vti.RegClass:$passthru),
                                                (vti.Vector vti.RegClass:$rs1),
                                                (XLenVT 1),
                                                (vti.Mask VMV0:$vm),
@@ -6849,115 +6849,115 @@ foreach vti = AllIntegerVectors in {
 //===----------------------------------------------------------------------===//
 // 11.7. Vector Narrowing Integer Right Shift Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_WV_WX_WI<"int_riscv_vnsrl", "PseudoVNSRL", AllWidenableIntVectors>;
-defm : VPatBinaryV_WV_WX_WI<"int_riscv_vnsra", "PseudoVNSRA", AllWidenableIntVectors>;
+defm : VPatBinaryV_WV_WX_WI<"int_capstone_vnsrl", "PseudoVNSRL", AllWidenableIntVectors>;
+defm : VPatBinaryV_WV_WX_WI<"int_capstone_vnsra", "PseudoVNSRA", AllWidenableIntVectors>;
 
 //===----------------------------------------------------------------------===//
 // 11.8. Vector Integer Comparison Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryM_VV_VX_VI<"int_riscv_vmseq", "PseudoVMSEQ", AllIntegerVectors>;
-defm : VPatBinaryM_VV_VX_VI<"int_riscv_vmsne", "PseudoVMSNE", AllIntegerVectors>;
-defm : VPatBinaryM_VV_VX<"int_riscv_vmsltu", "PseudoVMSLTU", AllIntegerVectors>;
-defm : VPatBinaryM_VV_VX<"int_riscv_vmslt", "PseudoVMSLT", AllIntegerVectors>;
-defm : VPatBinaryM_VV_VX_VI<"int_riscv_vmsleu", "PseudoVMSLEU", AllIntegerVectors>;
-defm : VPatBinaryM_VV_VX_VI<"int_riscv_vmsle", "PseudoVMSLE", AllIntegerVectors>;
+defm : VPatBinaryM_VV_VX_VI<"int_capstone_vmseq", "PseudoVMSEQ", AllIntegerVectors>;
+defm : VPatBinaryM_VV_VX_VI<"int_capstone_vmsne", "PseudoVMSNE", AllIntegerVectors>;
+defm : VPatBinaryM_VV_VX<"int_capstone_vmsltu", "PseudoVMSLTU", AllIntegerVectors>;
+defm : VPatBinaryM_VV_VX<"int_capstone_vmslt", "PseudoVMSLT", AllIntegerVectors>;
+defm : VPatBinaryM_VV_VX_VI<"int_capstone_vmsleu", "PseudoVMSLEU", AllIntegerVectors>;
+defm : VPatBinaryM_VV_VX_VI<"int_capstone_vmsle", "PseudoVMSLE", AllIntegerVectors>;
 
-defm : VPatBinaryM_VX_VI<"int_riscv_vmsgtu", "PseudoVMSGTU", AllIntegerVectors>;
-defm : VPatBinaryM_VX_VI<"int_riscv_vmsgt", "PseudoVMSGT", AllIntegerVectors>;
+defm : VPatBinaryM_VX_VI<"int_capstone_vmsgtu", "PseudoVMSGTU", AllIntegerVectors>;
+defm : VPatBinaryM_VX_VI<"int_capstone_vmsgt", "PseudoVMSGT", AllIntegerVectors>;
 
 // Match vmsgt with 2 vector operands to vmslt with the operands swapped.
-defm : VPatBinarySwappedM_VV<"int_riscv_vmsgtu", "PseudoVMSLTU", AllIntegerVectors>;
-defm : VPatBinarySwappedM_VV<"int_riscv_vmsgt", "PseudoVMSLT", AllIntegerVectors>;
+defm : VPatBinarySwappedM_VV<"int_capstone_vmsgtu", "PseudoVMSLTU", AllIntegerVectors>;
+defm : VPatBinarySwappedM_VV<"int_capstone_vmsgt", "PseudoVMSLT", AllIntegerVectors>;
 
-defm : VPatBinarySwappedM_VV<"int_riscv_vmsgeu", "PseudoVMSLEU", AllIntegerVectors>;
-defm : VPatBinarySwappedM_VV<"int_riscv_vmsge", "PseudoVMSLE", AllIntegerVectors>;
+defm : VPatBinarySwappedM_VV<"int_capstone_vmsgeu", "PseudoVMSLEU", AllIntegerVectors>;
+defm : VPatBinarySwappedM_VV<"int_capstone_vmsge", "PseudoVMSLE", AllIntegerVectors>;
 
 // Match vmslt(u).vx intrinsics to vmsle(u).vi if the scalar is -15 to 16 and
 // non-zero. Zero can be .vx with x0. This avoids the user needing to know that
 // there is no vmslt(u).vi instruction. Similar for vmsge(u).vx intrinsics
 // using vmslt(u).vi.
-defm : VPatCompare_VI<"int_riscv_vmslt", "PseudoVMSLE", simm5_plus1_nonzero>;
-defm : VPatCompare_VI<"int_riscv_vmsltu", "PseudoVMSLEU", simm5_plus1_nonzero>;
+defm : VPatCompare_VI<"int_capstone_vmslt", "PseudoVMSLE", simm5_plus1_nonzero>;
+defm : VPatCompare_VI<"int_capstone_vmsltu", "PseudoVMSLEU", simm5_plus1_nonzero>;
 
 // We need to handle 0 for vmsge.vi using vmslt.vi because there is no vmsge.vx.
-defm : VPatCompare_VI<"int_riscv_vmsge", "PseudoVMSGT", simm5_plus1>;
-defm : VPatCompare_VI<"int_riscv_vmsgeu", "PseudoVMSGTU", simm5_plus1_nonzero>;
+defm : VPatCompare_VI<"int_capstone_vmsge", "PseudoVMSGT", simm5_plus1>;
+defm : VPatCompare_VI<"int_capstone_vmsgeu", "PseudoVMSGTU", simm5_plus1_nonzero>;
 
 //===----------------------------------------------------------------------===//
 // 11.9. Vector Integer Min/Max Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX<"int_riscv_vminu", "PseudoVMINU", AllIntegerVectors>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vmin", "PseudoVMIN", AllIntegerVectors>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vmaxu", "PseudoVMAXU", AllIntegerVectors>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vmax", "PseudoVMAX", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX<"int_capstone_vminu", "PseudoVMINU", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX<"int_capstone_vmin", "PseudoVMIN", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX<"int_capstone_vmaxu", "PseudoVMAXU", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX<"int_capstone_vmax", "PseudoVMAX", AllIntegerVectors>;
 
 //===----------------------------------------------------------------------===//
 // 11.10. Vector Single-Width Integer Multiply Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX<"int_riscv_vmul", "PseudoVMUL", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX<"int_capstone_vmul", "PseudoVMUL", AllIntegerVectors>;
 
 defvar IntegerVectorsExceptI64 = !filter(vti, AllIntegerVectors,
                                          !ne(vti.SEW, 64));
-defm : VPatBinaryV_VV_VX<"int_riscv_vmulh", "PseudoVMULH",
+defm : VPatBinaryV_VV_VX<"int_capstone_vmulh", "PseudoVMULH",
                          IntegerVectorsExceptI64>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vmulhu", "PseudoVMULHU",
+defm : VPatBinaryV_VV_VX<"int_capstone_vmulhu", "PseudoVMULHU",
                          IntegerVectorsExceptI64>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vmulhsu", "PseudoVMULHSU",
+defm : VPatBinaryV_VV_VX<"int_capstone_vmulhsu", "PseudoVMULHSU",
                          IntegerVectorsExceptI64>;
 
 // vmulh, vmulhu, vmulhsu are not included for EEW=64 in Zve64*.
 defvar I64IntegerVectors = !filter(vti, AllIntegerVectors, !eq(vti.SEW, 64));
 let Predicates = [HasVInstructionsFullMultiply] in {
-  defm : VPatBinaryV_VV_VX<"int_riscv_vmulh", "PseudoVMULH",
+  defm : VPatBinaryV_VV_VX<"int_capstone_vmulh", "PseudoVMULH",
                            I64IntegerVectors>;
-  defm : VPatBinaryV_VV_VX<"int_riscv_vmulhu", "PseudoVMULHU",
+  defm : VPatBinaryV_VV_VX<"int_capstone_vmulhu", "PseudoVMULHU",
                            I64IntegerVectors>;
-  defm : VPatBinaryV_VV_VX<"int_riscv_vmulhsu", "PseudoVMULHSU",
+  defm : VPatBinaryV_VV_VX<"int_capstone_vmulhsu", "PseudoVMULHSU",
                            I64IntegerVectors>;
 }
 
 //===----------------------------------------------------------------------===//
 // 11.11. Vector Integer Divide Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX<"int_riscv_vdivu", "PseudoVDIVU", AllIntegerVectors, isSEWAware=1>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vdiv", "PseudoVDIV", AllIntegerVectors, isSEWAware=1>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vremu", "PseudoVREMU", AllIntegerVectors, isSEWAware=1>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vrem", "PseudoVREM", AllIntegerVectors, isSEWAware=1>;
+defm : VPatBinaryV_VV_VX<"int_capstone_vdivu", "PseudoVDIVU", AllIntegerVectors, isSEWAware=1>;
+defm : VPatBinaryV_VV_VX<"int_capstone_vdiv", "PseudoVDIV", AllIntegerVectors, isSEWAware=1>;
+defm : VPatBinaryV_VV_VX<"int_capstone_vremu", "PseudoVREMU", AllIntegerVectors, isSEWAware=1>;
+defm : VPatBinaryV_VV_VX<"int_capstone_vrem", "PseudoVREM", AllIntegerVectors, isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 11.12. Vector Widening Integer Multiply Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryW_VV_VX<"int_riscv_vwmul", "PseudoVWMUL", AllWidenableIntVectors>;
-defm : VPatBinaryW_VV_VX<"int_riscv_vwmulu", "PseudoVWMULU", AllWidenableIntVectors>;
-defm : VPatBinaryW_VV_VX<"int_riscv_vwmulsu", "PseudoVWMULSU", AllWidenableIntVectors>;
+defm : VPatBinaryW_VV_VX<"int_capstone_vwmul", "PseudoVWMUL", AllWidenableIntVectors>;
+defm : VPatBinaryW_VV_VX<"int_capstone_vwmulu", "PseudoVWMULU", AllWidenableIntVectors>;
+defm : VPatBinaryW_VV_VX<"int_capstone_vwmulsu", "PseudoVWMULSU", AllWidenableIntVectors>;
 
 //===----------------------------------------------------------------------===//
 // 11.13. Vector Single-Width Integer Multiply-Add Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatTernaryV_VV_VX_AAXA<"int_riscv_vmadd", "PseudoVMADD", AllIntegerVectors>;
-defm : VPatTernaryV_VV_VX_AAXA<"int_riscv_vnmsub", "PseudoVNMSUB", AllIntegerVectors>;
-defm : VPatTernaryV_VV_VX_AAXA<"int_riscv_vmacc", "PseudoVMACC", AllIntegerVectors>;
-defm : VPatTernaryV_VV_VX_AAXA<"int_riscv_vnmsac", "PseudoVNMSAC", AllIntegerVectors>;
+defm : VPatTernaryV_VV_VX_AAXA<"int_capstone_vmadd", "PseudoVMADD", AllIntegerVectors>;
+defm : VPatTernaryV_VV_VX_AAXA<"int_capstone_vnmsub", "PseudoVNMSUB", AllIntegerVectors>;
+defm : VPatTernaryV_VV_VX_AAXA<"int_capstone_vmacc", "PseudoVMACC", AllIntegerVectors>;
+defm : VPatTernaryV_VV_VX_AAXA<"int_capstone_vnmsac", "PseudoVNMSAC", AllIntegerVectors>;
 
 //===----------------------------------------------------------------------===//
 // 11.14. Vector Widening Integer Multiply-Add Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatTernaryW_VV_VX<"int_riscv_vwmaccu", "PseudoVWMACCU", AllWidenableIntVectors>;
-defm : VPatTernaryW_VV_VX<"int_riscv_vwmacc", "PseudoVWMACC", AllWidenableIntVectors>;
-defm : VPatTernaryW_VV_VX<"int_riscv_vwmaccsu", "PseudoVWMACCSU", AllWidenableIntVectors>;
-defm : VPatTernaryW_VX<"int_riscv_vwmaccus", "PseudoVWMACCUS", AllWidenableIntVectors>;
+defm : VPatTernaryW_VV_VX<"int_capstone_vwmaccu", "PseudoVWMACCU", AllWidenableIntVectors>;
+defm : VPatTernaryW_VV_VX<"int_capstone_vwmacc", "PseudoVWMACC", AllWidenableIntVectors>;
+defm : VPatTernaryW_VV_VX<"int_capstone_vwmaccsu", "PseudoVWMACCSU", AllWidenableIntVectors>;
+defm : VPatTernaryW_VX<"int_capstone_vwmaccus", "PseudoVWMACCUS", AllWidenableIntVectors>;
 
 //===----------------------------------------------------------------------===//
 // 11.15. Vector Integer Merge Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VM_XM_IM<"int_riscv_vmerge", "PseudoVMERGE">;
+defm : VPatBinaryV_VM_XM_IM<"int_capstone_vmerge", "PseudoVMERGE">;
 
 //===----------------------------------------------------------------------===//
 // 11.16. Vector Integer Move Instructions
 //===----------------------------------------------------------------------===//
 foreach vti = AllVectors in {
   let Predicates = GetVTypeMinimalPredicates<vti>.Predicates in {
-    def : Pat<(vti.Vector (int_riscv_vmv_v_v (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (int_capstone_vmv_v_v (vti.Vector vti.RegClass:$passthru),
                                              (vti.Vector vti.RegClass:$rs1),
                                              VLOpFrag)),
               (!cast<Instruction>("PseudoVMV_V_V_"#vti.LMul.MX)
@@ -6974,47 +6974,47 @@ foreach vti = AllVectors in {
 //===----------------------------------------------------------------------===//
 // 12.1. Vector Single-Width Saturating Add and Subtract
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX_VI<"int_riscv_vsaddu", "PseudoVSADDU", AllIntegerVectors>;
-defm : VPatBinaryV_VV_VX_VI<"int_riscv_vsadd", "PseudoVSADD", AllIntegerVectors>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vssubu", "PseudoVSSUBU", AllIntegerVectors>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vssub", "PseudoVSSUB", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX_VI<"int_capstone_vsaddu", "PseudoVSADDU", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX_VI<"int_capstone_vsadd", "PseudoVSADD", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX<"int_capstone_vssubu", "PseudoVSSUBU", AllIntegerVectors>;
+defm : VPatBinaryV_VV_VX<"int_capstone_vssub", "PseudoVSSUB", AllIntegerVectors>;
 
 //===----------------------------------------------------------------------===//
 // 12.2. Vector Single-Width Averaging Add and Subtract
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX_RM<"int_riscv_vaaddu", "PseudoVAADDU",
+defm : VPatBinaryV_VV_VX_RM<"int_capstone_vaaddu", "PseudoVAADDU",
                             AllIntegerVectors>;
-defm : VPatBinaryV_VV_VX_RM<"int_riscv_vasubu", "PseudoVASUBU",
+defm : VPatBinaryV_VV_VX_RM<"int_capstone_vasubu", "PseudoVASUBU",
                             AllIntegerVectors>;
-defm : VPatBinaryV_VV_VX_RM<"int_riscv_vasub", "PseudoVASUB",
+defm : VPatBinaryV_VV_VX_RM<"int_capstone_vasub", "PseudoVASUB",
                             AllIntegerVectors>;
-defm : VPatBinaryV_VV_VX_RM<"int_riscv_vaadd", "PseudoVAADD",
+defm : VPatBinaryV_VV_VX_RM<"int_capstone_vaadd", "PseudoVAADD",
                             AllIntegerVectors>;
 
 //===----------------------------------------------------------------------===//
 // 12.3. Vector Single-Width Fractional Multiply with Rounding and Saturation
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX_RM<"int_riscv_vsmul", "PseudoVSMUL",
+defm : VPatBinaryV_VV_VX_RM<"int_capstone_vsmul", "PseudoVSMUL",
                              IntegerVectorsExceptI64>;
 // vsmul.vv and vsmul.vx are not included in EEW=64 in Zve64*.
 let Predicates = [HasVInstructionsFullMultiply] in
-defm : VPatBinaryV_VV_VX_RM<"int_riscv_vsmul", "PseudoVSMUL",
+defm : VPatBinaryV_VV_VX_RM<"int_capstone_vsmul", "PseudoVSMUL",
                              I64IntegerVectors>;
 
 //===----------------------------------------------------------------------===//
 // 12.4. Vector Single-Width Scaling Shift Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX_VI_RM<"int_riscv_vssrl", "PseudoVSSRL",
+defm : VPatBinaryV_VV_VX_VI_RM<"int_capstone_vssrl", "PseudoVSSRL",
                                AllIntegerVectors, uimm5>;
-defm : VPatBinaryV_VV_VX_VI_RM<"int_riscv_vssra", "PseudoVSSRA",
+defm : VPatBinaryV_VV_VX_VI_RM<"int_capstone_vssra", "PseudoVSSRA",
                                AllIntegerVectors, uimm5>;
 
 //===----------------------------------------------------------------------===//
 // 12.5. Vector Narrowing Fixed-Point Clip Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_WV_WX_WI_RM<"int_riscv_vnclipu", "PseudoVNCLIPU",
+defm : VPatBinaryV_WV_WX_WI_RM<"int_capstone_vnclipu", "PseudoVNCLIPU",
                                AllWidenableIntVectors>;
-defm : VPatBinaryV_WV_WX_WI_RM<"int_riscv_vnclip", "PseudoVNCLIP",
+defm : VPatBinaryV_WV_WX_WI_RM<"int_capstone_vnclip", "PseudoVNCLIP",
                                AllWidenableIntVectors>;
 
 //===----------------------------------------------------------------------===//
@@ -7024,141 +7024,141 @@ defm : VPatBinaryV_WV_WX_WI_RM<"int_riscv_vnclip", "PseudoVNCLIP",
 //===----------------------------------------------------------------------===//
 // 13.2. Vector Single-Width Floating-Point Add/Subtract Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX_RM<"int_riscv_vfadd", "PseudoVFADD", AllFloatVectors,
+defm : VPatBinaryV_VV_VX_RM<"int_capstone_vfadd", "PseudoVFADD", AllFloatVectors,
                             isSEWAware = 1>;
-defm : VPatBinaryV_VV_VX_RM<"int_riscv_vfsub", "PseudoVFSUB", AllFloatVectors,
+defm : VPatBinaryV_VV_VX_RM<"int_capstone_vfsub", "PseudoVFSUB", AllFloatVectors,
                             isSEWAware = 1>;
-defm : VPatBinaryV_VX_RM<"int_riscv_vfrsub", "PseudoVFRSUB", AllFloatVectors,
+defm : VPatBinaryV_VX_RM<"int_capstone_vfrsub", "PseudoVFRSUB", AllFloatVectors,
                          isSEWAware = 1>;
 
 //===----------------------------------------------------------------------===//
 // 13.3. Vector Widening Floating-Point Add/Subtract Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryW_VV_VX_RM<"int_riscv_vfwadd", "PseudoVFWADD",
+defm : VPatBinaryW_VV_VX_RM<"int_capstone_vfwadd", "PseudoVFWADD",
                             AllWidenableFloatVectors, isSEWAware=1>;
-defm : VPatBinaryW_VV_VX_RM<"int_riscv_vfwsub", "PseudoVFWSUB",
+defm : VPatBinaryW_VV_VX_RM<"int_capstone_vfwsub", "PseudoVFWSUB",
                             AllWidenableFloatVectors, isSEWAware=1>;
-defm : VPatBinaryW_WV_WX_RM<"int_riscv_vfwadd_w", "PseudoVFWADD",
+defm : VPatBinaryW_WV_WX_RM<"int_capstone_vfwadd_w", "PseudoVFWADD",
                             AllWidenableFloatVectors, isSEWAware=1>;
-defm : VPatBinaryW_WV_WX_RM<"int_riscv_vfwsub_w", "PseudoVFWSUB",
+defm : VPatBinaryW_WV_WX_RM<"int_capstone_vfwsub_w", "PseudoVFWSUB",
                             AllWidenableFloatVectors, isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 13.4. Vector Single-Width Floating-Point Multiply/Divide Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX_RM<"int_riscv_vfmul", "PseudoVFMUL",
+defm : VPatBinaryV_VV_VX_RM<"int_capstone_vfmul", "PseudoVFMUL",
                             AllFloatVectors, isSEWAware=1>;
-defm : VPatBinaryV_VV_VX_RM<"int_riscv_vfdiv", "PseudoVFDIV",
+defm : VPatBinaryV_VV_VX_RM<"int_capstone_vfdiv", "PseudoVFDIV",
                             AllFloatVectors, isSEWAware=1>;
-defm : VPatBinaryV_VX_RM<"int_riscv_vfrdiv", "PseudoVFRDIV",
+defm : VPatBinaryV_VX_RM<"int_capstone_vfrdiv", "PseudoVFRDIV",
                          AllFloatVectors, isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 13.5. Vector Widening Floating-Point Multiply
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryW_VV_VX_RM<"int_riscv_vfwmul", "PseudoVFWMUL",
+defm : VPatBinaryW_VV_VX_RM<"int_capstone_vfwmul", "PseudoVFWMUL",
                             AllWidenableFloatVectors, isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 13.6. Vector Single-Width Floating-Point Fused Multiply-Add Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatTernaryV_VV_VX_AAXA_RM<"int_riscv_vfmacc", "PseudoVFMACC",
+defm : VPatTernaryV_VV_VX_AAXA_RM<"int_capstone_vfmacc", "PseudoVFMACC",
                                   AllFloatVectors, isSEWAware=1>;
-defm : VPatTernaryV_VV_VX_AAXA_RM<"int_riscv_vfnmacc", "PseudoVFNMACC",
+defm : VPatTernaryV_VV_VX_AAXA_RM<"int_capstone_vfnmacc", "PseudoVFNMACC",
                                   AllFloatVectors, isSEWAware=1>;
-defm : VPatTernaryV_VV_VX_AAXA_RM<"int_riscv_vfmsac", "PseudoVFMSAC",
+defm : VPatTernaryV_VV_VX_AAXA_RM<"int_capstone_vfmsac", "PseudoVFMSAC",
                                   AllFloatVectors, isSEWAware=1>;
-defm : VPatTernaryV_VV_VX_AAXA_RM<"int_riscv_vfnmsac", "PseudoVFNMSAC",
+defm : VPatTernaryV_VV_VX_AAXA_RM<"int_capstone_vfnmsac", "PseudoVFNMSAC",
                                   AllFloatVectors, isSEWAware=1>;
-defm : VPatTernaryV_VV_VX_AAXA_RM<"int_riscv_vfmadd", "PseudoVFMADD",
+defm : VPatTernaryV_VV_VX_AAXA_RM<"int_capstone_vfmadd", "PseudoVFMADD",
                                   AllFloatVectors, isSEWAware=1>;
-defm : VPatTernaryV_VV_VX_AAXA_RM<"int_riscv_vfnmadd", "PseudoVFNMADD",
+defm : VPatTernaryV_VV_VX_AAXA_RM<"int_capstone_vfnmadd", "PseudoVFNMADD",
                                   AllFloatVectors, isSEWAware=1>;
-defm : VPatTernaryV_VV_VX_AAXA_RM<"int_riscv_vfmsub", "PseudoVFMSUB",
+defm : VPatTernaryV_VV_VX_AAXA_RM<"int_capstone_vfmsub", "PseudoVFMSUB",
                                   AllFloatVectors, isSEWAware=1>;
-defm : VPatTernaryV_VV_VX_AAXA_RM<"int_riscv_vfnmsub", "PseudoVFNMSUB",
+defm : VPatTernaryV_VV_VX_AAXA_RM<"int_capstone_vfnmsub", "PseudoVFNMSUB",
                                   AllFloatVectors, isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 13.7. Vector Widening Floating-Point Fused Multiply-Add Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatTernaryW_VV_VX_RM<"int_riscv_vfwmacc", "PseudoVFWMACC",
+defm : VPatTernaryW_VV_VX_RM<"int_capstone_vfwmacc", "PseudoVFWMACC",
                              AllWidenableFloatVectors, isSEWAware=1>;
-defm : VPatTernaryW_VV_VX_RM<"int_riscv_vfwnmacc", "PseudoVFWNMACC",
+defm : VPatTernaryW_VV_VX_RM<"int_capstone_vfwnmacc", "PseudoVFWNMACC",
                              AllWidenableFloatVectors, isSEWAware=1>;
-defm : VPatTernaryW_VV_VX_RM<"int_riscv_vfwmsac", "PseudoVFWMSAC",
+defm : VPatTernaryW_VV_VX_RM<"int_capstone_vfwmsac", "PseudoVFWMSAC",
                              AllWidenableFloatVectors, isSEWAware=1>;
-defm : VPatTernaryW_VV_VX_RM<"int_riscv_vfwnmsac", "PseudoVFWNMSAC",
+defm : VPatTernaryW_VV_VX_RM<"int_capstone_vfwnmsac", "PseudoVFWNMSAC",
                              AllWidenableFloatVectors, isSEWAware=1>;
 let Predicates = [HasStdExtZvfbfwma] in
-defm : VPatTernaryW_VV_VX_RM<"int_riscv_vfwmaccbf16", "PseudoVFWMACCBF16",
+defm : VPatTernaryW_VV_VX_RM<"int_capstone_vfwmaccbf16", "PseudoVFWMACCBF16",
                               AllWidenableBFloatToFloatVectors, isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 13.8. Vector Floating-Point Square-Root Instruction
 //===----------------------------------------------------------------------===//
-defm : VPatUnaryV_V_RM<"int_riscv_vfsqrt", "PseudoVFSQRT", AllFloatVectors, isSEWAware=1>;
+defm : VPatUnaryV_V_RM<"int_capstone_vfsqrt", "PseudoVFSQRT", AllFloatVectors, isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 13.9. Vector Floating-Point Reciprocal Square-Root Estimate Instruction
 //===----------------------------------------------------------------------===//
-defm : VPatUnaryV_V<"int_riscv_vfrsqrt7", "PseudoVFRSQRT7", AllFloatVectors, isSEWAware=1>;
+defm : VPatUnaryV_V<"int_capstone_vfrsqrt7", "PseudoVFRSQRT7", AllFloatVectors, isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 13.10. Vector Floating-Point Reciprocal Estimate Instruction
 //===----------------------------------------------------------------------===//
-defm : VPatUnaryV_V_RM<"int_riscv_vfrec7", "PseudoVFREC7", AllFloatVectors, isSEWAware=1>;
+defm : VPatUnaryV_V_RM<"int_capstone_vfrec7", "PseudoVFREC7", AllFloatVectors, isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 13.11. Vector Floating-Point Min/Max Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX<"int_riscv_vfmin", "PseudoVFMIN", AllFloatVectors,
+defm : VPatBinaryV_VV_VX<"int_capstone_vfmin", "PseudoVFMIN", AllFloatVectors,
                          isSEWAware=1>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vfmax", "PseudoVFMAX", AllFloatVectors,
+defm : VPatBinaryV_VV_VX<"int_capstone_vfmax", "PseudoVFMAX", AllFloatVectors,
                          isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 13.12. Vector Floating-Point Sign-Injection Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX<"int_riscv_vfsgnj", "PseudoVFSGNJ", AllFloatVectors,
+defm : VPatBinaryV_VV_VX<"int_capstone_vfsgnj", "PseudoVFSGNJ", AllFloatVectors,
                          isSEWAware=1>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vfsgnjn", "PseudoVFSGNJN", AllFloatVectors,
+defm : VPatBinaryV_VV_VX<"int_capstone_vfsgnjn", "PseudoVFSGNJN", AllFloatVectors,
                          isSEWAware=1>;
-defm : VPatBinaryV_VV_VX<"int_riscv_vfsgnjx", "PseudoVFSGNJX", AllFloatVectors,
+defm : VPatBinaryV_VV_VX<"int_capstone_vfsgnjx", "PseudoVFSGNJX", AllFloatVectors,
                          isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 13.13. Vector Floating-Point Compare Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryM_VV_VX<"int_riscv_vmfeq", "PseudoVMFEQ", AllFloatVectors>;
-defm : VPatBinaryM_VV_VX<"int_riscv_vmfle", "PseudoVMFLE", AllFloatVectors>;
-defm : VPatBinaryM_VV_VX<"int_riscv_vmflt", "PseudoVMFLT", AllFloatVectors>;
-defm : VPatBinaryM_VV_VX<"int_riscv_vmfne", "PseudoVMFNE", AllFloatVectors>;
-defm : VPatBinaryM_VX<"int_riscv_vmfgt", "PseudoVMFGT", AllFloatVectors>;
-defm : VPatBinaryM_VX<"int_riscv_vmfge", "PseudoVMFGE", AllFloatVectors>;
-defm : VPatBinarySwappedM_VV<"int_riscv_vmfgt", "PseudoVMFLT", AllFloatVectors>;
-defm : VPatBinarySwappedM_VV<"int_riscv_vmfge", "PseudoVMFLE", AllFloatVectors>;
+defm : VPatBinaryM_VV_VX<"int_capstone_vmfeq", "PseudoVMFEQ", AllFloatVectors>;
+defm : VPatBinaryM_VV_VX<"int_capstone_vmfle", "PseudoVMFLE", AllFloatVectors>;
+defm : VPatBinaryM_VV_VX<"int_capstone_vmflt", "PseudoVMFLT", AllFloatVectors>;
+defm : VPatBinaryM_VV_VX<"int_capstone_vmfne", "PseudoVMFNE", AllFloatVectors>;
+defm : VPatBinaryM_VX<"int_capstone_vmfgt", "PseudoVMFGT", AllFloatVectors>;
+defm : VPatBinaryM_VX<"int_capstone_vmfge", "PseudoVMFGE", AllFloatVectors>;
+defm : VPatBinarySwappedM_VV<"int_capstone_vmfgt", "PseudoVMFLT", AllFloatVectors>;
+defm : VPatBinarySwappedM_VV<"int_capstone_vmfge", "PseudoVMFLE", AllFloatVectors>;
 
 //===----------------------------------------------------------------------===//
 // 13.14. Vector Floating-Point Classify Instruction
 //===----------------------------------------------------------------------===//
-defm : VPatConversionVI_VF<"int_riscv_vfclass", "PseudoVFCLASS">;
+defm : VPatConversionVI_VF<"int_capstone_vfclass", "PseudoVFCLASS">;
 
 //===----------------------------------------------------------------------===//
 // 13.15. Vector Floating-Point Merge Instruction
 //===----------------------------------------------------------------------===//
 // We can use vmerge.vvm to support vector-vector vfmerge.
-// NOTE: Clang previously used int_riscv_vfmerge for vector-vector, but now uses
-// int_riscv_vmerge. Support both for compatibility.
+// NOTE: Clang previously used int_capstone_vfmerge for vector-vector, but now uses
+// int_capstone_vmerge. Support both for compatibility.
 foreach vti = AllFloatVectors in {
   let Predicates = GetVTypeMinimalPredicates<vti>.Predicates in
-    defm : VPatBinaryCarryInTAIL<"int_riscv_vmerge", "PseudoVMERGE", "VVM",
+    defm : VPatBinaryCarryInTAIL<"int_capstone_vmerge", "PseudoVMERGE", "VVM",
                                  vti.Vector,
                                  vti.Vector, vti.Vector, vti.Mask,
                                  vti.Log2SEW, vti.LMul, vti.RegClass,
                                  vti.RegClass, vti.RegClass>;
   let Predicates = GetVTypePredicates<vti>.Predicates in
-    defm : VPatBinaryCarryInTAIL<"int_riscv_vfmerge", "PseudoVFMERGE",
+    defm : VPatBinaryCarryInTAIL<"int_capstone_vfmerge", "PseudoVFMERGE",
                                  "V"#vti.ScalarSuffix#"M",
                                  vti.Vector,
                                  vti.Vector, vti.Scalar, vti.Mask,
@@ -7169,7 +7169,7 @@ foreach vti = AllFloatVectors in {
 foreach fvti = AllFloatVectors in {
   defvar instr = !cast<Instruction>("PseudoVMERGE_VIM_"#fvti.LMul.MX);
   let Predicates = GetVTypePredicates<fvti>.Predicates in
-  def : Pat<(fvti.Vector (int_riscv_vfmerge (fvti.Vector fvti.RegClass:$passthru),
+  def : Pat<(fvti.Vector (int_capstone_vfmerge (fvti.Vector fvti.RegClass:$passthru),
                                             (fvti.Vector fvti.RegClass:$rs2),
                                             (fvti.Scalar (fpimm0)),
                                             (fvti.Mask VMV0:$vm), VLOpFrag)),
@@ -7180,53 +7180,53 @@ foreach fvti = AllFloatVectors in {
 //===----------------------------------------------------------------------===//
 // 13.17. Single-Width Floating-Point/Integer Type-Convert Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatConversionVI_VF_RTZ<"int_riscv_vfcvt_x_f_v", "PseudoVFCVT_RTZ_X_F">;
-defm : VPatConversionVI_VF_RTZ<"int_riscv_vfcvt_xu_f_v", "PseudoVFCVT_RTZ_XU_F">;
-defm : VPatConversionVI_VF_RM<"int_riscv_vfcvt_x_f_v", "PseudoVFCVT_X_F">;
-defm : VPatConversionVI_VF_RM<"int_riscv_vfcvt_xu_f_v", "PseudoVFCVT_XU_F">;
-defm : VPatConversionVI_VF<"int_riscv_vfcvt_rtz_xu_f_v", "PseudoVFCVT_RTZ_XU_F">;
-defm : VPatConversionVI_VF<"int_riscv_vfcvt_rtz_x_f_v", "PseudoVFCVT_RTZ_X_F">;
-defm : VPatConversionVF_VI_RM<"int_riscv_vfcvt_f_x_v", "PseudoVFCVT_F_X",
+defm : VPatConversionVI_VF_RTZ<"int_capstone_vfcvt_x_f_v", "PseudoVFCVT_RTZ_X_F">;
+defm : VPatConversionVI_VF_RTZ<"int_capstone_vfcvt_xu_f_v", "PseudoVFCVT_RTZ_XU_F">;
+defm : VPatConversionVI_VF_RM<"int_capstone_vfcvt_x_f_v", "PseudoVFCVT_X_F">;
+defm : VPatConversionVI_VF_RM<"int_capstone_vfcvt_xu_f_v", "PseudoVFCVT_XU_F">;
+defm : VPatConversionVI_VF<"int_capstone_vfcvt_rtz_xu_f_v", "PseudoVFCVT_RTZ_XU_F">;
+defm : VPatConversionVI_VF<"int_capstone_vfcvt_rtz_x_f_v", "PseudoVFCVT_RTZ_X_F">;
+defm : VPatConversionVF_VI_RM<"int_capstone_vfcvt_f_x_v", "PseudoVFCVT_F_X",
                               isSEWAware=1>;
-defm : VPatConversionVF_VI_RM<"int_riscv_vfcvt_f_xu_v", "PseudoVFCVT_F_XU",
+defm : VPatConversionVF_VI_RM<"int_capstone_vfcvt_f_xu_v", "PseudoVFCVT_F_XU",
                               isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 13.18. Widening Floating-Point/Integer Type-Convert Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatConversionWI_VF_RTZ<"int_riscv_vfwcvt_xu_f_v", "PseudoVFWCVT_RTZ_XU_F">;
-defm : VPatConversionWI_VF_RTZ<"int_riscv_vfwcvt_x_f_v", "PseudoVFWCVT_RTZ_X_F">;
-defm : VPatConversionWI_VF_RM<"int_riscv_vfwcvt_xu_f_v", "PseudoVFWCVT_XU_F">;
-defm : VPatConversionWI_VF_RM<"int_riscv_vfwcvt_x_f_v", "PseudoVFWCVT_X_F">;
-defm : VPatConversionWI_VF<"int_riscv_vfwcvt_rtz_xu_f_v", "PseudoVFWCVT_RTZ_XU_F">;
-defm : VPatConversionWI_VF<"int_riscv_vfwcvt_rtz_x_f_v", "PseudoVFWCVT_RTZ_X_F">;
-defm : VPatConversionWF_VI<"int_riscv_vfwcvt_f_xu_v", "PseudoVFWCVT_F_XU",
+defm : VPatConversionWI_VF_RTZ<"int_capstone_vfwcvt_xu_f_v", "PseudoVFWCVT_RTZ_XU_F">;
+defm : VPatConversionWI_VF_RTZ<"int_capstone_vfwcvt_x_f_v", "PseudoVFWCVT_RTZ_X_F">;
+defm : VPatConversionWI_VF_RM<"int_capstone_vfwcvt_xu_f_v", "PseudoVFWCVT_XU_F">;
+defm : VPatConversionWI_VF_RM<"int_capstone_vfwcvt_x_f_v", "PseudoVFWCVT_X_F">;
+defm : VPatConversionWI_VF<"int_capstone_vfwcvt_rtz_xu_f_v", "PseudoVFWCVT_RTZ_XU_F">;
+defm : VPatConversionWI_VF<"int_capstone_vfwcvt_rtz_x_f_v", "PseudoVFWCVT_RTZ_X_F">;
+defm : VPatConversionWF_VI<"int_capstone_vfwcvt_f_xu_v", "PseudoVFWCVT_F_XU",
                            isSEWAware=1>;
-defm : VPatConversionWF_VI<"int_riscv_vfwcvt_f_x_v", "PseudoVFWCVT_F_X",
+defm : VPatConversionWF_VI<"int_capstone_vfwcvt_f_x_v", "PseudoVFWCVT_F_X",
                            isSEWAware=1>;
-defm : VPatConversionWF_VF<"int_riscv_vfwcvt_f_f_v", "PseudoVFWCVT_F_F",
+defm : VPatConversionWF_VF<"int_capstone_vfwcvt_f_f_v", "PseudoVFWCVT_F_F",
                            isSEWAware=1>;
-defm : VPatConversionWF_VF_BF<"int_riscv_vfwcvtbf16_f_f_v",
+defm : VPatConversionWF_VF_BF<"int_capstone_vfwcvtbf16_f_f_v",
                               "PseudoVFWCVTBF16_F_F", isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
 // 13.19. Narrowing Floating-Point/Integer Type-Convert Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatConversionVI_WF_RTZ<"int_riscv_vfncvt_xu_f_w", "PseudoVFNCVT_RTZ_XU_F">;
-defm : VPatConversionVI_WF_RTZ<"int_riscv_vfncvt_x_f_w", "PseudoVFNCVT_RTZ_X_F">;
-defm : VPatConversionVI_WF_RM<"int_riscv_vfncvt_xu_f_w", "PseudoVFNCVT_XU_F">;
-defm : VPatConversionVI_WF_RM<"int_riscv_vfncvt_x_f_w", "PseudoVFNCVT_X_F">;
-defm : VPatConversionVI_WF<"int_riscv_vfncvt_rtz_xu_f_w", "PseudoVFNCVT_RTZ_XU_F">;
-defm : VPatConversionVI_WF<"int_riscv_vfncvt_rtz_x_f_w", "PseudoVFNCVT_RTZ_X_F">;
-defm : VPatConversionVF_WI_RM<"int_riscv_vfncvt_f_xu_w", "PseudoVFNCVT_F_XU",
+defm : VPatConversionVI_WF_RTZ<"int_capstone_vfncvt_xu_f_w", "PseudoVFNCVT_RTZ_XU_F">;
+defm : VPatConversionVI_WF_RTZ<"int_capstone_vfncvt_x_f_w", "PseudoVFNCVT_RTZ_X_F">;
+defm : VPatConversionVI_WF_RM<"int_capstone_vfncvt_xu_f_w", "PseudoVFNCVT_XU_F">;
+defm : VPatConversionVI_WF_RM<"int_capstone_vfncvt_x_f_w", "PseudoVFNCVT_X_F">;
+defm : VPatConversionVI_WF<"int_capstone_vfncvt_rtz_xu_f_w", "PseudoVFNCVT_RTZ_XU_F">;
+defm : VPatConversionVI_WF<"int_capstone_vfncvt_rtz_x_f_w", "PseudoVFNCVT_RTZ_X_F">;
+defm : VPatConversionVF_WI_RM<"int_capstone_vfncvt_f_xu_w", "PseudoVFNCVT_F_XU",
                               isSEWAware=1>;
-defm : VPatConversionVF_WI_RM<"int_riscv_vfncvt_f_x_w", "PseudoVFNCVT_F_X",
+defm : VPatConversionVF_WI_RM<"int_capstone_vfncvt_f_x_w", "PseudoVFNCVT_F_X",
                               isSEWAware=1>;
-defm : VPatConversionVF_WF_RM<"int_riscv_vfncvt_f_f_w", "PseudoVFNCVT_F_F",
+defm : VPatConversionVF_WF_RM<"int_capstone_vfncvt_f_f_w", "PseudoVFNCVT_F_F",
                               AllWidenableFloatVectors, isSEWAware=1>;
-defm : VPatConversionVF_WF_BF_RM<"int_riscv_vfncvtbf16_f_f_w", 
+defm : VPatConversionVF_WF_BF_RM<"int_capstone_vfncvtbf16_f_f_w", 
                                  "PseudoVFNCVTBF16_F_F", isSEWAware=1>;
-defm : VPatConversionVF_WF<"int_riscv_vfncvt_rod_f_f_w", "PseudoVFNCVT_ROD_F_F",
+defm : VPatConversionVF_WF<"int_capstone_vfncvt_rod_f_f_w", "PseudoVFNCVT_ROD_F_F",
                            isSEWAware=1>;
 
 //===----------------------------------------------------------------------===//
@@ -7236,34 +7236,34 @@ defm : VPatConversionVF_WF<"int_riscv_vfncvt_rod_f_f_w", "PseudoVFNCVT_ROD_F_F",
 //===----------------------------------------------------------------------===//
 // 14.1. Vector Single-Width Integer Reduction Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatReductionV_VS<"int_riscv_vredsum", "PseudoVREDSUM">;
-defm : VPatReductionV_VS<"int_riscv_vredand", "PseudoVREDAND">;
-defm : VPatReductionV_VS<"int_riscv_vredor", "PseudoVREDOR">;
-defm : VPatReductionV_VS<"int_riscv_vredxor", "PseudoVREDXOR">;
-defm : VPatReductionV_VS<"int_riscv_vredminu", "PseudoVREDMINU">;
-defm : VPatReductionV_VS<"int_riscv_vredmin", "PseudoVREDMIN">;
-defm : VPatReductionV_VS<"int_riscv_vredmaxu", "PseudoVREDMAXU">;
-defm : VPatReductionV_VS<"int_riscv_vredmax", "PseudoVREDMAX">;
+defm : VPatReductionV_VS<"int_capstone_vredsum", "PseudoVREDSUM">;
+defm : VPatReductionV_VS<"int_capstone_vredand", "PseudoVREDAND">;
+defm : VPatReductionV_VS<"int_capstone_vredor", "PseudoVREDOR">;
+defm : VPatReductionV_VS<"int_capstone_vredxor", "PseudoVREDXOR">;
+defm : VPatReductionV_VS<"int_capstone_vredminu", "PseudoVREDMINU">;
+defm : VPatReductionV_VS<"int_capstone_vredmin", "PseudoVREDMIN">;
+defm : VPatReductionV_VS<"int_capstone_vredmaxu", "PseudoVREDMAXU">;
+defm : VPatReductionV_VS<"int_capstone_vredmax", "PseudoVREDMAX">;
 
 //===----------------------------------------------------------------------===//
 // 14.2. Vector Widening Integer Reduction Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatReductionW_VS<"int_riscv_vwredsumu", "PseudoVWREDSUMU">;
-defm : VPatReductionW_VS<"int_riscv_vwredsum", "PseudoVWREDSUM">;
+defm : VPatReductionW_VS<"int_capstone_vwredsumu", "PseudoVWREDSUMU">;
+defm : VPatReductionW_VS<"int_capstone_vwredsum", "PseudoVWREDSUM">;
 
 //===----------------------------------------------------------------------===//
 // 14.3. Vector Single-Width Floating-Point Reduction Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatReductionV_VS_RM<"int_riscv_vfredosum", "PseudoVFREDOSUM", IsFloat=1>;
-defm : VPatReductionV_VS_RM<"int_riscv_vfredusum", "PseudoVFREDUSUM", IsFloat=1>;
-defm : VPatReductionV_VS<"int_riscv_vfredmin", "PseudoVFREDMIN", IsFloat=1>;
-defm : VPatReductionV_VS<"int_riscv_vfredmax", "PseudoVFREDMAX", IsFloat=1>;
+defm : VPatReductionV_VS_RM<"int_capstone_vfredosum", "PseudoVFREDOSUM", IsFloat=1>;
+defm : VPatReductionV_VS_RM<"int_capstone_vfredusum", "PseudoVFREDUSUM", IsFloat=1>;
+defm : VPatReductionV_VS<"int_capstone_vfredmin", "PseudoVFREDMIN", IsFloat=1>;
+defm : VPatReductionV_VS<"int_capstone_vfredmax", "PseudoVFREDMAX", IsFloat=1>;
 
 //===----------------------------------------------------------------------===//
 // 14.4. Vector Widening Floating-Point Reduction Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatReductionW_VS_RM<"int_riscv_vfwredusum", "PseudoVFWREDUSUM", IsFloat=1>;
-defm : VPatReductionW_VS_RM<"int_riscv_vfwredosum", "PseudoVFWREDOSUM", IsFloat=1>;
+defm : VPatReductionW_VS_RM<"int_capstone_vfwredusum", "PseudoVFWREDUSUM", IsFloat=1>;
+defm : VPatReductionW_VS_RM<"int_capstone_vfwredosum", "PseudoVFWREDOSUM", IsFloat=1>;
 
 //===----------------------------------------------------------------------===//
 // 15. Vector Mask Instructions
@@ -7272,53 +7272,53 @@ defm : VPatReductionW_VS_RM<"int_riscv_vfwredosum", "PseudoVFWREDOSUM", IsFloat=
 //===----------------------------------------------------------------------===//
 // 15.1 Vector Mask-Register Logical Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryM_MM<"int_riscv_vmand", "PseudoVMAND">;
-defm : VPatBinaryM_MM<"int_riscv_vmnand", "PseudoVMNAND">;
-defm : VPatBinaryM_MM<"int_riscv_vmandn", "PseudoVMANDN">;
-defm : VPatBinaryM_MM<"int_riscv_vmxor", "PseudoVMXOR">;
-defm : VPatBinaryM_MM<"int_riscv_vmor", "PseudoVMOR">;
-defm : VPatBinaryM_MM<"int_riscv_vmnor", "PseudoVMNOR">;
-defm : VPatBinaryM_MM<"int_riscv_vmorn", "PseudoVMORN">;
-defm : VPatBinaryM_MM<"int_riscv_vmxnor", "PseudoVMXNOR">;
+defm : VPatBinaryM_MM<"int_capstone_vmand", "PseudoVMAND">;
+defm : VPatBinaryM_MM<"int_capstone_vmnand", "PseudoVMNAND">;
+defm : VPatBinaryM_MM<"int_capstone_vmandn", "PseudoVMANDN">;
+defm : VPatBinaryM_MM<"int_capstone_vmxor", "PseudoVMXOR">;
+defm : VPatBinaryM_MM<"int_capstone_vmor", "PseudoVMOR">;
+defm : VPatBinaryM_MM<"int_capstone_vmnor", "PseudoVMNOR">;
+defm : VPatBinaryM_MM<"int_capstone_vmorn", "PseudoVMORN">;
+defm : VPatBinaryM_MM<"int_capstone_vmxnor", "PseudoVMXNOR">;
 
 // pseudo instructions
-defm : VPatNullaryM<"int_riscv_vmclr", "PseudoVMCLR">;
-defm : VPatNullaryM<"int_riscv_vmset", "PseudoVMSET">;
+defm : VPatNullaryM<"int_capstone_vmclr", "PseudoVMCLR">;
+defm : VPatNullaryM<"int_capstone_vmset", "PseudoVMSET">;
 
 //===----------------------------------------------------------------------===//
 // 15.2. Vector count population in mask vcpop.m
 //===----------------------------------------------------------------------===//
-defm : VPatUnaryS_M<"int_riscv_vcpop", "PseudoVCPOP">;
+defm : VPatUnaryS_M<"int_capstone_vcpop", "PseudoVCPOP">;
 
 //===----------------------------------------------------------------------===//
 // 15.3. vfirst find-first-set mask bit
 //===----------------------------------------------------------------------===//
-defm : VPatUnaryS_M<"int_riscv_vfirst", "PseudoVFIRST">;
+defm : VPatUnaryS_M<"int_capstone_vfirst", "PseudoVFIRST">;
 
 //===----------------------------------------------------------------------===//
 // 15.4. vmsbf.m set-before-first mask bit
 //===----------------------------------------------------------------------===//
-defm : VPatUnaryM_M<"int_riscv_vmsbf", "PseudoVMSBF">;
+defm : VPatUnaryM_M<"int_capstone_vmsbf", "PseudoVMSBF">;
 
 //===----------------------------------------------------------------------===//
 // 15.5. vmsif.m set-including-first mask bit
 //===----------------------------------------------------------------------===//
-defm : VPatUnaryM_M<"int_riscv_vmsif", "PseudoVMSIF">;
+defm : VPatUnaryM_M<"int_capstone_vmsif", "PseudoVMSIF">;
 
 //===----------------------------------------------------------------------===//
 // 15.6. vmsof.m set-only-first mask bit
 //===----------------------------------------------------------------------===//
-defm : VPatUnaryM_M<"int_riscv_vmsof", "PseudoVMSOF">;
+defm : VPatUnaryM_M<"int_capstone_vmsof", "PseudoVMSOF">;
 
 //===----------------------------------------------------------------------===//
 // 15.8.  Vector Iota Instruction
 //===----------------------------------------------------------------------===//
-defm : VPatUnaryV_M<"int_riscv_viota", "PseudoVIOTA">;
+defm : VPatUnaryV_M<"int_capstone_viota", "PseudoVIOTA">;
 
 //===----------------------------------------------------------------------===//
 // 15.9. Vector Element Index Instruction
 //===----------------------------------------------------------------------===//
-defm : VPatNullaryV<"int_riscv_vid", "PseudoVID">;
+defm : VPatNullaryV<"int_capstone_vid", "PseudoVID">;
 
 
 //===----------------------------------------------------------------------===//
@@ -7331,42 +7331,42 @@ defm : VPatNullaryV<"int_riscv_vid", "PseudoVID">;
 
 foreach vti = NoGroupIntegerVectors in {
   let Predicates = GetVTypePredicates<vti>.Predicates in
-  def : Pat<(XLenVT (riscv_vmv_x_s (vti.Vector vti.RegClass:$rs2))),
+  def : Pat<(XLenVT (capstone_vmv_x_s (vti.Vector vti.RegClass:$rs2))),
             (PseudoVMV_X_S $rs2, vti.Log2SEW)>;
-  // vmv.s.x is handled with a custom node in RISCVInstrInfoVVLPatterns.td
+  // vmv.s.x is handled with a custom node in CapstoneInstrInfoVVLPatterns.td
 }
 
 //===----------------------------------------------------------------------===//
 // 16.3. Vector Slide Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatTernaryV_VX_VI<"int_riscv_vslideup", "PseudoVSLIDEUP", AllIntegerVectors, uimm5>;
-defm : VPatTernaryV_VX_VI<"int_riscv_vslidedown", "PseudoVSLIDEDOWN", AllIntegerVectors, uimm5>;
-defm : VPatBinaryV_VX<"int_riscv_vslide1up", "PseudoVSLIDE1UP", AllIntegerVectors>;
-defm : VPatBinaryV_VX<"int_riscv_vslide1down", "PseudoVSLIDE1DOWN", AllIntegerVectors>;
+defm : VPatTernaryV_VX_VI<"int_capstone_vslideup", "PseudoVSLIDEUP", AllIntegerVectors, uimm5>;
+defm : VPatTernaryV_VX_VI<"int_capstone_vslidedown", "PseudoVSLIDEDOWN", AllIntegerVectors, uimm5>;
+defm : VPatBinaryV_VX<"int_capstone_vslide1up", "PseudoVSLIDE1UP", AllIntegerVectors>;
+defm : VPatBinaryV_VX<"int_capstone_vslide1down", "PseudoVSLIDE1DOWN", AllIntegerVectors>;
 
-defm : VPatTernaryV_VX_VI<"int_riscv_vslideup", "PseudoVSLIDEUP", AllFloatVectors, uimm5>;
-defm : VPatTernaryV_VX_VI<"int_riscv_vslidedown", "PseudoVSLIDEDOWN", AllFloatVectors, uimm5>;
-defm : VPatBinaryV_VX<"int_riscv_vfslide1up", "PseudoVFSLIDE1UP", AllFloatVectors>;
-defm : VPatBinaryV_VX<"int_riscv_vfslide1down", "PseudoVFSLIDE1DOWN", AllFloatVectors>;
+defm : VPatTernaryV_VX_VI<"int_capstone_vslideup", "PseudoVSLIDEUP", AllFloatVectors, uimm5>;
+defm : VPatTernaryV_VX_VI<"int_capstone_vslidedown", "PseudoVSLIDEDOWN", AllFloatVectors, uimm5>;
+defm : VPatBinaryV_VX<"int_capstone_vfslide1up", "PseudoVFSLIDE1UP", AllFloatVectors>;
+defm : VPatBinaryV_VX<"int_capstone_vfslide1down", "PseudoVFSLIDE1DOWN", AllFloatVectors>;
 
 //===----------------------------------------------------------------------===//
 // 16.4. Vector Register Gather Instructions
 //===----------------------------------------------------------------------===//
-defm : VPatBinaryV_VV_VX_VI_INT<"int_riscv_vrgather", "PseudoVRGATHER",
+defm : VPatBinaryV_VV_VX_VI_INT<"int_capstone_vrgather", "PseudoVRGATHER",
                                 AllIntegerVectors, uimm5>;
-defm : VPatBinaryV_VV_INT_EEW<"int_riscv_vrgatherei16_vv", "PseudoVRGATHEREI16",
+defm : VPatBinaryV_VV_INT_EEW<"int_capstone_vrgatherei16_vv", "PseudoVRGATHEREI16",
                               eew=16, vtilist=AllIntegerVectors>;
 
-defm : VPatBinaryV_VV_VX_VI_INT<"int_riscv_vrgather", "PseudoVRGATHER",
+defm : VPatBinaryV_VV_VX_VI_INT<"int_capstone_vrgather", "PseudoVRGATHER",
                                 AllFloatVectors, uimm5>;
-defm : VPatBinaryV_VV_INT_EEW<"int_riscv_vrgatherei16_vv", "PseudoVRGATHEREI16",
+defm : VPatBinaryV_VV_INT_EEW<"int_capstone_vrgatherei16_vv", "PseudoVRGATHEREI16",
                               eew=16, vtilist=AllFloatVectors>;
 //===----------------------------------------------------------------------===//
 // 16.5. Vector Compress Instruction
 //===----------------------------------------------------------------------===//
-defm : VPatUnaryV_V_AnyMask<"int_riscv_vcompress", "PseudoVCOMPRESS", AllIntegerVectors>;
-defm : VPatUnaryV_V_AnyMask<"int_riscv_vcompress", "PseudoVCOMPRESS", AllFloatVectors>;
+defm : VPatUnaryV_V_AnyMask<"int_capstone_vcompress", "PseudoVCOMPRESS", AllIntegerVectors>;
+defm : VPatUnaryV_V_AnyMask<"int_capstone_vcompress", "PseudoVCOMPRESS", AllFloatVectors>;
 
 // Include the non-intrinsic ISel patterns
-include "RISCVInstrInfoVVLPatterns.td"
-include "RISCVInstrInfoVSDPatterns.td"
+include "CapstoneInstrInfoVVLPatterns.td"
+include "CapstoneInstrInfoVSDPatterns.td"

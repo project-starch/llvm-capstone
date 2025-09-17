@@ -1,4 +1,4 @@
-//===-- RISCVAsmBackend.h - RISC-V Assembler Backend ----------------------===//
+//===-- CapstoneAsmBackend.h - Capstone Assembler Backend ----------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,12 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVASMBACKEND_H
-#define LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVASMBACKEND_H
+#ifndef LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneASMBACKEND_H
+#define LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneASMBACKEND_H
 
-#include "MCTargetDesc/RISCVBaseInfo.h"
-#include "MCTargetDesc/RISCVFixupKinds.h"
-#include "MCTargetDesc/RISCVMCTargetDesc.h"
+#include "MCTargetDesc/CapstoneBaseInfo.h"
+#include "MCTargetDesc/CapstoneFixupKinds.h"
+#include "MCTargetDesc/CapstoneMCTargetDesc.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCSubtargetInfo.h"
@@ -21,7 +21,7 @@ class MCAssembler;
 class MCObjectTargetWriter;
 class raw_ostream;
 
-class RISCVAsmBackend : public MCAsmBackend {
+class CapstoneAsmBackend : public MCAsmBackend {
   const MCSubtargetInfo &STI;
   uint8_t OSABI;
   bool Is64Bit;
@@ -34,9 +34,9 @@ class RISCVAsmBackend : public MCAsmBackend {
   StringMap<MCSymbol *> VendorSymbols;
 
 public:
-  RISCVAsmBackend(const MCSubtargetInfo &STI, uint8_t OSABI, bool Is64Bit,
+  CapstoneAsmBackend(const MCSubtargetInfo &STI, uint8_t OSABI, bool Is64Bit,
                   bool IsLittleEndian, const MCTargetOptions &Options);
-  ~RISCVAsmBackend() override = default;
+  ~CapstoneAsmBackend() override = default;
 
   std::optional<bool> evaluateFixup(const MCFragment &, MCFixup &, MCValue &,
                                     uint64_t &) override;

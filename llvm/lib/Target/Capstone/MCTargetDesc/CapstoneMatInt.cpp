@@ -1,4 +1,4 @@
-//===- RISCVMatInt.cpp - Immediate materialisation -------------*- C++ -*--===//
+//===- CapstoneMatInt.cpp - Immediate materialisation -------------*- C++ -*--===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,14 +6,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVMatInt.h"
-#include "MCTargetDesc/RISCVMCTargetDesc.h"
+#include "CapstoneMatInt.h"
+#include "MCTargetDesc/CapstoneMCTargetDesc.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/MC/MCInstBuilder.h"
 #include "llvm/Support/MathExtras.h"
 using namespace llvm;
 
-static int getInstSeqCost(RISCVMatInt::InstSeq &Res, bool HasRVC) {
+static int getInstSeqCost(CapstoneMatInt::InstSeq &Res, bool HasRVC) {
   if (!HasRVC)
     return Res.size();
 
@@ -22,17 +22,17 @@ static int getInstSeqCost(RISCVMatInt::InstSeq &Res, bool HasRVC) {
     // Assume instructions that aren't listed aren't compressible.
     bool Compressed = false;
     switch (Instr.getOpcode()) {
-    case RISCV::QC_E_LI:
+    case Capstone::QC_E_LI:
       // One 48-bit instruction takes the space of 1.5 regular instructions.
       Cost += 150;
       continue;
-    case RISCV::SLLI:
-    case RISCV::SRLI:
+    case Capstone::SLLI:
+    case Capstone::SRLI:
       Compressed = true;
       break;
-    case RISCV::ADDI:
-    case RISCV::ADDIW:
-    case RISCV::LUI:
+    case Capstone::ADDI:
+    case Capstone::ADDIW:
+    case Capstone::LUI:
       Compressed = isInt<6>(Instr.getImm());
       break;
     }
@@ -51,30 +51,30 @@ static int getInstSeqCost(RISCVMatInt::InstSeq &Res, bool HasRVC) {
 
 // Recursively generate a sequence for materializing an integer.
 static void generateInstSeqImpl(int64_t Val, const MCSubtargetInfo &STI,
-                                RISCVMatInt::InstSeq &Res) {
-  bool IsRV64 = STI.hasFeature(RISCV::Feature64Bit);
+                                CapstoneMatInt::InstSeq &Res) {
+  bool IsRV64 = STI.hasFeature(Capstone::Feature64Bit);
 
   // Use BSETI for a single bit that can't be expressed by a single LUI or ADDI.
-  if (STI.hasFeature(RISCV::FeatureStdExtZbs) && isPowerOf2_64(Val) &&
+  if (STI.hasFeature(Capstone::FeatureStdExtZbs) && isPowerOf2_64(Val) &&
       (!isInt<32>(Val) || Val == 0x800)) {
-    Res.emplace_back(RISCV::BSETI, Log2_64(Val));
+    Res.emplace_back(Capstone::BSETI, Log2_64(Val));
     return;
   }
 
-  if (!IsRV64 && STI.hasFeature(RISCV::FeatureVendorXqcili)) {
+  if (!IsRV64 && STI.hasFeature(Capstone::FeatureVendorXqcili)) {
     bool FitsOneStandardInst = ((Val & 0xFFF) == 0) || isInt<12>(Val);
 
     // 20-bit signed immediates that don't fit into `ADDI` or `LUI` should use
     // `QC.LI` (a single 32-bit instruction).
     if (!FitsOneStandardInst && isInt<20>(Val)) {
-      Res.emplace_back(RISCV::QC_LI, Val);
+      Res.emplace_back(Capstone::QC_LI, Val);
       return;
     }
 
     // 32-bit signed immediates that don't fit into `ADDI`, `LUI` or `QC.LI`
     // should use `QC.E.LI` (a single 48-bit instruction).
     if (!FitsOneStandardInst && isInt<32>(Val)) {
-      Res.emplace_back(RISCV::QC_E_LI, Val);
+      Res.emplace_back(Capstone::QC_E_LI, Val);
       return;
     }
   }
@@ -91,17 +91,17 @@ static void generateInstSeqImpl(int64_t Val, const MCSubtargetInfo &STI,
     int64_t Lo12 = SignExtend64<12>(Val);
 
     if (Hi20)
-      Res.emplace_back(RISCV::LUI, Hi20);
+      Res.emplace_back(Capstone::LUI, Hi20);
 
     if (Lo12 || Hi20 == 0) {
-      unsigned AddiOpc = RISCV::ADDI;
+      unsigned AddiOpc = Capstone::ADDI;
       if (IsRV64 && Hi20) {
         // Use ADDIW rather than ADDI only when necessary for correctness. As
-        // noted in RISCVOptWInstrs, this helps reduce test differences vs
+        // noted in CapstoneOptWInstrs, this helps reduce test differences vs
         // RV32 without being a pessimization.
         int64_t LuiRes = SignExtend64<32>(Hi20 << 12);
         if (!isInt<32>(LuiRes + Lo12))
-          AddiOpc = RISCV::ADDIW;
+          AddiOpc = Capstone::ADDIW;
       }
       Res.emplace_back(AddiOpc, Lo12);
     }
@@ -154,7 +154,7 @@ static void generateInstSeqImpl(int64_t Val, const MCSubtargetInfo &STI,
         ShiftAmount -= 12;
         Val = (uint64_t)Val << 12;
       } else if (isUInt<32>((uint64_t)Val << 12) &&
-                 STI.hasFeature(RISCV::FeatureStdExtZba)) {
+                 STI.hasFeature(Capstone::FeatureStdExtZba)) {
         // Reduce the shift amount and add zeros to the LSBs so it will match
         // LUI, then shift left with SLLI.UW to clear the upper 32 set bits.
         ShiftAmount -= 12;
@@ -165,7 +165,7 @@ static void generateInstSeqImpl(int64_t Val, const MCSubtargetInfo &STI,
 
     // Try to use SLLI_UW for Val when it is uint32 but not int32.
     if (isUInt<32>(Val) && !isInt<32>(Val) &&
-        STI.hasFeature(RISCV::FeatureStdExtZba)) {
+        STI.hasFeature(Capstone::FeatureStdExtZba)) {
       // Use LUI+ADDI or LUI to compose, then clear the upper 32 bits with
       // SLLI_UW.
       Val = ((uint64_t)Val) | (0xffffffffull << 32);
@@ -177,12 +177,12 @@ static void generateInstSeqImpl(int64_t Val, const MCSubtargetInfo &STI,
 
   // Skip shift if we were able to use LUI directly.
   if (ShiftAmount) {
-    unsigned Opc = Unsigned ? RISCV::SLLI_UW : RISCV::SLLI;
+    unsigned Opc = Unsigned ? Capstone::SLLI_UW : Capstone::SLLI;
     Res.emplace_back(Opc, ShiftAmount);
   }
 
   if (Lo12)
-    Res.emplace_back(RISCV::ADDI, Lo12);
+    Res.emplace_back(Capstone::ADDI, Lo12);
 }
 
 static unsigned extractRotateInfo(int64_t Val) {
@@ -204,7 +204,7 @@ static unsigned extractRotateInfo(int64_t Val) {
 }
 
 static void generateInstSeqLeadingZeros(int64_t Val, const MCSubtargetInfo &STI,
-                                        RISCVMatInt::InstSeq &Res) {
+                                        CapstoneMatInt::InstSeq &Res) {
   assert(Val > 0 && "Expected positive val");
 
   unsigned LeadingZeros = llvm::countl_zero((uint64_t)Val);
@@ -214,13 +214,13 @@ static void generateInstSeqLeadingZeros(int64_t Val, const MCSubtargetInfo &STI,
   // ADDI -1 and an SRLI.
   ShiftedVal |= maskTrailingOnes<uint64_t>(LeadingZeros);
 
-  RISCVMatInt::InstSeq TmpSeq;
+  CapstoneMatInt::InstSeq TmpSeq;
   generateInstSeqImpl(ShiftedVal, STI, TmpSeq);
 
   // Keep the new sequence if it is an improvement or the original is empty.
   if ((TmpSeq.size() + 1) < Res.size() ||
       (Res.empty() && TmpSeq.size() < 8)) {
-    TmpSeq.emplace_back(RISCV::SRLI, LeadingZeros);
+    TmpSeq.emplace_back(Capstone::SRLI, LeadingZeros);
     Res = TmpSeq;
   }
 
@@ -232,13 +232,13 @@ static void generateInstSeqLeadingZeros(int64_t Val, const MCSubtargetInfo &STI,
   // Keep the new sequence if it is an improvement or the original is empty.
   if ((TmpSeq.size() + 1) < Res.size() ||
       (Res.empty() && TmpSeq.size() < 8)) {
-    TmpSeq.emplace_back(RISCV::SRLI, LeadingZeros);
+    TmpSeq.emplace_back(Capstone::SRLI, LeadingZeros);
     Res = TmpSeq;
   }
 
   // If we have exactly 32 leading zeros and Zba, we can try using zext.w at
   // the end of the sequence.
-  if (LeadingZeros == 32 && STI.hasFeature(RISCV::FeatureStdExtZba)) {
+  if (LeadingZeros == 32 && STI.hasFeature(Capstone::FeatureStdExtZba)) {
     // Try replacing upper bits with 1.
     uint64_t LeadingOnesVal = Val | maskLeadingOnes<uint64_t>(LeadingZeros);
     TmpSeq.clear();
@@ -247,15 +247,15 @@ static void generateInstSeqLeadingZeros(int64_t Val, const MCSubtargetInfo &STI,
     // Keep the new sequence if it is an improvement.
     if ((TmpSeq.size() + 1) < Res.size() ||
         (Res.empty() && TmpSeq.size() < 8)) {
-      TmpSeq.emplace_back(RISCV::ADD_UW, 0);
+      TmpSeq.emplace_back(Capstone::ADD_UW, 0);
       Res = TmpSeq;
     }
   }
 }
 
-namespace llvm::RISCVMatInt {
+namespace llvm::CapstoneMatInt {
 InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
-  RISCVMatInt::InstSeq Res;
+  CapstoneMatInt::InstSeq Res;
   generateInstSeqImpl(Val, STI, Res);
 
   // If the low 12 bits are non-zero, the first expansion may end with an ADDI
@@ -269,13 +269,13 @@ InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
     // NOTE: We don't check for C extension to minimize differences in generated
     // code.
     bool IsShiftedCompressible =
-        isInt<6>(ShiftedVal) && !STI.hasFeature(RISCV::TuneLUIADDIFusion);
-    RISCVMatInt::InstSeq TmpSeq;
+        isInt<6>(ShiftedVal) && !STI.hasFeature(Capstone::TuneLUIADDIFusion);
+    CapstoneMatInt::InstSeq TmpSeq;
     generateInstSeqImpl(ShiftedVal, STI, TmpSeq);
 
     // Keep the new sequence if it is an improvement.
     if ((TmpSeq.size() + 1) < Res.size() || IsShiftedCompressible) {
-      TmpSeq.emplace_back(RISCV::SLLI, TrailingZeros);
+      TmpSeq.emplace_back(Capstone::SLLI, TrailingZeros);
       Res = TmpSeq;
     }
   }
@@ -285,7 +285,7 @@ InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
   if (Res.size() <= 2)
     return Res;
 
-  assert(STI.hasFeature(RISCV::Feature64Bit) &&
+  assert(STI.hasFeature(Capstone::Feature64Bit) &&
          "Expected RV32 to only need 2 instructions");
 
   // If the lower 13 bits are something like 0x17ff, try to add 1 to change the
@@ -296,12 +296,12 @@ InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
   if ((Val & 0xfff) != 0 && (Val & 0x1800) == 0x1000) {
     int64_t Imm12 = -(0x800 - (Val & 0xfff));
     int64_t AdjustedVal = Val - Imm12;
-    RISCVMatInt::InstSeq TmpSeq;
+    CapstoneMatInt::InstSeq TmpSeq;
     generateInstSeqImpl(AdjustedVal, STI, TmpSeq);
 
     // Keep the new sequence if it is an improvement.
     if ((TmpSeq.size() + 1) < Res.size()) {
-      TmpSeq.emplace_back(RISCV::ADDI, Imm12);
+      TmpSeq.emplace_back(Capstone::ADDI, Imm12);
       Res = TmpSeq;
     }
   }
@@ -316,12 +316,12 @@ InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
   // optimizations. Use an xori to invert the final value.
   if (Val < 0 && Res.size() > 3) {
     uint64_t InvertedVal = ~(uint64_t)Val;
-    RISCVMatInt::InstSeq TmpSeq;
+    CapstoneMatInt::InstSeq TmpSeq;
     generateInstSeqLeadingZeros(InvertedVal, STI, TmpSeq);
 
     // Keep it if we found a sequence that is smaller after inverting.
     if (!TmpSeq.empty() && (TmpSeq.size() + 1) < Res.size()) {
-      TmpSeq.emplace_back(RISCV::XORI, -1);
+      TmpSeq.emplace_back(Capstone::XORI, -1);
       Res = TmpSeq;
     }
   }
@@ -329,49 +329,49 @@ InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
   // If the Low and High halves are the same, use pack. The pack instruction
   // packs the XLEN/2-bit lower halves of rs1 and rs2 into rd, with rs1 in the
   // lower half and rs2 in the upper half.
-  if (Res.size() > 2 && STI.hasFeature(RISCV::FeatureStdExtZbkb)) {
+  if (Res.size() > 2 && STI.hasFeature(Capstone::FeatureStdExtZbkb)) {
     int64_t LoVal = SignExtend64<32>(Val);
     int64_t HiVal = SignExtend64<32>(Val >> 32);
     if (LoVal == HiVal) {
-      RISCVMatInt::InstSeq TmpSeq;
+      CapstoneMatInt::InstSeq TmpSeq;
       generateInstSeqImpl(LoVal, STI, TmpSeq);
       if ((TmpSeq.size() + 1) < Res.size()) {
-        TmpSeq.emplace_back(RISCV::PACK, 0);
+        TmpSeq.emplace_back(Capstone::PACK, 0);
         Res = TmpSeq;
       }
     }
   }
 
   // Perform optimization with BSETI in the Zbs extension.
-  if (Res.size() > 2 && STI.hasFeature(RISCV::FeatureStdExtZbs)) {
+  if (Res.size() > 2 && STI.hasFeature(Capstone::FeatureStdExtZbs)) {
     // Create a simm32 value for LUI+ADDIW by forcing the upper 33 bits to zero.
     // Xor that with original value to get which bits should be set by BSETI.
     uint64_t Lo = Val & 0x7fffffff;
     uint64_t Hi = Val ^ Lo;
     assert(Hi != 0);
-    RISCVMatInt::InstSeq TmpSeq;
+    CapstoneMatInt::InstSeq TmpSeq;
 
     if (Lo != 0)
       generateInstSeqImpl(Lo, STI, TmpSeq);
 
     if (TmpSeq.size() + llvm::popcount(Hi) < Res.size()) {
       do {
-        TmpSeq.emplace_back(RISCV::BSETI, llvm::countr_zero(Hi));
+        TmpSeq.emplace_back(Capstone::BSETI, llvm::countr_zero(Hi));
         Hi &= (Hi - 1); // Clear lowest set bit.
       } while (Hi != 0);
       Res = TmpSeq;
     }
 
     // Fold LI 1 + SLLI into BSETI.
-    if (Res[0].getOpcode() == RISCV::ADDI && Res[0].getImm() == 1 &&
-        Res[1].getOpcode() == RISCV::SLLI) {
+    if (Res[0].getOpcode() == Capstone::ADDI && Res[0].getImm() == 1 &&
+        Res[1].getOpcode() == Capstone::SLLI) {
       Res.erase(Res.begin());                                 // Remove ADDI.
-      Res.front() = Inst(RISCV::BSETI, Res.front().getImm()); // Patch SLLI.
+      Res.front() = Inst(Capstone::BSETI, Res.front().getImm()); // Patch SLLI.
     }
   }
 
   // Perform optimization with BCLRI in the Zbs extension.
-  if (Res.size() > 2 && STI.hasFeature(RISCV::FeatureStdExtZbs)) {
+  if (Res.size() > 2 && STI.hasFeature(Capstone::FeatureStdExtZbs)) {
     // Create a simm32 value for LUI+ADDIW by forcing the upper 33 bits to one.
     // Xor that with original value to get which bits should be cleared by
     // BCLRI.
@@ -379,12 +379,12 @@ InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
     uint64_t Hi = Val ^ Lo;
     assert(Hi != 0);
 
-    RISCVMatInt::InstSeq TmpSeq;
+    CapstoneMatInt::InstSeq TmpSeq;
     generateInstSeqImpl(Lo, STI, TmpSeq);
 
     if (TmpSeq.size() + llvm::popcount(Hi) < Res.size()) {
       do {
-        TmpSeq.emplace_back(RISCV::BCLRI, llvm::countr_zero(Hi));
+        TmpSeq.emplace_back(Capstone::BCLRI, llvm::countr_zero(Hi));
         Hi &= (Hi - 1); // Clear lowest set bit.
       } while (Hi != 0);
       Res = TmpSeq;
@@ -392,20 +392,20 @@ InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
   }
 
   // Perform optimization with SH*ADD in the Zba extension.
-  if (Res.size() > 2 && STI.hasFeature(RISCV::FeatureStdExtZba)) {
+  if (Res.size() > 2 && STI.hasFeature(Capstone::FeatureStdExtZba)) {
     int64_t Div = 0;
     unsigned Opc = 0;
-    RISCVMatInt::InstSeq TmpSeq;
+    CapstoneMatInt::InstSeq TmpSeq;
     // Select the opcode and divisor.
     if ((Val % 3) == 0 && isInt<32>(Val / 3)) {
       Div = 3;
-      Opc = RISCV::SH1ADD;
+      Opc = Capstone::SH1ADD;
     } else if ((Val % 5) == 0 && isInt<32>(Val / 5)) {
       Div = 5;
-      Opc = RISCV::SH2ADD;
+      Opc = Capstone::SH2ADD;
     } else if ((Val % 9) == 0 && isInt<32>(Val / 9)) {
       Div = 9;
-      Opc = RISCV::SH3ADD;
+      Opc = Capstone::SH3ADD;
     }
     // Build the new instruction sequence.
     if (Div > 0) {
@@ -421,13 +421,13 @@ InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
       Div = 0;
       if (isInt<32>(Hi52 / 3) && (Hi52 % 3) == 0) {
         Div = 3;
-        Opc = RISCV::SH1ADD;
+        Opc = Capstone::SH1ADD;
       } else if (isInt<32>(Hi52 / 5) && (Hi52 % 5) == 0) {
         Div = 5;
-        Opc = RISCV::SH2ADD;
+        Opc = Capstone::SH2ADD;
       } else if (isInt<32>(Hi52 / 9) && (Hi52 % 9) == 0) {
         Div = 9;
-        Opc = RISCV::SH3ADD;
+        Opc = Capstone::SH3ADD;
       }
       // Build the new instruction sequence.
       if (Div > 0) {
@@ -439,7 +439,7 @@ InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
         generateInstSeqImpl(Hi52 / Div, STI, TmpSeq);
         if ((TmpSeq.size() + 2) < Res.size()) {
           TmpSeq.emplace_back(Opc, 0);
-          TmpSeq.emplace_back(RISCV::ADDI, Lo12);
+          TmpSeq.emplace_back(Capstone::ADDI, Lo12);
           Res = TmpSeq;
         }
       }
@@ -448,16 +448,16 @@ InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
 
   // Perform optimization with rori in the Zbb and th.srri in the XTheadBb
   // extension.
-  if (Res.size() > 2 && (STI.hasFeature(RISCV::FeatureStdExtZbb) ||
-                         STI.hasFeature(RISCV::FeatureVendorXTHeadBb))) {
+  if (Res.size() > 2 && (STI.hasFeature(Capstone::FeatureStdExtZbb) ||
+                         STI.hasFeature(Capstone::FeatureVendorXTHeadBb))) {
     if (unsigned Rotate = extractRotateInfo(Val)) {
-      RISCVMatInt::InstSeq TmpSeq;
+      CapstoneMatInt::InstSeq TmpSeq;
       uint64_t NegImm12 = llvm::rotl<uint64_t>(Val, Rotate);
       assert(isInt<12>(NegImm12));
-      TmpSeq.emplace_back(RISCV::ADDI, NegImm12);
-      TmpSeq.emplace_back(STI.hasFeature(RISCV::FeatureStdExtZbb)
-                              ? RISCV::RORI
-                              : RISCV::TH_SRRI,
+      TmpSeq.emplace_back(Capstone::ADDI, NegImm12);
+      TmpSeq.emplace_back(STI.hasFeature(Capstone::FeatureStdExtZbb)
+                              ? Capstone::RORI
+                              : Capstone::TH_SRRI,
                           Rotate);
       Res = TmpSeq;
     }
@@ -467,29 +467,29 @@ InstSeq generateInstSeq(int64_t Val, const MCSubtargetInfo &STI) {
 
 void generateMCInstSeq(int64_t Val, const MCSubtargetInfo &STI,
                        MCRegister DestReg, SmallVectorImpl<MCInst> &Insts) {
-  RISCVMatInt::InstSeq Seq = RISCVMatInt::generateInstSeq(Val, STI);
+  CapstoneMatInt::InstSeq Seq = CapstoneMatInt::generateInstSeq(Val, STI);
 
-  MCRegister SrcReg = RISCV::X0;
-  for (RISCVMatInt::Inst &Inst : Seq) {
+  MCRegister SrcReg = Capstone::X0;
+  for (CapstoneMatInt::Inst &Inst : Seq) {
     switch (Inst.getOpndKind()) {
-    case RISCVMatInt::Imm:
+    case CapstoneMatInt::Imm:
       Insts.push_back(MCInstBuilder(Inst.getOpcode())
                           .addReg(DestReg)
                           .addImm(Inst.getImm()));
       break;
-    case RISCVMatInt::RegX0:
+    case CapstoneMatInt::RegX0:
       Insts.push_back(MCInstBuilder(Inst.getOpcode())
                           .addReg(DestReg)
                           .addReg(SrcReg)
-                          .addReg(RISCV::X0));
+                          .addReg(Capstone::X0));
       break;
-    case RISCVMatInt::RegReg:
+    case CapstoneMatInt::RegReg:
       Insts.push_back(MCInstBuilder(Inst.getOpcode())
                           .addReg(DestReg)
                           .addReg(SrcReg)
                           .addReg(SrcReg));
       break;
-    case RISCVMatInt::RegImm:
+    case CapstoneMatInt::RegImm:
       Insts.push_back(MCInstBuilder(Inst.getOpcode())
                           .addReg(DestReg)
                           .addReg(SrcReg)
@@ -506,7 +506,7 @@ InstSeq generateTwoRegInstSeq(int64_t Val, const MCSubtargetInfo &STI,
                               unsigned &ShiftAmt, unsigned &AddOpc) {
   int64_t LoVal = SignExtend64<32>(Val);
   if (LoVal == 0)
-    return RISCVMatInt::InstSeq();
+    return CapstoneMatInt::InstSeq();
 
   // Subtract the LoVal to emulate the effect of the final ADD.
   uint64_t Tmp = (uint64_t)Val - (uint64_t)LoVal;
@@ -520,25 +520,25 @@ InstSeq generateTwoRegInstSeq(int64_t Val, const MCSubtargetInfo &STI,
   unsigned TzHi = llvm::countr_zero(Tmp);
   assert(TzLo < 32 && TzHi >= 32);
   ShiftAmt = TzHi - TzLo;
-  AddOpc = RISCV::ADD;
+  AddOpc = Capstone::ADD;
 
   if (Tmp == ((uint64_t)LoVal << ShiftAmt))
-    return RISCVMatInt::generateInstSeq(LoVal, STI);
+    return CapstoneMatInt::generateInstSeq(LoVal, STI);
 
   // If we have Zba, we can use (ADD_UW X, (SLLI X, 32)).
-  if (STI.hasFeature(RISCV::FeatureStdExtZba) && Lo_32(Val) == Hi_32(Val)) {
+  if (STI.hasFeature(Capstone::FeatureStdExtZba) && Lo_32(Val) == Hi_32(Val)) {
     ShiftAmt = 32;
-    AddOpc = RISCV::ADD_UW;
-    return RISCVMatInt::generateInstSeq(LoVal, STI);
+    AddOpc = Capstone::ADD_UW;
+    return CapstoneMatInt::generateInstSeq(LoVal, STI);
   }
 
-  return RISCVMatInt::InstSeq();
+  return CapstoneMatInt::InstSeq();
 }
 
 int getIntMatCost(const APInt &Val, unsigned Size, const MCSubtargetInfo &STI,
                   bool CompressionCost, bool FreeZeroes) {
-  bool IsRV64 = STI.hasFeature(RISCV::Feature64Bit);
-  bool HasRVC = CompressionCost && STI.hasFeature(RISCV::FeatureStdExtZca);
+  bool IsRV64 = STI.hasFeature(Capstone::Feature64Bit);
+  bool HasRVC = CompressionCost && STI.hasFeature(Capstone::FeatureStdExtZca);
   int PlatRegSize = IsRV64 ? 64 : 32;
 
   // Split the constant into platform register sized chunks, and calculate cost
@@ -558,29 +558,29 @@ OpndKind Inst::getOpndKind() const {
   switch (Opc) {
   default:
     llvm_unreachable("Unexpected opcode!");
-  case RISCV::LUI:
-  case RISCV::QC_LI:
-  case RISCV::QC_E_LI:
-    return RISCVMatInt::Imm;
-  case RISCV::ADD_UW:
-    return RISCVMatInt::RegX0;
-  case RISCV::SH1ADD:
-  case RISCV::SH2ADD:
-  case RISCV::SH3ADD:
-  case RISCV::PACK:
-    return RISCVMatInt::RegReg;
-  case RISCV::ADDI:
-  case RISCV::ADDIW:
-  case RISCV::XORI:
-  case RISCV::SLLI:
-  case RISCV::SRLI:
-  case RISCV::SLLI_UW:
-  case RISCV::RORI:
-  case RISCV::BSETI:
-  case RISCV::BCLRI:
-  case RISCV::TH_SRRI:
-    return RISCVMatInt::RegImm;
+  case Capstone::LUI:
+  case Capstone::QC_LI:
+  case Capstone::QC_E_LI:
+    return CapstoneMatInt::Imm;
+  case Capstone::ADD_UW:
+    return CapstoneMatInt::RegX0;
+  case Capstone::SH1ADD:
+  case Capstone::SH2ADD:
+  case Capstone::SH3ADD:
+  case Capstone::PACK:
+    return CapstoneMatInt::RegReg;
+  case Capstone::ADDI:
+  case Capstone::ADDIW:
+  case Capstone::XORI:
+  case Capstone::SLLI:
+  case Capstone::SRLI:
+  case Capstone::SLLI_UW:
+  case Capstone::RORI:
+  case Capstone::BSETI:
+  case Capstone::BCLRI:
+  case Capstone::TH_SRRI:
+    return CapstoneMatInt::RegImm;
   }
 }
 
-} // namespace llvm::RISCVMatInt
+} // namespace llvm::CapstoneMatInt

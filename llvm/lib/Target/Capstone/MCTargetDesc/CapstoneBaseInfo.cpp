@@ -1,4 +1,4 @@
-//===-- RISCVBaseInfo.cpp - Top level definitions for RISC-V MC -----------===//
+//===-- CapstoneBaseInfo.cpp - Top level definitions for Capstone MC -----------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,12 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains small standalone enum definitions for the RISC-V target
+// This file contains small standalone enum definitions for the Capstone target
 // useful for the compiler back-end and the MC libraries.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVBaseInfo.h"
+#include "CapstoneBaseInfo.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/MC/MCSubtargetInfo.h"
@@ -21,43 +21,43 @@
 
 namespace llvm {
 
-extern const SubtargetFeatureKV RISCVFeatureKV[RISCV::NumSubtargetFeatures];
+extern const SubtargetFeatureKV CapstoneFeatureKV[Capstone::NumSubtargetFeatures];
 
-namespace RISCVSysReg {
+namespace CapstoneSysReg {
 #define GET_SysRegsList_IMPL
-#include "RISCVGenSearchableTables.inc"
-} // namespace RISCVSysReg
+#include "CapstoneGenSearchableTables.inc"
+} // namespace CapstoneSysReg
 
-namespace RISCVInsnOpcode {
-#define GET_RISCVOpcodesList_IMPL
-#include "RISCVGenSearchableTables.inc"
-} // namespace RISCVInsnOpcode
+namespace CapstoneInsnOpcode {
+#define GET_CapstoneOpcodesList_IMPL
+#include "CapstoneGenSearchableTables.inc"
+} // namespace CapstoneInsnOpcode
 
-namespace RISCVVInversePseudosTable {
-using namespace RISCV;
-#define GET_RISCVVInversePseudosTable_IMPL
-#include "RISCVGenSearchableTables.inc"
-} // namespace RISCVVInversePseudosTable
+namespace CapstoneVInversePseudosTable {
+using namespace Capstone;
+#define GET_CapstoneVInversePseudosTable_IMPL
+#include "CapstoneGenSearchableTables.inc"
+} // namespace CapstoneVInversePseudosTable
 
-namespace RISCV {
-#define GET_RISCVVSSEGTable_IMPL
-#define GET_RISCVVLSEGTable_IMPL
-#define GET_RISCVVLXSEGTable_IMPL
-#define GET_RISCVVSXSEGTable_IMPL
-#define GET_RISCVVLETable_IMPL
-#define GET_RISCVVSETable_IMPL
-#define GET_RISCVVLXTable_IMPL
-#define GET_RISCVVSXTable_IMPL
-#define GET_RISCVNDSVLNTable_IMPL
-#include "RISCVGenSearchableTables.inc"
-} // namespace RISCV
+namespace Capstone {
+#define GET_CapstoneVSSEGTable_IMPL
+#define GET_CapstoneVLSEGTable_IMPL
+#define GET_CapstoneVLXSEGTable_IMPL
+#define GET_CapstoneVSXSEGTable_IMPL
+#define GET_CapstoneVLETable_IMPL
+#define GET_CapstoneVSETable_IMPL
+#define GET_CapstoneVLXTable_IMPL
+#define GET_CapstoneVSXTable_IMPL
+#define GET_CapstoneNDSVLNTable_IMPL
+#include "CapstoneGenSearchableTables.inc"
+} // namespace Capstone
 
-namespace RISCVABI {
+namespace CapstoneABI {
 ABI computeTargetABI(const Triple &TT, const FeatureBitset &FeatureBits,
                      StringRef ABIName) {
   auto TargetABI = getTargetABI(ABIName);
   bool IsRV64 = TT.isArch64Bit();
-  bool IsRVE = FeatureBits[RISCV::FeatureStdExtE];
+  bool IsRVE = FeatureBits[Capstone::FeatureStdExtE];
 
   if (!ABIName.empty() && TargetABI == ABI_Unknown) {
     errs()
@@ -73,28 +73,28 @@ ABI computeTargetABI(const Triple &TT, const FeatureBitset &FeatureBits,
     TargetABI = ABI_Unknown;
   } else if (!IsRV64 && IsRVE && TargetABI != ABI_ILP32E &&
              TargetABI != ABI_Unknown) {
-    // TODO: move this checking to RISCVTargetLowering and RISCVAsmParser
+    // TODO: move this checking to CapstoneTargetLowering and CapstoneAsmParser
     errs()
         << "Only the ilp32e ABI is supported for RV32E (ignoring target-abi)\n";
     TargetABI = ABI_Unknown;
   } else if (IsRV64 && IsRVE && TargetABI != ABI_LP64E &&
              TargetABI != ABI_Unknown) {
-    // TODO: move this checking to RISCVTargetLowering and RISCVAsmParser
+    // TODO: move this checking to CapstoneTargetLowering and CapstoneAsmParser
     errs()
         << "Only the lp64e ABI is supported for RV64E (ignoring target-abi)\n";
     TargetABI = ABI_Unknown;
   }
 
-  if ((TargetABI == RISCVABI::ABI::ABI_ILP32E ||
+  if ((TargetABI == CapstoneABI::ABI::ABI_ILP32E ||
        (TargetABI == ABI_Unknown && IsRVE && !IsRV64)) &&
-      FeatureBits[RISCV::FeatureStdExtD])
+      FeatureBits[Capstone::FeatureStdExtD])
     reportFatalUsageError("ILP32E cannot be used with the D ISA extension");
 
   if (TargetABI != ABI_Unknown)
     return TargetABI;
 
   // If no explicit ABI is given, try to compute the default ABI.
-  auto ISAInfo = RISCVFeatures::parseFeatureBits(IsRV64, FeatureBits);
+  auto ISAInfo = CapstoneFeatures::parseFeatureBits(IsRV64, FeatureBits);
   if (!ISAInfo)
     reportFatalUsageError(ISAInfo.takeError());
   return getTargetABI((*ISAInfo)->computeDefaultABI());
@@ -117,51 +117,51 @@ ABI getTargetABI(StringRef ABIName) {
 // To avoid the BP value clobbered by a function call, we need to choose a
 // callee saved register to save the value. RV32E only has X8 and X9 as callee
 // saved registers and X8 will be used as fp. So we choose X9 as bp.
-MCRegister getBPReg() { return RISCV::X9; }
+MCRegister getBPReg() { return Capstone::X9; }
 
 // Returns the register holding shadow call stack pointer.
-MCRegister getSCSPReg() { return RISCV::X3; }
+MCRegister getSCSPReg() { return Capstone::X3; }
 
-} // namespace RISCVABI
+} // namespace CapstoneABI
 
-namespace RISCVFeatures {
+namespace CapstoneFeatures {
 
 void validate(const Triple &TT, const FeatureBitset &FeatureBits) {
-  if (TT.isArch64Bit() && !FeatureBits[RISCV::Feature64Bit])
+  if (TT.isArch64Bit() && !FeatureBits[Capstone::Feature64Bit])
     reportFatalUsageError("RV64 target requires an RV64 CPU");
-  if (!TT.isArch64Bit() && !FeatureBits[RISCV::Feature32Bit])
+  if (!TT.isArch64Bit() && !FeatureBits[Capstone::Feature32Bit])
     reportFatalUsageError("RV32 target requires an RV32 CPU");
-  if (FeatureBits[RISCV::Feature32Bit] &&
-      FeatureBits[RISCV::Feature64Bit])
+  if (FeatureBits[Capstone::Feature32Bit] &&
+      FeatureBits[Capstone::Feature64Bit])
     reportFatalUsageError("RV32 and RV64 can't be combined");
 }
 
-llvm::Expected<std::unique_ptr<RISCVISAInfo>>
+llvm::Expected<std::unique_ptr<CapstoneISAInfo>>
 parseFeatureBits(bool IsRV64, const FeatureBitset &FeatureBits) {
   unsigned XLen = IsRV64 ? 64 : 32;
   std::vector<std::string> FeatureVector;
   // Convert FeatureBitset to FeatureVector.
-  for (auto Feature : RISCVFeatureKV) {
+  for (auto Feature : CapstoneFeatureKV) {
     if (FeatureBits[Feature.Value] &&
-        llvm::RISCVISAInfo::isSupportedExtensionFeature(Feature.Key))
+        llvm::CapstoneISAInfo::isSupportedExtensionFeature(Feature.Key))
       FeatureVector.push_back(std::string("+") + Feature.Key);
   }
-  return llvm::RISCVISAInfo::parseFeatures(XLen, FeatureVector);
+  return llvm::CapstoneISAInfo::parseFeatures(XLen, FeatureVector);
 }
 
-} // namespace RISCVFeatures
+} // namespace CapstoneFeatures
 
 // Include the auto-generated portion of the compress emitter.
 #define GEN_UNCOMPRESS_INSTR
 #define GEN_COMPRESS_INSTR
-#include "RISCVGenCompressInstEmitter.inc"
+#include "CapstoneGenCompressInstEmitter.inc"
 
-bool RISCVRVC::compress(MCInst &OutInst, const MCInst &MI,
+bool CapstoneRVC::compress(MCInst &OutInst, const MCInst &MI,
                         const MCSubtargetInfo &STI) {
   return compressInst(OutInst, MI, STI);
 }
 
-bool RISCVRVC::uncompress(MCInst &OutInst, const MCInst &MI,
+bool CapstoneRVC::uncompress(MCInst &OutInst, const MCInst &MI,
                           const MCSubtargetInfo &STI) {
   return uncompressInst(OutInst, MI, STI);
 }
@@ -180,7 +180,7 @@ static constexpr std::pair<uint8_t, uint8_t> LoadFP32ImmArr[] = {
     {0b10001111, 0b00}, {0b11111111, 0b00}, {0b11111111, 0b10},
 };
 
-int RISCVLoadFPImm::getLoadFPImm(APFloat FPImm) {
+int CapstoneLoadFPImm::getLoadFPImm(APFloat FPImm) {
   assert((&FPImm.getSemantics() == &APFloat::IEEEsingle() ||
           &FPImm.getSemantics() == &APFloat::IEEEdouble() ||
           &FPImm.getSemantics() == &APFloat::IEEEhalf()) &&
@@ -224,7 +224,7 @@ int RISCVLoadFPImm::getLoadFPImm(APFloat FPImm) {
   return Entry;
 }
 
-float RISCVLoadFPImm::getFPImm(unsigned Imm) {
+float CapstoneLoadFPImm::getFPImm(unsigned Imm) {
   assert(Imm != 1 && Imm != 30 && Imm != 31 && "Unsupported immediate");
 
   // Entry 0 is -1.0, the only negative value. Entry 16 is 1.0.
@@ -241,16 +241,16 @@ float RISCVLoadFPImm::getFPImm(unsigned Imm) {
   return bit_cast<float>(I);
 }
 
-void RISCVZC::printRegList(unsigned RlistEncode, raw_ostream &OS) {
+void CapstoneZC::printRegList(unsigned RlistEncode, raw_ostream &OS) {
   assert(RlistEncode >= RLISTENCODE::RA &&
          RlistEncode <= RLISTENCODE::RA_S0_S11 && "Invalid Rlist");
   OS << "{ra";
-  if (RlistEncode > RISCVZC::RA) {
+  if (RlistEncode > CapstoneZC::RA) {
     OS << ", s0";
-    if (RlistEncode == RISCVZC::RA_S0_S11)
+    if (RlistEncode == CapstoneZC::RA_S0_S11)
       OS << "-s11";
-    else if (RlistEncode > RISCVZC::RA_S0 && RlistEncode <= RISCVZC::RA_S0_S11)
-      OS << "-s" << (RlistEncode - RISCVZC::RA_S0);
+    else if (RlistEncode > CapstoneZC::RA_S0 && RlistEncode <= CapstoneZC::RA_S0_S11)
+      OS << "-s" << (RlistEncode - CapstoneZC::RA_S0);
   }
   OS << "}";
 }

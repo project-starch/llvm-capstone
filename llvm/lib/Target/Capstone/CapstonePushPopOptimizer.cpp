@@ -1,4 +1,4 @@
-//===------- RISCVPushPopOptimizer.cpp - RISC-V Push/Pop opt. pass --------===//
+//===------- CapstonePushPopOptimizer.cpp - Capstone Push/Pop opt. pass --------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -11,21 +11,21 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVInstrInfo.h"
-#include "RISCVMachineFunctionInfo.h"
+#include "CapstoneInstrInfo.h"
+#include "CapstoneMachineFunctionInfo.h"
 #include "llvm/CodeGen/MachineInstr.h"
 
 using namespace llvm;
 
-#define RISCV_PUSH_POP_OPT_NAME "RISC-V Zcmp Push/Pop optimization pass"
+#define Capstone_PUSH_POP_OPT_NAME "Capstone Zcmp Push/Pop optimization pass"
 
 namespace {
-struct RISCVPushPopOpt : public MachineFunctionPass {
+struct CapstonePushPopOpt : public MachineFunctionPass {
   static char ID;
 
-  RISCVPushPopOpt() : MachineFunctionPass(ID) {}
+  CapstonePushPopOpt() : MachineFunctionPass(ID) {}
 
-  const RISCVInstrInfo *TII;
+  const CapstoneInstrInfo *TII;
   const TargetRegisterInfo *TRI;
 
   // Track which register units have been modified and used.
@@ -36,20 +36,20 @@ struct RISCVPushPopOpt : public MachineFunctionPass {
   bool adjustRetVal(MachineBasicBlock::iterator &MBBI);
   bool runOnMachineFunction(MachineFunction &Fn) override;
 
-  StringRef getPassName() const override { return RISCV_PUSH_POP_OPT_NAME; }
+  StringRef getPassName() const override { return Capstone_PUSH_POP_OPT_NAME; }
 };
 
-char RISCVPushPopOpt::ID = 0;
+char CapstonePushPopOpt::ID = 0;
 
 } // end of anonymous namespace
 
-INITIALIZE_PASS(RISCVPushPopOpt, "riscv-push-pop-opt", RISCV_PUSH_POP_OPT_NAME,
+INITIALIZE_PASS(CapstonePushPopOpt, "capstone-push-pop-opt", Capstone_PUSH_POP_OPT_NAME,
                 false, false)
 
 static bool isPop(unsigned Opcode) {
   switch (Opcode) {
-  case RISCV::CM_POP:
-  case RISCV::QC_CM_POP:
+  case Capstone::CM_POP:
+  case Capstone::QC_CM_POP:
     return true;
   default:
     return false;
@@ -60,16 +60,16 @@ static unsigned getPopRetOpcode(unsigned PopOpcode, bool IsReturnZero) {
   assert(isPop(PopOpcode) && "Unexpected Pop Opcode");
 
   switch (PopOpcode) {
-  case RISCV::CM_POP:
-    return IsReturnZero ? RISCV::CM_POPRETZ : RISCV::CM_POPRET;
-  case RISCV::QC_CM_POP:
-    return IsReturnZero ? RISCV::QC_CM_POPRETZ : RISCV::QC_CM_POPRET;
+  case Capstone::CM_POP:
+    return IsReturnZero ? Capstone::CM_POPRETZ : Capstone::CM_POPRET;
+  case Capstone::QC_CM_POP:
+    return IsReturnZero ? Capstone::QC_CM_POPRETZ : Capstone::QC_CM_POPRET;
   default:
     llvm_unreachable("Unhandled Pop Opcode");
   }
 }
 
-bool RISCVPushPopOpt::usePopRet(MachineBasicBlock::iterator &MBBI,
+bool CapstonePushPopOpt::usePopRet(MachineBasicBlock::iterator &MBBI,
                                 MachineBasicBlock::iterator &NextI,
                                 bool IsReturnZero) {
   // Since Pseudo instruction lowering happen later in the pipeline,
@@ -98,7 +98,7 @@ bool RISCVPushPopOpt::usePopRet(MachineBasicBlock::iterator &MBBI,
 
 // Search for last assignment to a0 and if possible use ret_val slot of POP to
 // store return value.
-bool RISCVPushPopOpt::adjustRetVal(MachineBasicBlock::iterator &MBBI) {
+bool CapstonePushPopOpt::adjustRetVal(MachineBasicBlock::iterator &MBBI) {
   MachineBasicBlock::reverse_iterator RE = MBBI->getParent()->rend();
   // Track which register units have been modified and used between the POP
   // insn and the last assignment to register a0.
@@ -113,7 +113,7 @@ bool RISCVPushPopOpt::adjustRetVal(MachineBasicBlock::iterator &MBBI) {
     if (auto OperandPair = TII->isCopyInstrImpl(MI)) {
       Register DestReg = OperandPair->Destination->getReg();
       Register Source = OperandPair->Source->getReg();
-      if (DestReg == RISCV::X10 && Source == RISCV::X0) {
+      if (DestReg == Capstone::X10 && Source == Capstone::X0) {
         MI.removeFromParent();
         return true;
       }
@@ -122,19 +122,19 @@ bool RISCVPushPopOpt::adjustRetVal(MachineBasicBlock::iterator &MBBI) {
     LiveRegUnits::accumulateUsedDefed(MI, ModifiedRegUnits, UsedRegUnits, TRI);
     // If a0 was modified or used, there is no possibility
     // of using ret_val slot of POP instruction.
-    if (!ModifiedRegUnits.available(RISCV::X10) ||
-        !UsedRegUnits.available(RISCV::X10))
+    if (!ModifiedRegUnits.available(Capstone::X10) ||
+        !UsedRegUnits.available(Capstone::X10))
       return false;
   }
   return false;
 }
 
-bool RISCVPushPopOpt::runOnMachineFunction(MachineFunction &Fn) {
+bool CapstonePushPopOpt::runOnMachineFunction(MachineFunction &Fn) {
   if (skipFunction(Fn.getFunction()))
     return false;
 
   // If Zcmp extension is not supported, abort.
-  const RISCVSubtarget *Subtarget = &Fn.getSubtarget<RISCVSubtarget>();
+  const CapstoneSubtarget *Subtarget = &Fn.getSubtarget<CapstoneSubtarget>();
   if (!Subtarget->hasStdExtZcmp() && !Subtarget->hasVendorXqccmp())
     return false;
 
@@ -151,7 +151,7 @@ bool RISCVPushPopOpt::runOnMachineFunction(MachineFunction &Fn) {
   for (auto &MBB : Fn) {
     // RET should be the only terminator.
     auto RetMBBI = MBB.getFirstTerminator();
-    if (RetMBBI == MBB.end() || RetMBBI->getOpcode() != RISCV::PseudoRET ||
+    if (RetMBBI == MBB.end() || RetMBBI->getOpcode() != Capstone::PseudoRET ||
         RetMBBI == MBB.begin())
       continue;
 
@@ -165,8 +165,8 @@ bool RISCVPushPopOpt::runOnMachineFunction(MachineFunction &Fn) {
   return Modified;
 }
 
-/// createRISCVPushPopOptimizationPass - returns an instance of the
+/// createCapstonePushPopOptimizationPass - returns an instance of the
 /// Push/Pop optimization pass.
-FunctionPass *llvm::createRISCVPushPopOptimizationPass() {
-  return new RISCVPushPopOpt();
+FunctionPass *llvm::createCapstonePushPopOptimizationPass() {
+  return new CapstonePushPopOpt();
 }

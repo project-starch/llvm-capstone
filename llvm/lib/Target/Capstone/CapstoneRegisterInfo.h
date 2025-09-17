@@ -1,4 +1,4 @@
-//===-- RISCVRegisterInfo.h - RISC-V Register Information Impl --*- C++ -*-===//
+//===-- CapstoneRegisterInfo.h - Capstone Register Information Impl --*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,22 +6,22 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains the RISC-V implementation of the TargetRegisterInfo class.
+// This file contains the Capstone implementation of the TargetRegisterInfo class.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCVREGISTERINFO_H
-#define LLVM_LIB_TARGET_RISCV_RISCVREGISTERINFO_H
+#ifndef LLVM_LIB_TARGET_Capstone_CapstoneREGISTERINFO_H
+#define LLVM_LIB_TARGET_Capstone_CapstoneREGISTERINFO_H
 
 #include "llvm/CodeGen/TargetRegisterInfo.h"
-#include "llvm/TargetParser/RISCVTargetParser.h"
+#include "llvm/TargetParser/CapstoneTargetParser.h"
 
 #define GET_REGINFO_HEADER
-#include "RISCVGenRegisterInfo.inc"
+#include "CapstoneGenRegisterInfo.inc"
 
 namespace llvm {
 
-namespace RISCVRI {
+namespace CapstoneRI {
 enum : uint8_t {
   // The IsVRegClass value of this RegisterClass.
   IsVRegClassShift = 0,
@@ -43,8 +43,8 @@ static inline bool isVRegClass(uint8_t TSFlags) {
 }
 
 /// \returns the LMUL for the register class.
-static inline RISCVVType::VLMUL getLMul(uint8_t TSFlags) {
-  return static_cast<RISCVVType::VLMUL>((TSFlags & VLMulShiftMask) >>
+static inline CapstoneVType::VLMUL getLMul(uint8_t TSFlags) {
+  return static_cast<CapstoneVType::VLMUL>((TSFlags & VLMulShiftMask) >>
                                         VLMulShift);
 }
 
@@ -52,11 +52,11 @@ static inline RISCVVType::VLMUL getLMul(uint8_t TSFlags) {
 static inline unsigned getNF(uint8_t TSFlags) {
   return static_cast<unsigned>((TSFlags & NFShiftMask) >> NFShift) + 1;
 }
-} // namespace RISCVRI
+} // namespace CapstoneRI
 
-struct RISCVRegisterInfo : public RISCVGenRegisterInfo {
+struct CapstoneRegisterInfo : public CapstoneGenRegisterInfo {
 
-  RISCVRegisterInfo(unsigned HwMode);
+  CapstoneRegisterInfo(unsigned HwMode);
 
   const uint32_t *getCallPreservedMask(const MachineFunction &MF,
                                        CallingConv::ID) const override;
@@ -124,7 +124,7 @@ struct RISCVRegisterInfo : public RISCVGenRegisterInfo {
 
   const TargetRegisterClass *
   getPointerRegClass(unsigned Kind = 0) const override {
-    return &RISCV::GPRRegClass;
+    return &Capstone::GPRRegClass;
   }
 
   const TargetRegisterClass *
@@ -147,16 +147,16 @@ struct RISCVRegisterInfo : public RISCVGenRegisterInfo {
                                 uint16_t Encoding) const;
 
   static bool isVRRegClass(const TargetRegisterClass *RC) {
-    return RISCVRI::isVRegClass(RC->TSFlags) &&
-           RISCVRI::getNF(RC->TSFlags) == 1;
+    return CapstoneRI::isVRegClass(RC->TSFlags) &&
+           CapstoneRI::getNF(RC->TSFlags) == 1;
   }
 
   static bool isVRNRegClass(const TargetRegisterClass *RC) {
-    return RISCVRI::isVRegClass(RC->TSFlags) && RISCVRI::getNF(RC->TSFlags) > 1;
+    return CapstoneRI::isVRegClass(RC->TSFlags) && CapstoneRI::getNF(RC->TSFlags) > 1;
   }
 
   static bool isRVVRegClass(const TargetRegisterClass *RC) {
-    return RISCVRI::isVRegClass(RC->TSFlags);
+    return CapstoneRI::isVRegClass(RC->TSFlags);
   }
 };
 } // namespace llvm

@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZimop.td -----------------------------*- tablegen -*-===//
+//===-- CapstoneInstrInfoZimop.td -----------------------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,12 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard
+// This file describes the Capstone instructions from the standard
 // May-Be-Operations Extension (Zimop).
 //
 //===----------------------------------------------------------------------===//
 
-class RVInstIMopr<bits<7> imm7, bits<5> imm5, bits<3> funct3, RISCVOpcode opcode,
+class RVInstIMopr<bits<7> imm7, bits<5> imm5, bits<3> funct3, CapstoneOpcode opcode,
                    dag outs, dag ins, string opcodestr, string argstr>
     : RVInstIBase<funct3, opcode, outs, ins, opcodestr, argstr> {
   let Inst{31} = imm7{6};
@@ -22,7 +22,7 @@ class RVInstIMopr<bits<7> imm7, bits<5> imm5, bits<3> funct3, RISCVOpcode opcode
   let Inst{21-20} = imm5{1-0};
 }
 
-class RVInstRMoprr<bits<4> imm4, bits<3> imm3, bits<3> funct3, RISCVOpcode opcode,
+class RVInstRMoprr<bits<4> imm4, bits<3> imm3, bits<3> funct3, CapstoneOpcode opcode,
                    dag outs, dag ins, string opcodestr, string argstr>
     : RVInstRBase<funct3, opcode, outs, ins, opcodestr, argstr> {
   let Inst{31} = imm4{3};
@@ -33,23 +33,23 @@ class RVInstRMoprr<bits<4> imm4, bits<3> imm3, bits<3> funct3, RISCVOpcode opcod
 }
 
 // May-Be-Operations
-def riscv_mop_r  : RVSDNode<"MOP_R",
+def capstone_mop_r  : RVSDNode<"MOP_R",
                             SDTypeProfile<1, 2, [SDTCisInt<0>, SDTCisSameAs<0, 1>,
                                                  SDTCisSameAs<0, 2>]>>;
-def riscv_mop_rr : RVSDNode<"MOP_RR",
+def capstone_mop_rr : RVSDNode<"MOP_RR",
                             SDTypeProfile<1, 3, [SDTCisInt<0>, SDTCisSameAs<0, 1>,
                                                  SDTCisSameAs<0, 2>,
                                                  SDTCisSameAs<0, 3>]>>;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class RVMopr<bits<7> imm7, bits<5> imm5, bits<3> funct3,
-             RISCVOpcode opcode, string opcodestr>
+             CapstoneOpcode opcode, string opcodestr>
     : RVInstIMopr<imm7, imm5, funct3, opcode, (outs GPR:$rd), (ins GPR:$rs1),
                    opcodestr, "$rd, $rs1">;
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class RVMoprr<bits<4> imm4, bits<3> imm3, bits<3> funct3,
-             RISCVOpcode opcode, string opcodestr>
+             CapstoneOpcode opcode, string opcodestr>
     : RVInstRMoprr<imm4, imm3, funct3, opcode, (outs GPR:$rd),
                    (ins GPR:$rs1, GPR:$rs2),
                    opcodestr, "$rd, $rs1, $rs2">;
@@ -69,12 +69,12 @@ foreach i = 0...7 in {
 let Predicates = [HasStdExtZimop] in {
 // Zimop instructions
 foreach i = 0...31 in {
-  def : Pat<(XLenVT (riscv_mop_r GPR:$rs1, (XLenVT i))),
+  def : Pat<(XLenVT (capstone_mop_r GPR:$rs1, (XLenVT i))),
             (!cast<Instruction>("MOP_R_"#i) GPR:$rs1)>;
 }
 
 foreach i = 0...7 in {
-  def : Pat<(XLenVT (riscv_mop_rr GPR:$rs1, GPR:$rs2, (XLenVT i))),
+  def : Pat<(XLenVT (capstone_mop_rr GPR:$rs1, GPR:$rs2, (XLenVT i))),
             (!cast<Instruction>("MOP_RR_"#i) GPR:$rs1, GPR:$rs2)>;
 }
 

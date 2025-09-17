@@ -1,4 +1,4 @@
-//===-- RISCVELFStreamer.cpp - RISC-V ELF Target Streamer Methods ---------===//
+//===-- CapstoneELFStreamer.cpp - Capstone ELF Target Streamer Methods ---------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,14 +6,14 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file provides RISC-V specific target streamer methods.
+// This file provides Capstone specific target streamer methods.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVELFStreamer.h"
-#include "RISCVAsmBackend.h"
-#include "RISCVBaseInfo.h"
-#include "RISCVMCTargetDesc.h"
+#include "CapstoneELFStreamer.h"
+#include "CapstoneAsmBackend.h"
+#include "CapstoneBaseInfo.h"
+#include "CapstoneMCTargetDesc.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCAssembler.h"
@@ -25,129 +25,129 @@
 using namespace llvm;
 
 // This part is for ELF object output.
-RISCVTargetELFStreamer::RISCVTargetELFStreamer(MCStreamer &S,
+CapstoneTargetELFStreamer::CapstoneTargetELFStreamer(MCStreamer &S,
                                                const MCSubtargetInfo &STI)
-    : RISCVTargetStreamer(S), CurrentVendor("riscv") {
+    : CapstoneTargetStreamer(S), CurrentVendor("capstone") {
   MCAssembler &MCA = getStreamer().getAssembler();
   const FeatureBitset &Features = STI.getFeatureBits();
-  auto &MAB = static_cast<RISCVAsmBackend &>(MCA.getBackend());
-  setTargetABI(RISCVABI::computeTargetABI(STI.getTargetTriple(), Features,
+  auto &MAB = static_cast<CapstoneAsmBackend &>(MCA.getBackend());
+  setTargetABI(CapstoneABI::computeTargetABI(STI.getTargetTriple(), Features,
                                           MAB.getTargetOptions().getABIName()));
   setFlagsFromFeatures(STI);
 }
 
-RISCVELFStreamer::RISCVELFStreamer(MCContext &C,
+CapstoneELFStreamer::CapstoneELFStreamer(MCContext &C,
                                    std::unique_ptr<MCAsmBackend> MAB,
                                    std::unique_ptr<MCObjectWriter> MOW,
                                    std::unique_ptr<MCCodeEmitter> MCE)
     : MCELFStreamer(C, std::move(MAB), std::move(MOW), std::move(MCE)) {}
 
-RISCVELFStreamer &RISCVTargetELFStreamer::getStreamer() {
-  return static_cast<RISCVELFStreamer &>(Streamer);
+CapstoneELFStreamer &CapstoneTargetELFStreamer::getStreamer() {
+  return static_cast<CapstoneELFStreamer &>(Streamer);
 }
 
-void RISCVTargetELFStreamer::emitDirectiveOptionExact() {}
-void RISCVTargetELFStreamer::emitDirectiveOptionNoExact() {}
-void RISCVTargetELFStreamer::emitDirectiveOptionPIC() {}
-void RISCVTargetELFStreamer::emitDirectiveOptionNoPIC() {}
-void RISCVTargetELFStreamer::emitDirectiveOptionPop() {}
-void RISCVTargetELFStreamer::emitDirectiveOptionPush() {}
-void RISCVTargetELFStreamer::emitDirectiveOptionRelax() {}
-void RISCVTargetELFStreamer::emitDirectiveOptionNoRelax() {}
-void RISCVTargetELFStreamer::emitDirectiveOptionRVC() {}
-void RISCVTargetELFStreamer::emitDirectiveOptionNoRVC() {}
+void CapstoneTargetELFStreamer::emitDirectiveOptionExact() {}
+void CapstoneTargetELFStreamer::emitDirectiveOptionNoExact() {}
+void CapstoneTargetELFStreamer::emitDirectiveOptionPIC() {}
+void CapstoneTargetELFStreamer::emitDirectiveOptionNoPIC() {}
+void CapstoneTargetELFStreamer::emitDirectiveOptionPop() {}
+void CapstoneTargetELFStreamer::emitDirectiveOptionPush() {}
+void CapstoneTargetELFStreamer::emitDirectiveOptionRelax() {}
+void CapstoneTargetELFStreamer::emitDirectiveOptionNoRelax() {}
+void CapstoneTargetELFStreamer::emitDirectiveOptionRVC() {}
+void CapstoneTargetELFStreamer::emitDirectiveOptionNoRVC() {}
 
-void RISCVTargetELFStreamer::emitAttribute(unsigned Attribute, unsigned Value) {
+void CapstoneTargetELFStreamer::emitAttribute(unsigned Attribute, unsigned Value) {
   getStreamer().setAttributeItem(Attribute, Value, /*OverwriteExisting=*/true);
 }
 
-void RISCVTargetELFStreamer::emitTextAttribute(unsigned Attribute,
+void CapstoneTargetELFStreamer::emitTextAttribute(unsigned Attribute,
                                                StringRef String) {
   getStreamer().setAttributeItem(Attribute, String, /*OverwriteExisting=*/true);
 }
 
-void RISCVTargetELFStreamer::emitIntTextAttribute(unsigned Attribute,
+void CapstoneTargetELFStreamer::emitIntTextAttribute(unsigned Attribute,
                                                   unsigned IntValue,
                                                   StringRef StringValue) {
   getStreamer().setAttributeItems(Attribute, IntValue, StringValue,
                                   /*OverwriteExisting=*/true);
 }
 
-void RISCVTargetELFStreamer::finishAttributeSection() {
-  RISCVELFStreamer &S = getStreamer();
+void CapstoneTargetELFStreamer::finishAttributeSection() {
+  CapstoneELFStreamer &S = getStreamer();
   if (S.Contents.empty())
     return;
 
-  S.emitAttributesSection(CurrentVendor, ".riscv.attributes",
-                          ELF::SHT_RISCV_ATTRIBUTES, AttributeSection);
+  S.emitAttributesSection(CurrentVendor, ".capstone.attributes",
+                          ELF::SHT_Capstone_ATTRIBUTES, AttributeSection);
 }
 
-void RISCVTargetELFStreamer::finish() {
-  RISCVTargetStreamer::finish();
+void CapstoneTargetELFStreamer::finish() {
+  CapstoneTargetStreamer::finish();
   ELFObjectWriter &W = getStreamer().getWriter();
-  RISCVABI::ABI ABI = getTargetABI();
+  CapstoneABI::ABI ABI = getTargetABI();
 
   unsigned EFlags = W.getELFHeaderEFlags();
 
   if (hasRVC())
-    EFlags |= ELF::EF_RISCV_RVC;
+    EFlags |= ELF::EF_Capstone_RVC;
   if (hasTSO())
-    EFlags |= ELF::EF_RISCV_TSO;
+    EFlags |= ELF::EF_Capstone_TSO;
 
   switch (ABI) {
-  case RISCVABI::ABI_ILP32:
-  case RISCVABI::ABI_LP64:
+  case CapstoneABI::ABI_ILP32:
+  case CapstoneABI::ABI_LP64:
     break;
-  case RISCVABI::ABI_ILP32F:
-  case RISCVABI::ABI_LP64F:
-    EFlags |= ELF::EF_RISCV_FLOAT_ABI_SINGLE;
+  case CapstoneABI::ABI_ILP32F:
+  case CapstoneABI::ABI_LP64F:
+    EFlags |= ELF::EF_Capstone_FLOAT_ABI_SINGLE;
     break;
-  case RISCVABI::ABI_ILP32D:
-  case RISCVABI::ABI_LP64D:
-    EFlags |= ELF::EF_RISCV_FLOAT_ABI_DOUBLE;
+  case CapstoneABI::ABI_ILP32D:
+  case CapstoneABI::ABI_LP64D:
+    EFlags |= ELF::EF_Capstone_FLOAT_ABI_DOUBLE;
     break;
-  case RISCVABI::ABI_ILP32E:
-  case RISCVABI::ABI_LP64E:
-    EFlags |= ELF::EF_RISCV_RVE;
+  case CapstoneABI::ABI_ILP32E:
+  case CapstoneABI::ABI_LP64E:
+    EFlags |= ELF::EF_Capstone_RVE;
     break;
-  case RISCVABI::ABI_Unknown:
+  case CapstoneABI::ABI_Unknown:
     llvm_unreachable("Improperly initialised target ABI");
   }
 
   W.setELFHeaderEFlags(EFlags);
 }
 
-void RISCVTargetELFStreamer::reset() {
+void CapstoneTargetELFStreamer::reset() {
   AttributeSection = nullptr;
 }
 
-void RISCVTargetELFStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {
+void CapstoneTargetELFStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {
   getStreamer().getAssembler().registerSymbol(Symbol);
-  static_cast<MCSymbolELF &>(Symbol).setOther(ELF::STO_RISCV_VARIANT_CC);
+  static_cast<MCSymbolELF &>(Symbol).setOther(ELF::STO_Capstone_VARIANT_CC);
 }
 
-void RISCVELFStreamer::reset() {
-  static_cast<RISCVTargetStreamer *>(getTargetStreamer())->reset();
+void CapstoneELFStreamer::reset() {
+  static_cast<CapstoneTargetStreamer *>(getTargetStreamer())->reset();
   MCELFStreamer::reset();
   LastMappingSymbols.clear();
   LastEMS = EMS_None;
 }
 
-void RISCVELFStreamer::emitDataMappingSymbol() {
+void CapstoneELFStreamer::emitDataMappingSymbol() {
   if (LastEMS == EMS_Data)
     return;
   emitMappingSymbol("$d");
   LastEMS = EMS_Data;
 }
 
-void RISCVELFStreamer::emitInstructionsMappingSymbol() {
+void CapstoneELFStreamer::emitInstructionsMappingSymbol() {
   if (LastEMS == EMS_Instructions)
     return;
   emitMappingSymbol("$x");
   LastEMS = EMS_Instructions;
 }
 
-void RISCVELFStreamer::emitMappingSymbol(StringRef Name) {
+void CapstoneELFStreamer::emitMappingSymbol(StringRef Name) {
   auto *Symbol =
       static_cast<MCSymbolELF *>(getContext().createLocalSymbol(Name));
   emitLabel(Symbol);
@@ -155,7 +155,7 @@ void RISCVELFStreamer::emitMappingSymbol(StringRef Name) {
   Symbol->setBinding(ELF::STB_LOCAL);
 }
 
-void RISCVELFStreamer::changeSection(MCSection *Section, uint32_t Subsection) {
+void CapstoneELFStreamer::changeSection(MCSection *Section, uint32_t Subsection) {
   // We have to keep track of the mapping symbol state of any sections we
   // use. Each one should start off as EMS_None, which is provided as the
   // default constructor by DenseMap::lookup.
@@ -165,33 +165,33 @@ void RISCVELFStreamer::changeSection(MCSection *Section, uint32_t Subsection) {
   MCELFStreamer::changeSection(Section, Subsection);
 }
 
-void RISCVELFStreamer::emitInstruction(const MCInst &Inst,
+void CapstoneELFStreamer::emitInstruction(const MCInst &Inst,
                                        const MCSubtargetInfo &STI) {
   emitInstructionsMappingSymbol();
   MCELFStreamer::emitInstruction(Inst, STI);
 }
 
-void RISCVELFStreamer::emitBytes(StringRef Data) {
+void CapstoneELFStreamer::emitBytes(StringRef Data) {
   emitDataMappingSymbol();
   MCELFStreamer::emitBytes(Data);
 }
 
-void RISCVELFStreamer::emitFill(const MCExpr &NumBytes, uint64_t FillValue,
+void CapstoneELFStreamer::emitFill(const MCExpr &NumBytes, uint64_t FillValue,
                                 SMLoc Loc) {
   emitDataMappingSymbol();
   MCELFStreamer::emitFill(NumBytes, FillValue, Loc);
 }
 
-void RISCVELFStreamer::emitValueImpl(const MCExpr *Value, unsigned Size,
+void CapstoneELFStreamer::emitValueImpl(const MCExpr *Value, unsigned Size,
                                      SMLoc Loc) {
   emitDataMappingSymbol();
   MCELFStreamer::emitValueImpl(Value, Size, Loc);
 }
 
-MCStreamer *llvm::createRISCVELFStreamer(const Triple &, MCContext &C,
+MCStreamer *llvm::createCapstoneELFStreamer(const Triple &, MCContext &C,
                                          std::unique_ptr<MCAsmBackend> &&MAB,
                                          std::unique_ptr<MCObjectWriter> &&MOW,
                                          std::unique_ptr<MCCodeEmitter> &&MCE) {
-  return new RISCVELFStreamer(C, std::move(MAB), std::move(MOW),
+  return new CapstoneELFStreamer(C, std::move(MAB), std::move(MOW),
                               std::move(MCE));
 }

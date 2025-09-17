@@ -1,4 +1,4 @@
-//===-- RISCVCallLowering.h - Call lowering ---------------------*- C++ -*-===//
+//===-- CapstoneCallLowering.h - Call lowering ---------------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCVCALLLOWERING_H
-#define LLVM_LIB_TARGET_RISCV_RISCVCALLLOWERING_H
+#ifndef LLVM_LIB_TARGET_Capstone_CapstoneCALLLOWERING_H
+#define LLVM_LIB_TARGET_Capstone_CapstoneCALLLOWERING_H
 
 #include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/GlobalISel/CallLowering.h"
@@ -21,12 +21,12 @@ namespace llvm {
 
 class MachineInstrBuilder;
 class MachineIRBuilder;
-class RISCVTargetLowering;
+class CapstoneTargetLowering;
 
-class RISCVCallLowering : public CallLowering {
+class CapstoneCallLowering : public CallLowering {
 
 public:
-  RISCVCallLowering(const RISCVTargetLowering &TLI);
+  CapstoneCallLowering(const CapstoneTargetLowering &TLI);
 
   bool lowerReturn(MachineIRBuilder &MIRBuiler, const Value *Val,
                    ArrayRef<Register> VRegs,
@@ -52,4 +52,4 @@ private:
 
 } // end namespace llvm
 
-#endif // LLVM_LIB_TARGET_RISCV_RISCVCALLLOWERING_H
+#endif // LLVM_LIB_TARGET_Capstone_CapstoneCALLLOWERING_H

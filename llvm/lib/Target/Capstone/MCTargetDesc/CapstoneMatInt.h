@@ -1,4 +1,4 @@
-//===- RISCVMatInt.h - Immediate materialisation ---------------*- C++ -*--===//
+//===- CapstoneMatInt.h - Immediate materialisation ---------------*- C++ -*--===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,8 +6,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_MCTARGETDESC_MATINT_H
-#define LLVM_LIB_TARGET_RISCV_MCTARGETDESC_MATINT_H
+#ifndef LLVM_LIB_TARGET_Capstone_MCTARGETDESC_MATINT_H
+#define LLVM_LIB_TARGET_Capstone_MCTARGETDESC_MATINT_H
 
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/MC/MCRegister.h"
@@ -17,7 +17,7 @@
 namespace llvm {
 class APInt;
 
-namespace RISCVMatInt {
+namespace CapstoneMatInt {
 
 enum OpndKind {
   RegImm, // ADDI/ADDIW/XORI/SLLI/SRLI/SLLI_UW/RORI/BSETI/BCLRI/TH_SRRI
@@ -78,6 +78,6 @@ InstSeq generateTwoRegInstSeq(int64_t Val, const MCSubtargetInfo &STI,
 // materializing a value used by a particular operation.
 int getIntMatCost(const APInt &Val, unsigned Size, const MCSubtargetInfo &STI,
                   bool CompressionCost = false, bool FreeZeroes = false);
-} // namespace RISCVMatInt
+} // namespace CapstoneMatInt
 } // namespace llvm
 #endif

@@ -1,4 +1,4 @@
-//===-- RISCVBaseInfo.h - Top level definitions for RISC-V MC ---*- C++ -*-===//
+//===-- CapstoneBaseInfo.h - Top level definitions for Capstone MC ---*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,28 +6,28 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains small standalone enum definitions for the RISC-V target
+// This file contains small standalone enum definitions for the Capstone target
 // useful for the compiler back-end and the MC libraries.
 //
 //===----------------------------------------------------------------------===//
-#ifndef LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVBASEINFO_H
-#define LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVBASEINFO_H
+#ifndef LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneBASEINFO_H
+#define LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneBASEINFO_H
 
-#include "MCTargetDesc/RISCVMCTargetDesc.h"
+#include "MCTargetDesc/CapstoneMCTargetDesc.h"
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/MC/MCInstrDesc.h"
-#include "llvm/TargetParser/RISCVISAInfo.h"
-#include "llvm/TargetParser/RISCVTargetParser.h"
+#include "llvm/TargetParser/CapstoneISAInfo.h"
+#include "llvm/TargetParser/CapstoneTargetParser.h"
 #include "llvm/TargetParser/SubtargetFeature.h"
 
 namespace llvm {
 
-// RISCVII - This namespace holds all of the target specific flags that
-// instruction info tracks. All definitions must match RISCVInstrFormats.td.
-namespace RISCVII {
+// CapstoneII - This namespace holds all of the target specific flags that
+// instruction info tracks. All definitions must match CapstoneInstrFormats.td.
+namespace CapstoneII {
 enum {
   InstFormatPseudo = 0,
   InstFormatR = 1,
@@ -150,8 +150,8 @@ static inline unsigned getFormat(uint64_t TSFlags) {
   return (TSFlags & InstFormatMask) >> InstFormatShift;
 }
 /// \returns the LMUL for the instruction.
-static inline RISCVVType::VLMUL getLMul(uint64_t TSFlags) {
-  return static_cast<RISCVVType::VLMUL>((TSFlags & VLMulMask) >> VLMulShift);
+static inline CapstoneVType::VLMUL getLMul(uint64_t TSFlags) {
+  return static_cast<CapstoneVType::VLMUL>((TSFlags & VLMulMask) >> VLMulShift);
 }
 /// \returns true if this a _TIED pseudo.
 static inline bool isTiedPseudo(uint64_t TSFlags) {
@@ -219,7 +219,7 @@ static inline MCRegister
 getTailExpandUseRegNo(const FeatureBitset &FeatureBits) {
   // For Zicfilp, PseudoTAIL should be expanded to a software guarded branch.
   // It means to use t2(x7) as rs1 of JALR to expand PseudoTAIL.
-  return FeatureBits[RISCV::FeatureStdExtZicfilp] ? RISCV::X7 : RISCV::X6;
+  return FeatureBits[Capstone::FeatureStdExtZicfilp] ? Capstone::X7 : Capstone::X6;
 }
 
 static inline unsigned getSEWOpNum(const MCInstrDesc &Desc) {
@@ -274,7 +274,7 @@ static inline bool isFirstDefTiedToFirstUse(const MCInstrDesc &Desc) {
          Desc.getOperandConstraint(Desc.getNumDefs(), MCOI::TIED_TO) == 0;
 }
 
-// RISC-V Specific Machine Operand Flags
+// Capstone Specific Machine Operand Flags
 enum {
   MO_None = 0,
   MO_CALL = 1,
@@ -298,12 +298,12 @@ enum {
   // multiple "bitmask" flags.
   MO_DIRECT_FLAG_MASK = 31
 };
-} // namespace RISCVII
+} // namespace CapstoneII
 
-namespace RISCVOp {
+namespace CapstoneOp {
 enum OperandType : unsigned {
-  OPERAND_FIRST_RISCV_IMM = MCOI::OPERAND_FIRST_TARGET,
-  OPERAND_UIMM1 = OPERAND_FIRST_RISCV_IMM,
+  OPERAND_FIRST_Capstone_IMM = MCOI::OPERAND_FIRST_TARGET,
+  OPERAND_UIMM1 = OPERAND_FIRST_Capstone_IMM,
   OPERAND_UIMM2,
   OPERAND_UIMM2_LSB0,
   OPERAND_UIMM3,
@@ -385,16 +385,16 @@ enum OperandType : unsigned {
   OPERAND_SEW_MASK,
   // Vector rounding mode for VXRM or FRM.
   OPERAND_VEC_RM,
-  OPERAND_LAST_RISCV_IMM = OPERAND_VEC_RM,
+  OPERAND_LAST_Capstone_IMM = OPERAND_VEC_RM,
   // Operand is either a register or uimm5, this is used by V extension pseudo
   // instructions to represent a value that be passed as AVL to either vsetvli
   // or vsetivli.
   OPERAND_AVL,
 };
-} // namespace RISCVOp
+} // namespace CapstoneOp
 
 // Describes the predecessor/successor bits used in the FENCE instruction.
-namespace RISCVFenceField {
+namespace CapstoneFenceField {
 enum FenceField {
   I = 8,
   O = 4,
@@ -404,7 +404,7 @@ enum FenceField {
 }
 
 // Describes the supported floating point rounding mode encodings.
-namespace RISCVFPRndMode {
+namespace CapstoneFPRndMode {
 enum RoundingMode {
   RNE = 0,
   RTZ = 1,
@@ -419,48 +419,48 @@ inline static StringRef roundingModeToString(RoundingMode RndMode) {
   switch (RndMode) {
   default:
     llvm_unreachable("Unknown floating point rounding mode");
-  case RISCVFPRndMode::RNE:
+  case CapstoneFPRndMode::RNE:
     return "rne";
-  case RISCVFPRndMode::RTZ:
+  case CapstoneFPRndMode::RTZ:
     return "rtz";
-  case RISCVFPRndMode::RDN:
+  case CapstoneFPRndMode::RDN:
     return "rdn";
-  case RISCVFPRndMode::RUP:
+  case CapstoneFPRndMode::RUP:
     return "rup";
-  case RISCVFPRndMode::RMM:
+  case CapstoneFPRndMode::RMM:
     return "rmm";
-  case RISCVFPRndMode::DYN:
+  case CapstoneFPRndMode::DYN:
     return "dyn";
   }
 }
 
 inline static RoundingMode stringToRoundingMode(StringRef Str) {
   return StringSwitch<RoundingMode>(Str)
-      .Case("rne", RISCVFPRndMode::RNE)
-      .Case("rtz", RISCVFPRndMode::RTZ)
-      .Case("rdn", RISCVFPRndMode::RDN)
-      .Case("rup", RISCVFPRndMode::RUP)
-      .Case("rmm", RISCVFPRndMode::RMM)
-      .Case("dyn", RISCVFPRndMode::DYN)
-      .Default(RISCVFPRndMode::Invalid);
+      .Case("rne", CapstoneFPRndMode::RNE)
+      .Case("rtz", CapstoneFPRndMode::RTZ)
+      .Case("rdn", CapstoneFPRndMode::RDN)
+      .Case("rup", CapstoneFPRndMode::RUP)
+      .Case("rmm", CapstoneFPRndMode::RMM)
+      .Case("dyn", CapstoneFPRndMode::DYN)
+      .Default(CapstoneFPRndMode::Invalid);
 }
 
 inline static bool isValidRoundingMode(unsigned Mode) {
   switch (Mode) {
   default:
     return false;
-  case RISCVFPRndMode::RNE:
-  case RISCVFPRndMode::RTZ:
-  case RISCVFPRndMode::RDN:
-  case RISCVFPRndMode::RUP:
-  case RISCVFPRndMode::RMM:
-  case RISCVFPRndMode::DYN:
+  case CapstoneFPRndMode::RNE:
+  case CapstoneFPRndMode::RTZ:
+  case CapstoneFPRndMode::RDN:
+  case CapstoneFPRndMode::RUP:
+  case CapstoneFPRndMode::RMM:
+  case CapstoneFPRndMode::DYN:
     return true;
   }
 }
-} // namespace RISCVFPRndMode
+} // namespace CapstoneFPRndMode
 
-namespace RISCVVXRndMode {
+namespace CapstoneVXRndMode {
 enum RoundingMode {
   RNU = 0,
   RNE = 1,
@@ -473,40 +473,40 @@ inline static StringRef roundingModeToString(RoundingMode RndMode) {
   switch (RndMode) {
   default:
     llvm_unreachable("Unknown vector fixed-point rounding mode");
-  case RISCVVXRndMode::RNU:
+  case CapstoneVXRndMode::RNU:
     return "rnu";
-  case RISCVVXRndMode::RNE:
+  case CapstoneVXRndMode::RNE:
     return "rne";
-  case RISCVVXRndMode::RDN:
+  case CapstoneVXRndMode::RDN:
     return "rdn";
-  case RISCVVXRndMode::ROD:
+  case CapstoneVXRndMode::ROD:
     return "rod";
   }
 }
 
 inline static RoundingMode stringToRoundingMode(StringRef Str) {
   return StringSwitch<RoundingMode>(Str)
-      .Case("rnu", RISCVVXRndMode::RNU)
-      .Case("rne", RISCVVXRndMode::RNE)
-      .Case("rdn", RISCVVXRndMode::RDN)
-      .Case("rod", RISCVVXRndMode::ROD)
-      .Default(RISCVVXRndMode::Invalid);
+      .Case("rnu", CapstoneVXRndMode::RNU)
+      .Case("rne", CapstoneVXRndMode::RNE)
+      .Case("rdn", CapstoneVXRndMode::RDN)
+      .Case("rod", CapstoneVXRndMode::ROD)
+      .Default(CapstoneVXRndMode::Invalid);
 }
 
 inline static bool isValidRoundingMode(unsigned Mode) {
   switch (Mode) {
   default:
     return false;
-  case RISCVVXRndMode::RNU:
-  case RISCVVXRndMode::RNE:
-  case RISCVVXRndMode::RDN:
-  case RISCVVXRndMode::ROD:
+  case CapstoneVXRndMode::RNU:
+  case CapstoneVXRndMode::RNE:
+  case CapstoneVXRndMode::RDN:
+  case CapstoneVXRndMode::ROD:
     return true;
   }
 }
-} // namespace RISCVVXRndMode
+} // namespace CapstoneVXRndMode
 
-namespace RISCVExceptFlags {
+namespace CapstoneExceptFlags {
 enum ExceptionFlag {
   NX = 0x01, // Inexact
   UF = 0x02, // Underflow
@@ -521,16 +521,16 @@ enum ExceptionFlag {
 // Floating-point Immediates
 //
 
-namespace RISCVLoadFPImm {
+namespace CapstoneLoadFPImm {
 float getFPImm(unsigned Imm);
 
 /// getLoadFPImm - Return a 5-bit binary encoding of the floating-point
 /// immediate value. If the value cannot be represented as a 5-bit binary
 /// encoding, then return -1.
 int getLoadFPImm(APFloat FPImm);
-} // namespace RISCVLoadFPImm
+} // namespace CapstoneLoadFPImm
 
-namespace RISCVSysReg {
+namespace CapstoneSysReg {
 struct SysReg {
   const char Name[32];
   unsigned Encoding;
@@ -550,7 +550,7 @@ struct SysReg {
 
   bool haveRequiredFeatures(const FeatureBitset &ActiveFeatures) const {
     // Not in 32-bit mode.
-    if (IsRV32Only && ActiveFeatures[RISCV::Feature64Bit])
+    if (IsRV32Only && ActiveFeatures[Capstone::Feature64Bit])
       return false;
     // No required feature associated with the system register.
     if (FeaturesRequired.none())
@@ -561,20 +561,20 @@ struct SysReg {
 
 #define GET_SysRegEncodings_DECL
 #define GET_SysRegsList_DECL
-#include "RISCVGenSearchableTables.inc"
-} // end namespace RISCVSysReg
+#include "CapstoneGenSearchableTables.inc"
+} // end namespace CapstoneSysReg
 
-namespace RISCVInsnOpcode {
-struct RISCVOpcode {
+namespace CapstoneInsnOpcode {
+struct CapstoneOpcode {
   char Name[10];
   uint8_t Value;
 };
 
-#define GET_RISCVOpcodesList_DECL
-#include "RISCVGenSearchableTables.inc"
-} // end namespace RISCVInsnOpcode
+#define GET_CapstoneOpcodesList_DECL
+#include "CapstoneGenSearchableTables.inc"
+} // end namespace CapstoneInsnOpcode
 
-namespace RISCVABI {
+namespace CapstoneABI {
 
 enum ABI {
   ABI_ILP32,
@@ -601,25 +601,25 @@ MCRegister getBPReg();
 // Returns the register holding shadow call stack pointer.
 MCRegister getSCSPReg();
 
-} // namespace RISCVABI
+} // namespace CapstoneABI
 
-namespace RISCVFeatures {
+namespace CapstoneFeatures {
 
 // Validates if the given combination of features are valid for the target
 // triple. Exits with report_fatal_error if not.
 void validate(const Triple &TT, const FeatureBitset &FeatureBits);
 
-llvm::Expected<std::unique_ptr<RISCVISAInfo>>
+llvm::Expected<std::unique_ptr<CapstoneISAInfo>>
 parseFeatureBits(bool IsRV64, const FeatureBitset &FeatureBits);
 
-} // namespace RISCVFeatures
+} // namespace CapstoneFeatures
 
-namespace RISCVRVC {
+namespace CapstoneRVC {
 bool compress(MCInst &OutInst, const MCInst &MI, const MCSubtargetInfo &STI);
 bool uncompress(MCInst &OutInst, const MCInst &MI, const MCSubtargetInfo &STI);
-} // namespace RISCVRVC
+} // namespace CapstoneRVC
 
-namespace RISCVZC {
+namespace CapstoneZC {
 enum RLISTENCODE {
   RA = 4,
   RA_S0,
@@ -638,31 +638,31 @@ enum RLISTENCODE {
 };
 
 inline unsigned encodeRegList(MCRegister EndReg, bool IsRVE = false) {
-  assert((!IsRVE || EndReg <= RISCV::X9) && "Invalid Rlist for RV32E");
+  assert((!IsRVE || EndReg <= Capstone::X9) && "Invalid Rlist for RV32E");
   switch (EndReg) {
-  case RISCV::X1:
+  case Capstone::X1:
     return RLISTENCODE::RA;
-  case RISCV::X8:
+  case Capstone::X8:
     return RLISTENCODE::RA_S0;
-  case RISCV::X9:
+  case Capstone::X9:
     return RLISTENCODE::RA_S0_S1;
-  case RISCV::X18:
+  case Capstone::X18:
     return RLISTENCODE::RA_S0_S2;
-  case RISCV::X19:
+  case Capstone::X19:
     return RLISTENCODE::RA_S0_S3;
-  case RISCV::X20:
+  case Capstone::X20:
     return RLISTENCODE::RA_S0_S4;
-  case RISCV::X21:
+  case Capstone::X21:
     return RLISTENCODE::RA_S0_S5;
-  case RISCV::X22:
+  case Capstone::X22:
     return RLISTENCODE::RA_S0_S6;
-  case RISCV::X23:
+  case Capstone::X23:
     return RLISTENCODE::RA_S0_S7;
-  case RISCV::X24:
+  case Capstone::X24:
     return RLISTENCODE::RA_S0_S8;
-  case RISCV::X25:
+  case Capstone::X25:
     return RLISTENCODE::RA_S0_S9;
-  case RISCV::X27:
+  case Capstone::X27:
     return RLISTENCODE::RA_S0_S11;
   default:
     llvm_unreachable("Undefined input.");
@@ -691,9 +691,9 @@ inline static unsigned getStackAdjBase(unsigned RlistVal, bool IsRV64) {
 }
 
 void printRegList(unsigned RlistEncode, raw_ostream &OS);
-} // namespace RISCVZC
+} // namespace CapstoneZC
 
-namespace RISCVVInversePseudosTable {
+namespace CapstoneVInversePseudosTable {
 struct PseudoInfo {
   uint16_t Pseudo;
   uint16_t BaseInstr;
@@ -701,11 +701,11 @@ struct PseudoInfo {
   uint8_t SEW;
 };
 
-#define GET_RISCVVInversePseudosTable_DECL
-#include "RISCVGenSearchableTables.inc"
-} // namespace RISCVVInversePseudosTable
+#define GET_CapstoneVInversePseudosTable_DECL
+#include "CapstoneGenSearchableTables.inc"
+} // namespace CapstoneVInversePseudosTable
 
-namespace RISCV {
+namespace Capstone {
 struct VLSEGPseudo {
   uint16_t NF : 4;
   uint16_t Masked : 1;
@@ -779,17 +779,17 @@ struct NDSVLNPseudo {
   uint16_t Pseudo;
 };
 
-#define GET_RISCVVSSEGTable_DECL
-#define GET_RISCVVLSEGTable_DECL
-#define GET_RISCVVLXSEGTable_DECL
-#define GET_RISCVVSXSEGTable_DECL
-#define GET_RISCVVLETable_DECL
-#define GET_RISCVVSETable_DECL
-#define GET_RISCVVLXTable_DECL
-#define GET_RISCVVSXTable_DECL
-#define GET_RISCVNDSVLNTable_DECL
-#include "RISCVGenSearchableTables.inc"
-} // namespace RISCV
+#define GET_CapstoneVSSEGTable_DECL
+#define GET_CapstoneVLSEGTable_DECL
+#define GET_CapstoneVLXSEGTable_DECL
+#define GET_CapstoneVSXSEGTable_DECL
+#define GET_CapstoneVLETable_DECL
+#define GET_CapstoneVSETable_DECL
+#define GET_CapstoneVLXTable_DECL
+#define GET_CapstoneVSXTable_DECL
+#define GET_CapstoneNDSVLNTable_DECL
+#include "CapstoneGenSearchableTables.inc"
+} // namespace Capstone
 
 } // namespace llvm
 

@@ -6,41 +6,41 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVSelectionDAGInfo.h"
-#include "RISCVSubtarget.h"
+#include "CapstoneSelectionDAGInfo.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 
 #define GET_SDNODE_DESC
-#include "RISCVGenSDNodeInfo.inc"
+#include "CapstoneGenSDNodeInfo.inc"
 
 using namespace llvm;
 
-RISCVSelectionDAGInfo::RISCVSelectionDAGInfo()
-    : SelectionDAGGenTargetInfo(RISCVGenSDNodeInfo) {}
+CapstoneSelectionDAGInfo::CapstoneSelectionDAGInfo()
+    : SelectionDAGGenTargetInfo(CapstoneGenSDNodeInfo) {}
 
-RISCVSelectionDAGInfo::~RISCVSelectionDAGInfo() = default;
+CapstoneSelectionDAGInfo::~CapstoneSelectionDAGInfo() = default;
 
-void RISCVSelectionDAGInfo::verifyTargetNode(const SelectionDAG &DAG,
+void CapstoneSelectionDAGInfo::verifyTargetNode(const SelectionDAG &DAG,
                                              const SDNode *N) const {
 #ifndef NDEBUG
   switch (N->getOpcode()) {
   default:
     return SelectionDAGGenTargetInfo::verifyTargetNode(DAG, N);
-  case RISCVISD::TUPLE_EXTRACT:
+  case CapstoneISD::TUPLE_EXTRACT:
     assert(N->getNumOperands() == 2 && "Expected three operands!");
     assert(N->getOperand(1).getOpcode() == ISD::TargetConstant &&
            N->getOperand(1).getValueType() == MVT::i32 &&
            "Expected index to be an i32 target constant!");
     break;
-  case RISCVISD::TUPLE_INSERT:
+  case CapstoneISD::TUPLE_INSERT:
     assert(N->getNumOperands() == 3 && "Expected three operands!");
     assert(N->getOperand(2).getOpcode() == ISD::TargetConstant &&
            N->getOperand(2).getValueType() == MVT::i32 &&
            "Expected index to be an i32 target constant!");
     break;
-  case RISCVISD::VQDOT_VL:
-  case RISCVISD::VQDOTU_VL:
-  case RISCVISD::VQDOTSU_VL: {
+  case CapstoneISD::VQDOT_VL:
+  case CapstoneISD::VQDOTU_VL:
+  case CapstoneISD::VQDOTSU_VL: {
     assert(N->getNumValues() == 1 && "Expected one result!");
     assert(N->getNumOperands() == 5 && "Expected five operands!");
     EVT VT = N->getValueType(0);
@@ -65,11 +65,11 @@ void RISCVSelectionDAGInfo::verifyTargetNode(const SelectionDAG &DAG,
 #endif
 }
 
-SDValue RISCVSelectionDAGInfo::EmitTargetCodeForMemset(
+SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemset(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
     SDValue Size, Align Alignment, bool isVolatile, bool AlwaysInline,
     MachinePointerInfo DstPtrInfo) const {
-  const auto &Subtarget = DAG.getSubtarget<RISCVSubtarget>();
+  const auto &Subtarget = DAG.getSubtarget<CapstoneSubtarget>();
   // We currently do this only for Xqcilsm
   if (!Subtarget.hasVendorXqcilsm())
     return SDValue();
@@ -100,7 +100,7 @@ SDValue RISCVSelectionDAGInfo::EmitTargetCodeForMemset(
     MachineMemOperand *BaseMemOperand = MF.getMachineMemOperand(
         DstPtrInfo.getWithOffset(OffsetSetwmi),
         MachineMemOperand::MOStore | Volatile, SizeWords * 4, Align(4));
-    return DAG.getMemIntrinsicNode(RISCVISD::QC_SETWMI, dl,
+    return DAG.getMemIntrinsicNode(CapstoneISD::QC_SETWMI, dl,
                                    DAG.getVTList(MVT::Other), Ops, MVT::i32,
                                    BaseMemOperand);
   };

@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZicbo.td - RISC-V CMO instructions ---*- tablegen -*-===//
+//===-- CapstoneInstrInfoZicbo.td - Capstone CMO instructions ---*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard Base Cache
+// This file describes the Capstone instructions from the standard Base Cache
 // Management Operation ISA Extensions document (Zicbom, Zicboz, and Zicbop).
 //
 //===----------------------------------------------------------------------===//
@@ -16,7 +16,7 @@
 //===----------------------------------------------------------------------===//
 
 // A 12-bit signed immediate where the least significant five bits are zero.
-def simm12_lsb00000 : RISCVOp,
+def simm12_lsb00000 : CapstoneOp,
                       ImmLeaf<XLenVT, [{return isShiftedInt<7, 5>(Imm);}]> {
   let ParserMatchClass = SImmAsmOperand<12, "Lsb00000">;
   let EncoderMethod = "getImmOpValue";

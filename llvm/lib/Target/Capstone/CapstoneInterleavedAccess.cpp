@@ -1,4 +1,4 @@
-//===-- RISCVInterleavedAccess.cpp - RISC-V Interleaved Access Transform --===//
+//===-- CapstoneInterleavedAccess.cpp - Capstone Interleaved Access Transform --===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -10,21 +10,21 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVISelLowering.h"
-#include "RISCVSubtarget.h"
+#include "Capstone.h"
+#include "CapstoneISelLowering.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Analysis/VectorUtils.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/IntrinsicsRISCV.h"
+#include "llvm/IR/IntrinsicsCapstone.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/PatternMatch.h"
 
 using namespace llvm;
 
-bool RISCVTargetLowering::isLegalInterleavedAccessType(
+bool CapstoneTargetLowering::isLegalInterleavedAccessType(
     VectorType *VTy, unsigned Factor, Align Alignment, unsigned AddrSpace,
     const DataLayout &DL) const {
   EVT VT = getValueType(DL, VTy);
@@ -51,47 +51,47 @@ bool RISCVTargetLowering::isLegalInterleavedAccessType(
   }
 
   // Need to make sure that EMUL * NFIELDS ≤ 8
-  auto [LMUL, Fractional] = RISCVVType::decodeVLMUL(getLMUL(ContainerVT));
+  auto [LMUL, Fractional] = CapstoneVType::decodeVLMUL(getLMUL(ContainerVT));
   if (Fractional)
     return true;
   return Factor * LMUL <= 8;
 }
 
 static const Intrinsic::ID FixedVlsegIntrIds[] = {
-    Intrinsic::riscv_seg2_load_mask, Intrinsic::riscv_seg3_load_mask,
-    Intrinsic::riscv_seg4_load_mask, Intrinsic::riscv_seg5_load_mask,
-    Intrinsic::riscv_seg6_load_mask, Intrinsic::riscv_seg7_load_mask,
-    Intrinsic::riscv_seg8_load_mask};
+    Intrinsic::capstone_seg2_load_mask, Intrinsic::capstone_seg3_load_mask,
+    Intrinsic::capstone_seg4_load_mask, Intrinsic::capstone_seg5_load_mask,
+    Intrinsic::capstone_seg6_load_mask, Intrinsic::capstone_seg7_load_mask,
+    Intrinsic::capstone_seg8_load_mask};
 
 static const Intrinsic::ID FixedVlssegIntrIds[] = {
-    Intrinsic::riscv_sseg2_load_mask, Intrinsic::riscv_sseg3_load_mask,
-    Intrinsic::riscv_sseg4_load_mask, Intrinsic::riscv_sseg5_load_mask,
-    Intrinsic::riscv_sseg6_load_mask, Intrinsic::riscv_sseg7_load_mask,
-    Intrinsic::riscv_sseg8_load_mask};
+    Intrinsic::capstone_sseg2_load_mask, Intrinsic::capstone_sseg3_load_mask,
+    Intrinsic::capstone_sseg4_load_mask, Intrinsic::capstone_sseg5_load_mask,
+    Intrinsic::capstone_sseg6_load_mask, Intrinsic::capstone_sseg7_load_mask,
+    Intrinsic::capstone_sseg8_load_mask};
 
 static const Intrinsic::ID ScalableVlsegIntrIds[] = {
-    Intrinsic::riscv_vlseg2_mask, Intrinsic::riscv_vlseg3_mask,
-    Intrinsic::riscv_vlseg4_mask, Intrinsic::riscv_vlseg5_mask,
-    Intrinsic::riscv_vlseg6_mask, Intrinsic::riscv_vlseg7_mask,
-    Intrinsic::riscv_vlseg8_mask};
+    Intrinsic::capstone_vlseg2_mask, Intrinsic::capstone_vlseg3_mask,
+    Intrinsic::capstone_vlseg4_mask, Intrinsic::capstone_vlseg5_mask,
+    Intrinsic::capstone_vlseg6_mask, Intrinsic::capstone_vlseg7_mask,
+    Intrinsic::capstone_vlseg8_mask};
 
 static const Intrinsic::ID FixedVssegIntrIds[] = {
-    Intrinsic::riscv_seg2_store_mask, Intrinsic::riscv_seg3_store_mask,
-    Intrinsic::riscv_seg4_store_mask, Intrinsic::riscv_seg5_store_mask,
-    Intrinsic::riscv_seg6_store_mask, Intrinsic::riscv_seg7_store_mask,
-    Intrinsic::riscv_seg8_store_mask};
+    Intrinsic::capstone_seg2_store_mask, Intrinsic::capstone_seg3_store_mask,
+    Intrinsic::capstone_seg4_store_mask, Intrinsic::capstone_seg5_store_mask,
+    Intrinsic::capstone_seg6_store_mask, Intrinsic::capstone_seg7_store_mask,
+    Intrinsic::capstone_seg8_store_mask};
 
 static const Intrinsic::ID FixedVsssegIntrIds[] = {
-    Intrinsic::riscv_sseg2_store_mask, Intrinsic::riscv_sseg3_store_mask,
-    Intrinsic::riscv_sseg4_store_mask, Intrinsic::riscv_sseg5_store_mask,
-    Intrinsic::riscv_sseg6_store_mask, Intrinsic::riscv_sseg7_store_mask,
-    Intrinsic::riscv_sseg8_store_mask};
+    Intrinsic::capstone_sseg2_store_mask, Intrinsic::capstone_sseg3_store_mask,
+    Intrinsic::capstone_sseg4_store_mask, Intrinsic::capstone_sseg5_store_mask,
+    Intrinsic::capstone_sseg6_store_mask, Intrinsic::capstone_sseg7_store_mask,
+    Intrinsic::capstone_sseg8_store_mask};
 
 static const Intrinsic::ID ScalableVssegIntrIds[] = {
-    Intrinsic::riscv_vsseg2_mask, Intrinsic::riscv_vsseg3_mask,
-    Intrinsic::riscv_vsseg4_mask, Intrinsic::riscv_vsseg5_mask,
-    Intrinsic::riscv_vsseg6_mask, Intrinsic::riscv_vsseg7_mask,
-    Intrinsic::riscv_vsseg8_mask};
+    Intrinsic::capstone_vsseg2_mask, Intrinsic::capstone_vsseg3_mask,
+    Intrinsic::capstone_vsseg4_mask, Intrinsic::capstone_vsseg5_mask,
+    Intrinsic::capstone_vsseg6_mask, Intrinsic::capstone_vsseg7_mask,
+    Intrinsic::capstone_vsseg8_mask};
 
 static bool isMultipleOfN(const Value *V, const DataLayout &DL, unsigned N) {
   assert(N);
@@ -203,11 +203,11 @@ static bool getMemOperands(unsigned Factor, VectorType *VTy, Type *XLenTy,
 /// %v1 = shuffle %wide.vec, undef, <1, 3, 5, 7>  ; Extract odd elements
 ///
 /// Into:
-/// %ld2 = { <4 x i32>, <4 x i32> } call llvm.riscv.seg2.load.v4i32.p0.i64(
+/// %ld2 = { <4 x i32>, <4 x i32> } call llvm.capstone.seg2.load.v4i32.p0.i64(
 ///                                        %ptr, i64 4)
 /// %vec0 = extractelement { <4 x i32>, <4 x i32> } %ld2, i32 0
 /// %vec1 = extractelement { <4 x i32>, <4 x i32> } %ld2, i32 1
-bool RISCVTargetLowering::lowerInterleavedLoad(
+bool CapstoneTargetLowering::lowerInterleavedLoad(
     Instruction *Load, Value *Mask, ArrayRef<ShuffleVectorInst *> Shuffles,
     ArrayRef<unsigned> Indices, unsigned Factor, const APInt &GapMask) const {
   assert(Indices.size() == Shuffles.size());
@@ -273,12 +273,12 @@ bool RISCVTargetLowering::lowerInterleavedLoad(
 /// %sub.v0 = shuffle <8 x i32> %v0, <8 x i32> v1, <0, 1, 2, 3>
 /// %sub.v1 = shuffle <8 x i32> %v0, <8 x i32> v1, <4, 5, 6, 7>
 /// %sub.v2 = shuffle <8 x i32> %v0, <8 x i32> v1, <8, 9, 10, 11>
-/// call void llvm.riscv.seg3.store.v4i32.p0.i64(%sub.v0, %sub.v1, %sub.v2,
+/// call void llvm.capstone.seg3.store.v4i32.p0.i64(%sub.v0, %sub.v1, %sub.v2,
 ///                                              %ptr, i32 4)
 ///
 /// Note that the new shufflevectors will be removed and we'll only generate one
 /// vsseg3 instruction in CodeGen.
-bool RISCVTargetLowering::lowerInterleavedStore(Instruction *Store,
+bool CapstoneTargetLowering::lowerInterleavedStore(Instruction *Store,
                                                 Value *LaneMask,
                                                 ShuffleVectorInst *SVI,
                                                 unsigned Factor,
@@ -349,7 +349,7 @@ bool RISCVTargetLowering::lowerInterleavedStore(Instruction *Store,
   return true;
 }
 
-bool RISCVTargetLowering::lowerDeinterleaveIntrinsicToLoad(
+bool CapstoneTargetLowering::lowerDeinterleaveIntrinsicToLoad(
     Instruction *Load, Value *Mask, IntrinsicInst *DI) const {
   const unsigned Factor = getDeinterleaveIntrinsicFactor(DI->getIntrinsicID());
   if (Factor > 8)
@@ -380,7 +380,7 @@ bool RISCVTargetLowering::lowerDeinterleaveIntrinsicToLoad(
     unsigned SEW = DL.getTypeSizeInBits(ResVTy->getElementType());
     unsigned NumElts = ResVTy->getElementCount().getKnownMinValue();
     Type *VecTupTy = TargetExtType::get(
-        Load->getContext(), "riscv.vector.tuple",
+        Load->getContext(), "capstone.vector.tuple",
         ScalableVectorType::get(Builder.getInt8Ty(), NumElts * SEW / 8),
         Factor);
     Function *VlsegNFunc = Intrinsic::getOrInsertDeclaration(
@@ -393,7 +393,7 @@ bool RISCVTargetLowering::lowerDeinterleaveIntrinsicToLoad(
         Mask,
         VL,
         ConstantInt::get(XLenTy,
-                         RISCVVType::TAIL_AGNOSTIC | RISCVVType::MASK_AGNOSTIC),
+                         CapstoneVType::TAIL_AGNOSTIC | CapstoneVType::MASK_AGNOSTIC),
         ConstantInt::get(XLenTy, Log2_64(SEW))};
 
     CallInst *Vlseg = Builder.CreateCall(VlsegNFunc, Operands);
@@ -402,7 +402,7 @@ bool RISCVTargetLowering::lowerDeinterleaveIntrinsicToLoad(
     Return = PoisonValue::get(StructType::get(Load->getContext(), AggrTypes));
     for (unsigned i = 0; i < Factor; ++i) {
       Value *VecExtract = Builder.CreateIntrinsic(
-          Intrinsic::riscv_tuple_extract, {ResVTy, VecTupTy},
+          Intrinsic::capstone_tuple_extract, {ResVTy, VecTupTy},
           {Vlseg, Builder.getInt32(i)});
       Return = Builder.CreateInsertValue(Return, VecExtract, i);
     }
@@ -412,7 +412,7 @@ bool RISCVTargetLowering::lowerDeinterleaveIntrinsicToLoad(
   return true;
 }
 
-bool RISCVTargetLowering::lowerInterleaveIntrinsicToStore(
+bool CapstoneTargetLowering::lowerInterleaveIntrinsicToStore(
     Instruction *Store, Value *Mask, ArrayRef<Value *> InterleaveValues) const {
   unsigned Factor = InterleaveValues.size();
   if (Factor > 8)
@@ -445,13 +445,13 @@ bool RISCVTargetLowering::lowerInterleaveIntrinsicToStore(
   unsigned SEW = DL.getTypeSizeInBits(InVTy->getElementType());
   unsigned NumElts = InVTy->getElementCount().getKnownMinValue();
   Type *VecTupTy = TargetExtType::get(
-      Store->getContext(), "riscv.vector.tuple",
+      Store->getContext(), "capstone.vector.tuple",
       ScalableVectorType::get(Builder.getInt8Ty(), NumElts * SEW / 8), Factor);
 
   Value *StoredVal = PoisonValue::get(VecTupTy);
   for (unsigned i = 0; i < Factor; ++i)
     StoredVal = Builder.CreateIntrinsic(
-        Intrinsic::riscv_tuple_insert, {VecTupTy, InVTy},
+        Intrinsic::capstone_tuple_insert, {VecTupTy, InVTy},
         {StoredVal, InterleaveValues[i], Builder.getInt32(i)});
 
   Function *VssegNFunc = Intrinsic::getOrInsertDeclaration(

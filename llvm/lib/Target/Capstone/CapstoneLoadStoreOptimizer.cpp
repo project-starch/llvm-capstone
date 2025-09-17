@@ -1,4 +1,4 @@
-//===----- RISCVLoadStoreOptimizer.cpp ------------------------------------===//
+//===----- CapstoneLoadStoreOptimizer.cpp ------------------------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -15,14 +15,14 @@
 // merging zero store instructions, promoting loads that read directly from a
 // preceding store, and merging base register updates with load/store
 // instructions (via pre-/post-indexed addressing). These advanced
-// transformations are not yet implemented in the RISC-V pass but represent
-// potential future enhancements for further optimizing RISC-V memory
+// transformations are not yet implemented in the Capstone pass but represent
+// potential future enhancements for further optimizing Capstone memory
 // operations.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVTargetMachine.h"
+#include "Capstone.h"
+#include "CapstoneTargetMachine.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -31,21 +31,21 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-load-store-opt"
-#define RISCV_LOAD_STORE_OPT_NAME "RISC-V Load / Store Optimizer"
+#define DEBUG_TYPE "capstone-load-store-opt"
+#define Capstone_LOAD_STORE_OPT_NAME "Capstone Load / Store Optimizer"
 
 // The LdStLimit limits number of instructions how far we search for load/store
 // pairs.
-static cl::opt<unsigned> LdStLimit("riscv-load-store-scan-limit", cl::init(128),
+static cl::opt<unsigned> LdStLimit("capstone-load-store-scan-limit", cl::init(128),
                                    cl::Hidden);
 
 namespace {
 
-struct RISCVLoadStoreOpt : public MachineFunctionPass {
+struct CapstoneLoadStoreOpt : public MachineFunctionPass {
   static char ID;
   bool runOnMachineFunction(MachineFunction &Fn) override;
 
-  RISCVLoadStoreOpt() : MachineFunctionPass(ID) {}
+  CapstoneLoadStoreOpt() : MachineFunctionPass(ID) {}
 
   MachineFunctionProperties getRequiredProperties() const override {
     return MachineFunctionProperties().setNoVRegs();
@@ -56,7 +56,7 @@ struct RISCVLoadStoreOpt : public MachineFunctionPass {
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
-  StringRef getPassName() const override { return RISCV_LOAD_STORE_OPT_NAME; }
+  StringRef getPassName() const override { return Capstone_LOAD_STORE_OPT_NAME; }
 
   // Find and pair load/store instructions.
   bool tryToPairLdStInst(MachineBasicBlock::iterator &MBBI);
@@ -78,20 +78,20 @@ struct RISCVLoadStoreOpt : public MachineFunctionPass {
 private:
   AliasAnalysis *AA;
   MachineRegisterInfo *MRI;
-  const RISCVInstrInfo *TII;
-  const RISCVRegisterInfo *TRI;
+  const CapstoneInstrInfo *TII;
+  const CapstoneRegisterInfo *TRI;
   LiveRegUnits ModifiedRegUnits, UsedRegUnits;
 };
 } // end anonymous namespace
 
-char RISCVLoadStoreOpt::ID = 0;
-INITIALIZE_PASS(RISCVLoadStoreOpt, DEBUG_TYPE, RISCV_LOAD_STORE_OPT_NAME, false,
+char CapstoneLoadStoreOpt::ID = 0;
+INITIALIZE_PASS(CapstoneLoadStoreOpt, DEBUG_TYPE, Capstone_LOAD_STORE_OPT_NAME, false,
                 false)
 
-bool RISCVLoadStoreOpt::runOnMachineFunction(MachineFunction &Fn) {
+bool CapstoneLoadStoreOpt::runOnMachineFunction(MachineFunction &Fn) {
   if (skipFunction(Fn.getFunction()))
     return false;
-  const RISCVSubtarget &Subtarget = Fn.getSubtarget<RISCVSubtarget>();
+  const CapstoneSubtarget &Subtarget = Fn.getSubtarget<CapstoneSubtarget>();
   if (!Subtarget.useLoadStorePairs())
     return false;
 
@@ -120,7 +120,7 @@ bool RISCVLoadStoreOpt::runOnMachineFunction(MachineFunction &Fn) {
 
 // Find loads and stores that can be merged into a single load or store pair
 // instruction.
-bool RISCVLoadStoreOpt::tryToPairLdStInst(MachineBasicBlock::iterator &MBBI) {
+bool CapstoneLoadStoreOpt::tryToPairLdStInst(MachineBasicBlock::iterator &MBBI) {
   MachineInstr &MI = *MBBI;
 
   // If this is volatile, it is not a candidate.
@@ -147,27 +147,27 @@ bool RISCVLoadStoreOpt::tryToPairLdStInst(MachineBasicBlock::iterator &MBBI) {
 // appropriate paired opcode, verifies that the memory operand is properly
 // aligned, and checks that the offset is valid. If all conditions are met, it
 // builds and inserts the paired instruction.
-bool RISCVLoadStoreOpt::tryConvertToLdStPair(
+bool CapstoneLoadStoreOpt::tryConvertToLdStPair(
     MachineBasicBlock::iterator First, MachineBasicBlock::iterator Second) {
   unsigned PairOpc;
   Align RequiredAlignment;
   switch (First->getOpcode()) {
   default:
     llvm_unreachable("Unsupported load/store instruction for pairing");
-  case RISCV::SW:
-    PairOpc = RISCV::MIPS_SWP;
+  case Capstone::SW:
+    PairOpc = Capstone::MIPS_SWP;
     RequiredAlignment = Align(8);
     break;
-  case RISCV::LW:
-    PairOpc = RISCV::MIPS_LWP;
+  case Capstone::LW:
+    PairOpc = Capstone::MIPS_LWP;
     RequiredAlignment = Align(8);
     break;
-  case RISCV::SD:
-    PairOpc = RISCV::MIPS_SDP;
+  case Capstone::SD:
+    PairOpc = Capstone::MIPS_SDP;
     RequiredAlignment = Align(16);
     break;
-  case RISCV::LD:
-    PairOpc = RISCV::MIPS_LDP;
+  case Capstone::LD:
+    PairOpc = Capstone::MIPS_LDP;
     RequiredAlignment = Align(16);
     break;
   }
@@ -217,7 +217,7 @@ static bool mayAlias(MachineInstr &MIa,
 // This requires more sophisticated checks for aliasing, register
 // liveness, and potential scheduling hazards.
 MachineBasicBlock::iterator
-RISCVLoadStoreOpt::findMatchingInsn(MachineBasicBlock::iterator I,
+CapstoneLoadStoreOpt::findMatchingInsn(MachineBasicBlock::iterator I,
                                     bool &MergeForward) {
   MachineBasicBlock::iterator E = I->getParent()->end();
   MachineBasicBlock::iterator MBBI = I;
@@ -329,7 +329,7 @@ RISCVLoadStoreOpt::findMatchingInsn(MachineBasicBlock::iterator I,
 }
 
 MachineBasicBlock::iterator
-RISCVLoadStoreOpt::mergePairedInsns(MachineBasicBlock::iterator I,
+CapstoneLoadStoreOpt::mergePairedInsns(MachineBasicBlock::iterator I,
                                     MachineBasicBlock::iterator Paired,
                                     bool MergeForward) {
   MachineBasicBlock::iterator E = I->getParent()->end();
@@ -396,6 +396,6 @@ RISCVLoadStoreOpt::mergePairedInsns(MachineBasicBlock::iterator I,
 }
 
 // Returns an instance of the Load / Store Optimization pass.
-FunctionPass *llvm::createRISCVLoadStoreOptPass() {
-  return new RISCVLoadStoreOpt();
+FunctionPass *llvm::createCapstoneLoadStoreOptPass() {
+  return new CapstoneLoadStoreOpt();
 }

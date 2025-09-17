@@ -1,4 +1,4 @@
-//===-- RISCVExpandAtomicPseudoInsts.cpp - Expand atomic pseudo instrs. ---===//
+//===-- CapstoneExpandAtomicPseudoInsts.cpp - Expand atomic pseudo instrs. ---===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -13,9 +13,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVInstrInfo.h"
-#include "RISCVTargetMachine.h"
+#include "Capstone.h"
+#include "CapstoneInstrInfo.h"
+#include "CapstoneTargetMachine.h"
 
 #include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -23,23 +23,23 @@
 
 using namespace llvm;
 
-#define RISCV_EXPAND_ATOMIC_PSEUDO_NAME                                        \
-  "RISC-V atomic pseudo instruction expansion pass"
+#define Capstone_EXPAND_ATOMIC_PSEUDO_NAME                                        \
+  "Capstone atomic pseudo instruction expansion pass"
 
 namespace {
 
-class RISCVExpandAtomicPseudo : public MachineFunctionPass {
+class CapstoneExpandAtomicPseudo : public MachineFunctionPass {
 public:
-  const RISCVSubtarget *STI;
-  const RISCVInstrInfo *TII;
+  const CapstoneSubtarget *STI;
+  const CapstoneInstrInfo *TII;
   static char ID;
 
-  RISCVExpandAtomicPseudo() : MachineFunctionPass(ID) {}
+  CapstoneExpandAtomicPseudo() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   StringRef getPassName() const override {
-    return RISCV_EXPAND_ATOMIC_PSEUDO_NAME;
+    return Capstone_EXPAND_ATOMIC_PSEUDO_NAME;
   }
 
 private:
@@ -68,10 +68,10 @@ private:
 #endif
 };
 
-char RISCVExpandAtomicPseudo::ID = 0;
+char CapstoneExpandAtomicPseudo::ID = 0;
 
-bool RISCVExpandAtomicPseudo::runOnMachineFunction(MachineFunction &MF) {
-  STI = &MF.getSubtarget<RISCVSubtarget>();
+bool CapstoneExpandAtomicPseudo::runOnMachineFunction(MachineFunction &MF) {
+  STI = &MF.getSubtarget<CapstoneSubtarget>();
   TII = STI->getInstrInfo();
 
 #ifndef NDEBUG
@@ -89,7 +89,7 @@ bool RISCVExpandAtomicPseudo::runOnMachineFunction(MachineFunction &MF) {
   return Modified;
 }
 
-bool RISCVExpandAtomicPseudo::expandMBB(MachineBasicBlock &MBB) {
+bool CapstoneExpandAtomicPseudo::expandMBB(MachineBasicBlock &MBB) {
   bool Modified = false;
 
   MachineBasicBlock::iterator MBBI = MBB.begin(), E = MBB.end();
@@ -102,46 +102,46 @@ bool RISCVExpandAtomicPseudo::expandMBB(MachineBasicBlock &MBB) {
   return Modified;
 }
 
-bool RISCVExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
+bool CapstoneExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
                                        MachineBasicBlock::iterator MBBI,
                                        MachineBasicBlock::iterator &NextMBBI) {
-  // RISCVInstrInfo::getInstSizeInBytes expects that the total size of the
+  // CapstoneInstrInfo::getInstSizeInBytes expects that the total size of the
   // expanded instructions for each pseudo is correct in the Size field of the
   // tablegen definition for the pseudo.
   switch (MBBI->getOpcode()) {
-  case RISCV::PseudoAtomicLoadNand32:
+  case Capstone::PseudoAtomicLoadNand32:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Nand, false, 32,
                              NextMBBI);
-  case RISCV::PseudoAtomicLoadNand64:
+  case Capstone::PseudoAtomicLoadNand64:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Nand, false, 64,
                              NextMBBI);
-  case RISCV::PseudoMaskedAtomicSwap32:
+  case Capstone::PseudoMaskedAtomicSwap32:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Xchg, true, 32,
                              NextMBBI);
-  case RISCV::PseudoMaskedAtomicLoadAdd32:
+  case Capstone::PseudoMaskedAtomicLoadAdd32:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Add, true, 32, NextMBBI);
-  case RISCV::PseudoMaskedAtomicLoadSub32:
+  case Capstone::PseudoMaskedAtomicLoadSub32:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Sub, true, 32, NextMBBI);
-  case RISCV::PseudoMaskedAtomicLoadNand32:
+  case Capstone::PseudoMaskedAtomicLoadNand32:
     return expandAtomicBinOp(MBB, MBBI, AtomicRMWInst::Nand, true, 32,
                              NextMBBI);
-  case RISCV::PseudoMaskedAtomicLoadMax32:
+  case Capstone::PseudoMaskedAtomicLoadMax32:
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::Max, true, 32,
                                 NextMBBI);
-  case RISCV::PseudoMaskedAtomicLoadMin32:
+  case Capstone::PseudoMaskedAtomicLoadMin32:
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::Min, true, 32,
                                 NextMBBI);
-  case RISCV::PseudoMaskedAtomicLoadUMax32:
+  case Capstone::PseudoMaskedAtomicLoadUMax32:
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::UMax, true, 32,
                                 NextMBBI);
-  case RISCV::PseudoMaskedAtomicLoadUMin32:
+  case Capstone::PseudoMaskedAtomicLoadUMin32:
     return expandAtomicMinMaxOp(MBB, MBBI, AtomicRMWInst::UMin, true, 32,
                                 NextMBBI);
-  case RISCV::PseudoCmpXchg32:
+  case Capstone::PseudoCmpXchg32:
     return expandAtomicCmpXchg(MBB, MBBI, false, 32, NextMBBI);
-  case RISCV::PseudoCmpXchg64:
+  case Capstone::PseudoCmpXchg64:
     return expandAtomicCmpXchg(MBB, MBBI, false, 64, NextMBBI);
-  case RISCV::PseudoMaskedCmpXchg32:
+  case Capstone::PseudoMaskedCmpXchg32:
     return expandAtomicCmpXchg(MBB, MBBI, true, 32, NextMBBI);
   }
 
@@ -149,95 +149,95 @@ bool RISCVExpandAtomicPseudo::expandMI(MachineBasicBlock &MBB,
 }
 
 static unsigned getLRForRMW32(AtomicOrdering Ordering,
-                              const RISCVSubtarget *Subtarget) {
+                              const CapstoneSubtarget *Subtarget) {
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
   case AtomicOrdering::Monotonic:
-    return RISCV::LR_W;
+    return Capstone::LR_W;
   case AtomicOrdering::Acquire:
     if (Subtarget->hasStdExtZtso())
-      return RISCV::LR_W;
-    return RISCV::LR_W_AQ;
+      return Capstone::LR_W;
+    return Capstone::LR_W_AQ;
   case AtomicOrdering::Release:
-    return RISCV::LR_W;
+    return Capstone::LR_W;
   case AtomicOrdering::AcquireRelease:
     if (Subtarget->hasStdExtZtso())
-      return RISCV::LR_W;
-    return RISCV::LR_W_AQ;
+      return Capstone::LR_W;
+    return Capstone::LR_W_AQ;
   case AtomicOrdering::SequentiallyConsistent:
-    return RISCV::LR_W_AQ_RL;
+    return Capstone::LR_W_AQ_RL;
   }
 }
 
 static unsigned getSCForRMW32(AtomicOrdering Ordering,
-                              const RISCVSubtarget *Subtarget) {
+                              const CapstoneSubtarget *Subtarget) {
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
   case AtomicOrdering::Monotonic:
-    return RISCV::SC_W;
+    return Capstone::SC_W;
   case AtomicOrdering::Acquire:
-    return RISCV::SC_W;
+    return Capstone::SC_W;
   case AtomicOrdering::Release:
     if (Subtarget->hasStdExtZtso())
-      return RISCV::SC_W;
-    return RISCV::SC_W_RL;
+      return Capstone::SC_W;
+    return Capstone::SC_W_RL;
   case AtomicOrdering::AcquireRelease:
     if (Subtarget->hasStdExtZtso())
-      return RISCV::SC_W;
-    return RISCV::SC_W_RL;
+      return Capstone::SC_W;
+    return Capstone::SC_W_RL;
   case AtomicOrdering::SequentiallyConsistent:
-    return RISCV::SC_W_RL;
+    return Capstone::SC_W_RL;
   }
 }
 
 static unsigned getLRForRMW64(AtomicOrdering Ordering,
-                              const RISCVSubtarget *Subtarget) {
+                              const CapstoneSubtarget *Subtarget) {
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
   case AtomicOrdering::Monotonic:
-    return RISCV::LR_D;
+    return Capstone::LR_D;
   case AtomicOrdering::Acquire:
     if (Subtarget->hasStdExtZtso())
-      return RISCV::LR_D;
-    return RISCV::LR_D_AQ;
+      return Capstone::LR_D;
+    return Capstone::LR_D_AQ;
   case AtomicOrdering::Release:
-    return RISCV::LR_D;
+    return Capstone::LR_D;
   case AtomicOrdering::AcquireRelease:
     if (Subtarget->hasStdExtZtso())
-      return RISCV::LR_D;
-    return RISCV::LR_D_AQ;
+      return Capstone::LR_D;
+    return Capstone::LR_D_AQ;
   case AtomicOrdering::SequentiallyConsistent:
-    return RISCV::LR_D_AQ_RL;
+    return Capstone::LR_D_AQ_RL;
   }
 }
 
 static unsigned getSCForRMW64(AtomicOrdering Ordering,
-                              const RISCVSubtarget *Subtarget) {
+                              const CapstoneSubtarget *Subtarget) {
   switch (Ordering) {
   default:
     llvm_unreachable("Unexpected AtomicOrdering");
   case AtomicOrdering::Monotonic:
-    return RISCV::SC_D;
+    return Capstone::SC_D;
   case AtomicOrdering::Acquire:
-    return RISCV::SC_D;
+    return Capstone::SC_D;
   case AtomicOrdering::Release:
     if (Subtarget->hasStdExtZtso())
-      return RISCV::SC_D;
-    return RISCV::SC_D_RL;
+      return Capstone::SC_D;
+    return Capstone::SC_D_RL;
   case AtomicOrdering::AcquireRelease:
     if (Subtarget->hasStdExtZtso())
-      return RISCV::SC_D;
-    return RISCV::SC_D_RL;
+      return Capstone::SC_D;
+    return Capstone::SC_D_RL;
   case AtomicOrdering::SequentiallyConsistent:
-    return RISCV::SC_D_RL;
+    return Capstone::SC_D_RL;
   }
 }
 
 static unsigned getLRForRMW(AtomicOrdering Ordering, int Width,
-                            const RISCVSubtarget *Subtarget) {
+                            const CapstoneSubtarget *Subtarget) {
   if (Width == 32)
     return getLRForRMW32(Ordering, Subtarget);
   if (Width == 64)
@@ -246,7 +246,7 @@ static unsigned getLRForRMW(AtomicOrdering Ordering, int Width,
 }
 
 static unsigned getSCForRMW(AtomicOrdering Ordering, int Width,
-                            const RISCVSubtarget *Subtarget) {
+                            const CapstoneSubtarget *Subtarget) {
   if (Width == 32)
     return getSCForRMW32(Ordering, Subtarget);
   if (Width == 64)
@@ -254,12 +254,12 @@ static unsigned getSCForRMW(AtomicOrdering Ordering, int Width,
   llvm_unreachable("Unexpected SC width\n");
 }
 
-static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
+static void doAtomicBinOpExpansion(const CapstoneInstrInfo *TII, MachineInstr &MI,
                                    DebugLoc DL, MachineBasicBlock *ThisMBB,
                                    MachineBasicBlock *LoopMBB,
                                    MachineBasicBlock *DoneMBB,
                                    AtomicRMWInst::BinOp BinOp, int Width,
-                                   const RISCVSubtarget *STI) {
+                                   const CapstoneSubtarget *STI) {
   Register DestReg = MI.getOperand(0).getReg();
   Register ScratchReg = MI.getOperand(1).getReg();
   Register AddrReg = MI.getOperand(2).getReg();
@@ -278,10 +278,10 @@ static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
   default:
     llvm_unreachable("Unexpected AtomicRMW BinOp");
   case AtomicRMWInst::Nand:
-    BuildMI(LoopMBB, DL, TII->get(RISCV::AND), ScratchReg)
+    BuildMI(LoopMBB, DL, TII->get(Capstone::AND), ScratchReg)
         .addReg(DestReg)
         .addReg(IncrReg);
-    BuildMI(LoopMBB, DL, TII->get(RISCV::XORI), ScratchReg)
+    BuildMI(LoopMBB, DL, TII->get(Capstone::XORI), ScratchReg)
         .addReg(ScratchReg)
         .addImm(-1);
     break;
@@ -289,13 +289,13 @@ static void doAtomicBinOpExpansion(const RISCVInstrInfo *TII, MachineInstr &MI,
   BuildMI(LoopMBB, DL, TII->get(getSCForRMW(Ordering, Width, STI)), ScratchReg)
       .addReg(AddrReg)
       .addReg(ScratchReg);
-  BuildMI(LoopMBB, DL, TII->get(RISCV::BNE))
+  BuildMI(LoopMBB, DL, TII->get(Capstone::BNE))
       .addReg(ScratchReg)
-      .addReg(RISCV::X0)
+      .addReg(Capstone::X0)
       .addMBB(LoopMBB);
 }
 
-static void insertMaskedMerge(const RISCVInstrInfo *TII, DebugLoc DL,
+static void insertMaskedMerge(const CapstoneInstrInfo *TII, DebugLoc DL,
                               MachineBasicBlock *MBB, Register DestReg,
                               Register OldValReg, Register NewValReg,
                               Register MaskReg, Register ScratchReg) {
@@ -306,24 +306,24 @@ static void insertMaskedMerge(const RISCVInstrInfo *TII, DebugLoc DL,
   // We select bits from newval and oldval using:
   // https://graphics.stanford.edu/~seander/bithacks.html#MaskedMerge
   // r = oldval ^ ((oldval ^ newval) & masktargetdata);
-  BuildMI(MBB, DL, TII->get(RISCV::XOR), ScratchReg)
+  BuildMI(MBB, DL, TII->get(Capstone::XOR), ScratchReg)
       .addReg(OldValReg)
       .addReg(NewValReg);
-  BuildMI(MBB, DL, TII->get(RISCV::AND), ScratchReg)
+  BuildMI(MBB, DL, TII->get(Capstone::AND), ScratchReg)
       .addReg(ScratchReg)
       .addReg(MaskReg);
-  BuildMI(MBB, DL, TII->get(RISCV::XOR), DestReg)
+  BuildMI(MBB, DL, TII->get(Capstone::XOR), DestReg)
       .addReg(OldValReg)
       .addReg(ScratchReg);
 }
 
-static void doMaskedAtomicBinOpExpansion(const RISCVInstrInfo *TII,
+static void doMaskedAtomicBinOpExpansion(const CapstoneInstrInfo *TII,
                                          MachineInstr &MI, DebugLoc DL,
                                          MachineBasicBlock *ThisMBB,
                                          MachineBasicBlock *LoopMBB,
                                          MachineBasicBlock *DoneMBB,
                                          AtomicRMWInst::BinOp BinOp, int Width,
-                                         const RISCVSubtarget *STI) {
+                                         const CapstoneSubtarget *STI) {
   assert(Width == 32 && "Should never need to expand masked 64-bit operations");
   Register DestReg = MI.getOperand(0).getReg();
   Register ScratchReg = MI.getOperand(1).getReg();
@@ -347,25 +347,25 @@ static void doMaskedAtomicBinOpExpansion(const RISCVInstrInfo *TII,
   default:
     llvm_unreachable("Unexpected AtomicRMW BinOp");
   case AtomicRMWInst::Xchg:
-    BuildMI(LoopMBB, DL, TII->get(RISCV::ADDI), ScratchReg)
+    BuildMI(LoopMBB, DL, TII->get(Capstone::ADDI), ScratchReg)
         .addReg(IncrReg)
         .addImm(0);
     break;
   case AtomicRMWInst::Add:
-    BuildMI(LoopMBB, DL, TII->get(RISCV::ADD), ScratchReg)
+    BuildMI(LoopMBB, DL, TII->get(Capstone::ADD), ScratchReg)
         .addReg(DestReg)
         .addReg(IncrReg);
     break;
   case AtomicRMWInst::Sub:
-    BuildMI(LoopMBB, DL, TII->get(RISCV::SUB), ScratchReg)
+    BuildMI(LoopMBB, DL, TII->get(Capstone::SUB), ScratchReg)
         .addReg(DestReg)
         .addReg(IncrReg);
     break;
   case AtomicRMWInst::Nand:
-    BuildMI(LoopMBB, DL, TII->get(RISCV::AND), ScratchReg)
+    BuildMI(LoopMBB, DL, TII->get(Capstone::AND), ScratchReg)
         .addReg(DestReg)
         .addReg(IncrReg);
-    BuildMI(LoopMBB, DL, TII->get(RISCV::XORI), ScratchReg)
+    BuildMI(LoopMBB, DL, TII->get(Capstone::XORI), ScratchReg)
         .addReg(ScratchReg)
         .addImm(-1);
     break;
@@ -377,13 +377,13 @@ static void doMaskedAtomicBinOpExpansion(const RISCVInstrInfo *TII,
   BuildMI(LoopMBB, DL, TII->get(getSCForRMW32(Ordering, STI)), ScratchReg)
       .addReg(AddrReg)
       .addReg(ScratchReg);
-  BuildMI(LoopMBB, DL, TII->get(RISCV::BNE))
+  BuildMI(LoopMBB, DL, TII->get(Capstone::BNE))
       .addReg(ScratchReg)
-      .addReg(RISCV::X0)
+      .addReg(Capstone::X0)
       .addMBB(LoopMBB);
 }
 
-bool RISCVExpandAtomicPseudo::expandAtomicBinOp(
+bool CapstoneExpandAtomicPseudo::expandAtomicBinOp(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     AtomicRMWInst::BinOp BinOp, bool IsMasked, int Width,
     MachineBasicBlock::iterator &NextMBBI) {
@@ -422,18 +422,18 @@ bool RISCVExpandAtomicPseudo::expandAtomicBinOp(
   return true;
 }
 
-static void insertSext(const RISCVInstrInfo *TII, DebugLoc DL,
+static void insertSext(const CapstoneInstrInfo *TII, DebugLoc DL,
                        MachineBasicBlock *MBB, Register ValReg,
                        Register ShamtReg) {
-  BuildMI(MBB, DL, TII->get(RISCV::SLL), ValReg)
+  BuildMI(MBB, DL, TII->get(Capstone::SLL), ValReg)
       .addReg(ValReg)
       .addReg(ShamtReg);
-  BuildMI(MBB, DL, TII->get(RISCV::SRA), ValReg)
+  BuildMI(MBB, DL, TII->get(Capstone::SRA), ValReg)
       .addReg(ValReg)
       .addReg(ShamtReg);
 }
 
-bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
+bool CapstoneExpandAtomicPseudo::expandAtomicMinMaxOp(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     AtomicRMWInst::BinOp BinOp, bool IsMasked, int Width,
     MachineBasicBlock::iterator &NextMBBI) {
@@ -484,10 +484,10 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
   //   ifnochangeneeded scratch2, incr, .looptail
   BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW32(Ordering, STI)), DestReg)
       .addReg(AddrReg);
-  BuildMI(LoopHeadMBB, DL, TII->get(RISCV::AND), Scratch2Reg)
+  BuildMI(LoopHeadMBB, DL, TII->get(Capstone::AND), Scratch2Reg)
       .addReg(DestReg)
       .addReg(MaskReg);
-  BuildMI(LoopHeadMBB, DL, TII->get(RISCV::ADDI), Scratch1Reg)
+  BuildMI(LoopHeadMBB, DL, TII->get(Capstone::ADDI), Scratch1Reg)
       .addReg(DestReg)
       .addImm(0);
 
@@ -496,7 +496,7 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
     llvm_unreachable("Unexpected AtomicRMW BinOp");
   case AtomicRMWInst::Max: {
     insertSext(TII, DL, LoopHeadMBB, Scratch2Reg, MI.getOperand(6).getReg());
-    BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BGE))
+    BuildMI(LoopHeadMBB, DL, TII->get(Capstone::BGE))
         .addReg(Scratch2Reg)
         .addReg(IncrReg)
         .addMBB(LoopTailMBB);
@@ -504,20 +504,20 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
   }
   case AtomicRMWInst::Min: {
     insertSext(TII, DL, LoopHeadMBB, Scratch2Reg, MI.getOperand(6).getReg());
-    BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BGE))
+    BuildMI(LoopHeadMBB, DL, TII->get(Capstone::BGE))
         .addReg(IncrReg)
         .addReg(Scratch2Reg)
         .addMBB(LoopTailMBB);
     break;
   }
   case AtomicRMWInst::UMax:
-    BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BGEU))
+    BuildMI(LoopHeadMBB, DL, TII->get(Capstone::BGEU))
         .addReg(Scratch2Reg)
         .addReg(IncrReg)
         .addMBB(LoopTailMBB);
     break;
   case AtomicRMWInst::UMin:
-    BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BGEU))
+    BuildMI(LoopHeadMBB, DL, TII->get(Capstone::BGEU))
         .addReg(IncrReg)
         .addReg(Scratch2Reg)
         .addMBB(LoopTailMBB);
@@ -537,9 +537,9 @@ bool RISCVExpandAtomicPseudo::expandAtomicMinMaxOp(
   BuildMI(LoopTailMBB, DL, TII->get(getSCForRMW32(Ordering, STI)), Scratch1Reg)
       .addReg(AddrReg)
       .addReg(Scratch1Reg);
-  BuildMI(LoopTailMBB, DL, TII->get(RISCV::BNE))
+  BuildMI(LoopTailMBB, DL, TII->get(Capstone::BNE))
       .addReg(Scratch1Reg)
-      .addReg(RISCV::X0)
+      .addReg(Capstone::X0)
       .addMBB(LoopHeadMBB);
 
   NextMBBI = MBB.end();
@@ -578,7 +578,7 @@ bool tryToFoldBNEOnCmpXchgResult(MachineBasicBlock &MBB,
 
   // If we have a masked cmpxchg, match AND dst, DestReg, MaskReg.
   if (MaskReg.isValid()) {
-    if (MBBI == E || MBBI->getOpcode() != RISCV::AND)
+    if (MBBI == E || MBBI->getOpcode() != Capstone::AND)
       return false;
     Register ANDOp1 = MBBI->getOperand(1).getReg();
     Register ANDOp2 = MBBI->getOperand(2).getReg();
@@ -592,7 +592,7 @@ bool tryToFoldBNEOnCmpXchgResult(MachineBasicBlock &MBB,
   }
 
   // Match BNE DestReg, MaskReg.
-  if (MBBI == E || MBBI->getOpcode() != RISCV::BNE)
+  if (MBBI == E || MBBI->getOpcode() != Capstone::BNE)
     return false;
   Register BNEOp0 = MBBI->getOperand(0).getReg();
   Register BNEOp1 = MBBI->getOperand(1).getReg();
@@ -620,7 +620,7 @@ bool tryToFoldBNEOnCmpXchgResult(MachineBasicBlock &MBB,
   return true;
 }
 
-bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
+bool CapstoneExpandAtomicPseudo::expandAtomicCmpXchg(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI, bool IsMasked,
     int Width, MachineBasicBlock::iterator &NextMBBI) {
   MachineInstr &MI = *MBBI;
@@ -665,7 +665,7 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(Ordering, Width, STI)),
             DestReg)
         .addReg(AddrReg);
-    BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BNE))
+    BuildMI(LoopHeadMBB, DL, TII->get(Capstone::BNE))
         .addReg(DestReg)
         .addReg(CmpValReg)
         .addMBB(LoopHeadBNETarget);
@@ -676,9 +676,9 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
             ScratchReg)
         .addReg(AddrReg)
         .addReg(NewValReg);
-    BuildMI(LoopTailMBB, DL, TII->get(RISCV::BNE))
+    BuildMI(LoopTailMBB, DL, TII->get(Capstone::BNE))
         .addReg(ScratchReg)
-        .addReg(RISCV::X0)
+        .addReg(Capstone::X0)
         .addMBB(LoopHeadMBB);
   } else {
     // .loophead:
@@ -689,10 +689,10 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
     BuildMI(LoopHeadMBB, DL, TII->get(getLRForRMW(Ordering, Width, STI)),
             DestReg)
         .addReg(AddrReg);
-    BuildMI(LoopHeadMBB, DL, TII->get(RISCV::AND), ScratchReg)
+    BuildMI(LoopHeadMBB, DL, TII->get(Capstone::AND), ScratchReg)
         .addReg(DestReg)
         .addReg(MaskReg);
-    BuildMI(LoopHeadMBB, DL, TII->get(RISCV::BNE))
+    BuildMI(LoopHeadMBB, DL, TII->get(Capstone::BNE))
         .addReg(ScratchReg)
         .addReg(CmpValReg)
         .addMBB(LoopHeadBNETarget);
@@ -709,9 +709,9 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
             ScratchReg)
         .addReg(AddrReg)
         .addReg(ScratchReg);
-    BuildMI(LoopTailMBB, DL, TII->get(RISCV::BNE))
+    BuildMI(LoopTailMBB, DL, TII->get(Capstone::BNE))
         .addReg(ScratchReg)
-        .addReg(RISCV::X0)
+        .addReg(Capstone::X0)
         .addMBB(LoopHeadMBB);
   }
 
@@ -728,9 +728,9 @@ bool RISCVExpandAtomicPseudo::expandAtomicCmpXchg(
 
 } // end of anonymous namespace
 
-INITIALIZE_PASS(RISCVExpandAtomicPseudo, "riscv-expand-atomic-pseudo",
-                RISCV_EXPAND_ATOMIC_PSEUDO_NAME, false, false)
+INITIALIZE_PASS(CapstoneExpandAtomicPseudo, "capstone-expand-atomic-pseudo",
+                Capstone_EXPAND_ATOMIC_PSEUDO_NAME, false, false)
 
-FunctionPass *llvm::createRISCVExpandAtomicPseudoPass() {
-  return new RISCVExpandAtomicPseudo();
+FunctionPass *llvm::createCapstoneExpandAtomicPseudoPass() {
+  return new CapstoneExpandAtomicPseudo();
 }

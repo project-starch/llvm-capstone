@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZfbfmin.td - 'Zfbfmin' instructions --*- tablegen -*-===//
+//===-- CapstoneInstrInfoZfbfmin.td - 'Zfbfmin' instructions --*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard 'Zfbfmin'
+// This file describes the Capstone instructions from the standard 'Zfbfmin'
 // extension, providing scalar conversion instructions for BFloat16.
 // This version is still experimental as the 'Zfbfmin' extension hasn't been
 // ratified yet.
@@ -29,18 +29,18 @@ def FCVT_S_BF16 : FPUnaryOp_r_frmlegacy<0b0100000, 0b00110, FPR32, FPR16, "fcvt.
 //===----------------------------------------------------------------------===//
 
 let Predicates = [HasStdExtZfbfmin] in {
-def : Pat<(riscv_selectcc_frag:$cc (XLenVT GPR:$lhs), GPR:$rhs, cond,
+def : Pat<(capstone_selectcc_frag:$cc (XLenVT GPR:$lhs), GPR:$rhs, cond,
                                    (bf16 FPR16:$truev), FPR16:$falsev),
           (Select_FPR16_Using_CC_GPR GPR:$lhs, GPR:$rhs,
-           (IntCCtoRISCVCC $cc), FPR16:$truev, FPR16:$falsev)>;
+           (IntCCtoCapstoneCC $cc), FPR16:$truev, FPR16:$falsev)>;
 
 // Explicitly select 0 in the condition to X0. The register coalescer doesn't
 // always do it.
-def : Pat<(riscv_selectcc_frag:$cc (XLenVT GPR:$lhs), 0, cond,
+def : Pat<(capstone_selectcc_frag:$cc (XLenVT GPR:$lhs), 0, cond,
                                    (bf16 FPR16:$truev),
                                    FPR16:$falsev),
           (Select_FPR16_Using_CC_GPR GPR:$lhs, (XLenVT X0),
-           (IntCCtoRISCVCC $cc), FPR16:$truev, FPR16:$falsev)>;
+           (IntCCtoCapstoneCC $cc), FPR16:$truev, FPR16:$falsev)>;
 
 /// Loads
 def : LdPat<load, FLH, bf16>;
@@ -56,9 +56,9 @@ def : Pat<(fpextend (bf16 FPR16:$rs1)),
           (FCVT_S_BF16 FPR16:$rs1, FRM_RNE)>;
 
 // Moves (no conversion)
-def : Pat<(bf16 (riscv_fmv_h_x GPR:$src)), (FMV_H_X GPR:$src)>;
-def : Pat<(riscv_fmv_x_anyexth (bf16 FPR16:$src)), (FMV_X_H FPR16:$src)>;
-def : Pat<(riscv_fmv_x_signexth (bf16 FPR16:$src)), (FMV_X_H FPR16:$src)>;
+def : Pat<(bf16 (capstone_fmv_h_x GPR:$src)), (FMV_H_X GPR:$src)>;
+def : Pat<(capstone_fmv_x_anyexth (bf16 FPR16:$src)), (FMV_X_H FPR16:$src)>;
+def : Pat<(capstone_fmv_x_signexth (bf16 FPR16:$src)), (FMV_X_H FPR16:$src)>;
 } // Predicates = [HasStdExtZfbfmin]
 
 let Predicates = [HasStdExtZfbfmin, HasStdExtD] in {

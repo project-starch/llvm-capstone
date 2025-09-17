@@ -1,4 +1,4 @@
-//===-- RISCVInstrFormats.td - RISC-V Instruction Formats --*- tablegen -*-===//
+//===-- CapstoneInstrFormats.td - Capstone Instruction Formats --*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -9,7 +9,7 @@
 //===----------------------------------------------------------------------===//
 //
 //  These instruction format definitions are structured to match the
-//  description in the RISC-V User-Level ISA specification as closely as
+//  description in the Capstone User-Level ISA specification as closely as
 //  possible. For instance, the specification describes instructions with the
 //  MSB (31st bit) on the left and the LSB (0th bit) on the right. This is
 //  reflected in the order of parameters to each instruction class.
@@ -25,8 +25,8 @@
 //===----------------------------------------------------------------------===//
 
 // Format specifies the encoding used by the instruction. This is used by
-// RISCVMCCodeEmitter to determine which form of fixup to use. These
-// definitions must be kept in-sync with RISCVBaseInfo.h.
+// CapstoneMCCodeEmitter to determine which form of fixup to use. These
+// definitions must be kept in-sync with CapstoneBaseInfo.h.
 class InstFormat<bits<5> val> {
   bits<5> Value = val;
 }
@@ -61,13 +61,13 @@ def InstFormatNDS_BRANCH_10 : InstFormat<27>;
 def InstFormatOther         : InstFormat<31>;
 
 
-class RISCVVConstraint<bits<3> val> {
+class CapstoneVConstraint<bits<3> val> {
   bits<3> Value = val;
 }
-def NoConstraint  : RISCVVConstraint<0b000>;
-def VS2Constraint : RISCVVConstraint<0b001>;
-def VS1Constraint : RISCVVConstraint<0b010>;
-def VMConstraint  : RISCVVConstraint<0b100>;
+def NoConstraint  : CapstoneVConstraint<0b000>;
+def VS2Constraint : CapstoneVConstraint<0b001>;
+def VS1Constraint : CapstoneVConstraint<0b010>;
+def VMConstraint  : CapstoneVConstraint<0b100>;
 
 // Illegal instructions:
 //
@@ -100,72 +100,72 @@ def VMConstraint  : RISCVVConstraint<0b100>;
 //
 // * vcompress: The destination vector register group cannot overlap the
 // source vector register group or the source mask register
-def WidenVNoMask : RISCVVConstraint<!or(VS2Constraint.Value,
+def WidenVNoMask : CapstoneVConstraint<!or(VS2Constraint.Value,
                                         VS1Constraint.Value)>;
-def WidenV       : RISCVVConstraint<!or(VS2Constraint.Value,
+def WidenV       : CapstoneVConstraint<!or(VS2Constraint.Value,
                                         VS1Constraint.Value,
                                         VMConstraint.Value)>;
-def WidenW       : RISCVVConstraint<!or(VS1Constraint.Value,
+def WidenW       : CapstoneVConstraint<!or(VS1Constraint.Value,
                                         VMConstraint.Value)>;
-def WidenCvt     : RISCVVConstraint<!or(VS2Constraint.Value,
+def WidenCvt     : CapstoneVConstraint<!or(VS2Constraint.Value,
                                         VMConstraint.Value)>;
-def Iota         : RISCVVConstraint<!or(VS2Constraint.Value,
+def Iota         : CapstoneVConstraint<!or(VS2Constraint.Value,
                                         VMConstraint.Value)>;
-def SlideUp      : RISCVVConstraint<!or(VS2Constraint.Value,
+def SlideUp      : CapstoneVConstraint<!or(VS2Constraint.Value,
                                         VMConstraint.Value)>;
-def Vrgather     : RISCVVConstraint<!or(VS2Constraint.Value,
+def Vrgather     : CapstoneVConstraint<!or(VS2Constraint.Value,
                                         VS1Constraint.Value,
                                         VMConstraint.Value)>;
-def Vcompress    : RISCVVConstraint<!or(VS2Constraint.Value,
+def Vcompress    : CapstoneVConstraint<!or(VS2Constraint.Value,
                                         VS1Constraint.Value)>;
-def Sha2Constraint : RISCVVConstraint<!or(VS2Constraint.Value,
+def Sha2Constraint : CapstoneVConstraint<!or(VS2Constraint.Value,
                                           VS1Constraint.Value)>;
 
 // The following opcode names match those given in Table 19.1 in the
-// RISC-V User-level ISA specification ("RISC-V base opcode map").
-class RISCVOpcode<string name, bits<7> val> {
+// Capstone User-level ISA specification ("Capstone base opcode map").
+class CapstoneOpcode<string name, bits<7> val> {
   string Name = name;
   bits<7> Value = val;
 }
-def RISCVOpcodesList : GenericTable {
-  let FilterClass = "RISCVOpcode";
+def CapstoneOpcodesList : GenericTable {
+  let FilterClass = "CapstoneOpcode";
   let Fields = [
     "Name", "Value"
   ];
   let PrimaryKey = [ "Value" ];
-  let PrimaryKeyName = "lookupRISCVOpcodeByValue";
+  let PrimaryKeyName = "lookupCapstoneOpcodeByValue";
 }
-def lookupRISCVOpcodeByName : SearchIndex {
-  let Table = RISCVOpcodesList;
+def lookupCapstoneOpcodeByName : SearchIndex {
+  let Table = CapstoneOpcodesList;
   let Key = [ "Name" ];
 }
-def OPC_LOAD      : RISCVOpcode<"LOAD",      0b0000011>;
-def OPC_LOAD_FP   : RISCVOpcode<"LOAD_FP",   0b0000111>;
-def OPC_CUSTOM_0  : RISCVOpcode<"CUSTOM_0",  0b0001011>;
-def OPC_MISC_MEM  : RISCVOpcode<"MISC_MEM",  0b0001111>;
-def OPC_OP_IMM    : RISCVOpcode<"OP_IMM",    0b0010011>;
-def OPC_AUIPC     : RISCVOpcode<"AUIPC",     0b0010111>;
-def OPC_OP_IMM_32 : RISCVOpcode<"OP_IMM_32", 0b0011011>;
-def OPC_STORE     : RISCVOpcode<"STORE",     0b0100011>;
-def OPC_STORE_FP  : RISCVOpcode<"STORE_FP",  0b0100111>;
-def OPC_CUSTOM_1  : RISCVOpcode<"CUSTOM_1",  0b0101011>;
-def OPC_AMO       : RISCVOpcode<"AMO",       0b0101111>;
-def OPC_OP        : RISCVOpcode<"OP",        0b0110011>;
-def OPC_LUI       : RISCVOpcode<"LUI",       0b0110111>;
-def OPC_OP_32     : RISCVOpcode<"OP_32",     0b0111011>;
-def OPC_MADD      : RISCVOpcode<"MADD",      0b1000011>;
-def OPC_MSUB      : RISCVOpcode<"MSUB",      0b1000111>;
-def OPC_NMSUB     : RISCVOpcode<"NMSUB",     0b1001011>;
-def OPC_NMADD     : RISCVOpcode<"NMADD",     0b1001111>;
-def OPC_OP_FP     : RISCVOpcode<"OP_FP",     0b1010011>;
-def OPC_OP_V      : RISCVOpcode<"OP_V",      0b1010111>;
-def OPC_CUSTOM_2  : RISCVOpcode<"CUSTOM_2",  0b1011011>;
-def OPC_BRANCH    : RISCVOpcode<"BRANCH",    0b1100011>;
-def OPC_JALR      : RISCVOpcode<"JALR",      0b1100111>;
-def OPC_JAL       : RISCVOpcode<"JAL",       0b1101111>;
-def OPC_SYSTEM    : RISCVOpcode<"SYSTEM",    0b1110011>;
-def OPC_OP_VE     : RISCVOpcode<"OP_VE",     0b1110111>;
-def OPC_CUSTOM_3  : RISCVOpcode<"CUSTOM_3",  0b1111011>;
+def OPC_LOAD      : CapstoneOpcode<"LOAD",      0b0000011>;
+def OPC_LOAD_FP   : CapstoneOpcode<"LOAD_FP",   0b0000111>;
+def OPC_CUSTOM_0  : CapstoneOpcode<"CUSTOM_0",  0b0001011>;
+def OPC_MISC_MEM  : CapstoneOpcode<"MISC_MEM",  0b0001111>;
+def OPC_OP_IMM    : CapstoneOpcode<"OP_IMM",    0b0010011>;
+def OPC_AUIPC     : CapstoneOpcode<"AUIPC",     0b0010111>;
+def OPC_OP_IMM_32 : CapstoneOpcode<"OP_IMM_32", 0b0011011>;
+def OPC_STORE     : CapstoneOpcode<"STORE",     0b0100011>;
+def OPC_STORE_FP  : CapstoneOpcode<"STORE_FP",  0b0100111>;
+def OPC_CUSTOM_1  : CapstoneOpcode<"CUSTOM_1",  0b0101011>;
+def OPC_AMO       : CapstoneOpcode<"AMO",       0b0101111>;
+def OPC_OP        : CapstoneOpcode<"OP",        0b0110011>;
+def OPC_LUI       : CapstoneOpcode<"LUI",       0b0110111>;
+def OPC_OP_32     : CapstoneOpcode<"OP_32",     0b0111011>;
+def OPC_MADD      : CapstoneOpcode<"MADD",      0b1000011>;
+def OPC_MSUB      : CapstoneOpcode<"MSUB",      0b1000111>;
+def OPC_NMSUB     : CapstoneOpcode<"NMSUB",     0b1001011>;
+def OPC_NMADD     : CapstoneOpcode<"NMADD",     0b1001111>;
+def OPC_OP_FP     : CapstoneOpcode<"OP_FP",     0b1010011>;
+def OPC_OP_V      : CapstoneOpcode<"OP_V",      0b1010111>;
+def OPC_CUSTOM_2  : CapstoneOpcode<"CUSTOM_2",  0b1011011>;
+def OPC_BRANCH    : CapstoneOpcode<"BRANCH",    0b1100011>;
+def OPC_JALR      : CapstoneOpcode<"JALR",      0b1100111>;
+def OPC_JAL       : CapstoneOpcode<"JAL",       0b1101111>;
+def OPC_SYSTEM    : CapstoneOpcode<"SYSTEM",    0b1110011>;
+def OPC_OP_VE     : CapstoneOpcode<"OP_VE",     0b1110111>;
+def OPC_CUSTOM_3  : CapstoneOpcode<"CUSTOM_3",  0b1111011>;
 
 class EltDeps<bit vl, bit mask> {
   bit VL = vl;
@@ -187,7 +187,7 @@ def EEWSEWx4 : EEW<3>;
 
 class RVInstCommon<dag outs, dag ins, string opcodestr, string argstr,
                    list<dag> pattern, InstFormat format> : Instruction {
-  let Namespace = "RISCV";
+  let Namespace = "Capstone";
 
   dag OutOperandList = outs;
   dag InOperandList = ins;
@@ -199,7 +199,7 @@ class RVInstCommon<dag outs, dag ins, string opcodestr, string argstr,
   let TSFlags{4-0} = Format.Value;
 
   // Defaults
-  RISCVVConstraint RVVConstraint = NoConstraint;
+  CapstoneVConstraint RVVConstraint = NoConstraint;
   let TSFlags{7-5} = RVVConstraint.Value;
 
   bits<3> VLMul = 0;
@@ -235,7 +235,7 @@ class RVInstCommon<dag outs, dag ins, string opcodestr, string argstr,
 
   // This is only valid when HasRoundModeOp is set to 1. HasRoundModeOp is set
   // to 1 for vector fixed-point or floating-point intrinsics. This bit is
-  // processed under pass 'RISCVInsertReadWriteCSR' pass to distinguish between
+  // processed under pass 'CapstoneInsertReadWriteCSR' pass to distinguish between
   // fixed-point / floating-point instructions and emit appropriate read/write
   // to the correct CSR.
   bit UsesVXRM = 0;
@@ -263,7 +263,7 @@ class RVInstCommon<dag outs, dag ins, string opcodestr, string argstr,
   let TSFlags{25-24} = DestEEW.Value;
 
   // Some vector instructions like vslidedown/vrgather will read elements past
-  // VL, and should be marked to make sure RISCVVLOptimizer doesn't reduce its
+  // VL, and should be marked to make sure CapstoneVLOptimizer doesn't reduce its
   // operands' VLs.
   bit ReadsPastVL = 0;
   let TSFlags{26} = ReadsPastVL;
@@ -334,12 +334,12 @@ class PseudoStore<string opcodestr, DAGOperand rsty = GPR>
   let isAsmParserOnly = 1;
 }
 
-// Instruction formats are listed in the order they appear in the RISC-V
+// Instruction formats are listed in the order they appear in the Capstone
 // instruction set manual (R, R4, I, S, B, U, J).
 
 // Common base class for R format instructions. Bits {31-25} should be set by
 // the subclasses.
-class RVInstRBase<bits<3> funct3, RISCVOpcode opcode, dag outs,
+class RVInstRBase<bits<3> funct3, CapstoneOpcode opcode, dag outs,
                   dag ins, string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
   bits<5> rs2;
@@ -353,14 +353,14 @@ class RVInstRBase<bits<3> funct3, RISCVOpcode opcode, dag outs,
   let Inst{6-0} = opcode.Value;
 }
 
-class RVInstR<bits<7> funct7, bits<3> funct3, RISCVOpcode opcode, dag outs,
+class RVInstR<bits<7> funct7, bits<3> funct3, CapstoneOpcode opcode, dag outs,
               dag ins, string opcodestr, string argstr>
     : RVInstRBase<funct3, opcode, outs, ins, opcodestr, argstr> {
   let Inst{31-25} = funct7;
 }
 
 class RVInstRAtomic<bits<5> funct5, bit aq, bit rl, bits<3> funct3,
-                    RISCVOpcode opcode, dag outs, dag ins, string opcodestr,
+                    CapstoneOpcode opcode, dag outs, dag ins, string opcodestr,
                     string argstr>
     : RVInstRBase<funct3, opcode, outs, ins, opcodestr, argstr> {
   let Inst{31-27} = funct5;
@@ -368,7 +368,7 @@ class RVInstRAtomic<bits<5> funct5, bit aq, bit rl, bits<3> funct3,
   let Inst{25} = rl;
 }
 
-class RVInstRFrm<bits<7> funct7, RISCVOpcode opcode, dag outs, dag ins,
+class RVInstRFrm<bits<7> funct7, CapstoneOpcode opcode, dag outs, dag ins,
                  string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
   bits<5> rs2;
@@ -384,7 +384,7 @@ class RVInstRFrm<bits<7> funct7, RISCVOpcode opcode, dag outs, dag ins,
   let Inst{6-0} = opcode.Value;
 }
 
-class RVInstR4<bits<2> funct2, bits<3> funct3, RISCVOpcode opcode, dag outs,
+class RVInstR4<bits<2> funct2, bits<3> funct3, CapstoneOpcode opcode, dag outs,
                dag ins, string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR4> {
   bits<5> rs3;
@@ -401,7 +401,7 @@ class RVInstR4<bits<2> funct2, bits<3> funct3, RISCVOpcode opcode, dag outs,
   let Inst{6-0} = opcode.Value;
 }
 
-class RVInstR4Frm<bits<2> funct2, RISCVOpcode opcode, dag outs, dag ins,
+class RVInstR4Frm<bits<2> funct2, CapstoneOpcode opcode, dag outs, dag ins,
                   string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR4> {
   bits<5> rs3;
@@ -421,7 +421,7 @@ class RVInstR4Frm<bits<2> funct2, RISCVOpcode opcode, dag outs, dag ins,
 
 // Common base class for I format instructions. Bits {31-20} should be set by
 // the subclasses.
-class RVInstIBase<bits<3> funct3, RISCVOpcode opcode, dag outs, dag ins,
+class RVInstIBase<bits<3> funct3, CapstoneOpcode opcode, dag outs, dag ins,
                   string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatI> {
   bits<5> rs1;
@@ -433,7 +433,7 @@ class RVInstIBase<bits<3> funct3, RISCVOpcode opcode, dag outs, dag ins,
   let Inst{6-0} = opcode.Value;
 }
 
-class RVInstI<bits<3> funct3, RISCVOpcode opcode, dag outs, dag ins,
+class RVInstI<bits<3> funct3, CapstoneOpcode opcode, dag outs, dag ins,
               string opcodestr, string argstr>
     : RVInstIBase<funct3, opcode, outs, ins, opcodestr, argstr> {
   bits<12> imm12;
@@ -441,7 +441,7 @@ class RVInstI<bits<3> funct3, RISCVOpcode opcode, dag outs, dag ins,
   let Inst{31-20} = imm12;
 }
 
-class RVInstIShift<bits<5> imm11_7, bits<3> funct3, RISCVOpcode opcode,
+class RVInstIShift<bits<5> imm11_7, bits<3> funct3, CapstoneOpcode opcode,
                    dag outs, dag ins, string opcodestr, string argstr>
     : RVInstIBase<funct3, opcode, outs, ins, opcodestr, argstr> {
   bits<6> shamt;
@@ -451,7 +451,7 @@ class RVInstIShift<bits<5> imm11_7, bits<3> funct3, RISCVOpcode opcode,
   let Inst{25-20} = shamt;
 }
 
-class RVInstIShiftW<bits<7> imm11_5, bits<3> funct3, RISCVOpcode opcode,
+class RVInstIShiftW<bits<7> imm11_5, bits<3> funct3, CapstoneOpcode opcode,
                     dag outs, dag ins, string opcodestr, string argstr>
     : RVInstIBase<funct3, opcode, outs, ins, opcodestr, argstr> {
   bits<5> shamt;
@@ -460,13 +460,13 @@ class RVInstIShiftW<bits<7> imm11_5, bits<3> funct3, RISCVOpcode opcode,
   let Inst{24-20} = shamt;
 }
 
-class RVInstIUnary<bits<12> imm12, bits<3> funct3, RISCVOpcode opcode,
+class RVInstIUnary<bits<12> imm12, bits<3> funct3, CapstoneOpcode opcode,
                    dag outs, dag ins, string opcodestr, string argstr>
     : RVInstIBase<funct3, opcode, outs, ins, opcodestr, argstr> {
   let Inst{31-20} = imm12;
 }
 
-class RVInstS<bits<3> funct3, RISCVOpcode opcode, dag outs, dag ins,
+class RVInstS<bits<3> funct3, CapstoneOpcode opcode, dag outs, dag ins,
               string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatS> {
   bits<12> imm12;
@@ -481,7 +481,7 @@ class RVInstS<bits<3> funct3, RISCVOpcode opcode, dag outs, dag ins,
   let Inst{6-0} = opcode.Value;
 }
 
-class RVInstB<bits<3> funct3, RISCVOpcode opcode, dag outs, dag ins,
+class RVInstB<bits<3> funct3, CapstoneOpcode opcode, dag outs, dag ins,
               string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatB> {
   bits<12> imm12;
@@ -498,7 +498,7 @@ class RVInstB<bits<3> funct3, RISCVOpcode opcode, dag outs, dag ins,
   let Inst{6-0} = opcode.Value;
 }
 
-class RVInstBIMM<bits<3> funct3, RISCVOpcode opcode, dag outs, dag ins,
+class RVInstBIMM<bits<3> funct3, CapstoneOpcode opcode, dag outs, dag ins,
                  string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatB> {
   bits<12> imm12;
@@ -514,7 +514,7 @@ class RVInstBIMM<bits<3> funct3, RISCVOpcode opcode, dag outs, dag ins,
   let Inst{6-0} = opcode.Value;
 }
 
-class RVInstU<RISCVOpcode opcode, dag outs, dag ins, string opcodestr,
+class RVInstU<CapstoneOpcode opcode, dag outs, dag ins, string opcodestr,
               string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatU> {
   bits<20> imm20;
@@ -525,7 +525,7 @@ class RVInstU<RISCVOpcode opcode, dag outs, dag ins, string opcodestr,
   let Inst{6-0} = opcode.Value;
 }
 
-class RVInstJ<RISCVOpcode opcode, dag outs, dag ins, string opcodestr,
+class RVInstJ<CapstoneOpcode opcode, dag outs, dag ins, string opcodestr,
               string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatJ> {
   bits<20> imm20;

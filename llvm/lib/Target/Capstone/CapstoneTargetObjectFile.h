@@ -1,4 +1,4 @@
-//===-- RISCVTargetObjectFile.h - RISC-V Object Info ------------*- C++ -*-===//
+//===-- CapstoneTargetObjectFile.h - Capstone Object Info ------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,15 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCVTARGETOBJECTFILE_H
-#define LLVM_LIB_TARGET_RISCV_RISCVTARGETOBJECTFILE_H
+#ifndef LLVM_LIB_TARGET_Capstone_CapstoneTARGETOBJECTFILE_H
+#define LLVM_LIB_TARGET_Capstone_CapstoneTARGETOBJECTFILE_H
 
 #include "llvm/CodeGen/TargetLoweringObjectFileImpl.h"
 
 namespace llvm {
 
-/// This implementation is used for RISC-V ELF targets.
-class RISCVELFTargetObjectFile : public TargetLoweringObjectFileELF {
+/// This implementation is used for Capstone ELF targets.
+class CapstoneELFTargetObjectFile : public TargetLoweringObjectFileELF {
   MCSection *SmallDataSection;
   MCSection *SmallRODataSection;
   MCSection *SmallROData4Section;

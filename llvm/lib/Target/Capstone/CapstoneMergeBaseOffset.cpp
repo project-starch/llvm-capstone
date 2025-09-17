@@ -1,4 +1,4 @@
-//===----- RISCVMergeBaseOffset.cpp - Optimise address calculations  ------===//
+//===----- CapstoneMergeBaseOffset.cpp - Optimise address calculations  ------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -11,8 +11,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVTargetMachine.h"
+#include "Capstone.h"
+#include "CapstoneTargetMachine.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -21,12 +21,12 @@
 #include <optional>
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-merge-base-offset"
-#define RISCV_MERGE_BASE_OFFSET_NAME "RISC-V Merge Base Offset"
+#define DEBUG_TYPE "capstone-merge-base-offset"
+#define Capstone_MERGE_BASE_OFFSET_NAME "Capstone Merge Base Offset"
 namespace {
 
-class RISCVMergeBaseOffsetOpt : public MachineFunctionPass {
-  const RISCVSubtarget *ST = nullptr;
+class CapstoneMergeBaseOffsetOpt : public MachineFunctionPass {
+  const CapstoneSubtarget *ST = nullptr;
   MachineRegisterInfo *MRI;
 
 public:
@@ -44,7 +44,7 @@ public:
 
   bool foldIntoMemoryOps(MachineInstr &Hi, MachineInstr &Lo);
 
-  RISCVMergeBaseOffsetOpt() : MachineFunctionPass(ID) {}
+  CapstoneMergeBaseOffsetOpt() : MachineFunctionPass(ID) {}
 
   MachineFunctionProperties getRequiredProperties() const override {
     return MachineFunctionProperties().setIsSSA();
@@ -56,14 +56,14 @@ public:
   }
 
   StringRef getPassName() const override {
-    return RISCV_MERGE_BASE_OFFSET_NAME;
+    return Capstone_MERGE_BASE_OFFSET_NAME;
   }
 };
 } // end anonymous namespace
 
-char RISCVMergeBaseOffsetOpt::ID = 0;
-INITIALIZE_PASS(RISCVMergeBaseOffsetOpt, DEBUG_TYPE,
-                RISCV_MERGE_BASE_OFFSET_NAME, false, false)
+char CapstoneMergeBaseOffsetOpt::ID = 0;
+INITIALIZE_PASS(CapstoneMergeBaseOffsetOpt, DEBUG_TYPE,
+                Capstone_MERGE_BASE_OFFSET_NAME, false, false)
 
 // Detect either of the patterns:
 //
@@ -81,15 +81,15 @@ INITIALIZE_PASS(RISCVMergeBaseOffsetOpt, DEBUG_TYPE,
 //    2) The address operands have the appropriate type, reflecting the
 //       lowering of a global address or constant pool using medlow or medany.
 //    3) The offset value in the Global Address or Constant Pool is 0.
-bool RISCVMergeBaseOffsetOpt::detectFoldable(MachineInstr &Hi,
+bool CapstoneMergeBaseOffsetOpt::detectFoldable(MachineInstr &Hi,
                                              MachineInstr *&Lo) {
-  if (Hi.getOpcode() != RISCV::LUI && Hi.getOpcode() != RISCV::AUIPC &&
-      Hi.getOpcode() != RISCV::PseudoMovAddr)
+  if (Hi.getOpcode() != Capstone::LUI && Hi.getOpcode() != Capstone::AUIPC &&
+      Hi.getOpcode() != Capstone::PseudoMovAddr)
     return false;
 
   const MachineOperand &HiOp1 = Hi.getOperand(1);
   unsigned ExpectedFlags =
-      Hi.getOpcode() == RISCV::AUIPC ? RISCVII::MO_PCREL_HI : RISCVII::MO_HI;
+      Hi.getOpcode() == Capstone::AUIPC ? CapstoneII::MO_PCREL_HI : CapstoneII::MO_HI;
   if (HiOp1.getTargetFlags() != ExpectedFlags)
     return false;
 
@@ -97,7 +97,7 @@ bool RISCVMergeBaseOffsetOpt::detectFoldable(MachineInstr &Hi,
       HiOp1.getOffset() != 0)
     return false;
 
-  if (Hi.getOpcode() == RISCV::PseudoMovAddr) {
+  if (Hi.getOpcode() == Capstone::PseudoMovAddr) {
     // Most of the code should handle it correctly without modification by
     // setting Lo and Hi both point to PseudoMovAddr
     Lo = &Hi;
@@ -107,19 +107,19 @@ bool RISCVMergeBaseOffsetOpt::detectFoldable(MachineInstr &Hi,
       return false;
 
     Lo = &*MRI->use_instr_begin(HiDestReg);
-    if (Lo->getOpcode() != RISCV::ADDI)
+    if (Lo->getOpcode() != Capstone::ADDI)
       return false;
   }
 
   const MachineOperand &LoOp2 = Lo->getOperand(2);
-  if (Hi.getOpcode() == RISCV::LUI || Hi.getOpcode() == RISCV::PseudoMovAddr) {
-    if (LoOp2.getTargetFlags() != RISCVII::MO_LO ||
+  if (Hi.getOpcode() == Capstone::LUI || Hi.getOpcode() == Capstone::PseudoMovAddr) {
+    if (LoOp2.getTargetFlags() != CapstoneII::MO_LO ||
         !(LoOp2.isGlobal() || LoOp2.isCPI() || LoOp2.isBlockAddress()) ||
         LoOp2.getOffset() != 0)
       return false;
   } else {
-    assert(Hi.getOpcode() == RISCV::AUIPC);
-    if (LoOp2.getTargetFlags() != RISCVII::MO_PCREL_LO ||
+    assert(Hi.getOpcode() == Capstone::AUIPC);
+    if (LoOp2.getTargetFlags() != CapstoneII::MO_PCREL_LO ||
         LoOp2.getType() != MachineOperand::MO_MCSymbol)
       return false;
   }
@@ -141,14 +141,14 @@ bool RISCVMergeBaseOffsetOpt::detectFoldable(MachineInstr &Hi,
 // Update the offset in Hi and Lo instructions.
 // Delete the tail instruction and update all the uses to use the
 // output from Lo.
-bool RISCVMergeBaseOffsetOpt::foldOffset(MachineInstr &Hi, MachineInstr &Lo,
+bool CapstoneMergeBaseOffsetOpt::foldOffset(MachineInstr &Hi, MachineInstr &Lo,
                                          MachineInstr &Tail, int64_t Offset) {
   assert(isInt<32>(Offset) && "Unexpected offset");
 
   // If Hi is an AUIPC, don't fold the offset if it is outside the bounds of
   // the global object. The object may be within 2GB of the PC, but addresses
   // outside of the object might not be.
-  if (Hi.getOpcode() == RISCV::AUIPC && Hi.getOperand(1).isGlobal()) {
+  if (Hi.getOpcode() == Capstone::AUIPC && Hi.getOperand(1).isGlobal()) {
     const GlobalValue *GV = Hi.getOperand(1).getGlobal();
     Type *Ty = GV->getValueType();
     if (!Ty->isSized() || Offset < 0 ||
@@ -158,7 +158,7 @@ bool RISCVMergeBaseOffsetOpt::foldOffset(MachineInstr &Hi, MachineInstr &Lo,
 
   // Put the offset back in Hi and the Lo
   Hi.getOperand(1).setOffset(Offset);
-  if (Hi.getOpcode() != RISCV::AUIPC)
+  if (Hi.getOpcode() != Capstone::AUIPC)
     Lo.getOperand(2).setOffset(Offset);
   // Delete the tail instruction.
   MRI->constrainRegClass(Lo.getOperand(0).getReg(),
@@ -190,11 +190,11 @@ bool RISCVMergeBaseOffsetOpt::foldOffset(MachineInstr &Hi, MachineInstr &Lo,
 //                      \                                    /
 //                       \                                  /
 //                         TailAdd: add  vreg4, vreg2, voff
-bool RISCVMergeBaseOffsetOpt::foldLargeOffset(MachineInstr &Hi,
+bool CapstoneMergeBaseOffsetOpt::foldLargeOffset(MachineInstr &Hi,
                                               MachineInstr &Lo,
                                               MachineInstr &TailAdd,
                                               Register GAReg) {
-  assert((TailAdd.getOpcode() == RISCV::ADD) && "Expected ADD instruction!");
+  assert((TailAdd.getOpcode() == Capstone::ADD) && "Expected ADD instruction!");
   Register Rs = TailAdd.getOperand(1).getReg();
   Register Rt = TailAdd.getOperand(2).getReg();
   Register Reg = Rs == GAReg ? Rt : Rs;
@@ -204,18 +204,18 @@ bool RISCVMergeBaseOffsetOpt::foldLargeOffset(MachineInstr &Hi,
     return false;
   // This can point to an ADDI(W) or a LUI:
   MachineInstr &OffsetTail = *MRI->getVRegDef(Reg);
-  if (OffsetTail.getOpcode() == RISCV::ADDI ||
-      OffsetTail.getOpcode() == RISCV::ADDIW) {
+  if (OffsetTail.getOpcode() == Capstone::ADDI ||
+      OffsetTail.getOpcode() == Capstone::ADDIW) {
     // The offset value has non zero bits in both %hi and %lo parts.
     // Detect an ADDI that feeds from a LUI instruction.
     MachineOperand &AddiImmOp = OffsetTail.getOperand(2);
-    if (AddiImmOp.getTargetFlags() != RISCVII::MO_None)
+    if (AddiImmOp.getTargetFlags() != CapstoneII::MO_None)
       return false;
     Register AddiReg = OffsetTail.getOperand(1).getReg();
     int64_t OffLo = AddiImmOp.getImm();
 
     // Handle rs1 of ADDI is X0.
-    if (AddiReg == RISCV::X0) {
+    if (AddiReg == Capstone::X0) {
       LLVM_DEBUG(dbgs() << "  Offset Instrs: " << OffsetTail);
       if (!foldOffset(Hi, Lo, TailAdd, OffLo))
         return false;
@@ -225,14 +225,14 @@ bool RISCVMergeBaseOffsetOpt::foldLargeOffset(MachineInstr &Hi,
 
     MachineInstr &OffsetLui = *MRI->getVRegDef(AddiReg);
     MachineOperand &LuiImmOp = OffsetLui.getOperand(1);
-    if (OffsetLui.getOpcode() != RISCV::LUI ||
-        LuiImmOp.getTargetFlags() != RISCVII::MO_None ||
+    if (OffsetLui.getOpcode() != Capstone::LUI ||
+        LuiImmOp.getTargetFlags() != CapstoneII::MO_None ||
         !MRI->hasOneUse(OffsetLui.getOperand(0).getReg()))
       return false;
     int64_t Offset = SignExtend64<32>(LuiImmOp.getImm() << 12);
     Offset += OffLo;
     // RV32 ignores the upper 32 bits. ADDIW sign extends the result.
-    if (!ST->is64Bit() || OffsetTail.getOpcode() == RISCV::ADDIW)
+    if (!ST->is64Bit() || OffsetTail.getOpcode() == Capstone::ADDIW)
       Offset = SignExtend64<32>(Offset);
     // We can only fold simm32 offsets.
     if (!isInt<32>(Offset))
@@ -244,7 +244,7 @@ bool RISCVMergeBaseOffsetOpt::foldLargeOffset(MachineInstr &Hi,
     OffsetTail.eraseFromParent();
     OffsetLui.eraseFromParent();
     return true;
-  } else if (OffsetTail.getOpcode() == RISCV::LUI) {
+  } else if (OffsetTail.getOpcode() == Capstone::LUI) {
     // The offset value has all zero bits in the lower 12 bits. Only LUI
     // exists.
     LLVM_DEBUG(dbgs() << "  Offset Instr: " << OffsetTail);
@@ -268,13 +268,13 @@ bool RISCVMergeBaseOffsetOpt::foldLargeOffset(MachineInstr &Hi,
 // Lo:         addi    vreg2, vreg1, %lo(s)
 // OffsetTail: addi    voff, x0, C
 // TailAdd:    shXadd  vreg4, voff, vreg2
-bool RISCVMergeBaseOffsetOpt::foldShiftedOffset(MachineInstr &Hi,
+bool CapstoneMergeBaseOffsetOpt::foldShiftedOffset(MachineInstr &Hi,
                                                 MachineInstr &Lo,
                                                 MachineInstr &TailShXAdd,
                                                 Register GAReg) {
-  assert((TailShXAdd.getOpcode() == RISCV::SH1ADD ||
-          TailShXAdd.getOpcode() == RISCV::SH2ADD ||
-          TailShXAdd.getOpcode() == RISCV::SH3ADD) &&
+  assert((TailShXAdd.getOpcode() == Capstone::SH1ADD ||
+          TailShXAdd.getOpcode() == Capstone::SH2ADD ||
+          TailShXAdd.getOpcode() == Capstone::SH3ADD) &&
          "Expected SHXADD instruction!");
 
   if (GAReg != TailShXAdd.getOperand(2).getReg())
@@ -288,10 +288,10 @@ bool RISCVMergeBaseOffsetOpt::foldShiftedOffset(MachineInstr &Hi,
     return false;
   // This can point to an ADDI X0, C.
   MachineInstr &OffsetTail = *MRI->getVRegDef(Rs1);
-  if (OffsetTail.getOpcode() != RISCV::ADDI)
+  if (OffsetTail.getOpcode() != Capstone::ADDI)
     return false;
   if (!OffsetTail.getOperand(1).isReg() ||
-      OffsetTail.getOperand(1).getReg() != RISCV::X0 ||
+      OffsetTail.getOperand(1).getReg() != Capstone::X0 ||
       !OffsetTail.getOperand(2).isImm())
     return false;
 
@@ -301,9 +301,9 @@ bool RISCVMergeBaseOffsetOpt::foldShiftedOffset(MachineInstr &Hi,
   unsigned ShAmt;
   switch (TailShXAdd.getOpcode()) {
   default: llvm_unreachable("Unexpected opcode");
-  case RISCV::SH1ADD: ShAmt = 1; break;
-  case RISCV::SH2ADD: ShAmt = 2; break;
-  case RISCV::SH3ADD: ShAmt = 3; break;
+  case Capstone::SH1ADD: ShAmt = 1; break;
+  case Capstone::SH2ADD: ShAmt = 2; break;
+  case Capstone::SH3ADD: ShAmt = 3; break;
   }
 
   Offset = (uint64_t)Offset << ShAmt;
@@ -315,7 +315,7 @@ bool RISCVMergeBaseOffsetOpt::foldShiftedOffset(MachineInstr &Hi,
   return true;
 }
 
-bool RISCVMergeBaseOffsetOpt::detectAndFoldOffset(MachineInstr &Hi,
+bool CapstoneMergeBaseOffsetOpt::detectAndFoldOffset(MachineInstr &Hi,
                                                   MachineInstr &Lo) {
   Register DestReg = Lo.getOperand(0).getReg();
 
@@ -332,7 +332,7 @@ bool RISCVMergeBaseOffsetOpt::detectAndFoldOffset(MachineInstr &Hi,
     LLVM_DEBUG(dbgs() << "Don't know how to get offset from this instr:"
                       << Tail);
     break;
-  case RISCV::ADDI: {
+  case Capstone::ADDI: {
     // Offset is simply an immediate operand.
     int64_t Offset = Tail.getOperand(2).getImm();
 
@@ -340,7 +340,7 @@ bool RISCVMergeBaseOffsetOpt::detectAndFoldOffset(MachineInstr &Hi,
     Register TailDestReg = Tail.getOperand(0).getReg();
     if (MRI->hasOneUse(TailDestReg)) {
       MachineInstr &TailTail = *MRI->use_instr_begin(TailDestReg);
-      if (TailTail.getOpcode() == RISCV::ADDI) {
+      if (TailTail.getOpcode() == Capstone::ADDI) {
         Offset += TailTail.getOperand(2).getImm();
         LLVM_DEBUG(dbgs() << "  Offset Instrs: " << Tail << TailTail);
         if (!foldOffset(Hi, Lo, TailTail, Offset))
@@ -353,7 +353,7 @@ bool RISCVMergeBaseOffsetOpt::detectAndFoldOffset(MachineInstr &Hi,
     LLVM_DEBUG(dbgs() << "  Offset Instr: " << Tail);
     return foldOffset(Hi, Lo, Tail, Offset);
   }
-  case RISCV::ADD:
+  case Capstone::ADD:
     // The offset is too large to fit in the immediate field of ADDI.
     // This can be in two forms:
     // 1) LUI hi_Offset followed by:
@@ -363,9 +363,9 @@ bool RISCVMergeBaseOffsetOpt::detectAndFoldOffset(MachineInstr &Hi,
     // 2) LUI (offset20)
     //    This happens in case the lower 12 bits of the offset are zeros.
     return foldLargeOffset(Hi, Lo, Tail, DestReg);
-  case RISCV::SH1ADD:
-  case RISCV::SH2ADD:
-  case RISCV::SH3ADD:
+  case Capstone::SH1ADD:
+  case Capstone::SH2ADD:
+  case Capstone::SH3ADD:
     // The offset is too large to fit in the immediate field of ADDI.
     // It may be encoded as (SH2ADD (ADDI X0, C), DestReg) or
     // (SH3ADD (ADDI X0, C), DestReg).
@@ -375,7 +375,7 @@ bool RISCVMergeBaseOffsetOpt::detectAndFoldOffset(MachineInstr &Hi,
   return false;
 }
 
-bool RISCVMergeBaseOffsetOpt::foldIntoMemoryOps(MachineInstr &Hi,
+bool CapstoneMergeBaseOffsetOpt::foldIntoMemoryOps(MachineInstr &Hi,
                                                 MachineInstr &Lo) {
   Register DestReg = Lo.getOperand(0).getReg();
 
@@ -399,29 +399,29 @@ bool RISCVMergeBaseOffsetOpt::foldIntoMemoryOps(MachineInstr &Hi,
     default:
       LLVM_DEBUG(dbgs() << "Not a load or store instruction: " << UseMI);
       return false;
-    case RISCV::LB:
-    case RISCV::LH:
-    case RISCV::LH_INX:
-    case RISCV::LW:
-    case RISCV::LW_INX:
-    case RISCV::LBU:
-    case RISCV::LHU:
-    case RISCV::LWU:
-    case RISCV::LD:
-    case RISCV::LD_RV32:
-    case RISCV::FLH:
-    case RISCV::FLW:
-    case RISCV::FLD:
-    case RISCV::SB:
-    case RISCV::SH:
-    case RISCV::SH_INX:
-    case RISCV::SW:
-    case RISCV::SW_INX:
-    case RISCV::SD:
-    case RISCV::SD_RV32:
-    case RISCV::FSH:
-    case RISCV::FSW:
-    case RISCV::FSD: {
+    case Capstone::LB:
+    case Capstone::LH:
+    case Capstone::LH_INX:
+    case Capstone::LW:
+    case Capstone::LW_INX:
+    case Capstone::LBU:
+    case Capstone::LHU:
+    case Capstone::LWU:
+    case Capstone::LD:
+    case Capstone::LD_RV32:
+    case Capstone::FLH:
+    case Capstone::FLW:
+    case Capstone::FLD:
+    case Capstone::SB:
+    case Capstone::SH:
+    case Capstone::SH_INX:
+    case Capstone::SW:
+    case Capstone::SW_INX:
+    case Capstone::SD:
+    case Capstone::SD_RV32:
+    case Capstone::FSH:
+    case Capstone::FSW:
+    case Capstone::FSD: {
       if (UseMI.getOperand(1).isFI())
         return false;
       // Register defined by Lo should not be the value register.
@@ -436,8 +436,8 @@ bool RISCVMergeBaseOffsetOpt::foldIntoMemoryOps(MachineInstr &Hi,
       CommonOffset = Offset;
       break;
     }
-    case RISCV::INLINEASM:
-    case RISCV::INLINEASM_BR: {
+    case Capstone::INLINEASM:
+    case Capstone::INLINEASM_BR: {
       SmallVector<unsigned> InlineAsmMemoryOpIndexes;
       unsigned NumOps = 0;
       for (unsigned I = InlineAsm::MIOp_FirstOperand;
@@ -504,20 +504,20 @@ bool RISCVMergeBaseOffsetOpt::foldIntoMemoryOps(MachineInstr &Hi,
   Hi.getOperand(1).setOffset(NewOffset);
   MachineOperand &ImmOp = Lo.getOperand(2);
   // Expand PseudoMovAddr into LUI
-  if (Hi.getOpcode() == RISCV::PseudoMovAddr) {
+  if (Hi.getOpcode() == Capstone::PseudoMovAddr) {
     auto *TII = ST->getInstrInfo();
-    Hi.setDesc(TII->get(RISCV::LUI));
+    Hi.setDesc(TII->get(Capstone::LUI));
     Hi.removeOperand(2);
   }
 
-  if (Hi.getOpcode() != RISCV::AUIPC)
+  if (Hi.getOpcode() != Capstone::AUIPC)
     ImmOp.setOffset(NewOffset);
 
   // Update the immediate in the load/store instructions to add the offset.
   for (MachineInstr &UseMI :
        llvm::make_early_inc_range(MRI->use_instructions(DestReg))) {
-    if (UseMI.getOpcode() == RISCV::INLINEASM ||
-        UseMI.getOpcode() == RISCV::INLINEASM_BR) {
+    if (UseMI.getOpcode() == Capstone::INLINEASM ||
+        UseMI.getOpcode() == Capstone::INLINEASM_BR) {
       auto &InlineAsmMemoryOpIndexes = InlineAsmMemoryOpIndexesMap[&UseMI];
       for (unsigned I : InlineAsmMemoryOpIndexes) {
         MachineOperand &MO = UseMI.getOperand(I + 1);
@@ -555,11 +555,11 @@ bool RISCVMergeBaseOffsetOpt::foldIntoMemoryOps(MachineInstr &Hi,
   return true;
 }
 
-bool RISCVMergeBaseOffsetOpt::runOnMachineFunction(MachineFunction &Fn) {
+bool CapstoneMergeBaseOffsetOpt::runOnMachineFunction(MachineFunction &Fn) {
   if (skipFunction(Fn.getFunction()))
     return false;
 
-  ST = &Fn.getSubtarget<RISCVSubtarget>();
+  ST = &Fn.getSubtarget<CapstoneSubtarget>();
 
   bool MadeChange = false;
   MRI = &Fn.getRegInfo();
@@ -578,6 +578,6 @@ bool RISCVMergeBaseOffsetOpt::runOnMachineFunction(MachineFunction &Fn) {
 }
 
 /// Returns an instance of the Merge Base Offset Optimization pass.
-FunctionPass *llvm::createRISCVMergeBaseOffsetOptPass() {
-  return new RISCVMergeBaseOffsetOpt();
+FunctionPass *llvm::createCapstoneMergeBaseOffsetOptPass() {
+  return new CapstoneMergeBaseOffsetOpt();
 }

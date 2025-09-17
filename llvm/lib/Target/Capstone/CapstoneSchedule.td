@@ -1,4 +1,4 @@
-//===-- RISCVSchedule.td - RISC-V Scheduling Definitions ---*- tablegen -*-===//
+//===-- CapstoneSchedule.td - Capstone Scheduling Definitions ---*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -515,10 +515,10 @@ def : ReadAdvance<ReadAtomicSTD, 0>;
 }
 
 // Include the scheduler resources for other instruction extensions.
-include "RISCVScheduleZb.td"
-include "RISCVScheduleV.td"
-include "RISCVScheduleXSf.td"
-include "RISCVScheduleZvk.td"
+include "CapstoneScheduleZb.td"
+include "CapstoneScheduleV.td"
+include "CapstoneScheduleXSf.td"
+include "CapstoneScheduleZvk.td"
 
 // Vendor Extensions
 multiclass UnsupportedSchedXsf {

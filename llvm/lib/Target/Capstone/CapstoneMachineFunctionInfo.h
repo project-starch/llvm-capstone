@@ -1,4 +1,4 @@
-//=- RISCVMachineFunctionInfo.h - RISC-V machine function info ----*- C++ -*-=//
+//=- CapstoneMachineFunctionInfo.h - Capstone machine function info ----*- C++ -*-=//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,45 +6,45 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file declares RISCV-specific per-machine-function information.
+// This file declares Capstone-specific per-machine-function information.
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCVMACHINEFUNCTIONINFO_H
-#define LLVM_LIB_TARGET_RISCV_RISCVMACHINEFUNCTIONINFO_H
+#ifndef LLVM_LIB_TARGET_Capstone_CapstoneMACHINEFUNCTIONINFO_H
+#define LLVM_LIB_TARGET_Capstone_CapstoneMACHINEFUNCTIONINFO_H
 
-#include "RISCVSubtarget.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/CodeGen/MIRYamlMapping.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 
 namespace llvm {
 
-class RISCVMachineFunctionInfo;
+class CapstoneMachineFunctionInfo;
 
 namespace yaml {
-struct RISCVMachineFunctionInfo final : public yaml::MachineFunctionInfo {
+struct CapstoneMachineFunctionInfo final : public yaml::MachineFunctionInfo {
   int VarArgsFrameIndex;
   int VarArgsSaveSize;
 
-  RISCVMachineFunctionInfo() = default;
-  RISCVMachineFunctionInfo(const llvm::RISCVMachineFunctionInfo &MFI);
+  CapstoneMachineFunctionInfo() = default;
+  CapstoneMachineFunctionInfo(const llvm::CapstoneMachineFunctionInfo &MFI);
 
   void mappingImpl(yaml::IO &YamlIO) override;
-  ~RISCVMachineFunctionInfo() = default;
+  ~CapstoneMachineFunctionInfo() = default;
 };
 
-template <> struct MappingTraits<RISCVMachineFunctionInfo> {
-  static void mapping(IO &YamlIO, RISCVMachineFunctionInfo &MFI) {
+template <> struct MappingTraits<CapstoneMachineFunctionInfo> {
+  static void mapping(IO &YamlIO, CapstoneMachineFunctionInfo &MFI) {
     YamlIO.mapOptional("varArgsFrameIndex", MFI.VarArgsFrameIndex);
     YamlIO.mapOptional("varArgsSaveSize", MFI.VarArgsSaveSize);
   }
 };
 } // end namespace yaml
 
-/// RISCVMachineFunctionInfo - This class is derived from MachineFunctionInfo
-/// and contains private RISCV-specific information for each MachineFunction.
-class RISCVMachineFunctionInfo : public MachineFunctionInfo {
+/// CapstoneMachineFunctionInfo - This class is derived from MachineFunctionInfo
+/// and contains private Capstone-specific information for each MachineFunction.
+class CapstoneMachineFunctionInfo : public MachineFunctionInfo {
 private:
   /// FrameIndex for start of varargs area
   int VarArgsFrameIndex = 0;
@@ -87,7 +87,7 @@ private:
   bool HasDynamicAllocation = false;
 
 public:
-  RISCVMachineFunctionInfo(const Function &F, const RISCVSubtarget *STI);
+  CapstoneMachineFunctionInfo(const Function &F, const CapstoneSubtarget *STI);
 
   MachineFunctionInfo *
   clone(BumpPtrAllocator &Allocator, MachineFunction &DestMF,
@@ -125,7 +125,7 @@ public:
     // We cannot use fixed locations for the callee saved spill slots if the
     // function uses a varargs save area, or is an interrupt handler.
     return !isPushable(MF) &&
-           MF.getSubtarget<RISCVSubtarget>().enableSaveRestore() &&
+           MF.getSubtarget<CapstoneSubtarget>().enableSaveRestore() &&
            VarArgsSaveSize == 0 && !MF.getFrameInfo().hasTailCall() &&
            !MF.getFunction().hasFnAttribute("interrupt");
   }
@@ -208,7 +208,7 @@ public:
   // calculating the CFA based on FP.
   bool hasImplicitFPUpdates(const MachineFunction &MF) const;
 
-  void initializeBaseYamlFields(const yaml::RISCVMachineFunctionInfo &YamlMFI);
+  void initializeBaseYamlFields(const yaml::CapstoneMachineFunctionInfo &YamlMFI);
 
   void addSExt32Register(Register Reg);
   bool isSExt32Register(Register Reg) const;
@@ -222,4 +222,4 @@ public:
 
 } // end namespace llvm
 
-#endif // LLVM_LIB_TARGET_RISCV_RISCVMACHINEFUNCTIONINFO_H
+#endif // LLVM_LIB_TARGET_Capstone_CapstoneMACHINEFUNCTIONINFO_H

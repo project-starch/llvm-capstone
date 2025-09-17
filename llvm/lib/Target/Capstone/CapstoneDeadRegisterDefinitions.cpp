@@ -1,4 +1,4 @@
-//===- RISCVDeadRegisterDefinitions.cpp - Replace dead defs w/ zero reg --===//
+//===- CapstoneDeadRegisterDefinitions.cpp - Replace dead defs w/ zero reg --===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -10,8 +10,8 @@
 //
 //===---------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVSubtarget.h"
+#include "Capstone.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/LiveDebugVariables.h"
 #include "llvm/CodeGen/LiveIntervals.h"
@@ -19,17 +19,17 @@
 #include "llvm/CodeGen/MachineFunctionPass.h"
 
 using namespace llvm;
-#define DEBUG_TYPE "riscv-dead-defs"
-#define RISCV_DEAD_REG_DEF_NAME "RISC-V Dead register definitions"
+#define DEBUG_TYPE "capstone-dead-defs"
+#define Capstone_DEAD_REG_DEF_NAME "Capstone Dead register definitions"
 
 STATISTIC(NumDeadDefsReplaced, "Number of dead definitions replaced");
 
 namespace {
-class RISCVDeadRegisterDefinitions : public MachineFunctionPass {
+class CapstoneDeadRegisterDefinitions : public MachineFunctionPass {
 public:
   static char ID;
 
-  RISCVDeadRegisterDefinitions() : MachineFunctionPass(ID) {}
+  CapstoneDeadRegisterDefinitions() : MachineFunctionPass(ID) {}
   bool runOnMachineFunction(MachineFunction &MF) override;
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
@@ -42,26 +42,26 @@ public:
     MachineFunctionPass::getAnalysisUsage(AU);
   }
 
-  StringRef getPassName() const override { return RISCV_DEAD_REG_DEF_NAME; }
+  StringRef getPassName() const override { return Capstone_DEAD_REG_DEF_NAME; }
 };
 } // end anonymous namespace
 
-char RISCVDeadRegisterDefinitions::ID = 0;
-INITIALIZE_PASS(RISCVDeadRegisterDefinitions, DEBUG_TYPE,
-                RISCV_DEAD_REG_DEF_NAME, false, false)
+char CapstoneDeadRegisterDefinitions::ID = 0;
+INITIALIZE_PASS(CapstoneDeadRegisterDefinitions, DEBUG_TYPE,
+                Capstone_DEAD_REG_DEF_NAME, false, false)
 
-FunctionPass *llvm::createRISCVDeadRegisterDefinitionsPass() {
-  return new RISCVDeadRegisterDefinitions();
+FunctionPass *llvm::createCapstoneDeadRegisterDefinitionsPass() {
+  return new CapstoneDeadRegisterDefinitions();
 }
 
-bool RISCVDeadRegisterDefinitions::runOnMachineFunction(MachineFunction &MF) {
+bool CapstoneDeadRegisterDefinitions::runOnMachineFunction(MachineFunction &MF) {
   if (skipFunction(MF.getFunction()))
     return false;
 
   const TargetInstrInfo *TII = MF.getSubtarget().getInstrInfo();
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
   LiveIntervals &LIS = getAnalysis<LiveIntervalsWrapperPass>().getLIS();
-  LLVM_DEBUG(dbgs() << "***** RISCVDeadRegisterDefinitions *****\n");
+  LLVM_DEBUG(dbgs() << "***** CapstoneDeadRegisterDefinitions *****\n");
 
   bool MadeChange = false;
   for (MachineBasicBlock &MBB : MF) {
@@ -71,8 +71,8 @@ bool RISCVDeadRegisterDefinitions::runOnMachineFunction(MachineFunction &MF) {
       const MCInstrDesc &Desc = MI.getDesc();
       if (!Desc.mayLoad() && !Desc.mayStore() &&
           !Desc.hasUnmodeledSideEffects() &&
-          MI.getOpcode() != RISCV::PseudoVSETVLI &&
-          MI.getOpcode() != RISCV::PseudoVSETIVLI)
+          MI.getOpcode() != Capstone::PseudoVSETVLI &&
+          MI.getOpcode() != Capstone::PseudoVSETIVLI)
         continue;
       for (int I = 0, E = Desc.getNumDefs(); I != E; ++I) {
         MachineOperand &MO = MI.getOperand(I);
@@ -90,14 +90,14 @@ bool RISCVDeadRegisterDefinitions::runOnMachineFunction(MachineFunction &MF) {
                    MI.print(dbgs()));
         Register X0Reg;
         const TargetRegisterClass *RC = TII->getRegClass(Desc, I, TRI);
-        if (RC && RC->contains(RISCV::X0)) {
-          X0Reg = RISCV::X0;
-        } else if (RC && RC->contains(RISCV::X0_W)) {
-          X0Reg = RISCV::X0_W;
-        } else if (RC && RC->contains(RISCV::X0_H)) {
-          X0Reg = RISCV::X0_H;
-        } else if (RC && RC->contains(RISCV::X0_Pair)) {
-          X0Reg = RISCV::X0_Pair;
+        if (RC && RC->contains(Capstone::X0)) {
+          X0Reg = Capstone::X0;
+        } else if (RC && RC->contains(Capstone::X0_W)) {
+          X0Reg = Capstone::X0_W;
+        } else if (RC && RC->contains(Capstone::X0_H)) {
+          X0Reg = Capstone::X0_H;
+        } else if (RC && RC->contains(Capstone::X0_Pair)) {
+          X0Reg = Capstone::X0_Pair;
         } else {
           LLVM_DEBUG(dbgs() << "    Ignoring, register is not a GPR.\n");
           continue;

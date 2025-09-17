@@ -1,4 +1,4 @@
-//=== RISCVPostLegalizerCombiner.cpp --------------------------*- C++ -*-===//
+//=== CapstonePostLegalizerCombiner.cpp --------------------------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -12,11 +12,11 @@
 /// The combines here must preserve instruction legality.
 ///
 /// Combines which don't rely on instruction legality should go in the
-/// RISCVPreLegalizerCombiner.
+/// CapstonePreLegalizerCombiner.
 ///
 //===----------------------------------------------------------------------===//
 
-#include "RISCVTargetMachine.h"
+#include "CapstoneTargetMachine.h"
 #include "llvm/CodeGen/GlobalISel/CSEInfo.h"
 #include "llvm/CodeGen/GlobalISel/Combiner.h"
 #include "llvm/CodeGen/GlobalISel/CombinerHelper.h"
@@ -29,81 +29,81 @@
 #include "llvm/CodeGen/TargetPassConfig.h"
 
 #define GET_GICOMBINER_DEPS
-#include "RISCVGenPostLegalizeGICombiner.inc"
+#include "CapstoneGenPostLegalizeGICombiner.inc"
 #undef GET_GICOMBINER_DEPS
 
-#define DEBUG_TYPE "riscv-postlegalizer-combiner"
+#define DEBUG_TYPE "capstone-postlegalizer-combiner"
 
 using namespace llvm;
 
 namespace {
 
 #define GET_GICOMBINER_TYPES
-#include "RISCVGenPostLegalizeGICombiner.inc"
+#include "CapstoneGenPostLegalizeGICombiner.inc"
 #undef GET_GICOMBINER_TYPES
 
-class RISCVPostLegalizerCombinerImpl : public Combiner {
+class CapstonePostLegalizerCombinerImpl : public Combiner {
 protected:
   const CombinerHelper Helper;
-  const RISCVPostLegalizerCombinerImplRuleConfig &RuleConfig;
-  const RISCVSubtarget &STI;
+  const CapstonePostLegalizerCombinerImplRuleConfig &RuleConfig;
+  const CapstoneSubtarget &STI;
 
 public:
-  RISCVPostLegalizerCombinerImpl(
+  CapstonePostLegalizerCombinerImpl(
       MachineFunction &MF, CombinerInfo &CInfo, const TargetPassConfig *TPC,
       GISelValueTracking &VT, GISelCSEInfo *CSEInfo,
-      const RISCVPostLegalizerCombinerImplRuleConfig &RuleConfig,
-      const RISCVSubtarget &STI, MachineDominatorTree *MDT,
+      const CapstonePostLegalizerCombinerImplRuleConfig &RuleConfig,
+      const CapstoneSubtarget &STI, MachineDominatorTree *MDT,
       const LegalizerInfo *LI);
 
-  static const char *getName() { return "RISCVPostLegalizerCombiner"; }
+  static const char *getName() { return "CapstonePostLegalizerCombiner"; }
 
   bool tryCombineAll(MachineInstr &I) const override;
 
 private:
 #define GET_GICOMBINER_CLASS_MEMBERS
-#include "RISCVGenPostLegalizeGICombiner.inc"
+#include "CapstoneGenPostLegalizeGICombiner.inc"
 #undef GET_GICOMBINER_CLASS_MEMBERS
 };
 
 #define GET_GICOMBINER_IMPL
-#include "RISCVGenPostLegalizeGICombiner.inc"
+#include "CapstoneGenPostLegalizeGICombiner.inc"
 #undef GET_GICOMBINER_IMPL
 
-RISCVPostLegalizerCombinerImpl::RISCVPostLegalizerCombinerImpl(
+CapstonePostLegalizerCombinerImpl::CapstonePostLegalizerCombinerImpl(
     MachineFunction &MF, CombinerInfo &CInfo, const TargetPassConfig *TPC,
     GISelValueTracking &VT, GISelCSEInfo *CSEInfo,
-    const RISCVPostLegalizerCombinerImplRuleConfig &RuleConfig,
-    const RISCVSubtarget &STI, MachineDominatorTree *MDT,
+    const CapstonePostLegalizerCombinerImplRuleConfig &RuleConfig,
+    const CapstoneSubtarget &STI, MachineDominatorTree *MDT,
     const LegalizerInfo *LI)
     : Combiner(MF, CInfo, TPC, &VT, CSEInfo),
       Helper(Observer, B, /*IsPreLegalize*/ false, &VT, MDT, LI),
       RuleConfig(RuleConfig), STI(STI),
 #define GET_GICOMBINER_CONSTRUCTOR_INITS
-#include "RISCVGenPostLegalizeGICombiner.inc"
+#include "CapstoneGenPostLegalizeGICombiner.inc"
 #undef GET_GICOMBINER_CONSTRUCTOR_INITS
 {
 }
 
-class RISCVPostLegalizerCombiner : public MachineFunctionPass {
+class CapstonePostLegalizerCombiner : public MachineFunctionPass {
 public:
   static char ID;
 
-  RISCVPostLegalizerCombiner();
+  CapstonePostLegalizerCombiner();
 
   StringRef getPassName() const override {
-    return "RISCVPostLegalizerCombiner";
+    return "CapstonePostLegalizerCombiner";
   }
 
   bool runOnMachineFunction(MachineFunction &MF) override;
   void getAnalysisUsage(AnalysisUsage &AU) const override;
 
 private:
-  RISCVPostLegalizerCombinerImplRuleConfig RuleConfig;
+  CapstonePostLegalizerCombinerImplRuleConfig RuleConfig;
 };
 } // end anonymous namespace
 
-void RISCVPostLegalizerCombiner::getAnalysisUsage(AnalysisUsage &AU) const {
+void CapstonePostLegalizerCombiner::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<TargetPassConfig>();
   AU.setPreservesCFG();
   getSelectionDAGFallbackAnalysisUsage(AU);
@@ -116,13 +116,13 @@ void RISCVPostLegalizerCombiner::getAnalysisUsage(AnalysisUsage &AU) const {
   MachineFunctionPass::getAnalysisUsage(AU);
 }
 
-RISCVPostLegalizerCombiner::RISCVPostLegalizerCombiner()
+CapstonePostLegalizerCombiner::CapstonePostLegalizerCombiner()
     : MachineFunctionPass(ID) {
   if (!RuleConfig.parseCommandLineOption())
     report_fatal_error("Invalid rule identifier");
 }
 
-bool RISCVPostLegalizerCombiner::runOnMachineFunction(MachineFunction &MF) {
+bool CapstonePostLegalizerCombiner::runOnMachineFunction(MachineFunction &MF) {
   if (MF.getProperties().hasFailedISel())
     return false;
   assert(MF.getProperties().hasLegalized() && "Expected a legalized function?");
@@ -131,7 +131,7 @@ bool RISCVPostLegalizerCombiner::runOnMachineFunction(MachineFunction &MF) {
   bool EnableOpt =
       MF.getTarget().getOptLevel() != CodeGenOptLevel::None && !skipFunction(F);
 
-  const RISCVSubtarget &ST = MF.getSubtarget<RISCVSubtarget>();
+  const CapstoneSubtarget &ST = MF.getSubtarget<CapstoneSubtarget>();
   const auto *LI = ST.getLegalizerInfo();
 
   GISelValueTracking *VT =
@@ -145,21 +145,21 @@ bool RISCVPostLegalizerCombiner::runOnMachineFunction(MachineFunction &MF) {
   CombinerInfo CInfo(/*AllowIllegalOps*/ true, /*ShouldLegalizeIllegal*/ false,
                      /*LegalizerInfo*/ nullptr, EnableOpt, F.hasOptSize(),
                      F.hasMinSize());
-  RISCVPostLegalizerCombinerImpl Impl(MF, CInfo, TPC, *VT, CSEInfo, RuleConfig,
+  CapstonePostLegalizerCombinerImpl Impl(MF, CInfo, TPC, *VT, CSEInfo, RuleConfig,
                                       ST, MDT, LI);
   return Impl.combineMachineInstrs();
 }
 
-char RISCVPostLegalizerCombiner::ID = 0;
-INITIALIZE_PASS_BEGIN(RISCVPostLegalizerCombiner, DEBUG_TYPE,
-                      "Combine RISC-V MachineInstrs after legalization", false,
+char CapstonePostLegalizerCombiner::ID = 0;
+INITIALIZE_PASS_BEGIN(CapstonePostLegalizerCombiner, DEBUG_TYPE,
+                      "Combine Capstone MachineInstrs after legalization", false,
                       false)
 INITIALIZE_PASS_DEPENDENCY(TargetPassConfig)
 INITIALIZE_PASS_DEPENDENCY(GISelValueTrackingAnalysisLegacy)
-INITIALIZE_PASS_END(RISCVPostLegalizerCombiner, DEBUG_TYPE,
-                    "Combine RISC-V MachineInstrs after legalization", false,
+INITIALIZE_PASS_END(CapstonePostLegalizerCombiner, DEBUG_TYPE,
+                    "Combine Capstone MachineInstrs after legalization", false,
                     false)
 
-FunctionPass *llvm::createRISCVPostLegalizerCombiner() {
-  return new RISCVPostLegalizerCombiner();
+FunctionPass *llvm::createCapstonePostLegalizerCombiner() {
+  return new CapstonePostLegalizerCombiner();
 }

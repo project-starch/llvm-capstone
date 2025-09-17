@@ -1,4 +1,4 @@
-//===- RISCVInstrInfoZk.td - RISC-V 'Zk' instructions ------*- tablegen -*-===//
+//===- CapstoneInstrInfoZk.td - Capstone 'Zk' instructions ------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard 'Zk',
+// This file describes the Capstone instructions from the standard 'Zk',
 // Scalar Cryptography Instructions extension, version 1.0.
 //
 //===----------------------------------------------------------------------===//
@@ -16,22 +16,22 @@
 //===----------------------------------------------------------------------===//
 
 // Scalar cryptography
-def riscv_sha256sig0 : RVSDNode<"SHA256SIG0", SDTIntUnaryOp>;
-def riscv_sha256sig1 : RVSDNode<"SHA256SIG1", SDTIntUnaryOp>;
-def riscv_sha256sum0 : RVSDNode<"SHA256SUM0", SDTIntUnaryOp>;
-def riscv_sha256sum1 : RVSDNode<"SHA256SUM1", SDTIntUnaryOp>;
+def capstone_sha256sig0 : RVSDNode<"SHA256SIG0", SDTIntUnaryOp>;
+def capstone_sha256sig1 : RVSDNode<"SHA256SIG1", SDTIntUnaryOp>;
+def capstone_sha256sum0 : RVSDNode<"SHA256SUM0", SDTIntUnaryOp>;
+def capstone_sha256sum1 : RVSDNode<"SHA256SUM1", SDTIntUnaryOp>;
 
-def SDT_RISCVZkByteSelect : SDTypeProfile<1, 3, [SDTCisVT<0, XLenVT>,
+def SDT_CapstoneZkByteSelect : SDTypeProfile<1, 3, [SDTCisVT<0, XLenVT>,
                                                  SDTCisVT<1, XLenVT>,
                                                  SDTCisVT<2, XLenVT>,
                                                  SDTCisVT<3, i32>]>;
 // Scalar cryptography
-def riscv_sm4ks : RVSDNode<"SM4KS", SDT_RISCVZkByteSelect>;
-def riscv_sm4ed : RVSDNode<"SM4ED", SDT_RISCVZkByteSelect>;
+def capstone_sm4ks : RVSDNode<"SM4KS", SDT_CapstoneZkByteSelect>;
+def capstone_sm4ed : RVSDNode<"SM4ED", SDT_CapstoneZkByteSelect>;
 
 // Scalar cryptography
-def riscv_sm3p0 : RVSDNode<"SM3P0", SDTIntUnaryOp>;
-def riscv_sm3p1 : RVSDNode<"SM3P1", SDTIntUnaryOp>;
+def capstone_sm3p0 : RVSDNode<"SM3P0", SDTIntUnaryOp>;
+def capstone_sm3p1 : RVSDNode<"SM3P1", SDTIntUnaryOp>;
 
 def RnumArg : AsmOperandClass {
   let Name = "RnumArg";
@@ -39,14 +39,14 @@ def RnumArg : AsmOperandClass {
   let DiagnosticType = "InvalidRnumArg";
 }
 
-def rnum : RISCVOp<i32>, TImmLeaf<i32, [{return (Imm >= 0 && Imm <= 10);}]> {
+def rnum : CapstoneOp<i32>, TImmLeaf<i32, [{return (Imm >= 0 && Imm <= 10);}]> {
   let ParserMatchClass = RnumArg;
   let EncoderMethod = "getImmOpValue";
   let DecoderMethod = "decodeUImmOperand<4>";
   let OperandType = "OPERAND_RVKRNUM";
 }
 
-def byteselect : RISCVOp<i32>, TImmLeaf<i32, [{return isUInt<2>(Imm);}]> {
+def byteselect : CapstoneOp<i32>, TImmLeaf<i32, [{return isUInt<2>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<2>;
   let DecoderMethod = "decodeUImmOperand<2>";
   let OperandType = "OPERAND_UIMM2";
@@ -149,65 +149,65 @@ class PatGprGprByteSelect<SDPatternOperator OpNode, RVInst Inst>
 
 // Zknd
 let Predicates = [HasStdExtZknd, IsRV32] in {
-def : PatGprGprByteSelect<int_riscv_aes32dsi, AES32DSI>;
-def : PatGprGprByteSelect<int_riscv_aes32dsmi, AES32DSMI>;
+def : PatGprGprByteSelect<int_capstone_aes32dsi, AES32DSI>;
+def : PatGprGprByteSelect<int_capstone_aes32dsmi, AES32DSMI>;
 } // Predicates = [HasStdExtZknd, IsRV32]
 
 let Predicates = [HasStdExtZknd, IsRV64] in {
-def : PatGprGpr<int_riscv_aes64ds, AES64DS>;
-def : PatGprGpr<int_riscv_aes64dsm, AES64DSM>;
-def : PatGpr<int_riscv_aes64im, AES64IM>;
+def : PatGprGpr<int_capstone_aes64ds, AES64DS>;
+def : PatGprGpr<int_capstone_aes64dsm, AES64DSM>;
+def : PatGpr<int_capstone_aes64im, AES64IM>;
 } // Predicates = [HasStdExtZknd, IsRV64]
 
 let Predicates = [HasStdExtZkndOrZkne, IsRV64] in {
-def : PatGprGpr<int_riscv_aes64ks2, AES64KS2>;
-def : Pat<(int_riscv_aes64ks1i GPR:$rs1, rnum:$rnum),
+def : PatGprGpr<int_capstone_aes64ks2, AES64KS2>;
+def : Pat<(int_capstone_aes64ks1i GPR:$rs1, rnum:$rnum),
           (AES64KS1I GPR:$rs1, rnum:$rnum)>;
 } // Predicates = [HasStdExtZkndOrZkne, IsRV64]
 
 // Zkne
 let Predicates = [HasStdExtZkne, IsRV32] in {
-def : PatGprGprByteSelect<int_riscv_aes32esi, AES32ESI>;
-def : PatGprGprByteSelect<int_riscv_aes32esmi, AES32ESMI>;
+def : PatGprGprByteSelect<int_capstone_aes32esi, AES32ESI>;
+def : PatGprGprByteSelect<int_capstone_aes32esmi, AES32ESMI>;
 } // Predicates = [HasStdExtZkne, IsRV32]
 
 let Predicates = [HasStdExtZkne, IsRV64] in {
-def : PatGprGpr<int_riscv_aes64es, AES64ES>;
-def : PatGprGpr<int_riscv_aes64esm, AES64ESM>;
+def : PatGprGpr<int_capstone_aes64es, AES64ES>;
+def : PatGprGpr<int_capstone_aes64esm, AES64ESM>;
 } // Predicates = [HasStdExtZkne, IsRV64]
 
 // Zknh
 let Predicates = [HasStdExtZknh] in {
-def : PatGpr<riscv_sha256sig0, SHA256SIG0>;
-def : PatGpr<riscv_sha256sig1, SHA256SIG1>;
-def : PatGpr<riscv_sha256sum0, SHA256SUM0>;
-def : PatGpr<riscv_sha256sum1, SHA256SUM1>;
+def : PatGpr<capstone_sha256sig0, SHA256SIG0>;
+def : PatGpr<capstone_sha256sig1, SHA256SIG1>;
+def : PatGpr<capstone_sha256sum0, SHA256SUM0>;
+def : PatGpr<capstone_sha256sum1, SHA256SUM1>;
 } // Predicates = [HasStdExtZknh]
 
 let Predicates = [HasStdExtZknh, IsRV32] in {
-def : PatGprGpr<int_riscv_sha512sig0l, SHA512SIG0L>;
-def : PatGprGpr<int_riscv_sha512sig0h, SHA512SIG0H>;
-def : PatGprGpr<int_riscv_sha512sig1l, SHA512SIG1L>;
-def : PatGprGpr<int_riscv_sha512sig1h, SHA512SIG1H>;
-def : PatGprGpr<int_riscv_sha512sum0r, SHA512SUM0R>;
-def : PatGprGpr<int_riscv_sha512sum1r, SHA512SUM1R>;
+def : PatGprGpr<int_capstone_sha512sig0l, SHA512SIG0L>;
+def : PatGprGpr<int_capstone_sha512sig0h, SHA512SIG0H>;
+def : PatGprGpr<int_capstone_sha512sig1l, SHA512SIG1L>;
+def : PatGprGpr<int_capstone_sha512sig1h, SHA512SIG1H>;
+def : PatGprGpr<int_capstone_sha512sum0r, SHA512SUM0R>;
+def : PatGprGpr<int_capstone_sha512sum1r, SHA512SUM1R>;
 } // Predicates = [HasStdExtZknh, IsRV32]
 
 let Predicates = [HasStdExtZknh, IsRV64] in {
-def : PatGpr<int_riscv_sha512sig0, SHA512SIG0>;
-def : PatGpr<int_riscv_sha512sig1, SHA512SIG1>;
-def : PatGpr<int_riscv_sha512sum0, SHA512SUM0>;
-def : PatGpr<int_riscv_sha512sum1, SHA512SUM1>;
+def : PatGpr<int_capstone_sha512sig0, SHA512SIG0>;
+def : PatGpr<int_capstone_sha512sig1, SHA512SIG1>;
+def : PatGpr<int_capstone_sha512sum0, SHA512SUM0>;
+def : PatGpr<int_capstone_sha512sum1, SHA512SUM1>;
 } // Predicates = [HasStdExtZknh, IsRV64]
 
 // Zksed
 let Predicates = [HasStdExtZksed] in {
-def : PatGprGprByteSelect<riscv_sm4ks, SM4KS>;
-def : PatGprGprByteSelect<riscv_sm4ed, SM4ED>;
+def : PatGprGprByteSelect<capstone_sm4ks, SM4KS>;
+def : PatGprGprByteSelect<capstone_sm4ed, SM4ED>;
 } // Predicates = [HasStdExtZksed]
 
 // Zksh
 let Predicates = [HasStdExtZksh] in {
-def : PatGpr<riscv_sm3p0, SM3P0>;
-def : PatGpr<riscv_sm3p1, SM3P1>;
+def : PatGpr<capstone_sm3p0, SM3P0>;
+def : PatGpr<capstone_sm3p1, SM3P1>;
 } // Predicates = [HasStdExtZksh]

@@ -1,4 +1,4 @@
-//===-- RISCVCallingConv.td - Calling Conventions RISC-V ---*- tablegen -*-===//
+//===-- CapstoneCallingConv.td - Calling Conventions Capstone ---*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,12 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This describes the calling conventions for the RISC-V architecture.
+// This describes the calling conventions for the Capstone architecture.
 //
 //===----------------------------------------------------------------------===//
 
-// The RISC-V calling convention is handled with custom code in
-// RISCVISelLowering.cpp (CC_RISCV).
+// The Capstone calling convention is handled with custom code in
+// CapstoneISelLowering.cpp (CC_Capstone).
 
 def CSR_ILP32E_LP64E : CalleeSavedRegs<(add X1, X8, X9)>;
 
@@ -39,7 +39,7 @@ def CSR_ILP32F_LP64F_V
 def CSR_ILP32D_LP64D_V
     : CalleeSavedRegs<(add CSR_ILP32D_LP64D, CSR_V)>;
 
-// Needed for implementation of RISCVRegisterInfo::getNoPreservedMask()
+// Needed for implementation of CapstoneRegisterInfo::getNoPreservedMask()
 def CSR_NoRegs : CalleeSavedRegs<(add)>;
 
 def CSR_IPRA : CalleeSavedRegs<(add X1)>;

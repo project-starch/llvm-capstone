@@ -1,4 +1,4 @@
-//===- RISCVVMV0Elimination.cpp - VMV0 Elimination -----------------------===//
+//===- CapstoneVMV0Elimination.cpp - VMV0 Elimination -----------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -29,8 +29,8 @@
 //
 //===---------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVSubtarget.h"
+#include "Capstone.h"
+#include "CapstoneSubtarget.h"
 #ifndef NDEBUG
 #include "llvm/ADT/PostOrderIterator.h"
 #endif
@@ -38,14 +38,14 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-vmv0-elimination"
+#define DEBUG_TYPE "capstone-vmv0-elimination"
 
 namespace {
 
-class RISCVVMV0Elimination : public MachineFunctionPass {
+class CapstoneVMV0Elimination : public MachineFunctionPass {
 public:
   static char ID;
-  RISCVVMV0Elimination() : MachineFunctionPass(ID) {}
+  CapstoneVMV0Elimination() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -64,22 +64,22 @@ public:
 
 } // namespace
 
-char RISCVVMV0Elimination::ID = 0;
+char CapstoneVMV0Elimination::ID = 0;
 
-INITIALIZE_PASS(RISCVVMV0Elimination, DEBUG_TYPE, "RISC-V VMV0 Elimination",
+INITIALIZE_PASS(CapstoneVMV0Elimination, DEBUG_TYPE, "Capstone VMV0 Elimination",
                 false, false)
 
-FunctionPass *llvm::createRISCVVMV0EliminationPass() {
-  return new RISCVVMV0Elimination();
+FunctionPass *llvm::createCapstoneVMV0EliminationPass() {
+  return new CapstoneVMV0Elimination();
 }
 
 static bool isVMV0(const MCOperandInfo &MCOI) {
-  return MCOI.RegClass == RISCV::VMV0RegClassID;
+  return MCOI.RegClass == Capstone::VMV0RegClassID;
 }
 
-bool RISCVVMV0Elimination::runOnMachineFunction(MachineFunction &MF) {
+bool CapstoneVMV0Elimination::runOnMachineFunction(MachineFunction &MF) {
   // Skip if the vector extension is not enabled.
-  const RISCVSubtarget *ST = &MF.getSubtarget<RISCVSubtarget>();
+  const CapstoneSubtarget *ST = &MF.getSubtarget<CapstoneSubtarget>();
   if (!ST->hasVInstructions())
     return false;
 
@@ -94,9 +94,9 @@ bool RISCVVMV0Elimination::runOnMachineFunction(MachineFunction &MF) {
   for (MachineBasicBlock *MBB : RPOT) {
     bool V0Clobbered = false;
     for (MachineInstr &MI : *MBB) {
-      assert(!(MI.readsRegister(RISCV::V0, TRI) && V0Clobbered) &&
+      assert(!(MI.readsRegister(Capstone::V0, TRI) && V0Clobbered) &&
              "Inserting a copy to v0 would clobber a read");
-      if (MI.modifiesRegister(RISCV::V0, TRI))
+      if (MI.modifiesRegister(Capstone::V0, TRI))
         V0Clobbered = false;
 
       if (any_of(MI.getDesc().operands(), isVMV0))
@@ -105,7 +105,7 @@ bool RISCVVMV0Elimination::runOnMachineFunction(MachineFunction &MF) {
 
     assert(!(V0Clobbered &&
              any_of(MBB->successors(),
-                    [](auto *Succ) { return Succ->isLiveIn(RISCV::V0); })) &&
+                    [](auto *Succ) { return Succ->isLiveIn(Capstone::V0); })) &&
            "Clobbered a v0 used in a successor");
   }
 #endif
@@ -123,23 +123,23 @@ bool RISCVVMV0Elimination::runOnMachineFunction(MachineFunction &MF) {
         if (isVMV0(MCOI)) {
           MachineOperand &MO = MI.getOperand(OpNo);
           Register Src = MO.getReg();
-          assert(MO.isUse() && MO.getSubReg() == RISCV::NoSubRegister &&
+          assert(MO.isUse() && MO.getSubReg() == Capstone::NoSubRegister &&
                  Src.isVirtual() && "vmv0 use in unexpected form");
 
           // Peek through a single copy to match what isel does.
           if (MachineInstr *SrcMI = MRI.getVRegDef(Src);
               SrcMI->isCopy() && SrcMI->getOperand(1).getReg().isVirtual() &&
-              SrcMI->getOperand(1).getSubReg() == RISCV::NoSubRegister) {
+              SrcMI->getOperand(1).getSubReg() == Capstone::NoSubRegister) {
             // Delete any dead copys to vmv0 to avoid allocating them.
             if (MRI.hasOneNonDBGUse(Src))
               DeadCopies.push_back(SrcMI);
             Src = SrcMI->getOperand(1).getReg();
           }
 
-          BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(RISCV::COPY), RISCV::V0)
+          BuildMI(MBB, MI, MI.getDebugLoc(), TII->get(Capstone::COPY), Capstone::V0)
               .addReg(Src);
 
-          MO.setReg(RISCV::V0);
+          MO.setReg(Capstone::V0);
           MadeChange = true;
           break;
         }
@@ -160,9 +160,9 @@ bool RISCVVMV0Elimination::runOnMachineFunction(MachineFunction &MF) {
     for (MachineInstr &MI : MBB) {
       for (MachineOperand &MO : MI.uses()) {
         if (MO.isReg() && MO.getReg().isVirtual() &&
-            MRI.getRegClass(MO.getReg()) == &RISCV::VMV0RegClass) {
+            MRI.getRegClass(MO.getReg()) == &Capstone::VMV0RegClass) {
           MRI.recomputeRegClass(MO.getReg());
-          assert((MRI.getRegClass(MO.getReg()) != &RISCV::VMV0RegClass ||
+          assert((MRI.getRegClass(MO.getReg()) != &Capstone::VMV0RegClass ||
                   MI.isInlineAsm() ||
                   MRI.getVRegDef(MO.getReg())->isInlineAsm()) &&
                  "Non-inline-asm use of vmv0 left behind");

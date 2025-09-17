@@ -1,4 +1,4 @@
-//===- RISCVGatherScatterLowering.cpp - Gather/Scatter lowering -----------===//
+//===- CapstoneGatherScatterLowering.cpp - Gather/Scatter lowering -----------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,12 +7,12 @@
 //===----------------------------------------------------------------------===//
 //
 // This pass custom lowers llvm.gather and llvm.scatter instructions to
-// RISC-V intrinsics.
+// Capstone intrinsics.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVTargetMachine.h"
+#include "Capstone.h"
+#include "CapstoneTargetMachine.h"
 #include "llvm/Analysis/InstSimplifyFolder.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
@@ -28,13 +28,13 @@
 using namespace llvm;
 using namespace PatternMatch;
 
-#define DEBUG_TYPE "riscv-gather-scatter-lowering"
+#define DEBUG_TYPE "capstone-gather-scatter-lowering"
 
 namespace {
 
-class RISCVGatherScatterLowering : public FunctionPass {
-  const RISCVSubtarget *ST = nullptr;
-  const RISCVTargetLowering *TLI = nullptr;
+class CapstoneGatherScatterLowering : public FunctionPass {
+  const CapstoneSubtarget *ST = nullptr;
+  const CapstoneTargetLowering *TLI = nullptr;
   LoopInfo *LI = nullptr;
   const DataLayout *DL = nullptr;
 
@@ -48,7 +48,7 @@ class RISCVGatherScatterLowering : public FunctionPass {
 public:
   static char ID; // Pass identification, replacement for typeid
 
-  RISCVGatherScatterLowering() : FunctionPass(ID) {}
+  CapstoneGatherScatterLowering() : FunctionPass(ID) {}
 
   bool runOnFunction(Function &F) override;
 
@@ -59,7 +59,7 @@ public:
   }
 
   StringRef getPassName() const override {
-    return "RISC-V gather/scatter lowering";
+    return "Capstone gather/scatter lowering";
   }
 
 private:
@@ -75,13 +75,13 @@ private:
 
 } // end anonymous namespace
 
-char RISCVGatherScatterLowering::ID = 0;
+char CapstoneGatherScatterLowering::ID = 0;
 
-INITIALIZE_PASS(RISCVGatherScatterLowering, DEBUG_TYPE,
-                "RISC-V gather/scatter lowering pass", false, false)
+INITIALIZE_PASS(CapstoneGatherScatterLowering, DEBUG_TYPE,
+                "Capstone gather/scatter lowering pass", false, false)
 
-FunctionPass *llvm::createRISCVGatherScatterLoweringPass() {
-  return new RISCVGatherScatterLowering();
+FunctionPass *llvm::createCapstoneGatherScatterLoweringPass() {
+  return new CapstoneGatherScatterLowering();
 }
 
 // TODO: Should we consider the mask when looking for a stride?
@@ -189,7 +189,7 @@ static std::pair<Value *, Value *> matchStridedStart(Value *Start,
 // start value. Build and update a scalar recurrence as we unwind the recursion.
 // We also update the Stride as we unwind. Our goal is to move all of the
 // arithmetic out of the loop.
-bool RISCVGatherScatterLowering::matchStridedRecurrence(Value *Index, Loop *L,
+bool CapstoneGatherScatterLowering::matchStridedRecurrence(Value *Index, Loop *L,
                                                         Value *&Stride,
                                                         PHINode *&BasePtr,
                                                         BinaryOperator *&Inc,
@@ -338,7 +338,7 @@ bool RISCVGatherScatterLowering::matchStridedRecurrence(Value *Index, Loop *L,
 }
 
 std::pair<Value *, Value *>
-RISCVGatherScatterLowering::determineBaseAndStride(Instruction *Ptr,
+CapstoneGatherScatterLowering::determineBaseAndStride(Instruction *Ptr,
                                                    IRBuilderBase &Builder) {
 
   // A gather/scatter of a splat is a zero strided load/store.
@@ -492,7 +492,7 @@ RISCVGatherScatterLowering::determineBaseAndStride(Instruction *Ptr,
   return P;
 }
 
-bool RISCVGatherScatterLowering::tryCreateStridedLoadStore(IntrinsicInst *II) {
+bool CapstoneGatherScatterLowering::tryCreateStridedLoadStore(IntrinsicInst *II) {
   VectorType *DataType;
   Value *StoreVal = nullptr, *Ptr, *Mask, *EVL = nullptr;
   MaybeAlign MA;
@@ -588,13 +588,13 @@ bool RISCVGatherScatterLowering::tryCreateStridedLoadStore(IntrinsicInst *II) {
   return true;
 }
 
-bool RISCVGatherScatterLowering::runOnFunction(Function &F) {
+bool CapstoneGatherScatterLowering::runOnFunction(Function &F) {
   if (skipFunction(F))
     return false;
 
   auto &TPC = getAnalysis<TargetPassConfig>();
-  auto &TM = TPC.getTM<RISCVTargetMachine>();
-  ST = &TM.getSubtarget<RISCVSubtarget>(F);
+  auto &TM = TPC.getTM<CapstoneTargetMachine>();
+  ST = &TM.getSubtarget<CapstoneSubtarget>(F);
   if (!ST->hasVInstructions() || !ST->useRVVForFixedLengthVectors())
     return false;
 

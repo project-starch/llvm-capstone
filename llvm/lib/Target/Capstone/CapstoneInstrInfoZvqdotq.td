@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZvqdot.td - 'Zvqdotq' instructions ---*- tablegen -*-===//
+//===-- CapstoneInstrInfoZvqdot.td - 'Zvqdotq' instructions ---*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard 'Zvqdotq'
+// This file describes the Capstone instructions from the standard 'Zvqdotq'
 // extension.
 // This version is still experimental as the 'Zvqdotq' extension hasn't been
 // ratified yet.
@@ -17,7 +17,7 @@
 // Instructions
 //===----------------------------------------------------------------------===//
 
-class VQDOTVV<bits<6> funct6, RISCVVFormat opv, string opcodestr>
+class VQDOTVV<bits<6> funct6, CapstoneVFormat opv, string opcodestr>
     : RVInstVV<funct6, opv, (outs VR:$vd_wb),
                 (ins VR:$vd, VR:$vs2, VR:$vs1, VMaskOp:$vm),
                 opcodestr, "$vd, $vs2, $vs1$vm"> {
@@ -27,7 +27,7 @@ class VQDOTVV<bits<6> funct6, RISCVVFormat opv, string opcodestr>
   let Constraints = "$vd = $vd_wb";
 }
 
-class VQDOTVX<bits<6> funct6, RISCVVFormat opv, string opcodestr>
+class VQDOTVX<bits<6> funct6, CapstoneVFormat opv, string opcodestr>
     : RVInstVX<funct6, opv, (outs VR:$vd_wb),
                 (ins VR:$vd, VR:$vs2, GPR:$rs1, VMaskOp:$vm),
                 opcodestr, "$vd, $vs2, $rs1$vm"> {
@@ -52,9 +52,9 @@ let Predicates = [HasStdExtZvqdotq] in {
 //===----------------------------------------------------------------------===//
 
 let HasPassthruOp = true, HasMaskOp = true in {
-  def riscv_vqdot_vl : RVSDNode<"VQDOT_VL", SDT_RISCVIntBinOp_VL>;
-  def riscv_vqdotu_vl : RVSDNode<"VQDOTU_VL", SDT_RISCVIntBinOp_VL>;
-  def riscv_vqdotsu_vl : RVSDNode<"VQDOTSU_VL", SDT_RISCVIntBinOp_VL>;
+  def capstone_vqdot_vl : RVSDNode<"VQDOT_VL", SDT_CapstoneIntBinOp_VL>;
+  def capstone_vqdotu_vl : RVSDNode<"VQDOTU_VL", SDT_CapstoneIntBinOp_VL>;
+  def capstone_vqdotsu_vl : RVSDNode<"VQDOTSU_VL", SDT_CapstoneIntBinOp_VL>;
 } // let HasPassthruOp = true, HasMaskOp = true
 
 //===----------------------------------------------------------------------===//
@@ -90,9 +90,9 @@ let Predicates = [HasStdExtZvqdotq], mayLoad = 0, mayStore = 0,
 //===----------------------------------------------------------------------===//
 
 defvar AllE32Vectors = [VI32MF2, VI32M1, VI32M2, VI32M4, VI32M8];
-defm : VPatBinaryVL_VV_VX<riscv_vqdot_vl, "PseudoVQDOT", AllE32Vectors>;
-defm : VPatBinaryVL_VV_VX<riscv_vqdotu_vl, "PseudoVQDOTU", AllE32Vectors>;
-defm : VPatBinaryVL_VV_VX<riscv_vqdotsu_vl, "PseudoVQDOTSU", AllE32Vectors>;
+defm : VPatBinaryVL_VV_VX<capstone_vqdot_vl, "PseudoVQDOT", AllE32Vectors>;
+defm : VPatBinaryVL_VV_VX<capstone_vqdotu_vl, "PseudoVQDOTU", AllE32Vectors>;
+defm : VPatBinaryVL_VV_VX<capstone_vqdotsu_vl, "PseudoVQDOTSU", AllE32Vectors>;
 
 // These VPat definitions are for vqdot because they have a different operand
 // order with other ternary instructions (i.e. vop.vx vd, vs2, rs1)
@@ -140,8 +140,8 @@ defset list<VTypeInfoToWide> VQDOTInfoPairs = {
 }
 
 let Predicates = [HasStdExtZvqdotq] in {
-  defm : VPatTernaryV_VV_VX_AABX<"int_riscv_vqdot", "PseudoVQDOT", VQDOTInfoPairs>;
-  defm : VPatTernaryV_VV_VX_AABX<"int_riscv_vqdotu", "PseudoVQDOTU", VQDOTInfoPairs>;
-  defm : VPatTernaryV_VV_VX_AABX<"int_riscv_vqdotsu", "PseudoVQDOTSU", VQDOTInfoPairs>;
-  defm : VPatTernaryV_VX_AABX<"int_riscv_vqdotus", "PseudoVQDOTUS", VQDOTInfoPairs>;
+  defm : VPatTernaryV_VV_VX_AABX<"int_capstone_vqdot", "PseudoVQDOT", VQDOTInfoPairs>;
+  defm : VPatTernaryV_VV_VX_AABX<"int_capstone_vqdotu", "PseudoVQDOTU", VQDOTInfoPairs>;
+  defm : VPatTernaryV_VV_VX_AABX<"int_capstone_vqdotsu", "PseudoVQDOTSU", VQDOTInfoPairs>;
+  defm : VPatTernaryV_VX_AABX<"int_capstone_vqdotus", "PseudoVQDOTUS", VQDOTInfoPairs>;
 }

@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoV.td - RISC-V 'V' instructions -------*- tablegen -*-===//
+//===-- CapstoneInstrInfoV.td - Capstone 'V' instructions -------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 ///
-/// This file describes the RISC-V instructions from the standard 'V' Vector
+/// This file describes the Capstone instructions from the standard 'V' Vector
 /// extension, version 1.0.
 ///
 //===----------------------------------------------------------------------===//
@@ -22,7 +22,7 @@ class VTypeIAsmOperand<int VTypeINum> : AsmOperandClass {
   let RenderMethod = "addVTypeIOperands";
 }
 
-class VTypeIOp<int VTypeINum> : RISCVOp {
+class VTypeIOp<int VTypeINum> : CapstoneOp {
   let ParserMatchClass = VTypeIAsmOperand<VTypeINum>;
   let PrintMethod = "printVTypeI";
   let DecoderMethod = "decodeUImmOperand<"#VTypeINum#">";
@@ -69,7 +69,7 @@ def VMaskCarryInOp : RegisterOperand<VMV0> {
   let EncoderMethod = "getVMaskReg";
 }
 
-def simm5 : RISCVSImmLeafOp<5> {
+def simm5 : CapstoneSImmLeafOp<5> {
   let MCOperandPredicate = [{
     int64_t Imm;
     if (MCOp.evaluateAsConstantImm(Imm))
@@ -78,7 +78,7 @@ def simm5 : RISCVSImmLeafOp<5> {
   }];
 }
 
-def simm5_plus1 : RISCVOp, ImmLeaf<XLenVT,
+def simm5_plus1 : CapstoneOp, ImmLeaf<XLenVT,
   [{return (isInt<5>(Imm) && Imm != -16) || Imm == 16;}]> {
   let ParserMatchClass = SImmAsmOperand<5, "Plus1">;
   let OperandType = "OPERAND_SIMM5_PLUS1";
@@ -315,7 +315,7 @@ class VSXSEGSched<int nf, int eew, bit isOrdered, string emul,
 class VSXSEGSchedMC<int nf, int eew, bit isOrdered>:
   VSXSEGSched<nf, eew, isOrdered, "WorstCase", forceMasked=1>;
 
-class RISCVVXMemOpMC<bits<3> E, bit Ordered, bit Store, bits<4> N = 0> {
+class CapstoneVXMemOpMC<bits<3> E, bit Ordered, bit Store, bits<4> N = 0> {
   bits<3> Log2EEW = E;
   bits<1> IsOrdered = Ordered;
   bits<1> IsStore = Store;
@@ -323,8 +323,8 @@ class RISCVVXMemOpMC<bits<3> E, bit Ordered, bit Store, bits<4> N = 0> {
   Instruction BaseInstr = !cast<Instruction>(NAME);
 }
 
-def RISCVBaseVXMemOpTable : GenericTable {
-  let FilterClass = "RISCVVXMemOpMC";
+def CapstoneBaseVXMemOpTable : GenericTable {
+  let FilterClass = "CapstoneVXMemOpMC";
   let CppTypeName = "VXMemOpInfo";
   let Fields = ["Log2EEW", "IsOrdered", "IsStore", "NF", "BaseInstr"];
   let PrimaryKey = ["BaseInstr"];
@@ -337,14 +337,14 @@ def RISCVBaseVXMemOpTable : GenericTable {
 
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in {
 // unit-stride load vd, (rs1), vm
-class VUnitStrideLoad<RISCVWidth width, string opcodestr>
+class VUnitStrideLoad<CapstoneWidth width, string opcodestr>
     : RVInstVLU<0b000, width.Value{3}, LUMOPUnitStride, width.Value{2-0},
                 (outs VR:$vd),
                 (ins GPRMemZeroOffset:$rs1, VMaskOp:$vm), opcodestr, "$vd, ${rs1}$vm">;
 
 let vm = 1, RVVConstraint = NoConstraint in {
 // unit-stride whole register load vl<nf>r.v vd, (rs1)
-class VWholeLoad<bits<3> nf, RISCVWidth width, string opcodestr, RegisterClass VRC>
+class VWholeLoad<bits<3> nf, CapstoneWidth width, string opcodestr, RegisterClass VRC>
     : RVInstVLU<nf, width.Value{3}, LUMOPUnitStrideWholeReg,
                 width.Value{2-0}, (outs VRC:$vd), (ins GPRMemZeroOffset:$rs1),
                 opcodestr, "$vd, $rs1"> {
@@ -359,46 +359,46 @@ class VUnitStrideLoadMask<string opcodestr>
 } // vm = 1, RVVConstraint = NoConstraint
 
 // unit-stride fault-only-first load vd, (rs1), vm
-class VUnitStrideLoadFF<RISCVWidth width, string opcodestr>
+class VUnitStrideLoadFF<CapstoneWidth width, string opcodestr>
     : RVInstVLU<0b000, width.Value{3}, LUMOPUnitStrideFF, width.Value{2-0},
                 (outs VR:$vd),
                 (ins GPRMemZeroOffset:$rs1, VMaskOp:$vm), opcodestr, "$vd, ${rs1}$vm">;
 
 // strided load vd, (rs1), rs2, vm
-class VStridedLoad<RISCVWidth width, string opcodestr>
+class VStridedLoad<CapstoneWidth width, string opcodestr>
     : RVInstVLS<0b000, width.Value{3}, width.Value{2-0},
                 (outs VR:$vd),
                 (ins GPRMemZeroOffset:$rs1, GPR:$rs2, VMaskOp:$vm), opcodestr,
                 "$vd, $rs1, $rs2$vm">;
 
 // indexed load vd, (rs1), vs2, vm
-class VIndexedLoad<RISCVMOP mop, RISCVWidth width, string opcodestr>
+class VIndexedLoad<CapstoneMOP mop, CapstoneWidth width, string opcodestr>
     : RVInstVLX<0b000, width.Value{3}, mop, width.Value{2-0},
                 (outs VR:$vd),
                 (ins GPRMemZeroOffset:$rs1, VR:$vs2, VMaskOp:$vm), opcodestr,
                 "$vd, $rs1, $vs2$vm">;
 
 // unit-stride segment load vd, (rs1), vm
-class VUnitStrideSegmentLoad<bits<3> nf, RISCVWidth width, string opcodestr>
+class VUnitStrideSegmentLoad<bits<3> nf, CapstoneWidth width, string opcodestr>
     : RVInstVLU<nf, width.Value{3}, LUMOPUnitStride, width.Value{2-0},
                 (outs VR:$vd),
                 (ins GPRMemZeroOffset:$rs1, VMaskOp:$vm), opcodestr, "$vd, ${rs1}$vm">;
 
 // segment fault-only-first load vd, (rs1), vm
-class VUnitStrideSegmentLoadFF<bits<3> nf, RISCVWidth width, string opcodestr>
+class VUnitStrideSegmentLoadFF<bits<3> nf, CapstoneWidth width, string opcodestr>
     : RVInstVLU<nf, width.Value{3}, LUMOPUnitStrideFF, width.Value{2-0},
                 (outs VR:$vd),
                 (ins GPRMemZeroOffset:$rs1, VMaskOp:$vm), opcodestr, "$vd, ${rs1}$vm">;
 
 // strided segment load vd, (rs1), rs2, vm
-class VStridedSegmentLoad<bits<3> nf, RISCVWidth width, string opcodestr>
+class VStridedSegmentLoad<bits<3> nf, CapstoneWidth width, string opcodestr>
     : RVInstVLS<nf, width.Value{3}, width.Value{2-0},
                 (outs VR:$vd),
                 (ins GPRMemZeroOffset:$rs1, GPR:$rs2, VMaskOp:$vm), opcodestr,
                 "$vd, $rs1, $rs2$vm">;
 
 // indexed segment load vd, (rs1), vs2, vm
-class VIndexedSegmentLoad<bits<3> nf, RISCVMOP mop, RISCVWidth width,
+class VIndexedSegmentLoad<bits<3> nf, CapstoneMOP mop, CapstoneWidth width,
                           string opcodestr>
     : RVInstVLX<nf, width.Value{3}, mop, width.Value{2-0},
                 (outs VR:$vd),
@@ -408,7 +408,7 @@ class VIndexedSegmentLoad<bits<3> nf, RISCVMOP mop, RISCVWidth width,
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in {
 // unit-stride store vd, vs3, (rs1), vm
-class VUnitStrideStore<RISCVWidth width, string opcodestr>
+class VUnitStrideStore<CapstoneWidth width, string opcodestr>
     : RVInstVSU<0b000, width.Value{3}, SUMOPUnitStride, width.Value{2-0},
                 (outs), (ins VR:$vs3, GPRMemZeroOffset:$rs1, VMaskOp:$vm), opcodestr,
                 "$vs3, ${rs1}$vm">;
@@ -430,31 +430,31 @@ class VUnitStrideStoreMask<string opcodestr>
 } // vm = 1
 
 // strided store vd, vs3, (rs1), rs2, vm
-class VStridedStore<RISCVWidth width, string opcodestr>
+class VStridedStore<CapstoneWidth width, string opcodestr>
     : RVInstVSS<0b000, width.Value{3}, width.Value{2-0}, (outs),
                 (ins VR:$vs3, GPRMemZeroOffset:$rs1, GPR:$rs2, VMaskOp:$vm),
                 opcodestr, "$vs3, $rs1, $rs2$vm">;
 
 // indexed store vd, vs3, (rs1), vs2, vm
-class VIndexedStore<RISCVMOP mop, RISCVWidth width, string opcodestr>
+class VIndexedStore<CapstoneMOP mop, CapstoneWidth width, string opcodestr>
     : RVInstVSX<0b000, width.Value{3}, mop, width.Value{2-0}, (outs),
                 (ins VR:$vs3, GPRMemZeroOffset:$rs1, VR:$vs2, VMaskOp:$vm),
                 opcodestr, "$vs3, $rs1, $vs2$vm">;
 
 // segment store vd, vs3, (rs1), vm
-class VUnitStrideSegmentStore<bits<3> nf, RISCVWidth width, string opcodestr>
+class VUnitStrideSegmentStore<bits<3> nf, CapstoneWidth width, string opcodestr>
     : RVInstVSU<nf, width.Value{3}, SUMOPUnitStride, width.Value{2-0},
                 (outs), (ins VR:$vs3, GPRMemZeroOffset:$rs1, VMaskOp:$vm), opcodestr,
                 "$vs3, ${rs1}$vm">;
 
 // segment store vd, vs3, (rs1), rs2, vm
-class VStridedSegmentStore<bits<3> nf, RISCVWidth width, string opcodestr>
+class VStridedSegmentStore<bits<3> nf, CapstoneWidth width, string opcodestr>
     : RVInstVSS<nf, width.Value{3}, width.Value{2-0}, (outs),
                 (ins VR:$vs3, GPRMemZeroOffset:$rs1, GPR:$rs2, VMaskOp:$vm),
                 opcodestr, "$vs3, $rs1, $rs2$vm">;
 
 // segment store vd, vs3, (rs1), vs2, vm
-class VIndexedSegmentStore<bits<3> nf, RISCVMOP mop, RISCVWidth width,
+class VIndexedSegmentStore<bits<3> nf, CapstoneMOP mop, CapstoneWidth width,
                            string opcodestr>
     : RVInstVSX<nf, width.Value{3}, mop, width.Value{2-0}, (outs),
                 (ins VR:$vs3, GPRMemZeroOffset:$rs1, VR:$vs2, VMaskOp:$vm),
@@ -463,19 +463,19 @@ class VIndexedSegmentStore<bits<3> nf, RISCVMOP mop, RISCVWidth width,
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
 // op vd, vs2, vs1, vm
-class VALUVV<bits<6> funct6, RISCVVFormat opv, string opcodestr>
+class VALUVV<bits<6> funct6, CapstoneVFormat opv, string opcodestr>
     : RVInstVV<funct6, opv, (outs VR:$vd),
                 (ins VR:$vs2, VR:$vs1, VMaskOp:$vm),
                 opcodestr, "$vd, $vs2, $vs1$vm">;
 
 // op vd, vs2, vs1, v0 (without mask, use v0 as carry input)
-class VALUmVV<bits<6> funct6, RISCVVFormat opv, string opcodestr>
+class VALUmVV<bits<6> funct6, CapstoneVFormat opv, string opcodestr>
     : RVInstVV<funct6, opv, (outs VR:$vd),
                 (ins VR:$vs2, VR:$vs1, VMaskCarryInOp:$vm),
                 opcodestr, "$vd, $vs2, $vs1, $vm">;
 
 // op vd, vs1, vs2, vm (reverse the order of vs1 and vs2)
-class VMACVV<bits<6> funct6, RISCVVFormat opv, string opcodestr,
+class VMACVV<bits<6> funct6, CapstoneVFormat opv, string opcodestr,
              bit EarlyClobber = 0>
     : RVInstVV<funct6, opv, (outs VR:$vd_wb),
                 (ins VR:$vd, VR:$vs1, VR:$vs2, VMaskOp:$vm),
@@ -485,7 +485,7 @@ class VMACVV<bits<6> funct6, RISCVVFormat opv, string opcodestr,
 }
 
 // op vd, vs2, vs1
-class VALUVVNoVm<bits<6> funct6, RISCVVFormat opv, string opcodestr>
+class VALUVVNoVm<bits<6> funct6, CapstoneVFormat opv, string opcodestr>
     : RVInstVV<funct6, opv, (outs VR:$vd),
                (ins VR:$vs2, VR:$vs1),
                opcodestr, "$vd, $vs2, $vs1"> {
@@ -493,19 +493,19 @@ class VALUVVNoVm<bits<6> funct6, RISCVVFormat opv, string opcodestr>
 }
 
 // op vd, vs2, rs1, vm
-class VALUVX<bits<6> funct6, RISCVVFormat opv, string opcodestr>
+class VALUVX<bits<6> funct6, CapstoneVFormat opv, string opcodestr>
     : RVInstVX<funct6, opv, (outs VR:$vd),
                 (ins VR:$vs2, GPR:$rs1, VMaskOp:$vm),
                 opcodestr, "$vd, $vs2, $rs1$vm">;
 
 // op vd, vs2, rs1, v0 (without mask, use v0 as carry input)
-class VALUmVX<bits<6> funct6, RISCVVFormat opv, string opcodestr>
+class VALUmVX<bits<6> funct6, CapstoneVFormat opv, string opcodestr>
     : RVInstVX<funct6, opv, (outs VR:$vd),
                 (ins VR:$vs2, GPR:$rs1, VMaskCarryInOp:$vm),
                 opcodestr, "$vd, $vs2, $rs1, $vm">;
 
 // op vd, rs1, vs2, vm (reverse the order of rs1 and vs2)
-class VMACVX<bits<6> funct6, RISCVVFormat opv, string opcodestr,
+class VMACVX<bits<6> funct6, CapstoneVFormat opv, string opcodestr,
              bit EarlyClobber = 0>
     : RVInstVX<funct6, opv, (outs VR:$vd_wb),
                 (ins VR:$vd, GPR:$rs1, VR:$vs2, VMaskOp:$vm),
@@ -515,7 +515,7 @@ class VMACVX<bits<6> funct6, RISCVVFormat opv, string opcodestr,
 }
 
 // op vd, vs1, vs2
-class VALUVXNoVm<bits<6> funct6, RISCVVFormat opv, string opcodestr>
+class VALUVXNoVm<bits<6> funct6, CapstoneVFormat opv, string opcodestr>
     : RVInstVX<funct6, opv, (outs VR:$vd),
                (ins VR:$vs2, GPR:$rs1),
                opcodestr, "$vd, $vs2, $rs1"> {
@@ -543,13 +543,13 @@ class VALUVINoVm<bits<6> funct6, string opcodestr, Operand optype = simm5>
 }
 
 // op vd, vs2, rs1, vm (Float)
-class VALUVF<bits<6> funct6, RISCVVFormat opv, string opcodestr>
+class VALUVF<bits<6> funct6, CapstoneVFormat opv, string opcodestr>
     : RVInstVX<funct6, opv, (outs VR:$vd),
                 (ins VR:$vs2, FPR32:$rs1, VMaskOp:$vm),
                 opcodestr, "$vd, $vs2, $rs1$vm">;
 
 // op vd, rs1, vs2, vm (Float) (with mask, reverse the order of rs1 and vs2)
-class VMACVF<bits<6> funct6, RISCVVFormat opv, string opcodestr,
+class VMACVF<bits<6> funct6, CapstoneVFormat opv, string opcodestr,
              bit EarlyClobber = 0>
     : RVInstVX<funct6, opv, (outs VR:$vd_wb),
                 (ins VR:$vd, FPR32:$rs1, VR:$vs2, VMaskOp:$vm),
@@ -559,7 +559,7 @@ class VMACVF<bits<6> funct6, RISCVVFormat opv, string opcodestr,
 }
 
 // op vd, vs2, vm (use vs1 as instruction encoding)
-class VALUVs2<bits<6> funct6, bits<5> vs1, RISCVVFormat opv, string opcodestr>
+class VALUVs2<bits<6> funct6, bits<5> vs1, CapstoneVFormat opv, string opcodestr>
     : RVInstV<funct6, vs1, opv, (outs VR:$vd),
                (ins VR:$vs2, VMaskOp:$vm),
                opcodestr, "$vd, $vs2$vm">;
@@ -571,24 +571,24 @@ class VALUVs2<bits<6> funct6, bits<5> vs1, RISCVVFormat opv, string opcodestr>
 //===----------------------------------------------------------------------===//
 
 multiclass VIndexLoadStore<int eew> {
-  defvar w = !cast<RISCVWidth>("LSWidth" # eew);
+  defvar w = !cast<CapstoneWidth>("LSWidth" # eew);
 
   def VLUXEI # eew # _V :
     VIndexedLoad<MOPLDIndexedUnord, w, "vluxei" # eew # ".v">,
-    RISCVVXMemOpMC<!logtwo(eew), Ordered=false, Store=false>,
+    CapstoneVXMemOpMC<!logtwo(eew), Ordered=false, Store=false>,
     VLXSchedMC<eew, isOrdered=0>;
   def VLOXEI # eew # _V :
     VIndexedLoad<MOPLDIndexedOrder, w, "vloxei" # eew # ".v">,
-    RISCVVXMemOpMC<!logtwo(eew), Ordered=true, Store=false>,
+    CapstoneVXMemOpMC<!logtwo(eew), Ordered=true, Store=false>,
     VLXSchedMC<eew, isOrdered=1>;
 
   def VSUXEI # eew # _V :
     VIndexedStore<MOPSTIndexedUnord, w, "vsuxei" # eew # ".v">,
-    RISCVVXMemOpMC<!logtwo(eew), Ordered=false, Store=true>,
+    CapstoneVXMemOpMC<!logtwo(eew), Ordered=false, Store=true>,
     VSXSchedMC<eew, isOrdered=0>;
   def VSOXEI # eew # _V :
     VIndexedStore<MOPSTIndexedOrder, w, "vsoxei" # eew # ".v">,
-    RISCVVXMemOpMC<!logtwo(eew), Ordered=true, Store=true>,
+    CapstoneVXMemOpMC<!logtwo(eew), Ordered=true, Store=true>,
     VSXSchedMC<eew, isOrdered=1>;
 }
 
@@ -1054,7 +1054,7 @@ multiclass VCPR_MV_Mask<string opcodestr, bits<6> funct6, string vm = "v"> {
 }
 
 multiclass VWholeLoadN<int l, bits<3> nf, string opcodestr, RegisterClass VRC> {
-  defvar w = !cast<RISCVWidth>("LSWidth" # l);
+  defvar w = !cast<CapstoneWidth>("LSWidth" # l);
   defvar s = !cast<SchedWrite>("WriteVLD" # !add(nf, 1) # "R");
 
   def E # l # _V : VWholeLoad<nf, w, opcodestr # "e" # l # ".v", VRC>,
@@ -1081,7 +1081,7 @@ def VSETVL : RVInstSetVL<(outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2),
 } // Predicates = [HasVInstructions]
 
 foreach eew = [8, 16, 32, 64] in {
-  defvar w = !cast<RISCVWidth>("LSWidth" # eew);
+  defvar w = !cast<CapstoneWidth>("LSWidth" # eew);
 
   let Predicates = !if(!eq(eew, 64), [HasVInstructionsI64],
                                      [HasVInstructions]) in {
@@ -1750,7 +1750,7 @@ foreach n = [1, 2, 4, 8] in {
 let Predicates = [HasVInstructions] in {
   foreach nf=2-8 in {
     foreach eew = [8, 16, 32] in {
-      defvar w = !cast<RISCVWidth>("LSWidth"#eew);
+      defvar w = !cast<CapstoneWidth>("LSWidth"#eew);
 
       def VLSEG#nf#E#eew#_V :
         VUnitStrideSegmentLoad<!add(nf, -1), w, "vlseg"#nf#"e"#eew#".v">,
@@ -1773,22 +1773,22 @@ let Predicates = [HasVInstructions] in {
       def VLUXSEG#nf#EI#eew#_V :
         VIndexedSegmentLoad<!add(nf, -1), MOPLDIndexedUnord, w,
                             "vluxseg"#nf#"ei"#eew#".v">,
-        RISCVVXMemOpMC<!logtwo(eew), Ordered=false, Store=false, N=nf>,
+        CapstoneVXMemOpMC<!logtwo(eew), Ordered=false, Store=false, N=nf>,
         VLXSEGSchedMC<nf, eew, isOrdered=0>;
       def VLOXSEG#nf#EI#eew#_V :
         VIndexedSegmentLoad<!add(nf, -1), MOPLDIndexedOrder, w,
                             "vloxseg"#nf#"ei"#eew#".v">,
-        RISCVVXMemOpMC<!logtwo(eew), Ordered=true, Store=false, N=nf>,
+        CapstoneVXMemOpMC<!logtwo(eew), Ordered=true, Store=false, N=nf>,
         VLXSEGSchedMC<nf, eew, isOrdered=1>;
       def VSUXSEG#nf#EI#eew#_V :
         VIndexedSegmentStore<!add(nf, -1), MOPSTIndexedUnord, w,
                              "vsuxseg"#nf#"ei"#eew#".v">,
-        RISCVVXMemOpMC<!logtwo(eew), Ordered=false, Store=true, N=nf>,
+        CapstoneVXMemOpMC<!logtwo(eew), Ordered=false, Store=true, N=nf>,
         VSXSEGSchedMC<nf, eew, isOrdered=0>;
       def VSOXSEG#nf#EI#eew#_V :
         VIndexedSegmentStore<!add(nf, -1), MOPSTIndexedOrder, w,
                              "vsoxseg"#nf#"ei"#eew#".v">,
-        RISCVVXMemOpMC<!logtwo(eew), Ordered=true, Store=true, N=nf>,
+        CapstoneVXMemOpMC<!logtwo(eew), Ordered=true, Store=true, N=nf>,
         VSXSEGSchedMC<nf, eew, isOrdered=1>;
     }
   }
@@ -1838,5 +1838,5 @@ let Predicates = [HasVInstructionsI64, IsRV64] in {
   }
 } // Predicates = [HasVInstructionsI64, IsRV64]
 
-include "RISCVInstrInfoZvfbf.td"
-include "RISCVInstrInfoVPseudos.td"
+include "CapstoneInstrInfoZvfbf.td"
+include "CapstoneInstrInfoVPseudos.td"

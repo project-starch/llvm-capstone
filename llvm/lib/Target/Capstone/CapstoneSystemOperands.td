@@ -1,4 +1,4 @@
-//===- RISCVSystemOperands.td ------------------------------*- tablegen -*-===//
+//===- CapstoneSystemOperands.td ------------------------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 //
 // This file defines the symbolic operands permitted for various kinds of
-// RISC-V system instruction.
+// Capstone system instruction.
 //
 //===----------------------------------------------------------------------===//
 
@@ -63,7 +63,7 @@ def lookupSysRegByName : SearchIndex {
 }
 
 // The following CSR encodings match those given in Tables 2.2,
-// 2.3, 2.4, 2.5 and 2.6 in the RISC-V Instruction Set Manual
+// 2.3, 2.4, 2.5 and 2.6 in the Capstone Instruction Set Manual
 // Volume II: Privileged Architecture.
 
 //===----------------------------------------------------------------------===//
@@ -429,7 +429,7 @@ def : SysReg<"dcsr", 0x7B0>;
 def : SysReg<"dpc", 0x7B1>;
 
 // "dscratch" is an alternative name for "dscratch0" which appeared in earlier
-// drafts of the RISC-V debug spec
+// drafts of the Capstone debug spec
 def : SysReg<"dscratch0", 0x7B2>;
 let isAltName = 1 in
 def : SysReg<"dscratch", 0x7B2>;
@@ -525,7 +525,7 @@ def : SysReg<"minstretcfgh", 0x722>;
 //===-----------------------------------------------
 
 // XSfmclic
-let FeaturesRequired = [{ {RISCV::FeatureVendorXSfmclic} }] in {
+let FeaturesRequired = [{ {Capstone::FeatureVendorXSfmclic} }] in {
 def : SysReg<"sf.mtvt", 0x307>;
 def : SysReg<"sf.mnxti", 0x345>;
 def : SysReg<"sf.mintstatus", 0x346>;
@@ -534,7 +534,7 @@ def : SysReg<"sf.mscratchcswl", 0x349>;
 }
 
 // XSfsclic
-let FeaturesRequired = [{ {RISCV::FeatureVendorXSfsclic} }] in {
+let FeaturesRequired = [{ {Capstone::FeatureVendorXSfsclic} }] in {
 def : SysReg<"sf.stvt", 0x107>;
 def : SysReg<"sf.snxti", 0x145>;
 def : SysReg<"sf.sintstatus", 0x146>;
@@ -543,7 +543,7 @@ def : SysReg<"sf.sscratchcswl", 0x149>;
 }
 
 // Xqciint
-let FeaturesRequired = [{ {RISCV::FeatureVendorXqciint} }], isRV32Only = 1 in {
+let FeaturesRequired = [{ {Capstone::FeatureVendorXqciint} }], isRV32Only = 1 in {
 def : SysReg<"qc.mmcr", 0x7C0>;
 def : SysReg<"qc.mntvec", 0x7C3>;
 def : SysReg<"qc.mstktopaddr", 0x7C4>;

@@ -1,4 +1,4 @@
-//===-- RISCVExpandPseudoInsts.cpp - Expand pseudo instructions -----------===//
+//===-- CapstoneExpandPseudoInsts.cpp - Expand pseudo instructions -----------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -12,9 +12,9 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVInstrInfo.h"
-#include "RISCVTargetMachine.h"
+#include "Capstone.h"
+#include "CapstoneInstrInfo.h"
+#include "CapstoneTargetMachine.h"
 
 #include "llvm/CodeGen/LivePhysRegs.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -23,22 +23,22 @@
 
 using namespace llvm;
 
-#define RISCV_EXPAND_PSEUDO_NAME "RISC-V pseudo instruction expansion pass"
-#define RISCV_PRERA_EXPAND_PSEUDO_NAME "RISC-V Pre-RA pseudo instruction expansion pass"
+#define Capstone_EXPAND_PSEUDO_NAME "Capstone pseudo instruction expansion pass"
+#define Capstone_PRERA_EXPAND_PSEUDO_NAME "Capstone Pre-RA pseudo instruction expansion pass"
 
 namespace {
 
-class RISCVExpandPseudo : public MachineFunctionPass {
+class CapstoneExpandPseudo : public MachineFunctionPass {
 public:
-  const RISCVSubtarget *STI;
-  const RISCVInstrInfo *TII;
+  const CapstoneSubtarget *STI;
+  const CapstoneInstrInfo *TII;
   static char ID;
 
-  RISCVExpandPseudo() : MachineFunctionPass(ID) {}
+  CapstoneExpandPseudo() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
-  StringRef getPassName() const override { return RISCV_EXPAND_PSEUDO_NAME; }
+  StringRef getPassName() const override { return Capstone_EXPAND_PSEUDO_NAME; }
 
 private:
   bool expandMBB(MachineBasicBlock &MBB);
@@ -69,10 +69,10 @@ private:
 #endif
 };
 
-char RISCVExpandPseudo::ID = 0;
+char CapstoneExpandPseudo::ID = 0;
 
-bool RISCVExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
-  STI = &MF.getSubtarget<RISCVSubtarget>();
+bool CapstoneExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
+  STI = &MF.getSubtarget<CapstoneSubtarget>();
   TII = STI->getInstrInfo();
 
 #ifndef NDEBUG
@@ -90,7 +90,7 @@ bool RISCVExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
   return Modified;
 }
 
-bool RISCVExpandPseudo::expandMBB(MachineBasicBlock &MBB) {
+bool CapstoneExpandPseudo::expandMBB(MachineBasicBlock &MBB) {
   bool Modified = false;
 
   MachineBasicBlock::iterator MBBI = MBB.begin(), E = MBB.end();
@@ -103,79 +103,79 @@ bool RISCVExpandPseudo::expandMBB(MachineBasicBlock &MBB) {
   return Modified;
 }
 
-bool RISCVExpandPseudo::expandMI(MachineBasicBlock &MBB,
+bool CapstoneExpandPseudo::expandMI(MachineBasicBlock &MBB,
                                  MachineBasicBlock::iterator MBBI,
                                  MachineBasicBlock::iterator &NextMBBI) {
-  // RISCVInstrInfo::getInstSizeInBytes expects that the total size of the
+  // CapstoneInstrInfo::getInstSizeInBytes expects that the total size of the
   // expanded instructions for each pseudo is correct in the Size field of the
   // tablegen definition for the pseudo.
   switch (MBBI->getOpcode()) {
-  case RISCV::PseudoMV_FPR16INX:
+  case Capstone::PseudoMV_FPR16INX:
     return expandMV_FPR16INX(MBB, MBBI);
-  case RISCV::PseudoMV_FPR32INX:
+  case Capstone::PseudoMV_FPR32INX:
     return expandMV_FPR32INX(MBB, MBBI);
-  case RISCV::PseudoRV32ZdinxSD:
+  case Capstone::PseudoRV32ZdinxSD:
     return expandRV32ZdinxStore(MBB, MBBI);
-  case RISCV::PseudoRV32ZdinxLD:
+  case Capstone::PseudoRV32ZdinxLD:
     return expandRV32ZdinxLoad(MBB, MBBI);
-  case RISCV::PseudoCCMOVGPRNoX0:
-  case RISCV::PseudoCCMOVGPR:
-  case RISCV::PseudoCCADD:
-  case RISCV::PseudoCCSUB:
-  case RISCV::PseudoCCAND:
-  case RISCV::PseudoCCOR:
-  case RISCV::PseudoCCXOR:
-  case RISCV::PseudoCCADDW:
-  case RISCV::PseudoCCSUBW:
-  case RISCV::PseudoCCSLL:
-  case RISCV::PseudoCCSRL:
-  case RISCV::PseudoCCSRA:
-  case RISCV::PseudoCCADDI:
-  case RISCV::PseudoCCSLLI:
-  case RISCV::PseudoCCSRLI:
-  case RISCV::PseudoCCSRAI:
-  case RISCV::PseudoCCANDI:
-  case RISCV::PseudoCCORI:
-  case RISCV::PseudoCCXORI:
-  case RISCV::PseudoCCSLLW:
-  case RISCV::PseudoCCSRLW:
-  case RISCV::PseudoCCSRAW:
-  case RISCV::PseudoCCADDIW:
-  case RISCV::PseudoCCSLLIW:
-  case RISCV::PseudoCCSRLIW:
-  case RISCV::PseudoCCSRAIW:
-  case RISCV::PseudoCCANDN:
-  case RISCV::PseudoCCORN:
-  case RISCV::PseudoCCXNOR:
-  case RISCV::PseudoCCNDS_BFOS:
-  case RISCV::PseudoCCNDS_BFOZ:
+  case Capstone::PseudoCCMOVGPRNoX0:
+  case Capstone::PseudoCCMOVGPR:
+  case Capstone::PseudoCCADD:
+  case Capstone::PseudoCCSUB:
+  case Capstone::PseudoCCAND:
+  case Capstone::PseudoCCOR:
+  case Capstone::PseudoCCXOR:
+  case Capstone::PseudoCCADDW:
+  case Capstone::PseudoCCSUBW:
+  case Capstone::PseudoCCSLL:
+  case Capstone::PseudoCCSRL:
+  case Capstone::PseudoCCSRA:
+  case Capstone::PseudoCCADDI:
+  case Capstone::PseudoCCSLLI:
+  case Capstone::PseudoCCSRLI:
+  case Capstone::PseudoCCSRAI:
+  case Capstone::PseudoCCANDI:
+  case Capstone::PseudoCCORI:
+  case Capstone::PseudoCCXORI:
+  case Capstone::PseudoCCSLLW:
+  case Capstone::PseudoCCSRLW:
+  case Capstone::PseudoCCSRAW:
+  case Capstone::PseudoCCADDIW:
+  case Capstone::PseudoCCSLLIW:
+  case Capstone::PseudoCCSRLIW:
+  case Capstone::PseudoCCSRAIW:
+  case Capstone::PseudoCCANDN:
+  case Capstone::PseudoCCORN:
+  case Capstone::PseudoCCXNOR:
+  case Capstone::PseudoCCNDS_BFOS:
+  case Capstone::PseudoCCNDS_BFOZ:
     return expandCCOp(MBB, MBBI, NextMBBI);
-  case RISCV::PseudoVMCLR_M_B1:
-  case RISCV::PseudoVMCLR_M_B2:
-  case RISCV::PseudoVMCLR_M_B4:
-  case RISCV::PseudoVMCLR_M_B8:
-  case RISCV::PseudoVMCLR_M_B16:
-  case RISCV::PseudoVMCLR_M_B32:
-  case RISCV::PseudoVMCLR_M_B64:
+  case Capstone::PseudoVMCLR_M_B1:
+  case Capstone::PseudoVMCLR_M_B2:
+  case Capstone::PseudoVMCLR_M_B4:
+  case Capstone::PseudoVMCLR_M_B8:
+  case Capstone::PseudoVMCLR_M_B16:
+  case Capstone::PseudoVMCLR_M_B32:
+  case Capstone::PseudoVMCLR_M_B64:
     // vmclr.m vd => vmxor.mm vd, vd, vd
-    return expandVMSET_VMCLR(MBB, MBBI, RISCV::VMXOR_MM);
-  case RISCV::PseudoVMSET_M_B1:
-  case RISCV::PseudoVMSET_M_B2:
-  case RISCV::PseudoVMSET_M_B4:
-  case RISCV::PseudoVMSET_M_B8:
-  case RISCV::PseudoVMSET_M_B16:
-  case RISCV::PseudoVMSET_M_B32:
-  case RISCV::PseudoVMSET_M_B64:
+    return expandVMSET_VMCLR(MBB, MBBI, Capstone::VMXOR_MM);
+  case Capstone::PseudoVMSET_M_B1:
+  case Capstone::PseudoVMSET_M_B2:
+  case Capstone::PseudoVMSET_M_B4:
+  case Capstone::PseudoVMSET_M_B8:
+  case Capstone::PseudoVMSET_M_B16:
+  case Capstone::PseudoVMSET_M_B32:
+  case Capstone::PseudoVMSET_M_B64:
     // vmset.m vd => vmxnor.mm vd, vd, vd
-    return expandVMSET_VMCLR(MBB, MBBI, RISCV::VMXNOR_MM);
-  case RISCV::PseudoReadVLENBViaVSETVLIX0:
+    return expandVMSET_VMCLR(MBB, MBBI, Capstone::VMXNOR_MM);
+  case Capstone::PseudoReadVLENBViaVSETVLIX0:
     return expandPseudoReadVLENBViaVSETVLIX0(MBB, MBBI);
   }
 
   return false;
 }
 
-bool RISCVExpandPseudo::expandCCOp(MachineBasicBlock &MBB,
+bool CapstoneExpandPseudo::expandCCOp(MachineBasicBlock &MBB,
                                    MachineBasicBlock::iterator MBBI,
                                    MachineBasicBlock::iterator &NextMBBI) {
 
@@ -192,11 +192,11 @@ bool RISCVExpandPseudo::expandCCOp(MachineBasicBlock &MBB,
   // We want to copy the "true" value when the condition is true which means
   // we need to invert the branch condition to jump over TrueBB when the
   // condition is false.
-  auto CC = static_cast<RISCVCC::CondCode>(MI.getOperand(3).getImm());
-  CC = RISCVCC::getOppositeBranchCondition(CC);
+  auto CC = static_cast<CapstoneCC::CondCode>(MI.getOperand(3).getImm());
+  CC = CapstoneCC::getOppositeBranchCondition(CC);
 
   // Insert branch instruction.
-  BuildMI(MBB, MBBI, DL, TII->get(RISCVCC::getBrCond(CC)))
+  BuildMI(MBB, MBBI, DL, TII->get(CapstoneCC::getBrCond(CC)))
       .addReg(MI.getOperand(1).getReg())
       .addReg(MI.getOperand(2).getReg())
       .addMBB(MergeBB);
@@ -204,10 +204,10 @@ bool RISCVExpandPseudo::expandCCOp(MachineBasicBlock &MBB,
   Register DestReg = MI.getOperand(0).getReg();
   assert(MI.getOperand(4).getReg() == DestReg);
 
-  if (MI.getOpcode() == RISCV::PseudoCCMOVGPR ||
-      MI.getOpcode() == RISCV::PseudoCCMOVGPRNoX0) {
+  if (MI.getOpcode() == Capstone::PseudoCCMOVGPR ||
+      MI.getOpcode() == Capstone::PseudoCCMOVGPRNoX0) {
     // Add MV.
-    BuildMI(TrueBB, DL, TII->get(RISCV::ADDI), DestReg)
+    BuildMI(TrueBB, DL, TII->get(Capstone::ADDI), DestReg)
         .add(MI.getOperand(5))
         .addImm(0);
   } else {
@@ -215,38 +215,38 @@ bool RISCVExpandPseudo::expandCCOp(MachineBasicBlock &MBB,
     switch (MI.getOpcode()) {
     default:
       llvm_unreachable("Unexpected opcode!");
-    case RISCV::PseudoCCADD:   NewOpc = RISCV::ADD;   break;
-    case RISCV::PseudoCCSUB:   NewOpc = RISCV::SUB;   break;
-    case RISCV::PseudoCCSLL:   NewOpc = RISCV::SLL;   break;
-    case RISCV::PseudoCCSRL:   NewOpc = RISCV::SRL;   break;
-    case RISCV::PseudoCCSRA:   NewOpc = RISCV::SRA;   break;
-    case RISCV::PseudoCCAND:   NewOpc = RISCV::AND;   break;
-    case RISCV::PseudoCCOR:    NewOpc = RISCV::OR;    break;
-    case RISCV::PseudoCCXOR:   NewOpc = RISCV::XOR;   break;
-    case RISCV::PseudoCCADDI:  NewOpc = RISCV::ADDI;  break;
-    case RISCV::PseudoCCSLLI:  NewOpc = RISCV::SLLI;  break;
-    case RISCV::PseudoCCSRLI:  NewOpc = RISCV::SRLI;  break;
-    case RISCV::PseudoCCSRAI:  NewOpc = RISCV::SRAI;  break;
-    case RISCV::PseudoCCANDI:  NewOpc = RISCV::ANDI;  break;
-    case RISCV::PseudoCCORI:   NewOpc = RISCV::ORI;   break;
-    case RISCV::PseudoCCXORI:  NewOpc = RISCV::XORI;  break;
-    case RISCV::PseudoCCADDW:  NewOpc = RISCV::ADDW;  break;
-    case RISCV::PseudoCCSUBW:  NewOpc = RISCV::SUBW;  break;
-    case RISCV::PseudoCCSLLW:  NewOpc = RISCV::SLLW;  break;
-    case RISCV::PseudoCCSRLW:  NewOpc = RISCV::SRLW;  break;
-    case RISCV::PseudoCCSRAW:  NewOpc = RISCV::SRAW;  break;
-    case RISCV::PseudoCCADDIW: NewOpc = RISCV::ADDIW; break;
-    case RISCV::PseudoCCSLLIW: NewOpc = RISCV::SLLIW; break;
-    case RISCV::PseudoCCSRLIW: NewOpc = RISCV::SRLIW; break;
-    case RISCV::PseudoCCSRAIW: NewOpc = RISCV::SRAIW; break;
-    case RISCV::PseudoCCANDN:  NewOpc = RISCV::ANDN;  break;
-    case RISCV::PseudoCCORN:   NewOpc = RISCV::ORN;   break;
-    case RISCV::PseudoCCXNOR:  NewOpc = RISCV::XNOR;  break;
-    case RISCV::PseudoCCNDS_BFOS: NewOpc = RISCV::NDS_BFOS; break;
-    case RISCV::PseudoCCNDS_BFOZ: NewOpc = RISCV::NDS_BFOZ; break;
+    case Capstone::PseudoCCADD:   NewOpc = Capstone::ADD;   break;
+    case Capstone::PseudoCCSUB:   NewOpc = Capstone::SUB;   break;
+    case Capstone::PseudoCCSLL:   NewOpc = Capstone::SLL;   break;
+    case Capstone::PseudoCCSRL:   NewOpc = Capstone::SRL;   break;
+    case Capstone::PseudoCCSRA:   NewOpc = Capstone::SRA;   break;
+    case Capstone::PseudoCCAND:   NewOpc = Capstone::AND;   break;
+    case Capstone::PseudoCCOR:    NewOpc = Capstone::OR;    break;
+    case Capstone::PseudoCCXOR:   NewOpc = Capstone::XOR;   break;
+    case Capstone::PseudoCCADDI:  NewOpc = Capstone::ADDI;  break;
+    case Capstone::PseudoCCSLLI:  NewOpc = Capstone::SLLI;  break;
+    case Capstone::PseudoCCSRLI:  NewOpc = Capstone::SRLI;  break;
+    case Capstone::PseudoCCSRAI:  NewOpc = Capstone::SRAI;  break;
+    case Capstone::PseudoCCANDI:  NewOpc = Capstone::ANDI;  break;
+    case Capstone::PseudoCCORI:   NewOpc = Capstone::ORI;   break;
+    case Capstone::PseudoCCXORI:  NewOpc = Capstone::XORI;  break;
+    case Capstone::PseudoCCADDW:  NewOpc = Capstone::ADDW;  break;
+    case Capstone::PseudoCCSUBW:  NewOpc = Capstone::SUBW;  break;
+    case Capstone::PseudoCCSLLW:  NewOpc = Capstone::SLLW;  break;
+    case Capstone::PseudoCCSRLW:  NewOpc = Capstone::SRLW;  break;
+    case Capstone::PseudoCCSRAW:  NewOpc = Capstone::SRAW;  break;
+    case Capstone::PseudoCCADDIW: NewOpc = Capstone::ADDIW; break;
+    case Capstone::PseudoCCSLLIW: NewOpc = Capstone::SLLIW; break;
+    case Capstone::PseudoCCSRLIW: NewOpc = Capstone::SRLIW; break;
+    case Capstone::PseudoCCSRAIW: NewOpc = Capstone::SRAIW; break;
+    case Capstone::PseudoCCANDN:  NewOpc = Capstone::ANDN;  break;
+    case Capstone::PseudoCCORN:   NewOpc = Capstone::ORN;   break;
+    case Capstone::PseudoCCXNOR:  NewOpc = Capstone::XNOR;  break;
+    case Capstone::PseudoCCNDS_BFOS: NewOpc = Capstone::NDS_BFOS; break;
+    case Capstone::PseudoCCNDS_BFOZ: NewOpc = Capstone::NDS_BFOZ; break;
     }
 
-    if (NewOpc == RISCV::NDS_BFOZ || NewOpc == RISCV::NDS_BFOS) {
+    if (NewOpc == Capstone::NDS_BFOZ || NewOpc == Capstone::NDS_BFOS) {
       BuildMI(TrueBB, DL, TII->get(NewOpc), DestReg)
           .add(MI.getOperand(5))
           .add(MI.getOperand(6))
@@ -277,7 +277,7 @@ bool RISCVExpandPseudo::expandCCOp(MachineBasicBlock &MBB,
   return true;
 }
 
-bool RISCVExpandPseudo::expandVMSET_VMCLR(MachineBasicBlock &MBB,
+bool CapstoneExpandPseudo::expandVMSET_VMCLR(MachineBasicBlock &MBB,
                                           MachineBasicBlock::iterator MBBI,
                                           unsigned Opcode) {
   DebugLoc DL = MBBI->getDebugLoc();
@@ -290,16 +290,16 @@ bool RISCVExpandPseudo::expandVMSET_VMCLR(MachineBasicBlock &MBB,
   return true;
 }
 
-bool RISCVExpandPseudo::expandMV_FPR16INX(MachineBasicBlock &MBB,
+bool CapstoneExpandPseudo::expandMV_FPR16INX(MachineBasicBlock &MBB,
                                           MachineBasicBlock::iterator MBBI) {
   DebugLoc DL = MBBI->getDebugLoc();
   const TargetRegisterInfo *TRI = STI->getRegisterInfo();
   Register DstReg = TRI->getMatchingSuperReg(
-      MBBI->getOperand(0).getReg(), RISCV::sub_16, &RISCV::GPRRegClass);
+      MBBI->getOperand(0).getReg(), Capstone::sub_16, &Capstone::GPRRegClass);
   Register SrcReg = TRI->getMatchingSuperReg(
-      MBBI->getOperand(1).getReg(), RISCV::sub_16, &RISCV::GPRRegClass);
+      MBBI->getOperand(1).getReg(), Capstone::sub_16, &Capstone::GPRRegClass);
 
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::ADDI), DstReg)
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::ADDI), DstReg)
       .addReg(SrcReg, getKillRegState(MBBI->getOperand(1).isKill()))
       .addImm(0);
 
@@ -307,16 +307,16 @@ bool RISCVExpandPseudo::expandMV_FPR16INX(MachineBasicBlock &MBB,
   return true;
 }
 
-bool RISCVExpandPseudo::expandMV_FPR32INX(MachineBasicBlock &MBB,
+bool CapstoneExpandPseudo::expandMV_FPR32INX(MachineBasicBlock &MBB,
                                           MachineBasicBlock::iterator MBBI) {
   DebugLoc DL = MBBI->getDebugLoc();
   const TargetRegisterInfo *TRI = STI->getRegisterInfo();
   Register DstReg = TRI->getMatchingSuperReg(
-      MBBI->getOperand(0).getReg(), RISCV::sub_32, &RISCV::GPRRegClass);
+      MBBI->getOperand(0).getReg(), Capstone::sub_32, &Capstone::GPRRegClass);
   Register SrcReg = TRI->getMatchingSuperReg(
-      MBBI->getOperand(1).getReg(), RISCV::sub_32, &RISCV::GPRRegClass);
+      MBBI->getOperand(1).getReg(), Capstone::sub_32, &Capstone::GPRRegClass);
 
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::ADDI), DstReg)
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::ADDI), DstReg)
       .addReg(SrcReg, getKillRegState(MBBI->getOperand(1).isKill()))
       .addImm(0);
 
@@ -327,18 +327,18 @@ bool RISCVExpandPseudo::expandMV_FPR32INX(MachineBasicBlock &MBB,
 // This function expands the PseudoRV32ZdinxSD for storing a double-precision
 // floating-point value into memory by generating an equivalent instruction
 // sequence for RV32.
-bool RISCVExpandPseudo::expandRV32ZdinxStore(MachineBasicBlock &MBB,
+bool CapstoneExpandPseudo::expandRV32ZdinxStore(MachineBasicBlock &MBB,
                                              MachineBasicBlock::iterator MBBI) {
   DebugLoc DL = MBBI->getDebugLoc();
   const TargetRegisterInfo *TRI = STI->getRegisterInfo();
   Register Lo =
-      TRI->getSubReg(MBBI->getOperand(0).getReg(), RISCV::sub_gpr_even);
+      TRI->getSubReg(MBBI->getOperand(0).getReg(), Capstone::sub_gpr_even);
   Register Hi =
-      TRI->getSubReg(MBBI->getOperand(0).getReg(), RISCV::sub_gpr_odd);
-  if (Hi == RISCV::DUMMY_REG_PAIR_WITH_X0)
-    Hi = RISCV::X0;
+      TRI->getSubReg(MBBI->getOperand(0).getReg(), Capstone::sub_gpr_odd);
+  if (Hi == Capstone::DUMMY_REG_PAIR_WITH_X0)
+    Hi = Capstone::X0;
 
-  auto MIBLo = BuildMI(MBB, MBBI, DL, TII->get(RISCV::SW))
+  auto MIBLo = BuildMI(MBB, MBBI, DL, TII->get(Capstone::SW))
                    .addReg(Lo, getKillRegState(MBBI->getOperand(0).isKill()))
                    .addReg(MBBI->getOperand(1).getReg())
                    .add(MBBI->getOperand(2));
@@ -347,13 +347,13 @@ bool RISCVExpandPseudo::expandRV32ZdinxStore(MachineBasicBlock &MBB,
   if (MBBI->getOperand(2).isGlobal() || MBBI->getOperand(2).isCPI()) {
     assert(MBBI->getOperand(2).getOffset() % 8 == 0);
     MBBI->getOperand(2).setOffset(MBBI->getOperand(2).getOffset() + 4);
-    MIBHi = BuildMI(MBB, MBBI, DL, TII->get(RISCV::SW))
+    MIBHi = BuildMI(MBB, MBBI, DL, TII->get(Capstone::SW))
                 .addReg(Hi, getKillRegState(MBBI->getOperand(0).isKill()))
                 .add(MBBI->getOperand(1))
                 .add(MBBI->getOperand(2));
   } else {
     assert(isInt<12>(MBBI->getOperand(2).getImm() + 4));
-    MIBHi = BuildMI(MBB, MBBI, DL, TII->get(RISCV::SW))
+    MIBHi = BuildMI(MBB, MBBI, DL, TII->get(Capstone::SW))
                 .addReg(Hi, getKillRegState(MBBI->getOperand(0).isKill()))
                 .add(MBBI->getOperand(1))
                 .addImm(MBBI->getOperand(2).getImm() + 4);
@@ -376,15 +376,15 @@ bool RISCVExpandPseudo::expandRV32ZdinxStore(MachineBasicBlock &MBB,
 // This function expands PseudoRV32ZdinxLoad for loading a double-precision
 // floating-point value from memory into an equivalent instruction sequence for
 // RV32.
-bool RISCVExpandPseudo::expandRV32ZdinxLoad(MachineBasicBlock &MBB,
+bool CapstoneExpandPseudo::expandRV32ZdinxLoad(MachineBasicBlock &MBB,
                                             MachineBasicBlock::iterator MBBI) {
   DebugLoc DL = MBBI->getDebugLoc();
   const TargetRegisterInfo *TRI = STI->getRegisterInfo();
   Register Lo =
-      TRI->getSubReg(MBBI->getOperand(0).getReg(), RISCV::sub_gpr_even);
+      TRI->getSubReg(MBBI->getOperand(0).getReg(), Capstone::sub_gpr_even);
   Register Hi =
-      TRI->getSubReg(MBBI->getOperand(0).getReg(), RISCV::sub_gpr_odd);
-  assert(Hi != RISCV::DUMMY_REG_PAIR_WITH_X0 && "Cannot write to X0_Pair");
+      TRI->getSubReg(MBBI->getOperand(0).getReg(), Capstone::sub_gpr_odd);
+  assert(Hi != Capstone::DUMMY_REG_PAIR_WITH_X0 && "Cannot write to X0_Pair");
 
   MachineInstrBuilder MIBLo, MIBHi;
 
@@ -393,7 +393,7 @@ bool RISCVExpandPseudo::expandRV32ZdinxLoad(MachineBasicBlock &MBB,
   bool IsOp1EqualToLo = Lo == MBBI->getOperand(1).getReg();
   // Order: Lo, Hi
   if (!IsOp1EqualToLo) {
-    MIBLo = BuildMI(MBB, MBBI, DL, TII->get(RISCV::LW), Lo)
+    MIBLo = BuildMI(MBB, MBBI, DL, TII->get(Capstone::LW), Lo)
                 .addReg(MBBI->getOperand(1).getReg())
                 .add(MBBI->getOperand(2));
   }
@@ -402,20 +402,20 @@ bool RISCVExpandPseudo::expandRV32ZdinxLoad(MachineBasicBlock &MBB,
     auto Offset = MBBI->getOperand(2).getOffset();
     assert(Offset % 8 == 0);
     MBBI->getOperand(2).setOffset(Offset + 4);
-    MIBHi = BuildMI(MBB, MBBI, DL, TII->get(RISCV::LW), Hi)
+    MIBHi = BuildMI(MBB, MBBI, DL, TII->get(Capstone::LW), Hi)
                 .addReg(MBBI->getOperand(1).getReg())
                 .add(MBBI->getOperand(2));
     MBBI->getOperand(2).setOffset(Offset);
   } else {
     assert(isInt<12>(MBBI->getOperand(2).getImm() + 4));
-    MIBHi = BuildMI(MBB, MBBI, DL, TII->get(RISCV::LW), Hi)
+    MIBHi = BuildMI(MBB, MBBI, DL, TII->get(Capstone::LW), Hi)
                 .addReg(MBBI->getOperand(1).getReg())
                 .addImm(MBBI->getOperand(2).getImm() + 4);
   }
 
   // Order: Hi, Lo
   if (IsOp1EqualToLo) {
-    MIBLo = BuildMI(MBB, MBBI, DL, TII->get(RISCV::LW), Lo)
+    MIBLo = BuildMI(MBB, MBBI, DL, TII->get(Capstone::LW), Lo)
                 .addReg(MBBI->getOperand(1).getReg())
                 .add(MBBI->getOperand(2));
   }
@@ -434,31 +434,31 @@ bool RISCVExpandPseudo::expandRV32ZdinxLoad(MachineBasicBlock &MBB,
   return true;
 }
 
-bool RISCVExpandPseudo::expandPseudoReadVLENBViaVSETVLIX0(
+bool CapstoneExpandPseudo::expandPseudoReadVLENBViaVSETVLIX0(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI) {
   DebugLoc DL = MBBI->getDebugLoc();
   Register Dst = MBBI->getOperand(0).getReg();
   unsigned Mul = MBBI->getOperand(1).getImm();
-  RISCVVType::VLMUL VLMUL = RISCVVType::encodeLMUL(Mul, /*Fractional=*/false);
-  unsigned VTypeImm = RISCVVType::encodeVTYPE(
+  CapstoneVType::VLMUL VLMUL = CapstoneVType::encodeLMUL(Mul, /*Fractional=*/false);
+  unsigned VTypeImm = CapstoneVType::encodeVTYPE(
       VLMUL, /*SEW=*/8, /*TailAgnostic=*/true, /*MaskAgnostic=*/true);
 
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::PseudoVSETVLIX0))
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::PseudoVSETVLIX0))
       .addReg(Dst, RegState::Define)
-      .addReg(RISCV::X0, RegState::Kill)
+      .addReg(Capstone::X0, RegState::Kill)
       .addImm(VTypeImm);
 
   MBBI->eraseFromParent();
   return true;
 }
 
-class RISCVPreRAExpandPseudo : public MachineFunctionPass {
+class CapstonePreRAExpandPseudo : public MachineFunctionPass {
 public:
-  const RISCVSubtarget *STI;
-  const RISCVInstrInfo *TII;
+  const CapstoneSubtarget *STI;
+  const CapstoneInstrInfo *TII;
   static char ID;
 
-  RISCVPreRAExpandPseudo() : MachineFunctionPass(ID) {}
+  CapstonePreRAExpandPseudo() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -467,7 +467,7 @@ public:
     MachineFunctionPass::getAnalysisUsage(AU);
   }
   StringRef getPassName() const override {
-    return RISCV_PRERA_EXPAND_PSEUDO_NAME;
+    return Capstone_PRERA_EXPAND_PSEUDO_NAME;
   }
 
 private:
@@ -505,10 +505,10 @@ private:
 #endif
 };
 
-char RISCVPreRAExpandPseudo::ID = 0;
+char CapstonePreRAExpandPseudo::ID = 0;
 
-bool RISCVPreRAExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
-  STI = &MF.getSubtarget<RISCVSubtarget>();
+bool CapstonePreRAExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
+  STI = &MF.getSubtarget<CapstoneSubtarget>();
   TII = STI->getInstrInfo();
 
 #ifndef NDEBUG
@@ -526,7 +526,7 @@ bool RISCVPreRAExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
   return Modified;
 }
 
-bool RISCVPreRAExpandPseudo::expandMBB(MachineBasicBlock &MBB) {
+bool CapstonePreRAExpandPseudo::expandMBB(MachineBasicBlock &MBB) {
   bool Modified = false;
 
   MachineBasicBlock::iterator MBBI = MBB.begin(), E = MBB.end();
@@ -539,26 +539,26 @@ bool RISCVPreRAExpandPseudo::expandMBB(MachineBasicBlock &MBB) {
   return Modified;
 }
 
-bool RISCVPreRAExpandPseudo::expandMI(MachineBasicBlock &MBB,
+bool CapstonePreRAExpandPseudo::expandMI(MachineBasicBlock &MBB,
                                       MachineBasicBlock::iterator MBBI,
                                       MachineBasicBlock::iterator &NextMBBI) {
 
   switch (MBBI->getOpcode()) {
-  case RISCV::PseudoLLA:
+  case Capstone::PseudoLLA:
     return expandLoadLocalAddress(MBB, MBBI, NextMBBI);
-  case RISCV::PseudoLGA:
+  case Capstone::PseudoLGA:
     return expandLoadGlobalAddress(MBB, MBBI, NextMBBI);
-  case RISCV::PseudoLA_TLS_IE:
+  case Capstone::PseudoLA_TLS_IE:
     return expandLoadTLSIEAddress(MBB, MBBI, NextMBBI);
-  case RISCV::PseudoLA_TLS_GD:
+  case Capstone::PseudoLA_TLS_GD:
     return expandLoadTLSGDAddress(MBB, MBBI, NextMBBI);
-  case RISCV::PseudoLA_TLSDESC:
+  case Capstone::PseudoLA_TLSDESC:
     return expandLoadTLSDescAddress(MBB, MBBI, NextMBBI);
   }
   return false;
 }
 
-bool RISCVPreRAExpandPseudo::expandAuipcInstPair(
+bool CapstonePreRAExpandPseudo::expandAuipcInstPair(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI, unsigned FlagsHi,
     unsigned SecondOpcode) {
@@ -568,20 +568,20 @@ bool RISCVPreRAExpandPseudo::expandAuipcInstPair(
 
   Register DestReg = MI.getOperand(0).getReg();
   Register ScratchReg =
-      MF->getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
+      MF->getRegInfo().createVirtualRegister(&Capstone::GPRRegClass);
 
   MachineOperand &Symbol = MI.getOperand(1);
   Symbol.setTargetFlags(FlagsHi);
   MCSymbol *AUIPCSymbol = MF->getContext().createNamedTempSymbol("pcrel_hi");
 
   MachineInstr *MIAUIPC =
-      BuildMI(MBB, MBBI, DL, TII->get(RISCV::AUIPC), ScratchReg).add(Symbol);
+      BuildMI(MBB, MBBI, DL, TII->get(Capstone::AUIPC), ScratchReg).add(Symbol);
   MIAUIPC->setPreInstrSymbol(*MF, AUIPCSymbol);
 
   MachineInstr *SecondMI =
       BuildMI(MBB, MBBI, DL, TII->get(SecondOpcode), DestReg)
           .addReg(ScratchReg)
-          .addSym(AUIPCSymbol, RISCVII::MO_PCREL_LO);
+          .addSym(AUIPCSymbol, CapstoneII::MO_PCREL_LO);
 
   if (MI.hasOneMemOperand())
     SecondMI->addMemOperand(*MF, *MI.memoperands_begin());
@@ -590,76 +590,76 @@ bool RISCVPreRAExpandPseudo::expandAuipcInstPair(
   return true;
 }
 
-bool RISCVPreRAExpandPseudo::expandLoadLocalAddress(
+bool CapstonePreRAExpandPseudo::expandLoadLocalAddress(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
-  return expandAuipcInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_PCREL_HI,
-                             RISCV::ADDI);
+  return expandAuipcInstPair(MBB, MBBI, NextMBBI, CapstoneII::MO_PCREL_HI,
+                             Capstone::ADDI);
 }
 
-bool RISCVPreRAExpandPseudo::expandLoadGlobalAddress(
+bool CapstonePreRAExpandPseudo::expandLoadGlobalAddress(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
-  unsigned SecondOpcode = STI->is64Bit() ? RISCV::LD : RISCV::LW;
-  return expandAuipcInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_GOT_HI,
+  unsigned SecondOpcode = STI->is64Bit() ? Capstone::LD : Capstone::LW;
+  return expandAuipcInstPair(MBB, MBBI, NextMBBI, CapstoneII::MO_GOT_HI,
                              SecondOpcode);
 }
 
-bool RISCVPreRAExpandPseudo::expandLoadTLSIEAddress(
+bool CapstonePreRAExpandPseudo::expandLoadTLSIEAddress(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
-  unsigned SecondOpcode = STI->is64Bit() ? RISCV::LD : RISCV::LW;
-  return expandAuipcInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_TLS_GOT_HI,
+  unsigned SecondOpcode = STI->is64Bit() ? Capstone::LD : Capstone::LW;
+  return expandAuipcInstPair(MBB, MBBI, NextMBBI, CapstoneII::MO_TLS_GOT_HI,
                              SecondOpcode);
 }
 
-bool RISCVPreRAExpandPseudo::expandLoadTLSGDAddress(
+bool CapstonePreRAExpandPseudo::expandLoadTLSGDAddress(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
-  return expandAuipcInstPair(MBB, MBBI, NextMBBI, RISCVII::MO_TLS_GD_HI,
-                             RISCV::ADDI);
+  return expandAuipcInstPair(MBB, MBBI, NextMBBI, CapstoneII::MO_TLS_GD_HI,
+                             Capstone::ADDI);
 }
 
-bool RISCVPreRAExpandPseudo::expandLoadTLSDescAddress(
+bool CapstonePreRAExpandPseudo::expandLoadTLSDescAddress(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MBBI,
     MachineBasicBlock::iterator &NextMBBI) {
   MachineFunction *MF = MBB.getParent();
   MachineInstr &MI = *MBBI;
   DebugLoc DL = MI.getDebugLoc();
 
-  const auto &STI = MF->getSubtarget<RISCVSubtarget>();
-  unsigned SecondOpcode = STI.is64Bit() ? RISCV::LD : RISCV::LW;
+  const auto &STI = MF->getSubtarget<CapstoneSubtarget>();
+  unsigned SecondOpcode = STI.is64Bit() ? Capstone::LD : Capstone::LW;
 
   Register FinalReg = MI.getOperand(0).getReg();
   Register DestReg =
-      MF->getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
+      MF->getRegInfo().createVirtualRegister(&Capstone::GPRRegClass);
   Register ScratchReg =
-      MF->getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
+      MF->getRegInfo().createVirtualRegister(&Capstone::GPRRegClass);
 
   MachineOperand &Symbol = MI.getOperand(1);
-  Symbol.setTargetFlags(RISCVII::MO_TLSDESC_HI);
+  Symbol.setTargetFlags(CapstoneII::MO_TLSDESC_HI);
   MCSymbol *AUIPCSymbol = MF->getContext().createNamedTempSymbol("tlsdesc_hi");
 
   MachineInstr *MIAUIPC =
-      BuildMI(MBB, MBBI, DL, TII->get(RISCV::AUIPC), ScratchReg).add(Symbol);
+      BuildMI(MBB, MBBI, DL, TII->get(Capstone::AUIPC), ScratchReg).add(Symbol);
   MIAUIPC->setPreInstrSymbol(*MF, AUIPCSymbol);
 
   BuildMI(MBB, MBBI, DL, TII->get(SecondOpcode), DestReg)
       .addReg(ScratchReg)
-      .addSym(AUIPCSymbol, RISCVII::MO_TLSDESC_LOAD_LO);
+      .addSym(AUIPCSymbol, CapstoneII::MO_TLSDESC_LOAD_LO);
 
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::ADDI), RISCV::X10)
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::ADDI), Capstone::X10)
       .addReg(ScratchReg)
-      .addSym(AUIPCSymbol, RISCVII::MO_TLSDESC_ADD_LO);
+      .addSym(AUIPCSymbol, CapstoneII::MO_TLSDESC_ADD_LO);
 
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::PseudoTLSDESCCall), RISCV::X5)
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::PseudoTLSDESCCall), Capstone::X5)
       .addReg(DestReg)
       .addImm(0)
-      .addSym(AUIPCSymbol, RISCVII::MO_TLSDESC_CALL);
+      .addSym(AUIPCSymbol, CapstoneII::MO_TLSDESC_CALL);
 
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::ADD), FinalReg)
-      .addReg(RISCV::X10)
-      .addReg(RISCV::X4);
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::ADD), FinalReg)
+      .addReg(Capstone::X10)
+      .addReg(Capstone::X4);
 
   MI.eraseFromParent();
   return true;
@@ -667,15 +667,15 @@ bool RISCVPreRAExpandPseudo::expandLoadTLSDescAddress(
 
 } // end of anonymous namespace
 
-INITIALIZE_PASS(RISCVExpandPseudo, "riscv-expand-pseudo",
-                RISCV_EXPAND_PSEUDO_NAME, false, false)
+INITIALIZE_PASS(CapstoneExpandPseudo, "capstone-expand-pseudo",
+                Capstone_EXPAND_PSEUDO_NAME, false, false)
 
-INITIALIZE_PASS(RISCVPreRAExpandPseudo, "riscv-prera-expand-pseudo",
-                RISCV_PRERA_EXPAND_PSEUDO_NAME, false, false)
+INITIALIZE_PASS(CapstonePreRAExpandPseudo, "capstone-prera-expand-pseudo",
+                Capstone_PRERA_EXPAND_PSEUDO_NAME, false, false)
 
 namespace llvm {
 
-FunctionPass *createRISCVExpandPseudoPass() { return new RISCVExpandPseudo(); }
-FunctionPass *createRISCVPreRAExpandPseudoPass() { return new RISCVPreRAExpandPseudo(); }
+FunctionPass *createCapstoneExpandPseudoPass() { return new CapstoneExpandPseudo(); }
+FunctionPass *createCapstonePreRAExpandPseudoPass() { return new CapstonePreRAExpandPseudo(); }
 
 } // end of namespace llvm

@@ -1,4 +1,4 @@
-//===-- RISCVTargetStreamer.cpp - RISC-V Target Streamer Methods ----------===//
+//===-- CapstoneTargetStreamer.cpp - Capstone Target Streamer Methods ----------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,13 +6,13 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file provides RISC-V specific target streamer methods.
+// This file provides Capstone specific target streamer methods.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVTargetStreamer.h"
-#include "RISCVBaseInfo.h"
-#include "RISCVMCTargetDesc.h"
+#include "CapstoneTargetStreamer.h"
+#include "CapstoneBaseInfo.h"
+#include "CapstoneMCTargetDesc.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
@@ -23,45 +23,45 @@
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
-#include "llvm/Support/RISCVAttributes.h"
-#include "llvm/TargetParser/RISCVISAInfo.h"
+#include "llvm/Support/CapstoneAttributes.h"
+#include "llvm/TargetParser/CapstoneISAInfo.h"
 
 using namespace llvm;
 
 // This option controls whether or not we emit ELF attributes for ABI features,
-// like RISC-V atomics or X3 usage.
-static cl::opt<bool> RiscvAbiAttr(
-    "riscv-abi-attributes",
-    cl::desc("Enable emitting RISC-V ELF attributes for ABI features"),
+// like Capstone atomics or X3 usage.
+static cl::opt<bool> CapstoneAbiAttr(
+    "capstone-abi-attributes",
+    cl::desc("Enable emitting Capstone ELF attributes for ABI features"),
     cl::Hidden);
 
-RISCVTargetStreamer::RISCVTargetStreamer(MCStreamer &S) : MCTargetStreamer(S) {}
+CapstoneTargetStreamer::CapstoneTargetStreamer(MCStreamer &S) : MCTargetStreamer(S) {}
 
-void RISCVTargetStreamer::finish() { finishAttributeSection(); }
-void RISCVTargetStreamer::reset() {}
+void CapstoneTargetStreamer::finish() { finishAttributeSection(); }
+void CapstoneTargetStreamer::reset() {}
 
-void RISCVTargetStreamer::emitDirectiveOptionArch(
-    ArrayRef<RISCVOptionArchArg> Args) {}
-void RISCVTargetStreamer::emitDirectiveOptionExact() {}
-void RISCVTargetStreamer::emitDirectiveOptionNoExact() {}
-void RISCVTargetStreamer::emitDirectiveOptionPIC() {}
-void RISCVTargetStreamer::emitDirectiveOptionNoPIC() {}
-void RISCVTargetStreamer::emitDirectiveOptionPop() {}
-void RISCVTargetStreamer::emitDirectiveOptionPush() {}
-void RISCVTargetStreamer::emitDirectiveOptionRelax() {}
-void RISCVTargetStreamer::emitDirectiveOptionNoRelax() {}
-void RISCVTargetStreamer::emitDirectiveOptionRVC() {}
-void RISCVTargetStreamer::emitDirectiveOptionNoRVC() {}
-void RISCVTargetStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {}
-void RISCVTargetStreamer::emitAttribute(unsigned Attribute, unsigned Value) {}
-void RISCVTargetStreamer::finishAttributeSection() {}
-void RISCVTargetStreamer::emitTextAttribute(unsigned Attribute,
+void CapstoneTargetStreamer::emitDirectiveOptionArch(
+    ArrayRef<CapstoneOptionArchArg> Args) {}
+void CapstoneTargetStreamer::emitDirectiveOptionExact() {}
+void CapstoneTargetStreamer::emitDirectiveOptionNoExact() {}
+void CapstoneTargetStreamer::emitDirectiveOptionPIC() {}
+void CapstoneTargetStreamer::emitDirectiveOptionNoPIC() {}
+void CapstoneTargetStreamer::emitDirectiveOptionPop() {}
+void CapstoneTargetStreamer::emitDirectiveOptionPush() {}
+void CapstoneTargetStreamer::emitDirectiveOptionRelax() {}
+void CapstoneTargetStreamer::emitDirectiveOptionNoRelax() {}
+void CapstoneTargetStreamer::emitDirectiveOptionRVC() {}
+void CapstoneTargetStreamer::emitDirectiveOptionNoRVC() {}
+void CapstoneTargetStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {}
+void CapstoneTargetStreamer::emitAttribute(unsigned Attribute, unsigned Value) {}
+void CapstoneTargetStreamer::finishAttributeSection() {}
+void CapstoneTargetStreamer::emitTextAttribute(unsigned Attribute,
                                             StringRef String) {}
-void RISCVTargetStreamer::emitIntTextAttribute(unsigned Attribute,
+void CapstoneTargetStreamer::emitIntTextAttribute(unsigned Attribute,
                                                unsigned IntValue,
                                                StringRef StringValue) {}
 
-void RISCVTargetStreamer::emitNoteGnuPropertySection(
+void CapstoneTargetStreamer::emitNoteGnuPropertySection(
     const uint32_t Feature1And) {
   MCStreamer &OutStreamer = getStreamer();
   MCContext &Ctx = OutStreamer.getContext();
@@ -94,7 +94,7 @@ void RISCVTargetStreamer::emitNoteGnuPropertySection(
   // Emit n_desc field
 
   // Emit the feature_1_and property
-  OutStreamer.emitIntValue(ELF::GNU_PROPERTY_RISCV_FEATURE_1_AND, 4); // pr_type
+  OutStreamer.emitIntValue(ELF::GNU_PROPERTY_Capstone_FEATURE_1_AND, 4); // pr_type
   OutStreamer.emitIntValue(4, 4);              // pr_datasz
   OutStreamer.emitIntValue(Feature1And, 4);    // pr_data
   OutStreamer.emitValueToAlignment(NoteAlign); // pr_padding
@@ -102,107 +102,107 @@ void RISCVTargetStreamer::emitNoteGnuPropertySection(
   OutStreamer.popSection();
 }
 
-void RISCVTargetStreamer::setTargetABI(RISCVABI::ABI ABI) {
-  assert(ABI != RISCVABI::ABI_Unknown && "Improperly initialized target ABI");
+void CapstoneTargetStreamer::setTargetABI(CapstoneABI::ABI ABI) {
+  assert(ABI != CapstoneABI::ABI_Unknown && "Improperly initialized target ABI");
   TargetABI = ABI;
 }
 
-void RISCVTargetStreamer::setFlagsFromFeatures(const MCSubtargetInfo &STI) {
-  HasRVC = STI.hasFeature(RISCV::FeatureStdExtZca);
-  HasTSO = STI.hasFeature(RISCV::FeatureStdExtZtso);
+void CapstoneTargetStreamer::setFlagsFromFeatures(const MCSubtargetInfo &STI) {
+  HasRVC = STI.hasFeature(Capstone::FeatureStdExtZca);
+  HasTSO = STI.hasFeature(Capstone::FeatureStdExtZtso);
 }
 
-void RISCVTargetStreamer::emitTargetAttributes(const MCSubtargetInfo &STI,
+void CapstoneTargetStreamer::emitTargetAttributes(const MCSubtargetInfo &STI,
                                                bool EmitStackAlign) {
   if (EmitStackAlign) {
     unsigned StackAlign;
-    if (TargetABI == RISCVABI::ABI_ILP32E)
+    if (TargetABI == CapstoneABI::ABI_ILP32E)
       StackAlign = 4;
-    else if (TargetABI == RISCVABI::ABI_LP64E)
+    else if (TargetABI == CapstoneABI::ABI_LP64E)
       StackAlign = 8;
     else
       StackAlign = 16;
-    emitAttribute(RISCVAttrs::STACK_ALIGN, StackAlign);
+    emitAttribute(CapstoneAttrs::STACK_ALIGN, StackAlign);
   }
 
-  auto ParseResult = RISCVFeatures::parseFeatureBits(
-      STI.hasFeature(RISCV::Feature64Bit), STI.getFeatureBits());
+  auto ParseResult = CapstoneFeatures::parseFeatureBits(
+      STI.hasFeature(Capstone::Feature64Bit), STI.getFeatureBits());
   if (!ParseResult) {
     report_fatal_error(ParseResult.takeError());
   } else {
     auto &ISAInfo = *ParseResult;
-    emitTextAttribute(RISCVAttrs::ARCH, ISAInfo->toString());
+    emitTextAttribute(CapstoneAttrs::ARCH, ISAInfo->toString());
   }
 
-  if (RiscvAbiAttr && STI.hasFeature(RISCV::FeatureStdExtA)) {
+  if (CapstoneAbiAttr && STI.hasFeature(Capstone::FeatureStdExtA)) {
     unsigned AtomicABITag;
-    if (STI.hasFeature(RISCV::FeatureStdExtZalasr))
-      AtomicABITag = static_cast<unsigned>(RISCVAttrs::RISCVAtomicAbiTag::A7);
-    else if (STI.hasFeature(RISCV::FeatureNoTrailingSeqCstFence))
-      AtomicABITag = static_cast<unsigned>(RISCVAttrs::RISCVAtomicAbiTag::A6C);
+    if (STI.hasFeature(Capstone::FeatureStdExtZalasr))
+      AtomicABITag = static_cast<unsigned>(CapstoneAttrs::CapstoneAtomicAbiTag::A7);
+    else if (STI.hasFeature(Capstone::FeatureNoTrailingSeqCstFence))
+      AtomicABITag = static_cast<unsigned>(CapstoneAttrs::CapstoneAtomicAbiTag::A6C);
     else
-      AtomicABITag = static_cast<unsigned>(RISCVAttrs::RISCVAtomicAbiTag::A6S);
-    emitAttribute(RISCVAttrs::ATOMIC_ABI, AtomicABITag);
+      AtomicABITag = static_cast<unsigned>(CapstoneAttrs::CapstoneAtomicAbiTag::A6S);
+    emitAttribute(CapstoneAttrs::ATOMIC_ABI, AtomicABITag);
   }
 }
 
 // This part is for ascii assembly output
-RISCVTargetAsmStreamer::RISCVTargetAsmStreamer(MCStreamer &S,
+CapstoneTargetAsmStreamer::CapstoneTargetAsmStreamer(MCStreamer &S,
                                                formatted_raw_ostream &OS)
-    : RISCVTargetStreamer(S), OS(OS) {}
+    : CapstoneTargetStreamer(S), OS(OS) {}
 
-void RISCVTargetAsmStreamer::emitDirectiveOptionPush() {
+void CapstoneTargetAsmStreamer::emitDirectiveOptionPush() {
   OS << "\t.option\tpush\n";
 }
 
-void RISCVTargetAsmStreamer::emitDirectiveOptionPop() {
+void CapstoneTargetAsmStreamer::emitDirectiveOptionPop() {
   OS << "\t.option\tpop\n";
 }
 
-void RISCVTargetAsmStreamer::emitDirectiveOptionPIC() {
+void CapstoneTargetAsmStreamer::emitDirectiveOptionPIC() {
   OS << "\t.option\tpic\n";
 }
 
-void RISCVTargetAsmStreamer::emitDirectiveOptionNoPIC() {
+void CapstoneTargetAsmStreamer::emitDirectiveOptionNoPIC() {
   OS << "\t.option\tnopic\n";
 }
 
-void RISCVTargetAsmStreamer::emitDirectiveOptionRVC() {
+void CapstoneTargetAsmStreamer::emitDirectiveOptionRVC() {
   OS << "\t.option\trvc\n";
 }
 
-void RISCVTargetAsmStreamer::emitDirectiveOptionNoRVC() {
+void CapstoneTargetAsmStreamer::emitDirectiveOptionNoRVC() {
   OS << "\t.option\tnorvc\n";
 }
 
-void RISCVTargetAsmStreamer::emitDirectiveOptionExact() {
+void CapstoneTargetAsmStreamer::emitDirectiveOptionExact() {
   OS << "\t.option\texact\n";
 }
 
-void RISCVTargetAsmStreamer::emitDirectiveOptionNoExact() {
+void CapstoneTargetAsmStreamer::emitDirectiveOptionNoExact() {
   OS << "\t.option\tnoexact\n";
 }
 
-void RISCVTargetAsmStreamer::emitDirectiveOptionRelax() {
+void CapstoneTargetAsmStreamer::emitDirectiveOptionRelax() {
   OS << "\t.option\trelax\n";
 }
 
-void RISCVTargetAsmStreamer::emitDirectiveOptionNoRelax() {
+void CapstoneTargetAsmStreamer::emitDirectiveOptionNoRelax() {
   OS << "\t.option\tnorelax\n";
 }
 
-void RISCVTargetAsmStreamer::emitDirectiveOptionArch(
-    ArrayRef<RISCVOptionArchArg> Args) {
+void CapstoneTargetAsmStreamer::emitDirectiveOptionArch(
+    ArrayRef<CapstoneOptionArchArg> Args) {
   OS << "\t.option\tarch";
   for (const auto &Arg : Args) {
     OS << ", ";
     switch (Arg.Type) {
-    case RISCVOptionArchArgType::Full:
+    case CapstoneOptionArchArgType::Full:
       break;
-    case RISCVOptionArchArgType::Plus:
+    case CapstoneOptionArchArgType::Plus:
       OS << "+";
       break;
-    case RISCVOptionArchArgType::Minus:
+    case CapstoneOptionArchArgType::Minus:
       OS << "-";
       break;
     }
@@ -211,21 +211,21 @@ void RISCVTargetAsmStreamer::emitDirectiveOptionArch(
   OS << "\n";
 }
 
-void RISCVTargetAsmStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {
+void CapstoneTargetAsmStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {
   OS << "\t.variant_cc\t" << Symbol.getName() << "\n";
 }
 
-void RISCVTargetAsmStreamer::emitAttribute(unsigned Attribute, unsigned Value) {
+void CapstoneTargetAsmStreamer::emitAttribute(unsigned Attribute, unsigned Value) {
   OS << "\t.attribute\t" << Attribute << ", " << Twine(Value) << "\n";
 }
 
-void RISCVTargetAsmStreamer::emitTextAttribute(unsigned Attribute,
+void CapstoneTargetAsmStreamer::emitTextAttribute(unsigned Attribute,
                                                StringRef String) {
   OS << "\t.attribute\t" << Attribute << ", \"" << String << "\"\n";
 }
 
-void RISCVTargetAsmStreamer::emitIntTextAttribute(unsigned Attribute,
+void CapstoneTargetAsmStreamer::emitIntTextAttribute(unsigned Attribute,
                                                   unsigned IntValue,
                                                   StringRef StringValue) {}
 
-void RISCVTargetAsmStreamer::finishAttributeSection() {}
+void CapstoneTargetAsmStreamer::finishAttributeSection() {}

@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoSFB.td - Pseudos for SFB -------------*- tablegen -*-===//
+//===-- CapstoneInstrInfoSFB.td - Pseudos for SFB -------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -13,12 +13,12 @@
 let Predicates = [HasShortForwardBranchOpt], isSelect = 1,
     Constraints = "$dst = $falsev", isCommutable = 1, Size = 8 in {
 // This instruction moves $truev to $dst when the condition is true. It will
-// be expanded to control flow in RISCVExpandPseudoInsts.
+// be expanded to control flow in CapstoneExpandPseudoInsts.
 def PseudoCCMOVGPR : Pseudo<(outs GPR:$dst),
                             (ins GPR:$lhs, GPR:$rhs, cond_code:$cc,
                              GPR:$falsev, GPR:$truev),
                             [(set GPR:$dst,
-                              (riscv_selectcc_frag:$cc (XLenVT GPR:$lhs),
+                              (capstone_selectcc_frag:$cc (XLenVT GPR:$lhs),
                                                        GPR:$rhs, cond,
                                                        (XLenVT GPR:$truev),
                                                        GPR:$falsev))]>,
@@ -31,13 +31,13 @@ def PseudoCCMOVGPR : Pseudo<(outs GPR:$dst),
 let Predicates = [HasConditionalMoveFusion, NoShortForwardBranchOpt],
     Constraints = "$dst = $falsev", isCommutable = 1, Size = 6 in {
 // This instruction moves $truev to $dst when the condition is true. It will
-// be expanded to control flow in RISCVExpandPseudoInsts.
+// be expanded to control flow in CapstoneExpandPseudoInsts.
 // We use GPRNoX0 because c.mv cannot encode X0.
 def PseudoCCMOVGPRNoX0 : Pseudo<(outs GPRNoX0:$dst),
                                 (ins GPR:$lhs, GPR:$rhs, cond_code:$cc,
                                  GPRNoX0:$falsev, GPRNoX0:$truev),
                                 [(set GPRNoX0:$dst,
-                                  (riscv_selectcc_frag:$cc (XLenVT GPR:$lhs),
+                                  (capstone_selectcc_frag:$cc (XLenVT GPR:$lhs),
                                                            (XLenVT GPR:$rhs),
                                                            cond, (XLenVT GPRNoX0:$truev),
                                                            (XLenVT GPRNoX0:$falsev)))]>,

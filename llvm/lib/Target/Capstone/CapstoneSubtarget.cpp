@@ -1,4 +1,4 @@
-//===-- RISCVSubtarget.cpp - RISC-V Subtarget Information -----------------===//
+//===-- CapstoneSubtarget.cpp - Capstone Subtarget Information -----------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,73 +6,73 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file implements the RISC-V specific subclass of TargetSubtargetInfo.
+// This file implements the Capstone specific subclass of TargetSubtargetInfo.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVSubtarget.h"
-#include "GISel/RISCVCallLowering.h"
-#include "GISel/RISCVLegalizerInfo.h"
-#include "RISCV.h"
-#include "RISCVFrameLowering.h"
-#include "RISCVSelectionDAGInfo.h"
-#include "RISCVTargetMachine.h"
+#include "CapstoneSubtarget.h"
+#include "GISel/CapstoneCallLowering.h"
+#include "GISel/CapstoneLegalizerInfo.h"
+#include "Capstone.h"
+#include "CapstoneFrameLowering.h"
+#include "CapstoneSelectionDAGInfo.h"
+#include "CapstoneTargetMachine.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-subtarget"
+#define DEBUG_TYPE "capstone-subtarget"
 
 #define GET_SUBTARGETINFO_TARGET_DESC
 #define GET_SUBTARGETINFO_CTOR
-#include "RISCVGenSubtargetInfo.inc"
+#include "CapstoneGenSubtargetInfo.inc"
 
-#define GET_RISCV_MACRO_FUSION_PRED_IMPL
-#include "RISCVGenMacroFusion.inc"
+#define GET_Capstone_MACRO_FUSION_PRED_IMPL
+#include "CapstoneGenMacroFusion.inc"
 
-namespace llvm::RISCVTuneInfoTable {
+namespace llvm::CapstoneTuneInfoTable {
 
-#define GET_RISCVTuneInfoTable_IMPL
-#include "RISCVGenSearchableTables.inc"
-} // namespace llvm::RISCVTuneInfoTable
+#define GET_CapstoneTuneInfoTable_IMPL
+#include "CapstoneGenSearchableTables.inc"
+} // namespace llvm::CapstoneTuneInfoTable
 
 static cl::opt<unsigned> RVVVectorLMULMax(
-    "riscv-v-fixed-length-vector-lmul-max",
+    "capstone-v-fixed-length-vector-lmul-max",
     cl::desc("The maximum LMUL value to use for fixed length vectors. "
              "Fractional LMUL values are not supported."),
     cl::init(8), cl::Hidden);
 
-static cl::opt<bool> RISCVDisableUsingConstantPoolForLargeInts(
-    "riscv-disable-using-constant-pool-for-large-ints",
+static cl::opt<bool> CapstoneDisableUsingConstantPoolForLargeInts(
+    "capstone-disable-using-constant-pool-for-large-ints",
     cl::desc("Disable using constant pool for large integers."),
     cl::init(false), cl::Hidden);
 
-static cl::opt<unsigned> RISCVMaxBuildIntsCost(
-    "riscv-max-build-ints-cost",
+static cl::opt<unsigned> CapstoneMaxBuildIntsCost(
+    "capstone-max-build-ints-cost",
     cl::desc("The maximum cost used for building integers."), cl::init(0),
     cl::Hidden);
 
-static cl::opt<bool> UseAA("riscv-use-aa", cl::init(true),
+static cl::opt<bool> UseAA("capstone-use-aa", cl::init(true),
                            cl::desc("Enable the use of AA during codegen."));
 
-static cl::opt<unsigned> RISCVMinimumJumpTableEntries(
-    "riscv-min-jump-table-entries", cl::Hidden,
-    cl::desc("Set minimum number of entries to use a jump table on RISCV"));
+static cl::opt<unsigned> CapstoneMinimumJumpTableEntries(
+    "capstone-min-jump-table-entries", cl::Hidden,
+    cl::desc("Set minimum number of entries to use a jump table on Capstone"));
 
 static cl::opt<bool> UseMIPSLoadStorePairsOpt(
-    "use-riscv-mips-load-store-pairs",
+    "use-capstone-mips-load-store-pairs",
     cl::desc("Enable the load/store pair optimization pass"), cl::init(false),
     cl::Hidden);
 
-static cl::opt<bool> UseCCMovInsn("use-riscv-ccmov",
+static cl::opt<bool> UseCCMovInsn("use-capstone-ccmov",
                                   cl::desc("Use 'mips.ccmov' instruction"),
                                   cl::init(true), cl::Hidden);
 
-void RISCVSubtarget::anchor() {}
+void CapstoneSubtarget::anchor() {}
 
-RISCVSubtarget &
-RISCVSubtarget::initializeSubtargetDependencies(const Triple &TT, StringRef CPU,
+CapstoneSubtarget &
+CapstoneSubtarget::initializeSubtargetDependencies(const Triple &TT, StringRef CPU,
                                                 StringRef TuneCPU, StringRef FS,
                                                 StringRef ABIName) {
   // Determine default and user-specified characteristics
@@ -83,93 +83,93 @@ RISCVSubtarget::initializeSubtargetDependencies(const Triple &TT, StringRef CPU,
   if (TuneCPU.empty())
     TuneCPU = CPU;
 
-  TuneInfo = RISCVTuneInfoTable::getRISCVTuneInfo(TuneCPU);
+  TuneInfo = CapstoneTuneInfoTable::getCapstoneTuneInfo(TuneCPU);
   // If there is no TuneInfo for this CPU, we fail back to generic.
   if (!TuneInfo)
-    TuneInfo = RISCVTuneInfoTable::getRISCVTuneInfo("generic");
+    TuneInfo = CapstoneTuneInfoTable::getCapstoneTuneInfo("generic");
   assert(TuneInfo && "TuneInfo shouldn't be nullptr!");
 
   ParseSubtargetFeatures(CPU, TuneCPU, FS);
-  TargetABI = RISCVABI::computeTargetABI(TT, getFeatureBits(), ABIName);
-  RISCVFeatures::validate(TT, getFeatureBits());
+  TargetABI = CapstoneABI::computeTargetABI(TT, getFeatureBits(), ABIName);
+  CapstoneFeatures::validate(TT, getFeatureBits());
   return *this;
 }
 
-RISCVSubtarget::RISCVSubtarget(const Triple &TT, StringRef CPU,
+CapstoneSubtarget::CapstoneSubtarget(const Triple &TT, StringRef CPU,
                                StringRef TuneCPU, StringRef FS,
                                StringRef ABIName, unsigned RVVVectorBitsMin,
                                unsigned RVVVectorBitsMax,
                                const TargetMachine &TM)
-    : RISCVGenSubtargetInfo(TT, CPU, TuneCPU, FS),
+    : CapstoneGenSubtargetInfo(TT, CPU, TuneCPU, FS),
       RVVVectorBitsMin(RVVVectorBitsMin), RVVVectorBitsMax(RVVVectorBitsMax),
       FrameLowering(
           initializeSubtargetDependencies(TT, CPU, TuneCPU, FS, ABIName)),
       InstrInfo(*this), RegInfo(getHwMode()), TLInfo(TM, *this) {
-  TSInfo = std::make_unique<RISCVSelectionDAGInfo>();
+  TSInfo = std::make_unique<CapstoneSelectionDAGInfo>();
 }
 
-RISCVSubtarget::~RISCVSubtarget() = default;
+CapstoneSubtarget::~CapstoneSubtarget() = default;
 
-const SelectionDAGTargetInfo *RISCVSubtarget::getSelectionDAGInfo() const {
+const SelectionDAGTargetInfo *CapstoneSubtarget::getSelectionDAGInfo() const {
   return TSInfo.get();
 }
 
-const CallLowering *RISCVSubtarget::getCallLowering() const {
+const CallLowering *CapstoneSubtarget::getCallLowering() const {
   if (!CallLoweringInfo)
-    CallLoweringInfo.reset(new RISCVCallLowering(*getTargetLowering()));
+    CallLoweringInfo.reset(new CapstoneCallLowering(*getTargetLowering()));
   return CallLoweringInfo.get();
 }
 
-InstructionSelector *RISCVSubtarget::getInstructionSelector() const {
+InstructionSelector *CapstoneSubtarget::getInstructionSelector() const {
   if (!InstSelector) {
-    InstSelector.reset(createRISCVInstructionSelector(
-        *static_cast<const RISCVTargetMachine *>(&TLInfo.getTargetMachine()),
+    InstSelector.reset(createCapstoneInstructionSelector(
+        *static_cast<const CapstoneTargetMachine *>(&TLInfo.getTargetMachine()),
         *this, *getRegBankInfo()));
   }
   return InstSelector.get();
 }
 
-const LegalizerInfo *RISCVSubtarget::getLegalizerInfo() const {
+const LegalizerInfo *CapstoneSubtarget::getLegalizerInfo() const {
   if (!Legalizer)
-    Legalizer.reset(new RISCVLegalizerInfo(*this));
+    Legalizer.reset(new CapstoneLegalizerInfo(*this));
   return Legalizer.get();
 }
 
-const RISCVRegisterBankInfo *RISCVSubtarget::getRegBankInfo() const {
+const CapstoneRegisterBankInfo *CapstoneSubtarget::getRegBankInfo() const {
   if (!RegBankInfo)
-    RegBankInfo.reset(new RISCVRegisterBankInfo(getHwMode()));
+    RegBankInfo.reset(new CapstoneRegisterBankInfo(getHwMode()));
   return RegBankInfo.get();
 }
 
-bool RISCVSubtarget::useConstantPoolForLargeInts() const {
-  return !RISCVDisableUsingConstantPoolForLargeInts;
+bool CapstoneSubtarget::useConstantPoolForLargeInts() const {
+  return !CapstoneDisableUsingConstantPoolForLargeInts;
 }
 
-unsigned RISCVSubtarget::getMaxBuildIntsCost() const {
+unsigned CapstoneSubtarget::getMaxBuildIntsCost() const {
   // Loading integer from constant pool needs two instructions (the reason why
   // the minimum cost is 2): an address calculation instruction and a load
   // instruction. Usually, address calculation and instructions used for
   // building integers (addi, slli, etc.) can be done in one cycle, so here we
   // set the default cost to (LoadLatency + 1) if no threshold is provided.
-  return RISCVMaxBuildIntsCost == 0
+  return CapstoneMaxBuildIntsCost == 0
              ? getSchedModel().LoadLatency + 1
-             : std::max<unsigned>(2, RISCVMaxBuildIntsCost);
+             : std::max<unsigned>(2, CapstoneMaxBuildIntsCost);
 }
 
-unsigned RISCVSubtarget::getMaxRVVVectorSizeInBits() const {
+unsigned CapstoneSubtarget::getMaxRVVVectorSizeInBits() const {
   assert(hasVInstructions() &&
          "Tried to get vector length without Zve or V extension support!");
 
   // ZvlLen specifies the minimum required vlen. The upper bound provided by
-  // riscv-v-vector-bits-max should be no less than it.
+  // capstone-v-vector-bits-max should be no less than it.
   if (RVVVectorBitsMax != 0 && RVVVectorBitsMax < ZvlLen)
-    report_fatal_error("riscv-v-vector-bits-max specified is lower "
+    report_fatal_error("capstone-v-vector-bits-max specified is lower "
                        "than the Zvl*b limitation");
 
   return RVVVectorBitsMax;
 }
 
-unsigned RISCVSubtarget::getMinRVVVectorSizeInBits() const {
+unsigned CapstoneSubtarget::getMinRVVVectorSizeInBits() const {
   assert(hasVInstructions() &&
          "Tried to get vector length without Zve or V extension support!");
 
@@ -177,15 +177,15 @@ unsigned RISCVSubtarget::getMinRVVVectorSizeInBits() const {
     return ZvlLen;
 
   // ZvlLen specifies the minimum required vlen. The lower bound provided by
-  // riscv-v-vector-bits-min should be no less than it.
+  // capstone-v-vector-bits-min should be no less than it.
   if (RVVVectorBitsMin != 0 && RVVVectorBitsMin < ZvlLen)
-    report_fatal_error("riscv-v-vector-bits-min specified is lower "
+    report_fatal_error("capstone-v-vector-bits-min specified is lower "
                        "than the Zvl*b limitation");
 
   return RVVVectorBitsMin;
 }
 
-unsigned RISCVSubtarget::getMaxLMULForFixedLengthVectors() const {
+unsigned CapstoneSubtarget::getMaxLMULForFixedLengthVectors() const {
   assert(hasVInstructions() &&
          "Tried to get vector length without Zve or V extension support!");
   assert(RVVVectorLMULMax <= 8 &&
@@ -194,28 +194,28 @@ unsigned RISCVSubtarget::getMaxLMULForFixedLengthVectors() const {
   return llvm::bit_floor(std::clamp<unsigned>(RVVVectorLMULMax, 1, 8));
 }
 
-bool RISCVSubtarget::useRVVForFixedLengthVectors() const {
+bool CapstoneSubtarget::useRVVForFixedLengthVectors() const {
   return hasVInstructions() &&
-         getMinRVVVectorSizeInBits() >= RISCV::RVVBitsPerBlock;
+         getMinRVVVectorSizeInBits() >= Capstone::RVVBitsPerBlock;
 }
 
-bool RISCVSubtarget::enableSubRegLiveness() const { return true; }
+bool CapstoneSubtarget::enableSubRegLiveness() const { return true; }
 
-bool RISCVSubtarget::enableMachinePipeliner() const {
+bool CapstoneSubtarget::enableMachinePipeliner() const {
   return getSchedModel().hasInstrSchedModel();
 }
 
   /// Enable use of alias analysis during code generation (during MI
   /// scheduling, DAGCombine, etc.).
-bool RISCVSubtarget::useAA() const { return UseAA; }
+bool CapstoneSubtarget::useAA() const { return UseAA; }
 
-unsigned RISCVSubtarget::getMinimumJumpTableEntries() const {
-  return RISCVMinimumJumpTableEntries.getNumOccurrences() > 0
-             ? RISCVMinimumJumpTableEntries
+unsigned CapstoneSubtarget::getMinimumJumpTableEntries() const {
+  return CapstoneMinimumJumpTableEntries.getNumOccurrences() > 0
+             ? CapstoneMinimumJumpTableEntries
              : TuneInfo->MinimumJumpTableEntries;
 }
 
-void RISCVSubtarget::overrideSchedPolicy(MachineSchedPolicy &Policy,
+void CapstoneSubtarget::overrideSchedPolicy(MachineSchedPolicy &Policy,
                                          const SchedRegion &Region) const {
   // Do bidirectional scheduling since it provides a more balanced scheduling
   // leading to better performance. This will increase compile time.
@@ -226,12 +226,12 @@ void RISCVSubtarget::overrideSchedPolicy(MachineSchedPolicy &Policy,
   // will cause some regressions on some cores.
   Policy.DisableLatencyHeuristic = DisableLatencySchedHeuristic;
 
-  // Spilling is generally expensive on all RISC-V cores, so always enable
+  // Spilling is generally expensive on all Capstone cores, so always enable
   // register-pressure tracking. This will increase compile time.
   Policy.ShouldTrackPressure = true;
 }
 
-void RISCVSubtarget::overridePostRASchedPolicy(
+void CapstoneSubtarget::overridePostRASchedPolicy(
     MachineSchedPolicy &Policy, const SchedRegion &Region) const {
   MISched::Direction PostRASchedDirection = getPostRASchedDirection();
   if (PostRASchedDirection == MISched::TopDown) {
@@ -246,10 +246,10 @@ void RISCVSubtarget::overridePostRASchedPolicy(
   }
 }
 
-bool RISCVSubtarget::useLoadStorePairs() const {
+bool CapstoneSubtarget::useLoadStorePairs() const {
   return UseMIPSLoadStorePairsOpt && HasVendorXMIPSLSP;
 }
 
-bool RISCVSubtarget::useCCMovInsn() const {
+bool CapstoneSubtarget::useCCMovInsn() const {
   return UseCCMovInsn && HasVendorXMIPSCMov;
 }

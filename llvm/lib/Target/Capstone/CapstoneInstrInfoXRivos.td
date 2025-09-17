@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoXRivos.td ----------------------------*- tablegen -*-===//
+//===-- CapstoneInstrInfoXRivos.td ----------------------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -10,7 +10,7 @@
 //
 //===----------------------------------------------------------------------===//
 
-class CustomRivosVXI<bits<6> funct6, RISCVVFormat opv, dag outs, dag ins,
+class CustomRivosVXI<bits<6> funct6, CapstoneVFormat opv, dag outs, dag ins,
                 string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
   bits<5> imm;
@@ -31,7 +31,7 @@ class CustomRivosVXI<bits<6> funct6, RISCVVFormat opv, dag outs, dag ins,
   let Constraints = "$vd = $vd_wb";
 }
 
-class CustomRivosXVI<bits<6> funct6, RISCVVFormat opv, dag outs, dag ins,
+class CustomRivosXVI<bits<6> funct6, CapstoneVFormat opv, dag outs, dag ins,
                 string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
   bits<5> imm;
@@ -69,12 +69,12 @@ defm RI_VUNZIP2B_V : VALU_IV_V<"ri.vunzip2b", 0b011000>;
 
 // These are modeled after the int binop VL nodes
 let HasMaskOp = true in {
-  def ri_vzipeven_vl : RVSDNode<"RI_VZIPEVEN_VL", SDT_RISCVIntBinOp_VL>;
-  def ri_vzipodd_vl : RVSDNode<"RI_VZIPODD_VL", SDT_RISCVIntBinOp_VL>;
-  def ri_vzip2a_vl : RVSDNode<"RI_VZIP2A_VL", SDT_RISCVIntBinOp_VL>;
-  def ri_vzip2b_vl : RVSDNode<"RI_VZIP2B_VL", SDT_RISCVIntBinOp_VL>;
-  def ri_vunzip2a_vl : RVSDNode<"RI_VUNZIP2A_VL", SDT_RISCVIntBinOp_VL>;
-  def ri_vunzip2b_vl : RVSDNode<"RI_VUNZIP2B_VL", SDT_RISCVIntBinOp_VL>;
+  def ri_vzipeven_vl : RVSDNode<"RI_VZIPEVEN_VL", SDT_CapstoneIntBinOp_VL>;
+  def ri_vzipodd_vl : RVSDNode<"RI_VZIPODD_VL", SDT_CapstoneIntBinOp_VL>;
+  def ri_vzip2a_vl : RVSDNode<"RI_VZIP2A_VL", SDT_CapstoneIntBinOp_VL>;
+  def ri_vzip2b_vl : RVSDNode<"RI_VZIP2B_VL", SDT_CapstoneIntBinOp_VL>;
+  def ri_vunzip2a_vl : RVSDNode<"RI_VUNZIP2A_VL", SDT_CapstoneIntBinOp_VL>;
+  def ri_vunzip2b_vl : RVSDNode<"RI_VUNZIP2B_VL", SDT_CapstoneIntBinOp_VL>;
 }
 
 multiclass RIVPseudoVALU_VV {
@@ -155,14 +155,14 @@ foreach m = MxList in {
   let VLMul = m.value in {
     let BaseInstr = RI_VEXTRACT in
     def PseudoRI_VEXTRACT_  # mx :
-      RISCVVPseudo<(outs GPR:$rd),
+      CapstoneVPseudo<(outs GPR:$rd),
                    (ins m.vrclass:$rs2, uimm5:$idx, ixlenimm:$sew),
                    []>;
 
     let HasVLOp = 1, BaseInstr = RI_VINSERT, HasVecPolicyOp = 1,
         Constraints = "$rd = $rs1" in
     def PseudoRI_VINSERT_ # mx :
-      RISCVVPseudo<(outs m.vrclass:$rd),
+      CapstoneVPseudo<(outs m.vrclass:$rd),
                    (ins m.vrclass:$rs1, GPR:$rs2, uimm5:$idx, AVL:$vl,
                         ixlenimm:$sew, ixlenimm:$policy),
                    []>;

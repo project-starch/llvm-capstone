@@ -1,4 +1,4 @@
-//===-- RISCVInstrFormatsV.td - RISC-V V Instruction Formats -*- tablegen -*-=//
+//===-- CapstoneInstrFormatsV.td - Capstone V Instruction Formats -*- tablegen -*-=//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,53 +6,53 @@
 //
 //===----------------------------------------------------------------------===//
 //
-//  This file describes the RISC-V V extension instruction formats.
+//  This file describes the Capstone V extension instruction formats.
 //
 //===----------------------------------------------------------------------===//
 
-class RISCVVFormat<bits<3> val> {
+class CapstoneVFormat<bits<3> val> {
   bits<3> Value = val;
 }
-def OPIVV : RISCVVFormat<0b000>;
-def OPFVV : RISCVVFormat<0b001>;
-def OPMVV : RISCVVFormat<0b010>;
-def OPIVI : RISCVVFormat<0b011>;
-def OPIVX : RISCVVFormat<0b100>;
-def OPFVF : RISCVVFormat<0b101>;
-def OPMVX : RISCVVFormat<0b110>;
-def OPCFG : RISCVVFormat<0b111>;
+def OPIVV : CapstoneVFormat<0b000>;
+def OPFVV : CapstoneVFormat<0b001>;
+def OPMVV : CapstoneVFormat<0b010>;
+def OPIVI : CapstoneVFormat<0b011>;
+def OPIVX : CapstoneVFormat<0b100>;
+def OPFVF : CapstoneVFormat<0b101>;
+def OPMVX : CapstoneVFormat<0b110>;
+def OPCFG : CapstoneVFormat<0b111>;
 
-class RISCVMOP<bits<2> val> {
+class CapstoneMOP<bits<2> val> {
   bits<2> Value = val;
 }
-def MOPLDUnitStride   : RISCVMOP<0b00>;
-def MOPLDIndexedUnord : RISCVMOP<0b01>;
-def MOPLDStrided      : RISCVMOP<0b10>;
-def MOPLDIndexedOrder : RISCVMOP<0b11>;
+def MOPLDUnitStride   : CapstoneMOP<0b00>;
+def MOPLDIndexedUnord : CapstoneMOP<0b01>;
+def MOPLDStrided      : CapstoneMOP<0b10>;
+def MOPLDIndexedOrder : CapstoneMOP<0b11>;
 
-def MOPSTUnitStride   : RISCVMOP<0b00>;
-def MOPSTIndexedUnord : RISCVMOP<0b01>;
-def MOPSTStrided      : RISCVMOP<0b10>;
-def MOPSTIndexedOrder : RISCVMOP<0b11>;
+def MOPSTUnitStride   : CapstoneMOP<0b00>;
+def MOPSTIndexedUnord : CapstoneMOP<0b01>;
+def MOPSTStrided      : CapstoneMOP<0b10>;
+def MOPSTIndexedOrder : CapstoneMOP<0b11>;
 
-class RISCVLSUMOP<bits<5> val> {
+class CapstoneLSUMOP<bits<5> val> {
   bits<5> Value = val;
 }
-def LUMOPUnitStride  : RISCVLSUMOP<0b00000>;
-def LUMOPUnitStrideMask : RISCVLSUMOP<0b01011>;
-def LUMOPUnitStrideWholeReg : RISCVLSUMOP<0b01000>;
-def LUMOPUnitStrideFF: RISCVLSUMOP<0b10000>;
-def SUMOPUnitStride  : RISCVLSUMOP<0b00000>;
-def SUMOPUnitStrideMask : RISCVLSUMOP<0b01011>;
-def SUMOPUnitStrideWholeReg : RISCVLSUMOP<0b01000>;
+def LUMOPUnitStride  : CapstoneLSUMOP<0b00000>;
+def LUMOPUnitStrideMask : CapstoneLSUMOP<0b01011>;
+def LUMOPUnitStrideWholeReg : CapstoneLSUMOP<0b01000>;
+def LUMOPUnitStrideFF: CapstoneLSUMOP<0b10000>;
+def SUMOPUnitStride  : CapstoneLSUMOP<0b00000>;
+def SUMOPUnitStrideMask : CapstoneLSUMOP<0b01011>;
+def SUMOPUnitStrideWholeReg : CapstoneLSUMOP<0b01000>;
 
-class RISCVWidth<bits<4> val> {
+class CapstoneWidth<bits<4> val> {
   bits<4> Value = val;
 }
-def LSWidth8     : RISCVWidth<0b0000>;
-def LSWidth16    : RISCVWidth<0b0101>;
-def LSWidth32    : RISCVWidth<0b0110>;
-def LSWidth64    : RISCVWidth<0b0111>;
+def LSWidth8     : CapstoneWidth<0b0000>;
+def LSWidth16    : CapstoneWidth<0b0101>;
+def LSWidth32    : CapstoneWidth<0b0110>;
+def LSWidth64    : CapstoneWidth<0b0111>;
 
 class RVInstSetiVLi<dag outs, dag ins, string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatI> {
@@ -104,7 +104,7 @@ class RVInstSetVL<dag outs, dag ins, string opcodestr, string argstr>
   let Defs = [VL, VTYPE];
 }
 
-class RVInstVV<bits<6> funct6, RISCVVFormat opv, dag outs, dag ins,
+class RVInstVV<bits<6> funct6, CapstoneVFormat opv, dag outs, dag ins,
                string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
   bits<5> vs2;
@@ -124,7 +124,7 @@ class RVInstVV<bits<6> funct6, RISCVVFormat opv, dag outs, dag ins,
   let RVVConstraint = VMConstraint;
 }
 
-class RVInstVX<bits<6> funct6, RISCVVFormat opv, dag outs, dag ins,
+class RVInstVX<bits<6> funct6, CapstoneVFormat opv, dag outs, dag ins,
                 string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
   bits<5> vs2;
@@ -144,7 +144,7 @@ class RVInstVX<bits<6> funct6, RISCVVFormat opv, dag outs, dag ins,
   let RVVConstraint = VMConstraint;
 }
 
-class RVInstV2<bits<6> funct6, bits<5> vs2, RISCVVFormat opv, dag outs, dag ins,
+class RVInstV2<bits<6> funct6, bits<5> vs2, CapstoneVFormat opv, dag outs, dag ins,
                 string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
   bits<5> rs1;
@@ -183,7 +183,7 @@ class RVInstIVI<bits<6> funct6, dag outs, dag ins, string opcodestr,
   let RVVConstraint = VMConstraint;
 }
 
-class RVInstV<bits<6> funct6, bits<5> vs1, RISCVVFormat opv, dag outs,
+class RVInstV<bits<6> funct6, bits<5> vs1, CapstoneVFormat opv, dag outs,
               dag ins, string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
   bits<5> vs2;
@@ -202,7 +202,7 @@ class RVInstV<bits<6> funct6, bits<5> vs1, RISCVVFormat opv, dag outs,
   let RVVConstraint = VMConstraint;
 }
 
-class RVInstVLU<bits<3> nf, bit mew, RISCVLSUMOP lumop,
+class RVInstVLU<bits<3> nf, bit mew, CapstoneLSUMOP lumop,
                 bits<3> width, dag outs, dag ins, string opcodestr,
                 string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
@@ -246,7 +246,7 @@ class RVInstVLS<bits<3> nf, bit mew, bits<3> width,
   let RVVConstraint = VMConstraint;
 }
 
-class RVInstVLX<bits<3> nf, bit mew, RISCVMOP mop, bits<3> width,
+class RVInstVLX<bits<3> nf, bit mew, CapstoneMOP mop, bits<3> width,
                 dag outs, dag ins, string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
   bits<5> vs2;
@@ -268,7 +268,7 @@ class RVInstVLX<bits<3> nf, bit mew, RISCVMOP mop, bits<3> width,
   let RVVConstraint = VMConstraint;
 }
 
-class RVInstVSU<bits<3> nf, bit mew, RISCVLSUMOP sumop,
+class RVInstVSU<bits<3> nf, bit mew, CapstoneLSUMOP sumop,
                 bits<3> width, dag outs, dag ins, string opcodestr,
                 string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
@@ -310,7 +310,7 @@ class RVInstVSS<bits<3> nf, bit mew, bits<3> width,
   let Uses = [VL, VTYPE];
 }
 
-class RVInstVSX<bits<3> nf, bit mew, RISCVMOP mop, bits<3> width,
+class RVInstVSX<bits<3> nf, bit mew, CapstoneMOP mop, bits<3> width,
                 dag outs, dag ins, string opcodestr, string argstr>
     : RVInst<outs, ins, opcodestr, argstr, [], InstFormatR> {
   bits<5> vs2;

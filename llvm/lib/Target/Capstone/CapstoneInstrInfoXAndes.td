@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoXAndes.td ----------------------------*- tablegen -*-===//
+//===-- CapstoneInstrInfoXAndes.td ----------------------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -11,7 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
-// RISC-V specific DAG Nodes.
+// Capstone specific DAG Nodes.
 //===----------------------------------------------------------------------===//
 
 def SDT_NDS_FMV_BF16_X
@@ -19,10 +19,10 @@ def SDT_NDS_FMV_BF16_X
 def SDT_NDS_FMV_X_ANYEXTBF16
     : SDTypeProfile<1, 1, [SDTCisVT<0, XLenVT>, SDTCisVT<1, bf16>]>;
 
-def riscv_nds_fmv_bf16_x
-    : SDNode<"RISCVISD::NDS_FMV_BF16_X", SDT_NDS_FMV_BF16_X>;
-def riscv_nds_fmv_x_anyextbf16
-    : SDNode<"RISCVISD::NDS_FMV_X_ANYEXTBF16", SDT_NDS_FMV_X_ANYEXTBF16>;
+def capstone_nds_fmv_bf16_x
+    : SDNode<"CapstoneISD::NDS_FMV_BF16_X", SDT_NDS_FMV_BF16_X>;
+def capstone_nds_fmv_x_anyextbf16
+    : SDNode<"CapstoneISD::NDS_FMV_X_ANYEXTBF16", SDT_NDS_FMV_X_ANYEXTBF16>;
 
 //===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.
@@ -82,7 +82,7 @@ def Log2 : SDNodeXForm<imm, [{
 // Pseudo table
 //===----------------------------------------------------------------------===//
 
-class RISCVNDSVLN<bit M, bit U, bits<3> S, bits<3> L> {
+class CapstoneNDSVLN<bit M, bit U, bits<3> S, bits<3> L> {
   bits<1> Masked = M;
   bits<1> Unsigned = U;
   bits<3> Log2SEW = S;
@@ -90,8 +90,8 @@ class RISCVNDSVLN<bit M, bit U, bits<3> S, bits<3> L> {
   Pseudo Pseudo = !cast<Pseudo>(NAME);
 }
 
-def RISCVNDSVLNTable : GenericTable {
-  let FilterClass = "RISCVNDSVLN";
+def CapstoneNDSVLNTable : GenericTable {
+  let FilterClass = "CapstoneNDSVLN";
   let CppTypeName = "NDSVLNPseudo";
   let Fields = ["Masked", "Unsigned", "Log2SEW", "LMUL", "Pseudo"];
   let PrimaryKey = ["Masked", "Unsigned", "Log2SEW", "LMUL"];
@@ -462,11 +462,11 @@ class NDSRVInstVLN<bits<5> funct5, string opcodestr>
 }
 
 class VPseudoVLN8NoMask<VReg RetClass, bit U> :
-      RISCVVPseudo<(outs RetClass:$rd),
+      CapstoneVPseudo<(outs RetClass:$rd),
                    (ins RetClass:$dest,
                         GPRMemZeroOffset:$rs1,
                         AVL:$vl, sew:$sew, vec_policy:$policy), []>,
-      RISCVNDSVLN</*Masked*/0, /*Unsigned*/U, !logtwo(8), VLMul> {
+      CapstoneNDSVLN</*Masked*/0, /*Unsigned*/U, !logtwo(8), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -477,12 +477,12 @@ class VPseudoVLN8NoMask<VReg RetClass, bit U> :
 }
 
 class VPseudoVLN8Mask<VReg RetClass, bit U> :
-      RISCVVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
+      CapstoneVPseudo<(outs GetVRegNoV0<RetClass>.R:$rd),
                    (ins GetVRegNoV0<RetClass>.R:$passthru,
                         GPRMemZeroOffset:$rs1,
                         VMaskOp:$vm, AVL:$vl, sew:$sew, vec_policy:$policy),
                    []>,
-      RISCVNDSVLN</*Masked*/1, /*Unsigned*/U, !logtwo(8), VLMul> {
+      CapstoneNDSVLN</*Masked*/1, /*Unsigned*/U, !logtwo(8), VLMul> {
   let mayLoad = 1;
   let mayStore = 0;
   let hasSideEffects = 0;
@@ -552,7 +552,7 @@ multiclass VPseudoVLN8<bit U> {
         VLESched<LInfo>;
       def "_V_" # LInfo # "_MASK" :
         VPseudoVLN8Mask<vreg, U>,
-        RISCVMaskedPseudo<MaskIdx=2>,
+        CapstoneMaskedPseudo<MaskIdx=2>,
         VLESched<LInfo>;
     }
   }
@@ -714,28 +714,28 @@ def NDS_VD4DOTSU_VV : NDSRVInstVD4DOT<0b000101, "nds.vd4dotsu">;
 //===----------------------------------------------------------------------===//
 
 class NDS_BBPat<CondCode Cond, NDSRVInstBB Inst>
-    : Pat<(riscv_brcc (and(XLenVT GPR:$rs1), PowerOf2:$mask), 0, Cond,
+    : Pat<(capstone_brcc (and(XLenVT GPR:$rs1), PowerOf2:$mask), 0, Cond,
               bb:$imm10),
           (Inst GPR:$rs1, (Log2 PowerOf2:$mask), bare_simm11_lsb0:$imm10)>;
 
 class NDS_BCPat<CondCode Cond, NDSRVInstBC Inst>
-    : Pat<(riscv_brcc (XLenVT GPR:$rs1), uimm7:$cimm, Cond, bb:$imm10),
+    : Pat<(capstone_brcc (XLenVT GPR:$rs1), uimm7:$cimm, Cond, bb:$imm10),
           (Inst GPR:$rs1, uimm7:$cimm, bare_simm11_lsb0:$imm10)>;
 
 defm CC_UImmLog2XLen_NDS : SelectCC_GPR_riirr<GPR, uimmlog2xlen>;
 defm CC_UImm7_NDS        : SelectCC_GPR_riirr<GPR, uimm7>;
 
 class SelectNDS_BB<CondCode Cond>
-    : Pat<(riscv_selectcc_frag:$cc (and(XLenVT GPR:$lhs), PowerOf2:$mask), 0,
+    : Pat<(capstone_selectcc_frag:$cc (and(XLenVT GPR:$lhs), PowerOf2:$mask), 0,
               Cond, (XLenVT GPR:$truev), GPR:$falsev),
           (Select_GPR_Using_CC_UImmLog2XLen_NDS GPR:$lhs, (Log2 PowerOf2:$mask),
-              (IntCCtoRISCVCC $cc), GPR:$truev, GPR:$falsev)>;
+              (IntCCtoCapstoneCC $cc), GPR:$truev, GPR:$falsev)>;
 
 class SelectNDS_BC<CondCode Cond>
-    : Pat<(riscv_selectcc_frag:$cc (XLenVT GPR:$lhs), uimm7:$cimm, Cond,
+    : Pat<(capstone_selectcc_frag:$cc (XLenVT GPR:$lhs), uimm7:$cimm, Cond,
               (XLenVT GPR:$truev), GPR:$falsev),
           (Select_GPR_Using_CC_UImm7_NDS GPR:$lhs, uimm7:$cimm,
-              (IntCCtoRISCVCC $cc), GPR:$truev, GPR:$falsev)>;
+              (IntCCtoCapstoneCC $cc), GPR:$truev, GPR:$falsev)>;
 
 let Predicates = [HasVendorXAndesPerf] in {
 
@@ -795,8 +795,8 @@ def NDS_FMV_X_BF16 : FPUnaryOp_r<0b1110000, 0b00000, 0b000, GPR, FPR16, "fmv.x.w
 }
 
 let Predicates = [HasVendorXAndesBFHCvt] in {
-def : Pat<(riscv_nds_fmv_bf16_x GPR:$src), (NDS_FMV_BF16_X GPR:$src)>;
-def : Pat<(riscv_nds_fmv_x_anyextbf16 (bf16 FPR16:$src)),
+def : Pat<(capstone_nds_fmv_bf16_x GPR:$src), (NDS_FMV_BF16_X GPR:$src)>;
+def : Pat<(capstone_nds_fmv_x_anyextbf16 (bf16 FPR16:$src)),
           (NDS_FMV_X_BF16 (bf16 FPR16:$src))>;
 } // Predicates = [HasVendorXAndesBFHCvt]
 
@@ -811,9 +811,9 @@ defm PseudoNDS_VFWCVT_S_BF16 : VPseudoVWCVT_S_BF16;
 defm PseudoNDS_VFNCVT_BF16_S : VPseudoVNCVT_BF16_S;
 } // Predicates = [HasVendorXAndesVBFHCvt]
 
-defm : VPatConversionS_BF16<"int_riscv_nds_vfwcvt_s_bf16",
+defm : VPatConversionS_BF16<"int_capstone_nds_vfwcvt_s_bf16",
                             "PseudoNDS_VFWCVT_S">;
-defm : VPatConversionBF16_S<"int_riscv_nds_vfncvt_bf16_s",
+defm : VPatConversionBF16_S<"int_capstone_nds_vfncvt_bf16_s",
                             "PseudoNDS_VFNCVT_BF16">;
 
 let Predicates = [HasVendorXAndesVSIntLoad] in {
@@ -827,9 +827,9 @@ defm PseudoNDS_VFPMADT : VPseudoVFPMAD_VF_RM;
 defm PseudoNDS_VFPMADB : VPseudoVFPMAD_VF_RM;
 } // Predicates = [HasVendorXAndesVPackFPH]
 
-defm : VPatVFPMADBinaryV_VX_RM<"int_riscv_nds_vfpmadt", "PseudoNDS_VFPMADT",
+defm : VPatVFPMADBinaryV_VX_RM<"int_capstone_nds_vfpmadt", "PseudoNDS_VFPMADT",
                                AllFP16Vectors>;
-defm : VPatVFPMADBinaryV_VX_RM<"int_riscv_nds_vfpmadb", "PseudoNDS_VFPMADB",
+defm : VPatVFPMADBinaryV_VX_RM<"int_capstone_nds_vfpmadb", "PseudoNDS_VFPMADB",
                                AllFP16Vectors>;
 
 let Predicates = [HasVendorXAndesVDot] in {
@@ -850,11 +850,11 @@ defset list<VTypeInfoToWide> AllQuadWidenableVD4DOTVectors = {
   def : VTypeInfoToWide<VI16M8,  VI64M8>;
 }
 
-defm : VPatTernaryVD4DOT_VV<"int_riscv_nds_vd4dots", "PseudoNDS_VD4DOTS",
+defm : VPatTernaryVD4DOT_VV<"int_capstone_nds_vd4dots", "PseudoNDS_VD4DOTS",
                             AllQuadWidenableVD4DOTVectors>;
-defm : VPatTernaryVD4DOT_VV<"int_riscv_nds_vd4dotu", "PseudoNDS_VD4DOTU",
+defm : VPatTernaryVD4DOT_VV<"int_capstone_nds_vd4dotu", "PseudoNDS_VD4DOTU",
                             AllQuadWidenableVD4DOTVectors>;
-defm : VPatTernaryVD4DOT_VV<"int_riscv_nds_vd4dotsu", "PseudoNDS_VD4DOTSU",
+defm : VPatTernaryVD4DOT_VV<"int_capstone_nds_vd4dotsu", "PseudoNDS_VD4DOTSU",
                             AllQuadWidenableVD4DOTVectors>;
 
 //===----------------------------------------------------------------------===//

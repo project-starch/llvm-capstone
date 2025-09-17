@@ -6,30 +6,30 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_RISCVSELECTIONDAGINFO_H
-#define LLVM_LIB_TARGET_RISCV_RISCVSELECTIONDAGINFO_H
+#ifndef LLVM_LIB_TARGET_Capstone_CapstoneSELECTIONDAGINFO_H
+#define LLVM_LIB_TARGET_Capstone_CapstoneSELECTIONDAGINFO_H
 
 #include "llvm/CodeGen/SDNodeInfo.h"
 #include "llvm/CodeGen/SelectionDAGTargetInfo.h"
 
 #define GET_SDNODE_ENUM
-#include "RISCVGenSDNodeInfo.inc"
+#include "CapstoneGenSDNodeInfo.inc"
 
 namespace llvm {
 
-namespace RISCVISD {
-// RISCVISD Node TSFlags
+namespace CapstoneISD {
+// CapstoneISD Node TSFlags
 enum : llvm::SDNodeTSFlags {
   HasPassthruOpMask = 1 << 0,
   HasMaskOpMask = 1 << 1,
 };
-} // namespace RISCVISD
+} // namespace CapstoneISD
 
-class RISCVSelectionDAGInfo : public SelectionDAGGenTargetInfo {
+class CapstoneSelectionDAGInfo : public SelectionDAGGenTargetInfo {
 public:
-  RISCVSelectionDAGInfo();
+  CapstoneSelectionDAGInfo();
 
-  ~RISCVSelectionDAGInfo() override;
+  ~CapstoneSelectionDAGInfo() override;
 
   void verifyTargetNode(const SelectionDAG &DAG,
                         const SDNode *N) const override;
@@ -41,27 +41,27 @@ public:
                                   MachinePointerInfo DstPtrInfo) const override;
 
   bool hasPassthruOp(unsigned Opcode) const {
-    return GenNodeInfo.getDesc(Opcode).TSFlags & RISCVISD::HasPassthruOpMask;
+    return GenNodeInfo.getDesc(Opcode).TSFlags & CapstoneISD::HasPassthruOpMask;
   }
 
   bool hasMaskOp(unsigned Opcode) const {
-    return GenNodeInfo.getDesc(Opcode).TSFlags & RISCVISD::HasMaskOpMask;
+    return GenNodeInfo.getDesc(Opcode).TSFlags & CapstoneISD::HasMaskOpMask;
   }
 
   unsigned getMAccOpcode(unsigned MulOpcode) const {
-    switch (static_cast<RISCVISD::GenNodeType>(MulOpcode)) {
+    switch (static_cast<CapstoneISD::GenNodeType>(MulOpcode)) {
     default:
       llvm_unreachable("Unexpected opcode");
-    case RISCVISD::VWMUL_VL:
-      return RISCVISD::VWMACC_VL;
-    case RISCVISD::VWMULU_VL:
-      return RISCVISD::VWMACCU_VL;
-    case RISCVISD::VWMULSU_VL:
-      return RISCVISD::VWMACCSU_VL;
+    case CapstoneISD::VWMUL_VL:
+      return CapstoneISD::VWMACC_VL;
+    case CapstoneISD::VWMULU_VL:
+      return CapstoneISD::VWMACCU_VL;
+    case CapstoneISD::VWMULSU_VL:
+      return CapstoneISD::VWMACCSU_VL;
     }
   }
 };
 
 } // namespace llvm
 
-#endif // LLVM_LIB_TARGET_RISCV_RISCVSELECTIONDAGINFO_H
+#endif // LLVM_LIB_TARGET_Capstone_CapstoneSELECTIONDAGINFO_H

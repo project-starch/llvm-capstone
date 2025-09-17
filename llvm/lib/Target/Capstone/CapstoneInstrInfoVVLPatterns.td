@@ -1,4 +1,4 @@
-//===- RISCVInstrInfoVVLPatterns.td - RVV VL patterns ------*- tablegen -*-===//
+//===- CapstoneInstrInfoVVLPatterns.td - RVV VL patterns ------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -10,10 +10,10 @@
 /// support code generation for the standard 'V' (Vector) extension, version
 /// version 1.0.
 ///
-/// This file is included from and depends upon RISCVInstrInfoVPseudos.td
+/// This file is included from and depends upon CapstoneInstrInfoVPseudos.td
 ///
 /// Note: the patterns for RVV intrinsics are found in
-/// RISCVInstrInfoVPseudos.td.
+/// CapstoneInstrInfoVPseudos.td.
 ///
 //===----------------------------------------------------------------------===//
 
@@ -25,7 +25,7 @@
 // it is lowered before instruction selection.
 // FIXME: I'm not sure the types here are entirely correct.
 // Returns a vector. Operand 0 is a passthru, operand 1 and 2 are i32 scalars, operand 3 is VL
-def riscv_splat_vector_split_i64_vl : RVSDNode<"SPLAT_VECTOR_SPLIT_I64_VL",
+def capstone_splat_vector_split_i64_vl : RVSDNode<"SPLAT_VECTOR_SPLIT_I64_VL",
                                                SDTypeProfile<1, 4, [SDTCisVec<0>,
                                                                     SDTCVecEltisVT<0, i64>,
                                                                     SDTCisSameAs<1, 0>,
@@ -33,12 +33,12 @@ def riscv_splat_vector_split_i64_vl : RVSDNode<"SPLAT_VECTOR_SPLIT_I64_VL",
                                                                     SDTCisVT<3, i32>,
                                                                     SDTCisVT<4, XLenVT>]>>;
 
-// RISC-V vector tuple type version of INSERT_SUBVECTOR/EXTRACT_SUBVECTOR.
-def riscv_tuple_insert : RVSDNode<"TUPLE_INSERT",
+// Capstone vector tuple type version of INSERT_SUBVECTOR/EXTRACT_SUBVECTOR.
+def capstone_tuple_insert : RVSDNode<"TUPLE_INSERT",
                                   SDTypeProfile<1, 3, [SDTCisSameAs<1, 0>,
                                                        SDTCisVec<2>,
                                                        SDTCisVT<3, i32>]>>;
-def riscv_tuple_extract : RVSDNode<"TUPLE_EXTRACT",
+def capstone_tuple_extract : RVSDNode<"TUPLE_EXTRACT",
                                    SDTypeProfile<1, 2, [SDTCisVec<0>,
                                                         SDTCisVT<2, i32>]>>;
 
@@ -47,14 +47,14 @@ def riscv_tuple_extract : RVSDNode<"TUPLE_EXTRACT",
 // Helpers to define the VL patterns.
 //===----------------------------------------------------------------------===//
 
-def SDT_RISCVIntUnOp_VL : SDTypeProfile<1, 4, [SDTCisSameAs<0, 1>,
+def SDT_CapstoneIntUnOp_VL : SDTypeProfile<1, 4, [SDTCisSameAs<0, 1>,
                                                SDTCisSameAs<0, 2>,
                                                SDTCisVec<0>, SDTCisInt<0>,
                                                SDTCVecEltisVT<3, i1>,
                                                SDTCisSameNumEltsAs<0, 3>,
                                                SDTCisVT<4, XLenVT>]>;
 
-def SDT_RISCVIntBinOp_VL : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>,
+def SDT_CapstoneIntBinOp_VL : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>,
                                                 SDTCisSameAs<0, 2>,
                                                 SDTCisVec<0>, SDTCisInt<0>,
                                                 SDTCisSameAs<0, 3>,
@@ -63,7 +63,7 @@ def SDT_RISCVIntBinOp_VL : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>,
                                                 SDTCisVT<5, XLenVT>]>;
 
 // Input: (vector, vector/scalar, passthru, mask, roundmode, vl)
-def SDT_RISCVVNBinOp_RM_VL : SDTypeProfile<1, 6, [SDTCisVec<0>, SDTCisInt<0>,
+def SDT_CapstoneVNBinOp_RM_VL : SDTypeProfile<1, 6, [SDTCisVec<0>, SDTCisInt<0>,
                                                   SDTCisSameAs<0, 3>,
                                                   SDTCisSameNumEltsAs<0, 1>,
                                                   SDTCisVec<1>,
@@ -74,12 +74,12 @@ def SDT_RISCVVNBinOp_RM_VL : SDTypeProfile<1, 6, [SDTCisVec<0>, SDTCisInt<0>,
                                                   SDTCisVT<5, XLenVT>,
                                                   SDTCisVT<6, XLenVT>]>;
 
-def SDT_RISCVFPUnOp_VL : SDTypeProfile<1, 3, [SDTCisSameAs<0, 1>,
+def SDT_CapstoneFPUnOp_VL : SDTypeProfile<1, 3, [SDTCisSameAs<0, 1>,
                                               SDTCisVec<0>, SDTCisFP<0>,
                                               SDTCVecEltisVT<2, i1>,
                                               SDTCisSameNumEltsAs<0, 2>,
                                               SDTCisVT<3, XLenVT>]>;
-def SDT_RISCVFPBinOp_VL : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>,
+def SDT_CapstoneFPBinOp_VL : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>,
                                                SDTCisSameAs<0, 2>,
                                                SDTCisVec<0>, SDTCisFP<0>,
                                                SDTCisSameAs<0, 3>,
@@ -87,7 +87,7 @@ def SDT_RISCVFPBinOp_VL : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>,
                                                SDTCisSameNumEltsAs<0, 4>,
                                                SDTCisVT<5, XLenVT>]>;
 
-def SDT_RISCVCopySign_VL : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>,
+def SDT_CapstoneCopySign_VL : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>,
                                                 SDTCisSameAs<0, 2>,
                                                 SDTCisVec<0>, SDTCisFP<0>,
                                                 SDTCisSameAs<0, 3>,
@@ -98,7 +98,7 @@ def SDT_RISCVCopySign_VL : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>,
 // VMV_V_V_VL matches the semantics of vmv.v.v but includes an extra operand
 // for the VL value to be used for the operation. The first operand is
 // passthru operand.
-def riscv_vmv_v_v_vl : RVSDNode<"VMV_V_V_VL",
+def capstone_vmv_v_v_vl : RVSDNode<"VMV_V_V_VL",
                                 SDTypeProfile<1, 3, [SDTCisVec<0>,
                                                      SDTCisSameAs<0, 1>,
                                                      SDTCisSameAs<0, 2>,
@@ -107,7 +107,7 @@ def riscv_vmv_v_v_vl : RVSDNode<"VMV_V_V_VL",
 // VMV_V_X_VL matches the semantics of vmv.v.x but includes an extra operand
 // for the VL value to be used for the operation. The first operand is
 // passthru operand.
-def riscv_vmv_v_x_vl : RVSDNode<"VMV_V_X_VL",
+def capstone_vmv_v_x_vl : RVSDNode<"VMV_V_X_VL",
                                 SDTypeProfile<1, 3, [SDTCisVec<0>, SDTCisInt<0>,
                                                      SDTCisSameAs<0, 1>,
                                                      SDTCisVT<2, XLenVT>,
@@ -116,21 +116,21 @@ def riscv_vmv_v_x_vl : RVSDNode<"VMV_V_X_VL",
 // VFMV_V_F_VL matches the semantics of vfmv.v.f but includes an extra operand
 // for the VL value to be used for the operation. The first operand is
 // passthru operand.
-def riscv_vfmv_v_f_vl : RVSDNode<"VFMV_V_F_VL",
+def capstone_vfmv_v_f_vl : RVSDNode<"VFMV_V_F_VL",
                                  SDTypeProfile<1, 3, [SDTCisVec<0>, SDTCisFP<0>,
                                                       SDTCisSameAs<0, 1>,
                                                       SDTCisEltOfVec<2, 0>,
                                                       SDTCisVT<3, XLenVT>]>>;
 
 // VMV_S_X_VL matches the semantics of vmv.s.x. It carries a VL operand.
-def riscv_vmv_s_x_vl : RVSDNode<"VMV_S_X_VL",
+def capstone_vmv_s_x_vl : RVSDNode<"VMV_S_X_VL",
                                 SDTypeProfile<1, 3, [SDTCisSameAs<0, 1>,
                                                      SDTCisInt<0>,
                                                      SDTCisVT<2, XLenVT>,
                                                      SDTCisVT<3, XLenVT>]>>;
 
 // VFMV_S_F_VL matches the semantics of vfmv.s.f. It carries a VL operand.
-def riscv_vfmv_s_f_vl : RVSDNode<"VFMV_S_F_VL",
+def capstone_vfmv_s_f_vl : RVSDNode<"VFMV_S_F_VL",
                                  SDTypeProfile<1, 3, [SDTCisSameAs<0, 1>,
                                                        SDTCisFP<0>,
                                                        SDTCisEltOfVec<2, 0>,
@@ -139,94 +139,94 @@ def riscv_vfmv_s_f_vl : RVSDNode<"VFMV_S_F_VL",
 // Vector binary ops with a passthru as a third operand, a mask as a fourth
 // operand, and VL as a fifth operand.
 let HasPassthruOp = true, HasMaskOp = true in {
-  def riscv_add_vl   : RVSDNode<"ADD_VL",   SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_sub_vl   : RVSDNode<"SUB_VL",   SDT_RISCVIntBinOp_VL>;
-  def riscv_mul_vl   : RVSDNode<"MUL_VL",   SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_mulhs_vl : RVSDNode<"MULHS_VL", SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_mulhu_vl : RVSDNode<"MULHU_VL", SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_and_vl   : RVSDNode<"AND_VL",   SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_or_vl    : RVSDNode<"OR_VL",    SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_xor_vl   : RVSDNode<"XOR_VL",   SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_sdiv_vl  : RVSDNode<"SDIV_VL",  SDT_RISCVIntBinOp_VL>;
-  def riscv_srem_vl  : RVSDNode<"SREM_VL",  SDT_RISCVIntBinOp_VL>;
-  def riscv_udiv_vl  : RVSDNode<"UDIV_VL",  SDT_RISCVIntBinOp_VL>;
-  def riscv_urem_vl  : RVSDNode<"UREM_VL",  SDT_RISCVIntBinOp_VL>;
-  def riscv_shl_vl   : RVSDNode<"SHL_VL",   SDT_RISCVIntBinOp_VL>;
-  def riscv_sra_vl   : RVSDNode<"SRA_VL",   SDT_RISCVIntBinOp_VL>;
-  def riscv_srl_vl   : RVSDNode<"SRL_VL",   SDT_RISCVIntBinOp_VL>;
-  def riscv_rotl_vl  : RVSDNode<"ROTL_VL",  SDT_RISCVIntBinOp_VL>;
-  def riscv_rotr_vl  : RVSDNode<"ROTR_VL",  SDT_RISCVIntBinOp_VL>;
-  def riscv_smin_vl  : RVSDNode<"SMIN_VL",  SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_smax_vl  : RVSDNode<"SMAX_VL",  SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_umin_vl  : RVSDNode<"UMIN_VL",  SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_umax_vl  : RVSDNode<"UMAX_VL",  SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_add_vl   : RVSDNode<"ADD_VL",   SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_sub_vl   : RVSDNode<"SUB_VL",   SDT_CapstoneIntBinOp_VL>;
+  def capstone_mul_vl   : RVSDNode<"MUL_VL",   SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_mulhs_vl : RVSDNode<"MULHS_VL", SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_mulhu_vl : RVSDNode<"MULHU_VL", SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_and_vl   : RVSDNode<"AND_VL",   SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_or_vl    : RVSDNode<"OR_VL",    SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_xor_vl   : RVSDNode<"XOR_VL",   SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_sdiv_vl  : RVSDNode<"SDIV_VL",  SDT_CapstoneIntBinOp_VL>;
+  def capstone_srem_vl  : RVSDNode<"SREM_VL",  SDT_CapstoneIntBinOp_VL>;
+  def capstone_udiv_vl  : RVSDNode<"UDIV_VL",  SDT_CapstoneIntBinOp_VL>;
+  def capstone_urem_vl  : RVSDNode<"UREM_VL",  SDT_CapstoneIntBinOp_VL>;
+  def capstone_shl_vl   : RVSDNode<"SHL_VL",   SDT_CapstoneIntBinOp_VL>;
+  def capstone_sra_vl   : RVSDNode<"SRA_VL",   SDT_CapstoneIntBinOp_VL>;
+  def capstone_srl_vl   : RVSDNode<"SRL_VL",   SDT_CapstoneIntBinOp_VL>;
+  def capstone_rotl_vl  : RVSDNode<"ROTL_VL",  SDT_CapstoneIntBinOp_VL>;
+  def capstone_rotr_vl  : RVSDNode<"ROTR_VL",  SDT_CapstoneIntBinOp_VL>;
+  def capstone_smin_vl  : RVSDNode<"SMIN_VL",  SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_smax_vl  : RVSDNode<"SMAX_VL",  SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_umin_vl  : RVSDNode<"UMIN_VL",  SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_umax_vl  : RVSDNode<"UMAX_VL",  SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
 
-  def riscv_bitreverse_vl : RVSDNode<"BITREVERSE_VL", SDT_RISCVIntUnOp_VL>;
-  def riscv_bswap_vl      : RVSDNode<"BSWAP_VL",      SDT_RISCVIntUnOp_VL>;
-  def riscv_ctlz_vl       : RVSDNode<"CTLZ_VL",       SDT_RISCVIntUnOp_VL>;
-  def riscv_cttz_vl       : RVSDNode<"CTTZ_VL",       SDT_RISCVIntUnOp_VL>;
-  def riscv_ctpop_vl      : RVSDNode<"CTPOP_VL",      SDT_RISCVIntUnOp_VL>;
+  def capstone_bitreverse_vl : RVSDNode<"BITREVERSE_VL", SDT_CapstoneIntUnOp_VL>;
+  def capstone_bswap_vl      : RVSDNode<"BSWAP_VL",      SDT_CapstoneIntUnOp_VL>;
+  def capstone_ctlz_vl       : RVSDNode<"CTLZ_VL",       SDT_CapstoneIntUnOp_VL>;
+  def capstone_cttz_vl       : RVSDNode<"CTTZ_VL",       SDT_CapstoneIntUnOp_VL>;
+  def capstone_ctpop_vl      : RVSDNode<"CTPOP_VL",      SDT_CapstoneIntUnOp_VL>;
 
   // Averaging adds of signed integers.
-  def riscv_avgfloors_vl  : RVSDNode<"AVGFLOORS_VL", SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_avgfloors_vl  : RVSDNode<"AVGFLOORS_VL", SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
   // Averaging adds of unsigned integers.
-  def riscv_avgflooru_vl  : RVSDNode<"AVGFLOORU_VL", SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_avgflooru_vl  : RVSDNode<"AVGFLOORU_VL", SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
   // Rounding averaging adds of signed integers.
-  def riscv_avgceils_vl   : RVSDNode<"AVGCEILS_VL", SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_avgceils_vl   : RVSDNode<"AVGCEILS_VL", SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
   // Rounding averaging adds of unsigned integers.
-  def riscv_avgceilu_vl   : RVSDNode<"AVGCEILU_VL", SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_saddsat_vl   : RVSDNode<"SADDSAT_VL", SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_uaddsat_vl   : RVSDNode<"UADDSAT_VL", SDT_RISCVIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_ssubsat_vl   : RVSDNode<"SSUBSAT_VL", SDT_RISCVIntBinOp_VL>;
-  def riscv_usubsat_vl   : RVSDNode<"USUBSAT_VL", SDT_RISCVIntBinOp_VL>;
+  def capstone_avgceilu_vl   : RVSDNode<"AVGCEILU_VL", SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_saddsat_vl   : RVSDNode<"SADDSAT_VL", SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_uaddsat_vl   : RVSDNode<"UADDSAT_VL", SDT_CapstoneIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_ssubsat_vl   : RVSDNode<"SSUBSAT_VL", SDT_CapstoneIntBinOp_VL>;
+  def capstone_usubsat_vl   : RVSDNode<"USUBSAT_VL", SDT_CapstoneIntBinOp_VL>;
 
-  def riscv_fadd_vl  : RVSDNode<"FADD_VL",  SDT_RISCVFPBinOp_VL, [SDNPCommutative]>;
-  def riscv_fsub_vl  : RVSDNode<"FSUB_VL",  SDT_RISCVFPBinOp_VL>;
-  def riscv_fmul_vl  : RVSDNode<"FMUL_VL",  SDT_RISCVFPBinOp_VL, [SDNPCommutative]>;
-  def riscv_fdiv_vl  : RVSDNode<"FDIV_VL",  SDT_RISCVFPBinOp_VL>;
+  def capstone_fadd_vl  : RVSDNode<"FADD_VL",  SDT_CapstoneFPBinOp_VL, [SDNPCommutative]>;
+  def capstone_fsub_vl  : RVSDNode<"FSUB_VL",  SDT_CapstoneFPBinOp_VL>;
+  def capstone_fmul_vl  : RVSDNode<"FMUL_VL",  SDT_CapstoneFPBinOp_VL, [SDNPCommutative]>;
+  def capstone_fdiv_vl  : RVSDNode<"FDIV_VL",  SDT_CapstoneFPBinOp_VL>;
 } // let HasPassthruOp = true, HasMaskOp = true
 
 // Vector unary ops with a mask as a second operand and VL as a third operand.
 let HasMaskOp = true in {
-  def riscv_fneg_vl  : RVSDNode<"FNEG_VL",  SDT_RISCVFPUnOp_VL>;
-  def riscv_fabs_vl  : RVSDNode<"FABS_VL",  SDT_RISCVFPUnOp_VL>;
-  def riscv_fsqrt_vl : RVSDNode<"FSQRT_VL", SDT_RISCVFPUnOp_VL>;
+  def capstone_fneg_vl  : RVSDNode<"FNEG_VL",  SDT_CapstoneFPUnOp_VL>;
+  def capstone_fabs_vl  : RVSDNode<"FABS_VL",  SDT_CapstoneFPUnOp_VL>;
+  def capstone_fsqrt_vl : RVSDNode<"FSQRT_VL", SDT_CapstoneFPUnOp_VL>;
 } // let HasMaskOp = true
 
 let HasPassthruOp = true, HasMaskOp = true in {
-  def riscv_fcopysign_vl : RVSDNode<"FCOPYSIGN_VL", SDT_RISCVCopySign_VL>;
-  def riscv_vfmin_vl   : RVSDNode<"VFMIN_VL",  SDT_RISCVFPBinOp_VL, [SDNPCommutative]>;
-  def riscv_vfmax_vl   : RVSDNode<"VFMAX_VL",  SDT_RISCVFPBinOp_VL, [SDNPCommutative]>;
+  def capstone_fcopysign_vl : RVSDNode<"FCOPYSIGN_VL", SDT_CapstoneCopySign_VL>;
+  def capstone_vfmin_vl   : RVSDNode<"VFMIN_VL",  SDT_CapstoneFPBinOp_VL, [SDNPCommutative]>;
+  def capstone_vfmax_vl   : RVSDNode<"VFMAX_VL",  SDT_CapstoneFPBinOp_VL, [SDNPCommutative]>;
 } // let HasPassthruOp = true, HasMaskOp = true
 
 let IsStrictFP = true, HasPassthruOp = true, HasMaskOp = true in {
-  def riscv_strict_fadd_vl  : RVSDNode<"STRICT_FADD_VL",  SDT_RISCVFPBinOp_VL, [SDNPCommutative, SDNPHasChain]>;
-  def riscv_strict_fsub_vl  : RVSDNode<"STRICT_FSUB_VL",  SDT_RISCVFPBinOp_VL, [SDNPHasChain]>;
-  def riscv_strict_fmul_vl  : RVSDNode<"STRICT_FMUL_VL",  SDT_RISCVFPBinOp_VL, [SDNPCommutative, SDNPHasChain]>;
-  def riscv_strict_fdiv_vl  : RVSDNode<"STRICT_FDIV_VL",  SDT_RISCVFPBinOp_VL, [SDNPHasChain]>;
+  def capstone_strict_fadd_vl  : RVSDNode<"STRICT_FADD_VL",  SDT_CapstoneFPBinOp_VL, [SDNPCommutative, SDNPHasChain]>;
+  def capstone_strict_fsub_vl  : RVSDNode<"STRICT_FSUB_VL",  SDT_CapstoneFPBinOp_VL, [SDNPHasChain]>;
+  def capstone_strict_fmul_vl  : RVSDNode<"STRICT_FMUL_VL",  SDT_CapstoneFPBinOp_VL, [SDNPCommutative, SDNPHasChain]>;
+  def capstone_strict_fdiv_vl  : RVSDNode<"STRICT_FDIV_VL",  SDT_CapstoneFPBinOp_VL, [SDNPHasChain]>;
 } // let IsStrictFP = true, HasPassthruOp = true, HasMaskOp = true
 
 let IsStrictFP = true, HasMaskOp = true in
-def riscv_strict_fsqrt_vl : RVSDNode<"STRICT_FSQRT_VL", SDT_RISCVFPUnOp_VL, [SDNPHasChain]>;
+def capstone_strict_fsqrt_vl : RVSDNode<"STRICT_FSQRT_VL", SDT_CapstoneFPUnOp_VL, [SDNPHasChain]>;
 
-def any_riscv_fadd_vl : PatFrags<(ops node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
-                        [(riscv_fadd_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
-                         (riscv_strict_fadd_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl)]>;
-def any_riscv_fsub_vl : PatFrags<(ops node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
-                        [(riscv_fsub_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
-                         (riscv_strict_fsub_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl)]>;
-def any_riscv_fmul_vl : PatFrags<(ops node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
-                        [(riscv_fmul_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
-                         (riscv_strict_fmul_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl)]>;
-def any_riscv_fdiv_vl : PatFrags<(ops node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
-                        [(riscv_fdiv_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
-                         (riscv_strict_fdiv_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl)]>;
-def any_riscv_fsqrt_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
-                        [(riscv_fsqrt_vl node:$src, node:$mask, node:$vl),
-                         (riscv_strict_fsqrt_vl node:$src, node:$mask, node:$vl)]>;
+def any_capstone_fadd_vl : PatFrags<(ops node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
+                        [(capstone_fadd_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
+                         (capstone_strict_fadd_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl)]>;
+def any_capstone_fsub_vl : PatFrags<(ops node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
+                        [(capstone_fsub_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
+                         (capstone_strict_fsub_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl)]>;
+def any_capstone_fmul_vl : PatFrags<(ops node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
+                        [(capstone_fmul_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
+                         (capstone_strict_fmul_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl)]>;
+def any_capstone_fdiv_vl : PatFrags<(ops node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
+                        [(capstone_fdiv_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl),
+                         (capstone_strict_fdiv_vl node:$lhs, node:$rhs, node:$passthru, node:$mask, node:$vl)]>;
+def any_capstone_fsqrt_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
+                        [(capstone_fsqrt_vl node:$src, node:$mask, node:$vl),
+                         (capstone_strict_fsqrt_vl node:$src, node:$mask, node:$vl)]>;
 
 let HasMaskOp = true in
-def riscv_fclass_vl : RVSDNode<"FCLASS_VL",
+def capstone_fclass_vl : RVSDNode<"FCLASS_VL",
                                SDTypeProfile<1, 3, [SDTCisInt<0>, SDTCisVec<0>,
                                                     SDTCisFP<1>, SDTCisVec<1>,
                                                     SDTCisSameSizeAs<0, 1>,
@@ -235,7 +235,7 @@ def riscv_fclass_vl : RVSDNode<"FCLASS_VL",
                                                     SDTCisSameNumEltsAs<0, 2>,
                                                     SDTCisVT<3, XLenVT>]>>;
 
-def SDT_RISCVVecFMA_VL : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>,
+def SDT_CapstoneVecFMA_VL : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>,
                                               SDTCisSameAs<0, 2>,
                                               SDTCisSameAs<0, 3>,
                                               SDTCisVec<0>, SDTCisFP<0>,
@@ -245,13 +245,13 @@ def SDT_RISCVVecFMA_VL : SDTypeProfile<1, 5, [SDTCisSameAs<0, 1>,
 
 let HasMaskOp = true in {
   // Vector FMA ops with a mask as a fourth operand and VL as a fifth operand.
-  def riscv_vfmadd_vl  : RVSDNode<"VFMADD_VL",  SDT_RISCVVecFMA_VL, [SDNPCommutative]>;
-  def riscv_vfnmadd_vl : RVSDNode<"VFNMADD_VL", SDT_RISCVVecFMA_VL, [SDNPCommutative]>;
-  def riscv_vfmsub_vl  : RVSDNode<"VFMSUB_VL",  SDT_RISCVVecFMA_VL, [SDNPCommutative]>;
-  def riscv_vfnmsub_vl : RVSDNode<"VFNMSUB_VL", SDT_RISCVVecFMA_VL, [SDNPCommutative]>;
+  def capstone_vfmadd_vl  : RVSDNode<"VFMADD_VL",  SDT_CapstoneVecFMA_VL, [SDNPCommutative]>;
+  def capstone_vfnmadd_vl : RVSDNode<"VFNMADD_VL", SDT_CapstoneVecFMA_VL, [SDNPCommutative]>;
+  def capstone_vfmsub_vl  : RVSDNode<"VFMSUB_VL",  SDT_CapstoneVecFMA_VL, [SDNPCommutative]>;
+  def capstone_vfnmsub_vl : RVSDNode<"VFNMSUB_VL", SDT_CapstoneVecFMA_VL, [SDNPCommutative]>;
 }
 
-def SDT_RISCVWVecFMA_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisFP<0>,
+def SDT_CapstoneWVecFMA_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisFP<0>,
                                                SDTCisVec<1>, SDTCisFP<1>,
                                                SDTCisOpSmallerThanOp<1, 0>,
                                                SDTCisSameNumEltsAs<0, 1>,
@@ -264,89 +264,89 @@ def SDT_RISCVWVecFMA_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisFP<0>,
 let HasMaskOp = true in {
   // Vector widening FMA ops with a mask as a fourth operand and VL as a fifth
   // operand.
-  def riscv_vfwmadd_vl  : RVSDNode<"VFWMADD_VL",  SDT_RISCVWVecFMA_VL, [SDNPCommutative]>;
-  def riscv_vfwnmadd_vl : RVSDNode<"VFWNMADD_VL", SDT_RISCVWVecFMA_VL, [SDNPCommutative]>;
-  def riscv_vfwmsub_vl  : RVSDNode<"VFWMSUB_VL",  SDT_RISCVWVecFMA_VL, [SDNPCommutative]>;
-  def riscv_vfwnmsub_vl : RVSDNode<"VFWNMSUB_VL", SDT_RISCVWVecFMA_VL, [SDNPCommutative]>;
+  def capstone_vfwmadd_vl  : RVSDNode<"VFWMADD_VL",  SDT_CapstoneWVecFMA_VL, [SDNPCommutative]>;
+  def capstone_vfwnmadd_vl : RVSDNode<"VFWNMADD_VL", SDT_CapstoneWVecFMA_VL, [SDNPCommutative]>;
+  def capstone_vfwmsub_vl  : RVSDNode<"VFWMSUB_VL",  SDT_CapstoneWVecFMA_VL, [SDNPCommutative]>;
+  def capstone_vfwnmsub_vl : RVSDNode<"VFWNMSUB_VL", SDT_CapstoneWVecFMA_VL, [SDNPCommutative]>;
 
   let IsStrictFP = true in {
-    def riscv_strict_vfmadd_vl : RVSDNode<"STRICT_VFMADD_VL", SDT_RISCVVecFMA_VL, [SDNPCommutative, SDNPHasChain]>;
-    def riscv_strict_vfnmadd_vl : RVSDNode<"STRICT_VFNMADD_VL", SDT_RISCVVecFMA_VL, [SDNPCommutative, SDNPHasChain]>;
-    def riscv_strict_vfmsub_vl : RVSDNode<"STRICT_VFMSUB_VL", SDT_RISCVVecFMA_VL, [SDNPCommutative, SDNPHasChain]>;
-    def riscv_strict_vfnmsub_vl : RVSDNode<"STRICT_VFNMSUB_VL", SDT_RISCVVecFMA_VL, [SDNPCommutative, SDNPHasChain]>;
+    def capstone_strict_vfmadd_vl : RVSDNode<"STRICT_VFMADD_VL", SDT_CapstoneVecFMA_VL, [SDNPCommutative, SDNPHasChain]>;
+    def capstone_strict_vfnmadd_vl : RVSDNode<"STRICT_VFNMADD_VL", SDT_CapstoneVecFMA_VL, [SDNPCommutative, SDNPHasChain]>;
+    def capstone_strict_vfmsub_vl : RVSDNode<"STRICT_VFMSUB_VL", SDT_CapstoneVecFMA_VL, [SDNPCommutative, SDNPHasChain]>;
+    def capstone_strict_vfnmsub_vl : RVSDNode<"STRICT_VFNMSUB_VL", SDT_CapstoneVecFMA_VL, [SDNPCommutative, SDNPHasChain]>;
   } // let IsStrictFP = true
 } // let HasMaskOp = true
 
-def any_riscv_vfmadd_vl : PatFrags<(ops node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
-                        [(riscv_vfmadd_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
-                         (riscv_strict_vfmadd_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl)]>;
-def any_riscv_vfnmadd_vl : PatFrags<(ops node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
-                        [(riscv_vfnmadd_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
-                         (riscv_strict_vfnmadd_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl)]>;
-def any_riscv_vfmsub_vl : PatFrags<(ops node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
-                        [(riscv_vfmsub_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
-                         (riscv_strict_vfmsub_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl)]>;
-def any_riscv_vfnmsub_vl : PatFrags<(ops node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
-                        [(riscv_vfnmsub_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
-                         (riscv_strict_vfnmsub_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl)]>;
+def any_capstone_vfmadd_vl : PatFrags<(ops node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
+                        [(capstone_vfmadd_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
+                         (capstone_strict_vfmadd_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl)]>;
+def any_capstone_vfnmadd_vl : PatFrags<(ops node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
+                        [(capstone_vfnmadd_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
+                         (capstone_strict_vfnmadd_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl)]>;
+def any_capstone_vfmsub_vl : PatFrags<(ops node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
+                        [(capstone_vfmsub_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
+                         (capstone_strict_vfmsub_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl)]>;
+def any_capstone_vfnmsub_vl : PatFrags<(ops node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
+                        [(capstone_vfnmsub_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl),
+                         (capstone_strict_vfnmsub_vl node:$rs1, node:$rs2, node:$rs3, node:$mask, node:$vl)]>;
 
-def SDT_RISCVFPRoundOp_VL  : SDTypeProfile<1, 3, [
+def SDT_CapstoneFPRoundOp_VL  : SDTypeProfile<1, 3, [
   SDTCisFP<0>, SDTCisFP<1>, SDTCisOpSmallerThanOp<0, 1>, SDTCisSameNumEltsAs<0, 1>,
   SDTCVecEltisVT<2, i1>, SDTCisSameNumEltsAs<1, 2>, SDTCisVT<3, XLenVT>
 ]>;
-def SDT_RISCVFPExtendOp_VL  : SDTypeProfile<1, 3, [
+def SDT_CapstoneFPExtendOp_VL  : SDTypeProfile<1, 3, [
   SDTCisFP<0>, SDTCisFP<1>, SDTCisOpSmallerThanOp<1, 0>, SDTCisSameNumEltsAs<0, 1>,
   SDTCVecEltisVT<2, i1>, SDTCisSameNumEltsAs<1, 2>, SDTCisVT<3, XLenVT>
 ]>;
 
 let HasMaskOp = true in {
-  def riscv_fpround_vl : RVSDNode<"FP_ROUND_VL", SDT_RISCVFPRoundOp_VL>;
-  def riscv_fpextend_vl : RVSDNode<"FP_EXTEND_VL", SDT_RISCVFPExtendOp_VL>;
+  def capstone_fpround_vl : RVSDNode<"FP_ROUND_VL", SDT_CapstoneFPRoundOp_VL>;
+  def capstone_fpextend_vl : RVSDNode<"FP_EXTEND_VL", SDT_CapstoneFPExtendOp_VL>;
 
   // Matches the semantics of the vfcnvt.rod function (Convert double-width
   // float to single-width float, rounding towards odd). Takes a double-width
   // float vector and produces a single-width float vector. Also has a mask and
   // VL operand.
-  def riscv_fncvt_rod_vl : RVSDNode<"VFNCVT_ROD_VL", SDT_RISCVFPRoundOp_VL>;
+  def capstone_fncvt_rod_vl : RVSDNode<"VFNCVT_ROD_VL", SDT_CapstoneFPRoundOp_VL>;
 
   let IsStrictFP = true in {
-    def riscv_strict_fpround_vl : RVSDNode<"STRICT_FP_ROUND_VL", SDT_RISCVFPRoundOp_VL, [SDNPHasChain]>;
-    def riscv_strict_fpextend_vl : RVSDNode<"STRICT_FP_EXTEND_VL", SDT_RISCVFPExtendOp_VL, [SDNPHasChain]>;
-    def riscv_strict_fncvt_rod_vl : RVSDNode<"STRICT_VFNCVT_ROD_VL", SDT_RISCVFPRoundOp_VL, [SDNPHasChain]>;
+    def capstone_strict_fpround_vl : RVSDNode<"STRICT_FP_ROUND_VL", SDT_CapstoneFPRoundOp_VL, [SDNPHasChain]>;
+    def capstone_strict_fpextend_vl : RVSDNode<"STRICT_FP_EXTEND_VL", SDT_CapstoneFPExtendOp_VL, [SDNPHasChain]>;
+    def capstone_strict_fncvt_rod_vl : RVSDNode<"STRICT_VFNCVT_ROD_VL", SDT_CapstoneFPRoundOp_VL, [SDNPHasChain]>;
   } // let IsStrictFP = true
 } // let HasMaskOp = true
 
-def any_riscv_fpround_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
-                            [(riscv_fpround_vl node:$src, node:$mask, node:$vl),
-                             (riscv_strict_fpround_vl node:$src, node:$mask, node:$vl)]>;
-def any_riscv_fpextend_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
-                            [(riscv_fpextend_vl node:$src, node:$mask, node:$vl),
-                             (riscv_strict_fpextend_vl node:$src, node:$mask, node:$vl)]>;
-def any_riscv_fncvt_rod_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
-                            [(riscv_fncvt_rod_vl node:$src, node:$mask, node:$vl),
-                             (riscv_strict_fncvt_rod_vl node:$src, node:$mask, node:$vl)]>;
+def any_capstone_fpround_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
+                            [(capstone_fpround_vl node:$src, node:$mask, node:$vl),
+                             (capstone_strict_fpround_vl node:$src, node:$mask, node:$vl)]>;
+def any_capstone_fpextend_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
+                            [(capstone_fpextend_vl node:$src, node:$mask, node:$vl),
+                             (capstone_strict_fpextend_vl node:$src, node:$mask, node:$vl)]>;
+def any_capstone_fncvt_rod_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
+                            [(capstone_fncvt_rod_vl node:$src, node:$mask, node:$vl),
+                             (capstone_strict_fncvt_rod_vl node:$src, node:$mask, node:$vl)]>;
 
-def SDT_RISCVFP2IOp_VL  : SDTypeProfile<1, 3, [
+def SDT_CapstoneFP2IOp_VL  : SDTypeProfile<1, 3, [
   SDTCisInt<0>, SDTCisFP<1>, SDTCisSameNumEltsAs<0, 1>,
   SDTCVecEltisVT<2, i1>, SDTCisSameNumEltsAs<1, 2>, SDTCisVT<3, XLenVT>
 ]>;
-def SDT_RISCVFP2IOp_RM_VL  : SDTypeProfile<1, 4, [
+def SDT_CapstoneFP2IOp_RM_VL  : SDTypeProfile<1, 4, [
   SDTCisInt<0>, SDTCisFP<1>, SDTCisSameNumEltsAs<0, 1>,
   SDTCVecEltisVT<2, i1>, SDTCisSameNumEltsAs<1, 2>, SDTCisVT<3, XLenVT>,
   SDTCisVT<4, XLenVT> // Rounding mode
 ]>;
 
-def SDT_RISCVI2FPOp_VL  : SDTypeProfile<1, 3, [
+def SDT_CapstoneI2FPOp_VL  : SDTypeProfile<1, 3, [
   SDTCisFP<0>, SDTCisInt<1>, SDTCisSameNumEltsAs<0, 1>,
   SDTCVecEltisVT<2, i1>, SDTCisSameNumEltsAs<1, 2>, SDTCisVT<3, XLenVT>
 ]>;
-def SDT_RISCVI2FPOp_RM_VL  : SDTypeProfile<1, 4, [
+def SDT_CapstoneI2FPOp_RM_VL  : SDTypeProfile<1, 4, [
   SDTCisFP<0>, SDTCisInt<1>, SDTCisSameNumEltsAs<0, 1>,
   SDTCVecEltisVT<2, i1>, SDTCisSameNumEltsAs<1, 2>, SDTCisVT<3, XLenVT>,
   SDTCisVT<4, XLenVT> // Rounding mode
 ]>;
 
-def SDT_RISCVSETCCOP_VL : SDTypeProfile<1, 6, [
+def SDT_CapstoneSETCCOP_VL : SDTypeProfile<1, 6, [
   SDTCVecEltisVT<0, i1>, SDTCisVec<1>, SDTCisSameNumEltsAs<0, 1>,
   SDTCisSameAs<1, 2>, SDTCisVT<3, OtherVT>, SDTCisSameAs<0, 4>,
   SDTCisSameAs<0, 5>, SDTCisVT<6, XLenVT>]>;
@@ -354,83 +354,83 @@ def SDT_RISCVSETCCOP_VL : SDTypeProfile<1, 6, [
 // Float -> Int
 
 let HasMaskOp = true in {
-  def riscv_vfcvt_rm_xu_f_vl : RVSDNode<"VFCVT_RM_XU_F_VL", SDT_RISCVFP2IOp_RM_VL>;
-  def riscv_vfcvt_rm_x_f_vl : RVSDNode<"VFCVT_RM_X_F_VL", SDT_RISCVFP2IOp_RM_VL>;
+  def capstone_vfcvt_rm_xu_f_vl : RVSDNode<"VFCVT_RM_XU_F_VL", SDT_CapstoneFP2IOp_RM_VL>;
+  def capstone_vfcvt_rm_x_f_vl : RVSDNode<"VFCVT_RM_X_F_VL", SDT_CapstoneFP2IOp_RM_VL>;
 
-  def riscv_vfcvt_rtz_xu_f_vl : RVSDNode<"VFCVT_RTZ_XU_F_VL", SDT_RISCVFP2IOp_VL>;
-  def riscv_vfcvt_rtz_x_f_vl  : RVSDNode<"VFCVT_RTZ_X_F_VL",  SDT_RISCVFP2IOp_VL>;
+  def capstone_vfcvt_rtz_xu_f_vl : RVSDNode<"VFCVT_RTZ_XU_F_VL", SDT_CapstoneFP2IOp_VL>;
+  def capstone_vfcvt_rtz_x_f_vl  : RVSDNode<"VFCVT_RTZ_X_F_VL",  SDT_CapstoneFP2IOp_VL>;
 
   let IsStrictFP = true in {
-    def riscv_strict_vfcvt_rm_x_f_vl : RVSDNode<"STRICT_VFCVT_RM_X_F_VL", SDT_RISCVFP2IOp_RM_VL, [SDNPHasChain]>;
-    def riscv_strict_vfcvt_rtz_xu_f_vl : RVSDNode<"STRICT_VFCVT_RTZ_XU_F_VL", SDT_RISCVFP2IOp_VL, [SDNPHasChain]>;
-    def riscv_strict_vfcvt_rtz_x_f_vl  : RVSDNode<"STRICT_VFCVT_RTZ_X_F_VL",  SDT_RISCVFP2IOp_VL, [SDNPHasChain]>;
+    def capstone_strict_vfcvt_rm_x_f_vl : RVSDNode<"STRICT_VFCVT_RM_X_F_VL", SDT_CapstoneFP2IOp_RM_VL, [SDNPHasChain]>;
+    def capstone_strict_vfcvt_rtz_xu_f_vl : RVSDNode<"STRICT_VFCVT_RTZ_XU_F_VL", SDT_CapstoneFP2IOp_VL, [SDNPHasChain]>;
+    def capstone_strict_vfcvt_rtz_x_f_vl  : RVSDNode<"STRICT_VFCVT_RTZ_X_F_VL",  SDT_CapstoneFP2IOp_VL, [SDNPHasChain]>;
   } // let IsStrictFP = true
 } // let HasMaskOp = true
 
-def any_riscv_vfcvt_rm_x_f_vl : PatFrags<(ops node:$src, node:$mask, node:$vl, node:$rm),
-                            [(riscv_vfcvt_rm_x_f_vl node:$src, node:$mask, node:$vl, node:$rm),
-                             (riscv_strict_vfcvt_rm_x_f_vl node:$src, node:$mask, node:$vl, node:$rm)]>;
-def any_riscv_vfcvt_rtz_xu_f_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
-                            [(riscv_vfcvt_rtz_xu_f_vl node:$src, node:$mask, node:$vl),
-                             (riscv_strict_vfcvt_rtz_xu_f_vl node:$src, node:$mask, node:$vl)]>;
-def any_riscv_vfcvt_rtz_x_f_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
-                            [(riscv_vfcvt_rtz_x_f_vl node:$src, node:$mask, node:$vl),
-                             (riscv_strict_vfcvt_rtz_x_f_vl node:$src, node:$mask, node:$vl)]>;
+def any_capstone_vfcvt_rm_x_f_vl : PatFrags<(ops node:$src, node:$mask, node:$vl, node:$rm),
+                            [(capstone_vfcvt_rm_x_f_vl node:$src, node:$mask, node:$vl, node:$rm),
+                             (capstone_strict_vfcvt_rm_x_f_vl node:$src, node:$mask, node:$vl, node:$rm)]>;
+def any_capstone_vfcvt_rtz_xu_f_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
+                            [(capstone_vfcvt_rtz_xu_f_vl node:$src, node:$mask, node:$vl),
+                             (capstone_strict_vfcvt_rtz_xu_f_vl node:$src, node:$mask, node:$vl)]>;
+def any_capstone_vfcvt_rtz_x_f_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
+                            [(capstone_vfcvt_rtz_x_f_vl node:$src, node:$mask, node:$vl),
+                             (capstone_strict_vfcvt_rtz_x_f_vl node:$src, node:$mask, node:$vl)]>;
 
 // Int -> Float
 
 let HasMaskOp = true in {
-  def riscv_sint_to_fp_vl : RVSDNode<"SINT_TO_FP_VL", SDT_RISCVI2FPOp_VL>;
-  def riscv_uint_to_fp_vl : RVSDNode<"UINT_TO_FP_VL", SDT_RISCVI2FPOp_VL>;
-  def riscv_vfcvt_rm_f_xu_vl : RVSDNode<"VFCVT_RM_F_XU_VL", SDT_RISCVI2FPOp_RM_VL>;
-  def riscv_vfcvt_rm_f_x_vl : RVSDNode<"VFCVT_RM_F_X_VL", SDT_RISCVI2FPOp_RM_VL>;
+  def capstone_sint_to_fp_vl : RVSDNode<"SINT_TO_FP_VL", SDT_CapstoneI2FPOp_VL>;
+  def capstone_uint_to_fp_vl : RVSDNode<"UINT_TO_FP_VL", SDT_CapstoneI2FPOp_VL>;
+  def capstone_vfcvt_rm_f_xu_vl : RVSDNode<"VFCVT_RM_F_XU_VL", SDT_CapstoneI2FPOp_RM_VL>;
+  def capstone_vfcvt_rm_f_x_vl : RVSDNode<"VFCVT_RM_F_X_VL", SDT_CapstoneI2FPOp_RM_VL>;
 
   let IsStrictFP = true in {
-    def riscv_strict_sint_to_fp_vl : RVSDNode<"STRICT_SINT_TO_FP_VL", SDT_RISCVI2FPOp_VL, [SDNPHasChain]>;
-    def riscv_strict_uint_to_fp_vl : RVSDNode<"STRICT_UINT_TO_FP_VL", SDT_RISCVI2FPOp_VL, [SDNPHasChain]>;
+    def capstone_strict_sint_to_fp_vl : RVSDNode<"STRICT_SINT_TO_FP_VL", SDT_CapstoneI2FPOp_VL, [SDNPHasChain]>;
+    def capstone_strict_uint_to_fp_vl : RVSDNode<"STRICT_UINT_TO_FP_VL", SDT_CapstoneI2FPOp_VL, [SDNPHasChain]>;
   } // let IsStrictFP = true
 } // let HasMaskOp = true
 
-def any_riscv_sint_to_fp_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
-                            [(riscv_sint_to_fp_vl node:$src, node:$mask, node:$vl),
-                             (riscv_strict_sint_to_fp_vl node:$src, node:$mask, node:$vl)]>;
-def any_riscv_uint_to_fp_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
-                            [(riscv_uint_to_fp_vl node:$src, node:$mask, node:$vl),
-                             (riscv_strict_uint_to_fp_vl node:$src, node:$mask, node:$vl)]>;
+def any_capstone_sint_to_fp_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
+                            [(capstone_sint_to_fp_vl node:$src, node:$mask, node:$vl),
+                             (capstone_strict_sint_to_fp_vl node:$src, node:$mask, node:$vl)]>;
+def any_capstone_uint_to_fp_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
+                            [(capstone_uint_to_fp_vl node:$src, node:$mask, node:$vl),
+                             (capstone_strict_uint_to_fp_vl node:$src, node:$mask, node:$vl)]>;
 
 let HasMaskOp = true in {
-  def riscv_vfround_noexcept_vl: RVSDNode<"VFROUND_NOEXCEPT_VL", SDT_RISCVFPUnOp_VL>;
+  def capstone_vfround_noexcept_vl: RVSDNode<"VFROUND_NOEXCEPT_VL", SDT_CapstoneFPUnOp_VL>;
 
   let IsStrictFP = true in
-  def riscv_strict_vfround_noexcept_vl: RVSDNode<"STRICT_VFROUND_NOEXCEPT_VL", SDT_RISCVFPUnOp_VL, [SDNPHasChain]>;
+  def capstone_strict_vfround_noexcept_vl: RVSDNode<"STRICT_VFROUND_NOEXCEPT_VL", SDT_CapstoneFPUnOp_VL, [SDNPHasChain]>;
 }
 
-def any_riscv_vfround_noexcept_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
-                        [(riscv_vfround_noexcept_vl node:$src, node:$mask, node:$vl),
-                         (riscv_strict_vfround_noexcept_vl node:$src, node:$mask, node:$vl)]>;
+def any_capstone_vfround_noexcept_vl : PatFrags<(ops node:$src, node:$mask, node:$vl),
+                        [(capstone_vfround_noexcept_vl node:$src, node:$mask, node:$vl),
+                         (capstone_strict_vfround_noexcept_vl node:$src, node:$mask, node:$vl)]>;
 
 // Vector compare producing a mask. Fourth operand is input mask. Fifth
 // operand is VL.
 let HasPassthruOp = true, HasMaskOp = true in
-def riscv_setcc_vl : RVSDNode<"SETCC_VL", SDT_RISCVSETCCOP_VL>;
+def capstone_setcc_vl : RVSDNode<"SETCC_VL", SDT_CapstoneSETCCOP_VL>;
 
 let IsStrictFP = true, HasMaskOp = true in {
-  def riscv_strict_fsetcc_vl : RVSDNode<"STRICT_FSETCC_VL", SDT_RISCVSETCCOP_VL, [SDNPHasChain]>;
-  def riscv_strict_fsetccs_vl : RVSDNode<"STRICT_FSETCCS_VL", SDT_RISCVSETCCOP_VL, [SDNPHasChain]>;
+  def capstone_strict_fsetcc_vl : RVSDNode<"STRICT_FSETCC_VL", SDT_CapstoneSETCCOP_VL, [SDNPHasChain]>;
+  def capstone_strict_fsetccs_vl : RVSDNode<"STRICT_FSETCCS_VL", SDT_CapstoneSETCCOP_VL, [SDNPHasChain]>;
 } // let IsStrictFP = true, HasMaskOp = true
 
-def any_riscv_fsetcc_vl : PatFrags<(ops node:$lhs, node:$rhs, node:$cc, node:$passthru, node:$mask, node:$vl),
-                            [(riscv_setcc_vl node:$lhs, node:$rhs, node:$cc, node:$passthru, node:$mask, node:$vl),
-                             (riscv_strict_fsetcc_vl node:$lhs, node:$rhs, node:$cc, node:$passthru, node:$mask, node:$vl)]>;
-def any_riscv_fsetccs_vl : PatFrags<(ops node:$lhs, node:$rhs, node:$cc, node:$passthru, node:$mask, node:$vl),
-                            [(riscv_setcc_vl node:$lhs, node:$rhs, node:$cc, node:$passthru, node:$mask, node:$vl),
-                             (riscv_strict_fsetccs_vl node:$lhs, node:$rhs, node:$cc, node:$passthru, node:$mask, node:$vl)]>;
+def any_capstone_fsetcc_vl : PatFrags<(ops node:$lhs, node:$rhs, node:$cc, node:$passthru, node:$mask, node:$vl),
+                            [(capstone_setcc_vl node:$lhs, node:$rhs, node:$cc, node:$passthru, node:$mask, node:$vl),
+                             (capstone_strict_fsetcc_vl node:$lhs, node:$rhs, node:$cc, node:$passthru, node:$mask, node:$vl)]>;
+def any_capstone_fsetccs_vl : PatFrags<(ops node:$lhs, node:$rhs, node:$cc, node:$passthru, node:$mask, node:$vl),
+                            [(capstone_setcc_vl node:$lhs, node:$rhs, node:$cc, node:$passthru, node:$mask, node:$vl),
+                             (capstone_strict_fsetccs_vl node:$lhs, node:$rhs, node:$cc, node:$passthru, node:$mask, node:$vl)]>;
 
 let HasMaskOp = true in {
   // Matches the semantics of vrgather.vx and vrgather.vv with extra operands
   // for passthru and VL, except that out of bound indices result in a poison
   // result not zero.  Operands are (src, index, mask, passthru, vl).
-  def riscv_vrgather_vx_vl : RVSDNode<"VRGATHER_VX_VL",
+  def capstone_vrgather_vx_vl : RVSDNode<"VRGATHER_VX_VL",
                                       SDTypeProfile<1, 5, [SDTCisVec<0>,
                                                           SDTCisSameAs<0, 1>,
                                                           SDTCisVT<2, XLenVT>,
@@ -438,7 +438,7 @@ let HasMaskOp = true in {
                                                           SDTCVecEltisVT<4, i1>,
                                                           SDTCisSameNumEltsAs<0, 4>,
                                                           SDTCisVT<5, XLenVT>]>>;
-  def riscv_vrgather_vv_vl : RVSDNode<"VRGATHER_VV_VL",
+  def capstone_vrgather_vv_vl : RVSDNode<"VRGATHER_VV_VL",
                                       SDTypeProfile<1, 5, [SDTCisVec<0>,
                                                           SDTCisSameAs<0, 1>,
                                                           SDTCisInt<2>,
@@ -448,7 +448,7 @@ let HasMaskOp = true in {
                                                           SDTCVecEltisVT<4, i1>,
                                                           SDTCisSameNumEltsAs<0, 4>,
                                                           SDTCisVT<5, XLenVT>]>>;
-  def riscv_vrgatherei16_vv_vl : RVSDNode<"VRGATHEREI16_VV_VL",
+  def capstone_vrgatherei16_vv_vl : RVSDNode<"VRGATHEREI16_VV_VL",
                                           SDTypeProfile<1, 5, [SDTCisVec<0>,
                                                               SDTCisSameAs<0, 1>,
                                                               SDTCisInt<2>,
@@ -460,7 +460,7 @@ let HasMaskOp = true in {
                                                               SDTCisVT<5, XLenVT>]>>;
 } // let HasMaskOp = true
 
-def SDT_RISCVVMERGE_VL  : SDTypeProfile<1, 5, [
+def SDT_CapstoneVMERGE_VL  : SDTypeProfile<1, 5, [
   SDTCisVec<0>, SDTCisVec<1>, SDTCisSameNumEltsAs<0, 1>, SDTCVecEltisVT<1, i1>,
   SDTCisSameAs<0, 2>, SDTCisSameAs<2, 3>, SDTCisSameAs<0, 4>,
   SDTCisVT<5, XLenVT>
@@ -469,33 +469,33 @@ def SDT_RISCVVMERGE_VL  : SDTypeProfile<1, 5, [
 // General vmerge node with mask, true, false, passthru, and vl operands.
 // Tail agnostic vselect can be implemented by setting passthru to undef.
 let HasPassthruOp = true in
-def riscv_vmerge_vl : RVSDNode<"VMERGE_VL", SDT_RISCVVMERGE_VL>;
+def capstone_vmerge_vl : RVSDNode<"VMERGE_VL", SDT_CapstoneVMERGE_VL>;
 
-def SDT_RISCVVMSETCLR_VL : SDTypeProfile<1, 1, [SDTCVecEltisVT<0, i1>,
+def SDT_CapstoneVMSETCLR_VL : SDTypeProfile<1, 1, [SDTCVecEltisVT<0, i1>,
                                                 SDTCisVT<1, XLenVT>]>;
 
 // Set mask vector to all zeros or ones.
-def riscv_vmclr_vl : RVSDNode<"VMCLR_VL", SDT_RISCVVMSETCLR_VL>;
-def riscv_vmset_vl : RVSDNode<"VMSET_VL", SDT_RISCVVMSETCLR_VL>;
+def capstone_vmclr_vl : RVSDNode<"VMCLR_VL", SDT_CapstoneVMSETCLR_VL>;
+def capstone_vmset_vl : RVSDNode<"VMSET_VL", SDT_CapstoneVMSETCLR_VL>;
 
-def SDT_RISCVMaskBinOp_VL : SDTypeProfile<1, 3, [SDTCisSameAs<0, 1>,
+def SDT_CapstoneMaskBinOp_VL : SDTypeProfile<1, 3, [SDTCisSameAs<0, 1>,
                                                  SDTCisSameAs<0, 2>,
                                                  SDTCVecEltisVT<0, i1>,
                                                  SDTCisVT<3, XLenVT>]>;
 
 // Mask binary operators.
-def riscv_vmand_vl : RVSDNode<"VMAND_VL", SDT_RISCVMaskBinOp_VL, [SDNPCommutative]>;
-def riscv_vmor_vl  : RVSDNode<"VMOR_VL",  SDT_RISCVMaskBinOp_VL, [SDNPCommutative]>;
-def riscv_vmxor_vl : RVSDNode<"VMXOR_VL", SDT_RISCVMaskBinOp_VL, [SDNPCommutative]>;
+def capstone_vmand_vl : RVSDNode<"VMAND_VL", SDT_CapstoneMaskBinOp_VL, [SDNPCommutative]>;
+def capstone_vmor_vl  : RVSDNode<"VMOR_VL",  SDT_CapstoneMaskBinOp_VL, [SDNPCommutative]>;
+def capstone_vmxor_vl : RVSDNode<"VMXOR_VL", SDT_CapstoneMaskBinOp_VL, [SDNPCommutative]>;
 
-def true_mask : PatLeaf<(riscv_vmset_vl (XLenVT srcvalue))>;
+def true_mask : PatLeaf<(capstone_vmset_vl (XLenVT srcvalue))>;
 
-def riscv_vmnot_vl : PatFrag<(ops node:$rs, node:$vl),
-                             (riscv_vmxor_vl node:$rs, true_mask, node:$vl)>;
+def capstone_vmnot_vl : PatFrag<(ops node:$rs, node:$vl),
+                             (capstone_vmxor_vl node:$rs, true_mask, node:$vl)>;
 
 let HasMaskOp = true in {
   //  vcpop.m with additional mask and VL operands.
-  def riscv_vcpop_vl : RVSDNode<"VCPOP_VL",
+  def capstone_vcpop_vl : RVSDNode<"VCPOP_VL",
                                 SDTypeProfile<1, 3, [SDTCisVT<0, XLenVT>,
                                                     SDTCisVec<1>, SDTCisInt<1>,
                                                     SDTCVecEltisVT<2, i1>,
@@ -503,7 +503,7 @@ let HasMaskOp = true in {
                                                     SDTCisVT<3, XLenVT>]>>;
 
   //  vfirst.m with additional mask and VL operands.
-  def riscv_vfirst_vl : RVSDNode<"VFIRST_VL",
+  def capstone_vfirst_vl : RVSDNode<"VFIRST_VL",
                                  SDTypeProfile<1, 3, [SDTCisVT<0, XLenVT>,
                                                      SDTCisVec<1>, SDTCisInt<1>,
                                                      SDTCVecEltisVT<2, i1>,
@@ -511,7 +511,7 @@ let HasMaskOp = true in {
                                                      SDTCisVT<3, XLenVT>]>>;
 } // let HasMaskOp = true
 
-def SDT_RISCVVEXTEND_VL : SDTypeProfile<1, 3, [SDTCisVec<0>,
+def SDT_CapstoneVEXTEND_VL : SDTypeProfile<1, 3, [SDTCisVec<0>,
                                                SDTCisSameNumEltsAs<0, 1>,
                                                SDTCisSameNumEltsAs<1, 2>,
                                                SDTCVecEltisVT<2, i1>,
@@ -519,15 +519,15 @@ def SDT_RISCVVEXTEND_VL : SDTypeProfile<1, 3, [SDTCisVec<0>,
 
 let HasMaskOp = true in {
   // Vector sign/zero extend with additional mask & VL operands.
-  def riscv_sext_vl : RVSDNode<"VSEXT_VL", SDT_RISCVVEXTEND_VL>;
-  def riscv_zext_vl : RVSDNode<"VZEXT_VL", SDT_RISCVVEXTEND_VL>;
+  def capstone_sext_vl : RVSDNode<"VSEXT_VL", SDT_CapstoneVEXTEND_VL>;
+  def capstone_zext_vl : RVSDNode<"VZEXT_VL", SDT_CapstoneVEXTEND_VL>;
 } // let HasMaskOp = true
 
-def riscv_ext_vl : PatFrags<(ops node:$A, node:$B, node:$C),
-                            [(riscv_sext_vl node:$A, node:$B, node:$C),
-                             (riscv_zext_vl node:$A, node:$B, node:$C)]>;
+def capstone_ext_vl : PatFrags<(ops node:$A, node:$B, node:$C),
+                            [(capstone_sext_vl node:$A, node:$B, node:$C),
+                             (capstone_zext_vl node:$A, node:$B, node:$C)]>;
 
-def SDT_RISCVVTRUNCATE_VL : SDTypeProfile<1, 3, [SDTCisVec<0>,
+def SDT_CapstoneVTRUNCATE_VL : SDTypeProfile<1, 3, [SDTCisVec<0>,
                                                  SDTCisSameNumEltsAs<0, 1>,
                                                  SDTCisSameNumEltsAs<0, 2>,
                                                  SDTCVecEltisVT<2, i1>,
@@ -536,20 +536,20 @@ def SDT_RISCVVTRUNCATE_VL : SDTypeProfile<1, 3, [SDTCisVec<0>,
 let HasMaskOp = true in {
   // Truncates a RVV integer vector by one power-of-two. Carries both an extra
   // mask and VL operand.
-  def riscv_trunc_vector_vl : RVSDNode<"TRUNCATE_VECTOR_VL",
-                                      SDT_RISCVVTRUNCATE_VL>;
+  def capstone_trunc_vector_vl : RVSDNode<"TRUNCATE_VECTOR_VL",
+                                      SDT_CapstoneVTRUNCATE_VL>;
 
   // Truncates a RVV integer vector by one power-of-two. If the value doesn't
   // fit in the destination type, the result is saturated. These correspond to
   // vnclip and vnclipu with a shift of 0. Carries both an extra mask and VL
   // operand.
-  def riscv_trunc_vector_vl_ssat : RVSDNode<"TRUNCATE_VECTOR_VL_SSAT",
-                                            SDT_RISCVVTRUNCATE_VL>;
-  def riscv_trunc_vector_vl_usat : RVSDNode<"TRUNCATE_VECTOR_VL_USAT",
-                                            SDT_RISCVVTRUNCATE_VL>;
+  def capstone_trunc_vector_vl_ssat : RVSDNode<"TRUNCATE_VECTOR_VL_SSAT",
+                                            SDT_CapstoneVTRUNCATE_VL>;
+  def capstone_trunc_vector_vl_usat : RVSDNode<"TRUNCATE_VECTOR_VL_USAT",
+                                            SDT_CapstoneVTRUNCATE_VL>;
 } // let HasMaskOp = true
 
-def SDT_RISCVVWIntBinOp_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisInt<0>,
+def SDT_CapstoneVWIntBinOp_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisInt<0>,
                                                   SDTCisInt<1>,
                                                   SDTCisSameNumEltsAs<0, 1>,
                                                   SDTCisOpSmallerThanOp<1, 0>,
@@ -562,17 +562,17 @@ def SDT_RISCVVWIntBinOp_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisInt<0>,
 let HasPassthruOp = true, HasMaskOp = true in {
   // Widening instructions with a passthru value a third operand, a mask as a
   // fourth operand, and VL as a fifth operand.
-  def riscv_vwmul_vl   : RVSDNode<"VWMUL_VL",   SDT_RISCVVWIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_vwmulu_vl  : RVSDNode<"VWMULU_VL",  SDT_RISCVVWIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_vwmulsu_vl : RVSDNode<"VWMULSU_VL", SDT_RISCVVWIntBinOp_VL>;
-  def riscv_vwadd_vl   : RVSDNode<"VWADD_VL",   SDT_RISCVVWIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_vwaddu_vl  : RVSDNode<"VWADDU_VL",  SDT_RISCVVWIntBinOp_VL, [SDNPCommutative]>;
-  def riscv_vwsub_vl   : RVSDNode<"VWSUB_VL",   SDT_RISCVVWIntBinOp_VL, []>;
-  def riscv_vwsubu_vl  : RVSDNode<"VWSUBU_VL",  SDT_RISCVVWIntBinOp_VL, []>;
-  def riscv_vwsll_vl   : RVSDNode<"VWSLL_VL",   SDT_RISCVVWIntBinOp_VL, []>;
+  def capstone_vwmul_vl   : RVSDNode<"VWMUL_VL",   SDT_CapstoneVWIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_vwmulu_vl  : RVSDNode<"VWMULU_VL",  SDT_CapstoneVWIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_vwmulsu_vl : RVSDNode<"VWMULSU_VL", SDT_CapstoneVWIntBinOp_VL>;
+  def capstone_vwadd_vl   : RVSDNode<"VWADD_VL",   SDT_CapstoneVWIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_vwaddu_vl  : RVSDNode<"VWADDU_VL",  SDT_CapstoneVWIntBinOp_VL, [SDNPCommutative]>;
+  def capstone_vwsub_vl   : RVSDNode<"VWSUB_VL",   SDT_CapstoneVWIntBinOp_VL, []>;
+  def capstone_vwsubu_vl  : RVSDNode<"VWSUBU_VL",  SDT_CapstoneVWIntBinOp_VL, []>;
+  def capstone_vwsll_vl   : RVSDNode<"VWSLL_VL",   SDT_CapstoneVWIntBinOp_VL, []>;
 } // let HasPassthruOp = true, HasMaskOp = true
 
-def SDT_RISCVVWIntTernOp_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisInt<0>,
+def SDT_CapstoneVWIntTernOp_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisInt<0>,
                                                    SDTCisInt<1>,
                                                    SDTCisSameNumEltsAs<0, 1>,
                                                    SDTCisOpSmallerThanOp<1, 0>,
@@ -585,12 +585,12 @@ def SDT_RISCVVWIntTernOp_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisInt<0>,
 let HasMaskOp = true in {
   // Widening ternary operations with a mask as the fourth operand and VL as the
   // fifth operand.
-  def riscv_vwmacc_vl : RVSDNode<"VWMACC_VL", SDT_RISCVVWIntTernOp_VL, [SDNPCommutative]>;
-  def riscv_vwmaccu_vl : RVSDNode<"VWMACCU_VL", SDT_RISCVVWIntTernOp_VL, [SDNPCommutative]>;
-  def riscv_vwmaccsu_vl : RVSDNode<"VWMACCSU_VL", SDT_RISCVVWIntTernOp_VL, []>;
+  def capstone_vwmacc_vl : RVSDNode<"VWMACC_VL", SDT_CapstoneVWIntTernOp_VL, [SDNPCommutative]>;
+  def capstone_vwmaccu_vl : RVSDNode<"VWMACCU_VL", SDT_CapstoneVWIntTernOp_VL, [SDNPCommutative]>;
+  def capstone_vwmaccsu_vl : RVSDNode<"VWMACCSU_VL", SDT_CapstoneVWIntTernOp_VL, []>;
 } // let HasMaskOp = true
 
-def SDT_RISCVVWFPBinOp_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisFP<0>,
+def SDT_CapstoneVWFPBinOp_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisFP<0>,
                                                  SDTCisFP<1>,
                                                  SDTCisSameNumEltsAs<0, 1>,
                                                  SDTCisOpSmallerThanOp<1, 0>,
@@ -601,12 +601,12 @@ def SDT_RISCVVWFPBinOp_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisFP<0>,
                                                  SDTCisVT<5, XLenVT>]>;
 
 let HasPassthruOp = true, HasMaskOp = true in {
-  def riscv_vfwmul_vl : RVSDNode<"VFWMUL_VL", SDT_RISCVVWFPBinOp_VL, [SDNPCommutative]>;
-  def riscv_vfwadd_vl : RVSDNode<"VFWADD_VL", SDT_RISCVVWFPBinOp_VL, [SDNPCommutative]>;
-  def riscv_vfwsub_vl : RVSDNode<"VFWSUB_VL", SDT_RISCVVWFPBinOp_VL, []>;
+  def capstone_vfwmul_vl : RVSDNode<"VFWMUL_VL", SDT_CapstoneVWFPBinOp_VL, [SDNPCommutative]>;
+  def capstone_vfwadd_vl : RVSDNode<"VFWADD_VL", SDT_CapstoneVWFPBinOp_VL, [SDNPCommutative]>;
+  def capstone_vfwsub_vl : RVSDNode<"VFWSUB_VL", SDT_CapstoneVWFPBinOp_VL, []>;
 } // let HasPassthruOp = true, HasMaskOp = true
 
-def SDT_RISCVVWIntBinOpW_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisInt<0>,
+def SDT_CapstoneVWIntBinOpW_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisInt<0>,
                                                    SDTCisSameAs<0, 1>,
                                                    SDTCisInt<2>,
                                                    SDTCisSameNumEltsAs<1, 2>,
@@ -617,13 +617,13 @@ def SDT_RISCVVWIntBinOpW_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisInt<0>,
                                                    SDTCisVT<5, XLenVT>]>;
 
 let HasPassthruOp = true, HasMaskOp = true in {
-  def riscv_vwadd_w_vl :  RVSDNode<"VWADD_W_VL",  SDT_RISCVVWIntBinOpW_VL>;
-  def riscv_vwaddu_w_vl : RVSDNode<"VWADDU_W_VL", SDT_RISCVVWIntBinOpW_VL>;
-  def riscv_vwsub_w_vl :  RVSDNode<"VWSUB_W_VL",  SDT_RISCVVWIntBinOpW_VL>;
-  def riscv_vwsubu_w_vl : RVSDNode<"VWSUBU_W_VL", SDT_RISCVVWIntBinOpW_VL>;
+  def capstone_vwadd_w_vl :  RVSDNode<"VWADD_W_VL",  SDT_CapstoneVWIntBinOpW_VL>;
+  def capstone_vwaddu_w_vl : RVSDNode<"VWADDU_W_VL", SDT_CapstoneVWIntBinOpW_VL>;
+  def capstone_vwsub_w_vl :  RVSDNode<"VWSUB_W_VL",  SDT_CapstoneVWIntBinOpW_VL>;
+  def capstone_vwsubu_w_vl : RVSDNode<"VWSUBU_W_VL", SDT_CapstoneVWIntBinOpW_VL>;
 } // let HasPassthruOp = true, HasMaskOp = true
 
-def SDT_RISCVVWFPBinOpW_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisFP<0>,
+def SDT_CapstoneVWFPBinOpW_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisFP<0>,
                                                   SDTCisSameAs<0, 1>,
                                                   SDTCisFP<2>,
                                                   SDTCisSameNumEltsAs<1, 2>,
@@ -634,8 +634,8 @@ def SDT_RISCVVWFPBinOpW_VL : SDTypeProfile<1, 5, [SDTCisVec<0>, SDTCisFP<0>,
                                                   SDTCisVT<5, XLenVT>]>;
 
 let HasPassthruOp = true, HasMaskOp = true in {
-  def riscv_vfwadd_w_vl :  RVSDNode<"VFWADD_W_VL", SDT_RISCVVWFPBinOpW_VL>;
-  def riscv_vfwsub_w_vl :  RVSDNode<"VFWSUB_W_VL", SDT_RISCVVWFPBinOpW_VL>;
+  def capstone_vfwadd_w_vl :  RVSDNode<"VFWADD_W_VL", SDT_CapstoneVWFPBinOpW_VL>;
+  def capstone_vfwsub_w_vl :  RVSDNode<"VFWSUB_W_VL", SDT_CapstoneVWFPBinOpW_VL>;
 } // let HasPassthruOp = true, HasMaskOp = true
 
 def SDTRVVVecReduce : SDTypeProfile<1, 6, [
@@ -645,64 +645,64 @@ def SDTRVVVecReduce : SDTypeProfile<1, 6, [
 ]>;
 
 let HasOneUse = 1 in {
-  def riscv_add_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
+  def capstone_add_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
                                          node:$E),
-                                    (riscv_add_vl node:$A, node:$B, node:$C,
+                                    (capstone_add_vl node:$A, node:$B, node:$C,
                                                   node:$D, node:$E)>;
-  def riscv_or_vl_is_add_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
+  def capstone_or_vl_is_add_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
                                                node:$E),
-                                          (riscv_or_vl node:$A, node:$B, node:$C,
+                                          (capstone_or_vl node:$A, node:$B, node:$C,
                                                        node:$D, node:$E), [{
     return orDisjoint(N);
   }]>;
-  def riscv_sub_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
+  def capstone_sub_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
                                          node:$E),
-                                    (riscv_sub_vl node:$A, node:$B, node:$C,
+                                    (capstone_sub_vl node:$A, node:$B, node:$C,
                                                   node:$D, node:$E)>;
-  def riscv_mul_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
+  def capstone_mul_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
                                          node:$E),
-                                    (riscv_mul_vl node:$A, node:$B, node:$C,
+                                    (capstone_mul_vl node:$A, node:$B, node:$C,
                                                   node:$D, node:$E)>;
-  def riscv_vwmul_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
+  def capstone_vwmul_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
                                            node:$E),
-                                      (riscv_vwmul_vl node:$A, node:$B, node:$C,
+                                      (capstone_vwmul_vl node:$A, node:$B, node:$C,
                                                       node:$D, node:$E)>;
-  def riscv_vwmulu_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
+  def capstone_vwmulu_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
                                             node:$E),
-                                       (riscv_vwmulu_vl node:$A, node:$B, node:$C,
+                                       (capstone_vwmulu_vl node:$A, node:$B, node:$C,
                                                         node:$D, node:$E)>;
-  def riscv_vwmulsu_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
+  def capstone_vwmulsu_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
                                              node:$E),
-                                        (riscv_vwmulsu_vl node:$A, node:$B, node:$C,
+                                        (capstone_vwmulsu_vl node:$A, node:$B, node:$C,
                                                           node:$D, node:$E)>;
-  def riscv_sext_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C),
-                             (riscv_sext_vl node:$A, node:$B, node:$C)>;
-  def riscv_zext_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C),
-                             (riscv_zext_vl node:$A, node:$B, node:$C)>;
-  def riscv_ext_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C),
-                            (riscv_ext_vl node:$A, node:$B, node:$C)>;
-  def riscv_fpextend_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C),
-                             (riscv_fpextend_vl node:$A, node:$B, node:$C)>;
-  def riscv_vfmadd_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
+  def capstone_sext_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C),
+                             (capstone_sext_vl node:$A, node:$B, node:$C)>;
+  def capstone_zext_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C),
+                             (capstone_zext_vl node:$A, node:$B, node:$C)>;
+  def capstone_ext_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C),
+                            (capstone_ext_vl node:$A, node:$B, node:$C)>;
+  def capstone_fpextend_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C),
+                             (capstone_fpextend_vl node:$A, node:$B, node:$C)>;
+  def capstone_vfmadd_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
                                             node:$E),
-                                       (riscv_vfmadd_vl node:$A, node:$B,
+                                       (capstone_vfmadd_vl node:$A, node:$B,
                                             node:$C, node:$D, node:$E)>;
-  def riscv_vfnmadd_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
+  def capstone_vfnmadd_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
                                              node:$E),
-                                        (riscv_vfnmadd_vl node:$A, node:$B,
+                                        (capstone_vfnmadd_vl node:$A, node:$B,
                                              node:$C, node:$D, node:$E)>;
-  def riscv_vfmsub_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
+  def capstone_vfmsub_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
                                             node:$E),
-                                       (riscv_vfmsub_vl node:$A, node:$B,
+                                       (capstone_vfmsub_vl node:$A, node:$B,
                                             node:$C, node:$D, node:$E)>;
-  def riscv_vfnmsub_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
+  def capstone_vfnmsub_vl_oneuse : PatFrag<(ops node:$A, node:$B, node:$C, node:$D,
                                              node:$E),
-                                        (riscv_vfnmsub_vl node:$A, node:$B,
+                                        (capstone_vfnmsub_vl node:$A, node:$B,
                                              node:$C, node:$D, node:$E)>;
 } // HasOneUse = 1
 
-def riscv_fpextend_vl_sameuser : PatFrag<(ops node:$A, node:$B, node:$C),
-                                 (riscv_fpextend_vl node:$A, node:$B, node:$C), [{
+def capstone_fpextend_vl_sameuser : PatFrag<(ops node:$A, node:$B, node:$C),
+                                 (capstone_fpextend_vl node:$A, node:$B, node:$C), [{
   return !N->use_empty() && all_equal(N->users());
 }]>;
 
@@ -743,8 +743,8 @@ def Low8BitsSplatPat
 
 // Ignore the vl operand on vmv_v_f, and vmv_s_f.
 def SplatFPOp : PatFrags<(ops node:$op),
-                         [(riscv_vfmv_v_f_vl undef, node:$op, srcvalue),
-                          (riscv_vfmv_s_f_vl undef, node:$op, srcvalue)]>;
+                         [(capstone_vfmv_v_f_vl undef, node:$op, srcvalue),
+                          (capstone_vfmv_s_f_vl undef, node:$op, srcvalue)]>;
 
 def sew8simm5  : ComplexPattern<XLenVT, 1, "selectRVVSimm5<8>",  []>;
 def sew16simm5 : ComplexPattern<XLenVT, 1, "selectRVVSimm5<16>", []>;
@@ -807,7 +807,7 @@ class VPatBinaryVL_V_RM<SDPatternOperator vop,
                    op2_reg_class:$rs2,
                    (mask_type VMV0:$vm),
                    // Value to indicate no rounding mode change in
-                   // RISCVInsertReadWriteCSR
+                   // CapstoneInsertReadWriteCSR
                    FRM_DYN,
                    GPR:$vl, log2sew, TAIL_AGNOSTIC)>;
 
@@ -876,7 +876,7 @@ multiclass VPatTiedBinaryNoMaskVL_V_RM<SDNode vop,
                      result_reg_class:$rs1,
                      op2_reg_class:$rs2,
                      // Value to indicate no rounding mode change in
-                     // RISCVInsertReadWriteCSR
+                     // CapstoneInsertReadWriteCSR
                      FRM_DYN,
                      GPR:$vl, log2sew, TAIL_AGNOSTIC)>;
 }
@@ -1037,7 +1037,7 @@ class VPatBinaryVL_VF_RM<SDPatternOperator vop,
                    scalar_reg_class:$rs2,
                    (mask_type VMV0:$vm),
                    // Value to indicate no rounding mode change in
-                   // RISCVInsertReadWriteCSR
+                   // CapstoneInsertReadWriteCSR
                    FRM_DYN,
                    GPR:$vl, log2sew, TAIL_AGNOSTIC)>;
 
@@ -1109,7 +1109,7 @@ multiclass VPatBinaryFPVL_R_VF_RM<SDPatternOperator vop, string instruction_name
                            fvti.RegClass:$rs1, fvti.ScalarRegClass:$rs2,
                            (fvti.Mask VMV0:$vm),
                            // Value to indicate no rounding mode change in
-                           // RISCVInsertReadWriteCSR
+                           // CapstoneInsertReadWriteCSR
                            FRM_DYN,
                            GPR:$vl, fvti.Log2SEW, TAIL_AGNOSTIC)>;
   }
@@ -1117,7 +1117,7 @@ multiclass VPatBinaryFPVL_R_VF_RM<SDPatternOperator vop, string instruction_name
 
 multiclass VPatIntegerSetCCVL_VV<VTypeInfo vti, string instruction_name,
                                  CondCode cc> {
-  def : Pat<(vti.Mask (riscv_setcc_vl (vti.Vector vti.RegClass:$rs1),
+  def : Pat<(vti.Mask (capstone_setcc_vl (vti.Vector vti.RegClass:$rs1),
                                       vti.RegClass:$rs2, cc,
                                       VR:$passthru,
                                       (vti.Mask VMV0:$vm),
@@ -1133,7 +1133,7 @@ multiclass VPatIntegerSetCCVL_VV<VTypeInfo vti, string instruction_name,
 multiclass VPatIntegerSetCCVL_VV_Swappable<VTypeInfo vti, string instruction_name,
                                            CondCode cc, CondCode invcc>
     : VPatIntegerSetCCVL_VV<vti, instruction_name, cc> {
-  def : Pat<(vti.Mask (riscv_setcc_vl (vti.Vector vti.RegClass:$rs2),
+  def : Pat<(vti.Mask (capstone_setcc_vl (vti.Vector vti.RegClass:$rs2),
                                       vti.RegClass:$rs1, invcc,
                                       VR:$passthru,
                                       (vti.Mask VMV0:$vm),
@@ -1147,7 +1147,7 @@ multiclass VPatIntegerSetCCVL_VV_Swappable<VTypeInfo vti, string instruction_nam
 multiclass VPatIntegerSetCCVL_VX_Swappable<VTypeInfo vti, string instruction_name,
                                            CondCode cc, CondCode invcc> {
   defvar instruction_masked = !cast<Instruction>(instruction_name#"_VX_"#vti.LMul.MX#"_MASK");
-  def : Pat<(vti.Mask (riscv_setcc_vl (vti.Vector vti.RegClass:$rs1),
+  def : Pat<(vti.Mask (capstone_setcc_vl (vti.Vector vti.RegClass:$rs1),
                                       (SplatPat (XLenVT GPR:$rs2)), cc,
                                       VR:$passthru,
                                       (vti.Mask VMV0:$vm),
@@ -1155,7 +1155,7 @@ multiclass VPatIntegerSetCCVL_VX_Swappable<VTypeInfo vti, string instruction_nam
             (instruction_masked VR:$passthru, vti.RegClass:$rs1,
                                 GPR:$rs2, (vti.Mask VMV0:$vm), GPR:$vl,
                                 vti.Log2SEW, TA_MU)>;
-  def : Pat<(vti.Mask (riscv_setcc_vl (SplatPat (XLenVT GPR:$rs2)),
+  def : Pat<(vti.Mask (capstone_setcc_vl (SplatPat (XLenVT GPR:$rs2)),
                                       (vti.Vector vti.RegClass:$rs1), invcc,
                                       VR:$passthru,
                                       (vti.Mask VMV0:$vm),
@@ -1169,7 +1169,7 @@ multiclass VPatIntegerSetCCVL_VI_Swappable<VTypeInfo vti, string instruction_nam
                                            CondCode cc, CondCode invcc,
                                            ComplexPattern splatpat_kind = SplatPat_simm5> {
   defvar instruction_masked = !cast<Instruction>(instruction_name#"_VI_"#vti.LMul.MX#"_MASK");
-  def : Pat<(vti.Mask (riscv_setcc_vl (vti.Vector vti.RegClass:$rs1),
+  def : Pat<(vti.Mask (capstone_setcc_vl (vti.Vector vti.RegClass:$rs1),
                                       (splatpat_kind simm5:$rs2), cc,
                                       VR:$passthru,
                                       (vti.Mask VMV0:$vm),
@@ -1179,7 +1179,7 @@ multiclass VPatIntegerSetCCVL_VI_Swappable<VTypeInfo vti, string instruction_nam
                                 vti.Log2SEW, TA_MU)>;
 
   // FIXME: Can do some canonicalization to remove these patterns.
-  def : Pat<(vti.Mask (riscv_setcc_vl (splatpat_kind simm5:$rs2),
+  def : Pat<(vti.Mask (capstone_setcc_vl (splatpat_kind simm5:$rs2),
                                       (vti.Vector vti.RegClass:$rs1), invcc,
                                       VR:$passthru,
                                       (vti.Mask VMV0:$vm),
@@ -1288,7 +1288,7 @@ multiclass VPatConvertI2FPVL_V_RM<SDPatternOperator vop, string instruction_name
                   (fvti.Vector (IMPLICIT_DEF)), ivti.RegClass:$rs1,
                   (ivti.Mask VMV0:$vm),
                   // Value to indicate no rounding mode change in
-                  // RISCVInsertReadWriteCSR
+                  // CapstoneInsertReadWriteCSR
                   FRM_DYN,
                   GPR:$vl, fvti.Log2SEW, TA_MA)>;
   }
@@ -1407,7 +1407,7 @@ multiclass VPatNConvertI2FPVL_W_RM<SDPatternOperator vop,
                   (fvti.Vector (IMPLICIT_DEF)), iwti.RegClass:$rs1,
                   (iwti.Mask VMV0:$vm),
                   // Value to indicate no rounding mode change in
-                  // RISCVInsertReadWriteCSR
+                  // CapstoneInsertReadWriteCSR
                   FRM_DYN,
                   GPR:$vl, fvti.Log2SEW, TA_MA)>;
   }
@@ -1459,7 +1459,7 @@ multiclass VPatReductionVL_RM<SDNode vop, string instruction_name, bit is_float>
               (vti_m1.Vector VR:$rs2),
               (vti.Mask VMV0:$vm),
               // Value to indicate no rounding mode change in
-              // RISCVInsertReadWriteCSR
+              // CapstoneInsertReadWriteCSR
               FRM_DYN,
               GPR:$vl, vti.Log2SEW, (XLenVT timm:$policy))>;
     }
@@ -1474,7 +1474,7 @@ multiclass VPatBinaryVL_WV_WX_WI<SDNode op, string instruction_name> {
                                  GetVTypePredicates<wti>.Predicates) in {
       def : Pat<
         (vti.Vector
-          (riscv_trunc_vector_vl
+          (capstone_trunc_vector_vl
             (op (wti.Vector wti.RegClass:$rs2),
                 (wti.Vector (ext_oneuse (vti.Vector vti.RegClass:$rs1)))),
             (vti.Mask true_mask),
@@ -1485,7 +1485,7 @@ multiclass VPatBinaryVL_WV_WX_WI<SDNode op, string instruction_name> {
 
       def : Pat<
         (vti.Vector
-          (riscv_trunc_vector_vl
+          (capstone_trunc_vector_vl
             (op (wti.Vector wti.RegClass:$rs2),
                 (wti.Vector (Low8BitsSplatPat (XLenVT GPR:$rs1)))),
             (vti.Mask true_mask),
@@ -1496,7 +1496,7 @@ multiclass VPatBinaryVL_WV_WX_WI<SDNode op, string instruction_name> {
 
       def : Pat<
         (vti.Vector
-          (riscv_trunc_vector_vl
+          (capstone_trunc_vector_vl
             (op (wti.Vector wti.RegClass:$rs2),
                 (wti.Vector (SplatPat_uimm5 uimm5:$rs1))), (vti.Mask true_mask),
             VLOpFrag)),
@@ -1560,7 +1560,7 @@ multiclass VPatWidenReductionVL_Ext_VL_RM<SDNode vop, PatFrags extop, string ins
                   (wti_m1.Vector VR:$passthru), (vti.Vector vti.RegClass:$rs1),
                   (wti_m1.Vector VR:$rs2), (vti.Mask VMV0:$vm),
                   // Value to indicate no rounding mode change in
-                  // RISCVInsertReadWriteCSR
+                  // CapstoneInsertReadWriteCSR
                   FRM_DYN,
                   GPR:$vl, vti.Log2SEW,
                   (XLenVT timm:$policy))>;
@@ -1659,7 +1659,7 @@ multiclass VPatNarrowShiftSplatExt_WX<SDNode op, PatFrags extop, string instruct
                                  GetVTypePredicates<wti>.Predicates) in
     def : Pat<
       (vti.Vector
-        (riscv_trunc_vector_vl
+        (capstone_trunc_vector_vl
           (op (wti.Vector wti.RegClass:$rs2),
               (wti.Vector (extop (vti.Vector (SplatPat (XLenVT GPR:$rs1))),
                                  (vti.Mask true_mask), VLOpFrag)),
@@ -1679,7 +1679,7 @@ multiclass VPatNarrowShiftExtVL_WV<SDNode op, PatFrags extop, string instruction
                                  GetVTypePredicates<wti>.Predicates) in
     def : Pat<
       (vti.Vector
-        (riscv_trunc_vector_vl
+        (capstone_trunc_vector_vl
           (op (wti.Vector wti.RegClass:$rs2),
               (wti.Vector (extop (vti.Vector vti.RegClass:$rs1),
                                  (vti.Mask true_mask), VLOpFrag)),
@@ -1692,8 +1692,8 @@ multiclass VPatNarrowShiftExtVL_WV<SDNode op, PatFrags extop, string instruction
 }
 
 multiclass VPatNarrowShiftVL_WV<SDNode op, string instruction_name> {
-  defm : VPatNarrowShiftExtVL_WV<op, riscv_sext_vl_oneuse, instruction_name>;
-  defm : VPatNarrowShiftExtVL_WV<op, riscv_zext_vl_oneuse, instruction_name>;
+  defm : VPatNarrowShiftExtVL_WV<op, capstone_sext_vl_oneuse, instruction_name>;
+  defm : VPatNarrowShiftExtVL_WV<op, capstone_zext_vl_oneuse, instruction_name>;
 }
 
 multiclass VPatMultiplyAddVL_VV_VX<SDNode op, string instruction_name> {
@@ -1704,7 +1704,7 @@ multiclass VPatMultiplyAddVL_VV_VX<SDNode op, string instruction_name> {
       // works best with how TwoAddressInstructionPass tries commuting.
       def : Pat<(vti.Vector
                (op vti.RegClass:$rs2,
-                   (riscv_mul_vl_oneuse vti.RegClass:$rs1,
+                   (capstone_mul_vl_oneuse vti.RegClass:$rs1,
                                         vti.RegClass:$rd,
                                         srcvalue, (vti.Mask true_mask), VLOpFrag),
                              srcvalue, (vti.Mask true_mask), VLOpFrag)),
@@ -1715,7 +1715,7 @@ multiclass VPatMultiplyAddVL_VV_VX<SDNode op, string instruction_name> {
       // commutable.
       def : Pat<(vti.Vector
                (op vti.RegClass:$rs2,
-                   (riscv_mul_vl_oneuse (SplatPat XLenVT:$rs1),
+                   (capstone_mul_vl_oneuse (SplatPat XLenVT:$rs1),
                                          vti.RegClass:$rd,
                                          srcvalue, (vti.Mask true_mask), VLOpFrag),
                              srcvalue, (vti.Mask true_mask), VLOpFrag)),
@@ -1757,13 +1757,13 @@ multiclass VPatNarrowShiftSplat_WX_WI<SDNode op, string instruction_name> {
     defvar wti = vtiTowti.Wti;
     let Predicates = !listconcat(GetVTypePredicates<vti>.Predicates,
                                  GetVTypePredicates<wti>.Predicates) in {
-      def : Pat<(vti.Vector (riscv_trunc_vector_vl
+      def : Pat<(vti.Vector (capstone_trunc_vector_vl
                 (wti.Vector (op wti.RegClass:$rs1, (SplatPat XLenVT:$rs2),
                                 srcvalue, true_mask, VLOpFrag)), true_mask, VLOpFrag)),
                 (!cast<Instruction>(instruction_name#"_WX_"#vti.LMul.MX)
                     (vti.Vector (IMPLICIT_DEF)),
                      wti.RegClass:$rs1, GPR:$rs2, GPR:$vl, vti.Log2SEW, TA_MA)>;
-      def : Pat<(vti.Vector (riscv_trunc_vector_vl
+      def : Pat<(vti.Vector (capstone_trunc_vector_vl
                 (wti.Vector (op wti.RegClass:$rs1, (SplatPat_uimm5 uimm5:$rs2),
                                 srcvalue, true_mask, VLOpFrag)), true_mask, VLOpFrag)),
                 (!cast<Instruction>(instruction_name#"_WI_"#vti.LMul.MX)
@@ -1806,7 +1806,7 @@ multiclass VPatFPMulAddVL_VV_VF_RM<SDPatternOperator vop, string instruction_nam
                    vti.RegClass:$rd, vti.RegClass:$rs1, vti.RegClass:$rs2,
                    (vti.Mask VMV0:$vm),
                    // Value to indicate no rounding mode change in
-                   // RISCVInsertReadWriteCSR
+                   // CapstoneInsertReadWriteCSR
                    FRM_DYN,
                    GPR:$vl, vti.Log2SEW, TA_MA)>;
 
@@ -1818,7 +1818,7 @@ multiclass VPatFPMulAddVL_VV_VF_RM<SDPatternOperator vop, string instruction_nam
                    vti.RegClass:$rd, vti.ScalarRegClass:$rs1, vti.RegClass:$rs2,
                    (vti.Mask VMV0:$vm),
                    // Value to indicate no rounding mode change in
-                   // RISCVInsertReadWriteCSR
+                   // CapstoneInsertReadWriteCSR
                    FRM_DYN,
                    GPR:$vl, vti.Log2SEW, TA_MA)>;
     }
@@ -1845,7 +1845,7 @@ multiclass VPatWidenFPMulAccVL_VV_VF_RM<SDNode vop, string instruction_name,
                    wti.RegClass:$rd, vti.RegClass:$rs1, vti.RegClass:$rs2,
                    (vti.Mask VMV0:$vm),
                    // Value to indicate no rounding mode change in
-                   // RISCVInsertReadWriteCSR
+                   // CapstoneInsertReadWriteCSR
                    FRM_DYN,
                    GPR:$vl, vti.Log2SEW, TA_MA)>;
       def : Pat<(vop (vti.Vector (SplatFPOp vti.ScalarRegClass:$rs1)),
@@ -1856,7 +1856,7 @@ multiclass VPatWidenFPMulAccVL_VV_VF_RM<SDNode vop, string instruction_name,
                    wti.RegClass:$rd, vti.ScalarRegClass:$rs1, vti.RegClass:$rs2,
                    (vti.Mask VMV0:$vm),
                    // Value to indicate no rounding mode change in
-                   // RISCVInsertReadWriteCSR
+                   // CapstoneInsertReadWriteCSR
                    FRM_DYN,
                    GPR:$vl, vti.Log2SEW, TA_MA)>;
     }
@@ -1940,19 +1940,19 @@ multiclass VPatAVGADDVL_VV_VX_RM<SDNode vop, int vxrm, string suffix = ""> {
 // 11. Vector Integer Arithmetic Instructions
 
 // 11.1. Vector Single-Width Integer Add and Subtract
-defm : VPatBinaryVL_VV_VX_VI<riscv_add_vl, "PseudoVADD">;
-defm : VPatBinaryVL_VV_VX<riscv_sub_vl, "PseudoVSUB">;
+defm : VPatBinaryVL_VV_VX_VI<capstone_add_vl, "PseudoVADD">;
+defm : VPatBinaryVL_VV_VX<capstone_sub_vl, "PseudoVSUB">;
 foreach vti = AllIntegerVectors in {
   let Predicates = GetVTypePredicates<vti>.Predicates in {
     // Handle VRSUB specially since it's the only integer binary op with
     // reversed pattern operands
-    def : Pat<(riscv_sub_vl (vti.Vector (SplatPat (XLenVT GPR:$rs2))),
+    def : Pat<(capstone_sub_vl (vti.Vector (SplatPat (XLenVT GPR:$rs2))),
                             (vti.Vector vti.RegClass:$rs1),
                             vti.RegClass:$passthru, (vti.Mask VMV0:$vm), VLOpFrag),
               (!cast<Instruction>("PseudoVRSUB_VX_"# vti.LMul.MX#"_MASK")
                    vti.RegClass:$passthru, vti.RegClass:$rs1, GPR:$rs2,
                    (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW, TAIL_AGNOSTIC)>;
-    def : Pat<(riscv_sub_vl (vti.Vector (SplatPat_simm5 simm5:$rs2)),
+    def : Pat<(capstone_sub_vl (vti.Vector (SplatPat_simm5 simm5:$rs2)),
                             (vti.Vector vti.RegClass:$rs1),
                             vti.RegClass:$passthru, (vti.Mask VMV0:$vm), VLOpFrag),
               (!cast<Instruction>("PseudoVRSUB_VI_"# vti.LMul.MX#"_MASK")
@@ -1960,7 +1960,7 @@ foreach vti = AllIntegerVectors in {
                    (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW, TAIL_AGNOSTIC)>;
 
     // Match VSUB with a small immediate to vadd.vi by negating the immediate.
-    def : Pat<(riscv_sub_vl (vti.Vector vti.RegClass:$rs1),
+    def : Pat<(capstone_sub_vl (vti.Vector vti.RegClass:$rs1),
                             (vti.Vector (SplatPat_simm5_plus1_nodec simm5_plus1:$rs2)),
                             vti.RegClass:$passthru, (vti.Mask VMV0:$vm), VLOpFrag),
               (!cast<Instruction>("PseudoVADD_VI_"#vti.LMul.MX#"_MASK")
@@ -1973,7 +1973,7 @@ foreach vti = AllIntegerVectors in {
 // (add v, C) -> (sub v, -C) if -C cheaper to materialize
 foreach vti = I64IntegerVectors in {
   let Predicates = [HasVInstructionsI64] in {
-    def : Pat<(riscv_add_vl (vti.Vector vti.RegClass:$rs1),
+    def : Pat<(capstone_add_vl (vti.Vector vti.RegClass:$rs1),
                             (vti.Vector (SplatPat_imm64_neg (i64 GPR:$rs2))),
                             vti.RegClass:$passthru, (vti.Mask VMV0:$vm), VLOpFrag),
               (!cast<Instruction>("PseudoVSUB_VX_"#vti.LMul.MX#"_MASK")
@@ -1984,10 +1984,10 @@ foreach vti = I64IntegerVectors in {
 }
 
 // 11.2. Vector Widening Integer Add/Subtract
-defm : VPatBinaryWVL_VV_VX_WV_WX<riscv_vwadd_vl,  riscv_vwadd_w_vl,  "PseudoVWADD">;
-defm : VPatBinaryWVL_VV_VX_WV_WX<riscv_vwaddu_vl, riscv_vwaddu_w_vl, "PseudoVWADDU">;
-defm : VPatBinaryWVL_VV_VX_WV_WX<riscv_vwsub_vl,  riscv_vwsub_w_vl,  "PseudoVWSUB">;
-defm : VPatBinaryWVL_VV_VX_WV_WX<riscv_vwsubu_vl, riscv_vwsubu_w_vl, "PseudoVWSUBU">;
+defm : VPatBinaryWVL_VV_VX_WV_WX<capstone_vwadd_vl,  capstone_vwadd_w_vl,  "PseudoVWADD">;
+defm : VPatBinaryWVL_VV_VX_WV_WX<capstone_vwaddu_vl, capstone_vwaddu_w_vl, "PseudoVWADDU">;
+defm : VPatBinaryWVL_VV_VX_WV_WX<capstone_vwsub_vl,  capstone_vwsub_w_vl,  "PseudoVWSUB">;
+defm : VPatBinaryWVL_VV_VX_WV_WX<capstone_vwsubu_vl, capstone_vwsubu_w_vl, "PseudoVWSUBU">;
 
 // shl_vl (ext_vl v, splat 1) is a special case of widening add.
 foreach vtiToWti = AllWidenableIntVectors in {
@@ -1995,19 +1995,19 @@ foreach vtiToWti = AllWidenableIntVectors in {
   defvar wti = vtiToWti.Wti;
   let Predicates = !listconcat(GetVTypePredicates<vti>.Predicates,
                                GetVTypePredicates<wti>.Predicates) in {
-    def : Pat<(riscv_shl_vl (wti.Vector (riscv_sext_vl_oneuse
+    def : Pat<(capstone_shl_vl (wti.Vector (capstone_sext_vl_oneuse
                               (vti.Vector vti.RegClass:$rs1),
                               (vti.Mask VMV0:$vm), VLOpFrag)),
-                            (wti.Vector (riscv_vmv_v_x_vl
+                            (wti.Vector (capstone_vmv_v_x_vl
                               (wti.Vector undef), 1, VLOpFrag)),
                               wti.RegClass:$passthru, (vti.Mask VMV0:$vm), VLOpFrag),
               (!cast<Instruction>("PseudoVWADD_VV_"#vti.LMul.MX#"_MASK")
                wti.RegClass:$passthru, vti.RegClass:$rs1, vti.RegClass:$rs1,
                (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW, TAIL_AGNOSTIC)>;
-    def : Pat<(riscv_shl_vl (wti.Vector (riscv_zext_vl_oneuse
+    def : Pat<(capstone_shl_vl (wti.Vector (capstone_zext_vl_oneuse
                               (vti.Vector vti.RegClass:$rs1),
                               (vti.Mask VMV0:$vm), VLOpFrag)),
-                            (wti.Vector (riscv_vmv_v_x_vl
+                            (wti.Vector (capstone_vmv_v_x_vl
                               (wti.Vector undef), 1, VLOpFrag)),
                               wti.RegClass:$passthru, (vti.Mask VMV0:$vm), VLOpFrag),
               (!cast<Instruction>("PseudoVWADDU_VV_"#vti.LMul.MX#"_MASK")
@@ -2027,7 +2027,7 @@ multiclass VPatWidenOrDisjointVL_VV_VX<SDNode extop, string instruction_name> {
       def : Pat<(wti.Vector
                   (extop
                     (vti.Vector
-                      (riscv_or_vl_is_add_oneuse
+                      (capstone_or_vl_is_add_oneuse
                         vti.RegClass:$rs2, vti.RegClass:$rs1,
                         undef, srcvalue, srcvalue)),
                     VMV0:$vm, VLOpFrag)),
@@ -2037,7 +2037,7 @@ multiclass VPatWidenOrDisjointVL_VV_VX<SDNode extop, string instruction_name> {
        def : Pat<(wti.Vector
                    (extop
                      (vti.Vector
-                       (riscv_or_vl_is_add_oneuse
+                       (capstone_or_vl_is_add_oneuse
                          vti.RegClass:$rs2, (SplatPat (XLenVT GPR:$rs1)),
                          undef, srcvalue, srcvalue)),
                      VMV0:$vm, VLOpFrag)),
@@ -2048,38 +2048,38 @@ multiclass VPatWidenOrDisjointVL_VV_VX<SDNode extop, string instruction_name> {
   }
 }
 
-defm : VPatWidenOrDisjointVL_VV_VX<riscv_sext_vl, "PseudoVWADD">;
-defm : VPatWidenOrDisjointVL_VV_VX<riscv_zext_vl, "PseudoVWADDU">;
+defm : VPatWidenOrDisjointVL_VV_VX<capstone_sext_vl, "PseudoVWADD">;
+defm : VPatWidenOrDisjointVL_VV_VX<capstone_zext_vl, "PseudoVWADDU">;
 
 // 11.3. Vector Integer Extension
-defm : VPatExtendVL_V<riscv_zext_vl, "PseudoVZEXT", "VF2",
+defm : VPatExtendVL_V<capstone_zext_vl, "PseudoVZEXT", "VF2",
                       AllFractionableVF2IntVectors>;
-defm : VPatExtendVL_V<riscv_sext_vl, "PseudoVSEXT", "VF2",
+defm : VPatExtendVL_V<capstone_sext_vl, "PseudoVSEXT", "VF2",
                       AllFractionableVF2IntVectors>;
-defm : VPatExtendVL_V<riscv_zext_vl, "PseudoVZEXT", "VF4",
+defm : VPatExtendVL_V<capstone_zext_vl, "PseudoVZEXT", "VF4",
                       AllFractionableVF4IntVectors>;
-defm : VPatExtendVL_V<riscv_sext_vl, "PseudoVSEXT", "VF4",
+defm : VPatExtendVL_V<capstone_sext_vl, "PseudoVSEXT", "VF4",
                       AllFractionableVF4IntVectors>;
-defm : VPatExtendVL_V<riscv_zext_vl, "PseudoVZEXT", "VF8",
+defm : VPatExtendVL_V<capstone_zext_vl, "PseudoVZEXT", "VF8",
                       AllFractionableVF8IntVectors>;
-defm : VPatExtendVL_V<riscv_sext_vl, "PseudoVSEXT", "VF8",
+defm : VPatExtendVL_V<capstone_sext_vl, "PseudoVSEXT", "VF8",
                       AllFractionableVF8IntVectors>;
 
 // 11.5. Vector Bitwise Logical Instructions
-defm : VPatBinaryVL_VV_VX_VI<riscv_and_vl, "PseudoVAND">;
-defm : VPatBinaryVL_VV_VX_VI<riscv_or_vl,  "PseudoVOR">;
-defm : VPatBinaryVL_VV_VX_VI<riscv_xor_vl, "PseudoVXOR">;
+defm : VPatBinaryVL_VV_VX_VI<capstone_and_vl, "PseudoVAND">;
+defm : VPatBinaryVL_VV_VX_VI<capstone_or_vl,  "PseudoVOR">;
+defm : VPatBinaryVL_VV_VX_VI<capstone_xor_vl, "PseudoVXOR">;
 
 // 11.6. Vector Single-Width Bit Shift Instructions
-defm : VPatBinaryVL_VV_VX_VI<riscv_shl_vl, "PseudoVSLL", uimm5>;
-defm : VPatBinaryVL_VV_VX_VI<riscv_srl_vl, "PseudoVSRL", uimm5>;
-defm : VPatBinaryVL_VV_VX_VI<riscv_sra_vl, "PseudoVSRA", uimm5>;
+defm : VPatBinaryVL_VV_VX_VI<capstone_shl_vl, "PseudoVSLL", uimm5>;
+defm : VPatBinaryVL_VV_VX_VI<capstone_srl_vl, "PseudoVSRL", uimm5>;
+defm : VPatBinaryVL_VV_VX_VI<capstone_sra_vl, "PseudoVSRA", uimm5>;
 
 foreach vti = AllIntegerVectors in {
   // Emit shift by 1 as an add since it might be faster.
   let Predicates = GetVTypePredicates<vti>.Predicates in
-  def : Pat<(riscv_shl_vl (vti.Vector vti.RegClass:$rs1),
-                          (riscv_vmv_v_x_vl (vti.Vector undef), 1, (XLenVT srcvalue)),
+  def : Pat<(capstone_shl_vl (vti.Vector vti.RegClass:$rs1),
+                          (capstone_vmv_v_x_vl (vti.Vector undef), 1, (XLenVT srcvalue)),
                           srcvalue, (vti.Mask true_mask), VLOpFrag),
             (!cast<Instruction>("PseudoVADD_VV_"# vti.LMul.MX)
                  (vti.Vector (IMPLICIT_DEF)),
@@ -2090,22 +2090,22 @@ foreach vti = AllIntegerVectors in {
 defm : VPatBinaryVL_WV_WX_WI<srl, "PseudoVNSRL">;
 defm : VPatBinaryVL_WV_WX_WI<sra, "PseudoVNSRA">;
 
-defm : VPatNarrowShiftSplat_WX_WI<riscv_sra_vl, "PseudoVNSRA">;
-defm : VPatNarrowShiftSplat_WX_WI<riscv_srl_vl, "PseudoVNSRL">;
-defm : VPatNarrowShiftSplatExt_WX<riscv_sra_vl, riscv_sext_vl_oneuse, "PseudoVNSRA">;
-defm : VPatNarrowShiftSplatExt_WX<riscv_sra_vl, riscv_zext_vl_oneuse, "PseudoVNSRA">;
-defm : VPatNarrowShiftSplatExt_WX<riscv_srl_vl, riscv_sext_vl_oneuse, "PseudoVNSRL">;
-defm : VPatNarrowShiftSplatExt_WX<riscv_srl_vl, riscv_zext_vl_oneuse, "PseudoVNSRL">;
+defm : VPatNarrowShiftSplat_WX_WI<capstone_sra_vl, "PseudoVNSRA">;
+defm : VPatNarrowShiftSplat_WX_WI<capstone_srl_vl, "PseudoVNSRL">;
+defm : VPatNarrowShiftSplatExt_WX<capstone_sra_vl, capstone_sext_vl_oneuse, "PseudoVNSRA">;
+defm : VPatNarrowShiftSplatExt_WX<capstone_sra_vl, capstone_zext_vl_oneuse, "PseudoVNSRA">;
+defm : VPatNarrowShiftSplatExt_WX<capstone_srl_vl, capstone_sext_vl_oneuse, "PseudoVNSRL">;
+defm : VPatNarrowShiftSplatExt_WX<capstone_srl_vl, capstone_zext_vl_oneuse, "PseudoVNSRL">;
 
-defm : VPatNarrowShiftVL_WV<riscv_srl_vl, "PseudoVNSRL">;
-defm : VPatNarrowShiftVL_WV<riscv_sra_vl, "PseudoVNSRA">;
+defm : VPatNarrowShiftVL_WV<capstone_srl_vl, "PseudoVNSRL">;
+defm : VPatNarrowShiftVL_WV<capstone_sra_vl, "PseudoVNSRA">;
 
 foreach vtiTowti = AllWidenableIntVectors in {
   defvar vti = vtiTowti.Vti;
   defvar wti = vtiTowti.Wti;
   let Predicates = !listconcat(GetVTypePredicates<vti>.Predicates,
                                GetVTypePredicates<wti>.Predicates) in
-  def : Pat<(vti.Vector (riscv_trunc_vector_vl (wti.Vector wti.RegClass:$rs1),
+  def : Pat<(vti.Vector (capstone_trunc_vector_vl (wti.Vector wti.RegClass:$rs1),
                                                (vti.Mask VMV0:$vm),
                                                VLOpFrag)),
             (!cast<Instruction>("PseudoVNSRL_WI_"#vti.LMul.MX#"_MASK")
@@ -2153,46 +2153,46 @@ foreach vti = AllIntegerVectors in {
 } // foreach vti = AllIntegerVectors
 
 // 11.9. Vector Integer Min/Max Instructions
-defm : VPatBinaryVL_VV_VX<riscv_umin_vl, "PseudoVMINU">;
-defm : VPatBinaryVL_VV_VX<riscv_smin_vl, "PseudoVMIN">;
-defm : VPatBinaryVL_VV_VX<riscv_umax_vl, "PseudoVMAXU">;
-defm : VPatBinaryVL_VV_VX<riscv_smax_vl, "PseudoVMAX">;
+defm : VPatBinaryVL_VV_VX<capstone_umin_vl, "PseudoVMINU">;
+defm : VPatBinaryVL_VV_VX<capstone_smin_vl, "PseudoVMIN">;
+defm : VPatBinaryVL_VV_VX<capstone_umax_vl, "PseudoVMAXU">;
+defm : VPatBinaryVL_VV_VX<capstone_smax_vl, "PseudoVMAX">;
 
 // 11.10. Vector Single-Width Integer Multiply Instructions
-defm : VPatBinaryVL_VV_VX<riscv_mul_vl, "PseudoVMUL">;
-defm : VPatBinaryVL_VV_VX<riscv_mulhs_vl, "PseudoVMULH", IntegerVectorsExceptI64>;
-defm : VPatBinaryVL_VV_VX<riscv_mulhu_vl, "PseudoVMULHU", IntegerVectorsExceptI64>;
+defm : VPatBinaryVL_VV_VX<capstone_mul_vl, "PseudoVMUL">;
+defm : VPatBinaryVL_VV_VX<capstone_mulhs_vl, "PseudoVMULH", IntegerVectorsExceptI64>;
+defm : VPatBinaryVL_VV_VX<capstone_mulhu_vl, "PseudoVMULHU", IntegerVectorsExceptI64>;
 // vsmul.vv and vsmul.vx are not included in EEW=64 in Zve64*.
 let Predicates = [HasVInstructionsFullMultiply] in {
-  defm : VPatBinaryVL_VV_VX<riscv_mulhs_vl, "PseudoVMULH", I64IntegerVectors>;
-  defm : VPatBinaryVL_VV_VX<riscv_mulhu_vl, "PseudoVMULHU", I64IntegerVectors>;
+  defm : VPatBinaryVL_VV_VX<capstone_mulhs_vl, "PseudoVMULH", I64IntegerVectors>;
+  defm : VPatBinaryVL_VV_VX<capstone_mulhu_vl, "PseudoVMULHU", I64IntegerVectors>;
 }
 
 // 11.11. Vector Integer Divide Instructions
-defm : VPatBinaryVL_VV_VX<riscv_udiv_vl, "PseudoVDIVU", isSEWAware=1>;
-defm : VPatBinaryVL_VV_VX<riscv_sdiv_vl, "PseudoVDIV", isSEWAware=1>;
-defm : VPatBinaryVL_VV_VX<riscv_urem_vl, "PseudoVREMU", isSEWAware=1>;
-defm : VPatBinaryVL_VV_VX<riscv_srem_vl, "PseudoVREM", isSEWAware=1>;
+defm : VPatBinaryVL_VV_VX<capstone_udiv_vl, "PseudoVDIVU", isSEWAware=1>;
+defm : VPatBinaryVL_VV_VX<capstone_sdiv_vl, "PseudoVDIV", isSEWAware=1>;
+defm : VPatBinaryVL_VV_VX<capstone_urem_vl, "PseudoVREMU", isSEWAware=1>;
+defm : VPatBinaryVL_VV_VX<capstone_srem_vl, "PseudoVREM", isSEWAware=1>;
 
 // 11.12. Vector Widening Integer Multiply Instructions
-defm : VPatBinaryWVL_VV_VX<riscv_vwmul_vl, "PseudoVWMUL">;
-defm : VPatBinaryWVL_VV_VX<riscv_vwmulu_vl, "PseudoVWMULU">;
-defm : VPatBinaryWVL_VV_VX<riscv_vwmulsu_vl, "PseudoVWMULSU">;
+defm : VPatBinaryWVL_VV_VX<capstone_vwmul_vl, "PseudoVWMUL">;
+defm : VPatBinaryWVL_VV_VX<capstone_vwmulu_vl, "PseudoVWMULU">;
+defm : VPatBinaryWVL_VV_VX<capstone_vwmulsu_vl, "PseudoVWMULSU">;
 
 // 11.13 Vector Single-Width Integer Multiply-Add Instructions
-defm : VPatMultiplyAddVL_VV_VX<riscv_add_vl, "PseudoVMADD">;
-defm : VPatMultiplyAddVL_VV_VX<riscv_sub_vl, "PseudoVNMSUB">;
+defm : VPatMultiplyAddVL_VV_VX<capstone_add_vl, "PseudoVMADD">;
+defm : VPatMultiplyAddVL_VV_VX<capstone_sub_vl, "PseudoVNMSUB">;
 
 // 11.14. Vector Widening Integer Multiply-Add Instructions
-defm : VPatWidenMultiplyAddVL_VV_VX<riscv_vwmacc_vl, "PseudoVWMACC">;
-defm : VPatWidenMultiplyAddVL_VV_VX<riscv_vwmaccu_vl, "PseudoVWMACCU">;
-defm : VPatWidenMultiplyAddVL_VV_VX<riscv_vwmaccsu_vl, "PseudoVWMACCSU">;
+defm : VPatWidenMultiplyAddVL_VV_VX<capstone_vwmacc_vl, "PseudoVWMACC">;
+defm : VPatWidenMultiplyAddVL_VV_VX<capstone_vwmaccu_vl, "PseudoVWMACCU">;
+defm : VPatWidenMultiplyAddVL_VV_VX<capstone_vwmaccsu_vl, "PseudoVWMACCSU">;
 foreach vtiTowti = AllWidenableIntVectors in {
   defvar vti = vtiTowti.Vti;
   defvar wti = vtiTowti.Wti;
   let Predicates = !listconcat(GetVTypePredicates<vti>.Predicates,
                                GetVTypePredicates<wti>.Predicates) in
-  def : Pat<(riscv_vwmaccsu_vl (vti.Vector vti.RegClass:$rs1),
+  def : Pat<(capstone_vwmaccsu_vl (vti.Vector vti.RegClass:$rs1),
                                (SplatPat XLenVT:$rs2),
                                (wti.Vector wti.RegClass:$rd),
                                (vti.Mask VMV0:$vm), VLOpFrag),
@@ -2204,7 +2204,7 @@ foreach vtiTowti = AllWidenableIntVectors in {
 // 11.15. Vector Integer Merge Instructions
 foreach vti = AllIntegerVectors in {
   let Predicates = GetVTypePredicates<vti>.Predicates in {
-    def : Pat<(vti.Vector (riscv_vmerge_vl (vti.Mask VMV0:$vm),
+    def : Pat<(vti.Vector (capstone_vmerge_vl (vti.Mask VMV0:$vm),
                                            vti.RegClass:$rs1,
                                            vti.RegClass:$rs2,
                                            vti.RegClass:$passthru,
@@ -2213,7 +2213,7 @@ foreach vti = AllIntegerVectors in {
                   vti.RegClass:$passthru, vti.RegClass:$rs2, vti.RegClass:$rs1,
                   (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW)>;
 
-    def : Pat<(vti.Vector (riscv_vmerge_vl (vti.Mask VMV0:$vm),
+    def : Pat<(vti.Vector (capstone_vmerge_vl (vti.Mask VMV0:$vm),
                                             (SplatPat XLenVT:$rs1),
                                             vti.RegClass:$rs2,
                                             vti.RegClass:$passthru,
@@ -2222,7 +2222,7 @@ foreach vti = AllIntegerVectors in {
                   vti.RegClass:$passthru, vti.RegClass:$rs2, GPR:$rs1,
                   (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW)>;
 
-    def : Pat<(vti.Vector (riscv_vmerge_vl (vti.Mask VMV0:$vm),
+    def : Pat<(vti.Vector (capstone_vmerge_vl (vti.Mask VMV0:$vm),
                                            (SplatPat_simm5 simm5:$rs1),
                                            vti.RegClass:$rs2,
                                            vti.RegClass:$passthru,
@@ -2237,7 +2237,7 @@ foreach vti = AllIntegerVectors in {
 foreach vti = AllVectors in {
   defvar ivti = GetIntVTypeInfo<vti>.Vti;
   let Predicates = GetVTypePredicates<ivti>.Predicates in {
-    def : Pat<(vti.Vector (riscv_vmv_v_v_vl vti.RegClass:$passthru,
+    def : Pat<(vti.Vector (capstone_vmv_v_v_vl vti.RegClass:$passthru,
                                             vti.RegClass:$rs2, VLOpFrag)),
               (!cast<Instruction>("PseudoVMV_V_V_"#vti.LMul.MX)
                vti.RegClass:$passthru, vti.RegClass:$rs2, GPR:$vl, vti.Log2SEW, TU_MU)>;
@@ -2245,11 +2245,11 @@ foreach vti = AllVectors in {
 
 foreach vti = AllIntegerVectors in {
   let Predicates = GetVTypePredicates<vti>.Predicates in {
-      def : Pat<(vti.Vector (riscv_vmv_v_x_vl vti.RegClass:$passthru, GPR:$rs2, VLOpFrag)),
+      def : Pat<(vti.Vector (capstone_vmv_v_x_vl vti.RegClass:$passthru, GPR:$rs2, VLOpFrag)),
                 (!cast<Instruction>("PseudoVMV_V_X_"#vti.LMul.MX)
                  vti.RegClass:$passthru, GPR:$rs2, GPR:$vl, vti.Log2SEW, TU_MU)>;
       defvar ImmPat = !cast<ComplexPattern>("sew"#vti.SEW#"simm5");
-      def : Pat<(vti.Vector (riscv_vmv_v_x_vl vti.RegClass:$passthru, (ImmPat simm5:$imm5),
+      def : Pat<(vti.Vector (capstone_vmv_v_x_vl vti.RegClass:$passthru, (ImmPat simm5:$imm5),
                                                   VLOpFrag)),
                 (!cast<Instruction>("PseudoVMV_V_I_"#vti.LMul.MX)
                  vti.RegClass:$passthru, simm5:$imm5, GPR:$vl, vti.Log2SEW, TU_MU)>;
@@ -2260,16 +2260,16 @@ foreach vti = AllIntegerVectors in {
 // 12. Vector Fixed-Point Arithmetic Instructions
 
 // 12.1. Vector Single-Width Saturating Add and Subtract
-defm : VPatBinaryVL_VV_VX_VI<riscv_saddsat_vl, "PseudoVSADD">;
-defm : VPatBinaryVL_VV_VX_VI<riscv_uaddsat_vl, "PseudoVSADDU">;
-defm : VPatBinaryVL_VV_VX<riscv_ssubsat_vl, "PseudoVSSUB">;
-defm : VPatBinaryVL_VV_VX<riscv_usubsat_vl, "PseudoVSSUBU">;
+defm : VPatBinaryVL_VV_VX_VI<capstone_saddsat_vl, "PseudoVSADD">;
+defm : VPatBinaryVL_VV_VX_VI<capstone_uaddsat_vl, "PseudoVSADDU">;
+defm : VPatBinaryVL_VV_VX<capstone_ssubsat_vl, "PseudoVSSUB">;
+defm : VPatBinaryVL_VV_VX<capstone_usubsat_vl, "PseudoVSSUBU">;
 
 // 12.2. Vector Single-Width Averaging Add and Subtract
-defm : VPatAVGADDVL_VV_VX_RM<riscv_avgfloors_vl, 0b10>;
-defm : VPatAVGADDVL_VV_VX_RM<riscv_avgflooru_vl, 0b10, suffix="U">;
-defm : VPatAVGADDVL_VV_VX_RM<riscv_avgceils_vl, 0b00>;
-defm : VPatAVGADDVL_VV_VX_RM<riscv_avgceilu_vl, 0b00, suffix="U">;
+defm : VPatAVGADDVL_VV_VX_RM<capstone_avgfloors_vl, 0b10>;
+defm : VPatAVGADDVL_VV_VX_RM<capstone_avgflooru_vl, 0b10, suffix="U">;
+defm : VPatAVGADDVL_VV_VX_RM<capstone_avgceils_vl, 0b00>;
+defm : VPatAVGADDVL_VV_VX_RM<capstone_avgceilu_vl, 0b00, suffix="U">;
 
 // 12.5. Vector Narrowing Fixed-Point Clip Instructions
 foreach vtiTowti = AllWidenableIntVectors in {
@@ -2278,13 +2278,13 @@ foreach vtiTowti = AllWidenableIntVectors in {
   let Predicates = !listconcat(GetVTypePredicates<vti>.Predicates,
                                GetVTypePredicates<wti>.Predicates) in {
     // Rounding mode here is arbitrary since we aren't shifting out any bits.
-    def : Pat<(vti.Vector (riscv_trunc_vector_vl_ssat (wti.Vector wti.RegClass:$rs1),
+    def : Pat<(vti.Vector (capstone_trunc_vector_vl_ssat (wti.Vector wti.RegClass:$rs1),
                                                       (vti.Mask VMV0:$vm),
                                                       VLOpFrag)),
               (!cast<Instruction>("PseudoVNCLIP_WI_"#vti.LMul.MX#"_MASK")
                   (vti.Vector (IMPLICIT_DEF)), wti.RegClass:$rs1, 0,
                   (vti.Mask VMV0:$vm), /*RNU*/0, GPR:$vl, vti.Log2SEW, TA_MA)>;
-    def : Pat<(vti.Vector (riscv_trunc_vector_vl_usat (wti.Vector wti.RegClass:$rs1),
+    def : Pat<(vti.Vector (capstone_trunc_vector_vl_usat (wti.Vector wti.RegClass:$rs1),
                                                       (vti.Mask VMV0:$vm),
                                                       VLOpFrag)),
               (!cast<Instruction>("PseudoVNCLIPU_WI_"#vti.LMul.MX#"_MASK")
@@ -2296,89 +2296,89 @@ foreach vtiTowti = AllWidenableIntVectors in {
 // 13. Vector Floating-Point Instructions
 
 // 13.2. Vector Single-Width Floating-Point Add/Subtract Instructions
-defm : VPatBinaryFPVL_VV_VF_RM<any_riscv_fadd_vl, "PseudoVFADD", isSEWAware=1>;
-defm : VPatBinaryFPVL_VV_VF_RM<any_riscv_fsub_vl, "PseudoVFSUB", isSEWAware=1>;
-defm : VPatBinaryFPVL_R_VF_RM<any_riscv_fsub_vl, "PseudoVFRSUB", isSEWAware=1>;
+defm : VPatBinaryFPVL_VV_VF_RM<any_capstone_fadd_vl, "PseudoVFADD", isSEWAware=1>;
+defm : VPatBinaryFPVL_VV_VF_RM<any_capstone_fsub_vl, "PseudoVFSUB", isSEWAware=1>;
+defm : VPatBinaryFPVL_R_VF_RM<any_capstone_fsub_vl, "PseudoVFRSUB", isSEWAware=1>;
 
 // 13.3. Vector Widening Floating-Point Add/Subtract Instructions
-defm : VPatBinaryFPWVL_VV_VF_WV_WF_RM<riscv_vfwadd_vl, riscv_vfwadd_w_vl,
+defm : VPatBinaryFPWVL_VV_VF_WV_WF_RM<capstone_vfwadd_vl, capstone_vfwadd_w_vl,
                                       "PseudoVFWADD", isSEWAware=1>;
-defm : VPatBinaryFPWVL_VV_VF_WV_WF_RM<riscv_vfwsub_vl, riscv_vfwsub_w_vl,
+defm : VPatBinaryFPWVL_VV_VF_WV_WF_RM<capstone_vfwsub_vl, capstone_vfwsub_w_vl,
                                       "PseudoVFWSUB", isSEWAware=1>;
 
 // 13.4. Vector Single-Width Floating-Point Multiply/Divide Instructions
-defm : VPatBinaryFPVL_VV_VF_RM<any_riscv_fmul_vl, "PseudoVFMUL", isSEWAware=1>;
-defm : VPatBinaryFPVL_VV_VF_RM<any_riscv_fdiv_vl, "PseudoVFDIV", isSEWAware=1>;
-defm : VPatBinaryFPVL_R_VF_RM<any_riscv_fdiv_vl, "PseudoVFRDIV", isSEWAware=1>;
+defm : VPatBinaryFPVL_VV_VF_RM<any_capstone_fmul_vl, "PseudoVFMUL", isSEWAware=1>;
+defm : VPatBinaryFPVL_VV_VF_RM<any_capstone_fdiv_vl, "PseudoVFDIV", isSEWAware=1>;
+defm : VPatBinaryFPVL_R_VF_RM<any_capstone_fdiv_vl, "PseudoVFRDIV", isSEWAware=1>;
 
 // 13.5. Vector Widening Floating-Point Multiply Instructions
-defm : VPatBinaryFPWVL_VV_VF_RM<riscv_vfwmul_vl, "PseudoVFWMUL", isSEWAware=1>;
+defm : VPatBinaryFPWVL_VV_VF_RM<capstone_vfwmul_vl, "PseudoVFWMUL", isSEWAware=1>;
 
 // 13.6 Vector Single-Width Floating-Point Fused Multiply-Add Instructions.
-defm : VPatFPMulAddVL_VV_VF_RM<any_riscv_vfmadd_vl,  "PseudoVFMADD">;
-defm : VPatFPMulAddVL_VV_VF_RM<any_riscv_vfmsub_vl,  "PseudoVFMSUB">;
-defm : VPatFPMulAddVL_VV_VF_RM<any_riscv_vfnmadd_vl, "PseudoVFNMADD">;
-defm : VPatFPMulAddVL_VV_VF_RM<any_riscv_vfnmsub_vl, "PseudoVFNMSUB">;
+defm : VPatFPMulAddVL_VV_VF_RM<any_capstone_vfmadd_vl,  "PseudoVFMADD">;
+defm : VPatFPMulAddVL_VV_VF_RM<any_capstone_vfmsub_vl,  "PseudoVFMSUB">;
+defm : VPatFPMulAddVL_VV_VF_RM<any_capstone_vfnmadd_vl, "PseudoVFNMADD">;
+defm : VPatFPMulAddVL_VV_VF_RM<any_capstone_vfnmsub_vl, "PseudoVFNMSUB">;
 
 // 13.7. Vector Widening Floating-Point Fused Multiply-Add Instructions
-defm : VPatWidenFPMulAccVL_VV_VF_RM<riscv_vfwmadd_vl, "PseudoVFWMACC">;
-defm : VPatWidenFPMulAccVL_VV_VF_RM<riscv_vfwmadd_vl, "PseudoVFWMACCBF16",
+defm : VPatWidenFPMulAccVL_VV_VF_RM<capstone_vfwmadd_vl, "PseudoVFWMACC">;
+defm : VPatWidenFPMulAccVL_VV_VF_RM<capstone_vfwmadd_vl, "PseudoVFWMACCBF16",
                                     AllWidenableBFloatToFloatVectors>;
-defm : VPatWidenFPMulAccVL_VV_VF_RM<riscv_vfwnmadd_vl, "PseudoVFWNMACC">;
-defm : VPatWidenFPMulAccVL_VV_VF_RM<riscv_vfwmsub_vl, "PseudoVFWMSAC">;
-defm : VPatWidenFPMulAccVL_VV_VF_RM<riscv_vfwnmsub_vl, "PseudoVFWNMSAC">;
+defm : VPatWidenFPMulAccVL_VV_VF_RM<capstone_vfwnmadd_vl, "PseudoVFWNMACC">;
+defm : VPatWidenFPMulAccVL_VV_VF_RM<capstone_vfwmsub_vl, "PseudoVFWMSAC">;
+defm : VPatWidenFPMulAccVL_VV_VF_RM<capstone_vfwnmsub_vl, "PseudoVFWNMSAC">;
 
 // 13.11. Vector Floating-Point MIN/MAX Instructions
-defm : VPatBinaryFPVL_VV_VF<riscv_vfmin_vl, "PseudoVFMIN", isSEWAware=1>;
-defm : VPatBinaryFPVL_VV_VF<riscv_vfmax_vl, "PseudoVFMAX", isSEWAware=1>;
+defm : VPatBinaryFPVL_VV_VF<capstone_vfmin_vl, "PseudoVFMIN", isSEWAware=1>;
+defm : VPatBinaryFPVL_VV_VF<capstone_vfmax_vl, "PseudoVFMAX", isSEWAware=1>;
 
 // 13.13. Vector Floating-Point Compare Instructions
-defm : VPatFPSetCCVL_VV_VF_FV<any_riscv_fsetcc_vl, SETEQ,
+defm : VPatFPSetCCVL_VV_VF_FV<any_capstone_fsetcc_vl, SETEQ,
                               "PseudoVMFEQ", "PseudoVMFEQ">;
-defm : VPatFPSetCCVL_VV_VF_FV<any_riscv_fsetcc_vl, SETOEQ,
+defm : VPatFPSetCCVL_VV_VF_FV<any_capstone_fsetcc_vl, SETOEQ,
                               "PseudoVMFEQ", "PseudoVMFEQ">;
-defm : VPatFPSetCCVL_VV_VF_FV<any_riscv_fsetcc_vl, SETNE,
+defm : VPatFPSetCCVL_VV_VF_FV<any_capstone_fsetcc_vl, SETNE,
                               "PseudoVMFNE", "PseudoVMFNE">;
-defm : VPatFPSetCCVL_VV_VF_FV<any_riscv_fsetcc_vl, SETUNE,
+defm : VPatFPSetCCVL_VV_VF_FV<any_capstone_fsetcc_vl, SETUNE,
                               "PseudoVMFNE", "PseudoVMFNE">;
-defm : VPatFPSetCCVL_VV_VF_FV<any_riscv_fsetccs_vl, SETLT,
+defm : VPatFPSetCCVL_VV_VF_FV<any_capstone_fsetccs_vl, SETLT,
                               "PseudoVMFLT", "PseudoVMFGT">;
-defm : VPatFPSetCCVL_VV_VF_FV<any_riscv_fsetccs_vl, SETOLT,
+defm : VPatFPSetCCVL_VV_VF_FV<any_capstone_fsetccs_vl, SETOLT,
                               "PseudoVMFLT", "PseudoVMFGT">;
-defm : VPatFPSetCCVL_VV_VF_FV<any_riscv_fsetccs_vl, SETLE,
+defm : VPatFPSetCCVL_VV_VF_FV<any_capstone_fsetccs_vl, SETLE,
                               "PseudoVMFLE", "PseudoVMFGE">;
-defm : VPatFPSetCCVL_VV_VF_FV<any_riscv_fsetccs_vl, SETOLE,
+defm : VPatFPSetCCVL_VV_VF_FV<any_capstone_fsetccs_vl, SETOLE,
                               "PseudoVMFLE", "PseudoVMFGE">;
 
 foreach vti = AllFloatVectors in {
   let Predicates = GetVTypePredicates<vti>.Predicates in {
     // 13.8. Vector Floating-Point Square-Root Instruction
-    def : Pat<(any_riscv_fsqrt_vl (vti.Vector vti.RegClass:$rs2), (vti.Mask VMV0:$vm),
+    def : Pat<(any_capstone_fsqrt_vl (vti.Vector vti.RegClass:$rs2), (vti.Mask VMV0:$vm),
                               VLOpFrag),
               (!cast<Instruction>("PseudoVFSQRT_V_"# vti.LMul.MX # "_E" # vti.SEW # "_MASK")
                    (vti.Vector (IMPLICIT_DEF)), vti.RegClass:$rs2,
                    (vti.Mask VMV0:$vm),
                    // Value to indicate no rounding mode change in
-                   // RISCVInsertReadWriteCSR
+                   // CapstoneInsertReadWriteCSR
                    FRM_DYN,
                    GPR:$vl, vti.Log2SEW, TA_MA)>;
 
     // 13.12. Vector Floating-Point Sign-Injection Instructions
-    def : Pat<(riscv_fabs_vl (vti.Vector vti.RegClass:$rs), (vti.Mask VMV0:$vm),
+    def : Pat<(capstone_fabs_vl (vti.Vector vti.RegClass:$rs), (vti.Mask VMV0:$vm),
                              VLOpFrag),
               (!cast<Instruction>("PseudoVFSGNJX_VV_"# vti.LMul.MX #"_E"#vti.SEW#"_MASK")
                    (vti.Vector (IMPLICIT_DEF)), vti.RegClass:$rs,
                    vti.RegClass:$rs, (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW,
                    TA_MA)>;
     // Handle fneg with VFSGNJN using the same input for both operands.
-    def : Pat<(riscv_fneg_vl (vti.Vector vti.RegClass:$rs), (vti.Mask VMV0:$vm),
+    def : Pat<(capstone_fneg_vl (vti.Vector vti.RegClass:$rs), (vti.Mask VMV0:$vm),
                              VLOpFrag),
               (!cast<Instruction>("PseudoVFSGNJN_VV_"# vti.LMul.MX#"_E"#vti.SEW #"_MASK")
                    (vti.Vector (IMPLICIT_DEF)), vti.RegClass:$rs,
                    vti.RegClass:$rs, (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW,
                    TA_MA)>;
 
-    def : Pat<(riscv_fcopysign_vl (vti.Vector vti.RegClass:$rs1),
+    def : Pat<(capstone_fcopysign_vl (vti.Vector vti.RegClass:$rs1),
                                   (vti.Vector vti.RegClass:$rs2),
                                   vti.RegClass:$passthru,
                                   (vti.Mask VMV0:$vm),
@@ -2388,8 +2388,8 @@ foreach vti = AllFloatVectors in {
                    vti.RegClass:$rs2, (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW,
                    TAIL_AGNOSTIC)>;
 
-    def : Pat<(riscv_fcopysign_vl (vti.Vector vti.RegClass:$rs1),
-                                  (riscv_fneg_vl vti.RegClass:$rs2,
+    def : Pat<(capstone_fcopysign_vl (vti.Vector vti.RegClass:$rs1),
+                                  (capstone_fneg_vl vti.RegClass:$rs2,
                                                  (vti.Mask true_mask),
                                                  VLOpFrag),
                                   srcvalue,
@@ -2399,7 +2399,7 @@ foreach vti = AllFloatVectors in {
         (vti.Vector (IMPLICIT_DEF)),
                    vti.RegClass:$rs1, vti.RegClass:$rs2, GPR:$vl, vti.Log2SEW, TA_MA)>;
 
-    def : Pat<(riscv_fcopysign_vl (vti.Vector vti.RegClass:$rs1),
+    def : Pat<(capstone_fcopysign_vl (vti.Vector vti.RegClass:$rs1),
                                   (SplatFPOp vti.ScalarRegClass:$rs2),
                                   vti.RegClass:$passthru,
                                   (vti.Mask VMV0:$vm),
@@ -2410,14 +2410,14 @@ foreach vti = AllFloatVectors in {
                    TAIL_AGNOSTIC)>;
 
     // Rounding without exception to implement nearbyint.
-    def : Pat<(any_riscv_vfround_noexcept_vl (vti.Vector vti.RegClass:$rs1),
+    def : Pat<(any_capstone_vfround_noexcept_vl (vti.Vector vti.RegClass:$rs1),
                                              (vti.Mask VMV0:$vm), VLOpFrag),
               (!cast<Instruction>("PseudoVFROUND_NOEXCEPT_V_" # vti.LMul.MX #"_MASK")
                     (vti.Vector (IMPLICIT_DEF)), vti.RegClass:$rs1,
                     (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW, TA_MA)>;
 
     // 14.14. Vector Floating-Point Classify Instruction
-    def : Pat<(riscv_fclass_vl (vti.Vector vti.RegClass:$rs2),
+    def : Pat<(capstone_fclass_vl (vti.Vector vti.RegClass:$rs2),
                                (vti.Mask VMV0:$vm), VLOpFrag),
               (!cast<Instruction>("PseudoVFCLASS_V_"# vti.LMul.MX #"_MASK")
                  (vti.Vector (IMPLICIT_DEF)), vti.RegClass:$rs2, 
@@ -2431,7 +2431,7 @@ foreach fvti = AllFloatVectors in {
   // 13.15. Vector Floating-Point Merge Instruction
   defvar ivti = GetIntVTypeInfo<fvti>.Vti;
   let Predicates = GetVTypePredicates<ivti>.Predicates in {
-  def : Pat<(fvti.Vector (riscv_vmerge_vl (fvti.Mask VMV0:$vm),
+  def : Pat<(fvti.Vector (capstone_vmerge_vl (fvti.Mask VMV0:$vm),
                                           fvti.RegClass:$rs1,
                                           fvti.RegClass:$rs2,
                                           fvti.RegClass:$passthru,
@@ -2440,7 +2440,7 @@ foreach fvti = AllFloatVectors in {
                  fvti.RegClass:$passthru, fvti.RegClass:$rs2, fvti.RegClass:$rs1, (fvti.Mask VMV0:$vm),
                  GPR:$vl, fvti.Log2SEW)>;
 
-  def : Pat<(fvti.Vector (riscv_vmerge_vl (fvti.Mask VMV0:$vm),
+  def : Pat<(fvti.Vector (capstone_vmerge_vl (fvti.Mask VMV0:$vm),
                                           (SplatFPOp (SelectScalarFPAsInt (XLenVT GPR:$imm))),
                                           fvti.RegClass:$rs2,
                                           fvti.RegClass:$passthru,
@@ -2450,7 +2450,7 @@ foreach fvti = AllFloatVectors in {
                  GPR:$vl, fvti.Log2SEW)>;
 
 
-  def : Pat<(fvti.Vector (riscv_vmerge_vl (fvti.Mask VMV0:$vm),
+  def : Pat<(fvti.Vector (capstone_vmerge_vl (fvti.Mask VMV0:$vm),
                                           (SplatFPOp (fvti.Scalar fpimm0)),
                                           fvti.RegClass:$rs2,
                                           fvti.RegClass:$passthru,
@@ -2463,7 +2463,7 @@ foreach fvti = AllFloatVectors in {
 
 foreach fvti = AllFloatVectors in {
   let Predicates = GetVTypePredicates<fvti>.Predicates in {
-    def : Pat<(fvti.Vector (riscv_vmerge_vl (fvti.Mask VMV0:$vm),
+    def : Pat<(fvti.Vector (capstone_vmerge_vl (fvti.Mask VMV0:$vm),
                                             (SplatFPOp fvti.ScalarRegClass:$rs1),
                                             fvti.RegClass:$rs2,
                                             fvti.RegClass:$passthru,
@@ -2480,11 +2480,11 @@ foreach fvti = AllFloatVectors in {
   let Predicates = GetVTypePredicates<ivti>.Predicates in {
     // 13.16. Vector Floating-Point Move Instruction
     // If we're splatting fpimm0, use vmv.v.x vd, x0.
-    def : Pat<(fvti.Vector (riscv_vfmv_v_f_vl
+    def : Pat<(fvti.Vector (capstone_vfmv_v_f_vl
                            fvti.Vector:$passthru, (fvti.Scalar (fpimm0)), VLOpFrag)),
               (!cast<Instruction>("PseudoVMV_V_I_"#fvti.LMul.MX)
                $passthru, 0, GPR:$vl, fvti.Log2SEW, TU_MU)>;
-    def : Pat<(fvti.Vector (riscv_vfmv_v_f_vl
+    def : Pat<(fvti.Vector (capstone_vfmv_v_f_vl
                            fvti.Vector:$passthru, (fvti.Scalar (SelectScalarFPAsInt (XLenVT GPR:$imm))), VLOpFrag)),
               (!cast<Instruction>("PseudoVMV_V_X_"#fvti.LMul.MX)
                $passthru, GPR:$imm, GPR:$vl, fvti.Log2SEW, TU_MU)>;
@@ -2493,7 +2493,7 @@ foreach fvti = AllFloatVectors in {
 
 foreach fvti = AllFloatVectors in {
   let Predicates = GetVTypePredicates<fvti>.Predicates in {
-    def : Pat<(fvti.Vector (riscv_vfmv_v_f_vl
+    def : Pat<(fvti.Vector (capstone_vfmv_v_f_vl
                            fvti.Vector:$passthru, (fvti.Scalar fvti.ScalarRegClass:$rs2), VLOpFrag)),
               (!cast<Instruction>("PseudoVFMV_V_" # fvti.ScalarSuffix # "_" #
                                   fvti.LMul.MX)
@@ -2503,27 +2503,27 @@ foreach fvti = AllFloatVectors in {
 }
 
 // 13.17. Vector Single-Width Floating-Point/Integer Type-Convert Instructions
-defm : VPatConvertFP2I_RM_VL_V<riscv_vfcvt_rm_xu_f_vl, "PseudoVFCVT_XU_F_V">;
-defm : VPatConvertFP2I_RM_VL_V<any_riscv_vfcvt_rm_x_f_vl, "PseudoVFCVT_X_F_V">;
+defm : VPatConvertFP2I_RM_VL_V<capstone_vfcvt_rm_xu_f_vl, "PseudoVFCVT_XU_F_V">;
+defm : VPatConvertFP2I_RM_VL_V<any_capstone_vfcvt_rm_x_f_vl, "PseudoVFCVT_X_F_V">;
 
-defm : VPatConvertFP2IVL_V<any_riscv_vfcvt_rtz_xu_f_vl, "PseudoVFCVT_RTZ_XU_F_V">;
-defm : VPatConvertFP2IVL_V<any_riscv_vfcvt_rtz_x_f_vl, "PseudoVFCVT_RTZ_X_F_V">;
+defm : VPatConvertFP2IVL_V<any_capstone_vfcvt_rtz_xu_f_vl, "PseudoVFCVT_RTZ_XU_F_V">;
+defm : VPatConvertFP2IVL_V<any_capstone_vfcvt_rtz_x_f_vl, "PseudoVFCVT_RTZ_X_F_V">;
 
-defm : VPatConvertI2FPVL_V_RM<any_riscv_uint_to_fp_vl, "PseudoVFCVT_F_XU_V">;
-defm : VPatConvertI2FPVL_V_RM<any_riscv_sint_to_fp_vl, "PseudoVFCVT_F_X_V">;
+defm : VPatConvertI2FPVL_V_RM<any_capstone_uint_to_fp_vl, "PseudoVFCVT_F_XU_V">;
+defm : VPatConvertI2FPVL_V_RM<any_capstone_sint_to_fp_vl, "PseudoVFCVT_F_X_V">;
 
-defm : VPatConvertI2FP_RM_VL_V<riscv_vfcvt_rm_f_xu_vl, "PseudoVFCVT_F_XU_V">;
-defm : VPatConvertI2FP_RM_VL_V<riscv_vfcvt_rm_f_x_vl, "PseudoVFCVT_F_X_V">;
+defm : VPatConvertI2FP_RM_VL_V<capstone_vfcvt_rm_f_xu_vl, "PseudoVFCVT_F_XU_V">;
+defm : VPatConvertI2FP_RM_VL_V<capstone_vfcvt_rm_f_x_vl, "PseudoVFCVT_F_X_V">;
 
 // 13.18. Widening Floating-Point/Integer Type-Convert Instructions
-defm : VPatWConvertFP2I_RM_VL_V<riscv_vfcvt_rm_xu_f_vl, "PseudoVFWCVT_XU_F_V">;
-defm : VPatWConvertFP2I_RM_VL_V<riscv_vfcvt_rm_x_f_vl, "PseudoVFWCVT_X_F_V">;
+defm : VPatWConvertFP2I_RM_VL_V<capstone_vfcvt_rm_xu_f_vl, "PseudoVFWCVT_XU_F_V">;
+defm : VPatWConvertFP2I_RM_VL_V<capstone_vfcvt_rm_x_f_vl, "PseudoVFWCVT_X_F_V">;
 
-defm : VPatWConvertFP2IVL_V<any_riscv_vfcvt_rtz_xu_f_vl, "PseudoVFWCVT_RTZ_XU_F_V">;
-defm : VPatWConvertFP2IVL_V<any_riscv_vfcvt_rtz_x_f_vl, "PseudoVFWCVT_RTZ_X_F_V">;
+defm : VPatWConvertFP2IVL_V<any_capstone_vfcvt_rtz_xu_f_vl, "PseudoVFWCVT_RTZ_XU_F_V">;
+defm : VPatWConvertFP2IVL_V<any_capstone_vfcvt_rtz_x_f_vl, "PseudoVFWCVT_RTZ_X_F_V">;
 
-defm : VPatWConvertI2FPVL_V<any_riscv_uint_to_fp_vl, "PseudoVFWCVT_F_XU_V">;
-defm : VPatWConvertI2FPVL_V<any_riscv_sint_to_fp_vl, "PseudoVFWCVT_F_X_V">;
+defm : VPatWConvertI2FPVL_V<any_capstone_uint_to_fp_vl, "PseudoVFWCVT_F_XU_V">;
+defm : VPatWConvertI2FPVL_V<any_capstone_sint_to_fp_vl, "PseudoVFWCVT_F_X_V">;
 
 foreach fvtiToFWti = AllWidenableFloatVectors in {
   defvar fvti = fvtiToFWti.Vti;
@@ -2531,7 +2531,7 @@ foreach fvtiToFWti = AllWidenableFloatVectors in {
   // Define vfwcvt.f.f.v for f16 when Zvfhmin is enable.
   let Predicates = !listconcat(GetVTypeMinimalPredicates<fvti>.Predicates,
                                GetVTypeMinimalPredicates<fwti>.Predicates) in
-  def : Pat<(fwti.Vector (any_riscv_fpextend_vl
+  def : Pat<(fwti.Vector (any_capstone_fpextend_vl
                              (fvti.Vector fvti.RegClass:$rs1),
                              (fvti.Mask VMV0:$vm),
                              VLOpFrag)),
@@ -2545,7 +2545,7 @@ foreach fvtiToFWti = AllWidenableBFloatToFloatVectors in {
   defvar fvti = fvtiToFWti.Vti;
   defvar fwti = fvtiToFWti.Wti;
   let Predicates = [HasVInstructionsBF16Minimal] in
-  def : Pat<(fwti.Vector (any_riscv_fpextend_vl
+  def : Pat<(fwti.Vector (any_capstone_fpextend_vl
                              (fvti.Vector fvti.RegClass:$rs1),
                              (fvti.Mask VMV0:$vm),
                              VLOpFrag)),
@@ -2556,17 +2556,17 @@ foreach fvtiToFWti = AllWidenableBFloatToFloatVectors in {
 }
 
 // 13.19 Narrowing Floating-Point/Integer Type-Convert Instructions
-defm : VPatNConvertFP2I_RM_VL_W<riscv_vfcvt_rm_xu_f_vl, "PseudoVFNCVT_XU_F_W">;
-defm : VPatNConvertFP2I_RM_VL_W<riscv_vfcvt_rm_x_f_vl, "PseudoVFNCVT_X_F_W">;
+defm : VPatNConvertFP2I_RM_VL_W<capstone_vfcvt_rm_xu_f_vl, "PseudoVFNCVT_XU_F_W">;
+defm : VPatNConvertFP2I_RM_VL_W<capstone_vfcvt_rm_x_f_vl, "PseudoVFNCVT_X_F_W">;
 
-defm : VPatNConvertFP2IVL_W<any_riscv_vfcvt_rtz_xu_f_vl, "PseudoVFNCVT_RTZ_XU_F_W">;
-defm : VPatNConvertFP2IVL_W<any_riscv_vfcvt_rtz_x_f_vl, "PseudoVFNCVT_RTZ_X_F_W">;
+defm : VPatNConvertFP2IVL_W<any_capstone_vfcvt_rtz_xu_f_vl, "PseudoVFNCVT_RTZ_XU_F_W">;
+defm : VPatNConvertFP2IVL_W<any_capstone_vfcvt_rtz_x_f_vl, "PseudoVFNCVT_RTZ_X_F_W">;
 
-defm : VPatNConvertI2FPVL_W_RM<any_riscv_uint_to_fp_vl, "PseudoVFNCVT_F_XU_W">;
-defm : VPatNConvertI2FPVL_W_RM<any_riscv_sint_to_fp_vl, "PseudoVFNCVT_F_X_W">;
+defm : VPatNConvertI2FPVL_W_RM<any_capstone_uint_to_fp_vl, "PseudoVFNCVT_F_XU_W">;
+defm : VPatNConvertI2FPVL_W_RM<any_capstone_sint_to_fp_vl, "PseudoVFNCVT_F_X_W">;
 
-defm : VPatNConvertI2FP_RM_VL_W<riscv_vfcvt_rm_f_xu_vl, "PseudoVFNCVT_F_XU_W">;
-defm : VPatNConvertI2FP_RM_VL_W<riscv_vfcvt_rm_f_x_vl, "PseudoVFNCVT_F_X_W">;
+defm : VPatNConvertI2FP_RM_VL_W<capstone_vfcvt_rm_f_xu_vl, "PseudoVFNCVT_F_XU_W">;
+defm : VPatNConvertI2FP_RM_VL_W<capstone_vfcvt_rm_f_x_vl, "PseudoVFNCVT_F_X_W">;
 
 foreach fvtiToFWti = AllWidenableFloatVectors in {
   defvar fvti = fvtiToFWti.Vti;
@@ -2574,20 +2574,20 @@ foreach fvtiToFWti = AllWidenableFloatVectors in {
   // Define vfncvt.f.f.w for f16 when Zvfhmin is enable.
   let Predicates = !listconcat(GetVTypeMinimalPredicates<fvti>.Predicates,
                                GetVTypeMinimalPredicates<fwti>.Predicates) in {
-    def : Pat<(fvti.Vector (any_riscv_fpround_vl
+    def : Pat<(fvti.Vector (any_capstone_fpround_vl
                                (fwti.Vector fwti.RegClass:$rs1),
                                (fwti.Mask VMV0:$vm), VLOpFrag)),
               (!cast<Instruction>("PseudoVFNCVT_F_F_W_"#fvti.LMul.MX#"_E"#fvti.SEW#"_MASK")
                   (fvti.Vector (IMPLICIT_DEF)), fwti.RegClass:$rs1,
                   (fwti.Mask VMV0:$vm),
                   // Value to indicate no rounding mode change in
-                  // RISCVInsertReadWriteCSR
+                  // CapstoneInsertReadWriteCSR
                   FRM_DYN,
                   GPR:$vl, fvti.Log2SEW, TA_MA)>;
 
   let Predicates = !listconcat(GetVTypePredicates<fvti>.Predicates,
                                GetVTypePredicates<fwti>.Predicates) in
-    def : Pat<(fvti.Vector (any_riscv_fncvt_rod_vl
+    def : Pat<(fvti.Vector (any_capstone_fncvt_rod_vl
                                (fwti.Vector fwti.RegClass:$rs1),
                                (fwti.Mask VMV0:$vm), VLOpFrag)),
               (!cast<Instruction>("PseudoVFNCVT_ROD_F_F_W_"#fvti.LMul.MX#"_E"#fvti.SEW#"_MASK")
@@ -2600,14 +2600,14 @@ foreach fvtiToFWti = AllWidenableBFloatToFloatVectors in {
   defvar fvti = fvtiToFWti.Vti;
   defvar fwti = fvtiToFWti.Wti;
   let Predicates = [HasVInstructionsBF16Minimal] in
-    def : Pat<(fvti.Vector (any_riscv_fpround_vl
+    def : Pat<(fvti.Vector (any_capstone_fpround_vl
                                (fwti.Vector fwti.RegClass:$rs1),
                                (fwti.Mask VMV0:$vm), VLOpFrag)),
               (!cast<Instruction>("PseudoVFNCVTBF16_F_F_W_"#fvti.LMul.MX#"_E"#fvti.SEW#"_MASK")
                   (fvti.Vector (IMPLICIT_DEF)), fwti.RegClass:$rs1,
                   (fwti.Mask VMV0:$vm),
                   // Value to indicate no rounding mode change in
-                  // RISCVInsertReadWriteCSR
+                  // CapstoneInsertReadWriteCSR
                   FRM_DYN,
                   GPR:$vl, fvti.Log2SEW, TA_MA)>;
 }
@@ -2627,9 +2627,9 @@ defm : VPatReductionVL<rvv_vecreduce_XOR_vl,  "PseudoVREDXOR", is_float=0>;
 // 14.2. Vector Widening Integer Reduction Instructions
 defm : VPatWidenReductionVL<rvv_vecreduce_ADD_vl, anyext_oneuse, "PseudoVWREDSUMU", is_float=0>;
 defm : VPatWidenReductionVL<rvv_vecreduce_ADD_vl, zext_oneuse, "PseudoVWREDSUMU", is_float=0>;
-defm : VPatWidenReductionVL_Ext_VL<rvv_vecreduce_ADD_vl, riscv_zext_vl_oneuse, "PseudoVWREDSUMU", is_float=0>;
+defm : VPatWidenReductionVL_Ext_VL<rvv_vecreduce_ADD_vl, capstone_zext_vl_oneuse, "PseudoVWREDSUMU", is_float=0>;
 defm : VPatWidenReductionVL<rvv_vecreduce_ADD_vl, sext_oneuse, "PseudoVWREDSUM", is_float=0>;
-defm : VPatWidenReductionVL_Ext_VL<rvv_vecreduce_ADD_vl, riscv_sext_vl_oneuse, "PseudoVWREDSUM", is_float=0>;
+defm : VPatWidenReductionVL_Ext_VL<rvv_vecreduce_ADD_vl, capstone_sext_vl_oneuse, "PseudoVWREDSUM", is_float=0>;
 
 // 14.3. Vector Single-Width Floating-Point Reduction Instructions
 defm : VPatReductionVL_RM<rvv_vecreduce_SEQ_FADD_vl, "PseudoVFREDOSUM", is_float=1>;
@@ -2639,10 +2639,10 @@ defm : VPatReductionVL<rvv_vecreduce_FMAX_vl,     "PseudoVFREDMAX", is_float=1>;
 
 // 14.4. Vector Widening Floating-Point Reduction Instructions
 defm : VPatWidenReductionVL_Ext_VL_RM<rvv_vecreduce_SEQ_FADD_vl,
-                                      riscv_fpextend_vl_oneuse,
+                                      capstone_fpextend_vl_oneuse,
                                       "PseudoVFWREDOSUM", is_float=1>;
 defm : VPatWidenReductionVL_Ext_VL_RM<rvv_vecreduce_FADD_vl,
-                                      riscv_fpextend_vl_oneuse,
+                                      capstone_fpextend_vl_oneuse,
                                       "PseudoVFWREDUSUM", is_float=1>;
 
 // 15. Vector Mask Instructions
@@ -2650,67 +2650,67 @@ defm : VPatWidenReductionVL_Ext_VL_RM<rvv_vecreduce_FADD_vl,
 foreach mti = AllMasks in {
   let Predicates = [HasVInstructions] in {
     // 15.1 Vector Mask-Register Logical Instructions
-    def : Pat<(mti.Mask (riscv_vmset_vl VLOpFrag)),
+    def : Pat<(mti.Mask (capstone_vmset_vl VLOpFrag)),
               (!cast<Instruction>("PseudoVMSET_M_" # mti.BX) GPR:$vl, mti.Log2SEW)>;
-    def : Pat<(mti.Mask (riscv_vmclr_vl VLOpFrag)),
+    def : Pat<(mti.Mask (capstone_vmclr_vl VLOpFrag)),
               (!cast<Instruction>("PseudoVMCLR_M_" # mti.BX) GPR:$vl, mti.Log2SEW)>;
 
-    def : Pat<(mti.Mask (riscv_vmand_vl VR:$rs1, VR:$rs2, VLOpFrag)),
+    def : Pat<(mti.Mask (capstone_vmand_vl VR:$rs1, VR:$rs2, VLOpFrag)),
               (!cast<Instruction>("PseudoVMAND_MM_" # mti.BX)
                    VR:$rs1, VR:$rs2, GPR:$vl, mti.Log2SEW)>;
-    def : Pat<(mti.Mask (riscv_vmor_vl VR:$rs1, VR:$rs2, VLOpFrag)),
+    def : Pat<(mti.Mask (capstone_vmor_vl VR:$rs1, VR:$rs2, VLOpFrag)),
               (!cast<Instruction>("PseudoVMOR_MM_" # mti.BX)
                    VR:$rs1, VR:$rs2, GPR:$vl, mti.Log2SEW)>;
-    def : Pat<(mti.Mask (riscv_vmxor_vl VR:$rs1, VR:$rs2, VLOpFrag)),
+    def : Pat<(mti.Mask (capstone_vmxor_vl VR:$rs1, VR:$rs2, VLOpFrag)),
               (!cast<Instruction>("PseudoVMXOR_MM_" # mti.BX)
                    VR:$rs1, VR:$rs2, GPR:$vl, mti.Log2SEW)>;
 
-    def : Pat<(mti.Mask (riscv_vmand_vl VR:$rs1,
-                                        (riscv_vmnot_vl VR:$rs2, VLOpFrag),
+    def : Pat<(mti.Mask (capstone_vmand_vl VR:$rs1,
+                                        (capstone_vmnot_vl VR:$rs2, VLOpFrag),
                                         VLOpFrag)),
               (!cast<Instruction>("PseudoVMANDN_MM_" # mti.BX)
                    VR:$rs1, VR:$rs2, GPR:$vl, mti.Log2SEW)>;
-    def : Pat<(mti.Mask (riscv_vmor_vl VR:$rs1,
-                                       (riscv_vmnot_vl VR:$rs2, VLOpFrag),
+    def : Pat<(mti.Mask (capstone_vmor_vl VR:$rs1,
+                                       (capstone_vmnot_vl VR:$rs2, VLOpFrag),
                                        VLOpFrag)),
               (!cast<Instruction>("PseudoVMORN_MM_" # mti.BX)
                    VR:$rs1, VR:$rs2, GPR:$vl, mti.Log2SEW)>;
     // XOR is associative so we need 2 patterns for VMXNOR.
-    def : Pat<(mti.Mask (riscv_vmxor_vl (riscv_vmnot_vl VR:$rs1,
+    def : Pat<(mti.Mask (capstone_vmxor_vl (capstone_vmnot_vl VR:$rs1,
                                                         VLOpFrag),
                                        VR:$rs2, VLOpFrag)),
               (!cast<Instruction>("PseudoVMXNOR_MM_" # mti.BX)
                    VR:$rs1, VR:$rs2, GPR:$vl, mti.Log2SEW)>;
 
-    def : Pat<(mti.Mask (riscv_vmnot_vl (riscv_vmand_vl VR:$rs1, VR:$rs2,
+    def : Pat<(mti.Mask (capstone_vmnot_vl (capstone_vmand_vl VR:$rs1, VR:$rs2,
                                                         VLOpFrag),
                                         VLOpFrag)),
               (!cast<Instruction>("PseudoVMNAND_MM_" # mti.BX)
                    VR:$rs1, VR:$rs2, GPR:$vl, mti.Log2SEW)>;
-    def : Pat<(mti.Mask (riscv_vmnot_vl (riscv_vmor_vl VR:$rs1, VR:$rs2,
+    def : Pat<(mti.Mask (capstone_vmnot_vl (capstone_vmor_vl VR:$rs1, VR:$rs2,
                                                        VLOpFrag),
                                         VLOpFrag)),
               (!cast<Instruction>("PseudoVMNOR_MM_" # mti.BX)
                    VR:$rs1, VR:$rs2, GPR:$vl, mti.Log2SEW)>;
-    def : Pat<(mti.Mask (riscv_vmnot_vl (riscv_vmxor_vl VR:$rs1, VR:$rs2,
+    def : Pat<(mti.Mask (capstone_vmnot_vl (capstone_vmxor_vl VR:$rs1, VR:$rs2,
                                                         VLOpFrag),
                                         VLOpFrag)),
               (!cast<Instruction>("PseudoVMXNOR_MM_" # mti.BX)
                    VR:$rs1, VR:$rs2, GPR:$vl, mti.Log2SEW)>;
 
     // Match the not idiom to the vmnot.m pseudo.
-    def : Pat<(mti.Mask (riscv_vmnot_vl VR:$rs, VLOpFrag)),
+    def : Pat<(mti.Mask (capstone_vmnot_vl VR:$rs, VLOpFrag)),
               (!cast<Instruction>("PseudoVMNAND_MM_" # mti.BX)
                    VR:$rs, VR:$rs, GPR:$vl, mti.Log2SEW)>;
 
     // 15.2 Vector count population in mask vcpop.m
-    def : Pat<(XLenVT (riscv_vcpop_vl (mti.Mask VR:$rs2), (mti.Mask VMV0:$vm),
+    def : Pat<(XLenVT (capstone_vcpop_vl (mti.Mask VR:$rs2), (mti.Mask VMV0:$vm),
                                       VLOpFrag)),
               (!cast<Instruction>("PseudoVCPOP_M_" # mti.BX # "_MASK")
                    VR:$rs2, (mti.Mask VMV0:$vm), GPR:$vl, mti.Log2SEW)>;
 
     // 15.3 vfirst find-first-set mask bit
-    def : Pat<(XLenVT (riscv_vfirst_vl (mti.Mask VR:$rs2), (mti.Mask VMV0:$vm),
+    def : Pat<(XLenVT (capstone_vfirst_vl (mti.Mask VR:$rs2), (mti.Mask VMV0:$vm),
                                       VLOpFrag)),
               (!cast<Instruction>("PseudoVFIRST_M_" # mti.BX # "_MASK")
                    VR:$rs2, (mti.Mask VMV0:$vm), GPR:$vl, mti.Log2SEW)>;
@@ -2722,7 +2722,7 @@ foreach mti = AllMasks in {
 // 16.1. Integer Scalar Move Instructions
 foreach vti = NoGroupIntegerVectors in {
   let Predicates = GetVTypePredicates<vti>.Predicates in {
-    def : Pat<(vti.Vector (riscv_vmv_s_x_vl (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (capstone_vmv_s_x_vl (vti.Vector vti.RegClass:$passthru),
                                             vti.ScalarRegClass:$rs1,
                                             VLOpFrag)),
               (PseudoVMV_S_X $passthru, vti.ScalarRegClass:$rs1, GPR:$vl,
@@ -2733,7 +2733,7 @@ foreach vti = NoGroupIntegerVectors in {
 // 16.4. Vector Register Gather Instruction
 foreach vti = AllIntegerVectors in {
   let Predicates = GetVTypePredicates<vti>.Predicates in {
-    def : Pat<(vti.Vector (riscv_vrgather_vv_vl vti.RegClass:$rs2,
+    def : Pat<(vti.Vector (capstone_vrgather_vv_vl vti.RegClass:$rs2,
                                                 vti.RegClass:$rs1,
                                                 vti.RegClass:$passthru,
                                                 (vti.Mask VMV0:$vm),
@@ -2741,14 +2741,14 @@ foreach vti = AllIntegerVectors in {
               (!cast<Instruction>("PseudoVRGATHER_VV_"# vti.LMul.MX#"_E"# vti.SEW#"_MASK")
                    vti.RegClass:$passthru, vti.RegClass:$rs2, vti.RegClass:$rs1,
                    (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW, TAIL_AGNOSTIC)>;
-    def : Pat<(vti.Vector (riscv_vrgather_vx_vl vti.RegClass:$rs2, GPR:$rs1,
+    def : Pat<(vti.Vector (capstone_vrgather_vx_vl vti.RegClass:$rs2, GPR:$rs1,
                                                 vti.RegClass:$passthru,
                                                 (vti.Mask VMV0:$vm),
                                                 VLOpFrag)),
               (!cast<Instruction>("PseudoVRGATHER_VX_"# vti.LMul.MX#"_MASK")
                    vti.RegClass:$passthru, vti.RegClass:$rs2, GPR:$rs1,
                    (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW, TAIL_AGNOSTIC)>;
-    def : Pat<(vti.Vector (riscv_vrgather_vx_vl vti.RegClass:$rs2,
+    def : Pat<(vti.Vector (capstone_vrgather_vx_vl vti.RegClass:$rs2,
                                                 uimm5:$imm,
                                                 vti.RegClass:$passthru,
                                                 (vti.Mask VMV0:$vm),
@@ -2768,7 +2768,7 @@ foreach vti = AllIntegerVectors in {
     defvar inst = "PseudoVRGATHEREI16_VV_" # vti.LMul.MX # "_E" # vti.SEW # "_" # emul_str;
     let Predicates = GetVTypePredicates<vti>.Predicates in
     def : Pat<(vti.Vector
-               (riscv_vrgatherei16_vv_vl vti.RegClass:$rs2,
+               (capstone_vrgatherei16_vv_vl vti.RegClass:$rs2,
                                          (ivti.Vector ivti.RegClass:$rs1),
                                          vti.RegClass:$passthru,
                                          (vti.Mask VMV0:$vm),
@@ -2782,15 +2782,15 @@ foreach vti = AllIntegerVectors in {
 // 16.2. Floating-Point Scalar Move Instructions
 foreach vti = NoGroupFloatVectors in {
   let Predicates = GetVTypePredicates<vti>.Predicates in {
-    def : Pat<(vti.Vector (riscv_vfmv_s_f_vl (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (capstone_vfmv_s_f_vl (vti.Vector vti.RegClass:$passthru),
                                              (vti.Scalar (fpimm0)),
                                              VLOpFrag)),
               (PseudoVMV_S_X $passthru, (XLenVT X0), GPR:$vl, vti.Log2SEW)>;
-    def : Pat<(vti.Vector (riscv_vfmv_s_f_vl (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (capstone_vfmv_s_f_vl (vti.Vector vti.RegClass:$passthru),
                                              (vti.Scalar (SelectScalarFPAsInt (XLenVT GPR:$imm))),
                                              VLOpFrag)),
               (PseudoVMV_S_X $passthru, GPR:$imm, GPR:$vl, vti.Log2SEW)>;
-    def : Pat<(vti.Vector (riscv_vfmv_s_f_vl (vti.Vector vti.RegClass:$passthru),
+    def : Pat<(vti.Vector (capstone_vfmv_s_f_vl (vti.Vector vti.RegClass:$passthru),
                                              vti.ScalarRegClass:$rs1,
                                              VLOpFrag)),
               (!cast<Instruction>("PseudoVFMV_S_"#vti.ScalarSuffix)
@@ -2803,7 +2803,7 @@ foreach vti = AllFloatVectors in {
   defvar ivti = GetIntVTypeInfo<vti>.Vti;
   let Predicates = GetVTypePredicates<ivti>.Predicates in {
     def : Pat<(vti.Vector
-               (riscv_vrgather_vv_vl vti.RegClass:$rs2,
+               (capstone_vrgather_vv_vl vti.RegClass:$rs2,
                                      (ivti.Vector vti.RegClass:$rs1),
                                      vti.RegClass:$passthru,
                                      (vti.Mask VMV0:$vm),
@@ -2811,7 +2811,7 @@ foreach vti = AllFloatVectors in {
               (!cast<Instruction>("PseudoVRGATHER_VV_"# vti.LMul.MX#"_E"# vti.SEW#"_MASK")
                    vti.RegClass:$passthru, vti.RegClass:$rs2, vti.RegClass:$rs1,
                    (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW, TAIL_AGNOSTIC)>;
-    def : Pat<(vti.Vector (riscv_vrgather_vx_vl vti.RegClass:$rs2, GPR:$rs1,
+    def : Pat<(vti.Vector (capstone_vrgather_vx_vl vti.RegClass:$rs2, GPR:$rs1,
                                                 vti.RegClass:$passthru,
                                                 (vti.Mask VMV0:$vm),
                                                 VLOpFrag)),
@@ -2819,7 +2819,7 @@ foreach vti = AllFloatVectors in {
                    vti.RegClass:$passthru, vti.RegClass:$rs2, GPR:$rs1,
                    (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW, TAIL_AGNOSTIC)>;
     def : Pat<(vti.Vector
-               (riscv_vrgather_vx_vl vti.RegClass:$rs2,
+               (capstone_vrgather_vx_vl vti.RegClass:$rs2,
                                      uimm5:$imm,
                                      vti.RegClass:$passthru,
                                      (vti.Mask VMV0:$vm),
@@ -2839,7 +2839,7 @@ foreach vti = AllFloatVectors in {
     let Predicates = !listconcat(GetVTypePredicates<vti>.Predicates,
                                  GetVTypePredicates<ivti>.Predicates) in
     def : Pat<(vti.Vector
-               (riscv_vrgatherei16_vv_vl vti.RegClass:$rs2,
+               (capstone_vrgatherei16_vv_vl vti.RegClass:$rs2,
                                          (ivti.Vector ivti.RegClass:$rs1),
                                          vti.RegClass:$passthru,
                                          (vti.Mask VMV0:$vm),
@@ -2851,13 +2851,13 @@ foreach vti = AllFloatVectors in {
 }
 
 //===----------------------------------------------------------------------===//
-// Miscellaneous RISCVISD SDNodes
+// Miscellaneous CapstoneISD SDNodes
 //===----------------------------------------------------------------------===//
 
 // Matches the semantics of the vid.v instruction, with a mask and VL
 // operand.
 let HasMaskOp = true in
-def riscv_vid_vl : RVSDNode<"VID_VL", SDTypeProfile<1, 2, [SDTCisVec<0>,
+def capstone_vid_vl : RVSDNode<"VID_VL", SDTypeProfile<1, 2, [SDTCisVec<0>,
                                                            SDTCVecEltisVT<1, i1>,
                                                            SDTCisSameNumEltsAs<0, 1>,
                                                            SDTCisVT<2, XLenVT>]>>;
@@ -2883,26 +2883,26 @@ let HasMaskOp = true in {
   // pass-thru operand, the second is the source vector, the third is the XLenVT
   // index (either constant or non-constant), the fourth is the mask, the fifth
   // is the VL and the sixth is the policy.
-  def riscv_slideup_vl   : RVSDNode<"VSLIDEUP_VL", SDTRVVSlide, []>;
-  def riscv_slidedown_vl : RVSDNode<"VSLIDEDOWN_VL", SDTRVVSlide, []>;
+  def capstone_slideup_vl   : RVSDNode<"VSLIDEUP_VL", SDTRVVSlide, []>;
+  def capstone_slidedown_vl : RVSDNode<"VSLIDEDOWN_VL", SDTRVVSlide, []>;
 
   // Matches the semantics of vslide1up/slide1down. The first operand is
   // passthru operand, the second is source vector, third is the XLenVT scalar
   // value. The fourth and fifth operands are the mask and VL operands.
-  def riscv_slide1up_vl  : RVSDNode<"VSLIDE1UP_VL", SDTRVVSlide1, []>;
-  def riscv_slide1down_vl  : RVSDNode<"VSLIDE1DOWN_VL", SDTRVVSlide1, []>;
+  def capstone_slide1up_vl  : RVSDNode<"VSLIDE1UP_VL", SDTRVVSlide1, []>;
+  def capstone_slide1down_vl  : RVSDNode<"VSLIDE1DOWN_VL", SDTRVVSlide1, []>;
 
   // Matches the semantics of vfslide1up/vfslide1down. The first operand is
   // passthru operand, the second is source vector, third is a scalar value
   // whose type matches the element type of the vectors.  The fourth and fifth
   // operands are the mask and VL operands.
-  def riscv_fslide1up_vl  : RVSDNode<"VFSLIDE1UP_VL", SDTRVVFSlide1, []>;
-  def riscv_fslide1down_vl  : RVSDNode<"VFSLIDE1DOWN_VL", SDTRVVFSlide1, []>;
+  def capstone_fslide1up_vl  : RVSDNode<"VFSLIDE1UP_VL", SDTRVVFSlide1, []>;
+  def capstone_fslide1down_vl  : RVSDNode<"VFSLIDE1DOWN_VL", SDTRVVFSlide1, []>;
 } // let HasMaskOp = true
 
 foreach vti = AllIntegerVectors in {
   let Predicates = GetVTypePredicates<vti>.Predicates in {
-    def : Pat<(vti.Vector (riscv_vid_vl (vti.Mask VMV0:$vm),
+    def : Pat<(vti.Vector (capstone_vid_vl (vti.Mask VMV0:$vm),
                                         VLOpFrag)),
               (!cast<Instruction>("PseudoVID_V_"#vti.LMul.MX#"_MASK")
                   (vti.Vector (IMPLICIT_DEF)), (vti.Mask VMV0:$vm), GPR:$vl, vti.Log2SEW,
@@ -2910,9 +2910,9 @@ foreach vti = AllIntegerVectors in {
   }
 }
 
-defm : VPatSlideVL_VX_VI<riscv_slideup_vl, "PseudoVSLIDEUP">;
-defm : VPatSlideVL_VX_VI<riscv_slidedown_vl, "PseudoVSLIDEDOWN">;
-defm : VPatSlide1VL_VX<riscv_slide1up_vl, "PseudoVSLIDE1UP">;
-defm : VPatSlide1VL_VF<riscv_fslide1up_vl, "PseudoVFSLIDE1UP">;
-defm : VPatSlide1VL_VX<riscv_slide1down_vl, "PseudoVSLIDE1DOWN">;
-defm : VPatSlide1VL_VF<riscv_fslide1down_vl, "PseudoVFSLIDE1DOWN">;
+defm : VPatSlideVL_VX_VI<capstone_slideup_vl, "PseudoVSLIDEUP">;
+defm : VPatSlideVL_VX_VI<capstone_slidedown_vl, "PseudoVSLIDEDOWN">;
+defm : VPatSlide1VL_VX<capstone_slide1up_vl, "PseudoVSLIDE1UP">;
+defm : VPatSlide1VL_VF<capstone_fslide1up_vl, "PseudoVFSLIDE1UP">;
+defm : VPatSlide1VL_VX<capstone_slide1down_vl, "PseudoVSLIDE1DOWN">;
+defm : VPatSlide1VL_VF<capstone_fslide1down_vl, "PseudoVFSLIDE1DOWN">;

@@ -1,4 +1,4 @@
-//===------ RISCVIndirectBranchTracking.cpp - Enables lpad mechanism ------===//
+//===------ CapstoneIndirectBranchTracking.cpp - Enables lpad mechanism ------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -12,28 +12,28 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVInstrInfo.h"
-#include "RISCVSubtarget.h"
+#include "Capstone.h"
+#include "CapstoneInstrInfo.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
 
-#define DEBUG_TYPE "riscv-indrect-branch-tracking"
-#define PASS_NAME "RISC-V Indirect Branch Tracking"
+#define DEBUG_TYPE "capstone-indrect-branch-tracking"
+#define PASS_NAME "Capstone Indirect Branch Tracking"
 
 using namespace llvm;
 
 cl::opt<uint32_t> PreferredLandingPadLabel(
-    "riscv-landing-pad-label", cl::ReallyHidden,
+    "capstone-landing-pad-label", cl::ReallyHidden,
     cl::desc("Use preferred fixed label for all labels"));
 
 namespace {
-class RISCVIndirectBranchTracking : public MachineFunctionPass {
+class CapstoneIndirectBranchTracking : public MachineFunctionPass {
 public:
   static char ID;
-  RISCVIndirectBranchTracking() : MachineFunctionPass(ID) {}
+  CapstoneIndirectBranchTracking() : MachineFunctionPass(ID) {}
 
   StringRef getPassName() const override { return PASS_NAME; }
 
@@ -45,32 +45,32 @@ private:
 
 } // end anonymous namespace
 
-INITIALIZE_PASS(RISCVIndirectBranchTracking, DEBUG_TYPE, PASS_NAME, false,
+INITIALIZE_PASS(CapstoneIndirectBranchTracking, DEBUG_TYPE, PASS_NAME, false,
                 false)
 
-char RISCVIndirectBranchTracking::ID = 0;
+char CapstoneIndirectBranchTracking::ID = 0;
 
-FunctionPass *llvm::createRISCVIndirectBranchTrackingPass() {
-  return new RISCVIndirectBranchTracking();
+FunctionPass *llvm::createCapstoneIndirectBranchTrackingPass() {
+  return new CapstoneIndirectBranchTracking();
 }
 
-static void emitLpad(MachineBasicBlock &MBB, const RISCVInstrInfo *TII,
+static void emitLpad(MachineBasicBlock &MBB, const CapstoneInstrInfo *TII,
                      uint32_t Label) {
   auto I = MBB.begin();
-  BuildMI(MBB, I, MBB.findDebugLoc(I), TII->get(RISCV::AUIPC), RISCV::X0)
+  BuildMI(MBB, I, MBB.findDebugLoc(I), TII->get(Capstone::AUIPC), Capstone::X0)
       .addImm(Label);
 }
 
-bool RISCVIndirectBranchTracking::runOnMachineFunction(MachineFunction &MF) {
-  const auto &Subtarget = MF.getSubtarget<RISCVSubtarget>();
-  const RISCVInstrInfo *TII = Subtarget.getInstrInfo();
+bool CapstoneIndirectBranchTracking::runOnMachineFunction(MachineFunction &MF) {
+  const auto &Subtarget = MF.getSubtarget<CapstoneSubtarget>();
+  const CapstoneInstrInfo *TII = Subtarget.getInstrInfo();
   if (!Subtarget.hasStdExtZicfilp())
     return false;
 
   uint32_t FixedLabel = 0;
   if (PreferredLandingPadLabel.getNumOccurrences() > 0) {
     if (!isUInt<20>(PreferredLandingPadLabel))
-      report_fatal_error("riscv-landing-pad-label=<val>, <val> needs to fit in "
+      report_fatal_error("capstone-landing-pad-label=<val>, <val> needs to fit in "
                          "unsigned 20-bits");
     FixedLabel = PreferredLandingPadLabel;
   }

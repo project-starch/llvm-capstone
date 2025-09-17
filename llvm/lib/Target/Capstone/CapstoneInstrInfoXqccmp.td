@@ -1,4 +1,4 @@
-//===---------------- RISCVInstrInfoXqccmp.td --------------*- tablegen -*-===//
+//===---------------- CapstoneInstrInfoXqccmp.td --------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -33,7 +33,7 @@ def RegListS0AsmOperand : AsmOperandClass {
   let DiagnosticString = "operand must be {ra, s0[-sN]} or {x1, x8[-x9][, x18[-xN]]}";
 }
 
-def reglist_s0 : RISCVOp<OtherVT> {
+def reglist_s0 : CapstoneOp<OtherVT> {
    let ParserMatchClass = RegListS0AsmOperand;
    let PrintMethod = "printRegList";
    let DecoderMethod = "decodeXqccmpRlistS0";
@@ -43,7 +43,7 @@ def reglist_s0 : RISCVOp<OtherVT> {
     if (!MCOp.evaluateAsConstantImm(Imm))
       return false;
     // 0~4 invalid for `qc.cm.pushfp`
-    return isUInt<4>(Imm) && Imm >= RISCVZC::RA_S0;
+    return isUInt<4>(Imm) && Imm >= CapstoneZC::RA_S0;
   }];
 
   string OperandType = "OPERAND_RLIST_S0";

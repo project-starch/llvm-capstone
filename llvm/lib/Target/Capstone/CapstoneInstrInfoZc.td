@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZc.td - RISC-V 'Zc*' instructions ----*- tablegen -*-===//
+//===-- CapstoneInstrInfoZc.td - Capstone 'Zc*' instructions ----*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 ///
-/// This file describes the RISC-V instructions from the 'Zc*' compressed
+/// This file describes the Capstone instructions from the 'Zc*' compressed
 /// instruction extensions, version 1.0.3.
 ///
 //===----------------------------------------------------------------------===//
@@ -15,7 +15,7 @@
 // Operand and SDNode transformation definitions.
 //===----------------------------------------------------------------------===//
 
-def uimm2_lsb0 : RISCVOp,
+def uimm2_lsb0 : CapstoneOp,
                  ImmLeaf<XLenVT, [{return isShiftedUInt<1, 1>(Imm);}]> {
   let ParserMatchClass = UImmAsmOperand<2, "Lsb0">;
   let EncoderMethod = "getImmOpValue";
@@ -29,7 +29,7 @@ def uimm2_lsb0 : RISCVOp,
   }];
 }
 
-def uimm8ge32 : RISCVOp {
+def uimm8ge32 : CapstoneOp {
   let ParserMatchClass = UImmAsmOperand<8, "GE32">;
   let DecoderMethod = "decodeUImmOperandGE<8, 32>";
   let OperandType = "OPERAND_UIMM8_GE32";
@@ -58,7 +58,7 @@ def NegStackAdjAsmOperand : AsmOperandClass {
   let RenderMethod = "addStackAdjOperands";
 }
 
-def reglist : RISCVOp<OtherVT> {
+def reglist : CapstoneOp<OtherVT> {
    let ParserMatchClass = RegListAsmOperand;
    let PrintMethod = "printRegList";
    let DecoderMethod = "decodeZcmpRlist";
@@ -68,13 +68,13 @@ def reglist : RISCVOp<OtherVT> {
     if (!MCOp.evaluateAsConstantImm(Imm))
       return false;
     // 0~3 Reserved for EABI
-    return isUInt<4>(Imm) && Imm >= RISCVZC::RA;
+    return isUInt<4>(Imm) && Imm >= CapstoneZC::RA;
   }];
 
   let OperandType = "OPERAND_RLIST";
 }
 
-def stackadj : RISCVOp<OtherVT> {
+def stackadj : CapstoneOp<OtherVT> {
   let ParserMatchClass = StackAdjAsmOperand;
   let PrintMethod = "printStackAdj";
   let OperandType = "OPERAND_STACKADJ";
@@ -86,7 +86,7 @@ def stackadj : RISCVOp<OtherVT> {
   }];
 }
 
-def negstackadj : RISCVOp<OtherVT> {
+def negstackadj : CapstoneOp<OtherVT> {
   let ParserMatchClass = NegStackAdjAsmOperand;
   let PrintMethod = "printNegStackAdj";
   let OperandType = "OPERAND_STACKADJ";

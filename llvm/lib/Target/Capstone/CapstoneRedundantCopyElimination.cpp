@@ -1,4 +1,4 @@
-//=- RISCVRedundantCopyElimination.cpp - Remove useless copy for RISC-V -----=//
+//=- CapstoneRedundantCopyElimination.cpp - Remove useless copy for Capstone -----=//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -19,12 +19,12 @@
 // AArch64RedundantCopyElimination.
 //
 // FIXME: Support compares with constants other than zero? This is harder to
-// do on RISC-V since branches can't have immediates.
+// do on Capstone since branches can't have immediates.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVInstrInfo.h"
+#include "Capstone.h"
+#include "CapstoneInstrInfo.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -32,19 +32,19 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-copyelim"
+#define DEBUG_TYPE "capstone-copyelim"
 
 STATISTIC(NumCopiesRemoved, "Number of copies removed.");
 
 namespace {
-class RISCVRedundantCopyElimination : public MachineFunctionPass {
+class CapstoneRedundantCopyElimination : public MachineFunctionPass {
   const MachineRegisterInfo *MRI;
   const TargetRegisterInfo *TRI;
   const TargetInstrInfo *TII;
 
 public:
   static char ID;
-  RISCVRedundantCopyElimination() : MachineFunctionPass(ID) {}
+  CapstoneRedundantCopyElimination() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
   MachineFunctionProperties getRequiredProperties() const override {
@@ -52,7 +52,7 @@ public:
   }
 
   StringRef getPassName() const override {
-    return "RISC-V Redundant Copy Elimination";
+    return "Capstone Redundant Copy Elimination";
   }
 
 private:
@@ -61,10 +61,10 @@ private:
 
 } // end anonymous namespace
 
-char RISCVRedundantCopyElimination::ID = 0;
+char CapstoneRedundantCopyElimination::ID = 0;
 
-INITIALIZE_PASS(RISCVRedundantCopyElimination, "riscv-copyelim",
-                "RISC-V Redundant Copy Elimination", false, false)
+INITIALIZE_PASS(CapstoneRedundantCopyElimination, "capstone-copyelim",
+                "Capstone Redundant Copy Elimination", false, false)
 
 static bool
 guaranteesZeroRegInBlock(MachineBasicBlock &MBB,
@@ -73,16 +73,16 @@ guaranteesZeroRegInBlock(MachineBasicBlock &MBB,
   assert(Cond.size() == 3 && "Unexpected number of operands");
   assert(TBB != nullptr && "Expected branch target basic block");
   auto Opc = Cond[0].getImm();
-  if (Opc == RISCV::BEQ && Cond[2].isReg() && Cond[2].getReg() == RISCV::X0 &&
+  if (Opc == Capstone::BEQ && Cond[2].isReg() && Cond[2].getReg() == Capstone::X0 &&
       TBB == &MBB)
     return true;
-  if (Opc == RISCV::BNE && Cond[2].isReg() && Cond[2].getReg() == RISCV::X0 &&
+  if (Opc == Capstone::BNE && Cond[2].isReg() && Cond[2].getReg() == Capstone::X0 &&
       TBB != &MBB)
     return true;
   return false;
 }
 
-bool RISCVRedundantCopyElimination::optimizeBlock(MachineBasicBlock &MBB) {
+bool CapstoneRedundantCopyElimination::optimizeBlock(MachineBasicBlock &MBB) {
   // Check if the current basic block has a single predecessor.
   if (MBB.pred_size() != 1)
     return false;
@@ -118,7 +118,7 @@ bool RISCVRedundantCopyElimination::optimizeBlock(MachineBasicBlock &MBB) {
       Register DefReg = MI->getOperand(0).getReg();
       Register SrcReg = MI->getOperand(1).getReg();
 
-      if (SrcReg == RISCV::X0 && !MRI->isReserved(DefReg) &&
+      if (SrcReg == Capstone::X0 && !MRI->isReserved(DefReg) &&
           TargetReg == DefReg) {
         LLVM_DEBUG(dbgs() << "Remove redundant Copy : ");
         LLVM_DEBUG(MI->print(dbgs()));
@@ -139,8 +139,8 @@ bool RISCVRedundantCopyElimination::optimizeBlock(MachineBasicBlock &MBB) {
     return false;
 
   MachineBasicBlock::iterator CondBr = PredMBB->getFirstTerminator();
-  assert((CondBr->getOpcode() == RISCV::BEQ ||
-          CondBr->getOpcode() == RISCV::BNE) &&
+  assert((CondBr->getOpcode() == Capstone::BEQ ||
+          CondBr->getOpcode() == Capstone::BNE) &&
          "Unexpected opcode");
   assert(CondBr->getOperand(0).getReg() == TargetReg && "Unexpected register");
 
@@ -159,7 +159,7 @@ bool RISCVRedundantCopyElimination::optimizeBlock(MachineBasicBlock &MBB) {
   return true;
 }
 
-bool RISCVRedundantCopyElimination::runOnMachineFunction(MachineFunction &MF) {
+bool CapstoneRedundantCopyElimination::runOnMachineFunction(MachineFunction &MF) {
   if (skipFunction(MF.getFunction()))
     return false;
 
@@ -174,6 +174,6 @@ bool RISCVRedundantCopyElimination::runOnMachineFunction(MachineFunction &MF) {
   return Changed;
 }
 
-FunctionPass *llvm::createRISCVRedundantCopyEliminationPass() {
-  return new RISCVRedundantCopyElimination();
+FunctionPass *llvm::createCapstoneRedundantCopyEliminationPass() {
+  return new CapstoneRedundantCopyElimination();
 }

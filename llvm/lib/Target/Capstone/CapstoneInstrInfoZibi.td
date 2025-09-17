@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZibi.td - 'Zibi' instructions --------*- tablegen -*-===//
+//===-- CapstoneInstrInfoZibi.td - 'Zibi' instructions --------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,12 +6,12 @@
 //
 //===----------------------------------------------------------------------===//
 ///
-/// This file describes the RISC-V instructions for 'Zibi' (branch with imm).
+/// This file describes the Capstone instructions for 'Zibi' (branch with imm).
 ///
 //===----------------------------------------------------------------------===//
 
 // A 5-bit unsigned immediate representing 1-31 and -1. 00000 represents -1.
-def imm5_zibi : RISCVOp<XLenVT>, ImmLeaf<XLenVT, [{
+def imm5_zibi : CapstoneOp<XLenVT>, ImmLeaf<XLenVT, [{
     return (Imm != 0 && isUInt<5>(Imm)) || Imm == -1;
 }]> {
   let ParserMatchClass = ImmAsmOperand<"", 5, "Zibi">;

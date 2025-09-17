@@ -1,4 +1,4 @@
-//===-- RISCVFrameLowering.cpp - RISC-V Frame Information -----------------===//
+//===-- CapstoneFrameLowering.cpp - Capstone Frame Information -----------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,14 +6,14 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains the RISC-V implementation of TargetFrameLowering class.
+// This file contains the Capstone implementation of TargetFrameLowering class.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVFrameLowering.h"
-#include "MCTargetDesc/RISCVBaseInfo.h"
-#include "RISCVMachineFunctionInfo.h"
-#include "RISCVSubtarget.h"
+#include "CapstoneFrameLowering.h"
+#include "MCTargetDesc/CapstoneBaseInfo.h"
+#include "CapstoneMachineFunctionInfo.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/CodeGen/CFIInstBuilder.h"
 #include "llvm/CodeGen/LivePhysRegs.h"
@@ -28,19 +28,19 @@
 
 #include <algorithm>
 
-#define DEBUG_TYPE "riscv-frame"
+#define DEBUG_TYPE "capstone-frame"
 
 using namespace llvm;
 
-static Align getABIStackAlignment(RISCVABI::ABI ABI) {
-  if (ABI == RISCVABI::ABI_ILP32E)
+static Align getABIStackAlignment(CapstoneABI::ABI ABI) {
+  if (ABI == CapstoneABI::ABI_ILP32E)
     return Align(4);
-  if (ABI == RISCVABI::ABI_LP64E)
+  if (ABI == CapstoneABI::ABI_LP64E)
     return Align(8);
   return Align(16);
 }
 
-RISCVFrameLowering::RISCVFrameLowering(const RISCVSubtarget &STI)
+CapstoneFrameLowering::CapstoneFrameLowering(const CapstoneSubtarget &STI)
     : TargetFrameLowering(
           StackGrowsDown, getABIStackAlignment(STI.getTargetABI()),
           /*LocalAreaOffset=*/0,
@@ -48,24 +48,24 @@ RISCVFrameLowering::RISCVFrameLowering(const RISCVSubtarget &STI)
       STI(STI) {}
 
 // The register used to hold the frame pointer.
-static constexpr MCPhysReg FPReg = RISCV::X8;
+static constexpr MCPhysReg FPReg = Capstone::X8;
 
 // The register used to hold the stack pointer.
-static constexpr MCPhysReg SPReg = RISCV::X2;
+static constexpr MCPhysReg SPReg = Capstone::X2;
 
 // The register used to hold the return address.
-static constexpr MCPhysReg RAReg = RISCV::X1;
+static constexpr MCPhysReg RAReg = Capstone::X1;
 
 // LIst of CSRs that are given a fixed location by save/restore libcalls or
 // Zcmp/Xqccmp Push/Pop. The order in this table indicates the order the
 // registers are saved on the stack. Zcmp uses the reverse order of save/restore
 // and Xqccmp on the stack, but this is handled when offsets are calculated.
 static const MCPhysReg FixedCSRFIMap[] = {
-    /*ra*/ RAReg,      /*s0*/ FPReg,      /*s1*/ RISCV::X9,
-    /*s2*/ RISCV::X18, /*s3*/ RISCV::X19, /*s4*/ RISCV::X20,
-    /*s5*/ RISCV::X21, /*s6*/ RISCV::X22, /*s7*/ RISCV::X23,
-    /*s8*/ RISCV::X24, /*s9*/ RISCV::X25, /*s10*/ RISCV::X26,
-    /*s11*/ RISCV::X27};
+    /*ra*/ RAReg,      /*s0*/ FPReg,      /*s1*/ Capstone::X9,
+    /*s2*/ Capstone::X18, /*s3*/ Capstone::X19, /*s4*/ Capstone::X20,
+    /*s5*/ Capstone::X21, /*s6*/ Capstone::X22, /*s7*/ Capstone::X23,
+    /*s8*/ Capstone::X24, /*s9*/ Capstone::X25, /*s10*/ Capstone::X26,
+    /*s11*/ Capstone::X27};
 
 // The number of stack bytes allocated by `QC.C.MIENTER(.NEST)` and popped by
 // `QC.C.MILEAVERET`.
@@ -77,21 +77,21 @@ static const std::pair<MCPhysReg, int8_t> FixedCSRFIQCIInterruptMap[] = {
     /* -3 is a gap for qc.mcause */
     {/*ra*/ RAReg, -4},
     /* -5 is reserved */
-    {/*t0*/ RISCV::X5, -6},
-    {/*t1*/ RISCV::X6, -7},
-    {/*t2*/ RISCV::X7, -8},
-    {/*a0*/ RISCV::X10, -9},
-    {/*a1*/ RISCV::X11, -10},
-    {/*a2*/ RISCV::X12, -11},
-    {/*a3*/ RISCV::X13, -12},
-    {/*a4*/ RISCV::X14, -13},
-    {/*a5*/ RISCV::X15, -14},
-    {/*a6*/ RISCV::X16, -15},
-    {/*a7*/ RISCV::X17, -16},
-    {/*t3*/ RISCV::X28, -17},
-    {/*t4*/ RISCV::X29, -18},
-    {/*t5*/ RISCV::X30, -19},
-    {/*t6*/ RISCV::X31, -20},
+    {/*t0*/ Capstone::X5, -6},
+    {/*t1*/ Capstone::X6, -7},
+    {/*t2*/ Capstone::X7, -8},
+    {/*a0*/ Capstone::X10, -9},
+    {/*a1*/ Capstone::X11, -10},
+    {/*a2*/ Capstone::X12, -11},
+    {/*a3*/ Capstone::X13, -12},
+    {/*a4*/ Capstone::X14, -13},
+    {/*a5*/ Capstone::X15, -14},
+    {/*a6*/ Capstone::X16, -15},
+    {/*a7*/ Capstone::X17, -16},
+    {/*t3*/ Capstone::X28, -17},
+    {/*t4*/ Capstone::X29, -18},
+    {/*t5*/ Capstone::X30, -19},
+    {/*t6*/ Capstone::X31, -20},
     /* -21, -22, -23, -24 are reserved */
 };
 
@@ -105,7 +105,7 @@ static bool needsDwarfCFI(const MachineFunction &MF) {
 static void emitSCSPrologue(MachineFunction &MF, MachineBasicBlock &MBB,
                             MachineBasicBlock::iterator MI,
                             const DebugLoc &DL) {
-  const auto &STI = MF.getSubtarget<RISCVSubtarget>();
+  const auto &STI = MF.getSubtarget<CapstoneSubtarget>();
   // We check Zimop instead of (Zimop || Zcmop) to determine whether HW shadow
   // stack is available despite the fact that sspush/sspopchk both have a
   // compressed form, because if only Zcmop is available, we would need to
@@ -119,7 +119,7 @@ static void emitSCSPrologue(MachineFunction &MF, MachineBasicBlock &MBB,
   if (!HasHWShadowStack && !HasSWShadowStack)
     return;
 
-  const llvm::RISCVRegisterInfo *TRI = STI.getRegisterInfo();
+  const llvm::CapstoneRegisterInfo *TRI = STI.getRegisterInfo();
 
   // Do not save RA to the SCS if it's not saved to the regular stack,
   // i.e. RA is not at risk of being overwritten.
@@ -128,30 +128,30 @@ static void emitSCSPrologue(MachineFunction &MF, MachineBasicBlock &MBB,
           CSI, [&](CalleeSavedInfo &CSR) { return CSR.getReg() == RAReg; }))
     return;
 
-  const RISCVInstrInfo *TII = STI.getInstrInfo();
+  const CapstoneInstrInfo *TII = STI.getInstrInfo();
   if (HasHWShadowStack) {
     if (STI.hasStdExtZcmop()) {
-      static_assert(RAReg == RISCV::X1, "C.SSPUSH only accepts X1");
-      BuildMI(MBB, MI, DL, TII->get(RISCV::PseudoMOP_C_SSPUSH));
+      static_assert(RAReg == Capstone::X1, "C.SSPUSH only accepts X1");
+      BuildMI(MBB, MI, DL, TII->get(Capstone::PseudoMOP_C_SSPUSH));
     } else {
-      BuildMI(MBB, MI, DL, TII->get(RISCV::PseudoMOP_SSPUSH)).addReg(RAReg);
+      BuildMI(MBB, MI, DL, TII->get(Capstone::PseudoMOP_SSPUSH)).addReg(RAReg);
     }
     return;
   }
 
-  Register SCSPReg = RISCVABI::getSCSPReg();
+  Register SCSPReg = CapstoneABI::getSCSPReg();
 
   bool IsRV64 = STI.is64Bit();
   int64_t SlotSize = STI.getXLen() / 8;
   // Store return address to shadow call stack
   // addi    gp, gp, [4|8]
   // s[w|d]  ra, -[4|8](gp)
-  BuildMI(MBB, MI, DL, TII->get(RISCV::ADDI))
+  BuildMI(MBB, MI, DL, TII->get(Capstone::ADDI))
       .addReg(SCSPReg, RegState::Define)
       .addReg(SCSPReg)
       .addImm(SlotSize)
       .setMIFlag(MachineInstr::FrameSetup);
-  BuildMI(MBB, MI, DL, TII->get(IsRV64 ? RISCV::SD : RISCV::SW))
+  BuildMI(MBB, MI, DL, TII->get(IsRV64 ? Capstone::SD : Capstone::SW))
       .addReg(RAReg)
       .addReg(SCSPReg)
       .addImm(-SlotSize)
@@ -181,7 +181,7 @@ static void emitSCSPrologue(MachineFunction &MF, MachineBasicBlock &MBB,
 static void emitSCSEpilogue(MachineFunction &MF, MachineBasicBlock &MBB,
                             MachineBasicBlock::iterator MI,
                             const DebugLoc &DL) {
-  const auto &STI = MF.getSubtarget<RISCVSubtarget>();
+  const auto &STI = MF.getSubtarget<CapstoneSubtarget>();
   bool HasHWShadowStack = MF.getFunction().hasFnAttribute("hw-shadow-stack") &&
                           STI.hasStdExtZimop();
   bool HasSWShadowStack =
@@ -195,25 +195,25 @@ static void emitSCSEpilogue(MachineFunction &MF, MachineBasicBlock &MBB,
           CSI, [&](CalleeSavedInfo &CSR) { return CSR.getReg() == RAReg; }))
     return;
 
-  const RISCVInstrInfo *TII = STI.getInstrInfo();
+  const CapstoneInstrInfo *TII = STI.getInstrInfo();
   if (HasHWShadowStack) {
-    BuildMI(MBB, MI, DL, TII->get(RISCV::PseudoMOP_SSPOPCHK)).addReg(RAReg);
+    BuildMI(MBB, MI, DL, TII->get(Capstone::PseudoMOP_SSPOPCHK)).addReg(RAReg);
     return;
   }
 
-  Register SCSPReg = RISCVABI::getSCSPReg();
+  Register SCSPReg = CapstoneABI::getSCSPReg();
 
   bool IsRV64 = STI.is64Bit();
   int64_t SlotSize = STI.getXLen() / 8;
   // Load return address from shadow call stack
   // l[w|d]  ra, -[4|8](gp)
   // addi    gp, gp, -[4|8]
-  BuildMI(MBB, MI, DL, TII->get(IsRV64 ? RISCV::LD : RISCV::LW))
+  BuildMI(MBB, MI, DL, TII->get(IsRV64 ? Capstone::LD : Capstone::LW))
       .addReg(RAReg, RegState::Define)
       .addReg(SCSPReg)
       .addImm(-SlotSize)
       .setMIFlag(MachineInstr::FrameDestroy);
-  BuildMI(MBB, MI, DL, TII->get(RISCV::ADDI))
+  BuildMI(MBB, MI, DL, TII->get(Capstone::ADDI))
       .addReg(SCSPReg, RegState::Define)
       .addReg(SCSPReg)
       .addImm(-SlotSize)
@@ -228,19 +228,19 @@ static void emitSCSEpilogue(MachineFunction &MF, MachineBasicBlock &MBB,
 static void emitSiFiveCLICStackSwap(MachineFunction &MF, MachineBasicBlock &MBB,
                                     MachineBasicBlock::iterator MBBI,
                                     const DebugLoc &DL) {
-  auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   if (!RVFI->isSiFiveStackSwapInterrupt(MF))
     return;
 
-  const auto &STI = MF.getSubtarget<RISCVSubtarget>();
-  const RISCVInstrInfo *TII = STI.getInstrInfo();
+  const auto &STI = MF.getSubtarget<CapstoneSubtarget>();
+  const CapstoneInstrInfo *TII = STI.getInstrInfo();
 
   assert(STI.hasVendorXSfmclic() && "Stack Swapping Requires XSfmclic");
 
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSRRW))
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::CSRRW))
       .addReg(SPReg, RegState::Define)
-      .addImm(RISCVSysReg::sf_mscratchcsw)
+      .addImm(CapstoneSysReg::sf_mscratchcsw)
       .addReg(SPReg, RegState::Kill)
       .setMIFlag(MachineInstr::FrameSetup);
 
@@ -249,13 +249,13 @@ static void emitSiFiveCLICStackSwap(MachineFunction &MF, MachineBasicBlock &MBB,
 
 static void
 createSiFivePreemptibleInterruptFrameEntries(MachineFunction &MF,
-                                             RISCVMachineFunctionInfo &RVFI) {
+                                             CapstoneMachineFunctionInfo &RVFI) {
   if (!RVFI.isSiFivePreemptibleInterrupt(MF))
     return;
 
-  const TargetRegisterClass &RC = RISCV::GPRRegClass;
+  const TargetRegisterClass &RC = Capstone::GPRRegClass;
   const TargetRegisterInfo &TRI =
-      *MF.getSubtarget<RISCVSubtarget>().getRegisterInfo();
+      *MF.getSubtarget<CapstoneSubtarget>().getRegisterInfo();
   MachineFrameInfo &MFI = MF.getFrameInfo();
 
   // Create two frame objects for spilling X8 and X9, which will be done in
@@ -272,13 +272,13 @@ static void emitSiFiveCLICPreemptibleSaves(MachineFunction &MF,
                                            MachineBasicBlock &MBB,
                                            MachineBasicBlock::iterator MBBI,
                                            const DebugLoc &DL) {
-  auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   if (!RVFI->isSiFivePreemptibleInterrupt(MF))
     return;
 
-  const auto &STI = MF.getSubtarget<RISCVSubtarget>();
-  const RISCVInstrInfo *TII = STI.getInstrInfo();
+  const auto &STI = MF.getSubtarget<CapstoneSubtarget>();
+  const CapstoneInstrInfo *TII = STI.getInstrInfo();
 
   // FIXME: CFI Information here is nonexistent/wrong.
 
@@ -289,33 +289,33 @@ static void emitSiFiveCLICPreemptibleSaves(MachineFunction &MF,
   // This is done instead of telling the register allocator that we need two
   // VRegs to store the value of `mcause` and `mepc` through the instruction,
   // which affects other passes.
-  TII->storeRegToStackSlot(MBB, MBBI, RISCV::X8, /* IsKill=*/true,
+  TII->storeRegToStackSlot(MBB, MBBI, Capstone::X8, /* IsKill=*/true,
                            RVFI->getInterruptCSRFrameIndex(0),
-                           &RISCV::GPRRegClass, STI.getRegisterInfo(),
+                           &Capstone::GPRRegClass, STI.getRegisterInfo(),
                            Register(), MachineInstr::FrameSetup);
-  TII->storeRegToStackSlot(MBB, MBBI, RISCV::X9, /* IsKill=*/true,
+  TII->storeRegToStackSlot(MBB, MBBI, Capstone::X9, /* IsKill=*/true,
                            RVFI->getInterruptCSRFrameIndex(1),
-                           &RISCV::GPRRegClass, STI.getRegisterInfo(),
+                           &Capstone::GPRRegClass, STI.getRegisterInfo(),
                            Register(), MachineInstr::FrameSetup);
 
   // Put `mcause` into X8 (s0), and `mepc` into X9 (s1). If either of these are
   // used in the function, then they will appear in `getUnmanagedCSI` and will
   // be saved again.
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSRRS))
-      .addReg(RISCV::X8, RegState::Define)
-      .addImm(RISCVSysReg::mcause)
-      .addReg(RISCV::X0)
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::CSRRS))
+      .addReg(Capstone::X8, RegState::Define)
+      .addImm(CapstoneSysReg::mcause)
+      .addReg(Capstone::X0)
       .setMIFlag(MachineInstr::FrameSetup);
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSRRS))
-      .addReg(RISCV::X9, RegState::Define)
-      .addImm(RISCVSysReg::mepc)
-      .addReg(RISCV::X0)
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::CSRRS))
+      .addReg(Capstone::X9, RegState::Define)
+      .addImm(CapstoneSysReg::mepc)
+      .addReg(Capstone::X0)
       .setMIFlag(MachineInstr::FrameSetup);
 
   // Enable interrupts.
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSRRSI))
-      .addReg(RISCV::X0, RegState::Define)
-      .addImm(RISCVSysReg::mstatus)
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::CSRRSI))
+      .addReg(Capstone::X0, RegState::Define)
+      .addImm(CapstoneSysReg::mstatus)
       .addImm(8)
       .setMIFlag(MachineInstr::FrameSetup);
 }
@@ -324,46 +324,46 @@ static void emitSiFiveCLICPreemptibleRestores(MachineFunction &MF,
                                               MachineBasicBlock &MBB,
                                               MachineBasicBlock::iterator MBBI,
                                               const DebugLoc &DL) {
-  auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   if (!RVFI->isSiFivePreemptibleInterrupt(MF))
     return;
 
-  const auto &STI = MF.getSubtarget<RISCVSubtarget>();
-  const RISCVInstrInfo *TII = STI.getInstrInfo();
+  const auto &STI = MF.getSubtarget<CapstoneSubtarget>();
+  const CapstoneInstrInfo *TII = STI.getInstrInfo();
 
   // FIXME: CFI Information here is nonexistent/wrong.
 
   // Disable interrupts.
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSRRCI))
-      .addReg(RISCV::X0, RegState::Define)
-      .addImm(RISCVSysReg::mstatus)
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::CSRRCI))
+      .addReg(Capstone::X0, RegState::Define)
+      .addImm(CapstoneSysReg::mstatus)
       .addImm(8)
       .setMIFlag(MachineInstr::FrameSetup);
 
   // Restore `mepc` from x9 (s1), and `mcause` from x8 (s0). If either were used
   // in the function, they have already been restored once, so now have the
   // value stored in `emitSiFiveCLICPreemptibleSaves`.
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSRRW))
-      .addReg(RISCV::X0, RegState::Define)
-      .addImm(RISCVSysReg::mepc)
-      .addReg(RISCV::X9, RegState::Kill)
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::CSRRW))
+      .addReg(Capstone::X0, RegState::Define)
+      .addImm(CapstoneSysReg::mepc)
+      .addReg(Capstone::X9, RegState::Kill)
       .setMIFlag(MachineInstr::FrameSetup);
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::CSRRW))
-      .addReg(RISCV::X0, RegState::Define)
-      .addImm(RISCVSysReg::mcause)
-      .addReg(RISCV::X8, RegState::Kill)
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::CSRRW))
+      .addReg(Capstone::X0, RegState::Define)
+      .addImm(CapstoneSysReg::mcause)
+      .addReg(Capstone::X8, RegState::Kill)
       .setMIFlag(MachineInstr::FrameSetup);
 
   // X8 and X9 need to be restored to their values on function entry, which we
   // saved onto the stack in `emitSiFiveCLICPreemptibleSaves`.
-  TII->loadRegFromStackSlot(MBB, MBBI, RISCV::X9,
+  TII->loadRegFromStackSlot(MBB, MBBI, Capstone::X9,
                             RVFI->getInterruptCSRFrameIndex(1),
-                            &RISCV::GPRRegClass, STI.getRegisterInfo(),
+                            &Capstone::GPRRegClass, STI.getRegisterInfo(),
                             Register(), MachineInstr::FrameSetup);
-  TII->loadRegFromStackSlot(MBB, MBBI, RISCV::X8,
+  TII->loadRegFromStackSlot(MBB, MBBI, Capstone::X8,
                             RVFI->getInterruptCSRFrameIndex(0),
-                            &RISCV::GPRRegClass, STI.getRegisterInfo(),
+                            &Capstone::GPRRegClass, STI.getRegisterInfo(),
                             Register(), MachineInstr::FrameSetup);
 }
 
@@ -373,7 +373,7 @@ static void emitSiFiveCLICPreemptibleRestores(MachineFunction &MF,
 // single register.
 static int getLibCallID(const MachineFunction &MF,
                         const std::vector<CalleeSavedInfo> &CSI) {
-  const auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  const auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   if (CSI.empty() || !RVFI->useSaveRestoreLibCalls(MF))
     return -1;
@@ -392,17 +392,17 @@ static int getLibCallID(const MachineFunction &MF,
   default:
     llvm_unreachable("Something has gone wrong!");
     // clang-format off
-  case /*s11*/ RISCV::X27: return 12;
-  case /*s10*/ RISCV::X26: return 11;
-  case /*s9*/  RISCV::X25: return 10;
-  case /*s8*/  RISCV::X24: return 9;
-  case /*s7*/  RISCV::X23: return 8;
-  case /*s6*/  RISCV::X22: return 7;
-  case /*s5*/  RISCV::X21: return 6;
-  case /*s4*/  RISCV::X20: return 5;
-  case /*s3*/  RISCV::X19: return 4;
-  case /*s2*/  RISCV::X18: return 3;
-  case /*s1*/  RISCV::X9:  return 2;
+  case /*s11*/ Capstone::X27: return 12;
+  case /*s10*/ Capstone::X26: return 11;
+  case /*s9*/  Capstone::X25: return 10;
+  case /*s8*/  Capstone::X24: return 9;
+  case /*s7*/  Capstone::X23: return 8;
+  case /*s6*/  Capstone::X22: return 7;
+  case /*s5*/  Capstone::X21: return 6;
+  case /*s4*/  Capstone::X20: return 5;
+  case /*s3*/  Capstone::X19: return 4;
+  case /*s2*/  Capstone::X18: return 3;
+  case /*s1*/  Capstone::X9:  return 2;
   case /*s0*/  FPReg:  return 1;
   case /*ra*/  RAReg:  return 0;
     // clang-format on
@@ -415,19 +415,19 @@ static const char *
 getSpillLibCallName(const MachineFunction &MF,
                     const std::vector<CalleeSavedInfo> &CSI) {
   static const char *const SpillLibCalls[] = {
-    "__riscv_save_0",
-    "__riscv_save_1",
-    "__riscv_save_2",
-    "__riscv_save_3",
-    "__riscv_save_4",
-    "__riscv_save_5",
-    "__riscv_save_6",
-    "__riscv_save_7",
-    "__riscv_save_8",
-    "__riscv_save_9",
-    "__riscv_save_10",
-    "__riscv_save_11",
-    "__riscv_save_12"
+    "__capstone_save_0",
+    "__capstone_save_1",
+    "__capstone_save_2",
+    "__capstone_save_3",
+    "__capstone_save_4",
+    "__capstone_save_5",
+    "__capstone_save_6",
+    "__capstone_save_7",
+    "__capstone_save_8",
+    "__capstone_save_9",
+    "__capstone_save_10",
+    "__capstone_save_11",
+    "__capstone_save_12"
   };
 
   int LibCallID = getLibCallID(MF, CSI);
@@ -442,19 +442,19 @@ static const char *
 getRestoreLibCallName(const MachineFunction &MF,
                       const std::vector<CalleeSavedInfo> &CSI) {
   static const char *const RestoreLibCalls[] = {
-    "__riscv_restore_0",
-    "__riscv_restore_1",
-    "__riscv_restore_2",
-    "__riscv_restore_3",
-    "__riscv_restore_4",
-    "__riscv_restore_5",
-    "__riscv_restore_6",
-    "__riscv_restore_7",
-    "__riscv_restore_8",
-    "__riscv_restore_9",
-    "__riscv_restore_10",
-    "__riscv_restore_11",
-    "__riscv_restore_12"
+    "__capstone_restore_0",
+    "__capstone_restore_1",
+    "__capstone_restore_2",
+    "__capstone_restore_3",
+    "__capstone_restore_4",
+    "__capstone_restore_5",
+    "__capstone_restore_6",
+    "__capstone_restore_7",
+    "__capstone_restore_8",
+    "__capstone_restore_9",
+    "__capstone_restore_10",
+    "__capstone_restore_11",
+    "__capstone_restore_12"
   };
 
   int LibCallID = getLibCallID(MF, CSI);
@@ -482,7 +482,7 @@ static unsigned getNumPushPopRegs(const std::vector<CalleeSavedInfo> &CSI) {
 // pointer register.  This is true if frame pointer elimination is
 // disabled, if it needs dynamic stack realignment, if the function has
 // variable sized allocas, or if the frame address is taken.
-bool RISCVFrameLowering::hasFPImpl(const MachineFunction &MF) const {
+bool CapstoneFrameLowering::hasFPImpl(const MachineFunction &MF) const {
   const TargetRegisterInfo *RegInfo = MF.getSubtarget().getRegisterInfo();
 
   const MachineFrameInfo &MFI = MF.getFrameInfo();
@@ -491,7 +491,7 @@ bool RISCVFrameLowering::hasFPImpl(const MachineFunction &MF) const {
          MFI.isFrameAddressTaken();
 }
 
-bool RISCVFrameLowering::hasBP(const MachineFunction &MF) const {
+bool CapstoneFrameLowering::hasBP(const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetRegisterInfo *TRI = STI.getRegisterInfo();
 
@@ -506,9 +506,9 @@ bool RISCVFrameLowering::hasBP(const MachineFunction &MF) const {
 }
 
 // Determines the size of the frame and maximum call frame size.
-void RISCVFrameLowering::determineFrameLayout(MachineFunction &MF) const {
+void CapstoneFrameLowering::determineFrameLayout(MachineFunction &MF) const {
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   // Get the number of bytes to allocate from the FrameInfo.
   uint64_t FrameSize = MFI.getStackSize();
@@ -542,10 +542,10 @@ void RISCVFrameLowering::determineFrameLayout(MachineFunction &MF) const {
 
 // Returns the stack size including RVV padding (when required), rounded back
 // up to the required stack alignment.
-uint64_t RISCVFrameLowering::getStackSizeWithRVVPadding(
+uint64_t CapstoneFrameLowering::getStackSizeWithRVVPadding(
     const MachineFunction &MF) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
-  auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
   return alignTo(MFI.getStackSize() + RVFI->getRVVPadding(), getStackAlign());
 }
 
@@ -582,7 +582,7 @@ getRVVCalleeSavedInfo(const MachineFunction &MF,
 static SmallVector<CalleeSavedInfo, 8>
 getPushOrLibCallsSavedInfo(const MachineFunction &MF,
                            const std::vector<CalleeSavedInfo> &CSI) {
-  auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   SmallVector<CalleeSavedInfo, 8> PushOrLibCallsCSI;
   if (!RVFI->useSaveRestoreLibCalls(MF) && !RVFI->isPushable(MF))
@@ -609,7 +609,7 @@ getPushOrLibCallsSavedInfo(const MachineFunction &MF,
 static SmallVector<CalleeSavedInfo, 8>
 getQCISavedInfo(const MachineFunction &MF,
                 const std::vector<CalleeSavedInfo> &CSI) {
-  auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   SmallVector<CalleeSavedInfo, 8> QCIInterruptCSI;
   if (!RVFI->useQCIInterrupt(MF))
@@ -624,7 +624,7 @@ getQCISavedInfo(const MachineFunction &MF,
   return QCIInterruptCSI;
 }
 
-void RISCVFrameLowering::allocateAndProbeStackForRVV(
+void CapstoneFrameLowering::allocateAndProbeStackForRVV(
     MachineFunction &MF, MachineBasicBlock &MBB,
     MachineBasicBlock::iterator MBBI, const DebugLoc &DL, int64_t Amount,
     MachineInstr::MIFlag Flag, bool EmitCFI, bool DynAllocation) const {
@@ -633,10 +633,10 @@ void RISCVFrameLowering::allocateAndProbeStackForRVV(
   // Emit a variable-length allocation probing loop.
 
   // Get VLEN in TargetReg
-  const RISCVInstrInfo *TII = STI.getInstrInfo();
-  Register TargetReg = RISCV::X6;
-  uint32_t NumOfVReg = Amount / RISCV::RVVBytesPerBlock;
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::PseudoReadVLENB), TargetReg)
+  const CapstoneInstrInfo *TII = STI.getInstrInfo();
+  Register TargetReg = Capstone::X6;
+  uint32_t NumOfVReg = Amount / Capstone::RVVBytesPerBlock;
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::PseudoReadVLENB), TargetReg)
       .setMIFlag(Flag);
   TII->mulImm(MF, MBB, MBBI, DL, TargetReg, NumOfVReg, Flag);
 
@@ -647,7 +647,7 @@ void RISCVFrameLowering::allocateAndProbeStackForRVV(
   }
 
   // It will be expanded to a probe loop in `inlineStackProbe`.
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::PROBED_STACKALLOC_RVV))
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::PROBED_STACKALLOC_RVV))
       .addReg(TargetReg);
 
   if (EmitCFI) {
@@ -656,15 +656,15 @@ void RISCVFrameLowering::allocateAndProbeStackForRVV(
   }
 
   // SUB SP, SP, T1
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::SUB), SPReg)
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::SUB), SPReg)
       .addReg(SPReg)
       .addReg(TargetReg)
       .setMIFlag(Flag);
 
   // If we have a dynamic allocation later we need to probe any residuals.
   if (DynAllocation) {
-    BuildMI(MBB, MBBI, DL, TII->get(STI.is64Bit() ? RISCV::SD : RISCV::SW))
-        .addReg(RISCV::X0)
+    BuildMI(MBB, MBBI, DL, TII->get(STI.is64Bit() ? Capstone::SD : Capstone::SW))
+        .addReg(Capstone::X0)
         .addReg(SPReg)
         .addImm(0)
         .setMIFlags(MachineInstr::FrameSetup);
@@ -675,7 +675,7 @@ static void appendScalableVectorExpression(const TargetRegisterInfo &TRI,
                                            SmallVectorImpl<char> &Expr,
                                            int FixedOffset, int ScalableOffset,
                                            llvm::raw_string_ostream &Comment) {
-  unsigned DwarfVLenB = TRI.getDwarfRegNum(RISCV::VLENB, true);
+  unsigned DwarfVLenB = TRI.getDwarfRegNum(Capstone::VLENB, true);
   uint8_t Buffer[16];
   if (FixedOffset) {
     Expr.push_back(dwarf::DW_OP_consts);
@@ -754,7 +754,7 @@ static MCCFIInstruction createDefCFAOffset(const TargetRegisterInfo &TRI,
 }
 
 // Allocate stack space and probe it if necessary.
-void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
+void CapstoneFrameLowering::allocateStack(MachineBasicBlock &MBB,
                                        MachineBasicBlock::iterator MBBI,
                                        MachineFunction &MF, uint64_t Offset,
                                        uint64_t RealStackSize, bool EmitCFI,
@@ -762,8 +762,8 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
                                        bool DynAllocation,
                                        MachineInstr::MIFlag Flag) const {
   DebugLoc DL;
-  const RISCVRegisterInfo *RI = STI.getRegisterInfo();
-  const RISCVInstrInfo *TII = STI.getInstrInfo();
+  const CapstoneRegisterInfo *RI = STI.getRegisterInfo();
+  const CapstoneInstrInfo *TII = STI.getInstrInfo();
   bool IsRV64 = STI.is64Bit();
   CFIInstBuilder CFIBuilder(MBB, MBBI, MachineInstr::FrameSetup);
 
@@ -777,8 +777,8 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
 
     if (NeedProbe && DynAllocation) {
       // s[d|w] zero, 0(sp)
-      BuildMI(MBB, MBBI, DL, TII->get(IsRV64 ? RISCV::SD : RISCV::SW))
-          .addReg(RISCV::X0)
+      BuildMI(MBB, MBBI, DL, TII->get(IsRV64 ? Capstone::SD : Capstone::SW))
+          .addReg(Capstone::X0)
           .addReg(SPReg)
           .addImm(0)
           .setMIFlags(Flag);
@@ -794,8 +794,8 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
       RI->adjustReg(MBB, MBBI, DL, SPReg, SPReg,
                     StackOffset::getFixed(-ProbeSize), Flag, getStackAlign());
       // s[d|w] zero, 0(sp)
-      BuildMI(MBB, MBBI, DL, TII->get(IsRV64 ? RISCV::SD : RISCV::SW))
-          .addReg(RISCV::X0)
+      BuildMI(MBB, MBBI, DL, TII->get(IsRV64 ? Capstone::SD : Capstone::SW))
+          .addReg(Capstone::X0)
           .addReg(SPReg)
           .addImm(0)
           .setMIFlags(Flag);
@@ -814,8 +814,8 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
 
       if (DynAllocation) {
         // s[d|w] zero, 0(sp)
-        BuildMI(MBB, MBBI, DL, TII->get(IsRV64 ? RISCV::SD : RISCV::SW))
-            .addReg(RISCV::X0)
+        BuildMI(MBB, MBBI, DL, TII->get(IsRV64 ? Capstone::SD : Capstone::SW))
+            .addReg(Capstone::X0)
             .addReg(SPReg)
             .addImm(0)
             .setMIFlags(Flag);
@@ -829,7 +829,7 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
   uint64_t RoundedSize = alignDown(Offset, ProbeSize);
   uint64_t Residual = Offset - RoundedSize;
 
-  Register TargetReg = RISCV::X6;
+  Register TargetReg = Capstone::X6;
   // SUB TargetReg, SP, RoundedSize
   RI->adjustReg(MBB, MBBI, DL, TargetReg, SPReg,
                 StackOffset::getFixed(-RoundedSize), Flag, getStackAlign());
@@ -840,7 +840,7 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
   }
 
   // It will be expanded to a probe loop in `inlineStackProbe`.
-  BuildMI(MBB, MBBI, DL, TII->get(RISCV::PROBED_STACKALLOC)).addReg(TargetReg);
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::PROBED_STACKALLOC)).addReg(TargetReg);
 
   if (EmitCFI) {
     // Set the CFA register back to SP.
@@ -852,8 +852,8 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
                   Flag, getStackAlign());
     if (DynAllocation) {
       // s[d|w] zero, 0(sp)
-      BuildMI(MBB, MBBI, DL, TII->get(IsRV64 ? RISCV::SD : RISCV::SW))
-          .addReg(RISCV::X0)
+      BuildMI(MBB, MBBI, DL, TII->get(IsRV64 ? Capstone::SD : Capstone::SW))
+          .addReg(Capstone::X0)
           .addReg(SPReg)
           .addImm(0)
           .setMIFlags(Flag);
@@ -866,9 +866,9 @@ void RISCVFrameLowering::allocateStack(MachineBasicBlock &MBB,
 
 static bool isPush(unsigned Opcode) {
   switch (Opcode) {
-  case RISCV::CM_PUSH:
-  case RISCV::QC_CM_PUSH:
-  case RISCV::QC_CM_PUSHFP:
+  case Capstone::CM_PUSH:
+  case Capstone::QC_CM_PUSH:
+  case Capstone::QC_CM_PUSHFP:
     return true;
   default:
     return false;
@@ -879,47 +879,47 @@ static bool isPop(unsigned Opcode) {
   // There are other pops but these are the only ones introduced during this
   // pass.
   switch (Opcode) {
-  case RISCV::CM_POP:
-  case RISCV::QC_CM_POP:
+  case Capstone::CM_POP:
+  case Capstone::QC_CM_POP:
     return true;
   default:
     return false;
   }
 }
 
-static unsigned getPushOpcode(RISCVMachineFunctionInfo::PushPopKind Kind,
+static unsigned getPushOpcode(CapstoneMachineFunctionInfo::PushPopKind Kind,
                               bool UpdateFP) {
   switch (Kind) {
-  case RISCVMachineFunctionInfo::PushPopKind::StdExtZcmp:
-    return RISCV::CM_PUSH;
-  case RISCVMachineFunctionInfo::PushPopKind::VendorXqccmp:
-    return UpdateFP ? RISCV::QC_CM_PUSHFP : RISCV::QC_CM_PUSH;
+  case CapstoneMachineFunctionInfo::PushPopKind::StdExtZcmp:
+    return Capstone::CM_PUSH;
+  case CapstoneMachineFunctionInfo::PushPopKind::VendorXqccmp:
+    return UpdateFP ? Capstone::QC_CM_PUSHFP : Capstone::QC_CM_PUSH;
   default:
     llvm_unreachable("Unhandled PushPopKind");
   }
 }
 
-static unsigned getPopOpcode(RISCVMachineFunctionInfo::PushPopKind Kind) {
+static unsigned getPopOpcode(CapstoneMachineFunctionInfo::PushPopKind Kind) {
   // There are other pops but they are introduced later by the Push/Pop
   // Optimizer.
   switch (Kind) {
-  case RISCVMachineFunctionInfo::PushPopKind::StdExtZcmp:
-    return RISCV::CM_POP;
-  case RISCVMachineFunctionInfo::PushPopKind::VendorXqccmp:
-    return RISCV::QC_CM_POP;
+  case CapstoneMachineFunctionInfo::PushPopKind::StdExtZcmp:
+    return Capstone::CM_POP;
+  case CapstoneMachineFunctionInfo::PushPopKind::VendorXqccmp:
+    return Capstone::QC_CM_POP;
   default:
     llvm_unreachable("Unhandled PushPopKind");
   }
 }
 
-void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
+void CapstoneFrameLowering::emitPrologue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
-  const RISCVRegisterInfo *RI = STI.getRegisterInfo();
+  auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
+  const CapstoneRegisterInfo *RI = STI.getRegisterInfo();
   MachineBasicBlock::iterator MBBI = MBB.begin();
 
-  Register BPReg = RISCVABI::getBPReg();
+  Register BPReg = CapstoneABI::getBPReg();
 
   // Debug location must be unknown since the first debug location is used
   // to determine the end of the prologue.
@@ -1053,12 +1053,12 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   }
 
   // Allocate space on the stack if necessary.
-  auto &Subtarget = MF.getSubtarget<RISCVSubtarget>();
-  const RISCVTargetLowering *TLI = Subtarget.getTargetLowering();
+  auto &Subtarget = MF.getSubtarget<CapstoneSubtarget>();
+  const CapstoneTargetLowering *TLI = Subtarget.getTargetLowering();
   bool NeedProbe = TLI->hasInlineStackProbe(MF);
   uint64_t ProbeSize = TLI->getStackProbeSize(MF, getStackAlign());
   bool DynAllocation =
-      MF.getInfo<RISCVMachineFunctionInfo>()->hasDynamicAllocation();
+      MF.getInfo<CapstoneMachineFunctionInfo>()->hasDynamicAllocation();
   if (StackSize != 0)
     allocateStack(MBB, MBBI, MF, StackSize, RealStackSize, NeedsDwarfCFI,
                   NeedProbe, ProbeSize, DynAllocation,
@@ -1143,25 +1143,25 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
 
   if (hasFP(MF)) {
     // Realign Stack
-    const RISCVRegisterInfo *RI = STI.getRegisterInfo();
+    const CapstoneRegisterInfo *RI = STI.getRegisterInfo();
     if (RI->hasStackRealignment(MF)) {
       Align MaxAlignment = MFI.getMaxAlign();
 
-      const RISCVInstrInfo *TII = STI.getInstrInfo();
+      const CapstoneInstrInfo *TII = STI.getInstrInfo();
       if (isInt<12>(-(int)MaxAlignment.value())) {
-        BuildMI(MBB, MBBI, DL, TII->get(RISCV::ANDI), SPReg)
+        BuildMI(MBB, MBBI, DL, TII->get(Capstone::ANDI), SPReg)
             .addReg(SPReg)
             .addImm(-(int)MaxAlignment.value())
             .setMIFlag(MachineInstr::FrameSetup);
       } else {
         unsigned ShiftAmount = Log2(MaxAlignment);
         Register VR =
-            MF.getRegInfo().createVirtualRegister(&RISCV::GPRRegClass);
-        BuildMI(MBB, MBBI, DL, TII->get(RISCV::SRLI), VR)
+            MF.getRegInfo().createVirtualRegister(&Capstone::GPRRegClass);
+        BuildMI(MBB, MBBI, DL, TII->get(Capstone::SRLI), VR)
             .addReg(SPReg)
             .addImm(ShiftAmount)
             .setMIFlag(MachineInstr::FrameSetup);
-        BuildMI(MBB, MBBI, DL, TII->get(RISCV::SLLI), SPReg)
+        BuildMI(MBB, MBBI, DL, TII->get(Capstone::SLLI), SPReg)
             .addReg(VR)
             .addImm(ShiftAmount)
             .setMIFlag(MachineInstr::FrameSetup);
@@ -1172,8 +1172,8 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
         if (SecondSPAdjustAmount < ProbeSize &&
             SecondSPAdjustAmount + MaxAlignment.value() >= ProbeSize) {
           bool IsRV64 = STI.is64Bit();
-          BuildMI(MBB, MBBI, DL, TII->get(IsRV64 ? RISCV::SD : RISCV::SW))
-              .addReg(RISCV::X0)
+          BuildMI(MBB, MBBI, DL, TII->get(IsRV64 ? Capstone::SD : Capstone::SW))
+              .addReg(Capstone::X0)
               .addReg(SPReg)
               .addImm(0)
               .setMIFlags(MachineInstr::FrameSetup);
@@ -1184,7 +1184,7 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
       // track the current stack after allocating variable sized objects.
       if (hasBP(MF)) {
         // move BP, SP
-        BuildMI(MBB, MBBI, DL, TII->get(RISCV::ADDI), BPReg)
+        BuildMI(MBB, MBBI, DL, TII->get(Capstone::ADDI), BPReg)
             .addReg(SPReg)
             .addImm(0)
             .setMIFlag(MachineInstr::FrameSetup);
@@ -1193,13 +1193,13 @@ void RISCVFrameLowering::emitPrologue(MachineFunction &MF,
   }
 }
 
-void RISCVFrameLowering::deallocateStack(MachineFunction &MF,
+void CapstoneFrameLowering::deallocateStack(MachineFunction &MF,
                                          MachineBasicBlock &MBB,
                                          MachineBasicBlock::iterator MBBI,
                                          const DebugLoc &DL,
                                          uint64_t &StackSize,
                                          int64_t CFAOffset) const {
-  const RISCVRegisterInfo *RI = STI.getRegisterInfo();
+  const CapstoneRegisterInfo *RI = STI.getRegisterInfo();
 
   RI->adjustReg(MBB, MBBI, DL, SPReg, SPReg, StackOffset::getFixed(StackSize),
                 MachineInstr::FrameDestroy, getStackAlign());
@@ -1210,11 +1210,11 @@ void RISCVFrameLowering::deallocateStack(MachineFunction &MF,
         .buildDefCFAOffset(CFAOffset);
 }
 
-void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
+void CapstoneFrameLowering::emitEpilogue(MachineFunction &MF,
                                       MachineBasicBlock &MBB) const {
-  const RISCVRegisterInfo *RI = STI.getRegisterInfo();
+  const CapstoneRegisterInfo *RI = STI.getRegisterInfo();
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   // All calls are tail calls in GHC calling conv, and functions have no
   // prologue/epilogue.
@@ -1319,7 +1319,7 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
   CFIBuilder.setInsertPoint(MBBI);
 
   if (getLibCallID(MF, CSI) != -1) {
-    // tail __riscv_restore_[0-12] instruction is considered as a terminator,
+    // tail __capstone_restore_[0-12] instruction is considered as a terminator,
     // therefore it is unnecessary to place any CFI instructions after it. Just
     // deallocate stack if needed and return.
     if (StackSize != 0)
@@ -1351,7 +1351,7 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
                       /*stack_adj of cm.pop instr*/ RealStackSize - StackSize);
 
     auto NextI = next_nodbg(MBBI, MBB.end());
-    if (NextI == MBB.end() || NextI->getOpcode() != RISCV::PseudoRET) {
+    if (NextI == MBB.end() || NextI->getOpcode() != Capstone::PseudoRET) {
       ++MBBI;
       if (NeedsDwarfCFI) {
         CFIBuilder.setInsertPoint(MBBI);
@@ -1384,11 +1384,11 @@ void RISCVFrameLowering::emitEpilogue(MachineFunction &MF,
 }
 
 StackOffset
-RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
+CapstoneFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
                                            Register &FrameReg) const {
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   const TargetRegisterInfo *RI = MF.getSubtarget().getRegisterInfo();
-  const auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  const auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   // Callee-saved registers should be referenced relative to the stack
   // pointer (positive offset), otherwise use the frame pointer (negative
@@ -1461,7 +1461,7 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
     // | VarSize objects          | |
     // |--------------------------| -- <-- SP
     if (hasBP(MF)) {
-      FrameReg = RISCVABI::getBPReg();
+      FrameReg = CapstoneABI::getBPReg();
     } else {
       // VarSize objects must be empty in this case!
       assert(!MFI.hasVarSizedObjects());
@@ -1503,7 +1503,7 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
 
   // This case handles indexing off both SP and BP.
   // If indexing off SP, there must not be any var sized objects
-  assert(FrameReg == RISCVABI::getBPReg() || !MFI.hasVarSizedObjects());
+  assert(FrameReg == CapstoneABI::getBPReg() || !MFI.hasVarSizedObjects());
 
   // When using SP to access frame objects, we need to add RVV stack size.
   //
@@ -1555,17 +1555,17 @@ RISCVFrameLowering::getFrameIndexReference(const MachineFunction &MF, int FI,
   return Offset;
 }
 
-static MCRegister getRVVBaseRegister(const RISCVRegisterInfo &TRI,
+static MCRegister getRVVBaseRegister(const CapstoneRegisterInfo &TRI,
                                      const Register &Reg) {
-  MCRegister BaseReg = TRI.getSubReg(Reg, RISCV::sub_vrm1_0);
+  MCRegister BaseReg = TRI.getSubReg(Reg, Capstone::sub_vrm1_0);
   // If it's not a grouped vector register, it doesn't have subregister, so
   // the base register is just itself.
-  if (BaseReg == RISCV::NoRegister)
+  if (BaseReg == Capstone::NoRegister)
     BaseReg = Reg;
   return BaseReg;
 }
 
-void RISCVFrameLowering::determineCalleeSaves(MachineFunction &MF,
+void CapstoneFrameLowering::determineCalleeSaves(MachineFunction &MF,
                                               BitVector &SavedRegs,
                                               RegScavenger *RS) const {
   TargetFrameLowering::determineCalleeSaves(MF, SavedRegs, RS);
@@ -1579,11 +1579,11 @@ void RISCVFrameLowering::determineCalleeSaves(MachineFunction &MF,
   // Correct behavior: v24m2 is marked only if v24 and v25 are marked.
   const MachineRegisterInfo &MRI = MF.getRegInfo();
   const MCPhysReg *CSRegs = MRI.getCalleeSavedRegs();
-  const RISCVRegisterInfo &TRI = *STI.getRegisterInfo();
+  const CapstoneRegisterInfo &TRI = *STI.getRegisterInfo();
   for (unsigned i = 0; CSRegs[i]; ++i) {
     unsigned CSReg = CSRegs[i];
     // Only vector registers need special care.
-    if (!RISCV::VRRegClass.contains(getRVVBaseRegister(TRI, CSReg)))
+    if (!Capstone::VRRegClass.contains(getRVVBaseRegister(TRI, CSReg)))
       continue;
 
     SavedRegs.reset(CSReg);
@@ -1611,19 +1611,19 @@ void RISCVFrameLowering::determineCalleeSaves(MachineFunction &MF,
   }
   // Mark BP as used if function has dedicated base pointer.
   if (hasBP(MF))
-    SavedRegs.set(RISCVABI::getBPReg());
+    SavedRegs.set(CapstoneABI::getBPReg());
 
   // When using cm.push/pop we must save X27 if we save X26.
-  auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
-  if (RVFI->isPushable(MF) && SavedRegs.test(RISCV::X26))
-    SavedRegs.set(RISCV::X27);
+  auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
+  if (RVFI->isPushable(MF) && SavedRegs.test(Capstone::X26))
+    SavedRegs.set(Capstone::X27);
 
   // SiFive Preemptible Interrupt Handlers need additional frame entries
   createSiFivePreemptibleInterruptFrameEntries(MF, *RVFI);
 }
 
 std::pair<int64_t, Align>
-RISCVFrameLowering::assignRVVStackObjectOffsets(MachineFunction &MF) const {
+CapstoneFrameLowering::assignRVVStackObjectOffsets(MachineFunction &MF) const {
   MachineFrameInfo &MFI = MF.getFrameInfo();
   // Create a buffer of RVV objects to allocate.
   SmallVector<int, 8> ObjectsToAllocate;
@@ -1648,7 +1648,7 @@ RISCVFrameLowering::assignRVVStackObjectOffsets(MachineFunction &MF) const {
 
   // The minimum alignment is 16 bytes.
   Align RVVStackAlign(16);
-  const auto &ST = MF.getSubtarget<RISCVSubtarget>();
+  const auto &ST = MF.getSubtarget<CapstoneSubtarget>();
 
   if (!ST.hasVInstructions()) {
     assert(ObjectsToAllocate.empty() &&
@@ -1662,11 +1662,11 @@ RISCVFrameLowering::assignRVVStackObjectOffsets(MachineFunction &MF) const {
     // ObjectSize in bytes.
     int64_t ObjectSize = MFI.getObjectSize(FI);
     auto ObjectAlign =
-        std::max(Align(RISCV::RVVBytesPerBlock), MFI.getObjectAlign(FI));
+        std::max(Align(Capstone::RVVBytesPerBlock), MFI.getObjectAlign(FI));
     // If the data type is the fractional vector type, reserve one vector
     // register for it.
-    if (ObjectSize < RISCV::RVVBytesPerBlock)
-      ObjectSize = RISCV::RVVBytesPerBlock;
+    if (ObjectSize < Capstone::RVVBytesPerBlock)
+      ObjectSize = Capstone::RVVBytesPerBlock;
     Offset = alignTo(Offset + ObjectSize, ObjectAlign);
     MFI.setObjectOffset(FI, -Offset);
     // Update the maximum alignment of the RVV stack section
@@ -1682,7 +1682,7 @@ RISCVFrameLowering::assignRVVStackObjectOffsets(MachineFunction &MF) const {
   // bytes, we can divide stack alignment by minimum vscale to get a maximum
   // stack alignment multiple of vscale.
   auto VScale =
-      std::max<uint64_t>(ST.getRealMinVLen() / RISCV::RVVBitsPerBlock, 1);
+      std::max<uint64_t>(ST.getRealMinVLen() / Capstone::RVVBitsPerBlock, 1);
   if (auto RVVStackAlignVScale = RVVStackAlign.value() / VScale) {
     if (auto AlignmentPadding =
             offsetToAlignment(StackSize, Align(RVVStackAlignVScale))) {
@@ -1713,11 +1713,11 @@ static unsigned getScavSlotsNumForRVV(MachineFunction &MF) {
                 ScavSlotsNumRVVSpillNonScalableObject});
 
   unsigned MaxScavSlotsNum = 0;
-  if (!MF.getSubtarget<RISCVSubtarget>().hasVInstructions())
+  if (!MF.getSubtarget<CapstoneSubtarget>().hasVInstructions())
     return false;
   for (const MachineBasicBlock &MBB : MF)
     for (const MachineInstr &MI : MBB) {
-      bool IsRVVSpill = RISCV::isRVVSpill(MI);
+      bool IsRVVSpill = Capstone::isRVVSpill(MI);
       for (auto &MO : MI.operands()) {
         if (!MO.isFI())
           continue;
@@ -1728,7 +1728,7 @@ static unsigned getScavSlotsNumForRVV(MachineFunction &MF) {
               MaxScavSlotsNum, IsScalableVectorID
                                    ? ScavSlotsNumRVVSpillScalableObject
                                    : ScavSlotsNumRVVSpillNonScalableObject);
-        } else if (MI.getOpcode() == RISCV::ADDI && IsScalableVectorID) {
+        } else if (MI.getOpcode() == Capstone::ADDI && IsScalableVectorID) {
           MaxScavSlotsNum =
               std::max(MaxScavSlotsNum, ScavSlotsADDIScalableObject);
         }
@@ -1755,11 +1755,11 @@ static bool hasRVVFrameObject(const MachineFunction &MF) {
   // D103622.
   //
   // Refer to https://github.com/llvm/llvm-project/issues/53016.
-  return MF.getSubtarget<RISCVSubtarget>().hasVInstructions();
+  return MF.getSubtarget<CapstoneSubtarget>().hasVInstructions();
 }
 
 static unsigned estimateFunctionSizeInBytes(const MachineFunction &MF,
-                                            const RISCVInstrInfo &TII) {
+                                            const CapstoneInstrInfo &TII) {
   unsigned FnSize = 0;
   for (auto &MBB : MF) {
     for (auto &MI : MBB) {
@@ -1783,7 +1783,7 @@ static unsigned estimateFunctionSizeInBytes(const MachineFunction &MF,
       if (MI.isConditionalBranch())
         FnSize += TII.getInstSizeInBytes(MI);
       if (MI.isConditionalBranch() || MI.isUnconditionalBranch()) {
-        if (MF.getSubtarget<RISCVSubtarget>().hasStdExtZca())
+        if (MF.getSubtarget<CapstoneSubtarget>().hasStdExtZca())
           FnSize += 2 + 8 + 2 + 2;
         else
           FnSize += 4 + 8 + 4 + 4;
@@ -1796,14 +1796,14 @@ static unsigned estimateFunctionSizeInBytes(const MachineFunction &MF,
   return FnSize;
 }
 
-void RISCVFrameLowering::processFunctionBeforeFrameFinalized(
+void CapstoneFrameLowering::processFunctionBeforeFrameFinalized(
     MachineFunction &MF, RegScavenger *RS) const {
-  const RISCVRegisterInfo *RegInfo =
-      MF.getSubtarget<RISCVSubtarget>().getRegisterInfo();
-  const RISCVInstrInfo *TII = MF.getSubtarget<RISCVSubtarget>().getInstrInfo();
+  const CapstoneRegisterInfo *RegInfo =
+      MF.getSubtarget<CapstoneSubtarget>().getRegisterInfo();
+  const CapstoneInstrInfo *TII = MF.getSubtarget<CapstoneSubtarget>().getInstrInfo();
   MachineFrameInfo &MFI = MF.getFrameInfo();
-  const TargetRegisterClass *RC = &RISCV::GPRRegClass;
-  auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  const TargetRegisterClass *RC = &Capstone::GPRRegClass;
+  auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   int64_t RVVStackSize;
   Align RVVStackAlign;
@@ -1861,13 +1861,13 @@ void RISCVFrameLowering::processFunctionBeforeFrameFinalized(
 // function contains variable size objects or there are vector objects accessed
 // by the frame pointer.
 // Let eliminateCallFramePseudoInstr preserve stack space for it.
-bool RISCVFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {
+bool CapstoneFrameLowering::hasReservedCallFrame(const MachineFunction &MF) const {
   return !MF.getFrameInfo().hasVarSizedObjects() &&
          !(hasFP(MF) && hasRVVFrameObject(MF));
 }
 
 // Eliminate ADJCALLSTACKDOWN, ADJCALLSTACKUP pseudo instructions.
-MachineBasicBlock::iterator RISCVFrameLowering::eliminateCallFramePseudoInstr(
+MachineBasicBlock::iterator CapstoneFrameLowering::eliminateCallFramePseudoInstr(
     MachineFunction &MF, MachineBasicBlock &MBB,
     MachineBasicBlock::iterator MI) const {
   DebugLoc DL = MI->getDebugLoc();
@@ -1884,24 +1884,24 @@ MachineBasicBlock::iterator RISCVFrameLowering::eliminateCallFramePseudoInstr(
       // Ensure the stack remains aligned after adjustment.
       Amount = alignSPAdjust(Amount);
 
-      if (MI->getOpcode() == RISCV::ADJCALLSTACKDOWN)
+      if (MI->getOpcode() == Capstone::ADJCALLSTACKDOWN)
         Amount = -Amount;
 
-      const RISCVTargetLowering *TLI =
-          MF.getSubtarget<RISCVSubtarget>().getTargetLowering();
+      const CapstoneTargetLowering *TLI =
+          MF.getSubtarget<CapstoneSubtarget>().getTargetLowering();
       int64_t ProbeSize = TLI->getStackProbeSize(MF, getStackAlign());
       if (TLI->hasInlineStackProbe(MF) && -Amount >= ProbeSize) {
         // When stack probing is enabled, the decrement of SP may need to be
         // probed. We can handle both the decrement and the probing in
         // allocateStack.
         bool DynAllocation =
-            MF.getInfo<RISCVMachineFunctionInfo>()->hasDynamicAllocation();
+            MF.getInfo<CapstoneMachineFunctionInfo>()->hasDynamicAllocation();
         allocateStack(MBB, MI, MF, -Amount, -Amount,
                       needsDwarfCFI(MF) && !hasFP(MF),
                       /*NeedProbe=*/true, ProbeSize, DynAllocation,
                       MachineInstr::NoFlags);
       } else {
-        const RISCVRegisterInfo &RI = *STI.getRegisterInfo();
+        const CapstoneRegisterInfo &RI = *STI.getRegisterInfo();
         RI.adjustReg(MBB, MI, DL, SPReg, SPReg, StackOffset::getFixed(Amount),
                      MachineInstr::NoFlags, getStackAlign());
       }
@@ -1923,8 +1923,8 @@ MachineBasicBlock::iterator RISCVFrameLowering::eliminateCallFramePseudoInstr(
 //   sw      s4,2008(sp)
 //   add     sp,sp,-64
 uint64_t
-RISCVFrameLowering::getFirstSPAdjustAmount(const MachineFunction &MF) const {
-  const auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+CapstoneFrameLowering::getFirstSPAdjustAmount(const MachineFunction &MF) const {
+  const auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
   const std::vector<CalleeSavedInfo> &CSI = MFI.getCalleeSavedInfo();
   uint64_t StackSize = getStackSizeWithRVVPadding(MF);
@@ -1952,11 +1952,11 @@ RISCVFrameLowering::getFirstSPAdjustAmount(const MachineFunction &MF) const {
     // compression instructions.
     if (STI.hasStdExtZca()) {
       // The compression extensions may support the following instructions:
-      // riscv32: c.lwsp rd, offset[7:2] => 2^(6 + 2)
+      // capstone32: c.lwsp rd, offset[7:2] => 2^(6 + 2)
       //          c.swsp rs2, offset[7:2] => 2^(6 + 2)
       //          c.flwsp rd, offset[7:2] => 2^(6 + 2)
       //          c.fswsp rs2, offset[7:2] => 2^(6 + 2)
-      // riscv64: c.ldsp rd, offset[8:3] => 2^(6 + 3)
+      // capstone64: c.ldsp rd, offset[8:3] => 2^(6 + 3)
       //          c.sdsp rs2, offset[8:3] => 2^(6 + 3)
       //          c.fldsp rd, offset[8:3] => 2^(6 + 3)
       //          c.fsdsp rs2, offset[8:3] => 2^(6 + 3)
@@ -1990,11 +1990,11 @@ RISCVFrameLowering::getFirstSPAdjustAmount(const MachineFunction &MF) const {
   return 0;
 }
 
-bool RISCVFrameLowering::assignCalleeSavedSpillSlots(
+bool CapstoneFrameLowering::assignCalleeSavedSpillSlots(
     MachineFunction &MF, const TargetRegisterInfo *TRI,
     std::vector<CalleeSavedInfo> &CSI, unsigned &MinCSFrameIndex,
     unsigned &MaxCSFrameIndex) const {
-  auto *RVFI = MF.getInfo<RISCVMachineFunctionInfo>();
+  auto *RVFI = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   // Preemptible Interrupts have two additional Callee-save Frame Indexes,
   // not tracked by `CSI`.
@@ -2058,7 +2058,7 @@ bool RISCVFrameLowering::assignCalleeSavedSpillSlots(
       if (FII != std::end(FixedCSRFIMap)) {
         int64_t Offset;
         if (RVFI->getPushPopKind(MF) ==
-            RISCVMachineFunctionInfo::PushPopKind::StdExtZcmp)
+            CapstoneMachineFunctionInfo::PushPopKind::StdExtZcmp)
           Offset = -int64_t(RVFI->getRVPushRegs() - RegNum) * Size;
         else
           Offset = -int64_t(RegNum + 1) * Size;
@@ -2085,7 +2085,7 @@ bool RISCVFrameLowering::assignCalleeSavedSpillSlots(
     if ((unsigned)FrameIdx > MaxCSFrameIndex)
       MaxCSFrameIndex = FrameIdx;
     CS.setFrameIdx(FrameIdx);
-    if (RISCVRegisterInfo::isRVVRegClass(RC))
+    if (CapstoneRegisterInfo::isRVVRegClass(RC))
       MFI.setStackID(FrameIdx, TargetStackID::ScalableVector);
   }
 
@@ -2110,7 +2110,7 @@ bool RISCVFrameLowering::assignCalleeSavedSpillSlots(
   return true;
 }
 
-bool RISCVFrameLowering::spillCalleeSavedRegisters(
+bool CapstoneFrameLowering::spillCalleeSavedRegisters(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
     ArrayRef<CalleeSavedInfo> CSI, const TargetRegisterInfo *TRI) const {
   if (CSI.empty())
@@ -2122,15 +2122,15 @@ bool RISCVFrameLowering::spillCalleeSavedRegisters(
   if (MI != MBB.end() && !MI->isDebugInstr())
     DL = MI->getDebugLoc();
 
-  RISCVMachineFunctionInfo *RVFI = MF->getInfo<RISCVMachineFunctionInfo>();
+  CapstoneMachineFunctionInfo *RVFI = MF->getInfo<CapstoneMachineFunctionInfo>();
   if (RVFI->useQCIInterrupt(*MF)) {
     // Emit QC.C.MIENTER(.NEST)
     BuildMI(
         MBB, MI, DL,
         TII.get(RVFI->getInterruptStackKind(*MF) ==
-                        RISCVMachineFunctionInfo::InterruptStackKind::QCINest
-                    ? RISCV::QC_C_MIENTER_NEST
-                    : RISCV::QC_C_MIENTER))
+                        CapstoneMachineFunctionInfo::InterruptStackKind::QCINest
+                    ? Capstone::QC_C_MIENTER_NEST
+                    : Capstone::QC_C_MIENTER))
         .setMIFlag(MachineInstr::FrameSetup);
 
     for (auto [Reg, _Offset] : FixedCSRFIQCIInterruptMap)
@@ -2144,7 +2144,7 @@ bool RISCVFrameLowering::spillCalleeSavedRegisters(
       // Use encoded number to represent registers to spill.
       unsigned Opcode = getPushOpcode(
           RVFI->getPushPopKind(*MF), hasFP(*MF) && !RVFI->useQCIInterrupt(*MF));
-      unsigned RegEnc = RISCVZC::encodeRegListNumRegs(PushedRegNum);
+      unsigned RegEnc = CapstoneZC::encodeRegListNumRegs(PushedRegNum);
       MachineInstrBuilder PushBuilder =
           BuildMI(MBB, MI, DL, TII.get(Opcode))
               .setMIFlag(MachineInstr::FrameSetup);
@@ -2156,8 +2156,8 @@ bool RISCVFrameLowering::spillCalleeSavedRegisters(
     }
   } else if (const char *SpillLibCall = getSpillLibCallName(*MF, CSI)) {
     // Add spill libcall via non-callee-saved register t0.
-    BuildMI(MBB, MI, DL, TII.get(RISCV::PseudoCALLReg), RISCV::X5)
-        .addExternalSymbol(SpillLibCall, RISCVII::MO_CALL)
+    BuildMI(MBB, MI, DL, TII.get(Capstone::PseudoCALLReg), Capstone::X5)
+        .addExternalSymbol(SpillLibCall, CapstoneII::MO_CALL)
         .setMIFlag(MachineInstr::FrameSetup);
 
     // Add registers spilled in libcall as liveins.
@@ -2186,18 +2186,18 @@ bool RISCVFrameLowering::spillCalleeSavedRegisters(
 }
 
 static unsigned getCalleeSavedRVVNumRegs(const Register &BaseReg) {
-  return RISCV::VRRegClass.contains(BaseReg)     ? 1
-         : RISCV::VRM2RegClass.contains(BaseReg) ? 2
-         : RISCV::VRM4RegClass.contains(BaseReg) ? 4
+  return Capstone::VRRegClass.contains(BaseReg)     ? 1
+         : Capstone::VRM2RegClass.contains(BaseReg) ? 2
+         : Capstone::VRM4RegClass.contains(BaseReg) ? 4
                                                  : 8;
 }
 
-void RISCVFrameLowering::emitCalleeSavedRVVPrologCFI(
+void CapstoneFrameLowering::emitCalleeSavedRVVPrologCFI(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MI, bool HasFP) const {
   MachineFunction *MF = MBB.getParent();
   const MachineFrameInfo &MFI = MF->getFrameInfo();
-  RISCVMachineFunctionInfo *RVFI = MF->getInfo<RISCVMachineFunctionInfo>();
-  const RISCVRegisterInfo &TRI = *STI.getRegisterInfo();
+  CapstoneMachineFunctionInfo *RVFI = MF->getInfo<CapstoneMachineFunctionInfo>();
+  const CapstoneRegisterInfo &TRI = *STI.getRegisterInfo();
 
   const auto &RVVCSI = getRVVCalleeSavedInfo(*MF, MFI.getCalleeSavedInfo());
   if (RVVCSI.empty())
@@ -2224,11 +2224,11 @@ void RISCVFrameLowering::emitCalleeSavedRVVPrologCFI(
   }
 }
 
-void RISCVFrameLowering::emitCalleeSavedRVVEpilogCFI(
+void CapstoneFrameLowering::emitCalleeSavedRVVEpilogCFI(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MI) const {
   MachineFunction *MF = MBB.getParent();
   const MachineFrameInfo &MFI = MF->getFrameInfo();
-  const RISCVRegisterInfo &TRI = *STI.getRegisterInfo();
+  const CapstoneRegisterInfo &TRI = *STI.getRegisterInfo();
 
   CFIInstBuilder CFIHelper(MBB, MI, MachineInstr::FrameDestroy);
   const auto &RVVCSI = getRVVCalleeSavedInfo(*MF, MFI.getCalleeSavedInfo());
@@ -2240,7 +2240,7 @@ void RISCVFrameLowering::emitCalleeSavedRVVEpilogCFI(
   }
 }
 
-bool RISCVFrameLowering::restoreCalleeSavedRegisters(
+bool CapstoneFrameLowering::restoreCalleeSavedRegisters(
     MachineBasicBlock &MBB, MachineBasicBlock::iterator MI,
     MutableArrayRef<CalleeSavedInfo> CSI, const TargetRegisterInfo *TRI) const {
   if (CSI.empty())
@@ -2274,11 +2274,11 @@ bool RISCVFrameLowering::restoreCalleeSavedRegisters(
   loadRegFromStackSlot(RVVCSI);
   loadRegFromStackSlot(UnmanagedCSI);
 
-  RISCVMachineFunctionInfo *RVFI = MF->getInfo<RISCVMachineFunctionInfo>();
+  CapstoneMachineFunctionInfo *RVFI = MF->getInfo<CapstoneMachineFunctionInfo>();
   if (RVFI->useQCIInterrupt(*MF)) {
     // Don't emit anything here because restoration is handled by
     // QC.C.MILEAVERET which we already inserted to return.
-    assert(MI->getOpcode() == RISCV::QC_C_MILEAVERET &&
+    assert(MI->getOpcode() == Capstone::QC_C_MILEAVERET &&
            "Unexpected QCI Interrupt Return Instruction");
   }
 
@@ -2286,7 +2286,7 @@ bool RISCVFrameLowering::restoreCalleeSavedRegisters(
     unsigned PushedRegNum = RVFI->getRVPushRegs();
     if (PushedRegNum > 0) {
       unsigned Opcode = getPopOpcode(RVFI->getPushPopKind(*MF));
-      unsigned RegEnc = RISCVZC::encodeRegListNumRegs(PushedRegNum);
+      unsigned RegEnc = CapstoneZC::encodeRegListNumRegs(PushedRegNum);
       MachineInstrBuilder PopBuilder =
           BuildMI(MBB, MI, DL, TII.get(Opcode))
               .setMIFlag(MachineInstr::FrameDestroy);
@@ -2302,13 +2302,13 @@ bool RISCVFrameLowering::restoreCalleeSavedRegisters(
     if (RestoreLibCall) {
       // Add restore libcall via tail call.
       MachineBasicBlock::iterator NewMI =
-          BuildMI(MBB, MI, DL, TII.get(RISCV::PseudoTAIL))
-              .addExternalSymbol(RestoreLibCall, RISCVII::MO_CALL)
+          BuildMI(MBB, MI, DL, TII.get(Capstone::PseudoTAIL))
+              .addExternalSymbol(RestoreLibCall, CapstoneII::MO_CALL)
               .setMIFlag(MachineInstr::FrameDestroy);
 
       // Remove trailing returns, since the terminator is now a tail call to the
       // restore function.
-      if (MI != MBB.end() && MI->getOpcode() == RISCV::PseudoRET) {
+      if (MI != MBB.end() && MI->getOpcode() == Capstone::PseudoRET) {
         NewMI->copyImplicitOps(*MF, *MI);
         MI->eraseFromParent();
       }
@@ -2317,7 +2317,7 @@ bool RISCVFrameLowering::restoreCalleeSavedRegisters(
   return true;
 }
 
-bool RISCVFrameLowering::enableShrinkWrapping(const MachineFunction &MF) const {
+bool CapstoneFrameLowering::enableShrinkWrapping(const MachineFunction &MF) const {
   // Keep the conventional code flow when not optimizing.
   if (MF.getFunction().hasOptNone())
     return false;
@@ -2325,10 +2325,10 @@ bool RISCVFrameLowering::enableShrinkWrapping(const MachineFunction &MF) const {
   return true;
 }
 
-bool RISCVFrameLowering::canUseAsPrologue(const MachineBasicBlock &MBB) const {
+bool CapstoneFrameLowering::canUseAsPrologue(const MachineBasicBlock &MBB) const {
   MachineBasicBlock *TmpMBB = const_cast<MachineBasicBlock *>(&MBB);
   const MachineFunction *MF = MBB.getParent();
-  const auto *RVFI = MF->getInfo<RISCVMachineFunctionInfo>();
+  const auto *RVFI = MF->getInfo<CapstoneMachineFunctionInfo>();
 
   // Make sure VTYPE and VL are not live-in since we will use vsetvli in the
   // prologue to get the VLEN, and that will clobber these registers.
@@ -2338,25 +2338,25 @@ bool RISCVFrameLowering::canUseAsPrologue(const MachineBasicBlock &MBB) const {
   // not worth since the situation is rare, we could do further check in future
   // if we find it is necessary.
   if (STI.preferVsetvliOverReadVLENB() &&
-      (MBB.isLiveIn(RISCV::VTYPE) || MBB.isLiveIn(RISCV::VL)))
+      (MBB.isLiveIn(Capstone::VTYPE) || MBB.isLiveIn(Capstone::VL)))
     return false;
 
   if (!RVFI->useSaveRestoreLibCalls(*MF))
     return true;
 
-  // Inserting a call to a __riscv_save libcall requires the use of the register
+  // Inserting a call to a __capstone_save libcall requires the use of the register
   // t0 (X5) to hold the return address. Therefore if this register is already
   // used we can't insert the call.
 
   RegScavenger RS;
   RS.enterBasicBlock(*TmpMBB);
-  return !RS.isRegUsed(RISCV::X5);
+  return !RS.isRegUsed(Capstone::X5);
 }
 
-bool RISCVFrameLowering::canUseAsEpilogue(const MachineBasicBlock &MBB) const {
+bool CapstoneFrameLowering::canUseAsEpilogue(const MachineBasicBlock &MBB) const {
   const MachineFunction *MF = MBB.getParent();
   MachineBasicBlock *TmpMBB = const_cast<MachineBasicBlock *>(&MBB);
-  const auto *RVFI = MF->getInfo<RISCVMachineFunctionInfo>();
+  const auto *RVFI = MF->getInfo<CapstoneMachineFunctionInfo>();
 
   // We do not want QC.C.MILEAVERET to be subject to shrink-wrapping - it must
   // come in the final block of its function as it both pops and returns.
@@ -2366,7 +2366,7 @@ bool RISCVFrameLowering::canUseAsEpilogue(const MachineBasicBlock &MBB) const {
   if (!RVFI->useSaveRestoreLibCalls(*MF))
     return true;
 
-  // Using the __riscv_restore libcalls to restore CSRs requires a tail call.
+  // Using the __capstone_restore libcalls to restore CSRs requires a tail call.
   // This means if we still need to continue executing code within this function
   // the restore cannot take place in this basic block.
 
@@ -2387,7 +2387,7 @@ bool RISCVFrameLowering::canUseAsEpilogue(const MachineBasicBlock &MBB) const {
   return SuccMBB->isReturnBlock() && SuccMBB->size() == 1;
 }
 
-bool RISCVFrameLowering::isSupportedStackID(TargetStackID::Value ID) const {
+bool CapstoneFrameLowering::isSupportedStackID(TargetStackID::Value ID) const {
   switch (ID) {
   case TargetStackID::Default:
   case TargetStackID::ScalableVector:
@@ -2400,23 +2400,23 @@ bool RISCVFrameLowering::isSupportedStackID(TargetStackID::Value ID) const {
   llvm_unreachable("Invalid TargetStackID::Value");
 }
 
-TargetStackID::Value RISCVFrameLowering::getStackIDForScalableVectors() const {
+TargetStackID::Value CapstoneFrameLowering::getStackIDForScalableVectors() const {
   return TargetStackID::ScalableVector;
 }
 
 // Synthesize the probe loop.
 static void emitStackProbeInline(MachineBasicBlock::iterator MBBI, DebugLoc DL,
                                  Register TargetReg, bool IsRVV) {
-  assert(TargetReg != RISCV::X2 && "New top of stack cannot already be in SP");
+  assert(TargetReg != Capstone::X2 && "New top of stack cannot already be in SP");
 
   MachineBasicBlock &MBB = *MBBI->getParent();
   MachineFunction &MF = *MBB.getParent();
 
-  auto &Subtarget = MF.getSubtarget<RISCVSubtarget>();
-  const RISCVInstrInfo *TII = Subtarget.getInstrInfo();
+  auto &Subtarget = MF.getSubtarget<CapstoneSubtarget>();
+  const CapstoneInstrInfo *TII = Subtarget.getInstrInfo();
   bool IsRV64 = Subtarget.is64Bit();
   Align StackAlign = Subtarget.getFrameLowering()->getStackAlign();
-  const RISCVTargetLowering *TLI = Subtarget.getTargetLowering();
+  const CapstoneTargetLowering *TLI = Subtarget.getTargetLowering();
   uint64_t ProbeSize = TLI->getStackProbeSize(MF, StackAlign);
 
   MachineFunction::iterator MBBInsertPoint = std::next(MBB.getIterator());
@@ -2426,36 +2426,36 @@ static void emitStackProbeInline(MachineBasicBlock::iterator MBBI, DebugLoc DL,
   MachineBasicBlock *ExitMBB = MF.CreateMachineBasicBlock(MBB.getBasicBlock());
   MF.insert(MBBInsertPoint, ExitMBB);
   MachineInstr::MIFlag Flags = MachineInstr::FrameSetup;
-  Register ScratchReg = RISCV::X7;
+  Register ScratchReg = Capstone::X7;
 
   // ScratchReg = ProbeSize
   TII->movImm(MBB, MBBI, DL, ScratchReg, ProbeSize, Flags);
 
   // LoopTest:
   //   SUB SP, SP, ProbeSize
-  BuildMI(*LoopTestMBB, LoopTestMBB->end(), DL, TII->get(RISCV::SUB), SPReg)
+  BuildMI(*LoopTestMBB, LoopTestMBB->end(), DL, TII->get(Capstone::SUB), SPReg)
       .addReg(SPReg)
       .addReg(ScratchReg)
       .setMIFlags(Flags);
 
   //   s[d|w] zero, 0(sp)
   BuildMI(*LoopTestMBB, LoopTestMBB->end(), DL,
-          TII->get(IsRV64 ? RISCV::SD : RISCV::SW))
-      .addReg(RISCV::X0)
+          TII->get(IsRV64 ? Capstone::SD : Capstone::SW))
+      .addReg(Capstone::X0)
       .addReg(SPReg)
       .addImm(0)
       .setMIFlags(Flags);
 
   if (IsRVV) {
     //  SUB TargetReg, TargetReg, ProbeSize
-    BuildMI(*LoopTestMBB, LoopTestMBB->end(), DL, TII->get(RISCV::SUB),
+    BuildMI(*LoopTestMBB, LoopTestMBB->end(), DL, TII->get(Capstone::SUB),
             TargetReg)
         .addReg(TargetReg)
         .addReg(ScratchReg)
         .setMIFlags(Flags);
 
     //  BGE TargetReg, ProbeSize, LoopTest
-    BuildMI(*LoopTestMBB, LoopTestMBB->end(), DL, TII->get(RISCV::BGE))
+    BuildMI(*LoopTestMBB, LoopTestMBB->end(), DL, TII->get(Capstone::BGE))
         .addReg(TargetReg)
         .addReg(ScratchReg)
         .addMBB(LoopTestMBB)
@@ -2463,7 +2463,7 @@ static void emitStackProbeInline(MachineBasicBlock::iterator MBBI, DebugLoc DL,
 
   } else {
     //  BNE SP, TargetReg, LoopTest
-    BuildMI(*LoopTestMBB, LoopTestMBB->end(), DL, TII->get(RISCV::BNE))
+    BuildMI(*LoopTestMBB, LoopTestMBB->end(), DL, TII->get(Capstone::BNE))
         .addReg(SPReg)
         .addReg(TargetReg)
         .addMBB(LoopTestMBB)
@@ -2480,7 +2480,7 @@ static void emitStackProbeInline(MachineBasicBlock::iterator MBBI, DebugLoc DL,
   fullyRecomputeLiveIns({ExitMBB, LoopTestMBB});
 }
 
-void RISCVFrameLowering::inlineStackProbe(MachineFunction &MF,
+void CapstoneFrameLowering::inlineStackProbe(MachineFunction &MF,
                                           MachineBasicBlock &MBB) const {
   // Get the instructions that need to be replaced. We emit at most two of
   // these. Remember them in order to avoid complications coming from the need
@@ -2488,20 +2488,20 @@ void RISCVFrameLowering::inlineStackProbe(MachineFunction &MF,
   SmallVector<MachineInstr *, 4> ToReplace;
   for (MachineInstr &MI : MBB) {
     unsigned Opc = MI.getOpcode();
-    if (Opc == RISCV::PROBED_STACKALLOC ||
-        Opc == RISCV::PROBED_STACKALLOC_RVV) {
+    if (Opc == Capstone::PROBED_STACKALLOC ||
+        Opc == Capstone::PROBED_STACKALLOC_RVV) {
       ToReplace.push_back(&MI);
     }
   }
 
   for (MachineInstr *MI : ToReplace) {
-    if (MI->getOpcode() == RISCV::PROBED_STACKALLOC ||
-        MI->getOpcode() == RISCV::PROBED_STACKALLOC_RVV) {
+    if (MI->getOpcode() == Capstone::PROBED_STACKALLOC ||
+        MI->getOpcode() == Capstone::PROBED_STACKALLOC_RVV) {
       MachineBasicBlock::iterator MBBI = MI->getIterator();
       DebugLoc DL = MBB.findDebugLoc(MBBI);
       Register TargetReg = MI->getOperand(0).getReg();
       emitStackProbeInline(MBBI, DL, TargetReg,
-                           (MI->getOpcode() == RISCV::PROBED_STACKALLOC_RVV));
+                           (MI->getOpcode() == Capstone::PROBED_STACKALLOC_RVV));
       MBBI->eraseFromParent();
     }
   }

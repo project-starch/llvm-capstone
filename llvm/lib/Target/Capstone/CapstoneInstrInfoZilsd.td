@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZilsd.td -----------------------------*- tablegen -*-===//
+//===-- CapstoneInstrInfoZilsd.td -----------------------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,23 +6,23 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard 'Zilsd',
+// This file describes the Capstone instructions from the standard 'Zilsd',
 // Load/Store pair instructions extension.
 //
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
-// RISC-V specific DAG Nodes.
+// Capstone specific DAG Nodes.
 //===----------------------------------------------------------------------===//
 
-def SDT_RISCV_LD_RV32
+def SDT_Capstone_LD_RV32
     : SDTypeProfile<2, 1, [SDTCisVT<0, i32>, SDTCisVT<1, i32>, SDTCisPtrTy<2>]>;
-def SDT_RISCV_SD_RV32
+def SDT_Capstone_SD_RV32
     : SDTypeProfile<0, 3, [SDTCisVT<0, i32>, SDTCisVT<1, i32>, SDTCisPtrTy<2>]>;
 
-def riscv_ld_rv32 : RVSDNode<"LD_RV32", SDT_RISCV_LD_RV32,
+def capstone_ld_rv32 : RVSDNode<"LD_RV32", SDT_Capstone_LD_RV32,
                              [SDNPHasChain, SDNPMayLoad, SDNPMemOperand]>;
-def riscv_st_rv32 : RVSDNode<"SD_RV32", SDT_RISCV_SD_RV32,
+def capstone_st_rv32 : RVSDNode<"SD_RV32", SDT_Capstone_SD_RV32,
                              [SDNPHasChain, SDNPMayStore, SDNPMemOperand]>;
 
 //===----------------------------------------------------------------------===//

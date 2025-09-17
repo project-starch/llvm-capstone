@@ -1,4 +1,4 @@
-//===-- RISCVSchedMIPSP8700.td - MIPS RISC-V Processor -----*- tablegen -*-===//
+//===-- CapstoneSchedMIPSP8700.td - MIPS Capstone Processor -----*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -7,7 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
-// P8700 - a RISC-V processor by MIPS.
+// P8700 - a Capstone processor by MIPS.
 // Pipelines:
 //   - 2 Integer Arithmetic and Logical Units (ALU and AL2)
 //   - Multiply / Divide Unit (MDU)

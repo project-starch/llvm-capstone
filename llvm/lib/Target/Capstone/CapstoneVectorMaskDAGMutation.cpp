@@ -1,4 +1,4 @@
-//===- RISCVVectorMaskDAGMutation.cpp - RISC-V Vector Mask DAGMutation ----===//
+//===- CapstoneVectorMaskDAGMutation.cpp - Capstone Vector Mask DAGMutation ----===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -30,21 +30,21 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "MCTargetDesc/RISCVBaseInfo.h"
-#include "MCTargetDesc/RISCVMCTargetDesc.h"
-#include "RISCVTargetMachine.h"
+#include "MCTargetDesc/CapstoneBaseInfo.h"
+#include "MCTargetDesc/CapstoneMCTargetDesc.h"
+#include "CapstoneTargetMachine.h"
 #include "llvm/CodeGen/LiveIntervals.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/ScheduleDAGInstrs.h"
 #include "llvm/CodeGen/ScheduleDAGMutation.h"
-#include "llvm/TargetParser/RISCVTargetParser.h"
+#include "llvm/TargetParser/CapstoneTargetParser.h"
 
 #define DEBUG_TYPE "machine-scheduler"
 
 namespace llvm {
 
 static bool isCopyToV0(const MachineInstr &MI) {
-  return MI.isFullCopy() && MI.getOperand(0).getReg() == RISCV::V0 &&
+  return MI.isFullCopy() && MI.getOperand(0).getReg() == Capstone::V0 &&
          MI.getOperand(1).getReg().isVirtual();
 }
 
@@ -62,19 +62,19 @@ static bool isSoleUseCopyToV0(SUnit &SU) {
   return isCopyToV0(*DepSU.getInstr());
 }
 
-class RISCVVectorMaskDAGMutation : public ScheduleDAGMutation {
+class CapstoneVectorMaskDAGMutation : public ScheduleDAGMutation {
 private:
   const TargetRegisterInfo *TRI;
 
 public:
-  RISCVVectorMaskDAGMutation(const TargetRegisterInfo *TRI) : TRI(TRI) {}
+  CapstoneVectorMaskDAGMutation(const TargetRegisterInfo *TRI) : TRI(TRI) {}
 
   void apply(ScheduleDAGInstrs *DAG) override {
     SUnit *NearestUseV0SU = nullptr;
     SmallVector<SUnit *, 2> DefMask;
     for (SUnit &SU : DAG->SUnits) {
       const MachineInstr *MI = SU.getInstr();
-      bool UseV0 = MI->findRegisterUseOperand(RISCV::V0, TRI);
+      bool UseV0 = MI->findRegisterUseOperand(Capstone::V0, TRI);
       if (isSoleUseCopyToV0(SU) && !UseV0)
         DefMask.push_back(&SU);
 
@@ -96,15 +96,15 @@ public:
           // For LMUL=8 cases, there will be more possibilities to spill.
           // FIXME: We should use RegPressureTracker to do fine-grained
           // controls.
-          RISCVII::getLMul(MI->getDesc().TSFlags) != RISCVVType::LMUL_8)
+          CapstoneII::getLMul(MI->getDesc().TSFlags) != CapstoneVType::LMUL_8)
         DAG->addEdge(&SU, SDep(NearestUseV0SU, SDep::Artificial));
     }
   }
 };
 
 std::unique_ptr<ScheduleDAGMutation>
-createRISCVVectorMaskDAGMutation(const TargetRegisterInfo *TRI) {
-  return std::make_unique<RISCVVectorMaskDAGMutation>(TRI);
+createCapstoneVectorMaskDAGMutation(const TargetRegisterInfo *TRI) {
+  return std::make_unique<CapstoneVectorMaskDAGMutation>(TRI);
 }
 
 } // namespace llvm

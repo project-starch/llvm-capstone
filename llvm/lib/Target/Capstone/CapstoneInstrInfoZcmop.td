@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZcmop.td -----------------------------*- tablegen -*-===//
+//===-- CapstoneInstrInfoZcmop.td -----------------------------*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,7 +6,7 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard Compressed
+// This file describes the Capstone instructions from the standard Compressed
 // May-Be-Operations Extension (Zcmop).
 //
 //===----------------------------------------------------------------------===//

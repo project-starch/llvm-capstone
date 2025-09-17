@@ -1,4 +1,4 @@
-//===-- RISCVELFStreamer.h - RISC-V ELF Target Streamer ---------*- C++ -*-===//
+//===-- CapstoneELFStreamer.h - Capstone ELF Target Streamer ---------*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,15 +6,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVELFSTREAMER_H
-#define LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVELFSTREAMER_H
+#ifndef LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneELFSTREAMER_H
+#define LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneELFSTREAMER_H
 
-#include "RISCVTargetStreamer.h"
+#include "CapstoneTargetStreamer.h"
 #include "llvm/MC/MCELFStreamer.h"
 
 namespace llvm {
 
-class RISCVELFStreamer : public MCELFStreamer {
+class CapstoneELFStreamer : public MCELFStreamer {
   void reset() override;
   void emitDataMappingSymbol();
   void emitInstructionsMappingSymbol();
@@ -26,7 +26,7 @@ class RISCVELFStreamer : public MCELFStreamer {
   ElfMappingSymbol LastEMS = EMS_None;
 
 public:
-  RISCVELFStreamer(MCContext &C, std::unique_ptr<MCAsmBackend> MAB,
+  CapstoneELFStreamer(MCContext &C, std::unique_ptr<MCAsmBackend> MAB,
                    std::unique_ptr<MCObjectWriter> MOW,
                    std::unique_ptr<MCCodeEmitter> MCE);
 
@@ -37,7 +37,7 @@ public:
   void emitValueImpl(const MCExpr *Value, unsigned Size, SMLoc Loc) override;
 };
 
-class RISCVTargetELFStreamer : public RISCVTargetStreamer {
+class CapstoneTargetELFStreamer : public CapstoneTargetStreamer {
 private:
   StringRef CurrentVendor;
 
@@ -52,8 +52,8 @@ private:
   void reset() override;
 
 public:
-  RISCVELFStreamer &getStreamer();
-  RISCVTargetELFStreamer(MCStreamer &S, const MCSubtargetInfo &STI);
+  CapstoneELFStreamer &getStreamer();
+  CapstoneTargetELFStreamer(MCStreamer &S, const MCSubtargetInfo &STI);
 
   void emitDirectiveOptionExact() override;
   void emitDirectiveOptionNoExact() override;
@@ -70,10 +70,10 @@ public:
   void finish() override;
 };
 
-MCStreamer *createRISCVELFStreamer(const Triple &, MCContext &C,
+MCStreamer *createCapstoneELFStreamer(const Triple &, MCContext &C,
                                    std::unique_ptr<MCAsmBackend> &&MAB,
                                    std::unique_ptr<MCObjectWriter> &&MOW,
                                    std::unique_ptr<MCCodeEmitter> &&MCE);
 } // namespace llvm
 
-#endif // LLVM_LIB_TARGET_RISCV_MCTARGETDESC_RISCVELFSTREAMER_H
+#endif // LLVM_LIB_TARGET_Capstone_MCTARGETDESC_CapstoneELFSTREAMER_H

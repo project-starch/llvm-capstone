@@ -1,4 +1,4 @@
-//===-- RISCVRegisterInfo.cpp - RISC-V Register Information -----*- C++ -*-===//
+//===-- CapstoneRegisterInfo.cpp - Capstone Register Information -----*- C++ -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,13 +6,13 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file contains the RISC-V implementation of the TargetRegisterInfo class.
+// This file contains the Capstone implementation of the TargetRegisterInfo class.
 //
 //===----------------------------------------------------------------------===//
 
-#include "RISCVRegisterInfo.h"
-#include "RISCV.h"
-#include "RISCVSubtarget.h"
+#include "CapstoneRegisterInfo.h"
+#include "Capstone.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/BinaryFormat/Dwarf.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
@@ -25,47 +25,47 @@
 #include "llvm/Support/ErrorHandling.h"
 
 #define GET_REGINFO_TARGET_DESC
-#include "RISCVGenRegisterInfo.inc"
+#include "CapstoneGenRegisterInfo.inc"
 
 using namespace llvm;
 
-static cl::opt<bool> DisableCostPerUse("riscv-disable-cost-per-use",
+static cl::opt<bool> DisableCostPerUse("capstone-disable-cost-per-use",
                                        cl::init(false), cl::Hidden);
 static cl::opt<bool>
-    DisableRegAllocHints("riscv-disable-regalloc-hints", cl::Hidden,
+    DisableRegAllocHints("capstone-disable-regalloc-hints", cl::Hidden,
                          cl::init(false),
                          cl::desc("Disable two address hints for register "
                                   "allocation"));
 
-static_assert(RISCV::X1 == RISCV::X0 + 1, "Register list not consecutive");
-static_assert(RISCV::X31 == RISCV::X0 + 31, "Register list not consecutive");
-static_assert(RISCV::F1_H == RISCV::F0_H + 1, "Register list not consecutive");
-static_assert(RISCV::F31_H == RISCV::F0_H + 31,
+static_assert(Capstone::X1 == Capstone::X0 + 1, "Register list not consecutive");
+static_assert(Capstone::X31 == Capstone::X0 + 31, "Register list not consecutive");
+static_assert(Capstone::F1_H == Capstone::F0_H + 1, "Register list not consecutive");
+static_assert(Capstone::F31_H == Capstone::F0_H + 31,
               "Register list not consecutive");
-static_assert(RISCV::F1_F == RISCV::F0_F + 1, "Register list not consecutive");
-static_assert(RISCV::F31_F == RISCV::F0_F + 31,
+static_assert(Capstone::F1_F == Capstone::F0_F + 1, "Register list not consecutive");
+static_assert(Capstone::F31_F == Capstone::F0_F + 31,
               "Register list not consecutive");
-static_assert(RISCV::F1_D == RISCV::F0_D + 1, "Register list not consecutive");
-static_assert(RISCV::F31_D == RISCV::F0_D + 31,
+static_assert(Capstone::F1_D == Capstone::F0_D + 1, "Register list not consecutive");
+static_assert(Capstone::F31_D == Capstone::F0_D + 31,
               "Register list not consecutive");
-static_assert(RISCV::F1_Q == RISCV::F0_Q + 1, "Register list not consecutive");
-static_assert(RISCV::F31_Q == RISCV::F0_Q + 31,
+static_assert(Capstone::F1_Q == Capstone::F0_Q + 1, "Register list not consecutive");
+static_assert(Capstone::F31_Q == Capstone::F0_Q + 31,
               "Register list not consecutive");
-static_assert(RISCV::V1 == RISCV::V0 + 1, "Register list not consecutive");
-static_assert(RISCV::V31 == RISCV::V0 + 31, "Register list not consecutive");
+static_assert(Capstone::V1 == Capstone::V0 + 1, "Register list not consecutive");
+static_assert(Capstone::V31 == Capstone::V0 + 31, "Register list not consecutive");
 
-RISCVRegisterInfo::RISCVRegisterInfo(unsigned HwMode)
-    : RISCVGenRegisterInfo(RISCV::X1, /*DwarfFlavour*/0, /*EHFlavor*/0,
+CapstoneRegisterInfo::CapstoneRegisterInfo(unsigned HwMode)
+    : CapstoneGenRegisterInfo(Capstone::X1, /*DwarfFlavour*/0, /*EHFlavor*/0,
                            /*PC*/0, HwMode) {}
 
 const MCPhysReg *
-RISCVRegisterInfo::getIPRACSRegs(const MachineFunction *MF) const {
+CapstoneRegisterInfo::getIPRACSRegs(const MachineFunction *MF) const {
   return CSR_IPRA_SaveList;
 }
 
 const MCPhysReg *
-RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
-  auto &Subtarget = MF->getSubtarget<RISCVSubtarget>();
+CapstoneRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
+  auto &Subtarget = MF->getSubtarget<CapstoneSubtarget>();
   if (MF->getFunction().getCallingConv() == CallingConv::GHC)
     return CSR_NoRegs_SaveList;
   if (MF->getFunction().getCallingConv() == CallingConv::PreserveMost)
@@ -93,37 +93,37 @@ RISCVRegisterInfo::getCalleeSavedRegs(const MachineFunction *MF) const {
   }
 
   bool HasVectorCSR =
-      MF->getFunction().getCallingConv() == CallingConv::RISCV_VectorCall &&
+      MF->getFunction().getCallingConv() == CallingConv::Capstone_VectorCall &&
       Subtarget.hasVInstructions();
 
   switch (Subtarget.getTargetABI()) {
   default:
     llvm_unreachable("Unrecognized ABI");
-  case RISCVABI::ABI_ILP32E:
-  case RISCVABI::ABI_LP64E:
+  case CapstoneABI::ABI_ILP32E:
+  case CapstoneABI::ABI_LP64E:
     return CSR_ILP32E_LP64E_SaveList;
-  case RISCVABI::ABI_ILP32:
-  case RISCVABI::ABI_LP64:
+  case CapstoneABI::ABI_ILP32:
+  case CapstoneABI::ABI_LP64:
     if (HasVectorCSR)
       return CSR_ILP32_LP64_V_SaveList;
     return CSR_ILP32_LP64_SaveList;
-  case RISCVABI::ABI_ILP32F:
-  case RISCVABI::ABI_LP64F:
+  case CapstoneABI::ABI_ILP32F:
+  case CapstoneABI::ABI_LP64F:
     if (HasVectorCSR)
       return CSR_ILP32F_LP64F_V_SaveList;
     return CSR_ILP32F_LP64F_SaveList;
-  case RISCVABI::ABI_ILP32D:
-  case RISCVABI::ABI_LP64D:
+  case CapstoneABI::ABI_ILP32D:
+  case CapstoneABI::ABI_LP64D:
     if (HasVectorCSR)
       return CSR_ILP32D_LP64D_V_SaveList;
     return CSR_ILP32D_LP64D_SaveList;
   }
 }
 
-BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
-  const RISCVFrameLowering *TFI = getFrameLowering(MF);
+BitVector CapstoneRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
+  const CapstoneFrameLowering *TFI = getFrameLowering(MF);
   BitVector Reserved(getNumRegs());
-  auto &Subtarget = MF.getSubtarget<RISCVSubtarget>();
+  auto &Subtarget = MF.getSubtarget<CapstoneSubtarget>();
 
   for (size_t Reg = 0; Reg < getNumRegs(); Reg++) {
     // Mark any GPRs requested to be reserved as such
@@ -136,62 +136,62 @@ BitVector RISCVRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   }
 
   // Use markSuperRegs to ensure any register aliases are also reserved
-  markSuperRegs(Reserved, RISCV::X2_H); // sp
-  markSuperRegs(Reserved, RISCV::X3_H); // gp
-  markSuperRegs(Reserved, RISCV::X4_H); // tp
+  markSuperRegs(Reserved, Capstone::X2_H); // sp
+  markSuperRegs(Reserved, Capstone::X3_H); // gp
+  markSuperRegs(Reserved, Capstone::X4_H); // tp
   if (TFI->hasFP(MF))
-    markSuperRegs(Reserved, RISCV::X8_H); // fp
+    markSuperRegs(Reserved, Capstone::X8_H); // fp
   // Reserve the base register if we need to realign the stack and allocate
   // variable-sized objects at runtime.
   if (TFI->hasBP(MF))
-    markSuperRegs(Reserved, RISCVABI::getBPReg()); // bp
+    markSuperRegs(Reserved, CapstoneABI::getBPReg()); // bp
 
   // Additionally reserve dummy register used to form the register pair
   // beginning with 'x0' for instructions that take register pairs.
-  markSuperRegs(Reserved, RISCV::DUMMY_REG_PAIR_WITH_X0);
+  markSuperRegs(Reserved, Capstone::DUMMY_REG_PAIR_WITH_X0);
 
   // There are only 16 GPRs for RVE.
   if (Subtarget.hasStdExtE())
-    for (MCPhysReg Reg = RISCV::X16_H; Reg <= RISCV::X31_H; Reg++)
+    for (MCPhysReg Reg = Capstone::X16_H; Reg <= Capstone::X31_H; Reg++)
       markSuperRegs(Reserved, Reg);
 
   // V registers for code generation. We handle them manually.
-  markSuperRegs(Reserved, RISCV::VL);
-  markSuperRegs(Reserved, RISCV::VTYPE);
-  markSuperRegs(Reserved, RISCV::VXSAT);
-  markSuperRegs(Reserved, RISCV::VXRM);
+  markSuperRegs(Reserved, Capstone::VL);
+  markSuperRegs(Reserved, Capstone::VTYPE);
+  markSuperRegs(Reserved, Capstone::VXSAT);
+  markSuperRegs(Reserved, Capstone::VXRM);
 
   // Floating point environment registers.
-  markSuperRegs(Reserved, RISCV::FRM);
-  markSuperRegs(Reserved, RISCV::FFLAGS);
+  markSuperRegs(Reserved, Capstone::FRM);
+  markSuperRegs(Reserved, Capstone::FFLAGS);
 
   // SiFive VCIX state registers.
-  markSuperRegs(Reserved, RISCV::SF_VCIX_STATE);
+  markSuperRegs(Reserved, Capstone::SF_VCIX_STATE);
 
   if (MF.getFunction().getCallingConv() == CallingConv::GRAAL) {
     if (Subtarget.hasStdExtE())
       reportFatalUsageError("Graal reserved registers do not exist in RVE");
-    markSuperRegs(Reserved, RISCV::X23_H);
-    markSuperRegs(Reserved, RISCV::X27_H);
+    markSuperRegs(Reserved, Capstone::X23_H);
+    markSuperRegs(Reserved, Capstone::X27_H);
   }
 
   // Shadow stack pointer.
-  markSuperRegs(Reserved, RISCV::SSP);
+  markSuperRegs(Reserved, Capstone::SSP);
 
   assert(checkAllSuperRegsMarked(Reserved));
   return Reserved;
 }
 
-bool RISCVRegisterInfo::isAsmClobberable(const MachineFunction &MF,
+bool CapstoneRegisterInfo::isAsmClobberable(const MachineFunction &MF,
                                          MCRegister PhysReg) const {
   return !MF.getSubtarget().isRegisterReservedByUser(PhysReg);
 }
 
-const uint32_t *RISCVRegisterInfo::getNoPreservedMask() const {
+const uint32_t *CapstoneRegisterInfo::getNoPreservedMask() const {
   return CSR_NoRegs_RegMask;
 }
 
-void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
+void CapstoneRegisterInfo::adjustReg(MachineBasicBlock &MBB,
                                   MachineBasicBlock::iterator II,
                                   const DebugLoc &DL, Register DestReg,
                                   Register SrcReg, StackOffset Offset,
@@ -203,15 +203,15 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
 
   MachineFunction &MF = *MBB.getParent();
   MachineRegisterInfo &MRI = MF.getRegInfo();
-  const RISCVSubtarget &ST = MF.getSubtarget<RISCVSubtarget>();
-  const RISCVInstrInfo *TII = ST.getInstrInfo();
+  const CapstoneSubtarget &ST = MF.getSubtarget<CapstoneSubtarget>();
+  const CapstoneInstrInfo *TII = ST.getInstrInfo();
 
   // Optimize compile time offset case
   if (Offset.getScalable()) {
     if (auto VLEN = ST.getRealVLen()) {
       // 1. Multiply the number of v-slots by the (constant) length of register
       const int64_t VLENB = *VLEN / 8;
-      assert(Offset.getScalable() % RISCV::RVVBytesPerBlock == 0 &&
+      assert(Offset.getScalable() % Capstone::RVVBytesPerBlock == 0 &&
              "Reserve the stack by the multiple of one vector size.");
       const int64_t NumOfVReg = Offset.getScalable() / 8;
       const int64_t FixedOffset = NumOfVReg * VLENB;
@@ -226,23 +226,23 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
   bool KillSrcReg = false;
 
   if (Offset.getScalable()) {
-    unsigned ScalableAdjOpc = RISCV::ADD;
+    unsigned ScalableAdjOpc = Capstone::ADD;
     int64_t ScalableValue = Offset.getScalable();
     if (ScalableValue < 0) {
       ScalableValue = -ScalableValue;
-      ScalableAdjOpc = RISCV::SUB;
+      ScalableAdjOpc = Capstone::SUB;
     }
     // Get vlenb and multiply vlen with the number of vector registers.
     Register ScratchReg = DestReg;
     if (DestReg == SrcReg)
-      ScratchReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+      ScratchReg = MRI.createVirtualRegister(&Capstone::GPRRegClass);
 
     assert(ScalableValue > 0 && "There is no need to get VLEN scaled value.");
-    assert(ScalableValue % RISCV::RVVBytesPerBlock == 0 &&
+    assert(ScalableValue % Capstone::RVVBytesPerBlock == 0 &&
            "Reserve the stack by the multiple of one vector size.");
-    assert(isInt<32>(ScalableValue / RISCV::RVVBytesPerBlock) &&
+    assert(isInt<32>(ScalableValue / Capstone::RVVBytesPerBlock) &&
            "Expect the number of vector registers within 32-bits.");
-    uint32_t NumOfVReg = ScalableValue / RISCV::RVVBytesPerBlock;
+    uint32_t NumOfVReg = ScalableValue / Capstone::RVVBytesPerBlock;
     // Only use vsetvli rather than vlenb if adjusting in the prologue or
     // epilogue, otherwise it may disturb the VTYPE and VL status.
     bool IsPrologueOrEpilogue =
@@ -251,7 +251,7 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
         IsPrologueOrEpilogue && ST.preferVsetvliOverReadVLENB();
     if (UseVsetvliRatherThanVlenb && (NumOfVReg == 1 || NumOfVReg == 2 ||
                                       NumOfVReg == 4 || NumOfVReg == 8)) {
-      BuildMI(MBB, II, DL, TII->get(RISCV::PseudoReadVLENBViaVSETVLIX0),
+      BuildMI(MBB, II, DL, TII->get(Capstone::PseudoReadVLENBViaVSETVLIX0),
               ScratchReg)
           .addImm(NumOfVReg)
           .setMIFlag(Flag);
@@ -261,19 +261,19 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
           .setMIFlag(Flag);
     } else {
       if (UseVsetvliRatherThanVlenb)
-        BuildMI(MBB, II, DL, TII->get(RISCV::PseudoReadVLENBViaVSETVLIX0),
+        BuildMI(MBB, II, DL, TII->get(Capstone::PseudoReadVLENBViaVSETVLIX0),
                 ScratchReg)
             .addImm(1)
             .setMIFlag(Flag);
       else
-        BuildMI(MBB, II, DL, TII->get(RISCV::PseudoReadVLENB), ScratchReg)
+        BuildMI(MBB, II, DL, TII->get(Capstone::PseudoReadVLENB), ScratchReg)
             .setMIFlag(Flag);
 
-      if (ScalableAdjOpc == RISCV::ADD && ST.hasStdExtZba() &&
+      if (ScalableAdjOpc == Capstone::ADD && ST.hasStdExtZba() &&
           (NumOfVReg == 2 || NumOfVReg == 4 || NumOfVReg == 8)) {
         unsigned Opc = NumOfVReg == 2
-                           ? RISCV::SH1ADD
-                           : (NumOfVReg == 4 ? RISCV::SH2ADD : RISCV::SH3ADD);
+                           ? Capstone::SH1ADD
+                           : (NumOfVReg == 4 ? Capstone::SH2ADD : Capstone::SH3ADD);
         BuildMI(MBB, II, DL, TII->get(Opc), DestReg)
             .addReg(ScratchReg, RegState::Kill)
             .addReg(SrcReg)
@@ -297,7 +297,7 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
   const uint64_t Align = RequiredAlign.valueOrOne().value();
 
   if (isInt<12>(Val)) {
-    BuildMI(MBB, II, DL, TII->get(RISCV::ADDI), DestReg)
+    BuildMI(MBB, II, DL, TII->get(Capstone::ADDI), DestReg)
         .addReg(SrcReg, getKillRegState(KillSrcReg))
         .addImm(Val)
         .setMIFlag(Flag);
@@ -316,11 +316,11 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
         (isUInt<5>(Hi20) || (Hi20 >= 0xfffe0 && Hi20 <= 0xfffff));
     bool IsCompressAddSub =
         (SrcReg == DestReg) &&
-        ((Val > 0 && RISCV::GPRNoX0RegClass.contains(SrcReg)) ||
-         (Val < 0 && RISCV::GPRCRegClass.contains(SrcReg)));
+        ((Val > 0 && Capstone::GPRNoX0RegClass.contains(SrcReg)) ||
+         (Val < 0 && Capstone::GPRCRegClass.contains(SrcReg)));
 
     if (!(IsCompressLUI && IsCompressAddSub)) {
-      BuildMI(MBB, II, DL, TII->get(RISCV::QC_E_ADDI), DestReg)
+      BuildMI(MBB, II, DL, TII->get(Capstone::QC_E_ADDI), DestReg)
           .addReg(SrcReg, getKillRegState(KillSrcReg))
           .addImm(Val)
           .setMIFlag(Flag);
@@ -339,11 +339,11 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
   if (Val > -4096 && Val <= (2 * MaxPosAdjStep)) {
     int64_t FirstAdj = Val < 0 ? -2048 : MaxPosAdjStep;
     Val -= FirstAdj;
-    BuildMI(MBB, II, DL, TII->get(RISCV::ADDI), DestReg)
+    BuildMI(MBB, II, DL, TII->get(Capstone::ADDI), DestReg)
         .addReg(SrcReg, getKillRegState(KillSrcReg))
         .addImm(FirstAdj)
         .setMIFlag(Flag);
-    BuildMI(MBB, II, DL, TII->get(RISCV::ADDI), DestReg)
+    BuildMI(MBB, II, DL, TII->get(Capstone::ADDI), DestReg)
         .addReg(DestReg, RegState::Kill)
         .addImm(Val)
         .setMIFlag(Flag);
@@ -358,14 +358,14 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
   if (ST.hasStdExtZba() && (Val & 0xFFF) != 0) {
     unsigned Opc = 0;
     if (isShiftedInt<12, 3>(Val)) {
-      Opc = RISCV::SH3ADD;
+      Opc = Capstone::SH3ADD;
       Val = Val >> 3;
     } else if (isShiftedInt<12, 2>(Val)) {
-      Opc = RISCV::SH2ADD;
+      Opc = Capstone::SH2ADD;
       Val = Val >> 2;
     }
     if (Opc) {
-      Register ScratchReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+      Register ScratchReg = MRI.createVirtualRegister(&Capstone::GPRRegClass);
       TII->movImm(MBB, II, DL, ScratchReg, Val, Flag);
       BuildMI(MBB, II, DL, TII->get(Opc), DestReg)
           .addReg(ScratchReg, RegState::Kill)
@@ -375,13 +375,13 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
     }
   }
 
-  unsigned Opc = RISCV::ADD;
+  unsigned Opc = Capstone::ADD;
   if (Val < 0) {
     Val = -Val;
-    Opc = RISCV::SUB;
+    Opc = Capstone::SUB;
   }
 
-  Register ScratchReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+  Register ScratchReg = MRI.createVirtualRegister(&Capstone::GPRRegClass);
   TII->movImm(MBB, II, DL, ScratchReg, Val, Flag);
   BuildMI(MBB, II, DL, TII->get(Opc), DestReg)
       .addReg(SrcReg, getKillRegState(KillSrcReg))
@@ -389,34 +389,34 @@ void RISCVRegisterInfo::adjustReg(MachineBasicBlock &MBB,
       .setMIFlag(Flag);
 }
 
-static std::tuple<RISCVVType::VLMUL, const TargetRegisterClass &, unsigned>
+static std::tuple<CapstoneVType::VLMUL, const TargetRegisterClass &, unsigned>
 getSpillReloadInfo(unsigned NumRemaining, uint16_t RegEncoding, bool IsSpill) {
   if (NumRemaining >= 8 && RegEncoding % 8 == 0)
-    return {RISCVVType::LMUL_8, RISCV::VRM8RegClass,
-            IsSpill ? RISCV::VS8R_V : RISCV::VL8RE8_V};
+    return {CapstoneVType::LMUL_8, Capstone::VRM8RegClass,
+            IsSpill ? Capstone::VS8R_V : Capstone::VL8RE8_V};
   if (NumRemaining >= 4 && RegEncoding % 4 == 0)
-    return {RISCVVType::LMUL_4, RISCV::VRM4RegClass,
-            IsSpill ? RISCV::VS4R_V : RISCV::VL4RE8_V};
+    return {CapstoneVType::LMUL_4, Capstone::VRM4RegClass,
+            IsSpill ? Capstone::VS4R_V : Capstone::VL4RE8_V};
   if (NumRemaining >= 2 && RegEncoding % 2 == 0)
-    return {RISCVVType::LMUL_2, RISCV::VRM2RegClass,
-            IsSpill ? RISCV::VS2R_V : RISCV::VL2RE8_V};
-  return {RISCVVType::LMUL_1, RISCV::VRRegClass,
-          IsSpill ? RISCV::VS1R_V : RISCV::VL1RE8_V};
+    return {CapstoneVType::LMUL_2, Capstone::VRM2RegClass,
+            IsSpill ? Capstone::VS2R_V : Capstone::VL2RE8_V};
+  return {CapstoneVType::LMUL_1, Capstone::VRRegClass,
+          IsSpill ? Capstone::VS1R_V : Capstone::VL1RE8_V};
 }
 
 // Split a VSPILLx_Mx/VSPILLx_Mx pseudo into multiple whole register stores
 // separated by LMUL*VLENB bytes.
-void RISCVRegisterInfo::lowerSegmentSpillReload(MachineBasicBlock::iterator II,
+void CapstoneRegisterInfo::lowerSegmentSpillReload(MachineBasicBlock::iterator II,
                                                 bool IsSpill) const {
   DebugLoc DL = II->getDebugLoc();
   MachineBasicBlock &MBB = *II->getParent();
   MachineFunction &MF = *MBB.getParent();
   MachineRegisterInfo &MRI = MF.getRegInfo();
-  const RISCVSubtarget &STI = MF.getSubtarget<RISCVSubtarget>();
+  const CapstoneSubtarget &STI = MF.getSubtarget<CapstoneSubtarget>();
   const TargetInstrInfo *TII = STI.getInstrInfo();
   const TargetRegisterInfo *TRI = STI.getRegisterInfo();
 
-  auto ZvlssegInfo = RISCV::isRVVSpillForZvlsseg(II->getOpcode());
+  auto ZvlssegInfo = Capstone::isRVVSpillForZvlsseg(II->getOpcode());
   unsigned NF = ZvlssegInfo->first;
   unsigned LMUL = ZvlssegInfo->second;
   unsigned NumRegs = NF * LMUL;
@@ -426,7 +426,7 @@ void RISCVRegisterInfo::lowerSegmentSpillReload(MachineBasicBlock::iterator II,
   uint16_t RegEncoding = TRI->getEncodingValue(Reg);
   Register Base = II->getOperand(1).getReg();
   bool IsBaseKill = II->getOperand(1).isKill();
-  Register NewBase = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+  Register NewBase = MRI.createVirtualRegister(&Capstone::GPRRegClass);
 
   auto *OldMMO = *(II->memoperands_begin());
   LocationSize OldLoc = OldMMO->getSize();
@@ -439,32 +439,32 @@ void RISCVRegisterInfo::lowerSegmentSpillReload(MachineBasicBlock::iterator II,
   while (I != NumRegs) {
     auto [LMulHandled, RegClass, Opcode] =
         getSpillReloadInfo(NumRegs - I, RegEncoding, IsSpill);
-    auto [RegNumHandled, _] = RISCVVType::decodeVLMUL(LMulHandled);
+    auto [RegNumHandled, _] = CapstoneVType::decodeVLMUL(LMulHandled);
     bool IsLast = I + RegNumHandled == NumRegs;
     if (PreHandledNum) {
       Register Step;
       // Optimize for constant VLEN.
       if (auto VLEN = STI.getRealVLen()) {
         int64_t Offset = *VLEN / 8 * PreHandledNum;
-        Step = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+        Step = MRI.createVirtualRegister(&Capstone::GPRRegClass);
         STI.getInstrInfo()->movImm(MBB, II, DL, Step, Offset);
       } else {
         if (!VLENB) {
-          VLENB = MRI.createVirtualRegister(&RISCV::GPRRegClass);
-          BuildMI(MBB, II, DL, TII->get(RISCV::PseudoReadVLENB), VLENB);
+          VLENB = MRI.createVirtualRegister(&Capstone::GPRRegClass);
+          BuildMI(MBB, II, DL, TII->get(Capstone::PseudoReadVLENB), VLENB);
         }
         uint32_t ShiftAmount = Log2_32(PreHandledNum);
         if (ShiftAmount == 0)
           Step = VLENB;
         else {
-          Step = MRI.createVirtualRegister(&RISCV::GPRRegClass);
-          BuildMI(MBB, II, DL, TII->get(RISCV::SLLI), Step)
+          Step = MRI.createVirtualRegister(&Capstone::GPRRegClass);
+          BuildMI(MBB, II, DL, TII->get(Capstone::SLLI), Step)
               .addReg(VLENB, getKillRegState(IsLast))
               .addImm(ShiftAmount);
         }
       }
 
-      BuildMI(MBB, II, DL, TII->get(RISCV::ADD), NewBase)
+      BuildMI(MBB, II, DL, TII->get(Capstone::ADD), NewBase)
           .addReg(Base, getKillRegState(I != 0 || IsBaseKill))
           .addReg(Step, getKillRegState(Step != VLENB || IsLast));
       Base = NewBase;
@@ -492,7 +492,7 @@ void RISCVRegisterInfo::lowerSegmentSpillReload(MachineBasicBlock::iterator II,
   II->eraseFromParent();
 }
 
-bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
+bool CapstoneRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
                                             int SPAdj, unsigned FIOperandNum,
                                             RegScavenger *RS) const {
   assert(SPAdj == 0 && "Unexpected non-zero SPAdj value");
@@ -506,7 +506,7 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   Register FrameReg;
   StackOffset Offset =
       getFrameLowering(MF)->getFrameIndexReference(MF, FrameIndex, FrameReg);
-  bool IsRVVSpill = RISCV::isRVVSpill(MI);
+  bool IsRVVSpill = Capstone::isRVVSpill(MI);
   if (!IsRVVSpill)
     Offset += StackOffset::getFixed(MI.getOperand(FIOperandNum + 1).getImm());
 
@@ -520,23 +520,23 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     int64_t Lo12 = SignExtend64<12>(Val);
     unsigned Opc = MI.getOpcode();
 
-    if (Opc == RISCV::ADDI && !isInt<12>(Val)) {
+    if (Opc == Capstone::ADDI && !isInt<12>(Val)) {
       // We chose to emit the canonical immediate sequence rather than folding
       // the offset into the using add under the theory that doing so doesn't
       // save dynamic instruction count and some target may fuse the canonical
       // 32 bit immediate sequence.  We still need to clear the portion of the
       // offset encoded in the immediate.
       MI.getOperand(FIOperandNum + 1).ChangeToImmediate(0);
-    } else if ((Opc == RISCV::PREFETCH_I || Opc == RISCV::PREFETCH_R ||
-                Opc == RISCV::PREFETCH_W) &&
+    } else if ((Opc == Capstone::PREFETCH_I || Opc == Capstone::PREFETCH_R ||
+                Opc == Capstone::PREFETCH_W) &&
                (Lo12 & 0b11111) != 0) {
       // Prefetch instructions require the offset to be 32 byte aligned.
       MI.getOperand(FIOperandNum + 1).ChangeToImmediate(0);
-    } else if (Opc == RISCV::MIPS_PREF && !isUInt<9>(Val)) {
+    } else if (Opc == Capstone::MIPS_PREF && !isUInt<9>(Val)) {
       // MIPS Prefetch instructions require the offset to be 9 bits encoded.
       MI.getOperand(FIOperandNum + 1).ChangeToImmediate(0);
-    } else if ((Opc == RISCV::PseudoRV32ZdinxLD ||
-                Opc == RISCV::PseudoRV32ZdinxSD) &&
+    } else if ((Opc == Capstone::PseudoRV32ZdinxLD ||
+                Opc == Capstone::PseudoRV32ZdinxSD) &&
                Lo12 >= 2044) {
       // This instruction will be split into 2 instructions. The second
       // instruction will add 4 to the immediate. If that would overflow 12
@@ -554,10 +554,10 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
 
   if (Offset.getScalable() || Offset.getFixed()) {
     Register DestReg;
-    if (MI.getOpcode() == RISCV::ADDI)
+    if (MI.getOpcode() == Capstone::ADDI)
       DestReg = MI.getOperand(0).getReg();
     else
-      DestReg = MRI.createVirtualRegister(&RISCV::GPRRegClass);
+      DestReg = MRI.createVirtualRegister(&Capstone::GPRRegClass);
     adjustReg(*II->getParent(), II, DL, DestReg, FrameReg, Offset,
               MachineInstr::NoFlags, std::nullopt);
     MI.getOperand(FIOperandNum).ChangeToRegister(DestReg, /*IsDef*/false,
@@ -570,7 +570,7 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   }
 
   // If after materializing the adjustment, we have a pointless ADDI, remove it
-  if (MI.getOpcode() == RISCV::ADDI &&
+  if (MI.getOpcode() == Capstone::ADDI &&
       MI.getOperand(0).getReg() == MI.getOperand(1).getReg() &&
       MI.getOperand(2).getImm() == 0) {
     MI.eraseFromParent();
@@ -580,30 +580,30 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   // Handle spill/fill of synthetic register classes for segment operations to
   // ensure correctness in the edge case one gets spilled.
   switch (MI.getOpcode()) {
-  case RISCV::PseudoVSPILL2_M1:
-  case RISCV::PseudoVSPILL2_M2:
-  case RISCV::PseudoVSPILL2_M4:
-  case RISCV::PseudoVSPILL3_M1:
-  case RISCV::PseudoVSPILL3_M2:
-  case RISCV::PseudoVSPILL4_M1:
-  case RISCV::PseudoVSPILL4_M2:
-  case RISCV::PseudoVSPILL5_M1:
-  case RISCV::PseudoVSPILL6_M1:
-  case RISCV::PseudoVSPILL7_M1:
-  case RISCV::PseudoVSPILL8_M1:
+  case Capstone::PseudoVSPILL2_M1:
+  case Capstone::PseudoVSPILL2_M2:
+  case Capstone::PseudoVSPILL2_M4:
+  case Capstone::PseudoVSPILL3_M1:
+  case Capstone::PseudoVSPILL3_M2:
+  case Capstone::PseudoVSPILL4_M1:
+  case Capstone::PseudoVSPILL4_M2:
+  case Capstone::PseudoVSPILL5_M1:
+  case Capstone::PseudoVSPILL6_M1:
+  case Capstone::PseudoVSPILL7_M1:
+  case Capstone::PseudoVSPILL8_M1:
     lowerSegmentSpillReload(II, /*IsSpill=*/true);
     return true;
-  case RISCV::PseudoVRELOAD2_M1:
-  case RISCV::PseudoVRELOAD2_M2:
-  case RISCV::PseudoVRELOAD2_M4:
-  case RISCV::PseudoVRELOAD3_M1:
-  case RISCV::PseudoVRELOAD3_M2:
-  case RISCV::PseudoVRELOAD4_M1:
-  case RISCV::PseudoVRELOAD4_M2:
-  case RISCV::PseudoVRELOAD5_M1:
-  case RISCV::PseudoVRELOAD6_M1:
-  case RISCV::PseudoVRELOAD7_M1:
-  case RISCV::PseudoVRELOAD8_M1:
+  case Capstone::PseudoVRELOAD2_M1:
+  case Capstone::PseudoVRELOAD2_M2:
+  case Capstone::PseudoVRELOAD2_M4:
+  case Capstone::PseudoVRELOAD3_M1:
+  case Capstone::PseudoVRELOAD3_M2:
+  case Capstone::PseudoVRELOAD4_M1:
+  case Capstone::PseudoVRELOAD4_M2:
+  case Capstone::PseudoVRELOAD5_M1:
+  case Capstone::PseudoVRELOAD6_M1:
+  case Capstone::PseudoVRELOAD7_M1:
+  case Capstone::PseudoVRELOAD8_M1:
     lowerSegmentSpillReload(II, /*IsSpill=*/false);
     return true;
   }
@@ -611,7 +611,7 @@ bool RISCVRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
   return false;
 }
 
-bool RISCVRegisterInfo::requiresVirtualBaseRegisters(
+bool CapstoneRegisterInfo::requiresVirtualBaseRegisters(
     const MachineFunction &MF) const {
   return true;
 }
@@ -620,17 +620,17 @@ bool RISCVRegisterInfo::requiresVirtualBaseRegisters(
 // served by a base register other than FP or SP.
 // Used by LocalStackSlotAllocation pass to determine which frame index
 // references it should create new base registers for.
-bool RISCVRegisterInfo::needsFrameBaseReg(MachineInstr *MI,
+bool CapstoneRegisterInfo::needsFrameBaseReg(MachineInstr *MI,
                                           int64_t Offset) const {
   unsigned FIOperandNum = 0;
   for (; !MI->getOperand(FIOperandNum).isFI(); FIOperandNum++)
     assert(FIOperandNum < MI->getNumOperands() &&
            "Instr doesn't have FrameIndex operand");
 
-  // For RISC-V, The machine instructions that include a FrameIndex operand
+  // For Capstone, The machine instructions that include a FrameIndex operand
   // are load/store, ADDI instructions.
-  unsigned MIFrm = RISCVII::getFormat(MI->getDesc().TSFlags);
-  if (MIFrm != RISCVII::InstFormatI && MIFrm != RISCVII::InstFormatS)
+  unsigned MIFrm = CapstoneII::getFormat(MI->getDesc().TSFlags);
+  if (MIFrm != CapstoneII::InstFormatI && MIFrm != CapstoneII::InstFormatS)
     return false;
   // We only generate virtual base registers for loads and stores, so
   // return false for everything else.
@@ -639,11 +639,11 @@ bool RISCVRegisterInfo::needsFrameBaseReg(MachineInstr *MI,
 
   const MachineFunction &MF = *MI->getMF();
   const MachineFrameInfo &MFI = MF.getFrameInfo();
-  const RISCVFrameLowering *TFI = getFrameLowering(MF);
+  const CapstoneFrameLowering *TFI = getFrameLowering(MF);
   const MachineRegisterInfo &MRI = MF.getRegInfo();
 
   if (TFI->hasFP(MF) && !shouldRealignStack(MF)) {
-    auto &Subtarget = MF.getSubtarget<RISCVSubtarget>();
+    auto &Subtarget = MF.getSubtarget<CapstoneSubtarget>();
     // Estimate the stack size used to store callee saved registers(
     // excludes reserved registers).
     unsigned CalleeSavedSize = 0;
@@ -652,31 +652,31 @@ bool RISCVRegisterInfo::needsFrameBaseReg(MachineInstr *MI,
       if (Subtarget.isRegisterReservedByUser(Reg))
         continue;
 
-      if (RISCV::GPRRegClass.contains(Reg))
-        CalleeSavedSize += getSpillSize(RISCV::GPRRegClass);
-      else if (RISCV::FPR64RegClass.contains(Reg))
-        CalleeSavedSize += getSpillSize(RISCV::FPR64RegClass);
-      else if (RISCV::FPR32RegClass.contains(Reg))
-        CalleeSavedSize += getSpillSize(RISCV::FPR32RegClass);
+      if (Capstone::GPRRegClass.contains(Reg))
+        CalleeSavedSize += getSpillSize(Capstone::GPRRegClass);
+      else if (Capstone::FPR64RegClass.contains(Reg))
+        CalleeSavedSize += getSpillSize(Capstone::FPR64RegClass);
+      else if (Capstone::FPR32RegClass.contains(Reg))
+        CalleeSavedSize += getSpillSize(Capstone::FPR32RegClass);
       // Ignore vector registers.
     }
 
     int64_t MaxFPOffset = Offset - CalleeSavedSize;
-    return !isFrameOffsetLegal(MI, RISCV::X8, MaxFPOffset);
+    return !isFrameOffsetLegal(MI, Capstone::X8, MaxFPOffset);
   }
 
   // Assume 128 bytes spill slots size to estimate the maximum possible
   // offset relative to the stack pointer.
   // FIXME: The 128 is copied from ARM. We should run some statistics and pick a
-  // real one for RISC-V.
+  // real one for Capstone.
   int64_t MaxSPOffset = Offset + 128;
   MaxSPOffset += MFI.getLocalFrameSize();
-  return !isFrameOffsetLegal(MI, RISCV::X2, MaxSPOffset);
+  return !isFrameOffsetLegal(MI, Capstone::X2, MaxSPOffset);
 }
 
 // Determine whether a given base register plus offset immediate is
 // encodable to resolve a frame index.
-bool RISCVRegisterInfo::isFrameOffsetLegal(const MachineInstr *MI,
+bool CapstoneRegisterInfo::isFrameOffsetLegal(const MachineInstr *MI,
                                            Register BaseReg,
                                            int64_t Offset) const {
   unsigned FIOperandNum = 0;
@@ -693,7 +693,7 @@ bool RISCVRegisterInfo::isFrameOffsetLegal(const MachineInstr *MI,
 // Insert defining instruction(s) for a pointer to FrameIdx before
 // insertion point I.
 // Return materialized frame pointer.
-Register RISCVRegisterInfo::materializeFrameBaseRegister(MachineBasicBlock *MBB,
+Register CapstoneRegisterInfo::materializeFrameBaseRegister(MachineBasicBlock *MBB,
                                                          int FrameIdx,
                                                          int64_t Offset) const {
   MachineBasicBlock::iterator MBBI = MBB->begin();
@@ -704,8 +704,8 @@ Register RISCVRegisterInfo::materializeFrameBaseRegister(MachineBasicBlock *MBB,
   MachineRegisterInfo &MFI = MF->getRegInfo();
   const TargetInstrInfo *TII = MF->getSubtarget().getInstrInfo();
 
-  Register BaseReg = MFI.createVirtualRegister(&RISCV::GPRRegClass);
-  BuildMI(*MBB, MBBI, DL, TII->get(RISCV::ADDI), BaseReg)
+  Register BaseReg = MFI.createVirtualRegister(&Capstone::GPRRegClass);
+  BuildMI(*MBB, MBBI, DL, TII->get(Capstone::ADDI), BaseReg)
       .addFrameIndex(FrameIdx)
       .addImm(Offset);
   return BaseReg;
@@ -713,7 +713,7 @@ Register RISCVRegisterInfo::materializeFrameBaseRegister(MachineBasicBlock *MBB,
 
 // Resolve a frame index operand of an instruction to reference the
 // indicated base register plus offset instead.
-void RISCVRegisterInfo::resolveFrameIndex(MachineInstr &MI, Register BaseReg,
+void CapstoneRegisterInfo::resolveFrameIndex(MachineInstr &MI, Register BaseReg,
                                           int64_t Offset) const {
   unsigned FIOperandNum = 0;
   while (!MI.getOperand(FIOperandNum).isFI()) {
@@ -731,81 +731,81 @@ void RISCVRegisterInfo::resolveFrameIndex(MachineInstr &MI, Register BaseReg,
 
 // Get the offset from the referenced frame index in the instruction,
 // if there is one.
-int64_t RISCVRegisterInfo::getFrameIndexInstrOffset(const MachineInstr *MI,
+int64_t CapstoneRegisterInfo::getFrameIndexInstrOffset(const MachineInstr *MI,
                                                     int Idx) const {
-  assert((RISCVII::getFormat(MI->getDesc().TSFlags) == RISCVII::InstFormatI ||
-          RISCVII::getFormat(MI->getDesc().TSFlags) == RISCVII::InstFormatS) &&
+  assert((CapstoneII::getFormat(MI->getDesc().TSFlags) == CapstoneII::InstFormatI ||
+          CapstoneII::getFormat(MI->getDesc().TSFlags) == CapstoneII::InstFormatS) &&
          "The MI must be I or S format.");
   assert(MI->getOperand(Idx).isFI() && "The Idx'th operand of MI is not a "
                                        "FrameIndex operand");
   return MI->getOperand(Idx + 1).getImm();
 }
 
-Register RISCVRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
+Register CapstoneRegisterInfo::getFrameRegister(const MachineFunction &MF) const {
   const TargetFrameLowering *TFI = getFrameLowering(MF);
-  return TFI->hasFP(MF) ? RISCV::X8 : RISCV::X2;
+  return TFI->hasFP(MF) ? Capstone::X8 : Capstone::X2;
 }
 
-StringRef RISCVRegisterInfo::getRegAsmName(MCRegister Reg) const {
-  if (Reg == RISCV::SF_VCIX_STATE)
+StringRef CapstoneRegisterInfo::getRegAsmName(MCRegister Reg) const {
+  if (Reg == Capstone::SF_VCIX_STATE)
     return "sf.vcix_state";
   return TargetRegisterInfo::getRegAsmName(Reg);
 }
 
 const uint32_t *
-RISCVRegisterInfo::getCallPreservedMask(const MachineFunction & MF,
+CapstoneRegisterInfo::getCallPreservedMask(const MachineFunction & MF,
                                         CallingConv::ID CC) const {
-  auto &Subtarget = MF.getSubtarget<RISCVSubtarget>();
+  auto &Subtarget = MF.getSubtarget<CapstoneSubtarget>();
 
   if (CC == CallingConv::GHC)
     return CSR_NoRegs_RegMask;
-  RISCVABI::ABI ABI = Subtarget.getTargetABI();
+  CapstoneABI::ABI ABI = Subtarget.getTargetABI();
   if (CC == CallingConv::PreserveMost) {
-    if (ABI == RISCVABI::ABI_ILP32E || ABI == RISCVABI::ABI_LP64E)
+    if (ABI == CapstoneABI::ABI_ILP32E || ABI == CapstoneABI::ABI_LP64E)
       return CSR_RT_MostRegs_RVE_RegMask;
     return CSR_RT_MostRegs_RegMask;
   }
   switch (ABI) {
   default:
     llvm_unreachable("Unrecognized ABI");
-  case RISCVABI::ABI_ILP32E:
-  case RISCVABI::ABI_LP64E:
+  case CapstoneABI::ABI_ILP32E:
+  case CapstoneABI::ABI_LP64E:
     return CSR_ILP32E_LP64E_RegMask;
-  case RISCVABI::ABI_ILP32:
-  case RISCVABI::ABI_LP64:
-    if (CC == CallingConv::RISCV_VectorCall)
+  case CapstoneABI::ABI_ILP32:
+  case CapstoneABI::ABI_LP64:
+    if (CC == CallingConv::Capstone_VectorCall)
       return CSR_ILP32_LP64_V_RegMask;
     return CSR_ILP32_LP64_RegMask;
-  case RISCVABI::ABI_ILP32F:
-  case RISCVABI::ABI_LP64F:
-    if (CC == CallingConv::RISCV_VectorCall)
+  case CapstoneABI::ABI_ILP32F:
+  case CapstoneABI::ABI_LP64F:
+    if (CC == CallingConv::Capstone_VectorCall)
       return CSR_ILP32F_LP64F_V_RegMask;
     return CSR_ILP32F_LP64F_RegMask;
-  case RISCVABI::ABI_ILP32D:
-  case RISCVABI::ABI_LP64D:
-    if (CC == CallingConv::RISCV_VectorCall)
+  case CapstoneABI::ABI_ILP32D:
+  case CapstoneABI::ABI_LP64D:
+    if (CC == CallingConv::Capstone_VectorCall)
       return CSR_ILP32D_LP64D_V_RegMask;
     return CSR_ILP32D_LP64D_RegMask;
   }
 }
 
 const TargetRegisterClass *
-RISCVRegisterInfo::getLargestLegalSuperClass(const TargetRegisterClass *RC,
+CapstoneRegisterInfo::getLargestLegalSuperClass(const TargetRegisterClass *RC,
                                              const MachineFunction &) const {
-  if (RC == &RISCV::VMV0RegClass)
-    return &RISCV::VRRegClass;
-  if (RC == &RISCV::VRNoV0RegClass)
-    return &RISCV::VRRegClass;
-  if (RC == &RISCV::VRM2NoV0RegClass)
-    return &RISCV::VRM2RegClass;
-  if (RC == &RISCV::VRM4NoV0RegClass)
-    return &RISCV::VRM4RegClass;
-  if (RC == &RISCV::VRM8NoV0RegClass)
-    return &RISCV::VRM8RegClass;
+  if (RC == &Capstone::VMV0RegClass)
+    return &Capstone::VRRegClass;
+  if (RC == &Capstone::VRNoV0RegClass)
+    return &Capstone::VRRegClass;
+  if (RC == &Capstone::VRM2NoV0RegClass)
+    return &Capstone::VRM2RegClass;
+  if (RC == &Capstone::VRM4NoV0RegClass)
+    return &Capstone::VRM4RegClass;
+  if (RC == &Capstone::VRM8NoV0RegClass)
+    return &Capstone::VRM8RegClass;
   return RC;
 }
 
-void RISCVRegisterInfo::getOffsetOpcodes(const StackOffset &Offset,
+void CapstoneRegisterInfo::getOffsetOpcodes(const StackOffset &Offset,
                                          SmallVectorImpl<uint64_t> &Ops) const {
   // VLENB is the length of a vector register in bytes. We use <vscale x 8 x i8>
   // to represent one vector register. The dwarf offset is
@@ -815,7 +815,7 @@ void RISCVRegisterInfo::getOffsetOpcodes(const StackOffset &Offset,
   // Add fixed-sized offset using existing DIExpression interface.
   DIExpression::appendOffset(Ops, Offset.getFixed());
 
-  unsigned VLENB = getDwarfRegNum(RISCV::VLENB, true);
+  unsigned VLENB = getDwarfRegNum(Capstone::VLENB, true);
   int64_t VLENBSized = Offset.getScalable() / 8;
   if (VLENBSized > 0) {
     Ops.push_back(dwarf::DW_OP_constu);
@@ -833,25 +833,25 @@ void RISCVRegisterInfo::getOffsetOpcodes(const StackOffset &Offset,
 }
 
 unsigned
-RISCVRegisterInfo::getRegisterCostTableIndex(const MachineFunction &MF) const {
-  return MF.getSubtarget<RISCVSubtarget>().hasStdExtZca() && !DisableCostPerUse
+CapstoneRegisterInfo::getRegisterCostTableIndex(const MachineFunction &MF) const {
+  return MF.getSubtarget<CapstoneSubtarget>().hasStdExtZca() && !DisableCostPerUse
              ? 1
              : 0;
 }
 
-float RISCVRegisterInfo::getSpillWeightScaleFactor(
+float CapstoneRegisterInfo::getSpillWeightScaleFactor(
     const TargetRegisterClass *RC) const {
   return getRegClassWeight(RC).RegWeight;
 }
 
 // Add two address hints to improve chances of being able to use a compressed
 // instruction.
-bool RISCVRegisterInfo::getRegAllocationHints(
+bool CapstoneRegisterInfo::getRegAllocationHints(
     Register VirtReg, ArrayRef<MCPhysReg> Order,
     SmallVectorImpl<MCPhysReg> &Hints, const MachineFunction &MF,
     const VirtRegMap *VRM, const LiveRegMatrix *Matrix) const {
   const MachineRegisterInfo *MRI = &MF.getRegInfo();
-  auto &Subtarget = MF.getSubtarget<RISCVSubtarget>();
+  auto &Subtarget = MF.getSubtarget<CapstoneSubtarget>();
 
   bool BaseImplRetVal = TargetRegisterInfo::getRegAllocationHints(
       VirtReg, Order, Hints, MF, VRM, Matrix);
@@ -869,7 +869,7 @@ bool RISCVRegisterInfo::getRegAllocationHints(
     // TODO: Support GPRPair subregisters? Need to be careful with even/odd
     // registers. If the virtual register is an odd register of a pair and the
     // physical register is even (or vice versa), we should not add the hint.
-    if (PhysReg && (!NeedGPRC || RISCV::GPRCRegClass.contains(PhysReg)) &&
+    if (PhysReg && (!NeedGPRC || Capstone::GPRCRegClass.contains(PhysReg)) &&
         !MO.getSubReg() && !VRRegMO.getSubReg()) {
       if (!MRI->isReserved(PhysReg) && !is_contained(Hints, PhysReg))
         TwoAddrHints.insert(PhysReg);
@@ -883,15 +883,15 @@ bool RISCVRegisterInfo::getRegAllocationHints(
     switch (MI.getOpcode()) {
     default:
       return false;
-    case RISCV::AND:
-    case RISCV::OR:
-    case RISCV::XOR:
-    case RISCV::SUB:
-    case RISCV::ADDW:
-    case RISCV::SUBW:
+    case Capstone::AND:
+    case Capstone::OR:
+    case Capstone::XOR:
+    case Capstone::SUB:
+    case Capstone::ADDW:
+    case Capstone::SUBW:
       NeedGPRC = true;
       return true;
-    case RISCV::ANDI: {
+    case Capstone::ANDI: {
       NeedGPRC = true;
       if (!MI.getOperand(2).isImm())
         return false;
@@ -901,30 +901,30 @@ bool RISCVRegisterInfo::getRegAllocationHints(
       // c.zext.b
       return Subtarget.hasStdExtZcb() && Imm == 255;
     }
-    case RISCV::SRAI:
-    case RISCV::SRLI:
+    case Capstone::SRAI:
+    case Capstone::SRLI:
       NeedGPRC = true;
       return true;
-    case RISCV::ADD:
-    case RISCV::SLLI:
+    case Capstone::ADD:
+    case Capstone::SLLI:
       return true;
-    case RISCV::ADDI:
-    case RISCV::ADDIW:
+    case Capstone::ADDI:
+    case Capstone::ADDIW:
       return MI.getOperand(2).isImm() && isInt<6>(MI.getOperand(2).getImm());
-    case RISCV::MUL:
-    case RISCV::SEXT_B:
-    case RISCV::SEXT_H:
-    case RISCV::ZEXT_H_RV32:
-    case RISCV::ZEXT_H_RV64:
+    case Capstone::MUL:
+    case Capstone::SEXT_B:
+    case Capstone::SEXT_H:
+    case Capstone::ZEXT_H_RV32:
+    case Capstone::ZEXT_H_RV64:
       // c.mul, c.sext.b, c.sext.h, c.zext.h
       NeedGPRC = true;
       return Subtarget.hasStdExtZcb();
-    case RISCV::ADD_UW:
+    case Capstone::ADD_UW:
       // c.zext.w
       NeedGPRC = true;
       return Subtarget.hasStdExtZcb() && MI.getOperand(2).isReg() &&
-             MI.getOperand(2).getReg() == RISCV::X0;
-    case RISCV::XORI:
+             MI.getOperand(2).getReg() == Capstone::X0;
+    case Capstone::XORI:
       // c.not
       NeedGPRC = true;
       return Subtarget.hasStdExtZcb() && MI.getOperand(2).isImm() &&
@@ -941,7 +941,7 @@ bool RISCVRegisterInfo::getRegAllocationHints(
       return true;
     Register Reg = MO.getReg();
     Register PhysReg = Reg.isPhysical() ? Reg : Register(VRM->getPhys(Reg));
-    return PhysReg && RISCV::GPRCRegClass.contains(PhysReg);
+    return PhysReg && Capstone::GPRCRegClass.contains(PhysReg);
   };
 
   for (auto &MO : MRI->reg_nodbg_operands(VirtReg)) {
@@ -951,7 +951,7 @@ bool RISCVRegisterInfo::getRegAllocationHints(
     if (isCompressible(MI, NeedGPRC)) {
       if (OpIdx == 0 && MI.getOperand(1).isReg()) {
         if (!NeedGPRC || MI.getNumExplicitOperands() < 3 ||
-            MI.getOpcode() == RISCV::ADD_UW ||
+            MI.getOpcode() == Capstone::ADD_UW ||
             isCompressibleOpnd(MI.getOperand(2)))
           tryAddHint(MO, MI.getOperand(1), NeedGPRC);
         if (MI.isCommutable() && MI.getOperand(2).isReg() &&
@@ -969,14 +969,14 @@ bool RISCVRegisterInfo::getRegAllocationHints(
     // Add a hint if it would allow auipc/lui+addi(w) fusion.  We do this even
     // without the fusions explicitly enabled as the impact is rarely negative
     // and some cores do implement this fusion.
-    if ((MI.getOpcode() == RISCV::ADDIW || MI.getOpcode() == RISCV::ADDI) &&
+    if ((MI.getOpcode() == Capstone::ADDIW || MI.getOpcode() == Capstone::ADDI) &&
         MI.getOperand(1).isReg()) {
       const MachineBasicBlock &MBB = *MI.getParent();
       MachineBasicBlock::const_iterator I = MI.getIterator();
       // Is the previous instruction a LUI or AUIPC that can be fused?
       if (I != MBB.begin()) {
         I = skipDebugInstructionsBackward(std::prev(I), MBB.begin());
-        if ((I->getOpcode() == RISCV::LUI || I->getOpcode() == RISCV::AUIPC) &&
+        if ((I->getOpcode() == Capstone::LUI || I->getOpcode() == Capstone::AUIPC) &&
             I->getOperand(0).getReg() == MI.getOperand(1).getReg()) {
           if (OpIdx == 0)
             tryAddHint(MO, MI.getOperand(1), /*NeedGPRC=*/false);
@@ -995,10 +995,10 @@ bool RISCVRegisterInfo::getRegAllocationHints(
 }
 
 Register
-RISCVRegisterInfo::findVRegWithEncoding(const TargetRegisterClass &RegClass,
+CapstoneRegisterInfo::findVRegWithEncoding(const TargetRegisterClass &RegClass,
                                         uint16_t Encoding) const {
-  MCRegister Reg = RISCV::V0 + Encoding;
-  if (RISCVRI::getLMul(RegClass.TSFlags) == RISCVVType::LMUL_1)
+  MCRegister Reg = Capstone::V0 + Encoding;
+  if (CapstoneRI::getLMul(RegClass.TSFlags) == CapstoneVType::LMUL_1)
     return Reg;
-  return getMatchingSuperReg(Reg, RISCV::sub_vrm1_0, &RegClass);
+  return getMatchingSuperReg(Reg, Capstone::sub_vrm1_0, &RegClass);
 }

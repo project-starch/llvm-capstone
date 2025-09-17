@@ -1,4 +1,4 @@
-//===-------------- RISCVVLOptimizer.cpp - VL Optimizer -------------------===//
+//===-------------- CapstoneVLOptimizer.cpp - VL Optimizer -------------------===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -17,7 +17,7 @@
 // of each instruction if it demands less than its VL operand.
 //
 // The analysis is explained in more detail in the 2025 EuroLLVM Developers'
-// Meeting talk "Accidental Dataflow Analysis: Extending the RISC-V VL
+// Meeting talk "Accidental Dataflow Analysis: Extending the Capstone VL
 // Optimizer", which is available on YouTube at
 // https://www.youtube.com/watch?v=Mfb5fRSdJAc
 //
@@ -26,8 +26,8 @@
 //
 //===---------------------------------------------------------------------===//
 
-#include "RISCV.h"
-#include "RISCVSubtarget.h"
+#include "Capstone.h"
+#include "CapstoneSubtarget.h"
 #include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/CodeGen/MachineDominators.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
@@ -35,8 +35,8 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "riscv-vl-optimizer"
-#define PASS_NAME "RISC-V VL Optimizer"
+#define DEBUG_TYPE "capstone-vl-optimizer"
+#define PASS_NAME "Capstone VL Optimizer"
 
 namespace {
 
@@ -46,22 +46,22 @@ struct DemandedVL {
   DemandedVL() : VL(MachineOperand::CreateImm(0)) {}
   DemandedVL(MachineOperand VL) : VL(VL) {}
   static DemandedVL vlmax() {
-    return DemandedVL(MachineOperand::CreateImm(RISCV::VLMaxSentinel));
+    return DemandedVL(MachineOperand::CreateImm(Capstone::VLMaxSentinel));
   }
   bool operator!=(const DemandedVL &Other) const {
     return !VL.isIdenticalTo(Other.VL);
   }
 
   DemandedVL max(const DemandedVL &X) const {
-    if (RISCV::isVLKnownLE(VL, X.VL))
+    if (Capstone::isVLKnownLE(VL, X.VL))
       return X;
-    if (RISCV::isVLKnownLE(X.VL, VL))
+    if (Capstone::isVLKnownLE(X.VL, VL))
       return *this;
     return DemandedVL::vlmax();
   }
 };
 
-class RISCVVLOptimizer : public MachineFunctionPass {
+class CapstoneVLOptimizer : public MachineFunctionPass {
   const MachineRegisterInfo *MRI;
   const MachineDominatorTree *MDT;
   const TargetInstrInfo *TII;
@@ -69,7 +69,7 @@ class RISCVVLOptimizer : public MachineFunctionPass {
 public:
   static char ID;
 
-  RISCVVLOptimizer() : MachineFunctionPass(ID) {}
+  CapstoneVLOptimizer() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
@@ -98,7 +98,7 @@ private:
   auto virtual_vec_uses(const MachineInstr &MI) const {
     return make_filter_range(MI.uses(), [this](const MachineOperand &MO) {
       return MO.isReg() && MO.getReg().isVirtual() &&
-             RISCVRegisterInfo::isRVVRegClass(MRI->getRegClass(MO.getReg()));
+             CapstoneRegisterInfo::isRVVRegClass(MRI->getRegClass(MO.getReg()));
     });
   }
 };
@@ -106,15 +106,15 @@ private:
 /// Represents the EMUL and EEW of a MachineOperand.
 struct OperandInfo {
   // Represent as 1,2,4,8, ... and fractional indicator. This is because
-  // EMUL can take on values that don't map to RISCVVType::VLMUL values exactly.
+  // EMUL can take on values that don't map to CapstoneVType::VLMUL values exactly.
   // For example, a mask operand can have an EMUL less than MF8.
   // If nullopt, then EMUL isn't used (i.e. only a single scalar is read).
   std::optional<std::pair<unsigned, bool>> EMUL;
 
   unsigned Log2EEW;
 
-  OperandInfo(RISCVVType::VLMUL EMUL, unsigned Log2EEW)
-      : EMUL(RISCVVType::decodeVLMUL(EMUL)), Log2EEW(Log2EEW) {}
+  OperandInfo(CapstoneVType::VLMUL EMUL, unsigned Log2EEW)
+      : EMUL(CapstoneVType::decodeVLMUL(EMUL)), Log2EEW(Log2EEW) {}
 
   OperandInfo(std::pair<unsigned, bool> EMUL, unsigned Log2EEW)
       : EMUL(EMUL), Log2EEW(Log2EEW) {}
@@ -147,13 +147,13 @@ struct OperandInfo {
 
 } // end anonymous namespace
 
-char RISCVVLOptimizer::ID = 0;
-INITIALIZE_PASS_BEGIN(RISCVVLOptimizer, DEBUG_TYPE, PASS_NAME, false, false)
+char CapstoneVLOptimizer::ID = 0;
+INITIALIZE_PASS_BEGIN(CapstoneVLOptimizer, DEBUG_TYPE, PASS_NAME, false, false)
 INITIALIZE_PASS_DEPENDENCY(MachineDominatorTreeWrapperPass)
-INITIALIZE_PASS_END(RISCVVLOptimizer, DEBUG_TYPE, PASS_NAME, false, false)
+INITIALIZE_PASS_END(CapstoneVLOptimizer, DEBUG_TYPE, PASS_NAME, false, false)
 
-FunctionPass *llvm::createRISCVVLOptimizerPass() {
-  return new RISCVVLOptimizer();
+FunctionPass *llvm::createCapstoneVLOptimizerPass() {
+  return new CapstoneVLOptimizer();
 }
 
 LLVM_ATTRIBUTE_UNUSED
@@ -176,10 +176,10 @@ static raw_ostream &operator<<(raw_ostream &OS,
 /// SEW are from the TSFlags of MI.
 static std::pair<unsigned, bool>
 getEMULEqualsEEWDivSEWTimesLMUL(unsigned Log2EEW, const MachineInstr &MI) {
-  RISCVVType::VLMUL MIVLMUL = RISCVII::getLMul(MI.getDesc().TSFlags);
-  auto [MILMUL, MILMULIsFractional] = RISCVVType::decodeVLMUL(MIVLMUL);
+  CapstoneVType::VLMUL MIVLMUL = CapstoneII::getLMul(MI.getDesc().TSFlags);
+  auto [MILMUL, MILMULIsFractional] = CapstoneVType::decodeVLMUL(MIVLMUL);
   unsigned MILog2SEW =
-      MI.getOperand(RISCVII::getSEWOpNum(MI.getDesc())).getImm();
+      MI.getOperand(CapstoneII::getSEWOpNum(MI.getDesc())).getImm();
 
   // Mask instructions will have 0 as the SEW operand. But the LMUL of these
   // instructions is calculated is as if the SEW operand was 3 (e8).
@@ -205,7 +205,7 @@ static unsigned getIntegerExtensionOperandEEW(unsigned Factor,
                                               const MachineInstr &MI,
                                               const MachineOperand &MO) {
   unsigned MILog2SEW =
-      MI.getOperand(RISCVII::getSEWOpNum(MI.getDesc())).getImm();
+      MI.getOperand(CapstoneII::getSEWOpNum(MI.getDesc())).getImm();
 
   if (MO.getOperandNo() == 0)
     return MILog2SEW;
@@ -218,13 +218,13 @@ static unsigned getIntegerExtensionOperandEEW(unsigned Factor,
 }
 
 #define VSEG_CASES(Prefix, EEW)                                                \
-  RISCV::Prefix##SEG2E##EEW##_V:                                               \
-  case RISCV::Prefix##SEG3E##EEW##_V:                                          \
-  case RISCV::Prefix##SEG4E##EEW##_V:                                          \
-  case RISCV::Prefix##SEG5E##EEW##_V:                                          \
-  case RISCV::Prefix##SEG6E##EEW##_V:                                          \
-  case RISCV::Prefix##SEG7E##EEW##_V:                                          \
-  case RISCV::Prefix##SEG8E##EEW##_V
+  Capstone::Prefix##SEG2E##EEW##_V:                                               \
+  case Capstone::Prefix##SEG3E##EEW##_V:                                          \
+  case Capstone::Prefix##SEG4E##EEW##_V:                                          \
+  case Capstone::Prefix##SEG5E##EEW##_V:                                          \
+  case Capstone::Prefix##SEG6E##EEW##_V:                                          \
+  case Capstone::Prefix##SEG7E##EEW##_V:                                          \
+  case Capstone::Prefix##SEG8E##EEW##_V
 #define VSSEG_CASES(EEW)    VSEG_CASES(VS, EEW)
 #define VSSSEG_CASES(EEW)   VSEG_CASES(VSS, EEW)
 #define VSUXSEG_CASES(EEW)  VSEG_CASES(VSUX, I##EEW)
@@ -233,16 +233,16 @@ static unsigned getIntegerExtensionOperandEEW(unsigned Factor,
 static std::optional<unsigned> getOperandLog2EEW(const MachineOperand &MO) {
   const MachineInstr &MI = *MO.getParent();
   const MCInstrDesc &Desc = MI.getDesc();
-  const RISCVVPseudosTable::PseudoInfo *RVV =
-      RISCVVPseudosTable::getPseudoInfo(MI.getOpcode());
+  const CapstoneVPseudosTable::PseudoInfo *RVV =
+      CapstoneVPseudosTable::getPseudoInfo(MI.getOpcode());
   assert(RVV && "Could not find MI in PseudoTable");
 
   // MI has a SEW associated with it. The RVV specification defines
   // the EEW of each operand and definition in relation to MI.SEW.
-  unsigned MILog2SEW = MI.getOperand(RISCVII::getSEWOpNum(Desc)).getImm();
+  unsigned MILog2SEW = MI.getOperand(CapstoneII::getSEWOpNum(Desc)).getImm();
 
-  const bool HasPassthru = RISCVII::isFirstDefTiedToFirstUse(Desc);
-  const bool IsTied = RISCVII::isTiedPseudo(Desc.TSFlags);
+  const bool HasPassthru = CapstoneII::isFirstDefTiedToFirstUse(Desc);
+  const bool IsTied = CapstoneII::isTiedPseudo(Desc.TSFlags);
 
   bool IsMODef = MO.getOperandNo() == 0 ||
                  (HasPassthru && MO.getOperandNo() == MI.getNumExplicitDefs());
@@ -250,7 +250,7 @@ static std::optional<unsigned> getOperandLog2EEW(const MachineOperand &MO) {
   // All mask operands have EEW=1
   const MCOperandInfo &Info = Desc.operands()[MO.getOperandNo()];
   if (Info.OperandType == MCOI::OPERAND_REGISTER &&
-      Info.RegClass == RISCV::VMV0RegClassID)
+      Info.RegClass == Capstone::VMV0RegClassID)
     return 0;
 
   // switch against BaseInstr to reduce number of cases that need to be
@@ -259,9 +259,9 @@ static std::optional<unsigned> getOperandLog2EEW(const MachineOperand &MO) {
 
   // 6. Configuration-Setting Instructions
   // Configuration setting instructions do not read or write vector registers
-  case RISCV::VSETIVLI:
-  case RISCV::VSETVL:
-  case RISCV::VSETVLI:
+  case Capstone::VSETIVLI:
+  case Capstone::VSETVL:
+  case Capstone::VSETVLI:
     llvm_unreachable("Configuration setting instructions do not read or write "
                      "vector registers");
 
@@ -269,34 +269,34 @@ static std::optional<unsigned> getOperandLog2EEW(const MachineOperand &MO) {
   // Vector Unit-Stride Instructions
   // Vector Strided Instructions
   /// Dest EEW encoded in the instruction
-  case RISCV::VLM_V:
-  case RISCV::VSM_V:
+  case Capstone::VLM_V:
+  case Capstone::VSM_V:
     return 0;
-  case RISCV::VLE8_V:
-  case RISCV::VSE8_V:
-  case RISCV::VLSE8_V:
-  case RISCV::VSSE8_V:
+  case Capstone::VLE8_V:
+  case Capstone::VSE8_V:
+  case Capstone::VLSE8_V:
+  case Capstone::VSSE8_V:
   case VSSEG_CASES(8):
   case VSSSEG_CASES(8):
     return 3;
-  case RISCV::VLE16_V:
-  case RISCV::VSE16_V:
-  case RISCV::VLSE16_V:
-  case RISCV::VSSE16_V:
+  case Capstone::VLE16_V:
+  case Capstone::VSE16_V:
+  case Capstone::VLSE16_V:
+  case Capstone::VSSE16_V:
   case VSSEG_CASES(16):
   case VSSSEG_CASES(16):
     return 4;
-  case RISCV::VLE32_V:
-  case RISCV::VSE32_V:
-  case RISCV::VLSE32_V:
-  case RISCV::VSSE32_V:
+  case Capstone::VLE32_V:
+  case Capstone::VSE32_V:
+  case Capstone::VLSE32_V:
+  case Capstone::VSSE32_V:
   case VSSEG_CASES(32):
   case VSSSEG_CASES(32):
     return 5;
-  case RISCV::VLE64_V:
-  case RISCV::VSE64_V:
-  case RISCV::VLSE64_V:
-  case RISCV::VSSE64_V:
+  case Capstone::VLE64_V:
+  case Capstone::VSE64_V:
+  case Capstone::VLSE64_V:
+  case Capstone::VSSE64_V:
   case VSSEG_CASES(64):
   case VSSSEG_CASES(64):
     return 6;
@@ -304,40 +304,40 @@ static std::optional<unsigned> getOperandLog2EEW(const MachineOperand &MO) {
   // Vector Indexed Instructions
   // vs(o|u)xei<eew>.v
   // Dest/Data (operand 0) EEW=SEW.  Source EEW=<eew>.
-  case RISCV::VLUXEI8_V:
-  case RISCV::VLOXEI8_V:
-  case RISCV::VSUXEI8_V:
-  case RISCV::VSOXEI8_V:
+  case Capstone::VLUXEI8_V:
+  case Capstone::VLOXEI8_V:
+  case Capstone::VSUXEI8_V:
+  case Capstone::VSOXEI8_V:
   case VSUXSEG_CASES(8):
   case VSOXSEG_CASES(8): {
     if (MO.getOperandNo() == 0)
       return MILog2SEW;
     return 3;
   }
-  case RISCV::VLUXEI16_V:
-  case RISCV::VLOXEI16_V:
-  case RISCV::VSUXEI16_V:
-  case RISCV::VSOXEI16_V:
+  case Capstone::VLUXEI16_V:
+  case Capstone::VLOXEI16_V:
+  case Capstone::VSUXEI16_V:
+  case Capstone::VSOXEI16_V:
   case VSUXSEG_CASES(16):
   case VSOXSEG_CASES(16): {
     if (MO.getOperandNo() == 0)
       return MILog2SEW;
     return 4;
   }
-  case RISCV::VLUXEI32_V:
-  case RISCV::VLOXEI32_V:
-  case RISCV::VSUXEI32_V:
-  case RISCV::VSOXEI32_V:
+  case Capstone::VLUXEI32_V:
+  case Capstone::VLOXEI32_V:
+  case Capstone::VSUXEI32_V:
+  case Capstone::VSOXEI32_V:
   case VSUXSEG_CASES(32):
   case VSOXSEG_CASES(32): {
     if (MO.getOperandNo() == 0)
       return MILog2SEW;
     return 5;
   }
-  case RISCV::VLUXEI64_V:
-  case RISCV::VLOXEI64_V:
-  case RISCV::VSUXEI64_V:
-  case RISCV::VSOXEI64_V:
+  case Capstone::VLUXEI64_V:
+  case Capstone::VLOXEI64_V:
+  case Capstone::VSUXEI64_V:
+  case Capstone::VSOXEI64_V:
   case VSUXSEG_CASES(64):
   case VSOXSEG_CASES(64): {
     if (MO.getOperandNo() == 0)
@@ -347,325 +347,325 @@ static std::optional<unsigned> getOperandLog2EEW(const MachineOperand &MO) {
 
   // Vector Integer Arithmetic Instructions
   // Vector Single-Width Integer Add and Subtract
-  case RISCV::VADD_VI:
-  case RISCV::VADD_VV:
-  case RISCV::VADD_VX:
-  case RISCV::VSUB_VV:
-  case RISCV::VSUB_VX:
-  case RISCV::VRSUB_VI:
-  case RISCV::VRSUB_VX:
+  case Capstone::VADD_VI:
+  case Capstone::VADD_VV:
+  case Capstone::VADD_VX:
+  case Capstone::VSUB_VV:
+  case Capstone::VSUB_VX:
+  case Capstone::VRSUB_VI:
+  case Capstone::VRSUB_VX:
   // Vector Bitwise Logical Instructions
   // Vector Single-Width Shift Instructions
   // EEW=SEW.
-  case RISCV::VAND_VI:
-  case RISCV::VAND_VV:
-  case RISCV::VAND_VX:
-  case RISCV::VOR_VI:
-  case RISCV::VOR_VV:
-  case RISCV::VOR_VX:
-  case RISCV::VXOR_VI:
-  case RISCV::VXOR_VV:
-  case RISCV::VXOR_VX:
-  case RISCV::VSLL_VI:
-  case RISCV::VSLL_VV:
-  case RISCV::VSLL_VX:
-  case RISCV::VSRL_VI:
-  case RISCV::VSRL_VV:
-  case RISCV::VSRL_VX:
-  case RISCV::VSRA_VI:
-  case RISCV::VSRA_VV:
-  case RISCV::VSRA_VX:
+  case Capstone::VAND_VI:
+  case Capstone::VAND_VV:
+  case Capstone::VAND_VX:
+  case Capstone::VOR_VI:
+  case Capstone::VOR_VV:
+  case Capstone::VOR_VX:
+  case Capstone::VXOR_VI:
+  case Capstone::VXOR_VV:
+  case Capstone::VXOR_VX:
+  case Capstone::VSLL_VI:
+  case Capstone::VSLL_VV:
+  case Capstone::VSLL_VX:
+  case Capstone::VSRL_VI:
+  case Capstone::VSRL_VV:
+  case Capstone::VSRL_VX:
+  case Capstone::VSRA_VI:
+  case Capstone::VSRA_VV:
+  case Capstone::VSRA_VX:
   // Vector Integer Min/Max Instructions
   // EEW=SEW.
-  case RISCV::VMINU_VV:
-  case RISCV::VMINU_VX:
-  case RISCV::VMIN_VV:
-  case RISCV::VMIN_VX:
-  case RISCV::VMAXU_VV:
-  case RISCV::VMAXU_VX:
-  case RISCV::VMAX_VV:
-  case RISCV::VMAX_VX:
+  case Capstone::VMINU_VV:
+  case Capstone::VMINU_VX:
+  case Capstone::VMIN_VV:
+  case Capstone::VMIN_VX:
+  case Capstone::VMAXU_VV:
+  case Capstone::VMAXU_VX:
+  case Capstone::VMAX_VV:
+  case Capstone::VMAX_VX:
   // Vector Single-Width Integer Multiply Instructions
   // Source and Dest EEW=SEW.
-  case RISCV::VMUL_VV:
-  case RISCV::VMUL_VX:
-  case RISCV::VMULH_VV:
-  case RISCV::VMULH_VX:
-  case RISCV::VMULHU_VV:
-  case RISCV::VMULHU_VX:
-  case RISCV::VMULHSU_VV:
-  case RISCV::VMULHSU_VX:
+  case Capstone::VMUL_VV:
+  case Capstone::VMUL_VX:
+  case Capstone::VMULH_VV:
+  case Capstone::VMULH_VX:
+  case Capstone::VMULHU_VV:
+  case Capstone::VMULHU_VX:
+  case Capstone::VMULHSU_VV:
+  case Capstone::VMULHSU_VX:
   // Vector Integer Divide Instructions
   // EEW=SEW.
-  case RISCV::VDIVU_VV:
-  case RISCV::VDIVU_VX:
-  case RISCV::VDIV_VV:
-  case RISCV::VDIV_VX:
-  case RISCV::VREMU_VV:
-  case RISCV::VREMU_VX:
-  case RISCV::VREM_VV:
-  case RISCV::VREM_VX:
+  case Capstone::VDIVU_VV:
+  case Capstone::VDIVU_VX:
+  case Capstone::VDIV_VV:
+  case Capstone::VDIV_VX:
+  case Capstone::VREMU_VV:
+  case Capstone::VREMU_VX:
+  case Capstone::VREM_VV:
+  case Capstone::VREM_VX:
   // Vector Single-Width Integer Multiply-Add Instructions
   // EEW=SEW.
-  case RISCV::VMACC_VV:
-  case RISCV::VMACC_VX:
-  case RISCV::VNMSAC_VV:
-  case RISCV::VNMSAC_VX:
-  case RISCV::VMADD_VV:
-  case RISCV::VMADD_VX:
-  case RISCV::VNMSUB_VV:
-  case RISCV::VNMSUB_VX:
+  case Capstone::VMACC_VV:
+  case Capstone::VMACC_VX:
+  case Capstone::VNMSAC_VV:
+  case Capstone::VNMSAC_VX:
+  case Capstone::VMADD_VV:
+  case Capstone::VMADD_VX:
+  case Capstone::VNMSUB_VV:
+  case Capstone::VNMSUB_VX:
   // Vector Integer Merge Instructions
   // Vector Integer Add-with-Carry / Subtract-with-Borrow Instructions
   // EEW=SEW, except the mask operand has EEW=1. Mask operand is handled
   // before this switch.
-  case RISCV::VMERGE_VIM:
-  case RISCV::VMERGE_VVM:
-  case RISCV::VMERGE_VXM:
-  case RISCV::VADC_VIM:
-  case RISCV::VADC_VVM:
-  case RISCV::VADC_VXM:
-  case RISCV::VSBC_VVM:
-  case RISCV::VSBC_VXM:
+  case Capstone::VMERGE_VIM:
+  case Capstone::VMERGE_VVM:
+  case Capstone::VMERGE_VXM:
+  case Capstone::VADC_VIM:
+  case Capstone::VADC_VVM:
+  case Capstone::VADC_VXM:
+  case Capstone::VSBC_VVM:
+  case Capstone::VSBC_VXM:
   // Vector Integer Move Instructions
   // Vector Fixed-Point Arithmetic Instructions
   // Vector Single-Width Saturating Add and Subtract
   // Vector Single-Width Averaging Add and Subtract
   // EEW=SEW.
-  case RISCV::VMV_V_I:
-  case RISCV::VMV_V_V:
-  case RISCV::VMV_V_X:
-  case RISCV::VSADDU_VI:
-  case RISCV::VSADDU_VV:
-  case RISCV::VSADDU_VX:
-  case RISCV::VSADD_VI:
-  case RISCV::VSADD_VV:
-  case RISCV::VSADD_VX:
-  case RISCV::VSSUBU_VV:
-  case RISCV::VSSUBU_VX:
-  case RISCV::VSSUB_VV:
-  case RISCV::VSSUB_VX:
-  case RISCV::VAADDU_VV:
-  case RISCV::VAADDU_VX:
-  case RISCV::VAADD_VV:
-  case RISCV::VAADD_VX:
-  case RISCV::VASUBU_VV:
-  case RISCV::VASUBU_VX:
-  case RISCV::VASUB_VV:
-  case RISCV::VASUB_VX:
+  case Capstone::VMV_V_I:
+  case Capstone::VMV_V_V:
+  case Capstone::VMV_V_X:
+  case Capstone::VSADDU_VI:
+  case Capstone::VSADDU_VV:
+  case Capstone::VSADDU_VX:
+  case Capstone::VSADD_VI:
+  case Capstone::VSADD_VV:
+  case Capstone::VSADD_VX:
+  case Capstone::VSSUBU_VV:
+  case Capstone::VSSUBU_VX:
+  case Capstone::VSSUB_VV:
+  case Capstone::VSSUB_VX:
+  case Capstone::VAADDU_VV:
+  case Capstone::VAADDU_VX:
+  case Capstone::VAADD_VV:
+  case Capstone::VAADD_VX:
+  case Capstone::VASUBU_VV:
+  case Capstone::VASUBU_VX:
+  case Capstone::VASUB_VV:
+  case Capstone::VASUB_VX:
   // Vector Single-Width Fractional Multiply with Rounding and Saturation
   // EEW=SEW. The instruction produces 2*SEW product internally but
   // saturates to fit into SEW bits.
-  case RISCV::VSMUL_VV:
-  case RISCV::VSMUL_VX:
+  case Capstone::VSMUL_VV:
+  case Capstone::VSMUL_VX:
   // Vector Single-Width Scaling Shift Instructions
   // EEW=SEW.
-  case RISCV::VSSRL_VI:
-  case RISCV::VSSRL_VV:
-  case RISCV::VSSRL_VX:
-  case RISCV::VSSRA_VI:
-  case RISCV::VSSRA_VV:
-  case RISCV::VSSRA_VX:
+  case Capstone::VSSRL_VI:
+  case Capstone::VSSRL_VV:
+  case Capstone::VSSRL_VX:
+  case Capstone::VSSRA_VI:
+  case Capstone::VSSRA_VV:
+  case Capstone::VSSRA_VX:
   // Vector Permutation Instructions
   // Integer Scalar Move Instructions
   // Floating-Point Scalar Move Instructions
   // EEW=SEW.
-  case RISCV::VMV_X_S:
-  case RISCV::VMV_S_X:
-  case RISCV::VFMV_F_S:
-  case RISCV::VFMV_S_F:
+  case Capstone::VMV_X_S:
+  case Capstone::VMV_S_X:
+  case Capstone::VFMV_F_S:
+  case Capstone::VFMV_S_F:
   // Vector Slide Instructions
   // EEW=SEW.
-  case RISCV::VSLIDEUP_VI:
-  case RISCV::VSLIDEUP_VX:
-  case RISCV::VSLIDEDOWN_VI:
-  case RISCV::VSLIDEDOWN_VX:
-  case RISCV::VSLIDE1UP_VX:
-  case RISCV::VFSLIDE1UP_VF:
-  case RISCV::VSLIDE1DOWN_VX:
-  case RISCV::VFSLIDE1DOWN_VF:
+  case Capstone::VSLIDEUP_VI:
+  case Capstone::VSLIDEUP_VX:
+  case Capstone::VSLIDEDOWN_VI:
+  case Capstone::VSLIDEDOWN_VX:
+  case Capstone::VSLIDE1UP_VX:
+  case Capstone::VFSLIDE1UP_VF:
+  case Capstone::VSLIDE1DOWN_VX:
+  case Capstone::VFSLIDE1DOWN_VF:
   // Vector Register Gather Instructions
   // EEW=SEW. For mask operand, EEW=1.
-  case RISCV::VRGATHER_VI:
-  case RISCV::VRGATHER_VV:
-  case RISCV::VRGATHER_VX:
+  case Capstone::VRGATHER_VI:
+  case Capstone::VRGATHER_VV:
+  case Capstone::VRGATHER_VX:
   // Vector Element Index Instruction
-  case RISCV::VID_V:
+  case Capstone::VID_V:
   // Vector Single-Width Floating-Point Add/Subtract Instructions
-  case RISCV::VFADD_VF:
-  case RISCV::VFADD_VV:
-  case RISCV::VFSUB_VF:
-  case RISCV::VFSUB_VV:
-  case RISCV::VFRSUB_VF:
+  case Capstone::VFADD_VF:
+  case Capstone::VFADD_VV:
+  case Capstone::VFSUB_VF:
+  case Capstone::VFSUB_VV:
+  case Capstone::VFRSUB_VF:
   // Vector Single-Width Floating-Point Multiply/Divide Instructions
-  case RISCV::VFMUL_VF:
-  case RISCV::VFMUL_VV:
-  case RISCV::VFDIV_VF:
-  case RISCV::VFDIV_VV:
-  case RISCV::VFRDIV_VF:
+  case Capstone::VFMUL_VF:
+  case Capstone::VFMUL_VV:
+  case Capstone::VFDIV_VF:
+  case Capstone::VFDIV_VV:
+  case Capstone::VFRDIV_VF:
   // Vector Single-Width Floating-Point Fused Multiply-Add Instructions
-  case RISCV::VFMACC_VV:
-  case RISCV::VFMACC_VF:
-  case RISCV::VFNMACC_VV:
-  case RISCV::VFNMACC_VF:
-  case RISCV::VFMSAC_VV:
-  case RISCV::VFMSAC_VF:
-  case RISCV::VFNMSAC_VV:
-  case RISCV::VFNMSAC_VF:
-  case RISCV::VFMADD_VV:
-  case RISCV::VFMADD_VF:
-  case RISCV::VFNMADD_VV:
-  case RISCV::VFNMADD_VF:
-  case RISCV::VFMSUB_VV:
-  case RISCV::VFMSUB_VF:
-  case RISCV::VFNMSUB_VV:
-  case RISCV::VFNMSUB_VF:
+  case Capstone::VFMACC_VV:
+  case Capstone::VFMACC_VF:
+  case Capstone::VFNMACC_VV:
+  case Capstone::VFNMACC_VF:
+  case Capstone::VFMSAC_VV:
+  case Capstone::VFMSAC_VF:
+  case Capstone::VFNMSAC_VV:
+  case Capstone::VFNMSAC_VF:
+  case Capstone::VFMADD_VV:
+  case Capstone::VFMADD_VF:
+  case Capstone::VFNMADD_VV:
+  case Capstone::VFNMADD_VF:
+  case Capstone::VFMSUB_VV:
+  case Capstone::VFMSUB_VF:
+  case Capstone::VFNMSUB_VV:
+  case Capstone::VFNMSUB_VF:
   // Vector Floating-Point Square-Root Instruction
-  case RISCV::VFSQRT_V:
+  case Capstone::VFSQRT_V:
   // Vector Floating-Point Reciprocal Square-Root Estimate Instruction
-  case RISCV::VFRSQRT7_V:
+  case Capstone::VFRSQRT7_V:
   // Vector Floating-Point Reciprocal Estimate Instruction
-  case RISCV::VFREC7_V:
+  case Capstone::VFREC7_V:
   // Vector Floating-Point MIN/MAX Instructions
-  case RISCV::VFMIN_VF:
-  case RISCV::VFMIN_VV:
-  case RISCV::VFMAX_VF:
-  case RISCV::VFMAX_VV:
+  case Capstone::VFMIN_VF:
+  case Capstone::VFMIN_VV:
+  case Capstone::VFMAX_VF:
+  case Capstone::VFMAX_VV:
   // Vector Floating-Point Sign-Injection Instructions
-  case RISCV::VFSGNJ_VF:
-  case RISCV::VFSGNJ_VV:
-  case RISCV::VFSGNJN_VV:
-  case RISCV::VFSGNJN_VF:
-  case RISCV::VFSGNJX_VF:
-  case RISCV::VFSGNJX_VV:
+  case Capstone::VFSGNJ_VF:
+  case Capstone::VFSGNJ_VV:
+  case Capstone::VFSGNJN_VV:
+  case Capstone::VFSGNJN_VF:
+  case Capstone::VFSGNJX_VF:
+  case Capstone::VFSGNJX_VV:
   // Vector Floating-Point Classify Instruction
-  case RISCV::VFCLASS_V:
+  case Capstone::VFCLASS_V:
   // Vector Floating-Point Move Instruction
-  case RISCV::VFMV_V_F:
+  case Capstone::VFMV_V_F:
   // Single-Width Floating-Point/Integer Type-Convert Instructions
-  case RISCV::VFCVT_XU_F_V:
-  case RISCV::VFCVT_X_F_V:
-  case RISCV::VFCVT_RTZ_XU_F_V:
-  case RISCV::VFCVT_RTZ_X_F_V:
-  case RISCV::VFCVT_F_XU_V:
-  case RISCV::VFCVT_F_X_V:
+  case Capstone::VFCVT_XU_F_V:
+  case Capstone::VFCVT_X_F_V:
+  case Capstone::VFCVT_RTZ_XU_F_V:
+  case Capstone::VFCVT_RTZ_X_F_V:
+  case Capstone::VFCVT_F_XU_V:
+  case Capstone::VFCVT_F_X_V:
   // Vector Floating-Point Merge Instruction
-  case RISCV::VFMERGE_VFM:
+  case Capstone::VFMERGE_VFM:
   // Vector count population in mask vcpop.m
   // vfirst find-first-set mask bit
-  case RISCV::VCPOP_M:
-  case RISCV::VFIRST_M:
+  case Capstone::VCPOP_M:
+  case Capstone::VFIRST_M:
   // Vector Bit-manipulation Instructions (Zvbb)
   // Vector And-Not
-  case RISCV::VANDN_VV:
-  case RISCV::VANDN_VX:
+  case Capstone::VANDN_VV:
+  case Capstone::VANDN_VX:
   // Vector Reverse Bits in Elements
-  case RISCV::VBREV_V:
+  case Capstone::VBREV_V:
   // Vector Reverse Bits in Bytes
-  case RISCV::VBREV8_V:
+  case Capstone::VBREV8_V:
   // Vector Reverse Bytes
-  case RISCV::VREV8_V:
+  case Capstone::VREV8_V:
   // Vector Count Leading Zeros
-  case RISCV::VCLZ_V:
+  case Capstone::VCLZ_V:
   // Vector Count Trailing Zeros
-  case RISCV::VCTZ_V:
+  case Capstone::VCTZ_V:
   // Vector Population Count
-  case RISCV::VCPOP_V:
+  case Capstone::VCPOP_V:
   // Vector Rotate Left
-  case RISCV::VROL_VV:
-  case RISCV::VROL_VX:
+  case Capstone::VROL_VV:
+  case Capstone::VROL_VX:
   // Vector Rotate Right
-  case RISCV::VROR_VI:
-  case RISCV::VROR_VV:
-  case RISCV::VROR_VX:
+  case Capstone::VROR_VI:
+  case Capstone::VROR_VV:
+  case Capstone::VROR_VX:
   // Vector Carry-less Multiplication Instructions (Zvbc)
   // Vector Carry-less Multiply
-  case RISCV::VCLMUL_VV:
-  case RISCV::VCLMUL_VX:
+  case Capstone::VCLMUL_VV:
+  case Capstone::VCLMUL_VX:
   // Vector Carry-less Multiply Return High Half
-  case RISCV::VCLMULH_VV:
-  case RISCV::VCLMULH_VX:
+  case Capstone::VCLMULH_VV:
+  case Capstone::VCLMULH_VX:
     return MILog2SEW;
 
   // Vector Widening Shift Left Logical (Zvbb)
-  case RISCV::VWSLL_VI:
-  case RISCV::VWSLL_VX:
-  case RISCV::VWSLL_VV:
+  case Capstone::VWSLL_VI:
+  case Capstone::VWSLL_VX:
+  case Capstone::VWSLL_VV:
   // Vector Widening Integer Add/Subtract
   // Def uses EEW=2*SEW . Operands use EEW=SEW.
-  case RISCV::VWADDU_VV:
-  case RISCV::VWADDU_VX:
-  case RISCV::VWSUBU_VV:
-  case RISCV::VWSUBU_VX:
-  case RISCV::VWADD_VV:
-  case RISCV::VWADD_VX:
-  case RISCV::VWSUB_VV:
-  case RISCV::VWSUB_VX:
+  case Capstone::VWADDU_VV:
+  case Capstone::VWADDU_VX:
+  case Capstone::VWSUBU_VV:
+  case Capstone::VWSUBU_VX:
+  case Capstone::VWADD_VV:
+  case Capstone::VWADD_VX:
+  case Capstone::VWSUB_VV:
+  case Capstone::VWSUB_VX:
   // Vector Widening Integer Multiply Instructions
   // Destination EEW=2*SEW. Source EEW=SEW.
-  case RISCV::VWMUL_VV:
-  case RISCV::VWMUL_VX:
-  case RISCV::VWMULSU_VV:
-  case RISCV::VWMULSU_VX:
-  case RISCV::VWMULU_VV:
-  case RISCV::VWMULU_VX:
+  case Capstone::VWMUL_VV:
+  case Capstone::VWMUL_VX:
+  case Capstone::VWMULSU_VV:
+  case Capstone::VWMULSU_VX:
+  case Capstone::VWMULU_VV:
+  case Capstone::VWMULU_VX:
   // Vector Widening Integer Multiply-Add Instructions
   // Destination EEW=2*SEW. Source EEW=SEW.
   // A SEW-bit*SEW-bit multiply of the sources forms a 2*SEW-bit value, which
   // is then added to the 2*SEW-bit Dest. These instructions never have a
   // passthru operand.
-  case RISCV::VWMACCU_VV:
-  case RISCV::VWMACCU_VX:
-  case RISCV::VWMACC_VV:
-  case RISCV::VWMACC_VX:
-  case RISCV::VWMACCSU_VV:
-  case RISCV::VWMACCSU_VX:
-  case RISCV::VWMACCUS_VX:
+  case Capstone::VWMACCU_VV:
+  case Capstone::VWMACCU_VX:
+  case Capstone::VWMACC_VV:
+  case Capstone::VWMACC_VX:
+  case Capstone::VWMACCSU_VV:
+  case Capstone::VWMACCSU_VX:
+  case Capstone::VWMACCUS_VX:
   // Vector Widening Floating-Point Fused Multiply-Add Instructions
-  case RISCV::VFWMACC_VF:
-  case RISCV::VFWMACC_VV:
-  case RISCV::VFWNMACC_VF:
-  case RISCV::VFWNMACC_VV:
-  case RISCV::VFWMSAC_VF:
-  case RISCV::VFWMSAC_VV:
-  case RISCV::VFWNMSAC_VF:
-  case RISCV::VFWNMSAC_VV:
-  case RISCV::VFWMACCBF16_VV:
-  case RISCV::VFWMACCBF16_VF:
+  case Capstone::VFWMACC_VF:
+  case Capstone::VFWMACC_VV:
+  case Capstone::VFWNMACC_VF:
+  case Capstone::VFWNMACC_VV:
+  case Capstone::VFWMSAC_VF:
+  case Capstone::VFWMSAC_VV:
+  case Capstone::VFWNMSAC_VF:
+  case Capstone::VFWNMSAC_VV:
+  case Capstone::VFWMACCBF16_VV:
+  case Capstone::VFWMACCBF16_VF:
   // Vector Widening Floating-Point Add/Subtract Instructions
   // Dest EEW=2*SEW. Source EEW=SEW.
-  case RISCV::VFWADD_VV:
-  case RISCV::VFWADD_VF:
-  case RISCV::VFWSUB_VV:
-  case RISCV::VFWSUB_VF:
+  case Capstone::VFWADD_VV:
+  case Capstone::VFWADD_VF:
+  case Capstone::VFWSUB_VV:
+  case Capstone::VFWSUB_VF:
   // Vector Widening Floating-Point Multiply
-  case RISCV::VFWMUL_VF:
-  case RISCV::VFWMUL_VV:
+  case Capstone::VFWMUL_VF:
+  case Capstone::VFWMUL_VV:
   // Widening Floating-Point/Integer Type-Convert Instructions
-  case RISCV::VFWCVT_XU_F_V:
-  case RISCV::VFWCVT_X_F_V:
-  case RISCV::VFWCVT_RTZ_XU_F_V:
-  case RISCV::VFWCVT_RTZ_X_F_V:
-  case RISCV::VFWCVT_F_XU_V:
-  case RISCV::VFWCVT_F_X_V:
-  case RISCV::VFWCVT_F_F_V:
-  case RISCV::VFWCVTBF16_F_F_V:
+  case Capstone::VFWCVT_XU_F_V:
+  case Capstone::VFWCVT_X_F_V:
+  case Capstone::VFWCVT_RTZ_XU_F_V:
+  case Capstone::VFWCVT_RTZ_X_F_V:
+  case Capstone::VFWCVT_F_XU_V:
+  case Capstone::VFWCVT_F_X_V:
+  case Capstone::VFWCVT_F_F_V:
+  case Capstone::VFWCVTBF16_F_F_V:
     return IsMODef ? MILog2SEW + 1 : MILog2SEW;
 
   // Def and Op1 uses EEW=2*SEW. Op2 uses EEW=SEW.
-  case RISCV::VWADDU_WV:
-  case RISCV::VWADDU_WX:
-  case RISCV::VWSUBU_WV:
-  case RISCV::VWSUBU_WX:
-  case RISCV::VWADD_WV:
-  case RISCV::VWADD_WX:
-  case RISCV::VWSUB_WV:
-  case RISCV::VWSUB_WX:
+  case Capstone::VWADDU_WV:
+  case Capstone::VWADDU_WX:
+  case Capstone::VWSUBU_WV:
+  case Capstone::VWSUBU_WX:
+  case Capstone::VWADD_WV:
+  case Capstone::VWADD_WX:
+  case Capstone::VWSUB_WV:
+  case Capstone::VWSUB_WX:
   // Vector Widening Floating-Point Add/Subtract Instructions
-  case RISCV::VFWADD_WF:
-  case RISCV::VFWADD_WV:
-  case RISCV::VFWSUB_WF:
-  case RISCV::VFWSUB_WV: {
+  case Capstone::VFWADD_WF:
+  case Capstone::VFWADD_WV:
+  case Capstone::VFWSUB_WF:
+  case Capstone::VFWSUB_WV: {
     bool IsOp1 = (HasPassthru && !IsTied) ? MO.getOperandNo() == 2
                                           : MO.getOperandNo() == 1;
     bool TwoTimes = IsMODef || IsOp1;
@@ -673,42 +673,42 @@ static std::optional<unsigned> getOperandLog2EEW(const MachineOperand &MO) {
   }
 
   // Vector Integer Extension
-  case RISCV::VZEXT_VF2:
-  case RISCV::VSEXT_VF2:
+  case Capstone::VZEXT_VF2:
+  case Capstone::VSEXT_VF2:
     return getIntegerExtensionOperandEEW(2, MI, MO);
-  case RISCV::VZEXT_VF4:
-  case RISCV::VSEXT_VF4:
+  case Capstone::VZEXT_VF4:
+  case Capstone::VSEXT_VF4:
     return getIntegerExtensionOperandEEW(4, MI, MO);
-  case RISCV::VZEXT_VF8:
-  case RISCV::VSEXT_VF8:
+  case Capstone::VZEXT_VF8:
+  case Capstone::VSEXT_VF8:
     return getIntegerExtensionOperandEEW(8, MI, MO);
 
   // Vector Narrowing Integer Right Shift Instructions
   // Destination EEW=SEW, Op 1 has EEW=2*SEW. Op2 has EEW=SEW
-  case RISCV::VNSRL_WX:
-  case RISCV::VNSRL_WI:
-  case RISCV::VNSRL_WV:
-  case RISCV::VNSRA_WI:
-  case RISCV::VNSRA_WV:
-  case RISCV::VNSRA_WX:
+  case Capstone::VNSRL_WX:
+  case Capstone::VNSRL_WI:
+  case Capstone::VNSRL_WV:
+  case Capstone::VNSRA_WI:
+  case Capstone::VNSRA_WV:
+  case Capstone::VNSRA_WX:
   // Vector Narrowing Fixed-Point Clip Instructions
   // Destination and Op1 EEW=SEW. Op2 EEW=2*SEW.
-  case RISCV::VNCLIPU_WI:
-  case RISCV::VNCLIPU_WV:
-  case RISCV::VNCLIPU_WX:
-  case RISCV::VNCLIP_WI:
-  case RISCV::VNCLIP_WV:
-  case RISCV::VNCLIP_WX:
+  case Capstone::VNCLIPU_WI:
+  case Capstone::VNCLIPU_WV:
+  case Capstone::VNCLIPU_WX:
+  case Capstone::VNCLIP_WI:
+  case Capstone::VNCLIP_WV:
+  case Capstone::VNCLIP_WX:
   // Narrowing Floating-Point/Integer Type-Convert Instructions
-  case RISCV::VFNCVT_XU_F_W:
-  case RISCV::VFNCVT_X_F_W:
-  case RISCV::VFNCVT_RTZ_XU_F_W:
-  case RISCV::VFNCVT_RTZ_X_F_W:
-  case RISCV::VFNCVT_F_XU_W:
-  case RISCV::VFNCVT_F_X_W:
-  case RISCV::VFNCVT_F_F_W:
-  case RISCV::VFNCVT_ROD_F_F_W:
-  case RISCV::VFNCVTBF16_F_F_W: {
+  case Capstone::VFNCVT_XU_F_W:
+  case Capstone::VFNCVT_X_F_W:
+  case Capstone::VFNCVT_RTZ_XU_F_W:
+  case Capstone::VFNCVT_RTZ_X_F_W:
+  case Capstone::VFNCVT_F_XU_W:
+  case Capstone::VFNCVT_F_X_W:
+  case Capstone::VFNCVT_F_F_W:
+  case Capstone::VFNCVT_ROD_F_F_W:
+  case Capstone::VFNCVTBF16_F_F_W: {
     assert(!IsTied);
     bool IsOp1 = HasPassthru ? MO.getOperandNo() == 2 : MO.getOperandNo() == 1;
     bool TwoTimes = IsOp1;
@@ -724,30 +724,30 @@ static std::optional<unsigned> getOperandLog2EEW(const MachineOperand &MO) {
   // We handle the cases when operand is a v0 mask operand above the switch,
   // but these instructions may use non-v0 mask operands and need to be handled
   // specifically.
-  case RISCV::VMAND_MM:
-  case RISCV::VMNAND_MM:
-  case RISCV::VMANDN_MM:
-  case RISCV::VMXOR_MM:
-  case RISCV::VMOR_MM:
-  case RISCV::VMNOR_MM:
-  case RISCV::VMORN_MM:
-  case RISCV::VMXNOR_MM:
-  case RISCV::VMSBF_M:
-  case RISCV::VMSIF_M:
-  case RISCV::VMSOF_M: {
+  case Capstone::VMAND_MM:
+  case Capstone::VMNAND_MM:
+  case Capstone::VMANDN_MM:
+  case Capstone::VMXOR_MM:
+  case Capstone::VMOR_MM:
+  case Capstone::VMNOR_MM:
+  case Capstone::VMORN_MM:
+  case Capstone::VMXNOR_MM:
+  case Capstone::VMSBF_M:
+  case Capstone::VMSIF_M:
+  case Capstone::VMSOF_M: {
     return MILog2SEW;
   }
 
   // Vector Compress Instruction
   // EEW=SEW, except the mask operand has EEW=1. Mask operand is not handled
   // before this switch.
-  case RISCV::VCOMPRESS_VM:
+  case Capstone::VCOMPRESS_VM:
     return MO.getOperandNo() == 3 ? 0 : MILog2SEW;
 
   // Vector Iota Instruction
   // EEW=SEW, except the mask operand has EEW=1. Mask operand is not handled
   // before this switch.
-  case RISCV::VIOTA_M: {
+  case Capstone::VIOTA_M: {
     if (IsMODef || MO.getOperandNo() == 1)
       return MILog2SEW;
     return 0;
@@ -755,51 +755,51 @@ static std::optional<unsigned> getOperandLog2EEW(const MachineOperand &MO) {
 
   // Vector Integer Compare Instructions
   // Dest EEW=1. Source EEW=SEW.
-  case RISCV::VMSEQ_VI:
-  case RISCV::VMSEQ_VV:
-  case RISCV::VMSEQ_VX:
-  case RISCV::VMSNE_VI:
-  case RISCV::VMSNE_VV:
-  case RISCV::VMSNE_VX:
-  case RISCV::VMSLTU_VV:
-  case RISCV::VMSLTU_VX:
-  case RISCV::VMSLT_VV:
-  case RISCV::VMSLT_VX:
-  case RISCV::VMSLEU_VV:
-  case RISCV::VMSLEU_VI:
-  case RISCV::VMSLEU_VX:
-  case RISCV::VMSLE_VV:
-  case RISCV::VMSLE_VI:
-  case RISCV::VMSLE_VX:
-  case RISCV::VMSGTU_VI:
-  case RISCV::VMSGTU_VX:
-  case RISCV::VMSGT_VI:
-  case RISCV::VMSGT_VX:
+  case Capstone::VMSEQ_VI:
+  case Capstone::VMSEQ_VV:
+  case Capstone::VMSEQ_VX:
+  case Capstone::VMSNE_VI:
+  case Capstone::VMSNE_VV:
+  case Capstone::VMSNE_VX:
+  case Capstone::VMSLTU_VV:
+  case Capstone::VMSLTU_VX:
+  case Capstone::VMSLT_VV:
+  case Capstone::VMSLT_VX:
+  case Capstone::VMSLEU_VV:
+  case Capstone::VMSLEU_VI:
+  case Capstone::VMSLEU_VX:
+  case Capstone::VMSLE_VV:
+  case Capstone::VMSLE_VI:
+  case Capstone::VMSLE_VX:
+  case Capstone::VMSGTU_VI:
+  case Capstone::VMSGTU_VX:
+  case Capstone::VMSGT_VI:
+  case Capstone::VMSGT_VX:
   // Vector Integer Add-with-Carry / Subtract-with-Borrow Instructions
   // Dest EEW=1. Source EEW=SEW. Mask source operand handled above this switch.
-  case RISCV::VMADC_VIM:
-  case RISCV::VMADC_VVM:
-  case RISCV::VMADC_VXM:
-  case RISCV::VMSBC_VVM:
-  case RISCV::VMSBC_VXM:
+  case Capstone::VMADC_VIM:
+  case Capstone::VMADC_VVM:
+  case Capstone::VMADC_VXM:
+  case Capstone::VMSBC_VVM:
+  case Capstone::VMSBC_VXM:
   // Dest EEW=1. Source EEW=SEW.
-  case RISCV::VMADC_VV:
-  case RISCV::VMADC_VI:
-  case RISCV::VMADC_VX:
-  case RISCV::VMSBC_VV:
-  case RISCV::VMSBC_VX:
+  case Capstone::VMADC_VV:
+  case Capstone::VMADC_VI:
+  case Capstone::VMADC_VX:
+  case Capstone::VMSBC_VV:
+  case Capstone::VMSBC_VX:
   // 13.13. Vector Floating-Point Compare Instructions
   // Dest EEW=1. Source EEW=SEW
-  case RISCV::VMFEQ_VF:
-  case RISCV::VMFEQ_VV:
-  case RISCV::VMFNE_VF:
-  case RISCV::VMFNE_VV:
-  case RISCV::VMFLT_VF:
-  case RISCV::VMFLT_VV:
-  case RISCV::VMFLE_VF:
-  case RISCV::VMFLE_VV:
-  case RISCV::VMFGT_VF:
-  case RISCV::VMFGE_VF: {
+  case Capstone::VMFEQ_VF:
+  case Capstone::VMFEQ_VV:
+  case Capstone::VMFNE_VF:
+  case Capstone::VMFNE_VV:
+  case Capstone::VMFLT_VF:
+  case Capstone::VMFLT_VV:
+  case Capstone::VMFLE_VF:
+  case Capstone::VMFLE_VV:
+  case Capstone::VMFGT_VF:
+  case Capstone::VMFGE_VF: {
     if (IsMODef)
       return 0;
     return MILog2SEW;
@@ -807,37 +807,37 @@ static std::optional<unsigned> getOperandLog2EEW(const MachineOperand &MO) {
 
   // Vector Reduction Operations
   // Vector Single-Width Integer Reduction Instructions
-  case RISCV::VREDAND_VS:
-  case RISCV::VREDMAX_VS:
-  case RISCV::VREDMAXU_VS:
-  case RISCV::VREDMIN_VS:
-  case RISCV::VREDMINU_VS:
-  case RISCV::VREDOR_VS:
-  case RISCV::VREDSUM_VS:
-  case RISCV::VREDXOR_VS:
+  case Capstone::VREDAND_VS:
+  case Capstone::VREDMAX_VS:
+  case Capstone::VREDMAXU_VS:
+  case Capstone::VREDMIN_VS:
+  case Capstone::VREDMINU_VS:
+  case Capstone::VREDOR_VS:
+  case Capstone::VREDSUM_VS:
+  case Capstone::VREDXOR_VS:
   // Vector Single-Width Floating-Point Reduction Instructions
-  case RISCV::VFREDMAX_VS:
-  case RISCV::VFREDMIN_VS:
-  case RISCV::VFREDOSUM_VS:
-  case RISCV::VFREDUSUM_VS: {
+  case Capstone::VFREDMAX_VS:
+  case Capstone::VFREDMIN_VS:
+  case Capstone::VFREDOSUM_VS:
+  case Capstone::VFREDUSUM_VS: {
     return MILog2SEW;
   }
 
   // Vector Widening Integer Reduction Instructions
   // The Dest and VS1 read only element 0 for the vector register. Return
   // 2*EEW for these. VS2 has EEW=SEW and EMUL=LMUL.
-  case RISCV::VWREDSUM_VS:
-  case RISCV::VWREDSUMU_VS:
+  case Capstone::VWREDSUM_VS:
+  case Capstone::VWREDSUMU_VS:
   // Vector Widening Floating-Point Reduction Instructions
-  case RISCV::VFWREDOSUM_VS:
-  case RISCV::VFWREDUSUM_VS: {
+  case Capstone::VFWREDOSUM_VS:
+  case Capstone::VFWREDUSUM_VS: {
     bool TwoTimes = IsMODef || MO.getOperandNo() == 3;
     return TwoTimes ? MILog2SEW + 1 : MILog2SEW;
   }
 
   // Vector Register Gather with 16-bit Index Elements Instruction
   // Dest and source data EEW=SEW. Index vector EEW=16.
-  case RISCV::VRGATHEREI16_VV: {
+  case Capstone::VRGATHEREI16_VV: {
     if (MO.getOperandNo() == 2)
       return 4;
     return MILog2SEW;
@@ -850,8 +850,8 @@ static std::optional<unsigned> getOperandLog2EEW(const MachineOperand &MO) {
 
 static std::optional<OperandInfo> getOperandInfo(const MachineOperand &MO) {
   const MachineInstr &MI = *MO.getParent();
-  const RISCVVPseudosTable::PseudoInfo *RVV =
-      RISCVVPseudosTable::getPseudoInfo(MI.getOpcode());
+  const CapstoneVPseudosTable::PseudoInfo *RVV =
+      CapstoneVPseudosTable::getPseudoInfo(MI.getOpcode());
   assert(RVV && "Could not find MI in PseudoTable");
 
   std::optional<unsigned> Log2EEW = getOperandLog2EEW(MO);
@@ -865,18 +865,18 @@ static std::optional<OperandInfo> getOperandInfo(const MachineOperand &MO) {
   // Vector Widening Floating-Point Reduction Instructions
   // The Dest and VS1 only read element 0 of the vector register. Return just
   // the EEW for these.
-  case RISCV::VREDAND_VS:
-  case RISCV::VREDMAX_VS:
-  case RISCV::VREDMAXU_VS:
-  case RISCV::VREDMIN_VS:
-  case RISCV::VREDMINU_VS:
-  case RISCV::VREDOR_VS:
-  case RISCV::VREDSUM_VS:
-  case RISCV::VREDXOR_VS:
-  case RISCV::VWREDSUM_VS:
-  case RISCV::VWREDSUMU_VS:
-  case RISCV::VFWREDOSUM_VS:
-  case RISCV::VFWREDUSUM_VS:
+  case Capstone::VREDAND_VS:
+  case Capstone::VREDMAX_VS:
+  case Capstone::VREDMAXU_VS:
+  case Capstone::VREDMIN_VS:
+  case Capstone::VREDMINU_VS:
+  case Capstone::VREDOR_VS:
+  case Capstone::VREDSUM_VS:
+  case Capstone::VREDXOR_VS:
+  case Capstone::VWREDSUM_VS:
+  case Capstone::VWREDSUMU_VS:
+  case Capstone::VFWREDOSUM_VS:
+  case Capstone::VFWREDUSUM_VS:
     if (MO.getOperandNo() != 2)
       return OperandInfo(*Log2EEW);
     break;
@@ -895,8 +895,8 @@ static bool isSupportedInstr(const MachineInstr &MI) {
   if (MI.isPHI() || MI.isFullCopy() || isTupleInsertInstr(MI))
     return true;
 
-  const RISCVVPseudosTable::PseudoInfo *RVV =
-      RISCVVPseudosTable::getPseudoInfo(MI.getOpcode());
+  const CapstoneVPseudosTable::PseudoInfo *RVV =
+      CapstoneVPseudosTable::getPseudoInfo(MI.getOpcode());
 
   if (!RVV)
     return false;
@@ -904,250 +904,250 @@ static bool isSupportedInstr(const MachineInstr &MI) {
   switch (RVV->BaseInstr) {
   // Vector Unit-Stride Instructions
   // Vector Strided Instructions
-  case RISCV::VLM_V:
-  case RISCV::VLE8_V:
-  case RISCV::VLSE8_V:
-  case RISCV::VLE16_V:
-  case RISCV::VLSE16_V:
-  case RISCV::VLE32_V:
-  case RISCV::VLSE32_V:
-  case RISCV::VLE64_V:
-  case RISCV::VLSE64_V:
+  case Capstone::VLM_V:
+  case Capstone::VLE8_V:
+  case Capstone::VLSE8_V:
+  case Capstone::VLE16_V:
+  case Capstone::VLSE16_V:
+  case Capstone::VLE32_V:
+  case Capstone::VLSE32_V:
+  case Capstone::VLE64_V:
+  case Capstone::VLSE64_V:
   // Vector Indexed Instructions
-  case RISCV::VLUXEI8_V:
-  case RISCV::VLOXEI8_V:
-  case RISCV::VLUXEI16_V:
-  case RISCV::VLOXEI16_V:
-  case RISCV::VLUXEI32_V:
-  case RISCV::VLOXEI32_V:
-  case RISCV::VLUXEI64_V:
-  case RISCV::VLOXEI64_V:
+  case Capstone::VLUXEI8_V:
+  case Capstone::VLOXEI8_V:
+  case Capstone::VLUXEI16_V:
+  case Capstone::VLOXEI16_V:
+  case Capstone::VLUXEI32_V:
+  case Capstone::VLOXEI32_V:
+  case Capstone::VLUXEI64_V:
+  case Capstone::VLOXEI64_V:
   // Vector Single-Width Integer Add and Subtract
-  case RISCV::VADD_VI:
-  case RISCV::VADD_VV:
-  case RISCV::VADD_VX:
-  case RISCV::VSUB_VV:
-  case RISCV::VSUB_VX:
-  case RISCV::VRSUB_VI:
-  case RISCV::VRSUB_VX:
+  case Capstone::VADD_VI:
+  case Capstone::VADD_VV:
+  case Capstone::VADD_VX:
+  case Capstone::VSUB_VV:
+  case Capstone::VSUB_VX:
+  case Capstone::VRSUB_VI:
+  case Capstone::VRSUB_VX:
   // Vector Bitwise Logical Instructions
   // Vector Single-Width Shift Instructions
-  case RISCV::VAND_VI:
-  case RISCV::VAND_VV:
-  case RISCV::VAND_VX:
-  case RISCV::VOR_VI:
-  case RISCV::VOR_VV:
-  case RISCV::VOR_VX:
-  case RISCV::VXOR_VI:
-  case RISCV::VXOR_VV:
-  case RISCV::VXOR_VX:
-  case RISCV::VSLL_VI:
-  case RISCV::VSLL_VV:
-  case RISCV::VSLL_VX:
-  case RISCV::VSRL_VI:
-  case RISCV::VSRL_VV:
-  case RISCV::VSRL_VX:
-  case RISCV::VSRA_VI:
-  case RISCV::VSRA_VV:
-  case RISCV::VSRA_VX:
+  case Capstone::VAND_VI:
+  case Capstone::VAND_VV:
+  case Capstone::VAND_VX:
+  case Capstone::VOR_VI:
+  case Capstone::VOR_VV:
+  case Capstone::VOR_VX:
+  case Capstone::VXOR_VI:
+  case Capstone::VXOR_VV:
+  case Capstone::VXOR_VX:
+  case Capstone::VSLL_VI:
+  case Capstone::VSLL_VV:
+  case Capstone::VSLL_VX:
+  case Capstone::VSRL_VI:
+  case Capstone::VSRL_VV:
+  case Capstone::VSRL_VX:
+  case Capstone::VSRA_VI:
+  case Capstone::VSRA_VV:
+  case Capstone::VSRA_VX:
   // Vector Widening Integer Add/Subtract
-  case RISCV::VWADDU_VV:
-  case RISCV::VWADDU_VX:
-  case RISCV::VWSUBU_VV:
-  case RISCV::VWSUBU_VX:
-  case RISCV::VWADD_VV:
-  case RISCV::VWADD_VX:
-  case RISCV::VWSUB_VV:
-  case RISCV::VWSUB_VX:
-  case RISCV::VWADDU_WV:
-  case RISCV::VWADDU_WX:
-  case RISCV::VWSUBU_WV:
-  case RISCV::VWSUBU_WX:
-  case RISCV::VWADD_WV:
-  case RISCV::VWADD_WX:
-  case RISCV::VWSUB_WV:
-  case RISCV::VWSUB_WX:
+  case Capstone::VWADDU_VV:
+  case Capstone::VWADDU_VX:
+  case Capstone::VWSUBU_VV:
+  case Capstone::VWSUBU_VX:
+  case Capstone::VWADD_VV:
+  case Capstone::VWADD_VX:
+  case Capstone::VWSUB_VV:
+  case Capstone::VWSUB_VX:
+  case Capstone::VWADDU_WV:
+  case Capstone::VWADDU_WX:
+  case Capstone::VWSUBU_WV:
+  case Capstone::VWSUBU_WX:
+  case Capstone::VWADD_WV:
+  case Capstone::VWADD_WX:
+  case Capstone::VWSUB_WV:
+  case Capstone::VWSUB_WX:
   // Vector Integer Extension
-  case RISCV::VZEXT_VF2:
-  case RISCV::VSEXT_VF2:
-  case RISCV::VZEXT_VF4:
-  case RISCV::VSEXT_VF4:
-  case RISCV::VZEXT_VF8:
-  case RISCV::VSEXT_VF8:
+  case Capstone::VZEXT_VF2:
+  case Capstone::VSEXT_VF2:
+  case Capstone::VZEXT_VF4:
+  case Capstone::VSEXT_VF4:
+  case Capstone::VZEXT_VF8:
+  case Capstone::VSEXT_VF8:
   // Vector Narrowing Integer Right Shift Instructions
-  case RISCV::VNSRL_WX:
-  case RISCV::VNSRL_WI:
-  case RISCV::VNSRL_WV:
-  case RISCV::VNSRA_WI:
-  case RISCV::VNSRA_WV:
-  case RISCV::VNSRA_WX:
+  case Capstone::VNSRL_WX:
+  case Capstone::VNSRL_WI:
+  case Capstone::VNSRL_WV:
+  case Capstone::VNSRA_WI:
+  case Capstone::VNSRA_WV:
+  case Capstone::VNSRA_WX:
   // Vector Integer Compare Instructions
-  case RISCV::VMSEQ_VI:
-  case RISCV::VMSEQ_VV:
-  case RISCV::VMSEQ_VX:
-  case RISCV::VMSNE_VI:
-  case RISCV::VMSNE_VV:
-  case RISCV::VMSNE_VX:
-  case RISCV::VMSLTU_VV:
-  case RISCV::VMSLTU_VX:
-  case RISCV::VMSLT_VV:
-  case RISCV::VMSLT_VX:
-  case RISCV::VMSLEU_VV:
-  case RISCV::VMSLEU_VI:
-  case RISCV::VMSLEU_VX:
-  case RISCV::VMSLE_VV:
-  case RISCV::VMSLE_VI:
-  case RISCV::VMSLE_VX:
-  case RISCV::VMSGTU_VI:
-  case RISCV::VMSGTU_VX:
-  case RISCV::VMSGT_VI:
-  case RISCV::VMSGT_VX:
+  case Capstone::VMSEQ_VI:
+  case Capstone::VMSEQ_VV:
+  case Capstone::VMSEQ_VX:
+  case Capstone::VMSNE_VI:
+  case Capstone::VMSNE_VV:
+  case Capstone::VMSNE_VX:
+  case Capstone::VMSLTU_VV:
+  case Capstone::VMSLTU_VX:
+  case Capstone::VMSLT_VV:
+  case Capstone::VMSLT_VX:
+  case Capstone::VMSLEU_VV:
+  case Capstone::VMSLEU_VI:
+  case Capstone::VMSLEU_VX:
+  case Capstone::VMSLE_VV:
+  case Capstone::VMSLE_VI:
+  case Capstone::VMSLE_VX:
+  case Capstone::VMSGTU_VI:
+  case Capstone::VMSGTU_VX:
+  case Capstone::VMSGT_VI:
+  case Capstone::VMSGT_VX:
   // Vector Integer Min/Max Instructions
-  case RISCV::VMINU_VV:
-  case RISCV::VMINU_VX:
-  case RISCV::VMIN_VV:
-  case RISCV::VMIN_VX:
-  case RISCV::VMAXU_VV:
-  case RISCV::VMAXU_VX:
-  case RISCV::VMAX_VV:
-  case RISCV::VMAX_VX:
+  case Capstone::VMINU_VV:
+  case Capstone::VMINU_VX:
+  case Capstone::VMIN_VV:
+  case Capstone::VMIN_VX:
+  case Capstone::VMAXU_VV:
+  case Capstone::VMAXU_VX:
+  case Capstone::VMAX_VV:
+  case Capstone::VMAX_VX:
   // Vector Single-Width Integer Multiply Instructions
-  case RISCV::VMUL_VV:
-  case RISCV::VMUL_VX:
-  case RISCV::VMULH_VV:
-  case RISCV::VMULH_VX:
-  case RISCV::VMULHU_VV:
-  case RISCV::VMULHU_VX:
-  case RISCV::VMULHSU_VV:
-  case RISCV::VMULHSU_VX:
+  case Capstone::VMUL_VV:
+  case Capstone::VMUL_VX:
+  case Capstone::VMULH_VV:
+  case Capstone::VMULH_VX:
+  case Capstone::VMULHU_VV:
+  case Capstone::VMULHU_VX:
+  case Capstone::VMULHSU_VV:
+  case Capstone::VMULHSU_VX:
   // Vector Integer Divide Instructions
-  case RISCV::VDIVU_VV:
-  case RISCV::VDIVU_VX:
-  case RISCV::VDIV_VV:
-  case RISCV::VDIV_VX:
-  case RISCV::VREMU_VV:
-  case RISCV::VREMU_VX:
-  case RISCV::VREM_VV:
-  case RISCV::VREM_VX:
+  case Capstone::VDIVU_VV:
+  case Capstone::VDIVU_VX:
+  case Capstone::VDIV_VV:
+  case Capstone::VDIV_VX:
+  case Capstone::VREMU_VV:
+  case Capstone::VREMU_VX:
+  case Capstone::VREM_VV:
+  case Capstone::VREM_VX:
   // Vector Widening Integer Multiply Instructions
-  case RISCV::VWMUL_VV:
-  case RISCV::VWMUL_VX:
-  case RISCV::VWMULSU_VV:
-  case RISCV::VWMULSU_VX:
-  case RISCV::VWMULU_VV:
-  case RISCV::VWMULU_VX:
+  case Capstone::VWMUL_VV:
+  case Capstone::VWMUL_VX:
+  case Capstone::VWMULSU_VV:
+  case Capstone::VWMULSU_VX:
+  case Capstone::VWMULU_VV:
+  case Capstone::VWMULU_VX:
   // Vector Single-Width Integer Multiply-Add Instructions
-  case RISCV::VMACC_VV:
-  case RISCV::VMACC_VX:
-  case RISCV::VNMSAC_VV:
-  case RISCV::VNMSAC_VX:
-  case RISCV::VMADD_VV:
-  case RISCV::VMADD_VX:
-  case RISCV::VNMSUB_VV:
-  case RISCV::VNMSUB_VX:
+  case Capstone::VMACC_VV:
+  case Capstone::VMACC_VX:
+  case Capstone::VNMSAC_VV:
+  case Capstone::VNMSAC_VX:
+  case Capstone::VMADD_VV:
+  case Capstone::VMADD_VX:
+  case Capstone::VNMSUB_VV:
+  case Capstone::VNMSUB_VX:
   // Vector Integer Merge Instructions
-  case RISCV::VMERGE_VIM:
-  case RISCV::VMERGE_VVM:
-  case RISCV::VMERGE_VXM:
+  case Capstone::VMERGE_VIM:
+  case Capstone::VMERGE_VVM:
+  case Capstone::VMERGE_VXM:
   // Vector Integer Add-with-Carry / Subtract-with-Borrow Instructions
-  case RISCV::VADC_VIM:
-  case RISCV::VADC_VVM:
-  case RISCV::VADC_VXM:
-  case RISCV::VMADC_VIM:
-  case RISCV::VMADC_VVM:
-  case RISCV::VMADC_VXM:
-  case RISCV::VSBC_VVM:
-  case RISCV::VSBC_VXM:
-  case RISCV::VMSBC_VVM:
-  case RISCV::VMSBC_VXM:
-  case RISCV::VMADC_VV:
-  case RISCV::VMADC_VI:
-  case RISCV::VMADC_VX:
-  case RISCV::VMSBC_VV:
-  case RISCV::VMSBC_VX:
+  case Capstone::VADC_VIM:
+  case Capstone::VADC_VVM:
+  case Capstone::VADC_VXM:
+  case Capstone::VMADC_VIM:
+  case Capstone::VMADC_VVM:
+  case Capstone::VMADC_VXM:
+  case Capstone::VSBC_VVM:
+  case Capstone::VSBC_VXM:
+  case Capstone::VMSBC_VVM:
+  case Capstone::VMSBC_VXM:
+  case Capstone::VMADC_VV:
+  case Capstone::VMADC_VI:
+  case Capstone::VMADC_VX:
+  case Capstone::VMSBC_VV:
+  case Capstone::VMSBC_VX:
   // Vector Widening Integer Multiply-Add Instructions
-  case RISCV::VWMACCU_VV:
-  case RISCV::VWMACCU_VX:
-  case RISCV::VWMACC_VV:
-  case RISCV::VWMACC_VX:
-  case RISCV::VWMACCSU_VV:
-  case RISCV::VWMACCSU_VX:
-  case RISCV::VWMACCUS_VX:
+  case Capstone::VWMACCU_VV:
+  case Capstone::VWMACCU_VX:
+  case Capstone::VWMACC_VV:
+  case Capstone::VWMACC_VX:
+  case Capstone::VWMACCSU_VV:
+  case Capstone::VWMACCSU_VX:
+  case Capstone::VWMACCUS_VX:
   // Vector Integer Move Instructions
-  case RISCV::VMV_V_I:
-  case RISCV::VMV_V_X:
-  case RISCV::VMV_V_V:
+  case Capstone::VMV_V_I:
+  case Capstone::VMV_V_X:
+  case Capstone::VMV_V_V:
   // Vector Single-Width Saturating Add and Subtract
-  case RISCV::VSADDU_VV:
-  case RISCV::VSADDU_VX:
-  case RISCV::VSADDU_VI:
-  case RISCV::VSADD_VV:
-  case RISCV::VSADD_VX:
-  case RISCV::VSADD_VI:
-  case RISCV::VSSUBU_VV:
-  case RISCV::VSSUBU_VX:
-  case RISCV::VSSUB_VV:
-  case RISCV::VSSUB_VX:
+  case Capstone::VSADDU_VV:
+  case Capstone::VSADDU_VX:
+  case Capstone::VSADDU_VI:
+  case Capstone::VSADD_VV:
+  case Capstone::VSADD_VX:
+  case Capstone::VSADD_VI:
+  case Capstone::VSSUBU_VV:
+  case Capstone::VSSUBU_VX:
+  case Capstone::VSSUB_VV:
+  case Capstone::VSSUB_VX:
   // Vector Single-Width Averaging Add and Subtract
-  case RISCV::VAADDU_VV:
-  case RISCV::VAADDU_VX:
-  case RISCV::VAADD_VV:
-  case RISCV::VAADD_VX:
-  case RISCV::VASUBU_VV:
-  case RISCV::VASUBU_VX:
-  case RISCV::VASUB_VV:
-  case RISCV::VASUB_VX:
+  case Capstone::VAADDU_VV:
+  case Capstone::VAADDU_VX:
+  case Capstone::VAADD_VV:
+  case Capstone::VAADD_VX:
+  case Capstone::VASUBU_VV:
+  case Capstone::VASUBU_VX:
+  case Capstone::VASUB_VV:
+  case Capstone::VASUB_VX:
   // Vector Single-Width Fractional Multiply with Rounding and Saturation
-  case RISCV::VSMUL_VV:
-  case RISCV::VSMUL_VX:
+  case Capstone::VSMUL_VV:
+  case Capstone::VSMUL_VX:
   // Vector Single-Width Scaling Shift Instructions
-  case RISCV::VSSRL_VV:
-  case RISCV::VSSRL_VX:
-  case RISCV::VSSRL_VI:
-  case RISCV::VSSRA_VV:
-  case RISCV::VSSRA_VX:
-  case RISCV::VSSRA_VI:
+  case Capstone::VSSRL_VV:
+  case Capstone::VSSRL_VX:
+  case Capstone::VSSRL_VI:
+  case Capstone::VSSRA_VV:
+  case Capstone::VSSRA_VX:
+  case Capstone::VSSRA_VI:
   // Vector Narrowing Fixed-Point Clip Instructions
-  case RISCV::VNCLIPU_WV:
-  case RISCV::VNCLIPU_WX:
-  case RISCV::VNCLIPU_WI:
-  case RISCV::VNCLIP_WV:
-  case RISCV::VNCLIP_WX:
-  case RISCV::VNCLIP_WI:
+  case Capstone::VNCLIPU_WV:
+  case Capstone::VNCLIPU_WX:
+  case Capstone::VNCLIPU_WI:
+  case Capstone::VNCLIP_WV:
+  case Capstone::VNCLIP_WX:
+  case Capstone::VNCLIP_WI:
   // Vector Bit-manipulation Instructions (Zvbb)
   // Vector And-Not
-  case RISCV::VANDN_VV:
-  case RISCV::VANDN_VX:
+  case Capstone::VANDN_VV:
+  case Capstone::VANDN_VX:
   // Vector Reverse Bits in Elements
-  case RISCV::VBREV_V:
+  case Capstone::VBREV_V:
   // Vector Reverse Bits in Bytes
-  case RISCV::VBREV8_V:
+  case Capstone::VBREV8_V:
   // Vector Reverse Bytes
-  case RISCV::VREV8_V:
+  case Capstone::VREV8_V:
   // Vector Count Leading Zeros
-  case RISCV::VCLZ_V:
+  case Capstone::VCLZ_V:
   // Vector Count Trailing Zeros
-  case RISCV::VCTZ_V:
+  case Capstone::VCTZ_V:
   // Vector Population Count
-  case RISCV::VCPOP_V:
+  case Capstone::VCPOP_V:
   // Vector Rotate Left
-  case RISCV::VROL_VV:
-  case RISCV::VROL_VX:
+  case Capstone::VROL_VV:
+  case Capstone::VROL_VX:
   // Vector Rotate Right
-  case RISCV::VROR_VI:
-  case RISCV::VROR_VV:
-  case RISCV::VROR_VX:
+  case Capstone::VROR_VI:
+  case Capstone::VROR_VV:
+  case Capstone::VROR_VX:
   // Vector Widening Shift Left Logical
-  case RISCV::VWSLL_VI:
-  case RISCV::VWSLL_VX:
-  case RISCV::VWSLL_VV:
+  case Capstone::VWSLL_VI:
+  case Capstone::VWSLL_VX:
+  case Capstone::VWSLL_VV:
   // Vector Carry-less Multiplication Instructions (Zvbc)
   // Vector Carry-less Multiply
-  case RISCV::VCLMUL_VV:
-  case RISCV::VCLMUL_VX:
+  case Capstone::VCLMUL_VV:
+  case Capstone::VCLMUL_VX:
   // Vector Carry-less Multiply Return High Half
-  case RISCV::VCLMULH_VV:
-  case RISCV::VCLMULH_VX:
+  case Capstone::VCLMULH_VV:
+  case Capstone::VCLMULH_VX:
   // Vector Mask Instructions
   // Vector Mask-Register Logical Instructions
   // vmsbf.m set-before-first mask bit
@@ -1155,144 +1155,144 @@ static bool isSupportedInstr(const MachineInstr &MI) {
   // vmsof.m set-only-first mask bit
   // Vector Iota Instruction
   // Vector Element Index Instruction
-  case RISCV::VMAND_MM:
-  case RISCV::VMNAND_MM:
-  case RISCV::VMANDN_MM:
-  case RISCV::VMXOR_MM:
-  case RISCV::VMOR_MM:
-  case RISCV::VMNOR_MM:
-  case RISCV::VMORN_MM:
-  case RISCV::VMXNOR_MM:
-  case RISCV::VMSBF_M:
-  case RISCV::VMSIF_M:
-  case RISCV::VMSOF_M:
-  case RISCV::VIOTA_M:
-  case RISCV::VID_V:
+  case Capstone::VMAND_MM:
+  case Capstone::VMNAND_MM:
+  case Capstone::VMANDN_MM:
+  case Capstone::VMXOR_MM:
+  case Capstone::VMOR_MM:
+  case Capstone::VMNOR_MM:
+  case Capstone::VMORN_MM:
+  case Capstone::VMXNOR_MM:
+  case Capstone::VMSBF_M:
+  case Capstone::VMSIF_M:
+  case Capstone::VMSOF_M:
+  case Capstone::VIOTA_M:
+  case Capstone::VID_V:
   // Vector Slide Instructions
-  case RISCV::VSLIDEUP_VX:
-  case RISCV::VSLIDEUP_VI:
-  case RISCV::VSLIDEDOWN_VX:
-  case RISCV::VSLIDEDOWN_VI:
-  case RISCV::VSLIDE1UP_VX:
-  case RISCV::VFSLIDE1UP_VF:
+  case Capstone::VSLIDEUP_VX:
+  case Capstone::VSLIDEUP_VI:
+  case Capstone::VSLIDEDOWN_VX:
+  case Capstone::VSLIDEDOWN_VI:
+  case Capstone::VSLIDE1UP_VX:
+  case Capstone::VFSLIDE1UP_VF:
   // Vector Register Gather Instructions
-  case RISCV::VRGATHER_VI:
-  case RISCV::VRGATHER_VV:
-  case RISCV::VRGATHER_VX:
-  case RISCV::VRGATHEREI16_VV:
+  case Capstone::VRGATHER_VI:
+  case Capstone::VRGATHER_VV:
+  case Capstone::VRGATHER_VX:
+  case Capstone::VRGATHEREI16_VV:
   // Vector Single-Width Floating-Point Add/Subtract Instructions
-  case RISCV::VFADD_VF:
-  case RISCV::VFADD_VV:
-  case RISCV::VFSUB_VF:
-  case RISCV::VFSUB_VV:
-  case RISCV::VFRSUB_VF:
+  case Capstone::VFADD_VF:
+  case Capstone::VFADD_VV:
+  case Capstone::VFSUB_VF:
+  case Capstone::VFSUB_VV:
+  case Capstone::VFRSUB_VF:
   // Vector Widening Floating-Point Add/Subtract Instructions
-  case RISCV::VFWADD_VV:
-  case RISCV::VFWADD_VF:
-  case RISCV::VFWSUB_VV:
-  case RISCV::VFWSUB_VF:
-  case RISCV::VFWADD_WF:
-  case RISCV::VFWADD_WV:
-  case RISCV::VFWSUB_WF:
-  case RISCV::VFWSUB_WV:
+  case Capstone::VFWADD_VV:
+  case Capstone::VFWADD_VF:
+  case Capstone::VFWSUB_VV:
+  case Capstone::VFWSUB_VF:
+  case Capstone::VFWADD_WF:
+  case Capstone::VFWADD_WV:
+  case Capstone::VFWSUB_WF:
+  case Capstone::VFWSUB_WV:
   // Vector Single-Width Floating-Point Multiply/Divide Instructions
-  case RISCV::VFMUL_VF:
-  case RISCV::VFMUL_VV:
-  case RISCV::VFDIV_VF:
-  case RISCV::VFDIV_VV:
-  case RISCV::VFRDIV_VF:
+  case Capstone::VFMUL_VF:
+  case Capstone::VFMUL_VV:
+  case Capstone::VFDIV_VF:
+  case Capstone::VFDIV_VV:
+  case Capstone::VFRDIV_VF:
   // Vector Widening Floating-Point Multiply
-  case RISCV::VFWMUL_VF:
-  case RISCV::VFWMUL_VV:
+  case Capstone::VFWMUL_VF:
+  case Capstone::VFWMUL_VV:
   // Vector Single-Width Floating-Point Fused Multiply-Add Instructions
-  case RISCV::VFMACC_VV:
-  case RISCV::VFMACC_VF:
-  case RISCV::VFNMACC_VV:
-  case RISCV::VFNMACC_VF:
-  case RISCV::VFMSAC_VV:
-  case RISCV::VFMSAC_VF:
-  case RISCV::VFNMSAC_VV:
-  case RISCV::VFNMSAC_VF:
-  case RISCV::VFMADD_VV:
-  case RISCV::VFMADD_VF:
-  case RISCV::VFNMADD_VV:
-  case RISCV::VFNMADD_VF:
-  case RISCV::VFMSUB_VV:
-  case RISCV::VFMSUB_VF:
-  case RISCV::VFNMSUB_VV:
-  case RISCV::VFNMSUB_VF:
+  case Capstone::VFMACC_VV:
+  case Capstone::VFMACC_VF:
+  case Capstone::VFNMACC_VV:
+  case Capstone::VFNMACC_VF:
+  case Capstone::VFMSAC_VV:
+  case Capstone::VFMSAC_VF:
+  case Capstone::VFNMSAC_VV:
+  case Capstone::VFNMSAC_VF:
+  case Capstone::VFMADD_VV:
+  case Capstone::VFMADD_VF:
+  case Capstone::VFNMADD_VV:
+  case Capstone::VFNMADD_VF:
+  case Capstone::VFMSUB_VV:
+  case Capstone::VFMSUB_VF:
+  case Capstone::VFNMSUB_VV:
+  case Capstone::VFNMSUB_VF:
   // Vector Widening Floating-Point Fused Multiply-Add Instructions
-  case RISCV::VFWMACC_VV:
-  case RISCV::VFWMACC_VF:
-  case RISCV::VFWNMACC_VV:
-  case RISCV::VFWNMACC_VF:
-  case RISCV::VFWMSAC_VV:
-  case RISCV::VFWMSAC_VF:
-  case RISCV::VFWNMSAC_VV:
-  case RISCV::VFWNMSAC_VF:
-  case RISCV::VFWMACCBF16_VV:
-  case RISCV::VFWMACCBF16_VF:
+  case Capstone::VFWMACC_VV:
+  case Capstone::VFWMACC_VF:
+  case Capstone::VFWNMACC_VV:
+  case Capstone::VFWNMACC_VF:
+  case Capstone::VFWMSAC_VV:
+  case Capstone::VFWMSAC_VF:
+  case Capstone::VFWNMSAC_VV:
+  case Capstone::VFWNMSAC_VF:
+  case Capstone::VFWMACCBF16_VV:
+  case Capstone::VFWMACCBF16_VF:
   // Vector Floating-Point Square-Root Instruction
-  case RISCV::VFSQRT_V:
+  case Capstone::VFSQRT_V:
   // Vector Floating-Point Reciprocal Square-Root Estimate Instruction
-  case RISCV::VFRSQRT7_V:
+  case Capstone::VFRSQRT7_V:
   // Vector Floating-Point Reciprocal Estimate Instruction
-  case RISCV::VFREC7_V:
+  case Capstone::VFREC7_V:
   // Vector Floating-Point MIN/MAX Instructions
-  case RISCV::VFMIN_VF:
-  case RISCV::VFMIN_VV:
-  case RISCV::VFMAX_VF:
-  case RISCV::VFMAX_VV:
+  case Capstone::VFMIN_VF:
+  case Capstone::VFMIN_VV:
+  case Capstone::VFMAX_VF:
+  case Capstone::VFMAX_VV:
   // Vector Floating-Point Sign-Injection Instructions
-  case RISCV::VFSGNJ_VF:
-  case RISCV::VFSGNJ_VV:
-  case RISCV::VFSGNJN_VV:
-  case RISCV::VFSGNJN_VF:
-  case RISCV::VFSGNJX_VF:
-  case RISCV::VFSGNJX_VV:
+  case Capstone::VFSGNJ_VF:
+  case Capstone::VFSGNJ_VV:
+  case Capstone::VFSGNJN_VV:
+  case Capstone::VFSGNJN_VF:
+  case Capstone::VFSGNJX_VF:
+  case Capstone::VFSGNJX_VV:
   // Vector Floating-Point Compare Instructions
-  case RISCV::VMFEQ_VF:
-  case RISCV::VMFEQ_VV:
-  case RISCV::VMFNE_VF:
-  case RISCV::VMFNE_VV:
-  case RISCV::VMFLT_VF:
-  case RISCV::VMFLT_VV:
-  case RISCV::VMFLE_VF:
-  case RISCV::VMFLE_VV:
-  case RISCV::VMFGT_VF:
-  case RISCV::VMFGE_VF:
+  case Capstone::VMFEQ_VF:
+  case Capstone::VMFEQ_VV:
+  case Capstone::VMFNE_VF:
+  case Capstone::VMFNE_VV:
+  case Capstone::VMFLT_VF:
+  case Capstone::VMFLT_VV:
+  case Capstone::VMFLE_VF:
+  case Capstone::VMFLE_VV:
+  case Capstone::VMFGT_VF:
+  case Capstone::VMFGE_VF:
   // Vector Floating-Point Classify Instruction
-  case RISCV::VFCLASS_V:
+  case Capstone::VFCLASS_V:
   // Vector Floating-Point Merge Instruction
-  case RISCV::VFMERGE_VFM:
+  case Capstone::VFMERGE_VFM:
   // Vector Floating-Point Move Instruction
-  case RISCV::VFMV_V_F:
+  case Capstone::VFMV_V_F:
   // Single-Width Floating-Point/Integer Type-Convert Instructions
-  case RISCV::VFCVT_XU_F_V:
-  case RISCV::VFCVT_X_F_V:
-  case RISCV::VFCVT_RTZ_XU_F_V:
-  case RISCV::VFCVT_RTZ_X_F_V:
-  case RISCV::VFCVT_F_XU_V:
-  case RISCV::VFCVT_F_X_V:
+  case Capstone::VFCVT_XU_F_V:
+  case Capstone::VFCVT_X_F_V:
+  case Capstone::VFCVT_RTZ_XU_F_V:
+  case Capstone::VFCVT_RTZ_X_F_V:
+  case Capstone::VFCVT_F_XU_V:
+  case Capstone::VFCVT_F_X_V:
   // Widening Floating-Point/Integer Type-Convert Instructions
-  case RISCV::VFWCVT_XU_F_V:
-  case RISCV::VFWCVT_X_F_V:
-  case RISCV::VFWCVT_RTZ_XU_F_V:
-  case RISCV::VFWCVT_RTZ_X_F_V:
-  case RISCV::VFWCVT_F_XU_V:
-  case RISCV::VFWCVT_F_X_V:
-  case RISCV::VFWCVT_F_F_V:
-  case RISCV::VFWCVTBF16_F_F_V:
+  case Capstone::VFWCVT_XU_F_V:
+  case Capstone::VFWCVT_X_F_V:
+  case Capstone::VFWCVT_RTZ_XU_F_V:
+  case Capstone::VFWCVT_RTZ_X_F_V:
+  case Capstone::VFWCVT_F_XU_V:
+  case Capstone::VFWCVT_F_X_V:
+  case Capstone::VFWCVT_F_F_V:
+  case Capstone::VFWCVTBF16_F_F_V:
   // Narrowing Floating-Point/Integer Type-Convert Instructions
-  case RISCV::VFNCVT_XU_F_W:
-  case RISCV::VFNCVT_X_F_W:
-  case RISCV::VFNCVT_RTZ_XU_F_W:
-  case RISCV::VFNCVT_RTZ_X_F_W:
-  case RISCV::VFNCVT_F_XU_W:
-  case RISCV::VFNCVT_F_X_W:
-  case RISCV::VFNCVT_F_F_W:
-  case RISCV::VFNCVT_ROD_F_F_W:
-  case RISCV::VFNCVTBF16_F_F_W:
+  case Capstone::VFNCVT_XU_F_W:
+  case Capstone::VFNCVT_X_F_W:
+  case Capstone::VFNCVT_RTZ_XU_F_W:
+  case Capstone::VFNCVT_RTZ_X_F_W:
+  case Capstone::VFNCVT_F_XU_W:
+  case Capstone::VFNCVT_F_X_W:
+  case Capstone::VFNCVT_F_F_W:
+  case Capstone::VFNCVT_ROD_F_F_W:
+  case Capstone::VFNCVTBF16_F_F_W:
     return true;
   }
 
@@ -1302,42 +1302,42 @@ static bool isSupportedInstr(const MachineInstr &MI) {
 /// Return true if MO is a vector operand but is used as a scalar operand.
 static bool isVectorOpUsedAsScalarOp(const MachineOperand &MO) {
   const MachineInstr *MI = MO.getParent();
-  const RISCVVPseudosTable::PseudoInfo *RVV =
-      RISCVVPseudosTable::getPseudoInfo(MI->getOpcode());
+  const CapstoneVPseudosTable::PseudoInfo *RVV =
+      CapstoneVPseudosTable::getPseudoInfo(MI->getOpcode());
 
   if (!RVV)
     return false;
 
   switch (RVV->BaseInstr) {
   // Reductions only use vs1[0] of vs1
-  case RISCV::VREDAND_VS:
-  case RISCV::VREDMAX_VS:
-  case RISCV::VREDMAXU_VS:
-  case RISCV::VREDMIN_VS:
-  case RISCV::VREDMINU_VS:
-  case RISCV::VREDOR_VS:
-  case RISCV::VREDSUM_VS:
-  case RISCV::VREDXOR_VS:
-  case RISCV::VWREDSUM_VS:
-  case RISCV::VWREDSUMU_VS:
-  case RISCV::VFREDMAX_VS:
-  case RISCV::VFREDMIN_VS:
-  case RISCV::VFREDOSUM_VS:
-  case RISCV::VFREDUSUM_VS:
-  case RISCV::VFWREDOSUM_VS:
-  case RISCV::VFWREDUSUM_VS:
+  case Capstone::VREDAND_VS:
+  case Capstone::VREDMAX_VS:
+  case Capstone::VREDMAXU_VS:
+  case Capstone::VREDMIN_VS:
+  case Capstone::VREDMINU_VS:
+  case Capstone::VREDOR_VS:
+  case Capstone::VREDSUM_VS:
+  case Capstone::VREDXOR_VS:
+  case Capstone::VWREDSUM_VS:
+  case Capstone::VWREDSUMU_VS:
+  case Capstone::VFREDMAX_VS:
+  case Capstone::VFREDMIN_VS:
+  case Capstone::VFREDOSUM_VS:
+  case Capstone::VFREDUSUM_VS:
+  case Capstone::VFWREDOSUM_VS:
+  case Capstone::VFWREDUSUM_VS:
     return MO.getOperandNo() == 3;
-  case RISCV::VMV_X_S:
-  case RISCV::VFMV_F_S:
+  case Capstone::VMV_X_S:
+  case Capstone::VFMV_F_S:
     return MO.getOperandNo() == 1;
   default:
     return false;
   }
 }
 
-bool RISCVVLOptimizer::isCandidate(const MachineInstr &MI) const {
+bool CapstoneVLOptimizer::isCandidate(const MachineInstr &MI) const {
   const MCInstrDesc &Desc = MI.getDesc();
-  if (!RISCVII::hasVLOp(Desc.TSFlags) || !RISCVII::hasSEWOp(Desc.TSFlags))
+  if (!CapstoneII::hasVLOp(Desc.TSFlags) || !CapstoneII::hasSEWOp(Desc.TSFlags))
     return false;
 
   if (MI.getNumExplicitDefs() != 1)
@@ -1380,11 +1380,11 @@ bool RISCVVLOptimizer::isCandidate(const MachineInstr &MI) const {
     return false;
   }
 
-  assert(!RISCVII::elementsDependOnVL(
-             TII->get(RISCV::getRVVMCOpcode(MI.getOpcode())).TSFlags) &&
+  assert(!CapstoneII::elementsDependOnVL(
+             TII->get(Capstone::getRVVMCOpcode(MI.getOpcode())).TSFlags) &&
          "Instruction shouldn't be supported if elements depend on VL");
 
-  assert(RISCVRI::isVRegClass(
+  assert(CapstoneRI::isVRegClass(
              MRI->getRegClass(MI.getOperand(0).getReg())->TSFlags) &&
          "All supported instructions produce a vector register result");
 
@@ -1393,37 +1393,37 @@ bool RISCVVLOptimizer::isCandidate(const MachineInstr &MI) const {
 }
 
 DemandedVL
-RISCVVLOptimizer::getMinimumVLForUser(const MachineOperand &UserOp) const {
+CapstoneVLOptimizer::getMinimumVLForUser(const MachineOperand &UserOp) const {
   const MachineInstr &UserMI = *UserOp.getParent();
   const MCInstrDesc &Desc = UserMI.getDesc();
 
   if (UserMI.isPHI() || UserMI.isFullCopy() || isTupleInsertInstr(UserMI))
     return DemandedVLs.lookup(&UserMI);
 
-  if (!RISCVII::hasVLOp(Desc.TSFlags) || !RISCVII::hasSEWOp(Desc.TSFlags)) {
+  if (!CapstoneII::hasVLOp(Desc.TSFlags) || !CapstoneII::hasSEWOp(Desc.TSFlags)) {
     LLVM_DEBUG(dbgs() << "  Abort due to lack of VL, assume that"
                          " use VLMAX\n");
     return DemandedVL::vlmax();
   }
 
-  if (RISCVII::readsPastVL(
-          TII->get(RISCV::getRVVMCOpcode(UserMI.getOpcode())).TSFlags)) {
+  if (CapstoneII::readsPastVL(
+          TII->get(Capstone::getRVVMCOpcode(UserMI.getOpcode())).TSFlags)) {
     LLVM_DEBUG(dbgs() << "  Abort because used by unsafe instruction\n");
     return DemandedVL::vlmax();
   }
 
-  unsigned VLOpNum = RISCVII::getVLOpNum(Desc);
+  unsigned VLOpNum = CapstoneII::getVLOpNum(Desc);
   const MachineOperand &VLOp = UserMI.getOperand(VLOpNum);
   // Looking for an immediate or a register VL that isn't X0.
-  assert((!VLOp.isReg() || VLOp.getReg() != RISCV::X0) &&
+  assert((!VLOp.isReg() || VLOp.getReg() != Capstone::X0) &&
          "Did not expect X0 VL");
 
   // If the user is a passthru it will read the elements past VL, so
   // abort if any of the elements past VL are demanded.
   if (UserOp.isTied()) {
     assert(UserOp.getOperandNo() == UserMI.getNumExplicitDefs() &&
-           RISCVII::isFirstDefTiedToFirstUse(UserMI.getDesc()));
-    if (!RISCV::isVLKnownLE(DemandedVLs.lookup(&UserMI).VL, VLOp)) {
+           CapstoneII::isFirstDefTiedToFirstUse(UserMI.getDesc()));
+    if (!Capstone::isVLKnownLE(DemandedVLs.lookup(&UserMI).VL, VLOp)) {
       LLVM_DEBUG(dbgs() << "  Abort because user is passthru in "
                            "instruction with demanded tail\n");
       return DemandedVL::vlmax();
@@ -1439,14 +1439,14 @@ RISCVVLOptimizer::getMinimumVLForUser(const MachineOperand &UserOp) const {
 
   // If we know the demanded VL of UserMI, then we can reduce the VL it
   // requires.
-  if (RISCV::isVLKnownLE(DemandedVLs.lookup(&UserMI).VL, VLOp))
+  if (Capstone::isVLKnownLE(DemandedVLs.lookup(&UserMI).VL, VLOp))
     return DemandedVLs.lookup(&UserMI);
 
   return VLOp;
 }
 
 /// Return true if MI is an instruction used for assembling registers
-/// for segmented store instructions, namely, RISCVISD::TUPLE_INSERT.
+/// for segmented store instructions, namely, CapstoneISD::TUPLE_INSERT.
 /// Currently it's lowered to INSERT_SUBREG.
 static bool isTupleInsertInstr(const MachineInstr &MI) {
   if (!MI.isInsertSubreg())
@@ -1455,22 +1455,22 @@ static bool isTupleInsertInstr(const MachineInstr &MI) {
   const MachineRegisterInfo &MRI = MI.getMF()->getRegInfo();
   const TargetRegisterClass *DstRC = MRI.getRegClass(MI.getOperand(0).getReg());
   const TargetRegisterInfo *TRI = MRI.getTargetRegisterInfo();
-  if (!RISCVRI::isVRegClass(DstRC->TSFlags))
+  if (!CapstoneRI::isVRegClass(DstRC->TSFlags))
     return false;
-  unsigned NF = RISCVRI::getNF(DstRC->TSFlags);
+  unsigned NF = CapstoneRI::getNF(DstRC->TSFlags);
   if (NF < 2)
     return false;
 
   // Check whether INSERT_SUBREG has the correct subreg index for tuple inserts.
-  auto VLMul = RISCVRI::getLMul(DstRC->TSFlags);
+  auto VLMul = CapstoneRI::getLMul(DstRC->TSFlags);
   unsigned SubRegIdx = MI.getOperand(3).getImm();
-  [[maybe_unused]] auto [LMul, IsFractional] = RISCVVType::decodeVLMUL(VLMul);
+  [[maybe_unused]] auto [LMul, IsFractional] = CapstoneVType::decodeVLMUL(VLMul);
   assert(!IsFractional && "unexpected LMUL for tuple register classes");
-  return TRI->getSubRegIdxSize(SubRegIdx) == RISCV::RVVBitsPerBlock * LMul;
+  return TRI->getSubRegIdxSize(SubRegIdx) == Capstone::RVVBitsPerBlock * LMul;
 }
 
 static bool isSegmentedStoreInstr(const MachineInstr &MI) {
-  switch (RISCV::getRVVMCOpcode(MI.getOpcode())) {
+  switch (Capstone::getRVVMCOpcode(MI.getOpcode())) {
   case VSSEG_CASES(8):
   case VSSSEG_CASES(8):
   case VSUXSEG_CASES(8):
@@ -1493,7 +1493,7 @@ static bool isSegmentedStoreInstr(const MachineInstr &MI) {
   }
 }
 
-bool RISCVVLOptimizer::checkUsers(const MachineInstr &MI) const {
+bool CapstoneVLOptimizer::checkUsers(const MachineInstr &MI) const {
   if (MI.isPHI() || MI.isFullCopy() || isTupleInsertInstr(MI))
     return true;
 
@@ -1541,7 +1541,7 @@ bool RISCVVLOptimizer::checkUsers(const MachineInstr &MI) const {
       continue;
     }
 
-    if (!RISCVII::hasSEWOp(UserMI.getDesc().TSFlags)) {
+    if (!CapstoneII::hasSEWOp(UserMI.getDesc().TSFlags)) {
       LLVM_DEBUG(dbgs() << "    Abort due to lack of SEW operand\n");
       return false;
     }
@@ -1568,10 +1568,10 @@ bool RISCVVLOptimizer::checkUsers(const MachineInstr &MI) const {
   return true;
 }
 
-bool RISCVVLOptimizer::tryReduceVL(MachineInstr &MI) const {
+bool CapstoneVLOptimizer::tryReduceVL(MachineInstr &MI) const {
   LLVM_DEBUG(dbgs() << "Trying to reduce VL for " << MI);
 
-  unsigned VLOpNum = RISCVII::getVLOpNum(MI.getDesc());
+  unsigned VLOpNum = CapstoneII::getVLOpNum(MI.getDesc());
   MachineOperand &VLOp = MI.getOperand(VLOpNum);
 
   // If the VL is 1, then there is no need to reduce it. This is an
@@ -1590,12 +1590,12 @@ bool RISCVVLOptimizer::tryReduceVL(MachineInstr &MI) const {
   // vleff's AVL. It will be greater than or equal to the output VL.
   if (CommonVL->isReg()) {
     const MachineInstr *VLMI = MRI->getVRegDef(CommonVL->getReg());
-    if (RISCVInstrInfo::isFaultOnlyFirstLoad(*VLMI) &&
+    if (CapstoneInstrInfo::isFaultOnlyFirstLoad(*VLMI) &&
         !MDT->dominates(VLMI, &MI))
-      CommonVL = &VLMI->getOperand(RISCVII::getVLOpNum(VLMI->getDesc()));
+      CommonVL = &VLMI->getOperand(CapstoneII::getVLOpNum(VLMI->getDesc()));
   }
 
-  if (!RISCV::isVLKnownLE(*CommonVL, VLOp)) {
+  if (!Capstone::isVLKnownLE(*CommonVL, VLOp)) {
     LLVM_DEBUG(dbgs() << "  Abort due to CommonVL not <= VLOp.\n");
     return false;
   }
@@ -1632,7 +1632,7 @@ static bool isPhysical(const MachineOperand &MO) {
 }
 
 /// Look through \p MI's operands and propagate what it demands to its uses.
-void RISCVVLOptimizer::transfer(const MachineInstr &MI) {
+void CapstoneVLOptimizer::transfer(const MachineInstr &MI) {
   if (!isSupportedInstr(MI) || !checkUsers(MI) || any_of(MI.defs(), isPhysical))
     DemandedVLs[&MI] = DemandedVL::vlmax();
 
@@ -1645,14 +1645,14 @@ void RISCVVLOptimizer::transfer(const MachineInstr &MI) {
   }
 }
 
-bool RISCVVLOptimizer::runOnMachineFunction(MachineFunction &MF) {
+bool CapstoneVLOptimizer::runOnMachineFunction(MachineFunction &MF) {
   if (skipFunction(MF.getFunction()))
     return false;
 
   MRI = &MF.getRegInfo();
   MDT = &getAnalysis<MachineDominatorTreeWrapperPass>().getDomTree();
 
-  const RISCVSubtarget &ST = MF.getSubtarget<RISCVSubtarget>();
+  const CapstoneSubtarget &ST = MF.getSubtarget<CapstoneSubtarget>();
   if (!ST.hasVInstructions())
     return false;
 

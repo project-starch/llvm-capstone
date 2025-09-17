@@ -1,4 +1,4 @@
-//===-- RISCVInstrInfoZb.td - RISC-V Bitmanip instructions -*- tablegen -*-===//
+//===-- CapstoneInstrInfoZb.td - Capstone Bitmanip instructions -*- tablegen -*-===//
 //
 // Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
 // See https://llvm.org/LICENSE.txt for license information.
@@ -6,14 +6,14 @@
 //
 //===----------------------------------------------------------------------===//
 //
-// This file describes the RISC-V instructions from the standard Bitmanip
+// This file describes the Capstone instructions from the standard Bitmanip
 // extensions, versions:
 //   Zba - 1.0
 //   Zbb - 1.0
 //   Zbc - 1.0
 //   Zbs - 1.0
 //
-// This file also describes RISC-V instructions from the Zbk* extensions in
+// This file also describes Capstone instructions from the Zbk* extensions in
 // Cryptography Extensions Volume I: Scalar & Entropy Source Instructions,
 // versions:
 //   Zbkb - 1.0
@@ -31,32 +31,32 @@ def SDTIntShiftAddOp : SDTypeProfile<1, 3, [   // shl_add
   SDTCisInt<3>
 ]>;
 
-def riscv_shl_add : RVSDNode<"SHL_ADD", SDTIntShiftAddOp>;
+def capstone_shl_add : RVSDNode<"SHL_ADD", SDTIntShiftAddOp>;
 
-// RV64IB rotates, directly matching the semantics of the named RISC-V
+// RV64IB rotates, directly matching the semantics of the named Capstone
 // instructions.
-def riscv_rolw    : RVSDNode<"ROLW",    SDT_RISCVIntBinOpW>;
-def riscv_rorw    : RVSDNode<"RORW",    SDT_RISCVIntBinOpW>;
+def capstone_rolw    : RVSDNode<"ROLW",    SDT_CapstoneIntBinOpW>;
+def capstone_rorw    : RVSDNode<"RORW",    SDT_CapstoneIntBinOpW>;
 
 // RV64IZbb bit counting instructions directly matching the semantics of the
-// named RISC-V instructions.
-def riscv_clzw    : RVSDNode<"CLZW",    SDT_RISCVIntUnaryOpW>;
-def riscv_ctzw    : RVSDNode<"CTZW",    SDT_RISCVIntUnaryOpW>;
+// named Capstone instructions.
+def capstone_clzw    : RVSDNode<"CLZW",    SDT_CapstoneIntUnaryOpW>;
+def capstone_ctzw    : RVSDNode<"CTZW",    SDT_CapstoneIntUnaryOpW>;
 
 // brev8, orc.b, zip, and unzip from Zbb and Zbkb. All operands are i32 or
 // XLenVT.
-def riscv_brev8   : RVSDNode<"BREV8",   SDTIntUnaryOp>;
-def riscv_orc_b   : RVSDNode<"ORC_B",   SDTIntUnaryOp>;
-def riscv_zip     : RVSDNode<"ZIP",     SDTIntUnaryOp>;
-def riscv_unzip   : RVSDNode<"UNZIP",   SDTIntUnaryOp>;
+def capstone_brev8   : RVSDNode<"BREV8",   SDTIntUnaryOp>;
+def capstone_orc_b   : RVSDNode<"ORC_B",   SDTIntUnaryOp>;
+def capstone_zip     : RVSDNode<"ZIP",     SDTIntUnaryOp>;
+def capstone_unzip   : RVSDNode<"UNZIP",   SDTIntUnaryOp>;
 
 // RV64IZbb absolute value for i32. Expanded to (max (negw X), X) during isel.
-def riscv_absw    : RVSDNode<"ABSW",    SDTIntUnaryOp>;
+def capstone_absw    : RVSDNode<"ABSW",    SDTIntUnaryOp>;
 
 // Scalar cryptography
-def riscv_clmul   : RVSDNode<"CLMUL",   SDTIntBinOp>;
-def riscv_clmulh  : RVSDNode<"CLMULH",  SDTIntBinOp>;
-def riscv_clmulr  : RVSDNode<"CLMULR",  SDTIntBinOp>;
+def capstone_clmul   : RVSDNode<"CLMUL",   SDTIntBinOp>;
+def capstone_clmulh  : RVSDNode<"CLMULH",  SDTIntBinOp>;
+def capstone_clmulr  : RVSDNode<"CLMULR",  SDTIntBinOp>;
 
 def BCLRXForm : SDNodeXForm<imm, [{
   // Find the lowest 0.
@@ -250,14 +250,14 @@ def gi_sh3add_uw_op : GIComplexOperandMatcher<s32, "selectSHXADD_UWOp<3>">,
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
 class RVBUnaryR<bits<7> funct7, bits<3> funct3,
-                RISCVOpcode opcode, string opcodestr>
+                CapstoneOpcode opcode, string opcodestr>
     : RVInstR<funct7, funct3, opcode, (outs GPR:$rd), (ins GPR:$rs1),
               opcodestr, "$rd, $rs1"> {
   let rs2 = 0;
 }
 
 let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-class RVBShift_ri<bits<5> imm11_7, bits<3> funct3, RISCVOpcode opcode,
+class RVBShift_ri<bits<5> imm11_7, bits<3> funct3, CapstoneOpcode opcode,
                   string opcodestr>
     : RVInstIShift<imm11_7, funct3, opcode, (outs GPR:$rd),
                    (ins GPR:$rs1, uimmlog2xlen:$shamt), opcodestr,
@@ -497,7 +497,7 @@ def invLogicImm : ComplexPattern<XLenVT, 1, "selectInvLogicImm", [], [], 0>;
 let Predicates = [HasStdExtZbbOrZbkb] in {
 def : Pat<(XLenVT (and GPR:$rs1, (not GPR:$rs2))), (ANDN GPR:$rs1, GPR:$rs2)>;
 def : Pat<(XLenVT (or  GPR:$rs1, (not GPR:$rs2))), (ORN  GPR:$rs1, GPR:$rs2)>;
-def : Pat<(XLenVT (not (riscv_xor_like GPR:$rs1, GPR:$rs2))),
+def : Pat<(XLenVT (not (capstone_xor_like GPR:$rs1, GPR:$rs2))),
           (XNOR GPR:$rs1, GPR:$rs2)>;
 
 def : Pat<(XLenVT (and GPR:$rs1, invLogicImm:$rs2)), (ANDN GPR:$rs1, invLogicImm:$rs2)>;
@@ -517,10 +517,10 @@ def : Pat<(XLenVT (rotl GPR:$rs1, uimmlog2xlen:$shamt)),
 } // Predicates = [HasStdExtZbbOrZbkb]
 
 let Predicates = [HasStdExtZbbOrZbkb, IsRV64] in {
-def : PatGprGpr<shiftopw<riscv_rolw>, ROLW>;
-def : PatGprGpr<shiftopw<riscv_rorw>, RORW>;
-def : PatGprImm<riscv_rorw, RORIW, uimm5>;
-def : Pat<(riscv_rolw GPR:$rs1, uimm5:$rs2),
+def : PatGprGpr<shiftopw<capstone_rolw>, ROLW>;
+def : PatGprGpr<shiftopw<capstone_rorw>, RORW>;
+def : PatGprImm<capstone_rorw, RORIW, uimm5>;
+def : Pat<(capstone_rolw GPR:$rs1, uimm5:$rs2),
           (RORIW GPR:$rs1, (ImmSubFrom32 uimm5:$rs2))>;
 } // Predicates = [HasStdExtZbbOrZbkb, IsRV64]
 
@@ -575,15 +575,15 @@ def : Pat<(XLenVT (and GPR:$r, BCLRIANDIMask:$i)),
 } // Predicates = [HasStdExtZbs]
 
 let Predicates = [HasStdExtZbb] in
-def : PatGpr<riscv_orc_b, ORC_B>;
+def : PatGpr<capstone_orc_b, ORC_B>;
 
 let Predicates = [HasStdExtZbkb] in
-def : PatGpr<riscv_brev8, BREV8>;
+def : PatGpr<capstone_brev8, BREV8>;
 
 let Predicates = [HasStdExtZbkb, IsRV32] in {
 // We treat zip and unzip as separate instructions, so match it directly.
-def : PatGpr<riscv_zip, ZIP_RV32, i32>;
-def : PatGpr<riscv_unzip, UNZIP_RV32, i32>;
+def : PatGpr<capstone_zip, ZIP_RV32, i32>;
+def : PatGpr<capstone_unzip, UNZIP_RV32, i32>;
 } // Predicates = [HasStdExtZbkb, IsRV32]
 
 let Predicates = [HasStdExtZbb] in {
@@ -593,11 +593,11 @@ def : PatGpr<ctpop, CPOP>;
 } // Predicates = [HasStdExtZbb]
 
 let Predicates = [HasStdExtZbb, IsRV64] in {
-def : PatGpr<riscv_clzw, CLZW>;
-def : PatGpr<riscv_ctzw, CTZW>;
+def : PatGpr<capstone_clzw, CLZW>;
+def : PatGpr<capstone_ctzw, CTZW>;
 def : Pat<(i64 (ctpop (i64 (zexti32 (i64 GPR:$rs1))))), (CPOPW GPR:$rs1)>;
 
-def : Pat<(i64 (riscv_absw GPR:$rs1)),
+def : Pat<(i64 (capstone_absw GPR:$rs1)),
           (MAX GPR:$rs1, (XLenVT (SUBW (XLenVT X0), GPR:$rs1)))>;
 } // Predicates = [HasStdExtZbb, IsRV64]
 
@@ -722,7 +722,7 @@ def : Pat<(i64 (and GPR:$rs, 0xFFFF)), (PACKW GPR:$rs, (XLenVT X0))>;
 multiclass ShxAddPat<int i, Instruction shxadd> {
   def : Pat<(XLenVT (add_like_non_imm12 (shl GPR:$rs1, (XLenVT i)), GPR:$rs2)),
             (shxadd GPR:$rs1, GPR:$rs2)>;
-  def : Pat<(XLenVT (riscv_shl_add GPR:$rs1, (XLenVT i), GPR:$rs2)),
+  def : Pat<(XLenVT (capstone_shl_add GPR:$rs1, (XLenVT i), GPR:$rs2)),
             (shxadd GPR:$rs1, GPR:$rs2)>;
 
   defvar pat = !cast<ComplexPattern>("sh"#i#"add_op");
@@ -765,7 +765,7 @@ multiclass ShxAdd_UWPat<int i, Instruction shxadd_uw> {
   def : Pat<(i64 (add_like_non_imm12 (shl (and GPR:$rs1, 0xFFFFFFFF), (i64 i)),
                                      (XLenVT GPR:$rs2))),
             (shxadd_uw GPR:$rs1, GPR:$rs2)>;
-  def : Pat<(i64 (riscv_shl_add (and GPR:$rs1, 0xFFFFFFFF), (i64 i), GPR:$rs2)),
+  def : Pat<(i64 (capstone_shl_add (and GPR:$rs1, 0xFFFFFFFF), (i64 i), GPR:$rs2)),
             (shxadd_uw GPR:$rs1, GPR:$rs2)>;
 
   defvar pat = !cast<ComplexPattern>("sh"#i#"add_uw_op");
@@ -845,14 +845,14 @@ def : Sh3AddPat<SH3ADD>;
 } // Predicates = [HasStdExtZba, IsRV64]
 
 let Predicates = [HasStdExtZbcOrZbkc] in {
-def : PatGprGpr<riscv_clmul, CLMUL>;
-def : PatGprGpr<riscv_clmulh, CLMULH>;
+def : PatGprGpr<capstone_clmul, CLMUL>;
+def : PatGprGpr<capstone_clmulh, CLMULH>;
 } // Predicates = [HasStdExtZbcOrZbkc]
 
 let Predicates = [HasStdExtZbc] in
-def : PatGprGpr<riscv_clmulr, CLMULR>;
+def : PatGprGpr<capstone_clmulr, CLMULR>;
 
 let Predicates = [HasStdExtZbkx] in {
-def : PatGprGpr<int_riscv_xperm4, XPERM4>;
-def : PatGprGpr<int_riscv_xperm8, XPERM8>;
+def : PatGprGpr<int_capstone_xperm4, XPERM4>;
+def : PatGprGpr<int_capstone_xperm8, XPERM8>;
 } // Predicates = [HasStdExtZbkx]
