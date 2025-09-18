@@ -58,6 +58,8 @@ public:
     avr,         // AVR: Atmel AVR microcontroller
     bpfel,       // eBPF or extended BPF or 64-bit BPF (little endian)
     bpfeb,       // eBPF or extended BPF or 64-bit BPF (big endian)
+    capstone32,  // Capstone: capstone32
+    capstone64,  // Capstone: capstone64
     csky,        // CSKY: csky
     dxil,        // DXIL 32-bit DirectX bytecode
     hexagon,     // Hexagon: hexagon
@@ -1081,6 +1083,19 @@ public:
 
   /// Tests whether the target is RISC-V (32- and 64-bit).
   bool isRISCV() const { return isRISCV32() || isRISCV64(); }
+  
+  /// Tests whether the target is 32-bit Capstone.
+  bool isCapstone32() const {
+    return getArch() == Triple::capstone32;
+  }
+
+  /// Tests whether the target is 64-bit Capstone.
+  bool isCapstone64() const {
+    return getArch() == Triple::capstone64;
+  }
+
+  /// Tests whether the target is Capstone (32- and 64-bit).
+  bool isCapstone() const { return isCapstone32() || isCapstone64(); }
 
   /// Tests whether the target is 32-bit SPARC (little and big endian).
   bool isSPARC32() const {

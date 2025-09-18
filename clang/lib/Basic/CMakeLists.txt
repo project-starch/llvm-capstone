@@ -101,6 +101,7 @@ add_clang_library(clangBasic
   Targets/ARM.cpp
   Targets/AVR.cpp
   Targets/BPF.cpp
+  Targets/Capstone.cpp
   Targets/CSKY.cpp
   Targets/DirectX.cpp
   Targets/Hexagon.cpp

@@ -23,6 +23,8 @@ add_llvm_component_library(LLVMTargetParser
   PPCTargetParser.cpp
   RISCVISAInfo.cpp
   RISCVTargetParser.cpp
+  CapstoneISAInfo.cpp
+  CapstoneTargetParser.cpp
   SubtargetFeature.cpp
   TargetParser.cpp
   Triple.cpp

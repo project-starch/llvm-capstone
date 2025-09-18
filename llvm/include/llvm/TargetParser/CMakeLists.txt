@@ -7,6 +7,9 @@ tablegen(LLVM AArch64TargetParserDef.inc -gen-arm-target-def EXTRA_INCLUDES ${PR
 set(LLVM_TARGET_DEFINITIONS ${PROJECT_SOURCE_DIR}/lib/Target/RISCV/RISCV.td)
 tablegen(LLVM RISCVTargetParserDef.inc -gen-riscv-target-def EXTRA_INCLUDES ${PROJECT_SOURCE_DIR}/lib/Target/RISCV)
 
+set(LLVM_TARGET_DEFINITIONS ${PROJECT_SOURCE_DIR}/lib/Target/Capstone/Capstone.td)
+tablegen(LLVM CapstoneTargetParserDef.inc -gen-capstone-target-def EXTRA_INCLUDES ${PROJECT_SOURCE_DIR}/lib/Target/Capstone)
+
 set(LLVM_TARGET_DEFINITIONS ${PROJECT_SOURCE_DIR}/lib/Target/PowerPC/PPC.td)
 tablegen(LLVM PPCGenTargetFeatures.inc -gen-target-features -I${PROJECT_SOURCE_DIR}/lib/Target/PowerPC)
 

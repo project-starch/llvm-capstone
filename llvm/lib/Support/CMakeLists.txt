@@ -239,6 +239,9 @@ add_llvm_component_library(LLVMSupport
   RISCVAttributes.cpp
   RISCVAttributeParser.cpp
   RISCVISAUtils.cpp
+  CapstoneAttributes.cpp
+  CapstoneAttributeParser.cpp
+  CapstoneISAUtils.cpp
   ScaledNumber.cpp
   ScopedPrinter.cpp
   SHA1.cpp
