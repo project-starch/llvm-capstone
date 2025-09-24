@@ -312,6 +312,21 @@ namespace clang {
     CC_RISCVVLSCall_16384, // __attribute__((riscv_vls_cc(16384)))
     CC_RISCVVLSCall_32768, // __attribute__((riscv_vls_cc(32768)))
     CC_RISCVVLSCall_65536, // __attribute__((riscv_vls_cc(65536)))
+    
+    CC_CapstoneVectorCall,    // __attribute__((capstone_vector_cc))
+    CC_CapstoneVLSCall_32,    // __attribute__((capstone_vls_cc(32)))
+    CC_CapstoneVLSCall_64,    // __attribute__((capstone_vls_cc(64)))
+    CC_CapstoneVLSCall_128,   // __attribute__((capstone_vls_cc)) or
+                              // __attribute__((capstone_vls_cc(128)))
+    CC_CapstoneVLSCall_256,   // __attribute__((capstone_vls_cc(256)))
+    CC_CapstoneVLSCall_512,   // __attribute__((capstone_vls_cc(512)))
+    CC_CapstoneVLSCall_1024,  // __attribute__((capstone_vls_cc(1024)))
+    CC_CapstoneVLSCall_2048,  // __attribute__((capstone_vls_cc(2048)))
+    CC_CapstoneVLSCall_4096,  // __attribute__((capstone_vls_cc(4096)))
+    CC_CapstoneVLSCall_8192,  // __attribute__((capstone_vls_cc(8192)))
+    CC_CapstoneVLSCall_16384, // __attribute__((capstone_vls_cc(16384)))
+    CC_CapstoneVLSCall_32768, // __attribute__((capstone_vls_cc(32768)))
+    CC_CapstoneVLSCall_65536, // __attribute__((capstone_vls_cc(65536)))
   };
 
   /// Checks whether the given calling convention supports variadic

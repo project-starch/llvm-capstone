@@ -266,77 +266,76 @@ void CapstoneTargetInfo::getTargetDefines(const LangOptions &Opts,
 }
 
 static constexpr int NumRVVBuiltins =
-    RISCVVector::FirstSiFiveBuiltin - Builtin::FirstTSBuiltin;
+    CapstoneVector::FirstSiFiveBuiltin - Builtin::FirstTSBuiltin;
 static constexpr int NumRVVSiFiveBuiltins =
-    RISCVVector::FirstAndesBuiltin - RISCVVector::FirstSiFiveBuiltin;
+    CapstoneVector::FirstAndesBuiltin - CapstoneVector::FirstSiFiveBuiltin;
 static constexpr int NumRVVAndesBuiltins =
-    RISCVVector::FirstTSBuiltin - RISCVVector::FirstAndesBuiltin;
+    CapstoneVector::FirstTSBuiltin - CapstoneVector::FirstAndesBuiltin;
 static constexpr int NumCapstoneBuiltins =
-    RISCV::LastTSBuiltin - RISCVVector::FirstTSBuiltin;
+    Capstone::LastTSBuiltin - CapstoneVector::FirstTSBuiltin;
 static constexpr int NumBuiltins =
-    RISCV::LastTSBuiltin - Builtin::FirstTSBuiltin;
+    Capstone::LastTSBuiltin - Builtin::FirstTSBuiltin;
 static_assert(NumBuiltins == (NumRVVBuiltins + NumRVVSiFiveBuiltins +
                               NumRVVAndesBuiltins + NumCapstoneBuiltins));
 
 namespace RVV {
-#define GET_RISCVV_BUILTIN_STR_TABLE
-#include "clang/Basic/riscv_vector_builtins.inc"
-#undef GET_RISCVV_BUILTIN_STR_TABLE
+#define GET_CapstoneV_BUILTIN_STR_TABLE
+#include "clang/Basic/capstone_vector_builtins.inc"
+#undef GET_CapstoneV_BUILTIN_STR_TABLE
 static_assert(BuiltinStrings.size() < 100'000);
 
 static constexpr std::array<Builtin::Info, NumRVVBuiltins> BuiltinInfos = {
-#define GET_RISCVV_BUILTIN_INFOS
-#include "clang/Basic/riscv_vector_builtins.inc"
-#undef GET_RISCVV_BUILTIN_INFOS
+#define GET_CapstoneV_BUILTIN_INFOS
+#include "clang/Basic/capstone_vector_builtins.inc"
+#undef GET_CapstoneV_BUILTIN_INFOS
 };
 } // namespace RVV
 
 namespace RVVSiFive {
 #define GET_CapstoneV_BUILTIN_STR_TABLE
-#include "clang/Basic/riscv_sifive_vector_builtins.inc"
+#include "clang/Basic/capstone_sifive_vector_builtins.inc"
 #undef GET_CapstoneV_BUILTIN_STR_TABLE
 
 static constexpr std::array<Builtin::Info, NumRVVSiFiveBuiltins> BuiltinInfos =
     {
-#define GET_RISCVV_BUILTIN_INFOS
-#include "clang/Basic/riscv_sifive_vector_builtins.inc"
-#undef GET_RISCVV_BUILTIN_INFOS
+#define GET_CapstoneV_BUILTIN_INFOS
+#include "clang/Basic/capstone_sifive_vector_builtins.inc"
+#undef GET_CapstoneV_BUILTIN_INFOS
 };
 } // namespace RVVSiFive
 
 namespace RVVAndes {
-#define GET_RISCVV_BUILTIN_STR_TABLE
-#include "clang/Basic/riscv_andes_vector_builtins.inc"
-#undef GET_RISCVV_BUILTIN_STR_TABLE
+#define GET_CapstoneV_BUILTIN_STR_TABLE
+#include "clang/Basic/capstone_andes_vector_builtins.inc"
+#undef GET_CapstoneV_BUILTIN_STR_TABLE
 
 static constexpr std::array<Builtin::Info, NumRVVAndesBuiltins> BuiltinInfos =
     {
-#define GET_RISCVV_BUILTIN_INFOS
-#include "clang/Basic/riscv_andes_vector_builtins.inc"
-#undef GET_RISCVV_BUILTIN_INFOS
+#define GET_CapstoneV_BUILTIN_INFOS
+#include "clang/Basic/capstone_andes_vector_builtins.inc"
+#undef GET_CapstoneV_BUILTIN_INFOS
 };
 } // namespace RVVAndes
 
 #define GET_BUILTIN_STR_TABLE
-#include "clang/Basic/BuiltinsRISCV.inc"
+#include "clang/Basic/BuiltinsCapstone.inc"
 #undef GET_BUILTIN_STR_TABLE
 
 static constexpr Builtin::Info BuiltinInfos[] = {
 #define GET_BUILTIN_INFOS
-#include "clang/Basic/BuiltinsRISCV.inc"
+#include "clang/Basic/BuiltinsCapstone.inc"
 #undef GET_BUILTIN_INFOS
 };
 static_assert(std::size(BuiltinInfos) == NumCapstoneBuiltins);
 
 llvm::SmallVector<Builtin::InfosShard>
 CapstoneTargetInfo::getTargetBuiltins() const {
-  return { };
-  // return {
-  //     {&RVV::BuiltinStrings, RVV::BuiltinInfos, "__builtin_rvv_"},
-  //     {&RVVSiFive::BuiltinStrings, RVVSiFive::BuiltinInfos, "__builtin_rvv_"},
-  //     {&RVVAndes::BuiltinStrings, RVVAndes::BuiltinInfos, "__builtin_rvv_"},
-  //     {&BuiltinStrings, BuiltinInfos},
-  // };
+  return {
+      {&RVV::BuiltinStrings, RVV::BuiltinInfos, "__builtin_rvv_"},
+      {&RVVSiFive::BuiltinStrings, RVVSiFive::BuiltinInfos, "__builtin_rvv_"},
+      {&RVVAndes::BuiltinStrings, RVVAndes::BuiltinInfos, "__builtin_rvv_"},
+      {&BuiltinStrings, BuiltinInfos},
+  };
 }
 
 bool CapstoneTargetInfo::initFeatureMap(
@@ -599,19 +598,19 @@ CapstoneTargetInfo::checkCallingConvention(CallingConv CC) const {
   default:
     return CCCR_Warning;
   case CC_C:
-  case CC_RISCVVectorCall:
-  case CC_RISCVVLSCall_32:
-  case CC_RISCVVLSCall_64:
-  case CC_RISCVVLSCall_128:
-  case CC_RISCVVLSCall_256:
-  case CC_RISCVVLSCall_512:
-  case CC_RISCVVLSCall_1024:
-  case CC_RISCVVLSCall_2048:
-  case CC_RISCVVLSCall_4096:
-  case CC_RISCVVLSCall_8192:
-  case CC_RISCVVLSCall_16384:
-  case CC_RISCVVLSCall_32768:
-  case CC_RISCVVLSCall_65536:
+  case CC_CapstoneVectorCall:
+  case CC_CapstoneVLSCall_32:
+  case CC_CapstoneVLSCall_64:
+  case CC_CapstoneVLSCall_128:
+  case CC_CapstoneVLSCall_256:
+  case CC_CapstoneVLSCall_512:
+  case CC_CapstoneVLSCall_1024:
+  case CC_CapstoneVLSCall_2048:
+  case CC_CapstoneVLSCall_4096:
+  case CC_CapstoneVLSCall_8192:
+  case CC_CapstoneVLSCall_16384:
+  case CC_CapstoneVLSCall_32768:
+  case CC_CapstoneVLSCall_65536:
     return CCCR_OK;
   }
 }

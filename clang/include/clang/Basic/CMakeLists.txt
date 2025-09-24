@@ -110,6 +110,10 @@ clang_tablegen(BuiltinsRISCV.inc -gen-clang-builtins
   SOURCE BuiltinsRISCV.td
   TARGET ClangBuiltinsRISCV)
 
+clang_tablegen(BuiltinsCapstone.inc -gen-clang-builtins
+  SOURCE BuiltinsCapstone.td
+  TARGET ClangBuiltinsCapstone)
+
 clang_tablegen(BuiltinsSPIRVCommon.inc -gen-clang-builtins
   SOURCE BuiltinsSPIRVCommon.td
   TARGET ClangBuiltinsSPIRVCommon)
@@ -225,3 +229,30 @@ clang_tablegen(riscv_andes_vector_builtin_cg.inc -gen-riscv-andes-vector-builtin
 clang_tablegen(riscv_andes_vector_builtin_sema.inc -gen-riscv-andes-vector-builtin-sema
   SOURCE riscv_andes_vector.td
   TARGET ClangRISCVAndesVectorBuiltinSema)
+clang_tablegen(capstone_vector_builtins.inc -gen-capstone-vector-builtins
+  SOURCE capstone_vector.td
+  TARGET ClangCapstoneVectorBuiltins)
+clang_tablegen(capstone_vector_builtin_cg.inc -gen-capstone-vector-builtin-codegen
+  SOURCE capstone_vector.td
+  TARGET ClangCapstoneVectorBuiltinCG)
+clang_tablegen(capstone_vector_builtin_sema.inc -gen-capstone-vector-builtin-sema
+  SOURCE capstone_vector.td
+  TARGET ClangCapstoneVectorBuiltinSema)
+clang_tablegen(capstone_sifive_vector_builtins.inc -gen-capstone-sifive-vector-builtins
+  SOURCE capstone_sifive_vector.td
+  TARGET ClangCapstoneSiFiveVectorBuiltins)
+clang_tablegen(capstone_sifive_vector_builtin_cg.inc -gen-capstone-sifive-vector-builtin-codegen
+  SOURCE capstone_sifive_vector.td
+  TARGET ClangCapstoneSiFiveVectorBuiltinCG)
+clang_tablegen(capstone_sifive_vector_builtin_sema.inc -gen-capstone-sifive-vector-builtin-sema
+  SOURCE capstone_sifive_vector.td
+  TARGET ClangCapstoneSiFiveVectorBuiltinSema)
+clang_tablegen(capstone_andes_vector_builtins.inc -gen-capstone-andes-vector-builtins
+  SOURCE capstone_andes_vector.td
+  TARGET ClangCapstoneAndesVectorBuiltins)
+clang_tablegen(capstone_andes_vector_builtin_cg.inc -gen-capstone-andes-vector-builtin-codegen
+  SOURCE capstone_andes_vector.td
+  TARGET ClangCapstoneAndesVectorBuiltinCG)
+clang_tablegen(capstone_andes_vector_builtin_sema.inc -gen-capstone-andes-vector-builtin-sema
+  SOURCE capstone_andes_vector.td
+  TARGET ClangCapstoneAndesVectorBuiltinSema)

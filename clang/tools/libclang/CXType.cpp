@@ -728,6 +728,19 @@ CXCallingConv clang_getFunctionTypeCallingConv(CXType X) {
       TCALLINGCONV(RISCVVLSCall_16384);
       TCALLINGCONV(RISCVVLSCall_32768);
       TCALLINGCONV(RISCVVLSCall_65536);
+      TCALLINGCONV(CapstoneVectorCall);
+      TCALLINGCONV(CapstoneVLSCall_32);
+      TCALLINGCONV(CapstoneVLSCall_64);
+      TCALLINGCONV(CapstoneVLSCall_128);
+      TCALLINGCONV(CapstoneVLSCall_256);
+      TCALLINGCONV(CapstoneVLSCall_512);
+      TCALLINGCONV(CapstoneVLSCall_1024);
+      TCALLINGCONV(CapstoneVLSCall_2048);
+      TCALLINGCONV(CapstoneVLSCall_4096);
+      TCALLINGCONV(CapstoneVLSCall_8192);
+      TCALLINGCONV(CapstoneVLSCall_16384);
+      TCALLINGCONV(CapstoneVLSCall_32768);
+      TCALLINGCONV(CapstoneVLSCall_65536);
     case CC_SpirFunction: return CXCallingConv_Unexposed;
     case CC_DeviceKernel:
       return CXCallingConv_Unexposed;

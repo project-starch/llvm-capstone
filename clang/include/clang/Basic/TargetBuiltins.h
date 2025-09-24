@@ -228,6 +228,35 @@ namespace clang {
   };
   } // namespace RISCV
 
+namespace CapstoneVector {
+  enum {
+    LastTIBuiltin = clang::Builtin::FirstTSBuiltin - 1,
+#define GET_CapstoneV_BUILTIN_ENUMERATORS
+#include "clang/Basic/capstone_vector_builtins.inc"
+    FirstSiFiveBuiltin,
+    LastRVVBuiltin = FirstSiFiveBuiltin - 1,
+#include "clang/Basic/capstone_sifive_vector_builtins.inc"
+    FirstAndesBuiltin,
+    LastSiFiveBuiltin = FirstAndesBuiltin - 1,
+#include "clang/Basic/capstone_andes_vector_builtins.inc"
+#undef GET_CapstoneV_BUILTIN_ENUMERATORS
+    FirstTSBuiltin,
+  };
+  }
+
+/// Capstone builtins
+namespace Capstone {
+  enum {
+    LastTIBuiltin = clang::Builtin::FirstTSBuiltin - 1,
+    FirstRVVBuiltin = clang::Builtin::FirstTSBuiltin,
+    LastRVVBuiltin = CapstoneVector::FirstTSBuiltin - 1,
+#define GET_BUILTIN_ENUMERATORS
+#include "clang/Basic/BuiltinsCapstone.inc"
+#undef GET_BUILTIN_ENUMERATORS
+    LastTSBuiltin
+  };
+  } // namespace Capstone
+
   /// LoongArch builtins
   namespace LoongArch {
   enum {

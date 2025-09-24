@@ -1702,6 +1702,23 @@ static unsigned getDwarfCC(CallingConv CC) {
     CC_VLS_CASE(65536)
 #undef CC_VLS_CASE
     return llvm::dwarf::DW_CC_LLVM_RISCVVLSCall;
+  case CC_CapstoneVectorCall:
+    return llvm::dwarf::DW_CC_LLVM_CapstoneVLSCall;
+#define CC_VLS_CASE(ABI_VLEN) case CC_CapstoneVLSCall_##ABI_VLEN:
+    CC_VLS_CASE(32)
+    CC_VLS_CASE(64)
+    CC_VLS_CASE(128)
+    CC_VLS_CASE(256)
+    CC_VLS_CASE(512)
+    CC_VLS_CASE(1024)
+    CC_VLS_CASE(2048)
+    CC_VLS_CASE(4096)
+    CC_VLS_CASE(8192)
+    CC_VLS_CASE(16384)
+    CC_VLS_CASE(32768)
+    CC_VLS_CASE(65536)
+#undef CC_VLS_CASE
+    return llvm::dwarf::DW_CC_LLVM_CapstoneVLSCall;
   }
   return 0;
 }

@@ -113,6 +113,16 @@ enum ActionType {
   GenRISCVAndesVectorBuiltins,
   GenRISCVAndesVectorBuiltinCG,
   GenRISCVAndesVectorBuiltinSema,
+  GenCapstoneVectorHeader,
+  GenCapstoneVectorBuiltins,
+  GenCapstoneVectorBuiltinCG,
+  GenCapstoneVectorBuiltinSema,
+  GenCapstoneSiFiveVectorBuiltins,
+  GenCapstoneSiFiveVectorBuiltinCG,
+  GenCapstoneSiFiveVectorBuiltinSema,
+  GenCapstoneAndesVectorBuiltins,
+  GenCapstoneAndesVectorBuiltinCG,
+  GenCapstoneAndesVectorBuiltinSema,
   GenAttrDocs,
   GenDiagDocs,
   GenOptDocs,
@@ -329,6 +339,34 @@ cl::opt<ActionType> Action(
         clEnumValN(GenRISCVAndesVectorBuiltinSema,
                    "gen-riscv-andes-vector-builtin-sema",
                    "Generate riscv_andes_vector_builtin_sema.inc for clang"),
+
+        clEnumValN(GenCapstoneVectorHeader, "gen-capstone-vector-header",
+                   "Generate capstone_vector.h for clang"),
+        clEnumValN(GenCapstoneVectorBuiltins, "gen-capstone-vector-builtins",
+                  "Generate capstone_vector_builtins.inc for clang"),
+        clEnumValN(GenCapstoneVectorBuiltinCG, "gen-capstone-vector-builtin-codegen",
+                   "Generate capstone_vector_builtin_cg.inc for clang"),
+        clEnumValN(GenCapstoneVectorBuiltinSema, "gen-capstone-vector-builtin-sema",
+                   "Generate capstone_vector_builtin_sema.inc for clang"),
+        clEnumValN(GenCapstoneSiFiveVectorBuiltins,
+                   "gen-capstone-sifive-vector-builtins",
+                   "Generate capstone_sifive_vector_builtins.inc for clang"),
+        clEnumValN(GenCapstoneSiFiveVectorBuiltinCG,
+                   "gen-capstone-sifive-vector-builtin-codegen",
+                   "Generate capstone_sifive_vector_builtin_cg.inc for clang"),
+        clEnumValN(GenCapstoneSiFiveVectorBuiltinSema,
+                   "gen-capstone-sifive-vector-builtin-sema",
+                   "Generate capstone_sifive_vector_builtin_sema.inc for clang"),
+        clEnumValN(GenCapstoneAndesVectorBuiltins,
+                   "gen-capstone-andes-vector-builtins",
+                   "Generate capstone_andes_vector_builtins.inc for clang"),
+        clEnumValN(GenCapstoneAndesVectorBuiltinCG,
+                   "gen-capstone-andes-vector-builtin-codegen",
+                   "Generate capstone_andes_vector_builtin_cg.inc for clang"),
+        clEnumValN(GenCapstoneAndesVectorBuiltinSema,
+                   "gen-capstone-andes-vector-builtin-sema",
+                   "Generate capstone_andes_vector_builtin_sema.inc for clang"),
+                    
         clEnumValN(GenAttrDocs, "gen-attr-docs",
                    "Generate attribute documentation"),
         clEnumValN(GenDiagDocs, "gen-diag-docs",
@@ -619,6 +657,37 @@ bool ClangTableGenMain(raw_ostream &OS, const RecordKeeper &Records) {
     break;
   case GenRISCVAndesVectorBuiltinSema:
     EmitRVVBuiltinSema(Records, OS);
+    break;
+
+  case GenCapstoneVectorHeader:
+    EmitCapstoneRVVHeader(Records, OS);
+    break;
+  case GenCapstoneVectorBuiltins:
+    EmitCapstoneRVVBuiltins(Records, OS);
+    break;
+  case GenCapstoneVectorBuiltinCG:
+    EmitCapstoneRVVBuiltinCG(Records, OS);
+    break;
+  case GenCapstoneVectorBuiltinSema:
+    EmitCapstoneRVVBuiltinSema(Records, OS);
+    break;
+  case GenCapstoneSiFiveVectorBuiltins:
+    EmitCapstoneRVVBuiltins(Records, OS);
+    break;
+  case GenCapstoneSiFiveVectorBuiltinCG:
+    EmitCapstoneRVVBuiltinCG(Records, OS);
+    break;
+  case GenCapstoneSiFiveVectorBuiltinSema:
+    EmitCapstoneRVVBuiltinSema(Records, OS);
+    break;
+  case GenCapstoneAndesVectorBuiltins:
+    EmitCapstoneRVVBuiltins(Records, OS);
+    break;
+  case GenCapstoneAndesVectorBuiltinCG:
+    EmitCapstoneRVVBuiltinCG(Records, OS);
+    break;
+  case GenCapstoneAndesVectorBuiltinSema:
+    EmitCapstoneRVVBuiltinSema(Records, OS);
     break;
   case GenAttrDocs:
     EmitClangAttrDocs(Records, OS);

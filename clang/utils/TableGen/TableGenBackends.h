@@ -171,6 +171,12 @@ void EmitRVVBuiltinCG(const llvm::RecordKeeper &Records, llvm::raw_ostream &OS);
 void EmitRVVBuiltinSema(const llvm::RecordKeeper &Records,
                         llvm::raw_ostream &OS);
 
+void EmitCapstoneRVVHeader(const llvm::RecordKeeper &Records, llvm::raw_ostream &OS);
+void EmitCapstoneRVVBuiltins(const llvm::RecordKeeper &Records, llvm::raw_ostream &OS);
+void EmitCapstoneRVVBuiltinCG(const llvm::RecordKeeper &Records, llvm::raw_ostream &OS);
+void EmitCapstoneRVVBuiltinSema(const llvm::RecordKeeper &Records,
+                                llvm::raw_ostream &OS);
+
 void EmitCdeHeader(const llvm::RecordKeeper &Records, llvm::raw_ostream &OS);
 void EmitCdeBuiltinDef(const llvm::RecordKeeper &Records,
                        llvm::raw_ostream &OS);
