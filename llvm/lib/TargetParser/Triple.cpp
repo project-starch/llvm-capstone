@@ -250,6 +250,10 @@ StringRef Triple::getArchTypePrefix(ArchType Kind) {
   case riscv64be:
     return "riscv";
 
+  case capstone32:
+  case capstone64:
+    return "capstone";
+
   case ve:          return "ve";
   case csky:        return "csky";
 
@@ -472,6 +476,8 @@ Triple::ArchType Triple::getArchTypeForLLVMName(StringRef Name) {
       .Case("riscv64", riscv64)
       .Case("riscv32be", riscv32be)
       .Case("riscv64be", riscv64be)
+      .Case("capstone32", capstone32)
+      .Case("capstone64", capstone64)
       .Case("hexagon", hexagon)
       .Case("sparc", sparc)
       .Case("sparcel", sparcel)
@@ -2342,7 +2348,7 @@ ExceptionHandling Triple::getDefaultExceptionHandling() const {
   }
 
   if (isAArch64() || isX86() || isPPC() || isMIPS() || isSPARC() || isBPF() ||
-      isRISCV() || isLoongArch())
+      isRISCV() || isLoongArch() || isCapstone())
     return ExceptionHandling::DwarfCFI;
 
   switch (getArch()) {

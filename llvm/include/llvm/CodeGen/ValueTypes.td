@@ -25,6 +25,7 @@ class ValueType<int size, int value> {
   bit isScalable = false;
   int NF = 0;
   bit isRISCVVecTuple = false;
+  bit isCapstoneVecTuple = false;
   // Indicates this VT should be included in the
   // [FIRST_VALUETYPE,LAST_VALUETYPE] range.
   bit isNormalValueType = true;
@@ -59,11 +60,12 @@ class VTScalableVec<int nelem, ValueType elt, int value>
   let isScalable = true;
 }
 
-class VTVecTup<int size, int nf, ValueType dummy_elt, int value>
+class VTVecTup<int size, int nf, ValueType dummy_elt, int value, bit is_capstone>
     : ValueType<size, value> {
   let NF = nf;
   let ElementType = dummy_elt;
-  let isRISCVVecTuple = true;
+  let isRISCVVecTuple = !if(is_capstone, 0, 1);
+  let isCapstoneVecTuple = is_capstone;
 }
 
 class VTCheriCapability<int size, int value> : ValueType<size, value> {
@@ -306,71 +308,38 @@ def nxv4f64  : VTScalableVec<4,  f64, 206>;  // n x  4 x  f64 vector value
 def nxv8f64  : VTScalableVec<8,  f64, 207>;  // n x  8 x  f64 vector value
 
 // Sz = NF * MinNumElts * 8(bits)
-def riscv_nxv1i8x2   : VTVecTup<16,  2, i8, 208>;  // RISCV vector tuple(min_num_elts=1,  nf=2)
-def riscv_nxv1i8x3   : VTVecTup<24,  3, i8, 209>;  // RISCV vector tuple(min_num_elts=1,  nf=3)
-def riscv_nxv1i8x4   : VTVecTup<32,  4, i8, 210>;  // RISCV vector tuple(min_num_elts=1,  nf=4)
-def riscv_nxv1i8x5   : VTVecTup<40,  5, i8, 211>;  // RISCV vector tuple(min_num_elts=1,  nf=5)
-def riscv_nxv1i8x6   : VTVecTup<48,  6, i8, 212>;  // RISCV vector tuple(min_num_elts=1,  nf=6)
-def riscv_nxv1i8x7   : VTVecTup<56,  7, i8, 213>;  // RISCV vector tuple(min_num_elts=1,  nf=7)
-def riscv_nxv1i8x8   : VTVecTup<64,  8, i8, 214>;  // RISCV vector tuple(min_num_elts=1,  nf=8)
-def riscv_nxv2i8x2   : VTVecTup<32,  2, i8, 215>;  // RISCV vector tuple(min_num_elts=2,  nf=2)
-def riscv_nxv2i8x3   : VTVecTup<48,  3, i8, 216>;  // RISCV vector tuple(min_num_elts=2,  nf=3)
-def riscv_nxv2i8x4   : VTVecTup<64,  4, i8, 217>;  // RISCV vector tuple(min_num_elts=2,  nf=4)
-def riscv_nxv2i8x5   : VTVecTup<80,  5, i8, 218>;  // RISCV vector tuple(min_num_elts=2,  nf=5)
-def riscv_nxv2i8x6   : VTVecTup<96,  6, i8, 219>;  // RISCV vector tuple(min_num_elts=2,  nf=6)
-def riscv_nxv2i8x7   : VTVecTup<112, 7, i8, 220>;  // RISCV vector tuple(min_num_elts=2,  nf=7)
-def riscv_nxv2i8x8   : VTVecTup<128, 8, i8, 221>;  // RISCV vector tuple(min_num_elts=2,  nf=8)
-def riscv_nxv4i8x2   : VTVecTup<64,  2, i8, 222>;  // RISCV vector tuple(min_num_elts=4,  nf=2)
-def riscv_nxv4i8x3   : VTVecTup<96,  3, i8, 223>;  // RISCV vector tuple(min_num_elts=4,  nf=3)
-def riscv_nxv4i8x4   : VTVecTup<128, 4, i8, 224>;  // RISCV vector tuple(min_num_elts=4,  nf=4)
-def riscv_nxv4i8x5   : VTVecTup<160, 5, i8, 225>;  // RISCV vector tuple(min_num_elts=4,  nf=5)
-def riscv_nxv4i8x6   : VTVecTup<192, 6, i8, 226>;  // RISCV vector tuple(min_num_elts=4,  nf=6)
-def riscv_nxv4i8x7   : VTVecTup<224, 7, i8, 227>;  // RISCV vector tuple(min_num_elts=4,  nf=7)
-def riscv_nxv4i8x8   : VTVecTup<256, 8, i8, 228>;  // RISCV vector tuple(min_num_elts=4,  nf=8)
-def riscv_nxv8i8x2   : VTVecTup<128, 2, i8, 229>;  // RISCV vector tuple(min_num_elts=8,  nf=2)
-def riscv_nxv8i8x3   : VTVecTup<192, 3, i8, 230>;  // RISCV vector tuple(min_num_elts=8,  nf=3)
-def riscv_nxv8i8x4   : VTVecTup<256, 4, i8, 231>;  // RISCV vector tuple(min_num_elts=8,  nf=4)
-def riscv_nxv8i8x5   : VTVecTup<320, 5, i8, 232>;  // RISCV vector tuple(min_num_elts=8,  nf=5)
-def riscv_nxv8i8x6   : VTVecTup<384, 6, i8, 233>;  // RISCV vector tuple(min_num_elts=8,  nf=6)
-def riscv_nxv8i8x7   : VTVecTup<448, 7, i8, 234>;  // RISCV vector tuple(min_num_elts=8,  nf=7)
-def riscv_nxv8i8x8   : VTVecTup<512, 8, i8, 235>;  // RISCV vector tuple(min_num_elts=8,  nf=8)
-def riscv_nxv16i8x2  : VTVecTup<256, 2, i8, 236>;  // RISCV vector tuple(min_num_elts=16, nf=2)
-def riscv_nxv16i8x3  : VTVecTup<384, 3, i8, 237>;  // RISCV vector tuple(min_num_elts=16, nf=3)
-def riscv_nxv16i8x4  : VTVecTup<512, 4, i8, 238>;  // RISCV vector tuple(min_num_elts=16, nf=4)
-def riscv_nxv32i8x2  : VTVecTup<512, 2, i8, 239>;  // RISCV vector tuple(min_num_elts=32, nf=2)
-
-def capstone_nxv1i8x2   : VTVecTup<16,  2, i8, 208>;  // Capstone vector tuple(min_num_elts=1,  nf=2)
-def capstone_nxv1i8x3   : VTVecTup<24,  3, i8, 209>;  // Capstone vector tuple(min_num_elts=1,  nf=3)
-def capstone_nxv1i8x4   : VTVecTup<32,  4, i8, 210>;  // Capstone vector tuple(min_num_elts=1,  nf=4)
-def capstone_nxv1i8x5   : VTVecTup<40,  5, i8, 211>;  // Capstone vector tuple(min_num_elts=1,  nf=5)
-def capstone_nxv1i8x6   : VTVecTup<48,  6, i8, 212>;  // Capstone vector tuple(min_num_elts=1,  nf=6)
-def capstone_nxv1i8x7   : VTVecTup<56,  7, i8, 213>;  // Capstone vector tuple(min_num_elts=1,  nf=7)
-def capstone_nxv1i8x8   : VTVecTup<64,  8, i8, 214>;  // Capstone vector tuple(min_num_elts=1,  nf=8)
-def capstone_nxv2i8x2   : VTVecTup<32,  2, i8, 215>;  // Capstone vector tuple(min_num_elts=2,  nf=2)
-def capstone_nxv2i8x3   : VTVecTup<48,  3, i8, 216>;  // Capstone vector tuple(min_num_elts=2,  nf=3)
-def capstone_nxv2i8x4   : VTVecTup<64,  4, i8, 217>;  // Capstone vector tuple(min_num_elts=2,  nf=4)
-def capstone_nxv2i8x5   : VTVecTup<80,  5, i8, 218>;  // Capstone vector tuple(min_num_elts=2,  nf=5)
-def capstone_nxv2i8x6   : VTVecTup<96,  6, i8, 219>;  // Capstone vector tuple(min_num_elts=2,  nf=6)
-def capstone_nxv2i8x7   : VTVecTup<112, 7, i8, 220>;  // Capstone vector tuple(min_num_elts=2,  nf=7)
-def capstone_nxv2i8x8   : VTVecTup<128, 8, i8, 221>;  // Capstone vector tuple(min_num_elts=2,  nf=8)
-def capstone_nxv4i8x2   : VTVecTup<64,  2, i8, 222>;  // Capstone vector tuple(min_num_elts=4,  nf=2)
-def capstone_nxv4i8x3   : VTVecTup<96,  3, i8, 223>;  // Capstone vector tuple(min_num_elts=4,  nf=3)
-def capstone_nxv4i8x4   : VTVecTup<128, 4, i8, 224>;  // Capstone vector tuple(min_num_elts=4,  nf=4)
-def capstone_nxv4i8x5   : VTVecTup<160, 5, i8, 225>;  // Capstone vector tuple(min_num_elts=4,  nf=5)
-def capstone_nxv4i8x6   : VTVecTup<192, 6, i8, 226>;  // Capstone vector tuple(min_num_elts=4,  nf=6)
-def capstone_nxv4i8x7   : VTVecTup<224, 7, i8, 227>;  // Capstone vector tuple(min_num_elts=4,  nf=7)
-def capstone_nxv4i8x8   : VTVecTup<256, 8, i8, 228>;  // Capstone vector tuple(min_num_elts=4,  nf=8)
-def capstone_nxv8i8x2   : VTVecTup<128, 2, i8, 229>;  // Capstone vector tuple(min_num_elts=8,  nf=2)
-def capstone_nxv8i8x3   : VTVecTup<192, 3, i8, 230>;  // Capstone vector tuple(min_num_elts=8,  nf=3)
-def capstone_nxv8i8x4   : VTVecTup<256, 4, i8, 231>;  // Capstone vector tuple(min_num_elts=8,  nf=4)
-def capstone_nxv8i8x5   : VTVecTup<320, 5, i8, 232>;  // Capstone vector tuple(min_num_elts=8,  nf=5)
-def capstone_nxv8i8x6   : VTVecTup<384, 6, i8, 233>;  // Capstone vector tuple(min_num_elts=8,  nf=6)
-def capstone_nxv8i8x7   : VTVecTup<448, 7, i8, 234>;  // Capstone vector tuple(min_num_elts=8,  nf=7)
-def capstone_nxv8i8x8   : VTVecTup<512, 8, i8, 235>;  // Capstone vector tuple(min_num_elts=8,  nf=8)
-def capstone_nxv16i8x2  : VTVecTup<256, 2, i8, 236>;  // Capstone vector tuple(min_num_elts=16, nf=2)
-def capstone_nxv16i8x3  : VTVecTup<384, 3, i8, 237>;  // Capstone vector tuple(min_num_elts=16, nf=3)
-def capstone_nxv16i8x4  : VTVecTup<512, 4, i8, 238>;  // Capstone vector tuple(min_num_elts=16, nf=4)
-def capstone_nxv32i8x2  : VTVecTup<512, 2, i8, 239>;  // Capstone vector tuple(min_num_elts=32, nf=2)
+def riscv_nxv1i8x2   : VTVecTup<16,  2, i8, 208, 0>;  // RISCV vector tuple(min_num_elts=1,  nf=2)
+def riscv_nxv1i8x3   : VTVecTup<24,  3, i8, 209, 0>;  // RISCV vector tuple(min_num_elts=1,  nf=3)
+def riscv_nxv1i8x4   : VTVecTup<32,  4, i8, 210, 0>;  // RISCV vector tuple(min_num_elts=1,  nf=4)
+def riscv_nxv1i8x5   : VTVecTup<40,  5, i8, 211, 0>;  // RISCV vector tuple(min_num_elts=1,  nf=5)
+def riscv_nxv1i8x6   : VTVecTup<48,  6, i8, 212, 0>;  // RISCV vector tuple(min_num_elts=1,  nf=6)
+def riscv_nxv1i8x7   : VTVecTup<56,  7, i8, 213, 0>;  // RISCV vector tuple(min_num_elts=1,  nf=7)
+def riscv_nxv1i8x8   : VTVecTup<64,  8, i8, 214, 0>;  // RISCV vector tuple(min_num_elts=1,  nf=8)
+def riscv_nxv2i8x2   : VTVecTup<32,  2, i8, 215, 0>;  // RISCV vector tuple(min_num_elts=2,  nf=2)
+def riscv_nxv2i8x3   : VTVecTup<48,  3, i8, 216, 0>;  // RISCV vector tuple(min_num_elts=2,  nf=3)
+def riscv_nxv2i8x4   : VTVecTup<64,  4, i8, 217, 0>;  // RISCV vector tuple(min_num_elts=2,  nf=4)
+def riscv_nxv2i8x5   : VTVecTup<80,  5, i8, 218, 0>;  // RISCV vector tuple(min_num_elts=2,  nf=5)
+def riscv_nxv2i8x6   : VTVecTup<96,  6, i8, 219, 0>;  // RISCV vector tuple(min_num_elts=2,  nf=6)
+def riscv_nxv2i8x7   : VTVecTup<112, 7, i8, 220, 0>;  // RISCV vector tuple(min_num_elts=2,  nf=7)
+def riscv_nxv2i8x8   : VTVecTup<128, 8, i8, 221, 0>;  // RISCV vector tuple(min_num_elts=2,  nf=8)
+def riscv_nxv4i8x2   : VTVecTup<64,  2, i8, 222, 0>;  // RISCV vector tuple(min_num_elts=4,  nf=2)
+def riscv_nxv4i8x3   : VTVecTup<96,  3, i8, 223, 0>;  // RISCV vector tuple(min_num_elts=4,  nf=3)
+def riscv_nxv4i8x4   : VTVecTup<128, 4, i8, 224, 0>;  // RISCV vector tuple(min_num_elts=4,  nf=4)
+def riscv_nxv4i8x5   : VTVecTup<160, 5, i8, 225, 0>;  // RISCV vector tuple(min_num_elts=4,  nf=5)
+def riscv_nxv4i8x6   : VTVecTup<192, 6, i8, 226, 0>;  // RISCV vector tuple(min_num_elts=4,  nf=6)
+def riscv_nxv4i8x7   : VTVecTup<224, 7, i8, 227, 0>;  // RISCV vector tuple(min_num_elts=4,  nf=7)
+def riscv_nxv4i8x8   : VTVecTup<256, 8, i8, 228, 0>;  // RISCV vector tuple(min_num_elts=4,  nf=8)
+def riscv_nxv8i8x2   : VTVecTup<128, 2, i8, 229, 0>;  // RISCV vector tuple(min_num_elts=8,  nf=2)
+def riscv_nxv8i8x3   : VTVecTup<192, 3, i8, 230, 0>;  // RISCV vector tuple(min_num_elts=8,  nf=3)
+def riscv_nxv8i8x4   : VTVecTup<256, 4, i8, 231, 0>;  // RISCV vector tuple(min_num_elts=8,  nf=4)
+def riscv_nxv8i8x5   : VTVecTup<320, 5, i8, 232, 0>;  // RISCV vector tuple(min_num_elts=8,  nf=5)
+def riscv_nxv8i8x6   : VTVecTup<384, 6, i8, 233, 0>;  // RISCV vector tuple(min_num_elts=8,  nf=6)
+def riscv_nxv8i8x7   : VTVecTup<448, 7, i8, 234, 0>;  // RISCV vector tuple(min_num_elts=8,  nf=7)
+def riscv_nxv8i8x8   : VTVecTup<512, 8, i8, 235, 0>;  // RISCV vector tuple(min_num_elts=8,  nf=8)
+def riscv_nxv16i8x2  : VTVecTup<256, 2, i8, 236, 0>;  // RISCV vector tuple(min_num_elts=16, nf=2)
+def riscv_nxv16i8x3  : VTVecTup<384, 3, i8, 237, 0>;  // RISCV vector tuple(min_num_elts=16, nf=3)
+def riscv_nxv16i8x4  : VTVecTup<512, 4, i8, 238, 0>;  // RISCV vector tuple(min_num_elts=16, nf=4)
+def riscv_nxv32i8x2  : VTVecTup<512, 2, i8, 239, 0>;  // RISCV vector tuple(min_num_elts=32, nf=2)
 
 def x86mmx    : ValueType<64,   240>;  // X86 MMX value
 def Glue      : ValueType<0,    241>;  // Pre-RA sched glue
@@ -399,6 +368,39 @@ def aarch64mfp8 : ValueType<8,  253>;  // 8-bit value in FPR (AArch64)
 // for enforcing safety guarantees on CHERI-enabled targets.
 def c64 : VTCheriCapability<64, 254>;   // 64-bit CHERI capability value
 def c128 : VTCheriCapability<128, 255>; // 128-bit CHERI capability value
+
+def capstone_nxv1i8x2   : VTVecTup<16,  2, i8, 256, 1>;  // Capstone vector tuple(min_num_elts=1,  nf=2)
+def capstone_nxv1i8x3   : VTVecTup<24,  3, i8, 257, 1>;  // Capstone vector tuple(min_num_elts=1,  nf=3)
+def capstone_nxv1i8x4   : VTVecTup<32,  4, i8, 258, 1>;  // Capstone vector tuple(min_num_elts=1,  nf=4)
+def capstone_nxv1i8x5   : VTVecTup<40,  5, i8, 259, 1>;  // Capstone vector tuple(min_num_elts=1,  nf=5)
+def capstone_nxv1i8x6   : VTVecTup<48,  6, i8, 260, 1>;  // Capstone vector tuple(min_num_elts=1,  nf=6)
+def capstone_nxv1i8x7   : VTVecTup<56,  7, i8, 261, 1>;  // Capstone vector tuple(min_num_elts=1,  nf=7)
+def capstone_nxv1i8x8   : VTVecTup<64,  8, i8, 262, 1>;  // Capstone vector tuple(min_num_elts=1,  nf=8)
+def capstone_nxv2i8x2   : VTVecTup<32,  2, i8, 263, 1>;  // Capstone vector tuple(min_num_elts=2,  nf=2)
+def capstone_nxv2i8x3   : VTVecTup<48,  3, i8, 264, 1>;  // Capstone vector tuple(min_num_elts=2,  nf=3)
+def capstone_nxv2i8x4   : VTVecTup<64,  4, i8, 265, 1>;  // Capstone vector tuple(min_num_elts=2,  nf=4)
+def capstone_nxv2i8x5   : VTVecTup<80,  5, i8, 266, 1>;  // Capstone vector tuple(min_num_elts=2,  nf=5)
+def capstone_nxv2i8x6   : VTVecTup<96,  6, i8, 267, 1>;  // Capstone vector tuple(min_num_elts=2,  nf=6)
+def capstone_nxv2i8x7   : VTVecTup<112, 7, i8, 268, 1>;  // Capstone vector tuple(min_num_elts=2,  nf=7)
+def capstone_nxv2i8x8   : VTVecTup<128, 8, i8, 269, 1>;  // Capstone vector tuple(min_num_elts=2,  nf=8)
+def capstone_nxv4i8x2   : VTVecTup<64,  2, i8, 270, 1>;  // Capstone vector tuple(min_num_elts=4,  nf=2)
+def capstone_nxv4i8x3   : VTVecTup<96,  3, i8, 271, 1>;  // Capstone vector tuple(min_num_elts=4,  nf=3)
+def capstone_nxv4i8x4   : VTVecTup<128, 4, i8, 272, 1>;  // Capstone vector tuple(min_num_elts=4,  nf=4)
+def capstone_nxv4i8x5   : VTVecTup<160, 5, i8, 273, 1>;  // Capstone vector tuple(min_num_elts=4,  nf=5)
+def capstone_nxv4i8x6   : VTVecTup<192, 6, i8, 274, 1>;  // Capstone vector tuple(min_num_elts=4,  nf=6)
+def capstone_nxv4i8x7   : VTVecTup<224, 7, i8, 275, 1>;  // Capstone vector tuple(min_num_elts=4,  nf=7)
+def capstone_nxv4i8x8   : VTVecTup<256, 8, i8, 276, 1>;  // Capstone vector tuple(min_num_elts=4,  nf=8)
+def capstone_nxv8i8x2   : VTVecTup<128, 2, i8, 277, 1>;  // Capstone vector tuple(min_num_elts=8,  nf=2)
+def capstone_nxv8i8x3   : VTVecTup<192, 3, i8, 278, 1>;  // Capstone vector tuple(min_num_elts=8,  nf=3)
+def capstone_nxv8i8x4   : VTVecTup<256, 4, i8, 279, 1>;  // Capstone vector tuple(min_num_elts=8,  nf=4)
+def capstone_nxv8i8x5   : VTVecTup<320, 5, i8, 280, 1>;  // Capstone vector tuple(min_num_elts=8,  nf=5)
+def capstone_nxv8i8x6   : VTVecTup<384, 6, i8, 281, 1>;  // Capstone vector tuple(min_num_elts=8,  nf=6)
+def capstone_nxv8i8x7   : VTVecTup<448, 7, i8, 282, 1>;  // Capstone vector tuple(min_num_elts=8,  nf=7)
+def capstone_nxv8i8x8   : VTVecTup<512, 8, i8, 283, 1>;  // Capstone vector tuple(min_num_elts=8,  nf=8)
+def capstone_nxv16i8x2  : VTVecTup<256, 2, i8, 284, 1>;  // Capstone vector tuple(min_num_elts=16, nf=2)
+def capstone_nxv16i8x3  : VTVecTup<384, 3, i8, 285, 1>;  // Capstone vector tuple(min_num_elts=16, nf=3)
+def capstone_nxv16i8x4  : VTVecTup<512, 4, i8, 286, 1>;  // Capstone vector tuple(min_num_elts=16, nf=4)
+def capstone_nxv32i8x2  : VTVecTup<512, 2, i8, 287, 1>;  // Capstone vector tuple(min_num_elts=32, nf=2)
 
 let isNormalValueType = false in {
 def token      : ValueType<0, 504>;  // TokenTy

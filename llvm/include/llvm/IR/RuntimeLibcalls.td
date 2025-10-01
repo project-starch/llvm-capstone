@@ -397,6 +397,7 @@ def RETURN_ADDRESS : RuntimeLibcall;
 // Clear cache
 def CLEAR_CACHE : RuntimeLibcall;
 def RISCV_FLUSH_ICACHE : RuntimeLibcall;
+def CAPSTONE_FLUSH_ICACHE : RuntimeLibcall;
 
 // Mips16 calls
 def MIPS16_RET_DC : RuntimeLibcall;

@@ -37,8 +37,8 @@ LLVMInitializeCapstoneTargetInfo() {
       getTheCapstone32Target(), "capstone32", "32-bit Capstone", "Capstone");
   RegisterTarget<Triple::capstone64, /*HasJIT=*/true> Y(
       getTheCapstone64Target(), "capstone64", "64-bit Capstone", "Capstone");
-  RegisterTarget<Triple::capstone32be> A(getTheCapstone32beTarget(), "capstone32be",
-                                      "32-bit big endian Capstone", "Capstone");
-  RegisterTarget<Triple::capstone64be> B(getTheCapstone64beTarget(), "capstone64be",
-                                      "64-bit big endian Capstone", "Capstone");
+  // RegisterTarget<Triple::capstone32be> A(getTheCapstone32beTarget(), "capstone32be",
+  //                                     "32-bit big endian Capstone", "Capstone");
+  // RegisterTarget<Triple::capstone64be> B(getTheCapstone64beTarget(), "capstone64be",
+  //                                     "64-bit big endian Capstone", "Capstone");
 }

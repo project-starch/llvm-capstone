@@ -113,6 +113,12 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
                                            const TargetOptions &Opts) {
   llvm::Triple::OSType os = Triple.getOS();
 
+  // ***** НАЧАЛО ОТЛАДОЧНОГО БЛОКА *****
+  if (Triple.getArch() == llvm::Triple::capstone32 || Triple.getArch() == llvm::Triple::capstone64) {
+    llvm::errs() << "!!! Capstone Target Detected !!! Arch: " << Triple.getArchName() << "\n";
+  }
+  // ***** КОНЕЦ ОТЛАДОЧНОГО БЛОКА *****
+
   switch (Triple.getArch()) {
   default:
     return nullptr;
@@ -467,6 +473,58 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
                                                                      Opts);
     default:
       return std::make_unique<RISCV64TargetInfo>(Triple, Opts);
+    }
+
+  case llvm::Triple::capstone32: {
+    llvm::errs() << "!!! Inside case capstone32 !!!\n";
+    switch (os) {
+    case llvm::Triple::NetBSD:
+      return std::make_unique<NetBSDTargetInfo<Capstone32TargetInfo>>(Triple,
+                                                                      Opts);
+    case llvm::Triple::Linux:
+      return std::make_unique<LinuxTargetInfo<Capstone32TargetInfo>>(Triple,
+                                                                     Opts);
+    default: {
+      llvm::errs() << "!!! Inside default for OS. Creating Capstone32TargetInfo... !!!\n";
+      auto TI = std::make_unique<Capstone32TargetInfo>(Triple, Opts);
+      llvm::errs() << "!!! Creation successful !!!\n";
+      return TI;
+      // return std::make_unique<Capstone32TargetInfo>(Triple, Opts);
+    }
+    }
+  }
+
+  case llvm::Triple::capstone64:
+    switch (os) {
+    case llvm::Triple::FreeBSD:
+      return std::make_unique<FreeBSDTargetInfo<Capstone64TargetInfo>>(Triple,
+                                                                       Opts);
+    case llvm::Triple::NetBSD:
+      return std::make_unique<NetBSDTargetInfo<Capstone64TargetInfo>>(Triple,
+                                                                      Opts);
+    case llvm::Triple::OpenBSD:
+      return std::make_unique<OpenBSDTargetInfo<Capstone64TargetInfo>>(Triple,
+                                                                       Opts);
+    case llvm::Triple::Fuchsia:
+      return std::make_unique<FuchsiaTargetInfo<Capstone64TargetInfo>>(Triple,
+                                                                       Opts);
+    case llvm::Triple::Haiku:
+      return std::make_unique<HaikuTargetInfo<Capstone64TargetInfo>>(Triple,
+                                                                     Opts);
+    case llvm::Triple::Linux:
+      switch (Triple.getEnvironment()) {
+      default:
+        return std::make_unique<LinuxTargetInfo<Capstone64TargetInfo>>(Triple,
+                                                                       Opts);
+      case llvm::Triple::OpenHOS:
+        return std::make_unique<OHOSTargetInfo<Capstone64TargetInfo>>(Triple,
+                                                                      Opts);
+      }
+    case llvm::Triple::Managarm:
+      return std::make_unique<ManagarmTargetInfo<Capstone64TargetInfo>>(Triple,
+                                                                        Opts);
+    default:
+      return std::make_unique<Capstone64TargetInfo>(Triple, Opts);
     }
 
   case llvm::Triple::sparc:

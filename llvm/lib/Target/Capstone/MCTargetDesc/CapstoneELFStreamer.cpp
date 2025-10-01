@@ -79,7 +79,7 @@ void CapstoneTargetELFStreamer::finishAttributeSection() {
     return;
 
   S.emitAttributesSection(CurrentVendor, ".capstone.attributes",
-                          ELF::SHT_Capstone_ATTRIBUTES, AttributeSection);
+                          ELF::SHT_CAPSTONE_ATTRIBUTES, AttributeSection);
 }
 
 void CapstoneTargetELFStreamer::finish() {
@@ -90,9 +90,9 @@ void CapstoneTargetELFStreamer::finish() {
   unsigned EFlags = W.getELFHeaderEFlags();
 
   if (hasRVC())
-    EFlags |= ELF::EF_Capstone_RVC;
+    EFlags |= ELF::EF_CAPSTONE_RVC;
   if (hasTSO())
-    EFlags |= ELF::EF_Capstone_TSO;
+    EFlags |= ELF::EF_CAPSTONE_TSO;
 
   switch (ABI) {
   case CapstoneABI::ABI_ILP32:
@@ -100,15 +100,15 @@ void CapstoneTargetELFStreamer::finish() {
     break;
   case CapstoneABI::ABI_ILP32F:
   case CapstoneABI::ABI_LP64F:
-    EFlags |= ELF::EF_Capstone_FLOAT_ABI_SINGLE;
+    EFlags |= ELF::EF_CAPSTONE_FLOAT_ABI_SINGLE;
     break;
   case CapstoneABI::ABI_ILP32D:
   case CapstoneABI::ABI_LP64D:
-    EFlags |= ELF::EF_Capstone_FLOAT_ABI_DOUBLE;
+    EFlags |= ELF::EF_CAPSTONE_FLOAT_ABI_DOUBLE;
     break;
   case CapstoneABI::ABI_ILP32E:
   case CapstoneABI::ABI_LP64E:
-    EFlags |= ELF::EF_Capstone_RVE;
+    EFlags |= ELF::EF_CAPSTONE_RVE;
     break;
   case CapstoneABI::ABI_Unknown:
     llvm_unreachable("Improperly initialised target ABI");
@@ -123,7 +123,7 @@ void CapstoneTargetELFStreamer::reset() {
 
 void CapstoneTargetELFStreamer::emitDirectiveVariantCC(MCSymbol &Symbol) {
   getStreamer().getAssembler().registerSymbol(Symbol);
-  static_cast<MCSymbolELF &>(Symbol).setOther(ELF::STO_Capstone_VARIANT_CC);
+  static_cast<MCSymbolELF &>(Symbol).setOther(ELF::STO_CAPSTONE_VARIANT_CC);
 }
 
 void CapstoneELFStreamer::reset() {

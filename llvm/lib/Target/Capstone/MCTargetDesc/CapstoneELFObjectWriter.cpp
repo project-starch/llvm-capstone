@@ -40,7 +40,7 @@ protected:
 }
 
 CapstoneELFObjectWriter::CapstoneELFObjectWriter(uint8_t OSABI, bool Is64Bit)
-    : MCELFObjectTargetWriter(Is64Bit, OSABI, ELF::EM_Capstone,
+    : MCELFObjectTargetWriter(Is64Bit, OSABI, ELF::EM_CAPSTONE,
                               /*HasRelocationAddend*/ true) {}
 
 CapstoneELFObjectWriter::~CapstoneELFObjectWriter() = default;

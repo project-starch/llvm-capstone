@@ -66,6 +66,7 @@ class LLVM_ABI ELFObjectFileBase : public ObjectFile {
   SubtargetFeatures getARMFeatures() const;
   SubtargetFeatures getHexagonFeatures() const;
   Expected<SubtargetFeatures> getRISCVFeatures() const;
+  Expected<SubtargetFeatures> getCapstoneFeatures() const;
   SubtargetFeatures getLoongArchFeatures() const;
 
   StringRef getAMDGPUCPUName() const;
@@ -418,6 +419,9 @@ protected:
       break;
     case ELF::EM_RISCV:
       Type = ELF::SHT_RISCV_ATTRIBUTES;
+      break;
+    case ELF::EM_CAPSTONE:
+      Type = ELF::SHT_CAPSTONE_ATTRIBUTES;
       break;
     case ELF::EM_HEXAGON:
       Type = ELF::SHT_HEXAGON_ATTRIBUTES;
@@ -823,6 +827,16 @@ Expected<uint32_t> ELFObjectFile<ELFT>::getSymbolFlags(DataRefImpl Sym) const {
       consumeError(NameOrErr.takeError());
     }
   } else if (EF.getHeader().e_machine == ELF::EM_RISCV) {
+    if (Expected<StringRef> NameOrErr = getSymbolName(Sym)) {
+      StringRef Name = *NameOrErr;
+      // Mark fake labels (used for label differences) and mapping symbols.
+      if (Name == ".L0 " || Name.starts_with("$d") || Name.starts_with("$x"))
+        Result |= SymbolRef::SF_FormatSpecific;
+    } else {
+      // TODO: Actually report errors helpfully.
+      consumeError(NameOrErr.takeError());
+    }
+  } else if (EF.getHeader().e_machine == ELF::EM_CAPSTONE) {
     if (Expected<StringRef> NameOrErr = getSymbolName(Sym)) {
       StringRef Name = *NameOrErr;
       // Mark fake labels (used for label differences) and mapping symbols.
@@ -1313,6 +1327,8 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
       return (IsLittleEndian ? "elf32-powerpcle" : "elf32-powerpc");
     case ELF::EM_RISCV:
       return (IsLittleEndian ? "elf32-littleriscv" : "elf32-bigriscv");
+    case ELF::EM_CAPSTONE:
+      return "elf32-littlecapstone";
     case ELF::EM_CSKY:
       return "elf32-csky";
     case ELF::EM_SPARC:
@@ -1339,6 +1355,8 @@ StringRef ELFObjectFile<ELFT>::getFileFormatName() const {
       return (IsLittleEndian ? "elf64-powerpcle" : "elf64-powerpc");
     case ELF::EM_RISCV:
       return (IsLittleEndian ? "elf64-littleriscv" : "elf64-bigriscv");
+    case ELF::EM_CAPSTONE:
+        return "elf64-littlecapstone";
     case ELF::EM_S390:
       return "elf64-s390";
     case ELF::EM_SPARCV9:
@@ -1406,6 +1424,15 @@ template <class ELFT> Triple::ArchType ELFObjectFile<ELFT>::getArch() const {
     default:
       report_fatal_error("Invalid ELFCLASS!");
     }
+  case ELF::EM_CAPSTONE:
+    switch (EF.getHeader().e_ident[ELF::EI_CLASS]) {
+    case ELF::ELFCLASS32:
+        return Triple::capstone32;
+    case ELF::ELFCLASS64:
+        return Triple::capstone64;
+    default:
+        report_fatal_error("Invalid ELFCLASS!");
+      }
   case ELF::EM_S390:
     return Triple::systemz;
 

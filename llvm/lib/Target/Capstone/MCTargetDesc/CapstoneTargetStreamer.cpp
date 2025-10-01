@@ -94,7 +94,7 @@ void CapstoneTargetStreamer::emitNoteGnuPropertySection(
   // Emit n_desc field
 
   // Emit the feature_1_and property
-  OutStreamer.emitIntValue(ELF::GNU_PROPERTY_Capstone_FEATURE_1_AND, 4); // pr_type
+  OutStreamer.emitIntValue(ELF::GNU_PROPERTY_CAPSTONE_FEATURE_1_AND, 4); // pr_type
   OutStreamer.emitIntValue(4, 4);              // pr_datasz
   OutStreamer.emitIntValue(Feature1And, 4);    // pr_data
   OutStreamer.emitValueToAlignment(NoteAlign); // pr_padding

@@ -325,6 +325,7 @@ enum {
   EM_VE = 251,            // NEC SX-Aurora VE
   EM_CSKY = 252,          // C-SKY 32-bit processor
   EM_LOONGARCH = 258,     // LoongArch
+  EM_CAPSTONE = 259,      // Capstone
 };
 
 // Object file classes.
@@ -715,6 +716,18 @@ enum : unsigned {
   EF_RISCV_TSO = 0x0010,
 };
 
+// Capstone Specific e_flags
+enum : unsigned {
+  EF_CAPSTONE_RVC = 0x0001,
+  EF_CAPSTONE_FLOAT_ABI = 0x0006,
+  EF_CAPSTONE_FLOAT_ABI_SOFT = 0x0000,
+  EF_CAPSTONE_FLOAT_ABI_SINGLE = 0x0002,
+  EF_CAPSTONE_FLOAT_ABI_DOUBLE = 0x0004,
+  EF_CAPSTONE_FLOAT_ABI_QUAD = 0x0006,
+  EF_CAPSTONE_RVE = 0x0008,
+  EF_CAPSTONE_TSO = 0x0010,
+};
+
 // ELF Relocation types for RISC-V
 enum {
 #include "ELFRelocs/RISCV.def"
@@ -723,10 +736,19 @@ enum {
 #undef ELF_RISCV_NONSTANDARD_RELOC
 };
 
+// ELF Relocation types for Capstone
+enum {
+#include "ELFRelocs/Capstone.def"
+#define ELF_Capstone_NONSTANDARD_RELOC(_vendor, name, value) name = value,
+#include "ELFRelocs/Capstone_nonstandard.def"
+#undef ELF_Capstone_NONSTANDARD_RELOC
+};
+
 enum {
   // Symbol may follow different calling convention than the standard calling
   // convention.
-  STO_RISCV_VARIANT_CC = 0x80
+  STO_RISCV_VARIANT_CC = 0x80,
+  STO_CAPSTONE_VARIANT_CC = 0x80
 };
 
 // ELF Relocation types for S390/zSeries
@@ -1221,6 +1243,7 @@ enum : unsigned {
   SHT_MSP430_ATTRIBUTES = 0x70000003U,
 
   SHT_RISCV_ATTRIBUTES = 0x70000003U,
+  SHT_CAPSTONE_ATTRIBUTES = 0x70000003U,
 
   SHT_CSKY_ATTRIBUTES = 0x70000001U,
 
@@ -1835,6 +1858,7 @@ enum : unsigned {
   GNU_PROPERTY_AARCH64_FEATURE_PAUTH = 0xc0000001,
   GNU_PROPERTY_X86_FEATURE_1_AND = 0xc0000002,
   GNU_PROPERTY_RISCV_FEATURE_1_AND = 0xc0000000,
+  GNU_PROPERTY_CAPSTONE_FEATURE_1_AND = 0xc0000000,
 
   GNU_PROPERTY_X86_UINT32_OR_LO = 0xc0008000,
   GNU_PROPERTY_X86_FEATURE_2_NEEDED = GNU_PROPERTY_X86_UINT32_OR_LO + 1,
@@ -1904,6 +1928,13 @@ enum : unsigned {
   GNU_PROPERTY_RISCV_FEATURE_1_CFI_LP_UNLABELED = 1 << 0,
   GNU_PROPERTY_RISCV_FEATURE_1_CFI_SS = 1 << 1,
   GNU_PROPERTY_RISCV_FEATURE_1_CFI_LP_FUNC_SIG = 1 << 2,
+};
+
+// Capstone processor feature bits.
+enum : unsigned {
+  GNU_PROPERTY_Capstone_FEATURE_1_CFI_LP_UNLABELED = 1 << 0,
+  GNU_PROPERTY_Capstone_FEATURE_1_CFI_SS = 1 << 1,
+  GNU_PROPERTY_Capstone_FEATURE_1_CFI_LP_FUNC_SIG = 1 << 2,
 };
 
 // FreeBSD note types.

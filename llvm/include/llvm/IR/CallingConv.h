@@ -287,6 +287,23 @@ namespace CallingConv {
     // Calling convention for AMDGPU whole wave functions.
     AMDGPU_Gfx_WholeWave = 124,
 
+    /// Calling convention used for Capstone V-extension.
+    Capstone_VectorCall = 125,
+
+    /// Calling convention used for Capstone V-extension fixed vectors.
+    Capstone_VLSCall_32 = 126,
+    Capstone_VLSCall_64 = 127,
+    Capstone_VLSCall_128 = 128,
+    Capstone_VLSCall_256 = 129,
+    Capstone_VLSCall_512 = 130,
+    Capstone_VLSCall_1024 = 131,
+    Capstone_VLSCall_2048 = 132,
+    Capstone_VLSCall_4096 = 133,
+    Capstone_VLSCall_8192 = 134,
+    Capstone_VLSCall_16384 = 135,
+    Capstone_VLSCall_32768 = 136,
+    Capstone_VLSCall_65536 = 137,
+
     /// The highest possible ID. Must be some 2^k - 1.
     MaxID = 1023
   };

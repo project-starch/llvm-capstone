@@ -306,6 +306,39 @@ static std::string computeRISCVDataLayout(const Triple &TT, StringRef ABIName) {
   return Ret;
 }
 
+static std::string computeCapstoneDataLayout(const Triple &TT,
+                                             StringRef ABIName) {
+  std::string Ret;
+
+  if (TT.isLittleEndian())
+    Ret += "e";
+  else
+    Ret += "E";
+
+  Ret += "-m:e";
+
+  // Pointer and integer sizes.
+  if (TT.isCapstone64()) {
+    Ret += "-p:64:64-i64:64-i128:128";
+    Ret += "-n32:64";
+  } else {
+    assert(TT.isCapstone32() && "only RV32 and RV64 are currently supported");
+    Ret += "-p:32:32-i64:64";
+    Ret += "-n32";
+  }
+
+  // Stack alignment based on ABI.
+  StringRef ABI = ABIName;
+  if (ABI == "ilp32e")
+    Ret += "-S32";
+  else if (ABI == "lp64e")
+    Ret += "-S64";
+  else
+    Ret += "-S128";
+
+  return Ret;
+}
+
 static std::string computeSparcDataLayout(const Triple &T) {
   const bool Is64Bit = T.isSPARC64();
 
@@ -578,9 +611,10 @@ std::string Triple::computeDataLayout(StringRef ABIName) const {
   case Triple::riscv64:
   case Triple::riscv32be:
   case Triple::riscv64be:
+    return computeRISCVDataLayout(*this, ABIName);
   case Triple::capstone32:
   case Triple::capstone64:
-    return computeRISCVDataLayout(*this, ABIName);
+    return computeCapstoneDataLayout(*this, ABIName);
   case Triple::sparc:
   case Triple::sparcv9:
   case Triple::sparcel:

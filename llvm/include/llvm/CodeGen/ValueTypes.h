@@ -178,6 +178,9 @@ namespace llvm {
     /// Return true if this is a vector value type.
     bool isRISCVVectorTuple() const { return V.isRISCVVectorTuple(); }
 
+    /// Return true if this is a vector value type (Capstone).
+    bool isCapstoneVectorTuple() const { return V.isCapstoneVectorTuple(); }
+
     bool isFixedLengthVector() const {
       return isSimple() ? V.isFixedLengthVector()
                         : isExtendedFixedLengthVector();
@@ -363,6 +366,11 @@ namespace llvm {
     /// Given a RISCV vector tuple type, return the num_fields.
     unsigned getRISCVVectorTupleNumFields() const {
       return V.getRISCVVectorTupleNumFields();
+    }
+
+    /// Given a Capstone vector tuple type, return the num_fields.
+    unsigned getCapstoneVectorTupleNumFields() const {
+      return V.getCapstoneVectorTupleNumFields();
     }
 
     /// Return the size of the specified value type in bits.

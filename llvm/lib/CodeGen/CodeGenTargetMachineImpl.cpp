@@ -81,6 +81,15 @@ void CodeGenTargetMachineImpl::initAsmInfo() {
 
   TmpAsmInfo->setFullRegisterNames(Options.MCOptions.PPCUseFullRegisterNames);
 
+  if (TmpAsmInfo->getExceptionHandlingType() !=
+          getTargetTriple().getDefaultExceptionHandling()) {
+    errs() << "MCAsmInfo EH type: "
+           << static_cast<int>(TmpAsmInfo->getExceptionHandlingType())
+           << ", Triple default EH type: "
+           << static_cast<int>(getTargetTriple().getDefaultExceptionHandling())
+           << '\n';
+  }
+
   assert(TmpAsmInfo->getExceptionHandlingType() ==
              getTargetTriple().getDefaultExceptionHandling() &&
          "MCAsmInfo and Triple disagree on default exception handling type");

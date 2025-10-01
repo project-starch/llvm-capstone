@@ -24,6 +24,9 @@
 #include "llvm/Support/RISCVAttributeParser.h"
 #include "llvm/Support/RISCVAttributes.h"
 #include "llvm/TargetParser/RISCVISAInfo.h"
+#include "llvm/Support/CapstoneAttributeParser.h"
+#include "llvm/Support/CapstoneAttributes.h"
+#include "llvm/TargetParser/CapstoneISAInfo.h"
 #include "llvm/TargetParser/SubtargetFeature.h"
 #include "llvm/TargetParser/Triple.h"
 #include <algorithm>
@@ -398,6 +401,40 @@ Expected<SubtargetFeatures> ELFObjectFileBase::getRISCVFeatures() const {
   return Features;
 }
 
+Expected<SubtargetFeatures> ELFObjectFileBase::getCapstoneFeatures() const {
+  SubtargetFeatures Features;
+  unsigned PlatformFlags = getPlatformFlags();
+
+  if (PlatformFlags & ELF::EF_CAPSTONE_RVC) {
+    Features.AddFeature("zca");
+  }
+
+  CapstoneAttributeParser Attributes;
+  if (Error E = getBuildAttributes(Attributes)) {
+    return std::move(E);
+  }
+
+  std::optional<StringRef> Attr =
+      Attributes.getAttributeString(CapstoneAttrs::ARCH);
+  if (Attr) {
+    auto ParseResult = CapstoneISAInfo::parseNormalizedArchString(*Attr);
+    if (!ParseResult)
+      return ParseResult.takeError();
+    auto &ISAInfo = *ParseResult;
+
+    if (ISAInfo->getXLen() == 32)
+      Features.AddFeature("64bit", false);
+    else if (ISAInfo->getXLen() == 64)
+      Features.AddFeature("64bit");
+    else
+      llvm_unreachable("XLEN should be 32 or 64.");
+
+    Features.addFeaturesVector(ISAInfo->toFeatures());
+  }
+
+  return Features;
+}
+
 SubtargetFeatures ELFObjectFileBase::getLoongArchFeatures() const {
   SubtargetFeatures Features;
 
@@ -424,6 +461,8 @@ Expected<SubtargetFeatures> ELFObjectFileBase::getFeatures() const {
     return getARMFeatures();
   case ELF::EM_RISCV:
     return getRISCVFeatures();
+  case ELF::EM_CAPSTONE:
+    return getCapstoneFeatures();
   case ELF::EM_LOONGARCH:
     return getLoongArchFeatures();
   case ELF::EM_HEXAGON:

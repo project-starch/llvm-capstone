@@ -123,6 +123,13 @@ namespace llvm {
               SimpleTy <= MVT::LAST_RISCV_VECTOR_TUPLE_VALUETYPE);
     }
 
+    /// Return true if this is a Capstone vector tuple type where the
+    /// runtime length is machine dependent
+    bool isCapstoneVectorTuple() const {
+      return (SimpleTy >= MVT::FIRST_Capstone_VECTOR_TUPLE_VALUETYPE &&
+              SimpleTy <= MVT::LAST_Capstone_VECTOR_TUPLE_VALUETYPE);
+    }
+
     /// Return true if this is a custom target type that has a scalable size.
     bool isScalableTargetExtVT() const {
       return SimpleTy == MVT::aarch64svcount || isRISCVVectorTuple();
@@ -486,6 +493,16 @@ namespace llvm {
       llvm_unreachable("Invalid RISCV vector tuple type");
     }
 
+    static MVT getCapstoneVectorTupleVT(unsigned Sz, unsigned NFields) {
+#define GET_VT_ATTR(Ty, n, sz, Any, Int, FP, Vec, Sc, Tup, NF, nElem, EltTy) \
+if (Tup && sz == Sz && NF == NFields)                                      \
+return Ty;
+#include "llvm/CodeGen/GenVT.inc"
+#undef GET_VT_ATTR
+
+      llvm_unreachable("Invalid Capstone vector tuple type");
+    }
+
     /// Given a RISC-V vector tuple type, return the num_fields.
     unsigned getRISCVVectorTupleNumFields() const {
       assert(isRISCVVectorTuple() && SimpleTy >= FIRST_VALUETYPE &&
@@ -493,6 +510,19 @@ namespace llvm {
       static constexpr uint8_t NFTable[] = {
 #define GET_VT_ATTR(Ty, N, Sz, Any, Int, FP, Vec, Sc, Tup, NF, NElem, EltTy) \
     NF,
+#include "llvm/CodeGen/GenVT.inc"
+#undef GET_VT_ATTR
+      };
+      return NFTable[SimpleTy - FIRST_VALUETYPE];
+    }
+
+    /// Given a Capstone vector tuple type, return the num_fields.
+    unsigned getCapstoneVectorTupleNumFields() const {
+      assert(isCapstoneVectorTuple() && SimpleTy >= FIRST_VALUETYPE &&
+             SimpleTy <= LAST_VALUETYPE);
+      static constexpr uint8_t NFTable[] = {
+#define GET_VT_ATTR(Ty, N, Sz, Any, Int, FP, Vec, Sc, Tup, NF, NElem, EltTy) \
+NF,
 #include "llvm/CodeGen/GenVT.inc"
 #undef GET_VT_ATTR
       };

@@ -82,7 +82,7 @@ static cl::opt<int>
               cl::init(2));
 
 static cl::opt<bool>
-    ReassocShlAddiAdd("reassoc-shl-addi-add", cl::Hidden,
+    ReassocShlAddiAdd("capstone-reassoc-shl-addi-add", cl::Hidden,
                       cl::desc("Swap add and addi in cases where the add may "
                                "be combined with a shift"),
                       cl::init(true));
@@ -8575,7 +8575,7 @@ SDValue CapstoneTargetLowering::emitFlushICache(SelectionDAG &DAG, SDValue InCha
                                              SDValue Flags, SDLoc DL) const {
   MakeLibCallOptions CallOptions;
   std::pair<SDValue, SDValue> CallResult =
-      makeLibCall(DAG, RTLIB::Capstone_FLUSH_ICACHE, MVT::isVoid,
+      makeLibCall(DAG, RTLIB::CAPSTONE_FLUSH_ICACHE, MVT::isVoid,
                   {Start, End, Flags}, CallOptions, DL, InChain);
 
   // This function returns void so only the out chain matters.
