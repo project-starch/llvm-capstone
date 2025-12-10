@@ -3623,6 +3623,7 @@ StringRef FunctionType::getNameForCallConv(CallingConv CC) {
     return "preserve_none";
     // clang-format off
   case CC_RISCVVectorCall: return "riscv_vector_cc";
+  case CC_CapstoneVectorCall: return "capstone_vector_cc";
 #define CC_VLS_CASE(ABI_VLEN) \
   case CC_RISCVVLSCall_##ABI_VLEN: return "riscv_vls_cc(" #ABI_VLEN ")";
   CC_VLS_CASE(32)
@@ -3637,6 +3638,21 @@ StringRef FunctionType::getNameForCallConv(CallingConv CC) {
   CC_VLS_CASE(16384)
   CC_VLS_CASE(32768)
   CC_VLS_CASE(65536)
+#undef CC_VLS_CASE
+#define Capstone_CC_VLS_CASE(ABI_VLEN) \
+  case CC_CapstoneVLSCall_## ABI_VLEN: return "capstone_vls_cc(" #ABI_VLEN ")";
+  Capstone_CC_VLS_CASE(32)
+  Capstone_CC_VLS_CASE(64)
+  Capstone_CC_VLS_CASE(128)
+  Capstone_CC_VLS_CASE(256)
+  Capstone_CC_VLS_CASE(512)
+  Capstone_CC_VLS_CASE(1024)
+  Capstone_CC_VLS_CASE(2048)
+  Capstone_CC_VLS_CASE(4096)
+  Capstone_CC_VLS_CASE(8192)
+  Capstone_CC_VLS_CASE(16384)
+  Capstone_CC_VLS_CASE(32768)
+  Capstone_CC_VLS_CASE(65536)
 #undef CC_VLS_CASE
     // clang-format on
   }
