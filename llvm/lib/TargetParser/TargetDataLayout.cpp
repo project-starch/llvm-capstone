@@ -319,7 +319,7 @@ static std::string computeCapstoneDataLayout(const Triple &TT,
 
   // Pointer and integer sizes.
   if (TT.isCapstone64()) {
-    Ret += "-p:64:64-i64:64-i128:128";
+    Ret += "-p:128:128-i64:64-i128:128";
     Ret += "-n32:64";
   } else {
     assert(TT.isCapstone32() && "only RV32 and RV64 are currently supported");

@@ -203,7 +203,8 @@ class LLVM_LIBRARY_VISIBILITY Capstone64TargetInfo : public CapstoneTargetInfo {
 public:
   Capstone64TargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
       : CapstoneTargetInfo(Triple, Opts) {
-    LongWidth = LongAlign = PointerWidth = PointerAlign = 64;
+    LongWidth = LongAlign = 64;
+    PointerWidth = PointerAlign = 128;
     IntMaxType = Int64Type = SignedLong;
     resetDataLayout("e-m:e-p:64:64-i64:64-i128:128-n32:64-S128");
   }

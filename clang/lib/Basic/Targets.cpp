@@ -113,12 +113,6 @@ std::unique_ptr<TargetInfo> AllocateTarget(const llvm::Triple &Triple,
                                            const TargetOptions &Opts) {
   llvm::Triple::OSType os = Triple.getOS();
 
-  // ***** НАЧАЛО ОТЛАДОЧНОГО БЛОКА *****
-  if (Triple.getArch() == llvm::Triple::capstone32 || Triple.getArch() == llvm::Triple::capstone64) {
-    llvm::errs() << "!!! Capstone Target Detected !!! Arch: " << Triple.getArchName() << "\n";
-  }
-  // ***** КОНЕЦ ОТЛАДОЧНОГО БЛОКА *****
-
   switch (Triple.getArch()) {
   default:
     return nullptr;
