@@ -139,16 +139,16 @@ def : LdPat<extloadi16, LH, i32>;
 def : StPat<truncstorei8, SB, GPR, i32>;
 def : StPat<truncstorei16, SH, GPR, i32>;
 
-def : Pat<(anyext (i32 GPR:$src)), (COPY GPR:$src)>;
-def : Pat<(sext (i32 GPR:$src)), (ADDIW GPR:$src, 0)>;
-def : Pat<(i32 (trunc GPR:$src)), (COPY GPR:$src)>;
+def : Pat<(i64 (anyext (i32 GPR:$src))), (COPY GPR:$src)>;
+def : Pat<(i64 (sext (i32 GPR:$src))), (ADDIW GPR:$src, 0)>;
+def : Pat<(i32 (trunc (i64 GPR:$src))), (COPY GPR:$src)>;
 
 // Use sext if the sign bit of the input is 0.
-def : Pat<(zext_is_sext (i32 GPR:$src)), (ADDIW GPR:$src, 0)>;
+def : Pat<(i64 (zext_is_sext (i32 GPR:$src))), (ADDIW GPR:$src, 0)>;
 }
 
 let Predicates = [IsRV64, NoStdExtZba] in
-def : Pat<(zext (i32 GPR:$src)), (SRLI (i64 (SLLI GPR:$src, 32)), 32)>;
+def : Pat<(i64 (zext (i32 GPR:$src))), (SRLI (i64 (SLLI GPR:$src, 32)), 32)>;
 
 let Predicates = [IsRV32, NoStdExtZbb, NoStdExtZbkb] in 
 def : Pat<(XLenVT (zext (i16 GPR:$src))),
@@ -177,7 +177,7 @@ def : Pat<(i32 (sext (i16 GPR:$src))),
 //===----------------------------------------------------------------------===//
 
 let Predicates = [HasStdExtZba, IsRV64] in {
-def : Pat<(zext (i32 GPR:$src)), (ADD_UW GPR:$src, (XLenVT X0))>;
+def : Pat<(i64 (zext (i32 GPR:$src))), (ADD_UW GPR:$src, (XLenVT X0))>;
 }
 
 let Predicates = [HasStdExtZbb] in

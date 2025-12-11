@@ -224,7 +224,7 @@ def XLenPairFVT : ValueTypeByHwMode<[RV32],
                                     [f64]>;
 def XLenRI : RegInfoByHwMode<
       [RV32,              RV64],
-      [RegInfo<32,32,32>, RegInfo<64,64,64>]>;
+      [RegInfo<32,32,32>, RegInfo<128,128,128>]>;
 
 class CapstoneRegisterClass<list<ValueType> regTypes, int align, dag regList>
     : RegisterClass<"Capstone", regTypes, align, regList> {
@@ -238,7 +238,7 @@ class CapstoneRegisterClass<list<ValueType> regTypes, int align, dag regList>
 }
 
 class GPRRegisterClass<dag regList>
-    : CapstoneRegisterClass<[XLenVT, XLenFVT, i32, i16], 32, regList> {
+    : CapstoneRegisterClass<[i128, XLenVT, XLenFVT, i32, i16], 128, regList> {
   let RegInfos = XLenRI;
 }
 
