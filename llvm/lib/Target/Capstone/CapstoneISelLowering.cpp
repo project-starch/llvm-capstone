@@ -127,6 +127,10 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   // Set up the register classes.
   addRegisterClass(XLenVT, &Capstone::GPRRegClass);
 
+  // If we are on 64-bit, allow to store 128-bit Capabilities in registers.
+  if (Subtarget.is64Bit())
+    addRegisterClass(MVT::i128, &Capstone::GPRRegClass);
+
   if (Subtarget.hasStdExtZfhmin())
     addRegisterClass(MVT::f16, &Capstone::FPR16RegClass);
   if (Subtarget.hasStdExtZfbfmin() || Subtarget.hasVendorXAndesBFHCvt())
