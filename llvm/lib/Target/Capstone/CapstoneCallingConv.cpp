@@ -545,6 +545,13 @@ bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
   unsigned StoreSizeBytes = XLen / 8;
   Align StackAlign = Align(XLen / 8);
 
+  // Specifically for Capability (i128): If the argument type is i128 then it
+  // needs 16 bytes and 16-byte alignment.
+  if (LocVT == MVT::i128) {
+    StoreSizeBytes = 16;
+    StackAlign = Align(16);
+  }
+
   if (ValVT.isVector() || ValVT.isCapstoneVectorTuple()) {
     Reg = allocateRVVReg(ValVT, ValNo, State, TLI);
     if (Reg) {
@@ -603,6 +610,7 @@ bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
   }
 
   assert(((ValVT.isFloatingPoint() && !ValVT.isVector()) || LocVT == XLenVT ||
+          LocVT == MVT::i128 ||
           (TLI.getSubtarget().hasVInstructions() &&
            (ValVT.isVector() || ValVT.isCapstoneVectorTuple()))) &&
          "Expected an XLenVT or vector types at this stage");
