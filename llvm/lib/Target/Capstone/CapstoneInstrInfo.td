@@ -352,6 +352,24 @@ def simm12 : CapstoneSImmLeafOp<12> {
   }];
 }
 
+// Operand of type i64. This is critical because XLenVT=i128,
+// and C++ SelectionDAG returns offsets as i64.
+def simm12_i64_op : CapstoneOp<i64>, ImmLeaf<i64, [{ return isInt<12>(Imm); }]> {
+  let ParserMatchClass = SImmAsmOperand<12>;
+  let EncoderMethod = "getImmOpValue";
+  let DecoderMethod = "decodeSImmOperand<12>";
+  let OperandType = "OPERAND_SIMM12";
+
+  let MCOperandPredicate = [{
+    int64_t Imm;
+    // Checking if the operand is a constant
+    if (MCOp.evaluateAsConstantImm(Imm))
+      return isInt<12>(Imm); // Fits in 12-bit signed immediate?
+    // Allow bare symbol references
+    return MCOp.isBareSymbolRef();
+  }];
+}
+
 // A 12-bit signed immediate which cannot fit in 6-bit signed immediate,
 // but even negative value fit in 12-bit.
 def simm12_no6 : ImmLeaf<XLenVT, [{
@@ -2316,23 +2334,22 @@ def : Pat<(int_capstone_pause), (FENCE 0x1, 0x0)>;
 // Capstone Core Instructions (128-bit Capabilities)
 //===----------------------------------------------------------------------===//
 
-// CLC: Capability Load Capability
-// We use opcode LOAD (0000011) and funct3 = 111 (0b111).
-// This is a free slot in the RISC-V standard that we use for CLC.
+// LDC: Capability Load 128-bit
 let hasSideEffects = 0, mayLoad = 1, mayStore = 0 in
-def CLC : RVInstI<0b111, OPC_LOAD, (outs GPR:$rd), (ins GPRMem:$rs1, simm12:$imm12),
-                  "clc", "$rd, ${imm12}(${rs1})">;
+def LDC : RVInstI<0b011, OPC_CAP_OP, (outs GPR:$rd),
+                  (ins GPRMem:$rs1, simm12_i64_op:$imm12),
+                  "ldc", "$rd, ${imm12}(${rs1})">;
 
-// CSC: Capability Store Capability
-// We use opcode STORE (0100011) and funct3 = 111 (0b111).
+// STC: Capability Store 128-bit
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
-def CSC : RVInstS<0b111, OPC_STORE, (outs), (ins GPR:$rs2, GPRMem:$rs1, simm12:$imm12),
-                  "csc", "$rs2, ${imm12}(${rs1})">;
+def STC : RVInstS<0b100, OPC_CAP_OP, (outs),
+                  (ins GPR:$rs2, GPRMem:$rs1, simm12_i64_op:$imm12),
+                  "stc", "$rs2, ${imm12}(${rs1})">;
 
 // Patterns for для SelectionDAG
 // "When we see a load/store of type i128 -> use CLC/CSC instruction"
-def : LdPat<load, CLC, i128>;
-def : StPat<store, CSC, GPR, i128>;
+def : LdPat<load, LDC, i128>;
+def : StPat<store, STC, GPR, i128>;
 
 //===----------------------------------------------------------------------===//
 // Standard extensions

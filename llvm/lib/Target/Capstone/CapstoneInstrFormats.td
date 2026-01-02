@@ -166,6 +166,7 @@ def OPC_JAL       : CapstoneOpcode<"JAL",       0b1101111>;
 def OPC_SYSTEM    : CapstoneOpcode<"SYSTEM",    0b1110011>;
 def OPC_OP_VE     : CapstoneOpcode<"OP_VE",     0b1110111>;
 def OPC_CUSTOM_3  : CapstoneOpcode<"CUSTOM_3",  0b1111011>;
+def OPC_CAP_OP    : CapstoneOpcode<"CAP_OP",  0b1011011>;
 
 class EltDeps<bit vl, bit mask> {
   bit VL = vl;

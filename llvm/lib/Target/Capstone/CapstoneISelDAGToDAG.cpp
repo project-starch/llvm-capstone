@@ -1037,6 +1037,88 @@ static unsigned getSegInstNF(unsigned Intrinsic) {
   }
 }
 
+bool CapstoneDAGToDAGISel::trySelectCapstoneLoadStore(SDNode *Node) {
+  unsigned Opcode = Node->getOpcode();
+  assert((Opcode == ISD::LOAD) || (Opcode == ISD::STORE));
+
+  auto *MemNode = cast<MemSDNode>(Node);
+  if (MemNode->getMemoryVT() != MVT::i128) // Here we only work with i128
+    return false;
+  // For Load, the result must also be i128
+  if (Opcode == ISD::LOAD && Node->getSimpleValueType(0) != MVT::i128)
+    return false;
+  // For Store, the stored value must be i128
+  if (Opcode == ISD::STORE &&
+      cast<StoreSDNode>(Node)->getValue().getSimpleValueType() != MVT::i128)
+    return false;
+
+  SDLoc DL(Node);                           // Debug location
+  SDValue Chain = MemNode->getChain();      // Dependency chain
+  SDValue BasePtr = MemNode->getBasePtr();  // Base address (or FrameIndex)
+  // Different operand offset Load (2), and for Store (3)
+  SDValue Offset = MemNode->getOperand(Opcode == ISD::LOAD ? 2 : 3);
+
+  // 1. Normalize offset (undef -> 0)
+  // IMPORTANT: Use MVT::i64, as the instruction expects simm12_i64_op
+  if (Offset.isUndef()) {
+    // If offset is undefined, set it explicitly 0
+    Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
+  } else if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
+    // IMPORTANT: Check if the offset fits in 12 bits.
+    // If not, we decline for now (let LLVM try to split it itself,
+    // although without patterns it will fail, but this is better than
+    // generating garbage).
+    if (!isInt<12>(C->getSExtValue()))
+      return false;
+
+    // Recreate the constant as TargetConstant i64
+    Offset = CurDAG->getTargetConstant(C->getSExtValue(), DL, MVT::i64);
+  } else {
+    // If offset is not a constant - we can't handle this yet
+    // (requires pointer arithmetic)
+    return false;
+  }
+
+  // 2. Materialize FrameIndex
+  if (auto *FIN = dyn_cast<FrameIndexSDNode>(BasePtr)) {
+    SDValue TFI = CurDAG->getTargetFrameIndex(FIN->getIndex(),
+                                              BasePtr.getSimpleValueType());
+    // Offset inside ADDI for address materialization is 0
+    // Note: Using pointer type (i128) here
+    SDValue Zero =
+        CurDAG->getTargetConstant(0, DL, BasePtr.getSimpleValueType());
+
+    // ADDI returns pointer type (i128)
+    BasePtr =
+        SDValue(CurDAG->getMachineNode(Capstone::ADDI, DL,
+                                       BasePtr.getSimpleValueType(), TFI, Zero),
+                0);
+  }
+
+  // 3. Generate instruction
+  if (Opcode == ISD::LOAD) {
+    SDNode *Res = CurDAG->getMachineNode(
+        Capstone::LDC, DL, CurDAG->getVTList(MVT::i128, MVT::Other),
+        {BasePtr, Offset, Chain});
+
+    CurDAG->setNodeMemRefs(cast<MachineSDNode>(Res),
+                           {MemNode->getMemOperand()});
+    ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
+    ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));
+  } else { // Store
+    SDValue Val = cast<StoreSDNode>(Node)->getValue();
+    SDNode *Res = CurDAG->getMachineNode(Capstone::STC, DL, MVT::Other,
+                                         {Val, BasePtr, Offset, Chain});
+
+    CurDAG->setNodeMemRefs(cast<MachineSDNode>(Res),
+                           {MemNode->getMemOperand()});
+    ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
+  }
+
+  CurDAG->RemoveDeadNode(Node);
+  return true;
+}
+
 void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   // If we have a custom node, we have already selected.
   if (Node->isMachineOpcode()) {
@@ -1779,6 +1861,8 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     return;
   }
   case ISD::LOAD: {
+    if (trySelectCapstoneLoadStore(Node))
+      return;
     if (tryIndexedLoad(Node))
       return;
 
@@ -1842,6 +1926,11 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
                                                Offset, Chain));
       return;
     }
+    break;
+  }
+  case ISD::STORE: {
+    if (trySelectCapstoneLoadStore(Node))
+      return;
     break;
   }
   case CapstoneISD::LD_RV32: {
@@ -2815,7 +2904,8 @@ bool CapstoneDAGToDAGISel::SelectInlineAsmMemoryOperand(
 bool CapstoneDAGToDAGISel::SelectAddrFrameIndex(SDValue Addr, SDValue &Base,
                                              SDValue &Offset) {
   if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
-    Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), Subtarget->getXLenVT());
+    Base =
+        CurDAG->getTargetFrameIndex(FIN->getIndex(), Addr.getSimpleValueType());
     Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), Subtarget->getXLenVT());
     return true;
   }
@@ -2965,7 +3055,7 @@ bool CapstoneDAGToDAGISel::areOffsetsWithinAlignment(SDValue Addr,
 }
 
 bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
-                                         SDValue &Offset) {
+                                            SDValue &Offset) {
   if (SelectAddrFrameIndex(Addr, Base, Offset))
     return true;
 
