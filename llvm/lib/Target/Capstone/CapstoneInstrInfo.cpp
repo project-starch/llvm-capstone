@@ -645,8 +645,11 @@ void CapstoneInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
 
   unsigned Opcode;
   if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
-    Opcode = TRI->getRegSizeInBits(Capstone::GPRRegClass) == 32 ?
-             Capstone::SW : Capstone::SD;
+    unsigned Size = TRI->getRegSizeInBits(Capstone::GPRRegClass);
+    if (Size == 128)
+      Opcode = Capstone::STC; // Use Store Capability instruction
+    else
+      Opcode = Size == 32 ? Capstone::SW : Capstone::SD;
   } else if (Capstone::GPRF16RegClass.hasSubClassEq(RC)) {
     Opcode = Capstone::SH_INX;
   } else if (Capstone::GPRF32RegClass.hasSubClassEq(RC)) {
@@ -729,8 +732,11 @@ void CapstoneInstrInfo::loadRegFromStackSlot(
 
   unsigned Opcode;
   if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
-    Opcode = TRI->getRegSizeInBits(Capstone::GPRRegClass) == 32 ?
-             Capstone::LW : Capstone::LD;
+    unsigned Size = TRI->getRegSizeInBits(Capstone::GPRRegClass);
+    if (Size == 128)
+      Opcode = Capstone::LDC; // Use Load Capability instruction
+    else
+      Opcode = Size == 32 ? Capstone::LW : Capstone::LD;
   } else if (Capstone::GPRF16RegClass.hasSubClassEq(RC)) {
     Opcode = Capstone::LH_INX;
   } else if (Capstone::GPRF32RegClass.hasSubClassEq(RC)) {
