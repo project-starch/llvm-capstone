@@ -189,6 +189,15 @@ def capstone_split_gpr_pair : RVSDNode<"SplitGPRPair",
                                                          SDTCisVT<1, XLenVT>,
                                                          SDTCisVT<2, GPRPairVT>]>>;
 
+// Name in quotes "CapstoneISD::CIncOffset"
+// must match what getTargetNodeName returns.
+// Profile types: 1 result, 2 operands.
+// All types i128 (to avoid type conflicts).
+def capstone_cincoffset : RVSDNode<"CIncOffset",
+                                SDTypeProfile<1, 2, [SDTCisVT<0, i128>,
+                                                     SDTCisVT<1, i128>,
+                                                     SDTCisVT<2, i128>]>>;
+
 //===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.
 //===----------------------------------------------------------------------===//
@@ -2350,6 +2359,20 @@ def STC : RVInstS<0b100, OPC_CAP_OP, (outs),
 // "When we see a load/store of type i128 -> use CLC/CSC instruction"
 def : LdPat<load, LDC, i128>;
 def : StPat<store, STC, GPR, i128>;
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in {
+// CIncOffset (Register form): increment the cursor of a capability
+// by a given amount (offset): ptr = ptr + rs2
+def CIncOffset : RVInstR<0b0001100, 0b001, OPC_CAP_OP, (outs GPR:$rd),
+                         (ins GPR:$rs1, GPR:$rs2),
+                         "cincoffset", "$rd, $rs1, $rs2">;
+
+// CIncOffsetImm (Immediate form): increment the cursor of a capability
+// by a given amount (offset):  ptr = ptr + imm
+def CIncOffsetImm : RVInstI<0b010, OPC_CAP_OP, (outs GPR:$rd),
+                            (ins GPR:$rs1, simm12_i64_op:$imm12),
+                            "cincoffsetimm", "$rd, $rs1, $imm12">;
+}
 
 //===----------------------------------------------------------------------===//
 // Standard extensions

@@ -83,7 +83,6 @@ public:
   bool tryUnsignedBitfieldInsertInZero(SDNode *Node, const SDLoc &DL, MVT VT,
                                        SDValue X, unsigned Msb, unsigned Lsb);
   bool tryIndexedLoad(SDNode *Node);
-  bool trySelectCapstoneLoadStore(SDNode *Node);
 
   bool selectShiftMask(SDValue N, unsigned ShiftWidth, SDValue &ShAmt);
   bool selectShiftMaskXLen(SDValue N, SDValue &ShAmt) {
@@ -170,6 +169,9 @@ public:
   void selectVSETVLI(SDNode *Node);
 
   void selectSF_VC_X_SE(SDNode *Node);
+
+  bool selectLDC_STC(SDNode *Node);
+  void selectCIncOffset(SDNode *Node);
 
   // Return the Capstone condition code that matches the given DAG integer
   // condition code. The CondCode must be one of those supported by the Capstone

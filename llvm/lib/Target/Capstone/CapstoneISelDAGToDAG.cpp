@@ -1037,7 +1037,7 @@ static unsigned getSegInstNF(unsigned Intrinsic) {
   }
 }
 
-bool CapstoneDAGToDAGISel::trySelectCapstoneLoadStore(SDNode *Node) {
+bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
   unsigned Opcode = Node->getOpcode();
   assert((Opcode == ISD::LOAD) || (Opcode == ISD::STORE));
 
@@ -1119,6 +1119,37 @@ bool CapstoneDAGToDAGISel::trySelectCapstoneLoadStore(SDNode *Node) {
   return true;
 }
 
+void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Base = Node->getOperand(0);   // i128 Base
+  SDValue Offset = Node->getOperand(1); // i128 Offset (Reg or Constant)
+  MVT VT = Node->getSimpleValueType(0); // i128
+
+  // 1. Attempt to use the instruction with immediate (CIncOffsetImm)
+  if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
+    int64_t ImmVal = C->getSExtValue();
+    // Check if it fits in 12 bits
+    if (isInt<12>(ImmVal)) {
+      // Create TargetConstant of type i64 (critical for simm12_i64_op!)
+      SDValue ImmOp = CurDAG->getTargetConstant(ImmVal, DL, MVT::i64);
+
+      SDNode *Res = CurDAG->getMachineNode(Capstone::CIncOffsetImm, DL, VT,
+                                           Base, ImmOp);
+      ReplaceNode(Node, Res);
+      return;
+    }
+
+    // If the constant is large, we need to load it into a register.
+    // The selectImm function (which exists in this file) does this efficiently.
+    Offset = selectImm(CurDAG, DL, Subtarget->getXLenVT(), ImmVal, *Subtarget);
+  }
+
+  // 2. Use the register instruction (CIncOffset)
+  // We reach here if Offset was a register OR if it was a large constant.
+
+  SDNode *Res = CurDAG->getMachineNode(Capstone::CIncOffset, DL, VT, Base, Offset);
+  ReplaceNode(Node, Res);
+}
 void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   // If we have a custom node, we have already selected.
   if (Node->isMachineOpcode()) {
@@ -1861,7 +1892,7 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     return;
   }
   case ISD::LOAD: {
-    if (trySelectCapstoneLoadStore(Node))
+    if (selectLDC_STC(Node))
       return;
     if (tryIndexedLoad(Node))
       return;
@@ -1929,7 +1960,7 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     break;
   }
   case ISD::STORE: {
-    if (trySelectCapstoneLoadStore(Node))
+    if (selectLDC_STC(Node))
       return;
     break;
   }
@@ -2838,7 +2869,7 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     ReplaceNode(Node, Load);
     return;
   }
-  case ISD::PREFETCH:
+  case ISD::PREFETCH: {
     unsigned Locality = Node->getConstantOperandVal(3);
     if (Locality > 2)
       break;
@@ -2867,6 +2898,11 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     if (NontemporalLevel & 0b10)
       MMO->setFlags(MONontemporalBit1);
     break;
+  }
+  case CapstoneISD::CIncOffset: {
+    selectCIncOffset(Node);
+    return;
+  }
   }
 
   // Select the default instruction.
