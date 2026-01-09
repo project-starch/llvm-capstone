@@ -297,8 +297,17 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   // TODO: add all necessary setOperationAction calls.
   setOperationAction(ISD::DYNAMIC_STACKALLOC, XLenVT, Custom);
 
+  //===--------------------------------------------------------------------===//
+  // Custom Capstone-specific lowering
+  //===--------------------------------------------------------------------===//
   // Custom lowering for add of 128-bit numbers
   setOperationAction(ISD::ADD, MVT::i128, Custom);
+
+  // Custom lowering for global addresses
+  setOperationAction(ISD::GlobalAddress, MVT::i128, Custom);
+  setOperationAction(ISD::BlockAddress, MVT::i128, Custom);
+  setOperationAction(ISD::ConstantPool, MVT::i128, Custom);
+  //===--------------------------------------------------------------------===//
 
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
   setOperationAction(ISD::BR_CC, XLenVT, Expand);
@@ -7425,6 +7434,7 @@ const char *CapstoneTargetLowering::getTargetNodeName(unsigned Opcode) const {
     NODE_NAME_CASE(FSUB_VL)
     NODE_NAME_CASE(HI)
     NODE_NAME_CASE(LD_RV32)
+    NODE_NAME_CASE(LGA)
     NODE_NAME_CASE(LLA)
     NODE_NAME_CASE(MNRET_GLUE)
     NODE_NAME_CASE(MOP_R)
@@ -9117,23 +9127,6 @@ SDValue CapstoneTargetLowering::lowerPARTIAL_REDUCE_MLA(SDValue Op,
   return Res;
 }
 
-static SDValue getTargetNode(GlobalAddressSDNode *N, const SDLoc &DL, EVT Ty,
-                             SelectionDAG &DAG, unsigned Flags) {
-  return DAG.getTargetGlobalAddress(N->getGlobal(), DL, Ty, 0, Flags);
-}
-
-static SDValue getTargetNode(BlockAddressSDNode *N, const SDLoc &DL, EVT Ty,
-                             SelectionDAG &DAG, unsigned Flags) {
-  return DAG.getTargetBlockAddress(N->getBlockAddress(), Ty, N->getOffset(),
-                                   Flags);
-}
-
-static SDValue getTargetNode(ConstantPoolSDNode *N, const SDLoc &DL, EVT Ty,
-                             SelectionDAG &DAG, unsigned Flags) {
-  return DAG.getTargetConstantPool(N->getConstVal(), Ty, N->getAlign(),
-                                   N->getOffset(), Flags);
-}
-
 static SDValue getTargetNode(JumpTableSDNode *N, const SDLoc &DL, EVT Ty,
                              SelectionDAG &DAG, unsigned Flags) {
   return DAG.getTargetJumpTable(N->getIndex(), Ty, Flags);
@@ -9247,26 +9240,44 @@ SDValue CapstoneTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG,
   }
 }
 
-SDValue CapstoneTargetLowering::lowerGlobalAddress(SDValue Op,
-                                                SelectionDAG &DAG) const {
+SDValue CapstoneTargetLowering::lowerGlobalAddress(
+    SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
-  assert(N->getOffset() == 0 && "unexpected offset in global node");
   const GlobalValue *GV = N->getGlobal();
-  return getAddr(N, DAG, GV->isDSOLocal(), GV->hasExternalWeakLinkage());
+  int64_t Offset = N->getOffset();
+
+  // 1. Create a TargetGlobalAddress.
+  // This is just a "token" that holds a reference to the symbol.
+  // We use MVT::i64 because in SelectLGA we will turn it into
+  // a sequence of instructions to generate a 64-bit offset/address.
+  SDValue TargetAddr = DAG.getTargetGlobalAddress(GV, DL, MVT::i64, Offset, 0);
+
+  // 2. Create the LGA node.
+  // This node tells the selector: "Here is the symbol (TargetAddr),
+  // make me a valid Capability Pointer out of it, using GP".
+  return DAG.getNode(CapstoneISD::LGA, DL, MVT::i128, TargetAddr);
 }
 
-SDValue CapstoneTargetLowering::lowerBlockAddress(SDValue Op,
-                                               SelectionDAG &DAG) const {
-  BlockAddressSDNode *N = cast<BlockAddressSDNode>(Op);
-
-  return getAddr(N, DAG);
+SDValue CapstoneTargetLowering::lowerBlockAddress(
+    SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  const BlockAddress *BA = cast<BlockAddressSDNode>(Op)->getBlockAddress();
+  // Create TargetBlockAddress (i64)
+  SDValue TargetAddr = DAG.getTargetBlockAddress(BA, MVT::i64, 0, 0);
+  // Wrap in LGA
+  return DAG.getNode(CapstoneISD::LGA, DL, MVT::i128, TargetAddr);
 }
 
-SDValue CapstoneTargetLowering::lowerConstantPool(SDValue Op,
-                                               SelectionDAG &DAG) const {
+SDValue CapstoneTargetLowering::lowerConstantPool(
+    SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
-
-  return getAddr(N, DAG);
+  // Create TargetConstantPool (i64)
+  SDValue TargetAddr = DAG.getTargetConstantPool(N->getConstVal(), MVT::i64,
+                                                 N->getAlign(), N->getOffset(), 0);
+  // Wrap in LGA
+  return DAG.getNode(CapstoneISD::LGA, DL, MVT::i128, TargetAddr);
 }
 
 SDValue CapstoneTargetLowering::lowerJumpTable(SDValue Op,

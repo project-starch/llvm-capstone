@@ -40,6 +40,7 @@
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/TargetParser/CapstoneISAInfo.h"
 #include "llvm/Transforms/Instrumentation/HWAddressSanitizer.h"
 
@@ -114,6 +115,8 @@ public:
   bool emitDirectiveOptionArch();
 
   void emitNoteGnuProperty(const Module &M);
+
+  void emitGlobalVariable(const GlobalVariable *GV) override;
 
 private:
   void emitAttributes(const MCSubtargetInfo &SubtargetInfo);
@@ -957,6 +960,68 @@ void CapstoneAsmPrinter::emitNoteGnuProperty(const Module &M) {
         static_cast<CapstoneTargetStreamer &>(*OutStreamer->getTargetStreamer());
     RTS.emitNoteGnuPropertySection(ELF::GNU_PROPERTY_Capstone_FEATURE_1_CFI_SS);
   }
+}
+
+/// Emits a global variable typed i128 to the output by splitting
+/// into 2 64-bit parts.
+void CapstoneAsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
+  // Check if this is a 128-bit sized type that needs special handling
+  if (GV->getValueType()->isSized() &&
+      getDataLayout().getTypeAllocSize(GV->getValueType()) == 16) {
+
+    // 1. Switch to appropriate section (bss, data, rodata...)
+    SectionKind Kind = TargetLoweringObjectFile::getKindForGlobal(GV, TM);
+    MCSection *Section = getObjFileLowering().SectionForGlobal(GV, Kind, TM);
+    OutStreamer->switchSection(Section);
+
+    // 2. Emit alignment if needed (128-bit values typically need 16-byte alignment)
+    Align Alignment = getGVAlignment(GV, getDataLayout());
+    OutStreamer->emitValueToAlignment(Alignment);
+
+    // 3. Emit symbol attributes (linkage, visibility, etc.)
+    emitLinkage(GV, getSymbol(GV));
+    emitVisibility(getSymbol(GV), GV->getVisibility());
+
+    // 4. Emit the label (variable name)
+    MCSymbol *GVSym = getSymbol(GV);
+    OutStreamer->emitLabel(GVSym);
+
+    // 5. Emit the content (16 bytes)
+    if (GV->hasInitializer()) {
+      const Constant *C = GV->getInitializer();
+
+      // Handle zero-initialized data
+      if (isa<ConstantAggregateZero>(C) || isa<ConstantPointerNull>(C)) {
+        OutStreamer->emitIntValue(0, 8); // Low 64 bits
+        OutStreamer->emitIntValue(0, 8); // High 64 bits
+      }
+      // Handle int128 constants
+      else if (const auto *CI = dyn_cast<ConstantInt>(C)) {
+        APInt Val = CI->getValue();
+        // Emit in target endianness order
+        OutStreamer->emitIntValue(Val.extractBits(64, 0).getZExtValue(), 8);
+        OutStreamer->emitIntValue(Val.extractBits(64, 64).getZExtValue(), 8);
+      }
+      // Handle other complex initializers (structs, arrays, relocations, etc.)
+      else {
+        // Fallback to standard emission which handles relocations and complex types
+        AsmPrinter::emitGlobalConstant(getDataLayout(), C);
+      }
+    } else {
+      // No initializer (e.g., .bss section) - just reserve space
+      OutStreamer->emitZeros(16);
+    }
+
+    // 6. Emit size directive for ELF (important for linker and debugger)
+    if (MAI->hasDotTypeDotSizeDirective())
+      OutStreamer->emitELFSize(GVSym, MCConstantExpr::create(16, OutContext));
+
+    return;
+  }
+
+  // For all other types (i32, i64, char arrays, etc.)
+  // use the standard implementation
+  AsmPrinter::emitGlobalVariable(GV);
 }
 
 static MCOperand lowerSymbolOperand(const MachineOperand &MO, MCSymbol *Sym,

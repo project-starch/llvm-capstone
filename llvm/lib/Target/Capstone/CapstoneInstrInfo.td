@@ -11,7 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 //===----------------------------------------------------------------------===//
-// Capstone specific DAG Nodes.
+// Standard RISCV-inherited DAG Nodes.
 //===----------------------------------------------------------------------===//
 
 class RVSDNode<string opcode, SDTypeProfile type_profile,
@@ -189,15 +189,26 @@ def capstone_split_gpr_pair : RVSDNode<"SplitGPRPair",
                                                          SDTCisVT<1, XLenVT>,
                                                          SDTCisVT<2, GPRPairVT>]>>;
 
-// Name in quotes "CapstoneISD::CIncOffset"
-// must match what getTargetNodeName returns.
-// Profile types: 1 result, 2 operands.
-// All types i128 (to avoid type conflicts).
-def capstone_cincoffset : RVSDNode<"CIncOffset",
-                                SDTypeProfile<1, 2, [SDTCisVT<0, i128>,
-                                                     SDTCisVT<1, i128>,
-                                                     SDTCisVT<2, i128>]>>;
+//===----------------------------------------------------------------------===//
+// New, Capstone-specific DAG nodes
+//===----------------------------------------------------------------------===//
 
+/// Name in quotes "CapstoneISD::CIncOffset"
+/// must match what getTargetNodeName returns.
+/// Profile types: 1 result, 2 operands.
+/// All types i128 (to avoid type conflicts).
+def capstone_cincoffset : RVSDNode<"CIncOffset",
+                                   SDTypeProfile<1, 2, [SDTCisVT<0, i128>,
+                                                        SDTCisVT<1, i128>,
+                                                        SDTCisVT<2, i128>]>>;
+
+def capstone_lga : SDNode<"CapstoneISD::LGA",
+                          SDTypeProfile<1, 1,
+                                        // Result (Pointer)
+                                        [SDTCisVT<0, i128>,
+                                        // Operand (TargetAddr)
+                                        SDTCisVT<1, i64>]>>;
+                                                     
 //===----------------------------------------------------------------------===//
 // Operand and SDNode transformation definitions.
 //===----------------------------------------------------------------------===//
@@ -2355,7 +2366,6 @@ def STC : RVInstS<0b100, OPC_CAP_OP, (outs),
                   (ins GPR:$rs2, GPRMem:$rs1, simm12_i64_op:$imm12),
                   "stc", "$rs2, ${imm12}(${rs1})">;
 
-// Patterns for для SelectionDAG
 // "When we see a load/store of type i128 -> use CLC/CSC instruction"
 def : LdPat<load, LDC, i128>;
 def : StPat<store, STC, GPR, i128>;

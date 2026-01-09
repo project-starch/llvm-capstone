@@ -170,8 +170,12 @@ public:
 
   void selectSF_VC_X_SE(SDNode *Node);
 
+  //===--------------------------------------------------------------------===//
+  // Capstone-specific selection
+  //===--------------------------------------------------------------------===//
   bool selectLDC_STC(SDNode *Node);
   void selectCIncOffset(SDNode *Node);
+  void selectLGA(SDNode *Node);
 
   // Return the Capstone condition code that matches the given DAG integer
   // condition code. The CondCode must be one of those supported by the Capstone

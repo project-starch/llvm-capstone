@@ -1150,6 +1150,37 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
   SDNode *Res = CurDAG->getMachineNode(Capstone::CIncOffset, DL, VT, Base, Offset);
   ReplaceNode(Node, Res);
 }
+
+void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Symbol = Node->getOperand(0); // This is our TargetGlobalAddress (i64)
+  MVT PtrVT = MVT::i128;
+
+  // We need: Ptr = GP + SymbolAddress
+
+  // 1. Get GP (c3)
+  SDValue GP = CurDAG->getRegister(Capstone::X3, PtrVT);
+
+  // 2. Materialize the Symbol Address into a register.
+  // We use the PseudoLLA pseudo-instruction (Load Local Address).
+  // It will be expanded (later, in AsmPrinter) into:
+  //   auipc a0, %pcrel_hi(sym)
+  //   addi  a0, a0, %pcrel_lo(sym)
+  // The result will be in a GPR register (i128).
+  // Important: although PseudoLLA returns an "address", in the Capstone context
+  // it is just a "number" (Data), since it is derived from the PC.
+  SDNode *Offset = CurDAG->getMachineNode(Capstone::PseudoLLA, DL, PtrVT,
+                                          Symbol);
+
+  // 3. Create CIncOffset: Ptr = GP + Offset
+  // GP is a valid capability (base for data).
+  // Offset is the offset to the variable.
+  SDNode *Res = CurDAG->getMachineNode(Capstone::CIncOffset, DL, PtrVT,
+                                       GP, SDValue(Offset, 0));
+
+  ReplaceNode(Node, Res);
+}
+
 void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   // If we have a custom node, we have already selected.
   if (Node->isMachineOpcode()) {
@@ -2901,6 +2932,10 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   }
   case CapstoneISD::CIncOffset: {
     selectCIncOffset(Node);
+    return;
+  }
+  case CapstoneISD::LGA: {
+    selectLGA(Node);
     return;
   }
   }
