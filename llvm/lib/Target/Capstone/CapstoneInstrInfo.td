@@ -372,6 +372,9 @@ def simm12 : CapstoneSImmLeafOp<12> {
   }];
 }
 
+//===----------------------------------------------------------------------===//
+// Capstone-specific instruction formats
+
 // Operand of type i64. This is critical because XLenVT=i128,
 // and C++ SelectionDAG returns offsets as i64.
 def simm12_i64_op : CapstoneOp<i64>, ImmLeaf<i64, [{ return isInt<12>(Imm); }]> {
@@ -389,6 +392,22 @@ def simm12_i64_op : CapstoneOp<i64>, ImmLeaf<i64, [{ return isInt<12>(Imm); }]> 
     return MCOp.isBareSymbolRef();
   }];
 }
+
+// We need it it the intrinsics (like LCC-intrinsics)
+def uimm5_i64 : CapstoneOp<i64>, ImmLeaf<i64, [{return isUInt<5>(Imm);}]> {
+  let ParserMatchClass = UImmAsmOperand<5>;
+  let EncoderMethod = "getImmOpValue";
+  let DecoderMethod = "decodeUImmOperand<5>";
+  let OperandType = "OPERAND_UIMM5";
+  let MCOperandPredicate = [{
+    int64_t Imm;
+    if (MCOp.evaluateAsConstantImm(Imm))
+      return isUInt<5>(Imm);
+    return MCOp.isBareSymbolRef();
+  }];
+}
+
+//===----------------------------------------------------------------------===//
 
 // A 12-bit signed immediate which cannot fit in 6-bit signed immediate,
 // but even negative value fit in 12-bit.
@@ -2383,6 +2402,23 @@ def CIncOffsetImm : RVInstI<0b010, OPC_CAP_OP, (outs GPR:$rd),
                             (ins GPR:$rs1, simm12_i64_op:$imm12),
                             "cincoffsetimm", "$rd, $rs1, $imm12">;
 }
+
+// LCC: Load Capability Contents (Field Query)
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def LCC : RVInstRI<0b0000100, 0b001, OPC_CAP_OP,
+                   (outs GPR:$rd), // Result: integer
+                   // Input: Capability + 5-bit field specifier
+                   (ins GPR:$rs1, uimm5_i64:$imm5),
+                   "lcc", "$rd, $rs1, $imm5">;
+
+// Mappings for LCC fields (Table 8 from Spec)
+// 0: valid, 2: cursor, 3: base, 4: end, 5: perms
+// get_tag, get_cursor, get_base, get_end, get_perm
+def : Pat<(int_capstone_cap_get_tag GPR:$src),    (LCC GPR:$src, 0)>;
+def : Pat<(int_capstone_cap_get_cursor GPR:$src), (LCC GPR:$src, 2)>;
+def : Pat<(int_capstone_cap_get_base GPR:$src),   (LCC GPR:$src, 3)>;
+def : Pat<(int_capstone_cap_get_end GPR:$src),    (LCC GPR:$src, 4)>;
+def : Pat<(int_capstone_cap_get_perm GPR:$src),   (LCC GPR:$src, 5)>;
 
 //===----------------------------------------------------------------------===//
 // Standard extensions

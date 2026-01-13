@@ -162,3 +162,16 @@ include "clang/Basic/BuiltinsCapstoneXCV.td"
 // XAndes extensions.
 //===----------------------------------------------------------------------===//
 include "clang/Basic/BuiltinsCapstoneXAndes.td"
+
+//===----------------------------------------------------------------------===//
+// Capstone Capability Extension.
+//===----------------------------------------------------------------------===//
+let Attributes = [NoThrow, Const] in {
+// Prototype: unsigned long __builtin_cap_get_tag(void *cap)
+// We use uint64_t for return (i64) and void* for capability (i128)
+def cap_get_tag    : CapstoneBuiltin<"uint64_t(void*)">;
+def cap_get_base   : CapstoneBuiltin<"uint64_t(void*)">;
+def cap_get_end    : CapstoneBuiltin<"uint64_t(void*)">;
+def cap_get_perm   : CapstoneBuiltin<"uint64_t(void*)">;
+def cap_get_cursor : CapstoneBuiltin<"uint64_t(void*)">;
+}

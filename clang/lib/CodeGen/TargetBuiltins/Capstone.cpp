@@ -1360,6 +1360,26 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
 
     // Andes Vector builtins are handled from here.
 #include "clang/Basic/capstone_andes_vector_builtin_cg.inc"
+  case Capstone::BI__builtin_capstone_cap_get_base:
+    ID = Intrinsic::capstone_cap_get_base;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  case Capstone::BI__builtin_capstone_cap_get_cursor:
+    ID = Intrinsic::capstone_cap_get_cursor;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  case Capstone::BI__builtin_capstone_cap_get_end:
+    ID = Intrinsic::capstone_cap_get_end;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  case Capstone::BI__builtin_capstone_cap_get_perm:
+    ID = Intrinsic::capstone_cap_get_perm;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  case Capstone::BI__builtin_capstone_cap_get_tag:
+    ID = Intrinsic::capstone_cap_get_tag;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
   }
 
   assert(ID != Intrinsic::not_intrinsic);

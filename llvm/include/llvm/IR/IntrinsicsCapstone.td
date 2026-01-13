@@ -58,6 +58,32 @@ let TargetPrefix = "capstone" in {
   //   ptr addr, ixlen cmpval, ixlen newval, ixlen mask, ixlenimm ordering)
   def int_capstone_masked_cmpxchg : CapstoneMaskedAtomicRMWFiveArg;
 
+  //===--------------------------------------------------------------------===//
+  // Capstone-specific (mainly capability-related) intrinsics
+
+  // i64 get_tag(i128 capability)
+  def int_capstone_cap_get_tag : Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty],
+                                           [IntrNoMem]>;
+
+  // i64 get_base(i128 capability)
+  def int_capstone_cap_get_base : Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty],
+                                            [IntrNoMem]>;
+
+  // i64 get_end(i128 capability)
+  def int_capstone_cap_get_end : Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty],
+                                           [IntrNoMem]>;
+
+  // i64 get_perm(i128 capability)
+  def int_capstone_cap_get_perm : Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty],
+                                            [IntrNoMem]>;
+
+  // i64 get_cursor(i128 capability) - analogue of get_addr
+  def int_capstone_cap_get_cursor : Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty],
+                                              [IntrNoMem]>;
+
+  // For length intrinsic, we do not make it yet, as it is (end - base),
+  // we can implement it in C-header or later with pattern.
+  //===--------------------------------------------------------------------===//
 } // TargetPrefix = "capstone"
 
 //===----------------------------------------------------------------------===//
