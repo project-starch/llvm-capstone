@@ -4873,12 +4873,20 @@ public:
   llvm::Value *EmitHexagonBuiltinExpr(unsigned BuiltinID, const CallExpr *E);
   llvm::Value *EmitRISCVBuiltinExpr(unsigned BuiltinID, const CallExpr *E,
                                     ReturnValueSlot ReturnValue);
+  llvm::Value *EmitCapstoneBuiltinExpr(unsigned BuiltinID, const CallExpr *E,
+                                       ReturnValueSlot ReturnValue);
 
   llvm::Value *EmitRISCVCpuSupports(const CallExpr *E);
   llvm::Value *EmitRISCVCpuSupports(ArrayRef<StringRef> FeaturesStrs);
   llvm::Value *EmitRISCVCpuInit();
   llvm::Value *EmitRISCVCpuIs(const CallExpr *E);
   llvm::Value *EmitRISCVCpuIs(StringRef CPUStr);
+
+  llvm::Value *EmitCapstoneCpuSupports(const CallExpr *E);
+  llvm::Value *EmitCapstoneCpuSupports(ArrayRef<StringRef> FeaturesStrs);
+  llvm::Value *EmitCapstoneCpuInit();
+  llvm::Value *EmitCapstoneCpuIs(const CallExpr *E);
+  llvm::Value *EmitCapstoneCpuIs(StringRef CPUStr);
 
   void AddAMDGPUFenceAddressSpaceMMRA(llvm::Instruction *Inst,
                                       const CallExpr *E);

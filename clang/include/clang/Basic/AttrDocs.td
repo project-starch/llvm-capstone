@@ -3035,6 +3035,90 @@ the type is not supported for that value of ``__riscv_v_fixed_vlen``.
 }];
 }
 
+def CapstoneInterruptDocs : Documentation {
+  let Category = DocCatFunction;
+  let Heading = "interrupt (Capstone)";
+  let Content = [{
+Clang supports the GNU style ``__attribute__((interrupt))`` attribute on Capstone
+targets. This attribute may be attached to a function definition and instructs
+the backend to generate appropriate function entry/exit code so that it can be
+used directly as an interrupt service routine.
+
+Permissible values for this parameter are ``machine``, ``supervisor``,
+``rnmi``, ``qci-nest``, ``qci-nonest``, ``SiFive-CLIC-preemptible``, and
+``SiFive-CLIC-stack-swap``. If there is no parameter, then it defaults to
+``machine``.
+
+The ``rnmi`` value is used for resumable non-maskable interrupts. It requires the
+standard Smrnmi extension.
+
+The ``qci-nest`` and ``qci-nonest`` values require Qualcomm's Xqciint extension
+and are used for Machine-mode Interrupts and Machine-mode Non-maskable
+interrupts. These use the following instructions from Xqciint to save and
+restore interrupt state to the stack -- the ``qci-nest`` value will use
+``qc.c.mienter.nest`` and the ``qci-nonest`` value will use ``qc.c.mienter`` to
+begin the interrupt handler. Both of these will use ``qc.c.mileaveret`` to
+restore the state and return to the previous context.
+
+The ``SiFive-CLIC-preemptible`` and ``SiFive-CLIC-stack-swap`` values are used
+for machine-mode interrupts. For ``SiFive-CLIC-preemptible`` interrupts, the
+values of ``mcause`` and ``mepc`` are saved onto the stack, and interrupts are
+re-enabled. For ``SiFive-CLIC-stack-swap`` interrupts, the stack pointer is
+swapped with ``mscratch`` before its first use and after its last use.
+
+The SiFive CLIC values may be combined with each other and with the ``machine``
+attribute value. Any other combination of different values is not allowed.
+
+Repeated interrupt attribute on the same declaration will cause a warning
+to be emitted. In case of repeated declarations, the last one prevails.
+
+Refer to:
+https://gcc.gnu.org/onlinedocs/gcc/Capstone-Function-Attributes.html
+https://capstone.org/specifications/privileged-isa/
+The Capstone Instruction Set Manual Volume II: Privileged Architecture
+Version 1.10.
+https://github.com/quic/capstone-unified-db/releases/tag/Xqci-0.13.0
+https://sifive.cdn.prismic.io/sifive/d1984d2b-c9b9-4c91-8de0-d68a5e64fa0f_sifive-interrupt-cookbook-v1p2.pdf
+  }];
+}
+
+def CapstoneRVVVectorBitsDocs : Documentation {
+  let Category = DocCatType;
+  let Content = [{
+On Capstone targets, the ``capstone_rvv_vector_bits(N)`` attribute is used to define
+fixed-length variants of sizeless types.
+
+For example:
+
+.. code-block:: c
+
+  #include <capstone_vector.h>
+
+  #if defined(__capstone_v_fixed_vlen)
+  typedef vint8m1_t fixed_vint8m1_t __attribute__((capstone_rvv_vector_bits(__capstone_v_fixed_vlen)));
+  #endif
+
+Creates a type ``fixed_vint8m1_t`` that is a fixed-length variant of
+``vint8m1_t`` that contains exactly 512 bits. Unlike ``vint8m1_t``, this type
+can be used in globals, structs, unions, and arrays, all of which are
+unsupported for sizeless types.
+
+The attribute can be attached to a single RVV vector (such as ``vint8m1_t``).
+The attribute will be rejected unless
+``N==(__capstone_v_fixed_vlen*LMUL)``, the implementation defined feature macro that
+is enabled under the ``-mrvv-vector-bits`` flag. ``__capstone_v_fixed_vlen`` can
+only be a power of 2 between 64 and 65536.
+
+For types where LMUL!=1, ``__capstone_v_fixed_vlen`` needs to be scaled by the LMUL
+of the type before passing to the attribute.
+
+For ``vbool*_t`` types, ``__capstone_v_fixed_vlen`` needs to be divided by the
+number from the type name. For example, ``vbool8_t`` needs to use
+``__capstone_v_fixed_vlen`` / 8. If the resulting value is not a multiple of 8,
+the type is not supported for that value of ``__capstone_v_fixed_vlen``.
+}];
+}
+
 def AVRInterruptDocs : Documentation {
   let Category = DocCatFunction;
   let Heading = "interrupt (AVR)";

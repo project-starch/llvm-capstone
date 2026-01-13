@@ -1135,6 +1135,9 @@ void TypePrinter::printFunctionAfter(const FunctionType::ExtInfo &Info,
     case CC_RISCVVectorCall:
       OS << "__attribute__((riscv_vector_cc))";
       break;
+    case CC_CapstoneVectorCall:
+      OS << "__attribute__((riscv_vector_cc))";
+      break;
 #define CC_VLS_CASE(ABI_VLEN)                                                  \
   case CC_RISCVVLSCall_##ABI_VLEN:                                             \
     OS << "__attribute__((riscv_vls_cc" #ABI_VLEN "))";                        \
@@ -1151,6 +1154,23 @@ void TypePrinter::printFunctionAfter(const FunctionType::ExtInfo &Info,
       CC_VLS_CASE(16384)
       CC_VLS_CASE(32768)
       CC_VLS_CASE(65536)
+#undef CC_VLS_CASE
+#define CC_VLS_CASE_CAPSTONE(ABI_VLEN)                                                  \
+case CC_CapstoneVLSCall_##ABI_VLEN:                                             \
+OS << "__attribute__((capstone_vls_cc" #ABI_VLEN "))";                        \
+break;
+      CC_VLS_CASE_CAPSTONE(32)
+      CC_VLS_CASE_CAPSTONE(64)
+      CC_VLS_CASE_CAPSTONE(128)
+      CC_VLS_CASE_CAPSTONE(256)
+      CC_VLS_CASE_CAPSTONE(512)
+      CC_VLS_CASE_CAPSTONE(1024)
+      CC_VLS_CASE_CAPSTONE(2048)
+      CC_VLS_CASE_CAPSTONE(4096)
+      CC_VLS_CASE_CAPSTONE(8192)
+      CC_VLS_CASE_CAPSTONE(16384)
+      CC_VLS_CASE_CAPSTONE(32768)
+      CC_VLS_CASE_CAPSTONE(65536)
 #undef CC_VLS_CASE
     }
   }
@@ -2130,6 +2150,12 @@ void TypePrinter::printAttributedAfter(const AttributedType *T,
     OS << "riscv_vector_cc";
     break;
   case attr::RISCVVLSCC:
+    OS << "riscv_vls_cc";
+    break;
+  case attr::CapstoneVectorCC:
+    OS << "riscv_vector_cc";
+    break;
+  case attr::CapstoneVLSCC:
     OS << "riscv_vls_cc";
     break;
   case attr::NoDeref:

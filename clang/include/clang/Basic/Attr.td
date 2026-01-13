@@ -477,6 +477,7 @@ def TargetAnyMips : TargetArch<["mips", "mipsel", "mips64", "mips64el"]>;
 def TargetMSP430 : TargetArch<["msp430"]>;
 def TargetM68k : TargetArch<["m68k"]>;
 def TargetRISCV : TargetArch<["riscv32", "riscv64"]>;
+def TargetCapstone : TargetArch<["capstone32", "capstone64"]>;
 def TargetX86 : TargetArch<["x86"]>;
 def TargetX86_64 : TargetArch<["x86_64"]>;
 def TargetAnyX86 : TargetArch<["x86", "x86_64"]>;
@@ -964,7 +965,8 @@ def PatchableFunctionEntry
     : InheritableAttr,
       TargetSpecificAttr<TargetArch<
           ["aarch64", "aarch64_be", "loongarch32", "loongarch64", "riscv32",
-           "riscv64", "x86", "x86_64", "ppc", "ppc64", "ppc64le"]>> {
+           "riscv64", "capstone32", "capstone64", "x86", "x86_64", "ppc",
+           "ppc64", "ppc64le"]>> {
   let Spellings = [GCC<"patchable_function_entry">];
   let Subjects = SubjectList<[Function, ObjCMethod]>;
   let Args = [UnsignedArgument<"Count">, DefaultIntArgument<"Offset", 0>,
@@ -2407,6 +2409,42 @@ def RISCVRVVVectorBits : TypeAttr {
   let ASTNode = 0;
 }
 
+def CapstoneInterrupt : InheritableAttr, TargetSpecificAttr<TargetRISCV> {
+  let Spellings = [GCC<"interrupt">];
+  let Subjects = SubjectList<[Function]>;
+  let Args = [VariadicEnumArgument<"Interrupt", "InterruptType", /*is_string=*/true,
+                                   [
+                                     "supervisor",
+                                     "machine",
+                                     "rnmi",
+                                     "qci-nest",
+                                     "qci-nonest",
+                                     "SiFive-CLIC-preemptible",
+                                     "SiFive-CLIC-stack-swap",
+                                   ],
+                                   [
+                                     "supervisor",
+                                     "machine",
+                                     "rnmi",
+                                     "qcinest",
+                                     "qcinonest",
+                                     "SiFiveCLICPreemptible",
+                                     "SiFiveCLICStackSwap",
+                                   ]>];
+  let ParseKind = "Interrupt";
+  let Documentation = [CapstoneInterruptDocs];
+}
+
+def CapstoneRVVVectorBits : TypeAttr {
+  let Spellings = [GNU<"capstone_rvv_vector_bits">];
+  let Subjects = SubjectList<[TypedefName], ErrorDiag>;
+  let Args = [UnsignedArgument<"NumBits">];
+  let Documentation = [CapstoneRVVVectorBitsDocs];
+  let PragmaAttributeSupport = 0;
+  // Represented as VectorType instead.
+  let ASTNode = 0;
+}
+
 // This is not a TargetSpecificAttr so that is silently accepted and
 // ignored on other targets as encouraged by the OpenCL spec.
 //
@@ -3495,6 +3533,21 @@ def RISCVVLSCC: DeclOrTypeAttr, TargetSpecificAttr<TargetRISCV> {
  let Spellings = [CXX11<"riscv", "vls_cc">,
                   C23<"riscv", "vls_cc">,
                   Clang<"riscv_vls_cc">];
+ let Args = [UnsignedArgument<"VectorWidth", /*opt*/1>];
+ let Documentation = [RISCVVLSCCDocs];
+}
+
+def CapstoneVectorCC: DeclOrTypeAttr, TargetSpecificAttr<TargetRISCV> {
+ let Spellings = [CXX11<"capstone", "vector_cc">,
+                  C23<"capstone", "vector_cc">,
+                  Clang<"capstone_vector_cc">];
+ let Documentation = [RISCVVectorCCDocs];
+}
+
+def CapstoneVLSCC: DeclOrTypeAttr, TargetSpecificAttr<TargetRISCV> {
+ let Spellings = [CXX11<"capstone", "vls_cc">,
+                  C23<"capstone", "vls_cc">,
+                  Clang<"capstone_vls_cc">];
  let Args = [UnsignedArgument<"VectorWidth", /*opt*/1>];
  let Documentation = [RISCVVLSCCDocs];
 }
