@@ -1042,35 +1042,51 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
   assert((Opcode == ISD::LOAD) || (Opcode == ISD::STORE));
 
   auto *MemNode = cast<MemSDNode>(Node);
-  if (MemNode->getMemoryVT() != MVT::i128) // Here we only work with i128
-    return false;
-  // For Load, the result must also be i128
-  if (Opcode == ISD::LOAD && Node->getSimpleValueType(0) != MVT::i128)
-    return false;
-  // For Store, the stored value must be i128
-  if (Opcode == ISD::STORE &&
-      cast<StoreSDNode>(Node)->getValue().getSimpleValueType() != MVT::i128)
-    return false;
+  EVT MemVT = MemNode->getMemoryVT();
+  MVT ResultVT = Node->getSimpleValueType(0);
 
-  SDLoc DL(Node);                           // Debug location
-  SDValue Chain = MemNode->getChain();      // Dependency chain
-  SDValue BasePtr = MemNode->getBasePtr();  // Base address (or FrameIndex)
+  unsigned MachineOpcode = 0;
+
+  if (Opcode == ISD::LOAD) {
+    // 1. Load Capability (i128 -> i128)
+    if (MemVT == MVT::i128 && ResultVT == MVT::i128)
+      MachineOpcode = Capstone::LDC;
+      // 2. Load i64 value with extension to i128 (i64 -> i128)
+      // This is needed for casts (long -> void*) and working with long.
+      // The LD instruction in Capstone (RV64) loads 64 bits
+      // and does sign-extend to register size (128).
+    else if (MemVT == MVT::i64 && ResultVT == MVT::i128)
+      MachineOpcode = Capstone::LD;
+  } else if (Opcode == ISD::STORE) {
+    // 1. Store Capability
+    if (MemVT == MVT::i128)
+      MachineOpcode = Capstone::STC;
+      // 2. Store i64 value (from 128-bit register)
+      // For example: *(long*)ptr = (long)ptr_val;
+    else if (MemVT == MVT::i64)
+      MachineOpcode = Capstone::SD;
+  }
+
+  if (MachineOpcode == 0)
+    return false; // If we don't know what to do - exit
+
+  SDLoc DL(Node); // Debug location
+  SDValue Chain = MemNode->getChain(); // Dependency chain
+  SDValue BasePtr = MemNode->getBasePtr(); // Base address (or FrameIndex)
   // Different operand offset Load (2), and for Store (3)
   SDValue Offset = MemNode->getOperand(Opcode == ISD::LOAD ? 2 : 3);
 
   // 1. Normalize offset (undef -> 0)
-  // IMPORTANT: Use MVT::i64, as the instruction expects simm12_i64_op
   if (Offset.isUndef()) {
+    // Use MVT::i64, as the instruction expects simm12_i64_op
     // If offset is undefined, set it explicitly 0
     Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
   } else if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
-    // IMPORTANT: Check if the offset fits in 12 bits.
-    // If not, we decline for now (let LLVM try to split it itself,
-    // although without patterns it will fail, but this is better than
-    // generating garbage).
+    // Check if the offset fits in 12 bits. If not, we decline for now
+    // (let LLVM try to split it itself, although without patterns it will
+    // fail, but this is better than generating garbage).
     if (!isInt<12>(C->getSExtValue()))
       return false;
-
     // Recreate the constant as TargetConstant i64
     Offset = CurDAG->getTargetConstant(C->getSExtValue(), DL, MVT::i64);
   } else {
@@ -1097,8 +1113,9 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
 
   // 3. Generate instruction
   if (Opcode == ISD::LOAD) {
+    // Use MachineOpcode that we selected above (LDC or LD)
     SDNode *Res = CurDAG->getMachineNode(
-        Capstone::LDC, DL, CurDAG->getVTList(MVT::i128, MVT::Other),
+        MachineOpcode, DL, CurDAG->getVTList(MVT::i128, MVT::Other),
         {BasePtr, Offset, Chain});
 
     CurDAG->setNodeMemRefs(cast<MachineSDNode>(Res),
@@ -1107,7 +1124,7 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
     ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));
   } else { // Store
     SDValue Val = cast<StoreSDNode>(Node)->getValue();
-    SDNode *Res = CurDAG->getMachineNode(Capstone::STC, DL, MVT::Other,
+    SDNode *Res = CurDAG->getMachineNode(MachineOpcode, DL, MVT::Other,
                                          {Val, BasePtr, Offset, Chain});
 
     CurDAG->setNodeMemRefs(cast<MachineSDNode>(Res),
@@ -2977,7 +2994,7 @@ bool CapstoneDAGToDAGISel::SelectAddrFrameIndex(SDValue Addr, SDValue &Base,
   if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
     Base =
         CurDAG->getTargetFrameIndex(FIN->getIndex(), Addr.getSimpleValueType());
-    Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), Subtarget->getXLenVT());
+    Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
     return true;
   }
 
@@ -3180,7 +3197,7 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
 
       if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))
         Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), VT);
-      Offset = CurDAG->getSignedTargetConstant(CVal, DL, VT);
+      Offset = CurDAG->getSignedTargetConstant(CVal, DL, MVT::i64);
       return true;
     }
   }
@@ -3199,7 +3216,7 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
           CurDAG->getMachineNode(Capstone::ADDI, DL, VT, Addr.getOperand(0),
                                  CurDAG->getSignedTargetConstant(Adj, DL, VT)),
           0);
-      Offset = CurDAG->getSignedTargetConstant(CVal - Adj, DL, VT);
+      Offset = CurDAG->getSignedTargetConstant(CVal - Adj, DL, MVT::i64);
       return true;
     }
 
@@ -3225,7 +3242,7 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
     return true;
 
   Base = Addr;
-  Offset = CurDAG->getTargetConstant(0, DL, VT);
+  Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
   return true;
 }
 
