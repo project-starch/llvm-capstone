@@ -1380,6 +1380,15 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
     ID = Intrinsic::capstone_cap_get_tag;
     IntrinsicTypes.push_back(Ops[0]->getType());
     break;
+  case Capstone::BI__builtin_capstone_cap_shrink:
+    ID = Intrinsic::capstone_cap_shrink;
+    // Resolve overloaded return type
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    // Manually extend 64-bit arguments to i128 to match intrinsic signature
+    llvm::Type *Int128Ty = llvm::Type::getInt128Ty(getLLVMContext());
+    Ops[1] = Builder.CreateZExt(Ops[1], Int128Ty);
+    Ops[2] = Builder.CreateZExt(Ops[2], Int128Ty);
+    break;
   }
 
   assert(ID != Intrinsic::not_intrinsic);

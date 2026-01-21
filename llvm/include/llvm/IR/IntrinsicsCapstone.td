@@ -83,6 +83,12 @@ let TargetPrefix = "capstone" in {
 
   // For length intrinsic, we do not make it yet, as it is (end - base),
   // we can implement it in C-header or later with pattern.
+
+  // ptr shrink(ptr cap, i128 new_base, i128 new_end)
+  // We use i128 for base/end to match the GPR register class size directly.
+  def int_capstone_cap_shrink : Intrinsic<[llvm_anyptr_ty],
+                                          [LLVMMatchType<0>, llvm_i128_ty, llvm_i128_ty],
+                                          [IntrNoMem]>;
   //===--------------------------------------------------------------------===//
 } // TargetPrefix = "capstone"
 

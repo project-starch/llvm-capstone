@@ -2420,6 +2420,20 @@ def : Pat<(int_capstone_cap_get_base GPR:$src),   (LCC GPR:$src, 3)>;
 def : Pat<(int_capstone_cap_get_end GPR:$src),    (LCC GPR:$src, 4)>;
 def : Pat<(int_capstone_cap_get_perm GPR:$src),   (LCC GPR:$src, 5)>;
 
+// SHRINK: Capability bounds narrowing
+// rd = shrink(cap_in, base, end)
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Constraints = "$rd = $cap_in" in
+def SHRINK : RVInstR<0b0000001, 0b001, OPC_CAP_OP, (outs GPR:$rd),
+                     (ins GPR:$cap_in, GPR:$rs1, GPR:$rs2),
+                     "shrink", "$rd, $rs1, $rs2">;
+
+// Patterns to handle implicit zero/sign/any extensions of i64 values
+// into i128 registers. This is necessary because standard integer types (i64)
+// need to be treated as GPRs (i128).
+def : Pat<(i128 (zext (i64 GPR:$src))), (COPY GPR:$src)>;
+def : Pat<(i128 (sext (i64 GPR:$src))), (COPY GPR:$src)>;
+def : Pat<(i128 (anyext (i64 GPR:$src))), (COPY GPR:$src)>;
+
 //===----------------------------------------------------------------------===//
 // Standard extensions
 //===----------------------------------------------------------------------===//

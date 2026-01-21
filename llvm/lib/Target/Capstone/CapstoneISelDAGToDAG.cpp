@@ -1198,6 +1198,21 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   ReplaceNode(Node, Res);
 }
 
+void CapstoneDAGToDAGISel::selectShrink(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Cap = Node->getOperand(1);
+  SDValue Base = Node->getOperand(2);
+  SDValue End = Node->getOperand(3);
+
+  // SHRINK instruction definition:
+  //    (outs GPR:$rd), (ins GPR:$cap_in, GPR:$rs1, GPR:$rs2)
+  // We manually create the MachineNode to ensure operands are treated
+  // as compatible with GPR (i128).
+  SDNode *Res = CurDAG->getMachineNode(Capstone::SHRINK, DL, MVT::i128, Cap,
+                                       Base, End);
+  ReplaceNode(Node, Res);
+}
+
 void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   // If we have a custom node, we have already selected.
   if (Node->isMachineOpcode()) {
@@ -2298,6 +2313,8 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     case Intrinsic::capstone_vsetvli:
     case Intrinsic::capstone_vsetvlimax:
       return selectVSETVLI(Node);
+    case Intrinsic::capstone_cap_shrink:
+      return selectShrink(Node);
     }
     break;
   }
