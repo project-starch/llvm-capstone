@@ -2443,6 +2443,15 @@ def : Pat<(i128 (zext (i64 GPR:$src))), (COPY GPR:$src)>;
 def : Pat<(i128 (sext (i64 GPR:$src))), (COPY GPR:$src)>;
 def : Pat<(i128 (anyext (i64 GPR:$src))), (COPY GPR:$src)>;
 
+// MOVC: Move Capability.
+// Used to copy capabilities between GPRs preserving the Tag bit.
+// Format: R-type, but rs2 is unused (must be 0).
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
+                   "movc", "$rd, $rs1"> {
+  let rs2 = 0;
+}
+
 //===----------------------------------------------------------------------===//
 // Standard extensions
 //===----------------------------------------------------------------------===//

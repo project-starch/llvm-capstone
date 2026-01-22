@@ -510,9 +510,8 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   unsigned KillFlag = getKillRegState(KillSrc);
 
   if (Capstone::GPRRegClass.contains(DstReg, SrcReg)) {
-    BuildMI(MBB, MBBI, DL, get(Capstone::ADDI), DstReg)
-        .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc))
-        .addImm(0);
+    BuildMI(MBB, MBBI, DL, get(Capstone::MOVC), DstReg)
+        .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc));
     return;
   }
 
