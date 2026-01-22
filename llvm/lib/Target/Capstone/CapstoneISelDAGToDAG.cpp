@@ -1213,6 +1213,71 @@ void CapstoneDAGToDAGISel::selectShrink(SDNode *Node) {
   ReplaceNode(Node, Res);
 }
 
+void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Chain = Node->getOperand(0);
+  SDValue Callee = Node->getOperand(1);
+  MVT PtrVT = MVT::i128;
+
+  // Target register that will be passed to CJALR (rs1)
+  SDValue TargetReg;
+
+  // Check if the call target is an LGA node (Direct Call lowered to Indirect)
+  if (Callee.getOpcode() == CapstoneISD::LGA) {
+    // We must manually expand LGA here because we cannot rely on TableGen
+    // patterns to match LGA inside a CALL node correctly
+    // (due to type/operand constraints).
+
+    // Extract the symbol (TargetGlobalAddress) from LGA
+    SDValue Symbol = Callee.getOperand(0);
+
+    // 1. PseudoLLA: Materialize numeric offset from PC
+    SDNode *Offset = CurDAG->getMachineNode(Capstone::PseudoLLA, DL, PtrVT,
+                                            Symbol);
+
+    // 2. GP: Get the root data capability
+    SDValue GP = CurDAG->getRegister(Capstone::X3, PtrVT);
+
+    // 3. CIncOffset: Create the final function pointer capability
+    SDNode *Ptr = CurDAG->getMachineNode(Capstone::CIncOffset, DL, PtrVT,
+                                         GP, SDValue(Offset, 0));
+    TargetReg = SDValue(Ptr, 0);
+  } else {
+    // Indirect call (e.g. function pointer).
+    // Callee is already a register (i128)
+    TargetReg = Callee;
+  }
+
+  // 2. Prepare operands for CJALR
+  SDValue Zero = CurDAG->getTargetConstant(0, DL, MVT::i64); // simm12_i64_op
+
+  SmallVector<SDValue, 8> Ops;
+  Ops.push_back(TargetReg); // rs1 (Target Function Pointer)
+  Ops.push_back(Zero);      // imm12 (Offset 0)
+  Ops.push_back(Chain);     // Input Chain
+
+  // Pass glue (flags, register arguments)
+  if (Node->getGluedNode())
+    Ops.push_back(Node->getOperand(Node->getNumOperands() - 1));
+
+  // Create CJALR instruction.
+  // Returns: 1. Value (RA) - not used here, 2. Chain, 3. Glue
+  // Note: We specify PtrVT as the first result type to match the instruction
+  // definition, even though CALL node doesn't use it.
+  SDNode *Call = CurDAG->getMachineNode(Capstone::CJALR, DL,
+                                        CurDAG->getVTList(
+                                            PtrVT, MVT::Other, MVT::Glue),
+                                        Ops);
+
+  // Replace original CALL.
+  // CALL returns {Chain, Glue}.
+  // CJALR returns {Value, Chain, Glue}.
+  // Map CALL:0 -> CJALR:1 (Chain), CALL:1 -> CJALR:2 (Glue).
+  ReplaceUses(SDValue(Node, 0), SDValue(Call, 1)); // Chain
+  ReplaceUses(SDValue(Node, 1), SDValue(Call, 2)); // Glue
+  CurDAG->RemoveDeadNode(Node);
+}
+
 void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   // If we have a custom node, we have already selected.
   if (Node->isMachineOpcode()) {
@@ -2970,6 +3035,11 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   }
   case CapstoneISD::LGA: {
     selectLGA(Node);
+    return;
+  }
+  case CapstoneISD::CALL:
+  case CapstoneISD::TAIL: {
+    selectCall(Node);
     return;
   }
   }

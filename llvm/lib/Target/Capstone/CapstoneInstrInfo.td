@@ -817,6 +817,13 @@ def JALR : RVInstI<0b000, OPC_JALR, (outs GPR:$rd),
                    (ins GPR:$rs1, simm12:$imm12),
                    "jalr", "$rd, ${imm12}(${rs1})">,
            Sched<[WriteJalr, ReadJalr]>;
+
+// CJALR: Capability Jump and Link Register
+// 1. Save PC+4 to rd (creating a return capability).
+// 2. Jump to target in rs1 (checking tag/perms).
+def CJALR : RVInstI<0b101, OPC_CAP_OP, (outs GPR:$rd),
+                    (ins GPR:$rs1, simm12_i64_op:$imm12),
+                    "cjalr", "$rd, ${imm12}(${rs1})">;
 } // hasSideEffects = 0, mayLoad = 0, mayStore = 0
 
 def BEQ  : BranchCC_rri<0b000, "beq">;
@@ -1876,7 +1883,8 @@ let isCall = 1, Defs = [X1] in {
 let Predicates = [NoStdExtZicfilp] in
 def PseudoCALLIndirect : Pseudo<(outs), (ins GPRJALR:$rs1),
                                 [(capstone_call GPRJALR:$rs1)]>,
-                         PseudoInstExpansion<(JALR X1, GPR:$rs1, 0)>;
+                         // Use CJALR
+                         PseudoInstExpansion<(CJALR X1, GPR:$rs1, 0)>;
 let Predicates = [HasStdExtZicfilp] in {
 def PseudoCALLIndirectNonX7 : Pseudo<(outs), (ins GPRJALRNonX7:$rs1),
                                      [(capstone_call GPRJALRNonX7:$rs1)]>,
@@ -1890,7 +1898,7 @@ def PseudoCALLIndirectX7 : Pseudo<(outs), (ins GPRX7:$rs1),
 
 let isBarrier = 1, isReturn = 1, isTerminator = 1 in
 def PseudoRET : Pseudo<(outs), (ins), [(capstone_ret_glue)]>,
-                PseudoInstExpansion<(JALR X0, X1, 0)>;
+                PseudoInstExpansion<(CJALR X0, X1, 0)>; // Use CJALR
 
 // PseudoTAIL is a pseudo instruction similar to PseudoCALL and will eventually
 // expand to auipc and jalr while encoding.
@@ -1905,7 +1913,8 @@ let isCall = 1, isTerminator = 1, isReturn = 1, isBarrier = 1, Uses = [X2] in {
 let Predicates = [NoStdExtZicfilp] in
 def PseudoTAILIndirect : Pseudo<(outs), (ins GPRTC:$rs1),
                                 [(capstone_tail GPRTC:$rs1)]>,
-                         PseudoInstExpansion<(JALR X0, GPR:$rs1, 0)>;
+                                // Use CJALR
+                         PseudoInstExpansion<(CJALR X0, GPR:$rs1, 0)>;
 let Predicates = [HasStdExtZicfilp] in {
 def PseudoTAILIndirectNonX7 : Pseudo<(outs), (ins GPRTCNonX7:$rs1),
                                      [(capstone_tail GPRTCNonX7:$rs1)]>,

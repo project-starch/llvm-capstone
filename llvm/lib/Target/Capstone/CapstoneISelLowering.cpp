@@ -23629,9 +23629,16 @@ SDValue CapstoneTargetLowering::LowerCall(CallLoweringInfo &CLI,
       CalleeIsLargeExternalSymbol = true;
     }
   } else if (GlobalAddressSDNode *S = dyn_cast<GlobalAddressSDNode>(Callee)) {
-    const GlobalValue *GV = S->getGlobal();
-    Callee = DAG.getTargetGlobalAddress(GV, DL, PtrVT, 0, CapstoneII::MO_CALL);
+    // Capstone CHANGE:
+    // Force all global calls to be indirect via Capability materialization
+    // (Load via GP). This reuses the logic we implemented for Global Variables
+    // (LGA -> PseudoLLA + CIncOffset). The SelectLGA logic in ISelDAGToDAG
+    // will handle materializing the address.
+    Callee = lowerGlobalAddress(SDValue(S, 0), DAG);
   } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
+    // FIXME: External Symbols (e.g. memset) should also be loaded via GOT/PLT
+    // as capabilities. For now, we fallback to standard lowering, which might
+    // be unsafe if PtrVT is i128
     Callee = DAG.getTargetExternalSymbol(S->getSymbol(), PtrVT, CapstoneII::MO_CALL);
   }
 

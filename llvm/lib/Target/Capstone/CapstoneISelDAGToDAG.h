@@ -177,6 +177,7 @@ public:
   void selectCIncOffset(SDNode *Node);
   void selectLGA(SDNode *Node);
   void selectShrink(SDNode *Node);
+  void selectCall(SDNode *Node);
 
   // Return the Capstone condition code that matches the given DAG integer
   // condition code. The CondCode must be one of those supported by the Capstone
