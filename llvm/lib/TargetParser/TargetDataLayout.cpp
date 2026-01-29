@@ -319,7 +319,11 @@ static std::string computeCapstoneDataLayout(const Triple &TT,
 
   // Pointer and integer sizes.
   if (TT.isCapstone64()) {
-    Ret += "-p:128:128-i64:64-i128:128";
+    // Capstone PureCap mode changes:
+    // 1. AS0 set to 64:128 (Legacy/Interop, alignment matches capability)
+    // 2. Add AS200 (p200:128:128:128) for Capabilities
+    Ret += "-p:64:128-p200:128:128:128";
+    Ret += "-i64:64-i128:128";
     Ret += "-n32:64";
   } else {
     assert(TT.isCapstone32() && "only RV32 and RV64 are currently supported");
@@ -335,6 +339,12 @@ static std::string computeCapstoneDataLayout(const Triple &TT,
     Ret += "-S64";
   else
     Ret += "-S128";
+
+  // Capstone PureCap mode changes:
+  // Add Non-Integral declaration for AS200 (Safety)
+  // Add purecap defaults: Alloca(A), Program(P), Globals(G) in AS200.
+  if (TT.isCapstone64())
+    Ret += "-ni:200-A200-P200-G200";
 
   return Ret;
 }

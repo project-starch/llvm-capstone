@@ -199,6 +199,33 @@ public:
       MaxAtomicInlineWidth = 32;
   }
 };
+
+// Map the "Default" address space (0 in C) to LLVM IR address space 200.
+// This makes all pointers "Fat Pointers" by default.
+const LangASMap CapstoneAddrSpaceMap = {
+  200, // Default
+  0,   // opencl_global
+  0,   // opencl_local
+  0,   // opencl_constant
+  0,   // opencl_private
+  0,   // opencl_generic
+  0,   // opencl_global_device
+  0,   // opencl_global_host
+  0,   // cuda_device
+  0,   // cuda_constant
+  0,   // cuda_shared
+  0,   // sycl_global
+  0,   // sycl_global_device
+  0,   // sycl_global_host
+  0,   // sycl_local
+  0,   // sycl_private
+  0,   // ptr32_sptr
+  0,   // ptr32_uptr
+  0,   // ptr64
+  0,   // hlsl_groupshared
+  0,   // wasm_funcref (unused)
+};
+
 class LLVM_LIBRARY_VISIBILITY Capstone64TargetInfo : public CapstoneTargetInfo {
 public:
   Capstone64TargetInfo(const llvm::Triple &Triple, const TargetOptions &Opts)
@@ -206,7 +233,18 @@ public:
     LongWidth = LongAlign = 64;
     PointerWidth = PointerAlign = 128;
     IntMaxType = Int64Type = SignedLong;
-    resetDataLayout("e-m:e-p:128:128-i64:64-i128:128-n32:64-S128");
+    AddrSpaceMap = &CapstoneAddrSpaceMap;
+
+    // IMPORTANT: New DataLayout for PureCap mode.
+    // p:64:128         -- AS0 is 64-bit but 128-bit aligned
+    //                         (Workaround for Clang consistency check)
+    // p200:128:128:128 -- AS200 is 128-bit (Capabilities)
+    // ni:200           -- Non-Integral pointers! Prevents unsafe optimizations
+    // A200/P200/G200   -- Use AS200 as the default address space for
+    //                     alloca/stack (A), program (P), and globals (G).
+    resetDataLayout(
+        "e-m:e-p:64:128-p200:128:128:128-i64:64-i128:128-n32:64-S128"
+        "-ni:200-A200-P200-G200");
   }
 
   bool setABI(const std::string &Name) override {
