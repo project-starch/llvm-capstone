@@ -1254,7 +1254,20 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
   SmallVector<SDValue, 8> Ops;
   Ops.push_back(TargetReg); // rs1 (Target Function Pointer)
   Ops.push_back(Zero);      // imm12 (Offset 0)
-  Ops.push_back(Chain);     // Input Chain
+
+  // Forward all remaining CALL operands (arg regs, regmask, etc.).
+  // This is critical: without the RegMask, the register allocator may legally
+  // reuse argument registers while materializing the callee, leading to
+  // clobbered arguments at the call site.
+  for (unsigned I = 2, E = Node->getNumOperands(); I != E; ++I) {
+    SDValue Op = Node->getOperand(I);
+    if (Op.getValueType() == MVT::Other || Op.getValueType() == MVT::Glue)
+      continue;
+    Ops.push_back(Op);
+  }
+
+  // Input chain (must be last non-glue operand).
+  Ops.push_back(Chain);
 
   // Pass glue (flags, register arguments)
   if (Node->getGluedNode())
@@ -1264,17 +1277,17 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
   // Returns: 1. Value (RA) - not used here, 2. Chain, 3. Glue
   // Note: We specify PtrVT as the first result type to match the instruction
   // definition, even though CALL node doesn't use it.
-  SDNode *Call = CurDAG->getMachineNode(Capstone::CJALR, DL,
-                                        CurDAG->getVTList(
-                                            PtrVT, MVT::Other, MVT::Glue),
+  SDNode *Call = CurDAG->getMachineNode(Capstone::PseudoCALLIndirect, DL,
+                                        CurDAG->
+                                        getVTList(MVT::Other, MVT::Glue),
                                         Ops);
 
   // Replace original CALL.
   // CALL returns {Chain, Glue}.
   // CJALR returns {Value, Chain, Glue}.
   // Map CALL:0 -> CJALR:1 (Chain), CALL:1 -> CJALR:2 (Glue).
-  ReplaceUses(SDValue(Node, 0), SDValue(Call, 1)); // Chain
-  ReplaceUses(SDValue(Node, 1), SDValue(Call, 2)); // Glue
+  ReplaceUses(SDValue(Node, 0), SDValue(Call, 0)); // Chain
+  ReplaceUses(SDValue(Node, 1), SDValue(Call, 1)); // Glue
   CurDAG->RemoveDeadNode(Node);
 }
 
@@ -1297,8 +1310,27 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
 
   switch (Opcode) {
   case ISD::Constant: {
-    assert((VT == Subtarget->getXLenVT() || VT == MVT::i32) && "Unexpected VT");
     auto *ConstNode = cast<ConstantSDNode>(Node);
+
+    // Capstone pointers/capabilities are i128
+    if (VT == MVT::i128) {
+      if (ConstNode->isZero()) {
+        SDValue New = CurDAG->getCopyFromReg(CurDAG->getEntryNode(), DL,
+                                             Capstone::X0, VT);
+        ReplaceNode(Node, New.getNode());
+        return;
+      }
+
+      // Non-zero i128 constants often appear as small integer literals (e.g.
+      // when constructing test pointers). Materialize them directly in the
+      // i128 GPR type so instruction selection doesn't leave target-independent
+      // extend nodes behind.
+      int64_t Imm = ConstNode->getSExtValue();
+      ReplaceNode(Node, selectImm(CurDAG, DL, VT, Imm, *Subtarget).getNode());
+      return;
+    }
+
+    assert((VT == Subtarget->getXLenVT() || VT == MVT::i32) && "Unexpected VT");
     if (ConstNode->isZero()) {
       SDValue New =
           CurDAG->getCopyFromReg(CurDAG->getEntryNode(), DL, Capstone::X0, VT);

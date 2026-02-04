@@ -425,6 +425,22 @@ bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
 
   ArrayRef<MCPhysReg> ArgGPRs = Capstone::getArgGPRs(ABI);
 
+  // Capability (i128) handling.
+  // Treat i128 values as a single capability that occupies one integer argument
+  // register (or one 16-byte stack slot). We must key off ValVT, because LocVT
+  // might already be canonicalized to XLenVT during legalization/splitting.
+  if (ValVT == MVT::i128) {
+    if (MCRegister Reg = State.AllocateReg(ArgGPRs)) {
+      State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, /*LocVT=*/ValVT,
+                                      LocInfo));
+      return false;
+    }
+    int64_t Offset = State.AllocateStack(/*Size=*/16, Align(16));
+    State.addLoc(CCValAssign::getMem(ValNo, ValVT, Offset, /*LocVT=*/ValVT,
+                                    LocInfo));
+    return false;
+  }
+
   // Zdinx use GPR without a bitcast when possible.
   if (LocVT == MVT::f64 && XLen == 64 && Subtarget.hasStdExtZdinx()) {
     if (MCRegister Reg = State.AllocateReg(ArgGPRs)) {
@@ -545,12 +561,6 @@ bool llvm::CC_Capstone(unsigned ValNo, MVT ValVT, MVT LocVT,
   unsigned StoreSizeBytes = XLen / 8;
   Align StackAlign = Align(XLen / 8);
 
-  // Specifically for Capability (i128): If the argument type is i128 then it
-  // needs 16 bytes and 16-byte alignment.
-  if (LocVT == MVT::i128) {
-    StoreSizeBytes = 16;
-    StackAlign = Align(16);
-  }
 
   if (ValVT.isVector() || ValVT.isCapstoneVectorTuple()) {
     Reg = allocateRVVReg(ValVT, ValNo, State, TLI);
