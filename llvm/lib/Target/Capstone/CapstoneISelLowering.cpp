@@ -23202,7 +23202,8 @@ SDValue CapstoneTargetLowering::LowerFormalArguments(
 
   EVT PtrVT = getPointerTy(DAG.getDataLayout());
   MVT XLenVT = Subtarget.getXLenVT();
-  unsigned XLenInBytes = Subtarget.getXLen() / 8;
+  // Capstone: GPRs are 128-bit (16 bytes).
+  unsigned CXLenInBytes = 16;
   // Used with vargs to accumulate store chains.
   std::vector<SDValue> OutChains;
 
@@ -23272,14 +23273,14 @@ SDValue CapstoneTargetLowering::LowerFormalArguments(
 
     // Size of the vararg save area. For now, the varargs save area is either
     // zero or large enough to hold a0-a7.
-    int VarArgsSaveSize = XLenInBytes * (ArgRegs.size() - Idx);
+    int VarArgsSaveSize = CXLenInBytes * (ArgRegs.size() - Idx);
     int FI;
 
     // If all registers are allocated, then all varargs must be passed on the
     // stack and we don't need to save any argregs.
     if (VarArgsSaveSize == 0) {
       int VaArgOffset = CCInfo.getStackSize();
-      FI = MFI.CreateFixedObject(XLenInBytes, VaArgOffset, true);
+      FI = MFI.CreateFixedObject(CXLenInBytes, VaArgOffset, true);
     } else {
       int VaArgOffset = -VarArgsSaveSize;
       FI = MFI.CreateFixedObject(VarArgsSaveSize, VaArgOffset, true);
@@ -23287,10 +23288,12 @@ SDValue CapstoneTargetLowering::LowerFormalArguments(
       // If saving an odd number of registers then create an extra stack slot to
       // ensure that the frame pointer is 2*XLEN-aligned, which in turn ensures
       // offsets to even-numbered registered remain 2*XLEN-aligned.
+      // Capstone: 16-byte alignment is native, so this logic is simplified
+      // or just works as is (16 * odd is 16-byte aligned).
       if (Idx % 2) {
         MFI.CreateFixedObject(
-            XLenInBytes, VaArgOffset - static_cast<int>(XLenInBytes), true);
-        VarArgsSaveSize += XLenInBytes;
+            CXLenInBytes, VaArgOffset - static_cast<int>(CXLenInBytes), true);
+        VarArgsSaveSize += CXLenInBytes;
       }
 
       SDValue FIN = DAG.getFrameIndex(FI, PtrVT);
@@ -23300,13 +23303,16 @@ SDValue CapstoneTargetLowering::LowerFormalArguments(
       for (unsigned I = Idx; I < ArgRegs.size(); ++I) {
         const Register Reg = RegInfo.createVirtualRegister(RC);
         RegInfo.addLiveIn(ArgRegs[I], Reg);
-        SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, XLenVT);
+        // Capstone: Load full 128-bit capability from register.
+        // This ensures the Tag bit is preserved.
+        SDValue ArgValue = DAG.getCopyFromReg(Chain, DL, Reg, MVT::i128);
         SDValue Store = DAG.getStore(
             Chain, DL, ArgValue, FIN,
-            MachinePointerInfo::getFixedStack(MF, FI, (I - Idx) * XLenInBytes));
+            MachinePointerInfo::getFixedStack(
+                MF, FI, (I - Idx) * CXLenInBytes));
         OutChains.push_back(Store);
         FIN =
-            DAG.getMemBasePlusOffset(FIN, TypeSize::getFixed(XLenInBytes), DL);
+            DAG.getMemBasePlusOffset(FIN, TypeSize::getFixed(CXLenInBytes), DL);
       }
     }
 
