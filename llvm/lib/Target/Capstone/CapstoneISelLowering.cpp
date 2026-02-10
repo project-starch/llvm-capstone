@@ -348,6 +348,11 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   }
 
   if (Subtarget.is64Bit()) {
+    // Branching & Selection
+    setOperationAction(ISD::BR_CC,  MVT::i64, Expand);
+    setOperationAction(ISD::SELECT_CC, MVT::i64, Expand);
+    setOperationAction(ISD::SETCC,     MVT::i64, Custom);
+
     setOperationAction(ISD::EH_DWARF_CFA, MVT::i64, Custom);
 
     setOperationAction(ISD::LOAD, MVT::i32, Custom);
@@ -7693,64 +7698,103 @@ SDValue CapstoneTargetLowering::lowerSETCC(SDValue Op,
                                            SelectionDAG &DAG) const {
   SDValue Op0 = Op.getOperand(0);
   SDValue Op1 = Op.getOperand(1);
-  SDValue CC = Op.getOperand(2);
+  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
   MVT VT = Op0.getSimpleValueType();
   SDLoc DL(Op);
 
   if (VT == MVT::i128) {
-    // We want to compare two i128 (Capabilities).
-    // For basic C support (pointer equality, null check)
-    // we can compare their addresses (lower 64 bits).
-
-    // Truncate operands to i64
     SDValue Op0_64 = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, Op0);
     SDValue Op1_64 = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, Op1);
 
-    // Return standard SETCC, but for i64. Standard RISC-V patterns will pick
-    // this up and generate SLT, XOR, SUB, etc.
-    return DAG.getNode(ISD::SETCC, DL, Op.getValueType(), Op0_64, Op1_64, CC);
+    // Возвращаем SETCC. Важно: Op.getValueType() (результат) остаётся i128 (или что там ожидалось),
+    // а операнды стали i64.
+    return DAG.getSetCC(DL, Op.getValueType(), Op0_64, Op1_64, CC);
   }
   return SDValue();
 }
 
+SDValue CapstoneTargetLowering::lowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
+  SDValue Chain = Op.getOperand(0);
+  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(1))->get();
+  SDValue LHS = Op.getOperand(2);
+  SDValue RHS = Op.getOperand(3);
+  SDValue Dest = Op.getOperand(4);
+  SDLoc DL(Op);
+
+  MVT XLenVT = Subtarget.getXLenVT();
+
+  auto toXLenForCmp = [&](SDValue V) -> SDValue {
+    MVT VT = V.getSimpleValueType();
+    if (VT == MVT::i128) {
+      // capability compare policy: compare low bits (address)
+      return DAG.getNode(ISD::TRUNCATE, DL, XLenVT, V);
+    }
+    if (VT != XLenVT) {
+      // если прилетит i1/i32 на RV64 и т.п.
+      return DAG.getZExtOrTrunc(V, DL, XLenVT);
+    }
+    return V;
+  };
+
+  SDValue L = toXLenForCmp(LHS);
+  SDValue R = toXLenForCmp(RHS);
+
+  // 1) i1 результат сравнения
+  SDValue CondI1 = DAG.getSetCC(DL, MVT::i1, L, R, CC);
+
+  // 2) BRCOND: иногда expects XLenVT boolean
+  // Если ваш lowerBRCOND принимает i1 — можно сразу:
+  // return DAG.getNode(ISD::BRCOND, DL, MVT::Other, Chain, CondI1, Dest);
+
+  SDValue CondXLen = DAG.getNode(ISD::ZERO_EXTEND, DL, XLenVT, CondI1);
+  return DAG.getNode(ISD::BRCOND, DL, MVT::Other, Chain, CondXLen, Dest);
+}
+
+/*
 SDValue CapstoneTargetLowering::lowerBR_CC(SDValue Op,
                                            SelectionDAG &DAG) const {
   SDValue Chain = Op.getOperand(0);
+  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(1))->get();
   SDValue LHS = Op.getOperand(2);
   SDValue RHS = Op.getOperand(3);
   SDValue Dest = Op.getOperand(4);
   SDLoc DL(Op);
 
   if (LHS.getSimpleValueType() == MVT::i128) {
-    // Truncate to i64
+    // 1. Обрезаем операнды до i64 (для сравнения адресов)
     SDValue LHS_64 = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, LHS);
     SDValue RHS_64 = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, RHS);
 
-    // Create BR_CC for i64
-    return DAG.getNode(ISD::BR_CC, DL, MVT::Other,
-                       Chain, Op.getOperand(1), LHS_64, RHS_64, Dest);
+    // 2. Создаем SETCC.
+    // Результат SETCC будет иметь тип XLenVT (i128), так как BooleanContents = ZeroOrOneBooleanContent
+    SDValue SetCC = DAG.getSetCC(DL, Subtarget.getXLenVT(), LHS_64, RHS_64, CC);
+
+    // 3. Создаем BRCOND (Ветвление по условию)
+    return DAG.getNode(ISD::BRCOND, DL, MVT::Other, Chain, SetCC, Dest);
   }
   return SDValue();
 }
+*/
 
-SDValue CapstoneTargetLowering::lowerSELECT_CC(SDValue Op,
-                                               SelectionDAG &DAG) const {
+SDValue CapstoneTargetLowering::lowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const {
   SDValue LHS = Op.getOperand(0);
   SDValue RHS = Op.getOperand(1);
   SDValue TrueVal = Op.getOperand(2);
   SDValue FalseVal = Op.getOperand(3);
-  SDValue CC = Op.getOperand(4);
+  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(4))->get();
   SDLoc DL(Op);
 
   if (LHS.getSimpleValueType() == MVT::i128) {
-    // Truncate comparison operands to i64 (Address comparison)
+    // 1. Truncate operands
     SDValue LHS_64 = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, LHS);
     SDValue RHS_64 = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, RHS);
 
-    // Create SELECT_CC for i64
-    // The True/False values remain i128 (result type), which is fine.
-    return DAG.getNode(ISD::SELECT_CC, DL, Op.getValueType(),
-                       LHS_64, RHS_64, TrueVal, FalseVal, CC);
+    // 2. Create SETCC
+    SDValue SetCC = DAG.getSetCC(DL, Subtarget.getXLenVT(), LHS_64, RHS_64, CC);
+
+    // 3. Create SELECT (стандартный, не CC)
+    // i128 = select (cond), true, false
+    return DAG.getNode(ISD::SELECT, DL, Op.getValueType(), SetCC, TrueVal, FalseVal);
   }
   return SDValue();
 }
