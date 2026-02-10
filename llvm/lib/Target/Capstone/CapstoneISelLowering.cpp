@@ -310,12 +310,16 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
 
   // Comparison of capabilities
   setOperationAction(ISD::SETCC, MVT::i128, Custom);
-  setOperationAction(ISD::BR_CC, MVT::i128, Custom);
-  setOperationAction(ISD::SELECT_CC, MVT::i128, Custom);
+  setOperationAction(ISD::BR_CC, MVT::i128, Expand);
+  setOperationAction(ISD::BR_CC, XLenVT, Expand);
+  setOperationAction(ISD::SELECT_CC, MVT::i128, Expand);
+  setOperationAction(ISD::SELECT_CC, XLenVT, Expand);
   //===--------------------------------------------------------------------===//
 
   setOperationAction(ISD::BR_JT, MVT::Other, Expand);
+  setOperationAction(ISD::BR_CC, XLenVT, Expand);
   setOperationAction(ISD::BRCOND, MVT::Other, Custom);
+  setOperationAction(ISD::SELECT_CC, XLenVT, Expand);
 
   setCondCodeAction(ISD::SETGT, XLenVT, Custom);
   setCondCodeAction(ISD::SETGE, XLenVT, Expand);
@@ -348,11 +352,6 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   }
 
   if (Subtarget.is64Bit()) {
-    // Branching & Selection
-    setOperationAction(ISD::BR_CC,  MVT::i64, Expand);
-    setOperationAction(ISD::SELECT_CC, MVT::i64, Expand);
-    setOperationAction(ISD::SETCC,     MVT::i64, Custom);
-
     setOperationAction(ISD::EH_DWARF_CFA, MVT::i64, Custom);
 
     setOperationAction(ISD::LOAD, MVT::i32, Custom);
@@ -7698,109 +7697,28 @@ SDValue CapstoneTargetLowering::lowerSETCC(SDValue Op,
                                            SelectionDAG &DAG) const {
   SDValue Op0 = Op.getOperand(0);
   SDValue Op1 = Op.getOperand(1);
-  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
+  SDValue CC = Op.getOperand(2);
   MVT VT = Op0.getSimpleValueType();
   SDLoc DL(Op);
 
   if (VT == MVT::i128) {
+    // We want to compare two i128 (Capabilities).
+    // For basic C support (pointer equality, null check)
+    // we can compare their addresses (lower 64 bits).
+
+    // Truncate operands to i64
     SDValue Op0_64 = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, Op0);
     SDValue Op1_64 = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, Op1);
 
-    // Возвращаем SETCC. Важно: Op.getValueType() (результат) остаётся i128 (или что там ожидалось),
-    // а операнды стали i64.
-    return DAG.getSetCC(DL, Op.getValueType(), Op0_64, Op1_64, CC);
-  }
-  return SDValue();
-}
-
-SDValue CapstoneTargetLowering::lowerBR_CC(SDValue Op, SelectionDAG &DAG) const {
-  SDValue Chain = Op.getOperand(0);
-  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(1))->get();
-  SDValue LHS = Op.getOperand(2);
-  SDValue RHS = Op.getOperand(3);
-  SDValue Dest = Op.getOperand(4);
-  SDLoc DL(Op);
-
-  MVT XLenVT = Subtarget.getXLenVT();
-
-  auto toXLenForCmp = [&](SDValue V) -> SDValue {
-    MVT VT = V.getSimpleValueType();
-    if (VT == MVT::i128) {
-      // capability compare policy: compare low bits (address)
-      return DAG.getNode(ISD::TRUNCATE, DL, XLenVT, V);
-    }
-    if (VT != XLenVT) {
-      // если прилетит i1/i32 на RV64 и т.п.
-      return DAG.getZExtOrTrunc(V, DL, XLenVT);
-    }
-    return V;
-  };
-
-  SDValue L = toXLenForCmp(LHS);
-  SDValue R = toXLenForCmp(RHS);
-
-  // 1) i1 результат сравнения
-  SDValue CondI1 = DAG.getSetCC(DL, MVT::i1, L, R, CC);
-
-  // 2) BRCOND: иногда expects XLenVT boolean
-  // Если ваш lowerBRCOND принимает i1 — можно сразу:
-  // return DAG.getNode(ISD::BRCOND, DL, MVT::Other, Chain, CondI1, Dest);
-
-  SDValue CondXLen = DAG.getNode(ISD::ZERO_EXTEND, DL, XLenVT, CondI1);
-  return DAG.getNode(ISD::BRCOND, DL, MVT::Other, Chain, CondXLen, Dest);
-}
-
-/*
-SDValue CapstoneTargetLowering::lowerBR_CC(SDValue Op,
-                                           SelectionDAG &DAG) const {
-  SDValue Chain = Op.getOperand(0);
-  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(1))->get();
-  SDValue LHS = Op.getOperand(2);
-  SDValue RHS = Op.getOperand(3);
-  SDValue Dest = Op.getOperand(4);
-  SDLoc DL(Op);
-
-  if (LHS.getSimpleValueType() == MVT::i128) {
-    // 1. Обрезаем операнды до i64 (для сравнения адресов)
-    SDValue LHS_64 = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, LHS);
-    SDValue RHS_64 = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, RHS);
-
-    // 2. Создаем SETCC.
-    // Результат SETCC будет иметь тип XLenVT (i128), так как BooleanContents = ZeroOrOneBooleanContent
-    SDValue SetCC = DAG.getSetCC(DL, Subtarget.getXLenVT(), LHS_64, RHS_64, CC);
-
-    // 3. Создаем BRCOND (Ветвление по условию)
-    return DAG.getNode(ISD::BRCOND, DL, MVT::Other, Chain, SetCC, Dest);
-  }
-  return SDValue();
-}
-*/
-
-SDValue CapstoneTargetLowering::lowerSELECT_CC(SDValue Op, SelectionDAG &DAG) const {
-  SDValue LHS = Op.getOperand(0);
-  SDValue RHS = Op.getOperand(1);
-  SDValue TrueVal = Op.getOperand(2);
-  SDValue FalseVal = Op.getOperand(3);
-  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(4))->get();
-  SDLoc DL(Op);
-
-  if (LHS.getSimpleValueType() == MVT::i128) {
-    // 1. Truncate operands
-    SDValue LHS_64 = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, LHS);
-    SDValue RHS_64 = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, RHS);
-
-    // 2. Create SETCC
-    SDValue SetCC = DAG.getSetCC(DL, Subtarget.getXLenVT(), LHS_64, RHS_64, CC);
-
-    // 3. Create SELECT (стандартный, не CC)
-    // i128 = select (cond), true, false
-    return DAG.getNode(ISD::SELECT, DL, Op.getValueType(), SetCC, TrueVal, FalseVal);
+    // Return standard SETCC, but for i64. Standard RISC-V patterns will pick
+    // this up and generate SLT, XOR, SUB, etc.
+    return DAG.getNode(ISD::SETCC, DL, Op.getValueType(), Op0_64, Op1_64, CC);
   }
   return SDValue();
 }
 
 SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
-                                            SelectionDAG &DAG) const {
+                                               SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
   default:
     reportFatalInternalError(
@@ -8645,9 +8563,6 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
   case ISD::VECTOR_COMPRESS:
     return lowerVectorCompress(Op, DAG);
   case ISD::SELECT_CC: {
-    if (Op.getOperand(0).getSimpleValueType() == MVT::i128)
-      return lowerSELECT_CC(Op, DAG);
-
     // This occurs because we custom legalize SETGT and SETUGT for setcc. That
     // causes LegalizeDAG to think we need to custom legalize select_cc. Expand
     // into separate SETCC+SELECT just like LegalizeDAG.
@@ -9011,8 +8926,6 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
   case ISD::PARTIAL_REDUCE_SMLA:
   case ISD::PARTIAL_REDUCE_SUMLA:
     return lowerPARTIAL_REDUCE_MLA(Op, DAG);
-  case ISD::BR_CC:
-    return lowerBR_CC(Op, DAG);
   }
 }
 
