@@ -7684,13 +7684,45 @@ SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
 
   // 2. Get context and operands
   SDLoc DL(Op);
-  SDValue Op0 = Op.getOperand(0); // Base (i128)
-  SDValue Op1 = Op.getOperand(1); // Offset (i128)
+  SDValue Base = Op.getOperand(0); // Base (i128)
+  SDValue Offset = Op.getOperand(1); // Offset (i128)
+
+  // --- Optimization for GEP scaling (loop_test fix) ---
+  // LLVM often emits: (add Base, (shl (sext i64:Index), ShAmt))
+  // We want:          (CIncOffset Base, (sext (shl i64:Index, ShAmt)))
+  // This moves the shift to 64-bit domain where it is legal (SLLI).
+
+  if (Offset.getOpcode() == ISD::SHL && Offset.getValueType() == MVT::i128) {
+    SDValue ShlVal = Offset.getOperand(0);
+    SDValue ShlAmt = Offset.getOperand(1);
+
+    // Check if we are shifting a sign-extended 64-bit value
+    if (ShlVal.getOpcode() == ISD::SIGN_EXTEND &&
+        ShlVal.getOperand(0).getValueType() == MVT::i64) {
+
+      SDValue InnerVal = ShlVal.getOperand(0); // This is the i64 Index
+
+      // 1. Perform shift in i64 domain (Standard RISC-V SLLI)
+      SDValue NewShift = DAG.getNode(ISD::SHL, DL, MVT::i64, InnerVal, ShlAmt);
+
+      // 2. Extend result back to i128 (matches our COPY pattern)
+      Offset = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, NewShift);
+        }
+    // Check if we are shifting a zero-extended 64-bit value
+    else if (ShlVal.getOpcode() == ISD::ZERO_EXTEND &&
+             ShlVal.getOperand(0).getValueType() == MVT::i64) {
+
+      SDValue InnerVal = ShlVal.getOperand(0);
+      SDValue NewShift = DAG.getNode(ISD::SHL, DL, MVT::i64, InnerVal, ShlAmt);
+      Offset = DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i128, NewShift);
+             }
+  }
+  // ----------------------------------------------------
 
   // 3. Create a new CIncOffset node
   // Note: we pass MVT::i128. This matches the .td file definition.
   // We pass Op1 (offset) as i128, even if it's a constant.
-  return DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Op0, Op1);
+  return DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Base, Offset);
 }
 
 SDValue CapstoneTargetLowering::lowerSETCC(SDValue Op,
