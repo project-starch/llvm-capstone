@@ -7696,26 +7696,26 @@ SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
     SDValue ShlVal = Offset.getOperand(0);
     SDValue ShlAmt = Offset.getOperand(1);
 
-    // Check if we are shifting a sign-extended 64-bit value
-    if (ShlVal.getOpcode() == ISD::SIGN_EXTEND &&
-        ShlVal.getOperand(0).getValueType() == MVT::i64) {
+    // Restrict to the common GEP pattern where the shift amount is constant.
+    if (isa<ConstantSDNode>(ShlAmt)) {
+      unsigned ExtOpc = ShlVal.getOpcode();
+      // Check if we are shifting an extended 64-bit value
+      if ((ExtOpc == ISD::SIGN_EXTEND || ExtOpc == ISD::ZERO_EXTEND) &&
+          ShlVal.getOperand(0).getValueType() == MVT::i64) {
+        SDValue Index64 = ShlVal.getOperand(0); // The i64 Index
 
-      SDValue InnerVal = ShlVal.getOperand(0); // This is the i64 Index
+        // Normalize shift amount to i64 (pointer width for arithmetic)
+        SDValue ShAmt64 = DAG.getZExtOrTrunc(ShlAmt, DL, MVT::i64);
 
-      // 1. Perform shift in i64 domain (Standard RISC-V SLLI)
-      SDValue NewShift = DAG.getNode(ISD::SHL, DL, MVT::i64, InnerVal, ShlAmt);
+        // 1. Perform shift in i64 domain (Standard RISC-V SLLI)
+        SDValue NewShift64 = DAG.getNode(ISD::SHL, DL, MVT::i64, Index64,
+                                         ShAmt64);
 
-      // 2. Extend result back to i128 (matches our COPY pattern)
-      Offset = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, NewShift);
-        }
-    // Check if we are shifting a zero-extended 64-bit value
-    else if (ShlVal.getOpcode() == ISD::ZERO_EXTEND &&
-             ShlVal.getOperand(0).getValueType() == MVT::i64) {
-
-      SDValue InnerVal = ShlVal.getOperand(0);
-      SDValue NewShift = DAG.getNode(ISD::SHL, DL, MVT::i64, InnerVal, ShlAmt);
-      Offset = DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i128, NewShift);
-             }
+        // 2. Extend the result back to i128
+        // (matches our COPY pattern or implicitly handled)
+        Offset = DAG.getNode(ExtOpc, DL, MVT::i128, NewShift64);
+      }
+    }
   }
   // ----------------------------------------------------
 
