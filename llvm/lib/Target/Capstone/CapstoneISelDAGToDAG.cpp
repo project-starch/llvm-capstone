@@ -3061,6 +3061,22 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       MMO->setFlags(MONontemporalBit1);
     break;
   }
+  case ISD::TRUNCATE: {
+    MVT VT = Node->getSimpleValueType(0);
+    SDValue Src = Node->getOperand(0);
+    MVT SrcVT = Src.getSimpleValueType();
+
+    // Intercept only truncation of i128 -> i64
+    if (SrcVT == MVT::i128 && VT == Subtarget->getXLenVT()) {
+      // Workaround: Explicitly select truncation from i128 to XLenVT (i64).
+      // We use a pseudo-instruction that expands to a register move (ADDI).
+      SDNode *Res = CurDAG->getMachineNode(Capstone::PseudoTRUNC_CAP,
+                                           SDLoc(Node), VT, Src);
+      ReplaceNode(Node, Res);
+      return;
+    }
+    break; // Let the remaining TRUNCATEs be processed as usual
+  }
   case CapstoneISD::CIncOffset: {
     selectCIncOffset(Node);
     return;

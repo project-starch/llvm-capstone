@@ -2453,6 +2453,19 @@ def MOVC : RVInstR<0b0001010, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
 }
 
 //===----------------------------------------------------------------------===//
+// Truncation and Subregister extraction
+//===----------------------------------------------------------------------===//
+
+// Pseudo instruction to truncate i128 Capability to i64 Address/Integer.
+// This is semantically equivalent to taking the lower 64 bits.
+// We define it as a move, but with different register classes if needed.
+// Since GPR handles both i128 and i64 contexts, this acts as a type cast.
+
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
+                      PseudoInstExpansion<(ADDI GPR:$rd, GPR:$rs, 0)>;
+
+//===----------------------------------------------------------------------===//
 // Standard extensions
 //===----------------------------------------------------------------------===//
 
