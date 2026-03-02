@@ -1,7 +1,8 @@
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %s | FileCheck %s
 
 ; CHECK-LABEL: check_eq:
-; CHECK: beq a0, a1, .LBB
+; CHECK: xor  a0, a0, a1
+; CHECK: seqz a0, a0
 define i64 @check_eq(ptr addrspace(200) %a, ptr addrspace(200) %b) {
 entry:
   %cmp = icmp eq ptr addrspace(200) %a, %b
@@ -10,7 +11,7 @@ entry:
 }
 
 ; CHECK-LABEL: check_null:
-; CHECK: beqz a0, .LBB
+; CHECK: seqz a0, a0
 define i64 @check_null(ptr addrspace(200) %a) {
 entry:
   %cmp = icmp eq ptr addrspace(200) %a, null
