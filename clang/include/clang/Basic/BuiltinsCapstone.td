@@ -177,4 +177,10 @@ def cap_get_cursor : CapstoneBuiltin<"uint64_t(void*)">;
 
 // void* shrink(void* cap, uint64_t base, uint64_t end)
 def cap_shrink :     CapstoneBuiltin<"void*(void*, uint64_t, uint64_t)">;
+
+// Capability manipulation
+def cap_tighten : CapstoneBuiltin<"void*(void*, uint64_t)">;
+def cap_scc     : CapstoneBuiltin<"void*(void*, uint64_t)">;
+def cap_delin   : CapstoneBuiltin<"void*(void*)">;
+def cap_init    : CapstoneBuiltin<"void*(void*, uint64_t)">;
 }

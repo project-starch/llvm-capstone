@@ -176,7 +176,14 @@ public:
   bool selectLDC_STC(SDNode *Node);
   void selectCIncOffset(SDNode *Node);
   void selectLGA(SDNode *Node);
+
+  // Intrinsics
   void selectShrink(SDNode *Node);
+  void selectSCC(SDNode *Node);
+  void selectInit(SDNode *Node);
+  void selectDelin(SDNode *Node);
+  void selectTighten(SDNode *Node);
+
   void selectCall(SDNode *Node);
 
   // Return the Capstone condition code that matches the given DAG integer

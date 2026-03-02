@@ -1213,6 +1213,59 @@ void CapstoneDAGToDAGISel::selectShrink(SDNode *Node) {
   ReplaceNode(Node, Res);
 }
 
+void CapstoneDAGToDAGISel::selectSCC(SDNode *Node) {
+  SDLoc DL(Node);
+  // Operand 0: intrinsic ID (implicit)
+  // Operand 1: cap (ptr addrspace(200))
+  // Operand 2: cursor (i128)
+  SDValue Cap    = Node->getOperand(1);
+  SDValue Cursor = Node->getOperand(2);
+
+  // SCC: rd = scc(cap, cursor)
+  // (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2)
+  SDNode *Res = CurDAG->getMachineNode(Capstone::SCC, DL, MVT::i128,
+                                       Cap, Cursor);
+  ReplaceNode(Node, Res);
+}
+
+void CapstoneDAGToDAGISel::selectInit(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Cap = Node->getOperand(1);
+  SDValue Val = Node->getOperand(2);
+
+  // INIT: rd = init(cap, val)
+  // (outs GPR:$rd), (ins GPR:$rs1, GPR:$rs2)
+  SDNode *Res = CurDAG->getMachineNode(Capstone::INIT, DL, MVT::i128,
+                                       Cap, Val);
+  ReplaceNode(Node, Res);
+}
+
+void CapstoneDAGToDAGISel::selectDelin(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Cap = Node->getOperand(1);
+
+  // DELIN: rd = delin(cap)  -- modifies cap in-place (tied operand)
+  // (outs GPR:$rd), (ins GPR:$cap_in)
+  SDNode *Res = CurDAG->getMachineNode(Capstone::DELIN, DL, MVT::i128,
+                                       Cap);
+  ReplaceNode(Node, Res);
+}
+
+void CapstoneDAGToDAGISel::selectTighten(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Cap = Node->getOperand(1);
+  SDValue Imm = Node->getOperand(2); // i64 immediate (5-bit)
+
+  // TIGHTEN: rd = tighten(cap, imm5)
+  // (outs GPR:$rd), (ins GPR:$rs1, uimm5_i64:$imm5)
+  // The immediate must be a TargetConstant for TableGen operand matching.
+  SDValue TImm = CurDAG->getTargetConstant(
+      cast<ConstantSDNode>(Imm)->getZExtValue(), DL, MVT::i64);
+  SDNode *Res = CurDAG->getMachineNode(Capstone::TIGHTEN, DL, MVT::i128,
+                                       Cap, TImm);
+  ReplaceNode(Node, Res);
+}
+
 void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
   SDLoc DL(Node);
   SDValue Chain = Node->getOperand(0);
@@ -2412,6 +2465,14 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       return selectVSETVLI(Node);
     case Intrinsic::capstone_cap_shrink:
       return selectShrink(Node);
+    case Intrinsic::capstone_cap_scc:
+      return selectSCC(Node);
+    case Intrinsic::capstone_cap_init:
+      return selectInit(Node);
+    case Intrinsic::capstone_cap_delin:
+      return selectDelin(Node);
+    case Intrinsic::capstone_cap_tighten:
+      return selectTighten(Node);
     }
     break;
   }

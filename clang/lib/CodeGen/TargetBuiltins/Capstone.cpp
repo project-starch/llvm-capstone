@@ -1380,7 +1380,7 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
     ID = Intrinsic::capstone_cap_get_tag;
     IntrinsicTypes.push_back(Ops[0]->getType());
     break;
-  case Capstone::BI__builtin_capstone_cap_shrink:
+  case Capstone::BI__builtin_capstone_cap_shrink: {
     ID = Intrinsic::capstone_cap_shrink;
     // Resolve overloaded return type
     IntrinsicTypes.push_back(Ops[0]->getType());
@@ -1389,6 +1389,36 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
     Ops[1] = Builder.CreateZExt(Ops[1], Int128Ty);
     Ops[2] = Builder.CreateZExt(Ops[2], Int128Ty);
     break;
+  }
+  case Capstone::BI__builtin_capstone_cap_scc:
+  case Capstone::BI__builtin_capstone_cap_init: {
+    ID = BuiltinID == Capstone::BI__builtin_capstone_cap_scc ?
+         Intrinsic::capstone_cap_scc : Intrinsic::capstone_cap_init;
+
+    IntrinsicTypes.push_back(Ops[0]->getType()); // Type of returned pointer
+
+    // Just like for SHRINK, we extend the second argument (integer) to i128
+    // so it fits smoothly into our GPR register class.
+    llvm::Type *Int128Ty = llvm::Type::getInt128Ty(getLLVMContext());
+    Ops[1] = Builder.CreateZExt(Ops[1], Int128Ty);
+    break;
+  }
+  case Capstone::BI__builtin_capstone_cap_tighten: {
+    ID = Intrinsic::capstone_cap_tighten;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+
+    // For tighten, the second argument is a 5-bit immediate. In the .td file,
+    // we configured it as i64, so we extend/truncate it to i64 here.
+    llvm::Type *Int64Ty = llvm::Type::getInt64Ty(getLLVMContext());
+    Ops[1] = Builder.CreateZExtOrTrunc(Ops[1], Int64Ty);
+    break;
+  }
+  case Capstone::BI__builtin_capstone_cap_delin: {
+    ID = Intrinsic::capstone_cap_delin;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    // No additional arguments.
+    break;
+  }
   }
 
   assert(ID != Intrinsic::not_intrinsic);

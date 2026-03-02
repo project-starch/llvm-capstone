@@ -86,9 +86,28 @@ let TargetPrefix = "capstone" in {
 
   // ptr shrink(ptr cap, i128 new_base, i128 new_end)
   // We use i128 for base/end to match the GPR register class size directly.
-  def int_capstone_cap_shrink : Intrinsic<[llvm_anyptr_ty],
-                                          [LLVMMatchType<0>, llvm_i128_ty, llvm_i128_ty],
-                                          [IntrNoMem]>;
+  def int_capstone_cap_shrink :
+    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i128_ty, llvm_i128_ty],
+              [IntrNoMem]>;
+
+  // ptr tighten(ptr cap, i64 imm5)
+  // We use i64 for the constant to map directly to our uimm5_i64 operand.
+  def int_capstone_cap_tighten :
+    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i64_ty], [IntrNoMem]>;
+
+  // ptr scc(ptr cap, i128 cursor)
+  // The cursor is an integer, but we use i128 so it fits smoothly into
+  // the GPR class (like SHRINK).
+  def int_capstone_cap_scc :
+    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i128_ty],[IntrNoMem]>;
+
+  // ptr delin(ptr cap)
+  def int_capstone_cap_delin :
+    Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>], [IntrNoMem]>;
+
+  // ptr init(ptr cap, i128 value)
+  def int_capstone_cap_init :
+    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i128_ty], [IntrNoMem]>;
   //===--------------------------------------------------------------------===//
 } // TargetPrefix = "capstone"
 

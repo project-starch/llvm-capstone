@@ -2466,6 +2466,40 @@ def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
                       PseudoInstExpansion<(ADDI GPR:$rd, GPR:$rs, 0)>;
 
 //===----------------------------------------------------------------------===//
+// Capability Manipulation Instructions
+//===----------------------------------------------------------------------===//
+
+// TIGHTEN: Permission Tightening (RI-Type)
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def TIGHTEN : RVInstRI<0b0000010, 0b001, OPC_CAP_OP, (outs GPR:$rd),
+                       (ins GPR:$rs1, uimm5_i64:$imm5),
+                       "tighten", "$rd, $rs1, $imm5">;
+
+// SCC: Set Cursor Capability (R-Type)
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def SCC : RVInstR<0b0000101, 0b001, OPC_CAP_OP, (outs GPR:$rd),
+                  (ins GPR:$rs1, GPR:$rs2),
+                  "scc", "$rd, $rs1, $rs2">;
+
+// INIT: Initialization (R-Type)
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def INIT : RVInstR<0b0001001, 0b001, OPC_CAP_OP, (outs GPR:$rd),
+                   (ins GPR:$rs1, GPR:$rs2),
+                   "init", "$rd, $rs1, $rs2">;
+
+// DELIN: Delinearisation
+// The spec says: rd = delin(rd). rs1 and rs2 are unused (0).
+// We use Tied Operands so the compiler knows it modifies the register in-place.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0,
+    Constraints = "$rd = $cap_in" in
+def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPR:$rd),
+                    (ins GPR:$cap_in),
+                    "delin", "$rd"> {
+  let rs1 = 0;
+  let rs2 = 0;
+}
+
+//===----------------------------------------------------------------------===//
 // Standard extensions
 //===----------------------------------------------------------------------===//
 
