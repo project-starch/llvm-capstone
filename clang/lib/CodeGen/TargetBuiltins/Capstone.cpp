@@ -1419,6 +1419,26 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
     // No additional arguments.
     break;
   }
+  case Capstone::BI__builtin_capstone_cap_mrev: {
+    ID = Intrinsic::capstone_cap_mrev;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  } 
+  case Capstone::BI__builtin_capstone_cap_seal: {
+    ID = Intrinsic::capstone_cap_seal;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  }
+  case Capstone::BI__builtin_capstone_cap_drop: {
+    ID = Intrinsic::capstone_cap_drop;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  }
+  case Capstone::BI__builtin_capstone_cap_revoke: {
+    ID = Intrinsic::capstone_cap_revoke;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  }
   }
 
   assert(ID != Intrinsic::not_intrinsic);

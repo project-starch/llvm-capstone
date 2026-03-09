@@ -93,7 +93,8 @@ let TargetPrefix = "capstone" in {
   // ptr tighten(ptr cap, i64 imm5)
   // We use i64 for the constant to map directly to our uimm5_i64 operand.
   def int_capstone_cap_tighten :
-    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i64_ty], [IntrNoMem]>;
+    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i64_ty],
+              [IntrNoMem, ImmArg<ArgIndex<1>>]>;
 
   // ptr scc(ptr cap, i128 cursor)
   // The cursor is an integer, but we use i128 so it fits smoothly into
@@ -108,6 +109,25 @@ let TargetPrefix = "capstone" in {
   // ptr init(ptr cap, i128 value)
   def int_capstone_cap_init :
     Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i128_ty], [IntrNoMem]>;
+
+  // ptr mrev(ptr cap) - Pure register operation
+  def int_capstone_cap_mrev : Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>],
+                                        [IntrNoMem]>;
+
+  // ptr seal(ptr cap) - Pure register operation
+  def int_capstone_cap_seal : Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>],
+                                        [IntrNoMem]>;
+
+  // ptr drop(ptr cap)
+  // Local side effect (invalidates reg), must not be DCE'd
+  def int_capstone_cap_drop : Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>],
+                                        [IntrHasSideEffects]>;
+
+  // ptr revoke(ptr cap)
+  // Global Side Effects: sweeps memory to invalidate aliased capabilities.
+  // Acts as full barrier.
+  def int_capstone_cap_revoke : Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>],
+                                          [IntrHasSideEffects]>;
   //===--------------------------------------------------------------------===//
 } // TargetPrefix = "capstone"
 

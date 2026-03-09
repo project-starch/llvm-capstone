@@ -178,9 +178,20 @@ def cap_get_cursor : CapstoneBuiltin<"uint64_t(void*)">;
 // void* shrink(void* cap, uint64_t base, uint64_t end)
 def cap_shrink :     CapstoneBuiltin<"void*(void*, uint64_t, uint64_t)">;
 
-// Capability manipulation
-def cap_tighten : CapstoneBuiltin<"void*(void*, uint64_t)">;
+// Capability manipulation (1)
+def cap_tighten : CapstoneBuiltin<"void*(void*, _Constant uint64_t)">;
 def cap_scc     : CapstoneBuiltin<"void*(void*, uint64_t)">;
 def cap_delin   : CapstoneBuiltin<"void*(void*)">;
 def cap_init    : CapstoneBuiltin<"void*(void*, uint64_t)">;
-}
+
+// Capability manipulation (2) - pure (no side-effects observable by optimizer)
+def cap_mrev   : CapstoneBuiltin<"void*(void*)">;
+def cap_seal   : CapstoneBuiltin<"void*(void*)">;
+} // Attributes = [NoThrow, Const]
+
+// Destructive capability operations: must NOT be marked Const because the
+// optimizer would be free to eliminate calls it considers "unused".
+let Attributes = [NoThrow] in {
+def cap_drop   : CapstoneBuiltin<"void*(void*)">;
+def cap_revoke : CapstoneBuiltin<"void*(void*)">;
+} // Attributes = [NoThrow]

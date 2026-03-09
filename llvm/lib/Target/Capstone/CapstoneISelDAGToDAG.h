@@ -184,6 +184,11 @@ public:
   void selectDelin(SDNode *Node);
   void selectTighten(SDNode *Node);
 
+  void selectMrev(SDNode *Node);
+  void selectSeal(SDNode *Node);
+  void selectDrop(SDNode *Node);
+  void selectRevoke(SDNode *Node);
+
   void selectCall(SDNode *Node);
 
   // Return the Capstone condition code that matches the given DAG integer

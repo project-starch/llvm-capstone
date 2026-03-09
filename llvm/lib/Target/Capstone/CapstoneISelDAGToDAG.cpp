@@ -1254,16 +1254,69 @@ void CapstoneDAGToDAGISel::selectDelin(SDNode *Node) {
 void CapstoneDAGToDAGISel::selectTighten(SDNode *Node) {
   SDLoc DL(Node);
   SDValue Cap = Node->getOperand(1);
-  SDValue Imm = Node->getOperand(2); // i64 immediate (5-bit)
+  SDValue Imm = Node->getOperand(2);
 
-  // TIGHTEN: rd = tighten(cap, imm5)
-  // (outs GPR:$rd), (ins GPR:$rs1, uimm5_i64:$imm5)
-  // The immediate must be a TargetConstant for TableGen operand matching.
-  SDValue TImm = CurDAG->getTargetConstant(
-      cast<ConstantSDNode>(Imm)->getZExtValue(), DL, MVT::i64);
-  SDNode *Res = CurDAG->getMachineNode(Capstone::TIGHTEN, DL, MVT::i128,
-                                       Cap, TImm);
+  // 1. Check that this is a constant (crash protection)
+  auto *ConstImm = dyn_cast<ConstantSDNode>(Imm);
+  if (!ConstImm)
+    report_fatal_error(
+      "Capstone TIGHTEN instruction requires a constant immediate!");
+
+  // 2. Check that immediate is in range 0..31 (silent truncation protection)
+  uint64_t ImmVal = ConstImm->getZExtValue();
+  if (!isUInt<5>(ImmVal))
+    report_fatal_error("Capstone TIGHTEN immediate must be in range 0-31!");
+
+  SDValue TImm = CurDAG->getTargetConstant(ImmVal, DL, MVT::i64);
+  SDNode *Res = CurDAG->getMachineNode(Capstone::TIGHTEN, DL, MVT::i128, Cap,
+                                       TImm);
   ReplaceNode(Node, Res);
+}
+
+void CapstoneDAGToDAGISel::selectMrev(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Cap = Node->getOperand(1);
+  SDNode *Res = CurDAG->getMachineNode(Capstone::MREV, DL, MVT::i128, Cap);
+  ReplaceNode(Node, Res);
+}
+
+void CapstoneDAGToDAGISel::selectSeal(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Cap = Node->getOperand(1);
+  SDNode *Res = CurDAG->getMachineNode(Capstone::SEAL, DL, MVT::i128, Cap);
+  ReplaceNode(Node, Res);
+}
+
+void CapstoneDAGToDAGISel::selectDrop(SDNode *Node) {
+  SDLoc DL(Node);
+  // INTRINSIC_W_CHAIN Layout: [0] = Chain, [1] = IntrinsicID, [2] = Arg0
+  SDValue Chain = Node->getOperand(0);
+  SDValue Cap = Node->getOperand(2);
+
+  // DROP is an in-place instruction ($rd tied to $cap_in).  The machine node
+  // still needs the input chain so that the instruction is not reordered or
+  // eliminated by the scheduler.
+  SDNode *Res = CurDAG->getMachineNode(Capstone::DROP, DL,
+                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       {Cap, Chain});
+  ReplaceUses(SDValue(Node, 0), SDValue(Res, 0)); // Resulting capability
+  ReplaceUses(SDValue(Node, 1), SDValue(Res, 1)); // Chain
+  CurDAG->RemoveDeadNode(Node);
+}
+
+void CapstoneDAGToDAGISel::selectRevoke(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Chain = Node->getOperand(0);
+  SDValue Cap = Node->getOperand(2);
+
+  // REVOKE is an in-place instruction ($rd tied to $cap_in) with
+  // massive global side-effects (memory-wide capability invalidation).
+  SDNode *Res = CurDAG->getMachineNode(Capstone::REVOKE, DL,
+                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       {Cap, Chain});
+  ReplaceUses(SDValue(Node, 0), SDValue(Res, 0)); // Resulting capability
+  ReplaceUses(SDValue(Node, 1), SDValue(Res, 1)); // Chain
+  CurDAG->RemoveDeadNode(Node);
 }
 
 void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
@@ -2473,6 +2526,10 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       return selectDelin(Node);
     case Intrinsic::capstone_cap_tighten:
       return selectTighten(Node);
+    case Intrinsic::capstone_cap_mrev:
+      return selectMrev(Node);
+    case Intrinsic::capstone_cap_seal:
+      return selectSeal(Node);
     }
     break;
   }
@@ -2730,6 +2787,10 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       ReplaceNode(Node, Load);
       return;
     }
+    case Intrinsic::capstone_cap_drop:
+      return selectDrop(Node);
+    case Intrinsic::capstone_cap_revoke:
+      return selectRevoke(Node);
     }
     break;
   }

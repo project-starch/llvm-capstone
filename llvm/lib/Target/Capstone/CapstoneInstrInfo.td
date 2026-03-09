@@ -2466,7 +2466,7 @@ def PseudoTRUNC_CAP : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
                       PseudoInstExpansion<(ADDI GPR:$rd, GPR:$rs, 0)>;
 
 //===----------------------------------------------------------------------===//
-// Capability Manipulation Instructions
+// Capability Manipulation Instructions (1)
 //===----------------------------------------------------------------------===//
 
 // TIGHTEN: Permission Tightening (RI-Type)
@@ -2497,6 +2497,41 @@ def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPR:$rd),
                     "delin", "$rd"> {
   let rs1 = 0;
   let rs2 = 0;
+}
+
+//===----------------------------------------------------------------------===//
+// Capability Manipulation Instructions (2)
+//===----------------------------------------------------------------------===//
+
+// MREV: Create revocation capability
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def MREV : RVInstR<0b0001000, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
+                   "mrev", "$rd, $rs1"> {
+  let rs2 = 0;
+}
+
+// SEAL: Seal a capability
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def SEAL : RVInstR<0b0000111, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
+                   "seal", "$rd, $rs1"> {
+  let rs2 = 0;
+}
+
+// DROP: Invalidate capability locally
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0, Constraints = "$rd = $rs1" in
+def DROP : RVInstR<0b0001011, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
+                   "drop", "$rs1"> {
+  let rs2 = 0;
+  let rd = 0; // Don't care field encoded as 0
+}
+
+// REVOKE: Revoke capability globally (Memory Sweep)
+let hasSideEffects = 1, mayLoad = 1, mayStore = 1, isBarrier = 1,
+    Constraints = "$rd = $rs1" in
+def REVOKE : RVInstR<0b0000000, 0b001, OPC_CAP_OP, (outs GPR:$rd),
+                     (ins GPR:$rs1), "revoke", "$rs1"> {
+  let rs2 = 0;
+  let rd = 0; // Don't care field encoded as 0
 }
 
 //===----------------------------------------------------------------------===//
