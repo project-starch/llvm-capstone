@@ -1439,6 +1439,32 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
     IntrinsicTypes.push_back(Ops[0]->getType());
     break;
   }
+  // Domain Crossing, World Switching & CSRs
+  case Capstone::BI__builtin_capstone_cap_call: {
+    ID = Intrinsic::capstone_cap_call;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  }
+  case Capstone::BI__builtin_capstone_cap_return: {
+    ID = Intrinsic::capstone_cap_return;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  }
+  case Capstone::BI__builtin_capstone_cap_enter: {
+    ID = Intrinsic::capstone_cap_enter;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  }
+  case Capstone::BI__builtin_capstone_cap_exit: {
+    ID = Intrinsic::capstone_cap_exit;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  }
+  case Capstone::BI__builtin_capstone_cap_ccsrrw: {
+    ID = Intrinsic::capstone_cap_ccsrrw;
+    IntrinsicTypes.push_back(Ops[0]->getType());
+    break;
+  }
   }
 
   assert(ID != Intrinsic::not_intrinsic);

@@ -191,6 +191,13 @@ public:
 
   void selectCall(SDNode *Node);
 
+  // Domain Crossing, World Switching & CSRs intrinsics
+  void selectCapCall(SDNode *Node);
+  void selectCapReturn(SDNode *Node);
+  void selectCapEnter(SDNode *Node);
+  void selectCapExit(SDNode *Node);
+  void selectCCSRRW(SDNode *Node);
+
   // Return the Capstone condition code that matches the given DAG integer
   // condition code. The CondCode must be one of those supported by the Capstone
   // ISA (see translateSetCCForBranch).

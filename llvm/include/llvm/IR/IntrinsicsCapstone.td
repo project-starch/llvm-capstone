@@ -60,6 +60,7 @@ let TargetPrefix = "capstone" in {
 
   //===--------------------------------------------------------------------===//
   // Capstone-specific (mainly capability-related) intrinsics
+  //===--------------------------------------------------------------------===//
 
   // i64 get_tag(i128 capability)
   def int_capstone_cap_get_tag : Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty],
@@ -128,6 +129,31 @@ let TargetPrefix = "capstone" in {
   // Acts as full barrier.
   def int_capstone_cap_revoke : Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>],
                                           [IntrHasSideEffects]>;
+  //===--------------------------------------------------------------------===//
+  // Domain Crossing, World Switching & CSRs
+  //===--------------------------------------------------------------------===//
+
+  // ptr cap_call(ptr cap)
+  def int_capstone_cap_call :
+    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>], [IntrHasSideEffects]>;
+
+  // void cap_return(ptr cap, i64 code)
+  def int_capstone_cap_return :
+    Intrinsic<[], [llvm_anyptr_ty, llvm_i64_ty], [IntrHasSideEffects]>;
+
+  // i64 cap_enter(ptr cap)
+  def int_capstone_cap_enter :
+    Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty], [IntrHasSideEffects]>;
+
+  // void cap_exit(ptr cap, i64 code)
+  def int_capstone_cap_exit :
+    Intrinsic<[],[llvm_anyptr_ty, llvm_i64_ty], [IntrHasSideEffects]>;
+
+  // ptr cap_ccsrrw(ptr cap, i64 csr)
+  def int_capstone_cap_ccsrrw :
+    Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>, llvm_i64_ty],
+              [IntrHasSideEffects, ImmArg<ArgIndex<1>>]>;
+
   //===--------------------------------------------------------------------===//
 } // TargetPrefix = "capstone"
 

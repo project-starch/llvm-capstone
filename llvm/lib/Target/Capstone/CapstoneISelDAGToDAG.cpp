@@ -1319,6 +1319,97 @@ void CapstoneDAGToDAGISel::selectRevoke(SDNode *Node) {
   CurDAG->RemoveDeadNode(Node);
 }
 
+//===----------------------------------------------------------------------===//
+// Domain Crossing, World Switching & CSRs
+//===----------------------------------------------------------------------===//
+void CapstoneDAGToDAGISel::selectCapCall(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Chain = Node->getOperand(0);
+  SDValue Cap = Node->getOperand(2);
+
+  SDNode *Res = CurDAG->getMachineNode(Capstone::CAP_CALL, DL,
+                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       {Cap, Chain});
+  ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
+  ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));
+  CurDAG->RemoveDeadNode(Node);
+}
+
+void CapstoneDAGToDAGISel::selectCapReturn(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Chain = Node->getOperand(0);
+  SDValue Cap = Node->getOperand(2);
+  SDValue Code = Node->getOperand(3); // i64 exit code
+
+  SDNode *Res = CurDAG->getMachineNode(Capstone::CAP_RETURN, DL,
+                                       CurDAG->getVTList(MVT::Other),
+                                       {Cap, Code, Chain});
+  ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
+  CurDAG->RemoveDeadNode(Node);
+}
+
+void CapstoneDAGToDAGISel::selectCapEnter(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Chain = Node->getOperand(0);
+  SDValue Cap = Node->getOperand(2);
+
+  // CAPENTER returns an integer code, which hardware places in a 128-bit GPR.
+  SDNode *Res = CurDAG->getMachineNode(Capstone::CAPENTER, DL,
+                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       {Cap, Chain});
+
+  // Safely cast the lower 64 bits to MVT::i64 for LLVM IR compliance
+  SDNode *Trunc = CurDAG->getMachineNode(Capstone::PseudoTRUNC_CAP, DL,
+                                         MVT::i64, SDValue(Res, 0));
+
+  ReplaceUses(SDValue(Node, 0), SDValue(Trunc, 0)); // i64 Result
+  ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));   // Chain
+  CurDAG->RemoveDeadNode(Node);
+}
+
+void CapstoneDAGToDAGISel::selectCapExit(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Chain = Node->getOperand(0);
+  SDValue Cap = Node->getOperand(2);
+  SDValue Code = Node->getOperand(3);
+
+  SDNode *Res = CurDAG->getMachineNode(Capstone::CAPEXIT, DL,
+                                       CurDAG->getVTList(MVT::Other),
+                                       {Cap, Code, Chain});
+  ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
+  CurDAG->RemoveDeadNode(Node);
+}
+
+void CapstoneDAGToDAGISel::selectCCSRRW(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Chain = Node->getOperand(0);
+  SDValue Cap = Node->getOperand(2);
+  SDValue CsrImm = Node->getOperand(3);
+
+  // 1. Crash protection: ensure the argument is a constant
+  auto *ConstImm = dyn_cast<ConstantSDNode>(CsrImm);
+  if (!ConstImm)
+    report_fatal_error(
+        "Capstone CCSRRW instruction requires a constant immediate CSR address!");
+
+  // 2. Bound checking: address must be a 12-bit unsigned immediate
+  uint64_t ImmVal = ConstImm->getZExtValue();
+  if (!isUInt<12>(ImmVal))
+    report_fatal_error("Capstone CCSRRW immediate must be in range 0-4095!");
+
+  SDValue TImm = CurDAG->getTargetConstant(ImmVal, DL, MVT::i64);
+
+  // The operand order matches TableGen 'ins' list: (ins csr_sysreg:$imm12, GPR:$rs1)
+  SDNode *Res = CurDAG->getMachineNode(Capstone::CCSRRW, DL,
+                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       {TImm, Cap, Chain});
+
+  ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
+  ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));
+  CurDAG->RemoveDeadNode(Node);
+}
+//===----------------------------------------------------------------------===//
+
 void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
   SDLoc DL(Node);
   SDValue Chain = Node->getOperand(0);
@@ -2791,6 +2882,14 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       return selectDrop(Node);
     case Intrinsic::capstone_cap_revoke:
       return selectRevoke(Node);
+
+    // Domain Crossing, World Switching & CSRs
+    case Intrinsic::capstone_cap_call:
+      return selectCapCall(Node);
+    case Intrinsic::capstone_cap_enter:
+      return selectCapEnter(Node);
+    case Intrinsic::capstone_cap_ccsrrw:
+      return selectCCSRRW(Node);
     }
     break;
   }
@@ -2957,6 +3056,11 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     case Intrinsic::capstone_sf_vc_i_se:
       selectSF_VC_X_SE(Node);
       return;
+    // Domain Crossing, World Switching & CSRs
+    case Intrinsic::capstone_cap_return:
+      return selectCapReturn(Node);
+    case Intrinsic::capstone_cap_exit:
+      return selectCapExit(Node);
     }
     break;
   }
