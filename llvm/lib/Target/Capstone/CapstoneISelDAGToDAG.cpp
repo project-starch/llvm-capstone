@@ -1327,24 +1327,17 @@ void CapstoneDAGToDAGISel::selectCapCall(SDNode *Node) {
   SDValue Chain = Node->getOperand(0);
   SDValue Cap = Node->getOperand(2);
 
+  // Получаем маску сохраненных регистров (Caller-Saved регистры будут затерты)
+  const uint32_t *Mask = Subtarget->getRegisterInfo()->getCallPreservedMask(
+      CurDAG->getMachineFunction(), CallingConv::C);
+  SDValue RegMask = CurDAG->getRegisterMask(Mask);
+
+  // Добавляем RegMask как неявный операнд (он сам прицепится к MachineInstr)
   SDNode *Res = CurDAG->getMachineNode(Capstone::CAP_CALL, DL,
                                        CurDAG->getVTList(MVT::i128, MVT::Other),
-                                       {Cap, Chain});
+                                       {Cap, RegMask, Chain});
   ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
   ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));
-  CurDAG->RemoveDeadNode(Node);
-}
-
-void CapstoneDAGToDAGISel::selectCapReturn(SDNode *Node) {
-  SDLoc DL(Node);
-  SDValue Chain = Node->getOperand(0);
-  SDValue Cap = Node->getOperand(2);
-  SDValue Code = Node->getOperand(3); // i64 exit code
-
-  SDNode *Res = CurDAG->getMachineNode(Capstone::CAP_RETURN, DL,
-                                       CurDAG->getVTList(MVT::Other),
-                                       {Cap, Code, Chain});
-  ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
   CurDAG->RemoveDeadNode(Node);
 }
 
@@ -1353,17 +1346,35 @@ void CapstoneDAGToDAGISel::selectCapEnter(SDNode *Node) {
   SDValue Chain = Node->getOperand(0);
   SDValue Cap = Node->getOperand(2);
 
-  // CAPENTER returns an integer code, which hardware places in a 128-bit GPR.
+  const uint32_t *Mask = Subtarget->getRegisterInfo()->getCallPreservedMask(
+      CurDAG->getMachineFunction(), CallingConv::C);
+  SDValue RegMask = CurDAG->getRegisterMask(Mask);
+
+  // CAPENTER возвращает integer код выхода.
   SDNode *Res = CurDAG->getMachineNode(Capstone::CAPENTER, DL,
                                        CurDAG->getVTList(MVT::i128, MVT::Other),
-                                       {Cap, Chain});
+                                       {Cap, RegMask, Chain});
 
-  // Safely cast the lower 64 bits to MVT::i64 for LLVM IR compliance
+  // Аккуратно обрезаем "сырой" i128 обратно до i64, требуемого LLVM IR
   SDNode *Trunc = CurDAG->getMachineNode(Capstone::PseudoTRUNC_CAP, DL,
                                          MVT::i64, SDValue(Res, 0));
 
-  ReplaceUses(SDValue(Node, 0), SDValue(Trunc, 0)); // i64 Result
-  ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));   // Chain
+  ReplaceUses(SDValue(Node, 0), SDValue(Trunc, 0));
+  ReplaceUses(SDValue(Node, 1), SDValue(Res, 1));
+  CurDAG->RemoveDeadNode(Node);
+}
+
+void CapstoneDAGToDAGISel::selectCapReturn(SDNode *Node) {
+  SDLoc DL(Node);
+  SDValue Chain = Node->getOperand(0);
+  SDValue Cap = Node->getOperand(2);
+  SDValue Code = Node->getOperand(3);
+
+  // Терминатор не возвращает данных, только генерирует цепочку зависимости
+  SDNode *Res = CurDAG->getMachineNode(Capstone::CAP_RETURN, DL,
+                                       CurDAG->getVTList(MVT::Other),
+                                       {Cap, Code, Chain});
+  ReplaceUses(SDValue(Node, 0), SDValue(Res, 0));
   CurDAG->RemoveDeadNode(Node);
 }
 
@@ -1386,20 +1397,19 @@ void CapstoneDAGToDAGISel::selectCCSRRW(SDNode *Node) {
   SDValue Cap = Node->getOperand(2);
   SDValue CsrImm = Node->getOperand(3);
 
-  // 1. Crash protection: ensure the argument is a constant
+  // Защитная проверка, аналогичная TIGHTEN
   auto *ConstImm = dyn_cast<ConstantSDNode>(CsrImm);
   if (!ConstImm)
     report_fatal_error(
-        "Capstone CCSRRW instruction requires a constant immediate CSR address!");
+        "Capstone CCSRRW instruction requires a constant CSR address!");
 
-  // 2. Bound checking: address must be a 12-bit unsigned immediate
   uint64_t ImmVal = ConstImm->getZExtValue();
   if (!isUInt<12>(ImmVal))
     report_fatal_error("Capstone CCSRRW immediate must be in range 0-4095!");
 
   SDValue TImm = CurDAG->getTargetConstant(ImmVal, DL, MVT::i64);
 
-  // The operand order matches TableGen 'ins' list: (ins csr_sysreg:$imm12, GPR:$rs1)
+  // Порядок {TImm, Cap} соответствует (ins csr_sysreg:$imm12, GPR:$rs1)
   SDNode *Res = CurDAG->getMachineNode(Capstone::CCSRRW, DL,
                                        CurDAG->getVTList(MVT::i128, MVT::Other),
                                        {TImm, Cap, Chain});

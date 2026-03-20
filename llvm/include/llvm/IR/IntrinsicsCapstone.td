@@ -134,25 +134,26 @@ let TargetPrefix = "capstone" in {
   //===--------------------------------------------------------------------===//
 
   // ptr cap_call(ptr cap)
-  def int_capstone_cap_call :
-    Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>], [IntrHasSideEffects]>;
-
-  // void cap_return(ptr cap, i64 code)
-  def int_capstone_cap_return :
-    Intrinsic<[], [llvm_anyptr_ty, llvm_i64_ty], [IntrHasSideEffects]>;
+  def int_capstone_cap_call : Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>],
+                                        [IntrHasSideEffects]>;
 
   // i64 cap_enter(ptr cap)
-  def int_capstone_cap_enter :
-    Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty], [IntrHasSideEffects]>;
-
-  // void cap_exit(ptr cap, i64 code)
-  def int_capstone_cap_exit :
-    Intrinsic<[],[llvm_anyptr_ty, llvm_i64_ty], [IntrHasSideEffects]>;
+  def int_capstone_cap_enter : Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty],
+                                         [IntrHasSideEffects]>;
 
   // ptr cap_ccsrrw(ptr cap, i64 csr)
-  def int_capstone_cap_ccsrrw :
-    Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>, llvm_i64_ty],
-              [IntrHasSideEffects, ImmArg<ArgIndex<1>>]>;
+  def int_capstone_cap_ccsrrw : Intrinsic<[llvm_anyptr_ty],
+                                          [LLVMMatchType<0>, llvm_i64_ty],
+                                          [IntrHasSideEffects,
+                                           ImmArg<ArgIndex<1>>]>;
+
+  // void cap_return(ptr cap, i64 code)
+  def int_capstone_cap_return : Intrinsic<[],[llvm_anyptr_ty, llvm_i64_ty],
+                                          [IntrHasSideEffects, IntrNoReturn]>;
+
+  // void cap_exit(ptr cap, i64 code)
+  def int_capstone_cap_exit : Intrinsic<[], [llvm_anyptr_ty, llvm_i64_ty],
+                                        [IntrHasSideEffects, IntrNoReturn]>;
 
   //===--------------------------------------------------------------------===//
 } // TargetPrefix = "capstone"

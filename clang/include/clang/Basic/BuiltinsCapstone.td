@@ -202,12 +202,15 @@ def cap_revoke : CapstoneBuiltin<"void*(void*)">;
 let Attributes = [NoThrow] in {
   // Domain Crossing
   def cap_call     : CapstoneBuiltin<"void*(void*)">;
-  def cap_return   : CapstoneBuiltin<"void(void*, uint64_t)">;
-
-  // World Switching
   def cap_enter    : CapstoneBuiltin<"uint64_t(void*)">;
-  def cap_exit     : CapstoneBuiltin<"void(void*, uint64_t)">;
 
   // Capability CSRs
   def cap_ccsrrw   : CapstoneBuiltin<"void*(void*, _Constant uint64_t)">;
+}
+
+// Операции, навсегда покидающие текущий контекст исполнения
+let Attributes =[NoThrow, NoReturn] in {
+  // World Switching
+  def cap_return   : CapstoneBuiltin<"void(void*, uint64_t)">;
+  def cap_exit     : CapstoneBuiltin<"void(void*, uint64_t)">;
 }

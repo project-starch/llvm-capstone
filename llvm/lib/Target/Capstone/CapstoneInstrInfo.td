@@ -2538,29 +2538,45 @@ def REVOKE : RVInstR<0b0000000, 0b001, OPC_CAP_OP, (outs GPR:$rd),
 // Domain Crossing, World Switching & CSRs
 //===----------------------------------------------------------------------===//
 
-let hasSideEffects = 1, mayLoad = 1, mayStore = 1, isBarrier = 1 in {
-  // CALL: Domain Crossing
-  def CAP_CALL : RVInstR<0b0100000, 0b001, OPC_CAP_OP,
-                         (outs GPR:$rd), (ins GPR:$rs1), "call", "$rd, $rs1"> {
-    let rs2 = 0;
+//===----------------------------------------------------------------------===//
+// Domain Crossing, World Switching & CSRs
+//===----------------------------------------------------------------------===//
+
+let hasSideEffects = 1, mayLoad = 1, mayStore = 1 in {
+  // Вызовы контекстов. isCall = 1 сообщит профилировщикам и отладчикам,
+  // что это call boundary.
+  let isCall = 1 in {
+    // CALL: Domain Crossing
+    def CAP_CALL : RVInstR<0b0100000, 0b001, OPC_CAP_OP,
+                           (outs GPR:$rd), (ins GPR:$rs1),
+                           "call", "$rd, $rs1"> {
+      let rs2 = 0;
+    }
+
+    // CAPENTER: Enter Secure World
+    def CAPENTER : RVInstR<0b0100010, 0b001, OPC_CAP_OP,
+                           (outs GPR:$rd), (ins GPR:$rs1),
+                           "capenter", "$rd, $rs1"> {
+      let rs2 = 0;
+    }
   }
 
-  // RETURN: Domain Return
-  def CAP_RETURN : RVInstR<0b0100001, 0b001, OPC_CAP_OP, (outs),
-                           (ins GPR:$rs1, GPR:$rs2), "return", "$rs1, $rs2"> {
-    let rd = 0;
-  }
+  // Терминаторы. isReturn/isTerminator ломают BasicBlock,
+  // isBarrier предотвращает "падение" инструкций из следующего блока.
+  let isReturn = 1, isTerminator = 1, isBarrier = 1 in {
+    // RETURN: Domain Return
+    def CAP_RETURN : RVInstR<0b0100001, 0b001, OPC_CAP_OP,
+                             (outs), (ins GPR:$rs1, GPR:$rs2),
+                             "return", "$rs1, $rs2"> {
+      let rd = 0;
+    }
 
-  // CAPENTER: Enter Secure World
-  def CAPENTER : RVInstR<0b0100010, 0b001, OPC_CAP_OP, (outs GPR:$rd),
-                         (ins GPR:$rs1), "capenter", "$rd, $rs1"> {
-    let rs2 = 0;
-  }
-
-  // CAPEXIT: Exit Secure World
-  def CAPEXIT : RVInstR<0b0100011, 0b001, OPC_CAP_OP, (outs),
-                        (ins GPR:$rs1, GPR:$rs2), "capexit", "$rs1, $rs2"> {
-    let rd = 0;
+    // CAPEXIT: Exit Secure World
+    def CAPEXIT : RVInstR<0b0100011, 0b001, OPC_CAP_OP,
+                          (outs), (ins GPR:$rs1, GPR:$rs2),
+                          "capexit", "$rs1, $rs2"> {
+      let rd = 0;
+    }
   }
 
   // CCSRRW: Capability CSR Read/Write (I-Type format)
