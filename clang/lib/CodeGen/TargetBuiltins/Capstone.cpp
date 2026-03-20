@@ -1083,6 +1083,7 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
 
   SmallVector<Value *, 4> Ops;
   llvm::Type *ResultType = ConvertType(E->getType());
+  bool DoesNotReturn = false;
 
   // Find out if any arguments are required to be integer constant expressions.
   unsigned ICEArguments = 0;
@@ -1448,6 +1449,7 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
   case Capstone::BI__builtin_capstone_cap_return: {
     ID = Intrinsic::capstone_cap_return;
     IntrinsicTypes.push_back(Ops[0]->getType());
+    DoesNotReturn = true;
     break;
   }
   case Capstone::BI__builtin_capstone_cap_enter: {
@@ -1458,6 +1460,7 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
   case Capstone::BI__builtin_capstone_cap_exit: {
     ID = Intrinsic::capstone_cap_exit;
     IntrinsicTypes.push_back(Ops[0]->getType());
+    DoesNotReturn = true;
     break;
   }
   case Capstone::BI__builtin_capstone_cap_ccsrrw: {
@@ -1470,5 +1473,11 @@ Value *CodeGenFunction::EmitCapstoneBuiltinExpr(unsigned BuiltinID,
   assert(ID != Intrinsic::not_intrinsic);
 
   llvm::Function *F = CGM.getIntrinsic(ID, IntrinsicTypes);
-  return Builder.CreateCall(F, Ops, "");
+  llvm::CallInst *Call = Builder.CreateCall(F, Ops, "");
+  if (DoesNotReturn) {
+    Call->setDoesNotReturn();
+    Builder.CreateUnreachable();
+    EmitBlock(createBasicBlock("capstone.noreturn.cont"));
+  }
+  return Call;
 }

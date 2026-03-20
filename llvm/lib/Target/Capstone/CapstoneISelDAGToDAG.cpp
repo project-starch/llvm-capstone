@@ -1327,12 +1327,11 @@ void CapstoneDAGToDAGISel::selectCapCall(SDNode *Node) {
   SDValue Chain = Node->getOperand(0);
   SDValue Cap = Node->getOperand(2);
 
-  // Получаем маску сохраненных регистров (Caller-Saved регистры будут затерты)
   const uint32_t *Mask = Subtarget->getRegisterInfo()->getCallPreservedMask(
       CurDAG->getMachineFunction(), CallingConv::C);
+  assert(Mask && "Missing call preserved mask for domain crossing intrinsic");
   SDValue RegMask = CurDAG->getRegisterMask(Mask);
 
-  // Добавляем RegMask как неявный операнд (он сам прицепится к MachineInstr)
   SDNode *Res = CurDAG->getMachineNode(Capstone::CAP_CALL, DL,
                                        CurDAG->getVTList(MVT::i128, MVT::Other),
                                        {Cap, RegMask, Chain});
@@ -1348,14 +1347,13 @@ void CapstoneDAGToDAGISel::selectCapEnter(SDNode *Node) {
 
   const uint32_t *Mask = Subtarget->getRegisterInfo()->getCallPreservedMask(
       CurDAG->getMachineFunction(), CallingConv::C);
+  assert(Mask && "Missing call preserved mask for domain crossing intrinsic");
   SDValue RegMask = CurDAG->getRegisterMask(Mask);
 
-  // CAPENTER возвращает integer код выхода.
   SDNode *Res = CurDAG->getMachineNode(Capstone::CAPENTER, DL,
                                        CurDAG->getVTList(MVT::i128, MVT::Other),
                                        {Cap, RegMask, Chain});
 
-  // Аккуратно обрезаем "сырой" i128 обратно до i64, требуемого LLVM IR
   SDNode *Trunc = CurDAG->getMachineNode(Capstone::PseudoTRUNC_CAP, DL,
                                          MVT::i64, SDValue(Res, 0));
 
@@ -1370,7 +1368,6 @@ void CapstoneDAGToDAGISel::selectCapReturn(SDNode *Node) {
   SDValue Cap = Node->getOperand(2);
   SDValue Code = Node->getOperand(3);
 
-  // Терминатор не возвращает данных, только генерирует цепочку зависимости
   SDNode *Res = CurDAG->getMachineNode(Capstone::CAP_RETURN, DL,
                                        CurDAG->getVTList(MVT::Other),
                                        {Cap, Code, Chain});

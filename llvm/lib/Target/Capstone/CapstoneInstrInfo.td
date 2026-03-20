@@ -2542,32 +2542,30 @@ def REVOKE : RVInstR<0b0000000, 0b001, OPC_CAP_OP, (outs GPR:$rd),
 // Domain Crossing, World Switching & CSRs
 //===----------------------------------------------------------------------===//
 
-let hasSideEffects = 1, mayLoad = 1, mayStore = 1 in {
-  // Вызовы контекстов. isCall = 1 сообщит профилировщикам и отладчикам,
-  // что это call boundary.
-  let isCall = 1 in {
-    // CALL: Domain Crossing
-    def CAP_CALL : RVInstR<0b0100000, 0b001, OPC_CAP_OP,
-                           (outs GPR:$rd), (ins GPR:$rs1),
-                           "call", "$rd, $rs1"> {
-      let rs2 = 0;
-    }
-
-    // CAPENTER: Enter Secure World
-    def CAPENTER : RVInstR<0b0100010, 0b001, OPC_CAP_OP,
-                           (outs GPR:$rd), (ins GPR:$rs1),
-                           "capenter", "$rd, $rs1"> {
-      let rs2 = 0;
-    }
+let hasSideEffects = 1, mayLoad = 1, mayStore = 1, isBarrier = 1 in {
+  // CALL: Domain Crossing
+  // Deliberately not marked isCall yet: we only need correct clobber handling
+  // on the SelectionDAG path for now, and the full call/debug-site modelling
+  // will be added later together with a dedicated call-like lowering path.
+  def CAP_CALL : RVInstR<0b0100000, 0b001, OPC_CAP_OP,
+                         (outs GPR:$rd), (ins GPR:$rs1),
+                         "call", "$rd, $rs1"> {
+    let rs2 = 0;
   }
 
-  // Терминаторы. isReturn/isTerminator ломают BasicBlock,
-  // isBarrier предотвращает "падение" инструкций из следующего блока.
-  let isReturn = 1, isTerminator = 1, isBarrier = 1 in {
+  // CAPENTER: Enter Secure World
+  def CAPENTER : RVInstR<0b0100010, 0b001, OPC_CAP_OP,
+                         (outs GPR:$rd), (ins GPR:$rs1),
+                         "capenter", "$rd, $rs1"> {
+    let rs2 = 0;
+  }
+
+  let isTerminator = 1 in {
     // RETURN: Domain Return
     def CAP_RETURN : RVInstR<0b0100001, 0b001, OPC_CAP_OP,
                              (outs), (ins GPR:$rs1, GPR:$rs2),
                              "return", "$rs1, $rs2"> {
+      let isReturn = 1;
       let rd = 0;
     }
 

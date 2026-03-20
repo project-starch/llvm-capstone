@@ -20,6 +20,9 @@ declare ptr addrspace(200) @llvm.capstone.cap.seal.p200(ptr addrspace(200))
 declare ptr addrspace(200) @llvm.capstone.cap.drop.p200(ptr addrspace(200))
 declare ptr addrspace(200) @llvm.capstone.cap.revoke.p200(ptr addrspace(200))
 
+; --- Capability CSR operations ---
+declare ptr addrspace(200) @llvm.capstone.cap.ccsrrw.p200(ptr addrspace(200), i64 immarg)
+
 
 ; CHECK-LABEL: test_get_tag:
 ; CHECK: lcc a0, a0, 0
@@ -133,3 +136,12 @@ entry:
   %0 = call ptr addrspace(200) @llvm.capstone.cap.revoke.p200(ptr addrspace(200) %p)
   ret ptr addrspace(200) %0
 }
+
+; CHECK-LABEL: test_ccsrrw:
+; CHECK: ccsrrw a0, ssp, a0
+define ptr addrspace(200) @test_ccsrrw(ptr addrspace(200) %p) {
+entry:
+  %0 = call ptr addrspace(200) @llvm.capstone.cap.ccsrrw.p200(ptr addrspace(200) %p, i64 17)
+  ret ptr addrspace(200) %0
+}
+
