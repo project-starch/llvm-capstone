@@ -310,6 +310,7 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
 
   // Comparison of capabilities
   setOperationAction(ISD::SETCC, MVT::i128, Custom);
+  setOperationAction(ISD::SELECT, MVT::i128, Custom);
   setOperationAction(ISD::BR_CC, MVT::i128, Expand);
   setOperationAction(ISD::BR_CC, XLenVT, Expand);
   setOperationAction(ISD::SELECT_CC, MVT::i128, Expand);
@@ -9664,11 +9665,140 @@ SDValue CapstoneTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const
   MVT VT = Op.getSimpleValueType();
   MVT XLenVT = Subtarget.getXLenVT();
 
+  auto lowerBranchSelect = [&]() {
+    // If the condition is not an integer SETCC which operates on XLenVT, we
+    // need to emit a CapstoneISD::SELECT_CC comparing the condition to zero.
+    if (CondV.getOpcode() != ISD::SETCC ||
+        CondV.getOperand(0).getSimpleValueType() != XLenVT) {
+      SDValue Zero = DAG.getConstant(0, DL, XLenVT);
+      SDValue SetNE = DAG.getCondCode(ISD::SETNE);
+
+      SDValue Ops[] = {CondV, Zero, SetNE, TrueV, FalseV};
+      return DAG.getNode(CapstoneISD::SELECT_CC, DL, VT, Ops);
+    }
+
+    // If the CondV is the output of a SETCC node which operates on XLenVT
+    // inputs, then merge the SETCC node into the lowered CapstoneISD::SELECT_CC
+    // to take advantage of the integer compare+branch instructions.
+    SDValue LHS = CondV.getOperand(0);
+    SDValue RHS = CondV.getOperand(1);
+    ISD::CondCode CCVal = cast<CondCodeSDNode>(CondV.getOperand(2))->get();
+
+    // Special case for a select of 2 constants that have a difference of 1.
+    if (isa<ConstantSDNode>(TrueV) && isa<ConstantSDNode>(FalseV) &&
+        CCVal == ISD::SETLT) {
+      const APInt &TrueVal = TrueV->getAsAPIntVal();
+      const APInt &FalseVal = FalseV->getAsAPIntVal();
+      if (TrueVal - 1 == FalseVal)
+        return DAG.getNode(ISD::ADD, DL, VT, CondV, FalseV);
+      if (TrueVal + 1 == FalseVal)
+        return DAG.getNode(ISD::SUB, DL, VT, FalseV, CondV);
+    }
+
+    translateSetCCForBranch(DL, LHS, RHS, CCVal, DAG, Subtarget);
+    if (isOneConstant(LHS) && (CCVal == ISD::SETLT || CCVal == ISD::SETULT) &&
+        RHS == TrueV && LHS == FalseV) {
+      LHS = DAG.getConstant(0, DL, VT);
+      if (CCVal == ISD::SETULT) {
+        std::swap(LHS, RHS);
+        CCVal = ISD::SETNE;
+      }
+    }
+
+    if (isAllOnesConstant(RHS) && CCVal == ISD::SETLT && LHS == TrueV &&
+        RHS == FalseV) {
+      RHS = DAG.getConstant(0, DL, VT);
+    }
+
+    SDValue TargetCC = DAG.getCondCode(CCVal);
+
+    if (isa<ConstantSDNode>(TrueV) && !isa<ConstantSDNode>(FalseV)) {
+      std::swap(TrueV, FalseV);
+      TargetCC =
+          DAG.getCondCode(ISD::getSetCCInverse(CCVal, LHS.getValueType()));
+    }
+
+    SDValue Ops[] = {LHS, RHS, TargetCC, TrueV, FalseV};
+    return DAG.getNode(CapstoneISD::SELECT_CC, DL, VT, Ops);
+  };
+
+  auto lowerCapabilitySelect = [&]() -> SDValue {
+    auto materializeCapabilitySelectOperand = [&](SDValue V) -> SDValue {
+      if (!isa<ConstantSDNode>(V))
+        return V;
+      if (!isNullConstant(V))
+        return SDValue();
+      return DAG.getRegister(Capstone::X0, VT);
+    };
+
+    TrueV = materializeCapabilitySelectOperand(TrueV);
+    FalseV = materializeCapabilitySelectOperand(FalseV);
+    if (!TrueV || !FalseV)
+      return SDValue();
+
+    auto getCapstoneCCForIntCC = [](ISD::CondCode CC) {
+      switch (CC) {
+      default:
+        llvm_unreachable("Unsupported integer condition code for capability select");
+      case ISD::SETEQ:
+        return CapstoneCC::COND_EQ;
+      case ISD::SETNE:
+        return CapstoneCC::COND_NE;
+      case ISD::SETLT:
+        return CapstoneCC::COND_LT;
+      case ISD::SETGE:
+        return CapstoneCC::COND_GE;
+      case ISD::SETULT:
+        return CapstoneCC::COND_LTU;
+      case ISD::SETUGE:
+        return CapstoneCC::COND_GEU;
+      }
+    };
+
+    SDValue LHS;
+    SDValue RHS;
+    ISD::CondCode CCVal;
+
+    if (CondV.getOpcode() != ISD::SETCC ||
+        CondV.getOperand(0).getSimpleValueType() != XLenVT) {
+      LHS = CondV;
+      RHS = DAG.getRegister(Capstone::X0, XLenVT);
+      CCVal = ISD::SETNE;
+    } else {
+      LHS = CondV.getOperand(0);
+      RHS = CondV.getOperand(1);
+      CCVal = cast<CondCodeSDNode>(CondV.getOperand(2))->get();
+      translateSetCCForBranch(DL, LHS, RHS, CCVal, DAG, Subtarget);
+
+      if (auto *RHSC = dyn_cast<ConstantSDNode>(RHS)) {
+        if (!RHSC->isZero())
+          return SDValue();
+        RHS = DAG.getRegister(Capstone::X0, XLenVT);
+      }
+    }
+
+    SDValue TargetCC = DAG.getTargetConstant(getCapstoneCCForIntCC(CCVal), DL,
+                                            XLenVT);
+    MachineSDNode *Select = DAG.getMachineNode(
+        Capstone::Select_GPRCAP_Using_CC_GPR, DL, VT,
+        {LHS, RHS, TargetCC, TrueV, FalseV});
+    return SDValue(Select, 0);
+  };
+
   // Lower vector SELECTs to VSELECTs by splatting the condition.
   if (VT.isVector()) {
     MVT SplatCondVT = VT.changeVectorElementType(MVT::i1);
     SDValue CondSplat = DAG.getSplat(SplatCondVT, DL, CondV);
     return DAG.getNode(ISD::VSELECT, DL, VT, CondSplat, TrueV, FalseV);
+  }
+
+  // Capability selects must remain on the branch-based path below. Reusing the
+  // existing SELECT_CC lowering avoids integer/bitwise transforms that are not
+  // valid for capabilities.
+  if (VT == MVT::i128) {
+    if (SDValue V = lowerCapabilitySelect())
+      return V;
+    return lowerBranchSelect();
   }
 
   // Try some other optimizations before falling back to generic lowering.
@@ -9866,75 +9996,7 @@ SDValue CapstoneTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const
     }
   }
 
-  // If the condition is not an integer SETCC which operates on XLenVT, we need
-  // to emit a CapstoneISD::SELECT_CC comparing the condition to zero. i.e.:
-  // (select condv, truev, falsev)
-  // -> (capstoneisd::select_cc condv, zero, setne, truev, falsev)
-  if (CondV.getOpcode() != ISD::SETCC ||
-      CondV.getOperand(0).getSimpleValueType() != XLenVT) {
-    SDValue Zero = DAG.getConstant(0, DL, XLenVT);
-    SDValue SetNE = DAG.getCondCode(ISD::SETNE);
-
-    SDValue Ops[] = {CondV, Zero, SetNE, TrueV, FalseV};
-
-    return DAG.getNode(CapstoneISD::SELECT_CC, DL, VT, Ops);
-  }
-
-  // If the CondV is the output of a SETCC node which operates on XLenVT inputs,
-  // then merge the SETCC node into the lowered CapstoneISD::SELECT_CC to take
-  // advantage of the integer compare+branch instructions. i.e.:
-  // (select (setcc lhs, rhs, cc), truev, falsev)
-  // -> (capstoneisd::select_cc lhs, rhs, cc, truev, falsev)
-  SDValue LHS = CondV.getOperand(0);
-  SDValue RHS = CondV.getOperand(1);
-  ISD::CondCode CCVal = cast<CondCodeSDNode>(CondV.getOperand(2))->get();
-
-  // Special case for a select of 2 constants that have a difference of 1.
-  // Normally this is done by DAGCombine, but if the select is introduced by
-  // type legalization or op legalization, we miss it. Restricting to SETLT
-  // case for now because that is what signed saturating add/sub need.
-  // FIXME: We don't need the condition to be SETLT or even a SETCC,
-  // but we would probably want to swap the true/false values if the condition
-  // is SETGE/SETLE to avoid an XORI.
-  if (isa<ConstantSDNode>(TrueV) && isa<ConstantSDNode>(FalseV) &&
-      CCVal == ISD::SETLT) {
-    const APInt &TrueVal = TrueV->getAsAPIntVal();
-    const APInt &FalseVal = FalseV->getAsAPIntVal();
-    if (TrueVal - 1 == FalseVal)
-      return DAG.getNode(ISD::ADD, DL, VT, CondV, FalseV);
-    if (TrueVal + 1 == FalseVal)
-      return DAG.getNode(ISD::SUB, DL, VT, FalseV, CondV);
-  }
-
-  translateSetCCForBranch(DL, LHS, RHS, CCVal, DAG, Subtarget);
-  // 1 < x ? x : 1 -> 0 < x ? x : 1
-  if (isOneConstant(LHS) && (CCVal == ISD::SETLT || CCVal == ISD::SETULT) &&
-      RHS == TrueV && LHS == FalseV) {
-    LHS = DAG.getConstant(0, DL, VT);
-    // 0 <u x is the same as x != 0.
-    if (CCVal == ISD::SETULT) {
-      std::swap(LHS, RHS);
-      CCVal = ISD::SETNE;
-    }
-  }
-
-  // x <s -1 ? x : -1 -> x <s 0 ? x : -1
-  if (isAllOnesConstant(RHS) && CCVal == ISD::SETLT && LHS == TrueV &&
-      RHS == FalseV) {
-    RHS = DAG.getConstant(0, DL, VT);
-  }
-
-  SDValue TargetCC = DAG.getCondCode(CCVal);
-
-  if (isa<ConstantSDNode>(TrueV) && !isa<ConstantSDNode>(FalseV)) {
-    // (select (setcc lhs, rhs, CC), constant, falsev)
-    // -> (select (setcc lhs, rhs, InverseCC), falsev, constant)
-    std::swap(TrueV, FalseV);
-    TargetCC = DAG.getCondCode(ISD::getSetCCInverse(CCVal, LHS.getValueType()));
-  }
-
-  SDValue Ops[] = {LHS, RHS, TargetCC, TrueV, FalseV};
-  return DAG.getNode(CapstoneISD::SELECT_CC, DL, VT, Ops);
+  return lowerBranchSelect();
 }
 
 SDValue CapstoneTargetLowering::lowerBRCOND(SDValue Op, SelectionDAG &DAG) const {
@@ -20760,6 +20822,9 @@ SDValue CapstoneTargetLowering::PerformDAGCombine(SDNode *N,
     SDLoc DL(N);
     EVT VT = N->getValueType(0);
 
+    if (VT == MVT::i128)
+      return SDValue();
+
     // If the True and False values are the same, we don't need a select_cc.
     if (TrueV == FalseV)
       return TrueV;
@@ -22594,6 +22659,7 @@ static MachineBasicBlock *emitSelectPseudo(MachineInstr &MI,
 
   MachineBasicBlock *HeadMBB = BB;
   MachineFunction *F = BB->getParent();
+  MachineRegisterInfo &MRI = F->getRegInfo();
   MachineBasicBlock *TailMBB = F->CreateMachineBasicBlock(LLVM_BB);
   MachineBasicBlock *IfFalseMBB = F->CreateMachineBasicBlock(LLVM_BB);
 
@@ -22635,6 +22701,20 @@ static MachineBasicBlock *emitSelectPseudo(MachineInstr &MI,
   // IfFalseMBB just falls through to TailMBB.
   IfFalseMBB->addSuccessor(TailMBB);
 
+  auto materializeSelectPHISource = [&](MachineBasicBlock *PredMBB,
+                                        Register SrcReg,
+                                        Register DstReg,
+                                        DebugLoc SrcDL) {
+    if (!SrcReg.isPhysical())
+      return SrcReg;
+
+    Register VReg = MRI.createVirtualRegister(MRI.getRegClass(DstReg));
+    auto InsertPt = PredMBB->getFirstTerminator();
+    BuildMI(*PredMBB, InsertPt, SrcDL, TII.get(TargetOpcode::COPY), VReg)
+        .addReg(SrcReg);
+    return VReg;
+  };
+
   // Create PHIs for all of the select pseudo-instructions.
   auto SelectMBBI = MI.getIterator();
   auto SelectEnd = std::next(LastSelectPseudo->getIterator());
@@ -22642,12 +22722,19 @@ static MachineBasicBlock *emitSelectPseudo(MachineInstr &MI,
   while (SelectMBBI != SelectEnd) {
     auto Next = std::next(SelectMBBI);
     if (CapstoneInstrInfo::isSelectPseudo(*SelectMBBI)) {
+      Register DstReg = SelectMBBI->getOperand(0).getReg();
+      Register TrueReg = materializeSelectPHISource(
+          HeadMBB, SelectMBBI->getOperand(4).getReg(), DstReg,
+          SelectMBBI->getDebugLoc());
+      Register FalseReg = materializeSelectPHISource(
+          IfFalseMBB, SelectMBBI->getOperand(5).getReg(), DstReg,
+          SelectMBBI->getDebugLoc());
       // %Result = phi [ %TrueValue, HeadMBB ], [ %FalseValue, IfFalseMBB ]
       BuildMI(*TailMBB, InsertionPoint, SelectMBBI->getDebugLoc(),
-              TII.get(Capstone::PHI), SelectMBBI->getOperand(0).getReg())
-          .addReg(SelectMBBI->getOperand(4).getReg())
+              TII.get(Capstone::PHI), DstReg)
+          .addReg(TrueReg)
           .addMBB(HeadMBB)
-          .addReg(SelectMBBI->getOperand(5).getReg())
+          .addReg(FalseReg)
           .addMBB(IfFalseMBB);
       SelectMBBI->eraseFromParent();
     }
@@ -22876,6 +22963,7 @@ CapstoneTargetLowering::EmitInstrWithCustomInserter(MachineInstr &MI,
            "ReadCounterWide is only to be used on capstone32");
     return emitReadCounterWidePseudo(MI, BB);
   case Capstone::Select_GPR_Using_CC_GPR:
+  case Capstone::Select_GPRCAP_Using_CC_GPR:
   case Capstone::Select_GPR_Using_CC_SImm5_CV:
   case Capstone::Select_GPRNoX0_Using_CC_SImm5NonZero_QC:
   case Capstone::Select_GPRNoX0_Using_CC_UImm5NonZero_QC:

@@ -1737,6 +1737,8 @@ multiclass SelectCC_GPR_rrirr<DAGOperand valty, ValueType vt> {
 let Predicates = [NoConditionalMoveFusion] in
 defm Select_GPR : SelectCC_GPR_rrirr<GPR, XLenVT>;
 
+defm Select_GPRCAP : SelectCC_GPR_rrirr<GPR, i128>;
+
 class SelectCompressOpt<CondCode Cond>
     : Pat<(capstone_selectcc_frag:$select (XLenVT GPR:$lhs), simm12_no6:$Constant, Cond,
                                        (XLenVT GPR:$truev), GPR:$falsev),
