@@ -240,6 +240,14 @@ static SDValue selectImm(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
   return selectImmSeq(CurDAG, DL, VT, Seq);
 }
 
+static int64_t getSignedI128ValueOrFatal(const ConstantSDNode *ConstNode,
+                                         StringRef Context) {
+  const APInt &Val = ConstNode->getAPIntValue();
+  if (!Val.isSignedIntN(64))
+    report_fatal_error(Twine("Capstone PureCap: ") + Context);
+  return Val.getSExtValue();
+}
+
 void CapstoneDAGToDAGISel::addVectorLoadStoreOperands(
     SDNode *Node, unsigned Log2SEW, const SDLoc &DL, unsigned CurOp,
     bool IsMasked, bool IsStridedOrIndexed, SmallVectorImpl<SDValue> &Operands,
@@ -1153,7 +1161,8 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
 
   // 1. Attempt to use the instruction with immediate (CIncOffsetImm)
   if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
-    int64_t ImmVal = C->getSExtValue();
+    int64_t ImmVal = getSignedI128ValueOrFatal(
+        C, "CIncOffset displacement must fit in signed 64-bits");
     // Check if it fits in 12 bits
     if (isInt<12>(ImmVal)) {
       // Create TargetConstant of type i64 (critical for simm12_i64_op!)
@@ -1534,11 +1543,13 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
         return;
       }
 
-      // Non-zero i128 constants often appear as small integer literals (e.g.
-      // when constructing test pointers). Materialize them directly in the
-      // i128 GPR type so instruction selection doesn't leave target-independent
-      // extend nodes behind.
-      int64_t Imm = ConstNode->getSExtValue();
+      // In PureCap mode, non-zero i128 constants are only valid when they
+      // semantically represent a signed 64-bit numeric address/offset value.
+      // Arbitrary 128-bit capability forging is forbidden.
+      int64_t Imm = getSignedI128ValueOrFatal(
+          ConstNode,
+          "Cannot materialize arbitrary >64-bit constants as capabilities; "
+          "capabilities are unforgeable");
       ReplaceNode(Node, selectImm(CurDAG, DL, VT, Imm, *Subtarget).getNode());
       return;
     }
