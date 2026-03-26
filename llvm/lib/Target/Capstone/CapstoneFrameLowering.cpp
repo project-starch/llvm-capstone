@@ -24,6 +24,7 @@
 #include "llvm/CodeGen/RegisterScavenging.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/MC/MCDwarf.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/LEB128.h"
 
 #include <algorithm>
@@ -947,6 +948,10 @@ void CapstoneFrameLowering::emitPrologue(MachineFunction &MF,
 
   // Determine the correct frame layout
   determineFrameLayout(MF);
+
+  if (RI->hasStackRealignment(MF))
+    reportFatalUsageError(
+        "Stack realignment is not supported yet in Capstone PureCap");
 
   const auto &CSI = MFI.getCalleeSavedInfo();
 

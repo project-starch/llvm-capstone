@@ -29,6 +29,11 @@
 
 using namespace llvm;
 
+static bool isCapabilityFrameReg(Register Reg) {
+  return Reg == Capstone::X2 || Reg == Capstone::X8 ||
+         Reg == CapstoneABI::getBPReg();
+}
+
 static cl::opt<bool> DisableCostPerUse("capstone-disable-cost-per-use",
                                        cl::init(false), cl::Hidden);
 static cl::opt<bool>
@@ -205,9 +210,16 @@ void CapstoneRegisterInfo::adjustReg(MachineBasicBlock &MBB,
   MachineRegisterInfo &MRI = MF.getRegInfo();
   const CapstoneSubtarget &ST = MF.getSubtarget<CapstoneSubtarget>();
   const CapstoneInstrInfo *TII = ST.getInstrInfo();
+  bool UseCapabilityAdjust = isCapabilityFrameReg(SrcReg) ||
+                             isCapabilityFrameReg(DestReg);
 
   // Optimize compile time offset case
   if (Offset.getScalable()) {
+    if (UseCapabilityAdjust)
+      reportFatalUsageError(
+          "Scalable stack adjustments are not supported yet in Capstone "
+          "PureCap");
+
     if (auto VLEN = ST.getRealVLen()) {
       // 1. Multiply the number of v-slots by the (constant) length of register
       const int64_t VLENB = *VLEN / 8;
@@ -293,6 +305,31 @@ void CapstoneRegisterInfo::adjustReg(MachineBasicBlock &MBB,
   int64_t Val = Offset.getFixed();
   if (DestReg == SrcReg && Val == 0)
     return;
+
+  if (UseCapabilityAdjust) {
+    if (Val == 0) {
+      BuildMI(MBB, II, DL, TII->get(Capstone::MOVC), DestReg)
+          .addReg(SrcReg, getKillRegState(KillSrcReg))
+          .setMIFlag(Flag);
+      return;
+    }
+
+    if (isInt<12>(Val)) {
+      BuildMI(MBB, II, DL, TII->get(Capstone::CIncOffsetImm), DestReg)
+          .addReg(SrcReg, getKillRegState(KillSrcReg))
+          .addImm(Val)
+          .setMIFlag(Flag);
+      return;
+    }
+
+    Register ScratchReg = MRI.createVirtualRegister(&Capstone::GPRRegClass);
+    TII->movImm(MBB, II, DL, ScratchReg, Val, Flag);
+    BuildMI(MBB, II, DL, TII->get(Capstone::CIncOffset), DestReg)
+        .addReg(SrcReg, getKillRegState(KillSrcReg))
+        .addReg(ScratchReg, RegState::Kill)
+        .setMIFlag(Flag);
+    return;
+  }
 
   const uint64_t Align = RequiredAlign.valueOrOne().value();
 
