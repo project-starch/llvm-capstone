@@ -1075,20 +1075,29 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
   SDValue BasePtr = MemNode->getBasePtr(); // Base address (or FrameIndex)
   // Different operand offset Load (2), and for Store (3)
   SDValue Offset = MemNode->getOperand(Opcode == ISD::LOAD ? 2 : 3);
+  int64_t BaseOffset = 0;
+
+  if (BasePtr.getOpcode() == CapstoneISD::CIncOffset) {
+    if (auto *C = dyn_cast<ConstantSDNode>(BasePtr.getOperand(1))) {
+      BaseOffset = C->getSExtValue();
+      BasePtr = BasePtr.getOperand(0);
+    }
+  }
 
   // 1. Normalize offset (undef -> 0)
   if (Offset.isUndef()) {
-    // Use MVT::i64, as the instruction expects simm12_i64_op
-    // If offset is undefined, set it explicitly 0
-    Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
+    if (!isInt<12>(BaseOffset))
+      return false;
+    // Use MVT::i64, as the instruction expects simm12_i64_op.
+    Offset = CurDAG->getTargetConstant(BaseOffset, DL, MVT::i64);
   } else if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
-    // Check if the offset fits in 12 bits. If not, we decline for now
-    // (let LLVM try to split it itself, although without patterns it will
-    // fail, but this is better than generating garbage).
-    if (!isInt<12>(C->getSExtValue()))
+    int64_t TotalOffset = C->getSExtValue() + BaseOffset;
+    // Check if the folded offset fits in 12 bits. If not, we decline for now
+    // and keep the address arithmetic as a separate node.
+    if (!isInt<12>(TotalOffset))
       return false;
     // Recreate the constant as TargetConstant i64
-    Offset = CurDAG->getTargetConstant(C->getSExtValue(), DL, MVT::i64);
+    Offset = CurDAG->getTargetConstant(TotalOffset, DL, MVT::i64);
   } else {
     // If offset is not a constant - we can't handle this yet
     // (requires pointer arithmetic)
@@ -3517,6 +3526,21 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
 
   SDLoc DL(Addr);
   MVT VT = Addr.getSimpleValueType();
+
+  // PureCap: fold capability pointer arithmetic with a small constant offset
+  // directly into the load/store simm12 field.
+  if (Addr.getOpcode() == CapstoneISD::CIncOffset) {
+    if (auto *C = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
+      int64_t CVal = C->getSExtValue();
+      if (isInt<12>(CVal)) {
+        Base = Addr.getOperand(0);
+        if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))
+          Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), VT);
+        Offset = CurDAG->getSignedTargetConstant(CVal, DL, MVT::i64);
+        return true;
+      }
+    }
+  }
 
   if (Addr.getOpcode() == CapstoneISD::ADD_LO) {
     bool CanFold = true;
