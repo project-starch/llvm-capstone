@@ -26,3 +26,23 @@ entry:
   ret ptr addrspace(200) %gep
 }
 
+; CHECK-LABEL: test_scalar_load_gep_neg:
+; CHECK: lw a0, -1(a0)
+; CHECK: cjalr zero, 0(ra)
+define i32 @test_scalar_load_gep_neg(ptr addrspace(200) %p) {
+entry:
+  %gep = getelementptr i8, ptr addrspace(200) %p, i128 -1
+  %v = load i32, ptr addrspace(200) %gep, align 4
+  ret i32 %v
+}
+
+; CHECK-LABEL: test_cap_load_gep_neg:
+; CHECK: ldc a0, -16(a0)
+; CHECK: cjalr zero, 0(ra)
+define ptr addrspace(200) @test_cap_load_gep_neg(ptr addrspace(200) %p) {
+entry:
+  %gep = getelementptr i8, ptr addrspace(200) %p, i128 -16
+  %v = load ptr addrspace(200), ptr addrspace(200) %gep, align 16
+  ret ptr addrspace(200) %v
+}
+

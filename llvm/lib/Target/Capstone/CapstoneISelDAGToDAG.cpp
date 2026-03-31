@@ -1087,7 +1087,8 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
 
   if (BasePtr.getOpcode() == CapstoneISD::CIncOffset) {
     if (auto *C = dyn_cast<ConstantSDNode>(BasePtr.getOperand(1))) {
-      BaseOffset = C->getSExtValue();
+      BaseOffset = getSignedI128ValueOrFatal(
+          C, "Folded load/store displacement must fit in signed 64-bits");
       BasePtr = BasePtr.getOperand(0);
     }
   }
@@ -1099,7 +1100,13 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
     // Use MVT::i64, as the instruction expects simm12_i64_op.
     Offset = CurDAG->getTargetConstant(BaseOffset, DL, MVT::i64);
   } else if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
-    int64_t TotalOffset = C->getSExtValue() + BaseOffset;
+    int64_t OffsetVal = getSignedI128ValueOrFatal(
+        C, "Folded load/store displacement must fit in signed 64-bits");
+    int64_t TotalOffset;
+    if (AddOverflow(OffsetVal, BaseOffset, TotalOffset))
+      report_fatal_error(
+          "Capstone PureCap: Folded load/store displacement must fit in "
+          "signed 64-bits");
     // Check if the folded offset fits in 12 bits. If not, we decline for now
     // and keep the address arithmetic as a separate node.
     if (!isInt<12>(TotalOffset))
@@ -3542,7 +3549,8 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
   // directly into the load/store simm12 field.
   if (Addr.getOpcode() == CapstoneISD::CIncOffset) {
     if (auto *C = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
-      int64_t CVal = C->getSExtValue();
+      int64_t CVal = getSignedI128ValueOrFatal(
+          C, "Address displacement must fit in signed 64-bits");
       if (isInt<12>(CVal)) {
         Base = Addr.getOperand(0);
         if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))
