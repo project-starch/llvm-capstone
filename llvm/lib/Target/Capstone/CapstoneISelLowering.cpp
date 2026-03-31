@@ -23796,10 +23796,11 @@ SDValue CapstoneTargetLowering::LowerCall(CallLoweringInfo &CLI,
     // will handle materializing the address.
     Callee = lowerGlobalAddress(SDValue(S, 0), DAG);
   } else if (ExternalSymbolSDNode *S = dyn_cast<ExternalSymbolSDNode>(Callee)) {
-    // FIXME: External Symbols (e.g. memset) should also be loaded via GOT/PLT
-    // as capabilities. For now, we fallback to standard lowering, which might
-    // be unsafe if PtrVT is i128
-    Callee = DAG.getTargetExternalSymbol(S->getSymbol(), PtrVT, CapstoneII::MO_CALL);
+    // PureCap direct calls need a capability-valued callee. Materialize
+    // compiler-generated ExternalSymbol callees (RTLIB/libc helpers) through
+    // the same GP-relative LGA path we already use for GlobalAddress nodes.
+    SDValue TargetAddr = DAG.getTargetExternalSymbol(S->getSymbol(), MVT::i64, 0);
+    Callee = DAG.getNode(CapstoneISD::LGA, DL, MVT::i128, TargetAddr);
   }
 
   // The first call operand is the chain and the second is the target address.
