@@ -296,6 +296,8 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
 
   // TODO: add all necessary setOperationAction calls.
   setOperationAction(ISD::DYNAMIC_STACKALLOC, XLenVT, Custom);
+  if (Subtarget.is64Bit())
+    setOperationAction(ISD::DYNAMIC_STACKALLOC, MVT::i128, Custom);
 
   //===--------------------------------------------------------------------===//
   // Custom Capstone-specific lowering
@@ -25503,6 +25505,59 @@ bool CapstoneTargetLowering::hasInlineStackProbe(const MachineFunction &MF) cons
   return false;
 }
 
+static SDValue lowerDynamicAllocaSizeToXLen(SDValue Size, SelectionDAG &DAG,
+                                            const SDLoc &DL, MVT XLenVT) {
+  if (!Size)
+    return SDValue();
+
+  if (Size.getValueType() == XLenVT)
+    return Size;
+
+  switch (Size.getOpcode()) {
+  case ISD::Constant: {
+    const APInt &Value = cast<ConstantSDNode>(Size)->getAPIntValue();
+    return DAG.getConstant(Value.trunc(XLenVT.getSizeInBits()), DL, XLenVT);
+  }
+  case ISD::ZERO_EXTEND:
+  case ISD::ANY_EXTEND:
+  case ISD::SIGN_EXTEND:
+  case ISD::TRUNCATE: {
+    SDValue Op = lowerDynamicAllocaSizeToXLen(Size.getOperand(0), DAG, DL,
+                                              XLenVT);
+    if (!Op)
+      return SDValue();
+    if (Op.getValueType() == XLenVT)
+      return Op;
+    if (Op.getValueType().bitsGT(XLenVT))
+      return DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Op);
+    return DAG.getNode(Size.getOpcode(), DL, XLenVT, Op);
+  }
+  case ISD::ADD:
+  case ISD::SUB:
+  case ISD::MUL:
+  case ISD::AND:
+  case ISD::OR:
+  case ISD::XOR:
+  case ISD::SHL:
+  case ISD::SRL:
+  case ISD::SRA:
+  case CapstoneISD::CIncOffset: {
+    SDValue LHS = lowerDynamicAllocaSizeToXLen(Size.getOperand(0), DAG, DL,
+                                               XLenVT);
+    SDValue RHS = lowerDynamicAllocaSizeToXLen(Size.getOperand(1), DAG, DL,
+                                               XLenVT);
+    if (!LHS || !RHS)
+      return SDValue();
+    unsigned Opc = Size.getOpcode() == CapstoneISD::CIncOffset
+                       ? ISD::ADD
+                       : Size.getOpcode();
+    return DAG.getNode(Opc, DL, XLenVT, LHS, RHS);
+  }
+  default:
+    return SDValue();
+  }
+}
+
 unsigned CapstoneTargetLowering::getStackProbeSize(const MachineFunction &MF,
                                                 Align StackAlign) const {
   // The default stack probe size is 4096 if the function has no
@@ -25518,6 +25573,53 @@ unsigned CapstoneTargetLowering::getStackProbeSize(const MachineFunction &MF,
 SDValue CapstoneTargetLowering::lowerDYNAMIC_STACKALLOC(SDValue Op,
                                                      SelectionDAG &DAG) const {
   MachineFunction &MF = DAG.getMachineFunction();
+  const TargetFrameLowering *TFL = DAG.getSubtarget().getFrameLowering();
+  SDLoc dl(Op);
+  EVT VT = Op.getValueType();
+
+  if (VT == MVT::i128) {
+    SDValue Chain = Op.getOperand(0);
+    SDValue Size = Op.getOperand(1);
+    Align Alignment = cast<ConstantSDNode>(Op.getOperand(2))->getAlignValue();
+    MVT XLenVT = Subtarget.getXLenVT();
+
+    if (Alignment > TFL->getStackAlign())
+      reportFatalUsageError(
+          "Stack realignment is not supported yet in Capstone PureCap");
+
+    SDValue SP;
+    if (hasInlineStackProbe(MF)) {
+      SP = DAG.getCopyFromReg(Chain, dl, Capstone::X2, VT);
+      Chain = SP.getValue(1);
+    } else {
+      Chain = DAG.getCALLSEQ_START(Chain, 0, 0, dl);
+      SP = DAG.getCopyFromReg(Chain, dl, Capstone::X2, VT);
+      Chain = SP.getValue(1);
+    }
+
+    // Capability offset arithmetic uses XLEN-sized displacements.
+    SDValue SizeXLen = lowerDynamicAllocaSizeToXLen(Size, DAG, dl, XLenVT);
+    if (!SizeXLen)
+      reportFatalUsageError(
+          "Unsupported dynamic alloca size expression in Capstone PureCap");
+    SDValue OffsetXLen = SizeXLen;
+    if (TFL->getStackGrowthDirection() == TargetFrameLowering::StackGrowsDown)
+      OffsetXLen = DAG.getNode(ISD::SUB, dl, XLenVT,
+                               DAG.getConstant(0, dl, XLenVT), SizeXLen);
+    SDValue Offset = DAG.getNode(ISD::SIGN_EXTEND, dl, VT, OffsetXLen);
+    SDValue NewSP = DAG.getNode(ISD::ADD, dl, VT, SP, Offset);
+
+    if (hasInlineStackProbe(MF)) {
+      Chain = DAG.getNode(CapstoneISD::PROBED_ALLOCA, dl, MVT::Other, Chain,
+                          NewSP);
+      return DAG.getMergeValues({NewSP, Chain}, dl);
+    }
+
+    Chain = DAG.getCopyToReg(Chain, dl, Capstone::X2, NewSP);
+    Chain = DAG.getCALLSEQ_END(Chain, 0, 0, SDValue(), dl);
+    return DAG.getMergeValues({NewSP, Chain}, dl);
+  }
+
   if (!hasInlineStackProbe(MF))
     return SDValue();
 
@@ -25528,8 +25630,6 @@ SDValue CapstoneTargetLowering::lowerDYNAMIC_STACKALLOC(SDValue Op,
 
   MaybeAlign Align =
       cast<ConstantSDNode>(Op.getOperand(2))->getMaybeAlignValue();
-  SDLoc dl(Op);
-  EVT VT = Op.getValueType();
 
   // Construct the new SP value in a GPR.
   SDValue SP = DAG.getCopyFromReg(Chain, dl, Capstone::X2, XLenVT);
@@ -25553,6 +25653,7 @@ CapstoneTargetLowering::emitDynamicProbedAlloc(MachineInstr &MI,
   Register TargetReg = MI.getOperand(0).getReg();
 
   const CapstoneInstrInfo *TII = Subtarget.getInstrInfo();
+  const CapstoneRegisterInfo *RI = Subtarget.getRegisterInfo();
   bool IsRV64 = Subtarget.is64Bit();
   Align StackAlign = Subtarget.getFrameLowering()->getStackAlign();
   const CapstoneTargetLowering *TLI = Subtarget.getTargetLowering();
@@ -25572,10 +25673,10 @@ CapstoneTargetLowering::emitDynamicProbedAlloc(MachineInstr &MI,
   TII->movImm(*MBB, MBBI, DL, ScratchReg, ProbeSize, MachineInstr::NoFlags);
 
   // LoopTest:
-  //   SUB SP, SP, ProbeSize
-  BuildMI(*LoopTestMBB, LoopTestMBB->end(), DL, TII->get(Capstone::SUB), SPReg)
-      .addReg(SPReg)
-      .addReg(ScratchReg);
+  //   SP -= ProbeSize using capability-safe adjustment.
+  RI->adjustReg(*LoopTestMBB, LoopTestMBB->end(), DL, SPReg, SPReg,
+                StackOffset::getFixed(-static_cast<int64_t>(ProbeSize)),
+                MachineInstr::NoFlags, StackAlign);
 
   //   s[d|w] zero, 0(sp)
   BuildMI(*LoopTestMBB, LoopTestMBB->end(), DL,
@@ -25590,10 +25691,9 @@ CapstoneTargetLowering::emitDynamicProbedAlloc(MachineInstr &MI,
       .addReg(SPReg)
       .addMBB(LoopTestMBB);
 
-  // Adjust with: MV SP, TargetReg.
-  BuildMI(*ExitMBB, ExitMBB->end(), DL, TII->get(Capstone::ADDI), SPReg)
-      .addReg(TargetReg)
-      .addImm(0);
+  // Adjust with: SP = TargetReg.
+  RI->adjustReg(*ExitMBB, ExitMBB->end(), DL, SPReg, TargetReg,
+                StackOffset::getFixed(0), MachineInstr::NoFlags, StackAlign);
 
   ExitMBB->splice(ExitMBB->end(), MBB, std::next(MBBI), MBB->end());
   ExitMBB->transferSuccessorsAndUpdatePHIs(MBB);
