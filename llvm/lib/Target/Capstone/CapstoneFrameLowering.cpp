@@ -949,10 +949,6 @@ void CapstoneFrameLowering::emitPrologue(MachineFunction &MF,
   // Determine the correct frame layout
   determineFrameLayout(MF);
 
-  if (RI->hasStackRealignment(MF))
-    reportFatalUsageError(
-        "Stack realignment is not supported yet in Capstone PureCap");
-
   const auto &CSI = MFI.getCalleeSavedInfo();
 
   // Skip to before the spills of scalar callee-saved registers
@@ -1153,24 +1149,41 @@ void CapstoneFrameLowering::emitPrologue(MachineFunction &MF,
       Align MaxAlignment = MFI.getMaxAlign();
 
       const CapstoneInstrInfo *TII = STI.getInstrInfo();
+      Register CursorReg =
+          MF.getRegInfo().createVirtualRegister(&Capstone::GPRRegClass);
+      Register AlignedCursorReg = CursorReg;
+
+      BuildMI(MBB, MBBI, DL, TII->get(Capstone::LCC), CursorReg)
+          .addReg(SPReg)
+          .addImm(2)
+          .setMIFlag(MachineInstr::FrameSetup);
+
       if (isInt<12>(-(int)MaxAlignment.value())) {
-        BuildMI(MBB, MBBI, DL, TII->get(Capstone::ANDI), SPReg)
-            .addReg(SPReg)
+        BuildMI(MBB, MBBI, DL, TII->get(Capstone::ANDI), CursorReg)
+            .addReg(CursorReg)
             .addImm(-(int)MaxAlignment.value())
             .setMIFlag(MachineInstr::FrameSetup);
       } else {
         unsigned ShiftAmount = Log2(MaxAlignment);
         Register VR =
             MF.getRegInfo().createVirtualRegister(&Capstone::GPRRegClass);
+        AlignedCursorReg =
+            MF.getRegInfo().createVirtualRegister(&Capstone::GPRRegClass);
         BuildMI(MBB, MBBI, DL, TII->get(Capstone::SRLI), VR)
-            .addReg(SPReg)
+            .addReg(CursorReg)
             .addImm(ShiftAmount)
             .setMIFlag(MachineInstr::FrameSetup);
-        BuildMI(MBB, MBBI, DL, TII->get(Capstone::SLLI), SPReg)
+        BuildMI(MBB, MBBI, DL, TII->get(Capstone::SLLI), AlignedCursorReg)
             .addReg(VR)
             .addImm(ShiftAmount)
             .setMIFlag(MachineInstr::FrameSetup);
       }
+
+      BuildMI(MBB, MBBI, DL, TII->get(Capstone::SCC), SPReg)
+          .addReg(SPReg)
+          .addReg(AlignedCursorReg)
+          .setMIFlag(MachineInstr::FrameSetup);
+
       if (NeedProbe && RVVStackSize == 0) {
         // Do a probe if the align + size allocated just passed the probe size
         // and was not yet probed.
@@ -1188,11 +1201,8 @@ void CapstoneFrameLowering::emitPrologue(MachineFunction &MF,
       // another base register BP to record SP after re-alignment. SP will
       // track the current stack after allocating variable sized objects.
       if (hasBP(MF)) {
-        // move BP, SP
-        BuildMI(MBB, MBBI, DL, TII->get(Capstone::ADDI), BPReg)
-            .addReg(SPReg)
-            .addImm(0)
-            .setMIFlag(MachineInstr::FrameSetup);
+        RI->adjustReg(MBB, MBBI, DL, BPReg, SPReg, StackOffset::getFixed(0),
+                      MachineInstr::FrameSetup, getStackAlign());
       }
     }
   }
