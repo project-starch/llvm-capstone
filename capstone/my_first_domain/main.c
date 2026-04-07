@@ -1,8 +1,6 @@
-// Простая математика, чтобы проверить, что LLVM генерирует правильный код.
-// Возвращаем сумму, чтобы увидеть её в `retval = ...` в консоли QEMU.
-int main() {
-  volatile int a = 10;
-  volatile int b = 32;
-  int c = a + b;
-  return c; // Должно вернуть 42
+// The domain entry/exit ABI is handled in start.S.
+// This file is intentionally ordinary C compiled by our clang.
+void domain_main(unsigned *res, unsigned func) {
+  (void)func;
+  *res = 42;
 }
