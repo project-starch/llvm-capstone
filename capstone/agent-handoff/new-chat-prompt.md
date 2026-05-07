@@ -8,7 +8,7 @@ I am continuing work on the Capstone architecture support in the repository:
 - `/home/alexey/dev/llvm-capstone`
 
 ## Important working style / constraints
-1. If you run terminal commands, **always redirect output into files under `/tmp`**, then read those files. Do **not** rely on directly captured terminal output.
+1. If you run terminal commands, **always redirect output into files under `/tmp/alexey/`**, then read those files. Do **not** rely on directly captured terminal output.
 2. Be iterative and conservative.
 3. Prefer the **smallest meaningful next step** toward the real goal.
 4. The main goal is **not** just toy backend work; it is to make the toolchain/runtime capable of compiling and running serious software such as:
@@ -19,6 +19,7 @@ I am continuing work on the Capstone architecture support in the repository:
 5. We currently care about the **SelectionDAG** path, not GISel.
 6. When you edit files, preserve existing style and avoid unrelated refactors.
 7. After edits, run focused tests and verify behavior.
+8. Keep the handoff files in `capstone/agent-handoff/` up to date whenever the validated baseline or workflow changes.
 
 ## Read these handoff/context files first
 Please read these files before proposing changes:
@@ -26,12 +27,12 @@ Please read these files before proposing changes:
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/README.md`
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-agent-test-instructions.md`
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-backend-status-for-llm.md`
+- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/current-next-step.md` (current recommendation only; do not treat it as immutable)
 
 Also use these logs as verified evidence of the latest native path:
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-my-domain-build-native.txt`
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-my-domain-readobj-native.txt`
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-modcapstone-rebuild.txt`
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-qemu-native-emcapstone.txt`
+- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-qemu-native-proof.txt`
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-lld-lit.txt`
 
 ## Current verified state
@@ -54,25 +55,8 @@ The `my_first_domain` flow is a **domain runtime sample**, not yet the same thin
 
 The next objective should be chosen accordingly.
 
-## Recommended next step
-Unless you discover a strong reason otherwise, the **minimum next meaningful step** is:
-
-> bring up the smallest possible **hosted** Capstone executable flow
-
-Meaning:
-1. determine the expected `clang + ld.lld + crt/startfiles + libc/sysroot` path for a normal hosted Capstone program,
-2. try to compile/link the smallest possible program such as:
-   - `int main() { return 0; }`
-   or
-   - a tiny `puts("ok")` program,
-3. identify the first real blocker,
-4. fix only that blocker,
-5. re-test.
-
-Do **not** jump straight to FFmpeg/sqlite/libpng unless the hosted smoke test already works.
-
 ## What to avoid spending time on right now
-Unless it blocks the hosted smoke test, please postpone:
+Unless it blocks the currently chosen milestone, please postpone:
 - pretty disassembly / `llvm-objdump` polishing
 - GISel support
 - cosmetic cleanups
@@ -82,11 +66,12 @@ Unless it blocks the hosted smoke test, please postpone:
 ## Expected workflow in the new chat
 1. Read the handoff files.
 2. Summarize the verified current state in a few bullets.
-3. Confirm what the next smallest hosted bring-up step is.
+3. Determine the next smallest meaningful milestone from the current repository state.
 4. Probe the existing repository/runtime for that path.
 5. If a minimal patch is justified, implement it.
 6. Rebuild and test using `/tmp`-redirected logs.
-7. Explain exactly what changed and what remains blocked.
+7. Update the handoff files if your changes modify the validated baseline or recommended workflow.
+8. Explain exactly what changed and what remains blocked.
 
 When responding, be concrete, cautious, and prefer proven facts over assumptions.
 

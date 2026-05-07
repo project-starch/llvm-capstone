@@ -2,7 +2,7 @@
 
 This file is a practical handoff note for future agent sessions working on the Capstone backend/toolchain in `/home/alexey/dev/llvm-capstone`.
 
-The user explicitly prefers that terminal output be redirected to files in `/tmp` and then inspected from there, rather than reading command output directly.
+The user explicitly prefers that terminal output be redirected to files in `/tmp/alexey/` and then inspected from there, rather than reading command output directly.
 
 ---
 
@@ -22,34 +22,44 @@ Capstone-related runtime repos in-tree:
 - `/home/alexey/dev/llvm-capstone/capstone/caplifive-buildroot`
 - `/home/alexey/dev/llvm-capstone/capstone/capstone-qemu`
 - `/home/alexey/dev/llvm-capstone/capstone/my_first_domain`
+- persistent handoff bundle: `/home/alexey/dev/llvm-capstone/capstone/agent-handoff`
+
+Before running commands that produce logs, make sure the scratch directory exists:
+
+```bash
+mkdir -p /tmp/alexey
+```
 
 ---
 
 ## 1. General rule for running commands
 
-Always redirect output to `/tmp/...` and inspect the file afterwards.
+Always redirect output to `/tmp/alexey/...` and inspect the file afterwards.
 
 Examples:
 
 ```bash
+mkdir -p /tmp/alexey
 cd /home/alexey/dev/llvm-capstone && \
-cmake --build /home/alexey/dev/llvm-capstone/llvm/build --target check-llvm > /tmp/capstone-check-llvm.txt 2>&1
+cmake --build /home/alexey/dev/llvm-capstone/llvm/build --target check-llvm > /tmp/alexey/capstone-check-llvm.txt 2>&1
 ```
 
 ```bash
-sed -n '1,220p' /tmp/capstone-check-llvm.txt
+sed -n '1,220p' /tmp/alexey/capstone-check-llvm.txt
 ```
 
 For shell scripts, if you want command tracing, prefer:
 
 ```bash
-bash -x ./build.sh > /tmp/my-domain-build.txt 2>&1
+mkdir -p /tmp/alexey
+bash -x ./build.sh > /tmp/alexey/my-domain-build.txt 2>&1
 ```
 
 or, if the script already has `set -x`, just redirect its output:
 
 ```bash
-./build.sh > /tmp/my-domain-build.txt 2>&1
+mkdir -p /tmp/alexey
+./build.sh > /tmp/alexey/my-domain-build.txt 2>&1
 ```
 
 ---
@@ -61,16 +71,17 @@ or, if the script already has `set -x`, just redirect its output:
 Use this when you changed backend lowering, instruction selection, frame lowering, memory lowering, etc.
 
 ```bash
+mkdir -p /tmp/alexey
 cd /home/alexey/dev/llvm-capstone/llvm && \
 /home/alexey/dev/llvm-capstone/llvm/build/bin/llvm-lit -sv \
   /home/alexey/dev/llvm-capstone/llvm/test/CodeGen/Capstone \
-  > /tmp/capstone-lit-codegen.txt 2>&1
+  > /tmp/alexey/capstone-lit-codegen.txt 2>&1
 ```
 
 Inspect:
 
 ```bash
-sed -n '1,260p' /tmp/capstone-lit-codegen.txt
+sed -n '1,260p' /tmp/alexey/capstone-lit-codegen.txt
 ```
 
 Important tests currently present in `llvm/test/CodeGen/Capstone/`:
@@ -98,18 +109,19 @@ Important tests currently present in `llvm/test/CodeGen/Capstone/`:
 Useful after a focused patch.
 
 ```bash
+mkdir -p /tmp/alexey
 cd /home/alexey/dev/llvm-capstone/llvm && \
 /home/alexey/dev/llvm-capstone/llvm/build/bin/llvm-lit -sv \
   /home/alexey/dev/llvm-capstone/llvm/test/CodeGen/Capstone/cap-control-flow.ll \
   /home/alexey/dev/llvm-capstone/llvm/test/CodeGen/Capstone/load-store.ll \
   /home/alexey/dev/llvm-capstone/llvm/test/CodeGen/Capstone/frame-lowering.ll \
-  > /tmp/capstone-lit-focused.txt 2>&1
+  > /tmp/alexey/capstone-lit-focused.txt 2>&1
 ```
 
 Inspect:
 
 ```bash
-sed -n '1,220p' /tmp/capstone-lit-focused.txt
+sed -n '1,220p' /tmp/alexey/capstone-lit-focused.txt
 ```
 
 ---
@@ -119,40 +131,42 @@ sed -n '1,220p' /tmp/capstone-lit-focused.txt
 Use this after touching `BuiltinsCapstone.td` or `clang/lib/CodeGen/TargetBuiltins/Capstone.cpp`.
 
 ```bash
+mkdir -p /tmp/alexey
 cd /home/alexey/dev/llvm-capstone/llvm && \
 /home/alexey/dev/llvm-capstone/llvm/build/bin/llvm-lit -sv \
   /home/alexey/dev/llvm-capstone/clang/test/CodeGen/capstone-builtins.c \
-  > /tmp/capstone-clang-builtins.txt 2>&1
+  > /tmp/alexey/capstone-clang-builtins.txt 2>&1
 ```
 
 Inspect:
 
 ```bash
-sed -n '1,220p' /tmp/capstone-clang-builtins.txt
+sed -n '1,220p' /tmp/alexey/capstone-clang-builtins.txt
 ```
 
 ---
 
 ## 4. Rebuild LLVM/Clang after source changes
 
-If backend or clang sources changed, rebuild before running tests.
+If backend, clang, or lld sources changed, rebuild before running tests.
 
 ```bash
+mkdir -p /tmp/alexey
 cd /home/alexey/dev/llvm-capstone && \
 cmake --build /home/alexey/dev/llvm-capstone/llvm/build -j$(nproc) \
-  > /tmp/capstone-llvm-build.txt 2>&1
+  > /tmp/alexey/capstone-llvm-build.txt 2>&1
 ```
 
 Inspect tail first:
 
 ```bash
-tail -n 200 /tmp/capstone-llvm-build.txt
+tail -n 200 /tmp/alexey/capstone-llvm-build.txt
 ```
 
 If needed, inspect head/middle too:
 
 ```bash
-sed -n '1,260p' /tmp/capstone-llvm-build.txt
+sed -n '1,260p' /tmp/alexey/capstone-llvm-build.txt
 ```
 
 ---
@@ -166,43 +180,48 @@ This is the current VM-validated sample flow.
 `capstone/my_first_domain/build.sh` already uses `set -euxo pipefail`, so command tracing is printed automatically.
 
 ```bash
+mkdir -p /tmp/alexey
 cd /home/alexey/dev/llvm-capstone/capstone/my_first_domain && \
-./build.sh > /tmp/capstone-my-domain-build.txt 2>&1
+./build.sh > /tmp/alexey/capstone-my-domain-build.txt 2>&1
 ```
 
 Inspect:
 
 ```bash
-sed -n '1,220p' /tmp/capstone-my-domain-build.txt
+sed -n '1,220p' /tmp/alexey/capstone-my-domain-build.txt
 ```
 
 Expected current behavior:
-- `build.sh` now defaults to the in-tree `ld.lld`
-- the produced ELF should be native `EM_CAPSTONE`
+- `build.sh` defaults to the in-tree `ld.lld`
+- the produced ELF is native `EM_CAPSTONE`
 - the old header rewrite shim is only used when `HOST_LD` is overridden to a non-`ld.lld` linker
 
 ### 5.2 Inspect the resulting ELF header
 
 ```bash
+mkdir -p /tmp/alexey
 /home/alexey/dev/llvm-capstone/llvm/build/bin/llvm-readobj -h \
   /home/alexey/dev/llvm-capstone/capstone/my_first_domain/my_domain.dom \
-  > /tmp/capstone-my-domain-readobj.txt 2>&1
+  > /tmp/alexey/capstone-my-domain-readobj.txt 2>&1
 ```
 
 ```bash
-sed -n '1,220p' /tmp/capstone-my-domain-readobj.txt
+sed -n '1,220p' /tmp/alexey/capstone-my-domain-readobj.txt
 ```
 
-### 5.3 Disassemble the sample (expect some `<unknown>` for custom instructions)
+### 5.3 Optional: disassemble the sample
+
+Expect some `<unknown>` output for custom instructions unless disassembler support has been extended.
 
 ```bash
+mkdir -p /tmp/alexey
 /home/alexey/dev/llvm-capstone/llvm/build/bin/llvm-objdump -d \
   /home/alexey/dev/llvm-capstone/capstone/my_first_domain/my_domain.dom \
-  > /tmp/capstone-my-domain-objdump.txt 2>&1
+  > /tmp/alexey/capstone-my-domain-objdump.txt 2>&1
 ```
 
 ```bash
-sed -n '1,260p' /tmp/capstone-my-domain-objdump.txt
+sed -n '1,260p' /tmp/alexey/capstone-my-domain-objdump.txt
 ```
 
 ### 5.4 Rebuild the userspace loader/module package if you changed loader-side source
@@ -211,12 +230,13 @@ Needed after edits under:
 - `capstone/caplifive-buildroot/package/modcapstone/...`
 
 ```bash
+mkdir -p /tmp/alexey
 cd /home/alexey/dev/llvm-capstone/capstone/caplifive-buildroot/build && \
-make modcapstone-rebuild > /tmp/capstone-modcapstone-rebuild.txt 2>&1
+make modcapstone-rebuild > /tmp/alexey/capstone-modcapstone-rebuild.txt 2>&1
 ```
 
 ```bash
-sed -n '1,220p' /tmp/capstone-modcapstone-rebuild.txt
+sed -n '1,220p' /tmp/alexey/capstone-modcapstone-rebuild.txt
 ```
 
 ### 5.5 Copy the sample into the Buildroot test-domains directory
@@ -229,14 +249,15 @@ cp /home/alexey/dev/llvm-capstone/capstone/my_first_domain/my_domain.dom \
 ### 5.6 Rebuild the rootfs image so the new domain lands in the VM image
 
 ```bash
+mkdir -p /tmp/alexey
 cd /home/alexey/dev/llvm-capstone/capstone/caplifive-buildroot/build && \
-make > /tmp/capstone-buildroot-make.txt 2>&1
+make > /tmp/alexey/capstone-buildroot-make.txt 2>&1
 ```
 
 Inspect:
 
 ```bash
-tail -n 200 /tmp/capstone-buildroot-make.txt
+tail -n 200 /tmp/alexey/capstone-buildroot-make.txt
 ```
 
 ### 5.7 Run QEMU
@@ -244,14 +265,15 @@ tail -n 200 /tmp/capstone-buildroot-make.txt
 `run-qemu.sh` itself does not print shell tracing, so use `bash -x`.
 
 ```bash
+mkdir -p /tmp/alexey
 cd /home/alexey/dev/llvm-capstone/capstone/caplifive-buildroot && \
-bash -x ./run-qemu.sh > /tmp/capstone-qemu-run.txt 2>&1
+bash -x ./run-qemu.sh > /tmp/alexey/capstone-qemu-run.txt 2>&1
 ```
 
 Because QEMU is interactive, this command will continue running until the VM exits. In practice, for manual interactive testing it is often easier to run it in a terminal you watch directly. If using file capture, you may need another shell/session to inspect the growing log:
 
 ```bash
-tail -n 300 /tmp/capstone-qemu-run.txt
+tail -n 300 /tmp/alexey/capstone-qemu-run.txt
 ```
 
 Inside the VM, the validated manual sequence is:
@@ -277,59 +299,56 @@ Expected success marker compared to the old failure mode:
 
 ## 6. Important caveat about the current sample flow
 
-The current `my_first_domain` path now has a **native Capstone sample flow** for the validated domain example:
-
+The current `my_first_domain` path now has a native Capstone sample flow for the validated domain example:
 - in-tree LLVM `clang` compiles the code,
 - in-tree `ld.lld` links the final domain ELF natively,
 - the output ELF carries `EM_CAPSTONE` (`0x103`),
-- the Buildroot userspace loader source has been updated to accept both `EM_RISCV` and `EM_CAPSTONE`,
+- the Buildroot userspace loader accepts both `EM_RISCV` and `EM_CAPSTONE`,
 - the VM path has been revalidated with `/capstone-test.user /test-domains/my_domain.dom`.
 
-However, this does **not** mean the whole broader toolchain/runtime stack is fully native yet for all programs. It means the minimal sample domain flow now works natively without the old `dd`/header-rewrite hack when using the in-tree `ld.lld` and rebuilt loader.
+This does **not** yet imply that the whole broader hosted toolchain/runtime stack is ready for large programs. It means the minimal sample domain flow is known-good and should be treated as the baseline runtime regression.
 
 ---
 
 ## 7. What to inspect when something fails
 
-### Build failure in LLVM/Clang
+### Build failure in LLVM/Clang/LLD
 Inspect:
-- `/tmp/capstone-llvm-build.txt`
+- `/tmp/alexey/capstone-llvm-build.txt`
 
 ### Backend regression test failure
 Inspect:
-- `/tmp/capstone-lit-codegen.txt`
-- `/tmp/capstone-lit-focused.txt`
+- `/tmp/alexey/capstone-lit-codegen.txt`
+- `/tmp/alexey/capstone-lit-focused.txt`
 
 ### Clang builtin regression failure
 Inspect:
-- `/tmp/capstone-clang-builtins.txt`
+- `/tmp/alexey/capstone-clang-builtins.txt`
 
 ### Sample domain build failure
 Inspect:
-- `/tmp/capstone-my-domain-build.txt`
+- `/tmp/alexey/capstone-my-domain-build.txt`
 
 ### Rootfs rebuild failure
 Inspect:
-- `/tmp/capstone-buildroot-make.txt`
+- `/tmp/alexey/capstone-buildroot-make.txt`
 
 ### Runtime/QEMU failure
 Inspect:
-- `/tmp/capstone-qemu-run.txt`
-- and compare against the known-good analysis in `/tmp/capstone-runtime-analysis-for-llm.md`
+- `/tmp/alexey/capstone-qemu-run.txt`
+- and compare against the latest proof logs saved in `capstone/agent-handoff/`
 
 ---
 
-## 8. Current known-good interpretation
+## 8. Maintenance rule for future sessions
 
-As of the current validated run:
-- the backend-generated sample domain builds,
-- the sample now links natively with in-tree `ld.lld`,
-- the resulting domain ELF is `EM_CAPSTONE`,
-- the domain ELF is accepted by the loader,
-- the kernel module creates the domain,
-- the domain executes under Capstone QEMU,
-- the previous QEMU assert is gone,
-- the currently visible harness result is `retval = 0`.
+If a session changes the validated flow or achieves a new milestone, it should update the persistent handoff bundle under:
+- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff`
 
-That means future sessions should treat the present `my_first_domain` flow as the baseline known-good runtime test.
+At minimum, keep these files accurate:
+- `README.md`
+- `new-chat-prompt.md`
+- `capstone-agent-test-instructions.md`
+- `capstone-backend-status-for-llm.md`
 
+And replace or refresh the proof logs if the known-good baseline changes.
