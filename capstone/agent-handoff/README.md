@@ -1,0 +1,52 @@
+# Capstone agent handoff bundle
+
+This directory stores persistent context for continuing the Capstone backend/toolchain bring-up from a new chat/session.
+
+Location:
+- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff`
+
+## Most important files
+
+### 1. How to run tests / reproduce the validated flow
+- `capstone-agent-test-instructions.md`
+
+### 2. Current backend/compiler implementation status
+- `capstone-backend-status-for-llm.md`
+
+### 3. Prompt for a fresh chat
+- `new-chat-prompt.md`
+
+## Useful verification logs copied from /tmp
+
+These files record the latest verified native sample flow:
+- `capstone-my-domain-build-native.txt`
+- `capstone-my-domain-readobj-native.txt`
+- `capstone-modcapstone-rebuild.txt`
+- `capstone-qemu-native-emcapstone.txt`
+- `capstone-lld-lit.txt`
+
+## Files intentionally not kept in this handoff bundle
+
+The following categories were intentionally omitted to keep the handoff concise:
+- long-form duplicated narrative explanations,
+- intermediate exploratory logs,
+- noisy build/image logs that do not add new state beyond the kept proof files.
+
+## Current verified milestone
+
+As of the latest validated state:
+- the in-tree LLVM Capstone backend builds the sample domain,
+- in-tree `ld.lld` links it natively as `EM_CAPSTONE`,
+- the Buildroot userspace loader accepts `EM_CAPSTONE`,
+- the sample domain executes successfully in the Capstone QEMU/Buildroot runtime,
+- the old manual ELF-header rewrite hack is no longer needed in the default sample path.
+
+## What this does NOT yet mean
+
+This does **not** yet imply that the whole broader hosted toolchain/runtime is ready for FFmpeg/sqlite/libpng/SPEC.
+
+The recommended next milestone is still:
+- bring up the smallest possible **hosted** Capstone executable flow (`main()`-style program),
+- then iterate from there.
+
+
