@@ -590,6 +590,10 @@ const char *tools::getLDMOption(const llvm::Triple &T, const ArgList &Args) {
     return "elf32lriscv";
   case llvm::Triple::riscv64:
     return "elf64lriscv";
+  case llvm::Triple::capstone32:
+    return "elf32lcapstone";
+  case llvm::Triple::capstone64:
+    return "elf64lcapstone";
   case llvm::Triple::sparc:
   case llvm::Triple::sparcel:
     return "elf32_sparc";

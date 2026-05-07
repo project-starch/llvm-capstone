@@ -591,6 +591,18 @@ std::string Linux::getDynamicLinker(const ArgList &Args) const {
     Loader = ("ld-linux-" + ArchName + "-" + ABIName + ".so.1").str();
     break;
   }
+  case llvm::Triple::capstone32:
+  case llvm::Triple::capstone64: {
+    StringRef ArchName = llvm::Triple::getArchTypeName(Arch);
+    StringRef ABIName = "ilp32d";
+    if (const Arg *A = Args.getLastArg(options::OPT_mabi_EQ))
+      ABIName = A->getValue();
+    else if (Arch == llvm::Triple::capstone64)
+      ABIName = "lp64d";
+    LibDir = "lib";
+    Loader = ("ld-linux-" + ArchName + "-" + ABIName + ".so.1").str();
+    break;
+  }
   case llvm::Triple::sparc:
   case llvm::Triple::sparcel:
     LibDir = "lib";
