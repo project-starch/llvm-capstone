@@ -27,13 +27,9 @@ Please read these files before proposing changes:
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/README.md`
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-agent-test-instructions.md`
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-backend-status-for-llm.md`
+- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/native-sample-validation.md`
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/current-next-step.md` (current recommendation only; do not treat it as immutable)
 
-Also use these logs as verified evidence of the latest native path:
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-my-domain-build-native.txt`
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-my-domain-readobj-native.txt`
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-qemu-native-proof.txt`
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-lld-lit.txt`
 
 ## Current verified state
 The following is already implemented and verified:

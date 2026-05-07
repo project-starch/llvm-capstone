@@ -16,26 +16,21 @@ Scratch log directory for future sessions:
 ### 2. Current backend/compiler implementation status
 - `capstone-backend-status-for-llm.md`
 
-### 3. Prompt for a fresh chat
+### 3. Native sample validation summary
+- `native-sample-validation.md`
+
+### 4. Prompt for a fresh chat
 - `new-chat-prompt.md`
 
-### 4. Current recommended next step
+### 5. Current recommended next step
 - `current-next-step.md`
-
-## Useful verification logs copied from the scratch log directory
-
-These files record the latest verified native sample flow:
-- `capstone-my-domain-build-native.txt`
-- `capstone-my-domain-readobj-native.txt`
-- `capstone-qemu-native-proof.txt`
-- `capstone-lld-lit.txt`
 
 ## Files intentionally not kept in this handoff bundle
 
 The following categories were intentionally omitted to keep the handoff concise:
 - long-form duplicated narrative explanations,
 - intermediate exploratory logs,
-- noisy build/image logs that do not add new state beyond the kept proof files.
+- noisy build/image logs that do not add new state beyond the written summaries.
 
 ## Current verified milestone
 
