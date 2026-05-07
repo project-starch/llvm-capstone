@@ -468,6 +468,13 @@ This sample path is now a **native Capstone ELF flow** for the validated domain 
 - the userspace loader accepts `EM_CAPSTONE`,
 - and QEMU runtime execution has been revalidated.
 
+There is also now a faster revalidation workflow for this same runtime baseline:
+- `capstone/tests/runtime-qemu/run-smoke.sh`
+- it boots QEMU once,
+- mounts a host-shared `9p` directory inside the guest,
+- and runs a tiny Capstone domain through `/capstone-test.user`
+- so small runtime smoke iterations no longer require rebuilding `rootfs.ext2` each time.
+
 So this now validates **code generation, native sample linking, and runtime ABI correctness** for the sample-domain path, but **not yet the broader hosted toolchain/runtime path**.
 
 ---
@@ -505,6 +512,11 @@ Even with the backend in much better shape now, a full FFmpeg bring-up still req
 - runtime/sysroot consistency,
 - allocator/libc support,
 - likely additional validation for atomics and broader library code.
+
+The first currently observed hosted blocker against the in-tree Buildroot glibc sysroot is earlier than full linking:
+- a normal hosted source such as `#include <stdio.h>` already fails during header parsing,
+- `bits/wordsize.h` reports `unsupported ABI`,
+- so the next smallest meaningful hosted step is to make the current target macro/ABI surface acceptable to that sysroot (or intentionally choose a different compatibility strategy).
 
 This is outside the narrow “backend implemented?” question, but relevant for roadmap planning.
 

@@ -13,6 +13,9 @@ Scratch log directory for future sessions:
 ### 1. How to run tests / reproduce the validated flow
 - `capstone-agent-test-instructions.md`
 
+### 1a. Testing matrix / what each test layer proves
+- `testing-matrix.md`
+
 ### 2. Current backend/compiler implementation status
 - `capstone-backend-status-for-llm.md`
 
@@ -47,6 +50,7 @@ Future sessions should keep this directory current.
 
 If the validated baseline changes, update at least:
 - `README.md`
+- `testing-matrix.md`
 - `new-chat-prompt.md`
 - `capstone-agent-test-instructions.md`
 - `capstone-backend-status-for-llm.md`

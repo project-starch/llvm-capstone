@@ -25,6 +25,7 @@ I am continuing work on the Capstone architecture support in the repository:
 Please read these files before proposing changes:
 
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/README.md`
+- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/testing-matrix.md`
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-agent-test-instructions.md`
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-backend-status-for-llm.md`
 - `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/native-sample-validation.md`
@@ -45,6 +46,11 @@ The following is already implemented and verified:
    - loader accepted it
    - `/capstone-test.user /test-domains/my_domain.dom` succeeded
    - QEMU no longer hits the old `env->priv < PRV_C` assert in this path
+7. There is now also a fast revalidation path for the current domain runtime baseline without rebuilding `rootfs.ext2` on every iteration:
+   - `capstone/tests/runtime-qemu/run-smoke.sh`
+   - it exports a host directory into the guest over `9p`
+   - mounts it in the guest
+   - and runs a tiny Capstone domain through `/capstone-test.user`
 
 ## Very important distinction
 The `my_first_domain` flow is a **domain runtime sample**, not yet the same thing as a general hosted user-space program flow.

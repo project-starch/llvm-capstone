@@ -310,6 +310,93 @@ This does **not** yet imply that the whole broader hosted toolchain/runtime stac
 
 ---
 
+## 6. Fast QEMU runtime smoke without rebuilding the rootfs on every iteration
+
+This is the preferred runtime revalidation path when you want to check that the
+current domain baseline still works, but you do **not** want to rebuild
+`rootfs.ext2` for each small test-domain change.
+
+It uses:
+- `capstone/tests/runtime-qemu/build-domain.sh`
+- `capstone/tests/runtime-qemu/run-domain-smoke.py`
+- `capstone/tests/runtime-qemu/run-smoke.sh`
+
+The key trick is that QEMU exports a host directory into the guest via `9p`, and
+the guest mounts that shared directory before running `/capstone-test.user`.
+
+### 6.1 Run the one-command smoke test
+
+```bash
+mkdir -p /tmp/alexey
+cd /home/alexey/dev/llvm-capstone && \
+bash capstone/tests/runtime-qemu/run-smoke.sh \
+  > /tmp/alexey/capstone-runtime-qemu-smoke-driver.txt 2>&1
+```
+
+Inspect the wrapper output:
+
+```bash
+sed -n '1,220p' /tmp/alexey/capstone-runtime-qemu-smoke-driver.txt
+```
+
+Inspect the full QEMU serial log:
+
+```bash
+sed -n '1,260p' /tmp/alexey/capstone-runtime-qemu-smoke.log
+```
+
+Expected markers include:
+- `Ok, good file.`
+- `Loadable executable segment found.`
+- `Created domain ID = 0`
+- `Called dom (1-th time) retval = 0`
+
+### 6.2 Build a different tiny domain and run it through the same harness
+
+```bash
+mkdir -p /tmp/alexey/capstone-runtime-qemu-share
+cd /home/alexey/dev/llvm-capstone && \
+bash capstone/tests/runtime-qemu/build-domain.sh \
+  capstone/tests/runtime-qemu/domains/write_42.c \
+  /tmp/alexey/capstone-runtime-qemu-share/write_42.dom \
+  > /tmp/alexey/capstone-runtime-qemu-build-domain.txt 2>&1
+```
+
+Then run it:
+
+```bash
+mkdir -p /tmp/alexey
+cd /home/alexey/dev/llvm-capstone && \
+python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
+  --share-dir /tmp/alexey/capstone-runtime-qemu-share \
+  --log-file /tmp/alexey/capstone-runtime-qemu-direct.log \
+  /tmp/alexey/capstone-runtime-qemu-share/write_42.dom \
+  > /tmp/alexey/capstone-runtime-qemu-direct-driver.txt 2>&1
+```
+
+---
+
+## 7. Hosted smoke tests without QEMU: current recommendation
+
+Do **not** add a separate large Capstone-specific hosted smoke suite yet unless a
+newly fixed hosted blocker needs a dedicated regression test.
+
+Why:
+- the tree already has existing driver/sysroot patterns for other targets, e.g.
+  `clang/test/Driver/linux-cross.cpp` and `clang/test/Driver/baremetal-sysroot.cpp`
+- Capstone already has a focused hosted driver regression in
+  `clang/test/Driver/capstone-linux-toolchain.c`
+- the current real hosted blocker is still earlier and very concrete:
+  the current Buildroot glibc sysroot rejects Capstone when ordinary hosted
+  headers are included (`bits/wordsize.h: unsupported ABI`)
+
+So for now:
+1. keep the driver regression test,
+2. keep probing the real hosted compile path against the real sysroot,
+3. once a hosted blocker is fixed, add the smallest exact regression for that case.
+
+---
+
 ## 7. What to inspect when something fails
 
 ### Build failure in LLVM/Clang/LLD
