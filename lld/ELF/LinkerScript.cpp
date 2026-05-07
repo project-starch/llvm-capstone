@@ -1232,7 +1232,8 @@ bool LinkerScript::assignOffsets(OutputSection *sec) {
 
   bool synthesizeAlign =
       ctx.arg.relocatable && ctx.arg.relax && (sec->flags & SHF_EXECINSTR) &&
-      (ctx.arg.emachine == EM_LOONGARCH || ctx.arg.emachine == EM_RISCV);
+      (ctx.arg.emachine == EM_LOONGARCH || ctx.arg.emachine == EM_RISCV ||
+       ctx.arg.emachine == EM_CAPSTONE);
   // We visited SectionsCommands from processSectionCommands to
   // layout sections. Now, we visit SectionsCommands again to fix
   // section offsets.

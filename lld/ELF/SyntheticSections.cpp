@@ -332,6 +332,7 @@ void GnuPropertySection::writeTo(uint8_t *buf) {
     featureAndType = GNU_PROPERTY_AARCH64_FEATURE_1_AND;
     break;
   case EM_RISCV:
+  case EM_CAPSTONE:
     featureAndType = GNU_PROPERTY_RISCV_FEATURE_1_AND;
     break;
   default:
@@ -1498,6 +1499,7 @@ DynamicSection<ELFT>::computeContents() {
       addInSec(DT_PLTGOT, *ctx.in.gotPlt);
       break;
     case EM_RISCV:
+    case EM_CAPSTONE:
       if (llvm::any_of(ctx.in.relaPlt->relocs, [&ctx = ctx](
                                                    const DynamicReloc &r) {
             return r.type == ctx.target->pltRel &&

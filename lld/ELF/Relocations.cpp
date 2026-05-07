@@ -1338,7 +1338,8 @@ unsigned RelocationScanner::handleTlsRelocation(RelExpr expr, RelType type,
   if (ctx.arg.emachine == EM_MIPS)
     return handleMipsTlsRelocation(ctx, type, sym, *sec, offset, addend, expr);
 
-  bool isRISCV = ctx.arg.emachine == EM_RISCV;
+  bool isRISCV =
+      ctx.arg.emachine == EM_RISCV || ctx.arg.emachine == EM_CAPSTONE;
 
   if (oneof<RE_AARCH64_TLSDESC_PAGE, R_TLSDESC, R_TLSDESC_CALL, R_TLSDESC_PC,
             R_TLSDESC_GOTPLT, RE_LOONGARCH_TLSDESC_PAGE_PC>(expr) &&
@@ -1671,7 +1672,7 @@ void RelocationScanner::scan(Relocs<RelTy> rels) {
   // Sort relocations by offset for more efficient searching for
   // R_RISCV_PCREL_HI20, ALIGN relocations, R_PPC64_ADDR64 and the
   // branch-to-branch optimization.
-  if (is_contained({EM_RISCV, EM_LOONGARCH}, ctx.arg.emachine) ||
+  if (is_contained({EM_RISCV, EM_CAPSTONE, EM_LOONGARCH}, ctx.arg.emachine) ||
       (ctx.arg.emachine == EM_PPC64 && sec->name == ".toc") ||
       ctx.arg.branchToBranch)
     llvm::stable_sort(sec->relocs(),

@@ -431,8 +431,9 @@ InputSectionBase *InputSection::getRelocatedSection() const {
 
 template <class ELFT, class RelTy>
 void InputSection::copyRelocations(Ctx &ctx, uint8_t *buf) {
-  bool linkerRelax =
-      ctx.arg.relax && is_contained({EM_RISCV, EM_LOONGARCH}, ctx.arg.emachine);
+  bool linkerRelax = ctx.arg.relax &&
+                     is_contained({EM_RISCV, EM_CAPSTONE, EM_LOONGARCH},
+                                  ctx.arg.emachine);
   if (!ctx.arg.relocatable && (linkerRelax || ctx.arg.branchToBranch)) {
     // On LoongArch and RISC-V, relaxation might change relocations: copy
     // from internal ones that are updated by relaxation.
@@ -750,6 +751,7 @@ static int64_t getTlsTpOffset(Ctx &ctx, const Symbol &s) {
     return s.getVA(ctx, 0) + (tls->p_vaddr & (tls->p_align - 1)) - 0x7000;
   case EM_LOONGARCH:
   case EM_RISCV:
+  case EM_CAPSTONE:
     // See the comment in handleTlsRelocation. For TLSDESC=>IE,
     // R_RISCV_TLSDESC_{LOAD_LO12,ADD_LO12_I,CALL} also reach here. While
     // `tls` may be null, the return value is ignored.
@@ -912,7 +914,8 @@ uint64_t InputSectionBase::getRelocTargetVA(Ctx &ctx, const Relocation &r,
         dest = getAArch64UndefinedRelativeWeakVA(r.type, p) + a;
       else if (ctx.arg.emachine == EM_PPC)
         dest = p;
-      else if (ctx.arg.emachine == EM_RISCV)
+      else if (ctx.arg.emachine == EM_RISCV ||
+               ctx.arg.emachine == EM_CAPSTONE)
         dest = getRISCVUndefinedRelativeWeakVA(r.type, p) + a;
       else
         dest = r.sym->getVA(ctx, a);
@@ -1058,7 +1061,8 @@ void InputSection::relocateNonAlloc(Ctx &ctx, uint8_t *buf,
       continue;
     auto *ds = dyn_cast<Defined>(&sym);
 
-    if (emachine == EM_RISCV && type == R_RISCV_SET_ULEB128) {
+    if ((emachine == EM_RISCV || emachine == EM_CAPSTONE) &&
+        type == R_RISCV_SET_ULEB128) {
       if (++it != end &&
           it->getType(/*isMips64EL=*/false) == R_RISCV_SUB_ULEB128 &&
           it->r_offset == offset) {

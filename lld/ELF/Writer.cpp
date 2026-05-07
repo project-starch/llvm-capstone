@@ -792,7 +792,7 @@ unsigned elf::getSectionRank(Ctx &ctx, OutputSection &osec) {
       rank |= 2;
   }
 
-  if (ctx.arg.emachine == EM_RISCV) {
+  if (ctx.arg.emachine == EM_RISCV || ctx.arg.emachine == EM_CAPSTONE) {
     // .sdata and .sbss are placed closer to make GP relaxation more profitable
     // and match GNU ld.
     StringRef name = osec.name;
@@ -923,7 +923,9 @@ template <class ELFT> void Writer<ELFT>::setReservedSymbolSections() {
   if (ctx.sym.bss) {
     // On RISC-V, set __bss_start to the start of .sbss if present.
     OutputSection *sbss =
-        ctx.arg.emachine == EM_RISCV ? findSection(ctx, ".sbss") : nullptr;
+        (ctx.arg.emachine == EM_RISCV || ctx.arg.emachine == EM_CAPSTONE)
+            ? findSection(ctx, ".sbss")
+            : nullptr;
     ctx.sym.bss->section = sbss ? sbss : findSection(ctx, ".bss");
   }
 
@@ -1839,7 +1841,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
     // should only be defined in an executable. If .sdata does not exist, its
     // value/section does not matter but it has to be relative, so set its
     // st_shndx arbitrarily to 1 (ctx.out.elfHeader).
-    if (ctx.arg.emachine == EM_RISCV) {
+    if (ctx.arg.emachine == EM_RISCV || ctx.arg.emachine == EM_CAPSTONE) {
       if (!ctx.arg.shared) {
         OutputSection *sec = findSection(ctx, ".sdata");
         addOptionalRegular(ctx, "__global_pointer$",
@@ -2065,7 +2067,7 @@ template <class ELFT> void Writer<ELFT>::finalizeSections() {
         addPhdrForSection(part, SHT_MIPS_OPTIONS, PT_MIPS_OPTIONS, PF_R);
         addPhdrForSection(part, SHT_MIPS_ABIFLAGS, PT_MIPS_ABIFLAGS, PF_R);
       }
-      if (ctx.arg.emachine == EM_RISCV)
+      if (ctx.arg.emachine == EM_RISCV || ctx.arg.emachine == EM_CAPSTONE)
         addPhdrForSection(part, SHT_RISCV_ATTRIBUTES, PT_RISCV_ATTRIBUTES,
                           PF_R);
     }

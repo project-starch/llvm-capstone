@@ -164,12 +164,14 @@ static std::tuple<ELFKind, uint16_t, uint8_t> parseEmulation(Ctx &ctx,
           .Cases("elf32btsmip", "elf32btsmipn32", {ELF32BEKind, EM_MIPS})
           .Cases("elf32ltsmip", "elf32ltsmipn32", {ELF32LEKind, EM_MIPS})
           .Case("elf32lriscv", {ELF32LEKind, EM_RISCV})
+          .Case("elf32lcapstone", {ELF32LEKind, EM_CAPSTONE})
           .Cases("elf32ppc", "elf32ppclinux", {ELF32BEKind, EM_PPC})
           .Cases("elf32lppc", "elf32lppclinux", {ELF32LEKind, EM_PPC})
           .Case("elf32loongarch", {ELF32LEKind, EM_LOONGARCH})
           .Case("elf64btsmip", {ELF64BEKind, EM_MIPS})
           .Case("elf64ltsmip", {ELF64LEKind, EM_MIPS})
           .Case("elf64lriscv", {ELF64LEKind, EM_RISCV})
+          .Case("elf64lcapstone", {ELF64LEKind, EM_CAPSTONE})
           .Case("elf64ppc", {ELF64BEKind, EM_PPC64})
           .Case("elf64lppc", {ELF64LEKind, EM_PPC64})
           .Cases("elf_amd64", "elf_x86_64", {ELF64LEKind, EM_X86_64})
@@ -419,7 +421,7 @@ static void checkOptions(Ctx &ctx) {
           << "--pcrel-optimize is only supported on PowerPC64 targets";
   }
 
-  if (ctx.arg.emachine != EM_RISCV) {
+  if (ctx.arg.emachine != EM_RISCV && ctx.arg.emachine != EM_CAPSTONE) {
     if (ctx.arg.relaxGP)
       ErrAlways(ctx) << "--relax-gp is only supported on RISC-V targets";
     if (ctx.arg.zZicfilpUnlabeledReport != ReportPolicy::None)
@@ -1301,7 +1303,8 @@ static SmallVector<StringRef, 0> getSymbolOrderingFile(Ctx &ctx,
 static bool getIsRela(Ctx &ctx, opt::InputArgList &args) {
   // The psABI specifies the default relocation entry format.
   bool rela = is_contained({EM_AARCH64, EM_AMDGPU, EM_HEXAGON, EM_LOONGARCH,
-                            EM_PPC, EM_PPC64, EM_RISCV, EM_S390, EM_X86_64},
+                            EM_PPC, EM_PPC64, EM_RISCV, EM_CAPSTONE, EM_S390,
+                            EM_X86_64},
                            ctx.arg.emachine);
   // If -z rel or -z rela is specified, use the last option.
   for (auto *arg : args.filtered(OPT_z)) {
@@ -2904,7 +2907,8 @@ static void redirectSymbols(Ctx &ctx, ArrayRef<WrappedSymbol> wrapped) {
 // enabled features in the GNU_PROPERTY_RISCV_FEATURE_1_AND bit mask.
 static void readSecurityNotes(Ctx &ctx) {
   if (ctx.arg.emachine != EM_386 && ctx.arg.emachine != EM_X86_64 &&
-      ctx.arg.emachine != EM_AARCH64 && ctx.arg.emachine != EM_RISCV)
+      ctx.arg.emachine != EM_AARCH64 && ctx.arg.emachine != EM_RISCV &&
+      ctx.arg.emachine != EM_CAPSTONE)
     return;
 
   ctx.arg.andFeatures = -1;
@@ -2956,7 +2960,7 @@ static void readSecurityNotes(Ctx &ctx) {
         << ": -z cet-report: file does not have "
            "GNU_PROPERTY_X86_FEATURE_1_SHSTK property";
 
-    if (ctx.arg.emachine == EM_RISCV) {
+    if (ctx.arg.emachine == EM_RISCV || ctx.arg.emachine == EM_CAPSTONE) {
       reportUnless(ctx.arg.zZicfilpUnlabeledReport,
                    features & GNU_PROPERTY_RISCV_FEATURE_1_CFI_LP_UNLABELED)
           << f
@@ -3056,7 +3060,7 @@ static void readSecurityNotes(Ctx &ctx) {
   else if (ctx.arg.zGcs == GcsPolicy::Never)
     ctx.arg.andFeatures &= ~GNU_PROPERTY_AARCH64_FEATURE_1_GCS;
 
-  if (ctx.arg.emachine == EM_RISCV) {
+  if (ctx.arg.emachine == EM_RISCV || ctx.arg.emachine == EM_CAPSTONE) {
     // Force enable/disable Zicfilp.
     if (ctx.arg.zZicfilp == ZicfilpPolicy::Unlabeled) {
       ctx.arg.andFeatures |= GNU_PROPERTY_RISCV_FEATURE_1_CFI_LP_UNLABELED;
@@ -3454,7 +3458,7 @@ template <class ELFT> void LinkerDriver::link(opt::InputArgList &args) {
     mergeHexagonAttributesSections(ctx);
 
   // Merge .riscv.attributes sections.
-  if (ctx.arg.emachine == EM_RISCV)
+  if (ctx.arg.emachine == EM_RISCV || ctx.arg.emachine == EM_CAPSTONE)
     mergeRISCVAttributesSections(ctx);
 
   {

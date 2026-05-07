@@ -891,7 +891,8 @@ std::array<uint8_t, 4> OutputSection::getFiller(Ctx &ctx) {
     return *filler;
   if (!(flags & SHF_EXECINSTR))
     return {0, 0, 0, 0};
-  if (ctx.arg.relocatable && ctx.arg.emachine == EM_RISCV) {
+  if (ctx.arg.relocatable &&
+      (ctx.arg.emachine == EM_RISCV || ctx.arg.emachine == EM_CAPSTONE)) {
     // See RISCV::maybeSynthesizeAlign: Synthesized NOP bytes and ALIGN
     // relocations might be needed between two input sections. Use a NOP for the
     // filler.

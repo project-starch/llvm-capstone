@@ -1048,6 +1048,7 @@ static void readGnuProperty(Ctx &ctx, const InputSection &sec,
     featureAndType = GNU_PROPERTY_AARCH64_FEATURE_1_AND;
     break;
   case EM_RISCV:
+  case EM_CAPSTONE:
     featureAndType = GNU_PROPERTY_RISCV_FEATURE_1_AND;
     break;
   default:
@@ -1783,6 +1784,9 @@ static uint16_t getBitcodeMachineKind(Ctx &ctx, StringRef path,
   case Triple::riscv32:
   case Triple::riscv64:
     return EM_RISCV;
+  case Triple::capstone32:
+  case Triple::capstone64:
+    return EM_CAPSTONE;
   case Triple::sparcv9:
     return EM_SPARCV9;
   case Triple::systemz:

@@ -75,6 +75,7 @@ void elf::setTarget(Ctx &ctx) {
   case EM_PPC64:
     return setPPC64TargetInfo(ctx);
   case EM_RISCV:
+  case EM_CAPSTONE:
     return setRISCVTargetInfo(ctx);
   case EM_SPARCV9:
     return setSPARCV9TargetInfo(ctx);
