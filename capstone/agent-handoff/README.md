@@ -3,10 +3,13 @@
 This directory stores persistent context for continuing the Capstone backend/toolchain bring-up from a new chat/session.
 
 Location:
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff`
+- `$CAPSTONE_HANDOFF_DIR` (default: `capstone/agent-handoff` inside the repository root)
+
+Shared test environment defaults:
+- `capstone/tests/capstone-test-env.sh`
 
 Scratch log directory for future sessions:
-- `/tmp/alexey`
+- `$CAPSTONE_TMP_ROOT` (default: `/tmp/capstone`)
 
 ## Most important files
 

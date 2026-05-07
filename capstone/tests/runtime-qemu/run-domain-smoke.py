@@ -18,11 +18,35 @@ SUCCESS_MARKERS = (
 )
 
 
+def env_or_default(name: str, default: pathlib.Path | str) -> str:
+    return os.environ.get(name, str(default))
+
+
+class NormalizedLogWriter:
+    def __init__(self, sink):
+        self.sink = sink
+
+    def write(self, data: str) -> None:
+        normalized = data.replace("\r\r\n", "\n").replace("\r\n", "\n").replace("\r", "\n")
+        self.sink.write(normalized)
+
+    def flush(self) -> None:
+        self.sink.flush()
+
+
 def parse_args() -> argparse.Namespace:
     script_dir = pathlib.Path(__file__).resolve().parent
     repo_root = script_dir.parent.parent.parent
-    buildroot_dir = repo_root / "capstone" / "caplifive-buildroot"
-    qemu_bin = repo_root / "capstone" / "capstone-qemu" / "build" / "qemu-system-riscv64"
+    default_tmp_root = pathlib.Path(env_or_default("CAPSTONE_TMP_ROOT", "/tmp/capstone"))
+    buildroot_dir = pathlib.Path(
+        env_or_default("CAPSTONE_BUILDROOT_DIR", repo_root / "capstone" / "caplifive-buildroot")
+    )
+    qemu_bin = pathlib.Path(
+        env_or_default(
+            "CAPSTONE_QEMU_BINARY",
+            repo_root / "capstone" / "capstone-qemu" / "build" / "qemu-system-riscv64",
+        )
+    )
 
     parser = argparse.ArgumentParser(
         description="Boot Capstone QEMU once, mount a host-shared 9p directory, and run domain smoke tests."
@@ -30,12 +54,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("domains", nargs="+", help="Domain ELF files to run inside the guest.")
     parser.add_argument(
         "--share-dir",
-        default="/tmp/alexey/capstone-runtime-qemu-share",
+        default=str(default_tmp_root / "capstone-runtime-qemu-share"),
         help="Host directory exported into the guest over 9p.",
     )
     parser.add_argument(
         "--log-file",
-        default="/tmp/alexey/capstone-runtime-qemu-smoke.log",
+        default=str(default_tmp_root / "capstone-runtime-qemu-smoke.log"),
         help="Full serial/QEMU log file.",
     )
     parser.add_argument(
@@ -155,6 +179,7 @@ def main() -> int:
     ]
 
     with log_file.open("w", encoding="utf-8") as log:
+        normalized_log = NormalizedLogWriter(log)
         log.write("> starting qemu with:\n")
         log.write(" ".join(qemu_cmd) + "\n\n")
         qemu = pexpect.spawn(
@@ -166,8 +191,7 @@ def main() -> int:
             cwd=str(buildroot_dir),
             env={"QEMU_AUDIO_DRV": "none", **os.environ},
         )
-        qemu.logfile_read = log
-        qemu.logfile_send = log
+        qemu.logfile_read = normalized_log
 
         try:
             qemu.expect("buildroot login:", timeout=120 * timeout_multiplier)
@@ -201,7 +225,7 @@ def main() -> int:
             qemu.terminate(force=True)
             raise
 
-    print(f"QEMU smoke passed. Full log: {log_file}")
+    print("QEMU smoke passed.")
     return 0
 
 

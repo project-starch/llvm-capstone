@@ -2,7 +2,9 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-TMP_ROOT=${TMP_ROOT:-/tmp/alexey}
+source "$SCRIPT_DIR/../capstone-test-env.sh"
+
+TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 SHARE_DIR=${SHARE_DIR:-$TMP_ROOT/capstone-runtime-qemu-share}
 LOG_FILE=${LOG_FILE:-$TMP_ROOT/capstone-runtime-qemu-smoke.log}
 
@@ -18,5 +20,5 @@ python3 "$SCRIPT_DIR/run-domain-smoke.py" \
   --log-file "$LOG_FILE" \
   "$SHARE_DIR/write_42.dom"
 
-echo "Smoke test completed. Serial log: $LOG_FILE"
+echo "run-smoke.sh wrapper completed. Full serial log: $LOG_FILE"
 

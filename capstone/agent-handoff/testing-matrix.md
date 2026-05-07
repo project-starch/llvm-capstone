@@ -4,8 +4,42 @@ This file is the compact, current map of how the Capstone work should be tested.
 It is intended to stay up to date as the bring-up moves from backend work to hosted user-space work.
 
 All example commands below follow the user's preferred workflow:
-- write logs to `/tmp/alexey/...`,
+- source the shared path defaults from `capstone/tests/capstone-test-env.sh`,
+- write logs to `$CAPSTONE_TMP_ROOT/...` (default: `/tmp/capstone/...`),
 - then inspect those log files.
+
+## Quick cheat sheet
+
+First, set up the common defaults once per shell:
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+source capstone/tests/capstone-test-env.sh
+```
+
+Then the most useful test entry points are:
+
+```bash
+# Backend / SelectionDAG regressions
+"$CAPSTONE_LLVM_LIT" -sv \
+  "$CAPSTONE_REPO_ROOT/llvm/test/CodeGen/Capstone"
+
+# Clang builtins
+"$CAPSTONE_LLVM_LIT" -sv \
+  "$CAPSTONE_REPO_ROOT/clang/test/CodeGen/capstone-builtins.c" \
+  "$CAPSTONE_REPO_ROOT/clang/test/CodeGen/builtins-capstone.c"
+
+# LLD / ELF emulation
+"$CAPSTONE_LLVM_LIT" -sv \
+  "$CAPSTONE_REPO_ROOT/lld/test/ELF/emulation-capstone.s"
+
+# Hosted Linux driver regression
+"$CAPSTONE_LLVM_LIT" -sv \
+  "$CAPSTONE_REPO_ROOT/clang/test/Driver/capstone-linux-toolchain.c"
+
+# Current runtime smoke in QEMU (single boot, shared 9p directory)
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-smoke.sh"
+```
 
 ---
 
@@ -56,17 +90,16 @@ A single test layer cannot cover all of this. Fast tests localize compiler/linke
 **Run**
 
 ```bash
-mkdir -p /tmp/alexey
-cd /home/alexey/dev/llvm-capstone/llvm && \
-/home/alexey/dev/llvm-capstone/llvm/cmake-build-debug/bin/llvm-lit -sv \
-  /home/alexey/dev/llvm-capstone/llvm/test/CodeGen/Capstone \
-  > /tmp/alexey/capstone-testing-codegen.txt 2>&1
+cd "$CAPSTONE_REPO_ROOT" && \
+"$CAPSTONE_LLVM_LIT" -sv \
+  "$CAPSTONE_REPO_ROOT/llvm/test/CodeGen/Capstone" \
+  > "$CAPSTONE_TMP_ROOT/capstone-testing-codegen.txt" 2>&1
 ```
 
 Inspect:
 
 ```bash
-sed -n '1,260p' /tmp/alexey/capstone-testing-codegen.txt
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-testing-codegen.txt"
 ```
 
 **When to run**
@@ -86,18 +119,17 @@ sed -n '1,260p' /tmp/alexey/capstone-testing-codegen.txt
 **Run**
 
 ```bash
-mkdir -p /tmp/alexey
-cd /home/alexey/dev/llvm-capstone/llvm && \
-/home/alexey/dev/llvm-capstone/llvm/cmake-build-debug/bin/llvm-lit -sv \
-  /home/alexey/dev/llvm-capstone/clang/test/CodeGen/capstone-builtins.c \
-  /home/alexey/dev/llvm-capstone/clang/test/CodeGen/builtins-capstone.c \
-  > /tmp/alexey/capstone-testing-clang-builtins.txt 2>&1
+cd "$CAPSTONE_REPO_ROOT" && \
+"$CAPSTONE_LLVM_LIT" -sv \
+  "$CAPSTONE_REPO_ROOT/clang/test/CodeGen/capstone-builtins.c" \
+  "$CAPSTONE_REPO_ROOT/clang/test/CodeGen/builtins-capstone.c" \
+  > "$CAPSTONE_TMP_ROOT/capstone-testing-clang-builtins.txt" 2>&1
 ```
 
 Inspect:
 
 ```bash
-sed -n '1,220p' /tmp/alexey/capstone-testing-clang-builtins.txt
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-testing-clang-builtins.txt"
 ```
 
 ---
@@ -114,17 +146,16 @@ sed -n '1,220p' /tmp/alexey/capstone-testing-clang-builtins.txt
 **Run**
 
 ```bash
-mkdir -p /tmp/alexey
-cd /home/alexey/dev/llvm-capstone/llvm && \
-/home/alexey/dev/llvm-capstone/llvm/cmake-build-debug/bin/llvm-lit -sv \
-  /home/alexey/dev/llvm-capstone/lld/test/ELF/emulation-capstone.s \
-  > /tmp/alexey/capstone-testing-lld.txt 2>&1
+cd "$CAPSTONE_REPO_ROOT" && \
+"$CAPSTONE_LLVM_LIT" -sv \
+  "$CAPSTONE_REPO_ROOT/lld/test/ELF/emulation-capstone.s" \
+  > "$CAPSTONE_TMP_ROOT/capstone-testing-lld.txt" 2>&1
 ```
 
 Inspect:
 
 ```bash
-sed -n '1,220p' /tmp/alexey/capstone-testing-lld.txt
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-testing-lld.txt"
 ```
 
 ---
@@ -143,17 +174,16 @@ sed -n '1,220p' /tmp/alexey/capstone-testing-lld.txt
 **Run**
 
 ```bash
-mkdir -p /tmp/alexey
-cd /home/alexey/dev/llvm-capstone/llvm && \
-/home/alexey/dev/llvm-capstone/llvm/cmake-build-debug/bin/llvm-lit -sv \
-  /home/alexey/dev/llvm-capstone/clang/test/Driver/capstone-linux-toolchain.c \
-  > /tmp/alexey/capstone-testing-driver.txt 2>&1
+cd "$CAPSTONE_REPO_ROOT" && \
+"$CAPSTONE_LLVM_LIT" -sv \
+  "$CAPSTONE_REPO_ROOT/clang/test/Driver/capstone-linux-toolchain.c" \
+  > "$CAPSTONE_TMP_ROOT/capstone-testing-driver.txt" 2>&1
 ```
 
 Inspect:
 
 ```bash
-sed -n '1,220p' /tmp/alexey/capstone-testing-driver.txt
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-testing-driver.txt"
 ```
 
 **Important limitation**
@@ -173,25 +203,23 @@ sed -n '1,220p' /tmp/alexey/capstone-testing-driver.txt
 **Build**
 
 ```bash
-mkdir -p /tmp/alexey
-cd /home/alexey/dev/llvm-capstone/capstone/my_first_domain && \
-LLVM_BIN=/home/alexey/dev/llvm-capstone/llvm/cmake-build-debug/bin ./build.sh \
-  > /tmp/alexey/capstone-testing-my-domain-build.txt 2>&1
+cd "$CAPSTONE_REPO_ROOT/capstone/my_first_domain" && \
+LLVM_BIN="$CAPSTONE_LLVM_BIN" ./build.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-testing-my-domain-build.txt" 2>&1
 ```
 
 Inspect:
 
 ```bash
-sed -n '1,220p' /tmp/alexey/capstone-testing-my-domain-build.txt
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-testing-my-domain-build.txt"
 ```
 
 Optional ELF inspection:
 
 ```bash
-mkdir -p /tmp/alexey
-/home/alexey/dev/llvm-capstone/llvm/cmake-build-debug/bin/llvm-readobj -h \
-  /home/alexey/dev/llvm-capstone/capstone/my_first_domain/my_domain.dom \
-  > /tmp/alexey/capstone-testing-my-domain-readobj.txt 2>&1
+"$CAPSTONE_LLVM_READOBJ" -h \
+  "$CAPSTONE_REPO_ROOT/capstone/my_first_domain/my_domain.dom" \
+  > "$CAPSTONE_TMP_ROOT/capstone-testing-my-domain-readobj.txt" 2>&1
 ```
 
 ---
@@ -211,22 +239,21 @@ mkdir -p /tmp/alexey
 **Run**
 
 ```bash
-mkdir -p /tmp/alexey
-cd /home/alexey/dev/llvm-capstone && \
+cd "$CAPSTONE_REPO_ROOT" && \
 bash capstone/tests/runtime-qemu/run-smoke.sh \
-  > /tmp/alexey/capstone-runtime-qemu-smoke-driver.txt 2>&1
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke-wrapper.txt" 2>&1
 ```
 
 Inspect the driver-side wrapper output:
 
 ```bash
-sed -n '1,220p' /tmp/alexey/capstone-runtime-qemu-smoke-driver.txt
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke-wrapper.txt"
 ```
 
 Inspect the full serial/QEMU log:
 
 ```bash
-sed -n '1,260p' /tmp/alexey/capstone-runtime-qemu-smoke.log
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke.log"
 ```
 
 **Why this layer matters**

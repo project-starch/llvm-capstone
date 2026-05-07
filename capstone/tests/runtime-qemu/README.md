@@ -28,12 +28,16 @@ The key property is that the domain is provided through a host-shared directory,
 ## Quick run
 
 ```bash
-mkdir -p /tmp/alexey
-cd /home/alexey/dev/llvm-capstone
- bash capstone/tests/runtime-qemu/run-smoke.sh > /tmp/alexey/capstone-runtime-qemu-smoke-driver.txt 2>&1
-sed -n '1,220p' /tmp/alexey/capstone-runtime-qemu-smoke-driver.txt
-sed -n '1,260p' /tmp/alexey/capstone-runtime-qemu-smoke.log
+cd "$(git rev-parse --show-toplevel)"
+source capstone/tests/capstone-test-env.sh
+bash capstone/tests/runtime-qemu/run-smoke.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke-wrapper.txt" 2>&1
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke-wrapper.txt"
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke.log"
 ```
+
+- `capstone-runtime-qemu-smoke-wrapper.txt` is the stdout/stderr of `run-smoke.sh` itself.
+- `capstone-runtime-qemu-smoke.log` is the full normalized guest serial/QEMU log.
 
 ## Extending it
 

@@ -5,10 +5,10 @@ Use the following prompt as the opening message in a fresh chat.
 ---
 
 I am continuing work on the Capstone architecture support in the repository:
-- `/home/alexey/dev/llvm-capstone`
+- `$CAPSTONE_REPO_ROOT`
 
 ## Important working style / constraints
-1. If you run terminal commands, **always redirect output into files under `/tmp/alexey/`**, then read those files. Do **not** rely on directly captured terminal output.
+1. If you run terminal commands, **always redirect output into files under `$CAPSTONE_TMP_ROOT/`** (default: `/tmp/capstone/`), then read those files. Do **not** rely on directly captured terminal output.
 2. Be iterative and conservative.
 3. Prefer the **smallest meaningful next step** toward the real goal.
 4. The main goal is **not** just toy backend work; it is to make the toolchain/runtime capable of compiling and running serious software such as:
@@ -24,12 +24,12 @@ I am continuing work on the Capstone architecture support in the repository:
 ## Read these handoff/context files first
 Please read these files before proposing changes:
 
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/README.md`
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/testing-matrix.md`
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-agent-test-instructions.md`
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/capstone-backend-status-for-llm.md`
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/native-sample-validation.md`
-- `/home/alexey/dev/llvm-capstone/capstone/agent-handoff/current-next-step.md` (current recommendation only; do not treat it as immutable)
+- `$CAPSTONE_HANDOFF_DIR/README.md`
+- `$CAPSTONE_HANDOFF_DIR/testing-matrix.md`
+- `$CAPSTONE_HANDOFF_DIR/capstone-agent-test-instructions.md`
+- `$CAPSTONE_HANDOFF_DIR/capstone-backend-status-for-llm.md`
+- `$CAPSTONE_HANDOFF_DIR/native-sample-validation.md`
+- `$CAPSTONE_HANDOFF_DIR/current-next-step.md` (current recommendation only; do not treat it as immutable)
 
 
 ## Current verified state

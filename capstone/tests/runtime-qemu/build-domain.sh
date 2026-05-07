@@ -2,10 +2,12 @@
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
-REPO_ROOT=$(cd -- "$SCRIPT_DIR/../../.." && pwd)
-LLVM_BIN=${LLVM_BIN:-$REPO_ROOT/llvm/cmake-build-debug/bin}
-CLANG=${CLANG:-$LLVM_BIN/clang}
-LD_LLD=${LD_LLD:-$LLVM_BIN/ld.lld}
+source "$SCRIPT_DIR/../capstone-test-env.sh"
+
+REPO_ROOT=${CAPSTONE_REPO_ROOT}
+LLVM_BIN=${LLVM_BIN:-$CAPSTONE_LLVM_BIN}
+CLANG=${CLANG:-$CAPSTONE_CLANG}
+LD_LLD=${LD_LLD:-$CAPSTONE_LD_LLD}
 START_SRC=${START_SRC:-$REPO_ROOT/capstone/my_first_domain/start.S}
 LINKER_SCRIPT=${LINKER_SCRIPT:-$REPO_ROOT/capstone/my_first_domain/link.ld}
 
