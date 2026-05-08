@@ -20,18 +20,22 @@ I am continuing work on the Capstone architecture support in the repository:
 6. When you edit files, preserve existing style and avoid unrelated refactors.
 7. After edits, run focused tests and verify behavior.
 8. Keep the handoff files in `capstone/agent-handoff/` up to date whenever the validated baseline or workflow changes.
+9. Keep timestamped session/investigation notes under `capstone/agent-handoff/history/` and keep durable current-state notes under `capstone/agent-handoff/current/`.
 
 ## Read these handoff/context files first
 Please read these files before proposing changes:
 
 - `$CAPSTONE_HANDOFF_DIR/README.md`
-- `$CAPSTONE_HANDOFF_DIR/testing-matrix.md`
-- `$CAPSTONE_HANDOFF_DIR/capstone-agent-test-instructions.md`
-- `$CAPSTONE_HANDOFF_DIR/capstone-backend-status-for-llm.md`
-- `$CAPSTONE_HANDOFF_DIR/split-host-enclave-strategy.md`
-- `$CAPSTONE_HANDOFF_DIR/hosted-libc-os-analysis.md`
-- `$CAPSTONE_HANDOFF_DIR/native-sample-validation.md`
-- `$CAPSTONE_HANDOFF_DIR/current-next-step.md` (current recommendation only; do not treat it as immutable)
+- `$CAPSTONE_HANDOFF_DIR/current/testing-matrix.md`
+- `$CAPSTONE_HANDOFF_DIR/current/capstone-agent-test-instructions.md`
+- `$CAPSTONE_HANDOFF_DIR/current/capstone-backend-status-for-llm.md`
+- `$CAPSTONE_HANDOFF_DIR/current/split-host-enclave-strategy.md`
+- `$CAPSTONE_HANDOFF_DIR/current/hosted-libc-os-analysis.md`
+- `$CAPSTONE_HANDOFF_DIR/current/native-sample-validation.md`
+- `$CAPSTONE_HANDOFF_DIR/current/current-next-step.md` (current recommendation only; do not treat it as immutable)
+
+If needed for recent chronology, also inspect:
+- `$CAPSTONE_HANDOFF_DIR/history/`
 
 
 ## Current verified state

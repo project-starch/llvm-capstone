@@ -428,6 +428,9 @@ Two important observations came out of that probe:
    on repeated calls.
 2. A minimal HostCall proof-of-concept using a shared region did **not yet** observe
    domain-written metadata becoming visible back in the host helper.
+3. The even narrower follow-up probe (one shared region, one `.smode` payload,
+   host-visible sentinel writes after successive `call_dom()` rounds) was also
+   attempted and still left the host-visible shared word unchanged.
 
 ### What this means
 
@@ -444,14 +447,18 @@ But the immediate coding milestone has to become even narrower:
 
 ### Refined next micro-step
 
-The new smallest meaningful implementation step is:
+The new smallest meaningful implementation step is no longer to repeat the same
+sentinel probe unchanged. It is now:
 
-1. create exactly one shared region,
-2. share it into `sbi.dom`,
-3. run a tiny `.smode` payload,
-4. have the payload write a sentinel value into the shared region,
-5. verify from the guest userspace helper whether the sentinel became visible.
+1. compare the `sbi.dom` wrapper path against a known working region-sharing
+   S-mode path in-tree,
+2. determine whether the failure is caused by:
+   - `.smode` code not executing as expected,
+   - `share_region()` not populating the state later used by S-mode
+     `SBI_EXT_CAPSTONE_REGION_QUERY`, or
+   - the queried capability not being usable in this wrapper path,
+3. add the smallest possible diagnostic for one of those specific hypotheses.
 
-Only after this narrower probe works should the project promote the full
+Only after that blocker is understood should the project promote the full
 `HC_WRITE_STDOUT` two-round RPC test to the validated baseline.
 

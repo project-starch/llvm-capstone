@@ -13,29 +13,38 @@ Scratch log directory for future sessions:
 
 ## Most important files
 
+Current, durable working notes now live under:
+- `current/`
+
+Timestamped narrative notes / session history now live under:
+- `history/`
+
 ### 1. How to run tests / reproduce the validated flow
-- `capstone-agent-test-instructions.md`
+- `current/capstone-agent-test-instructions.md`
 
 ### 1a. Testing matrix / what each test layer proves
-- `testing-matrix.md`
+- `current/testing-matrix.md`
 
 ### 2. Current backend/compiler implementation status
-- `capstone-backend-status-for-llm.md`
+- `current/capstone-backend-status-for-llm.md`
 
 ### 3. Native sample validation summary
-- `native-sample-validation.md`
+- `current/native-sample-validation.md`
 
 ### 4. Prompt for a fresh chat
 - `new-chat-prompt.md`
 
 ### 5. Current recommended next step
-- `current-next-step.md`
+- `current/current-next-step.md`
 
 ### 6. Split host-enclave strategy (source-backed)
-- `split-host-enclave-strategy.md`
+- `current/split-host-enclave-strategy.md`
 
 ### 7. Hosted libc / OS / syscall analysis
-- `hosted-libc-os-analysis.md`
+- `current/hosted-libc-os-analysis.md`
+
+### 8. Timestamped answer / investigation history
+- `history/`
 
 ## Files intentionally not kept in this handoff bundle
 
@@ -59,12 +68,12 @@ Future sessions should keep this directory current.
 
 If the validated baseline changes, update at least:
 - `README.md`
-- `testing-matrix.md`
+- `current/testing-matrix.md`
 - `new-chat-prompt.md`
-- `capstone-agent-test-instructions.md`
-- `capstone-backend-status-for-llm.md`
-- `current-next-step.md`
-- `split-host-enclave-strategy.md`
+- `current/capstone-agent-test-instructions.md`
+- `current/capstone-backend-status-for-llm.md`
+- `current/current-next-step.md`
+- `current/split-host-enclave-strategy.md`
 
 If a proof file becomes stale or redundant, replace it with a shorter current proof instead of accumulating duplicate logs.
 
@@ -73,6 +82,6 @@ If a proof file becomes stale or redundant, replace it with a shorter current pr
 This does **not** yet imply that the whole broader hosted toolchain/runtime is ready for FFmpeg/sqlite/libpng/SPEC.
 
 For the current recommended next milestone, see:
-- `current-next-step.md`
+- `current/current-next-step.md`
 
 
