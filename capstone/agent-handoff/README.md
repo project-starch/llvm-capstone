@@ -31,7 +31,10 @@ Scratch log directory for future sessions:
 ### 5. Current recommended next step
 - `current-next-step.md`
 
-### 6. Hosted libc / OS / syscall analysis
+### 6. Split host-enclave strategy (source-backed)
+- `split-host-enclave-strategy.md`
+
+### 7. Hosted libc / OS / syscall analysis
 - `hosted-libc-os-analysis.md`
 
 ## Files intentionally not kept in this handoff bundle
@@ -61,6 +64,7 @@ If the validated baseline changes, update at least:
 - `capstone-agent-test-instructions.md`
 - `capstone-backend-status-for-llm.md`
 - `current-next-step.md`
+- `split-host-enclave-strategy.md`
 
 If a proof file becomes stale or redundant, replace it with a shorter current proof instead of accumulating duplicate logs.
 
