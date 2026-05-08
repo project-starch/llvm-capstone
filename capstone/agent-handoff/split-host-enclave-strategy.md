@@ -411,3 +411,47 @@ This milestone:
 - speculative yield/resume ABI work
 - larger application bring-up such as sqlite/libpng/FFmpeg
 
+## Important runtime caveat discovered during the first implementation attempt
+
+After drafting the v0 ABI, an initial runtime experiment was attempted through the
+existing:
+
+- guest userspace helper -> `create_dom("/test-domains/sbi.dom", <smode>)`
+- shared region -> `create_region()/share_region()`
+- repeated `call_dom()` rounds
+
+Two important observations came out of that probe:
+
+1. In the currently tested `sbi.dom + .smode` path, the scalar `call_dom()` return
+   value did **not** behave as a reliable HostCall status channel.
+   Even the existing `/sbi-dom.user` + `/test-domains/sbi.smode` path returned `0`
+   on repeated calls.
+2. A minimal HostCall proof-of-concept using a shared region did **not yet** observe
+   domain-written metadata becoming visible back in the host helper.
+
+### What this means
+
+The architectural direction remains the same:
+- split host-enclave
+- shared-memory RPC
+- host-side service execution
+
+But the immediate coding milestone has to become even narrower:
+
+> before a full `HC_WRITE_STDOUT` round trip, first prove that an `sbi.dom + .smode`
+> payload can reliably observe and/or mutate a host-shared region in a way the guest
+> userspace helper can read back.
+
+### Refined next micro-step
+
+The new smallest meaningful implementation step is:
+
+1. create exactly one shared region,
+2. share it into `sbi.dom`,
+3. run a tiny `.smode` payload,
+4. have the payload write a sentinel value into the shared region,
+5. verify from the guest userspace helper whether the sentinel became visible.
+
+Only after this narrower probe works should the project promote the full
+`HC_WRITE_STDOUT` two-round RPC test to the validated baseline.
+

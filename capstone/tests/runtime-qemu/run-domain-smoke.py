@@ -10,7 +10,7 @@ from typing import Iterable
 
 import pexpect
 
-SUCCESS_MARKERS = (
+DEFAULT_DOMAIN_SUCCESS_MARKERS = (
     "Ok, good file.",
     "Loadable executable segment found.",
     "Created domain ID = 0",
@@ -51,7 +51,19 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Boot Capstone QEMU once, mount a host-shared 9p directory, and run domain smoke tests."
     )
-    parser.add_argument("domains", nargs="+", help="Domain ELF files to run inside the guest.")
+    parser.add_argument("domains", nargs="*", help="Domain ELF files to run inside the guest.")
+    parser.add_argument(
+        "--guest-command",
+        action="append",
+        default=[],
+        help="Additional shell command to run inside the guest after the standard setup.",
+    )
+    parser.add_argument(
+        "--success-marker",
+        action="append",
+        default=[],
+        help="Success marker required in each --guest-command output.",
+    )
     parser.add_argument(
         "--share-dir",
         default=str(default_tmp_root / "capstone-runtime-qemu-share"),
@@ -78,7 +90,10 @@ def parse_args() -> argparse.Namespace:
         default=1.0,
         help="Multiply the default expect timeouts by this factor.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if not args.domains and not args.guest_command:
+        parser.error("provide at least one domain path or one --guest-command")
+    return args
 
 
 def last_exit_code(text: str) -> int:
@@ -214,11 +229,25 @@ def main() -> int:
                     f"/capstone-test.user /mnt/host/{domain_name}",
                     timeout=30 * timeout_multiplier,
                 )
-                missing = [marker for marker in SUCCESS_MARKERS if marker not in output]
+                missing = [marker for marker in DEFAULT_DOMAIN_SUCCESS_MARKERS if marker not in output]
                 if missing:
                     raise RuntimeError(
                         f"domain smoke missing success markers for {domain_name}: {missing}\n{output}"
                     )
+
+            for guest_command in args.guest_command:
+                output = run_guest_command(
+                    qemu,
+                    guest_command,
+                    timeout=30 * timeout_multiplier,
+                )
+                if args.success_marker:
+                    missing = [marker for marker in args.success_marker if marker not in output]
+                    if missing:
+                        raise RuntimeError(
+                            f"guest command missing success markers: {missing}\n"
+                            f"command: {guest_command}\n{output}"
+                        )
 
             power_off(qemu)
         except Exception:

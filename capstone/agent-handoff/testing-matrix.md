@@ -39,6 +39,12 @@ Then the most useful test entry points are:
 
 # Current runtime smoke in QEMU (single boot, shared 9p directory)
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-smoke.sh"
+
+# Exploratory guest-side probe in the same QEMU harness
+python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
+  --share-dir "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share" \
+  --log-file "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-probe.log" \
+  --guest-command "/sbi-dom.user"
 ```
 
 ---
@@ -258,6 +264,11 @@ sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke.log"
 
 **Why this layer matters**
 - It is slower than `lit`, but it catches regressions that `lit` cannot see:
+
+**Also useful for exploratory probes**
+- `run-domain-smoke.py` now supports `--guest-command '...'`.
+- This was validated as a general harness capability.
+- It lets future sessions test guest-side helpers and runtime hypotheses without immediately creating a dedicated new wrapper script or rebuilding `rootfs.ext2`.
   - guest boot/runtime issues,
   - loader/runtime acceptance,
   - QEMU/device interactions,

@@ -1,11 +1,11 @@
 # Capstone runtime QEMU smoke tests
 
-This directory contains a minimal runtime smoke test for the **current validated domain ABI path**.
+This directory contains runtime smoke/probe helpers for the **current validated domain ABI path**.
 
 It intentionally does **not** try to validate the broader hosted Linux user-space flow yet.
 That hosted flow is still blocked earlier in the toolchain/sysroot integration.
 
-## What this smoke test validates
+## What the validated baseline currently covers
 
 In one QEMU boot it verifies that:
 
@@ -24,6 +24,15 @@ The key property is that the domain is provided through a host-shared directory,
 - `domains/write_42.c` — the initial tiny smoke domain.
 - `run-domain-smoke.py` — QEMU + guest automation harness.
 - `run-smoke.sh` — one-command entry point that builds the tiny domain and runs the smoke test.
+
+The QEMU harness now also supports a validated exploratory mode:
+
+- `run-domain-smoke.py --guest-command '...'`
+
+That mode was exercised successfully while probing the `sbi.dom + .smode` runtime path.
+It is useful when you want to boot QEMU once, mount the shared `9p` directory,
+load `/capstone.ko`, and then run an arbitrary guest-side command without creating
+another dedicated harness script first.
 
 ## Quick run
 
@@ -53,5 +62,20 @@ void domain_main(unsigned *res, unsigned func) {
 Then either:
 - build it with `build-domain.sh` and pass the resulting `.dom` to `run-domain-smoke.py`, or
 - extend `run-smoke.sh` to build and run it in the same shared directory / QEMU boot.
+
+For guest-side runtime probes that are **not** just `/capstone-test.user <domain>`, you can also use:
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+source capstone/tests/capstone-test-env.sh
+python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
+  --share-dir "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share" \
+  --log-file "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-probe.log" \
+  --guest-command "/sbi-dom.user"
+```
+
+This is a **runtime probe facility**, not by itself proof that a new architecture
+milestone is validated. Only promote a new probe to the validated baseline once it
+passes consistently and is documented in the handoff notes.
 
 

@@ -360,6 +360,30 @@ python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-direct-wrapper.txt" 2>&1
 ```
 
+### 6.3 Run an exploratory guest-side command in the same QEMU harness
+
+This is useful when you want to probe guest-side runtime behavior without adding
+another dedicated wrapper script first.
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
+  --share-dir "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share" \
+  --log-file "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-probe.log" \
+  --guest-command "/sbi-dom.user" \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-probe-wrapper.txt" 2>&1
+```
+
+Inspect:
+
+```bash
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-probe-wrapper.txt"
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-probe.log"
+```
+
+Treat this as a **runtime probe facility**, not automatic proof that the probed
+architecture hypothesis is already validated.
+
 ---
 
 ## 7. Hosted smoke tests without QEMU: current recommendation

@@ -7,9 +7,9 @@ It is expected to change over time and should be updated when the project state 
 
 The next smallest meaningful step toward the real goal (running serious software such as SPEC-like tests, FFmpeg, sqlite, libpng, etc.) is:
 
-> build a **minimal synchronous host-call prototype**: a tiny Capstone domain that requests `HC_WRITE_STDOUT` through **shared metadata + shared buffer regions**, returns to the host with `DOM_RETURN`, and is invoked a second time to observe the host response
+> prove that an `sbi.dom + .smode` payload can **reliably observe and/or mutate one host-shared region** in the current runtime path
 
-In short: **prove the split host-enclave RPC model with existing region-sharing primitives before doing libc/sysroot bring-up**.
+In short: **before the full `HC_WRITE_STDOUT` RPC round trip, first prove shared-region visibility in the exact S-mode path that the split design depends on**.
 
 ## Why this is the right next step
 
@@ -21,7 +21,7 @@ The project already has a validated native sample-domain flow:
 
 So the narrowest remaining uncertainty is no longer "can we enter a Capstone domain?" It is:
 
-> **what is the cheapest architecture for host services / libc-facing I/O that matches the runtime which already exists?**
+> **can the current `sbi.dom + .smode` runtime path actually support the shared-memory contract that the planned host-call RPC design depends on?**
 
 Source-backed findings from the repository point to a split model:
 
@@ -36,33 +36,22 @@ Source-backed findings from the repository point to a split model:
 - the domain side already returns via `SBI_EXT_CAPSTONE_DOM_RETURN`
 - the exported userspace ABI currently exposes `IOCTL_DOM_CALL`, but does **not** expose a general userspace-visible resume/trapframe ABI (`DOM_RESUME`, register snapshots, etc.)
 
-That means the lowest-risk near-term design is:
+That means the lowest-risk near-term design is still:
 
 - **yes**: split host-enclave execution
-- **yes**: shared-memory request/response ABI
+- **yes**: shared-memory request/response ABI, but only after the basic shared-region visibility probe is proven in this path
 - **yes**: ordinary Linux work performed by the host helper
 - **no for now**: speculative SGX-like yield/resume ABI assumptions
 - **no for now**: immediate hosted glibc/sysroot work as the main milestone
 
 ## Concrete form of the next step
 
-1. Define a tiny shared-memory HostCall ABI v0, for example:
-   - metadata region: `phase/opcode/offset/length/result/error`
-   - payload region: bytes for the request body
-2. Reuse existing `create_region()/map_region()/shared_region_annotated()` infrastructure.
-3. Implement a host harness that:
-   - creates the domain,
-   - shares metadata + payload regions,
-   - calls the domain,
-   - if the domain returns `HC_PENDING`, performs host-side `write(1, ...)`,
-   - writes the result back into metadata,
-   - calls the domain a second time.
-4. Implement a tiny domain that:
-   - writes `"hello from domain\n"` into the shared buffer,
-   - writes a request into shared metadata,
-   - returns to the host,
-   - on the second invocation, reads the host result and exits cleanly.
-5. Validate the full round-trip under the existing QEMU/runtime harness.
+1. Reuse the existing `sbi.dom` wrapper path.
+2. Create exactly one shared region from a guest userspace helper.
+3. Share that region into the domain using the most proven path available.
+4. Run a tiny `.smode` payload that writes a sentinel value into the shared region.
+5. Verify in the guest userspace helper whether the sentinel became visible.
+6. Only after that works, move on to the full `HC_WRITE_STDOUT` metadata/payload protocol.
 
 ## What not to jump to yet
 
@@ -73,5 +62,5 @@ Do **not** jump straight to:
 - speculative yield/resume trap ABIs,
 - FFmpeg/sqlite/libpng/SPEC directly.
 
-The point of this step is to prove the cheapest realistic host-service architecture using primitives that are already present in the repository.
+The point of this step is to remove the narrowest newly observed blocker in the split-runtime path, rather than assuming the full HostCall protocol before the shared-memory visibility probe is proven.
 
