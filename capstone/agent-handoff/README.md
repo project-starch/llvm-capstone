@@ -31,6 +31,9 @@ Scratch log directory for future sessions:
 ### 5. Current recommended next step
 - `current-next-step.md`
 
+### 6. Hosted libc / OS / syscall analysis
+- `hosted-libc-os-analysis.md`
+
 ## Files intentionally not kept in this handoff bundle
 
 The following categories were intentionally omitted to keep the handoff concise:

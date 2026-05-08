@@ -28,6 +28,7 @@ Please read these files before proposing changes:
 - `$CAPSTONE_HANDOFF_DIR/testing-matrix.md`
 - `$CAPSTONE_HANDOFF_DIR/capstone-agent-test-instructions.md`
 - `$CAPSTONE_HANDOFF_DIR/capstone-backend-status-for-llm.md`
+- `$CAPSTONE_HANDOFF_DIR/hosted-libc-os-analysis.md`
 - `$CAPSTONE_HANDOFF_DIR/native-sample-validation.md`
 - `$CAPSTONE_HANDOFF_DIR/current-next-step.md` (current recommendation only; do not treat it as immutable)
 
