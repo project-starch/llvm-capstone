@@ -411,54 +411,55 @@ This milestone:
 - speculative yield/resume ABI work
 - larger application bring-up such as sqlite/libpng/FFmpeg
 
-## Important runtime caveat discovered during the first implementation attempt
+## Historical runtime caveat and its current resolution
 
-After drafting the v0 ABI, an initial runtime experiment was attempted through the
-existing:
+During the first implementation attempt, the draft HostCall probe appeared to show
+that shared-region mutations were not becoming visible back in the host helper and
+that the split `null_blk` reference path was crashing.
 
-- guest userspace helper -> `create_dom("/test-domains/sbi.dom", <smode>)`
-- shared region -> `create_region()/share_region()`
-- repeated `call_dom()` rounds
+That caveat is now understood as a **historical local-environment issue**, not the
+current baseline architecture result.
 
-Two important observations came out of that probe:
+The decisive later finding was that the local tree had lost:
 
-1. In the currently tested `sbi.dom + .smode` path, the scalar `call_dom()` return
-   value did **not** behave as a reliable HostCall status channel.
-   Even the existing `/sbi-dom.user` + `/test-domains/sbi.smode` path returned `0`
-   on repeated calls.
-2. A minimal HostCall proof-of-concept using a shared region did **not yet** observe
-   domain-written metadata becoming visible back in the host helper.
-3. The even narrower follow-up probe (one shared region, one `.smode` payload,
-   host-visible sentinel writes after successive `call_dom()` rounds) was also
-   attempted and still left the host-visible shared word unchanged.
+- `capstone/caplifive-buildroot/build/local.mk`
 
-### What this means
+Without that override file, the local image fell back to a stock OpenSBI path, so
+host-side `SBI_EXT_CAPSTONE` calls behaved like the wrong firmware image rather than
+like the intended Capstone-enabled runtime.
+
+After restoring `build/local.mk`, rerunning the validated OpenSBI rebuild path, and
+rebuilding `capstone-null-blk` so its `vermagic` matched the active kernel, the
+following were all revalidated:
+
+1. the shared-region probe now observes host-visible sentinel changes across two
+   successive `call_dom()` rounds,
+2. baseline `null_blk` works,
+3. split `null_blk` now creates `/dev/nullb0`, completes I/O, and unloads cleanly.
+
+### What this means now
 
 The architectural direction remains the same:
 - split host-enclave
 - shared-memory RPC
 - host-side service execution
 
-But the immediate coding milestone has to become even narrower:
-
-> before a full `HC_WRITE_STDOUT` round trip, first prove that an `sbi.dom + .smode`
-> payload can reliably observe and/or mutate a host-shared region in a way the guest
-> userspace helper can read back.
+But the immediate coding milestone is no longer “prove that shared-region plumbing
+works at all.” That part now has a validated baseline again.
 
 ### Refined next micro-step
 
-The new smallest meaningful implementation step is no longer to repeat the same
-sentinel probe unchanged. It is now:
+The new smallest meaningful implementation step is to move **up one layer** from the
+sentinel proof toward the first real HostCall proof-of-concept, for example:
 
-1. compare the `sbi.dom` wrapper path against a known working region-sharing
-   S-mode path in-tree,
-2. determine whether the failure is caused by:
-   - `.smode` code not executing as expected,
-   - `share_region()` not populating the state later used by S-mode
-     `SBI_EXT_CAPSTONE_REGION_QUERY`, or
-   - the queried capability not being usable in this wrapper path,
-3. add the smallest possible diagnostic for one of those specific hypotheses.
+1. keep using the restored shared-region path as the runtime baseline,
+2. implement the narrowest real request/response experiment on top of it (such as the
+   previously outlined `HC_V0_OP_WRITE_STDOUT` flow),
+3. validate that higher-level proof with the same style of two-round `call_dom()`
+   runtime harness,
+4. only then generalize the ABI or broaden the hosted-software ambition.
 
-Only after that blocker is understood should the project promote the full
-`HC_WRITE_STDOUT` two-round RPC test to the validated baseline.
+So the gating question is no longer “is shared-region mutation broken in the current
+tree?”. It is now “what is the smallest real host-service protocol we should prove on
+top of the now-working runtime baseline?”.
 

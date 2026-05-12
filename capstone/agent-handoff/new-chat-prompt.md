@@ -52,11 +52,21 @@ The following is already implemented and verified:
    - loader accepted it
    - `/capstone-test.user /test-domains/my_domain.dom` succeeded
    - QEMU no longer hits the old `env->priv < PRV_C` assert in this path
-7. There is now also a fast revalidation path for the current domain runtime baseline without rebuilding `rootfs.ext2` on every iteration:
+7. There is also a `9p`-based tiny-domain runtime harness for quick experiments without rebuilding `rootfs.ext2` on every iteration:
    - `capstone/tests/runtime-qemu/run-smoke.sh`
    - it exports a host directory into the guest over `9p`
    - mounts it in the guest
    - and runs a tiny Capstone domain through `/capstone-test.user`
+   - treat it as a convenient probe harness unless it has been freshly revalidated for the current tree
+8. The earlier wrong-firmware runtime blocker was resolved by restoring
+   `capstone/caplifive-buildroot/build/local.mk` and rerunning
+   `make build CAPSTONE_CC_PATH=... A=opensbi-rebuild`.
+9. The current runtime baseline is stronger than the original sample-domain proof:
+   - `capstone/tests/runtime-qemu/run-shared-region-probe.sh` passes,
+   - baseline `null_blk` passes,
+   - split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully.
+10. After an OpenSBI/kernel change, any dependent kernel modules/packages may need a
+    rebuild so their `vermagic` matches the active kernel.
 
 ## Very important distinction
 The `my_first_domain` flow is a **domain runtime sample**, not yet the same thing as a general hosted user-space program flow.
@@ -68,6 +78,11 @@ Also, the currently preferred architectural direction for Paper I is:
 - before attempting a full hosted Capstone Linux userspace.
 
 The next objective should be chosen accordingly.
+
+The immediate runtime bring-up blocker is no longer “why do host-side
+`SBI_EXT_CAPSTONE` calls return `error=-2`?”. That issue is considered resolved in
+the current local baseline. The next objective should therefore build on the now-
+working runtime path rather than re-investigate the already-fixed firmware issue.
 
 ## What to avoid spending time on right now
 Unless it blocks the currently chosen milestone, please postpone:

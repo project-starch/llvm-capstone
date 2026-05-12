@@ -37,8 +37,11 @@ Then the most useful test entry points are:
 "$CAPSTONE_LLVM_LIT" -sv \
   "$CAPSTONE_REPO_ROOT/clang/test/Driver/capstone-linux-toolchain.c"
 
-# Current runtime smoke in QEMU (single boot, shared 9p directory)
+# Legacy tiny-domain smoke harness in QEMU (currently useful as a probe, not the primary validated gate)
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-smoke.sh"
+
+# Shared-region runtime proof on the restored OpenSBI path
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-shared-region-probe.sh"
 
 # Exploratory guest-side probe in the same QEMU harness
 python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
@@ -230,7 +233,7 @@ Optional ELF inspection:
 
 ---
 
-### F. QEMU runtime smoke with shared directory (single boot, no rootfs rebuild per iteration)
+### F. QEMU runtime smoke harness with shared directory (single boot, no rootfs rebuild per iteration)
 
 **What it proves**
 - QEMU boots,
@@ -238,6 +241,11 @@ Optional ELF inspection:
 - `capstone.ko` loads,
 - `/capstone-test.user` can execute a Capstone domain directly from a host-shared directory,
 - current runtime baseline can be revalidated without rebuilding `rootfs.ext2` every time.
+
+**Current status note**
+- keep this harness because it is useful for quick experiments,
+- but the currently revalidated runtime baseline in this workspace is the shared-region proof plus the baseline/split `null_blk` checks below,
+- do not rely on `run-smoke.sh` alone as the authoritative gate unless it has been freshly revalidated for the exact current tree.
 
 **Where**
 - `capstone/tests/runtime-qemu/`
@@ -278,6 +286,93 @@ sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke.log"
 - The guest kernel already has `CONFIG_NET_9P`, `CONFIG_NET_9P_VIRTIO`, and `CONFIG_9P_FS`.
 - Exporting a host directory into the guest allows fast iteration on test domains.
 - This avoids rebuilding the rootfs image for every small smoke-case change.
+
+---
+
+### G. Shared-region runtime proof (`run-shared-region-probe.sh`)
+
+**What it proves**
+- the VM is using the restored Capstone-enabled OpenSBI path rather than a stock OpenSBI path,
+- domain creation works,
+- annotated shared-region setup works,
+- host-visible shared memory really changes across successive `call_dom()` rounds.
+
+**Where**
+- `capstone/tests/runtime-qemu/run-shared-region-probe.sh`
+- `capstone/tests/runtime-qemu/build-shared-region-probe.sh`
+- `capstone/tests/runtime-qemu/shared-region-probe/`
+
+**Run**
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-shared-region-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe-wrapper.txt" 2>&1
+```
+
+Inspect the wrapper output:
+
+```bash
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe-wrapper.txt"
+```
+
+Inspect the full serial/QEMU log:
+
+```bash
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe.log"
+```
+
+Expected success markers include:
+- `shared-region-probe: word after call 1 = 0x1111111111111111`
+- `shared-region-probe: word after call 2 = 0x2222222222222222`
+- `shared-region-probe: success`
+
+**When to run**
+- after changes to `components/opensbi`,
+- after Buildroot/runtime plumbing changes,
+- after changes to region-sharing semantics,
+- before trusting any higher-level split-domain runtime result.
+
+---
+
+### H. Split `null_blk` runtime regression (manual QEMU guest command through the same harness)
+
+**What it proves**
+- the restored runtime path is good enough for a real reference case study,
+- the split driver creates `/dev/nullb0`,
+- data path I/O completes,
+- and unload works cleanly.
+
+**Run the I/O-path validation**
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
+  --buildroot-dir "$CAPSTONE_BUILDROOT_DIR" \
+  --qemu-binary "$CAPSTONE_QEMU_BINARY" \
+  --share-dir "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share" \
+  --log-file "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-marker.log" \
+  --guest-command "dmesg -n 8 && modprobe configfs && /null_blk.user && insmod /nullb/capstone_split/null_blk.ko && test -b /dev/nullb0 && echo hello-world | dd of=/dev/nullb0 bs=1024 count=1 && dd if=/dev/nullb0 bs=1024 count=1 | hexdump -C && echo __SPLIT_DONE__" \
+  --success-marker "__SPLIT_DONE__"
+```
+
+**Run the unload-path validation**
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
+  --buildroot-dir "$CAPSTONE_BUILDROOT_DIR" \
+  --qemu-binary "$CAPSTONE_QEMU_BINARY" \
+  --share-dir "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share" \
+  --log-file "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod.log" \
+  --guest-command "dmesg -n 8 && modprobe configfs && /null_blk.user && insmod /nullb/capstone_split/null_blk.ko && echo __BEFORE_RMMOD__ && rmmod null_blk && echo __AFTER_RMMOD__" \
+  --success-marker "__AFTER_RMMOD__"
+```
+
+**When to run**
+- after runtime/OpenSBI fixes,
+- after changes to the split-domain reference path,
+- after rebuilding packages that must match the active kernel `vermagic`.
 
 ---
 
@@ -322,7 +417,9 @@ As of the latest checked state:
 - LLD Capstone emulation test passes,
 - the hosted Linux driver regression for `capstone64-unknown-linux-gnu` passes,
 - the native sample-domain path is still valid,
-- the new `9p`-based QEMU smoke path works and avoids per-iteration rootfs rebuilds.
+- the shared-region probe now passes on the restored OpenSBI path,
+- baseline `null_blk` works,
+- and split `null_blk` now loads, performs I/O, and unloads successfully.
 
 What is **not** validated yet:
 - general hosted Linux user-space build + run,
@@ -339,7 +436,10 @@ If a change touches the backend/toolchain/runtime in a way that is broader than 
 2. `clang/test/CodeGen/capstone-builtins.c` and `builtins-capstone.c`
 3. `lld/test/ELF/emulation-capstone.s`
 4. `clang/test/Driver/capstone-linux-toolchain.c`
-5. `capstone/tests/runtime-qemu/run-smoke.sh`
+5. `capstone/tests/runtime-qemu/run-shared-region-probe.sh`
+6. one of the split `null_blk` harness commands above
 
-That combination gives one fast compiler/linker pass plus one runtime sanity check.
+Use `run-smoke.sh` as an additional probe when you specifically want to exercise the
+host-shared tiny-domain harness, but not as the sole runtime gate unless it has been
+freshly revalidated for the current tree.
 

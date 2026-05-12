@@ -298,11 +298,15 @@ This does **not** yet imply that the whole broader hosted toolchain/runtime stac
 
 ---
 
-## 6. Fast QEMU runtime smoke without rebuilding the rootfs on every iteration
+## 6. Fast QEMU runtime smoke harness without rebuilding the rootfs on every iteration
 
-This is the preferred runtime revalidation path when you want to check that the
-current domain baseline still works, but you do **not** want to rebuild
-`rootfs.ext2` for each small test-domain change.
+This harness is still useful when you want to probe a host-shared tiny domain
+without rebuilding `rootfs.ext2` for each small test-domain change.
+
+However, the currently revalidated runtime baseline in this workspace is now the
+shared-region proof plus the baseline/split `null_blk` checks in section 7 below.
+Treat `run-smoke.sh` as a convenient harness, not as the sole authoritative gate,
+unless it has been freshly revalidated for the exact current tree.
 
 It uses:
 - `capstone/tests/runtime-qemu/build-domain.sh`
@@ -332,7 +336,7 @@ Inspect the full QEMU serial log:
 sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke.log"
 ```
 
-Expected markers include:
+Expected markers, when this harness is green for the current tree, include:
 - `Ok, good file.`
 - `Loadable executable segment found.`
 - `Created domain ID = 0`
@@ -386,7 +390,132 @@ architecture hypothesis is already validated.
 
 ---
 
-## 7. Hosted smoke tests without QEMU: current recommendation
+## 7. Restored OpenSBI rebuild path and runtime revalidation
+
+The previously observed `error=-2` / stock-OpenSBI behavior is no longer the
+current baseline. The validated fix was:
+
+1. keep `capstone/caplifive-buildroot/build/local.mk` present,
+2. rerun the OpenSBI rebuild through Buildroot,
+3. rebuild dependent kernel modules/packages when their `vermagic` must match the
+   active kernel.
+
+### 7.1 Rebuild OpenSBI through the local override path
+
+```bash
+cd "$CAPSTONE_BUILDROOT_DIR" && \
+make build CAPSTONE_CC_PATH="$CAPSTONE_REPO_ROOT/capstone/capstone-c" A=opensbi-rebuild \
+  > "$CAPSTONE_TMP_ROOT/capstone-opensbi-rebuild.txt" 2>&1
+```
+
+Inspect:
+
+```bash
+tail -n 200 "$CAPSTONE_TMP_ROOT/capstone-opensbi-rebuild.txt"
+```
+
+Important success clues include:
+- `opensbi custom Syncing from source dir .../components/opensbi`
+- regeneration of:
+  - `components/opensbi/lib/sbi/sbi_capstone_dom.c.S`
+  - `components/opensbi/lib/sbi/capstone_int_handler.c.S`
+
+### 7.2 Rebuild `capstone-null-blk` after kernel/OpenSBI changes
+
+Use this if the active kernel changed and the package `vermagic` may now be stale.
+
+```bash
+cd "$CAPSTONE_BUILDROOT_DIR" && \
+LD_LIBRARY_PATH="" make -C buildroot BR2_EXTERNAL="$PWD" O="$PWD/build" capstone-null-blk-dirclean \
+  > "$CAPSTONE_TMP_ROOT/capstone-null-blk-dirclean.txt" 2>&1 && \
+LD_LIBRARY_PATH="" make -C buildroot BR2_EXTERNAL="$PWD" O="$PWD/build" capstone-null-blk-rebuild \
+  > "$CAPSTONE_TMP_ROOT/capstone-null-blk-rebuild.txt" 2>&1 && \
+LD_LIBRARY_PATH="" make -C buildroot BR2_EXTERNAL="$PWD" O="$PWD/build" \
+  > "$CAPSTONE_TMP_ROOT/capstone-buildroot-final.txt" 2>&1
+```
+
+Inspect:
+
+```bash
+tail -n 120 "$CAPSTONE_TMP_ROOT/capstone-null-blk-rebuild.txt"
+tail -n 120 "$CAPSTONE_TMP_ROOT/capstone-buildroot-final.txt"
+```
+
+### 7.3 Re-run the shared-region proof
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-shared-region-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe-wrapper.txt" 2>&1
+```
+
+Inspect:
+
+```bash
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe-wrapper.txt"
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe.log"
+```
+
+Current success markers:
+- `shared-region-probe: word after call 1 = 0x1111111111111111`
+- `shared-region-probe: word after call 2 = 0x2222222222222222`
+- `shared-region-probe: success`
+
+### 7.4 Re-run the baseline `null_blk` control
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
+  --buildroot-dir "$CAPSTONE_BUILDROOT_DIR" \
+  --qemu-binary "$CAPSTONE_QEMU_BINARY" \
+  --share-dir "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share" \
+  --log-file "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline.log" \
+  --guest-command "dmesg -n 8 && modprobe configfs && cd /nullb/baseline && insmod ./null_blk.ko && test -b /dev/nullb0 && echo hello-world | dd of=/dev/nullb0 bs=1024 count=1 && dd if=/dev/nullb0 bs=1024 count=1 | hexdump -C && rmmod null_blk" \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline-wrapper.txt" 2>&1
+```
+
+### 7.5 Re-run the split `null_blk` validations
+
+I/O path:
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
+  --buildroot-dir "$CAPSTONE_BUILDROOT_DIR" \
+  --qemu-binary "$CAPSTONE_QEMU_BINARY" \
+  --share-dir "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share" \
+  --log-file "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-marker.log" \
+  --guest-command "dmesg -n 8 && modprobe configfs && /null_blk.user && insmod /nullb/capstone_split/null_blk.ko && test -b /dev/nullb0 && echo hello-world | dd of=/dev/nullb0 bs=1024 count=1 && dd if=/dev/nullb0 bs=1024 count=1 | hexdump -C && echo __SPLIT_DONE__" \
+  --success-marker "__SPLIT_DONE__" \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-marker-wrapper.txt" 2>&1
+```
+
+Unload path:
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
+  --buildroot-dir "$CAPSTONE_BUILDROOT_DIR" \
+  --qemu-binary "$CAPSTONE_QEMU_BINARY" \
+  --share-dir "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share" \
+  --log-file "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod.log" \
+  --guest-command "dmesg -n 8 && modprobe configfs && /null_blk.user && insmod /nullb/capstone_split/null_blk.ko && echo __BEFORE_RMMOD__ && rmmod null_blk && echo __AFTER_RMMOD__" \
+  --success-marker "__AFTER_RMMOD__" \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod-wrapper.txt" 2>&1
+```
+
+Inspect the logs after either command:
+
+```bash
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-marker-wrapper.txt"
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-marker.log"
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod-wrapper.txt"
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod.log"
+```
+
+---
+
+## 8. Hosted smoke tests without QEMU: current recommendation
 
 Do **not** add a separate large Capstone-specific hosted smoke suite yet unless a
 newly fixed hosted blocker needs a dedicated regression test.
@@ -407,7 +536,7 @@ So for now:
 
 ---
 
-## 7. What to inspect when something fails
+## 9. What to inspect when something fails
 
 ### Build failure in LLVM/Clang/LLD
 Inspect:
@@ -433,11 +562,15 @@ Inspect:
 ### Runtime/QEMU failure
 Inspect:
 - `$CAPSTONE_TMP_ROOT/capstone-qemu-run.txt`
+- `$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe.log`
+- `$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline.log`
+- `$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-marker.log`
+- `$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod.log`
 - and compare against the latest proof logs saved in `capstone/agent-handoff/`
 
 ---
 
-## 8. Maintenance rule for future sessions
+## 10. Maintenance rule for future sessions
 
 If a session changes the validated flow or achieves a new milestone, it should update the persistent handoff bundle under:
 - `$CAPSTONE_HANDOFF_DIR`

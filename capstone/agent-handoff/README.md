@@ -60,7 +60,12 @@ As of the latest validated state:
 - in-tree `ld.lld` links it natively as `EM_CAPSTONE`,
 - the Buildroot userspace loader accepts `EM_CAPSTONE`,
 - the sample domain executes successfully in the Capstone QEMU/Buildroot runtime,
-- the old manual ELF-header rewrite hack is no longer needed in the default sample path.
+- the old manual ELF-header rewrite hack is no longer needed in the default sample path,
+- `capstone/caplifive-buildroot/build/local.mk` is again present and keeps Buildroot on the local Capstone-enabled Linux/OpenSBI override path,
+- rerunning `make build CAPSTONE_CC_PATH=... A=opensbi-rebuild` regenerates the OpenSBI wrapper assembly and restores the intended firmware/runtime path,
+- `capstone/tests/runtime-qemu/run-shared-region-probe.sh` now passes and proves that the host-visible shared-region mutations are working again,
+- baseline `null_blk` works,
+- and split `null_blk` now creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding the package against the active kernel.
 
 ## Maintenance rule
 
@@ -76,6 +81,10 @@ If the validated baseline changes, update at least:
 - `current/split-host-enclave-strategy.md`
 
 If a proof file becomes stale or redundant, replace it with a shorter current proof instead of accumulating duplicate logs.
+
+The obsolete draft runtime-author message that was created while the tree was still
+on the wrong-firmware path should not be kept under `current/`; that state has now
+been superseded by the validated notes in `history/` and `current/current-next-step.md`.
 
 ## What this does NOT yet mean
 

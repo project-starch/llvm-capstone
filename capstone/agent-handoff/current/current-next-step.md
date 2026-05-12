@@ -5,59 +5,62 @@ It is expected to change over time and should be updated when the project state 
 
 ## Current recommendation
 
-The next smallest meaningful step toward the real goal (running serious software such as SPEC-like tests, FFmpeg, sqlite, libpng, etc.) is:
+The previous runtime blocker has been removed. The next smallest meaningful step toward the real goal (running serious software such as SPEC-like tests, FFmpeg, sqlite, libpng, etc.) is now:
 
-> restore a **Capstone-enabled OpenSBI firmware rebuild path** and rebuild `fw_jump.elf`, because the current local image behaves like a stock OpenSBI path where host-side `SBI_EXT_CAPSTONE` calls return `error=-2`
+> move past the runtime bring-up blocker and continue with the next intended Capstone runtime / hosted-software milestone on top of the now-working firmware path
 
-In short: **the latest diagnostics show that the local tree had lost `capstone/caplifive-buildroot/build/local.mk`, so Buildroot was no longer overriding OpenSBI with the local Capstone-enabled source tree. Raw runtime logs now show host-side `DOM_CREATE`, `DOM_CALL_WITH_CAP`, and `REGION_CREATE` returning `error=-2, value=0`. Therefore the next step is to restore the firmware build path, not to keep iterating on guest-side shared-region protocol guesses under the current image.**
+In short: **restoring `capstone/caplifive-buildroot/build/local.mk`, rerunning `make build A=opensbi-rebuild`, and rebuilding `capstone-null-blk` resolved the wrong-firmware problem. The shared-region probe now passes, baseline `null_blk` passes, and split `null_blk` now loads, completes I/O, and unloads successfully.**
 
-## Why this is the right next step
+## Why this is now the right next step
 
-The narrowest active blocker has changed.
+The previously active blocker was:
 
-The decisive source-backed findings are now:
+- the local image behaving like stock OpenSBI,
+- host-side `SBI_EXT_CAPSTONE` calls returning `error=-2`,
+- shared-region mutations not becoming visible,
+- and split `null_blk` either crashing or failing to create the device.
 
-- `capstone/caplifive-buildroot/build/.config` expects `BR2_PACKAGE_OVERRIDE_FILE="$(CONFIG_DIR)/local.mk"`,
-- the local `capstone/caplifive-buildroot/build/local.mk` had been deleted and has now been restored,
-- that file is exactly what points Buildroot at the local Capstone-enabled source trees:
+That blocker is now gone.
+
+The source-backed validated results are:
+
+- `build/local.mk` is present again and points Buildroot at:
   - `components/linux`
   - `components/opensbi`
-- raw runtime diagnostics show host-side Capstone SBI calls failing immediately:
-  - `DOM_CREATE ... error=-2 value=0`
-  - `DOM_CALL_WITH_CAP ... error=-2 value=0`
-  - `REGION_CREATE ... error=-2 value=0`
-- the baseline `null_blk` path still works,
-- the split `null_blk` path no longer crashes after adding error checks, but now fails cleanly during region setup.
+- `make build A=opensbi-rebuild` regenerated:
+  - `components/opensbi/lib/sbi/sbi_capstone_dom.c.S`
+  - `components/opensbi/lib/sbi/capstone_int_handler.c.S`
+- the OpenSBI rebuild log shows `opensbi custom Syncing from source dir .../components/opensbi`
+- the shared-region probe now reaches:
+  - `word after call 1 = 0x1111111111111111`
+  - `word after call 2 = 0x2222222222222222`
+  - `success`
+- baseline `null_blk` works,
+- split `null_blk` now:
+  - creates `/dev/nullb0`,
+  - completes the marker-based I/O path,
+  - and completes `rmmod null_blk` successfully.
 
-So the narrowest remaining uncertainty is no longer:
-
-> "which guest shared-region API variation should we try next?"
-
-It is now:
-
-> **how do we get the local image back onto the Capstone-enabled OpenSBI firmware path so that host-side `SBI_EXT_CAPSTONE` calls stop failing immediately with `error=-2`?**
+So the current bottleneck is no longer the firmware/runtime bring-up path itself.
 
 ## Concrete form of the next step
 
-1. Keep `capstone/caplifive-buildroot/build/local.mk` present so the Buildroot override file once again points at:
-   - `components/linux`
-   - `components/opensbi`
-2. Restore or regenerate the missing local OpenSBI generated assembly files:
-   - `components/opensbi/lib/sbi/sbi_capstone_dom.c.S`
-   - `components/opensbi/lib/sbi/capstone_int_handler.c.S`
-3. Rebuild the firmware image so `build/images/fw_jump.elf` is produced from the Capstone-enabled OpenSBI override instead of a stock OpenSBI source path.
-4. Rerun the userspace shared-region probe first.
-5. If host-side `DOM_CREATE` / `REGION_CREATE` no longer return `error=-2`, rerun `null_blk` split.
-6. Only after the firmware path is genuinely fixed does it make sense to continue with higher-level guest shared-memory protocol debugging.
+1. Keep `capstone/caplifive-buildroot/build/local.mk` present so future rebuilds continue to use the local Capstone-enabled Linux/OpenSBI overrides.
+2. Treat the OpenSBI/runtime bring-up path as restored.
+3. Use the working shared-region probe and working split `null_blk` path as the new runtime baseline.
+4. Continue with the next actual milestone that was previously blocked by the runtime issue, for example:
+   - additional split-domain runtime case studies,
+   - hosted user-space ABI work,
+   - or the next planned serious software workload on top of the now-working runtime path.
+5. When changing `components/opensbi`, keep using the validated rebuild sequence:
+   - `make build CAPSTONE_CC_PATH=... A=opensbi-rebuild`
+   - then rebuild any kernel modules/packages whose vermagic must match the active kernel.
 
-## What not to jump to yet
+## What not to regress
 
-Do **not** jump straight to:
+Do **not** accidentally drop back to stock OpenSBI by deleting or bypassing:
 
-- full hosted `capstone64-unknown-linux-gnu` sysroot compatibility,
-- `glibc` / `musl` / `picolibc` porting,
-- speculative yield/resume trap ABIs,
-- FFmpeg/sqlite/libpng/SPEC directly.
+- `capstone/caplifive-buildroot/build/local.mk`
 
-The point of this step is to restore the actual Capstone-enabled firmware/runtime baseline first. Until host-side `SBI_EXT_CAPSTONE` calls stop failing with `error=-2`, guest protocol experiments do not meaningfully test the intended runtime.
+If that file disappears again, the earlier wrong-firmware symptoms are expected to come back.
 
