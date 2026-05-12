@@ -43,6 +43,13 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-smoke.sh"
 # Shared-region runtime proof on the restored OpenSBI path
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-shared-region-probe.sh"
 
+# Baseline null_blk runtime regression
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-baseline.sh"
+
+# Split null_blk runtime regressions
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-io.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh"
+
 # Exploratory guest-side probe in the same QEMU harness
 python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --share-dir "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share" \
@@ -335,7 +342,28 @@ Expected success markers include:
 
 ---
 
-### H. Split `null_blk` runtime regression (manual QEMU guest command through the same harness)
+### H. Baseline `null_blk` runtime regression
+
+**What it proves**
+- the ordinary in-kernel reference path still works,
+- the reference device appears,
+- the basic data path completes,
+- unload still works.
+
+**Where**
+- `capstone/tests/runtime-qemu/run-nullblk-baseline.sh`
+
+**Run**
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline-wrapper.txt" 2>&1
+```
+
+---
+
+### I. Split `null_blk` runtime regression (manual QEMU guest command through the same harness)
 
 **What it proves**
 - the restored runtime path is good enough for a real reference case study,
@@ -343,30 +371,24 @@ Expected success markers include:
 - data path I/O completes,
 - and unload works cleanly.
 
+**Where**
+- `capstone/tests/runtime-qemu/run-nullblk-split-io.sh`
+- `capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh`
+
 **Run the I/O-path validation**
 
 ```bash
 cd "$CAPSTONE_REPO_ROOT" && \
-python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
-  --buildroot-dir "$CAPSTONE_BUILDROOT_DIR" \
-  --qemu-binary "$CAPSTONE_QEMU_BINARY" \
-  --share-dir "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share" \
-  --log-file "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-marker.log" \
-  --guest-command "dmesg -n 8 && modprobe configfs && /null_blk.user && insmod /nullb/capstone_split/null_blk.ko && test -b /dev/nullb0 && echo hello-world | dd of=/dev/nullb0 bs=1024 count=1 && dd if=/dev/nullb0 bs=1024 count=1 | hexdump -C && echo __SPLIT_DONE__" \
-  --success-marker "__SPLIT_DONE__"
+bash capstone/tests/runtime-qemu/run-nullblk-split-io.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-io-wrapper.txt" 2>&1
 ```
 
 **Run the unload-path validation**
 
 ```bash
 cd "$CAPSTONE_REPO_ROOT" && \
-python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
-  --buildroot-dir "$CAPSTONE_BUILDROOT_DIR" \
-  --qemu-binary "$CAPSTONE_QEMU_BINARY" \
-  --share-dir "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share" \
-  --log-file "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod.log" \
-  --guest-command "dmesg -n 8 && modprobe configfs && /null_blk.user && insmod /nullb/capstone_split/null_blk.ko && echo __BEFORE_RMMOD__ && rmmod null_blk && echo __AFTER_RMMOD__" \
-  --success-marker "__AFTER_RMMOD__"
+bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod-wrapper.txt" 2>&1
 ```
 
 **When to run**
@@ -437,7 +459,9 @@ If a change touches the backend/toolchain/runtime in a way that is broader than 
 3. `lld/test/ELF/emulation-capstone.s`
 4. `clang/test/Driver/capstone-linux-toolchain.c`
 5. `capstone/tests/runtime-qemu/run-shared-region-probe.sh`
-6. one of the split `null_blk` harness commands above
+6. `capstone/tests/runtime-qemu/run-nullblk-baseline.sh`
+7. `capstone/tests/runtime-qemu/run-nullblk-split-io.sh`
+8. `capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh`
 
 Use `run-smoke.sh` as an additional probe when you specifically want to exercise the
 host-shared tiny-domain harness, but not as the sole runtime gate unless it has been

@@ -7,9 +7,9 @@ It is expected to change over time and should be updated when the project state 
 
 The previous runtime blocker has been removed. The next smallest meaningful step toward the real goal (running serious software such as SPEC-like tests, FFmpeg, sqlite, libpng, etc.) is now:
 
-> move past the runtime bring-up blocker and continue with the next intended Capstone runtime / hosted-software milestone on top of the now-working firmware path
+> implement the first real split host/service proof on top of the restored shared-region baseline: a tiny HostCall-style `WRITE_STDOUT` / `puts` request-response experiment
 
-In short: **restoring `capstone/caplifive-buildroot/build/local.mk`, rerunning `make build A=opensbi-rebuild`, and rebuilding `capstone-null-blk` resolved the wrong-firmware problem. The shared-region probe now passes, baseline `null_blk` passes, and split `null_blk` now loads, completes I/O, and unloads successfully.**
+In short: **restoring `capstone/caplifive-buildroot/build/local.mk`, rerunning `make build A=opensbi-rebuild`, and rebuilding `capstone-null-blk` resolved the wrong-firmware problem. The shared-region probe now passes, baseline `null_blk` passes, and split `null_blk` now loads, completes I/O, and unloads successfully. That makes the smallest real next milestone a narrow HostCall proof rather than more firmware triage.**
 
 ## Why this is now the right next step
 
@@ -42,17 +42,20 @@ The source-backed validated results are:
   - and completes `rmmod null_blk` successfully.
 
 So the current bottleneck is no longer the firmware/runtime bring-up path itself.
+The next unknown is one layer higher: validating the first real host-service protocol on top of the now-working shared-region mechanism.
 
 ## Concrete form of the next step
 
 1. Keep `capstone/caplifive-buildroot/build/local.mk` present so future rebuilds continue to use the local Capstone-enabled Linux/OpenSBI overrides.
 2. Treat the OpenSBI/runtime bring-up path as restored.
-3. Use the working shared-region probe and working split `null_blk` path as the new runtime baseline.
-4. Continue with the next actual milestone that was previously blocked by the runtime issue, for example:
-   - additional split-domain runtime case studies,
-   - hosted user-space ABI work,
-   - or the next planned serious software workload on top of the now-working runtime path.
-5. When changing `components/opensbi`, keep using the validated rebuild sequence:
+3. Use the working shared-region probe and working baseline/split `null_blk` wrappers as the new runtime baseline.
+4. Build the narrowest real host/service experiment on top of that baseline:
+   - domain writes a payload into a shared region,
+   - domain requests `WRITE_STDOUT` (or equivalent) through a tiny fixed-width metadata ABI,
+   - host services the request in ordinary Linux userspace,
+   - host re-enters the domain and the domain verifies the response.
+5. Only after that proof is green should the project broaden into richer host calls, micro-libc work, or larger applications.
+6. When changing `components/opensbi`, keep using the validated rebuild sequence:
    - `make build CAPSTONE_CC_PATH=... A=opensbi-rebuild`
    - then rebuild any kernel modules/packages whose vermagic must match the active kernel.
 

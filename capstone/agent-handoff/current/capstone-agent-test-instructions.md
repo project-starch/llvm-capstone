@@ -37,6 +37,10 @@ source capstone/tests/capstone-test-env.sh
 
 Always redirect output to `$CAPSTONE_TMP_ROOT/...` and inspect the file afterwards.
 
+Also preserve the user's local IDE configuration:
+- do **not** delete `$CAPSTONE_REPO_ROOT/.idea/`
+- it may be ignored in git, but it is still part of the user's active workspace
+
 Examples:
 
 ```bash
@@ -463,6 +467,16 @@ Current success markers:
 
 ### 7.4 Re-run the baseline `null_blk` control
 
+Preferred wrapper:
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline-wrapper.txt" 2>&1
+```
+
+Equivalent direct harness command:
+
 ```bash
 cd "$CAPSTONE_REPO_ROOT" && \
 python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
@@ -478,6 +492,16 @@ python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
 
 I/O path:
 
+Preferred wrapper:
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-nullblk-split-io.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-io-wrapper.txt" 2>&1
+```
+
+Equivalent direct harness command:
+
 ```bash
 cd "$CAPSTONE_REPO_ROOT" && \
 python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
@@ -491,6 +515,16 @@ python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
 ```
 
 Unload path:
+
+Preferred wrapper:
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod-wrapper.txt" 2>&1
+```
+
+Equivalent direct harness command:
 
 ```bash
 cd "$CAPSTONE_REPO_ROOT" && \

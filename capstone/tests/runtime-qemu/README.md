@@ -16,6 +16,13 @@ In one QEMU boot it verifies that:
 5. `/capstone-test.user` accepts and executes the domain from the shared directory,
 6. the expected success markers appear.
 
+The restored runtime baseline also includes the following QEMU guest-command
+regressions:
+
+7. the shared-region proof succeeds on the Capstone-enabled OpenSBI path,
+8. baseline `null_blk` loads, performs I/O, and unloads,
+9. split `null_blk` loads, performs I/O, and unloads.
+
 The key property is that the domain is provided through a host-shared directory, so the test does **not** rebuild `rootfs.ext2` for each iteration.
 
 ## Files
@@ -24,6 +31,10 @@ The key property is that the domain is provided through a host-shared directory,
 - `domains/write_42.c` — the initial tiny smoke domain.
 - `run-domain-smoke.py` — QEMU + guest automation harness.
 - `run-smoke.sh` — one-command entry point that builds the tiny domain and runs the smoke test.
+- `run-shared-region-probe.sh` — restored shared-region proof.
+- `run-nullblk-baseline.sh` — baseline `null_blk` regression wrapper.
+- `run-nullblk-split-io.sh` — split `null_blk` I/O regression wrapper.
+- `run-nullblk-split-rmmod.sh` — split `null_blk` unload regression wrapper.
 
 The QEMU harness now also supports a validated exploratory mode:
 
@@ -47,6 +58,34 @@ sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke.log"
 
 - `capstone-runtime-qemu-smoke-wrapper.txt` is the stdout/stderr of `run-smoke.sh` itself.
 - `capstone-runtime-qemu-smoke.log` is the full normalized guest serial/QEMU log.
+
+## Current runtime regression bundle
+
+```bash
+cd "$(git rev-parse --show-toplevel)"
+source capstone/tests/capstone-test-env.sh
+
+bash capstone/tests/runtime-qemu/run-shared-region-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe-wrapper.txt" 2>&1
+
+bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline-wrapper.txt" 2>&1
+
+bash capstone/tests/runtime-qemu/run-nullblk-split-io.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-io-wrapper.txt" 2>&1
+
+bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod-wrapper.txt" 2>&1
+```
+
+Inspect the resulting serial logs:
+
+```bash
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe.log"
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline.log"
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-io.log"
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod.log"
+```
 
 ## Extending it
 

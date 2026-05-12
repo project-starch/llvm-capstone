@@ -29,12 +29,9 @@
 # Nested build directory
 /build*
 
-# Nested Capstone component repositories used in this workspace.
-# They are managed as independent git repositories, not by this top-level repo.
-/capstone/caplifive-buildroot/
-/capstone/capstone-c/
-/capstone/capstone-qemu/
-/capstone/capstone-spec/
+# Nested Capstone component repositories used in this workspace are intentionally
+# left visible. They are managed as independent git repositories and should stay
+# browsable/editable from the IDE.
 
 # Generated sample-domain artifacts.
 /capstone/my_first_domain/.build/

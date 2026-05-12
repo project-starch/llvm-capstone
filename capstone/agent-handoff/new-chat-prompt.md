@@ -21,6 +21,8 @@ I am continuing work on the Capstone architecture support in the repository:
 7. After edits, run focused tests and verify behavior.
 8. Keep the handoff files in `capstone/agent-handoff/` up to date whenever the validated baseline or workflow changes.
 9. Keep timestamped session/investigation notes under `capstone/agent-handoff/history/` and keep durable current-state notes under `capstone/agent-handoff/current/`.
+10. Never delete the user's local IDE metadata in `$CAPSTONE_REPO_ROOT/.idea/`.
+11. Do not hide the nested component repositories from the workspace/IDE; they are independent git repos but must remain browsable and editable.
 
 ## Read these handoff/context files first
 Please read these files before proposing changes:
