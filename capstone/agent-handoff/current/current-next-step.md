@@ -7,51 +7,48 @@ It is expected to change over time and should be updated when the project state 
 
 The next smallest meaningful step toward the real goal (running serious software such as SPEC-like tests, FFmpeg, sqlite, libpng, etc.) is:
 
-> prove that an `sbi.dom + .smode` payload can **reliably observe and/or mutate one host-shared region** in the current runtime path
+> restore a **Capstone-enabled OpenSBI firmware rebuild path** and rebuild `fw_jump.elf`, because the current local image behaves like a stock OpenSBI path where host-side `SBI_EXT_CAPSTONE` calls return `error=-2`
 
-In short: **before the full `HC_WRITE_STDOUT` RPC round trip, first prove shared-region visibility in the exact S-mode path that the split design depends on**.
+In short: **the latest diagnostics show that the local tree had lost `capstone/caplifive-buildroot/build/local.mk`, so Buildroot was no longer overriding OpenSBI with the local Capstone-enabled source tree. Raw runtime logs now show host-side `DOM_CREATE`, `DOM_CALL_WITH_CAP`, and `REGION_CREATE` returning `error=-2, value=0`. Therefore the next step is to restore the firmware build path, not to keep iterating on guest-side shared-region protocol guesses under the current image.**
 
 ## Why this is the right next step
 
-The project already has a validated native sample-domain flow:
-- in-tree `clang` compiles the sample domain,
-- in-tree `ld.lld` links it as native `EM_CAPSTONE`,
-- the userspace loader accepts `EM_CAPSTONE`,
-- the sample domain executes successfully in the Capstone QEMU/Buildroot runtime.
+The narrowest active blocker has changed.
 
-So the narrowest remaining uncertainty is no longer "can we enter a Capstone domain?" It is:
+The decisive source-backed findings are now:
 
-> **can the current `sbi.dom + .smode` runtime path actually support the shared-memory contract that the planned host-call RPC design depends on?**
+- `capstone/caplifive-buildroot/build/.config` expects `BR2_PACKAGE_OVERRIDE_FILE="$(CONFIG_DIR)/local.mk"`,
+- the local `capstone/caplifive-buildroot/build/local.mk` had been deleted and has now been restored,
+- that file is exactly what points Buildroot at the local Capstone-enabled source trees:
+  - `components/linux`
+  - `components/opensbi`
+- raw runtime diagnostics show host-side Capstone SBI calls failing immediately:
+  - `DOM_CREATE ... error=-2 value=0`
+  - `DOM_CALL_WITH_CAP ... error=-2 value=0`
+  - `REGION_CREATE ... error=-2 value=0`
+- the baseline `null_blk` path still works,
+- the split `null_blk` path no longer crashes after adding error checks, but now fails cleanly during region setup.
 
-Source-backed findings from the repository point to a split model:
+So the narrowest remaining uncertainty is no longer:
 
-- userspace already has the needed domain/region primitives in
-  `capstone/caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.c`:
-  - `call_dom()`
-  - `create_region()`
-  - `map_region()`
-  - `shared_region_annotated()`
-- the host/domain boundary already supports repeated multi-round interaction patterns;
-  `miniweb_frontend.c` calls a domain, does ordinary host-side Linux work, and calls it again
-- the domain side already returns via `SBI_EXT_CAPSTONE_DOM_RETURN`
-- the exported userspace ABI currently exposes `IOCTL_DOM_CALL`, but does **not** expose a general userspace-visible resume/trapframe ABI (`DOM_RESUME`, register snapshots, etc.)
+> "which guest shared-region API variation should we try next?"
 
-That means the lowest-risk near-term design is still:
+It is now:
 
-- **yes**: split host-enclave execution
-- **yes**: shared-memory request/response ABI, but only after the basic shared-region visibility probe is proven in this path
-- **yes**: ordinary Linux work performed by the host helper
-- **no for now**: speculative SGX-like yield/resume ABI assumptions
-- **no for now**: immediate hosted glibc/sysroot work as the main milestone
+> **how do we get the local image back onto the Capstone-enabled OpenSBI firmware path so that host-side `SBI_EXT_CAPSTONE` calls stop failing immediately with `error=-2`?**
 
 ## Concrete form of the next step
 
-1. Reuse the existing `sbi.dom` wrapper path.
-2. Create exactly one shared region from a guest userspace helper.
-3. Share that region into the domain using the most proven path available.
-4. Run a tiny `.smode` payload that writes a sentinel value into the shared region.
-5. Verify in the guest userspace helper whether the sentinel became visible.
-6. Only after that works, move on to the full `HC_WRITE_STDOUT` metadata/payload protocol.
+1. Keep `capstone/caplifive-buildroot/build/local.mk` present so the Buildroot override file once again points at:
+   - `components/linux`
+   - `components/opensbi`
+2. Restore or regenerate the missing local OpenSBI generated assembly files:
+   - `components/opensbi/lib/sbi/sbi_capstone_dom.c.S`
+   - `components/opensbi/lib/sbi/capstone_int_handler.c.S`
+3. Rebuild the firmware image so `build/images/fw_jump.elf` is produced from the Capstone-enabled OpenSBI override instead of a stock OpenSBI source path.
+4. Rerun the userspace shared-region probe first.
+5. If host-side `DOM_CREATE` / `REGION_CREATE` no longer return `error=-2`, rerun `null_blk` split.
+6. Only after the firmware path is genuinely fixed does it make sense to continue with higher-level guest shared-memory protocol debugging.
 
 ## What not to jump to yet
 
@@ -62,5 +59,5 @@ Do **not** jump straight to:
 - speculative yield/resume trap ABIs,
 - FFmpeg/sqlite/libpng/SPEC directly.
 
-The point of this step is to remove the narrowest newly observed blocker in the split-runtime path, rather than assuming the full HostCall protocol before the shared-memory visibility probe is proven.
+The point of this step is to restore the actual Capstone-enabled firmware/runtime baseline first. Until host-side `SBI_EXT_CAPSTONE` calls stop failing with `error=-2`, guest protocol experiments do not meaningfully test the intended runtime.
 
