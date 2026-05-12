@@ -278,7 +278,7 @@ This sequence was assembled from existing source files and handoff notes already
 - `capstone/capstone-qemu/local_build.sh`
 - `capstone/capstone-c/local_build.sh`
 - `capstone/tests/runtime-qemu/run-domain-smoke.py`
-- `capstone/agent-handoff/history/2026-05-08T12-19-23Z-null-block-reference-test.md`
+- `capstone/agent-handoff/history/08-05-2026_12-19-23_null_block_reference_test.md`
 
 That is why this document includes all of the following in one place:
 - the manual guest-side path,
@@ -286,4 +286,5 @@ That is why this document includes all of the following in one place:
 - exact repository URLs,
 - pinned commits,
 - and the expected crash signatures.
+
 

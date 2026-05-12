@@ -4,12 +4,12 @@ Timestamp: 2026-05-08T11-21-40Z
 
 This note is intended for a future LLM/session.
 It preserves:
-1. the substance of the immediately previous assistant answer,
+1. the substance of the immediately previous note,
 2. the current blocker analysis after attempting the next minimal runtime step.
 
 ---
 
-## A. Substance of the previous assistant answer
+## A. Substance of the previous note
 
 The previous answer established the following:
 

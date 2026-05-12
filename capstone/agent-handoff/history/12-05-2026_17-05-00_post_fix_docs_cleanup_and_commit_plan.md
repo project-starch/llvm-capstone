@@ -35,7 +35,7 @@ The previous step refreshed these durable notes so they reflected the restored r
 - `capstone/agent-handoff/current/current-next-step.md`
 - `capstone/agent-handoff/current/split-host-enclave-strategy.md`
 
-It also removed the no-longer-needed draft message to the runtime author from `current/`.
+It also removed a no-longer-needed draft note from `current/`.
 
 ## Cleanup decisions made in that step
 
@@ -50,7 +50,7 @@ It intentionally did **not** make destructive decisions for ambiguous files such
 
 - `capstone/CapstoneSpecification.pdf`
 - `capstone/capstone-utils/pack-capstone-files.sh`
-- `capstone/caplifive-buildroot/run-qemu.sh`
+- `capstone/utils/run-qemu.sh`
 - ignored Meson-subproject content under `capstone/capstone-qemu/subprojects/`
 
 ## Important caveat discovered afterwards
@@ -71,5 +71,5 @@ The previous step also drafted a commit split separating:
 4. buildroot docs,
 5. qemu ignore cleanup.
 
-That commit plan was only a proposal, not yet the final authoritative split.
+That commit plan was only a proposal, not yet the final split.
 

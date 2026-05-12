@@ -8,7 +8,7 @@ This session confirmed the suspected root cause and then verified the actual fix
 
 The key point is:
 
-> restoring `capstone/caplifive-buildroot/build/local.mk` and rerunning the author-recommended `make build A=opensbi-rebuild` path brought back the Capstone-enabled OpenSBI runtime path.
+> restoring `capstone/caplifive-buildroot/build/local.mk` and rerunning the previously validated `make build A=opensbi-rebuild` path brought back the Capstone-enabled OpenSBI runtime path.
 
 After that:
 
@@ -18,9 +18,9 @@ After that:
 - the remaining `invalid module format` issue was only a stale `vermagic` mismatch and was fixed by rebuilding `capstone-null-blk` against the active `linux-custom` kernel,
 - the split null-block path then completed successfully.
 
-## Author confirmation that unblocked the fix
+## Earlier rebuild guidance that unblocked the fix
 
-The runtime author replied that:
+A previously validated runtime note pointed to the same fix:
 
 - the deleted `build/local.mk` was likely the real problem,
 - without it Buildroot grabs upstream OpenSBI,
