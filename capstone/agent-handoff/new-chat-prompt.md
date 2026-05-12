@@ -23,6 +23,8 @@ I am continuing work on the Capstone architecture support in the repository:
 9. Keep timestamped session/investigation notes under `capstone/agent-handoff/history/` and keep durable current-state notes under `capstone/agent-handoff/current/`.
 10. Never delete the user's local IDE metadata in `$CAPSTONE_REPO_ROOT/.idea/`.
 11. Do not hide the nested component repositories from the workspace/IDE; they are independent git repos but must remain browsable and editable.
+12. History notes must be written in English, use filename timestamps in `DD-MM-YYYY_HH-MM-SS` format, and avoid proper names or direct references to specific people in filenames/titles.
+13. Top-level helper scripts that are not specific to a child repository should live under `capstone/utils/`.
 
 ## Read these handoff/context files first
 Please read these files before proposing changes:

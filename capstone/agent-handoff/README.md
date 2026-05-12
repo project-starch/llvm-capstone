@@ -19,6 +19,12 @@ Current, durable working notes now live under:
 Timestamped narrative notes / session history now live under:
 - `history/`
 
+History-note rules:
+- write notes in English,
+- use `DD-MM-YYYY_HH-MM-SS` in filenames,
+- avoid proper names or direct references to specific people in filenames/titles,
+- keep durable current-state guidance in `current/` rather than in history notes.
+
 ### 1. How to run tests / reproduce the validated flow
 - `current/capstone-agent-test-instructions.md`
 

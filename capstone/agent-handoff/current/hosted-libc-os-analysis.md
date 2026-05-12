@@ -276,7 +276,7 @@ The currently validated runtime arrangement is:
 From:
 - `capstone/caplifive-buildroot/configs/qemu_capstone_defconfig`
 - `capstone/caplifive-buildroot/configs/kernel.config`
-- `capstone/caplifive-buildroot/run-qemu.sh`
+- `capstone/utils/run-qemu.sh`
 
 Observed facts:
 - Buildroot target arch is RISC-V 64-bit
@@ -549,7 +549,7 @@ Based on the current evidence, the most practical short-term view is:
 ### Current Linux runtime / QEMU
 - `capstone/caplifive-buildroot/configs/qemu_capstone_defconfig`
 - `capstone/caplifive-buildroot/configs/kernel.config`
-- `capstone/caplifive-buildroot/run-qemu.sh`
+- `capstone/utils/run-qemu.sh`
 - `capstone/tests/runtime-qemu/run-domain-smoke.py`
 
 ### Current `/dev/capstone` userspace-kernel contract

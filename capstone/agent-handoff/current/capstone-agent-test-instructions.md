@@ -255,11 +255,11 @@ tail -n 200 "$CAPSTONE_TMP_ROOT/capstone-buildroot-make.txt"
 
 ### 5.7 Run QEMU
 
-`run-qemu.sh` itself does not print shell tracing, so use `bash -x`.
+`capstone/utils/run-qemu.sh` itself does not print shell tracing, so use `bash -x`.
 
 ```bash
-cd "$CAPSTONE_BUILDROOT_DIR" && \
-bash -x ./run-qemu.sh > "$CAPSTONE_TMP_ROOT/capstone-qemu-run.txt" 2>&1
+cd "$CAPSTONE_REPO_ROOT" && \
+bash -x capstone/utils/run-qemu.sh > "$CAPSTONE_TMP_ROOT/capstone-qemu-run.txt" 2>&1
 ```
 
 Because QEMU is interactive, this command will continue running until the VM exits. In practice, for manual interactive testing it is often easier to run it in a terminal you watch directly. If using file capture, you may need another shell/session to inspect the growing log:
