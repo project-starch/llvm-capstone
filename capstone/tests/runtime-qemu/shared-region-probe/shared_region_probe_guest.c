@@ -4,6 +4,7 @@
 #include "../../../caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.h"
 #include "shared_region_probe.h"
 
+/* Print immediately so the serial log preserves the exact probe sequence. */
 #define print_nobuf(...)         \
   do {                           \
     printf(__VA_ARGS__);         \
@@ -31,10 +32,12 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  /* Reuse the standard sbi.dom substrate and swap in a custom .smode payload. */
   dom_id_t dom_id = create_dom("/test-domains/sbi.dom", argv[1]);
   if ((long)dom_id < 0)
     return fail_cleanup("create_dom failed", (unsigned long)dom_id);
 
+  /* Create and map one host-visible shared region used as a sentinel buffer. */
   region_id_t region_id = create_region(SHARED_REGION_PROBE_REGION_SIZE);
   unsigned long *region_words =
       (unsigned long *)map_region(region_id, SHARED_REGION_PROBE_REGION_SIZE);
@@ -47,10 +50,12 @@ int main(int argc, char **argv) {
   print_nobuf("shared-region-probe: created shared region ID = %lu\n", region_id);
   print_nobuf("shared-region-probe: initial word = 0x%016lx\n", region_words[0]);
 
+  /* Share the region before entering the domain for the first time. */
   shared_region_annotated(dom_id, region_id, PROBE_ANNOTATION_PERM_INOUT,
                           PROBE_ANNOTATION_REV_SHARED);
   print_nobuf("shared-region-probe: region shared via annotated path\n");
 
+  /* First round: the .smode payload should write the stage-1 sentinel. */
   unsigned long ret1 = call_dom(dom_id);
   print_nobuf("shared-region-probe: call 1 retval = %lu\n", ret1);
   print_nobuf("shared-region-probe: word after call 1 = 0x%016lx\n",
@@ -58,6 +63,7 @@ int main(int argc, char **argv) {
   if (region_words[0] != SHARED_REGION_PROBE_SENTINEL_STAGE1)
     return fail_cleanup("stage 1 sentinel mismatch", region_words[0]);
 
+  /* Second round: the same payload should advance the shared word again. */
   unsigned long ret2 = call_dom(dom_id);
   print_nobuf("shared-region-probe: call 2 retval = %lu\n", ret2);
   print_nobuf("shared-region-probe: word after call 2 = 0x%016lx\n",

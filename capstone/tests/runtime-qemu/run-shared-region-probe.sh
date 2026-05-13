@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# One-command regression wrapper for the restored shared-region sentinel proof.
+
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
 
@@ -11,8 +13,10 @@ LOG_FILE=${LOG_FILE:-$TMP_ROOT/capstone-runtime-qemu-shared-region-probe.log}
 mkdir -p "$TMP_ROOT" "$SHARE_DIR"
 rm -f "$SHARE_DIR"/shared_region_probe.user "$SHARE_DIR"/shared_region_probe.smode
 
+# Rebuild the probe into the host-shared 9p directory exported to the guest.
 bash "$SCRIPT_DIR/build-shared-region-probe.sh" "$SHARE_DIR"
 
+# The wrapper is green only if the helper observes both shared-memory mutations.
 python3 "$SCRIPT_DIR/run-domain-smoke.py" \
   --share-dir "$SHARE_DIR" \
   --log-file "$LOG_FILE" \

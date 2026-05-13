@@ -20,8 +20,9 @@ The restored runtime baseline also includes the following QEMU guest-command
 regressions:
 
 7. the shared-region proof succeeds on the Capstone-enabled OpenSBI path,
-8. baseline `null_blk` loads, performs I/O, and unloads,
-9. split `null_blk` loads, performs I/O, and unloads.
+8. the first HostCall-style `WRITE_STDOUT` request/response proof succeeds over shared metadata + payload regions,
+9. baseline `null_blk` loads, performs I/O, and unloads,
+10. split `null_blk` loads, performs I/O, and unloads.
 
 The key property is that the domain is provided through a host-shared directory, so the test does **not** rebuild `rootfs.ext2` for each iteration.
 
@@ -32,6 +33,8 @@ The key property is that the domain is provided through a host-shared directory,
 - `run-domain-smoke.py` — QEMU + guest automation harness.
 - `run-smoke.sh` — one-command entry point that builds the tiny domain and runs the smoke test.
 - `run-shared-region-probe.sh` — restored shared-region proof.
+- `build-hostcall-stdout-probe.sh` — cross-build helper for the first HostCall stdout proof.
+- `run-hostcall-stdout-probe.sh` — first HostCall-style `WRITE_STDOUT` / `puts` regression wrapper.
 - `run-nullblk-baseline.sh` — baseline `null_blk` regression wrapper.
 - `run-nullblk-split-io.sh` — split `null_blk` I/O regression wrapper.
 - `run-nullblk-split-rmmod.sh` — split `null_blk` unload regression wrapper.
@@ -68,6 +71,9 @@ source capstone/tests/capstone-test-env.sh
 bash capstone/tests/runtime-qemu/run-shared-region-probe.sh \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe-wrapper.txt" 2>&1
 
+bash capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-stdout-probe-wrapper.txt" 2>&1
+
 bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline-wrapper.txt" 2>&1
 
@@ -82,6 +88,7 @@ Inspect the resulting serial logs:
 
 ```bash
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe.log"
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-stdout-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-io.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod.log"

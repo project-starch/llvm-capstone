@@ -15,6 +15,7 @@ struct sbiret {
   long value;
 };
 
+/* Minimal SBI ecall wrapper used by the custom .smode probe payload. */
 static struct sbiret sbi_ecall(int ext, int fid, unsigned long arg0,
                                unsigned long arg1, unsigned long arg2,
                                unsigned long arg3, unsigned long arg4,
@@ -41,6 +42,7 @@ static struct sbiret sbi_ecall(int ext, int fid, unsigned long arg0,
 static char stack[4096];
 
 static unsigned long *shared_region_base(void) {
+  /* For this probe the newly shared region is expected to be the last region. */
   struct sbiret count =
       sbi_ecall(SBI_EXT_CAPSTONE, SBI_EXT_CAPSTONE_REGION_COUNT, 0, 0, 0, 0, 0,
                 0);
@@ -60,11 +62,13 @@ static void dom_return(unsigned long value) {
 }
 
 static void start_impl(void) {
+  /* First call_dom() round: publish stage 1, then return to the helper. */
   unsigned long *region = shared_region_base();
   region[0] = SHARED_REGION_PROBE_SENTINEL_STAGE1;
 
   dom_return(0x101);
 
+  /* Second call_dom() round: publish stage 2, then return again. */
   region[0] = SHARED_REGION_PROBE_SENTINEL_STAGE2;
   dom_return(0x202);
 

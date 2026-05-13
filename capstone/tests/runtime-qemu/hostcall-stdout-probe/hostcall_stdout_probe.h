@@ -1,0 +1,51 @@
+#ifndef CAPSTONE_TESTS_RUNTIME_QEMU_HOSTCALL_STDOUT_PROBE_H
+#define CAPSTONE_TESTS_RUNTIME_QEMU_HOSTCALL_STDOUT_PROBE_H
+
+/*
+ * This file freezes the tiny HostCall v0 ABI used by the first validated
+ * request/response runtime probe. The host helper and the custom .smode payload
+ * both include this header so they agree on field widths, status values, and
+ * the test message.
+ */
+
+#define HOSTCALL_STDOUT_PROBE_REGION_SIZE 4096UL
+#define HOSTCALL_STDOUT_PROBE_MESSAGE "hostcall-v0 payload from domain\n"
+#define HOSTCALL_STDOUT_PROBE_MESSAGE_LEN \
+  (sizeof(HOSTCALL_STDOUT_PROBE_MESSAGE) - 1)
+
+typedef unsigned long long hostcall_u64_t;
+typedef long long hostcall_s64_t;
+
+struct hostcall_v0 {
+  /* Shared state machine: INIT -> REQ -> RESP -> DONE / ERROR. */
+  hostcall_u64_t phase;
+  /* Which host service is being requested. */
+  hostcall_u64_t opcode;
+  /* Byte range inside the payload region that the host should consume. */
+  hostcall_u64_t offset;
+  hostcall_u64_t length;
+  /* Host-written service result and errno-like code. */
+  hostcall_s64_t result;
+  hostcall_s64_t error;
+};
+
+#define HC_V0_PHASE_INIT 0ULL
+#define HC_V0_PHASE_REQ 1ULL
+#define HC_V0_PHASE_RESP 2ULL
+#define HC_V0_PHASE_DONE 3ULL
+#define HC_V0_PHASE_ERROR 4ULL
+
+#define HC_V0_OP_NONE 0ULL
+#define HC_V0_OP_WRITE_STDOUT 1ULL
+
+#define HC_V0_RET_DONE 0UL
+#define HC_V0_RET_PENDING 1UL
+#define HC_V0_RET_ERROR 2UL
+
+/* For the first proof we keep both regions broadly shared to minimize moving parts. */
+#define HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT 0x1UL
+#define HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED 0x2UL
+
+#endif
+
+
