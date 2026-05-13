@@ -25,6 +25,13 @@ History-note rules:
 - avoid proper names or direct references to specific people in filenames/titles,
 - keep durable current-state guidance in `current/` rather than in history notes.
 
+Agent workflow rules to preserve across sessions:
+- treat the handoff rules in this directory as local workflow overlays on top of normal LLVM/Buildroot/Linux/QEMU development practices, not as replacements for subtree-native review and coding conventions,
+- do not mark a step complete until it has been tested at the layer affected by that step,
+- after a coherent validated change set, provide exact commit command(s) and proposed commit message(s) when a commit is appropriate,
+- document non-trivial new code with concise comments explaining protocol layouts, state transitions, and other non-obvious logic,
+- keep manager-facing summary files as local artifacts (for example under `$CAPSTONE_TMP_ROOT/`) rather than committing them into the repository.
+
 ### 1. How to run tests / reproduce the validated flow
 - `current/capstone-agent-test-instructions.md`
 
@@ -49,7 +56,16 @@ History-note rules:
 ### 7. Hosted libc / OS / syscall analysis
 - `current/hosted-libc-os-analysis.md`
 
-### 8. Timestamped answer / investigation history
+### 8. Project structure overview
+- `current/project-structure-overview.md`
+
+### 9. Coding conventions for the `capstone/` workspace layer
+- `current/capstone-coding-conventions.md`
+
+### 10. Runtime terminology glossary
+- `current/runtime-terms-glossary.md`
+
+### 11. Timestamped answer / investigation history
 - `history/`
 
 ## Files intentionally not kept in this handoff bundle
@@ -70,6 +86,7 @@ As of the latest validated state:
 - `capstone/caplifive-buildroot/build/local.mk` is again present and keeps Buildroot on the local Capstone-enabled Linux/OpenSBI override path,
 - rerunning `make build CAPSTONE_CC_PATH=... A=opensbi-rebuild` regenerates the OpenSBI wrapper assembly and restores the intended firmware/runtime path,
 - `capstone/tests/runtime-qemu/run-shared-region-probe.sh` now passes and proves that the host-visible shared-region mutations are working again,
+- `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` now passes and proves the first tiny split host/service request-response over shared metadata + payload,
 - baseline `null_blk` works,
 - and split `null_blk` now creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding the package against the active kernel.
 
@@ -85,6 +102,9 @@ If the validated baseline changes, update at least:
 - `current/capstone-backend-status-for-llm.md`
 - `current/current-next-step.md`
 - `current/split-host-enclave-strategy.md`
+- `current/project-structure-overview.md`
+- `current/capstone-coding-conventions.md`
+- `current/runtime-terms-glossary.md`
 
 If a proof file becomes stale or redundant, replace it with a shorter current proof instead of accumulating duplicate logs.
 

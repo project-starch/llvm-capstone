@@ -32,6 +32,42 @@ Relevant functions:
 
 This is enough substrate for a shared metadata region plus a shared payload/bounce-buffer region.
 
+### 1a. Where regions are actually allocated and where they end up
+
+It is easy to misread “the region maps into the helper virtual address space” as if
+the helper itself allocates the authoritative memory object. The source-backed path
+is slightly different:
+
+1. the helper calls `create_region(len)` from guest Linux userspace,
+2. `libcapstone` issues `IOCTL_REGION_CREATE` to `/dev/capstone`,
+3. the `modcapstone` kernel module allocates guest pages with `__get_free_pages(...)`,
+4. the kernel passes that guest physical address to OpenSBI via `SBI_EXT_CAPSTONE_REGION_CREATE`,
+5. OpenSBI stores the resulting region capability in its runtime region table,
+6. the helper may then call `map_region(region_id, len)` to map those same guest pages into the helper's Linux virtual address space,
+7. the helper may then call `shared_region_annotated(dom_id, region_id, ...)` to share access to that same region with a domain.
+
+So the memory is allocated on the **guest kernel/runtime side** on behalf of the
+helper request. It is then visible in two ways:
+
+- as a Linux userspace mapping in the helper,
+- as a shared region/capability in the domain.
+
+It is not a second copy, and it is not allocated by the developer workstation.
+
+### 1b. What `shared_region_annotated(...)` shares with whom
+
+`shared_region_annotated(dom_id, region_id, perm, rev)` shares a previously created
+guest region from the helper-side runtime context **with the specified domain**.
+
+In simple terms:
+
+- helper side: already has a handle and usually a userspace mapping,
+- domain side: receives access to that same underlying guest memory,
+- runtime: narrows that access according to the chosen permission and revoke mode.
+
+So `shared_region_annotated` means “helper <-> domain share this region under these
+rules”, not “two Linux processes share anonymous memory directly”.
+
 ### 2. Multi-round host/domain interaction already exists
 
 Relevant file:
@@ -386,6 +422,55 @@ are observed:
 7. Metadata ends in `HC_V0_PHASE_DONE` with `result == expected_len` and `error == 0`.
 8. No QEMU assert, no kernel-module failure, no unexpected capability fault.
 
+## What this protocol is for, and what it is not for
+
+The current HostCall v0 direction should be understood as a **coarse-grained host
+service boundary**, not as a plan to proxy every tiny libc helper one function at a
+time.
+
+### Intended use
+- operations that already cross into host/OS territory,
+- buffered output/input,
+- file/device/network style requests,
+- future libc-facing calls that are naturally system-boundary operations.
+
+### Not intended use
+- local pure computation,
+- string/memory helpers such as `strlen`, `strcmp`, or `memcpy`,
+- arithmetic helpers,
+- other fine-grained routines that should stay inside the domain-side runtime or a
+  small local libc layer.
+
+### Why this distinction matters
+If every tiny libc function became a two-round host request, overhead would be far
+too high. The purpose of the current proof is only to establish the correctness of
+the boundary-crossing protocol for the operations that genuinely need host-side
+service.
+
+### How some libc functionality can avoid HostCall entirely
+
+“Do not make a HostCall for X” is practical for several reasons:
+
+1. **pure local helpers can stay inside the domain/runtime image**
+   - examples: `strlen`, `memcpy`, `memset`, `strcmp`, integer helpers,
+   - these do not need Linux or host participation,
+   - they can live in domain code or in a small domain-side libc/runtime layer.
+
+2. **the boundary can be service-oriented rather than symbol-oriented**
+   - multiple libc APIs can lower to one coarse service,
+   - for example `puts`, `printf` flushing, and `fwrite(stdout, ...)` do not need three unrelated wire protocols,
+   - they can all eventually lower to one buffered write-like host service.
+
+3. **future hosted modes may bypass this protocol entirely for ordinary processes**
+   - if the project later reaches a compatibility-oriented hosted Linux mode,
+   - then ordinary Linux processes can use the normal libc/syscall path,
+   - and only isolated domain execution would still rely on the HostCall boundary.
+
+So the intended design is **not** “proxy every libc symbol one-by-one through a
+two-round ABI”. It is “use HostCall only for the operations that truly cross the
+domain/host boundary, and keep the rest local or lower them into a smaller set of
+coarse services”.
+
 ### What should *not* be part of v0
 
 To keep the first proof maximally narrow, do **not** add any of the following yet:
@@ -407,7 +492,7 @@ This milestone:
 ## What to postpone until after this proof
 
 - full hosted glibc/sysroot compatibility work
-- `picolibc` / `newlib` porting
+- `picolibc` porting
 - speculative yield/resume ABI work
 - larger application bring-up such as sqlite/libpng/FFmpeg
 
@@ -449,17 +534,23 @@ works at all.” That part now has a validated baseline again.
 
 ### Refined next micro-step
 
-The new smallest meaningful implementation step is to move **up one layer** from the
-sentinel proof toward the first real HostCall proof-of-concept, for example:
+That higher-level proof is now validated in the local runtime baseline:
 
-1. keep using the restored shared-region path as the runtime baseline,
-2. implement the narrowest real request/response experiment on top of it (such as the
-   previously outlined `HC_V0_OP_WRITE_STDOUT` flow),
-3. validate that higher-level proof with the same style of two-round `call_dom()`
-   runtime harness,
-4. only then generalize the ABI or broaden the hosted-software ambition.
+1. `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` builds a tiny guest helper and `.smode` payload,
+2. the first `call_dom()` round returns `HC_V0_RET_PENDING`,
+3. the helper observes `HC_V0_OP_WRITE_STDOUT`, prints the payload from ordinary Linux userspace, and writes back the response,
+4. the second `call_dom()` round returns `HC_V0_RET_DONE`,
+5. the shared metadata ends in `HC_V0_PHASE_DONE`.
 
-So the gating question is no longer “is shared-region mutation broken in the current
-tree?”. It is now “what is the smallest real host-service protocol we should prove on
-top of the now-working runtime baseline?”.
+So the new smallest meaningful implementation step is now to tighten that same proof rather than widen it:
+
+1. keep using the restored shared-region path and the current two-round HostCall stdout wrapper as the runtime baseline,
+2. keep the metadata region shared,
+3. change the payload region from broad shared `INOUT` access to a directional borrowed handoff (`OUT + BORROWED`),
+4. revalidate the same wrapper,
+5. only then generalize the ABI or broaden the hosted-software ambition.
+
+So the gating question is no longer “can the first host-service protocol work at all?”.
+It is now “can the first host-service protocol keep working once the payload ownership
+rules become stricter and closer to a real service ABI?”.
 

@@ -384,6 +384,66 @@ So `llvm-libc` today knows how to issue **RISC-V Linux syscalls**, not a Capston
 Also, there are no direct `Capstone` references under `libc/` today.
 So there is no in-tree evidence yet of a dedicated Capstone port of `llvm-libc`.
 
+## 10a. What the current HostCall direction means for libc
+
+The currently validated split HostCall proof should not be interpreted as “every
+future libc function will be proxied through a two-round host request.”
+
+The intended use of this protocol is the narrower and more practical one:
+
+- operations that truly need host/OS participation,
+- coarse-grained I/O or device/file/network style services,
+- future libc-facing boundary crossings that are naturally system-call-like.
+
+It is **not** meant for fine-grained local helpers such as `strlen`, `memcpy`,
+`strcmp`, arithmetic support, or other routines that should remain inside a domain-
+side runtime or small local libc layer.
+
+That distinction is important because proxying every small libc helper through this
+boundary would create unacceptable overhead.
+
+### How some libc calls can avoid this protocol
+
+There are several non-exclusive ways this can work:
+
+1. **Keep pure computation local**
+   - string/memory helpers and other pure CPU work can stay inside the domain-side
+     runtime or local libc implementation,
+   - they do not need host participation at all.
+
+2. **Lower multiple libc APIs into one coarser host service**
+   - the HostCall ABI can be designed around operations such as “buffered write”,
+     “open file”, “read file”, “stat path”, not around every libc symbol name,
+   - then higher-level libc entry points can share the same lower-level service.
+
+3. **Use ordinary Linux libc/syscalls in future hosted modes**
+   - if the project reaches a compatibility-oriented hosted Linux mode,
+   - then ordinary Capstone-compiled Linux programs may use a normal libc/syscall
+     path rather than this split helper protocol,
+   - in that world the HostCall boundary remains relevant mainly for isolated
+     domain-style execution.
+
+### Why the final implementation should not proxy every symbol
+
+The expensive part is not the symbol lookup. The expensive part is the control
+transfer pattern:
+
+1. enter the domain,
+2. publish the request,
+3. return to the helper,
+4. perform host work,
+5. re-enter the domain,
+6. validate and finish.
+
+That is acceptable for coarse OS-boundary work, but not for every tiny libc helper.
+
+So the practical long-term shape is expected to be:
+
+- **local implementation** for pure helper routines,
+- **coarse HostCall services** for true host/OS interactions in split-domain mode,
+- and potentially **ordinary hosted libc/syscalls** in a later compatibility-oriented
+  Linux mode.
+
 ---
 
 ## 11. libc options and what they imply
@@ -418,7 +478,7 @@ Evidence:
 #### Pros
 - Lighter and simpler than glibc.
 - Usually a more realistic first libc for a new Linux architecture/ABI bring-up.
-- Still a real Linux userspace libc, unlike `newlib`.
+- Still a real Linux userspace libc, unlike small freestanding libraries such as `picolibc`.
 
 #### Cons
 - Still requires a coherent Linux userspace ABI.
@@ -442,14 +502,17 @@ Possible in theory, but today it looks less attractive than `musl` as a first-cl
 
 ---
 
-### Option D: Use `newlib`
+### Option D: Use `picolibc`
 
 #### Important distinction
-`newlib` is primarily a bare-metal / embedded libc.
+`picolibc` is primarily a small embedded / freestanding libc derived from the
+same general space as older `newlib`-style usage, but it is the more relevant
+modern candidate if the project ever wants a minimal non-Linux libc for domain-
+oriented experiments.
 It is **not** the normal answer for a Linux hosted userspace goal like `sqlite`.
 
 #### Practical conclusion
-`newlib` could be relevant for freestanding or domain-oriented experiments, but not as the main path to serious Linux user-space software.
+`picolibc` could be relevant for freestanding or domain-oriented experiments, but not as the main path to serious Linux user-space software.
 
 ---
 

@@ -43,6 +43,9 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-smoke.sh"
 # Shared-region runtime proof on the restored OpenSBI path
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-shared-region-probe.sh"
 
+# First HostCall-style stdout request/response proof
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh"
+
 # Baseline null_blk runtime regression
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-baseline.sh"
 
@@ -251,7 +254,7 @@ Optional ELF inspection:
 
 **Current status note**
 - keep this harness because it is useful for quick experiments,
-- but the currently revalidated runtime baseline in this workspace is the shared-region proof plus the baseline/split `null_blk` checks below,
+- but the currently revalidated runtime baseline in this workspace is the shared-region proof, the first HostCall stdout proof, and the baseline/split `null_blk` checks below,
 - do not rely on `run-smoke.sh` alone as the authoritative gate unless it has been freshly revalidated for the exact current tree.
 
 **Where**
@@ -342,7 +345,41 @@ Expected success markers include:
 
 ---
 
-### H. Baseline `null_blk` runtime regression
+### H. First HostCall-style stdout runtime proof
+
+**What it proves**
+- the project now has a real split host/service request/response proof above the raw shared-region sentinel level,
+- a domain can populate shared metadata and payload regions,
+- the host helper can service `HC_V0_OP_WRITE_STDOUT` in ordinary Linux userspace,
+- the domain can verify the host response on the next `call_dom()` round.
+
+**Where**
+- `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh`
+- `capstone/tests/runtime-qemu/build-hostcall-stdout-probe.sh`
+- `capstone/tests/runtime-qemu/hostcall-stdout-probe/`
+
+**Run**
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-stdout-probe-wrapper.txt" 2>&1
+```
+
+Expected success markers include:
+- `hostcall-stdout-probe: first call retval = 1`
+- `hostcall-v0 payload from domain`
+- `hostcall-stdout-probe: second call retval = 0`
+- `hostcall-stdout-probe: success`
+
+**When to run**
+- after changes to shared-region metadata layout,
+- after changes to the split host/service protocol,
+- after OpenSBI/runtime changes that could affect re-entry or shared-region visibility.
+
+---
+
+### I. Baseline `null_blk` runtime regression
 
 **What it proves**
 - the ordinary in-kernel reference path still works,
@@ -363,7 +400,7 @@ bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh \
 
 ---
 
-### I. Split `null_blk` runtime regression (manual QEMU guest command through the same harness)
+### J. Split `null_blk` runtime regression (manual QEMU guest command through the same harness)
 
 **What it proves**
 - the restored runtime path is good enough for a real reference case study,
@@ -440,6 +477,7 @@ As of the latest checked state:
 - the hosted Linux driver regression for `capstone64-unknown-linux-gnu` passes,
 - the native sample-domain path is still valid,
 - the shared-region probe now passes on the restored OpenSBI path,
+- the first HostCall-style stdout proof now passes,
 - baseline `null_blk` works,
 - and split `null_blk` now loads, performs I/O, and unloads successfully.
 
@@ -459,9 +497,10 @@ If a change touches the backend/toolchain/runtime in a way that is broader than 
 3. `lld/test/ELF/emulation-capstone.s`
 4. `clang/test/Driver/capstone-linux-toolchain.c`
 5. `capstone/tests/runtime-qemu/run-shared-region-probe.sh`
-6. `capstone/tests/runtime-qemu/run-nullblk-baseline.sh`
-7. `capstone/tests/runtime-qemu/run-nullblk-split-io.sh`
-8. `capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh`
+6. `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh`
+7. `capstone/tests/runtime-qemu/run-nullblk-baseline.sh`
+8. `capstone/tests/runtime-qemu/run-nullblk-split-io.sh`
+9. `capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh`
 
 Use `run-smoke.sh` as an additional probe when you specifically want to exercise the
 host-shared tiny-domain harness, but not as the sole runtime gate unless it has been

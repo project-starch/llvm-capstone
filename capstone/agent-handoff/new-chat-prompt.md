@@ -8,6 +8,8 @@ I am continuing work on the Capstone architecture support in the repository:
 - `$CAPSTONE_REPO_ROOT`
 
 ## Important working style / constraints
+The rules below are local workspace overlays on top of normal LLVM/Buildroot/Linux/QEMU development practices; when touching a subtree, still follow that subtree's native conventions.
+
 1. If you run terminal commands, **always redirect output into files under `$CAPSTONE_TMP_ROOT/`** (default: `/tmp/capstone/`), then read those files. Do **not** rely on directly captured terminal output.
 2. Be iterative and conservative.
 3. Prefer the **smallest meaningful next step** toward the real goal.
@@ -18,13 +20,16 @@ I am continuing work on the Capstone architecture support in the repository:
    - libpng
 5. We currently care about the **SelectionDAG** path, not GISel.
 6. When you edit files, preserve existing style and avoid unrelated refactors.
-7. After edits, run focused tests and verify behavior.
-8. Keep the handoff files in `capstone/agent-handoff/` up to date whenever the validated baseline or workflow changes.
-9. Keep timestamped session/investigation notes under `capstone/agent-handoff/history/` and keep durable current-state notes under `capstone/agent-handoff/current/`.
-10. Never delete the user's local IDE metadata in `$CAPSTONE_REPO_ROOT/.idea/`.
-11. Do not hide the nested component repositories from the workspace/IDE; they are independent git repos but must remain browsable and editable.
-12. History notes must be written in English, use filename timestamps in `DD-MM-YYYY_HH-MM-SS` format, and avoid proper names or direct references to specific people in filenames/titles.
-13. Top-level helper scripts that are not specific to a child repository should live under `capstone/utils/`.
+7. Document non-trivial new code with concise comments explaining protocol layouts, state transitions, ownership rules, and other non-obvious logic.
+8. Every completed step that changes code, build behavior, or runtime behavior must be re-tested; after edits, run focused tests and verify behavior.
+9. Keep the handoff files in `capstone/agent-handoff/` up to date whenever the validated baseline or workflow changes.
+10. Keep timestamped session/investigation notes under `capstone/agent-handoff/history/` and keep durable current-state notes under `capstone/agent-handoff/current/`.
+11. Never delete the user's local IDE metadata in `$CAPSTONE_REPO_ROOT/.idea/`.
+12. Do not hide the nested component repositories from the workspace/IDE; they are independent git repos but must remain browsable and editable.
+13. History notes must be written in English, use filename timestamps in `DD-MM-YYYY_HH-MM-SS` format, and avoid proper names or direct references to specific people in filenames/titles.
+14. Top-level helper scripts that are not specific to a child repository should live under `capstone/utils/`.
+15. After a coherent validated change set, if a commit is appropriate, report the exact `git add` / `git commit -m '...'` command(s) with the proposed commit message.
+16. Manager-facing summary files should be kept as local artifacts (for example under `$CAPSTONE_TMP_ROOT/`) and should not be committed into the repository.
 
 ## Read these handoff/context files first
 Please read these files before proposing changes:
@@ -35,6 +40,9 @@ Please read these files before proposing changes:
 - `$CAPSTONE_HANDOFF_DIR/current/capstone-backend-status-for-llm.md`
 - `$CAPSTONE_HANDOFF_DIR/current/split-host-enclave-strategy.md`
 - `$CAPSTONE_HANDOFF_DIR/current/hosted-libc-os-analysis.md`
+- `$CAPSTONE_HANDOFF_DIR/current/project-structure-overview.md`
+- `$CAPSTONE_HANDOFF_DIR/current/capstone-coding-conventions.md`
+- `$CAPSTONE_HANDOFF_DIR/current/runtime-terms-glossary.md`
 - `$CAPSTONE_HANDOFF_DIR/current/native-sample-validation.md`
 - `$CAPSTONE_HANDOFF_DIR/current/current-next-step.md` (current recommendation only; do not treat it as immutable)
 
@@ -67,6 +75,7 @@ The following is already implemented and verified:
    `make build CAPSTONE_CC_PATH=... A=opensbi-rebuild`.
 9. The current runtime baseline is stronger than the original sample-domain proof:
    - `capstone/tests/runtime-qemu/run-shared-region-probe.sh` passes,
+   - `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` passes and proves a first two-round `HC_V0_OP_WRITE_STDOUT` request/response flow,
    - baseline `null_blk` passes,
    - split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully.
 10. After an OpenSBI/kernel change, any dependent kernel modules/packages may need a

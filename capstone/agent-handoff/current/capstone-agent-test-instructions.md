@@ -37,9 +37,15 @@ source capstone/tests/capstone-test-env.sh
 
 Always redirect output to `$CAPSTONE_TMP_ROOT/...` and inspect the file afterwards.
 
+Do not consider a step complete until it has been re-tested at the layer that step changed (compiler, linker, guest helper, runtime wrapper, QEMU path, etc.).
+
 Also preserve the user's local IDE configuration:
 - do **not** delete `$CAPSTONE_REPO_ROOT/.idea/`
 - it may be ignored in git, but it is still part of the user's active workspace
+
+When adding non-trivial new code, also add concise comments for the parts that are
+not obvious from syntax alone, especially protocol layouts, shared-memory/state-
+machine transitions, ownership rules, and other control-flow-sensitive logic.
 
 Examples:
 
@@ -465,7 +471,30 @@ Current success markers:
 - `shared-region-probe: word after call 2 = 0x2222222222222222`
 - `shared-region-probe: success`
 
-### 7.4 Re-run the baseline `null_blk` control
+### 7.4 Re-run the first HostCall stdout proof
+
+Preferred wrapper:
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-stdout-probe-wrapper.txt" 2>&1
+```
+
+Current success markers:
+- `hostcall-stdout-probe: first call retval = 1`
+- `hostcall-v0 payload from domain`
+- `hostcall-stdout-probe: second call retval = 0`
+- `hostcall-stdout-probe: success`
+
+Inspect:
+
+```bash
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-stdout-probe-wrapper.txt"
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-stdout-probe.log"
+```
+
+### 7.5 Re-run the baseline `null_blk` control
 
 Preferred wrapper:
 
@@ -488,7 +517,7 @@ python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline-wrapper.txt" 2>&1
 ```
 
-### 7.5 Re-run the split `null_blk` validations
+### 7.6 Re-run the split `null_blk` validations
 
 I/O path:
 
@@ -597,6 +626,7 @@ Inspect:
 Inspect:
 - `$CAPSTONE_TMP_ROOT/capstone-qemu-run.txt`
 - `$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe.log`
+- `$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-stdout-probe.log`
 - `$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline.log`
 - `$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-marker.log`
 - `$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod.log`
@@ -616,3 +646,6 @@ At minimum, keep these files accurate:
 - `capstone-backend-status-for-llm.md`
 
 And replace or refresh the proof logs if the known-good baseline changes.
+
+After a coherent validated change set, if a commit is appropriate, also report the exact `git add` / `git commit -m '...'` command(s) with the proposed message.
+
