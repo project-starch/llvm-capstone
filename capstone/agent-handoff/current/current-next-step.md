@@ -1,410 +1,101 @@
 # Current recommended next step
 
 This file intentionally contains the **current** recommendation only.
-It is expected to change over time and should be updated when the project state changes.
 
 ## Current recommendation
 
-The previous runtime blocker has been removed, the first real HostCall stdout proof is validated, the tighter borrowed-payload follow-up is validated, and a second HostCall filewrite service is now validated too. The next smallest meaningful step toward the real goal (running serious software such as SPEC-like tests, FFmpeg, sqlite, libpng, etc.) is now:
+The reverse-direction payload proof is already validated.
+So the next step is **not** another read-like or write-like toy proof.
 
-> keep the same metadata shape and two-round control flow, but flip the payload direction once: the domain should still initiate the request, and the helper should return borrowed input bytes for the domain to consume, so the runtime proves both output-like and input-like payload handoffs on the same ABI
+The next smallest meaningful step is:
 
-In short: **the project now knows that the HostCall ABI is reusable across at least two coarse host services under the tighter ownership rule. The next smallest milestone is to prove the reverse payload direction as well, so the ABI covers both domain->helper output and helper->domain input patterns.**
-
-## Same recommendation in simpler words
-
-Right now the project has proven that:
-
-- the domain can ask for one tiny host-side service,
-- the helper can do that work,
-- the domain can come back and verify the answer,
-- and the payload can already use a tighter borrowed one-direction handoff.
-
-That is good news, and it is already better than one hardcoded opcode.
-
-But both validated services still use the same payload direction:
-
-- domain writes payload,
-- helper consumes payload after return.
-
-So the next step is still **not** “jump to libc or sqlite” yet.
-The next step is:
-
-> keep the same small protocol, but make the domain request one tiny read-like service and make the helper return payload data for the domain once, so the project validates the opposite borrowed direction too
-
-Why this is the next step:
-
-- it is small,
-- it reuses the already working test,
-- it reuses the already validated metadata ABI,
-- it tests the missing helper-to-domain payload direction,
-- and it moves the design closer to something that can scale to real host-side I/O.
-
-## Same recommendation in more technical terms
-
-The current validated HostCall v0 probes use two shared regions:
-
-- metadata: `INOUT + SHARED`,
-- payload: now `OUT + BORROWED`.
-
-The metadata region should stay shared for now because both sides inspect and update
-the protocol state across both `call_dom()` rounds.
-
-That tighter payload result removed the most obvious ownership weakness from the
-first proof, and the second filewrite proof showed that the same metadata shape and
-state machine can carry more than one useful coarse-grained request.
-
-So the technical next step is to keep:
-
-- the same fixed-width metadata block,
-- the same two-round `call_dom()` / `DOM_RETURN(...)` flow,
-- and the same borrowed payload discipline idea,
-
-while switching the payload direction once so the domain still asks for a host-side
-service, but the helper becomes the producer of the response payload and the domain
-becomes the consumer for one tiny read-like service.
+> keep the same HostCall v0 control flow and metadata ABI, but stop adding one-off proof opcodes and define the first small stable reusable file-service subset, then implement the first handle-based file-object path on top of it
 
 ## Why this is now the right next step
 
-The previously active blocker was:
+The current runtime baseline already proves:
 
-- the local image behaving like stock OpenSBI,
-- host-side `SBI_EXT_CAPSTONE` calls returning `error=-2`,
-- shared-region mutations not becoming visible,
-- and split `null_blk` either crashing or failing to create the device.
+- the restored OpenSBI/runtime path works again,
+- shared-region mutations are visible,
+- the same metadata ABI supports more than one coarse HostCall service,
+- borrowed payload ownership works in both directions,
+- the domain remains the initiator and the helper remains the executor.
 
-That blocker is now gone.
+That means the main unresolved question is no longer:
 
-The source-backed validated results are:
+> can one more proof opcode fit the ABI?
 
-- `build/local.mk` is present again and points Buildroot at:
-  - `components/linux`
-  - `components/opensbi`
-- `make build A=opensbi-rebuild` regenerated:
-  - `components/opensbi/lib/sbi/sbi_capstone_dom.c.S`
-  - `components/opensbi/lib/sbi/capstone_int_handler.c.S`
-- the OpenSBI rebuild log shows `opensbi custom Syncing from source dir .../components/opensbi`
-- the shared-region probe now reaches:
-  - `word after call 1 = 0x1111111111111111`
-  - `word after call 2 = 0x2222222222222222`
-  - `success`
-- baseline `null_blk` works,
-- the first HostCall stdout proof now:
-  - shares fixed-width metadata and payload regions,
-  - returns `HC_V0_RET_PENDING` from the first `call_dom()` round,
-  - lets the host helper print the payload in ordinary Linux userspace,
-  - returns `HC_V0_RET_DONE` from the second `call_dom()` round,
-  - and finishes with `phase = HC_V0_PHASE_DONE`,
-- the second HostCall guest tmpfile proof now:
-   - reuses the same metadata ABI and borrowed payload discipline,
-   - lets the host helper write the payload to a fixed guest tmp file with ordinary Linux file I/O,
-   - verifies the file contents in the wrapper,
-   - and also finishes with `phase = HC_V0_PHASE_DONE`,
-- split `null_blk` now:
-  - creates `/dev/nullb0`,
-  - completes the marker-based I/O path,
-  - and completes `rmmod null_blk` successfully.
+It is now:
 
-So the current bottleneck is no longer the firmware/runtime bring-up path itself, it
-is no longer the first ownership-tightening step, and it is no longer “can one more
-opcode fit the same metadata ABI?”. The next unknown is whether the same protocol can
-support the opposite payload direction cleanly.
+> can this boundary support a small reusable service family that a future runtime/libc layer can actually target?
 
-## Why this directly helps the end goal
+## What this recommendation is trying to avoid
 
-The end goal is not just to print one string. The end goal is to support real
-software that eventually needs host-side services such as file I/O or other OS-
-boundary work.
+Do **not** drift into either of these extremes:
 
-That future only becomes practical if the project can prove three things in order:
+1. one HostCall opcode per libc symbol,
+2. a too-large speculative Linux ABI mirror.
 
-1. the control-transfer protocol works at all,
-2. the data-sharing rules are safe and disciplined enough to scale beyond a toy example,
-3. additional services can be added without redesigning the ABI every time.
+The intended design remains service-oriented:
 
-Step 1 is proven.
-Step 2 is now also proven at the first useful payload boundary.
-Step 3 has an initial proof too because the ABI already carries two coarse services.
-The current next step is the smallest concrete move toward a fuller bidirectional service boundary.
+- keep local computation helpers inside the domain/runtime,
+- cross the boundary only for real OS-facing work,
+- keep the wire ABI small and stable.
 
-## Important clarification: this is not meant to become “one protocol per libc symbol”
+## Concrete next implementation target
 
-The intended design is **service-oriented**, not **symbol-oriented**.
+The first implementation target should be a helper-managed file-object path.
 
 That means:
 
-- the domain/runtime side should keep local helpers such as `memcpy`, `strlen`, `strcmp`, formatting helpers, and similar pure computation inside the domain-side runtime or libc layer,
-- HostCall should be reserved for operations that really need host/OS participation,
-- several libc APIs may lower to one coarse host service instead of one wire opcode per symbol.
+1. helper owns a file-handle table,
+2. domain sees only protocol-level handles/tokens,
+3. helper keeps raw Linux file descriptors private,
+4. later read/write/close requests target the protocol-level handle.
 
-Examples:
+## Recommended first stable subset
 
-- `puts`, stdout flushes, and some forms of `fwrite(..., stdout)` can all eventually lower to one buffered write-like host service,
-- file-output-oriented libc calls may lower to a small file-service family rather than to one opcode per exact libc spelling.
+The first stable file-service subset should cover:
 
-So the current proofs are **not** proposing an architecture where every libc call pays for a fresh custom protocol. They are only proving the correctness of the boundary for the classes of operations that genuinely cross into host/OS territory.
+- `FILE_OPEN`
+- `FILE_READ`
+- `FILE_WRITE`
+- `FILE_CLOSE`
 
-## Why `WRITE_GUEST_TMPFILE` is one service even though the helper internally does `open + write + close`
+Then add only if justified by the next consumer:
 
-`HC_V0_OP_WRITE_GUEST_TMPFILE` is intentionally a **coarse host service**, not a direct mirror of one libc symbol.
+- `FILE_STAT_BASIC`
+- `FILE_SYNC`
 
-What the domain requests is:
+The full proposal lives in:
 
-> “take these payload bytes and commit them into this fixed file-like sink on the helper side.”
+- `current/stable-file-service-subset.md`
 
-How the helper implements that service internally is its own business. In the current proof, the helper happens to use:
+## Smallest code slice after the design note
 
-1. `open(...)`
-2. `write(...)`
-3. `close(...)`
+After the subset is documented, the next code change should be the smallest vertical slice that proves the object model:
 
-That is not a contradiction. It is exactly the point of a service-oriented boundary:
+1. open a helper-side file through the protocol,
+2. return a protocol-level handle,
+3. write or read through that handle,
+4. close it,
+5. validate handle lifetime and error handling.
 
-- the wire ABI stays small,
-- the helper may use multiple ordinary Linux calls to realize one coarse service,
-- the domain does not need to micromanage every host-side substep.
+That is the first step that genuinely moves the project closer to SQLite-like file workloads.
 
-If the protocol eventually grew a real file-service family, it could later split into separate open/read/write/close-like operations where that is actually justified. But that is a **later ABI design choice**, not something the proof must do immediately.
+## Exit criterion
 
-## Why the name contains `GUEST`
+This milestone is complete when:
 
-The helper in the current experiments runs as ordinary Linux userspace **inside the guest VM**.
-
-So `WRITE_GUEST_TMPFILE` means:
-
-- the domain requests a host-side service,
-- the helper services it,
-- the file that gets written lives in the guest Linux filesystem namespace,
-- not on the developer workstation.
-
-The request direction is still:
-
-- **domain asks**,
-- **helper performs**,
-- **domain validates the result**.
-
-It is **not** “helper asks the domain to write a file”.
-
-## Detailed shape of the next step
-
-The next step is intended to be a **read-like** proof, but still domain-initiated.
-
-### State before the operation
-
-- helper has already created the domain,
-- helper has already created metadata and payload regions,
-- metadata is shared because both sides need the state machine,
-- payload is prepared for a borrowed input-style response path,
-- no response bytes are present yet.
-
-### What the domain wants
-
-The domain wants a tiny host-side input service.
-
-In plain language:
-
-> “please obtain some bytes for me from the helper side and place the response into the shared payload buffer so I can consume it on re-entry.”
-
-This is analogous to a read-like or query-like host service, not to a local computation helper.
-
-### What happens during the operation
-
-Round 1:
-
-1. helper enters the domain with `call_dom()`,
-2. domain writes a request into metadata,
-3. domain returns `HC_V0_RET_PENDING`,
-4. helper observes the request,
-5. helper fetches or synthesizes the response bytes,
-6. helper writes those bytes into the payload region,
-7. helper writes `result/error/phase = RESP` into metadata.
-
-Round 2:
-
-8. helper enters the domain again with `call_dom()`,
-9. domain reads the response payload,
-10. domain checks metadata,
-11. domain finishes with `HC_V0_RET_DONE` and `phase = DONE`.
-
-### State after the operation
-
-- metadata records a successful response,
-- payload has served as a helper-to-domain borrowed handoff,
-- the domain has consumed the response bytes,
-- the same two-round control flow has now been proven in both directions:
-  - domain -> helper payload production,
-  - helper -> domain payload production.
-
-## Key terms used in this recommendation
-
-- **permissive**: broader sharing than strictly necessary; easier for bring-up, weaker for long-term discipline,
-- **stricter**: narrower access and clearer ownership rules,
-- **ownership discipline**: an explicit rule saying who writes, who reads, and when that access should end,
-- **disciplined protocol**: a protocol whose state transitions and buffer usage are intentionally constrained and easy to audit,
-- **payload becomes one-direction borrowed**: the payload is produced on one side, consumed on the other side, and is not meant to remain broadly shared after the round.
-
-See also `capstone/agent-handoff/current/runtime-terms-glossary.md`.
-
-## Plan from the current point to a serious workload
-
-### In simple words
-
-1. **Tighten the existing stdout proof**
-   - same demo, fewer permissions.
-2. **Add one or two more tiny host services**
-   - enough to prove the ABI is not special-cased for one hardcoded string.
-3. **Define a small stable host-service layer**
-   - something file/I/O shaped, not “one protocol per libc symbol”.
-4. **Build a tiny domain-side runtime/libc story around that layer**
-   - keep simple helpers local, cross the boundary only for real OS work.
-5. **Run one serious but still manageable target first**
-   - `sqlite` is the most sensible first serious workload.
-6. **Only then move to heavier programs**
-   - `ffmpeg` and especially SPEC are later, because they stress more subsystems.
-
-### More technical phased plan
-
-#### Phase 0: keep the current baseline green
-
-Required gates stay:
-
-- `run-shared-region-probe.sh`,
-- `run-hostcall-stdout-probe.sh`,
-- `run-hostcall-filewrite-probe.sh`,
-- `run-nullblk-baseline.sh`,
-- `run-nullblk-split-io.sh`,
-- `run-nullblk-split-rmmod.sh`.
-
-#### Phase 1: tighten ownership on the existing stdout proof
-
-Goal:
-
-- keep metadata as `INOUT + SHARED`,
-- move payload toward `OUT + BORROWED`,
-- prove the same two-round flow still works.
-
-Exit criterion:
-
-- same wrapper still passes,
-- no stale-read / revoke / capability fault regression appears.
-
-Status now: **validated**.
-
-#### Phase 2: prove that the ABI generalizes beyond one toy opcode
-
-Goal:
-
-- add one or two more coarse operations,
-- keep the same metadata shape if possible,
-- avoid symbol-per-libc growth.
-
-Good candidates:
-
-- small buffered write-like call,
-- minimal file open/read/close-style service,
-- tiny status/query operation.
-
-Exit criterion:
-
-- at least one second service works on the same ownership model,
-- the ABI still looks like a reusable service protocol rather than a one-off demo.
-
-Status now: **validated**.
-
-#### Phase 3: prove the reverse payload direction on the same ABI
-
-Goal:
-
-- keep metadata shared,
-- make the helper populate payload bytes,
-- let the domain consume them under a borrowed input-style rule,
-- revalidate the same two-round control-transfer shape.
-
-Exit criterion:
-
-- one helper-to-domain input-style service works,
-- the ABI now has both output-like and input-like payload proofs.
-
-#### Phase 4: define the minimal domain-side runtime/libc boundary
-
-Goal:
-
-- identify what stays local in the domain (`memcpy`, `strlen`, formatting helpers, etc.),
-- identify what crosses to the host (file/device/stdout-like services),
-- document the first stable service subset.
-
-Exit criterion:
-
-- the project has a small, explicit list of local helpers vs host services,
-- the next application step does not require inventing the ABI from scratch again.
-
-#### Phase 5: first serious workload = `sqlite`
-
-Why `sqlite` first:
-
-- much smaller dependency surface than `ffmpeg`,
-- easier to reason about than SPEC packaging/workflow,
-- stresses real file I/O and libc behavior without immediately requiring the whole multimedia stack.
-
-Exit criterion:
-
-- a meaningful `sqlite` scenario runs in the intended execution model,
-- failures can be attributed to concrete missing services rather than total ABI ambiguity.
-
-#### Phase 6: broaden to heavier workloads
-
-- `ffmpeg` after the file / buffering / process-environment surface is stronger,
-- SPEC-like runs after toolchain/runtime/libc behavior is much more mature and repeatable.
-
-## What the next step is, and why it is next
-
-### Simple answer
-
-The next step is to **keep the same small ABI, but reverse the payload direction once so the helper provides data and the domain consumes it**.
-
-It is next because it is the cheapest change that fills the biggest remaining gap in
-the proof story.
-
-### More technical answer
-
-The current HostCall proofs have already validated control transfer,
-helper-side servicing, re-entry, the tighter borrowed payload rule, and reuse of
-the same metadata ABI across two operations. The highest-value remaining uncertainty
-at this layer is whether the protocol also works when the helper is the payload
-producer instead of the payload consumer.
-
-Adding one helper-to-domain input-style service while keeping the same metadata ABI:
-
-- tests the missing `IN + BORROWED`-style data-flow direction,
-- preserves the now-validated two-round structure,
-- keeps the ABI narrow while broadening its real expressive power,
-- and avoids jumping to broad libc work before the service boundary is credibly bidirectional.
-
-That is why it is a better immediate step than jumping straight to `sqlite`,
-`ffmpeg`, SPEC, or a broad libc port.
-
-## Concrete form of the next step
-
-1. Keep `capstone/caplifive-buildroot/build/local.mk` present so future rebuilds continue to use the local Capstone-enabled Linux/OpenSBI overrides.
-2. Treat the OpenSBI/runtime bring-up path as restored.
-3. Use the working shared-region probe, the validated HostCall stdout wrapper, and the working baseline/split `null_blk` wrappers as the runtime baseline.
-4. Keep the metadata region shared (`INOUT + SHARED`), because both sides still need to inspect it across both rounds.
-5. Keep the already validated output-style payload discipline for the existing stdout and guest-tmpfile proofs.
-6. Add one read-like helper-to-domain proof on the same metadata layout and two-round control flow:
-   - helper populates payload bytes,
-   - domain consumes them after re-entry,
-   - borrowed input-style revoke semantics should prove the opposite data-flow direction.
-7. Revalidate the same wrapper style after that reverse-direction proof before broadening into richer libc-facing surface.
-8. Only after that bidirectional proof is green should the project broaden into richer host calls, micro-libc work, or larger applications.
-9. When changing `components/opensbi`, keep using the validated rebuild sequence:
-   - `make build CAPSTONE_CC_PATH=... A=opensbi-rebuild`
-   - then rebuild any kernel modules/packages whose vermagic must match the active kernel.
+- the stable file-service subset is documented,
+- the handoff no longer claims that reverse-direction payload is still the next missing proof,
+- the first handle-based file-object path is implemented and validated,
+- the next runtime/libc-facing step can build on a reusable service boundary instead of inventing another demo opcode.
 
 ## What not to regress
 
-Do **not** accidentally drop back to stock OpenSBI by deleting or bypassing:
+Do **not** accidentally drop back to the wrong-firmware path by deleting or bypassing:
 
 - `capstone/caplifive-buildroot/build/local.mk`
 
-If that file disappears again, the earlier wrong-firmware symptoms are expected to come back.
-
+If that file disappears again, the older `error=-2` / stock-OpenSBI symptoms are expected to return.

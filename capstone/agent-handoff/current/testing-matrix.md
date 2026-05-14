@@ -1,23 +1,16 @@
 # Capstone testing matrix and current recommendations
 
-This file is the compact, current map of how the Capstone work should be tested.
-It is intended to stay up to date as the bring-up moves from backend work to hosted user-space work.
+This file is the compact map of which test layer to run for which kind of change.
+It is intentionally shorter than the older narrative version.
 
-All example commands below follow the user's preferred workflow:
-- source the shared path defaults from `capstone/tests/capstone-test-env.sh`,
-- write logs to `$CAPSTONE_TMP_ROOT/...` (default: `/tmp/capstone/...`),
-- then inspect those log files.
-
-## Quick cheat sheet
-
-First, set up the common defaults once per shell:
+## Setup once per shell
 
 ```bash
 cd "$(git rev-parse --show-toplevel)"
 source capstone/tests/capstone-test-env.sh
 ```
 
-Then the most useful test entry points are:
+## Quick cheat sheet
 
 ```bash
 # Backend / SelectionDAG regressions
@@ -33,558 +26,63 @@ Then the most useful test entry points are:
 "$CAPSTONE_LLVM_LIT" -sv \
   "$CAPSTONE_REPO_ROOT/lld/test/ELF/emulation-capstone.s"
 
-# Hosted Linux driver regression
+# Linux driver regression
 "$CAPSTONE_LLVM_LIT" -sv \
   "$CAPSTONE_REPO_ROOT/clang/test/Driver/capstone-linux-toolchain.c"
 
-# Legacy tiny-domain smoke harness in QEMU (currently useful as a probe, not the primary validated gate)
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-smoke.sh"
-
-# Shared-region runtime proof on the restored OpenSBI path
+# Runtime proofs
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-shared-region-probe.sh"
-
-# First HostCall-style stdout request/response proof
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh"
-
-# Second HostCall-style guest tmpfile request/response proof
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh"
-
-# Reverse-direction HostCall-style guest tmpfile read proof
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh"
 
-# Baseline null_blk runtime regression
+# null_blk regressions
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-baseline.sh"
-
-# Split null_blk runtime regressions
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-io.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh"
-
-# Exploratory guest-side probe in the same QEMU harness
-python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
-  --share-dir "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-share" \
-  --log-file "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-probe.log" \
-  --guest-command "/sbi-dom.user"
 ```
 
----
+## Test layers
 
-## 1. Why multiple test layers are needed
+| Layer | What it proves | Run when | Entry point |
+| --- | --- | --- | --- |
+| Backend / SelectionDAG | codegen lowering and backend behavior | backend changes | `llvm/test/CodeGen/Capstone/` |
+| Clang builtins | builtin lowering to expected IR/intrinsics | builtin/frontend target changes | `clang/test/CodeGen/capstone-builtins.c`, `clang/test/CodeGen/builtins-capstone.c` |
+| LLD / ELF emulation | native `EM_CAPSTONE` emulation behavior | linker/emulation changes | `lld/test/ELF/emulation-capstone.s` |
+| Linux driver | hosted driver link-line construction only | driver/sysroot logic changes | `clang/test/Driver/capstone-linux-toolchain.c` |
+| Sample/runtime smoke | sample-domain path still works | sample/runtime packaging changes | `capstone/tests/runtime-qemu/run-smoke.sh` |
+| Shared-region proof | shared-region mutations are visible again | region/runtime ABI changes | `capstone/tests/runtime-qemu/run-shared-region-probe.sh` |
+| HostCall stdout proof | domain -> helper payload flow | HostCall metadata/output flow changes | `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` |
+| HostCall filewrite proof | same ABI reused for a second coarse service | HostCall service-family changes | `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh` |
+| HostCall fileread proof | helper -> domain payload flow | reverse-direction payload changes | `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh` |
+| `null_blk` baseline | baseline block path still works | runtime/device baseline checks | `capstone/tests/runtime-qemu/run-nullblk-baseline.sh` |
+| `null_blk` split | split I/O path and unload still work | OpenSBI/kernel/module integration changes | `run-nullblk-split-io.sh`, `run-nullblk-split-rmmod.sh` |
 
-The project has several distinct bring-up layers, and each one can fail independently:
+## Recommended minimums by change type
 
-1. **LLVM backend / SelectionDAG lowering**
-   - instruction selection,
-   - frame lowering,
-   - capability loads/stores,
-   - control flow lowering.
-2. **Clang frontend / builtins**
-   - builtin lowering to IR intrinsics.
-3. **LLD / ELF flavor**
-   - `EM_CAPSTONE`,
-   - ELF emulation names,
-   - native object/executable identity.
-4. **Clang driver / Linux hosted plumbing**
-   - sysroot search,
-   - startup files,
-   - link line construction,
-   - dynamic linker path.
-5. **Current domain runtime path in QEMU**
-   - boot,
-   - loader acceptance,
-   - domain execution.
-6. **Future hosted user-space path**
-   - headers,
-   - crt objects,
-   - libc/sysroot ABI,
-   - ordinary Linux executables.
+### Backend / Clang / LLD only
 
-A single test layer cannot cover all of this. Fast tests localize compiler/linker bugs; slower QEMU tests prove that the current runtime baseline still works.
+Run the focused `llvm-lit` layer that matches the modified subtree.
+Do not jump straight to QEMU unless the change affects runtime-facing behavior.
 
----
+### Userspace loader / helper / HostCall / runtime wrapper changes
 
-## 2. Current test layers
-
-### A. Backend regression tests (`llvm-lit`, very fast)
-
-**What they prove**
-- SelectionDAG codegen still works for the implemented Capstone subset.
-
-**Where**
-- `llvm/test/CodeGen/Capstone/`
-
-**Run**
+Run at least:
 
 ```bash
-cd "$CAPSTONE_REPO_ROOT" && \
-"$CAPSTONE_LLVM_LIT" -sv \
-  "$CAPSTONE_REPO_ROOT/llvm/test/CodeGen/Capstone" \
-  > "$CAPSTONE_TMP_ROOT/capstone-testing-codegen.txt" 2>&1
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-shared-region-probe.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh"
 ```
 
-Inspect:
+Then add the more specific wrapper that matches the changed service.
 
-```bash
-sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-testing-codegen.txt"
-```
+### OpenSBI / kernel / module integration changes
 
-**When to run**
-- after backend lowering / isel / frame / memory changes.
+Run the runtime proofs plus the `null_blk` regressions.
+If the active kernel changed, rebuild dependent modules/packages so their `vermagic` matches.
 
----
+## Important limitations
 
-### B. Clang builtin / frontend checks (`llvm-lit`, very fast)
-
-**What they prove**
-- Clang builtins still lower to the expected Capstone IR intrinsics.
-
-**Where**
-- `clang/test/CodeGen/capstone-builtins.c`
-- `clang/test/CodeGen/builtins-capstone.c`
-
-**Run**
-
-```bash
-cd "$CAPSTONE_REPO_ROOT" && \
-"$CAPSTONE_LLVM_LIT" -sv \
-  "$CAPSTONE_REPO_ROOT/clang/test/CodeGen/capstone-builtins.c" \
-  "$CAPSTONE_REPO_ROOT/clang/test/CodeGen/builtins-capstone.c" \
-  > "$CAPSTONE_TMP_ROOT/capstone-testing-clang-builtins.txt" 2>&1
-```
-
-Inspect:
-
-```bash
-sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-testing-clang-builtins.txt"
-```
-
----
-
-### C. LLD / ELF emulation checks (`llvm-lit`, fast)
-
-**What they prove**
-- `ld.lld` still accepts Capstone ELF emulation names,
-- produced ELFs remain native `EM_CAPSTONE`.
-
-**Where**
-- `lld/test/ELF/emulation-capstone.s`
-
-**Run**
-
-```bash
-cd "$CAPSTONE_REPO_ROOT" && \
-"$CAPSTONE_LLVM_LIT" -sv \
-  "$CAPSTONE_REPO_ROOT/lld/test/ELF/emulation-capstone.s" \
-  > "$CAPSTONE_TMP_ROOT/capstone-testing-lld.txt" 2>&1
-```
-
-Inspect:
-
-```bash
-sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-testing-lld.txt"
-```
-
----
-
-### D. Clang Linux driver checks (`llvm-lit`, fast)
-
-**What they prove**
-- the Linux driver builds the correct link line for hosted Capstone triples,
-- current tested behavior includes:
-  - `-m elf64lcapstone`
-  - `-dynamic-linker /lib/ld-linux-capstone64-lp64d.so.1`
-
-**Where**
-- `clang/test/Driver/capstone-linux-toolchain.c`
-
-**Run**
-
-```bash
-cd "$CAPSTONE_REPO_ROOT" && \
-"$CAPSTONE_LLVM_LIT" -sv \
-  "$CAPSTONE_REPO_ROOT/clang/test/Driver/capstone-linux-toolchain.c" \
-  > "$CAPSTONE_TMP_ROOT/capstone-testing-driver.txt" 2>&1
-```
-
-Inspect:
-
-```bash
-sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-testing-driver.txt"
-```
-
-**Important limitation**
-- this is a **driver command-line regression test**, not a guest runtime test.
-- it does **not** prove that a normal hosted Linux executable already builds or runs.
-
----
-
-### E. Current native sample-domain baseline (build + runtime)
-
-**What it proves**
-- the current validated domain ABI path still works end to end.
-
-**Where**
-- `capstone/my_first_domain/`
-
-**Build**
-
-```bash
-cd "$CAPSTONE_REPO_ROOT/capstone/my_first_domain" && \
-LLVM_BIN="$CAPSTONE_LLVM_BIN" ./build.sh \
-  > "$CAPSTONE_TMP_ROOT/capstone-testing-my-domain-build.txt" 2>&1
-```
-
-Inspect:
-
-```bash
-sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-testing-my-domain-build.txt"
-```
-
-Optional ELF inspection:
-
-```bash
-"$CAPSTONE_LLVM_READOBJ" -h \
-  "$CAPSTONE_REPO_ROOT/capstone/my_first_domain/my_domain.dom" \
-  > "$CAPSTONE_TMP_ROOT/capstone-testing-my-domain-readobj.txt" 2>&1
-```
-
----
-
-### F. QEMU runtime smoke harness with shared directory (single boot, no rootfs rebuild per iteration)
-
-**What it proves**
-- QEMU boots,
-- guest `9p` mount works,
-- `capstone.ko` loads,
-- `/capstone-test.user` can execute a Capstone domain directly from a host-shared directory,
-- current runtime baseline can be revalidated without rebuilding `rootfs.ext2` every time.
-
-**Current status note**
-- keep this harness because it is useful for quick experiments,
-- but the currently revalidated runtime baseline in this workspace is the shared-region proof, the first two HostCall proofs, and the baseline/split `null_blk` checks below,
-- do not rely on `run-smoke.sh` alone as the authoritative gate unless it has been freshly revalidated for the exact current tree.
-
-**Where**
-- `capstone/tests/runtime-qemu/`
-
-**Run**
-
-```bash
-cd "$CAPSTONE_REPO_ROOT" && \
-bash capstone/tests/runtime-qemu/run-smoke.sh \
-  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke-wrapper.txt" 2>&1
-```
-
-Inspect the driver-side wrapper output:
-
-```bash
-sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke-wrapper.txt"
-```
-
-Inspect the full serial/QEMU log:
-
-```bash
-sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-smoke.log"
-```
-
-**Why this layer matters**
-- It is slower than `lit`, but it catches regressions that `lit` cannot see:
-
-**Also useful for exploratory probes**
-- `run-domain-smoke.py` now supports `--guest-command '...'`.
-- This was validated as a general harness capability.
-- It lets future sessions test guest-side helpers and runtime hypotheses without immediately creating a dedicated new wrapper script or rebuilding `rootfs.ext2`.
-  - guest boot/runtime issues,
-  - loader/runtime acceptance,
-  - QEMU/device interactions,
-  - module/runtime integration.
-
-**Why it is implemented with `9p`**
-- The guest kernel already has `CONFIG_NET_9P`, `CONFIG_NET_9P_VIRTIO`, and `CONFIG_9P_FS`.
-- Exporting a host directory into the guest allows fast iteration on test domains.
-- This avoids rebuilding the rootfs image for every small smoke-case change.
-
----
-
-### G. Shared-region runtime proof (`run-shared-region-probe.sh`)
-
-**What it proves**
-- the VM is using the restored Capstone-enabled OpenSBI path rather than a stock OpenSBI path,
-- domain creation works,
-- annotated shared-region setup works,
-- host-visible shared memory really changes across successive `call_dom()` rounds.
-
-**Where**
-- `capstone/tests/runtime-qemu/run-shared-region-probe.sh`
-- `capstone/tests/runtime-qemu/build-shared-region-probe.sh`
-- `capstone/tests/runtime-qemu/shared-region-probe/`
-
-**Run**
-
-```bash
-cd "$CAPSTONE_REPO_ROOT" && \
-bash capstone/tests/runtime-qemu/run-shared-region-probe.sh \
-  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe-wrapper.txt" 2>&1
-```
-
-Inspect the wrapper output:
-
-```bash
-sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe-wrapper.txt"
-```
-
-Inspect the full serial/QEMU log:
-
-```bash
-sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe.log"
-```
-
-Expected success markers include:
-- `shared-region-probe: word after call 1 = 0x1111111111111111`
-- `shared-region-probe: word after call 2 = 0x2222222222222222`
-- `shared-region-probe: success`
-
-**When to run**
-- after changes to `components/opensbi`,
-- after Buildroot/runtime plumbing changes,
-- after changes to region-sharing semantics,
-- before trusting any higher-level split-domain runtime result.
-
----
-
-### H. First HostCall-style stdout runtime proof
-
-**What it proves**
-- the project now has a real split host/service request/response proof above the raw shared-region sentinel level,
-- a domain can populate shared metadata and a stricter borrowed payload region,
-- the host helper can service `HC_V0_OP_WRITE_STDOUT` in ordinary Linux userspace,
-- the domain can verify the host response on the next `call_dom()` round,
-- the payload handoff works with `OUT + BORROWED` while metadata remains `INOUT + SHARED`.
-
-**Where**
-- `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh`
-- `capstone/tests/runtime-qemu/build-hostcall-stdout-probe.sh`
-- `capstone/tests/runtime-qemu/hostcall-stdout-probe/`
-
-**Run**
-
-```bash
-cd "$CAPSTONE_REPO_ROOT" && \
-bash capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh \
-  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-stdout-probe-wrapper.txt" 2>&1
-```
-
-Expected success markers include:
-- `hostcall-stdout-probe: first call retval = 1`
-- `hostcall-v0 payload from domain`
-- `hostcall-stdout-probe: second call retval = 0`
-- `hostcall-stdout-probe: success`
-
-**When to run**
-- after changes to shared-region metadata layout,
-- after changes to the split host/service protocol,
-- after OpenSBI/runtime changes that could affect re-entry or shared-region visibility.
-
----
-
-### I. Second HostCall-style guest tmpfile runtime proof
-
-**What it proves**
-- the same fixed-width HostCall metadata ABI is not special-cased for stdout only,
-- the same `OUT + BORROWED` payload discipline also works for a second opcode,
-- the host helper can perform ordinary guest Linux file I/O and report the result back through metadata,
-- the guest-visible file contents match the exact borrowed payload bytes.
-
-**Where**
-- `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh`
-- `capstone/tests/runtime-qemu/build-hostcall-filewrite-probe.sh`
-- `capstone/tests/runtime-qemu/hostcall-filewrite-probe/`
-
-**Run**
-
-```bash
-cd "$CAPSTONE_REPO_ROOT" && \
-bash capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh \
-  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-filewrite-probe-wrapper.txt" 2>&1
-```
-
-Expected success markers include:
-- `hostcall-filewrite-probe: first call retval = 1`
-- `hostcall-filewrite-probe: servicing HC_V0_OP_WRITE_GUEST_TMPFILE`
-- `hostcall-filewrite-probe: second call retval = 0`
-- `hostcall-filewrite-probe: success`
-- `__HOSTCALL_FILEWRITE_OK__`
-
-**When to run**
-- after changes to HostCall opcode dispatch,
-- after changes to helper-side file-I/O servicing,
-- after changes to borrowed payload ownership rules or metadata response handling.
-
----
-
-### J. Reverse-direction HostCall-style guest tmpfile read proof
-
-**What it proves**
-- the same fixed-width HostCall metadata ABI can carry a domain-initiated read-like request,
-- the helper can publish response bytes back through a borrowed input-style payload share,
-- the protocol now has both domain->helper and helper->domain payload proofs,
-- the reverse-direction handoff works without changing the two-round control-transfer shape.
-
-**Where**
-- `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh`
-- `capstone/tests/runtime-qemu/build-hostcall-fileread-probe.sh`
-- `capstone/tests/runtime-qemu/hostcall-fileread-probe/`
-
-**Run**
-
-```bash
-cd "$CAPSTONE_REPO_ROOT" && \
-bash capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh \
-  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-fileread-probe-wrapper.txt" 2>&1
-```
-
-Expected success markers include:
-- `hostcall-fileread-probe: first call retval = 1`
-- `hostcall-fileread-probe: servicing HC_V0_OP_READ_GUEST_TMPFILE`
-- `hostcall-fileread-probe: payload shared as borrowed-in response`
-- `hostcall-fileread-probe: second call retval = 0`
-- `hostcall-fileread-probe: success`
-- `__HOSTCALL_FILEREAD_OK__`
-
-**When to run**
-- after changes to reverse-direction payload sharing,
-- after changes to borrowed input-style response handling,
-- after changes to helper-side read-like servicing or metadata response publication.
-
----
-
-### K. Baseline `null_blk` runtime regression
-
-**What it proves**
-- the ordinary in-kernel reference path still works,
-- the reference device appears,
-- the basic data path completes,
-- unload still works.
-
-**Where**
-- `capstone/tests/runtime-qemu/run-nullblk-baseline.sh`
-
-**Run**
-
-```bash
-cd "$CAPSTONE_REPO_ROOT" && \
-bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh \
-  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline-wrapper.txt" 2>&1
-```
-
----
-
-### L. Split `null_blk` runtime regression (manual QEMU guest command through the same harness)
-
-**What it proves**
-- the restored runtime path is good enough for a real reference case study,
-- the split driver creates `/dev/nullb0`,
-- data path I/O completes,
-- and unload works cleanly.
-
-**Where**
-- `capstone/tests/runtime-qemu/run-nullblk-split-io.sh`
-- `capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh`
-
-**Run the I/O-path validation**
-
-```bash
-cd "$CAPSTONE_REPO_ROOT" && \
-bash capstone/tests/runtime-qemu/run-nullblk-split-io.sh \
-  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-io-wrapper.txt" 2>&1
-```
-
-**Run the unload-path validation**
-
-```bash
-cd "$CAPSTONE_REPO_ROOT" && \
-bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh \
-  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod-wrapper.txt" 2>&1
-```
-
-**When to run**
-- after runtime/OpenSBI fixes,
-- after changes to the split-domain reference path,
-- after rebuilding packages that must match the active kernel `vermagic`.
-
----
-
-## 3. Hosted smoke tests without QEMU: should we add them now?
-
-### Short answer
-Not as a separate Capstone-specific suite **yet**.
-
-### Why not yet
-There are already existing patterns elsewhere in the tree for this style of testing, especially in:
-- `clang/test/Driver/linux-cross.cpp`
-- `clang/test/Driver/baremetal-sysroot.cpp`
-- the general Clang driver/sysroot tests
-
-Those tests are good for checking:
-- sysroot include discovery,
-- library search paths,
-- startup file selection,
-- `-dynamic-linker` behavior,
-- GCC toolchain detection.
-
-For Capstone specifically, we already have the first dedicated hosted-driver regression:
-- `clang/test/Driver/capstone-linux-toolchain.c`
-
-At the moment, a broader hosted smoke suite would mostly duplicate current driver coverage while the **first real hosted blocker** is still earlier and very concrete:
-- including glibc headers from the current Buildroot sysroot already fails in `bits/wordsize.h` with `unsupported ABI`.
-
-So the recommended approach is:
-1. keep the current driver regression,
-2. keep probing the real hosted compile path against the real sysroot,
-3. once the first sysroot/libc compatibility blocker is fixed, add the smallest focused regression for that exact case.
-
-This avoids inventing a parallel suite that mostly re-states a currently known failure.
-
----
-
-## 4. Current validated status summary
-
-As of the latest checked state:
-- backend `llvm-lit` Capstone tests pass,
-- Clang builtin tests pass,
-- LLD Capstone emulation test passes,
-- the hosted Linux driver regression for `capstone64-unknown-linux-gnu` passes,
-- the native sample-domain path is still valid,
-- the shared-region probe now passes on the restored OpenSBI path,
-- the first HostCall-style stdout proof now passes,
-- the second HostCall-style guest tmpfile proof now passes,
-- the reverse-direction HostCall-style guest tmpfile read proof now passes,
-- baseline `null_blk` works,
-- and split `null_blk` now loads, performs I/O, and unloads successfully.
-
-What is **not** validated yet:
-- general hosted Linux user-space build + run,
-- libc/sysroot ABI compatibility for normal user-space sources,
-- larger application builds.
-
----
-
-## 5. Recommended default test bundle after a non-trivial change
-
-If a change touches the backend/toolchain/runtime in a way that is broader than a one-line tweak, the default focused bundle should be:
-
-1. `llvm/test/CodeGen/Capstone`
-2. `clang/test/CodeGen/capstone-builtins.c` and `builtins-capstone.c`
-3. `lld/test/ELF/emulation-capstone.s`
-4. `clang/test/Driver/capstone-linux-toolchain.c`
-5. `capstone/tests/runtime-qemu/run-shared-region-probe.sh`
-6. `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh`
-7. `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh`
-8. `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh`
-9. `capstone/tests/runtime-qemu/run-nullblk-baseline.sh`
-10. `capstone/tests/runtime-qemu/run-nullblk-split-io.sh`
-11. `capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh`
-
-Use `run-smoke.sh` as an additional probe when you specifically want to exercise the
-host-shared tiny-domain harness, but not as the sole runtime gate unless it has been
-freshly revalidated for the current tree.
-
+- The Linux driver test is a command-line regression, not proof that hosted Capstone Linux userspace already works.
+- The current validated path is still the split host/domain runtime path.
+- `run-smoke.sh` is useful as a quick probe, but the HostCall wrappers and `null_blk` regressions are stronger current gates.

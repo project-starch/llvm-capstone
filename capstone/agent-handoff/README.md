@@ -1,124 +1,95 @@
 # Capstone agent handoff bundle
 
-This directory stores persistent context for continuing the Capstone backend/toolchain bring-up from a new chat/session.
+This directory stores persistent context for continuing the Capstone work in a new
+chat/session.
 
 Location:
-- `$CAPSTONE_HANDOFF_DIR` (default: `capstone/agent-handoff` inside the repository root)
+- `$CAPSTONE_HANDOFF_DIR` (default: `capstone/agent-handoff`)
 
-Shared test environment defaults:
+Shared environment defaults:
 - `capstone/tests/capstone-test-env.sh`
 
-Scratch log directory for future sessions:
+Scratch logs:
 - `$CAPSTONE_TMP_ROOT` (default: `/tmp/capstone`)
 
-## Most important files
+## Minimal startup reading set
 
-Current, durable working notes now live under:
-- `current/`
+For a normal fresh session, read only these files first:
 
-Timestamped narrative notes / session history now live under:
-- `history/`
+1. `README.md`
+2. `current/current-state.md`
+3. `current/current-next-step.md`
 
-History-note rules:
-- write notes in English,
+Everything else should be loaded only when the task needs it.
+
+## Directory layout
+
+- `current/` — compact durable current-state notes
+- `history/` — timestamped archival notes and chronology
+- `new-chat-prompt.md` — compact prompt template for a new chat
+
+## Current verified baseline
+
+At a high level, the repository currently has:
+
+- working sample-domain build + runtime validation,
+- working restored OpenSBI/runtime path via `capstone/caplifive-buildroot/build/local.mk`,
+- validated shared-region runtime proof,
+- validated HostCall stdout proof,
+- validated HostCall filewrite proof,
+- validated HostCall fileread reverse-direction proof,
+- working baseline and split `null_blk` regressions.
+
+See `current/current-state.md` for the concise canonical state snapshot.
+
+## Workflow rules to preserve
+
+- treat these handoff rules as local workflow overlays on top of normal LLVM/Buildroot/Linux/QEMU conventions,
+- do not mark a step complete until it has been tested at the affected layer,
+- keep non-trivial code documented with concise comments, especially around state transitions and ownership rules,
+- after a coherent validated change set, provide exact commit command(s) and prefer a multi-line commit message with a short subject plus a detailed body,
+- keep manager-facing summaries as local artifacts under `$CAPSTONE_TMP_ROOT/`, not as committed repository files.
+
+## Read on demand
+
+Use these only when the task actually needs them:
+
+- `current/testing-matrix.md` — compact map of test layers and entry points
+- `current/capstone-agent-test-instructions.md` — practical command cookbook
+- `current/stable-file-service-subset.md` — first reusable HostCall file-service proposal
+- `current/split-host-enclave-strategy.md` — source-backed architectural detail
+- `current/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
+- `current/capstone-backend-status-for-llm.md` — backend/compiler implementation detail
+- `current/native-sample-validation.md` — sample-domain validation detail
+- `current/project-structure-overview.md` — workspace guide
+- `current/capstone-coding-conventions.md` — local coding conventions
+- `current/runtime-terms-glossary.md` — terminology reference
+- `history/README.md` — historical index and note selection guide
+
+## History rules
+
+- write history notes in English,
 - use `DD-MM-YYYY_HH-MM-SS` in filenames,
 - avoid proper names or direct references to specific people in filenames/titles,
-- keep durable current-state guidance in `current/` rather than in history notes.
-
-Agent workflow rules to preserve across sessions:
-- treat the handoff rules in this directory as local workflow overlays on top of normal LLVM/Buildroot/Linux/QEMU development practices, not as replacements for subtree-native review and coding conventions,
-- do not mark a step complete until it has been tested at the layer affected by that step,
-- after a coherent validated change set, provide exact commit command(s) and proposed commit message(s) when a commit is appropriate, and prefer a real multi-line commit message with a short subject plus a more detailed body rather than only a one-line summary,
-- document non-trivial new code with concise comments explaining protocol layouts, state transitions, and other non-obvious logic,
-- keep manager-facing summary files as local artifacts (for example under `$CAPSTONE_TMP_ROOT/`) rather than committing them into the repository.
-
-### 1. How to run tests / reproduce the validated flow
-- `current/capstone-agent-test-instructions.md`
-
-### 1a. Testing matrix / what each test layer proves
-- `current/testing-matrix.md`
-
-### 2. Current backend/compiler implementation status
-- `current/capstone-backend-status-for-llm.md`
-
-### 3. Native sample validation summary
-- `current/native-sample-validation.md`
-
-### 4. Prompt for a fresh chat
-- `new-chat-prompt.md`
-
-### 5. Current recommended next step
-- `current/current-next-step.md`
-
-### 6. Split host-enclave strategy (source-backed)
-- `current/split-host-enclave-strategy.md`
-
-### 7. Hosted libc / OS / syscall analysis
-- `current/hosted-libc-os-analysis.md`
-
-### 8. Project structure overview
-- `current/project-structure-overview.md`
-
-### 9. Coding conventions for the `capstone/` workspace layer
-- `current/capstone-coding-conventions.md`
-
-### 10. Runtime terminology glossary
-- `current/runtime-terms-glossary.md`
-
-### 11. Timestamped answer / investigation history
-- `history/`
-
-## Files intentionally not kept in this handoff bundle
-
-The following categories were intentionally omitted to keep the handoff concise:
-- long-form duplicated narrative explanations,
-- intermediate exploratory logs,
-- noisy build/image logs that do not add new state beyond the written summaries.
-
-## Current verified milestone
-
-As of the latest validated state:
-- the in-tree LLVM Capstone backend builds the sample domain,
-- in-tree `ld.lld` links it natively as `EM_CAPSTONE`,
-- the Buildroot userspace loader accepts `EM_CAPSTONE`,
-- the sample domain executes successfully in the Capstone QEMU/Buildroot runtime,
-- the old manual ELF-header rewrite hack is no longer needed in the default sample path,
-- `capstone/caplifive-buildroot/build/local.mk` is again present and keeps Buildroot on the local Capstone-enabled Linux/OpenSBI override path,
-- rerunning `make build CAPSTONE_CC_PATH=... A=opensbi-rebuild` regenerates the OpenSBI wrapper assembly and restores the intended firmware/runtime path,
-- `capstone/tests/runtime-qemu/run-shared-region-probe.sh` now passes and proves that the host-visible shared-region mutations are working again,
-- `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` now passes and proves the first tiny split host/service request-response over shared metadata + payload,
-- `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh` now passes and proves that the same HostCall metadata ABI and borrowed payload discipline also support a second coarse host service,
-- `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh` now passes and proves the reverse payload direction for the same HostCall metadata ABI,
-- baseline `null_blk` works,
-- and split `null_blk` now creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding the package against the active kernel.
+- keep durable current guidance in `current/`, not in `history/`,
+- if two history notes become near-duplicates, keep one full primary source and reduce the other to a short pointer.
 
 ## Maintenance rule
 
-Future sessions should keep this directory current.
+If the validated baseline or recommended workflow changes, update at least:
 
-If the validated baseline changes, update at least:
 - `README.md`
-- `current/testing-matrix.md`
 - `new-chat-prompt.md`
+- `current/current-state.md`
+- `current/current-next-step.md`
+- `current/testing-matrix.md`
 - `current/capstone-agent-test-instructions.md`
-- `current/capstone-backend-status-for-llm.md`
-- `current/current-next-step.md`
-- `current/split-host-enclave-strategy.md`
-- `current/project-structure-overview.md`
-- `current/capstone-coding-conventions.md`
-- `current/runtime-terms-glossary.md`
 
-If a proof file becomes stale or redundant, replace it with a shorter current proof instead of accumulating duplicate logs.
+Update deeper reference files only when their subject actually changed.
 
-The obsolete draft runtime-author message that was created while the tree was still
-on the wrong-firmware path should not be kept under `current/`; that state has now
-been superseded by the validated notes in `history/` and `current/current-next-step.md`.
+## What this does not yet mean
 
-## What this does NOT yet mean
-
-This does **not** yet imply that the whole broader hosted toolchain/runtime is ready for FFmpeg/sqlite/libpng/SPEC.
-
-For the current recommended next milestone, see:
-- `current/current-next-step.md`
+This does **not** yet mean that a full hosted `capstone64-unknown-linux-gnu` user-space is ready.
+The current validated path is still the split host/domain runtime path.
 
 

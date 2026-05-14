@@ -7,116 +7,90 @@ Use the following prompt as the opening message in a fresh chat.
 I am continuing work on the Capstone architecture support in the repository:
 - `$CAPSTONE_REPO_ROOT`
 
-## Important working style / constraints
-The rules below are local workspace overlays on top of normal LLVM/Buildroot/Linux/QEMU development practices; when touching a subtree, still follow that subtree's native conventions.
+## Working style / constraints
+These are local workspace overlays on top of normal LLVM/Buildroot/Linux/QEMU practices.
 
-1. If you run terminal commands, **always redirect output into files under `$CAPSTONE_TMP_ROOT/`** (default: `/tmp/capstone/`), then read those files. Do **not** rely on directly captured terminal output.
+1. If you run terminal commands, prefer redirecting output into files under `$CAPSTONE_TMP_ROOT/` and then inspect those files.
 2. Be iterative and conservative.
-3. Prefer the **smallest meaningful next step** toward the real goal.
-4. The main goal is **not** just toy backend work; it is to make the toolchain/runtime capable of compiling and running serious software such as:
-   - SPEC-like tests
-   - FFmpeg
-   - sqlite
-   - libpng
-5. We currently care about the **SelectionDAG** path, not GISel.
-6. When you edit files, preserve existing style and avoid unrelated refactors.
-7. Document non-trivial new code with concise comments explaining protocol layouts, state transitions, ownership rules, and other non-obvious logic.
-8. Every completed step that changes code, build behavior, or runtime behavior must be re-tested; after edits, run focused tests and verify behavior.
-9. Keep the handoff files in `capstone/agent-handoff/` up to date whenever the validated baseline or workflow changes.
-10. Keep timestamped session/investigation notes under `capstone/agent-handoff/history/` and keep durable current-state notes under `capstone/agent-handoff/current/`.
-11. Never delete the user's local IDE metadata in `$CAPSTONE_REPO_ROOT/.idea/`.
-12. Do not hide the nested component repositories from the workspace/IDE; they are independent git repos but must remain browsable and editable.
-13. History notes must be written in English, use filename timestamps in `DD-MM-YYYY_HH-MM-SS` format, and avoid proper names or direct references to specific people in filenames/titles.
-14. Top-level helper scripts that are not specific to a child repository should live under `capstone/utils/`.
-15. After a coherent validated change set, if a commit is appropriate, report the exact `git add` / `git commit ...` command(s) with the proposed commit message, and prefer a multi-line message with a short subject plus a more detailed body rather than only one short line.
-16. Manager-facing summary files should be kept as local artifacts (for example under `$CAPSTONE_TMP_ROOT/`) and should not be committed into the repository.
+3. Prefer the smallest meaningful next step toward the real goal.
+4. Preserve existing style and avoid unrelated refactors.
+5. Re-test every completed step at the affected layer.
+6. Document non-trivial code concisely, especially protocol layouts, state transitions, ownership rules, branches, and call-sensitive logic.
+7. Keep `capstone/agent-handoff/` current when the validated baseline or workflow changes.
+8. Never delete `$CAPSTONE_REPO_ROOT/.idea/`.
+9. Do not hide nested component repositories from the workspace.
+10. History notes must be in English, use `DD-MM-YYYY_HH-MM-SS` filenames, and avoid proper names in titles/filenames.
+11. Top-level helper scripts that are not specific to a child repository should live under `capstone/utils/`.
+12. After a coherent validated change set, if a commit is appropriate, report exact `git add` / `git commit` commands and prefer a multi-line commit message with a short subject plus a detailed body.
+13. Keep manager-facing summaries as local artifacts under `$CAPSTONE_TMP_ROOT/`, not as committed files.
 
-## Read these handoff/context files first
-Please read these files before proposing changes:
+## Read these files first
+
+Read only this minimal startup set before proposing changes:
 
 - `$CAPSTONE_HANDOFF_DIR/README.md`
+- `$CAPSTONE_HANDOFF_DIR/current/current-state.md`
+- `$CAPSTONE_HANDOFF_DIR/current/current-next-step.md`
+
+Then load deeper files only if the task needs them:
+
 - `$CAPSTONE_HANDOFF_DIR/current/testing-matrix.md`
 - `$CAPSTONE_HANDOFF_DIR/current/capstone-agent-test-instructions.md`
-- `$CAPSTONE_HANDOFF_DIR/current/capstone-backend-status-for-llm.md`
+- `$CAPSTONE_HANDOFF_DIR/current/stable-file-service-subset.md`
 - `$CAPSTONE_HANDOFF_DIR/current/split-host-enclave-strategy.md`
 - `$CAPSTONE_HANDOFF_DIR/current/hosted-libc-os-analysis.md`
-- `$CAPSTONE_HANDOFF_DIR/current/project-structure-overview.md`
-- `$CAPSTONE_HANDOFF_DIR/current/capstone-coding-conventions.md`
-- `$CAPSTONE_HANDOFF_DIR/current/runtime-terms-glossary.md`
-- `$CAPSTONE_HANDOFF_DIR/current/native-sample-validation.md`
-- `$CAPSTONE_HANDOFF_DIR/current/current-next-step.md` (current recommendation only; do not treat it as immutable)
-
-If needed for recent chronology, also inspect:
-- `$CAPSTONE_HANDOFF_DIR/history/`
-
+- `$CAPSTONE_HANDOFF_DIR/current/capstone-backend-status-for-llm.md`
+- `$CAPSTONE_HANDOFF_DIR/history/README.md`
 
 ## Current verified state
-The following is already implemented and verified:
 
-1. The LLVM Capstone backend can compile the `my_first_domain` sample.
-2. Native `ld.lld` support for `EM_CAPSTONE` was added in a minimal way by aliasing Capstone to the existing RISC-V ELF behavior where needed.
-3. `capstone/caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.c` was updated to accept both `EM_RISCV` and `EM_CAPSTONE`.
-4. `capstone/my_first_domain/build.sh` now defaults to the in-tree `ld.lld`; the old EM_RISCV rewrite shim is only used if `HOST_LD` is overridden to a non-`ld.lld` linker.
-5. A focused LLD regression test was added:
-   - `lld/test/ELF/emulation-capstone.s`
-6. This native flow was validated end-to-end in QEMU:
-   - sample domain linked as `EM_CAPSTONE`
-   - loader accepted it
-   - `/capstone-test.user /test-domains/my_domain.dom` succeeded
-   - QEMU no longer hits the old `env->priv < PRV_C` assert in this path
-7. There is also a `9p`-based tiny-domain runtime harness for quick experiments without rebuilding `rootfs.ext2` on every iteration:
-   - `capstone/tests/runtime-qemu/run-smoke.sh`
-   - it exports a host directory into the guest over `9p`
-   - mounts it in the guest
-   - and runs a tiny Capstone domain through `/capstone-test.user`
-   - treat it as a convenient probe harness unless it has been freshly revalidated for the current tree
-8. The earlier wrong-firmware runtime blocker was resolved by restoring
-   `capstone/caplifive-buildroot/build/local.mk` and rerunning
-   `make build CAPSTONE_CC_PATH=... A=opensbi-rebuild`.
-9. The current runtime baseline is stronger than the original sample-domain proof:
-   - `capstone/tests/runtime-qemu/run-shared-region-probe.sh` passes,
-   - `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` passes and proves a first two-round `HC_V0_OP_WRITE_STDOUT` request/response flow,
-   - `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh` passes and proves a second two-round `HC_V0_OP_WRITE_GUEST_TMPFILE` request/response flow on the same metadata ABI and borrowed payload discipline,
-   - `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh` passes and proves a reverse-direction two-round `HC_V0_OP_READ_GUEST_TMPFILE` request/response flow on the same metadata ABI,
-   - baseline `null_blk` passes,
-   - split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully.
-10. After an OpenSBI/kernel change, any dependent kernel modules/packages may need a
-    rebuild so their `vermagic` matches the active kernel.
+The following is already verified:
+
+1. The LLVM Capstone backend builds the `my_first_domain` sample.
+2. Native `ld.lld` support for `EM_CAPSTONE` exists in the current tree.
+3. The Buildroot userspace loader accepts the sample domain in the validated path.
+4. `capstone/caplifive-buildroot/build/local.mk` is present and keeps the Buildroot image on the local Capstone-enabled Linux/OpenSBI override path.
+5. The restored runtime baseline now includes:
+   - `capstone/tests/runtime-qemu/run-shared-region-probe.sh`
+   - `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh`
+   - `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh`
+   - `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh`
+   - baseline `null_blk`
+   - split `null_blk`
+6. The HostCall proofs now cover both payload directions on the same metadata ABI.
 
 ## Very important distinction
-The `my_first_domain` flow is a **domain runtime sample**, not yet the same thing as a general hosted user-space program flow.
 
-Also, the currently preferred architectural direction for Paper I is:
+The validated path today is still the **split host/domain runtime path**, not a full hosted
+`capstone64-unknown-linux-gnu` Linux user-space.
 
-- **split host-enclave execution**,
-- using **shared regions + synchronous multi-round RPC** for host services,
-- before attempting a full hosted Capstone Linux userspace.
+The preferred near-term direction remains:
 
-The next objective should be chosen accordingly.
-
-The immediate runtime bring-up blocker is no longer “why do host-side
-`SBI_EXT_CAPSTONE` calls return `error=-2`?”. That issue is considered resolved in
-the current local baseline. The next objective should therefore build on the now-
-working runtime path rather than re-investigate the already-fixed firmware issue.
+- split host-enclave execution,
+- shared regions + synchronous multi-round HostCall,
+- then a small reusable service surface,
+- only later broader hosted user-space ambitions.
 
 ## What to avoid spending time on right now
-Unless it blocks the currently chosen milestone, please postpone:
-- pretty disassembly / `llvm-objdump` polishing
-- GISel support
-- cosmetic cleanups
-- changing the harness to print `42` from the sample result buffer
-- large speculative refactors
+
+Unless it directly blocks the active milestone, postpone:
+
+- GISel support,
+- cosmetic cleanups,
+- pretty disassembly work,
+- broad speculative refactors,
+- per-libc-symbol HostCall design.
 
 ## Expected workflow in the new chat
-1. Read the handoff files.
-2. Summarize the verified current state in a few bullets.
-3. Determine the next smallest meaningful milestone from the current repository state.
-4. Probe the existing repository/runtime for that path.
-5. If a minimal patch is justified, implement it.
-6. Rebuild and test using `/tmp`-redirected logs.
-7. Update the handoff files if your changes modify the validated baseline or recommended workflow.
-8. Explain exactly what changed and what remains blocked.
 
-When responding, be concrete, cautious, and prefer proven facts over assumptions.
+1. Read the minimal handoff set.
+2. Summarize the current verified state briefly.
+3. Identify the next smallest meaningful milestone from the current state.
+4. Load only the deeper docs needed for that milestone.
+5. Implement the minimal justified patch.
+6. Rebuild and test.
+7. Update the handoff files if the validated state or workflow changed.
+
+When responding, prefer concrete proven facts over assumptions.
 
 
