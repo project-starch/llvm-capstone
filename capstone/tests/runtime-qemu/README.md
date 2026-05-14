@@ -20,7 +20,7 @@ The restored runtime baseline also includes the following QEMU guest-command
 regressions:
 
 7. the shared-region proof succeeds on the Capstone-enabled OpenSBI path,
-8. the first HostCall-style `WRITE_STDOUT` request/response proof succeeds over shared metadata + payload regions,
+8. the first HostCall-style `WRITE_STDOUT` request/response proof succeeds with shared metadata plus a stricter borrowed payload region,
 9. baseline `null_blk` loads, performs I/O, and unloads,
 10. split `null_blk` loads, performs I/O, and unloads.
 

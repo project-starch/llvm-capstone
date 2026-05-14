@@ -89,7 +89,13 @@ static void init_regions(void) {
 static void start_impl(void) {
   init_regions();
 
-  /* Round 1: publish the request for the host helper. */
+  /*
+   * Round 1: publish the request for the host helper.
+   *
+   * The payload region is intentionally used as a one-direction borrowed buffer:
+   * this side writes the bytes, then returns. The helper consumes those bytes
+   * after return, and round 2 relies only on the metadata response.
+   */
   copy_bytes(payload, HOSTCALL_STDOUT_PROBE_MESSAGE,
              HOSTCALL_STDOUT_PROBE_MESSAGE_LEN);
   metadata->phase = HC_V0_PHASE_REQ;
@@ -101,7 +107,7 @@ static void start_impl(void) {
 
   dom_return(HC_V0_RET_PENDING);
 
-  /* Round 2: verify that the host serviced the request successfully. */
+  /* Round 2: verify the host response from metadata only. */
   if (metadata->phase != HC_V0_PHASE_RESP || metadata->error != 0 ||
       metadata->result != HOSTCALL_STDOUT_PROBE_MESSAGE_LEN) {
     metadata->phase = HC_V0_PHASE_ERROR;

@@ -42,8 +42,22 @@ struct hostcall_v0 {
 #define HC_V0_RET_PENDING 1UL
 #define HC_V0_RET_ERROR 2UL
 
-/* For the first proof we keep both regions broadly shared to minimize moving parts. */
+/*
+ * Local copies of the current runtime annotation values used by this probe.
+ *
+ * Why they live here instead of including the OpenSBI internal header directly:
+ * - the userspace probe and the custom .smode payload both need one small shared
+ *   header with no broader OpenSBI build-time dependencies,
+ * - the public modcapstone userspace header exports the ioctl fields but does not
+ *   currently export these symbolic names,
+ * - the authoritative numeric values currently match
+ *   components/opensbi/lib/sbi/capstone-sbi/sbi_capstone.h.
+ */
+#define HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_IN 0x0UL
 #define HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT 0x1UL
+#define HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_OUT 0x2UL
+
+#define HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_BORROWED 0x1UL
 #define HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED 0x2UL
 
 #endif

@@ -349,9 +349,10 @@ Expected success markers include:
 
 **What it proves**
 - the project now has a real split host/service request/response proof above the raw shared-region sentinel level,
-- a domain can populate shared metadata and payload regions,
+- a domain can populate shared metadata and a stricter borrowed payload region,
 - the host helper can service `HC_V0_OP_WRITE_STDOUT` in ordinary Linux userspace,
-- the domain can verify the host response on the next `call_dom()` round.
+- the domain can verify the host response on the next `call_dom()` round,
+- the payload handoff works with `OUT + BORROWED` while metadata remains `INOUT + SHARED`.
 
 **Where**
 - `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh`

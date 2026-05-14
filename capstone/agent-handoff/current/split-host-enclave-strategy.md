@@ -229,6 +229,9 @@ Recommended policy for the **very first proof-of-concept**:
      - `annotation_perm = CAPSTONE_ANNOTATION_PERM_OUT`
      - `annotation_rev  = CAPSTONE_ANNOTATION_REV_BORROWED`
 
+That tighter follow-up is now validated by the current
+`capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` path.
+
 Why start with `INOUT + SHARED` for both in v0:
 - it minimizes surprises from automatic revoke behavior while the protocol is
   still being validated
@@ -542,15 +545,22 @@ That higher-level proof is now validated in the local runtime baseline:
 4. the second `call_dom()` round returns `HC_V0_RET_DONE`,
 5. the shared metadata ends in `HC_V0_PHASE_DONE`.
 
-So the new smallest meaningful implementation step is now to tighten that same proof rather than widen it:
+The ownership-tightening follow-up is now validated too:
+
+1. metadata stays shared,
+2. payload now uses `OUT + BORROWED`,
+3. the same wrapper still completes successfully.
+
+So the new smallest meaningful implementation step is now to widen the proof only a little, without relaxing those ownership rules:
 
 1. keep using the restored shared-region path and the current two-round HostCall stdout wrapper as the runtime baseline,
 2. keep the metadata region shared,
-3. change the payload region from broad shared `INOUT` access to a directional borrowed handoff (`OUT + BORROWED`),
-4. revalidate the same wrapper,
-5. only then generalize the ABI or broaden the hosted-software ambition.
+3. keep the payload region on the now-validated directional borrowed handoff (`OUT + BORROWED`),
+4. add one second tiny host service on the same metadata ABI and two-round flow,
+5. revalidate that broader proof,
+6. only then generalize the ABI further or broaden the hosted-software ambition.
 
-So the gating question is no longer “can the first host-service protocol work at all?”.
-It is now “can the first host-service protocol keep working once the payload ownership
-rules become stricter and closer to a real service ABI?”.
+So the gating question is no longer “can the first host-service protocol work at all?”
+and no longer “can it survive the first ownership tightening?”. It is now “does this
+protocol still look reusable once it carries more than one coarse-grained service?”.
 

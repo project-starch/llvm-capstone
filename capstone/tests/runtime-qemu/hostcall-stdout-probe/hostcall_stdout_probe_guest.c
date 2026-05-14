@@ -53,7 +53,14 @@ int main(int argc, char **argv) {
   if ((long)dom_id < 0)
     return fail_cleanup("create_dom failed", (unsigned long)dom_id, NULL);
 
-  /* Create one shared control block and one shared payload buffer. */
+  /*
+   * Create one shared control block and one payload buffer.
+   *
+   * The metadata remains shared across both rounds because both sides mutate the
+   * state machine. The payload is stricter: the domain writes it in round 1, the
+   * helper consumes it after return, and the runtime should revoke the domain's
+   * borrowed access when that round completes.
+   */
   region_id_t metadata_region_id =
       create_region(HOSTCALL_STDOUT_PROBE_REGION_SIZE);
   region_id_t payload_region_id = create_region(HOSTCALL_STDOUT_PROBE_REGION_SIZE);
@@ -74,14 +81,19 @@ int main(int argc, char **argv) {
   print_nobuf("hostcall-stdout-probe: payload region ID = %lu\n",
               payload_region_id);
 
-  /* Share both regions before the first call_dom() round. */
+  /*
+   * Share metadata as INOUT+SHARED because the protocol header stays live across
+   * both rounds. Share the payload as OUT+BORROWED because only the domain needs
+   * to produce bytes before the first return.
+   */
   shared_region_annotated(dom_id, metadata_region_id,
                           HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT,
                           HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED);
   shared_region_annotated(dom_id, payload_region_id,
-                          HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT,
-                          HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED);
-  print_nobuf("hostcall-stdout-probe: metadata and payload shared\n");
+                          HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_OUT,
+                          HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_BORROWED);
+  print_nobuf(
+      "hostcall-stdout-probe: metadata shared, payload borrowed-out\n");
 
   /*
    * Round 1: the domain is expected to populate metadata/payload and return a
@@ -110,7 +122,10 @@ int main(int argc, char **argv) {
                         (unsigned long)(metadata->offset + metadata->length),
                         metadata);
 
-  /* Service the only currently supported host request: write payload to stdout. */
+  /*
+   * Service the only currently supported host request: read the domain-produced
+   * payload once and write it to stdout from the helper side.
+   */
   print_nobuf("hostcall-stdout-probe: servicing HC_V0_OP_WRITE_STDOUT\n");
   ssize_t write_result = write(STDOUT_FILENO, payload + metadata->offset,
                                (size_t)metadata->length);
@@ -128,8 +143,8 @@ int main(int argc, char **argv) {
   metadata->phase = HC_V0_PHASE_RESP;
 
   /*
-   * Round 2: the domain should observe the response, validate it, and finish
-   * with HC_V0_RET_DONE / HC_V0_PHASE_DONE.
+   * Round 2: the domain should only need the shared metadata response now. The
+   * payload handoff was for round 1 only.
    */
   unsigned long ret2 = call_dom(dom_id);
   print_nobuf("hostcall-stdout-probe: second call retval = %lu\n", ret2);

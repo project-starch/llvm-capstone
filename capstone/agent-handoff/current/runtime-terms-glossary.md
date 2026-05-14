@@ -113,14 +113,14 @@ A broad sharing mode that gives both sides more freedom than they strictly need.
 
 Example: `INOUT + SHARED` for a payload buffer means both sides can keep accessing
 the same buffer across rounds. That is convenient for bring-up, but looser than the
-final intended least-privilege design.
+current stdout proof's tighter payload model.
 
 ### Stricter sharing
 A more constrained sharing mode that gives each side only the access it actually
 needs.
 
-For example, a stdout payload that is written by the domain and only consumed by the
-helper is a better fit for a one-direction borrowed buffer than for broad shared
+For example, the current stdout payload is written by the domain and only consumed by
+the helper, so it now uses a one-direction borrowed buffer instead of broad shared
 read/write access.
 
 ### Borrowed region / borrowed handoff
@@ -185,6 +185,12 @@ response on re-entry.
 ### Tighten the HostCall proof
 Keep the same basic host/service flow, but make the ownership and permission model
 stricter so the proof is closer to the intended long-term ABI.
+
+In the current workspace this specifically meant:
+
+- metadata stayed `INOUT + SHARED`,
+- payload moved from broad shared access to `OUT + BORROWED`,
+- the same stdout wrapper was then revalidated successfully.
 
 ## 5. Validation and planning terms
 
