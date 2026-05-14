@@ -49,6 +49,9 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-stdout-probe.
 # Second HostCall-style guest tmpfile request/response proof
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh"
 
+# Reverse-direction HostCall-style guest tmpfile read proof
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh"
+
 # Baseline null_blk runtime regression
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-baseline.sh"
 
@@ -418,7 +421,43 @@ Expected success markers include:
 
 ---
 
-### J. Baseline `null_blk` runtime regression
+### J. Reverse-direction HostCall-style guest tmpfile read proof
+
+**What it proves**
+- the same fixed-width HostCall metadata ABI can carry a domain-initiated read-like request,
+- the helper can publish response bytes back through a borrowed input-style payload share,
+- the protocol now has both domain->helper and helper->domain payload proofs,
+- the reverse-direction handoff works without changing the two-round control-transfer shape.
+
+**Where**
+- `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh`
+- `capstone/tests/runtime-qemu/build-hostcall-fileread-probe.sh`
+- `capstone/tests/runtime-qemu/hostcall-fileread-probe/`
+
+**Run**
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-fileread-probe-wrapper.txt" 2>&1
+```
+
+Expected success markers include:
+- `hostcall-fileread-probe: first call retval = 1`
+- `hostcall-fileread-probe: servicing HC_V0_OP_READ_GUEST_TMPFILE`
+- `hostcall-fileread-probe: payload shared as borrowed-in response`
+- `hostcall-fileread-probe: second call retval = 0`
+- `hostcall-fileread-probe: success`
+- `__HOSTCALL_FILEREAD_OK__`
+
+**When to run**
+- after changes to reverse-direction payload sharing,
+- after changes to borrowed input-style response handling,
+- after changes to helper-side read-like servicing or metadata response publication.
+
+---
+
+### K. Baseline `null_blk` runtime regression
 
 **What it proves**
 - the ordinary in-kernel reference path still works,
@@ -439,7 +478,7 @@ bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh \
 
 ---
 
-### K. Split `null_blk` runtime regression (manual QEMU guest command through the same harness)
+### L. Split `null_blk` runtime regression (manual QEMU guest command through the same harness)
 
 **What it proves**
 - the restored runtime path is good enough for a real reference case study,
@@ -518,6 +557,7 @@ As of the latest checked state:
 - the shared-region probe now passes on the restored OpenSBI path,
 - the first HostCall-style stdout proof now passes,
 - the second HostCall-style guest tmpfile proof now passes,
+- the reverse-direction HostCall-style guest tmpfile read proof now passes,
 - baseline `null_blk` works,
 - and split `null_blk` now loads, performs I/O, and unloads successfully.
 
@@ -539,9 +579,10 @@ If a change touches the backend/toolchain/runtime in a way that is broader than 
 5. `capstone/tests/runtime-qemu/run-shared-region-probe.sh`
 6. `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh`
 7. `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh`
-8. `capstone/tests/runtime-qemu/run-nullblk-baseline.sh`
-9. `capstone/tests/runtime-qemu/run-nullblk-split-io.sh`
-10. `capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh`
+8. `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh`
+9. `capstone/tests/runtime-qemu/run-nullblk-baseline.sh`
+10. `capstone/tests/runtime-qemu/run-nullblk-split-io.sh`
+11. `capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh`
 
 Use `run-smoke.sh` as an additional probe when you specifically want to exercise the
 host-shared tiny-domain harness, but not as the sole runtime gate unless it has been

@@ -88,6 +88,7 @@ As of the latest validated state:
 - `capstone/tests/runtime-qemu/run-shared-region-probe.sh` now passes and proves that the host-visible shared-region mutations are working again,
 - `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` now passes and proves the first tiny split host/service request-response over shared metadata + payload,
 - `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh` now passes and proves that the same HostCall metadata ABI and borrowed payload discipline also support a second coarse host service,
+- `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh` now passes and proves the reverse payload direction for the same HostCall metadata ABI,
 - baseline `null_blk` works,
 - and split `null_blk` now creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding the package against the active kernel.
 

@@ -166,6 +166,12 @@ status code such as DONE, PENDING, or ERROR.
 The host-side operation encoded in shared metadata, for example
 `HC_V0_OP_WRITE_STDOUT`.
 
+Important nuance: this should usually mean a **coarse host service**, not a perfect
+1:1 mirror of one libc symbol or one Linux syscall.
+
+For example, a single HostCall service may be implemented inside the helper with
+multiple ordinary Linux calls such as `open(...)`, `write(...)`, and `close(...)`.
+
 ### Two-round protocol
 A synchronous request/response sequence:
 
@@ -181,6 +187,12 @@ This is not busy-wait polling. It is a pair of explicit control transfers.
 A proof that a domain can request a host-side service through the shared-memory
 protocol, return control, let the helper perform the service, and then validate the
 response on re-entry.
+
+Direction reminder:
+
+- the domain still initiates the request,
+- the helper performs the host-side work,
+- the helper does not “ask the domain to do Linux work for it”.
 
 ### Tighten the HostCall proof
 Keep the same basic host/service flow, but make the ownership and permission model
@@ -211,6 +223,20 @@ intended contract still works in the live runtime.
 The next narrowly scoped host-side operation after stdout, for example a very small
 buffered write-like or file-related service, added only after the current proof is
 stable.
+
+### `WRITE_GUEST_TMPFILE`
+The current second proof opcode meaning “helper, take these payload bytes and commit
+them into a fixed tmp file inside guest Linux”.
+
+The name does **not** mean that the domain is exposing guest Linux syscalls of its
+own. It only records where the helper-side file exists.
+
+### Reverse-direction payload proof
+A proof where the request is still domain-initiated, but the helper supplies payload
+bytes back to the domain as the response body.
+
+This is the natural read-like counterpart to the already validated output-like proofs
+where the domain supplies payload bytes to the helper.
 
 ### Runtime/ABI shaping
 The phase where the project is still deciding and validating the exact runtime

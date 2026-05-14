@@ -518,7 +518,32 @@ sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-filewrite-pro
 sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-filewrite-probe.log"
 ```
 
-### 7.6 Re-run the baseline `null_blk` control
+### 7.6 Re-run the reverse-direction HostCall guest tmpfile read proof
+
+Preferred wrapper:
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-fileread-probe-wrapper.txt" 2>&1
+```
+
+Current success markers:
+- `hostcall-fileread-probe: first call retval = 1`
+- `hostcall-fileread-probe: servicing HC_V0_OP_READ_GUEST_TMPFILE`
+- `hostcall-fileread-probe: payload shared as borrowed-in response`
+- `hostcall-fileread-probe: second call retval = 0`
+- `hostcall-fileread-probe: success`
+- `__HOSTCALL_FILEREAD_OK__`
+
+Inspect:
+
+```bash
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-fileread-probe-wrapper.txt"
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-fileread-probe.log"
+```
+
+### 7.7 Re-run the baseline `null_blk` control
 
 Preferred wrapper:
 
@@ -541,7 +566,7 @@ python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline-wrapper.txt" 2>&1
 ```
 
-### 7.7 Re-run the split `null_blk` validations
+### 7.8 Re-run the split `null_blk` validations
 
 I/O path:
 

@@ -18,6 +18,11 @@
   (sizeof(HOSTCALL_FILEWRITE_PROBE_MESSAGE) - 1)
 #define HOSTCALL_FILEWRITE_PROBE_OUTPUT_PATH "/tmp/hostcall_v0_filewrite.txt"
 
+#define HOSTCALL_FILEREAD_PROBE_MESSAGE "hostcall-v0 input payload"
+#define HOSTCALL_FILEREAD_PROBE_MESSAGE_LEN \
+  (sizeof(HOSTCALL_FILEREAD_PROBE_MESSAGE) - 1)
+#define HOSTCALL_FILEREAD_PROBE_INPUT_PATH "/tmp/hostcall_v0_read_source.txt"
+
 typedef unsigned long long hostcall_u64_t;
 typedef long long hostcall_s64_t;
 
@@ -43,6 +48,7 @@ struct hostcall_v0 {
 #define HC_V0_OP_NONE 0ULL
 #define HC_V0_OP_WRITE_STDOUT 1ULL
 #define HC_V0_OP_WRITE_GUEST_TMPFILE 2ULL
+#define HC_V0_OP_READ_GUEST_TMPFILE 3ULL
 
 #define HC_V0_RET_DONE 0UL
 #define HC_V0_RET_PENDING 1UL

@@ -7,7 +7,7 @@ It is expected to change over time and should be updated when the project state 
 
 The previous runtime blocker has been removed, the first real HostCall stdout proof is validated, the tighter borrowed-payload follow-up is validated, and a second HostCall filewrite service is now validated too. The next smallest meaningful step toward the real goal (running serious software such as SPEC-like tests, FFmpeg, sqlite, libpng, etc.) is now:
 
-> keep the same metadata shape and two-round control flow, but flip the payload direction once: make the helper populate a borrowed input buffer and make the domain consume it, so the runtime proves both output-like and input-like payload handoffs on the same ABI
+> keep the same metadata shape and two-round control flow, but flip the payload direction once: the domain should still initiate the request, and the helper should return borrowed input bytes for the domain to consume, so the runtime proves both output-like and input-like payload handoffs on the same ABI
 
 In short: **the project now knows that the HostCall ABI is reusable across at least two coarse host services under the tighter ownership rule. The next smallest milestone is to prove the reverse payload direction as well, so the ABI covers both domain->helper output and helper->domain input patterns.**
 
@@ -30,7 +30,7 @@ But both validated services still use the same payload direction:
 So the next step is still **not** “jump to libc or sqlite” yet.
 The next step is:
 
-> keep the same small protocol, but make the helper produce payload data for the domain once, so the project validates the opposite borrowed direction too
+> keep the same small protocol, but make the domain request one tiny read-like service and make the helper return payload data for the domain once, so the project validates the opposite borrowed direction too
 
 Why this is the next step:
 
@@ -58,10 +58,11 @@ So the technical next step is to keep:
 
 - the same fixed-width metadata block,
 - the same two-round `call_dom()` / `DOM_RETURN(...)` flow,
-- and the same borrowed payload discipline,
+- and the same borrowed payload discipline idea,
 
-while switching the payload direction once so the helper becomes the producer and
-the domain becomes the consumer for one tiny read-like service.
+while switching the payload direction once so the domain still asks for a host-side
+service, but the helper becomes the producer of the response payload and the domain
+becomes the consumer for one tiny read-like service.
 
 ## Why this is now the right next step
 
@@ -125,6 +126,114 @@ Step 1 is proven.
 Step 2 is now also proven at the first useful payload boundary.
 Step 3 has an initial proof too because the ABI already carries two coarse services.
 The current next step is the smallest concrete move toward a fuller bidirectional service boundary.
+
+## Important clarification: this is not meant to become “one protocol per libc symbol”
+
+The intended design is **service-oriented**, not **symbol-oriented**.
+
+That means:
+
+- the domain/runtime side should keep local helpers such as `memcpy`, `strlen`, `strcmp`, formatting helpers, and similar pure computation inside the domain-side runtime or libc layer,
+- HostCall should be reserved for operations that really need host/OS participation,
+- several libc APIs may lower to one coarse host service instead of one wire opcode per symbol.
+
+Examples:
+
+- `puts`, stdout flushes, and some forms of `fwrite(..., stdout)` can all eventually lower to one buffered write-like host service,
+- file-output-oriented libc calls may lower to a small file-service family rather than to one opcode per exact libc spelling.
+
+So the current proofs are **not** proposing an architecture where every libc call pays for a fresh custom protocol. They are only proving the correctness of the boundary for the classes of operations that genuinely cross into host/OS territory.
+
+## Why `WRITE_GUEST_TMPFILE` is one service even though the helper internally does `open + write + close`
+
+`HC_V0_OP_WRITE_GUEST_TMPFILE` is intentionally a **coarse host service**, not a direct mirror of one libc symbol.
+
+What the domain requests is:
+
+> “take these payload bytes and commit them into this fixed file-like sink on the helper side.”
+
+How the helper implements that service internally is its own business. In the current proof, the helper happens to use:
+
+1. `open(...)`
+2. `write(...)`
+3. `close(...)`
+
+That is not a contradiction. It is exactly the point of a service-oriented boundary:
+
+- the wire ABI stays small,
+- the helper may use multiple ordinary Linux calls to realize one coarse service,
+- the domain does not need to micromanage every host-side substep.
+
+If the protocol eventually grew a real file-service family, it could later split into separate open/read/write/close-like operations where that is actually justified. But that is a **later ABI design choice**, not something the proof must do immediately.
+
+## Why the name contains `GUEST`
+
+The helper in the current experiments runs as ordinary Linux userspace **inside the guest VM**.
+
+So `WRITE_GUEST_TMPFILE` means:
+
+- the domain requests a host-side service,
+- the helper services it,
+- the file that gets written lives in the guest Linux filesystem namespace,
+- not on the developer workstation.
+
+The request direction is still:
+
+- **domain asks**,
+- **helper performs**,
+- **domain validates the result**.
+
+It is **not** “helper asks the domain to write a file”.
+
+## Detailed shape of the next step
+
+The next step is intended to be a **read-like** proof, but still domain-initiated.
+
+### State before the operation
+
+- helper has already created the domain,
+- helper has already created metadata and payload regions,
+- metadata is shared because both sides need the state machine,
+- payload is prepared for a borrowed input-style response path,
+- no response bytes are present yet.
+
+### What the domain wants
+
+The domain wants a tiny host-side input service.
+
+In plain language:
+
+> “please obtain some bytes for me from the helper side and place the response into the shared payload buffer so I can consume it on re-entry.”
+
+This is analogous to a read-like or query-like host service, not to a local computation helper.
+
+### What happens during the operation
+
+Round 1:
+
+1. helper enters the domain with `call_dom()`,
+2. domain writes a request into metadata,
+3. domain returns `HC_V0_RET_PENDING`,
+4. helper observes the request,
+5. helper fetches or synthesizes the response bytes,
+6. helper writes those bytes into the payload region,
+7. helper writes `result/error/phase = RESP` into metadata.
+
+Round 2:
+
+8. helper enters the domain again with `call_dom()`,
+9. domain reads the response payload,
+10. domain checks metadata,
+11. domain finishes with `HC_V0_RET_DONE` and `phase = DONE`.
+
+### State after the operation
+
+- metadata records a successful response,
+- payload has served as a helper-to-domain borrowed handoff,
+- the domain has consumed the response bytes,
+- the same two-round control flow has now been proven in both directions:
+  - domain -> helper payload production,
+  - helper -> domain payload production.
 
 ## Key terms used in this recommendation
 

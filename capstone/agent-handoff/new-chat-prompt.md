@@ -77,6 +77,7 @@ The following is already implemented and verified:
    - `capstone/tests/runtime-qemu/run-shared-region-probe.sh` passes,
    - `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` passes and proves a first two-round `HC_V0_OP_WRITE_STDOUT` request/response flow,
    - `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh` passes and proves a second two-round `HC_V0_OP_WRITE_GUEST_TMPFILE` request/response flow on the same metadata ABI and borrowed payload discipline,
+   - `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh` passes and proves a reverse-direction two-round `HC_V0_OP_READ_GUEST_TMPFILE` request/response flow on the same metadata ABI,
    - baseline `null_blk` passes,
    - split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully.
 10. After an OpenSBI/kernel change, any dependent kernel modules/packages may need a

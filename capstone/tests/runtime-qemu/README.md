@@ -22,8 +22,9 @@ regressions:
 7. the shared-region proof succeeds on the Capstone-enabled OpenSBI path,
 8. the first HostCall-style `WRITE_STDOUT` request/response proof succeeds with shared metadata plus a stricter borrowed payload region,
 9. a second HostCall-style `WRITE_GUEST_TMPFILE` request/response proof succeeds on the same metadata ABI and borrowed payload discipline,
-10. baseline `null_blk` loads, performs I/O, and unloads,
-11. split `null_blk` loads, performs I/O, and unloads.
+10. a reverse-direction HostCall-style `READ_GUEST_TMPFILE` request/response proof succeeds with helper-produced borrowed response payload bytes,
+11. baseline `null_blk` loads, performs I/O, and unloads,
+12. split `null_blk` loads, performs I/O, and unloads.
 
 The key property is that the domain is provided through a host-shared directory, so the test does **not** rebuild `rootfs.ext2` for each iteration.
 
@@ -38,6 +39,8 @@ The key property is that the domain is provided through a host-shared directory,
 - `run-hostcall-stdout-probe.sh` — first HostCall-style `WRITE_STDOUT` / `puts` regression wrapper.
 - `build-hostcall-filewrite-probe.sh` — cross-build helper for the second HostCall filewrite proof.
 - `run-hostcall-filewrite-probe.sh` — second HostCall-style `WRITE_GUEST_TMPFILE` regression wrapper.
+- `build-hostcall-fileread-probe.sh` — cross-build helper for the reverse-direction HostCall fileread proof.
+- `run-hostcall-fileread-probe.sh` — reverse-direction HostCall-style `READ_GUEST_TMPFILE` regression wrapper.
 - `run-nullblk-baseline.sh` — baseline `null_blk` regression wrapper.
 - `run-nullblk-split-io.sh` — split `null_blk` I/O regression wrapper.
 - `run-nullblk-split-rmmod.sh` — split `null_blk` unload regression wrapper.
@@ -80,6 +83,9 @@ bash capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh \
 bash capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-filewrite-probe-wrapper.txt" 2>&1
 
+bash capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-fileread-probe-wrapper.txt" 2>&1
+
 bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline-wrapper.txt" 2>&1
 
@@ -96,6 +102,7 @@ Inspect the resulting serial logs:
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-stdout-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-filewrite-probe.log"
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-fileread-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-io.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod.log"

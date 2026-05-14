@@ -450,6 +450,10 @@ too high. The purpose of the current proof is only to establish the correctness 
 the boundary-crossing protocol for the operations that genuinely need host-side
 service.
 
+Another important consequence is that a HostCall opcode should usually describe a
+**coarse service**, not one exact libc symbol or one exact Linux syscall. The helper
+may internally use several ordinary Linux calls to realize one service request.
+
 ### How some libc functionality can avoid HostCall entirely
 
 “Do not make a HostCall for X” is practical for several reasons:
@@ -473,6 +477,40 @@ So the intended design is **not** “proxy every libc symbol one-by-one through 
 two-round ABI”. It is “use HostCall only for the operations that truly cross the
 domain/host boundary, and keep the rest local or lower them into a smaller set of
 coarse services”.
+
+### Example: why `HC_V0_OP_WRITE_GUEST_TMPFILE` is a single service
+
+The current second proof uses one opcode named `HC_V0_OP_WRITE_GUEST_TMPFILE`.
+
+That should be read as:
+
+> “helper, please commit these payload bytes into a fixed guest-side tmp file”.
+
+It is **not** intended to mean:
+
+- one opcode for `open`,
+- then another opcode for `write`,
+- then another opcode for `close`
+
+for the first proof.
+
+Inside the helper, that one coarse service is currently implemented with ordinary
+Linux userspace calls such as `open(...)`, `write(...)`, and `close(...)`. That is
+deliberate: the wire ABI stays small while the helper remains free to realize the
+service however is natural on the guest Linux side.
+
+The word `GUEST` in the opcode name is only there to remind readers where that file
+exists:
+
+- the helper runs inside guest Linux userspace,
+- the written tmp file therefore exists inside the guest filesystem namespace,
+- not on the developer workstation.
+
+The request direction is still the normal HostCall direction:
+
+- the **domain** requests the service,
+- the **helper** performs the service,
+- the **domain** validates the response on re-entry.
 
 ### What should *not* be part of v0
 
@@ -563,7 +601,7 @@ So the new smallest meaningful implementation step is no longer “add one secon
 1. keep using the restored shared-region path and the current two-round HostCall stdout wrapper as the runtime baseline,
 2. keep the metadata region shared,
 3. keep the existing output-style payload proofs as they are,
-4. add one tiny helper-to-domain input-style proof on the same metadata ABI and two-round flow,
+4. add one tiny helper-to-domain response-payload proof on the same metadata ABI and two-round flow,
 5. revalidate that reverse-direction proof,
 6. only then generalize the ABI further or broaden the hosted-software ambition.
 
@@ -571,4 +609,8 @@ So the gating question is no longer “can the first host-service protocol work 
 and no longer “can it survive the first ownership tightening?” and no longer “does
 it still look reusable once it carries more than one coarse-grained service?”. It is
 now “can the same ABI also support the opposite payload direction cleanly?”.
+
+That next step should still be understood as **domain-initiated**. The domain will
+ask for a read-like host service; the helper will then populate the response payload
+bytes for the domain to consume on the next round.
 
