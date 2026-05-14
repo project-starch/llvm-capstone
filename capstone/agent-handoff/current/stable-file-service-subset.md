@@ -198,6 +198,14 @@ The smallest code step that matches this design is:
 6. validate one small end-to-end file-object scenario,
 7. only then decide whether `FILE_STAT_BASIC` and `FILE_SYNC` are immediately required.
 
+Important current limitation:
+
+- the architectural subset above still makes sense,
+- but the current repository does **not** yet treat multi-`PENDING` re-entry from one
+  domain invocation as validated baseline behavior,
+- so the first implementation may need either one request per domain invocation or a
+  separately characterized multi-round control shape until that runtime question is resolved.
+
 ## Suggested validation order
 
 ### Phase A: handle lifecycle proof

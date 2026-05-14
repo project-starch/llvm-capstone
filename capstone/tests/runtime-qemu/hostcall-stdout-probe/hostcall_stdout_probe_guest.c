@@ -34,6 +34,33 @@ static int fail_cleanup(const char *message, unsigned long observed,
   return 1;
 }
 
+static void snapshot_request(struct hostcall_v0 *snapshot,
+                             const struct hostcall_v0 *metadata) {
+  snapshot->phase = metadata->phase;
+  snapshot->opcode = metadata->opcode;
+  snapshot->offset = metadata->offset;
+  snapshot->length = metadata->length;
+  snapshot->result = metadata->result;
+  snapshot->error = metadata->error;
+}
+
+static int snapshot_payload(char *dest, const char *payload,
+                            const struct hostcall_v0 *request) {
+  hostcall_u64_t end = request->offset + request->length;
+  hostcall_u64_t i;
+
+  if (request->offset > HOSTCALL_STDOUT_PROBE_REGION_SIZE)
+    return 0;
+  if (request->length > HOSTCALL_STDOUT_PROBE_REGION_SIZE)
+    return 0;
+  if (end > HOSTCALL_STDOUT_PROBE_REGION_SIZE)
+    return 0;
+
+  for (i = 0; i < request->length; ++i)
+    dest[i] = payload[request->offset + i];
+  return 1;
+}
+
 int main(int argc, char **argv) {
   if (argc != 2) {
     fprintf(stderr, "usage: %s <smode-domain-path>\n", argv[0]);
@@ -68,6 +95,8 @@ int main(int argc, char **argv) {
       metadata_region_id, HOSTCALL_STDOUT_PROBE_REGION_SIZE);
   char *payload =
       (char *)map_region(payload_region_id, HOSTCALL_STDOUT_PROBE_REGION_SIZE);
+  struct hostcall_v0 request;
+  char payload_snapshot[HOSTCALL_STDOUT_PROBE_REGION_SIZE];
   if (!metadata || !payload)
     return fail_cleanup("map_region failed", 0, metadata);
 
@@ -101,34 +130,34 @@ int main(int argc, char **argv) {
    */
   unsigned long ret1 = call_dom(dom_id);
   print_nobuf("hostcall-stdout-probe: first call retval = %lu\n", ret1);
+  snapshot_request(&request, metadata);
   print_nobuf("hostcall-stdout-probe: metadata phase after first call = %llu\n",
-              metadata->phase);
+              request.phase);
   if (ret1 != HC_V0_RET_PENDING)
     return fail_cleanup("unexpected first call retval", ret1, metadata);
-  if (metadata->phase != HC_V0_PHASE_REQ)
+  if (request.phase != HC_V0_PHASE_REQ)
     return fail_cleanup("unexpected phase after first call",
-                        (unsigned long)metadata->phase, metadata);
-  if (metadata->opcode != HC_V0_OP_WRITE_STDOUT)
+                        (unsigned long)request.phase, &request);
+  if (request.opcode != HC_V0_OP_WRITE_STDOUT)
     return fail_cleanup("unexpected opcode after first call",
-                        (unsigned long)metadata->opcode, metadata);
-  if (metadata->offset != 0)
+                        (unsigned long)request.opcode, &request);
+  if (request.offset != 0)
     return fail_cleanup("unexpected payload offset",
-                        (unsigned long)metadata->offset, metadata);
-  if (metadata->length != HOSTCALL_STDOUT_PROBE_MESSAGE_LEN)
+                        (unsigned long)request.offset, &request);
+  if (request.length != HOSTCALL_STDOUT_PROBE_MESSAGE_LEN)
     return fail_cleanup("unexpected payload length",
-                        (unsigned long)metadata->length, metadata);
-  if (metadata->offset + metadata->length > HOSTCALL_STDOUT_PROBE_REGION_SIZE)
-    return fail_cleanup("payload range exceeds shared region",
-                        (unsigned long)(metadata->offset + metadata->length),
-                        metadata);
+                        (unsigned long)request.length, &request);
+  if (!snapshot_payload(payload_snapshot, payload, &request))
+    return fail_cleanup("payload range exceeds shared region", 0, &request);
 
   /*
-   * Service the only currently supported host request: read the domain-produced
-   * payload once and write it to stdout from the helper side.
+   * Service the only currently supported host request from the snapped request.
+   * The helper does not trust repeated reads of the shared metadata/payload while
+   * performing the host-side work for this round.
    */
   print_nobuf("hostcall-stdout-probe: servicing HC_V0_OP_WRITE_STDOUT\n");
-  ssize_t write_result = write(STDOUT_FILENO, payload + metadata->offset,
-                               (size_t)metadata->length);
+  ssize_t write_result =
+      write(STDOUT_FILENO, payload_snapshot, (size_t)request.length);
   if (write_result < 0) {
     metadata->result = -1;
     metadata->error = errno;

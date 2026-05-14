@@ -35,6 +35,16 @@ static int fail_cleanup(const char *message, unsigned long observed,
   return 1;
 }
 
+static void snapshot_request(struct hostcall_v0 *snapshot,
+					 const struct hostcall_v0 *metadata) {
+  snapshot->phase = metadata->phase;
+  snapshot->opcode = metadata->opcode;
+  snapshot->offset = metadata->offset;
+  snapshot->length = metadata->length;
+  snapshot->result = metadata->result;
+  snapshot->error = metadata->error;
+}
+
 /*
  * Read exactly up to the requested number of bytes from the fixed guest-side input
  * file into the helper-mapped payload buffer.
@@ -89,6 +99,7 @@ int main(int argc, char **argv) {
 	  metadata_region_id, HOSTCALL_STDOUT_PROBE_REGION_SIZE);
   char *payload =
 	  (char *)map_region(payload_region_id, HOSTCALL_STDOUT_PROBE_REGION_SIZE);
+  struct hostcall_v0 request;
   if (!metadata || !payload)
 	return fail_cleanup("map_region failed", 0, metadata);
 
@@ -112,35 +123,36 @@ int main(int argc, char **argv) {
    */
   unsigned long ret1 = call_dom(dom_id);
   print_nobuf("hostcall-fileread-probe: first call retval = %lu\n", ret1);
+  snapshot_request(&request, metadata);
   print_nobuf(
 	  "hostcall-fileread-probe: metadata phase after first call = %llu\n",
-	  metadata->phase);
+    request.phase);
   if (ret1 != HC_V0_RET_PENDING)
 	return fail_cleanup("unexpected first call retval", ret1, metadata);
-  if (metadata->phase != HC_V0_PHASE_REQ)
+  if (request.phase != HC_V0_PHASE_REQ)
 	return fail_cleanup("unexpected phase after first call",
-						(unsigned long)metadata->phase, metadata);
-  if (metadata->opcode != HC_V0_OP_READ_GUEST_TMPFILE)
+            (unsigned long)request.phase, &request);
+  if (request.opcode != HC_V0_OP_READ_GUEST_TMPFILE)
 	return fail_cleanup("unexpected opcode after first call",
-						(unsigned long)metadata->opcode, metadata);
-  if (metadata->offset != 0)
+            (unsigned long)request.opcode, &request);
+  if (request.offset != 0)
 	return fail_cleanup("unexpected response offset request",
-						(unsigned long)metadata->offset, metadata);
-  if (metadata->length != HOSTCALL_FILEREAD_PROBE_MESSAGE_LEN)
+            (unsigned long)request.offset, &request);
+  if (request.length != HOSTCALL_FILEREAD_PROBE_MESSAGE_LEN)
 	return fail_cleanup("unexpected requested response length",
-						(unsigned long)metadata->length, metadata);
-  if (metadata->length > HOSTCALL_STDOUT_PROBE_REGION_SIZE)
+            (unsigned long)request.length, &request);
+  if (request.length > HOSTCALL_STDOUT_PROBE_REGION_SIZE)
 	return fail_cleanup("requested response exceeds payload region",
-						(unsigned long)metadata->length, metadata);
+            (unsigned long)request.length, &request);
 
   /*
-   * Service the read-like request: read bytes from the fixed guest-side input file
-   * into the helper mapping, then share the payload as borrowed input for round 2.
+   * Service the read-like request from the snapped metadata request, then share the
+   * response payload as borrowed input for round 2.
    */
   print_nobuf(
 	  "hostcall-fileread-probe: servicing HC_V0_OP_READ_GUEST_TMPFILE\n");
   ssize_t read_result = read_into_buffer(HOSTCALL_FILEREAD_PROBE_INPUT_PATH,
-										 payload, (size_t)metadata->length);
+							 payload, (size_t)request.length);
   if (read_result < 0) {
 	metadata->result = -1;
 	metadata->error = errno;

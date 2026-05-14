@@ -35,12 +35,23 @@ The current runtime proofs now cover:
 
 - shared metadata across two `call_dom()` rounds,
 - a tighter borrowed payload discipline,
+- helper-side request snapshotting before servicing the current working HostCall proofs,
 - reuse of one metadata ABI across more than one coarse service,
 - both payload directions:
   - domain -> helper output-style payload,
   - helper -> domain input-style payload.
 
 This means the immediate unknown is no longer "can one more toy read/write proof work?".
+
+It also means the currently validated HostCall shape is still:
+
+- one `PENDING` return,
+- helper-side service from a snapped request,
+- one completion return.
+
+An attempted multi-request file-object slice that tried to issue a second `PENDING`
+from the same domain invocation hit a QEMU assertion in the current environment and
+should be treated as an unvalidated path until characterized separately.
 
 ## Important distinction
 

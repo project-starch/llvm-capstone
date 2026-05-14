@@ -6,6 +6,11 @@
  * family. The host helper(s) and the custom .smode payload(s) both include this
  * header so they agree on field widths, status values, and the fixed proof
  * payloads.
+ *
+ * Important shared-metadata rule: `metadata` stays live as `INOUT + SHARED`, so
+ * helpers should snapshot the request fields they intend to trust immediately
+ * after a `call_dom()` return and before performing host-side work. That keeps
+ * each service round from depending on repeated reads of mutable shared state.
  */
 
 #define HOSTCALL_STDOUT_PROBE_REGION_SIZE 4096UL

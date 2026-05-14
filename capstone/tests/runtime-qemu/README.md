@@ -26,6 +26,21 @@ regressions:
 11. baseline `null_blk` loads, performs I/O, and unloads,
 12. split `null_blk` loads, performs I/O, and unloads.
 
+The current helper-side HostCall proofs also snapshot the shared metadata request
+(and, where applicable, the borrowed request payload) immediately after the first
+`call_dom()` return before performing host-side work. That keeps each validated
+proof from depending on repeated reads of mutable shared state while servicing the
+round.
+
+The currently validated HostCall baseline is still a **two-round** shape:
+
+- one `HC_V0_RET_PENDING` round,
+- host-side servicing from a snapped request,
+- one completion round.
+
+More ambitious multi-request flows on one domain invocation should not yet be
+treated as validated baseline behavior until that path is characterized separately.
+
 The key property is that the domain is provided through a host-shared directory, so the test does **not** rebuild `rootfs.ext2` for each iteration.
 
 ## Files

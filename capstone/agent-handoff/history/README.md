@@ -36,6 +36,7 @@ Read these if the session is about the HostCall proof progression:
 - `13-05-2026_19-53-21_hostcall_stdout_borrowed_payload_validated.md`
 - `14-05-2026_15-24-05_second_hostcall_service_filewrite_validated.md`
 - `14-05-2026_16-47-11_reverse_direction_hostcall_fileread_validated.md`
+- `14-05-2026_19-10-00_hostcall_metadata_snapshot_hardening_and_multi_pending_limit.md`
 
 ### Earlier architectural exploration
 
