@@ -28,7 +28,7 @@ The rules below are local workspace overlays on top of normal LLVM/Buildroot/Lin
 12. Do not hide the nested component repositories from the workspace/IDE; they are independent git repos but must remain browsable and editable.
 13. History notes must be written in English, use filename timestamps in `DD-MM-YYYY_HH-MM-SS` format, and avoid proper names or direct references to specific people in filenames/titles.
 14. Top-level helper scripts that are not specific to a child repository should live under `capstone/utils/`.
-15. After a coherent validated change set, if a commit is appropriate, report the exact `git add` / `git commit -m '...'` command(s) with the proposed commit message.
+15. After a coherent validated change set, if a commit is appropriate, report the exact `git add` / `git commit ...` command(s) with the proposed commit message, and prefer a multi-line message with a short subject plus a more detailed body rather than only one short line.
 16. Manager-facing summary files should be kept as local artifacts (for example under `$CAPSTONE_TMP_ROOT/`) and should not be committed into the repository.
 
 ## Read these handoff/context files first

@@ -28,7 +28,7 @@ History-note rules:
 Agent workflow rules to preserve across sessions:
 - treat the handoff rules in this directory as local workflow overlays on top of normal LLVM/Buildroot/Linux/QEMU development practices, not as replacements for subtree-native review and coding conventions,
 - do not mark a step complete until it has been tested at the layer affected by that step,
-- after a coherent validated change set, provide exact commit command(s) and proposed commit message(s) when a commit is appropriate,
+- after a coherent validated change set, provide exact commit command(s) and proposed commit message(s) when a commit is appropriate, and prefer a real multi-line commit message with a short subject plus a more detailed body rather than only a one-line summary,
 - document non-trivial new code with concise comments explaining protocol layouts, state transitions, and other non-obvious logic,
 - keep manager-facing summary files as local artifacts (for example under `$CAPSTONE_TMP_ROOT/`) rather than committing them into the repository.
 

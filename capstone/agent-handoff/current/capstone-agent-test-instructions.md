@@ -647,5 +647,5 @@ At minimum, keep these files accurate:
 
 And replace or refresh the proof logs if the known-good baseline changes.
 
-After a coherent validated change set, if a commit is appropriate, also report the exact `git add` / `git commit -m '...'` command(s) with the proposed message.
+After a coherent validated change set, if a commit is appropriate, also report the exact `git add` / `git commit ...` command(s) with the proposed message, and prefer a multi-line commit message with a short subject plus a descriptive body.
 
