@@ -551,16 +551,24 @@ The ownership-tightening follow-up is now validated too:
 2. payload now uses `OUT + BORROWED`,
 3. the same wrapper still completes successfully.
 
-So the new smallest meaningful implementation step is now to widen the proof only a little, without relaxing those ownership rules:
+The second-service follow-up is now validated too:
+
+1. `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh` reuses the same fixed-width metadata ABI,
+2. the payload stays on the same `OUT + BORROWED` discipline,
+3. the helper services `HC_V0_OP_WRITE_GUEST_TMPFILE` with ordinary guest Linux file I/O,
+4. the wrapper verifies the resulting file contents.
+
+So the new smallest meaningful implementation step is no longer “add one second opcode”. That part is now done. The next smallest step is to flip the payload direction once, without widening the ABI much:
 
 1. keep using the restored shared-region path and the current two-round HostCall stdout wrapper as the runtime baseline,
 2. keep the metadata region shared,
-3. keep the payload region on the now-validated directional borrowed handoff (`OUT + BORROWED`),
-4. add one second tiny host service on the same metadata ABI and two-round flow,
-5. revalidate that broader proof,
+3. keep the existing output-style payload proofs as they are,
+4. add one tiny helper-to-domain input-style proof on the same metadata ABI and two-round flow,
+5. revalidate that reverse-direction proof,
 6. only then generalize the ABI further or broaden the hosted-software ambition.
 
 So the gating question is no longer “can the first host-service protocol work at all?”
-and no longer “can it survive the first ownership tightening?”. It is now “does this
-protocol still look reusable once it carries more than one coarse-grained service?”.
+and no longer “can it survive the first ownership tightening?” and no longer “does
+it still look reusable once it carries more than one coarse-grained service?”. It is
+now “can the same ABI also support the opposite payload direction cleanly?”.
 

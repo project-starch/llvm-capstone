@@ -2,16 +2,21 @@
 #define CAPSTONE_TESTS_RUNTIME_QEMU_HOSTCALL_STDOUT_PROBE_H
 
 /*
- * This file freezes the tiny HostCall v0 ABI used by the first validated
- * request/response runtime probe. The host helper and the custom .smode payload
- * both include this header so they agree on field widths, status values, and
- * the test message.
+ * This file freezes the tiny HostCall v0 ABI used by the current runtime probe
+ * family. The host helper(s) and the custom .smode payload(s) both include this
+ * header so they agree on field widths, status values, and the fixed proof
+ * payloads.
  */
 
 #define HOSTCALL_STDOUT_PROBE_REGION_SIZE 4096UL
 #define HOSTCALL_STDOUT_PROBE_MESSAGE "hostcall-v0 payload from domain\n"
 #define HOSTCALL_STDOUT_PROBE_MESSAGE_LEN \
   (sizeof(HOSTCALL_STDOUT_PROBE_MESSAGE) - 1)
+
+#define HOSTCALL_FILEWRITE_PROBE_MESSAGE "hostcall-v0 file payload"
+#define HOSTCALL_FILEWRITE_PROBE_MESSAGE_LEN \
+  (sizeof(HOSTCALL_FILEWRITE_PROBE_MESSAGE) - 1)
+#define HOSTCALL_FILEWRITE_PROBE_OUTPUT_PATH "/tmp/hostcall_v0_filewrite.txt"
 
 typedef unsigned long long hostcall_u64_t;
 typedef long long hostcall_s64_t;
@@ -37,6 +42,7 @@ struct hostcall_v0 {
 
 #define HC_V0_OP_NONE 0ULL
 #define HC_V0_OP_WRITE_STDOUT 1ULL
+#define HC_V0_OP_WRITE_GUEST_TMPFILE 2ULL
 
 #define HC_V0_RET_DONE 0UL
 #define HC_V0_RET_PENDING 1UL

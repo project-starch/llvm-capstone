@@ -87,6 +87,7 @@ As of the latest validated state:
 - rerunning `make build CAPSTONE_CC_PATH=... A=opensbi-rebuild` regenerates the OpenSBI wrapper assembly and restores the intended firmware/runtime path,
 - `capstone/tests/runtime-qemu/run-shared-region-probe.sh` now passes and proves that the host-visible shared-region mutations are working again,
 - `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` now passes and proves the first tiny split host/service request-response over shared metadata + payload,
+- `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh` now passes and proves that the same HostCall metadata ABI and borrowed payload discipline also support a second coarse host service,
 - baseline `null_blk` works,
 - and split `null_blk` now creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding the package against the active kernel.
 

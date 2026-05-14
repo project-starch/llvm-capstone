@@ -76,6 +76,7 @@ The following is already implemented and verified:
 9. The current runtime baseline is stronger than the original sample-domain proof:
    - `capstone/tests/runtime-qemu/run-shared-region-probe.sh` passes,
    - `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` passes and proves a first two-round `HC_V0_OP_WRITE_STDOUT` request/response flow,
+   - `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh` passes and proves a second two-round `HC_V0_OP_WRITE_GUEST_TMPFILE` request/response flow on the same metadata ABI and borrowed payload discipline,
    - baseline `null_blk` passes,
    - split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully.
 10. After an OpenSBI/kernel change, any dependent kernel modules/packages may need a

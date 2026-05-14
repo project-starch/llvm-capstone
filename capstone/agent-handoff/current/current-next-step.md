@@ -5,11 +5,11 @@ It is expected to change over time and should be updated when the project state 
 
 ## Current recommendation
 
-The previous runtime blocker has been removed, the first real HostCall stdout proof is validated, and the tighter borrowed-payload follow-up is now validated too. The next smallest meaningful step toward the real goal (running serious software such as SPEC-like tests, FFmpeg, sqlite, libpng, etc.) is now:
+The previous runtime blocker has been removed, the first real HostCall stdout proof is validated, the tighter borrowed-payload follow-up is validated, and a second HostCall filewrite service is now validated too. The next smallest meaningful step toward the real goal (running serious software such as SPEC-like tests, FFmpeg, sqlite, libpng, etc.) is now:
 
-> keep the same metadata shape and two-round control flow, but add one second tiny host service so the ABI stops being a one-opcode special case while preserving the stricter borrowed payload discipline
+> keep the same metadata shape and two-round control flow, but flip the payload direction once: make the helper populate a borrowed input buffer and make the domain consume it, so the runtime proves both output-like and input-like payload handoffs on the same ABI
 
-In short: **the project now knows that a host-side service can be requested and serviced correctly under a tighter ownership rule. The next smallest milestone is to prove that the ABI generalizes beyond one hardcoded stdout demo without relaxing those ownership rules.**
+In short: **the project now knows that the HostCall ABI is reusable across at least two coarse host services under the tighter ownership rule. The next smallest milestone is to prove the reverse payload direction as well, so the ABI covers both domain->helper output and helper->domain input patterns.**
 
 ## Same recommendation in simpler words
 
@@ -20,25 +20,29 @@ Right now the project has proven that:
 - the domain can come back and verify the answer,
 - and the payload can already use a tighter borrowed one-direction handoff.
 
-That is good news, but one working opcode is still not enough to trust the ABI as a
-real service boundary.
+That is good news, and it is already better than one hardcoded opcode.
+
+But both validated services still use the same payload direction:
+
+- domain writes payload,
+- helper consumes payload after return.
 
 So the next step is still **not** “jump to libc or sqlite” yet.
 The next step is:
 
-> keep the same small protocol, but add one more tiny coarse-grained host service on the same ABI so the design is no longer just one special-case stdout demo
+> keep the same small protocol, but make the helper produce payload data for the domain once, so the project validates the opposite borrowed direction too
 
 Why this is the next step:
 
 - it is small,
 - it reuses the already working test,
-- it reuses the already validated stricter ownership model,
-- it checks that the ABI is reusable rather than hardcoded,
+- it reuses the already validated metadata ABI,
+- it tests the missing helper-to-domain payload direction,
 - and it moves the design closer to something that can scale to real host-side I/O.
 
 ## Same recommendation in more technical terms
 
-The current validated HostCall v0 stdout probe uses two shared regions:
+The current validated HostCall v0 probes use two shared regions:
 
 - metadata: `INOUT + SHARED`,
 - payload: now `OUT + BORROWED`.
@@ -46,8 +50,8 @@ The current validated HostCall v0 stdout probe uses two shared regions:
 The metadata region should stay shared for now because both sides inspect and update
 the protocol state across both `call_dom()` rounds.
 
-That tighter payload result removes the most obvious ownership weakness from the
-first proof. The next technical question is whether the same metadata shape and
+That tighter payload result removed the most obvious ownership weakness from the
+first proof, and the second filewrite proof showed that the same metadata shape and
 state machine can carry more than one useful coarse-grained request.
 
 So the technical next step is to keep:
@@ -56,7 +60,8 @@ So the technical next step is to keep:
 - the same two-round `call_dom()` / `DOM_RETURN(...)` flow,
 - and the same borrowed payload discipline,
 
-while adding one second tiny service opcode that is not just an alias for stdout.
+while switching the payload direction once so the helper becomes the producer and
+the domain becomes the consumer for one tiny read-like service.
 
 ## Why this is now the right next step
 
@@ -89,14 +94,20 @@ The source-backed validated results are:
   - lets the host helper print the payload in ordinary Linux userspace,
   - returns `HC_V0_RET_DONE` from the second `call_dom()` round,
   - and finishes with `phase = HC_V0_PHASE_DONE`,
+- the second HostCall guest tmpfile proof now:
+   - reuses the same metadata ABI and borrowed payload discipline,
+   - lets the host helper write the payload to a fixed guest tmp file with ordinary Linux file I/O,
+   - verifies the file contents in the wrapper,
+   - and also finishes with `phase = HC_V0_PHASE_DONE`,
 - split `null_blk` now:
   - creates `/dev/nullb0`,
   - completes the marker-based I/O path,
   - and completes `rmmod null_blk` successfully.
 
-So the current bottleneck is no longer the firmware/runtime bring-up path itself, and
-it is no longer the first ownership-tightening step either. The next unknown is
-whether the same protocol still looks sane once it serves more than one request kind.
+So the current bottleneck is no longer the firmware/runtime bring-up path itself, it
+is no longer the first ownership-tightening step, and it is no longer “can one more
+opcode fit the same metadata ABI?”. The next unknown is whether the same protocol can
+support the opposite payload direction cleanly.
 
 ## Why this directly helps the end goal
 
@@ -112,7 +123,8 @@ That future only becomes practical if the project can prove three things in orde
 
 Step 1 is proven.
 Step 2 is now also proven at the first useful payload boundary.
-The current next step is the smallest concrete move on Step 3.
+Step 3 has an initial proof too because the ABI already carries two coarse services.
+The current next step is the smallest concrete move toward a fuller bidirectional service boundary.
 
 ## Key terms used in this recommendation
 
@@ -149,6 +161,7 @@ Required gates stay:
 
 - `run-shared-region-probe.sh`,
 - `run-hostcall-stdout-probe.sh`,
+- `run-hostcall-filewrite-probe.sh`,
 - `run-nullblk-baseline.sh`,
 - `run-nullblk-split-io.sh`,
 - `run-nullblk-split-rmmod.sh`.
@@ -187,7 +200,23 @@ Exit criterion:
 - at least one second service works on the same ownership model,
 - the ABI still looks like a reusable service protocol rather than a one-off demo.
 
-#### Phase 3: define the minimal domain-side runtime/libc boundary
+Status now: **validated**.
+
+#### Phase 3: prove the reverse payload direction on the same ABI
+
+Goal:
+
+- keep metadata shared,
+- make the helper populate payload bytes,
+- let the domain consume them under a borrowed input-style rule,
+- revalidate the same two-round control-transfer shape.
+
+Exit criterion:
+
+- one helper-to-domain input-style service works,
+- the ABI now has both output-like and input-like payload proofs.
+
+#### Phase 4: define the minimal domain-side runtime/libc boundary
 
 Goal:
 
@@ -200,7 +229,7 @@ Exit criterion:
 - the project has a small, explicit list of local helpers vs host services,
 - the next application step does not require inventing the ABI from scratch again.
 
-#### Phase 4: first serious workload = `sqlite`
+#### Phase 5: first serious workload = `sqlite`
 
 Why `sqlite` first:
 
@@ -213,7 +242,7 @@ Exit criterion:
 - a meaningful `sqlite` scenario runs in the intended execution model,
 - failures can be attributed to concrete missing services rather than total ABI ambiguity.
 
-#### Phase 5: broaden to heavier workloads
+#### Phase 6: broaden to heavier workloads
 
 - `ffmpeg` after the file / buffering / process-environment surface is stronger,
 - SPEC-like runs after toolchain/runtime/libc behavior is much more mature and repeatable.
@@ -222,25 +251,25 @@ Exit criterion:
 
 ### Simple answer
 
-The next step is to **add one second tiny host service without changing the now-
-validated tighter ownership discipline**.
+The next step is to **keep the same small ABI, but reverse the payload direction once so the helper provides data and the domain consumes it**.
 
-It is next because it is the cheapest change that tests ABI reuse rather than just
-adding unrelated demo code.
+It is next because it is the cheapest change that fills the biggest remaining gap in
+the proof story.
 
 ### More technical answer
 
-The current stdout HostCall proof has already validated control transfer,
-helper-side servicing, re-entry, and the tighter borrowed payload rule. The
-highest-value remaining uncertainty at this layer is whether the protocol stays
-clean once it has to carry more than one operation.
+The current HostCall proofs have already validated control transfer,
+helper-side servicing, re-entry, the tighter borrowed payload rule, and reuse of
+the same metadata ABI across two operations. The highest-value remaining uncertainty
+at this layer is whether the protocol also works when the helper is the payload
+producer instead of the payload consumer.
 
-Adding one second coarse service while keeping the same metadata ABI:
+Adding one helper-to-domain input-style service while keeping the same metadata ABI:
 
-- tests that the opcode/metadata design is reusable,
-- preserves the now-validated permission model that later file/I/O services will likely need,
-- can keep the same wrapper style and two-round structure,
-- and avoids jumping to broad libc work before the service boundary is credible.
+- tests the missing `IN + BORROWED`-style data-flow direction,
+- preserves the now-validated two-round structure,
+- keeps the ABI narrow while broadening its real expressive power,
+- and avoids jumping to broad libc work before the service boundary is credibly bidirectional.
 
 That is why it is a better immediate step than jumping straight to `sqlite`,
 `ffmpeg`, SPEC, or a broad libc port.
@@ -251,13 +280,13 @@ That is why it is a better immediate step than jumping straight to `sqlite`,
 2. Treat the OpenSBI/runtime bring-up path as restored.
 3. Use the working shared-region probe, the validated HostCall stdout wrapper, and the working baseline/split `null_blk` wrappers as the runtime baseline.
 4. Keep the metadata region shared (`INOUT + SHARED`), because both sides still need to inspect it across both rounds.
-5. Keep the payload region on the now-validated stricter one-direction borrowed handoff:
-   - domain writes the bytes once,
-   - host reads them once after return,
-   - automatic revoke semantics keep the data-flow contract stricter and more realistic.
-6. Add one second tiny opcode on the same metadata layout and two-round control flow.
-7. Revalidate the same wrapper style after that opcode addition before broadening into richer libc-facing surface.
-8. Only after that second service is green should the project broaden into richer host calls, micro-libc work, or larger applications.
+5. Keep the already validated output-style payload discipline for the existing stdout and guest-tmpfile proofs.
+6. Add one read-like helper-to-domain proof on the same metadata layout and two-round control flow:
+   - helper populates payload bytes,
+   - domain consumes them after re-entry,
+   - borrowed input-style revoke semantics should prove the opposite data-flow direction.
+7. Revalidate the same wrapper style after that reverse-direction proof before broadening into richer libc-facing surface.
+8. Only after that bidirectional proof is green should the project broaden into richer host calls, micro-libc work, or larger applications.
 9. When changing `components/opensbi`, keep using the validated rebuild sequence:
    - `make build CAPSTONE_CC_PATH=... A=opensbi-rebuild`
    - then rebuild any kernel modules/packages whose vermagic must match the active kernel.

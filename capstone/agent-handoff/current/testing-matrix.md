@@ -46,6 +46,9 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-shared-region-probe.sh
 # First HostCall-style stdout request/response proof
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh"
 
+# Second HostCall-style guest tmpfile request/response proof
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh"
+
 # Baseline null_blk runtime regression
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-baseline.sh"
 
@@ -254,7 +257,7 @@ Optional ELF inspection:
 
 **Current status note**
 - keep this harness because it is useful for quick experiments,
-- but the currently revalidated runtime baseline in this workspace is the shared-region proof, the first HostCall stdout proof, and the baseline/split `null_blk` checks below,
+- but the currently revalidated runtime baseline in this workspace is the shared-region proof, the first two HostCall proofs, and the baseline/split `null_blk` checks below,
 - do not rely on `run-smoke.sh` alone as the authoritative gate unless it has been freshly revalidated for the exact current tree.
 
 **Where**
@@ -380,7 +383,42 @@ Expected success markers include:
 
 ---
 
-### I. Baseline `null_blk` runtime regression
+### I. Second HostCall-style guest tmpfile runtime proof
+
+**What it proves**
+- the same fixed-width HostCall metadata ABI is not special-cased for stdout only,
+- the same `OUT + BORROWED` payload discipline also works for a second opcode,
+- the host helper can perform ordinary guest Linux file I/O and report the result back through metadata,
+- the guest-visible file contents match the exact borrowed payload bytes.
+
+**Where**
+- `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh`
+- `capstone/tests/runtime-qemu/build-hostcall-filewrite-probe.sh`
+- `capstone/tests/runtime-qemu/hostcall-filewrite-probe/`
+
+**Run**
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-filewrite-probe-wrapper.txt" 2>&1
+```
+
+Expected success markers include:
+- `hostcall-filewrite-probe: first call retval = 1`
+- `hostcall-filewrite-probe: servicing HC_V0_OP_WRITE_GUEST_TMPFILE`
+- `hostcall-filewrite-probe: second call retval = 0`
+- `hostcall-filewrite-probe: success`
+- `__HOSTCALL_FILEWRITE_OK__`
+
+**When to run**
+- after changes to HostCall opcode dispatch,
+- after changes to helper-side file-I/O servicing,
+- after changes to borrowed payload ownership rules or metadata response handling.
+
+---
+
+### J. Baseline `null_blk` runtime regression
 
 **What it proves**
 - the ordinary in-kernel reference path still works,
@@ -401,7 +439,7 @@ bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh \
 
 ---
 
-### J. Split `null_blk` runtime regression (manual QEMU guest command through the same harness)
+### K. Split `null_blk` runtime regression (manual QEMU guest command through the same harness)
 
 **What it proves**
 - the restored runtime path is good enough for a real reference case study,
@@ -479,6 +517,7 @@ As of the latest checked state:
 - the native sample-domain path is still valid,
 - the shared-region probe now passes on the restored OpenSBI path,
 - the first HostCall-style stdout proof now passes,
+- the second HostCall-style guest tmpfile proof now passes,
 - baseline `null_blk` works,
 - and split `null_blk` now loads, performs I/O, and unloads successfully.
 
@@ -499,9 +538,10 @@ If a change touches the backend/toolchain/runtime in a way that is broader than 
 4. `clang/test/Driver/capstone-linux-toolchain.c`
 5. `capstone/tests/runtime-qemu/run-shared-region-probe.sh`
 6. `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh`
-7. `capstone/tests/runtime-qemu/run-nullblk-baseline.sh`
-8. `capstone/tests/runtime-qemu/run-nullblk-split-io.sh`
-9. `capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh`
+7. `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh`
+8. `capstone/tests/runtime-qemu/run-nullblk-baseline.sh`
+9. `capstone/tests/runtime-qemu/run-nullblk-split-io.sh`
+10. `capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh`
 
 Use `run-smoke.sh` as an additional probe when you specifically want to exercise the
 host-shared tiny-domain harness, but not as the sole runtime gate unless it has been
