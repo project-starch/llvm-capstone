@@ -57,6 +57,7 @@ Use these only when the task actually needs them:
 - `current/testing-matrix.md` — compact map of test layers and entry points
 - `current/capstone-agent-test-instructions.md` — practical command cookbook
 - `current/stable-file-service-subset.md` — first reusable HostCall file-service proposal
+- `current/hostcall-file-service-v0-wire-spec.md` — practical wire-format and state-machine spec for the next HostCall file-service implementation
 - `current/split-host-enclave-strategy.md` — source-backed architectural detail
 - `current/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
 - `current/capstone-backend-status-for-llm.md` — backend/compiler implementation detail

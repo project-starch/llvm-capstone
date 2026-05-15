@@ -124,6 +124,7 @@ bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh
 - `current/capstone-agent-test-instructions.md` — practical command cookbook.
 - `current/split-host-enclave-strategy.md` — source-backed architectural detail.
 - `current/stable-file-service-subset.md` — first reusable file-service proposal.
+- `current/hostcall-file-service-v0-wire-spec.md` — practical opcode/payload/state-machine spec for the next file-service implementation.
 - `current/hosted-libc-os-analysis.md` — why hosted Linux user-space is still blocked.
 - `history/README.md` — historical index and what is still worth reading.
 

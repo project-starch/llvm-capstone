@@ -55,6 +55,9 @@ Applies to `capstone/agent-handoff/**/*.md`.
 - use ATX headings (`#`, `##`, `###`),
 - keep long-lived facts in `current/` and session-specific facts in `history/`,
 - prefer source-backed statements over speculation,
+- write project-facing documentation in neutral design/review language rather than as direct
+  answers to chat questions; if a conversational answer reveals a durable rule, record the rule
+  itself, not the question/answer framing,
 - distinguish clearly between:
   - validated current state,
   - recommendation / next step,

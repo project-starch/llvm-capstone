@@ -86,6 +86,7 @@ Then add only if justified by the next consumer:
 The full proposal lives in:
 
 - `current/stable-file-service-subset.md`
+- `current/hostcall-file-service-v0-wire-spec.md`
 
 ## Smallest code slice after the design note
 

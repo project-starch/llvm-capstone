@@ -6,6 +6,11 @@ already validated HostCall v0 boundary.
 It exists to replace the current proof-only mindset with a small service family that a
 future domain-side runtime/libc layer can target.
 
+For the concrete opcode, payload-layout, and round-shape details to implement next,
+see also:
+
+- `current/hostcall-file-service-v0-wire-spec.md`
+
 ## Why this is the next step
 
 The current proofs already established:
