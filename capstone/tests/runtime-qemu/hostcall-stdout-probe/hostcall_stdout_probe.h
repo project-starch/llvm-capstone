@@ -54,6 +54,12 @@ struct hostcall_v0 {
 #define HC_V0_OP_WRITE_STDOUT 1ULL
 #define HC_V0_OP_WRITE_GUEST_TMPFILE 2ULL
 #define HC_V0_OP_READ_GUEST_TMPFILE 3ULL
+/* Diagnostic-only opcodes used by the minimal second-PENDING probe. */
+#define HC_V0_OP_SECOND_PENDING_STAGE1 4ULL
+#define HC_V0_OP_SECOND_PENDING_STAGE2 5ULL
+/* Diagnostic-only opcodes used by the second-PENDING payload-reuse probe. */
+#define HC_V0_OP_SECOND_PENDING_PAYLOAD_STAGE1 6ULL
+#define HC_V0_OP_SECOND_PENDING_PAYLOAD_STAGE2 7ULL
 
 #define HC_V0_RET_DONE 0UL
 #define HC_V0_RET_PENDING 1UL
