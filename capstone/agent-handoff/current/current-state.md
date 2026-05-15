@@ -49,9 +49,31 @@ It also means the currently validated HostCall shape is still:
 - helper-side service from a snapped request,
 - one completion return.
 
-An attempted multi-request file-object slice that tried to issue a second `PENDING`
-from the same domain invocation hit a QEMU assertion in the current environment and
-should be treated as an unvalidated path until characterized separately.
+A more precise diagnostic result is now available:
+
+- a minimal metadata-only probe shows that a second successive `PENDING` from one
+  domain invocation **does work** in the current environment,
+- but a narrower probe that reuses/re-shares the same borrowed output payload across
+  that next round reproduces the QEMU assertion
+  `helper_csmrev: Assertion \`rs1_v->val.cap.type == CAP_TYPE_LIN\` failed.`
+
+That limitation is now explained by an authoritative runtime/QEMU answer:
+
+- if a region is already borrow-shared, it must be explicitly revoked before doing
+  anything else with it, including borrow-sharing it again,
+- the current "borrowed output" behavior is a C-mode SBI abstraction layer rather
+  than a guarantee that repeated re-share without revoke is supported automatically.
+
+So the current blocker is not simply "second `PENDING` unsupported". The precise rule is:
+
+> repeated borrowed-output payload reuse across rounds is supported only if the
+> helper first calls `revoke_region()` on that payload region before re-sharing it.
+
+This matches the current probes:
+
+- metadata-only second `PENDING` works,
+- payload reuse without revoke reproduces `helper_csmrev`,
+- payload reuse with explicit `revoke_region()` before the second borrowed re-share passes.
 
 ## Important distinction
 

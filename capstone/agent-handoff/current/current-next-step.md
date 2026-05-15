@@ -10,7 +10,7 @@ service, so the next step is **not** another basic read-like or write-like toy p
 
 The next smallest meaningful step is:
 
-> keep the same HostCall v0 control flow and metadata ABI, but characterize the newly observed multi-`PENDING` limitation before treating a handle-based multi-op file-object path as safe validated baseline behavior
+> keep the same HostCall v0 control flow and metadata ABI, but apply the now-confirmed borrowed-region revoke discipline before any repeated borrowed payload re-share, then continue the smallest handle-based file-service experiment on top of that rule
 
 ## Why this is now the right next step
 
@@ -47,25 +47,27 @@ The intended design remains service-oriented:
 ## Concrete next implementation target
 
 The first implementation target is still expected to become a helper-managed
-file-object path, but one newly observed runtime fact now matters first.
+file-object path, but the diagnostics now show a more specific runtime fact.
 
-An attempted multi-op proof that tried to do:
+The repository now has source-backed evidence that:
 
-1. `FILE_OPEN` request,
-2. helper response,
-3. second domain `PENDING` for `FILE_WRITE`,
+1. a second successive `PENDING` can work when the probe is metadata only,
+2. but reusing/re-sharing the same borrowed output payload for the next round
+   reproduces the QEMU assertion in `helper_csmrev`.
 
-hit a QEMU assertion in the current environment during the attempted re-entry after
-the first response. So the repository does **not** yet have source-backed evidence
-that one domain invocation may safely emit multiple successive `PENDING` returns.
+An authoritative runtime/QEMU reply now also confirms the intended invariant:
+
+> once a region is borrow-shared, it must be revoked before anything else can be
+> done to it, including borrow-sharing it again.
 
 That means:
 
 1. the stable file-service subset remains the right architectural target,
-2. but the next implementation step should first determine whether multi-`PENDING`
-   is a supported runtime shape,
-3. or whether the service family must initially stay within the already validated
-   one-`PENDING`-then-complete pattern.
+2. generic multi-`PENDING` support is no longer the blocker,
+3. future multi-op file-object work should explicitly `revoke_region()` before any
+   repeated borrowed output payload re-share,
+4. a runtime-side auto-normalization patch is optional ergonomics work, not the
+   required correctness fix for the current branch.
 
 ## Recommended first stable subset
 
@@ -88,12 +90,14 @@ The full proposal lives in:
 ## Smallest code slice after the design note
 
 After the subset is documented, the next code change should be the smallest
-diagnostic that answers this precise runtime question:
+real helper/service path that obeys this now-known rule:
 
-1. can one domain invocation safely return `PENDING` more than once,
-2. or does the current runtime/QEMU path only support the already validated two-round shape?
+1. if the same payload region will be borrowed again in a later round, call
+   `revoke_region(payload_region_id)` first,
+2. then re-share it as borrowed for the next round,
+3. keep the non-revoke probe as the negative diagnostic proving why that discipline exists.
 
-That answer should come before promoting a multi-op handle path to the validated baseline.
+That should come before promoting a multi-op handle path to the validated baseline.
 
 ## Exit criterion
 
@@ -101,7 +105,7 @@ This milestone is complete when:
 
 - the stable file-service subset is documented,
 - the handoff no longer claims that reverse-direction payload is still the next missing proof,
-- the current multi-`PENDING` limitation is either explained or lifted,
+- the current repeated borrowed-payload reuse rule is documented and followed,
 - only then should the first handle-based file-object path be treated as validated baseline.
 
 ## What not to regress

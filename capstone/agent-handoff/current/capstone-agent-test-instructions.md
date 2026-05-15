@@ -158,6 +158,36 @@ bash capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh \
 sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-fileread-probe.txt"
 ```
 
+### Optional: metadata-only second-`PENDING` diagnostic
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-second-pending-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/run-hostcall-second-pending-probe.txt" 2>&1
+
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-second-pending-probe.txt"
+```
+
+### Optional: second-`PENDING` payload-reuse diagnostic
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/run-hostcall-second-pending-payload-probe.txt" 2>&1
+
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-second-pending-payload-probe.txt"
+```
+
+### Optional: second-`PENDING` payload-reuse revoke diagnostic
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-revoke-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/run-hostcall-second-pending-payload-revoke-probe.txt" 2>&1
+
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-second-pending-payload-revoke-probe.txt"
+```
+
 ### `null_blk` baseline and split regressions
 
 ```bash

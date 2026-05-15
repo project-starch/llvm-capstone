@@ -56,6 +56,12 @@ The key property is that the domain is provided through a host-shared directory,
 - `run-hostcall-filewrite-probe.sh` — second HostCall-style `WRITE_GUEST_TMPFILE` regression wrapper.
 - `build-hostcall-fileread-probe.sh` — cross-build helper for the reverse-direction HostCall fileread proof.
 - `run-hostcall-fileread-probe.sh` — reverse-direction HostCall-style `READ_GUEST_TMPFILE` regression wrapper.
+- `build-hostcall-second-pending-probe.sh` — metadata-only diagnostic for whether a domain may return `PENDING` twice from one invocation.
+- `run-hostcall-second-pending-probe.sh` — wrapper for that metadata-only second-`PENDING` diagnostic.
+- `build-hostcall-second-pending-payload-probe.sh` — narrower diagnostic for reusing one borrowed output payload region across two successive `PENDING` rounds.
+- `run-hostcall-second-pending-payload-probe.sh` — wrapper for that payload-reuse diagnostic.
+- `build-hostcall-second-pending-payload-revoke-probe.sh` — workaround/discipline variant that explicitly revokes the borrowed payload region before re-sharing it.
+- `run-hostcall-second-pending-payload-revoke-probe.sh` — wrapper for that explicit-revoke payload-reuse diagnostic.
 - `run-nullblk-baseline.sh` — baseline `null_blk` regression wrapper.
 - `run-nullblk-split-io.sh` — split `null_blk` I/O regression wrapper.
 - `run-nullblk-split-rmmod.sh` — split `null_blk` unload regression wrapper.
@@ -152,5 +158,33 @@ python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
 This is a **runtime probe facility**, not by itself proof that a new architecture
 milestone is validated. Only promote a new probe to the validated baseline once it
 passes consistently and is documented in the handoff notes.
+
+## Current targeted diagnostics around multi-round HostCall
+
+Two narrower diagnostic wrappers now exist for the current runtime question:
+
+- `run-hostcall-second-pending-probe.sh`
+  - metadata only,
+  - no payload reuse,
+  - currently shows that a second successive `PENDING` can work in this environment.
+- `run-hostcall-second-pending-payload-probe.sh`
+  - metadata plus one borrowed output payload region,
+  - helper tries to re-share that same payload for the next round,
+  - currently reproduces the QEMU assertion in `helper_csmrev`.
+- `run-hostcall-second-pending-payload-revoke-probe.sh`
+  - same payload-reuse shape,
+  - but helper explicitly calls `revoke_region(payload_region_id)` before the second borrowed re-share,
+  - currently succeeds.
+
+So the current evidence is more precise than "multi-PENDING is unsupported":
+
+- metadata-only second-`PENDING` works,
+- reusing/re-sharing the same borrowed output payload across successive rounds without revoke triggers the current `helper_csmrev` assertion,
+- explicitly revoking that region before the next borrowed re-share succeeds.
+
+This now matches the intended runtime rule confirmed by the runtime/QEMU author:
+
+> if a region is already borrow-shared, it must be revoked before anything else can
+> be done to it, including borrow-sharing it again.
 
 

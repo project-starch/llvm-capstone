@@ -55,6 +55,9 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh
 | HostCall stdout proof | domain -> helper payload flow | HostCall metadata/output flow changes | `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` |
 | HostCall filewrite proof | same ABI reused for a second coarse service | HostCall service-family changes | `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh` |
 | HostCall fileread proof | helper -> domain payload flow | reverse-direction payload changes | `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh` |
+| Second-`PENDING` diagnostic | whether metadata-only multi-`PENDING` re-entry works | targeted runtime/control-flow diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-probe.sh` |
+| Second-`PENDING` payload-reuse diagnostic | whether reusing the same borrowed output payload across rounds triggers the current limitation | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-probe.sh` |
+| Second-`PENDING` payload-reuse revoke diagnostic | whether explicit revoke before re-share satisfies the intended borrowed-region rule | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-revoke-probe.sh` |
 | `null_blk` baseline | baseline block path still works | runtime/device baseline checks | `capstone/tests/runtime-qemu/run-nullblk-baseline.sh` |
 | `null_blk` split | split I/O path and unload still work | OpenSBI/kernel/module integration changes | `run-nullblk-split-io.sh`, `run-nullblk-split-rmmod.sh` |
 
@@ -80,6 +83,23 @@ Then add the more specific wrapper that matches the changed service.
 
 Run the runtime proofs plus the `null_blk` regressions.
 If the active kernel changed, rebuild dependent modules/packages so their `vermagic` matches.
+
+### Narrow runtime/QEMU capability-path diagnosis
+
+When the question is specifically about repeated HostCall rounds, use:
+
+```bash
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-second-pending-probe.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-probe.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-revoke-probe.sh"
+```
+
+Interpretation in the current environment:
+
+- metadata-only second `PENDING` works,
+- reusing/re-sharing the same borrowed output payload across the next round without revoke reproduces the current `helper_csmrev` assertion,
+- explicitly revoking that payload region before the second borrowed re-share succeeds,
+- this matches the intended runtime rule that an already borrow-shared region must be revoked before it is reused or re-shared.
 
 ## Important limitations
 

@@ -201,10 +201,16 @@ The smallest code step that matches this design is:
 Important current limitation:
 
 - the architectural subset above still makes sense,
-- but the current repository does **not** yet treat multi-`PENDING` re-entry from one
-  domain invocation as validated baseline behavior,
-- so the first implementation may need either one request per domain invocation or a
-  separately characterized multi-round control shape until that runtime question is resolved.
+- but repeated borrowed output payload reuse across successive rounds is only valid
+  if the helper explicitly revokes that region before borrowing it again,
+- a metadata-only second-`PENDING` probe works,
+- a narrower probe that re-shares the same borrowed output payload for the next round
+  without revoke reproduces `helper_csmrev`,
+- and the matching explicit-`revoke_region()` probe passes.
+
+So the first implementation does **not** need a runtime/QEMU fix to move forward,
+but it **does** need to follow the confirmed revoke-before-reborrow discipline whenever
+the same borrowed payload object is reused across rounds.
 
 ## Suggested validation order
 
