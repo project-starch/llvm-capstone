@@ -6,7 +6,7 @@
 #include <unistd.h>
 
 #include "../../../caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.h"
-#include "../hostcall-stdout-probe/hostcall_stdout_probe.h"
+#include "../hostcall-file-service-probe-common.h"
 
 #define print_nobuf(...)         \
   do {                           \
@@ -14,26 +14,8 @@
     fflush(stdout);              \
   } while (0)
 
-#define HOSTCALL_COMBINED_FILE_OBJECT_MAX_HANDLES 8
-
-struct handle_slot {
-  int in_use;
-  int fd;
-};
-
-static struct handle_slot handle_slots[HOSTCALL_COMBINED_FILE_OBJECT_MAX_HANDLES];
-
-static void cleanup_open_handles(void) {
-  hostcall_u64_t slot_i;
-
-  for (slot_i = 0; slot_i < HOSTCALL_COMBINED_FILE_OBJECT_MAX_HANDLES; ++slot_i) {
-    if (handle_slots[slot_i].in_use) {
-      close(handle_slots[slot_i].fd);
-      handle_slots[slot_i].fd = -1;
-      handle_slots[slot_i].in_use = 0;
-    }
-  }
-}
+static struct hostcall_file_service_handle_slot
+    handle_slots[HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES];
 
 static int fail_cleanup(const char *message, unsigned long observed,
                         struct hostcall_v0 *metadata) {
@@ -46,109 +28,10 @@ static int fail_cleanup(const char *message, unsigned long observed,
             metadata->phase, metadata->opcode, metadata->offset,
             metadata->length, metadata->result, metadata->error);
   }
-  cleanup_open_handles();
+  hostcall_cleanup_open_handles(handle_slots,
+                                HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES);
   capstone_cleanup();
   return 1;
-}
-
-static void snapshot_request(struct hostcall_v0 *snapshot,
-                             const struct hostcall_v0 *metadata) {
-  snapshot->phase = metadata->phase;
-  snapshot->opcode = metadata->opcode;
-  snapshot->offset = metadata->offset;
-  snapshot->length = metadata->length;
-  snapshot->result = metadata->result;
-  snapshot->error = metadata->error;
-}
-
-static int payload_range_valid(const struct hostcall_v0 *request) {
-  hostcall_u64_t end = request->offset + request->length;
-
-  if (request->offset > HOSTCALL_STDOUT_PROBE_REGION_SIZE)
-    return 0;
-  if (request->length > HOSTCALL_STDOUT_PROBE_REGION_SIZE)
-    return 0;
-  if (end > HOSTCALL_STDOUT_PROBE_REGION_SIZE)
-    return 0;
-  return 1;
-}
-
-static hostcall_u64_t allocate_handle_token(int fd) {
-  hostcall_u64_t slot_i;
-
-  for (slot_i = 0; slot_i < HOSTCALL_COMBINED_FILE_OBJECT_MAX_HANDLES; ++slot_i) {
-    if (!handle_slots[slot_i].in_use) {
-      handle_slots[slot_i].in_use = 1;
-      handle_slots[slot_i].fd = fd;
-      return slot_i + 1;
-    }
-  }
-
-  errno = EMFILE;
-  return 0;
-}
-
-static int lookup_handle_fd(hostcall_u64_t token) {
-  if (token == 0 || token > HOSTCALL_COMBINED_FILE_OBJECT_MAX_HANDLES) {
-    errno = EBADF;
-    return -1;
-  }
-  if (!handle_slots[token - 1].in_use) {
-    errno = EBADF;
-    return -1;
-  }
-  return handle_slots[token - 1].fd;
-}
-
-static int close_handle_token(hostcall_u64_t token) {
-  struct handle_slot *slot;
-  int fd;
-
-  if (token == 0 || token > HOSTCALL_COMBINED_FILE_OBJECT_MAX_HANDLES) {
-    errno = EBADF;
-    return -1;
-  }
-
-  slot = &handle_slots[token - 1];
-  if (!slot->in_use) {
-    errno = EBADF;
-    return -1;
-  }
-
-  fd = slot->fd;
-  slot->fd = -1;
-  slot->in_use = 0;
-  if (close(fd) < 0)
-    return -1;
-  return 0;
-}
-
-static ssize_t write_full_at_offset(int fd, const char *buffer, size_t len,
-                                    off_t file_offset) {
-  size_t written = 0;
-
-  if (lseek(fd, file_offset, SEEK_SET) < 0)
-    return -1;
-
-  while (written < len) {
-    ssize_t rc = write(fd, buffer + written, len - written);
-    if (rc < 0)
-      return -1;
-    if (rc == 0) {
-      errno = EIO;
-      return -1;
-    }
-    written += (size_t)rc;
-  }
-
-  return (ssize_t)written;
-}
-
-static ssize_t read_into_buffer_at_offset(int fd, char *buffer, size_t len,
-                                          off_t file_offset) {
-  if (lseek(fd, file_offset, SEEK_SET) < 0)
-    return -1;
-  return read(fd, buffer, len);
 }
 
 int main(int argc, char **argv) {
@@ -218,7 +101,7 @@ int main(int argc, char **argv) {
       "hostcall-combined-file-object-probe: metadata shared, payload borrowed-out for first open request\n");
 
   ret1 = call_dom(dom_id);
-  snapshot_request(&request, metadata);
+  hostcall_snapshot_request(&request, metadata);
   print_nobuf("hostcall-combined-file-object-probe: first call retval = %lu\n",
               ret1);
   if (ret1 != HC_V0_RET_PENDING)
@@ -229,7 +112,7 @@ int main(int argc, char **argv) {
   if (request.offset != HC_FILE_OPEN_REQ_V0_PATH_OFFSET || !request.length)
     return fail_cleanup("unexpected first open layout",
                         (unsigned long)request.offset, &request);
-  if (!payload_range_valid(&request))
+  if (!hostcall_payload_range_valid(&request))
     return fail_cleanup("first open path exceeds payload region", 0, &request);
 
   memcpy(path_snapshot, payload + request.offset, (size_t)request.length);
@@ -246,7 +129,8 @@ int main(int argc, char **argv) {
     return fail_cleanup("first open request failed", (unsigned long)errno,
                         metadata);
   }
-  write_handle_token = allocate_handle_token(fd);
+  write_handle_token = hostcall_allocate_handle_token(
+      handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, fd);
   if (!write_handle_token) {
     int saved_errno = errno;
     close(fd);
@@ -268,7 +152,7 @@ int main(int argc, char **argv) {
       "hostcall-combined-file-object-probe: payload revoked and re-shared for write request\n");
 
   ret2 = call_dom(dom_id);
-  snapshot_request(&request, metadata);
+  hostcall_snapshot_request(&request, metadata);
   print_nobuf("hostcall-combined-file-object-probe: second call retval = %lu\n",
               ret2);
   if (ret2 != HC_V0_RET_PENDING)
@@ -279,7 +163,7 @@ int main(int argc, char **argv) {
   if (request.offset != HC_FILE_WRITE_REQ_V0_DATA_OFFSET)
     return fail_cleanup("unexpected write data offset",
                         (unsigned long)request.offset, &request);
-  if (!payload_range_valid(&request))
+  if (!hostcall_payload_range_valid(&request))
     return fail_cleanup("write payload exceeds payload region", 0, &request);
   if (((struct hc_file_write_req_v0 *)payload)->handle != write_handle_token)
     return fail_cleanup("unexpected write handle token",
@@ -291,7 +175,9 @@ int main(int argc, char **argv) {
   print_nobuf(
       "hostcall-combined-file-object-probe: servicing HC_V0_OP_FILE_WRITE for token %llu\n",
       write_handle_token);
-  fd = lookup_handle_fd(write_handle_token);
+  fd = hostcall_lookup_handle_fd(handle_slots,
+                                 HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES,
+                                 write_handle_token);
   if (fd < 0) {
     metadata->result = -1;
     metadata->error = errno;
@@ -299,9 +185,9 @@ int main(int argc, char **argv) {
     return fail_cleanup("lookup write handle failed", (unsigned long)errno,
                         metadata);
   }
-  if (write_full_at_offset(fd, write_snapshot, (size_t)request.length,
-                           (off_t)((struct hc_file_write_req_v0 *)payload)
-                               ->file_offset) < 0) {
+  if (hostcall_write_full_at_offset(
+          fd, write_snapshot, (size_t)request.length,
+          (off_t)((struct hc_file_write_req_v0 *)payload)->file_offset) < 0) {
     metadata->result = -1;
     metadata->error = errno;
     metadata->phase = HC_V0_PHASE_ERROR;
@@ -319,7 +205,7 @@ int main(int argc, char **argv) {
       "hostcall-combined-file-object-probe: payload revoked and re-shared for first close request\n");
 
   ret3 = call_dom(dom_id);
-  snapshot_request(&request, metadata);
+  hostcall_snapshot_request(&request, metadata);
   print_nobuf("hostcall-combined-file-object-probe: third call retval = %lu\n",
               ret3);
   if (ret3 != HC_V0_RET_PENDING)
@@ -335,7 +221,9 @@ int main(int argc, char **argv) {
   print_nobuf(
       "hostcall-combined-file-object-probe: servicing first HC_V0_OP_FILE_CLOSE for token %llu\n",
       write_handle_token);
-  if (close_handle_token(write_handle_token) < 0) {
+  if (hostcall_close_handle_token(handle_slots,
+                                  HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES,
+                                  write_handle_token) < 0) {
     metadata->result = -1;
     metadata->error = errno;
     metadata->phase = HC_V0_PHASE_ERROR;
@@ -354,7 +242,7 @@ int main(int argc, char **argv) {
       "hostcall-combined-file-object-probe: payload revoked and re-shared for second open request\n");
 
   ret4 = call_dom(dom_id);
-  snapshot_request(&request, metadata);
+  hostcall_snapshot_request(&request, metadata);
   print_nobuf("hostcall-combined-file-object-probe: fourth call retval = %lu\n",
               ret4);
   if (ret4 != HC_V0_RET_PENDING)
@@ -365,7 +253,7 @@ int main(int argc, char **argv) {
   if (request.offset != HC_FILE_OPEN_REQ_V0_PATH_OFFSET || !request.length)
     return fail_cleanup("unexpected second open layout",
                         (unsigned long)request.offset, &request);
-  if (!payload_range_valid(&request))
+  if (!hostcall_payload_range_valid(&request))
     return fail_cleanup("second open path exceeds payload region", 0, &request);
 
   memcpy(path_snapshot, payload + request.offset, (size_t)request.length);
@@ -382,7 +270,8 @@ int main(int argc, char **argv) {
     return fail_cleanup("second open request failed", (unsigned long)errno,
                         metadata);
   }
-  read_handle_token = allocate_handle_token(fd);
+  read_handle_token = hostcall_allocate_handle_token(
+      handle_slots, HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, fd);
   if (!read_handle_token) {
     int saved_errno = errno;
     close(fd);
@@ -404,7 +293,7 @@ int main(int argc, char **argv) {
       "hostcall-combined-file-object-probe: payload revoked and re-shared for read request\n");
 
   ret5 = call_dom(dom_id);
-  snapshot_request(&request, metadata);
+  hostcall_snapshot_request(&request, metadata);
   print_nobuf("hostcall-combined-file-object-probe: fifth call retval = %lu\n",
               ret5);
   if (ret5 != HC_V0_RET_PENDING)
@@ -415,7 +304,7 @@ int main(int argc, char **argv) {
   if (request.offset != HC_FILE_READ_REQ_V0_DATA_OFFSET)
     return fail_cleanup("unexpected read data offset",
                         (unsigned long)request.offset, &request);
-  if (!payload_range_valid(&request))
+  if (!hostcall_payload_range_valid(&request))
     return fail_cleanup("read request exceeds payload region", 0, &request);
   if (((struct hc_file_read_req_v0 *)payload)->handle != read_handle_token)
     return fail_cleanup("unexpected read handle token",
@@ -427,7 +316,9 @@ int main(int argc, char **argv) {
   print_nobuf(
       "hostcall-combined-file-object-probe: servicing HC_V0_OP_FILE_READ for token %llu\n",
       read_handle_token);
-  fd = lookup_handle_fd(read_handle_token);
+  fd = hostcall_lookup_handle_fd(handle_slots,
+                                 HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES,
+                                 read_handle_token);
   if (fd < 0) {
     metadata->result = -1;
     metadata->error = errno;
@@ -443,7 +334,7 @@ int main(int argc, char **argv) {
   print_nobuf(
       "hostcall-combined-file-object-probe: payload revoked and re-shared for read response plus final close request\n");
 
-  read_result = read_into_buffer_at_offset(
+  read_result = hostcall_read_into_buffer_at_offset(
       fd, payload + request.offset, (size_t)request.length,
       (off_t)read_request_snapshot.file_offset);
   if (read_result < 0) {
@@ -457,7 +348,7 @@ int main(int argc, char **argv) {
   metadata->phase = HC_V0_PHASE_RESP;
 
   ret6 = call_dom(dom_id);
-  snapshot_request(&request, metadata);
+  hostcall_snapshot_request(&request, metadata);
   print_nobuf("hostcall-combined-file-object-probe: sixth call retval = %lu\n",
               ret6);
   if (ret6 != HC_V0_RET_PENDING)
@@ -473,7 +364,9 @@ int main(int argc, char **argv) {
   print_nobuf(
       "hostcall-combined-file-object-probe: servicing second HC_V0_OP_FILE_CLOSE for token %llu\n",
       read_handle_token);
-  if (close_handle_token(read_handle_token) < 0) {
+  if (hostcall_close_handle_token(handle_slots,
+                                  HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES,
+                                  read_handle_token) < 0) {
     metadata->result = -1;
     metadata->error = errno;
     metadata->phase = HC_V0_PHASE_ERROR;
@@ -502,7 +395,8 @@ int main(int argc, char **argv) {
   print_nobuf("hostcall-combined-file-object-probe: success\n");
   print_nobuf("__HOSTCALL_COMBINED_FILE_OBJECT_OK__\n");
 
-  cleanup_open_handles();
+  hostcall_cleanup_open_handles(handle_slots,
+                                HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES);
   if (capstone_cleanup()) {
     fprintf(stderr,
             "hostcall-combined-file-object-probe: failed to clean up Capstone\n");
