@@ -64,6 +64,16 @@
 #define HOSTCALL_FILE_HANDLE_STAT_PROBE_MESSAGE_LEN \
   (sizeof(HOSTCALL_FILE_HANDLE_STAT_PROBE_MESSAGE) - 1)
 
+#define HOSTCALL_FILE_HANDLE_TRUNCATE_PROBE_INPUT_PATH \
+  "/tmp/hostcall_v0_handle_truncate.txt"
+#define HOSTCALL_FILE_HANDLE_TRUNCATE_PROBE_INPUT_PATH_LEN \
+  (sizeof(HOSTCALL_FILE_HANDLE_TRUNCATE_PROBE_INPUT_PATH) - 1)
+#define HOSTCALL_FILE_HANDLE_TRUNCATE_PROBE_INITIAL_MESSAGE \
+  "hostcall-v0 handle truncate payload"
+#define HOSTCALL_FILE_HANDLE_TRUNCATE_PROBE_INITIAL_MESSAGE_LEN \
+  (sizeof(HOSTCALL_FILE_HANDLE_TRUNCATE_PROBE_INITIAL_MESSAGE) - 1)
+#define HOSTCALL_FILE_HANDLE_TRUNCATE_PROBE_TARGET_SIZE 9ULL
+
 #define HOSTCALL_FILE_HANDLE_SYNC_PROBE_OUTPUT_PATH \
   "/tmp/hostcall_v0_handle_sync.txt"
 #define HOSTCALL_FILE_HANDLE_SYNC_PROBE_OUTPUT_PATH_LEN \
@@ -122,6 +132,7 @@ struct hostcall_v0 {
 #define HC_V0_OP_FILE_CLOSE 19ULL
 #define HC_V0_OP_FILE_STAT_BASIC 20ULL
 #define HC_V0_OP_FILE_SYNC 21ULL
+#define HC_V0_OP_FILE_TRUNCATE 22ULL
 
 #define HC_V0_RET_DONE 0UL
 #define HC_V0_RET_PENDING 1UL
@@ -186,6 +197,13 @@ struct hc_file_stat_basic_resp_v0 {
   hostcall_u64_t mode;
   hostcall_u64_t reserved0;
   hostcall_u64_t reserved1;
+};
+
+struct hc_file_truncate_req_v0 {
+  hostcall_u64_t handle;
+  hostcall_u64_t size;
+  hostcall_u64_t flags;
+  hostcall_u64_t reserved0;
 };
 
 #define HC_FILE_OPEN_REQ_V0_PATH_OFFSET 16ULL
