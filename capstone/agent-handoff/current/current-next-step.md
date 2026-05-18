@@ -5,12 +5,13 @@ This file intentionally contains the **current** recommendation only.
 ## Current recommendation
 
 The reverse-direction payload proof is already validated.
-The current helper-side proofs now also snapshot shared metadata requests before
-service, so the next step is **not** another basic read-like or write-like toy proof.
+The tree now also has a first helper-managed `FILE_OPEN` / `FILE_CLOSE` lifecycle proof,
+including explicit revoke-before-reborrow on the reused borrowed payload region.
+So the next step is **not** another basic read-like or write-like toy proof.
 
 The next smallest meaningful step is:
 
-> keep the same HostCall v0 control flow and metadata ABI, but apply the now-confirmed borrowed-region revoke discipline before any repeated borrowed payload re-share, then continue the smallest handle-based file-service experiment on top of that rule
+> keep the same HostCall v0 control flow and metadata ABI, preserve the now-confirmed borrowed-region revoke discipline, and extend the validated handle-based file-service path from `FILE_OPEN` / `FILE_CLOSE` to real byte movement through `FILE_WRITE` and then `FILE_READ`
 
 ## Why this is now the right next step
 
@@ -21,6 +22,7 @@ The current runtime baseline already proves:
 - the same metadata ABI supports more than one coarse HostCall service,
 - borrowed payload ownership works in both directions,
 - helper-side request snapshotting works in the current two-round HostCall proofs,
+- one helper-managed handle can survive across more than one request round and then be closed,
 - the domain remains the initiator and the helper remains the executor.
 
 That means the main unresolved question is no longer:
@@ -46,8 +48,8 @@ The intended design remains service-oriented:
 
 ## Concrete next implementation target
 
-The first implementation target is still expected to become a helper-managed
-file-object path, but the diagnostics now show a more specific runtime fact.
+The first implementation target is now a partially validated helper-managed
+file-object path, and the next remaining gap is clear.
 
 The repository now has source-backed evidence that:
 
@@ -68,6 +70,15 @@ That means:
    repeated borrowed output payload re-share,
 4. a runtime-side auto-normalization patch is optional ergonomics work, not the
    required correctness fix for the current branch.
+
+The repository now also has one validated concrete example of that rule in a real
+service path:
+
+- `FILE_OPEN` request,
+- helper response with token,
+- helper-side `revoke_region()` plus re-share of the same payload region,
+- `FILE_CLOSE` request,
+- final completion.
 
 ## Recommended first stable subset
 
@@ -90,15 +101,15 @@ The full proposal lives in:
 
 ## Smallest code slice after the design note
 
-After the subset is documented, the next code change should be the smallest
-real helper/service path that obeys this now-known rule:
+After the subset is documented and the first handle-lifecycle proof exists, the next
+code change should extend that same ABI to real byte movement:
 
-1. if the same payload region will be borrowed again in a later round, call
-   `revoke_region(payload_region_id)` first,
-2. then re-share it as borrowed for the next round,
-3. keep the non-revoke probe as the negative diagnostic proving why that discipline exists.
+1. add `FILE_WRITE` on the same helper-managed handle model,
+2. then add `FILE_READ`,
+3. keep using `revoke_region(payload_region_id)` before reusing the borrowed payload region,
+4. keep the non-revoke probe as the negative diagnostic proving why that discipline exists.
 
-That should come before promoting a multi-op handle path to the validated baseline.
+That should come before claiming a reusable SQLite-facing file service baseline.
 
 ## Exit criterion
 
@@ -107,7 +118,8 @@ This milestone is complete when:
 - the stable file-service subset is documented,
 - the handoff no longer claims that reverse-direction payload is still the next missing proof,
 - the current repeated borrowed-payload reuse rule is documented and followed,
-- only then should the first handle-based file-object path be treated as validated baseline.
+- a reusable handle-based path supports `OPEN`, `WRITE`, `READ`, and `CLOSE`,
+- only then should the first SQLite-facing file-service slice be treated as validated baseline.
 
 ## What not to regress
 

@@ -23,8 +23,9 @@ regressions:
 8. the first HostCall-style `WRITE_STDOUT` request/response proof succeeds with shared metadata plus a stricter borrowed payload region,
 9. a second HostCall-style `WRITE_GUEST_TMPFILE` request/response proof succeeds on the same metadata ABI and borrowed payload discipline,
 10. a reverse-direction HostCall-style `READ_GUEST_TMPFILE` request/response proof succeeds with helper-produced borrowed response payload bytes,
-11. baseline `null_blk` loads, performs I/O, and unloads,
-12. split `null_blk` loads, performs I/O, and unloads.
+11. a first helper-managed file-handle lifecycle proof succeeds for `FILE_OPEN` followed by `FILE_CLOSE` on one domain invocation,
+12. baseline `null_blk` loads, performs I/O, and unloads,
+13. split `null_blk` loads, performs I/O, and unloads.
 
 The current helper-side HostCall proofs also snapshot the shared metadata request
 (and, where applicable, the borrowed request payload) immediately after the first
@@ -32,14 +33,21 @@ The current helper-side HostCall proofs also snapshot the shared metadata reques
 proof from depending on repeated reads of mutable shared state while servicing the
 round.
 
-The currently validated HostCall baseline is still a **two-round** shape:
+The currently validated HostCall baseline now includes two shapes:
 
-- one `HC_V0_RET_PENDING` round,
-- host-side servicing from a snapped request,
-- one completion round.
+- the earlier single-request **two-round** proofs:
+  - one `HC_V0_RET_PENDING` round,
+  - host-side servicing from a snapped request,
+  - one completion round,
+- and a first helper-managed file-object lifecycle proof with:
+  - an `OPEN` request round,
+  - helper-side response plus explicit revoke-before-reborrow,
+  - a `CLOSE` request round,
+  - one final completion round.
 
-More ambitious multi-request flows on one domain invocation should not yet be
-treated as validated baseline behavior until that path is characterized separately.
+That does **not** yet mean every arbitrary multi-request flow is validated, but it does
+mean the tree now has one working handle-based multi-request path that obeys the
+confirmed borrowed-payload lifecycle rule.
 
 The key property is that the domain is provided through a host-shared directory, so the test does **not** rebuild `rootfs.ext2` for each iteration.
 
@@ -56,6 +64,8 @@ The key property is that the domain is provided through a host-shared directory,
 - `run-hostcall-filewrite-probe.sh` — second HostCall-style `WRITE_GUEST_TMPFILE` regression wrapper.
 - `build-hostcall-fileread-probe.sh` — cross-build helper for the reverse-direction HostCall fileread proof.
 - `run-hostcall-fileread-probe.sh` — reverse-direction HostCall-style `READ_GUEST_TMPFILE` regression wrapper.
+- `build-hostcall-file-open-close-probe.sh` — cross-build helper for the first helper-managed file-handle lifecycle proof.
+- `run-hostcall-file-open-close-probe.sh` — helper-managed `FILE_OPEN` / `FILE_CLOSE` regression wrapper.
 - `build-hostcall-second-pending-probe.sh` — metadata-only diagnostic for whether a domain may return `PENDING` twice from one invocation.
 - `run-hostcall-second-pending-probe.sh` — wrapper for that metadata-only second-`PENDING` diagnostic.
 - `build-hostcall-second-pending-payload-probe.sh` — narrower diagnostic for reusing one borrowed output payload region across two successive `PENDING` rounds.
@@ -107,6 +117,9 @@ bash capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh \
 bash capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-fileread-probe-wrapper.txt" 2>&1
 
+bash capstone/tests/runtime-qemu/run-hostcall-file-open-close-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-open-close-probe-wrapper.txt" 2>&1
+
 bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline-wrapper.txt" 2>&1
 
@@ -124,6 +137,7 @@ sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-shared-region-probe.lo
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-stdout-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-filewrite-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-fileread-probe.log"
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-open-close-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-io.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod.log"

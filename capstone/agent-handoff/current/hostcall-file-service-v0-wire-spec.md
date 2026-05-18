@@ -523,6 +523,13 @@ Why first:
 
 - establishes object lifetime and error handling without response payload complexity
 
+Current status:
+
+- this phase now exists in-tree as a validated `FILE_OPEN` / `FILE_CLOSE` proof,
+- it exercises helper-managed handle allocation and release,
+- and it reuses the same borrowed payload region across the later close request via
+  explicit revoke-before-reborrow.
+
 ### Phase 3: `FILE_WRITE` proof
 
 Validate:

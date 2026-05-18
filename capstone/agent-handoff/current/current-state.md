@@ -26,6 +26,7 @@ The following is already implemented and verified in the current tree:
 - `capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh` passes,
+- `capstone/tests/runtime-qemu/run-hostcall-file-open-close-probe.sh` passes,
 - baseline `null_blk` passes,
 - split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding against the active kernel.
 
@@ -37,17 +38,24 @@ The current runtime proofs now cover:
 - a tighter borrowed payload discipline,
 - helper-side request snapshotting before servicing the current working HostCall proofs,
 - reuse of one metadata ABI across more than one coarse service,
+- a first helper-managed file-handle lifecycle path,
 - both payload directions:
   - domain -> helper output-style payload,
   - helper -> domain input-style payload.
 
 This means the immediate unknown is no longer "can one more toy read/write proof work?".
 
-It also means the currently validated HostCall shape is still:
+The currently validated HostCall shapes are now:
 
-- one `PENDING` return,
-- helper-side service from a snapped request,
-- one completion return.
+- the original single-request path:
+  - one `PENDING` return,
+  - helper-side service from a snapped request,
+  - one completion return,
+- and a first handle-lifecycle multi-request path:
+  - `FILE_OPEN` request,
+  - helper response plus explicit payload revoke-before-reborrow,
+  - `FILE_CLOSE` request,
+  - one final completion return.
 
 A more precise diagnostic result is now available:
 
@@ -113,6 +121,7 @@ bash capstone/tests/runtime-qemu/run-shared-region-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh
+bash capstone/tests/runtime-qemu/run-hostcall-file-open-close-probe.sh
 bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh
 bash capstone/tests/runtime-qemu/run-nullblk-split-io.sh
 bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh

@@ -225,6 +225,13 @@ the same borrowed payload object is reused across rounds.
 - close it,
 - verify token lifecycle and error paths.
 
+Current status:
+
+- the tree now has a validated first lifecycle proof for `FILE_OPEN` followed by
+  `FILE_CLOSE` on one domain invocation,
+- that proof also demonstrates explicit revoke-before-reborrow on the reused
+  borrowed payload region.
+
 ### Phase B: reusable read/write proof
 - open,
 - write through the handle,

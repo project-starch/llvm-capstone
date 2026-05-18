@@ -38,6 +38,7 @@ At a high level, the repository currently has:
 - validated HostCall stdout proof,
 - validated HostCall filewrite proof,
 - validated HostCall fileread reverse-direction proof,
+- validated HostCall file open/close handle-lifecycle proof,
 - working baseline and split `null_blk` regressions.
 
 See `current/current-state.md` for the concise canonical state snapshot.
