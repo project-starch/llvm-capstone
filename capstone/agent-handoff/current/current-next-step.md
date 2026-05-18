@@ -17,7 +17,7 @@ So the next step is **not** another basic read-like or write-like toy proof.
 
 The next smallest meaningful step is:
 
-> keep the same HostCall v0 control flow and metadata ABI, preserve the now-confirmed borrowed-region revoke discipline, and identify which next consumer-facing semantics are still missing beyond the now-validated reusable file-object core
+> keep the same HostCall v0 control flow and metadata ABI, preserve the now-confirmed borrowed-region revoke discipline, and add a handle-based `FILE_SYNC` semantic as the next consumer-facing operation beyond the now-validated reusable file-object core
 
 ## Why this is now the right next step
 
@@ -40,7 +40,11 @@ That means the main unresolved question is no longer:
 
 It is now:
 
-> can this boundary support a small reusable service family that a future runtime/libc layer can actually target?
+> which next semantic most usefully increases the correctness envelope of that small reusable service family?
+
+The current answer is:
+
+> `FILE_SYNC` should come next.
 
 ## What this recommendation is trying to avoid
 
@@ -108,6 +112,16 @@ Then add only if justified by the next consumer:
 - `FILE_STAT_BASIC`
 - `FILE_SYNC`
 
+The current decision is that `FILE_SYNC` comes first; `FILE_STAT_BASIC` stays deferred until a concrete metadata-oriented consumer actually needs it.
+
+Why `FILE_SYNC` wins now:
+
+- it adds a new correctness boundary after writes rather than only inspection metadata,
+- it stays naturally handle-based and composes with the already validated
+  `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE` path,
+- it moves the service boundary closer to a durability-sensitive SQLite-like consumer
+  without jumping into a larger speculative surface expansion.
+
 The full proposal lives in:
 
 - `current/stable-file-service-subset.md`
@@ -116,14 +130,18 @@ The full proposal lives in:
 ## Smallest code slice after the design note
 
 After the subset is documented and the first composed file-object scenario exists, the next
-code change should target the next missing consumer-facing semantic:
+code change should target the chosen next consumer-facing semantic:
 
-1. decide whether the next realistic consumer needs `FILE_STAT_BASIC`, `FILE_SYNC`, or
-   both,
-2. keep the response path on the borrowed payload reuse discipline already validated
+1. add a handle-based `FILE_SYNC` request/response path,
+2. validate it first with a focused `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE`
+   proof,
+3. only then decide whether the composed reusable file-object scenario should absorb that
+   sync step,
+4. keep the response path on the borrowed payload reuse discipline already validated
    by the read proof,
-3. keep using `revoke_region(payload_region_id)` before reusing the borrowed payload region,
-4. avoid inventing more proof-only opcodes unless a concrete consumer really needs them.
+5. keep using `revoke_region(payload_region_id)` before reusing the borrowed payload region,
+6. avoid inventing more proof-only opcodes unless a concrete consumer really needs them.
+
 
 That should come before claiming a reusable SQLite-facing file service baseline.
 
@@ -135,8 +153,7 @@ This milestone is complete when:
 - the handoff no longer claims that reverse-direction payload is still the next missing proof,
 - the current repeated borrowed-payload reuse rule is documented and followed,
 - a reusable handle-based path supports `OPEN`, `WRITE`, `READ`, and `CLOSE`,
-- at least one realistic consumer-facing next semantic (`STAT_BASIC` or `SYNC`) is
-  chosen and justified,
+- `FILE_SYNC` is chosen and justified as the next realistic consumer-facing semantic,
 - only then should the first SQLite-facing file-service slice be treated as validated baseline.
 
 ## What not to regress

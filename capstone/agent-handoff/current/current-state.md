@@ -129,8 +129,9 @@ See `current/hosted-libc-os-analysis.md` only if the task is specifically about 
 
 ## Current next milestone in one sentence
 
-The next meaningful step is to stop adding one-off proof opcodes and define a first small,
-stable, reusable file-service subset on top of the already validated HostCall v0 boundary.
+The next meaningful step is to keep that small reusable file-service subset and add
+handle-based `FILE_SYNC` as the next consumer-facing semantic on top of the already
+validated HostCall v0 boundary.
 
 ## Fast runtime entry points
 
