@@ -543,6 +543,13 @@ Why next:
 
 - request-side borrowed payload is already a validated pattern in the tree
 
+Current status:
+
+- this phase now exists in-tree as a validated handle-based `FILE_WRITE` proof,
+- it exercises `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE` on one domain invocation,
+- and it uses explicit revoke-before-reborrow between the open, write, and close
+  request rounds.
+
 ### Phase 4: `FILE_READ` proof
 
 Validate:

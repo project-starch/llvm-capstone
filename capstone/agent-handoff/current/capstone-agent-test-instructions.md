@@ -168,6 +168,16 @@ bash capstone/tests/runtime-qemu/run-hostcall-file-open-close-probe.sh \
 sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-file-open-close-probe.txt"
 ```
 
+### HostCall file handle write proof
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-file-handle-write-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/run-hostcall-file-handle-write-probe.txt" 2>&1
+
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-file-handle-write-probe.txt"
+```
+
 ### Optional: metadata-only second-`PENDING` diagnostic
 
 ```bash

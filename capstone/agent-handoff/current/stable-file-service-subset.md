@@ -240,6 +240,13 @@ Current status:
 - read back,
 - verify the bytes.
 
+Current status:
+
+- the tree now has the first half of this phase in a validated handle-based write path:
+  `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE`,
+- the next missing piece is a matching reusable `FILE_READ` proof on the same
+  helper-managed handle model.
+
 ### Phase C: SQLite-facing gap check
 - list what is still missing for a tiny SQLite-style file backend shim,
 - only then choose whether sync/stat/locking must be added next.
