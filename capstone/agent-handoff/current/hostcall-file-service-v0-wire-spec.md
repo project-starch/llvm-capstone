@@ -31,7 +31,8 @@ A practical staged order is:
 2. `FILE_CLOSE`
 3. `FILE_WRITE`
 4. `FILE_READ`
-5. only then consider `FILE_STAT_BASIC` / `FILE_SYNC`
+5. `FILE_SYNC`
+6. only then consider `FILE_STAT_BASIC`
 
 That keeps the initial code slice small while still freezing a reusable modular ABI.
 
@@ -168,7 +169,7 @@ To avoid churn with those diagnostics, reserve a separate block for the file-ser
 #define HC_V0_OP_FILE_WRITE       18ULL
 #define HC_V0_OP_FILE_CLOSE       19ULL
 #define HC_V0_OP_FILE_STAT_BASIC  20ULL   /* reserved for later */
-#define HC_V0_OP_FILE_SYNC        21ULL   /* reserved for later */
+#define HC_V0_OP_FILE_SYNC        21ULL
 ```
 
 These values are a recommendation for the next implementation patch series.
@@ -383,6 +384,28 @@ Response contract:
 - `metadata.error = 0` on success
 - `metadata.result = -1` and `metadata.error = -errno` on failure
 
+### 7e. `FILE_SYNC`
+
+```c
+struct hc_file_sync_req_v0 {
+    uint64_t handle;
+    uint64_t flags;
+};
+```
+
+Request contract:
+
+- header starts at payload offset `0`
+- `metadata.offset = 0`
+- `metadata.length = 0`
+- `flags = 0` requests the first conservative durability-oriented behavior: `fsync(fd)`
+
+Response contract:
+
+- `metadata.result = 0` on success
+- `metadata.error = 0` on success
+- `metadata.result = -1` and `metadata.error = -errno` on failure
+
 ## 8. What lives in metadata vs payload
 
 ### Metadata
@@ -476,6 +499,13 @@ Practical note for a one-payload composed scenario:
 - request payload direction: domain -> helper
 - response payload: none
 - metadata only is sufficient for the response
+
+### `FILE_SYNC`
+
+- request payload direction: domain -> helper
+- response payload: none
+- metadata only is sufficient for the response
+- the initial conservative helper behavior is `flags == 0 -> fsync(fd)`
 
 ## 11. Error model
 
@@ -586,7 +616,10 @@ Do not add them by default until a real consumer needs them.
 Current status:
 
 - the tree now has the first composed reusable file-object scenario:
-  `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`,
+- the tree now also has the first focused handle-based `FILE_SYNC` proof:
+  `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE`,
+- the tree now has the first composed reusable file-object scenario:
+  `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`,
 - that proof reuses one metadata region and one payload region across the whole
   scenario,
 - and for the final `FILE_READ -> FILE_CLOSE` handoff it uses a slightly broader

@@ -246,10 +246,13 @@ Current status:
   `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE`,
 - the tree now also has the first handle-based `FILE_OPEN -> FILE_READ -> DONE`
   proof on the same helper-managed handle model,
+- the tree now also has the first handle-based `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE`
+  proof on that same model,
 - and the tree now has the first composed reusable file-object scenario:
-  `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`,
-- so the next missing piece is no longer operation composition itself, but whichever
-  next consumer-facing semantic the first real higher layer actually needs.
+  `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`,
+- so the next missing piece is no longer operation composition itself and no longer the
+  first durability-oriented semantic, but whichever next higher-layer semantic the first
+  real consumer actually needs after `SYNC` is already present.
 
 ### Phase C: SQLite-facing gap check
 - list what is still missing for a tiny SQLite-style file backend shim,

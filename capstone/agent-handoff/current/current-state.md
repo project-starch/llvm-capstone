@@ -29,6 +29,7 @@ The following is already implemented and verified in the current tree:
 - `capstone/tests/runtime-qemu/run-hostcall-file-open-close-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-file-handle-write-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh` passes,
+- `capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh` passes,
 - baseline `null_blk` passes,
 - split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding against the active kernel.
@@ -44,6 +45,7 @@ The current runtime proofs now cover:
 - a first helper-managed file-handle lifecycle path,
 - a first helper-managed file-handle byte-write path,
 - a first helper-managed file-handle byte-read path,
+- a first helper-managed file-handle sync path,
 - a first composed reusable file-object scenario built from the modular file-service operations,
 - both payload directions:
   - domain -> helper output-style payload,
@@ -63,13 +65,14 @@ The currently validated HostCall shapes are now:
   - optional later `FILE_WRITE` request on the returned token,
   - helper response plus explicit payload revoke-before-reborrow,
   - optional later `FILE_READ` request on the returned token,
+  - optional later `FILE_SYNC` request on the returned token,
   - helper response payload re-shared as borrowed input for the response round,
   - `FILE_CLOSE` request when that particular proof path needs it,
   - one final completion return.
 
 The tree now also has one concrete end-to-end composition proof for that service family:
 
-- `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`
+- `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`
 
 using one shared metadata region, one reused payload region, explicit revoke-before-
 reborrow at each borrowed-payload transition, and a slightly broader borrowed share
@@ -129,9 +132,9 @@ See `current/hosted-libc-os-analysis.md` only if the task is specifically about 
 
 ## Current next milestone in one sentence
 
-The next meaningful step is to keep that small reusable file-service subset and add
-handle-based `FILE_SYNC` as the next consumer-facing semantic on top of the already
-validated HostCall v0 boundary.
+The next meaningful step is to keep that small reusable file-service subset and decide
+which post-`FILE_SYNC` consumer-facing semantic is actually needed next rather than adding
+more ABI surface by habit.
 
 ## Fast runtime entry points
 

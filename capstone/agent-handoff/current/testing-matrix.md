@@ -35,6 +35,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-shared-region-probe.sh
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh"
 
 # null_blk regressions
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-baseline.sh"
@@ -58,7 +59,8 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh
 | HostCall file open/close proof | first helper-managed file-handle lifecycle path plus revoke-before-reborrow on a real service flow | handle-table or multi-request file-service changes | `capstone/tests/runtime-qemu/run-hostcall-file-open-close-probe.sh` |
 | HostCall file handle write proof | first handle-based byte-movement path on top of helper-managed file tokens | handle-based file-service data-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-write-probe.sh` |
 | HostCall file handle read proof | first handle-based reverse-direction byte-movement path on top of helper-managed file tokens | handle-based file-service read-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh` |
-| HostCall combined file-object proof | first composed end-to-end file-object scenario across modular OPEN/WRITE/CLOSE/READ operations | composed file-service behavior changes | `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh` |
+| HostCall file handle sync proof | first handle-based durability-oriented path on top of helper-managed file tokens | handle-based file-service sync-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh` |
+| HostCall combined file-object proof | first composed end-to-end file-object scenario across modular OPEN/WRITE/SYNC/CLOSE/READ operations | composed file-service behavior changes | `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh` |
 | Second-`PENDING` diagnostic | whether metadata-only multi-`PENDING` re-entry works | targeted runtime/control-flow diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-probe.sh` |
 | Second-`PENDING` payload-reuse diagnostic | whether reusing the same borrowed output payload across rounds triggers the current limitation | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-probe.sh` |
 | Second-`PENDING` payload-reuse revoke diagnostic | whether explicit revoke before re-share satisfies the intended borrowed-region rule | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-revoke-probe.sh` |

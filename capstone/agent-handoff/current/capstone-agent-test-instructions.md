@@ -188,6 +188,16 @@ bash capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh \
 sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-file-handle-read-probe.txt"
 ```
 
+### HostCall file handle sync proof
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/run-hostcall-file-handle-sync-probe.txt" 2>&1
+
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-file-handle-sync-probe.txt"
+```
+
 ### HostCall combined file-object proof
 
 ```bash
