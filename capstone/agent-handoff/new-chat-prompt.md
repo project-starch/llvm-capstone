@@ -59,10 +59,11 @@ The following is already verified:
    - `capstone/tests/runtime-qemu/run-hostcall-file-handle-write-probe.sh`
    - `capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh`
    - `capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh`
+   - `capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh`
    - `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh`
    - baseline `null_blk`
    - split `null_blk`
-6. The HostCall proofs now cover both payload directions on the same metadata ABI, a reusable handle-based file-object core, and an explicit sync boundary after writes.
+6. The HostCall proofs now cover both payload directions on the same metadata ABI, a reusable handle-based file-object core, an explicit sync boundary after writes, and a narrow stat path for file size/type facts.
 
 ## Very important distinction
 
@@ -74,7 +75,7 @@ The preferred near-term direction remains:
 - split host-enclave execution,
 - shared regions + synchronous multi-round HostCall,
 - then a small reusable service surface,
-- with `FILE_SYNC` already validated and the next step now being the first real post-sync higher-layer gap,
+- with `FILE_SYNC` and `FILE_STAT_BASIC` already validated and a narrow handle-based `FILE_TRUNCATE` now chosen as the next semantic,
 - only later broader hosted user-space ambitions.
 
 ## What to avoid spending time on right now

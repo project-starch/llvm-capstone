@@ -248,11 +248,21 @@ Current status:
   proof on the same helper-managed handle model,
 - the tree now also has the first handle-based `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE`
   proof on that same model,
+- the tree now also has the first handle-based `FILE_OPEN -> FILE_STAT_BASIC -> FILE_CLOSE`
+  proof on that same model,
 - and the tree now has the first composed reusable file-object scenario:
   `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`,
 - so the next missing piece is no longer operation composition itself and no longer the
-  first durability-oriented semantic, but whichever next higher-layer semantic the first
-  real consumer actually needs after `SYNC` is already present.
+  first durability-oriented semantic.
+
+Current decision:
+
+- the validated first post-`SYNC` semantic is now a narrow handle-based `FILE_STAT_BASIC` path,
+- its initial scope is limited to file size plus minimal mode/type facts from `fstat(fd)`,
+- the next missing size-related capability should now be a narrow handle-based `FILE_TRUNCATE`
+  path,
+- locking remains deferred because it adds more policy surface than the next smallest reusable
+  higher-layer bridge needs.
 
 ### Phase C: SQLite-facing gap check
 - list what is still missing for a tiny SQLite-style file backend shim,

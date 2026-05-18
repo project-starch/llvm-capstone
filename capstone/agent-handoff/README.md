@@ -42,10 +42,14 @@ At a high level, the repository currently has:
 - validated HostCall handle-based FILE_WRITE proof,
 - validated HostCall handle-based FILE_READ proof,
 - validated HostCall handle-based FILE_SYNC proof,
+- validated HostCall handle-based FILE_STAT_BASIC proof,
 - validated combined reusable file-object proof,
 - working baseline and split `null_blk` regressions.
 
 See `current/current-state.md` for the concise canonical state snapshot.
+
+At the current planning layer, `FILE_SYNC` and `FILE_STAT_BASIC` are already validated,
+and the next chosen consumer-facing semantic is a narrow handle-based `FILE_TRUNCATE` path.
 
 ## Workflow rules to preserve
 

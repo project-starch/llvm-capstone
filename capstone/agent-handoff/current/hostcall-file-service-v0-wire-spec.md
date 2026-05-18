@@ -32,7 +32,9 @@ A practical staged order is:
 3. `FILE_WRITE`
 4. `FILE_READ`
 5. `FILE_SYNC`
-6. only then consider `FILE_STAT_BASIC`
+6. `FILE_STAT_BASIC`
+7. `FILE_TRUNCATE`
+8. only then consider locking-related semantics
 
 That keeps the initial code slice small while still freezing a reusable modular ABI.
 
@@ -406,6 +408,38 @@ Response contract:
 - `metadata.error = 0` on success
 - `metadata.result = -1` and `metadata.error = -errno` on failure
 
+### 7f. `FILE_STAT_BASIC`
+
+```c
+struct hc_file_stat_basic_req_v0 {
+    uint64_t handle;
+    uint64_t flags;
+};
+
+struct hc_file_stat_basic_resp_v0 {
+    uint64_t file_size;
+    uint64_t mode;
+    uint64_t reserved0;
+    uint64_t reserved1;
+};
+```
+
+Request contract:
+
+- header starts at payload offset `0`
+- `metadata.offset = 0`
+- `metadata.length = 0`
+- `flags = 0` requests the first conservative stat slice from helper-side `fstat(fd)`
+
+Response contract:
+
+- helper writes `struct hc_file_stat_basic_resp_v0` at the start of the payload region
+- `metadata.offset = 0`
+- `metadata.length = sizeof(struct hc_file_stat_basic_resp_v0)`
+- `metadata.result = 0` on success
+- `metadata.error = 0` on success
+- `metadata.result = -1` and `metadata.error = -errno` on failure
+
 ## 8. What lives in metadata vs payload
 
 ### Metadata
@@ -429,6 +463,7 @@ Payload carries the operation-specific data-plane bytes:
 - `FILE_WRITE`: fixed-size write header plus write data bytes
 - `FILE_READ`: fixed-size read header, then later response data bytes
 - `FILE_CLOSE`: fixed-size close header only
+- `FILE_STAT_BASIC`: fixed-size request header, then later fixed-size response payload
 
 That separation keeps `hostcall_v0` generic while still allowing operation-specific request
 formats and variable-length data.
@@ -506,6 +541,15 @@ Practical note for a one-payload composed scenario:
 - response payload: none
 - metadata only is sufficient for the response
 - the initial conservative helper behavior is `flags == 0 -> fsync(fd)`
+
+### `FILE_STAT_BASIC`
+
+- request payload direction: domain -> helper
+- response payload direction: helper -> domain
+- helper snapshots the fixed-size stat request header before overwriting the payload region
+- if the same payload region is reused for the response and then for an immediate follow-on
+  request, the helper may need a slightly broader borrowed re-share (`INOUT + BORROWED`) for
+  that handoff, exactly as in the focused stat proof
 
 ## 11. Error model
 
@@ -609,13 +653,10 @@ Current status:
 - and it snapshots the read request header before revoking and re-sharing the same
   payload region as borrowed input for the response round.
 
-### Phase 5: decide whether `STAT_BASIC` / `SYNC` are immediately needed
-
-Do not add them by default until a real consumer needs them.
+### Phase 5: add `FILE_SYNC`
 
 Current status:
 
-- the tree now has the first composed reusable file-object scenario:
 - the tree now also has the first focused handle-based `FILE_SYNC` proof:
   `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE`,
 - the tree now has the first composed reusable file-object scenario:
@@ -625,6 +666,39 @@ Current status:
 - and for the final `FILE_READ -> FILE_CLOSE` handoff it uses a slightly broader
   borrowed response share so the domain can consume the read bytes and then stage
   the last close request without a second payload region.
+
+### Phase 6: add `FILE_STAT_BASIC`
+
+Recommended first scope:
+
+- request by helper-managed handle token,
+- use helper-side `fstat(fd)`,
+- return only the smallest durable facts likely to matter next:
+  - file size,
+  - minimal mode/type bits,
+- do **not** start by mirroring the full host `struct stat` layout.
+
+Why this comes next:
+
+- it gives a future higher layer object facts it cannot derive from plain read/write/sync,
+- it stays naturally handle-based and avoids repeated path queries,
+- it is a smaller next step than truncate or locking semantics.
+
+Current status:
+
+- this phase now exists in-tree as a validated handle-based `FILE_STAT_BASIC` proof,
+- it exercises `FILE_OPEN -> FILE_STAT_BASIC -> FILE_CLOSE` on one domain invocation,
+- and it snapshots the fixed-size stat request header before revoking and re-sharing the same
+  payload region for the response-plus-final-close handoff.
+
+### Phase 7: add `FILE_TRUNCATE`
+
+Recommended first scope:
+
+- request by helper-managed handle token,
+- one target size field,
+- helper behavior maps directly to `ftruncate(fd, new_size)`,
+- validate with a follow-on stat or read path that proves the new size actually took effect.
 
 ## 14. Minimal validation scenarios
 
@@ -657,6 +731,13 @@ Current status:
 - `FILE_CLOSE`
 
 This is the first scenario that demonstrates the intended modular composition model.
+
+### Scenario E: narrow stat path
+
+- `FILE_OPEN`
+- `FILE_STAT_BASIC`
+- `FILE_CLOSE`
+- verify returned file size and minimal mode/type facts inside the domain
 
 ## 15. What should remain for a later `hostcall_v1`
 
