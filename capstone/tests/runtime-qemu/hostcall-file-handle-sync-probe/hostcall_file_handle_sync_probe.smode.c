@@ -19,7 +19,6 @@ struct sbiret {
 
 static struct hostcall_v0 *metadata;
 static char *payload;
-static char read_snapshot[HOSTCALL_STDOUT_PROBE_REGION_SIZE];
 static char stack[4096];
 
 static struct sbiret sbi_ecall(int ext, int fid, unsigned long arg0,
@@ -73,17 +72,6 @@ static void copy_bytes(char *dest, const char *src, unsigned long len) {
   }
 }
 
-static int bytes_match(const char *lhs, const char *rhs, unsigned long len) {
-  while (len > 0) {
-    if (*lhs != *rhs)
-      return 0;
-    lhs++;
-    rhs++;
-    len--;
-  }
-  return 1;
-}
-
 static void init_regions(void) {
   region_id_t region_n = region_count();
   region_id_t metadata_region_id = region_n - 2;
@@ -98,22 +86,19 @@ static void start_impl(void) {
   struct hc_file_write_req_v0 *write_req;
   struct hc_file_sync_req_v0 *sync_req;
   struct hc_file_close_req_v0 *close_req;
-  struct hc_file_read_req_v0 *read_req;
-  hostcall_u64_t write_handle_token;
-  hostcall_u64_t read_handle_token;
-  hostcall_u64_t i;
+  hostcall_u64_t handle_token;
 
   init_regions();
 
   open_req = (struct hc_file_open_req_v0 *)payload;
   open_req->flags = O_CREAT | O_TRUNC | O_WRONLY;
   open_req->mode = 0644;
-  copy_bytes(open_req->path, HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH,
-             HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH_LEN);
+  copy_bytes(open_req->path, HOSTCALL_FILE_HANDLE_SYNC_PROBE_OUTPUT_PATH,
+             HOSTCALL_FILE_HANDLE_SYNC_PROBE_OUTPUT_PATH_LEN);
   metadata->phase = HC_V0_PHASE_REQ;
   metadata->opcode = HC_V0_OP_FILE_OPEN;
   metadata->offset = HC_FILE_OPEN_REQ_V0_PATH_OFFSET;
-  metadata->length = HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH_LEN;
+  metadata->length = HOSTCALL_FILE_HANDLE_SYNC_PROBE_OUTPUT_PATH_LEN;
   metadata->result = 0;
   metadata->error = 0;
   dom_return(HC_V0_RET_PENDING);
@@ -124,30 +109,30 @@ static void start_impl(void) {
     dom_return(HC_V0_RET_ERROR);
   }
 
-  write_handle_token = (hostcall_u64_t)metadata->result;
+  handle_token = (hostcall_u64_t)metadata->result;
   write_req = (struct hc_file_write_req_v0 *)payload;
-  write_req->handle = write_handle_token;
+  write_req->handle = handle_token;
   write_req->file_offset = 0;
   write_req->flags = 0;
   write_req->reserved0 = 0;
-  copy_bytes((char *)write_req->data, HOSTCALL_COMBINED_FILE_OBJECT_PROBE_MESSAGE,
-             HOSTCALL_COMBINED_FILE_OBJECT_PROBE_MESSAGE_LEN);
+  copy_bytes((char *)write_req->data, HOSTCALL_FILE_HANDLE_SYNC_PROBE_MESSAGE,
+             HOSTCALL_FILE_HANDLE_SYNC_PROBE_MESSAGE_LEN);
   metadata->phase = HC_V0_PHASE_REQ;
   metadata->opcode = HC_V0_OP_FILE_WRITE;
   metadata->offset = HC_FILE_WRITE_REQ_V0_DATA_OFFSET;
-  metadata->length = HOSTCALL_COMBINED_FILE_OBJECT_PROBE_MESSAGE_LEN;
+  metadata->length = HOSTCALL_FILE_HANDLE_SYNC_PROBE_MESSAGE_LEN;
   metadata->result = 0;
   metadata->error = 0;
   dom_return(HC_V0_RET_PENDING);
 
   if (metadata->phase != HC_V0_PHASE_RESP || metadata->error != 0 ||
-      metadata->result != HOSTCALL_COMBINED_FILE_OBJECT_PROBE_MESSAGE_LEN) {
+      metadata->result != HOSTCALL_FILE_HANDLE_SYNC_PROBE_MESSAGE_LEN) {
     metadata->phase = HC_V0_PHASE_ERROR;
     dom_return(HC_V0_RET_ERROR);
   }
 
   sync_req = (struct hc_file_sync_req_v0 *)payload;
-  sync_req->handle = write_handle_token;
+  sync_req->handle = handle_token;
   sync_req->flags = 0;
   metadata->phase = HC_V0_PHASE_REQ;
   metadata->opcode = HC_V0_OP_FILE_SYNC;
@@ -164,70 +149,7 @@ static void start_impl(void) {
   }
 
   close_req = (struct hc_file_close_req_v0 *)payload;
-  close_req->handle = write_handle_token;
-  metadata->phase = HC_V0_PHASE_REQ;
-  metadata->opcode = HC_V0_OP_FILE_CLOSE;
-  metadata->offset = 0;
-  metadata->length = 0;
-  metadata->result = 0;
-  metadata->error = 0;
-  dom_return(HC_V0_RET_PENDING);
-
-  if (metadata->phase != HC_V0_PHASE_RESP || metadata->error != 0 ||
-      metadata->result != 0) {
-    metadata->phase = HC_V0_PHASE_ERROR;
-    dom_return(HC_V0_RET_ERROR);
-  }
-
-  open_req = (struct hc_file_open_req_v0 *)payload;
-  open_req->flags = O_RDONLY;
-  open_req->mode = 0;
-  copy_bytes(open_req->path, HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH,
-             HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH_LEN);
-  metadata->phase = HC_V0_PHASE_REQ;
-  metadata->opcode = HC_V0_OP_FILE_OPEN;
-  metadata->offset = HC_FILE_OPEN_REQ_V0_PATH_OFFSET;
-  metadata->length = HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH_LEN;
-  metadata->result = 0;
-  metadata->error = 0;
-  dom_return(HC_V0_RET_PENDING);
-
-  if (metadata->phase != HC_V0_PHASE_RESP || metadata->error != 0 ||
-      metadata->result <= 0) {
-    metadata->phase = HC_V0_PHASE_ERROR;
-    dom_return(HC_V0_RET_ERROR);
-  }
-
-  read_handle_token = (hostcall_u64_t)metadata->result;
-  read_req = (struct hc_file_read_req_v0 *)payload;
-  read_req->handle = read_handle_token;
-  read_req->file_offset = 0;
-  read_req->flags = 0;
-  read_req->reserved0 = 0;
-  metadata->phase = HC_V0_PHASE_REQ;
-  metadata->opcode = HC_V0_OP_FILE_READ;
-  metadata->offset = HC_FILE_READ_REQ_V0_DATA_OFFSET;
-  metadata->length = HOSTCALL_COMBINED_FILE_OBJECT_PROBE_MESSAGE_LEN;
-  metadata->result = 0;
-  metadata->error = 0;
-  dom_return(HC_V0_RET_PENDING);
-
-  if (metadata->phase != HC_V0_PHASE_RESP || metadata->error != 0 ||
-      metadata->result != HOSTCALL_COMBINED_FILE_OBJECT_PROBE_MESSAGE_LEN) {
-    metadata->phase = HC_V0_PHASE_ERROR;
-    dom_return(HC_V0_RET_ERROR);
-  }
-
-  for (i = 0; i < metadata->result; ++i)
-    read_snapshot[i] = payload[metadata->offset + i];
-  if (!bytes_match(read_snapshot, HOSTCALL_COMBINED_FILE_OBJECT_PROBE_MESSAGE,
-                   HOSTCALL_COMBINED_FILE_OBJECT_PROBE_MESSAGE_LEN)) {
-    metadata->phase = HC_V0_PHASE_ERROR;
-    dom_return(HC_V0_RET_ERROR);
-  }
-
-  close_req = (struct hc_file_close_req_v0 *)payload;
-  close_req->handle = read_handle_token;
+  close_req->handle = handle_token;
   metadata->phase = HC_V0_PHASE_REQ;
   metadata->opcode = HC_V0_OP_FILE_CLOSE;
   metadata->offset = 0;

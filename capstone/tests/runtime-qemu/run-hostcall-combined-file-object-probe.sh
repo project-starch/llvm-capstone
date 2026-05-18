@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # One-command wrapper for the first combined file-object proof:
-# OPEN -> WRITE -> CLOSE -> OPEN -> READ -> CLOSE.
+# OPEN -> WRITE -> SYNC -> CLOSE -> OPEN -> READ -> CLOSE.
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
@@ -25,9 +25,10 @@ python3 "$SCRIPT_DIR/run-domain-smoke.py" \
   --guest-command "rm -f $OUTPUT_PATH && cp /mnt/host/hostcall_combined_file_object_probe.user /tmp/hostcall_combined_file_object_probe.user && chmod 0755 /tmp/hostcall_combined_file_object_probe.user && /tmp/hostcall_combined_file_object_probe.user /mnt/host/hostcall_combined_file_object_probe.smode && test \"\$(cat $OUTPUT_PATH)\" = \"$EXPECTED_TEXT\" && echo __HOSTCALL_COMBINED_FILE_OBJECT_OK__" \
   --success-marker "hostcall-combined-file-object-probe: first call retval = 1" \
   --success-marker "hostcall-combined-file-object-probe: servicing HC_V0_OP_FILE_WRITE" \
+  --success-marker "hostcall-combined-file-object-probe: servicing HC_V0_OP_FILE_SYNC" \
   --success-marker "hostcall-combined-file-object-probe: servicing HC_V0_OP_FILE_READ" \
   --success-marker "hostcall-combined-file-object-probe: payload revoked and re-shared for read response plus final close request" \
-  --success-marker "hostcall-combined-file-object-probe: seventh call retval = 0" \
+  --success-marker "hostcall-combined-file-object-probe: eighth call retval = 0" \
   --success-marker "hostcall-combined-file-object-probe: success" \
   --success-marker "__HOSTCALL_COMBINED_FILE_OBJECT_OK__"
 

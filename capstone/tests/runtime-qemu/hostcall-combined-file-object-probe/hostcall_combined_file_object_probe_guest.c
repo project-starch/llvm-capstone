@@ -51,6 +51,7 @@ int main(int argc, char **argv) {
   unsigned long ret5;
   unsigned long ret6;
   unsigned long ret7;
+  unsigned long ret8;
   hostcall_u64_t write_handle_token;
   hostcall_u64_t read_handle_token;
   int fd;
@@ -202,7 +203,7 @@ int main(int argc, char **argv) {
                           HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_OUT,
                           HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_BORROWED);
   print_nobuf(
-      "hostcall-combined-file-object-probe: payload revoked and re-shared for first close request\n");
+      "hostcall-combined-file-object-probe: payload revoked and re-shared for sync request\n");
 
   ret3 = call_dom(dom_id);
   hostcall_snapshot_request(&request, metadata);
@@ -210,6 +211,59 @@ int main(int argc, char **argv) {
               ret3);
   if (ret3 != HC_V0_RET_PENDING)
     return fail_cleanup("unexpected third call retval", ret3, &request);
+  if (request.phase != HC_V0_PHASE_REQ || request.opcode != HC_V0_OP_FILE_SYNC)
+    return fail_cleanup("unexpected sync request",
+                        (unsigned long)request.opcode, &request);
+  if (request.offset != 0 || request.length != 0)
+    return fail_cleanup("unexpected sync offset/length",
+                        (unsigned long)request.offset, &request);
+  if (((struct hc_file_sync_req_v0 *)payload)->handle != write_handle_token)
+    return fail_cleanup("unexpected sync token",
+                        (unsigned long)((struct hc_file_sync_req_v0 *)payload)
+                            ->handle,
+                        &request);
+  if (((struct hc_file_sync_req_v0 *)payload)->flags != 0)
+    return fail_cleanup("unexpected sync flags",
+                        (unsigned long)((struct hc_file_sync_req_v0 *)payload)
+                            ->flags,
+                        &request);
+  print_nobuf(
+      "hostcall-combined-file-object-probe: servicing HC_V0_OP_FILE_SYNC for token %llu\n",
+      write_handle_token);
+  fd = hostcall_lookup_handle_fd(handle_slots,
+                                 HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES,
+                                 write_handle_token);
+  if (fd < 0) {
+    metadata->result = -1;
+    metadata->error = errno;
+    metadata->phase = HC_V0_PHASE_ERROR;
+    return fail_cleanup("lookup sync handle failed", (unsigned long)errno,
+                        metadata);
+  }
+  if (fsync(fd) < 0) {
+    metadata->result = -1;
+    metadata->error = errno;
+    metadata->phase = HC_V0_PHASE_ERROR;
+    return fail_cleanup("sync request failed", (unsigned long)errno,
+                        metadata);
+  }
+  metadata->result = 0;
+  metadata->error = 0;
+  metadata->phase = HC_V0_PHASE_RESP;
+
+  revoke_region(payload_region_id);
+  shared_region_annotated(dom_id, payload_region_id,
+                          HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_OUT,
+                          HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_BORROWED);
+  print_nobuf(
+      "hostcall-combined-file-object-probe: payload revoked and re-shared for first close request\n");
+
+  ret4 = call_dom(dom_id);
+  hostcall_snapshot_request(&request, metadata);
+  print_nobuf("hostcall-combined-file-object-probe: fourth call retval = %lu\n",
+              ret4);
+  if (ret4 != HC_V0_RET_PENDING)
+    return fail_cleanup("unexpected fourth call retval", ret4, &request);
   if (request.phase != HC_V0_PHASE_REQ || request.opcode != HC_V0_OP_FILE_CLOSE)
     return fail_cleanup("unexpected first close request",
                         (unsigned long)request.opcode, &request);
@@ -241,12 +295,12 @@ int main(int argc, char **argv) {
   print_nobuf(
       "hostcall-combined-file-object-probe: payload revoked and re-shared for second open request\n");
 
-  ret4 = call_dom(dom_id);
+  ret5 = call_dom(dom_id);
   hostcall_snapshot_request(&request, metadata);
-  print_nobuf("hostcall-combined-file-object-probe: fourth call retval = %lu\n",
-              ret4);
-  if (ret4 != HC_V0_RET_PENDING)
-    return fail_cleanup("unexpected fourth call retval", ret4, &request);
+  print_nobuf("hostcall-combined-file-object-probe: fifth call retval = %lu\n",
+              ret5);
+  if (ret5 != HC_V0_RET_PENDING)
+    return fail_cleanup("unexpected fifth call retval", ret5, &request);
   if (request.phase != HC_V0_PHASE_REQ || request.opcode != HC_V0_OP_FILE_OPEN)
     return fail_cleanup("unexpected second open request",
                         (unsigned long)request.opcode, &request);
@@ -292,12 +346,12 @@ int main(int argc, char **argv) {
   print_nobuf(
       "hostcall-combined-file-object-probe: payload revoked and re-shared for read request\n");
 
-  ret5 = call_dom(dom_id);
+  ret6 = call_dom(dom_id);
   hostcall_snapshot_request(&request, metadata);
-  print_nobuf("hostcall-combined-file-object-probe: fifth call retval = %lu\n",
-              ret5);
-  if (ret5 != HC_V0_RET_PENDING)
-    return fail_cleanup("unexpected fifth call retval", ret5, &request);
+  print_nobuf("hostcall-combined-file-object-probe: sixth call retval = %lu\n",
+              ret6);
+  if (ret6 != HC_V0_RET_PENDING)
+    return fail_cleanup("unexpected sixth call retval", ret6, &request);
   if (request.phase != HC_V0_PHASE_REQ || request.opcode != HC_V0_OP_FILE_READ)
     return fail_cleanup("unexpected read request",
                         (unsigned long)request.opcode, &request);
@@ -347,12 +401,12 @@ int main(int argc, char **argv) {
   metadata->error = 0;
   metadata->phase = HC_V0_PHASE_RESP;
 
-  ret6 = call_dom(dom_id);
+  ret7 = call_dom(dom_id);
   hostcall_snapshot_request(&request, metadata);
-  print_nobuf("hostcall-combined-file-object-probe: sixth call retval = %lu\n",
-              ret6);
-  if (ret6 != HC_V0_RET_PENDING)
-    return fail_cleanup("unexpected sixth call retval", ret6, &request);
+  print_nobuf("hostcall-combined-file-object-probe: seventh call retval = %lu\n",
+              ret7);
+  if (ret7 != HC_V0_RET_PENDING)
+    return fail_cleanup("unexpected seventh call retval", ret7, &request);
   if (request.phase != HC_V0_PHASE_REQ || request.opcode != HC_V0_OP_FILE_CLOSE)
     return fail_cleanup("unexpected second close request",
                         (unsigned long)request.opcode, &request);
@@ -377,11 +431,11 @@ int main(int argc, char **argv) {
   metadata->error = 0;
   metadata->phase = HC_V0_PHASE_RESP;
 
-  ret7 = call_dom(dom_id);
-  print_nobuf("hostcall-combined-file-object-probe: seventh call retval = %lu\n",
-              ret7);
-  if (ret7 != HC_V0_RET_DONE)
-    return fail_cleanup("unexpected seventh call retval", ret7, metadata);
+  ret8 = call_dom(dom_id);
+  print_nobuf("hostcall-combined-file-object-probe: eighth call retval = %lu\n",
+              ret8);
+  if (ret8 != HC_V0_RET_DONE)
+    return fail_cleanup("unexpected eighth call retval", ret8, metadata);
   if (metadata->phase != HC_V0_PHASE_DONE)
     return fail_cleanup("unexpected final phase",
                         (unsigned long)metadata->phase, metadata);

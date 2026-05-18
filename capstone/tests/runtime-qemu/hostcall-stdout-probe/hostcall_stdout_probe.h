@@ -55,6 +55,15 @@
 #define HOSTCALL_FILE_HANDLE_READ_PROBE_MESSAGE_LEN \
   (sizeof(HOSTCALL_FILE_HANDLE_READ_PROBE_MESSAGE) - 1)
 
+#define HOSTCALL_FILE_HANDLE_SYNC_PROBE_OUTPUT_PATH \
+  "/tmp/hostcall_v0_handle_sync.txt"
+#define HOSTCALL_FILE_HANDLE_SYNC_PROBE_OUTPUT_PATH_LEN \
+  (sizeof(HOSTCALL_FILE_HANDLE_SYNC_PROBE_OUTPUT_PATH) - 1)
+#define HOSTCALL_FILE_HANDLE_SYNC_PROBE_MESSAGE \
+  "hostcall-v0 handle sync payload"
+#define HOSTCALL_FILE_HANDLE_SYNC_PROBE_MESSAGE_LEN \
+  (sizeof(HOSTCALL_FILE_HANDLE_SYNC_PROBE_MESSAGE) - 1)
+
 #define HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH \
   "/tmp/hostcall_v0_combined_file_object.txt"
 #define HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH_LEN \
@@ -102,6 +111,8 @@ struct hostcall_v0 {
 #define HC_V0_OP_FILE_READ 17ULL
 #define HC_V0_OP_FILE_WRITE 18ULL
 #define HC_V0_OP_FILE_CLOSE 19ULL
+#define HC_V0_OP_FILE_STAT_BASIC 20ULL
+#define HC_V0_OP_FILE_SYNC 21ULL
 
 #define HC_V0_RET_DONE 0UL
 #define HC_V0_RET_PENDING 1UL
@@ -149,6 +160,11 @@ struct hc_file_write_req_v0 {
 
 struct hc_file_close_req_v0 {
   hostcall_u64_t handle;
+};
+
+struct hc_file_sync_req_v0 {
+  hostcall_u64_t handle;
+  hostcall_u64_t flags;
 };
 
 #define HC_FILE_OPEN_REQ_V0_PATH_OFFSET 16ULL
