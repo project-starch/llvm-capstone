@@ -55,6 +55,15 @@
 #define HOSTCALL_FILE_HANDLE_READ_PROBE_MESSAGE_LEN \
   (sizeof(HOSTCALL_FILE_HANDLE_READ_PROBE_MESSAGE) - 1)
 
+#define HOSTCALL_FILE_HANDLE_STAT_PROBE_INPUT_PATH \
+  "/tmp/hostcall_v0_handle_stat.txt"
+#define HOSTCALL_FILE_HANDLE_STAT_PROBE_INPUT_PATH_LEN \
+  (sizeof(HOSTCALL_FILE_HANDLE_STAT_PROBE_INPUT_PATH) - 1)
+#define HOSTCALL_FILE_HANDLE_STAT_PROBE_MESSAGE \
+  "hostcall-v0 handle stat payload"
+#define HOSTCALL_FILE_HANDLE_STAT_PROBE_MESSAGE_LEN \
+  (sizeof(HOSTCALL_FILE_HANDLE_STAT_PROBE_MESSAGE) - 1)
+
 #define HOSTCALL_FILE_HANDLE_SYNC_PROBE_OUTPUT_PATH \
   "/tmp/hostcall_v0_handle_sync.txt"
 #define HOSTCALL_FILE_HANDLE_SYNC_PROBE_OUTPUT_PATH_LEN \
@@ -167,9 +176,22 @@ struct hc_file_sync_req_v0 {
   hostcall_u64_t flags;
 };
 
+struct hc_file_stat_basic_req_v0 {
+  hostcall_u64_t handle;
+  hostcall_u64_t flags;
+};
+
+struct hc_file_stat_basic_resp_v0 {
+  hostcall_u64_t file_size;
+  hostcall_u64_t mode;
+  hostcall_u64_t reserved0;
+  hostcall_u64_t reserved1;
+};
+
 #define HC_FILE_OPEN_REQ_V0_PATH_OFFSET 16ULL
 #define HC_FILE_READ_REQ_V0_DATA_OFFSET 32ULL
 #define HC_FILE_WRITE_REQ_V0_DATA_OFFSET 32ULL
+#define HC_FILE_STAT_BASIC_RESP_V0_SIZE 32ULL
 
 #endif
 

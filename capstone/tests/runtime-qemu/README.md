@@ -27,9 +27,10 @@ regressions:
 12. a first handle-based `FILE_WRITE` proof succeeds for `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE` on one domain invocation,
 13. a first handle-based `FILE_READ` proof succeeds for `FILE_OPEN -> FILE_READ -> DONE` on one domain invocation,
 14. a first handle-based `FILE_SYNC` proof succeeds for `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE` on one domain invocation,
-15. a first combined file-object proof succeeds for `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`,
-16. baseline `null_blk` loads, performs I/O, and unloads,
-17. split `null_blk` loads, performs I/O, and unloads.
+15. a first handle-based `FILE_STAT_BASIC` proof succeeds for `FILE_OPEN -> FILE_STAT_BASIC -> FILE_CLOSE` on one domain invocation,
+16. a first combined file-object proof succeeds for `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`,
+17. baseline `null_blk` loads, performs I/O, and unloads,
+18. split `null_blk` loads, performs I/O, and unloads.
 
 The current helper-side HostCall proofs also snapshot the shared metadata request
 (and, where applicable, the borrowed request payload) immediately after the first
@@ -76,6 +77,8 @@ The key property is that the domain is provided through a host-shared directory,
 - `run-hostcall-file-handle-read-probe.sh` — helper-managed `FILE_OPEN` / `FILE_READ` regression wrapper.
 - `build-hostcall-file-handle-sync-probe.sh` — cross-build helper for the first handle-based `FILE_SYNC` proof.
 - `run-hostcall-file-handle-sync-probe.sh` — helper-managed `FILE_OPEN` / `FILE_WRITE` / `FILE_SYNC` / `FILE_CLOSE` regression wrapper.
+- `build-hostcall-file-handle-stat-probe.sh` — cross-build helper for the first handle-based `FILE_STAT_BASIC` proof.
+- `run-hostcall-file-handle-stat-probe.sh` — helper-managed `FILE_OPEN` / `FILE_STAT_BASIC` / `FILE_CLOSE` regression wrapper.
 - `build-hostcall-combined-file-object-probe.sh` — cross-build helper for the first composed file-object proof.
 - `run-hostcall-combined-file-object-probe.sh` — helper-managed `FILE_OPEN` / `FILE_WRITE` / `FILE_SYNC` / `FILE_CLOSE` / `FILE_OPEN` / `FILE_READ` / `FILE_CLOSE` regression wrapper.
 - `build-hostcall-second-pending-probe.sh` — metadata-only diagnostic for whether a domain may return `PENDING` twice from one invocation.
@@ -141,6 +144,9 @@ bash capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh \
 bash capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-handle-sync-probe-wrapper.txt" 2>&1
 
+bash capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-handle-stat-probe-wrapper.txt" 2>&1
+
 bash capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-combined-file-object-probe-wrapper.txt" 2>&1
 
@@ -165,6 +171,7 @@ sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-open-clo
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-handle-write-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-handle-read-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-handle-sync-probe.log"
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-handle-stat-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-combined-file-object-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-io.log"
