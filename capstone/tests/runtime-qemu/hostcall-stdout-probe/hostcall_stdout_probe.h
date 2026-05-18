@@ -28,6 +28,15 @@
   (sizeof(HOSTCALL_FILEREAD_PROBE_MESSAGE) - 1)
 #define HOSTCALL_FILEREAD_PROBE_INPUT_PATH "/tmp/hostcall_v0_read_source.txt"
 
+#define HOSTCALL_FILE_OPEN_CLOSE_PROBE_INPUT_PATH \
+  "/tmp/hostcall_v0_open_close_source.txt"
+#define HOSTCALL_FILE_OPEN_CLOSE_PROBE_INPUT_PATH_LEN \
+  (sizeof(HOSTCALL_FILE_OPEN_CLOSE_PROBE_INPUT_PATH) - 1)
+#define HOSTCALL_FILE_OPEN_CLOSE_PROBE_MESSAGE \
+  "hostcall-v0 open-close source"
+#define HOSTCALL_FILE_OPEN_CLOSE_PROBE_MESSAGE_LEN \
+  (sizeof(HOSTCALL_FILE_OPEN_CLOSE_PROBE_MESSAGE) - 1)
+
 typedef unsigned long long hostcall_u64_t;
 typedef long long hostcall_s64_t;
 
@@ -61,6 +70,12 @@ struct hostcall_v0 {
 #define HC_V0_OP_SECOND_PENDING_PAYLOAD_STAGE1 6ULL
 #define HC_V0_OP_SECOND_PENDING_PAYLOAD_STAGE2 7ULL
 
+/* First practical file-service opcodes. */
+#define HC_V0_OP_FILE_OPEN 16ULL
+#define HC_V0_OP_FILE_READ 17ULL
+#define HC_V0_OP_FILE_WRITE 18ULL
+#define HC_V0_OP_FILE_CLOSE 19ULL
+
 #define HC_V0_RET_DONE 0UL
 #define HC_V0_RET_PENDING 1UL
 #define HC_V0_RET_ERROR 2UL
@@ -82,6 +97,36 @@ struct hostcall_v0 {
 
 #define HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_BORROWED 0x1UL
 #define HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED 0x2UL
+
+struct hc_file_open_req_v0 {
+  hostcall_u64_t flags;
+  hostcall_u64_t mode;
+  char path[];
+};
+
+struct hc_file_read_req_v0 {
+  hostcall_u64_t handle;
+  hostcall_u64_t file_offset;
+  hostcall_u64_t flags;
+  hostcall_u64_t reserved0;
+  unsigned char data[];
+};
+
+struct hc_file_write_req_v0 {
+  hostcall_u64_t handle;
+  hostcall_u64_t file_offset;
+  hostcall_u64_t flags;
+  hostcall_u64_t reserved0;
+  unsigned char data[];
+};
+
+struct hc_file_close_req_v0 {
+  hostcall_u64_t handle;
+};
+
+#define HC_FILE_OPEN_REQ_V0_PATH_OFFSET 16ULL
+#define HC_FILE_READ_REQ_V0_DATA_OFFSET 32ULL
+#define HC_FILE_WRITE_REQ_V0_DATA_OFFSET 32ULL
 
 #endif
 
