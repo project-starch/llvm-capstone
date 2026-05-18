@@ -170,8 +170,9 @@ To avoid churn with those diagnostics, reserve a separate block for the file-ser
 #define HC_V0_OP_FILE_READ        17ULL
 #define HC_V0_OP_FILE_WRITE       18ULL
 #define HC_V0_OP_FILE_CLOSE       19ULL
-#define HC_V0_OP_FILE_STAT_BASIC  20ULL   /* reserved for later */
+#define HC_V0_OP_FILE_STAT_BASIC  20ULL
 #define HC_V0_OP_FILE_SYNC        21ULL
+#define HC_V0_OP_FILE_TRUNCATE    22ULL
 ```
 
 These values are a recommendation for the next implementation patch series.
@@ -440,6 +441,31 @@ Response contract:
 - `metadata.error = 0` on success
 - `metadata.result = -1` and `metadata.error = -errno` on failure
 
+### 7g. `FILE_TRUNCATE`
+
+```c
+struct hc_file_truncate_req_v0 {
+    uint64_t handle;
+    uint64_t size;
+    uint64_t flags;
+    uint64_t reserved0;
+};
+```
+
+Request contract:
+
+- header starts at payload offset `0`
+- `metadata.offset = 0`
+- `metadata.length = 0`
+- `size` is the requested new file size
+- `flags = 0` requests the first conservative behavior: helper-side `ftruncate(fd, size)`
+
+Response contract:
+
+- `metadata.result = 0` on success
+- `metadata.error = 0` on success
+- `metadata.result = -1` and `metadata.error = -errno` on failure
+
 ## 8. What lives in metadata vs payload
 
 ### Metadata
@@ -464,6 +490,7 @@ Payload carries the operation-specific data-plane bytes:
 - `FILE_READ`: fixed-size read header, then later response data bytes
 - `FILE_CLOSE`: fixed-size close header only
 - `FILE_STAT_BASIC`: fixed-size request header, then later fixed-size response payload
+- `FILE_TRUNCATE`: fixed-size truncate request header only
 
 That separation keeps `hostcall_v0` generic while still allowing operation-specific request
 formats and variable-length data.
@@ -550,6 +577,14 @@ Practical note for a one-payload composed scenario:
 - if the same payload region is reused for the response and then for an immediate follow-on
   request, the helper may need a slightly broader borrowed re-share (`INOUT + BORROWED`) for
   that handoff, exactly as in the focused stat proof
+
+### `FILE_TRUNCATE`
+
+- request payload direction: domain -> helper
+- response payload: none
+- metadata only is sufficient for the response
+- the first focused validation path is `FILE_OPEN -> FILE_TRUNCATE -> FILE_STAT_BASIC -> FILE_CLOSE`
+  so the actual new size is checked on the next round rather than trusted blindly
 
 ## 11. Error model
 
@@ -700,6 +735,12 @@ Recommended first scope:
 - helper behavior maps directly to `ftruncate(fd, new_size)`,
 - validate with a follow-on stat or read path that proves the new size actually took effect.
 
+Current status:
+
+- this phase now exists in-tree as a validated handle-based `FILE_TRUNCATE` proof,
+- it exercises `FILE_OPEN -> FILE_TRUNCATE -> FILE_STAT_BASIC -> FILE_CLOSE` on one domain invocation,
+- and it keeps the narrow handle-based scope with one target-size field and no richer allocation policy.
+
 ## 14. Minimal validation scenarios
 
 ### Scenario A: handle lifecycle
@@ -739,6 +780,14 @@ This is the first scenario that demonstrates the intended modular composition mo
 - `FILE_CLOSE`
 - verify returned file size and minimal mode/type facts inside the domain
 
+### Scenario F: narrow truncate path
+
+- `FILE_OPEN`
+- `FILE_TRUNCATE`
+- `FILE_STAT_BASIC`
+- `FILE_CLOSE`
+- verify inside the domain that the stat response reflects the requested new size
+
 ## 15. What should remain for a later `hostcall_v1`
 
 Do **not** force a metadata redesign immediately.
@@ -748,7 +797,7 @@ Examples that would justify a versioned extension later:
 
 - a dedicated metadata handle field becomes clearly worth it
 - multi-buffer operations are needed
-- richer stat/sync/locking semantics need more structured fixed-width arguments
+- richer stat/sync/truncate/locking semantics need more structured fixed-width arguments
 - response metadata can no longer stay generic without excessive opcode-specific exceptions
 
 Until then, `hostcall_v0 + payload headers + helper-managed handle table` is the preferred

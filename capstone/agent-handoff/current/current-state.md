@@ -31,6 +31,7 @@ The following is already implemented and verified in the current tree:
 - `capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh` passes,
+- `capstone/tests/runtime-qemu/run-hostcall-file-handle-truncate-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh` passes,
 - baseline `null_blk` passes,
 - split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding against the active kernel.
@@ -48,6 +49,7 @@ The current runtime proofs now cover:
 - a first helper-managed file-handle byte-read path,
 - a first helper-managed file-handle sync path,
 - a first helper-managed file-handle stat path,
+- a first helper-managed file-handle truncate path,
 - a first composed reusable file-object scenario built from the modular file-service operations,
 - both payload directions:
   - domain -> helper output-style payload,
@@ -134,8 +136,8 @@ See `current/hosted-libc-os-analysis.md` only if the task is specifically about 
 
 ## Current next milestone in one sentence
 
-The next meaningful step is to keep that small reusable file-service subset and add a narrow,
-handle-based `FILE_TRUNCATE` semantic as the next higher-layer file-size mutation capability.
+The next meaningful step is to consume the now-validated small reusable file-service subset,
+including `FILE_TRUNCATE`, before adding any lock-focused ABI surface.
 
 ## Fast runtime entry points
 
@@ -149,6 +151,9 @@ bash capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-file-open-close-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-file-handle-write-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh
+bash capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh
+bash capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh
+bash capstone/tests/runtime-qemu/run-hostcall-file-handle-truncate-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh
 bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh
 bash capstone/tests/runtime-qemu/run-nullblk-split-io.sh

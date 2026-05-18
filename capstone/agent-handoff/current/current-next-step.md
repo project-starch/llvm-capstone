@@ -12,6 +12,7 @@ The tree now also has:
 - and a first handle-based `FILE_OPEN -> FILE_READ -> DONE` proof,
 - and a first handle-based `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE` proof,
 - and a first handle-based `FILE_OPEN -> FILE_STAT_BASIC -> FILE_CLOSE` proof,
+- and a first handle-based `FILE_OPEN -> FILE_TRUNCATE -> FILE_STAT_BASIC -> FILE_CLOSE` proof,
 - and a first composed `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE` proof,
 
 both using explicit revoke-before-reborrow on the reused borrowed payload region.
@@ -19,7 +20,7 @@ So the next step is **not** another basic read-like or write-like toy proof.
 
 The next smallest meaningful step is:
 
-> keep the same HostCall v0 control flow and metadata ABI, preserve the now-confirmed borrowed-region revoke discipline, and add a narrow handle-based `FILE_TRUNCATE` semantic as the next file-size mutation capability after the now-validated `FILE_STAT_BASIC` step
+> keep the same HostCall v0 control flow and metadata ABI, preserve the now-confirmed borrowed-region revoke discipline, and consume the now-validated `FILE_TRUNCATE`-capable file-service subset from one concrete higher-layer shim or composed scenario before adding any lock-specific ABI surface
 
 ## Why this is now the right next step
 
@@ -35,6 +36,7 @@ The current runtime baseline already proves:
 - bytes can now also be read back through that helper-managed handle model,
 - that helper-managed file object can now also expose an explicit sync boundary after writes,
 - that helper-managed file object can now also report narrow object facts through `FILE_STAT_BASIC`,
+- that helper-managed file object can now also change file size through a narrow handle-based `FILE_TRUNCATE`,
 - those modular operations now compose into one reusable file-object scenario,
 - the domain remains the initiator and the helper remains the executor.
 
@@ -52,11 +54,11 @@ That step is now done.
 
 The next question is:
 
-> which real higher-layer semantic is still missing after `OPEN`, `READ`, `WRITE`, `SYNC`, and `CLOSE` already work on the same reusable handle-based boundary?
+> which real higher-layer gap is still missing after `OPEN`, `READ`, `WRITE`, `SYNC`, `STAT_BASIC`, `TRUNCATE`, and `CLOSE` already work on the same reusable handle-based boundary?
 
 The current answer is:
 
-> `FILE_TRUNCATE` should come next, and it should stay handle-based and narrow.
+> do not assume locking comes next; first prove that the now-validated size-oriented subset is still insufficient for a concrete consumer.
 
 ## What this recommendation is trying to avoid
 
@@ -125,24 +127,25 @@ Then add only if justified by the next consumer:
 
 - `FILE_STAT_BASIC`
 - `FILE_SYNC`
+- `FILE_TRUNCATE`
 
-The tree now already validates `FILE_STAT_BASIC`, so the next missing higher-layer ability is
-to change file size through the same helper-managed object model.
+The tree now already validates `FILE_STAT_BASIC`, `FILE_SYNC`, and `FILE_TRUNCATE`, so the
+next missing higher-layer ability is no longer simple file size mutation.
 
-Why `FILE_TRUNCATE` wins now:
+Why locking does **not** automatically win now:
 
-- it complements the now-validated file-size query path from `FILE_STAT_BASIC`,
-- it stays naturally handle-based and avoids repeated path-based mutation requests,
-- it is the smallest next size-mutation semantic before moving on to more policy-heavy locking,
-- it moves the service boundary closer to what a first SQLite-like higher layer will need
-  without forcing locking decisions immediately.
+- lock acquire / upgrade / unlock semantics are about coordination and visibility across
+  multiple actors, not just about one-threaded local state mutation,
+- that makes them more policy-heavy than `FILE_TRUNCATE`,
+- and the tree should not freeze that ABI until a concrete consumer shows exactly which lock
+  guarantees are truly required.
 
-Recommended initial scope:
+Recommended next scope:
 
-- request by handle token, not by path,
-- one explicit target-size field,
-- helper behavior maps directly to `ftruncate(fd, new_size)`,
-- no append, allocation-policy, or sparse-file policy extensions in the first slice.
+- keep using the validated narrow handle-based operations,
+- either add one composed proof that exercises `TRUNCATE` inside a larger file-object flow,
+- or start a tiny higher-layer shim that consumes `OPEN/READ/WRITE/SYNC/STAT_BASIC/TRUNCATE/CLOSE`,
+- only then decide whether any lock-oriented semantic is actually missing.
 
 The full proposal lives in:
 
@@ -151,18 +154,17 @@ The full proposal lives in:
 
 ## Smallest code slice after the design note
 
-After the subset is documented and the narrow stat path exists, the next code change should
-target that chosen post-stat semantic:
+After the focused truncate proof exists, the next code change should target consumption rather
+than another isolated opcode:
 
-1. add a narrow handle-based `FILE_TRUNCATE` request/response path,
-2. keep the first scope to one target-size argument rather than richer allocation policies,
-3. validate it first with a focused `FILE_OPEN -> FILE_TRUNCATE -> FILE_STAT_BASIC -> FILE_CLOSE`
-   proof or an equivalent size-verifying scenario,
-4. only then decide whether a composed scenario should absorb that truncate step,
-5. keep the response path on the borrowed payload reuse discipline already validated by the
-   read and stat proofs,
-6. keep using `revoke_region(payload_region_id)` before reusing the borrowed payload region,
-7. avoid inventing more proof-only opcodes unless a concrete consumer really needs them.
+1. keep the validated narrow handle-based `FILE_TRUNCATE` request/response path unchanged,
+2. add either one composed scenario that uses truncate in a larger file-object story or one tiny
+   higher-layer shim that genuinely needs it,
+3. keep using the borrowed-payload revoke-before-reborrow discipline already validated by the
+   read, stat, and truncate proofs,
+4. avoid adding `LOCK_ACQUIRE` / `LOCK_UPGRADE` / `LOCK_RELEASE` until a concrete consumer proves
+   which coordination semantics are required,
+5. avoid inventing more proof-only opcodes unless a concrete consumer really needs them.
 
 
 That should come before claiming a reusable SQLite-facing file service baseline.
@@ -177,9 +179,8 @@ This milestone is complete when:
 - a reusable handle-based path supports `OPEN`, `WRITE`, `READ`, and `CLOSE`,
 - `FILE_SYNC` is implemented and validated as the first durability-oriented semantic,
 - `FILE_STAT_BASIC` is implemented and validated as the first post-sync semantic,
-- `FILE_TRUNCATE` is chosen as the next file-size mutation semantic and its initial scope is
-  kept narrow and handle-based,
-- only then should the first SQLite-facing file-service slice be treated as validated baseline.
+- `FILE_TRUNCATE` is implemented and validated as the first narrow size-mutation semantic,
+- and only then should the branch decide whether any lock-oriented ABI is truly required.
 
 ## What not to regress
 

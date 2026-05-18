@@ -43,13 +43,15 @@ At a high level, the repository currently has:
 - validated HostCall handle-based FILE_READ proof,
 - validated HostCall handle-based FILE_SYNC proof,
 - validated HostCall handle-based FILE_STAT_BASIC proof,
+- validated HostCall handle-based FILE_TRUNCATE proof,
 - validated combined reusable file-object proof,
 - working baseline and split `null_blk` regressions.
 
 See `current/current-state.md` for the concise canonical state snapshot.
 
-At the current planning layer, `FILE_SYNC` and `FILE_STAT_BASIC` are already validated,
-and the next chosen consumer-facing semantic is a narrow handle-based `FILE_TRUNCATE` path.
+At the current planning layer, `FILE_SYNC`, `FILE_STAT_BASIC`, and `FILE_TRUNCATE`
+are already validated. The next step should not jump straight to lock choreography
+unless a concrete higher-layer consumer proves it is required.
 
 ## Workflow rules to preserve
 

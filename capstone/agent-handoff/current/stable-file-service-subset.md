@@ -57,6 +57,7 @@ The first reusable host boundary should focus on operations that really need gue
 - writing bytes to it,
 - closing it,
 - querying basic status needed by higher layers,
+- changing file size through the same object when higher layers need it,
 - syncing durable state when correctness requires it.
 
 ## Recommended first stable subset
@@ -137,6 +138,21 @@ Why it matters early:
 - SQLite correctness eventually depends on sync-like behavior,
 - but the ABI can still keep this as one coarse operation rather than exposing every helper-side subcall.
 
+### 7. `HC_V0_OP_FILE_TRUNCATE`
+
+Purpose:
+- change the file size of an already opened helper-managed file object.
+
+Initial scope:
+- request by helper-managed handle token,
+- one explicit target-size field,
+- helper behavior maps directly to `ftruncate(fd, new_size)`.
+
+Why it now belongs in the stable subset:
+- it complements the already validated `FILE_STAT_BASIC` size-query path,
+- it keeps size mutation naturally handle-based rather than path-based,
+- it is still smaller and less policy-heavy than lock choreography.
+
 ## What should not be in the first subset
 
 Do **not** start with:
@@ -201,7 +217,7 @@ The smallest code step that matches this design is:
 4. implement `FILE_WRITE`,
 5. implement `FILE_CLOSE`,
 6. validate one small end-to-end file-object scenario,
-7. only then decide whether `FILE_STAT_BASIC` and `FILE_SYNC` are immediately required.
+7. add `FILE_STAT_BASIC`, `FILE_SYNC`, and `FILE_TRUNCATE` only as concrete higher-layer needs appear.
 
 Important current limitation:
 
@@ -250,6 +266,8 @@ Current status:
   proof on that same model,
 - the tree now also has the first handle-based `FILE_OPEN -> FILE_STAT_BASIC -> FILE_CLOSE`
   proof on that same model,
+- the tree now also has the first handle-based `FILE_OPEN -> FILE_TRUNCATE -> FILE_STAT_BASIC -> FILE_CLOSE`
+  proof on that same model,
 - and the tree now has the first composed reusable file-object scenario:
   `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`,
 - so the next missing piece is no longer operation composition itself and no longer the
@@ -259,14 +277,15 @@ Current decision:
 
 - the validated first post-`SYNC` semantic is now a narrow handle-based `FILE_STAT_BASIC` path,
 - its initial scope is limited to file size plus minimal mode/type facts from `fstat(fd)`,
-- the next missing size-related capability should now be a narrow handle-based `FILE_TRUNCATE`
-  path,
-- locking remains deferred because it adds more policy surface than the next smallest reusable
-  higher-layer bridge needs.
+- the next size-related capability was a narrow handle-based `FILE_TRUNCATE` path and is now
+  also validated,
+- locking remains deferred because it adds more policy surface than the current reusable
+  higher-layer bridge has yet proven necessary.
 
 ### Phase C: SQLite-facing gap check
-- list what is still missing for a tiny SQLite-style file backend shim,
-- only then choose whether sync/stat/locking must be added next.
+- list what is still missing for a tiny SQLite-style file backend shim after
+  `OPEN/READ/WRITE/SYNC/STAT_BASIC/TRUNCATE/CLOSE`,
+- only then choose whether any lock-oriented semantic must be added next.
 
 ## Exit criterion for this milestone
 
