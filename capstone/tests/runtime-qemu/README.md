@@ -25,8 +25,9 @@ regressions:
 10. a reverse-direction HostCall-style `READ_GUEST_TMPFILE` request/response proof succeeds with helper-produced borrowed response payload bytes,
 11. a first helper-managed file-handle lifecycle proof succeeds for `FILE_OPEN` followed by `FILE_CLOSE` on one domain invocation,
 12. a first handle-based `FILE_WRITE` proof succeeds for `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE` on one domain invocation,
-13. baseline `null_blk` loads, performs I/O, and unloads,
-14. split `null_blk` loads, performs I/O, and unloads.
+13. a first handle-based `FILE_READ` proof succeeds for `FILE_OPEN -> FILE_READ -> DONE` on one domain invocation,
+14. baseline `null_blk` loads, performs I/O, and unloads,
+15. split `null_blk` loads, performs I/O, and unloads.
 
 The current helper-side HostCall proofs also snapshot the shared metadata request
 (and, where applicable, the borrowed request payload) immediately after the first
@@ -69,6 +70,8 @@ The key property is that the domain is provided through a host-shared directory,
 - `run-hostcall-file-open-close-probe.sh` — helper-managed `FILE_OPEN` / `FILE_CLOSE` regression wrapper.
 - `build-hostcall-file-handle-write-probe.sh` — cross-build helper for the first handle-based `FILE_WRITE` proof.
 - `run-hostcall-file-handle-write-probe.sh` — helper-managed `FILE_OPEN` / `FILE_WRITE` / `FILE_CLOSE` regression wrapper.
+- `build-hostcall-file-handle-read-probe.sh` — cross-build helper for the first handle-based `FILE_READ` proof.
+- `run-hostcall-file-handle-read-probe.sh` — helper-managed `FILE_OPEN` / `FILE_READ` regression wrapper.
 - `build-hostcall-second-pending-probe.sh` — metadata-only diagnostic for whether a domain may return `PENDING` twice from one invocation.
 - `run-hostcall-second-pending-probe.sh` — wrapper for that metadata-only second-`PENDING` diagnostic.
 - `build-hostcall-second-pending-payload-probe.sh` — narrower diagnostic for reusing one borrowed output payload region across two successive `PENDING` rounds.
@@ -126,6 +129,9 @@ bash capstone/tests/runtime-qemu/run-hostcall-file-open-close-probe.sh \
 bash capstone/tests/runtime-qemu/run-hostcall-file-handle-write-probe.sh \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-handle-write-probe-wrapper.txt" 2>&1
 
+bash capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-handle-read-probe-wrapper.txt" 2>&1
+
 bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh \
   > "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline-wrapper.txt" 2>&1
 
@@ -145,6 +151,7 @@ sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-filewrite-pro
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-fileread-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-open-close-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-handle-write-probe.log"
+sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-hostcall-file-handle-read-probe.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-baseline.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-io.log"
 sed -n '1,220p' "$CAPSTONE_TMP_ROOT/capstone-runtime-qemu-nullb-split-rmmod.log"

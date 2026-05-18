@@ -40,6 +40,7 @@ At a high level, the repository currently has:
 - validated HostCall fileread reverse-direction proof,
 - validated HostCall file open/close handle-lifecycle proof,
 - validated HostCall handle-based FILE_WRITE proof,
+- validated HostCall handle-based FILE_READ proof,
 - working baseline and split `null_blk` regressions.
 
 See `current/current-state.md` for the concise canonical state snapshot.
@@ -50,6 +51,7 @@ See `current/current-state.md` for the concise canonical state snapshot.
 - do not mark a step complete until it has been tested at the affected layer,
 - keep non-trivial code documented with concise comments, especially around state transitions and ownership rules,
 - after a coherent validated change set, provide exact commit command(s) and prefer a multi-line commit message with a short subject plus a detailed body,
+- for capstone-local commits, do not add a redundant `capstone` prefix to the commit subject unless the broader monorepo context really needs it,
 - keep manager-facing summaries as local artifacts under `$CAPSTONE_TMP_ROOT/`, not as committed repository files.
 
 ## Read on demand

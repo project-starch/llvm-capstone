@@ -244,8 +244,10 @@ Current status:
 
 - the tree now has the first half of this phase in a validated handle-based write path:
   `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE`,
-- the next missing piece is a matching reusable `FILE_READ` proof on the same
-  helper-managed handle model.
+- the tree now also has the first handle-based `FILE_OPEN -> FILE_READ -> DONE`
+  proof on the same helper-managed handle model,
+- so the next missing piece is one reusable scenario that combines those modular
+  read/write operations around a persistent helper-managed file object.
 
 ### Phase C: SQLite-facing gap check
 - list what is still missing for a tiny SQLite-style file backend shim,

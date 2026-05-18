@@ -9,13 +9,14 @@ The tree now also has:
 
 - a first helper-managed `FILE_OPEN` / `FILE_CLOSE` lifecycle proof,
 - and a first handle-based `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE` proof,
+- and a first handle-based `FILE_OPEN -> FILE_READ -> DONE` proof,
 
 both using explicit revoke-before-reborrow on the reused borrowed payload region.
 So the next step is **not** another basic read-like or write-like toy proof.
 
 The next smallest meaningful step is:
 
-> keep the same HostCall v0 control flow and metadata ABI, preserve the now-confirmed borrowed-region revoke discipline, and extend the validated handle-based file-service path from `FILE_OPEN` / `FILE_WRITE` / `FILE_CLOSE` to reverse-direction byte movement through `FILE_READ`
+> keep the same HostCall v0 control flow and metadata ABI, preserve the now-confirmed borrowed-region revoke discipline, and combine the separately validated handle-based `FILE_WRITE` and `FILE_READ` paths into a reusable end-to-end file-object scenario that a SQLite-facing shim can target directly
 
 ## Why this is now the right next step
 
@@ -28,6 +29,7 @@ The current runtime baseline already proves:
 - helper-side request snapshotting works in the current two-round HostCall proofs,
 - one helper-managed handle can survive across more than one request round and then be closed,
 - bytes can now also be written through that helper-managed handle on a later round,
+- bytes can now also be read back through that helper-managed handle model,
 - the domain remains the initiator and the helper remains the executor.
 
 That means the main unresolved question is no longer:
@@ -84,6 +86,9 @@ service path:
 - helper-side `revoke_region()` plus re-share of the same payload region,
 - `FILE_WRITE` request using the returned token,
 - helper-side `revoke_region()` plus re-share of the same payload region,
+- or `FILE_READ` request using the returned token,
+- helper-side `revoke_region()` plus re-share of the same payload region for the
+  response direction,
 - `FILE_CLOSE` request,
 - final completion.
 
@@ -108,13 +113,16 @@ The full proposal lives in:
 
 ## Smallest code slice after the design note
 
-After the subset is documented and the first handle-lifecycle plus write proof exist, the next
-code change should extend that same ABI to real byte movement:
+After the subset is documented and the first handle-lifecycle plus read/write proofs exist, the
+next code change should combine them into a more reusable file-object scenario:
 
-1. add `FILE_READ` on the same helper-managed handle model,
-2. keep its response path on the same payload region reuse discipline,
+1. exercise one scenario that writes through a helper-managed token and later reads
+   through the same modular file-service family,
+2. keep the response path on the borrowed payload reuse discipline already validated
+   by the read proof,
 3. keep using `revoke_region(payload_region_id)` before reusing the borrowed payload region,
-4. keep the non-revoke probe as the negative diagnostic proving why that discipline exists.
+4. only then decide whether `FILE_STAT_BASIC` or `FILE_SYNC` are the next missing
+   SQLite-facing pieces.
 
 That should come before claiming a reusable SQLite-facing file service baseline.
 

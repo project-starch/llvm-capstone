@@ -565,6 +565,13 @@ Why after write:
 
 - it adds the direction flip and exercises the new rule most directly
 
+Current status:
+
+- this phase now exists in-tree as a validated handle-based `FILE_READ` proof,
+- it exercises `FILE_OPEN -> FILE_READ -> DONE` on one domain invocation,
+- and it snapshots the read request header before revoking and re-sharing the same
+  payload region as borrowed input for the response round.
+
 ### Phase 5: decide whether `STAT_BASIC` / `SYNC` are immediately needed
 
 Do not add them by default until a real consumer needs them.

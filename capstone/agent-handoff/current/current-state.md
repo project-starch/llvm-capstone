@@ -28,6 +28,7 @@ The following is already implemented and verified in the current tree:
 - `capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-file-open-close-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-file-handle-write-probe.sh` passes,
+- `capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh` passes,
 - baseline `null_blk` passes,
 - split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding against the active kernel.
 
@@ -41,6 +42,7 @@ The current runtime proofs now cover:
 - reuse of one metadata ABI across more than one coarse service,
 - a first helper-managed file-handle lifecycle path,
 - a first helper-managed file-handle byte-write path,
+- a first helper-managed file-handle byte-read path,
 - both payload directions:
   - domain -> helper output-style payload,
   - helper -> domain input-style payload.
@@ -58,7 +60,9 @@ The currently validated HostCall shapes are now:
   - helper response plus explicit payload revoke-before-reborrow,
   - optional later `FILE_WRITE` request on the returned token,
   - helper response plus explicit payload revoke-before-reborrow,
-  - `FILE_CLOSE` request,
+  - optional later `FILE_READ` request on the returned token,
+  - helper response payload re-shared as borrowed input for the response round,
+  - `FILE_CLOSE` request when that particular proof path needs it,
   - one final completion return.
 
 A more precise diagnostic result is now available:
@@ -127,6 +131,7 @@ bash capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-file-open-close-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-file-handle-write-probe.sh
+bash capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh
 bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh
 bash capstone/tests/runtime-qemu/run-nullblk-split-io.sh
 bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh
