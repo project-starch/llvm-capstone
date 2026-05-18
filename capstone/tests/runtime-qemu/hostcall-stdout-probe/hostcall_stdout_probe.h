@@ -37,6 +37,15 @@
 #define HOSTCALL_FILE_OPEN_CLOSE_PROBE_MESSAGE_LEN \
   (sizeof(HOSTCALL_FILE_OPEN_CLOSE_PROBE_MESSAGE) - 1)
 
+#define HOSTCALL_FILE_HANDLE_WRITE_PROBE_OUTPUT_PATH \
+  "/tmp/hostcall_v0_handle_write.txt"
+#define HOSTCALL_FILE_HANDLE_WRITE_PROBE_OUTPUT_PATH_LEN \
+  (sizeof(HOSTCALL_FILE_HANDLE_WRITE_PROBE_OUTPUT_PATH) - 1)
+#define HOSTCALL_FILE_HANDLE_WRITE_PROBE_MESSAGE \
+  "hostcall-v0 handle write payload"
+#define HOSTCALL_FILE_HANDLE_WRITE_PROBE_MESSAGE_LEN \
+  (sizeof(HOSTCALL_FILE_HANDLE_WRITE_PROBE_MESSAGE) - 1)
+
 typedef unsigned long long hostcall_u64_t;
 typedef long long hostcall_s64_t;
 
