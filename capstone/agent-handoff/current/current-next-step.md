@@ -10,13 +10,14 @@ The tree now also has:
 - a first helper-managed `FILE_OPEN` / `FILE_CLOSE` lifecycle proof,
 - and a first handle-based `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE` proof,
 - and a first handle-based `FILE_OPEN -> FILE_READ -> DONE` proof,
+- and a first composed `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE` proof,
 
 both using explicit revoke-before-reborrow on the reused borrowed payload region.
 So the next step is **not** another basic read-like or write-like toy proof.
 
 The next smallest meaningful step is:
 
-> keep the same HostCall v0 control flow and metadata ABI, preserve the now-confirmed borrowed-region revoke discipline, and combine the separately validated handle-based `FILE_WRITE` and `FILE_READ` paths into a reusable end-to-end file-object scenario that a SQLite-facing shim can target directly
+> keep the same HostCall v0 control flow and metadata ABI, preserve the now-confirmed borrowed-region revoke discipline, and identify which next consumer-facing semantics are still missing beyond the now-validated reusable file-object core
 
 ## Why this is now the right next step
 
@@ -30,6 +31,7 @@ The current runtime baseline already proves:
 - one helper-managed handle can survive across more than one request round and then be closed,
 - bytes can now also be written through that helper-managed handle on a later round,
 - bytes can now also be read back through that helper-managed handle model,
+- those modular operations now compose into one reusable file-object scenario,
 - the domain remains the initiator and the helper remains the executor.
 
 That means the main unresolved question is no longer:
@@ -79,7 +81,7 @@ That means:
    required correctness fix for the current branch.
 
 The repository now also has one validated concrete example of that rule in a real
-service path:
+composed service path:
 
 - `FILE_OPEN` request,
 - helper response with token,
@@ -113,16 +115,15 @@ The full proposal lives in:
 
 ## Smallest code slice after the design note
 
-After the subset is documented and the first handle-lifecycle plus read/write proofs exist, the
-next code change should combine them into a more reusable file-object scenario:
+After the subset is documented and the first composed file-object scenario exists, the next
+code change should target the next missing consumer-facing semantic:
 
-1. exercise one scenario that writes through a helper-managed token and later reads
-   through the same modular file-service family,
+1. decide whether the next realistic consumer needs `FILE_STAT_BASIC`, `FILE_SYNC`, or
+   both,
 2. keep the response path on the borrowed payload reuse discipline already validated
    by the read proof,
 3. keep using `revoke_region(payload_region_id)` before reusing the borrowed payload region,
-4. only then decide whether `FILE_STAT_BASIC` or `FILE_SYNC` are the next missing
-   SQLite-facing pieces.
+4. avoid inventing more proof-only opcodes unless a concrete consumer really needs them.
 
 That should come before claiming a reusable SQLite-facing file service baseline.
 
@@ -134,6 +135,8 @@ This milestone is complete when:
 - the handoff no longer claims that reverse-direction payload is still the next missing proof,
 - the current repeated borrowed-payload reuse rule is documented and followed,
 - a reusable handle-based path supports `OPEN`, `WRITE`, `READ`, and `CLOSE`,
+- at least one realistic consumer-facing next semantic (`STAT_BASIC` or `SYNC`) is
+  chosen and justified,
 - only then should the first SQLite-facing file-service slice be treated as validated baseline.
 
 ## What not to regress

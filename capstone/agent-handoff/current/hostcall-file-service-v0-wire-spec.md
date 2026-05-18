@@ -464,6 +464,13 @@ writing a separate wrapper protocol for every possible open/read/write/close com
   then `revoke_region(payload_region_id)`, then re-share the region as `IN + BORROWED`
   before the response round
 
+Practical note for a one-payload composed scenario:
+
+- if the protocol also needs the domain to stage another request immediately after
+  consuming the read response on that same payload region, the helper may need a
+  slightly broader borrowed re-share for that one handoff (for example `INOUT + BORROWED`)
+  unless the ABI grows a second payload region or another way to stage the follow-on request.
+
 ### `FILE_CLOSE`
 
 - request payload direction: domain -> helper
@@ -575,6 +582,16 @@ Current status:
 ### Phase 5: decide whether `STAT_BASIC` / `SYNC` are immediately needed
 
 Do not add them by default until a real consumer needs them.
+
+Current status:
+
+- the tree now has the first composed reusable file-object scenario:
+  `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`,
+- that proof reuses one metadata region and one payload region across the whole
+  scenario,
+- and for the final `FILE_READ -> FILE_CLOSE` handoff it uses a slightly broader
+  borrowed response share so the domain can consume the read bytes and then stage
+  the last close request without a second payload region.
 
 ## 14. Minimal validation scenarios
 

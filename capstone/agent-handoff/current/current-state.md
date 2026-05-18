@@ -29,6 +29,7 @@ The following is already implemented and verified in the current tree:
 - `capstone/tests/runtime-qemu/run-hostcall-file-open-close-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-file-handle-write-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh` passes,
+- `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh` passes,
 - baseline `null_blk` passes,
 - split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding against the active kernel.
 
@@ -43,6 +44,7 @@ The current runtime proofs now cover:
 - a first helper-managed file-handle lifecycle path,
 - a first helper-managed file-handle byte-write path,
 - a first helper-managed file-handle byte-read path,
+- a first composed reusable file-object scenario built from the modular file-service operations,
 - both payload directions:
   - domain -> helper output-style payload,
   - helper -> domain input-style payload.
@@ -64,6 +66,16 @@ The currently validated HostCall shapes are now:
   - helper response payload re-shared as borrowed input for the response round,
   - `FILE_CLOSE` request when that particular proof path needs it,
   - one final completion return.
+
+The tree now also has one concrete end-to-end composition proof for that service family:
+
+- `FILE_OPEN -> FILE_WRITE -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`
+
+using one shared metadata region, one reused payload region, explicit revoke-before-
+reborrow at each borrowed-payload transition, and a slightly broader borrowed share
+(`INOUT + BORROWED`) for the read-response-to-final-close handoff so the domain can
+consume the response bytes and then stage the last close request without a second
+payload region.
 
 A more precise diagnostic result is now available:
 
@@ -132,6 +144,7 @@ bash capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-file-open-close-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-file-handle-write-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh
+bash capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh
 bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh
 bash capstone/tests/runtime-qemu/run-nullblk-split-io.sh
 bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh

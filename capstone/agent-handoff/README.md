@@ -41,6 +41,7 @@ At a high level, the repository currently has:
 - validated HostCall file open/close handle-lifecycle proof,
 - validated HostCall handle-based FILE_WRITE proof,
 - validated HostCall handle-based FILE_READ proof,
+- validated combined reusable file-object proof,
 - working baseline and split `null_blk` regressions.
 
 See `current/current-state.md` for the concise canonical state snapshot.
