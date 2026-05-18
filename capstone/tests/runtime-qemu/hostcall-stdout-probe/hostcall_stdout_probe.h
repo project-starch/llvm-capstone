@@ -55,6 +55,15 @@
 #define HOSTCALL_FILE_HANDLE_READ_PROBE_MESSAGE_LEN \
   (sizeof(HOSTCALL_FILE_HANDLE_READ_PROBE_MESSAGE) - 1)
 
+#define HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH \
+  "/tmp/hostcall_v0_combined_file_object.txt"
+#define HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH_LEN \
+  (sizeof(HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH) - 1)
+#define HOSTCALL_COMBINED_FILE_OBJECT_PROBE_MESSAGE \
+  "hostcall-v0 combined file object payload"
+#define HOSTCALL_COMBINED_FILE_OBJECT_PROBE_MESSAGE_LEN \
+  (sizeof(HOSTCALL_COMBINED_FILE_OBJECT_PROBE_MESSAGE) - 1)
+
 typedef unsigned long long hostcall_u64_t;
 typedef long long hostcall_s64_t;
 
