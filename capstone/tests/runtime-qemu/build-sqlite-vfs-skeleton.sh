@@ -23,7 +23,10 @@ LD_LLD=${LD_LLD:-$CAPSTONE_LD_LLD}
 LLVM_READOBJ=${LLVM_READOBJ:-$CAPSTONE_LLVM_READOBJ}
 START_SRC=${START_SRC:-$REPO_ROOT/capstone/my_first_domain/start.S}
 LINKER_SCRIPT=${LINKER_SCRIPT:-$REPO_ROOT/capstone/my_first_domain/link.ld}
+SQLITE_VFS_OPT_LEVEL=${SQLITE_VFS_OPT_LEVEL:--O2}
+SQLITE_DOMAIN_OPT_LEVEL=${SQLITE_DOMAIN_OPT_LEVEL:--O2}
 SKELETON_DIR="$SCRIPT_DIR/sqlite-vfs-skeleton"
+DOMAIN_ENTRY_SRC=${DOMAIN_ENTRY_SRC:-$SKELETON_DIR/sqlite_vfs_skeleton_domain_entry.S}
 OUT_DOM="$OUT_DIR/sqlite_vfs_skeleton.dom"
 
 mkdir -p "$TMP_ROOT" "$OUT_DIR" "$OBJ_DIR"
@@ -60,24 +63,33 @@ fi
   -c "$START_SRC" \
   -o "$OBJ_DIR/sqlite_vfs_start.o"
 
-"$CLANG" -target capstone64-unknown-elf -ffreestanding -O0 \
+"$CLANG" -target capstone64-unknown-elf -ffreestanding "$SQLITE_VFS_OPT_LEVEL" \
   -I"$SKELETON_DIR" \
   -I"$SQLITE_SRC_DIR" \
   -c "$SKELETON_DIR/capstone_sqlite_vfs.c" \
   -o "$OBJ_DIR/capstone_sqlite_vfs.o"
 
-"$CLANG" -target capstone64-unknown-elf -ffreestanding -O0 \
+"$CLANG" -target capstone64-unknown-elf -ffreestanding "$SQLITE_DOMAIN_OPT_LEVEL" \
   -I"$SKELETON_DIR" \
   -I"$SQLITE_SRC_DIR" \
   -c "$SKELETON_DIR/sqlite_vfs_skeleton_domain.c" \
   -o "$OBJ_DIR/sqlite_vfs_skeleton_domain.o"
 
+"$CLANG" -target capstone64-unknown-elf -ffreestanding \
+  -I"$SKELETON_DIR" \
+  -I"$SQLITE_SRC_DIR" \
+  -c "$DOMAIN_ENTRY_SRC" \
+  -o "$OBJ_DIR/sqlite_vfs_skeleton_domain_entry.o"
+
 "$LD_LLD" -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
   "$OBJ_DIR/sqlite_vfs_start.o" \
   "$OBJ_DIR/capstone_sqlite_vfs.o" \
-  "$OBJ_DIR/sqlite_vfs_skeleton_domain.o"
+  "$OBJ_DIR/sqlite_vfs_skeleton_domain.o" \
+  "$OBJ_DIR/sqlite_vfs_skeleton_domain_entry.o"
 
 "$LLVM_READOBJ" -h "$OUT_DOM"
 
 echo "Built $OUT_DOM"
+
+
 
