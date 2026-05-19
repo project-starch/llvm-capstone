@@ -96,6 +96,15 @@
 #define HOSTCALL_PATH_ACCESS_PROBE_MESSAGE_LEN \
   (sizeof(HOSTCALL_PATH_ACCESS_PROBE_MESSAGE) - 1)
 
+#define HOSTCALL_PATH_DELETE_PROBE_PATH \
+  "/tmp/hostcall_v0_path_delete_target.txt"
+#define HOSTCALL_PATH_DELETE_PROBE_PATH_LEN \
+  (sizeof(HOSTCALL_PATH_DELETE_PROBE_PATH) - 1)
+#define HOSTCALL_PATH_DELETE_PROBE_MESSAGE \
+  "hostcall-v0 path delete payload"
+#define HOSTCALL_PATH_DELETE_PROBE_MESSAGE_LEN \
+  (sizeof(HOSTCALL_PATH_DELETE_PROBE_MESSAGE) - 1)
+
 #define HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH \
   "/tmp/hostcall_v0_combined_file_object.txt"
 #define HOSTCALL_COMBINED_FILE_OBJECT_PROBE_PATH_LEN \
@@ -148,6 +157,7 @@ struct hostcall_v0 {
 #define HC_V0_OP_FILE_TRUNCATE 22ULL
 /* First SQLite-facing path-service opcode. */
 #define HC_V0_OP_PATH_ACCESS 23ULL
+#define HC_V0_OP_PATH_DELETE 24ULL
 
 #define HC_V0_RET_DONE 0UL
 #define HC_V0_RET_PENDING 1UL
@@ -226,13 +236,20 @@ struct hc_path_access_req_v0 {
   char path[];
 };
 
+struct hc_path_delete_req_v0 {
+  hostcall_u64_t flags;
+  char path[];
+};
+
 #define HC_FILE_OPEN_REQ_V0_PATH_OFFSET 16ULL
 #define HC_FILE_READ_REQ_V0_DATA_OFFSET 32ULL
 #define HC_FILE_WRITE_REQ_V0_DATA_OFFSET 32ULL
 #define HC_FILE_STAT_BASIC_RESP_V0_SIZE 32ULL
 #define HC_PATH_ACCESS_REQ_V0_PATH_OFFSET 8ULL
+#define HC_PATH_DELETE_REQ_V0_PATH_OFFSET 8ULL
 
 #define HC_PATH_ACCESS_FLAG_EXISTS 0ULL
+#define HC_PATH_DELETE_FLAG_NONE 0ULL
 
 #endif
 
