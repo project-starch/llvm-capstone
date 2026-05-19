@@ -292,12 +292,14 @@ Current result:
 - the current validated handle-based subset is already enough for the file-object data path of a
   reduced SQLite consumer,
 - the first SQLite-facing path-level gap has now been closed with a focused existence/access proof,
-- the next smallest remaining HostCall-facing gap is still path-level rather than WAL-level,
-  - delete/unlink,
+- the second SQLite-facing path-level gap has now also been closed with a focused delete/unlink
+  proof,
 - `xFullPathname`-style normalization can stay local to a tiny SQLite-facing shim,
 - `xLock` / `xUnlock` / `xCheckReservedLock` still exist in rollback-journal mode, but the tree
   should first try a conservative single-actor model before freezing a broad lock ABI,
-- WAL/shared-memory support should remain deferred for the first SQLite bootstrap target.
+- WAL/shared-memory support should remain deferred for the first SQLite bootstrap target,
+- so the next smallest honest gap is no longer another path opcode but the first tiny SQLite-facing
+  VFS shim that consumes the already validated subset.
 
 See also:
 

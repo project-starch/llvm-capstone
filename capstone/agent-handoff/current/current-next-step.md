@@ -20,7 +20,7 @@ So the next step is **not** another basic read-like or write-like toy proof.
 
 The next smallest meaningful step is:
 
-> keep the same HostCall v0 control flow and metadata ABI, preserve the now-confirmed borrowed-region revoke discipline, and consume the now-validated `FILE_TRUNCATE`-capable file-service subset through one SQLite-oriented minimal VFS path before adding any broad lock-specific ABI surface
+> keep the same HostCall v0 control flow and metadata ABI, preserve the now-confirmed borrowed-region revoke discipline, and consume the now-validated handle-based plus path-level file-service subset through one tiny SQLite-oriented VFS shim before adding any broad lock-specific ABI surface
 
 ## Why this is now the right next step
 
@@ -58,7 +58,7 @@ The next question is:
 
 The current answer is:
 
-> do not assume locking comes next; first consume the now-validated size-oriented subset through a reduced SQLite-facing VFS shim and only then decide whether stronger lock semantics are actually required.
+> do not assume locking comes next; first consume the now-validated handle-based plus path-level subset through a reduced SQLite-facing VFS shim and only then decide whether stronger lock semantics are actually required.
 
 ## What this recommendation is trying to avoid
 
@@ -144,8 +144,8 @@ Recommended next scope:
 
 - keep using the validated narrow handle-based operations,
 - start a tiny SQLite-oriented VFS shim that consumes `OPEN/READ/WRITE/SYNC/STAT_BASIC/TRUNCATE/CLOSE`,
-- keep the now-validated path existence/access proof as the first SQLite-facing path service,
-- add only the next remaining path-level gap that the first SQLite bootstrap still needs,
+- keep the now-validated SQLite-facing path services,
+  - path existence/access,
   - path delete/unlink,
 - keep `xFullPathname`-style canonicalization local to that shim,
 - keep the first lock story conservative and single-actor oriented,
@@ -163,15 +163,13 @@ After the focused truncate proof exists, the next code change should target a re
 consumer path rather than another isolated opcode:
 
 1. keep the validated narrow handle-based `FILE_TRUNCATE` request/response path unchanged,
-2. add one tiny SQLite-oriented VFS shim that genuinely consumes the current handle-based file
-   service subset,
+2. add one tiny SQLite-oriented VFS shim that genuinely consumes the current handle-based and
+   path-level file-service subset,
 3. keep using the borrowed-payload revoke-before-reborrow discipline already validated by the
-   read, stat, and truncate proofs,
-4. add path delete support after the now-validated path existence/access proof and before jumping
-   to WAL/shared-memory or broad lock ABI work,
-5. avoid adding `LOCK_ACQUIRE` / `LOCK_UPGRADE` / `LOCK_RELEASE` until a concrete consumer proves
+   read, stat, truncate, path-access, and path-delete proofs,
+4. avoid adding `LOCK_ACQUIRE` / `LOCK_UPGRADE` / `LOCK_RELEASE` until a concrete consumer proves
    which coordination semantics are required,
-6. avoid inventing more proof-only opcodes unless a concrete consumer really needs them.
+5. avoid inventing more proof-only opcodes unless a concrete consumer really needs them.
 
 
 That should come before claiming a reusable SQLite-facing file service baseline.

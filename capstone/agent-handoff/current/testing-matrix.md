@@ -39,6 +39,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-file-handle-s
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-file-handle-truncate-probe.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-path-delete-probe.sh"
 
 # null_blk regressions
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-baseline.sh"
@@ -66,6 +67,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh
 | HostCall file handle stat proof | first handle-based narrow metadata path on top of helper-managed file tokens | handle-based file-service stat-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh` |
 | HostCall file handle truncate proof | first handle-based size-mutation path on top of helper-managed file tokens | handle-based file-service truncate-path changes | `capstone/tests/runtime-qemu/run-hostcall-file-handle-truncate-probe.sh` |
 | HostCall path access proof | first SQLite-facing path existence/access path on top of the current HostCall boundary | path-level SQLite/VFS-facing changes | `capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh` |
+| HostCall path delete proof | first SQLite-facing path delete/unlink path on top of the current HostCall boundary | path-level SQLite/VFS-facing changes | `capstone/tests/runtime-qemu/run-hostcall-path-delete-probe.sh` |
 | HostCall combined file-object proof | first composed end-to-end file-object scenario across modular OPEN/WRITE/SYNC/CLOSE/READ operations | composed file-service behavior changes | `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh` |
 | Second-`PENDING` diagnostic | whether metadata-only multi-`PENDING` re-entry works | targeted runtime/control-flow diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-probe.sh` |
 | Second-`PENDING` payload-reuse diagnostic | whether reusing the same borrowed output payload across rounds triggers the current limitation | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-probe.sh` |

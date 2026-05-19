@@ -63,10 +63,11 @@ The following is already verified:
    - `capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh`
    - `capstone/tests/runtime-qemu/run-hostcall-file-handle-truncate-probe.sh`
    - `capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh`
+   - `capstone/tests/runtime-qemu/run-hostcall-path-delete-probe.sh`
    - `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh`
    - baseline `null_blk`
    - split `null_blk`
-6. The HostCall proofs now cover both payload directions on the same metadata ABI, a reusable handle-based file-object core, an explicit sync boundary after writes, a narrow stat path for file size/type facts, a narrow handle-based truncate path for file-size mutation, and a first SQLite-facing path existence/access proof.
+6. The HostCall proofs now cover both payload directions on the same metadata ABI, a reusable handle-based file-object core, an explicit sync boundary after writes, a narrow stat path for file size/type facts, a narrow handle-based truncate path for file-size mutation, and the first SQLite-facing path existence/access and path delete proofs.
 
 ## Very important distinction
 
@@ -78,7 +79,7 @@ The preferred near-term direction remains:
 - split host-enclave execution,
 - shared regions + synchronous multi-round HostCall,
 - then a small reusable service surface,
-- with `FILE_SYNC`, `FILE_STAT_BASIC`, `FILE_TRUNCATE`, and the first SQLite-facing `PATH_ACCESS` proof already validated,
+- with `FILE_SYNC`, `FILE_STAT_BASIC`, `FILE_TRUNCATE`, and the first SQLite-facing `PATH_ACCESS` and `PATH_DELETE` proofs already validated,
 - and only then deciding whether any lock-oriented semantic is actually required,
 - only later broader hosted user-space ambitions.
 

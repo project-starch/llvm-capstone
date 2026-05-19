@@ -45,16 +45,16 @@ At a high level, the repository currently has:
 - validated HostCall handle-based FILE_STAT_BASIC proof,
 - validated HostCall handle-based FILE_TRUNCATE proof,
 - validated HostCall SQLite-facing PATH_ACCESS proof,
+- validated HostCall SQLite-facing PATH_DELETE proof,
 - validated combined reusable file-object proof,
 - working baseline and split `null_blk` regressions.
 
 See `current/current-state.md` for the concise canonical state snapshot.
 
-At the current planning layer, `FILE_SYNC`, `FILE_STAT_BASIC`, `FILE_TRUNCATE`, and
-the first SQLite-facing `PATH_ACCESS` proof are already validated. The next step
-should not jump straight to lock choreography. It should first consume that subset
-through a reduced SQLite-oriented VFS path and add only the next remaining small
-path-level gap that the first SQLite bootstrap still needs.
+At the current planning layer, `FILE_SYNC`, `FILE_STAT_BASIC`, `FILE_TRUNCATE`,
+and the first SQLite-facing `PATH_ACCESS` and `PATH_DELETE` proofs are already
+validated. The next step should not jump straight to lock choreography. It should
+first consume that subset through a reduced SQLite-oriented VFS path.
 
 ## Workflow rules to preserve
 

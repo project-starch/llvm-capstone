@@ -93,8 +93,8 @@ single-connection SQLite run actually needs.
 | SQLite VFS method | First implementation plan | Backing path |
 | --- | --- | --- |
 | `xOpen` | required | HostCall file-service open path |
-| `xDelete` | required | **new small path service still needed** |
-| `xAccess` | required at least for `SQLITE_ACCESS_EXISTS` | first focused path service now exists |
+| `xDelete` | required | **new small path service needed** |
+| `xAccess` | required at least for `SQLITE_ACCESS_EXISTS` | **new small path service needed** |
 | `xFullPathname` | required | local canonical/string policy inside the shim |
 | `xRandomness` | required | local deterministic or helper-fed bytes; first pass can be conservative |
 | `xSleep` | required | local stub or helper call; first pass can be conservative |
@@ -104,11 +104,10 @@ single-connection SQLite run actually needs.
 
 ## What the next HostCall expansion should be
 
-The next smallest runtime-facing additions are path-level, not WAL-level.
-The tree now has the first focused path existence/access proof, so the next remaining
-SQLite-facing path gap is:
+The first SQLite-facing path-level gaps have now both been closed with focused proofs:
 
-1. delete/unlink for a path-like object
+1. path existence/access
+2. path delete/unlink
 
 Suggested naming at the current layer:
 
@@ -140,6 +139,11 @@ Useful reference files:
   - `capstone/tests/runtime-qemu/hostcall-path-access-probe/hostcall_path_access_probe_guest.c`
   - `capstone/tests/runtime-qemu/build-hostcall-path-access-probe.sh`
   - `capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh`
+- first SQLite-facing path-delete path:
+  - `capstone/tests/runtime-qemu/hostcall-path-delete-probe/hostcall_path_delete_probe.smode.c`
+  - `capstone/tests/runtime-qemu/hostcall-path-delete-probe/hostcall_path_delete_probe_guest.c`
+  - `capstone/tests/runtime-qemu/build-hostcall-path-delete-probe.sh`
+  - `capstone/tests/runtime-qemu/run-hostcall-path-delete-probe.sh`
 
 The next path-level proofs should follow that same structure:
 
@@ -176,13 +180,15 @@ protocol-level lock acquire/upgrade/release semantics.
 
 ## Recommended implementation order
 
-### Step 1: add the first path services
+### Step 1: keep the path-level subset stable
 
-Add and validate the next narrow path operation for:
+The tree now already validates both narrow path services that the first SQLite-facing
+rollback-journal bootstrap clearly needed:
 
+- existence/access,
 - delete/unlink.
 
-These should get the same focused runtime/QEMU treatment as the existing file-handle proofs.
+So the next step should not be another speculative path opcode.
 
 ### Step 2: add a tiny SQLite VFS shim
 
@@ -226,8 +232,8 @@ already validated file-service subset to a real SQLite consumer.
 
 - keep SQLite in a reduced custom-VFS build,
 - reuse the current handle-based HostCall file service,
-- keep the now-validated path existence/access proof,
-- add only path delete/unlink next,
+- keep the now-validated path existence/access and path delete proofs,
+- then move to the first tiny SQLite VFS shim,
 - then prove a real SQLite smoke scenario,
 - and only after that decide whether stronger lock semantics are truly needed.
 

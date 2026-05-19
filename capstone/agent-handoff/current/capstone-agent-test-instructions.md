@@ -228,6 +228,15 @@ bash capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh \
 sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-path-access-probe.txt"
 ```
 
+### HostCall path delete proof
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-path-delete-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/run-hostcall-path-delete-probe.txt" 2>&1
+
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-path-delete-probe.txt"
+```
 
 ### HostCall combined file-object proof
 
