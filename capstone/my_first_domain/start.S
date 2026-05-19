@@ -1,5 +1,6 @@
 #ifndef __CAPSTONE_TEST_BUILTIN__
 #define __CAPSTONE_TEST_BUILTIN__
+#define cincoffset(rd, rs1, rs2) .insn r 0x5b, 0x1, 0xc, rd, rs1, rs2
 #define cincoffsetimm(rd, rs, offset) .insn i 0x5b, 0x2, rd, offset(rs)
 #define ldc(rd, rs, offset) .insn i 0x5b, 0x3, rd, offset(rs)
 #define stc(rs1, rs2, offset) .insn s 0x5b, 0x4, rs1, offset(rs2)
@@ -32,6 +33,7 @@ __test_entry:
   lcc(t1, sp, 4)
   scc(sp, sp, t1)
   delin(sp)
+  j test
 
 .text
   .global test
@@ -44,7 +46,11 @@ test:
   # Call ordinary C compiled by our clang.
   ldc(a0, sp, 80)
   ld a1, 64(sp)
-  jal ra, domain_main
+  .Lpcrel_hi_domain_main:
+  auipc t0, %pcrel_hi(domain_main)
+  addi t0, t0, %pcrel_lo(.Lpcrel_hi_domain_main)
+  cincoffset t0, gp, t0
+  .insn i 0x5b, 0x5, ra, 0(t0)
 
   lla t2, __test_reentry
   ldc(t1, sp, 48)

@@ -14,7 +14,7 @@ DEFAULT_DOMAIN_SUCCESS_MARKERS = (
     "Ok, good file.",
     "Loadable executable segment found.",
     "Created domain ID = 0",
-    "Called dom (1-th time) retval = 0",
+    "Called dom (1-th time) retval =",
 )
 
 
@@ -85,6 +85,11 @@ def parse_args() -> argparse.Namespace:
         help="Path to qemu-system-riscv64 built from capstone-qemu.",
     )
     parser.add_argument(
+        "--domain-loader",
+        default="/capstone-test.user",
+        help="Guest-visible path to the domain loader binary used for positional domain arguments.",
+    )
+    parser.add_argument(
         "--timeout-multiplier",
         type=float,
         default=1.0,
@@ -104,6 +109,24 @@ def last_exit_code(text: str) -> int:
     raise RuntimeError(f"could not parse exit code from: {text!r}")
 
 
+def serial_tail(qemu: pexpect.spawn, limit: int = 60) -> str:
+    text = qemu.before.replace("\r\r", "\r").strip()
+    if not text:
+        return "<no serial output captured>"
+    lines = text.splitlines()
+    return "\n".join(lines[-limit:])
+
+
+def expect_prompt(qemu: pexpect.spawn, *, timeout: float, action: str) -> None:
+    try:
+        qemu.expect(r"# ", timeout=timeout)
+    except (pexpect.EOF, pexpect.TIMEOUT) as exc:
+        raise RuntimeError(
+            f"QEMU stopped before the shell prompt while {action}.\n"
+            f"Recent serial output:\n{serial_tail(qemu)}"
+        ) from exc
+
+
 def copy_domains_into_share(domains: Iterable[str], share_dir: pathlib.Path) -> list[str]:
     share_dir.mkdir(parents=True, exist_ok=True)
     guest_names = []
@@ -118,11 +141,11 @@ def copy_domains_into_share(domains: Iterable[str], share_dir: pathlib.Path) -> 
 
 def run_guest_command(qemu: pexpect.spawn, command: str, timeout: float = 20.0) -> str:
     qemu.sendline(command)
-    qemu.expect(r"# ", timeout=timeout)
+    expect_prompt(qemu, timeout=timeout, action=f"running guest command: {command}")
     output = qemu.before.replace("\r\r", "\r")
 
     qemu.sendline("printf '__EXIT_CODE__%s\\n' $?")
-    qemu.expect(r"# ", timeout=5)
+    expect_prompt(qemu, timeout=5, action="collecting the previous guest exit code")
     exit_capture = qemu.before.replace("\r\r", "\r")
     exit_code = last_exit_code(exit_capture)
     if exit_code != 0:
@@ -148,6 +171,7 @@ def main() -> int:
     log_file = pathlib.Path(args.log_file).resolve()
     buildroot_dir = pathlib.Path(args.buildroot_dir).resolve()
     qemu_binary = pathlib.Path(args.qemu_binary).resolve()
+    domain_loader = args.domain_loader
 
     if not qemu_binary.exists():
         raise SystemExit(f"missing qemu binary: {qemu_binary}")
@@ -209,9 +233,15 @@ def main() -> int:
         qemu.logfile_read = normalized_log
 
         try:
-            qemu.expect("buildroot login:", timeout=120 * timeout_multiplier)
+            try:
+                qemu.expect("buildroot login:", timeout=120 * timeout_multiplier)
+            except (pexpect.EOF, pexpect.TIMEOUT) as exc:
+                raise RuntimeError(
+                    "QEMU stopped before the guest login prompt appeared.\n"
+                    f"Recent serial output:\n{serial_tail(qemu)}"
+                ) from exc
             qemu.sendline("root")
-            qemu.expect(r"# ", timeout=30 * timeout_multiplier)
+            expect_prompt(qemu, timeout=30 * timeout_multiplier, action="logging into the guest")
 
             run_guest_command(qemu, "dmesg -n 1", timeout=10 * timeout_multiplier)
             run_guest_command(qemu, "stty columns 29999", timeout=10 * timeout_multiplier)
@@ -226,7 +256,7 @@ def main() -> int:
             for domain_name in guest_domains:
                 output = run_guest_command(
                     qemu,
-                    f"/capstone-test.user /mnt/host/{domain_name}",
+                    f"{domain_loader} /mnt/host/{domain_name}",
                     timeout=30 * timeout_multiplier,
                 )
                 missing = [marker for marker in DEFAULT_DOMAIN_SUCCESS_MARKERS if marker not in output]

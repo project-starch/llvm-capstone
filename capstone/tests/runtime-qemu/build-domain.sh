@@ -10,6 +10,7 @@ CLANG=${CLANG:-$CAPSTONE_CLANG}
 LD_LLD=${LD_LLD:-$CAPSTONE_LD_LLD}
 START_SRC=${START_SRC:-$REPO_ROOT/capstone/my_first_domain/start.S}
 LINKER_SCRIPT=${LINKER_SCRIPT:-$REPO_ROOT/capstone/my_first_domain/link.ld}
+DOMAIN_OPT_LEVEL=${DOMAIN_OPT_LEVEL:--O2}
 
 if [[ $# -ne 2 ]]; then
   echo "usage: $0 <domain_main.c> <output.dom>" >&2
@@ -25,7 +26,7 @@ MAIN_O="$OBJ_DIR/main.o"
 mkdir -p "$(dirname -- "$OUT")"
 
 "$CLANG" -target capstone64-unknown-elf -ffreestanding -c "$START_SRC" -o "$START_O"
-"$CLANG" -target capstone64-unknown-elf -ffreestanding -O0 -c "$SRC" -o "$MAIN_O"
+"$CLANG" -target capstone64-unknown-elf -ffreestanding "$DOMAIN_OPT_LEVEL" -c "$SRC" -o "$MAIN_O"
 "$LD_LLD" -T "$LINKER_SCRIPT" -o "$OUT" "$START_O" "$MAIN_O"
 
 echo "Built $OUT"
