@@ -44,14 +44,17 @@ At a high level, the repository currently has:
 - validated HostCall handle-based FILE_SYNC proof,
 - validated HostCall handle-based FILE_STAT_BASIC proof,
 - validated HostCall handle-based FILE_TRUNCATE proof,
+- validated HostCall SQLite-facing PATH_ACCESS proof,
 - validated combined reusable file-object proof,
 - working baseline and split `null_blk` regressions.
 
 See `current/current-state.md` for the concise canonical state snapshot.
 
-At the current planning layer, `FILE_SYNC`, `FILE_STAT_BASIC`, and `FILE_TRUNCATE`
-are already validated. The next step should not jump straight to lock choreography
-unless a concrete higher-layer consumer proves it is required.
+At the current planning layer, `FILE_SYNC`, `FILE_STAT_BASIC`, `FILE_TRUNCATE`, and
+the first SQLite-facing `PATH_ACCESS` proof are already validated. The next step
+should not jump straight to lock choreography. It should first consume that subset
+through a reduced SQLite-oriented VFS path and add only the next remaining small
+path-level gap that the first SQLite bootstrap still needs.
 
 ## Workflow rules to preserve
 
@@ -70,6 +73,7 @@ Use these only when the task actually needs them:
 - `current/capstone-agent-test-instructions.md` — practical command cookbook
 - `current/stable-file-service-subset.md` — first reusable HostCall file-service proposal
 - `current/hostcall-file-service-v0-wire-spec.md` — practical wire-format and state-machine spec for the next HostCall file-service implementation
+- `current/sqlite-minimal-vfs-path.md` — concrete SQLite-facing next step and minimal VFS mapping
 - `current/split-host-enclave-strategy.md` — source-backed architectural detail
 - `current/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
 - `current/capstone-backend-status-for-llm.md` — backend/compiler implementation detail

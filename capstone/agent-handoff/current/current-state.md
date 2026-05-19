@@ -32,6 +32,7 @@ The following is already implemented and verified in the current tree:
 - `capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-file-handle-truncate-probe.sh` passes,
+- `capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh` passes,
 - baseline `null_blk` passes,
 - split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding against the active kernel.
@@ -50,6 +51,7 @@ The current runtime proofs now cover:
 - a first helper-managed file-handle sync path,
 - a first helper-managed file-handle stat path,
 - a first helper-managed file-handle truncate path,
+- a first SQLite-facing path existence/access path,
 - a first composed reusable file-object scenario built from the modular file-service operations,
 - both payload directions:
   - domain -> helper output-style payload,
@@ -137,7 +139,9 @@ See `current/hosted-libc-os-analysis.md` only if the task is specifically about 
 ## Current next milestone in one sentence
 
 The next meaningful step is to consume the now-validated small reusable file-service subset,
-including `FILE_TRUNCATE`, before adding any lock-focused ABI surface.
+including `FILE_TRUNCATE` plus the first SQLite-facing path existence/access proof, through a
+reduced SQLite-oriented VFS shim and add only the remaining smallest path-level gaps before any
+broad lock-focused ABI surface.
 
 ## Fast runtime entry points
 
@@ -154,6 +158,7 @@ bash capstone/tests/runtime-qemu/run-hostcall-file-handle-read-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-file-handle-truncate-probe.sh
+bash capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh
 bash capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh
 bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh
 bash capstone/tests/runtime-qemu/run-nullblk-split-io.sh
@@ -167,6 +172,7 @@ bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh
 - `current/split-host-enclave-strategy.md` — source-backed architectural detail.
 - `current/stable-file-service-subset.md` — first reusable file-service proposal.
 - `current/hostcall-file-service-v0-wire-spec.md` — practical opcode/payload/state-machine spec for the next file-service implementation.
+- `current/sqlite-minimal-vfs-path.md` — concrete SQLite-facing next step and VFS-to-HostCall mapping.
 - `current/hosted-libc-os-analysis.md` — why hosted Linux user-space is still blocked.
 - `history/README.md` — historical index and what is still worth reading.
 

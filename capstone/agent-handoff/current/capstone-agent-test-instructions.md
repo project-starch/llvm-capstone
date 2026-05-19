@@ -218,6 +218,17 @@ bash capstone/tests/runtime-qemu/run-hostcall-file-handle-truncate-probe.sh \
 sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-file-handle-truncate-probe.txt"
 ```
 
+### HostCall path access proof
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh \
+  > "$CAPSTONE_TMP_ROOT/run-hostcall-path-access-probe.txt" 2>&1
+
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-path-access-probe.txt"
+```
+
+
 ### HostCall combined file-object proof
 
 ```bash

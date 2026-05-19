@@ -37,6 +37,7 @@ Then load deeper files only if the task needs them:
 - `$CAPSTONE_HANDOFF_DIR/current/testing-matrix.md`
 - `$CAPSTONE_HANDOFF_DIR/current/capstone-agent-test-instructions.md`
 - `$CAPSTONE_HANDOFF_DIR/current/stable-file-service-subset.md`
+- `$CAPSTONE_HANDOFF_DIR/current/sqlite-minimal-vfs-path.md`
 - `$CAPSTONE_HANDOFF_DIR/current/split-host-enclave-strategy.md`
 - `$CAPSTONE_HANDOFF_DIR/current/hosted-libc-os-analysis.md`
 - `$CAPSTONE_HANDOFF_DIR/current/capstone-backend-status-for-llm.md`
@@ -61,10 +62,11 @@ The following is already verified:
    - `capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh`
    - `capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh`
    - `capstone/tests/runtime-qemu/run-hostcall-file-handle-truncate-probe.sh`
+   - `capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh`
    - `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh`
    - baseline `null_blk`
    - split `null_blk`
-6. The HostCall proofs now cover both payload directions on the same metadata ABI, a reusable handle-based file-object core, an explicit sync boundary after writes, a narrow stat path for file size/type facts, and a narrow handle-based truncate path for file-size mutation.
+6. The HostCall proofs now cover both payload directions on the same metadata ABI, a reusable handle-based file-object core, an explicit sync boundary after writes, a narrow stat path for file size/type facts, a narrow handle-based truncate path for file-size mutation, and a first SQLite-facing path existence/access proof.
 
 ## Very important distinction
 
@@ -76,7 +78,7 @@ The preferred near-term direction remains:
 - split host-enclave execution,
 - shared regions + synchronous multi-round HostCall,
 - then a small reusable service surface,
-- with `FILE_SYNC`, `FILE_STAT_BASIC`, and `FILE_TRUNCATE` already validated,
+- with `FILE_SYNC`, `FILE_STAT_BASIC`, `FILE_TRUNCATE`, and the first SQLite-facing `PATH_ACCESS` proof already validated,
 - and only then deciding whether any lock-oriented semantic is actually required,
 - only later broader hosted user-space ambitions.
 

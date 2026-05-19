@@ -287,6 +287,22 @@ Current decision:
   `OPEN/READ/WRITE/SYNC/STAT_BASIC/TRUNCATE/CLOSE`,
 - only then choose whether any lock-oriented semantic must be added next.
 
+Current result:
+
+- the current validated handle-based subset is already enough for the file-object data path of a
+  reduced SQLite consumer,
+- the first SQLite-facing path-level gap has now been closed with a focused existence/access proof,
+- the next smallest remaining HostCall-facing gap is still path-level rather than WAL-level,
+  - delete/unlink,
+- `xFullPathname`-style normalization can stay local to a tiny SQLite-facing shim,
+- `xLock` / `xUnlock` / `xCheckReservedLock` still exist in rollback-journal mode, but the tree
+  should first try a conservative single-actor model before freezing a broad lock ABI,
+- WAL/shared-memory support should remain deferred for the first SQLite bootstrap target.
+
+See also:
+
+- `current/sqlite-minimal-vfs-path.md`
+
 ## Exit criterion for this milestone
 
 This milestone is complete when:
