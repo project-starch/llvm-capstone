@@ -24951,6 +24951,16 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
     LLVMContext &Context, std::vector<EVT> &MemOps, unsigned Limit,
     const MemOp &Op, unsigned DstAS, unsigned SrcAS,
     const AttributeList &FuncAttributes) const {
+  if (Op.isMemcpy() && Op.size() != 0 && (Op.size() % 16) == 0 &&
+      Op.isFixedDstAlign() &&
+      Op.getDstAlign() >= Align(16) && Op.getSrcAlign() >= Align(16)) {
+    unsigned NumChunks = Op.size() / 16;
+    if (NumChunks <= 32) {
+      MemOps.assign(NumChunks, MVT::i128);
+      return true;
+    }
+  }
+
   return TargetLowering::findOptimalMemOpLowering(
       Context, MemOps, Limit, Op, DstAS, SrcAS, FuncAttributes);
 }

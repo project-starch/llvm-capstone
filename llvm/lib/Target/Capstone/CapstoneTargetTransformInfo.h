@@ -87,6 +87,9 @@ public:
   InstructionCost
   getIntImmCostIntrin(Intrinsic::ID IID, unsigned Idx, const APInt &Imm,
                       Type *Ty, TTI::TargetCostKind CostKind) const override;
+  uint64_t getMaxMemIntrinsicInlineSizeThreshold() const override {
+    return 512;
+  }
 
   /// \name EVL Support for predicated vectorization.
   /// Whether the target supports the %evl parameter of VP intrinsic efficiently
