@@ -15257,14 +15257,14 @@ EvaluateComparisonBinaryOperator(EvalInfo &Info, const BinaryOperator *E,
     }
 
     // The comparison here must be unsigned, and performed with the same
-    // width as the pointer.
+    // width as the pointer. Some targets, including Capstone, use pointers
+    // wider than 64 bits, so keep the offset math in APInt instead of
+    // truncating through uint64_t.
     unsigned PtrSize = Info.Ctx.getTypeSize(LHSTy);
-    uint64_t CompareLHS = LHSOffset.getQuantity();
-    uint64_t CompareRHS = RHSOffset.getQuantity();
-    assert(PtrSize <= 64 && "Unexpected pointer width");
-    uint64_t Mask = ~0ULL >> (64 - PtrSize);
-    CompareLHS &= Mask;
-    CompareRHS &= Mask;
+    llvm::APInt CompareLHS(PtrSize, static_cast<uint64_t>(LHSOffset.getQuantity()),
+                           /*isSigned=*/false);
+    llvm::APInt CompareRHS(PtrSize, static_cast<uint64_t>(RHSOffset.getQuantity()),
+                           /*isSigned=*/false);
 
     // If there is a base and this is a relational operator, we can only
     // compare pointers within the object in question; otherwise, the result
@@ -15274,14 +15274,15 @@ EvaluateComparisonBinaryOperator(EvalInfo &Info, const BinaryOperator *E,
       if (BaseTy->isIncompleteType())
         return Error(E);
       CharUnits Size = Info.Ctx.getTypeSizeInChars(BaseTy);
-      uint64_t OffsetLimit = Size.getQuantity();
-      if (CompareLHS > OffsetLimit || CompareRHS > OffsetLimit)
+      llvm::APInt OffsetLimit(PtrSize, static_cast<uint64_t>(Size.getQuantity()),
+                              /*isSigned=*/false);
+      if (CompareLHS.ugt(OffsetLimit) || CompareRHS.ugt(OffsetLimit))
         return Error(E);
     }
 
-    if (CompareLHS < CompareRHS)
+    if (CompareLHS.ult(CompareRHS))
       return Success(CmpResult::Less, E);
-    if (CompareLHS > CompareRHS)
+    if (CompareLHS.ugt(CompareRHS))
       return Success(CmpResult::Greater, E);
     return Success(CmpResult::Equal, E);
   }
