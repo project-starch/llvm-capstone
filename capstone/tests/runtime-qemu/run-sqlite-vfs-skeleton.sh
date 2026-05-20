@@ -12,14 +12,19 @@ LOG_FILE=${LOG_FILE:-$TMP_ROOT/capstone-runtime-qemu-sqlite-vfs-skeleton.log}
 DOMAIN_PATH="$SHARE_DIR/sqlite_vfs_skeleton.dom"
 
 mkdir -p "$TMP_ROOT" "$SHARE_DIR"
-rm -f "$DOMAIN_PATH"
+rm -f "$DOMAIN_PATH" "$SHARE_DIR/capstone-test.user"
+
+bash "$SCRIPT_DIR/build-capstone-test-user.sh" \
+  "$SHARE_DIR/capstone-test.user"
 
 bash "$SCRIPT_DIR/build-sqlite-vfs-skeleton.sh" "$SHARE_DIR"
 
 python3 "$SCRIPT_DIR/run-domain-smoke.py" \
   --share-dir "$SHARE_DIR" \
   --log-file "$LOG_FILE" \
-  "$DOMAIN_PATH"
+  --guest-command '/mnt/host/capstone-test.user /mnt/host/sqlite_vfs_skeleton.dom' \
+  --success-marker 'Created domain ID = 0' \
+  --success-marker 'Called dom (1-th time) retval = 196609'
 
 echo "run-sqlite-vfs-skeleton.sh wrapper completed. Full serial log: $LOG_FILE"
 
