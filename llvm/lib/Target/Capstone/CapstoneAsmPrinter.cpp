@@ -965,6 +965,9 @@ void CapstoneAsmPrinter::emitNoteGnuProperty(const Module &M) {
 /// Emits a global variable typed i128 to the output by splitting
 /// into 2 64-bit parts.
 void CapstoneAsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
+  if (GV->hasInitializer() && emitSpecialLLVMGlobal(GV))
+    return;
+
   // Check if this is a 128-bit sized type that needs special handling
   if (GV->getValueType()->isSized() &&
       getDataLayout().getTypeAllocSize(GV->getValueType()) == 16) {
