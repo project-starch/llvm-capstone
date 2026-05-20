@@ -4257,6 +4257,25 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
   if (AP.getObjFileLowering().supportIndirectSymViaGOTPCRel())
     handleIndirectSymViaGOTPCRel(AP, &ME, BaseCV, Offset);
 
+  if (Size > 8) {
+    MCValue MV;
+    if (ME->evaluateAsRelocatable(MV, nullptr) && !MV.isAbsolute()) {
+      // Some targets, including Capstone with addrspace(200) capability
+      // pointers, lower symbolic constants wider than 64 bits to a single
+      // relocatable address expression. MC streamers only accept relocatable
+      // emitValue sizes up to 8 bytes, so materialize the symbol in the low
+      // word and zero-extend the remaining bytes in data layout order.
+      if (DL.isBigEndian()) {
+        AP.OutStreamer->emitZeros(Size - 8);
+        AP.OutStreamer->emitValue(ME, 8);
+      } else {
+        AP.OutStreamer->emitValue(ME, 8);
+        AP.OutStreamer->emitZeros(Size - 8);
+      }
+      return;
+    }
+  }
+
   AP.OutStreamer->emitValue(ME, Size);
 }
 
