@@ -31,7 +31,11 @@ regressions:
 16. a first handle-based `FILE_TRUNCATE` proof succeeds for `FILE_OPEN -> FILE_TRUNCATE -> FILE_STAT_BASIC -> FILE_CLOSE` on one domain invocation,
 17. a first combined file-object proof succeeds for `FILE_OPEN -> FILE_WRITE -> FILE_SYNC -> FILE_CLOSE -> FILE_OPEN -> FILE_READ -> FILE_CLOSE`,
 18. baseline `null_blk` loads, performs I/O, and unloads,
-19. split `null_blk` loads, performs I/O, and unloads.
+19. split `null_blk` loads, performs I/O, and unloads,
+20. a first Capstone-compiled SQLite VFS skeleton builds against the official
+    `sqlite3.h` amalgamation header and links as a `.dom`; a dedicated QEMU
+    wrapper exists for it, but runtime revalidation is currently blocked by the
+    same sample-domain assertion that now also affects `run-smoke.sh`.
 
 The current helper-side HostCall proofs also snapshot the shared metadata request
 (and, where applicable, the borrowed request payload) immediately after the first
@@ -93,6 +97,16 @@ The key property is that the domain is provided through a host-shared directory,
 - `run-nullblk-baseline.sh` — baseline `null_blk` regression wrapper.
 - `run-nullblk-split-io.sh` — split `null_blk` I/O regression wrapper.
 - `run-nullblk-split-rmmod.sh` — split `null_blk` unload regression wrapper.
+- `build-sqlite-vfs-skeleton.sh` — downloads the pinned SQLite 3.53.1 amalgamation
+  if needed, then builds a Capstone-compiled SQLite-facing VFS skeleton domain.
+- `run-sqlite-vfs-skeleton.sh` — executes that SQLite VFS skeleton domain in the
+  existing QEMU smoke harness.
+- `build-static-cap-globals-probe.sh` — builds a reduced pair of domains for the
+  current static/global capability diagnostic: one direct-use control case and one
+  file-scope `static const` reproducer.
+- `run-static-cap-globals-probe.sh` — runs that reduced static/global capability
+  diagnostic and currently expects the direct-use control case to succeed while the
+  `static const` reproducer triggers the known capability failure.
 
 The QEMU harness now also supports a validated exploratory mode:
 
@@ -214,6 +228,15 @@ python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
 This is a **runtime probe facility**, not by itself proof that a new architecture
 milestone is validated. Only promote a new probe to the validated baseline once it
 passes consistently and is documented in the handoff notes.
+
+One such targeted exploratory probe now exists for the current LLVM-generated-domain
+blocker around static/global capability-bearing objects:
+
+- `run-static-cap-globals-probe.sh`
+  - direct-use control case succeeds,
+  - file-scope `static const` reproducer currently fails with
+    `[CAPSTONE] cs.cjalr requires capability in rs1`,
+  - kept as a stable diagnostic target while runtime-side support is designed.
 
 ## Current targeted diagnostics around multi-round HostCall
 
