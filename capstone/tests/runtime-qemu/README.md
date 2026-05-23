@@ -103,12 +103,12 @@ The key property is that the domain is provided through a host-shared directory,
   existing QEMU smoke harness.
 - `build-static-cap-globals-probe.sh` — builds a reduced pair of domains for the
   current static/global capability diagnostic: one direct-use control case, one
-  positive runtime-side materialization POC, and one file-scope `static const`
-  reproducer.
+  positive runtime-side materialization POC, one descriptor-driven materialization
+  POC, and one file-scope `static const` reproducer.
 - `run-static-cap-globals-probe.sh` — runs that reduced static/global capability
-  diagnostic and currently expects both the direct-use control case and the
-  runtime-side materialization POC to succeed while the `static const` reproducer
-  triggers the known capability failure.
+  diagnostic and currently expects the direct-use control case, the runtime-side
+  materialization POC, and the descriptor-driven materialization POC to succeed
+  while the `static const` reproducer triggers the known capability failure.
 
 The QEMU harness now also supports a validated exploratory mode:
 
@@ -237,6 +237,7 @@ blocker around static/global capability-bearing objects:
 - `run-static-cap-globals-probe.sh`
   - direct-use control case succeeds,
   - runtime-side materialization POC succeeds,
+  - descriptor-driven materialization POC succeeds,
   - file-scope `static const` reproducer currently fails with
     `[CAPSTONE] cs.cjalr requires capability in rs1`,
   - kept as a stable diagnostic target while runtime-side support is designed.

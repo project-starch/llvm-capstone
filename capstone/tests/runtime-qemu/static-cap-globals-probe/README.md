@@ -11,6 +11,10 @@ fields.
   - positive runtime-side materialization POC,
   - populates a writable global object at runtime and then uses it,
   - currently expected to execute successfully.
+- `descriptor_materialize_domain.c`
+  - descriptor-driven positive POC,
+  - rebuilds the reduced object from explicit descriptors plus raw templates,
+  - currently expected to execute successfully.
 - `static_const_domain.c`
   - reduced reproducer,
   - stores those values in a file-scope `static const` object and then loads them
@@ -22,6 +26,10 @@ The control case should print:
 Called dom (1-th time) retval = 305397871
 ```
 The runtime-materialization POC should currently print the same value:
+```text
+Called dom (1-th time) retval = 305397871
+```
+The descriptor-driven materialization POC should currently print the same value:
 ```text
 Called dom (1-th time) retval = 305397871
 ```
@@ -39,3 +47,5 @@ It is **not** yet part of the validated baseline smoke bundle.
   - intended to stay useful whether the policy becomes eager-at-init or lazy-on-first-use.
 - `metadata_contract.md`
   - maps the current reduced failing case onto that minimal descriptor model.
+- `runtime_materialize_helpers.h`
+  - tiny reusable primitive operations for reduced runtime-side materialization.
