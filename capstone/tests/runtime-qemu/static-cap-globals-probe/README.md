@@ -37,3 +37,12 @@ This probe is intended as a stable regression/diagnostic target while the tree
 works toward runtime-side support for static/global capability-bearing objects.
 It is **not** yet part of the validated baseline smoke bundle.
 
+## Related files
+
+- `metadata_contract.h`
+  - minimal shared descriptor shape for runtime-side materialization,
+  - intended to stay useful whether the policy becomes eager-at-init or lazy-on-first-use.
+- `metadata_contract.md`
+  - maps the current reduced failing case onto that minimal descriptor model.
+
+
