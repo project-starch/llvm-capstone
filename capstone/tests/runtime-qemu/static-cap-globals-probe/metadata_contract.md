@@ -64,3 +64,11 @@ Instead, runtime-side logic only needs:
 
 That is exactly the common core needed by both eager and lazy approaches.
 
+## Current evidence in this tree
+
+The sibling probe `runtime_materialize_domain.c` already shows that the reduced
+`pair { fn, name }` shape works when those capability-valued fields are created
+at runtime in writable global storage rather than consumed directly from a
+file-scope `static const` image object.
+
+

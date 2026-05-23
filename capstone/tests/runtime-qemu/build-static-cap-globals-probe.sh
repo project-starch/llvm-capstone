@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Build the reduced static-capability-globals diagnostic domains:
 # - one direct-use control case,
+# - one positive runtime-side materialization POC,
 # - one file-scope static const reproducer.
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -20,12 +21,18 @@ bash "$SCRIPT_DIR/build-domain.sh" \
   "$OUT_DIR/static_cap_globals_direct.dom"
 
 bash "$SCRIPT_DIR/build-domain.sh" \
+  "$PROBE_DIR/runtime_materialize_domain.c" \
+  "$OUT_DIR/static_cap_globals_runtime_materialize.dom"
+
+bash "$SCRIPT_DIR/build-domain.sh" \
   "$PROBE_DIR/static_const_domain.c" \
   "$OUT_DIR/static_cap_globals_static.dom"
 
 "$LLVM_READOBJ" -h "$OUT_DIR/static_cap_globals_direct.dom"
+"$LLVM_READOBJ" -h "$OUT_DIR/static_cap_globals_runtime_materialize.dom"
 "$LLVM_READOBJ" -h "$OUT_DIR/static_cap_globals_static.dom"
 
 echo "Built $OUT_DIR/static_cap_globals_direct.dom"
+echo "Built $OUT_DIR/static_cap_globals_runtime_materialize.dom"
 echo "Built $OUT_DIR/static_cap_globals_static.dom"
 
