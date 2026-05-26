@@ -101,3 +101,6 @@ test:
 
   .align 4
   .section .gct
+  .global __capstone_gct_start
+  .hidden __capstone_gct_start
+__capstone_gct_start:

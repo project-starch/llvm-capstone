@@ -28,7 +28,9 @@
 #include "llvm/CodeGen/MachineConstantPool.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineModuleInfo.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/Module.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInst.h"
@@ -43,6 +45,8 @@
 #include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/TargetParser/CapstoneISAInfo.h"
 #include "llvm/Transforms/Instrumentation/HWAddressSanitizer.h"
+
+#include <vector>
 
 using namespace llvm;
 
@@ -119,6 +123,7 @@ public:
   void emitGlobalVariable(const GlobalVariable *GV) override;
 
 private:
+  void emitStaticCapGCTSection(const Module &M);
   void emitAttributes(const MCSubtargetInfo &SubtargetInfo);
 
   void emitNTLHint(const MachineInstr *MI);
@@ -131,7 +136,127 @@ private:
 
   void lowerToMCInst(const MachineInstr *MI, MCInst &OutMI);
 };
+
+struct StaticCapGCTObjectRecord {
+  uint32_t ObjectID;
+  uint32_t Size;
+  uint32_t Align;
+  uint32_t TemplateOffset;
+  uint32_t FirstSlotIndex;
+  uint32_t NumSlots;
+  std::vector<uint8_t> TemplateBytes;
+};
+
+struct StaticCapGCTSlotRecord {
+  uint32_t ObjectID;
+  uint32_t FieldOffset;
+  uint32_t SlotKind;
+  uint32_t TargetFlags;
+  uint32_t TargetObjectID;
+  uint64_t TargetAddend;
+  const GlobalValue *TargetSymbol;
+};
+
+enum : uint32_t {
+  StaticCapSlotNull = 0,
+  StaticCapSlotFunction = 1,
+  StaticCapSlotGlobalObject = 2,
+  StaticCapSlotStringObject = 3,
+};
+
+enum : uint32_t {
+  StaticCapTargetFlagRelocatedSymbol = 1u << 0,
+};
+
+static constexpr uint32_t StaticCapMetadataMagic = 0x50414353u; // 'SCAP'
+static constexpr uint16_t StaticCapMetadataVersion = 1u;
+static constexpr uint32_t StaticCapMetadataGlobalDescSize = 24u;
+static constexpr uint32_t StaticCapMetadataSlotDescSize = 40u;
+
+bool collectStaticCapReducedObject(const GlobalVariable &GV,
+                                   const DataLayout &DL,
+                                   uint32_t &NextObjectID,
+                                   std::vector<StaticCapGCTObjectRecord> &Objects,
+                                   std::vector<StaticCapGCTSlotRecord> &Slots) {
+  if (!GV.hasInitializer() || !GV.isConstant())
+    return false;
+
+  auto *ST = dyn_cast<StructType>(GV.getValueType());
+  if (!ST || ST->getNumElements() != 1)
+    return false;
+
+  Type *FieldTy = ST->getElementType(0);
+  if (!FieldTy->isPointerTy() || FieldTy->getPointerAddressSpace() != 200)
+    return false;
+
+  const auto *CS = dyn_cast<ConstantStruct>(GV.getInitializer());
+  if (!CS || CS->getNumOperands() != 1)
+    return false;
+
+  auto *FieldInit = dyn_cast<Constant>(CS->getOperand(0));
+  if (!FieldInit)
+    return false;
+
+  const Value *Stripped = FieldInit->stripPointerCasts();
+  auto *TargetGV = dyn_cast<GlobalVariable>(Stripped);
+  auto *TargetFn = dyn_cast<Function>(Stripped);
+  if (!TargetGV && !TargetFn)
+    return false;
+
+  StaticCapGCTObjectRecord HolderObject;
+  HolderObject.ObjectID = NextObjectID++;
+  HolderObject.Size = static_cast<uint32_t>(DL.getTypeAllocSize(ST));
+  HolderObject.Align = GV.getAlign().valueOrOne().value();
+  HolderObject.TemplateOffset = 0;
+  HolderObject.FirstSlotIndex = static_cast<uint32_t>(Slots.size());
+  HolderObject.NumSlots = 1;
+  HolderObject.TemplateBytes.assign(HolderObject.Size, 0);
+
+  StaticCapGCTSlotRecord Slot = {
+      HolderObject.ObjectID,
+      0,
+      StaticCapSlotNull,
+      0,
+      0,
+      0,
+      nullptr,
+  };
+
+  if (TargetFn) {
+    Slot.SlotKind = StaticCapSlotFunction;
+    Slot.TargetFlags = StaticCapTargetFlagRelocatedSymbol;
+    Slot.TargetSymbol = TargetFn;
+  } else {
+    const auto *Init = TargetGV->getInitializer();
+    const auto *CDS = dyn_cast_or_null<ConstantDataSequential>(Init);
+    if (!CDS || CDS->getElementType() != Type::getInt8Ty(GV.getContext()))
+      return false;
+
+    StringRef RawBytes = CDS->getRawDataValues();
+
+    StaticCapGCTObjectRecord TargetObject;
+    TargetObject.ObjectID = NextObjectID++;
+    TargetObject.Size = static_cast<uint32_t>(DL.getTypeAllocSize(TargetGV->getValueType()));
+    TargetObject.Align = TargetGV->getAlign().valueOrOne().value();
+    TargetObject.TemplateOffset = 0;
+    TargetObject.FirstSlotIndex = static_cast<uint32_t>(Slots.size() + 1);
+    TargetObject.NumSlots = 0;
+    TargetObject.TemplateBytes.assign(RawBytes.begin(), RawBytes.end());
+
+    Slot.SlotKind = StaticCapSlotStringObject;
+    Slot.TargetObjectID = TargetObject.ObjectID;
+
+    Objects.push_back(std::move(HolderObject));
+    Slots.push_back(Slot);
+    Objects.push_back(std::move(TargetObject));
+    return true;
+  }
+
+  Objects.push_back(std::move(HolderObject));
+  Slots.push_back(Slot);
+  return true;
 }
+} // end anonymous namespace
 
 void CapstoneAsmPrinter::LowerSTACKMAP(MCStreamer &OutStreamer, StackMaps &SM,
                                     const MachineInstr &MI) {
@@ -593,6 +718,83 @@ void CapstoneAsmPrinter::emitEndOfAsmFile(Module &M) {
     emitNoteGnuProperty(M);
   }
   EmitHwasanMemaccessSymbols(M);
+  emitStaticCapGCTSection(M);
+}
+
+void CapstoneAsmPrinter::emitStaticCapGCTSection(const Module &M) {
+  if (!TM.getTargetTriple().isOSBinFormatELF())
+    return;
+
+  std::vector<StaticCapGCTObjectRecord> Objects;
+  std::vector<StaticCapGCTSlotRecord> Slots;
+  uint32_t NextObjectID = 0;
+
+  for (const GlobalVariable &GV : M.globals())
+    collectStaticCapReducedObject(GV, getDataLayout(), NextObjectID, Objects, Slots);
+
+  if (Objects.empty())
+    return;
+
+  uint32_t TemplateOffset = 0;
+  for (auto &Object : Objects) {
+    Object.TemplateOffset = TemplateOffset;
+    TemplateOffset += static_cast<uint32_t>(Object.TemplateBytes.size());
+  }
+
+  MCSection *GCTSection =
+      OutContext.getELFSection(".gct", ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
+  MCSymbol *GCTBegin = OutContext.getOrCreateSymbol("__llvm_static_cap_gct_begin");
+  MCSymbol *GCTEnd = OutContext.getOrCreateSymbol("__llvm_static_cap_gct_end");
+  OutStreamer->switchSection(GCTSection);
+  OutStreamer->emitValueToAlignment(Align(16));
+  OutStreamer->emitSymbolAttribute(GCTBegin, MCSA_Global);
+  OutStreamer->emitSymbolAttribute(GCTEnd, MCSA_Global);
+  OutStreamer->emitLabel(GCTBegin);
+
+  OutStreamer->emitIntValue(StaticCapMetadataMagic, 4);
+  OutStreamer->emitIntValue(StaticCapMetadataVersion, 2);
+  OutStreamer->emitIntValue(0, 2);
+  OutStreamer->emitIntValue(static_cast<uint32_t>(Objects.size()), 4);
+  OutStreamer->emitIntValue(static_cast<uint32_t>(Slots.size()), 4);
+  OutStreamer->emitIntValue(TemplateOffset, 4);
+  OutStreamer->emitIntValue(StaticCapMetadataGlobalDescSize, 4);
+  OutStreamer->emitIntValue(StaticCapMetadataSlotDescSize, 4);
+
+  for (const auto &Object : Objects) {
+    OutStreamer->emitIntValue(Object.ObjectID, 4);
+    OutStreamer->emitIntValue(Object.Size, 4);
+    OutStreamer->emitIntValue(Object.Align, 4);
+    OutStreamer->emitIntValue(Object.TemplateOffset, 4);
+    OutStreamer->emitIntValue(Object.FirstSlotIndex, 4);
+    OutStreamer->emitIntValue(Object.NumSlots, 4);
+  }
+
+  for (const auto &Slot : Slots) {
+    OutStreamer->emitIntValue(Slot.ObjectID, 4);
+    OutStreamer->emitIntValue(Slot.FieldOffset, 4);
+    OutStreamer->emitIntValue(Slot.SlotKind, 4);
+    OutStreamer->emitIntValue(Slot.TargetFlags, 4);
+    OutStreamer->emitIntValue(Slot.TargetObjectID, 4);
+    OutStreamer->emitIntValue(0, 4);
+    OutStreamer->emitIntValue(Slot.TargetAddend, 8);
+    if (Slot.TargetSymbol) {
+      const MCExpr *Expr = MCSymbolRefExpr::create(getSymbol(Slot.TargetSymbol), OutContext);
+      OutStreamer->emitValue(Expr, 8);
+    } else {
+      OutStreamer->emitIntValue(0, 8);
+    }
+  }
+
+  for (const auto &Object : Objects) {
+    if (Object.TemplateBytes.empty())
+      continue;
+
+    OutStreamer->emitBytes(StringRef(
+        reinterpret_cast<const char *>(Object.TemplateBytes.data()),
+        Object.TemplateBytes.size()));
+  }
+
+  OutStreamer->emitLabel(GCTEnd);
 }
 
 void CapstoneAsmPrinter::emitAttributes(const MCSubtargetInfo &SubtargetInfo) {

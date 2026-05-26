@@ -109,6 +109,9 @@ The key property is that the domain is provided through a host-shared directory,
   diagnostic and currently expects the direct-use control case, the runtime-side
   materialization POC, and the descriptor-driven materialization POC to succeed
   while the `static const` reproducer triggers the known capability failure.
+- `static-cap-typed-load-repro/run.sh` — runs a more standalone reduced diagnostic
+  that isolates the narrower trigger: a capability-typed runtime load from a
+  one-field file-scope static object.
 - `static-cap-globals-probe/PAUSE_POINT.md` — records the current SQLite/static-
   capability stopping point and the recommended re-entry step after benchmark work.
 - `BENCHMARK_SWITCHOVER.md` — records the recommended transition from the current
@@ -245,6 +248,20 @@ blocker around static/global capability-bearing objects:
   - file-scope `static const` reproducer currently fails with
     `[CAPSTONE] cs.cjalr requires capability in rs1`,
   - kept as the documented pause point before switching effort to benchmark bring-up.
+- `static-cap-typed-load-repro/run.sh`
+  - reduces the trigger further to one-field objects,
+  - shows a function-pointer typed load failing with
+    `[CAPSTONE] cs.cjalr requires capability in rs1`,
+  - shows a string-pointer typed load failing with
+    `[CAPSTONE] Cap mem access requires capability`,
+  - and verifies the smallest manual runtime-materialization workarounds, the
+    next-step descriptor-driven path, and a prototype LLVM-IR-generated bridge to
+    that materialization shape.
+  - the same directory now also fixes the exact candidate `.gct` metadata layout
+    for the first LLVM-path compiler-side emission proof of concept.
+  - a first in-tree backend-side POC now emits non-empty `SCAP` metadata into
+    `.gct` for the narrowed failing static-cap cases; inspect with
+    `static-cap-typed-load-repro/inspect-gct-emission.sh`.
 
 ## Current targeted diagnostics around multi-round HostCall
 
