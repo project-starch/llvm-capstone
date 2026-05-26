@@ -52,6 +52,9 @@ bash capstone/benchmarks/coremark/build-coremark-capstone.sh
 
 The fetch step works and pins upstream correctly.
 
+The current tree has been revalidated after the latest reduced static-capability
+work, and the first honest `CoreMark` blocker is still the same one.
+
 The first honest Capstone compile attempt currently fails before link with a
 backend crash while compiling upstream `core_list_join.c`:
 
