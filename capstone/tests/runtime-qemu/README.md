@@ -101,14 +101,18 @@ The key property is that the domain is provided through a host-shared directory,
   if needed, then builds a Capstone-compiled SQLite-facing VFS skeleton domain.
 - `run-sqlite-vfs-skeleton.sh` — executes that SQLite VFS skeleton domain in the
   existing QEMU smoke harness.
-- `build-static-cap-globals-probe.sh` — builds a reduced pair of domains for the
-  current static/global capability diagnostic: one direct-use control case, one
-  positive runtime-side materialization POC, one descriptor-driven materialization
-  POC, and one file-scope `static const` reproducer.
+- `build-static-cap-globals-probe.sh` — builds a reduced static/global capability
+  diagnostic bundle: direct-use control, runtime-side materialization POC,
+  descriptor-driven materialization POC, and a file-scope `static const`
+  reproducer.
 - `run-static-cap-globals-probe.sh` — runs that reduced static/global capability
   diagnostic and currently expects the direct-use control case, the runtime-side
   materialization POC, and the descriptor-driven materialization POC to succeed
   while the `static const` reproducer triggers the known capability failure.
+- `static-cap-globals-probe/PAUSE_POINT.md` — records the current SQLite/static-
+  capability stopping point and the recommended re-entry step after benchmark work.
+- `BENCHMARK_SWITCHOVER.md` — records the recommended transition from the current
+  SQLite/static-global line to CoreMark/BEEBS/RV8 bring-up.
 
 The QEMU harness now also supports a validated exploratory mode:
 
@@ -240,7 +244,7 @@ blocker around static/global capability-bearing objects:
   - descriptor-driven materialization POC succeeds,
   - file-scope `static const` reproducer currently fails with
     `[CAPSTONE] cs.cjalr requires capability in rs1`,
-  - kept as a stable diagnostic target while runtime-side support is designed.
+  - kept as the documented pause point before switching effort to benchmark bring-up.
 
 ## Current targeted diagnostics around multi-round HostCall
 

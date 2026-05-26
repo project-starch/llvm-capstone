@@ -49,3 +49,7 @@ It is **not** yet part of the validated baseline smoke bundle.
   - maps the current reduced failing case onto that minimal descriptor model.
 - `runtime_materialize_helpers.h`
   - tiny reusable primitive operations for reduced runtime-side materialization.
+- `PAUSE_POINT.md`
+  - records why this directory is a valid pause point before switching effort to
+    benchmark bring-up,
+  - captures the nearby `capstone-c` reference for later return.
