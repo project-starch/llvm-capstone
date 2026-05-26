@@ -76,3 +76,17 @@ from:
 > generalizing `descriptor_materialize_domain.c` into a tiny runtime global
 > table/access model, still without touching the loader first.
 
+## Current parking decision
+
+Benchmark work is now the active priority.
+
+That means the SQLite/static-global line should remain parked at this exact pause
+point while the tree does a first honest `CoreMark` bring-up through:
+
+- `capstone/benchmarks/coremark/README.md`
+- `capstone/benchmarks/coremark/fetch-coremark.sh`
+- `capstone/benchmarks/coremark/build-coremark-capstone.sh`
+
+Until that produces the first concrete blocker, there is no need to expand scope
+to `BEEBS`, `RV8`, or further SQLite integration work.
+

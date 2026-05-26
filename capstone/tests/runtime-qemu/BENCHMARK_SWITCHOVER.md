@@ -20,8 +20,8 @@ switching focus.
 Prioritize benchmark bring-up in this order:
 
 1. `CoreMark`
-2. one representative `BEEBS` benchmark
-3. `RV8` viability/build check
+2. one representative `BEEBS` benchmark, but only after the first `CoreMark` blocker is known
+3. `RV8` viability/build check, only after `CoreMark` stops being the speculative front
 
 For each target, do a fast first pass:
 
@@ -51,12 +51,38 @@ Prefer this order instead:
    - reproducible pinned sources in-tree, or
    - automated wrappers that depend on a checked-in source layout
 
-## Current exception
+## Current decision
 
-`CoreMark` already has packaging presence under:
+For `CoreMark`, the tree should now use a split layout instead of the sparse
+Buildroot package stub:
 
-- `capstone/caplifive-buildroot/buildroot/package/coremark/`
+- in-tree orchestration and notes under `capstone/benchmarks/coremark/`
+- fetched upstream sources under `/tmp/capstone/coremark-src` by default
+- build outputs under `/tmp/capstone/coremark-build` by default
 
-So the first exploration should check whether that existing packaging path can be
-reused before introducing any new source-management mechanism.
+This keeps the main repository clean while avoiding a misleading dependency on
+`capstone/caplifive-buildroot/buildroot/package/coremark/`, which is not the
+right primary bring-up location for the current work.
+
+Canonical `CoreMark` references:
+
+- repository: <https://github.com/eembc/coremark>
+- site: <https://www.eembc.org/coremark/>
+
+Pinned first-pass upstream target:
+
+- tag: `v1.01`
+- commit: `cfa9ab377835911f23d9b0831c7be302ed1f58de`
+
+## SQLite parking status
+
+SQLite should now stay parked at the current reduced-VFS/static-global pause
+point until `CoreMark` produces the first concrete compiler/linker/runtime
+blocker worth switching back from.
+
+So for now:
+
+- continue with `CoreMark`,
+- do not add new SQLite-facing scope,
+- do not spend time on `BEEBS`/`RV8` links beyond keeping them on the later list.
 
