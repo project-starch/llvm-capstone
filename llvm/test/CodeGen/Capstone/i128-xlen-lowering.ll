@@ -57,3 +57,19 @@ entry:
   %q = getelementptr i8, ptr addrspace(200) %p, i128 %scaled
   ret ptr addrspace(200) %q
 }
+
+@sink = addrspace(200) global ptr addrspace(200) null, align 16
+
+; CHECK-LABEL: stack_field_addr:
+; CHECK: cincoffsetimm [[ADDR:a[0-9]+]], {{(sp|s0)}},
+; CHECK-NOT: addi [[ADDR]],
+; CHECK: stc [[ADDR]],
+define void @stack_field_addr() addrspace(200) {
+entry:
+  %buf = alloca [256 x i8], align 16, addrspace(200)
+  %field = getelementptr inbounds [256 x i8], ptr addrspace(200) %buf, i64 0, i64 186
+  store ptr addrspace(200) %field, ptr addrspace(200) @sink, align 16
+  ret void
+}
+
+

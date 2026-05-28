@@ -1649,6 +1649,42 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   bool HasBitTest = Subtarget->hasBEXTILike();
 
   switch (Opcode) {
+  case ISD::FrameIndex: {
+    auto *FIN = cast<FrameIndexSDNode>(Node);
+    SDValue Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), VT);
+    SDNode *Res = CurDAG->getMachineNode(
+        Capstone::CIncOffsetImm, DL, VT, Base,
+        CurDAG->getSignedTargetConstant(0, DL, MVT::i64));
+    ReplaceNode(Node, Res);
+    return;
+  }
+  case ISD::ADD: {
+    SDValue Base = Node->getOperand(0);
+    SDValue Offset = Node->getOperand(1);
+    if (isa<ConstantSDNode>(Base) && isa<FrameIndexSDNode>(Offset))
+      std::swap(Base, Offset);
+
+    auto *FIN = dyn_cast<FrameIndexSDNode>(Base);
+    auto *C = dyn_cast<ConstantSDNode>(Offset);
+    if (!FIN || !C)
+      break;
+
+    SDValue FrameBase = CurDAG->getTargetFrameIndex(FIN->getIndex(), VT);
+    int64_t Imm = C->getSExtValue();
+    if (isInt<12>(Imm)) {
+      SDNode *Res = CurDAG->getMachineNode(
+          Capstone::CIncOffsetImm, DL, VT, FrameBase,
+          CurDAG->getSignedTargetConstant(Imm, DL, MVT::i64));
+      ReplaceNode(Node, Res);
+      return;
+    }
+
+    SDValue ImmReg = selectImm(CurDAG, DL, XLenVT, Imm, *Subtarget);
+    SDNode *Res = CurDAG->getMachineNode(Capstone::CIncOffset, DL, VT,
+                                         FrameBase, ImmReg);
+    ReplaceNode(Node, Res);
+    return;
+  }
   case ISD::Constant: {
     auto *ConstNode = cast<ConstantSDNode>(Node);
 
@@ -3645,6 +3681,38 @@ bool isRegImmLoadOrStore(SDNode *User, SDValue Add) {
   return true;
 }
 
+static SDValue materializeAddrBaseWithImmediate(SelectionDAG *CurDAG,
+                                                const SDLoc &DL, MVT VT,
+                                                SDValue Base, int64_t Imm,
+                                                const CapstoneSubtarget *Subtarget) {
+  if (Imm == 0)
+    return Base;
+
+  if (VT == MVT::i128) {
+    if (isInt<12>(Imm)) {
+      return SDValue(CurDAG->getMachineNode(
+                         Capstone::CIncOffsetImm, DL, VT, Base,
+                         CurDAG->getSignedTargetConstant(Imm, DL, MVT::i64)),
+                     0);
+    }
+
+    SDValue Offset = selectImm(CurDAG, DL, Subtarget->getXLenVT(), Imm, *Subtarget);
+    return SDValue(
+        CurDAG->getMachineNode(Capstone::CIncOffset, DL, VT, Base, Offset), 0);
+  }
+
+  if (isInt<12>(Imm)) {
+    return SDValue(CurDAG->getMachineNode(
+                       Capstone::ADDI, DL, VT, Base,
+                       CurDAG->getSignedTargetConstant(Imm, DL, VT)),
+                   0);
+  }
+
+  SDValue Offset = selectImm(CurDAG, DL, VT, Imm, *Subtarget);
+  return SDValue(CurDAG->getMachineNode(Capstone::ADD, DL, VT, Base, Offset),
+                 0);
+}
+
 // To prevent SelectAddrRegImm from folding offsets that conflict with the
 // fusion of PseudoMovAddr, check if the offset of every use of a given address
 // is within the alignment.
@@ -3762,10 +3830,8 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
     // This mirrors the AddiPair PatFrag in CapstoneInstrInfo.td.
     if (CVal >= -4096 && CVal <= 4094) {
       int64_t Adj = CVal < 0 ? -2048 : 2047;
-      Base = SDValue(
-          CurDAG->getMachineNode(Capstone::ADDI, DL, VT, Addr.getOperand(0),
-                                 CurDAG->getSignedTargetConstant(Adj, DL, VT)),
-          0);
+      Base = materializeAddrBaseWithImmediate(CurDAG, DL, VT, Addr.getOperand(0),
+                                              Adj, Subtarget);
       Offset = CurDAG->getSignedTargetConstant(CVal - Adj, DL, MVT::i64);
       return true;
     }
@@ -3780,9 +3846,13 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
         selectConstantAddr(CurDAG, DL, VT, Subtarget, Addr.getOperand(1), Base,
                            Offset, /*IsPrefetch=*/false)) {
       // Insert an ADD instruction with the materialized Hi52 bits.
-      Base = SDValue(
-          CurDAG->getMachineNode(Capstone::ADD, DL, VT, Addr.getOperand(0), Base),
-          0);
+      Base = VT == MVT::i128
+                 ? SDValue(CurDAG->getMachineNode(Capstone::CIncOffset, DL, VT,
+                                                  Addr.getOperand(0), Base),
+                           0)
+                 : SDValue(CurDAG->getMachineNode(Capstone::ADD, DL, VT,
+                                                  Addr.getOperand(0), Base),
+                           0);
       return true;
     }
   }
@@ -3861,11 +3931,8 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImmLsb00000(SDValue Addr, SDValue &Base,
     if ((-2049 >= CVal && CVal >= -4096) || (4065 >= CVal && CVal >= 2017)) {
       int64_t Adj = CVal < 0 ? -2048 : 2016;
       int64_t AdjustedOffset = CVal - Adj;
-      Base =
-          SDValue(CurDAG->getMachineNode(
-                      Capstone::ADDI, DL, VT, Addr.getOperand(0),
-                      CurDAG->getSignedTargetConstant(AdjustedOffset, DL, VT)),
-                  0);
+      Base = materializeAddrBaseWithImmediate(CurDAG, DL, VT, Addr.getOperand(0),
+                                              AdjustedOffset, Subtarget);
       Offset = CurDAG->getSignedTargetConstant(Adj, DL, VT);
       return true;
     }
@@ -3873,9 +3940,13 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImmLsb00000(SDValue Addr, SDValue &Base,
     if (selectConstantAddr(CurDAG, DL, VT, Subtarget, Addr.getOperand(1), Base,
                            Offset, /*IsPrefetch=*/true)) {
       // Insert an ADD instruction with the materialized Hi52 bits.
-      Base = SDValue(
-          CurDAG->getMachineNode(Capstone::ADD, DL, VT, Addr.getOperand(0), Base),
-          0);
+      Base = VT == MVT::i128
+                 ? SDValue(CurDAG->getMachineNode(Capstone::CIncOffset, DL, VT,
+                                                  Addr.getOperand(0), Base),
+                           0)
+                 : SDValue(CurDAG->getMachineNode(Capstone::ADD, DL, VT,
+                                                  Addr.getOperand(0), Base),
+                           0);
       return true;
     }
   }

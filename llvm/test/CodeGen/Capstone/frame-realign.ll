@@ -9,7 +9,7 @@ define ptr addrspace(200) @need_realign() {
 ; CHECK: lcc [[CUR:a[0-9]+]], sp, 2
 ; CHECK-NEXT: andi [[CUR]], [[CUR]], -64
 ; CHECK-NEXT: scc sp, sp, [[CUR]]
-; CHECK: mv a0, sp
+; CHECK: cincoffsetimm a0, sp, 0
 ; CHECK: cincoffsetimm sp, s0, -64
 ; CHECK: cjalr zero, 0(ra)
 entry:
