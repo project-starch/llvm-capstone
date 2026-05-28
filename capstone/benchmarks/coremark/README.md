@@ -50,28 +50,27 @@ bash capstone/benchmarks/coremark/build-coremark-capstone.sh
 
 ## Result of the current smoke
 
-The fetch step works and pins upstream correctly.
+The fetch step still works and pins upstream correctly.
 
-The current tree has been revalidated with `+m` enabled in the canonical helper.
+The current tree has been revalidated with `+m` enabled in the canonical helper,
+and the earlier compile-time CoreMark blockers have moved again:
 
-That change is enough to move the first honest blocker forward:
+- upstream `core_list_join.c` compiles,
+- upstream `core_main.c` now compiles at both `-O1` and `-O2` with the current
+  local lowering work,
+- the full helper now links a real
+  `/tmp/capstone/coremark-build/coremark_capstone.dom`.
 
-- upstream `core_list_join.c` now compiles with the current local lowering work,
-- the next real blocker is now upstream `core_main.c`.
+That means the first end-to-end blocker is no longer a backend selection
+failure during compilation. It is now a later runtime failure on the domain path:
 
-Current `core_main.c` status with the in-tree helper configuration:
+- the generic tiny runtime smoke still passes,
+- but a QEMU execution of `coremark_capstone.dom` currently aborts in
+  `helper_cscincoffsetimm` with `Assertion 'rs1_v->tag' failed` after the domain
+  is loaded and created.
 
-- `-O1`: reproducible Capstone backend failure in `coremark_main` on the
-  capability-offset path while selecting capability-width arithmetic derived
-  from zero-extended 32-bit offsets (the exact failure has already moved a few
-  times while narrowing the path, e.g. from `i128 and` to `i128 shl`, and then
-  to a remaining XLen-domain `and` emitted from the same normalization work),
-- `-O0`: compile does not currently complete within a short watchdog timeout,
-- `-O2`: same story so far — not yet a clean compile, and still not linkable.
-
-So the helper is still best understood as a **reproducible first-blocker
-detector**, but the blocker is now later and more concrete than the previous
-`core_list_join.c` crash.
+So the helper has moved from a **first-blocker detector for compilation** to a
+**reproducible compile-and-link smoke plus a runtime reproducer**.
 
 When `clang` crashes, it emits a preprocessed reproducer and run script under
 `/tmp/`, for example:
@@ -80,8 +79,8 @@ When `clang` crashes, it emits a preprocessed reproducer and run script under
 - `/tmp/core_main-*.sh`
 
 That is exactly the current handoff value: the tree now has a pinned upstream
-source, a stable Capstone invocation with `+m`, and a concrete later-stage
-backend failure instead of a speculative benchmark plan.
+source, a stable Capstone invocation with `+m`, a successful compile/link path,
+and a concrete later-stage runtime failure instead of an earlier backend crash.
 
 Do **not** publish scores from this setup.
 
@@ -94,7 +93,7 @@ Do **not** publish scores from this setup.
 
 ## Next step after the first smoke
 
-Once the first real `CoreMark` blocker is identified:
+Once the current runtime blocker is identified precisely enough:
 
 1. fix that blocker,
 2. rerun this smoke,

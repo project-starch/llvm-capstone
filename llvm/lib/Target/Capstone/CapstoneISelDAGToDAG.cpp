@@ -1166,6 +1166,70 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
   SDValue Offset = Node->getOperand(1); // i128 Offset (Reg or Constant)
   MVT VT = Node->getSimpleValueType(0); // i128
   MVT XLenVT = Subtarget->getXLenVT();
+  auto materializeXLenAndMask = [&](SDValue LHS, const APInt &Mask) -> SDValue {
+    APInt TruncMask = Mask.trunc(XLenVT.getSizeInBits());
+    int64_t Imm = TruncMask.getSExtValue();
+    if (isInt<12>(Imm)) {
+      SDNode *Andi = CurDAG->getMachineNode(
+          Capstone::ANDI, DL, XLenVT, LHS,
+          CurDAG->getSignedTargetConstant(Imm, DL, XLenVT));
+      return SDValue(Andi, 0);
+    }
+
+    SDValue RHS = selectImm(CurDAG, DL, XLenVT, Imm, *Subtarget);
+    SDNode *And = CurDAG->getMachineNode(Capstone::AND, DL, XLenVT, LHS, RHS);
+    return SDValue(And, 0);
+  };
+  auto matchExtendedXLenOffset = [&](SDValue V, unsigned &ExtOpcode) -> SDValue {
+    if ((ExtOpcode == ISD::SIGN_EXTEND || ExtOpcode == ISD::ZERO_EXTEND ||
+         ExtOpcode == ISD::ANY_EXTEND) &&
+        V.getOperand(0).getValueType().isScalarInteger() &&
+        !V.getOperand(0).getValueType().bitsGT(XLenVT)) {
+      if (ExtOpcode == ISD::SIGN_EXTEND)
+        return CurDAG->getSExtOrTrunc(V.getOperand(0), DL, XLenVT);
+      if (ExtOpcode == ISD::ZERO_EXTEND)
+        return CurDAG->getZExtOrTrunc(V.getOperand(0), DL, XLenVT);
+      if (V.getOperand(0).getSimpleValueType() == XLenVT)
+        return V.getOperand(0);
+      return CurDAG->getNode(ISD::ANY_EXTEND, DL, XLenVT, V.getOperand(0));
+    }
+
+    if ((V.getOpcode() == ISD::SRA || V.getOpcode() == ISD::SRL) &&
+        isa<ConstantSDNode>(V.getOperand(1))) {
+      SDValue Inner = V.getOperand(0);
+      auto *InnerShAmt = dyn_cast<ConstantSDNode>(Inner.getOperand(1));
+      auto *OuterShAmt = cast<ConstantSDNode>(V.getOperand(1));
+      if (Inner.getOpcode() == ISD::SHL && InnerShAmt &&
+          InnerShAmt->getZExtValue() == OuterShAmt->getZExtValue()) {
+        SDValue Ext = Inner.getOperand(0);
+        if (Ext.getOpcode() == ISD::ANY_EXTEND &&
+            Ext.getOperand(0).getSimpleValueType() == XLenVT) {
+          unsigned NarrowBits = V.getValueType().getSizeInBits() -
+                                OuterShAmt->getZExtValue();
+          if (NarrowBits > 0 && NarrowBits < XLenVT.getSizeInBits() &&
+              isPowerOf2_32(NarrowBits)) {
+            if (V.getOpcode() == ISD::SRA) {
+              ExtOpcode = ISD::SIGN_EXTEND;
+              unsigned ShiftAmt = XLenVT.getSizeInBits() - NarrowBits;
+              SDNode *SLLI = CurDAG->getMachineNode(
+                  Capstone::SLLI, DL, XLenVT, Ext.getOperand(0),
+                  CurDAG->getTargetConstant(ShiftAmt, DL, XLenVT));
+              SDNode *SRAI = CurDAG->getMachineNode(
+                  Capstone::SRAI, DL, XLenVT, SDValue(SLLI, 0),
+                  CurDAG->getTargetConstant(ShiftAmt, DL, XLenVT));
+              return SDValue(SRAI, 0);
+            }
+
+            ExtOpcode = ISD::ZERO_EXTEND;
+            return materializeXLenAndMask(
+                Ext.getOperand(0), APInt::getLowBitsSet(XLenVT.getSizeInBits(), NarrowBits));
+          }
+        }
+      }
+    }
+
+    return SDValue();
+  };
 
   // 1. Attempt to use the instruction with immediate (CIncOffsetImm)
   if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
@@ -1204,7 +1268,22 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
       }
     };
 
-    if (SDValue Narrow = narrowOffsetToXLen(Offset.getOperand(0))) {
+    if (Offset.getOpcode() == ISD::SHL && isa<ConstantSDNode>(Offset.getOperand(1))) {
+      unsigned ExtOpcode = Offset.getOperand(0).getOpcode();
+      if (SDValue BaseOffset = matchExtendedXLenOffset(Offset.getOperand(0), ExtOpcode)) {
+        uint64_t ShiftAmt = cast<ConstantSDNode>(Offset.getOperand(1))->getZExtValue();
+        SDNode *Shift = CurDAG->getMachineNode(
+            Capstone::SLLI, DL, XLenVT, BaseOffset,
+            CurDAG->getTargetConstant(ShiftAmt, DL, XLenVT));
+        Offset = SDValue(Shift, 0);
+      }
+    }
+
+    SDValue Narrow;
+    if (Offset.getValueType() == MVT::i128)
+      Narrow = narrowOffsetToXLen(Offset.getOperand(0));
+
+    if (Narrow) {
       Offset = Narrow;
     } else if (Offset.getOpcode() == ISD::AND) {
       auto *MaskC = dyn_cast<ConstantSDNode>(Offset.getOperand(1));
@@ -1213,9 +1292,7 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
           LHS.getOperand(0).getSimpleValueType() == XLenVT) {
         APInt Mask = MaskC->getAPIntValue();
         if (Mask.countl_zero() >= Mask.getBitWidth() - XLenVT.getSizeInBits())
-          Offset = CurDAG->getNode(
-              ISD::AND, DL, XLenVT, LHS.getOperand(0),
-              CurDAG->getConstant(Mask.trunc(XLenVT.getSizeInBits()), DL, XLenVT));
+          Offset = materializeXLenAndMask(LHS.getOperand(0), Mask);
       }
     }
   }
@@ -1940,13 +2017,11 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     break;
   case ISD::AND: {
     auto *N1C = dyn_cast<ConstantSDNode>(Node->getOperand(1));
-    if (!N1C)
-      break;
-
     SDValue N0 = Node->getOperand(0);
 
-    bool LeftShift = N0.getOpcode() == ISD::SHL;
-    if (LeftShift || N0.getOpcode() == ISD::SRL) {
+    if (N1C) {
+      bool LeftShift = N0.getOpcode() == ISD::SHL;
+      if (LeftShift || N0.getOpcode() == ISD::SRL) {
       auto *C = dyn_cast<ConstantSDNode>(N0.getOperand(1));
       if (!C)
         break;
@@ -2242,8 +2317,38 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
 
     if (tryShrinkShlLogicImm(Node))
       return;
+  }
 
-    break;
+    if (Node->getSimpleValueType(0) != Subtarget->getXLenVT())
+      break;
+
+    SDValue LHS = Node->getOperand(0);
+    SDValue RHS = Node->getOperand(1);
+
+    if (auto *C = dyn_cast<ConstantSDNode>(LHS)) {
+      std::swap(LHS, RHS);
+      N1C = C;
+    } else {
+      N1C = dyn_cast<ConstantSDNode>(RHS);
+    }
+
+    if (N1C) {
+      int64_t Imm = N1C->getSExtValue();
+      if (isInt<12>(Imm)) {
+        SDNode *Res = CurDAG->getMachineNode(
+            Capstone::ANDI, DL, Node->getSimpleValueType(0), LHS,
+            CurDAG->getSignedTargetConstant(Imm, DL, Node->getSimpleValueType(0)));
+        ReplaceNode(Node, Res);
+        return;
+      }
+
+      RHS = selectImm(CurDAG, DL, Node->getSimpleValueType(0), Imm, *Subtarget);
+    }
+
+    SDNode *Res = CurDAG->getMachineNode(Capstone::AND, DL,
+                                         Node->getSimpleValueType(0), LHS, RHS);
+    ReplaceNode(Node, Res);
+    return;
   }
   case ISD::MUL: {
     // Special case for calculating (mul (and X, C2), C1) where the full product

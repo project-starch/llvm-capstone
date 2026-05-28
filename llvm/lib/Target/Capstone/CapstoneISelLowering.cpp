@@ -304,7 +304,11 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   //===--------------------------------------------------------------------===//
   // Custom lowering for add of 128-bit numbers
   setOperationAction(ISD::ADD, MVT::i128, Custom);
-  setOperationAction({ISD::AND, ISD::OR, ISD::XOR}, MVT::i128, Expand);
+  setOperationAction(ISD::AND, MVT::i128, Custom);
+  setOperationAction({ISD::OR, ISD::XOR}, MVT::i128, Expand);
+  setOperationAction({ISD::SHL, ISD::SRA, ISD::SRL}, MVT::i128, Custom);
+  setOperationAction(ISD::MUL, MVT::i128, Custom);
+  setOperationAction({ISD::SMUL_LOHI, ISD::UMUL_LOHI}, MVT::i128, Expand);
 
   // Custom lowering for global addresses
   setOperationAction(ISD::GlobalAddress, MVT::i128, Custom);
@@ -7702,27 +7706,62 @@ SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
 
     // Restrict to the common GEP pattern where the shift amount is constant.
     if (isa<ConstantSDNode>(ShlAmt)) {
-      unsigned ExtOpc = ShlVal.getOpcode();
-      SDValue Index64;
+      auto extractShiftIndexToXLen = [&](SDValue V, unsigned &ExtOpcode) {
+        if ((ExtOpcode == ISD::SIGN_EXTEND || ExtOpcode == ISD::ZERO_EXTEND) &&
+            V.getOperand(0).getValueType() == MVT::i64)
+          return V.getOperand(0);
 
-      // Check if we are shifting an extended 64-bit value.
-      if ((ExtOpc == ISD::SIGN_EXTEND || ExtOpc == ISD::ZERO_EXTEND) &&
-          ShlVal.getOperand(0).getValueType() == MVT::i64) {
-        Index64 = ShlVal.getOperand(0);
-      } else if (ShlVal.getOpcode() == ISD::AND) {
-        auto *MaskC = dyn_cast<ConstantSDNode>(ShlVal.getOperand(1));
-        SDValue Ext = ShlVal.getOperand(0);
-        if (MaskC && Ext.getOpcode() == ISD::ANY_EXTEND &&
-            Ext.getOperand(0).getValueType() == MVT::i64) {
-          APInt Mask = MaskC->getAPIntValue();
-          if (Mask.countl_zero() >= 64) {
-            ExtOpc = ISD::ZERO_EXTEND;
-            Index64 = DAG.getNode(
-                ISD::AND, DL, MVT::i64, Ext.getOperand(0),
-                DAG.getConstant(Mask.trunc(64), DL, MVT::i64));
+        if (V.getOpcode() == ISD::AND) {
+          auto *MaskC = dyn_cast<ConstantSDNode>(V.getOperand(1));
+          SDValue Ext = V.getOperand(0);
+          if (MaskC && Ext.getOpcode() == ISD::ANY_EXTEND &&
+              Ext.getOperand(0).getValueType() == MVT::i64) {
+            APInt Mask = MaskC->getAPIntValue();
+            if (Mask.countl_zero() >= 64) {
+              ExtOpcode = ISD::ZERO_EXTEND;
+              return DAG.getNode(
+                  ISD::AND, DL, MVT::i64, Ext.getOperand(0),
+                  DAG.getConstant(Mask.trunc(64), DL, MVT::i64));
+            }
           }
         }
-      }
+
+        if ((V.getOpcode() == ISD::SRA || V.getOpcode() == ISD::SRL) &&
+            isa<ConstantSDNode>(V.getOperand(1))) {
+          SDValue Inner = V.getOperand(0);
+          auto *InnerShlAmt = dyn_cast<ConstantSDNode>(Inner.getOperand(1));
+          auto *OuterShAmt = cast<ConstantSDNode>(V.getOperand(1));
+          if (Inner.getOpcode() == ISD::SHL && InnerShlAmt &&
+              InnerShlAmt->getZExtValue() == OuterShAmt->getZExtValue()) {
+            SDValue Ext = Inner.getOperand(0);
+            if (Ext.getOpcode() == ISD::ANY_EXTEND &&
+                Ext.getOperand(0).getValueType() == MVT::i64) {
+              unsigned NarrowBits = V.getValueType().getSizeInBits() -
+                                    OuterShAmt->getZExtValue();
+              if (NarrowBits > 0 && NarrowBits < 64 &&
+                  isPowerOf2_32(NarrowBits)) {
+                if (V.getOpcode() == ISD::SRA) {
+                  ExtOpcode = ISD::SIGN_EXTEND;
+                  return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, MVT::i64,
+                                     Ext.getOperand(0),
+                                     DAG.getValueType(MVT::getIntegerVT(NarrowBits)));
+                }
+
+                ExtOpcode = ISD::ZERO_EXTEND;
+                return DAG.getNode(
+                    ISD::AND, DL, MVT::i64, Ext.getOperand(0),
+                    DAG.getConstant(APInt::getLowBitsSet(64, NarrowBits), DL,
+                                    MVT::i64));
+              }
+            }
+          }
+        }
+
+        return SDValue();
+      };
+
+      unsigned ExtOpc = ShlVal.getOpcode();
+      SDValue Index64 = extractShiftIndexToXLen(ShlVal, ExtOpc);
 
       if (Index64) {
         // Normalize shift amount to i64 (pointer width for arithmetic)
@@ -7743,6 +7782,186 @@ SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
   // Note: we pass MVT::i128. This matches the .td file definition.
   // We pass Op1 (offset) as i128, even if it's a constant.
   return DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Base, Offset);
+}
+
+static SDValue normalizeScalarI128ShiftOperandToXLen(
+    SDValue V, SelectionDAG &DAG, const CapstoneSubtarget &Subtarget,
+    const SDLoc &DL, unsigned &ExtOpcode) {
+  MVT XLenVT = Subtarget.getXLenVT();
+
+  if ((ExtOpcode == ISD::SIGN_EXTEND || ExtOpcode == ISD::ZERO_EXTEND ||
+       ExtOpcode == ISD::ANY_EXTEND) &&
+      V.getOperand(0).getValueType().isScalarInteger() &&
+      !V.getOperand(0).getValueType().bitsGT(XLenVT)) {
+    if (ExtOpcode == ISD::SIGN_EXTEND)
+      return DAG.getSExtOrTrunc(V.getOperand(0), DL, XLenVT);
+    if (ExtOpcode == ISD::ZERO_EXTEND)
+      return DAG.getZExtOrTrunc(V.getOperand(0), DL, XLenVT);
+    if (V.getOperand(0).getSimpleValueType() == XLenVT)
+      return V.getOperand(0);
+    return DAG.getNode(ISD::ANY_EXTEND, DL, XLenVT, V.getOperand(0));
+  }
+
+  if (V.getOpcode() == ISD::SIGN_EXTEND_INREG) {
+    SDValue Base = V.getOperand(0);
+    if (Base.getOpcode() == ISD::ANY_EXTEND &&
+        Base.getOperand(0).getValueType().isScalarInteger() &&
+        !Base.getOperand(0).getValueType().bitsGT(XLenVT))
+      Base = Base.getOperand(0);
+
+    if (Base.getValueType().isScalarInteger() && !Base.getValueType().bitsGT(XLenVT)) {
+      ExtOpcode = ISD::SIGN_EXTEND;
+      return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, XLenVT,
+                         DAG.getAnyExtOrTrunc(Base, DL, XLenVT), V.getOperand(1));
+    }
+  }
+
+  if ((V.getOpcode() == ISD::AssertZext || V.getOpcode() == ISD::AssertSext) &&
+      cast<VTSDNode>(V.getOperand(1))->getVT().isScalarInteger() &&
+      !cast<VTSDNode>(V.getOperand(1))->getVT().bitsGT(XLenVT)) {
+    unsigned AssertedOpc = V.getOpcode();
+    ExtOpcode = AssertedOpc == ISD::AssertZext ? ISD::ZERO_EXTEND : ISD::SIGN_EXTEND;
+    SDValue Base = V.getOperand(0);
+    if (Base.getValueType().bitsGT(XLenVT))
+      Base = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Base);
+    else if (Base.getSimpleValueType() != XLenVT)
+      Base = DAG.getAnyExtOrTrunc(Base, DL, XLenVT);
+
+    return DAG.getNode(AssertedOpc, DL, XLenVT, Base, V.getOperand(1));
+  }
+
+  if (V.getOpcode() == ISD::AND) {
+    auto *MaskC = dyn_cast<ConstantSDNode>(V.getOperand(1));
+    SDValue Ext = V.getOperand(0);
+    if (MaskC && Ext.getOpcode() == ISD::ANY_EXTEND &&
+        Ext.getOperand(0).getValueType() == XLenVT) {
+      APInt Mask = MaskC->getAPIntValue();
+      if (Mask.countl_zero() >= Mask.getBitWidth() - XLenVT.getSizeInBits()) {
+        ExtOpcode = ISD::ZERO_EXTEND;
+        return DAG.getNode(ISD::AND, DL, XLenVT, Ext.getOperand(0),
+                           DAG.getConstant(Mask.trunc(XLenVT.getSizeInBits()),
+                                           DL, XLenVT));
+      }
+    }
+  }
+
+  if ((V.getOpcode() == ISD::SRA || V.getOpcode() == ISD::SRL) &&
+      isa<ConstantSDNode>(V.getOperand(1))) {
+    SDValue Inner = V.getOperand(0);
+    auto *InnerShAmt = dyn_cast<ConstantSDNode>(Inner.getOperand(1));
+    auto *OuterShAmt = cast<ConstantSDNode>(V.getOperand(1));
+    if (Inner.getOpcode() == ISD::SHL && InnerShAmt &&
+        InnerShAmt->getZExtValue() == OuterShAmt->getZExtValue()) {
+      SDValue Ext = Inner.getOperand(0);
+      if (Ext.getOpcode() == ISD::ANY_EXTEND &&
+          Ext.getOperand(0).getValueType().isScalarInteger() &&
+          !Ext.getOperand(0).getValueType().bitsGT(XLenVT)) {
+        unsigned NarrowBits =
+            V.getValueType().getSizeInBits() - OuterShAmt->getZExtValue();
+        if (NarrowBits > 0 && NarrowBits < XLenVT.getSizeInBits() &&
+            isPowerOf2_32(NarrowBits)) {
+          SDValue Base = DAG.getAnyExtOrTrunc(Ext.getOperand(0), DL, XLenVT);
+          if (V.getOpcode() == ISD::SRA) {
+            ExtOpcode = ISD::SIGN_EXTEND;
+            return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, XLenVT, Base,
+                               DAG.getValueType(MVT::getIntegerVT(NarrowBits)));
+          }
+
+          ExtOpcode = ISD::ZERO_EXTEND;
+          return DAG.getNode(
+              ISD::AND, DL, XLenVT, Base,
+              DAG.getConstant(APInt::getLowBitsSet(XLenVT.getSizeInBits(),
+                                                   NarrowBits),
+                              DL, XLenVT));
+        }
+      }
+    }
+  }
+
+  return SDValue();
+}
+
+static SDValue lowerScalarI128Shift(SDValue Op, SelectionDAG &DAG,
+                                    const CapstoneSubtarget &Subtarget) {
+  if (Op.getSimpleValueType() != MVT::i128 ||
+      !isa<ConstantSDNode>(Op.getOperand(1)))
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT XLenVT = Subtarget.getXLenVT();
+  unsigned ExtOpcode = Op.getOperand(0).getOpcode();
+  SDValue XLenVal = normalizeScalarI128ShiftOperandToXLen(
+      Op.getOperand(0), DAG, Subtarget, DL, ExtOpcode);
+  if (!XLenVal)
+    return SDValue();
+
+  SDValue ShAmt = DAG.getZExtOrTrunc(Op.getOperand(1), DL, XLenVT);
+  SDValue Shifted =
+      DAG.getNode(Op.getOpcode(), DL, XLenVT, XLenVal, ShAmt);
+  return DAG.getNode(ExtOpcode, DL, MVT::i128, Shifted);
+}
+
+static SDValue lowerScalarI128And(SDValue Op, SelectionDAG &DAG,
+                                  const CapstoneSubtarget &Subtarget) {
+  if (Op.getSimpleValueType() != MVT::i128)
+    return SDValue();
+
+  SDValue LHS = Op.getOperand(0);
+  SDValue RHS = Op.getOperand(1);
+  if (isa<ConstantSDNode>(LHS))
+    std::swap(LHS, RHS);
+
+  auto *MaskC = dyn_cast<ConstantSDNode>(RHS);
+  if (!MaskC)
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT XLenVT = Subtarget.getXLenVT();
+  unsigned ExtOpcode = LHS.getOpcode();
+  SDValue XLenVal = normalizeScalarI128ShiftOperandToXLen(
+      LHS, DAG, Subtarget, DL, ExtOpcode);
+  if (!XLenVal)
+    return SDValue();
+
+  APInt Mask = MaskC->getAPIntValue();
+  if (Mask.countl_zero() < Mask.getBitWidth() - XLenVT.getSizeInBits())
+    return SDValue();
+
+  SDValue MaskXLen = DAG.getConstant(Mask.trunc(XLenVT.getSizeInBits()), DL, XLenVT);
+  SDValue And = DAG.getNode(ISD::AND, DL, XLenVT, XLenVal, MaskXLen);
+  return DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i128, And);
+}
+
+static SDValue lowerScalarI128Mul(SDValue Op, SelectionDAG &DAG,
+                                  const CapstoneSubtarget &Subtarget) {
+  if (Op.getSimpleValueType() != MVT::i128)
+    return SDValue();
+
+  SDValue LHS = Op.getOperand(0);
+  SDValue RHS = Op.getOperand(1);
+  if (isa<ConstantSDNode>(LHS))
+    std::swap(LHS, RHS);
+
+  auto *MulC = dyn_cast<ConstantSDNode>(RHS);
+  if (!MulC)
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT XLenVT = Subtarget.getXLenVT();
+  unsigned ExtOpcode = LHS.getOpcode();
+  SDValue XLenVal = normalizeScalarI128ShiftOperandToXLen(
+      LHS, DAG, Subtarget, DL, ExtOpcode);
+  if (!XLenVal)
+    return SDValue();
+
+  APInt ConstVal = MulC->getAPIntValue();
+  if (ConstVal.getSignificantBits() > XLenVT.getSizeInBits())
+    return SDValue();
+
+  SDValue MulXLen = DAG.getNode(
+      ISD::MUL, DL, XLenVT, XLenVal,
+      DAG.getConstant(ConstVal.trunc(XLenVT.getSizeInBits()), DL, XLenVT));
+  return DAG.getNode(ExtOpcode, DL, MVT::i128, MulXLen);
 }
 
 SDValue CapstoneTargetLowering::lowerSETCC(SDValue Op,
@@ -8688,9 +8907,15 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
     return lowerADD(Op, DAG);
   case ISD::SUB:
   case ISD::MUL:
+    if (Op.getSimpleValueType() == MVT::i128)
+      return lowerScalarI128Mul(Op, DAG, Subtarget);
+    [[fallthrough]];
   case ISD::MULHS:
   case ISD::MULHU:
   case ISD::AND:
+    if (Op.getSimpleValueType() == MVT::i128)
+      return lowerScalarI128And(Op, DAG, Subtarget);
+    [[fallthrough]];
   case ISD::OR:
   case ISD::XOR:
   case ISD::SDIV:
@@ -8706,6 +8931,8 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
   case ISD::SHL:
   case ISD::SRA:
   case ISD::SRL:
+    if (Op.getSimpleValueType() == MVT::i128)
+      return lowerScalarI128Shift(Op, DAG, Subtarget);
     if (Op.getSimpleValueType().isFixedLengthVector())
       return lowerToScalableOp(Op, DAG);
     // This can be called for an i32 shift amount that needs to be promoted.
