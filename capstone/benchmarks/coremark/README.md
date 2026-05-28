@@ -52,29 +52,36 @@ bash capstone/benchmarks/coremark/build-coremark-capstone.sh
 
 The fetch step works and pins upstream correctly.
 
-The current tree has been revalidated after the latest reduced static-capability
-work, and the first honest `CoreMark` blocker is still the same one.
+The current tree has been revalidated with `+m` enabled in the canonical helper.
 
-The first honest Capstone compile attempt currently fails before link with a
-backend crash while compiling upstream `core_list_join.c`:
+That change is enough to move the first honest blocker forward:
 
-- function: `core_list_init`
-- current symptom: Capstone backend instruction-selection failure on an `i128`
-  shift/division path (`Cannot select ... i128 = shl ...`)
-- observed at: `-O0`, `-O1`, and `-O2`
+- upstream `core_list_join.c` now compiles with the current local lowering work,
+- the next real blocker is now upstream `core_main.c`.
 
-So the current helper is best understood as a **reproducible first-blocker
-detector**, not a successful domain build yet.
+Current `core_main.c` status with the in-tree helper configuration:
+
+- `-O1`: reproducible Capstone backend failure in `coremark_main` on the
+  capability-offset path while selecting capability-width arithmetic derived
+  from zero-extended 32-bit offsets (the exact failure has already moved a few
+  times while narrowing the path, e.g. from `i128 and` to `i128 shl`, and then
+  to a remaining XLen-domain `and` emitted from the same normalization work),
+- `-O0`: compile does not currently complete within a short watchdog timeout,
+- `-O2`: same story so far — not yet a clean compile, and still not linkable.
+
+So the helper is still best understood as a **reproducible first-blocker
+detector**, but the blocker is now later and more concrete than the previous
+`core_list_join.c` crash.
 
 When `clang` crashes, it emits a preprocessed reproducer and run script under
 `/tmp/`, for example:
 
-- `/tmp/core_list_join-*.c`
-- `/tmp/core_list_join-*.sh`
+- `/tmp/core_main-*.c`
+- `/tmp/core_main-*.sh`
 
 That is exactly the current handoff value: the tree now has a pinned upstream
-source, a stable Capstone invocation, and a concrete backend failure instead of a
-speculative benchmark plan.
+source, a stable Capstone invocation with `+m`, and a concrete later-stage
+backend failure instead of a speculative benchmark plan.
 
 Do **not** publish scores from this setup.
 

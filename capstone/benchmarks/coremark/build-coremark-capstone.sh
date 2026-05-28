@@ -30,6 +30,8 @@ fi
 
 COMMON_FLAGS=(
   -target capstone64-unknown-elf
+  -Xclang -target-feature
+  -Xclang +m
   -ffreestanding
   -fno-builtin
   "$DOMAIN_OPT_LEVEL"
@@ -41,7 +43,7 @@ COMMON_FLAGS=(
   -Dmain=coremark_main
 )
 
-"$CLANG" -target capstone64-unknown-elf -ffreestanding -O0 \
+"$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m -ffreestanding -O0 \
   -I"$PORT_DIR" \
   -I"$COREMARK_SRC_DIR" \
   -c "$START_SRC" \

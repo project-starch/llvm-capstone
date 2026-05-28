@@ -304,6 +304,7 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   //===--------------------------------------------------------------------===//
   // Custom lowering for add of 128-bit numbers
   setOperationAction(ISD::ADD, MVT::i128, Custom);
+  setOperationAction({ISD::AND, ISD::OR, ISD::XOR}, MVT::i128, Expand);
 
   // Custom lowering for global addresses
   setOperationAction(ISD::GlobalAddress, MVT::i128, Custom);
@@ -7702,11 +7703,28 @@ SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
     // Restrict to the common GEP pattern where the shift amount is constant.
     if (isa<ConstantSDNode>(ShlAmt)) {
       unsigned ExtOpc = ShlVal.getOpcode();
-      // Check if we are shifting an extended 64-bit value
+      SDValue Index64;
+
+      // Check if we are shifting an extended 64-bit value.
       if ((ExtOpc == ISD::SIGN_EXTEND || ExtOpc == ISD::ZERO_EXTEND) &&
           ShlVal.getOperand(0).getValueType() == MVT::i64) {
-        SDValue Index64 = ShlVal.getOperand(0); // The i64 Index
+        Index64 = ShlVal.getOperand(0);
+      } else if (ShlVal.getOpcode() == ISD::AND) {
+        auto *MaskC = dyn_cast<ConstantSDNode>(ShlVal.getOperand(1));
+        SDValue Ext = ShlVal.getOperand(0);
+        if (MaskC && Ext.getOpcode() == ISD::ANY_EXTEND &&
+            Ext.getOperand(0).getValueType() == MVT::i64) {
+          APInt Mask = MaskC->getAPIntValue();
+          if (Mask.countl_zero() >= 64) {
+            ExtOpc = ISD::ZERO_EXTEND;
+            Index64 = DAG.getNode(
+                ISD::AND, DL, MVT::i64, Ext.getOperand(0),
+                DAG.getConstant(Mask.trunc(64), DL, MVT::i64));
+          }
+        }
+      }
 
+      if (Index64) {
         // Normalize shift amount to i64 (pointer width for arithmetic)
         SDValue ShAmt64 = DAG.getZExtOrTrunc(ShlAmt, DL, MVT::i64);
 
@@ -7714,8 +7732,7 @@ SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
         SDValue NewShift64 = DAG.getNode(ISD::SHL, DL, MVT::i64, Index64,
                                          ShAmt64);
 
-        // 2. Extend the result back to i128
-        // (matches our COPY pattern or implicitly handled)
+        // 2. Extend the result back to i128.
         Offset = DAG.getNode(ExtOpc, DL, MVT::i128, NewShift64);
       }
     }
@@ -8683,7 +8700,9 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
   case ISD::BSWAP:
   case ISD::CTPOP:
   case ISD::VSELECT:
-    return lowerToScalableOp(Op, DAG);
+    if (Op.getSimpleValueType().isFixedLengthVector())
+      return lowerToScalableOp(Op, DAG);
+    return SDValue();
   case ISD::SHL:
   case ISD::SRA:
   case ISD::SRL:
@@ -8723,7 +8742,9 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
   case ISD::USUBSAT:
   case ISD::SADDSAT:
   case ISD::SSUBSAT:
-    return lowerToScalableOp(Op, DAG);
+    if (Op.getSimpleValueType().isFixedLengthVector())
+      return lowerToScalableOp(Op, DAG);
+    return SDValue();
   case ISD::ABDS:
   case ISD::ABDU: {
     SDLoc dl(Op);

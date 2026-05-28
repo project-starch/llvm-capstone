@@ -1165,6 +1165,7 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
   SDValue Base = Node->getOperand(0);   // i128 Base
   SDValue Offset = Node->getOperand(1); // i128 Offset (Reg or Constant)
   MVT VT = Node->getSimpleValueType(0); // i128
+  MVT XLenVT = Subtarget->getXLenVT();
 
   // 1. Attempt to use the instruction with immediate (CIncOffsetImm)
   if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
@@ -1184,6 +1185,39 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
     // If the constant is large, we need to load it into a register.
     // The selectImm function (which exists in this file) does this efficiently.
     Offset = selectImm(CurDAG, DL, Subtarget->getXLenVT(), ImmVal, *Subtarget);
+  } else if (Offset.getSimpleValueType() == MVT::i128) {
+    auto narrowOffsetToXLen = [&](SDValue V) -> SDValue {
+      if (!V.getValueType().isScalarInteger() || V.getValueType().bitsGT(XLenVT))
+        return SDValue();
+
+      switch (Offset.getOpcode()) {
+      case ISD::ZERO_EXTEND:
+        return CurDAG->getZExtOrTrunc(V, DL, XLenVT);
+      case ISD::SIGN_EXTEND:
+        return CurDAG->getSExtOrTrunc(V, DL, XLenVT);
+      case ISD::ANY_EXTEND:
+        if (V.getSimpleValueType() == XLenVT)
+          return V;
+        return CurDAG->getNode(ISD::ANY_EXTEND, DL, XLenVT, V);
+      default:
+        return SDValue();
+      }
+    };
+
+    if (SDValue Narrow = narrowOffsetToXLen(Offset.getOperand(0))) {
+      Offset = Narrow;
+    } else if (Offset.getOpcode() == ISD::AND) {
+      auto *MaskC = dyn_cast<ConstantSDNode>(Offset.getOperand(1));
+      SDValue LHS = Offset.getOperand(0);
+      if (MaskC && LHS.getOpcode() == ISD::ANY_EXTEND &&
+          LHS.getOperand(0).getSimpleValueType() == XLenVT) {
+        APInt Mask = MaskC->getAPIntValue();
+        if (Mask.countl_zero() >= Mask.getBitWidth() - XLenVT.getSizeInBits())
+          Offset = CurDAG->getNode(
+              ISD::AND, DL, XLenVT, LHS.getOperand(0),
+              CurDAG->getConstant(Mask.trunc(XLenVT.getSizeInBits()), DL, XLenVT));
+      }
+    }
   }
 
   // 2. Use the register instruction (CIncOffset)
