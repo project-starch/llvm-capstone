@@ -86,13 +86,23 @@ important to keep its scope precise:
 So the current CoreMark blocker is from the **same broad static-capability area**,
 but not from the already-closed reduced `.gct` path.
 
-For the current benchmark smoke, the helper applies two temporary CoreMark-local
-workarounds while the generic path is still under construction:
+For the current benchmark smoke, the helper applies several temporary
+CoreMark-local workarounds while the generic path is still under construction:
 
+- compile `core_list_join.c` with `-O1` to avoid the current higher-opt list-path
+  capability-copy issue,
+- override `core_list_init()` locally so list sizing uses the actual
+  `sizeof(list_head)` on Capstone PureCap instead of the upstream hard-coded
+  16-byte pointer assumption,
+- override `core_init_matrix()` locally while the upstream matrix initializer
+  still exposes a mixed scalar/capability lowering failure,
 - compile `core_util.c` with `-fno-jump-tables` to avoid emitting a static switch
   table of capability addresses,
 - compile `port/core_portme.c` with `-fno-zero-initialized-in-bss` so the volatile
-  seed globals stay in `.data` instead of splitting the last seed into `.bss`.
+  seed globals stay in `.data` instead of splitting the last seed into `.bss`,
+- and keep the canonical helper on the list-only execution mask for now so the
+  current list/runtime bring-up can advance independently of the still-failing
+  matrix path.
 
 After those two benchmark-local workarounds, any remaining runtime failures are a
 much cleaner signal for residual backend capability-selection bugs instead of the

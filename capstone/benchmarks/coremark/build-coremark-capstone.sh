@@ -50,9 +50,7 @@ COMMON_FLAGS=(
   -o "$OBJ_DIR/start.o"
 
 for src in \
-  "$COREMARK_SRC_DIR/core_list_join.c" \
   "$COREMARK_SRC_DIR/core_main.c" \
-  "$COREMARK_SRC_DIR/core_matrix.c" \
   "$COREMARK_SRC_DIR/core_state.c" \
   "$SCRIPT_DIR/coremark_domain.c"
 do
@@ -60,24 +58,52 @@ do
   "$CLANG" "${COMMON_FLAGS[@]}" -c "$src" -o "$obj"
 done
 
-# Current benchmark-local runtime workaround:
+# Current benchmark-local runtime workarounds:
+# - core_list_join.c at -O1: avoids the current high-opt list-path capability
+#   copy trap while keeping the benchmark logic intact.
+# - core_list_capstone.c: fixes upstream list sizing that still assumes 16-byte
+#   per-node pointer storage; Capstone PureCap list nodes are wider.
+# - core_matrix_capstone.c: uses a local capability-safe matrix initializer while
+#   the upstream function still triggers a mixed scalar/capability lowering bug.
 # - core_util.c: avoid compiler-generated switch tables of capability-valued
 #   addresses until generic static-cap table materialization exists.
 # - core_portme.c: keep zero-initialized seed globals in .data so gp-relative
 #   capability bounds still cover the full volatile seed set.
+# - core_portme.c also keeps the canonical smoke on the list-only path for now
+#   so later matrix-only faults do not hide list/runtime progress.
+"$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables -O1 \
+  -Dcore_list_init=core_list_init_upstream_unused \
+  -c "$COREMARK_SRC_DIR/core_list_join.c" \
+  -o "$OBJ_DIR/core_list_join.o"
+
+"$CLANG" "${COMMON_FLAGS[@]}" \
+  -c "$SCRIPT_DIR/core_list_capstone.c" \
+  -o "$OBJ_DIR/core_list_capstone.o"
+
+"$CLANG" "${COMMON_FLAGS[@]}" -Dcore_init_matrix=core_init_matrix_upstream_unused \
+  -c "$COREMARK_SRC_DIR/core_matrix.c" \
+  -o "$OBJ_DIR/core_matrix.o"
+
+"$CLANG" "${COMMON_FLAGS[@]}" \
+  -c "$SCRIPT_DIR/core_matrix_capstone.c" \
+  -o "$OBJ_DIR/core_matrix_capstone.o"
+
 "$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables \
   -c "$COREMARK_SRC_DIR/core_util.c" \
   -o "$OBJ_DIR/core_util.o"
 
 "$CLANG" "${COMMON_FLAGS[@]}" -fno-zero-initialized-in-bss \
+  -DCOREMARK_DEFAULT_EXECS=1 \
   -c "$SCRIPT_DIR/port/core_portme.c" \
   -o "$OBJ_DIR/core_portme.o"
 
 "$LD_LLD" -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
   "$OBJ_DIR/start.o" \
   "$OBJ_DIR/core_list_join.o" \
+  "$OBJ_DIR/core_list_capstone.o" \
   "$OBJ_DIR/core_main.o" \
   "$OBJ_DIR/core_matrix.o" \
+  "$OBJ_DIR/core_matrix_capstone.o" \
   "$OBJ_DIR/core_state.o" \
   "$OBJ_DIR/core_util.o" \
   "$OBJ_DIR/core_portme.o" \

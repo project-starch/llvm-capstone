@@ -4,6 +4,10 @@
 #define ITERATIONS 10
 #endif
 
+#ifndef COREMARK_DEFAULT_EXECS
+#define COREMARK_DEFAULT_EXECS 0
+#endif
+
 #if VALIDATION_RUN
 volatile ee_s32 seed1_volatile = 0x3415;
 volatile ee_s32 seed2_volatile = 0x3415;
@@ -19,7 +23,7 @@ volatile ee_s32 seed3_volatile = 0x8;
 #endif
 
 volatile ee_s32 seed4_volatile = ITERATIONS;
-volatile ee_s32 seed5_volatile = 0;
+volatile ee_s32 seed5_volatile = COREMARK_DEFAULT_EXECS;
 
 ee_u32 default_num_contexts = 1;
 
