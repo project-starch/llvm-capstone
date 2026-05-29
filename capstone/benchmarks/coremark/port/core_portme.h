@@ -45,7 +45,13 @@ typedef uint32_t ee_u32;
 typedef uintptr_t ee_ptr_int;
 typedef size_t ee_size_t;
 
-#define align_mem(x) (void *)(4u + (((ee_ptr_int)(x) - 1u) & ~(ee_ptr_int)3u))
+static inline void *capstone_align_mem_ptr(void *x) {
+  ee_ptr_int misalign = ((ee_ptr_int)x) & (ee_ptr_int)3u;
+  ee_ptr_int adjust = ((ee_ptr_int)4u - misalign) & (ee_ptr_int)3u;
+  return (void *)((char *)x + adjust);
+}
+
+#define align_mem(x) capstone_align_mem_ptr((void *)(x))
 
 typedef ee_u32 CORE_TICKS;
 

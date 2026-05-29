@@ -54,13 +54,24 @@ for src in \
   "$COREMARK_SRC_DIR/core_main.c" \
   "$COREMARK_SRC_DIR/core_matrix.c" \
   "$COREMARK_SRC_DIR/core_state.c" \
-  "$COREMARK_SRC_DIR/core_util.c" \
-  "$SCRIPT_DIR/port/core_portme.c" \
   "$SCRIPT_DIR/coremark_domain.c"
 do
   obj="$OBJ_DIR/$(basename "${src%.c}").o"
   "$CLANG" "${COMMON_FLAGS[@]}" -c "$src" -o "$obj"
 done
+
+# Current benchmark-local runtime workaround:
+# - core_util.c: avoid compiler-generated switch tables of capability-valued
+#   addresses until generic static-cap table materialization exists.
+# - core_portme.c: keep zero-initialized seed globals in .data so gp-relative
+#   capability bounds still cover the full volatile seed set.
+"$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables \
+  -c "$COREMARK_SRC_DIR/core_util.c" \
+  -o "$OBJ_DIR/core_util.o"
+
+"$CLANG" "${COMMON_FLAGS[@]}" -fno-zero-initialized-in-bss \
+  -c "$SCRIPT_DIR/port/core_portme.c" \
+  -o "$OBJ_DIR/core_portme.o"
 
 "$LD_LLD" -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
   "$OBJ_DIR/start.o" \
