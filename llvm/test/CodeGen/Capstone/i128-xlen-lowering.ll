@@ -72,4 +72,19 @@ entry:
   ret void
 }
 
+; CHECK-LABEL: stack_cap_store:
+; CHECK: cincoffsetimm [[HOLDER:a[0-9]+]], {{(sp|s0)}},
+; CHECK: cincoffsetimm [[BUF:a[0-9]+]], {{(sp|s0)}},
+; CHECK-NOT: addi [[HOLDER]],
+; CHECK: stc [[BUF]], 16([[HOLDER]])
+define void @stack_cap_store() addrspace(200) {
+entry:
+  %holder = alloca { i32, ptr addrspace(200) }, align 16, addrspace(200)
+  %buf = alloca [32 x i8], align 16, addrspace(200)
+  %buf0 = getelementptr inbounds [32 x i8], ptr addrspace(200) %buf, i64 0, i64 0
+  %slot = getelementptr inbounds { i32, ptr addrspace(200) }, ptr addrspace(200) %holder, i64 0, i32 1
+  store ptr addrspace(200) %buf0, ptr addrspace(200) %slot, align 16
+  ret void
+}
+
 

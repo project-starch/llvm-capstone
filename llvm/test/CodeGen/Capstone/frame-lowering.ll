@@ -7,7 +7,8 @@ declare i32 @callee(i32)
 define i32 @frame_alloca(i32 %x) {
 ; CHECK-LABEL: frame_alloca:
 ; CHECK: cincoffsetimm sp, sp, -16
-; CHECK: sw a0, 12(sp)
+; CHECK: cincoffsetimm a2, sp, 12
+; CHECK: sw a0, 0(a2)
 ; CHECK: cincoffsetimm sp, sp, 16
 ; CHECK: cjalr zero, 0(ra)
 entry:
@@ -20,11 +21,11 @@ entry:
 
 define i32 @caller(i32 %x) {
 ; CHECK-LABEL: caller:
-; CHECK: cincoffsetimm sp, sp, -32
-; CHECK: stc ra, 16(sp)
+; CHECK: cincoffsetimm sp, sp, -48
+; CHECK: stc ra, 32(sp)
 ; CHECK: cjalr ra, 0(a1)
-; CHECK: ldc ra, 16(sp)
-; CHECK: cincoffsetimm sp, sp, 32
+; CHECK: ldc ra, 32(sp)
+; CHECK: cincoffsetimm sp, sp, 48
 ; CHECK: cjalr zero, 0(ra)
 entry:
   %slot = alloca i32, align 4, addrspace(200)

@@ -1045,6 +1045,10 @@ static unsigned getSegInstNF(unsigned Intrinsic) {
   }
 }
 
+static SDValue materializeFrameIndexAddrBase(SelectionDAG *CurDAG,
+                                             const SDLoc &DL, MVT VT,
+                                             int FrameIndex);
+
 bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
   unsigned Opcode = Node->getOpcode();
   assert((Opcode == ISD::LOAD) || (Opcode == ISD::STORE));
@@ -1121,18 +1125,9 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
 
   // 2. Materialize FrameIndex
   if (auto *FIN = dyn_cast<FrameIndexSDNode>(BasePtr)) {
-    SDValue TFI = CurDAG->getTargetFrameIndex(FIN->getIndex(),
-                                              BasePtr.getSimpleValueType());
-    // Offset inside ADDI for address materialization is 0
-    // Note: Using pointer type (i128) here
-    SDValue Zero =
-        CurDAG->getTargetConstant(0, DL, BasePtr.getSimpleValueType());
-
-    // ADDI returns pointer type (i128)
-    BasePtr =
-        SDValue(CurDAG->getMachineNode(Capstone::ADDI, DL,
-                                       BasePtr.getSimpleValueType(), TFI, Zero),
-                0);
+    BasePtr = materializeFrameIndexAddrBase(CurDAG, DL,
+                                            BasePtr.getSimpleValueType(),
+                                            FIN->getIndex());
   }
 
   // 3. Generate instruction
@@ -1661,6 +1656,39 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   case ISD::ADD: {
     SDValue Base = Node->getOperand(0);
     SDValue Offset = Node->getOperand(1);
+    if (VT == MVT::i128) {
+      if (isa<ConstantSDNode>(Base) && !isa<ConstantSDNode>(Offset))
+        std::swap(Base, Offset);
+
+      if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base)) {
+        SDValue FrameBase = CurDAG->getTargetFrameIndex(FIN->getIndex(), VT);
+        if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
+          int64_t Imm = C->getSExtValue();
+          if (isInt<12>(Imm)) {
+            SDNode *Res = CurDAG->getMachineNode(
+                Capstone::CIncOffsetImm, DL, VT, FrameBase,
+                CurDAG->getSignedTargetConstant(Imm, DL, MVT::i64));
+            ReplaceNode(Node, Res);
+            return;
+          }
+
+          SDValue ImmReg = selectImm(CurDAG, DL, XLenVT, Imm, *Subtarget);
+          SDNode *Res = CurDAG->getMachineNode(Capstone::CIncOffset, DL, VT,
+                                               FrameBase, ImmReg);
+          ReplaceNode(Node, Res);
+          return;
+        }
+
+        SDNode *Res = CurDAG->getMachineNode(Capstone::CIncOffset, DL, VT,
+                                             FrameBase, Offset);
+        ReplaceNode(Node, Res);
+        return;
+      }
+
+      selectCIncOffset(Node);
+      return;
+    }
+
     if (isa<ConstantSDNode>(Base) && isa<FrameIndexSDNode>(Offset))
       std::swap(Base, Offset);
 
@@ -3559,11 +3587,16 @@ bool CapstoneDAGToDAGISel::SelectInlineAsmMemoryOperand(
   return true;
 }
 
+static SDValue materializeFrameIndexAddrBase(SelectionDAG *CurDAG,
+                                             const SDLoc &DL, MVT VT,
+                                             int FrameIndex);
+
 bool CapstoneDAGToDAGISel::SelectAddrFrameIndex(SDValue Addr, SDValue &Base,
                                              SDValue &Offset) {
   if (auto *FIN = dyn_cast<FrameIndexSDNode>(Addr)) {
-    Base =
-        CurDAG->getTargetFrameIndex(FIN->getIndex(), Addr.getSimpleValueType());
+    Base = materializeFrameIndexAddrBase(CurDAG, SDLoc(Addr),
+                                         Addr.getSimpleValueType(),
+                                         FIN->getIndex());
     Offset = CurDAG->getTargetConstant(0, SDLoc(Addr), MVT::i64);
     return true;
   }
@@ -3713,6 +3746,19 @@ static SDValue materializeAddrBaseWithImmediate(SelectionDAG *CurDAG,
                  0);
 }
 
+static SDValue materializeFrameIndexAddrBase(SelectionDAG *CurDAG,
+                                             const SDLoc &DL, MVT VT,
+                                             int FrameIndex) {
+  SDValue Base = CurDAG->getTargetFrameIndex(FrameIndex, VT);
+  if (VT != MVT::i128)
+    return Base;
+
+  return SDValue(CurDAG->getMachineNode(
+                     Capstone::CIncOffsetImm, DL, VT, Base,
+                     CurDAG->getSignedTargetConstant(0, DL, MVT::i64)),
+                 0);
+}
+
 // To prevent SelectAddrRegImm from folding offsets that conflict with the
 // fusion of PseudoMovAddr, check if the offset of every use of a given address
 // is within the alignment.
@@ -3761,7 +3807,7 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
       if (isInt<12>(CVal)) {
         Base = Addr.getOperand(0);
         if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))
-          Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), VT);
+          Base = materializeFrameIndexAddrBase(CurDAG, DL, VT, FIN->getIndex());
         Offset = CurDAG->getSignedTargetConstant(CVal, DL, MVT::i64);
         return true;
       }
@@ -3790,6 +3836,19 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
     int64_t CVal = cast<ConstantSDNode>(Addr.getOperand(1))->getSExtValue();
     if (isInt<12>(CVal)) {
       Base = Addr.getOperand(0);
+
+      if (CurDAG->isBaseWithConstantOffset(Base)) {
+        int64_t BaseCVal = cast<ConstantSDNode>(Base.getOperand(1))->getSExtValue();
+        SDValue BaseBase = Base.getOperand(0);
+        if (isInt<12>(CVal + BaseCVal)) {
+          CVal += BaseCVal;
+          Base = BaseBase;
+        } else {
+          Base = materializeAddrBaseWithImmediate(CurDAG, DL, VT, BaseBase,
+                                                  BaseCVal, Subtarget);
+        }
+      }
+
       if (Base.getOpcode() == CapstoneISD::ADD_LO) {
         SDValue LoOperand = Base.getOperand(1);
         if (auto *GA = dyn_cast<GlobalAddressSDNode>(LoOperand)) {
@@ -3814,7 +3873,7 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
       }
 
       if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))
-        Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), VT);
+        Base = materializeFrameIndexAddrBase(CurDAG, DL, VT, FIN->getIndex());
       Offset = CurDAG->getSignedTargetConstant(CVal, DL, MVT::i64);
       return true;
     }
@@ -3880,8 +3939,16 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm9(SDValue Addr, SDValue &Base,
     if (isUInt<9>(CVal)) {
       Base = Addr.getOperand(0);
 
+      if (CurDAG->isBaseWithConstantOffset(Base)) {
+        int64_t BaseCVal = cast<ConstantSDNode>(Base.getOperand(1))->getSExtValue();
+        if (BaseCVal >= 0 && isUInt<9>(CVal + BaseCVal)) {
+          CVal += BaseCVal;
+          Base = Base.getOperand(0);
+        }
+      }
+
       if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))
-        Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), VT);
+        Base = materializeFrameIndexAddrBase(CurDAG, DL, VT, FIN->getIndex());
       Offset = CurDAG->getSignedTargetConstant(CVal, DL, VT);
       return true;
     }
@@ -3907,6 +3974,18 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImmLsb00000(SDValue Addr, SDValue &Base,
     if (isInt<12>(CVal)) {
       Base = Addr.getOperand(0);
 
+      if (CurDAG->isBaseWithConstantOffset(Base)) {
+        int64_t BaseCVal = cast<ConstantSDNode>(Base.getOperand(1))->getSExtValue();
+        SDValue BaseBase = Base.getOperand(0);
+        if (isInt<12>(CVal + BaseCVal) && ((CVal + BaseCVal) & 0b11111) == 0) {
+          CVal += BaseCVal;
+          Base = BaseBase;
+        } else {
+          Base = materializeAddrBaseWithImmediate(CurDAG, DL, VT, BaseBase,
+                                                  BaseCVal, Subtarget);
+        }
+      }
+
       // Early-out if not a valid offset.
       if ((CVal & 0b11111) != 0) {
         Base = Addr;
@@ -3915,7 +3994,7 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImmLsb00000(SDValue Addr, SDValue &Base,
       }
 
       if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))
-        Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), VT);
+        Base = materializeFrameIndexAddrBase(CurDAG, DL, VT, FIN->getIndex());
       Offset = CurDAG->getSignedTargetConstant(CVal, DL, VT);
       return true;
     }
@@ -4215,7 +4294,6 @@ bool CapstoneDAGToDAGISel::selectSETCC(SDValue N, ISD::CondCode ExpectedCCVal,
   // We're looking for a setcc.
   if (N->getOpcode() != ISD::SETCC)
     return false;
-
   // Must be an equality comparison.
   ISD::CondCode CCVal = cast<CondCodeSDNode>(N->getOperand(2))->get();
   if (CCVal != ExpectedCCVal)
