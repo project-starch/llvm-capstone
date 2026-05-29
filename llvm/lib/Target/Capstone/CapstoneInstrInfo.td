@@ -2438,12 +2438,17 @@ def SHRINK : RVInstR<0b0000001, 0b001, OPC_CAP_OP, (outs GPR:$rd),
                      (ins GPR:$cap_in, GPR:$rs1, GPR:$rs2),
                      "shrink", "$rd, $rs1, $rs2">;
 
-// Patterns to handle implicit zero/sign/any extensions of i64 values
-// into i128 registers. This is necessary because standard integer types (i64)
-// need to be treated as GPRs (i128).
-def : Pat<(i128 (zext (i64 GPR:$src))), (COPY GPR:$src)>;
-def : Pat<(i128 (sext (i64 GPR:$src))), (COPY GPR:$src)>;
-def : Pat<(i128 (anyext (i64 GPR:$src))), (COPY GPR:$src)>;
+// Scalar i64/i32 values sometimes need to flow through the i128 carrier type
+// used by PureCap lowering.  Those moves must not reuse the capability-copy
+// path because that preserves tag/bounds metadata. Materialize them through a
+// scalar ALU move instead so the result stays a plain numeric value.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
+def PseudoSCALAR_COPY_I128 : Pseudo<(outs GPR:$rd), (ins GPR:$rs), []>,
+                             PseudoInstExpansion<(ADDI GPR:$rd, GPR:$rs, 0)>;
+
+// Selection for scalar -> i128 carrier moves is done in
+// CapstoneISelDAGToDAG::Select so the selector can make a targeted decision
+// without falling back to the generic capability-preserving COPY path.
 
 // MOVC: Move Capability.
 // Used to copy capabilities between GPRs preserving the Tag bit.

@@ -3540,6 +3540,20 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     }
     break; // Let the remaining TRUNCATEs be processed as usual
   }
+  case ISD::ZERO_EXTEND:
+  case ISD::SIGN_EXTEND:
+  case ISD::ANY_EXTEND: {
+    SDValue Src = Node->getOperand(0);
+    MVT SrcVT = Src.getSimpleValueType();
+
+    if (VT == MVT::i128 && SrcVT.isScalarInteger() && !SrcVT.bitsGT(XLenVT)) {
+      SDNode *Res = CurDAG->getMachineNode(Capstone::PseudoSCALAR_COPY_I128,
+                                           DL, VT, Src);
+      ReplaceNode(Node, Res);
+      return;
+    }
+    break;
+  }
   case CapstoneISD::CIncOffset: {
     selectCIncOffset(Node);
     return;
