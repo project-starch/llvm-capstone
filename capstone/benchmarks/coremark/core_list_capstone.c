@@ -11,21 +11,51 @@ extern list_head *core_list_insert_new(list_head *insert_point, list_data *info,
                                        list_head *memblock_end,
                                        list_data *datablock_end);
 
+static inline void *capstone_align_ptr(void *ptr, ee_ptr_int align) {
+  ee_ptr_int misalign = ((ee_ptr_int)ptr) & (align - 1u);
+  ee_ptr_int adjust = (align - misalign) & (align - 1u);
+  return (void *)((char *)ptr + adjust);
+}
+
 list_head *core_list_init(ee_u32 blksize, list_head *memblock, ee_s16 seed) {
   /*
    * Upstream CoreMark hard-codes 16 bytes of pointer storage in per_item to
    * cover 64-bit pointer targets. Capstone PureCap pointers are wider, so the
    * original formula overestimates the number of list cells that fit in the
    * block and walks the datablock cursor out of bounds during initialization.
+   *
+   * The upstream path also treats the incoming block as already suitably
+   * aligned for list_head capability fields. On Capstone PureCap we must align
+   * the list storage explicitly before the first capability store.
    */
+  char *raw_mem = (char *)memblock;
+  char *aligned_mem =
+      (char *)capstone_align_ptr(raw_mem, (ee_ptr_int)_Alignof(list_head));
+  ee_u32 alignment_pad = (ee_u32)(aligned_mem - raw_mem);
   ee_u32 per_item = (ee_u32)(sizeof(list_head) + sizeof(list_data));
-  ee_u32 size = (blksize / per_item) - 2;
-  list_head *memblock_end = memblock + size;
-  list_data *datablock = (list_data *)(memblock_end);
-  list_data *datablock_end = datablock + size;
+  ee_u32 usable_blksize;
+  ee_u32 size;
+  list_head *memblock_end;
+  list_data *datablock;
+  list_data *datablock_end;
   ee_u32 i;
-  list_head *finder, *list = memblock;
+  list_head *finder;
+  list_head *list;
   list_data info;
+
+  if (alignment_pad >= blksize || per_item == 0)
+    return (list_head *)0;
+
+  usable_blksize = blksize - alignment_pad;
+  if (usable_blksize < (2u * per_item))
+    return (list_head *)0;
+
+  size = (usable_blksize / per_item) - 2;
+  memblock = (list_head *)aligned_mem;
+  list = memblock;
+  memblock_end = memblock + size;
+  datablock = (list_data *)(memblock_end);
+  datablock_end = datablock + size;
 
   list->next = NULL;
   list->info = datablock;

@@ -93,7 +93,8 @@ CoreMark-local workarounds while the generic path is still under construction:
   capability-copy issue,
 - override `core_list_init()` locally so list sizing uses the actual
   `sizeof(list_head)` on Capstone PureCap instead of the upstream hard-coded
-  16-byte pointer assumption,
+  16-byte pointer assumption, and so the list storage is explicitly aligned for
+  capability-bearing `list_head` nodes before the first store,
 - override `core_init_matrix()` locally while the upstream matrix initializer
   still exposes a mixed scalar/capability lowering failure,
 - compile `core_util.c` with `-fno-jump-tables` to avoid emitting a static switch

@@ -62,7 +62,8 @@ done
 # - core_list_join.c at -O1: avoids the current high-opt list-path capability
 #   copy trap while keeping the benchmark logic intact.
 # - core_list_capstone.c: fixes upstream list sizing that still assumes 16-byte
-#   per-node pointer storage; Capstone PureCap list nodes are wider.
+#   per-node pointer storage and explicitly aligns the list storage for
+#   capability-bearing list_head nodes on Capstone PureCap.
 # - core_matrix_capstone.c: uses a local capability-safe matrix initializer while
 #   the upstream function still triggers a mixed scalar/capability lowering bug.
 # - core_util.c: avoid compiler-generated switch tables of capability-valued
