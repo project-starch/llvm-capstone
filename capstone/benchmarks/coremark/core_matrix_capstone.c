@@ -1,5 +1,11 @@
 #include "coremark.h"
 
+/* Convert a LINEAR capability to NONLIN so it can be used as a base in
+ * multiple cincoffset operations without being consumed.  Must only be
+ * applied to a register that holds a tagged LINEAR cap. */
+#define CAPSTONE_DELIN(rd) \
+    __asm__ volatile (".insn r 0x5b, 0x1, 0x3, %0, x0, x0" : "+r"(rd))
+
 static inline void *capstone_align4_ptr(void *ptr) {
   ee_ptr_int misalign = ((ee_ptr_int)ptr) & (ee_ptr_int)3u;
   ee_ptr_int adjust = ((ee_ptr_int)4u - misalign) & (ee_ptr_int)3u;
@@ -47,6 +53,11 @@ ee_u32 core_init_matrix(ee_u32 blksize, void *memblk, ee_s32 seed, mat_params *p
   Count = N * N;
 
   A = (MATDAT *)capstone_align4_ptr(memblk);
+  /* A is a gp-derived LINEAR cap.  Convert to NONLIN before computing B so
+   * that "B = A + Count" does not consume A via cincoffset(rd≠rs1, LINEAR).
+   * B and C are derived from A (NONLIN) so they inherit NONLIN and need no
+   * separate delin. */
+  CAPSTONE_DELIN(A);
   B = A + Count;
   C = (MATRES *)capstone_align4_ptr(B + Count);
 

@@ -51,12 +51,17 @@ COMMON_FLAGS=(
 
 for src in \
   "$COREMARK_SRC_DIR/core_main.c" \
-  "$COREMARK_SRC_DIR/core_state.c" \
   "$SCRIPT_DIR/coremark_domain.c"
 do
   obj="$OBJ_DIR/$(basename "${src%.c}").o"
   "$CLANG" "${COMMON_FLAGS[@]}" -c "$src" -o "$obj"
 done
+
+# core_state.c: compile with core_init_state renamed so the local override wins.
+"$CLANG" "${COMMON_FLAGS[@]}" \
+  -Dcore_init_state=core_init_state_upstream_unused \
+  -c "$COREMARK_SRC_DIR/core_state.c" \
+  -o "$OBJ_DIR/core_state.o"
 
 # Current benchmark-local runtime workarounds:
 # - core_list_join.c at -O1: avoids the current high-opt list-path capability
@@ -64,14 +69,27 @@ done
 # - core_list_capstone.c: fixes upstream list sizing that still assumes 16-byte
 #   per-node pointer storage and explicitly aligns the list storage for
 #   capability-bearing list_head nodes on Capstone PureCap.
+# - core_state_capstone.c: replaces core_init_state() with a version that uses
+#   flat 2D char arrays instead of static pointer arrays.  The upstream four
+#   pointer arrays (intpat, floatpat, scipat, errpat) are 16-byte capability
+#   tables on Capstone PureCap; without runtime capability initialization the
+#   ldc-then-cincoffset sequence faults with helper_cscincoffset/rs1_v->tag.
 # - core_matrix_capstone.c: uses a local capability-safe matrix initializer while
 #   the upstream function still triggers a mixed scalar/capability lowering bug.
 # - core_util.c: avoid compiler-generated switch tables of capability-valued
 #   addresses until generic static-cap table materialization exists.
+#   Also compiled at -O0 to prevent loop-to-table transformation in crcu8:
+#   at -O1 the compiler inlines crcu8 twice into crcu16 and shares a single
+#   gp-derived LINEAR table pointer across both accesses; the first cincoffset
+#   consumes the pointer and the second fires helper_cscincoffset/rs1_v->tag.
+#   At -O0 the loop stays as 8 bit-manipulation iterations with no table, so
+#   no static-cap LINEAR aliasing occurs.  Root fix is delin emission in the
+#   LLVM backend; -O0 is the bring-up workaround.
 # - core_portme.c: keep zero-initialized seed globals in .data so gp-relative
 #   capability bounds still cover the full volatile seed set.
-# - core_portme.c also keeps the canonical smoke on the list-only path for now
-#   so later matrix-only faults do not hide list/runtime progress.
+# - core_portme.c runs all three algorithms (COREMARK_DEFAULT_EXECS=7) so that
+#   core_init_matrix is called and mat_params is populated with valid NONLIN caps
+#   before core_bench_matrix is invoked from calc_func during list traversal.
 "$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables -O1 \
   -Dcore_list_init=core_list_init_upstream_unused \
   -c "$COREMARK_SRC_DIR/core_list_join.c" \
@@ -81,6 +99,15 @@ done
   -c "$SCRIPT_DIR/core_list_capstone.c" \
   -o "$OBJ_DIR/core_list_capstone.o"
 
+"$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables \
+  -c "$SCRIPT_DIR/core_state_capstone.c" \
+  -o "$OBJ_DIR/core_state_capstone.o"
+
+# core_matrix.c: core_init_matrix renamed so core_matrix_capstone.c override wins.
+# NOTE: inner matrix loops trigger helper_cscincoffset/rs1_v->tag at runtime
+# (LINEAR row/col pointer hoisting); workaround attempts at -O0 and -O1 -fno-inline
+# both crash the LLVM backend (i128 shift legalization / CapstoneISelLowering
+# UNREACHABLE).  Binary builds at -O2 but fails at matrix_test.  Pending fix.
 "$CLANG" "${COMMON_FLAGS[@]}" -Dcore_init_matrix=core_init_matrix_upstream_unused \
   -c "$COREMARK_SRC_DIR/core_matrix.c" \
   -o "$OBJ_DIR/core_matrix.o"
@@ -89,12 +116,12 @@ done
   -c "$SCRIPT_DIR/core_matrix_capstone.c" \
   -o "$OBJ_DIR/core_matrix_capstone.o"
 
-"$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables \
+"$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables -O0 \
   -c "$COREMARK_SRC_DIR/core_util.c" \
   -o "$OBJ_DIR/core_util.o"
 
 "$CLANG" "${COMMON_FLAGS[@]}" -fno-zero-initialized-in-bss \
-  -DCOREMARK_DEFAULT_EXECS=1 \
+  -DCOREMARK_DEFAULT_EXECS=7 \
   -c "$SCRIPT_DIR/port/core_portme.c" \
   -o "$OBJ_DIR/core_portme.o"
 
@@ -106,6 +133,7 @@ done
   "$OBJ_DIR/core_matrix.o" \
   "$OBJ_DIR/core_matrix_capstone.o" \
   "$OBJ_DIR/core_state.o" \
+  "$OBJ_DIR/core_state_capstone.o" \
   "$OBJ_DIR/core_util.o" \
   "$OBJ_DIR/core_portme.o" \
   "$OBJ_DIR/coremark_domain.o"

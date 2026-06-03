@@ -109,6 +109,11 @@ The key property is that the domain is provided through a host-shared directory,
   diagnostic and currently expects the direct-use control case, the runtime-side
   materialization POC, and the descriptor-driven materialization POC to succeed
   while the `static const` reproducer triggers the known capability failure.
+- `build-coremark-core-init-state-repro.sh` — builds a minimal CoreMark-based
+  domain that only calls `core_init_state()`.
+- `run-coremark-core-init-state-repro.sh` — runs that narrow CoreMark runtime
+  reproducer and currently expects the `helper_cscincoffset` / `rs1_v->tag`
+  assertion failure.
 - `static-cap-typed-load-repro/run.sh` — runs a more standalone reduced diagnostic
   that isolates the narrower trigger: a capability-typed runtime load from a
   one-field file-scope static object.
