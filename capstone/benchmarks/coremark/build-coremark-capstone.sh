@@ -58,7 +58,16 @@ do
 done
 
 # core_state.c: compile with core_init_state renamed so the local override wins.
-"$CLANG" "${COMMON_FLAGS[@]}" \
+# -fno-jump-tables: core_state_transition has a multi-way switch.  At -O2 the compiler
+# generates a jump table with 32-bit integer addresses and loads from it via plain `lw`
+# (using a GP-derived integer as the base).  In cap_mem mode, `lw` requires a capability
+# base, so the scalar table lookup crashes with "cap mem access requires capability".
+# Disabling jump tables forces if-else chains which use only capability-safe operations.
+# -fno-optimize-sibling-calls: core_bench_state ends with a crc16 tail call; the Capstone
+# backend emits `cjalr ra, 0x0(a2)` (a call) rather than restoring ra then `cjalr zero`,
+# so crc16 "returns" to core_state_transition's entry instead of the real caller.
+# Same backend bug as core_bench_matrix; same workaround.
+"$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables -fno-optimize-sibling-calls \
   -Dcore_init_state=core_init_state_upstream_unused \
   -c "$COREMARK_SRC_DIR/core_state.c" \
   -o "$OBJ_DIR/core_state.o"
@@ -76,6 +85,8 @@ done
 #   ldc-then-cincoffset sequence faults with helper_cscincoffset/rs1_v->tag.
 # - core_matrix_capstone.c: uses a local capability-safe matrix initializer while
 #   the upstream function still triggers a mixed scalar/capability lowering bug.
+# - core_state.c: -fno-jump-tables avoids scalar switch-table `lw` in cap_mem mode
+#   (see comment at core_state.c compile step above).
 # - core_util.c: avoid compiler-generated switch tables of capability-valued
 #   addresses until generic static-cap table materialization exists.
 #   Also compiled at -O0 to prevent loop-to-table transformation in crcu8:
@@ -85,6 +96,15 @@ done
 #   At -O0 the loop stays as 8 bit-manipulation iterations with no table, so
 #   no static-cap LINEAR aliasing occurs.  Root fix is delin emission in the
 #   LLVM backend; -O0 is the bring-up workaround.
+# - core_util_capstone.c: replaces crcu8() and crcu16() with widened-local
+#   versions.  Upstream crcu8() declares i/x16/carry as ee_u8 (1-byte); at
+#   -O0 the compiler spills them to byte-sized stack slots at sp+0x09..0x0f,
+#   inside the same 16-byte capability granule that matrix_test uses for its
+#   saved s2 register.  Any byte store to that granule clears the capability
+#   tag so the subsequent ldc s2 in matrix_test's epilogue loads an untagged
+#   value and the next cincoffset asserts rs1_v->tag.  Fix: widen all locals
+#   to unsigned int so the compiler allocates 4-byte slots at higher frame
+#   offsets outside the dangerous [sp, sp+16) granule.
 # - core_portme.c: keep zero-initialized seed globals in .data so gp-relative
 #   capability bounds still cover the full volatile seed set.
 # - core_portme.c runs all three algorithms (COREMARK_DEFAULT_EXECS=7) so that
@@ -104,11 +124,18 @@ done
   -o "$OBJ_DIR/core_state_capstone.o"
 
 # core_matrix.c: core_init_matrix renamed so core_matrix_capstone.c override wins.
-# NOTE: inner matrix loops trigger helper_cscincoffset/rs1_v->tag at runtime
-# (LINEAR row/col pointer hoisting); workaround attempts at -O0 and -O1 -fno-inline
-# both crash the LLVM backend (i128 shift legalization / CapstoneISelLowering
-# UNREACHABLE).  Binary builds at -O2 but fails at matrix_test.  Pending fix.
-"$CLANG" "${COMMON_FLAGS[@]}" -Dcore_init_matrix=core_init_matrix_upstream_unused \
+# core_matrix.c compiled at -O2:
+# - core_init_matrix renamed so core_matrix_capstone.c override wins.
+# - Inner matrix loops trigger LINEAR row/col pointer hoisting at runtime;
+#   -O0/-O1 -fno-inline crash the LLVM backend (i128 shift / UNREACHABLE), so -O2.
+# - core_bench_matrix tail-calls crc16 via `cjalr ra, imm(a2)` (a CALL, not a jump),
+#   setting ra=next_inst=0x11b84=matrix_test entry.  crc16's return then lands at
+#   matrix_test with garbled registers → cincoffset crash.  This is a Capstone backend
+#   tail-call lowering bug (should restore ra then emit `cjalr zero`).
+#   Workaround: -fno-optimize-sibling-calls disables the bad tail call so core_bench_matrix
+#   generates a proper call+epilogue instead.
+"$CLANG" "${COMMON_FLAGS[@]}" -fno-optimize-sibling-calls \
+  -Dcore_init_matrix=core_init_matrix_upstream_unused \
   -c "$COREMARK_SRC_DIR/core_matrix.c" \
   -o "$OBJ_DIR/core_matrix.o"
 
@@ -117,8 +144,14 @@ done
   -o "$OBJ_DIR/core_matrix_capstone.o"
 
 "$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables -O0 \
+  -Dcrcu8=crcu8_upstream_unused \
+  -Dcrcu16=crcu16_upstream_unused \
   -c "$COREMARK_SRC_DIR/core_util.c" \
   -o "$OBJ_DIR/core_util.o"
+
+"$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables -O0 \
+  -c "$SCRIPT_DIR/core_util_capstone.c" \
+  -o "$OBJ_DIR/core_util_capstone.o"
 
 "$CLANG" "${COMMON_FLAGS[@]}" -fno-zero-initialized-in-bss \
   -DCOREMARK_DEFAULT_EXECS=7 \
@@ -135,6 +168,7 @@ done
   "$OBJ_DIR/core_state.o" \
   "$OBJ_DIR/core_state_capstone.o" \
   "$OBJ_DIR/core_util.o" \
+  "$OBJ_DIR/core_util_capstone.o" \
   "$OBJ_DIR/core_portme.o" \
   "$OBJ_DIR/coremark_domain.o"
 
