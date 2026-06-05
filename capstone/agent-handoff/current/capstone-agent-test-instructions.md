@@ -296,6 +296,20 @@ bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh \
 
 Inspect whichever log matches the path you touched.
 
+### CoreMark correctness run
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-coremark.sh \
+  > "$CAPSTONE_TMP_ROOT/run-coremark.txt" 2>&1
+
+grep -E "(Correct|Errors|crc|ERROR|PASSED)" "$CAPSTONE_TMP_ROOT/run-coremark.txt"
+```
+
+Expected: `Correct operation validated.` and `__COREMARK_PASSED__` in the output.
+Run when touching anything in `capstone/benchmarks/coremark/` or backend codegen
+(instruction selection, frame lowering — see `plans/backend-compiler-fixes.md`).
+
 ## 6. Important caveats
 
 - The current validated path is still the split host/domain runtime path, not a full hosted Capstone Linux user-space.

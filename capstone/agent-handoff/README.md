@@ -79,8 +79,7 @@ Use these only when the task actually needs them:
 - `current/sqlite-minimal-vfs-path.md` — concrete SQLite-facing next step and minimal VFS mapping
 - `current/split-host-enclave-strategy.md` — source-backed architectural detail
 - `current/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
-- `current/capstone-backend-status-for-llm.md` — backend/compiler implementation detail
-- `plans/backend-compiler-fixes.md` — known backend bugs and their planned root fixes
+- `plans/backend-compiler-fixes.md` — known backend bugs and their planned root fixes (replaces archived backend status memo)
 - `current/native-sample-validation.md` — sample-domain validation detail
 - `current/project-structure-overview.md` — workspace guide
 - `current/capstone-coding-conventions.md` — local coding conventions

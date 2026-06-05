@@ -1,4 +1,10 @@
-# Capstone backend/compiler status memo (for another LLM)
+> **ARCHIVED 2026-06-05.** Written at HEAD `8b7450001ade`; 17+ commits out of date.
+> Section 12 ("Verified now — strong confidence") contains stale claims: "PureCap-safe
+> frame lowering" is listed as verified, but CoreMark bring-up revealed the prologue emits
+> `cincoffsetimm rd≠rs1` on `sp` (consuming sp) — a real known-broken path.
+> For current backend bug status see `plans/backend-compiler-fixes.md`.
+
+# Capstone backend/compiler status memo (for another LLM) — ARCHIVED
 
 Repository state inspected at `HEAD`:
 - branch: `capstone-bootstrap`

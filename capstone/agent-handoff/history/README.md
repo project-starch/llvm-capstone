@@ -45,6 +45,10 @@ Read if the session is about the backend compiler workarounds or CRC validation:
 
 - `05-06-2026_00-00-00_coremark_purecap_bringup_complete.md` — CoreMark milestone: platform differences, 13-row workaround catalog, validated CRCs, commits
 
+### Archived backend status memo
+
+- `05-06-2026_01-00-00_capstone_backend_status_archived.md` — Backend/compiler status memo archived from `current/`. Written at `8b7450001ade`; Section 12 contains stale "verified" claims (frame lowering). See `plans/backend-compiler-fixes.md` for current backend bug tracking.
+
 ### Earlier architectural exploration
 
 Read only when reconstructing earlier design alternatives:
