@@ -9,17 +9,14 @@ Fast-track for anyone (developer or AI assistant) starting from scratch.
 ```bash
 git clone -b capstone-bootstrap https://github.com/project-starch/llvm-capstone
 cd llvm-capstone
+git submodule update --init
 ```
 
-The main repo does not bundle the sub-repositories. Clone them into the expected paths:
+`git submodule update --init` populates all four sub-repositories
+(`caplifive-buildroot`, `capstone-qemu`, `capstone-c`, `capstone-spec`)
+at the exact commits recorded in the main tree.
 
-```bash
-git clone https://github.com/project-starch/caplifive-buildroot.git capstone/caplifive-buildroot
-git clone https://github.com/project-starch/capstone-qemu.git        capstone/capstone-qemu
-git clone https://github.com/jasonyu1996/capstone-c                   capstone/capstone-c
-```
-
-After cloning all four, the workspace is ready for the steps below.
+After this, the workspace is ready for the steps below.
 
 ---
 
