@@ -27,9 +27,14 @@ static inline void capstone_fill_matrix_data(MATDAT *A,
     ee_s32 val;
     running_seed = (order * running_seed) % 65536;
     val = running_seed + order;
-    B[idx] = (MATDAT)(val & 0x0ffff);
-    val += order;
-    A[idx] = (MATDAT)(val & 0x00ff);
+    val = val & 0x0ffff;         /* matrix_clip(val, 0): clip before use as B */
+    B[idx] = (MATDAT)val;
+    /* Re-sign-extend to 16-bit before adding order, matching upstream where
+     * val is MATDAT (ee_s16): upstream assigns to MATDAT first which truncates
+     * to signed 16-bit, then does val+order on the signed value. */
+    val = (ee_s32)(MATDAT)val;
+    val = val + (ee_s32)order;   /* add order to sign-extended B value */
+    A[idx] = (MATDAT)(val & 0x00ff);   /* matrix_clip(val, 1) */
     ++order;
   }
 }

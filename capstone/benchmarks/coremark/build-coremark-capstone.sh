@@ -35,6 +35,7 @@ COMMON_FLAGS=(
   -ffreestanding
   -fno-builtin
   "$DOMAIN_OPT_LEVEL"
+  -I"$SCRIPT_DIR"
   -I"$PORT_DIR"
   -I"$COREMARK_SRC_DIR"
   -DTOTAL_DATA_SIZE="$COREMARK_TOTAL_DATA_SIZE"
@@ -49,13 +50,36 @@ COMMON_FLAGS=(
   -c "$START_SRC" \
   -o "$OBJ_DIR/start.o"
 
-for src in \
-  "$COREMARK_SRC_DIR/core_main.c" \
-  "$SCRIPT_DIR/coremark_domain.c"
-do
-  obj="$OBJ_DIR/$(basename "${src%.c}").o"
-  "$CLANG" "${COMMON_FLAGS[@]}" -c "$src" -o "$obj"
-done
+# core_main_capstone.c: local copy of upstream core_main.c with profile-run CRC
+# table entries (index 2) replaced with Capstone PureCap-specific values.
+# sizeof(list_head)=32 on Capstone PureCap (two 16-byte cap pointers) yields 9
+# list nodes instead of 18, producing deterministically different but correct CRCs.
+"$CLANG" "${COMMON_FLAGS[@]}" -c "$SCRIPT_DIR/core_main_capstone.c" -o "$OBJ_DIR/core_main.o"
+
+# coremark_domain_entry.S: hand-written assembly for domain_main.
+# The Capstone LLVM backend cannot generate correct code for domain_main at any
+# -O level (see comment in coremark_domain_entry.S for details).
+"$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -O0 \
+  -c "$SCRIPT_DIR/coremark_domain_entry.S" \
+  -o "$OBJ_DIR/coremark_domain_entry.o"
+
+# ee_printf_asm.S: assembly trampoline for ee_printf.
+# The compiler-generated va_list stores the vararg pointer as a scalar integer
+# (sd, not stc); when reloaded via ld the tag is 0 and subsequent memory
+# dereference crashes in cap_mem mode.  The trampoline forwards a0-a7 unchanged
+# to ee_printf_impl() — no va_list is ever constructed.
+"$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -O0 \
+  -c "$SCRIPT_DIR/ee_printf_asm.S" \
+  -o "$OBJ_DIR/ee_printf_asm.o"
+
+# coremark_domain.c: only contains global declarations (hc_metadata, hc_payload,
+# g_region_count).  -fno-zero-initialized-in-bss keeps the zero-initialized globals
+# in .data rather than .bss (NOLOAD) so they fall within pc_cap bounds.
+"$CLANG" "${COMMON_FLAGS[@]}" -fno-zero-initialized-in-bss \
+  -c "$SCRIPT_DIR/coremark_domain.c" \
+  -o "$OBJ_DIR/coremark_domain.o"
 
 # core_state.c: compile with core_init_state renamed so the local override wins.
 # -fno-jump-tables: core_state_transition has a multi-way switch.  At -O2 the compiler
@@ -96,15 +120,14 @@ done
 #   At -O0 the loop stays as 8 bit-manipulation iterations with no table, so
 #   no static-cap LINEAR aliasing occurs.  Root fix is delin emission in the
 #   LLVM backend; -O0 is the bring-up workaround.
-# - core_util_capstone.c: replaces crcu8() and crcu16() with widened-local
-#   versions.  Upstream crcu8() declares i/x16/carry as ee_u8 (1-byte); at
-#   -O0 the compiler spills them to byte-sized stack slots at sp+0x09..0x0f,
-#   inside the same 16-byte capability granule that matrix_test uses for its
-#   saved s2 register.  Any byte store to that granule clears the capability
-#   tag so the subsequent ldc s2 in matrix_test's epilogue loads an untagged
-#   value and the next cincoffset asserts rs1_v->tag.  Fix: widen all locals
-#   to unsigned int so the compiler allocates 4-byte slots at higher frame
-#   offsets outside the dangerous [sp, sp+16) granule.
+# - core_util_capstone.c: replaces crcu8(), crcu16(), and check_data_types().
+#   crcu8/crcu16: upstream locals are ee_u8 (1-byte); at -O0 they spill to
+#   byte-sized stack slots inside the same 16-byte granule as a caller's saved
+#   capability, clearing its tag.  Fix: widen to unsigned int.
+#   check_data_types: upstream checks sizeof(ee_ptr_int)==sizeof(int*); on
+#   Capstone PureCap uintptr_t=8 vs int*=16 (intentional cursor vs. cap).
+#   The mismatch increments total_errors and masks real CRC failures.  Fix:
+#   provide a replacement that omits the ee_ptr_int size check.
 # - core_portme.c: keep zero-initialized seed globals in .data so gp-relative
 #   capability bounds still cover the full volatile seed set.
 # - core_portme.c runs all three algorithms (COREMARK_DEFAULT_EXECS=7) so that
@@ -146,6 +169,7 @@ done
 "$CLANG" "${COMMON_FLAGS[@]}" -fno-jump-tables -O0 \
   -Dcrcu8=crcu8_upstream_unused \
   -Dcrcu16=crcu16_upstream_unused \
+  -Dcheck_data_types=check_data_types_upstream_unused \
   -c "$COREMARK_SRC_DIR/core_util.c" \
   -o "$OBJ_DIR/core_util.o"
 
@@ -153,7 +177,13 @@ done
   -c "$SCRIPT_DIR/core_util_capstone.c" \
   -o "$OBJ_DIR/core_util_capstone.o"
 
-"$CLANG" "${COMMON_FLAGS[@]}" -fno-zero-initialized-in-bss \
+# core_portme.c: -O0 prevents capability hoisting across loop iterations.
+# At higher -O levels the backend emits cincoffset rd≠rs1 (consuming the
+# LINEAR cap) once before the loop; subsequent iterations assert on tag=0.
+# At -O0 fmt/pay/string caps are reloaded from their RSA stack slots each
+# iteration via ldc, so no cross-iteration capability consumption occurs.
+# ee_printf is defined in ee_printf_asm.S; core_portme.c provides ee_printf_impl.
+"$CLANG" "${COMMON_FLAGS[@]}" -fno-zero-initialized-in-bss -O0 \
   -DCOREMARK_DEFAULT_EXECS=7 \
   -c "$SCRIPT_DIR/port/core_portme.c" \
   -o "$OBJ_DIR/core_portme.o"
@@ -170,7 +200,9 @@ done
   "$OBJ_DIR/core_util.o" \
   "$OBJ_DIR/core_util_capstone.o" \
   "$OBJ_DIR/core_portme.o" \
-  "$OBJ_DIR/coremark_domain.o"
+  "$OBJ_DIR/ee_printf_asm.o" \
+  "$OBJ_DIR/coremark_domain.o" \
+  "$OBJ_DIR/coremark_domain_entry.o"
 
 "$LLVM_READOBJ" -h "$OUT_DOM"
 
