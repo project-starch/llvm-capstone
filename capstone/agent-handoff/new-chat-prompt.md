@@ -67,7 +67,9 @@ The following is already verified:
    - `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh`
    - baseline `null_blk`
    - split `null_blk`
+   - `capstone/tests/runtime-qemu/run-coremark.sh`
 6. The HostCall proofs now cover both payload directions on the same metadata ABI, a reusable handle-based file-object core, an explicit sync boundary after writes, a narrow stat path for file size/type facts, a narrow handle-based truncate path for file-size mutation, and the first SQLite-facing path existence/access and path delete proofs.
+7. CoreMark PureCap bring-up is complete. All three algorithms (list, matrix, state machine) run and produce validated CRCs ("Correct operation validated."). Backend bug workarounds are documented in `$CAPSTONE_HANDOFF_DIR/plans/backend-compiler-fixes.md`.
 
 ## Very important distinction
 

@@ -1,16 +1,15 @@
-# Capstone agent handoff bundle
+# Capstone handoff bundle
 
-This directory stores persistent context for continuing the Capstone work in a new
-chat/session.
+Persistent context for continuing the Capstone work in a new session.
+Works for human developers and any AI coding assistant.
 
-Location:
-- `$CAPSTONE_HANDOFF_DIR` (default: `capstone/agent-handoff`)
+| Path | Default |
+|------|---------|
+| `$CAPSTONE_HANDOFF_DIR` | `capstone/agent-handoff` |
+| `$CAPSTONE_TMP_ROOT` (scratch) | `/tmp/capstone` |
+| Shared env file | `capstone/tests/capstone-test-env.sh` |
 
-Shared environment defaults:
-- `capstone/tests/capstone-test-env.sh`
-
-Scratch logs:
-- `$CAPSTONE_TMP_ROOT` (default: `/tmp/capstone`)
+**New here?** Start with `ONBOARDING.md`.
 
 ## Minimal startup reading set
 
@@ -24,9 +23,11 @@ Everything else should be loaded only when the task needs it.
 
 ## Directory layout
 
+- `ONBOARDING.md` — fast-track setup for new developers/contributors
 - `current/` — compact durable current-state notes
+- `plans/` — active work-in-progress plans (committed to git; one file per work item)
 - `history/` — timestamped archival notes and chronology
-- `new-chat-prompt.md` — compact prompt template for a new chat
+- `new-chat-prompt.md` — compact prompt template for resuming a session
 
 ## Current verified baseline
 
@@ -47,7 +48,8 @@ At a high level, the repository currently has:
 - validated HostCall SQLite-facing PATH_ACCESS proof,
 - validated HostCall SQLite-facing PATH_DELETE proof,
 - validated combined reusable file-object proof,
-- working baseline and split `null_blk` regressions.
+- working baseline and split `null_blk` regressions,
+- validated CoreMark profile-run on Capstone PureCap (`run-coremark.sh` passes, "Correct operation validated.").
 
 See `current/current-state.md` for the concise canonical state snapshot.
 
@@ -56,14 +58,15 @@ and the first SQLite-facing `PATH_ACCESS` and `PATH_DELETE` proofs are already
 validated. The next step should not jump straight to lock choreography. It should
 first consume that subset through a reduced SQLite-oriented VFS path.
 
-## Workflow rules to preserve
+## Contributing rules
 
-- treat these handoff rules as local workflow overlays on top of normal LLVM/Buildroot/Linux/QEMU conventions,
+- treat these as local workflow overlays on top of normal LLVM/Buildroot/Linux/QEMU conventions,
 - do not mark a step complete until it has been tested at the affected layer,
 - keep non-trivial code documented with concise comments, especially around state transitions and ownership rules,
-- after a coherent validated change set, provide exact commit command(s) and prefer a multi-line commit message with a short subject plus a detailed body,
-- for capstone-local commits, do not add a redundant `capstone` prefix to the commit subject unless the broader monorepo context really needs it,
-- keep manager-facing summaries as local artifacts under `$CAPSTONE_TMP_ROOT/`, not as committed repository files.
+- after a coherent validated change set, prefer a multi-line commit message with a short subject plus a detailed body,
+- for capstone-local commits, do not add a redundant `capstone` prefix to the commit subject unless the broader monorepo context requires it,
+- keep manager-facing summaries as local artifacts under `$CAPSTONE_TMP_ROOT/`, not as committed repository files,
+- active plans go in `plans/` (committed here); do not store project plans outside this repository.
 
 ## Read on demand
 
@@ -77,6 +80,7 @@ Use these only when the task actually needs them:
 - `current/split-host-enclave-strategy.md` — source-backed architectural detail
 - `current/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
 - `current/capstone-backend-status-for-llm.md` — backend/compiler implementation detail
+- `plans/backend-compiler-fixes.md` — known backend bugs and their planned root fixes
 - `current/native-sample-validation.md` — sample-domain validation detail
 - `current/project-structure-overview.md` — workspace guide
 - `current/capstone-coding-conventions.md` — local coding conventions

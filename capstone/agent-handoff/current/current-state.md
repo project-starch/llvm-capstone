@@ -36,7 +36,8 @@ The following is already implemented and verified in the current tree:
 - `capstone/tests/runtime-qemu/run-hostcall-path-delete-probe.sh` passes,
 - `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh` passes,
 - baseline `null_blk` passes,
-- split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding against the active kernel.
+- split `null_blk` creates `/dev/nullb0`, completes I/O, and unloads successfully after rebuilding against the active kernel,
+- `capstone/tests/runtime-qemu/run-coremark.sh` passes (CoreMark profile run, "Correct operation validated.").
 
 ## What the current HostCall proofs establish
 

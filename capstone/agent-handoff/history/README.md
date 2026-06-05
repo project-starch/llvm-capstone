@@ -39,6 +39,12 @@ Read these if the session is about the HostCall proof progression:
 - `14-05-2026_19-10-00_hostcall_metadata_snapshot_hardening_and_multi_pending_limit.md`
 - `14-05-2026_20-05-00_second_pending_and_payload_reuse_diagnostics.md`
 
+### CoreMark PureCap bring-up
+
+Read if the session is about the backend compiler workarounds or CRC validation:
+
+- `05-06-2026_00-00-00_coremark_purecap_bringup_complete.md` — CoreMark milestone: platform differences, 13-row workaround catalog, validated CRCs, commits
+
 ### Earlier architectural exploration
 
 Read only when reconstructing earlier design alternatives:
