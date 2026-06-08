@@ -24,11 +24,15 @@ At a high level:
 ### A. `capstone/agent-handoff/`
 Persistent context for continuing the work in a new chat or session.
 
-- `current/` — durable current-state notes.
-- `history/` — timestamped chronological notes.
-- `new-chat-prompt.md` — the compact prompt/working rules for a fresh session.
+- `state/` — volatile: `current-state.md`, `current-next-step.md` (update after each milestone).
+- `ref/` — durable quick reference (testing matrix, test cookbook, conventions, glossary, project layout).
+- `design/` — deep architecture and design docs (HostCall wire spec, CoreMark PureCap, SQLite VFS plan, ...).
+- `plans/` — active WIP plans committed to git (currently: backend compiler fixes).
+- `history/` — timestamped archival notes.
+- `new-chat-prompt.md` / `codex-onboarding.md` — session prompt templates.
 
-Read this first when re-entering the project.
+Read `README.md` then `state/current-state.md` and `state/current-next-step.md` first
+when re-entering the project.
 
 ### B. `capstone/tests/`
 Shared test harnesses and reproducible runtime probes.
@@ -58,7 +62,20 @@ Important files:
 
 Use this directory when validating the native `EM_CAPSTONE` sample flow.
 
-### E. Nested component repositories inside `capstone/`
+### E. `capstone/benchmarks/`
+Benchmark programs ported to the Capstone PureCap execution model.
+
+- `capstone/benchmarks/coremark/` — CoreMark 1.01 PureCap bring-up (complete). All three
+  algorithms (list, matrix, state machine) run with validated CRCs. Backend workarounds and
+  their root causes are documented in `capstone/agent-handoff/plans/backend-compiler-fixes.md`.
+  Architecture-specific design decisions (CRC derivation, node count differences) are in
+  `capstone/agent-handoff/design/coremark-purecap.md`.
+
+Next planned benchmarks (pending prologue frame lowering fix):
+- BEEBS (https://github.com/mageec/beebs)
+- RV8 (https://github.com/larkmjc/rv8-bench)
+
+### F. Nested component repositories inside `capstone/`
 These are separate repositories used by the local workspace and now exposed as
 explicit submodules in the top-level repo.
 

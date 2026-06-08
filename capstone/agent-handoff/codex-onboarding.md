@@ -67,9 +67,7 @@ Full design: capstone/agent-handoff/design/sqlite-minimal-vfs-path.md
 Backend workarounds (stable, do not remove or override):
   capstone/agent-handoff/plans/backend-compiler-fixes.md
 
-Deeper reference files (load only when the task needs them):
-  capstone/agent-handoff/ref/testing-matrix.md
-  capstone/agent-handoff/ref/capstone-agent-test-instructions.md
-  capstone/agent-handoff/design/hostcall-file-service-v0-wire-spec.md
-  capstone/agent-handoff/design/split-host-enclave-strategy.md
+Deeper reference files (load only when the task needs them) in folders:
+  capstone/agent-handoff/ref/
+  capstone/agent-handoff/design/
 ```

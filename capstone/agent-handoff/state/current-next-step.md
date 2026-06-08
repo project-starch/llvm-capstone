@@ -1,36 +1,34 @@
 # Current recommended next step
 
-## Milestone
+## Immediate milestone — Fix prologue frame lowering bug
 
-Build a minimal SQLite-oriented VFS shim that consumes the already-validated
-file-service subset (`OPEN`, `READ`, `WRITE`, `SYNC`, `STAT_BASIC`, `TRUNCATE`, `CLOSE`
-plus `PATH_ACCESS` and `PATH_DELETE`) through the existing HostCall boundary.
+**File**: `llvm/lib/Target/Capstone/CapstoneFrameLowering.cpp`
 
-## Why this is next
+**Change**: Prologue currently emits `cincoffsetimm s0, sp, -N` (rd≠rs1), which consumes
+`sp` (LINEAR capability). All subsequent `ldc`/`stc` using `sp` as base crash because
+`sp.tag=0` after the first use. Fix: emit `cincoffsetimm sp, sp, -N` (rd==rs1, in-place
+update, no consumption).
 
-All individual file-service operations are individually validated. The next unresolved
-question is not "can another toy proof work?" but "does the composition hold for a real
-consumer?" A tiny SQLite VFS shim is the smallest meaningful real consumer.
+**Why this first**: This is the only backend bug that requires a **per-domain hand-written
+assembly entry point**. Without this fix, every BEEBS and RV8 benchmark needs its own
+`*_entry.S` file. The other 4 bugs are compile-flag workarounds that scale via build scripts.
 
-## Concrete first actions
+**Test after fix**:
+- CoreMark should compile and link without `coremark_domain_entry.S`.
+- `run-coremark.sh` must still pass ("Correct operation validated.").
+- Run: `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone` — no regressions.
 
-1. Create `capstone/capstone-c/sqlite_vfs/` (or equivalent location).
-2. Implement `xOpen`, `xRead`, `xWrite`, `xSync`, `xFileSize`, `xTruncate`, `xClose`
-   using the existing HostCall opcodes — no new ABI surface.
-3. Implement `xAccess` and `xDelete` using the existing `PATH_ACCESS` / `PATH_DELETE` ops.
-4. Keep `xFullPathname` as a local shim (no cross-boundary call needed).
-5. Defer `LOCK_ACQUIRE` / `LOCK_RELEASE` until a concrete consumer proves they are required.
+## After the prologue fix — benchmark porting sequence
 
-## Exit criterion
+1. **BEEBS** (https://github.com/mageec/beebs) — 20+ small embedded benchmarks.
+   Build script pattern reuses the CoreMark approach directly.
+   Each passing benchmark validates more of the compiled domain code path.
 
-- The shim compiles and links against the validated HostCall boundary.
-- A smoke test (open a file, write, sync, read back, close) passes inside QEMU.
-- No new HostCall opcodes were added; all used opcodes are already validated.
+2. **RV8** (https://github.com/larkmjc/rv8-bench) — RISC-V performance benchmarks
+   (dhrystone, memcpy, primes, qsort, sieve, ...). Port after BEEBS.
 
-## Design detail
-
-Full design: `design/sqlite-minimal-vfs-path.md`
-Wire spec: `design/hostcall-file-service-v0-wire-spec.md`
+3. **Fix remaining backend bugs** only as they block specific benchmark programs,
+   not speculatively. See `plans/backend-compiler-fixes.md` for the full catalog.
 
 ## What not to regress
 

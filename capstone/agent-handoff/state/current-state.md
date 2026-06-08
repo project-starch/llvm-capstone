@@ -8,21 +8,9 @@ All of the following pass on the `capstone-bootstrap` branch:
 
 - LLVM Capstone backend builds the sample domain; `ld.lld` links native `EM_CAPSTONE`
 - `capstone/caplifive-buildroot/build/local.mk` present — keeps the image on the Capstone-enabled OpenSBI path
-- `run-shared-region-probe.sh`
-- `run-hostcall-stdout-probe.sh`
-- `run-hostcall-filewrite-probe.sh`
-- `run-hostcall-fileread-probe.sh`
-- `run-hostcall-file-open-close-probe.sh`
-- `run-hostcall-file-handle-write-probe.sh`
-- `run-hostcall-file-handle-read-probe.sh`
-- `run-hostcall-file-handle-sync-probe.sh`
-- `run-hostcall-file-handle-stat-probe.sh`
-- `run-hostcall-file-handle-truncate-probe.sh`
-- `run-hostcall-path-access-probe.sh`
-- `run-hostcall-path-delete-probe.sh`
-- `run-hostcall-combined-file-object-probe.sh`
-- `run-nullblk-baseline.sh`
-- `run-nullblk-split-io.sh`, `run-nullblk-split-rmmod.sh`
+- All HostCall probes pass: shared-region, stdout, filewrite, fileread, full file-handle
+  lifecycle (open/write/read/sync/stat/truncate/close), path ops, combined file-object
+- `run-nullblk-baseline.sh`, `run-nullblk-split-io.sh`, `run-nullblk-split-rmmod.sh`
 - `run-coremark.sh` — all three algorithms, "Correct operation validated."
 
 ## Important distinction
@@ -34,8 +22,9 @@ the domain is a Capstone-loaded domain.
 ## Known backend bugs (stable workarounds in place)
 
 Five LLVM backend bugs identified during CoreMark bring-up. All worked around in
-`capstone/benchmarks/coremark/build-coremark-capstone.sh`. No domain code is currently
-blocked. Details: `plans/backend-compiler-fixes.md`.
+`capstone/benchmarks/coremark/build-coremark-capstone.sh`. The prologue bug is the
+highest-priority fix — it requires a per-domain hand-written assembly entry, blocking
+benchmark porting. Details: `plans/backend-compiler-fixes.md`.
 
 ## Where to go next
 
