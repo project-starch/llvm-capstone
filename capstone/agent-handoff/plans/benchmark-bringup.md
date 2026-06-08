@@ -29,13 +29,17 @@ Start with a single tiny deterministic BEEBS benchmark, preferably `fac` unless
 local investigation shows another benchmark is simpler for the current runtime.
 Do not add a full BEEBS suite runner in the first pass.
 
-Initial skeleton:
+Initial skeleton status: implemented for `fac`.
 
-- Add `fetch-beebs.sh`.
-- Fetch `https://github.com/mageec/beebs.git` into
-  `$CAPSTONE_TMP_ROOT/beebs-src`.
-- Build one selected benchmark into a `.dom`.
-- Validate that the build script produces the `.dom`.
+- `capstone/benchmarks/beebs/fetch-beebs.sh` fetches pinned BEEBS sources from
+  `https://github.com/mageec/beebs.git` into `$CAPSTONE_TMP_ROOT/beebs-src`.
+- `capstone/benchmarks/beebs/build-beebs-fac-capstone.sh` builds only the `fac`
+  benchmark and produces `$CAPSTONE_TMP_ROOT/beebs-build/beebs_fac_capstone.dom`.
+- `capstone/benchmarks/beebs/beebs_fac_domain.c` is a minimal build-only domain
+  wrapper that calls `initialise_benchmark()`, `benchmark()`, and
+  `verify_benchmark()`.
+- Do not add a full BEEBS suite runner until this one-benchmark pattern has a
+  matching runtime wrapper.
 
 Validation for this milestone:
 

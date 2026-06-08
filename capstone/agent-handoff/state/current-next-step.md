@@ -1,21 +1,23 @@
 # Current recommended next step
 
-## Immediate milestone - Start BEEBS benchmark porting
+## Immediate milestone - Add a minimal BEEBS runtime wrapper
 
-**Goal**: add the first small BEEBS benchmark on the existing CoreMark-style split host/domain path.
+**Goal**: run the existing BEEBS `fac` `.dom` on the split host/domain runtime path and check only its correctness marker.
 
-**Why this first**: the prologue frame-lowering bug is fixed and validated. CoreMark now builds and runs with the compiled C `domain_main` wrapper instead of `coremark_domain_entry.S`, so the benchmark path no longer needs a per-domain handwritten entry point.
+**Why this first**: the build-only BEEBS skeleton now exists under `capstone/benchmarks/beebs/` and produces `$CAPSTONE_TMP_ROOT/beebs-build/beebs_fac_capstone.dom`. The next missing piece is the smallest host/runtime wrapper that proves the BEEBS pattern runs end to end before expanding to more benchmarks.
 
 **Smallest useful first step**:
-- choose one simple BEEBS benchmark with a tiny C workload and deterministic result,
-- create a minimal build/run wrapper under `capstone/benchmarks/` or the existing runtime test structure,
-- reuse the CoreMark compile/link/runtime pattern without removing the remaining backend workarounds,
-- validate with the affected backend/runtime layer before expanding to more benchmarks.
+- add a focused `run-beebs.sh` or `run-beebs-fac.sh` entry point for `fac` only,
+- reuse the CoreMark split host/domain launch pattern,
+- have the domain wrapper report the existing `BEEBS_RET_CORRECT` marker,
+- keep success based on correctness only; do not report or optimize performance scores,
+- do not expand beyond `fac` until this one benchmark has a stable build and run path.
 
 **Test expectations**:
-- `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone` for backend changes,
-- `bash capstone/tests/runtime-qemu/run-coremark.sh` if benchmark or backend codegen behavior changes,
-- a focused BEEBS run wrapper once introduced.
+- `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone`,
+- `bash capstone/tests/runtime-qemu/run-coremark.sh`,
+- `bash capstone/benchmarks/beebs/build-beebs-fac-capstone.sh`,
+- the focused BEEBS runtime wrapper once introduced.
 
 ## Remaining backend workarounds
 
