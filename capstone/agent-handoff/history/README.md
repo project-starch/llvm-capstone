@@ -10,13 +10,13 @@ Read `history/` only when one of these is needed:
 - chronology,
 - the original reasoning behind a decision,
 - a previously validated command sequence,
-- a root-cause trail that is not summarized in `current/`.
+- a root-cause trail that is not summarized in `state/` or `design/`.
 
 For normal startup, prefer:
 
 1. `../README.md`
-2. `../current/current-state.md`
-3. `../current/current-next-step.md`
+2. `../state/current-state.md`
+3. `../state/current-next-step.md`
 
 ## High-value notes by topic
 

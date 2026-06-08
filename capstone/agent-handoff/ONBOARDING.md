@@ -126,7 +126,7 @@ bash capstone/tests/runtime-qemu/run-nullblk-split-io.sh
 bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh
 ```
 
-See `current/testing-matrix.md` for when these matter.
+See `ref/testing-matrix.md` for when these matter.
 
 ---
 
@@ -135,8 +135,8 @@ See `current/testing-matrix.md` for when these matter.
 | File | Purpose |
 |------|---------|
 | `README.md` | Project rules, directory map, baseline summary |
-| `current/current-state.md` | Authoritative minimal state snapshot |
-| `current/current-next-step.md` | Current recommended next milestone |
-| `current/capstone-agent-test-instructions.md` | Command cookbook for common tasks |
-| `current/testing-matrix.md` | When to run which test layer |
-| `current/project-structure-overview.md` | Repository layout guide |
+| `state/current-state.md` | Authoritative minimal state snapshot |
+| `state/current-next-step.md` | Current recommended next milestone |
+| `ref/capstone-agent-test-instructions.md` | Command cookbook for common tasks |
+| `ref/testing-matrix.md` | When to run which test layer |
+| `ref/project-structure-overview.md` | Repository layout guide |

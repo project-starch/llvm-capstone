@@ -320,7 +320,7 @@ Run when touching anything in `capstone/benchmarks/coremark/` or backend codegen
 
 Read these only if the task needs them:
 
-- `current/testing-matrix.md` — which test layer proves what
-- `current/stable-file-service-subset.md` — the next reusable HostCall file-service target
-- `current/split-host-enclave-strategy.md` — architectural rationale
-- `current/hosted-libc-os-analysis.md` — hosted Linux blockers
+- `ref/testing-matrix.md` — which test layer proves what
+- `design/stable-file-service-subset.md` — the next reusable HostCall file-service target
+- `design/split-host-enclave-strategy.md` — architectural rationale
+- `design/hosted-libc-os-analysis.md` — hosted Linux blockers

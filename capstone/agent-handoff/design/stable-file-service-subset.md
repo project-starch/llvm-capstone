@@ -9,7 +9,7 @@ future domain-side runtime/libc layer can target.
 For the concrete opcode, payload-layout, and round-shape details to implement next,
 see also:
 
-- `current/hostcall-file-service-v0-wire-spec.md`
+- `design/hostcall-file-service-v0-wire-spec.md`
 
 ## Why this is the next step
 
@@ -303,7 +303,7 @@ Current result:
 
 See also:
 
-- `current/sqlite-minimal-vfs-path.md`
+- `design/sqlite-minimal-vfs-path.md`
 
 ## Exit criterion for this milestone
 

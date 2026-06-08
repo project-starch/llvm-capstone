@@ -1,0 +1,32 @@
+# Capstone LLVM fork — Claude Code workspace
+
+## Read first
+
+Set up the environment, then read the minimal handoff set:
+
+```bash
+source capstone/tests/capstone-test-env.sh
+```
+
+- `capstone/agent-handoff/README.md`
+- `capstone/agent-handoff/state/current-state.md`
+- `capstone/agent-handoff/state/current-next-step.md`
+
+New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
+
+## Hard constraints
+
+- No `Co-Authored-By:` lines in commits.
+- Never commit debug/report files (`*_DEBUG_CHECKPOINT.md`, session notes).
+- Active plans live in `capstone/agent-handoff/plans/` (committed, portable across machines and agents).
+- Manager-facing summaries go under `/tmp/capstone/`, not into the repo.
+
+## Where things live
+
+| What | Where |
+|------|-------|
+| Current state + next step | `capstone/agent-handoff/state/` |
+| Test matrix + cookbook | `capstone/agent-handoff/ref/` |
+| Architecture + design docs | `capstone/agent-handoff/design/` |
+| Active WIP plans | `capstone/agent-handoff/plans/` |
+| Archived session notes | `capstone/agent-handoff/history/` |

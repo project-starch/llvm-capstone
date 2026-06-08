@@ -29,18 +29,18 @@ These are local workspace overlays on top of normal LLVM/Buildroot/Linux/QEMU pr
 Read only this minimal startup set before proposing changes:
 
 - `$CAPSTONE_HANDOFF_DIR/README.md`
-- `$CAPSTONE_HANDOFF_DIR/current/current-state.md`
-- `$CAPSTONE_HANDOFF_DIR/current/current-next-step.md`
+- `$CAPSTONE_HANDOFF_DIR/state/current-state.md`
+- `$CAPSTONE_HANDOFF_DIR/state/current-next-step.md`
 
 Then load deeper files only if the task needs them:
 
-- `$CAPSTONE_HANDOFF_DIR/current/testing-matrix.md`
-- `$CAPSTONE_HANDOFF_DIR/current/capstone-agent-test-instructions.md`
-- `$CAPSTONE_HANDOFF_DIR/current/stable-file-service-subset.md`
-- `$CAPSTONE_HANDOFF_DIR/current/sqlite-minimal-vfs-path.md`
-- `$CAPSTONE_HANDOFF_DIR/current/split-host-enclave-strategy.md`
-- `$CAPSTONE_HANDOFF_DIR/current/hosted-libc-os-analysis.md`
-- `$CAPSTONE_HANDOFF_DIR/current/capstone-backend-status-for-llm.md`
+- `$CAPSTONE_HANDOFF_DIR/ref/testing-matrix.md`
+- `$CAPSTONE_HANDOFF_DIR/ref/capstone-agent-test-instructions.md`
+- `$CAPSTONE_HANDOFF_DIR/design/stable-file-service-subset.md`
+- `$CAPSTONE_HANDOFF_DIR/design/sqlite-minimal-vfs-path.md`
+- `$CAPSTONE_HANDOFF_DIR/design/split-host-enclave-strategy.md`
+- `$CAPSTONE_HANDOFF_DIR/design/hosted-libc-os-analysis.md`
+- `$CAPSTONE_HANDOFF_DIR/plans/backend-compiler-fixes.md`
 - `$CAPSTONE_HANDOFF_DIR/history/README.md`
 
 ## Current verified state

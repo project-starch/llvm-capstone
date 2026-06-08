@@ -16,47 +16,53 @@ Works for human developers and any AI coding assistant.
 For a normal fresh session, read only these files first:
 
 1. `README.md`
-2. `current/current-state.md`
-3. `current/current-next-step.md`
+2. `state/current-state.md`
+3. `state/current-next-step.md`
 
 Everything else should be loaded only when the task needs it.
 
 ## Directory layout
 
-- `ONBOARDING.md` — fast-track setup for new developers/contributors
-- `current/` — compact durable current-state notes
-- `plans/` — active work-in-progress plans (committed to git; one file per work item)
-- `history/` — timestamped archival notes and chronology
-- `new-chat-prompt.md` — compact prompt template for resuming a session
+```
+agent-handoff/
+├── ONBOARDING.md          fast-track setup for new developers/contributors
+├── new-chat-prompt.md     prompt template for resuming a session
+├── codex-onboarding.md    instructions + prompt for OpenAI Codex
+├── state/                 VOLATILE — rewrite after each milestone
+│   ├── current-state.md   what is verified right now (short)
+│   └── current-next-step.md  next concrete milestone (short)
+├── ref/                   durable quick-reference (rarely changes)
+│   ├── testing-matrix.md
+│   ├── capstone-agent-test-instructions.md
+│   ├── capstone-coding-conventions.md
+│   ├── project-structure-overview.md
+│   └── runtime-terms-glossary.md
+├── design/                deep architecture and design docs
+│   ├── sqlite-minimal-vfs-path.md
+│   ├── hostcall-file-service-v0-wire-spec.md
+│   ├── stable-file-service-subset.md
+│   ├── split-host-enclave-strategy.md
+│   ├── hosted-libc-os-analysis.md
+│   └── native-sample-validation.md
+├── plans/                 active WIP plans (committed, portable)
+│   └── backend-compiler-fixes.md
+└── history/               timestamped archival notes
+```
 
 ## Current verified baseline
 
-At a high level, the repository currently has:
+- working sample-domain build + runtime validation
+- working OpenSBI/runtime path via `capstone/caplifive-buildroot/build/local.mk`
+- validated shared-region runtime proof
+- validated HostCall stdout, filewrite, fileread proofs
+- validated HostCall file open/close handle-lifecycle proof
+- validated HostCall handle-based FILE_WRITE, FILE_READ, FILE_SYNC, FILE_STAT_BASIC, FILE_TRUNCATE proofs
+- validated HostCall SQLite-facing PATH_ACCESS and PATH_DELETE proofs
+- validated combined reusable file-object proof
+- working baseline and split `null_blk` regressions
+- validated CoreMark profile-run on Capstone PureCap ("Correct operation validated.")
 
-- working sample-domain build + runtime validation,
-- working restored OpenSBI/runtime path via `capstone/caplifive-buildroot/build/local.mk`,
-- validated shared-region runtime proof,
-- validated HostCall stdout proof,
-- validated HostCall filewrite proof,
-- validated HostCall fileread reverse-direction proof,
-- validated HostCall file open/close handle-lifecycle proof,
-- validated HostCall handle-based FILE_WRITE proof,
-- validated HostCall handle-based FILE_READ proof,
-- validated HostCall handle-based FILE_SYNC proof,
-- validated HostCall handle-based FILE_STAT_BASIC proof,
-- validated HostCall handle-based FILE_TRUNCATE proof,
-- validated HostCall SQLite-facing PATH_ACCESS proof,
-- validated HostCall SQLite-facing PATH_DELETE proof,
-- validated combined reusable file-object proof,
-- working baseline and split `null_blk` regressions,
-- validated CoreMark profile-run on Capstone PureCap (`run-coremark.sh` passes, "Correct operation validated.").
-
-See `current/current-state.md` for the concise canonical state snapshot.
-
-At the current planning layer, `FILE_SYNC`, `FILE_STAT_BASIC`, `FILE_TRUNCATE`,
-and the first SQLite-facing `PATH_ACCESS` and `PATH_DELETE` proofs are already
-validated. The next step should not jump straight to lock choreography. It should
-first consume that subset through a reduced SQLite-oriented VFS path.
+See `state/current-state.md` for the canonical snapshot.
 
 ## Contributing rules
 
@@ -72,18 +78,17 @@ first consume that subset through a reduced SQLite-oriented VFS path.
 
 Use these only when the task actually needs them:
 
-- `current/testing-matrix.md` — compact map of test layers and entry points
-- `current/capstone-agent-test-instructions.md` — practical command cookbook
-- `current/stable-file-service-subset.md` — first reusable HostCall file-service proposal
-- `current/hostcall-file-service-v0-wire-spec.md` — practical wire-format and state-machine spec for the next HostCall file-service implementation
-- `current/sqlite-minimal-vfs-path.md` — concrete SQLite-facing next step and minimal VFS mapping
-- `current/split-host-enclave-strategy.md` — source-backed architectural detail
-- `current/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
-- `plans/backend-compiler-fixes.md` — known backend bugs and their planned root fixes (replaces archived backend status memo)
-- `current/native-sample-validation.md` — sample-domain validation detail
-- `current/project-structure-overview.md` — workspace guide
-- `current/capstone-coding-conventions.md` — local coding conventions
-- `current/runtime-terms-glossary.md` — terminology reference
+- `ref/testing-matrix.md` — compact map of test layers and entry points
+- `ref/capstone-agent-test-instructions.md` — practical command cookbook
+- `ref/capstone-coding-conventions.md` — local coding conventions
+- `ref/project-structure-overview.md` — workspace guide
+- `ref/runtime-terms-glossary.md` — terminology reference
+- `design/sqlite-minimal-vfs-path.md` — concrete SQLite-facing next step and minimal VFS mapping
+- `design/hostcall-file-service-v0-wire-spec.md` — wire-format and state-machine spec for the HostCall file service
+- `design/stable-file-service-subset.md` — reusable HostCall file-service proposal
+- `design/split-host-enclave-strategy.md` — source-backed architectural detail
+- `design/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
+- `plans/backend-compiler-fixes.md` — known backend bugs and workarounds (from CoreMark bring-up)
 - `history/README.md` — historical index and note selection guide
 
 ## History rules
@@ -91,7 +96,7 @@ Use these only when the task actually needs them:
 - write history notes in English,
 - use `DD-MM-YYYY_HH-MM-SS` in filenames,
 - avoid proper names or direct references to specific people in filenames/titles,
-- keep durable current guidance in `current/`, not in `history/`,
+- keep durable current guidance in `state/`, `ref/`, or `design/`, not in `history/`,
 - if two history notes become near-duplicates, keep one full primary source and reduce the other to a short pointer.
 
 ## Maintenance rule
@@ -100,16 +105,14 @@ If the validated baseline or recommended workflow changes, update at least:
 
 - `README.md`
 - `new-chat-prompt.md`
-- `current/current-state.md`
-- `current/current-next-step.md`
-- `current/testing-matrix.md`
-- `current/capstone-agent-test-instructions.md`
+- `state/current-state.md`
+- `state/current-next-step.md`
+- `ref/testing-matrix.md`
+- `ref/capstone-agent-test-instructions.md`
 
-Update deeper reference files only when their subject actually changed.
+Update deeper `design/` files only when their subject actually changed.
 
 ## What this does not yet mean
 
 This does **not** yet mean that a full hosted `capstone64-unknown-linux-gnu` user-space is ready.
 The current validated path is still the split host/domain runtime path.
-
-
