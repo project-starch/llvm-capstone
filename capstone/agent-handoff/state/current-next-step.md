@@ -1,36 +1,26 @@
 # Current recommended next step
 
-## Immediate milestone — Fix prologue frame lowering bug
+## Immediate milestone - Start BEEBS benchmark porting
 
-**File**: `llvm/lib/Target/Capstone/CapstoneFrameLowering.cpp`
+**Goal**: add the first small BEEBS benchmark on the existing CoreMark-style split host/domain path.
 
-**Change**: Prologue currently emits `cincoffsetimm s0, sp, -N` (rd≠rs1), which consumes
-`sp` (LINEAR capability). All subsequent `ldc`/`stc` using `sp` as base crash because
-`sp.tag=0` after the first use. Fix: emit `cincoffsetimm sp, sp, -N` (rd==rs1, in-place
-update, no consumption).
+**Why this first**: the prologue frame-lowering bug is fixed and validated. CoreMark now builds and runs with the compiled C `domain_main` wrapper instead of `coremark_domain_entry.S`, so the benchmark path no longer needs a per-domain handwritten entry point.
 
-**Why this first**: This is the only backend bug that requires a **per-domain hand-written
-assembly entry point**. Without this fix, every BEEBS and RV8 benchmark needs its own
-`*_entry.S` file. The other 4 bugs are compile-flag workarounds that scale via build scripts.
+**Smallest useful first step**:
+- choose one simple BEEBS benchmark with a tiny C workload and deterministic result,
+- create a minimal build/run wrapper under `capstone/benchmarks/` or the existing runtime test structure,
+- reuse the CoreMark compile/link/runtime pattern without removing the remaining backend workarounds,
+- validate with the affected backend/runtime layer before expanding to more benchmarks.
 
-**Test after fix**:
-- CoreMark should compile and link without `coremark_domain_entry.S`.
-- `run-coremark.sh` must still pass ("Correct operation validated.").
-- Run: `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone` — no regressions.
+**Test expectations**:
+- `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone` for backend changes,
+- `bash capstone/tests/runtime-qemu/run-coremark.sh` if benchmark or backend codegen behavior changes,
+- a focused BEEBS run wrapper once introduced.
 
-## After the prologue fix — benchmark porting sequence
+## Remaining backend workarounds
 
-1. **BEEBS** (https://github.com/mageec/beebs) — 20+ small embedded benchmarks.
-   Build script pattern reuses the CoreMark approach directly.
-   Each passing benchmark validates more of the compiled domain code path.
-
-2. **RV8** (https://github.com/larkmjc/rv8-bench) — RISC-V performance benchmarks
-   (dhrystone, memcpy, primes, qsort, sieve, ...). Port after BEEBS.
-
-3. **Fix remaining backend bugs** only as they block specific benchmark programs,
-   not speculatively. See `plans/backend-compiler-fixes.md` for the full catalog.
+The prologue bug is closed. Keep the remaining backend workarounds in place unless a focused benchmark step proves a root fix. Details: `plans/backend-compiler-fixes.md`.
 
 ## What not to regress
 
-Do not delete `capstone/caplifive-buildroot/build/local.mk` — its absence silently
-switches the image to stock OpenSBI and breaks all runtime proofs.
+Do not delete `capstone/caplifive-buildroot/build/local.mk` - its absence silently switches the image to stock OpenSBI and breaks all runtime proofs.

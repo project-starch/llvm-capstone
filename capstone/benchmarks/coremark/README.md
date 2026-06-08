@@ -50,72 +50,18 @@ bash capstone/benchmarks/coremark/build-coremark-capstone.sh
 
 ## Result of the current smoke
 
-The fetch step still works and pins upstream correctly.
+The fetch step still works and pins upstream correctly. The current helper builds
+and links `/tmp/capstone/coremark-build/coremark_capstone.dom`, runs all three
+CoreMark algorithms on the split Capstone PureCap domain path, and validates the
+profile-run CRCs. Expected runtime output includes `Correct operation validated.`
+and `__COREMARK_PASSED__`.
 
-The current tree has been revalidated with `+m` enabled in the canonical helper,
-and the earlier compile-time CoreMark blockers have moved again:
-
-- upstream `core_list_join.c` compiles,
-- upstream `core_main.c` now compiles at both `-O1` and `-O2` with the current
-  local lowering work,
-- the full helper now links a real
-  `/tmp/capstone/coremark-build/coremark_capstone.dom`.
-
-That means the first end-to-end blocker is no longer a backend selection
-failure during compilation. It is now a later runtime failure on the domain path.
-
-The currently observed runtime problems split into **three distinct classes**:
-
-1. stack capability addresses that must stay capability-preserving during backend
-   selection,
-2. compiler-generated static tables of capability-valued addresses (for example a
-   lowered switch table in `get_seed_32()`),
-3. zero-initialized globals that fall into `.bss` and end up outside the current
-   `gp`-relative capability bounds used by the domain runtime.
-
-The reduced `.gct` proof of concept already in tree is still valid, but it is
-important to keep its scope precise:
-
-- it proves compiler emission plus reduced runtime-side consumption for narrow
-  one-slot static objects,
-- it does **not** yet provide a generic startup/runtime materializer for arbitrary
-  compiler-generated static capability tables inside a real benchmark image,
-- and it does **not** yet widen the domain's `gp`-relative capability policy to
-  cover all zero-initialized globals automatically.
-
-So the current CoreMark blocker is from the **same broad static-capability area**,
-but not from the already-closed reduced `.gct` path.
-
-For the current benchmark smoke, the helper applies several temporary
-CoreMark-local workarounds while the generic path is still under construction:
-
-- compile `core_list_join.c` with `-O1` to avoid the current higher-opt list-path
-  capability-copy issue,
-- override `core_list_init()` locally so list sizing uses the actual
-  `sizeof(list_head)` on Capstone PureCap instead of the upstream hard-coded
-  16-byte pointer assumption, and so the list storage is explicitly aligned for
-  capability-bearing `list_head` nodes before the first store,
-- override `core_init_matrix()` locally while the upstream matrix initializer
-  still exposes a mixed scalar/capability lowering failure,
-- compile `core_util.c` with `-fno-jump-tables` to avoid emitting a static switch
-  table of capability addresses,
-- compile `port/core_portme.c` with `-fno-zero-initialized-in-bss` so the volatile
-  seed globals stay in `.data` instead of splitting the last seed into `.bss`,
-- and keep the canonical helper on the list-only execution mask for now so the
-  current list/runtime bring-up can advance independently of the still-failing
-  matrix path.
-
-After those two benchmark-local workarounds, any remaining runtime failures are a
-much cleaner signal for residual backend capability-selection bugs instead of the
-already-known static table / `.bss` issues.
-
-- the generic tiny runtime smoke still passes,
-- and CoreMark now serves as a reproducible runtime bring-up target for the
-  remaining capability-selection issues after those localized benchmark
-  workarounds.
-
-So the helper has moved from a **first-blocker detector for compilation** to a
-**reproducible compile-and-link smoke plus a runtime reproducer**.
+CoreMark now uses the compiled C `domain_main` wrapper in `coremark_domain.c`;
+`coremark_domain_entry.S` is retained only as historical reference and is no
+longer compiled or linked by `build-coremark-capstone.sh`. The wrapper is kept at
+`-O0` while higher optimization levels still expose the known rd!=rs1 LINEAR-cap
+sink issue. The remaining backend workarounds are documented in
+`capstone/agent-handoff/plans/backend-compiler-fixes.md`.
 
 When `clang` crashes, it emits a preprocessed reproducer and run script under
 `/tmp/`, for example:
@@ -123,9 +69,9 @@ When `clang` crashes, it emits a preprocessed reproducer and run script under
 - `/tmp/core_main-*.c`
 - `/tmp/core_main-*.sh`
 
-That is exactly the current handoff value: the tree now has a pinned upstream
-source, a stable Capstone invocation with `+m`, a successful compile/link path,
-and a concrete later-stage runtime failure instead of an earlier backend crash.
+The current handoff value is a pinned upstream source, a stable Capstone
+invocation with `+m`, and an end-to-end correctness run for compiler/runtime
+bring-up.
 
 Do **not** publish scores from this setup.
 
@@ -136,13 +82,12 @@ Do **not** publish scores from this setup.
 - keeps fetch/build paths reproducible,
 - makes it easy to throw away and refetch `/tmp/capstone/coremark-src`.
 
-## Next step after the first smoke
+## Next step after the validated CoreMark path
 
-Once the current runtime blocker is identified precisely enough:
-
-1. fix that blocker,
-2. rerun this smoke,
-3. only then decide whether `BEEBS` needs to be pulled in,
-4. leave `RV8` for after the first benchmark path is less speculative.
+Use the CoreMark build pattern to start BEEBS benchmark porting. Start with one
+small deterministic benchmark, add a focused run wrapper, and validate it before
+expanding the set. Leave RV8 for after the first BEEBS path is stable. If a new
+benchmark exposes one of the remaining backend bugs, fix that root cause with a
+focused reproducer before adding more benchmarks.
 
 

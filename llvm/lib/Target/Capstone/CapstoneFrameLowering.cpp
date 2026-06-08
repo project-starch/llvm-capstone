@@ -1095,8 +1095,10 @@ void CapstoneFrameLowering::emitPrologue(MachineFunction &MF,
     // Some stack management variants automatically keep FP updated, so we don't
     // need an instruction to do so.
     if (!RVFI->hasImplicitFPUpdates(MF)) {
+      RI->adjustReg(MBB, MBBI, DL, FPReg, SPReg, StackOffset::getFixed(0),
+                    MachineInstr::FrameSetup, getStackAlign());
       RI->adjustReg(
-          MBB, MBBI, DL, FPReg, SPReg,
+          MBB, MBBI, DL, FPReg, FPReg,
           StackOffset::getFixed(RealStackSize - RVFI->getVarArgsSaveSize()),
           MachineInstr::FrameSetup, getStackAlign());
     }

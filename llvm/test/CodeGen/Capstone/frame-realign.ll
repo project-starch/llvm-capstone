@@ -5,7 +5,8 @@ target triple = "capstone64"
 define ptr addrspace(200) @need_realign() {
 ; CHECK-LABEL: need_realign:
 ; CHECK: cincoffsetimm sp, sp, -64
-; CHECK: cincoffsetimm s0, sp, 64
+; CHECK: movc s0, sp
+; CHECK-NEXT: cincoffsetimm s0, s0, 64
 ; CHECK: lcc [[CUR:a[0-9]+]], sp, 2
 ; CHECK-NEXT: andi [[CUR]], [[CUR]], -64
 ; CHECK-NEXT: scc sp, sp, [[CUR]]

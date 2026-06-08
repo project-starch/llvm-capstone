@@ -53,7 +53,7 @@ why they differ.
 | `core_util_capstone.c` | Widen `crcu8` byte locals to `unsigned int`; `check_data_types` stub | Cap-granule spill with byte locals; `sizeof` check blocks portable_init |
 | `port/core_portme.c` | Remove `sizeof` portability check; `-O0` build flag | Same as above; cap hoisting at -O1 |
 | `ee_printf_asm.S` | Assembly trampoline for `ee_printf` | `va_list` stores arg-ptr as `sd` (scalar), tag=0 on reload |
-| `coremark_domain_entry.S` | Hand-written `domain_main` prologue | Compiler emits `cincoffsetimm rd≠rs1` on sp, consuming sp |
+| `coremark_domain.c` | Compiled C `domain_main` wrapper and shared-region globals | Prologue frame lowering is fixed; wrapper remains at `-O0` while higher-opt LINEAR sink cases remain |
 
 ## Build script workarounds
 
@@ -67,7 +67,7 @@ These flags are set in `capstone/benchmarks/coremark/build-coremark-capstone.sh`
 
 ## Backend bugs that need root fixes
 
-The build-time workarounds above are a direct consequence of compiler bugs.
-The prologue frame lowering bug (hand-written entry point) is the highest priority
-because it requires per-domain `.S` files and blocks benchmark porting.
-See `plans/backend-compiler-fixes.md` for the full catalog and planned root fixes.
+The build-time workarounds above are a direct consequence of remaining compiler bugs.
+The prologue frame-lowering bug is fixed and validated, so CoreMark no longer
+needs a per-domain assembly entry. See `plans/backend-compiler-fixes.md` for
+the remaining active catalog and planned root fixes.

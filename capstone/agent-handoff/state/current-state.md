@@ -11,7 +11,8 @@ All of the following pass on the `capstone-bootstrap` branch:
 - All HostCall probes pass: shared-region, stdout, filewrite, fileread, full file-handle
   lifecycle (open/write/read/sync/stat/truncate/close), path ops, combined file-object
 - `run-nullblk-baseline.sh`, `run-nullblk-split-io.sh`, `run-nullblk-split-rmmod.sh`
-- `run-coremark.sh` — all three algorithms, "Correct operation validated."
+- `run-coremark.sh` - all three algorithms, "Correct operation validated."; CoreMark now uses
+  compiled C `domain_main`, not `coremark_domain_entry.S`
 
 ## Important distinction
 
@@ -21,10 +22,9 @@ the domain is a Capstone-loaded domain.
 
 ## Known backend bugs (stable workarounds in place)
 
-Five LLVM backend bugs identified during CoreMark bring-up. All worked around in
-`capstone/benchmarks/coremark/build-coremark-capstone.sh`. The prologue bug is the
-highest-priority fix — it requires a per-domain hand-written assembly entry, blocking
-benchmark porting. Details: `plans/backend-compiler-fixes.md`.
+The prologue frame-lowering bug is fixed and validated. Four remaining LLVM backend
+workarounds from CoreMark bring-up stay in `capstone/benchmarks/coremark/build-coremark-capstone.sh`
+and should only be removed after focused root fixes. Details: `plans/backend-compiler-fixes.md`.
 
 ## Where to go next
 

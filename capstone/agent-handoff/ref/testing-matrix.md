@@ -74,7 +74,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh
 | Second-`PENDING` payload-reuse revoke diagnostic | whether explicit revoke before re-share satisfies the intended borrowed-region rule | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-revoke-probe.sh` |
 | `null_blk` baseline | baseline block path still works | runtime/device baseline checks | `capstone/tests/runtime-qemu/run-nullblk-baseline.sh` |
 | `null_blk` split | split I/O path and unload still work | OpenSBI/kernel/module integration changes | `run-nullblk-split-io.sh`, `run-nullblk-split-rmmod.sh` |
-| CoreMark CRC validation | all three algorithms (list, matrix, state machine) run and produce validated CRCs on Capstone PureCap | backend codegen changes, CoreMark benchmark changes | `capstone/tests/runtime-qemu/run-coremark.sh` |
+| CoreMark CRC validation | all three algorithms (list, matrix, state machine) run and produce validated CRCs on Capstone PureCap with compiled C `domain_main` | backend codegen changes, CoreMark benchmark changes | `capstone/tests/runtime-qemu/run-coremark.sh` |
 
 ## Recommended minimums by change type
 

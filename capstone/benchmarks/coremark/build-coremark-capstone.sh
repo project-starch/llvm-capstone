@@ -56,14 +56,6 @@ COMMON_FLAGS=(
 # list nodes instead of 18, producing deterministically different but correct CRCs.
 "$CLANG" "${COMMON_FLAGS[@]}" -c "$SCRIPT_DIR/core_main_capstone.c" -o "$OBJ_DIR/core_main.o"
 
-# coremark_domain_entry.S: hand-written assembly for domain_main.
-# The Capstone LLVM backend cannot generate correct code for domain_main at any
-# -O level (see comment in coremark_domain_entry.S for details).
-"$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
-  -ffreestanding -O0 \
-  -c "$SCRIPT_DIR/coremark_domain_entry.S" \
-  -o "$OBJ_DIR/coremark_domain_entry.o"
-
 # ee_printf_asm.S: assembly trampoline for ee_printf.
 # The compiler-generated va_list stores the vararg pointer as a scalar integer
 # (sd, not stc); when reloaded via ld the tag is 0 and subsequent memory
@@ -74,10 +66,12 @@ COMMON_FLAGS=(
   -c "$SCRIPT_DIR/ee_printf_asm.S" \
   -o "$OBJ_DIR/ee_printf_asm.o"
 
-# coremark_domain.c: only contains global declarations (hc_metadata, hc_payload,
-# g_region_count).  -fno-zero-initialized-in-bss keeps the zero-initialized globals
-# in .data rather than .bss (NOLOAD) so they fall within pc_cap bounds.
-"$CLANG" "${COMMON_FLAGS[@]}" -fno-zero-initialized-in-bss \
+# coremark_domain.c: domain_main plus shared-region globals.  Keep this wrapper
+# at -O0 for now: the fixed frame-pointer prologue is safe there, while higher
+# optimization levels still expose the known rd!=rs1 LINEAR-cap sink issue.
+# -fno-zero-initialized-in-bss keeps the zero-initialized globals in .data rather
+# than .bss (NOLOAD) so they fall within pc_cap bounds.
+"$CLANG" "${COMMON_FLAGS[@]}" -fno-zero-initialized-in-bss -O0 \
   -c "$SCRIPT_DIR/coremark_domain.c" \
   -o "$OBJ_DIR/coremark_domain.o"
 
@@ -201,8 +195,7 @@ COMMON_FLAGS=(
   "$OBJ_DIR/core_util_capstone.o" \
   "$OBJ_DIR/core_portme.o" \
   "$OBJ_DIR/ee_printf_asm.o" \
-  "$OBJ_DIR/coremark_domain.o" \
-  "$OBJ_DIR/coremark_domain_entry.o"
+  "$OBJ_DIR/coremark_domain.o"
 
 "$LLVM_READOBJ" -h "$OUT_DOM"
 

@@ -307,6 +307,8 @@ grep -E "(Correct|Errors|crc|ERROR|PASSED)" "$CAPSTONE_TMP_ROOT/run-coremark.txt
 ```
 
 Expected: `Correct operation validated.` and `__COREMARK_PASSED__` in the output.
+This also verifies that CoreMark runs through the compiled C `domain_main` wrapper
+instead of the old per-domain assembly entry.
 Run when touching anything in `capstone/benchmarks/coremark/` or backend codegen
 (instruction selection, frame lowering — see `plans/backend-compiler-fixes.md`).
 

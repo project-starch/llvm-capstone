@@ -61,6 +61,7 @@ agent-handoff/
 - validated combined reusable file-object proof
 - working baseline and split `null_blk` regressions
 - validated CoreMark profile-run on Capstone PureCap ("Correct operation validated.")
+  using compiled C `domain_main` rather than `coremark_domain_entry.S`
 
 See `state/current-state.md` for the canonical snapshot.
 
