@@ -38,18 +38,20 @@ Initial skeleton status: implemented for `fac`.
 - `capstone/benchmarks/beebs/beebs_fac_domain.c` is a minimal build-only domain
   wrapper that calls `initialise_benchmark()`, `benchmark()`, and
   `verify_benchmark()`.
-- Do not add a full BEEBS suite runner until this one-benchmark pattern has a
-  matching runtime wrapper.
+- `capstone/benchmarks/beebs/run-beebs-fac.sh` builds the `fac` domain and host,
+  boots QEMU, and checks the `BEEBS_RET_CORRECT` marker.
+- Do not add a full BEEBS suite runner until at least one more benchmark follows
+  this pattern.
 
 Validation for this milestone:
 
 - `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone`
 - `bash capstone/tests/runtime-qemu/run-coremark.sh`
-- the BEEBS build script produces the selected benchmark `.dom`
+- `bash capstone/benchmarks/beebs/run-beebs-fac.sh`
 
 ## Later milestones
 
-- Add a minimal BEEBS host/runtime wrapper and `run-beebs.sh`.
+- Add `insertsort` as the second one-benchmark BEEBS expansion.
 - Expand BEEBS one benchmark at a time, carrying forward only the runtime and
   compiler workarounds proven necessary by that benchmark.
 - Start RV8 only after at least one BEEBS benchmark runs end to end with a stable

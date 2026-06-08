@@ -61,8 +61,8 @@ Build and test entry points (after: source capstone/tests/capstone-test-env.sh):
   bash capstone/tests/runtime-qemu/run-coremark.sh       # CoreMark validation
   "$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone    # backend CodeGen tests
 
-Current milestone: SQLite-oriented VFS shim consuming the validated file-service subset.
-Full design: capstone/agent-handoff/design/sqlite-minimal-vfs-path.md
+Current milestone: add the second BEEBS benchmark (`insertsort`) after the validated `fac` path.
+Plan: capstone/agent-handoff/plans/benchmark-bringup.md
 
 Backend workarounds (stable, do not remove or override):
   capstone/agent-handoff/plans/backend-compiler-fixes.md

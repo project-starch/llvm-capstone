@@ -13,6 +13,8 @@ All of the following pass on the `capstone-bootstrap` branch:
 - `run-nullblk-baseline.sh`, `run-nullblk-split-io.sh`, `run-nullblk-split-rmmod.sh`
 - `run-coremark.sh` - all three algorithms, "Correct operation validated."; CoreMark now uses
   compiled C `domain_main`, not `coremark_domain_entry.S`
+- `capstone/benchmarks/beebs/run-beebs-fac.sh` - first BEEBS benchmark runs end to end
+  and validates its correctness marker
 
 ## Important distinction
 

@@ -1,23 +1,23 @@
 # Current recommended next step
 
-## Immediate milestone - Add a minimal BEEBS runtime wrapper
+## Immediate milestone - Add the second BEEBS benchmark
 
-**Goal**: run the existing BEEBS `fac` `.dom` on the split host/domain runtime path and check only its correctness marker.
+**Goal**: extend the validated BEEBS pattern from `fac` to exactly one more tiny deterministic benchmark.
 
-**Why this first**: the build-only BEEBS skeleton now exists under `capstone/benchmarks/beebs/` and produces `$CAPSTONE_TMP_ROOT/beebs-build/beebs_fac_capstone.dom`. The next missing piece is the smallest host/runtime wrapper that proves the BEEBS pattern runs end to end before expanding to more benchmarks.
+**Why this first**: `capstone/benchmarks/beebs/run-beebs-fac.sh` now builds and runs `fac` end to end on the split host/domain runtime path. The next useful step is proving the pattern generalizes without creating a full suite runner.
 
 **Smallest useful first step**:
-- add a focused `run-beebs.sh` or `run-beebs-fac.sh` entry point for `fac` only,
-- reuse the CoreMark split host/domain launch pattern,
-- have the domain wrapper report the existing `BEEBS_RET_CORRECT` marker,
+- add `insertsort` only; it is a small deterministic array benchmark with no external data files,
+- extend the existing BEEBS build/host/run pattern conservatively,
+- keep `fac` working as the regression gate for the BEEBS path,
 - keep success based on correctness only; do not report or optimize performance scores,
-- do not expand beyond `fac` until this one benchmark has a stable build and run path.
+- do not introduce a broad BEEBS suite runner yet.
 
 **Test expectations**:
 - `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone`,
 - `bash capstone/tests/runtime-qemu/run-coremark.sh`,
-- `bash capstone/benchmarks/beebs/build-beebs-fac-capstone.sh`,
-- the focused BEEBS runtime wrapper once introduced.
+- `bash capstone/benchmarks/beebs/run-beebs-fac.sh`,
+- the focused `insertsort` build/run wrapper once introduced.
 
 ## Remaining backend workarounds
 

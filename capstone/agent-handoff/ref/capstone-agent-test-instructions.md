@@ -312,6 +312,20 @@ instead of the old per-domain assembly entry.
 Run when touching anything in `capstone/benchmarks/coremark/` or backend codegen
 (instruction selection, frame lowering — see `plans/backend-compiler-fixes.md`).
 
+### BEEBS `fac` correctness run
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/benchmarks/beebs/run-beebs-fac.sh \
+  > "$CAPSTONE_TMP_ROOT/run-beebs-fac.txt" 2>&1
+
+grep -E "(BEEBS|beebs-fac|PASSED|ERROR)" "$CAPSTONE_TMP_ROOT/run-beebs-fac.txt"
+```
+
+Expected: `beebs-fac-host: correctness marker validated` and
+`__BEEBS_FAC_PASSED__` in the output. Run when touching
+`capstone/benchmarks/beebs/` or the benchmark split host/domain wrapper path.
+
 ## 6. Important caveats
 
 - The current validated path is still the split host/domain runtime path, not a full hosted Capstone Linux user-space.

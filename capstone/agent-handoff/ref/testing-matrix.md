@@ -45,6 +45,10 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-path-delete-p
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-baseline.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-io.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh"
+
+# Benchmark regressions
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-coremark.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fac.sh"
 ```
 
 ## Test layers
@@ -75,6 +79,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh
 | `null_blk` baseline | baseline block path still works | runtime/device baseline checks | `capstone/tests/runtime-qemu/run-nullblk-baseline.sh` |
 | `null_blk` split | split I/O path and unload still work | OpenSBI/kernel/module integration changes | `run-nullblk-split-io.sh`, `run-nullblk-split-rmmod.sh` |
 | CoreMark CRC validation | all three algorithms (list, matrix, state machine) run and produce validated CRCs on Capstone PureCap with compiled C `domain_main` | backend codegen changes, CoreMark benchmark changes | `capstone/tests/runtime-qemu/run-coremark.sh` |
+| BEEBS `fac` validation | first BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes | `capstone/benchmarks/beebs/run-beebs-fac.sh` |
 
 ## Recommended minimums by change type
 
@@ -86,6 +91,9 @@ Do not jump straight to QEMU unless the change affects runtime-facing behavior.
 Additionally, run `capstone/tests/runtime-qemu/run-coremark.sh` when the change touches
 instruction selection, frame lowering, or any area covered by the CoreMark workarounds
 (see `plans/backend-compiler-fixes.md`).
+
+Run `capstone/benchmarks/beebs/run-beebs-fac.sh` when changing the BEEBS benchmark
+build/run path.
 
 ### Userspace loader / helper / HostCall / runtime wrapper changes
 
