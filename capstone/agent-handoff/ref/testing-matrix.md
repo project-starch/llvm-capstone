@@ -50,6 +50,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-coremark.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fac.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-insertsort.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fibcall.sh"
 ```
 
 ## Test layers
@@ -82,6 +83,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-insertsort.sh"
 | CoreMark CRC validation | all three algorithms (list, matrix, state machine) run and produce validated CRCs on Capstone PureCap with compiled C `domain_main` | backend codegen changes, CoreMark benchmark changes | `capstone/tests/runtime-qemu/run-coremark.sh` |
 | BEEBS `fac` validation | first BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes | `capstone/benchmarks/beebs/run-beebs-fac.sh` |
 | BEEBS `insertsort` validation | second BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-insertsort.sh` |
+| BEEBS `fibcall` validation | third BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes | `capstone/benchmarks/beebs/run-beebs-fibcall.sh` |
 
 ## Recommended minimums by change type
 
@@ -94,8 +96,9 @@ Additionally, run `capstone/tests/runtime-qemu/run-coremark.sh` when the change 
 instruction selection, frame lowering, or any area covered by the CoreMark workarounds
 (see `plans/backend-compiler-fixes.md`).
 
-Run `capstone/benchmarks/beebs/run-beebs-fac.sh` and
-`capstone/benchmarks/beebs/run-beebs-insertsort.sh` when changing the BEEBS
+Run `capstone/benchmarks/beebs/run-beebs-fac.sh`,
+`capstone/benchmarks/beebs/run-beebs-insertsort.sh`, and
+`capstone/benchmarks/beebs/run-beebs-fibcall.sh` when changing the BEEBS
 benchmark build/run path.
 
 ### Userspace loader / helper / HostCall / runtime wrapper changes

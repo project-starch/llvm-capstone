@@ -17,6 +17,8 @@ All of the following pass on the `capstone-bootstrap` branch:
   and validates its correctness marker
 - `capstone/benchmarks/beebs/run-beebs-insertsort.sh` - second BEEBS benchmark runs end to end
   and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-fibcall.sh` - third BEEBS benchmark runs end to end
+  and validates its correctness marker
 
 ## Important distinction
 

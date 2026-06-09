@@ -25,7 +25,7 @@ that proves the next small step works.
 
 ## Current BEEBS milestone status
 
-The first two tiny deterministic BEEBS benchmarks are implemented and validated.
+The first three tiny deterministic BEEBS benchmarks are implemented and validated.
 Do not add a full BEEBS suite runner yet.
 
 Implemented status:
@@ -52,6 +52,14 @@ Implemented status:
   functions with equivalent accessor-based code. The accessors recompute the global
   array capability and apply the same `CAPSTONE_DELIN` pattern used by CoreMark,
   avoiding QEMU failures from reusing a consumed gp-derived linear capability.
+- `capstone/benchmarks/beebs/build-beebs-fibcall-capstone.sh` builds only the
+  `fibcall` benchmark and produces
+  `$CAPSTONE_TMP_ROOT/beebs-build/beebs_fibcall_capstone.dom`.
+- `capstone/benchmarks/beebs/beebs_fibcall_domain.c` calls
+  `initialise_benchmark()`, `benchmark()`, and `verify_benchmark()` and records
+  only a correctness marker.
+- `capstone/benchmarks/beebs/run-beebs-fibcall.sh` builds the `fibcall` domain
+  and host, boots QEMU, and checks the `BEEBS_RET_CORRECT` marker.
 - Do not add a full BEEBS suite runner until several single-benchmark wrappers are
   stable.
 
@@ -61,10 +69,15 @@ Validation for this milestone:
 - `bash capstone/tests/runtime-qemu/run-coremark.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-fac.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-insertsort.sh`
+- `bash capstone/benchmarks/beebs/run-beebs-fibcall.sh`
+
+If the current medium thinking level becomes insufficient during benchmark
+bring-up, suspend work and tell the user before switching to high thinking.
 
 ## Later milestones
 
-- Add the next single BEEBS benchmark, for example `cnt`, `crc`, or `fibcall` after source inspection.
+- Add the next single BEEBS benchmark: `cnt`, after source and generated-assembly
+  inspection.
 - Expand BEEBS one benchmark at a time, carrying forward only the runtime and
   compiler workarounds proven necessary by that benchmark.
 - Start RV8 only after at least one BEEBS benchmark runs end to end with a stable

@@ -1,15 +1,22 @@
 # Current recommended next step
 
-## Immediate milestone - Add one more BEEBS benchmark
+## Immediate milestone - Add BEEBS `cnt`
 
-**Goal**: extend the validated BEEBS pattern from `fac` and `insertsort` to exactly one more tiny deterministic benchmark.
+**Goal**: extend the validated BEEBS pattern from `fac`, `insertsort`, and `fibcall`
+to exactly one more deterministic benchmark: `cnt`.
 
-**Why this first**: both `capstone/benchmarks/beebs/run-beebs-fac.sh` and `capstone/benchmarks/beebs/run-beebs-insertsort.sh` now build and run end to end on the split host/domain runtime path. The next useful step is proving the pattern generalizes one benchmark at a time without creating a full suite runner.
+**Why this first**: `fibcall` adds a simple verified benchmark without mutable global
+data. `cnt` is the next useful stress case because it has deterministic verification
+and global mutable matrix state, but it should still be handled as one focused
+benchmark rather than a suite runner.
 
 **Smallest useful first step**:
-- pick one small deterministic benchmark such as `cnt`, `crc`, or `fibcall`, after a quick source inspection,
+- inspect `cnt` source and generated Capstone assembly for global matrix accesses,
 - copy the existing BEEBS build/host/run pattern conservatively,
-- keep `fac` and `insertsort` working as regression gates for the BEEBS path,
+- add benchmark-local source wrapping only if `cnt` exposes the same gp-derived
+  linear capability reuse issue seen in `insertsort`,
+- keep `fac`, `insertsort`, and `fibcall` working as regression gates for the
+  BEEBS path,
 - keep success based on correctness only; do not report or optimize performance scores,
 - do not introduce a broad BEEBS suite runner yet.
 
@@ -18,7 +25,15 @@
 - `bash capstone/tests/runtime-qemu/run-coremark.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-fac.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-insertsort.sh`,
+- `bash capstone/benchmarks/beebs/run-beebs-fibcall.sh`,
 - the focused build/run wrapper for the new single benchmark once introduced.
+
+## Thinking-level rule
+
+Stay at medium thinking while the work remains mechanical or locally debuggable.
+If the next benchmark exposes a hard backend/compiler bug, unclear architecture
+semantics, or repeated failed runtime debugging where high thinking looks necessary,
+suspend work and tell the user before continuing.
 
 ## Remaining backend workarounds
 
