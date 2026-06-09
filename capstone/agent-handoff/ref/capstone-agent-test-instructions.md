@@ -355,6 +355,21 @@ Expected: `beebs-fibcall-host: correctness marker validated` and
 `__BEEBS_FIBCALL_PASSED__` in the output. Run when touching
 `capstone/benchmarks/beebs/` or the benchmark split host/domain wrapper path.
 
+### BEEBS `cnt` correctness run
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/benchmarks/beebs/run-beebs-cnt.sh \
+  > "$CAPSTONE_TMP_ROOT/run-beebs-cnt.txt" 2>&1
+
+grep -E "(BEEBS|beebs-cnt|PASSED|ERROR)" "$CAPSTONE_TMP_ROOT/run-beebs-cnt.txt"
+```
+
+Expected: `beebs-cnt-host: correctness marker validated` and
+`__BEEBS_CNT_PASSED__` in the output. Run when touching
+`capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
+backend codegen used by BEEBS global-state integer benchmarks.
+
 ## 6. Important caveats
 
 - The current validated path is still the split host/domain runtime path, not a full hosted Capstone Linux user-space.

@@ -51,6 +51,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-coremark.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fac.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-insertsort.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fibcall.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-cnt.sh"
 ```
 
 ## Test layers
@@ -84,6 +85,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fibcall.sh"
 | BEEBS `fac` validation | first BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes | `capstone/benchmarks/beebs/run-beebs-fac.sh` |
 | BEEBS `insertsort` validation | second BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-insertsort.sh` |
 | BEEBS `fibcall` validation | third BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes | `capstone/benchmarks/beebs/run-beebs-fibcall.sh` |
+| BEEBS `cnt` validation | fourth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-cnt.sh` |
 
 ## Recommended minimums by change type
 
@@ -97,9 +99,10 @@ instruction selection, frame lowering, or any area covered by the CoreMark worka
 (see `plans/backend-compiler-fixes.md`).
 
 Run `capstone/benchmarks/beebs/run-beebs-fac.sh`,
-`capstone/benchmarks/beebs/run-beebs-insertsort.sh`, and
-`capstone/benchmarks/beebs/run-beebs-fibcall.sh` when changing the BEEBS
-benchmark build/run path.
+`capstone/benchmarks/beebs/run-beebs-insertsort.sh`,
+`capstone/benchmarks/beebs/run-beebs-fibcall.sh`, and
+`capstone/benchmarks/beebs/run-beebs-cnt.sh` when changing the BEEBS benchmark
+build/run path.
 
 ### Userspace loader / helper / HostCall / runtime wrapper changes
 
