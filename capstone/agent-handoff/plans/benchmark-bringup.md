@@ -25,7 +25,7 @@ that proves the next small step works.
 
 ## Current BEEBS milestone status
 
-The first four tiny deterministic BEEBS benchmarks are implemented and validated.
+The first five tiny deterministic BEEBS benchmarks are implemented and validated.
 Do not add a full BEEBS suite runner yet.
 
 Implemented status:
@@ -73,6 +73,20 @@ Implemented status:
   matrix benchmark behavior while recomputing/delinearizing capabilities for
   global matrix and scalar state. This keeps the workaround local to the
   benchmark path.
+- `capstone/benchmarks/beebs/build-beebs-bubblesort-capstone.sh` builds only the
+  `bubblesort` benchmark and produces
+  `$CAPSTONE_TMP_ROOT/beebs-build/beebs_bubblesort_capstone.dom`.
+- `capstone/benchmarks/beebs/beebs_bubblesort_domain.c` calls
+  `initialise_benchmark()`, `benchmark()`, and `verify_benchmark()` and records
+  only a correctness marker.
+- `capstone/benchmarks/beebs/run-beebs-bubblesort.sh` builds the `bubblesort`
+  domain and host, boots QEMU, and checks the `BEEBS_RET_CORRECT` marker.
+- The `bubblesort` Capstone build script generates a temporary source wrapper in
+  `$CAPSTONE_TMP_ROOT/beebs-build` that preserves the upstream deterministic
+  sort behavior while recomputing/delinearizing capabilities for global array
+  and scalar state. The wrapper also avoids the current direct-compile crash in
+  upstream `verify_benchmark()` from lowering the local expected-array initializer
+  into the backend's unresolved memcpy call path.
 - Do not add a full BEEBS suite runner until several single-benchmark wrappers are
   stable.
 
@@ -84,13 +98,14 @@ Validation for this milestone:
 - `bash capstone/benchmarks/beebs/run-beebs-insertsort.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-fibcall.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-cnt.sh`
+- `bash capstone/benchmarks/beebs/run-beebs-bubblesort.sh`
 
 If the current medium thinking level becomes insufficient during benchmark
 bring-up, suspend work and tell the user before switching to high thinking.
 
 ## Later milestones
 
-- Add the next single BEEBS benchmark: `bubblesort`, after source and
+- Add the next single BEEBS benchmark: `prime`, after source and
   generated-assembly inspection.
 - Expand BEEBS one benchmark at a time, carrying forward only the runtime and
   compiler workarounds proven necessary by that benchmark.

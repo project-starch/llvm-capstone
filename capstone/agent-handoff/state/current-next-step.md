@@ -1,23 +1,23 @@
 # Current recommended next step
 
-## Immediate milestone - Add BEEBS `bubblesort`
+## Immediate milestone - Add BEEBS `prime`
 
 **Goal**: extend the validated BEEBS pattern from `fac`, `insertsort`, `fibcall`,
-and `cnt` to exactly one more deterministic benchmark: `bubblesort`.
+`cnt`, and `bubblesort` to exactly one more deterministic benchmark: `prime`.
 
-**Why this first**: `cnt` now covers deterministic verification with global matrix
-and scalar state. `bubblesort` is another small verified integer benchmark with a
-global array, so it should extend the same pattern without introducing a suite
+**Why this first**: `bubblesort` now covers deterministic verification with a
+global array and benchmark-local source wrapping. `prime` is a small scalar-heavy
+verified benchmark that adds modulo/division coverage without introducing a suite
 runner or performance reporting.
 
 **Smallest useful first step**:
-- inspect `bubblesort` source and generated Capstone assembly for global array
-  accesses,
+- inspect `prime` source and generated Capstone assembly for scalar global accesses
+  and division/modulo lowering,
 - copy the existing BEEBS build/host/run pattern conservatively,
-- add benchmark-local source wrapping only if `bubblesort` exposes the same gp-derived
-  linear capability reuse issue seen in `insertsort`,
-- keep `fac`, `insertsort`, `fibcall`, and `cnt` working as regression gates for the
-  BEEBS path,
+- add benchmark-local source wrapping only if `prime` exposes the same gp-derived
+  linear capability reuse issue seen in other global-state BEEBS wrappers,
+- keep `fac`, `insertsort`, `fibcall`, `cnt`, and `bubblesort` working as
+  regression gates for the BEEBS path,
 - keep success based on correctness only; do not report or optimize performance scores,
 - do not introduce a broad BEEBS suite runner yet.
 
@@ -28,6 +28,7 @@ runner or performance reporting.
 - `bash capstone/benchmarks/beebs/run-beebs-insertsort.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-fibcall.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-cnt.sh`,
+- `bash capstone/benchmarks/beebs/run-beebs-bubblesort.sh`,
 - the focused build/run wrapper for the new single benchmark once introduced.
 
 ## Thinking-level rule
