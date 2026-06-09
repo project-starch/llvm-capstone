@@ -25,7 +25,7 @@ that proves the next small step works.
 
 ## Current BEEBS milestone status
 
-The first five tiny deterministic BEEBS benchmarks are implemented and validated.
+The first six tiny deterministic BEEBS benchmarks are implemented and validated.
 Do not add a full BEEBS suite runner yet.
 
 Implemented status:
@@ -87,6 +87,19 @@ Implemented status:
   and scalar state. The wrapper also avoids the current direct-compile crash in
   upstream `verify_benchmark()` from lowering the local expected-array initializer
   into the backend's unresolved memcpy call path.
+- `capstone/benchmarks/beebs/build-beebs-prime-capstone.sh` builds only the
+  `prime` benchmark and produces
+  `$CAPSTONE_TMP_ROOT/beebs-build/beebs_prime_capstone.dom`.
+- `capstone/benchmarks/beebs/beebs_prime_domain.c` calls
+  `initialise_benchmark()`, `benchmark()`, and `verify_benchmark()` and records
+  only a correctness marker.
+- `capstone/benchmarks/beebs/run-beebs-prime.sh` builds the `prime` domain and
+  host, boots QEMU, and checks the `BEEBS_RET_CORRECT` marker.
+- The `prime` Capstone build script generates a temporary source wrapper in
+  `$CAPSTONE_TMP_ROOT/beebs-build` that preserves the upstream deterministic
+  prime-check behavior while recomputing/delinearizing capabilities for scalar
+  global state. This adds modulo/division coverage through the benchmark's
+  `m % n` path.
 - Do not add a full BEEBS suite runner until several single-benchmark wrappers are
   stable.
 
@@ -99,14 +112,15 @@ Validation for this milestone:
 - `bash capstone/benchmarks/beebs/run-beebs-fibcall.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-cnt.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-bubblesort.sh`
+- `bash capstone/benchmarks/beebs/run-beebs-prime.sh`
 
 If the current medium thinking level becomes insufficient during benchmark
 bring-up, suspend work and tell the user before switching to high thinking.
 
 ## Later milestones
 
-- Add the next single BEEBS benchmark: `prime`, after source and
-  generated-assembly inspection.
+- Add the next single BEEBS benchmark after source and generated-assembly
+  inspection.
 - Expand BEEBS one benchmark at a time, carrying forward only the runtime and
   compiler workarounds proven necessary by that benchmark.
 - Start RV8 only after at least one BEEBS benchmark runs end to end with a stable

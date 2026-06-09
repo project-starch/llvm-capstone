@@ -385,6 +385,21 @@ Expected: `beebs-bubblesort-host: correctness marker validated` and
 `capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
 backend codegen used by BEEBS global-state integer benchmarks.
 
+### BEEBS `prime` correctness run
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/benchmarks/beebs/run-beebs-prime.sh \
+  > "$CAPSTONE_TMP_ROOT/run-beebs-prime.txt" 2>&1
+
+grep -E "(BEEBS|beebs-prime|PASSED|ERROR)" "$CAPSTONE_TMP_ROOT/run-beebs-prime.txt"
+```
+
+Expected: `beebs-prime-host: correctness marker validated` and
+`__BEEBS_PRIME_PASSED__` in the output. Run when touching
+`capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
+backend codegen used by BEEBS scalar global-state and modulo/division paths.
+
 ## 6. Important caveats
 
 - The current validated path is still the split host/domain runtime path, not a full hosted Capstone Linux user-space.
