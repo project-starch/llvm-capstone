@@ -326,6 +326,21 @@ Expected: `beebs-fac-host: correctness marker validated` and
 `__BEEBS_FAC_PASSED__` in the output. Run when touching
 `capstone/benchmarks/beebs/` or the benchmark split host/domain wrapper path.
 
+### BEEBS `insertsort` correctness run
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/benchmarks/beebs/run-beebs-insertsort.sh \
+  > "$CAPSTONE_TMP_ROOT/run-beebs-insertsort.txt" 2>&1
+
+grep -E "(BEEBS|beebs-insertsort|PASSED|ERROR)" "$CAPSTONE_TMP_ROOT/run-beebs-insertsort.txt"
+```
+
+Expected: `beebs-insertsort-host: correctness marker validated` and
+`__BEEBS_INSERTSORT_PASSED__` in the output. Run when touching
+`capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
+backend codegen used by BEEBS scalar integer benchmarks.
+
 ## 6. Important caveats
 
 - The current validated path is still the split host/domain runtime path, not a full hosted Capstone Linux user-space.

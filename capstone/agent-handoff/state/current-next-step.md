@@ -1,15 +1,15 @@
 # Current recommended next step
 
-## Immediate milestone - Add the second BEEBS benchmark
+## Immediate milestone - Add one more BEEBS benchmark
 
-**Goal**: extend the validated BEEBS pattern from `fac` to exactly one more tiny deterministic benchmark.
+**Goal**: extend the validated BEEBS pattern from `fac` and `insertsort` to exactly one more tiny deterministic benchmark.
 
-**Why this first**: `capstone/benchmarks/beebs/run-beebs-fac.sh` now builds and runs `fac` end to end on the split host/domain runtime path. The next useful step is proving the pattern generalizes without creating a full suite runner.
+**Why this first**: both `capstone/benchmarks/beebs/run-beebs-fac.sh` and `capstone/benchmarks/beebs/run-beebs-insertsort.sh` now build and run end to end on the split host/domain runtime path. The next useful step is proving the pattern generalizes one benchmark at a time without creating a full suite runner.
 
 **Smallest useful first step**:
-- add `insertsort` only; it is a small deterministic array benchmark with no external data files,
-- extend the existing BEEBS build/host/run pattern conservatively,
-- keep `fac` working as the regression gate for the BEEBS path,
+- pick one small deterministic benchmark such as `cnt`, `crc`, or `fibcall`, after a quick source inspection,
+- copy the existing BEEBS build/host/run pattern conservatively,
+- keep `fac` and `insertsort` working as regression gates for the BEEBS path,
 - keep success based on correctness only; do not report or optimize performance scores,
 - do not introduce a broad BEEBS suite runner yet.
 
@@ -17,7 +17,8 @@
 - `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone`,
 - `bash capstone/tests/runtime-qemu/run-coremark.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-fac.sh`,
-- the focused `insertsort` build/run wrapper once introduced.
+- `bash capstone/benchmarks/beebs/run-beebs-insertsort.sh`,
+- the focused build/run wrapper for the new single benchmark once introduced.
 
 ## Remaining backend workarounds
 

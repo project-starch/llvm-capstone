@@ -15,6 +15,8 @@ All of the following pass on the `capstone-bootstrap` branch:
   compiled C `domain_main`, not `coremark_domain_entry.S`
 - `capstone/benchmarks/beebs/run-beebs-fac.sh` - first BEEBS benchmark runs end to end
   and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-insertsort.sh` - second BEEBS benchmark runs end to end
+  and validates its correctness marker
 
 ## Important distinction
 

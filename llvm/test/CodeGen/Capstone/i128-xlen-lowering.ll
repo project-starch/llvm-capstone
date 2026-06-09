@@ -1,6 +1,6 @@
 ; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s | FileCheck %s
 ;
-; CoreMark bring-up regression coverage for the scalar i128 normalization rules
+; CoreMark/BEEBS bring-up regression coverage for the scalar i128 normalization rules
 ; that must collapse back into the xlen domain before instruction selection.
 
 ; CHECK-LABEL: and_i128_zext_small:
@@ -88,3 +88,45 @@ entry:
 }
 
 
+
+; CHECK-LABEL: shl_i128_sextload:
+; CHECK: lw a0, 0(a0)
+; CHECK-NEXT: slli a0, a0, 2
+; CHECK: cjalr zero, 0(ra)
+define i128 @shl_i128_sextload(ptr addrspace(200) %p) {
+entry:
+  %n = load i32, ptr addrspace(200) %p, align 4
+  %wide = sext i32 %n to i128
+  %shifted = shl i128 %wide, 2
+  ret i128 %shifted
+}
+
+; CHECK-LABEL: or_i128_zextloads:
+; CHECK: lwu a0, 0(a0)
+; CHECK-NEXT: lwu a1, 0(a1)
+; CHECK-NEXT: or a0, a0, a1
+; CHECK: cjalr zero, 0(ra)
+define i128 @or_i128_zextloads(ptr addrspace(200) %p, ptr addrspace(200) %q) {
+entry:
+  %a = load i32, ptr addrspace(200) %p, align 4
+  %b = load i32, ptr addrspace(200) %q, align 4
+  %aw = zext i32 %a to i128
+  %bw = zext i32 %b to i128
+  %r = or i128 %aw, %bw
+  ret i128 %r
+}
+
+; CHECK-LABEL: xor_i128_sextloads:
+; CHECK: lw a0, 0(a0)
+; CHECK-NEXT: lw a1, 0(a1)
+; CHECK-NEXT: xor a0, a0, a1
+; CHECK: cjalr zero, 0(ra)
+define i128 @xor_i128_sextloads(ptr addrspace(200) %p, ptr addrspace(200) %q) {
+entry:
+  %a = load i32, ptr addrspace(200) %p, align 4
+  %b = load i32, ptr addrspace(200) %q, align 4
+  %aw = sext i32 %a to i128
+  %bw = sext i32 %b to i128
+  %r = xor i128 %aw, %bw
+  ret i128 %r
+}

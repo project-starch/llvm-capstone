@@ -49,6 +49,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh
 # Benchmark regressions
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-coremark.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fac.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-insertsort.sh"
 ```
 
 ## Test layers
@@ -80,6 +81,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fac.sh"
 | `null_blk` split | split I/O path and unload still work | OpenSBI/kernel/module integration changes | `run-nullblk-split-io.sh`, `run-nullblk-split-rmmod.sh` |
 | CoreMark CRC validation | all three algorithms (list, matrix, state machine) run and produce validated CRCs on Capstone PureCap with compiled C `domain_main` | backend codegen changes, CoreMark benchmark changes | `capstone/tests/runtime-qemu/run-coremark.sh` |
 | BEEBS `fac` validation | first BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes | `capstone/benchmarks/beebs/run-beebs-fac.sh` |
+| BEEBS `insertsort` validation | second BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-insertsort.sh` |
 
 ## Recommended minimums by change type
 
@@ -92,8 +94,9 @@ Additionally, run `capstone/tests/runtime-qemu/run-coremark.sh` when the change 
 instruction selection, frame lowering, or any area covered by the CoreMark workarounds
 (see `plans/backend-compiler-fixes.md`).
 
-Run `capstone/benchmarks/beebs/run-beebs-fac.sh` when changing the BEEBS benchmark
-build/run path.
+Run `capstone/benchmarks/beebs/run-beebs-fac.sh` and
+`capstone/benchmarks/beebs/run-beebs-insertsort.sh` when changing the BEEBS
+benchmark build/run path.
 
 ### Userspace loader / helper / HostCall / runtime wrapper changes
 

@@ -305,7 +305,7 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   // Custom lowering for add of 128-bit numbers
   setOperationAction(ISD::ADD, MVT::i128, Custom);
   setOperationAction(ISD::AND, MVT::i128, Custom);
-  setOperationAction({ISD::OR, ISD::XOR}, MVT::i128, Expand);
+  setOperationAction({ISD::OR, ISD::XOR}, MVT::i128, Custom);
   setOperationAction({ISD::SHL, ISD::SRA, ISD::SRL}, MVT::i128, Custom);
   setOperationAction(ISD::MUL, MVT::i128, Custom);
   setOperationAction({ISD::SMUL_LOHI, ISD::UMUL_LOHI}, MVT::i128, Expand);
@@ -7816,6 +7816,26 @@ static SDValue normalizeScalarI128ShiftOperandToXLen(
     }
   }
 
+  if (auto *Ld = dyn_cast<LoadSDNode>(V)) {
+    ISD::LoadExtType ExtType = Ld->getExtensionType();
+    EVT MemVT = Ld->getMemoryVT();
+    if (Ld->isSimple() && ExtType != ISD::NON_EXTLOAD &&
+        MemVT.isScalarInteger() && !MemVT.bitsGT(XLenVT)) {
+      if (ExtType == ISD::SEXTLOAD)
+        ExtOpcode = ISD::SIGN_EXTEND;
+      else if (ExtType == ISD::ZEXTLOAD)
+        ExtOpcode = ISD::ZERO_EXTEND;
+      else
+        ExtOpcode = ISD::ANY_EXTEND;
+
+      SDValue NarrowLoad =
+          DAG.getExtLoad(ExtType, DL, XLenVT, Ld->getChain(),
+                         Ld->getBasePtr(), MemVT, Ld->getMemOperand());
+      DAG.makeEquivalentMemoryOrdering(Ld, NarrowLoad);
+      return NarrowLoad;
+    }
+  }
+
   if ((V.getOpcode() == ISD::AssertZext || V.getOpcode() == ISD::AssertSext) &&
       cast<VTSDNode>(V.getOperand(1))->getVT().isScalarInteger() &&
       !cast<VTSDNode>(V.getOperand(1))->getVT().bitsGT(XLenVT)) {
@@ -7899,6 +7919,38 @@ static SDValue lowerScalarI128Shift(SDValue Op, SelectionDAG &DAG,
   SDValue Shifted =
       DAG.getNode(Op.getOpcode(), DL, XLenVT, XLenVal, ShAmt);
   return DAG.getNode(ExtOpcode, DL, MVT::i128, Shifted);
+}
+
+static SDValue lowerScalarI128Logical(SDValue Op, SelectionDAG &DAG,
+                                      const CapstoneSubtarget &Subtarget) {
+  if (Op.getSimpleValueType() != MVT::i128)
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT XLenVT = Subtarget.getXLenVT();
+  unsigned LHSExtOpcode = Op.getOperand(0).getOpcode();
+  unsigned RHSExtOpcode = Op.getOperand(1).getOpcode();
+  SDValue LHS = normalizeScalarI128ShiftOperandToXLen(
+      Op.getOperand(0), DAG, Subtarget, DL, LHSExtOpcode);
+  SDValue RHS = normalizeScalarI128ShiftOperandToXLen(
+      Op.getOperand(1), DAG, Subtarget, DL, RHSExtOpcode);
+  if (!LHS || !RHS)
+    return SDValue();
+
+  auto IsUnsignedExt = [](unsigned Opcode) {
+    return Opcode == ISD::ZERO_EXTEND || Opcode == ISD::ANY_EXTEND;
+  };
+
+  unsigned ResultExtOpcode;
+  if (LHSExtOpcode == ISD::SIGN_EXTEND && RHSExtOpcode == ISD::SIGN_EXTEND)
+    ResultExtOpcode = ISD::SIGN_EXTEND;
+  else if (IsUnsignedExt(LHSExtOpcode) && IsUnsignedExt(RHSExtOpcode))
+    ResultExtOpcode = ISD::ZERO_EXTEND;
+  else
+    return SDValue();
+
+  SDValue Logical = DAG.getNode(Op.getOpcode(), DL, XLenVT, LHS, RHS);
+  return DAG.getNode(ResultExtOpcode, DL, MVT::i128, Logical);
 }
 
 static SDValue lowerScalarI128And(SDValue Op, SelectionDAG &DAG,
@@ -8918,6 +8970,9 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
     [[fallthrough]];
   case ISD::OR:
   case ISD::XOR:
+    if (Op.getSimpleValueType() == MVT::i128)
+      return lowerScalarI128Logical(Op, DAG, Subtarget);
+    [[fallthrough]];
   case ISD::SDIV:
   case ISD::SREM:
   case ISD::UDIV:
