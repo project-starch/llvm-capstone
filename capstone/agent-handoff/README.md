@@ -62,7 +62,8 @@ agent-handoff/
 - working baseline and split `null_blk` regressions
 - validated CoreMark profile-run on Capstone PureCap ("Correct operation validated.")
   using compiled C `domain_main` rather than `coremark_domain_entry.S`
-- validated first BEEBS benchmark (`fac`) on the split host/domain runtime path
+- validated BEEBS benchmarks (`fac`, `insertsort`, `fibcall`, `cnt`,
+  `bubblesort`, `prime`, `recursion`) on the split host/domain runtime path
 
 See `state/current-state.md` for the canonical snapshot.
 

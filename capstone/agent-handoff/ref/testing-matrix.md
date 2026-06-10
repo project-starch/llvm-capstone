@@ -54,6 +54,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fibcall.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-cnt.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-bubblesort.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-prime.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-recursion.sh"
 ```
 
 ## Test layers
@@ -82,7 +83,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-prime.sh"
 | Second-`PENDING` payload-reuse diagnostic | whether reusing the same borrowed output payload across rounds triggers the current limitation | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-probe.sh` |
 | Second-`PENDING` payload-reuse revoke diagnostic | whether explicit revoke before re-share satisfies the intended borrowed-region rule | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-revoke-probe.sh` |
 | `null_blk` baseline | baseline block path still works | runtime/device baseline checks | `capstone/tests/runtime-qemu/run-nullblk-baseline.sh` |
-| `null_blk` split | split I/O path and unload still work | OpenSBI/kernel/module integration changes | `run-nullblk-split-io.sh`, `run-nullblk-split-rmmod.sh` |
+| `null_blk` split | split I/O and unload still work | OpenSBI/kernel/module/QEMU interrupt integration changes | `run-nullblk-split-io.sh`, `run-nullblk-split-rmmod.sh` |
 | CoreMark CRC validation | all three algorithms (list, matrix, state machine) run and produce validated CRCs on Capstone PureCap with compiled C `domain_main` | backend codegen changes, CoreMark benchmark changes | `capstone/tests/runtime-qemu/run-coremark.sh` |
 | BEEBS `fac` validation | first BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes | `capstone/benchmarks/beebs/run-beebs-fac.sh` |
 | BEEBS `insertsort` validation | second BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-insertsort.sh` |
@@ -90,6 +91,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-prime.sh"
 | BEEBS `cnt` validation | fourth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-cnt.sh` |
 | BEEBS `bubblesort` validation | fifth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-bubblesort.sh` |
 | BEEBS `prime` validation | sixth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-prime.sh` |
+| BEEBS `recursion` validation | seventh BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-recursion.sh` |
 
 ## Recommended minimums by change type
 
@@ -106,8 +108,9 @@ Run `capstone/benchmarks/beebs/run-beebs-fac.sh`,
 `capstone/benchmarks/beebs/run-beebs-insertsort.sh`,
 `capstone/benchmarks/beebs/run-beebs-fibcall.sh`,
 `capstone/benchmarks/beebs/run-beebs-cnt.sh`,
-`capstone/benchmarks/beebs/run-beebs-bubblesort.sh`, and
-`capstone/benchmarks/beebs/run-beebs-prime.sh` when changing the BEEBS
+`capstone/benchmarks/beebs/run-beebs-bubblesort.sh`,
+`capstone/benchmarks/beebs/run-beebs-prime.sh`, and
+`capstone/benchmarks/beebs/run-beebs-recursion.sh` when changing the BEEBS
 benchmark build/run path.
 
 ### Userspace loader / helper / HostCall / runtime wrapper changes
@@ -123,8 +126,17 @@ Then add the more specific wrapper that matches the changed service.
 
 ### OpenSBI / kernel / module integration changes
 
-Run the runtime proofs plus the `null_blk` regressions.
-If the active kernel changed, rebuild dependent modules/packages so their `vermagic` matches.
+Run the runtime proofs plus the `null_blk` regressions. If the active kernel
+changed, rebuild dependent modules/packages so their `vermagic` matches.
+
+For QEMU interrupt-delivery changes, include at least:
+
+```bash
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-baseline.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-io.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-coremark.sh"
+```
 
 ### Narrow runtime/QEMU capability-path diagnosis
 
@@ -142,6 +154,13 @@ Interpretation in the current environment:
 - reusing/re-sharing the same borrowed output payload across the next round without revoke reproduces the current `helper_csmrev` assertion,
 - explicitly revoking that payload region before the second borrowed re-share succeeds,
 - this matches the intended runtime rule that an already borrow-shared region must be revoked before it is reused or re-shared.
+
+## Runtime image behavior
+
+The QEMU smoke harness uses snapshot mode so guest writes are discarded and repeated
+runtime tests do not mutate the generated Buildroot `rootfs.ext2` image. Buildroot
+getty is pinned to `ttyS0`, matching the active QEMU serial console, and
+the harness forces QEMU `-smp 1` for deterministic boot progress.
 
 ## Important limitations
 

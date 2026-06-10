@@ -65,13 +65,25 @@ The following is already verified:
    - `capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh`
    - `capstone/tests/runtime-qemu/run-hostcall-path-delete-probe.sh`
    - `capstone/tests/runtime-qemu/run-hostcall-combined-file-object-probe.sh`
-   - baseline `null_blk`
-   - split `null_blk`
+   - `capstone/tests/runtime-qemu/run-nullblk-baseline.sh`
+   - `capstone/tests/runtime-qemu/run-nullblk-split-io.sh`
+   - `capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh`
    - `capstone/tests/runtime-qemu/run-coremark.sh`
    - `capstone/benchmarks/beebs/run-beebs-fac.sh`
+   - `capstone/benchmarks/beebs/run-beebs-insertsort.sh`
+   - `capstone/benchmarks/beebs/run-beebs-fibcall.sh`
+   - `capstone/benchmarks/beebs/run-beebs-cnt.sh`
+   - `capstone/benchmarks/beebs/run-beebs-bubblesort.sh`
+   - `capstone/benchmarks/beebs/run-beebs-prime.sh`
+   - `capstone/benchmarks/beebs/run-beebs-recursion.sh`
 6. The HostCall proofs now cover both payload directions on the same metadata ABI, a reusable handle-based file-object core, an explicit sync boundary after writes, a narrow stat path for file size/type facts, a narrow handle-based truncate path for file-size mutation, and the first SQLite-facing path existence/access and path delete proofs.
 7. CoreMark PureCap bring-up is complete. All three algorithms (list, matrix, state machine) run and produce validated CRCs ("Correct operation validated."). CoreMark now uses the compiled C domain_main wrapper; the previous per-domain coremark_domain_entry.S prologue workaround is no longer linked. Remaining backend bug workarounds are documented in `$CAPSTONE_HANDOFF_DIR/plans/backend-compiler-fixes.md`.
-8. The first BEEBS benchmark (`fac`) builds and runs end to end on the split host/domain runtime path, validating its correctness marker.
+8. Seven BEEBS benchmarks build and run end to end on the split host/domain
+   runtime path, validating correctness markers: `fac`, `insertsort`,
+   `fibcall`, `cnt`, `bubblesort`, `prime`, and `recursion`.
+9. The 2026-06-09/10 split `null_blk` unload blocker is fixed. The verified
+   baseline includes split unload through `run-nullblk-split-rmmod.sh`; the next
+   benchmark milestone should proceed from that green baseline.
 
 ## Very important distinction
 
@@ -108,5 +120,3 @@ Unless it directly blocks the active milestone, postpone:
 7. Update the handoff files if the validated state or workflow changed.
 
 When responding, prefer concrete proven facts over assumptions.
-
-

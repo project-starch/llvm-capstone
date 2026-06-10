@@ -17,10 +17,9 @@ python3 "$SCRIPT_DIR/run-domain-smoke.py" \
   --qemu-binary "$CAPSTONE_QEMU_BINARY" \
   --share-dir "$SHARE_DIR" \
   --log-file "$LOG_FILE" \
-  --guest-command "dmesg -n 8 && modprobe configfs && /null_blk.user && insmod /nullb/capstone_split/null_blk.ko && echo __BEFORE_RMMOD__ && rmmod null_blk && echo __AFTER_RMMOD__" \
+  --guest-command "dmesg -n 1 && modprobe configfs && /null_blk.user && insmod /nullb/capstone_split/null_blk.ko && echo __BEFORE_RMMOD__ && rmmod null_blk && echo __AFTER_RMMOD__" \
   --success-marker "SBI domain created with ID 0" \
   --success-marker "__BEFORE_RMMOD__" \
   --success-marker "__AFTER_RMMOD__"
 
 echo "run-nullblk-split-rmmod.sh wrapper completed. Full serial log: $LOG_FILE"
-

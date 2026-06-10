@@ -17,10 +17,9 @@ python3 "$SCRIPT_DIR/run-domain-smoke.py" \
   --qemu-binary "$CAPSTONE_QEMU_BINARY" \
   --share-dir "$SHARE_DIR" \
   --log-file "$LOG_FILE" \
-  --guest-command "dmesg -n 8 && modprobe configfs && /null_blk.user && insmod /nullb/capstone_split/null_blk.ko && test -b /dev/nullb0 && echo hello-world | dd of=/dev/nullb0 bs=1024 count=1 && dd if=/dev/nullb0 bs=1024 count=1 | hexdump -C && echo __SPLIT_DONE__" \
+  --guest-command "dmesg -n 1 && modprobe configfs && /null_blk.user && insmod /nullb/capstone_split/null_blk.ko && test -b /dev/nullb0 && echo __SPLIT_READY__ && echo hello-world | dd of=/dev/nullb0 bs=1024 count=1 && dd if=/dev/nullb0 bs=1024 count=1 | hexdump -C && echo __SPLIT_DONE__" \
   --success-marker "SBI domain created with ID 0" \
-  --success-marker "null_blk: disk nullb0 created" \
+  --success-marker "__SPLIT_READY__" \
   --success-marker "__SPLIT_DONE__"
 
 echo "run-nullblk-split-io.sh wrapper completed. Full serial log: $LOG_FILE"
-

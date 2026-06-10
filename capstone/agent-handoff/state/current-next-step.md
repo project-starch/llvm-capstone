@@ -1,20 +1,32 @@
 # Current recommended next step
 
-## Immediate milestone - Select and add the next single BEEBS benchmark
+## Immediate milestone - Add the next single BEEBS benchmark
 
 **Goal**: extend the validated BEEBS pattern from `fac`, `insertsort`, `fibcall`,
-`cnt`, `bubblesort`, and `prime` to exactly one more deterministic benchmark.
+`cnt`, `bubblesort`, `prime`, and `recursion` to exactly one more deterministic
+benchmark.
 
-**Why this next**: `prime` now covers scalar global state plus modulo/division.
-The next milestone should keep expanding one small verified benchmark at a time
-without introducing a suite runner or performance reporting.
+**Why this next**: `recursion` covers recursive calls plus scalar global state.
+BEEBS should keep expanding one small verified benchmark at a time without introducing
+a suite runner or performance reporting.
+
+**Recommended candidate**: start with `janne_complex`.
+
+Rationale:
+- it is tiny and integer-only;
+- it has deterministic `initialise_benchmark()`, `benchmark()`, and
+  `verify_benchmark()` functions;
+- it has only two file-scope scalar globals (`a`, `b`), matching the global-state
+  pattern already handled for other BEEBS wrappers;
+- it avoids the known floating-point/library-call hazards seen in `sqrt` and the
+  benchmarks whose verifier returns `-1`.
 
 **Smallest useful first step**:
-- inspect a small verified BEEBS candidate's source and generated Capstone assembly,
+- inspect `src/janne_complex/libjanne_complex.c` and the generated Capstone assembly,
 - copy the existing BEEBS build/host/run pattern conservatively,
 - add benchmark-local source wrapping only if the benchmark exposes the same gp-derived
   linear capability reuse issue seen in other global-state BEEBS wrappers,
-- keep `fac`, `insertsort`, `fibcall`, `cnt`, `bubblesort`, and `prime` working as
+- keep `fac`, `insertsort`, `fibcall`, `cnt`, `bubblesort`, `prime`, and `recursion` working as
   regression gates for the BEEBS path,
 - keep success based on correctness only; do not report or optimize performance scores,
 - do not introduce a broad BEEBS suite runner yet.
@@ -28,14 +40,19 @@ without introducing a suite runner or performance reporting.
 - `bash capstone/benchmarks/beebs/run-beebs-cnt.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-bubblesort.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-prime.sh`,
+- `bash capstone/benchmarks/beebs/run-beebs-recursion.sh`,
 - the focused build/run wrapper for the new single benchmark once introduced.
 
 ## Thinking-level rule
 
 Stay at medium thinking while the work remains mechanical or locally debuggable.
 If the next benchmark exposes a hard backend/compiler bug, unclear architecture
-semantics, or repeated failed runtime debugging where high thinking looks necessary,
+semantics, or repeated failed runtime debugging where higher thinking looks necessary,
 suspend work and tell the user before continuing.
+
+## Candidate caution
+
+Do not pick `sqrt` as the next medium-thinking benchmark: direct Capstone compile currently hits an unsupported softened floating-point library-call path. Benchmarks whose `verify_benchmark()` returns `-1` also remain out of scope for correctness-marker bring-up.
 
 ## Remaining backend workarounds
 

@@ -17,10 +17,10 @@ python3 "$SCRIPT_DIR/run-domain-smoke.py" \
   --qemu-binary "$CAPSTONE_QEMU_BINARY" \
   --share-dir "$SHARE_DIR" \
   --log-file "$LOG_FILE" \
-  --guest-command "dmesg -n 8 && modprobe configfs && cd /nullb/baseline && insmod ./null_blk.ko && test -b /dev/nullb0 && echo hello-world | dd of=/dev/nullb0 bs=1024 count=1 && dd if=/dev/nullb0 bs=1024 count=1 | hexdump -C && rmmod null_blk" \
-  --success-marker "null_blk: disk nullb0 created" \
+  --guest-command "dmesg -n 1 && modprobe configfs && cd /nullb/baseline && insmod ./null_blk.ko && test -b /dev/nullb0 && echo __BASELINE_READY__ && echo hello-world | dd of=/dev/nullb0 bs=1024 count=1 && dd if=/dev/nullb0 bs=1024 count=1 | hexdump -C && rmmod null_blk && echo __BASELINE_RMMOD_DONE__" \
+  --success-marker "__BASELINE_READY__" \
   --success-marker "1+0 records in" \
-  --success-marker "1+0 records out"
+  --success-marker "1+0 records out" \
+  --success-marker "__BASELINE_RMMOD_DONE__"
 
 echo "run-nullblk-baseline.sh wrapper completed. Full serial log: $LOG_FILE"
-

@@ -294,7 +294,8 @@ bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh \
   > "$CAPSTONE_TMP_ROOT/run-nullblk-split-rmmod.txt" 2>&1
 ```
 
-Inspect whichever log matches the path you touched.
+Expected: all three wrappers print `QEMU smoke passed.`. Inspect whichever log
+matches the path you touched.
 
 ### CoreMark correctness run
 
@@ -400,9 +401,27 @@ Expected: `beebs-prime-host: correctness marker validated` and
 `capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
 backend codegen used by BEEBS scalar global-state and modulo/division paths.
 
+### BEEBS `recursion` correctness run
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/benchmarks/beebs/run-beebs-recursion.sh \
+  > "$CAPSTONE_TMP_ROOT/run-beebs-recursion.txt" 2>&1
+
+grep -E "(BEEBS|beebs-recursion|PASSED|ERROR)" "$CAPSTONE_TMP_ROOT/run-beebs-recursion.txt"
+```
+
+Expected: `beebs-recursion-host: correctness marker validated` and
+`__BEEBS_RECURSION_PASSED__` in the output. Run when touching
+`capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
+backend codegen used by BEEBS recursive-call and scalar global-state paths.
+
 ## 6. Important caveats
 
 - The current validated path is still the split host/domain runtime path, not a full hosted Capstone Linux user-space.
+- The QEMU smoke harness uses snapshot mode, so runtime tests should not mutate `rootfs.ext2`.
+- Buildroot getty is pinned to `ttyS0`, matching the active QEMU serial console.
+- The QEMU smoke harness forces `-smp 1` for deterministic boot progress.
 - `run-smoke.sh` remains useful as a quick probe, but the dedicated HostCall wrappers are the stronger runtime checks.
 - After OpenSBI/kernel changes, rebuild dependent modules/packages if their `vermagic` must match the active kernel.
 

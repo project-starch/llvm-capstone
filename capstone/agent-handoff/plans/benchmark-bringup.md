@@ -25,7 +25,7 @@ that proves the next small step works.
 
 ## Current BEEBS milestone status
 
-The first six tiny deterministic BEEBS benchmarks are implemented and validated.
+The first seven tiny deterministic BEEBS benchmarks are implemented and validated.
 Do not add a full BEEBS suite runner yet.
 
 Implemented status:
@@ -100,6 +100,18 @@ Implemented status:
   prime-check behavior while recomputing/delinearizing capabilities for scalar
   global state. This adds modulo/division coverage through the benchmark's
   `m % n` path.
+- `capstone/benchmarks/beebs/build-beebs-recursion-capstone.sh` builds only the
+  `recursion` benchmark and produces
+  `$CAPSTONE_TMP_ROOT/beebs-build/beebs_recursion_capstone.dom`.
+- `capstone/benchmarks/beebs/beebs_recursion_domain.c` calls
+  `initialise_benchmark()`, `benchmark()`, and `verify_benchmark()` and records
+  only a correctness marker.
+- `capstone/benchmarks/beebs/run-beebs-recursion.sh` builds the `recursion`
+  domain and host, boots QEMU, and checks the `BEEBS_RET_CORRECT` marker.
+- The `recursion` Capstone build script generates a temporary source wrapper in
+  `$CAPSTONE_TMP_ROOT/beebs-build` that preserves the upstream deterministic
+  recursive Fibonacci behavior while recomputing/delinearizing capabilities for
+  scalar global state.
 - Do not add a full BEEBS suite runner until several single-benchmark wrappers are
   stable.
 
@@ -113,6 +125,7 @@ Validation for this milestone:
 - `bash capstone/benchmarks/beebs/run-beebs-cnt.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-bubblesort.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-prime.sh`
+- `bash capstone/benchmarks/beebs/run-beebs-recursion.sh`
 
 If the current medium thinking level becomes insufficient during benchmark
 bring-up, suspend work and tell the user before switching to high thinking.
@@ -127,6 +140,13 @@ bring-up, suspend work and tell the user before switching to high thinking.
   build and run pattern.
 - Fix remaining backend bugs only when a specific benchmark exposes them, and
   keep the focused regression for each fix.
+
+## Runtime harness note
+
+`capstone/tests/runtime-qemu/run-domain-smoke.py` runs QEMU with `-snapshot` so
+runtime tests do not dirty or corrupt the generated Buildroot `rootfs.ext2` image.
+The Buildroot guest getty is pinned to `ttyS0` for deterministic serial login.
+The runtime harness also forces QEMU `-smp 1` to avoid intermittent boot stalls.
 
 ## Current non-goals
 
