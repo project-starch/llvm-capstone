@@ -25,7 +25,7 @@ that proves the next small step works.
 
 ## Current BEEBS milestone status
 
-The first fourteen tiny deterministic BEEBS benchmarks are implemented and validated.
+The first fifteen tiny deterministic BEEBS benchmarks are implemented and validated.
 Do not add a full BEEBS suite runner yet.
 
 Implemented status:
@@ -209,6 +209,20 @@ Implemented status:
   avoids hosted `memcpy`/`memcmp` and recomputes/delinearizes capabilities for
   the global input, working, and expected-result arrays before passing the
   working block into the upstream DCT kernel.
+- `capstone/benchmarks/beebs/build-beebs-strstr-capstone.sh` builds only the
+  `strstr` benchmark and produces
+  `$CAPSTONE_TMP_ROOT/beebs-build/beebs_strstr_capstone.dom`.
+- `capstone/benchmarks/beebs/beebs_strstr_domain.c` calls
+  `initialise_benchmark()`, `benchmark()`, and `verify_benchmark()` and records
+  only a correctness marker.
+- `capstone/benchmarks/beebs/run-beebs-strstr.sh` builds the `strstr` domain and
+  host, boots QEMU, and checks the `BEEBS_RET_CORRECT` marker.
+- The `strstr` Capstone build script generates a temporary patched source in
+  `$CAPSTONE_TMP_ROOT/beebs-build` that preserves the upstream string-search
+  implementation but replaces global pointer variables to string literals with
+  local benchmark arrays and delinearized accessors. This keeps the workload on
+  explicit Capstone string-data capabilities while avoiding stale/scalar global
+  pointer assumptions.
 - Do not add a full BEEBS suite runner until several single-benchmark wrappers are
   stable.
 
@@ -230,6 +244,7 @@ Validation for this milestone:
 - `bash capstone/benchmarks/beebs/run-beebs-levenshtein.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-jfdctint.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-fdct.sh`
+- `bash capstone/benchmarks/beebs/run-beebs-strstr.sh`
 
 During the `levenshtein` milestone, the first full sequential BEEBS run passed
 through `recursion` and then hit a QEMU login prompt timeout before executing
@@ -243,12 +258,12 @@ bring-up, suspend work and tell the user before switching to high thinking.
 ## Later milestones
 
 - Add the next single BEEBS benchmark after source and generated-assembly
-  inspection. The recommended next candidate is `strstr`: it is deterministic,
-  has a real verifier, adds compact string-search coverage, and avoids the
-  floating-point hazards in `frac`/`sqrt` plus the no-verifier status of
-  `bs`, `fir`, `select`, and similar benchmarks. Expect a benchmark-local
-  wrapper if direct compile/runtime exposes scalar or stale capabilities for
-  global string pointers and string literals.
+  inspection. The recommended next candidate is `ndes`: it is deterministic,
+  has a real verifier, adds integer-heavy crypto-style bit permutation/table
+  lookup coverage, and avoids the floating-point hazards in `st`, `frac`, and
+  `sqrt` plus the no-verifier status of `bs`, `fir`, `select`, and similar
+  benchmarks. Expect benchmark-local wrappers if direct compile/runtime exposes
+  scalar or stale capabilities for global/static lookup tables.
 - Expand BEEBS one benchmark at a time, carrying forward only the runtime and
   compiler workarounds proven necessary by that benchmark.
 - Start RV8 only after at least one BEEBS benchmark runs end to end with a stable
