@@ -35,6 +35,8 @@ All of the following pass on the `capstone-bootstrap` branch:
   runs end to end and validates its correctness marker
 - `capstone/benchmarks/beebs/run-beebs-tarai.sh` - ninth BEEBS benchmark runs end
   to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-cover.sh` - tenth BEEBS benchmark runs end
+  to end and validates its correctness marker
 
 ## Resolved blocker
 
