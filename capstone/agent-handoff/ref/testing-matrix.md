@@ -61,6 +61,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-cover.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-duff.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-levenshtein.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-jfdctint.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fdct.sh"
 ```
 
 ## Test layers
@@ -104,6 +105,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-jfdctint.sh"
 | BEEBS `duff` validation | eleventh BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-duff.sh` |
 | BEEBS `levenshtein` validation | twelfth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-levenshtein.sh` |
 | BEEBS `jfdctint` validation | thirteenth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-jfdctint.sh` |
+| BEEBS `fdct` validation | fourteenth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-fdct.sh` |
 
 ## Recommended minimums by change type
 

@@ -25,7 +25,7 @@ that proves the next small step works.
 
 ## Current BEEBS milestone status
 
-The first thirteen tiny deterministic BEEBS benchmarks are implemented and validated.
+The first fourteen tiny deterministic BEEBS benchmarks are implemented and validated.
 Do not add a full BEEBS suite runner yet.
 
 Implemented status:
@@ -195,6 +195,20 @@ Implemented status:
   array initializer in upstream `verify_benchmark()` lowered into the current
   backend's unsupported `memcpy` call path; the patched verifier uses scalar
   expected-value checks and keeps success based on the upstream result vector.
+- `capstone/benchmarks/beebs/build-beebs-fdct-capstone.sh` builds only the
+  `fdct` benchmark and produces
+  `$CAPSTONE_TMP_ROOT/beebs-build/beebs_fdct_capstone.dom`.
+- `capstone/benchmarks/beebs/beebs_fdct_domain.c` calls
+  `initialise_benchmark()`, `benchmark()`, and `verify_benchmark()` and records
+  only a correctness marker.
+- `capstone/benchmarks/beebs/run-beebs-fdct.sh` builds the `fdct` domain and
+  host, boots QEMU, and checks the `BEEBS_RET_CORRECT` marker.
+- The `fdct` Capstone build script generates a temporary patched source in
+  `$CAPSTONE_TMP_ROOT/beebs-build` that preserves the upstream fixed-point DCT
+  kernel but rewrites the benchmark and verifier copy/compare paths. The wrapper
+  avoids hosted `memcpy`/`memcmp` and recomputes/delinearizes capabilities for
+  the global input, working, and expected-result arrays before passing the
+  working block into the upstream DCT kernel.
 - Do not add a full BEEBS suite runner until several single-benchmark wrappers are
   stable.
 
@@ -215,6 +229,7 @@ Validation for this milestone:
 - `bash capstone/benchmarks/beebs/run-beebs-duff.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-levenshtein.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-jfdctint.sh`
+- `bash capstone/benchmarks/beebs/run-beebs-fdct.sh`
 
 During the `levenshtein` milestone, the first full sequential BEEBS run passed
 through `recursion` and then hit a QEMU login prompt timeout before executing
@@ -228,11 +243,12 @@ bring-up, suspend work and tell the user before switching to high thinking.
 ## Later milestones
 
 - Add the next single BEEBS benchmark after source and generated-assembly
-  inspection. The recommended next candidate is `fdct`: it is deterministic,
-  has a real verifier, and extends the fixed-point 8x8 DCT coverage added by
-  `jfdctint` with a smaller source surface than broader DSP benchmarks such as
-  `edn`. Expect a benchmark-local wrapper or copy/compare rewrite for its
-  global arrays and `memcpy`/`memcmp` paths.
+  inspection. The recommended next candidate is `strstr`: it is deterministic,
+  has a real verifier, adds compact string-search coverage, and avoids the
+  floating-point hazards in `frac`/`sqrt` plus the no-verifier status of
+  `bs`, `fir`, `select`, and similar benchmarks. Expect a benchmark-local
+  wrapper if direct compile/runtime exposes scalar or stale capabilities for
+  global string pointers and string literals.
 - Expand BEEBS one benchmark at a time, carrying forward only the runtime and
   compiler workarounds proven necessary by that benchmark.
 - Start RV8 only after at least one BEEBS benchmark runs end to end with a stable
