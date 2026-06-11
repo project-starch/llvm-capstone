@@ -25,7 +25,7 @@ that proves the next small step works.
 
 ## Current BEEBS milestone status
 
-The first eight tiny deterministic BEEBS benchmarks are implemented and validated.
+The first nine tiny deterministic BEEBS benchmarks are implemented and validated.
 Do not add a full BEEBS suite runner yet.
 
 Implemented status:
@@ -125,6 +125,18 @@ Implemented status:
   in `$CAPSTONE_TMP_ROOT/beebs-build` that preserves the upstream deterministic
   nested-loop behavior while recomputing/delinearizing capabilities for scalar
   global state.
+- `capstone/benchmarks/beebs/build-beebs-tarai-capstone.sh` builds only the
+  `tarai` benchmark and produces
+  `$CAPSTONE_TMP_ROOT/beebs-build/beebs_tarai_capstone.dom`.
+- `capstone/benchmarks/beebs/beebs_tarai_domain.c` calls
+  `initialise_benchmark()`, `benchmark()`, and `verify_benchmark()` and records
+  only a correctness marker.
+- `capstone/benchmarks/beebs/run-beebs-tarai.sh` builds the `tarai` domain and
+  host, boots QEMU, and checks the `BEEBS_RET_CORRECT` marker.
+- The `tarai` Capstone build script generates a temporary source wrapper in
+  `$CAPSTONE_TMP_ROOT/beebs-build` that preserves the upstream deterministic
+  recursive behavior while recomputing/delinearizing capabilities for scalar
+  global state.
 - Do not add a full BEEBS suite runner until several single-benchmark wrappers are
   stable.
 
@@ -140,6 +152,7 @@ Validation for this milestone:
 - `bash capstone/benchmarks/beebs/run-beebs-prime.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-recursion.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-janne-complex.sh`
+- `bash capstone/benchmarks/beebs/run-beebs-tarai.sh`
 
 If the current medium thinking level becomes insufficient during benchmark
 bring-up, suspend work and tell the user before switching to high thinking.
@@ -147,9 +160,9 @@ bring-up, suspend work and tell the user before switching to high thinking.
 ## Later milestones
 
 - Add the next single BEEBS benchmark after source and generated-assembly
-  inspection. The recommended next candidate is `tarai`: it is tiny,
-  integer-only, deterministic, has a real verifier, and adds deeper recursive
-  call coverage with only scalar global state.
+  inspection. The recommended next candidate is `cover`: it is integer-only,
+  deterministic, has a real verifier, and adds dense switch/control-flow
+  coverage without benchmark global data.
 - Expand BEEBS one benchmark at a time, carrying forward only the runtime and
   compiler workarounds proven necessary by that benchmark.
 - Start RV8 only after at least one BEEBS benchmark runs end to end with a stable

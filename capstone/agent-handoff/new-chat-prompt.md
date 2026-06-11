@@ -77,11 +77,13 @@ The following is already verified:
    - `capstone/benchmarks/beebs/run-beebs-prime.sh`
    - `capstone/benchmarks/beebs/run-beebs-recursion.sh`
    - `capstone/benchmarks/beebs/run-beebs-janne-complex.sh`
+   - `capstone/benchmarks/beebs/run-beebs-tarai.sh`
 6. The HostCall proofs now cover both payload directions on the same metadata ABI, a reusable handle-based file-object core, an explicit sync boundary after writes, a narrow stat path for file size/type facts, a narrow handle-based truncate path for file-size mutation, and the first SQLite-facing path existence/access and path delete proofs.
 7. CoreMark PureCap bring-up is complete. All three algorithms (list, matrix, state machine) run and produce validated CRCs ("Correct operation validated."). CoreMark now uses the compiled C domain_main wrapper; the previous per-domain coremark_domain_entry.S prologue workaround is no longer linked. Remaining backend bug workarounds are documented in `$CAPSTONE_HANDOFF_DIR/plans/backend-compiler-fixes.md`.
-8. Eight BEEBS benchmarks build and run end to end on the split host/domain
+8. Nine BEEBS benchmarks build and run end to end on the split host/domain
    runtime path, validating correctness markers: `fac`, `insertsort`,
-   `fibcall`, `cnt`, `bubblesort`, `prime`, `recursion`, and `janne_complex`.
+   `fibcall`, `cnt`, `bubblesort`, `prime`, `recursion`, `janne_complex`, and
+   `tarai`.
 9. The 2026-06-09/10 split `null_blk` unload blocker is fixed. The verified
    baseline includes split unload through `run-nullblk-split-rmmod.sh`; the next
    benchmark milestone should proceed from that green baseline.

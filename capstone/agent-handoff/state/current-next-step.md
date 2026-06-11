@@ -3,32 +3,32 @@
 ## Immediate milestone - Add the next single BEEBS benchmark
 
 **Goal**: extend the validated BEEBS pattern from `fac`, `insertsort`, `fibcall`,
-`cnt`, `bubblesort`, `prime`, `recursion`, and `janne_complex` to exactly one
-more deterministic benchmark.
+`cnt`, `bubblesort`, `prime`, `recursion`, `janne_complex`, and `tarai` to
+exactly one more deterministic benchmark.
 
-**Why this next**: `janne_complex` added a tiny deterministic integer benchmark
-with scalar global state. BEEBS should keep expanding one small verified benchmark
-at a time without introducing a suite runner or performance reporting.
+**Why this next**: `tarai` added deeper recursive-call coverage with scalar
+global state. BEEBS should keep expanding one small verified benchmark at a time
+without introducing a suite runner or performance reporting.
 
-**Recommended candidate**: start with `tarai`.
+**Recommended candidate**: start with `cover`.
 
 Rationale:
-- it is tiny and integer-only;
+- it is integer-only and deterministic;
 - it has deterministic `initialise_benchmark()`, `benchmark()`, and
   `verify_benchmark()` functions;
-- it has only three file-scope scalar globals (`x`, `y`, `z`), matching the
-  scalar global-state pattern already handled for other BEEBS wrappers;
-- it adds deeper recursive-call coverage beyond `recursion`;
+- it has no benchmark global data that needs the scalar/array accessor workaround;
+- it adds dense `switch`/control-flow coverage via `swi10`, `swi50`, and `swi120`;
 - it avoids the known floating-point/library-call hazards seen in `sqrt` and the
   benchmarks whose verifier returns `-1`.
 
 **Smallest useful first step**:
-- inspect `src/tarai/libtarai.c` and the generated Capstone assembly,
+- inspect `src/cover/libcover.c` and the generated Capstone assembly,
 - copy the existing BEEBS build/host/run pattern conservatively,
 - add benchmark-local source wrapping only if the benchmark exposes the same gp-derived
   linear capability reuse issue seen in other global-state BEEBS wrappers,
-- keep `fac`, `insertsort`, `fibcall`, `cnt`, `bubblesort`, `prime`, and `recursion` working as
-  regression gates for the BEEBS path, plus `janne_complex`,
+- keep `fac`, `insertsort`, `fibcall`, `cnt`, `bubblesort`, `prime`,
+  `recursion`, `janne_complex`, and `tarai` working as regression gates for the
+  BEEBS path,
 - keep success based on correctness only; do not report or optimize performance scores,
 - do not introduce a broad BEEBS suite runner yet.
 
@@ -43,6 +43,7 @@ Rationale:
 - `bash capstone/benchmarks/beebs/run-beebs-prime.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-recursion.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-janne-complex.sh`,
+- `bash capstone/benchmarks/beebs/run-beebs-tarai.sh`,
 - the focused build/run wrapper for the new single benchmark once introduced.
 
 ## Thinking-level rule
