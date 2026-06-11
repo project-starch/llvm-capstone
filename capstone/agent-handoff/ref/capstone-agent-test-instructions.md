@@ -491,6 +491,21 @@ Expected: `beebs-levenshtein-host: correctness marker validated` and
 `capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
 backend codegen used by BEEBS string and fixed-size table paths.
 
+### BEEBS `jfdctint` correctness run
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/benchmarks/beebs/run-beebs-jfdctint.sh \
+  > "$CAPSTONE_TMP_ROOT/run-beebs-jfdctint.txt" 2>&1
+
+grep -E "(BEEBS|beebs-jfdctint|PASSED|ERROR)" "$CAPSTONE_TMP_ROOT/run-beebs-jfdctint.txt"
+```
+
+Expected: `beebs-jfdctint-host: correctness marker validated` and
+`__BEEBS_JFDCTINT_PASSED__` in the output. Run when touching
+`capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
+backend codegen used by BEEBS fixed-point DCT and 8x8 array-transform paths.
+
 ## 6. Important caveats
 
 - The current validated path is still the split host/domain runtime path, not a full hosted Capstone Linux user-space.
