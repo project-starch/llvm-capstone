@@ -461,6 +461,21 @@ Expected: `beebs-cover-host: correctness marker validated` and
 `capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
 backend codegen used by BEEBS switch-heavy integer control-flow paths.
 
+### BEEBS `duff` correctness run
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/benchmarks/beebs/run-beebs-duff.sh \
+  > "$CAPSTONE_TMP_ROOT/run-beebs-duff.txt" 2>&1
+
+grep -E "(BEEBS|beebs-duff|PASSED|ERROR)" "$CAPSTONE_TMP_ROOT/run-beebs-duff.txt"
+```
+
+Expected: `beebs-duff-host: correctness marker validated` and
+`__BEEBS_DUFF_PASSED__` in the output. Run when touching
+`capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
+backend codegen used by BEEBS byte-array and Duff's-device control-flow paths.
+
 ## 6. Important caveats
 
 - The current validated path is still the split host/domain runtime path, not a full hosted Capstone Linux user-space.

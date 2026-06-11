@@ -25,7 +25,7 @@ that proves the next small step works.
 
 ## Current BEEBS milestone status
 
-The first ten tiny deterministic BEEBS benchmarks are implemented and validated.
+The first eleven tiny deterministic BEEBS benchmarks are implemented and validated.
 Do not add a full BEEBS suite runner yet.
 
 Implemented status:
@@ -151,6 +151,21 @@ Implemented status:
   `Cap mem access requires capability` before the correctness marker. The
   flag keeps this benchmark as deterministic switch/control-flow coverage
   without relying on the unsupported jump-table form.
+- `capstone/benchmarks/beebs/build-beebs-duff-capstone.sh` builds only the
+  `duff` benchmark and produces
+  `$CAPSTONE_TMP_ROOT/beebs-build/beebs_duff_capstone.dom`.
+- `capstone/benchmarks/beebs/beebs_duff_domain.c` calls
+  `initialise_benchmark()`, `benchmark()`, and `verify_benchmark()` and records
+  only a correctness marker.
+- `capstone/benchmarks/beebs/run-beebs-duff.sh` builds the `duff` domain and
+  host, boots QEMU, and checks the `BEEBS_RET_CORRECT` marker.
+- The `duff` Capstone build script generates a temporary source wrapper in
+  `$CAPSTONE_TMP_ROOT/beebs-build` that preserves the upstream Duff's-device
+  byte-copy behavior while recomputing/delinearizing capabilities for the
+  `source` and `target` byte arrays. It also uses `long` loop/index values in
+  the accessor path to avoid the current backend selection gap for `i32` stack
+  reloads used as capability offsets, and keeps `-fno-jump-tables` because this
+  benchmark contains a switch.
 - Do not add a full BEEBS suite runner until several single-benchmark wrappers are
   stable.
 
@@ -168,6 +183,7 @@ Validation for this milestone:
 - `bash capstone/benchmarks/beebs/run-beebs-janne-complex.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-tarai.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-cover.sh`
+- `bash capstone/benchmarks/beebs/run-beebs-duff.sh`
 
 If the current medium thinking level becomes insufficient during benchmark
 bring-up, suspend work and tell the user before switching to high thinking.
@@ -175,9 +191,10 @@ bring-up, suspend work and tell the user before switching to high thinking.
 ## Later milestones
 
 - Add the next single BEEBS benchmark after source and generated-assembly
-  inspection. The recommended next candidate is `duff`: it is integer/byte-array
-  only, deterministic, has a real verifier, and adds Duff's-device fallthrough
-  control-flow coverage.
+  inspection. The recommended next candidate is `levenshtein`: it is
+  deterministic, has a real verifier, and adds string comparison plus
+  dynamic-programming table coverage. Expect a benchmark-local wrapper to avoid
+  hosted `strlen` and pointer-table assumptions.
 - Expand BEEBS one benchmark at a time, carrying forward only the runtime and
   compiler workarounds proven necessary by that benchmark.
 - Start RV8 only after at least one BEEBS benchmark runs end to end with a stable

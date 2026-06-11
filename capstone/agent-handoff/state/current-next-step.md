@@ -3,32 +3,32 @@
 ## Immediate milestone - Add the next single BEEBS benchmark
 
 **Goal**: extend the validated BEEBS pattern from `fac`, `insertsort`, `fibcall`,
-`cnt`, `bubblesort`, `prime`, `recursion`, `janne_complex`, `tarai`, and
-`cover` to exactly one more deterministic benchmark.
+`cnt`, `bubblesort`, `prime`, `recursion`, `janne_complex`, `tarai`, `cover`,
+and `duff` to exactly one more deterministic benchmark.
 
-**Why this next**: `cover` added dense switch/control-flow coverage. BEEBS should
-keep expanding one small verified benchmark at a time without introducing a
-suite runner or performance reporting.
+**Why this next**: `duff` added Duff's-device fallthrough and byte-array global
+coverage. BEEBS should keep expanding one small verified benchmark at a time
+without introducing a suite runner or performance reporting.
 
-**Recommended candidate**: start with `duff`.
+**Recommended candidate**: start with `levenshtein`.
 
 Rationale:
-- it is integer-only and deterministic;
+- it is deterministic and has a compact verifier;
 - it has deterministic `initialise_benchmark()`, `benchmark()`, and
   `verify_benchmark()` functions;
-- it adds Duff's-device fallthrough control-flow coverage;
-- it has two file-scope byte arrays (`source`, `target`), matching the global
-  array accessor pattern already handled for other BEEBS wrappers;
+- it adds string comparison plus dynamic-programming table coverage;
+- it will likely need a benchmark-local source wrapper to avoid hosted `strlen`
+  and pointer-table assumptions in the upstream source;
 - it avoids the known floating-point/library-call hazards seen in `sqrt` and the
   benchmarks whose verifier returns `-1`.
 
 **Smallest useful first step**:
-- inspect `src/duff/libduff.c` and the generated Capstone assembly,
+- inspect `src/levenshtein/liblevenshtein.c` and the generated Capstone assembly,
 - copy the existing BEEBS build/host/run pattern conservatively,
 - add benchmark-local source wrapping only if the benchmark exposes the same gp-derived
   linear capability reuse issue seen in other global-state BEEBS wrappers,
 - keep `fac`, `insertsort`, `fibcall`, `cnt`, `bubblesort`, `prime`,
-  `recursion`, `janne_complex`, `tarai`, and `cover` working as regression
+  `recursion`, `janne_complex`, `tarai`, `cover`, and `duff` working as regression
   gates for the BEEBS path,
 - keep success based on correctness only; do not report or optimize performance scores,
 - do not introduce a broad BEEBS suite runner yet.
@@ -46,6 +46,7 @@ Rationale:
 - `bash capstone/benchmarks/beebs/run-beebs-janne-complex.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-tarai.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-cover.sh`,
+- `bash capstone/benchmarks/beebs/run-beebs-duff.sh`,
 - the focused build/run wrapper for the new single benchmark once introduced.
 
 ## Thinking-level rule
