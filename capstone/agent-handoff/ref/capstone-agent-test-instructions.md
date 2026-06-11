@@ -416,6 +416,21 @@ Expected: `beebs-recursion-host: correctness marker validated` and
 `capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
 backend codegen used by BEEBS recursive-call and scalar global-state paths.
 
+### BEEBS `janne_complex` correctness run
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/benchmarks/beebs/run-beebs-janne-complex.sh \
+  > "$CAPSTONE_TMP_ROOT/run-beebs-janne-complex.txt" 2>&1
+
+grep -E "(BEEBS|beebs-janne-complex|PASSED|ERROR)" "$CAPSTONE_TMP_ROOT/run-beebs-janne-complex.txt"
+```
+
+Expected: `beebs-janne-complex-host: correctness marker validated` and
+`__BEEBS_JANNE_COMPLEX_PASSED__` in the output. Run when touching
+`capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
+backend codegen used by BEEBS scalar global-state integer benchmarks.
+
 ## 6. Important caveats
 
 - The current validated path is still the split host/domain runtime path, not a full hosted Capstone Linux user-space.

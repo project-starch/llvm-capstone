@@ -63,7 +63,8 @@ agent-handoff/
 - validated CoreMark profile-run on Capstone PureCap ("Correct operation validated.")
   using compiled C `domain_main` rather than `coremark_domain_entry.S`
 - validated BEEBS benchmarks (`fac`, `insertsort`, `fibcall`, `cnt`,
-  `bubblesort`, `prime`, `recursion`) on the split host/domain runtime path
+  `bubblesort`, `prime`, `recursion`, `janne_complex`) on the split
+  host/domain runtime path
 
 See `state/current-state.md` for the canonical snapshot.
 

@@ -25,7 +25,7 @@ that proves the next small step works.
 
 ## Current BEEBS milestone status
 
-The first seven tiny deterministic BEEBS benchmarks are implemented and validated.
+The first eight tiny deterministic BEEBS benchmarks are implemented and validated.
 Do not add a full BEEBS suite runner yet.
 
 Implemented status:
@@ -112,6 +112,19 @@ Implemented status:
   `$CAPSTONE_TMP_ROOT/beebs-build` that preserves the upstream deterministic
   recursive Fibonacci behavior while recomputing/delinearizing capabilities for
   scalar global state.
+- `capstone/benchmarks/beebs/build-beebs-janne-complex-capstone.sh` builds only
+  the `janne_complex` benchmark and produces
+  `$CAPSTONE_TMP_ROOT/beebs-build/beebs_janne_complex_capstone.dom`.
+- `capstone/benchmarks/beebs/beebs_janne_complex_domain.c` calls
+  `initialise_benchmark()`, `benchmark()`, and `verify_benchmark()` and records
+  only a correctness marker.
+- `capstone/benchmarks/beebs/run-beebs-janne-complex.sh` builds the
+  `janne_complex` domain and host, boots QEMU, and checks the
+  `BEEBS_RET_CORRECT` marker.
+- The `janne_complex` Capstone build script generates a temporary source wrapper
+  in `$CAPSTONE_TMP_ROOT/beebs-build` that preserves the upstream deterministic
+  nested-loop behavior while recomputing/delinearizing capabilities for scalar
+  global state.
 - Do not add a full BEEBS suite runner until several single-benchmark wrappers are
   stable.
 
@@ -126,6 +139,7 @@ Validation for this milestone:
 - `bash capstone/benchmarks/beebs/run-beebs-bubblesort.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-prime.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-recursion.sh`
+- `bash capstone/benchmarks/beebs/run-beebs-janne-complex.sh`
 
 If the current medium thinking level becomes insufficient during benchmark
 bring-up, suspend work and tell the user before switching to high thinking.
@@ -133,7 +147,9 @@ bring-up, suspend work and tell the user before switching to high thinking.
 ## Later milestones
 
 - Add the next single BEEBS benchmark after source and generated-assembly
-  inspection.
+  inspection. The recommended next candidate is `tarai`: it is tiny,
+  integer-only, deterministic, has a real verifier, and adds deeper recursive
+  call coverage with only scalar global state.
 - Expand BEEBS one benchmark at a time, carrying forward only the runtime and
   compiler workarounds proven necessary by that benchmark.
 - Start RV8 only after at least one BEEBS benchmark runs end to end with a stable

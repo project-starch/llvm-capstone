@@ -55,6 +55,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-cnt.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-bubblesort.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-prime.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-recursion.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-janne-complex.sh"
 ```
 
 ## Test layers
@@ -92,6 +93,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-recursion.sh"
 | BEEBS `bubblesort` validation | fifth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-bubblesort.sh` |
 | BEEBS `prime` validation | sixth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-prime.sh` |
 | BEEBS `recursion` validation | seventh BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-recursion.sh` |
+| BEEBS `janne_complex` validation | eighth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-janne-complex.sh` |
 
 ## Recommended minimums by change type
 
@@ -110,7 +112,8 @@ Run `capstone/benchmarks/beebs/run-beebs-fac.sh`,
 `capstone/benchmarks/beebs/run-beebs-cnt.sh`,
 `capstone/benchmarks/beebs/run-beebs-bubblesort.sh`,
 `capstone/benchmarks/beebs/run-beebs-prime.sh`, and
-`capstone/benchmarks/beebs/run-beebs-recursion.sh` when changing the BEEBS
+`capstone/benchmarks/beebs/run-beebs-recursion.sh`, and
+`capstone/benchmarks/beebs/run-beebs-janne-complex.sh` when changing the BEEBS
 benchmark build/run path.
 
 ### Userspace loader / helper / HostCall / runtime wrapper changes
