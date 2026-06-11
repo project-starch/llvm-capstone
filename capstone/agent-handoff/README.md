@@ -64,7 +64,7 @@ agent-handoff/
   using compiled C `domain_main` rather than `coremark_domain_entry.S`
 - validated BEEBS benchmarks (`fac`, `insertsort`, `fibcall`, `cnt`,
   `bubblesort`, `prime`, `recursion`, `janne_complex`, `tarai`, `cover`,
-  `duff`) on the split host/domain runtime path
+  `duff`, `levenshtein`) on the split host/domain runtime path
 
 See `state/current-state.md` for the canonical snapshot.
 

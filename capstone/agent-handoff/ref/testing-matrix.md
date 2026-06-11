@@ -59,6 +59,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-janne-complex.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-tarai.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-cover.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-duff.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-levenshtein.sh"
 ```
 
 ## Test layers
@@ -100,6 +101,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-duff.sh"
 | BEEBS `tarai` validation | ninth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-tarai.sh` |
 | BEEBS `cover` validation | tenth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-cover.sh` |
 | BEEBS `duff` validation | eleventh BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-duff.sh` |
+| BEEBS `levenshtein` validation | twelfth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-levenshtein.sh` |
 
 ## Recommended minimums by change type
 

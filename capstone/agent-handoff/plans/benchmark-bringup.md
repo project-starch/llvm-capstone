@@ -25,7 +25,7 @@ that proves the next small step works.
 
 ## Current BEEBS milestone status
 
-The first eleven tiny deterministic BEEBS benchmarks are implemented and validated.
+The first twelve tiny deterministic BEEBS benchmarks are implemented and validated.
 Do not add a full BEEBS suite runner yet.
 
 Implemented status:
@@ -166,6 +166,21 @@ Implemented status:
   the accessor path to avoid the current backend selection gap for `i32` stack
   reloads used as capability offsets, and keeps `-fno-jump-tables` because this
   benchmark contains a switch.
+- `capstone/benchmarks/beebs/build-beebs-levenshtein-capstone.sh` builds only the
+  `levenshtein` benchmark and produces
+  `$CAPSTONE_TMP_ROOT/beebs-build/beebs_levenshtein_capstone.dom`.
+- `capstone/benchmarks/beebs/beebs_levenshtein_domain.c` calls
+  `initialise_benchmark()`, `benchmark()`, and `verify_benchmark()` and records
+  only a correctness marker.
+- `capstone/benchmarks/beebs/run-beebs-levenshtein.sh` builds the `levenshtein`
+  domain and host, boots QEMU, and checks the `BEEBS_RET_CORRECT` marker.
+- The `levenshtein` Capstone build script generates a temporary source wrapper in
+  `$CAPSTONE_TMP_ROOT/beebs-build` that preserves the upstream deterministic
+  string-distance sum while avoiding hosted `strlen` and global pointer-table
+  assumptions. It uses fixed string globals selected by index, a local strlen,
+  a fixed-size flat DP table, and `long` loop/index values in address paths to
+  avoid the current backend selection gap for `i32` stack reloads used as
+  capability offsets.
 - Do not add a full BEEBS suite runner until several single-benchmark wrappers are
   stable.
 
@@ -184,6 +199,13 @@ Validation for this milestone:
 - `bash capstone/benchmarks/beebs/run-beebs-tarai.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-cover.sh`
 - `bash capstone/benchmarks/beebs/run-beebs-duff.sh`
+- `bash capstone/benchmarks/beebs/run-beebs-levenshtein.sh`
+
+During the `levenshtein` milestone, the first full sequential BEEBS run passed
+through `recursion` and then hit a QEMU login prompt timeout before executing
+`janne_complex`. A targeted rerun of `janne_complex`, `tarai`, `cover`, `duff`,
+and `levenshtein` passed. Treat that as harness/login flakiness, not a benchmark
+correctness failure.
 
 If the current medium thinking level becomes insufficient during benchmark
 bring-up, suspend work and tell the user before switching to high thinking.
@@ -191,10 +213,10 @@ bring-up, suspend work and tell the user before switching to high thinking.
 ## Later milestones
 
 - Add the next single BEEBS benchmark after source and generated-assembly
-  inspection. The recommended next candidate is `levenshtein`: it is
-  deterministic, has a real verifier, and adds string comparison plus
-  dynamic-programming table coverage. Expect a benchmark-local wrapper to avoid
-  hosted `strlen` and pointer-table assumptions.
+  inspection. The recommended next candidate is `jfdctint`: it is deterministic,
+  has a real verifier, and adds fixed-point arithmetic plus 8x8 array-transform
+  coverage. Expect a benchmark-local wrapper for the global data array and
+  verifier expected-data path.
 - Expand BEEBS one benchmark at a time, carrying forward only the runtime and
   compiler workarounds proven necessary by that benchmark.
 - Start RV8 only after at least one BEEBS benchmark runs end to end with a stable
