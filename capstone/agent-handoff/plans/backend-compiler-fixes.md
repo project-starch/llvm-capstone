@@ -15,6 +15,23 @@ backend.
 | Jump tables use scalar `lw` base load in cap_mem mode; `lw` requires `rs1.tag=1` but the GP-derived table pointer is scalar | `-fno-jump-tables` on affected files | `CapstoneISelLowering` / `CapstoneAsmPrinter`: lower jump tables through `ldc` (capability load) or materialize table entries as PC-relative capabilities so the table base is tagged |
 | `va_list` arg-pointer stored via `sd` (scalar), not `stc` (capability); reloaded via `ld` → tag=0 → any memory dereference crashes in cap_mem mode | Assembly trampoline `ee_printf_asm.S` bypasses `va_list` entirely by forwarding `a0-a7` directly to `ee_printf_impl()` | Capstone ABI / LLVM clang front-end: `va_start` must store the variadic argument pointer as a capability (`stc`), not a scalar integer |
 
+## Pointer/integer cast policy
+
+See also `ref/capstone-purecap-pointer-model.md`.
+
+Pointer-to-integer casts may preserve numeric address bits, but they do not
+preserve capability provenance or dereference authority. Integer-to-pointer casts
+may produce a pointer-shaped value, but unless the implementation has a specific
+valid provenance-restoration rule, the resulting pointer must not be assumed safe
+to dereference. Runtime trap/failure is expected if such a pointer is used for
+load/store/call.
+
+Valid pointer arithmetic should stay in the capability domain, for example
+`p + offset`, rather than round-tripping through `uintptr_t`. For benchmark
+bring-up, do not fix failures by fabricating authority from raw integers. Prefer
+benchmark-local rewrites that keep accesses derived from valid capabilities, or
+add a focused backend/runtime test if a real benchmark exposes this pattern.
+
 ## Related files
 
 - `capstone/benchmarks/coremark/build-coremark-capstone.sh` — remaining active workarounds have comment blocks
