@@ -4,35 +4,39 @@
 
 **Goal**: extend the validated BEEBS pattern from `fac`, `insertsort`, `fibcall`,
 `cnt`, `bubblesort`, `prime`, `recursion`, `janne_complex`, `tarai`, `cover`,
-`duff`, `levenshtein`, `jfdctint`, `fdct`, and `strstr` to exactly one more
-deterministic benchmark.
+`duff`, `levenshtein`, `jfdctint`, `fdct`, `strstr`, and `ndes` to exactly one
+more deterministic benchmark.
 
-**Why this next**: `strstr` added compact string-search coverage and validated a
-benchmark-local rewrite for global string pointer/literal access. BEEBS should
-keep expanding one small verified benchmark at a time
-without introducing a suite runner or performance reporting.
+**Why this next**: `ndes` added integer-heavy crypto-style bit permutation and
+static table lookup coverage. It validated a benchmark-local rewrite for
+by-value structs plus linear-capability-safe accessors around DES lookup tables.
+BEEBS should keep expanding one small verified benchmark at a time without
+introducing a suite runner or performance reporting.
 
-**Recommended candidate**: start with `ndes`.
+**Recommended candidate**: start with `stringsearch1`.
 
 Rationale:
 - it is deterministic and has a real verifier;
 - it has deterministic `initialise_benchmark()`, `benchmark()`, and
   `verify_benchmark()` functions;
-- it adds integer-heavy crypto-style bit permutation and table lookup coverage;
+- it adds a broader string-search workload after the compact `strstr` benchmark;
 - it avoids the floating-point/library-call hazards in `st`, `frac`, and `sqrt`;
-- it is narrower than `slre`, while still likely exercising global arrays and
-  static lookup tables enough to expose useful Capstone capability issues;
+- it is narrower than `slre`, while still likely exercising global string buffers
+  and included helper code enough to expose useful Capstone capability issues;
 - it avoids the known floating-point/library-call hazards seen in `sqrt` and the
   benchmarks whose verifier returns `-1`.
 
 **Smallest useful first step**:
-- inspect `src/ndes/libndes.c` and the generated Capstone assembly,
+- inspect `src/stringsearch1/stringsearch1.c`, `fast.rev.d12.c`, and
+  `fast.fwd.inc.c`,
 - copy the existing BEEBS build/host/run pattern conservatively,
-- add benchmark-local source wrapping only if the benchmark exposes the same gp-derived
-  linear capability reuse issue seen in other global-state BEEBS wrappers,
+- add benchmark-local source wrapping only if the benchmark exposes the same
+  gp-derived linear capability reuse issue seen in other global-state BEEBS
+  wrappers,
 - keep `fac`, `insertsort`, `fibcall`, `cnt`, `bubblesort`, `prime`,
   `recursion`, `janne_complex`, `tarai`, `cover`, `duff`, `levenshtein`, and
-  `jfdctint`, `fdct`, and `strstr` working as regression gates for the BEEBS path,
+  `jfdctint`, `fdct`, `strstr`, and `ndes` working as regression gates for the
+  BEEBS path,
 - keep success based on correctness only; do not report or optimize performance scores,
 - do not introduce a broad BEEBS suite runner yet.
 
@@ -54,6 +58,7 @@ Rationale:
 - `bash capstone/benchmarks/beebs/run-beebs-jfdctint.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-fdct.sh`,
 - `bash capstone/benchmarks/beebs/run-beebs-strstr.sh`,
+- `bash capstone/benchmarks/beebs/run-beebs-ndes.sh`,
 - the focused build/run wrapper for the new single benchmark once introduced.
 
 ## Thinking-level rule
