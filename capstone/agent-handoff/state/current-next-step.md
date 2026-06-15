@@ -11,11 +11,7 @@ than embedded in shell heredocs. The next step is resuming new benchmark bring-u
 
 ## Candidate pool
 
-- `aha-compress`
-- `nettle-md5`
-- `nettle-cast128`
 - `slre`
-- `matmult`
 - `mergesort`
 - `nbody`
 - `trio`
@@ -24,6 +20,11 @@ than embedded in shell heredocs. The next step is resuming new benchmark bring-u
 
 - `stringsearch1`: backend instruction selection failure in `prep1`.
 - `crc32`: builds and runs but returns the wrong correctness marker.
+- `nettle-cast128`: backend crash — `sign_extend_inreg i128` in `cast128_set_key`
+  (the `int length` parameter used in pointer arithmetic triggers unhandled
+  sign_extend_inreg within the i128 capability carrier type).
+- `matmult`: backend crash — non-vector shift on i128 from 2D array index
+  computation in `verify_benchmark` (`matrix exp[20][20]`).
 - `sglib-rbtree`, `aha-mont64`, `dijkstra`, `edn`, `ctl-string`, `qrduino`,
   `nettle-arcfour`, `ludcmp`, `nettle-des`, `statemate`: compile-time backend
   crashes or non-trivial source adaptation required.
