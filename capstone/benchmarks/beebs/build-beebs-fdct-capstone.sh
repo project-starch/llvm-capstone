@@ -21,9 +21,15 @@ OUT_DOM=${OUT_DOM:-$OUT_DIR/beebs_fdct_capstone.dom}
 FDCT_SRC=$BEEBS_SRC_DIR/src/fdct/libfdct.c
 SUPPORT_DIR=$BEEBS_SRC_DIR/support
 PATCHED_FDCT_SRC=$OUT_DIR/libfdct_capstone.c
+FDCT_TAIL_SRC=$SCRIPT_DIR/adapted/beebs_fdct_capstone_tail.c
 
 if [[ ! -f "$FDCT_SRC" || ! -f "$SUPPORT_DIR/support.h" ]]; then
   echo "missing BEEBS fdct source tree: $BEEBS_SRC_DIR" >&2
+  exit 1
+fi
+
+if [[ ! -f "$FDCT_TAIL_SRC" ]]; then
+  echo "missing adapted fdct tail source: $FDCT_TAIL_SRC" >&2
   exit 1
 fi
 
@@ -37,54 +43,7 @@ awk '
   pending != "" { print pending; pending = "" }
   { print }
 ' "$FDCT_SRC" > "$PATCHED_FDCT_SRC"
-
-cat >> "$PATCHED_FDCT_SRC" <<'EOF'
-#define CAPSTONE_DELIN(rd) \
-  __asm__ volatile (".insn r 0x5b, 0x1, 0x3, %0, x0, x0" : "+r"(rd))
-
-static __attribute__((noinline)) short int *beebs_fdct_block_ptr(void) {
-  short int *p = block;
-  CAPSTONE_DELIN(p);
-  return p;
-}
-
-static __attribute__((noinline)) const short int *beebs_fdct_block_ref_ptr(void) {
-  const short int *p = block_ref;
-  CAPSTONE_DELIN(p);
-  return p;
-}
-
-static __attribute__((noinline)) const short int *beebs_fdct_exp_res_ptr(void) {
-  const short int *p = exp_res;
-  CAPSTONE_DELIN(p);
-  return p;
-}
-
-void initialise_benchmark(void) {
-}
-
-int benchmark(void) {
-  short int *dst = beebs_fdct_block_ptr();
-  const short int *src = beebs_fdct_block_ref_ptr();
-
-  for (long i = 0; i < 64; ++i)
-    dst[i] = src[i];
-
-  fdct(dst, 8);
-  return 0;
-}
-
-int verify_benchmark(int unused) {
-  (void)unused;
-  short int *actual = beebs_fdct_block_ptr();
-  const short int *expected = beebs_fdct_exp_res_ptr();
-
-  for (long i = 0; i < 64; ++i)
-    if (actual[i] != expected[i])
-      return 0;
-  return 1;
-}
-EOF
+cat "$FDCT_TAIL_SRC" >> "$PATCHED_FDCT_SRC"
 
 COMMON_FLAGS=(
   -target capstone64-unknown-elf

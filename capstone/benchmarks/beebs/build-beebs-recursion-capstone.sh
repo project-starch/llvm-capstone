@@ -18,91 +18,20 @@ LINKER_SCRIPT=${LINKER_SCRIPT:-$REPO_ROOT/capstone/my_first_domain/link.ld}
 DOMAIN_OPT_LEVEL=${DOMAIN_OPT_LEVEL:--O0}
 OUT_DOM=${OUT_DOM:-$OUT_DIR/beebs_recursion_capstone.dom}
 
-RECURSION_SRC=$BEEBS_SRC_DIR/src/recursion/librecursion.c
 SUPPORT_DIR=$BEEBS_SRC_DIR/support
-PATCHED_RECURSION_SRC=$OUT_DIR/librecursion_capstone.c
+ADAPTED_RECURSION_SRC=$SCRIPT_DIR/adapted/beebs_recursion_capstone.c
 
-if [[ ! -f "$RECURSION_SRC" || ! -f "$SUPPORT_DIR/support.h" ]]; then
+if [[ ! -f "$SUPPORT_DIR/support.h" ]]; then
   echo "missing BEEBS recursion source tree: $BEEBS_SRC_DIR" >&2
   exit 1
 fi
 
+if [[ ! -f "$ADAPTED_RECURSION_SRC" ]]; then
+  echo "missing adapted recursion source: $ADAPTED_RECURSION_SRC" >&2
+  exit 1
+fi
+
 mkdir -p "$OUT_DIR" "$OBJ_DIR"
-
-cat > "$PATCHED_RECURSION_SRC" <<'EOF'
-volatile int In;
-static int n;
-
-#define CAPSTONE_DELIN(rd) \
-  __asm__ volatile (".insn r 0x5b, 0x1, 0x3, %0, x0, x0" : "+r"(rd))
-
-static __attribute__((noinline)) volatile int *beebs_recursion_in_ptr(void) {
-  volatile int *p = &In;
-  CAPSTONE_DELIN(p);
-  return p;
-}
-
-static __attribute__((noinline)) int *beebs_recursion_n_ptr(void) {
-  int *p = &n;
-  CAPSTONE_DELIN(p);
-  return p;
-}
-
-static __attribute__((noinline)) int beebs_recursion_in_get(void) {
-  volatile int *p = beebs_recursion_in_ptr();
-  return *p;
-}
-
-static __attribute__((noinline)) void beebs_recursion_in_set(int value) {
-  volatile int *p = beebs_recursion_in_ptr();
-  *p = value;
-}
-
-static __attribute__((noinline)) int beebs_recursion_n_get(void) {
-  int *p = beebs_recursion_n_ptr();
-  return *p;
-}
-
-static __attribute__((noinline)) void beebs_recursion_n_set(int value) {
-  int *p = beebs_recursion_n_ptr();
-  *p = value;
-}
-
-int fib(int i) {
-  if (i == 0)
-    return 1;
-  if (i == 1)
-    return 1;
-  return fib(i - 1) + fib(i - 2);
-}
-
-int anka(int i);
-
-int kalle(int i) {
-  if (i <= 0)
-    return 0;
-  return anka(i - 1);
-}
-
-int anka(int i) {
-  if (i <= 0)
-    return 1;
-  return kalle(i - 1);
-}
-
-int benchmark(void) {
-  beebs_recursion_in_set(fib(beebs_recursion_n_get()));
-  return beebs_recursion_in_get();
-}
-
-void initialise_benchmark(void) {
-  beebs_recursion_n_set(10);
-}
-
-int verify_benchmark(int r) {
-  return r == 89;
-}
-EOF
 
 COMMON_FLAGS=(
   -target capstone64-unknown-elf
@@ -120,7 +49,7 @@ COMMON_FLAGS=(
   -o "$OBJ_DIR/start.o"
 
 "$CLANG" "${COMMON_FLAGS[@]}" \
-  -c "$PATCHED_RECURSION_SRC" \
+  -c "$ADAPTED_RECURSION_SRC" \
   -o "$OBJ_DIR/beebs_recursion.o"
 
 "$CLANG" "${COMMON_FLAGS[@]}" \

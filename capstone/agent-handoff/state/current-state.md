@@ -65,10 +65,13 @@ Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 the marker ABI or host behavior is genuinely different; currently the older
 `fac`, `fibcall`, and `insertsort` wrappers keep custom markers.
 
-Capstone-specific benchmark source adaptations should live in explicit `.c`
-files under `capstone/benchmarks/beebs/adapted/`, not as embedded C heredocs in
-shell scripts. `bubblesort`, `prime`, and `strstr` have been migrated to that
-pattern while preserving their existing runtime behavior.
+All Capstone-specific benchmark source adaptations now live in explicit `.c`
+files under `capstone/benchmarks/beebs/adapted/`. Shell scripts orchestrate
+fetch/build/link/run only; no C code is embedded in `.sh` heredocs. Full-
+replacement adapted files (bubblesort, prime, cnt, duff, janne_complex, tarai,
+levenshtein, recursion) are compiled directly. Tail-append files (strstr,
+insertsort, jfdctint, fdct) are concatenated with the stripped upstream source
+at build time.
 
 ## Resolved blocker
 

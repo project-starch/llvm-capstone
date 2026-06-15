@@ -1,56 +1,15 @@
 # Current recommended next step
 
-## Immediate milestone - Finish BEEBS source-adaptation cleanup
+## Immediate milestone - Add the next BEEBS benchmark batch
 
-**Goal**: remove the remaining embedded C heredocs from BEEBS build scripts before
-adding more benchmarks.
+**Goal**: extend the validated BEEBS set with new benchmarks from the candidate
+pool below.
 
-**Why this next**: the shared domain/host wrapper cleanup is still the right
-direction, but benchmark-specific C embedded inside `.sh` files is not a good
-long-term structure. The first cleanup pass moved the Capstone-specific adapted
-source for these benchmarks into real files under
-`capstone/benchmarks/beebs/adapted/`:
+**Why this next**: the source-adaptation cleanup is complete. All Capstone-specific
+BEEBS C is now in real files under `capstone/benchmarks/beebs/adapted/` rather
+than embedded in shell heredocs. The next step is resuming new benchmark bring-up.
 
-- `bubblesort`
-- `prime`
-- `strstr`
-
-Continue that pattern before adding another benchmark batch. Shell scripts should
-orchestrate fetch/build/link/run only; Capstone-specific C should be reviewable
-as C source.
-
-## Cleanup rules
-
-- Keep shared domain/host wrappers for benchmarks with identical marker behavior.
-- Do not restore duplicate per-benchmark host/domain C files just to carry
-  different benchmark names.
-- Move substantial benchmark-specific C out of `.sh` files and into
-  `capstone/benchmarks/beebs/adapted/`.
-- For scripts that append a small Capstone-specific tail to fetched upstream
-  source, keep the tail in `adapted/` and let the script concatenate files
-  without embedding C text.
-- Keep fetched BEEBS sources under `$CAPSTONE_TMP_ROOT`; do not vendor sources or
-  add submodules.
-- Success is correctness marker only; do not report or optimize performance.
-- If the cleanup exposes a backend/compiler/runtime bug or would need higher
-  thinking, stop and report the blocker.
-
-## Remaining embedded-C cleanup candidates
-
-Migrate these next, preferably in batches of 3-4:
-
-- `cnt`
-- `duff`
-- `fdct`
-- `insertsort`
-- `janne-complex`
-- `jfdctint`
-- `levenshtein`
-- `recursion`
-- `tarai`
-
-After the embedded-C cleanup is complete, resume batched BEEBS bring-up. The next
-candidate pool remains:
+## Candidate pool
 
 - `aha-compress`
 - `nettle-md5`
@@ -71,13 +30,12 @@ candidate pool remains:
 
 ## Test expectations
 
-For the next cleanup commit:
+For each new benchmark commit:
 
-- each migrated `run-beebs-*.sh`
+- the new `run-beebs-<name>.sh`
 - `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone`
 - `bash capstone/tests/runtime-qemu/run-coremark.sh`
-- focused existing BEEBS regressions: `fac`, `strstr`, `ndes`, and one shared
-  simple-helper benchmark, preferably `run-beebs-expint.sh`
+- focused existing BEEBS regressions: `fac`, `strstr`, `ndes`, `expint`
 
 ## Thinking-level rule
 
