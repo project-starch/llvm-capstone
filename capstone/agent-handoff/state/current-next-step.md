@@ -1,81 +1,79 @@
 # Current recommended next step
 
-## Immediate milestone - Add the next single BEEBS benchmark
+## Immediate milestone - Continue batched BEEBS bring-up
 
-**Goal**: extend the validated BEEBS pattern from `fac`, `insertsort`, `fibcall`,
-`cnt`, `bubblesort`, `prime`, `recursion`, `janne_complex`, `tarai`, `cover`,
-`duff`, `levenshtein`, `jfdctint`, `fdct`, `strstr`, and `ndes` to exactly one
-more deterministic benchmark.
+**Goal**: extend the validated BEEBS pattern from the current 21 benchmarks by
+probing and adding another batch of 5-8 deterministic benchmarks.
 
-**Why this next**: `ndes` added integer-heavy crypto-style bit permutation and
-static table lookup coverage. It validated a benchmark-local rewrite for
-by-value structs plus linear-capability-safe accessors around DES lookup tables.
-BEEBS should keep expanding one small verified benchmark at a time without
-introducing a suite runner or performance reporting.
+**Why this next**: the previous batch validated the low-token workflow. Five
+benchmarks were added with shared simple-benchmark helpers and thin per-benchmark
+entry points:
 
-**Recommended candidate**: start with `stringsearch1`.
+- `sglib-arraybinsearch`
+- `sglib-queue`
+- `sglib-listinsertsort`
+- `sglib-listsort`
+- `expint`
 
-Rationale:
-- it is deterministic and has a real verifier;
-- it has deterministic `initialise_benchmark()`, `benchmark()`, and
-  `verify_benchmark()` functions;
-- it adds a broader string-search workload after the compact `strstr` benchmark;
-- it avoids the floating-point/library-call hazards in `st`, `frac`, and `sqrt`;
-- it is narrower than `slre`, while still likely exercising global string buffers
-  and included helper code enough to expose useful Capstone capability issues;
-- it avoids the known floating-point/library-call hazards seen in `sqrt` and the
-  benchmarks whose verifier returns `-1`.
+Use the same probe-first workflow for the next batch: classify candidates with
+temporary `/tmp/capstone` build/run artifacts, add only cheap passers, and defer
+hard failures instead of debugging them inside the batch.
 
-**Smallest useful first step**:
-- inspect `src/stringsearch1/stringsearch1.c`, `fast.rev.d12.c`, and
-  `fast.fwd.inc.c`,
-- copy the existing BEEBS build/host/run pattern conservatively,
-- add benchmark-local source wrapping only if the benchmark exposes the same
-  gp-derived linear capability reuse issue seen in other global-state BEEBS
-  wrappers,
-- keep `fac`, `insertsort`, `fibcall`, `cnt`, `bubblesort`, `prime`,
-  `recursion`, `janne_complex`, `tarai`, `cover`, `duff`, `levenshtein`, and
-  `jfdctint`, `fdct`, `strstr`, and `ndes` working as regression gates for the
-  BEEBS path,
-- keep success based on correctness only; do not report or optimize performance scores,
-- do not introduce a broad BEEBS suite runner yet.
+## Batch rules
 
-**Test expectations**:
-- `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone`,
-- `bash capstone/tests/runtime-qemu/run-coremark.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-fac.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-insertsort.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-fibcall.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-cnt.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-bubblesort.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-prime.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-recursion.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-janne-complex.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-tarai.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-cover.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-duff.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-levenshtein.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-jfdctint.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-fdct.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-strstr.sh`,
-- `bash capstone/benchmarks/beebs/run-beebs-ndes.sh`,
-- the focused build/run wrapper for the new single benchmark once introduced.
+- Batch size target: 5-8 benchmarks.
+- Keep committed run entry points per benchmark; shared helpers are acceptable for
+  simple one-source benchmarks.
+- Keep fetched BEEBS sources under `$CAPSTONE_TMP_ROOT`; do not vendor sources or
+  add submodules.
+- Success is correctness marker only; do not report or optimize performance.
+- Do not introduce a broad permanent suite runner yet.
+- If a candidate exposes a backend/compiler/runtime bug or would need higher
+  thinking, skip it and record the failure class.
+
+## Recommended candidate pool
+
+Probe these next, stopping once 5-8 cheap passers are available:
+
+- `aha-compress`
+- `nettle-md5`
+- `nettle-cast128`
+- `slre`
+- `matmult`
+- `mergesort`
+- `nbody`
+- `trio`
+
+Prefer candidates with real `verify_benchmark()` implementations. Continue to
+avoid benchmarks whose verifier returns `-1` and floating-point-heavy benchmarks
+unless they pass the cheap probe without backend work.
+
+## Deferred from the previous probe batch
+
+- `stringsearch1`: backend instruction selection failure in `prep1`.
+- `crc32`: builds and runs but returns the wrong correctness marker.
+- `sglib-rbtree`, `aha-mont64`, `dijkstra`, `edn`, `ctl-string`, `qrduino`,
+  `nettle-arcfour`, `ludcmp`, `nettle-des`, `statemate`: compile-time backend
+  crashes or non-trivial source adaptation required.
+
+## Test expectations
+
+For the next committed batch:
+
+- each newly added `run-beebs-*.sh`
+- `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone`
+- `bash capstone/tests/runtime-qemu/run-coremark.sh`
+- focused existing BEEBS regressions: `fac`, `strstr`, `ndes`, and one benchmark
+  from the latest batch, preferably `run-beebs-expint.sh`
 
 ## Thinking-level rule
 
 Stay at medium thinking while the work remains mechanical or locally debuggable.
-If the next benchmark exposes a hard backend/compiler bug, unclear architecture
-semantics, or repeated failed runtime debugging where higher thinking looks necessary,
-suspend work and tell the user before continuing.
-
-## Candidate caution
-
-Do not pick `sqrt` as the next medium-thinking benchmark: direct Capstone compile currently hits an unsupported softened floating-point library-call path. Benchmarks whose `verify_benchmark()` returns `-1` also remain out of scope for correctness-marker bring-up.
-
-## Remaining backend workarounds
-
-The prologue bug is closed. Keep the remaining backend workarounds in place unless a focused benchmark step proves a root fix. Details: `plans/backend-compiler-fixes.md`.
+If a benchmark exposes a hard backend/compiler bug, unclear architecture
+semantics, or repeated failed runtime debugging where higher thinking looks
+necessary, suspend work and tell the user before continuing.
 
 ## What not to regress
 
-Do not delete `capstone/caplifive-buildroot/build/local.mk` - its absence silently switches the image to stock OpenSBI and breaks all runtime proofs.
+Do not delete `capstone/caplifive-buildroot/build/local.mk` - its absence silently
+switches the image to stock OpenSBI and breaks all runtime proofs.

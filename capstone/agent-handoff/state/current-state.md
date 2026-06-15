@@ -49,6 +49,16 @@ All of the following pass on the `capstone-bootstrap` branch:
   runs end to end and validates its correctness marker
 - `capstone/benchmarks/beebs/run-beebs-ndes.sh` - sixteenth BEEBS benchmark
   runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-sglib-arraybinsearch.sh` - seventeenth
+  BEEBS benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-sglib-queue.sh` - eighteenth BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-sglib-listinsertsort.sh` - nineteenth
+  BEEBS benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-sglib-listsort.sh` - twentieth BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-expint.sh` - twenty-first BEEBS
+  benchmark runs end to end and validates its correctness marker
 
 ## Resolved blocker
 
