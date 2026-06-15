@@ -20,6 +20,9 @@ bring-up work.
 - Use shared wrappers for ordinary BEEBS benchmarks. Add per-benchmark
   domain/host C files only when the marker ABI or host behavior genuinely
   differs.
+- Do not embed substantial C code in `.sh` files. Shell scripts should
+  orchestrate fetch/build/link/run; Capstone-specific C adaptations should live
+  in source files under `capstone/benchmarks/beebs/adapted/`.
 - Do not add a broad permanent suite runner yet.
 - If a candidate exposes a hard backend/compiler/runtime bug, unclear
   architecture semantics, or repeated failed runtime debugging where higher
@@ -241,6 +244,44 @@ If custom wrappers are needed:
 4. Validate both the custom benchmark and one shared-wrapper benchmark afterward
    to prove both paths still work.
 
+## When to Add Adapted Benchmark Sources
+
+Some BEEBS sources need Capstone-specific changes to avoid unsafe global pointer
+patterns or to work around currently known backend limitations. Put that C in
+`capstone/benchmarks/beebs/adapted/`; do not place it in a shell heredoc.
+
+Use this pattern when:
+
+- the benchmark implementation itself needs a Capstone-specific rewrite,
+- a verifier or initializer must be replaced,
+- global data needs explicit capability delinearization,
+- the build script needs to combine fetched upstream source with a small
+  Capstone-specific tail.
+
+For a full adapted replacement, compile the adapted file directly:
+
+```bash
+ADAPTED_SRC=$SCRIPT_DIR/adapted/beebs_<name>_capstone.c
+"$CLANG" "${COMMON_FLAGS[@]}" \
+  -c "$ADAPTED_SRC" \
+  -o "$OBJ_DIR/beebs_<name>.o"
+```
+
+For a small tail appended to fetched upstream source, keep only the tail in the
+repo:
+
+```bash
+UPSTREAM_SRC=$BEEBS_SRC_DIR/src/<name>/<source>.c
+ADAPTED_TAIL_SRC=$SCRIPT_DIR/adapted/beebs_<name>_capstone_tail.c
+PATCHED_SRC=$OUT_DIR/<name>_capstone.c
+
+sed '/^<first replaced upstream line>/,$d' "$UPSTREAM_SRC" > "$PATCHED_SRC"
+cat "$ADAPTED_TAIL_SRC" >> "$PATCHED_SRC"
+```
+
+This keeps upstream BEEBS source fetched from `$CAPSTONE_TMP_ROOT` while keeping
+the Capstone-specific C reviewable as C.
+
 ## Add Multiple Benchmarks at Once
 
 Use batch mode to reduce token and runtime overhead. The recommended batch size
@@ -439,4 +480,3 @@ Stop and report instead of continuing when:
 - runtime behavior points at QEMU/OpenSBI/hostcall semantics,
 - source adaptation would become benchmark-specific research,
 - higher thinking appears necessary.
-

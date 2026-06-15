@@ -65,6 +65,11 @@ Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 the marker ABI or host behavior is genuinely different; currently the older
 `fac`, `fibcall`, and `insertsort` wrappers keep custom markers.
 
+Capstone-specific benchmark source adaptations should live in explicit `.c`
+files under `capstone/benchmarks/beebs/adapted/`, not as embedded C heredocs in
+shell scripts. `bubblesort`, `prime`, and `strstr` have been migrated to that
+pattern while preserving their existing runtime behavior.
+
 ## Resolved blocker
 
 The 2026-06-09/10 split `null_blk` unload blocker is resolved. The hang was

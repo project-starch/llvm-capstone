@@ -21,9 +21,15 @@ OUT_DOM=${OUT_DOM:-$OUT_DIR/beebs_strstr_capstone.dom}
 STRSTR_SRC=$BEEBS_SRC_DIR/src/strstr/libstrstr.c
 SUPPORT_DIR=$BEEBS_SRC_DIR/support
 PATCHED_STRSTR_SRC=$OUT_DIR/libstrstr_capstone.c
+STRSTR_TAIL_SRC=$SCRIPT_DIR/adapted/beebs_strstr_capstone_tail.c
 
 if [[ ! -f "$STRSTR_SRC" || ! -f "$SUPPORT_DIR/support.h" ]]; then
   echo "missing BEEBS strstr source tree: $BEEBS_SRC_DIR" >&2
+  exit 1
+fi
+
+if [[ ! -f "$STRSTR_TAIL_SRC" ]]; then
+  echo "missing adapted strstr tail source: $STRSTR_TAIL_SRC" >&2
   exit 1
 fi
 
@@ -32,46 +38,7 @@ mkdir -p "$OUT_DIR" "$OBJ_DIR"
 # Keep the upstream strstr implementation, but avoid global pointer variables
 # to string literals by passing freshly delinearized array capabilities.
 sed '/^char \*text =/,$d' "$STRSTR_SRC" > "$PATCHED_STRSTR_SRC"
-cat >> "$PATCHED_STRSTR_SRC" <<'EOF'
-#define CAPSTONE_DELIN(rd) \
-  __asm__ volatile (".insn r 0x5b, 0x1, 0x3, %0, x0, x0" : "+r"(rd))
-
-static char text_data[] =
-    "abbaabbaababadcsdabbacasdaabbbaabbadabbacbbbaabbadabbacasdaabbbaabba";
-static char substr_data[] = "abba";
-
-static __attribute__((noinline)) char *beebs_strstr_text_ptr(void) {
-  char *p = text_data;
-  CAPSTONE_DELIN(p);
-  return p;
-}
-
-static __attribute__((noinline)) char *beebs_strstr_substr_ptr(void) {
-  char *p = substr_data;
-  CAPSTONE_DELIN(p);
-  return p;
-}
-
-void initialise_benchmark(void) {
-}
-
-int benchmark(void) {
-  char *substr = beebs_strstr_substr_ptr();
-  char *f = beebs_strstr_text_ptr();
-  int n = 0;
-
-  do {
-    f = strstr(f + 1, substr);
-    n++;
-  } while (f);
-
-  return n;
-}
-
-int verify_benchmark(int r) {
-  return r == 8;
-}
-EOF
+cat "$STRSTR_TAIL_SRC" >> "$PATCHED_STRSTR_SRC"
 
 COMMON_FLAGS=(
   -target capstone64-unknown-elf
