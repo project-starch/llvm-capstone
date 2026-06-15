@@ -16,7 +16,7 @@ mkdir -p "$OUT_DIR"
   -O2 \
   -I"$SCRIPT_DIR" \
   -o "$OUT_DIR/beebs_bubblesort_host.user" \
-  "$SCRIPT_DIR/beebs_bubblesort_host.c" \
+  "$SCRIPT_DIR/beebs_simple_host.c" \
   "$LIBCAPSTONE_C"
 
 echo "Built $OUT_DIR/beebs_bubblesort_host.user"

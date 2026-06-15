@@ -60,6 +60,11 @@ All of the following pass on the `capstone-bootstrap` branch:
 - `capstone/benchmarks/beebs/run-beebs-expint.sh` - twenty-first BEEBS
   benchmark runs end to end and validates its correctness marker
 
+Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
+`beebs_simple_host.c`. Keep separate per-benchmark domain/host files only when
+the marker ABI or host behavior is genuinely different; currently the older
+`fac`, `fibcall`, and `insertsort` wrappers keep custom markers.
+
 ## Resolved blocker
 
 The 2026-06-09/10 split `null_blk` unload blocker is resolved. The hang was

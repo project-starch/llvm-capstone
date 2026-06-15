@@ -141,7 +141,7 @@ COMMON_FLAGS=(
   -o "$OBJ_DIR/beebs_tarai.o"
 
 "$CLANG" "${COMMON_FLAGS[@]}" \
-  -c "$SCRIPT_DIR/beebs_tarai_domain.c" \
+  -c "$SCRIPT_DIR/beebs_simple_domain.c" \
   -o "$OBJ_DIR/beebs_tarai_domain.o"
 
 "$LD_LLD" -T "$LINKER_SCRIPT" -o "$OUT_DOM" \

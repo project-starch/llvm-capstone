@@ -20,7 +20,7 @@ python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --log-file "$LOG_FILE" \
   --timeout-multiplier 4 \
   --guest-command \
-    'cp /mnt/host/beebs_janne_complex_host.user /tmp/beebs_janne_complex_host.user && chmod 0755 /tmp/beebs_janne_complex_host.user && /tmp/beebs_janne_complex_host.user /mnt/host/beebs_janne_complex_capstone.dom' \
+    'cp /mnt/host/beebs_janne_complex_host.user /tmp/beebs_janne_complex_host.user && chmod 0755 /tmp/beebs_janne_complex_host.user && /tmp/beebs_janne_complex_host.user janne-complex /mnt/host/beebs_janne_complex_capstone.dom' \
   --success-marker 'beebs-janne-complex-host: correctness marker validated'
 
 echo 'run-beebs-janne-complex.sh: BEEBS janne_complex correctness marker validated'
