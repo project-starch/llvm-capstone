@@ -35,6 +35,7 @@ agent-handoff/
 │   ├── testing-matrix.md
 │   ├── capstone-agent-test-instructions.md
 │   ├── capstone-coding-conventions.md
+│   ├── beebs-benchmark-bringup-manual.md
 │   ├── project-structure-overview.md
 │   └── runtime-terms-glossary.md
 ├── design/                deep architecture and design docs
@@ -85,6 +86,8 @@ Use these only when the task actually needs them:
 - `ref/testing-matrix.md` — compact map of test layers and entry points
 - `ref/capstone-agent-test-instructions.md` — practical command cookbook
 - `ref/capstone-coding-conventions.md` — local coding conventions
+- `ref/beebs-benchmark-bringup-manual.md` — exact workflow for adding one or
+  more BEEBS benchmark wrappers
 - `ref/capstone-purecap-pointer-model.md` — pointer/capability authority model
 - `ref/project-structure-overview.md` — workspace guide
 - `ref/runtime-terms-glossary.md` — terminology reference
