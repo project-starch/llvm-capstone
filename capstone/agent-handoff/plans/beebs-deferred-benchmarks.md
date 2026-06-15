@@ -1,0 +1,521 @@
+# BEEBS Deferred Benchmark Bring-up Issues
+
+All issues listed here were discovered during the BEEBS benchmark bring-up
+campaign on the `capstone-bootstrap` branch.  Each entry describes how to
+reproduce the problem, what was already tried, the likely root cause, and what
+a real fix would require.
+
+---
+
+## 1. `cincoffset` operand-swap bug (runtime — workaround applied)
+
+**Status**: workaround applied in `aha-compress`; the root cause is unfixed in
+the compiler.
+
+### Symptom
+
+QEMU crash during domain execution:
+
+```
+qemu-system-riscv64: ../target/riscv/op_helper.c:597:
+helper_cscincoffset: Assertion `rs1_v->tag' failed.
+```
+
+The assertion fires inside the QEMU implementation of the `cscincoffset`
+instruction (a variant of `cincoffset`).  It means the first source operand
+(`rs1`) has no capability tag — it was expected to be a capability, but is an
+integer instead.
+
+### How to reproduce
+
+```bash
+bash capstone/benchmarks/beebs/build-beebs-aha-compress-capstone.sh  # builds fine
+```
+
+Original (broken) tail — access test_data[i+2] directly after a compress call:
+
+```c
+for (i = 0; i < n; i += 3) {
+    r = compress1(test_data[i], test_data[i+1]);
+    if (r != test_data[i+2]) errors = 1;  // ← triggers the bug
+}
+```
+
+Run in QEMU, crash occurs.
+
+### Root cause analysis
+
+`CIncOffset` is defined in `CapstoneInstrInfo.td` as:
+
+```
+def CIncOffset : RVInstR<..., (ins GPR:$rs1, GPR:$rs2), "cincoffset", "$rd, $rs1, $rs2">;
+```
+
+The ISA requires `rs1 = capability base` and `rs2 = integer offset`.  The
+`capstone_cincoffset` SDNode definition uses an all-i128 type profile
+(`SDTCisVT<0..2, i128>`) and carries **no `SDNPCommutative` property**.
+However, the backend's DAG pattern matching and register allocator sometimes
+emit `cincoffset rd, rs1, rs2` with the operands swapped — integer in `rs1`
+and capability in `rs2`.
+
+The bug is reproducible and deterministic.  It is triggered whenever a loop
+body performs **two or more independent** GEP (getelementptr) computations into
+the same global array via a variable index in the same loop iteration.
+
+**Detailed observation** (from disassembly of the broken binary):
+
+- First GEP (e.g., `test_data[i]`) — emits `cincoffset a0, a3, a0` where
+  `a3` is the test_data capability (freshly loaded via `gp + PCREL_offset`) and
+  `a0` is the integer offset `i*8`.  This is **correct**.
+- Second GEP (e.g., `test_data[i+2]`, reloaded after the compress call) —
+  emits `cincoffset a1, a1, a2` where `a1 = i*8` (integer) and `a2 =
+  test_data` capability.  **Operands are swapped.**
+
+The pattern that triggers the wrong order: after the function call, the
+compiler reloads BOTH the test_data capability (into `a2`) and the address of
+`i` (into `a1`), loads `i` from `a1` (overwriting the capability register),
+computes `a1 = i*8`, then generates `cincoffset a1, a1, a2` — treating `a1`
+(integer) as `rs1` and `a2` (capability) as `rs2`.
+
+The pattern that always generates the correct order: when the test_data
+capability is first computed via `gp + PCREL_offset` it always lands in a
+specific register (e.g., `a0`), and the integer offset ends up in another
+register.  In this scenario the backend correctly puts the capability in `rs1`.
+
+### Workaround applied (aha-compress)
+
+In `capstone/benchmarks/beebs/adapted/beebs_aha_compress_capstone_tail.c`:
+
+```c
+for (i = 0; i < n; i += 3) {
+    row = test_data + i;   // one CIncOffset, generated correctly (PCREL pattern)
+    CAPSTONE_DELIN(row);   // delinearize so row can be read multiple times
+    d = row[0]; m = row[1]; e = row[2]; // constant-offset loads: ld val, N(cap)
+    if (compress1((unsigned)d, (unsigned)m) != (unsigned int)e) errors = 1;
+}
+```
+
+`row[0]`, `row[1]`, `row[2]` use **constant** immediate offsets and compile to
+`ld val, 0(row)`, `ld val, 8(row)`, `ld val, 16(row)` respectively — no
+additional `cincoffset` is emitted.  The post-call comparison uses `e` which is
+a plain integer on the stack; no capability arithmetic needed.
+
+### Where to fix in the backend
+
+Files: `llvm/lib/Target/Capstone/CapstoneISelDAGToDAG.cpp` (instruction
+selection) and the register allocator.
+
+The fix should ensure that when lowering `CapstoneISD::CIncOffset`, the
+capability operand is always placed as `rs1` and the integer operand as `rs2`
+in the generated `MachineInstr`.  One approach: teach the pattern matcher or
+post-selection peephole to swap operands when `rs1` is provably a non-capability
+value type and `rs2` is a capability.
+
+---
+
+## 2. `sign_extend_inreg i128` — unselectable DAG node (compile-time crash)
+
+**Status**: deferred.  Blocks `nettle-cast128`.
+
+### Symptom
+
+Compile-time `fatal error: error in backend`:
+
+```
+fatal error: error in backend: Cannot select: t42: i128 = sign_extend_inreg t41, ValueType:ch:i32
+  t41: i128 = any_extend t28
+    t28: i64,ch = load<(dereferenceable load (s32) from %ir.length.addr,
+                        addrspace 200), sext from i32>
+                  t0, FrameIndex:i128<1>, undef:i128
+In function: cast128_set_key
+```
+
+### How to reproduce
+
+```bash
+source capstone/tests/capstone-test-env.sh
+clang -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -fno-builtin -O0 \
+  -I$CAPSTONE_TMP_ROOT/beebs-src/support \
+  -c $CAPSTONE_TMP_ROOT/beebs-src/src/nettle-cast128/cast128.c -o /dev/null
+```
+
+### Triggering C pattern
+
+In `cast128_set_key(struct cast128_ctx *ctx, int length, const uint8_t *key)`:
+
+```c
+switch (length & 3) {
+case 0: w = READ_UINT32(key + length - 4); break;
+...
+}
+```
+
+`length` is `int` (i32).  It is used as a pointer offset: `key + length - 4`.
+The GEP lowering sign-extends `length` to i64 for the pointer arithmetic, then
+any-extends the i64 to i128 (the capability carrier type), and finally emits
+`sign_extend_inreg ... i32` to narrow the value back into the 32-bit range
+within the i128 carrier.
+
+The resulting DAG node `i128 = sign_extend_inreg(i128, i32)` has no selection
+rule in the Capstone instruction table.
+
+### Root cause
+
+`SIGN_EXTEND_INREG` for `MVT::i128` is **not registered** in
+`CapstoneISelLowering.cpp`.  Only `i1`, `i8`, and `i16` are explicitly
+registered:
+
+```cpp
+setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i1, Expand);
+setOperationAction(ISD::SIGN_EXTEND_INREG, {MVT::i8, MVT::i16}, Expand);
+```
+
+The default action for unregistered types is `Legal`, which means the
+instruction selector is expected to directly match the node.  But no such
+pattern exists for `i128 = sign_extend_inreg(i128, i32)`.
+
+The underlying operation is: extract the lower 32 bits of an i128, sign-extend
+them back to i128.  On Capstone, i128 is the capability carrier type, so this
+operation appears when a 32-bit signed integer (like a function parameter) is
+used in capability offset arithmetic.
+
+### What was tried
+
+Nothing beyond identifying the crash.  This is a compile-time crash (stop
+condition), so no workaround was attempted.
+
+### How to fix in the backend
+
+Option A (correct, targeted): register `SIGN_EXTEND_INREG` for `MVT::i128` as
+`Custom` in `CapstoneISelLowering.cpp`, and implement a lowering handler in
+`LowerOperation` that:
+1. Extracts the lower 64 bits of the i128 value (`TRUNCATE` to i64).
+2. Sign-extends the appropriate sub-value (`SIGN_EXTEND_INREG` on i64 — which
+   is already handled).
+3. Sign-extends the result back to i128 (`SIGN_EXTEND`).
+
+Option B (simpler): register `SIGN_EXTEND_INREG` for `MVT::i128` as `Expand`.
+The generic expander should lower it to shifts, but this may itself hit other
+unhandled cases for i128 shifts (see Bug 3).
+
+Option C (source workaround, benchmark-side): cast the `int length` parameter
+to `size_t` or `unsigned` before using it in pointer arithmetic, preventing the
+signed GEP path that generates `sign_extend_inreg`.
+
+Relevant files:
+- `llvm/lib/Target/Capstone/CapstoneISelLowering.cpp` — `LowerOperation`,
+  `setOperationAction` calls
+- `llvm/lib/Target/Capstone/CapstoneISelDAGToDAG.cpp` — potential instruction
+  selection pattern
+
+---
+
+## 3. Non-vector shift on i128 — DAG legalization assertion (compile-time crash)
+
+**Status**: deferred.  Blocks `matmult`.
+
+### Symptom
+
+Compile-time assertion failure:
+
+```
+clang: Assertion 'VT.isVector() && "Unable to legalize non-vector shift"'
+failed in (anonymous namespace)::SelectionDAGLegalize::ExpandNode
+at llvm/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp:4395
+In function: verify_benchmark
+```
+
+### How to reproduce
+
+```bash
+source capstone/tests/capstone-test-env.sh
+BEEBS=$CAPSTONE_TMP_ROOT/beebs-src
+sed -E '/^#include <(stdio|stdlib)\.h>/d' $BEEBS/src/matmult/matmult.c > /tmp/matmult_probe.c
+clang -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -fno-builtin -O0 -DMATMULT_INT \
+  -I$BEEBS/support \
+  -c /tmp/matmult_probe.c -o /dev/null
+```
+
+### Triggering C pattern
+
+In `verify_benchmark` (reached only with `-DMATMULT_INT`):
+
+```c
+#ifdef MATMULT_INT
+  matrix exp = {       // matrix = long [UPPERLIMIT][UPPERLIMIT] = long [20][20]
+    {291018000, ...},  // 400 long values, local (stack) variable
+    ...
+  };
+#endif
+  for (i = 0; i < UPPERLIMIT; i++)
+    for (j = 0; j < UPPERLIMIT; j++)
+      if (ResultArray[i][j] != exp[i][j])
+        return 0;
+```
+
+`matrix exp` is a local 2D array of 20×20 `long` values (400 × 8 bytes = 3200
+bytes on the stack).  The index expression `exp[i][j]` computes the offset
+`i * 20 * 8 + j * 8 = i * 160 + j * 8`.
+
+The multiplication `i * 160` (where 160 is not a power of two) requires a
+general multiply or a sequence of shifts and adds.  When this computation is
+performed in the i128 capability carrier type (because the base pointer `exp`
+is represented as i128), a shift node of type `SHL MVT::i128` reaches the
+DAG legalizer in a form it cannot handle, triggering the assertion in
+`SelectionDAGLegalize::ExpandNode`.
+
+### Root cause
+
+Although `{ISD::SHL, ISD::SRA, ISD::SRL}` for `MVT::i128` are registered as
+`Custom` in `CapstoneISelLowering.cpp`:
+
+```cpp
+setOperationAction({ISD::SHL, ISD::SRA, ISD::SRL}, MVT::i128, Custom);
+```
+
+The custom lowering handler handles specific known-good patterns (e.g., shifts
+used in `CIncOffset` computation), but apparently not the general case of
+shifting an i128 value used purely as an integer (not as a capability pointer
+offset).
+
+When the index expression is complex enough (non-power-of-two stride from a
+local 2D array), the legalizer creates a shift node that the custom handler
+does not recognize, falls through, and eventually reaches `ExpandNode` which
+asserts that it can only expand vector shifts.
+
+### What was tried
+
+Nothing beyond identifying the crash.  This is a compile-time crash (stop
+condition), so no workaround was attempted.
+
+### Potential approach for a source-level workaround
+
+The 2D array `matrix exp` in `verify_benchmark` is the only instance that
+triggers this.  A workaround for the benchmark (not a backend fix) would be to
+replace the 2D local array with a linearized 1D array or with global storage,
+or to split the comparison into a helper function that avoids the
+non-power-of-two stride:
+
+```c
+// Instead of: if (ResultArray[i][j] != exp[i][j])
+// Use a pre-flattened array and a helper:
+static const long exp_flat[400] = { 291018000, ... };
+for (i = 0; i < UPPERLIMIT; i++)
+    for (j = 0; j < UPPERLIMIT; j++)
+        if (ResultArray[i][j] != exp_flat[i * UPPERLIMIT + j])
+            return 0;
+```
+
+`i * UPPERLIMIT` where `UPPERLIMIT = 20` still has the same non-power-of-two
+multiplication problem.  A cleaner workaround: precompute the flat index as
+`k = i * UPPERLIMIT + j` in a single loop, or use a pointer that advances by 1
+per inner iteration (stride-1 access).
+
+```c
+const long *ep = exp_flat;
+for (i = 0; i < UPPERLIMIT; i++)
+    for (j = 0; j < UPPERLIMIT; j++, ep++)
+        if (ResultArray[i][j] != *ep)
+            return 0;
+```
+
+This avoids the multiply entirely — `ep` advances by a single `long` per
+iteration, which is `cincoffsetimm ptr, 8` (power of two), which works.
+
+NOTE: this has not been tested; it would require building a probe to confirm.
+
+### How to fix in the backend
+
+The `Custom` handler for `ISD::SHL` on `MVT::i128` in
+`CapstoneISelLowering.cpp` (around the `LowerOperation` switch for `ISD::SHL`)
+should be extended to handle the general case where the shift amount is a
+constant — lowering `SHL i128, C` to an arithmetic sequence (shifts + adds)
+that only uses operations the backend can legalize.
+
+Relevant file: `llvm/lib/Target/Capstone/CapstoneISelLowering.cpp`
+
+---
+
+## 4. `unsupported library call operation` — floating-point runtime (compile-time crash)
+
+**Status**: deferred.  Blocks `nbody`.
+
+### Symptom
+
+```
+fatal error: error in backend: unsupported library call operation
+In function: offset_momentum
+```
+
+### How to reproduce
+
+```bash
+source capstone/tests/capstone-test-env.sh
+BEEBS=$CAPSTONE_TMP_ROOT/beebs-src
+clang -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -fno-builtin -O0 \
+  -I$BEEBS/support \
+  -c $BEEBS/src/nbody/nbody.c -o /dev/null
+```
+
+### Triggering pattern
+
+`nbody.c` uses `double` arrays and calls `sqrt()`.  The function
+`offset_momentum` performs floating-point arithmetic on `double` type.
+The Capstone backend does not have a soft-float library call lowering for
+double-precision `sqrt`, triggering the assertion.
+
+### Status
+
+`nbody` is not a priority candidate — it requires floating-point support which
+is out of scope for the current freestanding capability bring-up.  Deferred
+indefinitely until a soft-float or hardware-float path is established.
+
+---
+
+## 5. `stdio.h` size mismatch — freestanding header clash
+
+**Status**: deferred.  Blocks `slre` and `mergesort` when compiled without
+include stripping.
+
+### Symptom
+
+```
+error: array is too large (18446744073709551604 elements)
+  char _unused2[15 * sizeof (int) - 4 * sizeof (void *) - sizeof (size_t)];
+```
+
+This error is from the host's `<stdio.h>` being pulled in to a Capstone
+freestanding build.  On Capstone, `sizeof(void *)` is 16 (capability size),
+making the struct padding calculation wrap around.
+
+### Root cause
+
+`slre` (`libslre.c`) and `mergesort` (`libmergesort.c`) both `#include
+<stdio.h>` directly.  Stripping `stdio.h` would remove the inclusion, but both
+benchmarks have **deeper problems** that make them non-trivial candidates:
+
+- **`slre`**: `char *regexes[]` — a global pointer array.  Each element is a
+  capability.  Taking the address of a global pointer array and storing it in a
+  local is the same pattern that triggers the `cincoffset` operand-swap bug
+  (Bug 1).  Additionally, `slre` calls `tolower()` and `isspace()` from
+  `<ctype.h>`, which are not available freestanding.  Two separate blockers.
+
+- **`mergesort`**: uses function pointers in an array, `alloca`, and `memcpy`.
+  `alloca` is not available freestanding; `memcpy` would need an inline
+  implementation.  The function pointer pattern might trigger additional
+  capability issues.
+
+Both are deferred.
+
+---
+
+## 6. `stringsearch1` — `strlen` dependency (not probed fully)
+
+**Status**: deferred.  Requires `string.h` for `strlen`.
+
+### How to reproduce
+
+```bash
+source capstone/tests/capstone-test-env.sh
+BEEBS=$CAPSTONE_TMP_ROOT/beebs-src
+# Stripping hosted includes reveals the underlying dependency:
+sed -E '/^#include <(stdio|stdlib|string)\.h>/d' \
+  $BEEBS/src/stringsearch1/stringsearch1.c > /tmp/stringsearch1_stripped.c
+clang -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -fno-builtin -O0 \
+  -I$BEEBS/support \
+  -c /tmp/stringsearch1_stripped.c -o /dev/null
+```
+
+**Error**: `call to undeclared function 'strlen'`
+
+### Status
+
+`strlen` could be implemented as an inline helper.  However, this benchmark
+was noted in earlier sessions as having a backend instruction selection failure
+in the `prep1` function.  The strlen issue was the first obstacle encountered
+in a previous bring-up attempt; the backend crash may be the deeper blocker.
+Not probed again in this session.
+
+---
+
+## 7. `crc32` — wrong correctness marker (runtime failure)
+
+**Status**: deferred.  Compiles and runs, but the correctness check fails.
+
+### Summary
+
+The `crc32` benchmark compiles cleanly and the QEMU run completes without a
+crash.  However, `verify_benchmark` returns the wrong value — the marker is
+`BEEBS_RET_WRONG` rather than `BEEBS_RET_CORRECT`.
+
+### Likely cause
+
+The CRC computation uses bit manipulation of 32-bit words in `unsigned long`
+variables.  On Capstone, `unsigned long` is 64 bits (the pointer-sized type).
+The upstream CRC table and polynomial constants are 32-bit values, but the
+arithmetic operations may produce different results when performed on 64-bit
+words, causing the final CRC to diverge from the expected value stored in
+`verify_benchmark`.
+
+### What to try
+
+1. Use `unsigned int` (always 32-bit) instead of `unsigned long` throughout the
+   CRC computation, or
+2. Explicitly mask all intermediate results to 32 bits with `& 0xFFFFFFFFU`.
+
+Neither has been tried.
+
+---
+
+## 8. Previously deferred benchmarks (no new investigation)
+
+These were deferred in earlier bring-up sessions and have not been re-examined:
+
+| Benchmark | Reason for deferral |
+|-----------|---------------------|
+| `sglib-rbtree` | Compile-time backend crash (red-black tree pointer chasing pattern) |
+| `aha-mont64` | Compile-time backend crash (64-bit Montgomery multiply) |
+| `dijkstra` | Compile-time backend crash (graph traversal, pointer-heavy) |
+| `edn` | Compile-time backend crash |
+| `ctl-string` | Compile-time backend crash or non-trivial C++ adaptation |
+| `qrduino` | Compile-time backend crash |
+| `nettle-arcfour` | Compile-time backend crash |
+| `ludcmp` | Compile-time backend crash (floating-point LU decomposition) |
+| `nettle-des` | Compile-time backend crash |
+| `statemate` | Compile-time backend crash |
+| `trio` | `verify_benchmark` returns -1; the library is 230 KB and uses variadic printf extensively — blocked on the `va_list` bug (see `plans/backend-compiler-fixes.md`) |
+
+The exact error for each was captured during previous sessions.  Re-running any
+of the failed ones can be done with:
+
+```bash
+source capstone/tests/capstone-test-env.sh
+BEEBS=$CAPSTONE_TMP_ROOT/beebs-src
+$CAPSTONE_CLANG \
+  -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -fno-builtin -O0 \
+  -I$BEEBS/support \
+  -c $BEEBS/src/<name>/<name>.c -o /dev/null
+```
+
+(Some need additional source files or include stripping; use the `build-beebs-*`
+scripts as templates.)
+
+---
+
+## Summary table
+
+| Bug | Type | Blocks | Severity |
+|-----|------|--------|----------|
+| `cincoffset` operand swap | Runtime tag fault | any benchmark with multi-element array loops | Workaround applied (aha-compress); others need DELIN |
+| `sign_extend_inreg i128` | Compile-time crash | `nettle-cast128` | Backend fix needed |
+| Non-vector shift on i128 | Compile-time crash | `matmult` | Backend fix needed |
+| Unsupported libcall (FP) | Compile-time crash | `nbody`, `ludcmp`, others | Out of scope (no FP support) |
+| `stdio.h` + pointer array | Multiple issues | `slre` | Two separate blockers |
+| `strlen` dependency | Build error | `stringsearch1` | Potentially fixable |
+| Wrong CRC result | Runtime correctness | `crc32` | Source-level 32-bit masking fix |
+| `va_list` ABI bug | Runtime crash | `trio` | Known bug, see backend-compiler-fixes.md |
