@@ -309,6 +309,17 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   setOperationAction({ISD::SHL, ISD::SRA, ISD::SRL}, MVT::i128, Custom);
   setOperationAction(ISD::MUL, MVT::i128, Custom);
   setOperationAction({ISD::SMUL_LOHI, ISD::UMUL_LOHI}, MVT::i128, Expand);
+  setOperationAction(ISD::SIGN_EXTEND_INREG, MVT::i128, Custom);
+
+  // Block extension loads into i128 — the instruction selector handles
+  // sign_extend(i64) via PseudoSCALAR_COPY_I128, but a merged sextload/
+  // zextload/extload into i128 has no selector and the DAGCombiner would
+  // otherwise generate one by folding sign_extend(sext_load(srcVT)).
+  for (MVT SrcVT : {MVT::i1, MVT::i8, MVT::i16, MVT::i32, MVT::i64}) {
+    setLoadExtAction(ISD::SEXTLOAD, MVT::i128, SrcVT, Expand);
+    setLoadExtAction(ISD::ZEXTLOAD, MVT::i128, SrcVT, Expand);
+    setLoadExtAction(ISD::EXTLOAD,  MVT::i128, SrcVT, Expand);
+  }
 
   // Custom lowering for global addresses
   setOperationAction(ISD::GlobalAddress, MVT::i128, Custom);
@@ -7695,6 +7706,20 @@ SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
   SDValue Base = Op.getOperand(0); // Base (i128)
   SDValue Offset = Op.getOperand(1); // Offset (i128)
 
+  // ISD::ADD is commutative; DAGCombine may place the integer offset in
+  // operand(0). Restore canonical order: capability in Base, integer in
+  // Offset. A {S,Z,A}EXT of a narrower type or a constant is an integer
+  // offset; a capability is natively i128 and never wrapped in such an ext.
+  {
+    auto isIntegerOffset = [](SDValue V) -> bool {
+      unsigned Opc = V.getOpcode();
+      return Opc == ISD::SIGN_EXTEND || Opc == ISD::ZERO_EXTEND ||
+             Opc == ISD::ANY_EXTEND || isa<ConstantSDNode>(V.getNode());
+    };
+    if (isIntegerOffset(Base) && !isIntegerOffset(Offset))
+      std::swap(Base, Offset);
+  }
+
   // --- Optimization for GEP scaling (loop_test fix) ---
   // LLVM often emits: (add Base, (shl (sext i64:Index), ShAmt))
   // We want:          (CIncOffset Base, (sext (shl i64:Index, ShAmt)))
@@ -8038,6 +8063,21 @@ SDValue CapstoneTargetLowering::lowerSETCC(SDValue Op,
     return DAG.getNode(ISD::SETCC, DL, Op.getValueType(), Op0_64, Op1_64, CC);
   }
   return SDValue();
+}
+
+// Lower i128 = sign_extend_inreg(i128 val, vt) by peeling the i128 wrapper:
+// truncate to i64, sign-extend within i64, then sign-extend back to i128.
+// This handles signed integer parameters used in capability pointer arithmetic.
+static SDValue lowerScalarI128SignExtendInReg(SDValue Op, SelectionDAG &DAG) {
+  assert(Op.getSimpleValueType() == MVT::i128);
+  SDLoc DL(Op);
+  SDValue Inner = Op.getOperand(0);
+  EVT ExtVT = cast<VTSDNode>(Op.getOperand(1))->getVT();
+  SDValue Trunc = DAG.getNode(ISD::TRUNCATE, DL, MVT::i64, Inner);
+  SDValue SExtI64 =
+      DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, MVT::i64, Trunc,
+                  DAG.getValueType(ExtVT));
+  return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, SExtI64);
 }
 
 SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
@@ -8982,6 +9022,10 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
   case ISD::VSELECT:
     if (Op.getSimpleValueType().isFixedLengthVector())
       return lowerToScalableOp(Op, DAG);
+    return SDValue();
+  case ISD::SIGN_EXTEND_INREG:
+    if (Op.getSimpleValueType() == MVT::i128)
+      return lowerScalarI128SignExtendInReg(Op, DAG);
     return SDValue();
   case ISD::SHL:
   case ISD::SRA:
@@ -17589,6 +17633,20 @@ performSIGN_EXTEND_INREGCombine(SDNode *N, TargetLowering::DAGCombinerInfo &DCI,
   EVT SrcVT = cast<VTSDNode>(N->getOperand(1))->getVT();
   unsigned Opc = Src.getOpcode();
   SDLoc DL(N);
+
+  // For i128 = sign_extend_inreg(i128, srcVT): when Src = any_extend(i64_x),
+  // directly produce sign_extend(i64_x).  We cannot go through
+  // sign_extend_inreg(i64_x, srcVT) here because visitSIGN_EXTEND would fold
+  // sign_extend(sign_extend_inreg(i64_x, srcVT)) back to
+  // sign_extend_inreg(any_extend(i64_x), srcVT) — causing an infinite loop.
+  // sign_extend(i64) selects to PseudoSCALAR_COPY_I128 which fills the high
+  // 64 bits with the sign of the low 64 bits, giving the correct i128 result.
+  if (VT == MVT::i128) {
+    if (Src.getOpcode() == ISD::ANY_EXTEND &&
+        Src.getOperand(0).getValueType() == MVT::i64)
+      return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, Src.getOperand(0));
+    return SDValue();
+  }
 
   // Fold (sext_inreg (fmv_x_anyexth X), i16) -> (fmv_x_signexth X)
   // Don't do this with Zhinx. We need to explicitly sign extend the GPR.

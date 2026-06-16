@@ -1326,7 +1326,18 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   SDNode *Res = CurDAG->getMachineNode(Capstone::CIncOffset, DL, PtrVT,
                                        GP, SDValue(Offset, 0));
 
-  ReplaceNode(Node, Res);
+  // 4. Delinearize: convert the LINEAR global capability to NONLINEAR.
+  // In Capstone, cincoffset rd, rs1, rs2 with rd!=rs1 consumes (zeroes) rs1
+  // when rs1 is LINEAR.  Global data capabilities are typically used as base
+  // pointers for multiple indexed accesses (e.g. S-box lookups), so if the
+  // register allocator assigns the same physical register to hold the base
+  // across several index uses the second use finds the register untagged and
+  // aborts.  Making the global capability NONLINEAR (copyable) prevents this:
+  // cincoffset with a NONLINEAR rs1 copies it to rd without clearing rs1.
+  SDNode *Delined = CurDAG->getMachineNode(Capstone::DELIN, DL, PtrVT,
+                                           SDValue(Res, 0));
+
+  ReplaceNode(Node, Delined);
 }
 
 void CapstoneDAGToDAGISel::selectShrink(SDNode *Node) {

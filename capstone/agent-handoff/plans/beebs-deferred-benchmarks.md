@@ -115,7 +115,36 @@ value type and `rs2` is a capability.
 
 ## 2. `sign_extend_inreg i128` — unselectable DAG node (compile-time crash)
 
-**Status**: deferred.  Blocks `nettle-cast128`.
+**Status**: FIXED.  `nettle-cast128` now passes.
+
+Two fixes were required and are both committed on `capstone-bootstrap`:
+
+1. **`CapstoneISelLowering.cpp`** — `performSIGN_EXTEND_INREGCombine`: added
+   an early i128 case that folds `sign_extend_inreg(any_extend(i64_val), srcVT)`
+   → `sign_extend(i64_val)`, which selects to `PseudoSCALAR_COPY_I128`.
+
+2. **`CapstoneISelDAGToDAG.cpp`** — `selectLGA`: after
+   `CIncOffset(gp, pcrel_offset)` that yields the global data capability, insert
+   `DELIN` to convert the capability from LINEAR to NONLINEAR.  Without DELIN,
+   a `cincoffset rd, cap_reg, offset` with `rd ≠ rs1` (as generated for indexed
+   accesses into S-box tables) consumes the base register, making subsequent
+   S-box accesses through the same base fail with
+   `helper_cscincoffset: Assertion 'rs1_v->tag' failed`.  Making the global
+   data cap NONLINEAR (via DELIN) allows it to be "copied" into an offset
+   register without being zeroed.
+
+   Note: function capabilities (`selectLGA` for call targets) intentionally do
+   NOT get DELIN — function capabilities remain LINEAR.
+
+**Source workaround also needed** (`build-beebs-nettle-cast128-capstone.sh`):
+The `verify_benchmark` function initialises a local `int expected[] = {0,1,...}`
+array via a global constant.  The Capstone backend emits `stc` (128-bit
+capability store) for the bulk copy, but only loads two int32s (64 bits) into
+the lower half of the register; the upper 64 bits (the other two int32s) are
+zero.  This corrupts `expected[2,3,6,7,10,11,14,15]` to 0, causing spurious
+verify failures even with correct computation.  The workaround patches
+`verify_benchmark` to compare `result[i]` directly against `(uint8_t)i`,
+eliminating the local array entirely.  See Bug #9 below for the root cause.
 
 ### Symptom
 
@@ -471,6 +500,50 @@ Neither has been tried.
 
 ---
 
+## 9. `stc` bulk-copy of integer arrays — corrupted stack data (backend bug)
+
+**Status**: source-level workaround applied for `nettle-cast128`; root cause
+unfixed in the backend.
+
+### Symptom
+
+Local integer arrays initialised from compile-time constants are silently
+corrupted at runtime: every other pair of int32 values in each 16-byte chunk is
+read back as 0 instead of its intended value.
+
+### Root cause
+
+When the compiler bulk-copies a constant integer array from the `.rodata`
+section to a stack slot, it uses `stc` (128-bit capability store) to write
+16 bytes at a time.  It loads two int32 values into the lower 64 bits of a
+register (via `lwu + slli 32 + or`) and then emits `stc reg, offset(sp)`.
+Because `stc` stores the full 128-bit capability register and only the lower
+64 bits were initialised (via 64-bit integer operations), the upper 64 bits
+are zero.  The third and fourth int32 within each 16-byte chunk are therefore
+written as 0.
+
+### Affected code
+
+Any function with a local array of `int` or `uint32_t` values initialised from
+a constant: `int arr[] = {a, b, c, d, ...}`.
+
+### Workaround
+
+Replace the local array lookup with a direct expression that avoids
+materialising the array on the stack.  For `verify_benchmark` in
+`nettle-cast128`, the pattern `result[i] != expected[i]` was replaced with
+`result[i] != (uint8_t)i`.
+
+### How to fix in the backend
+
+`stc` should not be used for stores of pure integer (non-capability) data.
+When emitting a bulk store of an integer register, the backend should use `sd`
+(64-bit store) twice rather than a single `stc`.  The relevant lowering is in
+the memcpy/constant-initialisation expansion path in `CapstoneISelLowering.cpp`
+or the target-specific memcpy inline expansion.
+
+---
+
 ## 8. Previously deferred benchmarks (no new investigation)
 
 These were deferred in earlier bring-up sessions and have not been re-examined:
@@ -511,8 +584,9 @@ scripts as templates.)
 
 | Bug | Type | Blocks | Severity |
 |-----|------|--------|----------|
-| `cincoffset` operand swap | Runtime tag fault | any benchmark with multi-element array loops | Workaround applied (aha-compress); others need DELIN |
-| `sign_extend_inreg i128` | Compile-time crash | `nettle-cast128` | Backend fix needed |
+| `cincoffset` operand swap | Runtime tag fault | any benchmark with multi-element array loops | Workaround applied (aha-compress); **DELIN fix in selectLGA resolves for nettle-cast128** |
+| `sign_extend_inreg i128` | Compile-time crash | `nettle-cast128` | **FIXED** — CapstoneISelLowering + DELIN in selectLGA |
+| `stc` bulk-copy integer corruption | Runtime correctness | `nettle-cast128` (verify) | Workaround applied; root cause unfixed in backend |
 | Non-vector shift on i128 | Compile-time crash | `matmult` | Backend fix needed |
 | Unsupported libcall (FP) | Compile-time crash | `nbody`, `ludcmp`, others | Out of scope (no FP support) |
 | `stdio.h` + pointer array | Multiple issues | `slre` | Two separate blockers |
