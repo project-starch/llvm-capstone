@@ -73,6 +73,24 @@ All of the following pass on the `capstone-bootstrap` branch:
   benchmark runs end to end and validates its correctness marker
 - `capstone/benchmarks/beebs/run-beebs-stringsearch1.sh` - twenty-eighth BEEBS
   benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-bs.sh` - twenty-ninth BEEBS benchmark
+  runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-fir.sh` - thirtieth BEEBS benchmark
+  runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-lcdnum.sh` - thirty-first BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-ns.sh` - thirty-second BEEBS benchmark
+  runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-ud.sh` - thirty-third BEEBS benchmark
+  runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-nsichneu.sh` - thirty-fourth BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-sglib-arraysort.sh` - thirty-fifth BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-sglib-arrayheapsort.sh` - thirty-sixth
+  BEEBS benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-sglib-arrayquicksort.sh` - thirty-seventh
+  BEEBS benchmark runs end to end and validates its correctness marker
 
 Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 `beebs_simple_host.c`. Keep separate per-benchmark domain/host files only when
@@ -86,6 +104,11 @@ replacement adapted files (bubblesort, prime, cnt, duff, janne_complex, tarai,
 levenshtein, recursion) are compiled directly. Tail-append files (strstr,
 insertsort, jfdctint, fdct, aha-compress, nettle-md5) are concatenated with
 the stripped upstream source at build time.
+
+`build-beebs-simple-capstone-common.sh` now supports `BEEBS_EXTRA_DEFINES`
+(array of `-D` defines, e.g. `BEEBS_EXTRA_DEFINES=(QUICK_SORT)`) and includes
+`-fno-jump-tables` unconditionally (jump tables use raw integer addresses which
+fault on Capstone since loads require capabilities).
 
 ## Known cincoffset operand-swap bug
 

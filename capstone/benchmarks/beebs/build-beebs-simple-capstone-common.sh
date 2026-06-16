@@ -37,12 +37,17 @@ COMMON_FLAGS=(
   -Xclang +m
   -ffreestanding
   -fno-builtin
+  -fno-jump-tables
   "$DOMAIN_OPT_LEVEL"
   -I"$SUPPORT_DIR"
 )
 
 for include_rel in "${BEEBS_EXTRA_INCLUDE_RELS[@]:-}"; do
   COMMON_FLAGS+=("-I$BEEBS_SRC_DIR/$include_rel")
+done
+
+for def in "${BEEBS_EXTRA_DEFINES[@]:-}"; do
+  [[ -n "$def" ]] && COMMON_FLAGS+=("-D$def")
 done
 
 sanitize_source() {
