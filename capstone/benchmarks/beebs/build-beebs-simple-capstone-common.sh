@@ -54,12 +54,18 @@ sanitize_source() {
   local src=$1
   local dst=$2
 
+  # Build sed pattern from base set + any extra headers to strip
+  local strip_pat='stdio|stdlib'
+  for hdr in "${BEEBS_STRIP_EXTRA_HEADERS[@]:-}"; do
+    [[ -n "$hdr" ]] && strip_pat="${strip_pat}|${hdr}"
+  done
+
   {
     if [[ "${BEEBS_DEFINE_NULL:-0}" == 1 ]]; then
       printf '#ifndef NULL\n#define NULL ((void *)0)\n#endif\n'
     fi
     if [[ "${BEEBS_STRIP_HOSTED_INCLUDES:-0}" == 1 ]]; then
-      sed -E '/^#include <(stdio|stdlib)\.h>/d' "$src"
+      sed -E "/^#include <(${strip_pat})\.h>/d" "$src"
     else
       sed -n '1,$p' "$src"
     fi
