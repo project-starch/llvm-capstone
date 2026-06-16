@@ -446,8 +446,7 @@ See Bug 11.
 
 ## 6. `stringsearch1` — pointer-difference-to-long crashes backend (compile-time)
 
-**Status**: fixable via source workaround (integer counter replacement).
-Not yet committed.
+**Status**: FIXED via source workarounds.  `stringsearch1` now passes.
 
 ### Symptom
 
@@ -705,6 +704,63 @@ also need inline stubs.
 
 ---
 
+## 12. Pointer subtraction → `sub i128` — backend unselectable (compile-time crash)
+
+**Status**: FIXED via source workaround.  `stringsearch1` now passes.
+
+### Symptom
+
+Compile-time `fatal error: error in backend: Cannot select`:
+
+```
+t28: i128 = sub t17, t33
+  t17: i128 = load ... from %ir.s   (capability pointer)
+  t33: i128 = sign_extend t32
+    t32: i64 = load ... from %ir.n1, sext from i32
+In function: exec1
+```
+
+### Root cause
+
+In C, `ptr - int` generates a GEP with a negative offset, which LLVM
+lowers to `add(ptr, neg(int))`.  The DAGCombiner has a canonical rule:
+`add(a, neg(b))` → `sub(a, b)`.  After this transform the Capstone backend
+receives `sub i128, something` — but there is no instruction selector for
+`sub i128`.  The backend CAN select `add i128` (→ `cincoffset`) but not
+`sub i128`.
+
+The same bug affects any `ptr -= int` or `ptr = ptr - int` in the source.
+Examples in stringsearch1: `s -= lastdelta` and `q = s - n1` in exec1/exec2.
+
+### Workaround (applied in stringsearch1 adapted files)
+
+Store the negative offset in a local `Tab` (= `long`) variable before the
+pointer addition.  At `-O0` the store/load pair prevents the DAGCombiner from
+tracing the value back to its negation origin, so `add(ptr, loaded_i64)`
+stays as `add` and selects as `cincoffset`.
+
+```c
+/* Instead of: s -= lastdelta; */
+Tab lastdelta_neg = -lastdelta;   /* store −lastdelta to stack */
+s += lastdelta_neg;               /* load from stack → add i128 (not sub) */
+```
+
+This technique is specific to `-O0` (all locals spilled).  At higher
+optimization levels the store/load pair would be eliminated and the negation
+would become visible to the DAGCombiner again.
+
+### How to fix in the backend
+
+Register a pattern (or custom lowering) for `sub i128, x` that lowers to
+`cincoffset rd, rs1, neg(x)` (negate the offset and use cincoffset).
+Alternatively, in the DAGCombiner or target-specific combine pass, block
+the `add(ptr, neg(x))` → `sub(ptr, x)` transform when the result type is i128.
+
+Relevant files: `llvm/lib/Target/Capstone/CapstoneISelDAGToDAG.cpp` (add a
+select pattern for `sub i128`) or `CapstoneISelLowering.cpp` (block the combine).
+
+---
+
 ## 8. Previously deferred benchmarks (no new investigation)
 
 These were deferred in earlier bring-up sessions and have not been re-examined:
@@ -751,7 +807,8 @@ scripts as templates.)
 | Non-vector shift on i128 | Compile-time crash | `matmult`, `stringsearch1` | **FIXED** for matmult — source workaround; `stringsearch1` fixable with int counters |
 | Unsupported libcall (FP) | Compile-time crash | `nbody`, `ludcmp`, others | Out of scope (no FP support) |
 | `stdio.h` + pointer size | freestanding build error | `slre`, `mergesort` | `mergesort` **FIXED**; `slre` has deeper Clang frontend crash |
-| ptrdiff_t → long, missing trunc | Compile-time crash | `stringsearch1` | Fixable — integer counter source workaround |
+| ptrdiff_t → long, missing trunc | Compile-time crash | `stringsearch1` | **FIXED** — integer counter source workaround |
+| ptr subtraction → sub i128 | Compile-time crash | `stringsearch1` | **FIXED** — Tab-local negative offset workaround |
 | Wrong CRC result | Runtime correctness | `crc32` | **FIXED** — 32-bit DWORD + single-call expected value |
 | `stc` bulk-copy integer corruption | Runtime correctness | `mergesort` (verify) | **FIXED** — global const arrays in verify_benchmark |
 | Range by-value ABI (stc zeroes upper half) | Runtime correctness | `mergesort` | **FIXED** — pointer-based Range passing in sort functions |

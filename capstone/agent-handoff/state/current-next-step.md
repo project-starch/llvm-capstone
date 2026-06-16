@@ -12,13 +12,13 @@ than embedded in shell heredocs. The next step is resuming new benchmark bring-u
 ## Candidate pool
 
 - `slre`
-- `stringsearch1`
 - `nbody`
 - `trio`
 
 ## Deferred from the previous probe batch
 
 - `mergesort`: **DONE** — fixed and committed.
+- `stringsearch1`: **DONE** — fixed and committed.
 - `crc32`: **DONE** — fixed and committed.
 - `nettle-cast128`: **DONE** — fixed and committed.
 - `matmult`: **DONE** — fixed and committed.
