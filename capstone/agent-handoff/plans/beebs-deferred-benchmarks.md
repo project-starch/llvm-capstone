@@ -412,8 +412,8 @@ indefinitely until a soft-float or hardware-float path is established.
 
 ## 5. `stdio.h` size mismatch — freestanding header clash
 
-**Status**: deferred.  Blocks `slre` and `mergesort` when compiled without
-include stripping.
+**Status**: partially resolved.  `mergesort` is **FIXED**.  `slre` has a
+separate deeper blocker (see Bug 11).
 
 ### Symptom
 
@@ -430,50 +430,82 @@ making the struct padding calculation wrap around.
 
 `slre` (`libslre.c`) and `mergesort` (`libmergesort.c`) both `#include
 <stdio.h>` directly.  Stripping `stdio.h` would remove the inclusion, but both
-benchmarks have **deeper problems** that make them non-trivial candidates:
+benchmarks have deeper problems.
 
-- **`slre`**: `char *regexes[]` — a global pointer array.  Each element is a
-  capability.  Taking the address of a global pointer array and storing it in a
-  local is the same pattern that triggers the `cincoffset` operand-swap bug
-  (Bug 1).  Additionally, `slre` calls `tolower()` and `isspace()` from
-  `<ctype.h>`, which are not available freestanding.  Two separate blockers.
+**`mergesort`**: FIXED.  All blockers resolved with source workarounds:
+function pointers removed (inlined comparison), FP jitter replaced with integer
+arithmetic, alloca replaced with static buffer, memcpy provided as inline stub,
+verify_benchmark local arrays moved to `.rodata` globals (Bug #9), and Range
+by-value ABI clobbering fixed (Bug #10).  See
+`capstone/benchmarks/beebs/adapted/beebs_mergesort_capstone_tail.c`.
 
-- **`mergesort`**: uses function pointers in an array, `alloca`, and `memcpy`.
-  `alloca` is not available freestanding; `memcpy` would need an inline
-  implementation.  The function pointer pattern might trigger additional
-  capability issues.
-
-Both are deferred.
+**`slre`**: has a Clang frontend crash that is not fixable at source level.
+See Bug 11.
 
 ---
 
-## 6. `stringsearch1` — `strlen` dependency (not probed fully)
+## 6. `stringsearch1` — pointer-difference-to-long crashes backend (compile-time)
 
-**Status**: deferred.  Requires `string.h` for `strlen`.
+**Status**: fixable via source workaround (integer counter replacement).
+Not yet committed.
 
-### How to reproduce
+### Symptom
 
-```bash
-source capstone/tests/capstone-test-env.sh
-BEEBS=$CAPSTONE_TMP_ROOT/beebs-src
-# Stripping hosted includes reveals the underlying dependency:
-sed -E '/^#include <(stdio|stdlib|string)\.h>/d' \
-  $BEEBS/src/stringsearch1/stringsearch1.c > /tmp/stringsearch1_stripped.c
-clang -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
-  -ffreestanding -fno-builtin -O0 \
-  -I$BEEBS/support \
-  -c /tmp/stringsearch1_stripped.c -o /dev/null
+Compile-time assertion failure from non-vector SHL i128 (same root cause as
+Bug #3 / matmult):
+
+```
+clang: Assertion 'VT.isVector() && "Unable to legalize non-vector shift"'
+failed in SelectionDAGLegalize::ExpandNode
+In function: prep1
 ```
 
-**Error**: `call to undeclared function 'strlen'`
+### Root cause
 
-### Status
+`fast.fwd.inc.c` (`prep1`) and `fast.rev.d12.c` (`prep2`, `exec2`) contain:
 
-`strlen` could be implemented as an inline helper.  However, this benchmark
-was noted in earlier sessions as having a backend instruction selection failure
-in the `prep1` function.  The strlen issue was the first obstacle encountered
-in a previous bring-up attempt; the backend crash may be the deeper blocker.
-Not probed again in this session.
+```c
+d[*p] = pe - p;   /* ptrdiff_t = i128 on Capstone; d is Tab = long (i64) */
+```
+
+Clang on Capstone generates `store i128` for this assignment instead of
+`trunc i128 to i64`; the backend cannot split the i128 store and asserts.
+Additional pointer-difference uses in `exec2`:
+```c
+k2 = d2[p - pat.pat];   /* pointer diff as array index */
+k2 = q + k2 - RH;       /* pointer diff assigned to int */
+```
+
+### Workaround (not yet applied)
+
+`fast.fwd.inc.c` and `fast.rev.d12.c` need complete replacement files with
+pointer differences replaced by integer shift counters:
+
+**prep1 / prep2 fix**:
+```c
+int shift = m - 1;
+for (p = pat.pat, pe = p + m - 1; p < pe; p++, shift--)
+    d[*p] = (Tab)shift;
+```
+
+**exec2 fix**: replace `p - pat.pat` and `q + k2 - RH` with tracked integer
+counters `pidx` and `scan_count`.
+
+Replacement files to create:
+- `capstone/benchmarks/beebs/adapted/beebs_stringsearch1_fwd_capstone.c`
+- `capstone/benchmarks/beebs/adapted/beebs_stringsearch1_rev_capstone.c`
+- `capstone/benchmarks/beebs/build-beebs-stringsearch1-capstone.sh`
+- `capstone/benchmarks/beebs/build-beebs-stringsearch1-host.sh`
+- `capstone/benchmarks/beebs/run-beebs-stringsearch1.sh`
+
+The `verify_benchmark` expected value needs a host reference run to confirm.
+
+### stringsearch1 source layout
+
+Three files compiled separately (conflicting globals):
+- `stringsearch1.c` — main harness (tiny)
+- `fast.fwd.inc.c` — `prep1`, `exec1`
+- `fast.rev.d12.c` — `prep2`, `exec2`
 
 ---
 
@@ -560,6 +592,119 @@ or the target-specific memcpy inline expansion.
 
 ---
 
+## 10. Range by-value struct ABI — stc zeroes upper half (runtime correctness)
+
+**Status**: FIXED via source workaround.  `mergesort` now passes.
+
+### Symptom
+
+Sort produces wrong output: `verify_benchmark` returns 0 (wrong result) even
+though `benchmark()` runs without crashing.  QEMU does not crash; the sorted
+array silently contains values in the wrong order.
+
+### Root cause
+
+On Capstone, a 16-byte struct (like `Range = {long start; long end}`) is
+passed in a single 128-bit capability register slot.  When the compiler copies
+a `Range` value returned via hidden pointer, it:
+
+1. Loads only `Range.start` (8 bytes) via `ld` from the hidden retval pointer.
+2. Stores the 128-bit slot via `stc`, which writes {lo=Range.start, hi=0}.
+
+`Range.end` (8 bytes at offset +8) is never loaded, and the upper half of the
+`stc` store writes 0 to the `Range.end` slot at the destination.  The callee
+then reads `Range.end = 0`, so `Range_length = 0 < 32`, and `InsertionSort` is
+called on an empty range — no sorting occurs.
+
+The bug is triggered at every `MakeRange(...)` return value that is then passed
+by value to another sort function.
+
+### Workaround (applied in mergesort tail)
+
+All sort functions in the tail file (`BinaryLast`, `InsertionSort`,
+`MergeSortR`, `MergeSort`) take `const Range *range` instead of `const Range
+range`.  Struct fields are assigned individually at each call site:
+
+```c
+A.start = range->start;   /* sd — compiler emits separate 8-byte stores */
+A.end   = mid;
+MergeSortR(array, &A, buffer);
+```
+
+Individual field assignments emit separate `sd` instructions, not `stc`, so
+both fields are written correctly.  `MakeRange` and `Range_length` from the
+upstream prefix are not called in the tail file.
+
+### How to fix in the backend
+
+The compiler should use `ldc` (load 128-bit) when copying a 16-byte
+non-capability struct, not `ld` (load 64-bit).  The struct copy path in
+`CapstoneISelLowering.cpp` (or in the ABI/calling-convention code) should
+treat a 16-byte struct as a 128-bit unit for both load and store, ensuring
+both fields are copied.
+
+---
+
+## 11. `slre` — Clang frontend PHINode type mismatch (compile-time crash)
+
+**Status**: deferred.  Not fixable at source level; needs a Clang frontend fix.
+
+### Symptom
+
+Compile-time crash with a Clang assertion:
+
+```
+PHINode::setIncomingValue: incoming value type does not match PHINode type!
+  ...
+UNREACHABLE executed at llvm/lib/IR/Instructions.cpp:<N>
+In function: doh
+```
+
+Triggered during IR generation in `VisitAbstractConditionalOperator`
+(CGExprScalar.cpp).
+
+### How to reproduce
+
+```bash
+source capstone/tests/capstone-test-env.sh
+BEEBS=$CAPSTONE_TMP_ROOT/beebs-src
+# Strip hosted includes first:
+sed -E '/^#include <(stdio|stdlib|ctype)\.h>/d' \
+  $BEEBS/src/slre/libslre.c > /tmp/slre_stripped.c
+$CAPSTONE_CLANG -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -fno-builtin -O0 \
+  -I$BEEBS/support -c /tmp/slre_stripped.c -o /dev/null
+```
+
+### Triggering C pattern
+
+In `doh()`:
+
+```c
+p = (i == 0) ? b->ptr : schlong + 1;
+```
+
+Both branches produce `const char *` (capability pointer), but the two
+branches resolve to capability values of differing LLVM IR types (one is a
+struct member access, one is pointer arithmetic on a local).  The Clang IR
+builder tries to merge them at the PHI node and asserts when the types differ.
+
+### Why no source workaround is possible
+
+The ternary-operator crash is in Clang's codegen for any conditional expression
+whose two branches produce capabilities of structurally different LLVM types.
+Rewriting `doh()` to avoid the ternary only moves the problem: the same pattern
+appears in multiple places.  The root fix must be in `CGExprScalar.cpp` to
+canonicalize capability pointer types before inserting them into PHI nodes.
+
+### Additional blocker (secondary)
+
+Even if the frontend crash were fixed, `slre` calls `tolower()` and `isspace()`
+from `<ctype.h>`, which are not available in a freestanding build.  These would
+also need inline stubs.
+
+---
+
 ## 8. Previously deferred benchmarks (no new investigation)
 
 These were deferred in earlier bring-up sessions and have not been re-examined:
@@ -603,9 +748,12 @@ scripts as templates.)
 | `cincoffset` operand swap | Runtime tag fault | any benchmark with multi-element array loops | Workaround applied (aha-compress); **DELIN fix in selectLGA resolves for nettle-cast128** |
 | `sign_extend_inreg i128` | Compile-time crash | `nettle-cast128` | **FIXED** — CapstoneISelLowering + DELIN in selectLGA |
 | `stc` bulk-copy integer corruption | Runtime correctness | `nettle-cast128` (verify) | Workaround applied; root cause unfixed in backend |
-| Non-vector shift on i128 | Compile-time crash | `matmult` | **FIXED** — source workaround in adapted tail |
+| Non-vector shift on i128 | Compile-time crash | `matmult`, `stringsearch1` | **FIXED** for matmult — source workaround; `stringsearch1` fixable with int counters |
 | Unsupported libcall (FP) | Compile-time crash | `nbody`, `ludcmp`, others | Out of scope (no FP support) |
-| `stdio.h` + pointer array | Multiple issues | `slre` | Two separate blockers |
-| `strlen` dependency | Build error | `stringsearch1` | Potentially fixable |
+| `stdio.h` + pointer size | freestanding build error | `slre`, `mergesort` | `mergesort` **FIXED**; `slre` has deeper Clang frontend crash |
+| ptrdiff_t → long, missing trunc | Compile-time crash | `stringsearch1` | Fixable — integer counter source workaround |
 | Wrong CRC result | Runtime correctness | `crc32` | **FIXED** — 32-bit DWORD + single-call expected value |
+| `stc` bulk-copy integer corruption | Runtime correctness | `mergesort` (verify) | **FIXED** — global const arrays in verify_benchmark |
+| Range by-value ABI (stc zeroes upper half) | Runtime correctness | `mergesort` | **FIXED** — pointer-based Range passing in sort functions |
+| Clang frontend PHINode type mismatch | Compile-time crash | `slre` | Not fixable at source level; needs Clang frontend fix |
 | `va_list` ABI bug | Runtime crash | `trio` | Known bug, see backend-compiler-fixes.md |
