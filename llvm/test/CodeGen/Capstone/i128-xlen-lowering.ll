@@ -63,6 +63,8 @@ entry:
 ; CHECK-LABEL: stack_field_addr:
 ; CHECK: cincoffsetimm [[ADDR:a[0-9]+]], {{(sp|s0)}},
 ; CHECK-NOT: addi [[ADDR]],
+; CHECK: cincoffset [[GLOBAL:a[0-9]+]], gp,
+; CHECK-NEXT: delin [[GLOBAL]]
 ; CHECK: stc [[ADDR]],
 define void @stack_field_addr() addrspace(200) {
 entry:

@@ -7,10 +7,11 @@ a real fix would require.
 
 ---
 
-## 1. `cincoffset` operand-swap bug (runtime — workaround applied)
+## 1. `cincoffset` operand-swap bug (runtime — backend fixed, workaround retained)
 
-**Status**: workaround applied in `aha-compress`; the root cause is unfixed in
-the compiler.
+**Status**: backend root cause fixed by the lowerADD operand canonicalization
+in `CapstoneISelLowering.cpp`.  The `aha-compress` source workaround remains in
+place because it is simple, deterministic, and already validated.
 
 ### Symptom
 
@@ -58,9 +59,10 @@ However, the backend's DAG pattern matching and register allocator sometimes
 emit `cincoffset rd, rs1, rs2` with the operands swapped — integer in `rs1`
 and capability in `rs2`.
 
-The bug is reproducible and deterministic.  It is triggered whenever a loop
-body performs **two or more independent** GEP (getelementptr) computations into
-the same global array via a variable index in the same loop iteration.
+Before the backend fix, the bug was reproducible and deterministic.  It was
+triggered whenever a loop body performed **two or more independent** GEP
+(getelementptr) computations into the same global array via a variable index in
+the same loop iteration.
 
 **Detailed observation** (from disassembly of the broken binary):
 
@@ -82,7 +84,23 @@ capability is first computed via `gp + PCREL_offset` it always lands in a
 specific register (e.g., `a0`), and the integer offset ends up in another
 register.  In this scenario the backend correctly puts the capability in `rs1`.
 
-### Workaround applied (aha-compress)
+### Backend fix
+
+The real fix is in `CapstoneISelLowering.cpp`:
+
+- `lowerADD` now identifies integer offsets more carefully, including
+  scaled-index GEP forms such as `shl(sext/zext idx, scale)`.
+- capability detection now distinguishes true i128 capability loads
+  (`NON_EXTLOAD` with memory VT i128, i.e. `ldc`) from sign-/zero-extended
+  integer loads carried in i128.
+- `selectCIncOffset` guards the final operand order so the selected
+  `cincoffset` has the capability in `rs1` and the integer offset in `rs2`.
+
+Focused coverage lives in `llvm/test/CodeGen/Capstone/ptr-arith.ll`, including
+the loaded-capability case and signed-i32 pointer-offset patterns.  `edn` was
+unblocked by this fix and now passes end to end.
+
+### Workaround retained (aha-compress)
 
 In `capstone/benchmarks/beebs/adapted/beebs_aha_compress_capstone_tail.c`:
 
@@ -99,17 +117,6 @@ for (i = 0; i < n; i += 3) {
 `ld val, 0(row)`, `ld val, 8(row)`, `ld val, 16(row)` respectively — no
 additional `cincoffset` is emitted.  The post-call comparison uses `e` which is
 a plain integer on the stack; no capability arithmetic needed.
-
-### Where to fix in the backend
-
-Files: `llvm/lib/Target/Capstone/CapstoneISelDAGToDAG.cpp` (instruction
-selection) and the register allocator.
-
-The fix should ensure that when lowering `CapstoneISD::CIncOffset`, the
-capability operand is always placed as `rs1` and the integer operand as `rs2`
-in the generated `MachineInstr`.  One approach: teach the pattern matcher or
-post-selection peephole to swap operands when `rs1` is provably a non-capability
-value type and `rs2` is a capability.
 
 ---
 
@@ -770,7 +777,6 @@ These were deferred in earlier bring-up sessions and have not been re-examined:
 | `sglib-rbtree` | Compile-time backend crash (red-black tree pointer chasing pattern) |
 | `aha-mont64` | Compile-time backend crash (64-bit Montgomery multiply) |
 | `dijkstra` | Compile-time backend crash (graph traversal, pointer-heavy) |
-| `edn` | Compile-time backend crash |
 | `ctl-string` | Compile-time backend crash or non-trivial C++ adaptation |
 | `qrduino` | Compile-time backend crash |
 | `nettle-arcfour` | Compile-time backend crash |
@@ -801,7 +807,7 @@ scripts as templates.)
 
 | Bug | Type | Blocks | Severity |
 |-----|------|--------|----------|
-| `cincoffset` operand swap | Runtime tag fault | any benchmark with multi-element array loops | Workaround applied (aha-compress); **DELIN fix in selectLGA resolves for nettle-cast128** |
+| `cincoffset` operand swap | Runtime tag fault | any benchmark with multi-element array loops | **FIXED** in lowerADD operand canonicalization; `aha-compress` workaround retained |
 | `sign_extend_inreg i128` | Compile-time crash | `nettle-cast128` | **FIXED** — CapstoneISelLowering + DELIN in selectLGA |
 | `stc` bulk-copy integer corruption | Runtime correctness | `nettle-cast128` (verify) | Workaround applied; root cause unfixed in backend |
 | Non-vector shift on i128 | Compile-time crash | `matmult`, `stringsearch1` | **FIXED** for matmult — source workaround; `stringsearch1` fixable with int counters |

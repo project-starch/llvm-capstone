@@ -134,8 +134,8 @@ files under `capstone/benchmarks/beebs/adapted/`. Shell scripts orchestrate
 fetch/build/link/run only; no C code is embedded in `.sh` heredocs. Full-
 replacement adapted files (bubblesort, prime, cnt, duff, janne_complex, tarai,
 levenshtein, recursion) are compiled directly. Tail-append files (strstr,
-insertsort, jfdctint, fdct, aha-compress, nettle-md5) are concatenated with
-the stripped upstream source at build time.
+insertsort, jfdctint, fdct, aha-compress, nettle-md5, nettle-cast128) are
+concatenated with the stripped upstream source at build time.
 
 `build-beebs-simple-capstone-common.sh` now supports `BEEBS_EXTRA_DEFINES`
 (array of `-D` defines, e.g. `BEEBS_EXTRA_DEFINES=(QUICK_SORT)`),

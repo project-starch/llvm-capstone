@@ -21,9 +21,15 @@ OUT_DOM=${OUT_DOM:-$OUT_DIR/beebs_nettle-cast128_capstone.dom}
 CAST128_SRC=$BEEBS_SRC_DIR/src/nettle-cast128/cast128.c
 SUPPORT_DIR=$BEEBS_SRC_DIR/support
 PATCHED_CAST128_SRC=$OUT_DIR/cast128_capstone.c
+CAST128_TAIL_SRC=$SCRIPT_DIR/adapted/beebs_nettle_cast128_capstone_tail.c
 
 if [[ ! -f "$CAST128_SRC" || ! -f "$SUPPORT_DIR/support.h" ]]; then
   echo "missing BEEBS nettle-cast128 source tree: $BEEBS_SRC_DIR" >&2
+  exit 1
+fi
+
+if [[ ! -f "$CAST128_TAIL_SRC" ]]; then
+  echo "missing adapted nettle-cast128 tail source: $CAST128_TAIL_SRC" >&2
   exit 1
 fi
 
@@ -36,11 +42,10 @@ mkdir -p "$OUT_DIR" "$OBJ_DIR"
 # initialises a local expected[] = {0,1,...,15,0} via such a bulk copy, which
 # corrupts expected[2,3,6,7,…] to 0 and causes spurious verify failures even
 # when the actual computation is correct.
-# Work-around: replace the local array with a direct comparison against i.
-cp "$CAST128_SRC" "$PATCHED_CAST128_SRC"
-perl -0pi \
-  -e 's|  //int expected_e[^\n]*\n  int expected\[\] = \{[^\}]+\};\n\n  for \(i=0; i<16; i\+\+\)\n    if \(result\[i\] != expected\[i\]\)|  for (i=0; i<16; i++)\n    if (result[i] != (uint8_t)i)|g' \
-  "$PATCHED_CAST128_SRC"
+# Work-around: keep the upstream CAST-128 implementation and append an adapted
+# benchmark/verifier tail that compares result[i] directly against i.
+sed '/^int initialise_benchmark/,$d' "$CAST128_SRC" > "$PATCHED_CAST128_SRC"
+cat "$CAST128_TAIL_SRC" >> "$PATCHED_CAST128_SRC"
 
 COMMON_FLAGS=(
   -target capstone64-unknown-elf
