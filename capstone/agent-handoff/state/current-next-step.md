@@ -1,62 +1,82 @@
 # Current recommended next step
 
-## Immediate milestone - Add the next BEEBS benchmark batch (Batch 3)
+## Current BEEBS milestone — 50 benchmarks validated
 
-**Goal**: extend the validated BEEBS set with benchmarks that need minor stubs
-or multi-file compilation.
+50 BEEBS benchmarks now pass end-to-end. The most recent additions are:
+- crc, statemate, nettle-arcfour, nettle-des, aha-mont64, dijkstra (this session)
+- ctl-stack, ctl-vector (this session)
 
-**Why this next**: Batch 1 (bs, fir, lcdnum, ns, ud) and Batch 2 (nsichneu,
-sglib-arraysort, sglib-arrayheapsort, sglib-arrayquicksort) are all committed
-and validated. The common script now has `-fno-jump-tables` and `BEEBS_EXTRA_DEFINES`
-support.
+## Remaining viable targets
 
-## Candidate pool — Batch 3 (stubs/multi-file)
+### miniz (feasible, complex)
+`src/miniz/miniz.c` + `src/miniz/miniz_b.c`. No float arithmetic. Needs:
+- memcpy/memset/memmove stubs (like ctl-vector)
+- assert stub: `#define assert(x) ((void)(x))`
+- Strip: `<stdlib.h>`, `<string.h>`, `<assert.h>`, `<stddef.h>`
+- The `#include <time.h>` is conditionally compiled; strip `<time.h>` too
+- BEEBS provides its own malloc_beebs in miniz.c
+- Risk: unknown if backend crashes on the large codebase; try it
 
-- `rijndael`: `src/rijndael/aes.c` + `src/rijndael/aesxam.c`. Strip
-  `stdio.h`, `stdlib.h`, `ctype.h`. `fpos_t` is self-defined. Multi-file compile.
-- `picojpeg`: `src/picojpeg/libpicojpeg.c` + `src/picojpeg/picojpeg_test.c`.
-  Strip `string.h`, provide memcpy stub. Multi-file compile.
-- `sglib-dllist`: Strip `stdio.h`, `stdlib.h`, `string.h` (unused). `BEEBS_DEFINE_NULL=1`.
-- `sglib-hashtable`: Same as sglib-dllist.
-- `nettle-aes`: Strip `assert.h`, add `#define assert(x) ((void)(x))` stub.
-- `nettle-sha256`: Strip `assert.h`, add assert stub + `abort()` stub.
-- `huffbench`: Strip many headers, provide `memset` stub. Verify no FP libcalls.
+### edn (deferred — cincoffset commutative bug)
+Build succeeds but runtime fails: `helper_cscincoffset: Assertion 'rs1_v->tag' failed`
+in `jpegdct`, `fir_no_red_ld`, `iir1` functions. Fixing requires rewriting those
+functions to avoid multiple variable-index array accesses per loop iteration.
+Defer unless the root backend bug is fixed.
 
-## Newly classified FP-blocked (defer)
+## Blocked (do not retry without root fix)
 
-- `qsort` — `float arr[20]` comparisons → soft-float libcalls
-- `select` — `float arr[20]` comparisons → soft-float libcalls
-- `sqrt` — explicit float arithmetic
-- `qurt` — explicit float arithmetic
-- `fasta` — float probability arithmetic
+### Pointer subtraction (i128 sub — no isel pattern)
+- **ctl-string**: `temp - s->string` pointer differences pervasively.
+- **qrduino**: Also hits cincoffset commutative bug at -O0; backend crash at -O1.
 
-## Previously deferred
+### Backend crash — large i128 load constant offset (sglib-rbtree)
+- `sglib__rbtree_it_compute_current_elem`: constant offset 2224 exceeds `lc`
+  immediate range (12-bit, max 2047). Cannot select `i128 load` node.
 
-- `slre`: Clang frontend PHINode type mismatch (Bug #11). Not fixable at source.
-- `nbody`, `trio`, `frac`, `st`, `stb_perlin`, `whetstone`, `newlib-*`: FP blocked.
-- `sglib-rbtree`, `aha-mont64`, `dijkstra`, `edn`, `ctl-string`, `qrduino`,
-  `nettle-arcfour`, `ludcmp`, `nettle-des`, `statemate`: compile-time backend
-  crashes or non-trivial source adaptation required.
-- `wikisort`: Range by-value ABI bug (Bug #10) throughout; invasive rewrite.
-- `compress`, `dtoa`, `cubic`: backend crashes.
+### Backend crash — other (pre-existing)
+- `compress`, `dtoa`, `cubic`: known backend crashes.
+- `slre`: Clang frontend PHINode type mismatch (Bug #11).
+- `wikisort`: Range struct passed by value throughout (Bug #10, invasive rewrite).
 
-## Test expectations
+### FP-blocked (soft-float libcalls on Capstone)
+- `matmult-int` (misleadingly named; uses float matrix)
+- `minver`, `ludcmp` — explicit float arithmetic
+- `qsort`, `select` — float array comparisons
+- `sqrt`, `qurt`, `fasta`, `frac`, `st`, `stb_perlin`, `whetstone` — float
+- `newlib-exp`, `newlib-log`, `newlib-mod`, `newlib-sqrt` — math library
+- `nbody`, `trio`, `trio-snprintf`, `trio-sscanf` — float / complex format lib
 
-For each new benchmark commit:
+## Regression gate (run before each new commit)
 
-- the new `run-beebs-<name>.sh`
-- `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone`
-- `bash capstone/tests/runtime-qemu/run-coremark.sh`
-- focused existing BEEBS regressions: `fac`, `strstr`, `ndes`, `expint`
+```bash
+source capstone/tests/capstone-test-env.sh
+"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone
+bash capstone/tests/runtime-qemu/run-coremark.sh
+bash capstone/benchmarks/beebs/run-beebs-fac.sh
+bash capstone/benchmarks/beebs/run-beebs-strstr.sh
+bash capstone/benchmarks/beebs/run-beebs-ndes.sh
+bash capstone/benchmarks/beebs/run-beebs-expint.sh
+bash capstone/benchmarks/beebs/run-beebs-aha-compress.sh
+bash capstone/benchmarks/beebs/run-beebs-nettle-cast128.sh
+bash capstone/benchmarks/beebs/run-beebs-crc32.sh
+bash capstone/benchmarks/beebs/run-beebs-matmult.sh
+bash capstone/benchmarks/beebs/run-beebs-ctl-vector.sh
+```
 
-## Thinking-level rule
+## Known backend limitations (document when encountered)
 
-Stay at medium thinking while the work remains mechanical or locally debuggable.
-If a benchmark exposes a hard backend/compiler bug, unclear architecture
-semantics, or repeated failed runtime debugging where higher thinking looks
-necessary, suspend work and tell the user before continuing.
+- **Pointer subtraction (i128 sub)**: subtracting two capability-typed pointers
+  generates `i128 sub` with no isel pattern. Avoid in stubs and benchmark adaptations.
+- **Large lc offset (>2047)**: loading a capability from a base capability with
+  constant offset > 12-bit signed range crashes the backend (sglib-rbtree case).
+- **memcpy/memmove/memset libcall**: the Capstone backend crashes with null symbol
+  name when generating calls to these. Always provide inline stubs instead.
+- **cincoffset commutative bug**: backend treats cincoffset as commutative; when
+  capability ends up in a higher register than the integer offset, operands are
+  swapped → tag fault. Affects any function with multiple variable-index array
+  accesses in the same loop iteration.
 
 ## What not to regress
 
-Do not delete `capstone/caplifive-buildroot/build/local.mk` - its absence silently
+Do not delete `capstone/caplifive-buildroot/build/local.mk` — its absence silently
 switches the image to stock OpenSBI and breaks all runtime proofs.
