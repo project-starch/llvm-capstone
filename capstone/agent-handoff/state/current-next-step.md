@@ -1,21 +1,16 @@
 # Current recommended next step
 
-## Current BEEBS milestone — 52 benchmarks validated
+## Current BEEBS milestone — 53 benchmarks validated
 
-52 BEEBS benchmarks now pass end-to-end. The most recent confirmed additions are:
+53 BEEBS benchmarks now pass end-to-end. The most recent confirmed additions are:
 - sglib-dllist, sglib-hashtable (38th and 39th — were committed but missed in prior count)
 - crc, statemate, nettle-arcfour, nettle-des, aha-mont64, dijkstra
 - ctl-stack, ctl-vector (51st and 52nd)
+- edn (53rd — unblocked by the cincoffset operand-swap fix in lowerADD)
 
 ## Remaining viable targets
 
 None. All remaining unprobed benchmarks are blocked — see Blocked section below.
-
-### edn (deferred — cincoffset commutative bug)
-Build succeeds but runtime fails: `helper_cscincoffset: Assertion 'rs1_v->tag' failed`
-in `jpegdct`, `fir_no_red_ld`, `iir1` functions. Fixing requires rewriting those
-functions to avoid multiple variable-index array accesses per loop iteration.
-Defer unless the root backend bug is fixed.
 
 ## Blocked (do not retry without root fix)
 
@@ -69,10 +64,9 @@ bash capstone/benchmarks/beebs/run-beebs-ctl-vector.sh
   constant offset > 12-bit signed range crashes the backend (sglib-rbtree case).
 - **memcpy/memmove/memset libcall**: the Capstone backend crashes with null symbol
   name when generating calls to these. Always provide inline stubs instead.
-- **cincoffset commutative bug**: backend treats cincoffset as commutative; when
-  capability ends up in a higher register than the integer offset, operands are
-  swapped → tag fault. Affects any function with multiple variable-index array
-  accesses in the same loop iteration.
+- **cincoffset commutative bug**: fixed in lowerADD (isIntegerOffset now covers
+  scaled-index GEP; isCapabilityValue distinguishes genuine ldc loads from
+  sextloads). edn was the last benchmark blocked by this.
 
 ## What not to regress
 

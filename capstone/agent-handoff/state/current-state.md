@@ -121,6 +121,8 @@ All of the following pass on the `capstone-bootstrap` branch:
   benchmark runs end to end and validates its correctness marker
 - `capstone/benchmarks/beebs/run-beebs-ctl-vector.sh` - fifty-second BEEBS
   benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-edn.sh` - fifty-third BEEBS benchmark
+  runs end to end and validates its correctness marker
 
 Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 `beebs_simple_host.c`. Keep separate per-benchmark domain/host files only when
@@ -142,22 +144,6 @@ after include-stripping, e.g. to add `static` to local array declarations that
 would otherwise trigger the stc-copy bug), and includes `-fno-jump-tables`
 unconditionally (jump tables use raw integer addresses which fault on Capstone
 since loads require capabilities).
-
-## Known cincoffset operand-swap bug
-
-The Capstone backend treats `cincoffset rd, rs1, rs2` as commutative (like
-ADD), but the ISA requires rs1=capability and rs2=integer. When multiple
-independent array-element addresses are computed in the same function and the
-capability ends up in a higher-numbered register than the integer offset, the
-backend swaps the operands, producing a tag fault at runtime.
-
-**Workaround pattern (used in aha-compress)**: compute the base address
-(`base = array + i`) once using the first (correct) `cincoffset`, then DELIN
-the result, then access all elements via constant-offset loads (`base[0]`,
-`base[1]`, `base[2]`) which emit `ld val, N(cap)` with no further `cincoffset`.
-
-This workaround is needed whenever a loop body accesses multiple elements of
-a global array by variable index in the same iteration.
 
 ## Resolved blocker
 
