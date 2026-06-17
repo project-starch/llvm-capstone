@@ -138,7 +138,9 @@ tail-append files (strstr, insertsort, jfdctint, fdct, aha-compress,
 nettle-md5, nettle-cast128, nettle-arcfour, nettle-des) are concatenated with
 the stripped upstream source at build time. `huffbench` uses checked-in adapted
 C snippets for its freestanding prefix and RNG replacement. `aha-mont64` uses a
-checked-in rewrite helper for constant hoisting.
+checked-in rewrite helper for constant hoisting. `ndes` uses a checked-in
+rewrite helper for pointer-based aggregate passing and explicit table
+delinearization.
 
 `build-beebs-simple-capstone-common.sh` now supports `BEEBS_EXTRA_DEFINES`
 (array of `-D` defines, e.g. `BEEBS_EXTRA_DEFINES=(QUICK_SORT)`),

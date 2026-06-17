@@ -80,9 +80,6 @@ sanitize_source() {
     sed_exprs+=(-e "/^#include <(${strip_pat})\.h>/d")
   fi
 
-  for expr in "${BEEBS_EXTRA_SED_EXPRS[@]:-}"; do
-    [[ -n "$expr" ]] && sed_exprs+=(-e "$expr")
-  done
   if [[ -n "${BEEBS_STRIP_FROM_REGEX:-}" ]]; then
     sed_exprs+=(-e "/${BEEBS_STRIP_FROM_REGEX}/,\$d")
   fi
