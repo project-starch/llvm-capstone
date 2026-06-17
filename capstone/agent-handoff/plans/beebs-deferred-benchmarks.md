@@ -536,12 +536,13 @@ words, causing the final CRC to diverge from the expected value stored in
 
 ### Fix applied
 
-Two patches are applied in `build-beebs-crc32-capstone.sh`:
+Two source adaptations are applied in `build-beebs-crc32-capstone.sh`:
 
-1. `typedef unsigned long DWORD` → `typedef unsigned int DWORD` (via perl).
-   On Capstone, `unsigned long` is 64 bits, so the `crc_32_tab` elements would
-   be 64-bit — but the index computation uses `slli 2` (×4 bytes), which is only
-   correct for 32-bit elements.  Changing to `unsigned int` fixes the stride.
+1. The checked-in prefix file `adapted/beebs_crc32_capstone_prefix.c` defines
+   `DWORD` as `unsigned int`.  On Capstone, `unsigned long` is 64 bits, so the
+   `crc_32_tab` elements would be 64-bit — but the index computation uses
+   `slli 2` (×4 bytes), which is only correct for 32-bit elements.  Changing to
+   `unsigned int` fixes the stride.
 
 2. Strip `verify_benchmark` from the upstream source; the tail file
    `adapted/beebs_crc32_capstone_tail.c` provides a replacement that compares
@@ -556,8 +557,8 @@ Confirmed working end-to-end in QEMU: `__BEEBS_CRC32_PASSED__`.
 
 ## 9. `stc` bulk-copy of integer arrays — corrupted stack data (backend bug)
 
-**Status**: source-level workaround applied for `nettle-cast128`; root cause
-unfixed in the backend.
+**Status**: source-level workarounds applied for affected benchmarks; root
+cause unfixed in the backend.
 
 ### Symptom
 
@@ -583,10 +584,11 @@ a constant: `int arr[] = {a, b, c, d, ...}`.
 
 ### Workaround
 
-Replace the local array lookup with a direct expression that avoids
-materialising the array on the stack.  For `verify_benchmark` in
-`nettle-cast128`, the pattern `result[i] != expected[i]` was replaced with
-`result[i] != (uint8_t)i`.
+Replace the local array lookup with a direct expression or a static/global
+expected array that avoids materialising the array on the stack.  For
+`verify_benchmark` in `nettle-cast128`, the pattern `result[i] != expected[i]`
+was replaced with `result[i] != (uint8_t)i`.  `nettle-arcfour` and
+`nettle-des` use checked-in verifier tail files with static expected arrays.
 
 ### How to fix in the backend
 

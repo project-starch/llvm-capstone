@@ -29,6 +29,21 @@ if [[ ! -f "$SUPPORT_DIR/support.h" ]]; then
   exit 1
 fi
 
+if [[ -n "${BEEBS_ADAPTED_TAIL_SRC:-}" ]]; then
+  if [[ ${#BEEBS_SOURCE_FILES_REL[@]} -ne 1 ]]; then
+    echo "BEEBS_ADAPTED_TAIL_SRC is only supported for single-source benchmarks" >&2
+    exit 1
+  fi
+  if [[ -z "${BEEBS_STRIP_FROM_REGEX:-}" ]]; then
+    echo "BEEBS_STRIP_FROM_REGEX must be set with BEEBS_ADAPTED_TAIL_SRC" >&2
+    exit 1
+  fi
+  if [[ ! -f "$BEEBS_ADAPTED_TAIL_SRC" ]]; then
+    echo "missing adapted tail source: $BEEBS_ADAPTED_TAIL_SRC" >&2
+    exit 1
+  fi
+fi
+
 mkdir -p "$OUT_DIR" "$OBJ_DIR"
 
 COMMON_FLAGS=(
@@ -68,6 +83,9 @@ sanitize_source() {
   for expr in "${BEEBS_EXTRA_SED_EXPRS[@]:-}"; do
     [[ -n "$expr" ]] && sed_exprs+=(-e "$expr")
   done
+  if [[ -n "${BEEBS_STRIP_FROM_REGEX:-}" ]]; then
+    sed_exprs+=(-e "/${BEEBS_STRIP_FROM_REGEX}/,\$d")
+  fi
 
   {
     for line in "${BEEBS_PREAMBLE_LINES[@]:-}"; do
@@ -80,6 +98,9 @@ sanitize_source() {
       sed -E "${sed_exprs[@]}" "$src"
     else
       cat "$src"
+    fi
+    if [[ -n "${BEEBS_ADAPTED_TAIL_SRC:-}" ]]; then
+      cat "$BEEBS_ADAPTED_TAIL_SRC"
     fi
   } > "$dst"
 }

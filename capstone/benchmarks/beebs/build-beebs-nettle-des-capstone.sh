@@ -12,7 +12,6 @@ BEEBS_PREAMBLE_LINES=(
   'typedef unsigned int uint32_t;'
 )
 BEEBS_EXTRA_INCLUDE_RELS=(src/nettle-des)
-# verify_benchmark has "uint8_t expected[16]" as a local array; same stc-copy
-# issue as nettle-arcfour. Fix: make it static.
-BEEBS_EXTRA_SED_EXPRS=('s/  uint8_t expected\[16\]/  static uint8_t expected[16]/')
+BEEBS_STRIP_FROM_REGEX='^int verify_benchmark'
+BEEBS_ADAPTED_TAIL_SRC=$SCRIPT_DIR/adapted/beebs_nettle_des_capstone_tail.c
 source "$SCRIPT_DIR/build-beebs-simple-capstone-common.sh"

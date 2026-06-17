@@ -133,17 +133,17 @@ All Capstone-specific benchmark source adaptations now live in explicit `.c`
 files under `capstone/benchmarks/beebs/adapted/`. Shell scripts orchestrate
 fetch/build/link/run only; no C code is embedded in `.sh` heredocs. Full-
 replacement adapted files (bubblesort, prime, cnt, duff, janne_complex, tarai,
-levenshtein, recursion) are compiled directly. Tail-append files (strstr,
-insertsort, jfdctint, fdct, aha-compress, nettle-md5, nettle-cast128) are
-concatenated with the stripped upstream source at build time.
+levenshtein, recursion) are compiled directly. Prefix/tail files (crc32) and
+tail-append files (strstr, insertsort, jfdctint, fdct, aha-compress,
+nettle-md5, nettle-cast128, nettle-arcfour, nettle-des) are concatenated with
+the stripped upstream source at build time.
 
 `build-beebs-simple-capstone-common.sh` now supports `BEEBS_EXTRA_DEFINES`
 (array of `-D` defines, e.g. `BEEBS_EXTRA_DEFINES=(QUICK_SORT)`),
-`BEEBS_EXTRA_SED_EXPRS` (array of sed expressions applied to each source file
-after include-stripping, e.g. to add `static` to local array declarations that
-would otherwise trigger the stc-copy bug), and includes `-fno-jump-tables`
-unconditionally (jump tables use raw integer addresses which fault on Capstone
-since loads require capabilities).
+`BEEBS_STRIP_FROM_REGEX` plus `BEEBS_ADAPTED_TAIL_SRC` for single-source
+tail-replacement adaptations, and includes `-fno-jump-tables` unconditionally
+(jump tables use raw integer addresses which fault on Capstone since loads
+require capabilities).
 
 ## Resolved blocker
 
