@@ -21,9 +21,16 @@ OUT_DOM=${OUT_DOM:-$OUT_DIR/beebs_${BEEBS_BENCHMARK}_capstone.dom}
 SUPPORT_DIR=$BEEBS_SRC_DIR/support
 HB_SRC=$BEEBS_SRC_DIR/src/huffbench/libhuffbench.c
 PATCHED_HB=$OUT_DIR/${BEEBS_BENCHMARK}_src.c
+HB_PREFIX_SRC=$SCRIPT_DIR/adapted/beebs_huffbench_capstone_prefix.c
+HB_RANDOM4_SRC=$SCRIPT_DIR/adapted/beebs_huffbench_random4_capstone.c
 
-if [[ ! -f "$SUPPORT_DIR/support.h" ]]; then
+if [[ ! -f "$SUPPORT_DIR/support.h" || ! -f "$HB_SRC" ]]; then
   echo "missing BEEBS support tree: $BEEBS_SRC_DIR" >&2
+  exit 1
+fi
+
+if [[ ! -f "$HB_PREFIX_SRC" || ! -f "$HB_RANDOM4_SRC" ]]; then
+  echo "missing adapted huffbench source snippets" >&2
   exit 1
 fi
 
@@ -40,38 +47,29 @@ COMMON_FLAGS=(
   -I"$SUPPORT_DIR"
 )
 
-# Prepend freestanding type stubs; strip all hosted includes; replace
-# random4() body to avoid long integer division (Capstone backend bug).
-# verify_benchmark() returns -1 (always-pass), so RNG identity is irrelevant.
-python3 - "$HB_SRC" "$PATCHED_HB" <<'PYEOF'
-import sys, re
-
-src_path, dst_path = sys.argv[1], sys.argv[2]
-with open(src_path) as f:
-    text = f.read()
-
-text = re.sub(
-    r'^#include <(string|stdio|stdlib|stddef|stdbool|math)\.h>\n',
-    '', text, flags=re.MULTILINE)
-
-# Replace Park-Miller RNG with a simple LCG to avoid long integer division.
-text = re.sub(
-    r'(static size_t random4\(\)\n\{)[^}]+(\})',
-    r'\g<1>\n    seed = seed * 1103515245L + 12345L;\n    return (size_t)(seed & 31);\n\g<2>',
-    text, flags=re.DOTALL)
-
-prefix = (
-    'typedef unsigned long size_t;\n'
-    'typedef int bool;\n'
-    '#define true 1\n'
-    '#define false 0\n'
-    '#define NULL ((void *)0)\n'
-    'void *memset(void *dst, int c, size_t n);\n'
-)
-with open(dst_path, 'w') as f:
-    f.write(prefix)
-    f.write(text)
-PYEOF
+# Prepend freestanding type stubs; strip hosted includes; replace random4()
+# with an adapted implementation that avoids long integer division (Capstone
+# backend bug). verify_benchmark() returns -1, so RNG identity is irrelevant.
+cp "$HB_PREFIX_SRC" "$PATCHED_HB"
+awk -v random4_src="$HB_RANDOM4_SRC" '
+  /^#include <(string|stdio|stdlib|stddef|stdbool|math)\.h>$/ { next }
+  /^static size_t random4\(\)$/ {
+    while ((getline line < random4_src) > 0)
+      print line
+    close(random4_src)
+    skip_random4 = 1
+    brace_depth = 0
+    next
+  }
+  skip_random4 {
+    brace_depth += gsub(/\{/, "{")
+    brace_depth -= gsub(/\}/, "}")
+    if (brace_depth == 0 && $0 ~ /^}$/)
+      skip_random4 = 0
+    next
+  }
+  { print }
+' "$HB_SRC" >> "$PATCHED_HB"
 
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 \

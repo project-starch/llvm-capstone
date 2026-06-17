@@ -52,7 +52,8 @@ mkdir -p "$OUT_DIR" "$OBJ_DIR"
 #    - benchmark() using switch dispatch (no function pointer table).
 #    - verify_benchmark() with global const arrays (avoids stc Bug #9).
 #
-# 3. Change `static long int seed` to `static int seed` in rand_beebs.
+# 3. Change `static long int seed` to `static int seed` in rand_beebs while
+#    generating the retained upstream prefix.
 #    On Capstone, global/static variable access uses delin (delinearize) to
 #    strip the capability tag, then ld/sd to load/store.  Only 32-bit lw/sw
 #    work with the delinearized integer pointer; 64-bit ld/sd require a
@@ -70,11 +71,10 @@ awk '
   /^#include <stdlib\.h>$/ { next }
   /^#include <string\.h>$/ { next }
   /^#include <math\.h>$/   { next }
+  /^  static long int seed = 0;$/ { print "  static int seed = 0;"; next }
   /^typedef bool \(\*Comparison\)/ { exit }
   { print }
 ' "$MERGESORT_SRC" > "$PATCHED_MERGESORT_SRC"
-
-perl -pi -e 's/static long int seed = 0;/static int seed = 0;/' "$PATCHED_MERGESORT_SRC"
 
 cat "$MERGESORT_TAIL_SRC" >> "$PATCHED_MERGESORT_SRC"
 
