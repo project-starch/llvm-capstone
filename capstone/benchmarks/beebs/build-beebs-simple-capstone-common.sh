@@ -54,20 +54,32 @@ sanitize_source() {
   local src=$1
   local dst=$2
 
-  # Build sed pattern from base set + any extra headers to strip
-  local strip_pat='stdio|stdlib'
-  for hdr in "${BEEBS_STRIP_EXTRA_HEADERS[@]:-}"; do
-    [[ -n "$hdr" ]] && strip_pat="${strip_pat}|${hdr}"
+  # Build the sed expression list
+  local sed_exprs=()
+
+  if [[ "${BEEBS_STRIP_HOSTED_INCLUDES:-0}" == 1 ]]; then
+    local strip_pat='stdio|stdlib'
+    for hdr in "${BEEBS_STRIP_EXTRA_HEADERS[@]:-}"; do
+      [[ -n "$hdr" ]] && strip_pat="${strip_pat}|${hdr}"
+    done
+    sed_exprs+=(-e "/^#include <(${strip_pat})\.h>/d")
+  fi
+
+  for expr in "${BEEBS_EXTRA_SED_EXPRS[@]:-}"; do
+    [[ -n "$expr" ]] && sed_exprs+=(-e "$expr")
   done
 
   {
+    for line in "${BEEBS_PREAMBLE_LINES[@]:-}"; do
+      [[ -n "$line" ]] && printf '%s\n' "$line"
+    done
     if [[ "${BEEBS_DEFINE_NULL:-0}" == 1 ]]; then
       printf '#ifndef NULL\n#define NULL ((void *)0)\n#endif\n'
     fi
-    if [[ "${BEEBS_STRIP_HOSTED_INCLUDES:-0}" == 1 ]]; then
-      sed -E "/^#include <(${strip_pat})\.h>/d" "$src"
+    if [[ ${#sed_exprs[@]} -gt 0 ]]; then
+      sed -E "${sed_exprs[@]}" "$src"
     else
-      sed -n '1,$p' "$src"
+      cat "$src"
     fi
   } > "$dst"
 }

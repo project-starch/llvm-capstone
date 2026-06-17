@@ -91,6 +91,28 @@ All of the following pass on the `capstone-bootstrap` branch:
   BEEBS benchmark runs end to end and validates its correctness marker
 - `capstone/benchmarks/beebs/run-beebs-sglib-arrayquicksort.sh` - thirty-seventh
   BEEBS benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-nettle-aes.sh` - thirty-eighth BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-picojpeg.sh` - thirty-ninth BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-nettle-sha256.sh` - fortieth BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-huffbench.sh` - forty-first BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-rijndael.sh` - forty-second BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-crc.sh` - forty-third BEEBS benchmark
+  runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-statemate.sh` - forty-fourth BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-nettle-arcfour.sh` - forty-fifth BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-nettle-des.sh` - forty-sixth BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-aha-mont64.sh` - forty-seventh BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-dijkstra.sh` - forty-eighth BEEBS
+  benchmark runs end to end and validates its correctness marker
 
 Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 `beebs_simple_host.c`. Keep separate per-benchmark domain/host files only when
@@ -106,9 +128,12 @@ insertsort, jfdctint, fdct, aha-compress, nettle-md5) are concatenated with
 the stripped upstream source at build time.
 
 `build-beebs-simple-capstone-common.sh` now supports `BEEBS_EXTRA_DEFINES`
-(array of `-D` defines, e.g. `BEEBS_EXTRA_DEFINES=(QUICK_SORT)`) and includes
-`-fno-jump-tables` unconditionally (jump tables use raw integer addresses which
-fault on Capstone since loads require capabilities).
+(array of `-D` defines, e.g. `BEEBS_EXTRA_DEFINES=(QUICK_SORT)`),
+`BEEBS_EXTRA_SED_EXPRS` (array of sed expressions applied to each source file
+after include-stripping, e.g. to add `static` to local array declarations that
+would otherwise trigger the stc-copy bug), and includes `-fno-jump-tables`
+unconditionally (jump tables use raw integer addresses which fault on Capstone
+since loads require capabilities).
 
 ## Known cincoffset operand-swap bug
 
