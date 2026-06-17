@@ -7708,15 +7708,61 @@ SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
 
   // ISD::ADD is commutative; DAGCombine may place the integer offset in
   // operand(0). Restore canonical order: capability in Base, integer in
-  // Offset. A {S,Z,A}EXT of a narrower type or a constant is an integer
-  // offset; a capability is natively i128 and never wrapped in such an ext.
+  // Offset.
+  //
+  // Two complementary checks are used:
+  //   isIntegerOffset — recognizes values that are definitely integer offsets:
+  //     bare {S,Z,A}_EXTEND, constants, and scaled-index (shl(ext, k)).
+  //   isCapabilityValue — recognizes values that are definitely capabilities:
+  //     i128 loads (always ldc on Capstone), CIncOffset results, LGA results.
+  //
+  // Swap when Base looks like an integer but Offset does not, OR when Offset
+  // looks like a capability but Base does not. This handles the spill-reload
+  // case where the capability comes back as a raw ISD::LOAD i128 and the
+  // integer index has already been scaled (shl) so neither operand is a bare
+  // extend.
   {
+    // ISD::ADD is commutative; DAGCombine may place the integer offset in
+    // operand(0). Restore canonical order: capability in Base, integer in
+    // Offset.
+    //
+    // isIntegerOffset — recognizes values that are definitely integer offsets:
+    //   bare {S,Z,A}_EXTEND, constants, and scaled-index shl(ext, k).
+    // isCapabilityValue — recognizes values that are definitely capabilities:
+    //   i128 loads (always ldc on Capstone), CIncOffset results, LGA results.
+    //   NOTE: CopyFromReg i128 is intentionally excluded — integers stored in
+    //   i128 registers appear as CopyFromReg i128 and must not be mistaken for
+    //   capabilities. Without this exclusion the swap incorrectly fires when an
+    //   integer (Base=CopyFromReg i128) faces a real capability (Offset=CIncOffset).
     auto isIntegerOffset = [](SDValue V) -> bool {
       unsigned Opc = V.getOpcode();
-      return Opc == ISD::SIGN_EXTEND || Opc == ISD::ZERO_EXTEND ||
-             Opc == ISD::ANY_EXTEND || isa<ConstantSDNode>(V.getNode());
+      if (Opc == ISD::SIGN_EXTEND || Opc == ISD::ZERO_EXTEND ||
+          Opc == ISD::ANY_EXTEND || isa<ConstantSDNode>(V.getNode()))
+        return true;
+      // Scaled-index GEP pattern: (shl (sext/zext i64_val), ShiftAmt)
+      if (Opc == ISD::SHL && V.getValueType() == MVT::i128) {
+        unsigned InnerOpc = V.getOperand(0).getOpcode();
+        return InnerOpc == ISD::SIGN_EXTEND || InnerOpc == ISD::ZERO_EXTEND ||
+               InnerOpc == ISD::ANY_EXTEND;
+      }
+      return false;
     };
-    if (isIntegerOffset(Base) && !isIntegerOffset(Offset))
+    auto isCapabilityValue = [](SDValue V) -> bool {
+      unsigned Opc = V.getOpcode();
+      // A genuine capability load (ldc) is a NON_EXTLOAD of 128 bits.
+      // Sext/zext/anyext loads from a smaller integer (e.g. sext from i64)
+      // have getValueType()==i128 but are NOT capability loads — they are
+      // integers widened to i128, and must not be treated as capabilities here.
+      if (Opc == ISD::LOAD && V.getValueType() == MVT::i128) {
+        const auto *Ld = cast<LoadSDNode>(V.getNode());
+        if (Ld->getExtensionType() == ISD::NON_EXTLOAD &&
+            Ld->getMemoryVT() == MVT::i128)
+          return true;
+      }
+      return Opc == CapstoneISD::CIncOffset || Opc == CapstoneISD::LGA;
+    };
+    if ((isIntegerOffset(Base) && !isIntegerOffset(Offset)) ||
+        (isCapabilityValue(Offset) && !isCapabilityValue(Base)))
       std::swap(Base, Offset);
   }
 

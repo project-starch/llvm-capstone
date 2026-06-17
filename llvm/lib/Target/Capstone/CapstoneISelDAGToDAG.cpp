@@ -1275,8 +1275,14 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
     }
 
     SDValue Narrow;
-    if (Offset.getValueType() == MVT::i128)
-      Narrow = narrowOffsetToXLen(Offset.getOperand(0));
+    if (Offset.getValueType() == MVT::i128) {
+      unsigned OffOpc = Offset.getOpcode();
+      // Only call getOperand(0) when Offset is an extend node; the lambda
+      // also only produces a useful result for extend opcodes anyway.
+      if (OffOpc == ISD::SIGN_EXTEND || OffOpc == ISD::ZERO_EXTEND ||
+          OffOpc == ISD::ANY_EXTEND)
+        Narrow = narrowOffsetToXLen(Offset.getOperand(0));
+    }
 
     if (Narrow) {
       Offset = Narrow;
