@@ -91,31 +91,35 @@ All of the following pass on the `capstone-bootstrap` branch:
   BEEBS benchmark runs end to end and validates its correctness marker
 - `capstone/benchmarks/beebs/run-beebs-sglib-arrayquicksort.sh` - thirty-seventh
   BEEBS benchmark runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-nettle-aes.sh` - thirty-eighth BEEBS
+- `capstone/benchmarks/beebs/run-beebs-sglib-dllist.sh` - thirty-eighth BEEBS
   benchmark runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-picojpeg.sh` - thirty-ninth BEEBS
+- `capstone/benchmarks/beebs/run-beebs-sglib-hashtable.sh` - thirty-ninth BEEBS
   benchmark runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-nettle-sha256.sh` - fortieth BEEBS
+- `capstone/benchmarks/beebs/run-beebs-nettle-aes.sh` - fortieth BEEBS
   benchmark runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-huffbench.sh` - forty-first BEEBS
+- `capstone/benchmarks/beebs/run-beebs-picojpeg.sh` - forty-first BEEBS
   benchmark runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-rijndael.sh` - forty-second BEEBS
+- `capstone/benchmarks/beebs/run-beebs-nettle-sha256.sh` - forty-second BEEBS
   benchmark runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-crc.sh` - forty-third BEEBS benchmark
+- `capstone/benchmarks/beebs/run-beebs-huffbench.sh` - forty-third BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-rijndael.sh` - forty-fourth BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-crc.sh` - forty-fifth BEEBS benchmark
   runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-statemate.sh` - forty-fourth BEEBS
+- `capstone/benchmarks/beebs/run-beebs-statemate.sh` - forty-sixth BEEBS
   benchmark runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-nettle-arcfour.sh` - forty-fifth BEEBS
+- `capstone/benchmarks/beebs/run-beebs-nettle-arcfour.sh` - forty-seventh BEEBS
   benchmark runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-nettle-des.sh` - forty-sixth BEEBS
+- `capstone/benchmarks/beebs/run-beebs-nettle-des.sh` - forty-eighth BEEBS
   benchmark runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-aha-mont64.sh` - forty-seventh BEEBS
+- `capstone/benchmarks/beebs/run-beebs-aha-mont64.sh` - forty-ninth BEEBS
   benchmark runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-dijkstra.sh` - forty-eighth BEEBS
+- `capstone/benchmarks/beebs/run-beebs-dijkstra.sh` - fiftieth BEEBS benchmark
+  runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-ctl-stack.sh` - fifty-first BEEBS
   benchmark runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-ctl-stack.sh` - forty-ninth BEEBS
-  benchmark runs end to end and validates its correctness marker
-- `capstone/benchmarks/beebs/run-beebs-ctl-vector.sh` - fiftieth BEEBS
+- `capstone/benchmarks/beebs/run-beebs-ctl-vector.sh` - fifty-second BEEBS
   benchmark runs end to end and validates its correctness marker
 
 Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and

@@ -1,21 +1,15 @@
 # Current recommended next step
 
-## Current BEEBS milestone — 50 benchmarks validated
+## Current BEEBS milestone — 52 benchmarks validated
 
-50 BEEBS benchmarks now pass end-to-end. The most recent additions are:
-- crc, statemate, nettle-arcfour, nettle-des, aha-mont64, dijkstra (this session)
-- ctl-stack, ctl-vector (this session)
+52 BEEBS benchmarks now pass end-to-end. The most recent confirmed additions are:
+- sglib-dllist, sglib-hashtable (38th and 39th — were committed but missed in prior count)
+- crc, statemate, nettle-arcfour, nettle-des, aha-mont64, dijkstra
+- ctl-stack, ctl-vector (51st and 52nd)
 
 ## Remaining viable targets
 
-### miniz (feasible, complex)
-`src/miniz/miniz.c` + `src/miniz/miniz_b.c`. No float arithmetic. Needs:
-- memcpy/memset/memmove stubs (like ctl-vector)
-- assert stub: `#define assert(x) ((void)(x))`
-- Strip: `<stdlib.h>`, `<string.h>`, `<assert.h>`, `<stddef.h>`
-- The `#include <time.h>` is conditionally compiled; strip `<time.h>` too
-- BEEBS provides its own malloc_beebs in miniz.c
-- Risk: unknown if backend crashes on the large codebase; try it
+None. All remaining unprobed benchmarks are blocked — see Blocked section below.
 
 ### edn (deferred — cincoffset commutative bug)
 Build succeeds but runtime fails: `helper_cscincoffset: Assertion 'rs1_v->tag' failed`
@@ -28,6 +22,10 @@ Defer unless the root backend bug is fixed.
 ### Pointer subtraction (i128 sub — no isel pattern)
 - **ctl-string**: `temp - s->string` pointer differences pervasively.
 - **qrduino**: Also hits cincoffset commutative bug at -O0; backend crash at -O1.
+- **miniz**: `tinfl_decompress` and `tdefl_compress_block` both use pointer
+  subtraction pervasively (12+ sites in tinfl/tdefl) to compute buffer offsets
+  and byte counts. Not practical to rewrite. Confirmed blocked: `ICmpInst`
+  assertion failure comparing `i128` (pointer diff) against integer literals.
 
 ### Backend crash — large i128 load constant offset (sglib-rbtree)
 - `sglib__rbtree_it_compute_current_elem`: constant offset 2224 exceeds `lc`
