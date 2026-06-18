@@ -1,11 +1,21 @@
 # Current recommended next step
 
-## Current BEEBS milestone — 55 benchmarks validated
+## Current BEEBS milestone — 56 benchmarks validated
 
-55 BEEBS benchmarks now pass end-to-end. The most recent addition is
-`qrduino`, validated with `run-beebs-qrduino.sh`.
+56 BEEBS benchmarks now pass end-to-end. The most recent addition is
+`sglib-rbtree`, validated with `run-beebs-sglib-rbtree.sh`.
 
 ## Recent backend root fixes
+
+The large-offset capability load/store backend blocker is fixed:
+
+- `selectLDC_STC` in `CapstoneISelDAGToDAG.cpp` now handles constant offsets
+  > 2047 for `ldc`/`stc` by emitting `CIncOffset(base, offset)` then
+  `ldc/stc rd, 0(adjusted)`, matching the existing large-offset pattern for
+  integer loads. Regression coverage in `load-store.ll`.
+- `sglib-rbtree` was the proof benchmark: its iterator struct has
+  `path[128]` of 16-byte capabilities (2048 bytes), pushing `equalto` and
+  `subcomparator` past the 2047-byte limit.
 
 The pointer-decrement backend blocker is fixed and validated:
 
@@ -40,6 +50,7 @@ bash capstone/benchmarks/beebs/run-beebs-stringsearch1.sh
 bash capstone/benchmarks/beebs/run-beebs-ndes.sh
 bash capstone/benchmarks/beebs/run-beebs-ctl-string.sh
 bash capstone/benchmarks/beebs/run-beebs-qrduino.sh
+bash capstone/benchmarks/beebs/run-beebs-sglib-rbtree.sh
 ```
 
 Note: one `run-beebs-ndes.sh` attempt timed out after loading `capstone.ko` with
@@ -48,15 +59,9 @@ transient QEMU smoke timeout unless it reproduces.
 
 ## Remaining viable targets
 
-No clean-add BEEBS target is known. The best next probe is the large-offset
-capability load backend crash seen in `sglib-rbtree`; that is likely a focused
-backend fix.
+No clean-add BEEBS target is known.
 
 ## Blocked (do not retry without root fix)
-
-### Backend crash — large i128 load constant offset (sglib-rbtree)
-- `sglib__rbtree_it_compute_current_elem`: constant offset 2224 exceeds `lc`
-  immediate range (12-bit, max 2047). Cannot select `i128 load` node.
 
 ### Backend crash / invasive pointer-difference users
 - **miniz**: `tinfl_decompress` and `tdefl_compress_block` both use pointer
@@ -98,8 +103,6 @@ bash capstone/benchmarks/beebs/run-beebs-qrduino.sh
 
 ## Known backend limitations (document when encountered)
 
-- **Large lc offset (>2047)**: loading a capability from a base capability with
-  constant offset > 12-bit signed range crashes the backend (sglib-rbtree case).
 - **memcpy/memmove/memset libcall**: the Capstone backend crashes with null symbol
   name when generating calls to these. Always provide inline stubs instead.
 - **cincoffset commutative bug**: fixed in lowerADD (isIntegerOffset now covers

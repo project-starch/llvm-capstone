@@ -772,7 +772,7 @@ and emits `CIncOffset(base, -offset)`. Focused coverage lives in
 
 | Benchmark | Reason for deferral |
 |-----------|---------------------|
-| `sglib-rbtree` | Still blocked: large capability-load constant offset (`lc` immediate range) |
+| `sglib-rbtree` | **RESOLVED**: large-offset `ldc`/`stc` backend fix in `selectLDC_STC`; validates with `run-beebs-sglib-rbtree.sh` |
 | `qrduino` | **RESOLVED**: source-local static string pointer adaptation; validates with `run-beebs-qrduino.sh` |
 | `aha-mont64` | **RESOLVED**: validates with `run-beebs-aha-mont64.sh` |
 | `dijkstra` | **RESOLVED**: validates with `run-beebs-dijkstra.sh` |
