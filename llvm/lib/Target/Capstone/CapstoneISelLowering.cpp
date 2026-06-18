@@ -7733,6 +7733,13 @@ static bool isCapstoneCapabilityValue(SDValue V) {
   return Opc == CapstoneISD::CIncOffset || Opc == CapstoneISD::LGA;
 }
 
+static SDValue getCapstoneCapabilityCursor(SDValue Cap, SelectionDAG &DAG,
+                                           const SDLoc &DL, MVT XLenVT) {
+  SDValue IntrinsicID =
+      DAG.getTargetConstant(Intrinsic::capstone_cap_get_cursor, DL, XLenVT);
+  return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, DL, XLenVT, IntrinsicID, Cap);
+}
+
 static SDValue narrowOffsetForCIncOffset(SDValue V, SelectionDAG &DAG,
                                          const CapstoneSubtarget &Subtarget,
                                          const SDLoc &DL,
@@ -7799,6 +7806,16 @@ static SDValue lowerSUB(SDValue Op, SelectionDAG &DAG,
   MVT XLenVT = Subtarget.getXLenVT();
   SDValue Base = Op.getOperand(0);
   SDValue Offset = Op.getOperand(1);
+
+  if (!isCapstoneIntegerOffset(Base) && !isCapstoneIntegerOffset(Offset)) {
+    SDValue BaseCursor =
+        getCapstoneCapabilityCursor(Base, DAG, DL, Subtarget.getXLenVT());
+    SDValue OffsetCursor =
+        getCapstoneCapabilityCursor(Offset, DAG, DL, Subtarget.getXLenVT());
+    SDValue Diff = DAG.getNode(ISD::SUB, DL, Subtarget.getXLenVT(), BaseCursor,
+                               OffsetCursor);
+    return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, Diff);
+  }
 
   if (!isCapstoneIntegerOffset(Offset) || isCapstoneIntegerOffset(Base))
     return SDValue();

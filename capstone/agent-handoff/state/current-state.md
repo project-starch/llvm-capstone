@@ -123,6 +123,8 @@ All of the following pass on the `capstone-bootstrap` branch:
   benchmark runs end to end and validates its correctness marker
 - `capstone/benchmarks/beebs/run-beebs-edn.sh` - fifty-third BEEBS benchmark
   runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-ctl-string.sh` - fifty-fourth BEEBS
+  benchmark runs end to end and validates its correctness marker
 
 Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 `beebs_simple_host.c`. Keep separate per-benchmark domain/host files only when
@@ -184,9 +186,12 @@ and should only be removed after focused root fixes. Details: `plans/backend-com
 
 The `sub i128` pointer-decrement backend blocker is fixed and validated:
 `ptr - integer` and `ptr + (-offset)` now lower through `cincoffset` with a
-negated XLEN offset. This does **not** mean true pointer difference
-(`ptr - ptr`) is validated; keep that as a separate backend/source bring-up
-question for `ctl-string`, `qrduino`, and `miniz`.
+negated XLEN offset.
+
+The `sub i128` pointer-difference backend blocker is also fixed and validated:
+`ptr - ptr` now lowers by extracting both capability cursors with `lcc ..., 2`,
+subtracting the XLEN cursor values, and sign-extending the integer result back
+through the `i128` carrier when needed. `ctl-string` is the proof benchmark.
 
 ## Where to go next
 

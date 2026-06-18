@@ -132,3 +132,18 @@ define ptr addrspace(200) @test_ptr_add_neg_i64(ptr addrspace(200) %p, i64 %offs
   %q = inttoptr i128 %addr to ptr addrspace(200)
   ret ptr addrspace(200) %q
 }
+
+; C pointer subtraction returns an integer difference between two capability
+; cursors. Do not select this as full-width i128 scalar subtraction.
+; CHECK-LABEL: test_ptrdiff:
+; CHECK-DAG: lcc [[CUR0:a[0-9]+]], a0, 2
+; CHECK-DAG: lcc [[CUR1:a[0-9]+]], a1, 2
+; CHECK: sub a0, [[CUR0]], [[CUR1]]
+; CHECK: cjalr zero, 0(ra)
+define i64 @test_ptrdiff(ptr addrspace(200) %p, ptr addrspace(200) %q) {
+  %pi = ptrtoint ptr addrspace(200) %p to i128
+  %qi = ptrtoint ptr addrspace(200) %q to i128
+  %diff = sub i128 %pi, %qi
+  %n = trunc i128 %diff to i64
+  ret i64 %n
+}
