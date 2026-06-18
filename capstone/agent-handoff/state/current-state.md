@@ -182,6 +182,12 @@ The prologue frame-lowering bug is fixed and validated. Four remaining LLVM back
 workarounds from CoreMark bring-up stay in `capstone/benchmarks/coremark/build-coremark-capstone.sh`
 and should only be removed after focused root fixes. Details: `plans/backend-compiler-fixes.md`.
 
+The `sub i128` pointer-decrement backend blocker is fixed and validated:
+`ptr - integer` and `ptr + (-offset)` now lower through `cincoffset` with a
+negated XLEN offset. This does **not** mean true pointer difference
+(`ptr - ptr`) is validated; keep that as a separate backend/source bring-up
+question for `ctl-string`, `qrduino`, and `miniz`.
+
 ## Where to go next
 
 - Next milestone: `state/current-next-step.md`

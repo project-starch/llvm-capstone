@@ -87,3 +87,48 @@ define i32 @test_signed_i32_load_gep(ptr addrspace(200) %key, i32 %length) {
   %ext = zext i8 %v to i32
   ret i32 %ext
 }
+
+; Pointer decrement can reach instruction selection as sub i128 after
+; DAGCombine rewrites add(ptr, neg(offset)). Lower it as cincoffset with a
+; negated xlen offset, not as scalar i128 subtraction.
+; CHECK-LABEL: test_ptr_sub_i64:
+; CHECK: neg [[NEG:a[0-9]+]], a1
+; CHECK-NEXT: cincoffset a0, a0, [[NEG]]
+; CHECK: cjalr zero, 0(ra)
+define ptr addrspace(200) @test_ptr_sub_i64(ptr addrspace(200) %p, i64 %offset) {
+  %base = ptrtoint ptr addrspace(200) %p to i128
+  %wide = sext i64 %offset to i128
+  %sub = sub i128 %base, %wide
+  %q = inttoptr i128 %sub to ptr addrspace(200)
+  ret ptr addrspace(200) %q
+}
+
+; The i32 form commonly appears as sign_extend_inreg(any_extend(...), i32)
+; before selection. Keep the negate in xlen and feed cincoffset.
+; CHECK-LABEL: test_ptr_sub_sext_i32:
+; CHECK: neg [[NEG:a[0-9]+]], a1
+; CHECK-NEXT: cincoffset a0, a0, [[NEG]]
+; CHECK: cjalr zero, 0(ra)
+define ptr addrspace(200) @test_ptr_sub_sext_i32(ptr addrspace(200) %p, i32 %offset) {
+  %base = ptrtoint ptr addrspace(200) %p to i128
+  %wide = sext i32 %offset to i128
+  %sub = sub i128 %base, %wide
+  %q = inttoptr i128 %sub to ptr addrspace(200)
+  ret ptr addrspace(200) %q
+}
+
+; add(ptr, -offset) is the canonical source of this backend blocker. This IR
+; shape should combine to the same sub-i128 lowering as an explicit pointer
+; decrement.
+; CHECK-LABEL: test_ptr_add_neg_i64:
+; CHECK: neg [[NEG:a[0-9]+]], a1
+; CHECK-NEXT: cincoffset a0, a0, [[NEG]]
+; CHECK: cjalr zero, 0(ra)
+define ptr addrspace(200) @test_ptr_add_neg_i64(ptr addrspace(200) %p, i64 %offset) {
+  %base = ptrtoint ptr addrspace(200) %p to i128
+  %wide = sext i64 %offset to i128
+  %neg = sub i128 0, %wide
+  %addr = add i128 %base, %neg
+  %q = inttoptr i128 %addr to ptr addrspace(200)
+  ret ptr addrspace(200) %q
+}

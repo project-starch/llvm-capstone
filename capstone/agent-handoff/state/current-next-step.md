@@ -8,15 +8,37 @@
 - ctl-stack, ctl-vector (51st and 52nd)
 - edn (53rd — unblocked by the cincoffset operand-swap fix in lowerADD)
 
+## Recent backend root fix
+
+The pointer-decrement backend blocker is fixed and validated:
+
+- `ptr - integer` and `ptr + (-offset)` patterns that reach SelectionDAG as
+  `sub i128` now lower to `cincoffset base, -offset`.
+- Regression coverage lives in `llvm/test/CodeGen/Capstone/ptr-arith.ll`.
+- Verified gates:
+  - `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone/ptr-arith.ll`
+  - `"$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone`
+  - `bash capstone/tests/runtime-qemu/run-coremark.sh`
+  - `bash capstone/benchmarks/beebs/run-beebs-stringsearch1.sh`
+  - `bash capstone/benchmarks/beebs/run-beebs-ndes.sh`
+
 ## Remaining viable targets
 
-None. All remaining unprobed benchmarks are blocked — see Blocked section below.
+No clean-add BEEBS target is known. `ctl-string` is the next useful probe only
+if you are ready to do targeted source adaptation/diagnosis, not a blind wrapper
+addition.
 
 ## Blocked (do not retry without root fix)
 
-### Pointer subtraction (i128 sub — no isel pattern)
-- **ctl-string**: `temp - s->string` pointer differences pervasively.
-- **qrduino**: Also hits cincoffset commutative bug at -O0; backend crash at -O1.
+### True pointer difference (capability `ptr - ptr`)
+- **ctl-string**: `temp - s->string` pointer differences pervasively. A
+  compile-only probe after the pointer-decrement fix reached a separate
+  soft-float blocker first (`CTL_GROWFACTOR` default `0.7` in
+  `ctl_StringAppend`). If probing again, first apply the same integer
+  `CTL_GROWFACTOR` strategy used by `ctl-vector`, then diagnose the remaining
+  true pointer-difference codegen.
+- **qrduino**: Also hits backend crashes at higher optimization levels; re-probe
+  only after true pointer-difference behavior is understood.
 - **miniz**: `tinfl_decompress` and `tdefl_compress_block` both use pointer
   subtraction pervasively (12+ sites in tinfl/tdefl) to compute buffer offsets
   and byte counts. Not practical to rewrite. Confirmed blocked: `ICmpInst`
@@ -58,8 +80,9 @@ bash capstone/benchmarks/beebs/run-beebs-ctl-vector.sh
 
 ## Known backend limitations (document when encountered)
 
-- **Pointer subtraction (i128 sub)**: subtracting two capability-typed pointers
-  generates `i128 sub` with no isel pattern. Avoid in stubs and benchmark adaptations.
+- **True pointer difference (`ptr - ptr`)**: subtracting two capability-typed
+  pointers is still not a validated backend path. Do not confuse this with
+  pointer decrement (`ptr - integer`), which is now fixed.
 - **Large lc offset (>2047)**: loading a capability from a base capability with
   constant offset > 12-bit signed range crashes the backend (sglib-rbtree case).
 - **memcpy/memmove/memset libcall**: the Capstone backend crashes with null symbol

@@ -304,6 +304,7 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   //===--------------------------------------------------------------------===//
   // Custom lowering for add of 128-bit numbers
   setOperationAction(ISD::ADD, MVT::i128, Custom);
+  setOperationAction(ISD::SUB, MVT::i128, Custom);
   setOperationAction(ISD::AND, MVT::i128, Custom);
   setOperationAction({ISD::OR, ISD::XOR}, MVT::i128, Custom);
   setOperationAction({ISD::SHL, ISD::SRA, ISD::SRL}, MVT::i128, Custom);
@@ -7692,6 +7693,149 @@ const char *CapstoneTargetLowering::getTargetNodeName(unsigned Opcode) const {
 #undef NODE_NAME_CASE
 }
 
+static bool isCapstoneIntegerOffset(SDValue V) {
+  unsigned Opc = V.getOpcode();
+  if (Opc == ISD::SIGN_EXTEND || Opc == ISD::ZERO_EXTEND ||
+      Opc == ISD::ANY_EXTEND || Opc == ISD::SIGN_EXTEND_INREG ||
+      isa<ConstantSDNode>(V.getNode()))
+    return true;
+
+  // Scaled-index GEP pattern: (shl (sext/zext i64_val), ShiftAmt)
+  if (Opc == ISD::SHL && V.getValueType() == MVT::i128) {
+    unsigned InnerOpc = V.getOperand(0).getOpcode();
+    return InnerOpc == ISD::SIGN_EXTEND || InnerOpc == ISD::ZERO_EXTEND ||
+           InnerOpc == ISD::ANY_EXTEND ||
+           InnerOpc == ISD::SIGN_EXTEND_INREG;
+  }
+
+  if (const auto *Ld = dyn_cast<LoadSDNode>(V)) {
+    ISD::LoadExtType ExtType = Ld->getExtensionType();
+    EVT MemVT = Ld->getMemoryVT();
+    return ExtType != ISD::NON_EXTLOAD && V.getValueType() == MVT::i128 &&
+           MemVT.isScalarInteger() && !MemVT.bitsGT(MVT::i64);
+  }
+
+  return false;
+}
+
+static bool isCapstoneCapabilityValue(SDValue V) {
+  unsigned Opc = V.getOpcode();
+  // A genuine capability load (ldc) is a NON_EXTLOAD of 128 bits.
+  // Sext/zext/anyext loads from a smaller integer (e.g. sext from i64)
+  // have getValueType()==i128 but are NOT capability loads — they are
+  // integers widened to i128, and must not be treated as capabilities here.
+  if (Opc == ISD::LOAD && V.getValueType() == MVT::i128) {
+    const auto *Ld = cast<LoadSDNode>(V.getNode());
+    if (Ld->getExtensionType() == ISD::NON_EXTLOAD &&
+        Ld->getMemoryVT() == MVT::i128)
+      return true;
+  }
+  return Opc == CapstoneISD::CIncOffset || Opc == CapstoneISD::LGA;
+}
+
+static SDValue narrowOffsetForCIncOffset(SDValue V, SelectionDAG &DAG,
+                                         const CapstoneSubtarget &Subtarget,
+                                         const SDLoc &DL,
+                                         unsigned &ExtOpcode) {
+  MVT XLenVT = Subtarget.getXLenVT();
+
+  if ((ExtOpcode == ISD::SIGN_EXTEND || ExtOpcode == ISD::ZERO_EXTEND ||
+       ExtOpcode == ISD::ANY_EXTEND) &&
+      V.getOperand(0).getValueType().isScalarInteger() &&
+      !V.getOperand(0).getValueType().bitsGT(XLenVT)) {
+    if (ExtOpcode == ISD::SIGN_EXTEND)
+      return DAG.getSExtOrTrunc(V.getOperand(0), DL, XLenVT);
+    if (ExtOpcode == ISD::ZERO_EXTEND)
+      return DAG.getZExtOrTrunc(V.getOperand(0), DL, XLenVT);
+    if (V.getOperand(0).getSimpleValueType() == XLenVT)
+      return V.getOperand(0);
+    return DAG.getNode(ISD::ANY_EXTEND, DL, XLenVT, V.getOperand(0));
+  }
+
+  if (V.getOpcode() == ISD::SIGN_EXTEND_INREG) {
+    SDValue Base = V.getOperand(0);
+    if (Base.getOpcode() == ISD::ANY_EXTEND &&
+        Base.getOperand(0).getValueType().isScalarInteger() &&
+        !Base.getOperand(0).getValueType().bitsGT(XLenVT))
+      Base = Base.getOperand(0);
+    if (Base.getValueType().isScalarInteger() &&
+        !Base.getValueType().bitsGT(XLenVT)) {
+      ExtOpcode = ISD::SIGN_EXTEND;
+      return DAG.getNode(ISD::SIGN_EXTEND_INREG, DL, XLenVT,
+                         DAG.getAnyExtOrTrunc(Base, DL, XLenVT),
+                         V.getOperand(1));
+    }
+  }
+
+  if (auto *Ld = dyn_cast<LoadSDNode>(V)) {
+    ISD::LoadExtType ExtType = Ld->getExtensionType();
+    EVT MemVT = Ld->getMemoryVT();
+    if (Ld->isSimple() && ExtType != ISD::NON_EXTLOAD &&
+        MemVT.isScalarInteger() && !MemVT.bitsGT(XLenVT)) {
+      if (ExtType == ISD::SEXTLOAD)
+        ExtOpcode = ISD::SIGN_EXTEND;
+      else if (ExtType == ISD::ZEXTLOAD)
+        ExtOpcode = ISD::ZERO_EXTEND;
+      else
+        ExtOpcode = ISD::ANY_EXTEND;
+
+      SDValue NarrowLoad =
+          DAG.getExtLoad(ExtType, DL, XLenVT, Ld->getChain(),
+                         Ld->getBasePtr(), MemVT, Ld->getMemOperand());
+      DAG.makeEquivalentMemoryOrdering(Ld, NarrowLoad);
+      return NarrowLoad;
+    }
+  }
+
+  return SDValue();
+}
+
+static SDValue lowerSUB(SDValue Op, SelectionDAG &DAG,
+                        const CapstoneSubtarget &Subtarget) {
+  if (Op.getSimpleValueType() != MVT::i128)
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT XLenVT = Subtarget.getXLenVT();
+  SDValue Base = Op.getOperand(0);
+  SDValue Offset = Op.getOperand(1);
+
+  if (!isCapstoneIntegerOffset(Offset) || isCapstoneIntegerOffset(Base))
+    return SDValue();
+
+  SDValue NegOffset;
+  if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
+    NegOffset = DAG.getConstant(-C->getAPIntValue(), DL, MVT::i128);
+  } else {
+    unsigned ExtOpcode = Offset.getOpcode();
+    SDValue XLenOffset;
+
+    if (Offset.getOpcode() == ISD::SHL &&
+        isa<ConstantSDNode>(Offset.getOperand(1))) {
+      ExtOpcode = Offset.getOperand(0).getOpcode();
+      XLenOffset =
+          narrowOffsetForCIncOffset(Offset.getOperand(0), DAG, Subtarget, DL,
+                                    ExtOpcode);
+      if (XLenOffset) {
+        SDValue ShAmt = DAG.getZExtOrTrunc(Offset.getOperand(1), DL, XLenVT);
+        XLenOffset = DAG.getNode(ISD::SHL, DL, XLenVT, XLenOffset, ShAmt);
+      }
+    } else {
+      XLenOffset =
+          narrowOffsetForCIncOffset(Offset, DAG, Subtarget, DL, ExtOpcode);
+    }
+
+    if (!XLenOffset)
+      return SDValue();
+
+    SDValue Zero = DAG.getConstant(0, DL, XLenVT);
+    SDValue NegXLen = DAG.getNode(ISD::SUB, DL, XLenVT, Zero, XLenOffset);
+    NegOffset = DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, NegXLen);
+  }
+
+  return DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Base, NegOffset);
+}
+
 SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
   // 1. Check if this is an operation on 128 bits (our pointers/capabilities)
   MVT VT = Op.getSimpleValueType();
@@ -7734,35 +7878,8 @@ SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
     //   i128 registers appear as CopyFromReg i128 and must not be mistaken for
     //   capabilities. Without this exclusion the swap incorrectly fires when an
     //   integer (Base=CopyFromReg i128) faces a real capability (Offset=CIncOffset).
-    auto isIntegerOffset = [](SDValue V) -> bool {
-      unsigned Opc = V.getOpcode();
-      if (Opc == ISD::SIGN_EXTEND || Opc == ISD::ZERO_EXTEND ||
-          Opc == ISD::ANY_EXTEND || isa<ConstantSDNode>(V.getNode()))
-        return true;
-      // Scaled-index GEP pattern: (shl (sext/zext i64_val), ShiftAmt)
-      if (Opc == ISD::SHL && V.getValueType() == MVT::i128) {
-        unsigned InnerOpc = V.getOperand(0).getOpcode();
-        return InnerOpc == ISD::SIGN_EXTEND || InnerOpc == ISD::ZERO_EXTEND ||
-               InnerOpc == ISD::ANY_EXTEND;
-      }
-      return false;
-    };
-    auto isCapabilityValue = [](SDValue V) -> bool {
-      unsigned Opc = V.getOpcode();
-      // A genuine capability load (ldc) is a NON_EXTLOAD of 128 bits.
-      // Sext/zext/anyext loads from a smaller integer (e.g. sext from i64)
-      // have getValueType()==i128 but are NOT capability loads — they are
-      // integers widened to i128, and must not be treated as capabilities here.
-      if (Opc == ISD::LOAD && V.getValueType() == MVT::i128) {
-        const auto *Ld = cast<LoadSDNode>(V.getNode());
-        if (Ld->getExtensionType() == ISD::NON_EXTLOAD &&
-            Ld->getMemoryVT() == MVT::i128)
-          return true;
-      }
-      return Opc == CapstoneISD::CIncOffset || Opc == CapstoneISD::LGA;
-    };
-    if ((isIntegerOffset(Base) && !isIntegerOffset(Offset)) ||
-        (isCapabilityValue(Offset) && !isCapabilityValue(Base)))
+    if ((isCapstoneIntegerOffset(Base) && !isCapstoneIntegerOffset(Offset)) ||
+        (isCapstoneCapabilityValue(Offset) && !isCapstoneCapabilityValue(Base)))
       std::swap(Base, Offset);
   }
 
@@ -9044,6 +9161,9 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
   case ISD::ADD:
     return lowerADD(Op, DAG);
   case ISD::SUB:
+    if (Op.getSimpleValueType() == MVT::i128)
+      return lowerSUB(Op, DAG, Subtarget);
+    [[fallthrough]];
   case ISD::MUL:
     if (Op.getSimpleValueType() == MVT::i128)
       return lowerScalarI128Mul(Op, DAG, Subtarget);
