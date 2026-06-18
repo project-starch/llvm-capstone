@@ -715,7 +715,8 @@ also need inline stubs.
 
 ## 12. Pointer subtraction → `sub i128` — backend unselectable (compile-time crash)
 
-**Status**: FIXED via source workaround.  `stringsearch1` now passes.
+**Status**: backend root cause fixed.  `stringsearch1`, `rijndael`, and
+`ctl-string` now pass with the backend lowering in place.
 
 ### Symptom
 
@@ -741,7 +742,7 @@ receives `sub i128, something` — but there is no instruction selector for
 The same bug affects any `ptr -= int` or `ptr = ptr - int` in the source.
 Examples in stringsearch1: `s -= lastdelta` and `q = s - n1` in exec1/exec2.
 
-### Workaround (applied in stringsearch1 adapted files)
+### Historical workaround (still present in stringsearch1 adapted files)
 
 Store the negative offset in a local `Tab` (= `long`) variable before the
 pointer addition.  At `-O0` the store/load pair prevents the DAGCombiner from
@@ -754,41 +755,35 @@ Tab lastdelta_neg = -lastdelta;   /* store −lastdelta to stack */
 s += lastdelta_neg;               /* load from stack → add i128 (not sub) */
 ```
 
-This technique is specific to `-O0` (all locals spilled).  At higher
-optimization levels the store/load pair would be eliminated and the negation
-would become visible to the DAGCombiner again.
+This technique was needed before the backend fix and remains in the checked-in
+adapted source because it is already validated.  The backend now lowers
+`ptr - integer` and `ptr + (-offset)` through `cincoffset` with a negated XLEN
+offset.
 
-### How to fix in the backend
+### Backend fix
 
-Register a pattern (or custom lowering) for `sub i128, x` that lowers to
-`cincoffset rd, rs1, neg(x)` (negate the offset and use cincoffset).
-Alternatively, in the DAGCombiner or target-specific combine pass, block
-the `add(ptr, neg(x))` → `sub(ptr, x)` transform when the result type is i128.
-
-Relevant files: `llvm/lib/Target/Capstone/CapstoneISelDAGToDAG.cpp` (add a
-select pattern for `sub i128`) or `CapstoneISelLowering.cpp` (block the combine).
+`CapstoneISelLowering.cpp` now recognizes `sub i128` pointer-decrement patterns
+and emits `CIncOffset(base, -offset)`. Focused coverage lives in
+`llvm/test/CodeGen/Capstone/ptr-arith.ll`.
 
 ---
 
-## 8. Previously deferred benchmarks (no new investigation)
-
-These were deferred in earlier bring-up sessions and have not been re-examined:
+## 13. Previously deferred benchmarks
 
 | Benchmark | Reason for deferral |
 |-----------|---------------------|
-| `sglib-rbtree` | Compile-time backend crash (red-black tree pointer chasing pattern) |
-| `aha-mont64` | Compile-time backend crash (64-bit Montgomery multiply) |
-| `dijkstra` | Compile-time backend crash (graph traversal, pointer-heavy) |
-| `ctl-string` | Compile-time backend crash or non-trivial C++ adaptation |
-| `qrduino` | Compile-time backend crash |
-| `nettle-arcfour` | Compile-time backend crash |
+| `sglib-rbtree` | Still blocked: large capability-load constant offset (`lc` immediate range) |
+| `qrduino` | **RESOLVED**: source-local static string pointer adaptation; validates with `run-beebs-qrduino.sh` |
+| `aha-mont64` | **RESOLVED**: validates with `run-beebs-aha-mont64.sh` |
+| `dijkstra` | **RESOLVED**: validates with `run-beebs-dijkstra.sh` |
+| `ctl-string` | **RESOLVED**: true pointer-difference backend fix; validates with `run-beebs-ctl-string.sh` |
+| `nettle-arcfour` | **RESOLVED**: validates with `run-beebs-nettle-arcfour.sh` |
 | `ludcmp` | Compile-time backend crash (floating-point LU decomposition) |
-| `nettle-des` | Compile-time backend crash |
-| `statemate` | Compile-time backend crash |
+| `nettle-des` | **RESOLVED**: validates with `run-beebs-nettle-des.sh` |
+| `statemate` | **RESOLVED**: validates with `run-beebs-statemate.sh` |
 | `trio` | `verify_benchmark` returns -1; the library is 230 KB and uses variadic printf extensively — blocked on the `va_list` bug (see `plans/backend-compiler-fixes.md`) |
 
-The exact error for each was captured during previous sessions.  Re-running any
-of the failed ones can be done with:
+Re-running unresolved candidates can be done with:
 
 ```bash
 source capstone/tests/capstone-test-env.sh
@@ -816,7 +811,7 @@ scripts as templates.)
 | Unsupported libcall (FP) | Compile-time crash | `nbody`, `ludcmp`, others | Out of scope (no FP support) |
 | `stdio.h` + pointer size | freestanding build error | `slre`, `mergesort` | `mergesort` **FIXED**; `slre` has deeper Clang frontend crash |
 | ptrdiff_t → long, missing trunc | Compile-time crash | `stringsearch1` | **FIXED** — integer counter source workaround |
-| ptr subtraction → sub i128 | Compile-time crash | `stringsearch1` | **FIXED** — Tab-local negative offset workaround |
+| ptr subtraction → sub i128 | Compile-time crash | `stringsearch1`, `rijndael` | **FIXED** — backend lowering; older source workarounds retained where already validated |
 | Wrong CRC result | Runtime correctness | `crc32` | **FIXED** — 32-bit DWORD + single-call expected value |
 | `stc` bulk-copy integer corruption | Runtime correctness | `mergesort` (verify) | **FIXED** — global const arrays in verify_benchmark |
 | Range by-value ABI (stc zeroes upper half) | Runtime correctness | `mergesort` | **FIXED** — pointer-based Range passing in sort functions |

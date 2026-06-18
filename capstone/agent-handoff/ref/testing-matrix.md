@@ -63,6 +63,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-levenshtein.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-jfdctint.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fdct.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-strstr.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-qrduino.sh"
 ```
 
 ## Test layers
@@ -108,6 +109,10 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-strstr.sh"
 | BEEBS `jfdctint` validation | thirteenth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-jfdctint.sh` |
 | BEEBS `fdct` validation | fourteenth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-fdct.sh` |
 | BEEBS `strstr` validation | fifteenth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-strstr.sh` |
+| BEEBS `qrduino` validation | fifty-fifth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, static-data capability handling | `capstone/benchmarks/beebs/run-beebs-qrduino.sh` |
+
+The canonical complete BEEBS validation list is in `state/current-state.md`;
+this matrix keeps only representative and recently added wrappers.
 
 ## Recommended minimums by change type
 

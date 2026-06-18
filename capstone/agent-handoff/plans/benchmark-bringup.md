@@ -25,8 +25,10 @@ that proves the next small step works.
 
 ## Current BEEBS milestone status
 
-The first fifteen tiny deterministic BEEBS benchmarks are implemented and validated.
-Do not add a full BEEBS suite runner yet.
+55 BEEBS benchmarks are implemented and validated on the split host/domain
+runtime path. The canonical current list lives in `state/current-state.md`; this
+plan preserves historical bring-up notes and should not be treated as the
+complete implemented-wrapper inventory. Do not add a full BEEBS suite runner yet.
 
 Implemented status:
 

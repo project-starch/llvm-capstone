@@ -537,6 +537,21 @@ Expected: `beebs-strstr-host: correctness marker validated` and
 `capstone/benchmarks/beebs/`, the benchmark split host/domain wrapper path, or
 backend codegen used by BEEBS string-search and global string data paths.
 
+### BEEBS `qrduino` correctness run
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/benchmarks/beebs/run-beebs-qrduino.sh \
+  > "$CAPSTONE_TMP_ROOT/run-beebs-qrduino.txt" 2>&1
+
+grep -E "(BEEBS|beebs-qrduino|PASSED|ERROR)" "$CAPSTONE_TMP_ROOT/run-beebs-qrduino.txt"
+```
+
+Expected: `beebs-qrduino-host: correctness marker validated` and
+`__BEEBS_QRDUINO_PASSED__` in the output. Run when touching the `qrduino`
+wrapper, static-data capability handling, inline libc stubs, or BEEBS allocator
+adaptations.
+
 ## 6. Important caveats
 
 - The current validated path is still the split host/domain runtime path, not a full hosted Capstone Linux user-space.

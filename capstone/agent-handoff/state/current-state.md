@@ -125,24 +125,29 @@ All of the following pass on the `capstone-bootstrap` branch:
   runs end to end and validates its correctness marker
 - `capstone/benchmarks/beebs/run-beebs-ctl-string.sh` - fifty-fourth BEEBS
   benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-qrduino.sh` - fifty-fifth BEEBS
+  benchmark runs end to end and validates its correctness marker
 
 Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 `beebs_simple_host.c`. Keep separate per-benchmark domain/host files only when
 the marker ABI or host behavior is genuinely different; currently the older
 `fac`, `fibcall`, and `insertsort` wrappers keep custom markers.
 
-All Capstone-specific benchmark source adaptations now live in explicit `.c`
-files under `capstone/benchmarks/beebs/adapted/`. Shell scripts orchestrate
-fetch/build/link/run only; no C code is embedded in `.sh` heredocs. Full-
-replacement adapted files (bubblesort, prime, cnt, duff, janne_complex, tarai,
-levenshtein, recursion) are compiled directly. Prefix/tail files (crc32) and
-tail-append files (strstr, insertsort, jfdctint, fdct, aha-compress,
-nettle-md5, nettle-cast128, nettle-arcfour, nettle-des) are concatenated with
-the stripped upstream source at build time. `huffbench` uses checked-in adapted
-C snippets for its freestanding prefix and RNG replacement. `aha-mont64` uses a
-checked-in rewrite helper for constant hoisting. `ndes` uses a checked-in
-rewrite helper for pointer-based aggregate passing and explicit table
-delinearization.
+Most Capstone-specific benchmark source adaptations live in explicit `.c` files
+under `capstone/benchmarks/beebs/adapted/`; shell scripts generally orchestrate
+fetch/build/link/run rather than embedding C source. Full-replacement adapted
+files (bubblesort, prime, cnt, duff, janne_complex, tarai, levenshtein,
+recursion) are compiled directly. Prefix/tail files (crc32) and tail-append
+files (strstr, insertsort, jfdctint, fdct, aha-compress, nettle-md5,
+nettle-cast128, nettle-arcfour, nettle-des) are concatenated with the stripped
+upstream source at build time. `huffbench` uses checked-in adapted C snippets
+for its freestanding prefix and RNG replacement. `aha-mont64` uses a checked-in
+rewrite helper for constant hoisting. `ndes` uses a checked-in rewrite helper
+for pointer-based aggregate passing and explicit table delinearization.
+`ctl-string` and `qrduino` are generated as scratch sources under
+`$CAPSTONE_TMP_ROOT/beebs-build` because their adaptations are local
+include/stub/allocation/verifier rewrites rather than reusable replacement
+translation units.
 
 `build-beebs-simple-capstone-common.sh` now supports `BEEBS_EXTRA_DEFINES`
 (array of `-D` defines, e.g. `BEEBS_EXTRA_DEFINES=(QUICK_SORT)`),

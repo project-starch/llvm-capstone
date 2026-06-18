@@ -1,10 +1,9 @@
 # Current recommended next step
 
-## Current BEEBS milestone — 54 benchmarks validated
+## Current BEEBS milestone — 55 benchmarks validated
 
-54 BEEBS benchmarks now pass end-to-end. The most recent addition is
-`ctl-string`, which was unblocked by the true pointer-difference backend fix and
-validated with `run-beebs-ctl-string.sh`.
+55 BEEBS benchmarks now pass end-to-end. The most recent addition is
+`qrduino`, validated with `run-beebs-qrduino.sh`.
 
 ## Recent backend root fixes
 
@@ -23,6 +22,12 @@ The true pointer-difference backend blocker is fixed and validated:
   `/tmp/capstone`, strips hosted includes, provides freestanding libc stubs,
   forces integer `CTL_GROWFACTOR`, and aligns the benchmark bump allocator for
   capability-bearing structs.
+- `qrduino` was source-adaptation-local, not a backend root fix. The original
+  scratch runtime crashed in `helper_cscincoffsetimm` because a static pointer
+  initialized to a string literal was loaded as an untagged scalar and then used
+  as the source pointer for `memcpy`. The wrapper keeps the literal as a static
+  array, strips hosted includes, provides inline libc stubs, aligns the heap, and
+  uses a byte-array verifier to avoid integer bulk-copy corruption.
 
 Verified gates for this milestone:
 
@@ -34,6 +39,7 @@ bash capstone/tests/runtime-qemu/run-coremark.sh
 bash capstone/benchmarks/beebs/run-beebs-stringsearch1.sh
 bash capstone/benchmarks/beebs/run-beebs-ndes.sh
 bash capstone/benchmarks/beebs/run-beebs-ctl-string.sh
+bash capstone/benchmarks/beebs/run-beebs-qrduino.sh
 ```
 
 Note: one `run-beebs-ndes.sh` attempt timed out after loading `capstone.ko` with
@@ -42,12 +48,9 @@ transient QEMU smoke timeout unless it reproduces.
 
 ## Remaining viable targets
 
-No clean-add BEEBS target is known. The best next probe is `qrduino`, because it
-was previously grouped with true pointer-difference blockers. Probe it first and
-stop if it exposes a new backend issue rather than rewriting heavily.
-
-If `qrduino` is not useful, investigate the large-offset capability load
-backend crash seen in `sglib-rbtree`; that is likely a focused backend fix.
+No clean-add BEEBS target is known. The best next probe is the large-offset
+capability load backend crash seen in `sglib-rbtree`; that is likely a focused
+backend fix.
 
 ## Blocked (do not retry without root fix)
 
@@ -90,6 +93,7 @@ bash capstone/benchmarks/beebs/run-beebs-crc32.sh
 bash capstone/benchmarks/beebs/run-beebs-matmult.sh
 bash capstone/benchmarks/beebs/run-beebs-ctl-vector.sh
 bash capstone/benchmarks/beebs/run-beebs-ctl-string.sh
+bash capstone/benchmarks/beebs/run-beebs-qrduino.sh
 ```
 
 ## Known backend limitations (document when encountered)
