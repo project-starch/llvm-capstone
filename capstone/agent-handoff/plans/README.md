@@ -17,3 +17,4 @@ This directory holds work-in-progress plans for ongoing Capstone development.
 |------|-------|
 | `backend-compiler-fixes.md` | Known Capstone backend bugs identified during CoreMark bring-up |
 | `benchmark-bringup.md` | Roadmap for adding BEEBS and RV8 benchmarks after CoreMark |
+| `capability-authority-audit.md` | Audit plan for preventing integer bits from becoming capability authority |
