@@ -1048,6 +1048,10 @@ static unsigned getSegInstNF(unsigned Intrinsic) {
 static SDValue materializeFrameIndexAddrBase(SelectionDAG *CurDAG,
                                              const SDLoc &DL, MVT VT,
                                              int FrameIndex);
+static SDValue materializeAddrBaseWithImmediate(SelectionDAG *CurDAG,
+                                                const SDLoc &DL, MVT VT,
+                                                SDValue Base, int64_t Imm,
+                                                const CapstoneSubtarget *Subtarget);
 
 bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
   unsigned Opcode = Node->getOpcode();
@@ -1097,12 +1101,34 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
     }
   }
 
-  // 1. Normalize offset (undef -> 0)
-  if (Offset.isUndef()) {
-    if (!isInt<12>(BaseOffset))
+  // For offsets that don't fit in ldc/stc's 12-bit immediate, split into
+  // CIncOffset(base, TotalOff) + ldc/stc rd, 0(adjusted).
+  // LD/SD (i64) have an LLVM fallback for large offsets; only LDC/STC need
+  // this decomposition.
+  auto handleOffset = [&](int64_t TotalOff) -> bool {
+    if (isInt<12>(TotalOff)) {
+      Offset = CurDAG->getTargetConstant(TotalOff, DL, MVT::i64);
+      return true;
+    }
+    if (MachineOpcode != Capstone::LDC && MachineOpcode != Capstone::STC)
       return false;
-    // Use MVT::i64, as the instruction expects simm12_i64_op.
-    Offset = CurDAG->getTargetConstant(BaseOffset, DL, MVT::i64);
+    // Materialize FrameIndex before adjusting the base capability.
+    if (auto *FIN = dyn_cast<FrameIndexSDNode>(BasePtr)) {
+      BasePtr = materializeFrameIndexAddrBase(CurDAG, DL,
+                                              BasePtr.getSimpleValueType(),
+                                              FIN->getIndex());
+    }
+    // Emit: CIncOffset(base, TotalOff), then ldc/stc rd, 0(adjusted).
+    BasePtr = materializeAddrBaseWithImmediate(CurDAG, DL, MVT::i128,
+                                               BasePtr, TotalOff, Subtarget);
+    Offset = CurDAG->getTargetConstant(0, DL, MVT::i64);
+    return true;
+  };
+
+  // 1. Normalize offset and handle large constants.
+  if (Offset.isUndef()) {
+    if (!handleOffset(BaseOffset))
+      return false;
   } else if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
     int64_t OffsetVal = getSignedI128ValueOrFatal(
         C, "Folded load/store displacement must fit in signed 64-bits");
@@ -1111,15 +1137,10 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
       report_fatal_error(
           "Capstone PureCap: Folded load/store displacement must fit in "
           "signed 64-bits");
-    // Check if the folded offset fits in 12 bits. If not, we decline for now
-    // and keep the address arithmetic as a separate node.
-    if (!isInt<12>(TotalOffset))
+    if (!handleOffset(TotalOffset))
       return false;
-    // Recreate the constant as TargetConstant i64
-    Offset = CurDAG->getTargetConstant(TotalOffset, DL, MVT::i64);
   } else {
-    // If offset is not a constant - we can't handle this yet
-    // (requires pointer arithmetic)
+    // Non-constant offset: can't handle here.
     return false;
   }
 

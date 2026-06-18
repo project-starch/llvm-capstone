@@ -67,3 +67,30 @@ entry:
   %0 = load i32, ptr addrspace(200) %gep, align 4
   ret i32 %0
 }
+
+; Large-offset capability load: offset 2224 matches sglib_rbtree_iterator::subcomparator
+; on Capstone (capabilities are 16 bytes; path[128] at offset 144 pushes
+; subcomparator to 2224, exceeding ldc's 12-bit immediate range of 2047).
+; The backend must split: cincoffset(base, 2224) then ldc at offset 0.
+; CHECK-LABEL: load_cap_large_offset:
+; CHECK: cincoffset
+; CHECK: ldc {{.*}}, 0(
+; CHECK: cjalr zero, 0(ra)
+define ptr addrspace(200) @load_cap_large_offset(ptr addrspace(200) %ptr) {
+entry:
+  %gep = getelementptr inbounds i8, ptr addrspace(200) %ptr, i64 2224
+  %0 = load ptr addrspace(200), ptr addrspace(200) %gep, align 16
+  ret ptr addrspace(200) %0
+}
+
+; Large-offset capability store: symmetric fix for STC.
+; CHECK-LABEL: store_cap_large_offset:
+; CHECK: cincoffset
+; CHECK: stc {{.*}}, 0(
+; CHECK: cjalr zero, 0(ra)
+define void @store_cap_large_offset(ptr addrspace(200) %ptr, ptr addrspace(200) %val) {
+entry:
+  %gep = getelementptr inbounds i8, ptr addrspace(200) %ptr, i64 2224
+  store ptr addrspace(200) %val, ptr addrspace(200) %gep, align 16
+  ret void
+}
