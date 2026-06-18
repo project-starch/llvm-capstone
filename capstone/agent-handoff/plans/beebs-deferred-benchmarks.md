@@ -782,6 +782,7 @@ and emits `CIncOffset(base, -offset)`. Focused coverage lives in
 | `nettle-des` | **RESOLVED**: validates with `run-beebs-nettle-des.sh` |
 | `statemate` | **RESOLVED**: validates with `run-beebs-statemate.sh` |
 | `trio` | `verify_benchmark` returns -1; the library is 230 KB and uses variadic printf extensively — blocked on the `va_list` bug (see `plans/backend-compiler-fixes.md`) |
+| `miniz` | Re-probed 2026-06-18. Backend pointer-subtraction fixed. New blocker: Clang frontend ICmpInst assertion in `ScalarExprEmitter::EmitCompare()` for `addrspace(200)` pointer comparisons following pointer arithmetic (e.g. `pIn_buf_cur >= pIn_buf_end` in `tinfl_decompress`). Needs Clang CodeGen fix. |
 
 Re-running unresolved candidates can be done with:
 
@@ -816,4 +817,5 @@ scripts as templates.)
 | `stc` bulk-copy integer corruption | Runtime correctness | `mergesort` (verify) | **FIXED** — global const arrays in verify_benchmark |
 | Range by-value ABI (stc zeroes upper half) | Runtime correctness | `mergesort` | **FIXED** — pointer-based Range passing in sort functions |
 | Clang frontend PHINode type mismatch | Compile-time crash | `slre` | Not fixable at source level; needs Clang frontend fix |
+| Clang frontend ICmpInst type mismatch | Compile-time crash | `miniz` | `ptr addrspace(200)` comparison after pointer arithmetic emits mismatched i128/i64 operands; needs Clang CodeGen fix in `ScalarExprEmitter::EmitCompare()` |
 | `va_list` ABI bug | Runtime crash | `trio` | Known bug, see backend-compiler-fixes.md |

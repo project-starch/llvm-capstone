@@ -63,11 +63,15 @@ No clean-add BEEBS target is known.
 
 ## Blocked (do not retry without root fix)
 
-### Backend crash / invasive pointer-difference users
-- **miniz**: `tinfl_decompress` and `tdefl_compress_block` both use pointer
-  subtraction pervasively (12+ sites in tinfl/tdefl) to compute buffer offsets
-  and byte counts. Re-probe after the pointer-difference fix before deciding
-  whether this is still blocked; do not rewrite it heavily.
+### Clang frontend ICmpInst type mismatch
+- **miniz**: Re-probed 2026-06-18. Backend pointer-subtraction is no longer a
+  blocker (fixed). New blocker: Clang frontend ICmpInst type mismatch for
+  `addrspace(200)` pointer comparisons. `pIn_buf_cur >= pIn_buf_end` (and ~5
+  similar sites in `tinfl_decompress`) causes an assertion failure in
+  `ScalarExprEmitter::EmitCompare()` because one operand is i128 and the other
+  is i64 after pointer arithmetic. Requires a Clang CodeGen fix for capability
+  pointer comparisons. Do not attempt source workarounds — the pattern is
+  pervasive and the root fix is in Clang.
 
 ### Backend crash — other (pre-existing)
 - `compress`, `dtoa`, `cubic`: known backend crashes.
