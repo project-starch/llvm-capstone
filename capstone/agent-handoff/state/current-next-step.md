@@ -1,11 +1,21 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 57 benchmarks validated
+## Current BEEBS milestone - 58 benchmarks validated
 
-57 BEEBS benchmarks now pass end-to-end. The most recent addition is `miniz`,
-validated with `run-beebs-miniz.sh`.
+58 BEEBS benchmarks now pass end-to-end. The most recent addition is `slre`,
+validated with `run-beebs-slre.sh`.
 
 ## Recent root fixes
+
+Narrow truncating stores from i128 carrier to capability-addressed memory
+are fixed:
+
+- `selectLDC_STC` in `CapstoneISelDAGToDAG.cpp` now handles `MemVT = i32/i16/i8`
+  truncating stores by emitting `SW`/`SH`/`SB` respectively.  The large-offset
+  CIncOffset decomposition is also extended to cover SW/SH/SB.
+- This arises when a pointer-difference result (i64 in an i128 any_extend carrier)
+  is stored into a narrower integer field (`int len = ptr1 - ptr2`).
+- `slre` is the proof benchmark.
 
 The large-offset capability load/store backend blocker is fixed:
 
@@ -56,6 +66,7 @@ bash capstone/benchmarks/beebs/run-beebs-ctl-string.sh
 bash capstone/benchmarks/beebs/run-beebs-qrduino.sh
 bash capstone/benchmarks/beebs/run-beebs-sglib-rbtree.sh
 bash capstone/benchmarks/beebs/run-beebs-miniz.sh
+bash capstone/benchmarks/beebs/run-beebs-slre.sh
 ```
 
 ## Remaining viable targets
@@ -65,8 +76,6 @@ to fix a root issue or carry an invasive source adaptation.
 
 Good next investigations:
 
-- `slre`: Clang frontend PHINode type mismatch plus small libc classification
-  stubs (`tolower`, `isspace`) after compile is fixed.
 - `wikisort`: range structs are passed by value throughout; likely needs an
   invasive pointer-based source adaptation or a deeper aggregate-copy fix.
 - `trio`: blocked on `va_list` capability storage/copying.
@@ -78,7 +87,6 @@ Good next investigations:
 ### Backend crash - other (pre-existing)
 
 - `compress`, `dtoa`, `cubic`: known backend crashes.
-- `slre`: Clang frontend PHINode type mismatch (Bug #11).
 - `wikisort`: Range struct passed by value throughout (Bug #10, invasive
   rewrite).
 
@@ -110,6 +118,7 @@ bash capstone/benchmarks/beebs/run-beebs-ctl-string.sh
 bash capstone/benchmarks/beebs/run-beebs-qrduino.sh
 bash capstone/benchmarks/beebs/run-beebs-sglib-rbtree.sh
 bash capstone/benchmarks/beebs/run-beebs-miniz.sh
+bash capstone/benchmarks/beebs/run-beebs-slre.sh
 ```
 
 ## Known backend limitations (document when encountered)

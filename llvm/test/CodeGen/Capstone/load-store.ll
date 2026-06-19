@@ -94,3 +94,55 @@ entry:
   store ptr addrspace(200) %val, ptr addrspace(200) %gep, align 16
   ret void
 }
+
+; Truncating stores of pointer-difference results carried in i128 to narrow
+; integer fields via a capability address.  These arise in C as:
+;   int_field = char_ptr1 - char_ptr2;
+; Clang emits ptrtoint → sub i128 → trunc i64 → trunc i32 → store i32.
+; The backend promotes the narrow value through an any_extend to i128, then
+; must select SW/SH/SB to write the low 32/16/8 bits of the source register.
+
+; CHECK-LABEL: store_ptrdiff_as_i32:
+; CHECK: sw {{a[0-9]+}}, {{[0-9]+}}({{a[0-9]+}})
+; CHECK: cjalr zero, 0(ra)
+define void @store_ptrdiff_as_i32(ptr addrspace(200) %p1, ptr addrspace(200) %p2,
+                                   ptr addrspace(200) %dst) {
+entry:
+  %lhs = ptrtoint ptr addrspace(200) %p1 to i128
+  %rhs = ptrtoint ptr addrspace(200) %p2 to i128
+  %diff = sub i128 %lhs, %rhs
+  %diff_i64 = trunc i128 %diff to i64
+  %diff_i32 = trunc i64 %diff_i64 to i32
+  store i32 %diff_i32, ptr addrspace(200) %dst, align 4
+  ret void
+}
+
+; CHECK-LABEL: store_ptrdiff_as_i16:
+; CHECK: sh {{a[0-9]+}}, {{[0-9]+}}({{a[0-9]+}})
+; CHECK: cjalr zero, 0(ra)
+define void @store_ptrdiff_as_i16(ptr addrspace(200) %p1, ptr addrspace(200) %p2,
+                                   ptr addrspace(200) %dst) {
+entry:
+  %lhs = ptrtoint ptr addrspace(200) %p1 to i128
+  %rhs = ptrtoint ptr addrspace(200) %p2 to i128
+  %diff = sub i128 %lhs, %rhs
+  %diff_i64 = trunc i128 %diff to i64
+  %diff_i16 = trunc i64 %diff_i64 to i16
+  store i16 %diff_i16, ptr addrspace(200) %dst, align 2
+  ret void
+}
+
+; CHECK-LABEL: store_ptrdiff_as_i8:
+; CHECK: sb {{a[0-9]+}}, {{[0-9]+}}({{a[0-9]+}})
+; CHECK: cjalr zero, 0(ra)
+define void @store_ptrdiff_as_i8(ptr addrspace(200) %p1, ptr addrspace(200) %p2,
+                                  ptr addrspace(200) %dst) {
+entry:
+  %lhs = ptrtoint ptr addrspace(200) %p1 to i128
+  %rhs = ptrtoint ptr addrspace(200) %p2 to i128
+  %diff = sub i128 %lhs, %rhs
+  %diff_i64 = trunc i128 %diff to i64
+  %diff_i8 = trunc i64 %diff_i64 to i8
+  store i8 %diff_i8, ptr addrspace(200) %dst, align 1
+  ret void
+}

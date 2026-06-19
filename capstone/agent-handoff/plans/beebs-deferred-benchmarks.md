@@ -653,63 +653,40 @@ both fields are copied.
 
 ---
 
-## 11. `slre` — Clang frontend PHINode type mismatch (compile-time crash)
+## 11. `slre` — backend narrow truncating store (compile-time crash)
 
-**Status**: deferred.  Not fixable at source level; needs a Clang frontend fix.
+**Status**: FIXED.  `slre` now passes end-to-end with `run-beebs-slre.sh`.
 
-### Symptom
+The earlier-documented PHINode type mismatch in `doh()` was resolved by a
+prior session's ptrdiff_t truncation fix in `CGExprScalar.cpp`.  The remaining
+crash was a backend "Cannot select" for a truncating store of a
+pointer-difference result (carried in i128 via `any_extend`) to a narrow
+integer field through a capability-addressed pointer.
 
-Compile-time crash with a Clang assertion:
+### Root cause
 
-```
-PHINode::setIncomingValue: incoming value type does not match PHINode type!
-  ...
-UNREACHABLE executed at llvm/lib/IR/Instructions.cpp:<N>
-In function: doh
-```
+`selectLDC_STC` in `CapstoneISelDAGToDAG.cpp` handled only `MemVT = i128` (→
+STC) and `MemVT = i64` (→ SD) stores.  When a pointer subtraction result
+(`i64` any-extended to `i128`) was stored to an `int` field (`MemVT = i32`),
+the node could not be selected.
 
-Triggered during IR generation in `VisitAbstractConditionalOperator`
-(CGExprScalar.cpp).
+### Fix
 
-### How to reproduce
+Added `MemVT = i32 → SW`, `MemVT = i16 → SH`, `MemVT = i8 → SB` cases to
+`selectLDC_STC` (store branch).  Also extended the large-offset CIncOffset
+decomposition to include SW/SH/SB.  Regression coverage in
+`llvm/test/CodeGen/Capstone/load-store.ll`
+(`store_ptrdiff_as_i32/i16/i8` test cases).
 
-```bash
-source capstone/tests/capstone-test-env.sh
-BEEBS=$CAPSTONE_TMP_ROOT/beebs-src
-# Strip hosted includes first:
-sed -E '/^#include <(stdio|stdlib|ctype)\.h>/d' \
-  $BEEBS/src/slre/libslre.c > /tmp/slre_stripped.c
-$CAPSTONE_CLANG -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
-  -ffreestanding -fno-builtin -O0 \
-  -I$BEEBS/support -c /tmp/slre_stripped.c -o /dev/null
-```
+### Source adaptation
 
-### Triggering C pattern
-
-In `doh()`:
-
-```c
-p = (i == 0) ? b->ptr : schlong + 1;
-```
-
-Both branches produce `const char *` (capability pointer), but the two
-branches resolve to capability values of differing LLVM IR types (one is a
-struct member access, one is pointer arithmetic on a local).  The Clang IR
-builder tries to merge them at the PHI node and asserts when the types differ.
-
-### Why no source workaround is possible
-
-The ternary-operator crash is in Clang's codegen for any conditional expression
-whose two branches produce capabilities of structurally different LLVM types.
-Rewriting `doh()` to avoid the ternary only moves the problem: the same pattern
-appears in multiple places.  The root fix must be in `CGExprScalar.cpp` to
-canonicalize capability pointer types before inserting them into PHI nodes.
-
-### Additional blocker (secondary)
-
-Even if the frontend crash were fixed, `slre` calls `tolower()` and `isspace()`
-from `<ctype.h>`, which are not available in a freestanding build.  These would
-also need inline stubs.
+`build-beebs-slre-capstone.sh` generates a scratch source with:
+- freestanding type defs and stubs for `strlen`, `memcmp`, `strchr`, and
+  ctype functions (`tolower`, `isspace`, `isdigit`, `isxdigit`)
+- `libslre.c` with hosted includes stripped and benchmark tail removed
+- `adapted/beebs_slre_capstone_tail.c`: rewrites `benchmark()` to pass regex
+  string literals directly to `slre_match` (avoiding the `char *regexes[]`
+  global pointer array that would require caprelocs)
 
 ---
 
@@ -816,6 +793,7 @@ scripts as templates.)
 | Wrong CRC result | Runtime correctness | `crc32` | **FIXED** — 32-bit DWORD + single-call expected value |
 | `stc` bulk-copy integer corruption | Runtime correctness | `mergesort` (verify) | **FIXED** — global const arrays in verify_benchmark |
 | Range by-value ABI (stc zeroes upper half) | Runtime correctness | `mergesort` | **FIXED** — pointer-based Range passing in sort functions |
-| Clang frontend PHINode type mismatch | Compile-time crash | `slre` | Not fixable at source level; needs Clang frontend fix |
+| Clang frontend PHINode type mismatch | Compile-time crash | `slre` | **FIXED** — prior ptrdiff_t truncation fix resolved the PHI issue; remaining backend truncating-store crash also fixed |
+| Backend narrow truncating store from i128 | Compile-time crash | `slre` | **FIXED** — selectLDC_STC now emits SW/SH/SB for MemVT i32/i16/i8 |
 | Clang frontend ICmpInst type mismatch | Compile-time crash | `miniz` | **FIXED** — pointer subtraction now truncates to C `ptrdiff_t` before integer comparison |
 | `va_list` ABI bug | Runtime crash | `trio` | Known bug, see backend-compiler-fixes.md |

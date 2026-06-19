@@ -1081,6 +1081,16 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
       // For example: *(long*)ptr = (long)ptr_val;
     else if (MemVT == MVT::i64)
       MachineOpcode = Capstone::SD;
+      // 3. Store narrower integer values carried in a 128-bit capability register.
+      // This arises when a pointer-difference result (i64 in an i128 carrier via
+      // any_extend) is stored into an int/short/char field through a capability
+      // pointer.  SW/SH/SB store the low 32/16/8 bits of the source register.
+    else if (MemVT == MVT::i32)
+      MachineOpcode = Capstone::SW;
+    else if (MemVT == MVT::i16)
+      MachineOpcode = Capstone::SH;
+    else if (MemVT == MVT::i8)
+      MachineOpcode = Capstone::SB;
   }
 
   if (MachineOpcode == 0)
@@ -1101,16 +1111,19 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
     }
   }
 
-  // For offsets that don't fit in ldc/stc's 12-bit immediate, split into
-  // CIncOffset(base, TotalOff) + ldc/stc rd, 0(adjusted).
-  // LD/SD (i64) have an LLVM fallback for large offsets; only LDC/STC need
-  // this decomposition.
+  // For offsets that don't fit in the 12-bit immediate, split into
+  // CIncOffset(base, TotalOff) + instruction rd, 0(adjusted).
+  // LD/SD (i64) have an LLVM fallback for large offsets when the address is
+  // a plain GPR; only capability-addressed instructions (LDC/STC and
+  // SW/SH/SB through capability pointers) need this decomposition.
   auto handleOffset = [&](int64_t TotalOff) -> bool {
     if (isInt<12>(TotalOff)) {
       Offset = CurDAG->getTargetConstant(TotalOff, DL, MVT::i64);
       return true;
     }
-    if (MachineOpcode != Capstone::LDC && MachineOpcode != Capstone::STC)
+    if (MachineOpcode != Capstone::LDC && MachineOpcode != Capstone::STC &&
+        MachineOpcode != Capstone::SW && MachineOpcode != Capstone::SH &&
+        MachineOpcode != Capstone::SB)
       return false;
     // Materialize FrameIndex before adjusting the base capability.
     if (auto *FIN = dyn_cast<FrameIndexSDNode>(BasePtr)) {
