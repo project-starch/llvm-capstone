@@ -146,3 +146,61 @@ entry:
   store i8 %diff_i8, ptr addrspace(200) %dst, align 1
   ret void
 }
+
+; Large-offset truncating stores: cincoffset decomposition for SW/SH/SB.
+; Offsets >2047 do not fit in a 12-bit immediate, so the backend must emit
+; cincoffset(base, 2224) then sw/sh/sb at offset 0 of the adjusted pointer.
+
+; CHECK-LABEL: store_ptrdiff_as_i32_large_offset:
+; CHECK: cincoffset
+; CHECK: sw {{.*}}, 0(
+; CHECK: cjalr zero, 0(ra)
+define void @store_ptrdiff_as_i32_large_offset(ptr addrspace(200) %p1,
+                                                ptr addrspace(200) %p2,
+                                                ptr addrspace(200) %dst) {
+entry:
+  %lhs = ptrtoint ptr addrspace(200) %p1 to i128
+  %rhs = ptrtoint ptr addrspace(200) %p2 to i128
+  %diff = sub i128 %lhs, %rhs
+  %diff_i64 = trunc i128 %diff to i64
+  %diff_i32 = trunc i64 %diff_i64 to i32
+  %gep = getelementptr inbounds i8, ptr addrspace(200) %dst, i64 2224
+  store i32 %diff_i32, ptr addrspace(200) %gep, align 4
+  ret void
+}
+
+; CHECK-LABEL: store_ptrdiff_as_i16_large_offset:
+; CHECK: cincoffset
+; CHECK: sh {{.*}}, 0(
+; CHECK: cjalr zero, 0(ra)
+define void @store_ptrdiff_as_i16_large_offset(ptr addrspace(200) %p1,
+                                                ptr addrspace(200) %p2,
+                                                ptr addrspace(200) %dst) {
+entry:
+  %lhs = ptrtoint ptr addrspace(200) %p1 to i128
+  %rhs = ptrtoint ptr addrspace(200) %p2 to i128
+  %diff = sub i128 %lhs, %rhs
+  %diff_i64 = trunc i128 %diff to i64
+  %diff_i16 = trunc i64 %diff_i64 to i16
+  %gep = getelementptr inbounds i8, ptr addrspace(200) %dst, i64 2224
+  store i16 %diff_i16, ptr addrspace(200) %gep, align 2
+  ret void
+}
+
+; CHECK-LABEL: store_ptrdiff_as_i8_large_offset:
+; CHECK: cincoffset
+; CHECK: sb {{.*}}, 0(
+; CHECK: cjalr zero, 0(ra)
+define void @store_ptrdiff_as_i8_large_offset(ptr addrspace(200) %p1,
+                                               ptr addrspace(200) %p2,
+                                               ptr addrspace(200) %dst) {
+entry:
+  %lhs = ptrtoint ptr addrspace(200) %p1 to i128
+  %rhs = ptrtoint ptr addrspace(200) %p2 to i128
+  %diff = sub i128 %lhs, %rhs
+  %diff_i64 = trunc i128 %diff to i64
+  %diff_i8 = trunc i64 %diff_i64 to i8
+  %gep = getelementptr inbounds i8, ptr addrspace(200) %dst, i64 2224
+  store i8 %diff_i8, ptr addrspace(200) %gep, align 1
+  ret void
+}
