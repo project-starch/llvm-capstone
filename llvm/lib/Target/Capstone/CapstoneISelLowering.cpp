@@ -6734,23 +6734,32 @@ static SDValue lowerConstant(SDValue Op, SelectionDAG &DAG,
   if (Seq.size() <= Subtarget.getMaxBuildIntsCost())
     return Op;
 
-  // Optimizations below are disabled for opt size. If we're optimizing for
-  // size, use a constant pool.
-  if (DAG.shouldOptForSize())
-    return SDValue();
+  if (!DAG.shouldOptForSize()) {
+    // Special case. See if we can build the constant as (ADD (SLLI X, C), X)
+    // do that if it will avoid a constant pool.
+    // It will require an extra temporary register though.
+    // If we have Zba we can use (ADD_UW X, (SLLI X, 32)) to handle cases
+    // where low and high 32 bits are the same and bit 31 and 63 are set.
+    unsigned ShiftAmt, AddOpc;
+    CapstoneMatInt::InstSeq SeqLo =
+        CapstoneMatInt::generateTwoRegInstSeq(Imm, Subtarget, ShiftAmt, AddOpc);
+    if (!SeqLo.empty() && (SeqLo.size() + 2) <= Subtarget.getMaxBuildIntsCost())
+      return Op;
+  }
 
-  // Special case. See if we can build the constant as (ADD (SLLI X, C), X) do
-  // that if it will avoid a constant pool.
-  // It will require an extra temporary register though.
-  // If we have Zba we can use (ADD_UW X, (SLLI X, 32)) to handle cases where
-  // low and high 32 bits are the same and bit 31 and 63 are set.
-  unsigned ShiftAmt, AddOpc;
-  CapstoneMatInt::InstSeq SeqLo =
-      CapstoneMatInt::generateTwoRegInstSeq(Imm, Subtarget, ShiftAmt, AddOpc);
-  if (!SeqLo.empty() && (SeqLo.size() + 2) <= Subtarget.getMaxBuildIntsCost())
-    return Op;
-
-  return SDValue();
+  // The constant must come from the constant pool. On Capstone, all loads
+  // require a capability (i128) address. Returning SDValue() here would
+  // trigger ExpandConstant, which creates ConstantPool:i64, an integer
+  // address that cannot be used with Capstone's ld instruction.
+  // Emit LOAD:i64(LGA:i128(TargetConstantPool)) directly instead.
+  SDLoc DL(Op);
+  const ConstantInt *CI = cast<ConstantSDNode>(Op)->getConstantIntValue();
+  SDValue CPIdx = DAG.getTargetConstantPool(CI, MVT::i64, Align(8));
+  SDValue Cap = DAG.getNode(CapstoneISD::LGA, DL, MVT::i128, CPIdx);
+  return DAG.getLoad(MVT::i64, DL, DAG.getEntryNode(), Cap,
+                     MachinePointerInfo::getConstantPool(
+                         DAG.getMachineFunction()),
+                     Align(8));
 }
 
 SDValue CapstoneTargetLowering::lowerConstantFP(SDValue Op,
@@ -8132,6 +8141,21 @@ static SDValue lowerScalarI128Logical(SDValue Op, SelectionDAG &DAG,
     return SDValue();
 
   SDLoc DL(Op);
+
+  if (Op.getOpcode() == ISD::OR && Op.getNode()->getFlags().hasDisjoint()) {
+    SDValue Base = Op.getOperand(0);
+    SDValue Offset = Op.getOperand(1);
+    if (isCapstoneIntegerOffset(Base) && !isCapstoneIntegerOffset(Offset))
+      std::swap(Base, Offset);
+
+    unsigned BaseOpc = Base.getOpcode();
+    bool BaseIsCapability = BaseOpc == ISD::FrameIndex ||
+                            BaseOpc == CapstoneISD::CIncOffset ||
+                            BaseOpc == CapstoneISD::LGA;
+    if (BaseIsCapability && isCapstoneIntegerOffset(Offset))
+      return DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Base, Offset);
+  }
+
   MVT XLenVT = Subtarget.getXLenVT();
   unsigned LHSExtOpcode = Op.getOperand(0).getOpcode();
   unsigned RHSExtOpcode = Op.getOperand(1).getOpcode();
@@ -9872,10 +9896,12 @@ SDValue CapstoneTargetLowering::lowerConstantPool(
     SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   ConstantPoolSDNode *N = cast<ConstantPoolSDNode>(Op);
-  // Create TargetConstantPool (i64)
   SDValue TargetAddr = DAG.getTargetConstantPool(N->getConstVal(), MVT::i64,
                                                  N->getAlign(), N->getOffset(), 0);
-  // Wrap in LGA
+  // Return the capability address. Same pattern as lowerGlobalAddress: always
+  // LGA:i128. For ConstantPool:i64 (e.g. division-by-constant magic numbers),
+  // the user's LOAD node uses this capability as the address operand directly,
+  // matching the Capstone `ld rd, 0(cap_base)` pattern.
   return DAG.getNode(CapstoneISD::LGA, DL, MVT::i128, TargetAddr);
 }
 

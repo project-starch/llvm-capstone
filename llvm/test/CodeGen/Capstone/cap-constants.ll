@@ -46,3 +46,17 @@ entry:
   ret ptr addrspace(200) %v
 }
 
+; Large scalar constants that are costed into a constant pool must still load
+; through a capability address. Returning a raw ConstantPool:i64 address would
+; make the final ld use an integer base.
+; CHECK-LABEL: test_large_const_optsize:
+; CHECK: auipc [[OFF:a[0-9]+]], %pcrel_hi
+; CHECK: addi [[OFF]], [[OFF]], %pcrel_lo
+; CHECK: cincoffset [[CAP:a[0-9]+]], gp, [[OFF]]
+; CHECK-NEXT: delin [[CAP]]
+; CHECK-NEXT: ld a0, 0([[CAP]])
+; CHECK: cjalr zero, 0(ra)
+define i64 @test_large_const_optsize() optsize {
+entry:
+  ret i64 1311768467463790320
+}

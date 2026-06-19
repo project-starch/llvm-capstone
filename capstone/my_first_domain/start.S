@@ -38,6 +38,7 @@ __test_entry:
 .text
   .global test
 test:
+  delin(gp)
   cincoffsetimm(sp, sp, -96)
   stc(ra, sp, 48)
   sd a0, 64(sp)

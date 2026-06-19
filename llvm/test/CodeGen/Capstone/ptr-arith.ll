@@ -18,7 +18,7 @@ entry:
   ret ptr addrspace(200) %add.ptr
 }
 
-; Scaled-index GEP: index is i64, multiplied by element size → shl(sext, k).
+; Scaled-index GEP: index is i64, multiplied by element size to shl(sext, k).
 ; lowerADD must recognise shl(sext, k) as an integer offset so the capability
 ; ends up as rs1 in cincoffset.
 ; CHECK-LABEL: test_scaled_gep:
@@ -146,4 +146,20 @@ define i64 @test_ptrdiff(ptr addrspace(200) %p, ptr addrspace(200) %q) {
   %diff = sub i128 %pi, %qi
   %n = trunc i128 %diff to i64
   ret i64 %n
+}
+
+; InstCombine can express pointer addition by a known disjoint byte offset as
+; `or disjoint` on the i128 pointer carrier. Select it as capability cursor
+; arithmetic, not scalar integer OR.
+; CHECK-LABEL: test_or_disjoint_frame_const:
+; CHECK: cincoffsetimm a0, {{(sp|s0)}}, 0
+; CHECK-NEXT: cincoffsetimm a0, a0, 8
+; CHECK: cjalr zero, 0(ra)
+define ptr addrspace(200) @test_or_disjoint_frame_const() {
+entry:
+  %buf = alloca [32 x i8], align 16, addrspace(200)
+  %base = ptrtoint ptr addrspace(200) %buf to i128
+  %off = or disjoint i128 %base, 8
+  %ptr = inttoptr i128 %off to ptr addrspace(200)
+  ret ptr addrspace(200) %ptr
 }

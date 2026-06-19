@@ -4727,8 +4727,18 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
       elementSize = CGF.getContext().getTypeSizeInChars(elementType);
 
     // Don't even emit the divide for element size of 1.
-    if (elementSize.isOne())
+    if (elementSize.isOne()) {
+      // When PtrDiffTy is wider than C's ptrdiff_t (e.g., on targets where
+      // the pointer integer type exceeds the address-arithmetic range),
+      // truncate to the C type so that downstream integer comparisons don't
+      // encounter operand type mismatches.
+      llvm::Type *PtrdiffIRTy =
+          CGF.ConvertType(CGF.getContext().getPointerDiffType());
+      if (diffInChars->getType() != PtrdiffIRTy)
+        diffInChars =
+            Builder.CreateTrunc(diffInChars, PtrdiffIRTy, "sub.ptr.cast");
       return diffInChars;
+    }
 
     divisor = CGF.CGM.getSize(elementSize);
   }
@@ -4736,7 +4746,14 @@ Value *ScalarExprEmitter::EmitSub(const BinOpInfo &op) {
   // Otherwise, do a full sdiv. This uses the "exact" form of sdiv, since
   // pointer difference in C is only defined in the case where both operands
   // are pointing to elements of an array.
-  return Builder.CreateExactSDiv(diffInChars, divisor, "sub.ptr.div");
+  {
+    Value *result = Builder.CreateExactSDiv(diffInChars, divisor, "sub.ptr.div");
+    llvm::Type *PtrdiffIRTy =
+        CGF.ConvertType(CGF.getContext().getPointerDiffType());
+    if (result->getType() != PtrdiffIRTy)
+      result = Builder.CreateTrunc(result, PtrdiffIRTy, "sub.ptr.cast");
+    return result;
+  }
 }
 
 Value *ScalarExprEmitter::GetMaximumShiftAmount(Value *LHS, Value *RHS,

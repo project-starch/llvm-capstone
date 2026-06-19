@@ -233,7 +233,8 @@ heuristic such as "this `i128` load is definitely an `ldc`".
 Prioritize currently known issues that are already symptoms of inconsistent
 pointer/scalar representation:
 
-- Clang capability pointer comparison mismatch blocking `miniz`;
+- capability pointer/scalar arithmetic regressions similar to the fixed `miniz`
+  ptrdiff and `or disjoint` cases;
 - `va_list` storing an argument pointer through scalar `sd` rather than
   capability `stc`;
 - compiler-generated bulk copy choosing `stc` for pure integer data or scalar
