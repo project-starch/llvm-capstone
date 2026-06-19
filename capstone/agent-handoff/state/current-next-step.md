@@ -76,11 +76,18 @@ to fix a root issue or carry an invasive source adaptation.
 
 Good next investigations:
 
-- `wikisort`: range structs are passed by value throughout; likely needs an
-  invasive pointer-based source adaptation or a deeper aggregate-copy fix. A
-  bounded secondary-agent probe was interrupted after producing an unvalidated
-  wrapper and a runtime OOB report; no `wikisort` files are committed. Treat
-  the next attempt as lead-owned work, not another delegated open-ended probe.
+- `wikisort`: keep lead-owned.  A scratch pointer-based adaptation under
+  `$CAPSTONE_TMP_ROOT/beebs-build` builds, avoids the original stack-cache OOB
+  by using a static 512-entry cache, and sorts correctly under native GCC, but
+  still fails the Capstone/QEMU correctness marker.  After guarding copy byte
+  counts against negative `Range_length(...)` values, the QEMU trap changes
+  into a stable wrong-result failure: random test case (`test_case=1`) first
+  becomes unsorted at index 6 (`13894 > 12446`).  Direct comparison calls,
+  direct field comparison, cursor-integer `memmove` direction checks, and
+  widening `Test` fields to `long` did not fix it.  `-O1` is not a workaround:
+  it currently hits an unrelated SelectionDAG alias-analysis assertion in
+  `APInt::getSExtValue()` during `benchmark`.  Do not add `wikisort` scripts
+  until a real QEMU correctness pass exists.
 - `trio`: blocked on `va_list` capability storage/copying.
 - FP-blocked benchmarks: require a deliberate soft-float/libcall strategy for
   Capstone, not one-off wrappers.
@@ -90,8 +97,8 @@ Good next investigations:
 ### Backend crash - other (pre-existing)
 
 - `compress`, `dtoa`, `cubic`: known backend crashes.
-- `wikisort`: Range struct passed by value throughout (Bug #10, invasive
-  rewrite).
+- `wikisort`: pointer-based source rewrite is not enough yet; current scratch
+  variant fails QEMU correctness after the original OOB is avoided.
 
 ### FP-blocked (soft-float libcalls on Capstone)
 

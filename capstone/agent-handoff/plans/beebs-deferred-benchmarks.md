@@ -602,7 +602,8 @@ or the target-specific memcpy inline expansion.
 
 ## 10. Range by-value struct ABI — stc zeroes upper half (runtime correctness)
 
-**Status**: FIXED via source workaround.  `mergesort` now passes.
+**Status**: PARTIALLY FIXED via source workaround.  `mergesort` now passes.
+`wikisort` still does not have a validated wrapper.
 
 ### Symptom
 
@@ -642,6 +643,40 @@ MergeSortR(array, &A, buffer);
 Individual field assignments emit separate `sd` instructions, not `stc`, so
 both fields are written correctly.  `MakeRange` and `Range_length` from the
 upstream prefix are not called in the tail file.
+
+### `wikisort` status
+
+`wikisort` has the same Range-by-value shape, but a pointer-based rewrite is
+not sufficient by itself.  The current scratch adaptation in
+`$CAPSTONE_TMP_ROOT/beebs-build`:
+
+- strips hosted includes and provides inline `memcpy` / `memmove` stubs;
+- replaces `sqrt` with an integer square root;
+- replaces the function-pointer test table with switch dispatch;
+- uses pointer-based `Range` helpers;
+- moves the 512-entry WikiSort cache out of the stack.
+
+That variant sorts correctly under a native GCC diagnostic harness, but still
+fails under Capstone/QEMU.  The original QEMU OOB in `memcpy` can be converted
+to a wrong-result failure by guarding copy byte counts against negative
+`Range_length(...)` values.  The stable failure is the random test case
+(`test_case=1`) becoming unsorted at index 6 (`13894 > 12446`).
+
+Scratch probes that did **not** fix QEMU correctness:
+
+- direct `TestCompare` calls instead of comparison function-pointer calls;
+- direct field comparison macro, avoiding `TestCompare` entirely;
+- cursor-integer comparison for `memmove` overlap direction;
+- widening `Test.value` / `Test.index` from `int` to `long`.
+
+Compiling the adapted source at `-O1` is not a workaround: it currently trips a
+separate SelectionDAG alias-analysis assertion in `APInt::getSExtValue()` while
+compiling `benchmark`.
+
+Do not add permanent `wikisort` build/run scripts until its QEMU correctness
+marker passes.  The next productive step is a focused backend/codegen
+reproducer for the remaining wrong-result delta between native execution and
+Capstone/QEMU, using the scratch adaptation as input.
 
 ### How to fix in the backend
 
@@ -792,7 +827,7 @@ scripts as templates.)
 | ptr subtraction → sub i128 | Compile-time crash | `stringsearch1`, `rijndael` | **FIXED** — backend lowering; older source workarounds retained where already validated |
 | Wrong CRC result | Runtime correctness | `crc32` | **FIXED** — 32-bit DWORD + single-call expected value |
 | `stc` bulk-copy integer corruption | Runtime correctness | `mergesort` (verify) | **FIXED** — global const arrays in verify_benchmark |
-| Range by-value ABI (stc zeroes upper half) | Runtime correctness | `mergesort` | **FIXED** — pointer-based Range passing in sort functions |
+| Range by-value ABI (stc zeroes upper half) | Runtime correctness | `mergesort`, `wikisort` | `mergesort` **FIXED** — pointer-based Range passing in sort functions; `wikisort` still fails QEMU correctness after pointer rewrite |
 | Clang frontend PHINode type mismatch | Compile-time crash | `slre` | **FIXED** — prior ptrdiff_t truncation fix resolved the PHI issue; remaining backend truncating-store crash also fixed |
 | Backend narrow truncating store from i128 | Compile-time crash | `slre` | **FIXED** — selectLDC_STC now emits SW/SH/SB for MemVT i32/i16/i8 |
 | Clang frontend ICmpInst type mismatch | Compile-time crash | `miniz` | **FIXED** — pointer subtraction now truncates to C `ptrdiff_t` before integer comparison |
