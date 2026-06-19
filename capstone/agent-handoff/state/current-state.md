@@ -133,6 +133,8 @@ All of the following pass on the `capstone-bootstrap` branch:
   benchmark runs end to end and validates its correctness marker
 - `capstone/benchmarks/beebs/run-beebs-slre.sh` - fifty-eighth BEEBS
   benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-wikisort.sh` - fifty-ninth BEEBS
+  benchmark runs end to end and validates its correctness marker
 
 Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 `beebs_simple_host.c`. Keep separate per-benchmark domain/host files only when
@@ -155,7 +157,8 @@ under `$CAPSTONE_TMP_ROOT/beebs-build` because their adaptations are local
 include/stub/allocation/verifier rewrites rather than reusable replacement
 translation units.  `slre` additionally uses a checked-in tail file
 (`adapted/beebs_slre_capstone_tail.c`) to avoid the `char *regexes[]` global
-pointer array that would require caprelocs.
+pointer array that would require caprelocs.  `wikisort` uses a checked-in tail
+file to keep the upstream prefix while replacing the Range/sort/test tail.
 
 `build-beebs-simple-capstone-common.sh` now supports `BEEBS_EXTRA_DEFINES`
 (array of `-D` defines, e.g. `BEEBS_EXTRA_DEFINES=(QUICK_SORT)`),

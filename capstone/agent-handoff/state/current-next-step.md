@@ -1,9 +1,9 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 58 benchmarks validated
+## Current BEEBS milestone - 59 benchmarks validated
 
-58 BEEBS benchmarks now pass end-to-end. The most recent addition is `slre`,
-validated with `run-beebs-slre.sh`.
+59 BEEBS benchmarks now pass end-to-end. The most recent addition is `wikisort`,
+validated with `run-beebs-wikisort.sh`.
 
 ## Recent root fixes
 
@@ -67,6 +67,7 @@ bash capstone/benchmarks/beebs/run-beebs-qrduino.sh
 bash capstone/benchmarks/beebs/run-beebs-sglib-rbtree.sh
 bash capstone/benchmarks/beebs/run-beebs-miniz.sh
 bash capstone/benchmarks/beebs/run-beebs-slre.sh
+bash capstone/benchmarks/beebs/run-beebs-wikisort.sh
 ```
 
 ## Remaining viable targets
@@ -76,18 +77,6 @@ to fix a root issue or carry an invasive source adaptation.
 
 Good next investigations:
 
-- `wikisort`: keep lead-owned.  A scratch pointer-based adaptation under
-  `$CAPSTONE_TMP_ROOT/beebs-build` builds, avoids the original stack-cache OOB
-  by using a static 512-entry cache, and sorts correctly under native GCC, but
-  still fails the Capstone/QEMU correctness marker.  After guarding copy byte
-  counts against negative `Range_length(...)` values, the QEMU trap changes
-  into a stable wrong-result failure: random test case (`test_case=1`) first
-  becomes unsorted at index 6 (`13894 > 12446`).  Direct comparison calls,
-  direct field comparison, cursor-integer `memmove` direction checks, and
-  widening `Test` fields to `long` did not fix it.  `-O1` is not a workaround:
-  it currently hits an unrelated SelectionDAG alias-analysis assertion in
-  `APInt::getSExtValue()` during `benchmark`.  Do not add `wikisort` scripts
-  until a real QEMU correctness pass exists.
 - `trio`: blocked on `va_list` capability storage/copying.
 - FP-blocked benchmarks: require a deliberate soft-float/libcall strategy for
   Capstone, not one-off wrappers.
@@ -97,8 +86,6 @@ Good next investigations:
 ### Backend crash - other (pre-existing)
 
 - `compress`, `dtoa`, `cubic`: known backend crashes.
-- `wikisort`: pointer-based source rewrite is not enough yet; current scratch
-  variant fails QEMU correctness after the original OOB is avoided.
 
 ### FP-blocked (soft-float libcalls on Capstone)
 
@@ -129,6 +116,7 @@ bash capstone/benchmarks/beebs/run-beebs-qrduino.sh
 bash capstone/benchmarks/beebs/run-beebs-sglib-rbtree.sh
 bash capstone/benchmarks/beebs/run-beebs-miniz.sh
 bash capstone/benchmarks/beebs/run-beebs-slre.sh
+bash capstone/benchmarks/beebs/run-beebs-wikisort.sh
 ```
 
 ## Known backend limitations (document when encountered)
