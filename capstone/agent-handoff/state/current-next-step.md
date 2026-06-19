@@ -77,7 +77,10 @@ to fix a root issue or carry an invasive source adaptation.
 Good next investigations:
 
 - `wikisort`: range structs are passed by value throughout; likely needs an
-  invasive pointer-based source adaptation or a deeper aggregate-copy fix.
+  invasive pointer-based source adaptation or a deeper aggregate-copy fix. A
+  bounded secondary-agent probe was interrupted after producing an unvalidated
+  wrapper and a runtime OOB report; no `wikisort` files are committed. Treat
+  the next attempt as lead-owned work, not another delegated open-ended probe.
 - `trio`: blocked on `va_list` capability storage/copying.
 - FP-blocked benchmarks: require a deliberate soft-float/libcall strategy for
   Capstone, not one-off wrappers.
