@@ -1,9 +1,16 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 62 benchmarks validated
+## Current BEEBS milestone - 63 benchmarks validated
 
-62 BEEBS benchmarks now pass end-to-end. The most recent addition is `cubic`,
-the **first floating-point benchmark**, validated with `run-beebs-cubic.sh`.
+63 BEEBS benchmarks now pass end-to-end. The most recent addition is `sqrt`,
+validated with `run-beebs-sqrt.sh` — the first FP benchmark to *reuse* the
+soft-float runtime (no compiler change). It needs no libm (it ships its own
+`sqrtfcn`) and has a real `verify_benchmark`; the only new infrastructure is the
+shared `build-beebs-softfloat-common.sh` helper, which compiles the compiler-rt
+float+double soft-float builtin set and is now also sourced by `cubic`.
+
+`cubic` (62nd) is the **first floating-point benchmark**, validated with
+`run-beebs-cubic.sh`.
 
 `cubic` required standing up a soft-float + libm runtime (see
 `design/capstone-softfloat-libm.md`). Two backend changes:
@@ -126,16 +133,25 @@ Good next investigations:
 - `cubic`: **RESOLVED** (first FP benchmark). The runtime libcall-name table is
   now registered and an in-domain soft-float + libm runtime exists; see the
   milestone note above and `design/capstone-softfloat-libm.md`.
+- `sqrt`: **RESOLVED** — pure soft-float (own `sqrtfcn`, no libm), real verify.
+  Reuses `build-beebs-softfloat-common.sh`. `run-beebs-sqrt.sh`.
+- `ludcmp`: **DEFERRED** — compiles and links with the soft-float runtime, but
+  crashes at runtime with `helper_cscincoffset: Assertion 'rs1_v->tag' failed`
+  (the `cincoffset` untagged-rs1 bug, deferred Bug #1) from its 2D float-matrix
+  indexing `a[i][j]`. Needs the `cincoffset`/capability-arithmetic canonicalization
+  extended (backend) or an invasive 2D-access source workaround — a separate
+  effort, not a clean add. `minver` (also 2D float matrix) likely hits the same.
 - `dtoa`: now compiles (libcall names resolve), but the bare-metal domain still
   lacks the libm/libc it needs — `log`/`floor`/`ceil` plus `malloc`,
   `memcpy`/`memmove`/`memset`, `strcpy`/`strlen`, `errno`, and freestanding
   `float.h`/`fenv.h`/`locale` shims (89 KB FP↔decimal library). The `cubic`
   soft-float runtime is reusable; `dtoa` mainly adds the libc surface. Larger
   follow-on. See `plans/beebs-deferred-benchmarks.md` (Bug #14).
-- The `cubic` runtime also unblocks the other FP benchmarks below at the
+- The soft-float runtime also unblocks the other FP benchmarks below at the
   *compile* level (each still needs its libm closure linked + a correctness
-  oracle): `nbody`, `minver`, `ludcmp`, `qsort`, `select`, `sqrt`, `qurt`,
-  `fasta`, `frac`, `st`, `whetstone`, `newlib-*`, `matmult-int`.
+  oracle, and some hit the `ludcmp` `cincoffset` bug above): `nbody`, `minver`,
+  `qsort`, `select`, `qurt`, `fasta`, `frac`, `st`, `whetstone`, `newlib-*`,
+  `matmult-int`.
 
 ### FP-blocked (soft-float libcalls on Capstone)
 

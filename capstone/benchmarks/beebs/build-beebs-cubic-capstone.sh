@@ -25,9 +25,6 @@ LIBM_SRC=$SCRIPT_DIR/adapted/beebs_cubic_libm.c
 TAIL_SRC=$SCRIPT_DIR/adapted/beebs_cubic_capstone_tail.c
 COMPILER_RT=$REPO_ROOT/compiler-rt/lib/builtins
 
-# compiler-rt double soft-float builtins needed by the cubic + libm closure.
-SOFTFLOAT_BUILTINS=(adddf3 subdf3 muldf3 divdf3 fixdfsi floatsidf comparedf2 fp_mode)
-
 for f in "$CUBIC_SRC" "$SUPPORT_DIR/support.h" "$LIBM_SRC" "$TAIL_SRC"; do
   if [[ ! -f "$f" ]]; then
     echo "missing required source: $f" >&2
@@ -79,11 +76,8 @@ objs+=("$OBJ_DIR/cubic_libm.o")
 "$CLANG" "${COMMON_FLAGS[@]}" -c "$TAIL_SRC" -o "$OBJ_DIR/cubic_tail.o"
 objs+=("$OBJ_DIR/cubic_tail.o")
 
-for b in "${SOFTFLOAT_BUILTINS[@]}"; do
-  "$CLANG" "${COMMON_FLAGS[@]}" -I"$COMPILER_RT" \
-    -c "$COMPILER_RT/$b.c" -o "$OBJ_DIR/$b.o"
-  objs+=("$OBJ_DIR/$b.o")
-done
+source "$SCRIPT_DIR/build-beebs-softfloat-common.sh"
+objs+=("${softfloat_objs[@]}")
 
 "$CLANG" "${COMMON_FLAGS[@]}" \
   -c "$SCRIPT_DIR/beebs_simple_domain.c" \
