@@ -777,7 +777,7 @@ and emits `CIncOffset(base, -offset)`. Focused coverage lives in
 | `ludcmp` | Compile-time backend crash (floating-point LU decomposition) |
 | `nettle-des` | **RESOLVED**: validates with `run-beebs-nettle-des.sh` |
 | `statemate` | **RESOLVED**: validates with `run-beebs-statemate.sh` |
-| `trio` | `verify_benchmark` returns -1; the library is 230 KB and uses variadic printf extensively — blocked on the `va_list` bug (see `plans/backend-compiler-fixes.md`) |
+| `trio` | Partially resolved: `trio-sscanf` validates with `run-beebs-trio-sscanf.sh` after the backend `va_list` fix, using `TRIO_SSCANF`, embedded/minimal `triostr`, disabled float/file/dynamic-string features, and local freestanding stubs. Full `trio`/`trio-snprintf` remain deferred for soft-float/complex format-lib scope; `trio-snprintf` also has `verify_benchmark = -1`. A full non-embedded `triostr.c` probe still reaches float conversion code and crashes in `trio_to_long_double` when materializing an arbitrary >64-bit capability constant. |
 | `miniz` | **RESOLVED**: Clang ptrdiff truncation, constant-pool capability load lowering, `or disjoint` capability-offset lowering, and local source adaptations; validates with `run-beebs-miniz.sh` |
 
 Re-running unresolved candidates can be done with:
@@ -815,4 +815,4 @@ scripts as templates.)
 | Clang frontend PHINode type mismatch | Compile-time crash | `slre` | **FIXED** — prior ptrdiff_t truncation fix resolved the PHI issue; remaining backend truncating-store crash also fixed |
 | Backend narrow truncating store from i128 | Compile-time crash | `slre` | **FIXED** — selectLDC_STC now emits SW/SH/SB for MemVT i32/i16/i8 |
 | Clang frontend ICmpInst type mismatch | Compile-time crash | `miniz` | **FIXED** — pointer subtraction now truncates to C `ptrdiff_t` before integer comparison |
-| `va_list` ABI bug | Runtime crash | `trio` | Known bug, see backend-compiler-fixes.md |
+| `va_list` ABI bug | Runtime crash | `trio` | **FIXED** in SelectionDAG lowering; `va_start`/`va_arg`/`va_copy` use capability load/store and 16-byte slot stride. `trio-sscanf` is the BEEBS proof wrapper. |

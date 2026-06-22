@@ -64,8 +64,8 @@ agent-handoff/
 - working baseline and split `null_blk` regressions
 - validated CoreMark profile-run on Capstone PureCap ("Correct operation validated.")
   using compiled C `domain_main` rather than `coremark_domain_entry.S`
-- 59 validated BEEBS benchmarks on the split host/domain runtime path; the
-  newest is `wikisort`
+- 60 validated BEEBS benchmarks on the split host/domain runtime path; the
+  newest is `trio-sscanf`
 - serial aggregate regression wrappers are available for HostCall proofs,
   `null_blk`, and the full validated BEEBS set
 

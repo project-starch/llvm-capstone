@@ -139,6 +139,8 @@ All of the following pass on the `capstone-bootstrap` branch:
   benchmark runs end to end and validates its correctness marker
 - `capstone/benchmarks/beebs/run-beebs-wikisort.sh` - fifty-ninth BEEBS
   benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-trio-sscanf.sh` - sixtieth BEEBS
+  benchmark runs end to end and validates its correctness marker
 
 Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 `beebs_simple_host.c`. Keep separate per-benchmark domain/host files only when
@@ -156,13 +158,16 @@ upstream source at build time. `huffbench` uses checked-in adapted C snippets
 for its freestanding prefix and RNG replacement. `aha-mont64` uses a checked-in
 rewrite helper for constant hoisting. `ndes` uses a checked-in rewrite helper
 for pointer-based aggregate passing and explicit table delinearization.
-`ctl-string`, `qrduino`, `miniz`, and `slre` are generated as scratch sources
-under `$CAPSTONE_TMP_ROOT/beebs-build` because their adaptations are local
-include/stub/allocation/verifier rewrites rather than reusable replacement
-translation units.  `slre` additionally uses a checked-in tail file
+`ctl-string`, `qrduino`, `miniz`, `slre`, and `trio-sscanf` are generated as
+scratch sources under `$CAPSTONE_TMP_ROOT/beebs-build` because their adaptations
+are local include/stub/allocation/verifier rewrites rather than reusable
+replacement translation units.  `slre` additionally uses a checked-in tail file
 (`adapted/beebs_slre_capstone_tail.c`) to avoid the `char *regexes[]` global
 pointer array that would require caprelocs.  `wikisort` uses a checked-in tail
 file to keep the upstream prefix while replacing the Range/sort/test tail.
+`trio-sscanf` strips hosted includes, builds with `TRIO_SSCANF`,
+`TRIO_EMBED_STRING`, float/file/dynamic-string features disabled, a minimal set
+of embedded `triostr` helpers, and checked-in freestanding libc stubs.
 
 `build-beebs-simple-capstone-common.sh` now supports `BEEBS_EXTRA_DEFINES`
 (array of `-D` defines, e.g. `BEEBS_EXTRA_DEFINES=(QUICK_SORT)`),

@@ -1,9 +1,9 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 59 benchmarks validated
+## Current BEEBS milestone - 60 benchmarks validated
 
-59 BEEBS benchmarks now pass end-to-end. The most recent addition is `wikisort`,
-validated with `run-beebs-wikisort.sh`.
+60 BEEBS benchmarks now pass end-to-end. The most recent addition is
+`trio-sscanf`, validated with `run-beebs-trio-sscanf.sh`.
 
 ## Recent root fixes
 
@@ -68,6 +68,7 @@ bash capstone/benchmarks/beebs/run-beebs-sglib-rbtree.sh
 bash capstone/benchmarks/beebs/run-beebs-miniz.sh
 bash capstone/benchmarks/beebs/run-beebs-slre.sh
 bash capstone/benchmarks/beebs/run-beebs-wikisort.sh
+bash capstone/benchmarks/beebs/run-beebs-trio-sscanf.sh
 ```
 
 ## Remaining viable targets
@@ -77,11 +78,13 @@ to fix a root issue or carry an invasive source adaptation.
 
 Good next investigations:
 
-- `trio`: the `va_list` capability storage/copying blocker is now **fixed** in the
-  backend (`va_start`/`va_arg`/`va_copy` lower with `stc`/`ldc` and a 16-byte
-  `cincoffset` stride; see `plans/backend-compiler-fixes.md`). `trio` likely still
-  needs soft-float/complex-format-lib support, so confirm the FP strategy before
-  bring-up.
+- `trio`/`trio-snprintf`: the `va_list` capability storage/copying blocker is now
+  **fixed** in the backend (`va_start`/`va_arg`/`va_copy` lower with `stc`/`ldc`
+  and a 16-byte `cincoffset` stride; see `plans/backend-compiler-fixes.md`).
+  `trio-sscanf` is validated with an embedded/minimal string-helper build.
+  Full `trio` and `trio-snprintf` still need a deliberate soft-float/complex
+  format-lib strategy; `trio-snprintf` also has `verify_benchmark = -1`, so do
+  not add it as a normal correctness gate without changing the verifier story.
 - FP-blocked benchmarks: require a deliberate soft-float/libcall strategy for
   Capstone, not one-off wrappers.
 
@@ -98,7 +101,7 @@ Good next investigations:
 - `qsort`, `select` - float array comparisons
 - `sqrt`, `qurt`, `fasta`, `frac`, `st`, `stb_perlin`, `whetstone` - float
 - `newlib-exp`, `newlib-log`, `newlib-mod`, `newlib-sqrt` - math library
-- `nbody`, `trio`, `trio-snprintf`, `trio-sscanf` - float / complex format lib
+- `nbody`, `trio`, `trio-snprintf` - float / complex format lib
 
 ## Regression gate for backend/lowering/ABI changes
 
