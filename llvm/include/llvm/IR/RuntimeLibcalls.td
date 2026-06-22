@@ -2334,6 +2334,25 @@ def RISCVSystemLibrary
            DefaultStackProtector)>;
 
 //===----------------------------------------------------------------------===//
+// Capstone Runtime Libcalls
+//===----------------------------------------------------------------------===//
+
+// Capstone is a CHERI-style PureCap fork of RISC-V and uses the same runtime
+// library as RISC-V (sans the RISC-V-specific __riscv_flush_icache).  Without
+// this the libcall-name table is empty for the capstone triple and any FP
+// libcall aborts in TargetLowering::makeLibCall ("unsupported library call
+// operation").
+def isCapstone   : RuntimeLibcallPredicate<"TT.isCapstone()">;
+def isCapstone64 : RuntimeLibcallPredicate<"TT.isCapstone64()">;
+
+def CapstoneSystemLibrary
+    : SystemRuntimeLibrary<isCapstone,
+      (add DefaultRuntimeLibcallImpls,
+           exp10f, exp10, exp10l_f128,
+           LibcallImpls<(add Int128RTLibcalls), isCapstone64>,
+           DefaultStackProtector)>;
+
+//===----------------------------------------------------------------------===//
 // SPARC Runtime Libcalls
 //===----------------------------------------------------------------------===//
 

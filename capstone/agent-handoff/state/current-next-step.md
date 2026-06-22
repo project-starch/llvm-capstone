@@ -1,9 +1,40 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 60 benchmarks validated
+## Current BEEBS milestone - 62 benchmarks validated
 
-60 BEEBS benchmarks now pass end-to-end. The most recent addition is
-`trio-sscanf`, validated with `run-beebs-trio-sscanf.sh`.
+62 BEEBS benchmarks now pass end-to-end. The most recent addition is `cubic`,
+the **first floating-point benchmark**, validated with `run-beebs-cubic.sh`.
+
+`cubic` required standing up a soft-float + libm runtime (see
+`design/capstone-softfloat-libm.md`). Two backend changes:
+(1) `CapstoneSystemLibrary` in `RuntimeLibcalls.td` registers the runtime
+libcall-name table (FP libcalls previously aborted at `TargetLowering.cpp:189`
+with "unsupported library call operation" because the table was empty);
+(2) a pre-legalize `ISD::ConstantFP` DAG combine in `CapstoneISelLowering.cpp`
+loads fp128 constants from the constant pool (`ldc`) instead of softening them
+into an unforgeable 128-bit capability immediate. The genuine capability-forge
+guard (`inttoptr` of a wide integer) is unchanged (`cap-constants-invalid.ll`).
+Runtime: `SolveCubic`'s `long double` is reduced to `double` (documented source
+adaptation — avoids fp128 quad soft-float, which would also need an i128
+non-vector-shift backend fix); doubles use compiler-rt soft-float builtins; a
+compact self-contained `adapted/beebs_cubic_libm.c` provides
+`fabs/sqrt/exp/log/pow/sin/cos/acos` (validated <1e-12 vs system libm). Verified
+against the exact mathematical roots {2, 2.5, 6} and {2.5}.
+
+`compress` (61st) is validated with `run-beebs-compress.sh`: pure-integer, no
+compiler change, FNV-1a checksum of the LZW work product
+(`in_count`/`out_count`/`free_ent` + `htab`/`codetab`) vs a native LP64 host
+reference. Its historically documented "backend crash" was already stale.
+
+`compress` no longer crashes the backend (the historically documented
+"pre-existing backend crash" was resolved by intervening backend fixes); it is
+a pure-integer source adaptation with no compiler change. Its upstream
+`verify_benchmark` returns -1 ("no verification") and this BEEBS variant never
+calls `output()`, so `comp_text_buffer`/`bytes_out` stay empty. The adapted tail
+(`adapted/beebs_compress_capstone_tail.c`) instead checksums the LZW work
+product (`in_count`/`out_count`/`free_ent` + `htab`/`codetab`) with FNV-1a
+against a native LP64 host reference — exercising capability-mode array indexing
+as a real correctness gate.
 
 ## Recent root fixes
 
@@ -90,9 +121,21 @@ Good next investigations:
 
 ## Blocked (do not retry without root fix)
 
-### Backend crash - other (pre-existing)
+### FP-blocked: needs in-domain libm + libc (dtoa)
 
-- `compress`, `dtoa`, `cubic`: known backend crashes.
+- `cubic`: **RESOLVED** (first FP benchmark). The runtime libcall-name table is
+  now registered and an in-domain soft-float + libm runtime exists; see the
+  milestone note above and `design/capstone-softfloat-libm.md`.
+- `dtoa`: now compiles (libcall names resolve), but the bare-metal domain still
+  lacks the libm/libc it needs — `log`/`floor`/`ceil` plus `malloc`,
+  `memcpy`/`memmove`/`memset`, `strcpy`/`strlen`, `errno`, and freestanding
+  `float.h`/`fenv.h`/`locale` shims (89 KB FP↔decimal library). The `cubic`
+  soft-float runtime is reusable; `dtoa` mainly adds the libc surface. Larger
+  follow-on. See `plans/beebs-deferred-benchmarks.md` (Bug #14).
+- The `cubic` runtime also unblocks the other FP benchmarks below at the
+  *compile* level (each still needs its libm closure linked + a correctness
+  oracle): `nbody`, `minver`, `ludcmp`, `qsort`, `select`, `sqrt`, `qurt`,
+  `fasta`, `frac`, `st`, `whetstone`, `newlib-*`, `matmult-int`.
 
 ### FP-blocked (soft-float libcalls on Capstone)
 

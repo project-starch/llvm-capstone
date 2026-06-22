@@ -1687,6 +1687,9 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
                        ISD::AND, ISD::OR, ISD::XOR, ISD::SETCC, ISD::SELECT});
   setTargetDAGCombine(ISD::SRA);
   setTargetDAGCombine(ISD::SIGN_EXTEND_INREG);
+  // fp128 constants must be loaded from the constant pool rather than softened
+  // into an unforgeable 128-bit capability immediate (see PerformDAGCombine).
+  setTargetDAGCombine(ISD::ConstantFP);
 
   if (Subtarget.hasStdExtFOrZfinx())
     setTargetDAGCombine({ISD::FADD, ISD::FMAXNUM, ISD::FMINNUM, ISD::FMUL});
@@ -21168,6 +21171,25 @@ SDValue CapstoneTargetLowering::PerformDAGCombine(SDNode *N,
   switch (N->getOpcode()) {
   default:
     break;
+  case ISD::ConstantFP: {
+    // An fp128 constant is otherwise softened (during type legalization) into
+    // an arbitrary 128-bit integer constant, which cannot be materialized as a
+    // capability ("capabilities are unforgeable"). Rewrite it, before type
+    // legalization, into a load from the constant pool: the f128 load softens
+    // to an i128 load of plain rodata (selected as `ldc`). This does not affect
+    // the genuine capability-forge path (inttoptr of a wide integer), which has
+    // no ConstantFP and still hits the hard error.
+    if (N->getValueType(0) != MVT::f128 || !DCI.isBeforeLegalize())
+      break;
+    const DataLayout &DL2 = DAG.getDataLayout();
+    EVT CapPtrVT = getPointerTy(DL2, DL2.getAllocaAddrSpace());
+    SDValue CPIdx = DAG.getConstantPool(
+        cast<ConstantFPSDNode>(N)->getConstantFPValue(), CapPtrVT, Align(16));
+    return DAG.getLoad(MVT::f128, DL, DAG.getEntryNode(), CPIdx,
+                       MachinePointerInfo::getConstantPool(
+                           DAG.getMachineFunction()),
+                       Align(16));
+  }
   case CapstoneISD::SplitF64: {
     SDValue Op0 = N->getOperand(0);
     // If the input to SplitF64 is just BuildPairF64 then the operation is

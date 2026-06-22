@@ -797,6 +797,87 @@ scripts as templates.)
 
 ---
 
+## 14. `compress` resolved; `cubic`/`dtoa` blocked on FP libcall-name table + libm
+
+### `compress` — RESOLVED
+
+The historically documented "pre-existing backend crash" no longer reproduces:
+`src/compress/libcompress.c` compiles cleanly at `-O0` (with and without
+`-fno-jump-tables`), resolved by intervening backend fixes. It is pure-integer
+with no real libc calls in the hot path (`printf` is behind an undefined
+`DO_TRACING`; the `exit(2)` path is `exit_stat = 2`, a variable). Validates with
+`run-beebs-compress.sh` (`__BEEBS_COMPRESS_PASSED__`).
+
+Adaptation (no compiler change): a dedicated `build-beebs-compress-capstone.sh`
+renames the upstream `initialise_benchmark`/`verify_benchmark` stubs via
+object-like macros and appends `adapted/beebs_compress_capstone_tail.c`. Upstream
+`verify_benchmark` returns -1 ("no verification") and this BEEBS variant never
+calls `output()`, so `comp_text_buffer`/`bytes_out` stay empty; the tail instead
+FNV-1a-checksums the LZW end state (`in_count`/`out_count`/`free_ent` +
+`htab`/`codetab`) against a native LP64 host reference
+(`COMPRESS_EXPECTED_FNV = 0xdd578ba2bbb979f4`). This is a real correctness gate
+that exercises capability-mode array indexing. Host + run wrappers reuse the
+`build-beebs-simple-host-common.sh` / `run-beebs-simple-common.sh` machinery.
+
+### `cubic` — RESOLVED (first FP benchmark; soft-float + libm runtime)
+
+Validates with `run-beebs-cubic.sh` (`__BEEBS_CUBIC_PASSED__`). Two backend
+changes plus an in-domain runtime; full design in
+`design/capstone-softfloat-libm.md`.
+
+- **Backend 1 — libcall names**: `CapstoneSystemLibrary` added to
+  `llvm/include/llvm/IR/RuntimeLibcalls.td` (gated on `isCapstone`, mirroring
+  `RISCVSystemLibrary` minus `__riscv_flush_icache`). Previously the Capstone
+  libcall-name table was empty → every FP libcall aborted at
+  `TargetLowering.cpp:189` ("unsupported library call operation").
+- **Backend 2 — fp128 constants**: a pre-legalize `ISD::ConstantFP` DAG combine
+  in `CapstoneISelLowering.cpp` rewrites fp128 constants to a constant-pool load
+  (`ldc` of rodata) before type legalization softens them into an unforgeable
+  128-bit capability immediate. The `inttoptr`-wide-integer capability-forge
+  guard is untouched (`cap-constants-invalid.ll` still passes). Coverage:
+  `llvm/test/CodeGen/Capstone/fp-libcall.ll`.
+- **Source adaptation**: `SolveCubic`'s `long double` → `double` (sed in
+  `build-beebs-cubic-capstone.sh`). This avoids fp128 quad soft-float, whose
+  compiler-rt implementation (`divtf3.c`) hits the i128 non-vector-shift
+  legalization limit (Bug #3). `PI = (4*atan(1))` is replaced by a literal to
+  drop `atan`. Roots {2, 2.5, 6} are exact in double.
+- **Runtime**: compiler-rt double soft-float builtins (`adddf3 subdf3 muldf3
+  divdf3 fixdfsi floatsidf comparedf2 fp_mode`) + a compact self-contained libm
+  `adapted/beebs_cubic_libm.c` (`fabs/sqrt/exp/log/pow/sin/cos/acos`, validated
+  <1e-12 vs system libm). No FP hardware used (no FP register state to preserve
+  across the host-call boundary).
+- **Verification**: `adapted/beebs_cubic_capstone_tail.c` checks the documented
+  polynomials against their exact roots ({2,2.5,6} and {2.5}) within 1e-4.
+
+### `dtoa` — still blocked on in-domain libm + libc
+
+Both abort at compile time with `fatal error: error in backend: unsupported
+library call operation` (`TargetLowering.cpp:189`, e.g. `@SolveCubic`). Root
+cause: the Capstone target initializes **no runtime libcall-name table**, so
+`getLibcallName(LC)` returns null for every FP libcall. This is *not* fixed by
+enabling hardware float (`+f +d`) — arithmetic becomes native but transcendentals
+(`pow`/`acos`/`cos`/`log`) are still libcalls with no registered name.
+
+Bring-up (two independent pieces, not yet done):
+
+1. **Backend:** register the runtime libcall-name table for Capstone (mirror
+   `RISCVISelLowering` / generic `RuntimeLibcallsInfo`). The default Capstone
+   processor model already enables `F`/`D`, so prefer hardware float and register
+   the libm/soft-float names (`pow`/`acos`/`cos`/`sin`/`sqrt`/`log`/`floor`/
+   `ceil`/`fabs`, plus `__divdf3`/`__muldf3`/… if any soft path remains). Backend
+   change → focused `CodeGen/Capstone` lit gate (add a `*-libcall.ll`).
+2. **Runtime libm (in-domain):** the bare-metal domain has no math library.
+   Provide freestanding implementations — `cos`/`acos`/`pow`/`sqrt`/`fabs` for
+   `cubic`; `log`/`floor`/`ceil` for `dtoa` (musl/newlib subset). `dtoa`
+   additionally needs libc: a bump `malloc` (cf. miniz), `memcpy`/`memmove`/
+   `memset`, `strcpy`/`strlen`, `errno`, and `float.h`/`fenv.h`/`locale` shims;
+   strip its hosted includes.
+
+`cubic` is the smaller first target; `dtoa` (89 KB FP↔decimal conversion) is a
+larger follow-on. Same class as `nbody` (Bug #4).
+
+---
+
 ## Summary table
 
 | Bug | Type | Blocks | Severity |
@@ -816,3 +897,5 @@ scripts as templates.)
 | Backend narrow truncating store from i128 | Compile-time crash | `slre` | **FIXED** — selectLDC_STC now emits SW/SH/SB for MemVT i32/i16/i8 |
 | Clang frontend ICmpInst type mismatch | Compile-time crash | `miniz` | **FIXED** — pointer subtraction now truncates to C `ptrdiff_t` before integer comparison |
 | `va_list` ABI bug | Runtime crash | `trio` | **FIXED** in SelectionDAG lowering; `va_start`/`va_arg`/`va_copy` use capability load/store and 16-byte slot stride. `trio-sscanf` is the BEEBS proof wrapper. |
+| Stale "backend crash" (integer) | (was compile-time crash) | `compress` | **RESOLVED** — no longer reproduces; pure-integer source adaptation, FNV checksum of LZW end state vs host reference. `run-beebs-compress.sh`. |
+| No runtime libcall-name table (FP) | Compile-time crash | `cubic`, `dtoa` | **`cubic` RESOLVED** — `CapstoneSystemLibrary` in `RuntimeLibcalls.td` + fp128-constant DAG combine + double pivot + in-domain soft-float/libm. `dtoa` still needs libc surface. Bug #14. |
