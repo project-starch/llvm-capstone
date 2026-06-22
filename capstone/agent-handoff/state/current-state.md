@@ -200,9 +200,15 @@ the domain is a Capstone-loaded domain.
 
 ## Known backend bugs (stable workarounds in place)
 
-The prologue frame-lowering bug is fixed and validated. Four remaining LLVM backend
+The prologue frame-lowering bug is fixed and validated. Three remaining LLVM backend
 workarounds from CoreMark bring-up stay in `capstone/benchmarks/coremark/build-coremark-capstone.sh`
 and should only be removed after focused root fixes. Details: `plans/backend-compiler-fixes.md`.
+
+The `va_list` capability-tag-loss backend bug is fixed and validated: `va_start`/
+`va_arg`/`va_copy` now lower with capability ops (`stc`/`ldc`, 16-byte `cincoffset`
+stride). The CoreMark `ee_printf_asm.S` trampoline is removed — `ee_printf` uses a
+standard C `va_list` and CoreMark still validates. This unblocks the `va_list`
+prerequisite for `trio`.
 
 The `sub i128` pointer-decrement backend blocker is fixed and validated:
 `ptr - integer` and `ptr + (-offset)` now lower through `cincoffset` with a

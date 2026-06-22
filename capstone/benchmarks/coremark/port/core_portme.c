@@ -1,5 +1,6 @@
 #include "coremark.h"
 #include "coremark_hostcall.h"
+#include <stdarg.h>
 
 #ifndef ITERATIONS
 #define ITERATIONS 10
@@ -75,22 +76,20 @@ void portable_fini(core_portable *p) {
 /*
  * ee_printf with format substitution.
  *
- * The compiler-generated va_list stores the argument-pointer as a SCALAR
- * integer (sd, not stc).  When reloaded via ld, the register tag is 0 and
- * any subsequent memory dereference crashes in cap_mem mode.
- *
- * Fix: the real entry point `ee_printf` is an assembly trampoline
- * (ee_printf_asm.S) that receives a0=fmt and a1-a7=varargs in registers and
- * calls `ee_printf_impl(fmt, a1..a7)` directly — no va_list involved.
- * `ee_printf_impl` selects the Nth argument via a fixed-offset if-chain
- * (pick_arg) so no variable-index capability arithmetic is needed.
+ * Uses the standard C va_list.  The Capstone backend now lowers va_start/va_arg
+ * with capability operations (stc/ldc and a 16-byte cincoffset stride), so the
+ * va_list pointer keeps its tag and each variadic argument is read from its own
+ * capability slot — no assembly trampoline is needed.
  *
  * DELIN is applied to fmt, pay, and %s string args because all three are
  * LINEAR capabilities on Capstone PureCap.  The host flushes the
  * accumulated buffer after HC_V0_RET_DONE.
  *
  * All local counters use unsigned long (i64) to avoid sext-from-i32
- * FrameIndex loads that the Capstone ISel cannot match.
+ * FrameIndex loads that the Capstone ISel cannot match.  Integer arguments are
+ * read with unsigned-long-width va_arg slots; %f is consumed as an integer slot
+ * (this freestanding port never formats floating point, matching prior
+ * behavior) so no soft-float support is required.
  */
 extern volatile struct hostcall_v0 *hc_metadata;
 extern volatile char               *hc_payload;
@@ -120,30 +119,7 @@ static unsigned long hcp_uint(char *pay, unsigned long off, unsigned long max,
   return off;
 }
 
-/*
- * Return the idx-th variadic argument as a void capability.
- * Each branch loads from a FIXED s0-relative RSA slot (no variable-index
- * capability arithmetic), so the base capability is never consumed.
- */
-static void *pick_arg(unsigned long idx,
-                      void *a1, void *a2, void *a3, void *a4,
-                      void *a5, void *a6, void *a7) {
-  if (idx == 0) return a1;
-  if (idx == 1) return a2;
-  if (idx == 2) return a3;
-  if (idx == 3) return a4;
-  if (idx == 4) return a5;
-  if (idx == 5) return a6;
-  return a7;
-}
-
-/*
- * Called from the ee_printf assembly trampoline with a0=fmt and
- * a1-a7 = the first seven variadic arguments (as capability registers).
- */
-int ee_printf_impl(const char *fmt,
-                   void *a1, void *a2, void *a3, void *a4,
-                   void *a5, void *a6, void *a7) {
+int ee_printf(const char *fmt, ...) {
   CAPSTONE_DELIN(fmt);
   if (!hc_metadata || !hc_payload)
     return 0;
@@ -151,7 +127,9 @@ int ee_printf_impl(const char *fmt,
   CAPSTONE_DELIN(pay);
   unsigned long off = hc_metadata->length;
   unsigned long max = HC_REGION_SIZE;
-  unsigned long idx = 0;
+
+  va_list ap;
+  va_start(ap, fmt);
 
   while (*fmt) {
     if (*fmt != '%') {
@@ -165,29 +143,37 @@ int ee_printf_impl(const char *fmt,
     if (*fmt == '0') { pad = '0'; fmt++; }
     while (*fmt >= '0' && *fmt <= '9') { width = width * 10 + (unsigned long)(*fmt - '0'); fmt++; }
     char spec = *fmt++;
-    if (spec == 'l') { spec = *fmt++; }  /* eat 'l' prefix */
+    int is_long = 0;
+    if (spec == 'l') { is_long = 1; spec = *fmt++; }  /* eat 'l' prefix */
     if (spec == 'd' || spec == 'i') {
-      long v = (long)(unsigned long)(uintptr_t)pick_arg(idx++, a1, a2, a3, a4, a5, a6, a7);
+      long v = is_long ? va_arg(ap, long) : (long)va_arg(ap, int);
       if (v < 0) { if (off < max - 1) pay[off++] = '-'; v = -v; }
       off = hcp_uint(pay, off, max, (unsigned long)v, 10, width, pad);
     } else if (spec == 'u') {
-      unsigned long v = (unsigned long)(uintptr_t)pick_arg(idx++, a1, a2, a3, a4, a5, a6, a7);
+      unsigned long v =
+          is_long ? va_arg(ap, unsigned long) : (unsigned long)va_arg(ap, unsigned int);
       off = hcp_uint(pay, off, max, v, 10, width, pad);
     } else if (spec == 'x') {
-      unsigned long v = (unsigned long)(uintptr_t)pick_arg(idx++, a1, a2, a3, a4, a5, a6, a7);
+      unsigned long v =
+          is_long ? va_arg(ap, unsigned long) : (unsigned long)va_arg(ap, unsigned int);
       off = hcp_uint(pay, off, max, v, 16, width, pad);
     } else if (spec == 's') {
       /* String arg is a LINEAR capability; DELIN before multi-char loop. */
-      const char *s = (const char *)pick_arg(idx++, a1, a2, a3, a4, a5, a6, a7);
+      const char *s = va_arg(ap, const char *);
       CAPSTONE_DELIN(s);
       if (!s) s = "(null)";
       while (*s && off < max - 1)
         pay[off++] = *s++;
     } else if (spec == '%') {
       if (off < max - 1) pay[off++] = '%';
+    } else if (spec == 'f') {
+      /* Freestanding port: no soft-float.  Consume the argument's slot as an
+       * integer so the va_list cursor stays aligned, but emit nothing. */
+      (void)va_arg(ap, unsigned long);
     }
   }
 
+  va_end(ap);
   hc_metadata->length = off;
   return 0;
 }

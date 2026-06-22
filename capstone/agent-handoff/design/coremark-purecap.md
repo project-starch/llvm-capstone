@@ -52,7 +52,7 @@ why they differ.
 | `core_state_capstone.c` | Replace `static char*[]` with flat `char[][]` | Runtime-uninitialized static capability pointers crash `ldc` |
 | `core_util_capstone.c` | Widen `crcu8` byte locals to `unsigned int`; `check_data_types` stub | Cap-granule spill with byte locals; `sizeof` check blocks portable_init |
 | `port/core_portme.c` | Remove `sizeof` portability check; `-O0` build flag | Same as above; cap hoisting at -O1 |
-| `ee_printf_asm.S` | Assembly trampoline for `ee_printf` | `va_list` stores arg-ptr as `sd` (scalar), tag=0 on reload |
+| `port/core_portme.c` (`ee_printf`) | Standard C `va_list` (`va_start`/`va_arg`) | `va_list` backend lowering fixed (was: arg-ptr stored as scalar `sd`, tag=0 on reload — bypassed by the now-removed `ee_printf_asm.S` trampoline) |
 | `coremark_domain.c` | Compiled C `domain_main` wrapper and shared-region globals | Prologue frame lowering is fixed; wrapper remains at `-O0` while higher-opt LINEAR sink cases remain |
 
 ## Build script workarounds

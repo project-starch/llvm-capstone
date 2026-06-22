@@ -56,16 +56,6 @@ COMMON_FLAGS=(
 # list nodes instead of 18, producing deterministically different but correct CRCs.
 "$CLANG" "${COMMON_FLAGS[@]}" -c "$SCRIPT_DIR/core_main_capstone.c" -o "$OBJ_DIR/core_main.o"
 
-# ee_printf_asm.S: assembly trampoline for ee_printf.
-# The compiler-generated va_list stores the vararg pointer as a scalar integer
-# (sd, not stc); when reloaded via ld the tag is 0 and subsequent memory
-# dereference crashes in cap_mem mode.  The trampoline forwards a0-a7 unchanged
-# to ee_printf_impl() — no va_list is ever constructed.
-"$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
-  -ffreestanding -O0 \
-  -c "$SCRIPT_DIR/ee_printf_asm.S" \
-  -o "$OBJ_DIR/ee_printf_asm.o"
-
 # coremark_domain.c: domain_main plus shared-region globals.  Keep this wrapper
 # at -O0 for now: the fixed frame-pointer prologue is safe there, while higher
 # optimization levels still expose the known rd!=rs1 LINEAR-cap sink issue.
@@ -176,7 +166,8 @@ COMMON_FLAGS=(
 # LINEAR cap) once before the loop; subsequent iterations assert on tag=0.
 # At -O0 fmt/pay/string caps are reloaded from their RSA stack slots each
 # iteration via ldc, so no cross-iteration capability consumption occurs.
-# ee_printf is defined in ee_printf_asm.S; core_portme.c provides ee_printf_impl.
+# ee_printf is defined in core_portme.c using a standard C va_list (the Capstone
+# backend now lowers va_start/va_arg as capability ops, so no trampoline needed).
 "$CLANG" "${COMMON_FLAGS[@]}" -fno-zero-initialized-in-bss -O0 \
   -DCOREMARK_DEFAULT_EXECS=7 \
   -c "$SCRIPT_DIR/port/core_portme.c" \
@@ -194,7 +185,6 @@ COMMON_FLAGS=(
   "$OBJ_DIR/core_util.o" \
   "$OBJ_DIR/core_util_capstone.o" \
   "$OBJ_DIR/core_portme.o" \
-  "$OBJ_DIR/ee_printf_asm.o" \
   "$OBJ_DIR/coremark_domain.o"
 
 "$LLVM_READOBJ" -h "$OUT_DOM"

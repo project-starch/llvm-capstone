@@ -13,9 +13,32 @@ backend.
 | `cincoffset rd≠rs1` with LINEAR rs1 consumes the cap; compiler hoists the offset computation above a loop, so the first iteration consumes the LINEAR cap and subsequent iterations crash | `CAPSTONE_DELIN(ptr)` applied manually before each affected pointer; `-O0` for files where the compiler would hoist | Backend: after instruction selection, identify `cincoffset` uses where rs1 is a LINEAR cap and rd≠rs1; insert an automatic `delin` on rs1 before the first such use |
 | Tail-call lowering emits `cjalr ra, imm(rs1)` (a CALL that sets `ra = pc+4`) instead of restoring `ra` and jumping | `-fno-optimize-sibling-calls` on affected files | `CapstoneISelLowering`: detect sibling-call scenario; emit `ldc ra, N(sp)` + `cincoffsetimm sp, sp, frame` + `cjalr zero, 0(ra)` instead of a CALL |
 | Jump tables use scalar `lw` base load in cap_mem mode; `lw` requires `rs1.tag=1` but the GP-derived table pointer is scalar | `-fno-jump-tables` on affected files | `CapstoneISelLowering` / `CapstoneAsmPrinter`: lower jump tables through `ldc` (capability load) or materialize table entries as PC-relative capabilities so the table base is tagged |
-| `va_list` arg-pointer stored via `sd` (scalar), not `stc` (capability); reloaded via `ld` → tag=0 → any memory dereference crashes in cap_mem mode | Assembly trampoline `ee_printf_asm.S` bypasses `va_list` entirely by forwarding `a0-a7` directly to `ee_printf_impl()` | Capstone ABI / LLVM clang front-end: `va_start` must store the variadic argument pointer as a capability (`stc`), not a scalar integer |
 
 ## Resolved
+
+- **`va_list` capability-tag loss.** `va_start`/`va_arg` (and `va_copy`) were
+  lowered with the AS0 pointer type (i64): the variadic-argument pointer was
+  stored/reloaded with scalar `sd`/`ld`, dropping the capability tag (any later
+  argument dereference faulted in cap_mem mode), and `va_arg` advanced the cursor
+  by the raw type size (8 for `long`) instead of the 16-byte (CLEN) save-area slot
+  stride. The bug was entirely in the **LLVM Capstone backend** — Clang merely
+  emits the raw `va_arg` IR instruction (`capstone64` has no case in
+  `CodeGenModule::createTargetCodeGenInfo`, so `DefaultABIInfo::EmitVAArg` defers
+  to the backend; `clang/.../Targets/Capstone.cpp::CapstoneABIInfo::EmitVAArg` is
+  unwired dead code for this triple).
+  Fix (`CapstoneISelLowering.cpp`): `VAARG`/`VACOPY` made `Custom`; `lowerVASTART`
+  types the save-area frame index with the capability (AS200, i128) pointer so the
+  store selects `stc`; new `lowerVAARG` loads via `ldc`, advances by
+  `alignTo(typeAllocSize, 16)` with `CapstoneISD::CIncOffset`, stores back via
+  `stc`, and loads the argument through the tagged capability; new `lowerVACOPY`
+  copies the va_list via `ldc`/`stc`. (SelectionDAG path; GISel
+  `G_VASTART`/`G_VAARG` has the same latent bug but is not exercised by the
+  benchmarks — parallel follow-up.)
+  Regression test: `llvm/test/CodeGen/Capstone/vararg.ll`.
+  This removed the CoreMark `ee_printf` workaround: `ee_printf` now uses a standard
+  C `va_list` (`port/core_portme.c`); the `ee_printf_asm.S` trampoline and the
+  `ee_printf_impl`/`pick_arg` indirection are deleted and CoreMark still validates.
+  Unblocks the `va_list` prerequisite for `trio`.
 
 - **16-byte non-capability aggregate copy miscompile (was "Bug #10").** A `memcpy`
   of a 16-byte `{i64,i64}` value that is only 8-byte aligned (e.g. the by-value
@@ -56,6 +79,5 @@ add a focused backend/runtime test if a real benchmark exposes this pattern.
 ## Related files
 
 - `capstone/benchmarks/coremark/build-coremark-capstone.sh` — remaining active workarounds have comment blocks
-- `capstone/benchmarks/coremark/ee_printf_asm.S` — va_list bug workaround
-- `llvm/lib/Target/Capstone/CapstoneISelLowering.cpp` — tail-call and jump-table lowering
+- `llvm/lib/Target/Capstone/CapstoneISelLowering.cpp` — tail-call and jump-table lowering; `va_list` lowering (`lowerVASTART`/`lowerVAARG`/`lowerVACOPY`)
 - `llvm/lib/Target/Capstone/CapstoneFrameLowering.cpp` — prologue/epilogue emission (prologue LINEAR-sp consumption fixed)

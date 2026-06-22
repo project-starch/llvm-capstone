@@ -77,7 +77,11 @@ to fix a root issue or carry an invasive source adaptation.
 
 Good next investigations:
 
-- `trio`: blocked on `va_list` capability storage/copying.
+- `trio`: the `va_list` capability storage/copying blocker is now **fixed** in the
+  backend (`va_start`/`va_arg`/`va_copy` lower with `stc`/`ldc` and a 16-byte
+  `cincoffset` stride; see `plans/backend-compiler-fixes.md`). `trio` likely still
+  needs soft-float/complex-format-lib support, so confirm the FP strategy before
+  bring-up.
 - FP-blocked benchmarks: require a deliberate soft-float/libcall strategy for
   Capstone, not one-off wrappers.
 

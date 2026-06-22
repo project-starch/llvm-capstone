@@ -352,8 +352,13 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
 
   setOperationAction({ISD::STACKSAVE, ISD::STACKRESTORE}, MVT::Other, Expand);
 
-  setOperationAction(ISD::VASTART, MVT::Other, Custom);
-  setOperationAction({ISD::VAARG, ISD::VACOPY, ISD::VAEND}, MVT::Other, Expand);
+  // Capstone PureCap: the va_list holds a capability (the AS200 pointer to the
+  // variadic save area).  The generic VASTART/VAARG/VACOPY lowering uses the
+  // AS0 pointer type (i64), which would store/reload the va_list pointer as a
+  // scalar (sd/ld) and strip its tag, faulting on any later dereference in
+  // cap_mem mode.  Lower all three with capability (i128, ldc/stc) operations.
+  setOperationAction({ISD::VASTART, ISD::VAARG, ISD::VACOPY}, MVT::Other, Custom);
+  setOperationAction(ISD::VAEND, MVT::Other, Expand);
 
   if (!Subtarget.hasVendorXTHeadBb() && !Subtarget.hasVendorXqcibm() &&
       !Subtarget.hasVendorXAndesPerf())
@@ -8314,6 +8319,10 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
     return lowerBRCOND(Op, DAG);
   case ISD::VASTART:
     return lowerVASTART(Op, DAG);
+  case ISD::VAARG:
+    return lowerVAARG(Op, DAG);
+  case ISD::VACOPY:
+    return lowerVACOPY(Op, DAG);
   case ISD::FRAMEADDR:
     return lowerFRAMEADDR(Op, DAG);
   case ISD::RETURNADDR:
@@ -10585,14 +10594,78 @@ SDValue CapstoneTargetLowering::lowerVASTART(SDValue Op, SelectionDAG &DAG) cons
   CapstoneMachineFunctionInfo *FuncInfo = MF.getInfo<CapstoneMachineFunctionInfo>();
 
   SDLoc DL(Op);
-  SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(),
-                                 getPointerTy(MF.getDataLayout()));
+  // PureCap: the va_list holds a capability pointing at the variadic save area.
+  // Type the frame index with the capability (AS200) pointer type so the
+  // FrameIndex materializes a tagged capability and the store below selects
+  // `stc` (a scalar i64 store via the default AS0 pointer type would drop the
+  // tag, faulting on the first va_arg dereference in cap_mem mode).
+  const DataLayout &DL2 = MF.getDataLayout();
+  EVT CapPtrVT = getPointerTy(DL2, DL2.getAllocaAddrSpace());
+  SDValue FI = DAG.getFrameIndex(FuncInfo->getVarArgsFrameIndex(), CapPtrVT);
 
   // vastart just stores the address of the VarArgsFrameIndex slot into the
   // memory location argument.
   const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
   return DAG.getStore(Op.getOperand(0), DL, FI, Op.getOperand(1),
                       MachinePointerInfo(SV));
+}
+
+// PureCap va_arg: the va_list is a single capability (AS200 pointer) at the
+// memory operand.  Each variadic argument occupies one capability granule
+// (CLEN = 16 bytes) in the save area built by LowerFormalArguments.  Load the
+// va_list capability (ldc), advance it by the CLEN-rounded argument size with a
+// capability cincoffset, store it back (stc), and load the argument through the
+// tagged capability.  The generic SelectionDAG::expandVAArg would instead use
+// the AS0 pointer type (i64) — scalar ld/sd that strip the tag — and advance by
+// the raw type size (8 for `long`) rather than the 16-byte slot stride.
+SDValue CapstoneTargetLowering::lowerVAARG(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  const DataLayout &DLayout = DAG.getDataLayout();
+  EVT CapPtrVT = getPointerTy(DLayout, DLayout.getAllocaAddrSpace());
+  MVT XLenVT = Subtarget.getXLenVT();
+  EVT VT = Op.getValueType();
+
+  SDValue Chain = Op.getOperand(0);
+  SDValue VAListPtr = Op.getOperand(1);
+  const Value *SV = cast<SrcValueSDNode>(Op.getOperand(2))->getValue();
+
+  // Load the current va_list capability (ldc preserves the tag).
+  SDValue VAList =
+      DAG.getLoad(CapPtrVT, DL, Chain, VAListPtr, MachinePointerInfo(SV));
+  Chain = VAList.getValue(1);
+
+  // Advance by the argument size rounded up to one capability granule.
+  uint64_t SlotSize =
+      alignTo(DLayout.getTypeAllocSize(VT.getTypeForEVT(*DAG.getContext())), 16);
+  SDValue Next = DAG.getNode(CapstoneISD::CIncOffset, DL, CapPtrVT, VAList,
+                             DAG.getConstant(SlotSize, DL, XLenVT));
+
+  // Store the advanced va_list capability back (stc).
+  Chain = DAG.getStore(Chain, DL, Next, VAListPtr, MachinePointerInfo(SV));
+
+  // Load the actual argument through the (tagged) capability.
+  SDValue Value = DAG.getLoad(VT, DL, Chain, VAList, MachinePointerInfo());
+  return DAG.getMergeValues({Value, Value.getValue(1)}, DL);
+}
+
+// PureCap va_copy: copy the va_list capability from src to dest with a
+// capability load/store (ldc/stc) so the tag survives.  The generic
+// SelectionDAG::expandVACopy would use the AS0 pointer type (scalar ld/sd).
+SDValue CapstoneTargetLowering::lowerVACOPY(SDValue Op, SelectionDAG &DAG) const {
+  SDLoc DL(Op);
+  const DataLayout &DLayout = DAG.getDataLayout();
+  EVT CapPtrVT = getPointerTy(DLayout, DLayout.getAllocaAddrSpace());
+
+  SDValue Chain = Op.getOperand(0);
+  SDValue DestPtr = Op.getOperand(1);
+  SDValue SrcPtr = Op.getOperand(2);
+  const Value *DestSV = cast<SrcValueSDNode>(Op.getOperand(3))->getValue();
+  const Value *SrcSV = cast<SrcValueSDNode>(Op.getOperand(4))->getValue();
+
+  SDValue V =
+      DAG.getLoad(CapPtrVT, DL, Chain, SrcPtr, MachinePointerInfo(SrcSV));
+  return DAG.getStore(V.getValue(1), DL, V, DestPtr,
+                      MachinePointerInfo(DestSV));
 }
 
 SDValue CapstoneTargetLowering::lowerFRAMEADDR(SDValue Op,
