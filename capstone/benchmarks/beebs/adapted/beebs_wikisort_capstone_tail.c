@@ -10,9 +10,11 @@
  *    with null symbol names, crashing SelectionDAGISel)
  *  - isqrt replaces sqrt (WikiSort uses sqrt for block_size; soft-float
  *    libcalls are unavailable on Capstone)
- *  - Range uses 32-bit fields and Range helpers take const Range *.
- *    Upstream's 16-byte Range values hit the Capstone aggregate-copy ABI bug:
- *    stores through a 128-bit carrier zero the upper half, clobbering end.
+ *  - Range helpers take const Range * (cheap, and avoids by-value struct churn).
+ *    Range uses upstream's 16-byte { long start; long end; } layout: the
+ *    Capstone aggregate-copy miscompile that used to clobber the upper field
+ *    (an 8-byte ld feeding a 16-byte stc for a struct copy) is fixed in the
+ *    backend (CapstoneTargetLowering::findOptimalMemOpLowering).
  *  - Float test generators replaced with integer equivalents
  *  - test_cases[] function pointer array replaced with switch dispatch (domain
  *    ELF loader does not process relocations, so function pointer arrays in
@@ -83,7 +85,7 @@ static long FloorPowerOfTwo(const long value)
 
 /* --- Range struct and helpers -------------------------------------------- */
 
-typedef struct { int start; int end; } Range;
+typedef struct { long start; long end; } Range;
 
 static long Range_length(const Range *r) { return r->end - r->start; }
 
@@ -95,7 +97,7 @@ static unsigned long Range_bytes(const Range *r)
 
 static Range MakeRange(const long start, const long end)
 {
-    Range r; r.start = (int)start; r.end = (int)end; return r;
+    Range r; r.start = start; r.end = end; return r;
 }
 
 /* --- Sort primitives ------------------------------------------------------ */
@@ -590,8 +592,6 @@ static unsigned char wiki_bss_pad[16] __attribute__((used, aligned(16)));
             fractional_step -= fractional_base;
             decimal_step    += 1;
         }
-        if (merge_size == 64)
-            return;
     }
 #undef CACHE_SIZE
 }
@@ -706,18 +706,6 @@ benchmark(void)
             array1[index] = item;
         }
         WikiSort(array1, total, compare);
-        {
-            /* With max_size=400 and cache_size=512, upstream's final level
-             * also takes the cache-backed merge path.  Spell that final merge
-             * directly to avoid the remaining Capstone hang in the final
-             * WikiSort control-flow level. */
-            static Test final_cache[512] __attribute__((aligned(16)));
-            Range zero = MakeRange(0, 0);
-            Range A = MakeRange(0, total / 2);
-            Range B = MakeRange(total / 2, total);
-            memcpy(&final_cache[0], &array1[A.start], Range_bytes(&A));
-            WikiMerge(array1, &zero, &A, &B, compare, final_cache, 512);
-        }
     }
     return 0;
 }

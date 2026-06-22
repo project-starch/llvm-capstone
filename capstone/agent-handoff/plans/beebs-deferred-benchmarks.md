@@ -645,22 +645,22 @@ upstream prefix are not called in the tail file.
 
 ### `wikisort` status
 
-`wikisort` has the same Range-by-value shape.  The validated adaptation in
+`wikisort` passes with upstream-shape `Range` after the aggregate-copy backend
+fix (see `plans/backend-compiler-fixes.md` → Resolved).  The adaptation in
 `capstone/benchmarks/beebs/adapted/beebs_wikisort_capstone_tail.c`:
 
 - strips hosted includes and provides inline `memcpy` / `memmove` stubs;
 - replaces `sqrt` with an integer square root;
 - replaces the function-pointer test table with switch dispatch;
-- makes `Range` an 8-byte `{ int start; int end; }` struct and passes ranges
-  by pointer in sort helpers;
 - moves the 512-entry WikiSort cache out of the stack.
 
-`wikisort` also avoids a remaining Capstone hang in the original final
-WikiSort control-flow level.  With `max_size=400` and the adapted
-`cache_size=512`, upstream's final level takes the cache-backed merge path; the
-tail stops after the third merge level and spells that final cache-backed merge
-directly in `benchmark()`.  `run-beebs-wikisort.sh` validates the correctness
-marker in QEMU.
+`Range` now uses upstream's 16-byte `{ long start; long end; }` layout (helpers
+still take `const Range *`).  The earlier 8-byte `{ int; int; }` shrink and the
+manual final-merge / early-`return` workaround have been **removed**: both were
+masking the 16-byte aggregate-copy miscompile (an 8-byte `ld` feeding a 16-byte
+`stc` for `range = MakeRange(...)`), which corrupted `Range.end` and, downstream,
+made the final WikiSort level diverge/hang.  With the backend fix the full
+upstream WikiSort runs; `run-beebs-wikisort.sh` validates the marker in QEMU.
 
 ### How to fix in the backend
 
@@ -811,7 +811,7 @@ scripts as templates.)
 | ptr subtraction → sub i128 | Compile-time crash | `stringsearch1`, `rijndael` | **FIXED** — backend lowering; older source workarounds retained where already validated |
 | Wrong CRC result | Runtime correctness | `crc32` | **FIXED** — 32-bit DWORD + single-call expected value |
 | `stc` bulk-copy integer corruption | Runtime correctness | `mergesort` (verify) | **FIXED** — global const arrays in verify_benchmark |
-| Range by-value ABI (stc zeroes upper half) | Runtime correctness | `mergesort`, `wikisort` | **FIXED** — `mergesort` uses pointer-based Range passing; `wikisort` uses 8-byte Range plus direct final cache merge |
+| 16-byte aggregate copy: misaligned `memcpy` lowered as 8-byte `ld` + 16-byte `stc` (upper field clobbered) | Runtime correctness | `mergesort`, `wikisort` | **FIXED in backend** — `findOptimalMemOpLowering` copies sub-cap-aligned memcpy as matched `i64` chunks; `wikisort` restored to upstream 16-byte Range with workarounds removed; `mergesort` pointer-based passing retained (already validated) |
 | Clang frontend PHINode type mismatch | Compile-time crash | `slre` | **FIXED** — prior ptrdiff_t truncation fix resolved the PHI issue; remaining backend truncating-store crash also fixed |
 | Backend narrow truncating store from i128 | Compile-time crash | `slre` | **FIXED** — selectLDC_STC now emits SW/SH/SB for MemVT i32/i16/i8 |
 | Clang frontend ICmpInst type mismatch | Compile-time crash | `miniz` | **FIXED** — pointer subtraction now truncates to C `ptrdiff_t` before integer comparison |

@@ -25521,12 +25521,32 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
     LLVMContext &Context, std::vector<EVT> &MemOps, unsigned Limit,
     const MemOp &Op, unsigned DstAS, unsigned SrcAS,
     const AttributeList &FuncAttributes) const {
+  // Capability-aligned copies (16-byte aligned on both ends) may carry in-place
+  // tagged capabilities, so copy them as i128 (ldc/stc) units to preserve tags.
   if (Op.isMemcpy() && Op.size() != 0 && (Op.size() % 16) == 0 &&
-      Op.isFixedDstAlign() &&
-      Op.getDstAlign() >= Align(16) && Op.getSrcAlign() >= Align(16)) {
+      Op.isAligned(Align(16))) {
     unsigned NumChunks = Op.size() / 16;
     if (NumChunks <= 32) {
       MemOps.assign(NumChunks, MVT::i128);
+      return true;
+    }
+  }
+
+  // Sub-capability-aligned copies: copy as matched XLen (i64) chunks rather than
+  // letting the generic lowering pick a *misaligned* i128 (capability) memory
+  // operation.  A misaligned i128 load is (mis)legalized into a single i64 load
+  // zero-extended to i128 while the paired i128 store stays a 16-byte `stc`, so
+  // the upper 8 bytes of every 16-byte unit are lost.  This is exactly the
+  // by-value 16-byte struct copy emitted for `agg = call_returning_struct(...)`
+  // (e.g. `range = MakeRange(...)`).  An access not aligned to the capability
+  // size cannot hold an in-place tagged capability, so copying via integer
+  // (tag-stripping) i64 chunks is both correct and matches the working
+  // narrower-aggregate codegen.
+  if (Op.isMemcpy() && Op.size() != 0 && (Op.size() % 8) == 0 &&
+      Op.isAligned(Align(8)) && !Op.isAligned(Align(16))) {
+    unsigned NumChunks = Op.size() / 8;
+    if (NumChunks <= 64) {
+      MemOps.assign(NumChunks, MVT::i64);
       return true;
     }
   }
