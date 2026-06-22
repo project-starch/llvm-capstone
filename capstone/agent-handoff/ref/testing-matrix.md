@@ -31,39 +31,14 @@ source capstone/tests/capstone-test-env.sh
   "$CAPSTONE_REPO_ROOT/clang/test/Driver/capstone-linux-toolchain.c"
 
 # Runtime proofs
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-shared-region-probe.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-filewrite-probe.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-fileread-probe.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-file-handle-sync-probe.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-file-handle-stat-probe.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-file-handle-truncate-probe.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-path-access-probe.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-path-delete-probe.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-all.sh"
 
 # null_blk regressions
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-baseline.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-io.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-all.sh"
 
 # Benchmark regressions
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-coremark.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fac.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-insertsort.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fibcall.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-cnt.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-bubblesort.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-prime.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-recursion.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-janne-complex.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-tarai.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-cover.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-duff.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-levenshtein.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-jfdctint.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-fdct.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-strstr.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-qrduino.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-all-beebs.sh"
 ```
 
 ## Test layers
@@ -92,7 +67,7 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-qrduino.sh"
 | Second-`PENDING` payload-reuse diagnostic | whether reusing the same borrowed output payload across rounds triggers the current limitation | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-probe.sh` |
 | Second-`PENDING` payload-reuse revoke diagnostic | whether explicit revoke before re-share satisfies the intended borrowed-region rule | targeted runtime/ownership diagnosis | `capstone/tests/runtime-qemu/run-hostcall-second-pending-payload-revoke-probe.sh` |
 | `null_blk` baseline | baseline block path still works | runtime/device baseline checks | `capstone/tests/runtime-qemu/run-nullblk-baseline.sh` |
-| `null_blk` split | split I/O and unload still work | OpenSBI/kernel/module/QEMU interrupt integration changes | `run-nullblk-split-io.sh`, `run-nullblk-split-rmmod.sh` |
+| `null_blk` aggregate | baseline, split I/O, and split unload still work | OpenSBI/kernel/module/QEMU interrupt integration changes | `capstone/tests/runtime-qemu/run-nullblk-all.sh` |
 | CoreMark CRC validation | all three algorithms (list, matrix, state machine) run and produce validated CRCs on Capstone PureCap with compiled C `domain_main` | backend codegen changes, CoreMark benchmark changes | `capstone/tests/runtime-qemu/run-coremark.sh` |
 | BEEBS `fac` validation | first BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes | `capstone/benchmarks/beebs/run-beebs-fac.sh` |
 | BEEBS `insertsort` validation | second BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-insertsort.sh` |
@@ -111,8 +86,9 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-beebs-qrduino.sh"
 | BEEBS `strstr` validation | fifteenth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, selected backend codegen changes | `capstone/benchmarks/beebs/run-beebs-strstr.sh` |
 | BEEBS `qrduino` validation | fifty-fifth BEEBS benchmark builds and runs on the split host/domain path with a correctness marker | BEEBS benchmark changes, benchmark runtime wrapper changes, static-data capability handling | `capstone/benchmarks/beebs/run-beebs-qrduino.sh` |
 
-The canonical complete BEEBS validation list is in `state/current-state.md`;
-this matrix keeps only representative and recently added wrappers.
+The canonical complete BEEBS validation list is in `state/current-state.md`.
+For backend/lowering/ABI changes, run all validated BEEBS wrappers rather than a
+representative subset.
 
 ## Recommended minimums by change type
 
@@ -121,9 +97,16 @@ this matrix keeps only representative and recently added wrappers.
 Run the focused `llvm-lit` layer that matches the modified subtree.
 Do not jump straight to QEMU unless the change affects runtime-facing behavior.
 
-Additionally, run `capstone/tests/runtime-qemu/run-coremark.sh` when the change touches
-instruction selection, frame lowering, or any area covered by the CoreMark workarounds
-(see `plans/backend-compiler-fixes.md`).
+For non-trivial backend/lowering/ABI changes, the full validation gate is:
+
+```bash
+"$CAPSTONE_LLVM_LIT" -sv "$CAPSTONE_REPO_ROOT/llvm/test/CodeGen/Capstone"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-coremark.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-all-beebs.sh"
+```
+
+Smaller BEEBS subsets are appropriate only for narrow wrapper/doc changes or
+quick pre-commit smoke checks.
 
 Run the BEEBS wrappers from the benchmark regression list above when changing the
 BEEBS benchmark build/run path.
@@ -134,7 +117,7 @@ Run at least:
 
 ```bash
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-shared-region-probe.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-stdout-probe.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-hostcall-all.sh"
 ```
 
 Then add the more specific wrapper that matches the changed service.
@@ -147,9 +130,7 @@ changed, rebuild dependent modules/packages so their `vermagic` matches.
 For QEMU interrupt-delivery changes, include at least:
 
 ```bash
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-baseline.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-io.sh"
-bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh"
+bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-all.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-coremark.sh"
 ```
 

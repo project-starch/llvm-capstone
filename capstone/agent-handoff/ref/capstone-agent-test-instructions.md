@@ -128,6 +128,20 @@ bash capstone/tests/runtime-qemu/run-shared-region-probe.sh \
 sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-shared-region-probe.txt"
 ```
 
+### HostCall aggregate proof
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/tests/runtime-qemu/run-hostcall-all.sh \
+  > "$CAPSTONE_TMP_ROOT/run-hostcall-all.txt" 2>&1
+
+sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-all.txt"
+```
+
+Expected: the aggregate prints each child wrapper before running it and stops on
+the first failure. Use the individual HostCall wrappers below for focused reruns
+and diagnosis.
+
 ### HostCall stdout proof
 
 ```bash
@@ -282,20 +296,13 @@ sed -n '1,260p' "$CAPSTONE_TMP_ROOT/run-hostcall-second-pending-payload-revoke-p
 
 ```bash
 cd "$CAPSTONE_REPO_ROOT" && \
-bash capstone/tests/runtime-qemu/run-nullblk-baseline.sh \
-  > "$CAPSTONE_TMP_ROOT/run-nullblk-baseline.txt" 2>&1
-
-cd "$CAPSTONE_REPO_ROOT" && \
-bash capstone/tests/runtime-qemu/run-nullblk-split-io.sh \
-  > "$CAPSTONE_TMP_ROOT/run-nullblk-split-io.txt" 2>&1
-
-cd "$CAPSTONE_REPO_ROOT" && \
-bash capstone/tests/runtime-qemu/run-nullblk-split-rmmod.sh \
-  > "$CAPSTONE_TMP_ROOT/run-nullblk-split-rmmod.txt" 2>&1
+bash capstone/tests/runtime-qemu/run-nullblk-all.sh \
+  > "$CAPSTONE_TMP_ROOT/run-nullblk-all.txt" 2>&1
 ```
 
-Expected: all three wrappers print `QEMU smoke passed.`. Inspect whichever log
-matches the path you touched.
+Expected: the aggregate prints each child wrapper before running it and stops on
+the first failure. Use the individual `run-nullblk-*.sh` wrappers for focused
+reruns and diagnosis.
 
 ### CoreMark correctness run
 
@@ -312,6 +319,23 @@ This also verifies that CoreMark runs through the compiled C `domain_main` wrapp
 instead of the old per-domain assembly entry.
 Run when touching anything in `capstone/benchmarks/coremark/` or backend codegen
 (instruction selection, frame lowering — see `plans/backend-compiler-fixes.md`).
+
+### Full BEEBS regression sweep
+
+```bash
+cd "$CAPSTONE_REPO_ROOT" && \
+bash capstone/benchmarks/beebs/run-all-beebs.sh \
+  > "$CAPSTONE_TMP_ROOT/run-all-beebs.txt" 2>&1
+```
+
+Expected: every validated wrapper prints its benchmark-specific correctness
+marker. The aggregate runs `run-beebs-*.sh` wrappers in sorted order and skips
+`run-beebs-simple-common.sh`, which is a shared helper, not a benchmark.
+
+Run this full sweep after non-trivial backend, lowering, ABI, or broad
+benchmark-runtime changes, together with the CodeGen lit suite and CoreMark.
+Use individual wrappers or small subsets only for narrow wrapper/doc changes or
+quick smoke checks.
 
 ### BEEBS `fac` correctness run
 

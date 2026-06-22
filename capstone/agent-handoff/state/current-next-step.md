@@ -96,28 +96,25 @@ Good next investigations:
 - `newlib-exp`, `newlib-log`, `newlib-mod`, `newlib-sqrt` - math library
 - `nbody`, `trio`, `trio-snprintf`, `trio-sscanf` - float / complex format lib
 
-## Regression gate (run before each new commit)
+## Regression gate for backend/lowering/ABI changes
+
+For non-trivial backend, lowering, ABI, or broad benchmark-runtime changes, do
+not treat the change as fully validated until this full gate passes:
 
 ```bash
 source capstone/tests/capstone-test-env.sh
 "$CAPSTONE_LLVM_LIT" -sv llvm/test/CodeGen/Capstone
 bash capstone/tests/runtime-qemu/run-coremark.sh
-bash capstone/benchmarks/beebs/run-beebs-fac.sh
-bash capstone/benchmarks/beebs/run-beebs-strstr.sh
-bash capstone/benchmarks/beebs/run-beebs-ndes.sh
-bash capstone/benchmarks/beebs/run-beebs-expint.sh
-bash capstone/benchmarks/beebs/run-beebs-aha-compress.sh
-bash capstone/benchmarks/beebs/run-beebs-nettle-cast128.sh
-bash capstone/benchmarks/beebs/run-beebs-crc32.sh
-bash capstone/benchmarks/beebs/run-beebs-matmult.sh
-bash capstone/benchmarks/beebs/run-beebs-ctl-vector.sh
-bash capstone/benchmarks/beebs/run-beebs-ctl-string.sh
-bash capstone/benchmarks/beebs/run-beebs-qrduino.sh
-bash capstone/benchmarks/beebs/run-beebs-sglib-rbtree.sh
-bash capstone/benchmarks/beebs/run-beebs-miniz.sh
-bash capstone/benchmarks/beebs/run-beebs-slre.sh
-bash capstone/benchmarks/beebs/run-beebs-wikisort.sh
+bash capstone/benchmarks/beebs/run-all-beebs.sh
 ```
+
+Smaller BEEBS subsets are still useful for narrow wrapper/doc changes and quick
+pre-commit smoke checks, but they are not the full backend validation gate.
+
+For runtime/HostCall changes, use `capstone/tests/runtime-qemu/run-hostcall-all.sh`
+as the normal proof gate. For OpenSBI/kernel/module changes, use
+`capstone/tests/runtime-qemu/run-nullblk-all.sh`. Individual wrappers remain the
+right entry points for focused reruns and diagnosis.
 
 ## Known backend limitations (document when encountered)
 

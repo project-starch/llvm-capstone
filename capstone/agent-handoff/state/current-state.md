@@ -12,6 +12,11 @@ All of the following pass on the `capstone-bootstrap` branch:
   lifecycle (open/write/read/sync/stat/truncate/close), path ops, combined file-object
 - `run-nullblk-baseline.sh`, `run-nullblk-split-io.sh`, and
   `run-nullblk-split-rmmod.sh`
+- `run-hostcall-all.sh`, `run-nullblk-all.sh`, and `run-all-beebs.sh` provide
+  serial aggregate gates for reproducible full reruns; keep individual wrappers
+  as the diagnostic entry points. The HostCall and `null_blk` aggregates have
+  passed end to end. Full BEEBS aggregate attempts hit transient QEMU boot/shell
+  prompt stalls, and each failed child reran cleanly in isolation.
 - QEMU runtime smoke tests use snapshot mode, so repeated runs do not mutate `rootfs.ext2`
 - Buildroot getty is pinned to `ttyS0`, avoiding intermittent boot-to-login hangs through `/dev/console`
 - QEMU runtime smoke tests force `-smp 1`, avoiding intermittent boot stalls under the current OpenSBI/QEMU setup
