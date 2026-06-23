@@ -1,10 +1,18 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 68 benchmarks validated
+## Current BEEBS milestone - 71 benchmarks validated
 
-68 BEEBS benchmarks now pass end-to-end. The most recent additions are `frac`,
-`st`, and `nbody` (`run-beebs-{frac,st,nbody}.sh`) — FP benchmarks reusing the
-soft-float runtime, no compiler change.
+71 BEEBS benchmarks now pass end-to-end. The most recent additions are `qsort`,
+`qurt`, and `select` (`run-beebs-{qsort,qurt,select}.sh`) — FP benchmarks needing
+only the soft-float builtins (no libm; they ship their own helpers or use only
+float compares), each with an adapted oracle tail (upstream verifiers return -1):
+`qsort` checks the sorted region is monotonic; `qurt` checks the last input's
+known complex roots (2±2i, tolerance — it uses its own approximate sqrt);
+`select` widens `arr` to [21] (fixing a latent 1-indexed over-read) and compares
+the captured k-th return against a host reference. No compiler change.
+
+The prior batch `frac`/`st`/`nbody` (`run-beebs-{frac,st,nbody}.sh`) reuses the
+shared libm; `st`/`nbody` drove the correctly-rounded `sqrt`.
 
 Two reusability changes: the libm is now the neutrally-named, shared
 `adapted/beebs_softfloat_libm.c` (was `beebs_cubic_libm.c`), and its `sqrt` is now
@@ -175,9 +183,8 @@ Good next investigations:
 
 ### Remaining FP benchmarks (compile via soft-float; not yet brought up)
 
-- `qsort`, `select`, `qurt` - need a correctness oracle (verify returns -1);
-  `qsort` may also use a function-pointer comparator (switch-dispatch like wikisort).
-- `whetstone` - needs `atan` (add to the libm) + an oracle.
+- `whetstone` - needs `atan` (add to the libm) + an oracle; also its
+  transcendentals would need to be bit-exact for an exact-comparison verifier.
 - `fasta` - needs libc (`memcpy`/`strlen`/`malloc`-ish).
 - `newlib-exp`, `newlib-log`, `newlib-mod`, `newlib-sqrt`, `stb_perlin` - math lib.
 - `matmult-int` - hits the i128 non-vector-shift backend limit (Bug #3).

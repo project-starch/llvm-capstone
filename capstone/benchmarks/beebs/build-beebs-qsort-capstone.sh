@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
+
+"$SCRIPT_DIR/fetch-beebs.sh" >/dev/null
+
+REPO_ROOT=$CAPSTONE_REPO_ROOT
+BEEBS_SRC_DIR=${BEEBS_SRC_DIR:-$CAPSTONE_TMP_ROOT/beebs-src}
+OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/beebs-build}
+OBJ_DIR=${OBJ_DIR:-$OUT_DIR/obj-qsort}
+CLANG=${CLANG:-$CAPSTONE_CLANG}
+LD_LLD=${LD_LLD:-$CAPSTONE_LD_LLD}
+LLVM_READOBJ=${LLVM_READOBJ:-$CAPSTONE_LLVM_READOBJ}
+START_SRC=${START_SRC:-$REPO_ROOT/capstone/my_first_domain/start.S}
+LINKER_SCRIPT=${LINKER_SCRIPT:-$REPO_ROOT/capstone/my_first_domain/link.ld}
+DOMAIN_OPT_LEVEL=${DOMAIN_OPT_LEVEL:--O0}
+OUT_DOM=${OUT_DOM:-$OUT_DIR/beebs_qsort_capstone.dom}
+
+QSORT_SRC=$BEEBS_SRC_DIR/src/qsort/libqsort.c
+SUPPORT_DIR=$BEEBS_SRC_DIR/support
+COMPILER_RT=$REPO_ROOT/compiler-rt/lib/builtins
+PATCHED_QSORT_SRC=$OUT_DIR/libqsort_capstone.c
+QSORT_TAIL_SRC=$SCRIPT_DIR/adapted/beebs_qsort_capstone_tail.c
+
+if [[ ! -f "$QSORT_SRC" || ! -f "$SUPPORT_DIR/support.h" || ! -f "$QSORT_TAIL_SRC" ]]; then
+  echo "missing required qsort sources" >&2
+  exit 1
+fi
+
+mkdir -p "$OUT_DIR" "$OBJ_DIR"
+
+# Rename the upstream -1 verify stub; the adapted tail provides a sorted-order
+# verifier.
+{
+  printf '#define verify_benchmark qsort_orig_verify\n'
+  cat "$QSORT_SRC"
+  cat "$QSORT_TAIL_SRC"
+} > "$PATCHED_QSORT_SRC"
+
+COMMON_FLAGS=(
+  -target capstone64-unknown-elf
+  -Xclang -target-feature
+  -Xclang +m
+  -ffreestanding
+  -fno-builtin
+  -fno-jump-tables
+  "$DOMAIN_OPT_LEVEL"
+  -I"$SUPPORT_DIR"
+)
+
+"$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -O0 -c "$START_SRC" -o "$OBJ_DIR/start.o"
+
+objs=("$OBJ_DIR/start.o")
+
+"$CLANG" "${COMMON_FLAGS[@]}" -c "$PATCHED_QSORT_SRC" -o "$OBJ_DIR/libqsort.o"
+objs+=("$OBJ_DIR/libqsort.o")
+
+source "$SCRIPT_DIR/build-beebs-softfloat-common.sh"
+objs+=("${softfloat_objs[@]}")
+
+"$CLANG" "${COMMON_FLAGS[@]}" \
+  -c "$SCRIPT_DIR/beebs_simple_domain.c" -o "$OBJ_DIR/beebs_qsort_domain.o"
+objs+=("$OBJ_DIR/beebs_qsort_domain.o")
+
+"$LD_LLD" -T "$LINKER_SCRIPT" -o "$OUT_DOM" "${objs[@]}"
+
+"$LLVM_READOBJ" -h "$OUT_DOM" >/dev/null
+
+if [[ ! -f "$OUT_DOM" ]]; then
+  echo "failed to build $OUT_DOM" >&2
+  exit 1
+fi
+
+echo "Built $OUT_DOM"
