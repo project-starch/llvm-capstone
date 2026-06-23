@@ -514,6 +514,36 @@ It is **not** the normal answer for a Linux hosted userspace goal like `sqlite`.
 #### Practical conclusion
 `picolibc` could be relevant for freestanding or domain-oriented experiments, but not as the main path to serious Linux user-space software.
 
+#### Domain-side libm note (investigated 2026-06)
+The BEEBS FP benchmarks (cubic, sqrt, ludcmp, minver, frac, st, nbody, qsort,
+qurt, select, matmult-float, whetstone, stb_perlin, newlib-*) currently run on a
+**hand-written local libm**, `capstone/benchmarks/beebs/adapted/beebs_softfloat_libm.c`
+(~416 lines: `fabs sqrt exp log pow sin cos acos floor atan`). `sqrt` is
+correctly-rounded (validated bit-exact vs host over 230M values); transcendentals
+are ~1e-12. This is the "small local libc layer" prescribed in §10a — pure
+computation, no OS, paired with compiler-rt soft-float builtins.
+
+Question raised: should this be replaced by a vendored, better-tested freestanding
+math library? Two candidates were checked **in-tree**:
+
+- **Arm Optimized Routines** (`libc/AOR_v20.02/math/`) — **partial, awkward fit.**
+  - Scalar `sin`/`cos` are *unusable here*: `s_cos.c`/`s_sin.c` just `#include "v_cos.c"`,
+    whose body is `#if V_SUPPORTED` (NEON/SVE). Capstone (soft-float, no vector unit)
+    has `V_SUPPORTED == 0`, so they compile to nothing.
+  - No `sqrt`, `acos`, `atan`, `floor` in AOR at all.
+  - Clean fit only for `exp`/`exp2`/`log`/`log2`/`pow` (+`f` variants): genuinely
+    scalar and, with default `WANT_ERRNO=0`, freestanding (no errno/syscalls; needs
+    only `<float.h>`/`<stdint.h>` + `math_config.h`). But these are the part already
+    working, so AOR buys little.
+- **picolibc libm** (fdlibm-derived) — the *more complete* candidate if we ever
+  retire the hand-rolled libm: scalar, SIMD-free, has sqrt/trig/inverse-trig/floor.
+  But it is a real port (cap pointer model `__SIZEOF_POINTER__=16`, headers).
+
+**Decision (current): keep the hand-rolled local libm.** It is small, freestanding,
+and validated bit-exact. Revisit **picolibc libm** (not AOR) only when a future
+benchmark needs a function we don't have, or demands tighter accuracy than the
+current kernels provide.
+
 ---
 
 ### Option E: Use `klibc`
