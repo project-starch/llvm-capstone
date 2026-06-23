@@ -1,8 +1,17 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 79 benchmarks validated
+## Current BEEBS milestone - 80 benchmarks validated
 
-79 BEEBS benchmarks now pass end-to-end. The most recent addition is `fasta`
+80 BEEBS benchmarks now pass end-to-end. The most recent addition is
+`janne_complex` (`run-beebs-janne_complex.sh`) — a trivial integer WCET
+benchmark (nested data-dependent loops). It is fully self-contained: integer
+only, includes only `support.h`, and its upstream `verify_benchmark` returns
+`r == 1` (which `complex()` always yields), so it needs no soft-float, no libm,
+no string lib, no adapted tail, and no host reference. The three wrappers just
+delegate to `build-beebs-simple-{capstone,host}-common.sh` /
+`run-beebs-simple-common.sh` (same minimal pattern as `bs`). No compiler change.
+
+The prior addition was `fasta`
 (`run-beebs-fasta.sh`) — the first of the libc-frontier benchmarks. Upstream
 `fasta` discards all output and `verify_benchmark` returns -1, so the adapted
 tail (`adapted/beebs_fasta_capstone_tail.c`) keeps the deterministic generator
