@@ -1,6 +1,6 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 80 benchmarks validated
+## Current BEEBS milestone - 81 benchmarks validated
 
 ### Recent backend work (2026-06-24): Bug #3 fixed; capability globals tagged
 
@@ -26,11 +26,14 @@ unaffected. Decision + implementation:
 `static-cap-global-init.ll`. (Multi-module offset-table generalization is a
 documented follow-on; not needed for single-module domains.)
 
-This resolved `dtoa` **blocker #1** (untagged `nums[]`). `dtoa` remains the one
-deferred benchmark only for **blocker #2** — arena 16-byte alignment in David
-Gay's `char[]`/`double[]` bigint pool (a 16-byte `Bigint.next` capability landing
-at an 8-mod-16 offset loses its tag). See `plans/beebs-deferred-benchmarks.md` §3
-(shift fix) and §15 (`dtoa`). Finishing `dtoa` is the current next step.
+This resolved `dtoa` **blocker #1** (untagged `nums[]`). `dtoa` is now
+**RESOLVED** end-to-end (`run-beebs-dtoa.sh` → `__BEEBS_DTOA_PASSED__`, oracle
+267945, upstream `benchmark`/`verify` unchanged): blocker #2 (arena 16-byte
+alignment for the 16-byte `Bigint.next` capability) was fixed in
+`build-beebs-dtoa-capstone.sh` via `-DOmit_Private_Memory` + a 16-aligned
+`heap[]` + 16-byte-rounded `malloc_beebs` (integer rounding, no pointer forging).
+`dtoa` was the last deferred BEEBS benchmark → **81**. See
+`plans/beebs-deferred-benchmarks.md` §3 (shift fix) and §15 (`dtoa`, RESOLVED).
 
 ### Benchmarks
 

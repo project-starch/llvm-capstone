@@ -911,12 +911,29 @@ larger follow-on. Same class as `nbody` (Bug #4).
 
 ---
 
-## 15. `dtoa` — capability-model runtime blockers (deferred 2026-06-24)
+## 15. `dtoa` — capability-model runtime blockers (RESOLVED 2026-06-24)
 
-**Status**: COMPILES (after the section 3 backend fix), but **deferred** — two
-runtime capability-tag faults remain.  The compile-time FP/libcall blockers from
-section 14 are gone: `dtoa` reuses the shared soft-float builtins + libm like the
-other FP benchmarks.
+**Status**: **RESOLVED** — `run-beebs-dtoa.sh` → `__BEEBS_DTOA_PASSED__` (oracle
+`(int)sum == 267945` over `strtod(nums[i])`, upstream `benchmark`/`verify`
+unchanged, no adapted tail). Both runtime capability-tag faults are fixed:
+
+- **Blocker #1** (untagged global `char *nums[]`): fixed by the capability-global
+  constructor-codegen pass (§3 note / `CapstoneCapGlobalInit` +
+  `start.S __capstone_cap_init`); `nums[]` is auto-tagged at runtime.
+- **Blocker #2** (arena 16-byte alignment): `Balloc` hands out `Bigint`s (first
+  field a 16-byte capability) from a `double`/`char` bump pool, so an allocation
+  at an 8-mod-16 offset lost the capability tag. Fixed in
+  `build-beebs-dtoa-capstone.sh`: `-DOmit_Private_Memory` routes every `Bigint`
+  through `malloc_beebs`, `heap[]` is `aligned(16)`, and each request is rounded
+  up to a 16-byte multiple (integer rounding — no pointer forging), keeping the
+  bump pointer 16-aligned. `HEAP_SIZE` enlarged (all allocations now use it).
+
+Build: prelude `adapted/beebs_dtoa_freestanding_prelude.h` + strip hosted
+`"stdlib.h"/"string.h"/"errno.h"/"math.h"` + `-DLong=int -DNO_HEX_FP
+-DOmit_Private_Memory` + shared string lib / libm / soft-float builtins.
+The compile-time FP/libcall blockers from section 14 were already gone.
+
+Historical detail below (kept for reference).
 
 ### What `dtoa` actually exercises
 
