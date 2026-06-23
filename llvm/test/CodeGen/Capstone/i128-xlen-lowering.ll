@@ -132,3 +132,36 @@ entry:
   %r = xor i128 %aw, %bw
   ret i128 %r
 }
+
+; A constant i128 shift whose operand is not a recognized extend -- here the
+; pointer difference `(p - q) / sizeof(T)` (an `sdiv exact` the middle-end
+; turns into a constant shift).  This previously hit the
+; "Unable to legalize non-vector shift" assertion in LegalizeDAG; the shift
+; lowering now falls back to truncating the i128 to xlen, shifting there, and
+; re-extending, so it must collapse to a plain sub + shift.  (BEEBS dtoa Balloc.)
+; CHECK-LABEL: ptrdiff_sdiv_i128:
+; CHECK: sub a0, a0, a1
+; CHECK-NEXT: srli a0, a0, 3
+; CHECK: cjalr zero, 0(ra)
+define i64 @ptrdiff_sdiv_i128(ptr addrspace(200) %p, ptr addrspace(200) %q) {
+entry:
+  %pi = ptrtoint ptr addrspace(200) %p to i128
+  %qi = ptrtoint ptr addrspace(200) %q to i128
+  %d = sub i128 %pi, %qi
+  %div = sdiv exact i128 %d, 8
+  %r = trunc i128 %div to i64
+  ret i64 %r
+}
+
+; CHECK-LABEL: srl_i128_ptrdiff:
+; CHECK: sub a0, a0, a1
+; CHECK: srli a0, a0, 5
+; CHECK: cjalr zero, 0(ra)
+define i128 @srl_i128_ptrdiff(ptr addrspace(200) %p, ptr addrspace(200) %q) {
+entry:
+  %pi = ptrtoint ptr addrspace(200) %p to i128
+  %qi = ptrtoint ptr addrspace(200) %q to i128
+  %d = sub i128 %pi, %qi
+  %sh = lshr i128 %d, 5
+  ret i128 %sh
+}

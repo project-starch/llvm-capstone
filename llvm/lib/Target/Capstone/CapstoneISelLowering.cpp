@@ -8134,8 +8134,26 @@ static SDValue lowerScalarI128Shift(SDValue Op, SelectionDAG &DAG,
   unsigned ExtOpcode = Op.getOperand(0).getOpcode();
   SDValue XLenVal = normalizeScalarI128ShiftOperandToXLen(
       Op.getOperand(0), DAG, Subtarget, DL, ExtOpcode);
-  if (!XLenVal)
-    return SDValue();
+  if (!XLenVal) {
+    // General fallback for an i128 value that the helper above could not prove
+    // narrowable through a recognized extend/load pattern -- most importantly
+    // the arithmetic right shift a power-of-two `sdiv exact` lowers to from a
+    // pointer difference (`(p - q) / sizeof(T)`).  On Capstone an i128 integer
+    // is carried in a capability register and only its low XLen bits are
+    // meaningful as an integer (a pointer difference lands entirely in that low
+    // half), so truncate to XLen, shift there, and re-extend with the kind that
+    // matches the shift's sign semantics.  This path is reached only when the
+    // operand is otherwise unhandled -- i.e. exactly the cases that previously
+    // hit the "Unable to legalize non-vector shift" assertion -- so it cannot
+    // regress any compile that already succeeds.  Restricted to shift amounts
+    // below XLen, where the XLen shift is well-defined.
+    unsigned ShAmtVal = Op.getConstantOperandVal(1);
+    if (ShAmtVal >= XLenVT.getSizeInBits())
+      return SDValue();
+    XLenVal = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Op.getOperand(0));
+    ExtOpcode =
+        Op.getOpcode() == ISD::SRA ? ISD::SIGN_EXTEND : ISD::ZERO_EXTEND;
+  }
 
   SDValue ShAmt = DAG.getZExtOrTrunc(Op.getOperand(1), DL, XLenVT);
   SDValue Shifted =
