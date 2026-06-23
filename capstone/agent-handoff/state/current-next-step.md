@@ -1,10 +1,18 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 65 benchmarks validated
+## Current BEEBS milestone - 68 benchmarks validated
 
-65 BEEBS benchmarks now pass end-to-end. The most recent additions are `ludcmp`
-and `minver` (`run-beebs-ludcmp.sh`, `run-beebs-minver.sh`) — float linear-algebra
-benchmarks reusing the soft-float runtime, no compiler change.
+68 BEEBS benchmarks now pass end-to-end. The most recent additions are `frac`,
+`st`, and `nbody` (`run-beebs-{frac,st,nbody}.sh`) — FP benchmarks reusing the
+soft-float runtime, no compiler change.
+
+Two reusability changes: the libm is now the neutrally-named, shared
+`adapted/beebs_softfloat_libm.c` (was `beebs_cubic_libm.c`), and its `sqrt` is now
+**correctly-rounded** (Newton seed + exact two-product residual + round-to-
+nearest-even; bit-exact vs the host over 230M values). The correctly-rounded sqrt
+is required by benchmarks that compare results for **exact** equality (`st`,
+`nbody`); `frac` needs only `fabs`. `cubic` re-verified after the sqrt change.
+`ludcmp`/`minver` (prior additions) reuse the soft-float builtins only.
 
 A runtime trace (instrumenting `helper_cscincoffset`, since reverted) showed the
 earlier `ludcmp` `cscincoffset rs1->tag` crash was **not** a `cincoffset`
@@ -160,20 +168,21 @@ Good next investigations:
   `float.h`/`fenv.h`/`locale` shims (89 KB FP↔decimal library). The `cubic`
   soft-float runtime is reusable; `dtoa` mainly adds the libc surface. Larger
   follow-on. See `plans/beebs-deferred-benchmarks.md` (Bug #14).
-- The soft-float runtime also unblocks the other FP benchmarks below at the
-  *compile* level (each still needs its libm closure linked + a correctness
-  oracle, and some hit the `ludcmp` `cincoffset` bug above): `nbody`, `minver`,
-  `qsort`, `select`, `qurt`, `fasta`, `frac`, `st`, `whetstone`, `newlib-*`,
-  `matmult-int`.
+- The soft-float runtime continues to unblock the remaining FP benchmarks below
+  at the *compile* level; each still needs its libm closure linked + a
+  correctness oracle (and exact-comparison verifiers need the correctly-rounded
+  `sqrt`, now in place).
 
-### FP-blocked (soft-float libcalls on Capstone)
+### Remaining FP benchmarks (compile via soft-float; not yet brought up)
 
-- `matmult-int` (misleadingly named; uses float matrix)
-- `minver`, `ludcmp` - explicit float arithmetic
-- `qsort`, `select` - float array comparisons
-- `sqrt`, `qurt`, `fasta`, `frac`, `st`, `stb_perlin`, `whetstone` - float
-- `newlib-exp`, `newlib-log`, `newlib-mod`, `newlib-sqrt` - math library
-- `nbody`, `trio`, `trio-snprintf` - float / complex format lib
+- `qsort`, `select`, `qurt` - need a correctness oracle (verify returns -1);
+  `qsort` may also use a function-pointer comparator (switch-dispatch like wikisort).
+- `whetstone` - needs `atan` (add to the libm) + an oracle.
+- `fasta` - needs libc (`memcpy`/`strlen`/`malloc`-ish).
+- `newlib-exp`, `newlib-log`, `newlib-mod`, `newlib-sqrt`, `stb_perlin` - math lib.
+- `matmult-int` - hits the i128 non-vector-shift backend limit (Bug #3).
+- `trio`, `trio-snprintf` - float / complex format lib.
+- `dtoa` - heavy libc (`malloc`/`errno`/`float.h`/`fenv.h`/`locale`) + libm.
 
 ## Regression gate for backend/lowering/ABI changes
 

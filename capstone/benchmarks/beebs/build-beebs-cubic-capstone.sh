@@ -21,7 +21,7 @@ OUT_DOM=${OUT_DOM:-$OUT_DIR/beebs_cubic_capstone.dom}
 CUBIC_SRC=$BEEBS_SRC_DIR/src/cubic/libcubic.c
 SUPPORT_DIR=$BEEBS_SRC_DIR/support
 PATCHED_CUBIC_SRC=$OUT_DIR/libcubic_capstone.c
-LIBM_SRC=$SCRIPT_DIR/adapted/beebs_cubic_libm.c
+LIBM_SRC=$SCRIPT_DIR/adapted/beebs_softfloat_libm.c
 TAIL_SRC=$SCRIPT_DIR/adapted/beebs_cubic_capstone_tail.c
 COMPILER_RT=$REPO_ROOT/compiler-rt/lib/builtins
 

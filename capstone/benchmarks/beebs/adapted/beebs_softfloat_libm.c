@@ -1,16 +1,16 @@
 /*
- * Compact, self-contained, freestanding double-precision libm for the BEEBS
- * `cubic` benchmark on Capstone PureCap.  The bare-metal domain has no libm;
- * `SolveCubic` needs fabs, sqrt, cos, acos and pow (always pow(x, 1/3)).
+ * Compact, self-contained, freestanding double-precision libm shared by the
+ * Capstone PureCap FP BEEBS benchmarks (cubic, st, frac, nbody, ...).  The
+ * bare-metal domain has no libm; this provides fabs, sqrt, exp, log, pow, sin,
+ * cos and acos.
  *
  * These are standard, deterministic IEEE-754 double implementations
- * (fdlibm-style kernels / Cody-Waite reduction), accurate to well under 1e-12
- * over the benchmark's input ranges — far tighter than the root-tolerance gate.
+ * (fdlibm-style kernels / Cody-Waite reduction), accurate to well under 1e-12.
  * No floating-point hardware is assumed: every operation lowers to compiler-rt
  * soft-float (no FP register state to preserve across the host-call boundary).
  *
  * Build the native accuracy self-test with:
- *   cc -DCUBIC_LIBM_TEST -O2 beebs_cubic_libm.c -lm -o /tmp/libm_test && /tmp/libm_test
+ *   cc -DCUBIC_LIBM_TEST -O2 beebs_softfloat_libm.c -lm -o /tmp/libm_test && /tmp/libm_test
  */
 
 typedef unsigned long long u64;
@@ -27,22 +27,82 @@ double fabs(double x) {
   return b.d;
 }
 
-/* sqrt via bit-trick seed + Newton-Raphson (4 iterations -> <1 ulp). */
+/* Exact a*a = hi + lo via a Veltkamp/Dekker split (no FMA). */
+static double two_prod_square(double a, double *lo) {
+  const double split = 134217729.0; /* 2^27 + 1 */
+  double c = split * a;
+  double ahi = c - (c - a);
+  double alo = a - ahi;
+  double hi = a * a;
+  *lo = ((ahi * ahi - hi) + 2.0 * ahi * alo) + alo * alo;
+  return hi;
+}
+
+/* Correctly-rounded (round-to-nearest-even) double sqrt: a Newton seed brings y
+ * within ~1 ulp, then the exact residual x - y*y selects the correctly-rounded
+ * neighbor. Needed because several benchmarks compare results for exact
+ * equality (st, nbody). */
 double sqrt(double x) {
+  if (x != x)
+    return x; /* NaN */
   if (x < 0.0)
-    return 0.0 / 0.0; /* NaN */
+    return 0.0 / 0.0;
   if (x == 0.0)
-    return x;
+    return x; /* +/-0 */
   union dbits b;
   b.d = x;
-  /* Initial exponent-halving seed. */
-  b.u = (b.u >> 1) + 0x1ff8000000000000ULL;
+  if ((b.u >> 52) == 0x7ff)
+    return x; /* +inf */
+
+  b.u = (b.u >> 1) + 0x1ff8000000000000ULL; /* exponent-halving seed */
   double y = b.d;
   y = 0.5 * (y + x / y);
   y = 0.5 * (y + x / y);
   y = 0.5 * (y + x / y);
   y = 0.5 * (y + x / y);
-  return y;
+
+  double lo, hi, r;
+  /* Pull y down until y*y <= x. */
+  for (;;) {
+    hi = two_prod_square(y, &lo);
+    r = (x - hi) - lo;
+    if (r >= 0.0)
+      break;
+    union dbits d;
+    d.d = y;
+    d.u--;
+    y = d.d;
+  }
+  /* Push y up while (y+ulp)^2 <= x, so y becomes the largest such double. */
+  for (;;) {
+    union dbits u;
+    u.d = y;
+    u.u++;
+    double yp = u.d;
+    hi = two_prod_square(yp, &lo);
+    r = (x - hi) - lo;
+    if (r < 0.0)
+      break;
+    y = yp;
+  }
+  /* y is now the largest double with y*y <= x. Round to nearest even between y
+   * and y+ulp. The midpoint m=y+ulp/2 is not representable, so compare the exact
+   * residual r0 = x - y*y against (m*m - y*y) = y*ulp + ulp*ulp/4. */
+  union dbits u;
+  u.d = y;
+  u.u++;
+  double yp = u.d;
+  double ulp = yp - y; /* exact */
+  hi = two_prod_square(y, &lo);
+  double r0 = (x - hi) - lo;             /* x - y*y (exact to rounding) */
+  double thresh = y * ulp + 0.25 * ulp * ulp; /* m*m - y*y */
+  if (r0 > thresh)
+    return yp;
+  if (r0 < thresh)
+    return y;
+  union dbits db;
+  db.d = y;
+  return (db.u & 1ULL) ? yp : y; /* tie -> even */
 }
 
 /* ---- exp / log / pow ---------------------------------------------------- */
