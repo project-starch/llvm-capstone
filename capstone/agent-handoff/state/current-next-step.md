@@ -1,8 +1,26 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 78 benchmarks validated
+## Current BEEBS milestone - 79 benchmarks validated
 
-78 BEEBS benchmarks now pass end-to-end. The most recent additions are
+79 BEEBS benchmarks now pass end-to-end. The most recent addition is `fasta`
+(`run-beebs-fasta.sh`) — the first of the libc-frontier benchmarks. Upstream
+`fasta` discards all output and `verify_benchmark` returns -1, so the adapted
+tail (`adapted/beebs_fasta_capstone_tail.c`) keeps the deterministic generator
+core (`myrandom` LCG + `accumulate_probabilities`) and reimplements the two
+consumers (`repeat_fasta`/`random_fasta`) to fold every generated character into
+an FNV-1a checksum, compared exactly to a same-source host reference
+(`0x24d70971e2d6dc0f`; `myrandom`'s f32 ops are correctly-rounded on both host
+hardware float at `-ffp-contract=off` and target compiler-rt soft-float, so the
+character stream is bit-identical). It introduced the shared freestanding
+string/mem library `adapted/beebs_freestanding_string.c`
+(`memcpy/memmove/memset/strlen/strcmp/strcpy` — the "pure computation" slice of
+libc, locally implemented, the string counterpart to `beebs_softfloat_libm.c`;
+`-ffunction-sections`/`--gc-sections` drops the unreferenced routines) and added
+`floatdisf`/`floatundisf` to the shared soft-float builtin set. The host-gcc
+recompute matches the reference bit-for-bit, confirming the generator is
+compiler-independent. No compiler change.
+
+The prior additions were
 `matmult-float` and `whetstone` (`run-beebs-{matmult-float,whetstone}.sh`),
 which complete the soft-float/libm-only FP class. Both reuse the soft-float
 builtins (+ shared libm) with no compiler change, and both use the proven
