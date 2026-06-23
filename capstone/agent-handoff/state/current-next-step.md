@@ -78,10 +78,12 @@ as a real correctness gate.
 
 `run-all-beebs.sh` now has low-token aggregate output: child wrapper output goes
 to `$CAPSTONE_TMP_ROOT/run-all-beebs/*.attempt-N.log`, while the aggregate prints
-compact pass/fail lines. It retries only pre-login QEMU boot failures once by
-default and caps aggregate boot-to-login waits at 90 seconds
-(`RUN_ALL_BEEBS_LOGIN_TIMEOUT`) so QEMU boot flakes fail fast into that retry;
-real marker failures still stop immediately.
+compact pass/fail lines. It is serial by default, with opt-in isolated
+parallelism via `RUN_ALL_BEEBS_JOBS=N`; each attempt gets its own build/share
+workspace under the aggregate log directory. It retries only structured QEMU
+infra flakes before benchmark execution twice by default and caps aggregate
+boot-to-login waits at 90 seconds (`RUN_ALL_BEEBS_LOGIN_TIMEOUT`) so QEMU boot
+flakes fail fast into that retry; real marker failures still stop immediately.
 
 ## Recent root fixes
 

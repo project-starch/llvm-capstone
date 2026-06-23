@@ -96,7 +96,9 @@ The following is already verified:
 9. The 2026-06-09/10 split `null_blk` unload blocker is fixed. The verified
    baseline includes split unload through `run-nullblk-split-rmmod.sh`; use
    `run-nullblk-all.sh`, `run-hostcall-all.sh`, and `run-all-beebs.sh` as the
-   serial aggregate gates, with individual wrappers kept for focused diagnosis.
+   aggregate gates, with individual wrappers kept for focused diagnosis. BEEBS
+   is serial by default and supports opt-in isolated parallel runs with
+   `RUN_ALL_BEEBS_JOBS=N`.
 
 ## Very important distinction
 

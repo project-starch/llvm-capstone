@@ -6,9 +6,12 @@ import pathlib
 import re
 import shutil
 import sys
-from typing import Iterable
+from typing import Iterable, Optional
 
 import pexpect
+
+INFRA_FLAKE_MARKER = "__CAPSTONE_INFRA_FLAKE__"
+INFRA_FLAKE_EXIT_CODE = 75
 
 DEFAULT_DOMAIN_SUCCESS_MARKERS = (
     "Ok, good file.",
@@ -45,6 +48,12 @@ class NormalizedLogWriter:
 
     def flush(self) -> None:
         self.sink.flush()
+
+
+class InfraFlakeError(RuntimeError):
+    def __init__(self, phase: str, message: str):
+        self.phase = phase
+        super().__init__(message)
 
 
 def parse_args() -> argparse.Namespace:
@@ -130,14 +139,19 @@ def serial_tail(qemu: pexpect.spawn, limit: int = 60) -> str:
     return "\n".join(lines[-limit:])
 
 
-def expect_prompt(qemu: pexpect.spawn, *, timeout: float, action: str) -> None:
+def expect_prompt(
+    qemu: pexpect.spawn, *, timeout: float, action: str, infra_phase: Optional[str] = None
+) -> None:
     try:
         qemu.expect(r"# ", timeout=timeout)
     except (pexpect.EOF, pexpect.TIMEOUT) as exc:
-        raise RuntimeError(
+        message = (
             f"QEMU stopped before the shell prompt while {action}.\n"
             f"Recent serial output:\n{serial_tail(qemu)}"
-        ) from exc
+        )
+        if infra_phase is not None:
+            raise InfraFlakeError(infra_phase, message) from exc
+        raise RuntimeError(message) from exc
 
 
 def copy_domains_into_share(domains: Iterable[str], share_dir: pathlib.Path) -> list[str]:
@@ -152,19 +166,38 @@ def copy_domains_into_share(domains: Iterable[str], share_dir: pathlib.Path) -> 
     return guest_names
 
 
-def run_guest_command(qemu: pexpect.spawn, command: str, timeout: float = 20.0) -> str:
+def run_guest_command(
+    qemu: pexpect.spawn,
+    command: str,
+    timeout: float = 20.0,
+    *,
+    infra_phase: Optional[str] = None,
+) -> str:
     qemu.sendline(command)
-    expect_prompt(qemu, timeout=timeout, action=f"running guest command: {command}")
+    expect_prompt(
+        qemu,
+        timeout=timeout,
+        action=f"running guest command: {command}",
+        infra_phase=infra_phase,
+    )
     output = qemu.before.replace("\r\r", "\r")
 
     qemu.sendline("printf '__EXIT_CODE__%s\\n' $?")
-    expect_prompt(qemu, timeout=5, action="collecting the previous guest exit code")
+    expect_prompt(
+        qemu,
+        timeout=5,
+        action="collecting the previous guest exit code",
+        infra_phase=infra_phase,
+    )
     exit_capture = qemu.before.replace("\r\r", "\r")
     exit_code = last_exit_code(exit_capture)
     if exit_code != 0:
-        raise RuntimeError(
+        message = (
             f"guest command failed with exit code {exit_code}: {command}\n{output}\n{exit_capture}"
         )
+        if infra_phase is not None:
+            raise InfraFlakeError(infra_phase, message)
+        raise RuntimeError(message)
     return output
 
 
@@ -255,22 +288,46 @@ def main() -> int:
                 )
                 qemu.expect("buildroot login:", timeout=login_timeout)
             except (pexpect.EOF, pexpect.TIMEOUT) as exc:
-                raise RuntimeError(
+                raise InfraFlakeError(
+                    "boot-login",
                     "QEMU stopped before the guest login prompt appeared.\n"
-                    f"Recent serial output:\n{serial_tail(qemu)}"
+                    f"Recent serial output:\n{serial_tail(qemu)}",
                 ) from exc
             qemu.sendline("root")
-            expect_prompt(qemu, timeout=30 * timeout_multiplier, action="logging into the guest")
+            expect_prompt(
+                qemu,
+                timeout=30 * timeout_multiplier,
+                action="logging into the guest",
+                infra_phase="guest-login",
+            )
 
-            run_guest_command(qemu, "dmesg -n 1", timeout=10 * timeout_multiplier)
-            run_guest_command(qemu, "stty columns 29999", timeout=10 * timeout_multiplier)
-            run_guest_command(qemu, "mkdir -p /mnt/host", timeout=10 * timeout_multiplier)
+            run_guest_command(
+                qemu, "dmesg -n 1", timeout=10 * timeout_multiplier, infra_phase="guest-setup"
+            )
+            run_guest_command(
+                qemu,
+                "stty columns 29999",
+                timeout=10 * timeout_multiplier,
+                infra_phase="guest-setup",
+            )
+            run_guest_command(
+                qemu,
+                "mkdir -p /mnt/host",
+                timeout=10 * timeout_multiplier,
+                infra_phase="guest-setup",
+            )
             run_guest_command(
                 qemu,
                 "mount -t 9p -o trans=virtio,version=9p2000.L hostshare /mnt/host",
                 timeout=20 * timeout_multiplier,
+                infra_phase="guest-setup",
             )
-            run_guest_command(qemu, "insmod /capstone.ko", timeout=20 * timeout_multiplier)
+            run_guest_command(
+                qemu,
+                "insmod /capstone.ko",
+                timeout=20 * timeout_multiplier,
+                infra_phase="guest-setup",
+            )
 
             for domain_name in guest_domains:
                 output = run_guest_command(
@@ -308,6 +365,9 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
-
-
+    try:
+        sys.exit(main())
+    except InfraFlakeError as exc:
+        print(f"{INFRA_FLAKE_MARKER} phase={exc.phase}", file=sys.stderr)
+        print(exc, file=sys.stderr)
+        sys.exit(INFRA_FLAKE_EXIT_CODE)

@@ -66,8 +66,9 @@ agent-handoff/
   using compiled C `domain_main` rather than `coremark_domain_entry.S`
 - 71 validated BEEBS benchmarks on the split host/domain runtime path; the
   newest are `qsort`, `qurt`, and `select`
-- serial aggregate regression wrappers are available for HostCall proofs,
-  `null_blk`, and the full validated BEEBS set
+- aggregate regression wrappers are available for HostCall proofs, `null_blk`,
+  and the full validated BEEBS set; BEEBS is serial by default and supports
+  opt-in isolated parallel runs with `RUN_ALL_BEEBS_JOBS=N`
 
 See `state/current-state.md` for the canonical snapshot.
 

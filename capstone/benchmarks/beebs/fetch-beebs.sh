@@ -7,8 +7,24 @@ source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 BEEBS_REPO_URL=${BEEBS_REPO_URL:-https://github.com/mageec/beebs.git}
 BEEBS_REF=${BEEBS_REF:-049ded9f3aeb5591f553879d3a0376b8614e9422}
 BEEBS_SRC_DIR=${BEEBS_SRC_DIR:-$CAPSTONE_TMP_ROOT/beebs-src}
+BEEBS_FETCH_READONLY=${BEEBS_FETCH_READONLY:-0}
 
 mkdir -p "$(dirname -- "$BEEBS_SRC_DIR")"
+
+if [[ "$BEEBS_FETCH_READONLY" == 1 ]]; then
+  if [[ ! -d "$BEEBS_SRC_DIR/.git" ]]; then
+    echo "missing read-only BEEBS checkout: $BEEBS_SRC_DIR" >&2
+    exit 1
+  fi
+  ACTUAL_COMMIT=$(git -C "$BEEBS_SRC_DIR" rev-parse HEAD)
+  if [[ "$ACTUAL_COMMIT" != "$BEEBS_REF" ]]; then
+    echo "read-only BEEBS checkout is at $ACTUAL_COMMIT, expected $BEEBS_REF" >&2
+    exit 1
+  fi
+  echo "BEEBS source dir : $BEEBS_SRC_DIR"
+  echo "BEEBS commit     : $ACTUAL_COMMIT"
+  exit 0
+fi
 
 if [[ -d "$BEEBS_SRC_DIR/.git" ]]; then
   if [[ -n "$(git -C "$BEEBS_SRC_DIR" status --porcelain)" ]]; then

@@ -13,13 +13,16 @@ All of the following pass on the `capstone-bootstrap` branch:
 - `run-nullblk-baseline.sh`, `run-nullblk-split-io.sh`, and
   `run-nullblk-split-rmmod.sh`
 - `run-hostcall-all.sh`, `run-nullblk-all.sh`, and `run-all-beebs.sh` provide
-  serial aggregate gates for reproducible full reruns; keep individual wrappers
-  as the diagnostic entry points. The HostCall, `null_blk`, and full BEEBS
-  aggregates have passed end to end. `run-all-beebs.sh` keeps child output in
-  per-benchmark logs by default and prints a compact summary; set
-  `RUN_ALL_BEEBS_VERBOSE=1` for streamed child output. It retries pre-login QEMU
-  boot failures once by default (`RUN_ALL_BEEBS_BOOT_RETRIES=0` disables this)
-  and caps aggregate boot-to-login waits at 90 seconds by default
+  aggregate gates for reproducible full reruns; keep individual wrappers as the
+  diagnostic entry points. The HostCall, `null_blk`, and full BEEBS aggregates
+  have passed end to end; BEEBS has also passed with `RUN_ALL_BEEBS_JOBS=4`.
+  `run-all-beebs.sh` is serial by default
+  (`RUN_ALL_BEEBS_JOBS=1`) and has opt-in isolated parallelism via
+  `RUN_ALL_BEEBS_JOBS=N`. It keeps child output in per-benchmark logs by default
+  and prints compact pass/fail lines; set `RUN_ALL_BEEBS_VERBOSE=1` for streamed
+  child output. It retries structured QEMU infra flakes before benchmark
+  execution twice by default (`RUN_ALL_BEEBS_BOOT_RETRIES=0` disables this) and
+  caps aggregate boot-to-login waits at 90 seconds by default
   (`RUN_ALL_BEEBS_LOGIN_TIMEOUT`), but does not retry benchmark marker failures.
 - QEMU runtime smoke tests use snapshot mode, so repeated runs do not mutate `rootfs.ext2`
 - Buildroot getty is pinned to `ttyS0`, avoiding intermittent boot-to-login hangs through `/dev/console`

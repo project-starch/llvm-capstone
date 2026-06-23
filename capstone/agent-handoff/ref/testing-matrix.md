@@ -39,6 +39,8 @@ bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-nullblk-all.sh"
 # Benchmark regressions
 bash "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-coremark.sh"
 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-all-beebs.sh"
+# Opt-in faster full BEEBS gate after focused checks:
+RUN_ALL_BEEBS_JOBS=8 bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-all-beebs.sh"
 ```
 
 ## Test layers
@@ -107,6 +109,11 @@ bash "$CAPSTONE_REPO_ROOT/capstone/benchmarks/beebs/run-all-beebs.sh"
 
 Smaller BEEBS subsets are appropriate only for narrow wrapper/doc changes or
 quick pre-commit smoke checks.
+
+`run-all-beebs.sh` is serial by default. Use `RUN_ALL_BEEBS_JOBS=N` for opt-in
+parallel full gates; the aggregate gives each attempt an isolated build/share
+workspace and retries only structured QEMU infra flakes that occur before
+benchmark execution.
 
 Run the BEEBS wrappers from the benchmark regression list above when changing the
 BEEBS benchmark build/run path.
