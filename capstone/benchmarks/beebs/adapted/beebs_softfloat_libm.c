@@ -283,6 +283,29 @@ double acos(double x) {
   return PI_CONST - 2.0 * (s + s * asin_R(t));
 }
 
+/* Round toward -inf.  Pure bit-manipulation (no FP rounding mode needed):
+   clear the fractional mantissa bits, rounding negative non-integers away from
+   zero.  Handles |x|<1, already-integral values, and inf/NaN (e >= 52). */
+double floor(double x) {
+  union dbits b;
+  b.d = x;
+  int e = (int)((b.u >> 52) & 0x7ff) - 1023; /* unbiased exponent */
+  if (e >= 52)
+    return x; /* already integral, or inf/NaN */
+  if (e < 0) {
+    if (x == 0.0)
+      return x;                     /* preserve -0.0 */
+    return (b.u >> 63) ? -1.0 : 0.0; /* |x| < 1 */
+  }
+  u64 frac = (1ULL << (52 - e)) - 1;
+  if ((b.u & frac) == 0)
+    return x; /* already integral */
+  if (b.u >> 63)
+    b.u += (1ULL << (52 - e)); /* negative: round toward -inf */
+  b.u &= ~frac;
+  return b.d;
+}
+
 #ifdef CUBIC_LIBM_TEST
 #include <math.h>
 #include <stdio.h>
@@ -314,6 +337,12 @@ int main(void) {
     if (e > maxerr) maxerr = e;
   }
   printf("cbrt  max rel err over [.1,40]  = %.3e\n", maxerr);
+  maxerr = 0;
+  for (double x = -10.0; x <= 10.0; x += 0.013) {
+    double e = fabs(floor(x) - floorl(x));
+    if (e > maxerr) maxerr = e;
+  }
+  printf("floor max abs err over [-10,10] = %.3e\n", maxerr);
   return 0;
 }
 #endif

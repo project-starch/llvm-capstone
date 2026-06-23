@@ -1,8 +1,21 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 75 benchmarks validated
+## Current BEEBS milestone - 76 benchmarks validated
 
-75 BEEBS benchmarks now pass end-to-end. The most recent additions are the four
+76 BEEBS benchmarks now pass end-to-end. The most recent addition is
+`stb_perlin` (`run-beebs-stb_perlin.sh`), a 3-D Perlin-noise benchmark. Its
+oracle is self-contained: `benchmark()` computes a 10x10 noise plane and
+compares every value against a `static const float expected[10][10]` global
+(in `.rodata`, so no Bug #9), returning 0 iff all 100 match exactly. The adapted
+tail just checks `res == 0`. Its only external dependency is `floor`, newly
+added to the shared `adapted/beebs_softfloat_libm.c` (bit-exact, validated by
+the libm self-test); everything else is the existing soft-float builtins. Built
+`-ffp-contract=off`; host (gcc -O0 -ffp-contract=off) and target match the
+embedded table bit-for-bit. No compiler change. Note: `matmult-int`'s upstream
+source is byte-identical to `matmult/matmult.c`, which `run-beebs-matmult.sh`
+already builds with `-DMATMULT_INT`, so it is effectively already covered.
+
+The prior step added the four
 `newlib-*` single-precision math benchmarks `newlib-sqrt`, `newlib-exp`,
 `newlib-log`, `newlib-mod` (`run-beebs-newlib-{sqrt,exp,log,mod}.sh`). Each
 `src/newlib-*/ef_*.c` is **self-contained** — it ships its own routine
@@ -208,11 +221,11 @@ Good next investigations:
 
 ### Remaining FP benchmarks (compile via soft-float; not yet brought up)
 
-- `whetstone` - needs `atan` (add to the libm) + an oracle; also its
-  transcendentals would need to be bit-exact for an exact-comparison verifier.
+- `whetstone` - needs `atan` (add to the libm) + a tolerance oracle (its
+  transcendentals are ~1e-12, not bit-exact, so exact comparison is wrong).
 - `fasta` - needs libc (`memcpy`/`strlen`/`malloc`-ish).
-- `stb_perlin` - math lib (`floor`/`fabs`); needs an oracle.
-- `matmult-int` - hits the i128 non-vector-shift backend limit (Bug #3).
+- `matmult-int` - source is byte-identical to `matmult/matmult.c`, already
+  covered by `run-beebs-matmult.sh` (`-DMATMULT_INT`); not a distinct add.
 - `trio`, `trio-snprintf` - float / complex format lib.
 - `dtoa` - heavy libc (`malloc`/`errno`/`float.h`/`fenv.h`/`locale`) + libm.
 

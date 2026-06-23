@@ -180,6 +180,10 @@ All of the following pass on the `capstone-bootstrap` branch:
   benchmark; self-contained `__ieee754_logf`, oracle tail vs host reference
 - `capstone/benchmarks/beebs/run-beebs-newlib-mod.sh` - seventy-fifth BEEBS
   benchmark; self-contained `__ieee754_fmodf`, oracle tail vs host reference
+- `capstone/benchmarks/beebs/run-beebs-stb_perlin.sh` - seventy-sixth BEEBS
+  benchmark; 3-D Perlin noise, self-contained oracle (`benchmark()` compares a
+  10x10 plane against a `static const` table and returns 0 on full match);
+  only external dep is `floor`, added to the shared soft-float libm
 
 Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 `beebs_simple_host.c`. Keep separate per-benchmark domain/host files only when
