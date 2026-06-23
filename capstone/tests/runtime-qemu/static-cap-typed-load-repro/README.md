@@ -130,29 +130,42 @@ This unblocks the *emission* side for string tables such as BEEBS `dtoa`'s
 `char *nums[]`, whose pointers otherwise load untagged.  See "Remaining runtime
 half" below for what is still needed to make such a table usable at runtime.
 
-### Remaining runtime half (to actually fix `nums[]`-style globals)
+### Resolution path chosen: constructor-codegen (decided 2026-06-24)
 
-The consumer POC rebuilds the capability field into a *parallel* writable object
-(`gHolder`) and uses that.  To make ordinary compiled code that accesses the
-*original* global (`tbl[i]`) see tagged capabilities, the runtime must patch the
-original global storage **in place**, which needs two more pieces:
+Two architectures were on the table for making ordinary code that accesses the
+*original* global (`tbl[i]`) see tagged capabilities:
 
-1. **Format**: each slot/object must carry a *relocated reference to the holder
-   global itself* (its runtime address), so a general consumer knows where to
-   store the materialized capability.  The current records describe the holder
-   only by template bytes + ObjectID, with no back-reference to the original
-   symbol.  Add an `R_Capstone_64`-relocated holder pointer per object.
-2. **General startup consumer**: a single `__capstone_init_cap_globals()` linked
-   into every domain (called from `start.S`/crt *before* `domain_main`) that
-   walks `__llvm_static_cap_gct_begin..end` and, for each slot, derives the live
-   target capability (function caps from the relocated symbol; string/object caps
-   as a bounded `cincoffset` from the domain data root) and stores it (tagged,
-   `scc`/`stc`) into `holder_addr + field_offset`.  The holder global must live
-   in writable `.data` (non-`const`, as `dtoa`'s `nums[]` already is).
+1. **GCT metadata + general runtime consumer** — generalize the consumer POC and
+   add a relocated holder back-reference to the format so it can patch the
+   original global in place. More moving parts (format change, a runtime `.gct`
+   walker, and hand-written capability-derivation for the in-place store).
+2. **Constructor-codegen** — have the compiler emit per-module init code that
+   stores each capability global at runtime with ordinary C stores
+   (`tbl[i] = "...";`); normal codegen materializes a tagged, bounded capability
+   and `scc`-stores it in place.
 
-This is a domain-startup-ABI change (touches `start.S`, `link.ld`, and every
-domain build), so it is scoped as a separate focused step rather than bundled
-with the emission extension.
+**Decision: constructor-codegen.** It is simpler and lower-risk (no metadata
+parser, no hand-written cap-derivation asm, in place by construction). The
+compiler-emitted `.gct` metadata is kept as an inspectable description / possible
+data source, but the consumer of record becomes compiler-emitted init code.
+Rationale and remaining productionization steps:
+`capstone/agent-handoff/design/capability-globals-init-decision.md`.
+
+This was validated end-to-end by the array-shaped cases below.
+
+### Array-shaped (`dtoa nums[]`-style) cases
+
+- `fail_str_array_load.c` — statically-initialized `const char *kTable[3]`, read
+  at runtime → **faults** (`Cap mem access requires capability`): the array form
+  of the blocker.
+- `fix_str_array_runtime_materialize.c` — non-const array, each element assigned
+  at runtime (`gTable[i] = "..."`), read back through the array → **succeeds**,
+  returns `336` ('o'+'h'+'y' first chars).
+
+Together these prove the runtime semantics the chosen path depends on: an ordinary
+C store of a literal/global address into a writable capability global produces a
+**tagged** slot that later normal loads + dereferences use successfully — in place,
+no metadata parsing, no cap-derivation asm.
 
 ## First runtime-side consumer POC for emitted `.gct`
 

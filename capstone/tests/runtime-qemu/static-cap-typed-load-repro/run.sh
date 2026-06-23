@@ -72,8 +72,10 @@ run_expect_success descriptor_str_runtime_materialize 111
 run_expect_success autogen_fn_runtime_materialize 305419896
 run_expect_success autogen_str_runtime_materialize 111
 run_expect_success consume_emitted_gct_string_domain 111
+run_expect_failure fail_str_array_load '[CAPSTONE] Cap mem access requires capability'
+run_expect_success fix_str_array_runtime_materialize 336
 
-echo 'static-cap-typed-load-repro: reproduced both minimal failing capability-typed loads and verified manual, descriptor-driven, LLVM-IR-generated, and emitted-.gct-consumer runtime-materialization fixes'
+echo 'static-cap-typed-load-repro: reproduced both minimal failing capability-typed loads and verified manual, descriptor-driven, LLVM-IR-generated, and emitted-.gct-consumer runtime-materialization fixes (incl. dtoa nums[]-style array shape)'
 echo '__STATIC_CAP_TYPED_LOAD_REPRO_OK__'
 printf 'Logs: %s\n' "$LOG_DIR"
 

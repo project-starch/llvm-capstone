@@ -64,6 +64,16 @@ bash "$RUNTIME_QEMU_DIR/build-domain.sh" \
   "$SCRIPT_DIR/consume_emitted_gct_string_domain.c" \
   "$OUT_DIR/consume_emitted_gct_string_domain.dom"
 
+# Array-shaped (dtoa `nums[]`-style) cases: the static-initialized array faults,
+# the runtime in-place materialization (constructor-codegen pattern) works.
+bash "$RUNTIME_QEMU_DIR/build-domain.sh" \
+  "$SCRIPT_DIR/fail_str_array_load.c" \
+  "$OUT_DIR/fail_str_array_load.dom"
+
+bash "$RUNTIME_QEMU_DIR/build-domain.sh" \
+  "$SCRIPT_DIR/fix_str_array_runtime_materialize.c" \
+  "$OUT_DIR/fix_str_array_runtime_materialize.dom"
+
 printf 'Built standalone typed-load repro domains in %s\n' "$OUT_DIR"
 
 
