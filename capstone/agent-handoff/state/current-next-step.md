@@ -1,8 +1,23 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 71 benchmarks validated
+## Current BEEBS milestone - 75 benchmarks validated
 
-71 BEEBS benchmarks now pass end-to-end. The most recent additions are `qsort`,
+75 BEEBS benchmarks now pass end-to-end. The most recent additions are the four
+`newlib-*` single-precision math benchmarks `newlib-sqrt`, `newlib-exp`,
+`newlib-log`, `newlib-mod` (`run-beebs-newlib-{sqrt,exp,log,mod}.sh`). Each
+`src/newlib-*/ef_*.c` is **self-contained** — it ships its own routine
+(`__ieee754_sqrtf`/`expf`/`logf`/`fmodf`, integer bit-manipulation plus
+non-contracted float arithmetic) with no libm/libc calls — so they reuse only
+the soft-float builtins (`build-beebs-softfloat-common.sh`); no libm object, no
+compiler change. Built with `-ffp-contract=off` so no FMA contraction can
+diverge from the soft-float reference. `newlib-sqrt` keeps the upstream exact
+`==` verifier (its `exp[]` is moved to `static const` to avoid Bug #9; the
+correctly-rounded `__ieee754_sqrtf` is bit-identical to the embedded newlib
+values); `newlib-exp/log/mod` have upstream `verify_benchmark == -1`, so each
+gets an oracle tail that captures all five calls and exact-bit-compares them
+against a host reference (`gcc -O0 -ffp-contract=off` over the same source).
+
+The prior additions `qsort`,
 `qurt`, and `select` (`run-beebs-{qsort,qurt,select}.sh`) — FP benchmarks needing
 only the soft-float builtins (no libm; they ship their own helpers or use only
 float compares), each with an adapted oracle tail (upstream verifiers return -1):
@@ -196,7 +211,7 @@ Good next investigations:
 - `whetstone` - needs `atan` (add to the libm) + an oracle; also its
   transcendentals would need to be bit-exact for an exact-comparison verifier.
 - `fasta` - needs libc (`memcpy`/`strlen`/`malloc`-ish).
-- `newlib-exp`, `newlib-log`, `newlib-mod`, `newlib-sqrt`, `stb_perlin` - math lib.
+- `stb_perlin` - math lib (`floor`/`fabs`); needs an oracle.
 - `matmult-int` - hits the i128 non-vector-shift backend limit (Bug #3).
 - `trio`, `trio-snprintf` - float / complex format lib.
 - `dtoa` - heavy libc (`malloc`/`errno`/`float.h`/`fenv.h`/`locale`) + libm.

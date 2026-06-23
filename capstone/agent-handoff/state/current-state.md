@@ -171,6 +171,15 @@ All of the following pass on the `capstone-bootstrap` branch:
   runs end to end and validates all three quadratic root cases
 - `capstone/benchmarks/beebs/run-beebs-select.sh` - seventy-first BEEBS
   benchmark runs end to end with a widened 1-indexed array and return-value oracle
+- `capstone/benchmarks/beebs/run-beebs-newlib-sqrt.sh` - seventy-second BEEBS
+  benchmark; self-contained `__ieee754_sqrtf`, upstream exact verifier with
+  `exp[]` moved to `static const` (Bug #9), soft-float builtins only
+- `capstone/benchmarks/beebs/run-beebs-newlib-exp.sh` - seventy-third BEEBS
+  benchmark; self-contained `__ieee754_expf`, oracle tail vs host reference
+- `capstone/benchmarks/beebs/run-beebs-newlib-log.sh` - seventy-fourth BEEBS
+  benchmark; self-contained `__ieee754_logf`, oracle tail vs host reference
+- `capstone/benchmarks/beebs/run-beebs-newlib-mod.sh` - seventy-fifth BEEBS
+  benchmark; self-contained `__ieee754_fmodf`, oracle tail vs host reference
 
 Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 `beebs_simple_host.c`. Keep separate per-benchmark domain/host files only when
