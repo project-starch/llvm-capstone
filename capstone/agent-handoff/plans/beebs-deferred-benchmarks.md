@@ -843,7 +843,7 @@ changes plus an in-domain runtime; full design in
   drop `atan`. Roots {2, 2.5, 6} are exact in double.
 - **Runtime**: compiler-rt double soft-float builtins (`adddf3 subdf3 muldf3
   divdf3 fixdfsi floatsidf comparedf2 fp_mode`) + a compact self-contained libm
-  `adapted/beebs_cubic_libm.c` (`fabs/sqrt/exp/log/pow/sin/cos/acos`, validated
+  `adapted/beebs_softfloat_libm.c` (`fabs/sqrt/exp/log/pow/sin/cos/acos`, validated
   <1e-12 vs system libm). No FP hardware used (no FP register state to preserve
   across the host-call boundary).
 - **Verification**: `adapted/beebs_cubic_capstone_tail.c` checks the documented
@@ -902,5 +902,5 @@ larger follow-on. Same class as `nbody` (Bug #4).
 | FP soft-float reuse | (was FP-blocked) | `sqrt` | **RESOLVED** — reuses `build-beebs-softfloat-common.sh` (no libm; own `sqrtfcn`; real verify). `run-beebs-sqrt.sh`. |
 | FP linear algebra | (was FP-blocked) | `ludcmp`, `minver` | **RESOLVED** — soft-float runtime + source workaround. `ludcmp`: Bug #9 (`verify_benchmark` local const arrays → `static const`). `minver`: FNV checksum oracle (verify was -1). The "cincoffset bug" hypothesis was disproven by runtime trace. `run-beebs-ludcmp.sh`, `run-beebs-minver.sh`. |
 | FP (libm reuse) | (was FP-blocked) | `frac`, `st`, `nbody` | **RESOLVED** — reuse shared `adapted/beebs_softfloat_libm.c` + soft-float builtins; real verifiers. Required a **correctly-rounded** software `sqrt` (Newton seed + exact two-product residual + round-to-nearest-even; bit-exact vs host) because `st`/`nbody` compare for exact equality. `run-beebs-{frac,st,nbody}.sh`. |
-| FP (soft-float only, oracle tails) | (was FP-blocked) | `qsort`, `qurt`, `select` | **RESOLVED** — only soft-float builtins (own helpers / float compares; no libm). Adapted oracle tails: `qsort` monotonic; `qurt` known roots 2±2i (tolerance); `select` arr[21] OOB fix + host-ref k-th value. `run-beebs-{qsort,qurt,select}.sh`. |
+| FP (soft-float only, oracle tails) | (was FP-blocked) | `qsort`, `qurt`, `select` | **RESOLVED** — only soft-float builtins (own helpers / float compares; no libm). Adapted oracle tails: `qsort` arr[21] OOB fix + monotonic/hash check; `qurt` all three known root cases; `select` arr[21] OOB fix + host-ref k-th value. `run-beebs-{qsort,qurt,select}.sh`. |
 | Bug #9 root: untagged stack dest in rodata→stack const-array `memcpy` | Runtime tag fault | local const-init arrays in any function | **OPEN (deferred backend root)** — worked around at source everywhere (`static const` / globals). A runtime trace pinned an untagged stack destination capability passed into the const-array-init `memcpy` (ludcmp `verify_benchmark`). Backend root fix is an independent future task. |

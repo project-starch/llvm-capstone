@@ -31,9 +31,10 @@ fi
 
 mkdir -p "$OUT_DIR" "$OBJ_DIR"
 
-# Rename the upstream -1 verify stub; the adapted tail provides a known-roots
-# verifier.
+# Rename the upstream benchmark and -1 verify stub; the adapted tail captures
+# all three quadratic cases and verifies their known roots.
 {
+  printf '#define benchmark qurt_orig_benchmark\n'
   printf '#define verify_benchmark qurt_orig_verify\n'
   cat "$QURT_SRC"
   cat "$QURT_TAIL_SRC"

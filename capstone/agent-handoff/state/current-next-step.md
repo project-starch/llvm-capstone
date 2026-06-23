@@ -6,8 +6,9 @@
 `qurt`, and `select` (`run-beebs-{qsort,qurt,select}.sh`) — FP benchmarks needing
 only the soft-float builtins (no libm; they ship their own helpers or use only
 float compares), each with an adapted oracle tail (upstream verifiers return -1):
-`qsort` checks the sorted region is monotonic; `qurt` checks the last input's
-known complex roots (2±2i, tolerance — it uses its own approximate sqrt);
+`qsort` widens `arr` to [21] and checks monotonicity plus a host-reference hash
+over the sorted 1-indexed region; `qurt` captures and checks all three known
+quadratic root cases (tolerance — it uses its own approximate sqrt);
 `select` widens `arr` to [21] (fixing a latent 1-indexed over-read) and compares
 the captured k-th return against a host reference. No compiler change.
 
@@ -56,7 +57,7 @@ guard (`inttoptr` of a wide integer) is unchanged (`cap-constants-invalid.ll`).
 Runtime: `SolveCubic`'s `long double` is reduced to `double` (documented source
 adaptation — avoids fp128 quad soft-float, which would also need an i128
 non-vector-shift backend fix); doubles use compiler-rt soft-float builtins; a
-compact self-contained `adapted/beebs_cubic_libm.c` provides
+compact self-contained `adapted/beebs_softfloat_libm.c` provides
 `fabs/sqrt/exp/log/pow/sin/cos/acos` (validated <1e-12 vs system libm). Verified
 against the exact mathematical roots {2, 2.5, 6} and {2.5}.
 
@@ -74,6 +75,13 @@ calls `output()`, so `comp_text_buffer`/`bytes_out` stay empty. The adapted tail
 product (`in_count`/`out_count`/`free_ent` + `htab`/`codetab`) with FNV-1a
 against a native LP64 host reference — exercising capability-mode array indexing
 as a real correctness gate.
+
+`run-all-beebs.sh` now has low-token aggregate output: child wrapper output goes
+to `$CAPSTONE_TMP_ROOT/run-all-beebs/*.attempt-N.log`, while the aggregate prints
+compact pass/fail lines. It retries only pre-login QEMU boot failures once by
+default and caps aggregate boot-to-login waits at 90 seconds
+(`RUN_ALL_BEEBS_LOGIN_TIMEOUT`) so QEMU boot flakes fail fast into that retry;
+real marker failures still stop immediately.
 
 ## Recent root fixes
 

@@ -53,24 +53,26 @@ backend did not support FP libcalls at all:
   limit (deferred Bug #3). Benchmarks that use `long double` only for intermediate
   precision are adapted to `double` (documented source change). A general fp128
   path would require fixing i128 shifts first.
-- **libm**: `adapted/beebs_cubic_libm.c` — a compact, self-contained,
+- **libm**: `adapted/beebs_softfloat_libm.c` — a compact, self-contained,
   deterministic double libm (`fabs`, `sqrt` Newton, `exp`/`log` with Cody-Waite
   reduction, `pow = exp(y·log x)`, `sin`/`cos` fdlibm kernels, `acos` fdlibm
   rational). Validated to <1e-12 (cos/acos/sqrt) / ~7e-9 (cbrt) against the system
   long-double libm via the built-in `-DCUBIC_LIBM_TEST` harness. Reuse/extend this
-  file for other FP benchmarks.
+  file for other FP benchmarks. The shared `sqrt` implementation is now
+  correctly rounded for the exact-equality checks in `st` and `nbody`.
 
 ## Verification pattern
 
 FP benchmarks whose upstream `verify_benchmark` returns -1 should verify against
-a known oracle, not a bit-exact host reference (hand-rolled libm differs from
-system libm by ULPs). `cubic` checks the documented polynomials' exact roots
-within 1e-4 (`adapted/beebs_cubic_capstone_tail.c`).
+a known oracle, not a trivial pass-through. `cubic` checks the documented
+polynomials' exact roots within 1e-4, `minver` checks a matrix checksum, `qsort`
+checks monotonicity plus a sorted-region hash, `qurt` checks all three quadratic
+root cases, and `select` captures the k-th return against a host reference.
 
 ## Next FP targets
 
-`dtoa` (needs libc: malloc/memcpy/errno/float.h/fenv.h/locale + log/floor/ceil),
-then `nbody`, `minver`, `ludcmp`, `qsort`, `select`, `sqrt`, `qurt`, `fasta`,
-`frac`, `st`, `whetstone`, `newlib-*`, `matmult-int`. All now compile; each needs
-its libm closure linked and a correctness oracle. A larger general-purpose fp128
-path additionally needs the i128 non-vector-shift backend fix (Bug #3).
+`dtoa` remains the large libc-heavy target: malloc, string/memory helpers,
+errno, float/fenv/locale shims, and additional libm surface (`floor`/`ceil`).
+Other remaining FP candidates should reuse the shared soft-float/libm pieces and
+add benchmark-specific oracles. A larger general-purpose fp128 path additionally
+needs the i128 non-vector-shift backend fix (Bug #3).

@@ -15,7 +15,12 @@ All of the following pass on the `capstone-bootstrap` branch:
 - `run-hostcall-all.sh`, `run-nullblk-all.sh`, and `run-all-beebs.sh` provide
   serial aggregate gates for reproducible full reruns; keep individual wrappers
   as the diagnostic entry points. The HostCall, `null_blk`, and full BEEBS
-  aggregates have passed end to end.
+  aggregates have passed end to end. `run-all-beebs.sh` keeps child output in
+  per-benchmark logs by default and prints a compact summary; set
+  `RUN_ALL_BEEBS_VERBOSE=1` for streamed child output. It retries pre-login QEMU
+  boot failures once by default (`RUN_ALL_BEEBS_BOOT_RETRIES=0` disables this)
+  and caps aggregate boot-to-login waits at 90 seconds by default
+  (`RUN_ALL_BEEBS_LOGIN_TIMEOUT`), but does not retry benchmark marker failures.
 - QEMU runtime smoke tests use snapshot mode, so repeated runs do not mutate `rootfs.ext2`
 - Buildroot getty is pinned to `ttyS0`, avoiding intermittent boot-to-login hangs through `/dev/console`
 - QEMU runtime smoke tests force `-smp 1`, avoiding intermittent boot stalls under the current OpenSBI/QEMU setup
@@ -141,6 +146,28 @@ All of the following pass on the `capstone-bootstrap` branch:
   benchmark runs end to end and validates its correctness marker
 - `capstone/benchmarks/beebs/run-beebs-trio-sscanf.sh` - sixtieth BEEBS
   benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-compress.sh` - sixty-first BEEBS
+  benchmark runs end to end and validates its adapted LZW-state checksum marker
+- `capstone/benchmarks/beebs/run-beebs-cubic.sh` - sixty-second BEEBS
+  benchmark runs end to end with the soft-float/libm runtime and root oracle
+- `capstone/benchmarks/beebs/run-beebs-sqrt.sh` - sixty-third BEEBS
+  benchmark runs end to end and validates its correctness marker
+- `capstone/benchmarks/beebs/run-beebs-ludcmp.sh` - sixty-fourth BEEBS
+  benchmark runs end to end with the local const-array source workaround
+- `capstone/benchmarks/beebs/run-beebs-minver.sh` - sixty-fifth BEEBS
+  benchmark runs end to end and validates its adapted matrix checksum marker
+- `capstone/benchmarks/beebs/run-beebs-frac.sh` - sixty-sixth BEEBS
+  benchmark runs end to end with shared soft-float/libm support
+- `capstone/benchmarks/beebs/run-beebs-st.sh` - sixty-seventh BEEBS
+  benchmark runs end to end with correctly-rounded software `sqrt`
+- `capstone/benchmarks/beebs/run-beebs-nbody.sh` - sixty-eighth BEEBS
+  benchmark runs end to end with correctly-rounded software `sqrt`
+- `capstone/benchmarks/beebs/run-beebs-qsort.sh` - sixty-ninth BEEBS
+  benchmark runs end to end with a widened 1-indexed array and sorted-region hash
+- `capstone/benchmarks/beebs/run-beebs-qurt.sh` - seventieth BEEBS benchmark
+  runs end to end and validates all three quadratic root cases
+- `capstone/benchmarks/beebs/run-beebs-select.sh` - seventy-first BEEBS
+  benchmark runs end to end with a widened 1-indexed array and return-value oracle
 
 Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 `beebs_simple_host.c`. Keep separate per-benchmark domain/host files only when
@@ -168,6 +195,10 @@ file to keep the upstream prefix while replacing the Range/sort/test tail.
 `trio-sscanf` strips hosted includes, builds with `TRIO_SSCANF`,
 `TRIO_EMBED_STRING`, float/file/dynamic-string features disabled, a minimal set
 of embedded `triostr` helpers, and checked-in freestanding libc stubs.
+`compress`, `cubic`, `minver`, `qsort`, `qurt`, and `select` use adapted
+oracle tails because the upstream verifiers return `-1`. FP benchmarks use
+compiler-rt soft-float builtins and, where needed, the shared
+`adapted/beebs_softfloat_libm.c` domain libm.
 
 `build-beebs-simple-capstone-common.sh` now supports `BEEBS_EXTRA_DEFINES`
 (array of `-D` defines, e.g. `BEEBS_EXTRA_DEFINES=(QUICK_SORT)`),

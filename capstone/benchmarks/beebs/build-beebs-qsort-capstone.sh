@@ -31,11 +31,12 @@ fi
 
 mkdir -p "$OUT_DIR" "$OBJ_DIR"
 
-# Rename the upstream -1 verify stub; the adapted tail provides a sorted-order
-# verifier.
+# Widen arr to [21] so the 1-indexed access (arr[1..20]) is in-bounds and
+# deterministic; rename the upstream -1 verify stub so the adapted tail can
+# provide a sorted-order/hash verifier.
 {
   printf '#define verify_benchmark qsort_orig_verify\n'
-  cat "$QSORT_SRC"
+  sed 's/float arr\[20\]/float arr[21]/' "$QSORT_SRC"
   cat "$QSORT_TAIL_SRC"
 } > "$PATCHED_QSORT_SRC"
 

@@ -22,6 +22,19 @@ def env_or_default(name: str, default: pathlib.Path | str) -> str:
     return os.environ.get(name, str(default))
 
 
+def env_float_or_default(name: str, default: float) -> float:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise SystemExit(f"{name} must be a number, got {value!r}") from exc
+    if parsed <= 0:
+        raise SystemExit(f"{name} must be positive, got {value!r}")
+    return parsed
+
+
 class NormalizedLogWriter:
     def __init__(self, sink):
         self.sink = sink
@@ -237,7 +250,10 @@ def main() -> int:
 
         try:
             try:
-                qemu.expect("buildroot login:", timeout=120 * timeout_multiplier)
+                login_timeout = env_float_or_default(
+                    "CAPSTONE_QEMU_LOGIN_TIMEOUT", 120 * timeout_multiplier
+                )
+                qemu.expect("buildroot login:", timeout=login_timeout)
             except (pexpect.EOF, pexpect.TIMEOUT) as exc:
                 raise RuntimeError(
                     "QEMU stopped before the guest login prompt appeared.\n"
@@ -293,6 +309,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
 
 
