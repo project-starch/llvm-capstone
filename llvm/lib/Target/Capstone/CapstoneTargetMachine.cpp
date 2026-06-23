@@ -119,6 +119,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstoneMakeCompressibleOptPass(*PR);
   initializeCapstoneGatherScatterLoweringPass(*PR);
   initializeCapstoneCodeGenPreparePass(*PR);
+  initializeCapstoneCapGlobalInitPass(*PR);
   initializeCapstonePostRAExpandPseudoPass(*PR);
   initializeCapstoneMergeBaseOffsetOptPass(*PR);
   initializeCapstoneOptWInstrsPass(*PR);
@@ -449,6 +450,11 @@ bool CapstonePassConfig::addRegAssignAndRewriteOptimized() {
 void CapstonePassConfig::addIRPasses() {
   addPass(createAtomicExpandLegacyPass());
   addPass(createCapstoneZacasABIFixPass());
+
+  // Materialize capability globals in place at runtime (tags cannot live in the
+  // static image). Runs at all opt levels; only synthesizes code when the module
+  // actually has capability globals.
+  addPass(createCapstoneCapGlobalInitPass());
 
   if (getOptLevel() != CodeGenOptLevel::None) {
     if (EnableLoopDataPrefetch)

@@ -279,6 +279,15 @@ The `sub i128` pointer-difference backend blocker is also fixed and validated:
 subtracting the XLEN cursor values, and sign-extending the integer result back
 through the `i128` carrier when needed. `ctl-string` is the proof benchmark.
 
+The i128 non-vector-shift assertion (Bug #3) is fixed (`lowerScalarI128Shift`
+general constant-shift fallback). **Capability globals are now auto-tagged**: the
+`CapstoneCapGlobalInit` ModulePass synthesizes a per-module `__capstone_cap_init`
+(called from `my_first_domain/start.S` before `domain_main`) that materializes
+initialized capability globals in place at runtime — a tag cannot live in the
+static image. Validated via `static-cap-typed-load-repro` + lit
+`static-cap-global-init.ll`. Design:
+`design/capability-globals-init-decision.md`.
+
 ## Where to go next
 
 - Next milestone: `state/current-next-step.md`

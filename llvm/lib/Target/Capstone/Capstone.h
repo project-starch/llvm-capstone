@@ -19,6 +19,7 @@
 
 namespace llvm {
 class FunctionPass;
+class ModulePass;
 class InstructionSelector;
 class PassRegistry;
 class CapstoneRegisterBankInfo;
@@ -27,6 +28,11 @@ class CapstoneTargetMachine;
 
 FunctionPass *createCapstoneCodeGenPreparePass();
 void initializeCapstoneCodeGenPreparePass(PassRegistry &);
+
+// Synthesizes a per-module `__capstone_cap_init` that materializes capability
+// globals in place at runtime (constructor-codegen). See CapstoneCapGlobalInit.cpp.
+ModulePass *createCapstoneCapGlobalInitPass();
+void initializeCapstoneCapGlobalInitPass(PassRegistry &);
 
 FunctionPass *createCapstoneDeadRegisterDefinitionsPass();
 void initializeCapstoneDeadRegisterDefinitionsPass(PassRegistry &);

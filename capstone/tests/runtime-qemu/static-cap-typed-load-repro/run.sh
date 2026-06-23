@@ -63,8 +63,15 @@ run_expect_failure() {
   fi
 }
 
-run_expect_failure fail_fn_struct_load '[CAPSTONE] cs.cjalr requires capability in rs1'
-run_expect_failure fail_str_struct_load '[CAPSTONE] Cap mem access requires capability'
+# The fail_* cases used to fault (untagged capability globals). The backend now
+# auto-materializes capability globals in place via the constructor-codegen pass
+# (CapstoneCapGlobalInit + start.S __capstone_cap_init), so they now succeed with
+# no source change — the end-to-end proof of the fix across string-struct,
+# function-struct and array shapes. The manual fix_/descriptor/autogen/consume
+# cases still pass (their explicit materialization is now redundant but harmless).
+run_expect_success fail_fn_struct_load 305419896   # was: cs.cjalr requires capability in rs1
+run_expect_success fail_str_struct_load 111        # was: Cap mem access requires capability
+run_expect_success fail_str_array_load 111         # was: Cap mem access requires capability
 run_expect_success fix_fn_runtime_materialize 305419896
 run_expect_success fix_str_runtime_materialize 111
 run_expect_success descriptor_fn_runtime_materialize 305419896
@@ -72,10 +79,9 @@ run_expect_success descriptor_str_runtime_materialize 111
 run_expect_success autogen_fn_runtime_materialize 305419896
 run_expect_success autogen_str_runtime_materialize 111
 run_expect_success consume_emitted_gct_string_domain 111
-run_expect_failure fail_str_array_load '[CAPSTONE] Cap mem access requires capability'
 run_expect_success fix_str_array_runtime_materialize 336
 
-echo 'static-cap-typed-load-repro: reproduced both minimal failing capability-typed loads and verified manual, descriptor-driven, LLVM-IR-generated, and emitted-.gct-consumer runtime-materialization fixes (incl. dtoa nums[]-style array shape)'
+echo 'static-cap-typed-load-repro: capability globals (string-struct, function-struct, array shapes) are auto-materialized in place by the backend constructor-codegen pass; manual/descriptor/autogen/gct-consumer materialization cases also verified'
 echo '__STATIC_CAP_TYPED_LOAD_REPRO_OK__'
 printf 'Logs: %s\n' "$LOG_DIR"
 

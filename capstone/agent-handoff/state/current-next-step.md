@@ -2,21 +2,35 @@
 
 ## Current BEEBS milestone - 80 benchmarks validated
 
-### Recent backend work (2026-06-24): Bug #3 fixed; `dtoa` deferred
+### Recent backend work (2026-06-24): Bug #3 fixed; capability globals tagged
 
 `Bug #3` (i128 non-vector-shift legalization assertion) is **fixed in the
 backend** — `lowerScalarI128Shift` now has a general constant-shift fallback for
 operands the narrowing helper can't recognize (notably the `ashr/lshr i128` a
 pointer-difference `(p-q)/sizeof(T)` lowers to). Validated by a domain probe + the
-`matmult-int` repro + new lit coverage in `i128-xlen-lowering.ll`; all 26
-Capstone CodeGen lit tests pass. This also unblocked `dtoa`'s *compile*.
+`matmult-int` repro + new lit coverage in `i128-xlen-lowering.ll`.
 
-`dtoa` is **deferred** (still 80, not added): after the backend fix it compiles
-and links (recipe + `ceil`/soft-float-builtin additions are in tree), but it hits
-two runtime capability-tag faults — an untagged global `char *nums[]` pointer
-array and an untagged-base capability load in David Gay's `char[]` bigint arena.
-Full diagnosis + reproduce recipe in
-`plans/beebs-deferred-benchmarks.md` §3 (fix) and §15 (`dtoa` blockers).
+**Capability-global tagging is resolved** (constructor-codegen). A capability tag
+cannot live in a static ELF image, so initialized capability globals (pointer
+tables, string tables like `dtoa`'s `char *nums[]`, function-pointer tables)
+loaded **untagged** and faulted on first use. New IR ModulePass
+`llvm/lib/Target/Capstone/CapstoneCapGlobalInit.cpp` synthesizes a per-module
+`__capstone_cap_init` that stores each capability-global element in place at
+runtime (isel lowers to a tagged `cincoffset gp`+`delin`+`stc`);
+`capstone/my_first_domain/start.S` calls it before `domain_main` (a weak no-op
+default covers domains with none). Validated end-to-end: the three previously
+faulting `static-cap-typed-load-repro` domains now pass unchanged (string-struct,
+array=`nums[]` shape, function-pointer); 28/28 Capstone lit tests; `bs`
+unaffected. Decision + implementation:
+`capstone/agent-handoff/design/capability-globals-init-decision.md`; test
+`static-cap-global-init.ll`. (Multi-module offset-table generalization is a
+documented follow-on; not needed for single-module domains.)
+
+This resolved `dtoa` **blocker #1** (untagged `nums[]`). `dtoa` remains the one
+deferred benchmark only for **blocker #2** — arena 16-byte alignment in David
+Gay's `char[]`/`double[]` bigint pool (a 16-byte `Bigint.next` capability landing
+at an 8-mod-16 offset loses its tag). See `plans/beebs-deferred-benchmarks.md` §3
+(shift fix) and §15 (`dtoa`). Finishing `dtoa` is the current next step.
 
 ### Benchmarks
 

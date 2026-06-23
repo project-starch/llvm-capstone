@@ -44,6 +44,19 @@ test:
   sd a0, 64(sp)
   stc(a1, sp, 80)
 
+  # Materialize capability globals in place before domain_main: a capability tag
+  # cannot live in the static image, so initialized capability globals (pointer
+  # tables, string tables) load untagged.  The compiler synthesizes a strong
+  # __capstone_cap_init that stores them with tags at runtime; the weak no-op
+  # default below is used when a domain has none.  Args a0/a1 are saved on the
+  # stack above and reloaded for domain_main below; gp (the data/code root) is
+  # callee-preserved.
+  .Lpcrel_hi_cap_init:
+  auipc t0, %pcrel_hi(__capstone_cap_init)
+  addi t0, t0, %pcrel_lo(.Lpcrel_hi_cap_init)
+  cincoffset t0, gp, t0
+  .insn i 0x5b, 0x5, ra, 0(t0)
+
   # Call ordinary C compiled by our clang.
   ldc(a0, sp, 80)
   ld a1, 64(sp)
@@ -99,6 +112,15 @@ test:
 
 .Ltest_ret:
   j .Ltest_ret
+
+# Weak no-op default for __capstone_cap_init: linked when a domain has no
+# capability globals.  When the compiler emits capability-global initialization,
+# its strong __capstone_cap_init overrides this (weak < strong at link time).
+.text
+  .weak __capstone_cap_init
+  .type __capstone_cap_init, @function
+__capstone_cap_init:
+  cjalr zero, 0(ra)
 
   .align 4
   .section .gct

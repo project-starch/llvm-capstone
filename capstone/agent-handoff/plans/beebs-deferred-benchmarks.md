@@ -958,16 +958,16 @@ arena allocator (`malloc_beebs` over `static char heap[8192]` + `private_mem`).
    pointer/capability arrays don't get their tags set at load (relocation/loader
    limitation) — same class as Bug #9 but for globals.
 
-   *Progress 2026-06-24*: the root cause is the static-cap GCT mechanism — the
-   compiler emits `.gct` materialization metadata for capability globals and a
-   domain-side consumer rebuilds them at runtime (see
-   `capstone/tests/runtime-qemu/static-cap-typed-load-repro/`).  It previously
-   only handled a one-field struct holder; the backend now also emits records for
-   **arrays** of capability pointers (`CapstoneAsmPrinter.cpp`,
-   `collectStaticCapReducedObject`; test `static-cap-gct-array.ll`) — the compiler
-   half.  The remaining runtime half (a general in-place `__capstone_init_cap_globals`
-   startup consumer + a holder back-reference in the format) is designed under
-   "Remaining runtime half" in that directory's `README.md`.
+   **RESOLVED 2026-06-24** (blocker #1). The backend now auto-materializes
+   capability globals in place via constructor-codegen: a ModulePass
+   (`CapstoneCapGlobalInit.cpp`) synthesizes `__capstone_cap_init` storing each
+   element with a tagged `stc`, and `start.S` calls it before `domain_main` (weak
+   no-op when a domain has none). The exact `nums[]` shape is the validated array
+   case — the previously-faulting `fail_str_array_load` repro domain now succeeds
+   unchanged. Decision + implementation:
+   `capstone/agent-handoff/design/capability-globals-init-decision.md`; test
+   `llvm/test/CodeGen/Capstone/static-cap-global-init.ll`. (`dtoa` itself still
+   needs blocker #2 below.)
 
 2. **Arena capability storage fault (the real blocker).**  With (1) worked
    around, the complex inputs (`"0.01000000023123"`, the 19-digit

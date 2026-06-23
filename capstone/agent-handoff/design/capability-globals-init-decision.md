@@ -1,6 +1,6 @@
 # Decision: how to tag capability globals (constructor-codegen vs GCT-consumer)
 
-Status: **decided (architecture), partially implemented.** 2026-06-24.
+Status: **implemented & validated (single-module).** 2026-06-24.
 
 ## Problem
 
@@ -78,25 +78,56 @@ descriptor-driven POCs, and as a possible data source for the auto-generated
 constructor), but the *consumer* of record becomes compiler-emitted init code
 rather than a runtime `.gct` walker.
 
-## Remaining work to productionize (not yet done)
+## What was implemented (2026-06-24)
 
-1. **Compiler**: auto-emit a per-module `__capstone_init_cap_globals` that stores
-   every capability-global initializer at runtime (reuse the
-   `collectStaticCapReducedObject` analysis to find them); zero the static-image
-   slots (or keep them, they are overwritten).
-2. **Placement**: ensure such globals land in writable `.data` even when `const`
-   (const string/function tables currently go to `.rodata`; a runtime store there
-   would fault). dtoa's `nums[]` is already non-const.
-3. **Wiring**: run the initializer before `domain_main` — either a fixed symbol
-   called from `start.S`, or `.init_array` processing in the domain crt. This is
-   the only domain-startup-ABI touch and should be reviewed with the runtime owner.
-4. **Function-pointer slots**: same store pattern; confirm a function capability
-   is materialized correctly for an indirect-call target.
+1. **Compiler** — `llvm/lib/Target/Capstone/CapstoneCapGlobalInit.cpp`, a
+   ModulePass run in `addIRPasses` at all opt levels. For each capability global
+   it can reduce (single-field struct / array of addrspace(200) pointers, with
+   GlobalVariable/Function targets), it synthesizes a per-module
+   `void __capstone_cap_init(void)` whose body stores each element in place; isel
+   lowers each store to a tagged capability store (`cincoffset gp` + `delin` +
+   `stc`). Intrinsic/metadata globals (appending linkage, `llvm.*`,
+   `llvm.metadata`) and thread-locals are skipped.
+2. **Wiring** — `capstone/my_first_domain/start.S` calls `__capstone_cap_init`
+   before `domain_main` (same `auipc`/`cincoffset gp`/cjalr pattern). A **weak
+   no-op** `__capstone_cap_init` in `start.S` is used when a domain has no
+   capability globals; the compiler-emitted **strong** symbol overrides it.
+3. **Test** — `llvm/test/CodeGen/Capstone/static-cap-global-init.ll`; the runtime
+   acceptance suite `tests/runtime-qemu/static-cap-typed-load-repro/` (the three
+   previously-faulting `fail_*` cases now succeed unchanged: 111 / 111 /
+   305419896, across string-struct, array, and function-pointer shapes).
+
+### Key implementation decisions
+
+- **Volatile stores, static initializer left intact.** The stores are `volatile`
+  so they are never elided as redundant-with-initializer; the untagged static
+  bytes are harmless (overwritten before first use). This keeps the AsmPrinter
+  `.gct` emission unchanged (it still reads the real initializer), so the GCT
+  metadata and its existing consumer tests are untouched.
+- **Weak default in `start.S` (not "always emit from compiler").** Always
+  emitting `__capstone_cap_init` from every module would collide at link in
+  multi-module domains; the weak-default + strong-override avoids that for the
+  common (single cap-global module) case.
+- **Const placement (former Stage 3) is moot on the domain.** A `const` capability
+  table goes to `.rodata`, but the domain maps `.rodata` writable at runtime, so
+  the in-place `stc` succeeds (proven: the `const`-qualified `fail_str_*` cases
+  pass). Only a future hosted/`mprotect` target would need writable re-sectioning.
+
+## Remaining work
+
+- **Multi-module**: if capability globals live in >1 linked object, the two
+  strong `__capstone_cap_init` definitions collide. Generalize to a PC-relative
+  **offset table** (`.capstone_init`, KEEP'd, bounded by `__capstone_init_*`)
+  with `start.S` iterating it. Not needed for current single-module domains
+  (incl. `dtoa nums[]`).
+- **Hosted**: a hosted crt must call `__capstone_cap_init` (only `start.S` does
+  today); harmless dead symbol otherwise.
 
 ## Important caveat
 
 Resolving capability-global tagging fixes blocker #1 only. BEEBS `dtoa` also has
 blocker #2 — an untagged-base capability load (`helper_cslcc`) in David Gay's
 `char[]` bigint arena on complex inputs — which is independent and would remain.
-So this decision is justified as **general capability-globals infrastructure**,
-not as a `dtoa`-specific fix.
+So this work is **general capability-globals infrastructure**; it resolves
+`dtoa`'s blocker #1 (the `nums[]` shape is the validated array case) but does not
+by itself make `dtoa` pass.
