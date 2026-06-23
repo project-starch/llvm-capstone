@@ -1,10 +1,26 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 63 benchmarks validated
+## Current BEEBS milestone - 65 benchmarks validated
 
-63 BEEBS benchmarks now pass end-to-end. The most recent addition is `sqrt`,
-validated with `run-beebs-sqrt.sh` — the first FP benchmark to *reuse* the
-soft-float runtime (no compiler change). It needs no libm (it ships its own
+65 BEEBS benchmarks now pass end-to-end. The most recent additions are `ludcmp`
+and `minver` (`run-beebs-ludcmp.sh`, `run-beebs-minver.sh`) — float linear-algebra
+benchmarks reusing the soft-float runtime, no compiler change.
+
+A runtime trace (instrumenting `helper_cscincoffset`, since reverted) showed the
+earlier `ludcmp` `cscincoffset rs1->tag` crash was **not** a `cincoffset`
+operand/canonicalization bug: the matrix algorithm runs fine. It is the
+documented **Bug #9** (a `verify_benchmark` *local* const-initialized array,
+`float exp_a[8][9]={...}`, lowered to a `memcpy` from `.rodata` into a stack array
+whose destination capability comes back untagged). Workaround (source, no compiler
+change): mark `exp_a`/`exp_b`/`exp_x` `static const` so they live in `.rodata`
+(no stack copy, no `memcpy`) — same class of fix as mergesort / nettle-*. `minver`
+needed only a correctness oracle (its upstream verify returns -1): an FNV-1a
+checksum of the inverted matrix `a_i` + `det` vs a native float reference.
+The **Bug #9 backend root cause** (untagged stack dest in a rodata→stack copy)
+remains an open, deferrable backend task — see `plans/beebs-deferred-benchmarks.md`.
+
+`sqrt` (63rd) is validated with `run-beebs-sqrt.sh` — the first FP benchmark to
+*reuse* the soft-float runtime (no compiler change). It needs no libm (it ships its own
 `sqrtfcn`) and has a real `verify_benchmark`; the only new infrastructure is the
 shared `build-beebs-softfloat-common.sh` helper, which compiles the compiler-rt
 float+double soft-float builtin set and is now also sourced by `cubic`.
@@ -135,12 +151,9 @@ Good next investigations:
   milestone note above and `design/capstone-softfloat-libm.md`.
 - `sqrt`: **RESOLVED** — pure soft-float (own `sqrtfcn`, no libm), real verify.
   Reuses `build-beebs-softfloat-common.sh`. `run-beebs-sqrt.sh`.
-- `ludcmp`: **DEFERRED** — compiles and links with the soft-float runtime, but
-  crashes at runtime with `helper_cscincoffset: Assertion 'rs1_v->tag' failed`
-  (the `cincoffset` untagged-rs1 bug, deferred Bug #1) from its 2D float-matrix
-  indexing `a[i][j]`. Needs the `cincoffset`/capability-arithmetic canonicalization
-  extended (backend) or an invasive 2D-access source workaround — a separate
-  effort, not a clean add. `minver` (also 2D float matrix) likely hits the same.
+- `ludcmp`, `minver`: **RESOLVED** (Bug #9 source workaround / oracle, see the
+  milestone note above). The earlier "cincoffset bug" hypothesis was disproven by
+  a runtime trace; the matrix algorithm's `cincoffset`s are correct.
 - `dtoa`: now compiles (libcall names resolve), but the bare-metal domain still
   lacks the libm/libc it needs — `log`/`floor`/`ceil` plus `malloc`,
   `memcpy`/`memmove`/`memset`, `strcpy`/`strlen`, `errno`, and freestanding
