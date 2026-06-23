@@ -115,6 +115,45 @@ The current LLVM Capstone backend now includes a first local proof of concept:
 This POC does **not** yet make the runtime consume `.gct` automatically.
 It proves the compiler-side emission half of the contract for the narrowed cases.
 
+### Array holders now emitted (2026-06-24)
+
+`collectStaticCapReducedObject` (`llvm/lib/Target/Capstone/CapstoneAsmPrinter.cpp`)
+was extended from the one-field-struct holder to also reduce an **array of
+addrspace(200) capability pointers** (`const char *tbl[]` / a function-pointer
+table).  The array yields one holder object with `NumSlots == N`, one slot per
+element (string or function), and one target object per distinct string, with
+correct per-target template offsets.  The single-field struct case is emitted
+byte-identically to before (the repro's `consume_emitted_gct_string_domain`
+still passes).  Regression coverage: `llvm/test/CodeGen/Capstone/static-cap-gct-array.ll`.
+
+This unblocks the *emission* side for string tables such as BEEBS `dtoa`'s
+`char *nums[]`, whose pointers otherwise load untagged.  See "Remaining runtime
+half" below for what is still needed to make such a table usable at runtime.
+
+### Remaining runtime half (to actually fix `nums[]`-style globals)
+
+The consumer POC rebuilds the capability field into a *parallel* writable object
+(`gHolder`) and uses that.  To make ordinary compiled code that accesses the
+*original* global (`tbl[i]`) see tagged capabilities, the runtime must patch the
+original global storage **in place**, which needs two more pieces:
+
+1. **Format**: each slot/object must carry a *relocated reference to the holder
+   global itself* (its runtime address), so a general consumer knows where to
+   store the materialized capability.  The current records describe the holder
+   only by template bytes + ObjectID, with no back-reference to the original
+   symbol.  Add an `R_Capstone_64`-relocated holder pointer per object.
+2. **General startup consumer**: a single `__capstone_init_cap_globals()` linked
+   into every domain (called from `start.S`/crt *before* `domain_main`) that
+   walks `__llvm_static_cap_gct_begin..end` and, for each slot, derives the live
+   target capability (function caps from the relocated symbol; string/object caps
+   as a bounded `cincoffset` from the domain data root) and stores it (tagged,
+   `scc`/`stc`) into `holder_addr + field_offset`.  The holder global must live
+   in writable `.data` (non-`const`, as `dtoa`'s `nums[]` already is).
+
+This is a domain-startup-ABI change (touches `start.S`, `link.ld`, and every
+domain build), so it is scoped as a separate focused step rather than bundled
+with the emission extension.
+
 ## First runtime-side consumer POC for emitted `.gct`
 
 This directory now also includes the first reduced domain that **reads the

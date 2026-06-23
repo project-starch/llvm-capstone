@@ -178,82 +178,116 @@ bool collectStaticCapReducedObject(const GlobalVariable &GV,
                                    uint32_t &NextObjectID,
                                    std::vector<StaticCapGCTObjectRecord> &Objects,
                                    std::vector<StaticCapGCTSlotRecord> &Slots) {
-  if (!GV.hasInitializer() || !GV.isConstant())
+  if (!GV.hasInitializer())
     return false;
 
-  auto *ST = dyn_cast<StructType>(GV.getValueType());
-  if (!ST || ST->getNumElements() != 1)
-    return false;
+  // Gather the capability-pointer fields (field offset + init constant) of a
+  // reduced "holder" object.  Two holder shapes are supported:
+  //   - a one-field struct wrapping a single addrspace(200) pointer, and
+  //   - an array of addrspace(200) pointers (e.g. `const char *tbl[]` / a
+  //     function-pointer table), which yields one slot per element.
+  // Both lower to the same per-slot records below; the array case is just the
+  // single-field case applied element-by-element.
+  Type *HolderTy = GV.getValueType();
+  const Constant *Initzr = GV.getInitializer();
+  SmallVector<std::pair<uint32_t, Constant *>, 8> Fields;
 
-  Type *FieldTy = ST->getElementType(0);
-  if (!FieldTy->isPointerTy() || FieldTy->getPointerAddressSpace() != 200)
+  if (auto *ST = dyn_cast<StructType>(HolderTy)) {
+    if (!GV.isConstant() || ST->getNumElements() != 1)
+      return false;
+    Type *FieldTy = ST->getElementType(0);
+    if (!FieldTy->isPointerTy() || FieldTy->getPointerAddressSpace() != 200)
+      return false;
+    const auto *CS = dyn_cast<ConstantStruct>(Initzr);
+    if (!CS || CS->getNumOperands() != 1)
+      return false;
+    Fields.emplace_back(0u, dyn_cast<Constant>(CS->getOperand(0)));
+  } else if (auto *AT = dyn_cast<ArrayType>(HolderTy)) {
+    Type *ElemTy = AT->getElementType();
+    if (!ElemTy->isPointerTy() || ElemTy->getPointerAddressSpace() != 200)
+      return false;
+    // A zero-initialized array carries no capabilities to materialize.
+    const auto *CA = dyn_cast<ConstantArray>(Initzr);
+    if (!CA)
+      return false;
+    uint32_t ElemSize = static_cast<uint32_t>(DL.getTypeAllocSize(ElemTy));
+    for (unsigned I = 0, E = CA->getNumOperands(); I != E; ++I)
+      Fields.emplace_back(I * ElemSize, dyn_cast<Constant>(CA->getOperand(I)));
+  } else {
     return false;
-
-  const auto *CS = dyn_cast<ConstantStruct>(GV.getInitializer());
-  if (!CS || CS->getNumOperands() != 1)
-    return false;
-
-  auto *FieldInit = dyn_cast<Constant>(CS->getOperand(0));
-  if (!FieldInit)
-    return false;
-
-  const Value *Stripped = FieldInit->stripPointerCasts();
-  auto *TargetGV = dyn_cast<GlobalVariable>(Stripped);
-  auto *TargetFn = dyn_cast<Function>(Stripped);
-  if (!TargetGV && !TargetFn)
-    return false;
+  }
 
   StaticCapGCTObjectRecord HolderObject;
   HolderObject.ObjectID = NextObjectID++;
-  HolderObject.Size = static_cast<uint32_t>(DL.getTypeAllocSize(ST));
+  HolderObject.Size = static_cast<uint32_t>(DL.getTypeAllocSize(HolderTy));
   HolderObject.Align = GV.getAlign().valueOrOne().value();
   HolderObject.TemplateOffset = 0;
   HolderObject.FirstSlotIndex = static_cast<uint32_t>(Slots.size());
-  HolderObject.NumSlots = 1;
+  HolderObject.NumSlots = static_cast<uint32_t>(Fields.size());
   HolderObject.TemplateBytes.assign(HolderObject.Size, 0);
 
-  StaticCapGCTSlotRecord Slot = {
-      HolderObject.ObjectID,
-      0,
-      StaticCapSlotNull,
-      0,
-      0,
-      0,
-      nullptr,
-  };
+  // Build everything into locals first so a mid-array bail leaves the caller's
+  // Objects/Slots untouched (all-or-nothing emission for this global).
+  std::vector<StaticCapGCTSlotRecord> NewSlots;
+  std::vector<StaticCapGCTObjectRecord> TargetObjects;
 
-  if (TargetFn) {
-    Slot.SlotKind = StaticCapSlotFunction;
-    Slot.TargetFlags = StaticCapTargetFlagRelocatedSymbol;
-    Slot.TargetSymbol = TargetFn;
-  } else {
-    const auto *Init = TargetGV->getInitializer();
-    const auto *CDS = dyn_cast_or_null<ConstantDataSequential>(Init);
-    if (!CDS || CDS->getElementType() != Type::getInt8Ty(GV.getContext()))
+  for (auto &[FieldOffset, FieldInit] : Fields) {
+    if (!FieldInit)
       return false;
 
-    StringRef RawBytes = CDS->getRawDataValues();
+    StaticCapGCTSlotRecord Slot = {
+        HolderObject.ObjectID, FieldOffset, StaticCapSlotNull, 0, 0, 0, nullptr,
+    };
 
-    StaticCapGCTObjectRecord TargetObject;
-    TargetObject.ObjectID = NextObjectID++;
-    TargetObject.Size = static_cast<uint32_t>(DL.getTypeAllocSize(TargetGV->getValueType()));
-    TargetObject.Align = TargetGV->getAlign().valueOrOne().value();
-    TargetObject.TemplateOffset = 0;
-    TargetObject.FirstSlotIndex = static_cast<uint32_t>(Slots.size() + 1);
-    TargetObject.NumSlots = 0;
-    TargetObject.TemplateBytes.assign(RawBytes.begin(), RawBytes.end());
+    if (isa<ConstantPointerNull>(FieldInit)) {
+      // Explicit null pointer: nothing to materialize, leave the slot as null.
+      NewSlots.push_back(Slot);
+      continue;
+    }
 
-    Slot.SlotKind = StaticCapSlotStringObject;
-    Slot.TargetObjectID = TargetObject.ObjectID;
+    const Value *Stripped = FieldInit->stripPointerCasts();
+    auto *TargetGV = dyn_cast<GlobalVariable>(Stripped);
+    auto *TargetFn = dyn_cast<Function>(Stripped);
 
-    Objects.push_back(std::move(HolderObject));
-    Slots.push_back(Slot);
-    Objects.push_back(std::move(TargetObject));
-    return true;
+    if (TargetFn) {
+      Slot.SlotKind = StaticCapSlotFunction;
+      Slot.TargetFlags = StaticCapTargetFlagRelocatedSymbol;
+      Slot.TargetSymbol = TargetFn;
+    } else if (TargetGV) {
+      const auto *Init = TargetGV->getInitializer();
+      const auto *CDS = dyn_cast_or_null<ConstantDataSequential>(Init);
+      if (!CDS || CDS->getElementType() != Type::getInt8Ty(GV.getContext()))
+        return false;
+
+      StringRef RawBytes = CDS->getRawDataValues();
+
+      StaticCapGCTObjectRecord TargetObject;
+      TargetObject.ObjectID = NextObjectID++;
+      TargetObject.Size =
+          static_cast<uint32_t>(DL.getTypeAllocSize(TargetGV->getValueType()));
+      TargetObject.Align = TargetGV->getAlign().valueOrOne().value();
+      TargetObject.TemplateOffset = 0;
+      TargetObject.FirstSlotIndex = 0;
+      TargetObject.NumSlots = 0;
+      TargetObject.TemplateBytes.assign(RawBytes.begin(), RawBytes.end());
+
+      Slot.SlotKind = StaticCapSlotStringObject;
+      Slot.TargetObjectID = TargetObject.ObjectID;
+      TargetObjects.push_back(std::move(TargetObject));
+    } else {
+      return false;
+    }
+
+    NewSlots.push_back(Slot);
   }
 
+  // Commit: holder, its (contiguous) slots, then any string target objects.
+  // This ordering keeps the single-field struct case byte-identical to before.
   Objects.push_back(std::move(HolderObject));
-  Slots.push_back(Slot);
+  for (const auto &S : NewSlots)
+    Slots.push_back(S);
+  for (auto &T : TargetObjects)
+    Objects.push_back(std::move(T));
   return true;
 }
 } // end anonymous namespace
