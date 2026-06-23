@@ -64,8 +64,9 @@ agent-handoff/
 - working baseline and split `null_blk` regressions
 - validated CoreMark profile-run on Capstone PureCap ("Correct operation validated.")
   using compiled C `domain_main` rather than `coremark_domain_entry.S`
-- 76 validated BEEBS benchmarks on the split host/domain runtime path; the
-  newest is `stb_perlin` (3-D Perlin noise; added `floor` to the shared libm)
+- 78 validated BEEBS benchmarks on the split host/domain runtime path; the
+  newest are `matmult-float` and `whetstone` (added `atan` to the shared libm),
+  completing the soft-float/libm-only FP class
 - aggregate regression wrappers are available for HostCall proofs, `null_blk`,
   and the full validated BEEBS set; BEEBS is serial by default and supports
   opt-in isolated parallel runs with `RUN_ALL_BEEBS_JOBS=N`

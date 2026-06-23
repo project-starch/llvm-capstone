@@ -306,6 +306,68 @@ double floor(double x) {
   return b.d;
 }
 
+/* atan(x): faithful fdlibm port (argument reduction into <= tan(pi/8) ranges +
+   an 11-term odd polynomial).  Same <1e-12 accuracy class as the rest. */
+double atan(double x) {
+  static const double atanhi[] = {
+      4.63647609000806093515e-01, 7.85398163397448278999e-01,
+      9.82793723247329054082e-01, 1.57079632679489655800e+00};
+  static const double atanlo[] = {
+      2.26987774529616870924e-17, 3.06161699786838301793e-17,
+      1.39033110312309984516e-17, 6.12323399573676603587e-17};
+  static const double aT[] = {
+      3.33333333333329318027e-01,  -1.99999999998764832476e-01,
+      1.42857142725034663711e-01,  -1.11111104054623557880e-01,
+      9.09088713343650656196e-02,  -7.69187620504482999495e-02,
+      6.66107313738753120669e-02,  -5.83357013379057348645e-02,
+      4.97687799461593236017e-02,  -3.65315727442169155270e-02,
+      1.62858201153657823623e-02};
+  union dbits b;
+  b.d = x;
+  unsigned hx = (unsigned)(b.u >> 32);
+  unsigned ix = hx & 0x7fffffff;
+  int neg = hx >> 31;
+  if (ix >= 0x44100000) { /* |x| >= 2^66 */
+    if (x != x)
+      return x; /* NaN */
+    return neg ? -(atanhi[3] + atanlo[3]) : (atanhi[3] + atanlo[3]);
+  }
+  int id;
+  if (ix < 0x3fdc0000) { /* |x| < 0.4375 */
+    if (ix < 0x3e400000)
+      return x; /* |x| < 2^-27: atan(x) ~= x */
+    id = -1;
+  } else {
+    x = fabs(x);
+    if (ix < 0x3ff30000) {        /* |x| < 1.1875 */
+      if (ix < 0x3fe60000) {      /* 7/16 <= |x| < 11/16 */
+        id = 0;
+        x = (2.0 * x - 1.0) / (2.0 + x);
+      } else { /* 11/16 <= |x| < 19/16 */
+        id = 1;
+        x = (x - 1.0) / (x + 1.0);
+      }
+    } else {
+      if (ix < 0x40038000) { /* 19/16 <= |x| < 39/16 */
+        id = 2;
+        x = (x - 1.5) / (1.0 + 1.5 * x);
+      } else { /* 39/16 <= |x| < 2^66 */
+        id = 3;
+        x = -1.0 / x;
+      }
+    }
+  }
+  double z = x * x;
+  double w = z * z;
+  double s1 = z * (aT[0] + w * (aT[2] + w * (aT[4] +
+              w * (aT[6] + w * (aT[8] + w * aT[10])))));
+  double s2 = w * (aT[1] + w * (aT[3] + w * (aT[5] + w * (aT[7] + w * aT[9]))));
+  if (id < 0)
+    return x - x * (s1 + s2);
+  z = atanhi[id] - ((x * (s1 + s2) - atanlo[id]) - x);
+  return neg ? -z : z;
+}
+
 #ifdef CUBIC_LIBM_TEST
 #include <math.h>
 #include <stdio.h>
@@ -343,6 +405,12 @@ int main(void) {
     if (e > maxerr) maxerr = e;
   }
   printf("floor max abs err over [-10,10] = %.3e\n", maxerr);
+  maxerr = 0;
+  for (double x = -20.0; x <= 20.0; x += 0.0017) {
+    double e = fabs(atan(x) - atanl(x));
+    if (e > maxerr) maxerr = e;
+  }
+  printf("atan  max abs err over [-20,20] = %.3e\n", maxerr);
   return 0;
 }
 #endif

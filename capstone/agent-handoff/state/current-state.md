@@ -184,6 +184,14 @@ All of the following pass on the `capstone-bootstrap` branch:
   benchmark; 3-D Perlin noise, self-contained oracle (`benchmark()` compares a
   10x10 plane against a `static const` table and returns 0 on full match);
   only external dep is `floor`, added to the shared soft-float libm
+- `capstone/benchmarks/beebs/run-beebs-matmult-float.sh` - seventy-seventh BEEBS
+  benchmark; `matmult` source built `-DMATMULT_FLOAT` (float[10][10]), soft-float
+  builtins only, FNV-1a checksum of the global `ResultArray` vs a host reference
+  (`--gc-sections` drops the dead `values_match`/`frexpf`/`fabsf`)
+- `capstone/benchmarks/beebs/run-beebs-whetstone.sh` - seventy-eighth BEEBS
+  benchmark; classic Whetstone over the shared libm (added `atan`); built
+  `-DPRINTOUT` with a capturing `POUT` that FNV-folds every module's outputs,
+  compared exactly to a same-libm host reference
 
 Most BEEBS correctness-marker wrappers now share `beebs_simple_domain.c` and
 `beebs_simple_host.c`. Keep separate per-benchmark domain/host files only when

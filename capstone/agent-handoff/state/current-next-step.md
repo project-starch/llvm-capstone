@@ -1,8 +1,30 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 76 benchmarks validated
+## Current BEEBS milestone - 78 benchmarks validated
 
-76 BEEBS benchmarks now pass end-to-end. The most recent addition is
+78 BEEBS benchmarks now pass end-to-end. The most recent additions are
+`matmult-float` and `whetstone` (`run-beebs-{matmult-float,whetstone}.sh`),
+which complete the soft-float/libm-only FP class. Both reuse the soft-float
+builtins (+ shared libm) with no compiler change, and both use the proven
+"reference computed from the same source + same soft-float math, compared
+exactly" pattern (IEEE float/double ops are bit-identical between host hardware
+float at `-ffp-contract=off` and target compiler-rt soft-float).
+
+- `matmult-float`: the same source as `matmult` built `-DMATMULT_FLOAT`
+  (UPPERLIMIT 10, float[10][10]); soft-float builtins only (no libm). The adapted
+  tail replaces the upstream local-`exp[][]` verifier (Bug #3/#9) with an FNV-1a
+  checksum of the global `ResultArray` read as a flat byte stream (oracle
+  `0xbdbace3d315e67a4`). Built `-ffunction-sections`/`--gc-sections` so the dead
+  upstream `values_match` (which would pull in `frexpf`/`fabsf`) is dropped.
+- `whetstone`: needed `atan` added to the shared `adapted/beebs_softfloat_libm.c`
+  (fdlibm port, ~1.6e-16, validated by the self-test). Upstream `verify` is -1
+  and the per-module results flow only through `POUT` (gated on `PRINTOUT`), so
+  the domain is built `-DPRINTOUT`, the upstream printf `POUT` definition block
+  is stripped, and the adapted tail's capturing `POUT` folds every module's four
+  doubles into an FNV checksum compared (exact) to a same-libm host reference
+  (`0x2f975c4609a1bfbb`).
+
+The prior addition was
 `stb_perlin` (`run-beebs-stb_perlin.sh`), a 3-D Perlin-noise benchmark. Its
 oracle is self-contained: `benchmark()` computes a 10x10 noise plane and
 compares every value against a `static const float expected[10][10]` global
@@ -219,15 +241,21 @@ Good next investigations:
   correctness oracle (and exact-comparison verifiers need the correctly-rounded
   `sqrt`, now in place).
 
-### Remaining FP benchmarks (compile via soft-float; not yet brought up)
+### Remaining uncovered benchmarks — the libc/format frontier only
 
-- `whetstone` - needs `atan` (add to the libm) + a tolerance oracle (its
-  transcendentals are ~1e-12, not bit-exact, so exact comparison is wrong).
+The soft-float/libm-only FP class is now **complete** (`matmult-float` and
+`whetstone` were the last two; `whetstone` is exact via the same-libm reference,
+not a tolerance oracle). `matmult-int`/`matmult-float` source is byte-identical
+to `matmult/matmult.c` (built `-DMATMULT_INT`/`-DMATMULT_FLOAT` respectively).
+What remains are heavier, libc-dependent benchmarks, each its own effort:
+
 - `fasta` - needs libc (`memcpy`/`strlen`/`malloc`-ish).
-- `matmult-int` - source is byte-identical to `matmult/matmult.c`, already
-  covered by `run-beebs-matmult.sh` (`-DMATMULT_INT`); not a distinct add.
-- `trio`, `trio-snprintf` - float / complex format lib.
+- `trio`, `trio-snprintf` - float / complex format lib (`trio-sscanf` is the
+  validated proof wrapper; `trio-snprintf` also has `verify_benchmark = -1`).
 - `dtoa` - heavy libc (`malloc`/`errno`/`float.h`/`fenv.h`/`locale`) + libm.
+
+Plus the **Bug #9 backend root fix** (removes the `static const` source
+workaround class across many benchmarks).
 
 ## Regression gate for backend/lowering/ABI changes
 
