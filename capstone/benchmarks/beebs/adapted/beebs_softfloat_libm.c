@@ -306,6 +306,10 @@ double floor(double x) {
   return b.d;
 }
 
+/* ceil(x) = -floor(-x): exact in IEEE for all finite x (and correct for
+   +/-0, +/-inf, NaN since floor passes those through). */
+double ceil(double x) { return -floor(-x); }
+
 /* atan(x): faithful fdlibm port (argument reduction into <= tan(pi/8) ranges +
    an 11-term odd polynomial).  Same <1e-12 accuracy class as the rest. */
 double atan(double x) {
@@ -405,6 +409,12 @@ int main(void) {
     if (e > maxerr) maxerr = e;
   }
   printf("floor max abs err over [-10,10] = %.3e\n", maxerr);
+  maxerr = 0;
+  for (double x = -10.0; x <= 10.0; x += 0.013) {
+    double e = fabs(ceil(x) - ceill(x));
+    if (e > maxerr) maxerr = e;
+  }
+  printf("ceil  max abs err over [-10,10] = %.3e\n", maxerr);
   maxerr = 0;
   for (double x = -20.0; x <= 20.0; x += 0.0017) {
     double e = fabs(atan(x) - atanl(x));

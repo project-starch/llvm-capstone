@@ -2,6 +2,24 @@
 
 ## Current BEEBS milestone - 80 benchmarks validated
 
+### Recent backend work (2026-06-24): Bug #3 fixed; `dtoa` deferred
+
+`Bug #3` (i128 non-vector-shift legalization assertion) is **fixed in the
+backend** — `lowerScalarI128Shift` now has a general constant-shift fallback for
+operands the narrowing helper can't recognize (notably the `ashr/lshr i128` a
+pointer-difference `(p-q)/sizeof(T)` lowers to). Validated by a domain probe + the
+`matmult-int` repro + new lit coverage in `i128-xlen-lowering.ll`; all 26
+Capstone CodeGen lit tests pass. This also unblocked `dtoa`'s *compile*.
+
+`dtoa` is **deferred** (still 80, not added): after the backend fix it compiles
+and links (recipe + `ceil`/soft-float-builtin additions are in tree), but it hits
+two runtime capability-tag faults — an untagged global `char *nums[]` pointer
+array and an untagged-base capability load in David Gay's `char[]` bigint arena.
+Full diagnosis + reproduce recipe in
+`plans/beebs-deferred-benchmarks.md` §3 (fix) and §15 (`dtoa` blockers).
+
+### Benchmarks
+
 80 BEEBS benchmarks now pass end-to-end. The most recent addition is
 `janne_complex` (`run-beebs-janne_complex.sh`) — a trivial integer WCET
 benchmark (nested data-dependent loops). It is fully self-contained: integer

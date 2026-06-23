@@ -21,6 +21,7 @@ CAPSTONE_SOFTFLOAT_BUILTINS=(
   addsf3 subsf3 mulsf3 divsf3 fixsfsi floatsisf comparesf2
   extendsfdf2 truncdfsf2
   floatdisf floatundisf
+  floatunsidf floatdidf floatundidf fixdfdi
   fp_mode
 )
 

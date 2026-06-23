@@ -249,7 +249,40 @@ Relevant files:
 
 ## 3. Non-vector shift on i128 — DAG legalization assertion (compile-time crash)
 
-**Status**: FIXED via source workaround.  `matmult` now passes.
+**Status**: FIXED IN THE BACKEND (2026-06-24).  Previously worked around in
+`matmult` source; the backend now lowers the general constant-shift case, so the
+source workaround is no longer required (it can stay or be simplified).  The fix
+also unblocked `dtoa`'s `Balloc` compile (`dtoa` is still deferred for a separate
+*runtime* reason — see section 8 below).
+
+### Backend fix (what was done)
+
+`lowerScalarI128Shift` in `llvm/lib/Target/Capstone/CapstoneISelLowering.cpp`
+only handled i128 shifts whose operand `normalizeScalarI128ShiftOperandToXLen`
+could prove narrowable through a recognized extend/load pattern; anything else
+returned `SDValue()` and fell through to the crashing `ExpandNode`.  The trigger
+in `dtoa` was a *pointer difference* — `(p - q) / sizeof(T)` — which the
+middle-end turns into `ashr/lshr i128 (sub i128 (ptrtoint p), (ptrtoint q)), C`,
+an operand the helper does not recognize.
+
+The fix adds a general fallback (reached *only* when the operand was previously
+unhandled, so it cannot regress any compile that already succeeded): for a
+constant shift amount below XLen, truncate the i128 to XLen, shift there, and
+re-extend (`SIGN_EXTEND` for `SRA`, else `ZERO_EXTEND`).  This is correct on
+Capstone because an i128 integer is carried in a capability register and only its
+low XLen bits are meaningful as an integer — a pointer difference lands entirely
+in that low half.
+
+Validated: pointer-difference domain probe runs and returns the correct value in
+QEMU; the `matmult-int` repro below now compiles; regression coverage added to
+`llvm/test/CodeGen/Capstone/i128-xlen-lowering.ll`
+(`ptrdiff_sdiv_i128`, `srl_i128_ptrdiff`); all 26 Capstone CodeGen lit tests pass.
+
+---
+
+#### (Original analysis, retained for reference)
+
+**Previous status**: FIXED via source workaround.  `matmult` now passes.
 
 ### Symptom
 
@@ -875,6 +908,75 @@ Bring-up (two independent pieces, not yet done):
 
 `cubic` is the smaller first target; `dtoa` (89 KB FP↔decimal conversion) is a
 larger follow-on. Same class as `nbody` (Bug #4).
+
+---
+
+## 15. `dtoa` — capability-model runtime blockers (deferred 2026-06-24)
+
+**Status**: COMPILES (after the section 3 backend fix), but **deferred** — two
+runtime capability-tag faults remain.  The compile-time FP/libcall blockers from
+section 14 are gone: `dtoa` reuses the shared soft-float builtins + libm like the
+other FP benchmarks.
+
+### What `dtoa` actually exercises
+
+`benchmark()` sums `strtod()` over five decimal strings and returns `(int)sum`;
+`verify_benchmark` checks `== 267945` (self-contained oracle — no host reference
+needed).  The 4320-line file *is* David Gay's `dtoa`/`strtod`; it ships its own
+arena allocator (`malloc_beebs` over `static char heap[8192]` + `private_mem`).
+
+### Bring-up recipe that gets it to compile + link (reproduce)
+
+- Prepend a freestanding prelude supplying `size_t`/`NULL` (`<stddef.h>`),
+  `int errno;` + `#define ERANGE 34` (strtod writes `errno=ERANGE` only on
+  overflow paths none of the inputs hit), and prototypes for
+  `memcpy/memmove/memset/strlen/strcpy/strcmp` (shared
+  `adapted/beebs_freestanding_string.c`) and `floor/ceil/log` (shared
+  `adapted/beebs_softfloat_libm.c`; **`ceil` was added** = `-floor(-x)`, bit-exact).
+- Strip the hosted quoted includes the prelude replaces:
+  `"stdlib.h"`, `"string.h"`, `"errno.h"`, `"math.h"` (keep `"float.h"` — clang
+  provides a freestanding one; the `DEBUG`/`USE_LOCALE`/`Honor_FLT_ROUNDS`
+  includes are behind off `#ifdef`s).
+- Compile flags: the usual domain set plus **`-DLong=int`** (target is LP64-like,
+  `long`=64-bit; David Gay's code assumes `ULong` is 32-bit — its own comment
+  flags this exact case) and **`-DNO_HEX_FP`** (omits the hex-float parser
+  `gethex`; our inputs are all decimal — this also avoids one i128-shift site,
+  though section 3's fix now handles those anyway).
+- Link: soft-float builtins **plus** `floatunsidf floatdidf floatundidf fixdfdi`
+  (added to `build-beebs-softfloat-common.sh`), the string lib, and the libm.
+
+### Remaining runtime blockers (both capability-tag faults)
+
+1. **Global `char *nums[]` pointer array is untagged on the domain load path.**
+   `strtod(nums[i])` faults dereferencing the string (`Cap mem access requires
+   capability`, `rs1=x10`, `imm=0` = loading `*s`).  A *direct string literal*
+   (`strtod("1.0")`) works — its address is materialized inline as a tagged
+   capability.  Confirmed by A/B probes: `strtod("1.0")` passes,
+   `strtod(nums[3])` (same string, via the array) faults.  **Workaround
+   available**: an adapted tail that calls `strtod` on the five literals directly
+   (identical computation + oracle).  This is a general issue: initialized global
+   pointer/capability arrays don't get their tags set at load (relocation/loader
+   limitation) — same class as Bug #9 but for globals.
+
+2. **Arena capability storage fault (the real blocker).**  With (1) worked
+   around, the complex inputs (`"0.01000000023123"`, the 19-digit
+   `"5555.5555555555555555"`) drive deeper bigint allocation, and a second fault
+   appears: `helper_cslcc: rs1_v->tag` — a capability **load with an untagged
+   base**.  David Gay's `Bigint` stores a `next` capability and `freelist[]` is a
+   global array of capabilities; the `char[]`-arena (`malloc_beebs` advances by
+   arbitrary byte sizes) stores/loads those capabilities at sub-capability
+   alignment.  Suspected causes (unconfirmed): `malloc_beebs` not 16-byte aligning
+   allocations that hold capabilities, and/or `freelist[]` being another untagged
+   global capability array (same root as #1).  Needs either an arena rework
+   (align to 16, or back the arena with a capability-typed store) or the loader
+   fix for global capability arrays.
+
+### Recommendation
+
+Resolve the global-capability-array tagging (blocker #1 root) first — it likely
+also fixes `freelist[]` in blocker #2 — then revisit the arena alignment.  The
+compile recipe above + the `ceil`/builtin additions are already in tree, so a
+future attempt only needs the runtime side.
 
 ---
 
