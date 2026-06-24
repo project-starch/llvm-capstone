@@ -1,6 +1,6 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 81 benchmarks validated
+## Current BEEBS milestone - 82 benchmarks validated (suite effectively complete)
 
 ### Recent backend work (2026-06-24): Bug #3 fixed; capability globals tagged
 
@@ -37,8 +37,23 @@ alignment for the 16-byte `Bigint.next` capability) was fixed in
 
 ### Benchmarks
 
-80 BEEBS benchmarks now pass end-to-end. The most recent addition is
-`janne_complex` (`run-beebs-janne_complex.sh`) — a trivial integer WCET
+82 BEEBS benchmarks now pass end-to-end and the suite is **effectively
+complete**: the only upstream `src/` dirs without a runner are `matmult-int`
+(byte-identical to `matmult`, already built `-DMATMULT_INT`) and `trio` (the
+shared trio library that `trio-sscanf`/`trio-snprintf` both build from — not a
+standalone benchmark).
+
+The most recent additions are `dtoa` (81st) and `trio-snprintf` (82nd).
+`trio-snprintf` (`run-beebs-trio-snprintf.sh`) builds the shared `src/trio`
+library `-DTRIO_SNPRINTF` with `TRIO_FEATURE_FLOAT=0` (integer formatter only, no
+long-double/fp128), reusing the `trio-sscanf` preamble/stubs. Its upstream
+`verify` is -1, so an adapted oracle (`adapted/beebs_trio_snprintf_tail.c`) runs
+the five `trio_snprintf` conversions and checks each formatted string exactly
+(`"123"`, `"123"`, `"  123"`, `"0007b"`, `"   10"`). The `va_list` + capability-
+global fixes from this session made it build/run with no new backend work.
+
+The prior milestone addition was `janne_complex`
+(`run-beebs-janne_complex.sh`) — a trivial integer WCET
 benchmark (nested data-dependent loops). It is fully self-contained: integer
 only, includes only `support.h`, and its upstream `verify_benchmark` returns
 `r == 1` (which `complex()` always yields), so it needs no soft-float, no libm,
