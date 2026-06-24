@@ -47,4 +47,6 @@ size_t strlen(const char *s);
 char *strcpy(char *d, const char *s);
 int strcmp(const char *a, const char *b);
 
+double sqrt(double x);
+
 #endif /* RV8_CAPSTONE_PREAMBLE_H */
