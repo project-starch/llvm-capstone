@@ -279,6 +279,13 @@ The `sub i128` pointer-difference backend blocker is also fixed and validated:
 subtracting the XLEN cursor values, and sign-extending the integer result back
 through the `i128` carrier when needed. `ctl-string` is the proof benchmark.
 
+Stack-passed capability arguments are fixed: a function with >8 args whose extra
+args are pointers had its stack-slot address computed with an integer `ISD::ADD`
+(→ `addi`, tag-stripping), delivering the callee an untagged capability.
+`CapstoneTargetLowering::LowerCall` now uses a capability `CIncOffset` for the
+slot address (test `stack-cap-arg.ll`; repro `tests/runtime-qemu/stack-cap-arg-repro/`).
+This unblocked RV8 `norx` and is the same class as the `va_list` fix.
+
 The i128 non-vector-shift assertion (Bug #3) is fixed (`lowerScalarI128Shift`
 general constant-shift fallback). **Capability globals are now auto-tagged**: the
 `CapstoneCapGlobalInit` ModulePass synthesizes a per-module `__capstone_cap_init`

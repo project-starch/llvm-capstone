@@ -1,5 +1,12 @@
 # Stack-passed capability argument repro (backend ABI bug)
 
+**Status: FIXED (2026-06-24).** `CapstoneTargetLowering::LowerCall` now derives
+the outgoing stack-argument slot address with a capability `CIncOffset` (using the
+alloca/capability pointer type) instead of an integer `ISD::ADD`, so stack-passed
+capability arguments keep their tag. Regression test:
+`llvm/test/CodeGen/Capstone/stack-cap-arg.ll`. This domain returns
+`BEEBS_RET_CORRECT` and RV8 `norx` now passes. Kept as a runtime repro.
+
 ## Symptom
 
 A function with more than 8 arguments whose 9th+ arguments are pointers

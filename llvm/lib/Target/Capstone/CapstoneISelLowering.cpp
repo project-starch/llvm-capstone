@@ -24427,12 +24427,18 @@ SDValue CapstoneTargetLowering::LowerCall(CallLoweringInfo &CLI,
       assert(!IsTailCall && "Tail call not allowed if stack is used "
                             "for passing parameters");
 
-      // Work out the address of the stack slot.
+      // Work out the address of the stack slot.  The stack pointer is a
+      // capability (alloca address space), so the slot address must be derived
+      // with a capability-preserving offset (CIncOffset), not an integer ADD:
+      // an integer add strips the tag, which would leave a stack-passed
+      // capability argument untagged and fault in the callee on first use.
+      EVT CapPtrVT = getPointerTy(DAG.getDataLayout(),
+                                  DAG.getDataLayout().getAllocaAddrSpace());
       if (!StackPtr.getNode())
-        StackPtr = DAG.getCopyFromReg(Chain, DL, Capstone::X2, PtrVT);
+        StackPtr = DAG.getCopyFromReg(Chain, DL, Capstone::X2, CapPtrVT);
       SDValue Address =
-          DAG.getNode(ISD::ADD, DL, PtrVT, StackPtr,
-                      DAG.getIntPtrConstant(VA.getLocMemOffset(), DL));
+          DAG.getNode(CapstoneISD::CIncOffset, DL, CapPtrVT, StackPtr,
+                      DAG.getConstant(VA.getLocMemOffset(), DL, XLenVT));
 
       // Emit the store.
       MemOpChains.push_back(
