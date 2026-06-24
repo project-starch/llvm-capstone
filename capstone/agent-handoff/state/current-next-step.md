@@ -1,6 +1,23 @@
 # Current recommended next step
 
-## Current BEEBS milestone - 82 benchmarks validated (suite effectively complete)
+## RV8 suite started (3rd of 3: CoreMark ✓, BEEBS ✓, RV8 in progress)
+
+The RV8 benchmark suite (`https://github.com/michaeljclark/rv8-bench`) is stood up
+under `capstone/benchmarks/rv8/` (split layout like CoreMark: `fetch-rv8.sh` →
+`/tmp/capstone/rv8-src`, pinned commit; no submodule). Shared adapted runtime:
+`adapted/rv8_capstone_preamble.h`, `rv8_malloc.c` (16-aligned bump allocator),
+`rv8_stubs.c` (no-op gettimeofday/printf/exit), reusing the BEEBS freestanding
+libc + `beebs_simple_domain.c` harness.
+
+**`dhrystone` PASSES** (`run-rv8-dhrystone.sh` → `__RV8_DHRYSTONE_PASSED__`):
+upstream `dhrystone.c` built with hosted includes stripped + `-include` preamble,
+`LOOPS` pinned to 100000, hosted calls stubbed; adapted oracle checks the
+canonical Dhrystone end-state self-check. **Next:** the remaining RV8 benchmarks
+in increasing difficulty — `qsort`, `sha512`/`aes`/`norx` (fixed-vector crypto),
+`primes` (needs `sqrt` + reduced sieve), `miniz` (largest memory), then `bigint`
+(C++, deferred). See `capstone/benchmarks/rv8/README.md`.
+
+## Current BEEBS milestone - 82 benchmarks validated (suite complete)
 
 ### Recent backend work (2026-06-24): Bug #3 fixed; capability globals tagged
 
