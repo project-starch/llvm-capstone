@@ -42,7 +42,12 @@ void *realloc(void *p, size_t n) {
   if (!np)
     return NULL;
   size_t copy = old < n ? old : n;
-  memcpy(np, p, copy);
+  /* Inline byte copy so this allocator stays self-contained (no dependency on
+     the string lib, which not every benchmark build links). */
+  char *d = (char *)np;
+  const char *s = (const char *)p;
+  for (size_t i = 0; i < copy; i++)
+    d[i] = s[i];
   return np;
 }
 
