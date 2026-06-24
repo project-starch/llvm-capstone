@@ -20,6 +20,10 @@ typedef unsigned long size_t;
 #define NULL ((void *)0)
 #endif
 
+#ifndef assert
+#define assert(x) ((void)0)
+#endif
+
 struct timeval {
   long tv_sec;
   long tv_usec;
