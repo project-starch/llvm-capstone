@@ -9,13 +9,15 @@ under `capstone/benchmarks/rv8/` (split layout like CoreMark: `fetch-rv8.sh` →
 `rv8_stubs.c` (no-op gettimeofday/printf/exit), reusing the BEEBS freestanding
 libc + `beebs_simple_domain.c` harness.
 
-**`dhrystone` PASSES** (`run-rv8-dhrystone.sh` → `__RV8_DHRYSTONE_PASSED__`):
-upstream `dhrystone.c` built with hosted includes stripped + `-include` preamble,
-`LOOPS` pinned to 100000, hosted calls stubbed; adapted oracle checks the
-canonical Dhrystone end-state self-check. **Next:** the remaining RV8 benchmarks
-in increasing difficulty — `qsort`, `sha512`/`aes`/`norx` (fixed-vector crypto),
-`primes` (needs `sqrt` + reduced sieve), `miniz` (largest memory), then `bigint`
-(C++, deferred). See `capstone/benchmarks/rv8/README.md`.
+**All 7 RV8 C benchmarks PASS**: dhrystone, qsort, sha512, aes, primes, norx,
+miniz (`run-rv8-<name>.sh` → `__RV8_<NAME>_PASSED__`). Each adapts the hosted
+program to the domain (strip hosted includes + `-include` preamble, stub
+gettimeofday/printf/exit, 16-aligned bump `malloc` with size-tracking `realloc`,
+reduce workloads, self-contained oracles). norx required a **backend fix**
+(stack-passed capability args delivered untagged — see backend-work note above).
+miniz reduced to core compress/uncompress with an enlarged arena. **Only
+`bigint` (C++) remains** — needs a C++ runtime/ABI assessment (no C++ runtime on
+the domain yet). See `capstone/benchmarks/rv8/README.md`.
 
 ## Current BEEBS milestone - 82 benchmarks validated (suite complete)
 

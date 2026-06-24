@@ -44,7 +44,9 @@ model — no stdio, bounded runtime-provided memory, result via an oracle — by
 | aes | **PASS** | `run-rv8-aes.sh` → `__RV8_AES_PASSED__`. Standard Rijndael; small malloc'd round-key context only. Oracle = FIPS-197 AES-128 known-answer (key `00..0F`, pt `0011..FF` → ct `69C4E0D8..C55A`) **and** encrypt/decrypt round-trip. Self-contained. |
 | norx | **PASS** | `run-rv8-norx.sh` → `__RV8_NORX_PASSED__`. NORX32 AEAD; oracle = decrypt round-trip + ciphertext-transformed over small static buffers. Required a **backend fix**: `cf_norx32_encrypt` has 10 args so `ciphertext`/`tag` are stack-passed capabilities, which `LowerCall` was delivering untagged (it computed the stack-slot address with an integer `ISD::ADD`/`addi` instead of a capability `CIncOffset`). Fixed in `CapstoneISelLowering::LowerCall`; root cause + minimal repro: `capstone/tests/runtime-qemu/stack-cap-arg-repro/`; lit `stack-cap-arg.ll`. |
 | primes | **PASS** | `run-rv8-primes.sh` → `__RV8_PRIMES_PASSED__`. Sieve of Eratosthenes; build reduces the limit 33,333,333 → 100000 (~12.5 KB sieve fits the bump arena), turns `main()` into a value-returning `rv8_primes_run()`, and fixes a latent UB (`1 << (p&0x3f)` 32-bit int shifted up to 63 → `1ull <<`). Oracle = largest prime ≤ 100000 == 99991 (independently well-known). Uses shared libm `sqrt` + soft-float builtins (`fixunsdfdi`/`fixunsdfsi` added). |
-| miniz | TODO | Heaviest: deflate compress/decompress with large buffers — shrink workload + round-trip checksum oracle. |
+| miniz | **PASS** | `run-rv8-miniz.sh` → `__RV8_MINIZ_PASSED__`. Reduced to core zlib-style compress/uncompress (`-DMINIZ_NO_STDIO -DMINIZ_NO_ARCHIVE_APIS -DMINIZ_NO_TIME`). Oracle = compress→decompress round-trip == original **and** `cmp_len < src_len` (real compression). miniz allocates a ~200 KB `tdefl_compressor` internally, so the bump arena is enlarged (`-DRV8_HEAP_SIZE=1MB`) and gained a size-tracking `realloc`. |
+
+**All 7 RV8 C benchmarks pass** (dhrystone, qsort, sha512, aes, primes, norx, miniz). Only `bigint` (C++) remains.
 | bigint | DEFERRED | C++ — needs C++ runtime/ABI assessment. |
 
 ## Run

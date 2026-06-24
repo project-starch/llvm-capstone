@@ -38,6 +38,7 @@ int printf(const char *fmt, ...);
 void exit(int code);
 
 void *malloc(size_t n);
+void *realloc(void *p, size_t n);
 void free(void *p);
 
 void *memcpy(void *d, const void *s, size_t n);
