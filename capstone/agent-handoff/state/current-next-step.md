@@ -50,6 +50,16 @@ unaffected. Decision + implementation:
 `static-cap-global-init.ll`. (Multi-module offset-table generalization is a
 documented follow-on; not needed for single-module domains.)
 
+Multi-module update (2026-06-24): the per-module `__capstone_cap_init` + GCT
+markers were strong symbols that collided in multi-module links (regressed
+CoreMark: duplicate-symbol link error). Fixed by making each initializer
+**internal** and registering it via a **PC-relative `.capstone_cap_init` offset
+table** (`emitCapGlobalInitTableEntry`) that `start.S` iterates before
+`domain_main` (absolute `.init_array` is unusable — the domain processes no
+load-time relocations). GCT begin/end markers made weak. **CoreMark links + runs
+again** ("Correct operation validated"); repro / RV8 7/7 / BEEBS `bs` / 29 lit
+all green. Details: `design/capability-globals-init-decision.md`.
+
 This resolved `dtoa` **blocker #1** (untagged `nums[]`). `dtoa` is now
 **RESOLVED** end-to-end (`run-beebs-dtoa.sh` → `__BEEBS_DTOA_PASSED__`, oracle
 267945, upstream `benchmark`/`verify` unchanged): blocker #2 (arena 16-byte
