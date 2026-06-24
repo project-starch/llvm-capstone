@@ -16,8 +16,13 @@ gettimeofday/printf/exit, 16-aligned bump `malloc` with size-tracking `realloc`,
 reduce workloads, self-contained oracles). norx required a **backend fix**
 (stack-passed capability args delivered untagged — see backend-work note above).
 miniz reduced to core compress/uncompress with an enlarged arena. **Only
-`bigint` (C++) remains** — needs a C++ runtime/ABI assessment (no C++ runtime on
-the domain yet). See `capstone/benchmarks/rv8/README.md`.
+`bigint` (C++) remains, deferred** — assessed (2026-06-24) as a full "C++ on the
+domain" bring-up, not a benchmark adaptation: (1) no C++ STL for capstone64
+(`<vector>`/`<string>`/`<iostream>` absent; bigint's `Nat` is `std::vector`-backed
++ `std::cout`); (2) the backend crashes on `new <type>` expressions (`APInt::zext`
+assertion; repro `capstone/tests/cxx-new-expr-crash.cc`). See
+`capstone/benchmarks/rv8/README.md`. So the three benchmark suites (CoreMark,
+BEEBS, RV8) are complete for C; SQLite / real software is the next stage.
 
 ## Current BEEBS milestone - 82 benchmarks validated (suite complete)
 

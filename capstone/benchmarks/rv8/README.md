@@ -47,7 +47,7 @@ model — no stdio, bounded runtime-provided memory, result via an oracle — by
 | miniz | **PASS** | `run-rv8-miniz.sh` → `__RV8_MINIZ_PASSED__`. Reduced to core zlib-style compress/uncompress (`-DMINIZ_NO_STDIO -DMINIZ_NO_ARCHIVE_APIS -DMINIZ_NO_TIME`). Oracle = compress→decompress round-trip == original **and** `cmp_len < src_len` (real compression). miniz allocates a ~200 KB `tdefl_compressor` internally, so the bump arena is enlarged (`-DRV8_HEAP_SIZE=1MB`) and gained a size-tracking `realloc`. |
 
 **All 7 RV8 C benchmarks pass** (dhrystone, qsort, sha512, aes, primes, norx, miniz). Only `bigint` (C++) remains.
-| bigint | DEFERRED | C++ — needs C++ runtime/ABI assessment. |
+| bigint | **DEFERRED (assessed)** | C++. Two hard blockers, both a full "C++ on the domain" bring-up: (1) **no C++ standard library** for capstone64 — `<vector>`/`<string>`/`<iostream>` not found, and bigint's core `Nat` is `std::vector`-backed and prints via `std::cout`; (2) the backend **crashes on `new <type>` expressions** (`APInt::zext` assertion) — minimal repro `capstone/tests/cxx-new-expr-crash.cc` (plain C++ and raw `operator new` calls are fine; only the new-expression's size/pointer-width lowering for 128-bit capabilities crashes). Not a benchmark adaptation; out of scope until C++ runtime support exists. |
 
 ## Run
 
