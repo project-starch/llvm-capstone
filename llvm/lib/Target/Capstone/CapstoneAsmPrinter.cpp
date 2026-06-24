@@ -124,6 +124,7 @@ public:
 
 private:
   void emitStaticCapGCTSection(const Module &M);
+  void emitCapGlobalInitTableEntry(const Module &M);
   void emitAttributes(const MCSubtargetInfo &SubtargetInfo);
 
   void emitNTLHint(const MachineInstr *MI);
@@ -753,6 +754,33 @@ void CapstoneAsmPrinter::emitEndOfAsmFile(Module &M) {
   }
   EmitHwasanMemaccessSymbols(M);
   emitStaticCapGCTSection(M);
+  emitCapGlobalInitTableEntry(M);
+}
+
+// If this module has a capability-global initializer (synthesized by the
+// CapstoneCapGlobalInit pass), emit one entry into the `.capstone_cap_init`
+// table: the PC-relative offset from the entry to the initializer. start.S
+// iterates the (linker-concatenated) table before domain_main and calls each
+// initializer at entry_runtime_addr + offset. Absolute function addresses can't
+// be used because the domain is loaded at a runtime base and processes no
+// load-time relocations; the `initfn - entry` difference is position-independent.
+void CapstoneAsmPrinter::emitCapGlobalInitTableEntry(const Module &M) {
+  if (!TM.getTargetTriple().isOSBinFormatELF())
+    return;
+  const Function *InitFn = M.getFunction("__capstone_cap_init");
+  if (!InitFn || InitFn->isDeclaration())
+    return;
+
+  MCSection *Sec = OutContext.getELFSection(".capstone_cap_init",
+                                            ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
+  OutStreamer->switchSection(Sec);
+  OutStreamer->emitValueToAlignment(Align(8));
+  MCSymbol *EntryLabel = OutContext.createTempSymbol("capstone_cap_init_entry");
+  OutStreamer->emitLabel(EntryLabel);
+  const MCExpr *Diff = MCBinaryExpr::createSub(
+      MCSymbolRefExpr::create(getSymbol(InitFn), OutContext),
+      MCSymbolRefExpr::create(EntryLabel, OutContext), OutContext);
+  OutStreamer->emitValue(Diff, /*Size=*/8);
 }
 
 void CapstoneAsmPrinter::emitStaticCapGCTSection(const Module &M) {
@@ -781,8 +809,13 @@ void CapstoneAsmPrinter::emitStaticCapGCTSection(const Module &M) {
   MCSymbol *GCTEnd = OutContext.getOrCreateSymbol("__llvm_static_cap_gct_end");
   OutStreamer->switchSection(GCTSection);
   OutStreamer->emitValueToAlignment(Align(16));
-  OutStreamer->emitSymbolAttribute(GCTBegin, MCSA_Global);
-  OutStreamer->emitSymbolAttribute(GCTEnd, MCSA_Global);
+  // Weak, not global: in a multi-module link more than one object may emit a
+  // .gct section, and global begin/end markers would collide. The .gct metadata
+  // is no longer the runtime consumer of record (capability globals are
+  // materialized via the CapstoneCapGlobalInit constructor pass), so weak
+  // markers bounding one object's records are sufficient for inspection.
+  OutStreamer->emitSymbolAttribute(GCTBegin, MCSA_Weak);
+  OutStreamer->emitSymbolAttribute(GCTEnd, MCSA_Weak);
   OutStreamer->emitLabel(GCTBegin);
 
   OutStreamer->emitIntValue(StaticCapMetadataMagic, 4);

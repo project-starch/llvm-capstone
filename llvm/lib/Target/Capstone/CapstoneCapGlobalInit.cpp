@@ -136,13 +136,17 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
   if (Items.empty())
     return false;
 
-  // Synthesize (or reuse) `void __capstone_cap_init(void)` in the program
-  // address space, matching ordinary Capstone functions, and emit the stores.
+  // Synthesize `void __capstone_cap_init(void)` in the program address space
+  // (matching ordinary Capstone functions) and emit the stores. It is given
+  // *internal* linkage and registered in llvm.global_ctors rather than exported
+  // under a fixed name: a fixed external name would collide at link time when
+  // more than one object in a multi-module program has capability globals (e.g.
+  // CoreMark). The domain runtime (start.S) runs the .init_array entries (one
+  // per such module) before domain_main.
   unsigned ProgAS = M.getDataLayout().getProgramAddressSpace();
   FunctionType *FTy = FunctionType::get(Type::getVoidTy(Ctx), /*isVarArg=*/false);
-  Function *InitFn = Function::Create(FTy, GlobalValue::ExternalLinkage, ProgAS,
+  Function *InitFn = Function::Create(FTy, GlobalValue::InternalLinkage, ProgAS,
                                       "__capstone_cap_init", &M);
-  InitFn->setVisibility(GlobalValue::DefaultVisibility);
 
   BasicBlock *BB = BasicBlock::Create(Ctx, "entry", InitFn);
   IRBuilder<> B(BB);
@@ -156,6 +160,13 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
   }
   B.CreateRetVoid();
 
+  // The init function is internal (no cross-module name collision). The
+  // AsmPrinter emits a PC-relative entry for it into the `.capstone_cap_init`
+  // table (one per module with capability globals), which start.S runs before
+  // domain_main. A standard .init_array of absolute function addresses cannot be
+  // used: the domain is loaded at a runtime base and processes no load-time
+  // relocations, so absolute (link-time) addresses are stale; the table stores
+  // `initfn - entry` offsets, which are position-independent.
   return true;
 }
 

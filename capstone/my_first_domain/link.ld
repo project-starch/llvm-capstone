@@ -22,6 +22,17 @@ SECTIONS {
     *(.data .data.*)
   } :domain
 
+  /* Capability-global initializer table (one 8-byte PC-relative entry per
+     module with capability globals): each entry = (initfn - entry). start.S
+     iterates [start,end) before domain_main and calls each initializer at
+     entry_runtime + offset. Position-independent (the domain processes no
+     load-time relocations). Empty (start == end) for domains with none. */
+  .capstone_cap_init : ALIGN(8) {
+    __capstone_cap_init_start = .;
+    KEEP(*(.capstone_cap_init))
+    __capstone_cap_init_end = .;
+  } :domain
+
   .bss (NOLOAD) : ALIGN(16) {
     *(.sbss .sbss.*)
     *(.bss .bss.*)

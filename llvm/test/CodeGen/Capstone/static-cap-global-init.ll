@@ -4,8 +4,13 @@
 ; CapstoneCapGlobalInit pass synthesizes a per-module __capstone_cap_init that
 ; stores each element at runtime; normal isel lowers the store to a tagged
 ; capability store (stc) derived from the global root (cincoffset gp / delin),
-; materializing the global in place. start.S calls __capstone_cap_init before
-; domain_main. See capstone/agent-handoff/design/capability-globals-init-decision.md.
+; materializing the global in place. The init function has internal linkage (no
+; cross-module collision) and is registered via a PC-relative entry in the
+; .capstone_cap_init table; start.S iterates that table before domain_main. (A
+; fixed external name and a standard .init_array of absolute addresses both fail
+; in multi-module domains -- the former collides, the latter is stale because the
+; domain processes no load-time relocations.)
+; See capstone/agent-handoff/design/capability-globals-init-decision.md.
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m < %s | FileCheck %s
 
@@ -31,6 +36,12 @@ target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S
 ; CHECK: delin a1
 ; CHECK: stc a1, 16(a0)
 ; CHECK: cjalr zero, 0(ra)
+
+; A PC-relative table entry registers the (internal) initializer for start.S to
+; run -- an offset (initfn - entry), not an absolute/colliding address.
+; CHECK: .section .capstone_cap_init
+; CHECK: [[E:.Lcapstone_cap_init_entry[0-9]+]]:
+; CHECK-NEXT: .quad __capstone_cap_init-[[E]]
 
 define ptr addrspace(200) @get(i64 %i) addrspace(200) {
   %p = getelementptr [2 x ptr addrspace(200)], ptr addrspace(200) @tab, i64 0, i64 %i

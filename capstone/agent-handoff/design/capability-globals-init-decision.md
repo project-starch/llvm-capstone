@@ -88,10 +88,18 @@ rather than a runtime `.gct` walker.
    lowers each store to a tagged capability store (`cincoffset gp` + `delin` +
    `stc`). Intrinsic/metadata globals (appending linkage, `llvm.*`,
    `llvm.metadata`) and thread-locals are skipped.
-2. **Wiring** — `capstone/my_first_domain/start.S` calls `__capstone_cap_init`
-   before `domain_main` (same `auipc`/`cincoffset gp`/cjalr pattern). A **weak
-   no-op** `__capstone_cap_init` in `start.S` is used when a domain has no
-   capability globals; the compiler-emitted **strong** symbol overrides it.
+2. **Wiring (multi-module safe)** — each module's `__capstone_cap_init` has
+   **internal** linkage (no cross-module collision) and the AsmPrinter emits a
+   **PC-relative entry** `.quad __capstone_cap_init - entry` into a
+   `.capstone_cap_init` table (`CapstoneAsmPrinter::emitCapGlobalInitTableEntry`).
+   `link.ld` bounds the linker-concatenated table (`__capstone_cap_init_start/_end`);
+   `capstone/my_first_domain/start.S` iterates it before `domain_main`, computing
+   each initializer's runtime address as `entry_runtime + offset` and calling it
+   via `cincoffset gp`. PC-relative offsets are required because the domain is
+   loaded at a runtime base and processes **no load-time relocations**, so a
+   standard `.init_array` of absolute addresses is stale; a fixed external
+   `__capstone_cap_init` symbol would also collide across modules (CoreMark).
+   Empty table (no capability globals) ⇒ no-op.
 3. **Test** — `llvm/test/CodeGen/Capstone/static-cap-global-init.ll`; the runtime
    acceptance suite `tests/runtime-qemu/static-cap-typed-load-repro/` (the three
    previously-faulting `fail_*` cases now succeed unchanged: 111 / 111 /
@@ -104,10 +112,13 @@ rather than a runtime `.gct` walker.
   bytes are harmless (overwritten before first use). This keeps the AsmPrinter
   `.gct` emission unchanged (it still reads the real initializer), so the GCT
   metadata and its existing consumer tests are untouched.
-- **Weak default in `start.S` (not "always emit from compiler").** Always
-  emitting `__capstone_cap_init` from every module would collide at link in
-  multi-module domains; the weak-default + strong-override avoids that for the
-  common (single cap-global module) case.
+- **Internal init + PC-relative offset table (not a fixed symbol or `.init_array`).**
+  A fixed external `__capstone_cap_init` collides across modules; a standard
+  `.init_array` of absolute function addresses is stale under the domain's
+  no-load-time-relocation model. The internal-function + `(initfn - entry)`
+  offset table is both collision-free and position-independent. (Validated on
+  multi-module CoreMark, which previously regressed to a duplicate-symbol link
+  error.)
 - **Const placement (former Stage 3) is moot on the domain.** A `const` capability
   table goes to `.rodata`, but the domain maps `.rodata` writable at runtime, so
   the in-place `stc` succeeds (proven: the `const`-qualified `fail_str_*` cases
@@ -115,13 +126,10 @@ rather than a runtime `.gct` walker.
 
 ## Remaining work
 
-- **Multi-module**: if capability globals live in >1 linked object, the two
-  strong `__capstone_cap_init` definitions collide. Generalize to a PC-relative
-  **offset table** (`.capstone_init`, KEEP'd, bounded by `__capstone_init_*`)
-  with `start.S` iterating it. Not needed for current single-module domains
-  (incl. `dtoa nums[]`).
-- **Hosted**: a hosted crt must call `__capstone_cap_init` (only `start.S` does
-  today); harmless dead symbol otherwise.
+- **Multi-module**: DONE — internal init + PC-relative `.capstone_cap_init`
+  offset table iterated by `start.S` (validated on CoreMark, RV8, BEEBS).
+- **Hosted**: a hosted crt would need to iterate the same table (only the domain
+  `start.S` does today); harmless otherwise.
 
 ## Important caveat
 

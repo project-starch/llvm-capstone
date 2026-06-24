@@ -44,18 +44,38 @@ test:
   sd a0, 64(sp)
   stc(a1, sp, 80)
 
-  # Materialize capability globals in place before domain_main: a capability tag
-  # cannot live in the static image, so initialized capability globals (pointer
-  # tables, string tables) load untagged.  The compiler synthesizes a strong
-  # __capstone_cap_init that stores them with tags at runtime; the weak no-op
-  # default below is used when a domain has none.  Args a0/a1 are saved on the
-  # stack above and reloaded for domain_main below; gp (the data/code root) is
-  # callee-preserved.
-  .Lpcrel_hi_cap_init:
-  auipc t0, %pcrel_hi(__capstone_cap_init)
-  addi t0, t0, %pcrel_lo(.Lpcrel_hi_cap_init)
-  cincoffset t0, gp, t0
-  .insn i 0x5b, 0x5, ra, 0(t0)
+  # Run capability-global initializers before domain_main. A capability tag
+  # cannot live in the static image, so initialized capability globals (pointer/
+  # string/function tables) load untagged; the compiler emits one initializer per
+  # such module plus a PC-relative entry in the .capstone_cap_init table (each
+  # entry = initfn - entry). The domain is loaded at a runtime base and processes
+  # no load-time relocations, so we resolve each initializer's runtime address as
+  # entry_runtime + offset and derive a code capability via cincoffset gp. The
+  # current/end table addresses are kept in the frame across calls (initializers
+  # clobber t/a regs but preserve gp/sp); a0/a1 are reloaded for domain_main
+  # below. Empty table (start == end) is a no-op.
+  .Lpcrel_init_start:
+  auipc t0, %pcrel_hi(__capstone_cap_init_start)
+  addi t0, t0, %pcrel_lo(.Lpcrel_init_start)
+  sd t0, 0(sp)
+  .Lpcrel_init_end:
+  auipc t1, %pcrel_hi(__capstone_cap_init_end)
+  addi t1, t1, %pcrel_lo(.Lpcrel_init_end)
+  sd t1, 8(sp)
+.Lcap_init_loop:
+  ld t0, 0(sp)
+  ld t1, 8(sp)
+  bgeu t0, t1, .Lcap_init_done
+  cincoffset t2, gp, t0          # cap to current table entry
+  ld t3, 0(t2)                   # t3 = initfn - entry (link-time relative)
+  add t3, t0, t3                 # target_runtime = entry_runtime + offset
+  cincoffset t2, gp, t3          # code capability to the initializer
+  .insn i 0x5b, 0x5, ra, 0(t2)   # call it
+  ld t0, 0(sp)
+  addi t0, t0, 8                 # next 8-byte entry
+  sd t0, 0(sp)
+  j .Lcap_init_loop
+.Lcap_init_done:
 
   # Call ordinary C compiled by our clang.
   ldc(a0, sp, 80)
@@ -112,15 +132,6 @@ test:
 
 .Ltest_ret:
   j .Ltest_ret
-
-# Weak no-op default for __capstone_cap_init: linked when a domain has no
-# capability globals.  When the compiler emits capability-global initialization,
-# its strong __capstone_cap_init overrides this (weak < strong at link time).
-.text
-  .weak __capstone_cap_init
-  .type __capstone_cap_init, @function
-__capstone_cap_init:
-  cjalr zero, 0(ra)
 
   .align 4
   .section .gct
