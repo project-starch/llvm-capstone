@@ -42,7 +42,8 @@ model — no stdio, bounded runtime-provided memory, result via an oracle — by
 | qsort | **PASS** | `run-rv8-qsort.sh` → `__RV8_QSORT_PASSED__`. Upstream ships its own in-place BSD qsort; main()'s 200 MB array replaced by a static `int[8192]` filled with the same recurrence. Oracle: sorted non-decreasing **and** element-sum preserved (permutation invariant) — self-contained. |
 | sha512 | **PASS** | `run-rv8-sha512.sh` → `__RV8_SHA512_PASSED__`. Self-contained SHA-512 (no malloc); kept `<stdint.h>` (freestanding), stubbed `assert`. Rounds reduced to 1000 (×64 zero bytes); oracle = the 64-byte digest vs a native gcc reference for the same input. |
 | aes | **PASS** | `run-rv8-aes.sh` → `__RV8_AES_PASSED__`. Standard Rijndael; small malloc'd round-key context only. Oracle = FIPS-197 AES-128 known-answer (key `00..0F`, pt `0011..FF` → ct `69C4E0D8..C55A`) **and** encrypt/decrypt round-trip. Self-contained. |
-| norx, primes, miniz | TODO | `primes`/`miniz` need workload shrink (domain memory); `primes` needs `sqrt` (shared libm). `norx` → known fixed-vector ciphertext. |
+| norx | **BLOCKED** | Builds (scaffolding present: `build-rv8-norx-*.sh`, `run-rv8-norx.sh`, `adapted/rv8_norx_tail.c`; oracle = round-trip + ciphertext-transformed). Runtime **capability-tag fault** (`Cap mem access requires capability`) in the AEAD body path — `do_header`/`do_trailer` guard on `nbuf` so the NULL header is not the cause. Leading suspect: the stack struct `blockctx { norx32_ctx *ctx; uint32_t type; }` (a capability-containing local passed by pointer to the blockwise callback) being under-aligned for its capability field. Needs a focused QEMU-trace diagnosis (like the dtoa blocker-#1 investigation); may be a backend stack-alignment fix for cap-containing structs. |
+| primes, miniz | TODO | `primes`/`miniz` need workload shrink (domain memory); `primes` needs `sqrt` (shared libm). |
 | bigint | DEFERRED | C++ — needs C++ runtime/ABI assessment. |
 
 ## Run

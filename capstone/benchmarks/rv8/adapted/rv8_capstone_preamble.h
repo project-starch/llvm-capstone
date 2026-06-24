@@ -24,6 +24,10 @@ typedef unsigned long size_t;
 #define assert(x) ((void)0)
 #endif
 
+#ifndef bzero
+#define bzero(s, n) ((void)memset((s), 0, (n)))
+#endif
+
 struct timeval {
   long tv_sec;
   long tv_usec;
@@ -38,6 +42,7 @@ void free(void *p);
 
 void *memcpy(void *d, const void *s, size_t n);
 void *memset(void *s, int c, size_t n);
+int memcmp(const void *a, const void *b, size_t n);
 size_t strlen(const char *s);
 char *strcpy(char *d, const char *s);
 int strcmp(const char *a, const char *b);

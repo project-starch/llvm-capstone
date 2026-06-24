@@ -50,6 +50,15 @@ void *memset(void *dst, int c, bsize_t n) {
   return dst;
 }
 
+int memcmp(const void *a, const void *b, bsize_t n) {
+  const unsigned char *x = (const unsigned char *)a;
+  const unsigned char *y = (const unsigned char *)b;
+  for (bsize_t i = 0; i < n; i++)
+    if (x[i] != y[i])
+      return (int)x[i] - (int)y[i];
+  return 0;
+}
+
 bsize_t strlen(const char *s) {
   const char *p = s;
   while (*p)
