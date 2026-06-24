@@ -41,7 +41,8 @@ model — no stdio, bounded runtime-provided memory, result via an oracle — by
 | dhrystone | **PASS** | `run-rv8-dhrystone.sh` → `__RV8_DHRYSTONE_PASSED__`. LOOPS pinned to 100000; oracle = canonical Dhrystone end-state self-check (`IntGlob==5`, `BoolGlob==1`, `Char1Glob=='A'`, `Char2Glob=='B'`, `Array1Glob[8]==7`, `Array2Glob[8][7]==LOOPS+10`). Self-contained, confirmed against a native gcc reference. |
 | qsort | **PASS** | `run-rv8-qsort.sh` → `__RV8_QSORT_PASSED__`. Upstream ships its own in-place BSD qsort; main()'s 200 MB array replaced by a static `int[8192]` filled with the same recurrence. Oracle: sorted non-decreasing **and** element-sum preserved (permutation invariant) — self-contained. |
 | sha512 | **PASS** | `run-rv8-sha512.sh` → `__RV8_SHA512_PASSED__`. Self-contained SHA-512 (no malloc); kept `<stdint.h>` (freestanding), stubbed `assert`. Rounds reduced to 1000 (×64 zero bytes); oracle = the 64-byte digest vs a native gcc reference for the same input. |
-| aes, norx, primes, miniz | TODO | Increasing difficulty; `primes`/`miniz` need workload shrink (domain memory). `primes` needs `sqrt` (shared libm). crypto (`aes`/`norx`) → known fixed-vector ciphertext. |
+| aes | **PASS** | `run-rv8-aes.sh` → `__RV8_AES_PASSED__`. Standard Rijndael; small malloc'd round-key context only. Oracle = FIPS-197 AES-128 known-answer (key `00..0F`, pt `0011..FF` → ct `69C4E0D8..C55A`) **and** encrypt/decrypt round-trip. Self-contained. |
+| norx, primes, miniz | TODO | `primes`/`miniz` need workload shrink (domain memory); `primes` needs `sqrt` (shared libm). `norx` → known fixed-vector ciphertext. |
 | bigint | DEFERRED | C++ — needs C++ runtime/ABI assessment. |
 
 ## Run
