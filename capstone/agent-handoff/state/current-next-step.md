@@ -1,6 +1,36 @@
 # Current recommended next step
 
-## RV8 suite started (3rd of 3: CoreMark ✓, BEEBS ✓, RV8 in progress)
+## Active track: capability granularity + provenance (the paper, C1/C2)
+
+The three benchmark suites are **complete** (CoreMark ✓, BEEBS 82/82 ✓, RV8 7/7 ✓;
+only C++ `bigint` deferred). Work has pivoted to the first paper's security
+contributions. Status + where things are: `state/current-state.md` (the C1/C2
+section) and the design docs below.
+
+- **C1 granularity — implemented & validated.** Object-granularity `SHRINK` for
+  **globals** (`-capstone-shrink-globals`, default on) and **heap** (`malloc`
+  `cap_shrink`, default on); **stack** is a gated spike (`-capstone-shrink-stack`,
+  default off, whole-object only). Evidence + tests:
+  `capstone/tests/capstone-authority/` (12/12) and lit `cap-shrink-{globals,stack}.ll`.
+  Design: `design/capability-bounds-model.md`.
+- **C2 provenance verifier — PROPOSED, awaiting PI review.** A MIR dataflow checker
+  that no integer can become authority. **Do not implement until the PI sign-off** —
+  see `design/c2-provenance-verifier-proposal.md` (ends with open framing questions).
+
+**Recommended next step:** review/agree the C2 proposal with the PI, then implement
+it as the paper's lead contribution. Smaller "needed anyway" work available
+meanwhile: finish heap narrowing in the BEEBS `dtoa`/`trio` allocators (C1
+uniformity); correct the falsified claims in `pi-discussion-…` (Q7/Q8) and
+`capability-provenance-threat-model.md` (T3) to match the measured
+segment-granular / SPLIT-exists / SHRINK-now-emitted reality; or move stack-shrink
+toward default-on (interior-pointer/varargs/`-O2` validation).
+
+The earlier benchmark milestones (RV8, BEEBS, backend fixes) are retained below as
+reference/history.
+
+---
+
+## RV8 suite — complete (3rd of 3: CoreMark ✓, BEEBS ✓, RV8 ✓)
 
 The RV8 benchmark suite (`https://github.com/michaeljclark/rv8-bench`) is stood up
 under `capstone/benchmarks/rv8/` (split layout like CoreMark: `fetch-rv8.sh` →
@@ -41,14 +71,15 @@ loaded **untagged** and faulted on first use. New IR ModulePass
 `llvm/lib/Target/Capstone/CapstoneCapGlobalInit.cpp` synthesizes a per-module
 `__capstone_cap_init` that stores each capability-global element in place at
 runtime (isel lowers to a tagged `cincoffset gp`+`delin`+`stc`);
-`capstone/my_first_domain/start.S` calls it before `domain_main` (a weak no-op
-default covers domains with none). Validated end-to-end: the three previously
-faulting `static-cap-typed-load-repro` domains now pass unchanged (string-struct,
-array=`nums[]` shape, function-pointer); 28/28 Capstone lit tests; `bs`
-unaffected. Decision + implementation:
+each initializer has internal linkage and is registered through the
+PC-relative `.capstone_cap_init` table that
+`capstone/my_first_domain/start.S` iterates before `domain_main`. Empty tables
+are a no-op for domains with no capability globals. Validated end-to-end: the
+three previously faulting `static-cap-typed-load-repro` domains now pass
+unchanged (string-struct, array=`nums[]` shape, function-pointer); Capstone lit
+tests; `bs` unaffected. Decision + implementation:
 `capstone/agent-handoff/design/capability-globals-init-decision.md`; test
-`static-cap-global-init.ll`. (Multi-module offset-table generalization is a
-documented follow-on; not needed for single-module domains.)
+`static-cap-global-init.ll`.
 
 Multi-module update (2026-06-24): the per-module `__capstone_cap_init` + GCT
 markers were strong symbols that collided in multi-module links (regressed

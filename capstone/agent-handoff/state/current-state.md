@@ -295,6 +295,48 @@ static image. Validated via `static-cap-typed-load-repro` + lit
 `static-cap-global-init.ll`. Design:
 `design/capability-globals-init-decision.md`.
 
+## Capability granularity & provenance (C1/C2 — paper track)
+
+After the three benchmark suites completed, work pivoted to the paper's security
+contributions. Current state on `capstone-bootstrap`:
+
+- **Bounds model settled** (`design/capability-bounds-model.md`): CHERI-128-style
+  compressed bounds — precise in-register, compressed on store; **byte-exact for
+  objects < 4 KiB**, power-of-two grain above. The narrowing op is **`SHRINK`**
+  (`int_capstone_cap_shrink`); `SPLIT`/`SHRINKTO` exist in the ISA but are not
+  wired into LLVM. (Corrects older "no splitting" / "address-space-broad bounds"
+  claims — measured reality is **segment-granular**, and the domain image is a
+  single `PT_LOAD`, so the inherited bound is effectively the whole image.)
+
+- **C1 object-granularity narrowing implemented:**
+  - **Globals** — `selectLGA` (`CapstoneISelDAGToDAG.cpp`) narrows each sized data
+    global to `[&g, &g+sizeof(g))`. Flag `-capstone-shrink-globals` (**default on**);
+    functions / unsized externs not narrowed.
+  - **Heap** — `rv8_malloc.c` narrows `malloc` returns with
+    `__builtin_capstone_cap_shrink` (`realloc` recovers its header via the wide
+    arena cap). Default on.
+  - **Stack** — bare-`FrameIndex` whole-object narrowing, flag
+    `-capstone-shrink-stack` (**default off**, spike: whole-object only, not
+    interior pointers / varargs / dynamic alloca).
+  - Validation: **CoreMark ✓, RV8 7/7 ✓, BEEBS 82/82 ✓** with global+heap on;
+    stack-on smoke = CoreMark + 9 stack-heavy BEEBS ✓. Found a **real OOB bug**:
+    rijndael `aesxam.c` wrote 8 bytes through a `char r[4]` (now patched `r[8]`).
+
+- **Provenance/authority evidence suite** (`capstone/tests/capstone-authority/`,
+  `run-authority-suite.sh`): 12 domains pinning runtime behavior (source + asm +
+  QEMU trap/no-trap vs an oracle). forge/ptr→int→ptr **tag-fault**; global/heap/
+  stack `_oob` **bounds-fault**; in-bounds + functional cases ok. Runtime fact:
+  a domain-mode capability fault currently **aborts the QEMU model** (a
+  `riscv_cpu_do_interrupt` assertion) after emitting the diagnostic.
+
+- **Regression tests:** lit `cap-shrink-globals.ll`, `cap-shrink-stack.ll`
+  (on/off A/B); updated `static-cap-global-init.ll`. Full Capstone lit suite green
+  (31 tests).
+
+- **C2 (provenance verifier) — PROPOSED, not implemented:** a MIR dataflow checker
+  that no integer-origin value is used as a capability. Parked for PI review:
+  `design/c2-provenance-verifier-proposal.md`.
+
 ## Where to go next
 
 - Next milestone: `state/current-next-step.md`
