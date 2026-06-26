@@ -48,6 +48,17 @@ static cl::opt<bool> CapstoneShrinkGlobals(
              "(emit SHRINK at materialization)"),
     cl::init(true));
 
+// Granularity (C1), stack slice. When on, an address-taken whole stack object
+// (a bare FrameIndex) is narrowed to its frame-object size with SHRINK, the
+// stack analogue of -capstone-shrink-globals. Default OFF: stack narrowing is
+// the riskiest of the three (ABI, spills, interior pointers, alloca), so it is
+// opt-in pending wider validation.
+static cl::opt<bool> CapstoneShrinkStack(
+    "capstone-shrink-stack", cl::Hidden,
+    cl::desc("Narrow capabilities for address-taken whole stack objects to "
+             "their size (emit SHRINK at FrameIndex materialization)"),
+    cl::init(false));
+
 #define GET_DAGISEL_BODY CapstoneDAGToDAGISel
 #include "CapstoneGenDAGISel.inc"
 
@@ -1752,10 +1763,41 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   switch (Opcode) {
   case ISD::FrameIndex: {
     auto *FIN = cast<FrameIndexSDNode>(Node);
-    SDValue Base = CurDAG->getTargetFrameIndex(FIN->getIndex(), VT);
+    int FI = FIN->getIndex();
+    SDValue Base = CurDAG->getTargetFrameIndex(FI, VT);
     SDNode *Res = CurDAG->getMachineNode(
         Capstone::CIncOffsetImm, DL, VT, Base,
         CurDAG->getSignedTargetConstant(0, DL, MVT::i64));
+
+    // Stack object granularity (C1, gated, default off): narrow the address of
+    // a whole stack object (a bare FrameIndex) to its frame-object size. Only
+    // the whole-object address is narrowed here; interior pointers
+    // (ADD(FI,offset)) and load/store bases keep the broad bounds, so this is
+    // object- not subobject-granularity. Restricted to normal, fixed-size,
+    // non-spill stack objects with a known positive size. The runtime cursor of
+    // the materialized cap equals the object's address (frame reg + offset,
+    // resolved post-RA), so base = lcc(cap, cursor), end = base + size.
+    if (CapstoneShrinkStack && VT == MVT::i128 && FI >= 0) {
+      const MachineFrameInfo &MFI = MF->getFrameInfo();
+      if (!MFI.isVariableSizedObjectIndex(FI) &&
+          !MFI.isSpillSlotObjectIndex(FI)) {
+        int64_t Size = MFI.getObjectSize(FI);
+        if (Size > 0) {
+          MVT XLenVT = Subtarget->getXLenVT();
+          SDValue Cursor(
+              CurDAG->getMachineNode(Capstone::LCC, DL, XLenVT, SDValue(Res, 0),
+                                     CurDAG->getTargetConstant(2, DL, XLenVT)),
+              0);
+          SDValue SizeReg =
+              selectImm(CurDAG, DL, XLenVT, Size, *Subtarget);
+          SDValue End(CurDAG->getMachineNode(Capstone::ADD, DL, XLenVT, Cursor,
+                                             SizeReg),
+                      0);
+          Res = CurDAG->getMachineNode(Capstone::SHRINK, DL, VT, SDValue(Res, 0),
+                                       Cursor, End);
+        }
+      }
+    }
     ReplaceNode(Node, Res);
     return;
   }

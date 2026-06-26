@@ -170,7 +170,10 @@ def main():
                               cwd=str(buildroot_dir), env={"QEMU_AUDIO_DRV": "none", **os.environ})
         child.logfile_read = log
         try:
-            child.expect("buildroot login:", timeout=120 * mult)
+            try:
+                child.expect("buildroot login:", timeout=120 * mult)
+            except (pexpect.EOF, pexpect.TIMEOUT) as exc:
+                raise InfraFlake(f"{domain}: boot-login") from exc
             child.sendline("root")
             expect_prompt(child, timeout=30 * mult, phase="login")
             run_cmd(child, "dmesg -n 1", timeout=10 * mult)
@@ -185,14 +188,21 @@ def main():
 
     results = []
     with log_file.open("w", encoding="utf-8") as log:
-        try:
-            for domain, expect, detail in oracle:
-                out = boot_and_run_one(domain, log)
-                passed, observed = classify(expect, detail, out)
-                results.append((domain, expect, observed, passed))
-        except InfraFlake as exc:
-            print(f"__CAPSTONE_INFRA_FLAKE__ {exc}", file=sys.stderr)
-            return INFRA_FLAKE_EXIT_CODE
+        for domain, expect, detail in oracle:
+            # Retry once on a transient QEMU boot flake (matches the benchmark
+            # aggregate runners).
+            out = None
+            for attempt in (1, 2):
+                try:
+                    out = boot_and_run_one(domain, log)
+                    break
+                except InfraFlake as exc:
+                    log.write(f"\n[infra-flake attempt {attempt}] {exc}\n")
+                    if attempt == 2:
+                        print(f"__CAPSTONE_INFRA_FLAKE__ {exc}", file=sys.stderr)
+                        return INFRA_FLAKE_EXIT_CODE
+            passed, observed = classify(expect, detail, out)
+            results.append((domain, expect, observed, passed))
 
     width = max(len(d) for d, *_ in results)
     print(f"\n{'DOMAIN'.ljust(width)}  {'EXPECT'.ljust(14)}  {'OBSERVED'.ljust(36)}  RESULT")

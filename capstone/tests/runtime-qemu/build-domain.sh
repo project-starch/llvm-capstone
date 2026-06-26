@@ -27,9 +27,14 @@ MAIN_O="$OBJ_DIR/main.o"
 
 mkdir -p "$(dirname -- "$OUT")"
 
+# EXTRA_CLANG_FLAGS: optional extra flags for the domain_main compile only
+# (e.g. -mllvm -capstone-shrink-stack=true for stack-narrowing probes).
+read -r -a _EXTRA_CLANG_FLAGS <<< "${EXTRA_CLANG_FLAGS:-}"
+
 "$CLANG" -target capstone64-unknown-elf -ffreestanding -c "$START_SRC" -o "$START_O"
 "$CLANG" -target capstone64-unknown-elf -ffreestanding -c "$GCT_TAIL_SRC" -o "$GCT_TAIL_O"
-"$CLANG" -target capstone64-unknown-elf -ffreestanding "$DOMAIN_OPT_LEVEL" -c "$SRC" -o "$MAIN_O"
+"$CLANG" -target capstone64-unknown-elf -ffreestanding "$DOMAIN_OPT_LEVEL" \
+  "${_EXTRA_CLANG_FLAGS[@]}" -c "$SRC" -o "$MAIN_O"
 "$LD_LLD" -T "$LINKER_SCRIPT" -o "$OUT" "$START_O" "$MAIN_O" "$GCT_TAIL_O"
 
 echo "Built $OUT"

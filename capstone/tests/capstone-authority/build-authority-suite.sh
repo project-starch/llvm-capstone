@@ -31,11 +31,17 @@ mkdir -p "$OUT_DIR" "$ASM_DIR"
 shopt -s nullglob
 for src in "$DOMAINS_DIR"/*.c; do
   name=$(basename "$src" .c)
+  # stack_* probes exercise -capstone-shrink-stack (default off), so they must be
+  # built with it on; global/heap narrowing is on by default and needs no flag.
+  extra=""
+  case "$name" in
+    stack_*) extra="-mllvm -capstone-shrink-stack=true" ;;
+  esac
   # Codegen evidence: annotated assembly at the same opt level we run.
-  "$CLANG" -target capstone64-unknown-elf -ffreestanding "$OPT_LEVEL" \
+  "$CLANG" -target capstone64-unknown-elf -ffreestanding "$OPT_LEVEL" $extra \
     -S "$src" -o "$ASM_DIR/$name.s"
   # Runtime artifact: a loadable domain.
-  DOMAIN_OPT_LEVEL="$OPT_LEVEL" \
+  DOMAIN_OPT_LEVEL="$OPT_LEVEL" EXTRA_CLANG_FLAGS="$extra" \
     bash "$SCRIPT_DIR/../runtime-qemu/build-domain.sh" "$src" "$OUT_DIR/$name.dom"
 done
 

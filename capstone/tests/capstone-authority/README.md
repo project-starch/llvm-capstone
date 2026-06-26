@@ -62,6 +62,8 @@ to skip the rebuild.
 | `global_oob_cross_segment` | bounds-fault | the coarse protection that already exists: an over-read past the *segment* traps even without object SHRINK, because capabilities are segment-bounded |
 | `heap_inbounds` | ok | in-bounds access to a `cap_shrink`-narrowed heap allocation works (positive control) |
 | `heap_oob` | bounds-fault | **heap granularity (C1)**: `p[100]` past a 64-byte allocation that malloc narrowed with `cap_shrink` traps, even though it stays inside the backing arena (heap analogue of `global_oob`) |
+| `stack_inbounds` | ok | in-bounds access to a `-capstone-shrink-stack`-narrowed local works (positive control; built with the flag on) |
+| `stack_oob` | bounds-fault | **stack granularity (C1)**: `buf[100]` past a 64-byte local traps when `&buf` is narrowed to its object by `-capstone-shrink-stack` (built with the flag on; stack analogue of `global_oob`) |
 | `many_pointer_args` | ok | the 9th/10th pointer args (stack-passed) are delivered tagged and deref correctly — regression guard for the fixed stack-arg tag-loss bug |
 | `spill_reachability` | ok | capabilities survive a register spill (stc/ldc) across a call with tag and bounds intact (PI Q1) |
 
@@ -118,7 +120,23 @@ to skip the rebuild.
    passes. Same precision story as globals: exact < 4 KiB, representable grain
    above.
 
-5. **A domain-mode capability fault aborts the QEMU model** (`riscv_cpu_do_interrupt`
+5. **Object-granularity STACK bounds — feasible (C1, spike, opt-in).** An
+   address-taken whole stack object (a bare `FrameIndex`) is narrowed to its
+   frame-object size in the backend (`CapstoneISelDAGToDAG.cpp`, `ISD::FrameIndex`),
+   gated by `-capstone-shrink-stack` (**default off**). `stack_oob` traps,
+   `stack_inbounds` passes, and the flag is exercised end-to-end:
+   - **CoreMark ✓** and a stack-heavy BEEBS subset **9/9 ✓** (`fasta`,
+     `huffbench`, `levenshtein`, `st`, `recursion`, `dijkstra`, `fir`, `crc32`,
+     `nsichneu`) built with `-capstone-shrink-stack=true`.
+
+   Scope of the slice (why it stays opt-in): only **whole-object** addresses are
+   narrowed — interior pointers (`&s.field`, i.e. `ADD(FI,offset)`), load/store
+   bases, varargs save areas, and dynamic `alloca` are left at the broad stack
+   bounds. So this is object- not subobject-granularity, and wider stack
+   patterns (especially `-O2` register/frame churn) need broader validation
+   before it can be on by default. The lit guard is `cap-shrink-stack.ll`.
+
+6. **A domain-mode capability fault aborts the QEMU model** (`riscv_cpu_do_interrupt`
    assertion `env->priv < PRV_C`). The fault is correctly detected and diagnosed
    first; graceful in-domain fault delivery is a separate runtime gap, noted here
    for the record.
