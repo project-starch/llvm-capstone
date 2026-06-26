@@ -42,11 +42,19 @@ sed 's/kt = kf + nc \* (cx->Nrnd + 1) - cx->Nkey;/{long _koff=(long)(nc*(cx->Nrn
 #      struct starts the iteration pointer at null instead of &ctx (compiler bug),
 #      causing cincoffsetimm to fail on the untagged null. set_key() initialises
 #      all required fields before ctx is used, so the zero-init is safe to drop.
+#   3. 'static char r[4]' → 'static char r[8]': fillrand() does
+#      '*(unsigned long*)r = RAND(...)', an 8-byte store through a 4-byte array
+#      (the code assumes sizeof(unsigned long)==4, false on rv64). This is a
+#      genuine out-of-bounds write that object-granularity capability narrowing
+#      (-capstone-shrink-globals) correctly traps; under broad bounds it silently
+#      clobbered 4 adjacent bytes. Only r[0..3] are ever read, so widening r to
+#      8 bytes makes the write in-bounds without changing the RAND stream.
 {
   printf 'typedef unsigned long size_t;\n'
   sed -E '/^#include <(stdio|stdlib|ctype)\.h>/d' "$AESXAM_SRC" \
     | sed 's/^char \*presetkey=/const char presetkey[]=/' \
-    | sed 's/aes     ctx = {0};/aes     ctx;/'
+    | sed 's/aes     ctx = {0};/aes     ctx;/' \
+    | sed -E 's/(static[[:space:]]+char[[:space:]]+)r\[4\]/\1r[8]/'
 } > "$PATCHED_AESXAM"
 
 COMMON_FLAGS=(

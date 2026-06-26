@@ -84,10 +84,27 @@ to skip the rebuild.
    > without faulting" unconditionally — the truth is finer: they run silently
    > only while they stay inside the (whole-image) segment bound.
 
-3. **The Step-3 before/after is now a one-line oracle flip:** `global_oob` is
-   recorded `no-trap-today`; after global-object SHRINK lands it should be
-   changed to `bounds-fault` and must trap. `global_oob_cross_segment` must keep
-   trapping. That is the measurable granularity result.
+3. **Object-granularity SHRINK is now implemented (Step 3, C1).** The backend
+   narrows every sized data global to `[&g, &g + sizeof(g))` at materialization
+   (`CapstoneISelDAGToDAG.cpp`, `selectLGA`), gated by `-capstone-shrink-globals`
+   (default on). With it on, `global_oob` flips from no-trap to **bounds-fault**
+   (recorded in the oracle); `global_inbounds` and the functional tests still
+   pass, i.e. legitimate in-object access is unaffected. Run with
+   `-mllvm -capstone-shrink-globals=false` to reproduce the pre-SHRINK
+   (segment-granular) behaviour for the before/after comparison.
+
+   **Correctness fallout (measured):** CoreMark ✓ and all 7 RV8 benchmarks ✓
+   pass with SHRINK on — including the large indexed-global-table cases
+   (sha512/aes/norx S-boxes, miniz buffers), which are the patterns most at risk
+   from object bounds. BEEBS global-heavy subset: 6/7 pass; **`rijndael` traps —
+   and that is a real bug it found, not a false positive.** `aesxam.c` declares
+   `static char r[4]` and then executes `*(unsigned long*)r = RAND(...)`, an
+   8-byte store through a 4-byte object (it assumes `sizeof(unsigned long)==4`,
+   false on rv64). Broad/segment bounds silently clobbered 4 adjacent bytes;
+   object SHRINK traps the OOB write. This is the canonical "tight bounds expose
+   a latent spatial-safety violation" result. (The rijndael build script now
+   patches the genuine bug — `r[4]` → `r[8]` — so the benchmark is spatially
+   correct and the gate stays green; the finding stands.)
 
 4. **A domain-mode capability fault aborts the QEMU model** (`riscv_cpu_do_interrupt`
    assertion `env->priv < PRV_C`). The fault is correctly detected and diagnosed

@@ -19,7 +19,7 @@ forge_inttoptr	tag-fault	inttoptr of a plain integer is untagged
 ptr_int_ptr_roundtrip	tag-fault	pointer laundered through a volatile integer loses its tag
 pointer_diff	ok	570359815
 global_inbounds	ok	554745896
-global_oob	no-trap-today	a[100] reaches into an adjacent in-segment global; segment-granular bounds do not fault until object SHRINK
+global_oob	bounds-fault	a[100] past a[64]; object SHRINK now narrows a to [a,a+64) so the cross-object over-read traps (was no-trap-today before -capstone-shrink-globals). Run with -mllvm -capstone-shrink-globals=false to see the pre-SHRINK no-trap behaviour.
 global_oob_cross_segment	bounds-fault	a[100] past the loadable segment; already trapped today (segment-granular bound)
 many_pointer_args	ok	161480759
 spill_reachability	ok	1494286391

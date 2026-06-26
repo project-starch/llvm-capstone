@@ -26,15 +26,16 @@ target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S
     [ptr addrspace(200) @tab], section "llvm.metadata"
 
 ; The synthesized initializer stores both elements with tagged capability stores
-; into @tab in place (offsets 0 and 16), each derived as cincoffset gp + delin.
+; into @tab in place (offsets 0 and 16). Each materialized global is derived as
+; cincoffset gp + delin and then narrowed to its object with SHRINK
+; (lcc cursor / add size / shrink) under -capstone-shrink-globals (default on),
+; so both the @tab store base and the stored string pointers carry object bounds.
 ; CHECK-LABEL: __capstone_cap_init:
-; CHECK: cincoffset a0, gp, a0
-; CHECK: cincoffset a1, gp, a1
-; CHECK: delin a1
-; CHECK: stc a1, 0(a0)
-; CHECK: cincoffset a1, gp, a1
-; CHECK: delin a1
-; CHECK: stc a1, 16(a0)
+; CHECK: cincoffset {{a[0-9]+}}, gp, {{a[0-9]+}}
+; CHECK: delin
+; CHECK: shrink
+; CHECK: stc {{a[0-9]+}}, 0(a0)
+; CHECK: stc {{a[0-9]+}}, 16(a0)
 ; CHECK: cjalr zero, 0(ra)
 
 ; A PC-relative table entry registers the (internal) initializer for start.S to

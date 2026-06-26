@@ -19,6 +19,7 @@
 #include "CapstoneSelectionDAGInfo.h"
 #include "llvm/CodeGen/MachineFrameInfo.h"
 #include "llvm/CodeGen/SDPatternMatch.h"
+#include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IntrinsicsCapstone.h"
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/Debug.h"
@@ -35,6 +36,17 @@ static cl::opt<bool> UsePseudoMovImm(
     cl::desc("Use a rematerializable pseudoinstruction for 2 instruction "
              "constant materialization"),
     cl::init(false));
+
+// Granularity (C1): when materializing a capability for a data global, narrow
+// its bounds to the object ([&g, &g + sizeof(g))) with SHRINK instead of
+// handing out the broad gp-derived (whole-segment) bounds. Gated so the
+// "before" (segment-granular) behaviour can be measured by passing
+// -capstone-shrink-globals=false.
+static cl::opt<bool> CapstoneShrinkGlobals(
+    "capstone-shrink-globals", cl::Hidden,
+    cl::desc("Narrow capabilities for global data objects to their size "
+             "(emit SHRINK at materialization)"),
+    cl::init(true));
 
 #define GET_DAGISEL_BODY CapstoneDAGToDAGISel
 #include "CapstoneGenDAGISel.inc"
@@ -1377,7 +1389,50 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   SDNode *Delined = CurDAG->getMachineNode(Capstone::DELIN, DL, PtrVT,
                                            SDValue(Res, 0));
 
-  ReplaceNode(Node, Delined);
+  // 5. Granularity (C1): narrow the capability to the named object's bounds.
+  // The CIncOffset above leaves the broad gp-derived (whole-segment) bounds and
+  // only moves the cursor to &g. SHRINK it to [&g, &g + sizeof(g)) so an
+  // over-read/-write that leaves the object faults. Done AFTER DELIN so the
+  // SHRINK operates on the NONLINEAR (freely copyable) capability -- we read it
+  // twice (LCC for the cursor, then SHRINK) and a LINEAR value cannot be used
+  // more than once.
+  //
+  // Restricted to sized data globals at offset 0: never functions, block
+  // addresses or constant pools (those reach selectLGA via non-GlobalAddress
+  // operands or as Functions), and never unsized/incomplete externs (sizeof
+  // unknown). The runtime cursor equals &g, so base = lcc(cap, cursor) and
+  // end = base + size; SHRINK's monotonicity holds because the object lies
+  // within gp's bounds.
+  SDNode *Final = Delined;
+  if (CapstoneShrinkGlobals) {
+    if (auto *GA = dyn_cast<GlobalAddressSDNode>(Symbol)) {
+      if (const auto *GVar = dyn_cast<GlobalVariable>(GA->getGlobal());
+          GVar && GA->getOffset() == 0 && !GVar->isThreadLocal() &&
+          GVar->getValueType()->isSized()) {
+        uint64_t Size =
+            CurDAG->getDataLayout().getTypeAllocSize(GVar->getValueType());
+        if (Size > 0) {
+          MVT XLenVT = Subtarget->getXLenVT();
+          // base = cursor of the materialized capability (= &g).
+          SDValue Cursor(
+              CurDAG->getMachineNode(Capstone::LCC, DL, XLenVT,
+                                     SDValue(Delined, 0),
+                                     CurDAG->getTargetConstant(2, DL, XLenVT)),
+              0);
+          // end = base + sizeof(g) (size may exceed a 12-bit immediate).
+          SDValue SizeReg =
+              selectImm(CurDAG, DL, XLenVT, (int64_t)Size, *Subtarget);
+          SDValue End(CurDAG->getMachineNode(Capstone::ADD, DL, XLenVT, Cursor,
+                                             SizeReg),
+                      0);
+          Final = CurDAG->getMachineNode(Capstone::SHRINK, DL, PtrVT,
+                                         SDValue(Delined, 0), Cursor, End);
+        }
+      }
+    }
+  }
+
+  ReplaceNode(Node, Final);
 }
 
 void CapstoneDAGToDAGISel::selectShrink(SDNode *Node) {
