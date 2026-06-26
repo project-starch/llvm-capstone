@@ -58,8 +58,10 @@ to skip the rebuild.
 | `ptr_int_ptr_roundtrip` | tag-fault | laundering a pointer through a (volatile) integer drops the tag; the reconstructed pointer faults — round-trips are fail-safe |
 | `pointer_diff` | ok | pointer subtraction is a pure integer computation; no trap, no authority |
 | `global_inbounds` | ok | ordinary in-bounds global access works (positive control) |
-| `global_oob` | no-trap-today | **the granularity gap**: a[100] in `char a[64]` reaches an adjacent in-segment global and is **not** caught today; flips to a trap once `a`'s capability is SHRINK'd to its object (C1 before/after) |
-| `global_oob_cross_segment` | bounds-fault | the coarse protection that already exists: an over-read past the *segment* traps today, because capabilities are segment-bounded |
+| `global_oob` | bounds-fault | **the granularity result (C1)**: a[100] in `char a[64]` reaches an adjacent in-segment global; with `-capstone-shrink-globals` (default on) `a`'s capability is narrowed to its object so it traps (was no-trap before SHRINK — set `-mllvm -capstone-shrink-globals=false` to see the before) |
+| `global_oob_cross_segment` | bounds-fault | the coarse protection that already exists: an over-read past the *segment* traps even without object SHRINK, because capabilities are segment-bounded |
+| `heap_inbounds` | ok | in-bounds access to a `cap_shrink`-narrowed heap allocation works (positive control) |
+| `heap_oob` | bounds-fault | **heap granularity (C1)**: `p[100]` past a 64-byte allocation that malloc narrowed with `cap_shrink` traps, even though it stays inside the backing arena (heap analogue of `global_oob`) |
 | `many_pointer_args` | ok | the 9th/10th pointer args (stack-passed) are delivered tagged and deref correctly — regression guard for the fixed stack-arg tag-loss bug |
 | `spill_reachability` | ok | capabilities survive a register spill (stc/ldc) across a call with tag and bounds intact (PI Q1) |
 
@@ -93,11 +95,12 @@ to skip the rebuild.
    `-mllvm -capstone-shrink-globals=false` to reproduce the pre-SHRINK
    (segment-granular) behaviour for the before/after comparison.
 
-   **Correctness fallout (measured):** CoreMark ✓ and all 7 RV8 benchmarks ✓
-   pass with SHRINK on — including the large indexed-global-table cases
-   (sha512/aes/norx S-boxes, miniz buffers), which are the patterns most at risk
-   from object bounds. BEEBS global-heavy subset: 6/7 pass; **`rijndael` traps —
-   and that is a real bug it found, not a false positive.** `aesxam.c` declares
+   **Correctness fallout (measured):** CoreMark ✓, all 7 RV8 benchmarks ✓, and
+   the full BEEBS suite 82/82 ✓ with SHRINK on — including the large
+   indexed-global-table cases (sha512/aes/norx S-boxes, miniz buffers), the
+   patterns most at risk from object bounds. The one case that surfaced
+   (`rijndael`) is **a real bug it found, not a false positive.** `aesxam.c`
+   declares
    `static char r[4]` and then executes `*(unsigned long*)r = RAND(...)`, an
    8-byte store through a 4-byte object (it assumes `sizeof(unsigned long)==4`,
    false on rv64). Broad/segment bounds silently clobbered 4 adjacent bytes;
@@ -106,7 +109,16 @@ to skip the rebuild.
    patches the genuine bug — `r[4]` → `r[8]` — so the benchmark is spatially
    correct and the gate stays green; the finding stands.)
 
-4. **A domain-mode capability fault aborts the QEMU model** (`riscv_cpu_do_interrupt`
+4. **Object-granularity HEAP bounds (C1, malloc side).** The bump allocator
+   (`benchmarks/rv8/adapted/rv8_malloc.c`) now narrows every `malloc` return to
+   the requested size with `__builtin_capstone_cap_shrink` (recovering its own
+   size header through the wide arena capability so `realloc` still works).
+   `heap_oob` traps; `heap_inbounds` passes; RV8 (which uses this allocator,
+   incl. `dhrystone` records that hold capability fields, and `realloc`) still
+   passes. Same precision story as globals: exact < 4 KiB, representable grain
+   above.
+
+5. **A domain-mode capability fault aborts the QEMU model** (`riscv_cpu_do_interrupt`
    assertion `env->priv < PRV_C`). The fault is correctly detected and diagnosed
    first; graceful in-domain fault delivery is a separate runtime gap, noted here
    for the record.
