@@ -113,5 +113,5 @@ the materialization code already knows the size as an immediate.
   size-immediate case.
 - **Spill/store widening caveat (§1)** is a real, citable subtlety for the
   spilled-capability question (Q1) and for any stored narrowed cap.
-- **`SPLIT` exists** — update `pi-discussion-capability-granularity-provenance.md`
+- **`SPLIT` exists** — update `granularity-provenance-discussion.md`
   Q7: the hardware splitting primitive is present; the compiler emits none.
