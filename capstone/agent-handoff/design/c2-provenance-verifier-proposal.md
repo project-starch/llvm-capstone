@@ -1,6 +1,6 @@
 # Proposal: C2 — capability provenance verifier (MIR dataflow checker)
 
-*Status: PROPOSAL for discussion with the PI. Not yet approved or implemented.
+*Status: PROPOSAL for discussion with the reviewer. Not yet approved or implemented.
 This is the candidate "lead" contribution (C2) for the first paper; C1
 (granularity) is already implemented and is the supporting measured result.*
 
@@ -13,7 +13,7 @@ bounds for globals/heap/stack are **not novel vs CHERI**, which has done all
 three since ~2015. Leading the paper with C1 invites the reviewer response "CHERI
 already does this."
 
-The defensible, PI-requested core is **C2 — provenance**:
+The defensible, reviewer-requested core is **C2 — provenance**:
 
 > A tagged capability can only be produced by deriving it from an existing
 > capability (a root, or a legal constructor applied to a capability); no integer
@@ -118,7 +118,7 @@ instruction, operand, integer-origin def chain); increment a counter.
 - **Opcode-table drift**: a new cap instruction missing from the CAP set →
   misclassified INT → false positive; the unit lit test + corpus run surface this.
 
-## Open questions for the PI discussion
+## Open questions for the review discussion
 1. Is the checker+empirical-corpus framing strong enough as the *lead*
    contribution, or does the paper need a mechanized/proof element (e.g. a
    small formal model of the lowering invariant)?

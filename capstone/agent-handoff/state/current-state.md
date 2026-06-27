@@ -334,7 +334,7 @@ contributions. Current state on `capstone-bootstrap`:
   (31 tests).
 
 - **C2 (provenance verifier) — PROPOSED, not implemented:** a MIR dataflow checker
-  that no integer-origin value is used as a capability. Parked for PI review:
+  that no integer-origin value is used as a capability. Parked for review:
   `design/c2-provenance-verifier-proposal.md`.
 
 ## Where to go next

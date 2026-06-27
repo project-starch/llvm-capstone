@@ -13,11 +13,11 @@ section) and the design docs below.
   default off, whole-object only). Evidence + tests:
   `capstone/tests/capstone-authority/` (12/12) and lit `cap-shrink-{globals,stack}.ll`.
   Design: `design/capability-bounds-model.md`.
-- **C2 provenance verifier — PROPOSED, awaiting PI review.** A MIR dataflow checker
-  that no integer can become authority. **Do not implement until the PI sign-off** —
+- **C2 provenance verifier — PROPOSED, awaiting review.** A MIR dataflow checker
+  that no integer can become authority. **Do not implement until reviewer sign-off** —
   see `design/c2-provenance-verifier-proposal.md` (ends with open framing questions).
 
-**Recommended next step:** review/agree the C2 proposal with the PI, then implement
+**Recommended next step:** review/agree the C2 proposal with the reviewer, then implement
 it as the paper's lead contribution. Smaller "needed anyway" work available
 meanwhile: heap narrowing now covers RV8 + BEEBS `dtoa` (object-bounded
 `malloc_beebs`); **trio** stays un-narrowed because its `realloc_beebs`
