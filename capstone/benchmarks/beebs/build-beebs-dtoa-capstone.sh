@@ -47,6 +47,13 @@ mkdir -p "$OUT_DIR" "$OBJ_DIR"
 #    heap and round each request up to a 16-byte multiple (integer rounding only --
 #    no pointer forging), keeping heap_ptr 16-aligned across allocations.  Also
 #    enlarge HEAP_SIZE since all allocations now come from this one pool.
+#  - object-granularity heap bounds (C1): narrow each malloc_beebs return to the
+#    (16-rounded) request with cap_shrink, the same as rv8_malloc / globals, so an
+#    over-read past an allocation faults. Safe here because dtoa's malloc_beebs is
+#    header-less and dtoa never calls realloc. (trio's realloc_beebs is NOT
+#    narrowed: it deliberately over-reads the old, smaller allocation -- "we don't
+#    know the size of the original pointer" -- so object bounds would trap it; that
+#    is a latent over-read, left as a documented limitation like the rijndael find.)
 {
   cat "$PRELUDE"
   sed -e '/#include "stdlib.h"/d' \
@@ -56,6 +63,7 @@ mkdir -p "$OUT_DIR" "$OBJ_DIR"
       -e 's|#define HEAP_SIZE 8192|#define HEAP_SIZE 65536|' \
       -e 's|static char heap\[HEAP_SIZE\];|static char heap[HEAP_SIZE] __attribute__((aligned(16)));|' \
       -e 's|    void \*new_ptr = heap_ptr;|    size = (size + 15u) \& ~(size_t)15u;\n    void *new_ptr = heap_ptr;|' \
+      -e 's|return new_ptr;|{ unsigned long _b = __builtin_capstone_cap_get_cursor(new_ptr); return __builtin_capstone_cap_shrink(new_ptr, _b, _b + size); }|' \
       "$DTOA_SRC"
 } > "$PATCHED_SRC"
 

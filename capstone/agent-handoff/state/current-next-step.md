@@ -19,8 +19,11 @@ section) and the design docs below.
 
 **Recommended next step:** review/agree the C2 proposal with the PI, then implement
 it as the paper's lead contribution. Smaller "needed anyway" work available
-meanwhile: finish heap narrowing in the BEEBS `dtoa`/`trio` allocators (C1
-uniformity); correct the falsified claims in `pi-discussion-…` (Q7/Q8) and
+meanwhile: heap narrowing now covers RV8 + BEEBS `dtoa` (object-bounded
+`malloc_beebs`); **trio** stays un-narrowed because its `realloc_beebs`
+deliberately over-reads the old allocation (a latent over-read, documented in
+`build-beebs-dtoa-capstone.sh`) — narrowing it needs a size-header rewrite.
+Other items: correct the falsified claims in `pi-discussion-…` (Q7/Q8) and
 `capability-provenance-threat-model.md` (T3) to match the measured
 segment-granular / SPLIT-exists / SHRINK-now-emitted reality; or move stack-shrink
 toward default-on (interior-pointer/varargs/`-O2` validation).
