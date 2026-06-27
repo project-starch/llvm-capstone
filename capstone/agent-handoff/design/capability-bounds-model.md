@@ -24,7 +24,7 @@ backend (`CapstoneInstrInfo.td`, `CapstoneISelDAGToDAG.cpp`,
 - The ISA also has **`SHRINKTO`** (narrow to `[cursor, cursor+imm)`, ideal for
   object/`malloc` materialization) and **`SPLIT`** (true capability split into
   two adjacent halves). **Neither is wired into LLVM** — only `SHRINK` is. This
-  also corrects the PI-discussion claim that "capability splitting does not
+  also corrects the granularity-discussion claim that "capability splitting does not
   exist": the *primitive* exists (`SPLIT`); the compiler just never emits it.
 
 ## 1. Representation: precise in register, compressed in memory
@@ -86,9 +86,12 @@ Spec §shrink / `helper_csshrink` (`op_helper.c:729`): `rd = shrink(rd, base, en
 
 **LLVM wiring:** `int_capstone_cap_shrink(ptr, i128 base, i128 end)`
 (`IntrinsicsCapstone.td:90`) → `selectShrink` → `Capstone::SHRINK`
-(`CapstoneISelDAGToDAG.cpp:1383`). It is **only reachable via the intrinsic** —
-never emitted automatically at object materialization. Closing that gap is the
-C1 (granularity) work item.
+(`CapstoneISelDAGToDAG.cpp`). Originally only reachable via the intrinsic.
+**→ now (C1 implemented):** `SHRINK` is emitted automatically at object
+materialization — globals (`selectLGA`, `-capstone-shrink-globals`, default on),
+stack (`ISD::FrameIndex`, `-capstone-shrink-stack`, opt-in), and heap (`malloc`
+`__builtin_capstone_cap_shrink`). The C1 gap this called out is closed for
+globals/heap (default) and stack (opt-in).
 
 ## 4. Sibling primitives that exist in the ISA but not in LLVM
 
@@ -109,6 +112,6 @@ the materialization code already knows the size as an immediate.
 - **Emit `SHRINK` (not `CSetBounds`).** Optionally wire `SHRINKTO` for the
   size-immediate case.
 - **Spill/store widening caveat (§1)** is a real, citable subtlety for the
-  spilled-capability question (PI Q1) and for any stored narrowed cap.
+  spilled-capability question (Q1) and for any stored narrowed cap.
 - **`SPLIT` exists** — update `pi-discussion-capability-granularity-provenance.md`
   Q7: the hardware splitting primitive is present; the compiler emits none.
