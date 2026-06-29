@@ -327,19 +327,22 @@ Current state on `capstone-bootstrap`:
     with global+heap on; stack-on smoke = CoreMark + 9 stack-heavy BEEBS ✓. Found
     a **real OOB bug**: rijndael wrote 8 bytes through a `char r[4]` (patched).
     **Overhead/code-size NOT measured** (don't say "overhead green").
-  - **Known miscompile (audit, verified):** negative pointer difference uses a
-    logical `srli` → wrong result; needs `srai` for signed `sdiv exact`.
+  - **Negative pointer difference fixed:** exact signed element scaling now
+    restores `srai` after narrowing the i128 pointer-difference carrier to XLEN;
+    genuine logical shifts remain `srli`. Positive and negative runtime probes
+    pass, including `low - high == -7`.
 
 - **Provenance/authority evidence suite** (`capstone/tests/capstone-authority/`,
-  `run-authority-suite.sh`): 12 domains pinning runtime behavior (source + asm +
+  `run-authority-suite.sh`): 13 domains pinning runtime behavior (source + asm +
   QEMU trap/no-trap vs an oracle). forge/ptr→int→ptr **tag-fault**; global/heap/
-  stack `_oob` **bounds-fault**; in-bounds + functional cases ok. Runtime fact:
+  stack `_oob` **bounds-fault**; positive/negative pointer differences and other
+  in-bounds/functional cases pass. Runtime fact:
   a domain-mode capability fault currently **aborts the QEMU model** (a
   `riscv_cpu_do_interrupt` assertion) after emitting the diagnostic.
 
 - **Regression tests:** lit `cap-shrink-globals.ll`, `cap-shrink-stack.ll`
-  (on/off A/B); updated `static-cap-global-init.ll`. Full Capstone lit suite green
-  (31 tests).
+  (on/off A/B), `ptr-diff-signed.ll`, and updated
+  `static-cap-global-init.ll`. Full Capstone lit suite green (32 tests).
 
 - **C2 (provenance verifier) — PROPOSED, do NOT implement verbatim:** the audit
   found the `UNKNOWN`-accepting opcode-only design is a hygiene checker, not a

@@ -11,7 +11,7 @@ section) and the design docs below.
   `SHRINK` for **globals** (`-capstone-shrink-globals`, default on); **two
   benchmark allocators** (rv8/dtoa, not a libc policy); **stack** gated spike
   (default off, whole-object only). Tests: `capstone/tests/capstone-authority/`
-  (12/12) + lit `cap-shrink-{globals,stack}.ll`. Coverage is partial; broad
+  (13/13) + lit `cap-shrink-{globals,stack}.ll`. Coverage is partial; broad
   `gp`/`sp` roots and RWX perms remain.
 - **C2 provenance verifier — PROPOSED, revise before implementing.** The audit
   found it is a hygiene checker, not a proof (see the doc's audit-response banner).
@@ -21,11 +21,11 @@ section) and the design docs below.
 `history/29-06-2026_15-08-22_granularity-provenance-audit.md`) reviewed this whole
 direction — read it first.** Its recommended order (adopted here):
 
-1. **Fix negative pointer difference** (verified miscompile: logical `srli` on a
-   signed `sdiv exact`; use `srai`) + add negative/signed/unsigned tests. *On the
-   correctness critical path; delegable as a self-contained backend fix.*
+1. Negative pointer difference (`srli` on signed exact scaling) — **fixed**;
+   signed/unsigned lit coverage + positive/negative runtime probes pass.
 2. Bounds-model doc corrected (QEMU keeps exact fat bounds; representability not
-   measured) — **done**; decide the intended real 128-bit `SHRINK` semantics.
+   measured) — **done**. **Recommended next:** decide the intended real 128-bit
+   `SHRINK` semantics.
 3. Rewrite the C1 claim as a **coverage matrix**; **measure overhead** (perf,
    code-size, dynamic `SHRINK` count) — remove "overhead green" language.
 4. Decide the **`uintptr_t` / address-only ABI** (currently an accidental 64-bit

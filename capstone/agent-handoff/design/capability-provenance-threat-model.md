@@ -18,7 +18,7 @@ one.*
 > inherited bound ≈ the **whole image** (cross-segment over-reads already trapped);
 > precision after narrowing is byte-exact < 4 KiB, power-of-two grain above
 > (`capability-bounds-model.md`). Evidence: the runtime authority suite
-> `../../tests/capstone-authority/` (12/12; `global_oob`/`heap_oob`/`stack_oob`
+> `../../tests/capstone-authority/` (13/13; `global_oob`/`heap_oob`/`stack_oob`
 > now **bounds-fault**), lit `cap-shrink-{globals,stack}.ll`, and a **real OOB
 > write found** in rijndael (`char r[4]` written as 8 bytes). The residual T3 gap
 > is now **subobject** bounds, stack **varargs/dynamic-alloca**, and

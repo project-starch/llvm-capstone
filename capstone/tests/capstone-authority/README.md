@@ -56,7 +56,8 @@ to skip the rebuild.
 |--------|--------|--------|
 | `forge_inttoptr` | tag-fault | an integer cast to a pointer is untagged; deref traps — integers cannot become authority (provenance, C2) |
 | `ptr_int_ptr_roundtrip` | tag-fault | laundering a pointer through a (volatile) integer drops the tag; the reconstructed pointer faults — round-trips are fail-safe |
-| `pointer_diff` | ok | pointer subtraction is a pure integer computation; no trap, no authority |
+| `pointer_diff` | ok | a positive pointer difference scales the cursor delta correctly and produces an integer, not authority |
+| `pointer_diff_neg` | ok | a negative pointer difference uses signed scaling and returns `-7`, guarding against the former `srli` miscompile |
 | `global_inbounds` | ok | ordinary in-bounds global access works (positive control) |
 | `global_oob` | bounds-fault | **the granularity result (C1)**: a[100] in `char a[64]` reaches an adjacent in-segment global; with `-capstone-shrink-globals` (default on) `a`'s capability is narrowed to its object so it traps (was no-trap before SHRINK — set `-mllvm -capstone-shrink-globals=false` to see the before) |
 | `global_oob_cross_segment` | bounds-fault | the coarse protection that already exists: an over-read past the *segment* traps even without object SHRINK, because capabilities are segment-bounded |

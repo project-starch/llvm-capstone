@@ -8131,6 +8131,11 @@ static SDValue lowerScalarI128Shift(SDValue Op, SelectionDAG &DAG,
 
   SDLoc DL(Op);
   MVT XLenVT = Subtarget.getXLenVT();
+  SDValue ShiftInput = Op.getOperand(0);
+  bool IsPointerDifference =
+      ShiftInput.getOpcode() == ISD::SUB &&
+      !isCapstoneIntegerOffset(ShiftInput.getOperand(0)) &&
+      !isCapstoneIntegerOffset(ShiftInput.getOperand(1));
   unsigned ExtOpcode = Op.getOperand(0).getOpcode();
   SDValue XLenVal = normalizeScalarI128ShiftOperandToXLen(
       Op.getOperand(0), DAG, Subtarget, DL, ExtOpcode);
@@ -8151,13 +8156,24 @@ static SDValue lowerScalarI128Shift(SDValue Op, SelectionDAG &DAG,
     if (ShAmtVal >= XLenVT.getSizeInBits())
       return SDValue();
     XLenVal = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Op.getOperand(0));
-    ExtOpcode =
-        Op.getOpcode() == ISD::SRA ? ISD::SIGN_EXTEND : ISD::ZERO_EXTEND;
+    ExtOpcode = Op.getOpcode() == ISD::SRA || IsPointerDifference
+                    ? ISD::SIGN_EXTEND
+                    : ISD::ZERO_EXTEND;
   }
 
   SDValue ShAmt = DAG.getZExtOrTrunc(Op.getOperand(1), DL, XLenVT);
+  unsigned ShiftOpcode = Op.getOpcode();
+  // An exact signed division by a power of two starts as SRA, but demanded-bits
+  // simplification may turn it into SRL when only the low XLEN result is used.
+  // Once we truncate the sign-extended i128 carrier to XLEN, that SRL must be
+  // restored to SRA or negative pointer differences become large positives.
+  // Keep genuine logical shifts (including exact shifts of zero-extended
+  // values) as SRL.
+  if (ShiftOpcode == ISD::SRL && Op->getFlags().hasExact() &&
+      ExtOpcode == ISD::SIGN_EXTEND)
+    ShiftOpcode = ISD::SRA;
   SDValue Shifted =
-      DAG.getNode(Op.getOpcode(), DL, XLenVT, XLenVal, ShAmt);
+      DAG.getNode(ShiftOpcode, DL, XLenVT, XLenVal, ShAmt);
   return DAG.getNode(ExtOpcode, DL, MVT::i128, Shifted);
 }
 

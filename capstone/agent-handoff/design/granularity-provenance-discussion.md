@@ -24,7 +24,7 @@ Companion documents:
 > example now **traps**; see the per-row "→ now:" notes. Measured detail: bounds
 > are **segment-granular** when un-narrowed (single `PT_LOAD` ≈ whole image), and
 > `SPLIT`/`SHRINKTO` exist in the ISA (so "no splitting" was about the compiler,
-> not the hardware). Evidence: `../../tests/capstone-authority/` (12/12),
+> not the hardware). Evidence: `../../tests/capstone-authority/` (13/13),
 > `cap-shrink-{globals,stack}.ll`, `capability-bounds-model.md`. The "before"
 > picture is reproducible with `-mllvm -capstone-shrink-globals=false`.
 
@@ -37,7 +37,7 @@ Companion documents:
 | 1 | Spilled capability readable by an attacker? | Spills use `stc` and stay *tagged* and usable. **Pre-narrowing:** any in-domain pointer could name any spill slot (no intra-domain bounds). **→ now:** object narrowing (C1) shrinks the blast radius — an attacker holding a pointer to object *X* can no longer name the spill slot for cap *Y* (their cap is bounded to *X*). Residual: caps spilled within a frame whose own bound still covers them; full mitigation also wants linearity / don't-spill policy. |
 | 2 | Distinguish int vs cap; MAC/checksum; "disjoint" | We use a **hardware out-of-band tag bit**, not a MAC. That is *stronger* than a checksum (unforgeable, not probabilistic). A MAC only becomes relevant if caps must cross **untagged storage** (disk/network/persistence). |
 | 3 | How is `ptr→int→ptr` compiled? | Through **integer** instructions (`mv`/`addi`); the result is **untagged → faults on deref** (fail-safe). Also: our `uintptr_t` is **64-bit**, narrower than the 128-bit cap — a cap cannot even round-trip through it. |
-| 4 | `p - q` into an integer? | Extract both cursors (`lcc`), integer `sub`, scale. Pure integer result, no tag. **BUG (2026-06-29 audit, verified):** the scale uses **logical** `srli`, so a **negative** difference is miscompiled (`low - high` returns garbage, not a negative `ptrdiff_t`); only the positive case is correct. Fix = `srai`/signed lowering for `sdiv exact`. The `pointer_diff` authority test was positive-only and masked it. |
+| 4 | `p - q` into an integer? | Extract both cursors (`lcc`), integer `sub`, then signed element scaling (`srai` for exact power-of-two factors). Pure integer result, no tag. **Fixed after the 2026-06-29 audit:** `low - high == -7` now passes; genuine logical shifts remain `srli`. |
 | 5 | `malloc` now / in the suites / how to do it | No OS heap, and **no general libc allocator**. **Per-allocator, benchmark-local:** `rv8_malloc.c` and dtoa's `malloc_beebs` `cap_shrink` each allocation (dtoa to the 16-rounded size, not byte-exact); **trio's `realloc_beebs` is left un-narrowed** (it over-reads the old block); CoreMark uses stack storage. So this is *not* a compiler-wide "heap default-on" policy — it is two prototype allocators. |
 | 6 | How are caps created / bounds assigned? | Derive from a root (`gp`/`sp`) via `cincoffset`. **Pre-narrowing:** bounds were inherited from the root (no per-object bounds). **→ now:** materialization narrows to the object with `SHRINK` (globals/heap default, stack opt-in). |
 | 7 | Do we do capability splitting? | **Compiler:** pre-narrowing did the anti-pattern (root cap + move cursor); **→ now** it narrows each object to its bounds (`SHRINK`). **Hardware:** a real `SPLIT` (and `SHRINKTO`) instruction *does* exist in the ISA — just not wired into LLVM yet. So "no splitting" was a statement about the compiler, and is now outdated. |
@@ -173,7 +173,7 @@ round-trip silently *loses* authority rather than silently *forging* it.
 lcc a1, a1, 2    ; read field 2 (cursor/address) of b  -> integer
 lcc a0, a0, 2    ; read field 2 (cursor/address) of a  -> integer
 sub a0, a0, a1   ; integer subtraction of the two addresses
-srli a0, a0, 2   ; divide by sizeof(int) = 4   <-- LOGICAL shift: BUG for negatives
+srai a0, a0, 2   ; exact signed divide by sizeof(int) = 4
 ```
 `lcc rd, rs, 2` is the capability **field-query** instruction reading the *cursor*
 (address) field (fields: 0=tag, 2=cursor, 3=base, 4=end, 5=perms). So a pointer
@@ -181,14 +181,12 @@ difference **projects both capabilities down to their integer addresses and
 subtracts** — the result is a plain integer with no tag (correct: a pointer
 difference is a number, not a capability; no tag/forging concern).
 
-> **BUG (2026-06-29 audit, verified):** the divide-by-`sizeof` uses a **logical**
-> `srli`, but `ptrdiff_t` is **signed**. For a negative difference (`low - high`,
-> e.g. `&a[3] - &a[10]`) the byte delta is negative (`-28`), so logical `>>2`
-> yields a huge positive value instead of `-7`; a `-O0` probe returns the wrong
-> result. **Fix:** lower `sdiv exact` by a power of two with a signed shift
-> (`srai`); keep `srli` only for logical/unsigned. Add negative + signed/unsigned
-> C runtime cases and signed lit coverage — the positive-only `pointer_diff`
-> probe and the `i128-xlen-lowering.ll` `srli` expectation both masked this.
+> **Resolved after the 2026-06-29 audit:** lowering recognizes the unlowered
+> capability-cursor `SUB` before truncating its i128 carrier to XLEN. If exact
+> signed scaling was represented as `SRL` by demanded-bits simplification, the
+> XLEN operation is restored to `SRA`; genuine logical shifts remain `SRL`.
+> `pointer_diff` and `pointer_diff_neg` both pass at runtime, and
+> `ptr-diff-signed.ll` covers power-of-two, 12-byte, and logical-shift cases.
 > (Cross-object subtraction is separately UB, as in standard C/CHERI.)
 
 ---
@@ -431,7 +429,7 @@ Key emitted sequences (full listings: `scratchpad/probes.s`, `arr.s`):
 ```
 forge:        mv a0, a0                                  ; no tag set → untagged
 roundtrip:    mv a0,a0 ; addi a0,a0,4 ; mv a0,a0         ; integer path → untagged
-pdiff:        lcc a1,a1,2 ; lcc a0,a0,2 ; sub ; srli a0,a0,2   ; integer result
+pdiff:        lcc a1,a1,2 ; lcc a0,a0,2 ; sub ; srai a0,a0,2   ; signed integer result
 out_obj:      auipc/addi &a ; cincoffset a0,gp,a0 ; delin a0 ; lb a0,35(a0)  ; NO bounds check
 take_global:  slli a0,a0,2 ; cincoffset a1,gp,&g ; delin a1 ; cincoffset a0,a1,a0  ; NO SHRINK
 ```

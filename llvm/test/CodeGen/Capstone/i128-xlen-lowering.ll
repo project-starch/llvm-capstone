@@ -141,7 +141,7 @@ entry:
 ; re-extending, so it must collapse to a plain sub + shift.  (BEEBS dtoa Balloc.)
 ; CHECK-LABEL: ptrdiff_sdiv_i128:
 ; CHECK: sub a0, a0, a1
-; CHECK-NEXT: srli a0, a0, 3
+; CHECK-NEXT: srai a0, a0, 3
 ; CHECK: cjalr zero, 0(ra)
 define i64 @ptrdiff_sdiv_i128(ptr addrspace(200) %p, ptr addrspace(200) %q) {
 entry:

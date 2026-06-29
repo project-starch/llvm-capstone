@@ -125,7 +125,7 @@ instruction, operand, integer-origin def chain); increment a counter.
   diagnostic); a demotion case (cap address forced through an integer then
   dereferenced) ⇒ flagged.
 - **Negative controls:** authority `forge_inttoptr` / `ptr_int_ptr_roundtrip`
-  flagged; the other 10 domains report 0.
+  flagged; the other 11 domains report 0.
 - **Corpus artifact (headline):** build CoreMark + BEEBS-82 + RV8 with
   `-mllvm -capstone-verify-provenance`; collect per-function counts. Expected: 0
   forging paths (or any hit is a documented finding). Read-only, so all

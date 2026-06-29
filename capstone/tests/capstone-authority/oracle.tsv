@@ -13,11 +13,13 @@
 #                     (the broad-bounds gap). After the Step-3 global SHRINK this
 #                     row's expectation flips to `bounds-fault`.
 #
-# retval decimals: 0x21FF0007=570359815  0x2110C028=554745896
+# retval decimals: 0x21FF0007=570359815  0x21FE0007=570294279
+#                  0x2110C028=554745896
 #                  0x09A00037=161480759  0x59110037=1494286391
 forge_inttoptr	tag-fault	inttoptr of a plain integer is untagged
 ptr_int_ptr_roundtrip	tag-fault	pointer laundered through a volatile integer loses its tag
 pointer_diff	ok	570359815
+pointer_diff_neg	ok	570294279
 global_inbounds	ok	554745896
 global_oob	bounds-fault	a[100] past a[64]; object SHRINK now narrows a to [a,a+64) so the cross-object over-read traps (was no-trap-today before -capstone-shrink-globals). Run with -mllvm -capstone-shrink-globals=false to see the pre-SHRINK no-trap behaviour.
 global_oob_cross_segment	bounds-fault	a[100] past the loadable segment; already trapped today (segment-granular bound)
