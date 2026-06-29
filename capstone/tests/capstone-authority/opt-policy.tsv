@@ -1,0 +1,11 @@
+# Domains excluded from the optimization sweep because optimization removes the
+# operation whose runtime behavior the probe is intended to measure.
+# Columns: domain <TAB> reason
+pointer_diff	-O1 constant-folds the fixed-address subtraction to the success marker
+pointer_diff_neg	-O1 constant-folds the fixed-address subtraction to the success marker
+global_one_past	-O1 removes the zero-initialized global load and returns constant zero
+global_unsigned_wrap_index	-O1 removes the zero-initialized global load and returns constant zero
+global_signed_negative_index	-O1 removes the zero-initialized global load and returns constant zero
+global_oob_cross_segment	-O1 removes the known-undefined global load and returns the constant marker
+many_pointer_args	-O1 specializes sink to read the global directly, removing stack-passed pointer arguments
+spill_reachability	-O1 removes clobber and the ten live capability spills/reloads

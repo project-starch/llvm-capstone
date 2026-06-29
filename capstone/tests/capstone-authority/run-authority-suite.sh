@@ -8,6 +8,7 @@ set -euo pipefail
 # Env:
 #   AUTHORITY_ONLY=name[,name]  run only the listed domains
 #   AUTHORITY_NO_BUILD=1        skip the loader/domain rebuild
+#   AUTHORITY_RESULTS_TSV=path  additionally write machine-readable results
 #
 # Prints a PASS/FAIL table and "__CAPSTONE_AUTHORITY_SUITE_PASSED__" on success.
 

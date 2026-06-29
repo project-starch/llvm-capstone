@@ -11,8 +11,9 @@ section) and the design docs below.
   `SHRINK` for **globals** (`-capstone-shrink-globals`, default on); **two
   benchmark allocators** (rv8/dtoa, not a libc policy); **stack** gated spike
   (default off, whole-object only). Tests: `capstone/tests/capstone-authority/`
-  (13/13) + lit `cap-shrink-{globals,stack}.ll`. Coverage is partial; broad
-  `gp`/`sp` roots and RWX perms remain.
+  (20/20 at canonical `-O0`; 12 eligible probes pass at `-O1/-O2/-O3`) + lit
+  `cap-shrink-{globals,stack}.ll`. The suite now measures the residual subobject
+  gap directly; broad `gp`/`sp` roots and RWX perms remain.
 - **C2 provenance verifier — PROPOSED, revise before implementing.** The audit
   found it is a hygiene checker, not a proof (see the doc's audit-response banner).
   **Do not implement verbatim**; needs typed-MIR redesign + reviewer sign-off.

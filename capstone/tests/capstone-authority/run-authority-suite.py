@@ -8,15 +8,15 @@ the oracle in oracle.tsv:
   tag-fault     -> "Cap mem access requires capability" in QEMU output, no retval
   bounds-fault  -> "Cap mem access OOB" in QEMU output, no retval
   ok            -> "retval = <detail>" present and NO "Cap mem access" fault
-  no-trap-today -> domain completes (retval present) with NO "Cap mem access"
-                   fault (the broad-bounds granularity gap; flips to
-                   bounds-fault once the Step-3 global SHRINK lands)
+  no-trap-today -> domain completes with the exact retval in <detail> and NO
+                   "Cap mem access" fault (a recorded bounds-granularity gap)
 
 Exit code 0 iff every domain matches its oracle. Exit code 75 marks an
 infrastructure flake (boot/login/mount problems) for retry, matching
 run-domain-smoke.py.
 """
 
+import csv
 import os
 import pathlib
 import re
@@ -31,6 +31,7 @@ OOB_FAULT_MARK = "Cap mem access OOB"
 ANY_FAULT_RE = re.compile(r"Cap mem access (requires capability|OOB)")
 RETVAL_RE = re.compile(r"retval = (\d+)")
 INFRA_FLAKE_EXIT_CODE = 75
+DOMAIN_TIMEOUT_MARK = "__CAPSTONE_DOMAIN_TIMEOUT__"
 
 SCRIPT_DIR = pathlib.Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent.parent.parent
@@ -67,6 +68,8 @@ def classify(expect, detail, output):
         observed.append(f"fault[{fault.group(0)}]")
     if retval:
         observed.append(f"retval={retval.group(1)}")
+    if DOMAIN_TIMEOUT_MARK in output:
+        observed.append("timeout")
     observed_str = ",".join(observed) or "no-output"
 
     if expect == "tag-fault":
@@ -76,7 +79,7 @@ def classify(expect, detail, output):
     if expect == "ok":
         return (retval is not None and retval.group(1) == detail and fault is None), observed_str
     if expect == "no-trap-today":
-        return (fault is None and retval is not None), observed_str
+        return (retval is not None and retval.group(1) == detail and fault is None), observed_str
     return False, f"unknown-expect:{expect}"
 
 
@@ -100,9 +103,24 @@ def run_domain(child, command, timeout):
     riscv_cpu_do_interrupt assertion), so we accept EOF as a valid terminal
     state and return whatever serial output was captured before it."""
     child.sendline(command)
-    idx = child.expect([r"# ", pexpect.EOF], timeout=timeout)
+    try:
+        idx = child.expect([r"# ", pexpect.EOF], timeout=timeout)
+    except pexpect.TIMEOUT:
+        out = child.before.replace("\r\r", "\r")
+        return f"{out}\n{DOMAIN_TIMEOUT_MARK}\n", False
     out = child.before.replace("\r\r", "\r")
     return out, (idx == 1)  # (output, qemu_died)
+
+
+def write_results_tsv(path, results):
+    if path is None:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as result_file:
+        writer = csv.writer(result_file, delimiter="\t", lineterminator="\n")
+        writer.writerow(("domain", "expected", "observed", "result"))
+        for domain, expect, observed, passed in results:
+            writer.writerow((domain, expect, observed, "PASS" if passed else "FAIL"))
 
 
 def main():
@@ -112,6 +130,9 @@ def main():
     qemu_bin = env("CAPSTONE_QEMU_BINARY", REPO_ROOT / "capstone" / "capstone-qemu" / "build" / "qemu-system-riscv64")
     log_file = pathlib.Path(env("AUTHORITY_LOG", tmp_root / "capstone-authority-suite.log"))
     mult = float(env("CAPSTONE_QEMU_TIMEOUT_MULTIPLIER", "2"))
+    boot_timeout = float(env("AUTHORITY_BOOT_TIMEOUT_SECONDS", str(120 * mult)))
+    results_tsv_env = env("AUTHORITY_RESULTS_TSV", "")
+    results_path = pathlib.Path(results_tsv_env) if results_tsv_env else None
     runtime_dir = SCRIPT_DIR.parent / "runtime-qemu"
 
     share_dir.mkdir(parents=True, exist_ok=True)
@@ -171,7 +192,7 @@ def main():
         child.logfile_read = log
         try:
             try:
-                child.expect("buildroot login:", timeout=120 * mult)
+                child.expect("buildroot login:", timeout=boot_timeout)
             except (pexpect.EOF, pexpect.TIMEOUT) as exc:
                 raise InfraFlake(f"{domain}: boot-login") from exc
             child.sendline("root")
@@ -187,6 +208,7 @@ def main():
             child.terminate(force=True)
 
     results = []
+    write_results_tsv(results_path, results)
     with log_file.open("w", encoding="utf-8") as log:
         for domain, expect, detail in oracle:
             # Retry once on a transient QEMU boot flake (matches the benchmark
@@ -199,10 +221,12 @@ def main():
                 except InfraFlake as exc:
                     log.write(f"\n[infra-flake attempt {attempt}] {exc}\n")
                     if attempt == 2:
+                        write_results_tsv(results_path, results)
                         print(f"__CAPSTONE_INFRA_FLAKE__ {exc}", file=sys.stderr)
                         return INFRA_FLAKE_EXIT_CODE
             passed, observed = classify(expect, detail, out)
             results.append((domain, expect, observed, passed))
+            write_results_tsv(results_path, results)
 
     width = max(len(d) for d, *_ in results)
     print(f"\n{'DOMAIN'.ljust(width)}  {'EXPECT'.ljust(14)}  {'OBSERVED'.ljust(36)}  RESULT")

@@ -333,10 +333,13 @@ Current state on `capstone-bootstrap`:
     pass, including `low - high == -7`.
 
 - **Provenance/authority evidence suite** (`capstone/tests/capstone-authority/`,
-  `run-authority-suite.sh`): 13 domains pinning runtime behavior (source + asm +
+  `run-authority-suite.sh`): 20 domains pinning runtime behavior (source + asm +
   QEMU trap/no-trap vs an oracle). forge/ptr→int→ptr **tag-fault**; global/heap/
-  stack `_oob` **bounds-fault**; positive/negative pointer differences and other
-  in-bounds/functional cases pass. Runtime fact:
+  stack edge/index `_oob` **bounds-fault**; positive/negative pointer differences
+  and last-valid-byte controls pass. A struct-field over-read is
+  **no-trap-today**, confirming the subobject-bounds gap. The additive opt matrix
+  passes all 12 eligible domains at `-O1/-O2/-O3`; 8 assembly-verified O0-only
+  probes are explicitly skipped. Runtime fact:
   a domain-mode capability fault currently **aborts the QEMU model** (a
   `riscv_cpu_do_interrupt` assertion) after emitting the diagnostic.
 

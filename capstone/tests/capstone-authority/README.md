@@ -14,17 +14,19 @@ result that the codegen-only analysis got wrong (see "Findings" below).
 ```
 domains/                  one .c per test (domain_main(unsigned *res, unsigned func))
 oracle.tsv                expected runtime outcome per domain
+opt-policy.tsv            probes whose tested operation disappears above -O0
 build-authority-suite.sh  compile each domain to .s (asm) and link a .dom
 run-authority-suite.py    boot QEMU once per domain, classify vs the oracle
 run-authority-suite.sh    thin wrapper (BEEBS/RV8-style)
+run-authority-opt-matrix.* additive -O1/-O2/-O3 classification sweep
 ```
 
-Built at **-O0 on purpose**: this is an authority / ISA-behaviour suite, so the
-source-level operations under test (forged derefs, OOB loads, 9th/10th
-stack-passed pointer args, spills) must be preserved 1:1 rather than optimised
-away — at -O2 the compiler merges globals, does IPCP, constant-folds and DCEs,
-all of which defeat these probes. The Step-3 SHRINK narrowing is inserted in the
-backend, so it applies at every optimisation level regardless.
+The canonical suite is built at **-O0 on purpose** so source-level operations
+under test remain visible. The additive optimization sweep runs eligible probes
+at `-O1`, `-O2`, and `-O3`. `opt-policy.tsv` records probes that are skipped
+because generated-assembly inspection proves optimization removed the operation
+being measured; a successful constant-folded program is not counted as evidence
+for the original property.
 
 ## Running
 
@@ -32,6 +34,9 @@ backend, so it applies at every optimisation level regardless.
 source capstone/tests/capstone-test-env.sh
 bash capstone/tests/capstone-authority/run-authority-suite.sh
 # -> per-domain PASS/FAIL table + __CAPSTONE_AUTHORITY_SUITE_PASSED__
+
+bash capstone/tests/capstone-authority/run-authority-opt-matrix.sh
+# -> domain x {-O1,-O2,-O3} PASS/FAIL/SKIP table
 ```
 
 Each domain gets its **own boot**: a capability fault inside a domain currently
@@ -39,7 +44,8 @@ aborts QEMU (a domain-mode fault hits a `riscv_cpu_do_interrupt` assertion in
 the QEMU model), so a single trapping domain would otherwise kill the run for
 all that follow. The diagnostic is emitted before the abort, so the trap is
 still observed. Set `AUTHORITY_ONLY=name` to run one domain; `AUTHORITY_NO_BUILD=1`
-to skip the rebuild.
+to skip the rebuild. Matrix logs and machine-readable TSV results are written
+under `$CAPSTONE_TMP_ROOT/capstone-authority-opt-matrix/`, not the repository.
 
 ## Oracle vocabulary
 
@@ -48,7 +54,7 @@ to skip the rebuild.
 | `tag-fault` | deref of an untagged value | `Cap mem access requires capability`, no retval |
 | `bounds-fault` | deref outside the capability bounds | `Cap mem access OOB`, no retval |
 | `ok` | completes with the exact `retval` in `detail` | `retval = <decimal>`, no fault |
-| `no-trap-today` | completes with no fault **today**; flips to `bounds-fault` after the Step-3 global SHRINK | `retval`, no fault |
+| `no-trap-today` | known granularity gap: completes with the exact `retval` in `detail` and no fault | `retval = <decimal>`, no fault |
 
 ## Tests and what each proves
 
@@ -59,12 +65,19 @@ to skip the rebuild.
 | `pointer_diff` | ok | a positive pointer difference scales the cursor delta correctly and produces an integer, not authority |
 | `pointer_diff_neg` | ok | a negative pointer difference uses signed scaling and returns `-7`, guarding against the former `srli` miscompile |
 | `global_inbounds` | ok | ordinary in-bounds global access works (positive control) |
+| `global_last_byte` | ok | byte 63 of a narrowed 64-byte global remains accessible |
+| `global_one_past` | bounds-fault | dereferencing byte 64 crosses the global's exclusive upper bound |
+| `global_unsigned_wrap_index` | bounds-fault | an all-ones unsigned byte index lands before the narrowed global and traps at -O0 |
+| `global_signed_negative_index` | bounds-fault | signed index -1 lands before the narrowed global and traps at -O0 |
 | `global_oob` | bounds-fault | **the granularity result (C1)**: a[100] in `char a[64]` reaches an adjacent in-segment global; with `-capstone-shrink-globals` (default on) `a`'s capability is narrowed to its object so it traps (was no-trap before SHRINK — set `-mllvm -capstone-shrink-globals=false` to see the before) |
 | `global_oob_cross_segment` | bounds-fault | the coarse protection that already exists: an over-read past the *segment* traps even without object SHRINK, because capabilities are segment-bounded |
 | `heap_inbounds` | ok | in-bounds access to a `cap_shrink`-narrowed heap allocation works (positive control) |
 | `heap_oob` | bounds-fault | **heap granularity (C1)**: `p[100]` past a 64-byte allocation that malloc narrowed with `cap_shrink` traps, even though it stays inside the backing arena (heap analogue of `global_oob`) |
 | `stack_inbounds` | ok | in-bounds access to a `-capstone-shrink-stack`-narrowed local works (positive control; built with the flag on) |
+| `stack_last_byte` | ok | byte 63 of a narrowed 64-byte stack object remains accessible |
+| `stack_one_past` | bounds-fault | dereferencing byte 64 crosses the stack object's exclusive upper bound |
 | `stack_oob` | bounds-fault | **stack granularity (C1)**: `buf[100]` past a 64-byte local traps when `&buf` is narrowed to its object by `-capstone-shrink-stack` (built with the flag on; stack analogue of `global_oob`) |
+| `subobject_overread` | no-trap-today | `first[8]` reaches the adjacent field because global SHRINK narrows the whole struct, not its fields |
 | `many_pointer_args` | ok | the 9th/10th pointer args (stack-passed) are delivered tagged and deref correctly — regression guard for the fixed stack-arg tag-loss bug |
 | `spill_reachability` | ok | capabilities survive a register spill (stc/ldc) across a call with tag and bounds intact (PI Q1) |
 
@@ -141,3 +154,14 @@ to skip the rebuild.
    assertion `env->priv < PRV_C`). The fault is correctly detected and diagnosed
    first; graceful in-domain fault delivery is a separate runtime gap, noted here
    for the record.
+
+7. **Subobject bounds remain a measured gap.** `subobject_overread` reads from
+   one array field into the next field of the same struct and returns the exact
+   adjacent-field marker without a fault. Whole-object global SHRINK therefore
+   does not provide field-level spatial isolation.
+
+8. **Optimization coverage is explicit.** All 12 eligible probes preserve their
+   oracle class at `-O1`, `-O2`, and `-O3`. Eight probes are O0-only because the
+   operation under test is removed: two pointer differences, three global
+   edge/index loads, the cross-segment load, stack-passed pointer arguments, and
+   forced capability spills. Exact reasons are recorded in `opt-policy.tsv`.

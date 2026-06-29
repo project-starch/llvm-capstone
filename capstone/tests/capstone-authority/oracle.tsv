@@ -9,24 +9,34 @@
 #   ok             -> domain completes with the exact retval in `detail`
 #                     (printed by the host as "retval = <decimal>"), and NO
 #                     "Cap mem access" diagnostic appears.
-#   no-trap-today  -> domain completes WITHOUT any "Cap mem access" fault today
-#                     (the broad-bounds gap). After the Step-3 global SHRINK this
-#                     row's expectation flips to `bounds-fault`.
+#   no-trap-today  -> domain completes with the exact numeric retval in `detail`
+#                     and WITHOUT any "Cap mem access" fault. This records a
+#                     known bounds-granularity gap rather than an intended
+#                     success case.
 #
 # retval decimals: 0x21FF0007=570359815  0x21FE0007=570294279
 #                  0x2110C028=554745896
+#                  0x2201003F=570490943  0x2202003F=570556479
+#                  0x220700A5=570884261
 #                  0x09A00037=161480759  0x59110037=1494286391
 forge_inttoptr	tag-fault	inttoptr of a plain integer is untagged
 ptr_int_ptr_roundtrip	tag-fault	pointer laundered through a volatile integer loses its tag
 pointer_diff	ok	570359815
 pointer_diff_neg	ok	570294279
 global_inbounds	ok	554745896
+global_last_byte	ok	570490943
+global_one_past	bounds-fault	byte 64 of a SHRINK-narrowed 64-byte global
+global_unsigned_wrap_index	bounds-fault	all-ones unsigned byte index wraps to one byte before the narrowed global
+global_signed_negative_index	bounds-fault	signed byte index -1 lands one byte before the narrowed global
 global_oob	bounds-fault	a[100] past a[64]; object SHRINK now narrows a to [a,a+64) so the cross-object over-read traps (was no-trap-today before -capstone-shrink-globals). Run with -mllvm -capstone-shrink-globals=false to see the pre-SHRINK no-trap behaviour.
 global_oob_cross_segment	bounds-fault	a[100] past the loadable segment; already trapped today (segment-granular bound)
 heap_inbounds	ok	1319108648
 heap_oob	bounds-fault	p[100] past a 64-byte allocation that malloc narrowed with cap_shrink; in-arena but out-of-object, so it traps (heap analogue of global_oob)
 # stack_* are built with -capstone-shrink-stack=true (default off); see README.
 stack_inbounds	ok	1470103592
+stack_last_byte	ok	570556479
+stack_one_past	bounds-fault	byte 64 of a SHRINK-narrowed 64-byte stack object
 stack_oob	bounds-fault	buf[100] past a 64-byte local; with -capstone-shrink-stack the whole-object &buf is narrowed to [buf,buf+64) so it traps (stack analogue of global_oob)
+subobject_overread	no-trap-today	570884261
 many_pointer_args	ok	161480759
 spill_reachability	ok	1494286391

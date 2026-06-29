@@ -24,7 +24,7 @@ Companion documents:
 > example now **traps**; see the per-row "→ now:" notes. Measured detail: bounds
 > are **segment-granular** when un-narrowed (single `PT_LOAD` ≈ whole image), and
 > `SPLIT`/`SHRINKTO` exist in the ISA (so "no splitting" was about the compiler,
-> not the hardware). Evidence: `../../tests/capstone-authority/` (13/13),
+> not the hardware). Evidence: `../../tests/capstone-authority/` (20/20),
 > `cap-shrink-{globals,stack}.ll`, `capability-bounds-model.md`. The "before"
 > picture is reproducible with `-mllvm -capstone-shrink-globals=false`.
 
