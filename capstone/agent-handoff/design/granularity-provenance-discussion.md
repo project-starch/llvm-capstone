@@ -37,12 +37,12 @@ Companion documents:
 | 1 | Spilled capability readable by an attacker? | Spills use `stc` and stay *tagged* and usable. **Pre-narrowing:** any in-domain pointer could name any spill slot (no intra-domain bounds). **→ now:** object narrowing (C1) shrinks the blast radius — an attacker holding a pointer to object *X* can no longer name the spill slot for cap *Y* (their cap is bounded to *X*). Residual: caps spilled within a frame whose own bound still covers them; full mitigation also wants linearity / don't-spill policy. |
 | 2 | Distinguish int vs cap; MAC/checksum; "disjoint" | We use a **hardware out-of-band tag bit**, not a MAC. That is *stronger* than a checksum (unforgeable, not probabilistic). A MAC only becomes relevant if caps must cross **untagged storage** (disk/network/persistence). |
 | 3 | How is `ptr→int→ptr` compiled? | Through **integer** instructions (`mv`/`addi`); the result is **untagged → faults on deref** (fail-safe). Also: our `uintptr_t` is **64-bit**, narrower than the 128-bit cap — a cap cannot even round-trip through it. |
-| 4 | `p - q` into an integer? | Extract both addresses (`lcc` cursor field), integer `sub`, scale (`srli`). Pure integer result, no tag. Correct and safe. |
-| 5 | `malloc` now / in the suites / how to do it | No OS heap; suites link a **static bump arena**. **Pre-narrowing** it returned un-narrowed (whole-arena) pointers. **→ now:** `malloc` `cap_shrink`s each allocation to the requested size (`rv8_malloc.c`, dtoa `malloc_beebs`). (trio's `realloc_beebs` left un-narrowed — it over-reads the old block.) |
+| 4 | `p - q` into an integer? | Extract both cursors (`lcc`), integer `sub`, scale. Pure integer result, no tag. **BUG (2026-06-29 audit, verified):** the scale uses **logical** `srli`, so a **negative** difference is miscompiled (`low - high` returns garbage, not a negative `ptrdiff_t`); only the positive case is correct. Fix = `srai`/signed lowering for `sdiv exact`. The `pointer_diff` authority test was positive-only and masked it. |
+| 5 | `malloc` now / in the suites / how to do it | No OS heap, and **no general libc allocator**. **Per-allocator, benchmark-local:** `rv8_malloc.c` and dtoa's `malloc_beebs` `cap_shrink` each allocation (dtoa to the 16-rounded size, not byte-exact); **trio's `realloc_beebs` is left un-narrowed** (it over-reads the old block); CoreMark uses stack storage. So this is *not* a compiler-wide "heap default-on" policy — it is two prototype allocators. |
 | 6 | How are caps created / bounds assigned? | Derive from a root (`gp`/`sp`) via `cincoffset`. **Pre-narrowing:** bounds were inherited from the root (no per-object bounds). **→ now:** materialization narrows to the object with `SHRINK` (globals/heap default, stack opt-in). |
 | 7 | Do we do capability splitting? | **Compiler:** pre-narrowing did the anti-pattern (root cap + move cursor); **→ now** it narrows each object to its bounds (`SHRINK`). **Hardware:** a real `SPLIT` (and `SHRINKTO`) instruction *does* exist in the ISA — just not wired into LLVM yet. So "no splitting" was a statement about the compiler, and is now outdated. |
 | 8 | The `&a[10]; p+5; p+25; *q` example | **Pre-narrowing:** both ran without faulting (cap covered the whole segment). **→ now (default):** `p+25` leaving the object **traps** — `a`'s capability is `SHRINK`'d to its bounds (authority `global_oob`/`stack_oob`). `-capstone-shrink-globals=false` reproduces the old no-trap behavior. |
-| 9 | The two contributions (granularity + provenance) | Both well-posed. C1 (granularity) is now **implemented + measured** (overhead green, rijndael bug found); C2 (provenance) primitives exist and a verifier is **proposed** (`c2-provenance-verifier-proposal.md`). See §9–§10. |
+| 9 | The two contributions (granularity + provenance) | C1 (granularity): **initial slices implemented** (globals default-on; two benchmark allocators; stack opt-in), **functionally** validated across CoreMark/BEEBS/RV8, rijndael OOB found — but **overhead is NOT yet measured** and coverage is partial (no subobject, broad roots remain). C2 (provenance): primitives exist; the **proposed** verifier is a hygiene checker, not a proof (audit). The audit argues the distinctive Capstone angle is **attenuation + root-elimination** (linearity/`SPLIT`), not re-deriving CHERI bounds — a framing to agree with the reviewer. See §9–§10. |
 
 ---
 
@@ -173,15 +173,23 @@ round-trip silently *loses* authority rather than silently *forging* it.
 lcc a1, a1, 2    ; read field 2 (cursor/address) of b  -> integer
 lcc a0, a0, 2    ; read field 2 (cursor/address) of a  -> integer
 sub a0, a0, a1   ; integer subtraction of the two addresses
-srli a0, a0, 2   ; divide by sizeof(int) = 4
+srli a0, a0, 2   ; divide by sizeof(int) = 4   <-- LOGICAL shift: BUG for negatives
 ```
 `lcc rd, rs, 2` is the capability **field-query** instruction reading the *cursor*
 (address) field (fields: 0=tag, 2=cursor, 3=base, 4=end, 5=perms). So a pointer
 difference **projects both capabilities down to their integer addresses and
-subtracts** — the result is a plain integer with no tag, which is correct: the
-difference of two pointers is a number, not a capability. **No security concern,
-no tag involved, behaves like a normal target.** (It does *not* check that the two
-pointers share an object/provenance — same as standard C/CHERI; UB if they don't.)
+subtracts** — the result is a plain integer with no tag (correct: a pointer
+difference is a number, not a capability; no tag/forging concern).
+
+> **BUG (2026-06-29 audit, verified):** the divide-by-`sizeof` uses a **logical**
+> `srli`, but `ptrdiff_t` is **signed**. For a negative difference (`low - high`,
+> e.g. `&a[3] - &a[10]`) the byte delta is negative (`-28`), so logical `>>2`
+> yields a huge positive value instead of `-7`; a `-O0` probe returns the wrong
+> result. **Fix:** lower `sdiv exact` by a power of two with a signed shift
+> (`srai`); keep `srli` only for logical/unsigned. Add negative + signed/unsigned
+> C runtime cases and signed lit coverage — the positive-only `pointer_diff`
+> probe and the `i128-xlen-lowering.ll` `srli` expectation both masked this.
+> (Cross-object subtraction is separately UB, as in standard C/CHERI.)
 
 ---
 
@@ -277,12 +285,14 @@ function pointers, and the `__capstone_cap_init` table derive from it (see
 `capability-globals-init-decision.md`); the derived object caps are then
 `SHRINK`'d.
 
-**Done (the C1 work):** `SHRINK` at each materialization site —
+**Initial slices (the C1 work):** `SHRINK` at materialization sites —
 - **globals:** narrow `cincoffset(gp,&g)` to `sizeof(g)` ✓ (default on);
 - **stack:** whole-object `FrameIndex` narrowing ◑ (`-capstone-shrink-stack`, off);
-- **heap:** `cap_shrink` in the allocator (§5) ✓ (default on);
-— hardware-rounded to representable granularity; overhead measured green,
-rijndael OOB bug found. Remaining: stack default-on, subobject, `SPLIT`/`SHRINKTO`.
+- **heap:** `cap_shrink` in **two benchmark allocators** ◑ (rv8/dtoa; not libc-wide);
+— exact in this QEMU (representability not observable). **Functional** validation
+only across CoreMark/BEEBS/RV8; rijndael OOB found. **Overhead NOT measured.**
+Remaining (audit): coverage matrix, overhead numbers, stack default-on, subobject,
+permissions/W^X, `SPLIT`/root-elimination.
 
 ---
 

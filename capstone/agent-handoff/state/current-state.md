@@ -298,29 +298,37 @@ static image. Validated via `static-cap-typed-load-repro` + lit
 ## Capability granularity & provenance (C1/C2 — paper track)
 
 After the three benchmark suites completed, work pivoted to the paper's security
-contributions. Current state on `capstone-bootstrap`:
+contributions. **An external audit (2026-06-29,
+`history/29-06-2026_15-08-22_granularity-provenance-audit.md`) reviewed this whole
+direction; its findings are folded in below — read it before paper-facing work.**
+Current state on `capstone-bootstrap`:
 
-- **Bounds model settled** (`design/capability-bounds-model.md`): CHERI-128-style
-  compressed bounds — precise in-register, compressed on store; **byte-exact for
-  objects < 4 KiB**, power-of-two grain above. The narrowing op is **`SHRINK`**
-  (`int_capstone_cap_shrink`); `SPLIT`/`SHRINKTO` exist in the ISA but are not
-  wired into LLVM. (Corrects older "no splitting" / "address-space-broad bounds"
-  claims — measured reality is **segment-granular**, and the domain image is a
-  single `PT_LOAD`, so the inherited bound is effectively the whole image.)
+- **Bounds model** (`design/capability-bounds-model.md`): the narrowing op is
+  **`SHRINK`** (`int_capstone_cap_shrink`); `SPLIT`/`SHRINKTO` exist in the ISA
+  but are unwired. **Audit correction:** the `<4 KiB exact / grain-above`
+  representability rule is **spec-derived, NOT measured** — this QEMU keeps exact
+  fat bounds in a side table (`cm_map`) and restores them on load, so observable
+  `SHRINK` is **exact at all sizes**. Un-narrowed bounds are segment-granular
+  (single `PT_LOAD` ≈ whole image).
 
-- **C1 object-granularity narrowing implemented:**
+- **C1 object-granularity narrowing — INITIAL SLICES (not a spatial-safety
+  theorem; broad `gp`/`sp` roots remain, permissions stay RWX):**
   - **Globals** — `selectLGA` (`CapstoneISelDAGToDAG.cpp`) narrows each sized data
     global to `[&g, &g+sizeof(g))`. Flag `-capstone-shrink-globals` (**default on**);
     functions / unsized externs not narrowed.
-  - **Heap** — `rv8_malloc.c` narrows `malloc` returns with
-    `__builtin_capstone_cap_shrink` (`realloc` recovers its header via the wide
-    arena cap). Default on.
+  - **Heap** — NOT a libc policy: only **two benchmark-local allocators**
+    (`rv8_malloc.c`, dtoa `malloc_beebs`) `cap_shrink` returns; trio left
+    un-narrowed (its `realloc` over-reads); CoreMark uses stack storage. Do not
+    call this "heap default-on."
   - **Stack** — bare-`FrameIndex` whole-object narrowing, flag
     `-capstone-shrink-stack` (**default off**, spike: whole-object only, not
     interior pointers / varargs / dynamic alloca).
-  - Validation: **CoreMark ✓, RV8 7/7 ✓, BEEBS 82/82 ✓** with global+heap on;
-    stack-on smoke = CoreMark + 9 stack-heavy BEEBS ✓. Found a **real OOB bug**:
-    rijndael `aesxam.c` wrote 8 bytes through a `char r[4]` (now patched `r[8]`).
+  - Validation is **functional only**: **CoreMark ✓, RV8 7/7 ✓, BEEBS 82/82 ✓**
+    with global+heap on; stack-on smoke = CoreMark + 9 stack-heavy BEEBS ✓. Found
+    a **real OOB bug**: rijndael wrote 8 bytes through a `char r[4]` (patched).
+    **Overhead/code-size NOT measured** (don't say "overhead green").
+  - **Known miscompile (audit, verified):** negative pointer difference uses a
+    logical `srli` → wrong result; needs `srai` for signed `sdiv exact`.
 
 - **Provenance/authority evidence suite** (`capstone/tests/capstone-authority/`,
   `run-authority-suite.sh`): 12 domains pinning runtime behavior (source + asm +
@@ -333,9 +341,17 @@ contributions. Current state on `capstone-bootstrap`:
   (on/off A/B); updated `static-cap-global-init.ll`. Full Capstone lit suite green
   (31 tests).
 
-- **C2 (provenance verifier) — PROPOSED, not implemented:** a MIR dataflow checker
-  that no integer-origin value is used as a capability. Parked for review:
-  `design/c2-provenance-verifier-proposal.md`.
+- **C2 (provenance verifier) — PROPOSED, do NOT implement verbatim:** the audit
+  found the `UNKNOWN`-accepting opcode-only design is a hygiene checker, not a
+  proof. Revise first (typed MIR intent, seed args from calling-conv, real
+  transfer functions, separate non-forging vs preservation, small formal model).
+  See the audit-response banner in `design/c2-provenance-verifier-proposal.md`.
+
+- **Audit's strategic reframing (for the reviewer):** object bounds re-derive
+  CHERI; Capstone's novelty is linearity/revocation/`SPLIT`/**root-elimination**.
+  Proposed stronger frame: **provenance + attenuation + root-elimination** (trusted
+  `SPLIT` removes the ambient broad root from application code). A
+  research-direction decision, not yet acted on.
 
 ## Where to go next
 

@@ -2,7 +2,36 @@
 
 *Status: PROPOSAL for discussion with the reviewer. Not yet approved or implemented.
 This is the candidate "lead" contribution (C2) for the first paper; C1
-(granularity) is already implemented and is the supporting measured result.*
+(granularity) has initial slices implemented as the supporting (not yet measured)
+systems result.*
+
+> **Audit response (2026-06-29) — revise before implementing; do NOT build verbatim.**
+> The 2026-06-29 audit is correct that, as written, this is a **hygiene checker,
+> not a provenance proof**: the `UNKNOWN`-accepting, opcode-only lattice proves
+> only "no definitely-INT chain reached a checked operand among modeled opcodes,"
+> not "every tagged capability derives from a trusted root." Three concrete fixes
+> are agreed and must land before/with implementation:
+> 1. **Don't accept `UNKNOWN`.** A security checker must minimize **false
+>    negatives**, so "sound against false positives" (in the original §"what it
+>    is") is the *wrong* notion — drop it. Carry pointer/capability **intent from
+>    IR into MIR** (virtual-reg class / operand annotation / MF metadata), seed
+>    **arguments and returns from the calling convention** (not `UNKNOWN`), and
+>    require an explicit trusted annotation for genuinely-unknown capability
+>    consumers.
+> 2. **Sharper opcode semantics.** `LDC` only *propagates* the memory tag (not a
+>    guaranteed-tagged result); `SHRINK`/`DELIN` have tied in/out operands and must
+>    *inherit + validate* their cap input; `CCSRRW` is a source only for reviewed
+>    CSRs; `SCC`/`INIT`/`TIGHTEN`/`MREV`/`SEAL` have distinct input roles; an
+>    integer used as a memory base is a **tag-faulting invalid access**, not
+>    evidence of a forge.
+> 3. **Separate two properties** and define transfer functions for COPY/PHI/SELECT/
+>    call/return/spill/reload/inline-asm: **non-forging** (no tag from scalar bits)
+>    vs **preservation** (a source pointer is never accidentally demoted before a
+>    required use). Add a **small formal machine model**; use the corpus run as
+>    *validation*, not the proof.
+>
+> Until revised, describe this as an **experimental diagnostic**, not a verifier.
+> The audit also reframes the research position (see below).
 
 ## Why this, and why now
 
@@ -127,3 +156,12 @@ instruction, operand, integer-origin def chain); increment a counter.
 3. Relationship to C1 in the writeup: provenance ("where authority came from") +
    granularity ("how much it carries") as two halves of one story, or two
    separate contributions?
+4. **(Audit) Research position.** Object bounds re-derive CHERI; Capstone's
+   distinctive mechanisms are **linearity / revocation / `SPLIT` / root
+   elimination**, and our path currently *delinearizes* `gp`/`sp` and re-derives
+   CHERI-style bounds. The audit's stronger framing is **"provenance +
+   attenuation + root-elimination (ordinary code cannot bypass the broad
+   root)."** Do we pivot the paper to that (trusted `SPLIT` partitioning removes
+   the ambient root from application state; verified attenuation; capability-spill
+   isolation), with provenance+granularity as components? This is a
+   research-direction decision for the reviewer, not a doc edit.

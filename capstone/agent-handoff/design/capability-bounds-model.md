@@ -7,17 +7,37 @@ backend (`CapstoneInstrInfo.td`, `CapstoneISelDAGToDAG.cpp`,
 `IntrinsicsCapstone.td`). This resolves the "representability" question and the
 `SHRINK` vs `CSetBounds` naming inconsistency in the other design docs.*
 
+> **Correction (2026-06-29 audit) — representability is NOT observable in this
+> QEMU.** The compression encoding in `cap_compress.c` exists, but tagged
+> stores also record the **full fat bounds** in a side table (`cm_map`):
+> `store_cap`/`store_capregval` call `cap_mem_map_add(&env->cm_map, addr,
+> &cap->bounds)`, and `load_capregval` decompresses the 128-bit payload and then
+> **`memcpy`s the exact fat bounds back over the decompressed ones**
+> (`capstone_helper.c:47-87`). A 5,000-byte unaligned `SHRINK` + `stc`/`ldc`
+> round-trip returns the **exact** base/end. So observable behavior is
+> **exact fat-bound preservation**, and the `<4 KiB exact / grain-above` rule
+> below is **spec-derived, not measured**. Two consequences: (1) do **not** cite
+> the rounding rule as experimental evidence; say "exact bounds in the current
+> QEMU model"; (2) the rounding semantics must be settled as a *decision* — either
+> the side table is part of the architectural representation (and we stop claiming
+> a self-contained 128-bit compressed cap), or the 128-bit encoding is made
+> authoritative with defined representable `SHRINK` semantics + object/allocation
+> alignment. (`cap_uncompress` also has int-shift UB at `1 << (E+14)`; submodule,
+> report upstream.)
+
 ## TL;DR
 
 - Capstone uses a **CHERI-128-style compressed-bounds capability**: bounds are
   **precise (full 64-bit base/cursor/end) while resident in a register**, and
-  **compressed into 128 bits when stored to memory** (floating-point-style
-  mantissa + shared exponent).
-- **Representability rounding is real and necessary** — the GPT note's
-  "near-ideal *modulo representability*" hedge is **correct**, not an imported
-  CHERI-ism. Precise bounds for objects **< 4 KiB**; larger objects round to a
-  power-of-two-aligned grain (base down, top up), so authority may round
-  **outward** by up to one grain.
+  encoded into 128 bits on store. **But** the current QEMU also keeps exact fat
+  bounds in a side table and restores them on load (see Correction above), so the
+  compression is not observable here.
+- **Representability rounding (spec-derived, unverified here).** The spec permits
+  a compressed implementation to round; the rule *would be* precise bounds for
+  objects **< 4 KiB** and a power-of-two-aligned grain above (base down, top up,
+  outward by ≤ one grain). **In this QEMU `SHRINK` is exact** — treat the rounding
+  rule as a property of a future faithful 128-bit implementation, not a measured
+  result.
 - The bounds-narrowing primitive is **`SHRINK`** (QEMU `csshrink`, spec §shrink).
   **`CSetBounds`/`scbnds` do not exist in Capstone** — that is CHERI naming;
   purge it from the docs in favour of `SHRINK`.
@@ -66,10 +86,14 @@ Let `len = end - base`, `hb = ` index of the highest set bit of `len`,
   (**top rounds up**). Grain = `2^(E+3)` bytes; e.g. a ~1 MiB object rounds to a
   2 KiB grain.
 
-**Paper-precise claim:** *compiler-generated object bounds are byte-exact for
-objects under 4 KiB; for larger objects, base/end are aligned to a
-`2^(E+3)`-byte grain (`E = ⌈log2 len⌉ − 12`), rounding authority outward by at
-most one grain.* This is the honest form of "near-ideal granularity."
+**Paper claim (spec-derived; NOT measured here).** *In a faithful 128-bit
+implementation, compiler-generated object bounds would be byte-exact for objects
+under 4 KiB and aligned to a `2^(E+3)`-byte grain above (`E = ⌈log2 len⌉ − 12`),
+rounding authority outward by at most one grain.* **In the current QEMU this does
+not occur** — the fat-bounds side table makes `SHRINK` exact at all sizes (see the
+Correction at top). State results as "exact bounds in the current QEMU model";
+the rounding rule is a property to defend for a real 128-bit-only implementation,
+backed by `cap_compress.c` source, not by a QEMU experiment.
 
 ## 3. `SHRINK` semantics (the narrowing primitive)
 

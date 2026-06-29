@@ -7,26 +7,37 @@ only C++ `bigint` deferred). Work has pivoted to the first paper's security
 contributions. Status + where things are: `state/current-state.md` (the C1/C2
 section) and the design docs below.
 
-- **C1 granularity — implemented & validated.** Object-granularity `SHRINK` for
-  **globals** (`-capstone-shrink-globals`, default on) and **heap** (`malloc`
-  `cap_shrink`, default on); **stack** is a gated spike (`-capstone-shrink-stack`,
-  default off, whole-object only). Evidence + tests:
-  `capstone/tests/capstone-authority/` (12/12) and lit `cap-shrink-{globals,stack}.ll`.
-  Design: `design/capability-bounds-model.md`.
-- **C2 provenance verifier — PROPOSED, awaiting review.** A MIR dataflow checker
-  that no integer can become authority. **Do not implement until reviewer sign-off** —
-  see `design/c2-provenance-verifier-proposal.md` (ends with open framing questions).
+- **C1 granularity — INITIAL SLICES (functionally validated, not measured).**
+  `SHRINK` for **globals** (`-capstone-shrink-globals`, default on); **two
+  benchmark allocators** (rv8/dtoa, not a libc policy); **stack** gated spike
+  (default off, whole-object only). Tests: `capstone/tests/capstone-authority/`
+  (12/12) + lit `cap-shrink-{globals,stack}.ll`. Coverage is partial; broad
+  `gp`/`sp` roots and RWX perms remain.
+- **C2 provenance verifier — PROPOSED, revise before implementing.** The audit
+  found it is a hygiene checker, not a proof (see the doc's audit-response banner).
+  **Do not implement verbatim**; needs typed-MIR redesign + reviewer sign-off.
 
-**Recommended next step:** review/agree the C2 proposal with the reviewer, then implement
-it as the paper's lead contribution. Smaller "needed anyway" work available
-meanwhile: heap narrowing now covers RV8 + BEEBS `dtoa` (object-bounded
-`malloc_beebs`); **trio** stays un-narrowed because its `realloc_beebs`
-deliberately over-reads the old allocation (a latent over-read, documented in
-`build-beebs-dtoa-capstone.sh`) — narrowing it needs a size-header rewrite.
-Other items: correct the falsified claims in `granularity-provenance-discussion.md` (Q7/Q8) and
-`capability-provenance-threat-model.md` (T3) to match the measured
-segment-granular / SPLIT-exists / SHRINK-now-emitted reality; or move stack-shrink
-toward default-on (interior-pointer/varargs/`-O2` validation).
+**An external audit (2026-06-29,
+`history/29-06-2026_15-08-22_granularity-provenance-audit.md`) reviewed this whole
+direction — read it first.** Its recommended order (adopted here):
+
+1. **Fix negative pointer difference** (verified miscompile: logical `srli` on a
+   signed `sdiv exact`; use `srai`) + add negative/signed/unsigned tests. *On the
+   correctness critical path; delegable as a self-contained backend fix.*
+2. Bounds-model doc corrected (QEMU keeps exact fat bounds; representability not
+   measured) — **done**; decide the intended real 128-bit `SHRINK` semantics.
+3. Rewrite the C1 claim as a **coverage matrix**; **measure overhead** (perf,
+   code-size, dynamic `SHRINK` count) — remove "overhead green" language.
+4. Decide the **`uintptr_t` / address-only ABI** (currently an accidental 64-bit
+   authority-losing middle ground).
+5. **Revise** the C2 proposal to a strict typed-MIR invariant + small formal model,
+   then implement.
+6. Stack coverage for default-on (interior/varargs/alloca + opt-level matrix).
+7. trio size-aware `realloc` + one canonical bounded allocator.
+8. Separate RX code / RW data, tighten perms, constrain function caps.
+9. **Root elimination via trusted `SPLIT`** — the likely Capstone-specific
+   contribution (reviewer decision; reframes the paper as
+   **provenance + attenuation + root-elimination**).
 
 The earlier benchmark milestones (RV8, BEEBS, backend fixes) are retained below as
 reference/history.
