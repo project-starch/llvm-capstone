@@ -24,11 +24,12 @@
 //
 // The static-image initializer is left intact (its untagged bytes are overwritten
 // before first use); the stores are marked volatile so they are never elided as
-// redundant-with-initializer. Two holder shapes are handled, matching the GCT
-// metadata analysis in CapstoneAsmPrinter.cpp: a one-field struct wrapping a
-// single addrspace(200) pointer, and an array of addrspace(200) pointers. Only
-// elements whose target is a GlobalVariable or Function are materialized; null
-// elements need no tag.
+// redundant-with-initializer. The initializer constant is walked *recursively*,
+// so a capability-pointer slot at any depth is materialized: a bare pointer
+// global, a one-field struct, a flat pointer array, and — the case SQLite's
+// builtin-function table needs — an array of structs / arbitrarily nested
+// aggregates. Only leaves whose target is a GlobalVariable or Function are
+// materialized; null elements need no tag.
 //
 // Design note + rationale (constructor-codegen vs a GCT runtime consumer):
 // capstone/agent-handoff/design/capability-globals-init-decision.md.
@@ -81,18 +82,55 @@ static bool needsMaterialization(Constant *FieldInit) {
   return isa<GlobalVariable>(Stripped) || isa<Function>(Stripped);
 }
 
+namespace {
+// A capability-pointer leaf inside a (possibly nested) global initializer that
+// must be materialized at runtime, identified by the GEP index path from the
+// holder global down to the slot.
+struct StoreItem {
+  GlobalVariable *Holder;
+  Type *AggTy;                   // holder's value type, for the GEP base
+  SmallVector<uint64_t, 4> Path; // element/field indices from holder to slot
+  Constant *Value;               // the capability to store (a Global/Function ref)
+};
+} // end anonymous namespace
+
+// Recursively walk a constant initializer, recording every capability-pointer
+// leaf that references a global/function. The original two flat shapes (a
+// one-field struct and a flat pointer array) are just shallow cases; arrays of
+// structs and other nested aggregates are now covered.
+static void collectCapInits(GlobalVariable *Holder, Type *AggTy, Constant *C,
+                            SmallVectorImpl<uint64_t> &Path,
+                            SmallVectorImpl<StoreItem> &Items) {
+  if (!C || isa<ConstantAggregateZero>(C) || isa<UndefValue>(C))
+    return;
+  if (auto *CS = dyn_cast<ConstantStruct>(C)) {
+    for (unsigned I = 0, E = CS->getNumOperands(); I != E; ++I) {
+      Path.push_back(I);
+      collectCapInits(Holder, AggTy, CS->getOperand(I), Path, Items);
+      Path.pop_back();
+    }
+    return;
+  }
+  if (auto *CA = dyn_cast<ConstantArray>(C)) {
+    for (unsigned I = 0, E = CA->getNumOperands(); I != E; ++I) {
+      Path.push_back(I);
+      collectCapInits(Holder, AggTy, CA->getOperand(I), Path, Items);
+      Path.pop_back();
+    }
+    return;
+  }
+  // Leaf: only a capability-pointer slot referencing a global/function gets a tag.
+  if (isCapPtr(C->getType()) && needsMaterialization(C))
+    Items.push_back(
+        {Holder, AggTy, SmallVector<uint64_t, 4>(Path.begin(), Path.end()), C});
+}
+
 bool CapstoneCapGlobalInit::runOnModule(Module &M) {
   LLVMContext &Ctx = M.getContext();
   Type *I64 = Type::getInt64Ty(Ctx);
 
-  // Collect (holder, value-type, GEP-index, element-constant) work items first,
-  // so we only create the init function when there is something to do.
-  struct StoreItem {
-    GlobalVariable *Holder;
-    Type *AggTy;     // the holder's value type (array/struct) for the GEP
-    uint64_t Index;  // element/field index within the holder
-    Constant *Value; // the capability to store (a Global/Function reference)
-  };
+  // Collect work items first, so we only create the init function when there is
+  // something to materialize.
   SmallVector<StoreItem, 16> Items;
 
   for (GlobalVariable &GV : M.globals()) {
@@ -105,32 +143,8 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
         GV.getName().starts_with("llvm.") ||
         GV.getSection() == "llvm.metadata")
       continue;
-    Type *Ty = GV.getValueType();
-    Constant *Init = GV.getInitializer();
-
-    if (auto *ST = dyn_cast<StructType>(Ty)) {
-      // One-field struct wrapping a single capability pointer.
-      if (ST->getNumElements() != 1 || !isCapPtr(ST->getElementType(0)))
-        continue;
-      auto *CS = dyn_cast<ConstantStruct>(Init);
-      if (!CS || CS->getNumOperands() != 1)
-        continue;
-      Constant *F = CS->getOperand(0);
-      if (needsMaterialization(F))
-        Items.push_back({&GV, Ty, 0, F});
-    } else if (auto *AT = dyn_cast<ArrayType>(Ty)) {
-      // Array of capability pointers.
-      if (!isCapPtr(AT->getElementType()))
-        continue;
-      auto *CA = dyn_cast<ConstantArray>(Init);
-      if (!CA)
-        continue;
-      for (unsigned I = 0, E = CA->getNumOperands(); I != E; ++I) {
-        Constant *F = CA->getOperand(I);
-        if (needsMaterialization(F))
-          Items.push_back({&GV, Ty, I, F});
-      }
-    }
+    SmallVector<uint64_t, 4> Path;
+    collectCapInits(&GV, GV.getValueType(), GV.getInitializer(), Path, Items);
   }
 
   if (Items.empty())
@@ -138,11 +152,10 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
 
   // Synthesize `void __capstone_cap_init(void)` in the program address space
   // (matching ordinary Capstone functions) and emit the stores. It is given
-  // *internal* linkage and registered in llvm.global_ctors rather than exported
-  // under a fixed name: a fixed external name would collide at link time when
-  // more than one object in a multi-module program has capability globals (e.g.
-  // CoreMark). The domain runtime (start.S) runs the .init_array entries (one
-  // per such module) before domain_main.
+  // *internal* linkage rather than exported under a fixed name: a fixed external
+  // name would collide at link time when more than one object in a multi-module
+  // program has capability globals (e.g. CoreMark). The AsmPrinter registers
+  // this function by emitting a PC-relative `.capstone_cap_init` table entry.
   unsigned ProgAS = M.getDataLayout().getProgramAddressSpace();
   FunctionType *FTy = FunctionType::get(Type::getVoidTy(Ctx), /*isVarArg=*/false);
   Function *InitFn = Function::Create(FTy, GlobalValue::InternalLinkage, ProgAS,
@@ -151,8 +164,26 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
   BasicBlock *BB = BasicBlock::Create(Ctx, "entry", InitFn);
   IRBuilder<> B(BB);
 
+  Type *I32 = Type::getInt32Ty(Ctx);
   for (const StoreItem &It : Items) {
-    Value *Idx[] = {ConstantInt::get(I64, 0), ConstantInt::get(I64, It.Index)};
+    // GEP index path: a leading 0 to step through the holder pointer, then the
+    // recorded element/field indices down to the capability slot. Struct member
+    // indices must be i32; array indices are i64 -- pick per level by walking
+    // the holder type.
+    SmallVector<Value *, 5> Idx;
+    Idx.push_back(ConstantInt::get(I64, 0));
+    Type *CurTy = It.AggTy;
+    for (uint64_t P : It.Path) {
+      if (auto *ST = dyn_cast<StructType>(CurTy)) {
+        Idx.push_back(ConstantInt::get(I32, P));
+        CurTy = ST->getElementType(P);
+      } else if (auto *AT = dyn_cast<ArrayType>(CurTy)) {
+        Idx.push_back(ConstantInt::get(I64, P));
+        CurTy = AT->getElementType();
+      } else {
+        Idx.push_back(ConstantInt::get(I64, P));
+      }
+    }
     Value *Slot = B.CreateInBoundsGEP(It.AggTy, It.Holder, Idx);
     // Volatile so the store is never elided as redundant with the (untagged)
     // static initializer; it must run to set the tag in place.
