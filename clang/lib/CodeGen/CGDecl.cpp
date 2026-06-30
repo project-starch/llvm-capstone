@@ -1036,6 +1036,28 @@ static bool shouldSplitConstantStore(CodeGenModule &CGM,
   return false;
 }
 
+// Capstone: a capability tag is out-of-band metadata, so a bytewise memcpy from
+// a constant template cannot carry it. A local aggregate initializer that embeds
+// an addrspace(200) pointer to a global/function must therefore be lowered to
+// element-wise stores (each capability leaf store is selected as a tagged
+// capability store), never a memcpy-from-template. Returns true if such a
+// capability is present at any depth. (addrspace 200 is the Capstone capability
+// address space; no other target forms pointer-to-global constants there, so
+// this is self-gating.)
+static bool constantContainsCapability(llvm::Constant *C) {
+  if (!C || isa<llvm::ConstantPointerNull>(C) ||
+      isa<llvm::ConstantAggregateZero>(C) || isa<llvm::UndefValue>(C))
+    return false;
+  llvm::Type *Ty = C->getType();
+  if (Ty->isPointerTy() && Ty->getPointerAddressSpace() == 200)
+    return isa<llvm::GlobalValue>(C->stripPointerCasts());
+  for (unsigned I = 0, E = C->getNumOperands(); I != E; ++I)
+    if (auto *Op = dyn_cast<llvm::Constant>(C->getOperand(I)))
+      if (constantContainsCapability(Op))
+        return true;
+  return false;
+}
+
 enum class IsPattern { No, Yes };
 
 /// Generate a constant filled with either a pattern or zeroes.
@@ -1249,10 +1271,16 @@ void CodeGenFunction::emitStoresForConstant(const VarDecl &D, Address Loc,
   bool IsTrivialAutoVarInitPattern =
       CGM.getContext().getLangOpts().getTrivialAutoVarInit() ==
       LangOptions::TrivialAutoVarInitKind::Pattern;
-  if (shouldSplitConstantStore(CGM, ConstantSize)) {
+  // Capstone: a constant embedding a capability must be split into element-wise
+  // stores so each capability leaf gets a tagged store -- a memcpy from a
+  // constant template would leave it untagged. Force the split (regardless of
+  // size / optimization level) when a capability is present.
+  bool HasCapability = constantContainsCapability(constant);
+  if (shouldSplitConstantStore(CGM, ConstantSize) || HasCapability) {
     if (auto *STy = dyn_cast<llvm::StructType>(Ty)) {
       if (STy == Loc.getElementType() ||
-          (STy != Loc.getElementType() && IsTrivialAutoVarInitPattern)) {
+          (STy != Loc.getElementType() && IsTrivialAutoVarInitPattern) ||
+          HasCapability) {
         const llvm::StructLayout *Layout =
             CGM.getDataLayout().getStructLayout(STy);
         for (unsigned i = 0; i != constant->getNumOperands(); i++) {
@@ -1267,7 +1295,8 @@ void CodeGenFunction::emitStoresForConstant(const VarDecl &D, Address Loc,
       }
     } else if (auto *ATy = dyn_cast<llvm::ArrayType>(Ty)) {
       if (ATy == Loc.getElementType() ||
-          (ATy != Loc.getElementType() && IsTrivialAutoVarInitPattern)) {
+          (ATy != Loc.getElementType() && IsTrivialAutoVarInitPattern) ||
+          HasCapability) {
         for (unsigned i = 0; i != ATy->getNumElements(); i++) {
           Address EltPtr = Builder.CreateConstGEP(
               Loc.withElementType(ATy->getElementType()), i);
