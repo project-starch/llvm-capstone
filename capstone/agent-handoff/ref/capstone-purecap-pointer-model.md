@@ -43,10 +43,18 @@ Ordinary C pointer operations usually inherit metadata from the source capabilit
   sharing operations for shared regions;
 - **cursor**: adjusted by capability arithmetic such as `cincoffset`.
 
-The compiler does not generally synthesize tight object bounds for every C object
-in the current benchmark path. Dedicated capability intrinsics exist for explicit
-metadata operations such as bounds tightening, but ordinary pointer expressions
-should be understood as derivations from an existing capability.
+The compiler narrows bounds for *selected* object materializations, not yet for
+every C object. As of the C1 work it emits `SHRINK` to the object size for common
+sized global materializations (`selectLGA`, `-capstone-shrink-globals`, default
+on), two benchmark allocators (`rv8_malloc.c` and dtoa, `cap_shrink`), and
+fixed-size stack frame objects (`-capstone-shrink-stack`, opt-in). Coverage is
+partial: subobjects, unions, non-zero global offsets, function/code capabilities,
+dynamic `alloca`/varargs, and the broad `gp`/`sp` roots themselves are not
+narrowed, so ordinary pointer expressions should still be understood as
+derivations from an existing (often broad) capability. See
+`../design/granularity-provenance-discussion.md` and the `2026-06-29` audit
+(`../history/29-06-2026_15-08-22_granularity-provenance-audit.md`) for the
+coverage matrix and the open items.
 
 ## Loads, stores, and tags
 

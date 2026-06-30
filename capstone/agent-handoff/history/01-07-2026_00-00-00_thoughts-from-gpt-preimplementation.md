@@ -1,3 +1,15 @@
+> **ARCHIVED — pre-implementation note (superseded).** This is an early
+> planning interpretation written *before* the C1 granularity work landed. Its
+> central claims are now stale: it says there is "no normal automatic `SHRINK`
+> on object materialization" and that "intra-domain object spatial safety is not
+> achieved yet," but the compiler now narrows common global materializations
+> (default on), two benchmark allocators, and stack objects (opt-in). The
+> canonical current discussion is
+> `design/granularity-provenance-discussion.md`; the measured/limited reality is
+> in the `2026-06-29` granularity-provenance audit
+> (`history/29-06-2026_15-08-22_granularity-provenance-audit.md`). Kept only for
+> historical provenance of the reasoning.
+
 # Capability Granularity, Provenance, and Next Steps
 
 Below is my interpretation of `discussion-capability-granularity-provenance.md`.
