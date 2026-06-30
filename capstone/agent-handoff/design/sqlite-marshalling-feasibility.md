@@ -123,6 +123,23 @@ safe-fail."** Revised staging:
   authority suite classifies traps): borrow→revoke→use-after-revoke must produce a
   deterministic **tag fault**, and a senior/hierarchical revoke must cascade to a
   derived sub-region. This is the spike; it reuses existing assets.
+
+  **M0 result (2026-06-29) — done; surfaced a load-bearing GAP.** Built and ran
+  `tests/runtime-qemu/borrow-revoke-uaf-probe/` (lender lends a region as a
+  revocable borrow, revokes it between two domain calls; the borrower caches the
+  delegated pointer in round 1 and dereferences it in round 2). The borrow and
+  the `revoke_region()` both succeed, **but the use-after-revoke is NOT trapped**:
+  the round-2 store lands and the lender observes the stage-2 sentinel
+  (`0x2222…`). This **contradicts the proposal's central "a subsequent
+  dereference then faults" claim in the current runtime configuration.** Two
+  incidental findings: (a) only the `REV_BORROWED` annotation (0x1) establishes a
+  revocable relationship — `REV_SHARED` (0x2) makes `revoke_region` assert in
+  `helper_csrevoke` (`type == CAP_TYPE_REV` fails); (b) this is a distinct issue
+  from the known `helper_csmrev` `CAP_TYPE_LIN` assertion on re-share-without-revoke.
+  Root-cause hypothesis (to confirm, see probe README): the borrower reaches the
+  region via an SBI region query that returns a mapping **not tracked as a child
+  of the lender's revocable capability**, so the QEMU revocation-tree sweep misses
+  it. This makes Risk 3 below the **critical-path** question, not a side concern.
 - **M1 — one SQLite boundary group, end-to-end.** Take the single hottest group —
   `sqlite3_column_text` (engine→host borrow) — and express it as: engine `mrev`s a
   revocation cap for the row buffer, lends the linear cap to the host shim, and
