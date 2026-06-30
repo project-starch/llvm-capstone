@@ -159,14 +159,16 @@ oracle-classified runner so the matrix is mechanically checkable.
 Implemented and tested the enforcement half; the recording half is blocked on an
 author design decision.
 
-- **Enforcement patch (kept, in working tree, `op_helper.c`):** added
+- **Enforcement patch (committed in `capstone-qemu`, `op_helper.c`):** added
   `capstone_cap_revoked()` (NULL/out-of-range node id ⇒ live) gated by
   `CAPSTONE_REVOCATION_ENFORCE` (default 1, flip to 0 to revert); a check in
   `_helper_access_with_cap` raising `RISCV_EXCP_INVALID_CAP`; and an untag of a
   revoked cap reloaded in `helper_reg_set_cap_compressed`. Minimal and reversible.
-  **Verified non-regressing:** with this patch alone, the re-share-after-revoke
-  probe still passes and M0 stays at the no-trap gap — because it is **dormant**:
-  nothing currently sets a node invalid (see next point), so the check never fires.
+  Committed on the `caplifive-release` submodule branch as **`3d71d161e7`** (parent
+  llvm-capstone submodule pointer bumped to match). **Verified non-regressing:**
+  with this patch alone, the re-share-after-revoke probe still passes and M0 stays
+  at the no-trap gap — because it is **dormant**: nothing currently sets a node
+  invalid (see next point), so the check never fires.
 
 - **Recording bug (found, fix reverted):** `cap_rev_tree_revoke`'s loop condition
   is `_CAP_REV_NODE(tree, node_id).depth > depth` where `depth` was just read from
@@ -188,11 +190,31 @@ author design decision.
 records an invalidation, a use-after-revoke faults), with no regression. The
 remaining work is the **recording-side semantics**, which is the author's call.
 
+## Open questions for the runtime/QEMU author (to raise before the recording fix)
+
+(Substance of the prepared author note, recorded here since the note itself is
+not committed.)
+
+1. **Loop condition.** Is `node_id` vs `cur` in `cap_rev_tree_revoke`'s condition
+   a bug? What subtree is a revoke meant to invalidate, and how is `depth` /
+   seniority meant to bound the walk?
+2. **Revoke→re-share lifecycle.** After a revoke retypes the retained node to
+   UNINIT (via `retain_data`), what is the intended re-share path — should the
+   caller re-`init` (UNINIT→LIN) before `mrev`, i.e. is the existing probe's
+   "revoke then re-share via `mrev`" the wrong sequence, or should revoke leave
+   the node LIN in this case?
+3. **Enforcement style.** Lazy per-use validity check (what we implemented) vs
+   eager tag-scrub at revoke — which matches the intended hardware/spec semantics?
+4. **Recycling safety (for the lazy check).** `cap_rev_tree_revoke` does not
+   `cap_rev_tree_release` the revoked nodes, and `release` is refcount-gated — can
+   you confirm a node is never reused while a capability still references it, so a
+   stale `rev_node_id` cannot alias a recycled (valid) node?
+
 ## Next step
 
-Raise this note with the QEMU/runtime author (lazy-vs-eager decision, the
-recycling-safety invariant, and the `depth`-loop question) **before**
-implementation. Tracked as task #70.
+Raise the questions above with the QEMU/runtime author **before** landing the
+recording-side fix. The enforcement half is committed (`3d71d161e7`) and dormant.
+Tracked as task #70.
 
 ## Pointers
 - M0 finding + probe: `sqlite-marshalling-feasibility.md` (M0 result),
