@@ -2,6 +2,21 @@
 
 Minimal snapshot. Read first in every session.
 
+## SQLite in-memory bring-up
+
+SQLite 3.53.3 now compiles and links as a `capstone64-unknown-elf` domain using
+memsys5 over a 1 MiB arena and the existing runtime-initialized SQLite VFS
+skeleton. Sources remain under `/tmp/capstone`; the pinned fetch/build/run
+workflow and blocker report are in `capstone/benchmarks/sqlite/README.md`.
+
+The QEMU run is blocked before SQL execution by a compiler coverage gap:
+`CapstoneCapGlobalInit` handles a one-pointer struct or a direct pointer array,
+but does not recurse through arrays/structs containing capability fields.
+SQLite has several callback/name tables of that shape. Their function/string
+pointers remain untagged, causing `cs.cjalr` or capability-memory faults during
+built-in registration. `capstone/benchmarks/sqlite/probes/nested-cap-global.c`
+is a 592-byte runtime reproducer. This is not a VFS/filesystem blocker.
+
 ## Verified baseline
 
 All of the following pass on the `capstone-bootstrap` branch:

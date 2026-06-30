@@ -40,6 +40,17 @@ direction — read it first.** Its recommended order (adopted here):
    contribution (reviewer decision; reframes the paper as
    **provenance + attenuation + root-elimination**).
 
+## Parallel prerequisite: SQLite runtime
+
+The SQLite 3.53.3 in-memory domain now compiles and links, but QEMU is blocked
+before SQL execution by non-recursive capability-global initialization. The
+next compiler task is to make `CapstoneCapGlobalInit` recursively materialize
+capability fields in arbitrary nested global aggregates and compiler-generated
+private constant templates. Use
+`capstone/benchmarks/sqlite/probes/nested-cap-global.c` as the runtime gate, then
+rerun `capstone/benchmarks/sqlite/run-sqlite-memory.sh`. Do not add further
+SQLite-specific table rewrites in place of fixing the general shape.
+
 The earlier benchmark milestones (RV8, BEEBS, backend fixes) are retained below as
 reference/history.
 

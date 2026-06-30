@@ -190,7 +190,12 @@ static int capstone_sqlite_vfs_sleep(sqlite3_vfs *vfs, int microseconds) {
   return microseconds;
 }
 
+#ifdef SQLITE_OMIT_FLOATING_POINT
+static int capstone_sqlite_vfs_current_time(sqlite3_vfs *vfs,
+                                            sqlite3_int64 *out) {
+#else
 static int capstone_sqlite_vfs_current_time(sqlite3_vfs *vfs, double *out) {
+#endif
   (void)vfs;
   if (out)
     *out = 0.0;
@@ -318,6 +323,5 @@ int capstone_sqlite_vfs_self_check(const struct capstone_sqlite_vfs_bundle *bund
 
   return CAPSTONE_SQLITE_VFS_CHECK_OK;
 }
-
 
 

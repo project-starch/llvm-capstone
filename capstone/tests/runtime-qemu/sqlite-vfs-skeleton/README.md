@@ -5,7 +5,8 @@ This directory is the **first Capstone-compiled SQLite-facing slice**.
 It does **not** build or run the full SQLite core yet.
 Instead it proves a smaller but real step:
 
-- fetch the official SQLite `3.53.1` amalgamation,
+- fetch the pinned official SQLite amalgamation through
+  `capstone/benchmarks/sqlite/fetch-sqlite.sh`,
 - compile a tiny custom-VFS skeleton against the real `sqlite3.h`,
 - compile that code with the in-tree Capstone `clang` for `capstone64-unknown-elf`,
 - and link it into a normal `.dom` sample-domain image.
@@ -86,5 +87,4 @@ Plumb the already validated HostCall services into the skeleton callbacks:
 
 Once that exists, the next honest gate is a first reduced SQLite smoke, not another
 purely abstract shim exercise.
-
 
