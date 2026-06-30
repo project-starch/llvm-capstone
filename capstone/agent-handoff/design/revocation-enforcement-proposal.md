@@ -190,6 +190,42 @@ author design decision.
 records an invalidation, a use-after-revoke faults), with no regression. The
 remaining work is the **recording-side semantics**, which is the author's call.
 
+## 8. Spec-grounded semantics (authoritative)
+
+From `capstone-spec/parts/cap-man-insn.adoc` (REVOKE/MREV) and `prog-model.adoc`
+(definitions). These largely *answer* the questions below from the spec, leaving
+the author to confirm the implementation should match.
+
+- **REVOKE `x[rs1]` (a type-2 revocation cap)** does two things:
+  1. For **every** capability `c` in the system (register or memory), set
+     `c.valid = 0` if either: `c` is non-revocation, valid, and **aliases**
+     `x[rs1]`; or `c` is a valid revocation cap with `x[rs1] <t c`.
+  2. Retype `x[rs1]` → `0` (linear) if every invalidated `c` was non-linear (or
+     `x[rs1]` lacks write perm); **otherwise** → `3` (uninitialised), cursor=base.
+- **alias** (`prog-model.adoc`): `c` aliases `d` iff `[c.base,c.end]` ∩
+  `[d.base,d.end]` ≠ ∅ — i.e. **bounds overlap**.
+- **`c <t d`**: `c` aliases `d` and `c` was created earlier (more senior).
+- **MREV** requires `x[rs1].type == 0` (linear) and yields a type-2 cap.
+
+Three consequences:
+1. **Revocation is aliasing-based.** The QEMU rev-tree (`.next`/`depth` walk) is an
+   *implementation* of "invalidate the aliasing/junior set." The current loop
+   invalidates nothing (the `node_id.depth > depth` self-comparison), so it does
+   not implement the spec at all. A correct fix must invalidate exactly the
+   aliasing non-revocation caps + junior revocation caps.
+2. **The re-share breakage is spec-explained.** If the delegated borrow cap is
+   **non-linear**, revoke invalidates it, `x[rs1]` stays **linear**, and re-share
+   via `mrev` is legal — matching the known-good probe. If the borrow cap is
+   **linear**, revoke makes `x[rs1]` **uninitialised**, so re-share must `init`
+   (UNINIT→LIN) *before* `mrev`. Our naive `cur.depth` fix invalidated a linear
+   cap, so `x[rs1]` became UNINIT and the probe's direct `mrev` asserted. The fix
+   is therefore correct *in spirit*; the probe (or the runtime's re-share path)
+   must follow the spec's init-before-mrev rule when a linear cap was revoked.
+3. **The lazy per-use check is spec-faithful.** The spec sets `c.valid = 0`
+   conceptually for all aliasing caps; realizing that lazily (fault when a cap
+   with an invalid rev-node is used) is a valid implementation, which is what the
+   committed enforcement patch does.
+
 ## Open questions for the runtime/QEMU author (to raise before the recording fix)
 
 (Substance of the prepared author note, recorded here since the note itself is
