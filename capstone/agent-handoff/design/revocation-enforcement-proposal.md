@@ -154,6 +154,40 @@ spill/`stc`+`ldc` step; case 4 adds a senior/sub delegation). 5 reuses the
 known-good probe; 6 is the existing regression gate. Each new case ships with the
 oracle-classified runner so the matrix is mechanically checkable.
 
+## 7. Implementation status (2026-06-30)
+
+Implemented and tested the enforcement half; the recording half is blocked on an
+author design decision.
+
+- **Enforcement patch (kept, in working tree, `op_helper.c`):** added
+  `capstone_cap_revoked()` (NULL/out-of-range node id ⇒ live) gated by
+  `CAPSTONE_REVOCATION_ENFORCE` (default 1, flip to 0 to revert); a check in
+  `_helper_access_with_cap` raising `RISCV_EXCP_INVALID_CAP`; and an untag of a
+  revoked cap reloaded in `helper_reg_set_cap_compressed`. Minimal and reversible.
+  **Verified non-regressing:** with this patch alone, the re-share-after-revoke
+  probe still passes and M0 stays at the no-trap gap — because it is **dormant**:
+  nothing currently sets a node invalid (see next point), so the check never fires.
+
+- **Recording bug (found, fix reverted):** `cap_rev_tree_revoke`'s loop condition
+  is `_CAP_REV_NODE(tree, node_id).depth > depth` where `depth` was just read from
+  the *same* node — always false on entry, so the loop body never runs and
+  revocation marks **nothing** invalid. The intended condition almost certainly
+  tests the current node (`cur`).
+
+- **Why the recording fix is not landed:** changing the condition to `cur` does
+  make the M0 **use-after-revoke fault as desired** (safe-fail achieved end to
+  end — the borrower's cached cap is reloaded untagged and the round-2 store no
+  longer lands). **But it breaks the known-good re-share-after-revoke flow**: once
+  `csrevoke` walks the subtree and retypes the node (LIN→UNINIT via `retain_data`),
+  the subsequent re-share's `helper_csmrev` asserts `CAP_TYPE_LIN`. So the
+  recording-side bug is **entangled with the revoke/re-share lifecycle** (the
+  `retain_data` / LIN-vs-UNINIT retyping and the mrev precondition) and a correct
+  fix needs the author's intended semantics, not a one-token edit.
+
+**Net:** the enforcement *mechanism* for #70 is in place and proven (when revoke
+records an invalidation, a use-after-revoke faults), with no regression. The
+remaining work is the **recording-side semantics**, which is the author's call.
+
 ## Next step
 
 Raise this note with the QEMU/runtime author (lazy-vs-eager decision, the
