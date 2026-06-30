@@ -1327,11 +1327,20 @@ static CharUnits getArrayElementAlign(CharUnits arrayAlign, llvm::Value *idx,
   // If we have a constant index, we can use the exact offset of the
   // element we're accessing.
   if (auto *constantIdx = dyn_cast<llvm::ConstantInt>(idx)) {
-    CharUnits offset = constantIdx->getZExtValue() * eltSize;
-    return arrayAlign.alignmentAtOffset(offset);
+    const llvm::APInt &index = constantIdx->getValue();
+    unsigned width = std::max(index.getBitWidth(), 65U);
+    llvm::APInt wideIndex = index.sextOrTrunc(width);
+    llvm::APInt elementSize(width, eltSize.getQuantity(), /*isSigned=*/true);
+    bool overflow;
+    llvm::APInt offset = wideIndex.smul_ov(elementSize, overflow);
+    if (!overflow && offset.isSignedIntN(64)) {
+      return arrayAlign.alignmentAtOffset(
+          CharUnits::fromQuantity(offset.getSExtValue()));
+    }
   }
 
-  // Otherwise, use the worst-case alignment for any element.
+  // Otherwise, use the worst-case alignment for any element. This also covers
+  // constants that do not fit in CharUnits::QuantityType.
   return arrayAlign.alignmentOfArrayElement(eltSize);
 }
 
