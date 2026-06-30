@@ -22,9 +22,13 @@ the capability-mediated borrow stays near raw-pointer cost and below the copy
 (`SQLITE_TRANSIENT`) baseline.
 
 The headline question for *us* is not "is the idea sound" but "**what already
-exists in this tree, and what is the real gap?**" The answer is: substantially
-more is wired than expected, and the central borrow→revoke→fault behaviour already
-works through one specific channel.
+exists in this tree, and what is the real gap?**" The answer (refined by the M0
+spike, below): substantially more *plumbing* is wired than expected — the
+primitive stack, the REV/LIN/UNINIT lifecycle, and the kernel-module borrow/revoke
+ABI all work — **but the central safe-fail guarantee does not hold yet**: M0
+showed that revocation is currently *recorded but not enforced*, so a
+use-after-revoke still succeeds. The real gap is QEMU revocation enforcement, not
+the toolchain.
 
 ## Ground truth 1 — the full primitive stack is wired, C → QEMU
 
@@ -78,11 +82,16 @@ domain entry, and everything derived from them is NONLIN. So **a linear capabili
 cannot be conjured from ordinary C pointers by the compiler.** It must enter the
 domain from somewhere that already holds UNINIT/LIN authority. That somewhere is:
 
-## Ground truth 3 — borrow/revoke already works via HostCall shared regions
+## Ground truth 3 — the borrow/revoke *plumbing* exists via HostCall shared regions (but is not enforced — see M0)
 
-This is the load-bearing discovery. The host↔domain boundary the proposal needs
-*already exists* as the **HostCall shared-region** mechanism, and the
-borrow→revoke contract is already demonstrated:
+This is the load-bearing discovery — with an important caveat the M0 spike
+established. The host↔domain boundary the proposal needs *already exists* as the
+**HostCall shared-region** mechanism, and the borrow/revoke *operations* run end
+to end. **However, this only demonstrates that the operations are plumbed, not
+that revocation is enforced** — the existing probes below confirm the calls
+succeed and that re-share-requires-revoke, but none of them tests that a
+use-after-revoke *faults*. M0 (below) does, and finds it does not. Read this
+section as "the wiring is present," not "the guarantee holds":
 
 - `tests/runtime-qemu/shared-region-probe/` — the host (S-mode runtime) shares a
   region with the domain via SBI ecalls (`SBI_EXT_CAPSTONE_REGION_QUERY/COUNT`);
@@ -100,10 +109,12 @@ The runtime/QEMU author has confirmed the intended rule (README, runtime-qemu):
 > if a region is already borrow-shared, it must be revoked before anything else
 > can be done to it, including borrow-sharing it again.
 
-That rule **is** the proposal's revocation contract (revoke at the borrow's end
-before the buffer is reused). So the engine→host "borrow result, revoke at next
-`step`/`reset`/`finalize`" pattern (Table 4 rows 1–8) maps directly onto an
-already-working primitive: shared-region borrow + `revoke_region`.
+That rule matches the *shape* of the proposal's revocation contract (revoke at
+the borrow's end before the buffer is reused), and the engine→host "borrow result,
+revoke at next `step`/`reset`/`finalize`" pattern (Table 4 rows 1–8) maps onto the
+shared-region borrow + `revoke_region` primitive. **But "revoke succeeds and
+enables re-share" is not "use-after-revoke faults"** — that stronger property is
+what M0 tests and what is currently missing (see below).
 
 ## Ground truth 4 — existing SQLite scaffolding
 
@@ -114,9 +125,9 @@ already-working primitive: shared-region borrow + `revoke_region`.
 
 ## What this re-frames in the milestones
 
-Because borrow/revoke already works, **M0 is not "can we revoke" (done) — it is
-"map the SQLite boundary onto the shared-region API and make the failure mode
-safe-fail."** Revised staging:
+Because the borrow/revoke *operations* run (but are not enforced), **M0 is not
+"can we revoke" — it is "does use-after-revoke actually fault?"** The answer (M0
+result, below) is **no, not yet**, so the revised staging puts enforcement first:
 
 - **M0 — characterize + harden the existing borrow/revoke.** Lift the
   shared-region revoke probe into a named, oracle-classified test (the way the
@@ -136,10 +147,31 @@ safe-fail."** Revised staging:
   revocable relationship — `REV_SHARED` (0x2) makes `revoke_region` assert in
   `helper_csrevoke` (`type == CAP_TYPE_REV` fails); (b) this is a distinct issue
   from the known `helper_csmrev` `CAP_TYPE_LIN` assertion on re-share-without-revoke.
-  Root-cause hypothesis (to confirm, see probe README): the borrower reaches the
-  region via an SBI region query that returns a mapping **not tracked as a child
-  of the lender's revocable capability**, so the QEMU revocation-tree sweep misses
-  it. This makes Risk 3 below the **critical-path** question, not a side concern.
+
+  **Root cause (CONFIRMED, 2026-06-30) — revocation is recorded but not enforced.**
+  `cap_rev_tree_revoke` (`cap_rev_tree.c:81`) sets the descendant rev-tree nodes'
+  `valid = false`. But that `valid` bit is **never read to gate a capability use**:
+  it is written on node creation, asserted in `_cap_rev_tree_dup_node_before`, set
+  false in `revoke`, and read nowhere else in `target/riscv`. The capability-use
+  paths do not consult it — `_helper_access_with_cap` (`op_helper.c:943`) authorizes
+  a load/store purely on the base register's cached `tag` bit plus a `cap_in_bounds`
+  check, and the cap-load path `helper_reg_set_cap_compressed` (`op_helper.c:999`)
+  derives the result tag from `cap_mem_map_query` (is a cap stored here?), not from
+  rev-tree validity. `helper_csrevoke` also does not touch `cm_map` or scrub
+  in-flight register/memory tags. **Therefore a revoked capability already
+  materialized in a register or memory remains fully usable**, which is exactly the
+  observed use-after-revoke. (This supersedes the earlier ambient-root/scalar
+  hypothesis: authority demonstrably comes from the register cap's tag+bounds; the
+  defect is that revocation is not checked on that path.)
+
+  **Consequence for the direction.** The borrow/revoke *plumbing* works
+  (mint-revocation, the REV/LIN/UNINIT lifecycle, the kernel-module borrow ABI),
+  but the security *guarantee* does not hold in this QEMU build because enforcement
+  is missing. Making revocation bite requires wiring enforcement into the
+  capability-use path — either **lazy** (the access/load path checks the cap's
+  rev-tree node `valid` bit; matches why the tree exists, adds a per-access lookup)
+  or **eager** (`csrevoke` scrubs tags in registers + `cm_map`). This is the gating
+  prerequisite for M1+, and it is a **QEMU model** change, not a compiler change.
 - **M1 — one SQLite boundary group, end-to-end.** Take the single hottest group —
   `sqlite3_column_text` (engine→host borrow) — and express it as: engine `mrev`s a
   revocation cap for the row buffer, lends the linear cap to the host shim, and
