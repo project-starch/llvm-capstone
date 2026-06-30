@@ -154,6 +154,22 @@ spill/`stc`+`ldc` step; case 4 adds a senior/sub delegation). 5 reuses the
 known-good probe; 6 is the existing regression gate. Each new case ships with the
 oracle-classified runner so the matrix is mechanically checkable.
 
+**Build status (2026-06-30):**
+- Case 1 (register-held): covered in spirit by the `_helper_access_with_cap`
+  check; not a separate probe (hard to force a register-resident cap across the
+  `dom_return` ecall from C).
+- Cases 2–3: **built** as `tests/runtime-qemu/revoke-matrix-probe/`
+  (`run-revoke-matrix-probe.sh`, both in one boot). Both currently show the
+  expected dormant **NO-TRAP gap** (revoke succeeds, store lands); they flip to
+  faults once the recording fix lands.
+- Case 4 (senior-cascade): **deferred** — needs `SHRINK`/`SPLIT` in the borrower
+  to derive a distinct sub-node, but these probes are built with the buildroot
+  gcc (no Capstone builtins / can't assemble the custom insns). Requires a
+  Capstone-clang borrower or a raw-encoded `.insn`. Low priority while dormant.
+- Case 5 (re-share): the existing `…payload-revoke-probe` passes.
+- Case 6 (no false positives): re-share probe + dormancy argument; full
+  authority-suite/benchmark gate to be re-run once the recording fix is active.
+
 ## 7. Implementation status (2026-06-30)
 
 Implemented and tested the enforcement half; the recording half is blocked on an
