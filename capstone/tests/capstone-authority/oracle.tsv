@@ -40,3 +40,6 @@ stack_oob	bounds-fault	buf[100] past a 64-byte local; with -capstone-shrink-stac
 subobject_overread	no-trap-today	570884261
 many_pointer_args	ok	161480759
 spill_reachability	ok	1494286391
+untagged_cap_roundtrip	ok	580452355
+tagged_cap_memcpy_aligned	ok	581566465
+tagged_cap_memcpy_misaligned	tag-fault	misaligned copy cannot carry a cap tag (byte-loop fallback); deref of the untagged copy faults

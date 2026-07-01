@@ -10,7 +10,8 @@ section) and the design docs below.
 - **C1 granularity — INITIAL SLICES (functionally validated, not measured).**
   `SHRINK` for **globals** (`-capstone-shrink-globals`, default on); **two
   benchmark allocators** (rv8/dtoa, not a libc policy); **stack** gated spike
-  (default off, whole-object only). Tests: `capstone/tests/capstone-authority/`
+  (default off; fixed objects incl. interior/load-store bases as of 2026-07-01).
+  Tests: `capstone/tests/capstone-authority/`
   (20/20 at canonical `-O0`; 12 eligible probes pass at `-O1/-O2/-O3`) + lit
   `cap-shrink-{globals,stack}.ll`. The suite now measures the residual subobject
   gap directly; broad `gp`/`sp` roots and RWX perms remain.
@@ -38,30 +39,43 @@ direction — read it first.** Its recommended order (adopted here):
 5. **Revise** the C2 proposal to a strict typed-MIR invariant + small formal model
    — **revision DONE (2026-07-01):** `design/c2-provenance-verifier-proposal.md`
    §"Design (v2)". **Then implement** — gated on reviewer sign-off on v2.
-6. Stack coverage for default-on (interior/varargs/alloca + opt-level matrix).
+6. Stack coverage toward default-on (task #77). **Increment 1 DONE (2026-07-01):**
+   interior pointers + load/store bases through fixed stack objects now narrow
+   too, via a shared `narrowToFrameObjectBounds` helper called from both
+   `ISD::FrameIndex` and `materializeFrameIndexAddrBase`
+   (`CapstoneISelDAGToDAG.cpp`); lit `cap-shrink-stack.ll` extended
+   (`cap_slot`/`field_store`), full 33-test Capstone lit suite green.
+   **Still gated off** pending: (a) agent2's default-on empirical matrix
+   (`/tmp/capstone/stack-shrink-default-on-results.md`) — the before/after
+   safety gate; (b) varargs save-area + dynamic `alloca` increments (variable-size
+   and spill slots are excluded by design).
 7. trio size-aware `realloc` + one canonical bounded allocator.
 8. Separate RX code / RW data, tighten perms, constrain function caps.
 9. **Root elimination via trusted `SPLIT`** — the likely Capstone-specific
    contribution (reviewer decision; reframes the paper as
    **provenance + attenuation + root-elimination**).
 
-## Parallel prerequisite: SQLite runtime — BLOCKED on a QEMU semantics decision
+## Parallel prerequisite: SQLite runtime — QEMU FIX LANDED, re-enable memcpy next
 
 Compiler gaps 1–2 are fixed (recursive nested-aggregate cap-global init, task
-#71; clang memcpy-from-private-template of cap aggregates, task #72). SQLite now
-reaches SQL execution and blocks on **gaps 3–4, which are a single QEMU
-limitation** (tasks #73/#74): untagged `ldc`/`stc` do not round-trip the full
-128-bit memory word, so **no in-domain `memcpy` preserves both plain data and
-capability tags**. The tag-preserving `memcpy` was reverted to the byte loop
-(faults loudly, no silent corruption). The fix belongs in `capstone-qemu` (make
-untagged `ldc`/`stc` bit-preserving over 128 bits, like CHERI `clc`/`csc`) and is
-a submodule semantics decision awaiting the QEMU author — proposal +
-author-questions in `design/untagged-cap-loadstore-preservation-proposal.md`.
-**Do not** re-land any `ldc`/`stc` `memcpy` rewrite until that change is agreed
-and its round-trip unit test is green, and do not add SQLite-specific table
-rewrites in place of the QEMU fix. Two `capstone-qemu` items are now queued for
-the author: this one and revocation enforcement
-(`design/revocation-enforcement-proposal.md`, task #70).
+#71; clang memcpy-from-private-template of cap aggregates, task #72). Gaps 3–4
+were a single QEMU limitation (untagged `ldc`/`stc` zeroed the high 64 bits, so
+no in-domain `memcpy` preserved both plain data and capability tags). **The QEMU
+author confirmed this is a bug and that the intended model is full 128-bit
+round-trip; the fix is now implemented (2026-07-01)** on `capstone-qemu` branch
+`fix/untagged-ldc-stc-128bit-preservation` (Option A: widen the untagged register
+path with `scalar_hi`). Validated by the new authority probe
+`untagged_cap_roundtrip` (both 64-bit halves survive) + full authority suite
+green. Details: `design/untagged-cap-loadstore-preservation-proposal.md` §8.
+
+**Next for SQLite (#73/#74):** re-enable the tag-preserving `memcpy` (16-byte
+aligned middle via `ldc`/`stc`, byte head/tail) — now safe because the round-trip
+is bit-exact — then re-drive `CREATE TABLE` to confirm gaps 3–4 clear. The other
+queued `capstone-qemu` item, revocation enforcement (task #70,
+`design/revocation-enforcement-proposal.md`), is **already wired on the
+memory-access path** (`capstone_cap_revoked` in `helper_reg_set_cap_compressed`;
+the runtime author confirmed the traversal is correct and the lazy check was a
+disabled TODO) — verify/close #70 against the current `caplifive-release` tip.
 
 The earlier benchmark milestones (RV8, BEEBS, backend fixes) are retained below as
 reference/history.

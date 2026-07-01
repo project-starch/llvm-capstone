@@ -20,10 +20,42 @@
 
 typedef __SIZE_TYPE__ bsize_t;
 
+/*
+ * Capability-preserving memcpy/memmove.
+ *
+ * A byte loop copies address bits but drops the out-of-band tag of any stored
+ * capability, so a copied pointer comes back untagged and the next dereference
+ * faults (SQLite gap 3). The fix is to copy the pointer-aligned middle one
+ * capability at a time (a `void*` load/store lowers to ldc/stc, which preserve
+ * the tag), with a byte head/tail for the unaligned ends. This is only correct
+ * once untagged ldc/stc is bit-exact over the full 128-bit word — otherwise the
+ * high half of every plain-data chunk is zeroed (gap 4). That QEMU fix landed
+ * (capstone-qemu: fix/untagged-ldc-stc-128bit-preservation), so this path is
+ * now safe: it preserves tags for capabilities AND the full 16 bytes of plain
+ * data. Using sizeof(void*) as the grain keeps the native self-test correct on
+ * the host (8-byte pointers) too — on the Capstone target it is 16, i.e. one
+ * capability, which is exactly the tag granularity.
+ */
+
 void *memcpy(void *dst, const void *src, bsize_t n) {
   unsigned char *d = (unsigned char *)dst;
   const unsigned char *s = (const unsigned char *)src;
-  for (bsize_t i = 0; i < n; i++)
+  const bsize_t ps = sizeof(void *);
+  bsize_t i = 0;
+  bsize_t da = ((bsize_t)d) & (ps - 1u);
+  bsize_t sa = ((bsize_t)s) & (ps - 1u);
+  /* Only when src and dst share alignment can the middle be copied as whole
+     capabilities; otherwise fall through to the byte loop for everything. */
+  if (da == sa) {
+    bsize_t head = da ? (ps - da) : 0u;
+    if (head > n)
+      head = n;
+    for (; i < head; i++)
+      d[i] = s[i];
+    for (; i + ps <= n; i += ps)
+      *(void **)(d + i) = *(void *const *)(s + i);
+  }
+  for (; i < n; i++)
     d[i] = s[i];
   return dst;
 }
@@ -31,12 +63,30 @@ void *memcpy(void *dst, const void *src, bsize_t n) {
 void *memmove(void *dst, const void *src, bsize_t n) {
   unsigned char *d = (unsigned char *)dst;
   const unsigned char *s = (const unsigned char *)src;
+  const bsize_t ps = sizeof(void *);
   if (d == s || n == 0)
     return dst;
   if (d < s) {
-    for (bsize_t i = 0; i < n; i++)
+    /* Forward copy is safe when dst is below src; use the same capability-
+       preserving aligned fast path as memcpy. */
+    bsize_t i = 0;
+    bsize_t da = ((bsize_t)d) & (ps - 1u);
+    bsize_t sa = ((bsize_t)s) & (ps - 1u);
+    if (da == sa) {
+      bsize_t head = da ? (ps - da) : 0u;
+      if (head > n)
+        head = n;
+      for (; i < head; i++)
+        d[i] = s[i];
+      for (; i + ps <= n; i += ps)
+        *(void **)(d + i) = *(void *const *)(s + i);
+    }
+    for (; i < n; i++)
       d[i] = s[i];
   } else {
+    /* Overlapping copy toward higher addresses: byte loop backward. This drops
+       tags for capabilities in an overlapping backward move (rare); such a
+       pointer faults loudly on next use rather than corrupting silently. */
     for (bsize_t i = n; i != 0; i--)
       d[i - 1] = s[i - 1];
   }

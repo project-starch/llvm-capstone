@@ -346,9 +346,13 @@ Current state on `capstone-bootstrap`:
     (`rv8_malloc.c`, dtoa `malloc_beebs`) `cap_shrink` returns; trio left
     un-narrowed (its `realloc` over-reads); CoreMark uses stack storage. Do not
     call this "heap default-on."
-  - **Stack** — bare-`FrameIndex` whole-object narrowing, flag
-    `-capstone-shrink-stack` (**default off**, spike: whole-object only, not
-    interior pointers / varargs / dynamic alloca).
+  - **Stack** — fixed stack objects narrowed to `[&obj, &obj+size)` via the
+    shared `narrowToFrameObjectBounds` helper, now covering **both** the
+    bare-`FrameIndex` address **and** interior pointers / load-store bases
+    (`materializeFrameIndexAddrBase`), flag `-capstone-shrink-stack`
+    (**still default off** pending the empirical default-on matrix). Not yet:
+    varargs save-area, dynamic `alloca` (variable-size + spill slots excluded by
+    design). Object- not subobject-granularity.
   - Validation is **functional only**: **CoreMark ✓, RV8 7/7 ✓, BEEBS 82/82 ✓**
     with global+heap on; stack-on smoke = CoreMark + 9 stack-heavy BEEBS ✓. Found
     a **real OOB bug**: rijndael wrote 8 bytes through a `char r[4]` (patched).

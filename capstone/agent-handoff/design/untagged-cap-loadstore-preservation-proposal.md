@@ -1,10 +1,17 @@
 # Proposal: make untagged `ldc`/`stc` bit-preserving over the full 128-bit word (QEMU)
 
-*Status: DESIGN PROPOSAL for review with the QEMU/runtime author before any
-implementation. No `capstone-qemu` changes have been made. Grew out of the SQLite
-bring-up (`sqlite-marshalling-feasibility.md` / gaps 3–4); the same limitation
-also blocks a correct capability-aware `memcpy`. Paths/line numbers are against
-`capstone-bootstrap` as of 2026-07-01.*
+*Status: **IMPLEMENTED (2026-07-01)** on `capstone-qemu` branch
+`fix/untagged-ldc-stc-128bit-preservation`. The runtime author confirmed this is
+a **bug** in the current emulator and that the intended model is **goal 1**
+(untagged `ldc`/`stc` bit-exact over the full 128-bit word), and that the spec
+document should state it — so **Option A was chosen** and a matching spec note is
+tracked on a `capstone-spec` branch. Validated: authority-suite round-trip probe
+`untagged_cap_roundtrip` (both 64-bit halves survive; retval `0x22990003`) plus
+the full authority suite green (20/20 unchanged + the new probe). Grew out of the
+SQLite bring-up (`sqlite-marshalling-feasibility.md` / gaps 3–4); the same
+limitation also blocked a correct capability-aware `memcpy`. See §8 for the
+implementation record. Paths/line numbers are against `capstone-bootstrap` as of
+2026-07-01.*
 
 ## 0. Summary
 
@@ -174,14 +181,37 @@ Case 5 guards against over-tagging.
 
 ## 8. Status and next step
 
-- Tag-preserving `memcpy` **reverted** to the committed byte loop; working tree
-  clean; benchmarks correct; gap-3 faults loudly (no silent corruption).
-- **Do not land** any `memcpy` `ldc`/`stc` rewrite until the QEMU change above is
-  agreed and case 1 is green — otherwise it re-introduces the gap-4 corruption
-  across all benchmarks.
-- Raise §7 with the QEMU/runtime author (bundle with the revocation questions in
-  `revocation-enforcement-proposal.md §Open questions` — both are `capstone-qemu`
-  semantics calls). Tracked as tasks #73 (gap 3) / #74 (gap 4), blocked on this.
+**Implemented (2026-07-01), Option A, on `capstone-qemu` branch
+`fix/untagged-ldc-stc-128bit-preservation`.** The runtime author confirmed the
+`hi = 0` behaviour is a bug and goal 1 (full 128-bit round-trip) is the intended
+model. Changes (six sites, one localized representation change):
+
+1. `target/riscv/cap.h` — added `capaddr_t scalar_hi` to `struct CapRegVal` (the
+   high 64 bits of an untagged register; meaningful only when `tag == false`);
+   `capregval_set_scalar` zeroes it so a genuine 64-bit value still stores
+   `hi = 0`. Safe re: migration — `env.gpr` VMState is already commented out
+   (`machine.c`).
+2. `op_helper.c helper_reg_set_cap_compressed` (the `ldc` register-set path) —
+   for the untagged case (incl. a revoked cap demoted to untagged) store the raw
+   loaded words `val.scalar = lo`, `scalar_hi = hi` (`cap_uncompress` is lossy
+   for arbitrary bit patterns, so we keep the raw words).
+3. `op_helper.c helper_compress_cap` (the `stc` path) — untagged writes
+   `result_hi = reg_v->scalar_hi` instead of `0`.
+4. `capstone_helper.c load_capregval`/`store_capregval` (context-switch / pc-swap
+   path) — untagged branch now loads/stores **both** words.
+5. Three direct scalar writers (`common-semi-target.h`, `gdbstub.c`,
+   `cpu_helper.c` exception cause) zero `scalar_hi` to avoid a stale high word.
+
+**Validated.** New authority probe `untagged_cap_roundtrip` copies a 16-byte
+plain-data word (non-zero high half) via an untagged `ldc`/`stc` pair and checks
+both halves survive → retval `0x22990003` (before the fix: `0x22990001`). Full
+authority suite green (20/20 prior probes unchanged + this one). QEMU builds
+clean (89/89).
+
+**Next:** re-enable the tag-preserving `memcpy` (copy the 16-byte aligned middle
+via `ldc`/`stc`, byte head/tail) now that the round-trip is bit-exact, then
+re-drive SQLite `CREATE TABLE` to clear gaps 3–4 (tasks #73/#74). The
+`ldc`/`stc` `memcpy` was correctly withheld until this landed; it is now safe.
 
 ## Pointers
 - SQLite gaps: `sqlite-marshalling-feasibility.md`,
