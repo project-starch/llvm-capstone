@@ -47,8 +47,12 @@ the audit's reframing.
 Method: build each domain twice — default (**ON**) vs `-mllvm
 -capstone-shrink-globals=false` (**OFF**) — and diff `llvm-size` text and the
 count of emitted `SHRINK` R-type encodings (`funct7=1, funct3=1, opcode 0x5b`).
-All 23 OFF builds passed their correctness markers (narrowing changes bounds, not
-results). `Δtext%` is `(text_ON − text_OFF) / text_OFF`; `B/shrink` is
+**Full coverage: CoreMark + all 7 RV8 + all 82 BEEBS = 90 domains**, measured in
+two passes (a representative 15 BEEBS first, then the remaining 67); all 90 OFF
+builds passed their correctness markers (narrowing changes bounds, not results).
+The table below shows CoreMark + RV8 + the first 15 BEEBS; the remaining 67 BEEBS
+are in the §5 appendix, and the aggregate stats in **Findings** are over all 90.
+`Δtext%` is `(text_ON − text_OFF) / text_OFF`; `B/shrink` is
 `Δtext / (SHRINK_ON − SHRINK_OFF)`.
 
 | benchmark | text ON | text OFF | Δtext | Δtext% | SHRINK ON | SHRINK OFF | B/shrink |
@@ -77,20 +81,28 @@ results). `Δtext%` is `(text_ON − text_OFF) / text_OFF`; `B/shrink` is
 | beebs sglib-rbtree | 13360 | 13244 | 116 | 0.88% | 8 | 0 | 14.5 |
 | beebs stringsearch1 | 5744 | 5332 | 412 | 7.73% | 22 | 0 | 18.7 |
 
-**Findings**
-- **Code-size overhead is low and predictable**: Δtext ranges **0.37%–13.39%**,
-  **median ≈ 1.8%**. It scales with the *number of narrowed sized-global
-  materializations*, not program size — `picojpeg` (305 shrinks, table-heavy) is
-  the high end; `primes` (11) the low end.
-- **Cost per narrowed global is ~13–19 bytes** (mean ≈ 15.5), consistent with the
-  fixed `lcc cursor / add size / shrink` materialization sequence — i.e. a small
-  constant, not a super-linear blowup.
+**Findings (over all 90 domains)**
+- **Cost per narrowed global is a near-constant ~15.6 bytes** (range 12.9–19.2,
+  mean 15.6), matching the fixed `lcc cursor / add size / shrink` materialization
+  sequence. This holds uniformly across the whole corpus — including the extreme
+  outliers — so the code-size overhead is essentially **(number of narrowed sized
+  globals) × ~15.6 bytes**, a function of *global-materialization density*, not
+  program size.
+- **Percentage overhead therefore spans a wide range**: **median 1.83%, mean
+  4.17%**, from **0%** (4 domains — `cover`/`fac`/`fibcall`/`sqrt` — materialize
+  no sized globals, 0 shrinks) to **46.1%** (`statemate`). Distribution: **0%: 4 |
+  0–3%: 57 | 3–10%: 22 | >10%: 7** of 90.
+- **The high-overhead tail is auto-generated, globals-dense code**: `statemate`
+  46.1% (588 shrinks) and `nsichneu` 33.7% (1083 shrinks) are generated WCET
+  state machines with huge static tables; then `compress` 24.6%, `dijkstra`
+  20.7%, `qrduino` 15.6%, `picojpeg` 13.4%, `ud` 12.8%. The mean is pulled up by
+  these; the **median (1.8%) is the representative figure** for ordinary code.
 - **No correctness cost**: every OFF build still passes its marker; the ON build
   additionally traps the rijndael OOB write that OFF silently allows.
-- **`SHRINK OFF = 1` on every RV8** is the source-level heap `cap_shrink` in
-  `rv8_malloc.c` — independent of the globals flag. CoreMark/BEEBS show OFF = 0
-  (no bounded allocator linked). This confirms globals-narrowing and
-  heap-narrowing are separately controlled.
+- **`SHRINK OFF = 1` on RV8 (and `dtoa`)** is the source-level heap `cap_shrink`
+  in `rv8_malloc.c` / dtoa `malloc_beebs` — independent of the globals flag. The
+  other 82 domains show OFF = 0 (no bounded allocator linked). This confirms
+  globals-narrowing and heap-narrowing are separately controlled.
 
 ## 3. Stated limitations (do NOT overclaim)
 
@@ -102,16 +114,93 @@ results). `Δtext%` is `(text_ON − text_OFF) / text_OFF`; `B/shrink` is
 - **Not a spatial-safety theorem** — see the §1 residual gap set.
 - **Bounds exactness is a property of this QEMU's side table**, not a measured
   compressed-encoding result (`capability-bounds-model.md`).
-- Sample is CoreMark + all 7 RV8 + 15 representative BEEBS (globals-heavy chosen);
-  the remaining ~67 BEEBS are expected to fall in the same 0–13% band but were not
-  all measured.
+- Coverage is now **complete for this corpus** (CoreMark + 7 RV8 + all 82 BEEBS =
+  90 domains); no BEEBS was skipped. It is still one benchmark corpus — the
+  distribution should not be extrapolated verbatim to arbitrary application code,
+  though the constant ~15.6 B/global cost model is expected to generalize.
 
 ## 4. Pointers
-- Raw data: `/tmp/capstone/c1-measurement-results.md`; method:
-  `/tmp/capstone/delegate-c1-measurement.md`.
+- Raw data: `/tmp/capstone/c1-measurement-results.md` (CoreMark+RV8+15 BEEBS) and
+  `/tmp/capstone/c1-measurement-results-beebs-rest.md` (remaining 67 BEEBS);
+  method: `/tmp/capstone/delegate-c1-measurement.md`,
+  `delegate-c1-remaining-beebs.md`.
 - Mechanism: `CapstoneISelDAGToDAG.cpp` (`selectLGA`, `-capstone-shrink-globals`);
   lit `cap-shrink-globals.ll`, `cap-shrink-stack.ll`.
 - Evidence suite: `../../tests/capstone-authority/` (`global_oob`/`stack_oob`/
   struct-field over-read).
 - Related: `capability-bounds-model.md` (precision), `bounded-heap-allocator-proposal.md`
   (heap, task #78), audit `../history/29-06-2026_15-08-22_granularity-provenance-audit.md`.
+
+## 5. Appendix — remaining 67 BEEBS (completes the 90-domain corpus)
+
+Same method as §2 (text bytes, `SHRINK` counts; all OFF builds passed markers).
+
+| benchmark | text ON | text OFF | Δtext | SHRINK ON | SHRINK OFF |
+|---|---:|---:|---:|---:|---:|
+| aha-compress | 3580 | 3516 | 64 | 4 | 0 |
+| aha-mont64 | 3160 | 3044 | 116 | 9 | 0 |
+| bs | 1140 | 1092 | 48 | 3 | 0 |
+| bubblesort | 2080 | 2032 | 48 | 3 | 0 |
+| cnt | 3020 | 2892 | 128 | 8 | 0 |
+| compress | 7870 | 6318 | 1552 | 103 | 0 |
+| cover | 8876 | 8876 | 0 | 0 | 0 |
+| crc | 2344 | 2172 | 172 | 11 | 0 |
+| ctl-stack | 4732 | 4448 | 284 | 20 | 0 |
+| ctl-string | 10218 | 9602 | 616 | 40 | 0 |
+| ctl-vector | 10500 | 9840 | 660 | 44 | 0 |
+| cubic | 45600 | 45352 | 248 | 15 | 0 |
+| dijkstra | 4056 | 3360 | 696 | 46 | 0 |
+| dtoa | 32096 | 31612 | 484 | 32 | 1 |
+| duff | 2544 | 2512 | 32 | 2 | 0 |
+| edn | 5464 | 5196 | 268 | 18 | 0 |
+| expint | 2004 | 1928 | 76 | 5 | 0 |
+| fac | 1044 | 1044 | 0 | 0 | 0 |
+| fasta | 13432 | 13272 | 160 | 10 | 0 |
+| fdct | 3976 | 3928 | 48 | 3 | 0 |
+| fibcall | 1064 | 1064 | 0 | 0 | 0 |
+| fir | 7360 | 7324 | 36 | 2 | 0 |
+| frac | 44128 | 44032 | 96 | 6 | 0 |
+| insertsort | 2132 | 2116 | 16 | 1 | 0 |
+| janne-complex | 1616 | 1584 | 32 | 2 | 0 |
+| janne_complex | 1244 | 1188 | 56 | 4 | 0 |
+| jfdctint | 5748 | 5684 | 64 | 4 | 0 |
+| lcdnum | 1560 | 1528 | 32 | 2 | 0 |
+| levenshtein | 2447 | 2351 | 96 | 6 | 0 |
+| ludcmp | 35392 | 34972 | 420 | 27 | 0 |
+| matmult-float | 15204 | 15084 | 120 | 8 | 0 |
+| matmult | 5508 | 5360 | 148 | 9 | 0 |
+| mergesort | 6284 | 6156 | 128 | 8 | 0 |
+| miniz | 67879 | 66943 | 936 | 62 | 0 |
+| minver | 36920 | 36600 | 320 | 21 | 0 |
+| nbody | 44012 | 43816 | 196 | 13 | 0 |
+| ndes | 7484 | 6952 | 532 | 35 | 0 |
+| newlib-exp | 33728 | 33580 | 148 | 9 | 0 |
+| newlib-log | 34264 | 34204 | 60 | 4 | 0 |
+| newlib-mod | 33452 | 33344 | 108 | 7 | 0 |
+| newlib-sqrt | 33408 | 33156 | 252 | 17 | 0 |
+| ns | 3848 | 3796 | 52 | 3 | 0 |
+| nsichneu | 66404 | 49676 | 16728 | 1083 | 0 |
+| prime | 2308 | 2260 | 48 | 3 | 0 |
+| qrduino | 28304 | 24492 | 3812 | 248 | 0 |
+| qsort | 33984 | 33664 | 320 | 20 | 0 |
+| qurt | 35664 | 34936 | 728 | 46 | 0 |
+| recursion | 1768 | 1736 | 32 | 2 | 0 |
+| select | 33680 | 33320 | 360 | 23 | 0 |
+| sglib-arraybinsearch | 1448 | 1384 | 64 | 4 | 0 |
+| sglib-dllist | 9148 | 9048 | 100 | 7 | 0 |
+| sglib-hashtable | 7120 | 6924 | 196 | 13 | 0 |
+| sglib-listinsertsort | 5124 | 5024 | 100 | 7 | 0 |
+| sglib-listsort | 2652 | 2552 | 100 | 7 | 0 |
+| sglib-queue | 3480 | 3448 | 32 | 2 | 0 |
+| slre | 12889 | 12749 | 140 | 9 | 0 |
+| sqrt | 32316 | 32316 | 0 | 0 | 0 |
+| st | 44572 | 44324 | 248 | 15 | 0 |
+| statemate | 25828 | 17680 | 8148 | 588 | 0 |
+| stb_perlin | 48240 | 48092 | 148 | 9 | 0 |
+| strstr | 1932 | 1900 | 32 | 2 | 0 |
+| tarai | 2008 | 1960 | 48 | 3 | 0 |
+| trio-snprintf | 37890 | 37182 | 708 | 46 | 0 |
+| trio-sscanf | 37774 | 37026 | 748 | 49 | 0 |
+| ud | 3280 | 2908 | 372 | 20 | 0 |
+| whetstone | 49448 | 48396 | 1052 | 70 | 0 |
+| wikisort | 23052 | 22956 | 96 | 5 | 0 |

@@ -15,11 +15,11 @@ explicit that this must **not** be called "heap narrowing, default on." This
 proposal is for a **single reusable bounded allocator** — real `malloc`/`free`
 with block reuse — that returns each allocation as a capability narrowed to
 exactly its requested size, so any over-read/over-write past an allocation
-**faults**. It also sketches a **`SPLIT`-based** variant that is the concrete
-"root-elimination" story the audit flagged as Capstone's novel angle: application
-code holds only narrow per-object capabilities carved from an arena, never the
-broad arena root. The narrowing half is implementable now; a fully general
-`realloc`/coalescing that must **copy blocks containing capabilities** is
+**faults**, via `SHRINK` (a `SPLIT`-based "root-elimination" allocator was
+considered and **rejected** for this use — §3 — with root-elimination deferred to
+a separate startup-partition idea). It is a **small purpose-built** allocator, not
+a port of an existing one (§2). The narrowing half is implementable now; a fully
+general `realloc`/coalescing that must **copy blocks containing capabilities** is
 **blocked on the same QEMU limitation as SQLite gaps 3–4** (see §5).
 
 ## 1. Motivation — why the current state is not a heap contribution
@@ -38,6 +38,25 @@ broad arena root. The narrowing half is implementable now; a fully general
   "two benchmark allocators" to "a real bounded allocator, measured."
 
 ## 2. Design — `cap_bump` → `cap_heap` (bounded free-list allocator)
+
+**Implementation base decision (2026-07-01): small purpose-built allocator, not a
+port of jemalloc/tcmalloc/glibc.** Those are large, thread/arena-aware, and
+coupled to `mmap`/`sbrk`/OS — we are freestanding over a static arena, so porting
+their OS layer dwarfs the allocator itself and destroys auditability. More
+fundamentally, the Capstone requirement is **pervasive, not a wrapper**: every
+returned pointer must be `SHRINK`-narrowed, and a narrowed user pointer **cannot
+reach its own metadata**, so *all* internal metadata access must be re-derived
+from the wide arena capability. In a dense allocator (dlmalloc's
+`mem2chunk`/`chunk2mem`, footer reads via pointer subtraction) every internal
+pointer manipulation is a place the capability model breaks and must be surgically
+rewritten — and its correctness assumes ordinary pointer arithmetic. A clean
+~300-line first-fit + boundary-tag-coalescing allocator where we control every
+derivation is *easier to get correct* than retrofitting, and it is the
+security-critical path. The paper claim is "bounded per-allocation capabilities,"
+not allocator throughput. **Credibility-upgrade fallback if a reviewer demands a
+"real" allocator:** port **dlmalloc** (single-file, boundary-tag,
+`MORECORE`→static arena) or **picolibc nano-malloc** (smaller, embedded-oriented)
+— a stretch goal, not v1.
 
 A single self-contained TU (`benchmarks/adapted/cap_heap.c`, header
 `cap_heap.h`) providing `malloc`/`free`/`realloc`/`calloc` over a
@@ -66,24 +85,37 @@ linkable by SQLite once the QEMU copy issue (§5) is resolved.
   `free` gives spatial narrowing + reuse but **not** use-after-free protection —
   state this honestly.
 
-## 3. The `SPLIT` variant — root-elimination (the novel angle)
+## 3. `SPLIT` for the allocator — considered and rejected (use `SHRINK`)
 
-The audit's strategic reframing: object bounds re-derive CHERI; Capstone's
-novelty is linearity + `SPLIT` + **root elimination**. A `SPLIT`-based allocator
-makes that concrete:
+**Decision (2026-07-01): the allocator uses `SHRINK`, not `SPLIT`.**
 
-- A **trusted arena manager** holds the one broad arena capability. `malloc`
-  carves a sub-allocation by **`SPLIT`ting** a chunk off the arena root and
-  handing the caller only that narrow (and linear) capability; the caller
-  **never sees the arena root**. `free` re-merges. Contrast the `SHRINK` design,
-  where the caller's narrow cap is still *derived from* a root that also remains
-  ambiently reachable in the allocator's globals.
-- This is the difference between "attenuation" (SHRINK: narrow view of a still-present root) and "root elimination" (SPLIT: the broad authority is consumed/partitioned, not just viewed). It's the paper-relevant Capstone-specific claim.
-- **Blocker:** `SPLIT` (and `SHRINKTO`) exist in the ISA but are **not wired into
-  LLVM** — only `SHRINK` is (`IntrinsicsCapstone.td`; `capability-bounds-model.md`
-  §TL;DR). So the SPLIT variant needs a backend intrinsic + isel first. Propose
-  doing the `SHRINK` allocator now and the `SPLIT` allocator as a follow-on that
-  also delivers the `int_capstone_cap_split` intrinsic (reusable beyond malloc).
+*Origin of the idea, for the record:* the `SPLIT` **instruction** is from the
+Capstone spec (`capstone-spec/parts/cap-man-insn.adoc`; surfaced in
+`capability-bounds-model.md` — a true capability split into two adjacent halves,
+in the ISA but not wired into LLVM). The **"root-elimination via trusted SPLIT"**
+framing is from the internal 2026-06-29 audit, not a published paper. Applying it
+to a heap allocator was this author's extrapolation; there is **no literature
+precedent for a "SPLIT-based allocator."**
+
+Why `SPLIT` is the wrong fit **for a heap allocator specifically**:
+- A `SPLIT`-based `malloc` would carve a chunk off the arena root and hand the
+  caller only that narrow linear cap; `free` would have to **merge** it back. But
+  `SPLIT` consumes the linear source and yields two halves the allocator must then
+  **track and recombine** — strictly more bookkeeping (linear-cap management,
+  merge-on-free) than integer-offset math over a static arena.
+- Its only benefit over `SHRINK` is "root elimination" — but that helps **only**
+  if application code could otherwise reach the allocator's broad root. The
+  allocator is **trusted and holds the root in its own private state anyway**, so
+  `SHRINK` already delivers the spatial property; `SPLIT` would defend only a
+  contrived "in-domain actor reaches the allocator's root cap" threat. Marginal
+  benefit, real complexity → not worth it per allocation.
+
+**Where root-elimination *does* belong (separate idea, not this allocator):** a
+**one-time trusted startup partition** — carve the domain's initial broad root
+into disjoint code/globals/stack/heap regions at boot so no single ambient root
+spans everything. That is the defensible Capstone-distinctive claim; it needs the
+`int_capstone_cap_split` intrinsic (backend work) and should be its own proposal,
+not folded into `malloc`. Tracked as a future item, out of scope here.
 
 ## 4. What's implementable now vs blocked
 
@@ -133,20 +165,24 @@ on the `SHRINK`-narrowing + spatial-only path before either resolves.
   a tagged pointer round-trips the pointer; use-after-free of a narrowed cap
   faults (after revocation).
 
-## 7. Open decisions (for the user / reviewer)
+## 7. Decisions
 
-1. **`SHRINK`-only now, `SPLIT` follow-on?** Recommend yes: ship the measurable
-   spatial allocator without waiting on a new backend intrinsic, then add the
-   `int_capstone_cap_split` intrinsic + the root-elimination allocator as the
-   novel-contribution follow-on.
-2. **Allocator scope.** Benchmark/SQLite support allocator (a clean, bounded,
-   *small* allocator) vs an attempt at a general libc `malloc`. Recommend the
-   former — the paper claim is "bounded per-allocation capabilities + measured,"
-   not "we wrote dlmalloc."
-3. **Free-list policy.** First-fit + boundary-tag coalescing (simple, adequate)
+*Decided 2026-07-01 (user review):*
+1. **Narrowing primitive:** `SHRINK`, **not** `SPLIT` — see §3 (SPLIT rejected for
+   the allocator; root-elimination deferred to a separate startup-partition
+   proposal).
+2. **Implementation base:** small purpose-built allocator (extend `rv8_malloc` →
+   `cap_heap`), **not** a jemalloc/tcmalloc/glibc port — see §2. dlmalloc /
+   picolibc nano-malloc kept as a documented credibility-upgrade fallback.
+3. **Scope:** a clean, bounded, *small* support allocator (benchmarks + SQLite),
+   not a general libc `malloc`. Paper claim is "bounded per-allocation
+   capabilities + measured," not "we wrote dlmalloc."
+
+*Still open (recommendations):*
+4. **Free-list policy.** First-fit + boundary-tag coalescing (simple, adequate)
    vs segregated bins. Recommend first-fit first; revisit only if measurement
    shows it matters.
-4. **Poisoning on free** now (spatial reuse only) vs gate behind revocation for
+5. **Poisoning on free** now (spatial reuse only) vs gate behind revocation for
    real UAF protection. Recommend land spatial now, add UAF when task #70 lands.
 
 ## 8. Pointers

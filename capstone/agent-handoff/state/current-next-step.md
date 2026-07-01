@@ -29,9 +29,10 @@ direction — read it first.** Its recommended order (adopted here):
    `SHRINK` semantics.
 3. Rewrite the C1 claim as a **coverage matrix**; **measure overhead** —
    **DONE (2026-07-01):** `design/c1-coverage-matrix-and-overhead.md` (coverage
-   matrix + code-size table: 0.4–13.4% text, median ≈1.8%, ~15 B/global, no
-   correctness cost). Residual: runtime/cycle overhead unmeasured (functional
-   QEMU) — needs a cycle-accurate or instrumented-instruction path.
+   matrix + full code-size table over all 90 domains: ~15.6 B/narrowed-global,
+   median 1.83% / mean 4.17% / range 0–46% text, no correctness cost). Residual:
+   runtime/cycle overhead unmeasured (functional QEMU) — needs a cycle-accurate
+   or instrumented-instruction path.
 4. Decide the **`uintptr_t` / address-only ABI** (currently an accidental 64-bit
    authority-losing middle ground).
 5. **Revise** the C2 proposal to a strict typed-MIR invariant + small formal model

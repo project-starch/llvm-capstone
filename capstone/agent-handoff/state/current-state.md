@@ -352,9 +352,11 @@ Current state on `capstone-bootstrap`:
   - Validation is **functional only**: **CoreMark ✓, RV8 7/7 ✓, BEEBS 82/82 ✓**
     with global+heap on; stack-on smoke = CoreMark + 9 stack-heavy BEEBS ✓. Found
     a **real OOB bug**: rijndael wrote 8 bytes through a `char r[4]` (patched).
-    **Code-size overhead measured (2026-07-01):** globals narrowing costs
-    **0.4–13.4% text (median ≈1.8%), ~15 bytes per narrowed global**, no
-    correctness regression — matrix + table in
+    **Code-size overhead measured across all 90 domains (CoreMark + 7 RV8 + 82
+    BEEBS, 2026-07-01):** globals narrowing costs a near-constant **~15.6 bytes
+    per narrowed global**; as % text, **median 1.83%, mean 4.17%, range 0%
+    (no sized globals) – 46% (`statemate`, generated WCET tables)**; no
+    correctness regression — matrix + full table in
     `design/c1-coverage-matrix-and-overhead.md`. **Runtime/cycle overhead still
     NOT measured** (functional QEMU, no cycle-accurate path) — don't claim it.
   - **Negative pointer difference fixed:** exact signed element scaling now
