@@ -268,6 +268,13 @@ Raise the questions above with the QEMU/runtime author **before** landing the
 recording-side fix. The enforcement half is committed (`3d71d161e7`) and dormant.
 Tracked as task #70.
 
+## Related QEMU semantics item
+
+A **second** `capstone-qemu` correctness question is queued for the same author:
+untagged `ldc`/`stc` do not preserve the full 128-bit memory word (blocks a
+capability-faithful `memcpy` / SQLite gaps 3–4). See
+`untagged-cap-loadstore-preservation-proposal.md`. Both should be raised together.
+
 ## Pointers
 - M0 finding + probe: `sqlite-marshalling-feasibility.md` (M0 result),
   `../../tests/runtime-qemu/borrow-revoke-uaf-probe/`.

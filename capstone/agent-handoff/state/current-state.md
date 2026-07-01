@@ -9,13 +9,24 @@ memsys5 over a 1 MiB arena and the existing runtime-initialized SQLite VFS
 skeleton. Sources remain under `/tmp/capstone`; the pinned fetch/build/run
 workflow and blocker report are in `capstone/benchmarks/sqlite/README.md`.
 
-The QEMU run is blocked before SQL execution by a compiler coverage gap:
-`CapstoneCapGlobalInit` handles a one-pointer struct or a direct pointer array,
-but does not recurse through arrays/structs containing capability fields.
-SQLite has several callback/name tables of that shape. Their function/string
-pointers remain untagged, causing `cs.cjalr` or capability-memory faults during
-built-in registration. `capstone/benchmarks/sqlite/probes/nested-cap-global.c`
-is a 592-byte runtime reproducer. This is not a VFS/filesystem blocker.
+Bring-up progressed through four gaps. **Gaps 1–2 are fixed** (compiler):
+`CapstoneCapGlobalInit` now recurses through arbitrary nested global aggregates
+(gap 1, task #71) and clang's memcpy-from-private-template of capability
+aggregates is handled (gap 2, task #72). **Gaps 3–4 are one QEMU limitation and
+are now the blocker** (tasks #73/#74): an untagged value in a capability register
+is only a 64-bit scalar, so untagged `ldc`/`stc` do not round-trip the full
+128-bit memory word (untagged `stc` writes `hi=0`; untagged load recovers only
+`lo`), while scalar `sd` clears tags and there is no runtime tag query. Therefore
+**no in-domain `memcpy` preserves both plain data and capability tags** — a
+byte-loop drops tags (gap 3, `strlen` fault) and an `ldc`/`stc` copy zeroes the
+high 8 bytes of data (gap 4, `SQLITE_CORRUPT`). The tag-preserving `memcpy` was
+reverted to the byte loop (loud fault, no silent corruption). The fix belongs in
+`capstone-qemu` (make untagged `ldc`/`stc` bit-preserving) and is a submodule
+semantics decision awaiting the QEMU author — see
+`design/untagged-cap-loadstore-preservation-proposal.md`. Diagnosis:
+`/tmp/capstone/gap3-diagnostics-results.md`; reproducer
+`capstone/benchmarks/sqlite/probes/runtime-bytecopy-capability.c`. This is not a
+VFS/filesystem blocker.
 
 ## Verified baseline
 
@@ -341,7 +352,11 @@ Current state on `capstone-bootstrap`:
   - Validation is **functional only**: **CoreMark ✓, RV8 7/7 ✓, BEEBS 82/82 ✓**
     with global+heap on; stack-on smoke = CoreMark + 9 stack-heavy BEEBS ✓. Found
     a **real OOB bug**: rijndael wrote 8 bytes through a `char r[4]` (patched).
-    **Overhead/code-size NOT measured** (don't say "overhead green").
+    **Code-size overhead measured (2026-07-01):** globals narrowing costs
+    **0.4–13.4% text (median ≈1.8%), ~15 bytes per narrowed global**, no
+    correctness regression — matrix + table in
+    `design/c1-coverage-matrix-and-overhead.md`. **Runtime/cycle overhead still
+    NOT measured** (functional QEMU, no cycle-accurate path) — don't claim it.
   - **Negative pointer difference fixed:** exact signed element scaling now
     restores `srai` after narrowing the i128 pointer-difference carrier to XLEN;
     genuine logical shifts remain `srli`. Positive and negative runtime probes
@@ -362,11 +377,17 @@ Current state on `capstone-bootstrap`:
   (on/off A/B), `ptr-diff-signed.ll`, and updated
   `static-cap-global-init.ll`. Full Capstone lit suite green (32 tests).
 
-- **C2 (provenance verifier) — PROPOSED, do NOT implement verbatim:** the audit
-  found the `UNKNOWN`-accepting opcode-only design is a hygiene checker, not a
-  proof. Revise first (typed MIR intent, seed args from calling-conv, real
-  transfer functions, separate non-forging vs preservation, small formal model).
-  See the audit-response banner in `design/c2-provenance-verifier-proposal.md`.
+- **C2 (provenance verifier) — REDESIGNED (v2, 2026-07-01), awaiting reviewer
+  sign-off before implementing.** The audit found v1 (`UNKNOWN`-accepting,
+  opcode-only) was a hygiene checker, not a proof. The redesign in
+  `design/c2-provenance-verifier-proposal.md` §"Design (v2)" folds in all three
+  fixes: no permissive `UNKNOWN` (`ROOT`/`CAP`/`INT`/`TAINTED` lattice, TAINTED-as-
+  authority flagged), IR→MIR intent + calling-convention arg/return seeding,
+  precise per-opcode transfer functions (LDC propagates memory tag; tied-operand
+  ops inherit+validate; integer-as-base is a fault not a forge), two separated
+  properties (P1 non-forging / P2 preservation), and a small hand-proved formal
+  model with the corpus as validation. v1 retained in the doc for history. Do NOT
+  implement until the reviewer signs off on v2.
 
 - **Audit's strategic reframing (for the reviewer):** object bounds re-derive
   CHERI; Capstone's novelty is linearity/revocation/`SPLIT`/**root-elimination**.

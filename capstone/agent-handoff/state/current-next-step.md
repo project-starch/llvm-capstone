@@ -27,12 +27,16 @@ direction — read it first.** Its recommended order (adopted here):
 2. Bounds-model doc corrected (QEMU keeps exact fat bounds; representability not
    measured) — **done**. **Recommended next:** decide the intended real 128-bit
    `SHRINK` semantics.
-3. Rewrite the C1 claim as a **coverage matrix**; **measure overhead** (perf,
-   code-size, dynamic `SHRINK` count) — remove "overhead green" language.
+3. Rewrite the C1 claim as a **coverage matrix**; **measure overhead** —
+   **DONE (2026-07-01):** `design/c1-coverage-matrix-and-overhead.md` (coverage
+   matrix + code-size table: 0.4–13.4% text, median ≈1.8%, ~15 B/global, no
+   correctness cost). Residual: runtime/cycle overhead unmeasured (functional
+   QEMU) — needs a cycle-accurate or instrumented-instruction path.
 4. Decide the **`uintptr_t` / address-only ABI** (currently an accidental 64-bit
    authority-losing middle ground).
-5. **Revise** the C2 proposal to a strict typed-MIR invariant + small formal model,
-   then implement.
+5. **Revise** the C2 proposal to a strict typed-MIR invariant + small formal model
+   — **revision DONE (2026-07-01):** `design/c2-provenance-verifier-proposal.md`
+   §"Design (v2)". **Then implement** — gated on reviewer sign-off on v2.
 6. Stack coverage for default-on (interior/varargs/alloca + opt-level matrix).
 7. trio size-aware `realloc` + one canonical bounded allocator.
 8. Separate RX code / RW data, tighten perms, constrain function caps.
@@ -40,16 +44,23 @@ direction — read it first.** Its recommended order (adopted here):
    contribution (reviewer decision; reframes the paper as
    **provenance + attenuation + root-elimination**).
 
-## Parallel prerequisite: SQLite runtime
+## Parallel prerequisite: SQLite runtime — BLOCKED on a QEMU semantics decision
 
-The SQLite 3.53.3 in-memory domain now compiles and links, but QEMU is blocked
-before SQL execution by non-recursive capability-global initialization. The
-next compiler task is to make `CapstoneCapGlobalInit` recursively materialize
-capability fields in arbitrary nested global aggregates and compiler-generated
-private constant templates. Use
-`capstone/benchmarks/sqlite/probes/nested-cap-global.c` as the runtime gate, then
-rerun `capstone/benchmarks/sqlite/run-sqlite-memory.sh`. Do not add further
-SQLite-specific table rewrites in place of fixing the general shape.
+Compiler gaps 1–2 are fixed (recursive nested-aggregate cap-global init, task
+#71; clang memcpy-from-private-template of cap aggregates, task #72). SQLite now
+reaches SQL execution and blocks on **gaps 3–4, which are a single QEMU
+limitation** (tasks #73/#74): untagged `ldc`/`stc` do not round-trip the full
+128-bit memory word, so **no in-domain `memcpy` preserves both plain data and
+capability tags**. The tag-preserving `memcpy` was reverted to the byte loop
+(faults loudly, no silent corruption). The fix belongs in `capstone-qemu` (make
+untagged `ldc`/`stc` bit-preserving over 128 bits, like CHERI `clc`/`csc`) and is
+a submodule semantics decision awaiting the QEMU author — proposal +
+author-questions in `design/untagged-cap-loadstore-preservation-proposal.md`.
+**Do not** re-land any `ldc`/`stc` `memcpy` rewrite until that change is agreed
+and its round-trip unit test is green, and do not add SQLite-specific table
+rewrites in place of the QEMU fix. Two `capstone-qemu` items are now queued for
+the author: this one and revocation enforcement
+(`design/revocation-enforcement-proposal.md`, task #70).
 
 The earlier benchmark milestones (RV8, BEEBS, backend fixes) are retained below as
 reference/history.
