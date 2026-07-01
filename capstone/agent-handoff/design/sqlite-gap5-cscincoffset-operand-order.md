@@ -1,9 +1,11 @@
 # SQLite gap 5 — `cscincoffset` untagged-base fault (backend operand order)
 
-*Status: ROOT-CAUSED 2026-07-01. Not yet fixed. Surfaced after the untagged
-`ldc`/`stc` QEMU fix + tag-preserving `memcpy` cleared gaps 3–4. This is a
-compiler (backend ISel) bug, not a memory/tag-loss bug — the `memcpy` is
-exonerated by the `tagged_cap_memcpy_aligned` authority probe.*
+*Status: FIXED 2026-07-01 (commit pending). Root-caused then fixed in the same
+session. Surfaced after the untagged `ldc`/`stc` QEMU fix + tag-preserving
+`memcpy` cleared gaps 3–4. This was a compiler (backend ISel) bug, not a
+memory/tag-loss bug — the `memcpy` is exonerated by the `tagged_cap_memcpy_aligned`
+authority probe. The fix cleared the `cscincoffset` assertion; SQLite now runs
+past it and hits a distinct, deeper untagged-pointer gap (**gap 6**, see below).*
 
 ## Symptom
 
@@ -53,26 +55,71 @@ The DAG cannot currently tell which i128 operand carries a capability vs an
 integer, so it trusts operand order. For `ptr + int` order it happens to be
 correct; for `int + ptr` it is wrong.
 
-## Fix direction (next step, not yet done)
+## Fix (implemented)
 
-In the i128 `ISD::ADD` path (and/or `selectCIncOffset`), pick the **capability**
-operand as the base regardless of operand order. A workable heuristic: if `Base`
-is an integer-carrier i128 (an ANY/ZERO/SIGN_EXTEND of a scalar ≤ XLEN, i.e. the
-same shape `matchExtendedXLenOffset` already recognises for the *offset*) and
-`Offset` is not, `std::swap(Base, Offset)` before selection. This generalises the
-existing constant-only swap to runtime integer carriers.
+The real chokepoint is `selectCIncOffset` (CapstoneISelDAGToDAG.cpp): **both** the
+raw `ISD::ADD` i128 ISel case (`Select`, ~:1815) and the `CapstoneISD::CIncOffset`
+custom-node case (~:3685) funnel through it, and it reads `Node->getOperand(0/1)`
+directly — so the pre-existing constant-only swap in the `ISD::ADD` case never
+reached it. `ISD::ADD` i128 is `Custom`-lowered (`CapstoneTargetLowering::LowerADD`
+already canonicalizes operand order using `isCapstoneIntegerOffset` /
+`isCapstoneCapabilityValue`), but adds that reach ISel **after** legalization
+(post-legalize combines) bypass that swap and arrive raw.
 
-- Add a lit test: `add i128 (zext i64 %n to i128), %cap` must select
-  `cscincoffset cap, n` (capability as base), for both operand orders.
-- Add an authority probe: an `int + ptr` deref that faults today and works after
-  the fix (analogue of the tagged-cap probes).
-- Re-run `run-sqlite-memory.sh` to confirm gap 5 clears; then the next SQLite
-  fault (if any) becomes gap 6.
+Fix: at the top of `selectCIncOffset`, apply the *same* predicate-based swap
+`LowerADD` uses, so the tagged capability is always the base:
+
+```cpp
+if (((isCapstoneIntegerOffset(Base) && !isCapstoneIntegerOffset(Offset)) ||
+     (isCapstoneCapabilityValue(Offset) && !isCapstoneCapabilityValue(Base))) &&
+    !isa<FrameIndexSDNode>(Offset))
+  std::swap(Base, Offset);
+```
+
+- The two predicates were made non-`static` and declared in `CapstoneISelLowering.h`
+  so both canonicalization sites share one classifier (no drift). The FrameIndex
+  guard preserves the dedicated frame-index base-materialization path above.
+- The swap is conservative and idempotent: it fires only on definite
+  integer-carrier-base / capability-offset shapes, so a correctly-ordered
+  `ptr + int` is provably never swapped, and a node `LowerADD` already
+  canonicalized is left unchanged.
+
+### Validation
+
+- Capstone lit suite **34/34** (added `cap-cincoffset-base.ll`, which locks in
+  that a capability arriving as a raw i128 load is classified as the base).
+- `run-sqlite-memory.sh`: the `helper_cscincoffset: rs1_v->tag` assertion is
+  **gone**. SQLite executes past gap 5.
+
+## Gap 6 (surfaced by the fix) — untagged `Table*` into `sqlite3DeleteTable`
+
+With gap 5 cleared, `run-sqlite-memory.sh` now faults with a different mechanism:
+
+```
+[CAPSTONE] Cap mem access requires capability: pc = 10200079c, rs1 = x11, imm = 84
+```
+
+Domain base this run = `0x101ff6000`, so the fault is at domain vaddr `0x1079c`
+in `sqlite3DeleteTable`:
+
+```
+10774: stc a1, 0x0(a0)   ; arg1 (pTable) spilled to [s0-0x40] with stc (tag-preserving)
+...
+107a0: ldc a1, 0x0(a0)   ; reloaded with ldc
+107a4: lw  a0, 0x54(a1)  ; FAULT — a1 (pTable) is untagged
+```
+
+`pTable` is stored/reloaded with the tag-preserving `stc`/`ldc` pair (proven by
+the `spill_reachability` authority probe), so it was **already untagged when the
+caller passed it**. This is a distinct, deeper provenance gap upstream (an
+untagged `Table*` produced/passed by the caller), **not** the cscincoffset
+operand-order bug and **not** a spill defect. Next step: trace the caller of
+`sqlite3DeleteTable` to find where the `Table*` loses its tag.
 
 ## Separate, do not conflate
 
 The RV8 `aes` `-O1` run in the (contaminated) stack-shrink matrix hit the **same
-assertion**, but SQLite reproduces it at **`-O0`**, so this is not an
+assertion**, but SQLite reproduced it at **`-O0`**, so it was not an
 optimization-only artifact. The other contaminated `-O1` failures
 (`Cannot select: i128 = xor/or`) are a **distinct** i128-logic-op ISel gap and
 should be tracked separately.

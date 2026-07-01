@@ -75,14 +75,23 @@ pointer-aligned middle via `ldc`/`stc`, byte head/tail). Validated: BEEBS 82/82,
 cap survives `memcpy`) + `tagged_cap_memcpy_misaligned` (documents the alignment
 limit). SQLite now runs **past** the data-corruption gap.
 
-**SQLite gap 5 — ROOT-CAUSED, backend fix is the next step.** SQLite (at `-O0`)
-now aborts at `helper_cscincoffset: rs1_v->tag`: `cscincoffset` gets an untagged
-**integer** as the capability base and the real cap as the offset — an `int + ptr`
-commutative-add operand-ordering bug in `CapstoneISelDAGToDAG.cpp` (`ISD::ADD`
-i128 / `selectCIncOffset`), NOT a tag-loss bug (memcpy exonerated). Full diagnosis
-+ fix direction: `design/sqlite-gap5-cscincoffset-operand-order.md`. Fix = swap so
-the capability operand is always the base; add lit + authority coverage; re-run
-`run-sqlite-memory.sh`.
+**SQLite gap 5 — FIXED (2026-07-01).** The `helper_cscincoffset: rs1_v->tag`
+abort was an `int + ptr` commutative-add operand-ordering bug: `cscincoffset` got
+an untagged **integer** as the capability base. Fixed in `selectCIncOffset`
+(`CapstoneISelDAGToDAG.cpp`) — the shared chokepoint for both the raw `ISD::ADD`
+i128 and `CapstoneISD::CIncOffset` ISel paths — by applying the same
+predicate-based swap `CapstoneTargetLowering::LowerADD` uses
+(`isCapstoneIntegerOffset` / `isCapstoneCapabilityValue`, now shared via
+`CapstoneISelLowering.h`) so the capability is always the base. Lit **34/34** (new
+`cap-cincoffset-base.ll`); the cscincoffset assertion is gone.
+
+**SQLite gap 6 — NEXT.** With gap 5 cleared SQLite now faults with a different
+mechanism: `Cap mem access requires capability` in `sqlite3DeleteTable` — an
+untagged `Table*` (`pTable`) passed in by the caller (its `stc`/`ldc` spill
+round-trip is tag-preserving, so it was already untagged on entry). A distinct,
+deeper provenance gap upstream, not the operand-order bug. Trace the caller to
+find where the `Table*` loses its tag. Details:
+`design/sqlite-gap5-cscincoffset-operand-order.md`.
 
 The other queued `capstone-qemu` item, revocation enforcement (task #70,
 `design/revocation-enforcement-proposal.md`), is **already wired on the

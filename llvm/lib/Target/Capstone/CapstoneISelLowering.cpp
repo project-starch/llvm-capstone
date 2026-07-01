@@ -7710,7 +7710,7 @@ const char *CapstoneTargetLowering::getTargetNodeName(unsigned Opcode) const {
 #undef NODE_NAME_CASE
 }
 
-static bool isCapstoneIntegerOffset(SDValue V) {
+bool llvm::isCapstoneIntegerOffset(SDValue V) {
   unsigned Opc = V.getOpcode();
   if (Opc == ISD::SIGN_EXTEND || Opc == ISD::ZERO_EXTEND ||
       Opc == ISD::ANY_EXTEND || Opc == ISD::SIGN_EXTEND_INREG ||
@@ -7735,7 +7735,7 @@ static bool isCapstoneIntegerOffset(SDValue V) {
   return false;
 }
 
-static bool isCapstoneCapabilityValue(SDValue V) {
+bool llvm::isCapstoneCapabilityValue(SDValue V) {
   unsigned Opc = V.getOpcode();
   // A genuine capability load (ldc) is a NON_EXTLOAD of 128 bits.
   // Sext/zext/anyext loads from a smaller integer (e.g. sext from i64)
