@@ -1071,6 +1071,8 @@ static unsigned getSegInstNF(unsigned Intrinsic) {
 static SDValue materializeFrameIndexAddrBase(SelectionDAG *CurDAG,
                                              const SDLoc &DL, MVT VT,
                                              int FrameIndex);
+static SDValue narrowToFrameObjectBounds(SelectionDAG *CurDAG, const SDLoc &DL,
+                                         MVT VT, int FrameIndex, SDValue Cap);
 static SDValue materializeAddrBaseWithImmediate(SelectionDAG *CurDAG,
                                                 const SDLoc &DL, MVT VT,
                                                 SDValue Base, int64_t Imm,
@@ -1769,36 +1771,13 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
         Capstone::CIncOffsetImm, DL, VT, Base,
         CurDAG->getSignedTargetConstant(0, DL, MVT::i64));
 
-    // Stack object granularity (C1, gated, default off): narrow the address of
-    // a whole stack object (a bare FrameIndex) to its frame-object size. Only
-    // the whole-object address is narrowed here; interior pointers
-    // (ADD(FI,offset)) and load/store bases keep the broad bounds, so this is
-    // object- not subobject-granularity. Restricted to normal, fixed-size,
-    // non-spill stack objects with a known positive size. The runtime cursor of
-    // the materialized cap equals the object's address (frame reg + offset,
-    // resolved post-RA), so base = lcc(cap, cursor), end = base + size.
-    if (CapstoneShrinkStack && VT == MVT::i128 && FI >= 0) {
-      const MachineFrameInfo &MFI = MF->getFrameInfo();
-      if (!MFI.isVariableSizedObjectIndex(FI) &&
-          !MFI.isSpillSlotObjectIndex(FI)) {
-        int64_t Size = MFI.getObjectSize(FI);
-        if (Size > 0) {
-          MVT XLenVT = Subtarget->getXLenVT();
-          SDValue Cursor(
-              CurDAG->getMachineNode(Capstone::LCC, DL, XLenVT, SDValue(Res, 0),
-                                     CurDAG->getTargetConstant(2, DL, XLenVT)),
-              0);
-          SDValue SizeReg =
-              selectImm(CurDAG, DL, XLenVT, Size, *Subtarget);
-          SDValue End(CurDAG->getMachineNode(Capstone::ADD, DL, XLenVT, Cursor,
-                                             SizeReg),
-                      0);
-          Res = CurDAG->getMachineNode(Capstone::SHRINK, DL, VT, SDValue(Res, 0),
-                                       Cursor, End);
-        }
-      }
-    }
-    ReplaceNode(Node, Res);
+    // Stack object granularity (C1, gated, default off): narrow the bare
+    // stack-object address to its frame-object bounds. Interior pointers and
+    // load/store bases are narrowed at the shared materializeFrameIndexAddrBase
+    // site, so this remains object- not subobject-granularity.
+    SDValue Narrowed =
+        narrowToFrameObjectBounds(CurDAG, DL, VT, FI, SDValue(Res, 0));
+    ReplaceNode(Node, Narrowed.getNode());
     return;
   }
   case ISD::ADD: {
@@ -3908,6 +3887,41 @@ static SDValue materializeAddrBaseWithImmediate(SelectionDAG *CurDAG,
                  0);
 }
 
+// Narrow a materialized frame-object capability `Cap` (whose runtime cursor is
+// the object's address) to that object's exact bounds [cursor, cursor+size),
+// giving object-granularity spatial safety for stack objects. C1, gated on
+// -capstone-shrink-stack (default off). Applies only to normal, fixed-size,
+// non-spill stack objects with a known positive size; returns Cap unchanged
+// otherwise. Shared by the bare-FrameIndex materialization (ISD::FrameIndex)
+// and interior / load-store base materialization (materializeFrameIndexAddrBase)
+// so every fixed stack-object pointer carries object bounds, not just the
+// whole-object address. The cursor is read at runtime (post-RA frame reg +
+// offset) via lcc, so end = cursor + size.
+static SDValue narrowToFrameObjectBounds(SelectionDAG *CurDAG, const SDLoc &DL,
+                                         MVT VT, int FrameIndex, SDValue Cap) {
+  if (!CapstoneShrinkStack || VT != MVT::i128 || FrameIndex < 0)
+    return Cap;
+  MachineFunction &MF = CurDAG->getMachineFunction();
+  const MachineFrameInfo &MFI = MF.getFrameInfo();
+  if (MFI.isVariableSizedObjectIndex(FrameIndex) ||
+      MFI.isSpillSlotObjectIndex(FrameIndex))
+    return Cap;
+  int64_t Size = MFI.getObjectSize(FrameIndex);
+  if (Size <= 0)
+    return Cap;
+  const CapstoneSubtarget &STI = MF.getSubtarget<CapstoneSubtarget>();
+  MVT XLenVT = STI.getXLenVT();
+  SDValue Cursor(
+      CurDAG->getMachineNode(Capstone::LCC, DL, XLenVT, Cap,
+                             CurDAG->getTargetConstant(2, DL, XLenVT)),
+      0);
+  SDValue SizeReg = selectImm(CurDAG, DL, XLenVT, Size, STI);
+  SDValue End(
+      CurDAG->getMachineNode(Capstone::ADD, DL, XLenVT, Cursor, SizeReg), 0);
+  return SDValue(
+      CurDAG->getMachineNode(Capstone::SHRINK, DL, VT, Cap, Cursor, End), 0);
+}
+
 static SDValue materializeFrameIndexAddrBase(SelectionDAG *CurDAG,
                                              const SDLoc &DL, MVT VT,
                                              int FrameIndex) {
@@ -3915,10 +3929,11 @@ static SDValue materializeFrameIndexAddrBase(SelectionDAG *CurDAG,
   if (VT != MVT::i128)
     return Base;
 
-  return SDValue(CurDAG->getMachineNode(
-                     Capstone::CIncOffsetImm, DL, VT, Base,
-                     CurDAG->getSignedTargetConstant(0, DL, MVT::i64)),
-                 0);
+  SDValue Cap(CurDAG->getMachineNode(
+                  Capstone::CIncOffsetImm, DL, VT, Base,
+                  CurDAG->getSignedTargetConstant(0, DL, MVT::i64)),
+              0);
+  return narrowToFrameObjectBounds(CurDAG, DL, VT, FrameIndex, Cap);
 }
 
 // To prevent SelectAddrRegImm from folding offsets that conflict with the

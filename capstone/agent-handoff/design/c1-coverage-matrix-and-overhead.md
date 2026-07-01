@@ -31,13 +31,13 @@ cite rounding as experimental evidence.
 | Function / code capabilities | No | — | — | broad; RX not separated from RW |
 | **Heap — benchmark allocators** | **Partial** | `rv8_malloc.c` + dtoa `malloc_beebs` call `cap_shrink(p, b, b+n)` on return | source-level (**not** a libc/global policy) | RV8 `SHRINK OFF = 1` residual (§2) = this call, independent of the globals flag |
 | Heap — general `malloc`/`free` | No | — | — | **proposed**, `bounded-heap-allocator-proposal.md` (task #78) |
-| **Stack — whole object** | **Yes (gated)** | `SHRINK` on bare `ISD::FrameIndex` | **off** (`-capstone-shrink-stack`) | lit `cap-shrink-stack.ll` on/off; authority `stack_oob` |
-| Stack — interior ptr / varargs / dynamic `alloca` | No | — | — | task #77 (coverage toward default-on) |
+| **Stack — fixed object (whole obj + interior/load-store base)** | **Yes (gated)** | `SHRINK` via shared `narrowToFrameObjectBounds`: bare `ISD::FrameIndex` **and** `materializeFrameIndexAddrBase` (ldc/stc base + interior ptr), narrowed to `[&obj, &obj+size)` | **off** (`-capstone-shrink-stack`) | lit `cap-shrink-stack.ll` on/off (`stack_idx`/`cap_slot`/`field_store`); authority `stack_oob` |
+| Stack — varargs save-area / dynamic `alloca` | No | — | — | task #77 follow-on increments (variable-size + spill excluded by design) |
 | Subobject / struct field | No | — | — | authority struct-field over-read = **no-trap-today** (confirms the gap) |
 | `gp` root (globals base) / `sp` root (stack base) | No (broad) | — | — | segment-granular; single `PT_LOAD` ≈ whole image |
 
 **Residual gap set** (the honest "not covered" list for the paper): subobjects,
-stack interior/varargs/alloca, general heap, function caps, RWX permissions, and
+stack varargs/dynamic-alloca, general heap, function caps, RWX permissions, and
 the two broad roots. Object bounds re-derive CHERI; the Capstone-specific angle
 (linearity / `SPLIT` / root-elimination) is separate — see the heap proposal and
 the audit's reframing.
