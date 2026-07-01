@@ -68,14 +68,27 @@ path with `scalar_hi`). Validated by the new authority probe
 `untagged_cap_roundtrip` (both 64-bit halves survive) + full authority suite
 green. Details: `design/untagged-cap-loadstore-preservation-proposal.md` §8.
 
-**Next for SQLite (#73/#74):** re-enable the tag-preserving `memcpy` (16-byte
-aligned middle via `ldc`/`stc`, byte head/tail) — now safe because the round-trip
-is bit-exact — then re-drive `CREATE TABLE` to confirm gaps 3–4 clear. The other
-queued `capstone-qemu` item, revocation enforcement (task #70,
+**SQLite gaps 3–4 CLEARED (2026-07-01).** The tag-preserving `memcpy`/`memmove`
+is re-enabled (`beebs_freestanding_string.c`, shared by SQLite + BEEBS; copies the
+pointer-aligned middle via `ldc`/`stc`, byte head/tail). Validated: BEEBS 82/82,
+200k-case libc fuzz, and authority probes `tagged_cap_memcpy_aligned` (a tagged
+cap survives `memcpy`) + `tagged_cap_memcpy_misaligned` (documents the alignment
+limit). SQLite now runs **past** the data-corruption gap.
+
+**SQLite gap 5 — ROOT-CAUSED, backend fix is the next step.** SQLite (at `-O0`)
+now aborts at `helper_cscincoffset: rs1_v->tag`: `cscincoffset` gets an untagged
+**integer** as the capability base and the real cap as the offset — an `int + ptr`
+commutative-add operand-ordering bug in `CapstoneISelDAGToDAG.cpp` (`ISD::ADD`
+i128 / `selectCIncOffset`), NOT a tag-loss bug (memcpy exonerated). Full diagnosis
++ fix direction: `design/sqlite-gap5-cscincoffset-operand-order.md`. Fix = swap so
+the capability operand is always the base; add lit + authority coverage; re-run
+`run-sqlite-memory.sh`.
+
+The other queued `capstone-qemu` item, revocation enforcement (task #70,
 `design/revocation-enforcement-proposal.md`), is **already wired on the
 memory-access path** (`capstone_cap_revoked` in `helper_reg_set_cap_compressed`;
 the runtime author confirmed the traversal is correct and the lazy check was a
-disabled TODO) — verify/close #70 against the current `caplifive-release` tip.
+disabled TODO) — verify/close #70 against the current submodule tip.
 
 The earlier benchmark milestones (RV8, BEEBS, backend fixes) are retained below as
 reference/history.
