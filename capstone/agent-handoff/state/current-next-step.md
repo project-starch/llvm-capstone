@@ -121,8 +121,13 @@ tag-preserving `ldc`/`stc` fast path (22 ops in its body) can't apply. Caller is
 the `sqlite3NestedParse` region. **Fix is primarily runtime-library** (smaller than
 feared): make `memcpy`/`memmove` preserve tags for any 16-byte-aligned cap granule
 inside a relatively-misaligned copy (query/repair via `ldc`/`stc`), and/or 16-align
-cap-bearing structs. Next: **write the fix proposal doc** + add an authority probe
-(relatively-misaligned cap copy), then implement. General finding in
+cap-bearing structs. **Fix proposal written:
+`design/sqlite-gap6-memcpy-tag-preservation-proposal.md`** (awaiting review) — step 0
+is one diagnostic (capture the culprit `memcpy(dst,src,n)` + source granule tag
+state to decide "under-aligned cap struct" vs "stale dest tag"), then Option 1
+(16-align the cap-bearing struct, reuse `memcpy`'s existing fast path) and/or
+Option 2 (tag-aware `memcpy`), plus a new authority probe
+`tagged_cap_memcpy_relmisaligned`. General finding in
 `design/research-decisions-log.md`. Full detail:
 `history/02-07-2026_00-00-00_sqlite-gap5-fix-and-gap6-investigation.md`.
 
