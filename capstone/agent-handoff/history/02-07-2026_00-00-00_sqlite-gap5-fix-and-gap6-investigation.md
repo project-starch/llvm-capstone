@@ -263,6 +263,83 @@ add an authority probe reproducing the relatively-misaligned cap-copy. The gener
 finding (16-byte tag granularity makes storage *layout* a provenance-correctness
 property) is in `design/research-decisions-log.md`.
 
+## Step 0 diagnostic (2026-07-03) — Case A confirmed; exact culprit = `sqlite3NestedParse` `saveBuf`
+
+Ran the proposal's step-0 disambiguation (Case A vs B). Method: temporary QEMU
+instrumentation (since reverted, submodule clean) recording, for every byte load
+(`size==1`), the source address + whether its granule is tagged (`gap6_last_load_*`),
+then a **pc-gated** log at the culprit store `sb` (`0x102142c44` = `memcpy+0x1fc`)
+correlating each tag-strip with its immediately-preceding `lbu` source and printing
+`memcpy`'s caller (`ra`, rebased). Findings:
+
+- **Exactly one primary loss** across the whole run:
+  `dst=0x1023f1f1c dst%16=12 (misaligned) | src=0x1023ffa10 src%16=0 src_tagged=1`.
+  A genuine **tagged, 16-aligned source** capability is byte-copied to a
+  **relatively-misaligned destination** (offset 12). → **Case A** (not Case B).
+- All other strips (~15, `src_tagged=0`) are **secondary**: they copy the already
+  untagged value back onto aligned tagged granules, clobbering their tags. Their
+  callers symbolize to `sqlite3_str_append` / `tokenExpr` / `sqlite3NestedParse`
+  (benign stale-tag stack reuse for strings/tokens).
+- Primary caller `ra=0x1020c57c8` = **`sqlite3NestedParse+0x174`**. Disasm of the
+  call site: `dst = s0-0x174` (offset 12 mod 16), `n = 0x100 = 256`, source = the
+  16-aligned Parse struct tail.
+
+Source confirms it exactly (amalgamation `sqlite3-capstone.c`):
+```c
+char saveBuf[PARSE_TAIL_SZ];                        /* bare char[] → NOT 16-aligned */
+memcpy(saveBuf, PARSE_TAIL(pParse), PARSE_TAIL_SZ); /* aligned tail → misaligned buf: strips */
+memset(PARSE_TAIL(pParse), 0, PARSE_TAIL_SZ);
+...
+memcpy(PARSE_TAIL(pParse), saveBuf, PARSE_TAIL_SZ); /* untagged buf → aligned tail: clobbers */
+```
+`PARSE_TAIL(pParse)` is 16-aligned (empirically `src%16=0`); `saveBuf` is a plain
+`char[]` the compiler placed at a 12-mod-16 slot. The Parse tail holds capability
+pointers (the `Table*` that later faults in `sqlite3DeleteTable`), saved into the
+misaligned buffer and restored untagged.
+
+**Consequence for the fix.** Because the two ends have a **constant** relative
+misalignment (12), **no `memcpy` cleverness (Option 2) can preserve the tag** — a
+capability physically cannot be tagged at destination offset 12. The only correct
+fix for Case A is **Option 1: eliminate the misalignment** — 16-align `saveBuf`
+(e.g. `_Alignas(16)` / `__attribute__((aligned(16)))`) via a build-time `sed`
+patch, so `da == sa == 0` and `memcpy`'s existing `ldc`/`stc` fast path carries the
+tags. Option 2 remains valuable only as general hardening for *mixed*-alignment
+copies (sub-ranges that re-align), which this case does not exhibit. This sharpens
+the paper point: **a `char[]` used to save/restore pointer-bearing memory is a
+latent tag-stripping bug on a capability machine unless 16-aligned.**
+
+Next: implement Option 1 (align `saveBuf`), add authority probe
+`tagged_cap_memcpy_relmisaligned`, and validate SQLite past gap 6 + BEEBS 82/82 /
+RV8 7/7 / CoreMark green.
+
+### Gap 6 FIXED (2026-07-03) — 16-align `saveBuf` (Option 1)
+
+Implemented Option 1. `build-sqlite-capstone.sh` now `sed`-patches
+`char saveBuf[PARSE_TAIL_SZ];` → `char saveBuf[PARSE_TAIL_SZ] __attribute__((aligned(16)));`
+(with a verification `grep`). With the buffer 16-aligned, both the save
+(`memcpy(saveBuf, PARSE_TAIL(pParse), …)`) and restore copies are aligned→aligned,
+so `memcpy`'s existing `ldc`/`stc` fast path carries the Parse-tail capability tags
+and nothing is byte-copied. **Result: the `sqlite3DeleteTable` untagged-`Table*`
+fault is gone** — SQLite now runs past gap 6.
+
+- **Scope / no regression risk:** the fix touches only the SQLite amalgamation
+  (`sqlite3-capstone.c`); the shared freestanding `memcpy` and QEMU are unchanged
+  (submodule clean, built from committed source), so BEEBS/RV8/CoreMark compile
+  byte-identical code and are unaffected. (Option 2 — a memcpy change — was *not*
+  needed: a constant relative misalignment is unpreservable by any copy loop, so
+  layout is the only correct fix.)
+- **Authority probe added:** `tagged_cap_saverestore_aligned_buf` — saves a tagged
+  capability into a 16-aligned `char[]` and restores it (the exact gap-6 shape),
+  asserting the tag round-trips (oracle `ok`, retval `0x22AC0001`). It is the
+  positive counterpart to the existing `tagged_cap_memcpy_misaligned` (unaligned
+  destination → tag-fault). Full authority suite green.
+
+**New blocker surfaced — "gap 7":** past gap 6, SQLite now hits a QEMU assertion
+`helper_cscincoffset: Assertion 'rs1_v->tag' failed` (`op_helper.c:597`) — a
+`cscincoffset` with an **untagged capability base** (`rs1 != gp`). Same helper as
+gap 5 but a distinct site; a hard assert rather than a clean fault. Root-causing is
+the next step (needs the guest pc of the offending `cscincoffset`).
+
 ## Separate, do not conflate
 
 The RV8 `aes` `-O1` run in the (contaminated) stack-shrink matrix hit the **same

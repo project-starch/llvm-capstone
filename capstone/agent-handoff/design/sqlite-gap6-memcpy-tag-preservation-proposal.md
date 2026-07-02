@@ -1,9 +1,20 @@
 # Proposal: preserve capability tags through relatively-misaligned `memcpy` (SQLite gap 6)
 
-*Status: PROPOSED (2026-07-02), awaiting review before implementation. Root cause
-is confirmed and the exact site is pinned; see
-`history/02-07-2026_00-00-00_sqlite-gap5-fix-and-gap6-investigation.md` for the
-full trace. This doc is the fix design.*
+*Status: IMPLEMENTED 2026-07-03 (Option 1). Step-0 diagnostic resolved Case A vs B
+(→ Case A); the fix — 16-align `saveBuf` in `sqlite3NestedParse` — is landed and
+SQLite runs past gap 6. See
+`history/02-07-2026_00-00-00_sqlite-gap5-fix-and-gap6-investigation.md` ("Gap 6
+FIXED") for the fix + the new gap-7 blocker. This doc is the fix design.*
+
+**Step 0 result (2026-07-03): Case A, confirmed.** The primary loss is a genuine
+tagged 16-aligned source (`src%16=0`, `src_tagged=1`) byte-copied to a
+relatively-misaligned destination (`dst%16=12`) — the `char saveBuf[PARSE_TAIL_SZ]`
+in **`sqlite3NestedParse`** (`memcpy(saveBuf, PARSE_TAIL(pParse), 256)`), a bare
+`char[]` the compiler placed at a 12-mod-16 slot. Because the relative
+misalignment is **constant**, **Option 2 cannot help this case** (a tag cannot
+live at destination offset 12) — the correct fix is **Option 1** (16-align
+`saveBuf`). Option 2 stays a general-hardening nice-to-have, not required for
+gap 6.
 
 ## Problem (confirmed)
 

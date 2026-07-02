@@ -113,6 +113,7 @@ SQLITE_PRIVATE const sqlite3_mem_methods *sqlite3MemGetMemsys5(void){\
   -e 's/sqlite3VdbeMemSetNull(pMem-(u<p->nField));/if( u<p->nField ) sqlite3VdbeMemSetNull(pMem-1); else sqlite3VdbeMemSetNull(pMem);/' \
   -e 's/(int)(pReadr1 - pMerger->aReadr)/(int)((__builtin_capstone_cap_get_cursor(pReadr1) - __builtin_capstone_cap_get_cursor(pMerger->aReadr)) \/ sizeof(PmaReader))/' \
   -e 's/(int)(pReadr2 - pMerger->aReadr)/(int)((__builtin_capstone_cap_get_cursor(pReadr2) - __builtin_capstone_cap_get_cursor(pMerger->aReadr)) \/ sizeof(PmaReader))/' \
+  -e 's/^  char saveBuf\[PARSE_TAIL_SZ\];/  char saveBuf[PARSE_TAIL_SZ] __attribute__((aligned(16)));/' \
   "$SQLITE_SRC_DIR/sqlite3.c" > "$PATCHED_SQLITE"
 
 grep -q '^#define SQLITE_TRANSIENT sqlite3CapstoneTransient$' "$PATCHED_SQLITE"
@@ -135,6 +136,9 @@ grep -q '^#define YYDYNSTACK 0$' "$PATCHED_SQLITE"
 grep -q 'if( u<p->nField ) sqlite3VdbeMemSetNull(pMem-1); else sqlite3VdbeMemSetNull(pMem);' "$PATCHED_SQLITE"
 grep -q '__builtin_capstone_cap_get_cursor(pReadr1)' "$PATCHED_SQLITE"
 grep -q '__builtin_capstone_cap_get_cursor(pReadr2)' "$PATCHED_SQLITE"
+# gap 6: sqlite3NestedParse saves the cap-bearing Parse tail through this buffer;
+# 16-align it so memcpy's tag-preserving ldc/stc fast path applies (no byte copy).
+grep -q 'char saveBuf\[PARSE_TAIL_SZ\] __attribute__((aligned(16)));' "$PATCHED_SQLITE"
 
 SQLITE_DEFINES=(
   -DNDEBUG

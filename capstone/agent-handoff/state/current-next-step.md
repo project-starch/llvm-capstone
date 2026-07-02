@@ -96,8 +96,34 @@ predicate-based swap `CapstoneTargetLowering::LowerADD` uses
 `CapstoneISelLowering.h`) so the capability is always the base. Lit **34/34** (new
 `cap-cincoffset-base.ll`); the cscincoffset assertion is gone.
 
-**SQLite gap 6 — root cause CONFIRMED (2026-07-02); exact source line + fix
-pending.** SQLite faults with `Cap mem access requires capability` in
+**SQLite gap 6 — FIXED 2026-07-03 (Option 1: 16-align `saveBuf`).** Step-0
+diagnostic (pc-gated at `memcpy+0x1fc`, correlating each strip with its source
+byte-load + memcpy caller) resolved it to **Case A**: the primary loss is a genuine
+tagged, 16-aligned capability byte-copied to a *relatively-misaligned* destination —
+`sqlite3NestedParse`'s `char saveBuf[PARSE_TAIL_SZ]` (the Parse-tail save/restore
+buffer) placed at a 12-mod-16 slot. Because the relative misalignment is constant,
+no memcpy change (Option 2) can preserve the tag; the fix is layout. Landed:
+`build-sqlite-capstone.sh` `sed`-patches `saveBuf` to `__attribute__((aligned(16)))`
+(+ verification grep) so both save/restore copies use `memcpy`'s aligned `ldc`/`stc`
+fast path. **SQLite now runs past `sqlite3DeleteTable`.** No regression risk to
+BEEBS/RV8/CoreMark (SQLite-amalgamation-only; shared `memcpy` + QEMU untouched).
+Authority probe `tagged_cap_saverestore_aligned_buf` added (round-trips a tagged
+cap through a 16-aligned `char[]`; oracle `ok`); full authority suite green.
+Detail: `history/02-07-2026_00-00-00_sqlite-gap5-fix-and-gap6-investigation.md`
+("Gap 6 FIXED"); design `design/sqlite-gap6-memcpy-tag-preservation-proposal.md`
+(IMPLEMENTED).
+
+**SQLite gap 7 — NEW blocker (surfaced 2026-07-03).** Past gap 6, SQLite hits a
+hard QEMU assert `helper_cscincoffset: Assertion 'rs1_v->tag' failed`
+(`op_helper.c:597`): a `cscincoffset` with an **untagged capability base**
+(`rs1 != gp`). Same helper as gap 5 (task #79) but a distinct site. Next: capture
+the offending guest pc (translate-time pc or a pc print at the assert), rebase
+against the domain image, and symbolize to name the SQLite site + whether it is a
+backend ISel issue (like gap 5) or an upstream tag loss.
+
+--- superseded gap-6 investigation notes (kept for provenance) ---
+
+SQLite faulted with `Cap mem access requires capability` in
 `sqlite3DeleteTable` on an untagged `Table*` (`0x102247f50`). A storage-slot-keyed
 QEMU trace (keyed by value **and** the granules it is stored into; since reverted,
 submodule clean) settled it from reliable helper-argument data (tag/addr/size —
