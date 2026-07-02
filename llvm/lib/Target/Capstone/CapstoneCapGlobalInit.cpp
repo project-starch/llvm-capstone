@@ -78,8 +78,28 @@ static bool isCapPtr(Type *Ty) {
 static bool needsMaterialization(Constant *FieldInit) {
   if (!FieldInit || isa<ConstantPointerNull>(FieldInit))
     return false;
-  const Value *Stripped = FieldInit->stripPointerCasts();
-  return isa<GlobalVariable>(Stripped) || isa<Function>(Stripped);
+  // Peel pointer casts and constant-offset GEPs to the underlying target. A
+  // pointer global initialized to an *interior* address of another global --
+  //   const unsigned char *p = &otherGlobal[N];
+  // (SQLite's sqlite3aLTb/aEQb/aGTb = &sqlite3UpperToLower[256(+6/+12)-OP_Ne]) --
+  // is a ConstantExpr GEP with non-zero indices. stripPointerCasts() only strips
+  // zero-index GEPs, so such a global was never recognized as referencing a
+  // GlobalVariable and its slot was left untagged, faulting on first use. We peel
+  // the GEP/cast chain here regardless of the `inbounds` flag: SQLite deliberately
+  // uses an index that is only in-bounds thanks to appended array elements, so
+  // clang does not mark the GEP inbounds and stripInBoundsConstantOffsets() would
+  // miss it. A global-initializer GEP always has constant indices, so peeling
+  // operand 0 is safe. The full interior pointer (with offset) is still what we
+  // store, so the tagged capability lands at the correct cursor.
+  const Constant *C = FieldInit;
+  while (auto *CE = dyn_cast<ConstantExpr>(C)) {
+    unsigned Op = CE->getOpcode();
+    if (Op != Instruction::GetElementPtr && Op != Instruction::BitCast &&
+        Op != Instruction::AddrSpaceCast)
+      break;
+    C = CE->getOperand(0);
+  }
+  return isa<GlobalVariable>(C) || isa<Function>(C);
 }
 
 namespace {

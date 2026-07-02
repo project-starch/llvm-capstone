@@ -113,13 +113,27 @@ Detail: `history/02-07-2026_00-00-00_sqlite-gap5-fix-and-gap6-investigation.md`
 ("Gap 6 FIXED"); design `design/sqlite-gap6-memcpy-tag-preservation-proposal.md`
 (IMPLEMENTED).
 
-**SQLite gap 7 — NEW blocker (surfaced 2026-07-03).** Past gap 6, SQLite hits a
-hard QEMU assert `helper_cscincoffset: Assertion 'rs1_v->tag' failed`
-(`op_helper.c:597`): a `cscincoffset` with an **untagged capability base**
-(`rs1 != gp`). Same helper as gap 5 (task #79) but a distinct site. Next: capture
-the offending guest pc (translate-time pc or a pc print at the assert), rebase
-against the domain image, and symbolize to name the SQLite site + whether it is a
-backend ISel issue (like gap 5) or an upstream tag loss.
+**SQLite gap 7 — FIXED 2026-07-03 (compiler, `CapstoneCapGlobalInit`).** The
+`cscincoffset` untagged-base assert was in `sqlite3VdbeExec` doing
+`sqlite3aEQb[opcode]`. `sqlite3aLTb/aEQb/aGTb` are global pointers initialized to
+an **interior address of another global** (`&sqlite3UpperToLower[256(+6/+12)-OP_Ne]`).
+`needsMaterialization` used `stripPointerCasts()` (strips only zero-index GEPs), so
+these interior-pointer globals were never tag-materialized → loaded untagged. Fix:
+peel the ConstantExpr GEP/cast chain inbounds-agnostically (SQLite's index is only
+in-bounds via appended array bytes, so clang doesn't mark the GEP `inbounds`).
+Validated: lit `static-cap-global-init-interior.ll` + Capstone lit 35/35; authority
+25/0; CoreMark/RV8 7-7/BEEBS 82-82 (shared-pass gate; failures seen were pre-boot
+infra flakes, pass standalone). Detail:
+`history/03-07-2026_00-00-00_sqlite-gap7-interior-pointer-cap-global-init.md`.
+
+**SQLite gap 8 — NEW blocker (surfaced 2026-07-03).** Past gap 7, SQLite hits
+`[CAPSTONE] Unaligned cap access (addr = 0x102237588)` then
+`riscv_cpu_do_interrupt: Assertion 'env->priv < PRV_C'` (`cpu_helper.c:1864`). Root
+is a 16-byte cap load/store (`ldc`/`stc`) at an **8-aligned (not 16-aligned)**
+address; the QEMU assert is a secondary effect (an exception raised in domain
+PRV_C mode isn't deliverable). Next: pin the offending `ldc`/`stc` guest pc,
+symbolize the SQLite site, and determine whether a cap-bearing field/struct is
+under-aligned (like gap 6) or an ISel addressing issue. Tracked as task #82.
 
 --- superseded gap-6 investigation notes (kept for provenance) ---
 
