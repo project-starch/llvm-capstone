@@ -111,10 +111,47 @@ in `sqlite3DeleteTable`:
 
 `pTable` is stored/reloaded with the tag-preserving `stc`/`ldc` pair (proven by
 the `spill_reachability` authority probe), so it was **already untagged when the
-caller passed it**. This is a distinct, deeper provenance gap upstream (an
-untagged `Table*` produced/passed by the caller), **not** the cscincoffset
-operand-order bug and **not** a spill defect. Next step: trace the caller of
-`sqlite3DeleteTable` to find where the `Table*` loses its tag.
+caller passed it**. This is a distinct, deeper provenance gap upstream, **not**
+the cscincoffset operand-order bug and **not** a spill defect.
+
+### Investigation (2026-07-01, QEMU instrumentation, since reverted)
+
+Temporary QEMU detectors (printing the untagged value + a frame anchor, a
+"scalar store of a tagged capability register" detector, and a value-filtered
+"scalar load from a capability slot" detector) established:
+
+- **The untagged pointer is `0x102247f50`.** By symbol table that vaddr lies
+  inside **`sqlite_heap`** (`nm`: `sqlite_heap` `0x166f50` .. `__capstone_gct_start`
+  `0x266f50`) — SQLite's static **MEMSYS5** arena (the domain configures it via
+  `sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, …, 64)`, build flag
+  `-DSQLITE_ENABLE_MEMSYS5=1`). So `pTable` is a MEMSYS5-allocated object.
+- **The allocator returns a *tagged* pointer.** `memsys5MallocUnsafe`'s return
+  path is `ldc a0, 0x10(a2)` (zPool, tagged) then `cincoffset a0, a0, <off>` —
+  a tagged capability. So the allocation is fine; the tag is lost **downstream**.
+- **Not a scalar store.** Zero domain hits for "scalar store of a tagged
+  capability register" before the fault — the tagged pointer is never `sd`'d.
+- **Plain varargs is *not* the culprit.** A minimal `va_arg(ap, void*)` compiles
+  to tag-preserving `stc`/`ldc` at `-O0`, so passing `sqlite_heap` through
+  `sqlite3_config`'s `...` keeps the tag.
+- **Signature = 128-bit scalar copy of a capability.** The faulting register's
+  full 128-bit value is `0x3bcd5c5568 : 0x102247f50`; the **high word looks like
+  compressed capability bounds**, not zero/garbage. So *both* 64-bit halves of a
+  real capability were preserved while the tag was dropped — the fingerprint of a
+  capability-containing aggregate copied with scalar 64-bit ops (`ld`/`sd` pairs
+  or an inlined struct copy), **not** a single scalar pointer load.
+
+### Reframed root cause + next step (gap 6)
+
+Gap 6 is a **capability-containing aggregate/struct copied via scalar 64-bit
+memory ops**, dropping the tag — the same class as gaps 2–3 but a case the
+16-byte-aligned tag-preserving `memcpy` does **not** cover (an inlined struct
+copy, a `memcpy` the compiler expanded to `2×i64` load/store, or a pointer field
+at a non-16-aligned struct offset). Next step: map the copy site to a source
+line (via `-g`/`llvm-symbolizer` on the domain, or a value-filtered lo+hi load
+detector) and fix it — either make the backend lower capability-containing
+aggregate copies with `ldc`/`stc`, or ensure such copies route through the
+tag-preserving `memcpy`. A minimal authority probe (a struct with a pointer
+field copied by assignment, then dereferenced) should reproduce it.
 
 ## Separate, do not conflate
 

@@ -85,13 +85,23 @@ predicate-based swap `CapstoneTargetLowering::LowerADD` uses
 `CapstoneISelLowering.h`) so the capability is always the base. Lit **34/34** (new
 `cap-cincoffset-base.ll`); the cscincoffset assertion is gone.
 
-**SQLite gap 6 — NEXT.** With gap 5 cleared SQLite now faults with a different
-mechanism: `Cap mem access requires capability` in `sqlite3DeleteTable` — an
-untagged `Table*` (`pTable`) passed in by the caller (its `stc`/`ldc` spill
-round-trip is tag-preserving, so it was already untagged on entry). A distinct,
-deeper provenance gap upstream, not the operand-order bug. Trace the caller to
-find where the `Table*` loses its tag. Details:
-`design/sqlite-gap5-cscincoffset-operand-order.md`.
+**SQLite gap 6 — INVESTIGATED, root cause reframed (2026-07-01).** With gap 5
+cleared SQLite faults with `Cap mem access requires capability` in
+`sqlite3DeleteTable` on an untagged `Table*`. QEMU instrumentation (since
+reverted; submodule clean) established: the pointer (`0x102247f50`) is a
+**MEMSYS5** allocation inside the static `sqlite_heap` arena; the allocator
+returns it **tagged** (`memsys5MallocUnsafe` = `ldc zPool` + `cincoffset`); the
+tag is lost **downstream**, **not** by a scalar store (0 hits) and **not** by
+plain varargs (tag-preserving at `-O0`). The faulting 128-bit value
+`0x3bcd5c5568:0x102247f50` has a **high word shaped like compressed cap
+bounds** → both halves preserved, tag dropped = signature of a **128-bit scalar
+copy of a capability-containing aggregate** (the same class as gaps 2–3, but a
+case the aligned tag-preserving `memcpy` doesn't cover — an inlined struct copy
+or a `memcpy` expanded to `2×i64`). Next: map the copy site to a source line and
+make capability-aggregate copies use `ldc`/`stc` (or route through the
+tag-preserving `memcpy`); reproduce with a struct-with-pointer-field authority
+probe. Full detail:
+`history/02-07-2026_00-00-00_sqlite-gap5-fix-and-gap6-investigation.md`.
 
 The other queued `capstone-qemu` item, revocation enforcement (task #70,
 `design/revocation-enforcement-proposal.md`), is **already wired on the
