@@ -39,16 +39,18 @@ agent-handoff/
 │   ├── beebs-benchmark-bringup-manual.md
 │   ├── project-structure-overview.md
 │   └── runtime-terms-glossary.md
-├── design/                deep architecture and design docs
+├── design/                deep architecture and DESIGN DECISIONS only
+│                          (bug-fix investigations/root-cause/audits -> history/)
 │   ├── sqlite-minimal-vfs-path.md
 │   ├── hostcall-file-service-v0-wire-spec.md
 │   ├── stable-file-service-subset.md
 │   ├── split-host-enclave-strategy.md
 │   ├── hosted-libc-os-analysis.md
+│   ├── research-decisions-log.md
 │   └── native-sample-validation.md
 ├── plans/                 active WIP plans (committed, portable)
 │   └── backend-compiler-fixes.md
-└── history/               timestamped archival notes
+└── history/               timestamped archival notes + bug-fix/root-cause trails
 ```
 
 ## Current verified baseline
@@ -101,6 +103,7 @@ Use these only when the task actually needs them:
 - `design/stable-file-service-subset.md` — reusable HostCall file-service proposal
 - `design/split-host-enclave-strategy.md` — source-backed architectural detail
 - `design/hosted-libc-os-analysis.md` — hosted Linux blockers and sysroot mismatch analysis
+- `design/research-decisions-log.md` — paper-worthy implementation decisions and tradeoffs, cited by commit hash
 - `plans/backend-compiler-fixes.md` — known backend bugs and workarounds (from CoreMark bring-up)
 - `history/README.md` — historical index and note selection guide
 

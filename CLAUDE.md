@@ -29,4 +29,9 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
 | Test matrix + cookbook | `capstone/agent-handoff/ref/` |
 | Architecture + design docs | `capstone/agent-handoff/design/` |
 | Active WIP plans | `capstone/agent-handoff/plans/` |
+| Bug-fix investigations, root-cause trails, audits | `capstone/agent-handoff/history/` (dated `DD-MM-YYYY_HH-MM-SS_name.md`) |
 | Archived session notes | `capstone/agent-handoff/history/` |
+
+**`design/` is for design decisions and architecture only.** A bug fix,
+root-cause investigation, or audit — even a substantial one — is *not* a design
+decision; it belongs in `history/` as a dated note, not in `design/`.
