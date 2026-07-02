@@ -96,24 +96,27 @@ predicate-based swap `CapstoneTargetLowering::LowerADD` uses
 `CapstoneISelLowering.h`) so the capability is always the base. Lit **34/34** (new
 `cap-cincoffset-base.ll`); the cscincoffset assertion is gone.
 
-**SQLite gap 6 — loss localized UPSTREAM (2026-07-02), causal store not yet
-pinned.** With gap 5 cleared SQLite faults with `Cap mem access requires
-capability` in `sqlite3DeleteTable` on an untagged `Table*` (`0x102247f50`, a
-MEMSYS5 allocation in `sqlite_heap`). Ruled out: allocator (returns it **tagged**),
-aggregate copy / varargs / pointer↔int round-trip (all tag-preserving). **`-g`
-disassembly (2026-07-02) proves DeleteTable's own slot is clean** (`stc` → scalar
-*load* for `if(!pTable)` → `ldc`; loads don't clear), so `pTable` **arrives
-untagged from the caller** — the loss is **upstream** on the
-CREATE→schema-hash-store→DROP-retrieve path (`pSchema->tblHash`, a `HashElem` in
-`sqlite_heap`). The earlier "12 `TAG-ST-CLR`" value-filtered hits were
-**incidental** — the three sampled pcs symbolized to unrelated functions (trigger
-creation, WITH-walker, `ExprCollSeqMatch`). Candidate mechanism (scalar sharing
-the stored cap's 16-byte granule) is still viable but must be located in the
-**HashElem storage**, not a stack frame. Next: a **storage-slot-keyed** trace of
-that HashElem granule (not value-keyed), then symbolize + MIR, then a fix
-**proposal**. The general finding (16-byte tag granularity makes storage layout a
-provenance property) is recorded in `design/research-decisions-log.md`. Full
-detail: `history/02-07-2026_00-00-00_sqlite-gap5-fix-and-gap6-investigation.md`.
+**SQLite gap 6 — root cause CONFIRMED (2026-07-02); exact source line + fix
+pending.** SQLite faults with `Cap mem access requires capability` in
+`sqlite3DeleteTable` on an untagged `Table*` (`0x102247f50`). A storage-slot-keyed
+QEMU trace (keyed by value **and** the granules it is stored into; since reverted,
+submodule clean) settled it from reliable helper-argument data (tag/addr/size —
+`env->pc` is lazily synced here and useless for pinning the store): **every `stc`
+of the pointer is tagged (89/89)**; the value is read back **untagged** at exactly
+two **stack** granules. The transition granule is stored **tagged**, then cleared
+by **byte-wise scalar stores (`size=1`)**, then read **untagged**; DeleteTable's
+own slot then receives it already-untagged and faults (its slot is otherwise
+clean: `stc`→scalar-load→`ldc`). **Mechanism: a live tagged capability in a 16-byte
+stack granule has its tag stripped by a byte-wise memory copy**
+(`memcpy`/`memmove`/small struct-copy lowered to `sb`/`sh`/`sw`) — the sub-16-byte
+scalar-copy path that bypasses `ldc`/`stc` (same class as
+`tagged_cap_memcpy_misaligned`). NOT the heap `HashElem` (earlier hypothesis
+superseded), allocator, or value-motion. Remaining: pin the exact SQLite line
+(needs a **pc-accurate** method — sync `env->pc` in the store helper, or MIR
+frame-slot analysis of the stack addr), then a fix **proposal** (make sub-16-byte
+copies tag-preserving over live-cap granules, or 16-align+`ldc`/`stc` cap-bearing
+structs; connects to gap 2). General finding in `design/research-decisions-log.md`.
+Full detail: `history/02-07-2026_00-00-00_sqlite-gap5-fix-and-gap6-investigation.md`.
 
 The other queued `capstone-qemu` item, revocation enforcement (task #70,
 `design/revocation-enforcement-proposal.md`), is **already wired on the

@@ -243,21 +243,20 @@ untagged and the first dereference faults far from the cause.
 
 Evidence: SQLite `sqlite3DeleteTable` faulted on an untagged `Table*`
 (`0x102247f50`, a MEMSYS5 allocation). The allocator returned it **tagged**;
-aggregate copy, varargs, and pointer↔int round-trip were all ruled out
-(tag-preserving). Static disassembly of the faulting function (`-g` build,
-symbolized 2026-07-02) shows DeleteTable's own `pTable` slot is **clean** —
-`stc` in, scalar *load* for the `if(!pTable)` null check (loads don't clear),
-`ldc` out — so the pointer **arrives untagged from the caller**. The loss is
-therefore **upstream**, on the CREATE→schema-hash-store→DROP-retrieve path: the
-`Table*` is parked in `pSchema->tblHash` (a `HashElem` in `sqlite_heap`) and
-retrieved by `sqlite3UnlinkAndDeleteTable`. The exact clearing store is not yet
-pinned; a value-only detector over `0x102247f50` is too loose (the value is
-pervasive — three sampled `TAG-ST-CLR` pcs symbolized to unrelated functions),
-so the remaining step is a **storage-slot-keyed** trace of the HashElem granule.
-The candidate mechanism remains a **memory-layout × 16-byte-tag-granularity
-interaction** (a scalar packed into the same 16-byte granule as the stored
-capability), now to be confirmed against the specific HashElem slot rather than a
-stack frame.
+aggregate copy, varargs, and pointer↔int round-trip were ruled out. A
+storage-slot-keyed QEMU trace (2026-07-02, keyed by value **and** by the granules
+that value is stored into; since reverted) confirmed the mechanism from reliable
+helper-argument data (tag flag / address / size — not the lazily-synced
+`env->pc`): **every `stc` of the pointer is tagged** (89/89), and the value is
+read back untagged at exactly two **stack** granules. The transition happens at
+one stack granule that is stored **tagged**, then cleared by **byte-wise scalar
+stores (`size=1`)**, then read **untagged**; DeleteTable later receives the value
+already untagged and faults. So a live tagged capability resident in a 16-byte
+**stack** granule has its tag stripped by a **byte-wise memory copy**
+(`memcpy`/`memmove`/small struct-copy lowered to `sb`/`sh`/`sw`) that overwrites
+the granule — the *sub-16-byte scalar-copy* path that bypasses tag-preserving
+`ldc`/`stc` (same class as the `tagged_cap_memcpy_misaligned` limitation). It is
+**not** the heap `HashElem`, the allocator, or a value-motion ABI bug.
 
 Why it matters: this is a distinct tag-loss class from the earlier backend bugs
 (`va_list` scalar path, stack-passed cap args, sub-capability aggregate copy),

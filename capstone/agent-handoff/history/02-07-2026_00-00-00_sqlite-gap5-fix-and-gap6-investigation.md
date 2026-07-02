@@ -189,16 +189,53 @@ parked in a **`HashElem` in `sqlite_heap`** between CREATE and DROP. The candida
 mechanism (a scalar sharing the stored capability's 16-byte granule) is still
 viable, but it must be located in that **HashElem storage**, not any stack frame.
 
-### Next step
+### CONFIRMED root cause (2026-07-02, storage-slot-keyed trace)
 
-Run a **storage-slot-keyed** trace (not value-keyed): follow the specific object
-`0x102247f50` from `memsys5MallocUnsafe` to the `HashElem.data` slot it is stored
-in, then report the pc of any tag-clearing *store* to **that HashElem granule**
-before the DROP retrieval. That pins the causal site (vs. the incidental
-value-aliasing hits above). Then symbolize it and inspect the MIR. Only after the
-causal store is confirmed does the fix (substantial backend work) get a proposal
-doc. Keep the general finding — 16-byte tag granularity makes storage *layout* a
-provenance-correctness property — in `design/research-decisions-log.md`.
+A storage-slot-keyed trace (QEMU hooks on the tag-map add/remove + cap-load
+paths, keyed by the pointer value **and** by the granules that value is stored
+into; since reverted, submodule clean) settled it. All numbers below are from the
+**helper arguments** (tag flag, address, size) — *not* from `env->pc`, which this
+QEMU syncs lazily so it is useless for pinning the storing instruction (it
+attributed a **stack**-address byte store to `pcache1FetchStage2`, a heap
+page-cache routine — impossible; `ra` is equally stale).
+
+Reliable findings:
+
+- **Every `stc` of the `Table*` is tagged** (89 stores, all `tag=1`). The tag is
+  never lost at a capability store.
+- The value is read back **untagged** at exactly **two** granules, both on the
+  **stack**: `0x1023ffa80` (first) and `0x1023f39e0` (DeleteTable's own
+  `[s0-0x40]`, the fault).
+- **Transition granule = `0x1023ffa80`:** stored **tagged** (`seq80 tag=1`), then
+  its tag is cleared by **byte-wise scalar stores (`size=1`)**, then read back
+  **untagged**. That is the root event.
+- DeleteTable's slot `0x1023f39e0` receives the value **already untagged**
+  (`stc tag=0`) and reads it untagged → fault. So the loss is upstream of
+  DeleteTable and propagates in as an untagged register (consistent with the
+  clean-slot disassembly above).
+
+**Mechanism (confirmed):** a live tagged capability resident in a **16-byte stack
+granule** has its tag stripped by a **byte-wise memory copy** (a
+`memcpy`/`memmove`/small struct-copy/`memset` lowered to `sb`/`sh`/`sw` scalar
+stores) that overwrites the granule. This is the **storage-aliasing /
+16-byte-tag-granularity** class — the *sub-16-byte scalar-copy* path that bypasses
+the tag-preserving `ldc`/`stc` middle (the same class as the documented
+`tagged_cap_memcpy_misaligned` limitation), now shown to bite an on-stack
+`Table*`. It is **not** the heap `HashElem` (that earlier hypothesis is
+superseded), not the allocator, not a value-motion ABI bug.
+
+### Remaining + fix direction
+
+Pinning the exact SQLite source line of the byte-copy needs a **pc-accurate**
+method — either sync `env->pc` in the store helper before the tag-map remove, or
+correlate the stack address `0x1023ffa80` with an LLVM **MIR frame-slot** analysis
+of the function active at that point. The fix (substantial, gets its own proposal
+doc) is one of: (a) make sub-16-byte / misaligned copies tag-preserving where a
+granule holds a live capability, or (b) guarantee capability-containing structs
+are 16-aligned and copied via `ldc`/`stc` (connects to gap 2 and the
+sub-capability aggregate-copy fix). The general finding — 16-byte tag granularity
+makes storage *layout* a provenance-correctness property — is in
+`design/research-decisions-log.md`.
 
 ## Separate, do not conflate
 
