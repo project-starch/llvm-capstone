@@ -114,6 +114,8 @@ SQLITE_PRIVATE const sqlite3_mem_methods *sqlite3MemGetMemsys5(void){\
   -e 's/(int)(pReadr1 - pMerger->aReadr)/(int)((__builtin_capstone_cap_get_cursor(pReadr1) - __builtin_capstone_cap_get_cursor(pMerger->aReadr)) \/ sizeof(PmaReader))/' \
   -e 's/(int)(pReadr2 - pMerger->aReadr)/(int)((__builtin_capstone_cap_get_cursor(pReadr2) - __builtin_capstone_cap_get_cursor(pMerger->aReadr)) \/ sizeof(PmaReader))/' \
   -e 's/^  char saveBuf\[PARSE_TAIL_SZ\];/  char saveBuf[PARSE_TAIL_SZ] __attribute__((aligned(16)));/' \
+  -e 's/  nByte = SZ_VDBECURSOR(nField);/  nByte = (SZ_VDBECURSOR(nField)+15)\&~15;/' \
+  -e 's/&pMem->z\[SZ_VDBECURSOR(nField)\]/\&pMem->z[(SZ_VDBECURSOR(nField)+15)\&~15]/' \
   "$SQLITE_SRC_DIR/sqlite3.c" > "$PATCHED_SQLITE"
 
 grep -q '^#define SQLITE_TRANSIENT sqlite3CapstoneTransient$' "$PATCHED_SQLITE"
@@ -139,6 +141,11 @@ grep -q '__builtin_capstone_cap_get_cursor(pReadr2)' "$PATCHED_SQLITE"
 # gap 6: sqlite3NestedParse saves the cap-bearing Parse tail through this buffer;
 # 16-align it so memcpy's tag-preserving ldc/stc fast path applies (no byte copy).
 grep -q 'char saveBuf\[PARSE_TAIL_SZ\] __attribute__((aligned(16)));' "$PATCHED_SQLITE"
+# gap 8: allocateCursor embeds a cap-bearing BtCursor at SZ_VDBECURSOR(nField),
+# which is only 8-aligned; 16-align its offset (and the allocation) so ldc/stc on
+# the BtCursor's capability fields don't fault on unaligned cap access.
+grep -q 'nByte = (SZ_VDBECURSOR(nField)+15)&~15;' "$PATCHED_SQLITE"
+grep -q '&pMem->z\[(SZ_VDBECURSOR(nField)+15)&~15\]' "$PATCHED_SQLITE"
 
 SQLITE_DEFINES=(
   -DNDEBUG

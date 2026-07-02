@@ -126,14 +126,23 @@ Validated: lit `static-cap-global-init-interior.ll` + Capstone lit 35/35; author
 infra flakes, pass standalone). Detail:
 `history/03-07-2026_00-00-00_sqlite-gap7-interior-pointer-cap-global-init.md`.
 
-**SQLite gap 8 — NEW blocker (surfaced 2026-07-03).** Past gap 7, SQLite hits
-`[CAPSTONE] Unaligned cap access (addr = 0x102237588)` then
-`riscv_cpu_do_interrupt: Assertion 'env->priv < PRV_C'` (`cpu_helper.c:1864`). Root
-is a 16-byte cap load/store (`ldc`/`stc`) at an **8-aligned (not 16-aligned)**
-address; the QEMU assert is a secondary effect (an exception raised in domain
-PRV_C mode isn't deliverable). Next: pin the offending `ldc`/`stc` guest pc,
-symbolize the SQLite site, and determine whether a cap-bearing field/struct is
-under-aligned (like gap 6) or an ISel addressing issue. Tracked as task #82.
+**SQLite gap 8 — FIXED 2026-07-03; SQLite now runs END TO END.** The unaligned cap
+`stc` was in `allocateCursor`, which embeds a cap-bearing `BtCursor` at
+`SZ_VDBECURSOR(nField)` — only 8-aligned (`ROUND8` + `(N+1)*sizeof(u64)`). Fix:
+`build-sqlite-capstone.sh` `sed`-patches the `BtCursor` offset (and its allocation
+size) to 16-align. SQLite-source only (no shared code/QEMU/compiler change), so the
+benchmark gate is unaffected. **Confirmed with pristine QEMU:** the domain emits
+`row name=alpha value=11 / beta=22 / gamma=33` and `__CAPSTONE_SQLITE_MEMORY_PASSED__`
+— CREATE/INSERT/SELECT all correct. **Gaps 1–8 all resolved; SQLite bring-up is
+complete.** Detail:
+`history/03-07-2026_00-00-01_sqlite-gap8-unaligned-cursor-and-full-pass.md`.
+
+**Follow-ups (not blockers):** (1) QEMU aborts (`riscv_cpu_do_interrupt` assert
+`env->priv < PRV_C`) when an in-domain cap fault is raised — cap faults aren't
+deliverable in PRV_C; worth fixing so faults are clean/catchable. (2) The alignment
+gaps (6 `saveBuf`, 8 `BtCursor`) are a class — SQLite hand-packs pointer-bearing
+regions at 8-aligned offsets; wider workloads may surface more, each a localized
+16-align patch.
 
 --- superseded gap-6 investigation notes (kept for provenance) ---
 

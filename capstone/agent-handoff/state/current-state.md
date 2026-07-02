@@ -4,29 +4,31 @@ Minimal snapshot. Read first in every session.
 
 ## SQLite in-memory bring-up
 
-SQLite 3.53.3 now compiles and links as a `capstone64-unknown-elf` domain using
-memsys5 over a 1 MiB arena and the existing runtime-initialized SQLite VFS
-skeleton. Sources remain under `/tmp/capstone`; the pinned fetch/build/run
-workflow and blocker report are in `capstone/benchmarks/sqlite/README.md`.
+SQLite 3.53.3 compiles, links, **and runs end to end** as a
+`capstone64-unknown-elf` pure-capability domain using memsys5 over the static
+arena and the runtime-initialized SQLite VFS skeleton. `run-sqlite-memory.sh`
+executes `CREATE TABLE` / `INSERT` / `SELECT` and the domain returns correct rows
+(`row name=alpha value=11 / beta=22 / gamma=33`, `__CAPSTONE_SQLITE_MEMORY_PASSED__`).
+The pinned fetch/build/run workflow is in `capstone/benchmarks/sqlite/README.md`.
 
-Bring-up progressed through four gaps. **Gaps 1–2 are fixed** (compiler):
-`CapstoneCapGlobalInit` now recurses through arbitrary nested global aggregates
-(gap 1, task #71) and clang's memcpy-from-private-template of capability
-aggregates is handled (gap 2, task #72). **Gaps 3–4 are one QEMU limitation and
-are now the blocker** (tasks #73/#74): an untagged value in a capability register
-is only a 64-bit scalar, so untagged `ldc`/`stc` do not round-trip the full
-128-bit memory word (untagged `stc` writes `hi=0`; untagged load recovers only
-`lo`), while scalar `sd` clears tags and there is no runtime tag query. Therefore
-**no in-domain `memcpy` preserves both plain data and capability tags** — a
-byte-loop drops tags (gap 3, `strlen` fault) and an `ldc`/`stc` copy zeroes the
-high 8 bytes of data (gap 4, `SQLITE_CORRUPT`). The tag-preserving `memcpy` was
-reverted to the byte loop (loud fault, no silent corruption). The fix belongs in
-`capstone-qemu` (make untagged `ldc`/`stc` bit-preserving) and is a submodule
-semantics decision awaiting the QEMU author — see
-`design/untagged-cap-loadstore-preservation-proposal.md`. Diagnosis:
-`/tmp/capstone/gap3-diagnostics-results.md`; reproducer
-`capstone/benchmarks/sqlite/probes/runtime-bytecopy-capability.c`. This is not a
-VFS/filesystem blocker.
+**Bring-up is complete — all 8 gaps resolved:**
+- Gaps 1–2 (compiler): `CapstoneCapGlobalInit` recurses nested global aggregates
+  (#71); clang memcpy-from-private-template of cap aggregates handled (#72).
+- Gaps 3–4 (QEMU): untagged `ldc`/`stc` made bit-preserving over the full 128-bit
+  word, enabling a tag-preserving `memcpy` (#73/#74).
+- Gap 5 (compiler ISel): `cscincoffset` int+ptr operand order (#79).
+- Gap 6 (SQLite alignment): 16-align `sqlite3NestedParse`'s `saveBuf` so the
+  tag-preserving `memcpy` fast path carries Parse-tail caps (#80).
+- Gap 7 (compiler): materialize interior-pointer capability globals
+  (`&global[N]`) — `sqlite3aLTb/aEQb/aGTb` (#81).
+- Gap 8 (SQLite alignment): 16-align the `BtCursor` embedded by `allocateCursor`
+  (#82).
+
+Full per-gap detail in `history/` (dated notes) and
+`design/sqlite-gap6-memcpy-tag-preservation-proposal.md`. Two non-blocking
+follow-ups remain: QEMU should deliver in-domain cap faults cleanly (today it
+asserts `env->priv < PRV_C`), and the SQLite 8-byte-alignment class (gaps 6/8) may
+surface more instances under wider workloads.
 
 ## Verified baseline
 
