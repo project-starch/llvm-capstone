@@ -133,25 +133,72 @@ Temporary QEMU detectors (printing the untagged value + a frame anchor, a
 - **Plain varargs is *not* the culprit.** A minimal `va_arg(ap, void*)` compiles
   to tag-preserving `stc`/`ldc` at `-O0`, so passing `sqlite_heap` through
   `sqlite3_config`'s `...` keeps the tag.
-- **Signature = 128-bit scalar copy of a capability.** The faulting register's
-  full 128-bit value is `0x3bcd5c5568 : 0x102247f50`; the **high word looks like
-  compressed capability bounds**, not zero/garbage. So *both* 64-bit halves of a
-  real capability were preserved while the tag was dropped — the fingerprint of a
-  capability-containing aggregate copied with scalar 64-bit ops (`ld`/`sd` pairs
-  or an inlined struct copy), **not** a single scalar pointer load.
+- **Faulting 128-bit value = `0x3bcd5c5568 : 0x102247f50`.** The high word is
+  shaped like compressed capability bounds, not zero/garbage — so both halves of a
+  real capability are present while the tag is dropped. (Initially read as a
+  "128-bit scalar copy of an aggregate," but that hypothesis was **tested and
+  rejected** — see below.)
 
-### Reframed root cause + next step (gap 6)
+### Hypotheses tested and rejected
 
-Gap 6 is a **capability-containing aggregate/struct copied via scalar 64-bit
-memory ops**, dropping the tag — the same class as gaps 2–3 but a case the
-16-byte-aligned tag-preserving `memcpy` does **not** cover (an inlined struct
-copy, a `memcpy` the compiler expanded to `2×i64` load/store, or a pointer field
-at a non-16-aligned struct offset). Next step: map the copy site to a source
-line (via `-g`/`llvm-symbolizer` on the domain, or a value-filtered lo+hi load
-detector) and fix it — either make the backend lower capability-containing
-aggregate copies with `ldc`/`stc`, or ensure such copies route through the
-tag-preserving `memcpy`. A minimal authority probe (a struct with a pointer
-field copied by assignment, then dereferenced) should reproduce it.
+- **Simple aggregate/struct copy** — REJECTED. Isolated `-O0` codegen of struct
+  assignment (pointer at offset 0 *and* mid-struct offset 8), by-value return, and
+  `__builtin_memcpy` of a pointer-containing struct all lower to **tag-preserving
+  `ldc`/`stc`** 16-byte pairs. Plain aggregate copies do not lose the tag.
+- **Pointer↔integer round-trip in SQLite source** — REJECTED. The tag map has a
+  live entry (a capability *was* `stc`'d) at the slots that later read untagged,
+  so the pointer **was tagged** at some point; it is not an inttoptr-of-integer.
+
+### Candidate mechanism (gap 6) — loss is UPSTREAM of DeleteTable
+
+A value-filtered detector — "a scalar store/load touching a 16-byte granule that
+currently holds a capability whose low word is `0x102247f50`" — fired **12
+`TAG-ST-CLR` events** at scalar-store offsets `+0xc / +0xe`. That first suggested
+"a live `pTable` copy shares a 16-byte granule with a scalar." **Static
+disassembly + symbolization (`-g` build, 2026-07-02) refuted the DeleteTable-frame
+version of that story and relocated the loss upstream.**
+
+**Symbolization of the three sampled pcs (image base was `0x101ff6000`):**
+
+| runtime pc | image off | symbol / source |
+|---|---|---|
+| `0x1020adfb0` | `0xb7fb0` | `sqlite3-capstone.c:158462` — trigger creation (`sqlite3AuthCheck` call) |
+| `0x1020d6ccc` | `0xe0ccc` | `sqlite3-capstone.c:154848` — WITH-clause walker (`pParse->pWith = …`) |
+| `0x1021077e0` | `0x1117e0` | `sqlite3ExprCollSeqMatch` prologue (`:113174`) |
+
+Three **unrelated** functions, three different stack addresses — i.e. the
+value-only filter caught **incidental** granule-aliasing on a pervasive value, not
+the causal clear (exactly the caveat that was flagged).
+
+**Disassembly of `sqlite3DeleteTable` (`0x10754`) proves its own slot is clean:**
+
+```
+10770: cincoffsetimm a0, s0, -0x40   ; pTable slot = [s0-0x40]
+10774: stc a1, 0x0(a0)              ; store arg pTable — tag-preserving
+10778: ld  a0, 0x0(a0)              ; scalar LOAD of low word (if(!pTable)) — loads don't clear
+1079c: cincoffsetimm a0, s0, -0x40
+107a0: ldc a1, 0x0(a0)             ; reload pTable
+107a4: lw  a0, 0x54(a1)            ; FAULT (--pTable->nTabRef); a1 untagged
+```
+
+`stc` → scalar-*load* → `ldc`: the frame slot never gets a tag-clearing *store*.
+So **`pTable` arrives in `a1` already untagged** — the tag was lost **before** the
+call. `sqlite3UnlinkAndDeleteTable` retrieves the `Table*` from the schema hash
+(`sqlite3HashInsert(&pDb->pSchema->tblHash, zTabName, 0)`), so the pointer is
+parked in a **`HashElem` in `sqlite_heap`** between CREATE and DROP. The candidate
+mechanism (a scalar sharing the stored capability's 16-byte granule) is still
+viable, but it must be located in that **HashElem storage**, not any stack frame.
+
+### Next step
+
+Run a **storage-slot-keyed** trace (not value-keyed): follow the specific object
+`0x102247f50` from `memsys5MallocUnsafe` to the `HashElem.data` slot it is stored
+in, then report the pc of any tag-clearing *store* to **that HashElem granule**
+before the DROP retrieval. That pins the causal site (vs. the incidental
+value-aliasing hits above). Then symbolize it and inspect the MIR. Only after the
+causal store is confirmed does the fix (substantial backend work) get a proposal
+doc. Keep the general finding — 16-byte tag granularity makes storage *layout* a
+provenance-correctness property — in `design/research-decisions-log.md`.
 
 ## Separate, do not conflate
 

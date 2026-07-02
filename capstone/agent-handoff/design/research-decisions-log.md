@@ -224,3 +224,52 @@ broad roots such as `gp`, stack, or allocator arenas. The paper must not claim
 object-granularity spatial safety until bounds are tightened and tested.
 
 Limits: this is a research/audit finding, not a fix in the audited commit range.
+
+### Tag-granularity overlap: a scalar store inside a live capability's 16-byte granule silently strips its tag
+
+Status: research finding (2026-07-02), fix pending. Full diagnosis trail:
+`capstone/agent-handoff/history/02-07-2026_00-00-00_sqlite-gap5-fix-and-gap6-investigation.md`
+(SQLite gap 6). Not yet a commit — recorded here because the *class* is
+paper-worthy independently of the eventual fix.
+
+Finding: the hardware tag map is **16-byte-granular** — any scalar write anywhere
+inside a capability's 16-byte storage clears that capability's tag (correct
+capability semantics: a partial overwrite is a forge attempt). This makes storage
+**layout** a provenance-correctness property, not just an ABI convenience. If the
+compiler ever places a scalar object (a spill slot, a coalesced local, a struct
+sub-field) in the same 16-byte granule as a still-live capability, a store to the
+scalar de-tags the capability with no diagnostic; a later `ldc` returns it
+untagged and the first dereference faults far from the cause.
+
+Evidence: SQLite `sqlite3DeleteTable` faulted on an untagged `Table*`
+(`0x102247f50`, a MEMSYS5 allocation). The allocator returned it **tagged**;
+aggregate copy, varargs, and pointer↔int round-trip were all ruled out
+(tag-preserving). Static disassembly of the faulting function (`-g` build,
+symbolized 2026-07-02) shows DeleteTable's own `pTable` slot is **clean** —
+`stc` in, scalar *load* for the `if(!pTable)` null check (loads don't clear),
+`ldc` out — so the pointer **arrives untagged from the caller**. The loss is
+therefore **upstream**, on the CREATE→schema-hash-store→DROP-retrieve path: the
+`Table*` is parked in `pSchema->tblHash` (a `HashElem` in `sqlite_heap`) and
+retrieved by `sqlite3UnlinkAndDeleteTable`. The exact clearing store is not yet
+pinned; a value-only detector over `0x102247f50` is too loose (the value is
+pervasive — three sampled `TAG-ST-CLR` pcs symbolized to unrelated functions),
+so the remaining step is a **storage-slot-keyed** trace of the HashElem granule.
+The candidate mechanism remains a **memory-layout × 16-byte-tag-granularity
+interaction** (a scalar packed into the same 16-byte granule as the stored
+capability), now to be confirmed against the specific HashElem slot rather than a
+stack frame.
+
+Why it matters: this is a distinct tag-loss class from the earlier backend bugs
+(`va_list` scalar path, stack-passed cap args, sub-capability aggregate copy),
+which were all *value-motion* bugs — a capability travelling a scalar path. This
+one is a *storage-aliasing* bug: the capability never moves, but a neighbour
+overwrites part of its granule. For the paper it argues that capability-tag
+preservation is not only an ABI/lowering obligation but also a **stack/struct
+layout invariant** the backend must maintain: no scalar storage may share a
+16-byte granule with a live tagged capability.
+
+Limits: the specific causal slot is not yet pinned to LLVM source/MIR — the next
+step is `-g` + `llvm-symbolizer` on the `TAG-ST-CLR` pcs and confirming the clear
+hits the exact slot `sqlite3DeleteTable` reloads from (the value is pervasive, so
+incidental clears must be excluded). The fix is substantial backend work and will
+get its own proposal doc before implementation.
