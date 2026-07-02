@@ -224,18 +224,44 @@ the tag-preserving `ldc`/`stc` middle (the same class as the documented
 `Table*`. It is **not** the heap `HashElem` (that earlier hypothesis is
 superseded), not the allocator, not a value-motion ABI bug.
 
-### Remaining + fix direction
+### EXACT site pinned (2026-07-02) — the domain `memcpy` byte-copy path
 
-Pinning the exact SQLite source line of the byte-copy needs a **pc-accurate**
-method — either sync `env->pc` in the store helper before the tag-map remove, or
-correlate the stack address `0x1023ffa80` with an LLVM **MIR frame-slot** analysis
-of the function active at that point. The fix (substantial, gets its own proposal
-doc) is one of: (a) make sub-16-byte / misaligned copies tag-preserving where a
-granule holds a live capability, or (b) guarantee capability-containing structs
-are 16-aligned and copied via `ldc`/`stc` (connects to gap 2 and the
-sub-capability aggregate-copy fix). The general finding — 16-byte tag granularity
-makes storage *layout* a provenance-correctness property — is in
-`design/research-decisions-log.md`.
+The lazy `env->pc` / stale `ra` could not name the store, so a **translate-time
+pc** was threaded through: `gen_helper_remove_cap_mem_map` was widened to take
+`ctx->base.pc_next` (the current-instruction guest pc, exact and non-perturbing;
+`cpu_restore_state()` was tried first but it *diverged the run*, so it was
+discarded). With the exact pc — and the **correct load base `0x101ff0000`**
+(derived by matching a byte-store pc to `memcpy`'s `sb`; the base I had used before
+was off by `0x6000`, which is why earlier symbolizations were incoherent) — the
+tag-clearing store is:
+
+- `exact_pc 0x102142c44` = **`memcpy + 0x1fc`** (`sb a0, 0x0(a1)`), the byte-copy
+  loop of the domain's freestanding `memcpy`; a sibling clear at `0x102143000`
+  is the analogous `memmove`/`memset` byte loop.
+- The 16 clears span offsets `0..f` of granule `0x1023ffa80` — a **full 16-byte
+  byte-by-byte copy** of the region holding the `Table*`.
+- The `memcpy` caller (from the `ra` capture, rebased) is in the
+  **`sqlite3NestedParse`** region — schema/parse machinery.
+
+Crucially, this `memcpy` **has** a tag-preserving `ldc`/`stc` fast path (22 such
+ops in its body), but this copy took the **byte path** — which happens when the
+source and destination are **relatively misaligned mod 16**, so the 16-byte
+`ldc`/`stc` cannot be used. The byte copy of a 16-byte-aligned tagged capability
+strips its tag. This is exactly the documented **`tagged_cap_memcpy_misaligned`**
+limitation, now shown to break real SQLite.
+
+### Fix direction
+
+Primarily a **runtime-library** fix (smaller than a backend ISel change): make the
+domain `memcpy`/`memmove` preserve tags even when src/dst are relatively
+misaligned — e.g. detect any 16-byte-aligned capability granule inside the copied
+range and move it with `ldc`/`stc` (querying/repairing the tag) rather than
+byte-wise. Alternatively/additionally, guarantee that capability-bearing SQLite
+structs are 16-aligned so the fast path always applies. Connects to gap 2 and the
+sub-capability aggregate-copy fix. Next: write the proposal doc, then implement +
+add an authority probe reproducing the relatively-misaligned cap-copy. The general
+finding (16-byte tag granularity makes storage *layout* a provenance-correctness
+property) is in `design/research-decisions-log.md`.
 
 ## Separate, do not conflate
 

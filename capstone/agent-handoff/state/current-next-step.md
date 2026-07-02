@@ -110,13 +110,21 @@ clean: `stc`→scalar-load→`ldc`). **Mechanism: a live tagged capability in a 
 stack granule has its tag stripped by a byte-wise memory copy**
 (`memcpy`/`memmove`/small struct-copy lowered to `sb`/`sh`/`sw`) — the sub-16-byte
 scalar-copy path that bypasses `ldc`/`stc` (same class as
-`tagged_cap_memcpy_misaligned`). NOT the heap `HashElem` (earlier hypothesis
-superseded), allocator, or value-motion. Remaining: pin the exact SQLite line
-(needs a **pc-accurate** method — sync `env->pc` in the store helper, or MIR
-frame-slot analysis of the stack addr), then a fix **proposal** (make sub-16-byte
-copies tag-preserving over live-cap granules, or 16-align+`ldc`/`stc` cap-bearing
-structs; connects to gap 2). General finding in `design/research-decisions-log.md`.
-Full detail: `history/02-07-2026_00-00-00_sqlite-gap5-fix-and-gap6-investigation.md`.
+`tagged_cap_memcpy_misaligned`). NOT the heap `HashElem` (superseded), allocator,
+or value-motion. **EXACT site pinned (2026-07-02):** threading a translate-time pc
+(`ctx->base.pc_next`) through `helper_remove_cap_mem_map`, plus the correct load
+base `0x101ff0000` (the earlier `…6000` was off, hence prior incoherent symbols),
+identifies the stripping store as the domain freestanding **`memcpy`'s byte-copy
+loop** (`memcpy+0x1fc`, `sb`) copying the 16-byte-aligned `Table*` **byte-by-byte**
+because src/dst are **relatively misaligned mod 16** — so `memcpy`'s own
+tag-preserving `ldc`/`stc` fast path (22 ops in its body) can't apply. Caller is in
+the `sqlite3NestedParse` region. **Fix is primarily runtime-library** (smaller than
+feared): make `memcpy`/`memmove` preserve tags for any 16-byte-aligned cap granule
+inside a relatively-misaligned copy (query/repair via `ldc`/`stc`), and/or 16-align
+cap-bearing structs. Next: **write the fix proposal doc** + add an authority probe
+(relatively-misaligned cap copy), then implement. General finding in
+`design/research-decisions-log.md`. Full detail:
+`history/02-07-2026_00-00-00_sqlite-gap5-fix-and-gap6-investigation.md`.
 
 The other queued `capstone-qemu` item, revocation enforcement (task #70,
 `design/revocation-enforcement-proposal.md`), is **already wired on the

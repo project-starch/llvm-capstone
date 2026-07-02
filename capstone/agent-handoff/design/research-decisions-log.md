@@ -258,6 +258,18 @@ the granule — the *sub-16-byte scalar-copy* path that bypasses tag-preserving
 `ldc`/`stc` (same class as the `tagged_cap_memcpy_misaligned` limitation). It is
 **not** the heap `HashElem`, the allocator, or a value-motion ABI bug.
 
+The exact site was then pinned (translate-time pc threaded through the store
+helper; correct load base `0x101ff0000`): the stripping store is the domain
+freestanding **`memcpy`'s byte-copy loop** (`memcpy+0x1fc`, `sb`), copying the
+16-byte-aligned `Table*` **byte-by-byte** because src/dst are **relatively
+misaligned mod 16**, so `memcpy`'s own tag-preserving `ldc`/`stc` fast path (22
+such ops in its body) cannot apply. Caller is in the `sqlite3NestedParse` region.
+So the fix is primarily a **runtime-library** one — make `memcpy`/`memmove`
+preserve tags for any 16-byte-aligned capability granule inside a relatively
+misaligned copy — not a deep backend change. This is the paper's cleanest
+demonstration that on a capability machine, *`memcpy` is security-relevant*: byte
+identity is not tag identity.
+
 Why it matters: this is a distinct tag-loss class from the earlier backend bugs
 (`va_list` scalar path, stack-passed cap args, sub-capability aggregate copy),
 which were all *value-motion* bugs — a capability travelling a scalar path. This
