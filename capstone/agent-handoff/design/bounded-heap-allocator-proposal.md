@@ -1,4 +1,7 @@
-# Proposal: a real bounded heap allocator (`malloc`/`free`) with C1 narrowing (and a `SPLIT` path)
+# Proposal: a real bounded heap allocator (`malloc`/`free`) with C1 narrowing via `SHRINK`
+
+<!-- Decision (see §3): the allocator narrows with `SHRINK`, not `SPLIT`. -->
+
 
 *Status: DESIGN PROPOSAL for review before implementation (standing rule for new
 research directions). Grew out of the 2026-06-29 granularity/provenance audit,
