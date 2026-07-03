@@ -55,7 +55,18 @@ direction — read it first.** Its recommended order (adopted here):
    sizes into an XLen register instead of erroring
    (`Unsupported dynamic alloca size expression`) — a general fix that unblocks
    `-O0` dynamic allocas. Full Capstone lit **36/36**, authority suite green.
-   **Still gated off** — the default-on empirical matrix is **DONE (2026-07-02,
+   **DEFAULT NOW ON (2026-07-03).** `-capstone-shrink-stack` was flipped to
+   `cl::init(true)` after **two independent full default-on regression matrices**
+   (this session, HEAD `099a55b22fbf`) agreed the `-O0` suite is clean: lit
+   **36/36** (with the default actually flipped), authority **26/26** (incl.
+   `stack_dynalloca_{inbounds,oob}`), CoreMark, RV8 **7/7**, BEEBS **82/82** incl.
+   rijndael, and **zero shrink-specific regressions at `-O1/-O2/-O3`** (flag on/off
+   byte-identical). Lit fallout from the flip was 3 orthogonal tests
+   (`dynamic-alloca`/`i128-xlen-lowering`/`ptr-arith`) pinned to
+   `-capstone-shrink-stack=false`; the two dedicated shrink tests' `NOSHRINK`
+   arms now pass `=false` explicitly. Pass `-capstone-shrink-stack=false` to
+   recover un-narrowed stack bounds. — The earlier default-on empirical matrix was
+   **DONE (2026-07-02,
    `/tmp/capstone/stack-shrink-default-on-results.md`)**. At the canonical `-O0`:
    authority 23/23, CoreMark all levels, RV8 7/7, BEEBS was **81/82** — the single
    regression **rijndael** is now **TRIAGED + FIXED (2026-07-03,
@@ -71,9 +82,11 @@ direction — read it first.** Its recommended order (adopted here):
    The `-O1/-O2/-O3` mass failures are **pre-existing, not stack-shrink-specific**
    (i128 `xor`/`or` ISel gap, fp128 materialize, `cscincoffset` assert — RV8 is
    0/7 at `-O1+` with or without shrink), so they are not a clean signal.
-   Remaining before default-on: ~~(a) resolve the rijndael `-O0` case~~ **DONE**;
-   (b) varargs save-area + dynamic `alloca` increments (variable-size and spill
-   slots are excluded by design); then a full clean default-on matrix.
+   Path to default-on (all **DONE**): ~~(a) resolve the rijndael `-O0` case~~;
+   ~~(b) varargs save-area + dynamic `alloca` increments~~; ~~a full clean
+   default-on matrix~~ → **default flipped on 2026-07-03**. Residual C1 gaps now:
+   **subobject** bounds and **inter-procedural** provenance (spill slots +
+   variable-size objects remain excluded by design).
 7. trio size-aware `realloc` + one canonical bounded allocator.
 8. Separate RX code / RW data, tighten perms, constrain function caps.
 9. **Root elimination via trusted `SPLIT`** — the likely Capstone-specific

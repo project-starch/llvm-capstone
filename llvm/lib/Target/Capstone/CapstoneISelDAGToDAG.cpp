@@ -48,18 +48,24 @@ static cl::opt<bool> CapstoneShrinkGlobals(
              "(emit SHRINK at materialization)"),
     cl::init(true));
 
-// Granularity (C1), stack slice. When on, an address-taken whole stack object
-// (a bare FrameIndex) is narrowed to its frame-object size with SHRINK, the
-// stack analogue of -capstone-shrink-globals. Default OFF: stack narrowing is
-// the riskiest of the three (ABI, spills, interior pointers, alloca), so it is
-// opt-in pending wider validation.
+// Granularity (C1), stack slice. When on, an address-taken stack object (a bare
+// FrameIndex, an interior pointer / load-store base through it, the varargs save
+// area, and dynamic runtime-sized allocas) is narrowed to its object size with
+// SHRINK, the stack analogue of -capstone-shrink-globals. Default ON as of
+// 2026-07-03: two independent full default-on regression matrices at HEAD
+// 099a55b22fbf agreed the -O0 suite is clean (lit 36/36, authority 26/26,
+// CoreMark, RV8 7/7, BEEBS 82/82 incl. rijndael) with zero shrink-specific
+// regressions at any opt level; the one prior -O0 failure (rijndael) was a
+// genuine LP64 over-read the narrowing correctly caught, now fixed. Pass
+// -capstone-shrink-stack=false to recover the un-narrowed (whole-frame-bounds)
+// behaviour.
 // Non-static: also read by lowerDYNAMIC_STACKALLOC in CapstoneISelLowering.cpp
 // so dynamic allocas are narrowed under the same flag.
 cl::opt<bool> CapstoneShrinkStack(
     "capstone-shrink-stack", cl::Hidden,
-    cl::desc("Narrow capabilities for address-taken whole stack objects to "
-             "their size (emit SHRINK at FrameIndex materialization)"),
-    cl::init(false));
+    cl::desc("Narrow capabilities for address-taken stack objects to their size "
+             "(emit SHRINK at FrameIndex materialization); default on"),
+    cl::init(true));
 
 #define GET_DAGISEL_BODY CapstoneDAGToDAGISel
 #include "CapstoneGenDAGISel.inc"

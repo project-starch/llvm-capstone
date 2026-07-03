@@ -7,14 +7,14 @@
 ; helper, so a load/store *through* a fixed stack object also carries object
 ; bounds (still object- not subobject-granularity: the base narrows to the whole
 ; frame object, and a field/element access rides an in-bounds offset). Default
-; off -> no narrowing.
+; on as of 2026-07-03; -capstone-shrink-stack=false -> no narrowing.
 ;
 ; See CapstoneISelDAGToDAG.cpp (narrowToFrameObjectBounds) and
 ; design/capability-bounds-model.md.
 
 ; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-shrink-stack=true < %s \
 ; RUN:   | FileCheck %s --check-prefixes=CHECK,SHRINK
-; RUN: llc -mtriple=capstone64 -mattr=+m < %s \
+; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-shrink-stack=false < %s \
 ; RUN:   | FileCheck %s --check-prefixes=CHECK,NOSHRINK
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"

@@ -1,4 +1,7 @@
-; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %s | FileCheck %s
+; Pinned to -capstone-shrink-stack=false (default on since 2026-07-03): this test
+; checks pointer-arithmetic lowering, not stack narrowing (the narrowed path is
+; covered by cap-shrink-{stack,dynalloca}.ll).
+; RUN: llc -mtriple=capstone64 -capstone-shrink-stack=false -verify-machineinstrs < %s | FileCheck %s
 
 ; CHECK-LABEL: test_imm:
 ; CHECK: cincoffsetimm a0, a0, 1

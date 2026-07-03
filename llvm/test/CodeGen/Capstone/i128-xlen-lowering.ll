@@ -1,4 +1,7 @@
-; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s | FileCheck %s
+; Pinned to -capstone-shrink-stack=false (default on since 2026-07-03): this test
+; checks scalar i128 normalization, not stack narrowing (the narrowed path is
+; covered by cap-shrink-{stack,dynalloca}.ll).
+; RUN: llc -mtriple=capstone64 -mattr=+m -capstone-shrink-stack=false -verify-machineinstrs < %s | FileCheck %s
 ;
 ; CoreMark/BEEBS bring-up regression coverage for the scalar i128 normalization rules
 ; that must collapse back into the xlen domain before instruction selection.
