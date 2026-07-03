@@ -12,17 +12,31 @@ one.*
 > unwired) at object materialization: **globals** (`CapstoneISelDAGToDAG.cpp`
 > `selectLGA`, `-capstone-shrink-globals`, **default on**), **heap**
 > (`rv8_malloc.c` + dtoa, `cap_shrink`, default on), **stack**
-> (`ISD::FrameIndex`, `-capstone-shrink-stack`, **gated off** — whole-object
-> only). Measured reality also corrects two claims below: un-narrowed bounds are
+> (`-capstone-shrink-stack`, **gated off**). Measured reality also corrects two claims below: un-narrowed bounds are
 > **segment-granular**, and the domain image is a single `PT_LOAD`, so the
 > inherited bound ≈ the **whole image** (cross-segment over-reads already trapped);
 > precision after narrowing is byte-exact < 4 KiB, power-of-two grain above
 > (`capability-bounds-model.md`). Evidence: the runtime authority suite
-> `../../tests/capstone-authority/` (20/20; `global_oob`/`heap_oob`/`stack_oob`
-> now **bounds-fault**), lit `cap-shrink-{globals,stack}.ll`, and a **real OOB
+> `../../tests/capstone-authority/` (26 domains;
+> `global_oob`/`heap_oob`/`stack_oob`/`stack_dynalloca_oob` all **bounds-fault**),
+> lit `cap-shrink-{globals,stack,dynalloca}.ll`, and a **real OOB
 > write found** in rijndael (`char r[4]` written as 8 bytes). The residual T3 gap
-> is now **subobject** bounds, stack **varargs/dynamic-alloca**, and
-> **inter-procedural** provenance — see the inline "→ now:" notes below.
+> is now **subobject** bounds and **inter-procedural** provenance — see the inline
+> "→ now:" notes below.
+>
+> **Update (2026-07-03) — stack narrowing coverage extended (still gated off).**
+> The stack arm is no longer whole-object-only: it now narrows **interior pointers
+> + load/store bases** through fixed frame objects (shared
+> `narrowToFrameObjectBounds`, 2026-07-01), the **varargs save area** (via the
+> fixed-object path), and **dynamic (runtime-sized) allocas** —
+> `lowerDYNAMIC_STACKALLOC` shrinks the returned pointer to
+> `[cursor, cursor+size)` while `sp`/X2 keeps broad bounds (2026-07-03;
+> `history/03-07-2026_00-00-05_dynamic-alloca-stack-narrowing.md`, probes
+> `stack_dynalloca_{inbounds,oob}`). So "stack varargs/dynamic-alloca" is **no
+> longer** part of the residual gap; the residual is **subobject** bounds and
+> **inter-procedural** provenance. `-capstone-shrink-stack` stays **default off**
+> pending a clean default-on regression matrix (rijndael, the one prior `-O0`
+> regression, was a genuine LP64 over-read the narrowing caught, now fixed).
 
 This document answers the questions raised after the reviewer's note on
 "manufacturing capabilities out of thin air" and integer↔capability confusion:
@@ -217,8 +231,8 @@ This was **exactly threat (3)** in the pre-narrowing output. Our scheme gives:
 So a memory-safety claim of the form "every access is capability-checked,
 therefore object bounds are enforced" **was false for the pre-narrowing output**
 and is **now true for narrowed objects** (globals/heap default, stack opt-in),
-modulo the residual gap (subobject, varargs/dynamic-alloca on stack,
-inter-procedural). We enforce that accesses go *through* capabilities, and now
+modulo the residual gap (subobject, inter-procedural; stack varargs/dynamic-alloca
+are now covered — see the 2026-07-03 banner note). We enforce that accesses go *through* capabilities, and now
 also that compiler-materialized object capabilities are *tight*. Remaining work
 is stated precisely in §6–§7.
 
@@ -276,7 +290,7 @@ objects (see `static-cap-global-init.ll`), so T6 no longer inherits T3.
 |---|--------|-------------|-------------|--------|
 | T1 | Forge cap from integer | `inttoptr`, byte punning, `memcpy` | No — produces untagged, faults on use | **Mitigated** (HW + compiler doesn't forge) |
 | T2 | Demote→re-promote (tag strip via integer ops) | Mis-typed lowering (`addi`/`ISD::ADD` on a pointer) | Yes — *was* a live bug (stack-arg) | **Mostly mitigated; audit/test needed** |
-| T3 | Over-broad bounds + attacker offset | Was: everything derived from ambient `gp`/stack root, no narrowing | Was the central gap | **Now: `SHRINK` narrows globals+heap (default) / stack (opt-in); residual = subobject, varargs/alloca, inter-procedural** |
+| T3 | Over-broad bounds + attacker offset | Was: everything derived from ambient `gp`/stack root, no narrowing | Was the central gap | **Now: `SHRINK` narrows globals+heap (default) / stack (opt-in, incl. interior/varargs/dynamic-alloca); residual = subobject, inter-procedural** |
 | T4 | Real cap in attacker slot + type confusion | Interpreters / language runtimes we will run | Future; severity set by T3 | **Open (workload + T3)** |
 | T5 | Control-flow redirection via cap offset | Unsealed function pointers, no CFI | Yes | **Not addressed** |
 | T6 | Tag in static image | Capability globals in ELF | No (re-materialized from `gp`) | **Mitigated** (inherits T3) |
@@ -304,8 +318,9 @@ objects (see `static-cap-global-init.ll`), so T6 no longer inherits T3.
 1. **(Was highest) Object-granularity bounds (T3).** **→ now largely addressed:**
    globals + heap are `SHRINK`-narrowed by default and stack opt-in, so intra-domain
    overflows and attacker indices on those objects **are** caught. Residual: stack
-   off by default (whole-object spike), **subobject** bounds, stack
-   **varargs/dynamic-alloca**, and **inter-procedural** provenance. The
+   off by default (now covers fixed objects incl. interior, varargs, and
+   dynamic-alloca — pending a clean default-on matrix), **subobject** bounds, and
+   **inter-procedural** provenance. The
    memory-safety claim can now include object-granularity spatial safety for
    compiler-materialized globals/heap (and stack with the flag), scoped by that
    residual — no longer only "inter-domain + provenance."
@@ -342,17 +357,20 @@ objects (see `static-cap-global-init.ll`), so T6 no longer inherits T3.
    * **Globals:** narrow the `cincoffset gp, &g` result to `sizeof(g)`
      (`CapstoneISelDAGToDAG.cpp` `selectLGA`; `-capstone-shrink-globals`, default
      on). ✓
-   * **Stack:** narrow address-taken whole locals to the object size
-     (`ISD::FrameIndex`; `-capstone-shrink-stack`, **default off** — whole-object
-     only, not interior/varargs/dynamic-alloca yet). ◑
+   * **Stack:** narrow address-taken locals to the object size (`ISD::FrameIndex`
+     + `materializeFrameIndexAddrBase`, shared `narrowToFrameObjectBounds`),
+     including interior pointers/load-store bases, the varargs save area, and
+     dynamic (runtime-sized) allocas (`lowerDYNAMIC_STACKALLOC`);
+     `-capstone-shrink-stack`, **default off** pending a clean default-on matrix. ◑
    * **Heap:** `cap_shrink` in `malloc` (`rv8_malloc.c`, dtoa) to the requested
      size. ✓
    The correctness-fallout + cost experiment was run: **CoreMark ✓, RV8 7/7 ✓,
    BEEBS 82/82 ✓** with narrowing on, and it **found a real OOB write** (rijndael
    `char r[4]` written 8 bytes — now patched). Evidence/regression:
-   `../../tests/capstone-authority/`, `cap-shrink-{globals,stack}.ll`. **Remaining:**
-   stack default-on (subobject/varargs/alloca), and the runtime gap that a
-   domain-mode fault currently aborts the QEMU model.
+   `../../tests/capstone-authority/`, `cap-shrink-{globals,stack,dynalloca}.ll`.
+   **Remaining:** flip stack default-on after a clean matrix, **subobject** bounds,
+   and the runtime gap that a domain-mode fault currently halts the QEMU model
+   (clean-halt landed; return-to-host delivery still needs monitor work).
 2. **Provenance audit + a "capability hygiene" test suite (closes T2 honestly).**
    Enumerate every lowering that touches a capability-typed value and assert it
    uses tag-preserving ops. Build a negative test battery that *attempts* to
@@ -413,8 +431,9 @@ through capabilities* and *inter-domain* isolation; narrowing now adds
 the protection an interpreter type-confusion exploit (T4) needs. The honest claim
 today is "provenance + inter-domain isolation **+ object-granularity spatial
 safety for narrowed globals/heap (and stack with the flag)**," with the residual
-being subobject bounds, stack varargs/dynamic-alloca, and inter-procedural
-provenance. The narrowing experiment also delivered the paper-worthy
+being subobject bounds and inter-procedural provenance (stack
+varargs/dynamic-alloca are now covered; the stack flag stays default-off pending a
+clean matrix). The narrowing experiment also delivered the paper-worthy
 overhead + bugs-found result (rijndael). The provenance test battery (step 2) is
 realized as `../../tests/capstone-authority/`; the systematic provenance *verifier*
 is proposed in `c2-provenance-verifier-proposal.md`.

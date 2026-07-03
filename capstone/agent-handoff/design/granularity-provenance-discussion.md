@@ -18,15 +18,28 @@ Companion documents:
 > (probe commit `dcc9c0cee120`). Since then, object-granularity bounds narrowing
 > landed: the compiler emits **`SHRINK`** at materialization for **globals**
 > (`-capstone-shrink-globals`, default on), **heap** (`malloc` `cap_shrink`,
-> default on), and **stack** (`-capstone-shrink-stack`, gated off, whole-object
-> only). So the "we never narrow / no per-object bounds / both run without
+> default on), and **stack** (`-capstone-shrink-stack`, gated off). So the "we
+> never narrow / no per-object bounds / both run without
 > faulting" answers below are **superseded** for narrowed objects — the array
 > example now **traps**; see the per-row "→ now:" notes. Measured detail: bounds
 > are **segment-granular** when un-narrowed (single `PT_LOAD` ≈ whole image), and
 > `SPLIT`/`SHRINKTO` exist in the ISA (so "no splitting" was about the compiler,
-> not the hardware). Evidence: `../../tests/capstone-authority/` (20/20),
-> `cap-shrink-{globals,stack}.ll`, `capability-bounds-model.md`. The "before"
-> picture is reproducible with `-mllvm -capstone-shrink-globals=false`.
+> not the hardware). Evidence: `../../tests/capstone-authority/` (26 domains),
+> `cap-shrink-{globals,stack,dynalloca}.ll`, `capability-bounds-model.md`. The
+> "before" picture is reproducible with `-mllvm -capstone-shrink-globals=false`.
+>
+> **Update (2026-07-03) — stack narrowing coverage extended (still gated off).**
+> The stack arm is no longer whole-object-only. It now narrows **interior pointers
+> + load/store bases** through fixed frame objects (shared
+> `narrowToFrameObjectBounds`, 2026-07-01), the **varargs save area** (via the
+> fixed-object path), and **dynamic (runtime-sized) allocas** —
+> `lowerDYNAMIC_STACKALLOC` shrinks the returned pointer to `[cursor, cursor+size)`
+> while `sp`/X2 keeps broad bounds (2026-07-03; probes
+> `stack_dynalloca_{inbounds,oob}`, lit `cap-shrink-dynalloca.ll`). So the
+> per-row "whole-object only" caveats below are themselves now dated;
+> `-capstone-shrink-stack` stays **default off** pending a clean default-on matrix
+> (the one prior `-O0` regression, rijndael, was a genuine LP64 over-read the
+> narrowing caught — now fixed).
 
 ---
 
@@ -285,7 +298,7 @@ function pointers, and the `__capstone_cap_init` table derive from it (see
 
 **Initial slices (the C1 work):** `SHRINK` at materialization sites —
 - **globals:** narrow `cincoffset(gp,&g)` to `sizeof(g)` ✓ (default on);
-- **stack:** whole-object `FrameIndex` narrowing ◑ (`-capstone-shrink-stack`, off);
+- **stack:** `FrameIndex` narrowing incl. interior/varargs/dynamic-alloca ◑ (`-capstone-shrink-stack`, off);
 - **heap:** `cap_shrink` in **two benchmark allocators** ◑ (rv8/dtoa; not libc-wide);
 — exact in this QEMU (representability not observable). **Functional** validation
 only across CoreMark/BEEBS/RV8; rijndael OOB found. **Overhead NOT measured.**
@@ -354,8 +367,9 @@ rounding), so intra-domain spatial violations trap.*
 **What was built (→ now):**
 1. **Globals bounds** ✓ — narrowed at materialization (`selectLGA`) incl. the
    `__capstone_cap_init` path; `-capstone-shrink-globals`, default on.
-2. **Stack bounds** ◑ — whole-object `FrameIndex` narrowing; `-capstone-shrink-stack`,
-   **default off** (interior/varargs/dynamic-alloca not yet).
+2. **Stack bounds** ◑ — `FrameIndex` narrowing incl. interior pointers/load-store
+   bases, varargs save area, and dynamic (runtime-sized) allocas;
+   `-capstone-shrink-stack`, **default off** pending a clean default-on matrix.
 3. **Heap bounds** ✓ — `cap_shrink` in the allocator (§5; `rv8_malloc.c`, dtoa).
 4. **Representability** ✓ — confirmed (`capability-bounds-model.md`): byte-exact
    < 4 KiB, power-of-two grain above.
@@ -437,7 +451,10 @@ Cross-checks in the backend: `CapstoneInstrInfo.td` defines `SHRINK` (bounds
 narrowing), `lcc` field map (0=tag,2=cursor,3=base,4=end,5=perms), `cincoffset`,
 `delin`, `seal`/`tighten`; `IntrinsicsCapstone.td` exposes `cap_shrink`,
 `cap_get_base/end`, `cap_seal`, plus the domain-transition intrinsics
-(`cap_enter/return/exit/ccsrrw`). **No automatic `SHRINK` emission exists.**
+(`cap_enter/return/exit/ccsrrw`). **[Pre-narrowing baseline, commit
+`dcc9c0cee120`: no automatic `SHRINK` emission.]** Since then, object
+materialization emits `SHRINK` automatically (globals/heap default,
+stack opt-in) — see the banners at the top and the "→ now:" notes.
 
 ---
 
