@@ -49,3 +49,20 @@ define i8 @dynalloca_two(i64 %n, i64 %m) addrspace(200) {
   %v = load volatile i8, ptr addrspace(200) %p
   ret i8 %v
 }
+
+; Memory-sourced (loaded) alloca size. lowerDynamicAllocaSizeToXLen must
+; materialize a size that comes from a load (an i32 -> i128 extending load in
+; PureCap lowering) into an XLen register instead of erroring out
+; ("Unsupported dynamic alloca size expression"). This case previously failed to
+; compile at all; here it must compile both ways and still narrow when on.
+; CHECK-LABEL: dynalloca_memsize:
+; SHRINK: shrink
+; NOSHRINK-NOT: shrink
+define i8 @dynalloca_memsize(ptr addrspace(200) %np) addrspace(200) {
+  %n32 = load volatile i32, ptr addrspace(200) %np, align 4
+  %n = zext i32 %n32 to i64
+  %p = alloca i8, i64 %n, align 16, addrspace(200)
+  store volatile i8 5, ptr addrspace(200) %p
+  %v = load volatile i8, ptr addrspace(200) %p
+  ret i8 %v
+}

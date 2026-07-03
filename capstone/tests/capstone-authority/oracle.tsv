@@ -37,6 +37,8 @@ stack_inbounds	ok	1470103592
 stack_last_byte	ok	570556479
 stack_one_past	bounds-fault	byte 64 of a SHRINK-narrowed 64-byte stack object
 stack_oob	bounds-fault	buf[100] past a 64-byte local; with -capstone-shrink-stack the whole-object &buf is narrowed to [buf,buf+64) so it traps (stack analogue of global_oob)
+stack_dynalloca_inbounds	ok	1560281128
+stack_dynalloca_oob	bounds-fault	buf[200] past a runtime-sized alloca(48); with -capstone-shrink-stack lowerDYNAMIC_STACKALLOC narrows the returned pointer to the allocated region so it traps (dynamic-alloca analogue of stack_oob)
 subobject_overread	no-trap-today	570884261
 many_pointer_args	ok	161480759
 spill_reachability	ok	1494286391

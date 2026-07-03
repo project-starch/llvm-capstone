@@ -50,27 +50,36 @@ movc sp, a1             ; sp = a1  (UN-narrowed, broad) -- stack discipline inta
 - **Inert by default:** with the flag off, `narrowAllocaResult` returns the pointer
   unchanged — byte-identical to prior behavior; no default-build regression risk.
   Authority suite (default flags) re-run green after the compiler rebuild.
-- **Runtime OOB:** the narrowing reuses the `SHRINK` primitive already proven at
-  runtime by the `stack_oob`/`global_oob` authority probes (an OOB access past a
-  SHRINK-narrowed object faults). A dedicated `-O0` dynamic-alloca runtime probe
-  is **blocked by a pre-existing, orthogonal limitation** (below), so it is not
-  added to the suite; the lit codegen test + the runtime-proven primitive cover
-  the mechanism.
+- **Runtime OOB (dedicated probes):** authority `stack_dynalloca_inbounds`
+  (`ok`, retval `1560281128`) and `stack_dynalloca_oob` (`bounds-fault`,
+  `Cap mem access OOB`) — a runtime-sized `alloca(48)` where an in-bounds access
+  returns cleanly and `buf[200]` traps. These build at `-O0` only after the size
+  fix below. Full authority suite green with them added.
 
-## Pre-existing limitation found (not caused by this change)
+## Pre-existing limitation found + FIXED (memory-sourced alloca size)
 
-`lowerDynamicAllocaSizeToXLen` rejects dynamic-alloca **size expressions that
-come from memory** (a `LOAD`), emitting
+`lowerDynamicAllocaSizeToXLen` rejected dynamic-alloca **size expressions sourced
+from memory**, emitting
 `fatal error: Unsupported dynamic alloca size expression in Capstone PureCap`.
-At `-O0` the size is always spilled/reloaded, so *any* `-O0` dynamic alloca with a
-non-constant size fails to compile — independent of `-capstone-shrink-stack` (it
-reproduces with the flag off). Register-sized dynamic allocas (e.g. size from a
-function parameter at `-O1`) compile fine. This is why the suites (which do not
-use memory-sized dynamic allocas at `-O0`) were unaffected, and why a synthetic
-`-O0` runtime probe cannot be built. **Follow-up:** teach
-`lowerDynamicAllocaSizeToXLen` to handle a `LOAD`/other size by materializing it
-into an XLen register (spill/reload or a copy), which would also unblock general
-`-O0` dynamic allocas — a small, separate enhancement.
+At `-O0` a non-constant size is always spilled/reloaded and materializes as an
+`i32`→`i128` **extending load**; the helper's structural recursion had no case for
+a load leaf → `default` → `SDValue()` → fatal. So *any* `-O0` dynamic alloca with
+a non-constant size failed to compile, independent of `-capstone-shrink-stack`
+(reproduced flag-off). Register-sized allocas (size from a parameter at `-O1`)
+were fine — which is why the suites, not using memory-sized `-O0` dynamic allocas,
+were unaffected.
+
+**Fix:** the `default` case now materializes any *scalar-integer* size leaf into
+an XLen register via `getZExtOrTrunc` (truncate an i128 carrier's low bits;
+zero-extend a narrower value — sizes are non-negative). This is consistent with
+the arithmetic cases, which already rebuild i128 size nodes in XLen: the whole
+size cone is a scalar byte count, never a dereferenceable capability, so
+extracting the low XLen bits is correct. This is a **general** fix (not gated) —
+it strictly expands what compiles (the recognized-opcode paths are unchanged; only
+the previously-fatal `default` now returns a value). It unblocks general `-O0`
+dynamic allocas *and* enabled the runtime probes above. lit
+`cap-shrink-dynalloca.ll` gains a `dynalloca_memsize` case (a loaded size) that
+previously failed to compile.
 
 ## Task #77 status
 

@@ -26292,7 +26292,17 @@ static SDValue lowerDynamicAllocaSizeToXLen(SDValue Size, SelectionDAG &DAG,
                        : Size.getOpcode();
     return DAG.getNode(Opc, DL, XLenVT, LHS, RHS);
   }
+    // Fallback for any other scalar-integer size leaf (e.g. a value loaded from
+    // memory -- the common case at -O0, where a non-constant alloca size is
+    // spilled/reloaded and materializes as an i32/i64/i128 (extending) load).
+    // Width-adjust it into an XLen register: truncate an i128 carrier's low bits
+    // or zero-extend a narrower value (sizes are non-negative). This is
+    // consistent with the arithmetic cases above, which already rebuild i128
+    // size nodes in XLen -- the whole size cone is a scalar byte count, never a
+    // dereferenceable capability, so extracting the low XLen bits is correct.
   default:
+    if (Size.getValueType().isScalarInteger())
+      return DAG.getZExtOrTrunc(Size, DL, XLenVT);
     return SDValue();
   }
 }
