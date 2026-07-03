@@ -25,6 +25,7 @@ python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --success-marker 'row name=alpha value=11' \
   --success-marker 'row name=beta value=22' \
   --success-marker 'row name=gamma value=33' \
+  --success-marker '__CAPSTONE_SQLITE_EXTENDED_PASSED__' \
   --success-marker '__CAPSTONE_SQLITE_MEMORY_PASSED__'
 
 echo "__CAPSTONE_SQLITE_MEMORY_PASSED__"

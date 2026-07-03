@@ -144,6 +144,19 @@ gaps (6 `saveBuf`, 8 `BtCursor`) are a class — SQLite hand-packs pointer-beari
 regions at 8-aligned offsets; wider workloads may surface more, each a localized
 16-align patch.
 
+**Workload hardening (2026-07-03).** Extended the domain test to a richer SQL
+workload (transaction, secondary INDEX, bound prepared inserts, REAL column,
+UPDATE/DELETE, aggregates+sorter, ORDER BY, JOIN, GROUP BY, string funcs) — all
+**pass** on the capability machine (`__CAPSTONE_SQLITE_EXTENDED_PASSED__`). One new
+gap (9) surfaced and is a client-API artifact, not a core cap gap: the build's
+`SQLITE_TRANSIENT`→function patch is applied only in the amalgamation, so the
+public `sqlite3.h` sentinel (`-1`) isn't recognized by the core; a client
+`bind_*(SQLITE_TRANSIENT)` gets `-1` stored as a destructor and later called
+(`cjalr` on `-1`). Worked around (`SQLITE_STATIC` for persistent buffers) +
+documented; proper fix = make the core accept `-1` too, or fix the clang
+constant-eval crash so no sentinel substitution is needed. Detail:
+`history/03-07-2026_00-00-02_sqlite-workload-hardening-and-gap9-transient.md`.
+
 --- superseded gap-6 investigation notes (kept for provenance) ---
 
 SQLite faulted with `Cap mem access requires capability` in
