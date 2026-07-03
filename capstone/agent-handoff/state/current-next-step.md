@@ -46,20 +46,24 @@ direction — read it first.** Its recommended order (adopted here):
    (`CapstoneISelDAGToDAG.cpp`); lit `cap-shrink-stack.ll` extended
    (`cap_slot`/`field_store`), full 33-test Capstone lit suite green.
    **Still gated off** — the default-on empirical matrix is **DONE (2026-07-02,
-   `/tmp/capstone/stack-shrink-default-on-results.md`)** and says **not safe to
-   enable by default yet**. At the canonical `-O0`: authority 23/23, CoreMark all
-   levels, RV8 7/7, BEEBS **81/82** — the *single* regression vs the 82/82 baseline
-   is **rijndael**, a real bounds fault (`Cap mem access OOB`, an 8-byte load at
-   `+12` of a **16-byte-bounded** stack object → 4 bytes past the end;
-   `pc=101561150`, `bounds=(10157f980,10157f990)`). Triage needed: is it a genuine
-   rijndael over-read the narrowing *caught* (feature working, cf. the earlier
-   rijndael found-bug) or a **too-tight bound** on an object that is really >16 B?
+   `/tmp/capstone/stack-shrink-default-on-results.md`)**. At the canonical `-O0`:
+   authority 23/23, CoreMark all levels, RV8 7/7, BEEBS was **81/82** — the single
+   regression **rijndael** is now **TRIAGED + FIXED (2026-07-03,
+   `history/03-07-2026_00-00-04_rijndael-stack-shrink-oob-triage-and-fix.md`)**:
+   verdict = **genuine over-read the narrowing caught (feature working)**, not a
+   too-tight bound. Root cause: `aes.h` `typedef unsigned long word` (8 bytes on
+   rv64) with the comment "must be a 32-bit storage unit" → `word_in(in_blk+12)` =
+   `*(unsigned long*)(in_blk+12)` = 8-byte load at +12 of a 16-byte AES block.
+   Fixed in `build-beebs-rijndael-capstone.sh` (patch `word` → `unsigned int`);
+   rijndael now **PASS** both default and `-shrink-stack` (correctness marker
+   validated, no fault). The fix is rijndael-isolated → `-O0` stack-shrink BEEBS is
+   now effectively **82/82**.
    The `-O1/-O2/-O3` mass failures are **pre-existing, not stack-shrink-specific**
    (i128 `xor`/`or` ISel gap, fp128 materialize, `cscincoffset` assert — RV8 is
    0/7 at `-O1+` with or without shrink), so they are not a clean signal.
-   Remaining before default-on: (a) resolve the rijndael `-O0` case; (b) varargs
-   save-area + dynamic `alloca` increments (variable-size and spill slots are
-   excluded by design).
+   Remaining before default-on: ~~(a) resolve the rijndael `-O0` case~~ **DONE**;
+   (b) varargs save-area + dynamic `alloca` increments (variable-size and spill
+   slots are excluded by design); then a full clean default-on matrix.
 7. trio size-aware `realloc` + one canonical bounded allocator.
 8. Separate RX code / RW data, tighten perms, constrain function caps.
 9. **Root elimination via trusted `SPLIT`** — the likely Capstone-specific

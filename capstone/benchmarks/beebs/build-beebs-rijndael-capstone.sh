@@ -57,6 +57,23 @@ sed 's/kt = kf + nc \* (cx->Nrnd + 1) - cx->Nkey;/{long _koff=(long)(nc*(cx->Nrn
     | sed -E 's/(static[[:space:]]+char[[:space:]]+)r\[4\]/\1r[8]/'
 } > "$PATCHED_AESXAM"
 
+# aes.h: 'typedef unsigned long word' with the comment "must be a 32-bit storage
+# unit". On rv64 `unsigned long` is 8 bytes, so word_in(x) = *(word*)(x) reads
+# 8 bytes where the algorithm intends 4. In encrypt()/decrypt(), si(...,3) does
+# *(word*)(in_blk + 12), an 8-byte load at offset 12 of the 16-byte AES block --
+# 4 bytes past the end (and word_out writes 8 bytes at out_blk+12 likewise).
+# Under broad bounds the overlapping 8-byte-at-4-byte-stride accesses happen to
+# reconstruct the right 16-byte output; object-granularity stack narrowing
+# (-capstone-shrink-stack) correctly traps the over-read. Fix is the header's own
+# stated intent: make `word` an actual 32-bit type (`unsigned int` is 32-bit on
+# rv64), which is both in-bounds and semantically correct AES. The patched header
+# is placed in OUT_DIR and shadows the fetched one via -I"$OUT_DIR".
+PATCHED_AES_H=$OUT_DIR/aes.h
+sed 's/typedef unsigned long   word;/typedef unsigned int    word;/' \
+  "$RIJ_DIR/aes.h" > "$PATCHED_AES_H"
+grep -q 'typedef unsigned int    word;' "$PATCHED_AES_H" \
+  || { echo "ERROR: aes.h word typedef patch did not apply" >&2; exit 1; }
+
 COMMON_FLAGS=(
   -target capstone64-unknown-elf
   -Xclang -target-feature
@@ -65,6 +82,7 @@ COMMON_FLAGS=(
   -fno-builtin
   -fno-jump-tables
   "$DOMAIN_OPT_LEVEL"
+  -I"$OUT_DIR"
   -I"$SUPPORT_DIR"
   -I"$RIJ_DIR"
 )
