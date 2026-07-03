@@ -25,10 +25,21 @@ The pinned fetch/build/run workflow is in `capstone/benchmarks/sqlite/README.md`
   (#82).
 
 Full per-gap detail in `history/` (dated notes) and
-`design/sqlite-gap6-memcpy-tag-preservation-proposal.md`. Two non-blocking
-follow-ups remain: QEMU should deliver in-domain cap faults cleanly (today it
-asserts `env->priv < PRV_C`), and the SQLite 8-byte-alignment class (gaps 6/8) may
-surface more instances under wider workloads.
+`design/sqlite-gap6-memcpy-tag-preservation-proposal.md`. Follow-ups: the SQLite
+8-byte-alignment class (gaps 6/8) may surface more instances under wider workloads.
+
+**In-domain cap-fault delivery — abort retired (2026-07-03).** QEMU no longer
+aborts on an in-domain capability fault: `riscv_cpu_do_interrupt`'s
+`assert(env->priv < PRV_C)` is replaced (for `env->priv == PRV_C`) by a clean halt
+— a structured `[CAPSTONE] domain halted by capability fault: cause=…` line then
+`fflush`+`exit(0)`. This preserves the domain's serial output (`abort()` didn't
+flush stdio — the gaps 8/9 "no serial output" cause) and turns a SIGABRT into a
+named halt. The monitor host-trap path (`priv < PRV_C`) is unchanged. Validated:
+full authority suite all-PASS, SQLite base+extended PASS, no abort in logs. Step A
+proved the `ctvec` horizontal-trap path can't deliver this (a domain installs no
+`ctvec`). **Return-to-host** delivery (domain terminates, host continues) is the
+remaining, monitor-side step — see
+`design/domain-fault-delivery-proposal.md` + `history/03-07-2026_00-00-03_*`.
 
 ## Verified baseline
 
