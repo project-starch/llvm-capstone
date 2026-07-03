@@ -242,6 +242,34 @@ Three consequences:
    with an invalid rev-node is used) is a valid implementation, which is what the
    committed enforcement patch does.
 
+### 8a. RESOLVED (2026-07-03): linear re-share implemented — an ISA-gap decision
+
+Consequence 2's "`init` (UNINIT→LIN) before `mrev`" is now implemented, but doing
+so exposed a concrete **ISA gap** the spec text does not resolve: `REVOKE` retypes
+the retained handle to UNINIT with **`cursor = base`** (spec + old
+`helper_csrevoke`), yet the only UNINIT→LIN transition, `CSINIT`, asserts
+**`cursor == end`** (the canonical "nothing initialised" form), and `CSSCC`
+(set-cursor) refuses UNINIT. So a revoked linear handle was stranded — no
+instruction could advance it — and re-share was impossible.
+
+**Decision (experimental, validated):** `REVOKE` leaves the UNINIT retained
+handle at **`cursor = end`** (not `base`), the canonical `csinit`-able form; the
+LIN case still lands at `base`. The owner then re-lends via `init`(→LIN)-before-
+`mrev`. `csinit` remains a **required, explicit reclaim step**, so linear-borrow
+exclusivity is unchanged — the change only makes the reclaim *reachable*. This
+keeps the security model (a revoked linear region must be explicitly
+re-initialised before re-use) while making it implementable.
+
+Implemented in QEMU `helper_csrevoke` (UNINIT→`cursor=end`) + `csinit`-before-
+`mrev` in the monitor's `shared_region_annotated` `REV_BORROWED` branch (both
+`sbi_capstone.c` copies — firmware handles the lender's SBI `mrev`/`revoke`,
+`sbi.dom` the borrower's in-domain faults). Validated: `run-hostcall-all.sh`
+12/12, `run-revoke-matrix-probe.sh`, authority suite. This is the paper's
+revocation story end-to-end (record → enforce → clean fault delivery → re-lend).
+Full trail: `history/03-07-2026_00-00-07_step-b-clean-in-domain-fault-delivery.md`.
+One-line runtime-author confirmation of the `cursor=end` choice is still worth
+obtaining (validated by the hostcall suite as oracle).
+
 ## Open questions for the runtime/QEMU author (to raise before the recording fix)
 
 (Substance of the prepared author note, recorded here since the note itself is

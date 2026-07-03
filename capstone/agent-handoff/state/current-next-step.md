@@ -236,17 +236,28 @@ node's depth (`cur`), so revoke now invalidates the junior subtree. Revocation n
 dropped), **re-share** (payload-revoke with a non-linear `REV_DEFAULT` borrow:
 revoke→re-share→round 2→**success**). No effect on non-revocation workloads
 (`cap_rev_tree_revoke` runs only on an explicit `csrevoke`). The runtime author
-greenlit the experiment (spec §8 model confirmed). (Prior note here claiming
-"author confirmed the traversal is correct" was imprecise — he blessed the
-*structure*, not the guard.) **Two follow-ons remain before #70 fully closes:**
-(a) re-share of a *linear* `REV_BORROWED` borrow needs the spec init(UNINIT→LIN)-
-before-`mrev` step, but `helper_csinit` requires `cursor==end` while a revoked
-handle has `cursor==base` — one narrow runtime-author clarification; (b) clean
-fault **delivery** of a caught use-after-revoke in a domain-call context (the
-monitor spins instead of returning the fault — the separate parked Step-B
-return-to-host gap; makes `run-revoke-matrix-probe.sh` hang in round 2, documented
-in that runner). Detail:
-`history/03-07-2026_00-00-06_revocation-70-verify-still-dormant.md`.
+greenlit the experiment (spec §8 model confirmed). **#70 NOW FULLY END-TO-END
+(2026-07-03): both follow-ons resolved + validated**
+(`history/03-07-2026_00-00-07_step-b-clean-in-domain-fault-delivery.md`).
+**(b) clean fault delivery:** a caught use-after-revoke now **terminates the
+domain and returns to the caller** (sentinel `0x0FA017ED`) instead of the monitor
+spinning — fixed in `sbi.dom`'s `swap_cpmp`/`handle_exception`
+(`fault_return_from_domain`, reusing the `DOM_RETURN` unwind);
+`run-revoke-matrix-probe.sh` PASS (both cases). **(a) linear re-share:** revoking
+a linear `REV_BORROWED` borrow leaves the handle UNINIT; the ISA gap was that
+`revoke` left `cursor==base` while `csinit` needs `cursor==end` and `scc` refuses
+UNINIT. Fixed in QEMU `helper_csrevoke` (UNINIT → `cursor=end`) + `csinit`-before-
+`mrev` in `shared_region_annotated` (both `sbi_capstone.c` copies);
+`run-hostcall-all.sh` green (12/12, was red across the linear-re-share probes once
+recording became active). Authority suite still `__CAPSTONE_AUTHORITY_SUITE_PASSED__`.
+**Key architecture note:** two monitors — the **OpenSBI firmware** (`fw_jump.elf`,
+submodule `components/opensbi`) handles lender **SBI ecalls** (region
+share/revoke/`mrev`); **`sbi.dom`** (submodule `package/.../capstone-sbi`) handles
+the borrower's **in-domain faults**. Fix each in the copy that runs the path.
+(a) is an experimental revocation-semantics choice worth a one-line author
+confirm. Changes are **uncommitted** (nested-submodule chain: capstone-qemu +
+opensbi + capstone-sbi + buildroot pointer + parent). Prior dormant→recording
+trail: `history/03-07-2026_00-00-06_revocation-70-verify-still-dormant.md`.
 
 The earlier benchmark milestones (RV8, BEEBS, backend fixes) are retained below as
 reference/history.
