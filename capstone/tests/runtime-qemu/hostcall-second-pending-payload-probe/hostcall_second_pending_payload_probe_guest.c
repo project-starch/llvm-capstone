@@ -126,7 +126,7 @@ int main(int argc, char **argv) {
                           HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED);
   shared_region_annotated(dom_id, payload_region_id,
                           HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_OUT,
-                          HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_BORROWED);
+                          HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_DEFAULT);
   print_nobuf(
       "hostcall-second-pending-payload-probe: metadata shared, payload borrowed-out for round 1\n");
 
@@ -169,7 +169,7 @@ int main(int argc, char **argv) {
       "hostcall-second-pending-payload-probe: about to re-share payload for round 2\n");
   shared_region_annotated(dom_id, payload_region_id,
                           HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_OUT,
-                          HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_BORROWED);
+                          HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_DEFAULT);
   print_nobuf(
       "hostcall-second-pending-payload-probe: payload re-shared as borrowed-out for round 2\n");
 

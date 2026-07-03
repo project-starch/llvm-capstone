@@ -221,10 +221,32 @@ Option 2 (tag-aware `memcpy`), plus a new authority probe
 `history/02-07-2026_00-00-00_sqlite-gap5-fix-and-gap6-investigation.md`.
 
 The other queued `capstone-qemu` item, revocation enforcement (task #70,
-`design/revocation-enforcement-proposal.md`), is **already wired on the
-memory-access path** (`capstone_cap_revoked` in `helper_reg_set_cap_compressed`;
-the runtime author confirmed the traversal is correct and the lazy check was a
-disabled TODO) — verify/close #70 against the current submodule tip.
+`design/revocation-enforcement-proposal.md`), has its **enforcement half wired on
+the memory-access path** (`capstone_cap_revoked` in `_helper_access_with_cap`
+raising `RISCV_EXCP_INVALID_CAP`, plus the reload-untag in
+`helper_reg_set_cap_compressed`; gated by `CAPSTONE_REVOCATION_ENFORCE`, default
+on). **RECORDING FIX LANDED + VALIDATED (2026-07-03; QEMU submodule
+`8b6a47f322` on `capstone-bootstrap`, parent pointer bumped).** The
+**recording** side (`cap_rev_tree_revoke`, `cap_rev_tree.c`) had a self-comparison
+loop guard (`_CAP_REV_NODE(tree, node_id).depth > depth` with `depth =
+node_id.depth`, always false) that recorded nothing; fixed to test the walked
+node's depth (`cur`), so revoke now invalidates the junior subtree. Revocation now
+**bites**, validated three ways: **record** (junior subtree invalidated),
+**enforce** (revoke-matrix: revoked cap reloads untagged, use-after-revoke store
+dropped), **re-share** (payload-revoke with a non-linear `REV_DEFAULT` borrow:
+revoke→re-share→round 2→**success**). No effect on non-revocation workloads
+(`cap_rev_tree_revoke` runs only on an explicit `csrevoke`). The runtime author
+greenlit the experiment (spec §8 model confirmed). (Prior note here claiming
+"author confirmed the traversal is correct" was imprecise — he blessed the
+*structure*, not the guard.) **Two follow-ons remain before #70 fully closes:**
+(a) re-share of a *linear* `REV_BORROWED` borrow needs the spec init(UNINIT→LIN)-
+before-`mrev` step, but `helper_csinit` requires `cursor==end` while a revoked
+handle has `cursor==base` — one narrow runtime-author clarification; (b) clean
+fault **delivery** of a caught use-after-revoke in a domain-call context (the
+monitor spins instead of returning the fault — the separate parked Step-B
+return-to-host gap; makes `run-revoke-matrix-probe.sh` hang in round 2, documented
+in that runner). Detail:
+`history/03-07-2026_00-00-06_revocation-70-verify-still-dormant.md`.
 
 The earlier benchmark milestones (RV8, BEEBS, backend fixes) are retained below as
 reference/history.

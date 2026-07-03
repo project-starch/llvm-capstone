@@ -4,11 +4,18 @@ set -euo pipefail
 # Revocation enforcement test matrix, cases 2 (memory-stored) and 3 (stc/ldc).
 # Both run in a single guest boot.
 #
-# IMPORTANT: like the M0 probe, this is "green" on the CURRENTLY OBSERVED gap
-# (use-after-revoke store lands) because the recording side is dormant pending
-# the author. When the recording fix lands, flip the final marker from the
-# NO-TRAP-GAP line to the QEMU "Cap mem access" / revoked-capability fault.
-# See agent-handoff/design/revocation-enforcement-proposal.md §6/§7.
+# STATUS (2026-07-03): the recording fix landed (QEMU submodule 8b6a47f322,
+# cap_rev_tree_revoke), so revocation now BITES: in round 2 the borrower's cached
+# cap reloads UNTAGGED and the use-after-revoke store no longer lands (verified).
+# HOWEVER the caught fault is raised inside a lender->borrower domain call, and
+# clean return-to-host delivery is the still-unfinished Step-B monitor gap
+# (design/domain-fault-delivery-proposal.md), so the monitor dumps registers and
+# spins rather than returning the fault -> this probe currently HANGS/times out
+# in round 2. That hang is the delivery gap, NOT a recording defect. This probe
+# is a standalone diagnostic; it is not part of any pass/fail gate. It becomes a
+# clean green once Step-B lands (flip the marker to the revoked-capability fault).
+# See agent-handoff/design/revocation-enforcement-proposal.md §6/§7 and
+# history/03-07-2026_00-00-06_revocation-70-verify-still-dormant.md.
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
