@@ -44,7 +44,15 @@ direction — read it first.** Its recommended order (adopted here):
    too, via a shared `narrowToFrameObjectBounds` helper called from both
    `ISD::FrameIndex` and `materializeFrameIndexAddrBase`
    (`CapstoneISelDAGToDAG.cpp`); lit `cap-shrink-stack.ll` extended
-   (`cap_slot`/`field_store`), full 33-test Capstone lit suite green.
+   (`cap_slot`/`field_store`). **Increment 2 DONE (2026-07-03,
+   `history/03-07-2026_00-00-05_dynamic-alloca-stack-narrowing.md`):** dynamic
+   (runtime-sized) allocas now narrow — `lowerDYNAMIC_STACKALLOC` shrinks the
+   returned pointer to `[cursor, cursor+alignedSize)` while `sp`/X2 stays broad;
+   lit `cap-shrink-dynalloca.ll`; **varargs save-area already covered** via the
+   fixed-object path. Full Capstone lit **36/36**. Found a pre-existing orthogonal
+   limitation: `lowerDynamicAllocaSizeToXLen` rejects memory-sized (`-O0`) dynamic
+   alloca sizes (`Unsupported dynamic alloca size expression`) — worth fixing for
+   robustness before default-on.
    **Still gated off** — the default-on empirical matrix is **DONE (2026-07-02,
    `/tmp/capstone/stack-shrink-default-on-results.md`)**. At the canonical `-O0`:
    authority 23/23, CoreMark all levels, RV8 7/7, BEEBS was **81/82** — the single

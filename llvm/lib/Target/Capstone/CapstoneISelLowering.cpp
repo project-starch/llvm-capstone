@@ -53,6 +53,10 @@
 
 using namespace llvm;
 
+// Defined in CapstoneISelDAGToDAG.cpp; read by lowerDYNAMIC_STACKALLOC so
+// dynamic allocas are narrowed under the same -capstone-shrink-stack flag.
+extern cl::opt<bool> CapstoneShrinkStack;
+
 #define DEBUG_TYPE "capstone-lower"
 
 STATISTIC(NumTailCalls, "Number of tail calls");
@@ -26344,15 +26348,40 @@ SDValue CapstoneTargetLowering::lowerDYNAMIC_STACKALLOC(SDValue Op,
     SDValue Offset = DAG.getNode(ISD::SIGN_EXTEND, dl, VT, OffsetXLen);
     SDValue NewSP = DAG.getNode(ISD::ADD, dl, VT, SP, Offset);
 
+    // C1 stack narrowing (gated on -capstone-shrink-stack): the real stack
+    // pointer (X2) must keep the broad bounds it needs for further allocations,
+    // but the pointer *returned to the program* can be narrowed to exactly the
+    // freshly allocated region [addr, addr+size). We read the runtime address
+    // (cursor) of NewSP and SHRINK a returned copy to [cursor, cursor+size),
+    // leaving the value copied to X2 un-narrowed. This gives object-granularity
+    // spatial safety for dynamic allocas, which -- unlike fixed frame objects
+    // (narrowed in CapstoneISelDAGToDAG::narrowToFrameObjectBounds) -- never
+    // reach a FrameIndex and so were previously left with whole-stack bounds.
+    auto narrowAllocaResult = [&](SDValue Ptr) -> SDValue {
+      if (!CapstoneShrinkStack)
+        return Ptr;
+      SDValue CursorId =
+          DAG.getTargetConstant(Intrinsic::capstone_cap_get_cursor, dl, XLenVT);
+      SDValue Cursor = DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, XLenVT, CursorId,
+                                   Ptr);
+      SDValue EndXLen = DAG.getNode(ISD::ADD, dl, XLenVT, Cursor, SizeXLen);
+      SDValue BaseI128 = DAG.getZExtOrTrunc(Cursor, dl, MVT::i128);
+      SDValue EndI128 = DAG.getZExtOrTrunc(EndXLen, dl, MVT::i128);
+      SDValue ShrinkId =
+          DAG.getTargetConstant(Intrinsic::capstone_cap_shrink, dl, XLenVT);
+      return DAG.getNode(ISD::INTRINSIC_WO_CHAIN, dl, VT, ShrinkId, Ptr,
+                         BaseI128, EndI128);
+    };
+
     if (hasInlineStackProbe(MF)) {
       Chain = DAG.getNode(CapstoneISD::PROBED_ALLOCA, dl, MVT::Other, Chain,
                           NewSP);
-      return DAG.getMergeValues({NewSP, Chain}, dl);
+      return DAG.getMergeValues({narrowAllocaResult(NewSP), Chain}, dl);
     }
 
     Chain = DAG.getCopyToReg(Chain, dl, Capstone::X2, NewSP);
     Chain = DAG.getCALLSEQ_END(Chain, 0, 0, SDValue(), dl);
-    return DAG.getMergeValues({NewSP, Chain}, dl);
+    return DAG.getMergeValues({narrowAllocaResult(NewSP), Chain}, dl);
   }
 
   if (!hasInlineStackProbe(MF))

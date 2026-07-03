@@ -53,7 +53,9 @@ static cl::opt<bool> CapstoneShrinkGlobals(
 // stack analogue of -capstone-shrink-globals. Default OFF: stack narrowing is
 // the riskiest of the three (ABI, spills, interior pointers, alloca), so it is
 // opt-in pending wider validation.
-static cl::opt<bool> CapstoneShrinkStack(
+// Non-static: also read by lowerDYNAMIC_STACKALLOC in CapstoneISelLowering.cpp
+// so dynamic allocas are narrowed under the same flag.
+cl::opt<bool> CapstoneShrinkStack(
     "capstone-shrink-stack", cl::Hidden,
     cl::desc("Narrow capabilities for address-taken whole stack objects to "
              "their size (emit SHRINK at FrameIndex materialization)"),
