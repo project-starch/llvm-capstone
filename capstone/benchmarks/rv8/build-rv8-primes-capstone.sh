@@ -69,7 +69,10 @@ COMMON_FLAGS=(
 objs=("$OBJ_DIR/start.o")
 "$CLANG" "${COMMON_FLAGS[@]}" -c "$PATCHED_SRC" -o "$OBJ_DIR/primes.o"; objs+=("$OBJ_DIR/primes.o")
 "$CLANG" "${COMMON_FLAGS[@]}" -c "$ADAPTED_DIR/rv8_primes_tail.c" -o "$OBJ_DIR/tail.o"; objs+=("$OBJ_DIR/tail.o")
-"$CLANG" "${COMMON_FLAGS[@]}" -c "$ADAPTED_DIR/rv8_malloc.c" -o "$OBJ_DIR/malloc.o"; objs+=("$OBJ_DIR/malloc.o")
+"$CLANG" "${COMMON_FLAGS[@]}" -DCAPSTONE_HEAP_SIZE=262144 -c "$ADAPTED_DIR/cap_heap.c" -o "$OBJ_DIR/malloc.o"; objs+=("$OBJ_DIR/malloc.o")
+"$CLANG" "${COMMON_FLAGS[@]}" -DCAPSTONE_HEAP_SIZE=262144 -c "$ADAPTED_DIR/umm/umm_malloc.c" -o "$OBJ_DIR/umm.o"; objs+=("$OBJ_DIR/umm.o")
+# umm uses memset/memcpy/memmove; primes otherwise links no string lib, so add the tag-preserving mem* slice.
+"$CLANG" "${COMMON_FLAGS[@]}" -c "$BEEBS_DIR/adapted/beebs_freestanding_string.c" -o "$OBJ_DIR/string.o"; objs+=("$OBJ_DIR/string.o")
 "$CLANG" "${COMMON_FLAGS[@]}" -c "$LIBM_SRC" -o "$OBJ_DIR/libm.o"; objs+=("$OBJ_DIR/libm.o")
 "$CLANG" "${COMMON_FLAGS[@]}" -c "$DOMAIN_SRC" -o "$OBJ_DIR/domain.o"; objs+=("$OBJ_DIR/domain.o")
 

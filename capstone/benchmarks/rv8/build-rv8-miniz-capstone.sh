@@ -64,7 +64,8 @@ COMMON_FLAGS=(
 objs=("$OBJ_DIR/start.o")
 "$CLANG" "${COMMON_FLAGS[@]}" -c "$PATCHED_SRC" -o "$OBJ_DIR/miniz.o"; objs+=("$OBJ_DIR/miniz.o")
 "$CLANG" "${COMMON_FLAGS[@]}" -c "$ADAPTED_DIR/rv8_miniz_tail.c" -o "$OBJ_DIR/tail.o"; objs+=("$OBJ_DIR/tail.o")
-"$CLANG" "${COMMON_FLAGS[@]}" -c "$ADAPTED_DIR/rv8_malloc.c" -o "$OBJ_DIR/malloc.o"; objs+=("$OBJ_DIR/malloc.o")
+"$CLANG" "${COMMON_FLAGS[@]}" -DCAPSTONE_HEAP_SIZE=1048576 -DUMM_BLOCK_BODY_SIZE=64 -c "$ADAPTED_DIR/cap_heap.c" -o "$OBJ_DIR/malloc.o"; objs+=("$OBJ_DIR/malloc.o")
+"$CLANG" "${COMMON_FLAGS[@]}" -DCAPSTONE_HEAP_SIZE=1048576 -DUMM_BLOCK_BODY_SIZE=64 -c "$ADAPTED_DIR/umm/umm_malloc.c" -o "$OBJ_DIR/umm.o"; objs+=("$OBJ_DIR/umm.o")
 "$CLANG" "${COMMON_FLAGS[@]}" -c "$STRING_SRC" -o "$OBJ_DIR/string.o"; objs+=("$OBJ_DIR/string.o")
 "$CLANG" "${COMMON_FLAGS[@]}" -c "$DOMAIN_SRC" -o "$OBJ_DIR/domain.o"; objs+=("$OBJ_DIR/domain.o")
 
