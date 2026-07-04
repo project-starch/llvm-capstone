@@ -29,8 +29,9 @@ cite rounding as experimental evidence.
 | **Sized data globals** | **Yes** | `selectLGA` emits `SHRINK` to `[&g, &g+sizeof(g))` (`CapstoneISelDAGToDAG.cpp`) | **on** (`-capstone-shrink-globals`) | lit `cap-shrink-globals.ll`; authority `global_oob` bounds-fault; §2 sizes; **rijndael OOB found** (8-byte write through `char r[4]`) |
 | Unsized / extern globals | No | — | — | no size known at materialization |
 | Function / code capabilities | No | — | — | broad; RX not separated from RW |
-| **Heap — benchmark allocators** | **Partial** | `rv8_malloc.c` + dtoa `malloc_beebs` call `cap_shrink(p, b, b+n)` on return | source-level (**not** a libc/global policy) | RV8 `SHRINK OFF = 1` residual (§2) = this call, independent of the globals flag |
-| Heap — general `malloc`/`free` | No | — | — | **proposed**, `bounded-heap-allocator-proposal.md` (task #78) |
+| **Heap — real reusing allocator (RV8)** | **Yes** | vendored **umm_malloc** behind `cap_heap.c`: `SHRINK(p, cur, cur+n)` on the malloc/realloc/calloc return, re-widen (`cincoffset` off the arena cap) on free/realloc entry | source-level shim (**not** a libc/global policy) | RV8 7/7 on umm incl. free/realloc-heavy (dhrystone/aes/miniz); authority `heap_free_reuse` + `heap_coalesce` bounds-fault (reclaimed/coalesced memory re-narrowed); §7a of the heap proposal |
+| Heap — dtoa bump | **Partial** | dtoa `malloc_beebs` calls `cap_shrink(p, b, b+n)` on return (no reuse) | source-level | authority `heap_oob`/`heap_inbounds`; `SHRINK OFF = 1` residual (§2) |
+| Heap — temporal (use-after-free / double-free) | No | — | — | **phase 2**, `bounded-heap-allocator-proposal.md` (revoke-on-free, ties to revocation #70) |
 | **Stack — fixed object (whole obj + interior/load-store base)** | **Yes (gated)** | `SHRINK` via shared `narrowToFrameObjectBounds`: bare `ISD::FrameIndex` **and** `materializeFrameIndexAddrBase` (ldc/stc base + interior ptr), narrowed to `[&obj, &obj+size)` | **off** (`-capstone-shrink-stack`) | lit `cap-shrink-stack.ll` on/off (`stack_idx`/`cap_slot`/`field_store`); authority `stack_oob` |
 | **Stack — dynamic `alloca` (runtime-sized)** | **Yes (gated)** | `SHRINK` in `lowerDYNAMIC_STACKALLOC`: returned pointer narrowed to `[cursor, cursor+alignedSize)`, `sp`/X2 kept broad | **off** (`-capstone-shrink-stack`) | lit `cap-shrink-dynalloca.ll` on/off; authority `stack_dynalloca_{inbounds,oob}` (runtime OOB traps) |
 | Stack — varargs save-area | **Yes (gated)** | covered via the fixed-object `narrowToFrameObjectBounds` path (the save area is a fixed frame object) | **off** (`-capstone-shrink-stack`) | confirmed: `shrink` emitted in a varargs function |
@@ -102,9 +103,10 @@ are in the §5 appendix, and the aggregate stats in **Findings** are over all 90
 - **No correctness cost**: every OFF build still passes its marker; the ON build
   additionally traps the rijndael OOB write that OFF silently allows.
 - **`SHRINK OFF = 1` on RV8 (and `dtoa`)** is the source-level heap `cap_shrink`
-  in `rv8_malloc.c` / dtoa `malloc_beebs` — independent of the globals flag. The
-  other 82 domains show OFF = 0 (no bounded allocator linked). This confirms
-  globals-narrowing and heap-narrowing are separately controlled.
+  in the allocator shim (RV8: `cap_heap.c` over umm; dtoa: `malloc_beebs`) —
+  independent of the globals flag. The other 82 domains show OFF = 0 (no bounded
+  allocator linked). This confirms globals-narrowing and heap-narrowing are
+  separately controlled.
 
 ## 3. Stated limitations (do NOT overclaim)
 

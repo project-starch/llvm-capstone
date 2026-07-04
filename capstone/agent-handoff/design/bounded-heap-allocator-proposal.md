@@ -237,11 +237,21 @@ heap metadata"). Vendored under `benchmarks/rv8/adapted/umm/`; the boundary shim
   reallocs + 14 frees). Real reuse + coalescing under C1 narrowing, validated.
 - dtoa/BEEBS unaffected (dtoa uses its own `malloc_beebs`, not this allocator).
 
-**Still open (phase-1 finish):** §6 authority probes for the free/reuse path
-(`heap_free_reuse`, `heap_coalesce`, `heap_double_free`) to prove reclaimed memory
-is re-narrowed and OOB still faults; commit. **Phase 2 (revoke-on-free temporal
-safety, ties to revocation #70):** separate proposal — umm's controlled index-based
-reuse makes a quarantine-before-relist step tractable.
+**Phase-1 authority probes — DONE (2026-07-05):** `heap_free_reuse` and
+`heap_coalesce` (in `tests/capstone-authority/domains/`) drive the *real* umm
+allocator and prove reclaimed/coalesced memory is re-narrowed and an OOB read
+still traps; full authority suite green (28/28). `heap_double_free` was
+**deliberately deferred to phase 2**: a double-free is a *temporal* fault with no
+clean spatial oracle today (umm has no double-free detector, so re-freeing a
+dangling pointer silently corrupts rather than faulting). Under phase-2
+revoke-on-free the freed pointer becomes untagged, so a double-free would
+**tag-fault** — a clean oracle. That probe therefore belongs with the phase-2
+work, where it also demonstrates the *value* of revocation.
+
+**Phase 2 (revoke-on-free temporal safety, ties to revocation #70):** separate
+proposal — umm's controlled index-based reuse makes a quarantine-before-relist
+step tractable, and gives `heap_double_free` / use-after-free a clean tag-fault
+oracle.
 
 ## 8. Pointers
 - Existing allocators: `benchmarks/rv8/adapted/rv8_malloc.c`,

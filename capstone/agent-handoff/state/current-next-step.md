@@ -8,13 +8,16 @@ contributions. Status + where things are: `state/current-state.md` (the C1/C2
 section) and the design docs below.
 
 - **C1 granularity — INITIAL SLICES (functionally validated, not measured).**
-  `SHRINK` for **globals** (`-capstone-shrink-globals`, default on); **two
-  benchmark allocators** (rv8/dtoa, not a libc policy); **stack** gated spike
-  (default off; fixed objects incl. interior/load-store bases as of 2026-07-01).
-  Tests: `capstone/tests/capstone-authority/`
-  (20/20 at canonical `-O0`; 12 eligible probes pass at `-O1/-O2/-O3`) + lit
+  `SHRINK` for **globals** (`-capstone-shrink-globals`, default on); a **real
+  reusing heap allocator** (vendored **umm_malloc** behind the `cap_heap.c`
+  narrow/re-widen shim; RV8 7/7 incl. free/realloc-heavy; dtoa still a bump);
+  **stack** gated spike (default off; fixed objects incl. interior/load-store
+  bases as of 2026-07-01). Tests: `capstone/tests/capstone-authority/`
+  (28/28 at canonical `-O0`, incl. `heap_free_reuse` + `heap_coalesce` on the real
+  umm allocator; eligible probes pass at `-O1/-O2/-O3`) + lit
   `cap-shrink-{globals,stack}.ll`. The suite now measures the residual subobject
-  gap directly; broad `gp`/`sp` roots and RWX perms remain.
+  gap directly; broad `gp`/`sp` roots and RWX perms remain. **#78 phase-1
+  (spatial) done; phase-2 = revoke-on-free temporal safety (ties revocation #70).**
 - **C2 provenance verifier — PROPOSED, revise before implementing.** The audit
   found it is a hygiene checker, not a proof (see the doc's audit-response banner).
   **Do not implement verbatim**; needs typed-MIR redesign + reviewer sign-off.
