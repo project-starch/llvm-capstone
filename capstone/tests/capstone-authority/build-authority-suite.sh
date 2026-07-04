@@ -36,6 +36,10 @@ for src in "$DOMAINS_DIR"/*.c; do
   extra=""
   case "$name" in
     stack_*) extra="-mllvm -capstone-shrink-stack=true" ;;
+    # heap free/reuse probes compile the real umm allocator into the TU; umm
+    # divides (block index math), so enable the M extension for hardware mul/div
+    # (the suite links no compiler-rt).
+    heap_free_*|heap_coalesce*) extra="-Xclang -target-feature -Xclang +m" ;;
   esac
   # Codegen evidence: annotated assembly at the same opt level we run.
   "$CLANG" -target capstone64-unknown-elf -ffreestanding "$OPT_LEVEL" $extra \

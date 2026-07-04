@@ -73,6 +73,8 @@ under `$CAPSTONE_TMP_ROOT/capstone-authority-opt-matrix/`, not the repository.
 | `global_oob_cross_segment` | bounds-fault | the coarse protection that already exists: an over-read past the *segment* traps even without object SHRINK, because capabilities are segment-bounded |
 | `heap_inbounds` | ok | in-bounds access to a `cap_shrink`-narrowed heap allocation works (positive control) |
 | `heap_oob` | bounds-fault | **heap granularity (C1)**: `p[100]` past a 64-byte allocation that malloc narrowed with `cap_shrink` traps, even though it stays inside the backing arena (heap analogue of `global_oob`) |
+| `heap_free_reuse` | bounds-fault | **reuse path (C1)**: drives the *real* umm allocator; a 64-byte block obtained by REUSING a just-freed slot is re-narrowed, so `q[100]` past it traps (built with `+m`) |
+| `heap_coalesce` | bounds-fault | **coalesce path (C1)**: real umm allocator; a 120-byte block carved from two freed+coalesced adjacent blocks is narrowed to its size, so `d[200]` past it traps (built with `+m`) |
 | `stack_inbounds` | ok | in-bounds access to a `-capstone-shrink-stack`-narrowed local works (positive control; built with the flag on) |
 | `stack_last_byte` | ok | byte 63 of a narrowed 64-byte stack object remains accessible |
 | `stack_one_past` | bounds-fault | dereferencing byte 64 crosses the stack object's exclusive upper bound |

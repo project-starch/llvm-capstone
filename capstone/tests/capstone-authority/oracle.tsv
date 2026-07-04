@@ -32,6 +32,8 @@ global_oob	bounds-fault	a[100] past a[64]; object SHRINK now narrows a to [a,a+6
 global_oob_cross_segment	bounds-fault	a[100] past the loadable segment; already trapped today (segment-granular bound)
 heap_inbounds	ok	1319108648
 heap_oob	bounds-fault	p[100] past a 64-byte allocation that malloc narrowed with cap_shrink; in-arena but out-of-object, so it traps (heap analogue of global_oob)
+heap_free_reuse	bounds-fault	q[100] past a 64-byte block the REAL umm allocator returned by REUSING a just-freed slot; the shim re-narrows the reused pointer, so the over-read traps (free->reuse preserves C1 bounds)
+heap_coalesce	bounds-fault	d[200] past a ~120-byte block the REAL umm allocator carved from two freed+coalesced adjacent blocks; the merged-then-reallocated region is narrowed to d's size, so the over-read traps
 # stack_* are built with -capstone-shrink-stack=true (default off); see README.
 stack_inbounds	ok	1470103592
 stack_last_byte	ok	570556479
