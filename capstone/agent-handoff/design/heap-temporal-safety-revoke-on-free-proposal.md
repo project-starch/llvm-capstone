@@ -75,6 +75,17 @@ dangling copies are caught on reload).
 
 ## 3. The central open question — the linear mrev-authority cap
 
+> **Step-0 update (2026-07-06, `history/06-07-2026_18-00-00_...`).** Empirically
+> confirmed: `mrev` on a NONLIN pointer aborts QEMU (`helper_csmrev` LIN assert),
+> and linearity cannot be fabricated from NONLIN. `start.S` boots `sp`/`gp`
+> **linear** then `delin`s both before `domain_main`. So step 1 **must** modify
+> `start.S` to carve+preserve a linear heap-authority cap (a sub-cap of `gp`,
+> which covers the BSS arena) before `delin(gp)`, stashed in a global the
+> allocator reloads (linear caps survive store/reload). Chosen path: intra-domain.
+> Also good news: rev-tree nodes are **recycled** via a free list, so node
+> capacity is bounded by live+in-flight allocations, not total-ever (§4 risk
+> reduced).
+
 `csmrev` **asserts its source is `CAP_TYPE_LIN`.** The allocator therefore needs a
 **linear** capability covering the arena to mint per-allocation nodes. Good news:
 `csmrev` does *not* consume its source (op_helper.c 733–738: rs1 is untouched), so
