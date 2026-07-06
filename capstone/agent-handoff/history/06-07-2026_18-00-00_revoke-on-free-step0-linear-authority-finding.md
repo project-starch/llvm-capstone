@@ -64,6 +64,47 @@ the allocation cap will be **both** SHRINK-narrowed (C1 spatial) **and** mrev'd
 authority-derived cap) so the two do not fight. Not a blocker; just an ordering
 constraint to respect in `cap_heap`.
 
+## Spike follow-up (2026-07-06, later) — a THIRD blocker: `gp` doesn't cover the arena
+
+Built a custom domain entry (`start_linauth.S`, via `START_SRC=`, so shared
+`start.S` untouched) that tried to `cssplit` a linear authority off `gp` before
+`delin`. Two empirical results:
+
+1. `cssplit t2, gp, (gp.end-4096)` aborted: `helper_cssplit` assert
+   `mid > base && mid < end` — i.e. `gp` spans **< 4096 bytes**.
+2. A diagnostic that stores `gp`'s measured range to a global OOB-faulted while
+   storing, printing `bounds = (0x101560000, 0x101560250)` — **`gp` spans ~592
+   bytes**. It is a genuine RISC-V **small-data global pointer**, not a whole-image
+   data capability. `cap_arena` (tens of KB of BSS) is **not** covered by `gp`;
+   large globals/BSS are reached by another capability (PC-relative via the code/
+   PC capability under medany, most likely), whose linearity and capture path are
+   unknown.
+
+**Consequence:** the "split `gp` for arena authority" plan is void. Obtaining a
+linear authority *over the heap arena* intra-domain requires understanding the
+domain boot capability model — specifically which capability covers BSS and
+whether a linear form of it is capturable before it is delin'd/used. This is a
+real investigation, not a quick edit.
+
+## Feasibility verdict (answers "is phase 2 a quick, low-risk finish?")
+
+**No.** Phase-2 revoke-on-free has (at least) three independent, substantial
+blockers, each now evidenced:
+1. **Per-allocation revocation vs coalescing.** Independent per-allocation nodes
+   need per-allocation LINEAR caps (via non-mergeable `split`), which fragments
+   and cannot coalesce → fights umm. Points to a **slab/fixed-slot** substrate.
+2. **`mrev` needs LINEAR** (confirmed abort on NONLIN); linearity can't be
+   fabricated from NONLIN.
+3. **Arena linear authority is not `gp`.** `gp` is a ~592-byte small-data pointer;
+   the arena-covering capability and its linear-capture path are unknown and need
+   a domain-boot-capability-model investigation.
+
+Each is tractable, but together they make phase 2 a genuine multi-step research +
+engineering effort (new slab allocator + domain-entry linear-authority sourcing +
+integration + probes + regression), **not** a low-risk one-shot finish. Phase-1
+(spatial, umm, RV8 7/7 + reuse/coalesce probes) is complete and shippable; phase-2
+should be its own scoped effort.
+
 ## Next step (needs sign-off: touches shared domain entry)
 
 Modify `my_first_domain/start.S` to carve+preserve a linear heap-authority cap

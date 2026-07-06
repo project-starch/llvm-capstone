@@ -85,6 +85,18 @@ dangling copies are caught on reload).
 > Also good news: rev-tree nodes are **recycled** via a free list, so node
 > capacity is bounded by live+in-flight allocations, not total-ever (§4 risk
 > reduced).
+>
+> **Spike follow-up (2026-07-06, later): `gp` is NOT the arena authority.**
+> Measured `gp` at runtime — it spans **~592 bytes** (a small-data pointer), so it
+> does not cover `cap_arena`; large BSS is reached by another (PC-derived)
+> capability. So "split `gp`" is void; sourcing a linear authority *over the heap
+> arena* needs a domain-boot-capability-model investigation. Combined with the
+> per-allocation-vs-coalescing tension (which points to a **slab** substrate, not
+> umm), **phase 2 is confirmed to be a genuine multi-step effort, not a low-risk
+> finish** (see `history/06-07-2026_18-00-00_...`). Recommend scoping phase 2 as
+> its own project: (i) domain-boot linear-authority investigation, (ii) slab
+> allocator, (iii) integration + `use_after_free`/`double_free` probes + RV8
+> regression.
 
 `csmrev` **asserts its source is `CAP_TYPE_LIN`.** The allocator therefore needs a
 **linear** capability covering the arena to mint per-allocation nodes. Good news:
