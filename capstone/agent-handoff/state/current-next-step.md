@@ -17,7 +17,13 @@ section) and the design docs below.
   umm allocator; eligible probes pass at `-O1/-O2/-O3`) + lit
   `cap-shrink-{globals,stack}.ll`. The suite now measures the residual subobject
   gap directly; broad `gp`/`sp` roots and RWX perms remain. **#78 phase-1
-  (spatial) done; phase-2 = revoke-on-free temporal safety (ties revocation #70).**
+  (spatial) done + shipped. Phase-2 (revoke-on-free temporal safety) is
+  SUSPENDED (2026-07-06)** — a de-risking spike found three blockers (per-alloc
+  revocation vs coalescing → needs a slab allocator; `mrev` needs LINEAR; the
+  arena's linear authority is not `gp`, a ~592 B small-data pointer). It is a
+  real multi-step project, not a quick add-on; resume plan in
+  `design/heap-temporal-safety-revoke-on-free-proposal.md` (status: SUSPENDED),
+  evidence in `history/06-07-2026_18-00-00_...`.
 - **C2 provenance verifier — PROPOSED, revise before implementing.** The audit
   found it is a hygiene checker, not a proof (see the doc's audit-response banner).
   **Do not implement verbatim**; needs typed-MIR redesign + reviewer sign-off.

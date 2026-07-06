@@ -1,10 +1,26 @@
 # Heap temporal safety via revoke-on-free (#78 phase 2) — PROPOSAL
 
-*Status: DESIGN PROPOSAL for review before implementation (standing rule for new
-research directions). Builds on #78 phase-1 (the real reusing umm allocator, RV8
-7/7 + `heap_free_reuse`/`heap_coalesce` authority probes) and revocation #70
-(record → enforce → clean fault delivery → linear re-lend, end-to-end). Paths
+*Status: **SUSPENDED (2026-07-06)** after a de-risking spike. This remains a valid,
+grounded design proposal, but implementation is **paused** — the spike proved
+phase-2 is a multi-step research + engineering effort with three independent
+blockers (§3 update + `history/06-07-2026_18-00-00_...`), not a low-risk add-on.
+Resume as its own scoped project when temporal safety is prioritized. Builds on
+#78 phase-1 (the real reusing umm allocator, RV8 7/7 + `heap_free_reuse`/
+`heap_coalesce` authority probes — **done, shipped**) and revocation #70. Paths
 against `capstone-bootstrap` as of 2026-07-06. Tracked under task #78.*
+
+**To resume, do these in order (each gates the next):**
+1. **Domain-boot linear-authority study** — determine which capability covers the
+   BSS/heap region (the spike showed it is NOT `gp`, a ~592-byte small-data
+   pointer; likely PC-derived), and whether a linear form is capturable before
+   `delin`. Gating; if no intra-domain linear authority exists, fall back to a
+   monitor-assisted mint.
+2. **Slab/fixed-slot allocator** — per-allocation linear slots (no coalescing, so
+   no merge needed), which is what composes with per-allocation revocation. umm
+   stays the phase-1 spatial allocator; the temporal path uses slab.
+3. **Integration + probes** — mint-on-alloc / revoke-on-free behind a flag;
+   `heap_use_after_free` + `heap_double_free` authority domains (tag-fault oracle);
+   RV8 7/7 regression with the flag on; measure (no sweep).
 
 ## 0. Summary
 
