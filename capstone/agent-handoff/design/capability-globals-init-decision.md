@@ -133,9 +133,10 @@ rather than a runtime `.gct` walker.
 
 ## Important caveat
 
-Resolving capability-global tagging fixes blocker #1 only. BEEBS `dtoa` also has
-blocker #2 — an untagged-base capability load (`helper_cslcc`) in David Gay's
-`char[]` bigint arena on complex inputs — which is independent and would remain.
-So this work is **general capability-globals infrastructure**; it resolves
-`dtoa`'s blocker #1 (the `nums[]` shape is the validated array case) but does not
-by itself make `dtoa` pass.
+Resolving capability-global tagging fixed blocker #1 for BEEBS `dtoa`. The
+independent arena-alignment blocker was fixed later in commit `216396dbafd4`
+by building with `-DOmit_Private_Memory` and a 16-byte-aligned, 16-byte-rounded
+arena allocator. Together those fixes make `run-beebs-dtoa.sh` pass end to end.
+The capability-global infrastructure remains broader than `dtoa`: it is the
+general mechanism for materializing initialized capability globals, pointer
+tables, string tables, and function-pointer tables in domain code.
