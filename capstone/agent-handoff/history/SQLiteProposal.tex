@@ -1,0 +1,506 @@
+\documentclass[10pt,twocolumn]{article}
+
+\usepackage[letterpaper,margin=0.75in]{geometry}
+\usepackage{times}
+\usepackage{microtype}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{titlesec}
+\usepackage{enumitem}
+\usepackage{url}
+\definecolor{linkblue}{rgb}{0.0,0.18,0.55}
+\usepackage{hyperref}
+\hypersetup{colorlinks=true,urlcolor=linkblue,linkcolor=black,citecolor=black,breaklinks=true}
+\usepackage{caption}
+\usepackage{abstract}
+
+\captionsetup{font=small,labelfont=bf,skip=4pt}
+\setlist{nosep,leftmargin=1.2em}
+
+% IEEE-style section headings: Roman numerals, centered small caps for sections
+\renewcommand{\thesection}{\Roman{section}}
+\renewcommand{\thesubsection}{\Roman{section}-\Alph{subsection}}
+\titlespacing*{\section}{0pt}{7pt}{3pt}
+\titlespacing*{\subsection}{0pt}{5pt}{2pt}
+\titleformat{\section}[block]{\normalfont\normalsize\bfseries\centering}{\thesection.}{0.5em}{\scshape}
+\titleformat{\subsection}[block]{\normalfont\normalsize\bfseries}{\thesubsection.}{0.5em}{}
+
+% Abstract styling
+\renewcommand{\abstractnamefont}{\normalfont\bfseries}
+\renewcommand{\abstracttextfont}{\normalfont\small\itshape}
+
+\definecolor{codebg}{rgb}{0.96,0.96,0.96}
+\definecolor{codecomment}{rgb}{0.35,0.45,0.35}
+\definecolor{codekw}{rgb}{0.10,0.10,0.55}
+\lstset{
+  basicstyle=\ttfamily\scriptsize,
+  backgroundcolor=\color{codebg},
+  commentstyle=\color{codecomment}\itshape,
+  keywordstyle=\color{codekw}\bfseries,
+  language=C,
+  breaklines=true,
+  columns=fullflexible,
+  keepspaces=true,
+  frame=single,
+  framesep=3pt,
+  xleftmargin=2pt,
+  aboveskip=4pt,
+  belowskip=4pt,
+  morekeywords={sqlite3,sqlite3_stmt,PyObject,size_t}
+}
+
+\setlength{\parskip}{2pt}
+\setlength{\columnsep}{0.28in}
+\pagestyle{empty}
+
+\title{\vspace{-2.4em}\textbf{\large Pointer-Safe Marshalling at the Host--SQLite Boundary}\\[0.15em]
+\normalsize\textnormal{Characterizing and Eliminating Lifetime-Contract Violations in Trusted Embedding Glue}}
+\author{\normalsize Claude summary after chatting with Prateek Saxena}
+\date{\vspace{-1.4em}}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\begin{abstract}
+\noindent SQLite is the most widely deployed database engine in the world, and
+it runs as a library linked directly into its host: a fault in the engine is a
+fault in the host's address space. Each host reaches the engine through
+SQLite's C API. That boundary passes \emph{borrowed, short-lived pointers in
+both directions}. Result values are lent out to the host, and buffers and
+callbacks are lent in to the engine. The code that mediates this exchange is
+trusted host code. A lifetime mistake in it, such as a borrowed pointer used
+past a teardown or a callback context freed mid-invocation, is a memory-safety
+vulnerability that no engine-level sandbox contains. We characterize the
+boundary's API surface and show that the resulting defect class recurs across
+nine independent host bindings spanning C, C++, Rust, and Go, while the
+vulnerable boundary itself is replicated by every application that embeds
+SQLite. We then argue that the obvious mitigation, copying every value across
+the boundary, is too expensive for the engine's hottest path. We state the
+goals for a marshalling layer that makes the contract violation
+\emph{unrepresentable} while preserving zero-copy access, and argue that an
+architectural capability model with linear capabilities and revocable
+hierarchical delegation (Capstone) can realize such a layer.
+\end{abstract}
+
+\section{Introduction}
+
+SQLite is embedded in browsers, mobile operating systems, language runtimes,
+and countless applications; it ships as a C library compiled \emph{into} the
+host process, with no process or memory isolation of its own. Consequently it
+executes with the host's privileges in the host's address space, and any
+memory-safety fault in or around the engine is a fault in the host. Throughout,
+we use \emph{host} to mean any application or language binding that embeds
+SQLite through its C API.
+
+Every host reaches the engine across a single, narrow interface: the SQLite C
+API. That interface is the subject of this paper, because the way data crosses
+it is inherently lifetime-sensitive. Consider the most common operation a host
+performs, reading a text column from a result row:
+
+\begin{lstlisting}
+sqlite3_step(stmt);                /* position on row 1 */
+const unsigned char *s =
+    sqlite3_column_text(stmt, 0);  /* borrow: ptr into engine memory */
+sqlite3_step(stmt);                /* advance: row 1's buffer is freed */
+puts((const char *)s);             /* use-after-free: s now dangles */
+\end{lstlisting}
+
+\noindent The pointer returned by \texttt{sqlite3\_column\_text} is not a copy:
+it addresses a buffer \emph{owned by the engine}, and the contract states it
+stays valid only until the next \texttt{step}, \texttt{reset}, or
+\texttt{finalize} on that statement (or an implicit type conversion). A host
+that keeps the pointer one step too long dereferences freed memory. Real
+bindings have done exactly this by caching it for later use
+(Section~\ref{sec:scope}). The hazard is symmetric: in the reverse direction,
+buffers passed with \texttt{sqlite3\_bind\_*} and callbacks registered with the
+engine are \emph{borrowed} across the call. They are owned by the host but held
+by the engine.
+Neither direction transfers ownership by default, and the contract is
+documented but \emph{not enforced}: correctness rests entirely on each binding
+author upholding it by hand. Table~\ref{tab:apis} enumerates the boundary's
+principal API groups and the lifetime or ownership obligation attached to each.
+
+\begin{table}[t]
+\centering
+\caption{Host--SQLite boundary API surface (the \texttt{sqlite3\_} prefix is
+omitted). Each group crosses the boundary with a lifetime or ownership
+obligation the host must uphold. Dir.: E$\rightarrow$H engine-to-host,
+H$\rightarrow$E host-to-engine, cb callback.}
+\label{tab:apis}
+\scriptsize
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}p{2.15cm} c p{3.45cm}@{}}
+\toprule
+\textbf{API group} & \textbf{Dir.} & \textbf{Boundary concern} \\
+\midrule
+\texttt{column\_blob/text} & E$\rightarrow$H & Borrowed ptr; invalid after \texttt{step}/\texttt{reset}/\texttt{finalize} or type conversion. \\
+\texttt{column\_value} & E$\rightarrow$H & \emph{Unprotected} value; unsafe except via \texttt{bind/result\_value}. \\
+\texttt{column\_name} & E$\rightarrow$H & Borrowed string; invalid on reprepare/finalize. \\
+\texttt{value\_blob/text} & E$\rightarrow$H & Valid only within the UDF invocation. \\
+\texttt{bind\_blob/text} & H$\rightarrow$E & Ownership flag: \texttt{STATIC} (caller owns), \texttt{TRANSIENT} (copy), or destructor. \\
+\texttt{result\_*} (UDF) & H$\rightarrow$E & Same ownership rules on the return path. \\
+\texttt{\{bind,result,}\newline\texttt{value\}\_pointer} & H$\leftrightarrow$E & Type-tagged raw pointer threaded through SQL. \\
+\texttt{create\_function},\newline hooks, \texttt{set\_}\newline\texttt{authorizer}, collation, progress, \texttt{trace\_v2} & cb & Host code invoked later; context + destructor lifetime. \\
+\texttt{blob\_open/}\newline\texttt{read/write} & E$\leftrightarrow$H & Incremental handle invalidated by writes to the row. \\
+\texttt{\{de\}serialize} & H$\rightarrow$E & Hands engine a memory image as a DB; \texttt{FREEONCLOSE} ownership. \\
+\texttt{prepare}/\texttt{step}/\newline\texttt{finalize}, \texttt{close\_v2} & H$\leftrightarrow$E & Statement/handle lifecycle; ``zombie'' connection on close with live stmts. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This boundary is not a niche concern: it is replicated, independently, by every
+host that embeds SQLite. Table~\ref{tab:hosts} lists twelve widely deployed
+hosts and the binding through which each crosses the API. The bindings are
+written
+in C, C++, Rust, Go, and others, but they all confront the same lifetime
+contract, and each re-implements the marshalling glue that enforces it.
+
+\begin{table}[t]
+\centering
+\caption{Representative hosts embedding SQLite and their bindings. The
+marshalling glue is re-implemented per binding.}
+\label{tab:hosts}
+\footnotesize
+\renewcommand{\arraystretch}{1.15}
+\begin{tabular}{@{}p{2.7cm} p{3.0cm} l@{}}
+\toprule
+\textbf{Host} & \textbf{Binding} & \textbf{Lang} \\
+\midrule
+Chrome / Chromium   & \texttt{sql::Database} (forked) & C++ \\
+Safari / WebKit     & WebSQL / storage layer          & C++ \\
+Mozilla Firefox     & mozStorage                      & C++ \\
+Android (AOSP)      & \texttt{android\_database\_}\allowbreak\texttt{SQLiteConnection} (JNI) & C++/Java \\
+CPython             & \texttt{\_sqlite3} module        & C \\
+PHP                 & \texttt{ext/sqlite3}, \texttt{pdo\_sqlite} & C \\
+Ruby                & \texttt{sqlite3-ruby} gem        & C \\
+Go                  & \texttt{mattn/go-sqlite3} (cgo)  & C/Go \\
+Rust                & \texttt{rusqlite}, \texttt{diesel} & Rust \\
+Node.js             & \texttt{better-sqlite3}, \texttt{node-sqlite3} & C++ \\
+Signal              & SQLCipher (forked)               & C \\
+.NET                & \texttt{SQLitePCLRaw}            & C\#/C \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Threat model}
+The danger is structural and independent of any sandboxing strategy. The
+marshalling glue of Table~\ref{tab:hosts} is trusted host code: it runs with
+full host privilege and mediates every value entering or leaving the engine.
+Consider a lifetime error in that glue: a result pointer dereferenced after the
+statement that owned it advanced, or a callback context freed while the engine
+still holds it. This is a use-after-free or related memory-safety vulnerability.
+It is reachable whenever an adversary influences the data or control flow that
+crosses the boundary. Because the contract is documented but not enforced,
+correctness rests entirely on each binding author manually upholding it, and
+the defect recurs (Section~\ref{sec:scope}).
+
+\subsection{Memory-safe isolation is not a complete answer}
+A natural response is to isolate the engine itself. One can run it in a
+separate process, or compile it to WebAssembly, so that malicious input
+corrupts only the engine's own sandbox. This is valuable, but it does not
+solve the problem stated above. Engine-level isolation contains faults
+\emph{inside} the engine. The marshalling glue sits on the trusted host side
+of the boundary, outside any such sandbox. A use-after-free in the host's
+result-reading or callback-dispatch code is unaffected by where the engine
+runs. Worse, the safe way to traverse a hard isolation boundary is to serialize
+and copy every value across it, which imposes exactly the overhead we argue
+against in Section~\ref{sec:goals}. Isolation therefore relocates the trusted
+boundary. It does not eliminate the lifetime contract that this paper targets.
+
+\section{Problem Scope: A C Host Example}
+\label{sec:scope}
+
+The defect class is concrete and cross-ecosystem, and it is not limited to the
+read-side hazard of Section~I. A representative recent instance on the
+\emph{callback} path is CPython's \texttt{\_sqlite3} module (gh-142830, 2025), a
+C extension wrapping the SQLite C API. A progress-handler callback that returns
+an object with a custom \texttt{\_\_bool\_\_} can de-register itself
+\emph{while the callback is still executing}, freeing the callback context the
+engine then dereferences:
+
+\begin{lstlisting}
+/* host callback context freed mid-invocation */
+ret = PyObject_CallNoArgs(callable);
+rc  = PyObject_IsTrue(ret);   /* runs __bool__:
+        set_progress_handler(None) -> frees ctx */
+if (rc < 0)
+    print_or_clear_traceback(ctx); /* UAF: ctx freed */
+\end{lstlisting}
+
+\noindent AddressSanitizer reports a heap-use-after-free read inside the host's
+callback dispatch, reached directly through \texttt{sqlite3VdbeExec}. The flaw
+is in the \emph{binding's} memory management, the trusted-glue surface of
+Section~I, not in SQLite.
+
+Table~\ref{tab:scope} lists 19 real, publicly tracked boundary-contract defects
+across host ecosystems. Two root causes dominate: \textbf{callbacks/hooks}
+registered into the engine, and \textbf{statements or connections used across
+teardown}. Conspicuously rare is the plain read-out-a-column path, the part a
+copy or a bounds-checked read already makes safe. The pattern defines the
+problem statement: \emph{the trusted marshalling layer is a recurring,
+exploitable memory-safety surface that engine isolation leaves exposed.}
+
+\begin{table*}[t]
+\centering
+\caption{Host-side SQLite boundary-contract defects, across ecosystems.
+UAF\,=\,use-after-free; UAC\,=\,use-after-close. Rows 1--11 are
+UAF, double-free, use-after-close, or finalize-time memory crashes; rows
+12--16 are adjacent lifetime, callback, or concurrency-safety defects; rows
+17--19 are bind/result/lifecycle mishandling (crash or stale-state) in the
+host glue. All links verified.}
+\label{tab:scope}
+\scriptsize
+\renewcommand{\arraystretch}{1.18}
+\begin{tabular}{@{}r p{2.0cm} p{2.0cm} p{4.0cm} l@{}}
+\toprule
+\textbf{\#} & \textbf{Host (lang)} & \textbf{Ref} & \textbf{Class} & \textbf{Link} \\
+\midrule
+1  & CPython (C)        & gh-142830                 & UAF, progress-handler context freed mid-call & \href{https://github.com/python/cpython/issues/142830}{\nolinkurl{github.com/python/cpython/issues/142830}} \\
+2  & rusqlite (Rust)    & RUSTSEC-2021-0128         & UAF, closure lifetimes on functions/hooks    & \href{https://rustsec.org/advisories/RUSTSEC-2021-0128.html}{\nolinkurl{rustsec.org/advisories/RUSTSEC-2021-0128.html}} \\
+3  & diesel (Rust)      & RUSTSEC-2021-0037         & UAF, column-name pointer cached across step  & \href{https://rustsec.org/advisories/RUSTSEC-2021-0037.html}{\nolinkurl{rustsec.org/advisories/RUSTSEC-2021-0037.html}} \\
+4  & PHP (C)            & Bug \#66550               & UAC, statement used after \texttt{sqlite3\_close} & \href{https://bugs.php.net/bug.php?id=66550}{\nolinkurl{bugs.php.net/bug.php?id=66550}} \\
+5  & PHP (C)            & Bug \#69971               & UAF, statement/database destruction order    & \href{https://bugs.php.net/bug.php?id=69971}{\nolinkurl{bugs.php.net/bug.php?id=69971}} \\
+6  & PHP (C)            & Bug \#77977               & UAF, via user-defined function               & \href{https://bugs.php.net/bug.php?id=77977}{\nolinkurl{bugs.php.net/bug.php?id=77977}} \\
+7  & CPython (C)        & gh-99886                  & UAF, subclassed Cursor dealloc order         & \href{https://github.com/python/cpython/issues/99886}{\nolinkurl{github.com/python/cpython/issues/99886}} \\
+8  & CPython (C)        & gh-85981 / bpo-41815      & UAC, backup() on a closed connection         & \href{https://github.com/python/cpython/issues/85981}{\nolinkurl{github.com/python/cpython/issues/85981}} \\
+9  & sqlite3-ruby (C)   & Issue \#49                & Finalize-time segfault on close              & \href{https://github.com/sparklemotion/sqlite3-ruby/issues/49}{\nolinkurl{github.com/sparklemotion/sqlite3-ruby/issues/49}} \\
+10 & sqlite3-ruby (C)   & "Closed Statement"        & UAC, statement reused after close            & \href{https://groups.google.com/g/sqlite3-ruby/c/SGRQE_2MZ8I}{\nolinkurl{groups.google.com/g/sqlite3-ruby/c/SGRQE_2MZ8I}} \\
+11 & go-sqlite3 (cgo)   & PR \#1303                 & Double-free / finalizer not removed on Close & \href{https://github.com/mattn/go-sqlite3/pull/1303}{\nolinkurl{github.com/mattn/go-sqlite3/pull/1303}} \\
+12 & expo-sqlite (C/JNI)& PR \#34992                & Unfinalized statements $\rightarrow$ NPE on close & \href{https://github.com/expo/expo/pull/34992}{\nolinkurl{github.com/expo/expo/pull/34992}} \\
+13 & CPython (C)        & gh-149738                 & Null-deref, deleted \texttt{row\_factory}     & \href{https://github.com/python/cpython/issues/149738}{\nolinkurl{github.com/python/cpython/issues/149738}} \\
+14 & CPython (C)        & bpo-31746 / PR \#27472    & Null-deref, uninitialised Connection         & \href{https://github.com/python/cpython/pull/27472}{\nolinkurl{github.com/python/cpython/pull/27472}} \\
+15 & CPython (C)        & gh-101767                 & Callback GIL-state unsafe in subinterpreters & \href{https://github.com/python/cpython/issues/101767}{\nolinkurl{github.com/python/cpython/issues/101767}} \\
+16 & datasette-authz (C)& Issue \#3                 & Authorizer callback-context lifetime churn   & \href{https://github.com/datasette/datasette-sqlite-authorizer/issues/3}{\nolinkurl{github.com/datasette/datasette-sqlite-authorizer/issues/3}} \\
+17 & node-sqlite3 (C++) & Issue \#1449              & Fatal abort, BindParameter typecast failure  & \href{https://github.com/TryGhost/node-sqlite3/issues/1449}{\nolinkurl{github.com/TryGhost/node-sqlite3/issues/1449}} \\
+18 & PHP (C)            & Bug \#79294               & Stale-state read, columnType after reset     & \href{https://bugs.php.net/bug.php?id=79294}{\nolinkurl{bugs.php.net/bug.php?id=79294}} \\
+19 & PHP (C)            & PR \#5204 / Bug \#64531   & Result/statement lifecycle mismatch          & \href{https://github.com/php/php-src/pull/5204}{\nolinkurl{github.com/php/php-src/pull/5204}} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\section{Solution Goals}
+\label{sec:goals}
+
+A solution should make the host--SQLite boundary safe \emph{by construction},
+so that no lifetime mistake in hand-written glue can become a host compromise.
+We state two goals.
+
+\subsection{G1: Protect pointers crossing in both directions}
+The boundary must enforce, rather than document, the ownership and lifetime
+contract of Table~\ref{tab:apis}. Engine$\rightarrow$host: a value handed out
+must remain valid for a well-defined scope and be impossible to dereference
+after the owning statement advances or is torn down. Host$\rightarrow$engine:
+bound buffers and registered callbacks must have their lifetimes pinned to the
+engine's use of them, so that a callback context cannot be freed while the
+engine still holds it (the gh-142830 pattern), and a statement cannot be used
+after its connection closes (the PHP and Ruby patterns). Enforcement should be
+mechanical: scoped or owned handles, lifetime typing, or a representation in
+which a dangling reference cannot be named.
+
+\subsection{G2: Preserve performance: copying is not the answer}
+The obvious safe default is to copy every value across the boundary, using
+\texttt{SQLITE\_TRANSIENT} semantics or serialize-and-deserialize across a
+process or WebAssembly boundary. That trades safety for throughput, and the
+trade is too expensive on the engine's hottest path. Every row read and every
+parameter bound incurs an allocation and a memory copy. Large \texttt{BLOB} and
+\texttt{TEXT} columns copy in full, doubling memory traffic and defeating
+SQLite's zero-copy read design. A solution must instead protect the borrowed
+pointer \emph{in place}, through enforced lifetimes, scoped or owned handles, or
+a memory-safe boundary representation, so that the common read and bind path
+stays copy-free while the dangling dereference becomes unrepresentable.
+
+\medskip
+\noindent\textbf{Success criterion.} A marshalling layer in which the
+boundary-contract defects of Table~\ref{tab:scope} cannot be written: borrowed
+pointers are lifetime-checked in both directions (G1), and the zero-copy fast
+path is retained for the common read and bind operations (G2).
+
+\section{Proposed Solution: A Capability-Based\\Marshalling Layer}
+\label{sec:soln}
+
+We sketch how Capstone can enforce the contract of Table~\ref{tab:apis} by
+construction, meeting G1 and G2 without copying. Capstone is an implemented
+capability ISA with \emph{linear capabilities}, explicit \emph{revocation
+capabilities}, and \emph{uninitialised capabilities}~\cite{capstone,capstonespec}.
+We model the engine and the host binding as two cooperating domains \emph{in one
+address space}. Every value crossing the boundary is named by a capability
+handle to the real buffer, not a raw pointer. Capstone's stated motivation for
+revocable delegation is exactly our scenario: after an untrusted component is
+granted access to a region, the grantor must be able to revoke
+it~\cite{capstonespec}. Capabilities fit because they are \emph{trustless}.
+Neither domain need trust the other's lifetime discipline. This is the situation
+that defeats engine-level isolation (Section~I-B), where the glue is trusted but
+buggy and copying across a hard boundary is the cost G2 forbids.
+
+\subsection{Linear capabilities replace borrowed pointers}
+A linear capability is \emph{alias-free} and move-only. Instructions may move
+but not copy it, so while one domain holds it no other capability grants access
+to the region~\cite{capstonespec}. Replace the borrowed result pointer of
+Section~I with a linear capability that the engine delegates to the host for
+the borrow window. Three consequences follow. (i)~The dangling read becomes
+\emph{unrepresentable}: access is only via the handle, so a host that
+over-retains it cannot silently read freed memory. (ii)~Double-free becomes
+structurally impossible. Double-free and double-finalize (rows~9,~11) are
+aliasing bugs that require two live references. A move-only linear capability
+admits exactly one holder, so a second \texttt{finalize} has nothing to consume.
+(iii)~Zero-copy is preserved (G2): the capability addresses the engine's actual
+buffer. The reverse direction is symmetric. The host delegates a linear
+capability for a bound buffer, and exclusivity forbids it from freeing the
+buffer out from under the engine. This removes the very reason
+\texttt{TRANSIENT} copies exist.
+
+\subsection{Revocation capabilities end the borrow}
+Capstone's revocation is explicit and is the natural model for the contract's
+end-of-life points. A revocation capability carries no access of its own; it is
+minted from a linear capability and later used to invalidate the capabilities
+derived from it~\cite{capstonespec}. Before lending a result buffer, the engine
+mints a revocation capability for it and retains it, delegating the linear
+capability to the host. At each point the contract says the borrow ends, the
+engine \emph{executes a revoke}. Those points are the next \texttt{step},
+\texttt{reset}, or \texttt{finalize} on that statement, or an in-place type
+conversion. The revoke sets the host's borrowed capability invalid
+(\texttt{valid}\,=\,0). A subsequent dereference then \emph{faults} rather than
+reading freed or rewritten memory (rows~1--8,~13,~14). This places no new burden
+on the engine. It already runs code at exactly these transitions, so minting at
+hand-out and revoking at teardown fall on paths it already executes. The reverse
+direction reuses the same primitive together with \emph{uninitialised
+capabilities}. A buffer the engine reclaims from the host is returned as an
+uninitialised, write-only capability that becomes usable only once fully
+overwritten, so the reclaiming side cannot read the previous occupant's
+data~\cite{capstonespec}. Callback dispatch is a domain crossing, where the
+engine invokes host code holding a context. Capstone provides sealed and
+sealed-return capabilities for safe context switching here. The context's
+capabilities are preserved across the call, and a revoke of the context (the
+gh-142830 re-entrant free) invalidates the engine's handle to it. We stress
+this is \emph{safe-fail}: it converts a use-after-free into a deterministic
+capability fault, eliminating the exploitable vulnerability rather than making
+the buggy program complete.
+
+\subsection{Hierarchical delegation contains the glue}
+The boundary forms an ownership tree (connection $\supset$ statement $\supset$
+value), and bindings often re-delegate borrowed values onward to application
+code. Capstone realises this directly. Revocation capabilities may overlap, and
+among aliasing ones it defines a seniority by creation order. The earlier one
+($c \prec_t d$) is the stronger, and revoking with it invalidates the weaker,
+overlapping ones. This gives arbitrarily extensible chains of
+delegation~\cite{capstonespec}. The engine mints a senior revocation capability
+covering a statement's region when it is prepared. \texttt{close}, executed as
+a revoke with that senior capability, invalidates every outstanding statement
+and value capability beneath it. This resolves the use-after-close class
+(rows~4,~8,~12) by construction. More fundamentally, the engine's senior
+revocation \emph{dominates} the binding's. A buggy binding that re-delegates a
+borrowed value and forgets to revoke it is still cleaned up by the engine's
+revoke at the next lifecycle transition. Enforcement thus moves off ``every
+binding author upholds the contract by hand,'' the threat model's core failure,
+and onto an invariant the buggy glue cannot defeat.
+
+\subsection{Applying the discipline to the observed defects}
+Table~\ref{tab:fix} maps every defect of Table~\ref{tab:scope} to the capability
+mechanism that makes it safe. Most rows are direct. A borrowed handle is revoked
+at a defined point, so a later use faults instead of corrupting memory. Three
+cases deserve comment. Row~14 is use-before-initialisation rather than a borrow,
+so it uses an uninitialised capability that carries no read authority until
+setup completes. Rows~18 and~19 are stale-state reads. They go through only once
+the borrow discipline is extended to \emph{derived} state, so that column
+metadata and result objects are themselves row- or statement-scoped borrows that
+the engine revokes on \texttt{reset} or re-\texttt{step}. Row~17 is the weakest
+fit: capabilities do not repair the faulty type coercion, but a bounded
+read-only borrow of the parameter turns a fatal process abort into a local,
+trappable fault. Only row~15 is out of reach. A subinterpreter GIL deadlock is a
+liveness defect with no pointer lifetime.
+
+\begin{table*}[t]
+\centering
+\caption{Capability-based fix for each defect of Table~\ref{tab:scope}.
+Primitives: \textbf{L} linear (exclusive, move-only borrow); \textbf{R}
+revocation (explicit revoke at the borrow's end); \textbf{H} hierarchical revoke
+(a senior revoke cascades on \texttt{close} or destroy); \textbf{U} uninitialised
+(no use before initialisation); \textbf{S} sealed (safe callback domain switch).
+All defects but row~15 are addressed.}
+\label{tab:fix}
+\footnotesize
+\renewcommand{\arraystretch}{1.15}
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}r l p{14.2cm}@{}}
+\toprule
+\textbf{\#} & \textbf{Prim.} & \textbf{Capability-based fix} \\
+\midrule
+1  & L,R,S & The engine borrows the callback context for the call. A mid-call free revokes it, so the engine's later use faults. \\
+2  & L,R,S & The closure is lent while registered. Dropping its captures revokes the handle, so a later invocation faults. \\
+3  & L,R   & The column pointer is a row-scoped borrow. \texttt{step} revokes it, so a cached read faults. \\
+4  & H     & The statement is a capability under the connection. \texttt{close} revokes the subtree, so reuse faults. \\
+5  & H     & The statement handle is derived from the database. Destroying the database revokes it, so neither destruction order leaves a dangling handle. \\
+6  & L,R,S & The function and its data are lent while registered. Freeing revokes them, so the engine's call faults. \\
+7  & H     & The cursor holds derived connection and statement handles. Owner teardown revokes them, so out-of-order dealloc faults. \\
+8  & R     & \texttt{backup} borrows the connection. \texttt{close} revokes the borrow, so the call faults. \\
+9  & H     & The statement is a capability under the connection. \texttt{close} revokes it, so \texttt{finalize} faults instead of corrupting memory. \\
+10 & H     & As row~4: a reuse after \texttt{close} hits an invalid capability. \\
+11 & L     & The handle is one move-only capability. \texttt{Close} consumes it, so no second alias remains to free again. \\
+12 & H     & Statements are capabilities under the connection. \texttt{close} revokes the subtree, so no unfinalised state can block the close. \\
+13 & L,R   & The cursor borrows the \texttt{row\_factory} handle. Deleting it revokes the borrow, so the later use faults. \\
+14 & U     & The connection is an uninitialised capability until setup completes. A premature access has no read authority and faults. \\
+15 & n/a   & Not addressed. A subinterpreter GIL deadlock is a liveness defect with no pointer lifetime. \\
+16 & L,R,S & The authorizer context is lent while registered. Mint at register and revoke at unregister fix the lifetime across language versions. \\
+17 & L     & The bound value crosses as a bounded read-only borrow. A malformed access faults locally instead of aborting the process. \\
+18 & R     & The column type is a row-scoped borrow. \texttt{reset} revokes it, so a later read faults instead of returning stale data. \\
+19 & L,R   & The result is a borrow derived from the statement. \texttt{reset} or re-stepping revokes it, so a mismatched fetch faults. \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Scope and limitations}
+The model meets G1 (both directions capability-mediated, stale handles trap,
+double-free impossible, \texttt{close} cascades) and G2 (handles, not copies,
+and the safe borrow replaces the mandatory \texttt{TRANSIENT} copy). Capstone
+overhead is reported below 50\% in common cases~\cite{capstone}. Two honest
+costs remain. First, linear capabilities are exclusive. Patterns that genuinely
+require shared concurrent reads of one value must fall back to non-linear
+capabilities, which forfeit the alias-freedom on which the clean revocation
+guarantee rests. The borrow-then-reclaim pattern that dominates
+Table~\ref{tab:scope} does not need such sharing. Second, revocation here is
+explicit. The engine must mint and revoke at the lifecycle transitions. It
+already executes code there, but the obligation is real. A capability design
+that made revocation implicit on the owner's next access, as the unimplemented
+CapsLock proposes for mixed Rust and FFI~\cite{capslock}, would discharge that
+obligation automatically. We note it as future work rather than rely on it.
+
+\section{Conclusion}
+SQLite's safety inside an embedding host turns on a boundary the engine does not
+control: the marshalling glue that lends pointers in both directions. We
+characterized that boundary, showed its lifetime contract is documented but not
+enforced, and collected 19 real defects across nine bindings that share one
+shape. A borrowed handle is used past the window in which it is valid.
+Engine-level isolation does not address this, because the glue is trusted and
+sits outside any sandbox, and copying every value defeats SQLite's zero-copy
+design. We argued that Capstone can enforce the contract in place. Linear
+capabilities make a borrow exclusive and a double-free unrepresentable. Explicit
+revocation ends the borrow at the points the contract already names.
+Senior revocation makes a connection's \texttt{close} cascade to its statements.
+Uninitialised capabilities cover safe reclaim and use-before-init. Table~\ref{tab:fix}
+maps all but one of the defects to one of these mechanisms; the exception is a
+deadlock, which no memory model addresses. The outcome is \emph{safe-fail}: a
+contract violation becomes a deterministic fault rather than an exploitable
+corruption, with the zero-copy fast path preserved. A full result rests on two
+deliverables we leave to evaluation: a binding co-designed with the engine so
+the engine mints and revokes the capabilities, and a measurement showing the
+capability-mediated borrow path stays close to raw pointers and well below the
+copy baseline.
+
+\begin{thebibliography}{9}
+\footnotesize
+\bibitem{capstone} J.~Z.~Yu, C.~Watt, A.~Badole, T.~E.~Carlson, and P.~Saxena.
+``Capstone: A Capability-based Foundation for Trustless Secure Memory Access.''
+\emph{USENIX Security}, 2023.
+\href{https://www.usenix.org/conference/usenixsecurity23/presentation/yu-jason}{\nolinkurl{usenix.org/conference/usenixsecurity23/presentation/yu-jason}}
+\bibitem{capstonespec} ``The Capstone-RISC-V Instruction Set Reference,'' v1.0.
+\href{https://capstone.kisp-lab.org/specs/}{\nolinkurl{capstone.kisp-lab.org/specs}}
+\bibitem{capslock} J.~Z.~Yu, C.~Watt, et al.
+``Securing Mixed Rust with Hardware Capabilities'' (CapsLock).
+\emph{ACM CCS}, 2025. Related/future work; not relied upon here.
+\href{https://arxiv.org/abs/2507.03344}{\nolinkurl{arxiv.org/abs/2507.03344}}
+\end{thebibliography}
+
+\end{document}
