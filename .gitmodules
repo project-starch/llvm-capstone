@@ -11,3 +11,8 @@
 	path = capstone/capstone-spec
 	url = https://github.com/project-starch/capstone-spec
 
+[submodule "capstone/paper"]
+	path = capstone/paper
+	url = https://github.com/project-starch/pointer-safe-paper
+	branch = main
+	update = none
