@@ -15,7 +15,7 @@ Setup for the second agent: `AGENT-B-SETUP.md`.
 | Owner | Subsystem | Submodules / dirs held | Branch |
 |---|---|---|---|
 | Agent-A | (current: SQLite Stage-2 corpus, firmware/monitor) | `caplifive-buildroot` → `opensbi`, `capstone-sbi-domain/capstone-sbi`; `capstone/capstone-c`; `capstone/benchmarks/sqlite`; `capstone/tests` | `capstone-bootstrap` |
-| Agent-B | unassigned — awaiting task (clone `/home/alexey/dev/llvm-capstone-b`) | none yet | `capstone-bootstrap-b` |
+| Agent-B | compiler/codegen + emulator (C1 subobject-bounds proposal, design-only) | `llvm/` (in-tree) + `capstone/capstone-qemu` | `capstone-bootstrap-b` |
 
 Suggested non-overlapping split (pick when B's task is set):
 - Compiler/codegen (`llvm/`, in-tree) + `capstone/capstone-qemu` — one owner.
@@ -31,7 +31,7 @@ if the other hits a usage limit. Keep it honest and current.
 | Agent | Current position |
 |---|---|
 | Agent-A | idle at `capstone-bootstrap` tip; no in-flight task; nothing uncommitted. |
-| Agent-B | _fill on first checkpoint_ |
+| Agent-B | Phase 1: investigating C1 subobject-bounds gap (read-only) at `capstone-bootstrap-b@`merged-from-`39f68da`; no build; writing `design/c1-subobject-bounds-proposal.md`; scaffolding committed, nothing else uncommitted. |
 
 ## Claimed / do-not-touch  _(hold list)_
 
@@ -52,6 +52,7 @@ if the other hits a usage limit. Keep it honest and current.
 |---|---|---|
 | 2026-07-08 | scaffolding | Added `MULTI-AGENT-WORKFLOW.md`, `AGENT-B-SETUP.md`, this file; paper submodule committed (`d4959767`). Push required for Agent-B's clone to pull them. |
 | 2026-07-08 | Agent-B online | Agent-B came online in clone `/home/alexey/dev/llvm-capstone-b` on `capstone-bootstrap-b`. Verified isolation: `CAPSTONE_REPO_ROOT`/`CAPSTONE_CLANG` inside B clone, `CAPSTONE_TMP_ROOT=/tmp/capstone-b`, `CLAUDE_CONFIG_DIR=~/.claude-b` (own creds), remote=project-starch/llvm-capstone, clean tree. Created `state/current-{state,next-step}.B.md`. LLVM build + buildroot/rootfs not yet built (fresh clone). Awaiting task assignment; no submodule owned. |
+| 2026-07-08 | Agent-B merge + lane claim | Merged `origin/capstone-bootstrap` (`39f68da`, agent-unavailable resilience + checkpoint protocol) into `capstone-bootstrap-b` (clean, no conflict). Claimed the **compiler/codegen + emulator** lane (`llvm/` in-tree + `capstone/capstone-qemu`); no firmware submodule touched. Task: design-only C1 subobject-bounds proposal (`design/c1-subobject-bounds-proposal.md`), gated for review before any implementation or full build. |
 
 ---
 
