@@ -100,6 +100,9 @@ is the single source of "who owns what right now":
 ## Active ownership (update before you start / when you hand off)
 - Agent-A (capstone-bootstrap): <subsystem>, submodules {…}, files {…}
 - Agent-B (capstone-bootstrap-b): <subsystem>, submodules {…}, files {…}
+## Current position (update at each checkpoint — makes takeover read-and-go)
+- Agent-A: <one sentence: what/where, branch@sha, tested? uncommitted?>
+- Agent-B: <one sentence: what/where, branch@sha, tested? uncommitted?>
 ## Claimed / do-not-touch
 - <path or submodule> — held by <agent> until <event>
 ## Sync log
@@ -109,6 +112,43 @@ is the single source of "who owns what right now":
 Push/pull through `origin`; the branches (not a shared working dir) are the
 coordination channel. Before bumping any submodule, check `COORDINATION.md`; after,
 note it in the sync log.
+
+## Resilience — when one agent goes dark (token/usage limit)
+
+Because all load-bearing state is **committed** (`state/*.md`, `history/`, the
+branches), no agent is a single point of failure. An agent's context is
+disposable; the project state is durable. Two exhaustion modes, handled
+differently:
+
+- **Context-window fill (frequent, benign).** Claude Code compacts; the agent
+  rehydrates from its `state/*.md` + `COORDINATION.md` and continues. No
+  cross-agent action. Only discipline: keep those files current.
+- **Account/usage limit (an agent dark for hours).** Lanes are independent, so one
+  agent going dark does **not** block the other's lane. The only coupling is the
+  merge point, which can wait or be reassigned. Degrade from two lanes to one,
+  never to zero.
+
+**Decision tree when Agent-X goes dark:**
+- **X's lane not on the critical path** → the surviving agent keeps working its own
+  lane; X resumes later from git (fresh session on X's account after reset →
+  rehydrates from `state/*.md`). No action.
+- **X's lane on the critical path** → the surviving agent takes over: `git fetch`,
+  read X's `state/*.md` + X's **Current position** line, continue on X's branch (or
+  cherry-pick). Cost: taking over the firmware/QEMU lane may require rebuilding
+  firmware/`rootfs.ext2` in the taker's clone — a time cost, not data loss.
+- **The integrator (A) is dark and B needs a merge** → B keeps committing to its own
+  branch (never blocked). Integration either waits, or the human temporarily
+  promotes B to integrator (merge B→canonical); A reconciles submodule bumps on
+  return using the **Submodule-bump log**.
+
+**Checkpoint discipline (this is what makes the above cheap):**
+- Commit + push **small and often** (exact paths) so an abrupt cutoff strands at
+  most the current in-flight step. Uncommitted WIP in a dead session is the only
+  thing that actually hurts.
+- Update `state/*.md` and the per-agent **Current position** line in
+  `COORDINATION.md` at each checkpoint.
+- The human can snapshot a stalled clone at any time: `git commit` the WIP in
+  either directory even while that agent is dark.
 
 ## Do-not hazards (both agents)
 
