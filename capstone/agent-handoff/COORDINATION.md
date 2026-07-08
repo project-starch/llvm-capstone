@@ -15,7 +15,7 @@ Setup for the second agent: `AGENT-B-SETUP.md`.
 | Owner | Subsystem | Submodules / dirs held | Branch |
 |---|---|---|---|
 | Agent-A | (current: SQLite Stage-2 corpus, firmware/monitor) | `caplifive-buildroot` → `opensbi`, `capstone-sbi-domain/capstone-sbi`; `capstone/capstone-c`; `capstone/benchmarks/sqlite`; `capstone/tests` | `capstone-bootstrap` |
-| Agent-B | _unassigned — fill in on first run_ | _none yet_ | `capstone-bootstrap-b` |
+| Agent-B | unassigned — awaiting task (clone `/home/alexey/dev/llvm-capstone-b`) | none yet | `capstone-bootstrap-b` |
 
 Suggested non-overlapping split (pick when B's task is set):
 - Compiler/codegen (`llvm/`, in-tree) + `capstone/capstone-qemu` — one owner.
@@ -40,6 +40,7 @@ Suggested non-overlapping split (pick when B's task is set):
 | Date | Action | Detail |
 |---|---|---|
 | 2026-07-08 | scaffolding | Added `MULTI-AGENT-WORKFLOW.md`, `AGENT-B-SETUP.md`, this file; paper submodule committed (`d4959767`). Push required for Agent-B's clone to pull them. |
+| 2026-07-08 | Agent-B online | Agent-B came online in clone `/home/alexey/dev/llvm-capstone-b` on `capstone-bootstrap-b`. Verified isolation: `CAPSTONE_REPO_ROOT`/`CAPSTONE_CLANG` inside B clone, `CAPSTONE_TMP_ROOT=/tmp/capstone-b`, `CLAUDE_CONFIG_DIR=~/.claude-b` (own creds), remote=project-starch/llvm-capstone, clean tree. Created `state/current-{state,next-step}.B.md`. LLVM build + buildroot/rootfs not yet built (fresh clone). Awaiting task assignment; no submodule owned. |
 
 ---
 
