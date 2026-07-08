@@ -1,10 +1,27 @@
 # C1 subobject-bounds narrowing — proposal (design, awaiting review)
 
-*Status: **PROPOSED — do not implement until reviewer/PI sign-off.** This is a
-design decision with real correctness risk (it can break valid intra-object
-pointer idioms), so it is gated for review before any code and before the ~10 GB
-LLVM/buildroot build. Author: Agent-B (compiler/codegen + emulator lane), branch
-`capstone-bootstrap-b`, 2026-07-08.*
+*Status: **v1 IMPLEMENTED + VALIDATED (2026-07-09), PI-approved.** The design
+below is the full proposal; v1 shipped a deliberately narrowed slice of it (see
+the v1-scope note under §2 and the rollout in §6). Author: Agent-B
+(compiler/codegen + emulator lane), branch `capstone-bootstrap-b`, 2026-07-08.*
+
+> **v1 implementation note (2026-07-09).** Shipped: the `-fcapstone-subobject-bounds`
+> flag (default off, Capstone-only), a frontend `CGExpr.cpp` hook
+> (`maybeNarrowSubobjectBounds`) that narrows **array-typed** fields only, with
+> refusals for unions, flexible/incomplete arrays, last-member (trailing) arrays,
+> and incomplete types. Rationale for arrays-only: it flips the headline gap
+> (`subobject_overread`) with **zero container_of exposure** (arrays are never
+> container_of subjects), so the offsetof-pattern refusal + `no_subobject_bounds`
+> opt-out attribute (§2.2, §5 Q1) and embedded-record/scalar-field narrowing move
+> to **increment 2**, where they are actually load-bearing. Validated: clang lit
+> `capstone-subobject-bounds.c` (on/off) + Capstone clang lit 7/7 + backend lit
+> 36/36; runtime authority `subobjfield_*` 5/5 (`overrun`→bounds-fault;
+> `inbounds`/`union_active`/`flexarray`→ok; un-flagged `subobject_overread` still
+> no-trap-today). Files: `clang/{include/clang/Basic/LangOptions.def,
+> include/clang/Driver/Options.td, lib/CodeGen/CGExpr.cpp,
+> test/CodeGen/capstone-subobject-bounds.c}`,
+> `capstone/tests/capstone-authority/{domains/subobjfield_*.c, oracle.tsv,
+> build-authority-suite.sh}`.
 
 *Evidence base (trusted over any summary): `design/capability-bounds-model.md`
 (the `SHRINK` primitive + exact-bounds caveat), `design/c1-coverage-matrix-and-overhead.md`

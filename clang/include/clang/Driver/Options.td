@@ -1029,6 +1029,15 @@ defm offload_uniform_block : BoolFOption<"offload-uniform-block",
   NegFlag<SetFalse, [], [ClangOption, CC1Option], "Don't assume">,
   BothFlags<[], [ClangOption], " that kernels are launched with uniform block sizes (default true for CUDA/HIP and false otherwise)">>;
 
+defm capstone_subobject_bounds : BoolFOption<"capstone-subobject-bounds",
+  LangOpts<"CapstoneSubobjectBounds">, DefaultFalse,
+  PosFlag<SetTrue, [], [ClangOption, CC1Option],
+          "Narrow Capstone capability bounds to individual struct subobjects "
+          "(fields) at field materialization, so an over-read/-write that leaves "
+          "a field but stays within the enclosing object faults. Opt-in; "
+          "Capstone targets only (no effect on other targets)">,
+  NegFlag<SetFalse, [], [ClangOption, CC1Option]>>;
+
 def fcomplex_arithmetic_EQ : Joined<["-"], "fcomplex-arithmetic=">, Group<f_Group>,
   Visibility<[ClangOption, CC1Option, FlangOption, FC1Option]>,
   Values<"full,improved,promoted,basic">, NormalizedValuesScope<"LangOptions">,

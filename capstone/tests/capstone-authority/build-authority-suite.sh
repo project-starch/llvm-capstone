@@ -36,6 +36,10 @@ for src in "$DOMAINS_DIR"/*.c; do
   extra=""
   case "$name" in
     stack_*) extra="-mllvm -capstone-shrink-stack=true" ;;
+    # subobjfield_* probes exercise -fcapstone-subobject-bounds (default off), the
+    # frontend field-granularity narrowing; build them with it on. (The existing
+    # subobject_overread probe stays un-flagged, documenting the no-trap gap.)
+    subobjfield_*) extra="-Xclang -fcapstone-subobject-bounds" ;;
     # heap free/reuse probes compile the real umm allocator into the TU; umm
     # divides (block index math), so enable the M extension for hardware mul/div
     # (the suite links no compiler-rt).

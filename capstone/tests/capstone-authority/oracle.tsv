@@ -42,6 +42,12 @@ stack_oob	bounds-fault	buf[100] past a 64-byte local; with -capstone-shrink-stac
 stack_dynalloca_inbounds	ok	1560281128
 stack_dynalloca_oob	bounds-fault	buf[200] past a runtime-sized alloca(48); with -capstone-shrink-stack lowerDYNAMIC_STACKALLOC narrows the returned pointer to the allocated region so it traps (dynamic-alloca analogue of stack_oob)
 subobject_overread	no-trap-today	570884261
+# subobjfield_* are built with -fcapstone-subobject-bounds (default off); they are
+# the flag-on demonstration that field narrowing flips subobject_overread's gap.
+subobjfield_overrun	bounds-fault	first[8] leaves the narrowed non-last array field first[] (SHRINK to [first,first+8)) into second[]; the frontend field narrowing makes it trap (subobject_overread is the same access built WITHOUT the flag = no-trap-today)
+subobjfield_inbounds	ok	571146300
+subobjfield_union_active	ok	571211866
+subobjfield_flexarray	ok	571277406
 many_pointer_args	ok	161480759
 spill_reachability	ok	1494286391
 untagged_cap_roundtrip	ok	580452355

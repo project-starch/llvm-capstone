@@ -40,6 +40,7 @@
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/IntrinsicsCapstone.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/MDBuilder.h"
 #include "llvm/IR/MatrixBuilder.h"
@@ -5258,6 +5259,89 @@ static bool hasAnyVptr(const QualType Type, const ASTContext &Context) {
   return false;
 }
 
+// C1 subobject-bounds narrowing (Capstone, -fcapstone-subobject-bounds, default
+// off). Object-granularity SHRINK narrows a capability to the WHOLE named object
+// (a global via selectLGA, a stack object via narrowToFrameObjectBounds); a field
+// access then does pointer arithmetic off that whole-object capability, so an
+// over-read that leaves the field but stays inside the object does not fault
+// (authority probe subobject_overread). This helper further narrows a field
+// lvalue's capability to that field's own bounds [&f, &f + sizeof(f)) via the
+// capstone_cap_shrink intrinsic (the same primitive the object narrowing and the
+// heap allocator shim use), which composes monotonically with the object bound
+// (field ⊆ object ⊆ segment).
+//
+// v1 scope is deliberately conservative — it narrows only ARRAY-typed fields
+// (the buffer over-read case: high safety value, and arrays are essentially
+// never the subject of container_of/offsetof back-walks, so this increment has
+// no container_of exposure). Scalar and embedded-record fields, plus the
+// offsetof-pattern refusal and the opt-out attribute, are a documented follow-up
+// (see design/c1-subobject-bounds-proposal.md). Refusals applied here: unions
+// (overlapping members), flexible/incomplete array members and any last-member
+// array (the trailing-array idiom is deliberately over-indexed), and
+// unsized/zero-size fields.
+static Address maybeNarrowSubobjectBounds(CodeGenFunction &CGF,
+                                          const FieldDecl *field, Address addr) {
+  if (!CGF.getLangOpts().CapstoneSubobjectBounds)
+    return addr;
+  if (!CGF.getTarget().getTriple().isCapstone())
+    return addr;
+
+  const RecordDecl *rec = field->getParent();
+  // Unions: members overlap; narrowing one member can cut off a valid access to
+  // a larger active member. Refuse.
+  if (rec->isUnion())
+    return addr;
+
+  QualType FieldType = field->getType();
+  // v1: only array fields (the buffer over-read case).
+  if (!FieldType->isArrayType())
+    return addr;
+  // Flexible / incomplete array members ("char data[];") are deliberately
+  // over-indexed past their declared size. Refuse.
+  if (FieldType->isIncompleteArrayType())
+    return addr;
+  // Any array that is the LAST member of its record is treated as a
+  // trailing-array (FAM "[0]"/"[1]") idiom and left un-narrowed — conservative
+  // but safe. Non-last array fields are the ones we narrow.
+  {
+    const FieldDecl *Last = nullptr;
+    for (const FieldDecl *FD : rec->fields())
+      Last = FD;
+    if (Last == field)
+      return addr;
+  }
+
+  // sizeof(field) in bytes; require a known, positive size.
+  ASTContext &Ctx = CGF.getContext();
+  if (FieldType->isIncompleteType())
+    return addr;
+  uint64_t Size = Ctx.getTypeSizeInChars(FieldType).getQuantity();
+  if (Size == 0)
+    return addr;
+
+  CGBuilderTy &Builder = CGF.Builder;
+  llvm::LLVMContext &VMCtx = CGF.getLLVMContext();
+  llvm::Value *P = addr.emitRawPointer(CGF);
+  llvm::Type *PtrTy = P->getType();
+  llvm::Type *I64 = llvm::Type::getInt64Ty(VMCtx);
+  llvm::Type *I128 = llvm::Type::getInt128Ty(VMCtx);
+
+  // base = cursor(&field); end = base + sizeof(field). Same idiom as the heap
+  // allocator shim: read the cursor as a scalar address (no forging), then
+  // SHRINK. SHRINK's monotonicity guarantees this only ever narrows.
+  llvm::Function *GetCursor = CGF.CGM.getIntrinsic(
+      llvm::Intrinsic::capstone_cap_get_cursor, {PtrTy});
+  llvm::Value *Cursor = Builder.CreateCall(GetCursor, {P});
+  llvm::Value *SizeV = llvm::ConstantInt::get(I64, Size);
+  llvm::Value *End = Builder.CreateAdd(Cursor, SizeV);
+  llvm::Value *BaseW = Builder.CreateZExt(Cursor, I128);
+  llvm::Value *EndW = Builder.CreateZExt(End, I128);
+  llvm::Function *Shrink =
+      CGF.CGM.getIntrinsic(llvm::Intrinsic::capstone_cap_shrink, {PtrTy});
+  llvm::Value *NP = Builder.CreateCall(Shrink, {P, BaseW, EndW});
+  return addr.withPointer(NP, addr.isKnownNonNull());
+}
+
 LValue CodeGenFunction::EmitLValueForField(LValue base, const FieldDecl *field,
                                            bool IsInBounds) {
   LValueBaseInfo BaseInfo = base.getBaseInfo();
@@ -5417,6 +5501,13 @@ LValue CodeGenFunction::EmitLValueForField(LValue base, const FieldDecl *field,
   // Make sure that the address is pointing to the right type.  This is critical
   // for both unions and structs.
   addr = addr.withElementType(CGM.getTypes().ConvertTypeForMem(FieldType));
+
+  // C1 subobject-bounds narrowing (Capstone, opt-in). Narrow the field
+  // capability to the field's own bounds so an over-read/-write that leaves the
+  // field but stays inside the enclosing object faults. No-op unless
+  // -fcapstone-subobject-bounds and a Capstone target; see the helper for the
+  // (conservative, v1) policy and refusals.
+  addr = maybeNarrowSubobjectBounds(*this, field, addr);
 
   if (field->hasAttr<AnnotateAttr>())
     addr = EmitFieldAnnotations(field, addr);
