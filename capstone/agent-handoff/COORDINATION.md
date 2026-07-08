@@ -31,7 +31,7 @@ if the other hits a usage limit. Keep it honest and current.
 | Agent | Current position |
 |---|---|
 | Agent-A | idle at `capstone-bootstrap` tip; no in-flight task; nothing uncommitted. |
-| Agent-B | Phase 1: investigating C1 subobject-bounds gap (read-only) at `capstone-bootstrap-b@`merged-from-`39f68da`; no build; writing `design/c1-subobject-bounds-proposal.md`; scaffolding committed, nothing else uncommitted. |
+| Agent-B | CHECKPOINT: wrote `design/c1-subobject-bounds-proposal.md` (design-only, default-off frontend policy) at `capstone-bootstrap-b@f98c96fb`; no build run; **awaiting reviewer/PI sign-off before any code or the big build**. Uncommitted WIP: the new proposal doc + this Current-position line (commit pending human ask). |
 
 ## Claimed / do-not-touch  _(hold list)_
 
