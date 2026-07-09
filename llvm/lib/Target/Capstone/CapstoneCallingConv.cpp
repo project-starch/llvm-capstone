@@ -716,6 +716,22 @@ bool llvm::CC_Capstone_FastCC(unsigned ValNo, MVT ValVT, MVT LocVT,
 
   ArrayRef<MCPhysReg> ArgGPRs = getFastCCArgGPRs(ABI);
 
+  // Capability (i128) handling, mirroring CC_Capstone.
+  // Treat i128 values as a single capability that occupies one integer argument
+  // register (or one 16-byte stack slot). We must key off ValVT, because LocVT
+  // might already be canonicalized to XLenVT during legalization/splitting.
+  if (ValVT == MVT::i128) {
+    if (MCRegister Reg = State.AllocateReg(ArgGPRs)) {
+      State.addLoc(CCValAssign::getReg(ValNo, ValVT, Reg, /*LocVT=*/ValVT,
+                                      LocInfo));
+      return false;
+    }
+    int64_t Offset = State.AllocateStack(/*Size=*/16, Align(16));
+    State.addLoc(CCValAssign::getMem(ValNo, ValVT, Offset, /*LocVT=*/ValVT,
+                                    LocInfo));
+    return false;
+  }
+
   if (LocVT.isVector()) {
     if (MCRegister Reg = allocateRVVReg(ValVT, ValNo, State, TLI)) {
       // Fixed-length vectors are located in the corresponding scalable-vector

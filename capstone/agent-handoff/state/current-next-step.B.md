@@ -4,6 +4,131 @@
 
 # Agent-B checkpoint status (2026-07-09)
 
+**Task `agentB-007` (single-domain held-cap Option B probe, steps 1–3) — DONE and
+PUSHED.** The literal row3 Option B works on the **real monitor-delivered
+capability**, at `-O0`, `-O1` and `-O2`: **24/24 probe runs green**. Landed at
+`capstone/tests/runtime-qemu/intra-domain-mrev-revoke-probe/` (+ `build-` and
+`run-intra-domain-mrev-revoke-probe.sh`). Note:
+`history/09-07-2026_23-05-00_option-b-held-cap-probe-steps-1-3.md`.
+
+- **Receive protocol (step 0), the plan's open question:** there is no `lcc` index
+  and no entry stub. `shared_region_annotated()` ends with
+  `__domcallsaves(d, CAPSTONE_DPI_REGION_SHARE, r)`, and `my_first_domain/start.S`
+  already reloads that capability as `domain_main`'s **first argument**. The
+  delivered cap *is* `domain_main`'s `arg` when `func == 1`. The existing runtime
+  probes discard it because they are **`.smode` payloads** under the `sbi.dom`
+  scaffold, where the cap lands in the scaffold's `regions[]` and S-mode uses
+  ambient `cpmp` authority — and they are built with Buildroot gcc, which has no
+  capability builtins. So the probe uses `domain_main` `.dom` images
+  (`build-domain.sh`) + `create_dom(path, NULL)`. **No shared file touched.**
+- Grant must be `REV_TRANSFERRED` + `PERM_INOUT`. `PERM_IN` (RO) would make
+  `cstighten` silently delinearise the cap, and `helper_csmrev` *asserts*
+  `CAP_TYPE_LIN` → emulator abort, not a fault.
+- **Cause is asserted and is opt-level dependent.** `-O0` spills the alias, so the
+  post-revoke deref reloads it and the tag is cleared → cause **24**. `-O1`/`-O2`
+  keep it in a register → cause **25**, self-proving. Every cause-24 expectation
+  carries the no-revoke control.
+- **Task-006 confirmed load-bearing in situ:** C1 — the `-O1/-O2` payloads would
+  not compile without it; C2 — `held_no_revoke_ok` at `-O2` never uses its `MREV`
+  result and the instruction still survives, `rd != x0`.
+- **Gap found (A's call, both outside B's lane):** after a domain revokes a
+  `REV_TRANSFERRED` region, the **host must not touch it**. The monitor keeps a
+  stale duplicate in `regions[]` (its own TODO) and drops the `cpmp` entry, so the
+  next host access misses, `swap_cpmp()` → `cap_base(regions[id])` on an untagged
+  reload → `helper_cslcc: Assertion rs1_v->tag failed` → **QEMU aborts**. Fixes:
+  `swap_cpmp` should skip untagged entries and `REV_TRANSFERRED` should clear
+  `regions[id]`; the emulator's `lcc` assert could be a clean cause-24 fault.
+- **Step 3 verdict — `MREV`-ing SQLite's own `memsys5` pointer is NOT reachable.**
+  Pointing memsys5 at a granted linear arena works (it never does `inttoptr`), but
+  `&zPool[k]` is a `cincoffset`, which inherits the pool's `rev_node_id`, type and
+  bounds; `MREV` of an allocation would sweep the whole heap, and cannot run at all
+  because the pool must be `delin`'d (C3) and `csmrev` asserts `LIN`. `SPLIT` is
+  the only fresh-node derivation and there is **no merge op**, so a coalescing
+  buddy allocator cannot be built on it. **Scaffold handed to A:**
+  `probe_linear_arena.h` — carve one `SPLIT` sub-capability per protected value out
+  of a separate arena. **Stopped before the matched-pair integration, per the task.**
+
+**Task `agentB-006` (fix C1 + C2) — DONE and PUSHED.** Both defects found in
+task 005 are closed, as two separate commits on `capstone-bootstrap-b`:
+
+- **C1** `Capstone: handle capability arguments in CC_Capstone_FastCC` — the
+  `MVT::i128` block, allocating from `getFastCCArgGPRs(ABI)`. Lit test
+  `llvm/test/CodeGen/Capstone/fastcc-capability-args.ll`. **The SQLite gate is
+  open**: a non-inlined `static` function taking a pointer now compiles at
+  `-O1`/`-O2`.
+- **C2** `Capstone: model MREV and DELIN as revocation-tree mutations` —
+  `IntrInaccessibleMemOnly` on both intrinsics (not `IntrHasSideEffects`: enough
+  to stop DCE/CSE/hoisting without making `MREV` a full memory barrier),
+  `hasSideEffects = 1` on both MachineInstrs, selection moved to
+  `INTRINSIC_W_CHAIN`, and `MREV`'s `$rd` constrained to `GPRNoX0`. Lit test
+  `llvm/test/CodeGen/Capstone/cap-mrev-delin-side-effects.ll`.
+
+The IR fix alone was **not** sufficient: `Const`/`IntrNoMem` caused the IR-level
+CSE, but `hasSideEffects = 0` on the MachineInstr caused a separate machine-level
+DCE. Both layers had to change; the lit test asserts both (`opt` + `llc` run
+lines).
+
+**New latent emulator gap (not fixed, not B's tree):** `helper_csmrev` writes
+`env->gpr[rd]` with no `rd == 0` guard, so `mrev zero, rs1` would clobber the
+hardwired-zero register. Unreachable from the compiler now that `$rd` is
+`GPRNoX0`, but a hand-written `.insn` could still hit it. Worth a guard in
+`op_helper.c` if anyone touches it.
+
+Regression: authority suite **32/32 PASS**, capstone-mrev-codegen probes **9/9
+PASS**, Capstone lit **38/38**, all with the rebuilt compiler. C3 was *not*
+changed — it is correct linear semantics, and the Option B recipe handles it.
+
+**Task `agentB-005` (intra-domain MREV codegen spike) — DONE and PUSHED.**
+The three data points A asked for:
+
+1. **Deref through a held cap after `REVOKE` → FAULTS.** Not missed, on all three
+   paths (register-held: cause 25; across the C ABI: cause 25; spilled to memory
+   and reloaded: cause 24). `-O2` asm keeps the post-revoke load based on the
+   gencap register; no ambient re-materialisation.
+2. **`MREV` RETAINS its source.** `helper_csmrev` copies `rs1`→`rd`, retypes only
+   `rd` to `REV`, and never nulls `rs1`. One linear grant ⇒ many nested
+   revocation handles.
+3. **A linear sub-cap IS `MREV`-able — via `SPLIT`.** `cssplit` gives a fresh rev
+   node, so revoking one half spares its sibling. `SHRINK`/`SHRINKTO` copy
+   `rev_node_id` and share the arena's node: not a substitute.
+
+Nine probes at `capstone/capstone-qemu/tests/capstone-mrev-codegen/`, GREEN 9/9,
+firmware-free. Submodule `e0cd45de`→`fd4bc0c0` (pushed); superproject gitlink
+bumped on `capstone-bootstrap-b`. Note
+`history/09-07-2026_20-42-10_intra-domain-mrev-codegen-spike.md`.
+
+**Three codegen defects found (B's lane).** C1 `fastcc` + capability argument
+ICEs clang (`CC_Capstone_FastCC` lacks the `MVT::i128` case) — blocked the
+*SQLite integration*, not the mechanism; C2 `cap_mrev`/`cap_delin` are marked
+pure but mutate the revocation tree (DCE + CSE observed at `-O2`); C3 passing a
+LINEAR cap by value consumes it (`movc` nulls a non-`NONLIN` source), silently.
+**C1 and C2 were fixed in task 006** (above). **C3 is not a bug** — it is correct
+linear semantics; the recipe below handles it with an explicit `delin`.
+
+**For A — Option B is a normal probe build, no firmware and no codegen fix
+needed**, provided the domain `delin`s its working alias (C3) and the arena is
+not reachable ambiently (provenance rule). Recipe:
+`arena = <linear grant>; R = mrev(arena); alias = delin(arena); … ; revoke(R)`.
+
+Open, in priority order, if B is asked to continue:
+- **A's decision on the row3 "after" fidelity** (see step-3 verdict above): copy
+  the protected value into a carved linear buffer (works today, scaffold landed),
+  or hold out for `MREV` of SQLite's own `memsys5` pointer, which needs a new
+  emulator merge op or a non-coalescing allocator. Corpus-fidelity call, A's lane.
+- **The revoked-region host landmine** (`swap_cpmp` + the `lcc` assert). The
+  monitor half is A's; the emulator half (`helper_cslcc` aborting instead of
+  faulting) is B's and is a small, contained change if A wants it.
+- **Probe cleanup (submodule, needs a gitlink bump).** Now that C1 and C2 are
+  fixed, `capstone/capstone-qemu/tests/capstone-mrev-codegen/` carries dead
+  workarounds: `touch()` in `mrev_call_alias.c`/`linear_move_consumed.c` can go
+  back to `static`, and the `KEEP()`/`OPAQUE()` macros in `mrev_codegen_probe.h`
+  are no longer needed to defeat DCE/CSE. Its README still says C1/C2 are open.
+  Left alone deliberately: task 006 was scoped to the LLVM tree, and the driver
+  already self-reports `FIXED` for C1.
+- Subobject-bounds increment 2 remains **PI-gated** (`container_of`) — do not start.
+
+## Previous (task 004)
+
 **Task `agentB-004` (durability + probes) — DONE and PUSHED; durability confirmed.**
 The four task-003 revoke probes now live in the submodule's own tree
 `capstone/capstone-qemu/tests/capstone-revoke-probes/` (sources + `run-revoke-probes.sh`

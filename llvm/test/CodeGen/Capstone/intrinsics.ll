@@ -11,10 +11,12 @@ declare i64 @llvm.capstone.cap.get.perm.p200(ptr addrspace(200))
 declare ptr addrspace(200) @llvm.capstone.cap.shrink.p200(ptr addrspace(200), i128, i128)
 declare ptr addrspace(200) @llvm.capstone.cap.tighten.p200(ptr addrspace(200), i64)
 declare ptr addrspace(200) @llvm.capstone.cap.scc.p200(ptr addrspace(200), i128)
-declare ptr addrspace(200) @llvm.capstone.cap.delin.p200(ptr addrspace(200))
 declare ptr addrspace(200) @llvm.capstone.cap.init.p200(ptr addrspace(200), i128)
-declare ptr addrspace(200) @llvm.capstone.cap.mrev.p200(ptr addrspace(200))
 declare ptr addrspace(200) @llvm.capstone.cap.seal.p200(ptr addrspace(200))
+
+; --- Revocation-tree mutations (side effects; see cap-mrev-delin-side-effects.ll) ---
+declare ptr addrspace(200) @llvm.capstone.cap.delin.p200(ptr addrspace(200))
+declare ptr addrspace(200) @llvm.capstone.cap.mrev.p200(ptr addrspace(200))
 
 ; --- Destructive manipulations (with side effects) ---
 declare ptr addrspace(200) @llvm.capstone.cap.drop.p200(ptr addrspace(200))

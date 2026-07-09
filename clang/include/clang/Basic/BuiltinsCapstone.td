@@ -181,17 +181,23 @@ def cap_shrink :     CapstoneBuiltin<"void*(void*, uint64_t, uint64_t)">;
 // Capability manipulation (1)
 def cap_tighten : CapstoneBuiltin<"void*(void*, _Constant uint64_t)">;
 def cap_scc     : CapstoneBuiltin<"void*(void*, uint64_t)">;
-def cap_delin   : CapstoneBuiltin<"void*(void*)">;
 def cap_init    : CapstoneBuiltin<"void*(void*, uint64_t)">;
 
 // Capability manipulation (2) - pure (no side-effects observable by optimizer)
-def cap_mrev   : CapstoneBuiltin<"void*(void*)">;
 def cap_seal   : CapstoneBuiltin<"void*(void*)">;
 } // Attributes = [NoThrow, Const]
 
 // Destructive capability operations: must NOT be marked Const because the
 // optimizer would be free to eliminate calls it considers "unused".
+//
+// cap_mrev and cap_delin belong here too: both mutate the revocation tree.
+// mrev allocates a node senior to its source and deepens the source, so each
+// call must yield a distinct node; delin clears the node's `linear` flag, which
+// decides whether a later revoke yields LIN or UNINIT. Marked Const, an unused
+// mrev was eliminated and two mrevs of the same capability were CSE'd into one.
 let Attributes = [NoThrow] in {
+def cap_delin  : CapstoneBuiltin<"void*(void*)">;
+def cap_mrev   : CapstoneBuiltin<"void*(void*)">;
 def cap_drop   : CapstoneBuiltin<"void*(void*)">;
 def cap_revoke : CapstoneBuiltin<"void*(void*)">;
 } // Attributes = [NoThrow]
