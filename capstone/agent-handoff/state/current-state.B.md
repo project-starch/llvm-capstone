@@ -4,6 +4,23 @@
 
 # Agent-B delta (2026-07-09)
 
+**`csrevoke` memory-alias sweep VALIDATED (task 003, outcome a).** Confirmed the
+load-bearing BORROW-REVOKE property: `csrevoke` invalidates **memory-resident**
+copies of a revoked capability, not just the register operand. Mechanism is lazy
+revocation on a shared rev-tree node; `rev_node_id` survives `cap_compress`/
+`cap_uncompress` (bits 33-63) and a reloaded revoked cap comes back untagged
+(`helper_reg_set_cap_compressed`), so its deref cause-24 faults. Proven
+firmware-free by hand-minting a LINEAR cap via `csdebuggencap` (`.insn`) +
+`mrev`/`revoke` builtins; 4 QEMU probes (mem-alias FAULT, reg-alias FAULT,
+unrelated OK 0x22130033, mem-control OK 0x2214005E). **No code change** (sweep
+already works). The row 3/13/18/19 revoke vehicle is proven at the emulator layer;
+the only remaining gate is A's `start.S` linear authority, which must route the
+region **through the tracked linear cap** (not an SBI-query mapping — the earlier
+R-probe "NO-TRAP-GAP" was that orthogonal provenance issue). Note:
+`history/09-07-2026_15-33-23_csrevoke-memory-alias-sweep-validated.md`.
+
+---
+
 **`csdrop` (DROP) implemented in `capstone-qemu`** — the LINEAR / Stage-2 row-11
 QEMU-lane unblock (task `agentB-002`). The emulator previously had no `csdrop`, so
 `__builtin_capstone_cap_drop`'s `drop` mnemonic decoded as an illegal instruction;

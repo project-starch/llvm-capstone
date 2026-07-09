@@ -2,22 +2,29 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-next-step.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-next-step.md` at Agent-B bring-up (2026-07-08).
 
-# Agent-B checkpoint status (2026-07-09) — `csdrop` shipped
+# Agent-B checkpoint status (2026-07-09)
 
-Task `agentB-002` (implement `csdrop`/DROP in `capstone-qemu`, the LINEAR row-11
-QEMU unblock) is **DONE + validated**, committed on `capstone-bootstrap-b`
-(submodule `cf541a1f`→`2e6a67d1`; superproject gitlink bumped). See
+**Task `agentB-003` (validate csrevoke memory-alias sweep) — DONE, outcome (a).**
+`csrevoke` DOES sweep memory-resident aliases; the BORROW-REVOKE (rows 3/13/18/19)
+revoke vehicle is proven at the QEMU layer. No `capstone-qemu` code change. Note:
+`history/09-07-2026_15-33-23_csrevoke-memory-alias-sweep-validated.md`. Committed on
+`capstone-bootstrap-b` (docs only).
+
+**Task `agentB-002` (implement `csdrop`/DROP) — DONE + validated.** Submodule
+`cf541a1f`→`2e6a67d1`; superproject gitlink bumped. Note:
 `history/09-07-2026_13-28-31_csdrop-implemented-row11-qemu-unblock.md`.
 
-**Next-step options for Agent-B:**
-- Await go-ahead to **push** (superproject `capstone-bootstrap-b` + submodule
-  branch to `project-starch/capstone-qemu`) so A can integrate.
-- Row-11 full domain before→after demo is **gated on A** (intra-domain linear
-  authority via sign-off-gated `start.S`/firmware). Coordinate before starting.
-- Optional additive follow-up: promote the scratchpad `csdrop_{live,use_after}`
-  probes into `capstone/tests/capstone-authority/domains/` + oracle (cross-lane
-  add to A's dir — do only with the same discipline as the C1 v1 `subobjfield_*`
-  probes).
+**Open / next-step options for Agent-B:**
+- **PUSH still pending.** Superproject `capstone-bootstrap-b` is on origin (human
+  pushed a0fa5ef9). BUT the task-002 submodule commit `2e6a67d1` is **NOT** on
+  `project-starch/capstone-qemu` — A cannot resolve the gitlink until it is pushed
+  (`git -C capstone/capstone-qemu push -u origin capstone-bootstrap-b`). Flag/await
+  go-ahead. Then push the new task-003 docs commit on `capstone-bootstrap-b`.
+- Rows 3/13/18/19 + row 11 full domain demos are **gated on A** (intra-domain
+  linear authority via `start.S`/firmware). For revoke rows, A must route the
+  region **through the tracked linear cap**, not an SBI-query mapping.
+- Optional cross-lane follow-up: promote the scratchpad `revoke_*` and
+  `csdrop_*` probes into `capstone/tests/capstone-authority/` + oracle (A's dir).
 - Subobject-bounds **increment 2** stays PI-gated (container_of policy) — do not start.
 
 ---
