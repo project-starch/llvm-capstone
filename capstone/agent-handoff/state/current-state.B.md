@@ -4,6 +4,24 @@
 
 # Agent-B delta (2026-07-09)
 
+**Revoke probes landed in-submodule + csdrop commit durability (task 004).** The
+four task-003 revoke probes (`revoke_mem_alias`/`reg_alias`/`unrelated_ok`/
+`mem_control` + `csrevoke_probe.h`) now live in the capstone-qemu submodule's own
+test tree (`tests/capstone-revoke-probes/`) with a `run-revoke-probes.sh` driver
+(reuses the sibling `capstone/tests/runtime-qemu` harness) and a README recording
+the mechanism, the reproduction table, and the **provenance constraint** (a region
+reached via an SBI `REGION_QUERY` mapping is not a tracked descendant of the
+revocable cap, so it must be delivered through the tracked linear cap). Confirmed
+on binary `2e6a67d1`: mem-alias → cause-24 (reload untags), reg-alias → cause-25
+(live rev-node invalid), unrelated OK 0x22130033, control OK 0x2214005E. **Durability:**
+the csdrop submodule commit `2e6a67d1` was already pushed to
+`project-starch/capstone-qemu` (remote-tracking reflog shows `update by push`); the
+NEW probe commit needs the operator to push the submodule branch again (no push
+creds in the non-interactive shell). Submodule probe commit `e0cd45de` (on top of
+`2e6a67d1`); superproject gitlink bumped `2e6a67d1`→`e0cd45de`. Driver green 4/4.
+
+---
+
 **`csrevoke` memory-alias sweep VALIDATED (task 003, outcome a).** Confirmed the
 load-bearing BORROW-REVOKE property: `csrevoke` invalidates **memory-resident**
 copies of a revoked capability, not just the register operand. Mechanism is lazy
