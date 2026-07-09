@@ -133,3 +133,69 @@ So the row3 "after" forks:
 SQLite" objections immediately and is the paper's near-term artifact), and record
 Option B as a follow-on gated on the same firmware as row 11. Awaiting the pick
 before the heavy Capstone build + serialized QEMU run.
+
+## Step-2 finding SUPERSEDED (2026-07-09, A after B task-007) — Option B is UNBLOCKED
+
+The step-2 claim that Option B "needs the gated `start.S`/firmware change" is
+**wrong**, and B's task-007 held-cap probe proves it (24/24 green,
+`history/09-07-2026_23-05-00_option-b-held-cap-probe-steps-1-3.md`). The domain
+does **not** need to fabricate intra-domain linear authority from `sp`/`gp`:
+
+- The monitor already **delivers** a linear region capability into the domain —
+  `shared_region_annotated()` ends in `__domcallsaves(d, REGION_SHARE, r)`, and
+  `my_first_domain/start.S` surfaces `r` as `domain_main`'s first (capability)
+  argument. A `REV_TRANSFERRED` grant hands the domain **full** authority with no
+  monitor-retained handle, so the domain can `MREV` it and `REVOKE` its own
+  junior alias entirely intra-domain. **No `start.S`/monitor edit.**
+- So row3 collapses to **one** domain with a **real** intra-domain revoke — strictly
+  better than Option A's two-domain lender/borrower. Steps 1–2 of the held-cap
+  plan (`plans/sqlite-row3-option-b-held-cap-probe-plan.md`) are DONE at
+  `-O0/-O1/-O2` on the C1/C2-fixed compiler.
+
+**The residual fidelity gap moved, it did not close.** B's memsys5 verdict: you
+can point SQLite's heap at the granted linear arena, but its allocations are
+**not** `MREV`-able — `&zPool[i]` lowers to `cincoffset`, which inherits the
+pool's `rev_node_id`/type/bounds, so an allocation is not a distinct capability
+to the revocation tree; and `SPLIT` (the only fresh-node op) is one-way with no
+merge, while memsys5 coalesces. So the two buildable shapes for the "after" are:
+
+- **B1 — pragmatic single-domain (buildable now).** Wrap `sqlite3_column_name`
+  to **carve a `SPLIT` sub-cap** from the granted arena, copy the real column-name
+  bytes into it, hand that alias to the caller; `REVOKE` it in the `finalize`
+  wrapper. Post-finalize `name[0]` faults. Real SQLite, real value, revoke at
+  finalize, one domain, real intra-domain cap fault. Residual: the revoked pointer
+  is a **carved copy**, not SQLite's own internal heap pointer.
+- **B2 — literal matched pair (needs emulator work, NOT firmware).** `MREV`
+  SQLite's **own** returned `column_name` pointer. Requires memsys5 allocations to
+  be distinct revocation nodes: either a new emulator **merge/unsplit** op (so a
+  `SPLIT`-per-allocation coalescing allocator is possible), or a **non-coalescing**
+  linear allocator that hands out `SPLIT`-derived allocations. This is emulator +
+  allocator work (B's lane), no longer the row-11 firmware wall.
+
+So the old row3 fork (Option A two-domain vs Option B firmware-gated) is replaced
+by: **B1 now (A builds), B2 as the deep follow-on (B's lane).** The Q1/PI bar
+decides whether B1's carved-copy fidelity is the acceptable row3 "after" or
+whether B2 is required for the headline.
+
+### B1 built + validated (2026-07-09, A)
+
+Landed: `benchmarks/sqlite/sqlite_row3_domain.c` (real-SQLite domain, one address
+space), `sqlite_host_row3.c` (shares the arena as region #2, REV_TRANSFERRED),
+`run-sqlite-row3.sh`; `build-sqlite-{capstone,host}.sh` parameterised
+(`DOMAIN_SRC`/`HOST_SRC`). **GREEN at `-O0`** (QEMU): fault cause 24 + no-revoke
+control returns reading colname `'c'`. The self-proving cause-25 path is proven in
+the **`-O2` asm** (post-finalize `lbu` reads through the register-held delin'd
+alias `s2`, only the MREV *handle* reloaded, no pointer re-materialisation), but
+the `-O1/-O2` **QEMU boot is blocked** by a domain-TU codegen bug
+(`helper_csdelin: rd_v->tag` — a `.insn`-split cap loses its tag across a call
+spill at `-O1+`; aborts the no-revoke control too, so NOT the mechanism). That
+robustness fix is B's lane (task-008, same cap-split territory). See
+`history/09-07-2026_23-15-00_row3-b1-matched-pair.md`.
+
+**Known codegen limitation (not row3-specific, candidate B item):** the SQLite
+amalgamation does **not** compile at `-O2` on this backend — `sqlite3_str_vappendf`
+produces an `i128 CapstoneISD::SELECT_CC` (a pointer-select on an i64 compare) that
+ISel cannot select (`fatal error: Cannot select`). The engine is therefore built
+at `-O0`; only the domain TU is varied for the fault-cause evidence (which is where
+the held alias lives, so it is sufficient). Worth an ISel pattern for `SELECT_CC`
+with an i128 result if `-O2` SQLite is ever wanted.
