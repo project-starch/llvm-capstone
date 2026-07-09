@@ -13,12 +13,12 @@ the mechanism, the reproduction table, and the **provenance constraint** (a regi
 reached via an SBI `REGION_QUERY` mapping is not a tracked descendant of the
 revocable cap, so it must be delivered through the tracked linear cap). Confirmed
 on binary `2e6a67d1`: mem-alias → cause-24 (reload untags), reg-alias → cause-25
-(live rev-node invalid), unrelated OK 0x22130033, control OK 0x2214005E. **Durability:**
-the csdrop submodule commit `2e6a67d1` was already pushed to
-`project-starch/capstone-qemu` (remote-tracking reflog shows `update by push`); the
-NEW probe commit needs the operator to push the submodule branch again (no push
-creds in the non-interactive shell). Submodule probe commit `e0cd45de` (on top of
-`2e6a67d1`); superproject gitlink bumped `2e6a67d1`→`e0cd45de`. Driver green 4/4.
+(live rev-node invalid), unrelated OK 0x22130033, control OK 0x2214005E. Submodule
+probe commit `e0cd45de` (on top of `2e6a67d1`); superproject gitlink bumped
+`2e6a67d1`→`e0cd45de`. Driver green 4/4. **Durability CONFIRMED:** both are on the
+shared remotes (superproject `d2e9dd43`, `capstone-qemu` `e0cd45de`), verified by a
+fresh clone outside this working clone; nothing outstanding to push. Agent-B now
+has its own PAT and pushes its own branches (`capstone-bootstrap-b` only).
 
 ---
 

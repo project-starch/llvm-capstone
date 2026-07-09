@@ -4,20 +4,24 @@
 
 # Agent-B checkpoint status (2026-07-09)
 
-**Task `agentB-004` (durability + probes) — DONE, one operator push pending.**
+**Task `agentB-004` (durability + probes) — DONE and PUSHED; durability confirmed.**
 The four task-003 revoke probes now live in the submodule's own tree
 `capstone/capstone-qemu/tests/capstone-revoke-probes/` (sources + `run-revoke-probes.sh`
 + README). Submodule commit `e0cd45de` (on `2e6a67d1`); superproject gitlink bumped
-`2e6a67d1`→`e0cd45de`. Driver GREEN 4/4. **Durability:** csdrop `2e6a67d1` is already
-on `project-starch/capstone-qemu` (submodule reflog `update by push`); the new
-`e0cd45de` needs an operator push (no push creds in this session). Note:
+`2e6a67d1`→`e0cd45de`. Driver GREEN 4/4. **Durability CONFIRMED (2026-07-09):** both
+are on the shared remotes — `origin/capstone-bootstrap-b` is `d2e9dd43`
+(superproject) and `e0cd45de` (`capstone-qemu`). Verified by a fresh clone of
+`project-starch/capstone-qemu` outside this working clone: tip `e0cd45de`, parent
+`2e6a67d1`, csdrop in `insn32.decode`/`helper.h`/`op_helper.c`, all 7 probe files
+present. A can `git submodule update` and integrate csdrop + probes into canonical;
+**no operator push is outstanding.** Note:
 `history/09-07-2026_16-09-42_task004-revoke-probes-landed-and-submodule-durability.md`.
-Operator ask (via `! `):
-```
-git -C capstone/capstone-qemu push origin capstone-bootstrap-b   # e0cd45de -> shared submodule remote
-git push origin capstone-bootstrap-b                             # superproject gitlink bump
-```
-After that, A can `git submodule update` and integrate csdrop + probes into canonical.
+
+Agent-B now holds its own fine-grained PAT (`GIT_CONFIG_GLOBAL=~/.agent-creds/gitconfig-b`
+via the `claude-b` wrapper) and pushes superproject **and** submodule branches
+directly — no operator hand-off. Discipline: push **only** `capstone-bootstrap-b`
+(never `capstone-bootstrap`/`main`); push the submodule branch **before** the
+superproject gitlink bump so A never sees a dangling gitlink.
 
 ---
 
@@ -32,10 +36,9 @@ revoke vehicle is proven at the QEMU layer. No `capstone-qemu` code change. Note
 `history/09-07-2026_13-28-31_csdrop-implemented-row11-qemu-unblock.md`.
 
 **Open / next-step options for Agent-B:**
-- **PUSH: one operator push left (see task-004 block above).** Task-002 submodule
-  commit `2e6a67d1` is already on `project-starch/capstone-qemu` (reflog
-  `update by push`). Remaining: push the new submodule commit `e0cd45de` and the
-  superproject `capstone-bootstrap-b` tip. No push creds in this session.
+- **PUSH: nothing outstanding.** Tasks 002/003/004 are all on
+  `origin/capstone-bootstrap-b` (superproject `d2e9dd43`, `capstone-qemu`
+  `e0cd45de`); durability verified by fresh clone. B pushes its own branches now.
 - Rows 3/13/18/19 + row 11 full domain demos are **gated on A** (intra-domain
   linear authority via `start.S`/firmware). For revoke rows, A must route the
   region **through the tracked linear cap**, not an SBI-query mapping.
