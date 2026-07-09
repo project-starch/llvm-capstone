@@ -4,6 +4,50 @@
 
 # Agent-B checkpoint status (2026-07-09)
 
+**Task `agentB-007` (single-domain held-cap Option B probe, steps 1–3) — DONE and
+PUSHED.** The literal row3 Option B works on the **real monitor-delivered
+capability**, at `-O0`, `-O1` and `-O2`: **24/24 probe runs green**. Landed at
+`capstone/tests/runtime-qemu/intra-domain-mrev-revoke-probe/` (+ `build-` and
+`run-intra-domain-mrev-revoke-probe.sh`). Note:
+`history/09-07-2026_23-05-00_option-b-held-cap-probe-steps-1-3.md`.
+
+- **Receive protocol (step 0), the plan's open question:** there is no `lcc` index
+  and no entry stub. `shared_region_annotated()` ends with
+  `__domcallsaves(d, CAPSTONE_DPI_REGION_SHARE, r)`, and `my_first_domain/start.S`
+  already reloads that capability as `domain_main`'s **first argument**. The
+  delivered cap *is* `domain_main`'s `arg` when `func == 1`. The existing runtime
+  probes discard it because they are **`.smode` payloads** under the `sbi.dom`
+  scaffold, where the cap lands in the scaffold's `regions[]` and S-mode uses
+  ambient `cpmp` authority — and they are built with Buildroot gcc, which has no
+  capability builtins. So the probe uses `domain_main` `.dom` images
+  (`build-domain.sh`) + `create_dom(path, NULL)`. **No shared file touched.**
+- Grant must be `REV_TRANSFERRED` + `PERM_INOUT`. `PERM_IN` (RO) would make
+  `cstighten` silently delinearise the cap, and `helper_csmrev` *asserts*
+  `CAP_TYPE_LIN` → emulator abort, not a fault.
+- **Cause is asserted and is opt-level dependent.** `-O0` spills the alias, so the
+  post-revoke deref reloads it and the tag is cleared → cause **24**. `-O1`/`-O2`
+  keep it in a register → cause **25**, self-proving. Every cause-24 expectation
+  carries the no-revoke control.
+- **Task-006 confirmed load-bearing in situ:** C1 — the `-O1/-O2` payloads would
+  not compile without it; C2 — `held_no_revoke_ok` at `-O2` never uses its `MREV`
+  result and the instruction still survives, `rd != x0`.
+- **Gap found (A's call, both outside B's lane):** after a domain revokes a
+  `REV_TRANSFERRED` region, the **host must not touch it**. The monitor keeps a
+  stale duplicate in `regions[]` (its own TODO) and drops the `cpmp` entry, so the
+  next host access misses, `swap_cpmp()` → `cap_base(regions[id])` on an untagged
+  reload → `helper_cslcc: Assertion rs1_v->tag failed` → **QEMU aborts**. Fixes:
+  `swap_cpmp` should skip untagged entries and `REV_TRANSFERRED` should clear
+  `regions[id]`; the emulator's `lcc` assert could be a clean cause-24 fault.
+- **Step 3 verdict — `MREV`-ing SQLite's own `memsys5` pointer is NOT reachable.**
+  Pointing memsys5 at a granted linear arena works (it never does `inttoptr`), but
+  `&zPool[k]` is a `cincoffset`, which inherits the pool's `rev_node_id`, type and
+  bounds; `MREV` of an allocation would sweep the whole heap, and cannot run at all
+  because the pool must be `delin`'d (C3) and `csmrev` asserts `LIN`. `SPLIT` is
+  the only fresh-node derivation and there is **no merge op**, so a coalescing
+  buddy allocator cannot be built on it. **Scaffold handed to A:**
+  `probe_linear_arena.h` — carve one `SPLIT` sub-capability per protected value out
+  of a separate arena. **Stopped before the matched-pair integration, per the task.**
+
 **Task `agentB-006` (fix C1 + C2) — DONE and PUSHED.** Both defects found in
 task 005 are closed, as two separate commits on `capstone-bootstrap-b`:
 
@@ -67,6 +111,13 @@ not reachable ambiently (provenance rule). Recipe:
 `arena = <linear grant>; R = mrev(arena); alias = delin(arena); … ; revoke(R)`.
 
 Open, in priority order, if B is asked to continue:
+- **A's decision on the row3 "after" fidelity** (see step-3 verdict above): copy
+  the protected value into a carved linear buffer (works today, scaffold landed),
+  or hold out for `MREV` of SQLite's own `memsys5` pointer, which needs a new
+  emulator merge op or a non-coalescing allocator. Corpus-fidelity call, A's lane.
+- **The revoked-region host landmine** (`swap_cpmp` + the `lcc` assert). The
+  monitor half is A's; the emulator half (`helper_cslcc` aborting instead of
+  faulting) is B's and is a small, contained change if A wants it.
 - **Probe cleanup (submodule, needs a gitlink bump).** Now that C1 and C2 are
   fixed, `capstone/capstone-qemu/tests/capstone-mrev-codegen/` carries dead
   workarounds: `touch()` in `mrev_call_alias.c`/`linear_move_consumed.c` can go

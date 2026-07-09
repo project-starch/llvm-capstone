@@ -4,6 +4,35 @@
 
 # Agent-B delta (2026-07-09)
 
+**Row3 Option B proven on the real delivery path (task 007).** One domain, a real
+monitor-granted `REV_TRANSFERRED` linear region, an intra-domain `MREV` →
+`REVOKE`, and the cached alias faults. 8 probes × `-O0`/`-O1`/`-O2`, **24/24
+green**, at `capstone/tests/runtime-qemu/intra-domain-mrev-revoke-probe/`. This is
+the faithful single-domain artifact the Q1 fork needs: (a) real monitor-delivered
+linear cap, (b) intra-domain instruction-level revoke, (c) cached alias faults
+with the **asserted** cause, (d) provenance enforced — the arena has no ambient
+second path (`held_ambient_miss` proves a forged address traps).
+
+Three things A must read before integrating:
+
+1. **Receive protocol:** no entry-stub glue, no `lcc` index. The delivered
+   capability *is* `domain_main`'s first argument on the `REGION_SHARE` entry;
+   `my_first_domain/start.S` already surfaces it. The existing runtime probes miss
+   it only because they are `.smode` payloads under the `sbi.dom` scaffold (cap
+   lands in the scaffold's `regions[]`; S-mode uses ambient `cpmp`) built with
+   Buildroot gcc, which has no capability builtins. Use `.dom` + `create_dom(p, NULL)`.
+2. **After a domain revokes a granted region, the host must not touch it** —
+   `swap_cpmp()` reloads the monitor's stale `regions[]` duplicate untagged and
+   `cap_base()`'s `lcc` **aborts QEMU**. Robustness gap, not a mechanism failure;
+   fixes are in the monitor (A) and the emulator (B), neither applied.
+3. **`MREV` of SQLite's own `memsys5` pointer is not reachable** (step-3 verdict).
+   Pointing memsys5 at a granted linear arena works; revoking its allocations does
+   not, because `&zPool[k]` is a `cincoffset` that inherits the pool's rev node,
+   type and bounds, and `SPLIT` — the only fresh-node derivation — has no inverse.
+   Scaffold for the pragmatic path: `probe_linear_arena.h`.
+
+No submodule change, no gitlink bump, no shared file touched.
+
 **Codegen defects C1 + C2 fixed (task 006).** Two separate commits on
 `capstone-bootstrap-b`, LLVM/clang tree only — no submodule change, no gitlink
 bump.
