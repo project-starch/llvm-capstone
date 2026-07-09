@@ -2,7 +2,43 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-next-step.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-next-step.md` at Agent-B bring-up (2026-07-08).
 
-# Agent-B checkpoint status (2026-07-09)
+# Agent-B checkpoint status (2026-07-10)
+
+**Task `agentB-009` (close corpus rows 11 + 14) — DONE and PUSHED. The SQLite
+Stage-2 corpus is complete: 17/17 in-scope rows validated on RTL.** 7 probes ×
+`-O0`/`-O1`/`-O2`, **21/21 green**, at
+`capstone/tests/runtime-qemu/linear-uninit-corpus-probe/` (+ `build-` and
+`run-linear-uninit-corpus-probe.sh`). Note:
+`history/10-07-2026_02-30-00_linear-uninit-rows-closed.md`, which supersedes the
+2026-07-08 deferral note; `stage2-mapping.md`'s validation table is updated.
+
+- **Row 14 (UNINIT) — checkpoint 14.** Derivation is intra-domain and needs no
+  monitor op: `revoke(mrev(arena))` on a lineage that was **never `delin`'d** returns
+  a `CAP_TYPE_UNINIT` handle (cursor at end). `cap_rev_tree_revoke()` returns
+  `retain_data`; `helper_csrevoke` (op_helper.c:709) makes it LIN when every revoked
+  node was non-linear, UNINIT otherwise. Pre-`csinit` read → FAULT **cause 26**;
+  `csinit` then reads/writes the same bytes through the same handle.
+- **Row 14 needed an emulator fix, and it is load-bearing.**
+  `_helper_access_with_cap` never checked the capability type, so an UNINIT cap was
+  denied only by bounds (cursor at end) — **a negative, in-bounds offset read the
+  stale byte.** Spec: no load form permits type 3 (`Unexpected capability type (26)`);
+  stores are permitted and left untouched. Proven by rebuilding without the check:
+  `uninit_negative_offset_fault` returned `0x14110000` instead of faulting.
+- **Row 11 (LINEAR) — checkpoint 11.** `csdrop` consumes the carved (`cssplit`)
+  statement handle; a later deref → FAULT cause 24, and a second `drop` → FAULT
+  cause 24 inside `helper_csdrop`. `linear_no_drop_ok` is the control for both.
+  `csdrop` clears a register; it does **not** revoke a lineage or free memory —
+  `linear_drop_sibling_ok` shows the connection survives and the host mmap sees the
+  post-drop write.
+- **No expected cause moves with `-O`** (unlike the held-cap probe): the UNINIT
+  handle keeps its tag and a valid rev node; the dropped handle stays untagged
+  through a spill/reload.
+- Submodule `capstone-qemu` bumped: the UNINIT-load check + a `DROP requires
+  capability` diagnostic in `helper_csdrop`. **No** `start.S`, monitor, `capstone-c`,
+  buildroot or LLVM change.
+- **Still open, still A's call:** the revoked-region host landmine from task 007
+  (`swap_cpmp()` → `cap_base(regions[id])` on an untagged reload aborts QEMU). Every
+  row-14 probe revokes its arena, so the controller's `read-arena` is opt-in.
 
 **Task `agentB-007` (single-domain held-cap Option B probe, steps 1–3) — DONE and
 PUSHED.** The literal row3 Option B works on the **real monitor-delivered
