@@ -2,7 +2,27 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-next-step.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-next-step.md` at Agent-B bring-up (2026-07-08).
 
-# Current recommended next step
+# Agent-B checkpoint status (2026-07-09) — `csdrop` shipped
+
+Task `agentB-002` (implement `csdrop`/DROP in `capstone-qemu`, the LINEAR row-11
+QEMU unblock) is **DONE + validated**, committed on `capstone-bootstrap-b`
+(submodule `cf541a1f`→`2e6a67d1`; superproject gitlink bumped). See
+`history/09-07-2026_13-28-31_csdrop-implemented-row11-qemu-unblock.md`.
+
+**Next-step options for Agent-B:**
+- Await go-ahead to **push** (superproject `capstone-bootstrap-b` + submodule
+  branch to `project-starch/capstone-qemu`) so A can integrate.
+- Row-11 full domain before→after demo is **gated on A** (intra-domain linear
+  authority via sign-off-gated `start.S`/firmware). Coordinate before starting.
+- Optional additive follow-up: promote the scratchpad `csdrop_{live,use_after}`
+  probes into `capstone/tests/capstone-authority/domains/` + oracle (cross-lane
+  add to A's dir — do only with the same discipline as the C1 v1 `subobjfield_*`
+  probes).
+- Subobject-bounds **increment 2** stays PI-gated (container_of policy) — do not start.
+
+---
+
+# Current recommended next step (inherited base)
 
 ## Active track: capability granularity + provenance (the paper, C1/C2)
 

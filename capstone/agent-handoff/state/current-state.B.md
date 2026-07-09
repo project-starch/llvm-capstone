@@ -2,6 +2,22 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-state.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-state.md` at Agent-B bring-up (2026-07-08).
 
+# Agent-B delta (2026-07-09)
+
+**`csdrop` (DROP) implemented in `capstone-qemu`** — the LINEAR / Stage-2 row-11
+QEMU-lane unblock (task `agentB-002`). The emulator previously had no `csdrop`, so
+`__builtin_capstone_cap_drop`'s `drop` mnemonic decoded as an illegal instruction;
+now it invalidates a capability (clears rs1's tag), so a later use faults cleanly
+(cause 24, "Cap mem access requires capability") rather than trapping as illegal.
+Spec-faithful and type-agnostic (DROP has no LIN-only restriction). Submodule bump
+`cf541a1f`→`2e6a67d1`; superproject gitlink bumped on `capstone-bootstrap-b`.
+Validated under QEMU (control ok + fault cause-24), no regressions. Full note:
+`history/09-07-2026_13-28-31_csdrop-implemented-row11-qemu-unblock.md`. Row-11 full
+domain demo still needs A's gated linear-authority `start.S`. (Prior: C1 subobject
+v1 arrays-only was merged to canonical by A, ff to `c4758de`.)
+
+---
+
 # Current Capstone state
 
 Minimal snapshot. Read first in every session.
