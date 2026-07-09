@@ -2512,6 +2512,30 @@ def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPR:$rd),
 // Capability Manipulation Instructions (2)
 //===----------------------------------------------------------------------===//
 
+// PseudoCapGlobalBase: materialise a gp-derived, NON-LINEAR capability for a
+// global's address. Expands (post-RA) to exactly:
+//
+//     cincoffset $rd, gp, $rs1     // $rs1 = the symbol offset, a plain scalar
+//     delin      $rd               // the derived capability is LINEAR; make it
+//                                  // NONLIN so it may be copied
+//
+// This has to be ONE instruction, not two. The capability that cincoffset
+// produces is LINEAR, and the ISA CONSUMES a non-NONLIN source on copy: `movc
+// rd, rs1` nulls rs1 (task-005 finding C3). DELIN is a tied in-place op, so
+// every DELIN of a value forces the register allocator to insert that copy. If
+// the LINEAR cincoffset result is ever left with more than one use -- which is
+// exactly what happens once MachineCSE hoists the (pure) cincoffset out of two
+// branches while leaving one (side-effecting) DELIN behind in each -- the first
+// copy nulls the register and every later use reads a null capability.
+//
+// Keeping the pair inside one pseudo means no LINEAR value is ever an SSA value
+// with multiple uses: the pseudo's operand is a scalar offset and its result is
+// already NONLIN, hence freely copyable and freely CSE-able. See
+// CapstoneISelDAGToDAG.cpp selectLGA and
+// llvm/test/CodeGen/Capstone/global-base-nonlinear.ll.
+let hasSideEffects = 0, mayLoad = 0, mayStore = 0, Size = 8, Uses = [X3] in
+def PseudoCapGlobalBase : Pseudo<(outs GPR:$rd), (ins GPR:$rs1), []>;
+
 // MREV: Create revocation capability
 // hasSideEffects: allocates a revocation-tree node and deepens the source's, so
 // two MREVs of the same register are not interchangeable with one.
