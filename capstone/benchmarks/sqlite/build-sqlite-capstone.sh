@@ -12,6 +12,11 @@ PATCHED_SQLITE=${PATCHED_SQLITE:-$OUT_DIR/sqlite3-capstone.c}
 OUT_DOM=${OUT_DOM:-$OUT_DIR/sqlite_memory_capstone.dom}
 DOMAIN_OPT_LEVEL=${DOMAIN_OPT_LEVEL:--O0}
 SQLITE_OPT_LEVEL=${SQLITE_OPT_LEVEL:--O0}
+# The domain payload TU (the run_* driver). Default = the sqlite-memory smoke
+# domain; the row3 matched-pair runner overrides it. DOMAIN_EXTRA_FLAGS lets a
+# caller pass e.g. -DROW3_NO_REVOKE to build the control variant.
+DOMAIN_SRC=${DOMAIN_SRC:-$SCRIPT_DIR/sqlite_capstone_domain.c}
+DOMAIN_EXTRA_FLAGS=${DOMAIN_EXTRA_FLAGS:-}
 
 CLANG=${CLANG:-$CAPSTONE_CLANG}
 LD_LLD=${LD_LLD:-$CAPSTONE_LD_LLD}
@@ -214,8 +219,8 @@ COMMON_FLAGS=(
 "$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" \
   -c "$ADAPTED_DIR/capstone_sqlite_os.c" -o "$OBJ_DIR/sqlite_os.o"
 
-"$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" \
-  -c "$SCRIPT_DIR/sqlite_capstone_domain.c" -o "$OBJ_DIR/domain.o"
+"$CLANG" "${COMMON_FLAGS[@]}" "$DOMAIN_OPT_LEVEL" $DOMAIN_EXTRA_FLAGS \
+  -c "$DOMAIN_SRC" -o "$OBJ_DIR/domain.o"
 
 BUILTIN_OBJECTS=()
 for builtin in adddf3 comparedf2 fixdfdi fixdfsi fixunsdfdi fixunsdfsi \
