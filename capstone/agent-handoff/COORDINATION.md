@@ -38,6 +38,7 @@ if the other hits a usage limit. Keep it honest and current.
 | Path or submodule | Held by | Until |
 |---|---|---|
 | `capstone/agent-handoff/state/current-state.md` + `current-next-step.md` | Agent-A (base files) | ongoing — Agent-B uses `*.B.md` |
+| **QEMU `rootfs.ext2` write-lock** (one guest boot at a time across A+B) | **Agent-B** — task 007, held-cap probe boots | **HELD** since 2026-07-09 — A: hold off QEMU runs until this row says RELEASED |
 | _add entries as you claim exclusive edit rights_ | | |
 
 ## Submodule-bump log  _(append after every gitlink change — this is where conflicts hide)_
