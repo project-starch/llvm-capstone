@@ -4,6 +4,36 @@
 
 # Agent-B checkpoint status (2026-07-09)
 
+**Task `agentB-006` (fix C1 + C2) — DONE and PUSHED.** Both defects found in
+task 005 are closed, as two separate commits on `capstone-bootstrap-b`:
+
+- **C1** `Capstone: handle capability arguments in CC_Capstone_FastCC` — the
+  `MVT::i128` block, allocating from `getFastCCArgGPRs(ABI)`. Lit test
+  `llvm/test/CodeGen/Capstone/fastcc-capability-args.ll`. **The SQLite gate is
+  open**: a non-inlined `static` function taking a pointer now compiles at
+  `-O1`/`-O2`.
+- **C2** `Capstone: model MREV and DELIN as revocation-tree mutations` —
+  `IntrInaccessibleMemOnly` on both intrinsics (not `IntrHasSideEffects`: enough
+  to stop DCE/CSE/hoisting without making `MREV` a full memory barrier),
+  `hasSideEffects = 1` on both MachineInstrs, selection moved to
+  `INTRINSIC_W_CHAIN`, and `MREV`'s `$rd` constrained to `GPRNoX0`. Lit test
+  `llvm/test/CodeGen/Capstone/cap-mrev-delin-side-effects.ll`.
+
+The IR fix alone was **not** sufficient: `Const`/`IntrNoMem` caused the IR-level
+CSE, but `hasSideEffects = 0` on the MachineInstr caused a separate machine-level
+DCE. Both layers had to change; the lit test asserts both (`opt` + `llc` run
+lines).
+
+**New latent emulator gap (not fixed, not B's tree):** `helper_csmrev` writes
+`env->gpr[rd]` with no `rd == 0` guard, so `mrev zero, rs1` would clobber the
+hardwired-zero register. Unreachable from the compiler now that `$rd` is
+`GPRNoX0`, but a hand-written `.insn` could still hit it. Worth a guard in
+`op_helper.c` if anyone touches it.
+
+Regression: authority suite **32/32 PASS**, capstone-mrev-codegen probes **9/9
+PASS**, Capstone lit **38/38**, all with the rebuilt compiler. C3 was *not*
+changed — it is correct linear semantics, and the Option B recipe handles it.
+
 **Task `agentB-005` (intra-domain MREV codegen spike) — DONE and PUSHED.**
 The three data points A asked for:
 
@@ -23,12 +53,13 @@ firmware-free. Submodule `e0cd45de`→`fd4bc0c0` (pushed); superproject gitlink
 bumped on `capstone-bootstrap-b`. Note
 `history/09-07-2026_20-42-10_intra-domain-mrev-codegen-spike.md`.
 
-**Three codegen defects found (B's lane, reported not fixed):** C1 `fastcc` +
-capability argument ICEs clang (`CC_Capstone_FastCC` lacks the `MVT::i128` case)
-— blocks the *SQLite integration*, not the mechanism; C2 `cap_mrev`/`cap_delin`
-are marked pure but mutate the revocation tree (DCE + CSE observed at `-O2`);
-C3 passing a LINEAR cap by value consumes it (`movc` nulls a non-`NONLIN`
-source), silently.
+**Three codegen defects found (B's lane).** C1 `fastcc` + capability argument
+ICEs clang (`CC_Capstone_FastCC` lacks the `MVT::i128` case) — blocked the
+*SQLite integration*, not the mechanism; C2 `cap_mrev`/`cap_delin` are marked
+pure but mutate the revocation tree (DCE + CSE observed at `-O2`); C3 passing a
+LINEAR cap by value consumes it (`movc` nulls a non-`NONLIN` source), silently.
+**C1 and C2 were fixed in task 006** (above). **C3 is not a bug** — it is correct
+linear semantics; the recipe below handles it with an explicit `delin`.
 
 **For A — Option B is a normal probe build, no firmware and no codegen fix
 needed**, provided the domain `delin`s its working alias (C3) and the arena is
@@ -36,13 +67,13 @@ not reachable ambiently (provenance rule). Recipe:
 `arena = <linear grant>; R = mrev(arena); alias = delin(arena); … ; revoke(R)`.
 
 Open, in priority order, if B is asked to continue:
-- **Fix C1** (~10 lines: copy the `MVT::i128` block from `CC_Capstone` into
-  `CC_Capstone_FastCC`, allocating from `getFastCCArgGPRs(ABI)`), then flip
-  `touch()` in `mrev_call_alias.c`/`linear_move_consumed.c` back to `static` and
-  drop the workaround note. Needs a clang rebuild; changes the shared LLVM tree.
-- **Fix C2** (drop `Const` from `cap_mrev`/`cap_delin`; give the intrinsics
-  `IntrHasSideEffects`, as `cap_drop`/`cap_revoke` already have), then remove the
-  `KEEP()`/`OPAQUE()` workarounds from the probes.
+- **Probe cleanup (submodule, needs a gitlink bump).** Now that C1 and C2 are
+  fixed, `capstone/capstone-qemu/tests/capstone-mrev-codegen/` carries dead
+  workarounds: `touch()` in `mrev_call_alias.c`/`linear_move_consumed.c` can go
+  back to `static`, and the `KEEP()`/`OPAQUE()` macros in `mrev_codegen_probe.h`
+  are no longer needed to defeat DCE/CSE. Its README still says C1/C2 are open.
+  Left alone deliberately: task 006 was scoped to the LLVM tree, and the driver
+  already self-reports `FIXED` for C1.
 - Subobject-bounds increment 2 remains **PI-gated** (`container_of`) — do not start.
 
 ## Previous (task 004)

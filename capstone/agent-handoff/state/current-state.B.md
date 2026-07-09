@@ -4,6 +4,38 @@
 
 # Agent-B delta (2026-07-09)
 
+**Codegen defects C1 + C2 fixed (task 006).** Two separate commits on
+`capstone-bootstrap-b`, LLVM/clang tree only — no submodule change, no gitlink
+bump.
+
+- **C1 — the SQLite gate is open.** `CC_Capstone_FastCC` now has the `MVT::i128`
+  capability case (allocating from `getFastCCArgGPRs(ABI)`), so a non-inlined
+  `static` function taking or returning a pointer compiles at `-O1`/`-O2`
+  instead of hitting `llvm_unreachable`. Test:
+  `llvm/test/CodeGen/Capstone/fastcc-capability-args.ll`.
+- **C2 — `MREV`/`DELIN` are no longer modelled as pure.** Both are
+  `IntrInaccessibleMemOnly` at the IR level and `hasSideEffects = 1` at the
+  MachineInstr level; selection moved to `INTRINSIC_W_CHAIN`; `MREV`'s `$rd` is
+  `GPRNoX0`. Test:
+  `llvm/test/CodeGen/Capstone/cap-mrev-delin-side-effects.ll`.
+
+Two things worth carrying forward. **The intrinsic attribute alone was not
+enough**: `Const`/`IntrNoMem` caused the IR-level CSE of two `MREV`s, but a
+*separate* `hasSideEffects = 0` on the MachineInstr caused machine-level DCE of
+an unused one. A fix at one layer would have looked correct in `opt -S` and still
+lost the instruction in the asm. **And keeping a dead `MREV` alive exposed a
+latent emulator gap**: regalloc then picks `x0` for the unused result, and
+`helper_csmrev` writes `env->gpr[rd]` with no `rd == 0` guard, so `mrev zero, rs1`
+would clobber the hardwired-zero register. Closed compiler-side with `GPRNoX0`; a
+hand-written `.insn` could still reach it, so `op_helper.c` deserves the guard.
+
+C3 (LINEAR cap consumed when passed by value) was **not** changed: it is correct
+linear semantics, and the Option B recipe already handles it with an explicit
+`delin`.
+
+Regression with the rebuilt compiler: authority suite **32/32**,
+capstone-mrev-codegen probes **9/9**, Capstone lit **38/38**.
+
 **Intra-domain MREV/REVOKE codegen spike (task 005) — the Option B unknown is
 answered.** Compiled domain C at `-O2` **does** route a deref through the held
 capability, so a later `REVOKE` faults it: verified on a register-held alias
