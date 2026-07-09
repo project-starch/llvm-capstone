@@ -2,6 +2,57 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-state.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-state.md` at Agent-B bring-up (2026-07-08).
 
+# Agent-B delta (2026-07-09)
+
+**Revoke probes landed in-submodule + csdrop commit durability (task 004).** The
+four task-003 revoke probes (`revoke_mem_alias`/`reg_alias`/`unrelated_ok`/
+`mem_control` + `csrevoke_probe.h`) now live in the capstone-qemu submodule's own
+test tree (`tests/capstone-revoke-probes/`) with a `run-revoke-probes.sh` driver
+(reuses the sibling `capstone/tests/runtime-qemu` harness) and a README recording
+the mechanism, the reproduction table, and the **provenance constraint** (a region
+reached via an SBI `REGION_QUERY` mapping is not a tracked descendant of the
+revocable cap, so it must be delivered through the tracked linear cap). Confirmed
+on binary `2e6a67d1`: mem-alias → cause-24 (reload untags), reg-alias → cause-25
+(live rev-node invalid), unrelated OK 0x22130033, control OK 0x2214005E. Submodule
+probe commit `e0cd45de` (on top of `2e6a67d1`); superproject gitlink bumped
+`2e6a67d1`→`e0cd45de`. Driver green 4/4. **Durability CONFIRMED:** both are on the
+shared remotes (superproject `d2e9dd43`, `capstone-qemu` `e0cd45de`), verified by a
+fresh clone outside this working clone; nothing outstanding to push. Agent-B now
+has its own PAT and pushes its own branches (`capstone-bootstrap-b` only).
+
+---
+
+**`csrevoke` memory-alias sweep VALIDATED (task 003, outcome a).** Confirmed the
+load-bearing BORROW-REVOKE property: `csrevoke` invalidates **memory-resident**
+copies of a revoked capability, not just the register operand. Mechanism is lazy
+revocation on a shared rev-tree node; `rev_node_id` survives `cap_compress`/
+`cap_uncompress` (bits 33-63) and a reloaded revoked cap comes back untagged
+(`helper_reg_set_cap_compressed`), so its deref cause-24 faults. Proven
+firmware-free by hand-minting a LINEAR cap via `csdebuggencap` (`.insn`) +
+`mrev`/`revoke` builtins; 4 QEMU probes (mem-alias FAULT, reg-alias FAULT,
+unrelated OK 0x22130033, mem-control OK 0x2214005E). **No code change** (sweep
+already works). The row 3/13/18/19 revoke vehicle is proven at the emulator layer;
+the only remaining gate is A's `start.S` linear authority, which must route the
+region **through the tracked linear cap** (not an SBI-query mapping — the earlier
+R-probe "NO-TRAP-GAP" was that orthogonal provenance issue). Note:
+`history/09-07-2026_15-33-23_csrevoke-memory-alias-sweep-validated.md`.
+
+---
+
+**`csdrop` (DROP) implemented in `capstone-qemu`** — the LINEAR / Stage-2 row-11
+QEMU-lane unblock (task `agentB-002`). The emulator previously had no `csdrop`, so
+`__builtin_capstone_cap_drop`'s `drop` mnemonic decoded as an illegal instruction;
+now it invalidates a capability (clears rs1's tag), so a later use faults cleanly
+(cause 24, "Cap mem access requires capability") rather than trapping as illegal.
+Spec-faithful and type-agnostic (DROP has no LIN-only restriction). Submodule bump
+`cf541a1f`→`2e6a67d1`; superproject gitlink bumped on `capstone-bootstrap-b`.
+Validated under QEMU (control ok + fault cause-24), no regressions. Full note:
+`history/09-07-2026_13-28-31_csdrop-implemented-row11-qemu-unblock.md`. Row-11 full
+domain demo still needs A's gated linear-authority `start.S`. (Prior: C1 subobject
+v1 arrays-only was merged to canonical by A, ff to `c4758de`.)
+
+---
+
 # Current Capstone state
 
 Minimal snapshot. Read first in every session.

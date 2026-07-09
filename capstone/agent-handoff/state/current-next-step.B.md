@@ -2,7 +2,55 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-next-step.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-next-step.md` at Agent-B bring-up (2026-07-08).
 
-# Current recommended next step
+# Agent-B checkpoint status (2026-07-09)
+
+**Task `agentB-004` (durability + probes) — DONE and PUSHED; durability confirmed.**
+The four task-003 revoke probes now live in the submodule's own tree
+`capstone/capstone-qemu/tests/capstone-revoke-probes/` (sources + `run-revoke-probes.sh`
++ README). Submodule commit `e0cd45de` (on `2e6a67d1`); superproject gitlink bumped
+`2e6a67d1`→`e0cd45de`. Driver GREEN 4/4. **Durability CONFIRMED (2026-07-09):** both
+are on the shared remotes — `origin/capstone-bootstrap-b` is `d2e9dd43`
+(superproject) and `e0cd45de` (`capstone-qemu`). Verified by a fresh clone of
+`project-starch/capstone-qemu` outside this working clone: tip `e0cd45de`, parent
+`2e6a67d1`, csdrop in `insn32.decode`/`helper.h`/`op_helper.c`, all 7 probe files
+present. A can `git submodule update` and integrate csdrop + probes into canonical;
+**no operator push is outstanding.** Note:
+`history/09-07-2026_16-09-42_task004-revoke-probes-landed-and-submodule-durability.md`.
+
+Agent-B now holds its own fine-grained PAT (`GIT_CONFIG_GLOBAL=~/.agent-creds/gitconfig-b`
+via the `claude-b` wrapper) and pushes superproject **and** submodule branches
+directly — no operator hand-off. Discipline: push **only** `capstone-bootstrap-b`
+(never `capstone-bootstrap`/`main`); push the submodule branch **before** the
+superproject gitlink bump so A never sees a dangling gitlink.
+
+---
+
+**Task `agentB-003` (validate csrevoke memory-alias sweep) — DONE, outcome (a).**
+`csrevoke` DOES sweep memory-resident aliases; the BORROW-REVOKE (rows 3/13/18/19)
+revoke vehicle is proven at the QEMU layer. No `capstone-qemu` code change. Note:
+`history/09-07-2026_15-33-23_csrevoke-memory-alias-sweep-validated.md`. Committed on
+`capstone-bootstrap-b` (docs only).
+
+**Task `agentB-002` (implement `csdrop`/DROP) — DONE + validated.** Submodule
+`cf541a1f`→`2e6a67d1`; superproject gitlink bumped. Note:
+`history/09-07-2026_13-28-31_csdrop-implemented-row11-qemu-unblock.md`.
+
+**Open / next-step options for Agent-B:**
+- **PUSH: nothing outstanding.** Tasks 002/003/004 are all on
+  `origin/capstone-bootstrap-b` (superproject `d2e9dd43`, `capstone-qemu`
+  `e0cd45de`); durability verified by fresh clone. B pushes its own branches now.
+- Rows 3/13/18/19 + row 11 full domain demos are **gated on A** (intra-domain
+  linear authority via `start.S`/firmware). For revoke rows, A must route the
+  region **through the tracked linear cap**, not an SBI-query mapping.
+- Optional cross-lane follow-up: the `revoke_*` probes now live in-submodule
+  (`capstone/capstone-qemu/tests/capstone-revoke-probes/`); `csdrop_*` remain in
+  scratchpad. Promoting either into `capstone/tests/capstone-authority/` + oracle
+  (A's dir) is still an option if A wants them in the authority gate.
+- Subobject-bounds **increment 2** stays PI-gated (container_of policy) — do not start.
+
+---
+
+# Current recommended next step (inherited base)
 
 ## Active track: capability granularity + provenance (the paper, C1/C2)
 
