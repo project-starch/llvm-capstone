@@ -4,6 +4,49 @@
 
 # Agent-B checkpoint status (2026-07-09)
 
+**Task `agentB-005` (intra-domain MREV codegen spike) — DONE and PUSHED.**
+The three data points A asked for:
+
+1. **Deref through a held cap after `REVOKE` → FAULTS.** Not missed, on all three
+   paths (register-held: cause 25; across the C ABI: cause 25; spilled to memory
+   and reloaded: cause 24). `-O2` asm keeps the post-revoke load based on the
+   gencap register; no ambient re-materialisation.
+2. **`MREV` RETAINS its source.** `helper_csmrev` copies `rs1`→`rd`, retypes only
+   `rd` to `REV`, and never nulls `rs1`. One linear grant ⇒ many nested
+   revocation handles.
+3. **A linear sub-cap IS `MREV`-able — via `SPLIT`.** `cssplit` gives a fresh rev
+   node, so revoking one half spares its sibling. `SHRINK`/`SHRINKTO` copy
+   `rev_node_id` and share the arena's node: not a substitute.
+
+Nine probes at `capstone/capstone-qemu/tests/capstone-mrev-codegen/`, GREEN 9/9,
+firmware-free. Submodule `e0cd45de`→`fd4bc0c0` (pushed); superproject gitlink
+bumped on `capstone-bootstrap-b`. Note
+`history/09-07-2026_20-42-10_intra-domain-mrev-codegen-spike.md`.
+
+**Three codegen defects found (B's lane, reported not fixed):** C1 `fastcc` +
+capability argument ICEs clang (`CC_Capstone_FastCC` lacks the `MVT::i128` case)
+— blocks the *SQLite integration*, not the mechanism; C2 `cap_mrev`/`cap_delin`
+are marked pure but mutate the revocation tree (DCE + CSE observed at `-O2`);
+C3 passing a LINEAR cap by value consumes it (`movc` nulls a non-`NONLIN`
+source), silently.
+
+**For A — Option B is a normal probe build, no firmware and no codegen fix
+needed**, provided the domain `delin`s its working alias (C3) and the arena is
+not reachable ambiently (provenance rule). Recipe:
+`arena = <linear grant>; R = mrev(arena); alias = delin(arena); … ; revoke(R)`.
+
+Open, in priority order, if B is asked to continue:
+- **Fix C1** (~10 lines: copy the `MVT::i128` block from `CC_Capstone` into
+  `CC_Capstone_FastCC`, allocating from `getFastCCArgGPRs(ABI)`), then flip
+  `touch()` in `mrev_call_alias.c`/`linear_move_consumed.c` back to `static` and
+  drop the workaround note. Needs a clang rebuild; changes the shared LLVM tree.
+- **Fix C2** (drop `Const` from `cap_mrev`/`cap_delin`; give the intrinsics
+  `IntrHasSideEffects`, as `cap_drop`/`cap_revoke` already have), then remove the
+  `KEEP()`/`OPAQUE()` workarounds from the probes.
+- Subobject-bounds increment 2 remains **PI-gated** (`container_of`) — do not start.
+
+## Previous (task 004)
+
 **Task `agentB-004` (durability + probes) — DONE and PUSHED; durability confirmed.**
 The four task-003 revoke probes now live in the submodule's own tree
 `capstone/capstone-qemu/tests/capstone-revoke-probes/` (sources + `run-revoke-probes.sh`

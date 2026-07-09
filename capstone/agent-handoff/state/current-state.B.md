@@ -4,6 +4,45 @@
 
 # Agent-B delta (2026-07-09)
 
+**Intra-domain MREV/REVOKE codegen spike (task 005) — the Option B unknown is
+answered.** Compiled domain C at `-O2` **does** route a deref through the held
+capability, so a later `REVOKE` faults it: verified on a register-held alias
+(cause 25), an alias passed across the C ABI into a non-inlined callee (cause
+25), and an alias spilled to memory and reloaded (cause 24). The `-O2` asm shows
+the post-revoke load still based on the gencap register — no ambient
+re-materialisation. Also: **`MREV` retains its linear source** (`helper_csmrev`
+never nulls `rs1`), so one linear grant mints many nested revocation handles; and
+**a linear sub-cap is `MREV`-able via `SPLIT`** (fresh rev node ⇒ siblings revoke
+independently), while `SHRINK`/`SHRINKTO` copy `rev_node_id` and so cannot carve
+independently-revocable sub-buffers.
+
+Nine probes landed at `capstone/capstone-qemu/tests/capstone-mrev-codegen/`
+(firmware-free `csdebuggencap` mint; driver asserts the **exact** fault cause,
+not just "a fault"). GREEN 9/9. Submodule `e0cd45de`→`fd4bc0c0` (pushed);
+superproject gitlink bumped on `capstone-bootstrap-b`.
+
+Three codegen defects found, all in B's lane, **none blocking the Option B
+mechanism**: **C1** `CC_Capstone_FastCC` has no `MVT::i128` case, so any `-O1+`
+domain TU with a non-inlined `static` function taking a pointer ICEs clang
+(`CapstoneISelLowering.cpp:23820`) — this *does* block the SQLite integration;
+~10-line fix, deliberately not applied (shared LLVM tree A also builds).
+**C2** `cap_mrev`/`cap_delin` are marked `Const`/`IntrNoMem` but mutate the
+revocation tree, so at `-O2` an unused `MREV` is DCE'd and two `MREV`s of the
+same value CSE into one. **C3** only `NONLIN` is copyable, so `movc`/`cincoffset`
+null a LINEAR source register: passing a LINEAR cap by value consumes it,
+silently and with no diagnostic.
+
+**Option B recipe (for A):** `arena = <linear grant>; R = mrev(arena);
+alias = delin(arena); …use alias freely…; revoke(R)`. The `delin` is required by
+C3 and is safe — it only clears the node's `linear` flag, so the alias stays
+revocable and `REVOKE` hands back a reusable `LIN` handle. The arena must be
+reachable **only** through the tracked capability; an ambient/`gp`-reachable
+buffer has a second, un-revocable path (`mrev_ambient_miss` returns instead of
+faulting). Note:
+`history/09-07-2026_20-42-10_intra-domain-mrev-codegen-spike.md`.
+
+## Previous (task 004)
+
 **Revoke probes landed in-submodule + csdrop commit durability (task 004).** The
 four task-003 revoke probes (`revoke_mem_alias`/`reg_alias`/`unrelated_ok`/
 `mem_control` + `csrevoke_probe.h`) now live in the capstone-qemu submodule's own
