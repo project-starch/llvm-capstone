@@ -84,3 +84,52 @@ matched pair the paper needs.
 Step 2's hook location: thin host-call wrapper (recommended — no amalgamation
 patch, revoke lands exactly at the API contract point) vs. a VFS/pager-level
 interception. Confirm the wrapper approach before I build.
+
+## Step-2 finding (2026-07-09) — the single-domain wrapper is BLOCKED; revised fork
+
+Investigated the actual revoke primitives before building (step-1 host UAF already
+reproduced: `name[0]` read = heap-use-after-free vs real SQLite 3.53.3, freed by
+`sqlite3MemFree` at finalize). The plan's "thin wrapper mints an R-cap at
+`column_name` and revokes at `finalize`, all in the one real-SQLite domain" is
+**not buildable on the current stack:**
+
+- Minting a revocation capability is `MREV`, and both the spec
+  (`capstone-spec/parts/cap-man-insn.adoc:533` — raises *Unexpected capability
+  type* unless `x[rs1].type == 0` linear) and the emulator (`helper_csmrev` asserts
+  `CAP_TYPE_LIN`) require a **linear** source capability.
+- A domain has **no intra-domain linear authority**: `my_first_domain/start.S`
+  delinearises `sp`/`gp`, and linearity can't be fabricated from non-linear. This is
+  the **same sign-off-gated `start.S`/firmware wall** that blocks LINEAR (row 11),
+  UNINIT (row 14), and #78 phase-2 (see
+  `history/08-07-2026_13-01-23_linear-uninit-rows-blocked-intra-domain.md` and
+  `history/06-07-2026_18-00-00_revoke-on-free-step0-linear-authority-finding.md`).
+- The **working** revoke path is the monitor's **cross-domain** `revoke_region`
+  (the abstract borrow/revoke probe; BORROW-REVOKE "validated on RTL"). It is
+  inherently **two-domain** (lender/borrower) — the monitor holds the linear
+  authority, not the domain.
+
+So the row3 "after" forks:
+
+- **Option A — faithful two-domain real-SQLite probe (buildable now).** Keep the
+  lender/borrower structure (working `revoke_region` path) but replace the magic
+  column value with **real SQLite**: the lender runs the real row3 sequence
+  (`open/exec/prepare/step/column_name`), copies the real column-name bytes into the
+  shared region, lends it as a revocable borrow, and **revokes at the
+  `sqlite3_finalize` point** (not at step). The borrower caches the pointer and
+  re-reads after finalize → deterministic monitor-clean trap. Closes the paper's
+  three concrete gaps (links real SQLite; real column value, no `0xC01A…` magic;
+  revoke timed at finalize). Residual: the *caching binding* is still a borrower
+  stand-in and the revoked pointer is the shared-region alias, not SQLite's own
+  internal heap pointer — so it is a matched pair for the engine + value + lifecycle,
+  not literally `before.c` in one address space.
+- **Option B — literal single-domain matched pair (blocked, shares the row-11
+  wall).** Same `before.c` in one domain, `MREV` at `column_name`, `REVOKE` at
+  `finalize`, post-finalize read faults. Needs intra-domain linear authority = the
+  gated `start.S`/firmware change. Comes "for free" once row 11's linear-authority
+  work lands — one firmware unblock yields the literal matched pairs for the whole
+  BORROW-REVOKE family (rows 3/13/18/19).
+
+**Recommendation:** build Option A now (it removes the "magic sentinel / doesn't link
+SQLite" objections immediately and is the paper's near-term artifact), and record
+Option B as a follow-on gated on the same firmware as row 11. Awaiting the pick
+before the heavy Capstone build + serialized QEMU run.
