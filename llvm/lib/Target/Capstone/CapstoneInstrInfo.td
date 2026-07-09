@@ -2497,7 +2497,9 @@ def INIT : RVInstR<0b0001001, 0b001, OPC_CAP_OP, (outs GPR:$rd),
 // DELIN: Delinearisation
 // The spec says: rd = delin(rd). rs1 and rs2 are unused (0).
 // We use Tied Operands so the compiler knows it modifies the register in-place.
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0,
+// hasSideEffects: clears the `linear` flag on the revocation-tree node, so it
+// must not be machine-DCE'd or CSE'd away.
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0,
     Constraints = "$rd = $cap_in" in
 def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPR:$rd),
                     (ins GPR:$cap_in),
@@ -2511,9 +2513,14 @@ def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPR:$rd),
 //===----------------------------------------------------------------------===//
 
 // MREV: Create revocation capability
-let hasSideEffects = 0, mayLoad = 0, mayStore = 0 in
-def MREV : RVInstR<0b0001000, 0b001, OPC_CAP_OP, (outs GPR:$rd), (ins GPR:$rs1),
-                   "mrev", "$rd, $rs1"> {
+// hasSideEffects: allocates a revocation-tree node and deepens the source's, so
+// two MREVs of the same register are not interchangeable with one.
+// $rd is GPRNoX0: because MREV now survives even when its result is unused, the
+// register allocator would otherwise pick x0, and helper_csmrev writes rd
+// unconditionally -- clobbering the hardwired-zero register.
+let hasSideEffects = 1, mayLoad = 0, mayStore = 0 in
+def MREV : RVInstR<0b0001000, 0b001, OPC_CAP_OP, (outs GPRNoX0:$rd),
+                   (ins GPR:$rs1), "mrev", "$rd, $rs1"> {
   let rs2 = 0;
 }
 

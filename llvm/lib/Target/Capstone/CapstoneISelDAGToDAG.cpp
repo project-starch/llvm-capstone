@@ -1513,13 +1513,20 @@ void CapstoneDAGToDAGISel::selectInit(SDNode *Node) {
 
 void CapstoneDAGToDAGISel::selectDelin(SDNode *Node) {
   SDLoc DL(Node);
-  SDValue Cap = Node->getOperand(1);
+  // INTRINSIC_W_CHAIN Layout: [0] = Chain, [1] = IntrinsicID, [2] = Arg0
+  SDValue Chain = Node->getOperand(0);
+  SDValue Cap = Node->getOperand(2);
 
   // DELIN: rd = delin(cap)  -- modifies cap in-place (tied operand)
   // (outs GPR:$rd), (ins GPR:$cap_in)
-  SDNode *Res = CurDAG->getMachineNode(Capstone::DELIN, DL, MVT::i128,
-                                       Cap);
-  ReplaceNode(Node, Res);
+  // It clears the `linear` flag on the revocation-tree node, so it carries a
+  // chain to keep it from being reordered or eliminated.
+  SDNode *Res = CurDAG->getMachineNode(Capstone::DELIN, DL,
+                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       {Cap, Chain});
+  ReplaceUses(SDValue(Node, 0), SDValue(Res, 0)); // Resulting capability
+  ReplaceUses(SDValue(Node, 1), SDValue(Res, 1)); // Chain
+  CurDAG->RemoveDeadNode(Node);
 }
 
 void CapstoneDAGToDAGISel::selectTighten(SDNode *Node) {
@@ -1546,9 +1553,19 @@ void CapstoneDAGToDAGISel::selectTighten(SDNode *Node) {
 
 void CapstoneDAGToDAGISel::selectMrev(SDNode *Node) {
   SDLoc DL(Node);
-  SDValue Cap = Node->getOperand(1);
-  SDNode *Res = CurDAG->getMachineNode(Capstone::MREV, DL, MVT::i128, Cap);
-  ReplaceNode(Node, Res);
+  // INTRINSIC_W_CHAIN Layout: [0] = Chain, [1] = IntrinsicID, [2] = Arg0
+  SDValue Chain = Node->getOperand(0);
+  SDValue Cap = Node->getOperand(2);
+
+  // MREV allocates a revocation-tree node and deepens the source's, so each
+  // MREV is distinct. The chain keeps two MREVs of the same capability from
+  // being CSE'd into one, and an unused MREV from being eliminated.
+  SDNode *Res = CurDAG->getMachineNode(Capstone::MREV, DL,
+                                       CurDAG->getVTList(MVT::i128, MVT::Other),
+                                       {Cap, Chain});
+  ReplaceUses(SDValue(Node, 0), SDValue(Res, 0)); // Revocation capability
+  ReplaceUses(SDValue(Node, 1), SDValue(Res, 1)); // Chain
+  CurDAG->RemoveDeadNode(Node);
 }
 
 void CapstoneDAGToDAGISel::selectSeal(SDNode *Node) {
@@ -2998,12 +3015,8 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       return selectSCC(Node);
     case Intrinsic::capstone_cap_init:
       return selectInit(Node);
-    case Intrinsic::capstone_cap_delin:
-      return selectDelin(Node);
     case Intrinsic::capstone_cap_tighten:
       return selectTighten(Node);
-    case Intrinsic::capstone_cap_mrev:
-      return selectMrev(Node);
     case Intrinsic::capstone_cap_seal:
       return selectSeal(Node);
     }
@@ -3263,6 +3276,10 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       ReplaceNode(Node, Load);
       return;
     }
+    case Intrinsic::capstone_cap_delin:
+      return selectDelin(Node);
+    case Intrinsic::capstone_cap_mrev:
+      return selectMrev(Node);
     case Intrinsic::capstone_cap_drop:
       return selectDrop(Node);
     case Intrinsic::capstone_cap_revoke:

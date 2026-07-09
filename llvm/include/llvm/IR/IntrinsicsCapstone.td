@@ -104,16 +104,24 @@ let TargetPrefix = "capstone" in {
     Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i128_ty],[IntrNoMem]>;
 
   // ptr delin(ptr cap)
+  // Mutates the revocation tree: clears the node's `linear` flag, which decides
+  // whether a later REVOKE yields LIN (data retained) or UNINIT. Modelled as a
+  // read+write of inaccessible memory so it is neither DCE'd nor CSE'd, without
+  // clobbering program memory the instruction never touches.
   def int_capstone_cap_delin :
-    Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>], [IntrNoMem]>;
+    Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>], [IntrInaccessibleMemOnly]>;
 
   // ptr init(ptr cap, i128 value)
   def int_capstone_cap_init :
     Intrinsic<[llvm_anyptr_ty], [LLVMMatchType<0>, llvm_i128_ty], [IntrNoMem]>;
 
-  // ptr mrev(ptr cap) - Pure register operation
+  // ptr mrev(ptr cap)
+  // Mutates the revocation tree: allocates a node senior to the source's and
+  // increments the source's depth. Each MREV must therefore produce a distinct
+  // node, so it must survive DCE and must never be CSE'd with another MREV of
+  // the same capability. Same modelling as delin.
   def int_capstone_cap_mrev : Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>],
-                                        [IntrNoMem]>;
+                                        [IntrInaccessibleMemOnly]>;
 
   // ptr seal(ptr cap) - Pure register operation
   def int_capstone_cap_seal : Intrinsic<[llvm_anyptr_ty],[LLVMMatchType<0>],
