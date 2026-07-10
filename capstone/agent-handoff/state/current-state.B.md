@@ -2,6 +2,57 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-state.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-state.md` at Agent-B bring-up (2026-07-08).
 
+# Agent-B delta (2026-07-10)
+
+**The SQLite Stage-2 corpus is complete — 17/17 in-scope rows validated on RTL
+(task 009).** Rows 11 (LINEAR, double-free) and 14 (UNINIT, use-before-init) were
+the last two deferred rows; both are now mechanism probes on RTL at `-O0`/`-O1`/`-O2`,
+**21/21 green**, at `capstone/tests/runtime-qemu/linear-uninit-corpus-probe/`.
+Note: `history/10-07-2026_02-30-00_linear-uninit-rows-closed.md` (supersedes the
+2026-07-08 deferral note). `stage2-mapping.md`'s validation table is updated.
+
+The 2026-07-08 deferral was correct then and is stale now — both of its blockers were
+removed by B-lane work. **Neither escape hatch it scoped out was needed:** no
+`share_uninit_region` monitor op, no gated `start.S` change, no firmware rebuild.
+
+1. **Row 14's derivation is one missing `csdelin`.** `cap_rev_tree_revoke()` returns
+   `retain_data` = "every node I invalidated was already delinearised", and
+   `helper_csrevoke` (op_helper.c:709) turns that into the retained handle's type:
+   all-non-linear → `LIN` (cursor at base); **still linear → `UNINIT`** (cursor at
+   end, the form `csinit` asserts on). The held-cap probe always `delin`s its arena,
+   which is why its revoke yields LIN. Omit the `delin` and `revoke(mrev(arena))`
+   hands the domain a real UNINIT capability over its own grant.
+2. **Row 14 needed an emulator fix, and it is load-bearing.**
+   `_helper_access_with_cap` never consulted the capability **type**: an UNINIT cap
+   was denied only incidentally, by bounds (its cursor sits at `end`). **A load at a
+   negative offset was in bounds and returned the stale byte** — the disclosure
+   UNINIT exists to prevent. Per spec, no load form permits type 3
+   (`existing-insn.adoc` "Load Instructions", `mem-access-insn.adoc` `[#load-cap]`:
+   types 0/1/5 only, else `Unexpected capability type (26)`); stores *are* permitted
+   (that is how an owner initialises memory) and are deliberately untouched.
+   `RISCV_EXCP_UNEXP_CAP_TYPE = 0x1a` was already defined and never raised. Now loads
+   through UNINIT raise cause **26**, which is self-proving. Verified by removing the
+   check and rebuilding: `uninit_negative_offset_fault` **returned `0x14110000`
+   instead of faulting**.
+3. **Row 11 rests on `csdrop` (task 002), and `csdrop` consumes a HANDLE, not
+   memory.** It clears one register's tag; it does not revoke a lineage or free
+   bytes. The row is "linearity leaves no second capability, so the second
+   `finalize` has nothing to hand back" — not "the allocator refuses a second free".
+   `linear_drop_sibling_ok` pins that: after dropping the carved statement, the
+   connection it came from still works and the host mmap reads back the post-drop
+   write. Both fault probes assert cause 24, so `linear_no_drop_ok` is their control;
+   the deref fault and the double-`drop` fault are told apart by their log lines.
+
+Unlike the held-cap probe, **no expected cause moves with `-O`**: the UNINIT handle
+keeps its tag and a valid revocation node, and the dropped handle stays untagged
+through a spill/reload.
+
+Submodule `capstone-qemu` bumped (the UNINIT-load check + a `DROP requires
+capability` diagnostic). No `start.S`, monitor, `capstone-c`, buildroot or LLVM
+change.
+
+---
+
 # Agent-B delta (2026-07-09)
 
 **Row3 Option B proven on the real delivery path (task 007).** One domain, a real

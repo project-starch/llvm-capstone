@@ -1,5 +1,14 @@
 # LINEAR (row 11) and UNINIT (row 14) are blocked intra-domain — deferred
 
+> **SUPERSEDED 2026-07-10 — both blockers are gone and both rows are validated on
+> RTL.** See `10-07-2026_02-30-00_linear-uninit-rows-closed.md`. Blocker 2 (`csdrop`
+> unimplemented) was removed by task 002. Blocker 1 (no intra-domain linear
+> authority) was removed by task 007: a `REV_TRANSFERRED` region reaches
+> `domain_main` as a real LINEAR capability, and revoking a *still-linear* lineage
+> yields an UNINIT handle directly — so the `share_uninit_region` monitor op scoped
+> out below was never needed. The analysis below remains accurate for the toolchain
+> as it stood on 2026-07-08; only its conclusion is stale.
+
 **Date:** 2026-07-08
 **Context:** SQLite-Capstone Stage-2. With the three revocation-family shapes
 BORROW-REVOKE (R), HIERARCHICAL-REVOKE (H), and SEALED-CALLBACK (S) all validated on

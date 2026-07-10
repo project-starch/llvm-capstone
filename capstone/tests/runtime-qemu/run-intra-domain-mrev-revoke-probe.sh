@@ -66,6 +66,7 @@ smoke() { # $1=share dir  $2=probe  $3=extra guest argv  rest: extra harness arg
 run_ok() { # $1=share  $2=probe  $3=expected retval  $4=optional "read-arena"
   local share="$1" name="$2" retval="$3" guest_arg="${4:-}"
   local marker="intra-domain-mrev-revoke-probe: call retval = $retval"
+  local log="$share/$name.log"
   local attempt=0 rc
   while :; do
     attempt=$((attempt + 1))
@@ -81,7 +82,17 @@ run_ok() { # $1=share  $2=probe  $3=expected retval  $4=optional "read-arena"
       echo "  ...infra flake on $name (attempt $attempt), retrying" >&2
       continue
     fi
-    echo "FAIL  $name  (rc=$rc; see $share/$name.log)" >&2
+    # A boot that dies before the domain returns leaves NO "call retval" line at
+    # all; a domain that returned the wrong value leaves one. Retrying the former
+    # cannot mask a real failure. The harness only reports its own flake exit for
+    # the setup phases, so a truncated guest command lands here as rc=1 -- which
+    # is how held_arena_survives_revoke spuriously failed once at -O2.
+    if [[ $attempt -le $RETRIES ]] &&
+       ! grep -q "intra-domain-mrev-revoke-probe: call retval" "$log" 2>/dev/null; then
+      echo "  ...no boot/retval for $name (attempt $attempt), retrying" >&2
+      continue
+    fi
+    echo "FAIL  $name  (rc=$rc; see $log)" >&2
     return 1
   done
 }
