@@ -130,6 +130,42 @@ either (a) ground the faithful half in the real reproducer + fix, or (b) demote 
 MODEL with an honest label where no memory-safety PoC exists. Each such pass
 either strengthens a row or surfaces an honest gap — both are wins for the table.
 
+### Provenance sweep results — all 19 rows (2026-07-10)
+
+Every row now has a `cve-repros/row*/PROVENANCE.md` citing the exact upstream
+artifact (verbatim reproducer + fix where they exist). Outcome:
+
+| Tier | Rows | Meaning |
+|---|---|---|
+| **LITERAL-traceable** (real SQLite-lifecycle memory-safety bug + real artifact) | 1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 14 (**11**) | verbatim reproducer/fix; faithfully lowerable |
+| **Real bug, non-SQLite event → stays probe** | 13 | genuine null-deref, but the trigger is a Python attribute deletion (no SQLite call) |
+| **MODEL / weak-or-mismatched provenance** | 7, 12, 16 | see below |
+| **Stale-state, not memory-safety → probe by nature** | 18, 19 | confirmed logic bugs, ASan-clean |
+| **N/A (out of scope)** | 15, 17 | no SQLite pointer lifetime |
+
+**Findings the sweep surfaced (honest gaps):**
+- **row 7** (our literal H representative) — the cited CPython #99886 is a
+  *managed-dictionary GC crash* (`_PyObject_ClearInstanceAttributes`, fix #99902),
+  **not** a connection→statement UAF. row 7's mechanism repro stands, but its
+  provenance to a hierarchical statement lifecycle is INTERPRETIVE. **The genuinely
+  faithful H bugs are row 5 (PHP #69971) and row 9 (sqlite3-ruby #49)** — both real
+  freed-parent → child-deref UAFs. Prefer them as the H family's faithful anchors
+  (Agent-B task-012 makes them literal); demote row 7's role to a mechanism demo.
+- **row 12** — the cited expo PR #34992 is a **statement-leak fix** (uses
+  `sqlite3_next_stmt`), not the null-deref the essence claims. Citation mismatch;
+  labeled MODEL until a matching artifact is found.
+- **row 16** — cited datasette issue #3 is a **functional test-failure**, no
+  memory-safety PoC (already MODEL).
+- **rows 18, 19** — confirmed **stale-state, not memory-safety** (php #79294 wrong
+  return value; php-src #5204 re-execution side effects) — validates the
+  "stays probe by nature" decision above.
+- **row 17** — the real crash is a **Node/napi** error-handling abort, not an
+  SQLite handle bug — stays N/A.
+
+**Net:** 11 of the 17 in-scope rows are solidly traceable to real memory-safety
+CVEs with verbatim artifacts; the remaining 6 are honestly tiered (probe-by-nature
+or MODEL), with the row-7 anchor caveat now explicit.
+
 ## Priority
 
 1. **S seal-proper trampoline** (B) — resolves residual S, lifts rows 1/2/6/16.
