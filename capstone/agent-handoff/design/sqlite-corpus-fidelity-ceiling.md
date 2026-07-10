@@ -95,6 +95,41 @@ that exercises Capstone's *compartmentalisation* (not just revocation) against a
 real bug. Delegated to B (task-011). If the paper claims anything about sealing,
 this is the gap a reviewer presses hardest.
 
+## Provenance tiers for the faithful host halves
+
+A `before-faithful.c` should be **traceable to real upstream artifacts**, not a
+paraphrase of the advisory. Each carries a `PROVENANCE` block citing the exact
+issue/PR/commit and quoting the real reproducer + fix hunk. Grounding in primary
+source is also a *filter*: it exposes which rows are backed by a real
+memory-safety PoC and which are our own constructions. Three tiers:
+
+- **LITERAL-traceable** — verbatim reproducer + real fix hunk from the upstream
+  bug report, lowered to C. Rows verified so far:
+  - **row 2** (rusqlite RUSTSEC-2021-0128 / CVE-2021-45713): lowers the *actual*
+    issue #1048 reproducer — a non-`move` closure borrowing an `Arc<Mutex<()>>`
+    registered via `update_hook`, the Arc dropped at scope end, an `INSERT` firing
+    the still-registered hook. Real glue quoted: `create_scalar_function`'s
+    `+ Send + 'static` fix bound and the `call_boxed_closure` trampoline
+    (`sqlite3_user_data(ctx).cast::<F>()` deref) from `src/functions.rs`.
+  - **row 8** (CPython bpo-41815 / gh-85981): quotes the verbatim regression test
+    `test_bad_source_closed_connection` (Lib/sqlite3/test/backup.py) and the exact
+    fix hunk `if (!pysqlite_check_thread(self) || !pysqlite_check_connection(self))
+    return NULL;` (GH-22322) added to the backup method in
+    Modules/_sqlite/connection.c.
+- **MODEL (not traceable)** — a plausible, mechanism-faithful model of the shape,
+  but NOT a lowering of a documented CVE. Must be labeled as such, never dressed
+  up with false provenance.
+  - **row 16** (datasette-sqlite-authorizer): the cited upstream link (issue #3)
+    is a **functional test-failure** report (read-only-protection tests failing on
+    Python 3.11) — **no UAF reproducer, no vulnerable source, no fix commit**. So
+    row 16's "authorizer context UAF" is a *constructed* essence of the
+    SEALED-CALLBACK shape. Header labels it MODEL, not LITERAL.
+
+**Action item (do more of this):** sweep the remaining rows' upstream URLs and
+either (a) ground the faithful half in the real reproducer + fix, or (b) demote to
+MODEL with an honest label where no memory-safety PoC exists. Each such pass
+either strengthens a row or surfaces an honest gap — both are wins for the table.
+
 ## Priority
 
 1. **S seal-proper trampoline** (B) — resolves residual S, lifts rows 1/2/6/16.
