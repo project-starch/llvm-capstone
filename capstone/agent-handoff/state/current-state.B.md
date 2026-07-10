@@ -2,6 +2,39 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-state.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-state.md` at Agent-B bring-up (2026-07-08).
 
+# Agent-B delta (2026-07-10, task 012) — HIERARCHICAL family literal across 3 languages
+
+**The HIERARCHICAL-REVOKE family now has THREE literal real-SQLite repros in three
+language bindings, not one.** Task-010 left row 7 (CPython) as the sole literal H;
+this task adds row 9 (Ruby, sqlite3-ruby #49) and row 5 (PHP, bug #69971) — the
+same intra-domain sub-arena cascade (`revoke_on_free_hier_alloc.h`) catching two
+more distinct real CVEs. Generalization breadth, not a new mechanism.
+
+- **row 9 (Ruby)** `run-sqlite-row9.sh` + `sqlite_row9_domain.c`: Database owns a
+  child statement; teardown revokes the sub-arena; the child's 2nd `sqlite3_finalize`
+  faults on the revoked `sqlite3_stmt`. 5/5.
+- **row 5 (PHP)** `run-sqlite-row5.sh` + `sqlite_row5_domain.c`: faithful #69971
+  wrong destruction order; Zend wrapper objects live on the surviving global arena
+  so only SQLite's connection+statement are revoked; the statement free handler's
+  `sqlite3_finalize(stmt->stmt)` faults INSIDE finalize on SQLite's own handle
+  (same PC as row 9). 5/5.
+- Both: control + fault (**cause 24**, inside the always-`-O0` `sqlite3_finalize`)
+  at -O0 and -O2, plus a **real-SQLite sibling-scoping** check (`-D*_SIBLING`, -O2):
+  revoke connection A, step connection B → SQLITE_ROW, B survives. New vs task-010,
+  which proved scoping only at the primitive level.
+- **Fidelity correction:** row 5's first cut faulted on the revoked PHP wrapper
+  (cause 25 but the wrong object); moved the Zend wrappers to the surviving arena so
+  the fault lands on the `sqlite3_stmt`. See the history note.
+- **Additive only:** no `llvm/`, no `capstone/capstone-qemu` (no gitlink bump),
+  `revoke_on_free_hier_alloc.h` / `sqlite_row7_domain.c` / A's files untouched.
+  Regressions: Capstone lit **39/39**; shared allocator unmodified so row 7 +
+  Phase-0 `hier-revoke-probe` unaffected. QEMU rootfs lock claimed + released.
+  Note `history/10-07-2026_19-40-00_hier-family-literal.md`; `stage2-mapping.md` H
+  literal column lists rows 7/9/5; row 5/9 README "after" sections added. Pushed to
+  `origin/capstone-bootstrap-b`.
+
+---
+
 # Agent-B delta (2026-07-10, task 010) — a LITERAL real-SQLite pair per shape
 
 **Every in-scope Stage-2 shape now has a faithful, literal real-SQLite matched
