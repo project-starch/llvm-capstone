@@ -1406,22 +1406,27 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   SDNode *Offset = CurDAG->getMachineNode(Capstone::PseudoLLA, DL, PtrVT,
                                           Symbol);
 
-  // 3. Create CIncOffset: Ptr = GP + Offset
-  // GP is a valid capability (base for data).
-  // Offset is the offset to the variable.
-  SDNode *Res = CurDAG->getMachineNode(Capstone::CIncOffset, DL, PtrVT,
-                                       GP, SDValue(Offset, 0));
-
-  // 4. Delinearize: convert the LINEAR global capability to NONLINEAR.
-  // In Capstone, cincoffset rd, rs1, rs2 with rd!=rs1 consumes (zeroes) rs1
-  // when rs1 is LINEAR.  Global data capabilities are typically used as base
-  // pointers for multiple indexed accesses (e.g. S-box lookups), so if the
-  // register allocator assigns the same physical register to hold the base
-  // across several index uses the second use finds the register untagged and
-  // aborts.  Making the global capability NONLINEAR (copyable) prevents this:
-  // cincoffset with a NONLINEAR rs1 copies it to rd without clearing rs1.
-  SDNode *Delined = CurDAG->getMachineNode(Capstone::DELIN, DL, PtrVT,
-                                           SDValue(Res, 0));
+  // 3+4. Ptr = delin(GP + Offset), as ONE instruction.
+  //
+  // cincoffset produces a LINEAR capability, and the ISA consumes a non-NONLIN
+  // source on copy (movc rd, rs1 nulls rs1 -- task-005 finding C3). Global data
+  // capabilities are used as base pointers for several accesses, so the base
+  // must be NONLIN before anything copies it.
+  //
+  // Emitting cincoffset and DELIN as two machine nodes is not enough, and was a
+  // live miscompile: DELIN is tied in-place and side-effecting, so it is neither
+  // CSE'd nor hoisted, while cincoffset is pure and MachineCSE happily hoists it
+  // out of the branches that use it. That leaves one LINEAR def with several
+  // tied uses; the two-address pass gives each use its own `movc` copy, and the
+  // FIRST copy nulls the shared register. Every later `delin` then hits an
+  // untagged operand (helper_csdelin's tag assert). -O0 never noticed because it
+  // re-materialises the base for every access.
+  //
+  // Inside one pseudo, no LINEAR value is ever an SSA value with multiple uses:
+  // the operand is the scalar symbol offset and the result is already NONLIN.
+  (void)GP; // gp is an implicit Use of the pseudo (Uses = [X3]).
+  SDNode *Delined = CurDAG->getMachineNode(Capstone::PseudoCapGlobalBase, DL,
+                                           PtrVT, SDValue(Offset, 0));
 
   // 5. Granularity (C1): narrow the capability to the named object's bounds.
   // The CIncOffset above leaves the broad gp-derived (whole-segment) bounds and

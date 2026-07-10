@@ -48,6 +48,8 @@ private:
                   MachineBasicBlock::iterator &NextMBBI);
   bool expandVMSET_VMCLR(MachineBasicBlock &MBB,
                          MachineBasicBlock::iterator MBBI, unsigned Opcode);
+  bool expandCapGlobalBase(MachineBasicBlock &MBB,
+                          MachineBasicBlock::iterator MBBI);
   bool expandMV_FPR16INX(MachineBasicBlock &MBB,
                          MachineBasicBlock::iterator MBBI);
   bool expandMV_FPR32INX(MachineBasicBlock &MBB,
@@ -110,6 +112,8 @@ bool CapstoneExpandPseudo::expandMI(MachineBasicBlock &MBB,
   // expanded instructions for each pseudo is correct in the Size field of the
   // tablegen definition for the pseudo.
   switch (MBBI->getOpcode()) {
+  case Capstone::PseudoCapGlobalBase:
+    return expandCapGlobalBase(MBB, MBBI);
   case Capstone::PseudoMV_FPR16INX:
     return expandMV_FPR16INX(MBB, MBBI);
   case Capstone::PseudoMV_FPR32INX:
@@ -287,6 +291,28 @@ bool CapstoneExpandPseudo::expandVMSET_VMCLR(MachineBasicBlock &MBB,
       .addReg(DstReg, RegState::Undef)
       .addReg(DstReg, RegState::Undef);
   MBBI->eraseFromParent(); // The pseudo instruction is gone now.
+  return true;
+}
+
+// PseudoCapGlobalBase $rd, $rs1  ->  cincoffset $rd, gp, $rs1 ; delin $rd
+//
+// One pseudo, because the cincoffset result is a LINEAR capability and the ISA
+// consumes a non-NONLIN source on copy. Keeping the delin welded to it means the
+// LINEAR value never becomes an SSA value the register allocator can copy. See
+// CapstoneInstrInfo.td, PseudoCapGlobalBase.
+bool CapstoneExpandPseudo::expandCapGlobalBase(MachineBasicBlock &MBB,
+                                               MachineBasicBlock::iterator MBBI) {
+  DebugLoc DL = MBBI->getDebugLoc();
+  Register DstReg = MBBI->getOperand(0).getReg();
+  Register SrcReg = MBBI->getOperand(1).getReg();
+
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::CIncOffset), DstReg)
+      .addReg(Capstone::X3)
+      .addReg(SrcReg, getKillRegState(MBBI->getOperand(1).isKill()));
+  // DELIN is tied: $rd = $cap_in, both are DstReg.
+  BuildMI(MBB, MBBI, DL, TII->get(Capstone::DELIN), DstReg).addReg(DstReg);
+
+  MBBI->eraseFromParent();
   return true;
 }
 
