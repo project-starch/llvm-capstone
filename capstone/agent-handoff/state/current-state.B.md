@@ -2,7 +2,42 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-state.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-state.md` at Agent-B bring-up (2026-07-08).
 
-# Agent-B delta (2026-07-10)
+# Agent-B delta (2026-07-10, task 010) — a LITERAL real-SQLite pair per shape
+
+**Every in-scope Stage-2 shape now has a faithful, literal real-SQLite matched
+pair, not just a mechanism probe.** Before: only row 3 (task-008 B2) was literal;
+16 rows were mechanism probes. Now 5 rows (one per class) are literal real-SQLite
+repros — the same program as each `before.c`, real SQLite linked, host = ASan /
+Capstone = capability fault on SQLite's own handle, with a no-fault control:
+
+- **L — row 11** (double-finalize): `run-sqlite-row11.sh`. 2nd `sqlite3_finalize`
+  derefs the revoked stmt (rof allocation freed by the 1st finalize). 4/4 -O0/-O2,
+  cause 24 (stmt spills across the finalize call; control disambiguates).
+- **U — row 14** (uninit connection): `run-sqlite-row14.sh`. `db` is a genuine
+  UNINIT cap; pre-open read faults cause 26 (self-proving, opt-independent);
+  correct control opens with real `sqlite3_open` first. 4/4.
+- **H — row 7** (cursor dealloc): `run-sqlite-row7.sh` + `revoke_on_free_hier_alloc.h`
+  + Phase-0 `tests/runtime-qemu/hier-revoke-probe` (6/6). Per-connection sub-arenas:
+  statement allocations are SPLIT descendants of the connection's MREV'd node;
+  close revokes the subtree, `sqlite3_step` on the child faults; a sibling
+  connection survives (scoping). **Mechanism answer: YES, intra-domain, no monitor
+  change.** 4/4 real-SQLite (cause 24; cause-25 self-proving reached in the primitive).
+- **S — row 2** (UDF context UAF): `run-sqlite-row2.sh`. SQLite invokes a registered
+  UDF whose freed `pApp` context is revoked; the callback faults. 4/4, cause 24.
+  **Residual: the callback-CONTEXT UAF is faithful single-domain; the SEAL PROPER
+  (domain-crossing entry) needs a second callback domain — reported, not built.**
+- **R — row 19**: skipped (documented) — SQLite reuses the column-text storage in
+  place on the next step, no free event to hook; row 3 already covers R.
+
+**Additive-only: no `llvm/`, no `capstone/capstone-qemu` (no gitlink bump), shared
+`revoke_on_free_alloc.h` unmodified.** Regressions: Capstone lit 39/39; the 5 pairs
+(18 boots) + Phase-0 hier probe (6 boots) green. Note:
+`history/10-07-2026_16-30-00_faithful-matched-pairs-per-shape.md`; `stage2-mapping.md`
+gains a "Literal real-SQLite repro" column.
+
+---
+
+# Agent-B delta (2026-07-10, task 009)
 
 **The SQLite Stage-2 corpus is complete — 17/17 in-scope rows validated on RTL
 (task 009).** Rows 11 (LINEAR, double-free) and 14 (UNINIT, use-before-init) were
