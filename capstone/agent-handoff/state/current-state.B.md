@@ -2,6 +2,28 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-state.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-state.md` at Agent-B bring-up (2026-07-08).
 
+# Agent-B delta (2026-07-13, task 013) — row-12 provenance citation-mismatch resolved
+
+**The corpus's last known provenance liability is closed.** A's ledger flagged
+row 12 (expo-sqlite null-deref) for citing PR #34992 — a statement-*leak* fix, not
+the `SQLITE_BUSY`-ignored null-deref the row describes. A thorough upstream search
+(expo, cordova-sqlite-storage, better-sqlite3, node-sqlite3, PHP, go-sqlite3, SQLite
+CVE DB) found **no** binding that ignores `SQLITE_BUSY`, nulls its C `sqlite3 *`, and
+derefs it in C. **Outcome B (documented model) + citation re-anchor:** the citation
+now points at the real crash report **expo #34990** (a Java `NullPointerException`
+on close-while-busy, the artifact #34992 fixes); row 12 stays honestly **△ modeled**
+because #34990's fault is a managed-language NPE, not a C SQLite-pointer null-deref —
+same category as rows 7 and 13. The C repro is a faithful behavioral translation of
+that crash. The false "All links verified" exposure is removed for row 12; tally
+unchanged (4 modeled: 7, 12, 13, 16). **Docs-only, additive:** no `llvm/`, no
+`capstone/capstone-qemu` gitlink bump, no code touched (Capstone lit / allocators /
+rows 3/7 unaffected by construction), no QEMU boot. Edited row 12's own
+`PROVENANCE.md`/`README.md`/`NOTE.md` + the shared `PROVENANCE-LEDGER.md`;
+`stage2-mapping.md` unchanged (never claimed row 12 literal). Note
+`history/13-07-2026_01-16-03_row12-provenance.md`. On `capstone-bootstrap-b`, pushed.
+
+---
+
 # Agent-B delta (2026-07-10, task 012) — HIERARCHICAL family literal across 3 languages
 
 **The HIERARCHICAL-REVOKE family now has THREE literal real-SQLite repros in three
