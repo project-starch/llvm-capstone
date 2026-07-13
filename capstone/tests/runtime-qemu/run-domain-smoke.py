@@ -117,6 +117,14 @@ def parse_args() -> argparse.Namespace:
         default=1.0,
         help="Multiply the default expect timeouts by this factor.",
     )
+    parser.add_argument(
+        "--qemu-extra-arg",
+        action="append",
+        default=[],
+        help="Extra argument appended verbatim to the qemu command line "
+        "(repeatable). Additive; used e.g. by the borrow-cost probe to pass "
+        "-icount for a deterministic instruction count.",
+    )
     args = parser.parse_args()
     if not args.domains and not args.guest_command:
         parser.error("provide at least one domain path or one --guest-command")
@@ -265,6 +273,7 @@ def main() -> int:
         "-cpu",
         "rv64,sstc=false,h=false",
     ]
+    qemu_cmd.extend(args.qemu_extra_arg)
 
     with log_file.open("w", encoding="utf-8") as log:
         normalized_log = NormalizedLogWriter(log)

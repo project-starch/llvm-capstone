@@ -2,6 +2,32 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-state.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-state.md` at Agent-B bring-up (2026-07-08).
 
+# Agent-B delta (2026-07-13, task 014) — borrow-path cost measured (paper deliverable 2)
+
+**The paper's deferred deliverable 2 now has a citable number.** Vehicle (a),
+**confirmed with the human at the gate**: a dynamic-instruction-count proxy on
+the QEMU functional model (not cycle-accurate timing — that needs an FPGA/gem5
+vehicle not in the tree). Added an emulator readout **`csrdicount`** to
+`capstone-qemu` (reads `icount_get_raw()`; under `-icount` one tick == one
+retired instruction) and a new `tests/runtime-qemu/borrow-cost-probe/` that, in
+one domain, measures three variants of the same borrow-one-word boundary op:
+
+- **raw pointer** = 2 instr/op (O(1));
+- **capability borrow** (`mrev`+`delin`+access+`revoke`, inline in-domain) =
+  **6 instr/op**, i.e. **+4 over raw**, **payload-independent** (O(1));
+- **defensive copy** = `2 + payload/8` instr (O(payload)): 34 at 256 B, 130 at
+  1024 B.
+
+So borrow **stays close to raw (3.0×, +4 instr)** and is **well below copy
+(5.7×–21.7× cheaper at 256 B–1024 B, gap grows with payload)**. Dynamic counts
+match the `-O2` disassembly exactly. **Label any paper number a functional-model
+instruction-count proxy.** Full note: `tests/runtime-qemu/borrow-cost-probe/
+RESULTS.md`; trail: `history/13-07-2026_16-52-21_borrow-path-perf.md`.
+**Additive; `capstone-qemu` gitlink bumped (my lane, submodule pushed first); no
+`llvm/` change; A's repros/allocators/monitor untouched.**
+
+---
+
 # Agent-B delta (2026-07-13, task 013) — row-12 provenance citation-mismatch resolved
 
 **The corpus's last known provenance liability is closed.** A's ledger flagged
