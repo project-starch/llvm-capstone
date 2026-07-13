@@ -2,6 +2,41 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-state.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-state.md` at Agent-B bring-up (2026-07-08).
 
+# Agent-B delta (2026-07-13, task 015) — CHERI corpus baseline (paper "Task 1")
+
+**The empirical CHERI column of the security table now exists.** Built the full
+CHERI-RISC-V **purecap** stack out-of-tree via cheribuild (`~/cheri-ws`, nothing
+in `llvm/`): CHERI-LLVM clang 17, CheriBSD purecap FreeBSD 15-CURRENT
+(`CHERI_CAPREVOKE`), `qemu-system-riscv64cheri` 7.1.0. Ran each corpus `before.c`
+purecap under three revocation configs (each confirmed with
+`malloc_revoke_enabled()`):
+
+- **spatial** (revoke off): blocks **3/15** — only the null-derefs (rows 12/13/14,
+  synchronous capability-tag fault). All 12 temporal defects run to completion.
+- **temporal** (async, the CheriBSD default): blocks **4/15** — the 3 null-derefs
+  plus the double-free (row 11, caught by the **allocator's abort**, not a sweep).
+  **All 10 use-after-free rows still MISS at the contract point** — the dangling
+  capability is revoked only by a later stop-the-world sweep, never synchronously
+  at `step`/`reset`/`finalize`/`close`. **This is the paper's thesis, confirmed.**
+- **eager** (revoke on every free, non-default + expensive): blocks all 15 shim
+  rows — but the **real diesel reuse-not-free case (`row3_reuse`) is blocked by NO
+  config** (stale-but-allocated: the cap stays tagged and in-bounds). The clean
+  "CHERI-can't" headline.
+
+**Methodology note the paper MUST carry:** upstream SQLite does not run purecap in
+a standalone binary here (`SIGBUS`/`BUS_ADRALN` in `sqlite3_open` at
+`THREADSAFE=0`; deadlock at `THREADSAFE=1`; both vanilla and CheriBSD-patched
+`contrib/sqlite3` 3.46.1). Each shim is therefore compiled **VERBATIM** against a
+minimal SQLite-lifecycle harness (`mock-sqlite/`) that reproduces the exact
+alloc/free/callback/invalidation events (harness runs clean purecap:
+`sanity_mock`=0, real-sqlite sanity=138), built **`-O0`** so the UB dangling
+access is emitted. **Additive, measurement only: no `llvm/` change, no
+`capstone-qemu` change, no gitlink bump** — only `capstone/tests/cheri-baseline/`.
+RESULTS `tests/cheri-baseline/RESULTS.md`; trail
+`history/13-07-2026_20-45-00_cheri-corpus-test.md`. No *our-QEMU* rootfs lock.
+
+---
+
 # Agent-B delta (2026-07-13, task 014) — borrow-path cost measured (paper deliverable 2)
 
 **The paper's deferred deliverable 2 now has a citable number.** Vehicle (a),

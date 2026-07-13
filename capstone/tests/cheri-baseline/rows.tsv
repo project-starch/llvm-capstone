@@ -1,0 +1,20 @@
+# Trimmed 15-row corpus -> on-disk cve-repros dir + oracle + predicted CHERI outcome.
+# The on-disk dirs still use the pre-trim 19-row numbering; this maps the paper's
+# 15-row security table onto them (old rows 15/17/18/19 dropped as out-of-scope;
+# old row 16 -> new row 15). See PROVENANCE-LEDGER.md and agentB-015 task.
+# cols: newrow  dir  hostoracle  defectclass  predA(spatial)  predB(+sweep)
+1	row1_cpython_progress_uaf	heap-use-after-free	uaf-freed	miss	sweep
+2	row2_rusqlite_hook_closure_uaf	heap-use-after-free	uaf-freed	miss	sweep
+3	row3_diesel_colname_cached	heap-use-after-free	stale-colname	miss	miss
+4	row4_php_stmt_after_close	heap-use-after-free	uaf-freed	miss	sweep
+5	row5_php_destruction_order	heap-use-after-free	uaf-freed	miss	sweep
+6	row6_php_udf_uaf	heap-use-after-free	uaf-freed	miss	sweep
+7	row7_cpython_cursor_dealloc	heap-use-after-free	uaf-freed	miss	sweep
+8	row8_cpython_backup_closed	heap-use-after-free	uaf-freed	miss	sweep
+9	row9_ruby_finalize_after_dbfree	heap-use-after-free	uaf-freed	miss	sweep
+10	row10_ruby_stmt_reuse_after_close	heap-use-after-free	uaf-freed	miss	sweep
+11	row11_go_double_finalize	bad-free	double-free	miss	catch
+12	row12_expo_unfinalized_close	null-deref	null-deref	trap	trap
+13	row13_cpython_deleted_rowfactory	null-deref	null-call	trap	trap
+14	row14_cpython_uninit_connection	null-deref	null-deref	trap	trap
+15	row16_datasette_authorizer_ctx	heap-use-after-free	uaf-freed	miss	sweep
