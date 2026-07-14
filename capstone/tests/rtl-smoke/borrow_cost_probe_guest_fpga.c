@@ -28,6 +28,11 @@
 
 #define TAG "borrow-cost-fpga"
 
+/* REV_SHARED: the host keeps a valid mapping after sharing (unlike
+ * REV_TRANSFERRED 0x3), so it can read the results back. Same value the
+ * shared-region-probe uses for its host-retained sentinel region. */
+#define BORROW_COST_ANNOTATION_REV_SHARED 0x2u
+
 static int fail_cleanup(const char *message, unsigned long observed) {
   fprintf(stderr, "%s: %s (observed=0x%016lx)\n", TAG, message, observed);
   fflush(stderr);
@@ -51,18 +56,36 @@ int main(int argc, char **argv) {
     return fail_cleanup("create_dom failed", (unsigned long)dom_id);
   print_nobuf("%s: created domain ID = %lu\n", TAG, dom_id);
 
-  region_id_t region_id = create_region(BORROW_COST_REGION_SIZE);
-  unsigned char *region_bytes =
-      (unsigned char *)map_region(region_id, BORROW_COST_REGION_SIZE);
-  if (!region_bytes)
-    return fail_cleanup("map_region failed", 0);
-  memset(region_bytes, 0, BORROW_COST_REGION_SIZE);
-  print_nobuf("%s: created region ID = %lu\n", TAG, region_id);
+  /* TWO regions (see borrow_cost_fpga.c): (1) the LINEAR arena the borrow loop
+   * mrev/revokes, handed REV_TRANSFERRED; (2) the results region, handed
+   * REV_SHARED so the host RETAINS its mapping and can read the eight results
+   * back after the call. A single REV_TRANSFERRED region cannot be read back by
+   * the host -- the monitor drops the host mapping and the readback traps
+   * (task-007 host-landmine; caught under QEMU, see RESULTS.md). */
+  region_id_t arena_id = create_region(BORROW_COST_REGION_SIZE);
+  unsigned char *arena_bytes =
+      (unsigned char *)map_region(arena_id, BORROW_COST_REGION_SIZE);
+  if (!arena_bytes)
+    return fail_cleanup("map_region (arena) failed", 0);
+  memset(arena_bytes, 0, BORROW_COST_REGION_SIZE);
 
-  /* Hand the region over LINEAR + RW, monitor keeps no revocation handle. */
-  shared_region_annotated(dom_id, region_id, BORROW_COST_ANNOTATION_PERM_INOUT,
+  region_id_t results_id = create_region(BORROW_COST_REGION_SIZE);
+  unsigned char *region_bytes =
+      (unsigned char *)map_region(results_id, BORROW_COST_REGION_SIZE);
+  if (!region_bytes)
+    return fail_cleanup("map_region (results) failed", 0);
+  memset(region_bytes, 0, BORROW_COST_REGION_SIZE);
+  print_nobuf("%s: created arena region ID = %lu, results region ID = %lu\n",
+              TAG, arena_id, results_id);
+
+  /* Share ORDER is load-bearing: the domain distinguishes the two regions by
+   * arrival order (arena first, results second). */
+  shared_region_annotated(dom_id, arena_id, BORROW_COST_ANNOTATION_PERM_INOUT,
                           BORROW_COST_ANNOTATION_REV_TRANSFERRED);
-  print_nobuf("%s: region transferred to domain (LIN, RW)\n", TAG);
+  shared_region_annotated(dom_id, results_id, BORROW_COST_ANNOTATION_PERM_INOUT,
+                          BORROW_COST_ANNOTATION_REV_SHARED);
+  print_nobuf("%s: arena transferred (LIN, RW); results shared (host retains)\n",
+              TAG);
 
   unsigned long retval = call_dom(dom_id);
   print_nobuf("%s: call retval = 0x%08lx\n", TAG, retval);

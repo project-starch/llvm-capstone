@@ -75,10 +75,16 @@ on-board bitstream.
    - simplest first: a trivial Capstone binary (a capability materialise + bounded access),
    - then one **corpus repro** — confirm it **faults on the RTL at the same point** it faults
      under QEMU (this is the "works on QEMU ⇒ works on RTL" check).
-3. **First real number — via the `rdcycle`/`mcycle` CSR. → DRAFTED in
-   `tests/rtl-smoke/` (staged, untested).** The port of the task-014 borrow-cost-probe
-   already exists: same measured loops (byte-identical), `csrdicount` → `rdcycle`, and
-   results handed back through the shared region so the controller prints them over UART.
+3. **First real number — via the `rdcycle`/`mcycle` CSR. → STAGED + QEMU-VALIDATED
+   in `tests/rtl-smoke/` (2026-07-14; `RESULTS.md`).** The port of the task-014
+   borrow-cost-probe builds `-O2` and runs green end-to-end on the functional model:
+   same measured loops (byte-identical), `csrdicount` → `rdcycle`, results handed back
+   through a **retained (`REV_SHARED`) results region** so the controller prints them
+   over UART. QEMU validation resolved the top open item (**`rdcycle` reads inside the
+   domain with no fault**) and caught two defects now fixed in the port: the
+   single-region read-back host-landmine (task-007) and an `-O2` backend ICE (flagged
+   to the codegen lane, array-store workaround in place). What's left is genuinely
+   hardware-only: build `fw_payload.bin`, overlay, boot, run.
    Files: `borrow_cost_fpga.c` (domain), `borrow_cost_probe_guest_fpga.c` (controller),
    `fpga_instrument.h`, `build-borrow-cost-fpga.sh`, `README.md`. **B's job:** compile on
    the caplifive toolchain, embed the `.user`+`.dom` in the caplifive-system fpga overlay,

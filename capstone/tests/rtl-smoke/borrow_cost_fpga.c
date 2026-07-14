@@ -17,7 +17,24 @@
 
 /* ---- domain entry glue (identical to the QEMU probe) ---- */
 
-static void *arena;
+/* Two regions arrive, both as REGION_SHARE entries, distinguished by ORDER:
+ *   regions[0] = the LINEAR arena (REV_TRANSFERRED) the borrow loop mrev/revokes;
+ *   regions[1] = the results region (REV_SHARED) the host RETAINS, so it can read
+ *                the eight results back after the call.
+ * The single-region design (write results through the reclaimed borrow handle,
+ * host reads the same region back) is UNSOUND: the arena is REV_TRANSFERRED, so
+ * after the call the monitor has dropped the host's mapping and the host readback
+ * traps (helper_cslcc tag assertion -- the task-007 host-landmine). Validated
+ * under QEMU: see RESULTS.md.
+ *
+ * The array-indexed store below is DELIBERATE: a conditional store of the
+ * delivered capability into two *distinct named* globals (arena=arg / else
+ * results=arg) ICEs the Capstone backend at -O2 (segfault in codegen; -O0/-O1
+ * fine). The indexed store compiles. Flagged to the codegen lane; see RESULTS.md. */
+static void *regions[2];
+static int share_count;
+#define arena regions[0]
+#define results_region regions[1]
 
 static volatile unsigned long raw_src[BORROW_COST_BUF_BYTES / sizeof(unsigned long)]
     __attribute__((aligned(16)));
@@ -27,7 +44,7 @@ static volatile unsigned long sink;
 
 static inline int receive(void *arg, unsigned func) {
   if (func == BORROW_COST_DPI_REGION_SHARE) {
-    arena = arg;
+    regions[share_count++ & 1] = arg; /* [0]=arena, [1]=results, by arrival order */
     return 1;
   }
   return 0;
@@ -56,10 +73,7 @@ static unsigned long measure_raw(volatile unsigned long *word) {
   return t1 - t0;
 }
 
-/* As the QEMU version, but also threads out the final reclaimed LINEAR handle
- * (`*out_final`) so domain_main can write results through it -- it is a valid,
- * in-bounds capability over the region base. */
-static unsigned long measure_borrow(void *lin, void **out_final) {
+static unsigned long measure_borrow(void *lin) {
   unsigned long i, t0, t1, acc = 0;
   void *c = lin;
   *(volatile unsigned long *)lin = 0x5E5E5E5Eu;
@@ -72,7 +86,6 @@ static unsigned long measure_borrow(void *lin, void **out_final) {
   }
   t1 = rd_icount();
   sink ^= acc;
-  *out_final = c;
   return t1 - t0;
 }
 
@@ -107,17 +120,15 @@ void domain_main(void *arg, unsigned func) {
     raw_src[k] = 0x5E5E5E5Eu + k;
   }
 
-  /* Order: the non-borrow variants first (they never touch the arena), then
-   * borrow LAST -- it consumes/reclaims the arena, and its final reclaimed
-   * handle is what we write the results through. */
   unsigned long empty = measure_empty();
   unsigned long raw = measure_raw(raw_src);
   unsigned long copy = measure_copy(raw_src, BORROW_COST_COPY_BYTES);
   unsigned long copy2 = measure_copy(raw_src, BORROW_COST_COPY_BYTES_2);
-  void *out = arena;
-  unsigned long borrow = measure_borrow(arena, &out);
+  unsigned long borrow = measure_borrow(arena);
 
-  fpga_write_results(out, BORROW_COST_ITERS, empty, raw, borrow, copy,
+  /* Results go to the RETAINED results region, NOT the reclaimed arena handle:
+   * the arena is REV_TRANSFERRED and the host can no longer read it back. */
+  fpga_write_results(results_region, BORROW_COST_ITERS, empty, raw, borrow, copy,
                      BORROW_COST_COPY_BYTES, copy2, BORROW_COST_COPY_BYTES_2);
 
   *res = BORROW_COST_RET_OK;

@@ -4,10 +4,13 @@ Hardware port of the task-014 borrow-cost probe. Goal: the **cycle-accurate**
 per-operation cost (raw / borrow / copy) that the QEMU instruction-count proxy
 in `paper/evaluation.tex` (`tab:borrowcost`, `sec:eval-perf`) stands in for.
 
-**Status: prepared, UNTESTED on hardware.** Everything here is built and staged
-by an agent; the build must be compiled on the caplifive toolchain and the run
-is human-driven on the FPGA web console. Two open items (below) may need one
-tweak each — flag them to the RTL collaborator while reachable.
+**Status: plumbing VALIDATED under QEMU (2026-07-14); UNTESTED on hardware.** The
+two-region result hand-off, the `rdcycle` read inside a domain, and the
+controller read-back all work on the functional model — see `RESULTS.md`. The
+QEMU pass caught (and this port now fixes) two defects that would have wasted a
+hardware slot: an unsound single-region read-back (the task-007 host-landmine)
+and an `-O2` Capstone-backend ICE. The run on the board is still human-driven on
+the FPGA web console; the remaining open items (below) are narrowed.
 
 ## What changed from the QEMU probe
 
@@ -20,7 +23,11 @@ CVA6/Capstone core:
 | Concern | QEMU probe | This variant |
 |---------|-----------|--------------|
 | Cycle count | `csrdicount` (QEMU icount op) | `rdcycle` CSR (`fpga_instrument.h`) |
-| Result output | `csdebugcount*` → QEMU serial | domain writes 8 results into the shared region; controller `printf`s them → **UART** |
+| Result output | `csdebugcount*` → QEMU serial | domain writes 8 results into a **retained (`REV_SHARED`) results region**; controller `printf`s them → **UART** |
+
+The result region is **separate** from the borrow arena and handed `REV_SHARED`,
+not `REV_TRANSFERRED`: a transferred region cannot be read back by the host after
+the domain revokes it (the read traps — task-007 host-landmine; see `RESULTS.md`).
 
 Files:
 - `borrow_cost_fpga.c` — domain payload (Capstone clang). Measured loops copied
@@ -93,13 +100,14 @@ should roughly bound the hardware cycle ratios.
 
 ## Open items (verify on first boot; ask the collaborator while reachable)
 
-1. **`rdcycle` inside a Capstone domain.** `rdcycle` reads the `cycle` CSR, which
-   S/U mode may read only if the higher level sets `[m|s]counteren.CY`. Linux sets
-   `scounteren.CY`, but whether the monitor exposes the counter to a *domain* is
-   unconfirmed. **If the domain faults on `rdcycle`:** either (a) have the monitor
-   set counteren.CY for the domain context, or (b) read `mcycle` bare-metal in
-   M-mode (swap the one asm line in `fpga_instrument.h`; `mcycle` is always M-mode
-   readable — `capstone-ariane core/csr_regfile.sv:677`).
+1. **`rdcycle` inside a Capstone domain — RESOLVED for QEMU, verify on board.**
+   Under our QEMU + OpenSBI Capstone monitor the domain reads `rdcycle` with **no
+   fault** (`RESULTS.md`), so `[m|s]counteren.CY` is exposed to the domain context
+   there. Likely fine on the FPGA too, but the on-board monitor build could
+   differ. **If the domain faults on `rdcycle` on hardware:** either (a) have the
+   monitor set counteren.CY for the domain context, or (b) read `mcycle`
+   bare-metal in M-mode (swap the one asm line in `fpga_instrument.h`; `mcycle` is
+   always M-mode readable — `capstone-ariane core/csr_regfile.sv:677`).
 2. **Overlay path / defconfig.** The exact `BR2_ROOTFS_OVERLAY` wiring in
    `caplifive-system` (question is out with the collaborator). Until confirmed,
    the overlay dir above is a placeholder.
