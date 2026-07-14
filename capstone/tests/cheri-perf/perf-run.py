@@ -32,8 +32,12 @@ def main():
         q.sendline("stty -echo 2>/dev/null; true")
         q.expect(r"# ", timeout=30)
         # The guest script sets sysctls + runs the bench for all three configs.
-        # Large ITERS under TCG can be slow -- give it room.
-        q.sendline("sh /root/cheri-perf/run-in-guest.sh")
+        # Large ITERS under TCG can be slow -- give it room. GUEST_ENV lets the
+        # host inject guest env (e.g. RC_SKIP_MICRO=1 to run only the tree arm).
+        import os as _os
+        genv = _os.environ.get("GUEST_ENV", "").strip()
+        prefix = (genv + " ") if genv else ""
+        q.sendline(f"{prefix}sh /root/cheri-perf/run-in-guest.sh")
         q.expect(r"===CHERI-PERF-END===", timeout=3600)
         q.expect(r"# ", timeout=60)
         q.sendline("poweroff 2>/dev/null || halt -p 2>/dev/null || shutdown -p now")

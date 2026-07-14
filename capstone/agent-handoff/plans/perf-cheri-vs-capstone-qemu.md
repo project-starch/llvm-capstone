@@ -152,10 +152,29 @@ trials agree to 3%); the two QEMU baselines are different vehicles (bare-metal
 domain vs full-OS jemalloc) so only within-vehicle overhead + O(1)-vs-sweep
 asymptotics are load-bearing.
 
-**Paper DONE:** `paper/evaluation.tex` §`sec:eval-perf-compare` filled with
-`tab:perfcompare` + the three analysis paragraphs.
+**Real-workload arm DONE (2026-07-14).** A shared binary-search-tree
+build/lookup/destroy workload (`tests/shared/tree_workload.h`, 2000-node live-set,
+20k node lifecycles) run on both sides: CHERI `tests/cheri-perf/tree_cheri.c`
+(3 configs), Capstone `tests/runtime-qemu/revoke-cost-probe/revoke_cost_tree.c`
+(bump/norevoke/revoke). Result:
 
-**Remaining:** optional applied case (SQLite workload, plan candidate #2) and the
-Capstone RTL cycle-accurate follow-on (`tests/rtl-smoke/`, human-in-the-loop).
+| | spatial/bump | async/norevoke | eager/revoke |
+|---|---|---|---|
+| CHERI | 10,095 | 19,281 (**1.9x**) | **16.77M (1,661x)** |
+| Capstone (-O0) | 1,719 | 96,202 | +10 revoke-at-free (**O(1)**) |
+
+Real-workload confirms + sharpens the microbench: CHERI async is **1.9x** (real
+per-op work dilutes the amortized sweep -> the representative deployed number),
+eager stays ~16.8M/op, our revoke-at-free stays **O(1) +10 instr/op**
+(workload-independent). Capstone tree is **-O0** (its capability-value selects ICE
+the -O2/-O1 backend -- the codegen gap in COORDINATION.md); the revoke-vs-norevoke
+delta is O-level-robust so the +10 is sound. Alloc-side +94k is the Phase-0
+allocator's O(n) slot scan, not the mechanism.
+
+**Paper DONE:** `paper/evaluation.tex` §`sec:eval-perf-compare` = `tab:perfcompare`
+(microbench) + `tab:perftree` (real workload) + analysis paragraphs.
+
+**Remaining:** the Capstone RTL cycle-accurate follow-on (`tests/rtl-smoke/`,
+human-in-the-loop). The -O2 backend cap-select ICE is a compiler-lane item for B.
 
 Original proposal above retained for context; the Jason gate is dropped.

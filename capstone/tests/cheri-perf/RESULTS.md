@@ -72,6 +72,59 @@ its own QEMU vehicle:
   transferable, apples-to-apples quantity is the **marginal Δ per free** above and
   the **within-vehicle overhead ratio**.
 
+## Real workload — binary-search-tree build/lookup/destroy
+
+The microbench above isolates the mechanism but is a synthetic tight loop with an
+empty heap at every free. To price temporal safety on a **real pointer-chasing
+workload with a live-set**, we run the shared BST workload
+(`tests/shared/tree_workload.h`): build a 2000-node tree, do 2000 lookups that
+chase pointers through it, tear it down; 10 rounds (20 000 node lifecycles). All
+2000 nodes are live during lookup + until teardown, so a revocation sweep has a
+genuine live capability graph to scan. Same source runs on the Capstone side
+(`tests/runtime-qemu/revoke-cost-probe/revoke_cost_tree.c`).
+
+**CHERI** (`rc_tree`, keys=2000, rounds=10, 20 000 ops; async/spatial n=3, eager n=1):
+
+| config | per-op (instr) | overhead vs spatial |
+|--------|---------------:|--------------------:|
+| **spatial** (baseline) | **10,095** | — |
+| **temporal** (async)   | **19,281** | **+9,186  (1.91×)** |
+| **eager** (every-free) | **16.77 M** | **+16.76 M  (1,661×)** |
+
+**Capstone** (`tree_cost_*`, keys=2000, rounds=2, 4 000 ops; `-O0` — the tree's
+capability-value selects ICE the `-O2`/`-O1` backend, the codegen gap flagged for
+the compiler lane):
+
+| config | per-op (instr) | note |
+|--------|---------------:|------|
+| **bump** (baseline) | **1,719** | — |
+| **revoke-on-free, revoke off** | **96,202** | +94,483: Phase-0 allocator O(n) slot-scan (see below) |
+| **full revoke-on-free** | **96,212** | **revoke-at-free = +10 instr/op, O(1)** |
+
+### Reading (the real-workload story)
+
+- **CHERI async on a real workload is 1.91×**, not the microbench's 6.4×. The
+  ratio drops because the workload does real per-op work (~10 k instr of build +
+  pointer-chasing lookup), so the amortized quarantine sweep is a smaller
+  *fraction* of the total. **1.91× (≈+91%) is the more representative deployed-
+  CHERI temporal-safety overhead** — and recall async still blocks 0/11 UAF at the
+  contract point (`tab:cheri`).
+- **CHERI eager stays catastrophic: ~16.8 M instr/op, 1,661×** — even higher per
+  free than the microbench's 14 M, because the 2000-node live-set means more live
+  capabilities for each sweep to scan. Eager is the config that matches our
+  security; it is not performance-viable.
+- **Our revoke-at-free is +10 instr/op (O(1)) on the real workload too** — the
+  revoke−norevoke delta is workload-independent by construction (both pay the same
+  alloc-side cost; they differ only by the free-time revoke intrinsic). It was +5
+  at `-O2` in the microbench; `-O0` here roughly doubles it. **This is the number
+  opposite CHERI eager's 16.8 M**: ~6 orders of magnitude, now confirmed on a real
+  pointer-chasing workload, not just a synthetic loop.
+- **The Capstone alloc-side +94 k is NOT the mechanism** — it is the Phase-0
+  `revoke_on_free_alloc.h` doing an O(n) linear `rof_find`/slot scan per malloc and
+  free, which explodes with a 2000-object live-set. A production allocator
+  (umm_malloc, #78) makes that O(1). The revocation primitive is the +10; the
+  allocator around it is deliberately naive Phase-0.
+
 ## Caveats / honesty
 
 - **Proxy, not timing.** Dynamic instruction count; QEMU has no pipeline/cache/

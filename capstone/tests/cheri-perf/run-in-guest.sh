@@ -41,11 +41,31 @@ set_cfg() { # $1 = spatial|temporal|eager
 }
 
 echo "===CHERI-PERF-BEGIN iters=$ITERS block=$BLOCK trials=$TRIALS==="
+if [ "${RC_SKIP_MICRO:-0}" = 1 ]; then
+  echo "RCPERF-NOTE microbench skipped (RC_SKIP_MICRO=1)"
+else
 for cfg in spatial temporal eager; do
   set_cfg "$cfg"
   t=1
   while [ "$t" -le "$TRIALS" ]; do
     "$BIN" "$cfg" "$ITERS" "$BLOCK"
+    t=$((t + 1))
+  done
+done
+fi
+
+# Real-workload arm: the binary-search-tree build/lookup/destroy workload.
+# Each free is a revocation point; under eager that is a full sweep, so eager
+# gets ONE trial (still ~20k sweeps) while spatial/async get the normal count.
+TREEBIN=./rc_tree
+[ "$BIN" = ./rc_cycle ] && TREEBIN=./rc_tree_cycle
+echo "RCTREE-BIN $TREEBIN"
+for cfg in spatial temporal eager; do
+  set_cfg "$cfg"
+  tt="$TRIALS"; [ "$cfg" = eager ] && tt=1
+  t=1
+  while [ "$t" -le "$tt" ]; do
+    "$TREEBIN" "$cfg"
     t=$((t + 1))
   done
 done

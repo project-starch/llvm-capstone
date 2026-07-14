@@ -31,32 +31,57 @@ def main():
         iters, block = int(m.group(2)), int(m.group(3))
         per.setdefault(mode, []).append(float(m.group(6)))
 
-    if not per:
-        print("no RCPERF lines found; boot or run likely failed. Inspect the log.")
-        return 1
-
-    med = {k: statistics.median(v) for k, v in per.items()}
-    print(f"counter        : {counter}")
-    print(f"iterations     : {iters}   block: {block} B   trials/config: "
-          f"{max(len(v) for v in per.values())}")
-    print()
-    base = med.get("spatial")
     hdr = f"{'config':<10} {'per-op (instr)':>16} {'overhead vs spatial':>22}"
-    print(hdr)
-    print("-" * len(hdr))
-    for mode in ("spatial", "temporal", "eager"):
-        if mode not in med:
-            continue
-        v = med[mode]
-        if base is not None and mode != "spatial":
-            ov = f"+{v - base:.1f}  ({v / base:.2f}x)"
-        else:
-            ov = "(baseline)"
-        print(f"{mode:<10} {v:>16.2f} {ov:>22}")
-    print()
-    for mode in ("spatial", "temporal", "eager"):
-        if mode in per and len(per[mode]) > 1:
-            print(f"  {mode} trials: {['%.1f' % x for x in per[mode]]}")
+
+    if per:
+        med = {k: statistics.median(v) for k, v in per.items()}
+        print(f"counter        : {counter}")
+        print(f"=== microbench: malloc/touch/free  (iters={iters}, block={block} B, "
+              f"trials/config={max(len(v) for v in per.values())}) ===")
+        base = med.get("spatial")
+        print(hdr)
+        print("-" * len(hdr))
+        for mode in ("spatial", "temporal", "eager"):
+            if mode not in med:
+                continue
+            v = med[mode]
+            ov = (f"+{v - base:.1f}  ({v / base:.2f}x)"
+                  if base is not None and mode != "spatial" else "(baseline)")
+            print(f"{mode:<10} {v:>16.2f} {ov:>22}")
+        for mode in ("spatial", "temporal", "eager"):
+            if mode in per and len(per[mode]) > 1:
+                print(f"  {mode} trials: {['%.1f' % x for x in per[mode]]}")
+    else:
+        print("(microbench skipped or produced no RCPERF lines)")
+
+    # ---- real-workload (binary-search-tree) arm ----
+    tree = {}
+    tkeys = trounds = None
+    for m in re.finditer(
+        r"RCTREE mode=(\w+) keys=(\d+) rounds=(\d+) ops=(\d+) instr=(\d+) perop=([\d.]+)",
+        txt,
+    ):
+        mode = m.group(1)
+        tkeys, trounds = int(m.group(2)), int(m.group(3))
+        tree.setdefault(mode, []).append(float(m.group(6)))
+    if tree:
+        tmed = {k: statistics.median(v) for k, v in tree.items()}
+        tbase = tmed.get("spatial")
+        print()
+        print(f"=== real workload: BST build/lookup/destroy "
+              f"(keys={tkeys}, rounds={trounds}) ===")
+        print(hdr)
+        print("-" * len(hdr))
+        for mode in ("spatial", "temporal", "eager"):
+            if mode not in tmed:
+                continue
+            v = tmed[mode]
+            if tbase is not None and mode != "spatial":
+                ov = f"+{v - tbase:.1f}  ({v / tbase:.2f}x)"
+            else:
+                ov = "(baseline)"
+            n = f"  [n={len(tree[mode])}]" if len(tree[mode]) != 1 else ""
+            print(f"{mode:<10} {v:>16.2f} {ov:>22}{n}")
     return 0
 
 

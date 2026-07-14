@@ -42,6 +42,15 @@ echo "[*] purecap flags: $CFLAGS ; $OPT"
 "$CC" $CFLAGS $OPT -g -DUSE_CYCLE "$SCRIPT_DIR/revoke_cost_cheri.c" -o "$OUT/rc_cycle" \
   2>"$OUT/rc_cycle_cc.log" || { echo "rc_cycle build FAILED"; cat "$OUT/rc_cycle_cc.log" >&2; exit 4; }
 
+# Real-workload arm: the shared binary-search-tree build/lookup/destroy workload.
+# TW_ROUNDS=10 (20k frees) bounds eager's cost (each free is a ~14M-instr sweep)
+# while keeping a 2000-node live-set for the sweep to scan.
+TREE_DEFS=${TREE_DEFS:--DTW_KEYS=2000 -DTW_ROUNDS=10}
+"$CC" $CFLAGS $OPT -g $TREE_DEFS "$SCRIPT_DIR/tree_cheri.c" -o "$OUT/rc_tree" \
+  2>"$OUT/rc_tree_cc.log" || { echo "rc_tree build FAILED"; cat "$OUT/rc_tree_cc.log" >&2; exit 4; }
+"$CC" $CFLAGS $OPT -g $TREE_DEFS -DUSE_CYCLE "$SCRIPT_DIR/tree_cheri.c" -o "$OUT/rc_tree_cycle" \
+  2>"$OUT/rc_tree_cycle_cc.log" || { echo "rc_tree_cycle build FAILED"; cat "$OUT/rc_tree_cycle_cc.log" >&2; exit 4; }
+
 # Revocation-status probe (reused from the cheri-baseline): confirms the config
 # the sysctl set is actually what the process runtime enforces.
 STATUS_SRC="$SCRIPT_DIR/../cheri-baseline/cheri_status.c"
