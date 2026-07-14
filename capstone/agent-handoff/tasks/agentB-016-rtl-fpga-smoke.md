@@ -75,13 +75,17 @@ on-board bitstream.
    - simplest first: a trivial Capstone binary (a capability materialise + bounded access),
    - then one **corpus repro** — confirm it **faults on the RTL at the same point** it faults
      under QEMU (this is the "works on QEMU ⇒ works on RTL" check).
-3. **First real number — via the `mcycle` CSR.** Port the **task-014 borrow-cost-probe**
-   (`tests/runtime-qemu/borrow-cost-probe/`) to read **`mcycle`/`rdcycle`** in place of the
-   QEMU `csrdicount` instruction-count proxy, bracketing the same raw / borrow / copy loops, and
-   have it **print the cycle deltas over UART**. Load + run on the RTL → the three numbers are
-   the deliverable (this is the **real cycle-accurate** figure the proxy stood in for; it fills
-   the paper's `evaluation.tex` perf placeholder). Keep an instruction-count readout too, for a
-   direct cross-check against the QEMU proxy.
+3. **First real number — via the `rdcycle`/`mcycle` CSR. → DRAFTED in
+   `tests/rtl-smoke/` (staged, untested).** The port of the task-014 borrow-cost-probe
+   already exists: same measured loops (byte-identical), `csrdicount` → `rdcycle`, and
+   results handed back through the shared region so the controller prints them over UART.
+   Files: `borrow_cost_fpga.c` (domain), `borrow_cost_probe_guest_fpga.c` (controller),
+   `fpga_instrument.h`, `build-borrow-cost-fpga.sh`, `README.md`. **B's job:** compile on
+   the caplifive toolchain, embed the `.user`+`.dom` in the caplifive-system fpga overlay,
+   run, capture the `RESULT` lines. **One open item to check on first boot:** whether
+   `rdcycle` is readable inside a Capstone domain (monitor `counteren.CY`); if it faults,
+   fall back to M-mode `mcycle` (one asm-line swap in `fpga_instrument.h`). This fills the
+   paper's `evaluation.tex` perf placeholder with the real cycle-accurate figure.
 4. **Record the gap.** Note anything that differed between QEMU and RTL (boot format, a config,
    a port, a missing instruction, `mcycle` availability in the Capstone build) — that list is
    exactly what the meeting wanted surfaced while the collaborator is reachable.
