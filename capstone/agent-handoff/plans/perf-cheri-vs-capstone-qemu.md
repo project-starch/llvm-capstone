@@ -131,9 +131,31 @@ cost is dominated by making each allocation independently revocable (+53), a
 property of the naive Phase-0 allocator, not the revoke primitive. This is the
 number to put opposite CHERI's async/eager sweep cost.
 
-**CHERI half: TODO** — same microbench on `qemu-system-riscv64cheri` (task-015
-stack), `CHERI_CAPREVOKE` off/async/eager, `rdcycle`/`rdinstret` under `-icount`.
-Likely an Agent-B task (owns the CHERI stack + heavy runs). Then the side-by-side
-table fills `paper/evaluation.tex` §`sec:eval-perf-compare`.
+**CHERI half DONE (2026-07-14).** `tests/cheri-perf/` (build/run `run.sh`) runs the
+IDENTICAL malloc/touch/free loop on CheriBSD purecap under
+`qemu-system-riscv64cheri`, `CHERI_CAPREVOKE` off/async/eager via the
+cheri-baseline sysctl knobs, `rdinstret` bracket (counts user+kernel, so the
+kernel revocation sweep is included). Result (`cheri-perf/RESULTS.md`):
+
+| config | per-op | overhead vs spatial |
+|---|---|---|
+| spatial (rev off) | 3,760 instr | — |
+| async (deployed default) | 23,977 instr | 6.4x |
+| **eager (revoke-every-free)** | **14.03 M instr** | **3,731x** |
+
+**Eager — the only CHERI config that matches our security — costs ~14M instr per
+free** (address-space sweep), vs our revoke-at-free **+5 instr/op**: ~6 orders of
+magnitude at equal temporal security. Async is cheaper (6.4x) but catches 0/11
+UAF at the contract point. Method notes: `-icount` infeasible for eager
+(~2.8e12 instr/trial); eager is n=2 (3rd trial exceeded the pexpect window, 2
+trials agree to 3%); the two QEMU baselines are different vehicles (bare-metal
+domain vs full-OS jemalloc) so only within-vehicle overhead + O(1)-vs-sweep
+asymptotics are load-bearing.
+
+**Paper DONE:** `paper/evaluation.tex` §`sec:eval-perf-compare` filled with
+`tab:perfcompare` + the three analysis paragraphs.
+
+**Remaining:** optional applied case (SQLite workload, plan candidate #2) and the
+Capstone RTL cycle-accurate follow-on (`tests/rtl-smoke/`, human-in-the-loop).
 
 Original proposal above retained for context; the Jason gate is dropped.

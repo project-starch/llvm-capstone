@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""Parse RCPERF lines from the CHERI perf serial log and report the per-op
+instruction count for each revocation config plus the overhead over the
+spatial (revocation-off) baseline. Uses the median trial per config."""
+import re
+import sys
+import statistics
+
+
+def main():
+    if len(sys.argv) < 2:
+        print("usage: parse.py <serial.log>", file=sys.stderr)
+        return 2
+    txt = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+
+    counter = None
+    m = re.search(r"RCPERF-COUNTER\s+(\S+)", txt)
+    if m:
+        counter = m.group(1)
+    if "RCPERF-FATAL" in txt:
+        print("FATAL: no user-readable instruction counter in the guest; see log")
+        return 1
+
+    per = {}  # mode -> list of perop
+    iters = block = None
+    for m in re.finditer(
+        r"RCPERF mode=(\w+) iters=(\d+) block=(\d+) empty=(\d+) allocfree=(\d+) perop=([\d.]+)",
+        txt,
+    ):
+        mode = m.group(1)
+        iters, block = int(m.group(2)), int(m.group(3))
+        per.setdefault(mode, []).append(float(m.group(6)))
+
+    if not per:
+        print("no RCPERF lines found; boot or run likely failed. Inspect the log.")
+        return 1
+
+    med = {k: statistics.median(v) for k, v in per.items()}
+    print(f"counter        : {counter}")
+    print(f"iterations     : {iters}   block: {block} B   trials/config: "
+          f"{max(len(v) for v in per.values())}")
+    print()
+    base = med.get("spatial")
+    hdr = f"{'config':<10} {'per-op (instr)':>16} {'overhead vs spatial':>22}"
+    print(hdr)
+    print("-" * len(hdr))
+    for mode in ("spatial", "temporal", "eager"):
+        if mode not in med:
+            continue
+        v = med[mode]
+        if base is not None and mode != "spatial":
+            ov = f"+{v - base:.1f}  ({v / base:.2f}x)"
+        else:
+            ov = "(baseline)"
+        print(f"{mode:<10} {v:>16.2f} {ov:>22}")
+    print()
+    for mode in ("spatial", "temporal", "eager"):
+        if mode in per and len(per[mode]) > 1:
+            print(f"  {mode} trials: {['%.1f' % x for x in per[mode]]}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
