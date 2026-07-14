@@ -16,30 +16,57 @@ This is a **smoke test**, not the full perf eval (that is T7 in `plans/ndss-pivo
 Two questions only: **(1) does our Capstone-compiled binary run on the RTL?** and **(2) can we
 get a first real number off it?**
 
-## Step 0 — secure hardware access first (coordinate)
+## The platform (know this before you plan)
 
-Access is via the **hardware-access contact**, who has opened a **web deploy interface** to the
-RTL/FPGA. You do not control this — **coordinate on the shared Slack channel before building
-anything**, confirm you can reach the deploy interface, and note the access path in
-COORDINATION. If access is not yet available, report that immediately and stop — do not
-sink time into a harness you cannot run.
+Access is a **browser GUI, not SSH** — a WebSocket console at
+`https://fpga.corank.info/<token>/` controlling a **Genesys 2** board running the Capstone
+**CVA6/Ariane** core ("CapliFive"). Manual + website capture: `/tmp/capstone/FPGA_Remote.zip`
+(RTL repo `github.com/project-starch/capstone-ariane` is **private**; needs `gh auth`/a local
+clone to read `tracer.sv`/`cva6.sv`). Salient facts that shape the task:
+
+- **Human-in-the-loop.** Power / Flash bitstream (`.bit`) / Load boot image (`.bin` → JTAG to
+  `0x80000000`, ~2 min for 15 MB) / Reset / Trace Dump are **manual clicks**; the Terminal tab
+  is UART. An agent cannot drive this directly — **the human operates the ~5 clicks; you
+  prepare every artifact and analyse the pasted UART/trace output.**
+- **Shared board, 10-min idle timeout.** All users see one state; use **Lock** to hold the
+  board during a run. Book a window; batch the runs.
+- **Instruments.** Standard RISC-V **`mcycle`/`rdcycle` CSR** for cycle timing; a **hardware
+  tracer** (256-entry buffer; CSR `0x810` enable event groups, `0x811` watchpoint phys-addr,
+  `0x800` debug-print; dump via UART with switches 0/1) for fine-grained event traces.
+
+## Step 0 — resolve the boot-image question FIRST (blocker)
+
+Before building anything, confirm with the collaborator: **does our existing OpenSBI-monitor +
+rootfs image boot on this bootloader, or do we need a bare-metal `.bin` loaded at
+`0x80000000`?** (The platform loads a single `.bin` into an "update mode" bootloader — this may
+not match our QEMU OpenSBI+rootfs boot.) Also confirm: which **bitstream is preloaded** (is it
+the tracer-enabled Capstone build?) and whether a **scriptable API** exists behind the web UI.
+Coordinate on Slack; note the answers in COORDINATION. If access/boot path is not yet settled,
+report that and stop — do not sink time into an image that won't boot.
 
 ## Steps
 
-1. **Access** (Step 0). Confirm you can deploy/run on the RTL via the web interface.
+1. **Boot path settled** (Step 0). Boot-image format confirmed and access reachable.
 2. **Functional parity — start minimal.** Take one known-good artifact that already runs on
-   *our* QEMU and run it on the RTL:
+   *our* QEMU and run it on the RTL (as whatever `.bin` the boot path requires):
    - simplest first: a trivial Capstone binary (a capability materialise + bounded access),
    - then one **corpus repro** — confirm it **faults on the RTL at the same point** it faults
      under QEMU (this is the "works on QEMU ⇒ works on RTL" check).
-3. **First real number.** Run the **task-014 borrow-cost-probe** (`tests/runtime-qemu/borrow-cost-probe/`)
-   on the RTL and capture whatever the RTL exposes — **cycle count if available** (the real
-   timing the proxy stood in for), else retired-instruction count for cross-check against the
-   QEMU proxy. Even a single clean number for the three variants (raw / borrow / copy) is the
-   deliverable.
-4. **Record the gap.** Note anything that differed between QEMU and RTL (a config, a port, an
-   opened interface, a missing instruction) — that list is exactly what the meeting wanted
-   surfaced while the collaborator is reachable.
+3. **First real number — via the `mcycle` CSR.** Port the **task-014 borrow-cost-probe**
+   (`tests/runtime-qemu/borrow-cost-probe/`) to read **`mcycle`/`rdcycle`** in place of the
+   QEMU `csrdicount` instruction-count proxy, bracketing the same raw / borrow / copy loops, and
+   have it **print the cycle deltas over UART**. Load + run on the RTL → the three numbers are
+   the deliverable (this is the **real cycle-accurate** figure the proxy stood in for; it fills
+   the paper's `evaluation.tex` perf placeholder). Keep an instruction-count readout too, for a
+   direct cross-check against the QEMU proxy.
+4. **Record the gap.** Note anything that differed between QEMU and RTL (boot format, a config,
+   a port, a missing instruction, `mcycle` availability in the Capstone build) — that list is
+   exactly what the meeting wanted surfaced while the collaborator is reachable.
+
+*(Deferred to T7/T10, not this task: the hardware **tracer** — a watchpoint at the borrowed
+address showing the fault fires at the contract point (security demo), and the feature-disable
+**overhead breakdown**. Note whether the preloaded bitstream exposes the tracer, but do not
+build the breakdown here.)*
 
 ## Deliverables
 
