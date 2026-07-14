@@ -16,3 +16,6 @@
 	url = https://github.com/project-starch/pointer-safe-paper
 	branch = main
 	update = none
+[submodule "capstone/capstone-ariane"]
+	path = capstone/capstone-ariane
+	url = https://github.com/project-starch/capstone-ariane.git
