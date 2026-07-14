@@ -77,16 +77,22 @@ about) plus **(2)** as the applied case if the CHERI-side SQLite harness is chea
 instruction-count readout (qemu `-d`/plugin, or `rdinstret` under a comparable
 `-icount` setup) — the exact mechanism is the main open question for Jason.
 
-## Open questions (→ Jason; methodology)
+## Methodology — resolved ourselves (no Jason gate)
 
-1. How should we measure **QEMU-to-QEMU runtime overhead for CHERI vs Capstone** on
-   equal footing? Specifically, the CHERI-QEMU instruction-count readout analogous
-   to our `-icount`/`csrdicount` (a qemu plugin? `-d instr`? `rdinstret`?).
-2. Is there a canonical malloc/free-heavy benchmark we should standardize on so the
-   two systems run *identical* workloads?
-3. For CHERI, confirm the revocation configs to report (spatial-off baseline,
-   async default, eager) map to the `malloc_revoke`/`CHERI_CAPREVOKE` knobs
-   task-015 already exercised.
+Jason is the FPGA/RTL collaborator, not a CHERI expert, so the CHERI-QEMU
+methodology is ours to settle. It is not hard: `qemu-system-riscv64cheri` is a
+standard QEMU fork, so it has the usual instruction-count readouts —
+`-plugin .../libinsn.so`, `-d nochain` counting, or `rdinstret`/`rdcycle` under
+`-icount`. We standardise on **`rdcycle`/`rdinstret` under `-icount`** on both
+sides (the Capstone side already does this — see below), so the two are directly
+comparable with no bespoke op.
+
+Remaining self-answerable items (no external dependency):
+1. Canonical malloc/free-heavy workload — start with the microbench used on the
+   Capstone side (`revoke-cost-probe`), port it verbatim to the CHERI side.
+2. Confirm the CHERI revocation configs (spatial-off baseline / async default /
+   eager) map to the `malloc_revoke`/`CHERI_CAPREVOKE` knobs task-015 exercised —
+   already documented in `tests/cheri-baseline/RESULTS.md`.
 
 ## Deliverable
 
@@ -109,4 +115,25 @@ instruction-count readout (qemu `-d`/plugin, or `rdinstret` under a comparable
 
 ## Status
 
-Proposal only — awaiting review + Jason's methodology answer. No runs started.
+**Capstone half DONE (2026-07-14).** `tests/runtime-qemu/revoke-cost-probe/`
+(build/run scripts `build-`/`run-revoke-cost-probe.sh`) measures the malloc/
+touch/free microbench under three allocator configs on `capstone-qemu`
+(`-icount`, `rdcycle` readout). Result (`revoke-cost-probe/RESULTS.md`):
+
+| config | per-op | |
+|---|---|---|
+| bump (unprotected baseline) | 7.0 instr | |
+| revoke-on-free, revoke suppressed | 60.0 instr | alloc-side: +53 |
+| **full revoke-on-free** | **65.0 instr** | **+58 over baseline (9.28x)** |
+
+Breakdown: **revoke-at-free itself is +5 instr/op (O(1), cheap)**; the temporal
+cost is dominated by making each allocation independently revocable (+53), a
+property of the naive Phase-0 allocator, not the revoke primitive. This is the
+number to put opposite CHERI's async/eager sweep cost.
+
+**CHERI half: TODO** — same microbench on `qemu-system-riscv64cheri` (task-015
+stack), `CHERI_CAPREVOKE` off/async/eager, `rdcycle`/`rdinstret` under `-icount`.
+Likely an Agent-B task (owns the CHERI stack + heavy runs). Then the side-by-side
+table fills `paper/evaluation.tex` §`sec:eval-perf-compare`.
+
+Original proposal above retained for context; the Jason gate is dropped.
