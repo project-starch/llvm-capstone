@@ -250,9 +250,13 @@ language runtimes) walks straight into it. Two sub-cases:
   capability.*
 * **Real cap in the slot, attacker controls the offset:** the runtime stores a
   genuine pointer and a type-confusion bug lets the attacker pick the offset
-  applied to it. **Tags do not help; bounds are the only defense — and per T3 our
-  bounds are domain-wide.** This is the dangerous case, and it is dangerous *for
-  us specifically* until T3 is addressed.
+  applied to it. **Tags do not help; bounds are the only defense.**
+  **→ now:** per the T3 update, compiler-materialized globals and heap objects are
+  `SHRINK`-narrowed by default (stack opt-in), so an attacker offset that leaves
+  such an object faults — the escalation is bounded for those materialization
+  sites. It remains dangerous *for us specifically* wherever the residual T3 gap
+  applies: **subobject** offsets within a narrowed object, and pointers whose
+  bounds are set **inter-procedurally** (not at a materialization site we narrow).
 
 The defense the reviewer implicitly endorses (and WASM uses) — keep real
 capabilities in a trusted region *outside* the attacker cage — is a **workload/

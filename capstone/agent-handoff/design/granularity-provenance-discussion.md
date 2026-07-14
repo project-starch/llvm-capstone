@@ -460,13 +460,23 @@ stack opt-in) — see the banners at the top and the "→ now:" notes.
 
 ## 12. Suggested next steps (engineering, ordered)
 
+*Status (2026-07-03): items 2 and the heap half of 4 are **done** — the C1 slices
+that were "next steps" when this was written have landed. Rewritten to reflect
+what remains.*
+
 1. **Authority-constructor inventory + negative-test battery** (C2 foundation;
    cheap; turns the found bugs into a permanent gate). *Also the artifact to hand
-   a collaborator.*
-2. **Globals bounds via `SHRINK`** — smallest end-to-end C1 slice; re-run the three
-   suites; record overhead + any benchmark that now faults (a finding).
+   a collaborator.* — **partly realized** as `../../tests/capstone-authority/`; the
+   systematic *checker* is still the `c2-provenance-verifier-proposal.md` work.
+2. ~~**Globals bounds via `SHRINK`** — smallest end-to-end C1 slice.~~ **DONE**
+   (`selectLGA`, `-capstone-shrink-globals`, default on; three suites re-run green;
+   rijndael OOB found). What's still open is **overhead measurement** (the
+   instruction-count proxy exists; cycle-accurate is pending the RTL vehicle).
 3. **Confirm `gp`'s exact bounds and the representable-bounds rule** against the
-   monitor/loader and the ISA (both underpin every claim).
-4. **Stack + heap bounds**, then the **provenance checker** pass.
+   monitor/loader and the ISA (both underpin every claim). — bounds model settled
+   in `capability-bounds-model.md`; the monitor/loader cross-check remains.
+4. ~~**Stack + heap bounds**~~ → **heap DONE** (two benchmark allocators);
+   **stack implemented but default-off** pending a clean default-on matrix; then the
+   **provenance checker** pass (still open, C2).
 5. **Decide the `uintptr_t`/`__intcap` model** (§3) and the **persistence-MAC**
-   question (§2) — both are short written decisions, not large builds.
+   question (§2) — both are short written decisions, not large builds. (Still open.)
