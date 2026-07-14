@@ -20,9 +20,11 @@ get a first real number off it?**
 
 Access is a **browser GUI, not SSH** — a WebSocket console at
 `https://fpga.corank.info/<token>/` controlling a **Genesys 2** board running the Capstone
-**CVA6/Ariane** core ("CapliFive"). Manual + website capture: `/tmp/capstone/FPGA_Remote.zip`
-(RTL repo `github.com/project-starch/capstone-ariane` is **private**; needs `gh auth`/a local
-clone to read `tracer.sv`/`cva6.sv`). Salient facts that shape the task:
+**CVA6/Ariane** core ("CapliFive"). Manual + website capture: `/tmp/capstone/FPGA_Remote.zip`.
+The RTL is now readable: `capstone/capstone-ariane` submodule (`tracer.sv`/`csr_regfile.sv`
+confirm the tracer CSRs + `mcycle`). The **version-matched build umbrella** is
+`github.com/project-starch/caplifive-system` (pins QEMU/buildroot/RTL/Anvil; see Step 0).
+Salient facts that shape the task:
 
 - **Human-in-the-loop.** Power / Flash bitstream (`.bit`) / Load boot image (`.bin` → JTAG to
   `0x80000000`, ~2 min for 15 MB) / Reset / Trace Dump are **manual clicks**; the Terminal tab
@@ -34,15 +36,36 @@ clone to read `tracer.sv`/`cva6.sv`). Salient facts that shape the task:
   tracer** (256-entry buffer; CSR `0x810` enable event groups, `0x811` watchpoint phys-addr,
   `0x800` debug-print; dump via UART with switches 0/1) for fine-grained event traces.
 
-## Step 0 — resolve the boot-image question FIRST (blocker)
+## Step 0 — boot path (RESOLVED 2026-07-14)
 
-Before building anything, confirm with the collaborator: **does our existing OpenSBI-monitor +
-rootfs image boot on this bootloader, or do we need a bare-metal `.bin` loaded at
-`0x80000000`?** (The platform loads a single `.bin` into an "update mode" bootloader — this may
-not match our QEMU OpenSBI+rootfs boot.) Also confirm: which **bitstream is preloaded** (is it
-the tracer-enabled Capstone build?) and whether a **scriptable API** exists behind the web UI.
-Coordinate on Slack; note the answers in COORDINATION. If access/boot path is not yet settled,
-report that and stop — do not sink time into an image that won't boot.
+The collaborator answered on Slack; this is no longer a blocker. Concrete facts:
+
+- **Boot image = OpenSBI `fw_payload.bin`** — OpenSBI firmware with the Linux kernel baked
+  in as `LINUX_PAYLOAD`, loaded as the single `.bin` to `0x80000000`. Same OpenSBI base as
+  our QEMU flow, but **payload-linked** (kernel embedded in the firmware image) rather than
+  QEMU's `fw_jump.elf` + separately-loaded `Image` + `rootfs.ext2` block device. Build it via
+  the canonical umbrella repo **`github.com/project-starch/caplifive-system`**:
+  `scripts/build-software.sh --mode fpga` →
+  `sw/buildroot/build/opensbi-custom/build/platform/generic/firmware/fw_payload.bin`.
+  Our Capstone test binary ships **inside** that image via the buildroot rootfs overlay
+  (embedded initramfs) — there is no separate block device on the FPGA path.
+- **Preloaded bitstream = the tracer-enabled Capstone build** ("unless overwritten by
+  someone else"): exposes `mcycle`/`rdcycle` and the tracer CSRs (`0x800`/`0x810`/`0x811`).
+  Verified against the RTL source (`capstone/capstone-ariane/core/csr_regfile.sv:677`,
+  `core/tracer.sv`). If it was overwritten, reflash the tracing RTL build.
+- **No scriptable API / SSH** behind the web console — browser GUI only. **Automation of the
+  perf sweep is not possible today**; the human-in-the-loop division of labour stands. (The
+  collaborator may later add a scriptable path + a session-locking tool — worth pushing for,
+  since it is exactly what would unblock an automated sweep.)
+- **No booking convention** — few users; coordinate ad hoc on Slack.
+
+**Version caveat (do not skip).** The umbrella pins *version-matched* components: QEMU
+(`caplifive-qemu`), buildroot (`caplifive-buildroot`), RTL (`caplifive-cva6`), Anvil. Build
+the FPGA image from that matched set, **not** from our QEMU tree's possibly-divergent
+components. The RTL the umbrella references is **`caplifive-cva6`**, not the
+`capstone-ariane` submodule we track — both carry `tracer.sv`, but confirm with the
+collaborator whether they are the same core before assuming our submodule matches the
+on-board bitstream.
 
 ## Steps
 
