@@ -216,6 +216,21 @@ lent only until `step` advances), not to the allocator.
 
 ## 6. Benefits of Capstone over CHERI (summary)
 
+> **Framing update (PI, 2026-07-14): security is a near-tie at the eager config;
+> the real axis is performance.** The `eager` column shows CHERI *can* match our
+> security (it blocks all 15). It does so only via a stop-the-world revocation
+> sweep on every free (Cornucopia — "a very slow version of what Capstone does,
+> like a garbage collector"), which is why it is not deployed. We realize the same
+> revoke-at-free as an **O(1)** op. So on the injected corpus the security
+> comparison is a **near-tie at the non-deployable eager config** (row 3r aside);
+> the distinguishing claim is that **we achieve it far more cheaply** — quantified
+> in the separate QEMU-to-QEMU overhead table (`plans/perf-cheri-vs-capstone-qemu.md`,
+> paper `sec:eval-perf-compare`). Also: the row-11 `abort` is **discounted**
+> (software detection, no capability check). The points below still hold, but read
+> them through this lens — the temporal-*coverage* wins (async gap, 3r) plus the
+> *cost* win, not a blanket "more secure than CHERI."
+
+
 1. **Catches the deployable-config gap.** The realistic CHERI default (async revocation)
    blocks **0/11** temporal defects at the contract point. Capstone blocks 11/11. To
    even approach Capstone's coverage, CHERI must run **eager** revoke-on-every-free — a
