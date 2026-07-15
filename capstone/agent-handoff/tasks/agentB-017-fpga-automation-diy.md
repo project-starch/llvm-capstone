@@ -19,6 +19,14 @@ this task attacks the blocker ourselves rather than waiting.
 this task. So: do the offline scaffold + protocol map now; the board wire-up
 waits on protocol access (below). Good use of spare tokens, not a gate.
 
+**TIME-SENSITIVE (2026-07-15).** The collaborator committed to **sending us the
+web UI's client JS on Thursday evening BST (2026-07-16)**, then is **flying out
+and unreachable**. So Thursday evening is the last easy window to ask follow-ups.
+Readiness is the goal: **have the `python-socketio` driver scaffold fully built
+BEFORE Thursday** so that the moment the JS arrives it is a ~10-minute wire-up +
+a same-evening sanity check, and any gaps can be raised while he is still
+reachable. Do NOT wait for the JS to start — build the scaffold now.
+
 ## The reality (know before planning)
 
 - The console is `https://fpga.corank.info/<token>/` (get the exact token'd URL
@@ -52,14 +60,15 @@ Then it drives the `tests/rtl-smoke/` run end-to-end: upload → run the
 
 0. Read `tests/rtl-smoke/README.md` + `RESULTS.md` (what the run needs, the two
    ports, the parser). Read `plans/perf-cheri-vs-capstone-qemu.md` for context.
-1. **Get the protocol.** Primary path — **ask the user before fetching the
-   private token'd URL** (it carries an access token), then WebFetch the console
-   URL, retrieve the referenced client JS bundle(s), and grep for `socket.emit(` /
-   `.on(` / `io(` — extract event names, payload shapes, and any auth/handshake
-   token or namespace. Fallback if the JS is unreachable/minified-opaque:
-   produce a precise **DevTools capture checklist** (Network → WS filter → click
-   each control once → export frames / HAR) so the user captures the live event
-   stream in one pass, and you map it from that.
+1. **Get the protocol.** Primary path — the **collaborator is sending the client
+   JS Thursday evening BST**; the moment it lands, grep it for `socket.emit(` /
+   `.on(` / `io(` and extract event names, payload shapes, and any auth/handshake
+   token or namespace, then wire the scaffold (step 2) to it. Same-day hedges, in
+   case his fly-out "will try" slips: (a) **ask the user before fetching the
+   private token'd URL**, then WebFetch the console URL + its referenced JS
+   bundle(s) and extract the same way; (b) a precise **DevTools capture checklist**
+   (Network → WS filter → click each control once → export frames/HAR) so the user
+   captures the live event stream in one pass. Any of the three yields the events.
 2. **Build the driver scaffold NOW (needs no JS):** a `python-socketio` client
    with the connection/handshake, the five action stubs, event-wait helpers, and
    a single config block naming the events to fill in. So when step 1 lands, wiring
