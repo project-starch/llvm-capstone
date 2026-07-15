@@ -1,0 +1,6 @@
+# fpga_driver runtime dependency: the Socket.IO client.
+python-socketio[client]>=5.0
+
+# Offline dry-run / mock server only (test_dryrun.py, mock_server.py):
+#   python-socketio  (server, included above)
+#   aiohttp>=3.8

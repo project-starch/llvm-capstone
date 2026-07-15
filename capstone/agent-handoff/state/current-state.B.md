@@ -2,6 +2,41 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-state.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-state.md` at Agent-B bring-up (2026-07-08).
 
+# Agent-B delta (2026-07-15, task 017) — FPGA web-console automation scaffold
+
+**A headless Socket.IO driver for the FPGA web console now exists, validated
+offline; it removes the human from the RTL perf sweep.** Additive test tooling
+under `capstone/tests/rtl-smoke/fpga_driver/` — no `llvm/`, submodule, monitor,
+`start.S`, allocator, or RTL-tree change.
+
+- `FpgaConsole` (`fpga_console.py`, sync `python-socketio` client): the five board
+  actions — upload boot image (+await), load→JTAG `0x80000000`, reset→await Linux
+  prompt, set virtual switch, Trace Dump→await end-of-dump — plus `terminal_input`
+  and `power`, with `wait_event`/`wait_status`/`wait_uart` helpers.
+- `run_rtl_smoke.py`: full agent-driven sweep — upload → load → reset → run the
+  borrow + three revoke `.user`/`.dom` pairs over UART → harvest RESULT lines →
+  `run-revoke-cost-fpga-qemu.sh --parse-uart`. Also `--parse-only`.
+- **`config.py` is the single wire-up point** — every Socket.IO event name,
+  payload, and completion signal. The console client JS is not in our capture, so
+  these are **PLACEHOLDERS inferred from the manual**; `PROTOCOL_SOURCE="placeholder"`
+  and the driver **refuses to drive a real board** until it is `"verified"`.
+- Validated OFFLINE against a mock Socket.IO server (`mock_server.py` +
+  `test_dryrun.py`): the five actions, the full sweep, UART markers split across
+  chunks, and `--parse-uart` reproducing the reference breakdown (bump 7 /
+  norevoke 60 / revoke 65 → **+5 O(1)** revoke-at-free). Caught+fixed a real bug
+  the mock exists to catch: `wait_uart` matched a *previous* command's marker
+  (whole-buffer search) → added a `search_from` offset.
+- `extract_from_js.py` (greps the client JS for `emit`/`on`/`io`) + `PROTOCOL.md`
+  (placeholder map + three routes to the real protocol, incl. a DevTools WS/HAR
+  capture checklist) make the Thu-2026-07-16-evening JS a ~10-minute wire-up.
+
+Remaining gap: wire the real events into `config.py`, set `PROTOCOL_SOURCE=
+"verified"`, update the mock, re-run `test_dryrun.py`. Did not operate the board
+or fetch the private token'd URL (needs the user's explicit OK). Trail:
+`history/15-07-2026_17-47-11_fpga-automation-diy.md`.
+
+---
+
 # Agent-B delta (2026-07-13, task 015) — CHERI corpus baseline (paper "Task 1")
 
 **The empirical CHERI column of the security table now exists.** Built the full

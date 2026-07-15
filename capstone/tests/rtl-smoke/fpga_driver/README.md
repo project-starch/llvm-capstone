@@ -1,0 +1,87 @@
+# fpga_driver — headless Socket.IO driver for the CapliFive FPGA web console
+
+Removes the human from the RTL perf sweep. The board's console
+(`fpga.corank.info`) is a browser Socket.IO GUI with no scriptable API, so the
+`tests/rtl-smoke/` run currently needs a person clicking ~5 buttons per run
+(README.md "Run (human-driven)"). This is a `python-socketio` client that
+performs those actions headlessly and drives the sweep end-to-end into the
+existing `--parse-uart` parser.
+
+**The human-driven run already works — this is the parallel automation, not the
+critical path.**
+
+## Status
+
+- **Scaffold: complete and validated offline.** Transport, the five board
+  actions, UART marker matching, the end-to-end sweep, and the `--parse-uart`
+  integration all pass against a mock Socket.IO server (`test_dryrun.py`).
+- **Blocked on the real protocol.** The event names/payloads in `config.py` are
+  **placeholders inferred from the manual** — the console's client JS is not in
+  our capture. `config.PROTOCOL_SOURCE = "placeholder"`, and the driver **refuses
+  to touch a real board** until it is set to `"verified"`. See `PROTOCOL.md` for
+  how to get the real protocol (collaborator's JS Thursday 2026-07-16 evening BST,
+  or the two fallbacks) — it is a ~10-minute edit of `config.py` once the JS is in
+  hand.
+
+## Files
+
+| File | Role |
+|------|------|
+| `config.py` | **The single wire-up point.** All Socket.IO event names, payloads, completion signals, connection settings, and UART markers. Editing this = wiring the real protocol. |
+| `fpga_console.py` | `FpgaConsole`: the Socket.IO client — connect/handshake, event-wait + UART helpers, the five actions. Transport only; no board specifics. |
+| `run_rtl_smoke.py` | End-to-end runner: upload → load → reset → run the `.user`/`.dom` pairs over UART → harvest RESULT lines → `run-revoke-cost-fpga-qemu.sh --parse-uart`. Also `--parse-only` and `--parse`-style reuse. |
+| `mock_server.py` | Mock console implementing the **placeholder** protocol; lets the flow run offline. Not the real board. |
+| `test_dryrun.py` | Offline dry-run: drives the whole scaffold against the mock and asserts the parse reproduces the reference numbers. |
+| `extract_from_js.py` | Greps the console client JS for `emit`/`on`/`io` → event names + payload hints, to turn into `config.py`. |
+| `PROTOCOL.md` | The protocol map (placeholder) + the three ways to get the real one, incl. the DevTools capture checklist. |
+| `requirements.txt` | `python-socketio` (client). The mock/test also need the server extra + aiohttp. |
+
+## Install
+
+```sh
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt          # driver only (python-socketio client)
+# for the offline test / mock server, also:
+pip install 'python-socketio' aiohttp
+```
+
+## Offline test (no board, no network beyond localhost)
+
+```sh
+python test_dryrun.py
+# -> "OK: dry-run passed (5 actions + end-to-end sweep + parse)."
+```
+
+## Wiring the real protocol (when the JS arrives)
+
+```sh
+python extract_from_js.py <console-bundle>.js
+```
+
+Then follow `PROTOCOL.md` §"Getting the real protocol" step 1 (map the names into
+`config.py`, set `PROTOCOL_SOURCE = "verified"`, update `mock_server.py`, re-run
+`test_dryrun.py`).
+
+## Real run (only after the protocol is verified)
+
+```sh
+# build the artifacts + assemble fw_payload.bin per ../README.md, then:
+python run_rtl_smoke.py \
+    --url 'https://fpga.corank.info/<token>/' \
+    --image /path/to/fw_payload.bin
+# -> uploads, runs the sweep over UART, prints the temporal-safety breakdown.
+```
+
+Parse a capture without touching the board:
+
+```sh
+python run_rtl_smoke.py --parse-only <uart-capture.txt>
+```
+
+## Guarantees / lane rules
+
+- Additive test tooling; touches nothing in `llvm/`, the monitor, `start.S`, the
+  allocators, or the RTL tree.
+- Never fetches a URL or seeks credentials on its own; the token'd URL is a CLI
+  argument, kept out of the repo and never logged.
+- Refuses to drive a real board while the protocol is a placeholder.
