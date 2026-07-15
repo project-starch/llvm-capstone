@@ -2,7 +2,7 @@
 
 ## Active track (2026-07-15): the paper's PERFORMANCE story — mostly DONE
 
-The active track since the PI's 2026-07-13 reframe is **performance**, not C1/C2.
+The active track since the 2026-07-13 reframe is **performance**, not C1/C2.
 The C1/C2 section below is paused reference material.
 
 - **DONE:** the full CHERI-vs-Capstone temporal-safety perf comparison
@@ -11,7 +11,7 @@ The C1/C2 section below is paused reference material.
   fix, and the `-O2` tree re-measurement (revoke-at-free **+5 instr/op O(1)**,
   matching the microbench). See `state/current-state.md` "Latest (2026-07-15)".
 - **STANDING NEXT STEP — Capstone RTL cycle-accurate number.** The QEMU result is
-  a functional-model instruction-count proxy; the PI wants "on real hardware we
+  a functional-model instruction-count proxy; the goal is "on real hardware we
   are obviously faster" layered on top. RTL borrow-cost port is staged in
   `tests/rtl-smoke/`; the temporal-overhead run is the follow-on. **Human-in-the-
   loop** (browser GUI, agent can't drive the board) and **POSTPONED** pending

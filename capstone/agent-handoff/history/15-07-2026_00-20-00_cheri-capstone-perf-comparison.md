@@ -10,7 +10,7 @@
 
 ## 1. Executive summary
 
-The PI reframed the CHERI comparison: on *security*, eager CHERI matches us
+The project direction reframed the CHERI comparison: on *security*, eager CHERI matches us
 (revoke-on-every-free blocks the corpus's temporal defects); the axis that
 actually separates the two systems is *performance*. This report answers the
 resulting question — **what does temporal safety cost, and is our contract-point
@@ -33,17 +33,17 @@ protection is deferred, not synchronous.
 
 ---
 
-## 2. Background — the PI's argument (2026-07-14)
+## 2. Background — the argument for the comparison (2026-07-14)
 
 - CHERI's **deployable** config (async revocation) does **not** catch the
   corpus's temporal defects at the contract point. Good — that is the security
   point (`tab:cheri`, from the cheri-baseline task).
 - CHERI's **eager** config (revoke-on-every-free) **does** catch them — so on
   *security*, eager CHERI matches us (modulo row 3r, which no CHERI policy
-  catches). The PI: eager is "a very slow version of what Capstone is doing…
+  catches). The framing: eager is "a very slow version of what Capstone is doing…
   like a garbage collector."
 - Capstone realizes the *same* revoke-at-free semantics as a **fast O(1)**
-  capability op. So the separating axis is **performance**. PI (Slack): "to show
+  capability op. So the separating axis is **performance**. Guidance (Slack): "to show
   the improvement, we should test the perf distinction on QEMU-Capstone and
   Qemu-cheri… add that performance data separately in a table."
 - Methodology rule: **QEMU-to-QEMU** (do not compare CHERI-QEMU to Capstone-RTL —
@@ -84,7 +84,7 @@ there is **no rootfs-lock contention** with the Capstone QEMU suites.
 - **No `-icount` on CHERI:** eager is ~10¹²–10¹² retired instructions per trial;
   counting one-by-one under `-icount` is intractable. Plain TCG + `rdinstret` is
   reproducible enough (trial spread ~1–3%). This asymmetry is exactly why the
-  PI's rule is QEMU-to-QEMU for the comparison and RTL only for the Capstone
+  the methodology rule is QEMU-to-QEMU for the comparison and RTL only for the Capstone
   absolute.
 
 ### 3.3 Config toggles
@@ -210,7 +210,7 @@ paper says so explicitly.**
   allocator-inclusive figure vs eager's millions is ~5 orders of magnitude; the
   +5/+10 is the fair comparison to CHERI's per-free *revocation action*.
 
-**Residual fairness gap (worth stating to the PI):** a perfectly symmetric test
+**Residual fairness gap (worth surfacing up front):** a perfectly symmetric test
 would run our allocator inside an OS too. We didn't — our side is bare-metal. So
 the honest framing is a *mechanism-cost* comparison, robust on the delta and the
 asymptotics, not a same-OS end-to-end head-to-head. The Capstone RTL number and a

@@ -1,24 +1,24 @@
 # Plan: temporal-safety overhead — our system vs CHERI, QEMU-to-QEMU (then RTL)
 
-*Proposal for review before implementation. Direction set by the PI on 2026-07-14
+*Proposal for review before implementation. Direction set on 2026-07-14
 (meeting + Slack). Feeds `paper/evaluation.tex` §\ref{sec:eval-perf-compare}
 (stub already added). Companion to the security table (`tab:cheri`) and the
 borrow-cost microbenchmark (`sec:eval-perf`).*
 
-## Why (the PI's argument)
+## Why (the argument)
 
-The security table is settled and well-received, but the PI reframed the headline:
+The security table is settled and well-received, but the direction reframed the headline:
 
 - CHERI's **deployable** config (async revocation) does **not** catch the corpus's
   temporal defects. Good — that is the security point.
 - CHERI's **eager** config (revoke-on-every-free) **does** catch them — so **on
-  security, eager CHERI matches us** (modulo row~3r). The PI was explicit: the
+  security, eager CHERI matches us** (modulo row~3r). The direction was explicit: the
   double-free `abort` is discounted (software, not a capability check — already
   fixed in the table), and eager is "a very slow version of what Capstone is
   doing… like a garbage collector."
 - Capstone realizes the *same* revoke-at-free semantics as a **fast O(1)**
   capability op. So **the axis that separates the two systems is performance**, not
-  security. PI: *"My only argument now is: is this performantly better than the
+  security. Guidance: *"My only argument now is: is this performantly better than the
   hardware?"* and *"show how much faster we are compared to the Cornucopia design."*
 
 Slack (verbatim): *"Cheri-sync is not the default, due to perf overheads. But its
@@ -26,7 +26,7 @@ security matches capstone. So to show the improvement, we should test the perf.
 distinction on QEMU-Capstone and Qemu-cheri. Hopefully we win there. Please add
 that performance data separately in a table."*
 
-## The methodology constraint (PI, explicit)
+## The methodology constraint (explicit)
 
 - **Do not** compare CHERI-QEMU against Capstone-RTL — *"that's incomparable."*
 - **QEMU-to-QEMU first:** measure the temporal-safety overhead of **CHERI-QEMU**
@@ -69,7 +69,7 @@ claim we hope to show: Capstone's revoke-on-free overhead ≪ CHERI's async, and
 3. **RV8/BEEBS** — already green on Capstone; less allocation-bound, so a weaker
    probe of revocation cost, but a useful cross-check.
 
-Recommend **(1)** for the headline number (isolates the mechanism the PI cares
+Recommend **(1)** for the headline number (isolates the mechanism the comparison cares
 about) plus **(2)** as the applied case if the CHERI-side SQLite harness is cheap.
 
 **Instrumentation.** Capstone: the existing `csrdicount` icount readout

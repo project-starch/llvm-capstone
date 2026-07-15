@@ -4,7 +4,7 @@ Minimal snapshot. Read first in every session.
 
 ## Latest (2026-07-15) — read this first; sections below predate it
 
-Since 2026-07-03 the active work shifted from C1/C2 to the **PI's performance
+Since 2026-07-03 the active work shifted from C1/C2 to the **performance
 reframe** (2026-07-13): eager CHERI matches our temporal security, so the
 separating axis is **performance**. That comparison is now **DONE** and in the
 paper.
