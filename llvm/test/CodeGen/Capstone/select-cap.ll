@@ -29,3 +29,24 @@ entry:
 ; CHECK: movc a0, zero
 ; CHECK: cjalr zero, 0(ra)
 
+; A capability select whose arms are two *non-null* constants. GlobalMerge +
+; DAGCombine can sink constant offsets into an i128 select like this; the arms
+; must be rematerialized into registers for the branch-based capability select.
+; This used to ICE in lowerSELECT (isa<> on a null SDValue). The arms MUST be
+; materialized as plain integers (li) -- an untagged integer value in a
+; capability register -- and NOT via cincoffsetimm from the null register, which
+; requires a tagged source and faults at runtime.
+define void @select_cap_const_arms(ptr addrspace(200) %arg, i1 %c) {
+entry:
+  %p = select i1 %c, ptr addrspace(200) inttoptr (i64 32 to ptr addrspace(200)),
+                     ptr addrspace(200) inttoptr (i64 16 to ptr addrspace(200))
+  store ptr addrspace(200) %arg, ptr addrspace(200) %p
+  ret void
+}
+
+; CHECK-LABEL: select_cap_const_arms:
+; CHECK-NOT: cincoffsetimm {{[a-z0-9]+}}, zero,
+; CHECK-DAG: li {{a[0-9]+}}, 16
+; CHECK-DAG: li {{a[0-9]+}}, 32
+; CHECK: cjalr zero, 0(ra)
+

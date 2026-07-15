@@ -15,12 +15,13 @@ source "$SCRIPT_DIR/../capstone-test-env.sh"
 BUILDROOT_DIR=${CAPSTONE_BUILDROOT_DIR}
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 OUT_DIR=${1:-$TMP_ROOT/capstone-runtime-qemu-share}
-# -O0 is the default here (not -O2): the tree workload has capability-value
-# selects (`cur = cond ? cur->l : cur->r`) that ICE the Capstone -O2/-O1 backend
-# -- the same codegen gap flagged in COORDINATION.md for the compiler lane. -O0
-# compiles; the load-bearing Capstone number is the revoke-vs-norevoke DELTA,
-# which is optimization-level-robust (both configs share the -O0 codegen and
-# differ only by the single free-time revoke intrinsic).
+# -O0 remains the default for continuity with the originally-published number,
+# but -O2 now works: the capability-value-select ICE (`cur = cond ? cur->l :
+# cur->r`) that used to pin this to -O0 was fixed 2026-07-15
+# (history/15-07-2026_03-43-21_cap-select-o2-ice-fixed.md). Override with
+# DOMAIN_OPT_LEVEL=-O2. Either way the load-bearing Capstone number is the
+# revoke-vs-norevoke DELTA, which is optimization-level-robust (both configs
+# share the codegen and differ only by the single free-time revoke intrinsic).
 DOMAIN_OPT_LEVEL=${DOMAIN_OPT_LEVEL:--O0}
 
 GUEST_CC=${GUEST_CC:-$BUILDROOT_DIR/build/host/bin/riscv64-buildroot-linux-gnu-gcc}
@@ -38,12 +39,18 @@ printf 'Built %s\n' "$OUT_DIR/revoke_cost_probe.user"
 
 ASM_DIR="$OUT_DIR/asm"; mkdir -p "$ASM_DIR"
 
+# Enable the M extension: at -O2 the shared workload's key generation lowers to a
+# hardware multiply, which needs +m (else ld.lld fails on __muldi3). Same flag
+# CoreMark uses; identical across all three configs, so it cancels in the
+# revoke-vs-norevoke delta. Harmless at -O0 (no multiply is emitted there).
+MEXT="-Xclang -target-feature -Xclang +m"
+
 build_mode() { # $1=name  $2=ROF_COST_MODE value
   local name="$1" mode="$2"
   "$CAPSTONE_CLANG" -target capstone64-unknown-elf -ffreestanding \
-    "$DOMAIN_OPT_LEVEL" -DROF_COST_MODE="$mode" \
+    "$DOMAIN_OPT_LEVEL" $MEXT -DROF_COST_MODE="$mode" \
     -I"$PROBE_DIR" -S "$PROBE_DIR/revoke_cost_tree.c" -o "$ASM_DIR/tree_cost_$name.s"
-  DOMAIN_OPT_LEVEL="$DOMAIN_OPT_LEVEL" EXTRA_CLANG_FLAGS="-DROF_COST_MODE=$mode" \
+  DOMAIN_OPT_LEVEL="$DOMAIN_OPT_LEVEL" EXTRA_CLANG_FLAGS="$MEXT -DROF_COST_MODE=$mode" \
     bash "$SCRIPT_DIR/build-domain.sh" \
     "$PROBE_DIR/revoke_cost_tree.c" "$OUT_DIR/tree_cost_$name.dom" >/dev/null
   printf 'Built %s (%s, mode %s)\n' "$OUT_DIR/tree_cost_$name.dom" "$DOMAIN_OPT_LEVEL" "$mode"

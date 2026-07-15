@@ -161,20 +161,24 @@ build/lookup/destroy workload (`tests/shared/tree_workload.h`, 2000-node live-se
 | | spatial/bump | async/norevoke | eager/revoke |
 |---|---|---|---|
 | CHERI | 10,095 | 19,281 (**1.9x**) | **16.77M (1,661x)** |
-| Capstone (-O0) | 1,719 | 96,202 | +10 revoke-at-free (**O(1)**) |
+| Capstone (-O2) | 230 | 24,300 | **+5** revoke-at-free (**O(1)**) |
 
 Real-workload confirms + sharpens the microbench: CHERI async is **1.9x** (real
 per-op work dilutes the amortized sweep -> the representative deployed number),
-eager stays ~16.8M/op, our revoke-at-free stays **O(1) +10 instr/op**
-(workload-independent). Capstone tree is **-O0** (its capability-value selects ICE
-the -O2/-O1 backend -- the codegen gap in COORDINATION.md); the revoke-vs-norevoke
-delta is O-level-robust so the +10 is sound. Alloc-side +94k is the Phase-0
-allocator's O(n) slot scan, not the mechanism.
+eager stays ~16.8M/op, our revoke-at-free stays **O(1) +5 instr/op**
+(workload-independent). **Now measured at -O2** (2026-07-15): the capability-value
+select ICE that had pinned this to -O0 was fixed
+(`history/15-07-2026_03-43-21_cap-select-o2-ice-fixed.md`), so the tree number now
+**matches the microbench's +5 exactly** (the earlier -O0 build measured +10; the
+delta is O-level-robust either way). Alloc-side +24k is the Phase-0 allocator's
+O(n) slot scan, not the mechanism. (Tree domain build now enables `+m` at -O2 —
+the workload's key-gen multiply needs it; identical across configs so it cancels
+in the delta.)
 
 **Paper DONE:** `paper/evaluation.tex` §`sec:eval-perf-compare` = `tab:perfcompare`
-(microbench) + `tab:perftree` (real workload) + analysis paragraphs.
+(microbench) + `tab:perftree` (real workload, -O2 +5) + analysis paragraphs.
 
 **Remaining:** the Capstone RTL cycle-accurate follow-on (`tests/rtl-smoke/`,
-human-in-the-loop). The -O2 backend cap-select ICE is a compiler-lane item for B.
+human-in-the-loop). ~~The -O2 backend cap-select ICE~~ FIXED 2026-07-15.
 
 Original proposal above retained for context; the Jason gate is dropped.

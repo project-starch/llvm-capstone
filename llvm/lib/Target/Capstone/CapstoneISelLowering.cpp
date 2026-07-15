@@ -10293,8 +10293,11 @@ SDValue CapstoneTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const
     ISD::CondCode CCVal = cast<CondCodeSDNode>(CondV.getOperand(2))->get();
 
     // Special case for a select of 2 constants that have a difference of 1.
-    if (isa<ConstantSDNode>(TrueV) && isa<ConstantSDNode>(FalseV) &&
-        CCVal == ISD::SETLT) {
+    // This materialises the result via ISD::ADD/SUB on VT, an integer transform
+    // that is not valid for capability (i128) selects -- those must stay on the
+    // branch-based path (see the VT == MVT::i128 caller below).
+    if (VT != MVT::i128 && isa<ConstantSDNode>(TrueV) &&
+        isa<ConstantSDNode>(FalseV) && CCVal == ISD::SETLT) {
       const APInt &TrueVal = TrueV->getAsAPIntVal();
       const APInt &FalseVal = FalseV->getAsAPIntVal();
       if (TrueVal - 1 == FalseVal)
@@ -10331,17 +10334,44 @@ SDValue CapstoneTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const
   };
 
   auto lowerCapabilitySelect = [&]() -> SDValue {
+    // The branch-based Select_GPRCAP pseudo takes its true/false values in
+    // registers; a bare i128 ConstantSDNode cannot be matched in that operand
+    // slot. Turn each constant arm into a register value:
+    //   * the null capability -> the X0 register;
+    //   * a non-null integer constant (e.g. an offset that GlobalMerge +
+    //     DAGCombine sank into an i128 select) -> the integer materialized into a
+    //     capability register with a plain integer load (li), by forcing it
+    //     through a CopyToReg/CopyFromReg. This is the same path the return
+    //     lowering uses for an i128 integer constant. It must NOT be a
+    //     CIncOffset from the null register: cincoffsetimm requires a *tagged*
+    //     source and asserts/faults at runtime on the untagged X0.
+    // Only integer-valued constants (fitting in XLen, no bounds/perms/tag bits)
+    // arise this way; bail on anything wider so the caller falls back cleanly.
     auto materializeCapabilitySelectOperand = [&](SDValue V) -> SDValue {
-      if (!isa<ConstantSDNode>(V))
+      auto *C = dyn_cast<ConstantSDNode>(V);
+      if (!C)
         return V;
-      if (!isNullConstant(V))
+      if (C->isZero())
+        return DAG.getRegister(Capstone::X0, VT);
+      if (C->getAPIntValue().getActiveBits() > XLenVT.getSizeInBits())
         return SDValue();
-      return DAG.getRegister(Capstone::X0, VT);
+      SDValue KCap = DAG.getConstant(
+          C->getAPIntValue().trunc(XLenVT.getSizeInBits()).zext(VT.getSizeInBits()),
+          DL, VT);
+      Register VReg =
+          DAG.getMachineFunction().getRegInfo().createVirtualRegister(
+              &Capstone::GPRRegClass);
+      SDValue Chain = DAG.getCopyToReg(DAG.getEntryNode(), DL, VReg, KCap);
+      return DAG.getCopyFromReg(Chain, DL, VReg, VT);
     };
 
-    TrueV = materializeCapabilitySelectOperand(TrueV);
-    FalseV = materializeCapabilitySelectOperand(FalseV);
-    if (!TrueV || !FalseV)
+    // Use local copies so that bailing out (returning a null SDValue) leaves the
+    // shared TrueV/FalseV pristine for the lowerBranchSelect() fallback --
+    // assigning a null back into the captured operands previously crashed the
+    // fallback on isa<>(null).
+    SDValue CapTrueV = materializeCapabilitySelectOperand(TrueV);
+    SDValue CapFalseV = materializeCapabilitySelectOperand(FalseV);
+    if (!CapTrueV || !CapFalseV)
       return SDValue();
 
     auto getCapstoneCCForIntCC = [](ISD::CondCode CC) {
@@ -10389,7 +10419,7 @@ SDValue CapstoneTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const
                                             XLenVT);
     MachineSDNode *Select = DAG.getMachineNode(
         Capstone::Select_GPRCAP_Using_CC_GPR, DL, VT,
-        {LHS, RHS, TargetCC, TrueV, FalseV});
+        {LHS, RHS, TargetCC, CapTrueV, CapFalseV});
     return SDValue(Select, 0);
   };
 
