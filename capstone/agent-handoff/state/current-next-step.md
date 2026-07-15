@@ -1,6 +1,25 @@
 # Current recommended next step
 
-## Active track: capability granularity + provenance (the paper, C1/C2)
+## Active track (2026-07-15): the paper's PERFORMANCE story — mostly DONE
+
+The active track since the PI's 2026-07-13 reframe is **performance**, not C1/C2.
+The C1/C2 section below is paused reference material.
+
+- **DONE:** the full CHERI-vs-Capstone temporal-safety perf comparison
+  (QEMU-to-QEMU, microbench + BST tree, both sides), the paper perf tables
+  (`evaluation.tex` §`sec:eval-perf-compare`), the `-O2` capability-select ICE
+  fix, and the `-O2` tree re-measurement (revoke-at-free **+5 instr/op O(1)**,
+  matching the microbench). See `state/current-state.md` "Latest (2026-07-15)".
+- **STANDING NEXT STEP — Capstone RTL cycle-accurate number.** The QEMU result is
+  a functional-model instruction-count proxy; the PI wants "on real hardware we
+  are obviously faster" layered on top. RTL borrow-cost port is staged in
+  `tests/rtl-smoke/`; the temporal-overhead run is the follow-on. **Human-in-the-
+  loop** (browser GUI, agent can't drive the board) and **POSTPONED** pending
+  Jason's answer on whether it can be automated.
+- **Infra:** `capstone/tests/run-nightly.sh` is the new one-shot build+test+report
+  driver (serial QEMU suites, report to `/tmp/capstone/`).
+
+## Paused track: capability granularity + provenance (the paper, C1/C2)
 
 The three benchmark suites are **complete** (CoreMark ✓, BEEBS 82/82 ✓, RV8 7/7 ✓;
 only C++ `bigint` deferred). Work has pivoted to the first paper's security

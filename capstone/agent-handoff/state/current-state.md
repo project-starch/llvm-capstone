@@ -2,6 +2,38 @@
 
 Minimal snapshot. Read first in every session.
 
+## Latest (2026-07-15) — read this first; sections below predate it
+
+Since 2026-07-03 the active work shifted from C1/C2 to the **PI's performance
+reframe** (2026-07-13): eager CHERI matches our temporal security, so the
+separating axis is **performance**. That comparison is now **DONE** and in the
+paper.
+
+- **CHERI-vs-Capstone temporal-safety perf comparison — DONE (QEMU-to-QEMU, two
+  workloads).** Eager CHERI (the config that matches our security) pays
+  **~14–17 M instr per free** (address-space sweep); our revoke-at-free is
+  **O(1), +5 instr/op**; async CHERI is 1.9–6.4× but blocks **0/11** UAF at the
+  contract point. Paper `evaluation.tex` §`sec:eval-perf-compare` filled
+  (`tab:perfcompare` microbench + `tab:perftree` real-workload BST). CHERI stack
+  is fully local at `~/cheri` (`tests/cheri-perf/`, `tests/cheri-baseline/`).
+  Full report: `history/15-07-2026_00-20-00_cheri-capstone-perf-comparison.md`;
+  plan `plans/perf-cheri-vs-capstone-qemu.md`.
+- **`-O2`/`-O1` capability-select ICE — FIXED (2026-07-15).** `lowerSELECT`
+  crashed on an i128 cap select with non-null constant arms; fixed in
+  `CapstoneISelLowering.cpp` (rematerialize constant arms as `li` via
+  CopyToReg). This unpinned the Capstone BST tree probe from `-O0`; it now builds
+  **and runs clean at `-O2`** (revoke-at-free +5, matching the microbench).
+  Backend lit 39/39, clang 6/6, authority **26/26**. Trail:
+  `history/15-07-2026_03-43-21_cap-select-o2-ice-fixed.md`.
+- **Nightly orchestrator added:** `capstone/tests/run-nightly.sh`
+  (build → lit → QEMU suites serially → report to `/tmp/capstone/`).
+- **Corrections to the sections below:** the authority suite is now **26 domains**
+  (not 20); `-capstone-shrink-stack` is **default ON** since 2026-07-03 (covering
+  varargs save-area + dynamic alloca, so those are no longer "not yet"); the
+  task-005 FastCC-i128 and revoke-intrinsic-DCE codegen defects are **resolved**.
+- **Standing next step:** the Capstone **RTL cycle-accurate** number
+  (human-in-the-loop; **postponed** pending Jason's answer on automation).
+
 ## SQLite in-memory bring-up
 
 SQLite 3.53.3 compiles, links, **and runs end to end** as a
