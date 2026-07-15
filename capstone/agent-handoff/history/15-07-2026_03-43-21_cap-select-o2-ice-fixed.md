@@ -1,8 +1,8 @@
 # Fixed: `-O2`/`-O1` Capstone backend ICE on capability-value selects
 
 *2026-07-15. Root-cause + fix for the codegen-lane ICE flagged in COORDINATION.md
-(2026-07-14, "new `-O2` Capstone-backend ICE"). Done in Agent-A's working tree by
-explicit user request (normally a B-lane `llvm/` item). This is the ICE that forced
+(2026-07-14, "new `-O2` Capstone-backend ICE"). Done in the working tree by
+explicit user request (normally a compiler-lane `llvm/` item). This is the ICE that forced
 the paper's Capstone BST tree-cost arm to build at `-O0`
 (`tests/runtime-qemu/revoke-cost-probe/`, `history/15-07-2026_00-20-00_cheri-capstone-perf-comparison.md`).*
 
@@ -78,8 +78,9 @@ never forms the offending node.)
    for capabilities").
 
 Emitted code for the trigger is now a correct branch-based capability select:
-`beqz` on the condition; each arm `cincoffsetimm aN, zero, {16,32}`; then
-`cincoffset` the merged-globals base by the selected offset and `stc`.
+`beqz` on the condition; each arm `li aN, {16,32}` (a plain untagged integer,
+not `cincoffsetimm` from the null register); then `cincoffset` the merged-globals
+base by the selected offset and `stc`.
 
 ## Validation
 
@@ -111,4 +112,4 @@ Emitted code for the trigger is now a correct branch-based capability select:
 - Rebuilt the `cmake-build-debug` tree (what `$CAPSTONE_CLANG` and the domain
   build scripts use). The separate `llvm/build` tree, if used by any codegen path,
   needs the same one-file rebuild.
-- COORDINATION.md B-lane item (2026-07-14) marked resolved.
+- COORDINATION.md compiler-lane item (2026-07-14) marked resolved.

@@ -1,6 +1,6 @@
 # row3 B2 — the LITERAL matched pair: a revoke-on-free linear allocator
 
-*2026-07-10, B-lane, branch `capstone-b-008-revoke-on-free` (a separate branch,
+*2026-07-10, compiler-lane, branch `capstone-b-008-revoke-on-free` (a separate branch,
 per the task: this is emulator + allocator + codegen work). Builds on task-007
 (held-cap delivery), task-006 (C1/C2 codegen), and A's B1 matched pair
 (`09-07-2026_23-15-00_row3-b1-matched-pair.md`).*
@@ -165,7 +165,7 @@ implemented — per the task's propose-before-big-directions rule.
   sustained revoke-on-free churn the emulator aborts (`_cap_rev_tree_dup_node_before`)
   instead of the allocator seeing a failed derivation and returning NOMEM. A
   robustness fix (return a NULL node id and let `helper_cssplit`/`helper_csmrev`
-  raise a clean fault) is B's lane (emulator) but a semantics call; not done.
+  raise a clean fault) is the compiler lane (emulator) but a semantics call; not done.
 - The task-007 revoked-region **host landmine** still applies: after the domain
   revokes a REV_TRANSFERRED lineage the host must not touch that region. The B2
   host reads only the host-call payload region (live), never the arena.

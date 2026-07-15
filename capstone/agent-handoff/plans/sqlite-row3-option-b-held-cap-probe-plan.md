@@ -1,6 +1,6 @@
 # Plan — row3 Option B, faithful path: single-domain **held-cap** revoke probe
 
-*A-lane. Supersedes the "Tier-1 monitor-mediated" idea (see why below). Depends on
+*firmware-lane. Supersedes the "Tier-1 monitor-mediated" idea (see why below). Depends on
 findings in `history/09-07-2026_18-10-43_option-b-intra-domain-revoke-firmware-spike.md`
 (spike + RESOLVED + delivery-ABI follow-on) and B's task-005 mechanism proof.*
 

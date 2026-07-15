@@ -1,6 +1,6 @@
 # Task 007 — single-domain held-cap Option B probe (steps 1–3)
 
-*2026-07-09, B-lane. Probe at `capstone/tests/runtime-qemu/intra-domain-mrev-revoke-probe/`.
+*2026-07-09, compiler-lane. Probe at `capstone/tests/runtime-qemu/intra-domain-mrev-revoke-probe/`.
 Plan: `plans/sqlite-row3-option-b-held-cap-probe-plan.md` (A). Depends on task-005
 (`history/09-07-2026_20-42-10_...`) and task-006 (C1/C2 codegen fixes).*
 

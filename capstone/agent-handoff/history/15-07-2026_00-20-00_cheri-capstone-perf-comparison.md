@@ -1,6 +1,6 @@
 # CHERI vs Capstone — temporal-safety performance comparison (full report)
 
-**Date:** 2026-07-14/15 · **Branch:** `capstone-bootstrap` · **Author:** Agent-A
+**Date:** 2026-07-14/15 · **Branch:** `capstone-bootstrap`
 **Feeds:** `paper/evaluation.tex` §`sec:eval-perf-compare` (`tab:perfcompare`,
 `tab:perftree`) · **Plan:** `plans/perf-cheri-vs-capstone-qemu.md`
 **Data:** `tests/cheri-perf/RESULTS.md` (CHERI) ·
@@ -288,7 +288,7 @@ DOMAIN_OPT_LEVEL=-O0 bash capstone/tests/runtime-qemu/run-tree-cost-probe.sh  # 
 - **Capstone RTL cycle-accurate** number (`tests/rtl-smoke/`, human-in-the-loop):
   converts our side from instruction-proxy to real silicon timing. Plumbing
   QEMU-validated; needs a hardware slot.
-- **Compiler lane (Agent-B):** the `-O2` capability-value-select ICE
+- **Compiler lane:** the `-O2` capability-value-select ICE
   (`cur = cond ? cur->l : cur->r`) — root-cause + fix so pointer-heavy capability
   code compiles optimized.
 - **Optional:** an OS-hosted Capstone workload to close the symmetry gap, and/or

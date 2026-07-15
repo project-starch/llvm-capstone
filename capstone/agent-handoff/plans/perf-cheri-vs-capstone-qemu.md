@@ -104,7 +104,7 @@ Remaining self-answerable items (no external dependency):
 
 ## Lane / sequencing
 
-- Likely an **Agent-B** task (it reuses task-015's CHERI stack + the Capstone
+- Likely a **compiler-lane** task (it reuses task-015's CHERI stack + the Capstone
   revoke-on-free allocator; heavy QEMU runs, serialize the rootfs lock —
   [[project_matrix_runs_serialize_rootfs_lock]]).
 - **Gated on Jason's methodology answer** for the CHERI-QEMU instruction-count

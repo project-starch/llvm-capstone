@@ -1,6 +1,6 @@
 # Spike: does Option B (intra-domain revoke) really need the gated `start.S` firmware cycle?
 
-*2026-07-09, A-lane. Firmware/monitor code-reading spike (phase 1 of the Q2
+*2026-07-09, firmware-lane. Firmware/monitor code-reading spike (phase 1 of the Q2
 de-risk). Status: **hypothesis strongly supported by code reading; one narrow
 codegen unknown remains, to be build-verified.** No code changed.*
 

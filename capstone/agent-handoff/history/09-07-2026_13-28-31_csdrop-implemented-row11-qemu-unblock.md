@@ -1,7 +1,7 @@
 # `csdrop` (DROP) implemented in capstone-qemu — the LINEAR / row-11 QEMU unblock
 
 **Date:** 2026-07-09
-**Agent:** Agent-B (compiler/codegen + emulator lane)
+**Lane:** compiler/codegen + emulator
 **Task:** `capstone/agent-handoff/tasks/agentB-002-csdrop-row11-linear.md`
 **Submodule commit:** `capstone-qemu` `cf541a1f` → `2e6a67d1` (branch `capstone-bootstrap-b`)
 
@@ -82,7 +82,7 @@ opcode that was previously illegal), so existing instructions are untouched.
 shell prompt — on the loaded machine; re-runs at the default timeout pass. Not
 related to the instruction.)
 
-## What row 11 still needs from Agent-A (firmware lane)
+## What row 11 still needs from the firmware lane
 
 `csdrop` is the *instruction*. A full **before→after row-11 domain demo** of a
 double-free (mint a genuine LINEAR cap → use → drop → double-drop/use → trap)
