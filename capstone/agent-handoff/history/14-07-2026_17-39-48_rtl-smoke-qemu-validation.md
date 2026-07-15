@@ -1,6 +1,6 @@
 # RTL/FPGA borrow-cost port — QEMU plumbing validation (task-016 Step 3)
 
-**Date:** 2026-07-14. **Outcome:** the staged FPGA borrow-cost
+**Date:** 2026-07-14. **Lane:** A-lane. **Outcome:** the staged FPGA borrow-cost
 port (`capstone/tests/rtl-smoke/`) now builds `-O2` and runs green end-to-end on
 the QEMU functional model; two real defects found and handled before any hardware
 slot. Full results: `tests/rtl-smoke/RESULTS.md`.
@@ -37,7 +37,7 @@ hardware.
    loop, not the write target — purely a **conditional store of a capability into
    two distinct named globals**. An array-indexed store (`regions[i++ & 1] = arg`)
    compiles at `-O2`; the port uses that. This is an `llvm/` codegen defect
-   (compiler lane) — flagged in COORDINATION.md, not fixed (shared tree).
+   (B-lane) — flagged in COORDINATION.md, not fixed (shared tree).
 
 4. **Green run.** raw=2, borrow=6 (+4 over raw, payload-independent), copy
    33@256B / 129@1024B — identical shape and identical raw/borrow/+4 to the

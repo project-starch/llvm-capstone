@@ -1,6 +1,6 @@
 # LINEAR (row 11) and UNINIT (row 14) closed — 17/17 in-scope corpus rows validated
 
-**Date:** 2026-07-10 (compiler-lane, task 009)
+**Date:** 2026-07-10 (B-lane, task 009)
 **Supersedes:** `08-07-2026_13-01-23_linear-uninit-rows-blocked-intra-domain.md`
 **Probe:** `capstone/tests/runtime-qemu/linear-uninit-corpus-probe/`
 + `build-`/`run-linear-uninit-corpus-probe.sh`
@@ -9,7 +9,7 @@
 
 Both deferred rows are **validated on RTL**, at `-O0`, `-O1` and `-O2`, 21/21 probe
 runs green. The 2026-07-08 deferral was correct when it was written and is now
-stale: each of its two blockers was removed by later compiler-lane work.
+stale: each of its two blockers was removed by later B-lane work.
 
 | Blocker (2026-07-08) | Removed by |
 |---|---|
@@ -152,7 +152,7 @@ were validated at. Not real-SQLite matched pairs; those remain optional for ever
 
 ## Scope
 
-- `capstone-qemu` (the compiler lane): the UNINIT-load check in `_helper_access_with_cap`, and
+- `capstone-qemu` (B's lane): the UNINIT-load check in `_helper_access_with_cap`, and
   the `DROP requires capability` diagnostic in `helper_csdrop`. Submodule bump.
 - Superproject: the new probe dir + its two top-level scripts, this note, and the
   `stage2-mapping.md` validation table.

@@ -1,6 +1,6 @@
 # Plan — row3 matched before→after against real SQLite (close the "abstract probe" gap)
 
-*Status: PROPOSED (firmware-lane, `capstone-bootstrap`), 2026-07-09. Awaiting go-ahead
+*Status: PROPOSED (A-lane, `capstone-bootstrap`), 2026-07-09. Awaiting go-ahead
 before the build/integration step. This is the paper's central empirical claim,
 so it is written up for review first (propose-before-big-directions).* 
 
@@ -74,7 +74,7 @@ matched pair the paper needs.
 ## Scope / cost
 
 - Needs the Capstone clang build (already present in this clone) + one QEMU domain
-  run (serialize per the single-`rootfs.ext2` rule — firmware-lane owns firmware/QEMU, no
+  run (serialize per the single-`rootfs.ext2` rule — A-lane owns firmware/QEMU, no
   contention with B's compiler lane).
 - ~1 focused build/integration pass once step 2 is signed off. Rows 19/13/18
   (same BORROW-REVOKE template) become cheap follow-ons afterward.
@@ -170,10 +170,10 @@ merge, while memsys5 coalesces. So the two buildable shapes for the "after" are:
   be distinct revocation nodes: either a new emulator **merge/unsplit** op (so a
   `SPLIT`-per-allocation coalescing allocator is possible), or a **non-coalescing**
   linear allocator that hands out `SPLIT`-derived allocations. This is emulator +
-  allocator work (the compiler lane), no longer the row-11 firmware wall.
+  allocator work (B's lane), no longer the row-11 firmware wall.
 
 So the old row3 fork (Option A two-domain vs Option B firmware-gated) is replaced
-by: **B1 now (A builds), B2 as the deep follow-on (the compiler lane).** The Q1/PI bar
+by: **B1 now (A builds), B2 as the deep follow-on (B's lane).** The Q1/PI bar
 decides whether B1's carved-copy fidelity is the acceptable row3 "after" or
 whether B2 is required for the headline.
 
@@ -189,7 +189,7 @@ alias `s2`, only the MREV *handle* reloaded, no pointer re-materialisation), but
 the `-O1/-O2` **QEMU boot is blocked** by a domain-TU codegen bug
 (`helper_csdelin: rd_v->tag` — a `.insn`-split cap loses its tag across a call
 spill at `-O1+`; aborts the no-revoke control too, so NOT the mechanism). That
-robustness fix is the compiler lane (task-008, same cap-split territory). See
+robustness fix is B's lane (task-008, same cap-split territory). See
 `history/09-07-2026_23-15-00_row3-b1-matched-pair.md`.
 
 **Known codegen limitation (not row3-specific, candidate B item):** the SQLite

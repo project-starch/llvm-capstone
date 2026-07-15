@@ -2,7 +2,7 @@
 
 *Status: **v1 IMPLEMENTED + VALIDATED (2026-07-09), PI-approved.** The design
 below is the full proposal; v1 shipped a deliberately narrowed slice of it (see
-the v1-scope note under §2 and the rollout in §6). Author: the compiler lane
+the v1-scope note under §2 and the rollout in §6). Author: B-lane
 (compiler/codegen + emulator lane), branch `capstone-bootstrap-b`, 2026-07-08.*
 
 > **v1 implementation note (2026-07-09).** Shipped: the `-fcapstone-subobject-bounds`

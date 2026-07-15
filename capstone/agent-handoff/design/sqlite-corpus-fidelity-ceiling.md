@@ -11,7 +11,7 @@ Companion to `benchmarks/sqlite/cve-repros/stage2-mapping.md` (the table) and
 
 A matched pair is "same program, two outcomes." The two halves are scored apart:
 
-- **Host "before" (real SQLite + ASan).** firmware-lane, no QEMU.
+- **Host "before" (real SQLite + ASan).** A-lane, no QEMU.
   `cve-repros/run-host-asan-repros.sh`. Two sets:
   - essence `before.c`: **18/18** reproduce their `oracle`.
   - binding-faithful `before-faithful.c` (models the real binding's C glue):
@@ -20,7 +20,7 @@ A matched pair is "same program, two outcomes." The two halves are scored apart:
     `oracle-faithful` (falls back to `oracle`). Row 8 is the case that forced
     this: the essence fabricates a UAF, but CPython's real path nulls `self->db`
     on close and passes NULL to `sqlite3_backup_init` → **null-deref**, not UAF.
-- **Capstone "after" (real SQLite in a domain → capability fault).** compiler-lane, QEMU.
+- **Capstone "after" (real SQLite in a domain → capability fault).** B-lane, QEMU.
   **5 LITERAL** (rows 3/R, 11/L, 14/U, 7/H, 2/S — one per shape), **12 mechanism
   probes**, 2 N/A. LITERAL = real SQLite linked, the faulting handle is the one
   SQLite's own API returned/holds, revoke fires on the real lifecycle event.
@@ -150,7 +150,7 @@ artifact (verbatim reproducer + fix where they exist). Outcome:
   provenance to a hierarchical statement lifecycle is INTERPRETIVE. **The genuinely
   faithful H bugs are row 5 (PHP #69971) and row 9 (sqlite3-ruby #49)** — both real
   freed-parent → child-deref UAFs. Prefer them as the H family's faithful anchors
-  (task-012 makes them literal); demote row 7's role to a mechanism demo.
+  (B-lane task-012 makes them literal); demote row 7's role to a mechanism demo.
 - **row 12** — the cited expo PR #34992 is a **statement-leak fix** (uses
   `sqlite3_next_stmt`), not the null-deref the essence claims. Citation mismatch;
   labeled MODEL until a matching artifact is found.

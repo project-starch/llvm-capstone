@@ -1,7 +1,7 @@
 # Task 004 — revoke probes landed in-submodule + csdrop commit durability
 
 **Date:** 2026-07-09
-**Lane:** compiler/codegen + emulator
+**Lane:** B-lane (compiler/codegen + emulator)
 **Branch:** `capstone-bootstrap-b`
 **Scope:** `capstone/capstone-qemu` submodule + handoff docs. No firmware touched.
 
@@ -60,7 +60,7 @@ New dir `capstone/capstone-qemu/tests/capstone-revoke-probes/`:
   `CAPSTONE_REPO_ROOT` (default 4 dirs up).
 - `README.md` — mechanism, reproduction table, and the provenance constraint.
 
-They live in the submodule (not `capstone/tests/`, the firmware lane) so the probe sources
+They live in the submodule (not `capstone/tests/`, A's lane) so the probe sources
 travel with the emulator they exercise.
 
 ## Reproduction (binary `2e6a67d1`, one boot per probe)

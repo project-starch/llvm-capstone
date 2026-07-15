@@ -1,6 +1,6 @@
 # Faithful real-SQLite matched pairs, one per Stage-2 shape (task 010)
 
-*2026-07-10, compiler-lane, branch `capstone-bootstrap-b`. Builds on the row3 B2
+*2026-07-10, B-lane, branch `capstone-bootstrap-b`. Builds on the row3 B2
 revoke-on-free allocator (task-008), the held-cap linear grant (task-007),
 `csdrop` (task-002) and the UNINIT-from-revoke derivation (task-009).*
 

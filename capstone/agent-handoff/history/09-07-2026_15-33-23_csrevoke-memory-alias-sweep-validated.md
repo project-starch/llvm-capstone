@@ -1,7 +1,7 @@
 # `csrevoke` memory-alias sweep — VALIDATED (outcome a)
 
 **Date:** 2026-07-09
-**Lane:** compiler/codegen + emulator
+**Lane:** B-lane (compiler/codegen + emulator)
 **Task:** `capstone/agent-handoff/tasks/agentB-003-validate-revoke-alias-sweep.md`
 **Result:** **Outcome (a)** — the memory-alias sweep already works. No code change.
 

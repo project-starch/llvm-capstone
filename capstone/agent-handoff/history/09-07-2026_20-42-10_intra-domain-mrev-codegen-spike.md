@@ -1,6 +1,6 @@
 # Codegen spike: can domain C mint + revoke a capability intra-domain?
 
-*2026-07-09, compiler-lane (task `agentB-005`). Answers the one narrow codegen unknown
+*2026-07-09, B-lane (task `agentB-005`). Answers the one narrow codegen unknown
 left open by A's firmware spike
 (`history/09-07-2026_18-10-43_option-b-intra-domain-revoke-firmware-spike.md`).
 Status: **all three questions answered; the Option B mechanism is a normal probe
@@ -71,7 +71,7 @@ Isolated by taking the `-O1` IR, deleting the two `fastcc` tokens, and running
 taking pointers. The Option B *mechanism* does not need this fixed; the SQLite
 *integration* does.
 
-Fix (~10 lines, the compiler lane): copy the `MVT::i128` block from `CC_Capstone` into
+Fix (~10 lines, B's lane): copy the `MVT::i128` block from `CC_Capstone` into
 `CC_Capstone_FastCC`, allocating from `getFastCCArgGPRs(ABI)`. Not done — it
 changes the shared LLVM tree that A also builds, and this task was scoped to
 report. Repro committed as `fastcc_cap_arg_repro.c`.
@@ -183,7 +183,7 @@ not reachable ambiently. A can proceed with the single-domain probe.
 
 The **SQLite integration** is a different matter: C1 blocks compiling any
 realistic domain C at `-O1`/`-O2`, and C2 makes `MREV` unsafe under the
-optimizer. Both are contained, both are the compiler lane, neither is on the critical
+optimizer. Both are contained, both are B's lane, neither is on the critical
 path for the mechanism proof.
 
 Not addressed (out of scope): SQLite's `memsys5` arena being linear-backed —
