@@ -36,14 +36,21 @@ critical path.**
 | `PROTOCOL.md` | The protocol map (placeholder) + the three ways to get the real one, incl. the DevTools capture checklist. |
 | `requirements.txt` | `python-socketio` (client). The mock/test also need the server extra + aiohttp. |
 
-## Install
+## Install (required before first use)
+
+Neither dependency ships with the system Python here — install them first or the
+driver fails at import:
 
 ```sh
 python -m venv .venv && . .venv/bin/activate
-pip install -r requirements.txt          # driver only (python-socketio client)
-# for the offline test / mock server, also:
-pip install 'python-socketio' aiohttp
+pip install -r requirements.txt          # python-socketio[client] + aiohttp
 ```
+
+`requirements.txt` covers both the driver's runtime need
+(`python-socketio[client]`) and the offline dry-run / mock server (`aiohttp`), so
+a single install runs everything below. If you only want the driver (no mock),
+`pip install 'python-socketio[client]'` is enough; the dry-run additionally needs
+`aiohttp`.
 
 ## Offline test (no board, no network beyond localhost)
 
