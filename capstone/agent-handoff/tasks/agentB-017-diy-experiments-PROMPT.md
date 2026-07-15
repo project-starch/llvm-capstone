@@ -3,8 +3,8 @@
 *Paste everything below the line into `claude-b`. Self-contained. This is the
 follow-on to the scaffold (phase 1) and the wire-up brief (phase 2,
 `agentB-017-wireup-PROMPT.md`). New direction: stop waiting on the collaborator's
-Thursday JS — get the protocol and the boot image ourselves, so an agent-driven
-run is ready the moment the user authorizes board contact.*
+Thursday JS — get the protocol and the boot image ourselves and close the whole
+loop autonomously (the user has authorized end-to-end board operation).*
 
 ---
 
@@ -16,6 +16,29 @@ cd /home/alexey/dev/llvm-capstone-b && git fetch origin && git pull --rebase
 source capstone/tests/capstone-test-env.sh
 ```
 
+## Authorization (2026-07-15) — run the whole flow autonomously
+
+The user has authorized you to do **everything end-to-end without them in the
+loop**: fetch the private token'd console URL, extract the protocol, build the
+boot image, wire the driver, **and operate the physical board** to run the perf
+sweep — all on your own judgement, no per-step go-ahead needed. The board URL
+(with its access token) is supplied to you separately at paste time; use it at
+runtime only.
+
+Two constraints remain absolute and are NOT relaxed by this authorization:
+- **Never commit or log the token.** It goes nowhere in the tree — not
+  `config.py`, not `PROTOCOL.md`, not a history note, not a commit message. Pass it
+  via `--url` at runtime; if you must persist it, put it in a **gitignored** local
+  file and confirm `git status` never shows it.
+- **Be a good citizen on the shared board.** It is shared hardware (all users see
+  one state, ~10-min idle timeout). Take the **Lock** while running and release it
+  when done; keep runs short and targeted; leave the board at a clean prompt (do
+  not power it off — others may need it); and if you arrive to find it in an
+  unexpected/in-use state, **back off** rather than stomp on someone's session.
+
+Autonomy means no approval gate — it does **not** mean silence: still report
+readiness, results, and any ambiguity, and still obey every lane rule below.
+
 ## The reframe (why this task)
 
 Your `fpga_driver/` scaffold is **done and verified green**; it is in a holding
@@ -24,17 +47,17 @@ the collaborator's client JS on **Thursday evening BST**, after which he is
 unreachable. That is fragile ("will try"). This task removes him from the critical
 path: **the protocol and the boot image are both obtainable DIY, without him.**
 
-Only **three** things gate an agent-driven RTL perf run, and only the last needs a
-human — and that human is the **user**, not the collaborator:
+Only **three** things gate an agent-driven RTL perf run, and none of them needs the
+collaborator — and the user has now authorized you to do all three yourself:
 
 | Piece | Needs collaborator? | DIY path (this task) |
 |---|---|---|
-| Socket.IO protocol (event names + payloads) | **No** | fetch the live console's own client JS, or the user's DevTools HAR |
+| Socket.IO protocol (event names + payloads) | **No** | fetch the live console's own client JS (or DevTools HAR fallback) |
 | Boot image `fw_payload.bin` (our test overlay) | **No** | build via `caplifive-system` — no board |
-| Operating the physical board | **No** | needs the **user's** explicit go-ahead + the token'd URL |
+| Operating the physical board | **No** | drive it via the wired `python-socketio` driver + the token'd URL you were handed |
 
-So: do the two DIY unblocks below, wire the driver, and report readiness. Do **not**
-touch the board.
+So: build the image, extract the protocol, wire the driver, and — once the mock is
+green — run the board and report the numbers.
 
 ## Task 1 — build the boot image (pure build, no board)
 
@@ -68,14 +91,14 @@ Two routes. **Route A (DevTools HAR) is the reliable one; prefer it.**
   Trace Dump → "Save all as HAR with content"). If the checklist there is thin,
   tighten it. When the user hands you a `.har`, read the `42["<event>",<payload>]`
   outbound frames and the inbound frames directly (`43…` = ack).
-- **Route B — fetch the live client JS ourselves (needs the user's explicit OK).**
-  The app's JS bundle is served from the **same origin as the token'd URL**
-  (`https://fpga.corank.info/<token>/`). **Only with the user's explicit go-ahead**,
-  WebFetch the console page, find the referenced JS bundle(s), fetch them, and run
-  `python fpga_driver/extract_from_js.py <bundle>.js` → emit/on/io names survive
-  minification. **Expect this may fail:** the fetch can be auth-gated or return
-  rendered/opaque content instead of raw JS — if so, fall back to Route A. **Never
-  WebFetch the private URL without the user saying go, and never commit the token.**
+- **Route B — fetch the live client JS ourselves (authorized; do it).** The app's
+  JS bundle is served from the **same origin as the token'd URL** (supplied at paste
+  time). WebFetch the console page, find the referenced JS bundle(s), fetch them,
+  and run `python fpga_driver/extract_from_js.py <bundle>.js` → emit/on/io names
+  survive minification. **Expect this may fail:** the fetch can be auth-gated or
+  return rendered/opaque content instead of raw JS — if so, fall back to Route A
+  (produce the tightened DevTools checklist and flag that you need a human-captured
+  HAR). Never commit or log the token, wherever it appears in the URL.
 
 ## Task 3 — wire the driver from whatever protocol you obtained
 
@@ -99,25 +122,33 @@ condensed:
 6. Note every ambiguity in your report (chunked upload, ack-vs-event, unexpected
    namespace/auth).
 
-## Real-board run — needs the USER, do NOT self-initiate
+## Real-board run — authorized; run it yourself
 
-After wiring + green mock, a real run requires the **user's explicit go-ahead and
-the token'd URL** (never commit the token). Intended command, for reference only:
+Once the driver is wired (`PROTOCOL_SOURCE="verified"`) **and the mock dry-run is
+green**, run the real perf sweep against the board on your own — the green mock is
+your gate, not a human. Command:
 
 ```
-python fpga_driver/run_rtl_smoke.py --url 'https://fpga.corank.info/<token>/' \
+python fpga_driver/run_rtl_smoke.py --url '<token-URL supplied at paste time>' \
     --image <path>/fw_payload.bin
 ```
 
-Do **not** run it against the board without the user saying go. Report readiness.
+Take the Lock first, run the `.user`+`.dom` sweep, capture the UART `RESULT` lines,
+feed them to `run-revoke-cost-fpga-qemu.sh --parse-uart`, release the Lock, and
+report the breakdown (bump / norevoke / revoke → revoke-at-free delta) next to the
+QEMU reference. Keep the token out of every committed/logged artifact. If anything
+about the live protocol differs from what you wired (upload chunking, ack-vs-event,
+namespace/auth), adapt `config.py`, re-green the mock, and note it in your report.
 
 ## Guardrails (unchanged)
 
 - Additive **test tooling only** — no `llvm/`, no submodule bumps, no monitor /
   `start.S` / allocator / RTL changes. (Building the boot image is an external
   build in `caplifive-system`, not a change to our tree.)
-- **Do not operate the board**; do not seek credentials. WebFetch the private URL
-  only with the user's explicit OK; the token is **never** committed.
+- Operating the board and fetching the token'd URL are **authorized** (see the
+  Authorization section) — but the **token is never committed or logged**, and be a
+  good citizen on the shared board (Lock, short runs, clean state, back off if it's
+  in use). Do not seek any credentials beyond the URL you were handed.
 - Commit on `capstone-bootstrap-b`, exact paths, **no `Co-Authored-By:`**, **no
   worker/agent identity in commit messages** (imperative subject), no debug/report
   files. Committing is not gated on an explicit ask — commit validated work as a
@@ -130,19 +161,26 @@ Do **not** run it against the board without the user saying go. Report readiness
 - **Boot image:** either `fw_payload.bin` built (path + how), or a precise report
   of the exact repo/submodule that needs `gh` auth to proceed.
 - **Protocol:** `config.py` filled + `PROTOCOL_SOURCE="verified"`, `mock_server.py`
-  matching, `test_dryrun.py` green — OR, if neither route yielded it yet, a crisp
-  statement of which route you attempted, what it returned, and what the user must
-  do (authorize the URL fetch, or run the DevTools capture).
+  matching, `test_dryrun.py` green — OR, if Route B's fetch came back opaque and you
+  genuinely cannot reach the events, the tightened DevTools checklist + a crisp
+  statement of what the fetch returned (this is the one case where a human capture
+  is the only remaining option).
+- **Board results:** the perf sweep run against the board — the parsed breakdown
+  (bump / norevoke / revoke → revoke-at-free delta) beside the QEMU reference — or,
+  if a real gate stopped you (gh-auth for the image, opaque protocol), exactly what
+  blocked and where.
 - `PROTOCOL.md` updated from PLACEHOLDER to the observed map (events + payloads +
-  handshake), noting the source (client JS / HAR).
+  handshake), noting the source (client JS / HAR). **No token anywhere in it.**
 - History note → `capstone/agent-handoff/history/DD-MM-YYYY_HH-MM-SS_fpga-diy-experiments.md`.
-- Short report: image state, protocol state, and exactly what remains before a
-  real-board run can be triggered.
+- Short report: image state, protocol state, board-run results, and anything that
+  blocked full end-to-end autonomy.
 
 ## Framing
 
-Still parallel, not critical-path — the human-driven RTL run already works. The
-prize here is that **nothing about an agent-driven run depends on the collaborator
-anymore**: we build the image and extract the protocol ourselves, and the only
-remaining gate is the user authorizing board contact. Fast, offline, low-risk;
-don't touch the board without the user.
+The human-driven RTL run already works, so nothing here is on the paper's critical
+path — but the user has authorized you to close the whole loop yourself: build the
+image, extract the protocol, wire the driver, and run the board, no human in the
+loop. Deliver the real cycle-accurate number if you can reach it; where a genuine
+gate stops you (gh-auth for the image, opaque protocol fetch), report precisely
+what blocked. Move fast, keep the token out of the tree, and be a considerate
+tenant of the shared board.
