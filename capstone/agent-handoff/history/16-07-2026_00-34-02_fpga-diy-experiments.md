@@ -111,3 +111,65 @@ outside the repo; redacted in all logs). Good citizen: Lock while running,
 back-off check, released the Lock, left the board powered (not off) so
 auto-shutdown reaps it. Additive test tooling only — no `llvm/`, monitor, RTL, or
 submodule-bump changes.
+
+## Update (2026-07-16, phase 3b): image BUILT + verified; blocked only on a board-console outage
+
+### Pre-build validation (all three gates PASS)
+
+- **Feature set revoke-cost actually needs (from the sources):** the core
+  capability instructions `cssplit` / `csmrev` (`__mrev`) / `csdelin` (`__delin`)
+  / `csrevoke` — which execute on the **CVA6 core (the FPGA bitstream already on
+  the board)**, not the monitor — plus the monitor's **region-share ABI**:
+  `REGION_SHARE_ANNOTATED` handing the LINEAR arena as `REV_TRANSFERRED` (monitor
+  keeps no handle → domain owns split/mrev/revoke) and the results region as
+  `REV_SHARED` (host retains its mapping), delivered to the domain as
+  `DPI_REGION_SHARE`. **revoke-cost does NOT touch `csdrop` / held-cap row-11/12,
+  and does NOT use `csdebugprint`/`csdebugcount`** (results go to a retained
+  region + UART printf). So the earlier "monitor must carry csdrop/row-11/12"
+  risk was moot — revoke-cost predates those features.
+- **genesys-testing monitor has the full ABI.** `caplifive-sbi` /
+  `caplifive-opensbi` @ `genesys-testing` implement `REV_TRANSFERRED`,
+  `REV_SHARED`, `REGION_SHARE_ANNOTATED`, and `DPI_REGION_SHARE`, and the header
+  constants match the probe **byte-for-byte** (`DPI_REGION_SHARE=0x1`,
+  `REV_TRANSFERRED=0x3`, `PERM_INOUT=0x1`, `REV_SHARED=0x2`). Our own monitor only
+  adds *extras* revoke-cost doesn't use (the `share_child_region` H-cascade,
+  csinit re-share-after-revoke). No feature gap.
+- **Sandbox deps OK:** every host build tool present; 112 cores / 250 GiB / 172 GiB
+  free.
+
+### Build (done)
+
+Built via `caplifive-system/sw/buildroot` (captainer-buildroot @ `8c5518d`,
+`fpga_defconfig`, `PLATFORM=fpga/ariane`, initramfs + `BR2_ROOTFS_OVERLAY`).
+Init the three nested submodules (buildroot, `components/opensbi` +
+`package/.../capstone-sbi` @ genesys-testing) and `sw/capstone-c`; stage the six
+`.user`/`.dom` into `overlay/root/rtl-smoke/`; `make setup`; `make build`.
+
+**Gotcha — `make build LINUX_PAYLOAD=1` does NOT embed Linux.** The Makefile only
+`export`s the env var; buildroot's `opensbi.mk` gates payload embedding on
+`BR2_TARGET_OPENSBI_LINUX_PAYLOAD=y` (commented out in `fpga_defconfig`), and
+buildroot skips the already-built opensbi package on the second invocation
+regardless. Result of the stock flow: a 2.1 MB opensbi-with-dummy-`test`-payload.
+**Fix:** rebuild opensbi's firmware directly with the Image as payload —
+`rm -rf build/build/opensbi-custom/build/platform/fpga/ariane/firmware` then
+`CROSS_COMPILE=<buildroot riscv> PLATFORM=fpga/ariane FW_PAYLOAD_PATH=<.../images/Image> make`
+in `opensbi-custom`. The fpga/ariane platform `objects.mk` already sets
+`FW_PAYLOAD_FDT_PATH=../../images/caplifive.dtb` (`FW_PAYLOAD_FDT_ADDR=0x82200000`),
+so the DTB is embedded automatically. → `fw_payload.bin` **15.4 MB**.
+
+**Verified the payload contents, not just the size:** the kernel Image embeds the
+initramfs gzip-compressed (`CONFIG_INITRAMFS_COMPRESSION_GZIP=y`), so plain grep
+misses the names. Decompressing the embedded cpio out of the Image (4,126,208 B,
+= `rootfs.cpio`) shows **all six** `/root/rtl-smoke/*.dom`/`*.user` present with
+correct sizes. Staged at `/tmp/capstone-b/fpga-image/fw_payload.bin`
+(sha256 `aadd213f…`).
+
+### Remaining gate: board web console is DOWN (transient, external)
+
+`fpga.corank.info` accepts the TCP/TLS connection (`connect≈0.26 s`) but the HTTP
+backend never responds — 20 s, 0 bytes, for **both** the token'd URL and the bare
+root — so it's the console service wedged (a restart on the lab-shared board),
+not a token/network problem (the build just pulled GiB from gitlab/GNU mirrors).
+The prior session reached it fine at 00:15. Everything else is ready: the sweep is
+the single `run_rtl_smoke.py --url … --image /tmp/capstone-b/fpga-image/fw_payload.bin`
+command the moment the console answers. A background poller retries ~1×/min.
