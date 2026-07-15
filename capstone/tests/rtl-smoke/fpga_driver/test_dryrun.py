@@ -82,32 +82,29 @@ def run() -> None:
             console = FpgaConsole(srv.url, allow_unverified=True,
                                   logger=lambda m: print(f"[drv] {m}"))
             console.connect(timeout=10)
+            frame = ""
+            users = None
             try:
+                # good-citizen helpers: user count + the auto-shutdown Lock
+                users = console.user_count()
+                console.lock()
                 console.power(True)
 
                 # -- the five actions, exercised individually --
-                # 1: upload (ack) + load (status Loading->Done)
-                import base64
-                console.upload_boot_image(
-                    "fw.bin", base64.b64encode(tmp_img.read_bytes()).decode(), 4100)
+                # 1: upload (multipart) + load (load_state loading->done)
+                console.upload_boot_image("fw.bin", str(tmp_img))
                 console.load_boot_image("fw.bin")
                 # 2: reset + wait for the shell prompt (cross-chunk marker)
                 console.reset(wait_prompt=True, prompt_timeout=15)
                 # 3: read UART until a marker -- done inside run_command below
                 capture = run_rtl_smoke.run_smoke(
                     console, tmp_img, "fw.bin", do_upload=False)
-                # 4 + 5: switch + trace dump (manual's switch0/switch1 sequence)
-                console.set_switch(0, True)          # detach UART
-                # trace_dump starts capturing; switch 1 triggers end-of-dump
-                import threading
-                done = {}
-                t = threading.Thread(
-                    target=lambda: done.setdefault("frame", console.trace_dump(timeout=10)))
-                t.start()
-                time.sleep(0.2)
-                console.set_switch(1, True)          # trigger dump
-                t.join(timeout=12)
+                # 4: toggle a virtual switch (verify via switch_state)
+                console.set_switch(1, True)
+                # 5: trace dump (POST trace-start -> trace_result text)
+                frame = console.trace_dump(timeout=10)
             finally:
+                console.unlock()
                 console.close()
 
         # -- assertions --
@@ -118,7 +115,9 @@ def run() -> None:
                        "mode=revoke  alloc_free=65",
                        "borrow-cost-fpga: RESULT vs-raw"):
             assert needle in capture, f"missing RESULT fragment: {needle!r}"
-        assert done.get("frame"), "trace_dump did not return an end-of-dump frame"
+        assert frame and "end of dump" in frame, \
+            f"trace_dump did not return the dump text: {frame!r}"
+        assert users == 1, f"expected user_count 1, got {users!r}"
 
         capture_path.write_text(capture)
         rc = run_rtl_smoke.parse_uart(capture_path)
@@ -134,5 +133,4 @@ def test_dryrun() -> None:  # pytest entry point
 
 
 if __name__ == "__main__":
-    assert C.PROTOCOL_SOURCE == "placeholder" or True  # informational
     run()

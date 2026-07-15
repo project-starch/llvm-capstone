@@ -1,22 +1,24 @@
-"""Headless Socket.IO driver for the FPGA web console.
+"""Headless driver for the FPGA web console (hybrid REST + Socket.IO).
 
-`FpgaConsole` wraps a `python-socketio` client and exposes the five board actions
-the rtl-smoke run needs, each mapped to a wire event through config.py:
+`FpgaConsole` performs the board actions the rtl-smoke run needs. The real
+console is a hybrid (see config.py): the action *verbs* are HTTP POST to a REST
+API, while the live UART stream, the power/switch controls, terminal keystrokes,
+and the auto-shutdown Lock are Socket.IO events; each long action reports
+completion through a per-action Socket.IO *state* event.
 
-    1. upload_boot_image() / load_boot_image()  -> .bin to 0x80000000, await done
-    2. reset() + wait_uart(login_prompt)         -> reset, wait for the shell
+    1. upload_boot_image() / load_boot_image()  -> HTTP upload + load, await done
+    2. reset() + wait_uart(login_prompt)         -> HTTP reset, wait for the shell
     3. wait_uart(marker)                          -> read UART until a marker
-    4. set_switch(n, on)                          -> toggle a virtual switch
-    5. trace_dump()                               -> capture, await end-of-dump
+    4. set_switch(n, on)                          -> Socket.IO switch toggle
+    5. trace_dump()                               -> HTTP trace-start, await result
 
-The protocol itself (event names, payloads, completion signals) is entirely in
-config.py; this module contains only transport + synchronisation logic. Nothing
-here is board-specific beyond the LISTEN/EMIT tables it reads.
+The protocol (REST paths, event names, payloads, completion signals) is entirely
+in config.py; this module is transport + synchronisation only.
 
-Only dependency: python-socketio (with the client extra). Sync client: the
-Socket.IO event loop runs in a background thread and invokes our handlers; we
-synchronise with the caller through a Condition-guarded event log + a UART text
-buffer, so the caller writes plain procedural code.
+Dependencies: python-socketio[client] (which also pulls in `requests`, used here
+for the REST calls). Sync client: the Socket.IO event loop runs in a background
+thread and invokes our handlers; we synchronise with the caller through a
+Condition-guarded event log + per-event latest-state map + a UART text buffer.
 """
 
 from __future__ import annotations
@@ -24,13 +26,22 @@ from __future__ import annotations
 import re
 import threading
 import time
-from typing import Any, Callable, List, Optional, Pattern, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Pattern, Tuple, Union
+from urllib.parse import urlsplit, urlunsplit
 
 try:
     import socketio
 except ModuleNotFoundError as exc:  # pragma: no cover - dependency hint
     raise SystemExit(
         "python-socketio is required: pip install 'python-socketio[client]'"
+    ) from exc
+
+try:
+    import requests
+except ModuleNotFoundError as exc:  # pragma: no cover - dependency hint
+    raise SystemExit(
+        "requests is required (ships with python-socketio[client]): "
+        "pip install requests"
     ) from exc
 
 from . import config as C
@@ -45,7 +56,7 @@ class ActionTimeout(RuntimeError):
 
 
 class ActionError(RuntimeError):
-    """The board reported an error status while an action was in flight."""
+    """The board reported an error state while an action was in flight."""
 
 
 def _compile(rx: Union[str, Pattern[str]]) -> Pattern[str]:
@@ -63,32 +74,41 @@ class FpgaConsole:
         client: Optional["socketio.Client"] = None,
     ) -> None:
         """`url` is the full token'd console URL (kept out of the repo; pass on
-        the CLI). `client` lets tests inject a pre-made socketio.Client (e.g.
-        pointed at the mock server)."""
+        the CLI). `client` lets tests inject a pre-made socketio.Client."""
         self.url = url
         self.token = token
         self._log = logger or (lambda m: None)
 
         if C.PROTOCOL_SOURCE != "verified" and not allow_unverified:
             raise ProtocolNotVerified(
-                "config.PROTOCOL_SOURCE is 'placeholder' -- the Socket.IO event "
-                "names/payloads are guesses from the manual, not the real "
-                "protocol. Refusing to drive a board. Wire up config.py from the "
-                "client JS and set PROTOCOL_SOURCE='verified', or pass "
-                "allow_unverified=True to run against the mock server.\n"
-                f"  ({C.PROTOCOL_NOTES})"
+                "config.PROTOCOL_SOURCE is 'placeholder' -- refusing to drive a "
+                "board. Wire config.py from the client JS and set "
+                "PROTOCOL_SOURCE='verified', or pass allow_unverified=True to run "
+                f"against the mock server.\n  ({C.PROTOCOL_NOTES})"
             )
+
+        # Derive the Socket.IO path and REST base from the URL path token, so the
+        # token stays only in `url` and never in config.py.  For a token'd URL
+        # https://host/<token>/ this yields socketio_path=/<token>/socket.io and
+        # api_base=https://host/<token>/api ; for a bare http://host:port (the
+        # mock) it yields /socket.io and http://host:port/api .
+        parts = urlsplit(url)
+        prefix = parts.path.rstrip("/")
+        self._socketio_path = f"{prefix}/{C.CONNECT.socketio_path}"
+        self._api_base = urlunsplit(
+            (parts.scheme, parts.netloc, f"{prefix}/{C.CONNECT.api_prefix}", "", "")
+        )
 
         self.sio = client or socketio.Client(
             reconnection=True, logger=False, engineio_logger=False
         )
+        self._http = requests.Session()
 
-        # Event log: every server->client event, appended under _cond.
+        # Event log + per-event latest payload + UART text buffer, all under _cond.
         self._cond = threading.Condition()
         self._events: List[Tuple[float, str, Any]] = []  # (ts, name, data)
-        # UART accumulates as text; guarded by the same condition.
+        self._state: Dict[str, Any] = {}                 # event name -> last payload
         self._uart = ""
-        self._last_status: Optional[str] = None
 
         self._install_handlers()
 
@@ -97,21 +117,27 @@ class FpgaConsole:
         auth = None
         if C.CONNECT.auth_key and self.token:
             auth = {C.CONNECT.auth_key: self.token}
-        self._log(f"connecting to {self.url} (ns={C.CONNECT.namespace})")
+        self._log(f"connecting (ns={C.CONNECT.namespace}, path={self._socketio_path})")
         self.sio.connect(
             self.url,
             auth=auth,
-            socketio_path=C.CONNECT.socketio_path,
+            socketio_path=self._socketio_path,
             namespaces=[C.CONNECT.namespace],
             wait=True,
             wait_timeout=timeout,
         )
+        # The 'connect' handler (installed in _install_handlers) mirrors the
+        # browser client by emitting request_history on this and every reconnect.
         self._log("connected")
 
     def close(self) -> None:
         try:
             self.sio.disconnect()
         except Exception:  # pragma: no cover - best effort
+            pass
+        try:
+            self._http.close()
+        except Exception:  # pragma: no cover
             pass
 
     def __enter__(self) -> "FpgaConsole":
@@ -125,21 +151,32 @@ class FpgaConsole:
     def _install_handlers(self) -> None:
         ns = C.CONNECT.namespace
 
-        # Catch-all: record every event so wait_event() can match generically.
         def catch_all(event: str, *args: Any) -> None:
             data = args[0] if len(args) == 1 else (args or None)
             self._record(event, data)
 
         self.sio.on("*", catch_all, namespace=ns)
 
+        # Re-request history on EVERY (re)connect, not just the first. A board
+        # `reset` drops the Socket.IO connection; python-socketio reconnects
+        # (reconnection=True), but the reconnected session must ask for the UART
+        # ring buffer + current states again or it silently misses the post-reset
+        # boot log (this is exactly what stalled the first hardware recon).
+        def on_connect() -> None:
+            try:
+                self._emit("request_history", last_seq=-1)
+            except Exception:  # pragma: no cover - best effort
+                pass
+
+        self.sio.on("connect", on_connect, namespace=ns)
+
     def _record(self, event: str, data: Any) -> None:
         now = time.monotonic()
         with self._cond:
             self._events.append((now, event, data))
+            self._state[event] = data
             if event == C.LISTEN["uart_output"]:
                 self._uart += self._extract_uart_text(data)
-            elif event == C.LISTEN["status"]:
-                self._last_status = self._extract_status(data)
             self._cond.notify_all()
         if event == C.LISTEN["uart_output"]:
             self._log(f"[uart] +{len(self._extract_uart_text(data))}B")
@@ -161,14 +198,6 @@ class FpgaConsole:
                     return str(v)
         return "" if data is None else str(data)
 
-    @staticmethod
-    def _extract_status(data: Any) -> Optional[str]:
-        if isinstance(data, str):
-            return data
-        if isinstance(data, dict):
-            return data.get(C.STATUS_STATE_KEY) or data.get("status")
-        return None
-
     # -- generic waiters ----------------------------------------------------
     def wait_event(
         self,
@@ -179,9 +208,8 @@ class FpgaConsole:
         since: Optional[float] = None,
     ) -> Any:
         """Block until a `name` event whose data satisfies `predicate` arrives.
-        Only events newer than `since` (monotonic ts) are considered; pass the
-        value of `self.now()` captured before the triggering emit to avoid
-        matching a stale event."""
+        Only events newer than `since` (monotonic ts) are considered; pass
+        `self.now()` captured before the trigger to skip a stale event."""
         deadline = time.monotonic() + timeout
         cursor = 0
         with self._cond:
@@ -196,19 +224,37 @@ class FpgaConsole:
                     raise ActionTimeout(f"timed out waiting for event {name!r}")
                 self._cond.wait(timeout=remaining)
 
-    def wait_status(self, state: str, timeout: float, error_status: str) -> None:
+    def wait_state(
+        self,
+        event: str,
+        done_state: str,
+        timeout: float,
+        *,
+        error_state: str = "error",
+        state_key: str = C.STATUS_STATE_KEY,
+        since: Optional[float] = None,
+    ) -> Any:
+        """Block until a per-action state `event` reports `done_state` in its
+        `state_key` field; raise ActionError if it reports `error_state`."""
         deadline = time.monotonic() + timeout
+        cursor = 0
         with self._cond:
             while True:
-                if self._last_status == state:
-                    return
-                if self._last_status == error_status:
-                    raise ActionError(f"board reported status {error_status!r}")
+                while cursor < len(self._events):
+                    ts, ev, data = self._events[cursor]
+                    cursor += 1
+                    if ev != event or (since is not None and ts < since):
+                        continue
+                    st = data.get(state_key) if isinstance(data, dict) else data
+                    if st == done_state:
+                        return data
+                    if st == error_state:
+                        raise ActionError(f"{event}: board reported {error_state!r}")
                 remaining = deadline - time.monotonic()
                 if remaining <= 0:
+                    last = self._state.get(event)
                     raise ActionTimeout(
-                        f"timed out waiting for status {state!r} "
-                        f"(last={self._last_status!r})"
+                        f"timed out waiting for {event}=={done_state!r} (last={last!r})"
                     )
                 self._cond.wait(timeout=remaining)
 
@@ -219,10 +265,9 @@ class FpgaConsole:
         *,
         search_from: int = 0,
     ) -> "re.Match[str]":
-        """Block until the UART text matches `pattern`. Searched over the buffer
-        from index `search_from` onward, so a marker split across chunks still
-        matches, but a stale marker printed by an earlier command is skipped
-        (pass the buffer length captured before the emit)."""
+        """Block until the UART text matches `pattern`, searched from index
+        `search_from` onward -- so a marker split across chunks still matches, but
+        a stale marker from an earlier command is skipped."""
         rx = _compile(pattern)
         deadline = time.monotonic() + timeout
         with self._cond:
@@ -234,13 +279,17 @@ class FpgaConsole:
                 if remaining <= 0:
                     tail = self._uart[-400:]
                     raise ActionTimeout(
-                        f"timed out waiting for UART /{rx.pattern}/; "
-                        f"last 400B: {tail!r}"
+                        f"timed out waiting for UART /{rx.pattern}/; last 400B: {tail!r}"
                     )
                 self._cond.wait(timeout=remaining)
 
     def now(self) -> float:
         return time.monotonic()
+
+    def latest(self, event: str) -> Any:
+        """Most recent payload seen for `event`, or None."""
+        with self._cond:
+            return self._state.get(event)
 
     @property
     def uart_text(self) -> str:
@@ -266,58 +315,162 @@ class FpgaConsole:
             self.sio.emit(spec.event, payload, namespace=ns)
         return None
 
-    def _await_done(self, key: str, mark: float) -> None:
-        spec = C.DONE_WHEN.get(key)
-        if spec is None:
-            return
-        if spec.status is not None:
-            self.wait_status(spec.status, spec.timeout_s, spec.error_status)
-        elif spec.event is not None:
-            self.wait_event(spec.event, spec.predicate, spec.timeout_s, since=mark)
+    def _post(self, key: str, /, **kwargs: Any) -> Any:
+        """Fire an HTTP action verb; block for its state-event completion (if the
+        action has one). Returns the parsed JSON response of the POST."""
+        spec = C.HTTP[key]
+        url = f"{self._api_base}/{spec.path}"
+        mark = self.now()
+        if spec.multipart:
+            fields, files = spec.body(**kwargs)
+            opened = {f: open(p, "rb") for f, p in files.items()}
+            try:
+                self._log(f"POST {spec.path} (multipart {list(files)})")
+                resp = self._http.request(spec.method, url, data=fields, files=opened)
+            finally:
+                for fh in opened.values():
+                    fh.close()
+        else:
+            body = spec.body(**kwargs)
+            self._log(f"POST {spec.path} <- {body!r}")
+            resp = self._http.request(spec.method, url, json=body)
+        try:
+            data = resp.json()
+        except ValueError:
+            data = None
+        if not resp.ok:
+            err = (data or {}).get("error") if isinstance(data, dict) else resp.text
+            raise ActionError(f"{spec.path} -> HTTP {resp.status_code}: {err!r}")
+        if spec.done_event:
+            if spec.done_state is None:
+                self.wait_event(spec.done_event, timeout=spec.timeout_s, since=mark)
+            else:
+                self.wait_state(
+                    spec.done_event, spec.done_state, spec.timeout_s,
+                    error_state=spec.error_state, state_key=spec.state_key, since=mark,
+                )
+        return data
 
     # -- the five actions ---------------------------------------------------
-    def power(self, on: bool = True) -> None:
-        self._emit("power", on=on)
-
-    def upload_boot_image(self, name: str, data_b64: str, size: int) -> Any:
-        """Action 1a: upload a .bin image; returns the ack (if any)."""
+    def power(self, on: bool = True, timeout: float = 30.0) -> None:
+        """Ensure board power is on/off. power_toggle is a *toggle*, so read the
+        current power_state first and only toggle when it differs."""
+        want = "on" if on else "off"
+        cur = self._current_state(C.POWER_STATE_EVENT, timeout=5.0)
+        if cur == want:
+            self._log(f"power already {want}")
+            return
         mark = self.now()
-        ack = self._emit("boot_image_upload", name=name, data_b64=data_b64, size=size)
-        if not C.EMIT["boot_image_upload"].expects_ack:
-            self._await_done("boot_image_upload", mark)
-        return ack
+        self._emit("power_toggle")
+        self.wait_state(C.POWER_STATE_EVENT, want, timeout, since=mark)
+
+    def upload_boot_image(self, name: str, file_path: str) -> Any:
+        """Action 1a: upload a boot image (multipart). Returns the JSON response
+        (``{name: <stored-name>}``)."""
+        return self._post("upload_image", name=name, file_path=file_path)
 
     def load_boot_image(self, name: str) -> None:
-        """Action 1b: load a stored image -> JTAG to 0x80000000; await complete."""
-        mark = self.now()
-        self._emit("boot_image_load", name=name)
-        self._await_done("boot_image_load", mark)
+        """Action 1b: load a stored image -> JTAG to 0x80000000; await done."""
+        self._post("load_image", filename=name)
 
     def reset(self, wait_prompt: bool = True, prompt_timeout: float = 180.0) -> None:
-        """Action 2: reset; optionally wait for the Linux prompt on UART."""
+        """Action 2: reset the board; optionally wait for the Linux prompt."""
         self.drain_uart()
-        mark = self.now()
-        self._emit("reset")
-        self._await_done("reset", mark)
+        self._post("reset")
         if wait_prompt:
             self.wait_uart(C.UART["login_prompt"], timeout=prompt_timeout)
 
-    def set_switch(self, index: int, on: bool = True) -> None:
-        """Action 4: set virtual switch `index`."""
-        self._emit("switch_set", index=index, on=on)
-
-    def trace_dump(self, timeout: Optional[float] = None) -> Any:
-        """Action 5: start Trace Dump; block for the end-of-dump frame.
-
-        Per the manual the dump also needs switch 0 (detach UART) then switch 1
-        (trigger); the caller sequences those with set_switch() around this call.
-        """
+    def set_switch(self, index: int, on: bool = True, timeout: float = 10.0) -> None:
+        """Action 4: set virtual switch `index`. switch_toggle is a *toggle*, so
+        read switch_state first and only toggle when the bit differs."""
+        if self._switch_is(index) == on:
+            return
         mark = self.now()
-        self._emit("trace_dump")
-        spec = C.DONE_WHEN["trace_dump"]
-        return self.wait_event(
-            spec.event, spec.predicate, timeout or spec.timeout_s, since=mark
+        self._emit("switch_toggle", index=index)
+        self.wait_event(
+            C.SWITCH_STATE_EVENT,
+            lambda d: self._switch_val(d, index) == (1 if on else 0),
+            timeout, since=mark,
         )
+
+    def trace_dump(self, timeout: Optional[float] = None) -> str:
+        """Action 5: start a trace dump; block for the finished dump text."""
+        spec = C.HTTP["trace_start"]
+        mark = self.now()
+        self._post("trace_start")
+        data = self.wait_event(
+            C.LISTEN["trace_result"], timeout=timeout or spec.timeout_s, since=mark
+        )
+        if isinstance(data, dict):
+            return str(data.get("text", ""))
+        return str(data)
+
+    # -- good-citizen helpers (shared board) --------------------------------
+    def lock(self, timeout_seconds: Optional[int] = None, timeout: float = 10.0) -> None:
+        """Take the auto-shutdown Lock so the board isn't reaped mid-run."""
+        secs = timeout_seconds
+        if secs is None:
+            st = self.latest(C.LOCK_STATE_EVENT)
+            secs = (st or {}).get(C.LOCK_TIMEOUT_KEY, 600) if isinstance(st, dict) else 600
+        mark = self.now()
+        self._emit("set_auto_shutdown", timeout_seconds=secs, locked=True)
+        self.wait_event(
+            C.LOCK_STATE_EVENT, lambda d: bool(d.get(C.LOCK_LOCKED_KEY)),
+            timeout, since=mark,
+        )
+
+    def unlock(self, timeout_seconds: Optional[int] = None, timeout: float = 10.0) -> None:
+        secs = timeout_seconds
+        if secs is None:
+            st = self.latest(C.LOCK_STATE_EVENT)
+            secs = (st or {}).get(C.LOCK_TIMEOUT_KEY, 600) if isinstance(st, dict) else 600
+        mark = self.now()
+        self._emit("set_auto_shutdown", timeout_seconds=secs, locked=False)
+        try:
+            self.wait_event(
+                C.LOCK_STATE_EVENT, lambda d: not d.get(C.LOCK_LOCKED_KEY),
+                timeout, since=mark,
+            )
+        except ActionTimeout:  # pragma: no cover - releasing is best-effort
+            pass
+
+    def user_count(self, timeout: float = 5.0) -> Optional[int]:
+        """Number of connected clients (including us), or None if unknown."""
+        st = self.latest(C.USER_COUNT_EVENT)
+        if st is None:
+            try:
+                st = self.wait_event(C.USER_COUNT_EVENT, timeout=timeout)
+            except ActionTimeout:
+                return None
+        return st.get(C.USER_COUNT_KEY) if isinstance(st, dict) else None
+
+    # -- state helpers ------------------------------------------------------
+    def _current_state(self, event: str, timeout: float = 5.0) -> Optional[str]:
+        st = self.latest(event)
+        if st is None:
+            try:
+                st = self.wait_event(event, timeout=timeout)
+            except ActionTimeout:
+                return None
+        return st.get(C.STATUS_STATE_KEY) if isinstance(st, dict) else st
+
+    @staticmethod
+    def _switch_val(data: Any, index: int) -> Optional[int]:
+        if isinstance(data, dict):
+            states = data.get(C.SWITCH_STATE_KEY)
+            if isinstance(states, (list, tuple)) and index < len(states):
+                return states[index]
+        return None
+
+    def _switch_is(self, index: int, timeout: float = 5.0) -> Optional[bool]:
+        st = self.latest(C.SWITCH_STATE_EVENT)
+        if st is None:
+            try:
+                st = self.wait_event(C.SWITCH_STATE_EVENT, timeout=timeout)
+            except ActionTimeout:
+                return None
+        v = self._switch_val(st, index)
+        return None if v is None else bool(v)
 
     # -- UART command helper (runs the .user/.dom pairs) --------------------
     def run_command(
@@ -329,7 +482,7 @@ class FpgaConsole:
         """Type `command` into the terminal and return the UART text emitted
         until `done_marker` matches."""
         start = len(self.uart_text)
-        self._emit("terminal_input", text=command + "\n")
+        self._emit("uart_send", text=command + "\r")
         m = self.wait_uart(done_marker, timeout=timeout, search_from=start)
         with self._cond:
             return self._uart[start:m.end()]

@@ -2,6 +2,25 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-state.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-state.md` at Agent-B bring-up (2026-07-08).
 
+# Agent-B delta (2026-07-16, task 017 phase 3) — protocol VERIFIED + driver validated on the real board
+
+**The FPGA driver is now wired to the REAL protocol and validated against live
+hardware.** Protocol obtained DIY (fetched the console's own `static/app.js`; no
+collaborator JS, no HAR). It is a **hybrid** — action verbs (upload/load/reset/
+trace) are HTTP POST to `<url>/api/...`; the UART stream + power/switch/Lock are
+Socket.IO; completion is per-action state events. `config.PROTOCOL_SOURCE =
+"verified"`; `test_dryrun.py` green against a mock rewritten to the hybrid.
+Wiring was a real code change (HTTP layer + toggle-with-verify + Lock/back-off in
+`fpga_console.py`), not just `config.py`. Live checks: connected to the board,
+every state-event payload shape matched; power / JTAG load (~2 min) / reset / UART
+capture all work. Found + fixed: `reset` drops the socket → re-`request_history`
+on every reconnect. Domain `.user`/`.dom` binaries built. **Remaining gate for the
+cycle-accurate number:** a fresh `fw_payload.bin` (LINUX_PAYLOAD=1, embedded
+initramfs, our overlay) — the on-board 2026-05-25 image expects an SD rootfs and
+prints `could not initialize sd... exiting`, so no shortcut. No gh-auth wall (all
+caplifive-system submodules clone without auth). See
+`history/16-07-2026_00-34-02_fpga-diy-experiments.md` and `fpga_driver/PROTOCOL.md`.
+
 # Agent-B delta (2026-07-15, task 017) — FPGA web-console automation scaffold
 
 **A headless Socket.IO driver for the FPGA web console now exists, validated

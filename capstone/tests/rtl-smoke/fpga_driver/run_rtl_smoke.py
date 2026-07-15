@@ -22,7 +22,6 @@ credentials on its own -- the token'd URL is a required CLI argument.
 from __future__ import annotations
 
 import argparse
-import base64
 import os
 import subprocess
 import sys
@@ -63,8 +62,7 @@ def run_smoke(
     """Drive one full sweep; return the concatenated UART capture (RESULT lines
     included). `console` must already be connected."""
     if do_upload:
-        data_b64 = base64.b64encode(image.read_bytes()).decode("ascii")
-        console.upload_boot_image(image_name, data_b64, image.stat().st_size)
+        console.upload_boot_image(image_name, str(image))
     console.load_boot_image(image_name)
     console.reset(wait_prompt=True)
 
@@ -105,6 +103,12 @@ def main(argv: List[str]) -> int:
     ap.add_argument("--allow-unverified", action="store_true",
                     help="run even though config.PROTOCOL_SOURCE is 'placeholder' "
                          "(mock-server / bring-up only -- see PROTOCOL.md)")
+    ap.add_argument("--no-lock", action="store_true",
+                    help="do not take the auto-shutdown Lock while running "
+                         "(default: take it, release it when done)")
+    ap.add_argument("--ignore-users", action="store_true",
+                    help="run even if other clients are connected to the shared "
+                         "board (default: back off if >1 user is present)")
     ap.add_argument("--parse-only", type=Path, default=None,
                     help="skip the board; just run --parse-uart on this capture file")
     args = ap.parse_args(argv)
@@ -126,13 +130,28 @@ def main(argv: List[str]) -> int:
         logger=lambda m: print(f"[fpga] {m}", file=sys.stderr),
     )
     console.connect()
+    locked = False
     try:
+        # Good-citizen check on the shared board: back off if someone else is on.
+        users = console.user_count()
+        if users is not None and users > 1 and not args.ignore_users:
+            print(f"[fpga] {users} clients connected -- the board is shared and "
+                  f"in use; backing off. Re-run with --ignore-users to override.",
+                  file=sys.stderr)
+            return 3
+        if not args.no_lock:
+            console.lock()
+            locked = True
+            print("[fpga] took the auto-shutdown Lock", file=sys.stderr)
         console.power(True)
         capture = run_smoke(
             console, args.image, image_name,
             do_upload=not args.no_upload, remote_dir=args.remote_dir,
         )
     finally:
+        if locked:
+            console.unlock()
+            print("[fpga] released the Lock", file=sys.stderr)
         console.close()
 
     if args.capture_out:

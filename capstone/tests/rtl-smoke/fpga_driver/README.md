@@ -12,16 +12,18 @@ critical path.**
 
 ## Status
 
-- **Scaffold: complete and validated offline.** Transport, the five board
-  actions, UART marker matching, the end-to-end sweep, and the `--parse-uart`
-  integration all pass against a mock Socket.IO server (`test_dryrun.py`).
-- **Blocked on the real protocol.** The event names/payloads in `config.py` are
-  **placeholders inferred from the manual** — the console's client JS is not in
-  our capture. `config.PROTOCOL_SOURCE = "placeholder"`, and the driver **refuses
-  to touch a real board** until it is set to `"verified"`. See `PROTOCOL.md` for
-  how to get the real protocol (collaborator's JS Thursday 2026-07-16 evening BST,
-  or the two fallbacks) — it is a ~10-minute edit of `config.py` once the JS is in
-  hand.
+- **Protocol: VERIFIED** (`config.PROTOCOL_SOURCE = "verified"`). Obtained DIY
+  from the console's own client JS (`static/app.js`, fetched live 2026-07-16);
+  see `PROTOCOL.md`. The console is a **hybrid**: the action verbs
+  (upload/load/reset/trace) are HTTP POST to a REST API, and the live UART stream
+  + power/switch/Lock controls are Socket.IO.
+- **Validated offline and against the real board.** `test_dryrun.py` drives the
+  full flow against a mock that implements the real hybrid protocol (REST + socket);
+  and the wired driver has connected to the live board, received every state event
+  with the exact payload shapes, and read live UART.
+- **Board note:** a board `reset` drops the Socket.IO connection briefly; the
+  client reconnects (`reconnection=True`), but see `PROTOCOL.md` / the history note
+  for the reconnect handling around reset.
 
 ## Files
 

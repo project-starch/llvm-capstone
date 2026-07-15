@@ -1,58 +1,84 @@
-# FPGA console Socket.IO protocol map
+# FPGA console protocol map
 
-Status: **PLACEHOLDER** (`config.PROTOCOL_SOURCE = "placeholder"`). The event
-names and payloads below are **inferred from the user manual**
-(`/tmp/capstone/FPGA_Remote/FPGA_Remote/FPGA_Remote_Manual.md`), not observed on
-the wire. The console's client JS is **not** in our local capture, so the real
-protocol has to come from one of the three sources in "Getting the real protocol"
-below. Until then the driver refuses to touch a real board (it runs only against
-`mock_server.py`, which implements exactly these placeholders).
+Status: **VERIFIED** (`config.PROTOCOL_SOURCE = "verified"`). Observed from the
+console's own client JS (`static/app.js`), fetched from the live site on
+2026-07-16 and read directly (it is unminified — event names and payload shapes
+are read straight off the `socket.emit(...)` / `socket.on(...)` / `fetch(...)`
+call sites). No collaborator hand-off and no DevTools HAR was needed.
 
-**The whole point of the scaffold:** every wire detail lives in `config.py`.
-Filling this map in = editing that one file. Nothing else should change.
+**Key finding — the console is a HYBRID, not pure Socket.IO.** The earlier
+placeholder assumed every action was a Socket.IO emit. In reality the action
+*verbs* (upload / load / reset / trace) are **HTTP POST to a REST API**, while the
+live UART stream, the power/switch controls, terminal keystrokes, and the
+auto-shutdown Lock are **Socket.IO events**; each long action reports completion
+through a per-action Socket.IO *state* event. Wiring this therefore touched
+`fpga_console.py` (added an HTTP layer + toggle-with-verify semantics), not just
+`config.py`.
 
-## The five actions the driver needs (task goal)
+Board Socket.IO server: **v4.7.5** (Engine.IO 4); `python-socketio` 5.x is
+compatible.
 
-| # | Action | Placeholder emit event | Payload (placeholder) | Completion (placeholder) |
-|---|--------|------------------------|-----------------------|--------------------------|
-| 1a | Upload boot image (`.bin`) | `boot_image_upload` | `{name, size, data(base64)}` | Socket.IO **ack** callback |
-| 1b | Load image → JTAG `0x80000000` | `boot_image_load` | `{name}` | `status` → `Loading` → `Done` |
-| 2 | Reset | `reset` | *(none)* | UART shows the Linux prompt |
-| 3 | Read UART until marker | *(listen only)* | — | regex over the UART stream |
-| 4 | Set virtual switch N | `switch_set` | `{index, on}` | `switches` broadcast |
-| 5 | Trace Dump | `trace_dump` (+ `switch_set` 0 then 1) | *(none)* | `trace_complete` event |
+## Connection
 
-Plus the helper the sweep depends on:
+- URL: `https://fpga.corank.info/<token>/` — the access token is in the URL
+  **path**. Passed to the driver on the CLI (`--url`), never committed or logged.
+- The page sets `SOCKET_PATH = '/<token>/socket.io'` and `URL_PREFIX = '/<token>'`
+  (inline `<script>`), and connects with `io({ path: SOCKET_PATH })`.
+- `FpgaConsole` derives both from the URL path at runtime, so no token lives in
+  the repo: `socketio_path = <url-path>/socket.io`, REST base = `<url>/api`.
+- Namespace `/` (default). No extra auth payload — the path token is sufficient
+  for the handshake (`config.CONNECT.auth_key = None`).
 
-| Helper | Placeholder emit event | Payload |
-|--------|------------------------|---------|
-| Terminal keystrokes (run `.user`/`.dom`) | `terminal_input` | `{data: "<text>"}` |
-| Power on | `power` | `{on: true}` |
+## Action verbs — HTTP POST (`<url>/api/...`)
 
-## Server → client events (LISTEN, placeholder)
+| # | Action | Method + path | Body | Completion |
+|---|--------|---------------|------|------------|
+| 1a | Upload boot image | `POST /api/images/upload` | multipart form `name` + `file` | HTTP response `{name}` (200) / `{error}` (non-200); synchronous |
+| 1b | Load image → JTAG `0x80000000` | `POST /api/load-image` | `{filename}` | `load_state` event `{state}`: `loading` → `done` \| `error` (409 `Already loading` if one is in flight) |
+| 2 | Reset | `POST /api/reset-board` | *(none)* | no state event — wait for the Linux prompt on the UART stream |
+| 5 | Trace dump | `POST /api/trace-start` (cancel: `/api/trace-cancel`) | *(none)* | `trace_result` event `{text}` (the finished dump); `trace_state` also goes `capturing` → `idle` |
 
-| Logical | Placeholder event | Assumed payload |
-|---------|-------------------|-----------------|
-| UART bytes | `terminal_output` | `{data: "<chunk>"}` (driver also tries `text/bytes/chunk/output`, or a bare string) |
-| Status | `status` | `{state: "Idle\|Loading\|Flashing\|Capturing\|Done\|Error"}` |
-| Trace frame | `trace_frame` | `{seq, event, data}` |
-| End-of-dump | `trace_complete` | `{frames, truncated}` |
-| LED / switch state | `leds` / `switches` | live bar state (informational) |
+Bitstream flashing (`POST /api/flash-bitstream {filename[, volatile]}`, completion
+via `flash_state`) and file management (`GET/DELETE/PATCH /api/images`,
+`/api/bitstreams`, `.../upload`) are present too but not on the rtl-smoke path.
 
-## Connection (placeholder)
+## Socket.IO client → server (EMIT)
 
-- URL: `https://fpga.corank.info/<token>/` — the token is in the URL **path**.
-  Passed to the driver on the CLI (`--url`), never committed.
-- `socketio_path`: `socket.io` (default). The console may customise it.
-- Namespace: `/` (default).
-- Auth: assumed the token in the URL path is sufficient for the handshake. If the
-  server wants it echoed in the connect `auth` payload, set `config.CONNECT.auth_key`
-  (e.g. `"token"`) and pass `--token`.
+| Logical | Event | Payload | Notes |
+|---------|-------|---------|-------|
+| Power | `power_toggle` | *(none)* | **toggle** — driver reads `power_state` and only toggles if it differs from the target |
+| Terminal keystrokes | `uart_send` | `{text}` | how the `.user`/`.dom` commands are typed (append `\r`) |
+| Terminal clear | `uart_clear` | *(none)* | |
+| Set switch N | `switch_toggle` | `{index}` | **toggle** — driver reads `switch_state` and only toggles if the bit differs |
+| Reset all switches | `switch_reset_all` | *(none)* | |
+| Lock (auto-shutdown) | `set_auto_shutdown` | `{timeout_seconds, locked}` | the good-citizen hold on the shared board |
+| History replay | `request_history` | `{last_seq}` | client sends on connect; resyncs UART + current states |
 
-## The UART contract (VERIFIED — not part of the web protocol)
+(GDB/JTAG console events — `gdb_start` / `gdb_stop` / `gdb_input` / `gdb_output` /
+`gdb_state` — also exist for manual bring-up; unused by the sweep.)
 
-These come from the guest software and the existing parser, and are already
-correct (they are what the human run and the QEMU validation use):
+## Socket.IO server → client (LISTEN)
+
+| Logical | Event | Payload |
+|---------|-------|---------|
+| UART bytes | `uart_data` | `{seq, text}` (text carries the bytes → `config.UART_TEXT_KEYS = ["text"]`) |
+| Load state | `load_state` | `{state, loaded_image_name}` |
+| Flash state | `flash_state` | `{state, nv_bitstream_name}` |
+| Trace state | `trace_state` | `{state}`: `idle` \| `capturing` |
+| Trace result | `trace_result` | `{text}` (the finished dump) |
+| Power state | `power_state` | `{state}`: `on` \| `off` |
+| GDB state | `gdb_state` | `{state}`: `idle` \| `starting` \| `running` \| `error` |
+| Switch state | `switch_state` | `{states: [0/1 × 8]}` |
+| LED state | `led_state` | `{states: [0/1 × 8]}` |
+| Lock/auto-shutdown | `auto_shutdown_state` | `{timeout, locked}` |
+| User count | `user_count` | `{count}` (used to back off if the shared board is in use) |
+
+On connect the server pushes an initial burst of these (power/switch/lock/led/
+load/user_count), so the driver knows current state without waiting for a change.
+
+## The UART contract (VERIFIED — guest software, not the web protocol)
+
+Unchanged from the placeholder; these come from the guest + the existing parser:
 
 - Shell prompt after reset: `config.UART["login_prompt"]`.
 - Per-run completion markers: `revoke-cost-fpga: measurement complete` and the
@@ -60,69 +86,49 @@ correct (they are what the human run and the QEMU validation use):
 - RESULT line format consumed by `run-revoke-cost-fpga-qemu.sh --parse-uart`:
   `revoke-cost-fpga: RESULT cycles/op  mode=<m>  alloc_free=<n>`.
 
-## Getting the real protocol
+## What differed from the placeholder (for the record)
 
-Three routes; any one yields the events. Primary is (1).
+1. **Action verbs are REST, not Socket.IO emits.** upload/load/reset/trace are
+   HTTP POST; only the live stream + a few controls are Socket.IO.
+2. **Upload is a multipart HTTP form**, not a base64 Socket.IO payload / ack — and
+   it is synchronous (no chunking, no progress events).
+3. **Power and switches are toggles**, not set-value calls; the driver reads the
+   state event first and only toggles on a mismatch.
+4. **Completion is per-action state events** (`load_state`, `trace_result`), not a
+   single shared `status` stream.
+5. **The dump is a REST call + one `trace_result`**, not the manual's
+   switch-0/switch-1 sequence.
 
-### 1. Collaborator's client JS (primary; Thursday 2026-07-16 evening BST)
-
-The moment the JS lands:
+## How the protocol was obtained (Route B, DIY)
 
 ```sh
-python extract_from_js.py <the-bundle>.js [more.js ...]
+curl -sS "<url>/"               # find <script src=".../static/app.js">
+curl -sS "<url>/static/app.js"  # unminified client JS
+python extract_from_js.py app.js   # lists every emit/on/io name
+# then read the fetch()/emit() call sites for payload shapes + REST paths
 ```
 
-It prints every `socket.emit(...)` / `socket.on(...)` event name (+ `io(...)`
-setup: path, auth) — event names are string literals and survive minification.
-Then, by hand:
+The DevTools-HAR route (below) was the documented fallback and was **not needed**.
 
-1. Map the emit names → `config.EMIT` (the five actions + `terminal_input`,
-   `power`). Read each call site for the payload shape.
-2. Map the on names → `config.LISTEN` (`uart_output`, `status`, `trace_*`).
-   Confirm which key holds the UART text → `config.UART_TEXT_KEYS`, and the
-   status field → `config.STATUS_STATE_KEY`.
-3. Fill the completion signals → `config.DONE_WHEN` (status string vs dedicated
-   event vs ack). Watch especially how **upload** completes (ack? chunked?
-   progress events?) and how **load** signals done.
-4. Set `config.CONNECT` (path, namespace, `auth_key`).
-5. Set `PROTOCOL_SOURCE = "verified"`.
-6. Update `mock_server.py` to the real names and re-run `python test_dryrun.py`.
-   Then a real run is `run_rtl_smoke.py --url … --image fw_payload.bin`.
+<details><summary>DevTools WebSocket/HAR capture checklist (fallback, unused)</summary>
 
-Raise any ambiguity (chunked upload, ack vs event, unexpected namespace) **the
-same evening** — he's unreachable afterwards.
+1. Open the console URL; DevTools → Network → filter **WS**; reload.
+2. Socket.IO frames are `42["event",payload]` (`42` = message+event; `43…` = ack).
+3. Also watch the **Fetch/XHR** panel — the action verbs are REST POSTs, not WS
+   frames, so a WS-only capture would miss upload/load/reset/trace.
+4. Right-click → **Save all as HAR with content**; read `[event,payload]` pairs
+   and the `/api/...` POST bodies.
+</details>
 
-### 2. Fetch the site JS (fallback; needs the user's OK on the private URL)
+## Offline validation + live validation
 
-Ask the user first — the URL carries a private token. Then WebFetch the console
-URL, find the referenced JS bundle(s) (`<script src=…>`), fetch those, and run
-`extract_from_js.py` on them exactly as in (1).
-
-### 3. Live DevTools WebSocket capture (fallback the user can do in one pass)
-
-Hand the user this checklist; it captures the real event stream directly:
-
-1. Open the console URL in Chrome/Firefox; open **DevTools → Network**.
-2. Filter to **WS** (WebSocket). Reload so the Socket.IO connection is captured.
-3. Click the socket.io entry → **Messages** tab (Chrome) / **Response** (FF).
-   Socket.IO frames look like `42["event_name",{…payload…}]` (`42` = Engine.IO
-   message + Socket.IO event; `430…` = ack). The array is `[event, payload]`.
-4. **Click each control once**, noting the frame each produces, in this order:
-   Power, Boot Images→Upload, Boot Images→Load, Reset, type a char in Terminal,
-   toggle a Switch, Trace Dump. Also capture a few **inbound** frames (UART
-   output, status).
-5. Export: right-click the WS entry → **Save all as HAR**, or copy the Messages
-   list. Send the HAR/paste back.
-
-From the HAR, each `42[...]` outbound frame gives an emit name+payload and each
-inbound gives a listen name+payload — same mapping as (1), then same steps 1–6.
-
-## Offline validation already done
-
-`test_dryrun.py` drives the whole scaffold against `mock_server.py`: connect →
-upload(ack) → load(status) → reset(await prompt) → run borrow + 3 revoke configs
-over UART (markers split across chunks) → harvest RESULT lines → switch 0/1 +
-Trace Dump (await `trace_complete`) → `--parse-uart`. It asserts the parse
-reproduces the reference breakdown (bump 7 / norevoke 60 / revoke 65 → +5 O(1)).
-So the transport, the five actions, and the integration are proven; only the wire
-names in `config.py` remain.
+- `test_dryrun.py` drives the whole scaffold against `mock_server.py` (which now
+  implements the real hybrid: REST endpoints + Socket.IO stream/state): connect →
+  Lock → power → upload(multipart) → load(`load_state` done) → reset(await prompt)
+  → borrow + 3 revoke configs over UART (markers split across chunks) → harvest
+  RESULT lines → switch toggle → trace dump (`trace_result`) → `--parse-uart`.
+  Asserts the parse reproduces bump 7 / norevoke 60 / revoke 65 → +5 O(1).
+- **Live transport check against the real board** (2026-07-16): the wired driver
+  connected to `fpga.corank.info`, received every state event with the exact
+  payload shapes above, and read live UART — confirming the map against hardware,
+  not just the mock.

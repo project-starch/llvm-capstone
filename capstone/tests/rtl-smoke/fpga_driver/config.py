@@ -1,162 +1,195 @@
-"""Socket.IO protocol map for the FPGA web console (fpga.corank.info).
+"""Protocol map for the FPGA web console (fpga.corank.info).
 
 THIS FILE IS THE SINGLE WIRE-UP POINT. The rest of the driver is written against
-the logical action names below; only this file names the *wire* Socket.IO events
-and payload shapes. When the console's client JS arrives (grep it for
-`socket.emit(`, `.on(`, `io(`), edit the values here and flip PROTOCOL_SOURCE to
-"verified" -- nothing else in the driver should need to change.
+the logical action names below; only this file names the *wire* protocol -- the
+REST endpoints, the Socket.IO event names, and the payload shapes.
 
-Every wire event / payload key here is a PLACEHOLDER inferred from the user
-manual (FPGA_Remote_Manual.md), NOT from the real protocol. The mock server
-(mock_server.py) implements exactly these placeholders so the flow can be
-exercised offline. Placeholders are named after the manual's UI vocabulary so the
-mapping to the real events is mechanical.
+Source of the map: the console's own client JS (``static/app.js``), fetched from
+the live site on 2026-07-16 and read directly (it is unminified). See PROTOCOL.md
+for the observed event tables and the call sites each entry came from.
 
-Fill-in checklist when the JS lands (see PROTOCOL.md for the full procedure):
-  1. namespace / connection URL suffix + how the access token is passed
-     (query string? auth payload? path?)  -> CONNECT
-  2. the emit event name + payload for each of: upload image, load image, reset,
-     set switch, trace dump, terminal input                    -> EMIT
-  3. the server->client event(s) that carry: UART bytes, status changes,
-     trace frames / end-of-dump                                 -> LISTEN
-  4. the completion signal for each long action (status string? dedicated
-     event? ack callback?)                                      -> DONE_WHEN
+Key finding: the real console is a **hybrid**, NOT pure Socket.IO (the earlier
+placeholder assumed pure Socket.IO). The action verbs -- upload / load / reset /
+trace -- are **HTTP POST to a REST API** under ``<url>/api/...``; the live UART
+stream and a few controls (power, switches, terminal keystrokes, the auto-shutdown
+Lock) are **Socket.IO events**; and every long action reports completion through a
+per-action Socket.IO *state* event (``load_state``, ``trace_result`` ...). So:
+
+  * action verbs               -> HTTP  (see ``HTTP``)
+  * live controls / keystrokes -> EMIT  (Socket.IO client->server)
+  * stream + completion signals -> LISTEN (Socket.IO server->client)
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
 # Provenance guard.  The driver REFUSES to talk to the real board while this is
-# "placeholder" (see fpga_console.py). Flip to "verified" only after the wire
-# events below have been confirmed against the real client JS or a live capture.
+# "placeholder" (see fpga_console.py).  Verified against the live client JS.
 # ---------------------------------------------------------------------------
-PROTOCOL_SOURCE = "placeholder"  # "placeholder" | "verified"
+PROTOCOL_SOURCE = "verified"  # "placeholder" | "verified"
 PROTOCOL_NOTES = (
-    "Inferred from FPGA_Remote_Manual.md; event names/payloads are guesses. "
-    "Replace from the console client JS or a DevTools WS capture, then set "
-    "PROTOCOL_SOURCE='verified'."
+    "Observed from the console client JS (static/app.js), fetched from the live "
+    "site 2026-07-16. Hybrid REST (action verbs) + Socket.IO (stream + state). "
+    "Socket.IO client on the board is v4.7.5 (Engine.IO 4); python-socketio 5.x "
+    "is compatible."
 )
 
 
 @dataclass(frozen=True)
 class Connect:
-    """How the Socket.IO client attaches to the console."""
-    # Path component after the origin, e.g. https://fpga.corank.info/<token>/ .
-    # Left empty here: pass the token'd URL to the driver on the command line so
-    # the secret never lives in the repo.
+    """How the Socket.IO client attaches to the console.
+
+    The access token lives only in the URL *path* (``https://host/<token>/``).
+    The board serves Socket.IO under ``/<token>/socket.io`` and the REST API under
+    ``/<token>/api`` -- both derived at runtime from the token'd URL, so no token
+    ever lives in this file. ``socketio_path`` below is the *suffix* the console
+    appends to the URL path; ``FpgaConsole`` builds the full ``/<token>/socket.io``.
+    """
     namespace: str = "/"
-    # socketio path (the HTTP endpoint Socket.IO polls/upgrades on). Default is
-    # "socket.io"; some deployments customise it.
-    socketio_path: str = "socket.io"
-    # How the access token in the URL path is presented to the server. Most
-    # token-in-path deployments still complete the Socket.IO handshake fine with
-    # the token only in the connect URL; if the server wants it echoed, set
-    # auth_key and the driver puts {auth_key: <token>} in the connect auth dict.
-    auth_key: Optional[str] = None  # e.g. "token"; None = token only in URL
+    socketio_path: str = "socket.io"   # suffix -> "/<url-path>/socket.io"
+    api_prefix: str = "api"            # REST base -> "<url>/api"
+    # The board authenticates purely by the path token; the Socket.IO handshake
+    # carries no extra auth payload. Kept for parametrisation only.
+    auth_key: Optional[str] = None
 
 
 @dataclass(frozen=True)
 class Emit:
-    """A client->server action: emit `event` with a payload built from kwargs."""
+    """A Socket.IO client->server action: emit `event` with a built payload."""
     event: str
-    # Build the payload dict from call kwargs. Default: pass kwargs through.
     payload: Callable[..., Any] = field(default=lambda **kw: kw or None)
-    # If the server replies via a Socket.IO ack callback, set True and the driver
-    # waits on the ack instead of (or in addition to) a DONE_WHEN event.
     expects_ack: bool = False
 
 
 @dataclass(frozen=True)
-class DoneWhen:
-    """How the driver knows a long-running action finished.
+class Http:
+    """An HTTP REST action verb (the console fires these with fetch()).
 
-    Exactly one of (status, event) is the trigger; `predicate` further filters
-    the payload. status compares against the STATUS event's state field.
+    `body` returns the JSON dict to POST (or None for a bare POST). For a
+    multipart upload, set `multipart=True` and have `body` return
+    ``(fields_dict, files_dict)`` where files_dict maps a form field -> a path.
+
+    Completion of a long action is reported by a Socket.IO *state* event, not by
+    the HTTP response: set `done_event` to that event, and either `done_state`
+    (wait until ``payload[state_key] == done_state``) or leave `done_state` None
+    to treat the *first* `done_event` as completion (e.g. ``trace_result`` which
+    only fires once, when the dump is ready).
     """
-    status: Optional[str] = None          # e.g. "Done" (from the status stream)
-    event: Optional[str] = None           # e.g. a dedicated "load_complete" event
-    predicate: Callable[[Any], bool] = field(default=lambda _data: True)
-    error_status: str = "Error"           # status value that means the action failed
+    method: str
+    path: str                                   # relative to the api base
+    body: Callable[..., Any] = field(default=lambda: None)
+    multipart: bool = False
+    done_event: Optional[str] = None
+    done_state: Optional[str] = None
+    error_state: str = "error"
+    state_key: str = "state"
     timeout_s: float = 180.0
 
 
 # ---------------------------------------------------------------------------
-# LISTEN: server -> client events the driver subscribes to.
+# LISTEN: server -> client Socket.IO events the driver subscribes to.
+# (Names verified from app.js `socket.on(...)`.)
 # ---------------------------------------------------------------------------
 LISTEN = {
-    # Stream of UART bytes from the board. Payload assumed to carry the bytes in
-    # one of the keys in `uart_text_keys` (first present wins), or to be a bare
-    # str. Adjust keys to match the real payload.
-    "uart_output": "terminal_output",
-    # Board status changes: Idle / Loading / Flashing / Capturing / Done / Error.
-    "status": "status",
-    # Trace frames + end-of-dump (tracer path; not needed for the cycle-count run).
-    "trace_frame": "trace_frame",
-    "trace_complete": "trace_complete",
-    # Live LED / switch state broadcasts (informational).
-    "leds": "leds",
-    "switches": "switches",
+    # Live UART bytes: uart_data -> {seq, text}.
+    "uart_output": "uart_data",
+    # Per-action state streams (each carries {state: ...}).
+    "load_state": "load_state",         # {state, loaded_image_name}
+    "flash_state": "flash_state",       # {state, nv_bitstream_name}
+    "trace_state": "trace_state",       # {state}: idle|capturing
+    "power_state": "power_state",       # {state}: on|off
+    "gdb_state": "gdb_state",           # {state}: idle|starting|running|error
+    # One-shot / informational broadcasts.
+    "trace_result": "trace_result",     # {text}: the finished trace dump
+    "switch_state": "switch_state",     # {states: [0/1, ...]}
+    "led_state": "led_state",           # {states: [0/1, ...]}
+    "auto_shutdown_state": "auto_shutdown_state",  # {timeout, locked}
+    "user_count": "user_count",         # {count}
 }
 
-# Candidate keys that may hold the UART text inside a `uart_output` payload.
-# The driver tries these in order, then falls back to str(payload).
-UART_TEXT_KEYS: List[str] = ["data", "text", "bytes", "chunk", "output"]
+# Key that carries the UART text inside a `uart_data` payload (verified: "text").
+UART_TEXT_KEYS: List[str] = ["text"]
 
-# Field inside a `status` payload holding the state string.
+# Field inside a per-action state payload holding the state string.
 STATUS_STATE_KEY = "state"
 
+# Named state events + their value fields, for the toggle/lock helpers.
+POWER_STATE_EVENT = "power_state"       # {state: "on"|"off"}
+SWITCH_STATE_EVENT = "switch_state"     # {states: [...]}
+SWITCH_STATE_KEY = "states"
+LOCK_STATE_EVENT = "auto_shutdown_state"  # {timeout, locked}
+LOCK_LOCKED_KEY = "locked"
+LOCK_TIMEOUT_KEY = "timeout"
+USER_COUNT_EVENT = "user_count"
+USER_COUNT_KEY = "count"
+
 
 # ---------------------------------------------------------------------------
-# EMIT + DONE_WHEN: the five board actions (+ helpers) the task calls for.
+# HTTP: the action verbs (POST). Paths are relative to "<url>/api".
 # ---------------------------------------------------------------------------
-EMIT = {
-    # 1a. Upload a .bin boot image to the console's image store.
-    #     Payload placeholder: {name, size, data(base64)} -- the real console may
-    #     chunk large uploads over multiple events; see PROTOCOL.md.
-    "boot_image_upload": Emit(
-        event="boot_image_upload",
-        payload=lambda name, data_b64, size: {
-            "name": name, "size": size, "data": data_b64,
-        },
-        expects_ack=True,
+HTTP = {
+    # 1a. Upload a boot image to the console's image store (multipart form).
+    #     app.js FileManager.upload(): POST /api/images/upload, FormData{name,file}
+    #     -> 200 {name} | non-200 {error}. No async state; the response is final.
+    "upload_image": Http(
+        method="POST",
+        path="images/upload",
+        multipart=True,
+        body=lambda name, file_path: ({"name": name}, {"file": file_path}),
     ),
-    # 1b. Load a stored image -> JTAG to 0x80000000 (~2 min for ~15 MB).
-    "boot_image_load": Emit(
-        event="boot_image_load",
-        payload=lambda name: {"name": name},
+    # 1b. Load a stored image -> JTAG to 0x80000000 (~2 min for a big image).
+    #     app.js onAction: POST /api/load-image {filename} -> {state}. Completion
+    #     via load_state {state}: loading -> done | error.
+    "load_image": Http(
+        method="POST",
+        path="load-image",
+        body=lambda filename: {"filename": filename},
+        done_event=LISTEN["load_state"],
+        done_state="done",
+        error_state="error",
+        timeout_s=300.0,
     ),
-    # 2. Board reset.
-    "reset": Emit(event="reset", payload=lambda: None),
-    # 4. Set a virtual switch (Trace Dump prep: switch 0 detaches UART, switch 1
-    #    triggers the dump; switch 2 = replacement policy).
-    "switch_set": Emit(
-        event="switch_set",
-        payload=lambda index, on: {"index": index, "on": on},
-    ),
-    # 5. Start a trace capture (button: "Trace Dump" -> status "Capturing").
-    "trace_dump": Emit(event="trace_dump", payload=lambda: None),
-    # Terminal keystrokes -- how we run the .user/.dom commands over UART.
-    "terminal_input": Emit(
-        event="terminal_input",
-        payload=lambda text: {"data": text},
-    ),
-    # Power on (most actions require power). Optional in the run if already on.
-    "power": Emit(event="power", payload=lambda on: {"on": on}),
+    # 2. Board reset. app.js resetBoard(): POST /api/reset-board. No state event;
+    #    the caller waits for the Linux prompt on the UART stream instead.
+    "reset": Http(method="POST", path="reset-board"),
+    # 5. Trace dump. app.js toggleTrace(): POST /api/trace-start -> {state}. The
+    #    finished dump arrives once as trace_result {text}; trace_state also goes
+    #    capturing -> idle. trace_dump() owns the wait for trace_result (so no
+    #    done_event here -- that would make the driver wait for it twice).
+    "trace_start": Http(method="POST", path="trace-start", timeout_s=120.0),
+    "trace_cancel": Http(method="POST", path="trace-cancel"),
 }
 
-DONE_WHEN = {
-    # Upload: assume an ack callback (expects_ack=True) OR a Done status.
-    "boot_image_upload": DoneWhen(status="Done", timeout_s=120.0),
-    # Load: Loading... -> Done (JTAG transfer).
-    "boot_image_load": DoneWhen(status="Done", timeout_s=300.0),
-    # Reset: no dedicated completion; the caller instead waits for the Linux
-    # prompt on the UART stream (wait_uart). Kept short as a safety net.
-    "reset": DoneWhen(status="Idle", timeout_s=30.0),
-    # Trace dump end-of-dump frame.
-    "trace_dump": DoneWhen(event=LISTEN["trace_complete"], timeout_s=120.0),
+
+# ---------------------------------------------------------------------------
+# EMIT: Socket.IO client->server events (verified from app.js `socket.emit`).
+# ---------------------------------------------------------------------------
+EMIT = {
+    # Power is a TOGGLE (no payload); the driver reads power_state and only
+    # toggles when the current state differs from the requested one.
+    "power_toggle": Emit(event="power_toggle", payload=lambda: None),
+    # Terminal keystrokes -- how we type the .user/.dom commands over UART.
+    "uart_send": Emit(event="uart_send", payload=lambda text: {"text": text}),
+    "uart_clear": Emit(event="uart_clear", payload=lambda: None),
+    # Virtual switches. switch_toggle is a TOGGLE by index; the driver reads
+    # switch_state and only toggles when the bit differs from the target.
+    "switch_toggle": Emit(event="switch_toggle", payload=lambda index: {"index": index}),
+    "switch_reset_all": Emit(event="switch_reset_all", payload=lambda: None),
+    # Auto-shutdown "Lock" (the good-citizen hold on the shared board).
+    "set_auto_shutdown": Emit(
+        event="set_auto_shutdown",
+        payload=lambda timeout_seconds, locked: {
+            "timeout_seconds": timeout_seconds, "locked": locked,
+        },
+    ),
+    # Replay of the UART ring buffer since a sequence number (client sends this
+    # on connect). Handy to resync; not required for a fresh post-reset run.
+    "request_history": Emit(
+        event="request_history", payload=lambda last_seq=-1: {"last_seq": last_seq}
+    ),
 }
 
 CONNECT = Connect()
