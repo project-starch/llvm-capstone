@@ -38,15 +38,26 @@ model. The number's *value* is not the deliverable; the *plumbing* is.
 
 ## Findings (both would have bitten on hardware)
 
-### 1. `rdcycle` is readable inside a Capstone domain (open item 1 — resolved for QEMU)
+### 1. Both `mcycle` and `rdcycle` are readable inside a Capstone domain (open item 1 — resolved for QEMU)
 
-The domain executed `rdcycle` (0xC00 `cycle` CSR) with **no fault**. The port's
-top open item was whether the monitor exposes the counter to a domain context
-(`[m|s]counteren.CY`). Under our QEMU + OpenSBI Capstone monitor it does. This is
-a strong signal the FPGA path will also work without a monitor change; the
-`mcycle`-in-M-mode fallback in `fpga_instrument.h` stays documented but is likely
-unnecessary. **Still verify on first boot** — the on-board monitor build could
-differ.
+The domain executed **`csrr mcycle`** (0xB00, the M-mode counter — now the
+default in `fpga_instrument.h`) with **no fault**, and separately `rdcycle`
+(0xC00 `cycle`) with no fault. Both give identical results under `-icount`
+(each advances one-per-retired-instruction). This resolves the port's top open
+item two ways:
+
+- The collaborator confirmed the on-board setup **gates the unprivileged
+  `cycle`** (`ccsr_en`/`mcounteren`), so the probe must read `mcycle`. `mcycle`
+  is a machine-level CSR, so the concern was whether a *domain* (PRV_C, not
+  M-mode) may read it at all. **Under our QEMU + OpenSBI Capstone monitor it
+  can** — so the domain-payload measurement model (not a bare-metal M-mode
+  harness) is viable with `mcycle`.
+- `rdcycle` also works here (our monitor exposes `counteren.CY` to the domain),
+  retained as `-DFPGA_CYCLE_USE_RDCYCLE` for setups that expose the counter.
+
+**Still verify on first board boot** — the on-board monitor/core build could
+differ. If the domain faults on `mcycle`, fall back to
+`-DFPGA_CYCLE_USE_RDCYCLE` (+ monitor `counteren.CY`) or an M-mode harness.
 
 ### 2. Single-region read-back is UNSOUND — the task-007 host-landmine (FIXED)
 
@@ -79,10 +90,54 @@ compile. Bisected: not the null-test, not the borrow loop, not the write target 
 purely the two-named-global conditional store. An **array-indexed** store
 (`regions[i++ & 1] = arg`) compiles at `-O2` and is what the port now uses.
 
-This is a real `llvm/` codegen defect (Agent-B's lane) — flagged in
-`COORDINATION.md`, not fixed here (shared LLVM tree). Repro: revert the
-`regions[]` array in `borrow_cost_fpga.c` to two named globals + a conditional
-store, build `-O2`.
+This was a real `llvm/` codegen defect (B-lane) — flagged in `COORDINATION.md`.
+It has since been **FIXED** (2026-07-15,
+`history/15-07-2026_03-43-21_cap-select-o2-ice-fixed.md`): `lowerSELECT` now
+rematerialises the constant arms of an i128 capability select. The `regions[]`
+array-indexed store is kept anyway (it never formed the offending node and is
+harmless), so the ports do not depend on the fix. Repro of the original ICE:
+revert to two named globals + a conditional store, build `-O2`.
+
+## Revoke-cost port — temporal-safety number (added 2026-07-15)
+
+The **temporal-safety overhead** arm (the paper's headline perf comparison vs
+CHERI) now has an FPGA port too, next to borrow-cost:
+`revoke_cost_fpga.c` / `revoke_cost_probe_guest_fpga.c` /
+`build-revoke-cost-fpga.sh`, driven by `run-revoke-cost-fpga-qemu.sh`. It is the
+hardware port of `../runtime-qemu/revoke-cost-probe/revoke_cost.c` — same
+malloc/touch/free loop under three allocator configs (bump / norevoke / revoke),
+selected per `.dom` build, reading `mcycle`, with the 4 counters handed back
+through a retained results region.
+
+**QEMU plumbing VALIDATED (`run-revoke-cost-fpga-qemu.sh`), matches the reference
+instruction-count probe exactly:**
+
+```
+bump      (unprotected baseline) : 7
+norevoke  (alloc-side)           : 60
+revoke    (full temporal safety) : 65
+alloc-side overhead (norevoke-bump)  : +53  (8.57x)
+revoke-at-free op   (revoke-norevoke): +5  (the O(1) op)
+total temporal cost (revoke-bump)    : +58  (9.29x over baseline)
+```
+
+Identical to `revoke-cost-probe/RESULTS.md` (bump 7.01 / norevoke 60 / revoke 65,
+revoke-at-free +5) — confirming the port measures the same code. On silicon these
+become real cycles; the **+5 revoke-at-free** is the O(1) number to place opposite
+CHERI's ~14–17 M-instr eager sweep.
+
+### Finding: two large shared regions starve the domain — keep the results region small
+
+The revoke-cost port needs the arena `REV_TRANSFERRED` (the allocator
+SPLIT/mrev/revokes it) plus a `REV_SHARED` results region the host reads back.
+Initially both were `ROF_COST_REGION_SIZE` (256 KiB). With two 256 KiB regions
+the **arena arrived unusable**: `rof_malloc` returned NULL on the first
+iteration, the loop dereferenced NULL, and the domain derailed (a stray
+`csrr`-decoded `csdebugprint` — `[CAPSTONE] Print = Scalar(0x1234)` — then hung).
+A single 256 KiB arena (the reference probe) and two *4 KiB* regions (the
+borrow-cost port) both work; two *256 KiB* regions do not. **Fix:** the results
+region only holds 4 words, so it is now a single 4 KiB page
+(`ROF_RESULTS_REGION_SIZE`). Worth remembering for any multi-large-region domain.
 
 ## Hardware run — still to do (unchanged)
 

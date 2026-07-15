@@ -21,25 +21,36 @@
 
 /* --- cycle read -----------------------------------------------------------
  *
- * `rdcycle` reads the unprivileged `cycle` CSR (0xC00), a mirror of the M-mode
- * `mcycle`. It is readable from S/U mode ONLY if the higher privilege level
- * enables it: mcounteren.CY (M->S) and scounteren.CY (S->U). Linux normally
- * sets scounteren.CY, so a Linux userspace process can rdcycle; whether a
- * *Capstone domain* may is set by the monitor's counteren for domains.
+ * Two ways to read the cycle counter, selected at compile time:
+ *   - default:                 `csrr mcycle` (M-mode counter CSR, 0xB00);
+ *   - -DFPGA_CYCLE_USE_RDCYCLE: `rdcycle` (unprivileged `cycle` CSR, 0xC00).
  *
- * OPEN ITEM (verify on first boot): if `rdcycle` faults inside the domain, the
- * monitor is not exposing the counter to domains. Two fixes, in order of
- * preference:
- *   (a) have the monitor set [m|s]counteren.CY for the domain context, or
- *   (b) run the measurement bare-metal in M-mode and read `mcycle` directly
- *       (csrr %0, mcycle) -- mcycle is always M-mode readable (confirmed in
- *       capstone-ariane core/csr_regfile.sv:677).
- * We default to (a)+rdcycle because it keeps the existing controller+domain
- * model (this file) unchanged; (b) is the fallback and only swaps the asm below.
+ * The collaborator confirmed (2026-07-14) that the on-board setup GATES the
+ * unprivileged `cycle` counter (`ccsr_en`/`mcounteren`), so on the FPGA the
+ * probe must read `mcycle` -- which is always M-mode readable
+ * (capstone-ariane core/csr_regfile.sv:677). Hence `mcycle` is the DEFAULT.
+ *
+ * `rdcycle` is retained as a fallback for contexts that DO expose counteren.CY
+ * to the measurement context: our QEMU + OpenSBI Capstone monitor does, so the
+ * earlier plumbing validation used it with no fault (see RESULTS.md). Linux
+ * userspace can always `rdcycle` (scounteren.CY), so the controller side is
+ * unaffected either way.
+ *
+ * OPEN ITEM (validated under QEMU, re-verify on first board boot): `mcycle`
+ * (0xB00) is a machine-level CSR, so whether a *Capstone domain* (PRV_C, not
+ * M-mode) may read it depends on the core/monitor. If the domain faults on
+ * `mcycle`, the fallbacks are: (a) build -DFPGA_CYCLE_USE_RDCYCLE and have the
+ * monitor set counteren.CY for the domain context, or (b) run the measurement
+ * bare-metal in M-mode (where `mcycle` is unconditionally readable). See
+ * RESULTS.md "mcycle-in-domain" for the QEMU finding.
  */
 static inline unsigned long rd_cycles(void) {
   unsigned long v;
+#ifdef FPGA_CYCLE_USE_RDCYCLE
   __asm__ volatile("rdcycle %0" : "=r"(v));
+#else
+  __asm__ volatile("csrr %0, mcycle" : "=r"(v));
+#endif
   return v;
 }
 
