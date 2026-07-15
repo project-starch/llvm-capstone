@@ -172,4 +172,12 @@ root — so it's the console service wedged (a restart on the lab-shared board),
 not a token/network problem (the build just pulled GiB from gitlab/GNU mirrors).
 The prior session reached it fine at 00:15. Everything else is ready: the sweep is
 the single `run_rtl_smoke.py --url … --image /tmp/capstone-b/fpga-image/fw_payload.bin`
-command the moment the console answers. A background poller retries ~1×/min.
+command the moment the console answers.
+
+**Outcome this session:** polled ~40 min (04:45→05:26). The console went from a
+full connect-then-hang (000) to fast **HTTP 503** at 05:01 — i.e. the reverse
+proxy is up but the **backend app is not running** — and stayed 503 through 05:26.
+The backend needs a restart on the lab side (or the board to recover); nothing on
+our side can drive around it. Task 028 (real-board sweep) is therefore **blocked
+on this external outage**, not on anything unbuilt. The image is staged and
+content-verified; the run is one command whenever the console serves again.
