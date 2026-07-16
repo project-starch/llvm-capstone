@@ -99,8 +99,17 @@ class FpgaConsole:
             (parts.scheme, parts.netloc, f"{prefix}/{C.CONNECT.api_prefix}", "", "")
         )
 
+        # Bounded reconnection: a board `reset` briefly drops the socket and we
+        # must reconnect to catch the post-reset boot log -- but never in an
+        # unbounded loop. Cap the attempts and the backoff so that if the console
+        # backend is down we give up quickly instead of retrying forever (which
+        # is the one way a client could keep knocking on a wedged backend).
         self.sio = client or socketio.Client(
-            reconnection=True, logger=False, engineio_logger=False
+            reconnection=True,
+            reconnection_attempts=12,      # ~finite; give up rather than loop forever
+            reconnection_delay=1,
+            reconnection_delay_max=5,
+            logger=False, engineio_logger=False,
         )
         self._http = requests.Session()
 
