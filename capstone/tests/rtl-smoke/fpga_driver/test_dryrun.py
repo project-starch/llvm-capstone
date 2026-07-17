@@ -27,6 +27,43 @@ from fpga_driver import run_rtl_smoke  # noqa: E402
 from fpga_driver import config as C  # noqa: E402
 
 
+def _check_load_retry() -> None:
+    """Unit check for load_boot_image's settle-and-retry (no server needed): a
+    transient load_state:error is retried and recovers; a persistent one gives up
+    after `attempts`. Mirrors the real board's post-power-on JTAG transient."""
+    from fpga_driver.fpga_console import FpgaConsole, ActionError
+
+    con = FpgaConsole("http://127.0.0.1:1", allow_unverified=True)
+    calls = {"n": 0}
+
+    def flaky(_key: str, **_kw: object) -> dict:
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise ActionError("load_state: board reported 'error'")
+        return {"state": "done"}
+
+    con._post = flaky  # type: ignore[assignment]
+    con.load_boot_image("fw.bin", attempts=3, settle=0.01)
+    assert calls["n"] == 3, f"expected recovery on 3rd attempt, got {calls['n']}"
+
+    calls["n"] = 0
+
+    def always_fail(_key: str, **_kw: object) -> dict:
+        calls["n"] += 1
+        raise ActionError("load_state: board reported 'error'")
+
+    con._post = always_fail  # type: ignore[assignment]
+    try:
+        con.load_boot_image("fw.bin", attempts=2, settle=0.01)
+    except ActionError:
+        pass
+    else:
+        raise AssertionError("persistent load error should have propagated")
+    assert calls["n"] == 2, f"expected exactly 2 attempts, got {calls['n']}"
+    con.close()
+    print("[drv] OK: load_boot_image settle-and-retry (recovers; gives up after N)")
+
+
 def _free_port() -> int:
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
@@ -77,6 +114,7 @@ def run() -> None:
     tmp_img = HERE / ".dryrun_fw_payload.bin"
     tmp_img.write_bytes(b"\x7fELF" + b"\x00" * 4096)  # tiny fake image
     capture_path = HERE / ".dryrun_capture.txt"
+    _check_load_retry()
     try:
         with _MockServer() as srv:
             console = FpgaConsole(srv.url, allow_unverified=True,

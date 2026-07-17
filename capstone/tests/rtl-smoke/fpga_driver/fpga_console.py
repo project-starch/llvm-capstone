@@ -420,9 +420,29 @@ class FpgaConsole:
         (``{name: <stored-name>}``)."""
         return self._post("upload_image", name=name, file_path=file_path)
 
-    def load_boot_image(self, name: str) -> None:
-        """Action 1b: load a stored image -> JTAG to 0x80000000; await done."""
-        self._post("load_image", filename=name)
+    def load_boot_image(self, name: str, *, attempts: int = 3,
+                        settle: float = 6.0) -> None:
+        """Action 1b: load a stored image -> JTAG to 0x80000000; await done.
+
+        A load issued right after power-on can transiently fail: OpenOCD/GDB
+        can't attach to the JTAG TAP until the core has settled, and the console
+        reports `load_state: error`. That is recoverable, so retry a few times
+        with a short settle between attempts (each attempt re-issues the POST;
+        the prior attempt has reached the terminal `error` state, so there is no
+        `Already loading` 409). Only a persistent error propagates."""
+        last: Optional[ActionError] = None
+        for i in range(1, attempts + 1):
+            try:
+                self._post("load_image", filename=name)
+                return
+            except ActionError as exc:
+                last = exc
+                self._log(f"load attempt {i}/{attempts} failed ({exc}); "
+                          f"settling {settle}s before retry")
+                if i < attempts:
+                    time.sleep(settle)
+        assert last is not None
+        raise last
 
     def reset(self, wait_prompt: bool = True, prompt_timeout: float = 180.0) -> None:
         """Action 2: reset the board; optionally wait for the Linux prompt."""
