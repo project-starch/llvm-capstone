@@ -22,16 +22,40 @@ and your `fpga_driver/` has been merged to `capstone-bootstrap`. **Run the real
 sweep now.** The board URL (with its access token) is supplied separately at paste
 time — runtime only, never commit or log it.
 
-## Pre-flight (cheap, do these first)
+## Verify against the API before any hardware action (do these IN ORDER)
 
-1. **Image still staged?** Confirm `/tmp/capstone-b/fpga-image/fw_payload.bin`
-   exists and matches the recorded sha256 (`aadd213f…`, from the phase-3b build
-   record `c9b8127`). If the scratch was cleared, rebuild it per that record before
-   running.
-2. **Live connectivity + courtesy check.** Connect and read `user_count`,
-   `power_state`, `load_state`. If `user_count` shows someone else likely mid-session
-   (an unexpected non-idle state you didn't create), **back off and report** rather
-   than stomp — the board is shared and just recovered.
+The point of this gate is to minimize the chance of the driver doing anything
+unexpected on real hardware. Do **not** issue any state-changing action
+(`power_toggle`, `POST /api/load-image`, `/api/reset-board`, `switch_toggle`, …)
+until Stages A and B below are clean.
+
+**Stage 0 — image staged?** Confirm `/tmp/capstone-b/fpga-image/fw_payload.bin`
+exists and matches the recorded sha256 (`aadd213f…`, phase-3b build record
+`c9b8127`). If the scratch was cleared, rebuild per that record.
+
+**Stage A — offline conformance (no hardware).** Re-run
+`python fpga_driver/test_dryrun.py` against the API-faithful `mock_server.py` →
+must be green. This exercises the whole flow (Lock → upload → reset → sweep →
+`--parse-uart` → release) plus the seq/history reconnect gating, entirely against
+the mock that models `capstone/tests/rtl-smoke/socketio-api.md`. If it is not
+green, stop here.
+
+**Stage B — live protocol check, READ-ONLY.** Connect to the real board and
+**observe only** — issue no state-changing event. On `connect` the server pushes a
+snapshot (`load_state`, `flash_state`, `power_state`, `led_state`, `switch_state`,
+`trace_state`, `auto_shutdown_state`, `gdb_state`) then `user_count`. Assert each
+payload's **keys/shape match `socketio-api.md` exactly** (e.g. `power_state.state ∈
+{on,off}`, `switch_state.states` has 8 entries, `auto_shutdown_state` has
+`{timeout, locked}`). A benign `request_history{last_seq:-1}` read is allowed;
+`power_toggle`/upload/reset/`switch_toggle` are **not**. Also the courtesy check:
+if `user_count` or an unexpected non-idle state suggests someone else is
+mid-session, **back off and report** — the board is shared and just recovered.
+**If any live event diverges from the doc, STOP and report before touching
+hardware.** (If the driver has no read-only/`--check-only` path, add a tiny one or
+script a bare `FpgaConsole` connect that logs the snapshot and asserts shapes — do
+not reuse the full run path for this.)
+
+Only when Stage A is green **and** Stage B matches the doc do you proceed.
 
 ## The run
 
