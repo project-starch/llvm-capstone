@@ -6,6 +6,17 @@ console's own client JS (`static/app.js`), fetched from the live site on
 are read straight off the `socket.emit(...)` / `socket.on(...)` / `fetch(...)`
 call sites). No collaborator hand-off and no DevTools HAR was needed.
 
+**Cross-checked (2026-07-17) against the authoritative
+`capstone/tests/rtl-smoke/socketio-api.md`** — the console `app.py` author's own
+Socket.IO reference. It confirms the reverse-engineered map byte-for-byte (event
+names, payloads, toggle semantics, the Lock, `request_history{last_seq}`). Three
+things it made precise, now folded in below: `uart_data.seq` must be **threaded**
+into `request_history` on reconnect (was hardcoded `-1`); `POST /api/reset-board`
+also emits `load_state{state:'idle'}`; and `trace_state` has a `done` state and
+is **mutually exclusive with `uart_data`** (bytes route to the trace parser while
+capturing). The doc covers Socket.IO only; the REST verbs stay as mapped from
+`app.js`.
+
 **Key finding — the console is a HYBRID, not pure Socket.IO.** The earlier
 placeholder assumed every action was a Socket.IO emit. In reality the action
 *verbs* (upload / load / reset / trace) are **HTTP POST to a REST API**, while the
@@ -35,7 +46,7 @@ compatible.
 |---|--------|---------------|------|------------|
 | 1a | Upload boot image | `POST /api/images/upload` | multipart form `name` + `file` | HTTP response `{name}` (200) / `{error}` (non-200); synchronous |
 | 1b | Load image → JTAG `0x80000000` | `POST /api/load-image` | `{filename}` | `load_state` event `{state}`: `loading` → `done` \| `error` (409 `Already loading` if one is in flight) |
-| 2 | Reset | `POST /api/reset-board` | *(none)* | no state event — wait for the Linux prompt on the UART stream |
+| 2 | Reset | `POST /api/reset-board` | *(none)* | emits `load_state{state:'idle', loaded_image_name:null}`; the driver waits for the Linux prompt on the UART stream (more robust than the state event) |
 | 5 | Trace dump | `POST /api/trace-start` (cancel: `/api/trace-cancel`) | *(none)* | `trace_result` event `{text}` (the finished dump); `trace_state` also goes `capturing` → `idle` |
 
 Bitstream flashing (`POST /api/flash-bitstream {filename[, volatile]}`, completion
@@ -52,7 +63,7 @@ via `flash_state`) and file management (`GET/DELETE/PATCH /api/images`,
 | Set switch N | `switch_toggle` | `{index}` | **toggle** — driver reads `switch_state` and only toggles if the bit differs |
 | Reset all switches | `switch_reset_all` | *(none)* | |
 | Lock (auto-shutdown) | `set_auto_shutdown` | `{timeout_seconds, locked}` | the good-citizen hold on the shared board |
-| History replay | `request_history` | `{last_seq}` | client sends on connect; resyncs UART + current states |
+| History replay | `request_history` | `{last_seq}` | sent on every (re)connect. Server replays only `uart_data` chunks with `seq > last_seq` (to the requesting sid, as one `uart_data{seq,text}`); `-1` = full replay. The driver tracks the max `seq` seen (`config.UART_SEQ_KEY`) and threads it here, so a reconnect fills only the gap instead of re-injecting the ≤512 KB buffer and duplicating RESULT lines |
 
 (GDB/JTAG console events — `gdb_start` / `gdb_stop` / `gdb_input` / `gdb_output` /
 `gdb_state` — also exist for manual bring-up; unused by the sweep.)
@@ -61,10 +72,10 @@ via `flash_state`) and file management (`GET/DELETE/PATCH /api/images`,
 
 | Logical | Event | Payload |
 |---------|-------|---------|
-| UART bytes | `uart_data` | `{seq, text}` (text carries the bytes → `config.UART_TEXT_KEYS = ["text"]`) |
-| Load state | `load_state` | `{state, loaded_image_name}` |
+| UART bytes | `uart_data` | `{seq, text}` (`text` → `config.UART_TEXT_KEYS=["text"]`; `seq` → `config.UART_SEQ_KEY="seq"`, tracked for `request_history`). Stops flowing while `trace_state=='capturing'` (bytes route to the trace parser) |
+| Load state | `load_state` | `{state, loaded_image_name}`; also `idle` after `reset-board` |
 | Flash state | `flash_state` | `{state, nv_bitstream_name}` |
-| Trace state | `trace_state` | `{state}`: `idle` \| `capturing` |
+| Trace state | `trace_state` | `{state}`: `idle` \| `capturing` \| `done` (`done` fires just before `trace_result`) |
 | Trace result | `trace_result` | `{text}` (the finished dump) |
 | Power state | `power_state` | `{state}`: `on` \| `off` |
 | GDB state | `gdb_state` | `{state}`: `idle` \| `starting` \| `running` \| `error` |
@@ -127,7 +138,11 @@ The DevTools-HAR route (below) was the documented fallback and was **not needed*
   Lock → power → upload(multipart) → load(`load_state` done) → reset(await prompt)
   → borrow + 3 revoke configs over UART (markers split across chunks) → harvest
   RESULT lines → switch toggle → trace dump (`trace_result`) → `--parse-uart`.
-  Asserts the parse reproduces bump 7 / norevoke 60 / revoke 65 → +5 O(1).
+  Asserts the parse reproduces bump 7 / norevoke 60 / revoke 65 → +5 O(1). It also
+  asserts the **history-seq threading**: a reconnect that re-requests history with
+  the tracked `seq` re-injects nothing (no duplication), while a `last_seq=-1`
+  replay does re-deliver the buffer (proving the mock — and the real server — gate
+  on `last_seq`).
 - **Live transport check against the real board** (2026-07-16): the wired driver
   connected to `fpga.corank.info`, received every state event with the exact
   payload shapes above, and read live UART — confirming the map against hardware,

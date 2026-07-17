@@ -66,14 +66,22 @@ def build_app() -> tuple[socketio.AsyncServer, web.Application]:
         "capturing": False,
         "line": "",       # accumulated UART keystrokes until CR/LF
         "clients": 0,
+        "uart_seq": 0,          # monotonic chunk counter (_uart_history_seq)
+        "uart_history": [],     # [(seq, text)] ring buffer for request_history
     }
 
     async def emit_uart(text: str, chunk: int = 24) -> None:
         """Broadcast `text` split into small chunks (markers may land across a
-        chunk boundary on purpose)."""
+        chunk boundary on purpose). Each chunk gets a monotonic `seq` and is kept
+        in the history buffer, mirroring the real server's uart_data {seq, text}."""
         for i in range(0, len(text), chunk):
+            piece = text[i:i + chunk]
+            board["uart_seq"] += 1
+            seq = board["uart_seq"]
+            board["uart_history"].append((seq, piece))
             await sio.emit(C.LISTEN["uart_output"],
-                           {C.UART_TEXT_KEYS[0]: text[i:i + chunk]}, namespace=NS)
+                           {C.UART_SEQ_KEY: seq, C.UART_TEXT_KEYS[0]: piece},
+                           namespace=NS)
             await asyncio.sleep(0.005)
 
     async def push_states() -> None:
@@ -97,8 +105,24 @@ def build_app() -> tuple[socketio.AsyncServer, web.Application]:
         board["clients"] = max(0, board["clients"] - 1)
 
     @sio.on(C.EMIT["request_history"].event, namespace=NS)
-    async def _history(sid, data=None):  # noqa: ARG001
-        await push_states()
+    async def _history(sid, data=None):
+        """Replay UART chunks newer than last_seq, to the requester only, as a
+        single uart_data {seq, text} -- exactly like the real server. seq gating
+        is what makes threading last_seq on the client observable: pass the real
+        seq and nothing (already-seen) is re-sent; pass -1 and the whole buffer
+        replays."""
+        last = -1
+        if isinstance(data, dict):
+            try:
+                last = int(data.get("last_seq", -1))
+            except (TypeError, ValueError):
+                last = -1
+        chunks = [(s, t) for (s, t) in board["uart_history"] if s > last]
+        if chunks:
+            text = "".join(t for _, t in chunks)
+            await sio.emit(C.LISTEN["uart_output"],
+                           {C.UART_SEQ_KEY: chunks[-1][0], C.UART_TEXT_KEYS[0]: text},
+                           to=sid, namespace=NS)
 
     @sio.on(C.EMIT["power_toggle"].event, namespace=NS)
     async def _power(sid, data=None):  # noqa: ARG001
@@ -130,6 +154,7 @@ def build_app() -> tuple[socketio.AsyncServer, web.Application]:
     @sio.on(C.EMIT["uart_clear"].event, namespace=NS)
     async def _uart_clear(sid, data=None):  # noqa: ARG001
         board["line"] = ""
+        board["uart_history"].clear()  # doc: clears the server-side history buffer
 
     @sio.on(C.EMIT["uart_send"].event, namespace=NS)
     async def _uart_send(sid, data):  # noqa: ARG001

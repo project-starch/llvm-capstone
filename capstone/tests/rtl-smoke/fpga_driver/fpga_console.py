@@ -118,6 +118,11 @@ class FpgaConsole:
         self._events: List[Tuple[float, str, Any]] = []  # (ts, name, data)
         self._state: Dict[str, Any] = {}                 # event name -> last payload
         self._uart = ""
+        # Highest uart_data `seq` seen so far. -1 means "nothing yet" -> a full
+        # replay on the first request_history. Threading the real seq on every
+        # reconnect is what stops the server re-injecting its whole (<=512 KB)
+        # UART history and duplicating the RESULT lines the parser reads.
+        self._last_uart_seq = -1
 
         self._install_handlers()
 
@@ -173,11 +178,22 @@ class FpgaConsole:
         # boot log (this is exactly what stalled the first hardware recon).
         def on_connect() -> None:
             try:
-                self._emit("request_history", last_seq=-1)
+                self._resync_history()
             except Exception:  # pragma: no cover - best effort
                 pass
 
         self.sio.on("connect", on_connect, namespace=ns)
+
+    def _resync_history(self) -> None:
+        """Ask the server to replay UART chunks newer than the last we've seen.
+        Passing the tracked `seq` (not a hardcoded -1) means a reconnect only
+        fills the gap since we dropped, rather than re-delivering the entire
+        history buffer -- which on the real board would duplicate/garble the
+        RESULT lines. -1 (the initial value) still gives a full replay the first
+        time, so a fresh session gets the whole boot log."""
+        with self._cond:
+            last = self._last_uart_seq
+        self._emit("request_history", last_seq=last)
 
     def _record(self, event: str, data: Any) -> None:
         now = time.monotonic()
@@ -186,6 +202,9 @@ class FpgaConsole:
             self._state[event] = data
             if event == C.LISTEN["uart_output"]:
                 self._uart += self._extract_uart_text(data)
+                seq = self._extract_uart_seq(data)
+                if seq is not None and seq > self._last_uart_seq:
+                    self._last_uart_seq = seq
             self._cond.notify_all()
         if event == C.LISTEN["uart_output"]:
             self._log(f"[uart] +{len(self._extract_uart_text(data))}B")
@@ -206,6 +225,23 @@ class FpgaConsole:
                         return v.decode("utf-8", "replace")
                     return str(v)
         return "" if data is None else str(data)
+
+    @staticmethod
+    def _extract_uart_seq(data: Any) -> Optional[int]:
+        """The monotonic `seq` on a uart_data payload, or None if absent. Used to
+        thread request_history so a reconnect doesn't replay the whole buffer."""
+        if isinstance(data, dict):
+            s = data.get(C.UART_SEQ_KEY)
+            if isinstance(s, bool):  # bool is an int subclass; not a seq
+                return None
+            if isinstance(s, int):
+                return s
+            if isinstance(s, str):
+                try:
+                    return int(s)
+                except ValueError:
+                    return None
+        return None
 
     # -- generic waiters ----------------------------------------------------
     def wait_event(
@@ -304,6 +340,12 @@ class FpgaConsole:
     def uart_text(self) -> str:
         with self._cond:
             return self._uart
+
+    @property
+    def last_uart_seq(self) -> int:
+        """Highest uart_data `seq` seen (-1 if none yet)."""
+        with self._cond:
+            return self._last_uart_seq
 
     def drain_uart(self) -> str:
         with self._cond:

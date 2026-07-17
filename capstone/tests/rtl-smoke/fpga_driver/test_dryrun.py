@@ -103,6 +103,28 @@ def run() -> None:
                 console.set_switch(1, True)
                 # 5: trace dump (POST trace-start -> trace_result text)
                 frame = console.trace_dump(timeout=10)
+
+                # -- history-seq threading (the reconnect path) --
+                # On every (re)connect the driver re-requests UART history. With
+                # the real seq threaded it asks only for chunks newer than it has
+                # seen, so uart_text must NOT grow; a hardcoded last_seq=-1 would
+                # re-inject the whole ring buffer and duplicate the RESULT lines.
+                # Prove both halves: tracked seq -> no growth; -1 -> growth.
+                seq_seen = console.last_uart_seq
+                assert seq_seen >= 0, "driver never tracked a uart_data seq"
+                len_before = len(console.uart_text)
+                console._resync_history()  # request_history{last_seq=seq_seen}
+                time.sleep(0.3)
+                assert len(console.uart_text) == len_before, (
+                    "reconnect duplicated UART history despite threading the seq")
+                # Sanity: the mock really gates on last_seq (a full replay grows).
+                console._emit("request_history", last_seq=-1)
+                deadline = time.time() + 2.0
+                while time.time() < deadline and len(console.uart_text) == len_before:
+                    time.sleep(0.05)
+                assert len(console.uart_text) > len_before, (
+                    "full replay (last_seq=-1) did not re-deliver history "
+                    "-- mock is not seq-gating")
             finally:
                 console.unlock()
                 console.close()

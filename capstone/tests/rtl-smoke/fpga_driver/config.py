@@ -99,7 +99,7 @@ LISTEN = {
     # Per-action state streams (each carries {state: ...}).
     "load_state": "load_state",         # {state, loaded_image_name}
     "flash_state": "flash_state",       # {state, nv_bitstream_name}
-    "trace_state": "trace_state",       # {state}: idle|capturing
+    "trace_state": "trace_state",       # {state}: idle|capturing|done
     "power_state": "power_state",       # {state}: on|off
     "gdb_state": "gdb_state",           # {state}: idle|starting|running|error
     # One-shot / informational broadcasts.
@@ -112,6 +112,15 @@ LISTEN = {
 
 # Key that carries the UART text inside a `uart_data` payload (verified: "text").
 UART_TEXT_KEYS: List[str] = ["text"]
+
+# Key carrying the monotonic sequence number on a `uart_data` payload
+# ({seq, text}). The driver tracks the max seq seen and passes it as
+# request_history{last_seq} on every reconnect, so the server replays only
+# chunks newer than we've seen (seq > last_seq) instead of the whole 512 KB
+# ring buffer -- which would otherwise duplicate the RESULT lines. Verified
+# against socketio-api.md ("uart_data ... {seq, text}", request_history replays
+# seq > last_seq; -1 = full replay).
+UART_SEQ_KEY = "seq"
 
 # Field inside a per-action state payload holding the state string.
 STATUS_STATE_KEY = "state"
