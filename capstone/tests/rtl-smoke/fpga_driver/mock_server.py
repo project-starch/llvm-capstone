@@ -182,6 +182,10 @@ def build_app() -> tuple[socketio.AsyncServer, web.Application]:
         # Echo the command like a real TTY, then respond based on which .dom ran.
         await emit_uart(cmd + "\n")
         payload = ""
+        if cmd.startswith("echo "):
+            # Shell echo (e.g. the RDY''OK login-confirm probe); quotes collapse.
+            await emit_uart(cmd[len("echo "):].replace("'", "") + "\n# ")
+            return
         if "insmod" in cmd and "capstone" in cmd:
             # The .doms need /dev/capstone; a healthy image loads the module.
             await emit_uart("/dev/capstone\nCAPSTONE_MOD_OK\n# ")

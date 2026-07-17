@@ -65,19 +65,22 @@ def _check_load_retry() -> None:
 
 
 def _check_gdb_boot(url: str, image: Path) -> None:
-    """The --boot-method=gdb path: gdb_start -> monitor reset halt -> set $pc ->
-    continue (no reset-board), then insmod + the sweep. Proves the GDB primitives
-    and that the boot bypasses reset-board yet still reaches a shell + RESULT."""
+    """The --boot-method=gdb path: gdb_start -> reset halt -> monitor load_image
+    (image + DTB) -> set pc/a0/a1 -> continue -> root login -> gdb_stop, then the
+    sweep. Proves the GDB primitives + the host-load boot bypasses reset-board yet
+    reaches a shell + RESULT."""
     console = FpgaConsole(url, allow_unverified=True)
     console.connect(timeout=10)
     try:
         capture = run_rtl_smoke.run_smoke(
-            console, image, "fw.bin", do_upload=False, boot_method="gdb")
+            console, image, "fw.bin", do_upload=False, boot_method="gdb",
+            dtb=image)  # reuse the dummy image as a stand-in DTB (not uploaded)
     finally:
         console.gdb_stop()
         console.close()
     assert console.gdb_text and "(gdb)" in console.gdb_text, \
         "no GDB session output seen"
+    assert "load_image" in console.gdb_text, "monitor load_image not issued"
     assert "CAPSTONE_MOD_OK" in capture, "insmod step missing from gdb-boot sweep"
     for needle in ("mode=bump  alloc_free=7", "mode=revoke  alloc_free=65",
                    "borrow-cost-fpga: RESULT vs-raw"):

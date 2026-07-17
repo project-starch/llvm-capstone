@@ -26,27 +26,36 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent.parent))
 # Allow running as a script (python run_rtl_smoke.py) or as a module.
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from fpga_driver import config as C  # type: ignore
-    from fpga_driver.fpga_console import FpgaConsole  # type: ignore
+    from fpga_driver.fpga_console import FpgaConsole, ActionTimeout  # type: ignore
 else:  # pragma: no cover
     from . import config as C
-    from .fpga_console import FpgaConsole
+    from .fpga_console import FpgaConsole, ActionTimeout
 
 REMOTE_DIR = "/root/rtl-smoke"
 # The Capstone kernel module. The .doms open /dev/capstone (via libcapstone's
 # capstone_init); that node is created by this module, and the fpga image does
-# NOT auto-load it at boot -- so the sweep must insmod it first, exactly like the
-# QEMU domain-smoke does. Missing this yields "failed to initialize Capstone".
+# NOT auto-load it at boot -- so a module image must insmod it first (else
+# "failed to initialize Capstone").
+#
+# HARDWARE NOTE (real FPGA): `insmod` of ANY module *hangs this board* -- the
+# kernel module loader's icache/text-patch path does not complete on this CVA6
+# (same class as the RFENCE boot gap). Build capstone BUILT-IN (CONFIG in-tree,
+# obj-y) so /dev/capstone exists at boot with no runtime insmod. See the
+# fpga-gdb-boot-run history note.
 CAPSTONE_MODULE = "/capstone.ko"
-# Load address our OpenSBI fw_payload runs from (M-mode entry).
+# Load address our OpenSBI fw_payload runs from (M-mode entry), and the address
+# the (bypassed) bootrom normally places the board DTB -- OpenSBI passes it as a1.
 BOOT_LOAD_ADDR = 0x80000000
+DTB_ADDR = 0x82200000
 
 # The runs the human sequence performs (README.md steps 3-4). Each entry:
 #   (label, controller.user, payload.dom, done_marker_key)
@@ -70,45 +79,92 @@ def load_capstone_module(console: FpgaConsole, module: str = CAPSTONE_MODULE) ->
     return out
 
 
+def throttled_send(console: FpgaConsole, text: str, delay: float = 0.05) -> None:
+    """Type `text` one char at a time. The board's UART RX FIFO overruns on a
+    bulk write and silently drops characters (corrupting commands, e.g.
+    `/capstone.ko` -> `/capstoneko`), so long commands must be throttled. (Even
+    throttled the RX is occasionally lossy -- callers should verify/retry.)"""
+    for ch in text:
+        console._emit("uart_send", text=ch)
+        time.sleep(delay)
+
+
+def login_root(console: FpgaConsole, tries: int = 4) -> bool:
+    """After the login prompt, log in as root (no password on this image) and
+    CONFIRM a live shell with an echo probe whose marker can't appear in the
+    command echo (quote-split RDY''OK)."""
+    console.wait_uart(r"login:", timeout=180.0)
+    for _ in range(tries):
+        console._emit("uart_send", text="root\r")
+        time.sleep(1.5)
+        start = len(console.uart_text)
+        console._emit("uart_send", text="echo RDY''OK\r")
+        try:
+            console.wait_uart(r"RDYOK", timeout=8.0, search_from=start)
+            return True
+        except ActionTimeout:
+            console._emit("uart_send", text="\r")
+            time.sleep(1.5)
+    return False
+
+
 def boot_via_gdb(console: FpgaConsole, image_name: str,
-                 *, load_addr: int = BOOT_LOAD_ADDR) -> None:
-    """Boot our image using the console's GDB session instead of reset-board.
+                 *, host_image: str, host_dtb: str,
+                 load_addr: int = BOOT_LOAD_ADDR, dtb_addr: int = DTB_ADDR) -> None:
+    """Boot our image via the GDB session instead of reset-board (VERIFIED live).
 
-    reset-board makes the bootrom reload the SPI-resident firmware, clobbering
-    our JTAG-loaded DRAM image. The debug module's `monitor reset halt` instead
-    halts the hart at the reset vector (clean M-mode) WITHOUT running the bootrom;
-    we then point the PC at our already-loaded image and `continue`. Non-persistent
-    (flashes nothing).
+    reset-board makes the bootrom reload the SPI-resident firmware, clobbering a
+    JTAG-loaded image. Instead: `monitor reset halt` halts the hart at the reset
+    vector (clean M-mode) WITHOUT running the bootrom, then OpenOCD (which runs on
+    the host) loads our image + the board DTB from host files straight into DRAM
+    while halted, we set the entry registers, and `continue`. Non-persistent.
 
-    The exact OpenOCD ordering (load-image vs gdb_start attach, restore vs the
-    console JTAG load) is worked out against the live session -- see the
-    fpga-gdb-boot history note. This is the recipe the driver drives; adjust the
-    command list here if the live session needs a different order."""
+    `host_image` / `host_dtb` are paths on the OpenOCD host (relative to its CWD,
+    the console app dir -- uploads land in `images/`). Because the bootrom is
+    bypassed, the DTB it normally places at `dtb_addr` must be loaded here and
+    passed in a1, else Linux has no device tree (no console, no boot)."""
     prompt = C.GDB_PROMPT
-    # 1. JTAG-load our image into DRAM (no reset -> bootrom does not reload SPI).
-    console.load_boot_image(image_name)
-    # 2. Attach OpenOCD + gdb-multiarch.
     console.gdb_start()
-    # 3. Halt at the reset vector via the debug module (not the reset-board button).
     console.gdb_cmd("monitor reset halt", prompt, timeout=60.0)
-    # 4. Enter at our OpenSBI (a0=hartid; the fpga OpenSBI embeds its own DTB).
+    # OpenOCD reads the host files and writes DRAM while the core is halted
+    # (~2 min for the 15 MB image). No console load-image (that poisons the TAP
+    # for the gdb attach) and no clobber (halted -> bootrom never runs).
+    console.gdb_cmd(f"monitor load_image {host_image} {load_addr:#x} bin",
+                    prompt, timeout=240.0)
+    console.gdb_cmd(f"monitor load_image {host_dtb} {dtb_addr:#x} bin",
+                    prompt, timeout=40.0)
     console.gdb_cmd(f"set $pc = {load_addr:#x}", prompt)
-    console.gdb_cmd("set $a0 = 0", prompt)
-    # 5. Resume. `continue` does not return a (gdb) prompt (target runs), so fire
-    #    it and watch the UART for OpenSBI -> Linux -> the shell login.
+    console.gdb_cmd("set $a0 = 0", prompt)          # hartid
+    console.gdb_cmd(f"set $a1 = {dtb_addr:#x}", prompt)  # DTB pointer
+    # Resume; `continue` doesn't return a prompt, so fire it and watch the UART.
     console._emit("gdb_input", text="continue\n")
-    console.wait_uart(C.UART["login_prompt"], timeout=180.0)
+    if not login_root(console):
+        raise RuntimeError("gdb-boot reached login but could not confirm a shell")
+    # Detach: the .doms do Capstone domain switches that desync an attached debug
+    # session ("packet queue is empty, aborting"). gdb_stop leaves Linux running.
+    console.gdb_stop()
+    time.sleep(4.0)
 
 
 def boot_board(console: FpgaConsole, image: Path, image_name: str,
-               *, boot_method: str = "reset", do_upload: bool = True) -> None:
+               *, boot_method: str = "reset", do_upload: bool = True,
+               dtb: Optional[Path] = None, host_dir: str = "images") -> None:
     """Get our image to a Linux shell. `reset` = upload+load+reset-board (works
     only if the board boots the JTAG-loaded image); `gdb` = the self-serve
-    GDB-driven boot that bypasses the SPI-reload reset."""
+    GDB-driven boot that bypasses the SPI-reload reset (needs the board `dtb`,
+    since the bypassed bootrom no longer supplies one)."""
     if do_upload:
         console.upload_boot_image(image_name, str(image))
     if boot_method == "gdb":
-        boot_via_gdb(console, image_name)
+        if dtb is None:
+            raise ValueError("boot_method='gdb' needs the board dtb= (the "
+                             "bypassed bootrom no longer places it)")
+        dtb_name = dtb.name
+        if do_upload:
+            console.upload_boot_image(dtb_name, str(dtb))
+        boot_via_gdb(console, image_name,
+                     host_image=f"{host_dir}/{image_name}",
+                     host_dtb=f"{host_dir}/{dtb_name}")
     elif boot_method == "reset":
         console.load_boot_image(image_name)
         console.reset(wait_prompt=True)
@@ -124,15 +180,19 @@ def run_smoke(
     do_upload: bool = True,
     remote_dir: str = REMOTE_DIR,
     boot_method: str = "reset",
+    dtb: Optional[Path] = None,
+    load_module: bool = True,
 ) -> str:
     """Drive one full sweep; return the concatenated UART capture (RESULT lines
-    included). `console` must already be connected."""
+    included). `console` must already be connected. `load_module=False` for a
+    built-in-capstone image (/dev/capstone at boot; insmod hangs this board)."""
     boot_board(console, image, image_name,
-               boot_method=boot_method, do_upload=do_upload)
+               boot_method=boot_method, do_upload=do_upload, dtb=dtb)
     capture: List[str] = []
-    # The .doms need /dev/capstone -- load the module before running any pair.
-    capture.append(f"# === insmod {CAPSTONE_MODULE} ===\n"
-                   f"{load_capstone_module(console)}\n")
+    if load_module:
+        # A module image needs /dev/capstone loaded before any pair.
+        capture.append(f"# === insmod {CAPSTONE_MODULE} ===\n"
+                       f"{load_capstone_module(console)}\n")
     for label, user, dom, marker_key in RUNS:
         cmd = f"{remote_dir}/{user} {remote_dir}/{dom}"
         marker = C.UART[marker_key]
