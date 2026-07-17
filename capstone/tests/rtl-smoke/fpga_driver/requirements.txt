@@ -1,0 +1,8 @@
+# Runtime dependency of the driver itself (fpga_console.py / run_rtl_smoke.py):
+python-socketio[client]>=5.0
+
+# Needed only for the offline dry-run + mock server (test_dryrun.py,
+# mock_server.py). Kept here (not just a comment) so a fresh
+# `pip install -r requirements.txt` can run the dry-run out of the box.
+# python-socketio (server side) is already pulled in by the line above.
+aiohttp>=3.8
