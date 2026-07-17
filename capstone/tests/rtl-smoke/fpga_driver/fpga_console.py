@@ -118,6 +118,10 @@ class FpgaConsole:
         self._events: List[Tuple[float, str, Any]] = []  # (ts, name, data)
         self._state: Dict[str, Any] = {}                 # event name -> last payload
         self._uart = ""
+        # Raw GDB/OpenOCD terminal text (gdb_output {data}), accumulated for the
+        # --boot-method=gdb path. Separate from _uart so a gdb_wait on a prompt
+        # doesn't collide with UART marker matching.
+        self._gdb = ""
         # Highest uart_data `seq` seen so far. -1 means "nothing yet" -> a full
         # replay on the first request_history. Threading the real seq on every
         # reconnect is what stops the server re-injecting its whole (<=512 KB)
@@ -205,6 +209,8 @@ class FpgaConsole:
                 seq = self._extract_uart_seq(data)
                 if seq is not None and seq > self._last_uart_seq:
                     self._last_uart_seq = seq
+            elif event == C.GDB_OUTPUT_EVENT:
+                self._gdb += self._extract_gdb_text(data)
             self._cond.notify_all()
         if event == C.LISTEN["uart_output"]:
             self._log(f"[uart] +{len(self._extract_uart_text(data))}B")
@@ -242,6 +248,19 @@ class FpgaConsole:
                 except ValueError:
                     return None
         return None
+
+    @staticmethod
+    def _extract_gdb_text(data: Any) -> str:
+        """Text from a gdb_output payload ({data: "..."}), or the raw value."""
+        if isinstance(data, dict):
+            v = data.get(C.GDB_OUTPUT_KEY)
+            if v is not None:
+                if isinstance(v, (bytes, bytearray)):
+                    return v.decode("utf-8", "replace")
+                return str(v)
+        if isinstance(data, (bytes, bytearray)):
+            return data.decode("utf-8", "replace")
+        return "" if data is None else str(data)
 
     # -- generic waiters ----------------------------------------------------
     def wait_event(
@@ -328,6 +347,31 @@ class FpgaConsole:
                     )
                 self._cond.wait(timeout=remaining)
 
+    def wait_gdb(
+        self,
+        pattern: Union[str, Pattern[str]],
+        timeout: float = 60.0,
+        *,
+        search_from: int = 0,
+    ) -> "re.Match[str]":
+        """Block until the accumulated GDB terminal text matches `pattern`,
+        searched from `search_from` onward (so a fresh prompt after a command is
+        matched, not a stale one)."""
+        rx = _compile(pattern)
+        deadline = time.monotonic() + timeout
+        with self._cond:
+            while True:
+                m = rx.search(self._gdb, search_from)
+                if m:
+                    return m
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    tail = self._gdb[-400:]
+                    raise ActionTimeout(
+                        f"timed out waiting for GDB /{rx.pattern}/; last 400B: {tail!r}"
+                    )
+                self._cond.wait(timeout=remaining)
+
     def now(self) -> float:
         return time.monotonic()
 
@@ -340,6 +384,11 @@ class FpgaConsole:
     def uart_text(self) -> str:
         with self._cond:
             return self._uart
+
+    @property
+    def gdb_text(self) -> str:
+        with self._cond:
+            return self._gdb
 
     @property
     def last_uart_seq(self) -> int:
@@ -450,6 +499,46 @@ class FpgaConsole:
         self._post("reset")
         if wait_prompt:
             self.wait_uart(C.UART["login_prompt"], timeout=prompt_timeout)
+
+    # -- GDB-driven boot (self-serve: no reset-board, flashes nothing) -------
+    def gdb_start(self, timeout: float = 60.0) -> None:
+        """Open the OpenOCD + gdb-multiarch session; wait for gdb_state=running.
+        No-ops on the server unless gdb_state is idle|error."""
+        mark = self.now()
+        self._emit("gdb_start")
+        self.wait_event(
+            C.GDB_STATE_EVENT,
+            lambda d: isinstance(d, dict) and d.get(C.STATUS_STATE_KEY) == "running",
+            timeout, since=mark,
+        )
+
+    def gdb_stop(self, timeout: float = 20.0) -> None:
+        """End the GDB session (resumes the CPU, tears down OpenOCD). Best-effort
+        wait for gdb_state=idle."""
+        mark = self.now()
+        self._emit("gdb_stop")
+        try:
+            self.wait_event(
+                C.GDB_STATE_EVENT,
+                lambda d: isinstance(d, dict) and d.get(C.STATUS_STATE_KEY) == "idle",
+                timeout, since=mark,
+            )
+        except ActionTimeout:  # pragma: no cover - stopping is best-effort
+            pass
+
+    def gdb_cmd(
+        self,
+        command: str,
+        done_marker: Union[str, Pattern[str]],
+        timeout: float = 120.0,
+    ) -> str:
+        """Send one GDB command (as PTY keystrokes) and return the gdb_output text
+        up to `done_marker` (typically the `(gdb) ` prompt)."""
+        start = len(self.gdb_text)
+        self._emit("gdb_input", text=command if command.endswith("\n") else command + "\n")
+        m = self.wait_gdb(done_marker, timeout=timeout, search_from=start)
+        with self._cond:
+            return self._gdb[start:m.end()]
 
     def set_switch(self, index: int, on: bool = True, timeout: float = 10.0) -> None:
         """Action 4: set virtual switch `index`. switch_toggle is a *toggle*, so

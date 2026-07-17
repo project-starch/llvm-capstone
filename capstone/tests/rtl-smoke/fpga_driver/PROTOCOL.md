@@ -65,8 +65,29 @@ via `flash_state`) and file management (`GET/DELETE/PATCH /api/images`,
 | Lock (auto-shutdown) | `set_auto_shutdown` | `{timeout_seconds, locked}` | the good-citizen hold on the shared board |
 | History replay | `request_history` | `{last_seq}` | sent on every (re)connect. Server replays only `uart_data` chunks with `seq > last_seq` (to the requesting sid, as one `uart_data{seq,text}`); `-1` = full replay. The driver tracks the max `seq` seen (`config.UART_SEQ_KEY`) and threads it here, so a reconnect fills only the gap instead of re-injecting the ≤512 KB buffer and duplicating RESULT lines |
 
-(GDB/JTAG console events — `gdb_start` / `gdb_stop` / `gdb_input` / `gdb_output` /
-`gdb_state` — also exist for manual bring-up; unused by the sweep.)
+| GDB start/stop | `gdb_start` / `gdb_stop` | *(none)* | open/close the OpenOCD + `gdb-multiarch` session (`gdb_state` → `starting`→`running`→`idle`) |
+| GDB keystrokes | `gdb_input` | `{text}` | raw PTY input — how the driver types `monitor reset halt` / `set $pc` / `continue` |
+
+### GDB-driven boot (`--boot-method=gdb`)
+
+`reset-board` makes the bootrom reload the **SPI-resident** firmware, clobbering
+our JTAG-loaded DRAM image — so on a board that boots resident firmware, the
+`reset` boot method never runs our image. The GDB path avoids `reset-board`
+entirely: `gdb_start` → `monitor reset halt` (halts the hart at the reset vector
+via the debug module, **not** the reset button) → `set $pc = 0x80000000` →
+`continue`, then watch UART for OpenSBI → Linux → shell. Non-persistent (flashes
+nothing). `gdb_output` is accumulated separately from UART (`console.gdb_text`).
+The exact OpenOCD ordering is verified against the live session — see the
+`fpga-gdb-boot` history note.
+
+### Module load (both boot methods)
+
+The `.doms` open `/dev/capstone` (libcapstone `capstone_init`), created by
+`capstone.ko`. The fpga image does **not** auto-load it at boot, so the sweep
+`insmod /capstone.ko` first (else `failed to initialize Capstone`). A UP
+(`CONFIG_SMP=n`) image must ship a `capstone.ko` built against the **same** SMP
+setting — an SMP-built module refuses to load into a UP kernel
+(`version magic '… SMP …' should be '…'`).
 
 ## Socket.IO server → client (LISTEN)
 

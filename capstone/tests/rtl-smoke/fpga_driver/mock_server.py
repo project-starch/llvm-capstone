@@ -68,7 +68,17 @@ def build_app() -> tuple[socketio.AsyncServer, web.Application]:
         "clients": 0,
         "uart_seq": 0,          # monotonic chunk counter (_uart_history_seq)
         "uart_history": [],     # [(seq, text)] ring buffer for request_history
+        "gdb": "idle",          # gdb_state: idle|starting|running|error
+        "gdb_line": "",         # accumulated gdb PTY keystrokes until newline
     }
+
+    BOOT_LOG = (
+        "\n[    0.000000] Linux version 6.x (capstone)\n"
+        "[    1.234567] Freeing unused kernel memory\n"
+        "Welcome to Buildroot\n"
+        "buildroot login: root\n"
+        "# "
+    )
 
     async def emit_uart(text: str, chunk: int = 24) -> None:
         """Broadcast `text` split into small chunks (markers may land across a
@@ -98,6 +108,7 @@ def build_app() -> tuple[socketio.AsyncServer, web.Application]:
         board["clients"] += 1
         await sio.emit(C.USER_COUNT_EVENT, {C.USER_COUNT_KEY: board["clients"]},
                        namespace=NS)
+        await sio.emit(C.GDB_STATE_EVENT, {"state": board["gdb"]}, namespace=NS)
         await push_states()
 
     @sio.event(namespace=NS)
@@ -171,6 +182,10 @@ def build_app() -> tuple[socketio.AsyncServer, web.Application]:
         # Echo the command like a real TTY, then respond based on which .dom ran.
         await emit_uart(cmd + "\n")
         payload = ""
+        if "insmod" in cmd and "capstone" in cmd:
+            # The .doms need /dev/capstone; a healthy image loads the module.
+            await emit_uart("/dev/capstone\nCAPSTONE_MOD_OK\n# ")
+            return
         for dom, result in RESULT_LINES.items():
             if dom in cmd:
                 payload = result + "\n" + REVOKE_DONE + "\n# "
@@ -182,6 +197,44 @@ def build_app() -> tuple[socketio.AsyncServer, web.Application]:
                 payload = "# "  # unknown command: just a fresh prompt
         if payload:
             await emit_uart(payload)
+
+    # ── GDB session (self-serve boot path) ────────────────────────────────
+    async def _gdb_emit(text: str) -> None:
+        await sio.emit(C.GDB_OUTPUT_EVENT, {C.GDB_OUTPUT_KEY: text}, namespace=NS)
+
+    @sio.on(C.EMIT["gdb_start"].event, namespace=NS)
+    async def _gdb_start(sid, data=None):  # noqa: ARG001
+        if board["gdb"] not in ("idle", "error"):
+            return
+        board["gdb"] = "starting"
+        await sio.emit(C.GDB_STATE_EVENT, {"state": "starting"}, namespace=NS)
+        await asyncio.sleep(0.01)
+        board["gdb"] = "running"
+        await sio.emit(C.GDB_STATE_EVENT, {"state": "running"}, namespace=NS)
+        await _gdb_emit("GNU gdb (multiarch)\n(gdb) ")
+
+    @sio.on(C.EMIT["gdb_stop"].event, namespace=NS)
+    async def _gdb_stop(sid, data=None):  # noqa: ARG001
+        board["gdb"] = "idle"
+        await sio.emit(C.GDB_STATE_EVENT, {"state": "idle"}, namespace=NS)
+
+    @sio.on(C.EMIT["gdb_input"].event, namespace=NS)
+    async def _gdb_input(sid, data):  # noqa: ARG001
+        if board["gdb"] != "running":
+            return
+        text = (data or {}).get("text", "")
+        for ch in text:
+            if ch in ("\r", "\n"):
+                cmd = board["gdb_line"].strip()
+                board["gdb_line"] = ""
+                await _gdb_emit(cmd + "\n")
+                if cmd == "continue" or cmd.startswith("c "):
+                    # Resuming our loaded image -> OpenSBI -> Linux -> shell on UART.
+                    await emit_uart(BOOT_LOG)
+                else:
+                    await _gdb_emit("(gdb) ")  # command ack + fresh prompt
+            else:
+                board["gdb_line"] += ch
 
     # ── REST action verbs ─────────────────────────────────────────────────
     api = C.CONNECT.api_prefix
@@ -212,13 +265,7 @@ def build_app() -> tuple[socketio.AsyncServer, web.Application]:
     async def _reset_board(request: web.Request) -> web.Response:  # noqa: ARG001
         async def _boot() -> None:
             await asyncio.sleep(0.01)
-            await emit_uart(
-                "\n[    0.000000] Linux version 6.x (capstone)\n"
-                "[    1.234567] Freeing unused kernel memory\n"
-                "Welcome to Buildroot\n"
-                "buildroot login: root\n"
-                "# ",
-            )
+            await emit_uart(BOOT_LOG)
         asyncio.create_task(_boot())
         return web.json_response({"ok": True})
 

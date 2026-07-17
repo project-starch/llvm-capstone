@@ -135,6 +135,12 @@ LOCK_TIMEOUT_KEY = "timeout"
 USER_COUNT_EVENT = "user_count"
 USER_COUNT_KEY = "count"
 
+# GDB debug session (used by the --boot-method=gdb path, which starts our image
+# without the bootrom-reloading reset-board -- see PROTOCOL.md "GDB-driven boot").
+GDB_STATE_EVENT = "gdb_state"           # {state}: idle|starting|running|error
+GDB_OUTPUT_EVENT = "gdb_output"         # {data}: raw terminal text from the PTY
+GDB_OUTPUT_KEY = "data"
+
 
 # ---------------------------------------------------------------------------
 # HTTP: the action verbs (POST). Paths are relative to "<url>/api".
@@ -199,6 +205,12 @@ EMIT = {
     "request_history": Emit(
         event="request_history", payload=lambda last_seq=-1: {"last_seq": last_seq}
     ),
+    # GDB session control (no payload) + raw PTY keystrokes. gdb_input is how we
+    # type `monitor reset halt` / `restore` / `set $pc` / `continue` to boot our
+    # image WITHOUT the console reset-board button (which reloads SPI firmware).
+    "gdb_start": Emit(event="gdb_start", payload=lambda: None),
+    "gdb_stop": Emit(event="gdb_stop", payload=lambda: None),
+    "gdb_input": Emit(event="gdb_input", payload=lambda text: {"text": text}),
 }
 
 CONNECT = Connect()
@@ -220,4 +232,10 @@ UART = {
     # The RESULT lines we harvest and hand to --parse-uart (kept loose; the
     # bundled parser does the strict extraction).
     "result_line": r"(?m)^.*RESULT.*$",
+    # Sentinel echoed by the insmod step (the .doms need /dev/capstone, created
+    # by capstone.ko -- the boot does NOT auto-load it). See run_rtl_smoke.
+    "module_loaded": r"CAPSTONE_MOD_(?:OK|FAIL)",
 }
+
+# The GDB/OpenOCD interactive prompt, matched after each gdb command.
+GDB_PROMPT = r"\(gdb\)\s*$"

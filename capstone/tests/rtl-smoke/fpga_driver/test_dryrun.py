@@ -64,6 +64,27 @@ def _check_load_retry() -> None:
     print("[drv] OK: load_boot_image settle-and-retry (recovers; gives up after N)")
 
 
+def _check_gdb_boot(url: str, image: Path) -> None:
+    """The --boot-method=gdb path: gdb_start -> monitor reset halt -> set $pc ->
+    continue (no reset-board), then insmod + the sweep. Proves the GDB primitives
+    and that the boot bypasses reset-board yet still reaches a shell + RESULT."""
+    console = FpgaConsole(url, allow_unverified=True)
+    console.connect(timeout=10)
+    try:
+        capture = run_rtl_smoke.run_smoke(
+            console, image, "fw.bin", do_upload=False, boot_method="gdb")
+    finally:
+        console.gdb_stop()
+        console.close()
+    assert console.gdb_text and "(gdb)" in console.gdb_text, \
+        "no GDB session output seen"
+    assert "CAPSTONE_MOD_OK" in capture, "insmod step missing from gdb-boot sweep"
+    for needle in ("mode=bump  alloc_free=7", "mode=revoke  alloc_free=65",
+                   "borrow-cost-fpga: RESULT vs-raw"):
+        assert needle in capture, f"gdb-boot sweep missing RESULT: {needle!r}"
+    print("[drv] OK: --boot-method=gdb (reset-halt/set-pc/continue + insmod + sweep)")
+
+
 def _free_port() -> int:
     s = socket.socket()
     s.bind(("127.0.0.1", 0))
@@ -166,6 +187,9 @@ def run() -> None:
             finally:
                 console.unlock()
                 console.close()
+
+            # The self-serve GDB boot path (fresh session, same mock board).
+            _check_gdb_boot(srv.url, tmp_img)
 
         # -- assertions --
         assert "buildroot login" in console.uart_text or "# " in capture, \
