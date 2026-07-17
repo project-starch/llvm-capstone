@@ -1,11 +1,3 @@
-# Follow-up prompt for Agent-B — task 017 reconcile against the official Socket.IO API
-
-*Paste everything below the line into `claude-b`. Self-contained. The collaborator
-sent the authoritative Socket.IO API doc; it is now committed on the main lane. This
-is a short verification pass — your wiring already matches it — plus one real check.*
-
----
-
 You are Agent-B, continuing task 017 in `/home/alexey/dev/llvm-capstone-b`,
 branch `capstone-bootstrap-b`.
 
