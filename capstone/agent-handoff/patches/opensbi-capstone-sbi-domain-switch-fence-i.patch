@@ -1,0 +1,96 @@
+Subject: [capstone-sbi] Restore fence.i at domain-switch/trap boundaries (CVA6 icache coherence)
+
+Apply in the OpenSBI Capstone monitor submodule:
+  capstone/caplifive-buildroot/components/opensbi/lib/sbi/capstone-sbi/
+  ($ git apply <this-file>   from that directory)
+
+WHY: on the CapliFive CVA6 (Genesys 2) the first domain switch (domcall /
+trap-return) hangs — create_dom succeeds, the first DOM_CALL/REGION_SHARE never
+returns and no RESULT is printed. The identical monitor completes both the
+borrow-cost and revoke-cost .doms end-to-end under QEMU (bump 7 / norevoke 60 /
+revoke 65; borrow raw 2 / borrow 6), so the monitor C logic and ISA-level
+domain-switch semantics are correct. QEMU models no icache, so it cannot
+reproduce the stall.
+
+Our capstone-bootstrap monitor lineage (2f772bb) DROPPED the fence.i icache
+flushes at the domain-switch/trap boundaries in sbi_capstone.S. The board-tested
+genesys-testing lineage keeps them — its tip commit is literally
+capstone-sbi@99aaffa8 "Added fence.i back" (Jason Yu). Without them, this CVA6's
+instruction fetch is left with stale icache across the M-mode<->domain/S-mode
+context switch (same coherence class as the RFENCE and insmod hangs on this
+core). This patch re-inserts the 9 fence.i at the same boundaries the reference
+uses: trap entry, before save_smode_context, the ecall vs non-ecall dispatch,
+before the SBI handler calls, the two j return_to_sumode paths, and before both
+mret paths (return_to_sumode + call_into_smode).
+
+fence.i is purely additive (flushes stale icache; cannot change correctness,
+only costs a few cycles at each switch), so it is safe to carry as a staging
+patch. Verified: the edited .S assembles cleanly (clang --target=riscv64
+-march=rv64gc, all capstone .insn macros + fence.i accepted).
+
+diff --git a/sbi_capstone.S b/sbi_capstone.S
+index 934c1d0..4e60a02 100644
+--- a/sbi_capstone.S
++++ b/sbi_capstone.S
+@@ -7,6 +7,7 @@ _dom_reentry:
+ #endif
+ 
+ _cap_trap_entry:
++    fence.i
+     CCSRRW(sp, CCSR_CSCRATCH, sp)
+ 
+     CINCOFFSETIMM(sp, sp, -32 * 8)
+@@ -50,6 +51,7 @@ _cap_trap_entry:
+ 
+     # TODO: however, this would require the bottom of the stack to be reserved
+     # for storing S-mode context
++    fence.i
+     call save_smode_context
+     CINCOFFSETIMM(sp, sp, 16)
+     RESTORE_REG(a0, sp)
+@@ -67,8 +69,10 @@ _cap_trap_entry:
+     srli t1, t0, 63
+     bne t1, x0, _handle_ints
+     li t1, CAUSE_SUPERVISOR_ECALL
++    fence.i
+     bne t0, t1, _handle_non_ecall
+ 
++    fence.i
+     call handle_trap_ecall
+     mv a1, a0
+     li a0, 0
+@@ -77,15 +81,18 @@ _cap_trap_entry:
+     addi t0, t0, 4
+     CCSRRW(x0, CCSR_CEPC, t0)
+ 
++    fence.i
+     j return_to_sumode
+ 
+ _handle_non_ecall:
+     mv a0, t0
++    fence.i
+     call handle_exception
+     CINCOFFSETIMM(sp, sp, 16)
+     RESTORE_REG(a0, sp)
+     RESTORE_REG(a1, sp)
+     CINCOFFSETIMM(sp, sp, -16)
++    fence.i
+     j return_to_sumode
+ 
+ _handle_ints:
+@@ -143,6 +150,7 @@ return_to_sumode:
+     # right before returning to S mode:
+     # cscratch: sp  ->
+     #      sp - 8 * 32 - 16  -> gp
++    fence.i
+     mret
+ 
+ call_into_smode:
+@@ -154,6 +162,7 @@ call_into_smode:
+     CCSRRW(sp, CCSR_CSCRATCH, sp)
+     li gp, 0
+ 
++    fence.i
+     mret
+ 
+ resume_smode:
