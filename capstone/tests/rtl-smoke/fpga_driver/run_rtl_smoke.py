@@ -56,6 +56,13 @@ CAPSTONE_MODULE = "/capstone.ko"
 # the (bypassed) bootrom normally places the board DTB -- OpenSBI passes it as a1.
 BOOT_LOAD_ADDR = 0x80000000
 DTB_ADDR = 0x82200000
+# Seconds to wait after a cold power-on before attaching JTAG/GDB. The FPGA's
+# RISC-V DTM is not responsive the instant the board powers up; attaching too
+# soon yields OpenOCD "JTAG scan chain ... all ones" / "Examination failed".
+POWER_ON_SETTLE = 15.0
+# Seconds to hold the board off during a --power-cycle, so a wedged/reset-looping
+# core is fully cleared before the cold power-on (and its POWER_ON_SETTLE).
+POWER_CYCLE_OFF = 8.0
 
 # The runs the human sequence performs (README.md steps 3-4). Each entry:
 #   (label, controller.user, payload.dom, done_marker_key)
@@ -95,12 +102,19 @@ def login_root(console: FpgaConsole, tries: int = 4) -> bool:
     command echo (quote-split RDY''OK)."""
     console.wait_uart(r"login:", timeout=180.0)
     for _ in range(tries):
-        console._emit("uart_send", text="root\r")
+        # The board's UART RX FIFO overruns on a bulk write and silently drops
+        # chars, so a burst `root\r` / `echo ...` can arrive corrupted and the
+        # shell never echoes the marker. Throttle the keystrokes (char-by-char)
+        # -- the same mitigation the command path uses -- and clear any partial
+        # line first so a prior dropped char can't poison this attempt.
+        console._emit("uart_send", text="\r")
+        time.sleep(0.5)
+        throttled_send(console, "root\r")
         time.sleep(1.5)
         start = len(console.uart_text)
-        console._emit("uart_send", text="echo RDY''OK\r")
+        throttled_send(console, "echo RDY''OK\r")
         try:
-            console.wait_uart(r"RDYOK", timeout=8.0, search_from=start)
+            console.wait_uart(r"RDYOK", timeout=10.0, search_from=start)
             return True
         except ActionTimeout:
             console._emit("uart_send", text="\r")
@@ -126,6 +140,13 @@ def boot_via_gdb(console: FpgaConsole, image_name: str,
     prompt = C.GDB_PROMPT
     console.gdb_start()
     console.gdb_cmd("monitor reset halt", prompt, timeout=60.0)
+    # `monitor reset halt` emits its `(gdb)` prompt before the JTAG-interrogation
+    # output ("JTAG tap ... found") has drained over this laggy channel. That
+    # trailing output carries a second prompt, which the *next* gdb_cmd can match
+    # prematurely -- firing the tiny DTB load while the 15 MB image load is still
+    # running, then timing out. Settle so all of reset-halt's lagging output
+    # (and its prompt) lands before the next command captures its search offset.
+    time.sleep(4.0)
     # OpenOCD reads the host files and writes DRAM while the core is halted
     # (~2 min for the 15 MB image). No console load-image (that poisons the TAP
     # for the gdb attach) and no clobber (halted -> bootrom never runs).
@@ -246,6 +267,9 @@ def main(argv: List[str]) -> int:
     ap.add_argument("--allow-unverified", action="store_true",
                     help="run even though config.PROTOCOL_SOURCE is 'placeholder' "
                          "(mock-server / bring-up only -- see PROTOCOL.md)")
+    ap.add_argument("--power-cycle", action="store_true",
+                    help="force the board off (settle) then on before booting, to "
+                         "clear a wedged / reset-looping core from a prior run")
     ap.add_argument("--no-lock", action="store_true",
                     help="do not take the auto-shutdown Lock while running "
                          "(default: take it, release it when done)")
@@ -274,6 +298,8 @@ def main(argv: List[str]) -> int:
     )
     console.connect()
     locked = False
+    capture = ""
+    run_error: Optional[BaseException] = None
     try:
         # Good-citizen check on the shared board: back off if someone else is on.
         users = console.user_count()
@@ -282,32 +308,72 @@ def main(argv: List[str]) -> int:
                   f"in use; backing off. Re-run with --ignore-users to override.",
                   file=sys.stderr)
             return 3
+        # A prior crashed run can orphan the GDB/OpenOCD session: it stays
+        # 'running', tying up the single-threaded console (and any in-flight JTAG
+        # load), which then times out our lock handshake. We are past the shared-
+        # board check here (solo), so a live session is ours to reap -- stop it
+        # before locking so the server is responsive and the board is clean.
+        if args.power_cycle:
+            print(f"[fpga] power-cycling to clear board state "
+                  f"(off {POWER_CYCLE_OFF:.0f}s)", file=sys.stderr)
+            console.power(False)
+            time.sleep(POWER_CYCLE_OFF)
+        gdb_st = console._current_state(C.GDB_STATE_EVENT)
+        if gdb_st in ("running", "starting", "error"):
+            print(f"[fpga] stale gdb session ({gdb_st}) from a prior run; "
+                  f"stopping it", file=sys.stderr)
+            console.gdb_stop()
+            time.sleep(3.0)
         if not args.no_lock:
             console.lock()
             locked = True
             print("[fpga] took the auto-shutdown Lock", file=sys.stderr)
+        # A cold power-on needs a settle before JTAG: the FPGA's RISC-V DTM is not
+        # yet responding when the board first comes up, so an immediate gdb attach
+        # sees "JTAG scan chain ... all ones" / "Examination failed". Only pay the
+        # settle when we actually turned the board on (already-on boards attach
+        # straight away).
+        was_off = console._current_state(C.POWER_STATE_EVENT) != "on"
         console.power(True)
+        if was_off:
+            print(f"[fpga] board was off; settling {POWER_ON_SETTLE:.0f}s after "
+                  f"power-on so the JTAG DTM is ready", file=sys.stderr)
+            time.sleep(POWER_ON_SETTLE)
         capture = run_smoke(
             console, args.image, image_name,
             do_upload=not args.no_upload, remote_dir=args.remote_dir,
             boot_method=args.boot_method,
             dtb=args.dtb, load_module=not args.builtin,
         )
+    except Exception as exc:  # noqa: BLE001 -- persist the UART for diagnosis
+        run_error = exc
+        capture = getattr(console, "uart_text", "") or ""
     finally:
+        # Tear down the GDB/OpenOCD session even on error, so a crashed run does
+        # not orphan it and wedge the next run's lock handshake (best-effort).
+        try:
+            console.gdb_stop()
+        except Exception:
+            pass
         if locked:
             console.unlock()
             print("[fpga] released the Lock", file=sys.stderr)
         console.close()
 
+    # Persist whatever UART we captured even on failure -- otherwise the boot/
+    # login log dies with the process and the failure can't be diagnosed.
     if args.capture_out:
         out_path = args.capture_out
-        out_path.write_text(capture)
     else:
         fd, tmp = tempfile.mkstemp(prefix="fpga-uart-", suffix=".txt")
         os.close(fd)
         out_path = Path(tmp)
-        out_path.write_text(capture)
+    out_path.write_text(capture)
     print(f"[fpga] UART capture -> {out_path}", file=sys.stderr)
+
+    if run_error is not None:
+        print(f"[fpga] run failed: {run_error}", file=sys.stderr)
+        return 4
 
     return parse_uart(out_path)
 
