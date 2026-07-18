@@ -99,6 +99,44 @@ The modcapstone kernel module + the Capstone monitor are already part of the
 capstone buildroot (`caplifive-buildroot`, the same tree the QEMU flow uses), so
 `/dev/capstone` and the domain-load path work on the FPGA exactly as under QEMU.
 
+### Patched board image (`fw_payload_up_builtin_fence.bin`, sha256 `9c53ffd8...`)
+
+The board image to run the sweep with is the **UP built-in image carrying the
+domain-switch `fence.i` fix** (see `agent-handoff/history/*_fpga-domain-call.md`
+and `*_fpga-domain-call-rebuild.md`). Two independent fixes are baked in:
+
+- **capstone built into the kernel** (`obj-y`, not a module) — `/dev/capstone`
+  exists at boot, no `insmod` (which hangs this CVA6). Boot with the driver's
+  `--builtin` flag (skips the insmod step).
+- **the 9 `fence.i` icache-flushes** restored to the OpenSBI Capstone monitor
+  (`sbi_capstone.S`) — the CVA6 needs them across the M-mode↔domain switch; our
+  lineage had dropped them, which is why the first domain CALL stalled on the
+  board while QEMU (no icache model) was fine.
+
+Rebuild recipe (from this repo; no external `caplifive-system` checkout needed,
+reusing the existing UP built-in Linux Image):
+
+```sh
+BR=capstone/caplifive-buildroot
+CROSS=$BR/build/host/bin/riscv64-buildroot-linux-gnu-
+# 1. apply the monitor patch to the OpenSBI capstone-sbi submodule working tree
+git -C $BR/components/opensbi/lib/sbi/capstone-sbi apply \
+    ../../../../../agent-handoff/patches/opensbi-capstone-sbi-domain-switch-fence-i.patch
+# (and mirror it into the rsynced build copy)
+cp $BR/components/opensbi/lib/sbi/capstone-sbi/sbi_capstone.S \
+   $BR/build/build/opensbi-custom/lib/sbi/capstone-sbi/sbi_capstone.S
+# 2. extract the UP built-in Linux Image from the prior image (offset 0x200000)
+dd if=fw_payload_up_builtin.bin of=Image_up_builtin bs=$((0x200000)) skip=1
+# 3. rebuild the fpga/ariane OpenSBI, wrapping that Image
+cd $BR/build/build/opensbi-custom && rm -rf build/platform/fpga/ariane/firmware
+make PLATFORM=fpga/ariane CROSS_COMPILE=$CROSS FW_PAYLOAD_PATH=<abs>/Image_up_builtin
+#   → build/platform/fpga/ariane/firmware/fw_payload.bin
+# QEMU regression check (fence.i is a no-op under QEMU; this confirms no break):
+#   cp the rebuilt generic fw_jump.elf into $BR/build/images/, then boot the
+#   Image_up_builtin under virt-capstone → shell + /dev/capstone at boot +
+#   borrow .dom RESULT raw=2/borrow=6; run-revoke-cost-fpga-qemu.sh → 7/60/65.
+```
+
 ## Run (human-driven on the FPGA web console)
 
 No scriptable API yet (browser GUI only). Sequence on `fpga.corank.info`:

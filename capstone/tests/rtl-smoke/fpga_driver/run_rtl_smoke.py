@@ -217,9 +217,21 @@ def main(argv: List[str]) -> int:
                     help="access token, if the protocol echoes it in the handshake "
                          "(config.CONNECT.auth_key); defaults to $FPGA_TOKEN")
     ap.add_argument("--image", type=Path,
-                    help="fw_payload.bin to upload+load. Required unless --parse-only.")
+                    help="fw_payload.bin to upload+load. Required unless --parse-only. "
+                         "For the board sweep use the patched UP built-in image "
+                         "fw_payload_up_builtin_fence.bin (sha256 9c53ffd8...; carries "
+                         "the domain-switch fence.i fix + capstone built-in so "
+                         "/dev/capstone exists at boot, no insmod). Staged under "
+                         "~/capstone-b-artifacts/ and /tmp/capstone-b/fpga-image/.")
     ap.add_argument("--image-name", default=None,
                     help="name to store the image under (default: the file's basename)")
+    ap.add_argument("--dtb", type=Path, default=None,
+                    help="board DTB to load at 0x82200000 (required for --boot-method=gdb: "
+                         "the bypassed bootrom no longer places it). e.g. caplifive.dtb.")
+    ap.add_argument("--builtin", action="store_true",
+                    help="the image has capstone built into the kernel (obj-y), so "
+                         "/dev/capstone exists at boot -- skip insmod (which hangs this "
+                         "board). Use for fw_payload_up_builtin_fence.bin.")
     ap.add_argument("--no-upload", action="store_true",
                     help="skip upload; the named image is already on the console")
     ap.add_argument("--boot-method", choices=("reset", "gdb"), default="reset",
@@ -279,6 +291,7 @@ def main(argv: List[str]) -> int:
             console, args.image, image_name,
             do_upload=not args.no_upload, remote_dir=args.remote_dir,
             boot_method=args.boot_method,
+            dtb=args.dtb, load_module=not args.builtin,
         )
     finally:
         if locked:
