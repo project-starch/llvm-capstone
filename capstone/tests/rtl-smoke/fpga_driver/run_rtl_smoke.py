@@ -169,11 +169,17 @@ def boot_via_gdb(console: FpgaConsole, image_name: str,
 
 def boot_board(console: FpgaConsole, image: Path, image_name: str,
                *, boot_method: str = "reset", do_upload: bool = True,
-               dtb: Optional[Path] = None, host_dir: str = "images") -> None:
+               dtb: Optional[Path] = None, host_dir: str = "images",
+               load_via_jtag: bool = True) -> None:
     """Get our image to a Linux shell. `reset` = upload+load+reset-board (works
     only if the board boots the JTAG-loaded image); `gdb` = the self-serve
     GDB-driven boot that bypasses the SPI-reload reset (needs the board `dtb`,
-    since the bypassed bootrom no longer supplies one)."""
+    since the bypassed bootrom no longer supplies one).
+
+    `load_via_jtag=False` (reset only): skip the JTAG image load and just
+    reset-board, so the bootrom boots the SPI-resident *reference* firmware. Use
+    this to test the board's own monitor -- no JTAG (avoids its flakiness), and
+    the load would be clobbered by the SPI reload anyway."""
     if do_upload:
         console.upload_boot_image(image_name, str(image))
     if boot_method == "gdb":
@@ -187,7 +193,8 @@ def boot_board(console: FpgaConsole, image: Path, image_name: str,
                      host_image=f"{host_dir}/{image_name}",
                      host_dtb=f"{host_dir}/{dtb_name}")
     elif boot_method == "reset":
-        console.load_boot_image(image_name)
+        if load_via_jtag:
+            console.load_boot_image(image_name)
         console.reset(wait_prompt=True)
     else:
         raise ValueError(f"unknown boot_method: {boot_method!r}")
@@ -203,12 +210,16 @@ def run_smoke(
     boot_method: str = "reset",
     dtb: Optional[Path] = None,
     load_module: bool = True,
+    load_via_jtag: bool = True,
 ) -> str:
     """Drive one full sweep; return the concatenated UART capture (RESULT lines
     included). `console` must already be connected. `load_module=False` for a
-    built-in-capstone image (/dev/capstone at boot; insmod hangs this board)."""
+    built-in-capstone image (/dev/capstone at boot; insmod hangs this board).
+    `load_via_jtag=False` (reset only): boot the SPI-resident reference firmware
+    instead of a JTAG-loaded image."""
     boot_board(console, image, image_name,
-               boot_method=boot_method, do_upload=do_upload, dtb=dtb)
+               boot_method=boot_method, do_upload=do_upload, dtb=dtb,
+               load_via_jtag=load_via_jtag)
     capture: List[str] = []
     if load_module:
         # A module image needs /dev/capstone loaded before any pair.
@@ -270,6 +281,10 @@ def main(argv: List[str]) -> int:
     ap.add_argument("--power-cycle", action="store_true",
                     help="force the board off (settle) then on before booting, to "
                          "clear a wedged / reset-looping core from a prior run")
+    ap.add_argument("--no-load", action="store_true",
+                    help="reset boot-method only: skip the JTAG image load and just "
+                         "reset-board, so the bootrom boots the SPI-resident "
+                         "reference firmware (to test the board's own monitor)")
     ap.add_argument("--no-lock", action="store_true",
                     help="do not take the auto-shutdown Lock while running "
                          "(default: take it, release it when done)")
@@ -344,6 +359,7 @@ def main(argv: List[str]) -> int:
             do_upload=not args.no_upload, remote_dir=args.remote_dir,
             boot_method=args.boot_method,
             dtb=args.dtb, load_module=not args.builtin,
+            load_via_jtag=not args.no_load,
         )
     except Exception as exc:  # noqa: BLE001 -- persist the UART for diagnosis
         run_error = exc
