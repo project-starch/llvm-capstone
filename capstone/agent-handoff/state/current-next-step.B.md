@@ -2,6 +2,24 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-next-step.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-next-step.md` at Agent-B bring-up (2026-07-08).
 
+# Agent-B FPGA track (2026-07-20) — freestanding controller clears FP hang; domain `cscall` reached
+
+**Active FPGA work is NOT reflected in the huge checkpoint below (which stops at 2026-07-10).**
+Current FPGA state + next step:
+- Report: `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md`.
+- Reproduction runbook (for Agent A): `ref/fpga-borrow-cost-reproduction.md`.
+- **Where we are:** the freestanding soft-float controller
+  (`tests/rtl-smoke/borrow_cost_fpga_ctl.c`) fixed the glibc-`fsd` FP hang and runs on
+  `captype-fixed` silicon through domain create + region setup. The domain `cscall` is now
+  **reached** and **enters the domain**, but the core wedges at domain entry vaddr `0x10044`
+  (`<test>` glue, offline-confirmed) — bootrom reset or early spin.
+- **Next:** build a combined image (freestanding controller in overlay + Stage-0 M-mode
+  `mtvec` LSB-first trap-dumper in the monitor), boot on the board, capture `mcause` at the
+  `0x10044` wedge to decide stale-icache-`fence.i` vs RTL cap-violation. Plan:
+  `/home/alexey/.claude-b/plans/curried-crunching-gizmo.md`.
+
+---
+
 # Agent-B checkpoint status (2026-07-10)
 
 **Task `agentB-009` (close corpus rows 11 + 14) — DONE and PUSHED. The SQLite
