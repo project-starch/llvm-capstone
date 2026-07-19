@@ -25,7 +25,10 @@ MODCAPSTONE_INCLUDE="$CAPSTONE_REPO_ROOT/capstone/caplifive-buildroot/package/mo
 
 mkdir -p "$TMP_ROOT" "$OUT_DIR"
 
-# Controller (guest Linux userspace).
+# Controller (guest Linux userspace, glibc). NOTE: on the CapliFive captype-fixed
+# bitstream this .user HANGS -- the core rejects glibc's hard-float `fsd` (double
+# FP) even with mstatus.FS enabled (JTAG-confirmed 2026-07-20; the DT advertises
+# rv64imafdc but double-FP does not execute). Kept for QEMU / D-capable cores.
 "$GUEST_CC" \
   -O2 \
   -I"$SCRIPT_DIR" \
@@ -35,6 +38,21 @@ mkdir -p "$TMP_ROOT" "$OUT_DIR"
   "$SCRIPT_DIR/borrow_cost_probe_guest_fpga.c" \
   "$LIBCAPSTONE_C"
 printf 'Built %s\n' "$OUT_DIR/borrow_cost_fpga.user"
+
+# Freestanding soft-float controller -- the one that actually runs on the
+# captype-fixed silicon. -nostdlib -static (no glibc, no ld.so) + soft-float
+# (-march=rv64imac -mabi=lp64) => emits ZERO FP instructions, so it never hits
+# the fsd the core rejects. Own _start (inits sp + gp), raw Linux syscalls via
+# ecall, integer-only output. Same ioctl protocol as libcapstone. See
+# borrow_cost_fpga_ctl.c and agent-handoff/history for the full root-cause trail.
+"$GUEST_CC" \
+  -Os -static -no-pie -fno-pie -nostdlib -ffreestanding -fno-stack-protector \
+  -march=rv64imac -mabi=lp64 \
+  -I"$SCRIPT_DIR" \
+  -I"$QEMU_PROBE_DIR" \
+  -o "$OUT_DIR/borrow_cost_fpga_ctl" \
+  "$SCRIPT_DIR/borrow_cost_fpga_ctl.c"
+printf 'Built %s\n' "$OUT_DIR/borrow_cost_fpga_ctl"
 
 # Domain payload (Capstone clang). Emit -O2 asm alongside for a static cross-check
 # of the per-op cycle counts, same as the QEMU probe.
