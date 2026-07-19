@@ -238,15 +238,19 @@ UART = {
     # Regex for the Linux shell prompt after boot. Buildroot default is
     # "# " at line start; widen if the board's prompt differs.
     "login_prompt": r"(?m)^(?:buildroot login:|.+ login:|/ #|~ #|# )\s*$",
-    # Per-run completion marker printed by the domain payload.
-    "measurement_complete": r"revoke-cost-fpga: measurement complete",
-    "borrow_complete": r"borrow-cost-fpga: RESULT vs-raw",
+    # Per-run completion marker printed by the domain payload. Kept short and
+    # tolerant of a single dropped char (the board's UART output is lossy): the
+    # `.?` absorbs one missing character at the fragile hyphen/space.
+    "measurement_complete": r"measurement.?complete",
+    "borrow_complete": r"RESULT vs.?raw",
     # The RESULT lines we harvest and hand to --parse-uart (kept loose; the
     # bundled parser does the strict extraction).
     "result_line": r"(?m)^.*RESULT.*$",
     # Sentinel echoed by the insmod step (the .doms need /dev/capstone, created
     # by capstone.ko -- the boot does NOT auto-load it). See run_rtl_smoke.
-    "module_loaded": r"CAPSTONE_MOD_(?:OK|FAIL)",
+    # Tripled tokens (OKOKOK / NONONO) so a single dropped char in the lossy
+    # UART output still leaves a matchable OKOK / NONO.
+    "module_loaded": r"OKOK|NONO",
 }
 
 # The GDB/OpenOCD interactive prompt, matched after each gdb command.

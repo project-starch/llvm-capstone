@@ -645,9 +645,21 @@ class FpgaConsole:
         timeout: float = 180.0,
     ) -> str:
         """Type `command` into the terminal and return the UART text emitted
-        until `done_marker` matches."""
+        until `done_marker` matches.
+
+        The board's UART RX FIFO overruns on a bulk write and silently drops
+        characters (a long command like the .user/.dom path arrives corrupted
+        and the shell errors on a garbled path -- `borrow_cost` -> `row_cost`).
+        So the keystrokes are throttled char-by-char, the same mitigation
+        login_root uses. A leading Ctrl-U clears any partial line a prior
+        dropped char may have left in the input buffer."""
+        self._emit("uart_send", text="\x15")  # Ctrl-U: clear the input line
+        time.sleep(0.2)
         start = len(self.uart_text)
-        self._emit("uart_send", text=command + "\r")
+        for ch in command:
+            self._emit("uart_send", text=ch)
+            time.sleep(0.05)
+        self._emit("uart_send", text="\r")
         m = self.wait_uart(done_marker, timeout=timeout, search_from=start)
         with self._cond:
             return self._uart[start:m.end()]

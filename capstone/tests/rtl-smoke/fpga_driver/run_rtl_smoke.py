@@ -81,10 +81,13 @@ def load_capstone_module(console: FpgaConsole, module: str = CAPSTONE_MODULE) ->
     """insmod the Capstone module and confirm /dev/capstone appeared. Raises if
     the module fails to load (e.g. a vermagic mismatch -- a UP image must ship a
     capstone.ko built against the same SMP setting)."""
-    cmd = (f"insmod {module} && ls /dev/capstone && echo CAPSTONE_MOD_OK "
-           f"|| echo CAPSTONE_MOD_FAIL")
+    # insmod may error "File exists" if already loaded; test the device node
+    # directly so the step is idempotent. Tripled OK/NO sentinels survive one
+    # dropped char in the lossy UART output (the marker matches OKOK / NONO).
+    cmd = (f"insmod {module} 2>/dev/null; "
+           f"[ -e /dev/capstone ] && echo OKOKOK || echo NONONO")
     out = console.run_command(cmd, C.UART["module_loaded"], timeout=30.0)
-    if "CAPSTONE_MOD_FAIL" in out or "CAPSTONE_MOD_OK" not in out:
+    if "NONO" in out or "OKOK" not in out:
         raise RuntimeError(f"insmod {module} failed (no /dev/capstone):\n{out}")
     return out
 
@@ -99,11 +102,17 @@ def throttled_send(console: FpgaConsole, text: str, delay: float = 0.05) -> None
         time.sleep(delay)
 
 
-def login_root(console: FpgaConsole, tries: int = 4) -> bool:
+def login_root(console: FpgaConsole, tries: int = 4,
+               search_from: Optional[int] = None) -> bool:
     """After the login prompt, log in as root (no password on this image) and
     CONFIRM a live shell with an echo probe whose marker can't appear in the
-    command echo (quote-split RDY''OK)."""
-    console.wait_uart(r"login:", timeout=180.0)
+    command echo (quote-split RDY''OK).
+
+    `search_from` pins the `login:` match to output produced AFTER this boot
+    began. The console replays its full UART history on connect (prior boots'
+    `login:` prompts and reset loops), so without this the wait matches a stale
+    prompt and we type `root` while the current kernel is still mid-boot."""
+    console.wait_uart(r"login:", timeout=180.0, search_from=search_from or 0)
     for _ in range(tries):
         # The board's UART RX FIFO overruns on a bulk write and silently drops
         # chars, so a burst `root\r` / `echo ...` can arrive corrupted and the
@@ -161,8 +170,12 @@ def boot_via_gdb(console: FpgaConsole, image_name: str,
     console.gdb_cmd("set $a0 = 0", prompt)          # hartid
     console.gdb_cmd(f"set $a1 = {dtb_addr:#x}", prompt)  # DTB pointer
     # Resume; `continue` doesn't return a prompt, so fire it and watch the UART.
+    # Pin login detection to output produced from here on -- the console replays
+    # its full UART history on connect (old boots' `login:` prompts), which would
+    # otherwise match instantly and make us log in before this kernel is ready.
+    boot_start = len(console.uart_text)
     console._emit("gdb_input", text="continue\n")
-    if not login_root(console):
+    if not login_root(console, search_from=boot_start):
         raise RuntimeError("gdb-boot reached login but could not confirm a shell")
     # Detach: the .doms do Capstone domain switches that desync an attached debug
     # session ("packet queue is empty, aborting"). gdb_stop leaves Linux running.
@@ -214,12 +227,16 @@ def run_smoke(
     dtb: Optional[Path] = None,
     load_module: bool = True,
     load_via_jtag: bool = True,
+    run_labels: Optional[List[str]] = None,
+    run_timeout: float = 240.0,
 ) -> str:
     """Drive one full sweep; return the concatenated UART capture (RESULT lines
     included). `console` must already be connected. `load_module=False` for a
     built-in-capstone image (/dev/capstone at boot; insmod hangs this board).
     `load_via_jtag=False` (reset only): boot the SPI-resident reference firmware
-    instead of a JTAG-loaded image."""
+    instead of a JTAG-loaded image. `run_labels` (e.g. ['borrow']) restricts the
+    sweep to those RUNS labels -- use it to run the decisive borrow-cost pair
+    first before churning the shared board through the rest."""
     boot_board(console, image, image_name,
                boot_method=boot_method, do_upload=do_upload, dtb=dtb,
                load_via_jtag=load_via_jtag)
@@ -228,10 +245,11 @@ def run_smoke(
         # A module image needs /dev/capstone loaded before any pair.
         capture.append(f"# === insmod {CAPSTONE_MODULE} ===\n"
                        f"{load_capstone_module(console)}\n")
-    for label, user, dom, marker_key in RUNS:
+    runs = RUNS if run_labels is None else [r for r in RUNS if r[0] in run_labels]
+    for label, user, dom, marker_key in runs:
         cmd = f"{remote_dir}/{user} {remote_dir}/{dom}"
         marker = C.UART[marker_key]
-        out = console.run_command(cmd, marker, timeout=240.0)
+        out = console.run_command(cmd, marker, timeout=run_timeout)
         capture.append(f"# === {label}: {cmd} ===\n{out}\n")
     return "".join(capture)
 
@@ -298,6 +316,17 @@ def main(argv: List[str]) -> int:
     ap.add_argument("--ignore-users", action="store_true",
                     help="run even if other clients are connected to the shared "
                          "board (default: back off if >1 user is present)")
+    ap.add_argument("--run-timeout", type=float, default=240.0,
+                    help="seconds to wait for each pair's completion marker "
+                         "(default 240). Raise it for polled-UART images: with the "
+                         "8250 in polled mode (UART irq removed from the DTB) TX is "
+                         "timer-driven and slow, so the full benchmark output can take "
+                         "many minutes.")
+    ap.add_argument("--runs", default=None,
+                    help="comma-separated subset of sweep labels to run "
+                         "(borrow,bump,norevoke,revoke); default all. Use "
+                         "--runs borrow to run just the decisive borrow-cost pair "
+                         "first without churning the shared board through the rest.")
     ap.add_argument("--parse-only", type=Path, default=None,
                     help="skip the board; just run --parse-uart on this capture file")
     ap.add_argument("--gdb-probe", action="store_true",
@@ -391,12 +420,16 @@ def main(argv: List[str]) -> int:
             print(f"[fpga] flash done; settling {POWER_ON_SETTLE:.0f}s for the "
                   f"freshly-programmed DTM", file=sys.stderr)
             time.sleep(POWER_ON_SETTLE)
+        run_labels = ([s.strip() for s in args.runs.split(",") if s.strip()]
+                      if args.runs else None)
         capture = run_smoke(
             console, args.image, image_name,
             do_upload=not args.no_upload, remote_dir=args.remote_dir,
             boot_method=args.boot_method,
             dtb=args.dtb, load_module=not args.builtin,
             load_via_jtag=not args.no_load,
+            run_labels=run_labels,
+            run_timeout=args.run_timeout,
         )
     except Exception as exc:  # noqa: BLE001 -- persist the UART for diagnosis
         run_error = exc

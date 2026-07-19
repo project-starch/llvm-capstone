@@ -1,0 +1,19 @@
+diff --git a/sbi_capstone.S b/sbi_capstone.S
+index ad47d61..5135d49 100644
+--- a/sbi_capstone.S
++++ b/sbi_capstone.S
+@@ -168,6 +168,14 @@ return_to_sumode:
+     RESTORE_REG(ra, sp)
+     RESTORE_REG(gp, sp)
+     RESTORE_REG(tp, sp)
++    # Enable S-mode floating point (mstatus.FS = Dirty) before returning. This
++    # monitor otherwise never sets FS, so Linux userspace runs with the FPU
++    # disabled: the first glibc FP register-save (fsd) traps as an illegal
++    # instruction, and because illegal-instr is not delegated to S-mode it lands
++    # in handle_exception's while(1) and hangs the whole system. t0 is scratch
++    # here -- it is reloaded on the next line.
++    li t0, 0x6000
++    csrs mstatus, t0
+     RESTORE_REG(t0, sp)
+     RESTORE_REG(t1, sp)
+     RESTORE_REG(t2, sp)
