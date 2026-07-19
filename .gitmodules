@@ -19,3 +19,6 @@
 [submodule "capstone/capstone-ariane"]
 	path = capstone/capstone-ariane
 	url = https://github.com/project-starch/capstone-ariane.git
+[submodule "capstone/caplifive-system"]
+	path = capstone/caplifive-system
+	url = https://github.com/project-starch/caplifive-system.git
