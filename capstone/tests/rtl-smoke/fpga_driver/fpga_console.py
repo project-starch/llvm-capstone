@@ -469,6 +469,11 @@ class FpgaConsole:
         (``{name: <stored-name>}``)."""
         return self._post("upload_image", name=name, file_path=file_path)
 
+    def flash_bitstream(self, name: str) -> Any:
+        """Flash a stored bitstream to the FPGA (PERSISTENT non-volatile write --
+        reprograms the shared board). Blocks until flash_state=done."""
+        return self._post("flash_bitstream", filename=name)
+
     def load_boot_image(self, name: str, *, attempts: int = 3,
                         settle: float = 6.0) -> None:
         """Action 1b: load a stored image -> JTAG to 0x80000000; await done.

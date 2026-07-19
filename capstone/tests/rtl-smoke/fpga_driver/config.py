@@ -167,6 +167,18 @@ HTTP = {
         error_state="error",
         timeout_s=300.0,
     ),
+    # 1c. Flash a stored bitstream to the FPGA (PERSISTENT / non-volatile write --
+    #     reprograms the shared FPGA). POST /api/flash-bitstream {filename};
+    #     completion via flash_state {state}: (flashing) -> done | error.
+    "flash_bitstream": Http(
+        method="POST",
+        path="flash-bitstream",
+        body=lambda filename: {"filename": filename},
+        done_event=LISTEN["flash_state"],
+        done_state="done",
+        error_state="error",
+        timeout_s=600.0,
+    ),
     # 2. Board reset. app.js resetBoard(): POST /api/reset-board. No state event;
     #    the caller waits for the Linux prompt on the UART stream instead.
     "reset": Http(method="POST", path="reset-board"),

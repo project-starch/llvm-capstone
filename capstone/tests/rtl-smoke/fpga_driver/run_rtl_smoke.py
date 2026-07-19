@@ -63,6 +63,9 @@ POWER_ON_SETTLE = 15.0
 # Seconds to hold the board off during a --power-cycle, so a wedged/reset-looping
 # core is fully cleared before the cold power-on (and its POWER_ON_SETTLE).
 POWER_CYCLE_OFF = 8.0
+# Extra UART drain (seconds) after a failed run before closing the console, so a
+# diagnostic dump still arriving when we give up is captured in full.
+FAIL_DRAIN_SECS = 12.0
 
 # The runs the human sequence performs (README.md steps 3-4). Each entry:
 #   (label, controller.user, payload.dom, done_marker_key)
@@ -281,6 +284,10 @@ def main(argv: List[str]) -> int:
     ap.add_argument("--power-cycle", action="store_true",
                     help="force the board off (settle) then on before booting, to "
                          "clear a wedged / reset-looping core from a prior run")
+    ap.add_argument("--flash-bitstream", default=None, metavar="NAME",
+                    help="PERSISTENT: flash this stored bitstream to the FPGA "
+                         "(reprograms the shared board) before booting, then run "
+                         "the smoke as usual to test the new RTL")
     ap.add_argument("--no-load", action="store_true",
                     help="reset boot-method only: skip the JTAG image load and just "
                          "reset-board, so the bootrom boots the SPI-resident "
@@ -293,6 +300,11 @@ def main(argv: List[str]) -> int:
                          "board (default: back off if >1 user is present)")
     ap.add_argument("--parse-only", type=Path, default=None,
                     help="skip the board; just run --parse-uart on this capture file")
+    ap.add_argument("--gdb-probe", action="store_true",
+                    help="non-destructive: attach GDB, `monitor halt` (NO reset, so "
+                         "a trapped/spinning core keeps its state), and read the trap "
+                         "CSRs mcause/mepc/mtval + pc. Needs no image. Use to read the "
+                         "exception a diagnostic monitor caught without a reflash/reload.")
     args = ap.parse_args(argv)
 
     if args.parse_only:
@@ -300,11 +312,12 @@ def main(argv: List[str]) -> int:
 
     if not args.url:
         ap.error("--url is required (unless --parse-only)")
-    if not args.image:
-        ap.error("--image is required (unless --parse-only)")
-    if not args.image.is_file():
-        ap.error(f"image not found: {args.image}")
-    image_name = args.image_name or args.image.name
+    if not args.gdb_probe:
+        if not args.image:
+            ap.error("--image is required (unless --parse-only / --gdb-probe)")
+        if not args.image.is_file():
+            ap.error(f"image not found: {args.image}")
+    image_name = args.image_name or (args.image.name if args.image else None)
 
     console = FpgaConsole(
         args.url, token=args.token,
@@ -328,6 +341,19 @@ def main(argv: List[str]) -> int:
         # load), which then times out our lock handshake. We are past the shared-
         # board check here (solo), so a live session is ours to reap -- stop it
         # before locking so the server is responsive and the board is clean.
+        if args.gdb_probe:
+            # Non-destructive trap-CSR read. The core is (expected) spinning in a
+            # diagnostic M-mode handler after catching a trap; attach and HALT it
+            # (never reset -- reset zeroes mcause), then read the trap CSRs. Reuses
+            # the same abstract-command path the JTAG image-load uses.
+            prompt = C.GDB_PROMPT
+            console.gdb_start()
+            console.gdb_cmd("monitor halt", prompt, timeout=30.0)
+            for expr in ("$pc", "$mcause", "$mepc", "$mtval"):
+                out = console.gdb_cmd(f"p/x {expr}", prompt, timeout=20.0)
+                print(f"[probe] {expr} => {out.strip()}", file=sys.stderr)
+            console.gdb_stop()
+            return 0
         if args.power_cycle:
             print(f"[fpga] power-cycling to clear board state "
                   f"(off {POWER_CYCLE_OFF:.0f}s)", file=sys.stderr)
@@ -354,6 +380,17 @@ def main(argv: List[str]) -> int:
             print(f"[fpga] board was off; settling {POWER_ON_SETTLE:.0f}s after "
                   f"power-on so the JTAG DTM is ready", file=sys.stderr)
             time.sleep(POWER_ON_SETTLE)
+        if args.flash_bitstream:
+            # Flash only AFTER the board is powered + settled: a cold FPGA/JTAG
+            # programmer is not yet responding at power-on, and an immediate flash
+            # is rejected (flash_state -> error in ~1s, no SPI write). The settle
+            # above (paid when the board was off) makes the programmer ready.
+            print(f"[fpga] FLASHING bitstream {args.flash_bitstream!r} "
+                  f"(persistent; reprograms the FPGA)", file=sys.stderr)
+            console.flash_bitstream(args.flash_bitstream)
+            print(f"[fpga] flash done; settling {POWER_ON_SETTLE:.0f}s for the "
+                  f"freshly-programmed DTM", file=sys.stderr)
+            time.sleep(POWER_ON_SETTLE)
         capture = run_smoke(
             console, args.image, image_name,
             do_upload=not args.no_upload, remote_dir=args.remote_dir,
@@ -363,6 +400,13 @@ def main(argv: List[str]) -> int:
         )
     except Exception as exc:  # noqa: BLE001 -- persist the UART for diagnosis
         run_error = exc
+        # Drain a bit more UART before closing: a diagnostic monitor that halts
+        # after printing a trap dump may still be mid-line when we give up, and
+        # the socket keeps delivering while the console is open. Capture the tail.
+        try:
+            time.sleep(FAIL_DRAIN_SECS)
+        except Exception:
+            pass
         capture = getattr(console, "uart_text", "") or ""
     finally:
         # Tear down the GDB/OpenOCD session even on error, so a crashed run does
