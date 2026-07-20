@@ -10,6 +10,73 @@ writing.
 
 ---
 
+## UPDATE — 2026-07-20 all-hands meeting (Prateek/PI, Umang/co-PI, Jason, me)
+
+The meeting **confirmed and sharpened** the reframe below. Deltas that override the rest of
+this doc where they conflict:
+
+1. **Deadline is now hard and near: a complete NDSS-formatted draft in ~7–10 days**, then
+   incrementally improve sections. Writing is the **critical path** — not the FPGA number.
+   Iterate section-by-section, update each other every 1–2 days.
+2. **Positioning locked: a focused paper on *cross-domain pointer bugs*** — the class of
+   use-after-free / dangling-share bugs that arise when two mutually-distrusting in-process
+   domains (two language runtimes, or host + embedded library) pass pointers by reference
+   across the boundary. Framed as an out-of-the-box **hardware multi-domain sandbox**
+   ("SFI/HFI, but with hardware cross-boundary pointers"). **A memorable abstraction name is
+   wanted** (cross-domain / cross-border keyword) — valued, not urgent. See §5 candidates.
+3. **#1 competitor = CHERI temporal safety = Cornucopia** (quarantine + stop-the-world memory
+   sweep). The separating story: Cornucopia's **eager** mode matches our security but is
+   ~3000× more instructions; its **lazy** mode is cheaper but leaves these vulnerabilities
+   **exploitable**. Position against CHERI **head-on** (reviewers will demand it).
+4. **Eval = three subsections + two extras.** (i) **Performance** — micro-benchmarks
+   (BEEBS / RV8 / CoreMark, the 3–4 we have) + RTL cost breakdown; (ii) **Security** — SQLite
+   **15 CVEs** eliminated (count is **15**, not 19); (iii) **Compatibility** — apps keep
+   running with the mechanism on. Plus **comparison to CHERI/Cornucopia**, plus **hardware
+   complexity** (revocation-tree RTL cost). **Selling point: first-ever hardware implementation
+   of Capstone** (2023 paper had none) — but this REQUIRES at least **preliminary FPGA perf
+   numbers** ("to tell people we have it, we have to have it").
+5. **FPGA: preliminary numbers suffice, and Jason is actively porting** ("now I'm working on
+   it, hope to finish soon"). The remaining `gp` blocker is a **monitor/RTL domain-entry ABI
+   gap Jason co-owns** — do NOT gate the paper on a perfect cycle count. Pursue it in parallel,
+   not on the critical path. (Technical state + fix hypothesis: see §8 below.)
+6. **SQLite stays the case study**; preempt "why only SQLite" with "important, condensed case
+   study." Future expansion (post-draft, if time): **Lua / busybox / JS interpreters** — Bo has
+   vulnerable cross-app benchmarks; **busybox flagged as a good small next target**.
+7. **CapliFive paper**: cite + careful related-work comparison, but our story is different and
+   more mature (real apps, actual RTL, real compiler annotations). Its problem statement
+   (running cap-unaware OSes on capability HW) is off-axis; don't over-credit — 2–3 sentences +
+   "initial prototype, no HW, toy compiler."
+8. **Logistics: move the paper to Overleaf** (NDSS template). Jason supplies the macro/template;
+   I create the Overleaf and can mirror to GitHub. This supersedes the GitHub-repo-only paper
+   workflow. Structure guidance from PI: motivation section built on the **sharing-pattern
+   taxonomy** (the L/R/H/U/S derivatives, cf. current Table 4) with a running SQLite example +
+   a table of ~10 interpreters that embed SQLite; **Section 3 = the mechanism/abstraction**.
+
+### §8 — FPGA `gp` blocker: root cause + fix hypothesis (2026-07-20)
+
+- **Symptom:** on `working-caplifive-captype-fixed.bit` the benchmark boots, `insmod`s,
+  `create_dom` succeeds, the domain `cscall` is reached — then the domain wedges at its own
+  entry `delin(gp)` (vaddr 0x10044): `gp = 0` (null/untagged) while `sp` is valid.
+- **Root cause:** our `my_first_domain/start.S` uses `gp` as the domain's image-base capability
+  (`cincoffset t, gp, off` to derive code/global caps) but **never establishes `gp`** — it
+  relies on a **QEMU-only patch** (`capstone-qemu` `7aca0540`) that makes `cscall` seed
+  `gp = PCC(cursor 0)`. Jason confirmed: the **RTL does not do this**, and keeping the bound
+  while forcing cursor 0 is **not representable** on real 128-bit caps. So `gp` arrives 0.
+- **Fix hypothesis (grounded in the reference `capstone-sbi/sbi_capstone.S`):** the canonical
+  domain glue establishes `gp` by **loading it from a reserved stack slot** (`LDC(gp, sp, -16)`;
+  written at `sp - 8*32 - 16`), seeded once at setup — because `sp` is the one capability that
+  arrives valid on RTL. Path forward: seed `gp` into the domain's initial stack slot in the
+  monitor's `create_domain`, and load it there in `start.S` — instead of the QEMU cscall hack.
+  This pairs a monitor change with a `start.S` change and **needs Jason's confirmation of the
+  RTL first-entry context layout** (B's earlier monitor-side seed failed at delivery because it
+  used the wrong slot / `ctvec` path). Alternative to probe: whether a self-contained
+  integer/soft-float domain can avoid `gp` entirely (empty `.capstone_cap_init`, call
+  `domain_main` PC-relative) — cheaper to try, but breaks as soon as `domain_main` touches any
+  global. **Crisp question already implicitly with Jason; get the ABI slot confirmed before
+  burning shared-board time.**
+
+---
+
 ## 1. What the paper actually is now (the reframe)
 
 Not "pointer-safe SQLite marshalling (design/position)." It is a **systems-security paper on
