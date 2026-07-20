@@ -76,7 +76,20 @@ test:
   ldc(a0, sp, 80)                 # a0 = region cap
   ld a1, 64(sp)                   # a1 = func code
   ldc(a2, sp, 32)                 # a2 = linear scratch cap
-  call domain_main                # plain call within PCC (no gp, no cjalr)
+
+  # Call domain_main WITHOUT gp, WITHOUT any capability jump. This is the
+  # reference monitor's plain call/ret-within-PCC ABI (sbi_capstone.S uses plain
+  # `call handle_exception` &c): a plain `call` keeps execution inside PCC and
+  # sets ra to a SCALAR return address -- no gp, no code-capability formation.
+  #
+  # The one catch: our clang defaults to a capability return for domain_main
+  # (`cjalr zero, 0(ra)`), which would require ra to be a capability. On a cscall
+  # domain entry there is no gp-free way to form a code capability (PCC is not
+  # readable and CTVEC arrives as an untagged scalar), so we instead retarget
+  # that single return to a plain `ret` (jalr zero, 0(ra)) at the .s stage in
+  # build-borrow-cost-fpga-nogp.sh -- see the comment there. Plain call + plain
+  # ret both stay within PCC, exactly like the reference monitor.
+  call domain_main                # plain call within PCC (scalar ra); no gp/cjalr
 
   lla t2, __test_reentry
   ldc(t1, sp, 48)                 # t1 = saved return (sealed-return) cap
