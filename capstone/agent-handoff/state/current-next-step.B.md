@@ -8,14 +8,18 @@
 Current FPGA state + next step:
 - Report: `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md`.
 - Reproduction runbook (for Agent A): `ref/fpga-borrow-cost-reproduction.md`.
-- **Where we are:** the freestanding soft-float controller
-  (`tests/rtl-smoke/borrow_cost_fpga_ctl.c`) fixed the glibc-`fsd` FP hang and runs on
-  `captype-fixed` silicon through domain create + region setup. The domain `cscall` is now
-  **reached** and **enters the domain**, but the core wedges at domain entry vaddr `0x10044`
-  (`<test>` glue, offline-confirmed) — bootrom reset or early spin.
-- **Next:** build a combined image (freestanding controller in overlay + Stage-0 M-mode
-  `mtvec` LSB-first trap-dumper in the monitor), boot on the board, capture `mcause` at the
-  `0x10044` wedge to decide stale-icache-`fence.i` vs RTL cap-violation. Plan:
+- **Where we are — ROOT CAUSE CONFIRMED on silicon:** the freestanding controller fixed the
+  glibc-`fsd` hang and runs through domain create + region setup; the domain `cscall` enters
+  the domain and wedges at vaddr `0x10044` = **`delin gp`** with **`gp=0`**. Board single-step
+  shows the delin can't retire (no trap; in-domain faults route to `ctvec`, not M-mode — the
+  mtvec dumper was a dead end); skipping the delin lets the domain run. `gp` is never
+  initialized (`start.S` inits only `sp`; monitor `create_domain` zeroes the `gp` slot), and
+  this CVA6's `delin` stalls on a null operand where QEMU asserts a tagged one.
+- **Next (owner = Jason):** fix `gp` delivery — (a) monitor sets valid `gp` in `dom_seal`;
+  (b) `start.S` derives `gp` before `delin gp` (fastest local test; A's shared file); (c) RTL
+  `delin(null)` no-op/trap (bitstream rebuild). Then run the borrow/revoke sweep for cycle
+  numbers. Report: `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md`;
+  runbook: `ref/fpga-borrow-cost-reproduction.md`; plan:
   `/home/alexey/.claude-b/plans/curried-crunching-gizmo.md`.
 
 ---

@@ -79,17 +79,67 @@ live hypotheses, distinguished only by the exception code:
 - ✅ FP/glibc blocker fixed and proven on silicon (freestanding controller).
 - ✅ Domain `cscall` reached and confirmed to **enter the domain** for the first time.
 - ✅ Wedge localized to domain entry vaddr `0x10044` (`<test>` glue), offline, unambiguously.
-- ❌ Exact fault mechanism at `0x10044` not yet read → needs a clean Stage-0 trap dump.
-- ❌ No `RESULT` cycle numbers yet (the original deliverable), blocked on the above.
+- ✅ **Exact fault mechanism CONFIRMED on silicon** (see ROOT CAUSE below): `delin gp` with
+  `gp=0` stalls the CVA6 pipeline; `gp` is never delivered valid at the FPGA `cscall`.
+- ❌ No `RESULT` cycle numbers yet (the original deliverable) — blocked on the `gp`-delivery
+  fix, which is monitor/RTL-owner (Jason) territory.
 
 ## Next step
 
-Build a **combined** image = freestanding controller in the overlay **+** the Stage-0 M-mode
-`mtvec` trap-dumper in the monitor (LSB-nibble-first, bounded THRE poll — the earlier
-MSB-first/unbounded dumper truncated before the exception code and hung after ~2 chars). Boot
-it, reach the `cscall`, capture `mcause/mepc/mtval` at the `0x10044` wedge, and branch per the
-reproduction runbook §7 / the plan. The `diag0` dumper image predates the freestanding fix
-and would hang at the fsd blocker before the domain call, so this is a fresh build.
+Decide the `gp`-delivery fix with Jason (monitor context vs domain `start.S` vs RTL `delin`);
+options (a)/(b)/(c) in ROOT CAUSE. Fastest local test: option (b) — have the domain `start.S`
+`test:` derive a valid `gp` from the domain's data cap before `delin gp`, rebuild the `.dom`,
+and re-run; if it reaches `domain_main`, the diagnosis is proven and the borrow/revoke sweep
+can finally produce cycle numbers. (start.S is a shared file / A's lane — coordinate before
+editing.) Jason also suggested board **Trace Dump** + reproducing a **reference example
+domain** as cross-checks, and bare-metal launch since borrow-cost is self-contained.
+
+## ROOT CAUSE CONFIRMED (2026-07-20, later same session): `delin gp` with `gp=0` stalls the CVA6
+
+Follow-on board probes (single-step + register read at the wedge, on freshly re-flashed
+`captype-fixed`) pin the mechanism exactly:
+
+1. **The `mtvec` dumper stayed silent; `$mcause=$mepc=$mtval=0`.** No M-mode trap. So the
+   wedge is NOT an M-mode exception — on real Capstone silicon an in-domain fault routes to
+   the capability trap vector `ctvec`, not `mtvec`. (The earlier `@@MT` dump only ever fired
+   on the *contaminated stock-Ariane* bitstream, which has no cap unit → faults go to M-mode.)
+   Jason confirmed `cscall`/`csreturn` **implicitly flush the icache**, so the stale-icache /
+   `fence.i` hypothesis is dead.
+2. **Single-stepping does not advance:** 40× `stepi` from `0x819a0044` leaves pc pinned there,
+   no trap. The instruction at `0x10044` = **`delin gp`** cannot retire.
+3. **Register read at the wedge:** `gp = 0x0` (null/untagged), `sp = 0x819c0000` (valid).
+4. **Skipping the `delin` (set pc to `0x10048`) lets the domain run:** pc advances cleanly
+   `0x48→0x4c→0x50→0x54→0x58→0x60`. So `delin gp` is *the* stalling instruction; everything
+   after it executes.
+5. **QEMU cross-check:** `helper_csdelin` (`capstone-qemu op_helper.c:871`) does
+   `assert(rd_v->tag)` — it requires a **tagged** operand. Since this exact `borrow_cost_fpga.dom`
+   passes under QEMU (`RESULT raw=2 borrow=6`), `gp` must arrive **tagged/valid** at
+   `delin gp` under QEMU. On the FPGA it arrives `0`.
+
+**Why `gp` is 0:** the domain `start.S` (`my_first_domain/start.S`) sets up **`sp`** in
+`_start` (reads it from `cscratch`/cap-CSR `0x4`) but **never initializes `gp`** before
+`test:`'s `delin gp`. `gp` is whatever `cscall` leaves in x3, i.e. the domain's saved-context
+`gp` slot. The monitor's `create_domain` (`sbi_capstone.c:279`) builds the sealed context as
+`dom_seal[0]=dom_code` (PCC), `dom_seal[2]=dom_data`, `dom_seal[3]=priv`, and **zeroes all
+other slots** — so the `gp` slot is 0. Under QEMU's `cscall` the domain still gets a valid
+`gp` (examples pass); on the FPGA `cscall` it lands 0.
+
+**Verdict:** an RTL/QEMU divergence at the domain-entry `gp` delivery. `gp` is not delivered
+as a valid capability to the domain at `cscall` on the FPGA (arrives 0), and this CVA6's
+`delin` **stalls the pipeline on a null/untagged operand** (no retire, no trap) where QEMU
+asserts/handles it. **This is the domain-CALL blocker, fully localized.**
+
+**Fix options (for the monitor/RTL owner — Jason):**
+- (a) **Monitor:** deliver a valid `gp` capability in the domain's initial sealed context
+  (e.g. `dom_data`) so `cscall` restores a tagged `gp` before `delin gp`.
+- (b) **Domain `start.S`:** initialize `gp` from the domain's data/code cap (as `sp` is
+  initialized from `cscratch`) *before* `delin gp`, so it never delins a null.
+- (c) **RTL:** make `delin` of an untagged/null operand a no-op or a clean trap instead of a
+  pipeline stall (the "correct" fix; needs an out-of-tree bitstream rebuild).
+
+The exact `dom_seal[i]`→register mapping (whether `gp` is *meant* to come from `dom_seal[2]`
+and the FPGA `cscall` simply doesn't restore x3) is the one open detail — a question for
+Jason, since it decides monitor-fix (a) vs RTL-fix (c).
 
 ## Artifacts / pointers
 

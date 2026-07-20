@@ -221,40 +221,45 @@ CSRs read post-hoc are muddy (overwritten by bootrom execution); use §7 for a c
 
 ---
 
-## 7. Stage-0: catch the domain-call trap cleanly (the diagnostic step)
+## 7. Diagnosing the domain-call wedge — CONFIRMED ROOT CAUSE
 
-Post-hoc gdb-probing is inconclusive because the reset runs the bootrom over the CSRs. Build
-a monitor that turns the silent reset into a readable trap dump, then run it:
+**The diagnosis is done (2026-07-20); this section records both the method that worked and a
+dead end so you don't repeat it.**
 
-1. In the OpenSBI Capstone monitor, program M-mode **`mtvec`** (it is left at reset-default
-   `ROMBase+0x40` = bootrom and is dormant in normal operation) to a tiny handler that writes
-   `mcause/mepc/mtval` to the ariane uart8250 (@0x10000000, reg-shift 2: THR +0x00, LSR +0x14)
-   then halts. **Build obstacle:** the monitor C (`sbi_capstone_dom.c`, which `#include`s
-   `capstone-sbi/sbi_capstone.c`) is pre-compiled by the Capstone capability compiler into a
-   **checked-in `sbi_capstone_dom.c.S`** and there is no rule to regenerate it here (no
-   capstone clang on PATH). So inject the dumper as **raw asm directly into**
-   `build/build/opensbi-custom/lib/sbi/sbi_capstone_dom.c.S`, using the `lla` idiom the file
-   already uses (`la` triggers a binutils `elfnn-riscv.c:2358` link crash here).
-2. Make the dumper **LSB-nibble-first** and **bound the THRE poll** — the board hardware-resets
-   ~9 chars into the handler, and the earlier MSB-first / unbounded-poll dumper got truncated
-   before the exception code and hung after ~2 chars on real UART timing.
-3. This image must ALSO have the **freestanding controller in the overlay** (§3–§4) — the
-   older `diag0` dumper image predates the freestanding fix and would hang at the fsd blocker
-   before ever reaching the domain call. So it is a fresh combined build.
-4. Boot it (§6), reach the `cscall`, capture the trap dump.
+**Dead end — the M-mode `mtvec` trap-dumper.** We built a dumper that repoints M-mode `mtvec`
+(reset-default = bootrom) to a UART hex-dump handler, injected as raw asm into
+`build/build/opensbi-custom/lib/sbi/sbi_capstone_dom.c.S` (the monitor C is pre-compiled to a
+checked-in `.c.S`; no capstone clang on PATH to regenerate it; use the `lla` idiom the file
+uses — `la` triggers a binutils `elfnn-riscv.c:2358` crash). On real `captype-fixed` the
+dumper **stays silent**: an in-domain capability fault routes to the Capstone cap-trap vector
+**`ctvec`**, NOT M-mode `mtvec`, so `$mcause` reads 0. (The dumper's `@@MT` output only ever
+appeared on the *contaminated stock-Ariane* bitstream, which lacks the cap unit → faults go
+to M-mode.) Jason also confirmed `cscall`/`csreturn` **implicitly flush the icache**, killing
+the stale-icache / `fence.i` theory. Don't rebuild the mtvec dumper for this.
 
-**Branch on the exception code (`mcause` low bits):**
-- instruction-access-fault / illegal-instr at ~`0x10044` → **stale-icache fetch** of the
-  freshly-placed domain code (CVA6 does no icache invalidate at the switch; QEMU models no
-  icache, so it never bit there) → try a `fence.i` at the domcall boundary (Stage-1A).
-- cap-violation causes **25–28** → compare the RTL guard that fired
-  (`commit_stage.sv:205-229`, `capstone_dyn_unit.anvil:226-291`) against the QEMU golden
-  model (`capstone-qemu op_helper.c helper_cscall`) to decide monitor-fix vs RTL-bug.
-- if a `fence.i` is issued at the boundary but the fetch still faults at `0x10044` → this
-  CVA6's `fence.i` does not flush the icache → **RTL**, write up for an out-of-tree bitstream
-  rebuild; do not loop on fence variants.
+**Method that worked — gdb single-step + register read at the wedge** (no rebuild; boot the
+plain `fw_payload_fpga_up_ctl.bin`, run the controller, `time.sleep(20)` to reach the domain
+call, `monitor halt`, then `stepi`/`p/x $gp`; scratchpad `run_singlestep.py`, `run_gpprobe.py`):
+- 40× `stepi` from `0x819a0044` never advances → the instruction at domain vaddr `0x10044`
+  (`delin gp`) cannot retire; no trap fires.
+- `gp = 0x0` (null/untagged) at the wedge; `sp = 0x819c0000` (valid).
+- Set pc past the delin (`set $pc = 0x819a0048`) → the domain executes normally.
 
-Full staged ladder + RTL cross-refs: `/home/alexey/.claude-b/plans/curried-crunching-gizmo.md`.
+**Root cause:** `delin gp` with `gp=0` **stalls the CVA6 pipeline** (no retire, no trap).
+`gp` is 0 because `start.S` `_start` inits only `sp` (from `cscratch`/cap-CSR `0x4`), never
+`gp`, and the monitor's `create_domain` (`sbi_capstone.c:279`) zeroes the domain context's
+`gp` slot (`dom_seal[0]=code,[2]=data,[3]=priv`, rest 0). QEMU's `helper_csdelin` asserts a
+*tagged* operand and the same `.dom` passes under QEMU, so `gp` arrives valid under QEMU but
+`0` on the FPGA — an RTL/QEMU divergence at domain-entry `gp` delivery.
+
+**Fix options (owner = Jason; see the state report):** (a) monitor delivers a valid `gp` in
+`dom_seal`; (b) `start.S` derives `gp` before `delin gp` (fastest local test, but `start.S`
+is A's shared file — coordinate); (c) RTL makes `delin(null)` a no-op/trap (needs a bitstream
+rebuild). Cross-checks Jason suggested: board **Trace Dump**, and reproducing a **reference
+example domain** (it should wedge identically at its own `delin gp`).
+
+Full ladder + RTL cross-refs: `/home/alexey/.claude-b/plans/curried-crunching-gizmo.md`.
+State report: `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md`.
 
 ---
 
