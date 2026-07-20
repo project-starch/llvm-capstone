@@ -81,20 +81,66 @@ live hypotheses, distinguished only by the exception code:
 - ✅ Wedge localized to domain entry vaddr `0x10044` (`<test>` glue), offline, unambiguously.
 - ✅ **Exact fault mechanism CONFIRMED on silicon** (see ROOT CAUSE below): `delin gp` with
   `gp=0` stalls the CVA6 pipeline; `gp` is never delivered valid at the FPGA `cscall`.
-- ✅ **Fix localized to the RTL** and software workarounds proven infeasible (see below).
-- ❌ No `RESULT` cycle numbers — blocked on the RTL `cscall` fix (bitstream rebuild, Jason).
+- ✅ **Fix localized to OUR domain runtime** (`my_first_domain/start.S` + clang codegen),
+  **NOT the RTL** — corrected 2026-07-20 after Jason's answer (see CORRECTION below).
+- ❌ No `RESULT` cycle numbers yet — but the fix is in-repo (no bitstream rebuild needed).
 
-## Next step — RTL escalation (software workarounds proven infeasible)
+## CORRECTION (2026-07-20, Jason's answer) — the fix is OURS, not the RTL
 
-The fix is necessarily RTL (see ROOT CAUSE): the FPGA `cscall` must set `gp = PCC(cursor 0)`
-on domain entry (`op_helper.c:1227-1231`). Software workarounds (a) monitor-context and (b)
-domain-`start.S` are both ruled out. **The FPGA cycle numbers are blocked on this bitstream
-rebuild**, which can't be done here (no Vivado/anvil on PATH). Hand to Jason with: the exact
-QEMU reference, the board evidence (gp=0 at `delin gp`, skip-delin runs), and the two
-confirm questions (what sets `gp` at first `cscall`; gp-cursor-0 representability on silicon).
-Jason's other suggestions (board **Trace Dump**, reproduce a **reference example domain**,
-bare-metal launch) remain as independent cross-checks but do not change the RTL verdict —
-any domain using the standard `start.S`/`gp` model will hit the same `delin gp` wedge.
+**My first verdict below ("fix is necessarily RTL") was WRONG.** Jason confirmed the
+`gp = PCC(cursor 0)` line in QEMU's `helper_cscall` is **our own non-canonical patch**,
+not canonical Capstone: commit `7aca05403dc52644072df84ad53b32cf17b9810f`
+("riscv: unblock native domain capability calls", Alexey Paznikov, 2026-05-19). So:
+
+- The **RTL is correct** to not set `gp` at `cscall` — canonical Capstone never does.
+- Jason also notes the approach isn't representable anyway: "it's unlikely going to be
+  representable when you keep the bound but set the cursor to 0."
+- Therefore **the gap is in OUR domain runtime**, which was written to depend on that
+  non-canonical, non-representable `gp` — and our QEMU patch masked it.
+
+**What the canonical reference domains actually do** (verified against the buildroot
+example domains `capstone-test-domains`: `fib.dom.S`, `thread.dom.S`, `smode.dom.S`,
+all emitted by the same capstone-cc compiler):
+
+- They **never establish or use a `gp` data/code capability.** There is **no `delin gp`,
+  no `.capstone_cap_init` loop, no `cincoffset gp,<abs>`** anywhere in them.
+- Code is addressed **pc-relative** (`lla`), fetched through the **implicit PCC** which
+  covers the domain's code.
+- Data capabilities come from (1) the **stack cap** read out of `cscratch`
+  (`ccsrrw sp, cscratch, x0`) and (2) **passed-in capability arguments**
+  (e.g. `stc a1,…` then `ldc … ; sd through it`).
+- `gp` is treated as an **opaque caller register**: saved on `domreturn`
+  (`stc gp, sp, -16`), zeroed (`li gp, 0`), restored on reentry (`ldc gp, sp, -16`).
+  It holds the *host's* gp and is never used inside the domain.
+
+Our `my_first_domain/start.S` invented `delin gp` + the `.capstone_cap_init` loop +
+`cincoffset gp,<absolute>` to support clang-compiled C with capability globals via a
+domain-wide cursor-0 `gp` cap — a model that only worked under our QEMU patch and is not
+representable on silicon.
+
+**And for the borrow-cost domain specifically it is pure dead weight:**
+`readelf` of `borrow_cost_fpga.dom` shows `.capstone_cap_init` is **size 0**
+(`__capstone_cap_init_start == __capstone_cap_init_end == 0x10690`) — it has **zero
+capability globals**, so the entire gp machinery does nothing useful, yet `delin gp`
+runs unconditionally at the top of `test:` and stalls the core.
+
+## Fix (in-repo, no bitstream rebuild)
+
+- **Minimal / benchmark-unblocking:** for domains with an empty `.capstone_cap_init`
+  (borrow_cost qualifies), don't emit `delin gp` / the cap_init loop, and call
+  `domain_main` within PCC (pc-relative) instead of via a `gp`-constructed code cap —
+  i.e. make our entry match the canonical compiler output. This should run on real
+  silicon and finally yield cycle numbers.
+- **General / correct:** rework the clang `CapstoneCapGlobalInit` codegen + `start.S` so
+  capability-global domains address code/globals **without** a cursor-0 domain-wide `gp`
+  (pc-relative code within PCC; a *representable* scheme for capability globals), and
+  **retire the QEMU hack `7aca0540`** so QEMU and silicon agree. This lands in A's lane
+  (shared `start.S` + compiler); scope + coordinate.
+
+--- The ROOT CAUSE section below is retained for the audit trail. Its board evidence
+(single-step pins at `delin gp`, `gp=0`, skip-delin runs) is STILL VALID and correct.
+Only its closing verdict ("fix is necessarily RTL") is WRONG and is superseded by the
+CORRECTION + Fix sections above. ---
 
 ## ROOT CAUSE CONFIRMED (2026-07-20, later same session): `delin gp` with `gp=0` stalls the CVA6
 

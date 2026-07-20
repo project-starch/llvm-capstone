@@ -15,13 +15,19 @@ Current FPGA state + next step:
   mtvec dumper was a dead end); skipping the delin lets the domain run. `gp` is never
   initialized (`start.S` inits only `sp`; monitor `create_domain` zeroes the `gp` slot), and
   this CVA6's `delin` stalls on a null operand where QEMU asserts a tagged one.
-- **Next (owner = Jason) — RTL escalation:** the fix is RTL-only. QEMU's `cscall` sets
-  `gp = PCC(cursor 0)` inside the instruction (`op_helper.c:1227-1231`); the FPGA `cscall`
-  omits it. Software workarounds ruled out: no `gp` slot in the first-entry sealed context
-  (c-effective layout, no GPRs) and the domain can't read PCC. So the FPGA `cscall` must be
-  fixed in RTL (bitstream rebuild) → **FPGA cycle numbers are blocked on this.** Send Jason
-  the report + the two confirm questions (what sets gp at first cscall; gp-cursor-0
-  representability on silicon). Report:
+- **Next (owner = us, in-repo) — fix OUR domain runtime, NOT the RTL** (corrected
+  2026-07-20 per Jason). The `gp = PCC(cursor 0)` line in QEMU's `cscall`
+  (`op_helper.c:1227-1231`) is **our own non-canonical patch** (commit `7aca0540`), not
+  canonical Capstone — so the RTL is correct to omit it and cursor-0 isn't representable on
+  HW. The canonical reference domains (`capstone-test-domains`: fib/thread/smode) **never
+  use `gp`**: no `delin gp`, no `.capstone_cap_init`, no `cincoffset gp,<abs>` — code is
+  pc-relative through PCC, stack cap from `cscratch`, data caps from args; `gp` is just a
+  preserved caller register. Our `my_first_domain/start.S` invented the gp machinery for
+  capability-globals; for borrow_cost it's dead weight (`.capstone_cap_init` size 0 → zero
+  cap globals). **Fix (no bitstream rebuild):** for empty-cap_init domains drop `delin gp` +
+  the cap_init loop and call `domain_main` within PCC (match canonical compiler output) →
+  runs on silicon → cycle numbers. General fix = rework clang `CapstoneCapGlobalInit` +
+  start.S off the cursor-0 gp model and retire QEMU hack `7aca0540` (A's lane). Report:
   `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md`;
   runbook: `ref/fpga-borrow-cost-reproduction.md`; plan:
   `/home/alexey/.claude-b/plans/curried-crunching-gizmo.md`.

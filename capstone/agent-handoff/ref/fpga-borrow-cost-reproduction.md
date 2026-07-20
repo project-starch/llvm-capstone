@@ -250,17 +250,25 @@ call, `monitor halt`, then `stepi`/`p/x $gp`; scratchpad `run_singlestep.py`, `r
 `gp`, and the monitor's `create_domain` (`sbi_capstone.c:279`) zeroes the domain context's
 `gp` slot (`dom_seal[0]=code,[2]=data,[3]=priv`, rest 0). QEMU's `helper_csdelin` asserts a
 *tagged* operand and the same `.dom` passes under QEMU, so `gp` arrives valid under QEMU but
-`0` on the FPGA — an RTL/QEMU divergence at domain-entry `gp` delivery.
+`0` on the FPGA. (The board evidence above is correct; the *cause* was mis-attributed —
+see the corrected verdict next.)
 
-**Fix = RTL only (owner = Jason; see the state report for the full derivation).** QEMU's
-`helper_cscall` sets `gp = pc_cap(cursor 0)` inside the `cscall` instruction itself
-(`op_helper.c:1227-1231`); the FPGA `cscall` omits it. The two software workarounds are ruled
-out: (a) seeding the monitor context is impossible — the first-entry sealed context has **no
-GPR/`gp` slot** (c-effective layout); (b) fixing `start.S` is impossible — the domain **can't
-read its PCC** and holds no cursor-0 code cap. So the FPGA `cscall` must be fixed in RTL to
-initialize `gp` (bitstream rebuild). Cross-checks Jason suggested (Trace Dump, reference
-example domain) don't change this — any domain on the standard `start.S`/`gp` model hits the
-same `delin gp` wedge. **FPGA cycle numbers are blocked on the RTL fix.**
+**Fix = OUR domain runtime, NOT the RTL (corrected 2026-07-20 per Jason).** The
+`gp = pc_cap(cursor 0)` line in QEMU's `helper_cscall` (`op_helper.c:1227-1231`) is **our
+own non-canonical patch** — commit `7aca0540` ("riscv: unblock native domain capability
+calls"), not canonical Capstone. So the RTL is correct to omit it, and the cursor-0
+approach isn't representable on silicon anyway. **The canonical reference domains
+(`capstone-test-domains`: fib/thread/smode, same capstone-cc compiler) never use `gp`:**
+no `delin gp`, no `.capstone_cap_init`, no `cincoffset gp,<abs>` — they address code
+pc-relative through the implicit PCC, get the stack cap from `cscratch`, and take data
+caps as arguments; `gp` is merely preserved as an opaque caller register. Our
+`my_first_domain/start.S` invented the gp machinery for capability-globals, and for
+borrow_cost it is pure dead weight (`.capstone_cap_init` is **size 0** — zero capability
+globals). **Fix (in-repo, no bitstream rebuild):** drop `delin gp` / the cap_init loop for
+empty-cap_init domains and call `domain_main` within PCC, matching the canonical compiler
+output → runs on silicon → cycle numbers. General fix = rework clang `CapstoneCapGlobalInit`
++ start.S off the cursor-0 gp model and retire QEMU hack `7aca0540` (A's lane). See the
+state report for the full derivation.
 
 Full ladder + RTL cross-refs: `/home/alexey/.claude-b/plans/curried-crunching-gizmo.md`.
 State report: `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md`.
