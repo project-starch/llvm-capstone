@@ -81,18 +81,20 @@ live hypotheses, distinguished only by the exception code:
 - ✅ Wedge localized to domain entry vaddr `0x10044` (`<test>` glue), offline, unambiguously.
 - ✅ **Exact fault mechanism CONFIRMED on silicon** (see ROOT CAUSE below): `delin gp` with
   `gp=0` stalls the CVA6 pipeline; `gp` is never delivered valid at the FPGA `cscall`.
-- ❌ No `RESULT` cycle numbers yet (the original deliverable) — blocked on the `gp`-delivery
-  fix, which is monitor/RTL-owner (Jason) territory.
+- ✅ **Fix localized to the RTL** and software workarounds proven infeasible (see below).
+- ❌ No `RESULT` cycle numbers — blocked on the RTL `cscall` fix (bitstream rebuild, Jason).
 
-## Next step
+## Next step — RTL escalation (software workarounds proven infeasible)
 
-Decide the `gp`-delivery fix with Jason (monitor context vs domain `start.S` vs RTL `delin`);
-options (a)/(b)/(c) in ROOT CAUSE. Fastest local test: option (b) — have the domain `start.S`
-`test:` derive a valid `gp` from the domain's data cap before `delin gp`, rebuild the `.dom`,
-and re-run; if it reaches `domain_main`, the diagnosis is proven and the borrow/revoke sweep
-can finally produce cycle numbers. (start.S is a shared file / A's lane — coordinate before
-editing.) Jason also suggested board **Trace Dump** + reproducing a **reference example
-domain** as cross-checks, and bare-metal launch since borrow-cost is self-contained.
+The fix is necessarily RTL (see ROOT CAUSE): the FPGA `cscall` must set `gp = PCC(cursor 0)`
+on domain entry (`op_helper.c:1227-1231`). Software workarounds (a) monitor-context and (b)
+domain-`start.S` are both ruled out. **The FPGA cycle numbers are blocked on this bitstream
+rebuild**, which can't be done here (no Vivado/anvil on PATH). Hand to Jason with: the exact
+QEMU reference, the board evidence (gp=0 at `delin gp`, skip-delin runs), and the two
+confirm questions (what sets `gp` at first `cscall`; gp-cursor-0 representability on silicon).
+Jason's other suggestions (board **Trace Dump**, reproduce a **reference example domain**,
+bare-metal launch) remain as independent cross-checks but do not change the RTL verdict —
+any domain using the standard `start.S`/`gp` model will hit the same `delin gp` wedge.
 
 ## ROOT CAUSE CONFIRMED (2026-07-20, later same session): `delin gp` with `gp=0` stalls the CVA6
 
@@ -129,17 +131,44 @@ as a valid capability to the domain at `cscall` on the FPGA (arrives 0), and thi
 `delin` **stalls the pipeline on a null/untagged operand** (no retire, no trap) where QEMU
 asserts/handles it. **This is the domain-CALL blocker, fully localized.**
 
-**Fix options (for the monitor/RTL owner — Jason):**
-- (a) **Monitor:** deliver a valid `gp` capability in the domain's initial sealed context
-  (e.g. `dom_data`) so `cscall` restores a tagged `gp` before `delin gp`.
-- (b) **Domain `start.S`:** initialize `gp` from the domain's data/code cap (as `sp` is
-  initialized from `cscratch`) *before* `delin gp`, so it never delins a null.
-- (c) **RTL:** make `delin` of an untagged/null operand a no-op or a clean trap instead of a
-  pipeline stall (the "correct" fix; needs an out-of-tree bitstream rebuild).
+**Where `gp` is supposed to come from — traced to the exact QEMU line.** QEMU's
+`helper_cscall` (`op_helper.c:1227-1231`) sets, on domain entry:
+```c
+if (env->priv == PRV_C) {
+    capfat_t gp_cap = env->pc_cap;   // gp := the domain PCC
+    gp_cap.bounds.cursor = 0;        //   with cursor forced to 0
+    capregval_set_cap(&env->gpr[3], &gp_cap);
+}
+```
+i.e. **`gp` is established by the `cscall` instruction itself**, *after* the context restore
+(`swap_c_effective_regs`, 1225) — not from any saved slot. The FPGA `cscall`
+(RTL `capstone_dom_switcher`) omits this step → `gp=0`.
 
-The exact `dom_seal[i]`→register mapping (whether `gp` is *meant* to come from `dom_seal[2]`
-and the FPGA `cscall` simply doesn't restore x3) is the one open detail — a question for
-Jason, since it decides monitor-fix (a) vs RTL-fix (c).
+**Both software workarounds are INFEASIBLE (investigated + ruled out 2026-07-20):**
+- (a) **Seed the monitor context** — NOT possible: the first-entry sealed context uses the
+  **c-effective layout** (`swap_c_effective_regs`, `capstone_helper.c:190`): PCC, `ctvec`,
+  `cscratch`, `mstatus`, `mideleg/medeleg/mip/mie` — **no GPRs**. `create_domain`'s
+  `dom_seal[0]=PCC`, `dom_seal[2]=cscratch(=dom_data→sp)`, `dom_seal[3]=mstatus`. There is
+  **no `gp` slot** to seed; `gp` is not restored from context on first entry, it is set by
+  `cscall` itself (the QEMU code above).
+- (b) **Fix it in the domain `start.S`** — NOT possible: the domain has **no way to obtain a
+  cursor-0 code capability**. There is no PCC-read instruction (cap-CSRs are only
+  `ctvec/cih/cepc/cscratch`), and the caps the domain *does* hold (`sp`=`dom_data` bounded to
+  the data region; `a1`=region cap) don't cover the code at cursor 0. `sp.base ≈ 0x819c0000`,
+  so moving its cursor to 0 is far out of bounds → not representable → untagged → `delin`
+  stalls again.
+
+**Therefore the fix is necessarily RTL (option c):** the FPGA `cscall` must initialize
+`gp = PCC(cursor 0)` on domain entry, exactly as `op_helper.c:1227-1231`. Needs an
+out-of-tree bitstream rebuild (Vivado + anvil), so it is an escalation to Jason, not fixable
+here. The FPGA cycle-accurate borrow/revoke numbers are **blocked on this RTL fix.**
+
+**One thing for Jason to confirm (representability):** QEMU keeps exact bounds in a side
+table, so `gp=PCC(base 0x819a0000, cursor 0)` round-trips losslessly there; on real hardware,
+a cursor 2 GB below `base` for a small code region may not be representable (tag cleared). So
+either the domain PCC is actually wide/base-0 on real HW, or the domain addressing model
+(`cincoffset gp,<absolute>` with `gp.cursor=0`) needs confirming for silicon. This is the
+same class as "what is `gp` supposed to be at first `cscall`."
 
 ## Artifacts / pointers
 

@@ -252,11 +252,15 @@ call, `monitor halt`, then `stepi`/`p/x $gp`; scratchpad `run_singlestep.py`, `r
 *tagged* operand and the same `.dom` passes under QEMU, so `gp` arrives valid under QEMU but
 `0` on the FPGA — an RTL/QEMU divergence at domain-entry `gp` delivery.
 
-**Fix options (owner = Jason; see the state report):** (a) monitor delivers a valid `gp` in
-`dom_seal`; (b) `start.S` derives `gp` before `delin gp` (fastest local test, but `start.S`
-is A's shared file — coordinate); (c) RTL makes `delin(null)` a no-op/trap (needs a bitstream
-rebuild). Cross-checks Jason suggested: board **Trace Dump**, and reproducing a **reference
-example domain** (it should wedge identically at its own `delin gp`).
+**Fix = RTL only (owner = Jason; see the state report for the full derivation).** QEMU's
+`helper_cscall` sets `gp = pc_cap(cursor 0)` inside the `cscall` instruction itself
+(`op_helper.c:1227-1231`); the FPGA `cscall` omits it. The two software workarounds are ruled
+out: (a) seeding the monitor context is impossible — the first-entry sealed context has **no
+GPR/`gp` slot** (c-effective layout); (b) fixing `start.S` is impossible — the domain **can't
+read its PCC** and holds no cursor-0 code cap. So the FPGA `cscall` must be fixed in RTL to
+initialize `gp` (bitstream rebuild). Cross-checks Jason suggested (Trace Dump, reference
+example domain) don't change this — any domain on the standard `start.S`/`gp` model hits the
+same `delin gp` wedge. **FPGA cycle numbers are blocked on the RTL fix.**
 
 Full ladder + RTL cross-refs: `/home/alexey/.claude-b/plans/curried-crunching-gizmo.md`.
 State report: `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md`.

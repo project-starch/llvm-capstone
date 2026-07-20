@@ -15,10 +15,14 @@ Current FPGA state + next step:
   mtvec dumper was a dead end); skipping the delin lets the domain run. `gp` is never
   initialized (`start.S` inits only `sp`; monitor `create_domain` zeroes the `gp` slot), and
   this CVA6's `delin` stalls on a null operand where QEMU asserts a tagged one.
-- **Next (owner = Jason):** fix `gp` delivery — (a) monitor sets valid `gp` in `dom_seal`;
-  (b) `start.S` derives `gp` before `delin gp` (fastest local test; A's shared file); (c) RTL
-  `delin(null)` no-op/trap (bitstream rebuild). Then run the borrow/revoke sweep for cycle
-  numbers. Report: `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md`;
+- **Next (owner = Jason) — RTL escalation:** the fix is RTL-only. QEMU's `cscall` sets
+  `gp = PCC(cursor 0)` inside the instruction (`op_helper.c:1227-1231`); the FPGA `cscall`
+  omits it. Software workarounds ruled out: no `gp` slot in the first-entry sealed context
+  (c-effective layout, no GPRs) and the domain can't read PCC. So the FPGA `cscall` must be
+  fixed in RTL (bitstream rebuild) → **FPGA cycle numbers are blocked on this.** Send Jason
+  the report + the two confirm questions (what sets gp at first cscall; gp-cursor-0
+  representability on silicon). Report:
+  `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md`;
   runbook: `ref/fpga-borrow-cost-reproduction.md`; plan:
   `/home/alexey/.claude-b/plans/curried-crunching-gizmo.md`.
 
