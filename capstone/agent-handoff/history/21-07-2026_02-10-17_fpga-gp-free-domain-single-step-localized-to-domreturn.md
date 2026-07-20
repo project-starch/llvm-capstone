@@ -63,6 +63,25 @@ thing to fix.
    region's physical address (instrument the controller to print its
    `map_region` mmap offset / the monitor's region paddr).
 
+## Update (2026-07-21, later): domreturn confirmed; extraction domain built
+
+- **probe6**: the plain `ret` (jalr zero,0(ra)) returns to the glue fine (no reset).
+- Adding the missing `stc(x0,sp,-16)` context slot to match the reference exit did
+  **not** fix it — **`domreturn` itself resets this RTL**. Ours is the first domain
+  in the lineage to actually reach `domreturn` on this board, so it is newly
+  exercised (the reference domains' exit may never have run here either).
+- **Extraction domain** (`/tmp/capstone/extract.c` → `nogp_extract.dom`): runs the
+  full measurement, `fpga_write_results`, then loads the 8 slots into `s2..s9`
+  (s2=iters..s9=copy2_bytes) and spins at paddr `0x819a03e0` — **no `domreturn`**.
+  Confirmed on board: it **spins** (no reset), so the numbers are computed and held
+  in registers on silicon. Reading them needs one clean `gdb halt` of the parked
+  core (`p/x $s2..$s9`), then `raw=(s4-s3)/s2`, `borrow=(s5-s3)/s2`, etc.
+- **Blocked on board infra**, not on our code: after ~16 cycles the console
+  degraded — DTM "Examination failed" on gdb re-attach, then power-on timeout, then
+  HTTPS connection timeouts (console unreachable). Board left off + unlocked.
+  **Resume:** `/tmp/capstone/board_extract.py` (keep-gdb-attached + Ctrl-C halt)
+  once the console recovers.
+
 ## Infra notes (for the next board session)
 
 - Hardware breakpoints: unavailable ("too many hardware breakpoints/watchpoints").
