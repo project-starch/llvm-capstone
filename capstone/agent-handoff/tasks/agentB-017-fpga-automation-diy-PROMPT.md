@@ -85,7 +85,7 @@ A documentation archive is on disk:
   - **Note:** the archive documents the UI + tracer but **does NOT contain the
     web app's client JS or the Socket.IO event names/payloads.** So the protocol
     itself has to come from the live site (see "Get the protocol" below).
-- The live console URL is `https://fpga.corank.info/wmeUWaqYFPRc7iqH0za8/`
+- The live console URL is `https://fpga.corank.info/<token>/`
   (private access token in the path — do NOT fetch it without the user's OK).
 
 ## Get the protocol — time-sensitive
