@@ -31,7 +31,7 @@ compatible.
 
 ## Connection
 
-- URL: `https://fpga.corank.info/<token>/` — the access token is in the URL
+- URL: `<FPGA-CONSOLE-URL>` — the access token is in the URL
   **path**. Passed to the driver on the CLI (`--url`), never committed or logged.
 - The page sets `SOCKET_PATH = '/<token>/socket.io'` and `URL_PREFIX = '/<token>'`
   (inline `<script>`), and connects with `io({ path: SOCKET_PATH })`.
@@ -165,6 +165,6 @@ The DevTools-HAR route (below) was the documented fallback and was **not needed*
   replay does re-deliver the buffer (proving the mock — and the real server — gate
   on `last_seq`).
 - **Live transport check against the real board** (2026-07-16): the wired driver
-  connected to `fpga.corank.info`, received every state event with the exact
+  connected to `the FPGA web console`, received every state event with the exact
   payload shapes above, and read live UART — confirming the map against hardware,
   not just the mock.

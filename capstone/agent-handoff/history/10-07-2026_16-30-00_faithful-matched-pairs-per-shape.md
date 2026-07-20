@@ -107,7 +107,7 @@ level; the control disambiguates).
   unseal happens. A fully-faithful sealed-callback would need SQLite's callback
   dispatch to cross into a separate callback domain (`__seal`/`__domcall` on that
   boundary), which a single domain cannot express. This is the residual to report
-  to the PI: the callback-context UAF is faithful today; the domain-crossing seal
+  to the lead: the callback-context UAF is faithful today; the domain-crossing seal
   needs a second domain and a monitor call boundary.
 
 ### R — row 19 (result lifecycle): NOT built, documented why
@@ -135,7 +135,7 @@ cheap."
   the revoke suppressed. The self-proving cause-25 form of the hierarchical cascade
   is reached in the Phase-0 primitive (no intervening call).
 
-## For A / the PI
+## For A / the lead
 
 - **Sealed-callback (S) residual:** the callback-context UAF is faithful in one
   domain; the SEAL PROPER (domain-crossing entry) needs SQLite's callback dispatch

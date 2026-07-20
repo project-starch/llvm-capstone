@@ -86,7 +86,7 @@ mock, a real run requires **the user's explicit go-ahead and the token'd URL**
 (never commit the token). The intended command is:
 
 ```
-python fpga_driver/run_rtl_smoke.py --url 'https://fpga.corank.info/<token>/' \
+python fpga_driver/run_rtl_smoke.py --url '<FPGA-CONSOLE-URL>' \
     --image <path-to>/fw_payload.bin
 ```
 

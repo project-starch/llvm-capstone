@@ -31,7 +31,7 @@ model). Therefore:
   pointers" *timing* claim needs a cycle-accurate vehicle (the Capstone hardware
   RTL / an FPGA or gem5-class model), which is **not in our tree**.
 
-**So before building anything, the human/PI must confirm which claim we are
+**So before building anything, the human/lead must confirm which claim we are
 making:** (a) an instruction-count proxy on the functional model (achievable
 now, must be labelled as a proxy, not silicon timing), or (b) a real timing
 number that requires a cycle-accurate vehicle we would first have to obtain. Do

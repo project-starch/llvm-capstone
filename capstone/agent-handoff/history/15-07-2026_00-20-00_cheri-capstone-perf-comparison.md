@@ -49,7 +49,7 @@ protection is deferred, not synchronous.
 - Methodology rule: **QEMU-to-QEMU** (do not compare CHERI-QEMU to Capstone-RTL —
   "that's incomparable"); RTL cycle-accurate is a Capstone-only follow-on.
 
-The Jason gate was dropped: Jason is the FPGA/RTL collaborator, not a CHERI
+The the collaborator gate was dropped: The collaborator is the FPGA/RTL collaborator, not a CHERI
 expert, and `qemu-system-riscv64cheri` is a standard QEMU fork with the usual
 instruction-count readouts, so the methodology was settled in-house.
 

@@ -1,4 +1,4 @@
-"""Protocol map for the FPGA web console (fpga.corank.info).
+"""Protocol map for the FPGA web console (the FPGA web console).
 
 THIS FILE IS THE SINGLE WIRE-UP POINT. The rest of the driver is written against
 the logical action names below; only this file names the *wire* protocol -- the

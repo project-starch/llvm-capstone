@@ -1,7 +1,7 @@
 # fpga_driver — headless Socket.IO driver for the CapliFive FPGA web console
 
 Removes the human from the RTL perf sweep. The board's console
-(`fpga.corank.info`) is a browser Socket.IO GUI with no scriptable API, so the
+(`the FPGA web console`) is a browser Socket.IO GUI with no scriptable API, so the
 `tests/rtl-smoke/` run currently needs a person clicking ~5 buttons per run
 (README.md "Run (human-driven)"). This is a `python-socketio` client that
 performs those actions headlessly and drives the sweep end-to-end into the
@@ -76,7 +76,7 @@ Then follow `PROTOCOL.md` §"Getting the real protocol" step 1 (map the names in
 ```sh
 # build the artifacts + assemble fw_payload.bin per ../README.md, then:
 python run_rtl_smoke.py \
-    --url 'https://fpga.corank.info/<token>/' \
+    --url '<FPGA-CONSOLE-URL>' \
     --image /path/to/fw_payload.bin
 # -> uploads, runs the sweep over UART, prints the temporal-safety breakdown.
 ```

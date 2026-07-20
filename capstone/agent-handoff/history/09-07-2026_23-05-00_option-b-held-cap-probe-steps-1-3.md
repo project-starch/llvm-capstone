@@ -176,7 +176,7 @@ statement — not a general heap.
 
 **Stopped here, per the task.** The remaining decision is corpus fidelity, A's
 lane: does row3's "after" copy the protected value into a carved buffer (pragmatic
-Option B, works today), or does the PI's bar demand `MREV` of SQLite's own
+Option B, works today), or does the lead's bar demand `MREV` of SQLite's own
 `memsys5` pointer? The latter needs either per-allocation `SPLIT` plus a new
 emulator merge op, or an allocator that never coalesces.
 

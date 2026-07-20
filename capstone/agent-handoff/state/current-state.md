@@ -32,7 +32,7 @@ paper.
   varargs save-area + dynamic alloca, so those are no longer "not yet"); the
   task-005 FastCC-i128 and revoke-intrinsic-DCE codegen defects are **resolved**.
 - **Standing next step:** the Capstone **RTL cycle-accurate** number
-  (human-in-the-loop; **postponed** pending Jason's answer on automation).
+  (human-in-the-loop; **postponed** pending the collaborator's answer on automation).
 
 ## SQLite in-memory bring-up
 

@@ -88,7 +88,7 @@ the gap is provenance/plumbing in the monitor path (the borrower must reach the
 region **only** through the delegated, tracked, linear cap). This experiment
 isolates the clean case — genuine tracked aliases — and shows the sweep has teeth.
 
-## Bottom line for A / the PI
+## Bottom line for A / the lead
 
 - The QEMU **revoke vehicle is proven**: register *and* memory aliases of a
   revocable capability fault after `csrevoke`. The literal single-domain

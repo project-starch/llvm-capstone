@@ -15,7 +15,7 @@ The C1/C2 section below is paused reference material.
   are obviously faster" layered on top. RTL borrow-cost port is staged in
   `tests/rtl-smoke/`; the temporal-overhead run is the follow-on. **Human-in-the-
   loop** (browser GUI, agent can't drive the board) and **POSTPONED** pending
-  Jason's answer on whether it can be automated.
+  The collaborator's answer on whether it can be automated.
 - **Infra:** `capstone/tests/run-nightly.sh` is the new one-shot build+test+report
   driver (serial QEMU suites, report to `/tmp/capstone/`).
 

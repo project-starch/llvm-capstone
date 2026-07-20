@@ -15,7 +15,7 @@ source capstone/tests/capstone-test-env.sh
 
 ## The gate is cleared
 
-The board console `fpga.corank.info` is **back up** (a colleague restarted the
+The board console `the FPGA web console` is **back up** (a colleague restarted the
 backend; no more HTTP 503). Everything else is ready: the driver is
 authoritatively confirmed against `socketio-api.md`, the history-seq bug is fixed,
 and your `fpga_driver/` has been merged to `capstone-bootstrap`. **Run the real

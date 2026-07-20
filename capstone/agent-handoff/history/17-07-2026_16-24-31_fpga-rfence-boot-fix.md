@@ -10,7 +10,7 @@ Traced the boot hang to a real SBI-RFENCE mismatch and **built the fix** (a UP �
 `CONFIG_SMP=n` — kernel image with our six `.dom`s, sha256 `6991c0f7…`). But the
 decisive discovery is that **`load-image` + `reset-board` does not boot our
 uploaded image at all** — the board boots a **board-resident firmware** (the
-collaborator's `root@jasonyu` build); our `alexey@focs-server` kernel never
+collaborator's `root@reference-build` build); our `alexey@focs-server` kernel never
 appears in any boot log. Fixing the boot therefore means **re-flashing the
 shared board's resident firmware**, which is **out of scope** (Step-1 case 2 /
 carve-out). Stop and report. The built UP image is ready to hand to the board
@@ -21,7 +21,7 @@ owner to flash.
 | | Kernel build identity |
 |---|---|
 | **Our uploaded images** (`fw_payload.bin` sha `aadd213f`, `fw_payload_up.bin` sha `6991c0f7`) | `alexey@focs-server` |
-| **What the board actually boots** (UART ring buffer) | `root@jasonyu`, `#3 SMP Sun May 24` and `#30 SMP Mon May 25` |
+| **What the board actually boots** (UART ring buffer) | `root@reference-build`, `#3 SMP Sun May 24` and `#30 SMP Mon May 25` |
 
 Our build id **never** appears on the board; only the collaborator's does. So
 `load-image` (JTAG write to `0x80000000`) followed by `reset-board` does **not**
@@ -30,7 +30,7 @@ SPI/SD (the `Hello World! … init SPI … could not initialize sd… exiting` z
 kept seeing), clobbering our JTAG load. The console's `load-image` is effectively
 a debug load, not a "boot this firmware" path. **Correction to the previous board-
 run note (`17-07-2026_14-50-30`): the OpenSBI+Linux that booted was the RESIDENT
-`jasonyu` firmware, not "our OpenSBI + our Linux" — that was a mis-attribution.**
+`the reference-build` firmware, not "our OpenSBI + our Linux" — that was a mis-attribution.**
 
 ## Root cause of the hang (in the resident firmware)
 
@@ -87,7 +87,7 @@ embeds the initramfs (4,126,208 B) with **all six** `/root/rtl-smoke/*.dom`,`*.u
 But because the board boots resident firmware, uploading + resetting this image
 does **not** run it — confirmed by a full gated board run (Lock → upload → load
 (retry cleared the post-power-on JTAG transient) → reset → 180 s wait → still the
-`jasonyu` resident boot loop → Lock released). So the fix cannot be applied from
+`the reference-build` resident boot loop → Lock released). So the fix cannot be applied from
 our side.
 
 ## What needs the board / monitor owner (hand-off)

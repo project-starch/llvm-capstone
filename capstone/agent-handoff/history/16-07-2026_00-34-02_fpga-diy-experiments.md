@@ -57,7 +57,7 @@ layer added no new requirement.
 
 ### 3. Live validation against the real board. DONE.
 
-- **Transport check (non-destructive):** connected to `fpga.corank.info`, received
+- **Transport check (non-destructive):** connected to `the FPGA web console`, received
   every state event with the **exact** payload shapes wired, read live UART.
   `user_count = 1` (board free), power off.
 - **Action chain (good-citizen: Lock → run → release):** power-on, `load-image`
@@ -166,7 +166,7 @@ correct sizes. Staged at `/tmp/capstone-b/fpga-image/fw_payload.bin`
 
 ### Remaining gate: board web console is DOWN (transient, external)
 
-`fpga.corank.info` accepts the TCP/TLS connection (`connect≈0.26 s`) but the HTTP
+`the FPGA web console` accepts the TCP/TLS connection (`connect≈0.26 s`) but the HTTP
 backend never responds — 20 s, 0 bytes, for **both** the token'd URL and the bare
 root — so it's the console service wedged (a restart on the lab-shared board),
 not a token/network problem (the build just pulled GiB from gitlab/GNU mirrors).

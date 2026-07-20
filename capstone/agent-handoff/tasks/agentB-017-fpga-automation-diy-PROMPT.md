@@ -85,7 +85,7 @@ A documentation archive is on disk:
   - **Note:** the archive documents the UI + tracer but **does NOT contain the
     web app's client JS or the Socket.IO event names/payloads.** So the protocol
     itself has to come from the live site (see "Get the protocol" below).
-- The live console URL is `https://fpga.corank.info/<token>/`
+- The live console URL is `<FPGA-CONSOLE-URL>`
   (private access token in the path — do NOT fetch it without the user's OK).
 
 ## Get the protocol — time-sensitive
@@ -133,6 +133,6 @@ evening BST (2026-07-16)**, then is **flying out and unreachable**. So:
 The human-driven RTL run already works, so this is **parallel, not
 critical-path** — the point is to have the driver ready so the eventual perf
 sweep runs without a human in the loop, and to be ready to wire up + sanity-check
-Jason's JS Thursday evening while he is still reachable. Deliver the offline
+The collaborator's JS Thursday evening while he is still reachable. Deliver the offline
 scaffold + protocol map fast; don't block on the board or the collaborator to
 make progress.

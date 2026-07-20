@@ -118,7 +118,7 @@ overrides re-run `-O1` at will.
   `hier-revoke-probe` (6/6, task-010) run on identical unchanged code and are
   unaffected.
 
-## Nothing needed from A / the PI
+## Nothing needed from A / the lead
 
 No emulator or monitor primitive was required — pure intra-domain SPLIT + MREV +
 REVOKE, as task-010 predicted for the whole family. The rows inherit the same

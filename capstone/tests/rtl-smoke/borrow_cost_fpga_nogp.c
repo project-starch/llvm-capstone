@@ -3,7 +3,7 @@
  * WHY: the earlier borrow_cost_fpga.c uses module-level statics (regions[],
  * raw_src[], copy_dst[], sink). Our LLVM Capstone backend reaches those via
  * `cincoffset X, gp, <absolute>` assuming gp = PCC(cursor 0) -- a form only our
- * QEMU fork fabricates and that is NOT representable on silicon (Jason, 2026-07-20:
+ * QEMU fork fabricates and that is NOT representable on silicon (the collaborator, 2026-07-20:
  * "store on stack"). So on the FPGA those globals fault (gp=0 -> `delin gp` stalls).
  *
  * This variant is GLOBAL-FREE: no module statics, so the compiler emits no gp use.

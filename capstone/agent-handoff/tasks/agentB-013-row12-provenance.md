@@ -115,4 +115,4 @@ Either way the "All links verified" exposure is removed.
 This is the last known provenance liability in the corpus table; closing it (as
 literal or as an honestly-labeled model) lets the paper's `tab:scope` caption be
 reworded from "All links verified" to the accurate per-tier count. Nothing here
-is expected to need A or the PI — pure repro + provenance, same as task-010/012.
+is expected to need A or the lead — pure repro + provenance, same as task-010/012.

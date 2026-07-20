@@ -264,7 +264,7 @@ def main(argv: List[str]) -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--url",
-                    help="full token'd console URL, e.g. https://fpga.corank.info/<token>/ "
+                    help="full token'd console URL, e.g. <FPGA-CONSOLE-URL> "
                          "(kept out of the repo; never logged). Required unless --parse-only.")
     ap.add_argument("--token", default=os.environ.get("FPGA_TOKEN"),
                     help="access token, if the protocol echoes it in the handshake "

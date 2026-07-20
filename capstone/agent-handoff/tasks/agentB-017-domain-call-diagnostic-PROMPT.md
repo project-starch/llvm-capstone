@@ -57,7 +57,7 @@ completes → self-fixed.
 
 Check whether **our** OpenSBI build fully enables/configures the Capstone domain
 CALL + region-share path, vs the `genesys-testing` reference / whatever the resident
-`jasonyu` firmware uses. A build-config or feature-flag difference in *our* monitor
+`the reference-build` firmware uses. A build-config or feature-flag difference in *our* monitor
 (not the RTL) would be the easiest fix of all.
 
 ## Decision

@@ -110,7 +110,7 @@ No statics ⇒ no `gp`. One entry ⇒ no cross-entry state.
 QEMU is a functional model (no gp/cjalr *fault* modelling beyond what we exercised,
 and it fabricates gp) — so the QEMU pass proves **functional correctness and the
 gp-free/cjalr-free shape**, not silicon behaviour. To get the cycle-accurate
-number the PI wants, the `.dom` + `.user` must run on the board:
+number the lead wants, the `.dom` + `.user` must run on the board:
 
 - Get the two nogp binaries onto the board — either baked into a rebuilt
   `fw_payload.bin` rootfs overlay (heavy; overlay wiring still open item #2 in the

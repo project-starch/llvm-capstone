@@ -173,7 +173,7 @@ merge, while memsys5 coalesces. So the two buildable shapes for the "after" are:
   allocator work (B's lane), no longer the row-11 firmware wall.
 
 So the old row3 fork (Option A two-domain vs Option B firmware-gated) is replaced
-by: **B1 now (A builds), B2 as the deep follow-on (B's lane).** The Q1/PI bar
+by: **B1 now (A builds), B2 as the deep follow-on (B's lane).** The Q1/lead bar
 decides whether B1's carved-copy fidelity is the acceptable row3 "after" or
 whether B2 is required for the headline.
 

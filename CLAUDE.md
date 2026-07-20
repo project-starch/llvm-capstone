@@ -20,6 +20,16 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
 - Never commit debug/report files (`*_DEBUG_CHECKPOINT.md`, session notes).
 - Active plans live in `capstone/agent-handoff/plans/` (committed, portable across machines and agents).
 - Manager-facing summaries go under `/tmp/capstone/`, not into the repo.
+- **Never name people in committed files.** Do not write the PI, co-PI, any collaborator, or
+  any individual's name (or personal build hostnames like `root@<name>`) into any file that
+  gets committed. Refer to roles generically: "the project lead", "the collaborator", "the
+  team". Names, meeting attributions, and questions/notes addressed to a person go under
+  `/tmp/capstone/` only — never committed, never pushed. (Functional exceptions that are not
+  name-drops: real dependency URLs in `.gitmodules` and published-paper citation URLs.)
+- **Never commit or share the FPGA console link or token.** The board URL/host and its token
+  are secret. Keep the full URL in an env var (`FPGA_URL`) only, for the duration of a run;
+  in any committed text use the placeholder `<FPGA-CONSOLE-URL>`. Never echo it into a
+  captured/committed log.
 
 ## Where things live
 

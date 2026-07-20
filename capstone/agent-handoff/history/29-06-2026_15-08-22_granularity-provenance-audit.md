@@ -331,7 +331,7 @@ formal source-language claim.
 
 ### Medium: the spilled-capability question remains open
 
-The PI's concern is valid. `stc`/`ldc` deliberately preserves a real tagged
+The lead's concern is valid. `stc`/`ldc` deliberately preserves a real tagged
 capability in a spill slot. Anyone who can address that slot and execute an
 `ldc` can acquire the authority.
 
@@ -516,7 +516,7 @@ quickly from selected examples to spatial-safety language.
 
 Documentation-only neutralization/rename commits. No technical concerns.
 
-## Answers to the PI's questions
+## Answers to the lead's questions
 
 ### Can an attacker steal a spilled capability?
 

@@ -69,11 +69,11 @@ column-name/heap pointer `MREV`'d, revoke at `sqlite3_finalize`, cached alias
 faults. Needs the linear-backed-heap question (memsys5 arena linear-backed) — its
 own plan; not this doc.
 
-## Q1 tie-in (evidence bar, PI)
+## Q1 tie-in (evidence bar, lead)
 
 This probe is the concrete artifact behind the Q1 fork: it demonstrates the
-faithful single-domain held-cap revoke. If the PI's bar accepts it as the row3
-"after," Option A becomes unnecessary as the headline. Frame for the PI: (a) real
+faithful single-domain held-cap revoke. If the lead's bar accepts it as the row3
+"after," Option A becomes unnecessary as the headline. Frame for the lead: (a) real
 monitor-delivered linear cap, (b) intra-domain instruction-level revoke, (c)
 cached alias faults with asserted cause, (d) provenance rule enforced (arena
 reachable only through the tracked cap).

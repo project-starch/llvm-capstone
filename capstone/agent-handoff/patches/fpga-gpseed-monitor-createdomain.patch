@@ -11,7 +11,7 @@
 # in the domain (gp=0, delin gp stalls) for BOTH cursor 0 and cursor=base. The
 # first-entry (c-effective) path does not restore ctvec for the entered domain.
 # So this patch is the EXPERIMENT as-run, kept for A to iterate (try a different
-# delivery slot / stack-memory delivery) once Jason answers which slot is usable.
+# delivery slot / stack-memory delivery) once the collaborator answers which slot is usable.
 #
 # After editing sbi_capstone.c you MUST force the monitor .S to regenerate
 # (the Makefile only stale-checks the wrapper sbi_capstone_dom.c, not the

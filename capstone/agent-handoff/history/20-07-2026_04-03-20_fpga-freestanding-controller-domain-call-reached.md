@@ -34,7 +34,7 @@ the gp-delivery design + code is captured so A can iterate without re-deriving i
 UNTESTED**: we never got a tagged `gp` into the domain to test it. What we newly learned is a
 **delivery constraint**: the monitor can't hand a first-entry domain a capability via `ctvec`.
 
-**Open question → Jason** (kept out of the repo, in `/tmp/capstone/jason-gp-representability-question.md`):
+**Open question → the collaborator** (kept out of the repo, in `/tmp/capstone/gp-representability-question.md`):
 which context slot (if any) the first-entry domain call restores for seeding `gp`, and what the
 intended mechanism is for a domain with globals to obtain a cap covering them.
 
@@ -64,7 +64,7 @@ not yet run — a cheap way to confirm mechanism-vs-RTL before more board time.
    `captype-fixed` bitstream's FPU **rejects `fsd` even with `mstatus.FS=Clean`** (JTAG:
    mcause=2 illegal, mepc in userspace, insn=`fsd`, FS=Clean; `libc.so.6` has 65 `fsd`
    incl. `_IO_vfprintf`, so the first `printf` traps → monitor `while(1)` → silent hang).
-   Jason's steer ("use soft float") = **a freestanding controller that links no glibc**:
+   The collaborator's steer ("use soft float") = **a freestanding controller that links no glibc**:
    `capstone/tests/rtl-smoke/borrow_cost_fpga_ctl.c`, built `-nostdlib -static -no-pie
    -march=rv64imac -mabi=lp64` → **zero FP instructions**. Own `_start` (inits sp AND gp),
    raw Linux syscalls via `ecall`, integer-only output, libcapstone's exact ioctl protocol.
@@ -130,18 +130,18 @@ live hypotheses, distinguished only by the exception code:
 - ✅ **Exact fault mechanism CONFIRMED on silicon** (see ROOT CAUSE below): `delin gp` with
   `gp=0` stalls the CVA6 pipeline; `gp` is never delivered valid at the FPGA `cscall`.
 - ✅ **Fix localized to OUR domain runtime** (`my_first_domain/start.S` + clang codegen),
-  **NOT the RTL** — corrected 2026-07-20 after Jason's answer (see CORRECTION below).
+  **NOT the RTL** — corrected 2026-07-20 after the collaborator's answer (see CORRECTION below).
 - ❌ No `RESULT` cycle numbers yet — but the fix is in-repo (no bitstream rebuild needed).
 
-## CORRECTION (2026-07-20, Jason's answer) — the fix is OURS, not the RTL
+## CORRECTION (2026-07-20, the collaborator's answer) — the fix is OURS, not the RTL
 
-**My first verdict below ("fix is necessarily RTL") was WRONG.** Jason confirmed the
+**My first verdict below ("fix is necessarily RTL") was WRONG.** the collaborator confirmed the
 `gp = PCC(cursor 0)` line in QEMU's `helper_cscall` is **our own non-canonical patch**,
 not canonical Capstone: commit `7aca05403dc52644072df84ad53b32cf17b9810f`
 ("riscv: unblock native domain capability calls", Alexey Paznikov, 2026-05-19). So:
 
 - The **RTL is correct** to not set `gp` at `cscall` — canonical Capstone never does.
-- Jason also notes the approach isn't representable anyway: "it's unlikely going to be
+- The collaborator also notes the approach isn't representable anyway: "it's unlikely going to be
   representable when you keep the bound but set the cursor to 0."
 - Therefore **the gap is in OUR domain runtime**, which was written to depend on that
   non-canonical, non-representable `gp` — and our QEMU patch masked it.
@@ -199,7 +199,7 @@ Follow-on board probes (single-step + register read at the wedge, on freshly re-
    wedge is NOT an M-mode exception — on real Capstone silicon an in-domain fault routes to
    the capability trap vector `ctvec`, not `mtvec`. (The earlier `@@MT` dump only ever fired
    on the *contaminated stock-Ariane* bitstream, which has no cap unit → faults go to M-mode.)
-   Jason confirmed `cscall`/`csreturn` **implicitly flush the icache**, so the stale-icache /
+   The collaborator confirmed `cscall`/`csreturn` **implicitly flush the icache**, so the stale-icache /
    `fence.i` hypothesis is dead.
 2. **Single-stepping does not advance:** 40× `stepi` from `0x819a0044` leaves pc pinned there,
    no trap. The instruction at `0x10044` = **`delin gp`** cannot retire.
@@ -254,10 +254,10 @@ i.e. **`gp` is established by the `cscall` instruction itself**, *after* the con
 
 **Therefore the fix is necessarily RTL (option c):** the FPGA `cscall` must initialize
 `gp = PCC(cursor 0)` on domain entry, exactly as `op_helper.c:1227-1231`. Needs an
-out-of-tree bitstream rebuild (Vivado + anvil), so it is an escalation to Jason, not fixable
+out-of-tree bitstream rebuild (Vivado + anvil), so it is an escalation to the collaborator, not fixable
 here. The FPGA cycle-accurate borrow/revoke numbers are **blocked on this RTL fix.**
 
-**One thing for Jason to confirm (representability):** QEMU keeps exact bounds in a side
+**One thing for the collaborator to confirm (representability):** QEMU keeps exact bounds in a side
 table, so `gp=PCC(base 0x819a0000, cursor 0)` round-trips losslessly there; on real hardware,
 a cursor 2 GB below `base` for a small code region may not be representable (tag cleared). So
 either the domain PCC is actually wide/base-0 on real HW, or the domain addressing model

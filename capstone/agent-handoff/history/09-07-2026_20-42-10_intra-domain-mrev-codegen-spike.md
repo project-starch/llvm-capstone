@@ -188,4 +188,4 @@ path for the mechanism proof.
 
 Not addressed (out of scope): SQLite's `memsys5` arena being linear-backed —
 still a separate, contained heap-backing question, and still not the `start.S`
-ABI change. Subobject-bounds increment 2 remains PI-gated.
+ABI change. Subobject-bounds increment 2 remains lead-gated.

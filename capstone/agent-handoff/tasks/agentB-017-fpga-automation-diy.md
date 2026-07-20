@@ -29,7 +29,7 @@ reachable. Do NOT wait for the JS to start — build the scaffold now.
 
 ## The reality (know before planning)
 
-- The console is `https://fpga.corank.info/<token>/` (get the exact token'd URL
+- The console is `<FPGA-CONSOLE-URL>` (get the exact token'd URL
   from the user; it is in the RTL platform memory / Slack). It drives a Genesys 2
   Capstone core over **Socket.IO** (WebSocket). Controls: Power, Bitstreams,
   **Boot Images** (upload `.bin` → JTAG to `0x80000000`), Reset, **Terminal**

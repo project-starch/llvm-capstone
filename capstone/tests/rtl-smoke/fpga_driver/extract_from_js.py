@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Extract Socket.IO event names + payload hints from the console's client JS.
 
-Feed this the client JS bundle(s) the collaborator sends (or a JS file saved from
+Feed this the client JS bundle(s) The collaborator sends (or a JS file saved from
 the live site). It greps for the Socket.IO surface -- `socket.emit(...)`,
 `socket.on(...)` / `.once(...)`, `io(...)` connection setup -- and prints the
 event names it finds, grouped emit vs listen, with a little surrounding context

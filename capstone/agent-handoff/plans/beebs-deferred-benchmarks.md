@@ -872,7 +872,7 @@ changes plus an in-domain runtime; full design in
 - **Source adaptation**: `SolveCubic`'s `long double` → `double` (sed in
   `build-beebs-cubic-capstone.sh`). This avoids fp128 quad soft-float, whose
   compiler-rt implementation (`divtf3.c`) hits the i128 non-vector-shift
-  legalization limit (Bug #3). `PI = (4*atan(1))` is replaced by a literal to
+  legalization limit (Bug #3). `lead = (4*atan(1))` is replaced by a literal to
   drop `atan`. Roots {2, 2.5, 6} are exact in double.
 - **Runtime**: compiler-rt double soft-float builtins (`adddf3 subdf3 muldf3
   divdf3 fixdfsi floatsidf comparedf2 fp_mode`) + a compact self-contained libm

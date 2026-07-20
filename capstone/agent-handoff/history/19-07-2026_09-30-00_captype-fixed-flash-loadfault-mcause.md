@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-19
 **Branch:** capstone-bootstrap-b
-**Scope:** flash the Capstone bitstream Jason named, boot our diagnostic image on it,
+**Scope:** flash the Capstone bitstream the collaborator named, boot our diagnostic image on it,
 read the exception the dumper catches. Board driver only (no submodule-source commits).
 
 ## Headline results
@@ -12,11 +12,11 @@ read the exception the dumper catches. Board driver only (no submodule-source co
    **`ariane_xilinx.bit`, modified 2026-07-19 01:10** (today) — the newest entry in
    the store. That is **stock upstream CVA6/Ariane** (no Capstone capability unit), so
    it would reset/trap on any `cscall`. **All prior Stage-0 board evidence was gathered
-   on this wrong bitstream** and must be treated as contaminated. (Confirms Jason's
+   on this wrong bitstream** and must be treated as contaminated. (Confirms the collaborator's
    "the other team might have flashed it with something different.")
 
 2. **Restored the real Capstone RTL.** Flashed `working-caplifive-captype-fixed.bit`
-   (Jason's file), **non-volatile**. Two driver bugs found + fixed along the way:
+   (the collaborator's file), **non-volatile**. Two driver bugs found + fixed along the way:
    - *Flash race:* the driver flashed immediately after `power(True)` on a cold board —
      the FPGA/JTAG programmer isn't up yet, so `flash_state -> error` in ~1 s (no SPI
      write). Fix: power-on + settle **before** the flash (`run_rtl_smoke.py`).
@@ -58,7 +58,7 @@ paired with this bitstream**:
   rejects for MMIO, the first S-mode MMIO load faults (surfaced as access fault).
 
 Either way: to run the borrow/revoke benchmark (and finally test the domain CALL) on
-captype-fixed, we need **the firmware image that pairs with this bitstream** (Jason has
+captype-fixed, we need **the firmware image that pairs with this bitstream** (the collaborator has
 a working setup on it), or the captype-fixed resident image, rather than our bundle.
 
 ## Dumper limitation found
@@ -77,7 +77,7 @@ If the dumper is reused, bound the poll or drop it.
 
 ## Next
 
-- Get the captype-fixed-paired firmware/DTB from Jason (or identify the resident image),
+- Get the captype-fixed-paired firmware/DTB from the collaborator (or identify the resident image),
   boot it, run borrow-cost → finally test the domain CALL on real Capstone silicon.
 - If cap-type mismatch: our monitor needs recompiling against the captype-fixed toolchain.
 

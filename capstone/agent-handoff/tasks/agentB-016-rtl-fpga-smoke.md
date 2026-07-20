@@ -7,7 +7,7 @@ branch `capstone-bootstrap-b`. Obey `./CLAUDE.md` and the workflow docs.*
 
 The 13 July meeting established that **real RTL exists** (built by the hardware/RTL
 collaborator) and that *"if something works on QEMU it should pretty much work on the
-RTL — not a major gap."* The PI's advice was to **test this while the collaborator is
+RTL — not a major gap."* The lead's advice was to **test this while the collaborator is
 physically reachable this week** — if a port/config tweak is needed, it is far cheaper to
 resolve now. This unblocks the paper's **performance** storyline: the RTL/FPGA is the
 **cycle-accurate vehicle** that B's task-014 instruction-count proxy explicitly could not be.
@@ -19,7 +19,7 @@ get a first real number off it?**
 ## The platform (know this before you plan)
 
 Access is a **browser GUI, not SSH** — a WebSocket console at
-`https://fpga.corank.info/<token>/` controlling a **Genesys 2** board running the Capstone
+`<FPGA-CONSOLE-URL>` controlling a **Genesys 2** board running the Capstone
 **CVA6/Ariane** core ("CapliFive"). Manual + website capture: `/tmp/capstone/FPGA_Remote.zip`.
 The RTL is now readable: `capstone/capstone-ariane` submodule (`tracer.sv`/`csr_regfile.sv`
 confirm the tracer CSRs + `mcycle`). The **version-matched build umbrella** is

@@ -216,7 +216,7 @@ lent only until `step` advances), not to the allocator.
 
 ## 6. Benefits of Capstone over CHERI (summary)
 
-> **Framing update (PI, 2026-07-14): security is a near-tie at the eager config;
+> **Framing update (lead, 2026-07-14): security is a near-tie at the eager config;
 > the real axis is performance.** The `eager` column shows CHERI *can* match our
 > security (it blocks all 15). It does so only via a stop-the-world revocation
 > sweep on every free (Cornucopia — "a very slow version of what Capstone does,

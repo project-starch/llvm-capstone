@@ -70,7 +70,7 @@ raw/borrow/copy).
 
 - Re-scan the REST API / `app.js` for any **persistent boot-image write** (flash a
   `.bin` to SPI), distinct from the bitstream path — did we miss one?
-- Capture the **current resident** boot log in full: does `jasonyu`'s firmware even
+- Capture the **current resident** boot log in full: does `the reference-build`'s firmware even
   reach a shell, or does it SD-init-loop forever? (If it never boots, the board is
   non-functional as flashed regardless — relevant to any eventual owner ask.)
 

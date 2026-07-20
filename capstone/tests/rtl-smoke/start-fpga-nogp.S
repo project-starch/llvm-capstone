@@ -3,7 +3,7 @@
  * WHY THIS EXISTS (2026-07-20): the stock my_first_domain/start.S reaches
  * domain_main and every global via `gp` -- but our LLVM Capstone backend uses a
  * gp = PCC(cursor 0) convention that only works because our QEMU fork FABRICATES
- * that gp at every use site (capstone-qemu 7aca0540 / 39130dc1). Jason confirmed
+ * that gp at every use site (capstone-qemu 7aca0540 / 39130dc1). The collaborator confirmed
  * the RTL never does this and gp=PCC(cursor 0) is not representable. So on silicon
  * `delin(gp)` stalls with gp=0. See history 20-07-2026 + the NDSS plan gp section.
  *

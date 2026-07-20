@@ -81,6 +81,6 @@ They split cleanly by lane:
 
 ## Not in scope right now
 
-- Subobject-bounds **increment 2** (embedded-struct/scalar fields) stays **PI-gated**
+- Subobject-bounds **increment 2** (embedded-struct/scalar fields) stays **lead-gated**
   (container_of policy) — do not start it.
 - Row 14 (UNINIT) — A's firmware lane, as above.

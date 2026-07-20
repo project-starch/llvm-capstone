@@ -159,7 +159,7 @@ That is a real emulator-semantics change (rev-tree depth/seniority invariants +
 its own probe and authority regression) and is left as a design direction, not
 implemented — per the task's propose-before-big-directions rule.
 
-## Flags for A / the PI (not fixed here)
+## Flags for A / the lead (not fixed here)
 
 - **The rev-node pool exhaustion is an ASSERT, not a graceful failure.** Under
   sustained revoke-on-free churn the emulator aborts (`_cap_rev_tree_dup_node_before`)

@@ -7,12 +7,12 @@ submodule, monitor, `start.S`, allocator, or RTL-tree changes.
 
 Remove the human from the RTL perf sweep. The `tests/rtl-smoke/` run (borrow-cost
 + the three revoke-cost configs) is fully staged and QEMU-validated, but the board
-console (`fpga.corank.info`) is a browser Socket.IO GUI with no scriptable API, so
+console (`the FPGA web console`) is a browser Socket.IO GUI with no scriptable API, so
 each run needs ~5 button clicks. Build a headless `python-socketio` driver that
 performs the five board actions and drives the sweep into the existing
 `run-revoke-cost-fpga-qemu.sh --parse-uart`.
 
-Time-sensitive framing: the collaborator sends the console's client JS **Thursday
+Time-sensitive framing: The collaborator sends the console's client JS **Thursday
 evening BST (2026-07-16)** then is unreachable. So the deliverable now is a fully
 built scaffold whose only remaining gap is the wire event names — a ~10-minute
 `config.py` edit once the JS lands.

@@ -139,7 +139,7 @@ make PLATFORM=fpga/ariane CROSS_COMPILE=$CROSS FW_PAYLOAD_PATH=<abs>/Image_up_bu
 
 ## Run (human-driven on the FPGA web console)
 
-No scriptable API yet (browser GUI only). Sequence on `fpga.corank.info`:
+No scriptable API yet (browser GUI only). Sequence on `the FPGA web console`:
 
 1. **Boot Images** → upload `fw_payload.bin` (JTAG to `0x80000000`, ~2 min).
 2. **Reset**; wait for the Linux prompt on the **Terminal** (UART) tab.
