@@ -7,6 +7,54 @@ glibc benchmark controller with a freestanding soft-float one, get past the FP h
 observe what the domain `cscall` actually does on real Capstone silicon. Controller source +
 board-driver work only; no submodule-source/RTL commits.
 
+---
+
+## LATEST (2026-07-20 PM) — gp-seed experiment run on-board; HANDOFF TO AGENT A
+
+**Agent-B is handing the FPGA experimental lane to Agent A (token refresh).** Full state below;
+the gp-delivery design + code is captured so A can iterate without re-deriving it.
+
+**What we built + ran (2 board runs, captype-fixed, no reflash — it was still resident):**
+- **Monitor** (`create_domain`, patch in `agent-handoff/patches/fpga-gpseed-monitor-createdomain.patch`):
+  mint a non-linear alias of the domain image, park an image-covering data cap in the
+  **ctvec slot `dom_seal[1]`** (which the reference monitor leaves 0), to seed `gp`.
+- **Domain** (`my_first_domain/start-fpga-gpseed.S`, tracked): `_start` loads it via
+  `ccsrrw(gp, ctvec, x0)` before `delin gp`. Built with `START_SRC=` that variant.
+- Ran with the seeded cap's cursor = **0** and cursor = **base** (representable).
+
+**Result — the delivery does NOT work on this RTL (both cursor values identical):**
+- pc pinned at `0x819a0044` (`delin gp`), **`gp = 0x0`**, 19/20 single-steps pinned — same wedge.
+- A cursor=base cap would read `p/x $gp = 0x819a0000`; it read **0** → **the cap never reached
+  `gp`**. `sp` (via cscratch) and PCC arrive fine; **`ctvec` arrives 0**. So the fast
+  first-entry (c-effective) domain-call path on this RTL **does not restore `ctvec`** for the
+  entered domain — a **delivery** failure, not a representability result.
+
+**IMPORTANT — this walks back the earlier "cursor-0 non-representable, confirmed" verdict**
+(in the CORRECTION/Fix sections below and in commit `ef521aef`). Representability is **still
+UNTESTED**: we never got a tagged `gp` into the domain to test it. What we newly learned is a
+**delivery constraint**: the monitor can't hand a first-entry domain a capability via `ctvec`.
+
+**Open question → Jason** (kept out of the repo, in `/tmp/capstone/jason-gp-representability-question.md`):
+which context slot (if any) the first-entry domain call restores for seeding `gp`, and what the
+intended mechanism is for a domain with globals to obtain a cap covering them.
+
+**Next options for A (see the runbook §7 + the AskUserQuestion trail):**
+1. **Read the RTL** (`caplifive-cva6`) first-entry context layout to find a slot that IS
+   restored (no board time), then re-target the delivery.
+2. **Stack-memory delivery**: monitor writes `gp_cap` into the domain's stack region, `start.S`
+   loads it via `sp`/`ldc` (the proven cscratch path) instead of ctvec.
+3. **Compiler/canonical fix** (robust end state, A's lane): stop needing a delivered `gp` —
+   address globals via a representable scheme (cursor=base + link-relative offsets), retiring
+   the QEMU hack `7aca0540`.
+
+**Artifacts:** `~/capstone-b-artifacts/fw_payload_fpga_up_gpseed.bin` (cursor=base build, sha
+`3cc33379`); build recipe `scratchpad/rebuild_gpseed.sh`; board run `scratchpad/run_gpseed.py`
+(does a resident-bitstream double-check + gdb single-step probe). QEMU-first verification of the
+delivery mechanism (boot the patched monitor with the hack disabled, read `gp`) was proposed but
+not yet run — a cheap way to confirm mechanism-vs-RTL before more board time.
+
+---
+
 ## Headline
 
 **Two blockers, first cleared, second now cleanly localized.**

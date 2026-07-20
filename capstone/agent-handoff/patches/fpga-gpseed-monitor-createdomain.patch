@@ -1,0 +1,48 @@
+# FPGA gp-seed experiment — monitor create_domain change (APPLY BY HAND)
+#
+# Target file (UNTRACKED in the caplifive-system submodule — a build/staging tree,
+# so `git diff` won't show it; edit it directly):
+#   capstone/caplifive-system/sw/buildroot/components/opensbi/lib/sbi/capstone-sbi/sbi_capstone.c
+#
+# Function: create_domain(). Delivers an image-covering data capability to the
+# domain via the (otherwise-zero) ctvec slot dom_seal[1], to seed gp.
+#
+# NOTE (result, 2026-07-20): on captype-fixed this did NOT work — ctvec arrives 0
+# in the domain (gp=0, delin gp stalls) for BOTH cursor 0 and cursor=base. The
+# first-entry (c-effective) path does not restore ctvec for the entered domain.
+# So this patch is the EXPERIMENT as-run, kept for A to iterate (try a different
+# delivery slot / stack-memory delivery) once Jason answers which slot is usable.
+#
+# After editing sbi_capstone.c you MUST force the monitor .S to regenerate
+# (the Makefile only stale-checks the wrapper sbi_capstone_dom.c, not the
+# #included sbi_capstone.c):
+#   touch capstone/caplifive-system/sw/buildroot/components/opensbi/lib/sbi/sbi_capstone_dom.c
+# then rebuild (see rebuild recipe in the runbook / rebuild_gpseed.sh).
+#
+# ---- ORIGINAL (reference) ----
+#     C_SET_CURSOR(dom_code, dom_code, base_addr + entry_offset);
+#
+#     // construct the sealed region of the domain
+#     dom_seal[0] = dom_code;
+#     dom_seal[2] = dom_data;
+#     dom_seal[3] = (3 << 38) | (2 << 34);
+#
+# ---- REPLACEMENT (gp-seed) ----
+    // gp-seed: mint a NON-LINEAR alias of the image [base, base+code_size] and
+    // hand out two cursors of it -- PCC (cursor=entry) in slot 0 and gp in the
+    // otherwise-zero ctvec slot [1], which start-fpga-gpseed.S loads via
+    // `ccsrrw gp, ctvec`. cursor value under test: base_addr (representable) or 0.
+    void *img_nl = __delin(dom_code);
+    void *pcc_cap, *gp_cap;
+    C_SET_CURSOR(pcc_cap, img_nl, base_addr + entry_offset);
+    C_SET_CURSOR(gp_cap, img_nl, base_addr);   // or 0 for the cursor-0 variant
+
+    // construct the sealed region of the domain
+    dom_seal[0] = pcc_cap;
+    dom_seal[1] = gp_cap;     // ctvec slot  -- BUG: not restored on first entry (RTL)
+    dom_seal[2] = dom_data;
+    dom_seal[3] = (3 << 38) | (2 << 34);
+#
+# Domain side (TRACKED, in the main repo): capstone/my_first_domain/start-fpga-gpseed.S
+#   = start.S + `#define ctvec 0x000` + `ccsrrw(gp, ctvec, x0)` in _start before `j test`.
+#   Build the domain with START_SRC pointing at it (see build-domain.sh).

@@ -2,20 +2,35 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-next-step.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-next-step.md` at Agent-B bring-up (2026-07-08).
 
-# Agent-B FPGA track (2026-07-20) — freestanding controller clears FP hang; domain `cscall` reached
+# Agent-B FPGA track (2026-07-20) — HANDED OFF TO AGENT A (B token refresh)
+
+> **HANDOFF (2026-07-20 PM):** Agent-B is handing the FPGA experimental lane to **Agent A**.
+> All state is captured below + in the report/runbook/patches. Start here:
+> - Report (full trail incl. the gp-seed experiment): `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md` (see the LATEST section at top).
+> - Runbook: `ref/fpga-borrow-cost-reproduction.md`.
+> - Experiment patch: `patches/fpga-gpseed-monitor-createdomain.patch` + tracked `my_first_domain/start-fpga-gpseed.S`.
+> - Open question for Jason (NOT in repo): `/tmp/capstone/jason-gp-representability-question.md`.
 
 **Active FPGA work is NOT reflected in the huge checkpoint below (which stops at 2026-07-10).**
-Current FPGA state + next step:
-- Report: `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md`.
-- Reproduction runbook (for Agent A): `ref/fpga-borrow-cost-reproduction.md`.
-- **Where we are — ROOT CAUSE CONFIRMED on silicon:** the freestanding controller fixed the
-  glibc-`fsd` hang and runs through domain create + region setup; the domain `cscall` enters
-  the domain and wedges at vaddr `0x10044` = **`delin gp`** with **`gp=0`**. Board single-step
-  shows the delin can't retire (no trap; in-domain faults route to `ctvec`, not M-mode — the
-  mtvec dumper was a dead end); skipping the delin lets the domain run. `gp` is never
-  initialized (`start.S` inits only `sp`; monitor `create_domain` zeroes the `gp` slot), and
-  this CVA6's `delin` stalls on a null operand where QEMU asserts a tagged one.
-- **Next (owner = us, in-repo) — fix OUR domain runtime, NOT the RTL** (corrected
+Current FPGA state:
+- **Blocker (unchanged):** the domain enters at `0x10044` = **`delin gp`** and wedges because
+  **`gp = 0`** (untagged) — our clang domains address globals via `cincoffset gp,<absolute>`
+  and need `gp` = an image-covering cap, but nothing establishes it on silicon (the QEMU
+  gp=pc_cap(cursor 0) is our non-canonical hack `7aca0540`). Canonical reference domains
+  (fib/thread/smode) use **no gp** (no globals; pc-relative through PCC).
+- **gp-seed experiment (2026-07-20, 2 board runs) — DELIVERY FAILED, representability still
+  UNTESTED.** Tried to hand the domain a `gp` from the monitor via the ctvec slot
+  (`dom_seal[1]`) + `ccsrrw gp,ctvec` in `start-fpga-gpseed.S`. Result: `gp=0`, `delin gp`
+  stalls, **identical for cursor 0 AND cursor=base** → the cap never reached `gp` (`ctvec`
+  arrives 0; PCC + cscratch/sp arrive fine). So this RTL's fast first-entry (c-effective) path
+  **does not restore `ctvec`** for the entered domain. **NOTE:** this walks back the earlier
+  "cursor-0 non-representable, confirmed" line (commit `ef521aef`) — that was premature.
+- **Next options for A** (pick per Jason's answer): (1) read `caplifive-cva6` RTL for the
+  first-entry context layout → deliver `gp` through a slot that IS restored; (2) stack-memory
+  delivery via the proven `cscratch`/`sp` path; (3) the compiler/canonical fix below.
+  Cheap de-risk first: QEMU-verify the delivery mechanism (patched monitor, hack disabled,
+  read `gp`) to separate "our mechanism is wrong" from "RTL doesn't restore ctvec".
+- **Longer-term fix (owner = us, in-repo) — fix OUR domain runtime, NOT the RTL** (corrected
   2026-07-20 per Jason). The `gp = PCC(cursor 0)` line in QEMU's `cscall`
   (`op_helper.c:1227-1231`) is **our own non-canonical patch** (commit `7aca0540`), not
   canonical Capstone — so the RTL is correct to omit it and cursor-0 isn't representable on

@@ -270,6 +270,31 @@ output → runs on silicon → cycle numbers. General fix = rework clang `Capsto
 + start.S off the cursor-0 gp model and retire QEMU hack `7aca0540` (A's lane). See the
 state report for the full derivation.
 
+### §7.1 — gp-seed experiment (2026-07-20) + HANDOFF TO A
+
+**Correction to the paragraph above:** the "cursor-0 isn't representable on silicon" claim was
+**not actually confirmed** — the experiment that would have tested it hit a *delivery* failure
+first, so representability is still open. What we tried and learned:
+
+- **Delivery attempt:** monitor `create_domain` parks an image-covering data cap in the ctvec
+  slot `dom_seal[1]` (patch: `agent-handoff/patches/fpga-gpseed-monitor-createdomain.patch`);
+  the domain (`my_first_domain/start-fpga-gpseed.S`, built via `START_SRC=`) loads it with
+  `ccsrrw(gp, ctvec, x0)` in `_start`.
+- **Result (2 board runs, cursor 0 and cursor=base — identical):** `gp = 0`, `delin gp` stalls
+  at `0x819a0044` (19/20 single-steps pinned). A cursor=base cap would read `0x819a0000`; it
+  read 0 → **the cap never reached `gp`.** `sp` (cscratch) + PCC arrive fine; **`ctvec` arrives
+  0** → this RTL's fast first-entry (c-effective) path **does not restore `ctvec`** for the
+  entered domain. Delivery problem, not representability.
+- **Open → Jason** (`/tmp/capstone/jason-gp-representability-question.md`, NOT in repo): which
+  first-entry context slot can seed `gp`; canonical mechanism for a domain with globals.
+- **Next for A:** (1) read `caplifive-cva6` RTL for the c-effective slot layout, then deliver
+  via a restored slot; (2) stack-memory delivery via the proven `sp`/`cscratch` path; (3) the
+  compiler/canonical fix. Cheap de-risk: QEMU-verify the delivery mechanism (hack disabled).
+- **Artifacts:** `~/capstone-b-artifacts/fw_payload_fpga_up_gpseed.bin` (sha `3cc33379`);
+  `scratchpad/rebuild_gpseed.sh` (build), `scratchpad/run_gpseed.py` (board run w/ bitstream
+  double-check + single-step probe). Rebuild gotcha: `touch` the wrapper
+  `sbi_capstone_dom.c` to force the monitor `.S` to regenerate from the `#include`d `.c`.
+
 Full ladder + RTL cross-refs: `/home/alexey/.claude-b/plans/curried-crunching-gizmo.md`.
 State report: `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md`.
 
