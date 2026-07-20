@@ -1,0 +1,5 @@
+# Local Python virtualenv for the FPGA board driver (machine-specific; never commit).
+# Recreate with: python3 -m venv .venv && .venv/bin/pip install python-socketio requests websocket-client
+.venv/
+__pycache__/
+*.pyc
