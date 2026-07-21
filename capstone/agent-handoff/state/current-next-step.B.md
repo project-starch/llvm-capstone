@@ -9,7 +9,7 @@
 > - Report (full trail incl. the gp-seed experiment): `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md` (see the LATEST section at top).
 > - Runbook: `ref/fpga-borrow-cost-reproduction.md`.
 > - Experiment patch: `patches/fpga-gpseed-monitor-createdomain.patch` + tracked `my_first_domain/start-fpga-gpseed.S`.
-> - Open question for the board owner (NOT in repo): `/tmp/capstone/jason-gp-representability-question.md`.
+> - Open question for the board owner (NOT in repo): `/tmp/capstone/board-owner-gp-representability-question.md`.
 
 **Active FPGA work is NOT reflected in the huge checkpoint below (which stops at 2026-07-10).**
 Current FPGA state:

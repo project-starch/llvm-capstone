@@ -285,7 +285,7 @@ first, so representability is still open. What we tried and learned:
   read 0 → **the cap never reached `gp`.** `sp` (cscratch) + PCC arrive fine; **`ctvec` arrives
   0** → this RTL's fast first-entry (c-effective) path **does not restore `ctvec`** for the
   entered domain. Delivery problem, not representability.
-- **Open → the board owner** (`/tmp/capstone/jason-gp-representability-question.md`, NOT in repo): which
+- **Open → the board owner** (`/tmp/capstone/board-owner-gp-representability-question.md`, NOT in repo): which
   first-entry context slot can seed `gp`; canonical mechanism for a domain with globals.
 - **Next for A:** (1) read `caplifive-cva6` RTL for the c-effective slot layout, then deliver
   via a restored slot; (2) stack-memory delivery via the proven `sp`/`cscratch` path; (3) the

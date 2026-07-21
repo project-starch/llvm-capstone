@@ -34,7 +34,7 @@ the gp-delivery design + code is captured so A can iterate without re-deriving i
 UNTESTED**: we never got a tagged `gp` into the domain to test it. What we newly learned is a
 **delivery constraint**: the monitor can't hand a first-entry domain a capability via `ctvec`.
 
-**Open question → the board owner** (kept out of the repo, in `/tmp/capstone/jason-gp-representability-question.md`):
+**Open question → the board owner** (kept out of the repo, in `/tmp/capstone/board-owner-gp-representability-question.md`):
 which context slot (if any) the first-entry domain call restores for seeding `gp`, and what the
 intended mechanism is for a domain with globals to obtain a cap covering them.
 
