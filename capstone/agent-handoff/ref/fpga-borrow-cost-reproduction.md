@@ -134,10 +134,15 @@ tree is never pruned, so `revoke` walks a growing list).
 
 ## 9. Platform constraints (design around these)
 
-- **No `drop`/csdrop** (funct7 `0001011`): absent from the QEMU decode, no helper,
-  not in the RTL → `drop a0` traps. The revocation tree cannot be pruned in software;
-  each `mrev` leaks a node for the domain call. A clean single-op `revoke` / pruned
-  O(1) borrow needs the RTL to release nodes on `revoke` (or add a prune op).
+- **No slot reclamation in the rev-node pool.** `drop`/csdrop *is* implemented — it is
+  decoded in QEMU (`helper_csdrop`) and the RTL (`decoder.sv`, rev-node drop endpoint)
+  and has an LLVM builtin (`__builtin_capstone_cap_drop`) — but it only *invalidates* a
+  node (clears its valid bit); it does not free the node's slot. The rev-node pool is a
+  fixed 1024-entry **bump allocator** with a monotonic head (`capstone_rev_node.anvil`:
+  head is set once at init and only ever `+1`), and neither `drop` nor `revoke`
+  decrements it. So the tree cannot be pruned in software; each `mrev` consumes a slot
+  for the domain call's lifetime. A clean single-op `revoke` / pruned O(1) borrow needs
+  the RTL allocator to free the slot on `drop`/`revoke`.
 - **`delin` is load-bearing.** `mrev`+`revoke` without `delin` returns UNINIT (not a
   reusable linear cap), so it can't loop; `revoke` can't be timed apart from `delin`.
 - **Revocation ceiling.** Keep total `mrev`s per domain call well under ~256 — nodes
