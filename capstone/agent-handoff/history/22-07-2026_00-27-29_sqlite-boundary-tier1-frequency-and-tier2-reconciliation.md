@@ -90,6 +90,51 @@ So Tier-2 is a wiring + workload-port task with a bounded alignment risk, not a
 deep-compiler-gap task. That materially raises the priority of finishing Experiment B
 directly (it now serves Compatibility **and** the direct overhead number at low risk).
 
+## Tier-2 direct in-domain measurement (DONE 2026-07-22)
+
+Rather than combine Tier-1's native-x86 denominator with a silicon unit cost, this
+measures the denominator **in the real environment**: a bulk SQLite scan running in a
+pure-capability domain, instruction-counted with `csrdicount` under QEMU `-icount`
+(the same functional-model proxy the paper's QEMU-to-QEMU comparison uses).
+
+Probe: `benchmarks/sqlite/sqlite_boundary_cost_domain.c` (built via
+`build-sqlite-capstone.sh DOMAIN_SRC=…`, knob `-DBOUNDARY_ROWS`). It inserts N rows
+into `t(id,a,b)` (two TEXT cols), then brackets a `SELECT a,b FROM t ORDER BY id`
+scan that reads each column via `sqlite3_column_text` (the borrow site), counting
+borrows B and retired instructions T of the scan.
+
+| rows | borrows | scan instrs (in-domain, icount) | instrs / borrow | scan overhead @CPI1 | @CPI1.5 |
+|--:|--:|--:|--:|--:|--:|
+| 200 | 400 | 1,145,047 | 2,863 | 5.97 % | 3.98 % |
+| 400 | 800 | 2,276,562 | 2,846 | 6.01 % | 4.01 % |
+
+- Size-stable: **~2,850 target-ISA in-domain instructions of real PureCap SQLite work
+  per column hand-out**; scan instrs scale linearly.
+- Overhead = B·171 cyc / (T·CPI); 171 = the silicon **added** protection cost
+  (`mrev`+`delin`+`revoke`; the load is already in the scan). `-icount` cannot see
+  the multi-cycle `mrev`/`revoke` HW cost, so the *unit* stays the silicon number;
+  QEMU supplies only the faithful denominator.
+
+**Result bracket (both confirm "revoke is rare"):**
+- **Worst case — a pure column-scan phase (boundary-densest work):** ~**6 %** @CPI1,
+  ~4 % @CPI1.5. This is the ceiling: even when the program does nothing but read
+  columns across the boundary, a borrow occurs only once per ~2,850 instructions.
+- **Typical — a mixed workload** (Tier-1 speedtest1, inserts/index/updates dilute the
+  scan): ~**1 %**.
+
+The SQLite bulk workload itself ran **correctly** in-domain throughout (further
+compatibility evidence); the only snag was infra (below), not a capability fault.
+
+## Infra finding: stale shared QEMU binary (fixed by rebuild)
+
+`csrdicount` (the `-icount` readout op) was illegal in-domain at first: the built
+`capstone/capstone-qemu/build/qemu-system-riscv64` was dated **Jul 10**, but the op
+was added to the pinned submodule source on **Jul 13** (`fb3217d179`) — the shared
+test binary was 12 days behind its own pinned source (`strings` showed no
+`csrdicount`). An **incremental** `ninja qemu-system-riscv64` (13 s, 12 steps,
+submodule source unchanged/clean) brought it in sync. Worth noting for the nightly
+orchestrator: the QEMU binary is not auto-rebuilt when the submodule source moves.
+
 ## Doc corrections made
 
 - `benchmarks/sqlite/README.md`: stale "not yet green / faults at
