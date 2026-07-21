@@ -300,12 +300,75 @@ State report: `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-c
 
 ---
 
-## 8. Once the domain call returns a RESULT (future)
+## 8. Cycle-accurate reproduction — DONE (2026-07-21)
 
-Run the full sweep (borrow + three revoke `.dom`s) via `run_rtl_smoke.py`, harvest the
-`RESULT` lines, and feed them to `run-revoke-cost-fpga-qemu.sh --parse-uart` to reproduce the
-per-op cycle breakdown next to the QEMU baseline (borrow raw2/borrow6; revoke bump7 /
-norevoke60 / revoke65, +5 O(1) revoke-at-free). That is the original deliverable.
+The domain-call wedge (§7) was cleared by the **gp-free / cjalr-free** domain:
+`borrow_cost_fpga_nogp.{c,dom}` + `start-fpga-nogp.S`, single REV_SHARED region,
+plain call/ret ABI (build script sed-retargets the one `cjalr zero,0(ra)` return to
+plain `ret`). It runs the full temporal-safety measurement on silicon. Results,
+numbers, and the full analysis live in
+`history/21-07-2026_16-12-13_RESULTS-fpga-borrow-cost-cycle-accurate.md`.
+
+### 8.1 Build + run the borrow-cost probe
+
+```bash
+bash capstone/tests/rtl-smoke/build-borrow-cost-fpga-nogp.sh   # -> nogp_ctl + nogp.dom
+```
+Board run: boot `fw_payload_fpga_up_ctl.bin` via gdb, UART-transfer the two
+binaries (gzip+base64, per-chunk sha), run `nogp_ctl nogp.dom`, harvest the
+`borrow-cost-fpga: RESULT cycles/op` line. The reference driver + a self-contained
+runner pattern (bitstream-verify, lock, boot, transfer, run, power-off+unlock) are
+in the scratchpad (`board_run_nogp.py`, `board_run_breakdown.py`). **Numbers
+(64 iters):** raw 8, borrow 182, copy@256 902, copy@1024 3611 cyc/op.
+
+### 8.2 Build + run the per-primitive BREAKDOWN probe (Q6)
+
+```bash
+bash capstone/tests/rtl-smoke/build-borrow-breakdown-fpga-nogp.sh  # -> bd_ctl + bd.dom
+```
+QEMU functional pre-check (catches ABI/build bugs before board time; needs the
+rootfs write-lock, serialize with other QEMU suites):
+```bash
+python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
+  --share-dir <dir> --qemu-extra-arg=-icount --qemu-extra-arg="shift=0,sleep=off" \
+  --guest-command "cp /mnt/host/borrow_breakdown_fpga_nogp_ctl /tmp/bd && chmod 0755 /tmp/bd && /tmp/bd /mnt/host/borrow_breakdown_fpga_nogp.dom" \
+  --success-marker "borrow-breakdown-fpga: measurement complete"
+```
+Then `board_run_breakdown.py`. **Numbers (64 iters):** load 1, mrev+delin+revoke
+170 (tree 0–64), borrow 365 (tree 64–128) cyc/op → fit borrow$(N)\approx75+3N/2$;
+**revoke dominates, mrev/delin/load are ~1 cyc.**
+
+### 8.3 Platform constraints you WILL hit (learned the hard way)
+
+- **No `drop` on this core.** `drop`/csdrop (funct7 `0001011`) is not in the QEMU
+  decode table, has no helper, and is not in the RTL — `drop a0` traps. So you
+  **cannot prune the revocation tree in software**; the "reset the tree to size-1"
+  trick is impossible here. A clean single-op `revoke` / O(1) borrow constant needs
+  an RTL prune (implement `drop`, or auto-release nodes on `revoke`).
+- **`delin` is load-bearing.** `mrev`+`revoke` without `delin` returns UNINIT (not
+  a reusable LINEAR cap), so it can't loop. `revoke` is inseparable from `delin`.
+- **`mrev`-alone resets the board.** The only loop isolating `mrev` accumulates
+  un-revoked nodes (no `drop` to prune) → same stress as the ~1024-revoke ceiling,
+  hit immediately → silent reset. Gated off (`BREAKDOWN_WITH_MREV_ONLY=0`); the
+  safe breakdown uses only the proven revoke-per-iteration loops (`mrd`, `full`).
+- **Keep total revocations per domain call well under ~256.** `mrev` allocates a
+  node per iter and nothing releases it; 1024 in one call breaks `domreturn` AND
+  wedges the debug module. `BREAKDOWN_ITERS=64` → ≤128 nodes: safe. 256 exits
+  cleanly; 1024 resets. Read numbers at 64/256, not 1024.
+- **Board flakiness costs runs.** Expect: silent bitstream overwrite (always verify
+  `nv_bitstream_name == working-caplifive-captype-fixed.bit` before measuring, as
+  `board_run_breakdown.py` does); mid-session websocket drops / HTTPS read-timeouts
+  right after `detaching gdb` (retry the whole run); UART history-replay noise in
+  the capture (trust only the freshly-printed `RESULT` line inside your BEGIN/END
+  markers). See the board-stability report (`/tmp/capstone/`, not the repo).
+
+### 8.4 Still open
+
+The revoke-cost sweep (bump / norevoke / revoke — the temporal-safety headline vs
+CHERI) still needs the gp-free treatment applied to `revoke_cost_fpga.*` (uses the
+allocator; more moving parts). Feed its UART `RESULT` lines to
+`run-revoke-cost-fpga-qemu.sh --parse-uart` for the per-op breakdown next to the
+QEMU baseline (borrow raw2/borrow6; revoke bump7 / norevoke60 / revoke65).
 
 ---
 

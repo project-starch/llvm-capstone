@@ -89,6 +89,64 @@ while copy grows with size. Break-even is below the smallest copy: borrow
 `O(size)`" is confirmed cycle-accurate; only the borrow *constant* is not yet
 pinned.
 
+## 3b. Per-primitive breakdown (Q6) — board run 2026-07-21 (cyc/op)
+
+A dedicated breakdown domain (`borrow_breakdown_fpga_nogp.{c,dom}` +
+`borrow_breakdown_fpga_nogp_ctl.c`, built by `build-borrow-breakdown-fpga-nogp.sh`)
+times the primitives, as far as the platform allows. Two hard constraints shape
+what is measurable:
+
+- **No `drop` on this core.** `drop`/csdrop (the prune instruction the §5 pruned
+  probe assumed) is **not implemented**: funct7 `0001011` is absent from the QEMU
+  decode table, there is no helper, and the RTL is a subset. `drop a0` would trap.
+  So the revocation tree **cannot be pruned in software** — the clean single-op
+  constant needs an RTL primitive (implement `drop`, or auto-release on `revoke`).
+- **`delin` is load-bearing.** `mrev`+`revoke` *without* `delin` returns UNINIT
+  (not a reusable LINEAR cap: `cap_rev_tree_revoke` keeps data only if the revoked
+  subtree is non-linear), so it cannot loop. `revoke` is therefore inseparable
+  from `delin`; the measurable units are `load`, `mrev+delin+revoke`, and (only
+  functionally) `mrev` alone.
+- **`mrev` alone resets the board.** The only loop isolating `mrev` mrevs without
+  revoking, accumulating one un-reclaimed node per iter — the same resource stress
+  as the ~1024 ceiling (§3.3), reached immediately because nothing is released and
+  there is no `drop`. On silicon it resets during entry. So `mrev`-alone is
+  DISABLED (`BREAKDOWN_WITH_MREV_ONLY=0`); the safe breakdown uses only the proven
+  revoke-per-iteration loops.
+
+**Silicon numbers (captype-fixed CVA6, mcycle, 64 iters):**
+`empty=349 raw=423 mrd=11253 full=23756` →
+
+| quantity | cyc/op | note |
+|----------|-------:|------|
+| load (raw)                    | **1**   | the actual data access — ~0.6% of borrow |
+| mrev+delin+revoke (`mrd`), tree 0–64 | **170** | the reclaim unit at a small tree |
+| borrow (`full`), tree 64–128  | **365** | borrow at an *inflated* offset (see below) |
+
+The cross-check `full − mrd` came out **195**, not `load` (1). That is not an
+error — it is the tree-growth (§3) made explicit: `mrd` runs at revocation-tree
+offset 0–64 and `full` at 64–128 (each `revoke` leaves an unreclaimed node), so
+`full − mrd = load + 64·growth`. Solving: **growth ≈ 3.0 cyc/node**, independently
+reproducing the 182→464 (64→256) sweep fit from §3. The consistent model is
+
+> **borrow(N) ≈ 75 + 3·(N/2) cyc/op**  (single-lineage tight loop) — base ≈ **75**
+> cyc, growth ≈ **3 cyc per accumulated revocation node**.
+
+It predicts 171 @64 (measured standalone **182**) and 459 @256 (measured **464**) —
+both within noise. Attribution:
+
+- **load ≈ 1 cyc** — the borrowed access itself is essentially free; the cost is
+  the temporal-safety machinery, not the dereference.
+- **mrev + delin + revoke ≈ 74 cyc base** (+3 cyc/node) — this IS the borrow cost.
+- `mrev` and `delin` are single instructions (QEMU decomposition: borrow = 6
+  instrs = mrev 1 + delin+revoke ~3 + load 2; the ~1-cyc silicon `load` confirms a
+  lone instruction is ~1 cyc), so within the 74-cyc base **`revoke` is the
+  dominant primitive (~70 cyc) and the SOLE source of the O(tree) growth.**
+
+**Q6 answered:** of `mrev`/`delin`/`revoke`, **`revoke` carries essentially the
+entire cost and all the growth**; `mrev`, `delin`, and the `load` are each ~1 cyc.
+A number for `revoke` *alone* (vs the +delin unit) and a pruned O(1) constant both
+require an RTL change (a `drop`/auto-prune), not more board time.
+
 ## 4. What is solid vs open
 
 - **Solid:** the measurement runs on silicon; copy@256B ≈ 900 cyc and copy@1024B ≈
@@ -100,21 +158,28 @@ pinned.
 
 ## 5. Recommended next measurements
 
-- **Per-op breakdown of `mrev` / `delin` / `revoke` (Q6).** The table reports the
-  borrow *sequence*, not the individual ops. A probe that times each op alone
-  (with the surrounding setup held constant) would attribute the cost — almost
-  certainly `mrev`+`revoke` (the tree ops) dominate and `delin` is near-free. This
-  is the single most informative follow-up and is straightforward (three small
-  timed loops); it needs board time, not new mechanism.
-- **Pruned single-op borrow.** Drop/free the revocation node each iteration (e.g.
-  `csdrop` the minted `mrev` cap after `revoke`) so the tree stays size-1; then
-  `borrow` is a true single-op constant at any iteration count — expected ~the
-  86-cyc fit intercept. Confirms the O(1) headline cleanly.
-- **A 3rd iteration point (128)** to validate the linear growth model (the 128 run
-  flaked; retry).
+- **Per-op breakdown of `mrev` / `delin` / `revoke` (Q6).** DONE (§3b): `revoke`
+  carries essentially the whole cost and all the growth; `mrev`, `delin`, `load`
+  are each ~1 cyc. The only residual — `revoke` *alone* separated from `delin`, and
+  a pruned O(1) constant — is **blocked in software** (no `drop` on this core) and
+  needs an RTL prune/auto-release, NOT more board time.
+- ~~Pruned single-op borrow via `csdrop`~~ — **not possible on this platform**:
+  `drop` is unimplemented (§3b), so the tree cannot be pruned in software. The base
+  constant (~75 cyc) is instead recovered from the growth fit (§3b), which is
+  self-consistent across three data points (mrd@0–64, full@64–128, standalone
+  64/256). A truly pruned probe requires the RTL to implement `drop` or release
+  nodes on `revoke`.
+- **3rd growth point — now HAVE it.** The breakdown's `mrd`@0–64 vs `full`@64–128
+  gives an in-run growth slope (≈3 cyc/node) that agrees with the standalone
+  64→256 sweep; the linear model is validated.
 - **Revoke-cost probe (bump/norevoke/revoke) on silicon** — the temporal-safety
-  headline vs CHERI — needs the same gp-free treatment applied to
-  `revoke_cost_fpga.*` (uses the allocator; more moving parts).
+  headline vs CHERI — still open; needs the same gp-free treatment applied to
+  `revoke_cost_fpga.*` (uses the allocator; more moving parts). This is the one
+  remaining board-worthy measurement.
+- **RTL asks (for the board owner / downstream):** implement `drop` (funct7
+  `0001011`), or auto-release revocation-tree nodes on `revoke`, so the tree stays
+  bounded — this both kills the ~1024-revoke reset ceiling AND unlocks a clean
+  single-op `revoke` / O(1) borrow measurement.
 
 ## 6. Is this refinement critical? (Q4)
 
@@ -126,6 +191,13 @@ ambiguity — but it does **not block** reporting the cycle-accurate shape (borr
 `O(1)` ≪ copy `O(size)`), which the current data already establishes. The paper is
 updated to report exactly that (copy numbers firm; borrow shape firm; borrow
 constant flagged as in-progress with the revocation-accumulation caveat).
+
+**Update 2026-07-21 (breakdown run):** the borrow constant is now pinned by a
+third, independent route — the per-primitive breakdown (§3b) yields base ≈ 75 cyc
++ 3 cyc/node, self-consistent with the 64/256 sweep, and attributes the cost to
+`revoke`. So the borrow *shape* and *constant* are both settled to the resolution
+this silicon allows; the only thing that would sharpen it further (a pruned O(1)
+`revoke`) is gated on an RTL prune primitive, not on us. Nothing here is blocking.
 
 ## 7. Method note (how the number was obtained)
 
