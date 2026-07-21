@@ -106,15 +106,51 @@ Land the chosen fix + the plain-call/ret lowering; build **one integer-only benc
   allocates **no** rev-node), and naturally satisfied by Experiment B (few boundary
   lends). Only matters if a single domain call revokes >1024 times.
 
-## 4. Proposed sequence
+## 4. Proposed sequence (prioritized 2026-07-22)
 
-1. **Now (no board):** QEMU experiment for Experiment B's overhead question — instrument
-   a boundary workload (Host–SQLite first, it exists) to count how often `revoke`
-   actually fires vs total instructions, and report aggregate overhead. Directly tests
-   "revoke is rare." Matches the QEMU-to-QEMU method already in the paper.
-2. **1–2 days:** the `gp` spike (§2 Step 1).
-3. **~1 week after spike:** first real integer program (BEEBS kernel, then CoreMark) in
-   a domain **on silicon** — Experiment A existence proof + ambient PureCap cycle cost.
+**Prioritization decision.** The highest-leverage thread is getting a real,
+substantial application (full SQLite) to run *correctly* in a domain under PureCap
+on QEMU. It does double duty: (i) it **is** the Compatibility handle the PI says we
+lack (a real app runs correctly under pervasive capabilities), and (ii) it unblocks
+the **direct** boundary-overhead measurement (Tier 2 below) — the PI's "revoke is
+rare" number. Same effort, two of the three eval goals, on the **stable** vehicle.
+Silicon apps (the `gp` bring-up, §2) are **deferred to a stretch**: silicon's unique
+contribution — cycle-accurate primitive costs — is already captured, and the `gp`
+path is board-fragile and high-risk for a *weaker* compatibility claim (a small
+integer benchmark, no host↔engine boundary).
+
+Two measurement tiers for Experiment B's overhead:
+
+- **Tier 1 (frequency estimate, doable now, no blockers).** On a runnable SQLite
+  build, run a real query workload (**speedtest1**) with instruction counting;
+  count boundary events *B* (`sqlite3_column_*` hand-outs = borrows; `step`/
+  `finalize`/`close` = revokes) vs total retired instructions *T*. Aggregate
+  overhead ≈ *B*·(per-op cost)/*T*. Directly tests "revoke is rare" as an estimate.
+  The build can be a plain (non-domain) build — *B* and *T* are build-independent,
+  and a plain build runs the whole workload to completion.
+- **Tier 2 (in-domain direct measurement, blocked → the main thrust unblocks it).**
+  Run speedtest1 with SQLite *inside a domain* (engine = lender), the host harness
+  as embedder (borrower), and measure real cycles bump/norevoke/revoke. **Blocked**
+  by capability-tag-preservation gaps: full SQLite faults during init at
+  `sqlite3RegisterBuiltinFunctions` (an aggregate copy strips nested-pointer tags —
+  same class as the fixed gap6). Closing these gaps *is* the compatibility result.
+
+Sequence:
+
+1. **Now (no board):**
+   - **Tier 1** frequency estimate (speedtest1) — cheap, immediate "revoke is rare"
+     data point; de-risks the whole hypothesis before heavier investment.
+   - **Gap-scoping spike** — enumerate how many tag-preservation gaps remain between
+     the current frontier (`sqlite3RegisterBuiltinFunctions`) and a full speedtest1
+     run in-domain. *Sizes* the main thrust before committing (the one real risk is a
+     long gap tail — surface its length up front).
+2. **Main thrust (no board):** close the tag-preservation gaps → full SQLite runs a
+   workload in a domain under PureCap → **Tier 2** direct overhead + the Compatibility
+   result (real app correct under pervasive capabilities).
+3. **Deferred stretch (board):** the `gp` spike (§2 Step 1) → first real integer
+   program (BEEBS kernel, then CoreMark) in a domain **on silicon** — Experiment A
+   existence proof + ambient PureCap cycle cost. Revisit only if schedule allows after
+   the Compatibility thrust lands.
 4. **Lua boundary case study (Experiment B) — QEMU only, not silicon.** Lua (~23k LoC,
    heavy globals, `longjmp`, default floating-point) plus the documented board
    instabilities (UART-only transfer, console drops, silent in-domain resets, no HW
