@@ -328,47 +328,47 @@ static int run(const char *dom_path) {
   puts_(TAG ": region shared (host retains); measurement ran in share entry\n");
 
   /* Breakdown result slots (see borrow_breakdown_fpga_nogp.c BD_SLOT_*):
-   * 0=iters 1=empty 2=raw(load) 3=mrev_only(mint) 4=mrd(mint+delin+revoke)
-   * 5=full(borrow) 6=magic(0xB2EA) 7=sink. */
+   * 0=iters 1=empty 2=raw(load) 3=shrink 4=mrev(TOTAL over MREV_ITERS)
+   * 5=mrd(mrev+delin+revoke) 6=full(borrow) 7=magic(0xB2EA). */
+  #define MREV_ITERS 16UL   /* must match domain BREAKDOWN_MREV_ITERS */
   const ulong *r = (const ulong *)results;
   ulong iters = r[0];
   ulong empty = r[1];
   ulong raw = r[2];
-  ulong mrev_only = r[3];
-  ulong mrd = r[4];
-  ulong full = r[5];
-  ulong magic = r[6];
+  ulong shrink = r[3];
+  ulong mrev_tot = r[4];
+  ulong mrd = r[5];
+  ulong full = r[6];
+  ulong magic = r[7];
   if (iters == 0) { puts_(TAG ": iters=0\n"); return 1; }
   if (magic != 0xB2EAUL) { puts_(TAG ": bad magic (not a breakdown domain)\n"); return 1; }
 
   puts_(TAG ": RAW iters="); putu_(iters);
   puts_(" empty="); putu_(empty);
   puts_(" raw="); putu_(raw);
-  puts_(" mrev_only="); putu_(mrev_only);
+  puts_(" shrink="); putu_(shrink);
+  puts_(" mrev_tot="); putu_(mrev_tot); puts_("(/"); putu_(MREV_ITERS); puts_(")");
   puts_(" mrd="); putu_(mrd);
   puts_(" full="); putu_(full); puts_("\n");
 
-  /* Per-op cycle costs (empty-subtracted). Directly-measured quantities:
-   *   load          = raw
-   *   mrev+delin+revoke = mrd           (the reclaim unit; mrev is ~1 instr per
-   *                                       the QEMU decomposition, so mrd ~= the
-   *                                       delin+revoke tree cost)
-   *   borrow        = full              (mrev + delin + revoke + load)
-   * cross-check: full - mrd  should ~= raw (the load).
-   * (mrev-in-isolation is omitted: the only loop that isolates it accumulates
-   *  un-revoked nodes and resets this silicon -- so mrev_only == empty here.) */
+  /* Per-op cycle costs (empty-subtracted). ovh = per-iter loop overhead. Directly
+   * measured: load, shrink, mrev, and the reclaim unit mrev+delin+revoke (mrd);
+   * derived: delin+revoke = mrd - mrev; borrow = full. */
+  ulong ovh = empty / iters;
   ulong load_pp = (raw > empty) ? (raw - empty) / iters : 0;
+  ulong shrink_pp = (shrink > empty) ? (shrink - empty) / iters : 0;
+  ulong mrev_pp = (mrev_tot / MREV_ITERS > ovh) ? (mrev_tot / MREV_ITERS - ovh) : 0;
   ulong mrd_pp = (mrd > empty) ? (mrd - empty) / iters : 0;
   ulong full_pp = (full > empty) ? (full - empty) / iters : 0;
-  ulong xchk_pp = (full_pp > mrd_pp) ? (full_pp - mrd_pp) : 0;
-  (void)mrev_only;
+  ulong dr_pp = (mrd_pp > mrev_pp) ? (mrd_pp - mrev_pp) : 0;   /* delin+revoke */
 
-  puts_(TAG ": RESULT cycles/op  load="); putu_(load_pp);
-  puts_("  mrev+delin+revoke="); putu_(mrd_pp);
+  puts_(TAG ": RESULT prim cyc/op  load="); putu_(load_pp);
+  puts_("  mrev="); putu_(mrev_pp);
+  puts_("  delin+revoke="); putu_(dr_pp);
+  puts_("  shrink="); putu_(shrink_pp); puts_("\n");
+
+  puts_(TAG ": RESULT seq  cyc/op  mrev+delin+revoke="); putu_(mrd_pp);
   puts_("  borrow(full)="); putu_(full_pp); puts_("\n");
-
-  puts_(TAG ": RESULT xcheck   full-mrd="); putu_(xchk_pp);
-  puts_(" (should ~= load="); putu_(load_pp); puts_(")\n");
 
   puts_(TAG ": measurement complete\n");
   return 0;
