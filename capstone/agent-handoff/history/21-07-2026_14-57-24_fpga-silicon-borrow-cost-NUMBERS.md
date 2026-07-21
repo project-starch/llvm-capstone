@@ -63,6 +63,39 @@ the borrow/copy deltas dominate so the per-op figures are robust to it.
 Driver: scratchpad `/tmp/capstone/board_run_nogp.py` (+ `board_flash_extract.py`
 for the re-flash). QEMU sanity of the 64-iter build: raw=4/borrow=8 (icount).
 
+## Convergence check at 256 iters — borrow is NOT a clean constant (tree growth)
+
+Re-ran at 256 iterations (also exits cleanly — `domreturn` works at 256):
+
+```
+iter64 : raw=8  borrow=182  copy@256B=902  copy@1024B=3611   empty=4
+iter256: raw=2  borrow=464  copy@256B=894  copy@1024B=3587   empty=840
+```
+
+- **`copy` is stable and trustworthy**: ~900 cyc @256B, ~3600 cyc @1024B — matches
+  across iteration counts (large signal, baseline-noise-immune). These are the
+  solid cycle-accurate copy numbers.
+- **`borrow` GROWS with the iteration count**: 182 → 464 cyc (64 → 256). Even
+  without subtracting the (noisy) `empty` baseline, `borrow_total/iter` = 183 vs
+  468. So the borrow/revoke per-op cost **increases with the number of prior
+  revocations**, and breaks entirely at 1024. Interpretation: the tight loop does
+  `mrev`+`revoke` on the same lineage every iteration; each `mrev` adds a
+  revocation-tree node that is not pruned, so revoke walks a growing tree — cost
+  scales with accumulated revocations until the tree is exhausted (the 1024 break).
+  This is an RTL revocation-resource behaviour the QEMU model does not show
+  (QEMU: constant). It does NOT necessarily refute the paper's O(1)-per-free claim
+  (real workloads free distinct objects, bounding the live tree by heap size, not
+  by a tight revoke loop) — but the tight-loop microbenchmark is not a faithful
+  single-op measurement on silicon.
+- **`raw` and `empty` are small, noisy signals** (empty 4 vs 840 does not scale
+  with iters — an mcycle-measurement artifact), so raw (~2-8 cyc, i.e. a cheap
+  load) is order-of-magnitude only.
+
+**Trustworthy silicon numbers:** copy@256B ~900 cyc, copy@1024B ~3600 cyc.
+**Borrow:** order ~180-470 cyc and rising with accumulated revocations; a clean
+single-op figure needs a redesigned probe that prunes the revocation node each
+iteration (e.g. `csdrop` the mrev cap) so the tree stays size-1.
+
 ## Follow-ups
 
 - Confirm convergence / precision at a higher iteration count that still exits
