@@ -133,6 +133,6 @@ evening BST (2026-07-16)**, then is **flying out and unreachable**. So:
 The human-driven RTL run already works, so this is **parallel, not
 critical-path** — the point is to have the driver ready so the eventual perf
 sweep runs without a human in the loop, and to be ready to wire up + sanity-check
-Jason's JS Thursday evening while he is still reachable. Deliver the offline
+the board owner's JS Thursday evening while he is still reachable. Deliver the offline
 scaffold + protocol map fast; don't block on the board or the collaborator to
 make progress.

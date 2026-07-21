@@ -16,6 +16,11 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
 
 ## Hard constraints
 
+- **Never mention any real person by name — anywhere.** No PI, supervisor,
+  colleague, board owner, or collaborator names in commits, code, docs, reports,
+  or any committed/shared content. Use neutral roles ("the board owner", "the
+  collaborator", "the PI"). This is permanent and absolute. (Upstream `lldb/`,
+  `llvm/` etc. files are not ours — leave their names alone.)
 - No `Co-Authored-By:` lines in commits.
 - Never commit debug/report files (`*_DEBUG_CHECKPOINT.md`, session notes).
 - Active plans live in `capstone/agent-handoff/plans/` (committed, portable across machines and agents).

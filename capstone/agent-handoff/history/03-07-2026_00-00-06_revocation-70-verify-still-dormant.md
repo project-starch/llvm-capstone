@@ -20,7 +20,7 @@ Recording bug (`cap_rev_tree.c` `cap_rev_tree_revoke`): the loop guard was
 `D > D`, always false, so the invalidation body never ran. Confirmed empirically:
 `run-revoke-matrix-probe.sh` → "use-after-revoke NOT trapped (dormant)".
 
-## 2. Author (Jason) go-ahead
+## 2. Author (the board owner) go-ahead
 
 Round-1 questions were answered (record under `/tmp/capstone/`); the Jul-1
 follow-up got: (a) the traversal *structure* "doesn't look incorrect ... starts

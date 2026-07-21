@@ -9,7 +9,7 @@ borrow-cost. Board-driver + our-image build changes only; no submodule-source co
 
 ## Reframe that started this task
 
-The board owner (Jason) resolved two things: (1) **use `working-caplifive-captype-fixed.bit`,
+The board owner (the board owner) resolved two things: (1) **use `working-caplifive-captype-fixed.bit`,
 don't regenerate the bitstream**; (2) our earlier custom image load-faulted on the UART
 because it **wasn't built for FPGA** — build the software with the FPGA mode via
 `caplifive-system` (`scripts/build-software.sh --mode fpga`, his "`--fpga`"), which

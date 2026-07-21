@@ -1,4 +1,4 @@
-# Follow-up prompt for Agent-B — task 017 phase 3 (DIY: take Jason off the critical path)
+# Follow-up prompt for Agent-B — task 017 phase 3 (DIY: take the board owner off the critical path)
 
 *Paste everything below the line into `claude-b`. Self-contained. This is the
 follow-on to the scaffold (phase 1) and the wire-up brief (phase 2,

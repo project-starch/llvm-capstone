@@ -21,7 +21,7 @@ controller). Read it top to bottom once before running anything. Companion docs:
 - **Non-persistent board use only.** Boot via JTAG/gdb (`load_image`), never rely on the
   board's resident firmware. **A bitstream flash is the ONLY persistent write** and is a
   HARD STOP-and-ask — volatile *or* non-volatile — because we cannot rebuild a bitstream
-  here. The one exception already exercised is re-flashing Jason's named
+  here. The one exception already exercised is re-flashing the board owner's named
   `working-caplifive-captype-fixed.bit` to undo another team overwriting the board (see §5).
 - **Lock the board** before driving it, **release + power off** in a `finally` on every run
   (good citizen; the user authorized ignoring other users but not leaving it powered/locked).
@@ -175,7 +175,7 @@ Check first:
 # the driver exposes GET /api/bitstreams + flash_state; nv_bitstream_name tells you what's resident
 ```
 
-If it must be re-flashed, this is the one allowed persistent write (Jason's file, restoring
+If it must be re-flashed, this is the one allowed persistent write (the board owner's file, restoring
 the intended config). Two rules learned the hard way:
 - **Power on + settle BEFORE flashing** (a cold board's JTAG programmer isn't up → `flash_state=error`, no SPI write).
 - **Power-cycle AFTER flashing** (`--power-cycle`); a non-volatile flash only writes SPI, the
@@ -234,7 +234,7 @@ uses — `la` triggers a binutils `elfnn-riscv.c:2358` crash). On real `captype-
 dumper **stays silent**: an in-domain capability fault routes to the Capstone cap-trap vector
 **`ctvec`**, NOT M-mode `mtvec`, so `$mcause` reads 0. (The dumper's `@@MT` output only ever
 appeared on the *contaminated stock-Ariane* bitstream, which lacks the cap unit → faults go
-to M-mode.) Jason also confirmed `cscall`/`csreturn` **implicitly flush the icache**, killing
+to M-mode.) the board owner also confirmed `cscall`/`csreturn` **implicitly flush the icache**, killing
 the stale-icache / `fence.i` theory. Don't rebuild the mtvec dumper for this.
 
 **Method that worked — gdb single-step + register read at the wedge** (no rebuild; boot the
@@ -253,7 +253,7 @@ call, `monitor halt`, then `stepi`/`p/x $gp`; scratchpad `run_singlestep.py`, `r
 `0` on the FPGA. (The board evidence above is correct; the *cause* was mis-attributed —
 see the corrected verdict next.)
 
-**Fix = OUR domain runtime, NOT the RTL (corrected 2026-07-20 per Jason).** The
+**Fix = OUR domain runtime, NOT the RTL (corrected 2026-07-20 per the board owner).** The
 `gp = pc_cap(cursor 0)` line in QEMU's `helper_cscall` (`op_helper.c:1227-1231`) is **our
 own non-canonical patch** — commit `7aca0540` ("riscv: unblock native domain capability
 calls"), not canonical Capstone. So the RTL is correct to omit it, and the cursor-0
@@ -285,7 +285,7 @@ first, so representability is still open. What we tried and learned:
   read 0 → **the cap never reached `gp`.** `sp` (cscratch) + PCC arrive fine; **`ctvec` arrives
   0** → this RTL's fast first-entry (c-effective) path **does not restore `ctvec`** for the
   entered domain. Delivery problem, not representability.
-- **Open → Jason** (`/tmp/capstone/jason-gp-representability-question.md`, NOT in repo): which
+- **Open → the board owner** (`/tmp/capstone/jason-gp-representability-question.md`, NOT in repo): which
   first-entry context slot can seed `gp`; canonical mechanism for a domain with globals.
 - **Next for A:** (1) read `caplifive-cva6` RTL for the c-effective slot layout, then deliver
   via a restored slot; (2) stack-memory delivery via the proven `sp`/`cscratch` path; (3) the

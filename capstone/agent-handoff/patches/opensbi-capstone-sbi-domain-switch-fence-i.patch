@@ -15,7 +15,7 @@ reproduce the stall.
 Our capstone-bootstrap monitor lineage (2f772bb) DROPPED the fence.i icache
 flushes at the domain-switch/trap boundaries in sbi_capstone.S. The board-tested
 genesys-testing lineage keeps them — its tip commit is literally
-capstone-sbi@99aaffa8 "Added fence.i back" (Jason Yu). Without them, this CVA6's
+capstone-sbi@99aaffa8 "Added fence.i back" (the board owner Yu). Without them, this CVA6's
 instruction fetch is left with stale icache across the M-mode<->domain/S-mode
 context switch (same coherence class as the RFENCE and insmod hangs on this
 core). This patch re-inserts the 9 fence.i at the same boundaries the reference
