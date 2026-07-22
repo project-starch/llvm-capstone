@@ -38,22 +38,29 @@ New gate flag **`-capstone-gp-captable`** (`cl::init(false)`), separate from
 gp-captable implies the gp-free call/ret lowering (plain jal/jalr) but replaces the
 global-addressing half.
 
-### Stage 1 — access-side lowering (this stage)
-- Add the gated flag.
-- Assign each eligible domain global a stable index via a deterministic pre-pass
-  over `M.globals()` (defined, non-external, address-reachable data globals),
-  recorded in a target map keyed by GlobalValue.
-- In `expandCapGlobalBase` (or the DAG global-address lowering), under the flag,
-  emit `ldc rd, gp, index*16` instead of `scc gp, VA; delin`. The pcrel VA
-  materialization (`PseudoLLA`) is no longer needed for the base.
-- Lit: `llvm/test/CodeGen/Capstone/cap-gp-captable.ll` — a global load/store emits
-  `ldc … gp, <i*16>` under the flag and is byte-identical (still `scc`/`cincoffset`)
-  with it off. Assert no `scc … gp` under the flag.
+### Stage 1 — access-side lowering — DONE (commits 433a02f3, dfff7590)
+- Gated flag `-capstone-gp-captable` + `getGpCaptableIndex()` (deterministic
+  `M.globals()` enumeration: defined, sized, non-thread-local vars).
+- `CapstoneISelLowering.cpp::lowerGlobalAddress`: under the flag, an indexable
+  global lowers to `load i128 (gp + index*16)` — an invariant, entry-chained load
+  that selection folds into `ldc rd, index*16(gp)`; the loaded data cap is used
+  directly as the base. Non-indexable refs fall through to the default LGA path.
+  (Chose ISelLowering over expandCapGlobalBase because the access is a chained
+  memory load, which needs the DAG load machinery, not a pseudo expansion.)
+- Lit `cap-gp-captable.ll`: `ldc … (gp)` + `-NOT scc` under the flag; unchanged
+  `cincoffset gp; …` off. Corpus 41/41 green (flag-off byte-identical).
 
-### Stage 2 — global descriptor table (compiler-emitted)
-- Emit a read-only descriptor section (e.g. `.capstone_gp_table`) enumerating, in
-  index order, `{size, align, has_init, init_template_symbol}` per global, plus the
-  count N. The linker keeps initializers as a read-only template in the image.
+### Stage 2 — global descriptor table (compiler-emitted)  [NEXT]
+- **Reuse existing infrastructure** — `CapstoneCapGlobalInit.cpp` already does the
+  hard part: a per-module constructor-codegen pass + an AsmPrinter-emitted
+  **PC-relative `.capstone_cap_init` table** that `start.S` runs before `main`,
+  precisely because the domain image loads at a runtime base so absolute link-time
+  addresses are stale (its own design note spells this out). Model the gp-captable
+  builder on the SAME mechanism rather than a fresh descriptor path.
+- Emit, in `getGpCaptableIndex` order, per global: `{size, align, init-template
+  PC-relative offset (0 = zero-init/.bss)}`. Initializer bytes kept as a read-only
+  template in the image, referenced by a link-time-relative expression
+  (`.quad tmpl - .`) so it is position-independent.
 - Keep empty (integer-only / no-global) domains a clean no-op (N=0).
 
 ### Stage 3 — entry-glue table + init builder (generic, runtime)
