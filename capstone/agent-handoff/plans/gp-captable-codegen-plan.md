@@ -58,27 +58,45 @@ global-addressing half.
   `.capstone_cap_init`). Absent when the flag is off; N=0 globals => no section.
 - Lit `cap-gp-captable.ll` extended (descriptor + `CAP-NOT`); corpus 41/41 green.
 
-### Stage 3 — entry-glue table builder (generic, runtime)  [NEXT]
-- **DECISION on initializer values:** build the cap-table with **zero-initialized**
-  storage in the glue, and set initializer *values* via **runtime stores** (reuse
-  the `CapstoneCapGlobalInit` PC-relative-init-table + `start.S`-runner mechanism,
-  extended to materialize *all* initialized domain globals, not just capability
-  leaves, as gp-captable stores). This **avoids the image-read problem** entirely:
-  the glue never has to read an init template through PCC (an execute cap can't
-  serve as a data base — the same RTL rule that motivated this whole change), and
-  it reuses proven infra. So the glue only needs `{size}` from the descriptor;
-  `init_off` stays in the descriptor as an unused-for-now alternative.
-- Glue (generalize `start-gpfree-captable.S`): `sp = cscratch`; carve the N-entry
-  cap-table off the top (`split gp,sp,end - N*16`); for each i, carve `size[i]`
-  bytes from `sp`, zero them, `delin`, `stc` into `gp[i]`; remainder of `sp` =
-  stack. Reentry re-derives gp from `sp` (no gp memory round-trip).
-- Then the runtime-store init routine runs (gp-captable stores) to set values.
+### Stage 3 — entry-glue table builder  [NEXT]
+
+**CORRECTION (23-07): the glue must NOT read the descriptor at runtime.** Reading
+`.capstone_gp_table` from the image at entry is the *same* execute-cap data-read
+the RTL forbids (PCC is execute; there is no default data cap; `split`/`lcc` aren't
+even exposed as compiler intrinsics — only `scc`/`delin`/`shrink`/`mrev` are). So a
+runtime descriptor reader would wedge for the same reason the code-split gp did.
+capstone-c avoids this by baking each global's **size as a compile-time immediate**
+in straight-line prologue code (codegen.rs:280-293) — no runtime table read.
+
+**Approach:** a **build-time generator** reads the Stage-2 `.capstone_gp_table`
+descriptor from the compiled object and emits the table-build glue with sizes
+**baked in as immediates** (unrolled, one block per global). No runtime image read.
+The Stage-2 descriptor is thus consumed at *build* time, not runtime — its emission
+stays valid; only the consumer moves from the glue to the generator.
+
+- Generated glue per global i (from `start-gpfree-captable.S`'s proven sequence):
+  `sp = cscratch`; carve the N-entry cap-table off the top
+  (`addi t1, END, -N*16; split gp,sp,t1; delin gp`); then per global,
+  `addi t1,t1,-size[i]; split t2,sp,t1; delin t2; <zero size[i] bytes>; stc t2,gp[i]`;
+  `scc sp,sp,t1; delin sp`. Reentry re-derives gp (no gp memory round-trip).
+- **Initializer values** via **runtime stores** (reuse the `CapstoneCapGlobalInit`
+  PC-relative-init-table + `start.S` runner, extended to all initialized domain
+  globals as gp-captable stores) — also avoids any image data-read. First proof
+  uses a **zero-init** app (globals in `.bss`, filled at runtime by ordinary
+  gp-captable stores) so no initializer machinery is needed to validate the glue.
 
 ### Stage 4 — real-app proof
-- Pick a small integer benchmark with real globals + a call graph, build
-  `-capstone-gp-captable`, run in a domain on QEMU (gp-fabrication OFF), then on the
-  board (existing firmware — monitor unchanged). Expect correct result, clean exit.
-- Full regression corpus stays green with the flag OFF.
+- QEMU DONE (commit cc8f2372): compiler-built `-capstone-gp-captable` zero-init app
+  (`captable_zeroinit_app.c` + `start-gpfree-captable-app.S`) returns 554745964
+  (0x2110C06C) in a domain with gp-fabrication OFF; single flag => cjalr=0,
+  scc-gp=0, ldc gp[0]. Corpus 41/41 green with the flag off.
+- Silicon: run the same compiler-built dom on the board (existing firmware, monitor
+  unchanged) — confirms the compiler codegen output works on captype-fixed CVA6
+  (the hand-crafted probe already proved the cap-table *mechanism*; this proves the
+  *generated* code). [IN PROGRESS]
+- Follow-ups: build-time glue generator from `.capstone_gp_table` (arbitrary N);
+  runtime-store init pass for statically-initialized globals; a larger integer
+  benchmark (real call graph) end-to-end.
 
 ## Open question routed to the board owner (`/tmp/capstone/boardowner-msg.md`)
 Whether a **single** data cap over a data-region globals block (with direct
