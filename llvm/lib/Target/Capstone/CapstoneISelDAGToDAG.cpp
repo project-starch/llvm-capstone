@@ -21,6 +21,7 @@
 #include "llvm/CodeGen/SDPatternMatch.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IntrinsicsCapstone.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MathExtras.h"
@@ -83,6 +84,47 @@ cl::opt<bool> CapstoneGpFree(
              "avoid the gp root for direct calls / global addressing "
              "(silicon domain ABI); default off"),
     cl::init(false));
+
+// gp-captable: the silicon-correct global-addressing half of the gp-free domain
+// ABI. gp is the base of a per-global cap-table (data authority, derived in-glue
+// from sp/cscratch) rather than a cap over the code image; a global at cap-table
+// index i is reached by loading its capability from gp[i] (offset i * capability
+// width). This is the model proven to run on captype-fixed CVA6
+// (tests/runtime-qemu/gp-free-domain/start-gpfree-captable.S; see
+// history/22-07-2026_18-05-00_* UPDATE 23-07 "FIX VALIDATED" and
+// plans/gp-captable-codegen-plan.md). DEFAULT OFF -> byte-identical codegen, so
+// the regression corpus is unaffected; only silicon cap-table domains opt in.
+// Implies the gp-free call/ret lowering but replaces `scc gp,&g` global access
+// with `ldc rd, gp, i*16`.
+cl::opt<bool> CapstoneGpCaptable(
+    "capstone-gp-captable", cl::Hidden,
+    cl::desc("Address domain globals through a gp-based per-global capability "
+             "table (ldc gp[i]) instead of scc gp into the code image "
+             "(silicon-correct gp-free global ABI); default off"),
+    cl::init(false));
+
+// Cap-table index for a domain global, in deterministic module order. The SAME
+// enumeration (defined, sized, non-thread-local GlobalVariables in Module order)
+// is the source of truth shared with the entry-glue table/init builder, so the
+// access side and the runtime table agree on which slot holds which global.
+// Returns -1 for a value that is not an indexable domain global (function,
+// declaration, unsized/thread-local, constant pool, etc.).
+int getGpCaptableIndex(const GlobalValue *GV) {
+  const auto *GVar = dyn_cast<GlobalVariable>(GV);
+  if (!GVar || GVar->isDeclaration() || GVar->isThreadLocal() ||
+      !GVar->getValueType()->isSized())
+    return -1;
+  int Index = 0;
+  for (const GlobalVariable &Cand : GVar->getParent()->globals()) {
+    if (Cand.isDeclaration() || Cand.isThreadLocal() ||
+        !Cand.getValueType()->isSized())
+      continue;
+    if (&Cand == GVar)
+      return Index;
+    ++Index;
+  }
+  return -1;
+}
 
 #define GET_DAGISEL_BODY CapstoneDAGToDAGISel
 #include "CapstoneGenDAGISel.inc"
