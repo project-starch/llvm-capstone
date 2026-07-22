@@ -6,7 +6,40 @@ the definitive root cause, and how to reproduce every step. Companion runbook:
 `ref/gp-free-silicon-smoke-runbook.md`. QEMU proof:
 `22-07-2026_16-09-12_gp-free-domain-bringup-qemu-proof.md`.
 
-## UPDATE 2026-07-22 (latest-2): ra-spill fix done (necessary) but plain call/ret STILL crashes on RTL — needs board-owner input
+## UPDATE 2026-07-22 (latest-3): capstone-c CONFIRMS plain call/ret + integer ra are correct — board-owner cjalr question is MOOT
+
+Checked the reference before asking the board owner (per user). capstone-c
+(`capstone-c/src/codegen/`):
+- **Emits plain `call`/`ret`** for intra-domain function calls (`code_printer.rs`
+  `print_call`→`call name`, `print_ret`→`ret`); `domcall`/`domreturn` (funct 0x20/
+  0x21) are ONLY for cross-domain boundaries.
+- **Spills `ra` as an integer** (`codegen.rs:423`: `reg_id == GPR_IDX_RA ⇒ size 8`,
+  not 16) — exactly our `sd`/`ld` fix.
+- Also: the borrow-cost `nogp` domain that RUNS on silicon rewrites its `cjalr`→
+  plain `ret` (`build-borrow-cost-fpga-nogp.sh`) — direct proof plain ret works
+  in-domain on the RTL.
+
+**So Path B (cjalr) is WRONG and the board-owner cjalr question is unnecessary — the
+reference already answers it: plain call/ret + integer ra is correct.** Our ABI and
+ra-spill fix both match capstone-c.
+
+**Therefore the silicon crash is a DIFFERENT bug**, not call/ret or ra-spill (both
+confirmed correct) and not gp delivery (validated). What's still untested-on-silicon
+and unique to our domain vs the working borrow-cost domain: **(a) global access via
+`scc gp` + the shrink-globals bounds-narrowing (`lcc`/`shrink`/`cincoffset`), and
+(b) `ra` spill/restore across a NESTED call** (borrow-cost has a single leaf-ish
+`ret`, no cross-call ra spill; capstone-c does nested calls but our LLVM codegen may
+differ subtly). Crash signature = illegal-instruction (mcause=2, mtval=0 ⇒ fetched a
+zero instruction) ⇒ PC jumped into zeroed memory (e.g. the code padding
+[base+0x33c, base+0x1000) our fixed-offset linker introduced, or a wild target).
+
+**Next (no board owner needed):** single-step `domain_main` on the board to find the
+exact faulting instruction, and/or bisect by building variants: (1) globals but no
+nested call (leaf), (2) nested call but no globals, (3) no shrink-globals. Whichever
+crashes isolates it. Consider whether the [base+0x33c,base+0x1000) PCC padding
+(zeros = illegal instrs) is reachable by any mis-computed target.
+
+## UPDATE 2026-07-22 (earlier): ra-spill fix done (necessary) but plain call/ret STILL crashes on RTL
 
 Added the ra-spill fix (`llc` change, committed): with `-capstone-gp-free`, callee-saved
 `ra` (X1) now spills with integer `sd`/`ld` instead of `stc`/`ldc`
