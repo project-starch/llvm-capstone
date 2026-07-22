@@ -6,7 +6,30 @@ the definitive root cause, and how to reproduce every step. Companion runbook:
 `ref/gp-free-silicon-smoke-runbook.md`. QEMU proof:
 `22-07-2026_16-09-12_gp-free-domain-bringup-qemu-proof.md`.
 
-## UPDATE 2026-07-22 (later): create_domain FIXED via SPLIT-derived gp; hang moved to domain-entry
+## UPDATE 2026-07-22 (latest): gp DELIVERY WORKS on silicon; remaining bug is the plain-jal/jalr call/ret ABI
+
+gdb-halt on the hung core (driver `/tmp/capstone/board_run_gpfree_gdb.py`) gave:
+`pc=0x0 mcause=0x2(illegal-instr) mtval=0x0 ra=0x819a0064 sp=0x819bff50
+gp=0x819a1000` (domain base ~0x819a0000). Readout:
+- **`gp = base+0x1000` = the split-derived gp.** The domain ENTERED (share worked),
+  gp was delivered via cscratch, and it EXECUTED. **The C_GEN_CAP→SPLIT fix is
+  validated end-to-end on hardware.** (The controller's `region=`/MARK prints were
+  just lost/buffered on the flaky UART; the domain really did run.)
+- `ra = base+0x64` = the return point right after the glue's `call domain_main`
+  (`0x10060 jalr <domain_main>; 0x10064 ...`). So the crash is INSIDE the call graph.
+- **`pc=0, mcause=2, mtval=0` = the domain jumped to address 0 and fetched a zero
+  (illegal) instruction.** A return/`jalr` landed at 0. This is the OTHER half of the
+  gp-free ABI: plain `jal/jalr` calls + `jalr x0,0(ra)` returns (the domain uses
+  `auipc;jalr` calls and plain rets, NOT cjalr). Independent of gp; silicon-only
+  (QEMU runs the identical call graph fine).
+- **Next:** investigate the plain-call/ret path in a domain on silicon — how the
+  integer `ra` is saved/restored on the capability stack (`sd/ld ra, off(sp)` where
+  sp is the cscratch cap) and whether plain `jalr` sets/consumes `ra` as expected
+  inside a pure-cap domain. Single-step domain_main's prologue/helper-call/epilogue,
+  or compare against how the reference monitor does intra-domain call/ret. gp is NOT
+  implicated.
+
+## UPDATE 2026-07-22 (earlier): create_domain FIXED via SPLIT-derived gp; hang moved to domain-entry
 
 The `C_GEN_CAP` fix landed. Replaced the fabricate-based gp mint with a real
 derivation (`plans/gp-cap-derive-on-silicon-proposal.md`): the gp-free domain is
