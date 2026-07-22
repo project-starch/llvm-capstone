@@ -6,6 +6,35 @@ the definitive root cause, and how to reproduce every step. Companion runbook:
 `ref/gp-free-silicon-smoke-runbook.md`. QEMU proof:
 `22-07-2026_16-09-12_gp-free-domain-bringup-qemu-proof.md`.
 
+## UPDATE 2026-07-22 (later): create_domain FIXED via SPLIT-derived gp; hang moved to domain-entry
+
+The `C_GEN_CAP` fix landed. Replaced the fabricate-based gp mint with a real
+derivation (`plans/gp-cap-derive-on-silicon-proposal.md`): the gp-free domain is
+now linked with globals forced to a fixed offset
+(`tests/runtime-qemu/gp-free-domain/link-gpfree.ld`, `GPFREE_GLOBALS_OFFSET=0x1000`),
+and the monitor `create_domain` does `dom_gp = __split(dom_code, base+0x1000)` →
+PCC=[base,base+0x1000) execute, gp=[base+0x1000,base+code_size) R/W, delivered via
+the cscratch top-16 slot (same store target as before). No `C_GEN_CAP`.
+
+- **QEMU: PASS** with `CAPSTONE_GP_FABRICATE=0` — `retval = 554745961`. Logic
+  validated (split direction, cscratch store, cursor). Verified by rebuilding the
+  **caplifive-buildroot** `fw_jump.elf` (the QEMU tree) with the same edit and
+  running `run-domain-smoke.py`.
+- **Silicon: create_domain now RETURNS** — the controller printed
+  `gpfree-fpga: created domain ID = 0` (previously it hung here with zero output).
+  The split-derived gp is accepted by the RTL. Firmware = caplifive-system
+  fpga/ariane rebuilt with the split edit (`fw_payload_fpga_up_gpfree.bin`).
+- **New blocker:** silent hang (no reboot banner) at the **domain-entry / region
+  share** — after `create_region`/`map_region`/`memset` succeed (controller reached
+  the `region =` print), the `REGION_SHARE_ANNOTATED` that enters the domain hangs.
+  QEMU runs the same entry fine, so it's a silicon-specific difference in the domain
+  executing with the split gp (candidates: glue `ldc gp; delin` on the split cap,
+  `scc gp` bounds/perms, or the `domreturn` reset flagged in the runbook). Next:
+  add a UART marker right before the share to bracket share-vs-entry, and check the
+  `domreturn` path (Experiment A allocates no rev-nodes, so a clean exit was
+  expected). create_region/share themselves work for the borrow-cost domain on
+  silicon, so suspicion is the domain body/exit, not the region plumbing.
+
 ## TL;DR
 
 - **Goal:** run a real globals-using integer domain (gpfree_app: data globals +
