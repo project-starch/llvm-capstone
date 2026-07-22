@@ -63,6 +63,18 @@ determined?*
 
 ## 2. The enabling engineering: the `gp` bring-up (gate for any real app in a domain on silicon)
 
+> **STATUS 2026-07-22 — DONE on QEMU (functional, silicon-faithful).** The gp-free
+> compiler (`-capstone-gp-free`: plain call/ret + `scc` global addressing), the
+> monitor `C_GEN_CAP` + cscratch delivery, and the entry glue are implemented and
+> proven: a real globals-using app runs correctly gp-free with the fabrication OFF
+> (branch `capstone-gp-free`; `tests/runtime-qemu/gp-free-domain/`;
+> `history/22-07-2026_16-09-12_*`). The board owner ratified the approach
+> (cursor-0 unrepresentable → `scc`; gp software-delivered via cscratch;
+> `project_silicon_gp_delivery_boardowner_guidance`). Below is the original
+> proposal; the "monitor-side vs backend-side" fork resolved to **both**: backend
+> `scc` codegen + monitor `C_GEN_CAP`/cscratch delivery. Remaining = the FPGA
+> (caplifive-system) monitor copy + a board run.
+
 Today only hand-crafted, global-free, `cjalr`-free domains run on silicon. A real app
 (globals + a real call graph) does not, because our backend reaches globals and forms
 return capabilities through a `gp = PCC(cursor 0)` convention that **only our QEMU

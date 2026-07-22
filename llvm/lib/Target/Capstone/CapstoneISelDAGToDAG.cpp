@@ -67,6 +67,23 @@ cl::opt<bool> CapstoneShrinkStack(
              "(emit SHRINK at FrameIndex materialization); default on"),
     cl::init(true));
 
+// gp-free / plain-call-ret domain ABI (silicon bring-up, Experiment A). When on,
+// intra-domain calls and returns lower to plain jal/jalr that stay inside PCC
+// (bounds-checked on fetch) instead of CJALR (which needs a code capability),
+// and direct calls + global data addressing avoid the `gp = PCC(cursor 0)` root
+// our QEMU fork fabricates but the RTL never establishes. This matches the
+// reference monitor's own within-PCC call/ret ABI and lets a real globals-using
+// domain run on silicon. DEFAULT OFF: with it off, codegen is byte-identical to
+// the capability ABI, so the whole regression corpus is unaffected; only silicon
+// domains opt in. See plans/compatibility-eval-silicon-app.md §2.
+// Non-static: also read by CapstoneAsmPrinter (call/ret pseudo lowering).
+cl::opt<bool> CapstoneGpFree(
+    "capstone-gp-free", cl::Hidden,
+    cl::desc("Lower intra-domain calls/returns to plain jal/jalr within PCC and "
+             "avoid the gp root for direct calls / global addressing "
+             "(silicon domain ABI); default off"),
+    cl::init(false));
+
 #define GET_DAGISEL_BODY CapstoneDAGToDAGISel
 #include "CapstoneGenDAGISel.inc"
 
@@ -1728,17 +1745,27 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
     // Extract the symbol (TargetGlobalAddress) from LGA
     SDValue Symbol = Callee.getOperand(0);
 
-    // 1. PseudoLLA: Materialize numeric offset from PC
+    // 1. PseudoLLA: Materialize numeric offset from PC (auipc + addi %pcrel).
     SDNode *Offset = CurDAG->getMachineNode(Capstone::PseudoLLA, DL, PtrVT,
                                             Symbol);
 
-    // 2. GP: Get the root data capability
-    SDValue GP = CurDAG->getRegister(Capstone::X3, PtrVT);
+    if (CapstoneGpFree) {
+      // gp-free domain ABI: the callee is within the domain image, so the
+      // PC-relative address itself is a valid jump target inside PCC. Skip the
+      // `cincoffset gp` code-capability formation and hand the raw PC-relative
+      // address straight to the (indirect) call, which the AsmPrinter lowers to
+      // a plain `jalr` -- no gp, no cjalr. Reuses PseudoLLA's PC-relative fixup
+      // (the PseudoCALL/auipc+jalr CALL relocation is not wired for Capstone).
+      TargetReg = SDValue(Offset, 0);
+    } else {
+      // 2. GP: Get the root data capability
+      SDValue GP = CurDAG->getRegister(Capstone::X3, PtrVT);
 
-    // 3. CIncOffset: Create the final function pointer capability
-    SDNode *Ptr = CurDAG->getMachineNode(Capstone::CIncOffset, DL, PtrVT,
-                                         GP, SDValue(Offset, 0));
-    TargetReg = SDValue(Ptr, 0);
+      // 3. CIncOffset: Create the final function pointer capability
+      SDNode *Ptr = CurDAG->getMachineNode(Capstone::CIncOffset, DL, PtrVT, GP,
+                                           SDValue(Offset, 0));
+      TargetReg = SDValue(Ptr, 0);
+    }
   } else {
     // Indirect call (e.g. function pointer).
     // Callee is already a register (i128)
