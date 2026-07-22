@@ -305,3 +305,47 @@ Artifacts staged in /tmp/capstone/: `board_bisect_gpfree.py` (multi-variant
 sequential runner, stops at first crash), `board_gdb_vard.py` (gdb-halt CSR dump +
 shell-liveness probe + `x/6i`), variant doms varA/varB/varD/varE + gpfree_app (varC).
 Variant sources in the session scratchpad. Monitor edit still LOCAL (uncommitted).
+
+## UPDATE 23-07 (cont.) — DEFINITIVE ROOT CAUSE: SPLIT-of-code gp is unusable for data access on the RTL
+
+Two more board sessions bisected the globals-access path itself:
+- **varE** (globals READ-ONLY, shrink ON): CRASH (same M-mode wedge). ⇒ NOT
+  store-specific — a pure *read* of a global via gp wedges too.
+- **varG** (globals READ-ONLY, **ALL shrink OFF** — bare `scc gp; delin;
+  cincoffset; lw`, zero `shrink` insns): **CRASH** (`created domain ID = 0` then
+  wedge). ⇒ **`shrink` is NOT the culprit either.** The most minimal possible
+  global access — a plain `scc gp`-derived load — wedges the RTL.
+  (varH, the read-WRITE shrink-off twin, didn't run: varG crashing first settles it.)
+
+**Conclusion (board-proven): a gp derived by `__split`-ing the code image
+(`dom_code`) is fundamentally unusable as a data base on captype-fixed CVA6.**
+The monitor delivers gp with correct bounds (`base+0x1000`, confirmed by gdb), but
+`scc gp; delin; load` wedges → trap → mtvec≈0 → infinite illegal-instr loop at
+addr 0. QEMU (identical monitor edit + SPLIT) is permissive; the RTL is not. Most
+likely mechanism: `dom_gp` inherits `dom_code`'s **execute** authority/type, which
+carries no data (load/store) rights on real silicon — so any data use faults. This
+is independent of: shrink-globals, shrink-stack, store-vs-load, nested calls, and
+the plain call/ret + integer-ra ABI (all previously suspected, all now excluded).
+
+**This matches the board owner's guidance** ([[project_silicon_gp_delivery_boardowner_guidance]]):
+the usable/writable gp must come from **data authority (the capstone-c cscratch
+cap-table / `dom_data` path), NOT a partition of the executable code cap.** The
+current monitor `create_domain` gp derivation (line ~310, `dom_gp =
+__split(dom_code, base+0x1000)`) is the wrong source and must be replaced.
+
+**Recommended fix direction (a "big direction" — propose + confirm before coding):**
+- Writable globals should live in a **data region the monitor already holds a
+  data-typed cap for** (like `dom_data`), and gp should be a data cap over that
+  region — not carved from `dom_code`. Options:
+  (A) link `.data`/`.bss` into the `dom_data` region (layout change) + monitor
+      delivers gp = data cap over it;
+  (B) if the RTL exposes a retype/perm op (CAPPERM/CAPTYPE) to turn a code split
+      into a data cap, apply it in the monitor after the split;
+  (C) confirm the exact reference mechanism from capstone-c's cap-table and mirror it.
+- One board run per candidate to confirm (bare `scc gp; delin; lw` must survive).
+
+**Ruled-out / red-herring summary for future sessions:** call/ret ABI ✗, ra-spill
+sd/ld ✗, nested calls ✗, cjalr / board-owner cjalr question ✗ (moot), shrink-globals
+✗, shrink-stack ✗, store-vs-load ✗. The single remaining cause is the **gp cap
+source** (SPLIT-of-code vs data authority). Also open: the degenerate-SPLIT
+create_domain hang for no-globals images (image==0x1000).
