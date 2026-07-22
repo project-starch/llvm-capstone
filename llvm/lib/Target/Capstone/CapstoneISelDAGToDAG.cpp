@@ -126,6 +126,13 @@ int getGpCaptableIndex(const GlobalValue *GV) {
   return -1;
 }
 
+// gp-captable is a superset of gp-free: it replaces the global-addressing half
+// (scc gp -> ldc gp[i]) but still needs the gp-free call/ret + ra-spill lowering
+// (plain jal/jalr within PCC, integer ra) and the gp-free fallback for
+// non-indexable symbol refs. So every gp-free ABI decision is active under either
+// flag; this is the single predicate the call/ret/spill/global sites consult.
+bool capstoneGpFreeAbiActive() { return CapstoneGpFree || CapstoneGpCaptable; }
+
 #define GET_DAGISEL_BODY CapstoneDAGToDAGISel
 #include "CapstoneGenDAGISel.inc"
 
@@ -1791,7 +1798,7 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
     SDNode *Offset = CurDAG->getMachineNode(Capstone::PseudoLLA, DL, PtrVT,
                                             Symbol);
 
-    if (CapstoneGpFree) {
+    if (capstoneGpFreeAbiActive()) {
       // gp-free domain ABI: the callee is within the domain image, so the
       // PC-relative address itself is a valid jump target inside PCC. Skip the
       // `cincoffset gp` code-capability formation and hand the raw PC-relative

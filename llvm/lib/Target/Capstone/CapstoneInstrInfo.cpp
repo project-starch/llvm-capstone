@@ -43,6 +43,8 @@ using namespace llvm;
 // a tagless STC/LDC round-trip loses it (a ret then lands at 0). Defined in
 // CapstoneISelDAGToDAG.cpp.
 extern llvm::cl::opt<bool> CapstoneGpFree;
+// True under gp-free OR gp-captable (the latter implies the former's ra-spill).
+bool capstoneGpFreeAbiActive();
 
 #define GEN_CHECK_COMPRESS_INSTR
 #include "CapstoneGenCompressInstEmitter.inc"
@@ -653,7 +655,7 @@ void CapstoneInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
   if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
     unsigned Size = TRI->getRegSizeInBits(Capstone::GPRRegClass);
     if (Size == 128) {
-      if (CapstoneGpFree && SrcReg == Capstone::X1)
+      if (capstoneGpFreeAbiActive() && SrcReg == Capstone::X1)
         Opcode = Capstone::SD; // gp-free: ra is a plain integer return address
       else
         Opcode = Capstone::STC; // Use Store Capability instruction
@@ -743,7 +745,7 @@ void CapstoneInstrInfo::loadRegFromStackSlot(
   if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
     unsigned Size = TRI->getRegSizeInBits(Capstone::GPRRegClass);
     if (Size == 128) {
-      if (CapstoneGpFree && DstReg == Capstone::X1)
+      if (capstoneGpFreeAbiActive() && DstReg == Capstone::X1)
         Opcode = Capstone::LD; // gp-free: ra is a plain integer return address
       else
         Opcode = Capstone::LDC; // Use Load Capability instruction

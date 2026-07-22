@@ -28,6 +28,10 @@ using namespace llvm;
 // adding it with CIncOffset, so a representable (in-bounds-cursor) image-covering
 // gp works -- see expandCapGlobalBase.
 extern cl::opt<bool> CapstoneGpFree;
+// True under gp-free OR gp-captable. Under gp-captable, indexable globals never
+// reach this pseudo (they lower to ldc gp[i] earlier); this covers the gp-free
+// fallback for the remaining non-indexable symbol refs.
+bool capstoneGpFreeAbiActive();
 
 #define Capstone_EXPAND_PSEUDO_NAME "Capstone pseudo instruction expansion pass"
 #define Capstone_PRERA_EXPAND_PSEUDO_NAME "Capstone Pre-RA pseudo instruction expansion pass"
@@ -322,7 +326,8 @@ bool CapstoneExpandPseudo::expandCapGlobalBase(MachineBasicBlock &MBB,
   // cursor := absoluteVA regardless of gp's incoming cursor, so that gp works.
   // SrcReg (the PseudoLLA %pcrel result) is the global's absolute VA in both
   // cases; SCC and CIncOffset are operand-identical (rd, gp, off).
-  unsigned BaseOpc = CapstoneGpFree ? Capstone::SCC : Capstone::CIncOffset;
+  unsigned BaseOpc =
+      capstoneGpFreeAbiActive() ? Capstone::SCC : Capstone::CIncOffset;
   BuildMI(MBB, MBBI, DL, TII->get(BaseOpc), DstReg)
       .addReg(Capstone::X3)
       .addReg(SrcReg, getKillRegState(MBBI->getOperand(1).isKill()));

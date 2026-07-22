@@ -70,6 +70,9 @@ extern llvm::cl::opt<bool> CapstoneGpFree;
 // order the access side uses. getGpCaptableIndex is that canonical order.
 extern llvm::cl::opt<bool> CapstoneGpCaptable;
 int getGpCaptableIndex(const llvm::GlobalValue *GV);
+// gp-free ABI active under either gp-free or gp-captable (the latter implies the
+// former's call/ret lowering). Defined in CapstoneISelDAGToDAG.cpp.
+bool capstoneGpFreeAbiActive();
 
 namespace {
 class CapstoneAsmPrinter : public AsmPrinter {
@@ -491,7 +494,7 @@ void CapstoneAsmPrinter::emitInstruction(const MachineInstr *MI) {
   // a call/return that stays inside the domain image is legal in c-effective mode
   // -- exactly the reference monitor's own within-PCC call/ret ABI. JALR shares
   // CJALR's (rd, rs1, imm12) shape, so this is an opcode swap.
-  if (CapstoneGpFree) {
+  if (capstoneGpFreeAbiActive()) {
     switch (MI->getOpcode()) {
     case Capstone::PseudoRET:
       // ret: jalr x0, 0(x1)
