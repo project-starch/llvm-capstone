@@ -9913,12 +9913,51 @@ SDValue CapstoneTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG,
   }
 }
 
+// gp-captable ABI (defined in CapstoneISelDAGToDAG.cpp).
+extern llvm::cl::opt<bool> CapstoneGpCaptable;
+int getGpCaptableIndex(const GlobalValue *GV);
+
 SDValue CapstoneTargetLowering::lowerGlobalAddress(
     SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
   const GlobalValue *GV = N->getGlobal();
   int64_t Offset = N->getOffset();
+
+  // gp-captable global ABI (silicon-correct): reach the global through a
+  // gp-based per-global capability table instead of `scc gp` into the code
+  // image (which the RTL rejects -- a code-authority gp is unusable as a data
+  // base; see plans/gp-captable-codegen-plan.md). The global's data capability
+  // lives at gp[index]; load it and use it directly as the base pointer. gp is
+  // the cap-table base (a data cap the entry glue derives from sp/cscratch).
+  if (CapstoneGpCaptable) {
+    int Index = getGpCaptableIndex(GV);
+    if (Index >= 0) {
+      // Address of the cap-table slot: gp with cursor at index * capWidth.
+      SDValue GP = DAG.getRegister(Capstone::X3, MVT::i128);
+      SDValue Slot = DAG.getNode(
+          CapstoneISD::CIncOffset, DL, MVT::i128, GP,
+          DAG.getConstant((int64_t)Index * 16, DL, MVT::i128));
+      // Load the per-global data capability from the table. It is set up once at
+      // domain entry and read-only thereafter -> invariant/dereferenceable, and
+      // chained off the entry node so it can float freely. Selection folds the
+      // CIncOffset displacement into `ldc rd, index*16(gp)`.
+      MachineFunction &MF = DAG.getMachineFunction();
+      MachineMemOperand *MMO = MF.getMachineMemOperand(
+          MachinePointerInfo(), MachineMemOperand::MOLoad |
+                                    MachineMemOperand::MODereferenceable |
+                                    MachineMemOperand::MOInvariant,
+          LLT(MVT::i128), Align(16));
+      SDValue Ptr = DAG.getLoad(MVT::i128, DL, DAG.getEntryNode(), Slot, MMO);
+      // Interior offset (global + constant): advance the loaded capability.
+      if (Offset != 0)
+        Ptr = DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Ptr,
+                          DAG.getConstant(Offset, DL, MVT::i128));
+      return Ptr;
+    }
+    // Not an indexable domain global (function ref, declaration, unsized,
+    // thread-local, ...): fall through to the default LGA lowering.
+  }
 
   // 1. Create a TargetGlobalAddress.
   // This is just a "token" that holds a reference to the symbol.
