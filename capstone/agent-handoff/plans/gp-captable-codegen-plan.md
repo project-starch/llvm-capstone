@@ -91,9 +91,23 @@ stays valid; only the consumer moves from the glue to the generator.
   (0x2110C06C) in a domain with gp-fabrication OFF; single flag => cjalr=0,
   scc-gp=0, ldc gp[0]. Corpus 41/41 green with the flag off.
 - Silicon: run the same compiler-built dom on the board (existing firmware, monitor
-  unchanged) — confirms the compiler codegen output works on captype-fixed CVA6
-  (the hand-crafted probe already proved the cap-table *mechanism*; this proves the
-  *generated* code). [IN PROGRESS]
+  unchanged). **RESULT (23-07): the compiler-generated gp-captable domain RUNS ON
+  SILICON** — created, entered, executed `ldc gp[0]` cap-table global access, and
+  `domreturn`ed CLEANLY (MARK_PRE/POST_SHARE, no wedge). The cap-table codegen +
+  in-glue table build work on captype-fixed CVA6; the crash is entirely gone.
+  Value is WRONG though: retval 0x2110C0BC (s=188) vs expected 0x2110C06C (s=108),
+  exactly +10 per element (+80). QEMU gives the correct 108 → a silicon-specific
+  bug. NOT yet root-caused: `domain_main` reloads the acc cap (`ldc gp[0]`) every
+  iteration and both the store and the load use `acc + i*4` (same address), so a
+  pure cursor offset can't change the sum — the cause is elsewhere (candidates:
+  the glue's zeroing `sd`s landing off if `split`'s cursor is at the top not base,
+  clobbering something read back; or an RTL cincoffset/split-bounds subtlety).
+  **Next: one gdb board session** — inspect the acc cap fields (base/end/cursor)
+  after `ldc gp[0]` and dump acc memory after the loop, to see where the +10/elem
+  comes from. Everything structural on silicon (create/enter/cap-table access/exit)
+  is correct; only the numeric value is off. Candidate glue hardening to try in the
+  same session: `scc t2,t2,t1` after `split` (deterministic base cursor) and verify
+  the 4 zeroing `sd`s cover exactly [base,base+size).
 - Follow-ups: build-time glue generator from `.capstone_gp_table` (arbitrary N);
   runtime-store init pass for statically-initialized globals; a larger integer
   benchmark (real call graph) end-to-end.
