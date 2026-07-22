@@ -242,3 +242,66 @@ Monitor edit stays a LOCAL experiment (no submodule-source commit). No real-pers
 names. Bug-fix/investigation → history/ dated (this file). See also memories:
 [[project_fpga_fw_payload_build_recipe]], [[project_silicon_gp_delivery_boardowner_guidance]],
 [[project_opensbi_monitor_rebuild_include_wrapper]].
+
+## UPDATE 23-07 — bisection reframes the crash: NOT the call/ret ABI; it is an M-mode wedge in the globals-via-SPLIT-gp path
+
+Three board sessions this date (captype-fixed, fw_payload_fpga_up_gpfree.bin, clean
+lock/power/unlock each). Built gp-free domain variants that differ by ONE axis and
+ran them; QEMU passes for all (crash is silicon-only).
+
+**Variant results (all built with link-gpfree.ld, `-capstone-gp-free`, -O0):**
+- **varA** (leaf, NO globals) and **varB** (nested, NO globals): `create_domain`
+  HANGS (nothing printed after `BEGIN`). Root cause: image is *exactly* 0x1000
+  (LOAD MemSiz=0x1000, empty .bss at base+0x1000), so the monitor's fixed
+  `__split(dom_code, base+0x1000)` splits at the *exact upper bound* → degenerate
+  zero-length globals cap → SPLIT faults in M-mode. **These variants are INVALID
+  tests** (a no-globals domain can't use the fixed-0x1000-SPLIT monitor). Separate,
+  real monitor robustness bug: guard/skip the split when the globals region is empty.
+- **varD** (globals, but helper INLINED → NO nested call; MemSiz=0x1040, valid
+  split): prints `created domain ID = 0`, then **crashes at the domain run** —
+  identical to the full app. ⇒ **NESTING IS NOT THE BUG**; the ra-spill ABI is not
+  either. Both were red herrings.
+
+**gdb-halt on varD (definitive):**
+`$pc=0x0 $mepc=0x2 $mcause=0x2(illegal) $mtval=0x0 $mstatus=0xca..(MPP=M)`
+`$ra=0x819a0064(=base+0x64) $gp=0x819a1000(=base+0x1000) $a1=0x819a1020` ;
+`x/6i $pc` = garbage (`ld s1,0(s0); add s0,s0,8; …`) at physical 0. shell dead
+(whole board wedged). Reading:
+- The domain **entered and ran domain_main** — `ra=base+0x64` is the live return
+  set by `call domain_main` and **not yet zeroed** by the glue's `li ra,0`, so the
+  plain `ret` back to the glue had **not** completed.
+- `gp=base+0x1000` correct (cscratch delivery works on silicon — the cscratch-vs-
+  ctvec question is settled: cscratch works).
+- **PC=0 cannot come from the plain `ret`** (a non-cap jalr only moves PCC.cursor
+  within the current PCC; it can't null PCC). So PC=0 is a **trap** (domain
+  mtvec≈0) taken from a fault **inside domain_main**, then an infinite illegal-instr
+  loop at low addresses. The masked first-fault is the only thing domain_main does
+  that the working borrow-cost leaf never did: **access globals through the
+  SPLIT-derived gp** (`scc gp` + `shrink` + load/store). QEMU (same monitor edit)
+  allows it; the RTL wedges ⇒ an **RTL SPLIT-gp / global-access** discrepancy, not
+  an ABI issue.
+
+**Not a plain write-perm story:** `dom_data` (the domain stack, writable) derives
+from the *same* `dom_code` split chain and works in the reference, so a split of
+`dom_code` is writable. The discrepancy is RTL-specific to the gp global-access
+sequence.
+
+**Next diagnostic (staged, ready): load-vs-store bisection.**
+- **varE** (`/tmp/capstone/varE_glob_readonly.dom[.gz]`): globals **read-only** —
+  domain_main only *loads* `tbl[]` (rodata), never stores a global. MemSiz=0x1020
+  (valid split). QEMU oracle `554745933` (0x2110C04D). One board run:
+  - varE **PASSES** ⇒ the fault is the global **STORE** path (SPLIT-gp write /
+    `shrink`-store bounds on the RTL).
+  - varE **CRASHES** ⇒ the gp **LOAD/scc** path itself is broken on the RTL.
+- Then catch the FIRST trap (not the loop): set/inspect the domain mtvec, or
+  hbreak-free single-step from domain entry, to name the exact faulting insn.
+- Given the M-mode-wedge evidence, a board-owner question is now well-grounded:
+  *does a `scc gp`-derived, `shrink`-narrowed cap support load/store inside a
+  domain on captype-fixed CVA6, and is a SPLIT of the code image the right source
+  for a writable gp, or must writable globals live in `dom_data`?* (matches their
+  earlier cap-table guidance, [[project_silicon_gp_delivery_boardowner_guidance]]).
+
+Artifacts staged in /tmp/capstone/: `board_bisect_gpfree.py` (multi-variant
+sequential runner, stops at first crash), `board_gdb_vard.py` (gdb-halt CSR dump +
+shell-liveness probe + `x/6i`), variant doms varA/varB/varD/varE + gpfree_app (varC).
+Variant sources in the session scratchpad. Monitor edit still LOCAL (uncommitted).
