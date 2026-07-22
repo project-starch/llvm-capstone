@@ -6,7 +6,37 @@ the definitive root cause, and how to reproduce every step. Companion runbook:
 `ref/gp-free-silicon-smoke-runbook.md`. QEMU proof:
 `22-07-2026_16-09-12_gp-free-domain-bringup-qemu-proof.md`.
 
-## UPDATE 2026-07-22 (latest): gp DELIVERY WORKS on silicon; remaining bug is the plain-jal/jalr call/ret ABI
+## UPDATE 2026-07-22 (latest-2): ra-spill fix done (necessary) but plain call/ret STILL crashes on RTL — needs board-owner input
+
+Added the ra-spill fix (`llc` change, committed): with `-capstone-gp-free`, callee-saved
+`ra` (X1) now spills with integer `sd`/`ld` instead of `stc`/`ldc`
+(`CapstoneInstrInfo.cpp storeRegToStackSlot`/`loadRegFromStackSlot`), since gp-free
+`ra` is a plain integer return address. Verified in asm (`sd ra`/`ld ra`) and QEMU
+still passes (retval 554745961). **But the silicon crash persists, essentially
+unchanged:** gdb-halt on the ra-fixed domain gives
+`pc=0x2 mcause=0x2(illegal) mtval=0 ra=0x819a0064 gp=0x819a1000 mstatus.MPP=M`
+(vs `pc=0x0` before). Same signature: gp correct (domain entered), `ra=base+0x64`
+(glue's post-`call domain_main` return), control flow lands at ~0 and traps to M-mode.
+
+**Conclusion:** the blocker is NOT the ra spill (fixed) but the **plain `jal/jalr`
+call/return convention itself inside a SEALED DOMAIN on this RTL.** A return
+(`jalr x0, 0(ra)`) with an integer `ra` lands at ~address 0 (illegal-instr trap) on
+hardware while running fine on QEMU. This is fundamental to the gp-free ABI premise
+("plain jal/jalr within PCC"): it holds for the M-mode monitor but appears NOT to
+hold for intra-domain control flow on silicon (the domain may require `cjalr` /a
+capability return address). **This needs the board owner** — see the question below.
+gp delivery + firmware are DONE; this call/ret ABI question is the last blocker.
+
+### Board-owner question (draft)
+"Inside a sealed pure-capability domain on the CVA6/Capstone RTL, do plain `jal/jalr`
+calls and returns (integer `ra`) work for intra-domain control flow, or must the
+domain use `cjalr` / a capability return address? Our gp-free domain enters correctly
+and the monitor-delivered `gp` is validated (gp=base+0x1000 via SPLIT), but returns
+crash to ~address 0 (mcause=2 illegal-instr, mtval=0) on the RTL while working on
+QEMU. If cjalr is required in-domain, we'll keep cjalr for calls/returns and use the
+gp-free change only for global addressing (`scc gp`), not for call/ret."
+
+## UPDATE 2026-07-22 (earlier): gp DELIVERY WORKS on silicon; remaining bug is the plain-jal/jalr call/ret ABI
 
 gdb-halt on the hung core (driver `/tmp/capstone/board_run_gpfree_gdb.py`) gave:
 `pc=0x0 mcause=0x2(illegal-instr) mtval=0x0 ra=0x819a0064 sp=0x819bff50

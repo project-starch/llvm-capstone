@@ -37,6 +37,13 @@
 
 using namespace llvm;
 
+// gp-free domain ABI: with -capstone-gp-free, calls/returns are plain jal/jalr and
+// the return address `ra` (X1) is a plain integer, not a capability. Spill/reload it
+// with integer SD/LD (not STC/LDC) so the return address survives on hardware where
+// a tagless STC/LDC round-trip loses it (a ret then lands at 0). Defined in
+// CapstoneISelDAGToDAG.cpp.
+extern llvm::cl::opt<bool> CapstoneGpFree;
+
 #define GEN_CHECK_COMPRESS_INSTR
 #include "CapstoneGenCompressInstEmitter.inc"
 
@@ -645,9 +652,12 @@ void CapstoneInstrInfo::storeRegToStackSlot(MachineBasicBlock &MBB,
   unsigned Opcode;
   if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
     unsigned Size = TRI->getRegSizeInBits(Capstone::GPRRegClass);
-    if (Size == 128)
-      Opcode = Capstone::STC; // Use Store Capability instruction
-    else
+    if (Size == 128) {
+      if (CapstoneGpFree && SrcReg == Capstone::X1)
+        Opcode = Capstone::SD; // gp-free: ra is a plain integer return address
+      else
+        Opcode = Capstone::STC; // Use Store Capability instruction
+    } else
       Opcode = Size == 32 ? Capstone::SW : Capstone::SD;
   } else if (Capstone::GPRF16RegClass.hasSubClassEq(RC)) {
     Opcode = Capstone::SH_INX;
@@ -732,9 +742,12 @@ void CapstoneInstrInfo::loadRegFromStackSlot(
   unsigned Opcode;
   if (Capstone::GPRRegClass.hasSubClassEq(RC)) {
     unsigned Size = TRI->getRegSizeInBits(Capstone::GPRRegClass);
-    if (Size == 128)
-      Opcode = Capstone::LDC; // Use Load Capability instruction
-    else
+    if (Size == 128) {
+      if (CapstoneGpFree && DstReg == Capstone::X1)
+        Opcode = Capstone::LD; // gp-free: ra is a plain integer return address
+      else
+        Opcode = Capstone::LDC; // Use Load Capability instruction
+    } else
       Opcode = Size == 32 ? Capstone::LW : Capstone::LD;
   } else if (Capstone::GPRF16RegClass.hasSubClassEq(RC)) {
     Opcode = Capstone::LH_INX;
