@@ -50,26 +50,29 @@ global-addressing half.
 - Lit `cap-gp-captable.ll`: `ldc … (gp)` + `-NOT scc` under the flag; unchanged
   `cincoffset gp; …` off. Corpus 41/41 green (flag-off byte-identical).
 
-### Stage 2 — global descriptor table (compiler-emitted)  [NEXT]
-- **Reuse existing infrastructure** — `CapstoneCapGlobalInit.cpp` already does the
-  hard part: a per-module constructor-codegen pass + an AsmPrinter-emitted
-  **PC-relative `.capstone_cap_init` table** that `start.S` runs before `main`,
-  precisely because the domain image loads at a runtime base so absolute link-time
-  addresses are stale (its own design note spells this out). Model the gp-captable
-  builder on the SAME mechanism rather than a fresh descriptor path.
-- Emit, in `getGpCaptableIndex` order, per global: `{size, align, init-template
-  PC-relative offset (0 = zero-init/.bss)}`. Initializer bytes kept as a read-only
-  template in the image, referenced by a link-time-relative expression
-  (`.quad tmpl - .`) so it is position-independent.
-- Keep empty (integer-only / no-global) domains a clean no-op (N=0).
+### Stage 2 — global descriptor table (compiler-emitted) — DONE (commit 6afca3bb)
+- `CapstoneAsmPrinter::emitGpCaptableTable` emits `.capstone_gp_table` under the
+  flag: `u64 count`, then per global in `getGpCaptableIndex` order
+  `{u64 size, u64 align, i64 init_off}`. `init_off` is 0 for a zero global, else a
+  PC-relative `template - .` diff (position-independent, same rationale as
+  `.capstone_cap_init`). Absent when the flag is off; N=0 globals => no section.
+- Lit `cap-gp-captable.ll` extended (descriptor + `CAP-NOT`); corpus 41/41 green.
 
-### Stage 3 — entry-glue table + init builder (generic, runtime)
-- A generic entry-glue init routine (generalized from `start-gpfree-captable.S`)
-  reads the descriptor, and for each global: carve storage from `sp` (data
-  authority) with `split`, copy the init template (or zero for `.bss`), `delin`,
-  `stc` the cap into `gp[i]`; the cap-table itself is carved off the top of `sp`
-  first (as in the probe). Remainder of `sp` = stack.
-- Reentry re-derives gp from `sp` (like capstone-c) — no gp memory round-trip.
+### Stage 3 — entry-glue table builder (generic, runtime)  [NEXT]
+- **DECISION on initializer values:** build the cap-table with **zero-initialized**
+  storage in the glue, and set initializer *values* via **runtime stores** (reuse
+  the `CapstoneCapGlobalInit` PC-relative-init-table + `start.S`-runner mechanism,
+  extended to materialize *all* initialized domain globals, not just capability
+  leaves, as gp-captable stores). This **avoids the image-read problem** entirely:
+  the glue never has to read an init template through PCC (an execute cap can't
+  serve as a data base — the same RTL rule that motivated this whole change), and
+  it reuses proven infra. So the glue only needs `{size}` from the descriptor;
+  `init_off` stays in the descriptor as an unused-for-now alternative.
+- Glue (generalize `start-gpfree-captable.S`): `sp = cscratch`; carve the N-entry
+  cap-table off the top (`split gp,sp,end - N*16`); for each i, carve `size[i]`
+  bytes from `sp`, zero them, `delin`, `stc` into `gp[i]`; remainder of `sp` =
+  stack. Reentry re-derives gp from `sp` (no gp memory round-trip).
+- Then the runtime-store init routine runs (gp-captable stores) to set values.
 
 ### Stage 4 — real-app proof
 - Pick a small integer benchmark with real globals + a call graph, build
