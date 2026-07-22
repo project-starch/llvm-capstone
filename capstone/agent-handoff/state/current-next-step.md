@@ -6,13 +6,24 @@ DONE on QEMU (functional, silicon-faithful): a real globals-using app runs
 correctly in a pure-cap domain **gp-free** with the fabrication OFF and the
 **monitor** delivering `gp` via cscratch. Compiler committed (`88054a14`); monitor
 + QEMU edits are local submodule experiments. Board owner ratified the approach.
-See `state/current-state.md` "Latest (2026-07-22)",
-`history/22-07-2026_16-09-12_*`, memory
-`project_silicon_gp_delivery_boardowner_guidance`.
-**Next:** the silicon smoke — `ref/gp-free-silicon-smoke-runbook.md` (FPGA monitor
-change applied; rebuild the board image + run the gp-free domain on the RTL to
-confirm cscratch delivery + get the Experiment-A cycle number). Human-in-the-loop
-board session (flaky/slow); the functional/compat story is already in hand.
+
+**Silicon smoke ATTEMPTED 2026-07-22 — firmware/boot chain FIXED, domain run BLOCKED
+by a definitive root cause. FULL KB:
+`history/22-07-2026_18-05-00_gp-free-silicon-smoke-firmware-fixed-createdomain-hangs.md`
+(read this before resuming).**
+- Working now: board boots Linux to a shell with our gp-delivery monitor
+  (CAPLIFIVE-ARIANE fw, embedded FDT+kernel), `/dev/capstone` present, controller +
+  domain transfer+verify. Firmware-build recipe in memory
+  `project_fpga_fw_payload_build_recipe`.
+- BLOCKER: the monitor's `gp` mint uses **`C_GEN_CAP` (custom-2 funct7 0x40) — a
+  QEMU-only DEBUG instr (`helper_csdebuggencap`), NOT implemented on the RTL**
+  (decoder `default: ;`). It fabricates a cap from (base,end), which HW capability
+  monotonicity forbids. On silicon it no-ops → garbage cap → `stc` fault → M-mode
+  hangs in `capstone_error`=`while(1)`. Compiler side is fine; the domain never ran.
+- **Next:** rework the gp mint to DERIVE from existing authority using RTL-implemented
+  ops (CAPCREATE/CAPPERM/CAPBOUND, or split/scc), per the capstone-c cscratch
+  cap-table reference; likely align with the board owner. Then rebuild fw (recipe)
+  + one board run for the retval `554745961`.
 
 ## Active track (2026-07-15): the paper's PERFORMANCE story — mostly DONE
 
