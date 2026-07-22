@@ -349,3 +349,46 @@ sd/ld ✗, nested calls ✗, cjalr / board-owner cjalr question ✗ (moot), shri
 ✗, shrink-stack ✗, store-vs-load ✗. The single remaining cause is the **gp cap
 source** (SPLIT-of-code vs data authority). Also open: the degenerate-SPLIT
 create_domain hang for no-globals images (image==0x1000).
+
+## UPDATE 23-07 (FIX VALIDATED ON SILICON) — capstone-c-style data-authority gp + cap-table WORKS
+
+Built a capstone-c-faithful probe and **it passes on the real RTL** — first
+globals-using domain to run to completion on captype-fixed CVA6 under the gp-free
+ABI. Board output:
+```
+created domain ID = 0
+MARK_PRE_SHARE / MARK_POST_SHARE
+RESULT retval = 554745961 (0x2110c069)   <- correct
+```
+
+**What the probe does** (`tests/runtime-qemu/gp-free-domain/start-gpfree-captable.S`
++ `captable_app.c` stub; build with link-gpfree.ld + `-capstone-gp-free`; QEMU also
+passes 554745961):
+- Entry glue mirrors capstone-c codegen.rs:264-298 exactly:
+  `sp = cscratch` (dom_data, a DATA cap) → `lcc t1,sp,End` → carve a 1-entry
+  cap-table off the top (`split gp,sp,t1; delin gp`) → carve one data word off sp
+  for the global (`split t2,sp,t1; delin t2`), store 105 through that **DATA** cap,
+  `stc t2 -> gp[0]` → remainder of sp = stack.
+- Workload reads the global back via the cap-table (`ldc t2, gp[0]; lw`), writes
+  `0x2110C000|105` to the shared region cap, domreturns. **No code-image split, no
+  gp memory round-trip.**
+- **Monitor UNCHANGED**: it still stashes its (now-unused) code-split gp and
+  delivers dom_data via cscratch; the glue ignores the stashed gp. `__pad[16]`
+  keeps the image >0x1000 so the monitor's fixed base+0x1000 SPLIT stays
+  non-degenerate and create_domain returns. So **no firmware rebuild was needed** —
+  ran on the existing `fw_payload_fpga_up_gpfree.bin`.
+
+**Proven:** deriving gp from the DATA region (`sp`/cscratch) in-glue + accessing
+globals through data caps is the correct, hardware-working model — confirming the
+board owner's cap-table guidance and the root cause (code-split gp is unusable).
+
+**Remaining work to a full real app (compiler side, no longer a silicon unknown):**
+teach `-capstone-gp-free` LLVM codegen to emit this pattern instead of `scc gp,&g`
+into the code image — either (a) full cap-table indirection (load per-global cap
+from gp[idx], deref), matching capstone-c, or (b) if the board owner confirms a
+single data cap suffices, a simpler gp = one data cap over a data-region globals
+block with direct `scc gp` addressing (still needs globals in data memory +
+init-copy of initializers from the image). The board-owner message
+(`/tmp/capstone/boardowner-msg.md`) asks which. Also still open: degenerate-SPLIT
+create_domain hang for no-globals images (guard the monitor split when globals
+region is empty).
