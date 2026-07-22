@@ -47,3 +47,19 @@ define void @store_g0(i32 %v) {
   store i32 %v, ptr addrspace(200) @g0, align 4
   ret void
 }
+
+; Stage 2: the `.capstone_gp_table` descriptor the entry glue reads to build the
+; runtime cap-table. One record per global in index order: {size, align, init_off}
+; (init_off = 0 for a zero global, else PC-relative to its image template). Emitted
+; only under the flag.
+; CAP-NOT: .capstone_gp_table
+; CT:      .section .capstone_gp_table
+; CT:      .quad 2
+; g0 (index 0): i32 zeroinitializer -> size 4, align 4, init_off 0.
+; CT:      .quad 4
+; CT-NEXT: .quad 4
+; CT-NEXT: .quad 0
+; g1 (index 1): i32 7 -> size 4, align 4, PC-relative offset to the template.
+; CT:      .quad 4
+; CT-NEXT: .quad 4
+; CT:      .quad g1-{{.*}}
