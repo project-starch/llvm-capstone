@@ -40,3 +40,23 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
 **`design/` is for design decisions and architecture only.** A bug fix,
 root-cause investigation, or audit — even a substantial one — is *not* a design
 decision; it belongs in `history/` as a dated note, not in `design/`.
+
+## Delegating to subagents
+
+Delegation is **opt-in and at the main session's discretion** — not automatic.
+The main (Opus) session owns planning, synthesis, reviewing subagent output, and
+all final decisions. Subagents start cold, so any that could write or run tests
+**inherit this file's hard constraints** (no real-person names; serialize QEMU
+suites — the shared `rootfs.ext2` write-lock means never two in parallel;
+`ninja -j90` never `-j112`; never commit unless asked; submodule source stays
+uncommitted). Subagents do not recurse.
+
+- **Delegate** (notify the user when it's substantial): broad read-only code/file
+  search → the built-in **Explore** agent; running the regression corpus / lit /
+  QEMU suites for validation → the **corpus-runner** agent (Sonnet, read-only,
+  serialized, never touches the board); bounded multi-step research with a clear
+  question → **general-purpose**.
+- **Keep in the main Opus session** (never delegate): all FPGA/board sessions
+  (board etiquette + secret token + can't be parallelized); compiler/codegen and
+  capability-ABI changes; subtle-correctness or concurrency debugging; the paper;
+  commits; and anything involving real-person names.
