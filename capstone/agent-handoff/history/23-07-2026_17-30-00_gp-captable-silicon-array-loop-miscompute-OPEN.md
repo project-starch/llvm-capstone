@@ -6,6 +6,56 @@ owner, but not yet confirmed by RTL/gdb.** Do not claim silicon compatibility, d
 not merge `capstone-gp-free` until the board owner confirms and/or a workaround is
 proven.
 
+## UPDATE 23-07 #3 — shrink RESULT is correct; it's a shrink→store FORWARDING hazard (RTL)
+
+On-board shrink-bounds probe (`shrink_probe.c`: shrink acc cap to 4 bytes, `lcc`
+the result). Board == QEMU exactly: **end−base=4, valid=1, base−cursor=0.** The
+shrunk cap is valid and precisely bounded on hardware → **NOT representability,
+NOT an invalid cap, NOT our codegen making a bad cap.** The earlier representability
+hypothesis (#2) is REFUTED.
+
+Refined root cause: the RTL mishandles a **store through a freshly-`shrink`ed
+capability** — a `shrink`→dependent-store RAW forwarding hazard. Fits everything:
+no-shrink removes the shrink→store dependency (passes); fence-immune (register
+forwarding, not memory ordering); non-deterministic (pipeline race); passes only
+when value==index (register schedule dodges the hazard). Our side is fully
+validated (all caps correct on board, codegen equivalent to the passing case,
+QEMU correct). **Confidence ~90% RTL; escalation to the board owner is justified.**
+
+Two workarounds: (1) shrink off (coarser bounds, proven on silicon); (2) likely,
+break the shrink→store adjacency (schedule an instruction between them) to keep
+per-element bounding — untested, worth trying in codegen.
+
+## UPDATE 23-07 #2 — LOCALIZED TO `shrink`; WORKAROUND FOUND
+
+Board discriminators (run8/run9, fast transfer):
+- **Fence does NOT fix it** (`fence rw,rw` between cap store and accumulate, both
+  reload and register-sum forms still garbage) → not a memory-ordering hazard.
+- **Stack arrays fail too** (`stack_array`, sp-derived cap → 0x0D1FC5A8) → NOT
+  gp[0]-specific; any capability store to an array element in a loop.
+- **NO-SHRINK PASSES** (the decisive one): `rc_p1` and `stack_array` rebuilt with
+  `-capstone-shrink-stack=false -capstone-shrink-globals=false` (per-access
+  element-`shrink` removed) return the CORRECT 1000036 on the board. With shrink
+  on they garble.
+
+=> The fault is the per-access **`shrink`** instruction (element-bounding), not the
+store/load/gp path. **Workaround: build domains with shrink off** — array accesses
+fall back to whole-array/frame bounds (coarser but still capability-bounded);
+real programs then run correctly on silicon (unblocks app-level silicon perf).
+
+**Likely mechanism (hypothesis, connects to a known issue):** shrinking a cap to a
+4-byte element may produce bounds that are **unrepresentable under the RTL's
+capability compression** (cf. the cursor-0-unrepresentable issue,
+[[project_silicon_gp_delivery_boardowner_guidance]]). Our QEMU fork likely models
+precise/uncompressed caps and so never sees it; the RTL enforces compression and a
+mis-rounded bound then makes a subsequent store land wrong (address leaks into the
+result, non-deterministic by data-region placement). If so this is arguably OURS to
+fix (make per-access shrink representability-aware) rather than a pure RTL defect —
+NOT yet confirmed. Decisive next probe: `lcc` the shrink'd cap's base/end on the
+board vs QEMU; a mismatch = representability (ours), correct bounds + corrupt store
+= RTL. Store-value dependence (passes only when value==index) is still unexplained
+and fits a compression/rounding interaction.
+
 ## UPDATE 23-07 (cap-field dump on the board) — rules OUR side out
 
 On-board `lcc` probes of the `acc` capability (`cap_probe.c`, position-independent
