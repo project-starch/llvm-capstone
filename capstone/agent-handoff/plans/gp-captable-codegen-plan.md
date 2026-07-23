@@ -95,19 +95,22 @@ stays valid; only the consumer moves from the glue to the generator.
   SILICON** — created, entered, executed `ldc gp[0]` cap-table global access, and
   `domreturn`ed CLEANLY (MARK_PRE/POST_SHARE, no wedge). The cap-table codegen +
   in-glue table build work on captype-fixed CVA6; the crash is entirely gone.
-  Value is WRONG though: retval 0x2110C0BC (s=188) vs expected 0x2110C06C (s=108),
-  exactly +10 per element (+80). QEMU gives the correct 108 → a silicon-specific
-  bug. NOT yet root-caused: `domain_main` reloads the acc cap (`ldc gp[0]`) every
-  iteration and both the store and the load use `acc + i*4` (same address), so a
-  pure cursor offset can't change the sum — the cause is elsewhere (candidates:
-  the glue's zeroing `sd`s landing off if `split`'s cursor is at the top not base,
-  clobbering something read back; or an RTL cincoffset/split-bounds subtlety).
-  **Next: one gdb board session** — inspect the acc cap fields (base/end/cursor)
-  after `ldc gp[0]` and dump acc memory after the loop, to see where the +10/elem
-  comes from. Everything structural on silicon (create/enter/cap-table access/exit)
-  is correct; only the numeric value is off. Candidate glue hardening to try in the
-  same session: `scc t2,t2,t1` after `split` (deterministic base cursor) and verify
-  the 4 zeroing `sd`s cover exactly [base,base+size).
+  Value is WRONG though. **OPEN — NOT root-caused, NOT confirmed hardware.** The
+  earlier "+80, an -O0 store-to-load reload, fixed by -O2" reading was REFUTED
+  (un-masked probes 23-07): `rc_regsum` sums from a register with no acc reload and
+  still fails; `-O2` only "passed" by constant-folding the loop away. Real signature
+  (raw values via `*res=1000000+s`): a loop that **stores to a global array AND keeps
+  a live accumulator in the same body** returns an **address-like value** (`s`
+  contaminated by a capability cursor, e.g. 0x8B5x_xxxx) — EXCEPT when the stored
+  value equals the loop index (`acc[i]=i` passes). Minimal pair: `rc_const0`(PASS)
+  vs `rc_p1`(`acc[i]=i+1`, FAIL); both QEMU-correct. Storing alone (`rc_elem`) and
+  separated fill/sum loops (`twoloop`) pass, so acc memory is fine. Full trail +
+  reproducer table: `history/23-07-2026_17-30-00_gp-captable-silicon-array-loop-
+  miscompute-OPEN.md`. **Next:** take the minimal reproducer to the board owner to
+  localize (we can't single-step the domain — harness detaches gdb for the shell);
+  off-board, dump the acc/gp cap fields the glue builds + compare rc_const0/rc_p1
+  register schedules to rule our side in/out first. This BLOCKS any silicon-
+  compatibility claim, the branch merge, and app-level silicon perf.
 - Follow-ups: build-time glue generator from `.capstone_gp_table` (arbitrary N);
   runtime-store init pass for statically-initialized globals; a larger integer
   benchmark (real call graph) end-to-end.

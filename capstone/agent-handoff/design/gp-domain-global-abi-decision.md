@@ -48,9 +48,15 @@ glue splits `gp` (and each global's storage) from it — identical to capstone-c
   hardware-correct (`history/...` UPDATE 23-07 "FIX VALIDATED").
 - Compiler-built domain (`captable_zeroinit_app.c`, `-capstone-gp-captable`):
   QEMU correct (554745964); on silicon it **creates, enters, does `ldc gp[0]`
-  global access, and exits cleanly** — the crash is gone. One open
-  implementation bug: the returned value is off (+10/element) on silicon only;
-  under diagnosis (needs a gdb board session), not a design flaw.
+  global access, and exits cleanly** — the wedge/crash is gone, and the cap-table
+  *mechanism* runs (`rc_const0`, `rc_elem`, `twoloop` return correct values on the
+  board). **BUT an OPEN correctness bug remains:** a loop that stores to a global
+  array while keeping a live accumulator miscomputes on silicon (returns an
+  address-like value) unless the stored value equals the loop index — QEMU-correct
+  throughout. NOT root-caused; NOT confirmed as our-code vs RTL. This means the ABI
+  is validated at the *access/mechanism* level but **not yet proven correct for
+  general programs on silicon.** See
+  `../history/23-07-2026_17-30-00_gp-captable-silicon-array-loop-miscompute-OPEN.md`.
 
 ## Consequences / open items
 
