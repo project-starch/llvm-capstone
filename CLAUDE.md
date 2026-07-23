@@ -26,6 +26,16 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
 - Active plans live in `capstone/agent-handoff/plans/` (committed, portable across machines and agents).
 - Manager-facing summaries go under `/tmp/capstone/`, not into the repo.
 
+## Context & compaction
+
+Board-debug threads here run long, so manage context deliberately. Lightly (not
+every turn) assess whether it's a good moment to `/compact`, and **proactively
+recommend it in one line** when work hits a natural checkpoint AND the important
+state is already captured in committed docs/memory so it can be safely summarized.
+Do **not** recommend it mid-task, during active debugging, or while un-captured
+details still matter. Briefly say why the timing is safe (or why to postpone).
+Never compact unilaterally — you can only recommend; it is the user's call.
+
 ## Where things live
 
 | What | Where |
