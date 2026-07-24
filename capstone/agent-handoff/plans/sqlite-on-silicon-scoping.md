@@ -203,11 +203,44 @@ CoreMark → SQLite) depends on.
   balloons `.text` to ~2 KiB, which (a) collides with the fixed globals offset in
   `gp-free-domain/link-gpfree.ld` and (b) overflows the monitor's PCC code window
   (all code must fit `[base, base+0x1000)` for the silicon image SPLIT). Runtime
-  table-gen sidesteps it for crc32, but **SQLite's static tables will hit this**:
-  needs a real large-RO-table delivery mechanism (candidates: a monitor-provided
-  data cap over an image .rodata region; a data-region copy set up by the glue;
-  or raising GPFREE_GLOBALS_OFFSET + PCC window — the last needs a firmware
-  rebuild). Decide before Stage 3 (SQLite firmware). [[project_gp_captable_codegen]]
+  table-gen sidesteps it for crc32; the generator loop now handles large **`.bss`**
+  (rung 6); but large initialized **`.rodata`** still has no delivery path and
+  **SQLite's static tables will hit it**. Decide before Stage 3 (SQLite firmware).
+
+  **Design scoping (2026-07-24, grounded on the monitor `create_domain`,
+  `capstone-sbi/sbi_capstone.c:279`).** Domain memory model:
+  `dom_code = split_out_cap(base, tot_size)` then `__split` at `base+code_size`
+  and `+DOMAIN_DATA_SIZE` yields **`dom_code = [base, base+code_size)` handed as
+  PCC (execute authority)** covering the whole loaded image incl. `.rodata/.data`,
+  and **`dom_data`** = a *fresh, zeroed* RAM region delivered via cscratch (where
+  the glue carves the cap-table + storage). So the initializer bytes physically
+  exist in the image but are covered **only by an execute-authority cap**, and the
+  22-07 root-cause proved a code-authority cap **cannot load data** on captype-fixed
+  CVA6 (the original gp-via-SPLIT wedge). That is exactly why we materialize via
+  `li/sd` immediates today. Candidates, re-assessed:
+  1. **Monitor delivers a DATA-authority cap over the image `.rodata` sub-range**
+     `[base+0x1000, base+code_size)` in a spare sealed slot (`dom_seal[0]=code`,
+     `[2]=data`, `[3]=flags` today — free slots exist); glue then *copies*
+     initializers into `dom_data` storage at runtime (no immediate bloat, scales to
+     SQLite). **KEY OPEN QUESTION (board owner):** can the monitor form a
+     *load-authority* cap over that physical range when the same bytes were also
+     split as `dom_code` (execute)? A cap `__split` from `dom_code` inherits EXECUTE
+     authority (→ the wedge); it must instead be derived from a *data-authority
+     parent* (`mem_l`/`split_out_cap` with load perms) **without** violating
+     linearity vs. `dom_code`. Whether a read-only alias of an execute-covered
+     range is formable is a capability-model/RTL question — **draft to board owner:
+     `/tmp/capstone/boardowner-largero-question.md`**. If yes → cleanest, no
+     firmware-size cost, matches the capstone-c "globals in DATA memory" model.
+  2. **Glue copies from image `.rodata` itself** — RULED OUT: the glue runs with
+     PCC (execute) + `dom_data`; it has no load-authority cap over the image, the
+     same wall as (1) but without a monitor-provided data cap. Reduces to (1).
+  3. **Raise `GPFREE_GLOBALS_OFFSET` + PCC window** (bigger `[base, base+BIG)` so
+     more `li/sd` immediate code fits) — firmware rebuild AND still bloats code
+     ~1 insn / word; does NOT scale to SQLite-sized tables. Fallback only.
+  **Direction:** (1) is the only scalable path and it hinges on one board-owner
+  answer; everything else (glue copy loop, generator emitting a copy instead of
+  immediates, an extra sealed slot) is ours and straightforward once that's known.
+  [[project_gp_captable_codegen]] [[project_silicon_gp_delivery_boardowner_guidance]]
 - **RISK A concretized — per-module cap-table indices.** `getGpCaptableIndex`
   (`CapstoneISelDAGToDAG.cpp:112`) numbers globals **per module**, so multi-TU
   domains collide on the single gp cap-table + emit multiple descriptor headers.
