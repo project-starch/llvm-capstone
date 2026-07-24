@@ -204,6 +204,7 @@ def preflight_artifacts():
 def main():
     preflight_artifacts()
     oracles = {r: open(ART / f"{r}.oracle").read().strip() for r in RUNGS}
+    ctl = ART / "ladder_perf_ctl"
 
     console = FpgaConsole(URL, logger=lambda m: print(f"[fpga] {m}", file=sys.stderr))
     console.connect()
