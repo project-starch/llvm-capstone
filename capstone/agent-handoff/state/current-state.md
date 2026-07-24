@@ -2,6 +2,26 @@
 
 Minimal snapshot. Read first in every session.
 
+## Latest (2026-07-25) — silicon-ladder perf sweep on the Genesys2 FPGA (on-board mcycle)
+
+The 7 ready silicon-ladder rungs were run on the CVA6 FPGA; **6/7 produced real
+on-board `mcycle`, 2/7 also pass `retval==oracle`**. Trustworthy silicon perf
+points: `rv8_primes` (mcycle 17,286,789) and `beebs_prime` (47,796). Coherent
+finding: the **4 rungs that store into a global array while keeping a live
+accumulator** (matmult_int, beebs_crc32, beebs_insertsort, beebs_recursion) all
+**miscompile on silicon** (wrong retval, QEMU-correct) — strongest corroboration
+yet of the open gp-captable array-store bug (4/4 fail, 2/2 scalar rungs pass).
+`coremark_matrix` (only `-Os` rung) **hangs the cscall even as the first domain**
+(code-specific, distinct from the multi-domain hang). Full table + mechanics:
+`history/25-07-2026_03-58-47_fpga-ladder-perf-sweep-results.md`.
+
+Runner: `tests/rtl-smoke/fpga_driver/run_ladder_perf_fpga.py` — one full
+power-cycle + JTAG reload per rung (each rung runs as first domain / clean icache;
+warm `reset halt` does NOT re-enter OpenSBI), tier-1 `fast_xfer.fast_put`
+transfer, `insmod /capstone.ko` (UP image doesn't auto-load it). The `-b` LLVM was
+rebuilt from scratch with `-capstone-gp-captable` (system `/usr/bin/clang++`,
+`RISCV;Capstone`); all 7 perf domains build `cjalr=0 ldc-gp≥1`.
+
 ## Latest (2026-07-24) — CoreMark matrix on the silicon ladder (QEMU)
 
 CoreMark 1.01's **matrix** benchmark now runs as silicon-ladder **rung 7** in a
