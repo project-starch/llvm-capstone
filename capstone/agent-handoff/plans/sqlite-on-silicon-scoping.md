@@ -173,6 +173,24 @@ CoreMark → SQLite) depends on.
   Primality call graph (prime->even->divides) + `swap(&x,&y)` taking the ADDRESS
   of two globals (pointers into the gp cap-table region) + a volatile `result`.
   3 .bss globals, `cjalr=0`. Files `beebs_prime_{kernel.h,app.c,host.c}`.
+- **Rung 6 DONE 2026-07-24: RV8 `primes`** (first RV8-family rung) → `retval ==
+  oracle 99991`. Faithful to rv8-bench's sieve at the committed RV8 oracle's
+  reduced limit (100000 → largest prime 99991) with the same `1ull << (p&0x3f)`
+  shift-UB fix; single-TU, sieve as a **12.5 KB `.bss` bitmap** (runtime-written,
+  no big *initialized* table), 64-bit shift arithmetic, nested sieve loop,
+  `cjalr=0`. Files `rv8_primes_{kernel.h,app.c,host.c}`. **This rung forced a
+  real generator fix** — see next item.
+- **DONE 2026-07-24: generator now zeroes large `.bss` with a runtime loop.**
+  `gen-gp-captable-glue.py` previously unrolled `sd x0, k(t2)` per 8-byte word,
+  which for primes' 12.5 KB sieve (a) overflowed the 12-bit store/`addi` immediate
+  and (b) would balloon `.text` by ~1560 stores past the 0x1000 PCC code window.
+  Fix: an all-zero global is now zeroed by a compact `li count; cincoffset ptr;
+  loop{sd x0; cincoffsetimm ptr,8; addi count,-8; bnez}` (any size, tiny code);
+  the reserve `addi t1,-stor` falls back to `li;sub` when >2047. Initialized
+  (non-zero) storage stays unrolled and is now explicitly capped at 2040 B with
+  the large-RO message. Re-verified no regression: matmult / crc32 (1 KiB `.bss`)
+  / insertsort (initialized const path) / primes all still PASS. **This directly
+  de-risks SQLite's large `.bss`** (only large initialized `.rodata` remains open).
 - **`dijkstra` DEFERRED — blocked by the big-table item.** Its `AdjMatrix[10][10]`
   (400 B) and the function-local `expected[100]` (400 B) are genuine INPUT data
   (a random adjacency matrix + a result vector), so unlike crc32 they cannot be

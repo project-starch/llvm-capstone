@@ -165,10 +165,9 @@ def main():
              "  split(gp, sp, t1)              /* gp = [t1,END) table; sp = [base,t1) */",
              "  delin(gp)"]
 
+    loop_id = 0
     for i, (size, align, init_off) in enumerate(recs):
         stor = align_up(size, 16)   # 16-align keeps split bounds + storage base aligned
-        if stor > 32768:
-            die("global %d storage %d B too large for the unrolled initializer (TODO loop)" % (i, stor))
         # Build the exact storage image: initializer bytes (if any) + zero pad to stor.
         init_bytes = b""
         tag = ".bss/zero"
@@ -188,16 +187,44 @@ def main():
 
         lines.append("  /* global %d: size=%d align=%d -> %d B (%s) */"
                      % (i, size, align, stor, tag))
-        lines.append("  addi t1, t1, -%d" % stor)
+        if stor <= 2047:
+            lines.append("  addi t1, t1, -%d" % stor)
+        else:
+            lines.append("  li t3, %d" % stor)   # reserve overflows 12-bit imm
+            lines.append("  sub t1, t1, t3")
         lines.append("  split(t2, sp, t1)             /* t2 = storage cap */")
         lines.append("  delin(t2)")
-        for k in range(0, stor, 8):
-            word = int.from_bytes(buf[k:k + 8], "little")
-            if word == 0:
-                lines.append("  sd x0, %d(t2)" % k)
-            else:
-                lines.append("  li t3, 0x%x" % word)
-                lines.append("  sd t3, %d(t2)" % k)
+
+        if all(b == 0 for b in buf):
+            # All-zero (.bss): a compact runtime loop, not an unrolled sd storm.
+            # Unrolling would (a) overflow the 12-bit sd immediate past 2 KB and
+            # (b) balloon .text (~1 insn / 8 B) past the 0x1000 PCC code window.
+            # t3 = byte counter, t4 = moving store pointer (a copy of t2).
+            loop_id += 1
+            lbl = 90 + (loop_id % 9)      # numeric local label; nearest-match safe
+            lines.append("  li t3, %d" % stor)
+            lines.append("  cincoffset(t4, t2, x0)       /* t4 = t2 (moving ptr) */")
+            lines.append("%d:" % lbl)
+            lines.append("  sd x0, 0(t4)")
+            lines.append("  cincoffsetimm(t4, t4, 8)")
+            lines.append("  addi t3, t3, -8")
+            lines.append("  bnez t3, %db" % lbl)
+        else:
+            # Initialized (non-zero) storage: unrolled li/sd immediates. Bounded by
+            # the silicon big-table limit (offsets must stay in the 12-bit range and
+            # the whole domain must fit the 0x1000 code window) -- large initialized
+            # read-only tables need the tracked large-RO delivery mechanism instead.
+            if stor > 2040:
+                die("global %d: %d B of *initialized* data overflows the 12-bit store "
+                    "offset -- large initialized tables need the large-RO silicon "
+                    "delivery mechanism (tracked open item), not unrolled li/sd" % (i, stor))
+            for k in range(0, stor, 8):
+                word = int.from_bytes(buf[k:k + 8], "little")
+                if word == 0:
+                    lines.append("  sd x0, %d(t2)" % k)
+                else:
+                    lines.append("  li t3, 0x%x" % word)
+                    lines.append("  sd t3, %d(t2)" % k)
         lines.append("  stc(t2, gp, %d)               /* cap-table[%d] */" % (i * 16, i))
 
     lines += ["  scc(sp, sp, t1)               /* sp.cursor = top of remaining stack */",
