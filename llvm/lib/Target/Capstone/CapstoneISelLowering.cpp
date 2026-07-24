@@ -25740,21 +25740,40 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
     }
   }
 
-  // Sub-capability-aligned copies: copy as matched XLen (i64) chunks rather than
-  // letting the generic lowering pick a *misaligned* i128 (capability) memory
-  // operation.  A misaligned i128 load is (mis)legalized into a single i64 load
-  // zero-extended to i128 while the paired i128 store stays a 16-byte `stc`, so
-  // the upper 8 bytes of every 16-byte unit are lost.  This is exactly the
-  // by-value 16-byte struct copy emitted for `agg = call_returning_struct(...)`
-  // (e.g. `range = MakeRange(...)`).  An access not aligned to the capability
-  // size cannot hold an in-place tagged capability, so copying via integer
-  // (tag-stripping) i64 chunks is both correct and matches the working
-  // narrower-aggregate codegen.
-  if (Op.isMemcpy() && Op.size() != 0 && (Op.size() % 8) == 0 &&
-      Op.isAligned(Align(8)) && !Op.isAligned(Align(16))) {
-    unsigned NumChunks = Op.size() / 8;
-    if (NumChunks <= 64) {
-      MemOps.assign(NumChunks, MVT::i64);
+  // Any other memcpy is *sub-capability*: not 16-byte aligned on both ends with
+  // a 16-multiple size, so it cannot carry an in-place tagged capability (that
+  // case returned above).  Do not let the generic lowering pick an i128
+  // (capability) unit here: whenever only the destination happens to be
+  // 16-aligned, a misaligned-source i128 load is (mis)legalized into a single
+  // i64 load zero-extended to i128 while the paired i128 store stays a 16-byte
+  // `stc`, so the upper 8 bytes of every 16-byte unit are silently dropped.
+  // That miscompiles `int e[N] = {...}` local-array initialization (the const
+  // template is only 4-aligned, size need not be a multiple of 8), by-value
+  // 16-byte struct copies for `agg = call_returning_struct(...)` (e.g. `range =
+  // MakeRange(...)`), and similar.  Decompose into scalar (tag-stripping) chunks
+  // sized to the copy's actual alignment instead -- correct for any size/align
+  // and matching the working narrower-aggregate codegen.
+  if (Op.isMemcpy() && Op.size() != 0 &&
+      !(Op.isAligned(Align(16)) && (Op.size() % 16) == 0)) {
+    uint64_t EffAlign = Op.getSrcAlign().value();
+    if (Op.isFixedDstAlign())
+      EffAlign = std::min<uint64_t>(EffAlign, Op.getDstAlign().value());
+    if (EffAlign == 0)
+      EffAlign = 1;
+    uint64_t Unit = 8; // never i128 on this path; cap the scalar unit at XLen
+    while (Unit > 1 && (EffAlign % Unit) != 0)
+      Unit /= 2;
+    std::vector<EVT> Chunks;
+    uint64_t Remaining = Op.size();
+    while (Remaining > 0 && Chunks.size() < 64) {
+      uint64_t Chunk = Unit;
+      while (Chunk > Remaining)
+        Chunk /= 2;
+      Chunks.push_back(MVT::getIntegerVT(Chunk * 8));
+      Remaining -= Chunk;
+    }
+    if (Remaining == 0) {
+      MemOps = std::move(Chunks);
       return true;
     }
   }
