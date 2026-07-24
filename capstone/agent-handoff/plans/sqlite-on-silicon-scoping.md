@@ -158,6 +158,24 @@ CoreMark → SQLite) depends on.
   gate GREEN** (lit 41/41; QEMU: CoreMark, BEEBS 82/82, authority 26/26, RV8 7/7,
   SQLite 9/9 rows). Also noticed, NOT fixed: `-O2` on this kernel crashes clang
   (APInt assertion, store→load forwarding).
+- **Rung 3 DONE 2026-07-24: BEEBS `crc32`** → `retval == oracle 1703161001` on
+  QEMU, silicon config. Two globals (a 1 KiB table + function-local `static
+  seed`), nested loops, real `crc32pseudo→rand_beebs→UPDC32` call graph indexing
+  the table 1024x. Files `beebs_crc32_{kernel.h,app.c,host.c}`. Validates a 1 KiB
+  `.bss` array reached via `ldc gp[i]`. (Value differs from upstream 1207487004
+  only because `unsigned long` is 64-bit here; domain == native oracle by
+  construction, which is the correctness claim.)
+- **OPEN — large initialized read-only tables don't fit the silicon-gp model.**
+  crc32's upstream 256-entry `const` table exposed it: the generator materializes
+  initialized globals as `li/sd` instruction immediates, so a 1 KiB const table
+  balloons `.text` to ~2 KiB, which (a) collides with the fixed globals offset in
+  `gp-free-domain/link-gpfree.ld` and (b) overflows the monitor's PCC code window
+  (all code must fit `[base, base+0x1000)` for the silicon image SPLIT). Runtime
+  table-gen sidesteps it for crc32, but **SQLite's static tables will hit this**:
+  needs a real large-RO-table delivery mechanism (candidates: a monitor-provided
+  data cap over an image .rodata region; a data-region copy set up by the glue;
+  or raising GPFREE_GLOBALS_OFFSET + PCC window — the last needs a firmware
+  rebuild). Decide before Stage 3 (SQLite firmware). [[project_gp_captable_codegen]]
 - **RISK A concretized — per-module cap-table indices.** `getGpCaptableIndex`
   (`CapstoneISelDAGToDAG.cpp:112`) numbers globals **per module**, so multi-TU
   domains collide on the single gp cap-table + emit multiple descriptor headers.
