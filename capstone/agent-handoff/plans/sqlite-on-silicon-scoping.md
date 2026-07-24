@@ -239,12 +239,45 @@ CoreMark → SQLite) depends on.
      fixes this by having the *monitor* do the copy with its own authority.
   3. **Raise `GPFREE_GLOBALS_OFFSET` + PCC window** — firmware rebuild AND still
      bloats code ~1 insn/word; does NOT scale. Fallback only.
-  **Next A-lane step (actionable now):** prototype (1) on QEMU — monitor copy +
-  data-cap-in-sealed-slot + glue copy loop + generator emitting a copy (not `li/sd`)
-  for initialized globals above a size threshold. Validate a large-`const`-table
-  ladder rung (e.g. revive crc32's upstream 256-entry table, or dijkstra's input
-  data) end-to-end, then confirm on the board in the batched pass.
+  **Prototype (1) — implementation contract (design 2026-07-24):**
+  - *Monitor* (`create_domain`, after the `dom_data` split, before sealing): copy the
+    image's initialized-data region `[base+GPFREE_GLOBALS_OFFSET, base+code_size)` to
+    the **front of `dom_data`** so `dom_data[k] == image[base+0x1000+k]`. The monitor
+    holds `dom_code` (RWX, split from full-authority `mem_l`) so it can *read* the
+    image in M-mode (the execute-can't-load rule bites only the DOMAIN using it as
+    PCC, not the monitor). No new sealed slot / no cap-delivery change — the glue
+    already gets `dom_data` via cscratch. (Needs an OpenSBI monitor rebuild — the
+    `.c.S`-regen gotcha applies.)
+  - *Glue/generator* (`gen-gp-captable-glue.py`): for an initialized global **above a
+    size threshold** (small ones keep the `li/sd` immediate path — no monitor dep),
+    emit a **copy** from `dom_data`-front into the carved cap-table storage instead of
+    immediates. Post-link addressing is solved with linker-resolved `lla`:
+    `lla t4,<sym>; lla t5,__gpfree_globals_base; sub t5,t4,t5` gives the global's
+    blob offset (`sym - globals_base`), `cincoffset t4,sp,t5` = source in `dom_data`,
+    then an 8-byte copy loop into `t2` (regs t3–t6 free; t1/t2/gp/sp preserved). Needs
+    a `__gpfree_globals_base` symbol at `base+0x1000` in `link-gpfree.ld`. Only
+    file-scope globals for now (a `.L__const.*` function-local template isn't a
+    linkable symbol the glue can `lla`); 8-multiple sizes (tail-handling later).
+  - *Validation*: a large-`const`-table rung (revive crc32's upstream 256-entry
+    table, or dijkstra's input data). Toolchain side (link sym + generator + rung) is
+    buildable + asm-inspectable **without** the monitor rebuild; the monitor copy +
+    rebuild + end-to-end QEMU run is the costlier follow-on, then the board.
+
+  **STATUS 2026-07-24 — toolchain side DONE (uncommitted).** `__gpfree_globals_base`
+  added to `link-gpfree.ld`; generator emits the copy path for initialized globals
+  `> 256 B` (8-mult, file-scope symbol); rung `beebs_crc32big_{kernel.h,app.c,host.c}`
+  = crc32 with the upstream 256-entry `const crc_32_tab` (2048 B; oracle 1703161001,
+  == the runtime-table crc32 rung by construction). **Builds + assembles + links +
+  static gate `cjalr=0 ldc-gp=2`; the 2 KiB table lowers to an 11-instr copy loop, no
+  `li/sd` storm.** Cannot RUN yet (needs the monitor blob). REMAINING: (a) monitor
+  copy in `create_domain` (image `[base+0x1000, base+code_size)` -> `dom_data` front)
+  + OpenSBI rebuild; (b) end-to-end QEMU run; (c) FOLLOW-UP: the `lla` path needs an
+  external-linkage symbol, so **`static`/`.L`-local large consts (SQLite!) need a
+  two-pass baked-offset variant** (read final addrs from the linked `.dom` symtab,
+  regen glue with `li <off>` constants, relink) — separable, but required before
+  SQLite's `static const` tables.
   [[project_gp_captable_codegen]] [[project_silicon_gp_delivery_boardowner_guidance]]
+  [[project_opensbi_monitor_rebuild_include_wrapper]]
 - **RISK A concretized — per-module cap-table indices.** `getGpCaptableIndex`
   (`CapstoneISelDAGToDAG.cpp:112`) numbers globals **per module**, so multi-TU
   domains collide on the single gp cap-table + emit multiple descriptor headers.

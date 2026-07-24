@@ -31,6 +31,12 @@ SECTIONS {
      can SPLIT the image into code|globals at a boundary it knows a priori. */
   . = 0x10000 + 0x1000;
 
+  /* Anchor at the globals base (== base + GPFREE_GLOBALS_OFFSET). The cap-table
+     glue uses `lla <sym> - __gpfree_globals_base` to compute a global's offset into
+     the monitor-copied initializer blob at the front of dom_data (large-RO delivery
+     path). Kept as an absolute address symbol so it is linkable from the glue TU. */
+  __gpfree_globals_base = .;
+
   .rodata : ALIGN(16) {
     *(.srodata .srodata.*)
     *(.rodata .rodata.*)

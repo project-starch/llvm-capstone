@@ -210,21 +210,52 @@ def main():
             lines.append("  addi t3, t3, -8")
             lines.append("  bnez t3, %db" % lbl)
         else:
-            # Initialized (non-zero) storage: unrolled li/sd immediates. Bounded by
-            # the silicon big-table limit (offsets must stay in the 12-bit range and
-            # the whole domain must fit the 0x1000 code window) -- large initialized
-            # read-only tables need the tracked large-RO delivery mechanism instead.
-            if stor > 2040:
-                die("global %d: %d B of *initialized* data overflows the 12-bit store "
-                    "offset -- large initialized tables need the large-RO silicon "
-                    "delivery mechanism (tracked open item), not unrolled li/sd" % (i, stor))
-            for k in range(0, stor, 8):
-                word = int.from_bytes(buf[k:k + 8], "little")
-                if word == 0:
-                    lines.append("  sd x0, %d(t2)" % k)
-                else:
-                    lines.append("  li t3, 0x%x" % word)
-                    lines.append("  sd t3, %d(t2)" % k)
+            sym, addend = init_map.get(i, (None, 0))
+            # Large-RO delivery path: for a big initialized global, COPY its
+            # initializer from the monitor-placed blob at the front of dom_data
+            # (dom_data[k] == image[globals_base + k]) instead of an li/sd immediate
+            # storm that overflows the 0x1000 code window. Post-link offset comes from
+            # linker-resolved `lla <sym> - __gpfree_globals_base`. Requirements: a
+            # file-scope (linkable, non-.L) symbol and an 8-multiple size.
+            COPY_THRESHOLD = 256
+            if (stor > COPY_THRESHOLD and (size % 8) == 0
+                    and sym is not None and not sym.startswith(".L")):
+                loop_id += 1
+                lbl = 90 + (loop_id % 9)
+                lines.append("  /* large-RO: copy %d B from dom_data-front blob */" % size)
+                lines.append("  lla t4, %s" % sym)
+                if addend:
+                    lines.append("  addi t4, t4, %d" % addend)
+                lines.append("  lla t5, __gpfree_globals_base")
+                lines.append("  sub t5, t4, t5               /* blob offset = sym-base */")
+                lines.append("  cincoffset(t4, sp, t5)       /* t4 = dom_data + off (src) */")
+                lines.append("  cincoffset(t3, t2, x0)       /* t3 = storage (dst) */")
+                lines.append("  li t6, %d" % size)
+                lines.append("%d:" % lbl)
+                lines.append("  ld t5, 0(t4)")
+                lines.append("  sd t5, 0(t3)")
+                lines.append("  cincoffsetimm(t4, t4, 8)")
+                lines.append("  cincoffsetimm(t3, t3, 8)")
+                lines.append("  addi t6, t6, -8")
+                lines.append("  bnez t6, %db" % lbl)
+                if stor > size:                     # zero the 16-align pad tail
+                    lines.append("  sd x0, 0(t3)")
+            else:
+                # Small initialized storage: unrolled li/sd immediates (no monitor dep).
+                # Bounded by the 12-bit store offset; a big non-copyable global here is
+                # the tracked large-RO limit (function-local .L template, or odd size).
+                if stor > 2040:
+                    die("global %d: %d B of *initialized* data overflows the 12-bit "
+                        "store offset and is not copy-eligible (sym=%r, size%%8=%d) -- "
+                        "needs the large-RO copy path (file-scope symbol, 8-mult size)"
+                        % (i, stor, sym, size % 8))
+                for k in range(0, stor, 8):
+                    word = int.from_bytes(buf[k:k + 8], "little")
+                    if word == 0:
+                        lines.append("  sd x0, %d(t2)" % k)
+                    else:
+                        lines.append("  li t3, 0x%x" % word)
+                        lines.append("  sd t3, %d(t2)" % k)
         lines.append("  stc(t2, gp, %d)               /* cap-table[%d] */" % (i * 16, i))
 
     lines += ["  scc(sp, sp, t1)               /* sp.cursor = top of remaining stack */",
