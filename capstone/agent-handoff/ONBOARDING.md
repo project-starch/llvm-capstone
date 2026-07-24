@@ -7,9 +7,8 @@ Fast-track for anyone (developer or AI assistant) starting from scratch.
 ## 0. Clone the repository
 
 ```bash
-git clone -b capstone-bootstrap https://github.com/project-starch/llvm-capstone
+git clone --recurse-submodules -b capstone-bootstrap https://github.com/project-starch/llvm-capstone
 cd llvm-capstone
-git submodule update --init
 ```
 
 `git submodule update --init` populates all four sub-repositories
