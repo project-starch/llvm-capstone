@@ -133,14 +133,37 @@ CoreMark → SQLite) depends on.
 - **RISK A also:** cap-table size vs. the stack/data region it's carved from at
   CoreMark/SQLite global counts.
 - Gate: matmult-int builds with an auto-generated glue and runs on QEMU.
-- **DONE 2026-07-24 (zero-init half):** generator + generic glue built under
-  `tests/runtime-qemu/silicon-ladder/` (`gen-gp-captable-glue.py`,
-  `start-gp-captable-generic.S`, `build-ladder-domain.sh`). Rung 1 **matmult-int**
-  (3 `.bss` globals, non-inlined `mm_cell`, native `+m` mul) **passes on QEMU** with
-  gp fabrication OFF — `retval == native-oracle checksum 774662735`, static gate
-  `cjalr=0 ldc-gp=6`. `run-matmult-int-qemu.sh`. The generator scaled N=1→N=3
-  automatically. STILL OPEN: initialized-global template copy (deferred to a later
-  step + the board question above).
+- **DONE 2026-07-24:** generator + generic glue under `tests/runtime-qemu/silicon-ladder/`
+  (`gen-gp-captable-glue.py`, `start-gp-captable-generic.S`, `build-ladder-domain.sh`,
+  `run-ladder-qemu.sh`). Both global classes handled + validated on QEMU (gp
+  fabrication OFF):
+  - `.bss`: rung 1 **matmult-int** (3 globals, non-inlined `mm_cell`, `+m` mul) →
+    `retval == oracle 774662735`, gate `cjalr=0 ldc-gp=6`.
+  - initialized: **init_probe** (const `LUT[8]` + `.bss`) → `retval == oracle
+    4093668916`; `li/sd` materialization packs the LUT int32s correctly.
+  Generator scaled N=1→N=3 automatically. Commits `05451cd8`, `2ffd621a`.
+- **Rung 2 DONE 2026-07-24: BEEBS `insertsort`** (a *found* benchmark; single-TU;
+  `is_a[11]` .bss global + a function-local const `expected[11]`) → `retval ==
+  oracle 271779359` on QEMU, silicon config. Files `beebs_insertsort_{kernel.h,
+  app.c,host.c}`. Surfaced + fixed TWO real bugs (full trail:
+  `history/24-07-2026_03-57-54_ladder-rung2-insertsort-memcpy-stc-miscompile.md`):
+  (1) **generator** — pick the initialized-global template by *reloc type*
+  (`R_RISCV_ADD` 33..36), not "skip `.L`-prefixed": a function-local const is
+  promoted to `.L__const.*` and was wrongly zero-filled. (2) **compiler
+  (unconditional)** — `findOptimalMemOpLowering` sub-capability memcpy fix: a copy
+  that is neither 16-aligned+16-multiple nor 8-aligned+8-multiple (e.g. 44-byte
+  `int e[11]`, 4-aligned) fell to the generic lowering, which used a 16-byte `stc`
+  while the under-aligned source loaded only 8 bytes → upper 8 bytes of each unit
+  dropped. Generalized to scalarize any non-tag-capable copy. **Full regression
+  gate GREEN** (lit 41/41; QEMU: CoreMark, BEEBS 82/82, authority 26/26, RV8 7/7,
+  SQLite 9/9 rows). Also noticed, NOT fixed: `-O2` on this kernel crashes clang
+  (APInt assertion, store→load forwarding).
+- **RISK A concretized — per-module cap-table indices.** `getGpCaptableIndex`
+  (`CapstoneISelDAGToDAG.cpp:112`) numbers globals **per module**, so multi-TU
+  domains collide on the single gp cap-table + emit multiple descriptor headers.
+  Single-TU domains are fine (matmult, init_probe, **the SQLite amalgamation**, most
+  BEEBS/RV8). **CoreMark (multi-file) needs amalgamation or `-flto`** to present one
+  module — the next step. (Whole-program-index compiler fix is the alternative.)
 
 ### Stage 0b — QEMU parity for the whole ladder in the *silicon* build config
 With the generator, build every ladder rung `-capstone-gp-captable` + gp-free +

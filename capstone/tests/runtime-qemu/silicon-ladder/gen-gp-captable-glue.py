@@ -68,8 +68,14 @@ def read_descriptor(main_o, out_inc):
 
 
 def read_init_symbols(main_o):
-    """record-index -> (symbol, addend) for initialized globals, via the ADD reloc
-    (non-.L symbol) against .capstone_gp_table at descriptor offset 24*(i+1)."""
+    """record-index -> (symbol, addend) for initialized globals. Each initialized
+    global's init_off is a `sym - .` PC-relative diff, emitted as an ADD/SUB reloc
+    pair against .capstone_gp_table at descriptor offset 24*(i+1). The ADD half
+    (R_RISCV_ADD8/16/32/64 = 33..36) points at the initializer symbol; the SUB half
+    (37..40) points at the local `.L0` anchor. Select by RELOC TYPE, not by symbol
+    name -- a function-local const is promoted to a `.L__const.*` symbol, so a
+    "skip .L-prefixed symbols" heuristic would wrongly drop it and zero-fill it."""
+    ADD_RELOCS = {33, 34, 35, 36}       # R_RISCV_ADD{8,16,32,64}
     out = subprocess.run([tool("llvm-readobj"), "-r", "--elf-output-style=GNU", main_o],
                          capture_output=True, text=True).stdout
     init_map = {}
@@ -85,9 +91,13 @@ def read_init_symbols(main_o):
         if len(parts) < 5 or not re.fullmatch(r"[0-9a-fA-F]+", parts[0]):
             continue
         offset = int(parts[0], 16)
-        sym = parts[4]
-        if sym.startswith(".L"):        # the SUB half (local temp) -- skip
+        try:
+            reltype = int(parts[1], 16) & 0xffffffff   # Info = (symidx<<32)|type
+        except ValueError:
             continue
+        if reltype not in ADD_RELOCS:   # the SUB anchor half -- skip
+            continue
+        sym = parts[4]
         addend = 0
         if "+" in parts:
             try:
