@@ -58,7 +58,31 @@ Watch-outs (resolve at implementation time with the hot context):
   not collide for these sizes; the front blob is later reused as stack scratch —
   harmless (the copy into cap-table storage already happened).
 
-### 1-STATUS (2026-07-24): monitor copy IMPLEMENTED (pending rebuild)
+### 1-STATUS (2026-07-24 v2): monitor rebuild BROKE BOOT — reverted + restored
+**Outcome: the large-RO monitor copy is BLOCKED at the rebuild step, not the code.** The copy
+loop compiled cleanly under capstone-cc (`.c.S` regenerated, `fw_jump` relinked), but the
+**rebuilt `fw_jump` hangs at boot with ZERO serial** (no OpenSBI banner) — and `create_domain`
+isn't even called at boot, so this is a **whole-monitor** breakage, not the copy logic.
+- **Restored:** the known-good `fw_jump.elf` from `/tmp/capstone/fw_jump.elf.orig.bak2` (==
+  `.bak`, md5 `6724bcb3…`, the Jul-22 20:04 monitor). `matmult_int` boots + PASSES again — B
+  unblocked. The broken rebuild is saved at `/tmp/capstone/fw_jump.elf.largero-broken`.
+- **Suspected cause = the monitor REGEN itself, not the copy.** capstone-c advanced to
+  `8cda52c`; its recent commits are codegen fixes for *"loading from dyn addresses"* /
+  *"linear addr dyn offset branch"* — i.e. regenerating the monitor with current capstone-cc
+  may miscompile it (the good `fw_jump` was a **prebuilt**, likely from an older capstone-cc).
+- **To isolate H1 (my dyn-offset copy code) vs H2 (regen breaks the monitor regardless):**
+  revert the copy (DONE — component source reverted), `rm sbi_capstone_dom.c.S`, rebuild, boot
+  test. If it STILL hangs → H2 (regen path broken; large-RO on QEMU needs a fixed capstone-cc
+  or a different validation route). If it boots → H1 (the `dom_gp[wi]=…` dyn-offset codegen is
+  the specific trigger; rework the copy, e.g. avoid variable-offset linear-cap access).
+- **DO NOT rebuild the monitor** until this is diagnosed — a rebuild silently re-breaks the
+  shared `fw_jump` (affects both lanes). The component source edit is reverted; the package
+  copy still carries an (inert, non-fw_jump) copy edit + `GPFREE_GLOBALS_OFFSET` define.
+- **Decoupling:** the FPGA handoff does NOT need this — the non-large-RO rungs (matmult,
+  coremark_matrix, rv8_primes, beebs_crc32/insertsort/prime/recursion) are silicon-ready and
+  boot on the restored monitor. Large-RO (crc32big → SQLite) is a separate, blocked track.
+
+### 1-STATUS (2026-07-24 v1, superseded): monitor copy IMPLEMENTED (pending rebuild)
 The copy is written. **Critical finding — the monitor has three divergent copies; the QEMU
 `fw_jump` builds from the OPENSBI COMPONENT copy, not the package copy:**
 - `build/local.mk`: `OPENSBI_OVERRIDE_SRCDIR = components/opensbi` → `fw_jump` compiles
