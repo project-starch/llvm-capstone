@@ -9,7 +9,8 @@ Works for human developers and any AI coding assistant.
 | `$CAPSTONE_TMP_ROOT` (scratch) | `/tmp/capstone` |
 | Shared env file | `capstone/tests/capstone-test-env.sh` |
 
-**New here?** Start with `ONBOARDING.md`.
+**New here?** Start with `ONBOARDING.md` (it has a short callout for non-Claude coding agents
+like Codex/Cursor, which do not auto-read `CLAUDE.md`).
 
 ## Minimal startup reading set
 
@@ -21,13 +22,26 @@ For a normal fresh session, read only these files first:
 
 Everything else should be loaded only when the task needs it.
 
+## Who works where (lanes)
+
+Work is split across two peer agent lanes plus, when needed, an external collaborator:
+
+- **Lane A** → commits to `capstone-bootstrap`. **Lane B** → commits to
+  `capstone-bootstrap-b`. Both branch off the shared mainline; sync via
+  `git merge origin/capstone-bootstrap`. The A↔B split, hand-off rules, and the permanent
+  repository rules are in **`DELEGATION.md`** (read it before delegating).
+- **External collaborators** using their own coding agent get a **self-contained,
+  stock-toolchain** task doc under `plans/` (e.g. `plans/xlang-repro-task.md`, the
+  cross-language reproduction task) that does *not* depend on our in-flux compiler/ABI. The
+  ONBOARDING callout covers pasting `CLAUDE.md` as context for non-Claude agents.
+
 ## Directory layout
 
 ```
 agent-handoff/
-├── ONBOARDING.md          fast-track setup for new developers/contributors
+├── ONBOARDING.md          fast-track setup (incl. non-Claude-agent + collaborator callout)
+├── DELEGATION.md          A↔B lane split + permanent repository rules
 ├── new-chat-prompt.md     prompt template for resuming a session
-├── codex-onboarding.md    instructions + prompt for OpenAI Codex
 ├── state/                 VOLATILE — rewrite after each milestone
 │   ├── current-state.md   what is verified right now (short)
 │   └── current-next-step.md  next concrete milestone (short)

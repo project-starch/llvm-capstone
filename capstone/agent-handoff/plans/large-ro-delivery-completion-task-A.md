@@ -3,7 +3,7 @@
 **Owner: A lane (in-lane — do not delegate).** Touches the OpenSBI monitor,
 capability-ABI-adjacent glue, and the SQLite critical path; A holds the hot context.
 The B lane is explicitly fenced off these files (see
-`plans/dhrystone-ladder-task-B.md`).
+`plans/ladder-breadth-task-B.md`).
 
 Canonical design + contract: `plans/sqlite-on-silicon-scoping.md` (the large-RO
 implementation contract + the "STATUS 2026-07-24 — toolchain side DONE" block). This

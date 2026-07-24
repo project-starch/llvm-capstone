@@ -88,3 +88,13 @@ uncommitted). Subagents do not recurse.
   (board etiquette + secret token + can't be parallelized); compiler/codegen and
   capability-ABI changes; subtle-correctness or concurrency debugging; the paper;
   commits; and anything involving real-person names.
+
+Peer **lane B** (a separate Opus session on `capstone-bootstrap-b`) is a different
+thing from subagents — see `capstone/agent-handoff/DELEGATION.md`. A third category
+is an **external collaborator running their own (non-Claude) coding agent**: give
+them a **self-contained, stock-toolchain** task doc in `plans/` that is **decoupled
+from our in-flux compiler/ABI/board** (so the churn here can't block them), and keep
+the collaborator's real name out of the repo. Non-Claude agents don't auto-read this
+file — the `agent-handoff/ONBOARDING.md` callout covers pasting it as context. The
+reproduction/repro-artifact half of a new benchmark can go this way; the
+capability/compiler/board half stays in an owning lane.

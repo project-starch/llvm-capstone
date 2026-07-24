@@ -77,6 +77,56 @@ this doc where they conflict:
 
 ---
 
+## UPDATE — 2026-07-24 meeting: broaden the story with a cross-language benchmark
+
+A SQLite-only case study "looks a little thin." Decision: **broaden generality** by adding
+the **cross-language (xlang) benchmark** — the FFI temporal-borrow bugs written up in
+`capstone/paper/proposals/xlang.tex` (Companion III): **Lua-in-Rust** (mlua/rlua) and
+**mruby** (Ruby in C/C++), **15 verified temporal-borrow defects** (UAF / double-free) at the
+FFI boundary. These are exactly the class linear capabilities + revocation target, so they
+extend the SQLite security story to a mixed-language setting without a new mechanism.
+
+**Sequencing (the load-bearing decision).** Split the work into two phases along the
+stability boundary of our stack:
+
+- **Phase 1 — reproduction, decoupled from our toolchain (handed to an external collaborator
+  using their own coding agent, Codex — NOT Claude Code).** Deliverable = each bug as a
+  **minimal, deterministic, self-contained artifact** that crashes with a memory-safety
+  violation on a **stock toolchain** (native AddressSanitizer first, then **plain RISC-V
+  QEMU** — the meeting's explicit target), plus an **FFI-boundary annotation** (which pointer
+  crosses, and where the borrow must be revoked / what becomes a capability). This phase
+  **does not touch** our LLVM-Capstone fork, QEMU fork, gp-captable/ABI work, or the FPGA.
+- **Phase 2 — mechanism, stays in our lane (later).** Ingest the artifacts, compile under
+  Capstone, run in mutually-distrusting domains, show linear-cap **revocation converts the
+  UAF into a fault** — QEMU first, then FPGA.
+
+**Why this is the right way despite repo instability.** All the instability lives on *our*
+side of the pipeline and enters only in Phase 2. The reproduction phase is stock-toolchain
+upstream-bug work, so the collaborator is insulated from the in-flux compiler/ABI entirely —
+the decoupling *is* the risk mitigation. Had we asked an external agent to bring xlang up
+*under the Capstone compiler* now, it would collide head-on with the large-`.rodata` /
+gp-captable churn we are mid-fix on.
+
+**Start set.** mruby first (pure C, standalone C host, public ASan traces). A single **mruby
+3.1.0** build covers the pre-3.2 cluster (rows 4,5,7,8,9,10,12,13,14,15); CVE-2026-1979 needs
+≤3.4.0, CVE-2018-10191 needs ≤1.4.0. Defer the Lua-Rust rows (rows 1–2; heavier Rust
+toolchain). **We (A) validate one repro ourselves first** (suggest row 10, CVE-2022-1106 —
+has fix commit `7f5a490d`) to battle-test the recipe, then hand the generalized prompt.
+
+**Handoff artifact:** `plans/xlang-repro-task.md` — a from-scratch, tool-agnostic
+(Codex-oriented) runbook; QEMU-reproduction first. Keeps the collaborator's real name out of
+the repo per the naming rule (address it to them when sending). Cover message to send with it
+is drafted under `/tmp/capstone/`.
+
+**Timeline.** The meeting reaffirmed the ~10-day clock on the FPGA/SQLite bottleneck; xlang
+Phase 1 (~1–2 days/bug per the PI) runs in parallel and off our critical path.
+
+**Unchanged:** FPGA remains the headline for the SQLite/perf story; xlang broadens the
+**security-generality** story, it does not replace SQLite. NB: scrub the real-person name in
+`xlang.tex`'s author line before the paper is shared (double-blind will strip it anyway).
+
+---
+
 ## 1. What the paper actually is now (the reframe)
 
 Not "pointer-safe SQLite marshalling (design/position)." It is a **systems-security paper on

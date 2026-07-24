@@ -29,7 +29,7 @@ Persistent context for continuing the work in a new chat or session.
 - `design/` — deep architecture and design docs (HostCall wire spec, CoreMark PureCap, SQLite VFS plan, ...).
 - `plans/` — active WIP plans committed to git (currently: backend compiler fixes).
 - `history/` — timestamped archival notes.
-- `new-chat-prompt.md` / `codex-onboarding.md` — session prompt templates.
+- `new-chat-prompt.md` — session prompt template (non-Claude agents: see the ONBOARDING callout).
 
 Read `README.md` then `state/current-state.md` and `state/current-next-step.md` first
 when re-entering the project.

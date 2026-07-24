@@ -2,6 +2,19 @@
 
 Fast-track for anyone (developer or AI assistant) starting from scratch.
 
+> **Using a non-Claude coding agent** (Codex, Cursor, …)? Those agents do **not** auto-read
+> the repo-root `CLAUDE.md`, so paste it in explicitly as context, together with `README.md`,
+> `state/current-state.md`, and `state/current-next-step.md`. Everything those agents need is
+> in the tracked repo files — there is no separate agent-specific onboarding file.
+>
+> **Handed a self-contained task doc** under `plans/` (e.g. the cross-language reproduction
+> task, `plans/xlang-repro-task.md`)? That doc is authoritative and stock-toolchain only — you
+> can skip the repo-build steps below unless it says otherwise.
+>
+> **Contributing to the core repo?** Work happens in two peer lanes — Lane A on
+> `capstone-bootstrap`, Lane B on `capstone-bootstrap-b` — under the rules in `DELEGATION.md`
+> and the hard constraints in the repo-root `CLAUDE.md`. Read both before committing.
+
 ---
 
 ## 0. Clone the repository
@@ -11,11 +24,17 @@ git clone --recurse-submodules -b capstone-bootstrap https://github.com/project-
 cd llvm-capstone
 ```
 
-`git submodule update --init` populates all four sub-repositories
-(`caplifive-buildroot`, `capstone-qemu`, `capstone-c`, `capstone-spec`)
-at the exact commits recorded in the main tree.
+`--recurse-submodules` is **required, not optional**: the submodules
+(`caplifive-buildroot`, `caplifive-system`, `capstone-qemu`, `capstone-c`,
+`capstone-spec`, `capstone-ariane`, `paper`) themselves contain **nested** submodules
+(QEMU roms/edk2, buildroot/opensbi components, …). If you already cloned without it, run:
 
-After this, the workspace is ready for the steps below.
+```bash
+git submodule update --init --recursive
+```
+
+Plain `git submodule update --init` (non-recursive) leaves the nested submodules empty and
+the build will fail. After the recursive populate, the workspace is ready for the steps below.
 
 ---
 
