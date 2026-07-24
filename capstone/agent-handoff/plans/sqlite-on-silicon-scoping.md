@@ -165,6 +165,20 @@ CoreMark → SQLite) depends on.
   `.bss` array reached via `ldc gp[i]`. (Value differs from upstream 1207487004
   only because `unsigned long` is 64-bit here; domain == native oracle by
   construction, which is the correctness claim.)
+- **Rung 4 DONE 2026-07-24: BEEBS `recursion`** → `retval == oracle 1579141629`.
+  Deep self-recursion (fib) + mutual recursion (anka<->kalle) under gp-free plain
+  call/ret (tall reentrant stack), a `volatile int In` global + `static n`.
+  `cjalr=0`. Files `beebs_recursion_{kernel.h,app.c,host.c}`.
+- **Rung 5 DONE 2026-07-24: BEEBS `prime`** → `retval == oracle 582955588`.
+  Primality call graph (prime->even->divides) + `swap(&x,&y)` taking the ADDRESS
+  of two globals (pointers into the gp cap-table region) + a volatile `result`.
+  3 .bss globals, `cjalr=0`. Files `beebs_prime_{kernel.h,app.c,host.c}`.
+- **`dijkstra` DEFERRED — blocked by the big-table item.** Its `AdjMatrix[10][10]`
+  (400 B) and the function-local `expected[100]` (400 B) are genuine INPUT data
+  (a random adjacency matrix + a result vector), so unlike crc32 they cannot be
+  computed at runtime -- ~200 li/sd immediates plus a 10-function body would
+  overflow the 0x1000 code window. Confirms the big-table limit bites real
+  benchmarks with legitimate input data; revisit once that mechanism exists.
 - **OPEN — large initialized read-only tables don't fit the silicon-gp model.**
   crc32's upstream 256-entry `const` table exposed it: the generator materializes
   initialized globals as `li/sd` instruction immediates, so a 1 KiB const table
