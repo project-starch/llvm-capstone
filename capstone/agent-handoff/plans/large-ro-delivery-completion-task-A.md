@@ -58,7 +58,31 @@ Watch-outs (resolve at implementation time with the hot context):
   not collide for these sizes; the front blob is later reused as stack scratch —
   harmless (the copy into cap-table storage already happened).
 
-### 1-STATUS (2026-07-24 v2): monitor rebuild BROKE BOOT — reverted + restored
+### 1-STATUS (2026-07-24 v3, DEFINITIVE): monitor REGEN path is broken — large-RO blocked on it
+Ran the isolation to the end. **The monitor-regen path cannot reproduce the working monitor in
+this environment — every regeneration boot-hangs; only the checked-in prebuilt boots.** Details:
+- Good monitor `fw_jump.elf` md5 `6724bcb3` (checked-in **prebuilt**) — boots, all rungs pass.
+- **Every** regen → md5 `788f8a1a`, **hangs at boot (zero serial)**. Confirmed with BOTH
+  capstone-c `8cda52c` (drifted) AND the pinned `4899cf9` — so it is **NOT the commit drift**;
+  both compilers produce the same broken monitor. (H1 = my copy code is moot; the reverted,
+  no-change source also boot-hangs.)
+- Root of the divergence (diff of good vs regen `.c.S`): the current compiler allocates **more
+  callee-saved regs / bigger frames** (`s0–s11`, frame −464) than whatever built the good
+  prebuilt (`s0–s6`, frame −368). I.e. the working monitor was built by a **different compiler
+  state not reproducible from the current capstone-c** — a real toolchain gap.
+- **Consequence:** large-RO on QEMU is **blocked** — I can't rebuild the monitor to add the
+  copy without boot-breaking it. This is NOT a quick fix; fastest path = ask whoever produced
+  the prebuilt which exact capstone-c commit + flags built `fw_jump` (6724bcb3), or debug why
+  the current compiler's monitor output hangs (register-alloc / linear-dyn-offset codegen).
+- **Safe state left:** good `fw_jump` restored (B unblocked); good-`.c.S` backup at
+  `/tmp/claude-.../llvm-capstone-b/.../sbi_capstone_dom.c.S.orig`; broken regen saved at
+  `/tmp/capstone/fw_jump.elf.largero-broken`; capstone-c back at session-start `8cda52c`;
+  component source reverted. **DO NOT rebuild the QEMU monitor** until the toolchain gap is
+  resolved (it silently boot-breaks the shared `fw_jump` for both lanes).
+- **Decoupled:** the FPGA handoff for the non-large-RO rungs (matmult, coremark_matrix,
+  rv8_primes, beebs_crc32/insertsort/prime/recursion) needs NO monitor regen — proceed there.
+
+### 1-STATUS (2026-07-24 v2, superseded): monitor rebuild BROKE BOOT — reverted + restored
 **Outcome: the large-RO monitor copy is BLOCKED at the rebuild step, not the code.** The copy
 loop compiled cleanly under capstone-cc (`.c.S` regenerated, `fw_jump` relinked), but the
 **rebuilt `fw_jump` hangs at boot with ZERO serial** (no OpenSBI banner) — and `create_domain`
