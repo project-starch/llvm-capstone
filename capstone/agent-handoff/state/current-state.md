@@ -2,6 +2,22 @@
 
 Minimal snapshot. Read first in every session.
 
+## Latest (2026-07-24) — CoreMark matrix on the silicon ladder (QEMU)
+
+CoreMark 1.01's **matrix** benchmark now runs as silicon-ladder **rung 7** in a
+pure-cap domain on QEMU: domain crc16 `14343` == native `cc -O0` oracle, static
+gate `cjalr=0 ldc-gp=1`, `__CAPSTONE_LADDER_COREMARK_MATRIX_PASSED__`. Files in
+`tests/runtime-qemu/silicon-ladder/coremark_matrix_{kernel.h,app.c,host.c}` +
+`run-coremark-matrix-qemu.sh`. Matrix only (list/state CRCs are pointer-size-
+dependent → wouldn't match a native oracle); driven standalone with CoreMark's
+validation-run matrix params (N=9). Built `-Os` (pinned in the wrapper): CoreMark
+matrix is ~4.7 KiB `.text` at `-O0` and overflows the 4 KiB PCC window; ~1.5 KiB
+at `-Os`. **Note:** the `-b` clang is stale (predates the merged
+`-capstone-gp-captable` flag); validated with a sibling checkout's current clang
+driving the `-b` runtime — the `-b` LLVM build config was restored to shared +
+`clang;lld` but the rebuild is deferred. Trail:
+`history/24-07-2026_14-14-09_coremark-matrix-silicon-ladder-rung.md`.
+
 ## Latest (2026-07-22) — gp-free domain bring-up (silicon-shaped ABI)
 
 On branch **`capstone-gp-free`** (off `capstone-bootstrap`; not merged/pushed): a
