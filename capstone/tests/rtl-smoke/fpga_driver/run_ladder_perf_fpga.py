@@ -16,7 +16,7 @@ Adapted from the proven /tmp/capstone/board_run_gpfree.py (the 554745961 silicon
 run). Artifacts come from build-ladder-fpga.sh's OUT_DIR (default
 $CAPSTONE_TMP_ROOT/ladder-fpga): ladder_perf_ctl, <rung>.dom, <rung>.oracle.
 """
-import sys, os, time, base64, hashlib, re, pathlib, gzip
+import sys, os, time, base64, hashlib, re, pathlib, gzip, subprocess
 
 DRV = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(DRV.parent))          # .../rtl-smoke (for `import fpga_driver`)
@@ -31,8 +31,12 @@ IMG = pathlib.Path(os.path.expanduser("~/capstone-b-artifacts/fw_payload_fpga_up
 IMG_NAME = "fw_payload_fpga_up_gpfree.bin"
 BITSTREAM = "working-caplifive-captype-fixed.bit"
 
-ART = pathlib.Path(os.environ.get("LADDER_FPGA_DIR",
-                                  os.path.expanduser("/tmp/capstone/ladder-fpga")))
+# Must match build-ladder-fpga.sh's OUT_DIR default ($CAPSTONE_TMP_ROOT/ladder-fpga),
+# else the runner reads a different dir than the build writes and can pick up stale
+# doms (the 2026-07-25 incident). preflight_artifacts() also passes OUT_DIR=ART.
+ART = pathlib.Path(os.environ.get("LADDER_FPGA_DIR") or
+                   os.path.join(os.environ.get("CAPSTONE_TMP_ROOT", "/tmp/capstone"),
+                                "ladder-fpga"))
 RUNGS = (os.environ.get("LADDER_RUNGS") or
          "matmult_int coremark_matrix rv8_primes beebs_crc32 "
          "beebs_insertsort beebs_prime beebs_recursion").split()
@@ -152,14 +156,54 @@ def send_file(console, local_gz, remote_gz, remote_bin, bin_sha, do_exec, chunk=
         sh(console, f"chmod 0755 {remote_bin}")
     log(f"  {remote_bin} OK (sha {bin_sha})")
 
+def preflight_artifacts():
+    """Never feed the board a stale domain binary.
+
+    A 2026-07-25 sweep ran pre-fix `.dom` files (built before the sub-cap memcpy
+    fix) and reported 4 bogus "silicon miscompiles" that were actually an
+    already-fixed compiler bug — because this runner used to reuse an existing
+    `.dom` and never rebuild it. So by default we REBUILD every artifact against
+    the current compiler via build-ladder-fpga.sh, and regardless of that we
+    HARD-FAIL if any artifact is missing or older than the compiler binary.
+
+    Env knobs: LADDER_REBUILD=0 skips the rebuild (then the freshness check must
+    pass on the pre-built set); CAPSTONE_CLANG is used for the freshness compare.
+    """
+    build_sh = DRV.parent / "build-ladder-fpga.sh"
+    if os.environ.get("LADDER_REBUILD", "1") != "0":
+        if not build_sh.is_file():
+            raise SystemExit(f"cannot rebuild: {build_sh} missing "
+                             f"(set LADDER_REBUILD=0 to run a pre-built set)")
+        log(f"rebuilding ladder artifacts with the current compiler -> {ART}")
+        subprocess.run(["bash", str(build_sh), *RUNGS], check=True,
+                       env=dict(os.environ, OUT_DIR=str(ART)))
+
+    arts = [ART / "ladder_perf_ctl"] + [ART / f"{r}.dom" for r in RUNGS]
+    missing = [str(a) for a in arts if not a.is_file()] + \
+              [str(ART / f"{r}.oracle") for r in RUNGS
+               if not (ART / f"{r}.oracle").is_file()]
+    if missing:
+        raise SystemExit("artifacts missing (run build-ladder-fpga.sh):\n  " +
+                         "\n  ".join(missing))
+
+    cc = os.environ.get("CAPSTONE_CLANG")
+    if cc and os.path.exists(cc):
+        cc_mtime = os.path.getmtime(os.path.realpath(cc))
+        stale = [str(a) for a in arts if os.path.getmtime(a) < cc_mtime]
+        if stale:
+            raise SystemExit(
+                "STALE domain artifacts OLDER than the compiler — would run "
+                "pre-fix code (see the 2026-07-25 stale-dom incident):\n  " +
+                "\n  ".join(stale) +
+                f"\ncompiler: {os.path.realpath(cc)}\n"
+                "Rebuild them (default) or delete them; do NOT run stale on the board.")
+    else:
+        log("WARNING: CAPSTONE_CLANG unset/absent — cannot verify dom freshness")
+
+
 def main():
+    preflight_artifacts()
     oracles = {r: open(ART / f"{r}.oracle").read().strip() for r in RUNGS}
-    ctl = ART / "ladder_perf_ctl"
-    if not ctl.is_file():
-        raise SystemExit(f"controller missing: {ctl} (run build-ladder-fpga.sh)")
-    for r in RUNGS:
-        if not (ART / f"{r}.dom").is_file():
-            raise SystemExit(f"domain missing: {ART}/{r}.dom")
 
     console = FpgaConsole(URL, logger=lambda m: print(f"[fpga] {m}", file=sys.stderr))
     console.connect()
