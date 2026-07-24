@@ -37,6 +37,37 @@ can also use the browser GUI. Every step and gotcha is in the KB files below.
 - A local `.bit` is NOT needed — re-flash names the **server-side** bitstream
   `working-caplifive-captype-fixed.bit`.
 
+## Running faster + running a suite (transfer tiers)
+
+The old bottleneck was per-run UART transfer. Two levers, in order:
+
+- **Tier-1 `fast_xfer` (DONE, board-validated ~3×).** Use
+  `tests/rtl-smoke/fpga_driver/fast_xfer.py` `fast_put` for every domain transfer
+  (direct-append base64 chunks, single final-sha guard, safe-retry on mismatch). A
+  controller is now ~30 s vs ~4 min. Memory `project_board_transfer_tiers`.
+- **Batch many domains in ONE session.** The firmware JTAG-load (~2 min, 15 MB)
+  dominates — pay it **once**. Boot once, then loop `fast_put dom → run → read
+  mcycle → next`. Domain binaries are tiny; only the firmware is big.
+- **Tier-2b (JTAG `load_image` into reserved RAM + resident controller)** — the
+  suite/SQLite scaling path: load → run → read `mcycle` → load next, many domains
+  per session, no reflash, no UART transfer. Board owner's endorsed "domain in the
+  image, loaded over JTAG" model. **Confirm the reserved-region address/size with
+  the board owner before use — never guess a RAM address.** Not needed for a handful
+  of tiny integer domains (Tier-1 in one session suffices); it's the on-ramp to
+  SQLite-on-silicon. Design: `plans/sqlite-on-silicon-scoping.md` §"Delivery
+  mechanism"; the UART-baked-controller variant (initramfs) is postponed
+  (`project_board_transfer_tiers`).
+
+## DO NOT rebuild the monitor / firmware
+
+There is a confirmed **toolchain gap**: regenerating `fw_jump.elf` (QEMU) or the
+FPGA firmware monitor from the current `capstone-c` **boot-hangs** (zero serial);
+the working firmware is an unreproducible prebuilt (older compiler state, smaller
+frames). **Use the existing working prebuilt as-is.** Fixing the regen is a
+separate workstream (`plans/monitor-regen-audit-task-B.md`) that unblocks
+large-`.rodata`/SQLite on silicon. Memory
+`project_opensbi_monitor_rebuild_include_wrapper` (WARNING section).
+
 ## Non-negotiables
 
 Lock → power-cycle → run → **power off + unlock in `finally`** (never leave it
