@@ -58,11 +58,34 @@ Watch-outs (resolve at implementation time with the hot context):
   not collide for these sizes; the front blob is later reused as stack scratch —
   harmless (the copy into cap-table storage already happened).
 
+### 1-STATUS (2026-07-24): monitor copy IMPLEMENTED (pending rebuild)
+The copy is written. **Critical finding — the monitor has three divergent copies; the QEMU
+`fw_jump` builds from the OPENSBI COMPONENT copy, not the package copy:**
+- `build/local.mk`: `OPENSBI_OVERRIDE_SRCDIR = components/opensbi` → `fw_jump` compiles
+  `components/opensbi/lib/sbi/capstone-sbi/sbi_capstone.c` (the **`__split` gp-delivery**
+  variant: `dom_gp = __split(dom_code, base+0x1000)` holds the globals; `dom_code` is only
+  `[base, base+0x1000)`). The large-RO copy is added THERE, reading from **`dom_gp[wi]`**
+  (not `dom_code`), placed right after the `dom_gp` split while both cursors are fresh and
+  before `dom_gp` is consumed by the cscratch store. Loads through `dom_gp` don't consume it.
+- The `capstone-sbi-domain` **package** copy (cap-table variant) also got a copy edit (reads
+  `dom_code`) — harmless but NOT what QEMU builds; the component copy is authoritative for QEMU.
+- Copy uses the `void*[i]` word-copy idiom (capstone-c `enclave_code[i]=code_base[..]`); const
+  tables carry no cap tags so a plain word copy is exact.
+
 ### 2. OpenSBI monitor rebuild
-Apply the `.c.S`-regen gotcha (`project_opensbi_monitor_rebuild_include_wrapper`):
-force `.c.S` regeneration or `fw_jump`/`fw_payload` relinks stale. Two monitor copies
-exist — rebuild the one QEMU actually loads (the prebuilt `fw_jump.elf` in
-`buildroot/build/images`). Submodule *source* stays uncommitted (hard rule 7).
+Mechanism found 2026-07-24:
+- Wrapper `components/opensbi/lib/sbi/sbi_capstone_dom.c` `#include`s the edited
+  `capstone-sbi/sbi_capstone.c`. capstone-cc compiles the wrapper → `sbi_capstone_dom.c.S`,
+  checked into the srcdir and generated **out-of-band** (NO `%.c.S: %.c` make rule). Editing
+  the `#include`d `.c` doesn't change the wrapper's mtime → the `.c.S` is stale.
+- So: (a) build capstone-cc (`cd capstone/capstone-c && cargo build --release`, or
+  `./local_build.sh`); (b) **force-regen** `sbi_capstone_dom.c.S` (+ `capstone_int_handler.c.S`)
+  from their wrappers via capstone-cc with the ABI/cpp flags matching the existing `.c.S`
+  (gp-free README documents `make ... A=opensbi-rebuild CAPSTONE_CC_PATH=$(realpath
+  ../capstone-c)` — VERIFY that target/invocation before running); (c) rebuild `fw_jump` via
+  buildroot; new `fw_jump.elf` → `buildroot/build/images`.
+- OPEN: exact regen make-target / capstone-cc flags unverified — confirm before building so
+  the monitor isn't subtly miscompiled. Submodule *source* stays uncommitted (rule 7).
 
 ### 3. End-to-end QEMU run — first light
 Run `beebs_crc32big` in a domain on QEMU (silicon config). **Expect retval
