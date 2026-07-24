@@ -218,28 +218,32 @@ CoreMark → SQLite) depends on.
   22-07 root-cause proved a code-authority cap **cannot load data** on captype-fixed
   CVA6 (the original gp-via-SPLIT wedge). That is exactly why we materialize via
   `li/sd` immediates today. Candidates, re-assessed:
-  1. **Monitor delivers a DATA-authority cap over the image `.rodata` sub-range**
-     `[base+0x1000, base+code_size)` in a spare sealed slot (`dom_seal[0]=code`,
-     `[2]=data`, `[3]=flags` today — free slots exist); glue then *copies*
-     initializers into `dom_data` storage at runtime (no immediate bloat, scales to
-     SQLite). **KEY OPEN QUESTION (board owner):** can the monitor form a
-     *load-authority* cap over that physical range when the same bytes were also
-     split as `dom_code` (execute)? A cap `__split` from `dom_code` inherits EXECUTE
-     authority (→ the wedge); it must instead be derived from a *data-authority
-     parent* (`mem_l`/`split_out_cap` with load perms) **without** violating
-     linearity vs. `dom_code`. Whether a read-only alias of an execute-covered
-     range is formable is a capability-model/RTL question — **draft to board owner:
-     `/tmp/capstone/boardowner-largero-question.md`**. If yes → cleanest, no
-     firmware-size cost, matches the capstone-c "globals in DATA memory" model.
+  1. **CHOSEN — monitor pre-populates a data region + hands the domain a data cap.**
+     The monitor runs in M-mode with authority over all physical memory (it loads the
+     image and carves every region). So it can `memcpy` the image's `.rodata`
+     initializer bytes into a *fresh* domain data region and hand the domain a
+     **data-authority cap** to it in a spare sealed slot (`dom_seal[0]=code`,
+     `[2]=data`, `[3]=flags` today — free slots exist); the entry glue then copies
+     from that cap into cap-table storage (no `li/sd` immediate bloat, scales to any
+     table size). This **avoids the execute-alias question entirely** — it never
+     reads data through `dom_code` (execute); it's the same
+     data-authority-over-a-data-region case that **already loads correctly on the
+     board** (23-07, retval 554745961). **Therefore this is a design decision we own
+     and can prototype on QEMU first, NOT a board-owner blocker.** Only residual to
+     check in code (not on the board): that the monitor's own cap over the loaded
+     image is load-capable so it can read the bytes to copy (`mem_l`/`split_out_cap`
+     authority). Optional board-owner sanity-check drafted:
+     `/tmp/capstone/boardowner-largero-brief.md`.
   2. **Glue copies from image `.rodata` itself** — RULED OUT: the glue runs with
-     PCC (execute) + `dom_data`; it has no load-authority cap over the image, the
-     same wall as (1) but without a monitor-provided data cap. Reduces to (1).
-  3. **Raise `GPFREE_GLOBALS_OFFSET` + PCC window** (bigger `[base, base+BIG)` so
-     more `li/sd` immediate code fits) — firmware rebuild AND still bloats code
-     ~1 insn / word; does NOT scale to SQLite-sized tables. Fallback only.
-  **Direction:** (1) is the only scalable path and it hinges on one board-owner
-  answer; everything else (glue copy loop, generator emitting a copy instead of
-  immediates, an extra sealed slot) is ours and straightforward once that's known.
+     PCC (execute) + `dom_data`; it has no load-authority cap over the image. (1)
+     fixes this by having the *monitor* do the copy with its own authority.
+  3. **Raise `GPFREE_GLOBALS_OFFSET` + PCC window** — firmware rebuild AND still
+     bloats code ~1 insn/word; does NOT scale. Fallback only.
+  **Next A-lane step (actionable now):** prototype (1) on QEMU — monitor copy +
+  data-cap-in-sealed-slot + glue copy loop + generator emitting a copy (not `li/sd`)
+  for initialized globals above a size threshold. Validate a large-`const`-table
+  ladder rung (e.g. revive crc32's upstream 256-entry table, or dijkstra's input
+  data) end-to-end, then confirm on the board in the batched pass.
   [[project_gp_captable_codegen]] [[project_silicon_gp_delivery_boardowner_guidance]]
 - **RISK A concretized — per-module cap-table indices.** `getGpCaptableIndex`
   (`CapstoneISelDAGToDAG.cpp:112`) numbers globals **per module**, so multi-TU

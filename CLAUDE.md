@@ -36,6 +36,14 @@ Do **not** recommend it mid-task, during active debugging, or while un-captured
 details still matter. Briefly say why the timing is safe (or why to postpone).
 Never compact unilaterally — you can only recommend; it is the user's call.
 
+When you recommend `/compact`, also give a short **compaction brief** — the generic
+summarizer can't tell what's load-bearing, so tell it: what to **keep verbatim**
+(current task + exact next step, un-committed decisions/rationale, open blockers,
+live file paths/values still in flight) and what's safe to **compress** (resolved
+sub-threads, tool-output noise, superseded approaches, anything already committed to
+docs/memory). A couple of lines is enough; skip it only when there's nothing special
+to preserve beyond the obvious.
+
 ## Where things live
 
 | What | Where |

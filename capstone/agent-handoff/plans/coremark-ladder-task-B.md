@@ -4,6 +4,12 @@
 choose your own method. You are as capable as the A lane; the guardrails below are
 context you'd otherwise pay a cold-start tax to rediscover, not a leash.
 
+**First, adopt this repo's operating rules as your own** — read `CLAUDE.md` (project
+instructions, canonical) and `capstone/agent-handoff/DELEGATION.md`, then treat the
+"Permanent repository rules" at the bottom of this doc as binding for everything you
+do here. Also run `source capstone/tests/capstone-test-env.sh` and skim
+`agent-handoff/state/current-state.md` for the live picture.
+
 ## Goal (the deliverable)
 Get **CoreMark** running as a silicon-ladder rung: it compiles in the silicon
 config and, run in a pure-cap domain on QEMU, returns its **correct checksum ==
@@ -48,16 +54,28 @@ amalgamation path is the recommended one because it stays in your lane entirely.
   checksum, `<base>_app.c` returns it via `*res`, `<base>_host.c` prints the same
   value. Match the existing rungs.
 
-## Guardrails (hard constraints — inherited, non-negotiable)
-- **No real person's name anywhere** in committed/shared content (neutral roles only).
-- **Serialize the QEMU suites** — the shared `rootfs.ext2` write-lock means never
-  two matrix/QEMU runs in parallel (A may be running QEMU; coordinate / don't overlap).
-- **`ninja -j90`**, never `-j112` (a `-j112` debug-link storm hangs the whole box).
-- **No commits into submodule *source*** (`capstone-qemu`/opensbi/buildroot/system).
-- Commit to **`capstone-bootstrap-b`** only; **no `Co-Authored-By`**, no agent
-  identity in messages; don't rewrite pushed history; commit only when asked.
-- Bug-fix / root-cause notes → `history/` (dated `DD-MM-YYYY_HH-MM-SS_name.md`),
-  not `design/`.
+## Permanent repository rules — adopt these as your own (non-negotiable)
+These are the full standing rules for anyone working in this repo (canonical:
+`CLAUDE.md` + `DELEGATION.md`). Treat them exactly as the A lane does:
+1. **Never mention any real person by name — anywhere.** PI / supervisor / board
+   owner / collaborator → neutral roles, in every committed/shared file, commit,
+   doc, or report. Permanent and absolute. (Upstream `lldb/`, `llvm/` files are not
+   ours — leave their names alone.)
+2. **No `Co-Authored-By:` lines**; no worker/agent identity in commit messages;
+   **don't rewrite pushed history**; **commit only when the user asks.**
+3. **Never commit debug/report/session-note files** (`*_DEBUG_CHECKPOINT.md`, etc.).
+4. **Manager/PI-facing summaries → `/tmp/capstone/`**, never the repo.
+5. **Serialize the QEMU suites** — shared `rootfs.ext2` write-lock, never two
+   matrix/QEMU runs in parallel (the A lane may be running QEMU; don't overlap).
+6. **`ninja -j90`** (~80% of 112 cores), **never `-j112`** (parallel debug-link
+   storm hangs the whole box, no SSH).
+7. **No commits into submodule *source*** (`capstone-qemu`/opensbi/buildroot/system);
+   submodule source stays uncommitted.
+8. **Bug-fix / root-cause / audit notes → `history/`** (dated
+   `DD-MM-YYYY_HH-MM-SS_name.md`), **not `design/`** (`design/` = architecture only).
+   Active plans → `plans/`.
+9. Commit to **`capstone-bootstrap-b`** only. Board/FPGA is off-limits for this task
+   (batched, human-in-loop, A lane).
 
 ## Start here
 `git switch capstone-bootstrap-b && git merge origin/capstone-bootstrap` to pick up
