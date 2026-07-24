@@ -53,6 +53,21 @@ be free on method.
   linear superset and gated/corpus-safe (flag-off codegen byte-identical, or the
   change corpus-validated). Retire the side branch after folding.
 
+## Context management (compaction) — both lanes
+Board-debug threads run long, so every lane manages context deliberately (canonical:
+`CLAUDE.md` "Context & compaction").
+- **Assess lightly** (not every turn) whether it's a safe moment to `/compact`, and
+  **recommend it in one line** at a natural checkpoint **once the important state is
+  already captured** in committed docs/memory. Do **not** recommend it mid-task,
+  during active debugging, or while un-captured details still matter. Say briefly why
+  the timing is safe (or why to postpone).
+- **Never compact unilaterally** — you can only recommend; it's the user's call.
+- When you recommend `/compact`, add a short **compaction brief**: what to **keep
+  verbatim** (current task + exact next step, un-committed decisions/rationale, open
+  blockers, live file paths/values in flight) vs. what's safe to **compress**
+  (resolved sub-threads, tool-output noise, superseded approaches, anything already
+  in docs/memory). The generic summarizer can't tell what's load-bearing — tell it.
+
 ## Permanent repository rules — every lane adopts these as its own
 (Canonical source: `CLAUDE.md` "Hard constraints" + the memory feedback files.)
 1. **Never mention any real person by name — anywhere.** PI / supervisor / board

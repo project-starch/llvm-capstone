@@ -4,10 +4,15 @@
 choose your own method. You are as capable as the A lane; the guardrails below are
 context you'd otherwise pay a cold-start tax to rediscover, not a leash.
 
-**First, adopt this repo's operating rules as your own** — read `CLAUDE.md` (project
-instructions, canonical) and `capstone/agent-handoff/DELEGATION.md`, then treat the
-"Permanent repository rules" at the bottom of this doc as binding for everything you
-do here. Also run `source capstone/tests/capstone-test-env.sh` and skim
+**First, adopt this repo's operating rules as your own.** Read the **repo-root
+`CLAUDE.md`** (the committed project instructions — your Claude Code session
+auto-loads it; it's the same file the A lane works under, present at the root of
+your own checkout) and **`capstone/agent-handoff/DELEGATION.md`**, and treat their
+hard constraints — plus the "Permanent repository rules" restated at the bottom of
+this doc — as binding for everything you do here. This includes the **context /
+compaction discipline** (manage context deliberately; recommend `/compact` only at a
+safe checkpoint and with a short keep-vs-compress brief; never compact unilaterally).
+Then `source capstone/tests/capstone-test-env.sh` and skim
 `agent-handoff/state/current-state.md` for the live picture.
 
 ## Goal (the deliverable)
