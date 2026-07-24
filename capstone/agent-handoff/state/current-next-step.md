@@ -1,5 +1,30 @@
 # Current recommended next step
 
+## gp-free domain bring-up (2026-07-22) — branch `capstone-gp-free`
+
+DONE on QEMU (functional, silicon-faithful): a real globals-using app runs
+correctly in a pure-cap domain **gp-free** with the fabrication OFF and the
+**monitor** delivering `gp` via cscratch. Compiler committed (`88054a14`); monitor
++ QEMU edits are local submodule experiments. Board owner ratified the approach.
+
+**Silicon smoke ATTEMPTED 2026-07-22 — firmware/boot chain FIXED, domain run BLOCKED
+by a definitive root cause. FULL KB:
+`history/22-07-2026_18-05-00_gp-free-silicon-smoke-firmware-fixed-createdomain-hangs.md`
+(read this before resuming).**
+- Working now: board boots Linux to a shell with our gp-delivery monitor
+  (CAPLIFIVE-ARIANE fw, embedded FDT+kernel), `/dev/capstone` present, controller +
+  domain transfer+verify. Firmware-build recipe in memory
+  `project_fpga_fw_payload_build_recipe`.
+- BLOCKER: the monitor's `gp` mint uses **`C_GEN_CAP` (custom-2 funct7 0x40) — a
+  QEMU-only DEBUG instr (`helper_csdebuggencap`), NOT implemented on the RTL**
+  (decoder `default: ;`). It fabricates a cap from (base,end), which HW capability
+  monotonicity forbids. On silicon it no-ops → garbage cap → `stc` fault → M-mode
+  hangs in `capstone_error`=`while(1)`. Compiler side is fine; the domain never ran.
+- **Next:** rework the gp mint to DERIVE from existing authority using RTL-implemented
+  ops (CAPCREATE/CAPPERM/CAPBOUND, or split/scc), per the capstone-c cscratch
+  cap-table reference; likely align with the board owner. Then rebuild fw (recipe)
+  + one board run for the retval `554745961`.
+
 ## Active track (2026-07-15): the paper's PERFORMANCE story — mostly DONE
 
 The active track since the 2026-07-13 reframe is **performance**, not C1/C2.
@@ -15,7 +40,7 @@ The C1/C2 section below is paused reference material.
   are obviously faster" layered on top. RTL borrow-cost port is staged in
   `tests/rtl-smoke/`; the temporal-overhead run is the follow-on. **Human-in-the-
   loop** (browser GUI, agent can't drive the board) and **POSTPONED** pending
-  The collaborator's answer on whether it can be automated.
+  the board owner's answer on whether it can be automated.
 - **Infra:** `capstone/tests/run-nightly.sh` is the new one-shot build+test+report
   driver (serial QEMU suites, report to `/tmp/capstone/`).
 

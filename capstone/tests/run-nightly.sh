@@ -117,6 +117,26 @@ else
         >"$OUT/build-clang.log" 2>&1; then
     BUILD_OK=0; OVERALL_OK=0; log "[build] clang FAILED (see build-clang.log)"
   fi
+  # QEMU staleness guard: a default (non---clean) nightly does NOT rebuild
+  # qemu-system-riscv64, so a submodule source move (e.g. a new instrumentation op)
+  # can leave the shared binary behind its own pinned source -- the op then decodes
+  # as an illegal instruction in-domain. Cheap fix: if the binary is older than any
+  # tracked qemu source, do an incremental ninja relink (seconds), not a --clean build.
+  if [ "$BUILD_OK" -eq 1 ] && [ "$DO_CLEAN" -eq 0 ]; then
+    QBUILD="$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/build"
+    QBIN="$QBUILD/qemu-system-riscv64"
+    QSRC="$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/target"
+    if [ -f "$QBIN" ] && [ -f "$QBUILD/build.ninja" ] && \
+       [ -n "$(find "$QSRC" -type f -newer "$QBIN" -print -quit 2>/dev/null)" ]; then
+      log "[build] qemu binary older than its source -> incremental ninja relink ..."
+      if ninja -C "$QBUILD" qemu-system-riscv64 \
+            >"$OUT/build-qemu-incremental.log" 2>&1; then
+        log "[build] qemu incremental relink ok"
+      else
+        BUILD_OK=0; OVERALL_OK=0; log "[build] qemu incremental relink FAILED"
+      fi
+    fi
+  fi
   if [ "$DO_CLEAN" -eq 1 ] && [ "$BUILD_OK" -eq 1 ]; then
     for bs in "$CAPSTONE_REPO_ROOT/capstone/capstone-qemu/build-qemu.sh" \
               "$RUNTIME_DIR/build-buildroot.sh"; do

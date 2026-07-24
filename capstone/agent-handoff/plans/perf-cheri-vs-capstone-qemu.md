@@ -36,7 +36,7 @@ that performance data separately in a table."*
 - **Then RTL on top:** report the Capstone cycle-accurate number and say "on real
   hardware we are obviously much faster." (The RTL borrow-cost port is staged in
   `tests/rtl-smoke/`; the RTL temporal-overhead run is the follow-on.)
-- **Ask the collaborator** how to set up the QEMU-to-QEMU CHERI-vs-Capstone overhead
+- **Ask the board owner** how to set up the QEMU-to-QEMU CHERI-vs-Capstone overhead
   measurement (methodology question — see below).
 
 ## The experiment
@@ -75,11 +75,11 @@ about) plus **(2)** as the applied case if the CHERI-side SQLite harness is chea
 **Instrumentation.** Capstone: the existing `csrdicount` icount readout
 (`tests/runtime-qemu/borrow-cost-probe/`). CHERI: an equivalent QEMU
 instruction-count readout (qemu `-d`/plugin, or `rdinstret` under a comparable
-`-icount` setup) — the exact mechanism is the main open question for the collaborator.
+`-icount` setup) — the exact mechanism is the main open question for the board owner.
 
-## Methodology — resolved ourselves (no the collaborator gate)
+## Methodology — resolved ourselves (no the board owner gate)
 
-The collaborator is the FPGA/RTL collaborator, not a CHERI expert, so the CHERI-QEMU
+the board owner is the FPGA/RTL collaborator, not a CHERI expert, so the CHERI-QEMU
 methodology is ours to settle. It is not hard: `qemu-system-riscv64cheri` is a
 standard QEMU fork, so it has the usual instruction-count readouts —
 `-plugin .../libinsn.so`, `-d nochain` counting, or `rdinstret`/`rdcycle` under
@@ -107,7 +107,7 @@ Remaining self-answerable items (no external dependency):
 - Likely a **B-lane** task (it reuses task-015's CHERI stack + the Capstone
   revoke-on-free allocator; heavy QEMU runs, serialize the rootfs lock —
   [[project_matrix_runs_serialize_rootfs_lock]]).
-- **Gated on the collaborator's methodology answer** for the CHERI-QEMU instruction-count
+- **Gated on the board owner's methodology answer** for the CHERI-QEMU instruction-count
   readout (question 1). Draft the B task once that lands; do not sink time into a
   CHERI-side counter that won't compare cleanly.
 - Independent of the RTL borrow-cost run (`tests/rtl-smoke/`), which proceeds in
@@ -181,4 +181,4 @@ in the delta.)
 **Remaining:** the Capstone RTL cycle-accurate follow-on (`tests/rtl-smoke/`,
 human-in-the-loop). ~~The -O2 backend cap-select ICE~~ FIXED 2026-07-15.
 
-Original proposal above retained for context; the the collaborator gate is dropped.
+Original proposal above retained for context; the the board owner gate is dropped.

@@ -9913,12 +9913,51 @@ SDValue CapstoneTargetLowering::getAddr(NodeTy *N, SelectionDAG &DAG,
   }
 }
 
+// gp-captable ABI (defined in CapstoneISelDAGToDAG.cpp).
+extern llvm::cl::opt<bool> CapstoneGpCaptable;
+int getGpCaptableIndex(const GlobalValue *GV);
+
 SDValue CapstoneTargetLowering::lowerGlobalAddress(
     SDValue Op, SelectionDAG &DAG) const {
   SDLoc DL(Op);
   GlobalAddressSDNode *N = cast<GlobalAddressSDNode>(Op);
   const GlobalValue *GV = N->getGlobal();
   int64_t Offset = N->getOffset();
+
+  // gp-captable global ABI (silicon-correct): reach the global through a
+  // gp-based per-global capability table instead of `scc gp` into the code
+  // image (which the RTL rejects -- a code-authority gp is unusable as a data
+  // base; see plans/gp-captable-codegen-plan.md). The global's data capability
+  // lives at gp[index]; load it and use it directly as the base pointer. gp is
+  // the cap-table base (a data cap the entry glue derives from sp/cscratch).
+  if (CapstoneGpCaptable) {
+    int Index = getGpCaptableIndex(GV);
+    if (Index >= 0) {
+      // Address of the cap-table slot: gp with cursor at index * capWidth.
+      SDValue GP = DAG.getRegister(Capstone::X3, MVT::i128);
+      SDValue Slot = DAG.getNode(
+          CapstoneISD::CIncOffset, DL, MVT::i128, GP,
+          DAG.getConstant((int64_t)Index * 16, DL, MVT::i128));
+      // Load the per-global data capability from the table. It is set up once at
+      // domain entry and read-only thereafter -> invariant/dereferenceable, and
+      // chained off the entry node so it can float freely. Selection folds the
+      // CIncOffset displacement into `ldc rd, index*16(gp)`.
+      MachineFunction &MF = DAG.getMachineFunction();
+      MachineMemOperand *MMO = MF.getMachineMemOperand(
+          MachinePointerInfo(), MachineMemOperand::MOLoad |
+                                    MachineMemOperand::MODereferenceable |
+                                    MachineMemOperand::MOInvariant,
+          LLT(MVT::i128), Align(16));
+      SDValue Ptr = DAG.getLoad(MVT::i128, DL, DAG.getEntryNode(), Slot, MMO);
+      // Interior offset (global + constant): advance the loaded capability.
+      if (Offset != 0)
+        Ptr = DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::i128, Ptr,
+                          DAG.getConstant(Offset, DL, MVT::i128));
+      return Ptr;
+    }
+    // Not an indexable domain global (function ref, declaration, unsized,
+    // thread-local, ...): fall through to the default LGA lowering.
+  }
 
   // 1. Create a TargetGlobalAddress.
   // This is just a "token" that holds a reference to the symbol.
@@ -25701,21 +25740,40 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
     }
   }
 
-  // Sub-capability-aligned copies: copy as matched XLen (i64) chunks rather than
-  // letting the generic lowering pick a *misaligned* i128 (capability) memory
-  // operation.  A misaligned i128 load is (mis)legalized into a single i64 load
-  // zero-extended to i128 while the paired i128 store stays a 16-byte `stc`, so
-  // the upper 8 bytes of every 16-byte unit are lost.  This is exactly the
-  // by-value 16-byte struct copy emitted for `agg = call_returning_struct(...)`
-  // (e.g. `range = MakeRange(...)`).  An access not aligned to the capability
-  // size cannot hold an in-place tagged capability, so copying via integer
-  // (tag-stripping) i64 chunks is both correct and matches the working
-  // narrower-aggregate codegen.
-  if (Op.isMemcpy() && Op.size() != 0 && (Op.size() % 8) == 0 &&
-      Op.isAligned(Align(8)) && !Op.isAligned(Align(16))) {
-    unsigned NumChunks = Op.size() / 8;
-    if (NumChunks <= 64) {
-      MemOps.assign(NumChunks, MVT::i64);
+  // Any other memcpy is *sub-capability*: not 16-byte aligned on both ends with
+  // a 16-multiple size, so it cannot carry an in-place tagged capability (that
+  // case returned above).  Do not let the generic lowering pick an i128
+  // (capability) unit here: whenever only the destination happens to be
+  // 16-aligned, a misaligned-source i128 load is (mis)legalized into a single
+  // i64 load zero-extended to i128 while the paired i128 store stays a 16-byte
+  // `stc`, so the upper 8 bytes of every 16-byte unit are silently dropped.
+  // That miscompiles `int e[N] = {...}` local-array initialization (the const
+  // template is only 4-aligned, size need not be a multiple of 8), by-value
+  // 16-byte struct copies for `agg = call_returning_struct(...)` (e.g. `range =
+  // MakeRange(...)`), and similar.  Decompose into scalar (tag-stripping) chunks
+  // sized to the copy's actual alignment instead -- correct for any size/align
+  // and matching the working narrower-aggregate codegen.
+  if (Op.isMemcpy() && Op.size() != 0 &&
+      !(Op.isAligned(Align(16)) && (Op.size() % 16) == 0)) {
+    uint64_t EffAlign = Op.getSrcAlign().value();
+    if (Op.isFixedDstAlign())
+      EffAlign = std::min<uint64_t>(EffAlign, Op.getDstAlign().value());
+    if (EffAlign == 0)
+      EffAlign = 1;
+    uint64_t Unit = 8; // never i128 on this path; cap the scalar unit at XLen
+    while (Unit > 1 && (EffAlign % Unit) != 0)
+      Unit /= 2;
+    std::vector<EVT> Chunks;
+    uint64_t Remaining = Op.size();
+    while (Remaining > 0 && Chunks.size() < 64) {
+      uint64_t Chunk = Unit;
+      while (Chunk > Remaining)
+        Chunk /= 2;
+      Chunks.push_back(MVT::getIntegerVT(Chunk * 8));
+      Remaining -= Chunk;
+    }
+    if (Remaining == 0) {
+      MemOps = std::move(Chunks);
       return true;
     }
   }

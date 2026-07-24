@@ -59,6 +59,21 @@ namespace llvm {
 extern const SubtargetFeatureKV CapstoneFeatureKV[Capstone::NumSubtargetFeatures];
 } // namespace llvm
 
+// gp-free / plain-call-ret domain ABI (defined in CapstoneISelDAGToDAG.cpp).
+// When on, the call/return pseudos below lower to plain jal/jalr within PCC
+// instead of CJALR.
+extern llvm::cl::opt<bool> CapstoneGpFree;
+
+// gp-captable global ABI (defined in CapstoneISelDAGToDAG.cpp). When on, globals
+// are reached through a gp-based per-global capability table; the entry glue needs
+// each global's size (to carve+zero its data-region storage) in the same index
+// order the access side uses. getGpCaptableIndex is that canonical order.
+extern llvm::cl::opt<bool> CapstoneGpCaptable;
+int getGpCaptableIndex(const llvm::GlobalValue *GV);
+// gp-free ABI active under either gp-free or gp-captable (the latter implies the
+// former's call/ret lowering). Defined in CapstoneISelDAGToDAG.cpp.
+bool capstoneGpFreeAbiActive();
+
 namespace {
 class CapstoneAsmPrinter : public AsmPrinter {
 public:
@@ -125,6 +140,7 @@ public:
 private:
   void emitStaticCapGCTSection(const Module &M);
   void emitCapGlobalInitTableEntry(const Module &M);
+  void emitGpCaptableTable(const Module &M);
   void emitAttributes(const MCSubtargetInfo &SubtargetInfo);
 
   void emitNTLHint(const MachineInstr *MI);
@@ -472,6 +488,38 @@ void CapstoneAsmPrinter::emitInstruction(const MachineInstr *MI) {
 
   emitNTLHint(MI);
 
+  // gp-free domain ABI: lower calls/returns to plain jal/jalr within PCC instead
+  // of the default CJALR (which needs a code capability, unformable gp-free on a
+  // cscall domain entry). Plain jumps are bounds-checked against PCC on fetch, so
+  // a call/return that stays inside the domain image is legal in c-effective mode
+  // -- exactly the reference monitor's own within-PCC call/ret ABI. JALR shares
+  // CJALR's (rd, rs1, imm12) shape, so this is an opcode swap.
+  if (capstoneGpFreeAbiActive()) {
+    switch (MI->getOpcode()) {
+    case Capstone::PseudoRET:
+      // ret: jalr x0, 0(x1)
+      EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::JALR)
+                                       .addReg(Capstone::X0)
+                                       .addReg(Capstone::X1)
+                                       .addImm(0));
+      return;
+    case Capstone::PseudoCALLIndirect:
+      // indirect call: jalr x1, 0(rs1)
+      EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::JALR)
+                                       .addReg(Capstone::X1)
+                                       .addReg(MI->getOperand(0).getReg())
+                                       .addImm(0));
+      return;
+    case Capstone::PseudoTAILIndirect:
+      // indirect tail call: jalr x0, 0(rs1)
+      EmitToStreamer(*OutStreamer, MCInstBuilder(Capstone::JALR)
+                                       .addReg(Capstone::X0)
+                                       .addReg(MI->getOperand(0).getReg())
+                                       .addImm(0));
+      return;
+    }
+  }
+
   // Do any auto-generated pseudo lowerings.
   if (MCInst OutInst; lowerPseudoInstExpansion(MI, OutInst)) {
     EmitToStreamer(*OutStreamer, OutInst);
@@ -755,6 +803,7 @@ void CapstoneAsmPrinter::emitEndOfAsmFile(Module &M) {
   EmitHwasanMemaccessSymbols(M);
   emitStaticCapGCTSection(M);
   emitCapGlobalInitTableEntry(M);
+  emitGpCaptableTable(M);
 }
 
 // If this module has a capability-global initializer (synthesized by the
@@ -781,6 +830,63 @@ void CapstoneAsmPrinter::emitCapGlobalInitTableEntry(const Module &M) {
       MCSymbolRefExpr::create(getSymbol(InitFn), OutContext),
       MCSymbolRefExpr::create(EntryLabel, OutContext), OutContext);
   OutStreamer->emitValue(Diff, /*Size=*/8);
+}
+
+// gp-captable ABI: emit the `.capstone_gp_table` descriptor the entry glue reads
+// to build the per-global capability table at domain entry. In getGpCaptableIndex
+// order (the same order the access side uses for `ldc gp[i]`), one record per
+// global so slot i in the runtime table matches index i in the code:
+//
+//   header:  u64 count
+//   record:  u64 size            -- bytes to carve from sp and zero for this global
+//            u64 align           -- alignment of the storage
+//            i64 init_off         -- PC-relative (initializer_template - here), or
+//                                    0 for a zero-initialized (.bss) global
+//
+// The offset is a link-time `sym - .` difference (position-independent) rather
+// than an absolute address, for the same reason as `.capstone_cap_init`: the
+// domain image loads at a runtime base and processes no load-time relocations.
+void CapstoneAsmPrinter::emitGpCaptableTable(const Module &M) {
+  if (!CapstoneGpCaptable || !TM.getTargetTriple().isOSBinFormatELF())
+    return;
+
+  // Collect domain globals in the canonical cap-table index order.
+  SmallVector<const GlobalVariable *, 16> Table;
+  for (const GlobalVariable &GV : M.globals())
+    if (getGpCaptableIndex(&GV) >= 0)
+      Table.push_back(&GV);
+  if (Table.empty())
+    return; // integer-only / no-global domain: clean no-op.
+
+  const DataLayout &DL = getDataLayout();
+  MCSection *Sec = OutContext.getELFSection(".capstone_gp_table",
+                                            ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
+  OutStreamer->switchSection(Sec);
+  OutStreamer->emitValueToAlignment(Align(8));
+  OutStreamer->emitIntValue(Table.size(), /*Size=*/8);
+
+  for (const GlobalVariable *GV : Table) {
+    uint64_t Size = DL.getTypeAllocSize(GV->getValueType());
+    uint64_t Alignment = GV->getAlign().value_or(DL.getABITypeAlign(
+        GV->getValueType())).value();
+    OutStreamer->emitIntValue(Size, 8);
+    OutStreamer->emitIntValue(Alignment, 8);
+
+    // init_off: 0 for a zero initializer (glue just zeroes), else the PC-relative
+    // distance to the global's own image copy (the initializer template).
+    bool ZeroInit = !GV->hasInitializer() ||
+                    GV->getInitializer()->isNullValue();
+    if (ZeroInit) {
+      OutStreamer->emitIntValue(0, 8);
+    } else {
+      MCSymbol *Here = OutContext.createTempSymbol("capstone_gp_tmpl_ref");
+      OutStreamer->emitLabel(Here);
+      const MCExpr *Diff = MCBinaryExpr::createSub(
+          MCSymbolRefExpr::create(getSymbol(GV), OutContext),
+          MCSymbolRefExpr::create(Here, OutContext), OutContext);
+      OutStreamer->emitValue(Diff, 8);
+    }
+  }
 }
 
 void CapstoneAsmPrinter::emitStaticCapGCTSection(const Module &M) {

@@ -4,13 +4,13 @@
 defer eval" framing. Sync cadence: short calls; next full sync ~Friday. Coordinate on the
 shared Slack channel.
 
-**Deadline:** target **NDSS**, ~6 weeks out. lead wants **~90% of the paper by end of July**
-(lead travels Aug 4 + teaching after). So the next two weeks are the push; lead helps heavily on
+**Deadline:** target **NDSS**, ~6 weeks out. PI wants **~90% of the paper by end of July**
+(PI travels Aug 4 + teaching after). So the next two weeks are the push; PI helps heavily on
 writing.
 
 ---
 
-## UPDATE — 2026-07-20 all-hands meeting (the project lead/lead, the co-lead/co-lead, the collaborator, me)
+## UPDATE — 2026-07-20 all-hands meeting (the project lead, the co-lead, the board owner, me)
 
 The meeting **confirmed and sharpened** the reframe below. Deltas that override the rest of
 this doc where they conflict:
@@ -35,9 +35,9 @@ this doc where they conflict:
    complexity** (revocation-tree RTL cost). **Selling point: first-ever hardware implementation
    of Capstone** (2023 paper had none) — but this REQUIRES at least **preliminary FPGA perf
    numbers** ("to tell people we have it, we have to have it").
-5. **FPGA: preliminary numbers suffice, and the collaborator is actively porting** ("now I'm working on
+5. **FPGA: preliminary numbers suffice, and the board owner is actively porting** ("now I'm working on
    it, hope to finish soon"). The remaining `gp` blocker is a **monitor/RTL domain-entry ABI
-   gap the collaborator co-owns** — do NOT gate the paper on a perfect cycle count. Pursue it in parallel,
+   gap the board owner co-owns** — do NOT gate the paper on a perfect cycle count. Pursue it in parallel,
    not on the critical path. (Technical state + fix hypothesis: see §8 below.)
 6. **SQLite stays the case study**; preempt "why only SQLite" with "important, condensed case
    study." Future expansion (post-draft, if time): **Lua / busybox / JS interpreters** — Bo has
@@ -46,9 +46,9 @@ this doc where they conflict:
    more mature (real apps, actual RTL, real compiler annotations). Its problem statement
    (running cap-unaware OSes on capability HW) is off-axis; don't over-credit — 2–3 sentences +
    "initial prototype, no HW, toy compiler."
-8. **Logistics: move the paper to Overleaf** (NDSS template). The collaborator supplies the macro/template;
+8. **Logistics: move the paper to Overleaf** (NDSS template). the board owner supplies the macro/template;
    I create the Overleaf and can mirror to GitHub. This supersedes the GitHub-repo-only paper
-   workflow. Structure guidance from lead: motivation section built on the **sharing-pattern
+   workflow. Structure guidance from PI: motivation section built on the **sharing-pattern
    taxonomy** (the L/R/H/U/S derivatives, cf. current Table 4) with a running SQLite example +
    a table of ~10 interpreters that embed SQLite; **Section 3 = the mechanism/abstraction**.
 
@@ -60,19 +60,19 @@ this doc where they conflict:
 - **Root cause:** our `my_first_domain/start.S` uses `gp` as the domain's image-base capability
   (`cincoffset t, gp, off` to derive code/global caps) but **never establishes `gp`** — it
   relies on a **QEMU-only patch** (`capstone-qemu` `7aca0540`) that makes `cscall` seed
-  `gp = PCC(cursor 0)`. The collaborator confirmed: the **RTL does not do this**, and keeping the bound
+  `gp = PCC(cursor 0)`. the board owner confirmed: the **RTL does not do this**, and keeping the bound
   while forcing cursor 0 is **not representable** on real 128-bit caps. So `gp` arrives 0.
 - **Fix hypothesis (grounded in the reference `capstone-sbi/sbi_capstone.S`):** the canonical
   domain glue establishes `gp` by **loading it from a reserved stack slot** (`LDC(gp, sp, -16)`;
   written at `sp - 8*32 - 16`), seeded once at setup — because `sp` is the one capability that
   arrives valid on RTL. Path forward: seed `gp` into the domain's initial stack slot in the
   monitor's `create_domain`, and load it there in `start.S` — instead of the QEMU cscall hack.
-  This pairs a monitor change with a `start.S` change and **needs the collaborator's confirmation of the
+  This pairs a monitor change with a `start.S` change and **needs the board owner's confirmation of the
   RTL first-entry context layout** (B's earlier monitor-side seed failed at delivery because it
   used the wrong slot / `ctvec` path). Alternative to probe: whether a self-contained
   integer/soft-float domain can avoid `gp` entirely (empty `.capstone_cap_init`, call
   `domain_main` PC-relative) — cheaper to try, but breaks as soon as `domain_main` touches any
-  global. **Crisp question already implicitly with the collaborator; get the ABI slot confirmed before
+  global. **Crisp question already implicitly with the board owner; get the ABI slot confirmed before
   burning shared-board time.**
 
 ---
@@ -115,7 +115,7 @@ under the baseline** (HFI, and CHERI), and **stopped on our system**. Doable on 
 **B. Performance** — end-to-end cost on RTL/FPGA of: micro-benchmarks (**BEEBS, RV8, CoreMark**;
 maybe IOzone) + the **SQLite CVE benchmark** + **SQLite's own built-in tests**. Report
 **aggregate first**, then a **breakdown** (spatial / temporal / linear) by *selectively disabling
-features* (e.g. make it non-linear, skip checks, re-run). lead's prior: the **linear-capability /
+features* (e.g. make it non-linear, skip checks, re-run). PI's prior: the **linear-capability /
 borrow tree is the main overhead** — that component is the one to isolate.
 
 ## 3. Baselines (this is the crux)
@@ -169,13 +169,13 @@ Threshold*.
 | T6 | **Embedding interface + host shims:** define import/export interface; per CVE, replace the big host app with a **minimal vulnerable shim** exercising the boundary. This is the real system under test. | **B** (A defines per-CVE boundary contract) |
 | T7 | **Performance eval on RTL/FPGA:** aggregate end-to-end (micro + SQLite CVE bench + SQLite built-in tests). | **B** |
 | T8 | **Related-work section:** CHERI (#1), HFI/SFI, Cornucopia/MTE, Keystone, CapsLock, MPK. | **A** |
-| T9 | **Paper restructure:** from design-paper to full paper (threat model, abstraction, hardware-complexity, compiler, security eval, perf eval). | **A** (lead co-writes) |
+| T9 | **Paper restructure:** from design-paper to full paper (threat model, abstraction, hardware-complexity, compiler, security eval, perf eval). | **A** (PI co-writes) |
 
 ### Weeks 3–4
 | ID | Work | Owner |
 |----|------|-------|
 | T10 | **Overhead breakdown** (spatial/temporal/linear via feature-disable); confirm borrow-tree dominates. | **B** |
-| T11 | Name lock-in; full draft to 90%. | A + lead |
+| T11 | Name lock-in; full draft to 90%. | A + PI |
 
 ## 7. Open items for the Friday sync
 1. Exact removed rows — confirm **15,17,18,19 → 15 rows** (17 inferred).

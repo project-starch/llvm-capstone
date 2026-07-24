@@ -1,4 +1,4 @@
-# Follow-up prompt for Agent-B — task 017 phase 3 (DIY: take the collaborator off the critical path)
+# Follow-up prompt for Agent-B — task 017 phase 3 (DIY: take the board owner off the critical path)
 
 *Paste everything below the line into `claude-b`. Self-contained. This is the
 follow-on to the scaffold (phase 1) and the wire-up brief (phase 2,
@@ -43,7 +43,7 @@ readiness, results, and any ambiguity, and still obey every lane rule below.
 
 Your `fpga_driver/` scaffold is **done and verified green**; it is in a holding
 pattern waiting for the Socket.IO protocol. The plan was to get that protocol from
-The collaborator's client JS on **Thursday evening BST**, after which he is
+the collaborator's client JS on **Thursday evening BST**, after which he is
 unreachable. That is fragile ("will try"). This task removes him from the critical
 path: **the protocol and the boot image are both obtainable DIY, without him.**
 

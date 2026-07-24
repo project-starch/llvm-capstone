@@ -9,7 +9,7 @@
 > - Report (full trail incl. the gp-seed experiment): `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md` (see the LATEST section at top).
 > - Runbook: `ref/fpga-borrow-cost-reproduction.md`.
 > - Experiment patch: `patches/fpga-gpseed-monitor-createdomain.patch` + tracked `my_first_domain/start-fpga-gpseed.S`.
-> - Open question for the collaborator (NOT in repo): `/tmp/capstone/gp-representability-question.md`.
+> - Open question for the board owner (NOT in repo): `/tmp/capstone/board-owner-gp-representability-question.md`.
 
 **Active FPGA work is NOT reflected in the huge checkpoint below (which stops at 2026-07-10).**
 Current FPGA state:
@@ -25,13 +25,13 @@ Current FPGA state:
   arrives 0; PCC + cscratch/sp arrive fine). So this RTL's fast first-entry (c-effective) path
   **does not restore `ctvec`** for the entered domain. **NOTE:** this walks back the earlier
   "cursor-0 non-representable, confirmed" line (commit `ef521aef`) — that was premature.
-- **Next options for A** (pick per the collaborator's answer): (1) read `caplifive-cva6` RTL for the
+- **Next options for A** (pick per the board owner's answer): (1) read `caplifive-cva6` RTL for the
   first-entry context layout → deliver `gp` through a slot that IS restored; (2) stack-memory
   delivery via the proven `cscratch`/`sp` path; (3) the compiler/canonical fix below.
   Cheap de-risk first: QEMU-verify the delivery mechanism (patched monitor, hack disabled,
   read `gp`) to separate "our mechanism is wrong" from "RTL doesn't restore ctvec".
 - **Longer-term fix (owner = us, in-repo) — fix OUR domain runtime, NOT the RTL** (corrected
-  2026-07-20 per the collaborator). The `gp = PCC(cursor 0)` line in QEMU's `cscall`
+  2026-07-20 per the board owner). The `gp = PCC(cursor 0)` line in QEMU's `cscall`
   (`op_helper.c:1227-1231`) is **our own non-canonical patch** (commit `7aca0540`), not
   canonical Capstone — so the RTL is correct to omit it and cursor-0 isn't representable on
   HW. The canonical reference domains (`capstone-test-domains`: fib/thread/smode) **never
@@ -208,7 +208,7 @@ Open, in priority order, if B is asked to continue:
   are no longer needed to defeat DCE/CSE. Its README still says C1/C2 are open.
   Left alone deliberately: task 006 was scoped to the LLVM tree, and the driver
   already self-reports `FIXED` for C1.
-- Subobject-bounds increment 2 remains **lead-gated** (`container_of`) — do not start.
+- Subobject-bounds increment 2 remains **PI-gated** (`container_of`) — do not start.
 
 ## Previous (task 004)
 
@@ -254,7 +254,7 @@ revoke vehicle is proven at the QEMU layer. No `capstone-qemu` code change. Note
   (`capstone/capstone-qemu/tests/capstone-revoke-probes/`); `csdrop_*` remain in
   scratchpad. Promoting either into `capstone/tests/capstone-authority/` + oracle
   (A's dir) is still an option if A wants them in the authority gate.
-- Subobject-bounds **increment 2** stays lead-gated (container_of policy) — do not start.
+- Subobject-bounds **increment 2** stays PI-gated (container_of policy) — do not start.
 
 ---
 

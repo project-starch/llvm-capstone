@@ -2,13 +2,22 @@
 
 ## Status
 
-SQLite 3.53.3 now **compiles and links** for `capstone64-unknown-elf`. The
-QEMU smoke is not yet green: initialization reaches
-`sqlite3RegisterBuiltinFunctions()`, then faults while copying an aggregate
-whose nested capability fields were not tagged.
+SQLite 3.53.3 **compiles, links, and runs end to end** for `capstone64-unknown-elf`
+as a pure-capability domain. The QEMU smoke is **green**: `run-sqlite-memory.sh`
+emits both `__CAPSTONE_SQLITE_EXTENDED_PASSED__` and
+`__CAPSTONE_SQLITE_MEMORY_PASSED__`, returning correct rows. All 8 capability
+cap-tag / alignment gaps that once blocked init (the last being the aggregate copy in
+`sqlite3RegisterBuiltinFunctions`) are resolved — see `state/current-state.md`
+(§"SQLite in-memory bring-up") and the dated `history/` gap notes (gaps 1–9).
 
-This is a compiler/runtime coverage blocker, not a filesystem or VFS blocker.
-No file-backed database path is used.
+The extended in-domain workload exercises transactions, a secondary `INDEX`,
+`INTEGER PRIMARY KEY`+`REAL`, bound prepared inserts, `UPDATE`/`DELETE`, aggregates +
+sorter, index-driven `WHERE`, `JOIN`, `GROUP BY`, and string functions. No
+file-backed database path is used (in-memory only).
+
+Residual notes: bindings must use `SQLITE_STATIC`, not `SQLITE_TRANSIENT` (gap 9,
+a `.h`/`.c` sentinel mismatch in the TRANSIENT patch); the 8-byte-alignment class
+(gaps 6/8) may surface more instances under wider workloads (e.g. `speedtest1`).
 
 ## Workload
 
@@ -78,44 +87,29 @@ The downloaded amalgamation remains unchanged. The build creates
 - move integer-valued built-in `pUserData` fields out of static initializers;
 - initialize memsys5's function-pointer methods table at runtime.
 
-The last two avoid unsupported 128-bit integer-pointer constants and one
-non-recursive capability-global shape. They do not fix the general blocker
-below.
+The last two avoided unsupported 128-bit integer-pointer constants and one
+non-recursive capability-global shape.
 
-## Runtime blocker
-
-Run the current smoke with:
+## Run
 
 ```bash
 source capstone/tests/capstone-test-env.sh
 bash capstone/benchmarks/sqlite/run-sqlite-memory.sh
 ```
 
-Current result: QEMU aborts before any SQL statement executes. The progression
-is:
+Current result: **green** — the domain runs the base 3-row workload and the
+extended workload, emitting `__CAPSTONE_SQLITE_EXTENDED_PASSED__` then
+`__CAPSTONE_SQLITE_MEMORY_PASSED__`.
 
-1. A static `sqlite3_mem_methods` struct initially produced
-   `cs.cjalr requires capability` in `sqlite3MallocInit()` at
-   `sqlite3GlobalConfig.m.xInit(...)`.
-2. Runtime-initializing that table advances into built-in registration.
-3. SQLite's built-in table is an array of structs containing function and
-   string pointers. `CapstoneCapGlobalInit` does not recursively materialize
-   nested aggregate fields. Clang also lowers a local aggregate copy to
-   `memcpy` from a private global template containing the same untagged
-   pointers.
-4. The current terminal failure is `helper_cscincoffset: Assertion
-   'rs1_v->tag' failed` in `memcpy`, while
-   `sqlite3RegisterBuiltinFunctions()` copies that template.
+### Resolved blocker history (kept for reference)
 
-`probes/nested-cap-global.c` is the 592-byte minimal reproducer. It defines an
-array of structs with one function pointer and one string pointer. It compiles
-and links, then QEMU fails with:
-
-```text
-[CAPSTONE] cs.cjalr requires capability in rs1
-```
-
-The required compiler follow-up is recursive materialization of capability
-fields inside arbitrary global aggregates, including compiler-generated private
-constant templates. Until that exists, adding more SQLite-specific table
-rewrites would hide the general compiler gap.
+Init once aborted before any SQL executed, at the built-in-function registration
+copy: `helper_cscincoffset: Assertion 'rs1_v->tag' failed` inside a `memcpy`,
+while `sqlite3RegisterBuiltinFunctions()` copied a private aggregate template
+whose nested capability fields were untagged. The general fixes landed as gaps
+1–2 (`CapstoneCapGlobalInit` recurses nested global aggregates; clang's
+memcpy-from-private-template of cap aggregates is handled) plus the QEMU
+tag-preserving `ldc`/`stc` (gaps 3–4) and the alignment fixes (gaps 6/8). The
+minimal reproducer `probes/nested-cap-global.c` (an array of structs with a
+function pointer and a string pointer) now runs without fault. Full per-gap
+trail: `state/current-state.md` and the dated `history/` gap notes.

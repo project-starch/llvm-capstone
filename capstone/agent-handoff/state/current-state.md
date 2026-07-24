@@ -2,6 +2,31 @@
 
 Minimal snapshot. Read first in every session.
 
+## Latest (2026-07-22) — gp-free domain bring-up (silicon-shaped ABI)
+
+On branch **`capstone-gp-free`** (off `capstone-bootstrap`; not merged/pushed): a
+real globals-using integer app now runs **correctly** in a pure-capability domain
+**gp-free / cjalr-free** on QEMU with the `gp = PCC(cursor 0)` fabrication
+**disabled** — `gp` is an image-covering data cap the **monitor** delivers via the
+cscratch stack region (board owner's confirmed channel; same as `capstone-c`).
+
+- **Compiler `-capstone-gp-free`** (default off, byte-identical off; lit 40/40):
+  plain `jal`/`jalr` calls/returns within PCC (no `cjalr`); global data via `SCC`
+  (absolute in-bounds cursor) not `cincoffset gp` (which needs the unrepresentable
+  cursor 0). Files: `CapstoneAsmPrinter.cpp`, `CapstoneISelDAGToDAG.cpp`
+  (`selectCall`), `CapstoneExpandPseudoInsts.cpp` (`expandCapGlobalBase`).
+- **Monitor** `create_domain` mints `gp` with `C_GEN_CAP` + stashes it at the
+  cscratch region top slot; **glue** `start-gpfree-cscratch.S` loads it. **QEMU**
+  `op_helper.c` gates the 4 gp-fabrication sites behind `CAPSTONE_GP_FABRICATE`
+  (default on) + a `CAPSTONE_GP_STANDIN` monitor stand-in.
+- Proof + repro: `tests/runtime-qemu/gp-free-domain/` (`build-and-run.sh` →
+  `__CAPSTONE_GPFREE_DOMAIN_PASSED__`); default domains still pass with the rebuilt
+  monitor. Trail: `history/22-07-2026_16-09-12_gp-free-domain-bringup-qemu-proof.md`;
+  guidance memory `project_silicon_gp_delivery_boardowner_guidance`.
+- **Remaining:** same `create_domain` change on the FPGA (caplifive-system) copy +
+  board image rebuild + a silicon smoke/cycle run (Experiment A). QEMU + monitor
+  submodule edits kept as local experiments (no submodule-source commits).
+
 ## Latest (2026-07-15) — read this first; sections below predate it
 
 Since 2026-07-03 the active work shifted from C1/C2 to the **performance
@@ -32,7 +57,7 @@ paper.
   varargs save-area + dynamic alloca, so those are no longer "not yet"); the
   task-005 FastCC-i128 and revoke-intrinsic-DCE codegen defects are **resolved**.
 - **Standing next step:** the Capstone **RTL cycle-accurate** number
-  (human-in-the-loop; **postponed** pending the collaborator's answer on automation).
+  (human-in-the-loop; **postponed** pending the board owner's answer on automation).
 
 ## SQLite in-memory bring-up
 

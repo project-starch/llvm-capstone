@@ -23,6 +23,16 @@
 
 using namespace llvm;
 
+// gp-free / plain-call-ret domain ABI (defined in CapstoneISelDAGToDAG.cpp).
+// When on, global addressing sets the cursor absolutely with SCC instead of
+// adding it with CIncOffset, so a representable (in-bounds-cursor) image-covering
+// gp works -- see expandCapGlobalBase.
+extern cl::opt<bool> CapstoneGpFree;
+// True under gp-free OR gp-captable. Under gp-captable, indexable globals never
+// reach this pseudo (they lower to ldc gp[i] earlier); this covers the gp-free
+// fallback for the remaining non-indexable symbol refs.
+bool capstoneGpFreeAbiActive();
+
 #define Capstone_EXPAND_PSEUDO_NAME "Capstone pseudo instruction expansion pass"
 #define Capstone_PRERA_EXPAND_PSEUDO_NAME "Capstone Pre-RA pseudo instruction expansion pass"
 
@@ -306,7 +316,19 @@ bool CapstoneExpandPseudo::expandCapGlobalBase(MachineBasicBlock &MBB,
   Register DstReg = MBBI->getOperand(0).getReg();
   Register SrcReg = MBBI->getOperand(1).getReg();
 
-  BuildMI(MBB, MBBI, DL, TII->get(Capstone::CIncOffset), DstReg)
+  // Default (capability ABI): cursor += absoluteVA (CIncOffset), which lands at
+  // the global only if gp.cursor == 0 -- the QEMU-fabricated gp = PCC(cursor 0).
+  //
+  // gp-free domain ABI: set the cursor ABSOLUTELY with SCC. An image-bounded gp
+  // with cursor 0 is unrepresentable on real 128-bit caps (the exact reason the
+  // RTL cannot establish `gp = PCC(cursor 0)`), so the monitor can only deliver a
+  // representable image-covering gp with an in-bounds cursor. SCC sets
+  // cursor := absoluteVA regardless of gp's incoming cursor, so that gp works.
+  // SrcReg (the PseudoLLA %pcrel result) is the global's absolute VA in both
+  // cases; SCC and CIncOffset are operand-identical (rd, gp, off).
+  unsigned BaseOpc =
+      capstoneGpFreeAbiActive() ? Capstone::SCC : Capstone::CIncOffset;
+  BuildMI(MBB, MBBI, DL, TII->get(BaseOpc), DstReg)
       .addReg(Capstone::X3)
       .addReg(SrcReg, getKillRegState(MBBI->getOperand(1).isKill()));
   // DELIN is tied: $rd = $cap_in, both are DstReg.

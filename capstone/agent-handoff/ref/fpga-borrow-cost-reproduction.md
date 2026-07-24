@@ -1,318 +1,163 @@
-# FPGA borrow/revoke-cost reproduction runbook (for Agent A)
+# Reproducing the Capstone RTL/FPGA cycle measurements
 
-**Goal:** reproduce, end to end, the on-board CapliFive CVA6 run that gets the
-Capstone domain benchmark past the old glibc/FP hang and up to the domain `cscall`,
-so the domain-call fault can be diagnosed and (eventually) the cycle numbers captured.
+End-to-end manual to reproduce, on the CapliFive CVA6 "Capstone" FPGA, the
+cycle-accurate borrow-cost numbers and the per-primitive breakdown. Read once top
+to bottom before running anything. Results: `history/*_RESULTS-fpga-borrow-cost-*.md`.
 
-This is the exact path Agent B walked (tasks 016–018 + the 2026-07-20 freestanding
-controller). Read it top to bottom once before running anything. Companion docs:
-- `history/19-07-2026_19-55-15_fpga-mode-build-run.md` (the `--mode fpga` UP image + the fsd diagnosis)
-- `history/20-07-2026_*_fpga-freestanding-controller-domain-call-reached.md` (the freestanding fix + domain-call finding — the state report)
-- `history/19-07-2026_09-30-00_captype-fixed-flash-loadfault-mcause.md` (bitstream flash + power-cycle rules)
-- memory `fpga-benchmark-must-be-freestanding`, `fpga-bitstream-flash-and-pairing`, `fpga-up-image-vermagic`
+## 0. Hard rules
 
----
+- **The board token is secret.** It arrives as `<FPGA-CONSOLE-URL>`.
+  Never commit it, never write it into a repo file, never echo it into a captured
+  log. Keep it only in `~/.config/capstone/fpga-board-url` (read by the runners).
+- **Non-persistent boot.** Boot the firmware via JTAG/gdb into DRAM every run; never
+  rely on resident firmware. **A bitstream flash is the ONLY persistent write and is
+  a STOP-and-ask** (we cannot rebuild a bitstream here). The one authorized flash is
+  restoring the board owner's `working-caplifive-captype-fixed.bit` when another team
+  has overwritten it (§6).
+- **Good-citizen board use:** lock before driving; power off + unlock in a `finally`
+  on every run.
+- Commits: no submodule-source commits, no `Co-Authored-By:`. Collaborator-facing
+  notes under `/tmp/capstone/`, not the repo.
 
-## 0. Hard rules (do not skip)
+## 1. What runs, and why it is "gp-free"
 
-- **The FPGA token is secret.** It arrives as a URL `<FPGA-CONSOLE-URL>`.
-  Never commit it, never write it into a file under the repo, never echo it into a
-  captured log. Put it in an env var only (`export FPGA_URL=...`) for the duration of a run.
-- **Non-persistent board use only.** Boot via JTAG/gdb (`load_image`), never rely on the
-  board's resident firmware. **A bitstream flash is the ONLY persistent write** and is a
-  HARD STOP-and-ask — volatile *or* non-volatile — because we cannot rebuild a bitstream
-  here. The one exception already exercised is re-flashing the collaborator's named
-  `working-caplifive-captype-fixed.bit` to undo another team overwriting the board (see §5).
-- **Lock the board** before driving it, **release + power off** in a `finally` on every run
-  (good citizen; the user authorized ignoring other users but not leaving it powered/locked).
-- Commits go on `capstone-bootstrap-b` only; no submodule-source commits; no `Co-Authored-By:`.
-- Manager/collaborator-facing notes under `/tmp/capstone/`, not the repo.
+The measurement runs inside one Capstone domain entered on a single `REV_SHARED`
+region (the domain both computes results and writes them into the region the host
+reads back). The domain is built **gp-free / cjalr-free**: our LLVM Capstone backend
+otherwise reaches globals via `cincoffset gp,<abs>` assuming `gp = PCC(cursor 0)`, a
+form only our QEMU fork fabricates — on silicon `gp = 0`, so `delin gp` stalls. The
+gp-free domain has no module statics (so no `gp` use), takes its scratch as a linear
+cap carved off the stack, and returns via a plain `ret` (the build script retargets
+clang's one capability-return to `jalr zero,0(ra)`), matching the reference monitor's
+call/ret ABI. Root-cause trail: `history/20-07-2026_*plain-call-ret*.md`.
 
----
-
-## 1. Why this is hard (the two blockers, in order)
-
-1. **The stock benchmark `.user` controller is a glibc Linux program, and glibc emits
-   `fsd` (double-precision FP store).** This `captype-fixed` bitstream's FPU **rejects
-   `fsd` even with `mstatus.FS=Clean`** (JTAG-proven: mcause=2 illegal, mepc in userspace,
-   insn=`fsd`, FS=Clean). The first `printf` traps → the monitor `while(1)`s → silent hang.
-   **Fix = a freestanding soft-float controller (`borrow_cost_fpga_ctl.c`)** that links no
-   glibc and emits zero FP. This is *proven working* — it boots, creates the domain, and
-   maps both regions on real silicon.
-2. **With (1) fixed, the domain `cscall` is finally reached — and the domain wedges at its
-   own entry (vaddr `0x10044`, the `<test>` glue right after `_start`).** Sometimes the core
-   resets to the bootrom (banner), sometimes it sits spinning at `0x10044`. **This is the
-   open blocker** and the thing Stage-0 instrumentation (§7) is meant to diagnose.
-
-You must clear (1) to even observe (2).
-
----
-
-## 2. One-time environment
+## 2. Environment
 
 ```bash
-cd /home/alexey/dev/llvm-capstone-b        # (Agent A: your clone)
+cd <your llvm-capstone clone>
 source capstone/tests/capstone-test-env.sh
 ```
+Host compiler stays `/usr/bin/clang++` (never a capstone-built clang). The board
+driver is `capstone/tests/rtl-smoke/fpga_driver/`; a Python venv with `socketio`
+drives it (`/tmp/capstone/fpga-venv` in this workspace).
 
-- Host compiler must stay `/usr/bin/clang++` — never a capstone-built clang (memory
-  `llvm-build-constraints`). Cap ninja at ~70–80% of cores.
-- The board driver lives at `capstone/tests/rtl-smoke/fpga_driver/` and is already wired to
-  the real (verified) hybrid HTTP+Socket.IO protocol. `run_rtl_smoke.py` is the entry point;
-  the ad-hoc run scripts B used (keepalive capture, gdb-probe) are in the session scratchpad
-  and are reproduced inline in §6–§7 because scratchpad is not committed.
-
----
-
-## 3. Build the freestanding controller + the domain `.dom`
+## 3. Build the probes
 
 ```bash
-bash capstone/tests/rtl-smoke/build-borrow-cost-fpga.sh
-# Produces in $CAPSTONE_TMP_ROOT/capstone-rtl-smoke/ :
-#   borrow_cost_fpga_ctl   <- the freestanding soft-float controller (THE one that runs)
-#   borrow_cost_fpga.dom   <- the Capstone-clang domain payload
-#   borrow_cost_fpga.user  <- the OLD glibc controller (kept for QEMU / D-capable cores; HANGS on-board)
+bash capstone/tests/rtl-smoke/build-borrow-cost-fpga-nogp.sh       # super-ops
+bash capstone/tests/rtl-smoke/build-borrow-breakdown-fpga-nogp.sh  # primitives
 ```
+Each emits a soft-float freestanding controller (`*_ctl`) and a Capstone `.dom` into
+`$CAPSTONE_TMP_ROOT/capstone-rtl-smoke/`. The controller links no glibc (the board's
+FPU rejects glibc's hard-float `fsd`); it uses raw Linux syscalls, integer-only
+output, and the `/dev/capstone` ioctl protocol. The build scripts assert the domain
+is **gp-free and cjalr-free** (a new static or `memcpy` libcall would reintroduce
+`gp`; the assert fails the build).
 
-Sanity-check the controller emits **zero** FP and is static/no-PIE:
+Knobs (breakdown): `BREAKDOWN_ITERS` (default 64), `BREAKDOWN_MREV_ITERS` (default
+16 — the `mrev`-only loop never revokes, so keep it small).
+
+## 4. QEMU functional pre-check
+
+Always validate functionally before board time — it catches ABI/build bugs for free.
+Needs the shared `rootfs.ext2` write-lock, so serialize with other QEMU suites.
 
 ```bash
-BR=$CAPSTONE_BUILDROOT_DIR
-$BR/build/host/bin/riscv64-buildroot-linux-gnu-objdump -d \
-  $CAPSTONE_TMP_ROOT/capstone-rtl-smoke/borrow_cost_fpga_ctl | grep -cE '\bf(sd|sw|ld|lw|add|mul|div)\b'
-# expect: 0
-file $CAPSTONE_TMP_ROOT/capstone-rtl-smoke/borrow_cost_fpga_ctl   # expect: statically linked, no interpreter
+SHARE=$CAPSTONE_TMP_ROOT/capstone-breakdown-share
+bash capstone/tests/rtl-smoke/build-borrow-breakdown-fpga-nogp.sh "$SHARE"
+python3 capstone/tests/runtime-qemu/run-domain-smoke.py \
+  --share-dir "$SHARE" --qemu-extra-arg=-icount --qemu-extra-arg="shift=0,sleep=off" \
+  --guest-command "cp /mnt/host/borrow_breakdown_fpga_nogp_ctl /tmp/bd && chmod 0755 /tmp/bd && /tmp/bd /mnt/host/borrow_breakdown_fpga_nogp.dom" \
+  --success-marker "borrow-breakdown-fpga: measurement complete"
 ```
+Under `-icount`, `mcycle` counts retired instructions, so the QEMU figures are
+instruction counts (functional proxy), not cycles — use them only to confirm the op
+sequence runs and the decomposition is self-consistent. Same recipe with the
+borrow-cost controller/domain for the super-operations.
 
-Key build flags (in the script; do not drop any): `-Os -static -no-pie -fno-pie -nostdlib
--ffreestanding -fno-stack-protector -march=rv64imac -mabi=lp64`. The `_start` must init
-**both** `sp` and `gp` (`lla gp, __global_pointer$` under `.option norelax`); forgetting
-`gp` makes every global store SIGSEGV (cause 0xf) — this bit us once.
+## 5. Board firmware image
 
----
+Boot `fw_payload_fpga_up_ctl.bin` (a `--mode fpga`, **UP / `CONFIG_SMP=n`** OpenSBI
+FW_PAYLOAD with kernel + initramfs + `caplifive.dtb` baked in). It ships `capstone`
+built-in (`/dev/capstone` at boot) and the freestanding tools (`base64`, `gunzip`,
+`sha256sum`). Build it in the caplifive-system container; the load-bearing gotchas:
 
-## 4. Build the `--mode fpga` **UP (SMP=n)** image with the controller baked in
+- **Must be UP.** The SMP kernel floods the console with thousands of
+  `remote fence ... not available in SBI v1.0` lines and buries the login prompt.
+- **`make build LINUX_PAYLOAD=1` does not relink OpenSBI** → a 2.1 MB payload with no
+  kernel. Force the relink: `make -C build/build/opensbi-custom PLATFORM=fpga/ariane
+  CROSS_COMPILE=.../riscv64-buildroot-linux-gnu- LINUX_PAYLOAD=1`. A correct payload
+  is ~15 MB.
+- **Buildroot doesn't track the cpio dep** → after changing the rootfs overlay, force
+  `make build A=linux-rebuild` then relink OpenSBI, or the initramfs is stale.
+- `capstone.ko` must match the UP vermagic if loaded via `insmod`; the built-in path
+  avoids this (and `insmod` can hang this CVA6's module loader).
 
-This is the caplifive-system "official" software build; it produces the OpenSBI FW_PAYLOAD
-with the kernel + initramfs embedded and `caplifive.dtb` baked in (so boot needs only
-`--image`). Must be **UP / `CONFIG_SMP=n`** — the SMP kernel floods the console with
-`remote fence ... not available in SBI v1.0` (2000+ lines) and buries the login prompt.
+The probe binaries do **not** need to be baked in — the runner UART-transfers them at
+run time (§7). Full container build recipe: `history/19-07-2026_*fpga-mode-build-run*.md`.
 
-Prereqs: `caplifive-system` software submodules initialised (`caplifive-system` →
-`sw/buildroot`, `sw/capstone-c`, nested `buildroot`, `components/opensbi`, and
-`capstone-sbi` @ the `99aaffa8` genesys-testing reference). Skip the heavy RTL/Vivado/anvil
-submodules.
+## 6. Bitstream
 
-Container toolchain (Podman not installed here; Docker is — add a `podman`→`docker` shim on
-PATH so the caplifive scripts run unmodified):
+Measure **only** on `working-caplifive-captype-fixed.bit`. Stock `ariane_xilinx.bit`
+has no capability unit → every `cscall` resets → all data is garbage. The runner
+verifies `nv_bitstream_name` before measuring. If it is wrong (another team
+overwrote it), re-flash the board owner's file (the one authorized persistent write):
 
-```bash
-# one-time: build the container image
-cd capstone/caplifive-system
-scripts/build-image.sh          # -> caplifive-build:latest  (Ubuntu 22.04 + rust + opam/OCaml 5.2.0)
-```
+- **Power on + settle before flashing** (a cold JTAG programmer errors otherwise).
+- **Power-cycle after flashing** — a non-volatile flash only writes SPI; the FPGA
+  keeps running the old config until it reconfigures at power-on. Skip this and the
+  DTM comes up degenerate.
 
-Build inside the container (bind-mount the already-checked-out tree; skip setup.sh's
-recursive submodule pull). The three gotchas below are the whole reason this is a runbook:
+## 7. Board run
 
-```bash
-docker run --rm -v $PWD:/workspace -w /workspace caplifive-build:latest bash -c '
-  set -e
-  # A) build once (kernel config must be SMP=n; if the defconfig is SMP=y, disable it
-  #    in the kernel fragment and rebuild the kernel — see history 19-07 19:55 note)
-  make build
-  # B) GOTCHA 1: `make build LINUX_PAYLOAD=1` does NOT re-trigger the OpenSBI link,
-  #    so you get a 2.1 MB payload with NO kernel. Force the relink explicitly:
-  make -C build/build/opensbi-custom PLATFORM=fpga/ariane \
-       CROSS_COMPILE=$(pwd)/build/build/host/bin/riscv64-buildroot-linux-gnu- LINUX_PAYLOAD=1
-'
-```
+`board_run_breakdown.py` (in `/tmp/capstone/`) does the whole flow and is the
+template: connect → lock → **verify bitstream** (re-flash if wrong) → power-cycle →
+`upload_boot_image` → gdb `load_image` @0x80000000 → `set $pc`, `$a0=0`, continue →
+wait for `login` → quiet the console → confirm `/dev/capstone` → UART-transfer the
+controller+domain (gzip+base64, per-chunk sha256, retry) → run bracketed by unique
+BEGIN/END markers → harvest the `RESULT` line → **power off + unlock in `finally`**.
+Run it under the venv; the resilient socket wrapper survives transient drops.
 
-After changing the rootfs overlay (next step) you MUST force the initramfs to re-embed:
+Harvest: trust only the freshly-printed `RESULT` line inside your BEGIN/END markers
+(the console replays stale UART history, which can carry old runs' text).
 
-```bash
-# C) GOTCHA 2: buildroot does not track the cpio dependency; force it:
-docker run --rm -v $PWD:/workspace -w /workspace caplifive-build:latest bash -c '
-  make build A=linux-rebuild        # re-embeds rootfs.cpio into the kernel Image
-  make -C build/build/opensbi-custom PLATFORM=fpga/ariane \
-       CROSS_COMPILE=$(pwd)/build/build/host/bin/riscv64-buildroot-linux-gnu- LINUX_PAYLOAD=1
-'
-```
+## 8. The numbers
 
-A correct payload is ~15.3 MB (kernel at 0x200000 embedded). A 2.1 MB payload = you hit
-gotcha 1.
+Super-operations (`mcycle`, cyc/op, 64 iters): **raw 8, borrow 182, copy@256 902,
+copy@1024 3611**. Borrow is O(1) in payload; copy is O(payload).
 
-### Stage the controller + domain into the rootfs overlay (before the re-embed above)
+Elementary primitives (cyc/op, small tree): **load 2, shrink 1, mrev 50,
+delin+revoke 121** → mrev+delin+revoke 171, borrow ≈173. The cost is the revocation
+machinery (`mrev` mint + `revoke` reclaim); `load`, `delin`, `shrink` are 1–2-cyc
+register ops. In a tight single-lineage loop borrow(N) ≈ 75 + 3·N/2 (the revocation
+tree is never pruned, so `revoke` walks a growing list).
 
-```bash
-DST=capstone/caplifive-system/sw/buildroot/overlay/root/rtl-smoke
-mkdir -p $DST
-cp $CAPSTONE_TMP_ROOT/capstone-rtl-smoke/borrow_cost_fpga_ctl $DST/
-cp $CAPSTONE_TMP_ROOT/capstone-rtl-smoke/borrow_cost_fpga.dom $DST/
-# (also the revoke_cost_fpga_*.dom for the full sweep)
-```
+## 9. Platform constraints (design around these)
 
-Copy the finished payload out to the artifacts dir (kept out of the repo):
+- **No slot reclamation in the rev-node pool.** `drop`/csdrop *is* implemented — it is
+  decoded in QEMU (`helper_csdrop`) and the RTL (`decoder.sv`, rev-node drop endpoint)
+  and has an LLVM builtin (`__builtin_capstone_cap_drop`) — but it only *invalidates* a
+  node (clears its valid bit); it does not free the node's slot. The rev-node pool is a
+  fixed 1024-entry **bump allocator** with a monotonic head (`capstone_rev_node.anvil`:
+  head is set once at init and only ever `+1`), and neither `drop` nor `revoke`
+  decrements it. So the tree cannot be pruned in software; each `mrev` consumes a slot
+  for the domain call's lifetime. A clean single-op `revoke` / pruned O(1) borrow needs
+  the RTL allocator to free the slot on `drop`/`revoke`.
+- **`delin` is load-bearing.** `mrev`+`revoke` without `delin` returns UNINIT (not a
+  reusable linear cap), so it can't loop; `revoke` can't be timed apart from `delin`.
+- **Revocation ceiling.** Keep total `mrev`s per domain call well under ~256 — nodes
+  are never released; 1024 in one call breaks `domreturn` and wedges the debug
+  module. `mrev`-only loops accumulate fastest; keep their count small.
+- **`mcycle`, not `cycle`.** The board gates the unprivileged `cycle` counter; read
+  `mcycle` in-domain (default in `fpga_instrument.h`).
 
-```bash
-cp .../build/.../fw_payload.bin ~/capstone-b-artifacts/fw_payload_fpga_up_ctl.bin
-sha256sum ~/capstone-b-artifacts/fw_payload_fpga_up_ctl.bin   # B's good build: fe37ebdb...
-```
+## 10. Still open
 
-`capstone.ko` must match the **UP** vermagic (rebuilt alongside the UP kernel) or `insmod`
-fails; the overlay ships it at `/capstone.ko` (memory `fpga-up-image-vermagic`).
-
----
-
-## 5. Put the correct bitstream on the board (flash + power-cycle)
-
-Only if the board's resident NV bitstream is NOT `working-caplifive-captype-fixed.bit`
-(the other team has overwritten it before, e.g. with stock `ariane_xilinx.bit` — which has
-no capability unit and resets on any `cscall`; ALL evidence gathered on that is garbage).
-Check first:
-
-```bash
-# the driver exposes GET /api/bitstreams + flash_state; nv_bitstream_name tells you what's resident
-```
-
-If it must be re-flashed, this is the one allowed persistent write (the collaborator's file, restoring
-the intended config). Two rules learned the hard way:
-- **Power on + settle BEFORE flashing** (a cold board's JTAG programmer isn't up → `flash_state=error`, no SPI write).
-- **Power-cycle AFTER flashing** (`--power-cycle`); a non-volatile flash only writes SPI, the
-  FPGA keeps running the old config until it reconfigures at power-on. Skip this and the DTM
-  comes up degenerate (IDCODE 0x00000001, `load_image` fails "waiting for busy to go low").
-
----
-
-## 6. Boot + run (the freestanding controller) with keepalive capture
-
-The lab websocket idle-drops ~60 s into a passive output wait, so background the controller
-to a file and send a keepalive during the wait. Skeleton (full version = scratchpad
-`run_ctl_image7.py`; the driver primitives it uses are stable):
-
-```python
-# export FPGA_URL=<FPGA-CONSOLE-URL>   (never commit this)
-IMG = "~/capstone-b-artifacts/fw_payload_fpga_up_ctl.bin"
-CTL = "/root/rtl-smoke/borrow_cost_fpga_ctl"
-DOM = "/root/rtl-smoke/borrow_cost_fpga.dom"
-# 1. lock; power(False); power(True); settle
-# 2. gdb_start; monitor reset halt
-# 3. load_image IMG @0x80000000 bin   (~2 min, 15 MB); DTB baked in, no separate load needed
-#    (if using a non-baked DTB: load caplifive.dtb @0x82200000 and set $a1)
-# 4. set $pc=0x80000000; $a0=0; continue
-# 5. poll for "login:"  (keepalive: send '\r' every ~12 s so the socket stays alive)
-# 6. root; quiet the console:  echo 1 > /proc/sys/kernel/printk
-# 7. insmod /capstone.ko ; test -e /dev/capstone
-# 8. run in BACKGROUND to a file:  ( CTL DOM; echo CTLEXIT=$? ) >/root/out.txt 2>&1 &
-# 9. keepalive-poll out.txt for "measurement complete" / "CTLEXIT=" (up to ~240 s)
-# 10. finally: gdb_stop; power(False); unlock; close
-```
-
-**Expected today:** boots → shell → `insmod` OK → controller prints `created domain ID = 0`
-→ `create_region`/`map_region` OK for both regions → then **hangs at the domain `cscall`**
-(bootrom banner, or a silent spin). You will NOT get `RESULT` cycle lines yet — that is the
-open blocker (§7).
-
-If it hangs, gdb-probe the parked core (non-destructive; scratchpad `run_ctl_image7.py`
-tail does this): `monitor halt; p/x $pc; p/x $mcause; p/x $mepc; p/x $mtval`. B saw
-`pc=0x819a0044` = domain vaddr `0x10044` (the `<test>` entry glue), `mcause=0` — i.e. the
-switch transferred fetch into the domain and it wedged at the first entry instruction. The
-CSRs read post-hoc are muddy (overwritten by bootrom execution); use §7 for a clean dump.
-
----
-
-## 7. Diagnosing the domain-call wedge — CONFIRMED ROOT CAUSE
-
-**The diagnosis is done (2026-07-20); this section records both the method that worked and a
-dead end so you don't repeat it.**
-
-**Dead end — the M-mode `mtvec` trap-dumper.** We built a dumper that repoints M-mode `mtvec`
-(reset-default = bootrom) to a UART hex-dump handler, injected as raw asm into
-`build/build/opensbi-custom/lib/sbi/sbi_capstone_dom.c.S` (the monitor C is pre-compiled to a
-checked-in `.c.S`; no capstone clang on PATH to regenerate it; use the `lla` idiom the file
-uses — `la` triggers a binutils `elfnn-riscv.c:2358` crash). On real `captype-fixed` the
-dumper **stays silent**: an in-domain capability fault routes to the Capstone cap-trap vector
-**`ctvec`**, NOT M-mode `mtvec`, so `$mcause` reads 0. (The dumper's `@@MT` output only ever
-appeared on the *contaminated stock-Ariane* bitstream, which lacks the cap unit → faults go
-to M-mode.) The collaborator also confirmed `cscall`/`csreturn` **implicitly flush the icache**, killing
-the stale-icache / `fence.i` theory. Don't rebuild the mtvec dumper for this.
-
-**Method that worked — gdb single-step + register read at the wedge** (no rebuild; boot the
-plain `fw_payload_fpga_up_ctl.bin`, run the controller, `time.sleep(20)` to reach the domain
-call, `monitor halt`, then `stepi`/`p/x $gp`; scratchpad `run_singlestep.py`, `run_gpprobe.py`):
-- 40× `stepi` from `0x819a0044` never advances → the instruction at domain vaddr `0x10044`
-  (`delin gp`) cannot retire; no trap fires.
-- `gp = 0x0` (null/untagged) at the wedge; `sp = 0x819c0000` (valid).
-- Set pc past the delin (`set $pc = 0x819a0048`) → the domain executes normally.
-
-**Root cause:** `delin gp` with `gp=0` **stalls the CVA6 pipeline** (no retire, no trap).
-`gp` is 0 because `start.S` `_start` inits only `sp` (from `cscratch`/cap-CSR `0x4`), never
-`gp`, and the monitor's `create_domain` (`sbi_capstone.c:279`) zeroes the domain context's
-`gp` slot (`dom_seal[0]=code,[2]=data,[3]=priv`, rest 0). QEMU's `helper_csdelin` asserts a
-*tagged* operand and the same `.dom` passes under QEMU, so `gp` arrives valid under QEMU but
-`0` on the FPGA. (The board evidence above is correct; the *cause* was mis-attributed —
-see the corrected verdict next.)
-
-**Fix = OUR domain runtime, NOT the RTL (corrected 2026-07-20 per the collaborator).** The
-`gp = pc_cap(cursor 0)` line in QEMU's `helper_cscall` (`op_helper.c:1227-1231`) is **our
-own non-canonical patch** — commit `7aca0540` ("riscv: unblock native domain capability
-calls"), not canonical Capstone. So the RTL is correct to omit it, and the cursor-0
-approach isn't representable on silicon anyway. **The canonical reference domains
-(`capstone-test-domains`: fib/thread/smode, same capstone-cc compiler) never use `gp`:**
-no `delin gp`, no `.capstone_cap_init`, no `cincoffset gp,<abs>` — they address code
-pc-relative through the implicit PCC, get the stack cap from `cscratch`, and take data
-caps as arguments; `gp` is merely preserved as an opaque caller register. Our
-`my_first_domain/start.S` invented the gp machinery for capability-globals, and for
-borrow_cost it is pure dead weight (`.capstone_cap_init` is **size 0** — zero capability
-globals). **Fix (in-repo, no bitstream rebuild):** drop `delin gp` / the cap_init loop for
-empty-cap_init domains and call `domain_main` within PCC, matching the canonical compiler
-output → runs on silicon → cycle numbers. General fix = rework clang `CapstoneCapGlobalInit`
-+ start.S off the cursor-0 gp model and retire QEMU hack `7aca0540` (A's lane). See the
-state report for the full derivation.
-
-### §7.1 — gp-seed experiment (2026-07-20) + HANDOFF TO A
-
-**Correction to the paragraph above:** the "cursor-0 isn't representable on silicon" claim was
-**not actually confirmed** — the experiment that would have tested it hit a *delivery* failure
-first, so representability is still open. What we tried and learned:
-
-- **Delivery attempt:** monitor `create_domain` parks an image-covering data cap in the ctvec
-  slot `dom_seal[1]` (patch: `agent-handoff/patches/fpga-gpseed-monitor-createdomain.patch`);
-  the domain (`my_first_domain/start-fpga-gpseed.S`, built via `START_SRC=`) loads it with
-  `ccsrrw(gp, ctvec, x0)` in `_start`.
-- **Result (2 board runs, cursor 0 and cursor=base — identical):** `gp = 0`, `delin gp` stalls
-  at `0x819a0044` (19/20 single-steps pinned). A cursor=base cap would read `0x819a0000`; it
-  read 0 → **the cap never reached `gp`.** `sp` (cscratch) + PCC arrive fine; **`ctvec` arrives
-  0** → this RTL's fast first-entry (c-effective) path **does not restore `ctvec`** for the
-  entered domain. Delivery problem, not representability.
-- **Open → the collaborator** (`/tmp/capstone/gp-representability-question.md`, NOT in repo): which
-  first-entry context slot can seed `gp`; canonical mechanism for a domain with globals.
-- **Next for A:** (1) read `caplifive-cva6` RTL for the c-effective slot layout, then deliver
-  via a restored slot; (2) stack-memory delivery via the proven `sp`/`cscratch` path; (3) the
-  compiler/canonical fix. Cheap de-risk: QEMU-verify the delivery mechanism (hack disabled).
-- **Artifacts:** `~/capstone-b-artifacts/fw_payload_fpga_up_gpseed.bin` (sha `3cc33379`);
-  `scratchpad/rebuild_gpseed.sh` (build), `scratchpad/run_gpseed.py` (board run w/ bitstream
-  double-check + single-step probe). Rebuild gotcha: `touch` the wrapper
-  `sbi_capstone_dom.c` to force the monitor `.S` to regenerate from the `#include`d `.c`.
-
-Full ladder + RTL cross-refs: `/home/alexey/.claude-b/plans/curried-crunching-gizmo.md`.
-State report: `history/20-07-2026_04-03-20_fpga-freestanding-controller-domain-call-reached.md`.
-
----
-
-## 8. Once the domain call returns a RESULT (future)
-
-Run the full sweep (borrow + three revoke `.dom`s) via `run_rtl_smoke.py`, harvest the
-`RESULT` lines, and feed them to `run-revoke-cost-fpga-qemu.sh --parse-uart` to reproduce the
-per-op cycle breakdown next to the QEMU baseline (borrow raw2/borrow6; revoke bump7 /
-norevoke60 / revoke65, +5 O(1) revoke-at-free). That is the original deliverable.
-
----
-
-## Artifacts / pointers
-
-- Good UP+freestanding image: `~/capstone-b-artifacts/fw_payload_fpga_up_ctl.bin` (sha `fe37ebdb`).
-- Controller source: `capstone/tests/rtl-smoke/borrow_cost_fpga_ctl.c`; builder
-  `build-borrow-cost-fpga.sh`.
-- Board driver: `capstone/tests/rtl-smoke/fpga_driver/` (`run_rtl_smoke.py`, `fpga_console.py`).
-- Session run scripts (not committed): scratchpad `run_ctl_image{5,6,7}.py`, `rebuild_all.sh`.
+The temporal-safety-vs-CHERI sweep (bump / norevoke / revoke) needs the same gp-free
+treatment applied to `revoke_cost_fpga.*` (it uses the revoke-on-free allocator —
+more moving parts). The three configs isolate the temporal cost: **bump** = plain
+bump allocator, no safety (baseline); **norevoke** = the revoke-on-free allocator
+with revocation disabled (alloc-side cost: split+mrev+delin per malloc, free is a
+no-op); **revoke** = full temporal safety (revoke per free). Then
+`norevoke − bump` = alloc-side overhead and `revoke − norevoke` = the revoke-at-free
+op. Feed the board `RESULT` lines to `run-revoke-cost-fpga-qemu.sh --parse-uart`.

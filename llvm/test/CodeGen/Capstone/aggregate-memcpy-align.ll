@@ -43,3 +43,38 @@ entry:
                                        i64 16, i1 false)
   ret void
 }
+
+; A 16-byte copy aligned to only 4 bytes: the destination might still be
+; 16-aligned, so the generic lowering used to pick an i128 (stc) unit whose
+; misaligned source load only supplied 8 bytes.  It must decompose to matched
+; 4-byte accesses (sw) instead -- no stc/ldc.
+; CHECK-LABEL: copy_i32x4_align4:
+; CHECK-NOT:   stc
+; CHECK-NOT:   ldc
+; CHECK:       sw {{[a-z0-9]+}}, {{[0-9]+}}(
+; CHECK-NOT:   stc
+define void @copy_i32x4_align4(ptr addrspace(200) %dst, ptr addrspace(200) %src) {
+entry:
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 4 %dst,
+                                       ptr addrspace(200) align 4 %src,
+                                       i64 16, i1 false)
+  ret void
+}
+
+; A 44-byte copy aligned to 4 (`int e[11] = {...}` local-array init): size is a
+; multiple of neither 16 nor 8, so it matched none of the special-cased branches
+; and fell through to the generic lowering, which picked a leading i128 (stc)
+; unit and dropped the upper 8 bytes of it.  It must decompose to matched 4-byte
+; accesses -- no stc/ldc.
+; CHECK-LABEL: copy_44_align4:
+; CHECK-NOT:   stc
+; CHECK-NOT:   ldc
+; CHECK:       sw {{[a-z0-9]+}}, {{[0-9]+}}(
+; CHECK-NOT:   stc
+define void @copy_44_align4(ptr addrspace(200) %dst, ptr addrspace(200) %src) {
+entry:
+  call void @llvm.memcpy.p200.p200.i64(ptr addrspace(200) align 4 %dst,
+                                       ptr addrspace(200) align 4 %src,
+                                       i64 44, i1 false)
+  ret void
+}

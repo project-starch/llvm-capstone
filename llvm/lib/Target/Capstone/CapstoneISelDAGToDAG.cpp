@@ -21,6 +21,7 @@
 #include "llvm/CodeGen/SDPatternMatch.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/IntrinsicsCapstone.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/Alignment.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MathExtras.h"
@@ -66,6 +67,71 @@ cl::opt<bool> CapstoneShrinkStack(
     cl::desc("Narrow capabilities for address-taken stack objects to their size "
              "(emit SHRINK at FrameIndex materialization); default on"),
     cl::init(true));
+
+// gp-free / plain-call-ret domain ABI (silicon bring-up, Experiment A). When on,
+// intra-domain calls and returns lower to plain jal/jalr that stay inside PCC
+// (bounds-checked on fetch) instead of CJALR (which needs a code capability),
+// and direct calls + global data addressing avoid the `gp = PCC(cursor 0)` root
+// our QEMU fork fabricates but the RTL never establishes. This matches the
+// reference monitor's own within-PCC call/ret ABI and lets a real globals-using
+// domain run on silicon. DEFAULT OFF: with it off, codegen is byte-identical to
+// the capability ABI, so the whole regression corpus is unaffected; only silicon
+// domains opt in. See plans/compatibility-eval-silicon-app.md §2.
+// Non-static: also read by CapstoneAsmPrinter (call/ret pseudo lowering).
+cl::opt<bool> CapstoneGpFree(
+    "capstone-gp-free", cl::Hidden,
+    cl::desc("Lower intra-domain calls/returns to plain jal/jalr within PCC and "
+             "avoid the gp root for direct calls / global addressing "
+             "(silicon domain ABI); default off"),
+    cl::init(false));
+
+// gp-captable: the silicon-correct global-addressing half of the gp-free domain
+// ABI. gp is the base of a per-global cap-table (data authority, derived in-glue
+// from sp/cscratch) rather than a cap over the code image; a global at cap-table
+// index i is reached by loading its capability from gp[i] (offset i * capability
+// width). This is the model proven to run on captype-fixed CVA6
+// (tests/runtime-qemu/gp-free-domain/start-gpfree-captable.S; see
+// history/22-07-2026_18-05-00_* UPDATE 23-07 "FIX VALIDATED" and
+// plans/gp-captable-codegen-plan.md). DEFAULT OFF -> byte-identical codegen, so
+// the regression corpus is unaffected; only silicon cap-table domains opt in.
+// Implies the gp-free call/ret lowering but replaces `scc gp,&g` global access
+// with `ldc rd, gp, i*16`.
+cl::opt<bool> CapstoneGpCaptable(
+    "capstone-gp-captable", cl::Hidden,
+    cl::desc("Address domain globals through a gp-based per-global capability "
+             "table (ldc gp[i]) instead of scc gp into the code image "
+             "(silicon-correct gp-free global ABI); default off"),
+    cl::init(false));
+
+// Cap-table index for a domain global, in deterministic module order. The SAME
+// enumeration (defined, sized, non-thread-local GlobalVariables in Module order)
+// is the source of truth shared with the entry-glue table/init builder, so the
+// access side and the runtime table agree on which slot holds which global.
+// Returns -1 for a value that is not an indexable domain global (function,
+// declaration, unsized/thread-local, constant pool, etc.).
+int getGpCaptableIndex(const GlobalValue *GV) {
+  const auto *GVar = dyn_cast<GlobalVariable>(GV);
+  if (!GVar || GVar->isDeclaration() || GVar->isThreadLocal() ||
+      !GVar->getValueType()->isSized())
+    return -1;
+  int Index = 0;
+  for (const GlobalVariable &Cand : GVar->getParent()->globals()) {
+    if (Cand.isDeclaration() || Cand.isThreadLocal() ||
+        !Cand.getValueType()->isSized())
+      continue;
+    if (&Cand == GVar)
+      return Index;
+    ++Index;
+  }
+  return -1;
+}
+
+// gp-captable is a superset of gp-free: it replaces the global-addressing half
+// (scc gp -> ldc gp[i]) but still needs the gp-free call/ret + ra-spill lowering
+// (plain jal/jalr within PCC, integer ra) and the gp-free fallback for
+// non-indexable symbol refs. So every gp-free ABI decision is active under either
+// flag; this is the single predicate the call/ret/spill/global sites consult.
+bool capstoneGpFreeAbiActive() { return CapstoneGpFree || CapstoneGpCaptable; }
 
 #define GET_DAGISEL_BODY CapstoneDAGToDAGISel
 #include "CapstoneGenDAGISel.inc"
@@ -1728,17 +1794,27 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
     // Extract the symbol (TargetGlobalAddress) from LGA
     SDValue Symbol = Callee.getOperand(0);
 
-    // 1. PseudoLLA: Materialize numeric offset from PC
+    // 1. PseudoLLA: Materialize numeric offset from PC (auipc + addi %pcrel).
     SDNode *Offset = CurDAG->getMachineNode(Capstone::PseudoLLA, DL, PtrVT,
                                             Symbol);
 
-    // 2. GP: Get the root data capability
-    SDValue GP = CurDAG->getRegister(Capstone::X3, PtrVT);
+    if (capstoneGpFreeAbiActive()) {
+      // gp-free domain ABI: the callee is within the domain image, so the
+      // PC-relative address itself is a valid jump target inside PCC. Skip the
+      // `cincoffset gp` code-capability formation and hand the raw PC-relative
+      // address straight to the (indirect) call, which the AsmPrinter lowers to
+      // a plain `jalr` -- no gp, no cjalr. Reuses PseudoLLA's PC-relative fixup
+      // (the PseudoCALL/auipc+jalr CALL relocation is not wired for Capstone).
+      TargetReg = SDValue(Offset, 0);
+    } else {
+      // 2. GP: Get the root data capability
+      SDValue GP = CurDAG->getRegister(Capstone::X3, PtrVT);
 
-    // 3. CIncOffset: Create the final function pointer capability
-    SDNode *Ptr = CurDAG->getMachineNode(Capstone::CIncOffset, DL, PtrVT,
-                                         GP, SDValue(Offset, 0));
-    TargetReg = SDValue(Ptr, 0);
+      // 3. CIncOffset: Create the final function pointer capability
+      SDNode *Ptr = CurDAG->getMachineNode(Capstone::CIncOffset, DL, PtrVT, GP,
+                                           SDValue(Offset, 0));
+      TargetReg = SDValue(Ptr, 0);
+    }
   } else {
     // Indirect call (e.g. function pointer).
     // Callee is already a register (i128)

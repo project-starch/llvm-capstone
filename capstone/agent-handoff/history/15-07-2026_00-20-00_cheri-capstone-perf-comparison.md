@@ -1,11 +1,5 @@
 # CHERI vs Capstone — temporal-safety performance comparison (full report)
 
-**Date:** 2026-07-14/15 · **Branch:** `capstone-bootstrap`
-**Feeds:** `paper/evaluation.tex` §`sec:eval-perf-compare` (`tab:perfcompare`,
-`tab:perftree`) · **Plan:** `plans/perf-cheri-vs-capstone-qemu.md`
-**Data:** `tests/cheri-perf/RESULTS.md` (CHERI) ·
-`tests/runtime-qemu/revoke-cost-probe/RESULTS.md` (Capstone microbench)
-
 ---
 
 ## 1. Executive summary
@@ -49,7 +43,7 @@ protection is deferred, not synchronous.
 - Methodology rule: **QEMU-to-QEMU** (do not compare CHERI-QEMU to Capstone-RTL —
   "that's incomparable"); RTL cycle-accurate is a Capstone-only follow-on.
 
-The the collaborator gate was dropped: The collaborator is the FPGA/RTL collaborator, not a CHERI
+The the board owner gate was dropped: the board owner is the FPGA/RTL collaborator, not a CHERI
 expert, and `qemu-system-riscv64cheri` is a standard QEMU fork with the usual
 instruction-count readouts, so the methodology was settled in-house.
 
@@ -254,43 +248,4 @@ overhead: our system versus CHERI"):
 - Abstract + intro updated to surface the performance finding (the eager-sweep vs
   O(1)-contract-point difference) as a headline contribution alongside security.
 
-Builds clean (`latexmk` rc=0, no undefined refs).
 
----
-
-## 10. Reproduction
-
-**CHERI** (needs the `~/cheri` stack + `~/cheri-ws/cheribuild`):
-
-```
-bash capstone/tests/cheri-perf/run.sh                 # microbench, 3 configs
-# tree arm: RC_SKIP_MICRO=1 via GUEST_ENV in the driver (see run-in-guest.sh)
-```
-
-`run.sh` auto-creates a dummy `makeinfo` shim so the disk-image bake skips
-rebuilding the already-built gdb (else `apt install texinfo`). The `.img` had been
-cleaned and was rebaked from the extant `rootfs-riscv64-purecap/`.
-
-**Capstone** (needs `capstone-test-env.sh`; QEMU rootfs write-lock — announce in
-COORDINATION.md):
-
-```
-bash capstone/tests/runtime-qemu/run-revoke-cost-probe.sh   # microbench
-DOMAIN_OPT_LEVEL=-O0 bash capstone/tests/runtime-qemu/run-tree-cost-probe.sh  # BST
-```
-
-(The tree build defaults to `-O0` for the ICE reason above.)
-
----
-
-## 11. Remaining work
-
-- **Capstone RTL cycle-accurate** number (`tests/rtl-smoke/`, human-in-the-loop):
-  converts our side from instruction-proxy to real silicon timing. Plumbing
-  QEMU-validated; needs a hardware slot.
-- **Compiler lane:** the `-O2` capability-value-select ICE
-  (`cur = cond ? cur->l : cur->r`) — root-cause + fix so pointer-heavy capability
-  code compiles optimized.
-- **Optional:** an OS-hosted Capstone workload to close the symmetry gap, and/or
-  the SQLite applied case (blocked on CHERI side — SQLite faults purecap
-  standalone, per the cheri-baseline notes).
