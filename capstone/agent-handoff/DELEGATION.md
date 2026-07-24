@@ -30,8 +30,13 @@ general-purpose subagents, **not** to B. Delegating to B is a peer hand-off.
   measurement — anything disjoint from the other lane's active files.
 - **Keep in the owning lane (don't split across lanes):** the compiler/codegen +
   capability-ABI (splitting risks ABI incoherence + merge conflicts on the Capstone
-  target files), all board/FPGA sessions (serialized, secret token, human-in-loop),
-  the paper (single-author coherence), and anything touching real-person names.
+  target files), the paper (single-author coherence), and anything touching
+  real-person names.
+- **The board/FPGA may be driven by EITHER lane (A or B)** — neither is prohibited.
+  It is a **single shared physical resource** (secret token, human-in-the-loop), so
+  board sessions are **serialized across lanes**: never two at once, coordinate
+  timing, hand off sequentially (typically A prepares the silicon-ready artifacts,
+  then B — or A — runs the board batch). Built-in subagents never touch the board.
 
 ## How to write the handoff (high autonomy)
 The peer is as capable as you. Hand off the **goal + guardrails, not the steps** —
@@ -87,5 +92,8 @@ Board-debug threads run long, so every lane manages context deliberately (canoni
 8. **Bug-fix / root-cause / audit notes → `history/`** (dated
    `DD-MM-YYYY_HH-MM-SS_name.md`), **not `design/`** (`design/` = architecture
    decisions only). Active plans → `plans/` (committed, portable).
-9. Board/FPGA sessions, compiler/codegen + capability-ABI changes, subtle-correctness
-   debugging, and the paper stay in the owning lane; never delegate them to subagents.
+9. Compiler/codegen + capability-ABI changes, subtle-correctness debugging, and the
+   paper stay in the owning lane; never delegate them to subagents. **Board/FPGA
+   sessions may be run by either Opus lane (A or B)** — not lane-restricted — but are
+   **serialized across lanes** (single shared board + secret token + human-in-loop);
+   built-in subagents never touch the board.

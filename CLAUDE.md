@@ -84,10 +84,16 @@ uncommitted). Subagents do not recurse.
   QEMU suites for validation → the **corpus-runner** agent (Sonnet, read-only,
   serialized, never touches the board); bounded multi-step research with a clear
   question → **general-purpose**.
-- **Keep in the main Opus session** (never delegate): all FPGA/board sessions
-  (board etiquette + secret token + can't be parallelized); compiler/codegen and
-  capability-ABI changes; subtle-correctness or concurrency debugging; the paper;
+- **Keep in the main Opus session** (never delegate to subagents): compiler/codegen
+  and capability-ABI changes; subtle-correctness or concurrency debugging; the paper;
   commits; and anything involving real-person names.
+
+**FPGA/board sessions may be run by EITHER Opus lane (A or B)** — B is explicitly
+**not** prohibited from the board (permanent rule). The board is a single shared
+physical resource (secret token, human-in-the-loop, can't be parallelized), so board
+sessions are **serialized across lanes**: never two at once — coordinate timing and
+hand off sequentially. (Built-in **subagents** still never touch the board; the
+corpus-runner is board-free.)
 
 Peer **lane B** (a separate Opus session on `capstone-bootstrap-b`) is a different
 thing from subagents — see `capstone/agent-handoff/DELEGATION.md`. A third category

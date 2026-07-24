@@ -97,8 +97,10 @@ the A lane does:
 7. **Bug-fix / root-cause / audit notes → `history/`** (dated
    `DD-MM-YYYY_HH-MM-SS_name.md`), **not `design/`** (`design/` = architecture only).
    Active plans → `plans/`.
-8. Commit to **`capstone-bootstrap-b`** only. Board/FPGA is off-limits (batched,
-   human-in-loop, A lane).
+8. Commit to **`capstone-bootstrap-b`** only. The board/FPGA is **not** off-limits to
+   you (either lane may run it), but it is a single shared resource — **serialized
+   across lanes**, coordinate timing, never two board sessions at once. For *this*
+   breadth task you stay on QEMU regardless.
 
 ## Start here
 `git switch capstone-bootstrap-b && git merge origin/capstone-bootstrap` to pick up
