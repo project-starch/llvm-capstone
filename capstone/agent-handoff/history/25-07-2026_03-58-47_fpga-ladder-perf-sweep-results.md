@@ -1,5 +1,39 @@
 # FPGA silicon-ladder perf sweep — on-board mcycle results
 
+## ⚠ CORRECTION (2026-07-25, same day, post-sweep) — the 4 "miscompiles" were a STALE BUILD
+
+Finding #1 below ("gp-captable silicon miscompile", 4/4 array-store rungs) is
+**RETRACTED**. Root cause of those 4 wrong retvals was **stale domains**, not
+silicon/RTL:
+
+- `run_ladder_perf_fpga.py` uses whatever `<rung>.dom` already exists in
+  `$OUT_DIR/ladder-fpga` and **never rebuilds** it (it only errors if missing).
+  The doms in that dir predated the **24-07 sub-cap memcpy `stc`-packing fix**
+  (commit `d078839`, `history/24-07-2026_03-57-54_ladder-rung2-insertsort-...`).
+- `beebs_insertsort`'s silicon retval `255001740` is the **exact** pre-fix memcpy
+  signature ("array sorted right, `expected[]` read wrong") from that 24-07 note —
+  an address-independent FNV checksum, not the `0x8Bxx` address-contamination
+  shape of the real shrink hazard. That alone pins it to the compiler bug.
+- **Verification (board-free, current compiler):** rebuilt & ran all four under
+  QEMU via `run-ladder-qemu.sh` — **all PASS the oracle**: matmult_int 774662735,
+  beebs_crc32 1703161001, beebs_insertsort 271779359, beebs_recursion 1579141629.
+  The current `-b` clang (built 24-07 18:30) is newer than the fix; the sweep
+  (25-07 04:00) simply ran pre-fix `.dom` artifacts.
+
+**Consequence:** these 4 do **not** corroborate the gp-captable array-store /
+`shrink`→store RTL bug. That RTL-leaning bug (23-07 note) is real but **separate**
+and is worked around here by shrink-off (the ladder builds `-capstone-shrink-*
+=false`), so it is not the mechanism behind these four. The mcycle numbers for the
+4 miscompiled runs are measurements of wrong executions → **discard**. Only
+`rv8_primes` and `beebs_prime` remain valid silicon points.
+
+**Action:** a board **re-sweep with freshly-built doms** (delete `$OUT_DIR/
+ladder-fpga/*.dom` first, or have the runner force-rebuild) to get correct
+on-silicon retvals + mcycle for 6/7 (coremark still hangs — real, still open).
+The runner should be hardened to rebuild-or-fingerprint doms so this can't recur.
+
+---
+
 **Date:** 2026-07-25
 **Task:** run the 7 ready silicon-ladder rungs on the Genesys2 CVA6 FPGA, record
 `mcycle` + `retval`, gate correctness on `retval == native cc -O0 oracle`.

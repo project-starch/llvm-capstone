@@ -6,13 +6,22 @@ Minimal snapshot. Read first in every session.
 
 The 7 ready silicon-ladder rungs were run on the CVA6 FPGA; **6/7 produced real
 on-board `mcycle`, 2/7 also pass `retval==oracle`**. Trustworthy silicon perf
-points: `rv8_primes` (mcycle 17,286,789) and `beebs_prime` (47,796). Coherent
-finding: the **4 rungs that store into a global array while keeping a live
-accumulator** (matmult_int, beebs_crc32, beebs_insertsort, beebs_recursion) all
-**miscompile on silicon** (wrong retval, QEMU-correct) — strongest corroboration
-yet of the open gp-captable array-store bug (4/4 fail, 2/2 scalar rungs pass).
+points: `rv8_primes` (mcycle 17,286,789) and `beebs_prime` (47,796).
+
+**CORRECTION (2026-07-25, post-sweep): the 4 "silicon miscompiles" were a STALE
+BUILD, not an RTL/silicon bug.** The runner reused pre-built `.dom` files that
+predate the 24-07 sub-cap memcpy `stc`-packing fix (commit `d078839`); it never
+rebuilds an existing dom. `beebs_insertsort`'s silicon value `255001740` is the
+*exact* pre-fix memcpy signature. Rebuilt against the current compiler, **all 4
+(matmult_int, beebs_crc32, beebs_insertsort, beebs_recursion) pass QEMU** with the
+oracle value. So they are the already-fixed compiler bug, **not** silicon
+divergence — the earlier "4/4 array-store = RTL corroboration" reading is
+RETRACTED. The mcycle numbers for those 4 are of miscompiled runs → discard.
+**Next: a board re-sweep with freshly-built doms to confirm silicon now matches
+(6/7 correct expected).** The one genuinely RTL-leaning bug remains the separate
+23-07 `shrink`→store hazard, worked around by shrink-off (not hit here).
 `coremark_matrix` (only `-Os` rung) **hangs the cscall even as the first domain**
-(code-specific, distinct from the multi-domain hang). Full table + mechanics:
+(code-specific, still open). Full table + mechanics + this correction:
 `history/25-07-2026_03-58-47_fpga-ladder-perf-sweep-results.md`.
 
 Runner: `tests/rtl-smoke/fpga_driver/run_ladder_perf_fpga.py` — one full

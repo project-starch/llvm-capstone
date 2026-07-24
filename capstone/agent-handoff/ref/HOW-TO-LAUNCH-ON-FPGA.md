@@ -45,18 +45,38 @@ The old bottleneck was per-run UART transfer. Two levers, in order:
   `tests/rtl-smoke/fpga_driver/fast_xfer.py` `fast_put` for every domain transfer
   (direct-append base64 chunks, single final-sha guard, safe-retry on mismatch). A
   controller is now ~30 s vs ~4 min. Memory `project_board_transfer_tiers`.
-- **Batch many domains in ONE session.** The firmware JTAG-load (~2 min, 15 MB)
-  dominates — pay it **once**. Boot once, then loop `fast_put dom → run → read
-  mcycle → next`. Domain binaries are tiny; only the firmware is big.
-- **Tier-2b (JTAG `load_image` into reserved RAM + resident controller)** — the
-  suite/SQLite scaling path: load → run → read `mcycle` → load next, many domains
-  per session, no reflash, no UART transfer. Board owner's endorsed "domain in the
-  image, loaded over JTAG" model. **Confirm the reserved-region address/size with
-  the board owner before use — never guess a RAM address.** Not needed for a handful
-  of tiny integer domains (Tier-1 in one session suffices); it's the on-ramp to
-  SQLite-on-silicon. Design: `plans/sqlite-on-silicon-scoping.md` §"Delivery
-  mechanism"; the UART-baked-controller variant (initramfs) is postponed
-  (`project_board_transfer_tiers`).
+- **Batch many domains in ONE session — BLOCKED today by the multi-domain hang.**
+  The firmware JTAG-load (~2 min, 15 MB) dominates, so in principle you boot once
+  and loop `fast_put dom → run → read mcycle → next`. **But a second domain reused
+  at the same entry VA (`0x10000`) within one boot silently hangs its `cscall`** —
+  the missing domain-boundary `fence.i` / icache-coherence gap (RTL does no icache
+  invalidate on the switch). Until that monitor fix lands, each rung must run as the
+  *first* domain of a clean boot ⇒ **one full power-cycle + firmware reload per
+  rung (~2.5 min each)**. This per-rung cost is the real board-time bottleneck, and
+  **no transfer tier removes it** — the unlock is the `fence.i` domain-boundary fix
+  (`plans/curried-crunching-gizmo.md`), which is a monitor change gated on
+  monitor-regen (see below).
+- **Tier-2b / "route B" (JTAG `load_image` + resident/baked controller)** — the
+  suite/SQLite scaling path. Two variants, and a key clarification learned 2026-07-25:
+  - **Route A — live poke** (gdb `monitor load_image dom <addr>` into a reserved RAM
+    region): **confirm the reserved-region address/size with the board owner before
+    use — never guess a RAM address** (else it stomps the booted kernel). This is what
+    the "never guess an address" rule guards.
+  - **Route B — bake domains into the firmware initramfs and reload the whole image**
+    ("recompile the image"): needs **no** reserved address (the `fw_payload` has a
+    built-in initramfs), but requires a firmware-image rebuild ⇒ **gated on the
+    monitor-regen boot-hang** (below).
+  - **Neither route cuts the per-rung power-cycle cost** — both still reload the image
+    per boot and both still hit the same-VA multi-domain hang. Tier-2b is the on-ramp
+    for domains too big for Tier-1 transfer (SQLite-scale), **not** a speedup for a
+    handful of tiny integer rungs (Tier-1 in one session is right for those). Design:
+    `plans/sqlite-on-silicon-scoping.md` §"Delivery mechanism".
+
+- **GOTCHA — never run stale domain binaries.** The ladder-perf runner reuses an
+  existing `<rung>.dom` and does **not** rebuild it. On 2026-07-25 this made a sweep
+  run pre-fix binaries and report 4 bogus "silicon miscompiles" that were actually an
+  already-fixed compiler bug. **Delete `$OUT_DIR/ladder-fpga/*.dom` (or force-rebuild)
+  before every sweep** so the current compiler is exercised.
 
 ## DO NOT rebuild the monitor / firmware
 
