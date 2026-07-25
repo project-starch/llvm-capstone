@@ -5,6 +5,31 @@
 silicon**, which is the paper's comprehensive-benchmark number, so it matters — but the micro-bench
 perf table comes first.
 
+## UPDATE 2026-07-25 — the toolchain answer is KNOWN; try the fast path first
+
+The board owner confirmed the monitor build reference is **`caplifive-system`** (the source of the
+working firmware). That repo **pins its own `capstone-c` submodule** (`sw/capstone-c`) at branch
+**`bugfix`, commit `508342a`** — *not* our tree's `master`@`8cda52c`. The two diverge right after
+`4899cf9`; the `bugfix` side carries two commits we never had, including **`3780447 "Fixed overly
+large alignment for gct"`** (gct = the global-constructor table the monitor uses) — the very
+plausible reason the regen frames differ (`s0–s11/−464` vs the good prebuilt's `s0–s6/−368`).
+
+**So the likely fix is not archaeology — it is using the right, already-pinned compiler.**
+**Fast path (do this first):**
+1. Build the monitor with `capstone-c` at `caplifive-system`'s pin: check out our
+   `capstone/capstone-c` submodule to `508342a` (or build against
+   `capstone/caplifive-system/sw/capstone-c`, already at `508342a`). Confirm the commit:
+   `git -C capstone/caplifive-system/sw/capstone-c log --oneline -1` → `508342a`.
+2. Regen + relink the QEMU monitor with **that** compiler
+   (`rm sbi_capstone_dom.c.S`, `make build A=opensbi-rebuild CAPSTONE_CC_PATH=<508342a checkout>`).
+3. Boot-test in QEMU: OpenSBI banner + a known-good domain (e.g. `matmult_int`) runs.
+4. If it boots → the "toolchain gap" is closed; **pin our `capstone-c` (and the ladder/monitor
+   builds) to `508342a`** and record it. Then land the large-`.rodata` monitor change and rebuild.
+
+Only if the fast path does **not** boot do the deeper audit (Paths A/B below). Also note the board
+owner asked "did you try reproducing the whole thing?" — i.e. build `caplifive-system` end-to-end
+as-is (its pinned submodules) before assuming a miscompile; a clean end-to-end build is the control.
+
 **Adopt the repo rules** (repo-root `CLAUDE.md`, permanent list at the bottom of
 `fpga-ladder-perf-task-B.md`). `source capstone/tests/capstone-test-env.sh`; read
 `state/current-state.md` and memory `project_opensbi_monitor_rebuild_include_wrapper` (the WARNING

@@ -78,15 +78,16 @@ The old bottleneck was per-run UART transfer. Two levers, in order:
   already-fixed compiler bug. **Delete `$OUT_DIR/ladder-fpga/*.dom` (or force-rebuild)
   before every sweep** so the current compiler is exercised.
 
-## DO NOT rebuild the monitor / firmware
+## Don't rebuild the monitor with our tree's `capstone-c` — use `caplifive-system`'s pin
 
-There is a confirmed **toolchain gap**: regenerating `fw_jump.elf` (QEMU) or the
-FPGA firmware monitor from the current `capstone-c` **boot-hangs** (zero serial);
-the working firmware is an unreproducible prebuilt (older compiler state, smaller
-frames). **Use the existing working prebuilt as-is.** Fixing the regen is a
-separate workstream (`plans/monitor-regen-audit-task-B.md`) that unblocks
-large-`.rodata`/SQLite on silicon. Memory
-`project_opensbi_monitor_rebuild_include_wrapper` (WARNING section).
+Regenerating `fw_jump.elf` (QEMU) or the FPGA firmware monitor from **our tree's**
+`capstone-c` (`master`@`8cda52c`) **boot-hangs** (zero serial). **Known fix
+(2026-07-25):** the working firmware is built by `caplifive-system`'s pinned
+`capstone-c` = branch **`bugfix`@`508342a`** (divergent from our `master`; carries
+a gct-alignment fix). So for any monitor rebuild, build with **that** compiler, not
+our tree's. Recovering + pinning this is `plans/monitor-regen-audit-task-B.md` (fast
+path); until it's pinned in-tree, **use the existing working prebuilt as-is** for
+board runs. Memory `project_opensbi_monitor_rebuild_include_wrapper`.
 
 ## Non-negotiables
 

@@ -1,0 +1,56 @@
+=================================================================
+==2475525==ERROR: AddressSanitizer: heap-use-after-free on address 0x7d672b1e0090 at pc 0x55fa897bacfb bp 0x7ffe89350d90 sp 0x7ffe89350d88
+WRITE of size 8 at 0x7d672b1e0090 thread T0
+    #0 0x55fa897bacfa in mrb_vm_exec /path/to/xlang/10/mruby/src/vm.c:2822:17
+    #1 0x55fa89796d37 in mrb_vm_run /path/to/xlang/10/mruby/src/vm.c:1131:12
+    #2 0x55fa897d58d4 in mrb_load_exec /path/to/xlang/10/mruby/mrbgems/mruby-compiler/core/parse.y:6890:7
+    #3 0x55fa897d6490 in mrb_load_detect_file_cxt /path/to/xlang/10/mruby/mrbgems/mruby-compiler/core/parse.y:6933:12
+    #4 0x55fa8973a1f4 in main /path/to/xlang/10/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:357:11
+    #5 0x7fd72c02a600 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+    #6 0x7fd72c02a717 in __libc_start_main csu/../csu/libc-start.c:360:3
+    #7 0x55fa8964fc94 in _start (/path/to/xlang/10/mruby/build/host/bin/mruby+0x10ac94) (BuildId: c66b422d5f7134d9cc57cdbcee1a465d6ca2737f)
+
+0x7d672b1e0090 is located 16 bytes inside of 1024-byte region [0x7d672b1e0080,0x7d672b1e0480)
+freed by thread T0 here:
+    #0 0x55fa896f5640 in realloc (/path/to/xlang/10/mruby/build/host/bin/mruby+0x1b0640) (BuildId: c66b422d5f7134d9cc57cdbcee1a465d6ca2737f)
+    #1 0x55fa8975a86e in mrb_realloc_simple /path/to/xlang/10/mruby/src/gc.c:226:8
+    #2 0x55fa8978f56f in stack_extend_alloc /path/to/xlang/10/mruby/src/vm.c:180:27
+    #3 0x55fa8978f56f in mrb_stack_extend /path/to/xlang/10/mruby/src/vm.c:200:5
+    #4 0x55fa897a5209 in mrb_vm_exec /path/to/xlang/10/mruby/src/vm.c:1675:9
+    #5 0x55fa89796d37 in mrb_vm_run /path/to/xlang/10/mruby/src/vm.c:1131:12
+    #6 0x55fa89792273 in mrb_run /path/to/xlang/10/mruby/src/vm.c:3032:10
+    #7 0x55fa89792273 in mrb_funcall_with_block /path/to/xlang/10/mruby/src/vm.c:566:13
+    #8 0x55fa89790f01 in mrb_funcall_argv /path/to/xlang/10/mruby/src/vm.c:577:10
+    #9 0x55fa89790f01 in mrb_funcall_id /path/to/xlang/10/mruby/src/vm.c:393:10
+    #10 0x55fa898149f9 in mrb_cmp /path/to/xlang/10/mruby/src/numeric.c:1777:9
+    #11 0x55fa89775984 in r_check /path/to/xlang/10/mruby/src/range.c:39:7
+    #12 0x55fa89775984 in range_ptr_init /path/to/xlang/10/mruby/src/range.c:80:3
+    #13 0x55fa89775867 in mrb_range_new /path/to/xlang/10/mruby/src/range.c:452:22
+    #14 0x55fa89799d33 in mrb_vm_exec /path/to/xlang/10/mruby/src/vm.c:2822:17
+    #15 0x55fa89796d37 in mrb_vm_run /path/to/xlang/10/mruby/src/vm.c:1131:12
+    #16 0x55fa897d58d4 in mrb_load_exec /path/to/xlang/10/mruby/mrbgems/mruby-compiler/core/parse.y:6890:7
+    #17 0x55fa897d6490 in mrb_load_detect_file_cxt /path/to/xlang/10/mruby/mrbgems/mruby-compiler/core/parse.y:6933:12
+    #18 0x55fa8973a1f4 in main /path/to/xlang/10/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:357:11
+    #19 0x7fd72c02a600 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+    #20 0x7fd72c02a717 in __libc_start_main csu/../csu/libc-start.c:360:3
+    #21 0x55fa8964fc94 in _start (/path/to/xlang/10/mruby/build/host/bin/mruby+0x10ac94) (BuildId: c66b422d5f7134d9cc57cdbcee1a465d6ca2737f)
+
+previously allocated by thread T0 here:
+    #0 0x55fa896f5640 in realloc (/path/to/xlang/10/mruby/build/host/bin/mruby+0x1b0640) (BuildId: c66b422d5f7134d9cc57cdbcee1a465d6ca2737f)
+    #1 0x55fa8975b05d in mrb_realloc_simple /path/to/xlang/10/mruby/src/gc.c:226:8
+    #2 0x55fa8975b05d in mrb_realloc /path/to/xlang/10/mruby/src/gc.c:240:8
+    #3 0x55fa8975b05d in mrb_malloc /path/to/xlang/10/mruby/src/gc.c:256:10
+    #4 0x55fa8975b05d in mrb_calloc /path/to/xlang/10/mruby/src/gc.c:274:9
+    #5 0x55fa89796b80 in stack_init /path/to/xlang/10/mruby/src/vm.c:109:28
+    #6 0x55fa89796b80 in mrb_vm_run /path/to/xlang/10/mruby/src/vm.c:1124:5
+    #7 0x55fa8981328f in mrb_init_core /path/to/xlang/10/mruby/src/init.c:50:3
+    #8 0x55fa8975945a in mrb_core_init_protect /path/to/xlang/10/mruby/src/error.c:588:5
+    #9 0x55fa89777390 in mrb_open_core /path/to/xlang/10/mruby/src/state.c:52:7
+    #10 0x55fa89777390 in mrb_open_allocf /path/to/xlang/10/mruby/src/state.c:91:20
+    #11 0x55fa89777390 in mrb_open /path/to/xlang/10/mruby/src/state.c:75:20
+    #12 0x55fa8973948d in main /path/to/xlang/10/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:278:20
+    #13 0x7fd72c02a600 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+    #14 0x7fd72c02a717 in __libc_start_main csu/../csu/libc-start.c:360:3
+    #15 0x55fa8964fc94 in _start (/path/to/xlang/10/mruby/build/host/bin/mruby+0x10ac94) (BuildId: c66b422d5f7134d9cc57cdbcee1a465d6ca2737f)
+
+SUMMARY: AddressSanitizer: heap-use-after-free /path/to/xlang/10/mruby/src/vm.c:2822:17 in mrb_vm_exec

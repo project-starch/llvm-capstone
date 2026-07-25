@@ -36,6 +36,21 @@ firmware reflash per benchmark would make the suite impractical. Baking into the
 image (tier-2a) is reserved for a final frozen artifact if we want one. Confirming the
 reserved region with the board owner is a one-line ask (`reply-boardowner-jtag-limits.md`).
 
+## Large read-only initializer delivery — board owner's decision (2026-07-25)
+
+For big `const` tables (SQLite) that overflow the `[base, base+0x1000)` PCC window if materialized
+as `li`/`sd` code, the delivery mechanism = copy the initializer bytes from the loaded image into a
+fresh domain **data** region and hand the domain a **data-authority cap** to it (the same
+data-cap-over-data-region case that already worked on the board 23-07); entry glue copies into its
+cap-table storage. **Endorsed owner: the HOST USERSPACE process — NOT the M-mode monitor.** Board
+owner: *"Better let the host userspace process do it rather than the monitor. But for now whatever
+works is fine."* So: **prototype on QEMU with whatever is simplest (monitor-memcpy is acceptable
+for now), but the design target is host-userspace population** — factor the prototype so the copy
+can move out of M-mode later. Never read initializer data through an execute cap. This also
+**reduces the monitor-side change** the SQLite path needs (see the monitor-regen note): if the host
+does the populate, the monitor may not need new code at all for large-RO. Full ask/answer thread is
+out-of-repo (`/tmp/capstone/`); design record here is canonical.
+
 ## What is already in hand (do not rebuild)
 
 - SQLite 3.53.3 **runs end-to-end in a pure-cap domain on QEMU** — CREATE/INSERT/
