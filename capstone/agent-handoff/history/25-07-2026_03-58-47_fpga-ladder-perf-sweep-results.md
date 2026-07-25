@@ -1,5 +1,52 @@
 # FPGA silicon-ladder perf sweep — on-board mcycle results
 
+## ✅ UPDATE 3 (2026-07-25, FINAL) — all 4 are REAL silicon miscompiles; Finding #1 REINSTATED
+
+With improved board transfer, the last two unverified rungs landed. Final,
+all-fresh-dom picture:
+
+| rung (fresh dom) | silicon | oracle | mcycle | verdict |
+|---|---:|---:|---:|---|
+| rv8_primes | 99991 | 99991 | 17,283,292 | ✅ PASS |
+| beebs_prime | 582955588 | 582955588 | 47,804 | ✅ PASS |
+| matmult_int | 1166210317 | 774662735 | 76,498 | ❌ miscompile |
+| beebs_crc32 | 1568735421 | 1703161001 | 311,902 | ❌ miscompile |
+| beebs_insertsort | 255001740 | 271779359 | 10,463 | ❌ miscompile |
+| beebs_recursion | 2095861164 | 1579141629 | 30,263 | ❌ miscompile |
+| coremark_matrix | — | 14343 | — | transfer never landed |
+
+**The stale-build explanation (UPDATE 1) is fully retracted as a cause.** The
+decisive evidence: `beebs_insertsort`'s dom, rebuilt 15:17 (well after the 24-07
+memcpy fix `d078839`), **passes QEMU at 271779359 and still returns 255001740 on
+silicon**. Its value coinciding with the pre-fix memcpy signature was a **red
+herring** — I over-trusted a single matching number. Same for matmult_int and
+beebs_recursion (verified earlier on fresh doms). So:
+
+- **Finding #1 below is REINSTATED**: 4/4 rungs that store into a global array
+  while keeping a live accumulator miscompile on silicon; 2/2 pure-scalar rungs
+  pass. QEMU-correct in every case, and this is with **shrink OFF** — so it is not
+  the 23-07 shrink→store hazard's workaround target either. Strongest on-silicon
+  corroboration of the open gp-captable bug, on current binaries.
+- **The stale-dom process bug was still real** and is fixed (runner rebuilds by
+  default + hard-fails on stale, `4be78cb`/`bd03316`) — it just wasn't the cause of
+  any miscompile. Keep the hardening; drop the explanation.
+- **Transfer reliability was the real blocker** for the missing verdicts. Fixed in
+  `fast_xfer.py`: Ctrl-C resync (escapes the `> ` continuation prompt a dropped
+  char leaves — Ctrl-U alone cannot), catch the wedge ActionTimeout and escalate to
+  the next tier instead of aborting the rung, plus a third 0.09s/100-char tier.
+  This recovered beebs_crc32 + beebs_insertsort on the next run.
+- **`coremark_matrix` remains unverified**: its dom wedges the shell at every tier,
+  so the `-Os` cscall hang (Finding #2) has still never been tested on a fresh
+  build. It needs a transfer path that doesn't depend on typing base64 into a
+  shell (or a smaller/chunk-split payload).
+
+**Lesson worth keeping:** one matching magic number is not identification. The
+stale-dom hypothesis was plausible and the process bug was genuine, but the
+confirming test (rebuild → re-run on hardware) was the only thing that could
+settle it, and it should have come before the retraction was written up.
+
+---
+
 ## ⚠⚠ UPDATE 2 (2026-07-25, fresh-dom re-sweep) — SUPERSEDES the stale-build claim below for matmult/recursion
 
 The "stale build" correction in UPDATE 1 was **over-generalized**. A re-sweep with
