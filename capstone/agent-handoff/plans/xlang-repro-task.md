@@ -36,6 +36,35 @@ bug **fire deterministically** and **document the boundary** — you are not fix
 
 ---
 
+## 1a. Scope & autonomy — own this end to end (no per-row sign-off)
+
+**This is a standing, autonomous task. Do the whole set; don't wait for us between rows.** The
+mission is: **reproduce every bug in the §6 table, each with both a native-ASan trace and a
+RISC-V QEMU run**, and land them all. Work at your own pace, in whatever order is efficient
+(the mruby Tier-1 cluster shares one `3.1.0` checkout — batch it), and integrate as you go.
+
+- **Definition of done for the whole task:** every row in §6 has its `<row>/` artifact directory
+  with `target.md`, `boundary.md`, the trigger, `asan.txt` (native ASan heap-UAF / double-free),
+  and `build.sh` + `run.sh` that reproduce **both** the native-ASan crash **and** the RISC-V
+  QEMU run (`qemu-riscv64 -L /usr/riscv64-linux-gnu …`). Row 10 (already landed) is the template
+  — match its shape.
+- **Suggested flow:** finish the native-ASan repros across the cluster first (fast iteration,
+  clean traces), then do the RISC-V QEMU pass across the same builds. Or interleave per row —
+  your call. Either way both must be present at the end.
+- **Don't ask us to pick the next row or approve each one.** If a specific bug turns out to be
+  infeasible on a stock toolchain (needs a since-removed gem, won't build at the pinned version,
+  no public trigger), **skip it, note why in that row's `target.md`, and move on** — a short
+  written "skipped because X" is a perfectly good outcome for a hard row. Flag us only when you
+  finish the set, or if you hit something that blocks *many* rows at once.
+- **Commit + push to your branch as you complete rows** (a branch like `xlang-repro` or the
+  existing CVE branch is fine); we integrate from there. Small, per-row-or-per-batch commits.
+- **HARD RULE — no personal data in committed files.** ASan traces embed the absolute build
+  path in every frame. **Scrub it before committing** (build under a neutral dir, or
+  `sed -i "s#$HOME/<...>/#/path/to/#g" asan.txt`). No usernames, real names, or home paths in
+  any committed file. Keep the file/line/offset info — only the leading path changes.
+
+---
+
 ## 2. What a "reproducible artifact" must contain
 
 For each bug, produce a self-contained directory `xlang/<id>/` with:
