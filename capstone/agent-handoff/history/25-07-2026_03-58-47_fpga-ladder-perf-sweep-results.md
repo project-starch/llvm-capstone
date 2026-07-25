@@ -1,5 +1,44 @@
 # FPGA silicon-ladder perf sweep — on-board mcycle results
 
+## ⚠⚠ UPDATE 2 (2026-07-25, fresh-dom re-sweep) — SUPERSEDES the stale-build claim below for matmult/recursion
+
+The "stale build" correction in UPDATE 1 was **over-generalized**. A re-sweep with
+**freshly-rebuilt post-fix doms** (runner now rebuilds-by-default) shows the core
+silicon divergence is **REAL, not stale**:
+
+| rung (fresh dom) | silicon retval | oracle | mcycle | verdict |
+|---|---:|---:|---:|---|
+| rv8_primes | 99991 | 99991 | 17,283,292 | ✅ PASS |
+| beebs_prime | 582955588 | 582955588 | 47,804 | ✅ PASS |
+| **matmult_int** | 1166210317 | 774662735 | 76,498 | ❌ **real miscompile** |
+| **beebs_recursion** | 2095861164 | 1579141629 | 30,263 | ❌ **real miscompile** |
+| coremark_matrix | — (transfer flaked) | 14343 | — | no verdict |
+| beebs_crc32 | — (transfer flaked) | 1703161001 | — | no verdict |
+| beebs_insertsort | — (transfer flaked) | 271779359 | — | no verdict |
+
+- `matmult_int` and `beebs_recursion` return the **same wrong value** as the stale
+  run on a **freshly-built dom**, while QEMU is correct. The memcpy fix (`d078839`)
+  does not change their codegen (recursion has **no** local const array at all), so
+  these were never the stale/memcpy artifact — they are genuine QEMU-correct/
+  silicon-wrong miscompiles, i.e. the **open gp-captable silicon bug**
+  (`23-07-2026_17-30-00_gp-captable-silicon-array-loop-miscompute-OPEN.md`), and
+  they persist with **shrink OFF** (so not the 23-07 shrink→store workaround's target).
+- Only `beebs_insertsort` fits the stale/memcpy story (its `255001740` = the exact
+  pre-fix memcpy signature, and it *does* have a local const array) — but the
+  re-sweep couldn't confirm it because its transfer flaked all attempts.
+- The 3 "no verdict" rungs failed at **transfer**, not compute: fast_xfer over the
+  board UART/websocket non-deterministically drops (empty-file sha `e3b0c442…`,
+  unterminated-quote `> ` shell prompt, `DN_` marker timeouts). So `coremark_matrix`'s
+  `-Os` hang (Finding #2) is **still unverified** on a fresh dom.
+
+**Bottom line:** UPDATE 1's process-bug finding is correct and the runner fix
+stands, but its "these 4 don't corroborate the RTL/gp-captable bug" conclusion is
+**retracted for matmult_int + beebs_recursion** — those ARE real silicon
+miscompiles. Next: (a) robuster transfer / prompt-sync to clear the 3 no-verdicts;
+(b) fold matmult/recursion into the open gp-captable silicon-bug investigation.
+
+---
+
 ## ⚠ CORRECTION (2026-07-25, same day, post-sweep) — the 4 "miscompiles" were a STALE BUILD
 
 Finding #1 below ("gp-captable silicon miscompile", 4/4 array-store rungs) is

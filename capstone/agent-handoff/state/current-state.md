@@ -4,24 +4,33 @@ Minimal snapshot. Read first in every session.
 
 ## Latest (2026-07-25) — silicon-ladder perf sweep on the Genesys2 FPGA (on-board mcycle)
 
-The 7 ready silicon-ladder rungs were run on the CVA6 FPGA; **6/7 produced real
-on-board `mcycle`, 2/7 also pass `retval==oracle`**. Trustworthy silicon perf
-points: `rv8_primes` (mcycle 17,286,789) and `beebs_prime` (47,796).
+**Net after two correction passes (2026-07-25), fresh-dom re-sweep settled it:**
 
-**CORRECTION (2026-07-25, post-sweep): the 4 "silicon miscompiles" were a STALE
-BUILD, not an RTL/silicon bug.** The runner reused pre-built `.dom` files that
-predate the 24-07 sub-cap memcpy `stc`-packing fix (commit `d078839`); it never
-rebuilds an existing dom. `beebs_insertsort`'s silicon value `255001740` is the
-*exact* pre-fix memcpy signature. Rebuilt against the current compiler, **all 4
-(matmult_int, beebs_crc32, beebs_insertsort, beebs_recursion) pass QEMU** with the
-oracle value. So they are the already-fixed compiler bug, **not** silicon
-divergence — the earlier "4/4 array-store = RTL corroboration" reading is
-RETRACTED. The mcycle numbers for those 4 are of miscompiled runs → discard.
-**Next: a board re-sweep with freshly-built doms to confirm silicon now matches
-(6/7 correct expected).** The one genuinely RTL-leaning bug remains the separate
-23-07 `shrink`→store hazard, worked around by shrink-off (not hit here).
-`coremark_matrix` (only `-Os` rung) **hangs the cscall even as the first domain**
-(code-specific, still open). Full table + mechanics + this correction:
+1. **A process bug WAS real and is fixed:** the runner reused pre-built `.dom`
+   files predating the 24-07 sub-cap memcpy `stc`-packing fix (`d078839`) and its
+   artifact dir differed from the build script's, so it ran stale binaries.
+   `beebs_insertsort`'s `255001740` is the exact pre-fix memcpy signature (and it
+   has a local const array), so that rung was the stale/memcpy artifact. Runner
+   now rebuilds-by-default + hard-fails on stale (commit `4be78cb`/`bd03316`).
+2. **BUT the core silicon divergence is REAL, not stale.** Re-run with FRESH
+   post-fix doms: `matmult_int` (`1166210317` vs `774662735`) and `beebs_recursion`
+   (`2095861164` vs `1579141629`) are **still wrong on silicon while QEMU-correct**,
+   with the *same* values as before (their codegen is unchanged by the memcpy fix —
+   recursion has no const-array copy at all). These are genuine QEMU-correct/
+   silicon-wrong miscompiles = instances of the open gp-captable silicon bug
+   (`history/23-07-2026_17-30-00_gp-captable-silicon-array-loop-miscompute-OPEN.md`),
+   even with shrink OFF. So my intermediate "all 4 were stale" retraction was
+   WRONG; the original note's array-store observation was substantially right.
+3. **PASS on silicon (fresh doms):** `rv8_primes` (mcycle 17,283,292) and
+   `beebs_prime` (47,804) — the trustworthy perf points.
+4. **No verdict yet (transfer flakiness, not compute):** `coremark_matrix`,
+   `beebs_crc32`, `beebs_insertsort` — the fast_xfer over the board UART/websocket
+   is non-deterministically dropping (empty-file sha, unterminated-quote shell
+   prompt, timeouts), hitting different rungs each run. Getting these needs a more
+   robust transfer / prompt-sync, or retries. `coremark_matrix`'s `-Os` hang is
+   therefore STILL unverified (its transfer never landed on the fresh run).
+
+Full table + mechanics + this trail:
 `history/25-07-2026_03-58-47_fpga-ladder-perf-sweep-results.md`.
 
 Runner: `tests/rtl-smoke/fpga_driver/run_ladder_perf_fpga.py` — one full
