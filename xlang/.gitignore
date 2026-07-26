@@ -1,2 +1,16 @@
+# Vendored upstream sources, cloned on demand by each row's build.sh.
+# These are third-party trees pinned to a SHA -- never commit them.
 **/mruby/
+**/mruby-io/
+**/rlua/
+**/pulse-binding-rust/
+
+# Build output.
+**/target/
+**/build/
+
+# Rake/mruby build stamps (build_config.rb.lock etc.) -- generated, not inputs.
 **/*.lock
+# ...but Cargo.lock IS an input: it pins transitive crate versions, which §2
+# ("hermetic", "pin every version") wants captured rather than resolved afresh.
+!**/Cargo.lock
