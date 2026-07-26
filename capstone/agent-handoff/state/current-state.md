@@ -2,6 +2,22 @@
 
 Minimal snapshot. Read first in every session.
 
+## Latest (2026-07-26) — xlang cross-language repro corpus (separate track from the board work)
+
+**14 of 15 rows reproduce; 12 of 15 reproduce the temporal-borrow class the
+benchmark is about.** All 15 `run.sh` pass and assert their expected outcome.
+Stock toolchain only — no Capstone compiler, no QEMU fork, no board.
+
+- Artifacts: `xlang/` (start at `xlang/README.md`).
+- Full state, evidence and open decisions:
+  `history/26-07-2026_18-04-21_xlang-phase1-state.md`.
+- **Do not quote "14/15" for the temporal benchmark** — rows 6 and 11 reproduce as
+  *spatial* heap-buffer-overflows, not UAFs, which contradicts the companion note's
+  "every defect here is a temporal borrow" claim. Row 7 does not reproduce and
+  appears not to exist as specified.
+- Corpus is no longer monolingual: Lua↔Rust 2/2 and Rust→C 1/1 now reproduce, so
+  the paper's "two subjects" framing is backed by artifacts for the first time.
+
 ## Latest (2026-07-25) — silicon-ladder perf sweep on the Genesys2 FPGA (on-board mcycle)
 
 **FINAL, verified on FRESHLY-BUILT post-fix doms (2026-07-25). The original
