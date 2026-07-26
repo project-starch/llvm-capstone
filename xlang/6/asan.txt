@@ -1,0 +1,68 @@
+=================================================================
+==2658822==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7c97837e04a0 at pc 0x562387d8d72b bp 0x7ffce48056f0 sp 0x7ffce48056e0
+WRITE of size 8 at 0x7c97837e04a0 thread T0
+    #0 0x562387d8d72a in mrb_vm_exec /path/to/xlang/6/mruby/src/vm.c:1788
+    #1 0x562387db03dc in mrb_vm_run /path/to/xlang/6/mruby/src/vm.c:1601
+    #2 0x562387db5e07 in mrb_top_run /path/to/xlang/6/mruby/src/vm.c:3449
+    #3 0x562387de4e12 in mrb_load_exec mrbgems/mruby-compiler/core/parse.y:7786
+    #4 0x562387de5271 in mrb_load_detect_file_cxt mrbgems/mruby-compiler/core/parse.y:7829
+    #5 0x562387d262f9 in main /path/to/xlang/6/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:355
+    #6 0x7f078442a600 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:59
+    #7 0x7f078442a717 in __libc_start_main_impl ../csu/libc-start.c:360
+    #8 0x562387d24624 in _start (/path/to/xlang/6/mruby/build/host/bin/mruby+0x114624) (BuildId: 2fd0cbd93418bb0bc1eef71601a0b7e93507b6db)
+
+0x7c97837e04a0 is located 32 bytes after 1024-byte region [0x7c97837e0080,0x7c97837e0480)
+allocated by thread T0 here:
+    #0 0x7f078492a6cf in realloc ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:81
+    #1 0x562387e149f1 in mrb_basic_alloc_func /path/to/xlang/6/mruby/src/allocf.c:35
+    #2 0x562387d4a925 in mrb_realloc_simple /path/to/xlang/6/mruby/src/gc.c:202
+    #3 0x562387d4a9c2 in mrb_realloc /path/to/xlang/6/mruby/src/gc.c:216
+    #4 0x562387d4aa51 in mrb_malloc /path/to/xlang/6/mruby/src/gc.c:232
+    #5 0x562387d88512 in stack_init /path/to/xlang/6/mruby/src/vm.c:119
+    #6 0x562387db0222 in mrb_vm_run /path/to/xlang/6/mruby/src/vm.c:1587
+    #7 0x562387db5e07 in mrb_top_run /path/to/xlang/6/mruby/src/vm.c:3449
+    #8 0x562387d5ea55 in mrb_load_proc /path/to/xlang/6/mruby/src/load.c:706
+    #9 0x562387e542f4 in mrb_init_mrblib /path/to/xlang/6/mruby/build/host/mrblib/mrblib.c:2515
+    #10 0x562387e27db0 in mrb_init_core /path/to/xlang/6/mruby/src/init.c:48
+    #11 0x562387d70468 in init_gc_and_core /path/to/xlang/6/mruby/src/state.c:35
+    #12 0x562387d43151 in mrb_core_init_protect /path/to/xlang/6/mruby/src/error.c:741
+    #13 0x562387d70541 in mrb_open_core /path/to/xlang/6/mruby/src/state.c:52
+    #14 0x562387d705a1 in mrb_open /path/to/xlang/6/mruby/src/state.c:75
+    #15 0x562387d24a95 in main /path/to/xlang/6/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:279
+    #16 0x7f078442a600 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:59
+    #17 0x7f078442a717 in __libc_start_main_impl ../csu/libc-start.c:360
+    #18 0x562387d24624 in _start (/path/to/xlang/6/mruby/build/host/bin/mruby+0x114624) (BuildId: 2fd0cbd93418bb0bc1eef71601a0b7e93507b6db)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow /path/to/xlang/6/mruby/src/vm.c:1788 in mrb_vm_exec
+Shadow bytes around the buggy address:
+  0x7c97837e0200: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7c97837e0280: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7c97837e0300: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7c97837e0380: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7c97837e0400: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+=>0x7c97837e0480: fa fa fa fa[fa]fa fa fa fa fa fa fa fa fa fa fa
+  0x7c97837e0500: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7c97837e0580: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7c97837e0600: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7c97837e0680: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7c97837e0700: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==2658822==ABORTING

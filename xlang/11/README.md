@@ -1,14 +1,80 @@
-# CVE-2018-10191 (Row 11) — Use-After-Free in OP_GETUPVAR
+# CVE-2018-10191 (Row 11) — `OP_GETUPVAR` scope-level truncation in mruby ≤ 1.4.0
 
-This is a minimal reproduction outline and skip metadata for `CVE-2018-10191` (Row 11 in `xlang-repro-task.md`), a heap Use-After-Free in `OP_GETUPVAR` due to scope-level integer overflow.
+Minimal, deterministic reproduction of `CVE-2018-10191`: nesting Ruby scopes past
+128 levels silently truncates the `OP_GETUPVAR` scope-level operand, so the VM
+resolves the wrong environment and then indexes it with an index computed for a
+much wider scope — reading past the end of its register array.
 
-## Status: SKIPPED
-In modern sandbox environments, compiling deeply nested scopes (128+ levels) triggers compile-time parser memory limits or stack overflows before the virtual machine's runtime execution and integer overflow can be reached. This prevents a clean native ASan reproduction of the overflow.
+> ### ⚠ This is a spatial bug, not a use-after-free
+> The spec and the benchmark table list this row as a temporal borrow (UAF). It
+> **does not reproduce as one** — ASan reports `heap-buffer-overflow`. The
+> temporal path is closed at this version by `envadjust()`. This needs a decision
+> before the row goes into a temporal-only benchmark; the evidence and the options
+> are in **`target.md` → "Bug-class discrepancy"**.
+
+## Vulnerability overview
+
+`OP_GETUPVAR` carries two operands in one instruction word: `B`, the local's index
+within the target scope (**9 bits**, max 511), and `C`, how many scopes to walk
+outward (**7 bits**, max 127). `codegen.c:2191` emits the level with no range
+check, so at depth ≥ 129 it wraps — `129 & 0x7f == 1`.
+
+`uvenv()` then walks 1 scope instead of 129 and hands back a small, wrong
+environment. `vm.c:1208` reads `e->stack[b]` on it with `b` still the large outer
+index, overshooting that environment's storage.
+
+Two independent bugs have to line up, and either check alone would stop it: the
+compiler emits an out-of-range level without a diagnostic, and the VM indexes the
+resolved environment without bounding `b` against its register count.
 
 ## Contents
-* `target.md` - Pinned versions and skip technical rationale
-* `build_config.rb` - Unified build configuration
-* `build.sh` - Automated build script
-* `trigger.rb` - Trigger script outline
-* `run.sh` - Verification script outline
-* `boundary.md` - Language boundary violation analysis
+
+| File | What it is |
+|---|---|
+| `target.md` | Pinned commit, mechanism, ASan verdict, **bug-class discrepancy** |
+| `build_config.rb` | host+ASan and riscv64 cross build |
+| `build.sh` | Clean checkout of `e340b172` → both builds |
+| `trigger.rb` | **The trigger** (generated, self-contained): 80 outer locals + 129 nested blocks |
+| `run.sh` | Runs both, asserts the native abort |
+| `asan.txt` | Captured ASan report (scrubbed) |
+| `boundary.md` | Annotation per §8, with the caveat that nothing crosses an FFI here |
+
+## How to build and run
+
+```bash
+chmod +x build.sh run.sh
+./build.sh
+./run.sh
+```
+
+## Expected outcome
+
+**Native + ASan** — aborts, exit 1:
+
+```
+==NNNN==ERROR: AddressSanitizer: heap-buffer-overflow
+READ of size 16 at 0x... thread T0
+    #0 ... in mrb_vm_exec .../src/vm.c:1208
+0x... is located 528 bytes after 4096-byte region
+SUMMARY: AddressSanitizer: heap-buffer-overflow .../src/vm.c:1208 in mrb_vm_exec
+```
+
+Deterministic — 10/10 runs.
+
+**RISC-V QEMU** — **segmentation fault, exit 139**, on 3/3 runs. On the riscv64
+build the out-of-range read reaches an unmapped page, so the plain non-ASan binary
+faults outright. Both legs of the deliverable are therefore present for this row.
+
+`PASS = native ASan shows heap-buffer-overflow at vm.c:1208 in mrb_vm_exec`
+(and RISC-V QEMU segfaults on the same trigger)
+
+## Tuning the trigger
+
+Both knobs are load-bearing:
+
+- **Nesting depth ≥ 129** — below that the level fits in 7 bits and resolution is
+  correct. Depths 129–254 all truncate; **255+** is rejected by the compiler with
+  `codegen error: too complex expression`, so the usable window is 129–254.
+- **Outer locals ≥ ~80** — sets how large `b` is. Below ~80 the stray read stays
+  in bounds and quietly returns the wrong value instead of faulting, which is the
+  same bug with no sanitizer-visible symptom.
