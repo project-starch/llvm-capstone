@@ -26,7 +26,21 @@ from fpga_driver.run_rtl_smoke import login_root, POWER_ON_SETTLE, POWER_CYCLE_O
 from fpga_driver.fast_xfer import fast_put
 from socketio.exceptions import BadNamespaceError
 
-URL = open(os.path.expanduser("~/.config/capstone/fpga-board-url")).read().strip()
+# The console URL embeds the access token in its PATH, so it is a secret: it must
+# never be committed, echoed into a captured log, or persisted. The project rule is
+# to keep it in an env var for the duration of a run, so FPGA_URL wins; the dotfile
+# is only a fallback for setups that already had one. Prefer FPGA_URL.
+def _board_url():
+    u = os.environ.get("FPGA_URL")
+    if u:
+        return u.strip()
+    p = os.path.expanduser("~/.config/capstone/fpga-board-url")
+    if os.path.exists(p):
+        return open(p).read().strip()
+    raise SystemExit("no board URL: export FPGA_URL='https://<host>/<token>/' "
+                     "for this run (do not commit or persist it)")
+
+URL = _board_url()
 IMG = pathlib.Path(os.path.expanduser("~/capstone-b-artifacts/fw_payload_fpga_up_gpfree.bin"))
 IMG_NAME = "fw_payload_fpga_up_gpfree.bin"
 BITSTREAM = "working-caplifive-captype-fixed.bit"
@@ -225,7 +239,16 @@ def main():
         rb = nvbit(console)
         log(f"took the lock; resident NV bitstream = {rb!r}")
         if rb != BITSTREAM:
-            log(f"resident bitstream {rb!r} != {BITSTREAM!r}; re-flashing (authorized restore)")
+            # HARD STOP. Flashing reprograms a SHARED physical board and is the one
+            # persistent write this console exposes, so it needs an explicit human go
+            # every time -- "authorized restore" was too weak a justification to do it
+            # unattended mid-sweep. Opt in per run with FPGA_ALLOW_FLASH=1.
+            if os.environ.get("FPGA_ALLOW_FLASH") != "1":
+                raise SystemExit(
+                    f"HARD STOP: resident bitstream is {rb!r}, expected {BITSTREAM!r}.\n"
+                    "Re-flashing is NOT done automatically -- it reprograms a shared board.\n"
+                    "Ask the user, then re-run with FPGA_ALLOW_FLASH=1 if they approve.")
+            log(f"resident bitstream {rb!r} != {BITSTREAM!r}; re-flashing (explicitly approved)")
             console.power(True); time.sleep(POWER_ON_SETTLE)
             console.flash_bitstream(BITSTREAM)
             console.power(False); time.sleep(POWER_CYCLE_OFF)
