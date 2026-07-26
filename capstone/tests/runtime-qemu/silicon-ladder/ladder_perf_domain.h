@@ -85,8 +85,13 @@ static inline unsigned long ladder_rd_minstret(void) {
  * is never taken.
  *
  *   returns (END marker appears) => entry path is FINE for this exact binary
- *                                   => the hang is INSIDE the compute (compiler)
- *   still hangs                   => the hang is at/before entry (monitor/RTL)
+ *                                   => the hang is INSIDE the compute
+ *   still hangs                   => the hang is at/before entry
+ *
+ * This localizes the LAYER only, never the culprit. "Inside the compute" does not
+ * mean "a compiler bug": the compute runs correctly under QEMU with the identical
+ * binary, so whatever it is, it is a silicon divergence -- either codegen that hits
+ * an RTL corner QEMU does not model, or an RTL bug outright. Do not collapse the two.
  *
  * `func` is the gate because it is genuinely opaque: nothing passes it (the
  * controller sets no func, domain_main is called from assembly glue), so the

@@ -11,12 +11,26 @@
    rungs complete a full round-trip on silicon when the compute is branched over), so
    an entry-side barrier is the wrong layer. The previous "build `fence.i` into board
    firmware" instruction here rested on the retracted domain-entry framing.
-   Next diagnostic is cheap and needs no firmware change: **bisect within the
-   compute** — shrink `matmult_int -O1`'s iteration count / matrix dimension until it
-   returns, and find the threshold. A hang that vanishes below some trip count points
-   at a corrupted loop bound (the leading hypothesis: the known miscompute landing on
-   a loop counter rather than a checksum); one that persists at trivial size points
-   elsewhere.
+   Next diagnostics are cheap and need no firmware change. **Static analysis on
+   2026-07-27 replaced the old "shrink the iteration count" step (task #64, deleted)
+   with two sharper board tests**, both prepared offline, one boot each:
+   - **#65 (`matmult_int`)** — at −O1 it emits 8 conditional branches, **all `bne`**;
+     the same source at −O0 emits 8, **all `blt`**. `bne` exits on exact equality and
+     can be overshot by a perturbed loop counter (→ infinite loop); `blt` exits on
+     ordering and cannot (→ wrong answer). Same rung, one opt level apart, and the
+     symptom flips with the branch kind. Test: rebuild −O1 with ordered exits forced.
+     **Prediction: it stops hanging and returns a WRONG value**, which would unify the
+     miscompute and the hang into one root cause (collapsing this with task #49).
+   - **#66 (`coremark_matrix`)** — does NOT fit that story (its exits are ordered,
+     17 `bgeu`). But its dimension `N` is computed at runtime by
+     `while (j < blksize) { i++; j = i*i*2*4; }` → `bgeu` at `0x10428` driven by
+     `mulw` at `0x10444`; an ordered exit still never fires if the multiply never
+     reaches 666, and `N` feeds every downstream bound via `p->N`. Test: return `N`
+     straight out of `core_init_matrix`. Hangs ⇒ that loop; `N != 9` ⇒ the miscompute
+     caught red-handed; `N == 9` ⇒ look downstream.
+   Caveat carried forward: fragility is an **amplifier, not a cause** —
+   `beebs_recursion` −O1 has `bne` backedges and passes. Trail:
+   `history/27-07-2026_00-28-51_loop-exit-condition-splits-hang-from-miscompute.md`.
 2. **Silicon-validate the 16/32 KiB code window** (QEMU-validated only). Unlocks full
    CoreMark and Dhrystone, which is what the benchmark set actually needs for
    representativeness — no measured kernel currently chases pointers.

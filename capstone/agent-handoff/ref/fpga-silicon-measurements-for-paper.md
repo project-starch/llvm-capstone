@@ -171,6 +171,22 @@ An assumption in the paper becomes a measurement, and the claim gets stronger.
   checksum (`matmult_int` miscomputes at −O0 and hangs at −O1). Trail:
   `history/26-07-2026_23-56-07_the-hang-is-in-the-compute-not-at-domain-entry.md`.
   `beebs_crc32` cannot build at −O1+ and `beebs_insertsort` crashes clang at −O1.
+  **Sharpened 2026-07-27 by static analysis (no board time):** `matmult_int` at −O1
+  emits 8 conditional branches, **all `bne`**; the same source at −O0 emits 8, **all
+  `blt`**. `bne` exits on exact equality and can be overshot by a perturbed loop
+  counter (infinite loop); `blt` exits on ordering and cannot (wrong answer). So the
+  miscompute and the hang are plausibly **one fault with two symptoms**, selected by
+  the emitted branch. Caveat: not a global discriminator — `beebs_recursion` −O1 also
+  has `bne` backedges and passes, so fragility is an amplifier, not the cause. And it
+  does not cover `coremark_matrix`, whose exits are ordered (`bgeu`) but whose matrix
+  dimension `N` is computed at runtime by `while (j < blksize) { j = i*i*2*4; }` —
+  an ordered exit that still never fires if the `mulw` result never reaches 666.
+  Also corrected there: the "no discriminating instruction" sweep had been run with the
+  Capstone-triple disassembler, which prints every M-extension op as `<unknown>`; re-run
+  with `--triple=riscv64 --mattr=+m` the conclusion **stands** (`beebs_prime` passes
+  with `mul`+`remu`), and the blind spot was only 2% of instructions, uniform across
+  binaries. Trail:
+  `history/27-07-2026_00-28-51_loop-exit-condition-splits-hang-from-miscompute.md`.
 - **The pointer-chasing axis is missing entirely.** No measured kernel chases
   pointers, yet capabilities are 16 B against an 8-byte pointer, so linked structures
   double memory traffic — historically where capability machines hurt most. The set
