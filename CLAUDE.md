@@ -19,8 +19,20 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
 - **Never mention any real person by name — anywhere.** No PI, supervisor,
   colleague, board owner, or collaborator names in commits, code, docs, reports,
   or any committed/shared content. Use neutral roles ("the board owner", "the
-  collaborator", "the PI"). This is permanent and absolute. (Upstream `lldb/`,
-  `llvm/` etc. files are not ours — leave their names alone.)
+  collaborator", "the external collaborator", "the PI"). This is permanent and
+  absolute. (Upstream `lldb/`, `llvm/` etc. files are not ours — leave their
+  names alone.)
+  - **This includes the commit-message SUBJECT line, and includes naming a
+    collaborator even when merely *referring to* or *assigning work to* them**
+    (e.g. "task for <name>" → "task for the external collaborator"). A name in a
+    commit subject is the exact mistake made on 2026-07-25 (had to be amended +
+    force-pushed) — do not repeat it.
+  - **MANDATORY pre-commit AND pre-push check:** before every `git commit` and
+    before every `git push`, scan the full commit message *and* the staged diff
+    for personal names (grep the message and `git diff --cached` for known
+    collaborator/PI names). Treat any hit as a release-blocking error — fix
+    before committing. If a named commit was already pushed, amend/rewrite and
+    force-push, and notify the other lanes (they must re-sync).
 - No `Co-Authored-By:` lines in commits.
 - Never commit debug/report files (`*_DEBUG_CHECKPOINT.md`, session notes).
 - Active plans live in `capstone/agent-handoff/plans/` (committed, portable across machines and agents).
