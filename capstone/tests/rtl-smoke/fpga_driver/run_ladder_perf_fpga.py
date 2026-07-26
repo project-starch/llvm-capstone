@@ -212,6 +212,8 @@ def main():
     locked = False
     gdb_up = False
     results = {}
+    debug_lines = {}      # rung -> raw per-probe values (gp_diag only)
+    instret_lines = {}    # rung -> (retired instructions, minstret phase)
     try:
         users = console.user_count()
         log(f"users connected: {users}")
@@ -248,15 +250,29 @@ def main():
         for r in RUNGS:
             dom = ART / f"{r}.dom"
             dom_remote = f"/tmp/{r}.dom"
-            try:
-                log(f"[{r}] power-cycle + reload firmware")
-                cold_boot(console, prompt)
-                fast_put(console, ctl_gz, "/tmp/lpc.gz", CTL_REMOTE, ctl_sha, True, log)
-                fast_put(console, gzip_file(dom), f"/tmp/{r}.gz", dom_remote,
-                         sha16(dom), False, log)
-            except (ActionTimeout, BadNamespaceError, RuntimeError) as e:
+            # Boot + transfer is one RETRYABLE unit. A single GDB timeout during
+            # `monitor reset halt`, or a fast_put wedge, used to skip the rung
+            # outright -- on 26-07 that silently dropped the beebs_prime_noins
+            # CONTROL, which was the whole point of that session. cold_boot is
+            # idempotent, so a retry costs a reload and nothing else; losing a
+            # rung costs the run's conclusion.
+            dom_gz = gzip_file(dom)
+            dom_sha = sha16(dom)
+            for boot_attempt in range(1, 4):
+                try:
+                    log(f"[{r}] power-cycle + reload firmware (attempt {boot_attempt})")
+                    cold_boot(console, prompt)
+                    fast_put(console, ctl_gz, "/tmp/lpc.gz", CTL_REMOTE, ctl_sha, True, log)
+                    fast_put(console, dom_gz, f"/tmp/{r}.gz", dom_remote,
+                             dom_sha, False, log)
+                    break
+                except (ActionTimeout, BadNamespaceError, RuntimeError) as e:
+                    log(f"  {r}: boot/transfer failed ({e}); retrying")
+                    if not getattr(console.sio, "connected", False):
+                        wait_connected(console, 45)
+            else:
                 results[r] = (None, None, None)
-                log(f"  {r}: boot/transfer failed ({e}); skipping")
+                log(f"  {r}: boot/transfer failed on every attempt; skipping")
                 if not getattr(console.sio, "connected", False):
                     wait_connected(console, 45)
                 continue
@@ -271,6 +287,20 @@ def main():
                     if m:
                         results[r] = (m.group(1), int(m.group(2)), m.group(3))
                         log(f"  {r}: retval={m.group(1)} cycles={m.group(2)} ran={m.group(3)}")
+                        # instret/phase are optional (perf rungs only). phase=1
+                        # means minstret faulted the domain; phase=2 means it read.
+                        ins = re.search(rf"RESULT {r} .*instret=(\d+) phase=(\d+)", out)
+                        if ins:
+                            instret_lines[r] = (int(ins.group(1)), int(ins.group(2)))
+                            log(f"  {r}: instret={ins.group(1)} (minstret phase="
+                                f"{ins.group(2)})")
+                        # The gp_diag rung also prints raw per-probe values; that
+                        # line IS the point of running it, so surface it in the log
+                        # rather than leaving it buried in the UART capture.
+                        d = re.search(rf"DEBUG {r} ((?:dbg\d+=\d+ ?)+)", out)
+                        if d:
+                            log(f"  {r}: DEBUG {d.group(1).strip()}")
+                            debug_lines[r] = d.group(1).strip()
                         break
                     log(f"  {r}: ran but no RESULT line; attempt {attempt}")
                 except ActionTimeout:
@@ -300,15 +330,19 @@ def main():
         console.close()
 
     # report
-    lines = ["rung                 retval        oracle        cycles(mcycle)  correct"]
+    lines = ["rung                 retval        oracle        cycles(mcycle)  instret       correct"]
     allok = True
     for r in RUNGS:
         got, cyc, ran = results.get(r, (None, None, None))
         oracle = oracles[r]
         ok = (got == oracle and ran == str(0xD09E))
         allok = allok and ok
+        ins = instret_lines.get(r, (None, None))[0]
         lines.append(f"{r:<20} {str(got):<13} {oracle:<13} {str(cyc):<15} "
-                     f"{'YES' if ok else 'NO'}")
+                     f"{str(ins):<13} {'YES' if ok else 'NO'}")
+    for r in RUNGS:
+        if r in debug_lines:
+            lines.append(f"{r} raw probes: {debug_lines[r]}")
     report = "\n".join(lines)
     print("\n==== silicon-ladder FPGA perf ====\n" + report)
     pathlib.Path(RESULTS_OUT).write_text(report + "\n")

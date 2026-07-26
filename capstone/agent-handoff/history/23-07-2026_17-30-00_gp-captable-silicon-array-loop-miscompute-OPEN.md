@@ -1,5 +1,20 @@
 # OPEN: gp-captable domains miscompute a global-array store+accumulate loop on silicon (correct on QEMU)
 
+> ## ⚠️ 25-07-2026 — THE ROOT CAUSE BELOW IS REFUTED. READ THIS FIRST.
+>
+> Everything below concluded the cause is an **RTL `shrink`→store forwarding hazard**, with
+> "build with shrink off" as a proven workaround. **That does not hold.** The 4 silicon-ladder
+> rungs that miscompute are built shrink-off and contain **zero `shrink` instructions**, and
+> still fail on hardware. Also refuted since: bounds-representability (the rung with the
+> *largest* global passes), "array store with a live accumulator" (`beebs_recursion` has no
+> array), and any instruction-level discriminator.
+>
+> **The mechanism is currently UNKNOWN. Do NOT escalate the shrink story to the board owner.**
+> Full evidence + the `gp_diag` diagnostic rung built to settle it:
+> `history/25-07-2026_17-09-01_gp-captable-miscompute-shrink-theory-refuted.md`.
+> The *observations* below (probe values, board discriminators) remain valid data; only the
+> interpretation is withdrawn.
+
 **Status: OPEN. Our side VALIDATED (caps well-formed on HW, codegen provably
 equivalent); now strongly RTL-store-path-leaning — ready to escalate to the board
 owner, but not yet confirmed by RTL/gdb.** Do not claim silicon compatibility, do

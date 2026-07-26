@@ -2,6 +2,23 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-next-step.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-next-step.md` at Agent-B bring-up (2026-07-08).
 
+
+# Agent-B next step (2026-07-26)
+
+1. **Unblock the `cscall` hang** — the only thing standing between 3/5 and 5/5
+   benchmarks. Build the domain-boundary `fence.i` patch
+   (`patches/opensbi-capstone-sbi-domcall-boundary-fence-i.patch`) into board
+   firmware and retest `matmult_int -O1` + `coremark_matrix -O0` (32 KiB window).
+   QEMU cannot validate it (no icache model), so it must go straight to the board.
+2. **Silicon-validate the 16/32 KiB code window** (QEMU-validated only). Unlocks full
+   CoreMark and Dhrystone, which is what the benchmark set actually needs for
+   representativeness — no measured kernel currently chases pointers.
+3. **Scale the rungs past ~1M cycles.** A timer tick inside the bracket costs ~16k
+   cycles; `beebs_recursion` at 10.5k is under that floor and survives only because
+   identical instret across passes certifies it clean.
+4. SQLite (goal 2) still needs tier-2b (initramfs bake) — see task #59.
+
+
 # Agent-B FPGA track (2026-07-20) — HANDED OFF TO AGENT A (B token refresh)
 
 > **HANDOFF (2026-07-20 PM):** Agent-B is handing the FPGA experimental lane to **Agent A**.

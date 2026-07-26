@@ -34,13 +34,98 @@ static inline unsigned long ladder_rd_mcycle(void) {
   return v;
 }
 
+/* minstret (0xB02), read for the same reason mcycle is: the board gates the
+   unprivileged `instret` for the domain. Pairing it with mcycle is what splits the
+   measured capability overhead into "the ABI retires MORE instructions" (every
+   global goes through `ldc rd, i*16(gp)`) versus "the same instructions cost MORE
+   cycles". A cycle count alone conflates the two, and the plain-RISC-V baseline
+   half already reports instret -- only this side was missing. */
+static inline unsigned long ladder_rd_minstret(void) {
+  unsigned long v;
+  __asm__ volatile("csrr %0, minstret" : "=r"(v));
+  return v;
+}
+
+/* Slots clear of the debug window: the controller prints res[3 .. 3+LADDER_DBG_SLOTS)
+   as dbg0.., currently reaching res[47], and gp_diag3's seeded data windows occupy
+   res[32..48). So instret cannot simply take res[3]. */
+#define LADDER_INSTRET_SLOT 64
+#define LADDER_PHASE_SLOT   65
+
+/* LADDER_INSTR_MODE -- the bisection knob.
+ *
+ * Adding the minstret instrumentation flipped beebs_prime from returning the
+ * correct oracle to miscomputing on silicon, confirmed by a controlled A/B (mode 4
+ * wrong and deterministic, mode 0 correct). The instrumentation is three separable
+ * constructs, so building each ALONE says which one is the trigger -- something no
+ * gp_diag variant could do, because gp_diag3's fault vanishes when perturbed while
+ * both of these variants are tiny and freely modifiable.
+ *
+ *   0  none                  -- the pre-26-07 body, mcycle only          (PASSES)
+ *   1  phase stores only     -- two stores of a constant to res[65]
+ *   2  minstret reads only   -- two `csrr minstret`, no region store
+ *   3  instret store only    -- one store of a constant to res[64]
+ *   4  full (default)        -- all three, i.e. the shipping instrumentation (FAILS)
+ *   5  one store to res[3]   -- LOW offset 0x18, otherwise identical to mode 3
+ *   6  one store to res[32]  -- MID offset 0x100, otherwise identical to mode 3
+ *
+ * Modes 5-6 exist because the mode 1/2/3 board results narrowed the trigger to "an
+ * extra STORE through the shared-region capability" (mode 2 adds 104 B of CSR reads
+ * and PASSES; mode 3 adds 16 B containing one store and FAILS). Two hypotheses
+ * survive: the store's OFFSET matters (res[0..2] at 0x0/0x8/0x10 are present in the
+ * passing control, while the failing stores are at 0x200/0x208), or merely having
+ * one MORE region store matters regardless of where. A low-offset store separates
+ * them in one boot.
+ *
+ * Modes 1-3 deliberately store CONSTANTS, not real counter values: the question is
+ * which construct perturbs codegen, not what the counters read. Keeping the stored
+ * value constant across modes means the only variable is the construct itself.
+ *
+ * -DLADDER_NO_MINSTRET is kept as a spelling of mode 0 so the existing
+ * beebs_prime_noins control rung builds unchanged. */
+#ifdef LADDER_NO_MINSTRET
+#  define LADDER_INSTR_MODE 0
+#endif
+#ifndef LADDER_INSTR_MODE
+#  define LADDER_INSTR_MODE 4
+#endif
 void domain_main(unsigned long *res, unsigned func) {
   (void)func;
+#if LADDER_INSTR_MODE == 1 || LADDER_INSTR_MODE == 4
+  /* Whether minstret is domain-readable here is NOT established -- only mcycle is
+     (confirmed by the borrow-cost board runs). A gated CSR faults, halting the
+     domain, which looks exactly like every other silent failure. So record the
+     phase first: if the host reads back PHASE=1 with the rest zero, minstret is
+     the culprit and a failed boot still says something. */
+  res[LADDER_PHASE_SLOT] = 1UL;
+#endif
+#if LADDER_INSTR_MODE == 2 || LADDER_INSTR_MODE == 4
+  unsigned long i0 = ladder_rd_minstret();
+#endif
+#if LADDER_INSTR_MODE == 1 || LADDER_INSTR_MODE == 4
+  res[LADDER_PHASE_SLOT] = 2UL;
+#endif
+
   unsigned long c0 = ladder_rd_mcycle();
   unsigned v = LADDER_COMPUTE();
   unsigned long c1 = ladder_rd_mcycle();
+#if LADDER_INSTR_MODE == 2 || LADDER_INSTR_MODE == 4
+  unsigned long i1 = ladder_rd_minstret();
+#endif
+
   res[0] = (unsigned long)v;
   res[1] = c1 - c0;
   res[2] = 0xD09EUL;
+#if LADDER_INSTR_MODE == 4
+  res[LADDER_INSTRET_SLOT] = i1 - i0;
+#elif LADDER_INSTR_MODE == 3
+  res[LADDER_INSTRET_SLOT] = 0x1640UL;      /* constant: isolate the store itself */
+#elif LADDER_INSTR_MODE == 2
+  (void)i0; (void)i1;                       /* reads only; nothing stored */
+#elif LADDER_INSTR_MODE == 5
+  res[3] = 0x1640UL;                        /* LOW offset 0x18 */
+#elif LADDER_INSTR_MODE == 6
+  res[32] = 0x1640UL;                       /* MID offset 0x100 */
+#endif
 }
 #endif

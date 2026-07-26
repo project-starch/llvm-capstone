@@ -41,7 +41,12 @@ for R in "${RUNGS[@]}"; do
   [[ -f "$APP" && -f "$HOST" ]] || { echo "missing ${R}_fpga_app.c / ${R}_host.c" >&2; exit 1; }
   # coremark_matrix overflows the 4 KiB PCC window at -O0; it is built -Os (see
   # silicon-ladder/run-coremark-matrix-qemu.sh). Others use the ladder default -O0.
-  OPT=-O0; [[ "$R" == coremark_matrix ]] && OPT=-Os
+  # LADDER_OPT overrides the per-rung default for the whole set. -O0 emits an
+  # `ldc` reload of the region capability before EVERY region store; -O1+ keeps it
+  # in a register. Since an extra capability store is the confirmed miscompute
+  # trigger (26-07 bisect), optimisation level is a candidate workaround.
+  OPT=${LADDER_OPT:--O0}
+  [[ -z "${LADDER_OPT:-}" && "$R" == coremark_matrix ]] && OPT=-Os
   DOMAIN_OPT_LEVEL=$OPT bash "$LAD/build-ladder-domain.sh" "$APP" "$OUT_DIR/${R}.dom"
   cc -O0 -o "$OUT_DIR/${R}_host" "$HOST"
   "$OUT_DIR/${R}_host" > "$OUT_DIR/${R}.oracle"

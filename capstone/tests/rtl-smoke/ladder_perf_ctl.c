@@ -11,7 +11,12 @@
  *   res[2] = 0xD09E  (ran-marker)
  * The controller reads them straight back out of the retained mapping and prints
  *   RESULT <name> retval=<r0> cycles=<r1> ran=<r2>
- * for the UART harvester. No CALL, no cross-entry state (the region cap is
+ * for the UART harvester. The DIAGNOSTIC rung (gp_diag) additionally fills
+ * res[3..11] with one RAW value per probe; when any is non-zero the controller
+ * also prints
+ *   DEBUG <name> dbg0=<r3> dbg1=<r4> ...
+ * which localizes a silicon miscompute to a specific mechanism in ONE run
+ * (a checksum alone cannot -- the FNV fold is not injective). No CALL, no cross-entry state (the region cap is
  * domain_main's argument; the rung reaches its own globals via gp[i]).
  *
  * Same freestanding soft-float model as borrow_cost_fpga_nogp_ctl.c: links NO
@@ -177,6 +182,23 @@ static const unsigned char ELF_MAGIC[4] = {0x7f, 'E', 'L', 'F'};
 
 #define TAG "ladder-perf"
 
+/* res[3..3+LADDER_DBG_SLOTS) are the diagnostic rung's raw per-probe values.
+   4 KiB region => 512 slots, so this is far inside bounds. Perf rungs leave the
+   slots zero and the DEBUG line is then suppressed entirely, so raising this
+   costs them nothing.
+
+   45 is chosen to reach res[47]: it covers gp_diag4's four 8-word readback
+   groups + canary (33), AND both of gp_diag3's seeded data windows in full --
+   W1 = res[32..40) at dbg29..dbg36, W2 = res[40..48) at dbg37..dbg44.
+
+   Overlapping a diagnostic rung's DATA window is deliberate here, not an
+   accident: the controller memsets the region before the share and only reads
+   these slots AFTER the domain returns, so it observes what the domain's stores
+   actually left in memory without perturbing the domain at all. That is how we
+   established (at 33 slots, covering W1[0..3]) that the stores LAND and the
+   gp-captable fault is therefore load-side. */
+#define LADDER_DBG_SLOTS 45
+
 static int dev_fd;
 
 struct ElfCode { void *map_base; ulong map_len; ulong code_start, code_len, entry_offset; };
@@ -291,13 +313,40 @@ static int run(const char *name, const char *dom_path) {
   /* The share IS the entry: domain_main runs the rung and writes res[0..2]. */
   shared_region_annotated(dom, region_id, ANNOT_PERM_INOUT, REV_SHARED);
 
+  /* res[64]/res[65]: retired-instruction delta and the minstret phase marker
+     (ladder_perf_domain.h). They sit above the debug window on purpose. instret
+     is what separates "the capability ABI retires more instructions" from "the
+     same instructions cost more cycles"; phase says whether minstret was even
+     readable, so a domain that faults reading it does not look like a generic
+     silent failure. Diagnostic rungs have their own domain_main and write
+     neither, so both print only when set. */
   const ulong *r = (const ulong *)results;
   ulong retval = r[0], cycles = r[1], ran = r[2];
+  ulong instret = r[64], phase = r[65];
   puts_(TAG ": RESULT "); puts_(name);
   puts_(" retval="); putu_(retval);
   puts_(" cycles="); putu_(cycles);
   puts_(" ran="); putu_(ran);
+  if (phase) { puts_(" instret="); putu_(instret);
+               puts_(" phase="); putu_(phase); }
   puts_("\n");
+
+  /* Diagnostic rungs (gp_diag) additionally write one RAW value per probe into
+     res[3..]; perf rungs leave those slots zero. Printing them costs a perf rung
+     nothing and saves a whole power-cycle when diagnosing. */
+  {
+    int any = 0;
+    for (int i = 0; i < LADDER_DBG_SLOTS; i++)
+      if (r[3 + i]) { any = 1; break; }
+    if (any) {
+      puts_(TAG ": DEBUG "); puts_(name);
+      for (int i = 0; i < LADDER_DBG_SLOTS; i++) {
+        puts_(" dbg"); putu_((ulong)i); puts_("=");
+        putu_(r[3 + i]);
+      }
+      puts_("\n");
+    }
+  }
   return 0;
 }
 

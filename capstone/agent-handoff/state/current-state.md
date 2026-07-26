@@ -27,6 +27,17 @@ retraction was WRONG and is itself retracted.**
    (`history/23-07-2026_17-30-00_gp-captable-silicon-array-loop-miscompute-OPEN.md`).
    NOTE: `beebs_insertsort`'s 255001740 coinciding with the pre-fix memcpy
    signature was a **red herring** — it reproduces on post-fix binaries.
+   **UPDATE 25-07 17:09 — the pass/fail data above stands, but its EXPLANATION is
+   withdrawn; the cause is now UNKNOWN.** The rungs contain **zero `shrink`**
+   instructions, so the documented `shrink`→store root cause cannot apply, and
+   "array-store-with-live-accumulator" is the wrong framing (`beebs_recursion` has
+   no array at all). Bounds-representability (the rung with the *largest* global
+   passes) and any instruction-level discriminator are also refuted. **Do not
+   escalate the shrink story to the board owner.** A `gp_diag` rung returning RAW
+   per-probe values (a checksum provably cannot localize this) is built and
+   QEMU-validated; one board run should settle it:
+   `LADDER_RUNGS="gp_diag" python3 tests/rtl-smoke/fpga_driver/run_ladder_perf_fpga.py`.
+   Evidence: `history/25-07-2026_17-09-01_gp-captable-miscompute-shrink-theory-refuted.md`.
 2. **A separate process bug was also real and is fixed:** the runner reused
    pre-built `.dom`s and read a different dir than the build script wrote, so it
    *could* run stale binaries. Now rebuilds-by-default + hard-fails on stale

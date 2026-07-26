@@ -1,0 +1,124 @@
+Subject: [capstone-sbi] fence.i at the DOMCALL boundary (not just the trap path)
+
+Apply in the OpenSBI Capstone monitor submodule:
+  capstone/caplifive-buildroot/components/opensbi/lib/sbi/capstone-sbi/
+  ($ git apply <this-file>   from that directory)
+The FPGA firmware has its own copy of the same source at
+  capstone/caplifive-system/sw/buildroot/components/opensbi/lib/sbi/capstone-sbi/
+and that is the one that must carry this for a BOARD test.
+
+WHY THIS IS DIFFERENT FROM opensbi-capstone-sbi-domain-switch-fence-i.patch.
+That patch adds 9 fence.i to `sbi_capstone.S` -- the hand-written *generic trap*
+path (trap entry, the mret paths, ...). It is correct and regression-clean, but
+it does NOT cover the domain switch itself: the `domcall`/`domreturn`
+instructions are emitted by the Capstone-C compiler into the GENERATED
+`sbi_capstone_dom.c.S`, and `grep -c fence` on that file is 0. So the actual
+domain-entry fetch has never had a barrier. This patch closes that gap.
+
+MECHANISM. The RTL performs NO icache invalidate on a domain switch (the commit
+stage redirects the frontend with no flush), and the domain's code was just
+written as DATA by the host. So the fetch at the domain entry VA can hit stale
+icache. This predicts exactly the observed symptom: a SECOND domain reusing
+entry VA 0x10000 within one boot hangs its cscall, which is what forces one full
+power-cycle + JTAG reload per rung (~2.5 min). QEMU models no icache, so this is
+a no-op there -- i.e. QEMU CANNOT validate this fix; only the board can.
+
+WHAT IT DOES. Adds C_ISYNC() == `__asm__ volatile("fence.i")` immediately before
+every domain entry/return: both __domcallsaves call sites in call_domain /
+call_domain_with_cap, the region-share entries, __ihdomcallsaves, and
+__domreturnsaves. 8 sites.
+
+VERIFIED (board-free, 2026-07-25):
+  - capstone-c 508342a accepts a bare `__asm__ volatile("fence.i")` (the monitor
+    already uses inline asm with operands; note NO existing site uses a clobber
+    list, so this deliberately omits ::: "memory").
+  - Regenerating sbi_capstone_dom.c.S emits all 8 fence.i at the domain
+    entry/return sites (previously 0 in that file).
+NOT yet verified: monitor relink + QEMU boot, and the board test that is the
+only real check. fence.i is purely additive (flush stale icache; costs a few
+cycles), so it is safe to carry as a staging patch.
+
+RTL TELL. If this IS applied and a domain-entry fetch still faults/hangs at
+~0x10000, then this CVA6's fence.i does not actually flush the icache (same
+class as the earlier RFENCE/insmod icache hangs) -- that is an RTL finding, and
+the right move is to report it, NOT to iterate on further fence variants.
+
+--- a/sbi_capstone.c
++++ b/sbi_capstone.c
+@@ -27,6 +27,14 @@
+ #define cap_end(cap) __capfield((cap), 4)
+ #define cap_type(cap) __capfield((cap), 1)
+ #define debug_counter_inc(counter_no, delta) __asm__ volatile(".insn r 0x5b, 0x1, 0x45, x0, %0, %1" :: "r"(counter_no), "r"(delta))
++
++/* CVA6 has NO icache invalidate on a domain switch (verified in the RTL: the
++   commit stage redirects the frontend without any flush), and the domain code
++   was just written as DATA by the host. Without a barrier the fetch at the
++   domain entry VA can hit stale icache -- which is why a SECOND domain reusing
++   entry VA 0x10000 within one boot hangs its cscall. QEMU models no icache, so
++   this is a no-op there and the bug is silicon-only. */
++#define C_ISYNC() __asm__ volatile("fence.i")
+ #define debug_counter_tick(counter_no) debug_counter_inc((counter_no), 1)
+ 
+ #define CPMP_COUNT 16
+@@ -331,6 +339,7 @@
+     
+     unsigned res;
+     __dom void *d = domains[dom_id];
++    C_ISYNC();
+     d = __domcallsaves(d, CAPSTONE_DPI_CALL, &res);
+     domains[dom_id] = d;
+     
+@@ -343,6 +352,7 @@
+     __asm__ ("scc(%0, %1, %2)" : "=r"(region) : "r"(region), "r"(cursor));
+ 
+     __dom void *d = domains[dom_id];
++    C_ISYNC();
+     d = __domcallsaves(d, CAPSTONE_DPI_CALL, region);
+     domains[dom_id] = d;
+ 
+@@ -453,6 +463,8 @@
+         return -1;
+     }
+ 
++    C_ISYNC();
++
+     d = __domcallsaves(d, CAPSTONE_DPI_REGION_SHARE, r);
+     domains[dom_id] = d;
+ 
+@@ -555,6 +567,8 @@
+         return -1;
+     }
+ 
++    C_ISYNC();
++
+     d = __domcallsaves(d, CAPSTONE_DPI_REGION_SHARE, child);
+     domains[dom_id] = d;
+ 
+@@ -570,9 +584,11 @@
+     __dom void *d = domains[dom_id];
+ 
+     if (region_cpmp[region_id] != -1) {
++        C_ISYNC();
+         d = __domcallsaves(d, CAPSTONE_DPI_REGION_SHARE, read_cpmp(region_cpmp[region_id]));
+     }
+     else {
++        C_ISYNC();
+         d = __domcallsaves(d, CAPSTONE_DPI_REGION_SHARE, regions[region_id]);
+     }
+ 
+@@ -642,6 +658,7 @@
+     debug_counter_tick(DEBUG_COUNTER_SWITCH_S);
+ 
+     *caller_buf = retval;
++    C_ISYNC();
+     __domreturnsaves(caller_dom, DOM_REENTRY_POINT, 0);
+ }
+ 
+@@ -701,6 +718,7 @@
+         return -1;
+     }
+     __dom void *d = domains[dom_id];
++    C_ISYNC();
+     d = __ihdomcallsaves(CAPSTONE_IHI_THREAD_SPAWN, d); // TODO: this shall
+     domains[dom_id] = d;
+     return 0;

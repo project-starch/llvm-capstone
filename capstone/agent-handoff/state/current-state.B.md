@@ -2,6 +2,45 @@
 > (clone `/home/alexey/dev/llvm-capstone-b`). Do NOT edit `current-state.md` (Agent-A's
 > single-writer base file). Seeded from A's `current-state.md` at Agent-B bring-up (2026-07-08).
 
+
+# Agent-B delta (2026-07-26) — THREE benchmarks measured on silicon; two blocked by a domain-entry hang
+
+**Goal 1 (RV8/CoreMark/BEEBS perf on FPGA) is 3/5 done.** Pervasive spatial-safety
+overhead, capability domain vs plain RISC-V, same clang and same -O on both sides,
+same board, warm baseline:
+
+| benchmark | opt | cycles | instructions |
+|---|---|---:|---:|
+| `beebs_prime` (scalar) | −O0 | **1.032×** | — |
+| `rv8_primes` (sieve) | −O0 | **1.050×** | 1.102× |
+| `beebs_recursion` (recursion) | −O1 | **1.801×** | 1.458× |
+
+The spread is the result. Recursion is the outlier because gp-free call/return plus
+capability spills are paid per call (CPI 5.21 → 6.44); the sieve amortises its `ldc`
+cap-table indirections over straight-line loops. Also measured: **CPI on this CVA6 is
+2.0–3.2**, not the paper's assumed 1, which roughly halves `tab:appoverhead`'s SQLite
+figures to ≈0.5% / ≈3%.
+
+**The −O0 miscompute has a workaround: −O1.** Bisected to a single extra store
+through the region capability (CSR reads innocent; offset irrelevant; the store lands
+correctly yet corrupts an already-completed computation). At −O1 the region cap stays
+in a register instead of being `ldc`-reloaded per store, and `beebs_recursion` flips
+from 2095861164 to the correct 1579141629.
+
+**Blocked: `matmult_int` + `coremark_matrix` hang the `cscall`** at every reachable
+config. NOT reachable from the compiler side — not −Os codegen (coremark hangs at
+−O0), not code size (coremark hangs at 1,988 B, smaller than passing rungs), and no
+instruction discriminates hanging from passing builds. Standing candidate: the
+domain-boundary `fence.i` patch, never built into board firmware.
+
+**The 4 KiB code window is liftable** (one hardcoded number in `link-gpfree.ld`;
+QEMU-validated at 16 KiB and 32 KiB, not yet on silicon). Needed for full
+CoreMark/Dhrystone.
+
+Full trail: `history/26-07-2026_19-31-06_RESULTS-three-benchmarks-on-silicon-and-the-hang-blocker.md`.
+Paper extract: `ref/fpga-silicon-measurements-for-paper.md`.
+
+
 # Agent-B delta (2026-07-16, task 017 phase 3) — protocol VERIFIED + driver validated on the real board
 
 **The FPGA driver is now wired to the REAL protocol and validated against live

@@ -15,8 +15,11 @@ LD_LLD=${LD_LLD:-$CAPSTONE_LD_LLD}
 GPFREE_DIR="$SCRIPT_DIR/../gp-free-domain"
 GENERIC_GLUE="$SCRIPT_DIR/start-gp-captable-generic.S"
 GCT_TAIL="$SCRIPT_DIR/../gct-section-end.S"
-LINKER_SCRIPT="$GPFREE_DIR/link-gpfree.ld"
+LINKER_SCRIPT=${LINKER_SCRIPT:-"$GPFREE_DIR/link-gpfree.ld"}
 DOMAIN_OPT_LEVEL=${DOMAIN_OPT_LEVEL:--O0}
+# Extra -D/-f flags for one build (e.g. -DLADDER_NO_MINSTRET for the
+# un-instrumented control variant). Word-split on purpose.
+DOMAIN_EXTRA_CFLAGS=${DOMAIN_EXTRA_CFLAGS:-}
 
 [[ $# -eq 2 ]] || { echo "usage: $0 <domain_main.c> <out.dom>" >&2; exit 1; }
 SRC=$1; OUT=$2
@@ -25,14 +28,22 @@ mkdir -p "$OBJ_DIR" "$(dirname -- "$OUT")"
 
 SILICON_FLAGS=(-mllvm -capstone-gp-captable
                -mllvm -capstone-shrink-stack=false
-               -mllvm -capstone-shrink-globals=false)
+               -mllvm -capstone-shrink-globals=false
+               -fno-jump-tables)
+# -fno-jump-tables: a dense `switch` otherwise lowers to a table of code addresses
+# in .rodata plus an indirect `jr`. In a gp-captable domain .rodata is not reachable
+# as plain data (globals come from the gp cap-table), so loading the table faults:
+# "Cap mem access requires capability" -> "domain halted by capability fault:
+# cause = 24" with a wild PC, which looks exactly like a domain crash. Costs a few
+# compares; without it any switch-heavy workload (SQLite) breaks this way.
 # +m: native integer multiply (CVA6 has the M extension) instead of a __muldi3
 # libcall the freestanding domain can't link.
 MARCH_FLAGS=(-Xclang -target-feature -Xclang +m)
 
 # 1. domain_main -> descriptor-bearing object
 "$CLANG" -target capstone64-unknown-elf -ffreestanding "$DOMAIN_OPT_LEVEL" \
-  "${MARCH_FLAGS[@]}" "${SILICON_FLAGS[@]}" -I"$(dirname -- "$SRC")" \
+  "${MARCH_FLAGS[@]}" "${SILICON_FLAGS[@]}" ${DOMAIN_EXTRA_CFLAGS} \
+  -I"$(dirname -- "$SRC")" \
   -c "$SRC" -o "$OBJ_DIR/main.o"
 
 # 2. generate the per-app cap-table builder from the descriptor
