@@ -1,7 +1,10 @@
 [package]
-name = "hlua-repro"
+name = "libpulse-repro"
 version = "0.1.0"
-edition = "2015"
+edition = "2018"
 
 [dependencies]
-hlua = "0.1.0"
+# libpulse-binding 2.4.0 -- the last release before the 2.5.0 security fix for the
+# proplist::Iterator use-after-free. Vendored by build.sh as a path dependency so
+# the pin is a git SHA rather than a crates.io version range.
+libpulse-binding = { path = "./pulse-binding-rust/pulse-binding", default-features = false }

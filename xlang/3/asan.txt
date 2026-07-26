@@ -1,0 +1,48 @@
+Row 3 -- GHSA-f56g-chqp-22m9, libpulse-binding proplist::Iterator use-after-free
+
+TOOL NOTE: this report is from VALGRIND MEMCHECK, not AddressSanitizer.
+The stale read happens inside libpulse.so / libpulsecommon.so, which are
+distribution shared libraries built WITHOUT sanitizer instrumentation. ASan
+only checks loads and stores it has instrumented, so although it does poison
+the region on free, it cannot observe pa_proplist_iterate() reading it and the
+ASan build exits 0. Valgrind instruments at the machine level and sees the
+access wherever it originates, so it is the correct ground-truth tool for a
+Rust->C boundary bug where the stale dereference is on the C side.
+
+Reproduce with:  ./run.sh   (or see README.md)
+Deterministic: 10/10 runs.
+
+==2667225== Invalid read of size 8
+==2667225==    at 0x4B999A0: pa_hashmap_iterate (in /usr/lib/x86_64-linux-gnu/pulseaudio/libpulsecommon-17.0.so)
+==2667225==    by 0x48F934E: pa_proplist_iterate (in /usr/lib/x86_64-linux-gnu/libpulse.so.0.24.3)
+==2667225==    by 0x4018D8A: <libpulse_binding::proplist::Iterator as core::iter::traits::iterator::Iterator>::next (proplist.rs:171)
+==2667225==    by 0x40186E1: libpulse_repro::main (main.rs:51)
+==2667225==  Address 0x57bae50 is 32 bytes inside a block of size 1,072 free'd
+==2667225==    at 0x48AB8BF: free (vg_replace_malloc.c:990)
+==2667225==    by 0x4B87889: pa_xfree (in /usr/lib/x86_64-linux-gnu/pulseaudio/libpulsecommon-17.0.so)
+==2667225==    by 0x40190B1: <libpulse_binding::proplist::Proplist as core::ops::drop::Drop>::drop (proplist.rs:453)
+==2667225==    by 0x4018FAA: core::ptr::drop_glue::<libpulse_binding::proplist::Proplist> (library/core/src/ptr/mod.rs:828)
+==2667225==    by 0x4018E69: <libpulse_binding::proplist::Proplist as core::iter::traits::collect::IntoIterator>::into_iter (proplist.rs:186)
+==2667225==    by 0x401866E: libpulse_repro::main (main.rs:47)
+==2667225==  Block was alloc'd at
+==2667225==    at 0x48AFE43: calloc (vg_replace_malloc.c:1678)
+==2667225==    by 0x4B8F4C2: pa_xmalloc0 (in /usr/lib/x86_64-linux-gnu/pulseaudio/libpulsecommon-17.0.so)
+==2667225==    by 0x4BA2EB4: pa_hashmap_new_full (in /usr/lib/x86_64-linux-gnu/pulseaudio/libpulsecommon-17.0.so)
+==2667225==    by 0x40188D9: <libpulse_binding::proplist::Proplist>::new (proplist.rs:192)
+==2667225==    by 0x4018497: libpulse_repro::main (main.rs:39)
+==2667225== 
+==2667225== 
+==2667225== HEAP SUMMARY:
+==2667225==     in use at exit: 4,852 bytes in 6 blocks
+==2667225==   total heap usage: 29 allocs, 23 frees, 9,314 bytes allocated
+==2667225== 
+==2667225== LEAK SUMMARY:
+==2667225==    definitely lost: 0 bytes in 0 blocks
+==2667225==    indirectly lost: 0 bytes in 0 blocks
+==2667225==      possibly lost: 0 bytes in 0 blocks
+==2667225==    still reachable: 4,852 bytes in 6 blocks
+==2667225==         suppressed: 0 bytes in 0 blocks
+==2667225== Rerun with --leak-check=full to see details of leaked memory
+==2667225== 
+==2667225== For lists of detected and suppressed errors, rerun with: -s
+==2667225== ERROR SUMMARY: 1 errors from 1 contexts (suppressed: 0 from 0)
