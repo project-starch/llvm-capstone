@@ -1,0 +1,55 @@
+Make rlua 396a4b09 build and run on a modern Rust toolchain (rustc 1.96.1+).
+
+WHAT THIS CHANGES, AND WHY IT DOES NOT HIDE THE BUG
+===================================================
+rlua at this commit uses `mem::uninitialized()` at two sites to move a value out
+of a place it does not own. Since rustc 1.48 that call panics at runtime for
+types whose uninitialised bit-pattern is invalid ("attempted to leave type ...
+uninitialized, which is invalid"), and the panic is non-unwinding, so the process
+aborts during `LuaTable::set` -- long before the trigger reaches Lua's collector.
+Without this patch the abort masks the defect under test and the row cannot be
+reproduced on any toolchain shipped after 2020.
+
+Both sites are replaced with `std::ptr::read`, the modern idiom for exactly the
+same operation: move the value out by bitwise copy and leave the source place
+logically dead.
+
+The second hunk (`destructor<T>`) is the userdata destructor -- the code path
+rlua #19 is actually about -- so it matters that the replacement preserves the
+defect rather than papering over it:
+
+  * `mem::replace(obj, mem::uninitialized())` moves T out, drops it, and writes
+    uninitialised bytes back into the userdata slot.
+  * `std::ptr::read(obj)` moves T out, drops it, and leaves the original bytes.
+
+Neither version marks the slot as already-destroyed, so when Lua's `__gc` runs a
+second time on a resurrected userdata, both drop the same object twice. If
+anything `ptr::read` is the more faithful reproduction: the second drop operates
+on the original bit-pattern rather than on garbage, which is the classic
+double-drop shape the issue describes.
+
+This is a toolchain-compatibility shim only. It touches no lifetime, ownership,
+or GC logic, and adds no bounds or validity check that upstream lacked.
+
+diff --git i/src/util.rs w/src/util.rs
+index c1a8008..45b75a7 100644
+--- i/src/util.rs
++++ w/src/util.rs
+@@ -171,7 +171,7 @@ where
+         F: FnOnce(*mut ffi::lua_State) -> c_int,
+     {
+         let func = ffi::lua_touserdata(state, -1) as *mut F;
+-        let func = mem::replace(&mut *func, mem::uninitialized());
++        let func = std::ptr::read(func);
+         ffi::lua_pop(state, 1);
+         func(state)
+     }
+@@ -278,7 +278,7 @@ pub unsafe fn push_string(state: *mut ffi::lua_State, s: &str) {
+ pub unsafe extern "C" fn destructor<T>(state: *mut ffi::lua_State) -> c_int {
+     match catch_unwind(|| {
+         let obj = &mut *(ffi::lua_touserdata(state, 1) as *mut T);
+-        mem::replace(obj, mem::uninitialized());
++        std::ptr::read(obj);
+         0
+     }) {
+         Ok(r) => r,
