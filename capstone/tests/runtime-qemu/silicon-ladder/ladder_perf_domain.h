@@ -68,6 +68,36 @@ static inline unsigned long ladder_rd_minstret(void) {
  *   4  full (default)        -- all three, i.e. the shipping instrumentation (FAILS)
  *   5  one store to res[3]   -- LOW offset 0x18, otherwise identical to mode 3
  *   6  one store to res[32]  -- MID offset 0x100, otherwise identical to mode 3
+ *   7  ENTRY PROBE           -- everything EXCEPT the compute actually runs
+ *
+ * Mode 7 answers a different question from 1-6: `matmult_int` and `coremark_matrix`
+ * produce no END marker at all, and that was written up as "a domain-entry fault".
+ * But a domain that enters correctly and then spins forever inside the compute is
+ * externally IDENTICAL -- no output either way -- so entry was never actually
+ * localized, only assumed. The distinction decides whether the domain-boundary
+ * `fence.i` (an entry-side fix) is even the right patch.
+ *
+ * The obvious probe -- store a marker and read it back -- does NOT work here: the
+ * controller only reports res[] after the cscall returns, so a hang hides the
+ * marker too. Mode 7 instead makes the ANSWER be "does it return at all":
+ * everything on the entry path runs unchanged (glue, gp-captable build, region
+ * cap delivery, cscall/csreturn), but the compute is placed behind a branch that
+ * is never taken.
+ *
+ *   returns (END marker appears) => entry path is FINE for this exact binary
+ *                                   => the hang is INSIDE the compute (compiler)
+ *   still hangs                   => the hang is at/before entry (monitor/RTL)
+ *
+ * `func` is the gate because it is genuinely opaque: nothing passes it (the
+ * controller sets no func, domain_main is called from assembly glue), so the
+ * optimizer cannot fold the branch and delete the call. That matters -- the
+ * compute must stay LINKED so its globals keep their gp-captable slots and the
+ * image layout stays as close to the hanging build as possible. Gating on `res`
+ * instead would be unsafe: after the stores above, -O1 may assume res != NULL and
+ * eliminate the call outright.
+ *
+ * retval comes back 0 in this mode, so the controller will flag an oracle
+ * mismatch. That is expected and irrelevant -- the only signal is END vs no END.
  *
  * Modes 5-6 exist because the mode 1/2/3 board results narrowed the trigger to "an
  * extra STORE through the shared-region capability" (mode 2 adds 104 B of CSR reads
@@ -91,6 +121,16 @@ static inline unsigned long ladder_rd_minstret(void) {
 #endif
 void domain_main(unsigned long *res, unsigned func) {
   (void)func;
+#if LADDER_INSTR_MODE == 7
+  /* Entry probe: run the whole entry path, skip only the compute. See above. */
+  res[LADDER_PHASE_SLOT] = 0xE117UL;
+  unsigned v7 = 0u;
+  if (func == 0xDEADBEEFu) v7 = LADDER_COMPUTE();   /* never taken; keeps it linked */
+  res[0] = (unsigned long)v7;
+  res[1] = 0UL;
+  res[2] = 0xD09EUL;
+}
+#else
 #if LADDER_INSTR_MODE == 1 || LADDER_INSTR_MODE == 4
   /* Whether minstret is domain-readable here is NOT established -- only mcycle is
      (confirmed by the borrow-cost board runs). A gated CSR faults, halting the
@@ -128,4 +168,5 @@ void domain_main(unsigned long *res, unsigned func) {
   res[32] = 0x1640UL;                       /* MID offset 0x100 */
 #endif
 }
+#endif /* LADDER_INSTR_MODE == 7 */
 #endif
