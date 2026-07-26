@@ -48,7 +48,15 @@ for R in "${RUNGS[@]}"; do
   OPT=${LADDER_OPT:--O0}
   [[ -z "${LADDER_OPT:-}" && "$R" == coremark_matrix ]] && OPT=-Os
   DOMAIN_OPT_LEVEL=$OPT bash "$LAD/build-ladder-domain.sh" "$APP" "$OUT_DIR/${R}.dom"
-  cc -O0 -o "$OUT_DIR/${R}_host" "$HOST"
+  # The oracle must see the same kernel-level -D knobs as the domain, or the
+  # correctness gate silently compares against a different computation (e.g.
+  # -DLADDER_CM_INIT_ONLY makes the rung return N, not the crc). Only -D/-U are
+  # forwarded: the rest of DOMAIN_EXTRA_CFLAGS is Capstone-target-specific.
+  HOST_DEFS=()
+  for tok in ${DOMAIN_EXTRA_CFLAGS:-}; do
+    [[ $tok == -D* || $tok == -U* ]] && HOST_DEFS+=("$tok")
+  done
+  cc -O0 "${HOST_DEFS[@]+"${HOST_DEFS[@]}"}" -I"$LAD" -o "$OUT_DIR/${R}_host" "$HOST"
   "$OUT_DIR/${R}_host" > "$OUT_DIR/${R}.oracle"
   echo "  oracle: $R = $(cat "$OUT_DIR/${R}.oracle")"
 done

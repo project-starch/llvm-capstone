@@ -33,7 +33,12 @@ can also use the browser GUI. Every step and gotcha is in the KB files below.
   (boot fw → UART-transfer gzip+base64 sha-verified → run → harvest),
   `board_reflash_only.py` (re-flash only). Protocol: `tests/rtl-smoke/socketio-api.md`,
   `tests/rtl-smoke/fpga_driver/`.
-- Board URL token: `~/.config/capstone/fpga-board-url` (secret; never commit/echo).
+- Board URL token: **`FPGA_URL` environment variable, for the duration of ONE run.**
+  The console URL embeds the access token in its path, so it is a credential: never
+  commit it, never echo it into a capture, and **never persist it to disk** -- writing
+  it to a dotfile (an older revision of this file suggested
+  `~/.config/capstone/fpga-board-url`) is still a leak. Ask the user out-of-band each
+  time; in committed text write `<FPGA-CONSOLE-URL>`.
 - A local `.bit` is NOT needed — re-flash names the **server-side** bitstream
   `working-caplifive-captype-fixed.bit`.
 

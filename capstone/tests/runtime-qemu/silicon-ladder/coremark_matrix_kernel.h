@@ -210,11 +210,37 @@ static ee_u32 core_init_matrix(ee_u32 blksize, void *memblk, ee_s32 seed,
 #define CM_MATRIX_BLKSIZE 666
 static ee_u8 cm_memblk[CM_MATRIX_BLKSIZE + 16] __attribute__((aligned(16)));
 
+/* LADDER_CM_INIT_ONLY -- board test B (task #66).
+ *
+ * This rung hangs on silicon at -O0, and unlike matmult_int it does NOT fit the
+ * fragile-exit story: its exits are overwhelmingly ordered (17 bgeu, 1 bge, 1 blt),
+ * and an ordered exit cannot be overshot. But it has the one thing matmult_int lacks --
+ * a loop bound computed at RUNTIME. core_init_matrix derives the matrix dimension with
+ *
+ *     while (j < blksize) { i++; j = i * i * 2 * 4; }   N = i - 1;
+ *
+ * which lowers to `bgeu a0, a1` at 0x10428 driven by `mulw a0, a0, a0` at 0x10444. An
+ * ordered exit still never fires if the multiply never produces a value reaching
+ * blksize (666) -- and N then feeds EVERY downstream loop bound via p->N.
+ *
+ * So return N immediately and skip the benchmark. Three-way outcome:
+ *   HANGS          => the fault IS this while loop (the mulw).
+ *   returns N != 9 => the miscompute is caught red-handed at its source, and it
+ *                     explains every downstream bound in one step.
+ *   returns N == 9 => init is clean; the hang is downstream of it.
+ *
+ * Expected N = 9: i*i*8 first reaches 666 at i=10 (800), so N = i-1 = 9. The native
+ * host oracle computes it from this same header, so the runner's gate still applies. */
 static unsigned coremark_matrix_compute(void) {
   mat_params p;
-  core_init_matrix(CM_MATRIX_BLKSIZE, cm_memblk, 0, &p);
+  ee_u32 n = core_init_matrix(CM_MATRIX_BLKSIZE, cm_memblk, 0, &p);
+#ifdef LADDER_CM_INIT_ONLY
+  return (unsigned)n;
+#else
+  (void)n;
   ee_u16 crc = 0;
   crc = core_bench_matrix(&p, 0x66, crc);
   return (unsigned)crc;
+#endif
 }
 #endif

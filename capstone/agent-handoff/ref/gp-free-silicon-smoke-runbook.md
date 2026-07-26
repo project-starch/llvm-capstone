@@ -15,7 +15,8 @@ silicon port.
   `create_domain` mints `gp` with `C_GEN_CAP` and stashes it at the cscratch
   region top slot (identical to the QEMU/buildroot copy already validated).
 - Board access per `ref/fpga-borrow-cost-reproduction.md` (browser/websocket +
-  the board-URL token in `~/.config/capstone/fpga-board-url` — never committed).
+  the board-URL token in the `FPGA_URL` env var for one run only — never committed,
+  never persisted to disk).
 
 ## Step 1 — rebuild the FPGA firmware (fw_payload) with the monitor change
 
