@@ -1,0 +1,87 @@
+=================================================================
+==2568211==ERROR: AddressSanitizer: heap-use-after-free on address 0x7bde72df3dd0 at pc 0x56418ffc422a bp 0x7fff940eb910 sp 0x7fff940eb900
+READ of size 4 at 0x7bde72df3dd0 thread T0
+    #0 0x56418ffc4229 in io_get_open_fptr /path/to/xlang/12/mruby-io/src/io.c:78
+    #1 0x56418ffc42f0 in mrb_io_close /path/to/xlang/12/mruby-io/src/io.c:906
+    #2 0x56418ff3377b in mrb_vm_exec /path/to/xlang/12/mruby/src/vm.c:1422
+    #3 0x56418ff40fb3 in mrb_vm_run /path/to/xlang/12/mruby/src/vm.c:907
+    #4 0x56418ff41477 in mrb_top_run /path/to/xlang/12/mruby/src/vm.c:2894
+    #5 0x56418ff65dd2 in mrb_load_exec /path/to/xlang/12/mruby/mrbgems/mruby-compiler/core/parse.y:5832
+    #6 0x56418ff6a067 in mrb_load_file_cxt /path/to/xlang/12/mruby/mrbgems/mruby-compiler/core/parse.y:5841
+    #7 0x56418fecee64 in main /path/to/xlang/12/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:227
+    #8 0x7fbe73a2a600 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:59
+    #9 0x7fbe73a2a717 in __libc_start_main_impl ../csu/libc-start.c:360
+    #10 0x56418fece064 in _start (/path/to/xlang/12/mruby/build/host/bin/mruby+0x27064) (BuildId: d1818e8c09f68faf4e30776395139f7d82dd81e3)
+
+0x7bde72df3dd0 is located 0 bytes inside of 16-byte region [0x7bde72df3dd0,0x7bde72df3de0)
+freed by thread T0 here:
+    #0 0x7fbe73f2a3ff in free ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:51
+    #1 0x56418ff0fb49 in mrb_default_allocf /path/to/xlang/12/mruby/src/state.c:50
+    #2 0x56418feec132 in mrb_free /path/to/xlang/12/mruby/src/gc.c:272
+    #3 0x56418ffc7b34 in mrb_io_initialize_copy /path/to/xlang/12/mruby-io/src/io.c:559
+    #4 0x56418ff3377b in mrb_vm_exec /path/to/xlang/12/mruby/src/vm.c:1422
+    #5 0x56418ff40fb3 in mrb_vm_run /path/to/xlang/12/mruby/src/vm.c:907
+    #6 0x56418ff41477 in mrb_top_run /path/to/xlang/12/mruby/src/vm.c:2894
+    #7 0x56418ff65dd2 in mrb_load_exec /path/to/xlang/12/mruby/mrbgems/mruby-compiler/core/parse.y:5832
+    #8 0x56418ff6a067 in mrb_load_file_cxt /path/to/xlang/12/mruby/mrbgems/mruby-compiler/core/parse.y:5841
+    #9 0x56418fecee64 in main /path/to/xlang/12/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:227
+    #10 0x7fbe73a2a600 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:59
+    #11 0x7fbe73a2a717 in __libc_start_main_impl ../csu/libc-start.c:360
+    #12 0x56418fece064 in _start (/path/to/xlang/12/mruby/build/host/bin/mruby+0x27064) (BuildId: d1818e8c09f68faf4e30776395139f7d82dd81e3)
+
+previously allocated by thread T0 here:
+    #0 0x7fbe73f2a6cf in realloc ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:81
+    #1 0x56418ff0fb42 in mrb_default_allocf /path/to/xlang/12/mruby/src/state.c:54
+    #2 0x56418feef418 in mrb_realloc_simple /path/to/xlang/12/mruby/src/gc.c:204
+    #3 0x56418feef4d0 in mrb_realloc /path/to/xlang/12/mruby/src/gc.c:218
+    #4 0x56418feef677 in mrb_malloc /path/to/xlang/12/mruby/src/gc.c:240
+    #5 0x56418ffc3c1f in mrb_io_alloc /path/to/xlang/12/mruby-io/src/io.c:263
+    #6 0x56418ffc3fa7 in mrb_io_initialize /path/to/xlang/12/mruby-io/src/io.c:608
+    #7 0x56418ff358e5 in mrb_vm_exec /path/to/xlang/12/mruby/src/vm.c:1606
+    #8 0x56418ff40fb3 in mrb_vm_run /path/to/xlang/12/mruby/src/vm.c:907
+    #9 0x56418ff2abd0 in mrb_run /path/to/xlang/12/mruby/src/vm.c:2880
+    #10 0x56418ff2c2cf in mrb_funcall_with_block /path/to/xlang/12/mruby/src/vm.c:477
+    #11 0x56418fee4367 in mrb_instance_new /path/to/xlang/12/mruby/src/class.c:1569
+    #12 0x56418ff3377b in mrb_vm_exec /path/to/xlang/12/mruby/src/vm.c:1422
+    #13 0x56418ff40fb3 in mrb_vm_run /path/to/xlang/12/mruby/src/vm.c:907
+    #14 0x56418ff41477 in mrb_top_run /path/to/xlang/12/mruby/src/vm.c:2894
+    #15 0x56418ff65dd2 in mrb_load_exec /path/to/xlang/12/mruby/mrbgems/mruby-compiler/core/parse.y:5832
+    #16 0x56418ff6a067 in mrb_load_file_cxt /path/to/xlang/12/mruby/mrbgems/mruby-compiler/core/parse.y:5841
+    #17 0x56418fecee64 in main /path/to/xlang/12/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:227
+    #18 0x7fbe73a2a600 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:59
+    #19 0x7fbe73a2a717 in __libc_start_main_impl ../csu/libc-start.c:360
+    #20 0x56418fece064 in _start (/path/to/xlang/12/mruby/build/host/bin/mruby+0x27064) (BuildId: d1818e8c09f68faf4e30776395139f7d82dd81e3)
+
+SUMMARY: AddressSanitizer: heap-use-after-free /path/to/xlang/12/mruby-io/src/io.c:78 in io_get_open_fptr
+Shadow bytes around the buggy address:
+  0x7bde72df3b00: fa fa 00 03 fa fa 00 00 fa fa fd fa fa fa 00 03
+  0x7bde72df3b80: fa fa fd fa fa fa 00 03 fa fa 06 fa fa fa 00 00
+  0x7bde72df3c00: fa fa 00 00 fa fa 00 00 fa fa 00 00 fa fa 00 fa
+  0x7bde72df3c80: fa fa 00 fa fa fa 05 fa fa fa fd fd fa fa 04 fa
+  0x7bde72df3d00: fa fa fd fd fa fa fd fd fa fa 00 fa fa fa 00 00
+=>0x7bde72df3d80: fa fa 00 00 fa fa 00 fa fa fa[fd]fd fa fa 00 00
+  0x7bde72df3e00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7bde72df3e80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7bde72df3f00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7bde72df3f80: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7bde72df4000: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==2568211==ABORTING

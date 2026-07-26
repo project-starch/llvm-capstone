@@ -1,0 +1,7 @@
+[package]
+name = "hlua-repro"
+version = "0.1.0"
+edition = "2015"
+
+[dependencies]
+hlua = "0.1.0"

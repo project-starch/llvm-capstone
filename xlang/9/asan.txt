@@ -1,0 +1,112 @@
+=================================================================
+==2558586==ERROR: AddressSanitizer: heap-use-after-free on address 0x7b69baff03d0 at pc 0x55c3f85e26ad bp 0x7ffcfe123df0 sp 0x7ffcfe123de0
+READ of size 4 at 0x7b69baff03d0 thread T0
+    #0 0x55c3f85e26ac in mrb_gc_mark /path/to/xlang/9/mruby/src/gc.c:721
+    #1 0x55c3f85e3040 in gc_mark_children /path/to/xlang/9/mruby/src/gc.c:697
+    #2 0x55c3f85e3926 in gc_gray_mark /path/to/xlang/9/mruby/src/gc.c:907
+    #3 0x55c3f85e3926 in incremental_marking_phase /path/to/xlang/9/mruby/src/gc.c:1002
+    #4 0x55c3f85e3926 in incremental_gc /path/to/xlang/9/mruby/src/gc.c:1115
+    #5 0x55c3f85e44a0 in incremental_gc_until /path/to/xlang/9/mruby/src/gc.c:1140
+    #6 0x55c3f85e4e91 in mrb_full_gc /path/to/xlang/9/mruby/src/gc.c:1240
+    #7 0x55c3f85e5e2b in gc_start /path/to/xlang/9/mruby/src/gc.c:1316
+    #8 0x55c3f86293bb in mrb_vm_exec /path/to/xlang/9/mruby/src/vm.c:1422
+    #9 0x55c3f8636bf3 in mrb_vm_run /path/to/xlang/9/mruby/src/vm.c:907
+    #10 0x55c3f86370b7 in mrb_top_run /path/to/xlang/9/mruby/src/vm.c:2894
+    #11 0x55c3f865ba12 in mrb_load_exec /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/parse.y:5832
+    #12 0x55c3f865fca7 in mrb_load_file_cxt /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/parse.y:5841
+    #13 0x55c3f85c4aa4 in main /path/to/xlang/9/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:227
+    #14 0x7f29bbc2a600 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:59
+    #15 0x7f29bbc2a717 in __libc_start_main_impl ../csu/libc-start.c:360
+    #16 0x55c3f85c3ca4 in _start (/path/to/xlang/9/mruby/build/host/bin/mruby+0x23ca4) (BuildId: 2f115a65d41d5a3d16178d81a4659d9e472afc3c)
+
+0x7b69baff03d0 is located 0 bytes inside of 48-byte region [0x7b69baff03d0,0x7b69baff0400)
+freed by thread T0 here:
+    #0 0x7f29bc12a3ff in free ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:51
+    #1 0x55c3f8605789 in mrb_default_allocf /path/to/xlang/9/mruby/src/state.c:50
+    #2 0x55c3f85e1d72 in mrb_free /path/to/xlang/9/mruby/src/gc.c:272
+    #3 0x55c3f8605bb2 in mrb_irep_free /path/to/xlang/9/mruby/src/state.c:154
+    #4 0x55c3f8605e8b in mrb_irep_decref /path/to/xlang/9/mruby/src/state.c:127
+    #5 0x55c3f8605d32 in mrb_irep_free /path/to/xlang/9/mruby/src/state.c:166
+    #6 0x55c3f8605e8b in mrb_irep_decref /path/to/xlang/9/mruby/src/state.c:127
+    #7 0x55c3f85e20da in obj_free /path/to/xlang/9/mruby/src/gc.c:822
+    #8 0x55c3f85e3ee8 in incremental_sweep_phase /path/to/xlang/9/mruby/src/gc.c:1058
+    #9 0x55c3f85e3ee8 in incremental_gc /path/to/xlang/9/mruby/src/gc.c:1124
+    #10 0x55c3f85e44a0 in incremental_gc_until /path/to/xlang/9/mruby/src/gc.c:1140
+    #11 0x55c3f85e46a4 in clear_all_old /path/to/xlang/9/mruby/src/gc.c:1166
+    #12 0x55c3f85e4f96 in mrb_full_gc /path/to/xlang/9/mruby/src/gc.c:1232
+    #13 0x55c3f85e5e2b in gc_start /path/to/xlang/9/mruby/src/gc.c:1316
+    #14 0x55c3f86293bb in mrb_vm_exec /path/to/xlang/9/mruby/src/vm.c:1422
+    #15 0x55c3f8636bf3 in mrb_vm_run /path/to/xlang/9/mruby/src/vm.c:907
+    #16 0x55c3f86370b7 in mrb_top_run /path/to/xlang/9/mruby/src/vm.c:2894
+    #17 0x55c3f865ba12 in mrb_load_exec /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/parse.y:5832
+    #18 0x55c3f865fca7 in mrb_load_file_cxt /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/parse.y:5841
+    #19 0x55c3f85c4aa4 in main /path/to/xlang/9/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:227
+    #20 0x7f29bbc2a600 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:59
+    #21 0x7f29bbc2a717 in __libc_start_main_impl ../csu/libc-start.c:360
+    #22 0x55c3f85c3ca4 in _start (/path/to/xlang/9/mruby/build/host/bin/mruby+0x23ca4) (BuildId: 2f115a65d41d5a3d16178d81a4659d9e472afc3c)
+
+previously allocated by thread T0 here:
+    #0 0x7f29bc12a6cf in realloc ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:81
+    #1 0x55c3f8605782 in mrb_default_allocf /path/to/xlang/9/mruby/src/state.c:54
+    #2 0x55c3f85e5058 in mrb_realloc_simple /path/to/xlang/9/mruby/src/gc.c:204
+    #3 0x55c3f85e5110 in mrb_realloc /path/to/xlang/9/mruby/src/gc.c:218
+    #4 0x55c3f85e52b7 in mrb_malloc /path/to/xlang/9/mruby/src/gc.c:240
+    #5 0x55c3f8606047 in mrb_str_pool /path/to/xlang/9/mruby/src/state.c:186
+    #6 0x55c3f866c468 in new_lit /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:513
+    #7 0x55c3f8681a40 in codegen /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:2360
+    #8 0x55c3f868f38d in gen_call /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:889
+    #9 0x55c3f8678833 in codegen /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:1623
+    #10 0x55c3f8670cef in codegen /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:1308
+    #11 0x55c3f868dc00 in lambda_body /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:734
+    #12 0x55c3f86746a9 in codegen /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:1434
+    #13 0x55c3f86903c0 in gen_call /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:924
+    #14 0x55c3f8678833 in codegen /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:1623
+    #15 0x55c3f8670cef in codegen /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:1308
+    #16 0x55c3f8693e15 in scope_body /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:763
+    #17 0x55c3f867879b in codegen /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:1618
+    #18 0x55c3f8694be4 in mrb_generate_code /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/codegen.c:3032
+    #19 0x55c3f86b5a2a in create_proc_from_string /path/to/xlang/9/mruby/mrbgems/mruby-eval/src/eval.c:234
+    #20 0x55c3f86b689b in f_eval /path/to/xlang/9/mruby/mrbgems/mruby-eval/src/eval.c:298
+    #21 0x55c3f86293bb in mrb_vm_exec /path/to/xlang/9/mruby/src/vm.c:1422
+    #22 0x55c3f8636bf3 in mrb_vm_run /path/to/xlang/9/mruby/src/vm.c:907
+    #23 0x55c3f86370b7 in mrb_top_run /path/to/xlang/9/mruby/src/vm.c:2894
+    #24 0x55c3f865ba12 in mrb_load_exec /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/parse.y:5832
+    #25 0x55c3f865fca7 in mrb_load_file_cxt /path/to/xlang/9/mruby/mrbgems/mruby-compiler/core/parse.y:5841
+    #26 0x55c3f85c4aa4 in main /path/to/xlang/9/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:227
+    #27 0x7f29bbc2a600 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:59
+    #28 0x7f29bbc2a717 in __libc_start_main_impl ../csu/libc-start.c:360
+    #29 0x55c3f85c3ca4 in _start (/path/to/xlang/9/mruby/build/host/bin/mruby+0x23ca4) (BuildId: 2f115a65d41d5a3d16178d81a4659d9e472afc3c)
+
+SUMMARY: AddressSanitizer: heap-use-after-free /path/to/xlang/9/mruby/src/gc.c:721 in mrb_gc_mark
+Shadow bytes around the buggy address:
+  0x7b69baff0100: fa fa 00 00 00 00 00 fa fa fa 00 00 00 00 00 fa
+  0x7b69baff0180: fa fa 00 00 00 00 00 fa fa fa 00 00 00 00 00 fa
+  0x7b69baff0200: fa fa 00 00 00 00 00 fa fa fa 00 00 00 00 00 fa
+  0x7b69baff0280: fa fa 00 00 00 00 00 00 fa fa 00 00 00 00 00 00
+  0x7b69baff0300: fa fa 00 00 00 00 00 00 fa fa 00 00 00 00 00 00
+=>0x7b69baff0380: fa fa 00 00 00 00 00 fa fa fa[fd]fd fd fd fd fd
+  0x7b69baff0400: fa fa fd fd fd fd fd fa fa fa fd fd fd fd fd fa
+  0x7b69baff0480: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7b69baff0500: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7b69baff0580: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7b69baff0600: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==2558586==ABORTING

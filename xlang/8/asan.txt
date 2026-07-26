@@ -1,0 +1,93 @@
+=================================================================
+==2551528==ERROR: AddressSanitizer: heap-use-after-free on address 0x7cd457be0b00 at pc 0x564dd02b2adf bp 0x7ffe2d28b170 sp 0x7ffe2d28b168
+READ of size 8 at 0x7cd457be0b00 thread T0
+    #0 0x564dd02b2ade in hash_values_at /path/to/xlang/8/mruby/mrbgems/mruby-hash-ext/src/hash-ext.c:33:31
+    #1 0x564dd020d680 in mrb_vm_exec /path/to/xlang/8/mruby/src/vm.c
+    #2 0x564dd02013a8 in mrb_vm_run /path/to/xlang/8/mruby/src/vm.c:949:12
+    #3 0x564dd023b5bf in mrb_load_exec /path/to/xlang/8/mruby/mrbgems/mruby-compiler/core/parse.y:6438:7
+    #4 0x564dd01a3f68 in main /path/to/xlang/8/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:327:11
+    #5 0x7f0458a2a600 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+    #6 0x7f0458a2a717 in __libc_start_main csu/../csu/libc-start.c:360:3
+    #7 0x564dd00b9c74 in _start (/path/to/xlang/8/mruby/build/host/bin/mruby+0x51c74) (BuildId: 020d8d626271409f350ed9f6017dd3f882343d9a)
+
+0x7cd457be0b00 is located 128 bytes inside of 2048-byte region [0x7cd457be0a80,0x7cd457be1280)
+freed by thread T0 here:
+    #0 0x564dd015f620 in realloc (/path/to/xlang/8/mruby/build/host/bin/mruby+0xf7620) (BuildId: 020d8d626271409f350ed9f6017dd3f882343d9a)
+    #1 0x564dd01c1f1a in mrb_realloc_simple /path/to/xlang/8/mruby/src/gc.c:209:8
+    #2 0x564dd01c1f1a in mrb_realloc /path/to/xlang/8/mruby/src/gc.c:223:8
+    #3 0x564dd01fc14d in stack_extend_alloc /path/to/xlang/8/mruby/src/vm.c:205:27
+    #4 0x564dd01fc14d in mrb_stack_extend /path/to/xlang/8/mruby/src/vm.c:226:5
+    #5 0x564dd020d533 in mrb_vm_exec /path/to/xlang/8/mruby/src/vm.c:1484:9
+    #6 0x564dd02013a8 in mrb_vm_run /path/to/xlang/8/mruby/src/vm.c:949:12
+    #7 0x564dd01fdf8e in mrb_run /path/to/xlang/8/mruby/src/vm.c
+    #8 0x564dd01fdf8e in mrb_funcall_with_block /path/to/xlang/8/mruby/src/vm.c:531:13
+    #9 0x564dd01fc9da in mrb_funcall_argv /path/to/xlang/8/mruby/src/vm.c:541:10
+    #10 0x564dd01fc9da in mrb_funcall /path/to/xlang/8/mruby/src/vm.c:402:10
+    #11 0x564dd01ddc2c in mrb_eql /path/to/xlang/8/mruby/src/object.c:639:10
+    #12 0x564dd01cf339 in ht_hash_equal /path/to/xlang/8/mruby/src/hash.c:126:22
+    #13 0x564dd01ca9b4 in ht_get /path/to/xlang/8/mruby/src/hash.c:458:11
+    #14 0x564dd01ca585 in mrb_hash_get /path/to/xlang/8/mruby/src/hash.c:711:7
+    #15 0x564dd02b29e0 in hash_values_at /path/to/xlang/8/mruby/mrbgems/mruby-hash-ext/src/hash-ext.c:33:31
+    #16 0x564dd020d680 in mrb_vm_exec /path/to/xlang/8/mruby/src/vm.c
+    #17 0x564dd02013a8 in mrb_vm_run /path/to/xlang/8/mruby/src/vm.c:949:12
+    #18 0x564dd023b5bf in mrb_load_exec /path/to/xlang/8/mruby/mrbgems/mruby-compiler/core/parse.y:6438:7
+    #19 0x564dd01a3f68 in main /path/to/xlang/8/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:327:11
+    #20 0x7f0458a2a600 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+    #21 0x7f0458a2a717 in __libc_start_main csu/../csu/libc-start.c:360:3
+    #22 0x564dd00b9c74 in _start (/path/to/xlang/8/mruby/build/host/bin/mruby+0x51c74) (BuildId: 020d8d626271409f350ed9f6017dd3f882343d9a)
+
+previously allocated by thread T0 here:
+    #0 0x564dd015f620 in realloc (/path/to/xlang/8/mruby/build/host/bin/mruby+0xf7620) (BuildId: 020d8d626271409f350ed9f6017dd3f882343d9a)
+    #1 0x564dd01c1f1a in mrb_realloc_simple /path/to/xlang/8/mruby/src/gc.c:209:8
+    #2 0x564dd01c1f1a in mrb_realloc /path/to/xlang/8/mruby/src/gc.c:223:8
+    #3 0x564dd01c2243 in mrb_malloc /path/to/xlang/8/mruby/src/gc.c:245:10
+    #4 0x564dd01c2243 in mrb_calloc /path/to/xlang/8/mruby/src/gc.c:263:9
+    #5 0x564dd01fd20e in stack_init /path/to/xlang/8/mruby/src/vm.c:133:28
+    #6 0x564dd01fd20e in mrb_funcall_with_block /path/to/xlang/8/mruby/src/vm.c:463:7
+    #7 0x564dd01fd145 in mrb_funcall_with_block /path/to/xlang/8/mruby/src/vm.c:441:13
+    #8 0x564dd01fcab3 in mrb_funcall_argv /path/to/xlang/8/mruby/src/vm.c:541:10
+    #9 0x564dd01b6147 in mrb_obj_new /path/to/xlang/8/mruby/src/class.c:1553:5
+    #10 0x564dd01c124c in mrb_exc_new_str /path/to/xlang/8/mruby/src/error.c:31:10
+    #11 0x564dd01c124c in mrb_init_exception /path/to/xlang/8/mruby/src/error.c:574:20
+    #12 0x564dd0270bc7 in mrb_init_core /path/to/xlang/8/mruby/src/init.c:42:3
+    #13 0x564dd01e2b86 in mrb_open_core /path/to/xlang/8/mruby/src/state.c:43:3
+    #14 0x564dd01e2b86 in mrb_open_allocf /path/to/xlang/8/mruby/src/state.c:71:20
+    #15 0x564dd01e2b86 in mrb_open /path/to/xlang/8/mruby/src/state.c:63:20
+    #16 0x564dd01a346b in main /path/to/xlang/8/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:253:20
+    #17 0x7f0458a2a600 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+    #18 0x7f0458a2a717 in __libc_start_main csu/../csu/libc-start.c:360:3
+    #19 0x564dd00b9c74 in _start (/path/to/xlang/8/mruby/build/host/bin/mruby+0x51c74) (BuildId: 020d8d626271409f350ed9f6017dd3f882343d9a)
+
+SUMMARY: AddressSanitizer: heap-use-after-free /path/to/xlang/8/mruby/mrbgems/mruby-hash-ext/src/hash-ext.c:33:31 in hash_values_at
+Shadow bytes around the buggy address:
+  0x7cd457be0880: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7cd457be0900: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7cd457be0980: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7cd457be0a00: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7cd457be0a80: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+=>0x7cd457be0b00:[fd]fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7cd457be0b80: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7cd457be0c00: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7cd457be0c80: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7cd457be0d00: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7cd457be0d80: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==2551528==ABORTING
