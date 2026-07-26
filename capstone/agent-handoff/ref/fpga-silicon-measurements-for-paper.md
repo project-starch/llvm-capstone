@@ -171,16 +171,21 @@ An assumption in the paper becomes a measurement, and the claim gets stronger.
   checksum (`matmult_int` miscomputes at −O0 and hangs at −O1). Trail:
   `history/26-07-2026_23-56-07_the-hang-is-in-the-compute-not-at-domain-entry.md`.
   `beebs_crc32` cannot build at −O1+ and `beebs_insertsort` crashes clang at −O1.
-  **Sharpened 2026-07-27 by static analysis (no board time):** `matmult_int` at −O1
-  emits 8 conditional branches, **all `bne`**; the same source at −O0 emits 8, **all
-  `blt`**. `bne` exits on exact equality and can be overshot by a perturbed loop
-  counter (infinite loop); `blt` exits on ordering and cannot (wrong answer). So the
-  miscompute and the hang are plausibly **one fault with two symptoms**, selected by
-  the emitted branch. Caveat: not a global discriminator — `beebs_recursion` −O1 also
-  has `bne` backedges and passes, so fragility is an amplifier, not the cause. And it
-  does not cover `coremark_matrix`, whose exits are ordered (`bgeu`) but whose matrix
-  dimension `N` is computed at runtime by `while (j < blksize) { j = i*i*2*4; }` —
-  an ordered exit that still never fires if the `mulw` result never reaches 666.
+  **The loop-exit ("fragile `bne`") hypothesis is REFUTED on silicon (2026-07-27).** It
+  was observed statically that `matmult_int` at −O1 emits 8 conditional branches, **all
+  `bne`**, while the same source at −O0 emits 8, **all `blt`** — suggesting the hang and
+  the miscompute were one fault whose symptom the branch kind selected (`bne` exits on
+  exact equality and can be overshot; `blt` cannot). **Board test #65 killed it:** a −O1
+  build with ordered exits forced (verified 0 fragile / 8 ordered, QEMU-correct through
+  the same controller) **still hangs, identically.** The codegen split is real but is a
+  correlate, not the mechanism. Do not repeat the "one fault, two symptoms" framing.
+  **What #66 DID establish:** for `coremark_matrix`, the hang is inside
+  **`core_init_matrix`**. Bisecting against mode 7 at the same −O0 @32 KiB config —
+  entry-only RETURNS, entry + `core_init_matrix` HANGS, everything HANGS — narrows it
+  from the whole benchmark to one ~40-line function. Two candidates remain inside it:
+  the dimension loop `while (j < blksize) { j = i*i*2*4; }` (`bgeu` `0x10428` / `mulw`
+  `0x10444`), and the N×N seeding loop doing `seed = ((order*seed) % 65536)` per element
+  through the gp-delivered block cap. Not yet separated.
   Also corrected there: the "no discriminating instruction" sweep had been run with the
   Capstone-triple disassembler, which prints every M-extension op as `<unknown>`; re-run
   with `--triple=riscv64 --mattr=+m` the conclusion **stands** (`beebs_prime` passes

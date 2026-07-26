@@ -37,6 +37,14 @@ static int mmC[MM_N][MM_N];
  *                             after all; the -O1 hang is something else.
  *   still HANGS            => the fragile-exit mechanism is dead.
  *
+ * RAN ON SILICON 2026-07-27 (task #65): **STILL HANGS**, identically, two attempts --
+ * even though this build verifies as 0 fragile / 8 ordered branches and returns the
+ * oracle under QEMU through the same board controller. **The fragile-exit mechanism is
+ * REFUTED.** The -O1-all-bne / -O0-all-blt split is real but is a correlate, not the
+ * cause. Kept in-tree as the record of a falsified hypothesis (and because the knob is
+ * a useful general lever), NOT as a live lead. Trail:
+ * history/27-07-2026_00-58-47_RESULTS-65-falsified-66-localizes-hang-to-core_init_matrix.md
+ *
  * Laundering the BOUND alone is not enough -- measured: 8 bne became 5 bne + 2 beq,
  * because IndVarSimplify still proves the counter lands on the bound exactly and
  * rewrites `i < n` back to `i != n`. The INCREMENT has to be opaque too (MM_STEP), so

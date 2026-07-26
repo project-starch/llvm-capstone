@@ -230,7 +230,17 @@ static ee_u8 cm_memblk[CM_MATRIX_BLKSIZE + 16] __attribute__((aligned(16)));
  *   returns N == 9 => init is clean; the hang is downstream of it.
  *
  * Expected N = 9: i*i*8 first reaches 666 at i=10 (800), so N = i-1 = 9. The native
- * host oracle computes it from this same header, so the runner's gate still applies. */
+ * host oracle computes it from this same header, so the runner's gate still applies.
+ *
+ * RAN ON SILICON 2026-07-27 (task #66): **HANGS.** Against mode 7 at the same
+ * -O0 @32KiB config (entry path only -> RETURNS), this localizes the fault to INSIDE
+ * core_init_matrix -- the whole benchmark narrowed to this one function.
+ *
+ * But the three-way reading above was TOO NARROW: "hangs => it is the while loop" is
+ * wrong, because core_init_matrix contains a second candidate -- the N*N seeding loop
+ * below, which runs `seed = ((order * seed) % 65536)` (a multiply AND a remainder) per
+ * element and writes A[]/B[] through the gp-delivered block capability. Both would hang.
+ * NEXT PROBE: return N *before* the seeding loop to separate them (one boot). */
 static unsigned coremark_matrix_compute(void) {
   mat_params p;
   ee_u32 n = core_init_matrix(CM_MATRIX_BLKSIZE, cm_memblk, 0, &p);

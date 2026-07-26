@@ -48,23 +48,34 @@ known miscompute corrupting a **loop bound** instead of a checksum (`matmult_int
 miscomputes at −O0, hangs at −O1 — one bug, two victims). Trail:
 `history/26-07-2026_23-56-07_the-hang-is-in-the-compute-not-at-domain-entry.md`.
 
-**SHARPENED (2026-07-27, static analysis, zero board time).** `matmult_int` at −O1
-emits 8 conditional branches, **all `bne`**; the same source at −O0 emits 8, **all
-`blt`**. `bne` exits on exact equality and can be overshot by a perturbed loop counter
-(→ infinite loop); `blt` exits on ordering and cannot (→ wrong answer). Same rung, one
-opt level apart, symptom flips with the branch kind ⇒ **the miscompute and the hang are
-plausibly ONE fault with two symptoms**, selected by the emitted branch. NOT a global
-discriminator: `beebs_recursion` −O1 also has `bne` backedges and passes, so fragility
-is an **amplifier, not a cause**. `coremark_matrix` needs a different mechanism — its
-exits are ordered (17 `bgeu`), but its dimension `N` is computed at runtime by
-`while (j < blksize) { i++; j = i*i*2*4; }` (`bgeu` at `0x10428`, `mulw` at `0x10444`),
-and an ordered exit still never fires if the multiply never reaches 666; `N` then feeds
-every downstream bound via `p->N`. Also corrected: the "no discriminating instruction"
-sweep had used the Capstone-triple disassembler, which prints every M-extension op as
-`<unknown>`; re-run properly the conclusion **stands** (`beebs_prime` passes with
-`mul`+`remu`) and the blind spot was 2% of instructions, uniform across binaries.
-Next: tasks **#65/#66** (task #64 deleted as superseded). Trail:
-`history/27-07-2026_00-28-51_loop-exit-condition-splits-hang-from-miscompute.md`.
+**2026-07-27, static analysis:** `matmult_int` at −O1 emits 8 conditional branches, **all
+`bne`**; the same source at −O0 emits 8, **all `blt`**. That suggested the hang and the
+miscompute were ONE fault whose symptom the branch kind selects (`bne` exits on exact
+equality and can be overshot by a perturbed counter; `blt` cannot). Also corrected there:
+the "no discriminating instruction" sweep had used the Capstone-triple disassembler,
+which prints every M-extension op as `<unknown>`; re-run properly the conclusion
+**stands** (`beebs_prime` passes with `mul`+`remu`), blind spot only 2% of instructions.
+
+**BOARD RESULT (2026-07-27, tasks #65/#66) — the fragile-exit hypothesis is REFUTED,
+and coremark's hang is LOCALIZED.**
+- **#65 FALSIFIED the prediction.** A −O1 `matmult_int` with ordered exits forced
+  (verified 0 fragile / 8 ordered; QEMU-correct through the same controller) **still
+  hangs, identically.** The `bne`/`blt` codegen split is a correlate, **not the
+  mechanism**. Do not carry "one fault, two symptoms" forward. Second hypothesis in two
+  days to die this way — both were strong static correlations promoted to mechanisms
+  before a board test could speak.
+- **#66 LOCALIZED coremark.** Returning `N` straight out of `core_init_matrix` and
+  skipping the whole benchmark **still hangs**. Bisected against mode 7 at the same
+  −O0 @32 KiB config: entry-only RETURNS, entry + `core_init_matrix` HANGS, everything
+  HANGS ⇒ **the fault is inside `core_init_matrix`** — the whole benchmark narrowed to
+  one ~40-line function. Two candidates remain inside it, not yet separated: the
+  dimension loop `while (j < blksize) { j = i*i*2*4; }` (`bgeu` `0x10428` / `mulw`
+  `0x10444`), and the N×N seeding loop running `seed = ((order*seed) % 65536)` per
+  element through the gp-delivered block cap.
+Next: split `core_init_matrix` (return `N` before the seeding loop, one boot); then a
+phase bisect on `matmult_int`. Trail:
+`history/27-07-2026_00-58-47_RESULTS-65-falsified-66-localizes-hang-to-core_init_matrix.md`
+(supersedes the forward half of `..._00-28-51_...`).
 
 **The 4 KiB code window is liftable** (one hardcoded number in `link-gpfree.ld`;
 QEMU-validated at 16 KiB and 32 KiB, not yet on silicon). Needed for full

@@ -11,26 +11,30 @@
    rungs complete a full round-trip on silicon when the compute is branched over), so
    an entry-side barrier is the wrong layer. The previous "build `fence.i` into board
    firmware" instruction here rested on the retracted domain-entry framing.
-   Next diagnostics are cheap and need no firmware change. **Static analysis on
-   2026-07-27 replaced the old "shrink the iteration count" step (task #64, deleted)
-   with two sharper board tests**, both prepared offline, one boot each:
-   - **#65 (`matmult_int`)** — at −O1 it emits 8 conditional branches, **all `bne`**;
-     the same source at −O0 emits 8, **all `blt`**. `bne` exits on exact equality and
-     can be overshot by a perturbed loop counter (→ infinite loop); `blt` exits on
-     ordering and cannot (→ wrong answer). Same rung, one opt level apart, and the
-     symptom flips with the branch kind. Test: rebuild −O1 with ordered exits forced.
-     **Prediction: it stops hanging and returns a WRONG value**, which would unify the
-     miscompute and the hang into one root cause (collapsing this with task #49).
-   - **#66 (`coremark_matrix`)** — does NOT fit that story (its exits are ordered,
-     17 `bgeu`). But its dimension `N` is computed at runtime by
-     `while (j < blksize) { i++; j = i*i*2*4; }` → `bgeu` at `0x10428` driven by
-     `mulw` at `0x10444`; an ordered exit still never fires if the multiply never
-     reaches 666, and `N` feeds every downstream bound via `p->N`. Test: return `N`
-     straight out of `core_init_matrix`. Hangs ⇒ that loop; `N != 9` ⇒ the miscompute
-     caught red-handed; `N == 9` ⇒ look downstream.
-   Caveat carried forward: fragility is an **amplifier, not a cause** —
-   `beebs_recursion` −O1 has `bne` backedges and passes. Trail:
-   `history/27-07-2026_00-28-51_loop-exit-condition-splits-hang-from-miscompute.md`.
+   **Tasks #65/#66 RAN on 2026-07-27. Both hung; one hypothesis died, one lead got
+   sharper.** (They replaced the old "shrink the iteration count" step, task #64.)
+   - **#65 FALSIFIED.** `matmult_int` −O1 rebuilt with ordered loop exits forced
+     (verified 0 fragile / 8 ordered; QEMU-correct through the same controller) **still
+     hangs.** So the `bne`-overshoot mechanism is dead: the −O1-all-`bne` /
+     −O0-all-`blt` codegen split is real but is a **correlate, not the cause**. Do NOT
+     revive "the miscompute and the hang are one fault selected by the branch kind".
+   - **#66 LOCALIZED.** Returning `N` straight out of `core_init_matrix`, skipping the
+     entire benchmark, **still hangs**. Against mode 7 at the same −O0 @32 KiB config
+     (entry-only RETURNS) this puts the fault **inside `core_init_matrix`** — one
+     ~40-line function instead of the whole benchmark.
+   **Next, cheapest first:**
+   1. **Split `core_init_matrix`** — return `N` *before* the N×N seeding loop. One boot;
+      separates the two remaining candidates: the dimension loop
+      `while (j < blksize) { j = i*i*2*4; }` (`bgeu` `0x10428` / `mulw` `0x10444`) vs the
+      seeding loop's `seed = ((order*seed) % 65536)` per element through the
+      gp-delivered block cap. The pre-registered "hangs ⇒ it's the while loop" reading
+      was too narrow — `core_init_matrix` contains both.
+   2. **Phase-bisect `matmult_int`** — return after the init loops, then after the
+      `mm_cell` loops, then after the FNV fold. 2–3 boots, no mechanism guess needed.
+   3. Do not let this hold the eval section hostage: 3 measured rungs + the §5 caveats
+      is shippable; a *documented* hardware limitation is acceptable, an unexplained one
+      is not. Trail:
+   `history/27-07-2026_00-58-47_RESULTS-65-falsified-66-localizes-hang-to-core_init_matrix.md`.
 2. **Silicon-validate the 16/32 KiB code window** (QEMU-validated only). Unlocks full
    CoreMark and Dhrystone, which is what the benchmark set actually needs for
    representativeness — no measured kernel currently chases pointers.
