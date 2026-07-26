@@ -5,11 +5,18 @@
 
 # Agent-B next step (2026-07-26)
 
-1. **Unblock the `cscall` hang** — the only thing standing between 3/5 and 5/5
-   benchmarks. Build the domain-boundary `fence.i` patch
-   (`patches/opensbi-capstone-sbi-domcall-boundary-fence-i.patch`) into board
-   firmware and retest `matmult_int -O1` + `coremark_matrix -O0` (32 KiB window).
-   QEMU cannot validate it (no icache model), so it must go straight to the board.
+1. **Unblock the hang** — the only thing standing between 3/5 and 5/5 benchmarks.
+   **Do NOT start with the `fence.i` patch.** As of 2026-07-26 the hang is localized
+   to **inside the compute**, not domain entry (`LADDER_INSTR_MODE=7`: both hanging
+   rungs complete a full round-trip on silicon when the compute is branched over), so
+   an entry-side barrier is the wrong layer. The previous "build `fence.i` into board
+   firmware" instruction here rested on the retracted domain-entry framing.
+   Next diagnostic is cheap and needs no firmware change: **bisect within the
+   compute** — shrink `matmult_int -O1`'s iteration count / matrix dimension until it
+   returns, and find the threshold. A hang that vanishes below some trip count points
+   at a corrupted loop bound (the leading hypothesis: the known miscompute landing on
+   a loop counter rather than a checksum); one that persists at trivial size points
+   elsewhere.
 2. **Silicon-validate the 16/32 KiB code window** (QEMU-validated only). Unlocks full
    CoreMark and Dhrystone, which is what the benchmark set actually needs for
    representativeness — no measured kernel currently chases pointers.

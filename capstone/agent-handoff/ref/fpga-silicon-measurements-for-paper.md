@@ -156,11 +156,21 @@ An assumption in the paper becomes a measurement, and the claim gets stronger.
 - **Three benchmarks, not seven.** `matmult_int` and `coremark_matrix` produce no
   result at ANY reachable configuration: they transfer cleanly, then the `cscall`
   hangs (matmult at −O1 and −O2; coremark at −Os and at −O0 with a 32 KiB window).
-  This is a domain-entry fault, not delivery and not the compiler — it is not `-Os`
-  codegen (coremark hangs at −O0), not code size (coremark hangs at 1,988 B of text,
-  smaller than rungs that pass), and no instruction is present in every hanging build
-  and absent from every passing one. `beebs_crc32` cannot build at −O1+ and
-  `beebs_insertsort` crashes clang at −O1.
+  It is not `-Os` codegen (coremark hangs at −O0), not code size (coremark hangs at
+  1,988 B of text, smaller than rungs that pass), and no instruction is present in
+  every hanging build and absent from every passing one. Global count and `.bss` size
+  do not discriminate either (`rv8_primes` has the largest `.bss`, 12,512 B, and
+  passes; every hanging rung is under 800 B).
+  **The hang is INSIDE THE COMPUTE, not at domain entry** — established 2026-07-26 by
+  `LADDER_INSTR_MODE=7`, which runs the whole entry path but branches over the compute:
+  both hanging rungs then complete a full domain round-trip on silicon, first attempt.
+  An earlier version of this document called it "a domain-entry fault"; that was
+  inferred from the failure of three compiler-side hypotheses, which does not localize a
+  layer, and it is **retracted**. Mechanism inside the compute is still unknown; the
+  leading hypothesis is the known miscompute corrupting a **loop bound** rather than a
+  checksum (`matmult_int` miscomputes at −O0 and hangs at −O1). Trail:
+  `history/26-07-2026_23-56-07_the-hang-is-in-the-compute-not-at-domain-entry.md`.
+  `beebs_crc32` cannot build at −O1+ and `beebs_insertsort` crashes clang at −O1.
 - **The pointer-chasing axis is missing entirely.** No measured kernel chases
   pointers, yet capabilities are 16 B against an 8-byte pointer, so linked structures
   double memory traffic — historically where capability machines hurt most. The set

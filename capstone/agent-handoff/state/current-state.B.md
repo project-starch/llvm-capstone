@@ -3,7 +3,7 @@
 > single-writer base file). Seeded from A's `current-state.md` at Agent-B bring-up (2026-07-08).
 
 
-# Agent-B delta (2026-07-26) — THREE benchmarks measured on silicon; two blocked by a domain-entry hang
+# Agent-B delta (2026-07-26) — THREE benchmarks measured on silicon; two blocked by a hang INSIDE THE COMPUTE
 
 **Goal 1 (RV8/CoreMark/BEEBS perf on FPGA) is 3/5 done.** Pervasive spatial-safety
 overhead, capability domain vs plain RISC-V, same clang and same -O on both sides,
@@ -28,10 +28,25 @@ in a register instead of being `ldc`-reloaded per store, and `beebs_recursion` f
 from 2095861164 to the correct 1579141629.
 
 **Blocked: `matmult_int` + `coremark_matrix` hang the `cscall`** at every reachable
-config. NOT reachable from the compiler side — not −Os codegen (coremark hangs at
-−O0), not code size (coremark hangs at 1,988 B, smaller than passing rungs), and no
-instruction discriminates hanging from passing builds. Standing candidate: the
-domain-boundary `fence.i` patch, never built into board firmware.
+config. Not −Os codegen (coremark hangs at −O0), not code size (coremark hangs at
+1,988 B, smaller than passing rungs), no discriminating instruction, and neither
+global count nor `.bss` size discriminates (`rv8_primes` has the largest `.bss`,
+12,512 B, and passes).
+
+**LOCALIZED (2026-07-26 late): the hang is INSIDE THE COMPUTE, not at domain entry.**
+`LADDER_INSTR_MODE=7` runs the entire entry path but branches over the compute, and
+both hanging rungs then complete a full domain round-trip on silicon on the first
+attempt (`ran=0xD09E`, `phase=0xE117`). So entry glue, gp-captable build, region-cap
+delivery and `cscall`/`csreturn` all work for these exact binaries — and
+stale-icache-at-entry is dead too, since mode 7 fetches the same freshly-placed code.
+**RETRACTED: the earlier "domain-entry fault, not reachable from the compiler side"
+conclusion**, which was inferred from three dead compiler-side hypotheses — that rules
+out three causes, it does not localize a layer. **Consequence: the domain-boundary
+`fence.i` patch is aimed at the wrong layer** and should not be built on that
+rationale. Mechanism inside the compute is still unknown; leading hypothesis is the
+known miscompute corrupting a **loop bound** instead of a checksum (`matmult_int`
+miscomputes at −O0, hangs at −O1 — one bug, two victims). Trail:
+`history/26-07-2026_23-56-07_the-hang-is-in-the-compute-not-at-domain-entry.md`.
 
 **The 4 KiB code window is liftable** (one hardcoded number in `link-gpfree.ld`;
 QEMU-validated at 16 KiB and 32 KiB, not yet on silicon). Needed for full
