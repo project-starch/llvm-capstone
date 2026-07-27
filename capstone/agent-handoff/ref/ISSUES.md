@@ -288,42 +288,55 @@ regress.
 - **Leads:** `sha512` faults with bounds visibly too small; `norx` with an untagged capability
   reaching a load. Both smell like a bounds/provenance codegen bug at −O1+.
 
-### C-4 — A `.rodata` access is emitted PC-relative and faults outside PCC `PARTIALLY DIAGNOSED`
-Renamed from "large read-only data cannot be delivered": **size is not the variable.**
+### C-4 — split into a FIXED half and a remaining domain-creation bug
+Renamed from "large read-only data cannot be delivered": size was never the variable.
 
-**Established (2026-07-28), all verified:**
-- The domain faults on `ld a4, 0(a0)` with `a0` built by `auipc a4,0x0` + `addi a0,a4,0x750`
-  = **`0x11000`** — a PC-relative absolute address used as a capability base.
-- Layout: `.text` `0x10000` (PCC window only `0x1000`); **`.rodata` `0x11000` — OUTSIDE
-  PCC**; `.capstone_gp_table` `0x110c8`; `.bss` `0x11120`.
-- Marking a table `const` moves it to `.rodata` and triggers this; the same data as
-  non-const `static` lands in `.bss` and works.
-- The table must have **external linkage** or it fails to link (`undefined symbol:
-  sha512_k`) — the cap-table glue is a separate TU.
+#### C-4a — constant pools are unreachable in a domain `FIXED 2026-07-28`
+**Root cause, with the emitted sequence:**
+```
+.LCPI0_0: .quad 81985529216486895        ; .rodata.cst8 -- a CONSTANT POOL entry
+  auipc a2, %pcrel_hi(.LCPI0_0)
+  addi  a1, a2, %pcrel_lo(...)
+  scc   a1, gp, a1     ; set gp's cursor to a .rodata address
+  ld    s6, 0(a1)      ; FAULTS
+```
+A pool entry is **not** a `GlobalVariable`, so it gets no cap-table slot (correctly);
+`lowerConstantPool` then falls back to `LGA` → `scc gp`. Under gp-captable `gp` is bounded
+to the **cap table itself**, so the cursor lands out of bounds. The tell in the fault line
+is that the reported bounds are exactly the table:
+`cursor = 0x101561000, bounds = (0x10157ffd0, 0x101580000)`.
 
-> **⚠ CORRECTION.** An earlier commit claimed the cause was `ISD::ConstantPool` nodes
-> getting no cap-table slot. **That is refuted by the descriptors**, which show all the
-> read-only data DOES have slots: `[0] size=64` (`sha512_init_state`), `[1] size=640`
-> (`sha512_k`), `[2] size=192` (`sha_chain`+`sha_w`, merged by GlobalMerge). The IR has 4
-> named globals; GlobalMerge combines two, giving the 3 descriptors seen. So "missing from
-> the table" does NOT explain the faulting access, and the mechanism is still open.
+**Fix:** `CapstoneSubtarget::useConstantPoolForLargeInts()` returns **false** whenever the
+gp-free/gp-captable ABI is active, so the constant is materialised inline instead. Forming
+a pool in a domain is always a miscompile, never an optimisation — the same reason
+`-fno-jump-tables` is already mandatory (a jump table is `.rodata` too).
 
-**The open question, stated precisely:** every global has a slot and `lowerGlobalAddress`
-routes slotted globals through `ldc gp[i]` — so **which lowering path emits the
-`auipc`/`addi` at `0x108b0`–`0x108c0`, and for which object?** Candidates not yet
-separated: (a) a `ConstantPool` node after all, at an address that happens to sit inside
-`.rodata`; (b) an `LGA` fallback taken before GlobalMerge renumbers indices, so the access
-and the table disagree about order; (c) glue code rather than domain code. Resolve by
-correlating the faulting PC against the emitted assembly with symbols, not against the
-stripped `.dom`.
+**Validated:** the previously-faulting `rv8_sha512` configuration now returns its oracle
+(`__CAPSTONE_LADDER_RV8_SHA512_PASSED__`); 0 `.LCPI` entries remain in the emitted asm;
+Capstone lit **43/43**; `beebs_bs`, `beebs_prime`, `beebs_cnt` still pass QEMU parity.
 
-**Note on index stability (worth checking regardless):** `getGpCaptableIndex` derives an
-index by *position* in `M.globals()`. GlobalMerge changes that list. If any access is
-lowered against the pre-merge order while the descriptor table is emitted post-merge, the
-domain would load the wrong slot — a silent wrong-capability bug, not just a fault.
+> **Two wrong turns on the way, both worth remembering.** First this was called a
+> *large-data delivery* problem, because bigger constants are the ones that get pooled.
+> Then, on seeing that all named globals DID have cap-table slots, the constant-pool
+> explanation was **retracted as refuted** — but the faulting object was never a global,
+> so the descriptors could not have refuted it. The lesson is to identify the faulting
+> OBJECT before reasoning about the mechanism: a symbolised `-S` listing settled in one
+> step what two rounds of inference got wrong.
 
-**Repro:** `tests/runtime-qemu/silicon-ladder/rv8_sha512_kernel.h`, oracle 1390718314;
-spec entry commented out. Blocks the crypto/bitwise rung, and likely SQLite's const tables.
+#### C-4b — a large initialized global breaks domain creation `OPEN`
+With the full 640 B `sha512_k`, the domain cannot be created at all: QEMU asserts in
+`helper_cssplit` (`rs1_v->tag && !rs2_v->tag`), loadable size 5088. Truncating the table to
+128 B gets past creation and (since C-4a) now **passes**. So this is a distinct,
+size-dependent fault in the monitor's image SPLIT, not an addressing problem.
+- **Repro:** `rv8_sha512_kernel.h` as committed (oracle 1390718314); spec entry commented
+  out. Truncate `sha512_k` to 16 entries to isolate C-4a from C-4b.
+- **Blocks:** the crypto/bitwise rung, and probably SQLite's const tables.
+
+**Related hazard, unverified:** `getGpCaptableIndex` derives its index from a global's
+*position* in `M.globals()`, and GlobalMerge mutates that list (it merged `sha_chain` +
+`sha_w` into one 192 B entry here). If any access were lowered against the pre-merge order
+while descriptors are emitted post-merge, a domain would load the **wrong slot** — silent
+wrong data rather than a fault. Not observed; worth a dedicated check.
 
 ### C-9 — Redundant `mv rd, rd` around inline-asm register constraints `OPEN`
 The Capstone backend emits **no-op self-moves** around an `asm volatile("" : "+r"(x))`

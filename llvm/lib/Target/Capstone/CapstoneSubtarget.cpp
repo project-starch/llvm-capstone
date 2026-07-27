@@ -141,7 +141,35 @@ const CapstoneRegisterBankInfo *CapstoneSubtarget::getRegBankInfo() const {
   return RegBankInfo.get();
 }
 
+// gp-captable / gp-free ABI predicate (defined at global scope in
+// CapstoneISelDAGToDAG.cpp, alongside the cl::opt flags it reads).
+bool capstoneGpFreeAbiActive();
+
 bool CapstoneSubtarget::useConstantPoolForLargeInts() const {
+  // A constant pool is UNREACHABLE in a domain under the gp-free/gp-captable
+  // ABI, so forming one is always a miscompile rather than an optimisation.
+  //
+  // Pool entries live in .rodata, which sits outside the domain's PCC window,
+  // and -- unlike a global -- a pool entry is not a GlobalVariable, so it gets
+  // no cap-table slot. lowerConstantPool therefore falls back to LGA, which
+  // expands to `scc gp, <absolute addr>`. Under gp-captable `gp` is bounded to
+  // the cap TABLE (a few dozen bytes), so setting its cursor to a .rodata
+  // address is out of bounds and the domain takes a capability fault:
+  //
+  //   auipc a2, %pcrel_hi(.LCPI0_0)
+  //   addi  a1, a2, %pcrel_lo(...)
+  //   scc   a1, gp, a1        <-- cursor into .rodata, gp bounds are the table
+  //   ld    s6, 0(a1)         <-- FAULTS
+  //
+  // Observed as "Cap mem access OOB: cursor = ...1000, bounds = (...7ffd0,
+  // ...80000)" -- the bounds being exactly the cap table is the tell. Found via
+  // rv8_sha512, whose 64-bit literal multiplier was pooled (issue C-4).
+  //
+  // Materialising the constant inline costs a few instructions instead, which is
+  // strictly better than not running. This is the same reason -fno-jump-tables
+  // is already mandatory for these domains: a jump table is .rodata too.
+  if (capstoneGpFreeAbiActive())
+    return false;
   return !CapstoneDisableUsingConstantPoolForLargeInts;
 }
 
