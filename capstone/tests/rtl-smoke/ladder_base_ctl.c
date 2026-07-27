@@ -193,10 +193,39 @@ static void run_pass(const struct rung *r, int pass) {
   puts_("\n");
 }
 
+/* Number of passes per rung. Two is not enough -- issue I-2.
+ *
+ * The cold/warm split above controls for demand paging, and that was necessary,
+ * but it does NOT control for timer interrupts landing inside the bracket. The
+ * ctrsanity probe measured that directly: for a 5-instruction register-only loop
+ * that both targets compile identically, the Linux baseline runs at 7.25 cyc/iter
+ * against the domain's metronomic 6.00 -- ~1.21x slow -- and the excess scales
+ * proportionally with work (3.92x instructions for 4x the work, at 14 cycles per
+ * excess instruction: interrupt entry/exit plus cache disruption).
+ *
+ * That inflates the DENOMINATOR of every overhead ratio, so it understates
+ * capability overhead -- the error runs in our own favour.
+ *
+ * A single warm pass cannot see this. Many passes can: interrupts arrive on a
+ * timer, not in step with the kernel, so across N passes the instret varies and
+ * the MINIMUM instret is the least-disturbed run. The consumer picks that pass
+ * (see run_ladder_base_fpga.py) and reports how many passes tied at it, which is
+ * the cleanliness evidence -- several passes agreeing exactly is what "no
+ * interrupt landed" looks like, whereas the old test (pass1 instret == pass2
+ * instret) only proved reproducibility. beebs_cnt passed that test twice and
+ * still produced an impossible 0.684x ratio.
+ *
+ * For kernels shorter than a timer tick this yields a genuinely interrupt-free
+ * measurement. For kernels longer than a tick no pass can be clean, and the
+ * spread across passes is then the honest error bar rather than a hidden bias. */
+#ifndef BASE_PASSES
+#define BASE_PASSES 16
+#endif
+
 static void run_one(const struct rung *r, int ctr) {
   (void)ctr;                    /* both counters are read; see run_pass */
-  run_pass(r, 1);
-  run_pass(r, 2);
+  for (int p = 1; p <= BASE_PASSES; p++)
+    run_pass(r, p);
 }
 
 /* ------------------------------------------------------------------ *

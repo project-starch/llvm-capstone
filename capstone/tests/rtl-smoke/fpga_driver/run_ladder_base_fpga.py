@@ -201,6 +201,29 @@ def main():
                     results[r] = passes
                     (rv1, c1, i1), (rv2, c2, i2) = passes[1], passes[2]
                     idem = "" if rv2 == rv1 else "  [stateful: warm pass invalid]"
+                    # Pick the LEAST-DISTURBED warm pass, not merely the second
+                    # one (issue I-2). Timer interrupts land inside the bracket
+                    # and inflate both counters; they arrive on a timer rather
+                    # than in step with the kernel, so across many passes the
+                    # minimum instret is the run that took fewest of them, and
+                    # the number of passes tied at that minimum is the evidence
+                    # that it is genuinely clean. The old check -- pass1 instret
+                    # == pass2 instret -- only proved reproducibility, which
+                    # beebs_cnt satisfied while still yielding a 0.684x ratio.
+                    warm = {p: v for p, v in passes.items() if p >= 2}
+                    if rv2 != rv1:          # stateful kernel: warm passes invalid
+                        warm = {}
+                    if warm:
+                        best_i = min(v[2] for v in warm.values())
+                        tied = [v for v in warm.values() if v[2] == best_i]
+                        best_c = min(v[1] for v in tied)
+                        spread = max(v[1] for v in warm.values()) - \
+                            min(v[1] for v in warm.values())
+                        clean = f"{len(tied)}/{len(warm)} passes at min instret"
+                        log(f"  {r}: BEST cycles={best_c} instret={best_i} "
+                            f"({clean}, cycle spread={spread}) retval={rv1}{idem}")
+                        results[r]["best"] = (rv1, best_c, best_i,
+                                              len(tied), len(warm), spread)
                     log(f"  {r}: cold={c1} warm={c2} (delta={c1 - c2}) "
                         f"instret={i1}/{i2} retval={rv1}{idem}")
             if len(results) == len(RUNGS):
