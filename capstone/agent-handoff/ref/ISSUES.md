@@ -366,11 +366,40 @@ glue is identical between the passing and failing builds, and the linker forces 
 image offset `0x1000` so `code_size` grows with `.rodata` while `tot_size` does not
 necessarily follow.
 
-**Next step, concretely:** check how the loader (`capstone-test.user`) derives the
-`code_size` and `tot_size` arguments from the ELF, and print them for the 4576-byte and
-5088-byte images. The fix is almost certainly in that derivation, not in the monitor —
-which means **no firmware rebuild**, and it can be validated on QEMU first.
-The domain also needs `tot_size > code_size + 1536` with room for the globals after that.
+**The size chain, traced end to end (2026-07-28):**
+`libcapstone.c: create_dom_from_elf` sets `code_len` from the ELF and ioctls to
+`modcapstone/module/capstone.c:83`, which computes
+
+```c
+dom_tot_size   = m_args.code_len + DOMAIN_DATA_SIZE;      /* 1536 */
+dom_pages      = (dom_tot_size - 1) / PAGE_SIZE + 1;
+create_domain(paddr, code_len, (1 << dom_pages_log2) * PAGE_SIZE, entry_offset);
+```
+
+> **⚠ This REFUTES the simple invariant proposed above — do not chase it.** Working the
+> arithmetic for both images gives the *same* `tot_size` and satisfies
+> `tot_size > code_size + 1536` in **both** cases:
+>
+> | image | `code_len` | `dom_tot` | pages | `tot_size` | invariant holds? |
+> |---|---:|---:|---:|---:|---|
+> | passing | 4576 | 6112 | 2 | 8192 | yes |
+> | failing | 5088 | 6624 | 2 | 8192 | yes |
+>
+> So `tot_size` is not the discriminator and the first `__split` should be in bounds.
+
+**What that leaves, for whoever picks this up.** The untagged `dom_seal` must come from
+somewhere else. Two candidates, neither checked:
+1. **What `code_len` actually contains.** The loader prints `Segment size = 1118` (exec
+   `p_filesz`) and `Loadable size = 5088` separately; if `code_len` is the *exec segment*
+   rather than the whole loadable image, the split point sits inside `.text` and the
+   globals fall outside `dom_data` entirely — which would also explain why only
+   globals-heavy images break.
+2. **`dom_pages_log2`** — how it is derived from `dom_pages` was not read; a rounding that
+   goes *down* rather than up would shrink `tot_size` below the arithmetic above.
+
+**Cheapest next step:** print `code_len`, `tot_size` and the segment/loadable sizes for one
+passing and one failing image. The kernel module already logs them
+(`capstone.c:96`), so this is a `dmesg` read on QEMU — no firmware rebuild, no board.
 
 With the full 640 B `sha512_k`, the domain cannot be created at all: QEMU asserts in
 `helper_cssplit` (`rs1_v->tag && !rs2_v->tag`), loadable size 5088. Truncating the table to
