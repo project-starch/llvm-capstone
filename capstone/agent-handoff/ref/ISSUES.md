@@ -377,10 +377,28 @@ immediate-materialisation code, exactly the reason the copy path exists. So:
   fixing the copy path itself.
 - Threshold reverted to 256; no code change kept from this experiment.
 
-**So the remaining work is to fix the copy path directly.** Dump capability tags through
-the `lla`/`lla`/`sub`/`cincoffset` sequence to find where a tagged value reaches an operand
-that must be untagged. Do not infer it from reading — inference has been wrong three times
-on this issue.
+**The `lla`-produces-a-tag hypothesis is REFUTED (disassembly, 2026-07-28).** The emitted
+glue uses plain integer addressing exactly as intended:
+```
+auipc t4, 0x1 ; addi t4, t4, -0x108     ; integer address of sha512_k
+auipc t5, 0x1 ; addi t5, t5, -0x150     ; integer address of __gpfree_globals_base
+sub   t5, t4, t5                        ; plain integer offset
+<cincoffset t4, sp, t5> ; <cincoffset t3, t2, x0> ; li t6, 0x280 ; ld/sd loop
+```
+No capability reaches an operand that must be untagged in this sequence. That is the
+**fourth** hypothesis refuted on C-4b (after the `tot_size` invariant, `code_len`, and
+`dom_pages_log2`).
+
+**New observation, unexplained:** `li t6, 0x280` (640) appears **TWICE** in the domain, at
+`0x10164` and `0x10324` — two identical 640-byte copy loops, where only one global is
+640 bytes. Either the glue is emitted twice, or the generator emits a duplicate descriptor.
+A second copy loop would carve/copy storage a second time and could plausibly leave the
+register state that the next `split` chokes on.
+
+**Next step: explain the duplicate.** Dump the full generated `.inc` and count copy loops
+against the 3 descriptors; if there are two for one global, the generator is the bug and it
+is reproducible entirely off-board. **Verify by counting, not by reasoning** — four
+inferences have now been wrong on this issue, and each looked sound before it was checked.
 
 **Related hazard — CHECKED 2026-07-28, NOT a bug.** `getGpCaptableIndex` derives its index
 from a global's *position* in `M.globals()`, and GlobalMerge mutates that list (it merged
