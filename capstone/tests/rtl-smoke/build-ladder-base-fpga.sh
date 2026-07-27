@@ -53,9 +53,17 @@ RUNGS=(
   "beebs_fac:beebs_fac_kernel.h:fac_compute:-O1"
   "beebs_cnt:beebs_cnt_kernel.h:cnt_compute:-O1"
   "beebs_duff:beebs_duff_kernel.h:duff_compute:-O1"
+  # Counter-sanity probe (issue I-2): pure register arithmetic, so both targets
+  # must emit the same RISC-V instructions. If instret matches and cycles do not,
+  # a domain cycle is not comparable to a baseline cycle and every published
+  # overhead ratio is wrong. Two lengths separate a proportional effect from a
+  # fixed one.
+  "ctrsanity:ctrsanity_kernel.h:cs_compute:-O1"
+  "ctrsanity4:ctrsanity4_kernel.h:cs_compute:-O1"
 )
 
 OBJS=()
+: > "$OUT_DIR/optlevels.txt"
 for SPEC in "${RUNGS[@]}"; do
   IFS=: read -r R HDR FN OPT <<<"$SPEC"
   # LADDER_OPT overrides the per-rung default. The capability half and the
@@ -73,6 +81,8 @@ for SPEC in "${RUNGS[@]}"; do
     -DLADDER_KERNEL_HDR="\"$HDR\"" -DLADDER_COMPUTE="$FN" -DLADDER_EXPORT="base_$R" \
     -c "$SCRIPT_DIR/ladder_base_kern.c" -o "$OBJ_DIR/base_$R.o"
   OBJS+=("$OBJ_DIR/base_$R.o")
+  # See issue I-1: the runner cross-checks this against the capability half.
+  echo "$R $OPT" >> "$OUT_DIR/optlevels.txt"
   # Native oracle beside the object. run_ladder_base_fpga.py hard-fails on a
   # missing <rung>_host, and building them only in the QEMU script meant a
   # board run from a fresh OUT_DIR aborted at the artifact check.

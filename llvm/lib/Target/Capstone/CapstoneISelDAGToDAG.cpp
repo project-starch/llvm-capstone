@@ -3786,6 +3786,47 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
     }
     break; // Let the remaining TRUNCATEs be processed as usual
   }
+  case ISD::SIGN_EXTEND_INREG: {
+    // i128 = sign_extend_inreg(i128 X, srcVT)  --  issue C-1.
+    //
+    // This is lowered *here*, at selection, and deliberately not in a DAG
+    // combine. The combiner cannot own it: expanding to
+    // sign_extend(sign_extend_inreg(trunc(X), srcVT)) is immediately folded by
+    // visitSIGN_EXTEND back into sign_extend_inreg(any_extend(...), srcVT),
+    // which re-enters the same combine -- the infinite loop that
+    // performSIGN_EXTEND_INREGCombine's i128 arm documents and avoids by
+    // handling ONLY the any_extend(i64) shape. Every other shape (an `int`
+    // index feeding capability address arithmetic is the common one) then
+    // survives to here unselectable: "Cannot select: i128 = sign_extend_inreg".
+    //
+    // At selection there is no combiner left to fight, so emit the sequence
+    // directly: take the low XLen bits, sign-extend the source field within
+    // XLen with a shift pair, then widen to i128 -- PseudoSCALAR_COPY_I128
+    // replicates bit 63 into the high half, which is exactly the i128 sign
+    // extension.
+    MVT VT = Node->getSimpleValueType(0);
+    if (VT != MVT::i128)
+      break;
+    MVT XLenVT = Subtarget->getXLenVT();
+    unsigned SrcBits =
+        cast<VTSDNode>(Node->getOperand(1))->getVT().getSizeInBits();
+    unsigned XLenBits = XLenVT.getSizeInBits();
+    SDValue Lo(CurDAG->getMachineNode(Capstone::PseudoTRUNC_CAP, DL, XLenVT,
+                                      Node->getOperand(0)),
+               0);
+    // srcVT >= XLen: the low half already holds the value; only the widening
+    // to i128 is needed.
+    if (SrcBits < XLenBits) {
+      SDValue ShAmt = CurDAG->getTargetConstant(XLenBits - SrcBits, DL, XLenVT);
+      SDValue Shl(
+          CurDAG->getMachineNode(Capstone::SLLI, DL, XLenVT, Lo, ShAmt), 0);
+      Lo = SDValue(
+          CurDAG->getMachineNode(Capstone::SRAI, DL, XLenVT, Shl, ShAmt), 0);
+    }
+    ReplaceNode(Node, CurDAG->getMachineNode(Capstone::PseudoSCALAR_COPY_I128,
+                                             DL, VT, Lo));
+    return;
+  }
   case ISD::ZERO_EXTEND:
   case ISD::SIGN_EXTEND:
   case ISD::ANY_EXTEND: {

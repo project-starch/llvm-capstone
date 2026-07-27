@@ -35,6 +35,7 @@ RUNGS=("$@")
 echo "Built $OUT_DIR/ladder_perf_ctl"
 
 # 2. Per-rung perf domain + native oracle.
+: > "$OUT_DIR/optlevels.txt"
 for R in "${RUNGS[@]}"; do
   APP="$LAD/${R}_fpga_app.c"
   HOST="$LAD/${R}_host.c"
@@ -48,6 +49,14 @@ for R in "${RUNGS[@]}"; do
   OPT=${LADDER_OPT:--O0}
   [[ -z "${LADDER_OPT:-}" && "$R" == coremark_matrix ]] && OPT=-Os
   DOMAIN_OPT_LEVEL=$OPT bash "$LAD/build-ladder-domain.sh" "$APP" "$OUT_DIR/${R}.dom"
+  # Record the level actually used. The capability and baseline halves MUST be
+  # built at the same -O or the ratio measures optimisation, not capabilities --
+  # and on 2026-07-27 they silently were not, because run_ladder_perf_fpga.py
+  # rebuilds by default and LADDER_OPT had been set only on a pre-build. That
+  # produced five bogus "silicon failures" and a false refutation of R-1. The
+  # runner cross-checks these files and hard-fails, so the mismatch cannot be
+  # silent again. (Issue I-1.)
+  echo "$R $OPT" >> "$OUT_DIR/optlevels.txt"
   # The oracle must see the same kernel-level -D knobs as the domain, or the
   # correctness gate silently compares against a different computation (e.g.
   # -DLADDER_CM_INIT_ONLY makes the rung return N, not the crc). Only -D/-U are

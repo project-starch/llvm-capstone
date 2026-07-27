@@ -13,7 +13,7 @@ Last updated 2026-07-27.
 ## RTL / FPGA
 
 ### R-1 — A load through one capability register misses a store through another `CHARACTERISED`
-**The blocker for 4 of 7 benchmark rungs.** An intervening store through one capability register
+**The blocker for several of the 13 benchmark rungs.** An intervening store through one capability register
 causes a later load through a *different* capability register to miss an earlier store to its own
 address — though the addresses are distinct and both capabilities are in-bounds derivations of the
 same object. Not loop-specific. QEMU executes every probe correctly.
@@ -28,8 +28,9 @@ same object. Not loop-specific. QEMU executes every probe correctly.
 - **Impact:** `matmult_int`, `coremark_matrix`, `beebs_crc32`, `beebs_insertsort` unmeasurable.
 - **Confidence it is hardware:** high, not certain. Residual doubt is whether our non-standard
   gp-captable ABI provokes it. **Open question for the board owner.**
-- **Predictive record (2026-07-27): 1 hit, 1 miss — R-1 is NOT complete.**
-  Two rungs were written specifically to test its predictions.
+- **Predictive record — see the SCORED entry below for the final tally (2 hits, 3 misses,
+  1 partial). R-1 is NOT a complete account of the board's behaviour, but its own scope is
+  confirmed.** Rungs were written specifically to test its predictions:
   - `beebs_bs` — **predicted PASS, PASSED** (887447230 = oracle, 2264 cyc). This is the
     load-bearing confirmation: `bs_data[mid]` is a genuine register-indexed load through a
     derived capability — the exact addressing form in every failing rung — and it is correct
@@ -167,7 +168,7 @@ M-mode appears to spin (`capstone_error` = `while(1)`); only a power-cycle recov
 
 ## Infrastructure / procedure
 
-### I-1 — A sweep silently rebuilds at −O0 and discards your pre-built set `FIXED BY RULE`
+### I-1 — A sweep silently rebuilds at −O0 and discards your pre-built set `FIXED`
 `run_ladder_perf_fpga.py` **rebuilds every artifact by default** (the 25-07 anti-stale fix),
 shelling out to `build-ladder-fpga.sh` with the inherited environment. Setting `LADDER_OPT`
 on a *pre-build* and omitting it from the *sweep* means the runner rebuilds everything at its
@@ -193,29 +194,47 @@ on a *pre-build* and omitting it from the *sweep* means the runner rebuilds ever
   boundary moving under an optimization flag.
 - **Evidence:** `history/27-07-2026_22-40-00_RESULTS-two-new-silicon-rungs-and-an-O-level-procedure-bug.md`
 
-### I-2 — Baseline may be charged for OS interference the domain never pays `OPEN`
-`beebs_cnt` is silicon-correct and retires **1.138×** the baseline instructions, yet takes
-**0.684×** the cycles — capability CPI 1.68 vs baseline CPI 2.79. Taken at face value it
-claims pervasive capability safety is **32 % faster**, which is a confound, not a result.
-The baseline is a Linux userspace process; the domain is bare-metal, clean icache, no OS.
+### I-2 — The Linux baseline is ~1.21x slow on identical work `CONFIRMED`
+**Every published cycle ratio understates capability overhead.** Proven 2026-07-28 with a probe
+whose measured region is a 5-instruction register-only loop -- no loads, stores, pointers or
+globals -- verified in the disassembly to emit the identical `srai/xor/addi/add/bne` on both
+targets.
 
-- **Same class as** the cold/warm paging confound that once produced "capabilities are 1.8×
-  faster" for `beebs_prime`. The warm-baseline rule was written for that one and does **not**
-  cover this.
-- **Not universal** — `beebs_bs` (1.181×) and `rv8_primes` (1.050×) look coherent. But it is
-  **not established that the existing rows are free of it**, and `beebs_prime` at 1.032× is
-  the one to re-examine: a confound in this direction *understates* capability overhead.
-- **Impact:** blocks `beebs_cnt` as a cycle row; puts a question mark on the cheapest existing
-  row. Quote `cnt`'s instruction ratio only.
+| probe | cap cyc | base cyc | **cyc ratio** | ins ratio | cap CPI | base CPI |
+|---|---:|---:|---:|---:|---:|---:|
+| `ctrsanity` (100k) | 600,309 | 728,727 | **0.824** | 0.982 | 1.201 | 1.431 |
+| `ctrsanity4` (400k) | 2,400,310 | 2,884,826 | **0.832** | 0.982 | 1.200 | 1.417 |
+
+Cycles per iteration: domain **6.003 / 6.001** (metronomic), baseline 7.287 / 7.212.
+
+- **Cause: timer interrupts inside the bracket.** The baseline's excess scales **3.92x** in
+  instructions and **3.77x** in cycles for **4x** the work -- proportional to elapsed time, which
+  is what a periodic interrupt looks like and a fixed entry cost does not -- at **14 cycles per
+  excess instruction**, far above this core's 1.2-1.4 CPI, as expected for interrupt entry/exit
+  plus cache disruption.
+- **Direction matters: it inflates the DENOMINATOR, so it flatters us.** Our overheads are too
+  low, not too high.
+- **Do NOT apply a blanket 1.214x correction.** Short kernels may take no interrupts at all --
+  `beebs_bs`'s baseline is 1,912 cyc (~40 us) with byte-identical instret across passes
+  (827/827), as has `beebs_recursion` (2,019/2,019); those rows are probably clean.
+- **The "certified clean" test is necessary but NOT sufficient.** `beebs_cnt`'s passes were
+  byte-identical (67,140/67,140) and its ratio is still an impossible **0.684x** -- two passes can
+  take the *same* number of interrupts and both be contaminated. Identical instret proves
+  reproducibility, not absence. `cnt`'s implied factor (1.46x) exceeds this probe's 1.214x, so
+  **`cnt` is still not fully explained**.
+- **Repro:** `tests/runtime-qemu/silicon-ladder/ctrsanity{,4}_kernel.h` -- both halves registered;
+  `-O1`.
+- **Evidence:** `history/28-07-2026_00-10-00_RESULTS-I-2-confirmed-the-linux-baseline-is-1.21x-slow-so-our-overheads-are-understated.md`
+- **Fix, ranked:** (1) run the baseline **bare-metal**, removing the confound instead of
+  modelling it -- real work, the baseline kernels currently link into a Linux userspace binary;
+  (2) **lead with instruction ratios**, far less contaminated (0.982 vs 0.824) and the paper's
+  central *ABI-not-enforcement* claim is instruction-based anyway; (3) per-row triage before
+  publishing any cycle ratio.
+- **Impact:** blocks the 4-row cycle table as it stands. Instruction ratios unaffected.
 
 ---
 
 ## Compiler / toolchain (ours)
-
-### C-1 — `Cannot select: i128 = sign_extend_inreg` `OPEN`
-An `int` index feeding capability address arithmetic fails ISel. Same family as C-5.
-- **Repro:** `rawhazard3_fpga_app.c` with `int` (not `long`) index variables
-- **Workaround:** use `long` indices. Applied in the probes only.
 
 ### C-2 — `Cannot select: i128 = or` / `= xor` `OPEN`
 `lowerScalarI128Logical` bails when the two operands are not *matching* extends (both sign or both
@@ -242,6 +261,24 @@ to `lla` from the glue's separate TU.
 - **Workaround:** make the source opaque to the optimizer so the table stays runtime-generated.
   Per-benchmark, not general.
 
+### C-9 — Redundant `mv rd, rd` around inline-asm register constraints `OPEN`
+The Capstone backend emits **no-op self-moves** around an `asm volatile("" : "+r"(x))`
+tie. A 5-instruction loop body became 7 — `srai / xor / add / **mv a4,a4** / addi /
+**mv a4,a4** / bne` — where plain riscv64 emits 5 for the same source.
+
+- **Found:** 2026-07-27, while building the I-2 counter-sanity probe. It is logged because
+  it **silently defeated that probe**: the measurement depends on both targets retiring the
+  same instruction count, and the compiler manufactured a 1.4× difference out of nothing.
+- **Repro:** `tests/runtime-qemu/silicon-ladder/ctrsanity_kernel.h` with the inner
+  `__asm__ volatile("" : "+r"(acc))` restored; disassemble
+  `--triple=riscv64 --mattr=+m` and compare against `ladder-base/obj/base_ctrsanity.o`.
+- **Impact:** small in isolation (two wasted instructions per tie), but the register-pinning
+  idiom is used throughout the ladder kernels to defeat constant folding, so it inflates
+  the capability instruction count of **any** rung that uses it — i.e. it can bias an
+  overhead ratio upward. Worth a look before the next measurement round.
+- **Workaround:** keep inline-asm ties out of measured loops; use an opaque trip count and
+  a consumed result instead.
+
 ### C-5 — 4 KiB code window `OPEN`
 `link-gpfree.ld` forces globals to image offset `0x1000`, capping `.text` at 4096 B. One
 hardcoded number, QEMU-validated at 16 KiB and 32 KiB and silicon-validated at 32 KiB. Lifting it
@@ -249,7 +286,19 @@ is what full CoreMark and Dhrystone need. Task #62.
 
 ---
 
-## Fixed (2026-07-27) — kept for provenance
+## Archive — fixed, kept for provenance
+
+**Move an entry here as soon as it is fixed**, with the fix and how it was validated.
+Keep the id so older notes that cite it still resolve.
+
+### Fixed 2026-07-27 (evening)
+
+| id | issue | fix | validated by |
+|---|---|---|---|
+| **C-1** | `Cannot select: i128 = sign_extend_inreg` — an `int` index feeding capability address arithmetic crashed the backend at −O1+. The `Custom` action only runs during Legalize, and `performSIGN_EXTEND_INREGCombine` deliberately handles **only** the `any_extend(i64)` shape because expanding the general case in a combine ping-pongs against `visitSIGN_EXTEND` forever. Every other shape reached ISel unselectable. | Selected directly in `CapstoneDAGToDAGISel::Select` (`CapstoneISelDAGToDAG.cpp`), where there is no combiner to fight: `PseudoTRUNC_CAP` to XLen → `SLLI`/`SRAI` pair to sign-extend the source field → `PseudoSCALAR_COPY_I128` to widen. | repro clean at −O0/−O1/−O2/−O3; new lit `i128-sext-inreg-int-index.ll`; **Capstone lit 42/42** |
+| **I-1** | A sweep silently rebuilt at −O0 and discarded the pre-built set, running capability halves at a different −O than their baselines. Cost five bogus "silicon failures", a false refutation of R-1, and a nearly published claim that a plain rebuild flips a passing rung. | Both build scripts now record the per-rung level to `<OUT_DIR>/optlevels.txt`; `run_ladder_perf_fpga.py` logs the effective levels and **hard-fails** on any capability/baseline mismatch, naming the rungs and telling you to set `LADDER_OPT` on the runner. | mismatch path exercised; runner parses; levels appear in the run log |
+
+### Fixed 2026-07-27 (daytime)
 
 | id | issue | fix |
 |---|---|---|

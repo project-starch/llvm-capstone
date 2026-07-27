@@ -118,6 +118,25 @@ Source: `history/21-07-2026_16-12-13_RESULTS-fpga-borrow-cost-cycle-accurate.md`
 
 ---
 
+> ## ⚠ READ FIRST (2026-07-28): the cycle ratios below are UNDER-STATED
+>
+> A controlled probe (`ctrsanity`, issue **I-2**) shows the **Linux baseline runs identical
+> work ~1.21x slower than a domain** — 6.00 vs 7.25 cycles for the same 5-instruction
+> register-only loop, verified instruction-for-instruction in the disassembly. Cause: timer
+> interrupts inside the measurement bracket (the baseline's excess scales 3.92x for 4x the
+> work, at 14 cycles per excess instruction). It inflates the **denominator**, so every
+> affected row **understates capability overhead** — the error runs in our favour.
+>
+> **Do not publish a cycle ratio without per-row triage, and do not apply a blanket 1.214x
+> correction either.** Short kernels may be interrupt-free: `beebs_bs` (1,912 cyc baseline)
+> and `beebs_recursion` both retired byte-identical instret across passes and are probably
+> clean. But byte-identical instret is **necessary, not sufficient** — `beebs_cnt` passed that
+> test and still shows an impossible 0.684x.
+>
+> **The instruction ratios are far less affected (0.982 vs 0.824) and the paper's central
+> claim — the cost is the ABI, not the enforcement — is an instruction-count argument.
+> Lead with instructions.**
+
 ## 2. NEW — Pervasive spatial safety: 3.2% scalar, 5.0% array, 80% recursive
 
 The draft claims spatial safety is pervasive ("every pointer is a bounded

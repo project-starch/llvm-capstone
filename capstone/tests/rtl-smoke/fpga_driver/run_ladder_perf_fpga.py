@@ -200,6 +200,36 @@ def preflight_artifacts():
         raise SystemExit("artifacts missing (run build-ladder-fpga.sh):\n  " +
                          "\n  ".join(missing))
 
+    # -O-level cross-check (issue I-1). The capability and baseline halves must be
+    # built at the SAME -O or the ratio measures optimisation, not capabilities.
+    # On 2026-07-27 they silently were not: this runner REBUILDS by default, and
+    # LADDER_OPT had been set only on a pre-build, so five rungs ran at -O0 against
+    # -O1 baselines. That produced five bogus "silicon failures", a false
+    # refutation of R-1 that was nearly sent to the board owner, and a nearly
+    # published claim that a plain rebuild flips a passing rung. Only an unrelated
+    # control rung caught it. Fail loudly instead.
+    def _optlevels(path):
+        try:
+            return dict(l.split() for l in path.read_text().split("\n") if l.strip())
+        except OSError:
+            return {}
+
+    mine = _optlevels(ART / "optlevels.txt")
+    if mine:
+        log("opt levels: " + ", ".join(f"{r}={mine.get(r, '?')}" for r in RUNGS))
+    base = _optlevels(pathlib.Path(
+        os.environ.get("CAPSTONE_TMP_ROOT", "/tmp/capstone")) / "ladder-base"
+        / "optlevels.txt")
+    mismatch = [f"{r}: capability={mine[r]} baseline={base[r]}"
+                for r in RUNGS if r in mine and r in base and mine[r] != base[r]]
+    if mismatch:
+        raise SystemExit(
+            "-O LEVEL MISMATCH between the capability and baseline halves — the\n"
+            "ratio would measure optimisation, not capabilities (issue I-1):\n  " +
+            "\n  ".join(mismatch) +
+            "\nSet LADDER_OPT on THIS command (the runner rebuilds; setting it only\n"
+            "on a pre-build is discarded), or rebuild the baseline to match.")
+
     cc = os.environ.get("CAPSTONE_CLANG")
     if cc and os.path.exists(cc):
         cc_mtime = os.path.getmtime(os.path.realpath(cc))

@@ -133,6 +133,8 @@ unsigned base_beebs_fibcall(void);
 unsigned base_beebs_fac(void);
 unsigned base_beebs_cnt(void);
 unsigned base_beebs_duff(void);
+unsigned base_ctrsanity(void);
+unsigned base_ctrsanity4(void);
 
 struct rung { const char *name; unsigned (*fn)(void); };
 static const struct rung RUNGS[] = {
@@ -154,6 +156,8 @@ static const struct rung RUNGS[] = {
   { "beebs_fac",        base_beebs_fac        },
   { "beebs_cnt",        base_beebs_cnt        },
   { "beebs_duff",       base_beebs_duff       },
+  { "ctrsanity",        base_ctrsanity        },
+  { "ctrsanity4",       base_ctrsanity4       },
 };
 #define NRUNGS ((int)(sizeof RUNGS / sizeof RUNGS[0]))
 
