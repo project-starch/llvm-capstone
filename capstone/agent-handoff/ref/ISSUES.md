@@ -35,7 +35,10 @@ same object. Not loop-specific. QEMU executes every probe correctly.
     derived capability — the exact addressing form in every failing rung — and it is correct
     because nothing is ever *stored* to the table. **The intervening store is a necessary
     ingredient**, not incidental.
-  - `beebs_janne` — **predicted PASS, HANGS** (see R-6). R-1 as stated does not explain it.
+  - `beebs_janne` — **predicted PASS, HANGS** (see R-6). Now bisected: the failing loop nest
+    contains **no memory operations at all**, so R-1 cannot explain it and the two must not be
+    conflated. R-1's scope is unchanged by it; its completeness as an explanation of the whole
+    board's behaviour is not.
 
 ### R-2 — `delin` in domain code wedges the board `WORKED AROUND`
 A `delin` executed in domain code on a capability loaded from the gp cap-table wedges the board
@@ -59,12 +62,34 @@ that never occurs here, so R-1 predicts PASS. **The board hangs it.**
 
 - **Repro:** `tests/runtime-qemu/silicon-ladder/beebs_janne_{kernel.h,fpga_app.c,host.c}`,
   `-O1`, oracle 484656629, QEMU-correct through the identical controller.
-- **Why it matters:** this is a *failed prediction*, so either R-1 is incomplete or there is a
-  second independent hardware fault. Recorded rather than explained away — the whole value of
-  writing predictive tests is that a miss is informative.
-- **Next:** bisect it the way `insertsort_diag` was bisected — return the loop trip counts and the
-  counter value in raw debug slots so a hang becomes a returned diagnostic. Do **not** theorise
-  first; eleven hypotheses have died that way.
+- **BISECTED 2026-07-27 (`janne_diag`), and the result does NOT fit R-1.** Safety bounds turned
+  the hang into a returned diagnostic:
+
+  | slot | board | correct |
+  |---|---|---|
+  | outer trips | **200** (its safety bound) | 9 |
+  | inner trips | **500** (its safety bound) | 12 |
+  | final `a` | **2** | 31 |
+  | final `b` | **-339** | 27 |
+  | `jc_iters` | 700 (= 200+500, self-consistent) | 21 |
+
+  Neither loop terminates, and `a` is frozen at 2 — after 200 outer iterations of `a = a + 2` it
+  should be ≥ 400. The board state is internally consistent (`a`=2 and `b`=−339 keep both
+  conditions true forever), so the loops behaved *exactly* as if `a` stopped accumulating.
+
+  **The damning part: the loop nest is pure register arithmetic.** Verified in both the emitted
+  assembly and the shipped `.dom` — `a`=`a3`, `b`=`a2`, the counter accumulates in `a6`, and
+  `jd_iters` is stored **once after** the loops. There are **no memory operations inside the
+  nest**. R-1 is a memory hazard and therefore cannot explain this.
+
+- **Status: mechanism UNKNOWN. Do not fold this into R-1.** Candidate explanations, none tested:
+  a control-flow/branch-resolution issue on this RTL (the nest is unusually branch-dense); an
+  interrupt landing inside the measured bracket (the measurements doc notes ~16k cycles when one
+  does; this rung ran 11,167); or the emitted code differing from what actually executes.
+- **Next probe (cheap, decisive):** a *minimal pure-register loop* — `long i=0; while (i<100) i++;`
+  returned raw, with no memory access anywhere in the loop. If that fails on the board the finding
+  is far larger than R-1. If it passes, janne's specific branch structure is implicated and the
+  bisect should continue by simplifying the nest one condition at a time.
 
 ### R-3 — Second domain at the same entry VA hangs within one boot `OPEN`
 A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` — missing

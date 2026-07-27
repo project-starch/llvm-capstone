@@ -321,8 +321,11 @@ static int run(const char *dom_path) {
 
   /* The share IS the entry: the region cap arrives as domain_main(res, func)'s
    * `res`; the app runs its globals + call-graph workload (gp delivered by the
-   * monitor via cscratch -- NO fabrication) and writes *res, then domreturns. */
+   * monitor via cscratch -- NO fabrication) and writes *res, then domreturns.
+   * Markers bracket the share so a silent hang localizes to entry vs exit. */
+  puts_("MARK_PRE_SHARE\n");
   shared_region_annotated(dom, region_id, PERM_INOUT, REV_SHARED);
+  puts_("MARK_POST_SHARE\n");
   puts_(TAG ": region shared (host retains); domain ran in share entry\n");
 
   u32 retval = *(volatile u32 *)region;

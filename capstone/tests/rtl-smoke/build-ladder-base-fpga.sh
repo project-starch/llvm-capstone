@@ -42,6 +42,8 @@ RUNGS=(
   "beebs_insertsort:beebs_insertsort_kernel.h:is_compute:-O0"
   "beebs_prime:beebs_prime_kernel.h:prime_compute:-O0"
   "beebs_recursion:beebs_recursion_kernel.h:rec_compute:-O0"
+  "beebs_bs:beebs_bs_kernel.h:bs_compute:-O1"
+  "beebs_janne:beebs_janne_kernel.h:jc_compute:-O1"
 )
 
 OBJS=()
