@@ -15,7 +15,24 @@ LD_LLD=${LD_LLD:-$CAPSTONE_LD_LLD}
 GPFREE_DIR="$SCRIPT_DIR/../gp-free-domain"
 GENERIC_GLUE="$SCRIPT_DIR/start-gp-captable-generic.S"
 GCT_TAIL="$SCRIPT_DIR/../gct-section-end.S"
-LINKER_SCRIPT=${LINKER_SCRIPT:-"$GPFREE_DIR/link-gpfree.ld"}
+# DOMAIN_WINDOW=32k selects the 32 KiB code window (globals at image offset 0x8000)
+# instead of the default 4 KiB (0x1000) -- issue C-5.
+#
+# Opt-in PER RUNG, deliberately not a global default: changing the window changes
+# image layout, and this project has a documented layout sensitivity (a 2026-07-26
+# A/B where four added instructions flipped a passing rung). Every measured rung
+# stays at 4 KiB so its published number stands; only rungs that cannot build at
+# 4 KiB opt in, and they are re-gated on their oracle.
+#
+# Why it matters beyond code size: with 32 KiB there is room to materialise a large
+# initializer with unrolled li/sd instead of the large-RO COPY path, and the copy
+# path is broken (C-4b, cssplit tag assertion). So the bigger window does not just
+# raise a limit, it lets a whole class of rungs avoid a broken code path.
+if [[ "${DOMAIN_WINDOW:-}" == "32k" ]]; then
+  LINKER_SCRIPT=${LINKER_SCRIPT:-"$GPFREE_DIR/link-gpfree-32k.ld"}
+else
+  LINKER_SCRIPT=${LINKER_SCRIPT:-"$GPFREE_DIR/link-gpfree.ld"}
+fi
 # DOMAIN_BASE_VA relocates the domain's entry VA (default 0x10000).
 #
 # Purpose: test whether issue R-3 is really about the entry ADDRESS. R-3 says a

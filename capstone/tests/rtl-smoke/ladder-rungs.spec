@@ -56,7 +56,12 @@ ctrsanity4:ctrsanity4_kernel.h:cs_compute:-O1
 # Crypto/bitwise profile, added 2026-07-28. The rest of the RV8 set is blocked by
 # known issues, not by this measurement: aes ~8 KB of tables (C-4/C-5), dhrystone 684
 # lines (C-5), qsort sorts in place (R-1), miniz mixed-extend i128 logic (C-2).
-# rv8_sha512: BLOCKED by C-4 (large-RO delivery), kept as that issue's reproducer.
+# rv8_sha512 WORKS as of 2026-07-28, but needs TWO opt-in knobs (see below), so it is
+# not enabled by the default build path yet -- the runner would build it at 4 KiB with
+# the broken copy path. Build it with:
+#   DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1 DOMAIN_OPT_LEVEL=-O1
+# Verified: returns its oracle 1390718314, static gate cjalr=0 ldc-gp=3.
+# Historic note (the two knobs exist because):
 #   80-entry K table (640 B): fails at domain CREATION, QEMU asserts in helper_cssplit
 #     (`rs1_v->tag && !rs2_v->tag`), loadable size 5088.
 #   16-entry K table (128 B): domain creates, then a global access faults OOB --

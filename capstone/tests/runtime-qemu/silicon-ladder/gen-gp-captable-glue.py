@@ -217,7 +217,14 @@ def main():
             # storm that overflows the 0x1000 code window. Post-link offset comes from
             # linker-resolved `lla <sym> - __gpfree_globals_base`. Requirements: a
             # file-scope (linkable, non-.L) symbol and an 8-multiple size.
-            COPY_THRESHOLD = 256
+            # The large-RO copy path is BROKEN (C-4b: it trips
+            # `helper_cssplit: rs1_v->tag && !rs2_v->tag` at domain entry). Set
+            # LADDER_NO_RO_COPY=1 to force the unrolled li/sd path instead, which
+            # WORKS -- verified end to end: rv8_sha512 with its full 640 B table
+            # returns its oracle under DOMAIN_WINDOW=32k. The unrolled path costs
+            # ~8 KB of .text for 640 B of data, so it needs the 32 KiB window; at
+            # 4 KiB the link fails outright. Use both knobs together.
+            COPY_THRESHOLD = (1 << 30) if os.environ.get("LADDER_NO_RO_COPY") == "1" else 256
             if (stor > COPY_THRESHOLD and (size % 8) == 0
                     and sym is not None and not sym.startswith(".L")):
                 loop_id += 1

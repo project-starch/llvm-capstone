@@ -323,7 +323,7 @@ Capstone lit **43/43**; `beebs_bs`, `beebs_prime`, `beebs_cnt` still pass QEMU p
 > OBJECT before reasoning about the mechanism: a symbolised `-S` listing settled in one
 > step what two rounds of inference got wrong.
 
-#### C-4b — the large-RO COPY PATH in the generated glue is broken `OPEN — trigger identified`
+#### C-4b — the large-RO COPY PATH in the generated glue is broken `OPEN — but BYPASSABLE`
 **Not a domain-creation bug, and not about size.** Earlier notes here (now corrected) chased
 image geometry through the loader and kernel module. That was the wrong component:
 
@@ -422,9 +422,26 @@ died on contact with a dump, a count or a disassembly.
 - The generated glue is **correct by count** (1 copy loop, 3 globals, 4 splits, 3 `stc`),
   and the two copies in the image are the two entry points, by design.
 
-**Therefore: instrument, do not reason.** The next step is a QEMU run with the capability
-tag dumped at each `split` in the copy path, to find which operand is tagged when it must
-not be. Five paper hypotheses have failed; the sixth should not be one.
+**BYPASSED 2026-07-28 — C-5 dissolves C-4b.** The copy path exists only because the
+unrolled `li`/`sd` alternative does not fit a 4 KiB window. Give it a **32 KiB** window and
+it does, so the broken path can simply not be taken:
+
+```
+DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1 DOMAIN_OPT_LEVEL=-O1 run-ladder-qemu.sh rv8_sha512
+  -> __CAPSTONE_LADDER_RV8_SHA512_PASSED__ (retval = 1390718314)
+```
+
+`rv8_sha512` now runs with its **full 640 B table** — the crypto/bitwise rung the ladder
+lacked. Both knobs are **opt-in per rung, not defaults**: changing the window changes image
+layout and this project has documented layout sensitivity (2026-07-26: four added
+instructions flipped a passing rung), so every measured rung stays at 4 KiB and its
+published number stands. `beebs_bs` and `beebs_prime` re-verified unchanged.
+
+**C-4b remains open and still matters**: the copy path is still broken, and any initializer
+needing more than ~32 KiB of unrolled materialisation will still hit it (SQLite is the
+likely first). But it no longer blocks a benchmark. When someone does fix it: **instrument,
+do not reason** — dump the capability tag at each `split` in the copy path. Five paper
+hypotheses have failed here; the sixth should not be one.
 
 **Related hazard — CHECKED 2026-07-28, NOT a bug.** `getGpCaptableIndex` derives its index
 from a global's *position* in `M.globals()`, and GlobalMerge mutates that list (it merged
