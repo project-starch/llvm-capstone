@@ -257,12 +257,35 @@ Cycles per iteration: domain **6.003 / 6.001** (metronomic), baseline 7.287 / 7.
 
 ## Compiler / toolchain (ours)
 
-### C-2 — `Cannot select: i128 = or` / `= xor` `OPEN`
-`lowerScalarI128Logical` bails when the two operands are not *matching* extends (both sign or both
-unsigned). Blocks `rv8_qsort` and `rv8_miniz` at −O1/−O2.
-- **Why unfixed:** closing it requires deciding what the high 64 bits mean in the mixed case —
-  capability metadata vs a genuine 128-bit integer. A semantics call with miscompile risk, left
-  alone deliberately under deadline.
+### C-2 — `Cannot select: i128 = or` / `= xor`, mixed extends `OPEN (partially widened)`
+Blocks `rv8_qsort` and `rv8_miniz` at −O1/−O2 (both still fail 2026-07-28; −O0 passes).
+
+**The semantics question was malformed, and the answer is now settled.** It was framed as
+"do the high 64 bits mean capability metadata or a genuine 128-bit integer?" — neither.
+`lowerScalarI128Logical` computes the op in XLen and re-extends, which is exact **only while
+the i128 carrier's high half is an extension of its low half.** Matching extends preserve that
+invariant. Mixed extends break it: for `sext(a) OR zext(b)` the true 128-bit high half is
+`sign(a)`, which is **not a function of the low-half result**, so re-extending the narrow
+result under *either* rule is a **miscompile**. **The bail is correct. Do not "fix" it by
+picking an extension rule.**
+
+- **Widened safely 2026-07-28** (`CapstoneISelLowering.cpp`): when the sign-extended operand is
+  **known non-negative** (`DAG.SignBitIsZero`), its sign extension and a zero extension are the
+  same bits, so both operands agree and the invariant holds. Covers indices/sizes the optimizer
+  has already proven `>= 0`, without assuming anything about meaning.
+  Lit `i128-logical-mixed-extend.ll`; **Capstone lit 43/43**.
+- **Does NOT unblock rv8.** Re-verified with exit codes: `qsort` −O1/−O2 still
+  `Cannot select: i128 = xor`, `miniz` still `i128 = or`. Their signed operand is not provably
+  non-negative, so they are the genuinely unrepresentable case.
+  > ⚠ An intermediate report that both benchmarks "now build" was **wrong** — that check
+  > grepped output for error strings without testing the exit code, so a failing build read as
+  > success. Always gate on exit status.
+- **What the real fix needs, and why it is not a lowering patch:** the remaining case cannot be
+  represented while i128 is carried in a single capability register. Either (a) genuine
+  128-bit integers get a register-pair representation distinct from the capability carrier, or
+  (b) find why a **64-bit** `or`/`xor` is being widened to i128 at all — if the source only does
+  64-bit logic, the i128 node is an artifact upstream of this lowering and should be prevented
+  rather than lowered. **(b) is the cheaper investigation and should come first.**
 
 ### C-3 — RV8 fails at runtime at −O1/−O2 `OPEN`
 Five RV8 benchmarks now *build* at −O1/−O2 but fail 10/10 at runtime: `primes`/`aes`/`dhrystone`

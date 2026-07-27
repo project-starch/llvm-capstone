@@ -8221,8 +8221,26 @@ static SDValue lowerScalarI128Logical(SDValue Op, SelectionDAG &DAG,
     ResultExtOpcode = ISD::SIGN_EXTEND;
   else if (IsUnsignedExt(LHSExtOpcode) && IsUnsignedExt(RHSExtOpcode))
     ResultExtOpcode = ISD::ZERO_EXTEND;
-  else
-    return SDValue();
+  else {
+    // Mixed extends (issue C-2). This lowering computes the op in XLen and
+    // re-extends, which is exact only while the i128 carrier's high half is an
+    // extension of its low half. Mixed extends break that invariant: for
+    // sign_extend(a) OR zero_extend(b) the true 128-bit high half is sign(a),
+    // and sign(a) is NOT a function of the low-half result -- so re-extending
+    // the narrow result under either rule would MISCOMPILE. Bailing here is
+    // correct, not conservative.
+    //
+    // One case is recoverable rather than guessed at: if the sign-extended
+    // operand is known non-negative, its sign extension and a zero extension
+    // are the same bits, so both operands agree and the invariant holds. That
+    // covers the common shapes (array indices, sizes, anything the optimizer
+    // has already proven >= 0) without assuming anything about what the high
+    // bits "mean".
+    SDValue SignedNarrow = LHSExtOpcode == ISD::SIGN_EXTEND ? LHS : RHS;
+    if (!DAG.SignBitIsZero(SignedNarrow))
+      return SDValue();
+    ResultExtOpcode = ISD::ZERO_EXTEND;
+  }
 
   SDValue Logical = DAG.getNode(Op.getOpcode(), DL, XLenVT, LHS, RHS);
   return DAG.getNode(ResultExtOpcode, DL, MVT::i128, Logical);
