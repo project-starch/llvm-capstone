@@ -2,49 +2,62 @@
 
 Minimal snapshot. Read first in every session.
 
-## Latest (2026-07-27) — silicon status: 3 rungs measured, 2 hang, blocker still open
+## Latest (2026-07-28) — silicon status: ONE defensible overhead row
 
-**Paper-facing source of truth is `ref/fpga-silicon-measurements-for-paper.md`
-(§5 is the authoritative "what is NOT established" list). This section is the
-short state; the dated `history/` notes are the trail.**
+**Paper-facing source of truth is `ref/fpga-silicon-measurements-for-paper.md`; open issues
+are `ref/ISSUES.md`. This section is the short state; dated `history/` notes are the trail.**
 
-### The perf table as it stands (these 3 are quotable)
+### ⚠ The old 3-row table is WITHDRAWN
 
-Method: each kernel built twice from the identical source header by the same
-clang at the same `-O` — once `-target capstone64` as a pure-cap domain, once
-`-target riscv64` with no capability flags — run on the same board, compute-only
-bracket, warm baseline. Static gate fails the build if a capability instruction
-reaches the baseline.
+`beebs_prime` 1.032x, `rv8_primes` 1.050x and the headline **"3.2 % scalar / 5.0 % array /
+80 % recursive" must not be quoted.** Their baselines were contaminated by timer interrupts
+serviced inside the measurement bracket (issue **I-2**). Every correction so far has run the
+same way: **our overheads are larger than we claimed.**
 
-| rung | opt | capability cyc | baseline cyc | **cycles** | **instr** |
+### What IS quotable
+
+| rung | opt | capability | baseline | **cycles** | **instr** |
 |---|---|---:|---:|---:|---:|
-| `beebs_prime` (pure scalar) | −O0 | 47,780 | 46,306 | **1.032×** | — |
-| `rv8_primes` (sieve, 16.5 M cyc) | −O0 | 17,283,292 | 16,459,057 | **1.050×** | **1.102×** |
-| `beebs_recursion` (deep + mutual recursion) | −O1 | 18,957 | 10,523 | **1.801×** | **1.458×** |
+| `beebs_bs` (binary search) | −O1 | 2,258 cyc / 875 instr | 1,772 / 827 | **1.274x** | **1.058x** |
 
-**Headline: pervasive spatial safety costs 3.2 % scalar / 5.0 % array / 80 %
-recursive. The spread IS the result — report the range and the mechanism, never
-an average.** The recursion outlier is **ABI cost** (gp-free call/return + cap
-spills), not hardware.
+Certified by an explicit criterion: **15 of 15** repeated baseline passes tied at minimum
+retired instructions, **45-cycle** spread. Nothing else in the ladder has shown that.
 
-### The paper's evaluation now carries the silicon numbers (2026-07-27)
+### BOARD RESULTS 2026-07-28 — ONE defensible row; the 3.2/5.0/80 headline is WITHDRAWN
 
-`old-parts/evaluation.tex` gained `sec:eval-spatial-cost` + `tab:spatialcost` —
-the first time the draft **prices** pervasive spatial safety rather than only
-showing it correct. Also folds in the ABI-not-enforcement split (sieve: +10.2%
-instructions, +5.6% cycles, CPI *falls* 2.07→1.98) and one scoped paragraph on the
-R-1 board defect explaining why 3 kernels and not 7. `tab:appoverhead`'s CPI=1
-footnote is corrected against the measured 2.0–3.2.
+**Read `history/28-07-2026_01-30-00_*` and `history/28-07-2026_00-10-00_*` before any
+paper-facing work.**
 
-Paper commit `524f5d0` is **local only, deliberately not pushed** — that repo syncs
-with Overleaf and pushing risks clobbering edits made there. The parent's submodule
-pointer is intentionally left unbumped for the same reason. Builds clean: 13 pages,
-no errors, no undefined refs, no overfull boxes in the new material.
+Measuring each baseline **16x** and keeping the least-disturbed pass (min instret; the
+count of passes tied at that minimum is the cleanliness evidence) changed the table
+materially, and every change ran the same way — **our overheads are larger than claimed**:
 
-**`tab:spatialcost` is built to take more rows** — when board runs land, add them
-there and update the 3.2/5.0/80 spread sentence if the range moves.
+| rung | ties | old | **new** |
+|---|---|---:|---:|
+| `beebs_bs` | **15/15**, 45-cyc spread | 1.181x | **1.274x cyc / 1.058x instr — CLEAN, the only defensible row** |
+| `beebs_prime` | 5/15 | 1.073x | **>=1.605x** (was published as 1.032x — WITHDRAWN) |
+| `beebs_cnt` | 1/15 | 0.773x | 1.165x (the impossible sub-1.0 was interrupts) |
+| `rv8_primes` | 1/15 | 1.051x | 1.055x — **uncorrected, too long for a clean pass** |
 
-### BOARD RESULTS 2026-07-27 (13 boots) — 4 publishable rows, 5 silicon-correct rungs
+**Cause (I-2, confirmed):** the Linux baseline services timer interrupts inside the
+bracket. A control kernel compiling to the identical 5 RISC-V instructions on both
+targets runs at a metronomic **6.003/6.001 cyc/iter in the domain** vs **7.29** under
+Linux; the excess scales 3.9x for 4x the work at ~14 cyc per extra instruction.
+
+**Section 3 ("overhead is ABI, not hardware") is SUSPENDED — it may invert.** Removing
+the calibrated interrupt load takes `rv8_primes` from cycles 1.055x / instr 1.103x
+(CPI *falls*) to cycles 1.280x / instr 1.132x (CPI *rises*). Only a **bare-metal
+baseline** can settle it.
+
+**min-of-16 works as a function of kernel length:** clean below ~2k cycles, large but
+uncertified 10k-170k, **useless above ~700k**. Bare-metal baseline still required for
+long kernels.
+
+**Paper updated** (`old-parts/evaluation.tex`, commit `51479d8`, local only): table cut to
+the single `beebs_bs` row, the ABI-not-enforcement paragraph removed rather than softened,
+CPI footnote corrected to the in-domain range 1.20-2.58.
+
+### Superseded — board results 2026-07-27 (13 boots)
 
 **`beebs_bs` is a new, clean 4th row: 1.181× cycles / 1.058× instructions** (capability
 2,258 cyc / 875 instr vs −O1 warm baseline 1,912 / 827; CPI 2.31 → 2.58). Reproduces

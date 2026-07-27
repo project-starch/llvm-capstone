@@ -137,7 +137,7 @@ Source: `history/21-07-2026_16-12-13_RESULTS-fpga-borrow-cost-cycle-accurate.md`
 > claim — the cost is the ABI, not the enforcement — is an instruction-count argument.
 > Lead with instructions.**
 
-## 2. NEW — Pervasive spatial safety: 3.2% scalar, 5.0% array, 80% recursive
+## 2. Pervasive spatial safety — ONE clean row (`beebs_bs` 1.274x); the 3.2/5.0/80 headline is WITHDRAWN
 
 The draft claims spatial safety is pervasive ("every pointer is a bounded
 capability, always on"), demonstrates it is **correct**, and never prices it.
@@ -237,7 +237,32 @@ Sources: `history/26-07-2026_14-46-43_RESULTS-silicon-spatial-safety-overhead-ba
 
 ---
 
-## 3. NEW — That overhead is ABI, not hardware
+## 3. "That overhead is ABI, not hardware" — CLAIM SUSPENDED (2026-07-28), it may invert
+
+> ### ⚠ SUSPENDED 2026-07-28 — this section's conclusion may be BACKWARDS
+>
+> The claim below rests on `rv8_primes` retiring **+10.2 % instructions** for only **+5.6 %
+> cycles**, CPI *falling* 2.07 -> 1.98 — read as "bounds enforcement is near-free per
+> instruction; the cost is the ABI". That depends on the baseline being sound, and it is not:
+> the baseline is a Linux process paying timer interrupts inside the bracket (issue **I-2**),
+> and interrupts cost ~**14 cycles per instruction** against real code's ~2, so they inflate
+> the baseline's CPI specifically.
+>
+> Removing the measured interrupt load (calibrated from `ctrsanity`) flips it:
+>
+> | | cycles | instr | CPI |
+> |---|---:|---:|---:|
+> | capability | 17,283,292 | 8,773,753 | 1.97 |
+> | baseline **as measured** | 16,389,191 | 7,955,129 | 2.06 |
+> | baseline **est. clean** | ~13,501,000 | ~7,749,000 | **1.74** |
+>
+> As measured: cycles **1.055x**, instructions **1.103x** -> CPI **falls**.
+> Estimated clean: cycles **1.280x**, instructions **1.132x** -> CPI **RISES**.
+>
+> Cycles may therefore grow *faster* than instructions — the opposite conclusion.
+> **Do not cite this section.** `rv8_primes` is 16.5 M cycles, far too long for min-of-16 to
+> find a clean pass (1/15 ties), so only a **bare-metal baseline** can settle it. The estimate
+> above is a calibration-based inference, NOT a measurement, and must not be published as one.
 
 ### The question this answers
 
