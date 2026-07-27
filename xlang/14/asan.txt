@@ -1,0 +1,101 @@
+=================================================================
+==2650394==ERROR: AddressSanitizer: heap-use-after-free on address 0x7e102a208400 at pc 0x55f81fc81be9 bp 0x7ffc90446bf0 sp 0x7ffc90446be0
+READ of size 4 at 0x7e102a208400 thread T0
+    #0 0x55f81fc81be8 in mark_context_stack /path/to/xlang/14/mruby/src/gc.c:556
+    #1 0x55f81fc81cc6 in mark_context /path/to/xlang/14/mruby/src/gc.c:573
+    #2 0x55f81fc82a10 in root_scan_phase /path/to/xlang/14/mruby/src/gc.c:874
+    #3 0x55f81fc82a10 in incremental_gc /path/to/xlang/14/mruby/src/gc.c:1081
+    #4 0x55f81fc8372d in incremental_gc_until /path/to/xlang/14/mruby/src/gc.c:1112
+    #5 0x55f81fc840e4 in mrb_full_gc /path/to/xlang/14/mruby/src/gc.c:1212
+    #6 0x55f81fc84b92 in mrb_obj_alloc /path/to/xlang/14/mruby/src/gc.c:505
+    #7 0x55f81fca6534 in str_new /path/to/xlang/14/mruby/src/string.c:59
+    #8 0x55f81fcadfa9 in mrb_str_dup /path/to/xlang/14/mruby/src/string.c:1070
+    #9 0x55f81fcd13e1 in mrb_vm_exec /path/to/xlang/14/mruby/src/vm.c:2398
+    #10 0x55f81fcd43e3 in mrb_vm_run /path/to/xlang/14/mruby/src/vm.c:829
+    #11 0x55f81fcd45f3 in mrb_top_run /path/to/xlang/14/mruby/src/vm.c:2651
+    #12 0x55f81fcf84b2 in mrb_load_exec /path/to/xlang/14/mruby/mrbgems/mruby-compiler/core/parse.y:5762
+    #13 0x55f81fcfc4aa in mrb_load_file_cxt /path/to/xlang/14/mruby/mrbgems/mruby-compiler/core/parse.y:5771
+    #14 0x55f81fc64a34 in main /path/to/xlang/14/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:227
+    #15 0x7f202ae2a600 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:59
+    #16 0x7f202ae2a717 in __libc_start_main_impl ../csu/libc-start.c:360
+    #17 0x55f81fc63c64 in _start (/path/to/xlang/14/mruby/build/host/bin/mruby+0x21c64) (BuildId: 8f70e06aad5b418d933167cd16b10353ecc82ae7)
+
+0x7e102a208400 is located 49152 bytes inside of 49200-byte region [0x7e102a1fc400,0x7e102a208430)
+freed by thread T0 here:
+    #0 0x7f202b32a3ff in free ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:51
+    #1 0x55f81fca4d9c in mrb_default_allocf /path/to/xlang/14/mruby/src/state.c:56
+    #2 0x55f81fc811a7 in mrb_free /path/to/xlang/14/mruby/src/gc.c:269
+    #3 0x55f81fc833f5 in incremental_sweep_phase /path/to/xlang/14/mruby/src/gc.c:1055
+    #4 0x55f81fc833f5 in incremental_gc /path/to/xlang/14/mruby/src/gc.c:1096
+    #5 0x55f81fc8372d in incremental_gc_until /path/to/xlang/14/mruby/src/gc.c:1112
+    #6 0x55f81fc840e4 in mrb_full_gc /path/to/xlang/14/mruby/src/gc.c:1212
+    #7 0x55f81fc84b92 in mrb_obj_alloc /path/to/xlang/14/mruby/src/gc.c:505
+    #8 0x55f81fca6534 in str_new /path/to/xlang/14/mruby/src/string.c:59
+    #9 0x55f81fca91ad in mrb_str_new /path/to/xlang/14/mruby/src/string.c:193
+    #10 0x55f81fc9d74d in mrb_fixnum_to_str /path/to/xlang/14/mruby/src/numeric.c:1186
+    #11 0x55f81fc9da7c in fix_to_s /path/to/xlang/14/mruby/src/numeric.c:1211
+    #12 0x55f81fcc748a in mrb_vm_exec /path/to/xlang/14/mruby/src/vm.c:1273
+    #13 0x55f81fcd43e3 in mrb_vm_run /path/to/xlang/14/mruby/src/vm.c:829
+    #14 0x55f81fcd45f3 in mrb_top_run /path/to/xlang/14/mruby/src/vm.c:2651
+    #15 0x55f81fcf84b2 in mrb_load_exec /path/to/xlang/14/mruby/mrbgems/mruby-compiler/core/parse.y:5762
+    #16 0x55f81fcfc4aa in mrb_load_file_cxt /path/to/xlang/14/mruby/mrbgems/mruby-compiler/core/parse.y:5771
+    #17 0x55f81fc64a34 in main /path/to/xlang/14/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:227
+    #18 0x7f202ae2a600 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:59
+    #19 0x7f202ae2a717 in __libc_start_main_impl ../csu/libc-start.c:360
+    #20 0x55f81fc63c64 in _start (/path/to/xlang/14/mruby/build/host/bin/mruby+0x21c64) (BuildId: 8f70e06aad5b418d933167cd16b10353ecc82ae7)
+
+previously allocated by thread T0 here:
+    #0 0x7f202b32a6cf in realloc ../../../../src/libsanitizer/asan/asan_malloc_linux.cpp:81
+    #1 0x55f81fca4d95 in mrb_default_allocf /path/to/xlang/14/mruby/src/state.c:60
+    #2 0x55f81fc842bc in mrb_realloc_simple /path/to/xlang/14/mruby/src/gc.c:202
+    #3 0x55f81fc84374 in mrb_realloc /path/to/xlang/14/mruby/src/gc.c:216
+    #4 0x55f81fc84503 in mrb_malloc /path/to/xlang/14/mruby/src/gc.c:237
+    #5 0x55f81fc84536 in mrb_calloc /path/to/xlang/14/mruby/src/gc.c:255
+    #6 0x55f81fc84574 in add_heap /path/to/xlang/14/mruby/src/gc.c:325
+    #7 0x55f81fc84e4a in mrb_obj_alloc /path/to/xlang/14/mruby/src/gc.c:511
+    #8 0x55f81fca9056 in mrb_str_buf_new /path/to/xlang/14/mruby/src/string.c:106
+    #9 0x55f81fd325a7 in mrb_str_format /path/to/xlang/14/mruby/mrbgems/mruby-sprintf/src/sprintf.c:561
+    #10 0x55f81fd37b6a in mrb_f_sprintf /path/to/xlang/14/mruby/mrbgems/mruby-sprintf/src/sprintf.c:517
+    #11 0x55f81fcc748a in mrb_vm_exec /path/to/xlang/14/mruby/src/vm.c:1273
+    #12 0x55f81fcd43e3 in mrb_vm_run /path/to/xlang/14/mruby/src/vm.c:829
+    #13 0x55f81fcd45f3 in mrb_top_run /path/to/xlang/14/mruby/src/vm.c:2651
+    #14 0x55f81fcf84b2 in mrb_load_exec /path/to/xlang/14/mruby/mrbgems/mruby-compiler/core/parse.y:5762
+    #15 0x55f81fcfc4aa in mrb_load_file_cxt /path/to/xlang/14/mruby/mrbgems/mruby-compiler/core/parse.y:5771
+    #16 0x55f81fc64a34 in main /path/to/xlang/14/mruby/mrbgems/mruby-bin-mruby/tools/mruby/mruby.c:227
+    #17 0x7f202ae2a600 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:59
+    #18 0x7f202ae2a717 in __libc_start_main_impl ../csu/libc-start.c:360
+    #19 0x55f81fc63c64 in _start (/path/to/xlang/14/mruby/build/host/bin/mruby+0x21c64) (BuildId: 8f70e06aad5b418d933167cd16b10353ecc82ae7)
+
+SUMMARY: AddressSanitizer: heap-use-after-free /path/to/xlang/14/mruby/src/gc.c:556 in mark_context_stack
+Shadow bytes around the buggy address:
+  0x7e102a208180: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7e102a208200: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7e102a208280: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7e102a208300: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+  0x7e102a208380: fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd fd
+=>0x7e102a208400:[fd]fd fd fd fd fd fa fa fa fa fa fa fa fa fa fa
+  0x7e102a208480: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e102a208500: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e102a208580: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e102a208600: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+  0x7e102a208680: fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==2650394==ABORTING

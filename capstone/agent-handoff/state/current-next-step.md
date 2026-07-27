@@ -50,6 +50,27 @@ not our tree's `master`@`8cda52c`) — `plans/monitor-regen-audit-task-B.md`; an
 
 ---
 
+## xlang corpus — three decisions pending (2026-07-26)
+
+Not blocking the board track; these are calls for the core team, not more building.
+Detail and evidence: `history/26-07-2026_18-04-21_xlang-phase1-state.md` §4.
+
+1. **Rows 6 and 11 are spatial, not temporal.** Verified, not assumed — row 11's
+   temporal path is closed by `envadjust()`, row 6 corrupts a register operand and
+   stores past the frame. Decide: reclassify as spatial (and soften the companion
+   note's "all temporal" claim), or drop them from the temporal subset. Revocation
+   does not address either; bounds do.
+2. **Row 7 appears not to exist.** Its issue number (#6701) belongs to row 6, the
+   named function is absent before mruby 3.4.0, and the described GC hazard is closed
+   by the allocation arena. Either find the real issue, or drop the row and amend the
+   tally sentence claiming the corpus spans "the bigint gem".
+3. **Confirm CVE-2026-1979 against NVD** — the #6701 mapping was established from the
+   upstream commit message and could not be checked offline.
+
+Also open: rows 1 and 2 need a vendored patch to build on any post-2020 rustc. Row
+1's touches the destructor under test (chosen to preserve the double-drop) — worth a
+deliberate look if the corpus must be unpatched upstream source only.
+
 ## Superseded (2026-07-22) — gp-free domain bring-up, `C_GEN_CAP` blocker
 
 **RESOLVED 2026-07-23 — kept for provenance.** The blocker below (the monitor's `gp`
@@ -62,6 +83,7 @@ globals-using domain to run on the board. The monitor was left **unchanged**. Se
 memory `history/22-07-2026_18-05-00_...` entry in `MEMORY.md` for the full trail.
 
 Original note follows.
+## gp-free domain bring-up (2026-07-22) — branch `capstone-gp-free`
 
 DONE on QEMU (functional, silicon-faithful): a real globals-using app runs
 correctly in a pure-cap domain **gp-free** with the fabrication OFF and the

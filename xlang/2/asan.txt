@@ -1,0 +1,60 @@
+=================================================================
+==2665744==ERROR: AddressSanitizer: stack-use-after-return on address 0x7b1febaf0240 at pc 0x5635f63590f5 bp 0x7ffc84216a70 sp 0x7ffc84216a68
+READ of size 8 at 0x7b1febaf0240 thread T0
+    #0 0x5635f63590f4 in <rlua::table::Table>::len (/path/to/xlang/2/target/x86_64-unknown-linux-gnu/release/rlua-repro-2+0x1410f4) (BuildId: 2969de4d13450e454ba153c20f4d1fe45df16b23)
+    #1 0x5635f635769d in rlua_repro_2::main rlua_repro_2.6244089ff5c6bb75-cgu.0
+    #2 0x5635f63563c2 in std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()> rlua_repro_2.6244089ff5c6bb75-cgu.0
+    #3 0x5635f6356c08 in std::rt::lang_start::<()>::{closure#0} rlua_repro_2.6244089ff5c6bb75-cgu.0
+    #4 0x5635f64447e6 in std::rt::lang_start_internal (/path/to/xlang/2/target/x86_64-unknown-linux-gnu/release/rlua-repro-2+0x22c7e6) (BuildId: 2969de4d13450e454ba153c20f4d1fe45df16b23)
+    #5 0x5635f63587ef in main (/path/to/xlang/2/target/x86_64-unknown-linux-gnu/release/rlua-repro-2+0x1407ef) (BuildId: 2969de4d13450e454ba153c20f4d1fe45df16b23)
+    #6 0x7f1fed82a600 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+    #7 0x7f1fed82a717 in __libc_start_main csu/../csu/libc-start.c:360:3
+    #8 0x5635f6299864 in _start (/path/to/xlang/2/target/x86_64-unknown-linux-gnu/release/rlua-repro-2+0x81864) (BuildId: 2969de4d13450e454ba153c20f4d1fe45df16b23)
+
+Address 0x7b1febaf0240 is located in stack of thread T0 at offset 576 in frame
+    #0 0x5635f6362f6f in std::panicking::catch_unwind::do_call::<core::panic::unwind_safe::AssertUnwindSafe<<rlua::lua::Lua>::create_callback::call_callback::{closure#0}>, core::result::Result<i32, rlua::error::Error>> rlua.64c3ecae5c25bc41-cgu.3
+
+  This frame has 8 object(s):
+    [32, 96) 'r.i.i'
+    [128, 160) 'iter6.i.i'
+    [192, 224) 'args2.i.i'
+    [256, 320) 'self1.i.i'
+    [352, 376) 'results.i.i'
+    [416, 480) '_26.i.i'
+    [512, 536) 'args.i.i'
+    [576, 600) 'lua.i.i' <== Memory access at offset 576 is inside this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-use-after-return (/path/to/xlang/2/target/x86_64-unknown-linux-gnu/release/rlua-repro-2+0x1410f4) (BuildId: 2969de4d13450e454ba153c20f4d1fe45df16b23) in <rlua::table::Table>::len
+Shadow bytes around the buggy address:
+  0x7b1febaeff80: 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+  0x7b1febaf0000: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x7b1febaf0080: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x7b1febaf0100: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x7b1febaf0180: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+=>0x7b1febaf0200: f5 f5 f5 f5 f5 f5 f5 f5[f5]f5 f5 f5 f5 f5 f5 f5
+  0x7b1febaf0280: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x7b1febaf0300: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x7b1febaf0380: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x7b1febaf0400: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+  0x7b1febaf0480: f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5 f5
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==2665744==ABORTING

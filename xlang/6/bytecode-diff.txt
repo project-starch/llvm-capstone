@@ -1,0 +1,33 @@
+Differential proof of the bytecode corruption (Row 6 / CVE-2026-1979).
+
+Same trigger.rb, two compilers: the pinned vulnerable commit cda2567c, and
+the same tree with the upstream fix e50f15c1 cherry-picked. Only the
+compiler differs. Reproduce with:
+    mrbc -v -o /dev/null trigger.rb
+
+=== VULNERABLE (cda2567c) -- 'victim' method irep ===
+   48 000 ENTER		0:0:0:0:0:0:0 (0x0)
+   49 004 LOADI_5	R38	(5)
+   49 006 JMP		009
+   50 009 LOADNIL	R2	(nil)
+   50 011 RETURN	R2	
+
+irep 0x7ba037fe01e0 nregs=7 nlocals=3 pools=0 syms=2 reps=0 ilen=33
+
+=== FIXED (cda2567c + e50f15c1) -- same method ===
+   48 000 ENTER		0:0:0:0:0:0:0 (0x0)
+   49 004 LOADI_5	R2	(5)
+   49 006 JMP		012
+   49 009 JMP		012
+   50 012 LOADNIL	R2	(nil)
+   50 014 RETURN	R2	
+
+
+The destination register of LOADI_5 is corrupted from R2 to R38.
+38 == OP_JMPIF (include/mruby/ops.h). The method's frame has nregs=4, so
+writing R38 stores 8 bytes past the end of the frame; at recursion depth
+the frame base is high enough that this also passes the end of the whole
+VM stack allocation, which is what AddressSanitizer reports.
+
+Note the fixed build also retains the second 'JMP 012' -- the optimization
+correctly declines to fire once it checks the opcode really is OP_JMPNOT.

@@ -1,0 +1,143 @@
+=================================================================
+==2653329==ERROR: AddressSanitizer: heap-use-after-free on address 0x7b852c3e0cd0 at pc 0x5609b3dc0634 bp 0x7ffc37d96c70 sp 0x7ffc37d96428
+READ of size 43 at 0x7b852c3e0cd0 thread T0
+    #0 0x5609b3dc0633 in memcpy (/path/to/xlang/1/target/x86_64-unknown-linux-gnu/debug/rlua-repro+0xfa633) (BuildId: 0f7cfda85f0655e8cc6bdd286fd78af0279d83dc)
+    #1 0x5609b3e857ef in core::ptr::copy_nonoverlapping::<u8> /rustc/<hash>/library/core/src/ptr/mod.rs:554:14
+    #2 0x5609b3e857ef in <alloc::io::buffered::bufwriter::BufWriter<std::io::stdio::StdoutRaw>>::write_to_buffer_unchecked /rustc/<hash>/library/alloc/src/io/buffered/bufwriter.rs:475:13
+    #3 0x5609b3e857ef in <alloc::io::buffered::bufwriter::BufWriter<std::io::stdio::StdoutRaw> as core::io::write::Write>::write_all /rustc/<hash>/library/alloc/src/io/buffered/bufwriter.rs:570:22
+    #4 0x5609b3e857ef in <alloc::io::buffered::linewritershim::LineWriterShim<std::io::stdio::StdoutRaw> as core::io::write::Write>::write_all /rustc/<hash>/library/alloc/src/io/buffered/linewritershim.rs:303:29
+    #5 0x5609b3e857ef in <alloc::io::buffered::linewriter::LineWriter<std::io::stdio::StdoutRaw> as core::io::write::Write>::write_all /rustc/<hash>/library/alloc/src/io/buffered/linewriter.rs:211:46
+    #6 0x5609b3e857ef in <std::io::stdio::StdoutLock as core::io::write::Write>::write_all /rustc/<hash>/library/std/src/io/stdio.rs:863:33
+    #7 0x5609b3e83b36 in <core::io::write::default_write_fmt::Adapter<std::io::stdio::StdoutLock> as core::fmt::Write>::write_str /rustc/<hash>/library/core/src/io/write.rs:391:30
+    #8 0x5609b3e0c466 in <alloc::string::String as core::fmt::Display>::fmt /rustc/<hash>/library/alloc/src/string.rs:2749:9
+    #9 0x5609b3e94ec9 in <core::fmt::rt::Argument>::fmt /rustc/<hash>/library/core/src/fmt/rt.rs:152:76
+    #10 0x5609b3e94ec9 in core::fmt::write /rustc/<hash>/library/core/src/fmt/mod.rs
+    #11 0x5609b3e852dc in core::io::write::default_write_fmt::<std::io::stdio::StdoutLock> /rustc/<hash>/library/core/src/io/write.rs:402:11
+    #12 0x5609b3e852dc in <std::io::stdio::StdoutLock as core::io::write::Write>::write_fmt /rustc/<hash>/library/core/src/io/write.rs:335:13
+    #13 0x5609b3e852dc in <&std::io::stdio::Stdout as core::io::write::Write>::write_fmt /rustc/<hash>/library/std/src/io/stdio.rs:837:21
+    #14 0x5609b3e7fb19 in <std::io::stdio::Stdout as core::io::write::Write>::write_fmt /rustc/<hash>/library/std/src/io/stdio.rs:811:18
+    #15 0x5609b3e7fb19 in std::io::stdio::print_to::<std::io::stdio::Stdout> /rustc/<hash>/library/std/src/io/stdio.rs:1167:32
+    #16 0x5609b3e7fb19 in std::io::stdio::_print /rustc/<hash>/library/std/src/io/stdio.rs:1275:5
+    #17 0x5609b3df001b in <rlua_repro::Userdata as rlua::lua::LuaUserDataType>::add_methods::{closure#0} /path/to/xlang/1/src/main.rs:35:13
+    #18 0x5609b3e017e0 in <rlua::lua::LuaUserDataMethods<rlua_repro::Userdata>>::box_method::<<rlua_repro::Userdata as rlua::lua::LuaUserDataType>::add_methods::{closure#0}>::{closure#0} /path/to/xlang/1/rlua/src/lua.rs:837:13
+    #19 0x5609b3e1bf75 in <alloc::boxed::Box<dyn core::ops::function::FnMut<(&rlua::lua::Lua, rlua::lua::LuaMultiValue), Output = core::result::Result<rlua::lua::LuaMultiValue, rlua::error::LuaError>>> as core::ops::function::FnMut<(&rlua::lua::Lua, rlua::lua::LuaMultiValue)>>::call_mut /rustc/<hash>/library/alloc/src/boxed.rs:2333:9
+    #20 0x5609b3e2204b in <rlua::lua::Lua>::create_callback_function::callback_call_impl::{closure#0} /path/to/xlang/1/rlua/src/lua.rs:1334:31
+    #21 0x5609b3e23ac0 in std::panicking::catch_unwind::do_call::<<rlua::lua::Lua>::create_callback_function::callback_call_impl::{closure#0}, core::result::Result<i32, rlua::error::LuaError>> /rustc/<hash>/library/std/src/panicking.rs:576:43
+    #22 0x5609b3e1a2da in __rust_try akywb4em2v4k0wmuh5xg4plrp
+    #23 0x5609b3e19ef5 in std::panicking::catch_unwind::<core::result::Result<i32, rlua::error::LuaError>, <rlua::lua::Lua>::create_callback_function::callback_call_impl::{closure#0}> /rustc/<hash>/library/std/src/panicking.rs:544:19
+    #24 0x5609b3e19ef5 in std::panic::catch_unwind::<<rlua::lua::Lua>::create_callback_function::callback_call_impl::{closure#0}, core::result::Result<i32, rlua::error::LuaError>> /rustc/<hash>/library/std/src/panic.rs:359:14
+    #25 0x5609b3e1487f in rlua::util::callback_error::<i32, <rlua::lua::Lua>::create_callback_function::callback_call_impl::{closure#0}> /path/to/xlang/1/rlua/src/util.rs:300:11
+    #26 0x5609b3e1ebb2 in <rlua::lua::Lua>::create_callback_function::callback_call_impl /path/to/xlang/1/rlua/src/lua.rs:1318:13
+    #27 0x5609b3e30a3b in luaD_precall /path/to/xlang/1/rlua/lua/ldo.c:434:12
+    #28 0x5609b3e58d43 in luaV_execute /path/to/xlang/1/rlua/lua/lvm.c:1134:13
+    #29 0x5609b3e30e19 in luaD_call /path/to/xlang/1/rlua/lua/ldo.c:499:5
+    #30 0x5609b3e30e7b in luaD_callnoyield /path/to/xlang/1/rlua/lua/ldo.c:509:3
+    #31 0x5609b3e29e8a in f_call /path/to/xlang/1/rlua/lua/lapi.c:942:3
+    #32 0x5609b3e2fd76 in luaD_rawrunprotected /path/to/xlang/1/rlua/lua/ldo.c:142:3
+    #33 0x5609b3e31856 in luaD_pcall /path/to/xlang/1/rlua/lua/ldo.c:729:12
+    #34 0x5609b3e2a0bc in lua_pcallk /path/to/xlang/1/rlua/lua/lapi.c:968:14
+    #35 0x5609b3e16211 in rlua::ffi::lua_pcall /path/to/xlang/1/rlua/src/ffi.rs:248:5
+    #36 0x5609b3e25eb2 in rlua::util::pcall_with_traceback /path/to/xlang/1/rlua/src/util.rs:343:15
+    #37 0x5609b3e00d37 in <rlua::lua::LuaFunction>::call::<(), ()>::{closure#0} /path/to/xlang/1/rlua/src/lua.rs:493:21
+    #38 0x5609b3e0dfc6 in rlua::util::stack_err_guard::<<rlua::lua::LuaFunction>::call<(), ()>::{closure#0}, ()> /path/to/xlang/1/rlua/src/util.rs:128:15
+    #39 0x5609b3dff39a in <rlua::lua::LuaFunction>::call::<(), ()> /path/to/xlang/1/rlua/src/lua.rs:481:13
+    #40 0x5609b3e001ef in <rlua::lua::Lua>::eval::<()> /path/to/xlang/1/rlua/src/lua.rs:1097:14
+    #41 0x5609b3e08645 in rlua_repro::main /path/to/xlang/1/src/main.rs:61:9
+    #42 0x5609b3df11ea in <fn() as core::ops::function::FnOnce<()>>::call_once /rustc/<hash>/library/core/src/ops/function.rs:250:5
+    #43 0x5609b3e08a0d in std::sys::backtrace::__rust_begin_short_backtrace::<fn(), ()> /rustc/<hash>/library/std/src/sys/backtrace.rs:166:18
+    #44 0x5609b3e089e0 in std::rt::lang_start::<()>::{closure#0} /rustc/<hash>/library/std/src/rt.rs:206:18
+    #45 0x5609b3e7eaa6 in <&dyn core::ops::function::Fn<(), Output = i32> + core::panic::unwind_safe::RefUnwindSafe + core::marker::Sync as core::ops::function::FnOnce<()>>::call_once /rustc/<hash>/library/core/src/ops/function.rs:287:21
+    #46 0x5609b3e7eaa6 in std::panicking::catch_unwind::do_call::<&dyn core::ops::function::Fn<(), Output = i32> + core::panic::unwind_safe::RefUnwindSafe + core::marker::Sync, i32> /rustc/<hash>/library/std/src/panicking.rs:576:43
+    #47 0x5609b3e7eaa6 in std::panicking::catch_unwind::<i32, &dyn core::ops::function::Fn<(), Output = i32> + core::panic::unwind_safe::RefUnwindSafe + core::marker::Sync> /rustc/<hash>/library/std/src/panicking.rs:544:19
+    #48 0x5609b3e7eaa6 in std::panic::catch_unwind::<&dyn core::ops::function::Fn<(), Output = i32> + core::panic::unwind_safe::RefUnwindSafe + core::marker::Sync, i32> /rustc/<hash>/library/std/src/panic.rs:359:14
+    #49 0x5609b3e7eaa6 in std::rt::lang_start_internal::{closure#0} /rustc/<hash>/library/std/src/rt.rs:175:24
+    #50 0x5609b3e7eaa6 in std::panicking::catch_unwind::do_call::<std::rt::lang_start_internal::{closure#0}, isize> /rustc/<hash>/library/std/src/panicking.rs:576:43
+    #51 0x5609b3e7eaa6 in std::panicking::catch_unwind::<isize, std::rt::lang_start_internal::{closure#0}> /rustc/<hash>/library/std/src/panicking.rs:544:19
+    #52 0x5609b3e7eaa6 in std::panic::catch_unwind::<std::rt::lang_start_internal::{closure#0}, isize> /rustc/<hash>/library/std/src/panic.rs:359:14
+    #53 0x5609b3e7eaa6 in std::rt::lang_start_internal /rustc/<hash>/library/std/src/rt.rs:171:5
+    #54 0x5609b3e0894f in std::rt::lang_start::<()> /rustc/<hash>/library/std/src/rt.rs:205:5
+    #55 0x5609b3e0883d in main (/path/to/xlang/1/target/x86_64-unknown-linux-gnu/debug/rlua-repro+0x14283d) (BuildId: 0f7cfda85f0655e8cc6bdd286fd78af0279d83dc)
+    #56 0x7f452d22a600 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:59:16
+    #57 0x7f452d22a717 in __libc_start_main csu/../csu/libc-start.c:360:3
+    #58 0x5609b3d343f4 in _start (/path/to/xlang/1/target/x86_64-unknown-linux-gnu/debug/rlua-repro+0x6e3f4) (BuildId: 0f7cfda85f0655e8cc6bdd286fd78af0279d83dc)
+
+0x7b852c3e0cd0 is located 0 bytes inside of 43-byte region [0x7b852c3e0cd0,0x7b852c3e0cfb)
+freed by thread T0 here:
+    #0 0x5609b3dc13d6 in free (/path/to/xlang/1/target/x86_64-unknown-linux-gnu/debug/rlua-repro+0xfb3d6) (BuildId: 0f7cfda85f0655e8cc6bdd286fd78af0279d83dc)
+    #1 0x5609b3e17a7a in core::ptr::drop_glue::<alloc::raw_vec::RawVec<u8>> /rustc/<hash>/library/core/src/ptr/mod.rs:828:1
+    #2 0x5609b3df9858 in std::panicking::catch_unwind::do_call::<rlua::util::destructor<core::cell::RefCell<rlua_repro::Userdata>>::{closure#0}, i32> /rustc/<hash>/library/std/src/panicking.rs:576:43
+    #3 0x5609b3e0c865 in rlua::util::destructor::<core::cell::RefCell<rlua_repro::Userdata>> /path/to/xlang/1/rlua/src/util.rs:279:11
+    #4 0x5609b3e30a3b in luaD_precall /path/to/xlang/1/rlua/lua/ldo.c:434:12
+    #5 0x5609b3e30e09 in luaD_call /path/to/xlang/1/rlua/lua/ldo.c:498:8
+    #6 0x5609b3e30e7b in luaD_callnoyield /path/to/xlang/1/rlua/lua/ldo.c:509:3
+    #7 0x5609b3e34a62 in dothecall /path/to/xlang/1/rlua/lua/lgc.c:802:3
+    #8 0x5609b3e2fd76 in luaD_rawrunprotected /path/to/xlang/1/rlua/lua/ldo.c:142:3
+    #9 0x5609b3e31856 in luaD_pcall /path/to/xlang/1/rlua/lua/ldo.c:729:12
+    #10 0x5609b3e34be0 in GCTM /path/to/xlang/1/rlua/lua/lgc.c:822:14
+    #11 0x5609b3e34ce9 in runafewfinalizers /path/to/xlang/1/rlua/lua/lgc.c:848:5
+    #12 0x5609b3e356a3 in singlestep /path/to/xlang/1/rlua/lua/lgc.c:1086:17
+    #13 0x5609b3e356fb in luaC_runtilstate /path/to/xlang/1/rlua/lua/lgc.c:1106:5
+    #14 0x5609b3e35927 in luaC_fullgc /path/to/xlang/1/rlua/lua/lgc.c:1171:3
+    #15 0x5609b3e2a504 in lua_gc /path/to/xlang/1/rlua/lua/lapi.c:1055:7
+    #16 0x5609b3e36227 in luaB_collectgarbage /path/to/xlang/1/rlua/lua/lbaselib.c:182:13
+    #17 0x5609b3e30a3b in luaD_precall /path/to/xlang/1/rlua/lua/ldo.c:434:12
+    #18 0x5609b3e58d43 in luaV_execute /path/to/xlang/1/rlua/lua/lvm.c:1134:13
+    #19 0x5609b3e30e19 in luaD_call /path/to/xlang/1/rlua/lua/ldo.c:499:5
+    #20 0x5609b3e30e7b in luaD_callnoyield /path/to/xlang/1/rlua/lua/ldo.c:509:3
+    #21 0x5609b3e29e8a in f_call /path/to/xlang/1/rlua/lua/lapi.c:942:3
+    #22 0x5609b3e2fd76 in luaD_rawrunprotected /path/to/xlang/1/rlua/lua/ldo.c:142:3
+    #23 0x5609b3e31856 in luaD_pcall /path/to/xlang/1/rlua/lua/ldo.c:729:12
+    #24 0x5609b3e2a0bc in lua_pcallk /path/to/xlang/1/rlua/lua/lapi.c:968:14
+    #25 0x5609b3e16211 in rlua::ffi::lua_pcall /path/to/xlang/1/rlua/src/ffi.rs:248:5
+    #26 0x5609b3e0dfc6 in rlua::util::stack_err_guard::<<rlua::lua::LuaFunction>::call<(), ()>::{closure#0}, ()> /path/to/xlang/1/rlua/src/util.rs:128:15
+    #27 0x5609b3dff39a in <rlua::lua::LuaFunction>::call::<(), ()> /path/to/xlang/1/rlua/src/lua.rs:481:13
+    #28 0x5609b3e001ef in <rlua::lua::Lua>::eval::<()> /path/to/xlang/1/rlua/src/lua.rs:1097:14
+    #29 0x5609b3e08645 in rlua_repro::main /path/to/xlang/1/src/main.rs:61:9
+
+previously allocated by thread T0 here:
+    #0 0x5609b3dc1674 in malloc (/path/to/xlang/1/target/x86_64-unknown-linux-gnu/debug/rlua-repro+0xfb674) (BuildId: 0f7cfda85f0655e8cc6bdd286fd78af0279d83dc)
+    #1 0x5609b3e89464 in <alloc::raw_vec::RawVecInner>::try_allocate_in (/path/to/xlang/1/target/x86_64-unknown-linux-gnu/debug/rlua-repro+0x1c3464) (BuildId: 0f7cfda85f0655e8cc6bdd286fd78af0279d83dc)
+    #2 0x5609b3e1f885 in <alloc::raw_vec::RawVecInner>::with_capacity_in /rustc/<hash>/library/alloc/src/raw_vec/mod.rs:435:15
+    #3 0x5609b3e2419e in <alloc::raw_vec::RawVec<u8>>::with_capacity_in /rustc/<hash>/library/alloc/src/raw_vec/mod.rs:177:20
+    #4 0x5609b3e2419e in <alloc::vec::Vec<u8>>::with_capacity_in /rustc/<hash>/library/alloc/src/vec/mod.rs:975:20
+    #5 0x5609b3e2419e in <u8 as <[_]>::to_vec_in::ConvertVec>::to_vec::<alloc::alloc::Global> /rustc/<hash>/library/alloc/src/slice.rs:448:29
+    #6 0x5609b3e0ecd9 in <str as alloc::string::ToString>::to_string /rustc/<hash>/library/alloc/src/string.rs:2931:9
+    #7 0x5609b3df11ea in <fn() as core::ops::function::FnOnce<()>>::call_once /rustc/<hash>/library/core/src/ops/function.rs:250:5
+    #8 0x5609b3e0894f in std::rt::lang_start::<()> /rustc/<hash>/library/std/src/rt.rs:205:5
+    #9 0x5609b3e0883d in main (/path/to/xlang/1/target/x86_64-unknown-linux-gnu/debug/rlua-repro+0x14283d) (BuildId: 0f7cfda85f0655e8cc6bdd286fd78af0279d83dc)
+    #10 0x7f452d22a717 in __libc_start_main csu/../csu/libc-start.c:360:3
+    #11 0x5609b3d343f4 in _start (/path/to/xlang/1/target/x86_64-unknown-linux-gnu/debug/rlua-repro+0x6e3f4) (BuildId: 0f7cfda85f0655e8cc6bdd286fd78af0279d83dc)
+
+SUMMARY: AddressSanitizer: heap-use-after-free (/path/to/xlang/1/target/x86_64-unknown-linux-gnu/debug/rlua-repro+0xfa633) (BuildId: 0f7cfda85f0655e8cc6bdd286fd78af0279d83dc) in memcpy
+Shadow bytes around the buggy address:
+  0x7b852c3e0a00: fa fa 00 00 00 00 05 fa fa fa 00 00 00 00 01 fa
+  0x7b852c3e0a80: fa fa 00 00 00 00 04 fa fa fa 00 00 00 00 03 fa
+  0x7b852c3e0b00: fa fa 00 00 00 00 04 fa fa fa 00 00 00 00 02 fa
+  0x7b852c3e0b80: fa fa 00 00 00 00 05 fa fa fa 00 00 00 00 01 fa
+  0x7b852c3e0c00: fa fa 00 00 00 00 03 fa fa fa 00 00 00 00 02 fa
+=>0x7b852c3e0c80: fa fa 00 00 00 00 04 fa fa fa[fd]fd fd fd fd fd
+  0x7b852c3e0d00: fa fa 00 00 00 00 01 fa fa fa 00 00 00 00 00 00
+  0x7b852c3e0d80: fa fa fd fd fd fd fd fa fa fa fd fd fd fd fd fa
+  0x7b852c3e0e00: fa fa fd fd fd fd fd fd fa fa fd fd fd fd fd fd
+  0x7b852c3e0e80: fa fa 00 00 00 00 00 fa fa fa 00 00 00 00 06 fa
+  0x7b852c3e0f00: fa fa 00 00 00 00 01 fa fa fa 00 00 00 00 00 fa
+Shadow byte legend (one shadow byte represents 8 application bytes):
+  Addressable:           00
+  Partially addressable: 01 02 03 04 05 06 07 
+  Heap left redzone:       fa
+  Freed heap region:       fd
+  Stack left redzone:      f1
+  Stack mid redzone:       f2
+  Stack right redzone:     f3
+  Stack after return:      f5
+  Stack use after scope:   f8
+  Global redzone:          f9
+  Global init order:       f6
+  Poisoned by user:        f7
+  Container overflow:      fc
+  Array cookie:            ac
+  Intra object redzone:    bb
+  ASan internal:           fe
+  Left alloca redzone:     ca
+  Right alloca redzone:    cb
+==2653329==ABORTING

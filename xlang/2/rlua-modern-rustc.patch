@@ -1,0 +1,40 @@
+Make rlua 0.15.4-alpha.0 (78021185) compile on a modern Rust toolchain.
+
+WHAT THIS CHANGES, AND WHY IT DOES NOT HIDE THE BUG
+===================================================
+The `rlua_panic!` macro expands to `panic!(...);` -- with a trailing semicolon --
+and is then invoked in expression position (e.g. `_ => rlua_panic!("...")` in
+src/lua.rs:728). Rust deprecated that in 2020 (rust-lang issue #79813) and it is
+now a hard error, so the crate does not build at all: 6 errors, all from this one
+macro body.
+
+The patch removes the trailing semicolon from the two `panic!` arms, making the
+macro a valid expression. It touches only panic formatting in an internal
+assertion macro -- no lifetime, ownership, borrow, or Lua-state logic -- and none
+of the affected call sites are on the path this row exercises.
+
+The defect under test is the unconstrained `'callback` lifetime in
+`Lua::create_function`'s signature (src/lua.rs), which this patch does not touch.
+
+diff --git i/src/macros.rs w/src/macros.rs
+index 842b2be..b16994d 100644
+--- i/src/macros.rs
++++ w/src/macros.rs
+@@ -31,7 +31,7 @@ macro_rules! abort {
+ 
+ macro_rules! rlua_panic {
+     ($msg:expr) => {
+-        panic!(concat!("rlua internal error (this is a bug): ", $msg));
++        panic!(concat!("rlua internal error (this is a bug): ", $msg))
+     };
+ 
+     ($msg:expr,) => {
+@@ -39,7 +39,7 @@ macro_rules! rlua_panic {
+     };
+ 
+     ($msg:expr, $($arg:tt)+) => {
+-        panic!(concat!("rlua internal error (this is a bug): ", $msg), $($arg)+);
++        panic!(concat!("rlua internal error (this is a bug): ", $msg), $($arg)+)
+     };
+ 
+     ($msg:expr, $($arg:tt)+,) => {

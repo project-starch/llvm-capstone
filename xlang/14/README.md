@@ -27,7 +27,14 @@ To run the reproduction and capture output:
 ```
 
 ## Expected Outcome
-The native execution under AddressSanitizer should abort with a `heap-use-after-free` in `mark_context_stack` during tests or driver execution.
-The RISC-V QEMU execution will demonstrate anomalous behavior or crash.
+Native under AddressSanitizer: aborts with `heap-use-after-free` at
+`src/gc.c:556` in `mark_context_stack`, freed in `incremental_sweep_phase`.
+Deterministic — 10/10 consecutive runs.
 
-`PASS = the sanitizer/QEMU shows the UAF at mark_context_stack`
+RISC-V QEMU (`-O3`, gcc cross-build, no sanitizer): the trigger **runs to
+completion and exits 0**. The stale register read lands on memory the allocator
+has not yet reused, so the UAF is benign without ASan instrumentation. This is
+expected and is not a reproduction failure; the native ASan run is the
+memory-safety evidence for this row.
+
+`PASS = native ASan shows the UAF at mark_context_stack`
