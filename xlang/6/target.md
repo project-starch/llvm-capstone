@@ -83,7 +83,25 @@ that equivalence to skip both rows on one rationale.
 
 The upstream fix commit `e50f15c1` says **"Fixes #6701"** and changes exactly the
 pattern-matching optimization described above, so **CVE-2026-1979 and mruby #6701
-are the same defect — this row**. But the spec §6 and the benchmark table describe
+are the same defect — this row**.
+
+> **Confirmed against NVD (checked 2026-07-27).** The mapping no longer rests on
+> the commit message alone. The NVD record for CVE-2026-1979 (published
+> 2026-02-06, last modified 2026-06-17) lists `mruby/mruby` issue **#6701** and
+> fix commit **`e50f15c1c6e131fa7934355eb02b8173b13df415`** among its references,
+> names the affected component as the **"JMPNOT-to-JMPIF Optimization"** in
+> `mrb_vm_exec` / `src/vm.c`, and gives affected versions **3.0 through 3.4.0** —
+> all matching this row exactly.
+>
+> Two details are worth carrying into the paper. First, NVD assigns **CWE-119
+> *and* CWE-416**, while its prose description says only "can lead to use after
+> free". The dual assignment means the spatial reading recorded below is not a
+> contradiction of the CVE — CWE-119 is already on the record; it is the prose,
+> inherited from the CNA (VulDB), that is imprecise. Second, this independently
+> settles Row 7: #6701 is *this* bug, so Row 7's separate "bigint `mrb_bint_reduce`
+> UAF" description has no issue backing it. See `../7/target.md`.
+
+But the spec §6 and the benchmark table describe
 Row 7 as something different: *"UAF in `mrb_bint_reduce` (bigint gem), read by the
 VM"*. That is not what `e50f15c1` fixes.
 

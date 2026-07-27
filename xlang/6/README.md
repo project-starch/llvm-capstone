@@ -33,6 +33,29 @@ destination register), so it becomes **`LOADI_5 R38`** in a frame with `nregs=4`
 an out-of-bounds register write. `bytecode-diff.txt` shows this against a compiler
 with the upstream fix applied.
 
+## Classification: spatial, not temporal
+
+The benchmark table lists this row as a use-after-free. It is not one. The defect is
+a compile-time arithmetic error that rewrites one byte of an already-emitted
+instruction, turning `LOADI_5 R2` into `LOADI_5 R38` in a frame with `nregs=4`. At
+run time the VM executes a well-formed instruction whose register operand simply
+names a slot past the end of the current frame, and stores 8 bytes there. Nothing is
+freed, nothing is reused, and no reference outlives its referent: the target address
+is computed fresh as `base + 38` from a live, correctly-sized allocation. NVD assigns
+both CWE-119 and CWE-416 to this CVE; only CWE-119 — a spatial bound — describes what
+actually reproduces here.
+
+Bounds, not revocation, are what stop it. Revocation acts on references that survive
+the death of what they point to, and this row has none: the VM stack is alive
+throughout. A capability carrying the frame's extent and checked on each register
+access refuses the store at `base + 38` because 38 lies outside `nregs=4` — and it
+refuses at the first out-of-range access, rather than depending on whether the
+overshoot happens to land in mapped memory. That distinction is what makes the row
+worth keeping: at shallow recursion the same corrupted instruction writes *inside*
+the allocation and nothing faults at all (see "Tuning the trigger"), so the defect is
+silent under both ASan and a plain run. A bound on the register index is the only
+mechanism here that turns it into a deterministic trap.
+
 ## Contents
 
 | File | What it is |
