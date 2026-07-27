@@ -332,11 +332,17 @@ size-dependent fault in the monitor's image SPLIT, not an addressing problem.
   out. Truncate `sha512_k` to 16 entries to isolate C-4a from C-4b.
 - **Blocks:** the crypto/bitwise rung, and probably SQLite's const tables.
 
-**Related hazard, unverified:** `getGpCaptableIndex` derives its index from a global's
-*position* in `M.globals()`, and GlobalMerge mutates that list (it merged `sha_chain` +
-`sha_w` into one 192 B entry here). If any access were lowered against the pre-merge order
-while descriptors are emitted post-merge, a domain would load the **wrong slot** — silent
-wrong data rather than a fault. Not observed; worth a dedicated check.
+**Related hazard — CHECKED 2026-07-28, NOT a bug.** `getGpCaptableIndex` derives its index
+from a global's *position* in `M.globals()`, and GlobalMerge mutates that list (it merged
+`sha_chain` + `sha_w` into one 192 B entry here), which raised the possibility of an access
+lowered against the pre-merge order loading the **wrong capability slot** — silent wrong
+data rather than a fault. It cannot happen: **GlobalMerge runs in `addPreISel`**
+(`CapstoneTargetMachine.cpp`), i.e. before instruction selection, so `lowerGlobalAddress`
+during ISel and `emitGpCaptableTable` in the AsmPrinter both see the same post-merge list.
+Confirmed empirically as well — the merged-global `rv8_sha512` build and the 6-global
+`beebs_cnt` both return their exact oracles, which mismatched indices would break.
+**Recorded because the reasoning is the useful part:** any future pass that adds or removes
+globals *after* ISel would silently break this positional scheme.
 
 ### C-9 — Redundant `mv rd, rd` around inline-asm register constraints `OPEN`
 The Capstone backend emits **no-op self-moves** around an `asm volatile("" : "+r"(x))`
