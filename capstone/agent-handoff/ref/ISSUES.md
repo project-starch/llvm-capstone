@@ -323,7 +323,33 @@ Capstone lit **43/43**; `beebs_bs`, `beebs_prime`, `beebs_cnt` still pass QEMU p
 > OBJECT before reasoning about the mechanism: a symbolised `-S` listing settled in one
 > step what two rounds of inference got wrong.
 
-#### C-4b — a large initialized global breaks domain creation `OPEN`
+#### C-4b — a large initialized global breaks domain creation `OPEN — localised to the monitor`
+**Localised 2026-07-28: it is NOT the generated glue.** The glue emitted for the failing
+640 B case and the passing 128 B case has the *same shape* — both sizes are under 2047, so
+both use `addi t1, t1, -N` followed by `split(t2, sp, t1)`; only the constant differs:
+
+```
+addi t1, t1, -640
+split(t2, sp, t1)             /* t2 = storage cap */
+/* large-RO: copy 640 B from dom_data-front blob */
+lla t4, sha512_k ; lla t5, __gpfree_globals_base ; sub t5, t4, t5
+cincoffset(t4, sp, t5)   /* src */ ; cincoffset(t3, t2, x0)  /* dst */
+```
+
+The variable that actually changes is the **image size** reaching the monitor's
+`create_domain`: 5088 bytes (fails) vs 4576 (passes). The assertion
+`helper_cssplit: rs1_v->tag && !rs2_v->tag` fires there, i.e. the monitor's SPLIT of the
+image is handed a *tagged* value where it expects an integer split point.
+
+**So look in the monitor's `create_domain`, not the compiler.** This is the same area as
+the known degenerate-SPLIT note (`__pad` exists to keep the image above `0x1000` so the
+monitor's SPLIT stays non-degenerate); a larger image plausibly pushes the split geometry
+into a case that code does not handle.
+
+**Next step, concretely:** instrument or read `create_domain` in the caplifive-system
+OpenSBI monitor to print the SPLIT operands for a 4576-byte and a 5088-byte image, and
+compare. The failing operand is the second one.
+
 With the full 640 B `sha512_k`, the domain cannot be created at all: QEMU asserts in
 `helper_cssplit` (`rs1_v->tag && !rs2_v->tag`), loadable size 5088. Truncating the table to
 128 B gets past creation and (since C-4a) now **passes**. So this is a distinct,
