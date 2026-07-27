@@ -323,91 +323,48 @@ Capstone lit **43/43**; `beebs_bs`, `beebs_prime`, `beebs_cnt` still pass QEMU p
 > OBJECT before reasoning about the mechanism: a symbolised `-S` listing settled in one
 > step what two rounds of inference got wrong.
 
-#### C-4b — a large initialized global breaks domain creation `OPEN — localised to the monitor`
-**Localised 2026-07-28: it is NOT the generated glue.** The glue emitted for the failing
-640 B case and the passing 128 B case has the *same shape* — both sizes are under 2047, so
-both use `addi t1, t1, -N` followed by `split(t2, sp, t1)`; only the constant differs:
+#### C-4b — the large-RO COPY PATH in the generated glue is broken `OPEN — trigger identified`
+**Not a domain-creation bug, and not about size.** Earlier notes here (now corrected) chased
+image geometry through the loader and kernel module. That was the wrong component:
 
+> `Created domain ID = 0` appears **before** the assertion in the serial log. Domain
+> creation **succeeds**; `helper_cssplit: rs1_v->tag && !rs2_v->tag` fires afterwards, in
+> the **entry glue**.
+
+**The actual trigger is a threshold in the glue generator, not a size limit.**
+`gen-gp-captable-glue.py` has `COPY_THRESHOLD = 256` and picks between two paths:
+
+| initializer size | glue path | result |
+|---|---|---|
+| 640 B (`sha512_k[80]`) | **large-RO copy loop** (`stor > 256`) | **FAILS** |
+| 128 B (`sha512_k[16]`) | unrolled `li`/`sd` immediates (`stor <= 256`) | **passes** |
+
+So every "size-dependent" symptom was just this threshold selecting a different code path.
+The large-RO copy path is the thing that is broken; it is emitted for exactly one global in
+the ladder today, which is why nothing else has hit it.
+
+**The suspect sequence** (from the generated `.inc`):
 ```
-addi t1, t1, -640
-split(t2, sp, t1)             /* t2 = storage cap */
-/* large-RO: copy 640 B from dom_data-front blob */
-lla t4, sha512_k ; lla t5, __gpfree_globals_base ; sub t5, t4, t5
-cincoffset(t4, sp, t5)   /* src */ ; cincoffset(t3, t2, x0)  /* dst */
+lla t4, sha512_k
+lla t5, __gpfree_globals_base
+sub t5, t4, t5               /* blob offset = sym - base */
+cincoffset(t4, sp, t5)       /* src */
+cincoffset(t3, t2, x0)       /* dst */
 ```
+`lla` on a Capstone target may not yield a plain integer, so `sub` of two such values --
+and hence the operand feeding a later `split` -- is where a stray tag most plausibly comes
+from. **Verify by dumping tags, not by reading:** that inference is exactly the kind that
+has been wrong three times on this issue.
 
-The variable that actually changes is the **image size** reaching the monitor's
-`create_domain`: 5088 bytes (fails) vs 4576 (passes). The assertion
-`helper_cssplit: rs1_v->tag && !rs2_v->tag` fires there, i.e. the monitor's SPLIT of the
-image is handed a *tagged* value where it expects an integer split point.
+**Refuted along the way, recorded so nobody repeats them:** (a) `tot_size` invariant --
+both images give `tot_size` 8192 and satisfy `tot_size > code_size + 1536`; (b) `code_len`
+carrying the exec segment -- it is `image_size`, the whole loadable image
+(`libcapstone.c:197`); (c) `dom_pages_log2` rounding -- it rounds **up** correctly
+(`dom_pages == 1 ? 0 : ilog2(dom_pages - 1) + 1`).
 
-**So look in the monitor's `create_domain`, not the compiler.** This is the same area as
-the known degenerate-SPLIT note (`__pad` exists to keep the image above `0x1000` so the
-monitor's SPLIT stays non-degenerate); a larger image plausibly pushes the split geometry
-into a case that code does not handle.
-
-**The invariant it violates (read from the monitor source, no board needed):**
-`create_domain` (`caplifive-system/.../capstone-sbi/sbi_capstone.c:279`) does
-
-```c
-dom_code = split_out_cap(base_addr, tot_size, 1);        /* [base, base+tot_size) */
-dom_seal = __split(dom_code, base_addr + code_size);     /* needs code_size < tot_size */
-dom_data = __split(dom_seal, base_addr + code_size + DOMAIN_DATA_SIZE);  /* 1536 B */
-```
-
-`DOMAIN_DATA_SIZE` is `16 * 96` = **1536**. The assertion that fires is
-`rs1_v->tag && !rs2_v->tag` on the **second** `__split`, whose `rs1` is `dom_seal` — so
-`dom_seal` came back **untagged**, which means the **first** split's point
-`base_addr + code_size` fell outside `dom_code`'s bounds. In other words the loader passed
-**`code_size >= tot_size`** (or close enough that the geometry degenerates).
-
-That is consistent with everything observed: it is purely size-dependent, the generated
-glue is identical between the passing and failing builds, and the linker forces globals to
-image offset `0x1000` so `code_size` grows with `.rodata` while `tot_size` does not
-necessarily follow.
-
-**The size chain, traced end to end (2026-07-28):**
-`libcapstone.c: create_dom_from_elf` sets `code_len` from the ELF and ioctls to
-`modcapstone/module/capstone.c:83`, which computes
-
-```c
-dom_tot_size   = m_args.code_len + DOMAIN_DATA_SIZE;      /* 1536 */
-dom_pages      = (dom_tot_size - 1) / PAGE_SIZE + 1;
-create_domain(paddr, code_len, (1 << dom_pages_log2) * PAGE_SIZE, entry_offset);
-```
-
-> **⚠ This REFUTES the simple invariant proposed above — do not chase it.** Working the
-> arithmetic for both images gives the *same* `tot_size` and satisfies
-> `tot_size > code_size + 1536` in **both** cases:
->
-> | image | `code_len` | `dom_tot` | pages | `tot_size` | invariant holds? |
-> |---|---:|---:|---:|---:|---|
-> | passing | 4576 | 6112 | 2 | 8192 | yes |
-> | failing | 5088 | 6624 | 2 | 8192 | yes |
->
-> So `tot_size` is not the discriminator and the first `__split` should be in bounds.
-
-**What that leaves, for whoever picks this up.** The untagged `dom_seal` must come from
-somewhere else. Two candidates, neither checked:
-1. **What `code_len` actually contains.** The loader prints `Segment size = 1118` (exec
-   `p_filesz`) and `Loadable size = 5088` separately; if `code_len` is the *exec segment*
-   rather than the whole loadable image, the split point sits inside `.text` and the
-   globals fall outside `dom_data` entirely — which would also explain why only
-   globals-heavy images break.
-2. **`dom_pages_log2`** — how it is derived from `dom_pages` was not read; a rounding that
-   goes *down* rather than up would shrink `tot_size` below the arithmetic above.
-
-**Cheapest next step:** print `code_len`, `tot_size` and the segment/loadable sizes for one
-passing and one failing image. The kernel module already logs them
-(`capstone.c:96`), so this is a `dmesg` read on QEMU — no firmware rebuild, no board.
-
-With the full 640 B `sha512_k`, the domain cannot be created at all: QEMU asserts in
-`helper_cssplit` (`rs1_v->tag && !rs2_v->tag`), loadable size 5088. Truncating the table to
-128 B gets past creation and (since C-4a) now **passes**. So this is a distinct,
-size-dependent fault in the monitor's image SPLIT, not an addressing problem.
-- **Repro:** `rv8_sha512_kernel.h` as committed (oracle 1390718314); spec entry commented
-  out. Truncate `sha512_k` to 16 entries to isolate C-4a from C-4b.
-- **Blocks:** the crypto/bitwise rung, and probably SQLite's const tables.
+**Cheapest next step:** build with `COPY_THRESHOLD` raised above 640 so the 640 B table
+takes the unrolled path. If it then passes, the copy path is confirmed as the sole fault
+and the unrolled path is a usable stopgap (at a code-size cost against C-5's window).
 
 **Related hazard — CHECKED 2026-07-28, NOT a bug.** `getGpCaptableIndex` derives its index
 from a global's *position* in `M.globals()`, and GlobalMerge mutates that list (it merged
