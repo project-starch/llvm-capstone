@@ -27,6 +27,25 @@ recursive. The spread IS the result — report the range and the mechanism, neve
 an average.** The recursion outlier is **ABI cost** (gp-free call/return + cap
 spills), not hardware.
 
+### Board queue (2026-07-27) — 5 rungs staged, blocked only on board time
+
+`beebs_bs` is **silicon-correct** (887447230 = oracle, 2264 cyc) and needs only its
+**baseline** boot to become the 4th measured row; both halves are now registered.
+Four further rungs — `beebs_fibcall`, `beebs_fac`, `beebs_cnt`, `beebs_duff` — are
+built, QEMU-green, oracles fixed, `-O1`, registered in **both** the build script and
+`ladder_base_ctl.c`'s dispatch table. All four are **predicted PASS under R-1**, and
+the predictions are recorded in `ref/ISSUES.md` before the board runs. `cnt` and
+`duff` are the load-bearing pair: they are the first **cross-object** controls in the
+whole investigation (every failing rung to date reads and writes ONE array through
+two derived capability registers). If they pass, the measured table goes 3 → 8 and
+R-1 stays narrow; if either fails, R-1 is wider than written and both the registry
+and the repro README must be corrected before the package goes to the board owner.
+
+**Trap that already cost one boot:** `ladder_base_ctl.c` keeps a hand-maintained
+name→function dispatch table, separate from the `RUNGS` list in
+`build-ladder-base-fpga.sh`. A rung in one but not the other builds clean and then
+reports `--` for every column. Add to both.
+
 Two further results that upgrade the paper: measured **CPI 2.0–3.2** (the draft
 assumed 1, so `tab:appoverhead`'s SQLite figures roughly halve), and on
 `rv8_primes` **+10.2 % instructions but only +5.6 % cycles with a *lower* CPI** ⇒

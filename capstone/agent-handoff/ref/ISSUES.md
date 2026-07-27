@@ -35,6 +35,23 @@ same object. Not loop-specific. QEMU executes every probe correctly.
     derived capability — the exact addressing form in every failing rung — and it is correct
     because nothing is ever *stored* to the table. **The intervening store is a necessary
     ingredient**, not incidental.
+  - **Four more predictions registered 2026-07-27, board pending.** Built, QEMU-green through
+    the identical controller, oracles fixed, `-O1` to match `beebs_bs`. Written down *before*
+    the board speaks so they are tests and not stories:
+
+    | rung | predicted | what it discriminates |
+    |---|---|---|
+    | `beebs_fibcall` | PASS | no arrays at all — a failure would mean R-1 is not the whole story |
+    | `beebs_fac` | PASS | same, plus a 2nd recursion point for the 1.801× headline |
+    | `beebs_cnt` | PASS | **the same-object clause.** Stores to `Array` and to `Seed` are outstanding through two capability registers naming two *different* globals |
+    | `beebs_duff` | PASS | **pointer-walk into two distinct objects** — the form that failed in rawhazard7 *within one object* |
+
+    `cnt` and `duff` are the load-bearing pair. Every failing rung to date is same-object
+    (`C[i*N+j] += …` reads and writes ONE array through two derived registers); no
+    cross-object control has ever been run. If they pass, R-1 stays narrow and most of a
+    benchmark suite remains measurable. **If either fails, R-1 is wider than written — any two
+    derived capability registers — and this file plus the repro README must be corrected
+    before the package goes to the board owner.**
   - `beebs_janne` — **predicted PASS, HANGS** (see R-6). Now bisected: the failing loop nest
     contains **no memory operations at all**, so R-1 cannot explain it and the two must not be
     conflated. R-1's scope is unchanged by it; its completeness as an explanation of the whole

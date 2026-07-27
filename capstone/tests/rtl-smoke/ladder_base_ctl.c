@@ -129,6 +129,10 @@ unsigned base_beebs_prime(void);
 unsigned base_beebs_recursion(void);
 unsigned base_beebs_bs(void);
 unsigned base_beebs_janne(void);
+unsigned base_beebs_fibcall(void);
+unsigned base_beebs_fac(void);
+unsigned base_beebs_cnt(void);
+unsigned base_beebs_duff(void);
 
 struct rung { const char *name; unsigned (*fn)(void); };
 static const struct rung RUNGS[] = {
@@ -142,6 +146,14 @@ static const struct rung RUNGS[] = {
   { "beebs_recursion",  base_beebs_recursion  },
   { "beebs_bs",         base_beebs_bs         },
   { "beebs_janne",      base_beebs_janne      },
+  /* This table is hand-maintained and is SEPARATE from the RUNGS list in
+     build-ladder-base-fpga.sh. Adding a rung there but not here builds fine and
+     then reports "--" for every column at run time -- which cost a board boot on
+     2026-07-27. Add to both, always. */
+  { "beebs_fibcall",    base_beebs_fibcall    },
+  { "beebs_fac",        base_beebs_fac        },
+  { "beebs_cnt",        base_beebs_cnt        },
+  { "beebs_duff",       base_beebs_duff       },
 };
 #define NRUNGS ((int)(sizeof RUNGS / sizeof RUNGS[0]))
 

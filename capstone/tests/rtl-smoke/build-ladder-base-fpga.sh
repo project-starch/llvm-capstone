@@ -44,6 +44,15 @@ RUNGS=(
   "beebs_recursion:beebs_recursion_kernel.h:rec_compute:-O0"
   "beebs_bs:beebs_bs_kernel.h:bs_compute:-O1"
   "beebs_janne:beebs_janne_kernel.h:jc_compute:-O1"
+  # Four rungs added 2026-07-27, all predicted PASS under R-1 (ref/ISSUES.md).
+  # -O1 to match beebs_bs, the other R-1-predicted rung: -O0's `ldc` reload of
+  # the region capability before every store is itself under suspicion, so the
+  # prediction is cleaner at -O1. The capability half must be built with
+  # LADDER_OPT=-O1 to match, or the ratio measures optimisation, not capabilities.
+  "beebs_fibcall:beebs_fibcall_kernel.h:fibcall_compute:-O1"
+  "beebs_fac:beebs_fac_kernel.h:fac_compute:-O1"
+  "beebs_cnt:beebs_cnt_kernel.h:cnt_compute:-O1"
+  "beebs_duff:beebs_duff_kernel.h:duff_compute:-O1"
 )
 
 OBJS=()
