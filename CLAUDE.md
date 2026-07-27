@@ -47,6 +47,17 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
   are secret. Keep the full URL in an env var (`FPGA_URL`) only, for the duration of a run;
   in any committed text use the placeholder `<FPGA-CONSOLE-URL>`. Never echo it into a
   captured/committed log.
+- **ASK BEFORE EDITING THE PAPER (`capstone/paper/`).** Never edit, restructure, or add
+  sections to the paper on your own initiative — propose the change and wait for an explicit
+  go-ahead, even when the edit is obviously implied by new results and even when the results
+  are already validated and committed elsewhere. "The numbers are ready" is not authorization
+  to write the prose. Two reasons this is a hard rule and not a preference: the repo syncs
+  with Overleaf, so an unasked-for edit can collide with work in progress there; and the
+  paper's framing is the project lead's call, not a lane's. **Reporting** new results into
+  `agent-handoff/ref/fpga-silicon-measurements-for-paper.md` needs no permission and is the
+  right default — that doc exists precisely so results can land without touching the paper.
+  When permission *is* given: never `git push` the paper submodule (Overleaf owns the remote),
+  and leave the parent's submodule pointer unbumped.
 
 ## Context & compaction
 
