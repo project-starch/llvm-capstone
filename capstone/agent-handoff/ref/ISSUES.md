@@ -28,6 +28,14 @@ same object. Not loop-specific. QEMU executes every probe correctly.
 - **Impact:** `matmult_int`, `coremark_matrix`, `beebs_crc32`, `beebs_insertsort` unmeasurable.
 - **Confidence it is hardware:** high, not certain. Residual doubt is whether our non-standard
   gp-captable ABI provokes it. **Open question for the board owner.**
+- **Predictive record (2026-07-27): 1 hit, 1 miss — R-1 is NOT complete.**
+  Two rungs were written specifically to test its predictions.
+  - `beebs_bs` — **predicted PASS, PASSED** (887447230 = oracle, 2264 cyc). This is the
+    load-bearing confirmation: `bs_data[mid]` is a genuine register-indexed load through a
+    derived capability — the exact addressing form in every failing rung — and it is correct
+    because nothing is ever *stored* to the table. **The intervening store is a necessary
+    ingredient**, not incidental.
+  - `beebs_janne` — **predicted PASS, HANGS** (see R-6). R-1 as stated does not explain it.
 
 ### R-2 — `delin` in domain code wedges the board `WORKED AROUND`
 A `delin` executed in domain code on a capability loaded from the gp cap-table wedges the board
@@ -42,6 +50,21 @@ so it is the instruction and not code layout.
 - **Probably our bug**, not the platform's: the glue already delins every cap-table entry before
   storing it, and our QEMU was patched to tolerate the redundant case *"rather than faulting"*.
   Only the failure *mode* (full wedge vs catchable trap) is worth the board owner's attention.
+
+### R-6 — `beebs_janne` hangs although R-1 predicts it should pass `OPEN`
+BEEBS `janne_complex`: nested data-dependent loops whose conditions are computed **entirely from
+locals**, with one `.bss` counter (`jc_iters++`) touched through a single capability register.
+R-1 requires a load through one capability register with an intervening store through *another*;
+that never occurs here, so R-1 predicts PASS. **The board hangs it.**
+
+- **Repro:** `tests/runtime-qemu/silicon-ladder/beebs_janne_{kernel.h,fpga_app.c,host.c}`,
+  `-O1`, oracle 484656629, QEMU-correct through the identical controller.
+- **Why it matters:** this is a *failed prediction*, so either R-1 is incomplete or there is a
+  second independent hardware fault. Recorded rather than explained away — the whole value of
+  writing predictive tests is that a miss is informative.
+- **Next:** bisect it the way `insertsort_diag` was bisected — return the loop trip counts and the
+  counter value in raw debug slots so a hang becomes a returned diagnostic. Do **not** theorise
+  first; eleven hypotheses have died that way.
 
 ### R-3 — Second domain at the same entry VA hangs within one boot `OPEN`
 A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` — missing
