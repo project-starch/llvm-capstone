@@ -29,44 +29,11 @@ OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/ladder-base}
 OBJ_DIR=$OUT_DIR/obj
 mkdir -p "$OBJ_DIR"
 
-# rung : kernel header : compute fn.  -O level MUST mirror build-ladder-fpga.sh,
-# where every rung is -O0 except coremark_matrix, which is -Os because it
-# overflows the domain's 4 KiB PCC window at -O0. The baseline has no such window,
-# but it is built -Os anyway so the pair stays same-compiler/same-flags.
-RUNGS=(
-  "null:ladder_base_null_kernel.h:null_compute:-O0"
-  "matmult_int:matmult_int_kernel.h:mm_compute:-O0"
-  "coremark_matrix:coremark_matrix_kernel.h:coremark_matrix_compute:-Os"
-  "rv8_primes:rv8_primes_kernel.h:primes_compute:-O0"
-  "beebs_crc32:beebs_crc32_kernel.h:crc_compute:-O0"
-  "beebs_insertsort:beebs_insertsort_kernel.h:is_compute:-O0"
-  "beebs_prime:beebs_prime_kernel.h:prime_compute:-O0"
-  # -O1, NOT -O0: the capability half is measured at -O1 (the level at which this
-  # rung computes correctly on silicon), and the comment below has said the
-  # baseline "has to be -O1 as well" while this spec said -O0. A 2026-07-28 run
-  # exposed the contradiction -- the -O0 baseline returns 19,825 cyc / 4,759 instr
-  # against the published -O1 pair's 10,523 / 2,019, roughly 2x. Anyone running the
-  # baseline without LADDER_OPT was silently producing a mismatched denominator.
-  "beebs_recursion:beebs_recursion_kernel.h:rec_compute:-O1"
-  "beebs_bs:beebs_bs_kernel.h:bs_compute:-O1"
-  "beebs_janne:beebs_janne_kernel.h:jc_compute:-O1"
-  # Four rungs added 2026-07-27, all predicted PASS under R-1 (ref/ISSUES.md).
-  # -O1 to match beebs_bs, the other R-1-predicted rung: -O0's `ldc` reload of
-  # the region capability before every store is itself under suspicion, so the
-  # prediction is cleaner at -O1. The capability half must be built with
-  # LADDER_OPT=-O1 to match, or the ratio measures optimisation, not capabilities.
-  "beebs_fibcall:beebs_fibcall_kernel.h:fibcall_compute:-O1"
-  "beebs_fac:beebs_fac_kernel.h:fac_compute:-O1"
-  "beebs_cnt:beebs_cnt_kernel.h:cnt_compute:-O1"
-  "beebs_duff:beebs_duff_kernel.h:duff_compute:-O1"
-  # Counter-sanity probe (issue I-2): pure register arithmetic, so both targets
-  # must emit the same RISC-V instructions. If instret matches and cycles do not,
-  # a domain cycle is not comparable to a baseline cycle and every published
-  # overhead ratio is wrong. Two lengths separate a proportional effect from a
-  # fixed one.
-  "ctrsanity:ctrsanity_kernel.h:cs_compute:-O1"
-  "ctrsanity4:ctrsanity4_kernel.h:cs_compute:-O1"
-)
+# Rung table comes from the SHARED spec so the capability half cannot drift apart
+# from this one -- see ladder-rungs.spec for why that mattered (two silent -O
+# mismatches, one of which produced five bogus "silicon failures").
+SPEC_FILE=${SPEC_FILE:-"$SCRIPT_DIR/ladder-rungs.spec"}
+mapfile -t RUNGS < <(grep -vE '^\s*(#|$)' "$SPEC_FILE")
 
 OBJS=()
 : > "$OUT_DIR/optlevels.txt"

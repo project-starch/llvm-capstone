@@ -47,8 +47,11 @@ for R in "${RUNGS[@]}"; do
   # `ldc` reload of the region capability before EVERY region store; -O1+ keeps it
   # in a register. Since an extra capability store is the confirmed miscompute
   # trigger (26-07 bisect), optimisation level is a candidate workaround.
-  OPT=${LADDER_OPT:--O0}
-  [[ -z "${LADDER_OPT:-}" && "$R" == coremark_matrix ]] && OPT=-Os
+  # Per-rung -O from the SHARED spec, so this half cannot pair against a baseline
+  # built at a different level. LADDER_OPT still overrides everything, for a
+  # deliberate single-level A/B sweep.
+  SPEC_OPT=$(awk -F: -v r="$R" '$1==r{print $4}' "$SCRIPT_DIR/ladder-rungs.spec")
+  OPT=${LADDER_OPT:-${SPEC_OPT:--O0}}
   # LADDER_DISTINCT_VA=1 links each rung at its own entry VA (0x10000, 0x20000,
   # ...), which is what makes LADDER_ONE_BOOT=1 usable for a whole sweep. R-3 --
   # a second domain within one boot hangs -- was proven ADDRESS-KEYED on
