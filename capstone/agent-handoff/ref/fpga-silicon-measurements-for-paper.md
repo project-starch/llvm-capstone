@@ -376,7 +376,12 @@ rare; usually honesty costs you something.
 
 ## 5. What is NOT established — read before citing anything above
 
-- **Three benchmarks, not seven.** `matmult_int` and `coremark_matrix` produce no
+- **Three benchmarks measured, not seven — and it will stay three.** `beebs_crc32` and
+  `beebs_insertsort` were made *buildable* at −O1/−O2 on 2026-07-27 and are QEMU-correct, but
+  when measured on the board **both failed**: crc32 hangs, insertsort returns a wrong value with
+  only 560 retired instructions (the compute never ran). Both were already wrong on silicon at
+  −O0, so this is the same divergence, not a new fault. `matmult_int` and
+  `coremark_matrix` produce no
   result at ANY reachable configuration: they transfer cleanly, then the `cscall`
   hangs (matmult at −O1 and −O2; coremark at −Os and at −O0 with a 32 KiB window).
   It is not `-Os` codegen (coremark hangs at −O0), not code size (coremark hangs at
@@ -393,7 +398,17 @@ rare; usually honesty costs you something.
   leading hypothesis is the known miscompute corrupting a **loop bound** rather than a
   checksum (`matmult_int` miscomputes at −O0 and hangs at −O1). Trail:
   `history/26-07-2026_23-56-07_the-hang-is-in-the-compute-not-at-domain-entry.md`.
-  `beebs_crc32` cannot build at −O1+ and `beebs_insertsort` crashes clang at −O1.
+  `beebs_crc32` and `beebs_insertsort` **no longer fail to build** (2026-07-27): the former was
+  an optimizer/large-RO-delivery interaction, not a compiler bug (−O1+ constant-folds its
+  runtime-generated CRC table into a 2048 B private constant the cap-table glue cannot deliver);
+  the latter was CodeGenPrepare zero-extending a negative address offset into the 128-bit pointer
+  carrier, plus an i128 ISel gap. Both build and pass the QEMU parity leg at −O0/−O1/−O2, so the
+  measured set nevertheless stays at **three** — see
+  `history/27-07-2026_15-48-02_RESULTS-the-two-newly-buildable-rungs-fail-on-silicon-too.md`.
+  So 3 pass / 4 fail, and the four failures are one family: each either hangs or returns a value
+  whose instruction count proves the compute never ran. No compiler-side property separates the
+  two groups. Trail:
+  `history/27-07-2026_12-59-35_three-codegen-fixes-unblock-two-ladder-rungs-and-rv8-at-O1.md`.
   **The loop-exit ("fragile `bne`") hypothesis is REFUTED on silicon (2026-07-27).** It
   was observed statically that `matmult_int` at −O1 emits 8 conditional branches, **all
   `bne`**, while the same source at −O0 emits 8, **all `blt`** — suggesting the hang and

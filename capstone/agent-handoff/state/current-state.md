@@ -36,8 +36,14 @@ gp-captable ABI. That is one benchmark — caveat it.
 ### 2026-07-27 — two blocked rungs UNBLOCKED by compiler fixes (board-free)
 
 `beebs_crc32` and `beebs_insertsort` now **build at −O0/−O1/−O2 and pass the QEMU parity leg**,
-taking the ladder from **3 to 5 buildable, QEMU-correct rungs**. They are the cheapest additions
-to the perf table and the highest-value use of the next board window. Three fixes:
+taking the ladder from 3 to 5 *buildable* rungs. **They were then measured on the board and BOTH
+FAIL — the measured set stays at 3.** `beebs_crc32` hangs at −O1; `beebs_insertsort` returns
+957879052 against an oracle of 271779359 with only 560 retired instructions, i.e. the compute
+never ran. Both were already wrong on silicon at −O0 in the 25-07 sweep, so the compiler fixes
+were **necessary but not sufficient** — they removed the build blocker and exposed the same
+unexplained silicon divergence underneath. Not a regression. Trail:
+`history/27-07-2026_15-48-02_RESULTS-the-two-newly-buildable-rungs-fail-on-silicon-too.md`.
+The fixes themselves remain worth having:
 
 1. **`beebs_crc32` was never a compiler bug.** The kernel generates its CRC table at runtime to
    avoid a large initialized global; −O1+ **constant-folds the loop** and re-materialises a
