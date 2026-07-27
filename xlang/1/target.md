@@ -31,6 +31,34 @@ exactly as `mem::replace(_, mem::uninitialized())` did, and likewise leaves the
 slot unmarked, so a second `__gc` still double-drops. See the patch header for
 the full argument.
 
+### Leaving the destructor unpatched was tried, and it degrades the artifact
+
+The destructor is instantiated as `destructor::<RefCell<T>>` (`rlua/src/lua.rs:1607`,
+confirmed in the ASan frame below), so the rustc ≥1.48 abort fires only when `T`'s
+all-uninitialised bit-pattern is invalid. `String` holds a `NonNull` and so is
+invalid; a raw pointer plus a `usize` is not. Making the harness payload an
+all-bits-valid heap owner therefore lets the **upstream destructor compile and run
+completely unmodified** — the patch shrinks to its one off-path hunk.
+
+It was built and run that way. It does not produce a use-after-free:
+
+| Destructor | Result |
+|---|---|
+| `ptr::read` (patched) | `heap-use-after-free`, `READ of size 43`, offset 0 of the freed region, free site attributed to `destructor::<RefCell<Userdata>>` |
+| `mem::uninitialized` (pristine) | `SEGV on unknown address`, "dereference of a high value address" |
+
+The reason is that `mem::replace(obj, mem::uninitialized())` *writes* undef bytes
+back into the userdata slot. The resurrected handle then reads a garbage pointer
+rather than the freed one, so the fault is a wild read that ASan cannot attribute
+to any allocation — a spatial-looking crash standing in for a temporal defect,
+which is precisely the wrong evidence for this row.
+
+`ptr::read` is therefore kept, and it is the more faithful reproduction: it leaves
+the original bytes in place, so the stale access reads the genuinely freed buffer
+and the second `__gc` double-drops the same object. The cost is that one patched
+line sits on the defect path; the benefit is that the row demonstrates the temporal
+defect it claims to.
+
 This is also why the row needs **nightly** Rust: `-Zsanitizer=address` is
 nightly-only.
 

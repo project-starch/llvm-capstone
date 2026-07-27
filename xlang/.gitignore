@@ -9,6 +9,9 @@
 **/target/
 **/build/
 
+# Phase-2 host binaries, built on demand by shim/build-mruby-host.sh.
+**/xlang-host
+
 # Rake/mruby build stamps (build_config.rb.lock etc.) -- generated, not inputs.
 **/*.lock
 # ...but Cargo.lock IS an input: it pins transitive crate versions, which §2

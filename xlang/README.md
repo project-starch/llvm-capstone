@@ -52,14 +52,23 @@ hold:
   end of the VM stack; nothing is freed and reused. See `6/target.md`.
 
 Neither is addressed by revocation — bounds are what stop them. Each row's
-`target.md` lays out the options (reclassify vs. drop from the temporal subset).
+`target.md` lays out the options (reclassify vs. drop from the temporal subset),
+and each row's `README.md` now carries the paper-facing statement of what the
+defect actually is and why a bound rather than revocation is what catches it.
+
+For row 6 the spatial reading is not merely our own: NVD assigns **CWE-119 as well
+as CWE-416** to CVE-2026-1979. Only the CNA's prose description calls it a
+use-after-free.
 
 ### 2. Row 7 appears not to exist as specified
 
 Three independent problems, each verified against the source:
 
 - Its issue number (**#6701**) belongs to **row 6** — the upstream fix `e50f15c1`
-  says "Fixes #6701" and changes the pattern-matching peephole.
+  says "Fixes #6701" and changes the pattern-matching peephole. Confirmed against
+  NVD on 2026-07-27: the CVE-2026-1979 record references issue #6701 and commit
+  `e50f15c1` directly and names the "JMPNOT-to-JMPIF Optimization" component, with
+  no mention of bigint or `mrb_bint_reduce`.
 - `mrb_bint_reduce` does **not exist** in mruby 3.1.0/3.2.0/3.3.0, contradicting
   the spec's placement of this row in the "single 3.1.0 build" Tier-1 cluster.
 - The GC hazard the row describes is closed by mruby's allocation arena

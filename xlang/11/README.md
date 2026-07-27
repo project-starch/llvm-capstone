@@ -27,6 +27,27 @@ Two independent bugs have to line up, and either check alone would stop it: the
 compiler emits an out-of-range level without a diagnostic, and the VM indexes the
 resolved environment without bounding `b` against its register count.
 
+## Classification: spatial, not temporal
+
+The benchmark table lists this row as a use-after-free. It is not one. The defect is
+an operand-width truncation: the compiler emits a 7-bit scope level that wraps at
+depth ≥ 129, so `uvenv()` resolves the wrong — much nearer — environment while the
+register index `b` is still the large one computed for the intended outer scope. The
+read at `vm.c:1208` then runs off the end of a live, correctly-sized register array.
+The temporal reading was tested and closed rather than assumed: `envadjust()`
+rewrites `REnv::stack` on every VM-stack reallocation, and a `Proc` that escapes its
+scopes gets its environment *closed* onto heap-owned storage. Neither path leaves a
+reference outliving its referent.
+
+Bounds, not revocation, are what stop it. A capability bounded to the resolved
+environment's register array rejects `e->stack[b]` as soon as `b` exceeds that
+array's length, independently of whether the overshoot reaches unmapped memory —
+which matters here, because with fewer than ~80 outer locals the same truncation
+reads *in bounds* and silently returns the wrong value (see "Tuning the trigger").
+Revocation has nothing to act on: the environment it would revoke is alive and
+intact. The error is that the wrong environment was selected and then indexed past
+its end, and only a bound on that index catches it.
+
 ## Contents
 
 | File | What it is |

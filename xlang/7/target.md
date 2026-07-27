@@ -26,6 +26,13 @@ Searching the whole repository history for `6701` returns only that commit. So
 #6701 is not a bigint issue, and the spec's pairing of that number with a
 `mrb_bint_reduce` GCD bug is a misattribution.
 
+This was confirmed against NVD on 2026-07-27, so it no longer rests on the upstream
+commit message alone. The NVD record for **CVE-2026-1979** references issue #6701
+and commit `e50f15c1` directly, and names the affected component as the
+**"JMPNOT-to-JMPIF Optimization"** in `mrb_vm_exec` / `src/vm.c` — Row 6's defect,
+with no mention of bigint, `mrb_bint_reduce`, or the rational path anywhere in the
+record. The number is spoken for.
+
 Note this is the opposite of what `../6/target.md` used to claim. The old text said
 Rows 6 and 7 were the *same* bug and skipped both on one rationale. In fact the
 *identifier* is shared but the *described defects* are different, and only the
