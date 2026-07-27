@@ -35,7 +35,21 @@ same object. Not loop-specific. QEMU executes every probe correctly.
     derived capability — the exact addressing form in every failing rung — and it is correct
     because nothing is ever *stored* to the table. **The intervening store is a necessary
     ingredient**, not incidental.
-  - **Four more predictions registered 2026-07-27, board pending.** Built, QEMU-green through
+  - **SCORED 2026-07-27 (board): 2 hits, 3 misses, 1 partial — and the same-object clause is
+    CONFIRMED.** `beebs_cnt` passes on silicon (oracle exactly), and it is the sharpest
+    cross-object control available: its seeding loop keeps stores outstanding to `Array` and
+    to `Seed` through two capability registers naming two *different* globals. R-1 predicted
+    PASS and it passed. **The "same object" clause in this entry and in the repro README is
+    therefore tested, not merely inferred, and needs no correction.**
+    `beebs_bs` passed again (2,258 cyc, reproducing 2,264 from the prior session).
+    `beebs_fac` and `beebs_duff` HANG; `beebs_fibcall` miscomputes while retiring ~94 % of the
+    baseline's instructions (166,539 vs 177,855) — a third signature, distinct from both the
+    hangs and from "the compute never ran". R-1 speaks to memory-shape failures and does not
+    explain hangs, consistent with the standing ≥2-independent-faults position.
+    > **⚠ A mid-run report that "R-1's same-object clause is REFUTED" was WRONG and is
+    > withdrawn.** It came from a sweep accidentally run at −O0 (see I-1); at the intended
+    > −O1 the cross-object control passes. Nothing in the repro package needs changing.
+  - **Four predictions registered 2026-07-27 before the board ran.** Built, QEMU-green through
     the identical controller, oracles fixed, `-O1` to match `beebs_bs`. Written down *before*
     the board speaks so they are tests and not stories:
 
@@ -148,6 +162,51 @@ address. Passing rungs were only ever clean where someone looked.
 M-mode appears to spin (`capstone_error` = `while(1)`); only a power-cycle recovers. Seen for
 `C_GEN_CAP` (QEMU-only op), for the R-2 `delin`, and for an `scc`-derived load.
 - **Evidence:** `history/22-07-2026_18-05-00_gp-free-silicon-smoke-*.md`
+
+---
+
+## Infrastructure / procedure
+
+### I-1 — A sweep silently rebuilds at −O0 and discards your pre-built set `FIXED BY RULE`
+`run_ladder_perf_fpga.py` **rebuilds every artifact by default** (the 25-07 anti-stale fix),
+shelling out to `build-ladder-fpga.sh` with the inherited environment. Setting `LADDER_OPT`
+on a *pre-build* and omitting it from the *sweep* means the runner rebuilds everything at its
+`-O0` default and measures that — against baselines specified at another level.
+
+- **Cost when it fired (2026-07-27):** five rungs reported as silicon failures, including one
+  that had passed before; a false conclusion that **R-1's same-object clause was refuted**,
+  which would have gone to the board owner as a correction to the bug report; and a nearly
+  published §5 claim that *an ordinary rebuild flips a passing rung*. All three withdrawn.
+- **Caught only by the in-sweep control.** `beebs_bs` was included purely as a stability
+  check; its failure is what made the sweep suspect instead of informative.
+- **Rules:**
+  1. Set `LADDER_OPT` on the **runner** invocation, not just the pre-build.
+  2. Keep a **known-good rung in every sweep**. It is the only thing distinguishing
+     informative failures from a misconfigured harness.
+  3. `LADDER_REBUILD=0` is **required** to run a specific pre-built binary — pointing
+     `LADDER_FPGA_DIR` at it does not stop the rebuild from overwriting it.
+  4. Compare the static shape (`.text` size, `ldc gp[i]` count) against the known-good build
+     before believing a flipped result.
+- **Static signature of the mistake** (`beebs_bs`): −O0 → 2,100 B text, 4 `ldc gp[i]`, 2
+  cap-table globals, FAILS; −O1 → 1,408 B, 2, 1 global, PASSES. The function-local
+  `static const int probes[18]` becomes a delivered cap-table global at −O0 — the C-4
+  boundary moving under an optimization flag.
+- **Evidence:** `history/27-07-2026_22-40-00_RESULTS-two-new-silicon-rungs-and-an-O-level-procedure-bug.md`
+
+### I-2 — Baseline may be charged for OS interference the domain never pays `OPEN`
+`beebs_cnt` is silicon-correct and retires **1.138×** the baseline instructions, yet takes
+**0.684×** the cycles — capability CPI 1.68 vs baseline CPI 2.79. Taken at face value it
+claims pervasive capability safety is **32 % faster**, which is a confound, not a result.
+The baseline is a Linux userspace process; the domain is bare-metal, clean icache, no OS.
+
+- **Same class as** the cold/warm paging confound that once produced "capabilities are 1.8×
+  faster" for `beebs_prime`. The warm-baseline rule was written for that one and does **not**
+  cover this.
+- **Not universal** — `beebs_bs` (1.181×) and `rv8_primes` (1.050×) look coherent. But it is
+  **not established that the existing rows are free of it**, and `beebs_prime` at 1.032× is
+  the one to re-examine: a confound in this direction *understates* capability overhead.
+- **Impact:** blocks `beebs_cnt` as a cycle row; puts a question mark on the cheapest existing
+  row. Quote `cnt`'s instruction ratio only.
 
 ---
 

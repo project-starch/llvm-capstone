@@ -147,7 +147,28 @@ overhead ratios (capability ÷ baseline) for cycles and for instructions respect
 |---|---|---:|---:|---:|---:|
 | `beebs_prime` (pure scalar) | −O0 | 47,780 | 46,306 | **1.032×** | — [†] |
 | `rv8_primes` (sieve, 16.5M cyc) | −O0 | 17,283,292 | 16,459,057 | **1.050×** | **1.102×** |
+| `beebs_bs` (binary search, read-only table) | −O1 | 2,258 | 1,912 | **1.181×** | **1.058×** |
 | `beebs_recursion` (deep + mutual recursion) | −O1 | 18,957 | 10,523 | **1.801×** | **1.458×** |
+
+**`beebs_bs` added 2026-07-27 — four rows now.** Capability CPI rises 2.31 → 2.58; same
+*more instructions, ABI not enforcement* shape as the sieve. The capability binary
+reproduces across two sessions and a power cycle (2,264 → 2,258 cyc, 0.3 %), and both
+halves are −O1. Trail:
+`history/27-07-2026_22-40-00_RESULTS-two-new-silicon-rungs-and-an-O-level-procedure-bug.md`.
+
+> **`beebs_cnt` is silicon-CORRECT but its cycle ratio is NOT publishable.** It returns
+> its oracle exactly (2,356,896,837) and retires **1.138×** the baseline instructions —
+> credible, in family. But it takes **0.684×** the cycles, i.e. it would claim pervasive
+> capability safety makes code **32 % faster**. That is an uncontrolled confound, not a
+> result. Capability CPI 1.68 vs baseline CPI 2.79: the baseline is a Linux userspace
+> process while the domain is bare-metal with a clean icache and no OS, and for a 400 B
+> working set the baseline may be charged for interference the domain never sees. This
+> is the same *class* as the cold/warm paging confound that once produced "capabilities
+> are 1.8× faster" for `beebs_prime` — so the warm-baseline rule does **not** cover it.
+> **`beebs_bs` and the sieve do not show it, but it is NOT established that the existing
+> rows are free of it.** `beebs_prime` (1.032×) is the one to re-examine, because a
+> confound in this direction would *understate* capability overhead. Quote `cnt`'s
+> instruction ratio only, or hold the rung back entirely.
 
 > **[†] Why `beebs_prime` has no instruction ratio — this is a finding, not a gap.**
 > The ratio needs `instret` from *both* halves. The baseline half has it (14,680, see §4).

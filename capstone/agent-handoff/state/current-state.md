@@ -44,7 +44,33 @@ no errors, no undefined refs, no overfull boxes in the new material.
 **`tab:spatialcost` is built to take more rows** — when board runs land, add them
 there and update the 3.2/5.0/80 spread sentence if the range moves.
 
-### Board queue (2026-07-27) — 5 rungs staged, blocked only on board time
+### BOARD RESULTS 2026-07-27 (13 boots) — 4 publishable rows, 5 silicon-correct rungs
+
+**`beebs_bs` is a new, clean 4th row: 1.181× cycles / 1.058× instructions** (capability
+2,258 cyc / 875 instr vs −O1 warm baseline 1,912 / 827; CPI 2.31 → 2.58). Reproduces
+across two sessions and a power cycle.
+
+**`beebs_cnt` is silicon-CORRECT but NOT publishable as a cycle row** — 1.138×
+instructions yet 0.684× cycles, i.e. it would claim capabilities are 32 % *faster*.
+Uncontrolled confound, logged as **I-2**; it also puts a question mark on `beebs_prime`'s
+1.032×. `beebs_fibcall` miscomputes at ~94 % of baseline instructions; `beebs_fac` and
+`beebs_duff` hang.
+
+**R-1's same-object clause is CONFIRMED, not refuted.** `beebs_cnt` is the cross-object
+control and it passes exactly as R-1 predicted. The repro package needs no correction.
+
+> **⚠ A mid-session report that R-1 was refuted, and that "an ordinary rebuild flips a
+> passing rung", were BOTH WRONG and are withdrawn.** Cause: the sweep was accidentally
+> run at −O0 — `run_ladder_perf_fpga.py` rebuilds by default and `LADDER_OPT` was set only
+> on the pre-build. Logged as **I-1** with the rules that prevent it. It was caught solely
+> because a known-good rung was in the sweep as a control.
+
+Trail: `history/27-07-2026_22-40-00_RESULTS-two-new-silicon-rungs-and-an-O-level-procedure-bug.md`.
+
+**Paper:** `tab:spatialcost` should gain the `beebs_bs` row (needs approval per CLAUDE.md;
+not done). `beebs_cnt` must NOT go in until I-2 is resolved.
+
+### Board queue (2026-07-27) — superseded by the results above
 
 `beebs_bs` is **silicon-correct** (887447230 = oracle, 2264 cyc) and needs only its
 **baseline** boot to become the 4th measured row; both halves are now registered.
