@@ -162,12 +162,21 @@ halves bracket the compute only, so domain entry/exit is excluded from both.
 The `capability` and `baseline` columns are **cycles**. The two bold columns are the
 overhead ratios (capability ÷ baseline) for cycles and for instructions respectively.
 
-| benchmark | opt | capability (cyc) | baseline (cyc) | **cycles** | **instructions** |
-|---|---|---:|---:|---:|---:|
-| `beebs_prime` (pure scalar) | −O0 | 47,780 | 46,306 | **1.032×** | — [†] |
-| `rv8_primes` (sieve, 16.5M cyc) | −O0 | 17,283,292 | 16,459,057 | **1.050×** | **1.102×** |
-| `beebs_bs` (binary search, read-only table) | −O1 | 2,258 | 1,912 | **1.181×** | **1.058×** |
-| `beebs_recursion` (deep + mutual recursion) | −O1 | 18,957 | 10,523 | **1.801×** | **1.458×** |
+> ### 2026-07-28: THIS TABLE IS WITHDRAWN except for `beebs_bs`
+> Measuring each baseline 16× and keeping the least-disturbed pass changed it materially.
+> **`beebs_prime` 1.032× is wrong** — its baseline was carrying ~1,900 interrupt-handler
+> instructions; min-of-16 gives 29,775 cyc (−33 %) and the ratio becomes **≥1.605×**, still
+> uncertified at 5/15 ties. The **"3.2 % scalar / 5.0 % array / 80 % recursive" headline is
+> withdrawn** — its cheapest, most quotable component was the most contaminated.
+> Trail: `history/28-07-2026_01-30-00_RESULTS-min-of-16-fixes-short-rungs-and-beebs_prime-is-not-1.032x.md`.
+
+| benchmark | opt | capability (cyc) | baseline (cyc) | **cycles** | **instructions** | status |
+|---|---|---:|---:|---:|---:|---|
+| `beebs_bs` (binary search, read-only table) | −O1 | 2,258 | **1,772** | **1.274×** | **1.058×** | ✅ **CLEAN — 15/15 passes tied at min instret, 45-cyc spread. The only defensible row.** |
+| `beebs_prime` (pure scalar) | −O0 | 47,780 | 29,775 | ≥1.605× | — [†] | ⚠ was 1.032×; 5/15 ties, true value likely higher |
+| `beebs_cnt` (matrix seed + sum) | −O1 | 128,178 | 110,013 | 1.165× | 1.277× | ⚠ was an impossible 0.773×; 1/15 ties |
+| `rv8_primes` (sieve, 16.5M cyc) | −O0 | 17,283,292 | 16,389,191 | 1.055× | 1.103× | ❌ **uncorrected** — too long for a clean pass; carries the full ~1.21× penalty |
+| `beebs_recursion` (deep + mutual recursion) | −O1 | 18,957 | 10,523 | 1.801× | 1.458× | ⚠ not re-measured with min-of-16 |
 
 **`beebs_bs` added 2026-07-27 — four rows now.** Capability CPI rises 2.31 → 2.58; same
 *more instructions, ABI not enforcement* shape as the sieve. The capability binary

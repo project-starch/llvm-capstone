@@ -41,7 +41,13 @@ RUNGS=(
   "beebs_crc32:beebs_crc32_kernel.h:crc_compute:-O0"
   "beebs_insertsort:beebs_insertsort_kernel.h:is_compute:-O0"
   "beebs_prime:beebs_prime_kernel.h:prime_compute:-O0"
-  "beebs_recursion:beebs_recursion_kernel.h:rec_compute:-O0"
+  # -O1, NOT -O0: the capability half is measured at -O1 (the level at which this
+  # rung computes correctly on silicon), and the comment below has said the
+  # baseline "has to be -O1 as well" while this spec said -O0. A 2026-07-28 run
+  # exposed the contradiction -- the -O0 baseline returns 19,825 cyc / 4,759 instr
+  # against the published -O1 pair's 10,523 / 2,019, roughly 2x. Anyone running the
+  # baseline without LADDER_OPT was silently producing a mismatched denominator.
+  "beebs_recursion:beebs_recursion_kernel.h:rec_compute:-O1"
   "beebs_bs:beebs_bs_kernel.h:bs_compute:-O1"
   "beebs_janne:beebs_janne_kernel.h:jc_compute:-O1"
   # Four rungs added 2026-07-27, all predicted PASS under R-1 (ref/ISSUES.md).
