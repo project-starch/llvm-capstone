@@ -376,6 +376,24 @@ rare; usually honesty costs you something.
 
 ## 5. What is NOT established — read before citing anything above
 
+- **THE MECHANISM IS NOW KNOWN (2026-07-27).** The four non-measured rungs fail because of a
+  characterised **hardware** fault: *a load whose address arrives through a register — a
+  register-carried capability or a register-computed offset — does not observe pending stores to
+  other addresses.* Isolated by a minimal failing case with controls on both sides: a register
+  index alone is correct, a second store alone is correct, together they fail; store ordering and
+  index arithmetic are irrelevant; it reproduces across boots. It is not loop-specific (a single
+  such load returned 0 where 5 had just been stored). **Seven mitigations were tried and all
+  failed** — fence before the load, fence after every store, register hoisting, making the other
+  store register-indexed, 64 B cache-line separation, constant-offset pointer walk, both accesses
+  via pointers — so there is **no general software workaround**: a dynamic array index cannot
+  have a compile-time-constant base. QEMU executes every probe correctly.
+  This explains the 3-pass/4-fail split exactly, including `rv8_primes`, whose passing had
+  refuted several earlier theories: its inner loop touches one location per iteration, so a
+  second store is never pending, while `matmult_int` and `coremark_matrix` do
+  `C[i*N+j] += A[…]*B[…]` — register-indexed loads plus a store elsewhere.
+  **For the paper this converts "an unexplained divergence" into "a documented hardware
+  limitation", which is a citable claim.** Trail:
+  `history/27-07-2026_17-05-00_RESULTS-culprit-found-register-indexed-load-misses-pending-stores.md`.
 - **Three benchmarks measured, not seven — and it will stay three.** `beebs_crc32` and
   `beebs_insertsort` were made *buildable* at −O1/−O2 on 2026-07-27 and are QEMU-correct, but
   when measured on the board **both failed**: crc32 hangs, insertsort returns a wrong value with
