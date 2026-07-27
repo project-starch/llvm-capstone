@@ -346,9 +346,31 @@ the known degenerate-SPLIT note (`__pad` exists to keep the image above `0x1000`
 monitor's SPLIT stays non-degenerate); a larger image plausibly pushes the split geometry
 into a case that code does not handle.
 
-**Next step, concretely:** instrument or read `create_domain` in the caplifive-system
-OpenSBI monitor to print the SPLIT operands for a 4576-byte and a 5088-byte image, and
-compare. The failing operand is the second one.
+**The invariant it violates (read from the monitor source, no board needed):**
+`create_domain` (`caplifive-system/.../capstone-sbi/sbi_capstone.c:279`) does
+
+```c
+dom_code = split_out_cap(base_addr, tot_size, 1);        /* [base, base+tot_size) */
+dom_seal = __split(dom_code, base_addr + code_size);     /* needs code_size < tot_size */
+dom_data = __split(dom_seal, base_addr + code_size + DOMAIN_DATA_SIZE);  /* 1536 B */
+```
+
+`DOMAIN_DATA_SIZE` is `16 * 96` = **1536**. The assertion that fires is
+`rs1_v->tag && !rs2_v->tag` on the **second** `__split`, whose `rs1` is `dom_seal` — so
+`dom_seal` came back **untagged**, which means the **first** split's point
+`base_addr + code_size` fell outside `dom_code`'s bounds. In other words the loader passed
+**`code_size >= tot_size`** (or close enough that the geometry degenerates).
+
+That is consistent with everything observed: it is purely size-dependent, the generated
+glue is identical between the passing and failing builds, and the linker forces globals to
+image offset `0x1000` so `code_size` grows with `.rodata` while `tot_size` does not
+necessarily follow.
+
+**Next step, concretely:** check how the loader (`capstone-test.user`) derives the
+`code_size` and `tot_size` arguments from the ELF, and print them for the 4576-byte and
+5088-byte images. The fix is almost certainly in that derivation, not in the monitor —
+which means **no firmware rebuild**, and it can be validated on QEMU first.
+The domain also needs `tot_size > code_size + 1536` with room for the globals after that.
 
 With the full 640 B `sha512_k`, the domain cannot be created at all: QEMU asserts in
 `helper_cssplit` (`rs1_v->tag && !rs2_v->tag`), loadable size 5088. Truncating the table to
