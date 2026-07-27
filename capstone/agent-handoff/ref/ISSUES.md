@@ -288,45 +288,42 @@ regress.
 - **Leads:** `sha512` faults with bounds visibly too small; `norx` with an untagged capability
   reaching a load. Both smell like a bounds/provenance codegen bug at −O1+.
 
-### C-4 — Read-only data is reached PC-relative and bypasses the cap table `ROOT-CAUSED`
-**The name was misleading: the problem is not SIZE, it is that `.rodata` is not routed
-through the cap table at all.** Root-caused 2026-07-28 via `rv8_sha512`.
+### C-4 — A `.rodata` access is emitted PC-relative and faults outside PCC `PARTIALLY DIAGNOSED`
+Renamed from "large read-only data cannot be delivered": **size is not the variable.**
 
-**Evidence.** The domain faults on `ld a4, 0(a0)` where `a0` is built by
-`auipc a4, 0x0` + `addi a0, a4, 0x750` = **`0x11000`** — a PC-relative absolute address.
-Section layout confirms why that cannot work:
+**Established (2026-07-28), all verified:**
+- The domain faults on `ld a4, 0(a0)` with `a0` built by `auipc a4,0x0` + `addi a0,a4,0x750`
+  = **`0x11000`** — a PC-relative absolute address used as a capability base.
+- Layout: `.text` `0x10000` (PCC window only `0x1000`); **`.rodata` `0x11000` — OUTSIDE
+  PCC**; `.capstone_gp_table` `0x110c8`; `.bss` `0x11120`.
+- Marking a table `const` moves it to `.rodata` and triggers this; the same data as
+  non-const `static` lands in `.bss` and works.
+- The table must have **external linkage** or it fails to link (`undefined symbol:
+  sha512_k`) — the cap-table glue is a separate TU.
 
-| section | addr | contents |
-|---|---|---|
-| `.text` | `0x10000` | 0xb30 bytes — the PCC window is only `0x1000` |
-| **`.rodata`** | **`0x11000`** | 0xc8 bytes of **anonymous `$d`** entries — *outside PCC* |
-| `.capstone_gp_table` | `0x110c8` | 3 entries |
-| `.bss` | `0x11120` | `sha_chain`, `sha_w` — **in the cap table, work fine** |
+> **⚠ CORRECTION.** An earlier commit claimed the cause was `ISD::ConstantPool` nodes
+> getting no cap-table slot. **That is refuted by the descriptors**, which show all the
+> read-only data DOES have slots: `[0] size=64` (`sha512_init_state`), `[1] size=640`
+> (`sha512_k`), `[2] size=192` (`sha_chain`+`sha_w`, merged by GlobalMerge). The IR has 4
+> named globals; GlobalMerge combines two, giving the 3 descriptors seen. So "missing from
+> the table" does NOT explain the faulting access, and the mechanism is still open.
 
-**Mechanism.** `CapstoneTargetLowering::lowerGlobalAddress` routes any global with a
-cap-table index through `ldc gp[i]`. But a **constant-pool** reference is an
-`ISD::ConstantPool` node that never reaches that function, and pool entries are not in
-`M.globals()` so `emitGpCaptableTable` gives them no slot either. They therefore fall to
-PC-relative addressing, which is only valid inside PCC — and `.rodata` is placed beyond it.
+**The open question, stated precisely:** every global has a slot and `lowerGlobalAddress`
+routes slotted globals through `ldc gp[i]` — so **which lowering path emits the
+`auipc`/`addi` at `0x108b0`–`0x108c0`, and for which object?** Candidates not yet
+separated: (a) a `ConstantPool` node after all, at an address that happens to sit inside
+`.rodata`; (b) an `LGA` fallback taken before GlobalMerge renumbers indices, so the access
+and the table disagree about order; (c) glue code rather than domain code. Resolve by
+correlating the faulting PC against the emitted assembly with symbols, not against the
+stripped `.dom`.
 
-**Consequences, which are broader than one benchmark:**
-- Any function whose codegen needs a constant pool cannot run in a gp-captable domain.
-- It looks size-dependent only because *larger* constants are what get pooled rather than
-  materialised inline — hence the old "large read-only data" framing.
-- `const` globals with external linkage land in `.rodata` and hit this; the same data as
-  `static` non-const would go to `.data`/`.bss` and work.
+**Note on index stability (worth checking regardless):** `getGpCaptableIndex` derives an
+index by *position* in `M.globals()`. GlobalMerge changes that list. If any access is
+lowered against the pre-merge order while the descriptor table is emitted post-merge, the
+domain would load the wrong slot — a silent wrong-capability bug, not just a fault.
 
-**Fix options, in increasing order of correctness:**
-1. **Suppress constant pools under `-capstone-gp-captable`** (force inline materialisation).
-   Smallest change; costs code size, which competes with the 4 KiB window (C-5).
-2. **Place `.rodata` inside the PCC window** so PC-relative access is legal. Cheap for small
-   `.rodata`, but the window is already tight.
-3. **Give pool entries cap-table slots** — correct and general, but they are not
-   `GlobalVariable`s, so both the descriptor emitter and the index function need extending.
-
-**Repro:** `tests/runtime-qemu/silicon-ladder/rv8_sha512_kernel.h` (oracle 1390718314),
-spec entry commented out. Also note the table must have **external linkage** or it fails to
-link (`undefined symbol: sha512_k`) — the glue is a separate TU.
+**Repro:** `tests/runtime-qemu/silicon-ladder/rv8_sha512_kernel.h`, oracle 1390718314;
+spec entry commented out. Blocks the crypto/bitwise rung, and likely SQLite's const tables.
 
 ### C-9 — Redundant `mv rd, rd` around inline-asm register constraints `OPEN`
 The Capstone backend emits **no-op self-moves** around an `asm volatile("" : "+r"(x))`
