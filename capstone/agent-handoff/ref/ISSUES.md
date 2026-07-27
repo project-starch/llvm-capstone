@@ -395,10 +395,22 @@ No capability reaches an operand that must be untagged in this sequence. That is
 A second copy loop would carve/copy storage a second time and could plausibly leave the
 register state that the next `split` chokes on.
 
-**Next step: explain the duplicate.** Dump the full generated `.inc` and count copy loops
-against the 3 descriptors; if there are two for one global, the generator is the bug and it
-is reproducible entirely off-board. **Verify by counting, not by reasoning** — four
-inferences have now been wrong on this issue, and each looked sound before it was checked.
+**Counted, and the GENERATOR IS CORRECT.** The emitted `.inc` contains exactly
+**1** copy loop, **3** global headers, **4** `split`s (cap table + 3 globals) and **3**
+`stc`s to the table — all as intended.
+
+**So the duplicate is in the LINKED IMAGE, not the generated glue**: the disassembly shows
+two 640-byte copy loops (`li t6, 0x280` at `0x10164` and `0x10324`) while the generator
+emits one. That points at the glue being assembled/linked **twice** — look at
+`start-gp-captable-generic.S` and how it includes `gp_captable_build.inc`, and at whether
+two glue instances reach the link. A second run of the carve/copy sequence would consume
+`t1` again and re-`split` an already-split `sp`, which is a very plausible source of the
+`cssplit` tag assertion.
+
+**This is now a link/assembly-structure question, fully off-board and file-local.** It is
+also the fifth distinct hypothesis on C-4b; the four before it (tot_size invariant,
+`code_len`, `dom_pages_log2`, `lla` tags) were each refuted by measurement after looking
+sound on paper. Count or dump before concluding.
 
 **Related hazard — CHECKED 2026-07-28, NOT a bug.** `getGpCaptableIndex` derives its index
 from a global's *position* in `M.globals()`, and GlobalMerge mutates that list (it merged
