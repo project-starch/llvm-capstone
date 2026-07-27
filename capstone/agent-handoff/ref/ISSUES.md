@@ -86,10 +86,32 @@ that never occurs here, so R-1 predicts PASS. **The board hangs it.**
   a control-flow/branch-resolution issue on this RTL (the nest is unusually branch-dense); an
   interrupt landing inside the measured bracket (the measurements doc notes ~16k cycles when one
   does; this rung ran 11,167); or the emitted code differing from what actually executes.
-- **Next probe (cheap, decisive):** a *minimal pure-register loop* — `long i=0; while (i<100) i++;`
-  returned raw, with no memory access anywhere in the loop. If that fails on the board the finding
-  is far larger than R-1. If it passes, janne's specific branch structure is implicated and the
-  bisect should continue by simplifying the nest one condition at a time.
+- **Next probe RUN (`regloop_diag`, 2026-07-27) — and it PASSES, which deepens the puzzle.**
+  A staircase of register-pure loops, no memory in any body:
+
+  | probe | board | correct |
+  |---|---|---|
+  | simple counted loop, 100 trips | 100 | 100 ✅ |
+  | nested 10x10 | 100 | 100 ✅ |
+  | data-dependent branch in body | 100 | 100 ✅ |
+  | multiply in body | 100 | 100 ✅ |
+  | **janne's EXACT nest, bounded** | **21** | 21 ✅ |
+
+  So pure-register looping is fine, and **janne's algorithm itself runs correctly on this board**.
+
+- **The open puzzle: two register-pure implementations of the same nest, one fails, one works.**
+  Verified by counting memory ops in the loop *region* (not the whole function): `janne_diag`'s
+  nest has **0**, and it fails; `regloop_diag`'s dbg4 nest also has 0, and it passes. The
+  differences are incidental — three counters vs two, bounds 200/500 vs 400, and dbg4 executes
+  after four other loops. Nothing algorithmic.
+- **Most likely reading: this is the known code-layout / perturbation sensitivity**, the same
+  phenomenon as the 2026-07-26 controlled A/B where **four added instructions flipped a passing
+  rung from correct to wrong**. That makes R-6 a *symptom class* rather than a distinct fault, and
+  means **a passing rung is not stable ground** — already the standing caveat in
+  `ref/fpga-silicon-measurements-for-paper.md` §5.
+- **Do not merge R-6 into R-1** (R-1 is a memory hazard; these nests touch no memory), and do not
+  claim it is understood. The honest status is: janne's algorithm works, one particular build of
+  it does not, and the discriminator is not algorithmic.
 
 ### R-3 — Second domain at the same entry VA hangs within one boot `OPEN`
 A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` — missing
