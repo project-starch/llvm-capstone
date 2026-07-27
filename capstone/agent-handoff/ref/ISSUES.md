@@ -86,6 +86,33 @@ so it is the instruction and not code layout.
   storing it, and our QEMU was patched to tolerate the redundant case *"rather than faulting"*.
   Only the failure *mode* (full wedge vs catchable trap) is worth the board owner's attention.
 
+### R-7 — `rv8_sha512` hangs on silicon though it is QEMU-correct `OPEN`
+Measured 2026-07-28. The rung builds with the C-5 window + copy-path bypass, passes the
+QEMU parity leg with its full 640 B table (oracle 1390718314), and then **hangs the
+`cscall` on the board**, both attempts.
+
+- **Its BASELINE half is clean and measured:** 540,073 cyc / 462,646 instret, 15/15 passes
+  tied at min instret, spread 0, correct oracle. So only the capability half fails.
+- **R-1 predicted PASS**: `sha512_k[i]` is a read-only indexed load with nothing ever
+  stored to that table — the `beebs_bs` shape, which passes. But `sha_w[i&15]` **is** both
+  read and written inside the compression loop, with `sha_chain[]` stored in the same
+  region, so the same-object load/store pattern R-1 describes *is* present after all. This
+  rung is therefore consistent with R-1 rather than a counter-example — unlike R-6.
+- **Untested confound:** it is the only rung built at a **32 KiB** window with an
+  ~8 KB unrolled initializer prologue. Before attributing this to R-1, build a *small*
+  variant (16-entry table, 4 KiB window, no bypass) and run it: that variant already passes
+  QEMU, so a board run separates "R-1 memory hazard" from "something about the large
+  window or the long unrolled prologue".
+- **Repro:** `DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1 DOMAIN_OPT_LEVEL=-O1`, artifacts in the
+  ladder dir; capability half must be run with `LADDER_REBUILD=0` (see below).
+
+**Tooling gap found while running this:** the runner's rebuild path does **not** know about
+`DOMAIN_WINDOW` / `LADDER_NO_RO_COPY`, so a default run would silently rebuild this rung at
+4 KiB with the broken copy path and measure the wrong binary. `LADDER_REBUILD=0` with a
+pre-built dir is the current workaround. **Plumb the knobs through
+`run_ladder_perf_fpga.py`'s rebuild** so this cannot be got wrong — it is the same class as
+I-1, where a silently-different build produced five bogus results.
+
 ### R-6 — `beebs_janne` hangs although R-1 predicts it should pass `OPEN`
 BEEBS `janne_complex`: nested data-dependent loops whose conditions are computed **entirely from
 locals**, with one `.bss` counter (`jc_iters++`) touched through a single capability register.

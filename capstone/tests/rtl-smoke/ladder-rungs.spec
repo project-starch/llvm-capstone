@@ -67,4 +67,6 @@ ctrsanity4:ctrsanity4_kernel.h:cs_compute:-O1
 #   16-entry K table (128 B): domain creates, then a global access faults OOB --
 #     cursor 0x101561000 against bounds (0x10157ffd0, 0x101580000).
 #   Uncomment once C-4 is fixed; the kernel and oracle (1390718314) are ready.
-# rv8_sha512:rv8_sha512_kernel.h:sha512_compute:-O1
+# The BASELINE half is plain riscv64 with no code window and no cap-table glue, so it
+# builds and runs unconditionally; only the CAPABILITY half needs the two knobs.
+rv8_sha512:rv8_sha512_kernel.h:sha512_compute:-O1
