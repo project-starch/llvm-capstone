@@ -27,6 +27,23 @@ recursive. The spread IS the result — report the range and the mechanism, neve
 an average.** The recursion outlier is **ABI cost** (gp-free call/return + cap
 spills), not hardware.
 
+### The paper's evaluation now carries the silicon numbers (2026-07-27)
+
+`old-parts/evaluation.tex` gained `sec:eval-spatial-cost` + `tab:spatialcost` —
+the first time the draft **prices** pervasive spatial safety rather than only
+showing it correct. Also folds in the ABI-not-enforcement split (sieve: +10.2%
+instructions, +5.6% cycles, CPI *falls* 2.07→1.98) and one scoped paragraph on the
+R-1 board defect explaining why 3 kernels and not 7. `tab:appoverhead`'s CPI=1
+footnote is corrected against the measured 2.0–3.2.
+
+Paper commit `524f5d0` is **local only, deliberately not pushed** — that repo syncs
+with Overleaf and pushing risks clobbering edits made there. The parent's submodule
+pointer is intentionally left unbumped for the same reason. Builds clean: 13 pages,
+no errors, no undefined refs, no overfull boxes in the new material.
+
+**`tab:spatialcost` is built to take more rows** — when board runs land, add them
+there and update the 3.2/5.0/80 spread sentence if the range moves.
+
 ### Board queue (2026-07-27) — 5 rungs staged, blocked only on board time
 
 `beebs_bs` is **silicon-correct** (887447230 = oracle, 2264 cyc) and needs only its

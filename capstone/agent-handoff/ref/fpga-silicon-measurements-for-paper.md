@@ -124,6 +124,15 @@ The draft claims spatial safety is pervasive ("every pointer is a bounded
 capability, always on"), demonstrates it is **correct**, and never prices it.
 This is that price, measured.
 
+> **IN THE PAPER as of 2026-07-27** — `old-parts/evaluation.tex`, new subsection
+> `sec:eval-spatial-cost` + `tab:spatialcost` (paper commit `524f5d0`, **local
+> only, not pushed** because that repo syncs with Overleaf). §3's ABI-not-hardware
+> split is written up in the same subsection, and §4's measured CPI 2.0–3.2 now
+> corrects `tab:appoverhead`'s CPI=1 footnote (the SQLite rows are ~2× what this
+> hardware would pay; the conservative figures are kept deliberately, since the
+> measured CPI comes from these kernels rather than from SQLite).
+> **When new rungs land, edit `tab:spatialcost` — it is built to take more rows.**
+
 Method: each kernel compiled **twice from the identical source header** by the
 **same clang at the same `-O`** — once for `-target capstone64` as a pure-capability
 domain, once for `-target riscv64` with no capability flags — and run on the same
