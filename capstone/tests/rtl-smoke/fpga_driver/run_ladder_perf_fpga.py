@@ -218,9 +218,17 @@ def preflight_artifacts():
     mine = _optlevels(ART / "optlevels.txt")
     if mine:
         log("opt levels: " + ", ".join(f"{r}={mine.get(r, '?')}" for r in RUNGS))
-    base = _optlevels(pathlib.Path(
-        os.environ.get("CAPSTONE_TMP_ROOT", "/tmp/capstone")) / "ladder-base"
-        / "optlevels.txt")
+    # Prefer the BARE-METAL baseline: it is the real denominator now (issue I-2).
+    # The Linux dir is kept only as a fallback for older artifact sets -- checking
+    # it first made this guard fire against a stale -O0 file and block a correctly
+    # configured -O1 sweep.
+    _root = pathlib.Path(os.environ.get("CAPSTONE_TMP_ROOT", "/tmp/capstone"))
+    base = {}
+    for _d in ("ladder-base-bare", "ladder-base"):
+        base = _optlevels(_root / _d / "optlevels.txt")
+        if base:
+            log(f"comparing -O levels against {_d}")
+            break
     mismatch = [f"{r}: capability={mine[r]} baseline={base[r]}"
                 for r in RUNGS if r in mine and r in base and mine[r] != base[r]]
     if mismatch:
@@ -303,6 +311,7 @@ def main():
         # a clean boot, sidestepping the multi-domain same-VA icache hang. ~2.5 min
         # per rung (the JTAG reload dominates); the domains themselves are tiny.
         for r in RUNGS:
+            # one-boot mode: a wedged rung must not poison the rest of the sweep
             dom = ART / f"{r}.dom"
             dom_remote = f"/tmp/{r}.dom"
             # Boot + transfer is one RETRYABLE unit. A single GDB timeout during
@@ -340,6 +349,7 @@ def main():
                         wait_connected(console, 45)
             else:
                 results[r] = (None, None, None)
+                booted_once[0] = False   # force a fresh boot for the next rung
                 log(f"  {r}: boot/transfer failed on every attempt; skipping")
                 if not getattr(console.sio, "connected", False):
                     wait_connected(console, 45)
@@ -373,6 +383,12 @@ def main():
                     log(f"  {r}: ran but no RESULT line; attempt {attempt}")
                 except ActionTimeout:
                     log(f"  {r}: no END marker in 120s (attempt {attempt})")
+                    # A rung that never returned may have WEDGED the boot. In
+                    # one-boot mode the next rung would "reuse" a dead boot and
+                    # fail too: on 2026-07-28 one hanging rung cost the four after
+                    # it, all of which had worked minutes earlier. Force a fresh
+                    # boot so one failure stays one failure.
+                    booted_once[0] = False
                 except BadNamespaceError:
                     log(f"  {r}: socket dropped; reconnecting"); wait_connected(console, 45)
                 time.sleep(2)

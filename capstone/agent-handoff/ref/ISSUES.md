@@ -164,6 +164,11 @@ JTAG firmware reload per rung** (~2.5 min), the dominant cost of every board swe
   | `beebs_prime` (−O1) | 9,746 | 9,749 | **0.03 %** |
 
   `instret` was byte-identical in both positions (875, 2,708).
+- **A wedged rung poisons the rest of the sweep unless recovery is enabled.** On
+  2026-07-28 `rv8_primes` hung and the runner kept "reusing" the dead boot, losing the
+  **four** rungs after it — all of which had worked minutes earlier. Fixed: a rung that
+  times out clears the boot flag so the next one power-cycles. One failure now stays one
+  failure. Anyone re-implementing one-boot mode must include this.
 - **How to use it:** `LADDER_DISTINCT_VA=1` on the build (assigns `0x10000`, `0x20000`, …
   64 KiB apart) **and** `LADDER_ONE_BOOT=1` on the runner. Both are opt-in: if the
   address-keying assumption ever fails the symptom is a silent hang that looks like a
@@ -272,6 +277,9 @@ picking an extension rule.**
   rather than lowered. **(b) is the cheaper investigation and should come first.**
 
 ### C-3 — RV8 fails at runtime at −O1/−O2 `OPEN`
+**Now also reaches the ladder (2026-07-28):** the `rv8_primes` *rung* runs at −O0 and
+**HANGS at −O1** on silicon, so it is the one row in the overhead table that cannot be
+measured at the uniform level. Same family as the RV8 −O1/−O2 failures below.
 Five RV8 benchmarks now *build* at −O1/−O2 but fail 10/10 at runtime: `primes`/`aes`/`dhrystone`
 hang silently; `sha512`/`norx` take deterministic capability faults (cause 5 OOB / cause 24, same
 PC at both levels). −O0 controls all pass. **Not regressions** — code that never compiled cannot

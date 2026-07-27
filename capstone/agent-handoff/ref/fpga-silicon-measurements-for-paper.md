@@ -155,26 +155,51 @@ halves bracket the compute only, so domain entry/exit is excluded from both.
 The `capability` and `baseline` columns are **cycles**. The two bold columns are the
 overhead ratios (capability ÷ baseline) for cycles and for instructions respectively.
 
-### Measured against the bare-metal baseline (2026-07-28)
+### FINAL — uniform −O1, bare-metal baseline, one harness, one session (2026-07-28)
 
-| benchmark | opt | capability (cyc) | baseline (cyc) | **cycles** | **instructions** |
-|---|---|---:|---:|---:|---:|
-| `rv8_primes` (sieve, 16.5M cyc) | −O0 | 17,283,292 | 13,679,903 | **1.263×** | **1.130×** |
-| `beebs_cnt` (matrix seed + sum) | −O1 | 128,178 | 94,731 | **1.353×** | **1.319×** |
-| `beebs_bs` (binary search) | −O1 | 2,258 | 1,476 | **1.530×** | **1.058×** |
-| `beebs_prime` (pure scalar) | −O0 | 47,780 | 28,385 | **1.683×** | — [†] |
-| `beebs_recursion` (deep + mutual) | −O1 | 18,957 | 9,696 | **1.955×** | **1.458×** [‡] |
-| `ctrsanity` (**control**, identical code both sides) | −O1 | 600,309 | 600,041 | **1.000×** | **1.000×** |
+| benchmark | opt | capability | baseline | **cycles** | **instr** | **CPI ratio** |
+|---|---|---:|---:|---:|---:|---:|
+| `beebs_prime` (pure scalar) | −O1 | 9,782 / 2,708 | 9,283 / 2,704 | **1.054×** | 1.001× | 1.052 |
+| `rv8_primes` (sieve) | −O0 [*] | 17,283,292 / 8,773,753 | 13,679,903 / 7,764,899 | **1.263×** | 1.130× | 1.118 |
+| `beebs_cnt` (matrix seed+sum) | −O1 | 128,175 / 76,429 | 94,736 / 57,949 | **1.353×** | 1.319× | 1.026 |
+| `beebs_bs` (binary search) | −O1 | 2,259 / 875 | 1,470 / 827 | **1.537×** | 1.058× | 1.452 |
+| `beebs_recursion` (deep+mutual) | −O1 | 18,971 / 2,944 | 9,696 / 2,019 | **1.957×** | 1.458× | 1.342 |
+| **`ctrsanity`** (**control**: identical code both sides) | −O1 | 600,309 / 500,033 | 600,041 / 500,022 | **1.000×** | 1.000× | 1.000 |
 
-**Pervasive spatial safety costs 26 %–96 % in cycles**, not the 3–5 % previously
-reported. The old figures (`beebs_prime` 1.032x, `rv8_primes` 1.050x, and the
-"3.2 % scalar / 5.0 % array / 80 % recursive" headline) are **WITHDRAWN** — they were
-measured against an interrupt-contaminated denominator.
+Cells are `cycles / instret`. **Pervasive spatial safety costs 5 %–96 % in cycles**,
+depending entirely on kernel shape.
 
-[†] `beebs_prime` has no capability instret: instrumenting its `domain_main` changes the
-value it computes (a separate, unexplained silicon effect).
-[‡] `beebs_recursion`'s capability instret is back-computed from the old published ratio;
-re-measure it directly before citing.
+[*] **`rv8_primes` HANGS at −O1 on this silicon** and is measurable only at −O0 — a real
+limitation, reported rather than hidden. Everything else is −O1. (Its −O0 pair is
+internally consistent, so the ratio is valid; only cross-row `-O` comparison is affected.)
+
+### Why the overheads are what they are
+
+`cycles_ratio = instr_ratio × CPI_ratio`, and **which factor dominates is the finding**:
+
+| benchmark | cycles | = instructions | × CPI | dominated by |
+|---|---:|---:|---:|---|
+| `beebs_prime` | 1.054 | 1.001 | 1.052 | neither — essentially free |
+| `rv8_primes` | 1.263 | 1.130 | 1.118 | balanced |
+| `beebs_cnt` | 1.353 | **1.319** | 1.026 | **extra instructions** |
+| `beebs_bs` | 1.537 | 1.058 | **1.452** | **stalls** |
+| `beebs_recursion` | 1.957 | **1.458** | **1.342** | both |
+
+- **`cnt` (bulk array work)** — nearly all cost is the +31.9 % instructions our globals
+  ABI emits (`ldc gp[i]` per global reference); per-instruction speed barely moves.
+- **`bs` (search)** — the opposite: only **+5.8 % instructions** but **+53.7 % cycles**.
+  Each `bs_data[mid]` load depends on a `cincoffset` that depends on an `ldc` from the
+  cap table — a serial dependency chain, and this is an **in-order** core, so it stalls.
+- **`recursion`** — both, because the gp-free call/return sequence *and* 128-bit
+  capability spills are paid on **every call**. Its absolute CPI is 6.44, by far the
+  highest.
+- **`prime`** — at −O1 the compiler keeps globals in registers, so the indirection is
+  amortised almost entirely: **1.054×**. At −O0 the same kernel measured **1.683×**,
+  because every access reloaded from the cap table.
+
+**That last point matters for how the whole table is read.** Optimisation level changes
+the answer by more than the capability mechanism does on scalar code, which is why the
+table is now uniform −O1 (realistic) rather than mixed.
 
 **`beebs_bs` added 2026-07-27 — four rows now.** Capability CPI rises 2.31 → 2.58; same
 *more instructions, ABI not enforcement* shape as the sieve. The capability binary

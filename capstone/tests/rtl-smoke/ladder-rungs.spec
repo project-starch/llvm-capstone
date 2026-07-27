@@ -31,13 +31,19 @@
 # level they were introduced and measured at (beebs_bs and later). coremark_matrix
 # is -Os because it overflows the domain's 4 KiB PCC window (C-5) at -O0.
 
-null:ladder_base_null_kernel.h:null_compute:-O0
-matmult_int:matmult_int_kernel.h:mm_compute:-O0
+# UNIFORM -O1 (2026-07-28). Every rung is now -O1 except coremark_matrix, which needs
+# -Os to fit the 4 KiB PCC window (C-5). Previously the table mixed -O0 and -O1 rows:
+# each PAIR was internally consistent, so each ratio was valid, but comparing ACROSS
+# rows mixed optimisation levels -- a reviewer's first question. All five measurable
+# rungs were verified to pass the QEMU parity leg at -O1 before this change.
+
+null:ladder_base_null_kernel.h:null_compute:-O1
+matmult_int:matmult_int_kernel.h:mm_compute:-O1
 coremark_matrix:coremark_matrix_kernel.h:coremark_matrix_compute:-Os
-rv8_primes:rv8_primes_kernel.h:primes_compute:-O0
-beebs_crc32:beebs_crc32_kernel.h:crc_compute:-O0
-beebs_insertsort:beebs_insertsort_kernel.h:is_compute:-O0
-beebs_prime:beebs_prime_kernel.h:prime_compute:-O0
+rv8_primes:rv8_primes_kernel.h:primes_compute:-O1
+beebs_crc32:beebs_crc32_kernel.h:crc_compute:-O1
+beebs_insertsort:beebs_insertsort_kernel.h:is_compute:-O1
+beebs_prime:beebs_prime_kernel.h:prime_compute:-O1
 beebs_recursion:beebs_recursion_kernel.h:rec_compute:-O1
 beebs_bs:beebs_bs_kernel.h:bs_compute:-O1
 beebs_janne:beebs_janne_kernel.h:jc_compute:-O1
