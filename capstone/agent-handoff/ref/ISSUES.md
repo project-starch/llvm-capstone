@@ -399,18 +399,32 @@ register state that the next `split` chokes on.
 **1** copy loop, **3** global headers, **4** `split`s (cap table + 3 globals) and **3**
 `stc`s to the table — all as intended.
 
-**So the duplicate is in the LINKED IMAGE, not the generated glue**: the disassembly shows
-two 640-byte copy loops (`li t6, 0x280` at `0x10164` and `0x10324`) while the generator
-emits one. That points at the glue being assembled/linked **twice** — look at
-`start-gp-captable-generic.S` and how it includes `gp_captable_build.inc`, and at whether
-two glue instances reach the link. A second run of the carve/copy sequence would consume
-`t1` again and re-`split` an already-split `sp`, which is a very plausible source of the
-`cssplit` tag assertion.
+**The duplicate is BY DESIGN — this lead is refuted too.**
+`start-gp-captable-generic.S` has two entry points and each expands the macro:
+```
+__test_reentry:  ccsrrw(sp, cscratch, x0) ; BUILD_GP_CAPTABLE  /* reentry */
+_start:          ccsrrw(sp, cscratch, x0) ; BUILD_GP_CAPTABLE  /* normal entry */
+```
+Two copies in the image, exactly one executed per entry. Nothing wrong with it.
 
-**This is now a link/assembly-structure question, fully off-board and file-local.** It is
-also the fifth distinct hypothesis on C-4b; the four before it (tot_size invariant,
-`code_len`, `dom_pages_log2`, `lla` tags) were each refuted by measurement after looking
-sound on paper. Count or dump before concluding.
+**Status: FIVE hypotheses proposed, FIVE refuted by measurement.** In order: the
+`tot_size` invariant; `code_len` carrying the exec segment; `dom_pages_log2` rounding;
+`lla` yielding a tagged value; a duplicated copy loop. Each looked sound on paper and each
+died on contact with a dump, a count or a disassembly.
+
+**What is solidly established, and is the whole of what a successor should trust:**
+- Domain creation **succeeds** (`Created domain ID = 0` precedes the assertion) — the fault
+  is in the **entry glue**, not `create_domain`, not the loader, not the kernel module.
+- The discriminator is `COPY_THRESHOLD = 256` selecting the **large-RO copy path**, not
+  image size: 640 B takes it and fails, 128 B takes the unrolled path and passes.
+- The copy path is **not optional** — forcing the unrolled path for 640 B blows `.text` to
+  11,895 B against the 4 KiB window, so **C-4b is entangled with C-5**.
+- The generated glue is **correct by count** (1 copy loop, 3 globals, 4 splits, 3 `stc`),
+  and the two copies in the image are the two entry points, by design.
+
+**Therefore: instrument, do not reason.** The next step is a QEMU run with the capability
+tag dumped at each `split` in the copy path, to find which operand is tagged when it must
+not be. Five paper hypotheses have failed; the sixth should not be one.
 
 **Related hazard — CHECKED 2026-07-28, NOT a bug.** `getGpCaptableIndex` derives its index
 from a global's *position* in `M.globals()`, and GlobalMerge mutates that list (it merged
