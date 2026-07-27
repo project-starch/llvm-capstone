@@ -118,26 +118,19 @@ Source: `history/21-07-2026_16-12-13_RESULTS-fpga-borrow-cost-cycle-accurate.md`
 
 ---
 
-> ## ⚠ READ FIRST (2026-07-28): the cycle ratios below are UNDER-STATED
+> ## ✅ RESOLVED 2026-07-28 — measure against the BARE-METAL baseline
 >
-> A controlled probe (`ctrsanity`, issue **I-2**) shows the **Linux baseline runs identical
-> work ~1.21x slower than a domain** — 6.00 vs 7.25 cycles for the same 5-instruction
-> register-only loop, verified instruction-for-instruction in the disassembly. Cause: timer
-> interrupts inside the measurement bracket (the baseline's excess scales 3.92x for 4x the
-> work, at 14 cycles per excess instruction). It inflates the **denominator**, so every
-> affected row **understates capability overhead** — the error runs in our favour.
+> The Linux baseline was serving timer interrupts inside the bracket (**I-2**). It is
+> replaced by an S-mode OpenSBI payload with **no OS**. Proof it works: the `ctrsanity`
+> control, whose clean value is known independently from the domain side, now reads
+> **600,041 cyc bare vs 600,309 cyc capability — ratio 1.000** (was 728,727, i.e. 1.21x).
+> Quality: **15/15 passes tied at min instret, spread 0** on nearly every rung.
 >
-> **Do not publish a cycle ratio without per-row triage, and do not apply a blanket 1.214x
-> correction either.** Short kernels may be interrupt-free: `beebs_bs` (1,912 cyc baseline)
-> and `beebs_recursion` both retired byte-identical instret across passes and are probably
-> clean. But byte-identical instret is **necessary, not sufficient** — `beebs_cnt` passed that
-> test and still shows an impossible 0.684x.
->
-> **The instruction ratios are far less affected (0.982 vs 0.824) and the paper's central
-> claim — the cost is the ABI, not the enforcement — is an instruction-count argument.
-> Lead with instructions.**
+> **Every overhead ratio rose. Use the table below; the old numbers are withdrawn.**
+> Build: `build-ladder-base-bare.sh`; run: `fpga_driver/run_base_bare_fpga.py`.
+> Trail: `history/28-07-2026_02-30-00_RESULTS-bare-metal-baseline-works-*.md`.
 
-## 2. Pervasive spatial safety — ONE clean row (`beebs_bs` 1.274x); the 3.2/5.0/80 headline is WITHDRAWN
+## 2. Pervasive spatial safety costs 26 %–96 % in cycles (bare-metal baseline)
 
 The draft claims spatial safety is pervasive ("every pointer is a bounded
 capability, always on"), demonstrates it is **correct**, and never prices it.
@@ -162,21 +155,26 @@ halves bracket the compute only, so domain entry/exit is excluded from both.
 The `capability` and `baseline` columns are **cycles**. The two bold columns are the
 overhead ratios (capability ÷ baseline) for cycles and for instructions respectively.
 
-> ### 2026-07-28: THIS TABLE IS WITHDRAWN except for `beebs_bs`
-> Measuring each baseline 16× and keeping the least-disturbed pass changed it materially.
-> **`beebs_prime` 1.032× is wrong** — its baseline was carrying ~1,900 interrupt-handler
-> instructions; min-of-16 gives 29,775 cyc (−33 %) and the ratio becomes **≥1.605×**, still
-> uncertified at 5/15 ties. The **"3.2 % scalar / 5.0 % array / 80 % recursive" headline is
-> withdrawn** — its cheapest, most quotable component was the most contaminated.
-> Trail: `history/28-07-2026_01-30-00_RESULTS-min-of-16-fixes-short-rungs-and-beebs_prime-is-not-1.032x.md`.
+### Measured against the bare-metal baseline (2026-07-28)
 
-| benchmark | opt | capability (cyc) | baseline (cyc) | **cycles** | **instructions** | status |
-|---|---|---:|---:|---:|---:|---|
-| `beebs_bs` (binary search, read-only table) | −O1 | 2,258 | **1,772** | **1.274×** | **1.058×** | ✅ **CLEAN — 15/15 passes tied at min instret, 45-cyc spread. The only defensible row.** |
-| `beebs_prime` (pure scalar) | −O0 | 47,780 | 29,775 | ≥1.605× | — [†] | ⚠ was 1.032×; 5/15 ties, true value likely higher |
-| `beebs_cnt` (matrix seed + sum) | −O1 | 128,178 | 110,013 | 1.165× | 1.277× | ⚠ was an impossible 0.773×; 1/15 ties |
-| `rv8_primes` (sieve, 16.5M cyc) | −O0 | 17,283,292 | 16,389,191 | 1.055× | 1.103× | ❌ **uncorrected** — too long for a clean pass; carries the full ~1.21× penalty |
-| `beebs_recursion` (deep + mutual recursion) | −O1 | 18,957 | 10,523 | 1.801× | 1.458× | ⚠ not re-measured with min-of-16 |
+| benchmark | opt | capability (cyc) | baseline (cyc) | **cycles** | **instructions** |
+|---|---|---:|---:|---:|---:|
+| `rv8_primes` (sieve, 16.5M cyc) | −O0 | 17,283,292 | 13,679,903 | **1.263×** | **1.130×** |
+| `beebs_cnt` (matrix seed + sum) | −O1 | 128,178 | 94,731 | **1.353×** | **1.319×** |
+| `beebs_bs` (binary search) | −O1 | 2,258 | 1,476 | **1.530×** | **1.058×** |
+| `beebs_prime` (pure scalar) | −O0 | 47,780 | 28,385 | **1.683×** | — [†] |
+| `beebs_recursion` (deep + mutual) | −O1 | 18,957 | 9,696 | **1.955×** | **1.458×** [‡] |
+| `ctrsanity` (**control**, identical code both sides) | −O1 | 600,309 | 600,041 | **1.000×** | **1.000×** |
+
+**Pervasive spatial safety costs 26 %–96 % in cycles**, not the 3–5 % previously
+reported. The old figures (`beebs_prime` 1.032x, `rv8_primes` 1.050x, and the
+"3.2 % scalar / 5.0 % array / 80 % recursive" headline) are **WITHDRAWN** — they were
+measured against an interrupt-contaminated denominator.
+
+[†] `beebs_prime` has no capability instret: instrumenting its `domain_main` changes the
+value it computes (a separate, unexplained silicon effect).
+[‡] `beebs_recursion`'s capability instret is back-computed from the old published ratio;
+re-measure it directly before citing.
 
 **`beebs_bs` added 2026-07-27 — four rows now.** Capability CPI rises 2.31 → 2.58; same
 *more instructions, ABI not enforcement* shape as the sieve. The capability binary
@@ -237,32 +235,30 @@ Sources: `history/26-07-2026_14-46-43_RESULTS-silicon-spatial-safety-overhead-ba
 
 ---
 
-## 3. "That overhead is ABI, not hardware" — CLAIM SUSPENDED (2026-07-28), it may invert
+## 3. "That overhead is ABI, not hardware" — REFUTED (2026-07-28): CPI RISES
 
-> ### ⚠ SUSPENDED 2026-07-28 — this section's conclusion may be BACKWARDS
+> ### ❌ REFUTED 2026-07-28 — measured, not estimated
 >
-> The claim below rests on `rv8_primes` retiring **+10.2 % instructions** for only **+5.6 %
-> cycles**, CPI *falling* 2.07 -> 1.98 — read as "bounds enforcement is near-free per
-> instruction; the cost is the ABI". That depends on the baseline being sound, and it is not:
-> the baseline is a Linux process paying timer interrupts inside the bracket (issue **I-2**),
-> and interrupts cost ~**14 cycles per instruction** against real code's ~2, so they inflate
-> the baseline's CPI specifically.
+> The claim rested on `rv8_primes` retiring **more instructions than it cost cycles**,
+> CPI *falling* 2.07 -> 1.98, read as "bounds enforcement is near-free per instruction;
+> the cost is the ABI". Against the bare-metal baseline it **reverses**:
 >
-> Removing the measured interrupt load (calibrated from `ctrsanity`) flips it:
->
-> | | cycles | instr | CPI |
+> | | cycles | instructions | CPI |
 > |---|---:|---:|---:|
-> | capability | 17,283,292 | 8,773,753 | 1.97 |
-> | baseline **as measured** | 16,389,191 | 7,955,129 | 2.06 |
-> | baseline **est. clean** | ~13,501,000 | ~7,749,000 | **1.74** |
+> | baseline (bare) | 13,679,903 | 7,764,899 | **1.762** |
+> | capability | 17,283,292 | 8,773,753 | **1.970** |
+> | ratio | **1.263x** | **1.130x** | CPI **RISES** |
 >
-> As measured: cycles **1.055x**, instructions **1.103x** -> CPI **falls**.
-> Estimated clean: cycles **1.280x**, instructions **1.132x** -> CPI **RISES**.
+> Cycles grow **faster** than instructions. The old "CPI falls" was an artifact of
+> interrupts inflating the *baseline's* CPI — interrupt handling runs at ~14 cycles per
+> instruction against real code's ~1.8, i.e. it inflated exactly the quantity the
+> argument turned on. (The pre-registered estimate said baseline CPI ~1.742; measured
+> 1.762.)
 >
-> Cycles may therefore grow *faster* than instructions — the opposite conclusion.
-> **Do not cite this section.** `rv8_primes` is 16.5 M cycles, far too long for min-of-16 to
-> find a clean pass (1/15 ties), so only a **bare-metal baseline** can settle it. The estimate
-> above is a calibration-based inference, NOT a measurement, and must not be published as one.
+> **Do not claim capability enforcement is free per instruction.** On every rung with
+> both counters, cycles grow faster than instruction count. Some of the cost is the ABI's
+> extra instructions, but it is NOT the whole story and this section must be rewritten
+> rather than re-cited.
 
 ### The question this answers
 

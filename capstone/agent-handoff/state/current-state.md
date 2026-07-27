@@ -2,26 +2,45 @@
 
 Minimal snapshot. Read first in every session.
 
-## Latest (2026-07-28) — silicon status: ONE defensible overhead row
+## Latest (2026-07-28) — bare-metal baseline works; ALL overheads revised UP
 
-**Paper-facing source of truth is `ref/fpga-silicon-measurements-for-paper.md`; open issues
-are `ref/ISSUES.md`. This section is the short state; dated `history/` notes are the trail.**
+**Read `history/28-07-2026_02-30-00_RESULTS-bare-metal-baseline-works-*` before any
+paper-facing work.** Paper-facing source of truth:
+`ref/fpga-silicon-measurements-for-paper.md`; open issues: `ref/ISSUES.md`.
 
-### ⚠ The old 3-row table is WITHDRAWN
+### I-2 is FIXED by removing the OS from the baseline
 
-`beebs_prime` 1.032x, `rv8_primes` 1.050x and the headline **"3.2 % scalar / 5.0 % array /
-80 % recursive" must not be quoted.** Their baselines were contaminated by timer interrupts
-serviced inside the measurement bracket (issue **I-2**). Every correction so far has run the
-same way: **our overheads are larger than we claimed.**
+The baseline now runs bare-metal as an S-mode OpenSBI payload. Proof: the `ctrsanity`
+control (identical 5-instruction loop both sides) reads **600,041 cyc bare vs 600,309
+capability — ratio 1.000**, where Linux gave 728,727 (1.21x). Quality went from 1/15
+passes tied at min instret to **15/15, spread 0**.
 
-### What IS quotable
+### The table — every number rose
 
-| rung | opt | capability | baseline | **cycles** | **instr** |
-|---|---|---:|---:|---:|---:|
-| `beebs_bs` (binary search) | −O1 | 2,258 cyc / 875 instr | 1,772 / 827 | **1.274x** | **1.058x** |
+| rung | opt | **cycles** | was | **instr** |
+|---|---|---:|---:|---:|
+| `rv8_primes` | −O0 | **1.263x** | 1.050 | 1.130x |
+| `beebs_cnt` | −O1 | **1.353x** | 1.165 | 1.319x |
+| `beebs_bs` | −O1 | **1.530x** | 1.274 | 1.058x |
+| `beebs_prime` | −O0 | **1.683x** | 1.032 | — |
+| `beebs_recursion` | −O1 | **1.955x** | 1.801 | 1.458x |
+| `ctrsanity` (control) | −O1 | 1.000x | — | 1.000x |
 
-Certified by an explicit criterion: **15 of 15** repeated baseline passes tied at minimum
-retired instructions, **45-cycle** spread. Nothing else in the ladder has shown that.
+**Pervasive spatial safety costs 26–96 % in cycles, not 3–5 %.**
+
+### §3 "overhead is ABI, not hardware" is REFUTED
+
+`rv8_primes` cycles grow **1.263x** against instructions **1.130x**; CPI **RISES**
+1.762 → 1.970. The old "CPI falls" was interrupts inflating the baseline's CPI (~14
+cyc/instr vs real code's ~1.8). **Do not claim enforcement is free per instruction.**
+
+### Paper is now STALE and needs approval to update
+
+`tab:spatialcost` still shows `beebs_bs` 1.274x (should be **1.530x**) and the prose
+still says 27 % cycles / 5.8 % instructions. The "ABI not enforcement" paragraph was
+already removed, which turned out to be right. **Per CLAUDE.md, ask before editing.**
+
+### Superseded — the min-of-16 era (2026-07-28, earlier)
 
 ### BOARD RESULTS 2026-07-28 — ONE defensible row; the 3.2/5.0/80 headline is WITHDRAWN
 

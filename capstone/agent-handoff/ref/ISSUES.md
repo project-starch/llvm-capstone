@@ -215,43 +215,27 @@ on a *pre-build* and omitting it from the *sweep* means the runner rebuilds ever
   boundary moving under an optimization flag.
 - **Evidence:** `history/27-07-2026_22-40-00_RESULTS-two-new-silicon-rungs-and-an-O-level-procedure-bug.md`
 
-### I-2 — The Linux baseline is ~1.21x slow on identical work `CONFIRMED`
-**Every published cycle ratio understates capability overhead.** Proven 2026-07-28 with a probe
-whose measured region is a 5-instruction register-only loop -- no loads, stores, pointers or
-globals -- verified in the disassembly to emit the identical `srai/xor/addi/add/bne` on both
-targets.
+### I-2 — Linux baseline served interrupts inside the bracket `FIXED`
+**Fixed 2026-07-28 by removing the OS**, not by modelling the error. The baseline now runs
+as a bare-metal S-mode OpenSBI payload (`build-ladder-base-bare.sh`,
+`fpga_driver/run_base_bare_fpga.py`).
 
-| probe | cap cyc | base cyc | **cyc ratio** | ins ratio | cap CPI | base CPI |
-|---|---:|---:|---:|---:|---:|---:|
-| `ctrsanity` (100k) | 600,309 | 728,727 | **0.824** | 0.982 | 1.201 | 1.431 |
-| `ctrsanity4` (400k) | 2,400,310 | 2,884,826 | **0.832** | 0.982 | 1.200 | 1.417 |
-
-Cycles per iteration: domain **6.003 / 6.001** (metronomic), baseline 7.287 / 7.212.
-
-- **Cause: timer interrupts inside the bracket.** The baseline's excess scales **3.92x** in
-  instructions and **3.77x** in cycles for **4x** the work -- proportional to elapsed time, which
-  is what a periodic interrupt looks like and a fixed entry cost does not -- at **14 cycles per
-  excess instruction**, far above this core's 1.2-1.4 CPI, as expected for interrupt entry/exit
-  plus cache disruption.
-- **Direction matters: it inflates the DENOMINATOR, so it flatters us.** Our overheads are too
-  low, not too high.
-- **Do NOT apply a blanket 1.214x correction.** Short kernels may take no interrupts at all --
-  `beebs_bs`'s baseline is 1,912 cyc (~40 us) with byte-identical instret across passes
-  (827/827), as has `beebs_recursion` (2,019/2,019); those rows are probably clean.
-- **The "certified clean" test is necessary but NOT sufficient.** `beebs_cnt`'s passes were
-  byte-identical (67,140/67,140) and its ratio is still an impossible **0.684x** -- two passes can
-  take the *same* number of interrupts and both be contaminated. Identical instret proves
-  reproducibility, not absence. `cnt`'s implied factor (1.46x) exceeds this probe's 1.214x, so
-  **`cnt` is still not fully explained**.
-- **Repro:** `tests/runtime-qemu/silicon-ladder/ctrsanity{,4}_kernel.h` -- both halves registered;
-  `-O1`.
-- **Evidence:** `history/28-07-2026_00-10-00_RESULTS-I-2-confirmed-the-linux-baseline-is-1.21x-slow-so-our-overheads-are-understated.md`
-- **Fix, ranked:** (1) run the baseline **bare-metal**, removing the confound instead of
-  modelling it -- real work, the baseline kernels currently link into a Linux userspace binary;
-  (2) **lead with instruction ratios**, far less contaminated (0.982 vs 0.824) and the paper's
-  central *ABI-not-enforcement* claim is instruction-based anyway; (3) per-row triage before
-  publishing any cycle ratio.
-- **Impact:** blocks the 4-row cycle table as it stands. Instruction ratios unaffected.
+- **Proof:** the `ctrsanity` control -- identical 5-instruction loop on both sides -- reads
+  **600,041 cyc bare vs 600,309 cyc capability, ratio 1.000** (Linux was 728,727, 1.21x).
+  Quality went from 1/15 passes tied at min instret to **15/15 with spread 0**.
+- **Consequence: every published overhead ratio rose.** `beebs_prime` 1.032x -> **1.683x**,
+  `rv8_primes` 1.050x -> **1.263x**, `beebs_recursion` 1.801x -> **1.955x**,
+  `beebs_bs` 1.274x -> **1.530x**. Pervasive spatial safety costs **26-96 %**, not 3-5 %.
+- **And it refuted a second claim:** with a clean baseline, `rv8_primes` cycles grow
+  (1.263x) FASTER than instructions (1.130x) and CPI RISES 1.762 -> 1.970, inverting the
+  "overhead is ABI, not enforcement" section.
+- **Side benefit:** firmware 15.4 MB -> 2.1 MB, so the JTAG reload that dominates every
+  boot is much faster.
+- **Bring-up trail (3 silent board sessions):** legacy SBI console absent; DBCN impossible
+  (board reports SBI 1.0, DBCN needs 2.0) and the probe read `a0` instead of `a1` anyway;
+  fixed by direct ns16550a MMIO with parameters taken from the firmware's **device tree**
+  (`/soc/uart@10000000`, `reg-shift=2`). **The FDT had the answer on disk the whole time.**
+- **Evidence:** `history/28-07-2026_02-30-00_RESULTS-bare-metal-baseline-works-*.md`
 
 ---
 
