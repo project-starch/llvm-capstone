@@ -16,6 +16,26 @@ GPFREE_DIR="$SCRIPT_DIR/../gp-free-domain"
 GENERIC_GLUE="$SCRIPT_DIR/start-gp-captable-generic.S"
 GCT_TAIL="$SCRIPT_DIR/../gct-section-end.S"
 LINKER_SCRIPT=${LINKER_SCRIPT:-"$GPFREE_DIR/link-gpfree.ld"}
+# DOMAIN_BASE_VA relocates the domain's entry VA (default 0x10000).
+#
+# Purpose: test whether issue R-3 is really about the entry ADDRESS. R-3 says a
+# second domain reused at entry VA 0x10000 within one boot silently hangs its
+# cscall -- read as a missing icache invalidate on domain switch. If that is
+# address-keyed, two domains at DIFFERENT VAs should coexist in one boot, which
+# would remove the full power-cycle + JTAG reload we currently pay per rung
+# (~2.5 min, the dominant cost of every sweep). Nobody has tested it.
+#
+# Substituted into a temp copy of the script rather than passed via --defsym:
+# ld.lld resolves --defsym after the script is evaluated, so DEFINED() inside
+# SECTIONS would not see it and the base would silently stay 0x10000 -- exactly
+# the kind of silent wrong-config that cost us a sweep on 2026-07-27.
+DOMAIN_BASE_VA=${DOMAIN_BASE_VA:-}
+if [[ -n "$DOMAIN_BASE_VA" && "$DOMAIN_BASE_VA" != "0x10000" ]]; then
+  _relocated=$(mktemp "${TMPDIR:-/tmp}/link-gpfree-XXXXXX.ld")
+  sed "s/0x10000/$DOMAIN_BASE_VA/g" "$LINKER_SCRIPT" > "$_relocated"
+  LINKER_SCRIPT=$_relocated
+  echo "  relocated domain base VA -> $DOMAIN_BASE_VA"
+fi
 DOMAIN_OPT_LEVEL=${DOMAIN_OPT_LEVEL:--O0}
 # Extra -D/-f flags for one build (e.g. -DLADDER_NO_MINSTRET for the
 # un-instrumented control variant). Word-split on purpose.

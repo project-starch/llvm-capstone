@@ -36,6 +36,7 @@ echo "Built $OUT_DIR/ladder_perf_ctl"
 
 # 2. Per-rung perf domain + native oracle.
 : > "$OUT_DIR/optlevels.txt"
+VA_SLOT=0
 for R in "${RUNGS[@]}"; do
   APP="$LAD/${R}_fpga_app.c"
   HOST="$LAD/${R}_host.c"
@@ -48,7 +49,20 @@ for R in "${RUNGS[@]}"; do
   # trigger (26-07 bisect), optimisation level is a candidate workaround.
   OPT=${LADDER_OPT:--O0}
   [[ -z "${LADDER_OPT:-}" && "$R" == coremark_matrix ]] && OPT=-Os
-  DOMAIN_OPT_LEVEL=$OPT bash "$LAD/build-ladder-domain.sh" "$APP" "$OUT_DIR/${R}.dom"
+  # LADDER_DISTINCT_VA=1 links each rung at its own entry VA (0x10000, 0x20000,
+  # ...), which is what makes LADDER_ONE_BOOT=1 usable for a whole sweep. R-3 --
+  # a second domain within one boot hangs -- was proven ADDRESS-KEYED on
+  # 2026-07-28: two domains at different VAs run correctly back to back, and a
+  # control measuring each rung in BOTH boot positions found no difference
+  # (beebs_prime 9,746 vs 9,749 cyc, beebs_bs 2,246/2,258 vs 2,263, instret
+  # byte-identical). 64 KiB of spacing against ~10 KiB domains.
+  RUNG_VA=""
+  if [[ "${LADDER_DISTINCT_VA:-0}" == "1" ]]; then
+    printf -v RUNG_VA '0x%x' $(( 0x10000 + VA_SLOT * 0x10000 ))
+    VA_SLOT=$((VA_SLOT + 1))
+  fi
+  DOMAIN_OPT_LEVEL=$OPT DOMAIN_BASE_VA=$RUNG_VA \
+    bash "$LAD/build-ladder-domain.sh" "$APP" "$OUT_DIR/${R}.dom"
   # Record the level actually used. The capability and baseline halves MUST be
   # built at the same -O or the ratio measures optimisation, not capabilities --
   # and on 2026-07-27 they silently were not, because run_ladder_perf_fpga.py

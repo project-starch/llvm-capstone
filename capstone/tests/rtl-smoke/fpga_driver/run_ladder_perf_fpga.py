@@ -51,6 +51,7 @@ BITSTREAM = "working-caplifive-captype-fixed.bit"
 ART = pathlib.Path(os.environ.get("LADDER_FPGA_DIR") or
                    os.path.join(os.environ.get("CAPSTONE_TMP_ROOT", "/tmp/capstone"),
                                 "ladder-fpga"))
+ONE_BOOT = os.environ.get("LADDER_ONE_BOOT") == "1"
 RUNGS = (os.environ.get("LADDER_RUNGS") or
          "matmult_int coremark_matrix rv8_primes beebs_crc32 "
          "beebs_insertsort beebs_prime beebs_recursion").split()
@@ -297,6 +298,7 @@ def main():
 
         ctl_gz = gzip_file(ctl)
         ctl_sha = sha16(ctl)
+        booted_once = [False]
         # One rung per FULL power-cycle + reload: each domain runs as the first of
         # a clean boot, sidestepping the multi-domain same-VA icache hang. ~2.5 min
         # per rung (the JTAG reload dominates); the domains themselves are tiny.
@@ -313,8 +315,21 @@ def main():
             dom_sha = sha16(dom)
             for boot_attempt in range(1, 4):
                 try:
-                    log(f"[{r}] power-cycle + reload firmware (attempt {boot_attempt})")
-                    cold_boot(console, prompt)
+                    # LADDER_ONE_BOOT=1: boot ONCE for the whole sweep instead of
+                    # power-cycling per rung. Only valid when the rungs are linked
+                    # at DISTINCT entry VAs (DOMAIN_BASE_VA), because R-3 hangs a
+                    # second domain reused at the SAME VA within one boot. The
+                    # power-cycle is ~2.5 min and dominates every sweep, so this is
+                    # the single biggest throughput lever available -- but it is
+                    # opt-in, because if R-3 turns out not to be address-keyed the
+                    # failure mode is a silent hang that looks like a rung result.
+                    if ONE_BOOT and booted_once[0]:
+                        log(f"[{r}] reusing the existing boot (LADDER_ONE_BOOT=1)")
+                    else:
+                        log(f"[{r}] power-cycle + reload firmware "
+                            f"(attempt {boot_attempt})")
+                        cold_boot(console, prompt)
+                        booted_once[0] = True
                     fast_put(console, ctl_gz, "/tmp/lpc.gz", CTL_REMOTE, ctl_sha, True, log)
                     fast_put(console, dom_gz, f"/tmp/{r}.gz", dom_remote,
                              dom_sha, False, log)

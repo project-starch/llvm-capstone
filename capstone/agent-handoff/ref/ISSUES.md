@@ -145,14 +145,35 @@ that never occurs here, so R-1 predicts PASS. **The board hangs it.**
   claim it is understood. The honest status is: janne's algorithm works, one particular build of
   it does not, and the discriminator is not algorithmic.
 
-### R-3 — Second domain at the same entry VA hangs within one boot `OPEN`
-A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` — missing
-icache invalidate on the domain switch. Forces **one full power-cycle + firmware reload per rung**
-(~2.5 min), which is the dominant board-time cost.
+### R-3 — Second domain at the same entry VA hangs within one boot `WORKED AROUND`
+A domain reused at entry VA `0x10000` within a single boot silently hangs its `cscall` —
+a missing icache invalidate on the domain switch. This forced **one full power-cycle +
+JTAG firmware reload per rung** (~2.5 min), the dominant cost of every board sweep.
 
-- **Evidence:** `ref/HOW-TO-LAUNCH-ON-FPGA.md`; fix sketch `plans/curried-crunching-gizmo.md`
-- **Note:** the domain-boundary `fence.i` was long suspected to be the fix for R-1 as well; board
-  test #63 disproved that. It remains the right fix for **this** issue only.
+- **RESOLVED IN PRACTICE 2026-07-28: the fault is ADDRESS-KEYED.** Domains linked at
+  *different* entry VAs run back to back in one boot. `beebs_bs` @`0x10000` then
+  `beebs_prime` @`0x20000`, no power-cycle between them, both returned their oracles.
+  Nobody had tested this; the per-rung power-cycle was an assumption, not a measurement.
+- **Validated as measurement-safe, not merely correct.** The obvious risk was that a
+  second domain runs with an icache warmed by the first, so cycle counts would not be
+  comparable to the published first-domain numbers. A reversed-order control says no:
+
+  | rung | as 1st domain | as 2nd domain | spread |
+  |---|---:|---:|---|
+  | `beebs_bs` | 2,258 / 2,246 | 2,263 | 0.75 % |
+  | `beebs_prime` (−O1) | 9,746 | 9,749 | **0.03 %** |
+
+  `instret` was byte-identical in both positions (875, 2,708).
+- **How to use it:** `LADDER_DISTINCT_VA=1` on the build (assigns `0x10000`, `0x20000`, …
+  64 KiB apart) **and** `LADDER_ONE_BOOT=1` on the runner. Both are opt-in: if the
+  address-keying assumption ever fails the symptom is a silent hang that looks like a
+  rung result, so this must not become a default without a control rung in the sweep.
+- **Impact:** a 13-rung sweep goes from ~13 boots (~35 min) to **1** (~5 min).
+- **Not a root fix.** The monitor still lacks the icache invalidate on domain switch, so
+  same-VA reuse still hangs. Sidestepped, not repaired — the fix sketch remains in
+  `plans/curried-crunching-gizmo.md`.
+- **Mechanism note:** the domain-boundary `fence.i` was long suspected to fix R-1 as well;
+  board test #63 disproved that. It remains the right fix for **this** issue only.
 
 ### R-4 — A shared-region word is silently corrupted `OPEN`
 `rv8_primes` returned the *correct* result while a word of its shared region held a stray DRAM
