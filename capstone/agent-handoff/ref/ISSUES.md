@@ -289,6 +289,20 @@ regress.
   reaching a load. Both smell like a bounds/provenance codegen bug at −O1+.
 
 ### C-4 — Large read-only data cannot be delivered into a domain `OPEN`
+**Now has a first-class reproducer (2026-07-28): `rv8_sha512`.** It is the rung that would
+have added the ladder's missing crypto/bitwise profile, and C-4 is the only thing stopping
+it. Two distinct symptoms depending on how much initialized read-only data is present:
+- **640 B table** (`sha512_k[80]`): fails at **domain creation** — QEMU asserts in
+  `helper_cssplit` (`rs1_v->tag && !rs2_v->tag`); loadable size 5088.
+- **128 B table**: domain creates, then a global access **faults OOB** — cursor
+  `0x101561000` against delivered bounds `(0x10157ffd0, 0x101580000)`, i.e. the capability
+  covers a region the global is not in.
+- **Also note:** the table must have **external linkage**. As `static const` it fails to
+  link (`undefined symbol: sha512_k`) because the cap-table glue is a separate TU — this
+  is the "needs a linkable, non-`.L` symbol" clause, now confirmed by construction.
+- **Repro:** `tests/runtime-qemu/silicon-ladder/rv8_sha512_kernel.h` (+ `_app.c`,
+  `_fpga_app.c`, `_host.c`), oracle **1390718314**; entry commented out in
+  `ladder-rungs.spec`, uncomment when fixed.
 The cap-table glue cannot deliver a global that is both large and a **private** (`.L`) constant:
 too big for the unrolled 12-bit store path, and the large-RO copy path needs a *linkable* symbol
 to `lla` from the glue's separate TU.

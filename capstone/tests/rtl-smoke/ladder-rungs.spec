@@ -53,3 +53,13 @@ beebs_cnt:beebs_cnt_kernel.h:cnt_compute:-O1
 beebs_duff:beebs_duff_kernel.h:duff_compute:-O1
 ctrsanity:ctrsanity_kernel.h:cs_compute:-O1
 ctrsanity4:ctrsanity4_kernel.h:cs_compute:-O1
+# Crypto/bitwise profile, added 2026-07-28. The rest of the RV8 set is blocked by
+# known issues, not by this measurement: aes ~8 KB of tables (C-4/C-5), dhrystone 684
+# lines (C-5), qsort sorts in place (R-1), miniz mixed-extend i128 logic (C-2).
+# rv8_sha512: BLOCKED by C-4 (large-RO delivery), kept as that issue's reproducer.
+#   80-entry K table (640 B): fails at domain CREATION, QEMU asserts in helper_cssplit
+#     (`rs1_v->tag && !rs2_v->tag`), loadable size 5088.
+#   16-entry K table (128 B): domain creates, then a global access faults OOB --
+#     cursor 0x101561000 against bounds (0x10157ffd0, 0x101580000).
+#   Uncomment once C-4 is fixed; the kernel and oracle (1390718314) are ready.
+# rv8_sha512:rv8_sha512_kernel.h:sha512_compute:-O1
