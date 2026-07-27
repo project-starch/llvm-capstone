@@ -103,6 +103,7 @@ See `state/current-state.md` for the canonical snapshot.
 
 Use these only when the task actually needs them:
 
+- **`ref/ISSUES.md` — the open-issues registry (RTL/FPGA + compiler), each with a runnable repro. Read before re-investigating anything; update whenever an issue is found, characterised or closed.**
 - `ref/testing-matrix.md` — compact map of test layers and entry points
 - `ref/capstone-agent-test-instructions.md` — practical command cookbook
 - `ref/capstone-coding-conventions.md` — local coding conventions

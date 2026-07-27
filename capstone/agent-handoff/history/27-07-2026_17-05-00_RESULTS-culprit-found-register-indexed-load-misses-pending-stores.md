@@ -71,6 +71,41 @@ pointer walk does, and what any optimiser would naturally produce — the fault 
 strength-reduction mitigation is dead too: there is no way to express a dynamic array index whose
 base is a compile-time constant, which means **no general software workaround exists**.
 
+## REFINED by reading the emitted code (2026-07-27, board-free)
+
+The disassembly makes the discriminator sharper than "register-addressed". The rung loads the
+array capability once (`ldc a1, 0(gp)`) and then derives a second one:
+
+```
+cincoffset a4, a1, a4      ; a4 = a1 + j*4 -- a SECOND capability into the SAME object
+lw   a5, -4(a4)            ; condition load  rh_a[j-1]  via a4
+lw/sw a7, 8(a1)            ; the other store rh_a[2]    via a1
+lw   t0, -4(a4)            ; reload          rh_a[j-1]  via a4   <-- STALE
+```
+
+The **passing** probe B uses `0(a1)` and `8(a1)` — a single capability register with constant
+offsets. Every **failing** probe uses two capability registers (`a1` and `a4`) derived from the
+same object, with the load through one and the intervening store through the other.
+
+> **Sharper statement: an intervening store through one capability register causes a subsequent
+> load through a *different* capability register to miss an earlier store through its own
+> register — even though the two addresses are distinct and both capabilities are in-bounds
+> derivations of the same object.**
+
+This also explains v7 (a pointer walk creates exactly such a second capability register) and v6 W4
+(cache-line separation does not help because the register pair is unchanged).
+
+**The emitted code is ISA-legal.** Deriving a second capability with `cincoffset` and accessing
+through both is ordinary PureCap; both are in-bounds; the addresses do not overlap. A load
+missing a prior store to its own address on the same hart is a memory-consistency violation that
+software cannot cause.
+
+**Confidence, stated honestly: high, not certain.** The residual doubt is not about the C or the
+codegen — it is whether our *non-standard gp-captable ABI* provokes this in a way another ABI
+would not (e.g. something about cap-table-derived capabilities sharing provenance metadata). That
+is still a hardware limitation from where we sit, but it might be avoidable by a different ABI,
+and it is the right question to put to the board owner rather than to assert.
+
 ## Why this explains the whole 3-pass / 4-fail split
 
 For the first time, one mechanism accounts for every rung without special pleading:
