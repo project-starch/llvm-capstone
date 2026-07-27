@@ -127,6 +127,8 @@ unsigned base_beebs_crc32(void);
 unsigned base_beebs_insertsort(void);
 unsigned base_beebs_prime(void);
 unsigned base_beebs_recursion(void);
+unsigned base_beebs_bs(void);
+unsigned base_beebs_janne(void);
 
 struct rung { const char *name; unsigned (*fn)(void); };
 static const struct rung RUNGS[] = {
@@ -138,6 +140,8 @@ static const struct rung RUNGS[] = {
   { "beebs_insertsort", base_beebs_insertsort },
   { "beebs_prime",      base_beebs_prime      },
   { "beebs_recursion",  base_beebs_recursion  },
+  { "beebs_bs",         base_beebs_bs         },
+  { "beebs_janne",      base_beebs_janne      },
 };
 #define NRUNGS ((int)(sizeof RUNGS / sizeof RUNGS[0]))
 
