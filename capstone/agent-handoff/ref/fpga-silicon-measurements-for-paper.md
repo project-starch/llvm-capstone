@@ -9,7 +9,7 @@ Vehicle throughout: Genesys 2 CVA6, bitstream `working-caplifive-captype-fixed.b
 `mcycle`/`minstret` read in-domain (the unprivileged counters are gated for the
 domain). Single core.
 
-Last updated 2026-07-26.
+Last updated 2026-07-27.
 
 **Benchmark scope is capped by a 4 KiB code window — but the cap is liftable.**
 `link-gpfree.ld` forces globals to image offset `0x1000`, so every domain's `.text`
@@ -186,6 +186,24 @@ An assumption in the paper becomes a measurement, and the claim gets stronger.
   the dimension loop `while (j < blksize) { j = i*i*2*4; }` (`bgeu` `0x10428` / `mulw`
   `0x10444`), and the N×N seeding loop doing `seed = ((order*seed) % 65536)` per element
   through the gp-delivered block cap. Not yet separated.
+  **RESOLVED for coremark_matrix's FIRST fault (2026-07-27, board #67a-#67f): a `delin`
+  executed in domain code wedges the RTL.** Bisected one instruction at a time, every build
+  QEMU-correct through the identical controller: while-loop only RETURNS 9; **+ one `delin`
+  HANGS**; the same image with `addi x0,x0,0` in the `delin`'s place (same position, same 4
+  bytes, same register plumbing) **RETURNS 9**. Layout is controlled out -- mandatory, since
+  4 added instructions previously flipped a passing rung. It is NOT "delin is unimplemented":
+  the glue delins several caps in every domain and passing rungs work. The operand differs --
+  the glue delins a cap *fresh from `split`*, domain code delins one *`ldc`-loaded from the
+  cap-table*, which the glue already delin'd before `stc`, so on a type-preserving machine it
+  is NONLIN->NONLIN -- exactly the case our QEMU fork was patched (`f4d416c265`) to treat as
+  idempotent "rather than faulting". Caveat: instrumented QEMU reports that operand as LIN, so
+  QEMU and the glue disagree about capability type after `stc`->`ldc`; which side is right is
+  a board-owner question. **Removing the delin is safe but insufficient** -- the derivation it
+  guarded works without it and QEMU still yields 14343, but the full rung still hangs, so there
+  are **>=2 independent faults**; fault 2 lies in the seeding loop or later. `matmult_int`
+  contains **no delin at all**, so this does not explain it. A minimal two-instruction silicon
+  repro now exists. Trail:
+  `history/27-07-2026_04-33-58_RESULTS-delin-wedges-the-RTL-controlled-and-second-fault-isolated.md`.
   Also corrected there: the "no discriminating instruction" sweep had been run with the
   Capstone-triple disassembler, which prints every M-extension op as `<unknown>`; re-run
   with `--triple=riscv64 --mattr=+m` the conclusion **stands** (`beebs_prime` passes

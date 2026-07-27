@@ -205,16 +205,30 @@ static BaseIndexOffset matchLSNode(const LSBaseSDNode *N,
   int64_t Offset = 0;
   bool IsIndexSignExt = false;
 
+  // Offsets accumulate into an int64_t, so a constant wider than 64 significant
+  // bits cannot be represented here at all. Targets with capability (wider than
+  // 64-bit) pointers can reach this code with such a constant on the pointer
+  // carrier, where an unguarded getSExtValue() asserts. For every target with
+  // pointers of 64 bits or fewer this predicate is always true, so guarding on
+  // it leaves their address analysis -- and their codegen -- unchanged.
+  auto fitsInOffset = [](const ConstantSDNode *C) {
+    return C->getAPIntValue().getSignificantBits() <= 64;
+  };
+
   // pre-inc/pre-dec ops are components of EA.
   if (N->getAddressingMode() == ISD::PRE_INC) {
-    if (auto *C = dyn_cast<ConstantSDNode>(N->getOffset()))
+    if (auto *C = dyn_cast<ConstantSDNode>(N->getOffset())) {
+      if (!fitsInOffset(C))
+        return BaseIndexOffset(SDValue(), SDValue(), 0, false);
       Offset += C->getSExtValue();
-    else // If unknown, give up now.
+    } else // If unknown, give up now.
       return BaseIndexOffset(SDValue(), SDValue(), 0, false);
   } else if (N->getAddressingMode() == ISD::PRE_DEC) {
-    if (auto *C = dyn_cast<ConstantSDNode>(N->getOffset()))
+    if (auto *C = dyn_cast<ConstantSDNode>(N->getOffset())) {
+      if (!fitsInOffset(C))
+        return BaseIndexOffset(SDValue(), SDValue(), 0, false);
       Offset -= C->getSExtValue();
-    else // If unknown, give up now.
+    } else // If unknown, give up now.
       return BaseIndexOffset(SDValue(), SDValue(), 0, false);
   }
 
@@ -224,7 +238,8 @@ static BaseIndexOffset matchLSNode(const LSBaseSDNode *N,
     case ISD::OR:
       // Only consider ORs which act as adds.
       if (auto *C = dyn_cast<ConstantSDNode>(Base->getOperand(1)))
-        if (DAG.MaskedValueIsZero(Base->getOperand(0), C->getAPIntValue())) {
+        if (fitsInOffset(C) &&
+            DAG.MaskedValueIsZero(Base->getOperand(0), C->getAPIntValue())) {
           Offset += C->getSExtValue();
           Base = DAG.getTargetLoweringInfo().unwrapAddress(Base->getOperand(0));
           continue;
@@ -233,6 +248,8 @@ static BaseIndexOffset matchLSNode(const LSBaseSDNode *N,
     case ISD::ADD:
     case ISD::PTRADD:
       if (auto *C = dyn_cast<ConstantSDNode>(Base->getOperand(1))) {
+        if (!fitsInOffset(C))
+          break;
         Offset += C->getSExtValue();
         Base = DAG.getTargetLoweringInfo().unwrapAddress(Base->getOperand(0));
         continue;
@@ -244,6 +261,8 @@ static BaseIndexOffset matchLSNode(const LSBaseSDNode *N,
       unsigned int IndexResNo = (Base->getOpcode() == ISD::LOAD) ? 1 : 0;
       if (LSBase->isIndexed() && Base.getResNo() == IndexResNo)
         if (auto *C = dyn_cast<ConstantSDNode>(LSBase->getOffset())) {
+          if (!fitsInOffset(C))
+            break;
           auto Off = C->getSExtValue();
           if (LSBase->getAddressingMode() == ISD::PRE_DEC ||
               LSBase->getAddressingMode() == ISD::POST_DEC)

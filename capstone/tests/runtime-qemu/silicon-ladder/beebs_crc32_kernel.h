@@ -30,10 +30,26 @@ static UNS_32_BITS crc_32_tab[256];
 static void crc32_init_table(void) {
   unsigned n;
   int k;
+  /* The polynomial is deliberately made OPAQUE to the optimizer.
+   *
+   * At -O0 this loop runs as written. At -O1+ LLVM constant-folds the whole
+   * nest and re-materializes the result as a 2048 B *private* constant
+   * (`.L.crctable`), which defeats the entire point of generating the table at
+   * runtime (see the header comment): a large initialized read-only global then
+   * has to be delivered into the domain, and the gp cap-table glue cannot do it
+   * -- 2048 B overflows the unrolled 12-bit store-offset path, and the large-RO
+   * copy path needs a *linkable* (non-`.L`) symbol, which a private constant is
+   * not. Result: the rung failed to build at -O1 and above.
+   *
+   * One opaque register breaks the constant-folding without changing a single
+   * runtime operation, so the table stays a 1 KiB .bss array at every -O level
+   * and the emitted arithmetic is identical. */
+  UNS_32_BITS poly = 0xedb88320UL;
+  __asm__("" : "+r"(poly));
   for (n = 0; n < 256; n++) {
     UNS_32_BITS c = (UNS_32_BITS)n;
     for (k = 0; k < 8; k++)
-      c = (c & 1u) ? (0xedb88320UL ^ (c >> 1)) : (c >> 1);
+      c = (c & 1u) ? (poly ^ (c >> 1)) : (c >> 1);
     crc_32_tab[n] = c & 0xffffffffUL;
   }
 }

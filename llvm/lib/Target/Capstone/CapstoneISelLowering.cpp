@@ -9262,8 +9262,15 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
   case ISD::MULHS:
   case ISD::MULHU:
   case ISD::AND:
+    // lowerScalarI128And only handles the special case of a constant mask that
+    // fits in XLen (it can then drop the high half entirely). With two
+    // non-constant operands it bails, and because this arm used to `return`
+    // unconditionally the bail left the node unlowered -> "Cannot select:
+    // i128 = and". Fall through to the general logical lowering, which narrows
+    // both operands to XLen and re-extends -- exactly what OR/XOR already do.
     if (Op.getSimpleValueType() == MVT::i128)
-      return lowerScalarI128And(Op, DAG, Subtarget);
+      if (SDValue V = lowerScalarI128And(Op, DAG, Subtarget))
+        return V;
     [[fallthrough]];
   case ISD::OR:
   case ISD::XOR:

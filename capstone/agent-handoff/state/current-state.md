@@ -2,55 +2,243 @@
 
 Minimal snapshot. Read first in every session.
 
-## Latest (2026-07-25) — silicon-ladder perf sweep on the Genesys2 FPGA (on-board mcycle)
+## Latest (2026-07-27) — silicon status: 3 rungs measured, 2 hang, blocker still open
 
-**FINAL, verified on FRESHLY-BUILT post-fix doms (2026-07-25). The original
-sweep's array-store finding was RIGHT; my intermediate "it was all a stale build"
-retraction was WRONG and is itself retracted.**
+**Paper-facing source of truth is `ref/fpga-silicon-measurements-for-paper.md`
+(§5 is the authoritative "what is NOT established" list). This section is the
+short state; the dated `history/` notes are the trail.**
 
-| rung (fresh dom) | silicon | oracle | mcycle | verdict |
+### The perf table as it stands (these 3 are quotable)
+
+Method: each kernel built twice from the identical source header by the same
+clang at the same `-O` — once `-target capstone64` as a pure-cap domain, once
+`-target riscv64` with no capability flags — run on the same board, compute-only
+bracket, warm baseline. Static gate fails the build if a capability instruction
+reaches the baseline.
+
+| rung | opt | capability cyc | baseline cyc | **cycles** | **instr** |
+|---|---|---:|---:|---:|---:|
+| `beebs_prime` (pure scalar) | −O0 | 47,780 | 46,306 | **1.032×** | — |
+| `rv8_primes` (sieve, 16.5 M cyc) | −O0 | 17,283,292 | 16,459,057 | **1.050×** | **1.102×** |
+| `beebs_recursion` (deep + mutual recursion) | −O1 | 18,957 | 10,523 | **1.801×** | **1.458×** |
+
+**Headline: pervasive spatial safety costs 3.2 % scalar / 5.0 % array / 80 %
+recursive. The spread IS the result — report the range and the mechanism, never
+an average.** The recursion outlier is **ABI cost** (gp-free call/return + cap
+spills), not hardware.
+
+Two further results that upgrade the paper: measured **CPI 2.0–3.2** (the draft
+assumed 1, so `tab:appoverhead`'s SQLite figures roughly halve), and on
+`rv8_primes` **+10.2 % instructions but only +5.6 % cycles with a *lower* CPI** ⇒
+capability enforcement is near-free per instruction; the overhead is the
+gp-captable ABI. That is one benchmark — caveat it.
+
+### 2026-07-27 — two blocked rungs UNBLOCKED by compiler fixes (board-free)
+
+`beebs_crc32` and `beebs_insertsort` now **build at −O0/−O1/−O2 and pass the QEMU parity leg**,
+taking the ladder from **3 to 5 buildable, QEMU-correct rungs**. They are the cheapest additions
+to the perf table and the highest-value use of the next board window. Three fixes:
+
+1. **`beebs_crc32` was never a compiler bug.** The kernel generates its CRC table at runtime to
+   avoid a large initialized global; −O1+ **constant-folds the loop** and re-materialises a
+   2048 B *private* constant `.L.crctable`, which the cap-table glue cannot deliver (over the
+   12-bit unrolled path, and the large-RO copy path needs a *linkable*, non-`.L` symbol visible
+   from the glue's separate TU). Fixed by making the polynomial opaque to the optimizer — one
+   line, no runtime change. **Generalises: any hand-rolled table meant to dodge the large-RO
+   limit can be silently undone at −O1+, SQLite included.**
+2. **`beebs_insertsort` — the clang crash was hiding a real defect.** Guarding an
+   `APInt::getSExtValue()` assert in `SelectionDAGAddressAnalysis` exposed
+   `Constant:i128<0xFFFFFFFFFFFFFFFC>` — **CodeGenPrepare zero-extends a negative address
+   offset** into the pointer carrier (`AddrMode.BaseOffs` is `int64_t`, `ConstantInt::get`
+   defaults to `IsSigned=false`). Invisible on ≤64-bit-pointer targets; on a 128-bit capability
+   `−4` becomes a huge positive offset. It was producing a **wrong address**, caught only by our
+   backend's fatal guard. Latent for any wide-pointer target, CHERI included.
+3. **`i128 = and` was unlowerable** — the dispatch `return`ed the constant-mask helper
+   unconditionally, so its bail left the node unlowered instead of falling through to the general
+   path OR/XOR use.
+
+**RV8 is NOT fixed — do not quote "0/7 → 5/7".** Five RV8 benchmarks now *compile* at −O1/−O2,
+then **fail 10/10 at runtime** (3 silent hangs; `sha512`/`norx` take deterministic capability
+faults, cause 5 OOB and cause 24, same PC at both levels). −O0 controls all pass. These are not
+regressions — you cannot regress code that never compiled — they are pre-existing −O1+ codegen
+defects newly exposed, and root-causing them is the next real compiler task.
+
+**Regression status: clean.** Capstone lit 41/41, BEEBS 82/82, CoreMark, authority 32/32, RV8
+−O0 5/5, full X86 + RISCV lit. The only failures are 6 `emutls*`/`tls-android` tests, **verified
+pre-existing** by stashing the changes, rebuilding `llc`, and reproducing them identically.
+Trail: `history/27-07-2026_12-59-35_three-codegen-fixes-unblock-two-ladder-rungs-and-rv8-at-O1.md`.
+
+### The other 4 rungs
+
+| rung | status on silicon |
+|---|---|
+| `matmult_int` | **HANGS** the `cscall` at −O1/−O2 — no result at any reachable config |
+| `coremark_matrix` | **HANGS** at −Os and at −O0 @32 KiB — localized to `core_init_matrix` (#66) |
+| `beebs_crc32` | cannot **build** at −O1+ (2048 B folded table overflows a 12-bit store offset) |
+| `beebs_insertsort` | **crashes clang** at −O1 |
+
+### RETRACTED — do not carry these forward
+
+The 2026-07-25 sweep table below this section reported **4 rungs miscomputing**
+under an "array-store-with-live-accumulator" framing. **Both the framing and that
+rung classification are withdrawn:**
+
+- The rungs contain **zero `shrink`** instructions, so the documented
+  `shrink`→store root cause cannot apply; and `beebs_recursion` has no array at
+  all. Bounds-representability is refuted too (the rung with the *largest* global
+  passes). **Do not escalate the shrink story to the board owner.**
+- **"Scalar rungs pass, array rungs fail" is too strong.** A controlled A/B showed
+  two builds of the same rung differing only in `domain_main` — *with* the minstret
+  instrumentation `beebs_prime` returns 1087631800 (wrong, deterministic across two
+  sessions); *without* it, 582955588 = the oracle. **Four instructions, none inside
+  the computation, flip a passing rung.** A passing rung is not stable ground —
+  re-gate on the oracle after ANY domain change.
+- **"Domain-entry fault" is dead** (#63, `LADDER_INSTR_MODE=7`): the entry path runs
+  and both hanging rungs complete a full domain round-trip when the compute is
+  branched over. The domain-boundary `fence.i` (#61) is therefore the wrong layer.
+- **"Fragile `bne` loop exits" is dead** (#65). It was observed statically that
+  `matmult_int` at −O1 emits 8 conditional branches **all `bne`** while −O0 emits 8
+  **all `blt`**, suggesting one fault whose symptom the branch kind selects. A −O1
+  build with ordered exits forced — verified 0 fragile / 8 ordered, QEMU-correct
+  through the *same* controller — **still hangs, identically.** The codegen split is
+  real but is a **correlate, not the cause**. Do not restate "one fault, two
+  symptoms".
+
+**The pattern to inherit:** two hypotheses died in two days, both by promoting a
+strong *static* correlation to a *mechanism* before a board test could speak. At
+~2.5 min/boot with days left, prefer a **bisect that needs no mechanism guess**
+(mode 7 and #66 paid off; #65 did not).
+
+### RESOLVED 2026-07-27 (board #67a–#67f) — `delin` in domain code wedges the RTL
+
+**`coremark_matrix`'s first fault is NAMED, with a size-matched control.** Six boots,
+each build QEMU-correct through the identical controller first. Full trail:
+`history/27-07-2026_04-33-58_RESULTS-delin-wedges-the-RTL-controlled-and-second-fault-isolated.md`.
+
+| probe | delta | board |
+|---|---|---|
+| #67a | while loop only | **RETURNS 9** |
+| #67c | + **`delin`** (one instruction) | **HANGS** |
+| #67e | #67c with `addi x0,x0,0` **instead** (size-matched) | **RETURNS 9** |
+| #67f | `B = A + N*N`, **no `delin`** | **RETURNS 9** |
+| #67d | **full** benchmark, **no `delin`** | **HANGS** |
+
+1. **The `delin` opcode is the fault, not code layout.** #67c and #67e differ only in a
+   4-byte instruction's *encoding* — same position, same `"+r"(A)` plumbing. This control
+   was mandatory: the 26-07 A/B showed 4 added instructions can flip a rung.
+2. **Not "`delin` is unimplemented".** The glue `delin`s several caps in *every* domain and
+   passing rungs work. The difference is the operand: glue delins a cap **fresh from
+   `split`**; domain code delins one **loaded by `ldc` from the cap-table** — which the glue
+   already delin'd before `stc`, so on a type-preserving machine it is **NONLIN→NONLIN**.
+   That is exactly the case `capstone-qemu` `f4d416c265` patched to be idempotent
+   *"rather than faulting"*. Same QEMU-permissive / RTL-enforces shape as `C_GEN_CAP`.
+   **Caveat:** instrumented QEMU reports that operand as **LIN**, so QEMU and the glue
+   disagree about type after `stc`→`ldc`. Which side is wrong is a **board-owner question**.
+3. **Dropping the `delin` is safe but insufficient.** #67f returns (the `rd != rs1`
+   derivation does not consume `A` on hardware) and QEMU still gives 14343 — but the full
+   rung still hangs (#67d). **≥2 independent faults.** Fault 2 is in the **seeding loop or
+   later**, which revives the surviving static candidate: `coremark_matrix` is the only rung
+   doing **narrow (`sh`) accesses through the block cap**. Next: phase-bisect inside the
+   seeding loop, or widen `MATDAT` to 32-bit.
+4. **`matmult_int` has no `delin` at all** — fault 1 cannot explain it. Still possibly two bugs.
+5. **A minimal silicon repro now exists** (two 4-byte instructions, both QEMU-correct) — the
+   *paper-acceptable* outcome: a documented hardware limitation, not an unexplained one.
+
+### What survives, cumulatively
+
+- The hang is **inside the compute**, not at domain entry.
+- For `coremark_matrix` it is inside **`core_init_matrix`** — bisected against mode 7
+  at the same −O0 @32 KiB config: entry-only **RETURNS**, entry + `core_init_matrix`
+  **HANGS**, everything **HANGS**. That is one ~40-line function. Two candidates
+  remain, **not yet separated**: the dimension loop
+  `while (j < blksize) { i++; j = i*i*2*4; }` (`bgeu` `0x10428` / `mulw` `0x10444`),
+  and the N×N seeding loop running `seed = ((order*seed) % 65536)` per element,
+  writing `A[]`/`B[]` **through the gp-delivered block capability**.
+- It is **not** the loop-exit condition, and **not** discriminated by instruction
+  mix (M-extension ops included, re-checked properly), code size, global count, or
+  `.bss` size.
+- **Do not assume the two hanging rungs share a mechanism.** `matmult_int` has no
+  data-dependent bound at all; `coremark_matrix` is built around one.
+- **Three further framings refuted board-free (2026-07-27, lane C** —
+  `history/27-07-2026_02-45-07_core_init_matrix-codegen-audit-three-framings-refuted.md`**):**
+  (a) *"an extra capability load/store in a loop is the trigger"* — `rv8_primes`
+  reloads its block cap from the cap-table **and** stores through a dynamically
+  derived cap in its hottest loop, and is silicon-correct; (b) *"the block cap gets
+  round-tripped through memory"* — the **passing** `beebs_prime` spills and reloads
+  its block cap; (c) *"a redundant NONLIN→NONLIN `delin` faults on the RTL"* —
+  instrumented QEMU shows **zero** redundant delins in the whole coremark run, so
+  the cap is genuinely LIN at that site and the in-kernel `delin` is necessary.
+  Also: at −O0 `core_init_matrix` keeps **no** live capability across the loop — it
+  reloads **both** `A` and `B` from stack slots every iteration.
+  **Surviving candidate, for `coremark_matrix` only:** it is the sole rung doing
+  **narrow (`sh`/`sb`/`lh`/`lb`) accesses through the block capability** (4 stores +
+  9 loads at −Os); all three passing rungs use word-or-wider only, and `matmult_int`
+  has none — so it cannot be a shared mechanism. Treat as a candidate, not a cause.
+  **⚠ Probe #67 as specified is a 3-way, not a 2-way:** the `delin` + `B = A + N*N`
+  derivation block sits *between* the dimension loop and the seeding loop, so
+  "return `N` before the seeding loop" leaves two candidates on its HANG branch.
+  Move the split point before the `delin`, or make it 3-way.
+- The corruption is a **silicon divergence** — QEMU runs the identical binaries
+  correctly — and is **NOT proven a compiler bug**. If our code is ISA-legal and
+  QEMU-correct, this is an RTL divergence to hand to the board owner with a minimal
+  repro: a **paper-acceptable** outcome (documented hardware limitation).
+
+Trail: `history/27-07-2026_00-58-47_RESULTS-65-falsified-66-localizes-hang-to-core_init_matrix.md`,
+`history/27-07-2026_00-28-51_loop-exit-condition-splits-hang-from-miscompute.md`,
+`history/26-07-2026_23-56-07_the-hang-is-in-the-compute-not-at-domain-entry.md`,
+`history/26-07-2026_17-43-17_controlled-ab-four-instructions-flip-a-passing-rung.md`,
+`history/23-07-2026_17-30-00_gp-captable-silicon-array-loop-miscompute-OPEN.md`.
+Memory `project_gp_captable_codegen`.
+
+### Tooling traps that silently corrupt this analysis
+
+- **The Capstone-triple disassembler cannot decode M-extension instructions.**
+  Domains build `-Xclang -target-feature -Xclang +m`, but `llvm-objdump` on a
+  `capstone64` binary prints every `mul`/`div`/`rem` as `<unknown>`. Any
+  mnemonic-keyed analysis must pass `--triple=riscv64 --mattr=+m`. (Re-run properly,
+  the "no discriminating instruction" conclusion still **stands** — a trap, not a
+  retraction.)
+- **`<sym+0xNN>` in disassembly is not a branch target.** Regexes grabbing the last
+  hex number on the line invert forward/backward branch classification. Strip `<...>`.
+- **At −O0 clang emits a forward exit test plus an unconditional `j` backedge.** A
+  metric counting only *conditional backedges* reports zero for every −O0 build.
+- **A domain that hangs reports nothing at all** — the controller prints `res[]` only
+  after the `cscall` returns, so "write a marker and read it back" probes are unusable
+  on a hang. Design probes around *does it return at all*.
+
+---
+
+## Superseded (2026-07-25) — silicon-ladder perf sweep, original table
+
+**Kept for provenance. Its rung classification and explanation are RETRACTED by the
+2026-07-27 section above — read that first.**
+
+| rung (fresh dom) | silicon | oracle | mcycle | verdict as reported then |
 |---|---:|---:|---:|---|
 | rv8_primes | 99991 | 99991 | 17,283,292 | ✅ PASS |
 | beebs_prime | 582955588 | 582955588 | 47,804 | ✅ PASS |
-| matmult_int | 1166210317 | 774662735 | 76,498 | ❌ silicon miscompile |
-| beebs_crc32 | 1568735421 | 1703161001 | 311,902 | ❌ silicon miscompile |
-| beebs_insertsort | 255001740 | 271779359 | 10,463 | ❌ silicon miscompile |
-| beebs_recursion | 2095861164 | 1579141629 | 30,263 | ❌ silicon miscompile |
+| matmult_int | 1166210317 | 774662735 | 76,498 | ❌ reported miscompile |
+| beebs_crc32 | 1568735421 | 1703161001 | 311,902 | ❌ reported miscompile |
+| beebs_insertsort | 255001740 | 271779359 | 10,463 | ❌ reported miscompile |
+| beebs_recursion | 2095861164 | 1579141629 | 30,263 | ❌ reported miscompile |
 | coremark_matrix | — | 14343 | — | transfer never landed |
 
-1. **All 4 failing rungs are GENUINE silicon miscompiles**, each verified on a dom
-   rebuilt after the 24-07 memcpy fix (`d078839`) and each **QEMU-correct** with
-   that same fresh binary (e.g. fresh `beebs_insertsort` passes QEMU at 271779359
-   but returns 255001740 on hardware). 4/4 array-store-with-live-accumulator rungs
-   fail; 2/2 pure-scalar rungs pass — the split holds, with **shrink OFF**. This is
-   the open gp-captable silicon bug
-   (`history/23-07-2026_17-30-00_gp-captable-silicon-array-loop-miscompute-OPEN.md`).
-   NOTE: `beebs_insertsort`'s 255001740 coinciding with the pre-fix memcpy
-   signature was a **red herring** — it reproduces on post-fix binaries.
-   **UPDATE 25-07 17:09 — the pass/fail data above stands, but its EXPLANATION is
-   withdrawn; the cause is now UNKNOWN.** The rungs contain **zero `shrink`**
-   instructions, so the documented `shrink`→store root cause cannot apply, and
-   "array-store-with-live-accumulator" is the wrong framing (`beebs_recursion` has
-   no array at all). Bounds-representability (the rung with the *largest* global
-   passes) and any instruction-level discriminator are also refuted. **Do not
-   escalate the shrink story to the board owner.** A `gp_diag` rung returning RAW
-   per-probe values (a checksum provably cannot localize this) is built and
-   QEMU-validated; one board run should settle it:
-   `LADDER_RUNGS="gp_diag" python3 tests/rtl-smoke/fpga_driver/run_ladder_perf_fpga.py`.
-   Evidence: `history/25-07-2026_17-09-01_gp-captable-miscompute-shrink-theory-refuted.md`.
-2. **A separate process bug was also real and is fixed:** the runner reused
-   pre-built `.dom`s and read a different dir than the build script wrote, so it
-   *could* run stale binaries. Now rebuilds-by-default + hard-fails on stale
-   (`4be78cb`/`bd03316`). It did not, in the end, explain any of the miscompiles.
-3. **Board transfer was the other blocker, now improved** (`fast_xfer`: Ctrl-C
-   resync to escape the `> ` continuation prompt a dropped char leaves; catch the
-   wedge timeout and escalate instead of aborting; third slower tier). This
-   recovered 2 of 3 previously-unverifiable rungs.
-4. **`coremark_matrix` still has NO verdict** — its dom fails transfer even at the
-   safest tier (it wedges the shell repeatedly), so the `-Os` cscall hang remains
-   unverified on a fresh build.
+Each was verified on a dom rebuilt after the 24-07 memcpy fix (`d078839`) and each
+was **QEMU-correct** with that same fresh binary — that part stands, and it is why
+this is a silicon divergence rather than a build artifact. `beebs_insertsort`'s
+255001740 coinciding with the pre-fix memcpy signature was a **red herring**.
 
-Full table + mechanics + full correction trail:
+Two process findings from that sweep, both still valid:
+
+1. **The runner could run stale binaries** — it reused pre-built `.dom`s and read a
+   different dir than the build script wrote. Now rebuilds-by-default + hard-fails on
+   stale (`4be78cb`/`bd03316`). It did not explain any of the miscompiles.
+2. **Board transfer improved** (`fast_xfer`: Ctrl-C resync to escape the `> `
+   continuation prompt a dropped char leaves; catch the wedge timeout and escalate
+   instead of aborting; third slower tier). This recovered 2 of 3 previously
+   unverifiable rungs. `coremark_matrix` was later shown **not** transfer-blocked.
+
+Full table + mechanics + correction trail:
 `history/25-07-2026_03-58-47_fpga-ladder-perf-sweep-results.md`.
 
 Runner: `tests/rtl-smoke/fpga_driver/run_ladder_perf_fpga.py` — one full

@@ -1,6 +1,67 @@
 # Current recommended next step
 
-## gp-free domain bring-up (2026-07-22) — branch `capstone-gp-free`
+## 2026-07-27 — deadline triage: the paper's eval section
+
+Deadline is **end-July 2026**. Weigh everything against *"does this change a number
+or a claim in the paper?"* The perf table rests on **3 measured rungs**; shipping 3
+rungs with correct caveats beats 5 rungs with an unexplained divergence.
+
+**The one open gate: the gp-captable silicon divergence** (`state/current-state.md`
+"Latest (2026-07-27)" for the full status and the list of dead hypotheses).
+
+Highest-value work now, in order:
+
+1. **Compiler-side, no board needed — look at `core_init_matrix` at −O0.** #66 put
+   `coremark_matrix`'s fault inside that one ~40-line function. Both surviving
+   candidates run through the **gp-delivered block capability** (the seeding loop
+   writes `A[]` and `B[]` through it), and an extra capability store in a loop is the
+   *already-confirmed* miscompute trigger from the 2026-07-26 bisect. Check whether
+   our codegen keeps a **live capability across the loop** where the RTL's shrink-off
+   / store-hazard workaround assumes otherwise.
+2. **The genuinely open deliverable is unchanged: is our emitted code ISA-legal and
+   QEMU-correct?** If yes, this is an **RTL divergence** to hand to the board owner
+   with a minimal repro — a *paper-acceptable* outcome (documented hardware
+   limitation), not a failure. Keep the board-owner message short and human.
+3. **Do not assume the two hanging rungs share a mechanism.** `matmult_int` has no
+   data-dependent bound; `coremark_matrix` is built around one. They may be two bugs.
+   `matmult_int`'s remaining lever is a **phase bisect** needing no mechanism guess:
+   return after the init loops, then after the `mm_cell` loops, then after the FNV
+   fold (2–3 boots).
+4. **Board probe #67** (split `core_init_matrix` — return `N` *before* the seeding
+   loop, one boot, separates the two candidates) is **B's**. The board is one shared
+   physical resource, **serialized across lanes** — confirm a window before any
+   hardware run.
+5. **Lift the 4 KiB code window** (task #62) — one hardcoded number in
+   `link-gpfree.ld`, QEMU-validated at 16 KiB and 32 KiB. It is what full CoreMark +
+   Dhrystone need, and the only realistic way to close the **missing pointer-chasing
+   axis** (capabilities are 16 B vs 8, so the current set likely *understates*
+   overhead).
+
+**Fallback, already written:** if the divergence does not resolve in time, report the
+3 rungs + the `ref/fpga-silicon-measurements-for-paper.md` §5 caveat list, and state
+the 2 blocked rungs as a documented hardware limitation. **Do not let this blocker
+hold the whole eval section hostage.**
+
+Keystone unblocks tracked elsewhere, both from the board owner's two answers:
+**monitor rebuild** with `caplifive-system`'s pinned `capstone-c` (`bugfix`@`508342a`,
+not our tree's `master`@`8cda52c`) — `plans/monitor-regen-audit-task-B.md`; and
+**large-RO delivery via host userspace**, not the monitor —
+`plans/sqlite-on-silicon-scoping.md`.
+
+---
+
+## Superseded (2026-07-22) — gp-free domain bring-up, `C_GEN_CAP` blocker
+
+**RESOLVED 2026-07-23 — kept for provenance.** The blocker below (the monitor's `gp`
+mint used `C_GEN_CAP`, a QEMU-only DEBUG instruction not implemented on the RTL) was
+root-caused and **fixed on silicon**: a capstone-c-style **data-authority `gp` +
+cap-table** probe (`start-gpfree-captable.S` — derive `gp` from sp/cscratch in-glue,
+globals in DATA memory, access via `ldc gp[0]`; no code split, no `gp` memory
+round-trip) **passes on captype-fixed CVA6**, retval `554745961` — the first
+globals-using domain to run on the board. The monitor was left **unchanged**. See
+memory `history/22-07-2026_18-05-00_...` entry in `MEMORY.md` for the full trail.
+
+Original note follows.
 
 DONE on QEMU (functional, silicon-faithful): a real globals-using app runs
 correctly in a pure-cap domain **gp-free** with the fabrication OFF and the
@@ -9,21 +70,17 @@ correctly in a pure-cap domain **gp-free** with the fabrication OFF and the
 
 **Silicon smoke ATTEMPTED 2026-07-22 — firmware/boot chain FIXED, domain run BLOCKED
 by a definitive root cause. FULL KB:
-`history/22-07-2026_18-05-00_gp-free-silicon-smoke-firmware-fixed-createdomain-hangs.md`
-(read this before resuming).**
+`history/22-07-2026_18-05-00_gp-free-silicon-smoke-firmware-fixed-createdomain-hangs.md`.**
 - Working now: board boots Linux to a shell with our gp-delivery monitor
   (CAPLIFIVE-ARIANE fw, embedded FDT+kernel), `/dev/capstone` present, controller +
   domain transfer+verify. Firmware-build recipe in memory
   `project_fpga_fw_payload_build_recipe`.
-- BLOCKER: the monitor's `gp` mint uses **`C_GEN_CAP` (custom-2 funct7 0x40) — a
-  QEMU-only DEBUG instr (`helper_csdebuggencap`), NOT implemented on the RTL**
-  (decoder `default: ;`). It fabricates a cap from (base,end), which HW capability
-  monotonicity forbids. On silicon it no-ops → garbage cap → `stc` fault → M-mode
-  hangs in `capstone_error`=`while(1)`. Compiler side is fine; the domain never ran.
-- **Next:** rework the gp mint to DERIVE from existing authority using RTL-implemented
-  ops (CAPCREATE/CAPPERM/CAPBOUND, or split/scc), per the capstone-c cscratch
-  cap-table reference; likely align with the board owner. Then rebuild fw (recipe)
-  + one board run for the retval `554745961`.
+- BLOCKER (since resolved, see above): the monitor's `gp` mint uses **`C_GEN_CAP`
+  (custom-2 funct7 0x40) — a QEMU-only DEBUG instr (`helper_csdebuggencap`), NOT
+  implemented on the RTL** (decoder `default: ;`). It fabricates a cap from
+  (base,end), which HW capability monotonicity forbids. On silicon it no-ops →
+  garbage cap → `stc` fault → M-mode hangs in `capstone_error`=`while(1)`. Compiler
+  side was fine; the domain never ran.
 
 ## Active track (2026-07-15): the paper's PERFORMANCE story — mostly DONE
 
