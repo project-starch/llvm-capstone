@@ -362,9 +362,25 @@ carrying the exec segment -- it is `image_size`, the whole loadable image
 (`libcapstone.c:197`); (c) `dom_pages_log2` rounding -- it rounds **up** correctly
 (`dom_pages == 1 ? 0 : ilog2(dom_pages - 1) + 1`).
 
-**Cheapest next step:** build with `COPY_THRESHOLD` raised above 640 so the 640 B table
-takes the unrolled path. If it then passes, the copy path is confirmed as the sole fault
-and the unrolled path is a usable stopgap (at a code-size cost against C-5's window).
+**Experiment RUN (2026-07-28): the unrolled path is not a viable stopgap, and C-4b is
+entangled with C-5.** Raising `COPY_THRESHOLD` above 640 so the big table takes the
+unrolled `li`/`sd` path fails at link time:
+
+```
+ld.lld: error: unable to place section .text at file offset [0x1000, 0x2E77]
+```
+
+`.text` reaches **11,895 B** against the 4 KiB window — 640 B of data costs ~8 KB of
+immediate-materialisation code, exactly the reason the copy path exists. So:
+- The copy path is **necessary**, not an optimisation — it cannot simply be disabled.
+- **C-4b cannot be worked around without first lifting C-5** (the 4 KiB window), or by
+  fixing the copy path itself.
+- Threshold reverted to 256; no code change kept from this experiment.
+
+**So the remaining work is to fix the copy path directly.** Dump capability tags through
+the `lla`/`lla`/`sub`/`cincoffset` sequence to find where a tagged value reaches an operand
+that must be untagged. Do not infer it from reading — inference has been wrong three times
+on this issue.
 
 **Related hazard — CHECKED 2026-07-28, NOT a bug.** `getGpCaptableIndex` derives its index
 from a global's *position* in `M.globals()`, and GlobalMerge mutates that list (it merged
