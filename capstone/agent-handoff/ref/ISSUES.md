@@ -86,7 +86,7 @@ so it is the instruction and not code layout.
   storing it, and our QEMU was patched to tolerate the redundant case *"rather than faulting"*.
   Only the failure *mode* (full wedge vs catchable trap) is worth the board owner's attention.
 
-### R-7 — `rv8_sha512` hangs on silicon though it is QEMU-correct `OPEN`
+### R-7 — `rv8_sha512` hangs on silicon: an INSTANCE OF R-1, not a new fault `CLOSED into R-1`
 Measured 2026-07-28. The rung builds with the C-5 window + copy-path bypass, passes the
 QEMU parity leg with its full 640 B table (oracle 1390718314), and then **hangs the
 `cscall` on the board**, both attempts.
@@ -98,11 +98,18 @@ QEMU parity leg with its full 640 B table (oracle 1390718314), and then **hangs 
   read and written inside the compression loop, with `sha_chain[]` stored in the same
   region, so the same-object load/store pattern R-1 describes *is* present after all. This
   rung is therefore consistent with R-1 rather than a counter-example — unlike R-6.
-- **Untested confound:** it is the only rung built at a **32 KiB** window with an
-  ~8 KB unrolled initializer prologue. Before attributing this to R-1, build a *small*
-  variant (16-entry table, 4 KiB window, no bypass) and run it: that variant already passes
-  QEMU, so a board run separates "R-1 memory hazard" from "something about the large
-  window or the long unrolled prologue".
+- **CONFOUND ELIMINATED — the C-5 workaround is EXONERATED.** The control
+  (`rv8_sha512s`: identical compression loop, 16-entry table, **default 4 KiB window,
+  default unrolled path, no bypass**, QEMU-green at oracle 2842840124) **hangs on silicon
+  too**. So neither the 32 KiB window nor the ~8 KB prologue is implicated: the fault is
+  the kernel's memory shape. **R-7 is an instance of R-1**, and the `DOMAIN_WINDOW=32k` /
+  `LADDER_NO_RO_COPY=1` machinery is sound and reusable for other rungs.
+- **Which also means my PASS prediction was simply a misread of my own kernel:**
+  `sha_w[i&15]` is read *and written* in the compression loop while `sha_chain[]` is stored
+  in the same region — the same-object load-with-intervening-store pattern R-1 describes.
+  Only `sha512_k` is read-only, and that was the part I looked at.
+- **Control kept in the tree** (`rv8_sha512s_*`) as the cheapest R-1 reproducer that is not
+  a synthetic probe: a real crypto kernel, 4 KiB, no special flags.
 - **Repro:** `DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1 DOMAIN_OPT_LEVEL=-O1`, artifacts in the
   ladder dir; capability half must be run with `LADDER_REBUILD=0` (see below).
 
