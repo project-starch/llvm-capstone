@@ -81,7 +81,10 @@ ctrsanity4:ctrsanity4_kernel.h:cs_compute:-O1
 #   Uncomment once C-4 is fixed; the kernel and oracle (1390718314) are ready.
 # The BASELINE half is plain riscv64 with no code window and no cap-table glue, so it
 # builds and runs unconditionally; only the CAPABILITY half needs the two knobs.
-rv8_sha512:rv8_sha512_kernel.h:sha512_compute:-O1:DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1
+# KNOBS DROPPED 2026-07-28: C-4b is fixed, so the large-RO COPY path works and the
+# 640 B K table no longer needs the 32 KiB window or the unrolled-path bypass. Re-gated
+# at the DEFAULT window with no knobs: oracle 1390718314, cjalr=0 ldc-gp=3, copy-path=yes.
+rv8_sha512:rv8_sha512_kernel.h:sha512_compute:-O1
 # Selected against R-1's shape (no arrays at all), not for benchmark prestige --
 # 6 of 6 silicon attempts today were predicted PASS and only 2 were.
 beebs_expint:beebs_expint_kernel.h:expint_compute:-O1
@@ -106,4 +109,11 @@ beebs_cover:beebs_cover_kernel.h:cover_compute:-O1
 # Both QEMU-gated 2026-07-28 at -O1: mont64 retval 2185097489 (cjalr=0 ldc-gp=1),
 # ns retval 1184999093 (cjalr=0 ldc-gp=2).
 beebs_aha_mont64:beebs_aha_mont64_kernel.h:mont_compute:-O1
-beebs_ns:beebs_ns_kernel.h:ns_compute:-O1:DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1
+# KNOBS DROPPED 2026-07-28, same reason. Both 2,000 B tables are copy-eligible
+# (file-scope symbol, size%8==0), so they take the copy path at the DEFAULT window:
+# oracle 1184999093, cjalr=0 ldc-gp=2, copy-path=yes.
+# WORTH RE-RUNNING ON THE BOARD: R-9 recorded this rung hanging, and the hypothesis on
+# file was prologue SCALE -- ~500 words stored through the carving capability. The copy
+# path replaces that with a 6-instruction loop, so the silicon binary is now a completely
+# different shape. If prologue scale was the cause, this should now pass.
+beebs_ns:beebs_ns_kernel.h:ns_compute:-O1
