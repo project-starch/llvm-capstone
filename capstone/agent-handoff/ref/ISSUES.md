@@ -961,7 +961,30 @@ What is ruled out:
   in `helper_cssplit`; it now gets far enough to run domain code, so the monitor is
   receiving 0x8000.
 
-Leading suspicion, untested: `sp`'s bounds at the fault are
+**NARROWED 2026-07-28 (two causes found, one fixed, one still open).**
+
+*Cause 1, FIXED -- the plumbing was never running.* `run-domain-smoke.py` defaults to
+`--domain-loader /capstone-test.user`, i.e. the copy baked into the ROOTFS, not a
+rebuilt one. So the S3.3 globals-offset packing in `libcapstone.c` was never in effect
+and the monitor kept using 0x1000 -- which is why the blob was copied from the wrong
+place and both glues failed. Rebuild the loader and pass
+`--domain-loader /mnt/host/capstone-test.user`. Confirmed by the loader now printing
+`Globals offset = 0x8000`, which it never did before.
+A second, self-inflicted bug on the way: the section walk was placed AFTER
+`munmap(elf_header, ...)`, so it dereferenced unmapped memory and segfaulted the
+loader. It must stay above the munmap; there is now a comment saying so.
+
+*Cause 2, OPEN -- the descriptor is still not found.* With the offset correctly
+delivered the fault is UNCHANGED: `sp` un-narrowed (`bounds = dom_data base..end`) and
+the store at `base-48`, which is precisely `cincoffsetimm(sp,-96)` + `stc(ra,sp,48)`
+with the cursor still at base. That is the interpreter's `beqz s4, 99f` early-exit
+firing, i.e. **it read `count` as 0** from `blob[8]`. So either the monitor is not
+using the offset it was given, or the blob does not start where the glue assumes.
+**Next: `C_PRINT` the monitor's `gpoff`, `code_size` and the dom_data bounds in
+create_domain.** That is a 2-minute rebuild and it distinguishes the two directly,
+rather than a fourth round of reasoning about it.
+
+Superseded suspicion: `sp`'s bounds at the fault are
 `(0x101568e90, 0x101580000)` -- the END is dom_data's end, i.e. sp looks **un-narrowed by
 the carve splits**, which would mean the cursor/bounds relationship after
 `scc(sp, sp, t1)` is not what both glues assume when the offset is not 0x1000.
