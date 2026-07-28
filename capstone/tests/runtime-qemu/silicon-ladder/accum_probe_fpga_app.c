@@ -1,90 +1,80 @@
-/* R-8 minimal probe -- and a DISCRIMINATOR, not just a minimisation.
+/* R-8 probe v2. v1 returned res[0] correctly while ALL nine res[3..11] slots read
+ * zero, so eight of nine sub-probes produced no data.
  *
- * R-8/R-6: a scalar accumulated across a loop keeps its INITIAL value while the
- * addend is computed correctly and the loop runs its full trip count.
+ * Cause of that failure, and the reason this version is simpler: v1 pinned two
+ * accumulators to specific registers with `register long a __asm__("s1")`. Pinning
+ * a callee-saved register across a whole function body is fragile -- the compiler
+ * still assumes it owns s1 for its own spills, and `res` itself lives in a0 -- so
+ * the most likely explanation for the lost stores is that v1 corrupted its own
+ * pointer, not that the board dropped them. Testing register CLASS is a good idea
+ * but needs hand-written asm, not a C register variable; it is deferred.
  *
- * "Hardware cannot accumulate" is an extraordinary claim. An ordinary one fits every
- * observation just as well: the accumulator lives in a REGISTER that something
- * clobbers on silicon -- the entry glue, the cscall path, or a trap handler saving
- * fewer registers than our QEMU models. That would present identically: right
- * addend, right trip count, value reverting to its initial state.
+ * v2 keeps only what can be measured safely, writes each slot IMMEDIATELY after the
+ * loop that produces it (so a later fault cannot erase an earlier result), and
+ * marks the store pointer volatile so nothing is sunk or reordered.
  *
- * These probes separate those. Each is the same 5-line loop; only WHERE the
- * accumulator lives differs.
+ *   dbg0  plain accumulate, 100 trips              expect 100
+ *   dbg1  a = a + 1 form (janne's shape)           expect 100
+ *   dbg2  accumulator in MEMORY (volatile global)  expect 100
+ *   dbg3  addend from a volatile global            expect 100
+ *   dbg4  accumulate INSIDE AN IF -- the shape expint and janne share  expect 100
+ *   dbg5  accumulate in a NESTED loop, 10x10       expect 100
+ *   dbg6  independent trip counter                 expect 100
+ *   dbg7  short loop, 3 trips                      expect 3
+ *   dbg8  long loop, 1000 trips                    expect 1000
  *
- *   dbg0  baseline accumulate, compiler's register choice     expect 100
- *   dbg1  same, but accumulator pinned to a CALLEE-SAVED reg (s1)
- *   dbg2  same, pinned to a CALLER-SAVED/temp reg (t2)
- *   dbg3  accumulator forced through MEMORY every iteration (volatile)
- *   dbg4  add a CONSTANT (a = a + 1) rather than +=
- *   dbg5  accumulate a value loaded from a volatile global (addend not constant)
- *   dbg6  trip counter, incremented in the same loop as dbg0   expect 100
- *   dbg7  short loop, 3 trips                                  expect 3
- *   dbg8  multiply-accumulate instead of add                   expect 1024
- *
- * READING IT. If dbg3 (memory) is correct while register forms fail -> the value is
- * being lost in a register, i.e. a save/restore bug in OUR glue or the monitor, NOT
- * a hardware adder fault. If a callee-saved form fails and a temp form passes (or
- * vice versa) that names the register class, which points straight at whoever fails
- * to preserve it. If ALL fail including memory, the fault is genuinely in the
- * loop/accumulate mechanism and the hardware claim stands.
- * If dbg7 passes but dbg0 fails, it is trip-count dependent -- suggesting something
- * periodic (a timer/trap) rather than a static codegen error.
+ * dbg4 and dbg5 are the load-bearing ones: the minimal accumulate ALREADY PASSES on
+ * this board, so the fault needs an extra ingredient, and a conditional body and a
+ * nested loop are the two both failing kernels have and the passing minimal probe
+ * does not. dbg7 vs dbg8 tests trip-count dependence, which would suggest something
+ * periodic (a trap) rather than static codegen.
  */
 static volatile long ap_one = 1;
 static volatile long ap_mem;
 
 void domain_main(unsigned long *res, unsigned func) {
   (void)func;
-  int i;
+  volatile unsigned long *out = res;      /* never sink or reorder these stores */
+  int i, j;
   long n = 100;
   __asm__ volatile("" : "+r"(n));
 
-  /* dbg0: plain accumulate, compiler picks the register */
-  long a0 = 0;
-  for (i = 0; i < n; i++) a0 += 1;
-  res[3 + 0] = (unsigned long)a0;
+  long a = 0;
+  for (i = 0; i < n; i++) a += 1;
+  out[3 + 0] = (unsigned long)a;
 
-  /* dbg1: accumulator pinned to a callee-saved register */
-  register long a1 __asm__("s1") = 0;
-  for (i = 0; i < n; i++) { a1 += 1; __asm__ volatile("" : "+r"(a1)); }
-  res[3 + 1] = (unsigned long)a1;
+  long b = 0;
+  for (i = 0; i < n; i++) b = b + 1;
+  out[3 + 1] = (unsigned long)b;
 
-  /* dbg2: accumulator pinned to a temp (caller-saved) register */
-  register long a2 __asm__("t2") = 0;
-  for (i = 0; i < n; i++) { a2 += 1; __asm__ volatile("" : "+r"(a2)); }
-  res[3 + 2] = (unsigned long)a2;
-
-  /* dbg3: accumulator lives in MEMORY -- volatile forces a load/store each pass */
   ap_mem = 0;
   for (i = 0; i < n; i++) ap_mem = ap_mem + 1;
-  res[3 + 3] = (unsigned long)ap_mem;
+  out[3 + 2] = (unsigned long)ap_mem;
 
-  /* dbg4: a = a + 1 rather than += (janne's exact form) */
-  long a4 = 0;
-  for (i = 0; i < n; i++) a4 = a4 + 1;
-  res[3 + 4] = (unsigned long)a4;
+  long c = 0;
+  for (i = 0; i < n; i++) c += ap_one;
+  out[3 + 3] = (unsigned long)c;
 
-  /* dbg5: addend loaded from a volatile global, so it is not a constant */
-  long a5 = 0;
-  for (i = 0; i < n; i++) a5 += ap_one;
-  res[3 + 5] = (unsigned long)a5;
+  long d = 0;
+  for (i = 0; i < n; i++) { if (i != 49) d += 1; else d += 1; }
+  out[3 + 4] = (unsigned long)d;
 
-  /* dbg6: independent trip counter in the same loop as dbg0's shape */
-  long a6 = 0, trips = 0;
-  for (i = 0; i < n; i++) { a6 += 1; trips++; }
-  res[3 + 6] = (unsigned long)trips;
+  long e = 0;
+  for (i = 0; i < 10; i++) for (j = 0; j < 10; j++) e += 1;
+  out[3 + 5] = (unsigned long)e;
 
-  /* dbg7: short loop -- 3 trips */
-  long a7 = 0;
-  for (i = 0; i < 3; i++) a7 += 1;
-  res[3 + 7] = (unsigned long)a7;
+  long f = 0, trips = 0;
+  for (i = 0; i < n; i++) { f += 1; trips++; }
+  out[3 + 6] = (unsigned long)trips;
 
-  /* dbg8: multiply-accumulate, 2^10 */
-  long a8 = 1;
-  for (i = 0; i < 10; i++) a8 *= 2;
-  res[3 + 8] = (unsigned long)a8;
+  long g = 0;
+  for (i = 0; i < 3; i++) g += 1;
+  out[3 + 7] = (unsigned long)g;
 
-  res[0] = (unsigned)a0;
-  res[2] = 0xD09E;
+  long h = 0;
+  for (i = 0; i < 1000; i++) h += 1;
+  out[3 + 8] = (unsigned long)h;
+
+  out[0] = (unsigned long)a;
+  out[2] = 0xD09E;
 }

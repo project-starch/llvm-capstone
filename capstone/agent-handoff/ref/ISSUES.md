@@ -199,7 +199,22 @@ silicon failure seen — R-1 for the array kernels, this for the scalar ones. Tw
 not a fog. It is also a far better bug report: a five-line loop whose accumulator does not
 accumulate, with a QEMU-correct binary and every neighbouring operation proven good.
 
-**Probe status (`accum_probe_fpga_app.c`): written, run, INCONCLUSIVE — fix before reuse.**
+**Probe status: TWO versions run, both INCONCLUSIVE — the blocker is our harness, not the
+board.** v1 pinned accumulators to named registers (suspected of corrupting `res` in `a0`);
+v2 removed all pinning, used a `volatile` store pointer and wrote each slot immediately
+after its loop. **Both behaved identically**: `res[0]` and `res[2]` land (retval 100 and the
+`0xD09E` marker both arrive) while `res[3..11]` all read zero, so the controller suppresses
+the DEBUG line.
+
+**The discriminating fact: `expint_diag` writes the SAME slots successfully** (it returned
+`dbg0=0 dbg1=2 ... dbg7=2`). So slot delivery works in one probe and not another, and the
+difference is in our two `domain_main` implementations, not in silicon. **Diff them before
+running anything else** — `expint_diag_fpga_app.c` vs `accum_probe_fpga_app.c`. Do not
+spend another boot on this probe until a QEMU-visible reproduction exists; note the QEMU
+ladder harness gives only an 8-byte `res` region, so the debug-slot path is currently
+board-only, which is itself worth fixing.
+
+**Original probe status note (superseded, kept for the reasoning):**
 It was designed to discriminate the important question (see below) across 9 debug slots. On
 the board `res[0]` returned **100** — the plain accumulate, correct — but **all nine
 `res[3..11]` slots read zero**, so the controller suppressed the DEBUG line and eight of
