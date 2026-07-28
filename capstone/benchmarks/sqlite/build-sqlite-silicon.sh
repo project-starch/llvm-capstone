@@ -39,6 +39,9 @@ VFS_DIR=$REPO_ROOT/capstone/tests/runtime-qemu/sqlite-vfs-skeleton
 BUILTINS=$REPO_ROOT/compiler-rt/lib/builtins
 BEEBS_STRING=$REPO_ROOT/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c
 OPT=${SQLITE_OPT_LEVEL:--O0}
+# The memsys5 arena is charged against dom_data (see sqlite_capstone_domain.c), so the
+# silicon build shrinks it. 1 MiB does not fit; 256 KiB leaves a workable stack.
+HEAP=${SQLITE_HEAP_SIZE:-$((256*1024))}
 
 mkdir -p "$OUT_DIR" "$OBJ_DIR"
 
@@ -75,6 +78,7 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
 
 echo "== compiling the single silicon TU (this is the first time SQLite sees the silicon ABI)"
 "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "$OPT" \
+  -DSQLITE_HEAP_SIZE=$HEAP \
   -c "$OBJ_DIR/amalgam.c" -o "$OBJ_DIR/amalgam.o"
 
 echo "== compiling the no-globals support objects separately (they cannot collide)"

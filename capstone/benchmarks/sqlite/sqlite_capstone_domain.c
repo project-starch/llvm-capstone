@@ -2,7 +2,16 @@
 #include "sqlite_hostcall.h"
 
 #define CAPSTONE_DPI_REGION_SHARE 1U
+/* Overridable so the silicon build can shrink it. Under -capstone-gp-captable every
+   global's storage is CARVED FROM dom_data, and dom_data is what is left of a
+   power-of-two page allocation after the image -- so this array is charged directly
+   against the domain's stack budget rather than costing only image space.
+   At 1 MiB the silicon build does not fit: storage 1,120,992 against dom_data
+   706,128, i.e. a stack of -510,576 (domdata-budget.py). It is the single largest
+   line in that budget by an order of magnitude. */
+#ifndef SQLITE_HEAP_SIZE
 #define SQLITE_HEAP_SIZE (1024U * 1024U)
+#endif
 
 static unsigned char sqlite_heap[SQLITE_HEAP_SIZE] __attribute__((aligned(16)));
 static volatile struct sqlite_hostcall_v0 *hostcall_metadata;
