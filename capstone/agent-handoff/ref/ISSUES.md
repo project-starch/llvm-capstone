@@ -939,86 +939,41 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
   `fw_jump.elf.good` = `6724bcb3`).
 - Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
 
-### C-12 — a NON-DEFAULT globals offset does not work, and it blocks SQLite `OPEN`
-Measured 2026-07-28. With `DOMAIN_WINDOW=32k` (globals at image offset 0x8000 instead
-of 0x1000) `beebs_crc32big` fails, while the identical rung at the default offset passes.
+### C-12 — a NON-DEFAULT globals offset does not work `FIXED 2026-07-28`
+**FIXED. Two capstone-c miscompiles in the monitor, both found by printing values.**
 
-**This is on the SQLite critical path, not a side issue.** SQLite needs
-`globals_off ~= 0x230000` because its `.text` is 2.2 MB, i.e. exactly this mechanism at a
-larger value. Debug it on the 12 KB rung, where a cycle is a QEMU run, rather than
-discovering it on a multi-MB build.
+`DOMAIN_WINDOW=32k` (globals at image offset 0x8000) now returns oracle **1703161001**,
+and the default window stays 6/6 green on both glue paths. This unblocks SQLite, which
+needs `globals_off ~= 0x230000` for its 2.2 MB `.text` -- the same mechanism at a larger
+value.
 
-What is ruled out:
-- **Not the entry glue.** BOTH glues fail, and differently: the generated prologue
-  returns `4294967295` (the domain never wrote its result, no fault), the descriptor
-  interpreter takes `Cap mem access OOB: pc = 101560254, rs1 = x2 (sp), addr = ...e60,
-  bounds = (...e90, 101580000)` -- a store 48 bytes BELOW sp's base, from
-  `stc(ra, sp, 48)` in `test:`.
-- **Not dom_data sizing.** `domdata-budget.py` gives ~90 KB of stack for a domain whose
-  entry frame is 96 bytes (4 KiB window: 118,960 B; 32 KiB: 90,288 B). This was the
-  leading hypothesis and it is dead.
-- **Not the offset failing to arrive.** Before the offset was plumbed the 32k case died
-  in `helper_cssplit`; it now gets far enough to run domain code, so the monitor is
-  receiving 0x8000.
+**Miscompile 1 -- `x >> 32` evaluates at 32 bits.** The monitor received
+`entry_offset = 0x800000000000` intact (printed), but `entry_offset >> 32` produced 0, so
+the packed offset was lost and `gpoff` fell back to 0x1000. Workaround:
+`(entry_offset >> 16) >> 16`, which yields 0x8000.
 
-**NARROWED 2026-07-28 (two causes found, one fixed, one still open).**
+**Miscompile 2 -- a nested ternary does not select the branch its condition implies.**
+With `gpoff = packed_gpoff ? packed_gpoff : (globals_off ? globals_off : DEFAULT)` the
+monitor computed `gpoff = 0x1000` while `packed_gpoff` printed as **0x8000** on the line
+immediately above. Replaced with plain `if` statements and it takes the right branch.
 
-*Cause 1, FIXED -- the plumbing was never running.* `run-domain-smoke.py` defaults to
-`--domain-loader /capstone-test.user`, i.e. the copy baked into the ROOTFS, not a
-rebuilt one. So the S3.3 globals-offset packing in `libcapstone.c` was never in effect
-and the monitor kept using 0x1000 -- which is why the blob was copied from the wrong
-place and both glues failed. Rebuild the loader and pass
-`--domain-loader /mnt/host/capstone-test.user`. Confirmed by the loader now printing
-`Globals offset = 0x8000`, which it never did before.
-A second, self-inflicted bug on the way: the section walk was placed AFTER
-`munmap(elf_header, ...)`, so it dereferenced unmapped memory and segfaulted the
-loader. It must stay above the munmap; there is now a comment saying so.
+**Both are capstone-c bugs, not ours**, and both are silent -- no diagnostic, just a wrong
+value. Anything nontrivial written in the monitor should be checked by printing the
+computed value, not by reading the C. Worth reporting upstream with these two reductions.
 
-*Cause 2, OPEN -- the monitor receives gpoff = 0x1000 while the loader computes 0x8000.*
-Instrumented `create_domain` with `C_PRINT` and ran the 32k case. The monitor sees:
+**Two self-inflicted diagnostic errors on the way, recorded because they cost more time
+than the bugs did:**
+- *A stale log read as evidence.* `run-domain-smoke.py`'s log is not cleared between runs,
+  so I read prints from an earlier firmware and concluded that "only the later of two
+  `C_PRINT` markers executes" -- an anomaly that never existed. `rm` the log first.
+- *An `&&` chain broken by a relative path.* Running `make` from `caplifive-buildroot` and
+  then `source capstone/tests/...` short-circuited the whole test, and the log I then read
+  was again stale. `EXIT=` printing empty was the tell.
 
-    base_addr = 0x101560000   correct
-    code_size = 0x8890        correct
-    gpoff     = 0x1000        WRONG -- loader printed "Globals offset = 0x8000"
-    tot_size  = 0x20000       correct
-
-So the blob is copied from the wrong place, the glue reads `count` as 0 from the
-resulting garbage, takes its `beqz s4, 99f` early-exit, and leaves `sp` un-narrowed --
-which is exactly the observed fault. The chain is understood; what is not is WHERE the
-packed high half dies. Verified along the way: `create_dom` uses `load_elf_code` (the
-function that does the packing), not `load_elf_code_ko`, so it is not the wrong loader.
-
-**Unexplained anomaly, and probably the thread to pull.** Two `C_PRINT` markers were
-added to `create_domain`: `0x0C12A063` at the very top (before the unpack) and
-`0x0C12DEB0` about fifteen lines later. Both are present in the generated
-`sbi_capstone_dom.c.S` exactly once (checked individually as decimals -- a combined
-grep hides which). At runtime **only the later one prints.** Execution therefore does
-not reach the top of the function as written, which would also explain the unpack
-never taking effect. Suspects, in order: capstone-c mis-generating the prologue for a
-5-argument function (the arity changed when `globals_off` was added); a stale object
-somewhere in the buildroot tree despite the `.c.S` and `fw_jump.elf` timestamps being
-consistent; or the ecall dispatch reaching a different entry label than the one the
-prints sit in (`.c.S` contains 52 `create_domain`-derived labels).
-
-**Next: disassemble `create_domain` in the linked `fw_jump.elf`** and confirm whether
-the two `li` constants are both on the executed path -- rather than trusting that
-presence in the `.c.S` means presence on the path. That is the same class of check that
-resolved C-11 (compare the linked artifact, not the source). With the offset correctly
-delivered the fault is UNCHANGED: `sp` un-narrowed (`bounds = dom_data base..end`) and
-the store at `base-48`, which is precisely `cincoffsetimm(sp,-96)` + `stc(ra,sp,48)`
-with the cursor still at base. That is the interpreter's `beqz s4, 99f` early-exit
-firing, i.e. **it read `count` as 0** from `blob[8]`. So either the monitor is not
-using the offset it was given, or the blob does not start where the glue assumes.
-**Next: `C_PRINT` the monitor's `gpoff`, `code_size` and the dom_data bounds in
-create_domain.** That is a 2-minute rebuild and it distinguishes the two directly,
-rather than a fourth round of reasoning about it.
-
-Superseded suspicion: `sp`'s bounds at the fault are
-`(0x101568e90, 0x101580000)` -- the END is dom_data's end, i.e. sp looks **un-narrowed by
-the carve splits**, which would mean the cursor/bounds relationship after
-`scc(sp, sp, t1)` is not what both glues assume when the offset is not 0x1000.
-**Dump the carve boundaries** (t1 after each split) rather than reasoning further --
-that is what settled C-4b and what the last three hypotheses here failed to do.
+Confirmed properly by disassembling the LINKED `fw_jump.elf`: `_create_domain.0` at
+`0x80020d9e` is `lui t0, 0xc12a; addiw t0, t0, 0x63`, i.e. the marker is on the executed
+path immediately after a five-argument prologue. Checking the linked artifact rather than
+the generated `.c.S` is what settled it -- the same check that resolved C-11.
 
 ### C-5 — 4 KiB code window `OPEN`
 `link-gpfree.ld` forces globals to image offset `0x1000`, capping `.text` at 4096 B. One

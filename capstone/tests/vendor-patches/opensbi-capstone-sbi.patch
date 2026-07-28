@@ -1,5 +1,5 @@
 diff --git a/sbi_capstone.c b/sbi_capstone.c
-index be47c68..713790b 100644
+index be47c68..27b8258 100644
 --- a/sbi_capstone.c
 +++ b/sbi_capstone.c
 @@ -32,6 +32,9 @@
@@ -12,7 +12,7 @@ index be47c68..713790b 100644
  
  
  // toggle the following for swapping between cpmp swapping and gen_cap (hack)
-@@ -288,9 +291,32 @@ static void *split_out_cap(unsigned base, unsigned len, unsigned linear) {
+@@ -288,9 +291,42 @@ static void *split_out_cap(unsigned base, unsigned len, unsigned linear) {
  }
  
  
@@ -37,26 +37,26 @@ index be47c68..713790b 100644
 +       libcapstone; the kernel module forwards the word untouched). 0 in the high half
 +       means "not supplied" and falls back to the historical 0x1000, so any domain
 +       built before this creates exactly as it used to. */
-+    C_PRINT(0x0C12A063);
-+    C_PRINT(entry_offset);
-+    unsigned packed_gpoff = entry_offset >> 32;
++    /* TWO 16-BIT SHIFTS, not one 32-bit shift. capstone-c holds the full 64-bit value
++       (the print above shows 0x800000000000 arriving intact) but `>> 32` yields 0 --
++       the shift is evaluated at 32 bits. Measured, not assumed: with `>> 32` the
++       monitor computed gpoff = 0x1000 from an entry_offset of 0x800000000000. */
++    unsigned packed_gpoff = (entry_offset >> 16) >> 16;
 +    entry_offset = entry_offset & 0xffffffff;
-+    unsigned gpoff = packed_gpoff ? packed_gpoff
-+                                  : (globals_off ? globals_off : GPFREE_GLOBALS_OFFSET);
++    /* Plain if/else, not a nested ternary. With the ternary form capstone-c produced
++       gpoff = 0x1000 even though packed_gpoff printed as 0x8000 immediately above --
++       i.e. the conditional did not select the branch its own condition implied. */
++    unsigned gpoff = GPFREE_GLOBALS_OFFSET;
++    if (globals_off) {
++        gpoff = globals_off;
++    }
++    if (packed_gpoff) {
++        gpoff = packed_gpoff;
++    }
      // alignment requirement
      code_size = (((code_size - 1) >> 4) + 1) << 4;
      __linear void *mem_l, *dom_code, *dom_data, *mem_r;
-@@ -298,16 +324,122 @@ static unsigned create_domain(unsigned base_addr, unsigned code_size,
- 
-     dom_code = split_out_cap(base_addr, tot_size, 1);
- 
-+    /* C-12 instrumentation (temporary): what did the monitor actually receive? */
-+    C_PRINT(0x0C12DEB0);
-+    C_PRINT(base_addr);
-+    C_PRINT(code_size);
-+    C_PRINT(gpoff);
-+    C_PRINT(tot_size);
-+
+@@ -301,13 +337,112 @@ static unsigned create_domain(unsigned base_addr, unsigned code_size,
      dom_seal = __split(dom_code, base_addr + code_size);
      dom_data = __split(dom_seal, base_addr + code_size + DOMAIN_DATA_SIZE);
  
@@ -169,7 +169,7 @@ index be47c68..713790b 100644
      // construct the sealed region of the domain
      dom_seal[0] = dom_code;
      dom_seal[2] = dom_data;
-@@ -753,7 +885,7 @@ unsigned handle_trap_ecall(unsigned arg0, unsigned arg1,
+@@ -753,7 +888,7 @@ unsigned handle_trap_ecall(unsigned arg0, unsigned arg1,
          case SBI_EXT_CAPSTONE:
              switch(func_code) {
                  case SBI_EXT_CAPSTONE_DOM_CREATE:
