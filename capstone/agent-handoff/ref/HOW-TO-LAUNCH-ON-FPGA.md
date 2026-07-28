@@ -135,6 +135,42 @@ our tree's. Recovering + pinning this is `plans/monitor-regen-audit-task-B.md` (
 path); until it's pinned in-tree, **use the existing working prebuilt as-is** for
 board runs. Memory `project_opensbi_monitor_rebuild_include_wrapper`.
 
+## Large domains go in the BUILDROOT IMAGE over JTAG, not over UART (2026-07-28)
+
+For anything bigger than a few tens of KB, build it into the FPGA buildroot image and
+let it ride the firmware over JTAG. The board owner's answer when asked how to deliver
+a large binary was, in substance, *"isn't it built into the buildroot image and loaded
+through JTAG? Why do we need UART?"* -- and that is right.
+
+    capstone/caplifive-system/sw/buildroot/overlay/test-domains/   <- put artifacts here
+    cd capstone/caplifive-system/sw/buildroot
+    make setup
+    make build CAPSTONE_CC_PATH=$(realpath ../capstone-c)
+
+The FPGA rootfs is a CPIO **initramfs compiled into the kernel**
+(`fpga_defconfig`: `BR2_TARGET_ROOTFS_CPIO`, `BR2_TARGET_ROOTFS_INITRAMFS`;
+`fpgakernel.config`: `CONFIG_INITRAMFS_SOURCE=.../rootfs.cpio`), so anything in the
+overlay is present at boot with no transfer step at all. Note this is
+**caplifive-system's** overlay -- caplifive-buildroot has a separate one that feeds the
+QEMU image.
+
+### Why UART is the wrong answer, and two mistakes made getting there
+
+**Do not size a UART transfer from the raw file.** `fast_put` gzips first, so the
+transfer is base64 of the COMPRESSED size. Sizing SQLite from its raw 2.27 MB gave
+">= 63 min" and led to ruling UART out; the real figure was ~15 min (1.62 MB -> 529 KB
+gzipped -> 705 K base64 chars at ~800 chars/s).
+
+**But ~15 min was also wrong, in the other direction.** It assumes zero retries. At
+703 K chars the transfer is 1,759 chunks, a dropped character is near-certain, and
+`_put_once` **truncates and restarts the whole file** on any failure -- then falls back
+to burst=1, which for that size is ~4 hours. Measured: the 529 KB domain wedged the
+shell partway through and began exactly that fallback. So UART's limit at this scale is
+**reliability, not throughput**, and no amount of pacing fixes a whole-file restart.
+
+If UART ever has to carry something this big, make `fast_put` verify and retry
+PER CHUNK instead of per file. Until then: use the image.
+
 ## Two things that LOOK like a hang and are not (2026-07-28)
 
 Both cost time in one session; check them before debugging anything.
