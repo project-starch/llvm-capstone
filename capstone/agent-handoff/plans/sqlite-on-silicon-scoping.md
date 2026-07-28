@@ -293,6 +293,27 @@ CoreMark → SQLite) depends on.
   SQLite's `static const` tables.
   [[project_gp_captable_codegen]] [[project_silicon_gp_delivery_boardowner_guidance]]
   [[project_opensbi_monitor_rebuild_include_wrapper]]
+- **RISK A MEASURED 2026-07-28 — it is five TUs, not nineteen.** The per-module index
+  only collides for a TU that HAS indexable globals; one with none emits no descriptor
+  and no `ldc gp[i]`, so it cannot collide. Counted defined data symbols per object in
+  the existing build rather than assuming:
+
+      sqlite3.o     996      the amalgamation, already a single TU
+      domain.o       72
+      floatdidf.o     2      third-party compiler-rt, the awkward one
+      sqlite_vfs.o    1
+      sqlite_os.o     1
+      other 14        0      start, libc, beebs_string, 11 more builtins
+
+  So the work is presenting **five** TUs as one module. Four are ours and amalgamate by
+  `#include`. `floatdidf` is compiler-rt with 2 globals — inspect them first, since
+  folding or localising two constants beats pulling third-party source into our TU.
+  Also measured: the float builtins **cannot** simply be dropped —
+  `SQLITE_OMIT_FLOATING_POINT=1` is set and `sqlite3.o` still references 4 of them
+  undefined. Keep the link-time gate (exactly one `.capstone_gp_table` header in the
+  linked image) regardless; it turns the whole class from silent-wrong-answer into a
+  build error.
+
 - **RISK A concretized — per-module cap-table indices.** `getGpCaptableIndex`
   (`CapstoneISelDAGToDAG.cpp:112`) numbers globals **per module**, so multi-TU
   domains collide on the single gp cap-table + emit multiple descriptor headers.
