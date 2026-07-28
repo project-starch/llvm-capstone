@@ -622,7 +622,41 @@ Capstone lit **43/43**; `beebs_bs`, `beebs_prime`, `beebs_cnt` still pass QEMU p
 > OBJECT before reasoning about the mechanism: a symbolised `-S` listing settled in one
 > step what two rounds of inference got wrong.
 
-#### C-4b — the large-RO COPY PATH in the generated glue is broken `OPEN — but BYPASSABLE`
+#### C-4b — the large-RO COPY PATH in the generated glue is broken `OPEN — HALF DELIVERED 2026-07-28`
+
+**UPDATE 2026-07-28 — the MONITOR half now works; the failure has moved.** C-11 (the
+monitor could not be rebuilt) is fixed, so the monitor-side copy specified in
+`plans/sqlite-on-silicon-scoping.md` is now implemented, built and running:
+`create_domain` copies the image's initialized-globals bytes
+`[base+GPFREE_GLOBALS_OFFSET, base+code_size)` into the front of `dom_data`, guarded so it
+is skipped rather than overrunning when the image is large relative to the data region.
+Source is uncommitted submodule state, mirrored at
+`tests/vendor-patches/opensbi-capstone-sbi.patch`.
+
+Evidence it works: `beebs_crc32big` (2,048 B `const crc_32_tab`, external linkage, the
+rung built specifically for this path) previously **failed at domain CREATION**; it now
+prints `Created domain ID = 0` and proceeds. The regression rung `beebs_aha_mont64` still
+passes with the copy live (`retval = 2185097489`).
+
+**What remains: the same `helper_cssplit` assertion (`rs1_v->tag && !rs2_v->tag`), but
+later in the sequence** — no longer at creation, now after the domain exists. Static
+reading of the generated glue does NOT explain it: every `split` there takes `sp` (tagged)
+as rs1 and an `lcc`-derived integer as rs2, and the registers that do hold capabilities
+(`t3`, `t4` in the copy loop) are re-loaded with `li` before any later split. So the next
+step is to LOCATE the faulting `cssplit` rather than reason about it — QEMU aborts on the
+assertion, so add a print of `rs1`/`rs2` provenance in `helper_cssplit`, or break there
+under gdb, and find out whether it is in the glue at all or in the monitor's
+`create_region`/`share_region` path that runs immediately after.
+
+**One implementation trap already paid for, recorded so it is not repeated:** the copy
+must index in **16-byte** units. `__linear void *` subscripting steps one CAPABILITY and
+generates a 16-byte `ldc`/`stc` — `dom_seal`'s own zeroing loop uses the same convention
+(`DOMAIN_DATA_SIZE = 16 * DOMAIN_DATA_N`). An earlier draft used `>> 3`, walked twice the
+intended distance and stored past `dom_data`:
+`Cap mem access OOB: cursor = 101562000, size = 16, bounds = (101560000, 101561020)`.
+
+*Original entry, still accurate for the glue half:*
+
 **Not a domain-creation bug, and not about size.** Earlier notes here (now corrected) chased
 image geometry through the loader and kernel module. That was the wrong component:
 

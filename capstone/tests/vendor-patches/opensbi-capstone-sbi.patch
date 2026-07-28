@@ -1,5 +1,5 @@
 diff --git a/sbi_capstone.c b/sbi_capstone.c
-index be47c68..07e6026 100644
+index be47c68..741f352 100644
 --- a/sbi_capstone.c
 +++ b/sbi_capstone.c
 @@ -32,6 +32,9 @@
@@ -12,7 +12,85 @@ index be47c68..07e6026 100644
  
  
  // toggle the following for swapping between cpmp swapping and gen_cap (hack)
-@@ -306,8 +309,24 @@ static unsigned create_domain(unsigned base_addr, unsigned code_size,
+@@ -301,13 +304,102 @@ static unsigned create_domain(unsigned base_addr, unsigned code_size,
+     dom_seal = __split(dom_code, base_addr + code_size);
+     dom_data = __split(dom_seal, base_addr + code_size + DOMAIN_DATA_SIZE);
+ 
++    /* Large-.rodata delivery (issue C-4b). Copy the initialized-globals bytes of the
++       loaded image, [base+GPFREE_GLOBALS_OFFSET, base+code_size), into the FRONT of
++       dom_data, so that dom_data[k] == image[base+GPFREE_GLOBALS_OFFSET + k].
++
++       WHY THIS IS NEEDED. The cap-table glue otherwise materializes an initialized
++       global with an unrolled li/sd immediate sequence. That has a hard ceiling: a
++       single global must be a multiple of 8 bytes and fit a 12-bit store offset
++       (~2 KB), and the code it emits competes for the domain's PCC window. beebs_ns
++       hit it exactly -- "2512 B of *initialized* data overflows the 12-bit store
++       offset and is not copy-eligible" -- and SQLite's static tables are far past it.
++       With the bytes present in dom_data the glue can copy them instead, which scales
++       to any table size.
++
++       WHY THE MONITOR DOES IT. The initializer bytes physically exist in the loaded
++       image, but after the dom_gp split below the image is covered for the domain only
++       by an EXECUTE-authority cap, and the 2026-07-22 root cause established that a
++       code-authority cap cannot load data on captype-fixed CVA6. The monitor runs in
++       M-mode with authority over the image, so it can read it and write into the
++       fresh dom_data region -- the data-authority-over-a-data-region case that already
++       works on the board. The domain therefore never reads data through an execute cap.
++
++       PLACEMENT is load-bearing, in three ways:
++         - BEFORE the dom_gp __split below, while dom_code still spans
++           [base, base+code_size) and so still covers the globals.
++         - BEFORE the C_SET_CURSOR calls that move dom_code's and dom_data's cursors:
++           indexed access here is cursor-relative.
++         - AFTER the dom_data __split, so dom_data is the fresh region and index 0 is
++           its front.
++
++       The word-copy idiom (cap-to-cap, the same shape capstone-c uses for enclave
++       setup) is exact for this payload: .rodata const tables carry no capability tags,
++       so there is nothing for a plain word copy to lose.
++
++       Board owner's stated preference is for the HOST USERSPACE process to do this
++       rather than the monitor ("but for now whatever works is fine"). This is the
++       prototype; keeping it as one self-contained block is what makes moving it out of
++       M-mode later a local change. */
++    /* Bounds guard, deliberately explicit. dom_data spans
++       [base+code_size+DOMAIN_DATA_SIZE, base+tot_size), so it holds
++       tot_size - code_size - DOMAIN_DATA_SIZE bytes, while the blob is
++       code_size - GPFREE_GLOBALS_OFFSET bytes. A domain with a large image and a
++       small data region would otherwise run the copy past dom_data's end, and an
++       out-of-bounds capability store HERE is an M-mode fault -- i.e. it takes the
++       whole machine down, not just the domain. Skipping the copy instead is safe:
++       the glue only reads the blob for globals that took the copy path, and a
++       domain that does not fit simply keeps the old unrolled-immediate behaviour. */
++    if(code_size > GPFREE_GLOBALS_OFFSET
++       && tot_size > code_size + DOMAIN_DATA_SIZE
++       && (code_size - GPFREE_GLOBALS_OFFSET)
++              <= (tot_size - code_size - DOMAIN_DATA_SIZE)) {
++        /* Index in 16-BYTE units, not 8. These are `__linear void *`, so subscripting
++           steps one CAPABILITY (16 B) and the generated access is a 16-byte ldc/stc --
++           `dom_seal`'s own zeroing loop runs to DOMAIN_DATA_N with
++           DOMAIN_DATA_SIZE = 16 * DOMAIN_DATA_N, which is the same convention.
++           Computing the trip count with `>> 3` (as the earlier draft of this copy did)
++           walks TWICE the intended distance and stores past dom_data's end. That is not
++           a theoretical concern: it faulted on the first run --
++             Cap mem access OOB: cursor = 101562000, size = 16,
++                                 bounds = (101560000, 101561020)
++           i.e. it reached +0x2000 into a 0x1020-byte region.
++           Both endpoints are 16-aligned by construction: code_size is rounded up to a
++           multiple of 16 at the top of this function, and GPFREE_GLOBALS_OFFSET is
++           0x1000, so the byte count is always a whole number of capabilities.
++           Copying through capability-sized accesses is exact for this payload: the
++           image bytes here are const initializer data with no capability tags, so the
++           128 bits round-trip unchanged. */
++        unsigned gpoff_c = GPFREE_GLOBALS_OFFSET >> 4;          /* image offset, in caps */
++        unsigned glob_c  = (code_size - GPFREE_GLOBALS_OFFSET) >> 4;
++        unsigned ci;
++        for(ci = 0; ci < glob_c; ci += 1)
++            dom_data[ci] = dom_code[gpoff_c + ci];
++    }
++
+     int i;
+     for(i = 0; i < DOMAIN_DATA_N; i += 1) {
          dom_seal[i] = 0;
      }
  
