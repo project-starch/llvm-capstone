@@ -16,6 +16,7 @@ submodule, re-run `refresh.sh`.
 | `capstone-qemu.patch` | `capstone/capstone-qemu` | `CAPSTONE_GP_FABRICATE` / `CAPSTONE_GP_STANDIN` toggles in `op_helper.c`. **Every silicon-config QEMU run sets `CAPSTONE_GP_FABRICATE=0`** — without this patch the gp-free/gp-captable ABI cannot be tested under emulation at all. |
 | `opensbi-component.patch`, `opensbi-capstone-sbi.patch` | `caplifive-buildroot/components/opensbi` | The component copy is what the **QEMU `fw_jump` actually builds from** (`build/local.mk`: `OPENSBI_OVERRIDE_SRCDIR`). The package copy below is *not*. |
 | `buildroot-capstone-sbi-package.patch` | `caplifive-buildroot/package/capstone-sbi-domain/capstone-sbi` | The inert large-RO copy edit. Kept because it records the intended shape of the C-4b change. |
+| `capstone-reentry.c` | `caplifive-buildroot/package/modcapstone/userspace/` | **Untracked** — shares TWO regions, so the domain is entered twice (the share *is* the entry). The only way to exercise the glue's `__test_reentry` path, and the gate for S2. |
 | `capstone-diag.c` | `caplifive-buildroot/package/modcapstone/userspace/` | **Untracked** — the I-3 fix. A separate domain loader so a probe can run under QEMU in seconds; deliberately not a change to `capstone-test.c`, which loads the whole QEMU corpus. Nothing but this mirror held it. |
 
 ## Not mirrored here, on purpose
