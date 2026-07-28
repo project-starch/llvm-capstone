@@ -76,3 +76,7 @@ beebs_expint:beebs_expint_kernel.h:expint_compute:-O1
 # R-1 reproducer kept as a rung: a real crypto kernel that hangs at the DEFAULT
 # 4 KiB window with no special flags. Baseline half builds and runs fine.
 rv8_sha512s:rv8_sha512s_kernel.h:sha512s_compute:-O1
+# Screened on shape over the WHOLE kernel: no initialized arrays (avoids C-4/C-5) and
+# no array stores in any loop (avoids R-1's required shape). Control-flow dominated --
+# 180 switch dispatches per call, a profile nothing else in the ladder has.
+beebs_cover:beebs_cover_kernel.h:cover_compute:-O1
