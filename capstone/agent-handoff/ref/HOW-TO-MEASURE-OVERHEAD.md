@@ -74,6 +74,22 @@ by default and discards a pre-built set. Both halves take their per-rung `-O` fr
 shared `ladder-rungs.spec`, and the runner hard-fails on a capability/baseline mismatch
 (issue I-1, which once produced five bogus "silicon failures").
 
+**Per-rung build knobs live in the spec, NOT on the command line (since 2026-07-28).**
+`ladder-rungs.spec` has an optional 5th field of space-separated `KEY=VALUE` assignments
+applied to the capability half only — today `DOMAIN_WINDOW=32k` (C-5) and
+`LADDER_NO_RO_COPY=1` (C-4b). Before this, a whole-set sweep was impossible: applying the
+knobs to every rung perturbs already-published rows (layout sensitivity — a 2026-07-26 A/B
+where four added instructions flipped a passing rung), and applying them to none silently
+builds the rungs that need them at 4 KiB with the broken copy path. That is why
+`rv8_sha512` sat QEMU-verified but unmeasured, and why R-7 asked for exactly this. **Do
+not reintroduce these as env vars** — a per-rung build property belongs in the one file
+both halves read, same as `-O`. The baseline half discards field 5 deliberately.
+
+**Transfers must show `burst=16` on the FIRST attempt.** `fast_put` sends 16 chars per
+socket.io emit; `burst=1` on the first line means the burst tier was bypassed and the
+transfer will be ~15× slower (it used to emit one round-trip per character). See
+`HOW-TO-LAUNCH-ON-FPGA.md` "Tier-1b".
+
 **Throughput:** `LADDER_DISTINCT_VA=1` + `LADDER_ONE_BOOT=1` runs a whole sweep in one
 boot instead of one boot per rung (R-3 is address-keyed). Validated measurement-safe: a
 rung measured as 2nd domain matches its 1st-domain value to 0.03 %. Keep a known-good

@@ -772,6 +772,51 @@ tie. A 5-instruction loop body became 7 — `srai / xor / add / **mv a4,a4** / a
 - **Workaround:** keep inline-asm ties out of measured loops; use an opaque trip count and
   a consumed result instead.
 
+### C-11 — the monitor cannot be rebuilt: boot-hangs with zero serial `OPEN — THIS IS THE SQLITE BLOCKER`
+Every regeneration of the OpenSBI monitor boot-hangs (no banner at all); only the
+checked-in prebuilt `fw_jump.elf` (md5 `6724bcb3`) boots. Recorded since 2026-07-24;
+re-examined 2026-07-28 and the recorded root cause does not survive.
+
+**Why it blocks SQLite.** SQLite's static tables need the large-`.rodata` **copy** path,
+because the unrolled `li`/`sd` path has a hard ceiling: a single initialized global must
+be `size % 8 == 0` and fit a 12-bit store offset (~2 KB). Verbatim from the generator when
+`beebs_ns` hit it:
+`2512 B of *initialized* data overflows the 12-bit store offset and is not copy-eligible (sym='ns_keys', size%8=4)`.
+The copy path needs one monitor change (C-4b), the monitor cannot be rebuilt, so SQLite on
+silicon has no path today. **This is the single gate, and it is not a compiler problem.**
+
+- **The recorded cause CANNOT be the cause.** `plans/large-ro-delivery-completion-task-A.md`
+  §1-STATUS v3 blames compiler drift: good monitor `s0–s6`/frame −368, every regen
+  `s0–s11`/−464. That difference is real and reproduces. But attributing a boot hang to it
+  requires the differing code to run at boot. Attributed every differing line of a fresh
+  regen against the known-good `.c.S` to its enclosing label: **100 % of the real
+  differences are inside `create_domain`** (the only other hit is the trailing `.align`
+  line; `cap_env_init` is byte-identical). `create_domain` is an SBI handler invoked from
+  userspace, and §1-STATUS v2 itself records that it "isn't even called at boot" against a
+  hang with **zero serial**. v2 and v3 contradict each other; v2 has the direct observation.
+- **The one untried candidate is REFUTED.** `caplifive-system` pins `sw/capstone-c` at
+  `bugfix@508342a`; the isolation had used `master@8cda52c` and the merge-base `4899cf9`.
+  Built `508342a` in a throwaway worktree (submodule tree untouched) and ran the regen
+  command from `caplifive-buildroot/Makefile:26`: output differs from the current tree's by
+  **two lines, both `.align 4` vs `.align 16`**, and in the direction *away* from the good
+  monitor. No board time, no firmware risk. `ref/HOW-TO-LAUNCH-ON-FPGA.md` still records
+  `508342a` as the "known fix" — that may hold for **caplifive-system's own** monitor, a
+  different tree, but it is not a fix for the buildroot one.
+- **Next steps, cheapest first.** (a) **Splice, don't regenerate** — apply the large-RO copy
+  hunk directly to the known-good `.c.S` and rebuild; if it boots, SQLite is unblocked and
+  the hang can stay open indefinitely. **This needs no board time — the QEMU leg is the
+  gate.** (b) `capstone_int_handler.c.S` is regenerated too and is **unexamined** (no
+  known-good backup was found), and unlike `create_domain` it *is* live early. (c) Localise
+  with the board's gdb (halt, read `pc`).
+- **HAZARD — the checked-in `.c.S` IS the broken regen.** `components/opensbi/lib/sbi/
+  sbi_capstone_dom.c.S` is md5 `6dfe662a` (the `s0–s11`/−464 build); only `fw_jump.elf` was
+  restored on 2026-07-24. It has no `%.c.S: %.c` rule, so **any buildroot rebuild from this
+  tree silently links the broken monitor**, for both lanes. Known-good copies existed only
+  in temp dirs and are now preserved at
+  `~/capstone-b-artifacts/monitor-known-good/` (`sbi_capstone_dom.c.S.good-b7baff6f`,
+  `fw_jump.elf.good` = `6724bcb3`).
+- Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
+
 ### C-5 — 4 KiB code window `OPEN`
 `link-gpfree.ld` forces globals to image offset `0x1000`, capping `.text` at 4096 B. One
 hardcoded number, QEMU-validated at 16 KiB and 32 KiB and silicon-validated at 32 KiB. Lifting it

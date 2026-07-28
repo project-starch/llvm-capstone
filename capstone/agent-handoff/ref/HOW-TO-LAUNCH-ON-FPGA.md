@@ -112,6 +112,25 @@ our tree's. Recovering + pinning this is `plans/monitor-regen-audit-task-B.md` (
 path); until it's pinned in-tree, **use the existing working prebuilt as-is** for
 board runs. Memory `project_opensbi_monitor_rebuild_include_wrapper`.
 
+## Two things that LOOK like a hang and are not (2026-07-28)
+
+Both cost time in one session; check them before debugging anything.
+
+1. **The board powering off at the end of a run is CORRECT.** `powered off` / `unlocked`
+   in the log is the runner's `finally`, and the process exits 0. It is not a crash.
+2. **A reboot banner in the UART right after a rung's `BG<rung>` marker is usually the
+   NEXT rung's power-cycle, not a wedge.** `Hello World! ... booting! ... OpenSBI v1.3`
+   appearing after `domain ID = 0` reads like the domain took the board down; it is the
+   runner power-cycling because that rung produced no END marker within 120 s. The actual
+   failure is a hang (`cscall` never returns). To tell them apart, look at whether a
+   `power-cycle + reload firmware` line precedes the banner.
+
+**And one real hazard: an ad-hoc console script that never calls `disconnect()` stays
+alive forever.** The socket.io client thread is non-daemon, so a script that connects,
+does its job and falls off the end keeps running and holds a console session — it shows
+up as an inflated `users connected:` count and looks like someone else is on the board.
+One such script lived 49 minutes. Always `disconnect()`, or run it under `timeout`.
+
 ## Non-negotiables
 
 Lock → power-cycle → run → **power off + unlock in `finally`** (never leave it

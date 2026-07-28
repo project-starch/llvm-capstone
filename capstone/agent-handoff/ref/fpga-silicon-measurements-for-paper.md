@@ -130,7 +130,7 @@ Source: `history/21-07-2026_16-12-13_RESULTS-fpga-borrow-cost-cycle-accurate.md`
 > Build: `build-ladder-base-bare.sh`; run: `fpga_driver/run_base_bare_fpga.py`.
 > Trail: `history/28-07-2026_02-30-00_RESULTS-bare-metal-baseline-works-*.md`.
 
-## 2. Pervasive spatial safety costs 26 %–96 % in cycles (bare-metal baseline)
+## 2. Pervasive spatial safety costs 0 %–96 % in cycles (bare-metal baseline)
 
 The draft claims spatial safety is pervasive ("every pointer is a bounded
 capability, always on"), demonstrates it is **correct**, and never prices it.
@@ -143,6 +143,13 @@ This is that price, measured.
 > corrects `tab:appoverhead`'s CPI=1 footnote (the SQLite rows are ~2× what this
 > hardware would pay; the conservative figures are kept deliberately, since the
 > measured CPI comes from these kernels rather than from SQLite).
+> **UPDATED 2026-07-28 (rungs 6 and 8).** `tab:spatialcost` now carries `cover` and
+> `aha-mont64`, the reading paragraph says **0 %–96 %** rather than 5 %–96 %, and the
+> mechanism sentence (*overhead is a property of data access, not execution*) is stated
+> in the paper for the first time — it is the strongest claim the table supports and it
+> was previously only in this document. The "hardware limitation" paragraph was also
+> corrected: it attributed **all** unmeasured kernels to the register-indexed-load
+> defect, which R-6 and R-9 refute.
 > **When new rungs land, edit `tab:spatialcost` — it is built to take more rows.**
 
 Method: each kernel compiled **twice from the identical source header** by the
@@ -202,6 +209,32 @@ is a property of DATA ACCESS, not of execution.**
 [*] **`rv8_primes` HANGS at −O1 on this silicon** and is measurable only at −O0 — a real
 limitation, reported rather than hidden. Everything else is −O1. (Its −O0 pair is
 internally consistent, so the ratio is valid; only cross-row `-O` comparison is affected.)
+
+### Rungs that do NOT appear in the table, and why (2026-07-28)
+
+Eight rows are measured. Coverage is bounded by silicon failures, not by effort, and the
+bound is **not** a single cause — that is the honest statement and it differs from what
+§5 said before today.
+
+| rung | QEMU | baseline half | capability half on silicon | issue |
+|---|---|---|---|---|
+| `matmult_int` | pass | clean | `cscall` hangs at every reachable config | R-1 |
+| `coremark_matrix` | pass | clean | `cscall` hangs at every reachable config | R-1 |
+| `beebs_crc32` | pass | clean | hangs | R-1 |
+| `beebs_insertsort` | pass | clean | wrong value, 560 instrs (compute never ran) | R-1 |
+| `beebs_janne` | pass | clean | hangs — **R-1 predicts PASS** | R-6 |
+| `rv8_sha512` | pass (oracle 1390718314) | 540,073 / 462,646 | hangs, both attempts | R-7 → R-1 |
+| `rv8_sha512s` | pass (oracle 2842840124) | 117,035 / 69,108 | hangs (4 KiB control for R-7) | R-1 |
+| `beebs_ns` | pass (oracle 1184999093) | 88,451 / 62,097 | hangs — **R-1 predicts PASS** | R-9 |
+
+Every one of these has a **clean, correct baseline half**, so the failure is specific to
+the capability build and not to the kernel or the harness. That is what makes them
+reportable as a platform limitation rather than as "benchmarks we could not get working".
+
+**Two of the eight are not explained by R-1** (`beebs_janne`, `beebs_ns`): neither writes
+the object it indexes, so R-1's same-object load-with-intervening-store shape is absent.
+Do not write "all remaining failures are the register-indexed-load defect" — it was
+written once and R-9 falsified it the next day.
 
 ### Why the overheads are what they are
 
@@ -511,7 +544,15 @@ rare; usually honesty costs you something.
 
 ## 5. What is NOT established — read before citing anything above
 
-- **THE MECHANISM IS NOW KNOWN (2026-07-27).** The four non-measured rungs fail because of a
+- **PARTLY SUPERSEDED 2026-07-28 — read the correction first.** What follows was written when
+  four rungs were unmeasured and all four fit the register-indexed-load shape. Since then
+  **R-6 (`beebs_janne`) and R-9 (`beebs_ns`) hang although neither writes the object it
+  indexes**, so R-1's shape is absent and cannot be the explanation for them. R-1 remains
+  well-supported for the rungs it does describe, and the reproducer below is unaffected. But
+  **"the mechanism is now known" is too strong as a blanket statement about non-measured
+  rungs**, and the paper's corresponding paragraph was reworded on 2026-07-28. Treat the
+  paragraph below as "the mechanism for the R-1 class", not "the mechanism, full stop".
+- **THE MECHANISM FOR THE R-1 CLASS (2026-07-27).** Those rungs fail because of a
   characterised **hardware** fault: *a load whose address arrives through a register — a
   register-carried capability or a register-computed offset — does not observe pending stores to
   other addresses.* Isolated by a minimal failing case with controls on both sides: a register
@@ -529,7 +570,11 @@ rare; usually honesty costs you something.
   **For the paper this converts "an unexplained divergence" into "a documented hardware
   limitation", which is a citable claim.** Trail:
   `history/27-07-2026_17-05-00_RESULTS-culprit-found-register-indexed-load-misses-pending-stores.md`.
-- **Three benchmarks measured, not seven — and it will stay three.** `beebs_crc32` and
+- **STALE COUNT — now eight measured, not three (2026-07-28).** The paragraph below dates from
+  when three rows existed and predicted it would "stay three". It did not: the bare-metal
+  baseline (I-2) plus rungs `cover`, `aha_mont64`, `bs`, `cnt`, `recursion` took it to eight.
+  Kept for provenance because its per-rung failure detail is still accurate and still the best
+  record of what was tried. `beebs_crc32` and
   `beebs_insertsort` were made *buildable* at −O1/−O2 on 2026-07-27 and are QEMU-correct, but
   when measured on the board **both failed**: crc32 hangs, insertsort returns a wrong value with
   only 560 retired instructions (the compute never ran). Both were already wrong on silicon at
