@@ -379,6 +379,20 @@ then no END marker in 120 s, both attempts.
   hypothesis is, it has to explain why all four of these hang while `bs` and `cover`
   pass.
 
+  **Copy-path hypothesis REFUTED 2026-07-28, without a board session.** The obvious
+  remaining variable was the delivery mechanism: `beebs_ns` takes the large-RO COPY
+  path (monitor blob) while `beebs_bs` takes the unrolled `li`/`sd` path, and that
+  would have explained R-9 and the SQLite board hang with one cause. It does not.
+  Checking the generated glue rather than booting:
+
+      beebs_ns        copy-path = yes    hangs
+      beebs_nssmall   copy-path = NO     hangs      <- unrolled, still hangs
+      beebs_bs        copy-path = no     passes
+
+  `nssmall`'s tables are 500 B and 500 % 8 == 4, so they are not copy-eligible and
+  fall to the unrolled path -- the same path `bs` uses successfully. Delivery is not
+  the variable. Reading the build output first is what made this free.
+
   **What is left, and it is now a short list.** The kernel is a linear scan comparing a
   loaded value against a loop-invariant, with an early `return` out of a nest. `bs`
   (passes) is a binary search — same read-only indexed load, but a *computed* index and

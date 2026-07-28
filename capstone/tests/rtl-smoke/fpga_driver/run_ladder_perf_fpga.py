@@ -41,8 +41,12 @@ def _board_url():
                      "for this run (do not commit or persist it)")
 
 URL = _board_url()
-IMG = pathlib.Path(os.path.expanduser("~/capstone-b-artifacts/fw_payload_fpga_up_gpfree.bin"))
-IMG_NAME = "fw_payload_fpga_up_gpfree.bin"
+# FPGA_FW overrides the firmware, so a run can exercise a freshly built monitor
+# instead of the checked-in prebuilt. Needed for anything that depends on a monitor
+# change (the globals-offset unpacking, the loud capstone_error).
+IMG = pathlib.Path(os.environ.get("FPGA_FW") or
+                   os.path.expanduser("~/capstone-b-artifacts/fw_payload_fpga_up_gpfree.bin"))
+IMG_NAME = os.environ.get("FPGA_FW_NAME") or "fw_payload_fpga_up_gpfree.bin"
 BITSTREAM = "working-caplifive-captype-fixed.bit"
 
 # Must match build-ladder-fpga.sh's OUT_DIR default ($CAPSTONE_TMP_ROOT/ladder-fpga),
