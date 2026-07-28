@@ -1,0 +1,38 @@
+diff --git a/sbi_capstone.c b/sbi_capstone.c
+index be47c68..decc071 100644
+--- a/sbi_capstone.c
++++ b/sbi_capstone.c
+@@ -32,6 +32,9 @@
+ #define CPMP_COUNT 16
+ #define DOMAIN_DATA_N    96
+ #define DOMAIN_DATA_SIZE (16 * DOMAIN_DATA_N)
++/* Fixed image offset of the domain's globals (must match GPFREE_GLOBALS_OFFSET in
++   tests/.../link-gpfree.ld). Globals live at [base+GPFREE_GLOBALS_OFFSET, base+code_size). */
++#define GPFREE_GLOBALS_OFFSET 0x1000u
+ 
+ 
+ // toggle the following for swapping between cpmp swapping and gen_cap (hack)
+@@ -301,6 +304,23 @@ static unsigned create_domain(unsigned base_addr, unsigned code_size,
+     dom_seal = __split(dom_code, base_addr + code_size);
+     dom_data = __split(dom_seal, base_addr + code_size + DOMAIN_DATA_SIZE);
+ 
++    /* Large-.rodata delivery (silicon): copy the initialized-globals image bytes
++       [base+GPFREE_GLOBALS_OFFSET, base+code_size) into the front of dom_data, so the
++       domain's cap-table glue can materialize a large const global via
++       `lla <sym> - __gpfree_globals_base` (a data-authority read from dom_data)
++       instead of an li/sd immediate storm that overflows the PCC code window.
++       Result: dom_data[k] == image[base+GPFREE_GLOBALS_OFFSET + k]. Word copy through
++       the linear caps (cap-to-cap, same idiom as capstone-c enclave setup); .rodata
++       const tables carry no capability tags, so a plain word copy is exact. Must run
++       BEFORE C_SET_CURSOR moves dom_code's cursor (indexed access is cursor-relative). */
++    if(code_size > GPFREE_GLOBALS_OFFSET) {
++        unsigned gpoff_w = GPFREE_GLOBALS_OFFSET >> 3;          /* 0x1000/8 words */
++        unsigned glob_w  = (code_size - GPFREE_GLOBALS_OFFSET) >> 3;
++        unsigned wi;
++        for(wi = 0; wi < glob_w; wi += 1)
++            dom_data[wi] = dom_code[gpoff_w + wi];
++    }
++
+     int i;
+     for(i = 0; i < DOMAIN_DATA_N; i += 1) {
+         dom_seal[i] = 0;

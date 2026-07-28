@@ -1,0 +1,39 @@
+diff --git a/sbi_capstone.c b/sbi_capstone.c
+index be47c68..07e6026 100644
+--- a/sbi_capstone.c
++++ b/sbi_capstone.c
+@@ -32,6 +32,9 @@
+ #define CPMP_COUNT 16
+ #define DOMAIN_DATA_N    96
+ #define DOMAIN_DATA_SIZE (16 * DOMAIN_DATA_N)
++// gp-free domain ABI (silicon): fixed image offset where the domain's globals
++// begin (must equal the value in tests/runtime-qemu/gp-free-domain/link-gpfree.ld).
++#define GPFREE_GLOBALS_OFFSET 0x1000
+ 
+ 
+ // toggle the following for swapping between cpmp swapping and gen_cap (hack)
+@@ -306,8 +309,24 @@ static unsigned create_domain(unsigned base_addr, unsigned code_size,
+         dom_seal[i] = 0;
+     }
+ 
++    // gp-free domain ABI (silicon): derive the domain's `gp` from real authority
++    // by SPLITting the code image at the fixed globals boundary
++    // (GPFREE_GLOBALS_OFFSET, matching link-gpfree.ld) into an execute code cap
++    // (PCC) and an R/W globals cap (gp). SPLIT only partitions existing authority,
++    // so -- unlike the QEMU-only debug op C_GEN_CAP (funct 0x40, absent on the RTL,
++    // which fabricates a cap and hangs the monitor on silicon) -- this works on
++    // real hardware. gp is delivered via the cscratch (dom_data) top-16 slot; the
++    // entry glue does `ldc gp, END-16; delin`.
++    __linear void *dom_gp = __split(dom_code, base_addr + GPFREE_GLOBALS_OFFSET);
++    // dom_code -> [base, base+GPFREE_GLOBALS_OFFSET) (code); dom_gp -> [.., +code_size) (globals)
++
+     C_SET_CURSOR(dom_code, dom_code, base_addr + entry_offset);
+ 
++    // store gp (linear; glue delins on first entry) into the cscratch top slot
++    C_SET_CURSOR(dom_data, dom_data, base_addr + tot_size - 16);
++    *(__linear void **)dom_data = dom_gp;
++    C_SET_CURSOR(dom_data, dom_data, base_addr + code_size + DOMAIN_DATA_SIZE);
++
+     // construct the sealed region of the domain
+     dom_seal[0] = dom_code;
+     dom_seal[2] = dom_data;

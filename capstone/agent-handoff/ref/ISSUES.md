@@ -772,10 +772,48 @@ tie. A 5-instruction loop body became 7 — `srai / xor / add / **mv a4,a4** / a
 - **Workaround:** keep inline-asm ties out of measured loops; use an opaque trip count and
   a consumed result instead.
 
-### C-11 — the monitor cannot be rebuilt: boot-hangs with zero serial `OPEN — THIS IS THE SQLITE BLOCKER`
-Every regeneration of the OpenSBI monitor boot-hangs (no banner at all); only the
-checked-in prebuilt `fw_jump.elf` (md5 `6724bcb3`) boots. Recorded since 2026-07-24;
-re-examined 2026-07-28 and the recorded root cause does not survive.
+### C-11 — the monitor cannot be rebuilt: boot-hangs with zero serial `FIXED 2026-07-28`
+**FIXED 2026-07-28. Root cause: a stale object file, not the compiler.**
+
+`build/build/opensbi-custom/build/platform/generic/firmware/fw_jump.o` was compiled
+2026-07-22 **for the FPGA firmware, where embedding a device tree is mandatory**.
+`make A=opensbi-rebuild` only **relinks** and never recompiles it, so every QEMU monitor
+rebuild silently linked in an **FPGA device tree**; `firmware/fw_base.S:217`
+(`#ifdef FW_FDT_PATH` → `lla a1, fw_fdt_bin`) then makes OpenSBI **discard the DTB QEMU
+passes in `a1`**. Wrong memory map, wrong UART, console never initialised → hang with zero
+serial, before any banner.
+
+**Fix — make it part of the rebuild recipe, not a troubleshooting step:**
+```bash
+D=build/build/opensbi-custom/build/platform/generic/firmware
+rm -f $D/fw_jump.o $D/fw_jump.elf $D/fw_jump.bin $D/fw_dynamic.o $D/fw_payload.o
+make build A=opensbi-rebuild CAPSTONE_CC_PATH="$(realpath ../capstone-c)"
+```
+**Verify before trusting any rebuilt monitor:**
+`readelf -sW build/images/fw_jump.elf | grep -c fw_fdt_bin` must be **0**, and
+`.rodata` must be `002de8` (an FDT-contaminated build reads `003a10`).
+Validated: rebuilt monitor md5 `9cbf5068` boots and `beebs_aha_mont64` returns its oracle.
+
+**The trap RE-ARMS every time the FPGA firmware is built in this tree**, because the same
+build dir serves both and the FPGA side *requires* `FW_FDT_PATH`. Separating them (a
+distinct `O=` build dir) is the durable fix and is not done yet.
+
+**What was wrong before.** The recorded cause was compiler drift (good monitor `s0–s6`/
+frame −368 vs regen `s0–s11`/−464). That difference is real but confined to `create_domain`,
+which does not run at boot. The decisive experiment was to hold every generated input fixed
+— install the known-good `.c.S`, block regeneration, rebuild — and it **still hung**, which
+exonerated capstone-c outright. Then a section-by-section ELF diff showed `.rodata` alone
+grew by 3,112 B, the symbol diff showed exactly one new symbol (`fw_fdt_bin`), and dumping
+the first bytes of `.rodata` gave `d00dfeed` — FDT magic. Full trail:
+`history/28-07-2026_16-10-00_monitor-regen-SOLVED-stale-fdt-object.md`.
+
+**Unblocks:** large-`.rodata` delivery (C-4b) → SQLite on silicon; the `fence.i`
+domain-boundary fix (the real fix for R-3, i.e. the per-rung power-cycle that dominates
+board time); and any future monitor change.
+
+---
+*Historical detail below, kept because it is still the best record of what was ruled out.*
+
 
 **Why it blocks SQLite.** SQLite's static tables need the large-`.rodata` **copy** path,
 because the unrolled `li`/`sd` path has a hard ceiling: a single initialized global must

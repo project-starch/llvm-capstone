@@ -1,0 +1,81 @@
+diff --git a/target/riscv/op_helper.c b/target/riscv/op_helper.c
+index 299d75442b..3929e18e78 100644
+--- a/target/riscv/op_helper.c
++++ b/target/riscv/op_helper.c
+@@ -584,12 +584,41 @@ void helper_csmovc(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
+     }
+ }
+ 
++/* gp = PCC(cursor 0) fabrication toggle (our non-canonical patch 7aca0540).
++ * The RTL never establishes gp this way -- an image-bounded cap forced to cursor
++ * 0 is unrepresentable -- so the gp-free domain ABI delivers gp from the monitor
++ * and turns this off (CAPSTONE_GP_FABRICATE=0). Default on preserves the legacy
++ * behaviour, so the existing corpus is unaffected. Cached once. */
++static bool capstone_gp_fabricate(void) {
++    static int cached = -1;
++    if (cached < 0) {
++        const char *e = getenv("CAPSTONE_GP_FABRICATE");
++        cached = (e && e[0] == '0') ? 0 : 1;
++    }
++    return cached;
++}
++
++/* Monitor stand-in for the gp-free QEMU proof. When CAPSTONE_GP_STANDIN=1 (and
++ * fabrication is off), helper_cscall delivers a *representable* image-covering gp
++ * -- PCC's bounds with an in-bounds cursor (= base) -- which is exactly what the
++ * monitor's C_GEN_CAP mint will hand a fresh domain on silicon. QEMU supplies it
++ * here so the gp-free scc codegen can be proven end to end without rebuilding the
++ * OpenSBI monitor + buildroot image. Default off. */
++static bool capstone_gp_standin(void) {
++    static int cached = -1;
++    if (cached < 0) {
++        const char *e = getenv("CAPSTONE_GP_STANDIN");
++        cached = (e && e[0] == '1') ? 1 : 0;
++    }
++    return cached;
++}
++
+ void helper_cscincoffset(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint32_t rs2) {
+     capregval_t *rd_v = &env->gpr[rd];
+     capregval_t *rs1_v = &env->gpr[rs1];
+     capregval_t *rs2_v = &env->gpr[rs2];
+ 
+-    if (!rs1_v->tag && env->priv == PRV_C && rs1 == 3) {
++    if (capstone_gp_fabricate() && !rs1_v->tag && env->priv == PRV_C && rs1 == 3) {
+         capfat_t gp_cap = env->pc_cap;
+         gp_cap.bounds.cursor = 0;
+         capregval_set_cap(rs1_v, &gp_cap);
+@@ -617,7 +646,7 @@ void helper_cscincoffsetimm(CPURISCVState *env, uint32_t rd, uint32_t rs1, uint6
+     capregval_t *rd_v = &env->gpr[rd];
+     capregval_t *rs1_v = &env->gpr[rs1];
+ 
+-    if (!rs1_v->tag && env->priv == PRV_C && rs1 == 3) {
++    if (capstone_gp_fabricate() && !rs1_v->tag && env->priv == PRV_C && rs1 == 3) {
+         capfat_t gp_cap = env->pc_cap;
+         gp_cap.bounds.cursor = 0;
+         capregval_set_cap(rs1_v, &gp_cap);
+@@ -1168,7 +1197,7 @@ void helper_cjalr_switch_caps(CPURISCVState *env, uint32_t rd, uint32_t rs1, uin
+ 
+     env->pc_cap = rs1_v->val.cap;
+ 
+-    if (env->priv == PRV_C) {
++    if (capstone_gp_fabricate() && env->priv == PRV_C) {
+         capfat_t gp_cap = env->pc_cap;
+         gp_cap.bounds.cursor = 0;
+         capregval_set_cap(&env->gpr[3], &gp_cap);
+@@ -1226,8 +1255,13 @@ void helper_cscall(CPURISCVState *env, uint32_t rd, uint32_t rs1) {
+ 
+     if (env->priv == PRV_C) {
+         capfat_t gp_cap = env->pc_cap;
+-        gp_cap.bounds.cursor = 0;
+-        capregval_set_cap(&env->gpr[3], &gp_cap);
++        if (capstone_gp_fabricate()) {
++            gp_cap.bounds.cursor = 0;                  /* legacy, unrepresentable */
++            capregval_set_cap(&env->gpr[3], &gp_cap);
++        } else if (capstone_gp_standin()) {
++            gp_cap.bounds.cursor = gp_cap.bounds.base; /* representable stand-in */
++            capregval_set_cap(&env->gpr[3], &gp_cap);
++        }
+     }
+ 
+     // set cra

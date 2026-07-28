@@ -101,7 +101,30 @@ The old bottleneck was per-run UART transfer. Two levers, in order:
   already-fixed compiler bug. **Delete `$OUT_DIR/ladder-fpga/*.dom` (or force-rebuild)
   before every sweep** so the current compiler is exercised.
 
-## Don't rebuild the monitor with our tree's `capstone-c` — use `caplifive-system`'s pin
+## Rebuilding the monitor — SOLVED 2026-07-28, but delete the stale objects first
+
+The monitor **can** be rebuilt now. Every rebuild used to boot-hang with zero serial; the
+cause was never the compiler. `fw_jump.o` in the shared build dir had been compiled for the
+**FPGA** firmware, where embedding a device tree is mandatory, and `A=opensbi-rebuild` only
+relinks — so the QEMU monitor inherited an FPGA DTB and `fw_base.S`'s
+`#ifdef FW_FDT_PATH → lla a1, fw_fdt_bin` discarded the DTB QEMU passes. Wrong UART, no
+console, no banner.
+
+```bash
+cd capstone/caplifive-buildroot
+D=build/build/opensbi-custom/build/platform/generic/firmware
+rm -f $D/fw_jump.o $D/fw_jump.elf $D/fw_jump.bin $D/fw_dynamic.o $D/fw_payload.o   # REQUIRED
+make build A=opensbi-rebuild CAPSTONE_CC_PATH="$(realpath ../capstone-c)"
+readelf -sW build/images/fw_jump.elf | grep -c fw_fdt_bin      # MUST be 0
+readelf -SW build/images/fw_jump.elf | grep '\.rodata'         # MUST be 002de8, not 003a10
+```
+
+**This re-arms every time the FPGA firmware is built in this tree** — same build dir, and
+the FPGA side genuinely needs `FW_FDT_PATH`. Treat the `rm` as part of the recipe.
+Restore point if anything goes wrong: `~/capstone-b-artifacts/monitor-known-good/`
+(`fw_jump.elf.good` md5 `6724bcb3`, plus the known-good `.c.S`). Trail: issue C-11.
+
+## Superseded: "don't rebuild the monitor with our tree's `capstone-c`"
 
 Regenerating `fw_jump.elf` (QEMU) or the FPGA firmware monitor from **our tree's**
 `capstone-c` (`master`@`8cda52c`) **boot-hangs** (zero serial). **Known fix
