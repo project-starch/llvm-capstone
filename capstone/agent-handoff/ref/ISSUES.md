@@ -939,6 +939,35 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
   `fw_jump.elf.good` = `6724bcb3`).
 - Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
 
+### C-12 — a NON-DEFAULT globals offset does not work, and it blocks SQLite `OPEN`
+Measured 2026-07-28. With `DOMAIN_WINDOW=32k` (globals at image offset 0x8000 instead
+of 0x1000) `beebs_crc32big` fails, while the identical rung at the default offset passes.
+
+**This is on the SQLite critical path, not a side issue.** SQLite needs
+`globals_off ~= 0x230000` because its `.text` is 2.2 MB, i.e. exactly this mechanism at a
+larger value. Debug it on the 12 KB rung, where a cycle is a QEMU run, rather than
+discovering it on a multi-MB build.
+
+What is ruled out:
+- **Not the entry glue.** BOTH glues fail, and differently: the generated prologue
+  returns `4294967295` (the domain never wrote its result, no fault), the descriptor
+  interpreter takes `Cap mem access OOB: pc = 101560254, rs1 = x2 (sp), addr = ...e60,
+  bounds = (...e90, 101580000)` -- a store 48 bytes BELOW sp's base, from
+  `stc(ra, sp, 48)` in `test:`.
+- **Not dom_data sizing.** `domdata-budget.py` gives ~90 KB of stack for a domain whose
+  entry frame is 96 bytes (4 KiB window: 118,960 B; 32 KiB: 90,288 B). This was the
+  leading hypothesis and it is dead.
+- **Not the offset failing to arrive.** Before the offset was plumbed the 32k case died
+  in `helper_cssplit`; it now gets far enough to run domain code, so the monitor is
+  receiving 0x8000.
+
+Leading suspicion, untested: `sp`'s bounds at the fault are
+`(0x101568e90, 0x101580000)` -- the END is dom_data's end, i.e. sp looks **un-narrowed by
+the carve splits**, which would mean the cursor/bounds relationship after
+`scc(sp, sp, t1)` is not what both glues assume when the offset is not 0x1000.
+**Dump the carve boundaries** (t1 after each split) rather than reasoning further --
+that is what settled C-4b and what the last three hypotheses here failed to do.
+
 ### C-5 — 4 KiB code window `OPEN`
 `link-gpfree.ld` forces globals to image offset `0x1000`, capping `.text` at 4096 B. One
 hardcoded number, QEMU-validated at 16 KiB and 32 KiB and silicon-validated at 32 KiB. Lifting it
