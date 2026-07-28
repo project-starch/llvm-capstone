@@ -145,6 +145,33 @@ path at all, which is why two boots were spent learning nothing.
 were written down before the fix was attempted, and they killed the theory in one command
 instead of after a codegen change. That is the practice to repeat.
 
+### I-4 — some probes return ALL ZEROS on the board while correct under QEMU `OPEN — blocks R-6/R-8 work`
+2026-07-28. Two probes (`accum_probe`, `accum2_probe`) fail to deliver results **on the
+board** while the **identical binaries** are correct under QEMU via the new diag loader.
+`expint_diag` and the `rawhazard*` family deliver fine on the board, so the mechanism is
+not "debug slots don't work".
+
+| probe | QEMU (diag loader) | board (`ladder_perf_ctl`) |
+|---|---|---|
+| `expint_diag` | — | **slots delivered** (`dbg0=0 dbg1=2 … dbg7=2`) |
+| `accum_probe` | **9/9 correct** | retval **100 correct**, all slots **0** |
+| `accum2_probe` | **9/9 correct** (`3883 0 3883 100 3881 3883 49 100 3883`) | retval **0**, all slots **0** |
+
+`accum2_probe` is the sharper case: on the board **even `res[0]` is zero**, i.e. the region
+reads back entirely unwritten, yet the `cscall` returned normally (no hang, no fault, the
+runner reported a result). Under QEMU the same binary writes everything correctly.
+
+**Why this blocks the R-6/R-8 hunt:** every bisect designed to find that fault is delivered
+through exactly this path, and two of three such probes now come back empty. Until it is
+understood, a board "all zeros" cannot be distinguished from "the fault under
+investigation".
+
+**Leads, none checked:** `expint_diag` (works) writes `res[3+0]` **early**, before its main
+loop, while both failing probes write only after several loops; `accum2_probe` uses a
+`volatile unsigned long *out` alias where `expint_diag` writes `res[...]` directly; the
+failing probes are also the largest. Compare the three side by side — all three are
+committed, and QEMU can now run them in seconds, so this is an **off-board** investigation.
+
 ### R-8 — pure-scalar miscompute; the "accumulator" characterisation is TOO BROAD `OPEN`
 Measured 2026-07-28 on `beebs_expint`, and it is the cleanest instance of this class yet.
 
