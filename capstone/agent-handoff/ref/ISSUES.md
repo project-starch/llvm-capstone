@@ -423,61 +423,44 @@ as a bare-metal S-mode OpenSBI payload (`build-ladder-base-bare.sh`,
 
 ---
 
-### I-3 — the QEMU ladder path shares NO region, so debug-slot probes cannot be tested off-board `OPEN — root cause found`
-Root-caused 2026-07-28, and it is why two board boots produced one data point between them.
+### I-3 — diagnostic probes could not run under QEMU `FIXED 2026-07-28`
+Diagnostic rungs write raw values into `res[3..47]`. Under QEMU a domain saw only an
+8-byte return slot, so every `*_diag` / `rawhazard*` probe was **board-only** — each
+iteration cost a full boot and a broken probe could not be caught before spending one.
+Two boots on 2026-07-28 produced one data point between them for exactly this reason.
 
-**Cause.** `modcapstone/userspace/capstone-test.c` — the loader the QEMU smoke path runs as
-`/capstone-test.user` — has its region setup **commented out**:
+**Root cause, after four failed attempts: `the share IS the entry`.**
+`ladder_perf_ctl` says so in its own comment, and it is the whole difference. An
+**annotated** region share *invokes* the domain with the REGION as its argument. The QEMU
+loader shared a region and then called `call_dom()`, which enters through the plain call
+path whose first argument is the 8-byte return slot — so `res[3]` faulted every time.
 
-```c
-// region_id = create_region(4096);
-// share_region(dom_id, region_id);
+Attempts that failed first, recorded so nobody repeats them: plain `share_region`;
+`shared_region_annotated` (with `REV_SHARED` wrongly passed as `0x0` — it is `0x2`);
+adding `map_region` + zeroing. **None of them mattered: the bug was the trailing
+`call_dom`, not the share.**
+
+**Fix:** `package/modcapstone/userspace/capstone-diag.c` → `capstone-diag.user`, a
+**separate** loader that maps a 4096-byte region, shares it annotated
+(`ANNOT_PERM_INOUT`, `REV_SHARED`) — which enters the domain — then reads `res[0]` and
+prints `res[3..47]` as a `DEBUG` line.
+
+**Deliberately separate from `capstone-test.c`**, which loads the entire QEMU corpus (82
+BEEBS, RV8, CoreMark, SQLite, authority). Changing that file's entry model would move where
+every existing domain finds its result. Zero regression surface this way.
+
+**No guest image rebuild needed** — build with the buildroot cross-compiler, drop it in the
+9p share:
+```
+run-domain-smoke.py --domain-loader /mnt/host/capstone-diag.user <rung>.dom
 ```
 
-So a domain under QEMU gets only the 8-byte return slot, which is exactly the fault seen
-when a probe writes `res[3..]` there:
-`Cap mem access OOB: cursor = 8008f3c0, imm = 24, bounds = (8008f3c0, 8008f3c8)`.
-The FPGA controller (`ladder_perf_ctl`) *does* create a proper shared region, which is why
-`expint_diag` prints debug slots on the board and nothing can be rehearsed under emulation.
+**Verified:** `accum_probe` returns all nine slots under QEMU —
+`dbg0..dbg6=100, dbg7=3, dbg8=1000`, **9/9 correct** — the probe that produced nothing on
+two board boots.
 
-**Consequence, and it is expensive.** Every diagnostic rung — the whole `*_diag` and
-`rawhazard*` family, which is how R-1 was localised — is **board-only by construction**.
-Each iteration costs a full boot, and a broken probe cannot be caught before spending one.
-Both `accum_probe` runs failed this way.
-
-**Fix ATTEMPTED 2026-07-28, not yet working — but the approach is validated and no image
-rebuild is needed.** `capstone-diag.c` / `capstone-diag.user` now exist
-(`package/modcapstone/userspace/`), built with the buildroot cross-compiler and run from
-the 9p host share via `run-domain-smoke.py --domain-loader /mnt/host/capstone-diag.user`.
-
-**Deliberately a SEPARATE loader, not a change to `capstone-test.c`:** that file is the
-loader for the entire QEMU corpus (82 BEEBS, RV8, CoreMark, SQLite, authority), and sharing
-a region changes what a domain's first argument *is* — enabling it there risks moving where
-every existing domain finds its result. A separate binary has zero regression surface, and
-running it from the host share avoids rebuilding the guest image at all.
-
-**Status: the domain still sees only the 8-byte return slot.** Two variants tried, both
-still faulting at `res[3]` with `bounds = (8008f3c0, 8008f3c8)`:
-1. `create_region(4096)` + `share_region(...)` — no change.
-2. `create_region(4096)` + `shared_region_annotated(dom, reg, ANNOT_PERM_INOUT, REV_SHARED)`
-   — no change. (First attempt passed `REV_SHARED` as `0x0`; the correct value is `0x2`,
-   corrected and retested.)
-
-**Next thing to try, and it is the last structural difference from the working
-`ladder_perf_ctl`:** that controller calls **`map_region(region_id, REGION_SIZE)` and
-`memset_`s it BEFORE sharing** — the diag loader does neither. Add both and retest. Its
-comment says "the share IS the entry", so the entry argument may only be established once
-the region is mapped by the caller.
-
-**Old plan (superseded):** restore the two lines in `capstone-test.c` and rebuild the guest
-image. That is a **buildroot userspace
-rebuild**, not a script change, so it is not free — but it converts probe iteration from
-~2.5 min of a shared physical resource into seconds of QEMU, and it would have caught both
-`accum_probe` failures for nothing.
-
-**Do this before any further probe work.** It is the highest-leverage infrastructure item
-outstanding: R-1 was localised by diagnostic rungs, R-6/R-8 still need them, and right now
-every one of them is blind until it reaches the board.
+**Consequence:** probe iteration drops from ~2.5 min of a shared physical resource to
+seconds of emulation, and R-1's diagnostic family can finally be developed off-board.
 
 ## Compiler / toolchain (ours)
 
