@@ -217,7 +217,6 @@
 __test_reentry:
   ccsrrw(sp, cscratch, x0)
   BUILD_GP_CAPTABLE_INTERP
-  RUN_CAP_INIT
   ldc(t0, sp, -32)
   ccsrrw(x0, cscratch, t0)
   ld t0, -40(sp)
@@ -232,7 +231,6 @@ _start:
 __test_entry:
   ccsrrw(sp, cscratch, x0)           /* sp = dom_data (cscratch) DATA region */
   BUILD_GP_CAPTABLE_INTERP
-  RUN_CAP_INIT
   j test
 
 .text
@@ -242,6 +240,14 @@ test:
   stc(ra, sp, 48)                    /* save the entry return cap for domreturn */
   sd a0, 64(sp)
   stc(a1, sp, 80)                    /* a1 = shared region cap (res) */
+
+  /* Cap-init runs HERE, not at the entry points, because it CALLS: `jalr ra`
+     clobbers ra, and ra holds the entry return capability that domreturn needs.
+     Running it before `stc(ra, sp, 48)` destroyed that capability and the domain
+     faulted at its own exit (cause 24 at the domreturn) with the compute already
+     finished and correct -- a failure that looks like a miscompute but is not.
+     my_first_domain/start.S orders it the same way, for the same reason. */
+  RUN_CAP_INIT
 
   ldc(a0, sp, 80)                    /* a0 = res */
   ld a1, 64(sp)                      /* a1 = func */

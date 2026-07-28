@@ -1473,6 +1473,42 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
   SDValue Symbol = Node->getOperand(0); // This is our TargetGlobalAddress (i64)
   MVT PtrVT = MVT::i128;
 
+  // gp-captable: a CODE address must never be derived from gp.
+  //
+  // Under plain gp-free, gp spans the whole image, so `scc gp, &f` yields a usable
+  // code address and the fallthrough below is correct. Under gp-captable, gp is
+  // bounded to the CAP TABLE -- a few hundred bytes at the top of dom_data -- so the
+  // same sequence produces a capability with cap-table bounds and a cursor pointing
+  // wildly outside them. helper_csscc does not bounds-check, so QEMU hands the
+  // garbage back happily and it only faults when something dereferences it; the RTL
+  // would not be so forgiving. That makes this a silent, latent miscompile of exactly
+  // the kind C-8 (constant pools) turned out to be.
+  //
+  // It stayed hidden because no ladder rung takes a function's address. The `strtab`
+  // rung does, and faults with
+  //   Cap mem access OOB: cursor = 10156051c, bounds = (10157ff80, 101580000)
+  // i.e. the cap table. SQLite takes function addresses everywhere (VFS method
+  // tables, FuncDef.xSFunc, sqlite3_mem_methods), so this blocks it outright.
+  //
+  // The fix is to hand back the raw PC-relative integer with no gp involvement --
+  // precisely what the gp-free direct-call path already does. Code addresses are
+  // fetched through PCC, so they need no data capability; an untagged 128-bit value
+  // round-trips through stc/ldc and compares by identity, so storing and comparing
+  // function pointers keeps working.
+  if (CapstoneGpCaptable) {
+    bool IsCodeSymbol = false;
+    if (auto *GA = dyn_cast<GlobalAddressSDNode>(Symbol))
+      IsCodeSymbol = isa<Function>(GA->getGlobal());
+    else if (isa<BlockAddressSDNode>(Symbol) || isa<ExternalSymbolSDNode>(Symbol))
+      IsCodeSymbol = true;
+
+    if (IsCodeSymbol) {
+      SDNode *Addr = CurDAG->getMachineNode(Capstone::PseudoLLA, DL, PtrVT, Symbol);
+      ReplaceNode(Node, Addr);
+      return;
+    }
+  }
+
   // We need: Ptr = GP + SymbolAddress
 
   // 1. Get GP (c3)

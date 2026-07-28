@@ -61,12 +61,18 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
 
 ## Context & compaction
 
-Board-debug threads here run long, so manage context deliberately. Lightly (not
-every turn) assess whether it's a good moment to `/compact`, and **proactively
-recommend it in one line** when work hits a natural checkpoint AND the important
-state is already captured in committed docs/memory so it can be safely summarized.
-Do **not** recommend it mid-task, during active debugging, or while un-captured
-details still matter. Briefly say why the timing is safe (or why to postpone).
+Board-debug threads here run long. **Do NOT routinely recommend `/compact`.** Keep
+working and let context management happen on its own; a compaction suggestion at a
+natural-looking checkpoint is usually just an interruption.
+
+Raise it **only when not compacting would actually damage progress** — i.e. context
+is close enough to exhausted that the next steps would be taken with important state
+already lost, and that state is not yet in committed docs/memory. In that case say so
+in one line, with the specific thing at risk. Otherwise say nothing about compaction.
+
+The durable protection is not compaction, it is committing: land findings in
+`agent-handoff/` and commit messages as you go, so a summary losing detail costs
+nothing.
 Never compact unilaterally — you can only recommend; it is the user's call.
 
 When you recommend `/compact`, also give a short **compaction brief** — the generic
