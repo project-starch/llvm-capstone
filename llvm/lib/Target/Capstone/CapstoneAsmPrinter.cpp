@@ -141,6 +141,7 @@ private:
   void emitStaticCapGCTSection(const Module &M);
   void emitCapGlobalInitTableEntry(const Module &M);
   void emitGpCaptableTable(const Module &M);
+  void emitGpCaptableInitDesc(const Module &M);
   void emitAttributes(const MCSubtargetInfo &SubtargetInfo);
 
   void emitNTLHint(const MachineInstr *MI);
@@ -804,6 +805,7 @@ void CapstoneAsmPrinter::emitEndOfAsmFile(Module &M) {
   emitStaticCapGCTSection(M);
   emitCapGlobalInitTableEntry(M);
   emitGpCaptableTable(M);
+  emitGpCaptableInitDesc(M);
 }
 
 // If this module has a capability-global initializer (synthesized by the
@@ -885,6 +887,86 @@ void CapstoneAsmPrinter::emitGpCaptableTable(const Module &M) {
           MCSymbolRefExpr::create(getSymbol(GV), OutContext),
           MCSymbolRefExpr::create(Here, OutContext), OutContext);
       OutStreamer->emitValue(Diff, 8);
+    }
+  }
+}
+
+// gp-captable ABI, BLOB-RELATIVE variant: emit `.capstone_gp_initdesc`, the
+// descriptor a fixed entry-glue interpreter reads to build the per-global
+// capability table -- replacing the per-app unrolled prologue that
+// gen-gp-captable-glue.py generates today.
+//
+//   header:  u64 built_flag      -- 0 in the image. The glue sets it in its own
+//                                   (copied) view after the first build, so a
+//                                   reentry can skip rebuilding and reload gp.
+//            u64 count
+//            u64 gp_slot[2]      -- 16 B, 16-aligned: where the glue parks gp.
+//   record:  u64 size
+//            u64 align
+//            i64 blob_off        -- (sym - __gpfree_globals_base), i.e. the
+//                                   global's offset into the initializer blob the
+//                                   monitor copies into the front of dom_data.
+//                                   -1 for a zero-initialized (.bss) global.
+//
+// WHY BLOB-RELATIVE, AND WHY THIS UNBLOCKS SQLITE. The existing `.capstone_gp_table`
+// carries a PC-relative diff to the image copy of the initializer, which the
+// generator turns into an unrolled li/sd storm -- costing ~25 bytes of .text per
+// byte of data and capped at 2040 B per global by the 12-bit store offset. Its
+// alternative, the copy path, needs the generator to `lla` the symbol from a
+// SEPARATE translation unit, so it rejects every `.L`-private symbol: every
+// `static const` table and every string literal. SQLite has ~1,095 globals, 910 of
+// them private.
+//
+// The compiler has no such problem: it can name a private symbol, and
+// `sym - __gpfree_globals_base` is an ordinary link-time symbol difference
+// (R_RISCV_ADD64/SUB64 -- verified to assemble against a linker-script-defined
+// symbol before this was written). So moving the offset computation from the glue
+// into the descriptor removes the private-symbol restriction, the 2040 B ceiling,
+// the size%8 requirement and the O(N) prologue in one step.
+//
+// The zero-init sentinel is -1, NOT 0: unlike the PC-relative form, blob_off 0 is
+// a perfectly legal value (the first global sits exactly at the region base).
+//
+// Emitted ALONGSIDE `.capstone_gp_table`, not instead of it, so the existing
+// generator keeps working until the interpreter replaces it.
+void CapstoneAsmPrinter::emitGpCaptableInitDesc(const Module &M) {
+  if (!CapstoneGpCaptable || !TM.getTargetTriple().isOSBinFormatELF())
+    return;
+
+  SmallVector<const GlobalVariable *, 16> Table;
+  for (const GlobalVariable &GV : M.globals())
+    if (getGpCaptableIndex(&GV) >= 0)
+      Table.push_back(&GV);
+  if (Table.empty())
+    return;
+
+  const DataLayout &DL = getDataLayout();
+  MCSection *Sec = OutContext.getELFSection(".capstone_gp_initdesc",
+                                            ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
+  OutStreamer->switchSection(Sec);
+  OutStreamer->emitValueToAlignment(Align(16));
+  OutStreamer->emitIntValue(0, /*Size=*/8);            // built_flag
+  OutStreamer->emitIntValue(Table.size(), /*Size=*/8); // count
+  OutStreamer->emitIntValue(0, /*Size=*/8);            // gp_slot[0]
+  OutStreamer->emitIntValue(0, /*Size=*/8);            // gp_slot[1]
+
+  MCSymbol *GlobalsBase = OutContext.getOrCreateSymbol("__gpfree_globals_base");
+  for (const GlobalVariable *GV : Table) {
+    uint64_t Size = DL.getTypeAllocSize(GV->getValueType());
+    uint64_t Alignment =
+        GV->getAlign().value_or(DL.getABITypeAlign(GV->getValueType())).value();
+    OutStreamer->emitIntValue(Size, 8);
+    OutStreamer->emitIntValue(Alignment, 8);
+
+    bool ZeroInit =
+        !GV->hasInitializer() || GV->getInitializer()->isNullValue();
+    if (ZeroInit) {
+      OutStreamer->emitIntValue(static_cast<uint64_t>(-1), 8);
+    } else {
+      const MCExpr *Off = MCBinaryExpr::createSub(
+          MCSymbolRefExpr::create(getSymbol(GV), OutContext),
+          MCSymbolRefExpr::create(GlobalsBase, OutContext), OutContext);
+      OutStreamer->emitValue(Off, 8);
     }
   }
 }

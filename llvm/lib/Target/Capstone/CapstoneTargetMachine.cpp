@@ -468,6 +468,10 @@ void CapstonePassConfig::addIRPasses() {
   TargetPassConfig::addIRPasses();
 }
 
+// gp-captable ABI flag, defined in CapstoneISelDAGToDAG.cpp. Declared here the same
+// way CapstoneAsmPrinter.cpp declares it, so addPreISel can keep GlobalMerge off.
+extern llvm::cl::opt<bool> CapstoneGpCaptable;
+
 bool CapstonePassConfig::addPreISel() {
   if (TM->getOptLevel() != CodeGenOptLevel::None) {
     // Add a barrier before instruction selection so that we will not get
@@ -476,7 +480,24 @@ bool CapstonePassConfig::addPreISel() {
     addPass(createBarrierNoopPass());
   }
 
-  if ((TM->getOptLevel() != CodeGenOptLevel::None &&
+  // GlobalMerge is INCOMPATIBLE with the gp-captable ABI and must not run under it.
+  //
+  // It packs several globals into one `.L_MergedGlobals` container, which then gets a
+  // SINGLE cap-table slot with bounds spanning all of them. That silently converts N
+  // per-object bounded capabilities into one union-bounds capability -- destroying the
+  // exact property this ABI exists to provide, while leaving the index scheme looking
+  // superficially intact. It is an ABI invariant, not a tuning knob, which is why this
+  // is not left to -capstone-* flags or to the user.
+  //
+  // (It also happens to break the build downstream: the container is private, so the
+  // glue generator's copy path rejects it on the `.L` prefix and then dies on the
+  // 2040 B unrolled-initializer ceiling. That is a symptom, not the reason.)
+  //
+  // An explicit -capstone-global-merge=true still forces it on, for measuring the
+  // difference deliberately.
+  if (CapstoneGpCaptable && EnableGlobalMerge != cl::BOU_TRUE) {
+    // deliberately no GlobalMerge
+  } else if ((TM->getOptLevel() != CodeGenOptLevel::None &&
        EnableGlobalMerge == cl::BOU_UNSET) ||
       EnableGlobalMerge == cl::BOU_TRUE) {
     // FIXME: Like AArch64, we disable extern global merging by default due to

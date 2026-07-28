@@ -122,6 +122,12 @@ and `LADDER_REBUILD=0` is no longer needed. Same fix shape as I-1: put the per-r
 property in the one file both halves read, rather than relying on an env var set by hand.
 (The baseline half discards field 5 explicitly — it is plain riscv64 with no glue to affect.)
 
+**Re-reproduced AGAIN 2026-07-28 after C-4b was fixed**, now via the copy path at the
+DEFAULT 4 KiB window with no knobs (transfer `sha 1e159a9fa415a763 OK`, first attempt):
+still no END marker in 120 s, both attempts. Expected — R-7 is an R-1 instance and the
+4 KiB control `rv8_sha512s` hangs too — but it costs nothing to confirm alongside `beebs_ns`
+and being wrong in that direction would have been worth knowing.
+
 **Re-reproduced 2026-07-28** on the burst-transfer path with the knobs coming from the spec:
 transfer clean (`sha a88b9760f76b5741 OK`, first attempt), `rv8_sha512 domain ID = 0` prints,
 then no END marker in 120 s, twice. Same hang, now on a build the runner produced itself.
@@ -336,7 +342,17 @@ then no END marker in 120 s, both attempts.
   prologue scale rather than loop scale. **This is a hypothesis, not a finding** — the only
   evidence for it is that bs (small, passes) and ns (large, hangs) differ in that dimension,
   and shape-based prediction has been measured non-predictive on this platform.
-- **Cheapest falsification, and write it before acting on it:** shrink the tables to
+- **PROLOGUE SCALE REFUTED 2026-07-28 (the pre-registered falsification fired).** C-4b was
+  fixed the same day, so `beebs_ns` now takes the large-RO **copy path** at the DEFAULT
+  4 KiB window with no knobs: the ~500-store unrolled prologue is replaced by a
+  6-instruction loop, and the transferred domain shrank from **3,676 to 2,024** b64 chars.
+  Re-run on the board: transfer clean (`sha eac91ea38af6da9a OK`, first attempt, burst=16),
+  and it **hangs identically** — no END marker in 120 s, both attempts. So the prologue is
+  not the variable, and neither is the 32 KiB window (this build used 4 KiB). Per the plan
+  written before the experiment: **stop shrinking.** The difference between `beebs_bs`
+  (passes) and `beebs_ns` (hangs) is somewhere else entirely, and R-9 stays open with its
+  leading hypothesis dead rather than with a hypothesis that was never tested.
+- *Superseded plan, kept to show what was pre-registered:* shrink the tables to
   `[1][5][5][5]` (125 entries, 500 B, still over the 256 B threshold so the same code path,
   still inside the offset limit). If it PASSES, prologue scale is implicated and the
   bisection continues by doubling. If it still HANGS at bs-comparable size, prologue scale is

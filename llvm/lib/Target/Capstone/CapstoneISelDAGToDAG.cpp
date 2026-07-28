@@ -114,16 +114,33 @@ int getGpCaptableIndex(const GlobalValue *GV) {
   if (!GVar || GVar->isDeclaration() || GVar->isThreadLocal() ||
       !GVar->getValueType()->isSized())
     return -1;
-  int Index = 0;
-  for (const GlobalVariable &Cand : GVar->getParent()->globals()) {
-    if (Cand.isDeclaration() || Cand.isThreadLocal() ||
-        !Cand.getValueType()->isSized())
-      continue;
-    if (&Cand == GVar)
-      return Index;
-    ++Index;
+
+  // Memoized per module. The scan itself is O(N) and this is called once per
+  // global-address lowering AND once per global by the descriptor emitters, so the
+  // uncached form is O(N * references). That is invisible for a BEEBS kernel with 3
+  // globals and quadratic for SQLite, which has ~1,095 module globals and tens of
+  // thousands of references to them.
+  //
+  // Keyed on the Module so a cache built for one module can never be read by
+  // another; the map is rebuilt whenever the module pointer changes. Enumeration
+  // order and the filter predicate are unchanged -- this is purely a lookup cache,
+  // and the ordering it caches is the ABI contract shared with the entry glue.
+  static const Module *CachedM = nullptr;
+  static DenseMap<const GlobalVariable *, int> Cache;
+  const Module *M = GVar->getParent();
+  if (M != CachedM) {
+    Cache.clear();
+    int Index = 0;
+    for (const GlobalVariable &Cand : M->globals()) {
+      if (Cand.isDeclaration() || Cand.isThreadLocal() ||
+          !Cand.getValueType()->isSized())
+        continue;
+      Cache[&Cand] = Index++;
+    }
+    CachedM = M;
   }
-  return -1;
+  auto It = Cache.find(GVar);
+  return It == Cache.end() ? -1 : It->second;
 }
 
 // gp-captable is a superset of gp-free: it replaces the global-addressing half
