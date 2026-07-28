@@ -14,6 +14,12 @@ CLANG=${CLANG:-$CAPSTONE_CLANG}
 LD_LLD=${LD_LLD:-$CAPSTONE_LD_LLD}
 GPFREE_DIR="$SCRIPT_DIR/../gp-free-domain"
 GENERIC_GLUE="$SCRIPT_DIR/start-gp-captable-generic.S"
+INTERP_GLUE="$SCRIPT_DIR/start-gp-captable-interp.S"
+# DOMAIN_GLUE=interp selects the descriptor-driven entry glue: a FIXED loop over
+# .capstone_gp_initdesc instead of the per-app unrolled prologue that
+# gen-gp-captable-glue.py emits. Opt-in while both paths coexist, so every measured
+# rung keeps its current binary until the interpreter is gated on the whole ladder.
+DOMAIN_GLUE=${DOMAIN_GLUE:-generated}
 GCT_TAIL="$SCRIPT_DIR/../gct-section-end.S"
 # DOMAIN_WINDOW=32k selects the 32 KiB code window (globals at image offset 0x8000)
 # instead of the default 4 KiB (0x1000) -- issue C-5.
@@ -83,12 +89,22 @@ MARCH_FLAGS=(-Xclang -target-feature -Xclang +m)
   -I"$(dirname -- "$SRC")" \
   -c "$SRC" -o "$OBJ_DIR/main.o"
 
-# 2. generate the per-app cap-table builder from the descriptor
-python3 "$SCRIPT_DIR/gen-gp-captable-glue.py" "$OBJ_DIR/main.o" "$OBJ_DIR/gp_captable_build.inc"
+if [[ "$DOMAIN_GLUE" == "interp" ]]; then
+  # 2/3. Descriptor-driven glue: nothing to generate. The compiler emitted
+  # .capstone_gp_initdesc, the linker script puts it first in the globals region
+  # (blob offset 0), the monitor copies it into dom_data, and this glue interprets
+  # it at entry. O(1) .text regardless of how many globals the domain has.
+  echo "  glue: descriptor-driven interpreter (no generated prologue)"
+  "$CLANG" -target capstone64-unknown-elf -ffreestanding \
+    -c "$INTERP_GLUE" -o "$OBJ_DIR/start.o"
+else
+  # 2. generate the per-app cap-table builder from the descriptor
+  python3 "$SCRIPT_DIR/gen-gp-captable-glue.py" "$OBJ_DIR/main.o" "$OBJ_DIR/gp_captable_build.inc"
 
-# 3. glue (includes the generated builder) + gct tail
-"$CLANG" -target capstone64-unknown-elf -ffreestanding -I"$OBJ_DIR" \
-  -c "$GENERIC_GLUE" -o "$OBJ_DIR/start.o"
+  # 3. glue (includes the generated builder) + gct tail
+  "$CLANG" -target capstone64-unknown-elf -ffreestanding -I"$OBJ_DIR" \
+    -c "$GENERIC_GLUE" -o "$OBJ_DIR/start.o"
+fi
 "$CLANG" -target capstone64-unknown-elf -ffreestanding -c "$GCT_TAIL" -o "$OBJ_DIR/gct.o"
 
 # 4. link

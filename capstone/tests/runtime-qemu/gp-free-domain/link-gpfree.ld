@@ -37,6 +37,23 @@ SECTIONS {
      path). Kept as an absolute address symbol so it is linkable from the glue TU. */
   __gpfree_globals_base = .;
 
+  /* The blob-relative init descriptor MUST be the first thing in the globals
+     region, for two reasons.
+     (1) It has to be INSIDE the blob at all. The monitor copies
+         [base+GPFREE_GLOBALS_OFFSET, base+code_size) into the front of dom_data;
+         as an orphan section lld placed this at ~0x10cb0, i.e. BELOW
+         __gpfree_globals_base, so it was never copied and the entry-glue
+         interpreter could not have read it.
+     (2) Placing it first makes its blob offset exactly 0, so the glue finds it
+         with no `lla` arithmetic at all -- it is simply the front of dom_data.
+     KEEP() because the SQLite build links with --gc-sections and nothing
+     references this section from code; without it, it is collected. */
+  .capstone_gp_initdesc : ALIGN(16) {
+    __capstone_gp_initdesc_start = .;
+    KEEP(*(.capstone_gp_initdesc))
+    __capstone_gp_initdesc_end = .;
+  } :domain
+
   .rodata : ALIGN(16) {
     *(.srodata .srodata.*)
     *(.rodata .rodata.*)
