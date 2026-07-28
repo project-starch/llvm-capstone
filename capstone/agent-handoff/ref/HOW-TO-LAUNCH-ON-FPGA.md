@@ -50,6 +50,24 @@ The old bottleneck was per-run UART transfer. Two levers, in order:
   `tests/rtl-smoke/fpga_driver/fast_xfer.py` `fast_put` for every domain transfer
   (direct-append base64 chunks, single final-sha guard, safe-retry on mismatch). A
   controller is now ~30 s vs ~4 min. Memory `project_board_transfer_tiers`.
+- **Tier-1b BURSTING — do not regress to one emit per character (2026-07-28).**
+  `fast_put`'s first tier now sends **16 characters per socket.io emit**, ~15× fewer
+  round-trips. It had been emitting **one `uart_send` per character**, so a 6,032-char
+  domain cost 6,032 HTTPS round-trips — and the round-trip, not the UART, was the
+  wall clock.
+  **The char-by-char throttle was solving a real problem, just not this one.** The
+  board's ns16550a RX FIFO does overrun on a bulk write and silently drop characters
+  (`fpga_console.run_command` records `borrow_cost` arriving as `row_cost`). But that
+  bounds **bytes in flight before the UART drains**, not bytes per emit. 16 = the
+  FIFO depth, so a burst fills it at most once and drains in ~1.4 ms at 115200 baud,
+  against a ~20 ms inter-burst delay.
+  Guarded exactly like the existing tiers: whole-file sha after every attempt,
+  escalating `burst(16) → fast(1) → safe(1) → safest(1)`. The last three are the old
+  behaviour verbatim, so a board that cannot take bursts costs one wasted attempt and
+  nothing else. Verified offline that burst=16 emits a **byte-identical** stream to
+  burst=1 and never exceeds 16 chars per emit.
+  **If a transfer looks slow again, check this first** — the symptom is a log line
+  with `burst=1` on the FIRST attempt rather than `burst=16`.
 - **Batch many domains in ONE session — BLOCKED today by the multi-domain hang.**
   The firmware JTAG-load (~2 min, 15 MB) dominates, so in principle you boot once
   and loop `fast_put dom → run → read mcycle → next`. **But a second domain reused

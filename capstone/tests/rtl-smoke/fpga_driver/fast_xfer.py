@@ -43,15 +43,42 @@ def _resync(console):
     time.sleep(0.15)
 
 
-def _type_line(console, line, delay):
+def _type_line(console, line, delay, burst=1):
+    """Type `line` then Enter, `burst` characters per socket.io emit.
+
+    WHY BURSTING. The char-by-char throttle exists because the board's ns16550a RX
+    FIFO overruns on a bulk write and silently drops characters (fpga_console.
+    run_command documents a real instance: a path arriving as `row_cost` instead of
+    `borrow_cost`). That is a real constraint -- but it is a constraint on how many
+    bytes may be in flight before the UART drains, NOT on how many bytes may ride in
+    one emit. Sending one character per emit paid a full HTTPS/socket.io round-trip
+    per character, and the round-trip -- not the FIFO -- was the actual wall clock:
+    a 6,032-char domain transfer is 6,032 round-trips.
+
+    A 16-byte burst is bounded by the hardware, not guessed: 16 bytes is the
+    ns16550a FIFO depth, so a burst fills it at most exactly once, and at 115200
+    baud it drains in ~1.4 ms -- an order of magnitude under the ~20 ms inter-burst
+    delay. Round-trips drop ~16x.
+
+    This is still guarded end-to-end: fast_put verifies a whole-file sha after every
+    attempt and escalates to slower, smaller-burst tiers on any mismatch, with the
+    final tier at burst=1 (the old behaviour). So the worst case of bursting too
+    hard is one wasted attempt, never a corrupt domain -- the same bargain the
+    original fast_put already made with its delay/chunk tiers."""
     _resync(console)
-    for ch in line:
-        console._emit("uart_send", text=ch)
-        time.sleep(delay)
+    if burst <= 1:
+        for ch in line:
+            console._emit("uart_send", text=ch)
+            time.sleep(delay)
+    else:
+        for i in range(0, len(line), burst):
+            console._emit("uart_send", text=line[i:i + burst])
+            time.sleep(delay)
     console._emit("uart_send", text="\r")
 
 
-def _put_once(console, b64, remote_gz, remote_bin, bin_sha, delay, chunk, log):
+def _put_once(console, b64, remote_gz, remote_bin, bin_sha, delay, chunk, log,
+              burst=1):
     n = (len(b64) + chunk - 1) // chunk
     # A dropped char can wedge the shell at a `> ` continuation; that raises
     # ActionTimeout here. Catch it and return False so fast_put escalates to the
@@ -64,34 +91,40 @@ def _put_once(console, b64, remote_gz, remote_bin, bin_sha, delay, chunk, log):
         for k, i in enumerate(range(0, len(b64), chunk)):
             piece = b64[i:i + chunk]
             start = len(console.uart_text)
-            _type_line(console, f"printf %s '{piece}' >> {remote_gz}; echo D''N_$?", delay)
+            _type_line(console, f"printf %s '{piece}' >> {remote_gz}; echo D''N_$?",
+                       delay, burst)
             console.wait_uart(r"DN_\d", timeout=60, search_from=start)
         out = console.run_command(
             f"base64 -d {remote_gz} | gunzip -c > {remote_bin}; "
             f"echo S$(sha256sum {remote_bin} | cut -c1-16)S",
             r"S[0-9a-f]{16}S", timeout=60)
     except ActionTimeout:
-        log(f"  {remote_bin}: {n} chunks @delay={delay} chunk={chunk} -> "
+        log(f"  {remote_bin}: {n} chunks @delay={delay} chunk={chunk} burst={burst} -> "
             f"TIMEOUT (shell wedged); will resync+retry")
         return False
     m = re.search(r"S([0-9a-f]{16})S", out)
     ok = bool(m) and m.group(1) == bin_sha
-    log(f"  {remote_bin}: {n} chunks @delay={delay} chunk={chunk} -> "
+    log(f"  {remote_bin}: {n} chunks @delay={delay} chunk={chunk} burst={burst} -> "
         f"sha {m.group(1) if m else None} {'OK' if ok else 'MISMATCH'}")
     return ok
 
 
 def fast_put(console, local_gz, remote_gz, remote_bin, bin_sha, do_exec, log,
-             fast=(0.02, 400), safe=(0.05, 200), safest=(0.09, 100)):
+             burst=(0.02, 400, 16), fast=(0.02, 400, 1), safe=(0.05, 200, 1),
+             safest=(0.09, 100, 1)):
     """Transfer local_gz -> remote_bin (decompressed) on the board, escalating
-    fast -> safe -> safest on any whole-file sha mismatch. Each tier first
+    burst -> fast -> safe -> safest on any whole-file sha mismatch. The first tier
+    sends 16 characters per socket.io emit (see _type_line); every later tier falls
+    back to one character per emit, i.e. the original behaviour, so a board that
+    cannot take bursts costs one extra attempt and nothing else. Each tier first
     Ctrl-C-resyncs the shell, so a continuation prompt left by a dropped char in
     the previous tier can't poison the retry. Returns True; raises on repeated
     failure."""
     b64 = base64.b64encode(open(local_gz, "rb").read()).decode()
     log(f"transfer {remote_bin}: {len(b64)} b64 chars")
-    for delay, chunk in (fast, safe, safest):
-        if _put_once(console, b64, remote_gz, remote_bin, bin_sha, delay, chunk, log):
+    for delay, chunk, bu in (burst, fast, safe, safest):
+        if _put_once(console, b64, remote_gz, remote_bin, bin_sha, delay, chunk, log,
+                     bu):
             if do_exec:
                 console.run_command(f"chmod 0755 {remote_bin}; echo D''N_$?", r"DN_\d", 20)
             return True
