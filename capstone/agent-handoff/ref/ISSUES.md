@@ -113,12 +113,18 @@ QEMU parity leg with its full 640 B table (oracle 1390718314), and then **hangs 
 - **Repro:** `DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1 DOMAIN_OPT_LEVEL=-O1`, artifacts in the
   ladder dir; capability half must be run with `LADDER_REBUILD=0` (see below).
 
-**Tooling gap found while running this:** the runner's rebuild path does **not** know about
-`DOMAIN_WINDOW` / `LADDER_NO_RO_COPY`, so a default run would silently rebuild this rung at
-4 KiB with the broken copy path and measure the wrong binary. `LADDER_REBUILD=0` with a
-pre-built dir is the current workaround. **Plumb the knobs through
-`run_ladder_perf_fpga.py`'s rebuild** so this cannot be got wrong — it is the same class as
-I-1, where a silently-different build produced five bogus results.
+**Tooling gap found while running this — FIXED 2026-07-28.** The runner's rebuild path did
+not know about `DOMAIN_WINDOW` / `LADDER_NO_RO_COPY`, so a default run would silently rebuild
+this rung at 4 KiB with the broken copy path and measure the wrong binary; `LADDER_REBUILD=0`
+with a pre-built dir was the workaround. The knobs now live in **`ladder-rungs.spec` field 5**
+and travel with the rung through `build-ladder-fpga.sh`, so a plain sweep builds it correctly
+and `LADDER_REBUILD=0` is no longer needed. Same fix shape as I-1: put the per-rung build
+property in the one file both halves read, rather than relying on an env var set by hand.
+(The baseline half discards field 5 explicitly — it is plain riscv64 with no glue to affect.)
+
+**Re-reproduced 2026-07-28** on the burst-transfer path with the knobs coming from the spec:
+transfer clean (`sha a88b9760f76b5741 OK`, first attempt), `rv8_sha512 domain ID = 0` prints,
+then no END marker in 120 s, twice. Same hang, now on a build the runner produced itself.
 
 ### C-10 — capability-spill lead: REFUTED `CLOSED`
 Proposed and killed the same evening, by the falsification checks written into the entry
@@ -301,6 +307,44 @@ them hardware is currently an assumption, and the minimal probe passing makes a
 software-side explanation *more* likely, not less.
 - **Repro:** `tests/runtime-qemu/silicon-ladder/expint_diag_fpga_app.c`, `-O1`,
   expected `dbg7=3883`, board returns 2.
+
+### R-9 — `beebs_ns` hangs although its tables are never written `OPEN — R-1 does not predict it`
+Measured 2026-07-28, first silicon attempt, reproduced across two independent board runs.
+
+`beebs_ns` (BEEBS `ns`, four nested loops linearly scanning a 4-D lookup table) passes the
+QEMU parity leg at −O1 (oracle 1184999093, `cjalr=0 ldc-gp=2`) and its **baseline half is
+clean and measured** — 88,451 cyc / 62,097 instret, 15/15 passes tied at min instret,
+spread 0, correct oracle. Only the capability half fails: `beebs_ns domain ID = 0` prints,
+then no END marker in 120 s, both attempts.
+
+- **Not a transfer artefact.** The domain arrived intact — `sha b911a58bd6d7dac0 OK` on the
+  first attempt in run 2, matching the locally computed sha of the decompressed binary. The
+  controller then started it and it never returned.
+- **R-1 predicts PASS and is wrong here.** Neither `ns_keys` nor `ns_answer` is ever written
+  by the kernel: `ns_foo` only compares and returns. The same-object load-with-intervening-
+  store shape R-1 describes is **absent from the kernel proper**. That puts this rung with
+  **R-6** (`beebs_janne`) rather than with R-7 — two hangs R-1 does not account for.
+- **"It is the 32 KiB window" is NOT available as an explanation.** That confound was already
+  eliminated under R-7: the `rv8_sha512s` control (identical kernel, 16-entry table, default
+  4 KiB window, default unrolled path, no bypass) hangs on silicon too, and C-5 is recorded
+  as silicon-validated at 32 KiB. Do not re-run that experiment; it has been done.
+- **What is actually distinctive is SCALE of the glue prologue.** The passing read-only rung,
+  `beebs_bs`, also has initialized tables materialised by the same unrolled `li`/`sd` path —
+  but 120 B / 15 entries plus 72 B / 18, against ns's **2 x 2,000 B / 500 entries**. So the
+  glue writes ~500 words per table through its carving capability and the kernel then reads
+  them through `ldc gp[i]`, a *different* capability register. That is R-1's shape at
+  prologue scale rather than loop scale. **This is a hypothesis, not a finding** — the only
+  evidence for it is that bs (small, passes) and ns (large, hangs) differ in that dimension,
+  and shape-based prediction has been measured non-predictive on this platform.
+- **Cheapest falsification, and write it before acting on it:** shrink the tables to
+  `[1][5][5][5]` (125 entries, 500 B, still over the 256 B threshold so the same code path,
+  still inside the offset limit). If it PASSES, prologue scale is implicated and the
+  bisection continues by doubling. If it still HANGS at bs-comparable size, prologue scale is
+  refuted and the difference is elsewhere — do not keep shrinking.
+- **Repro:** rung `beebs_ns` in `ladder-rungs.spec` carries its own knobs
+  (`DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1`); a plain
+  `LADDER_RUNGS=beebs_ns LADDER_ONE_BOOT=1 LADDER_DISTINCT_VA=1 run_ladder_perf_fpga.py`
+  reproduces it.
 
 ### R-6 — `beebs_janne` hangs although R-1 predicts it should pass `OPEN`
 BEEBS `janne_complex`: nested data-dependent loops whose conditions are computed **entirely from
