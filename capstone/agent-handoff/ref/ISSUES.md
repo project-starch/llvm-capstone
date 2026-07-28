@@ -120,7 +120,7 @@ pre-built dir is the current workaround. **Plumb the knobs through
 `run_ladder_perf_fpga.py`'s rebuild** so this cannot be got wrong — it is the same class as
 I-1, where a silently-different build produced five bogus results.
 
-### R-8 — pure-scalar code executes fully and returns a WRONG value `OPEN`
+### R-8 — a scalar ACCUMULATOR keeps its initial value across a loop `CHARACTERISED — and it is R-6's mechanism`
 Measured 2026-07-28 on `beebs_expint`, and it is the cleanest instance of this class yet.
 
 | | capability | baseline (bare-metal) |
@@ -154,9 +154,48 @@ would fail under emulation too.
   the registry has flagged since R-6 but could not previously support with a clean case.
 - **Repro:** `tests/runtime-qemu/silicon-ladder/beebs_expint_*`, `-O1`, oracle
   2,021,290,181, QEMU-green, baseline half clean (15/15 tied, spread 0).
-- **Next:** bisect `ei_expint` by returning intermediates through the debug slots — the two
-  branches, the `psi` nested loop and `ei_foo`'s shift are the separable pieces. This is a
-  *diagnostic* rung, not a measurement, so a wrong answer is still a usable result.
+#### BISECTED 2026-07-28 (`expint_diag`) — one slot diverges, and it names the fault
+
+| slot | board | expected | |
+|---|---:|---:|---|
+| dbg0 branch / dbg1 init | 0 / 2 | 0 / 2 | ✓ |
+| dbg2,3 `fact` (signed div) | 0 / 0 | 0 / 0 | ✓ |
+| dbg4 `psi` (nested loop) | **3881** | 3881 | ✓ |
+| dbg5 `ei_foo` (the shift) | 0 | 0 | ✓ |
+| **dbg6 `del` at i==nm1** | **3881** | 3881 | ✓ **the addend is correct** |
+| dbg8 trip count | **100** | 100 | ✓ **the loop ran fully** |
+| dbg9 `sum(ii)` | 1225 | 1225 | ✓ |
+| **dbg7 final `ans`** | **2** | **3883** | ✗ |
+
+**`ans` is frozen at its INITIAL value.** The loop ran all 100 iterations, `del` was
+computed correctly as 3881, and `ans += del` did not accumulate. Nothing else diverges —
+division, shifts, the nested loop and control flow are all correct.
+
+#### This is R-6's mechanism, and the two issues unify
+
+`beebs_janne` (R-6) showed *exactly* this: `a` frozen at **2** after 200 iterations of
+`a = a + 2`, with the loop counters self-consistent. Both cases are:
+- **pure register arithmetic**, no arrays, no memory in the loop
+- the loop **runs its full trip count**
+- the per-iteration value is **computed correctly**
+- the **accumulator retains its initial value**
+
+> **Statement of the fault: a scalar accumulated across loop iterations retains its
+> initial value. The addend is computed correctly; the accumulation is lost.**
+
+R-1 cannot explain either (no memory involved), and the identical binaries are
+QEMU-correct. `beebs_fibcall`'s pure-scalar miscompute is very likely the same thing.
+
+**Why this matters more than a benchmark row:** R-1 plus this account for essentially every
+silicon failure seen — R-1 for the array kernels, this for the scalar ones. Two mechanisms,
+not a fog. It is also a far better bug report: a five-line loop whose accumulator does not
+accumulate, with a QEMU-correct binary and every neighbouring operation proven good.
+
+**Next:** minimise to a standalone probe — `long a = 2; for (i=0;i<N;i++) a += 1;` returned
+raw — and sweep the shape (register vs spilled accumulator, `+=` vs `a = a + k`, trip count,
+`-O0`/`-O1`). That probe belongs in the R-1 tarball as a second, independent finding.
+- **Repro:** `tests/runtime-qemu/silicon-ladder/expint_diag_fpga_app.c`, `-O1`,
+  expected `dbg7=3883`, board returns 2.
 
 ### R-6 — `beebs_janne` hangs although R-1 predicts it should pass `OPEN`
 BEEBS `janne_complex`: nested data-dependent loops whose conditions are computed **entirely from
