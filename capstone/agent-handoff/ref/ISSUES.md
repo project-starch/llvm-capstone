@@ -622,9 +622,43 @@ Capstone lit **43/43**; `beebs_bs`, `beebs_prime`, `beebs_cnt` still pass QEMU p
 > OBJECT before reasoning about the mechanism: a symbolised `-S` listing settled in one
 > step what two rounds of inference got wrong.
 
-#### C-4b — the large-RO COPY PATH in the generated glue is broken `OPEN — HALF DELIVERED 2026-07-28`
+#### C-4b — the large-RO COPY PATH in the generated glue is broken `FIXED 2026-07-28`
 
-**UPDATE 2026-07-28 — the MONITOR half now works; the failure has moved.** C-11 (the
+**FIXED 2026-07-28. Root cause: `cincoffset` CONSUMES a linear `rs1`.**
+
+`op_helper.c:635-640` — `helper_cscincoffset` with `rd != rs1` does
+`*rd_v = *rs1_v; if(!captype_is_copyable(rs1_v->val.cap.type)) *rs1_v = CAPREGVAL_NULL;`
+and `cap.h:122` defines `captype_is_copyable(ty) { return ty == CAP_TYPE_NONLIN; }`.
+`sp` arrives from cscratch as `CAP_TYPE_LIN`, and the builder's only `delin(sp)` was its
+LAST line — so the copy path's `cincoffset(t4, sp, t5)` **nulled `sp` outright**, and the
+next `split(t2, sp, t1)` tripped `helper_cssplit`'s `assert(rs1_v->tag && !rs2_v->tag)`
+with `tag == 0`.
+
+That accounts for every observed symptom: it fired only AFTER `Created domain ID = 0`,
+only when `COPY_THRESHOLD` selected the copy path, and never in the zero-init path (which
+`cincoffset`s `t2`, already delinearized) or the unrolled path (which never `cincoffset`s
+`sp`). It is also why five careful static readings of the generated assembly missed it —
+**the assembly is correct as written; the defect is in the ISA semantics of one operand.**
+
+**Fix:** emit `delin(sp)` at the top of `BUILD_GP_CAPTABLE`. Minimal and correct rather
+than a workaround — `helper_cssplit` asserts `type == LIN || NONLIN` so every split still
+works, and `split` (unlike `cincoffset`) never consumes `rs1`. `sp` was delinearized by the
+builder's last line anyway, so this only moves that transition earlier; the capability
+handed to compiled code is unchanged.
+
+Emitted **only when a global actually took the copy path**, so every currently-measured
+rung stays byte-identical — verified by diffing generated glue against the previous
+generator (`beebs_aha_mont64`: 0 differing lines; `beebs_crc32big`: gains exactly the
+`delin` and a comment). The condition is derived from the emitted body, not by re-testing
+the eligibility predicate, so the two cannot drift.
+
+**Validated:** `beebs_crc32big` (2,048 B `const crc_32_tab`) returns oracle **1703161001**
+through the copy path — the first time that path has worked end to end. Standing ladder
+regression 6/6 green (`matmult_int` 774662735, `beebs_prime` 582955588, `beebs_bs`
+887447230, `beebs_cover` 1993178309, `ctrsanity` 43260934, `beebs_aha_mont64` 2185097489).
+
+*Previous status, kept for provenance:* the MONITOR half working, and the failure moving.
+ C-11 (the
 monitor could not be rebuilt) is fixed, so the monitor-side copy specified in
 `plans/sqlite-on-silicon-scoping.md` is now implemented, built and running:
 `create_domain` copies the image's initialized-globals bytes
