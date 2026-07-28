@@ -120,38 +120,30 @@ pre-built dir is the current workaround. **Plumb the knobs through
 `run_ladder_perf_fpga.py`'s rebuild** so this cannot be got wrong — it is the same class as
 I-1, where a silently-different build produced five bogus results.
 
-### C-10 — LEAD: a capability may be spilled with `sd` instead of `stc` `UNVERIFIED`
-Found while disassembling `accum_probe` (2026-07-28). **Verify before acting — this is a
-lead, not a finding**, and tonight's record on unverified leads is poor.
+### C-10 — capability-spill lead: REFUTED `CLOSED`
+Proposed and killed the same evening, by the falsification checks written into the entry
+before acting on it.
 
-**Observation.** The probe's nine slot stores ARE emitted (`sd a1, 0x18(a0)` …
-`sd a2, 0x58(a0)`, offsets 0x18–0x58 = `res[3..11]`) yet none of them land on the board,
-while `res[0]`/`res[2]` do. Nearby:
+**The lead:** `accum_probe`'s slot stores are emitted but never land, and nearby sits
+`sd a0, 0x40(sp)` — a 128-bit capability apparently spilled with a plain 8-byte store,
+which would drop the tag and corrupt `res` on reload.
 
-```
-100f4: sd a0, 0x40(sp)      <-- res (a0) spilled with a PLAIN 8-byte store
-```
+**Refuted by the control:** `expint_diag`, which writes the same slots **successfully**,
+contains the **identical instruction** (`100b8: sd a0, 0x40(sp)`). Present in both the
+working and the failing probe, so it cannot be the cause. A follow-up check also killed the
+register-reuse variant: **both** probes use `a0` as the base for their slot stores
+(`sd _, 0x18(a0)`, `0x20(a0)`, …) over the same offset range.
 
-**Why this could matter a great deal.** In this ABI `res` arrives as a **128-bit
-capability** in `a0`. Spilling it with `sd` saves only the low 64 bits and drops the tag;
-the reload then yields an untagged/partial pointer, and stores through it are lost or
-faulting. That would explain the exact symptom — emitted stores that never arrive — and it
-is the same *class* as the already-fixed stack-passed-capability bug (`LowerCall` using an
-integer `ISD::ADD` for a slot address, delivering an untagged capability).
+**So the two probes are structurally identical in every respect hypothesised, and
+`accum_probe`'s delivery failure is UNEXPLAINED.** Both spill `a0` the same way, both store
+through `a0`, both write `res[0]`/`res[2]` last — and only one delivers. Something outside
+this comparison differs. Do not re-run either on the board until it reproduces off-board;
+the QEMU ladder harness gives an 8-byte `res` region and so cannot exercise the debug-slot
+path at all, which is why two boots were spent learning nothing.
 
-**What must be checked first, because the lead dies if either fails:**
-1. Does `a0` actually hold the capability at `0x100f4`, or an integer copy? A plain `sd` of
-   an integer that happens to live in `a0` is correct and unremarkable.
-2. Does `expint_diag` — which writes the same slots **successfully** — avoid this spill? If
-   it also spills `a0` with `sd` and still works, the theory is dead.
-
-**If it holds it is OUR bug, not the board's**, and it plausibly reaches far beyond this
-probe: any domain function under enough register pressure to spill an incoming capability
-would corrupt it. That would be a candidate mechanism for the R-6/R-8 scalar miscomputes
-(`expint`, `janne`, `fibcall`), all of which are register-pressure-heavy loops.
-
-**Repro:** build `accum_probe_fpga_app.c` at `-O1` and disassemble
-`--triple=riscv64 --mattr=+m`; compare against `expint_diag_fpga_app.c`.
+**Value of the entry:** it is kept because the *method* worked. The falsification checks
+were written down before the fix was attempted, and they killed the theory in one command
+instead of after a codegen change. That is the practice to repeat.
 
 ### R-8 — pure-scalar miscompute; the "accumulator" characterisation is TOO BROAD `OPEN`
 Measured 2026-07-28 on `beebs_expint`, and it is the cleanest instance of this class yet.
