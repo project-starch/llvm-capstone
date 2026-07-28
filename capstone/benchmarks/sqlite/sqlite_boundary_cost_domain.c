@@ -18,7 +18,13 @@
 #include "sqlite_hostcall.h"
 
 #define CAPSTONE_DPI_REGION_SHARE 1U
+/* Overridable, same reason as sqlite_capstone_domain.c: under -capstone-gp-captable
+   this array's storage is CARVED FROM dom_data, so it is charged against the domain's
+   stack budget rather than only costing image space. At 1 MiB the silicon build does
+   not fit (domdata-budget.py reports a negative stack). */
+#ifndef SQLITE_HEAP_SIZE
 #define SQLITE_HEAP_SIZE (1024U * 1024U)
+#endif
 #ifndef BOUNDARY_ROWS
 #define BOUNDARY_ROWS 200U
 #endif

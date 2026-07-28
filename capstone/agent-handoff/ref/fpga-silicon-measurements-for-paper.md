@@ -555,6 +555,37 @@ rare; usually honesty costs you something.
 
 ---
 
+## 4b. SQLite in the SILICON config — QEMU, 2026-07-28 (NEW)
+
+SQLite had **never been compiled for the silicon ABI** before this date; the paper's
+own text still says "SQLite has not run on the board." Both halves now run under QEMU
+in the full silicon configuration (`-capstone-gp-captable` + gp-free call/ret +
+shrink off + `-fno-jump-tables`, one module, descriptor-driven entry glue):
+
+| | result |
+|---|---|
+| existence proof (CREATE/INSERT/SELECT) | all five markers: `alpha=11`, `beta=22`, `gamma=33`, `__CAPSTONE_SQLITE_EXTENDED_PASSED__`, `__CAPSTONE_SQLITE_MEMORY_PASSED__` |
+| boundary workload | `rows=200 borrows=400 scan_instrs=790,003` → **1,975 instructions per borrow** |
+
+Build shape, for the record: `.text` 1,308,416 B, globals offset `0x140000`,
+**1,059 globals each behind its own bounded capability** (`ldc-gp` = 583 sites),
+`cjalr` = 0, exactly one `.capstone_gp_table` header (i.e. no multi-TU index
+collision). memsys5 arena reduced 1 MiB → 256 KiB because under gp-captable every
+global's storage is carved from `dom_data` and is therefore charged against the
+domain's stack budget, not just image space.
+
+**Comparison, not replacement.** The previously reported ~2,845 instructions/borrow
+came from the NON-silicon build (shrink on, gp-free off). The silicon figure is
+**lower**, which is the expected direction: `-capstone-shrink-globals=false` removes
+the per-access narrowing sequence. Do not present 1,975 as a correction of 2,845 —
+they are different configurations, and the honest statement is that the boundary cost
+is ~2,000 instructions/borrow in the configuration the silicon run uses.
+
+**Still QEMU, not silicon.** This is the S5 gate of `plans/sqlite-on-silicon-scoping.md`,
+not a board measurement. What remains before a board number: R-3's `fence.i` fix (each
+run otherwise costs a full power-cycle plus a ~2 min firmware reload), and baking the
+1.4 MB domain into the rootfs — UART transfer is ruled out by measurement at >= 63 min.
+
 ## 5. What is NOT established — read before citing anything above
 
 - **PARTLY SUPERSEDED 2026-07-28 — read the correction first.** What follows was written when
