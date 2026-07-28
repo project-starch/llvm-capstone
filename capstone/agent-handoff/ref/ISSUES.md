@@ -169,8 +169,18 @@ investigation".
 **Leads, none checked:** `expint_diag` (works) writes `res[3+0]` **early**, before its main
 loop, while both failing probes write only after several loops; `accum2_probe` uses a
 `volatile unsigned long *out` alias where `expint_diag` writes `res[...]` directly; the
-failing probes are also the largest. Compare the three side by side — all three are
-committed, and QEMU can now run them in seconds, so this is an **off-board** investigation.
+failing probes are also the largest. > **⚠ CORRECTION: this is NOT an off-board investigation.** An earlier note here claimed it
+> was. It cannot be: these probes are **correct under QEMU** and fail only on the board, so
+> emulation cannot reproduce the failure. What QEMU buys is that a probe can be proven
+> *well-formed* before spending a boot — not that this fault can be chased there.
+>
+> Static comparison of the three domains found **no discriminator**: identical `.text`
+> section size (0x1000, the padded window) and no visible frame-size difference. So the
+> difference is not code size or stack depth as guessed.
+>
+> **This therefore costs board time to resolve, and each attempt is one boot.** Budget
+> accordingly, and prefer adding slots to a probe that ALREADY delivers on the board
+> (`expint_diag` is the known-good vehicle) over debugging why a new one does not.
 
 ### R-8 — pure-scalar miscompute; the "accumulator" characterisation is TOO BROAD `OPEN`
 Measured 2026-07-28 on `beebs_expint`, and it is the cleanest instance of this class yet.
