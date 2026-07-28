@@ -445,7 +445,32 @@ The FPGA controller (`ladder_perf_ctl`) *does* create a proper shared region, wh
 Each iteration costs a full boot, and a broken probe cannot be caught before spending one.
 Both `accum_probe` runs failed this way.
 
-**Fix:** restore the two lines and rebuild the guest image. That is a **buildroot userspace
+**Fix ATTEMPTED 2026-07-28, not yet working — but the approach is validated and no image
+rebuild is needed.** `capstone-diag.c` / `capstone-diag.user` now exist
+(`package/modcapstone/userspace/`), built with the buildroot cross-compiler and run from
+the 9p host share via `run-domain-smoke.py --domain-loader /mnt/host/capstone-diag.user`.
+
+**Deliberately a SEPARATE loader, not a change to `capstone-test.c`:** that file is the
+loader for the entire QEMU corpus (82 BEEBS, RV8, CoreMark, SQLite, authority), and sharing
+a region changes what a domain's first argument *is* — enabling it there risks moving where
+every existing domain finds its result. A separate binary has zero regression surface, and
+running it from the host share avoids rebuilding the guest image at all.
+
+**Status: the domain still sees only the 8-byte return slot.** Two variants tried, both
+still faulting at `res[3]` with `bounds = (8008f3c0, 8008f3c8)`:
+1. `create_region(4096)` + `share_region(...)` — no change.
+2. `create_region(4096)` + `shared_region_annotated(dom, reg, ANNOT_PERM_INOUT, REV_SHARED)`
+   — no change. (First attempt passed `REV_SHARED` as `0x0`; the correct value is `0x2`,
+   corrected and retested.)
+
+**Next thing to try, and it is the last structural difference from the working
+`ladder_perf_ctl`:** that controller calls **`map_region(region_id, REGION_SIZE)` and
+`memset_`s it BEFORE sharing** — the diag loader does neither. Add both and retest. Its
+comment says "the share IS the entry", so the entry argument may only be established once
+the region is mapped by the caller.
+
+**Old plan (superseded):** restore the two lines in `capstone-test.c` and rebuild the guest
+image. That is a **buildroot userspace
 rebuild**, not a script change, so it is not free — but it converts probe iteration from
 ~2.5 min of a shared physical resource into seconds of QEMU, and it would have caught both
 `accum_probe` failures for nothing.
