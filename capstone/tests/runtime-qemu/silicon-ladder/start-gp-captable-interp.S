@@ -95,9 +95,13 @@
  * a0, a1 (initializers are ordinary C and save what they use).
  */
 .macro RUN_CAP_INIT
+  /* Skipped on a reentry for the same reason the table build is: re-running the
+     initializers would reset every pointer-valued global to its image value,
+     silently discarding whatever the previous entry stored there. */
+  beqz  s5, 79f                      /* fast path: table already built, globals live   */
   lla   t3, __capstone_cap_init_start
   lla   t4, __capstone_cap_init_end
-  bgeu  t3, t4, 79f                  /* empty table -> nothing to do                  */
+  bgeu  t3, t4, 78f                  /* empty table -> still record that we built      */
   lla   t5, __gpfree_globals_base
   sub   t6, t3, t5                   /* table's offset into the blob                  */
   /* The initializers are ordinary C, so they save/restore callee-saved registers
@@ -124,13 +128,46 @@
   bltu  a7, t4, 70b
   ldc(s1, sp, 0)                     /* restore the blob cap                          */
   cincoffsetimm(sp, sp, 32)
+78:
+  /* Persist "built" ONLY here, once the table AND the initializers are done. Setting
+     it inside BUILD would make the very first entry skip its own cap-init, since
+     RUN_CAP_INIT runs later (in `test:`, after the return capability is parked). The
+     in-register s5 carries "did build" across that gap; the in-memory flag is what a
+     LATER entry sees. */
+  li    t3, 1
+  sd    t3, 0(s1)
 79:
 .endm
 
 .macro BUILD_GP_CAPTABLE_INTERP
   delin(sp)                          /* C-4b: sp arrives LIN; cincoffset would eat it */
-  cincoffset(s1, sp, x0)             /* s1 = blob view (cursor == dom_data base)      */
+  cincoffset(s1, sp, x0)
+  lcc(t3, sp, 3)                     /* t3 = sp.base                                   */
+  scc(s1, s1, t3)                    /* s1 = blob view, cursor forced to the base      */
 
+  /* S2 -- IDEMPOTENT ENTRY. On the FIRST entry sp is the whole dom_data with its
+     cursor at the base; on REENTRY it is whatever the exit path stashed in cscratch,
+     i.e. the already-carved stack region -- which still starts at the same base, so
+     the blob is reachable either way once the cursor is forced there.
+
+     Without this, both entry points rebuild the table and re-run every initializer,
+     so globals DO NOT SURVIVE a domreturn. That is a correctness gate rather than a
+     saving: sqlite_capstone_domain.c handles two CAPSTONE_DPI_REGION_SHARE entries
+     that stash the host capabilities in globals before the run entry, so a rebuilding
+     reentry would reset shared_region_count to 0, drop both capabilities, and run
+     SQLite with no host channel.
+
+     The flag lives at blob[0] and is 0 in the image, so a freshly created domain
+     always builds. It is safe to rely on that zero specifically because the blob is a
+     deterministic COPY of image bytes -- dom_data itself is __get_free_pages memory
+     and is not zeroed. gp is parked at blob[16] with stc, so it keeps its tag. */
+  ld    t4, 0(s1)                    /* built_flag                                     */
+  beqz  t4, 5f
+  li    s5, 0                        /* s5 = 0: took the fast path, did NOT build      */
+  ldc(gp, s1, 16)                    /* already built: reload gp and skip everything   */
+  j     99f
+5:
+  li    s5, 1                        /* s5 = 1: building now                           */
   ld    s4, 8(s1)                    /* count                                          */
   beqz  s4, 99f                      /* no globals: nothing to build                   */
 
@@ -211,6 +248,7 @@
 
   scc(sp, sp, t1)                    /* sp.cursor = top of the remaining stack         */
   delin(sp)
+  stc(gp, s1, 16)                    /* park gp for the reentry fast path              */
 99:
 .endm
 
