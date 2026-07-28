@@ -172,7 +172,7 @@ overhead ratios (capability ÷ baseline) for cycles and for instructions respect
 | `beebs_bs` (binary search) | −O1 | 2,259 / 875 | 1,470 / 827 | **1.537×** | 1.058× | 1.452 |
 | `beebs_recursion` (deep+mutual) | −O1 | 18,971 / 2,944 | 9,696 / 2,019 | **1.957×** | 1.458× | 1.342 |
 | **`beebs_cover`** (switch coverage, control-flow only) | −O1 | 159,952 / 76,471 | 167,778 / 76,513 | **0.953×** ⚠ | **0.999×** | 0.954 |
-| **`beebs_aha_mont64`** (Montgomery modmul, no arrays) ‡ | −O1 | 289,869 / 256,699 | 283,612 / 256,622 | **1.022×** | **1.000×** | 1.022 |
+| **`beebs_aha_mont64`** (Montgomery modmul, no arrays) | −O1 | 290,071 / 256,699 | 283,612 / 256,622 | **1.023×** | **1.000×** | 1.023 |
 | **`ctrsanity`** (**control**: identical code both sides) | −O1 | 600,309 / 500,033 | 600,041 / 500,022 | **1.000×** | 1.000× | 1.000 |
 
 Cells are `cycles / instret`. **Pervasive spatial safety costs 0 %–96 % in cycles**,
@@ -185,18 +185,14 @@ kernel faster. The 4.7 % cycle difference is code layout/alignment, and layout s
 is documented here (2026-07-26: four added instructions flipped a passing rung). **Report it
 as "no measurable overhead", not a negative cost.**
 
-‡ **NEEDS RE-MEASURING (found 2026-07-28, after this row was published).** GlobalMerge was
-running at −O1 and packed this rung's **3 globals into one `.L_MergedGlobals`** container,
-which under the gp-captable ABI means they shared a **single union-bounds capability** — not
-the per-object bounds the paper claims. Verified by A/B against the same compiler: 3
-cap-table slots with GlobalMerge off, 1 with it on. GlobalMerge is now disabled under
-gp-captable (it is an ABI invariant, not a tuning knob), so the binary has changed and this
-row must be re-taken before publication.
-Scope is bounded — the same A/B across every measured rung shows only `beebs_aha_mont64`
-(3 vs 1) and `rv8_sha512` (4 vs 3, never measured) differ; `prime`, `rv8_primes`, `cnt`,
-`bs`, `recursion`, `cover`, `ctrsanity` and `ns` are unaffected. The qualitative claim below
-is not at risk (the instruction ratio moves by at most a few hundred out of 256,000), but
-the exact figure is provisional until re-run.
+**Re-measured 2026-07-28 under the corrected ABI, and the row survives.** It was first
+taken while GlobalMerge was packing this rung's 3 globals into one `.L_MergedGlobals`
+container -- i.e. one union-bounds capability, not the per-object bounds the paper
+claims. GlobalMerge is now disabled under gp-captable (an ABI invariant, not a tuning
+knob) and the rung was re-run on the board: **290,071 cycles** against the previous
+289,869, with instret byte-identical at 256,699. A 0.07 % cycle difference, so the
+conclusion is unchanged -- but it is now measured in the configuration the paper
+describes rather than a weaker one.
 
 **`beebs_aha_mont64` is the independent confirmation `cover` needed** (added 2026-07-28).
 It retires **256,699 vs 256,622** instructions — **77 apart out of 256,000, a ratio of
