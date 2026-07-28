@@ -66,6 +66,67 @@
 /* Build the per-global capability table from .capstone_gp_initdesc.
    Precondition: sp = dom_data, cursor at its base. Clobbers t0-t6, s1-s4.
    Postcondition: gp = cap table, sp = remaining stack with cursor at its top. */
+
+/* Run capability-global initializers (.capstone_cap_init) -- S1.5.
+ *
+ * A capability tag cannot live in the static image, so a global initialized to a
+ * POINTER (a function-pointer method table, an array of `const char *`, `&other[N]`)
+ * loads untagged. The compiler synthesizes one initializer function per module and
+ * records it in .capstone_cap_init as a PC-relative `initfn - entry` diff; running
+ * them is what turns those words into real capabilities.
+ *
+ * The generated silicon glue never did this -- no ladder rung has such a global, so
+ * nothing caught it. SQLite has 54 of them (VFS method tables, sqlite3StdType,
+ * sqlite3aLTb/aEQb/aGTb, ...), so it is a hard prerequisite, not an optimisation.
+ *
+ * TWO DIFFERENCES from my_first_domain/start.S, both forced by this ABI:
+ *  - It reads the table from the BLOB, not the image. Under gp-captable the image is
+ *    reachable only through an EXECUTE-authority capability, and the 2026-07-22 root
+ *    cause established that a code cap cannot load data on captype-fixed CVA6. The
+ *    monitor's copy of the globals region is in dom_data, which we hold as DATA.
+ *    The table's blob offset is the link-time constant
+ *    (__capstone_cap_init_start - __gpfree_globals_base); both `lla`s are PC-relative,
+ *    so their difference is base-independent.
+ *  - It calls with a plain `jalr`, not a capability call. Under the gp-free ABI calls
+ *    are ordinary jumps within PCC; `gp` here is bounded to the cap table and must not
+ *    be used to derive a code capability.
+ *
+ * Empty table (start == end) is a no-op. Clobbers t0-t6, a4-a7; preserves gp, sp,
+ * a0, a1 (initializers are ordinary C and save what they use).
+ */
+.macro RUN_CAP_INIT
+  lla   t3, __capstone_cap_init_start
+  lla   t4, __capstone_cap_init_end
+  bgeu  t3, t4, 79f                  /* empty table -> nothing to do                  */
+  lla   t5, __gpfree_globals_base
+  sub   t6, t3, t5                   /* table's offset into the blob                  */
+  /* The initializers are ordinary C, so they save/restore callee-saved registers
+     with sd/ld -- 8-byte integer accesses that DROP A CAPABILITY TAG. Anything
+     capability-valued must therefore be parked with stc/ldc across the call, not
+     left in a register. Keeping the blob in s1 across the call is what faulted on
+     the first attempt: `Cap mem access OOB ... rs1 = x9`, s1 having come back
+     untagged. sp and gp are safe because the ABI keeps them intact. */
+  cincoffsetimm(sp, sp, -32)
+  stc(s1, sp, 0)                     /* park the blob cap across the calls            */
+  cincoffset(a6, s1, t6)
+  stc(a6, sp, 16)                    /* park the entry pointer too                    */
+  mv    a7, t3                       /* a7 = runtime IMAGE address of the entry       */
+70:
+  ldc(a6, sp, 16)
+  ld    t0, 0(a6)                    /* t0 = initfn - entry (link-time relative)      */
+  add   t0, a7, t0                   /* -> initfn runtime address                     */
+  jalr  ra, 0(t0)                    /* plain call: gp-free ABI, within PCC           */
+  ldc(a6, sp, 16)                    /* reload: the callee may have clobbered it      */
+  cincoffsetimm(a6, a6, 8)
+  stc(a6, sp, 16)
+  addi  a7, a7, 8
+  lla   t4, __capstone_cap_init_end
+  bltu  a7, t4, 70b
+  ldc(s1, sp, 0)                     /* restore the blob cap                          */
+  cincoffsetimm(sp, sp, 32)
+79:
+.endm
+
 .macro BUILD_GP_CAPTABLE_INTERP
   delin(sp)                          /* C-4b: sp arrives LIN; cincoffset would eat it */
   cincoffset(s1, sp, x0)             /* s1 = blob view (cursor == dom_data base)      */
@@ -156,6 +217,7 @@
 __test_reentry:
   ccsrrw(sp, cscratch, x0)
   BUILD_GP_CAPTABLE_INTERP
+  RUN_CAP_INIT
   ldc(t0, sp, -32)
   ccsrrw(x0, cscratch, t0)
   ld t0, -40(sp)
@@ -170,6 +232,7 @@ _start:
 __test_entry:
   ccsrrw(sp, cscratch, x0)           /* sp = dom_data (cscratch) DATA region */
   BUILD_GP_CAPTABLE_INTERP
+  RUN_CAP_INIT
   j test
 
 .text
