@@ -1,6 +1,17 @@
 # Silicon-ladder rung table — THE single source of truth for both halves.
 #
-# Format:  <rung>:<kernel header>:<compute fn>:<-O level>
+# Format:  <rung>:<kernel header>:<compute fn>:<-O level>[:<domain knobs>]
+#
+# Field 5 is OPTIONAL: space-separated KEY=VALUE env assignments applied to the
+# CAPABILITY half's domain build only (build-ladder-fpga.sh). The baseline half
+# discards it -- it is plain riscv64 with no cap-table glue for the knobs to affect.
+# Two knobs are in use:
+#   DOMAIN_WINDOW=32k     32 KiB code window instead of 4 KiB (issue C-5)
+#   LADDER_NO_RO_COPY=1   unrolled li/sd initializer instead of the large-RO COPY
+#                         path, which is broken (issue C-4b)
+# They are per-rung and NOT global on purpose: changing the window changes image
+# layout, and a 2026-07-26 A/B showed four added instructions flipping a passing rung.
+# Every already-measured rung keeps its published number by staying at the default.
 #
 # WHY THIS FILE EXISTS. The capability half and the baseline half of every overhead
 # ratio must be built at the SAME -O level, or the ratio measures optimisation
@@ -56,10 +67,11 @@ ctrsanity4:ctrsanity4_kernel.h:cs_compute:-O1
 # Crypto/bitwise profile, added 2026-07-28. The rest of the RV8 set is blocked by
 # known issues, not by this measurement: aes ~8 KB of tables (C-4/C-5), dhrystone 684
 # lines (C-5), qsort sorts in place (R-1), miniz mixed-extend i128 logic (C-2).
-# rv8_sha512 WORKS as of 2026-07-28, but needs TWO opt-in knobs (see below), so it is
-# not enabled by the default build path yet -- the runner would build it at 4 KiB with
-# the broken copy path. Build it with:
-#   DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1 DOMAIN_OPT_LEVEL=-O1
+# rv8_sha512 WORKS as of 2026-07-28 but needs TWO opt-in knobs, which is why it sat
+# QEMU-verified-but-unmeasured: a whole-set sweep could apply them to every rung
+# (perturbing measured rows) or to none (this rung then builds at 4 KiB with the
+# broken copy path and fails). Field 5 resolves that -- the knobs now travel WITH the
+# rung, so a plain `build-ladder-fpga.sh` sweep builds it correctly.
 # Verified: returns its oracle 1390718314, static gate cjalr=0 ldc-gp=3.
 # Historic note (the two knobs exist because):
 #   80-entry K table (640 B): fails at domain CREATION, QEMU asserts in helper_cssplit
@@ -69,7 +81,7 @@ ctrsanity4:ctrsanity4_kernel.h:cs_compute:-O1
 #   Uncomment once C-4 is fixed; the kernel and oracle (1390718314) are ready.
 # The BASELINE half is plain riscv64 with no code window and no cap-table glue, so it
 # builds and runs unconditionally; only the CAPABILITY half needs the two knobs.
-rv8_sha512:rv8_sha512_kernel.h:sha512_compute:-O1
+rv8_sha512:rv8_sha512_kernel.h:sha512_compute:-O1:DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1
 # Selected against R-1's shape (no arrays at all), not for benchmark prestige --
 # 6 of 6 silicon attempts today were predicted PASS and only 2 were.
 beebs_expint:beebs_expint_kernel.h:expint_compute:-O1
@@ -80,3 +92,18 @@ rv8_sha512s:rv8_sha512s_kernel.h:sha512s_compute:-O1
 # no array stores in any loop (avoids R-1's required shape). Control-flow dominated --
 # 180 switch dispatches per call, a profile nothing else in the ladder has.
 beebs_cover:beebs_cover_kernel.h:cover_compute:-O1
+# Added 2026-07-28. These two are a deliberate PAIR, chosen to bracket the mechanism
+# claim (overhead is a property of DATA ACCESS, not execution) from both ends in one
+# board session rather than to add benchmark names:
+#   aha_mont64 -- 24 B of globals, no arrays, no tables. Pure 64-bit multiply/shift
+#                 carry chains: modul64 is a 64-iteration shift-and-subtract, xbinGCD
+#                 a 64-iteration binary GCD. If the claim holds this lands near 1.00x
+#                 for a completely different execution profile than beebs_cover, which
+#                 is the other near-1.00x rung (and is control-flow, not arithmetic).
+#   ns         -- almost nothing BUT memory: 500 four-level indexed read-only loads
+#                 per call with essentially no arithmetic on the loaded value. The
+#                 heaviest data-access profile in the ladder.
+# Both QEMU-gated 2026-07-28 at -O1: mont64 retval 2185097489 (cjalr=0 ldc-gp=1),
+# ns retval 1184999093 (cjalr=0 ldc-gp=2).
+beebs_aha_mont64:beebs_aha_mont64_kernel.h:mont_compute:-O1
+beebs_ns:beebs_ns_kernel.h:ns_compute:-O1:DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1

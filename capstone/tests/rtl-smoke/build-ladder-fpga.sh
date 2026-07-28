@@ -52,6 +52,27 @@ for R in "${RUNGS[@]}"; do
   # deliberate single-level A/B sweep.
   SPEC_OPT=$(awk -F: -v r="$R" '$1==r{print $4}' "$SCRIPT_DIR/ladder-rungs.spec")
   OPT=${LADDER_OPT:-${SPEC_OPT:--O0}}
+  # Optional 5th spec field: per-rung domain knobs, space-separated KEY=VALUE.
+  #
+  # WHY THIS EXISTS. Two knobs -- DOMAIN_WINDOW=32k (C-5, the 32 KiB code window) and
+  # LADDER_NO_RO_COPY=1 (C-4b, force the unrolled li/sd initializer instead of the
+  # broken large-RO COPY path) -- are REQUIRED by some rungs and deliberately NOT the
+  # default for the rest, because changing the window changes image layout and this
+  # project has a documented layout sensitivity (a 2026-07-26 A/B where four added
+  # instructions flipped a passing rung). Every already-measured rung must keep its
+  # published number, so the knobs cannot be global.
+  #
+  # Before this field they were env vars set by hand on the command line, which meant
+  # a whole-set sweep either applied them to every rung (perturbing measured rows) or
+  # to none (rv8_sha512 silently built at 4 KiB with the broken copy path and failed).
+  # Neither is usable, so rv8_sha512 sat QEMU-verified but unmeasured. Putting them in
+  # the spec is the same fix, and for the same reason, as putting -O there: a per-rung
+  # build property belongs in the one file both halves read.
+  #
+  # These are Capstone-glue properties only. The BASELINE half never applies them --
+  # see build-ladder-base-bare.sh, which discards field 5 on purpose.
+  SPEC_KNOBS=$(awk -F: -v r="$R" '$1==r{print $5}' "$SCRIPT_DIR/ladder-rungs.spec")
+  [[ -n "$SPEC_KNOBS" ]] && echo "  knobs: $R -> $SPEC_KNOBS"
   # LADDER_DISTINCT_VA=1 links each rung at its own entry VA (0x10000, 0x20000,
   # ...), which is what makes LADDER_ONE_BOOT=1 usable for a whole sweep. R-3 --
   # a second domain within one boot hangs -- was proven ADDRESS-KEYED on
@@ -64,7 +85,9 @@ for R in "${RUNGS[@]}"; do
     printf -v RUNG_VA '0x%x' $(( 0x10000 + VA_SLOT * 0x10000 ))
     VA_SLOT=$((VA_SLOT + 1))
   fi
-  DOMAIN_OPT_LEVEL=$OPT DOMAIN_BASE_VA=$RUNG_VA \
+  # SPEC_KNOBS is word-split on purpose: it is a list of KEY=VALUE assignments that
+  # must reach build-ladder-domain.sh as separate env entries.
+  env $SPEC_KNOBS DOMAIN_OPT_LEVEL=$OPT DOMAIN_BASE_VA=$RUNG_VA \
     bash "$LAD/build-ladder-domain.sh" "$APP" "$OUT_DIR/${R}.dom"
   # Record the level actually used. The capability and baseline halves MUST be
   # built at the same -O or the ratio measures optimisation, not capabilities --

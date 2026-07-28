@@ -40,12 +40,12 @@ TBL="$OBJ_DIR/ladder_rungs_table.h"
   echo "/* GENERATED from ladder-rungs.spec by build-ladder-base-bare.sh -- do not edit. */"
   echo "struct rung { const char *name; unsigned (*fn)(void); };"
   for SPEC in "${RUNGS[@]}"; do
-    IFS=: read -r R _ _ _ <<<"$SPEC"
+    IFS=: read -r R _ _ _ _ <<<"$SPEC"
     echo "unsigned base_$R(void);"
   done
   echo "static const struct rung RUNGS[] = {"
   for SPEC in "${RUNGS[@]}"; do
-    IFS=: read -r R _ _ _ <<<"$SPEC"
+    IFS=: read -r R _ _ _ _ <<<"$SPEC"
     echo "  { \"$R\", base_$R },"
   done
   echo "};"
@@ -55,7 +55,12 @@ TBL="$OBJ_DIR/ladder_rungs_table.h"
 OBJS=()
 : > "$OUT_DIR/optlevels.txt"
 for SPEC in "${RUNGS[@]}"; do
-  IFS=: read -r R HDR FN OPT <<<"$SPEC"
+  # Field 5 (per-rung domain knobs) is deliberately DISCARDED here: DOMAIN_WINDOW
+  # and LADDER_NO_RO_COPY are properties of the Capstone gp-captable glue, and the
+  # baseline is plain riscv64 with no glue at all. Reading it into a variable the
+  # baseline never uses would invite someone to "helpfully" apply it and destroy
+  # the comparison.
+  IFS=: read -r R HDR FN OPT _ <<<"$SPEC"
   OPT=${LADDER_OPT:-$OPT}
   # Identical flags to the Linux baseline build: same clang, same -O, same target,
   # same -fno-jump-tables. Only the harness around the kernel differs, so a

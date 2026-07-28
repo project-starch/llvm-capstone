@@ -38,7 +38,9 @@ mapfile -t RUNGS < <(grep -vE '^\s*(#|$)' "$SPEC_FILE")
 OBJS=()
 : > "$OUT_DIR/optlevels.txt"
 for SPEC in "${RUNGS[@]}"; do
-  IFS=: read -r R HDR FN OPT <<<"$SPEC"
+  # Field 5 (per-rung domain knobs) is Capstone-glue-only -- discarded here, see
+  # build-ladder-base-bare.sh for why it must stay discarded.
+  IFS=: read -r R HDR FN OPT _ <<<"$SPEC"
   # LADDER_OPT overrides the per-rung default. The capability half and the
   # baseline MUST be built at the same level or the ratio measures optimisation
   # rather than capabilities -- beebs_recursion is measured at -O1 on the
