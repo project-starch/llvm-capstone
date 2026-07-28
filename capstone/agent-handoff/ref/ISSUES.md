@@ -357,6 +357,35 @@ then no END marker in 120 s, both attempts.
   still inside the offset limit). If it PASSES, prologue scale is implicated and the
   bisection continues by doubling. If it still HANGS at bs-comparable size, prologue scale is
   refuted and the difference is elsewhere — do not keep shrinking.
+- **THREE MORE HYPOTHESES ELIMINATED 2026-07-28, in ONE boot.** Rather than test one
+  theory per board session, three variants were built that each change exactly ONE
+  property, with data byte-identical to `beebs_ns` where present, and run in a single
+  boot with `beebs_ns` itself as the in-boot control. All four hang:
+
+  | variant | changed vs `ns` | silicon |
+  |---|---|---|
+  | `beebs_ns` | — (control) | hangs |
+  | `beebs_nskeys` | reads ONE table, never a second | hangs |
+  | `beebs_nsflat` | same 500 elements FLAT, one index level | hangs |
+  | `beebs_nssmall` | 125 entries instead of 500 | hangs |
+
+  So it is **not** two cap-table globals in one loop, **not** 4-level nested address
+  arithmetic, and **not** table size. `nssmall`'s tables are 500 B — *smaller than
+  `beebs_bs`'s* 120 B + 72 B combined data is not, but its per-table 500 B is within
+  the same order, and `bs` passes — so a size threshold between them is not credible.
+
+  All three are QEMU-green at −O1 (oracles 3914083333 / 1184999093 / 2711842293) and
+  are kept in `ladder-rungs.spec` as a ready-made discriminator set: whatever the next
+  hypothesis is, it has to explain why all four of these hang while `bs` and `cover`
+  pass.
+
+  **What is left, and it is now a short list.** The kernel is a linear scan comparing a
+  loaded value against a loop-invariant, with an early `return` out of a nest. `bs`
+  (passes) is a binary search — same read-only indexed load, but a *computed* index and
+  no early exit from a nest. Candidate remaining differences: the early return itself,
+  the loop-invariant compare operand, or the fact that ns's index advances by 1 while
+  bs's jumps. Test those next, again as a one-boot discriminator set.
+
 - **Repro:** rung `beebs_ns` in `ladder-rungs.spec` carries its own knobs
   (`DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1`); a plain
   `LADDER_RUNGS=beebs_ns LADDER_ONE_BOOT=1 LADDER_DISTINCT_VA=1 run_ladder_perf_fpga.py`

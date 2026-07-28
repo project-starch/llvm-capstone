@@ -117,3 +117,17 @@ beebs_aha_mont64:beebs_aha_mont64_kernel.h:mont_compute:-O1
 # path replaces that with a 6-instruction loop, so the silicon binary is now a completely
 # different shape. If prologue scale was the cause, this should now pass.
 beebs_ns:beebs_ns_kernel.h:ns_compute:-O1
+# R-9 DISCRIMINATORS (2026-07-28). beebs_ns hangs on silicon, R-1 does not predict it
+# (neither table is ever written), and the prologue-scale hypothesis is refuted. Each
+# of these changes exactly ONE property of the kernel so a board run says which one
+# matters. Data is byte-identical to beebs_ns where present; all three QEMU-gated at -O1.
+#   nskeys  -- reads ONE table, never a second. Is touching two distinct cap-table
+#              globals in the same loop the trigger?           oracle 3914083333
+#   nsflat  -- same 500 elements, FLAT, one index level. Is 4-level nested address
+#              arithmetic the trigger?                          oracle 1184999093
+#   nssmall -- 125 entries, same 4-level shape. The size test pre-registered under R-9.
+#                                                               oracle 2711842293
+# Run them in ONE boot with beebs_ns itself as the in-boot control.
+beebs_nskeys:beebs_nskeys_kernel.h:nskeys_compute:-O1
+beebs_nsflat:beebs_nsflat_kernel.h:nsflat_compute:-O1
+beebs_nssmall:beebs_nssmall_kernel.h:nssmall_compute:-O1
