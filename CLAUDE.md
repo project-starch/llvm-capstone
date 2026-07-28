@@ -65,7 +65,16 @@ Board-debug threads here run long. **Do NOT routinely recommend `/compact`.** Ke
 working and let context management happen on its own; a compaction suggestion at a
 natural-looking checkpoint is usually just an interruption.
 
-Raise it **only when not compacting would actually damage progress** — i.e. context
+**Do not announce being "low on" or "out of" context, and do not use it as a reason to
+stop or to defer a hard step.** That has been a false alarm every time it was raised so
+far: work continued productively immediately afterwards, and the actual failures were
+process slips (grepping for a hex constant emitted in decimal, `grep -c "A\|B"` that
+cannot say which matched, running a rebuilt binary the harness does not actually load,
+reading a Makefile's echoed recipe as an error) rather than anything caused by lost
+state. Hedging before a hard problem reads as an excuse and wastes a turn. If a
+mistake happens, name the specific slip and the check that would have caught it.
+
+Raise compaction **only when not compacting would actually damage progress** — i.e. context
 is close enough to exhausted that the next steps would be taken with important state
 already lost, and that state is not yet in committed docs/memory. In that case say so
 in one line, with the specific thing at risk. Otherwise say nothing about compaction.
