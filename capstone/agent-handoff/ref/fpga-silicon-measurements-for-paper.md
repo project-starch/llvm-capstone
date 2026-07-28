@@ -164,10 +164,25 @@ overhead ratios (capability ÷ baseline) for cycles and for instructions respect
 | `beebs_cnt` (matrix seed+sum) | −O1 | 128,175 / 76,429 | 94,736 / 57,949 | **1.353×** | 1.319× | 1.026 |
 | `beebs_bs` (binary search) | −O1 | 2,259 / 875 | 1,470 / 827 | **1.537×** | 1.058× | 1.452 |
 | `beebs_recursion` (deep+mutual) | −O1 | 18,971 / 2,944 | 9,696 / 2,019 | **1.957×** | 1.458× | 1.342 |
+| **`beebs_cover`** (switch coverage, control-flow only) | −O1 | 159,952 / 76,471 | 167,778 / 76,513 | **0.953×** ⚠ | **0.999×** | 0.954 |
 | **`ctrsanity`** (**control**: identical code both sides) | −O1 | 600,309 / 500,033 | 600,041 / 500,022 | **1.000×** | 1.000× | 1.000 |
 
-Cells are `cycles / instret`. **Pervasive spatial safety costs 5 %–96 % in cycles**,
+Cells are `cycles / instret`. **Pervasive spatial safety costs 0 %–96 % in cycles**,
 depending entirely on kernel shape.
+
+⚠ **`beebs_cover` reads 0.953×, i.e. nominally *faster*. Do NOT report it as a speedup.**
+The instruction ratio is **0.999×** — both builds retire the same work (76,471 vs 76,513,
+42 apart out of 76,000) — so there is no mechanism by which capabilities could make this
+kernel faster. The 4.7 % cycle difference is code layout/alignment, and layout sensitivity
+is documented here (2026-07-26: four added instructions flipped a passing rung). **Report it
+as "no measurable overhead", not a negative cost.**
+
+**It is the most informative row, not merely the sixth.** `cover` is control-flow dominated
+— 180 switch dispatches per call, one global, essentially no data traffic — and its 0.999×
+instruction ratio says the gp-captable ABI adds **nothing** when a kernel does not touch
+data. Beside `cnt` (+31.9 % instructions, bulk array work) and `bs` (+44.6 % CPI,
+dependency-chained loads), the table now separates the cost cleanly: **capability overhead
+is a property of DATA ACCESS, not of execution.**
 
 [*] **`rv8_primes` HANGS at −O1 on this silicon** and is measurable only at −O0 — a real
 limitation, reported rather than hidden. Everything else is −O1. (Its −O0 pair is
