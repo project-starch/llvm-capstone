@@ -120,6 +120,39 @@ pre-built dir is the current workaround. **Plumb the knobs through
 `run_ladder_perf_fpga.py`'s rebuild** so this cannot be got wrong — it is the same class as
 I-1, where a silently-different build produced five bogus results.
 
+### C-10 — LEAD: a capability may be spilled with `sd` instead of `stc` `UNVERIFIED`
+Found while disassembling `accum_probe` (2026-07-28). **Verify before acting — this is a
+lead, not a finding**, and tonight's record on unverified leads is poor.
+
+**Observation.** The probe's nine slot stores ARE emitted (`sd a1, 0x18(a0)` …
+`sd a2, 0x58(a0)`, offsets 0x18–0x58 = `res[3..11]`) yet none of them land on the board,
+while `res[0]`/`res[2]` do. Nearby:
+
+```
+100f4: sd a0, 0x40(sp)      <-- res (a0) spilled with a PLAIN 8-byte store
+```
+
+**Why this could matter a great deal.** In this ABI `res` arrives as a **128-bit
+capability** in `a0`. Spilling it with `sd` saves only the low 64 bits and drops the tag;
+the reload then yields an untagged/partial pointer, and stores through it are lost or
+faulting. That would explain the exact symptom — emitted stores that never arrive — and it
+is the same *class* as the already-fixed stack-passed-capability bug (`LowerCall` using an
+integer `ISD::ADD` for a slot address, delivering an untagged capability).
+
+**What must be checked first, because the lead dies if either fails:**
+1. Does `a0` actually hold the capability at `0x100f4`, or an integer copy? A plain `sd` of
+   an integer that happens to live in `a0` is correct and unremarkable.
+2. Does `expint_diag` — which writes the same slots **successfully** — avoid this spill? If
+   it also spills `a0` with `sd` and still works, the theory is dead.
+
+**If it holds it is OUR bug, not the board's**, and it plausibly reaches far beyond this
+probe: any domain function under enough register pressure to spill an incoming capability
+would corrupt it. That would be a candidate mechanism for the R-6/R-8 scalar miscomputes
+(`expint`, `janne`, `fibcall`), all of which are register-pressure-heavy loops.
+
+**Repro:** build `accum_probe_fpga_app.c` at `-O1` and disassemble
+`--triple=riscv64 --mattr=+m`; compare against `expint_diag_fpga_app.c`.
+
 ### R-8 — pure-scalar miscompute; the "accumulator" characterisation is TOO BROAD `OPEN`
 Measured 2026-07-28 on `beebs_expint`, and it is the cleanest instance of this class yet.
 
