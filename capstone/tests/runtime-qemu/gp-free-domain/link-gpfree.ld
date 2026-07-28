@@ -17,18 +17,22 @@ ENTRY(_start)
 
 PHDRS {
   domain PT_LOAD FLAGS(0x7);
+  nobits PT_NULL;
 }
 
 SECTIONS {
   . = 0x10000;
-
   .text : ALIGN(16) {
     *(.text.entry)
     *(.text .text.*)
   } :domain
 
-  /* Force globals to a fixed offset (0x1000) from the image base so the monitor
-     can SPLIT the image into code|globals at a boundary it knows a priori. */
+  /* Globals start at GPFREE_GLOBALS_OFFSET from the image base. The monitor no
+     longer has to know this a priori -- it reads it from .capstone_domhdr above --
+     so it is a build knob rather than a shared constant. build-ladder-domain.sh
+     substitutes the token for DOMAIN_WINDOW; the default keeps every existing rung
+     byte-identical. This is what replaces link-gpfree-32k.ld, whose separate copy of
+     the constant was the thing the monitor silently disagreed with. */
   . = 0x10000 + 0x1000;
 
   /* Anchor at the globals base (== base + GPFREE_GLOBALS_OFFSET). The cap-table
@@ -70,12 +74,31 @@ SECTIONS {
     __capstone_cap_init_end = .;
   } :domain
 
+  /* End of the LOADED globals template: rodata + data + capstone_cap_init. This is
+     exactly the byte range the monitor copies into the front of dom_data. */
+  . = ALIGN(16);
+  __gpfree_globals_tmpl_end = .;
+
+  /* .bss is deliberately NOT in the :domain PT_LOAD.
+     Under gp-captable every global's storage is CARVED FROM dom_data by the entry
+     glue, so the image's .bss is never touched -- it is pure padding that the loader
+     nonetheless counts, because libcapstone derives code_len from p_memsz. Leaving it
+     in costs dom_data the whole .bss size, and for SQLite (a 1 MiB memsys5 arena)
+     that is the difference between fitting and not: dom_data comes out ~860 KB with
+     .bss in the PT_LOAD versus ~1.92 MB with it out, against ~1.47 MB needed.
+     PT_NULL keeps the addresses assigned (so symbols resolve and the glue's zero path
+     still knows the sizes) while dropping it from the loaded image. */
   .bss (NOLOAD) : ALIGN(16) {
     *(.sbss .sbss.*)
     *(.bss .bss.*)
     *(COMMON)
     . = ALIGN(16);
-  } :domain
+  } :nobits
+
+  . = ALIGN(16);
+  __gpfree_globals_end = .;
+  __gpfree_globals_tmpl_len   = __gpfree_globals_tmpl_end - __gpfree_globals_base;
+  __gpfree_globals_region_len = __gpfree_globals_end - __gpfree_globals_base;
 
   .gct : ALIGN(16) {
     KEEP(*(.gct))

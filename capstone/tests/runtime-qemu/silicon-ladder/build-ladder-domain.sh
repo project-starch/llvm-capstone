@@ -34,10 +34,21 @@ GCT_TAIL="$SCRIPT_DIR/../gct-section-end.S"
 # initializer with unrolled li/sd instead of the large-RO COPY path, and the copy
 # path is broken (C-4b, cssplit tag assertion). So the bigger window does not just
 # raise a limit, it lets a whole class of rungs avoid a broken code path.
-if [[ "${DOMAIN_WINDOW:-}" == "32k" ]]; then
-  LINKER_SCRIPT=${LINKER_SCRIPT:-"$GPFREE_DIR/link-gpfree-32k.ld"}
-else
-  LINKER_SCRIPT=${LINKER_SCRIPT:-"$GPFREE_DIR/link-gpfree.ld"}
+# The code window is now produced by substituting the offset into the ONE linker
+# script, instead of maintaining a second copy of it (link-gpfree-32k.ld). That
+# second copy was the bug: the monitor had a single hardcoded 0x1000, so a 32 KiB
+# window plus the copy path silently disagreed about where the blob started.
+LINKER_SCRIPT=${LINKER_SCRIPT:-"$GPFREE_DIR/link-gpfree.ld"}
+case "${DOMAIN_WINDOW:-}" in
+  "")   GLOBALS_OFF_VAL=0x1000 ;;
+  32k)  GLOBALS_OFF_VAL=0x8000 ;;
+  *)    GLOBALS_OFF_VAL=${DOMAIN_WINDOW} ;;
+esac
+if [[ "$GLOBALS_OFF_VAL" != "0x1000" ]]; then
+  _lds=$(mktemp "${TMPDIR:-/tmp}/link-gpfree-off-XXXXXX.ld")
+  sed "s/0x10000 + 0x1000/0x10000 + $GLOBALS_OFF_VAL/" "$LINKER_SCRIPT" > "$_lds"
+  LINKER_SCRIPT=$_lds
+  echo "  globals offset -> $GLOBALS_OFF_VAL"
 fi
 # DOMAIN_BASE_VA relocates the domain's entry VA (default 0x10000).
 #
