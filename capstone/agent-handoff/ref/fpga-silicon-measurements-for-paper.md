@@ -582,6 +582,40 @@ not a board measurement. What remains before a board number: R-3's `fence.i` fix
 run otherwise costs a full power-cycle plus a ~2 min firmware reload), and baking the
 1.4 MB domain into the rootfs — UART transfer is ruled out by measurement at >= 63 min.
 
+## 4c. SQLite ON THE BOARD — delivery works, the domain does not complete (2026-07-29)
+
+First attempt to run SQLite on the FPGA. **Delivery is solved; execution is not.**
+
+What worked, on real hardware:
+- SQLite ships **inside the buildroot initramfs** and arrives with the firmware over
+  JTAG — `ls /test-domains/` on the booted board lists `sqlite_silicon.dom`
+  (1,623,008 B) with **no transfer step at all**. This is the route the board owner
+  described, and it is now built end to end (17.5 MB `fw_payload`, FDT embedded,
+  first 64 bytes matching the known-good firmware).
+- The host loader parses the image and computes **`Globals offset = 0x140000`**
+  correctly on silicon — so the C-12 plumbing works on hardware, not just QEMU.
+
+What did not: after `Loadable size = 1389480` the domain produces nothing and the run
+times out. No fault line, no output.
+
+**Most likely cause, and it is a step that was skipped rather than a new unknown.**
+The plan (`plans/sqlite-on-silicon-scoping.md`, S7) says to climb the code window with
+a trivial rung first: 32 KiB → 256 KiB → 1 MiB → full size. C-5 is validated on
+silicon only to **32 KiB**, and SQLite jumps straight to a **1.3 MB PCC** — a 40×
+extrapolation, on a platform with documented layout sensitivity. Going straight to the
+top was my shortcut and this is the predicted way for it to fail.
+
+Second candidate, not yet excluded: on the caplifive-system monitor
+`capstone_error(code)` is `#define ... while(1);` — the code is discarded and the
+monitor **spins silently**. A blob-does-not-fit would therefore look identical to a
+domain hang. The QEMU monitor prints; this one does not. Making them agree is cheap
+and would have distinguished these two on the first run.
+
+**Next, in order:** (1) give the FPGA monitor a real `capstone_error` so failures are
+distinguishable; (2) climb the window with a trivial rung at 256 KiB and 1 MiB; (3)
+re-run SQLite. Nothing here suggests the ABI work is wrong — every piece of it is green
+under QEMU and the offset demonstrably reaches the monitor on silicon.
+
 ## 5. What is NOT established — read before citing anything above
 
 - **PARTLY SUPERSEDED 2026-07-28 — read the correction first.** What follows was written when
