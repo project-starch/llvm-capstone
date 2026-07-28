@@ -120,7 +120,7 @@ pre-built dir is the current workaround. **Plumb the knobs through
 `run_ladder_perf_fpga.py`'s rebuild** so this cannot be got wrong — it is the same class as
 I-1, where a silently-different build produced five bogus results.
 
-### R-8 — a scalar ACCUMULATOR keeps its initial value across a loop `CHARACTERISED — and it is R-6's mechanism`
+### R-8 — pure-scalar miscompute; the "accumulator" characterisation is TOO BROAD `OPEN`
 Measured 2026-07-28 on `beebs_expint`, and it is the cleanest instance of this class yet.
 
 | | capability | baseline (bare-metal) |
@@ -180,8 +180,16 @@ division, shifts, the nested loop and control flow are all correct.
 - the per-iteration value is **computed correctly**
 - the **accumulator retains its initial value**
 
-> **Statement of the fault: a scalar accumulated across loop iterations retains its
-> initial value. The addend is computed correctly; the accumulation is lost.**
+> **Proposed statement (NOW KNOWN TOO BROAD): a scalar accumulated across loop
+> iterations retains its initial value.**
+>
+> **⚠ REFUTED as stated, 2026-07-28.** A minimal probe --
+> `long a = 0; for (i = 0; i < 100; i++) a += 1;` in a domain, returned as the retval --
+> **comes back as 100, correct**, on the same board and toolchain. So plain accumulation
+> is NOT broken, and whatever breaks `expint` and `janne` needs more than a loop and a
+> `+=`. Candidate extra ingredients, none yet tested: a branch inside the loop body,
+> register pressure, a nested loop, or the specific accumulate-inside-an-if shape both
+> failing kernels share.
 
 R-1 cannot explain either (no memory involved), and the identical binaries are
 QEMU-correct. `beebs_fibcall`'s pure-scalar miscompute is very likely the same thing.
@@ -191,9 +199,29 @@ silicon failure seen — R-1 for the array kernels, this for the scalar ones. Tw
 not a fog. It is also a far better bug report: a five-line loop whose accumulator does not
 accumulate, with a QEMU-correct binary and every neighbouring operation proven good.
 
-**Next:** minimise to a standalone probe — `long a = 2; for (i=0;i<N;i++) a += 1;` returned
-raw — and sweep the shape (register vs spilled accumulator, `+=` vs `a = a + k`, trip count,
-`-O0`/`-O1`). That probe belongs in the R-1 tarball as a second, independent finding.
+**Probe status (`accum_probe_fpga_app.c`): written, run, INCONCLUSIVE — fix before reuse.**
+It was designed to discriminate the important question (see below) across 9 debug slots. On
+the board `res[0]` returned **100** — the plain accumulate, correct — but **all nine
+`res[3..11]` slots read zero**, so the controller suppressed the DEBUG line and eight of
+nine probes produced no data. The `res[3..]` writes did not land even though `res[0]` did;
+the QEMU harness separately rejects this probe because its shared region is only 8 bytes.
+**Fix the probe's use of the debug slots, then re-run** — the discrimination is still the
+right experiment.
+
+**The question the probe must answer, and why it matters more than the benchmark:**
+"an accumulator does not accumulate" is an extraordinary claim about an ALU. An ordinary
+explanation fits every observation equally well — the value lives in a **register that
+something clobbers on silicon**: our entry glue, the `cscall` path, or a trap handler that
+saves less than our QEMU fork models. That would present identically (right addend, right
+trip count, value reverting to its initial state) and would be **our bug, not the board's**.
+Reading: memory-form correct + register-forms wrong ⇒ ours; one register class failing ⇒
+names the culprit; all forms failing ⇒ the hardware claim survives; short loop passing and
+long failing ⇒ something periodic, i.e. a trap.
+
+**Confidence, stated plainly:** R-1 is well supported (five-line repro, controls both
+sides, 7 failed mitigations, a correct advance prediction). **R-6/R-8 are NOT** — calling
+them hardware is currently an assumption, and the minimal probe passing makes a
+software-side explanation *more* likely, not less.
 - **Repro:** `tests/runtime-qemu/silicon-ladder/expint_diag_fpga_app.c`, `-O1`,
   expected `dbg7=3883`, board returns 2.
 
