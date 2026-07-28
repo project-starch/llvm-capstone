@@ -982,6 +982,42 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
   `fw_jump.elf.good` = `6724bcb3`).
 - Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
 
+### C-13 — the descriptor-driven entry glue does not work on SILICON `OPEN — blocks SQLite`
+Found 2026-07-29 by a one-variable control, after it had already cost several board
+sessions and a firmware rebuild.
+
+    same rung (beebs_prime), same known-good firmware, same everything else:
+      DOMAIN_GLUE=interp      FAILS  (no END marker, twice)
+      DOMAIN_GLUE=generated   PASSES (582955588, 9,751 cycles)
+
+`start-gp-captable-interp.S` is green on QEMU for every rung it has been tried on
+(`aha_mont64`, `prime`, `crc32big`, `ns`, `statictbl`, `strtab`, `reentry`, plus the
+6/6 regression) and fails on the board. It was never once run on silicon against a
+known-good rung before everything else was built on top of it.
+
+**What this RETRACTS — all of these were measured with `interp` and are now void:**
+- **R-9's "all four variants hang"** (`ns`, `nskeys`, `nsflat`, `nssmall`). That whole
+  boot used `interp`, so it measured the glue, not the kernels. The three hypotheses
+  recorded as eliminated are **un-eliminated**; the variants may be fine.
+- **The SQLite board hang** is most likely this rather than a 1.3 MB PCC limit -- the
+  SQLite domain is built with `interp`.
+- **The window climb** result, which never got past its control.
+- **"My rebuilt FPGA firmware is broken"** -- it is not; the firmware was never the
+  variable. (The `capstone_error` fix and the caplifive-system monitor port stand on
+  their own merits and should be kept.)
+
+**Why it went unnoticed:** the rule "test the default path after every change" was
+applied to QEMU and not to silicon. `interp` was introduced, gated on QEMU, and then
+used for every subsequent board run *including the controls*, so nothing in the setup
+could reveal it.
+
+**Next:** bisect the glue against the generated prologue on hardware. The two differ in
+that `interp` reads the descriptor from the blob at runtime, uses `s1`/`s2`/`s3`/`s4`
+across the builder, and calls `RUN_CAP_INIT`. The first suspect is the runtime
+descriptor READ from `dom_data` -- the whole design rests on the claim that the blob is
+data-authority-readable by the domain, which is proven for the monitor's WRITE but has
+never been proven for the domain's READ on silicon.
+
 ### C-12 — a NON-DEFAULT globals offset does not work `FIXED 2026-07-28`
 **FIXED. Two capstone-c miscompiles in the monitor, both found by printing values.**
 

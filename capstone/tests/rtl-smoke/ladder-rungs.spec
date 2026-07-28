@@ -131,3 +131,10 @@ beebs_ns:beebs_ns_kernel.h:ns_compute:-O1
 beebs_nskeys:beebs_nskeys_kernel.h:nskeys_compute:-O1
 beebs_nsflat:beebs_nsflat_kernel.h:nsflat_compute:-O1
 beebs_nssmall:beebs_nssmall_kernel.h:nssmall_compute:-O1
+
+# WINDOW CLIMB (2026-07-29). C-5 is validated on silicon only to 32 KiB; SQLite needs a
+# 1.3 MB PCC and its first board run hung. Same kernel as beebs_prime (known-good,
+# oracle 582955588) at larger code windows, to find where the window stops working
+# before blaming SQLite for it.
+beebs_prime256k:beebs_prime_kernel.h:prime_compute:-O1:DOMAIN_WINDOW=0x40000
+beebs_prime1m:beebs_prime_kernel.h:prime_compute:-O1:DOMAIN_WINDOW=0x100000
