@@ -974,7 +974,36 @@ A second, self-inflicted bug on the way: the section walk was placed AFTER
 `munmap(elf_header, ...)`, so it dereferenced unmapped memory and segfaulted the
 loader. It must stay above the munmap; there is now a comment saying so.
 
-*Cause 2, OPEN -- the descriptor is still not found.* With the offset correctly
+*Cause 2, OPEN -- the monitor receives gpoff = 0x1000 while the loader computes 0x8000.*
+Instrumented `create_domain` with `C_PRINT` and ran the 32k case. The monitor sees:
+
+    base_addr = 0x101560000   correct
+    code_size = 0x8890        correct
+    gpoff     = 0x1000        WRONG -- loader printed "Globals offset = 0x8000"
+    tot_size  = 0x20000       correct
+
+So the blob is copied from the wrong place, the glue reads `count` as 0 from the
+resulting garbage, takes its `beqz s4, 99f` early-exit, and leaves `sp` un-narrowed --
+which is exactly the observed fault. The chain is understood; what is not is WHERE the
+packed high half dies. Verified along the way: `create_dom` uses `load_elf_code` (the
+function that does the packing), not `load_elf_code_ko`, so it is not the wrong loader.
+
+**Unexplained anomaly, and probably the thread to pull.** Two `C_PRINT` markers were
+added to `create_domain`: `0x0C12A063` at the very top (before the unpack) and
+`0x0C12DEB0` about fifteen lines later. Both are present in the generated
+`sbi_capstone_dom.c.S` exactly once (checked individually as decimals -- a combined
+grep hides which). At runtime **only the later one prints.** Execution therefore does
+not reach the top of the function as written, which would also explain the unpack
+never taking effect. Suspects, in order: capstone-c mis-generating the prologue for a
+5-argument function (the arity changed when `globals_off` was added); a stale object
+somewhere in the buildroot tree despite the `.c.S` and `fw_jump.elf` timestamps being
+consistent; or the ecall dispatch reaching a different entry label than the one the
+prints sit in (`.c.S` contains 52 `create_domain`-derived labels).
+
+**Next: disassemble `create_domain` in the linked `fw_jump.elf`** and confirm whether
+the two `li` constants are both on the executed path -- rather than trusting that
+presence in the `.c.S` means presence on the path. That is the same class of check that
+resolved C-11 (compare the linked artifact, not the source). With the offset correctly
 delivered the fault is UNCHANGED: `sp` un-narrowed (`bounds = dom_data base..end`) and
 the store at `base-48`, which is precisely `cincoffsetimm(sp,-96)` + `stc(ra,sp,48)`
 with the cursor still at base. That is the interpreter's `beqz s4, 99f` early-exit
