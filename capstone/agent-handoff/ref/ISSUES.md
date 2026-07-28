@@ -423,6 +423,37 @@ as a bare-metal S-mode OpenSBI payload (`build-ladder-base-bare.sh`,
 
 ---
 
+### I-3 — the QEMU ladder path shares NO region, so debug-slot probes cannot be tested off-board `OPEN — root cause found`
+Root-caused 2026-07-28, and it is why two board boots produced one data point between them.
+
+**Cause.** `modcapstone/userspace/capstone-test.c` — the loader the QEMU smoke path runs as
+`/capstone-test.user` — has its region setup **commented out**:
+
+```c
+// region_id = create_region(4096);
+// share_region(dom_id, region_id);
+```
+
+So a domain under QEMU gets only the 8-byte return slot, which is exactly the fault seen
+when a probe writes `res[3..]` there:
+`Cap mem access OOB: cursor = 8008f3c0, imm = 24, bounds = (8008f3c0, 8008f3c8)`.
+The FPGA controller (`ladder_perf_ctl`) *does* create a proper shared region, which is why
+`expint_diag` prints debug slots on the board and nothing can be rehearsed under emulation.
+
+**Consequence, and it is expensive.** Every diagnostic rung — the whole `*_diag` and
+`rawhazard*` family, which is how R-1 was localised — is **board-only by construction**.
+Each iteration costs a full boot, and a broken probe cannot be caught before spending one.
+Both `accum_probe` runs failed this way.
+
+**Fix:** restore the two lines and rebuild the guest image. That is a **buildroot userspace
+rebuild**, not a script change, so it is not free — but it converts probe iteration from
+~2.5 min of a shared physical resource into seconds of QEMU, and it would have caught both
+`accum_probe` failures for nothing.
+
+**Do this before any further probe work.** It is the highest-leverage infrastructure item
+outstanding: R-1 was localised by diagnostic rungs, R-6/R-8 still need them, and right now
+every one of them is blind until it reaches the board.
+
 ## Compiler / toolchain (ours)
 
 ### C-2 — `Cannot select: i128 = or` / `= xor`, mixed extends `OPEN (partially widened)`
