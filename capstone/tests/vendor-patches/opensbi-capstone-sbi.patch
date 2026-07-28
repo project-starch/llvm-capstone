@@ -1,5 +1,5 @@
 diff --git a/sbi_capstone.c b/sbi_capstone.c
-index be47c68..741f352 100644
+index be47c68..9225ace 100644
 --- a/sbi_capstone.c
 +++ b/sbi_capstone.c
 @@ -32,6 +32,9 @@
@@ -12,7 +12,32 @@ index be47c68..741f352 100644
  
  
  // toggle the following for swapping between cpmp swapping and gen_cap (hack)
-@@ -301,13 +304,102 @@ static unsigned create_domain(unsigned base_addr, unsigned code_size,
+@@ -288,9 +291,23 @@ static void *split_out_cap(unsigned base, unsigned len, unsigned linear) {
+ }
+ 
+ 
++/* globals_off: image offset where the domain's globals region starts, i.e. the value
++   the linker script put in __gpfree_globals_base minus the image base. 0 means "not
++   supplied" and falls back to the historical fixed 0x1000, so a caller that does not
++   pass it gets byte-for-byte the old behaviour and every existing rung keeps working
++   against this firmware.
++
++   It has to be a parameter rather than a constant because .text must fit BELOW it:
++   0x1000 is right for a BEEBS kernel and hopeless for SQLite, whose .text is 2.2 MB,
++   and one firmware has to serve both. Keeping it a #define also made DOMAIN_WINDOW=32k
++   silently WRONG whenever the copy path was in use -- the glue computed blob offsets
++   from base+0x8000 while the monitor filled dom_data from base+0x1000. That was masked
++   only because every 32k rung also set LADDER_NO_RO_COPY=1. */
+ static unsigned create_domain(unsigned base_addr, unsigned code_size,
+-                          unsigned tot_size, unsigned entry_offset)
++                          unsigned tot_size, unsigned entry_offset,
++                          unsigned globals_off)
+ {
++    unsigned gpoff = globals_off ? globals_off : GPFREE_GLOBALS_OFFSET;
+     // alignment requirement
+     code_size = (((code_size - 1) >> 4) + 1) << 4;
+     __linear void *mem_l, *dom_code, *dom_data, *mem_r;
+@@ -301,13 +318,112 @@ static unsigned create_domain(unsigned base_addr, unsigned code_size,
      dom_seal = __split(dom_code, base_addr + code_size);
      dom_data = __split(dom_seal, base_addr + code_size + DOMAIN_DATA_SIZE);
  
@@ -62,10 +87,20 @@ index be47c68..741f352 100644
 +       whole machine down, not just the domain. Skipping the copy instead is safe:
 +       the glue only reads the blob for globals that took the copy path, and a
 +       domain that does not fit simply keeps the old unrolled-immediate behaviour. */
-+    if(code_size > GPFREE_GLOBALS_OFFSET
++    if(code_size > gpoff
 +       && tot_size > code_size + DOMAIN_DATA_SIZE
-+       && (code_size - GPFREE_GLOBALS_OFFSET)
-+              <= (tot_size - code_size - DOMAIN_DATA_SIZE)) {
++       && (code_size - gpoff) > (tot_size - code_size - DOMAIN_DATA_SIZE)) {
++        /* The blob does not fit in dom_data. This used to SKIP the copy silently,
++           on the reasoning that "the glue only reads the blob for globals that took
++           the copy path" -- which is exactly backwards once a global DOES take it:
++           the domain then runs with uninitialized globals, computes wrong answers and
++           never faults. A domain whose globals were not delivered is not a degraded
++           domain, it is a wrong one, so fail loudly and let the build-time budget
++           check (which is where this belongs) catch it earlier next time. */
++        capstone_error(0xB10B);
++    }
++    if(code_size > gpoff
++       && tot_size > code_size + DOMAIN_DATA_SIZE) {
 +        /* Index in 16-BYTE units, not 8. These are `__linear void *`, so subscripting
 +           steps one CAPABILITY (16 B) and the generated access is a 16-byte ldc/stc --
 +           `dom_seal`'s own zeroing loop runs to DOMAIN_DATA_N with
@@ -82,8 +117,8 @@ index be47c68..741f352 100644
 +           Copying through capability-sized accesses is exact for this payload: the
 +           image bytes here are const initializer data with no capability tags, so the
 +           128 bits round-trip unchanged. */
-+        unsigned gpoff_c = GPFREE_GLOBALS_OFFSET >> 4;          /* image offset, in caps */
-+        unsigned glob_c  = (code_size - GPFREE_GLOBALS_OFFSET) >> 4;
++        unsigned gpoff_c = gpoff >> 4;                          /* image offset, in caps */
++        unsigned glob_c  = (code_size - gpoff) >> 4;
 +        unsigned ci;
 +        for(ci = 0; ci < glob_c; ci += 1)
 +            dom_data[ci] = dom_code[gpoff_c + ci];
@@ -102,7 +137,7 @@ index be47c68..741f352 100644
 +    // which fabricates a cap and hangs the monitor on silicon) -- this works on
 +    // real hardware. gp is delivered via the cscratch (dom_data) top-16 slot; the
 +    // entry glue does `ldc gp, END-16; delin`.
-+    __linear void *dom_gp = __split(dom_code, base_addr + GPFREE_GLOBALS_OFFSET);
++    __linear void *dom_gp = __split(dom_code, base_addr + gpoff);
 +    // dom_code -> [base, base+GPFREE_GLOBALS_OFFSET) (code); dom_gp -> [.., +code_size) (globals)
 +
      C_SET_CURSOR(dom_code, dom_code, base_addr + entry_offset);
@@ -115,3 +150,12 @@ index be47c68..741f352 100644
      // construct the sealed region of the domain
      dom_seal[0] = dom_code;
      dom_seal[2] = dom_data;
+@@ -753,7 +869,7 @@ unsigned handle_trap_ecall(unsigned arg0, unsigned arg1,
+         case SBI_EXT_CAPSTONE:
+             switch(func_code) {
+                 case SBI_EXT_CAPSTONE_DOM_CREATE:
+-                    res = create_domain(arg0, arg1, arg2, arg3);
++                    res = create_domain(arg0, arg1, arg2, arg3, arg4);
+                     break;
+                 case SBI_EXT_CAPSTONE_DOM_CALL:
+                     res = call_domain(arg0);
