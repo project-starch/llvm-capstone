@@ -120,6 +120,44 @@ pre-built dir is the current workaround. **Plumb the knobs through
 `run_ladder_perf_fpga.py`'s rebuild** so this cannot be got wrong — it is the same class as
 I-1, where a silently-different build produced five bogus results.
 
+### R-8 — pure-scalar code executes fully and returns a WRONG value `OPEN`
+Measured 2026-07-28 on `beebs_expint`, and it is the cleanest instance of this class yet.
+
+| | capability | baseline (bare-metal) |
+|---|---:|---:|
+| retval | **2,223,116,741** ✗ | 2,021,290,181 ✓ |
+| cycles | 110,988 | 110,844 |
+| instret | **71,243** | **71,248** |
+
+**The instruction counts differ by 5 out of 71,000.** The domain ran the whole
+computation — this is not a hang, and not the "compute never ran" signature
+(`beebs_insertsort`'s 560 instructions) — and produced a different number.
+
+**Why R-1 cannot explain it:** `beebs_expint` has **no arrays at all**. Every value is a
+scalar local; the only global is a `volatile long` accumulator. There is no same-object
+load/store pair for a memory hazard to act on. The rung was in fact *selected* against
+R-1's shape for exactly this reason.
+
+**Why it is not a compile-time difference:** the identical binary is **QEMU-correct**
+(`__CAPSTONE_LADDER_BEEBS_EXPINT_PASSED__`, oracle 2,021,290,181). So constant folding,
+the `2e6`/`3e7` double-to-long literals, and shift-amount UB are all ruled out — those
+would fail under emulation too.
+
+**So: same instructions, same count, different arithmetic result, on silicon only.**
+
+- **Companion case:** `beebs_fibcall` is also pure scalar and also miscomputes on silicon
+  (at −O1 it retired 166,539 against a baseline 177,855 — ~94 % of the work, wrong answer).
+  Two independent pure-scalar miscomputes make this a class, not a one-off.
+- **Relation to R-6:** `beebs_janne`'s failing nest is likewise pure register arithmetic.
+  R-6, R-8 and the `fibcall` miscompute plausibly share one mechanism that is **not** R-1.
+- **Value:** this is the strongest evidence yet that **R-1 is not the whole story**, which
+  the registry has flagged since R-6 but could not previously support with a clean case.
+- **Repro:** `tests/runtime-qemu/silicon-ladder/beebs_expint_*`, `-O1`, oracle
+  2,021,290,181, QEMU-green, baseline half clean (15/15 tied, spread 0).
+- **Next:** bisect `ei_expint` by returning intermediates through the debug slots — the two
+  branches, the `psi` nested loop and `ei_foo`'s shift are the separable pieces. This is a
+  *diagnostic* rung, not a measurement, so a wrong answer is still a usable result.
+
 ### R-6 — `beebs_janne` hangs although R-1 predicts it should pass `OPEN`
 BEEBS `janne_complex`: nested data-dependent loops whose conditions are computed **entirely from
 locals**, with one `.bss` counter (`jc_iters++`) touched through a single capability register.

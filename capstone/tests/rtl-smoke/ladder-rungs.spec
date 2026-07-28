@@ -70,3 +70,9 @@ ctrsanity4:ctrsanity4_kernel.h:cs_compute:-O1
 # The BASELINE half is plain riscv64 with no code window and no cap-table glue, so it
 # builds and runs unconditionally; only the CAPABILITY half needs the two knobs.
 rv8_sha512:rv8_sha512_kernel.h:sha512_compute:-O1
+# Selected against R-1's shape (no arrays at all), not for benchmark prestige --
+# 6 of 6 silicon attempts today were predicted PASS and only 2 were.
+beebs_expint:beebs_expint_kernel.h:expint_compute:-O1
+# R-1 reproducer kept as a rung: a real crypto kernel that hangs at the DEFAULT
+# 4 KiB window with no special flags. Baseline half builds and runs fine.
+rv8_sha512s:rv8_sha512s_kernel.h:sha512s_compute:-O1
