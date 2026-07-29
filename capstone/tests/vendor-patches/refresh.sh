@@ -20,6 +20,14 @@ snap "opensbi component"    capstone/caplifive-buildroot/components/opensbi     
 snap "opensbi capstone-sbi" capstone/caplifive-buildroot/components/opensbi/lib/sbi/capstone-sbi opensbi-capstone-sbi.patch
 snap "capstone-sbi package" capstone/caplifive-buildroot/package/capstone-sbi-domain/capstone-sbi buildroot-capstone-sbi-package.patch
 
+# caplifive-SYSTEM: the tree the FPGA firmware is actually built from. It was missing
+# here, which meant the FPGA monitor's uncommitted edits had NO backup at all -- including
+# the 2026-07-29 C-13 root-cause fix (scalar blob copy). Submodule source is deliberately
+# not committed, so an unmirrored edit is one `git checkout` from being lost. Same
+# wrong-tree gap that left the FPGA rootfs overlay carrying a day-old SQLite domain.
+snap "SYSTEM opensbi"       capstone/caplifive-system/sw/buildroot/components/opensbi   system-opensbi-component.patch
+snap "SYSTEM capstone-sbi"  capstone/caplifive-system/sw/buildroot/components/opensbi/lib/sbi/capstone-sbi system-opensbi-capstone-sbi.patch
+
 DIAG="$ROOT/capstone/caplifive-buildroot/package/modcapstone/userspace/capstone-diag.c"
 if [[ -f "$DIAG" ]]; then
   if cmp -s "$DIAG" "$OUT/capstone-diag.c"; then echo "  same capstone-diag.c"

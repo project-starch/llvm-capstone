@@ -1,0 +1,6 @@
+diff --git a/lib/sbi/capstone-sbi b/lib/sbi/capstone-sbi
+--- a/lib/sbi/capstone-sbi
++++ b/lib/sbi/capstone-sbi
+@@ -1 +1 @@
+-Subproject commit 99aaffa82af4f5a98b1d1b725ab241f30737cf44
++Subproject commit 99aaffa82af4f5a98b1d1b725ab241f30737cf44-dirty
