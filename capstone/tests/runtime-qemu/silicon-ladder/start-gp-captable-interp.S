@@ -52,6 +52,20 @@
 #define INTERP_DIAG_STAGE 1
 #endif
 
+/* C-13. Is `sp` still LINEAR after the entry block above?
+   The RTL's DELIN accepts CAP_TYPE_LINEAR ONLY and raises UNEXPECTED_CAP_TYPE
+   otherwise -- it is NOT idempotent, unlike our patched QEMU helper_csdelin, which
+   returns early for an already-NONLIN cap and hid this for the entire bring-up.
+   SPLIT preserves cap_type (modify_cap_start/_end/_revnode all copy it through), so
+   once sp is delin'd at entry, EVERY capability split from it is already NONLIN and
+   each later delin is both redundant and fatal on silicon.
+   So: delin exactly once. When the entry delin runs, all the later ones are gated off. */
+#if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE < 2
+#define INTERP_SP_LINEAR 1         /* entry delin skipped -> sp and its splits stay LIN */
+#else
+#define INTERP_SP_LINEAR 0         /* entry delin ran -> everything derived is NONLIN   */
+#endif
+
 #ifndef __CAPSTONE_TEST_BUILTIN__
 #define __CAPSTONE_TEST_BUILTIN__
 #define cincoffset(rd, rs1, rs2) .insn r 0x5b, 0x1, 0xc, rd, rs1, rs2
@@ -226,7 +240,9 @@
   slli  t3, s4, 4                    /* count * 16                                     */
   sub   t1, t1, t3
   split(gp, sp, t1)                  /* gp = [t1,END) table; sp = [base,t1)            */
-  delin(gp)
+#if INTERP_SP_LINEAR
+  delin(gp)                          /* only needed when sp was still LIN (see C-13)   */
+#endif
   cincoffset(s2, gp, x0)             /* s2 = moving table pointer                      */
 
 #ifndef INTERP_FAKE_COUNT
@@ -251,7 +267,9 @@
 11:
   sub   t1, t1, t4
   split(t2, sp, t1)                  /* t2 = storage cap                               */
-  delin(t2)
+#if INTERP_SP_LINEAR
+  delin(t2)                          /* only needed when sp was still LIN (see C-13)   */
+#endif
 
   /* dst walker; t6 counts bytes still to write into storage. */
   cincoffset(t6, t2, x0)
@@ -307,7 +325,22 @@
   blt   s3, s4, 10b
 
   scc(sp, sp, t1)                    /* sp.cursor = top of the remaining stack         */
-  delin(sp)
+
+  /* C-13 ROOT CAUSE: delin sp EXACTLY ONCE.
+     The RTL's DELIN (capstone-ariane core/anvil_build/capstone_dyn_unit.anvil) raises
+     UNEXPECTED_CAP_TYPE unless the operand is CAP_TYPE_LINEAR -- it is NOT idempotent.
+     Our QEMU helper_csdelin (op_helper.c:900) was patched to return early when the cap
+     is already NONLIN, so a double delin is silent under emulation and fatal on silicon.
+     Every real (non-diagnostic) build takes the #else branch above and delins sp at
+     ENTRY to derive the blob view, which leaves sp NONLIN here -- so this trailing delin
+     was a second delin on a non-linear capability and wedged the board. It is also
+     redundant: its only purpose is to make the stack non-linear for the app, which the
+     entry delin already did.
+     Measured: stage 1 (no entry delin) 4/4 PASS, stage 2 (entry delin) 3/3 FAIL.
+     SPLIT and SCC both accept NONLIN, so DELIN is the only instruction that cared. */
+#if INTERP_SP_LINEAR
+  delin(sp)                          /* entry delin was skipped: sp is still LIN here  */
+#endif
 #ifndef INTERP_FAKE_COUNT
   stc(gp, s1, 16)                    /* park gp for the reentry fast path              */
 #endif
