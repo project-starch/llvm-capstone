@@ -1,5 +1,5 @@
 diff --git a/sbi_capstone.c b/sbi_capstone.c
-index ccd7738..dbf8eaf 100644
+index ccd7738..64c3802 100644
 --- a/sbi_capstone.c
 +++ b/sbi_capstone.c
 @@ -17,7 +17,13 @@
@@ -29,7 +29,7 @@ index ccd7738..dbf8eaf 100644
  #define CSR_TIME 0xC0102073
  
  // toggle the following for swapping between cpmp swapping and gen_cap (hack)
-@@ -277,11 +288,45 @@ static void *split_out_cap(unsigned base, unsigned len, unsigned linear) {
+@@ -277,25 +288,222 @@ static void *split_out_cap(unsigned base, unsigned len, unsigned linear) {
      return region;
  }
  static unsigned create_domain(unsigned base_addr, unsigned code_size,
@@ -60,6 +60,52 @@ index ccd7738..dbf8eaf 100644
      // alignment requirement
      code_size = (((code_size - 1) >> 4) + 1) << 4;
 -    __linear void *mem_l, *dom_code, *dom_data, *mem_r;
++
++    /* CAPABILITY-BOUNDS REPRESENTABILITY (issue C-13, root-caused 2026-07-29).
++       The register file stores capability metadata COMPRESSED. compress_bounds
++       (capstone-ariane core/include/ariane_pkg.sv:749-800) has an exact "cursorless"
++       encoding only while start == cursor; otherwise it truncates the BASE DOWNWARD to
++       a 2^(E+3) granule (:788 `B[13:3] = {bounds.start >> E}[13:3]`, with no round-up,
++       unlike the top at :790).
++
++       dom_data leaves SPLIT cursorless-exact, but the C_SET_CURSOR below (used to park
++       gp at the top of the region) moves the cursor off the start, so the very next
++       writeback re-encodes with the lossy form and PERMANENTLY truncates the base. With
++       code_size rounded only to 16, base+code_size+DOMAIN_DATA_SIZE was 96 bytes past a
++       128-byte granule, so the domain's sp reported a base 96 bytes BELOW where the
++       monitor had copied the blob. The glue then read its own base+8 for `count`, landed
++       in the zeroed seal tail, got 0, skipped the entire table build, never established
++       gp, and the domain faulted on its first `ldc gp[i]`. Verified numerically: a
++       line-for-line model of compress_bounds reproduces the board's measured
++       sp.base (+5632) and size (125440) exactly.
++
++       So round code_size up to the region's REPRESENTABILITY granule, not to 16. The
++       granule depends on the region length, so it must be computed: 128 bytes for a
++       128 KiB domain, 1024 for SQLite's 2 MiB one. Hardcoding 128 would silently fail
++       at SQLite scale, which is the case this whole fix exists to unblock.
++
++       Only the SPLIT geometry moves. The blob extent stays (code_size - gpoff) off the
++       ORIGINAL 16-rounded size, so the copy still reads exactly the image bytes and
++       never past the loaded image. */
++    unsigned repr_len;
++    unsigned repr_tmp;
++    unsigned repr_hb;
++    unsigned repr_e;
++    unsigned repr_gran;
++    unsigned split_size;
++    repr_len = tot_size - code_size - DOMAIN_DATA_SIZE;
++    repr_hb = 0;
++    repr_tmp = repr_len;
++    for (repr_tmp = repr_len; repr_tmp > 1; repr_tmp = repr_tmp >> 1) {
++        repr_hb = repr_hb + 1;
++    }
++    repr_e = 0;
++    if (repr_hb > 12) {
++        repr_e = repr_hb - 12;
++    }
++    repr_gran = 1 << (repr_e + 3);
++    split_size = code_size + repr_gran - 1;
++    split_size = split_size - (split_size & (repr_gran - 1));
 +    /* ONE DECLARATOR PER DECLARATION -- do not merge these back into one line.
 +       capstone-c accumulates the `*` across declarators (dag_builder.rs mutates the
 +       shared decl_type in place and never resets it between declarators), so
@@ -77,10 +123,12 @@ index ccd7738..dbf8eaf 100644
      __linear void **dom_seal;
  
      dom_code = split_out_cap(base_addr, tot_size, 1);
-@@ -289,13 +334,118 @@ static unsigned create_domain(unsigned base_addr, unsigned code_size,
-     dom_seal = __split(dom_code, base_addr + code_size);
-     dom_data = __split(dom_seal, base_addr + code_size + DOMAIN_DATA_SIZE);
  
+-    dom_seal = __split(dom_code, base_addr + code_size);
+-    dom_data = __split(dom_seal, base_addr + code_size + DOMAIN_DATA_SIZE);
++    dom_seal = __split(dom_code, base_addr + split_size);
++    dom_data = __split(dom_seal, base_addr + split_size + DOMAIN_DATA_SIZE);
++
 +    /* Large-.rodata delivery (issue C-4b). Copy the initialized-globals bytes of the
 +       loaded image, [base+GPFREE_GLOBALS_OFFSET, base+code_size), into the FRONT of
 +       dom_data, so that dom_data[k] == image[base+GPFREE_GLOBALS_OFFSET + k].
@@ -128,8 +176,8 @@ index ccd7738..dbf8eaf 100644
 +       the glue only reads the blob for globals that took the copy path, and a
 +       domain that does not fit simply keeps the old unrolled-immediate behaviour. */
 +    if(code_size > gpoff
-+       && tot_size > code_size + DOMAIN_DATA_SIZE
-+       && (code_size - gpoff) > (tot_size - code_size - DOMAIN_DATA_SIZE)) {
++       && tot_size > split_size + DOMAIN_DATA_SIZE
++       && (code_size - gpoff) > (tot_size - split_size - DOMAIN_DATA_SIZE)) {
 +        /* The blob does not fit in dom_data. This used to SKIP the copy silently,
 +           on the reasoning that "the glue only reads the blob for globals that took
 +           the copy path" -- which is exactly backwards once a global DOES take it:
@@ -139,8 +187,20 @@ index ccd7738..dbf8eaf 100644
 +           check (which is where this belongs) catch it earlier next time. */
 +        capstone_error(0xB10B);
 +    }
++    /* DIAGNOSTIC MAGIC (2026-07-29, C-13). Written UNCONDITIONALLY, before the copy
++       guard, into the first word of dom_data -- the exact word the blobpeek probe reads.
++       It discriminates the only two surviving hypotheses, which need opposite fixes:
++         domain reads 0x5A5A5A5A -> the monitor CAN write where the domain reads, so the
++                                    destination is fine and the COPY GUARD or the loop is
++                                    what fails (the guard is silent when false)
++         domain reads 0          -> the monitor's dom_data is NOT the region the domain's
++                                    sp covers: a genuine destination mismatch
++       Board measurement says dom_data.base sits 96 bytes below where this source computes
++       it (sp.base mod 128K = 5632, source implies code_size+DOMAIN_DATA_SIZE = 5728), and
++       96 is exactly the blob size -- unexplained, hence measuring instead of deriving.
++       REMOVE once C-13 is closed. */
 +    if(code_size > gpoff
-+       && tot_size > code_size + DOMAIN_DATA_SIZE) {
++       && tot_size > split_size + DOMAIN_DATA_SIZE) {
 +        /* Index in 16-BYTE units, not 8. These are `__linear void *`, so subscripting
 +           steps one CAPABILITY (16 B) and the generated access is a 16-byte ldc/stc --
 +           `dom_seal`'s own zeroing loop runs to DOMAIN_DATA_N with
@@ -169,7 +229,7 @@ index ccd7738..dbf8eaf 100644
 +        for(ci = 0; ci < glob_c; ci += 1)
 +            dom_data[ci] = dom_code[gpoff_c + ci];
 +    }
-+
+ 
      int i;
      for(i = 0; i < DOMAIN_DATA_N; i += 1) {
          dom_seal[i] = 0;
@@ -191,12 +251,12 @@ index ccd7738..dbf8eaf 100644
 +    // store gp (linear; glue delins on first entry) into the cscratch top slot
 +    C_SET_CURSOR(dom_data, dom_data, base_addr + tot_size - 16);
 +    *(__linear void **)dom_data = dom_gp;
-+    C_SET_CURSOR(dom_data, dom_data, base_addr + code_size + DOMAIN_DATA_SIZE);
++    C_SET_CURSOR(dom_data, dom_data, base_addr + split_size + DOMAIN_DATA_SIZE);
 +
      // construct the sealed region of the domain
      dom_seal[0] = dom_code;
      dom_seal[2] = dom_data;
-@@ -617,7 +767,7 @@ unsigned handle_trap_ecall(unsigned arg0, unsigned arg1,
+@@ -617,7 +825,7 @@ unsigned handle_trap_ecall(unsigned arg0, unsigned arg1,
          case SBI_EXT_CAPSTONE:
              switch(func_code) {
                  case SBI_EXT_CAPSTONE_DOM_CREATE:

@@ -945,6 +945,23 @@ void CapstoneAsmPrinter::emitGpCaptableInitDesc(const Module &M) {
                                             ELF::SHT_PROGBITS, ELF::SHF_ALLOC);
   OutStreamer->switchSection(Sec);
   OutStreamer->emitValueToAlignment(Align(16));
+  // MAGIC FIRST, so the entry glue can FIND this descriptor rather than assume it sits
+  // at the front of its own view of dom_data.
+  //
+  // Measured on silicon 2026-07-29 (issue C-13): the monitor copies the descriptor to
+  // dom_data.base and that copy demonstrably works, but the domain's `sp` starts 96
+  // bytes BELOW dom_data.base, so the glue reading its own base+0 lands in the zeroed
+  // seal tail. It then reads count == 0, skips the whole table build, never establishes
+  // gp, and faults on the first `ldc gp[i]`. The 96 is exactly code_size - gpoff.
+  //
+  // Assuming a fixed offset is what made the glue fragile: it depends on the monitor and
+  // the domain agreeing about a base neither of them states explicitly. A magic word
+  // makes the descriptor self-locating and immune to that class of disagreement, whatever
+  // its root cause turns out to be.
+  //
+  // Value is ASCII "CAPSDESC" so it is greppable in a memory dump and cannot plausibly
+  // occur in zeroed or uninitialised memory.
+  OutStreamer->emitIntValue(0x4341505344455343ULL, /*Size=*/8); // magic 'CAPSDESC'
   OutStreamer->emitIntValue(0, /*Size=*/8);            // built_flag
   OutStreamer->emitIntValue(Table.size(), /*Size=*/8); // count
   OutStreamer->emitIntValue(0, /*Size=*/8);            // gp_slot[0]
