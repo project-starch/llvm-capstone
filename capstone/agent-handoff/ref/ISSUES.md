@@ -982,7 +982,7 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
   `fw_jump.elf.good` = `6724bcb3`).
 - Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
 
-### C-13 — a single `lla` (auipc) in domain glue wedges silicon `ROOT-CAUSED 2026-07-29`
+### C-13 — interp glue fails on silicon NON-DETERMINISTICALLY `OPEN — bisection invalid`
 Found 2026-07-29 by a one-variable control, after it had already cost several board
 sessions and a firmware rebuild.
 
@@ -1011,7 +1011,36 @@ applied to QEMU and not to silicon. `interp` was introduced, gated on QEMU, and 
 used for every subsequent board run *including the controls*, so nothing in the setup
 could reveal it.
 
-**ROOT CAUSE: `lla` / `auipc` executed inside a domain.** Isolated to ONE instruction
+**THE BISECTION BELOW IS INVALID. The failure is NOT REPRODUCIBLE run to run.**
+
+    stage 1   PASS
+    stage 2   PASS   -> FAIL on repeat, same build, same firmware, same rung
+    stage 3   FAIL
+    stage 4   FAIL
+    stage 5   FAIL
+
+Stage 2 was re-run with no change of any kind and flipped. So every attribution made
+from single runs is reading noise: first "it is RUN_CAP_INIT's jalr" (wrong -- the rung's
+cap-init table is empty and the jalr never executed), then "it is lla/auipc" (wrong --
+stage 5 removed the added lla and still failed, and the passing stages already contain
+six auipc).
+
+**The methodological error, which is the useful part:** I bisected without first
+establishing that the failure was DETERMINISTIC. One run per stage is only evidence if
+the same configuration reproduces. It does not here. Roughly six board sessions were
+spent building a causal story on single samples.
+
+**What must happen before any further bisection:** measure the failure RATE. Run one
+fixed configuration (interp, stage 2, `beebs_prime`) N times and count. Until that
+number exists, no single-run pass or fail can attribute anything, and the same applies
+retroactively to R-9's discriminator boot -- those four "hangs" are also single samples.
+
+**What still stands**, because it rests on repeated or structural evidence:
+- `generated` glue passes on silicon; `interp` has never yet passed twice.
+- Firmware is not the variable (generated passes on both the prebuilt and the rebuild).
+- SQLite's QEMU results are unaffected -- they are deterministic and re-run many times.
+
+*Superseded reasoning follows, kept only to show what was tried.* Isolated to ONE instruction
 pair by staged bisection on `beebs_prime`, one variable per boot, every build
 QEMU-gated first:
 

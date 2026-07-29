@@ -104,6 +104,15 @@
   /* Skipped on a reentry for the same reason the table build is: re-running the
      initializers would reset every pointer-valued global to its image value,
      silently discarding whatever the previous entry stored there. */
+#if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE == 5
+  /* STAGE 5: the same value stage 4 obtained with `lla`, obtained instead as a BAKED
+     IMMEDIATE. If stage 4 fails and stage 5 passes, the fault is specifically auipc in
+     domain code, and baking link-time constants is a proven workaround -- which is the
+     whole fix direction for the copy path and cap-init. Same instruction count either
+     way, so this is not a timing artefact. */
+  li    t3, 0x11000
+  j     79f
+#endif
 #if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE == 4
   /* STAGE 4: one `lla` and nothing else. beebs_prime's cap-init table is EMPTY, so in
      stage 3 the only instructions that actually executed were two llas and a bgeu --
