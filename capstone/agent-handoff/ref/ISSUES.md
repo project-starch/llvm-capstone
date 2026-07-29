@@ -982,7 +982,7 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
   `fw_jump.elf.good` = `6724bcb3`).
 - Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
 
-### C-13 — the descriptor-driven entry glue does not work on SILICON `OPEN — blocks SQLite`
+### C-13 — RUN_CAP_INIT's `jalr` on a plain integer wedges silicon `ROOT-CAUSED 2026-07-29`
 Found 2026-07-29 by a one-variable control, after it had already cost several board
 sessions and a firmware rebuild.
 
@@ -1010,6 +1010,31 @@ known-good rung before everything else was built on top of it.
 applied to QEMU and not to silicon. `interp` was introduced, gated on QEMU, and then
 used for every subsequent board run *including the controls*, so nothing in the setup
 could reveal it.
+
+**ROOT CAUSE: `RUN_CAP_INIT`.** Bisected on hardware with `beebs_prime` (known-good,
+3 KB, one boot each), one variable per stage, each build QEMU-gated first:
+
+    stage 1  minimal carve loop only                    PASS
+    stage 2  + early delin(sp) + s1 blob view           PASS
+    stage 3  + RUN_CAP_INIT                             FAIL
+
+So the interpreter's core is fine on silicon -- the carve loop, the splits, the `stc`
+into the cap table, the s-registers, the early `delin(sp)` (R-2 does NOT bite here) and
+the `sp`-derived blob view all work. Only cap-init fails.
+
+**Why it is the culprit.** `RUN_CAP_INIT` calls each initializer with `jalr` on a PLAIN
+INTEGER computed from `lla` differences. The reference implementation
+(`my_first_domain/start.S:58-68`) instead derives a real CODE CAPABILITY with
+`cincoffset gp, off` and calls it with `cjalr` -- which is valid there because in that
+ABI `gp` spans the whole image. Under gp-captable `gp` is bounded to the cap table, so a
+bare `jalr` was substituted. QEMU accepts an integer jump target; the RTL does not.
+
+**Fix:** derive the code capability from **PCC**, which covers the code region by
+construction, instead of from `gp` or an integer. Contained to one macro.
+
+**Verify on BOTH:** `beebs_prime` has an EMPTY cap-init table, so it exercises only the
+two `lla`s and the guard branch -- it proves the mechanism, not the calls. SQLite has 54
+real pointer-valued initializers and is what proves the scale. Gate on both.
 
 **Descriptor READ eliminated 2026-07-29.** The leading suspect was the runtime read of
 the monitor-copied blob -- the one assumption in the design never checked on hardware.

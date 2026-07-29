@@ -108,6 +108,7 @@ if [[ "$DOMAIN_GLUE" == "interp" ]]; then
   echo "  glue: descriptor-driven interpreter (no generated prologue)"
   "$CLANG" -target capstone64-unknown-elf -ffreestanding \
     ${INTERP_FAKE_COUNT:+-DINTERP_FAKE_COUNT=$INTERP_FAKE_COUNT} \
+    ${INTERP_DIAG_STAGE:+-DINTERP_DIAG_STAGE=$INTERP_DIAG_STAGE} \
     -c "$INTERP_GLUE" -o "$OBJ_DIR/start.o"
 else
   # 2. generate the per-app cap-table builder from the descriptor

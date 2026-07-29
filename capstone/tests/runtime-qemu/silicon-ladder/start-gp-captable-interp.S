@@ -46,6 +46,12 @@
  * `cincoffset rd, rs1, rs2` with rd != rs1 CONSUMES a linear rs1 (issue C-4b);
  * the delin below makes that safe regardless.
  */
+/* Diagnostic staging for C-13 (see ISSUES). 1 = minimal glue, proven PASSING on
+   silicon; 2 = minimal + the early delin(sp) and sp-derived blob view. */
+#ifndef INTERP_DIAG_STAGE
+#define INTERP_DIAG_STAGE 1
+#endif
+
 #ifndef __CAPSTONE_TEST_BUILTIN__
 #define __CAPSTONE_TEST_BUILTIN__
 #define cincoffset(rd, rs1, rs2) .insn r 0x5b, 0x1, 0xc, rd, rs1, rs2
@@ -98,6 +104,9 @@
   /* Skipped on a reentry for the same reason the table build is: re-running the
      initializers would reset every pointer-valued global to its image value,
      silently discarding whatever the previous entry stored there. */
+#if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE < 3
+  j     79f                          /* diagnostic: skip cap-init entirely             */
+#endif
   beqz  s5, 79f                      /* fast path: table already built, globals live   */
   lla   t3, __capstone_cap_init_start
   lla   t4, __capstone_cap_init_end
@@ -140,10 +149,20 @@
 .endm
 
 .macro BUILD_GP_CAPTABLE_INTERP
+#if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE < 2
+  /* Diagnostic build: no descriptor is read, so no blob view is needed -- which also
+     lets us drop the early delin(sp). That matters because R-2 is literally "delin in
+     domain code wedges the board", and the generated prologue (which WORKS on silicon)
+     delins sp only at the END. Nothing here touches sp with cincoffset, so sp can stay
+     linear: split and scc do not consume rs1. */
+#else
+  /* STAGE 2 restores exactly this block and nothing else, so a board run attributes
+     the failure to the early delin(sp) + sp-derived view rather than to cap-init. */
   delin(sp)                          /* C-4b: sp arrives LIN; cincoffset would eat it */
   cincoffset(s1, sp, x0)
   lcc(t3, sp, 3)                     /* t3 = sp.base                                   */
   scc(s1, s1, t3)                    /* s1 = blob view, cursor forced to the base      */
+#endif
 
   /* S2 -- IDEMPOTENT ENTRY. On the FIRST entry sp is the whole dom_data with its
      cursor at the base; on REENTRY it is whatever the exit path stashed in cscratch,
@@ -161,7 +180,11 @@
      always builds. It is safe to rely on that zero specifically because the blob is a
      deterministic COPY of image bytes -- dom_data itself is __get_free_pages memory
      and is not zeroed. gp is parked at blob[16] with stc, so it keeps its tag. */
+#ifdef INTERP_FAKE_COUNT
+  li    t4, 0                        /* diagnostic: always build, never read the blob  */
+#else
   ld    t4, 0(s1)                    /* built_flag                                     */
+#endif
   beqz  t4, 5f
   li    s5, 0                        /* s5 = 0: took the fast path, did NOT build      */
   ldc(gp, s1, 16)                    /* already built: reload gp and skip everything   */
@@ -188,7 +211,9 @@
   delin(gp)
   cincoffset(s2, gp, x0)             /* s2 = moving table pointer                      */
 
+#ifndef INTERP_FAKE_COUNT
   cincoffsetimm(t0, s1, 32)          /* t0 = &record[0]                                */
+#endif
   li    s3, 0
 10:
 #ifdef INTERP_FAKE_COUNT
@@ -257,13 +282,17 @@
 40:
   stc(t2, s2, 0)                     /* cap-table[i] = storage                         */
   cincoffsetimm(s2, s2, 16)
+#ifndef INTERP_FAKE_COUNT
   cincoffsetimm(t0, t0, 24)          /* next record                                    */
+#endif
   addi  s3, s3, 1
   blt   s3, s4, 10b
 
   scc(sp, sp, t1)                    /* sp.cursor = top of the remaining stack         */
   delin(sp)
+#ifndef INTERP_FAKE_COUNT
   stc(gp, s1, 16)                    /* park gp for the reentry fast path              */
+#endif
 99:
 .endm
 
