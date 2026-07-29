@@ -136,7 +136,13 @@
   lla   t3, __capstone_cap_init_start
   j     79f
 #endif
-#if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE < 3
+/* Stages 1, 2 and 6 all skip cap-init. `< 3` alone was a BUG: stage 6 is meant to be
+   stage 2 plus ONE load, but `6 < 3` is false, so it silently un-skipped this whole
+   block and re-introduced two `lla`/`auipc` pairs and a store into the blob -- exactly
+   the confound behind the retracted lla/auipc root cause (1d83cd9260af, retracted by
+   d579630011ee). Any stage that is "stage 2 plus something" must skip cap-init too.
+   Verify by diffing disassembly after changing this; do not trust the #if. */
+#if defined(INTERP_FAKE_COUNT) && (INTERP_DIAG_STAGE < 3 || INTERP_DIAG_STAGE >= 6)
   j     79f                          /* diagnostic: skip cap-init entirely             */
 #endif
   beqz  s5, 79f                      /* fast path: table already built, globals live   */
@@ -213,7 +219,27 @@
      deterministic COPY of image bytes -- dom_data itself is __get_free_pages memory
      and is not zeroed. gp is parked at blob[16] with stc, so it keeps its tag. */
 #ifdef INTERP_FAKE_COUNT
-  li    t4, 0                        /* diagnostic: always build, never read the blob  */
+#if INTERP_DIAG_STAGE >= 6
+  /* STAGE 6 -- CAN THE DOMAIN READ THE MONITOR-COPIED BLOB AT ALL?
+     Stage 2 (entry delin present, delin fix applied) plus ONE load through the
+     sp-derived blob view -- verified by DISASSEMBLY DIFF, not by reading the #if.
+     (The first version of this claim was false: the cap-init skip at the top of
+     RUN_CAP_INIT was gated `< 3`, so stage 6 also un-skipped two lla/auipc pairs and
+     a store. Fixed; re-diff after any change here.) The value is discarded and we
+     always build, so nothing downstream depends on what comes back -- this isolates the
+     READ itself and nothing else.
+     Why this is the right next test: the monitor's WRITE into dom_data is proven, but the
+     domain reading it back is the one assumption in this design never checked on silicon,
+     and it is the only thing the REAL interp path does that stage 2 does not. Real interp
+     still failed WITH the delin fix, so the remaining fault is either here or downstream
+     of it.
+     stage 6 FAILS -> the domain cannot read the blob; the descriptor-driven design needs
+                      the descriptor delivered another way (e.g. baked immediates).
+     stage 6 PASSES -> the read works and the remaining fault is in the descriptor's
+                      CONTENTS or in the record loop that consumes them. */
+  ld    t4, 0(s1)                    /* the load under test                            */
+#endif
+  li    t4, 0                        /* diagnostic: always build, ignore what was read */
 #else
   ld    t4, 0(s1)                    /* built_flag                                     */
 #endif

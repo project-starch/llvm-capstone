@@ -138,3 +138,14 @@ beebs_nssmall:beebs_nssmall_kernel.h:nssmall_compute:-O1
 # before blaming SQLite for it.
 beebs_prime256k:beebs_prime_kernel.h:prime_compute:-O1:DOMAIN_WINDOW=0x40000
 beebs_prime1m:beebs_prime_kernel.h:prime_compute:-O1:DOMAIN_WINDOW=0x100000
+
+# REPRODUCIBILITY SAMPLES (2026-07-29). Four IDENTICAL copies of beebs_prime, so one
+# boot yields four pass/fail samples instead of one. C-13's bisection was invalidated by
+# assuming the silicon failure was deterministic without checking: stage 2 passed once
+# and failed on a re-run with no change at all. Nothing can be attributed until the
+# failure RATE is known. They differ only in entry VA, an axis already validated as
+# measurement-safe when R-3 was found address-keyed (0.03% across boot positions).
+beebs_primer1:beebs_prime_kernel.h:prime_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=2
+beebs_primer2:beebs_prime_kernel.h:prime_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=6
+beebs_primer3:beebs_prime_kernel.h:prime_compute:-O1
+beebs_primer4:beebs_prime_kernel.h:prime_compute:-O1
