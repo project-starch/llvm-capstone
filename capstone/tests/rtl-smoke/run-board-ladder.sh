@@ -27,6 +27,31 @@ REPO=$(cd -- "$HERE/../../.." && pwd)                          # repo root
 
 [[ $# -ge 1 ]] || { echo "usage: $0 <rung> [rung...]" >&2; exit 2; }
 
+# ---- EXCLUSIVE BOARD LOCK -------------------------------------------------------------
+# The board is ONE shared physical device. Two sessions at once do not merely interleave:
+# each power-cycles and JTAG-loads while the other is mid-transfer, so every load is
+# interrupted and the board sits in a bootrom loop (`Hit any key to enter update mode`
+# repeating). That happened on 2026-07-30 and cost several sessions AND produced a false
+# diagnosis -- a control rung "failed to boot", which was read as a bad firmware image
+# when it was actually contention.
+#
+# Serialization was previously a rule I was supposed to remember. Now it is enforced:
+# a non-blocking flock, so a second session fails IMMEDIATELY and says who holds it,
+# instead of silently corrupting both runs.
+BOARD_LOCK=${BOARD_LOCK:-/tmp/capstone/.board.lock}
+mkdir -p "$(dirname "$BOARD_LOCK")"
+exec {LOCKFD}>"$BOARD_LOCK"
+if ! flock -n "$LOCKFD"; then
+  echo "FATAL: another board session holds $BOARD_LOCK" >&2
+  echo "       holder: $(cat "$BOARD_LOCK" 2>/dev/null || echo '(unknown)')" >&2
+  echo "       running board processes:" >&2
+  pgrep -af 'fpga_driver/run_' 2>/dev/null | sed 's/^/         /' >&2 || true
+  echo "       Wait for it, or kill it and release the board, before retrying." >&2
+  exit 3
+fi
+# Safe to truncate+write: we hold the flock, so no other writer can race us.
+printf 'pid=%s started=%s rungs=%s\n' "$$" "$(date -Is)" "$*" > "$BOARD_LOCK"
+
 # ---- preconditions, each fatal and each reported by NAME -----------------------------
 ENVSH="$REPO/capstone/tests/capstone-test-env.sh"
 [[ -f "$ENVSH" ]] || { echo "FATAL: missing $ENVSH" >&2; exit 1; }

@@ -112,7 +112,34 @@ def login_root(console: FpgaConsole, tries: int = 4,
     began. The console replays its full UART history on connect (prior boots'
     `login:` prompts and reset loops), so without this the wait matches a stale
     prompt and we type `root` while the current kernel is still mid-boot."""
-    console.wait_uart(r"login:", timeout=180.0, search_from=search_from or 0)
+    # BOOTROM-LOOP DETECTION. If the JTAG-loaded image faults on entry the board resets
+    # and the bootrom starts over, printing its banner again -- forever. Waiting the full
+    # 180 s for a `login:` that can never come wastes a session AND yields a misleading
+    # "boot timeout" instead of naming the real state. Two common causes, which need
+    # opposite responses: a genuinely bad image, or TWO SESSIONS sharing the board (each
+    # power-cycling while the other is mid-load). Both happened on 2026-07-30.
+    #
+    # Poll for the login prompt, but bail out early if the bootrom banner repeats: seeing
+    # it 3+ times AFTER this boot began means we are looping, not booting.
+    import re as _re, time as _time
+    _BOOTROM = r"Hit any key to enter update mode"
+    _start = search_from or 0
+    _deadline = _time.time() + 180.0
+    while True:
+        _txt = console.uart_text[_start:]
+        if _re.search(r"login:", _txt):
+            break
+        _loops = len(_re.findall(_BOOTROM, _txt))
+        if _loops >= 3:
+            raise RuntimeError(
+                f"BOARD IS IN A BOOTROM LOOP ({_loops} resets, no login). The loaded image "
+                f"is not executing. Check, in this order: (1) is another board session "
+                f"running? `pgrep -af fpga_driver/run_` -- concurrent access power-cycles "
+                f"the board mid-load and looks exactly like this; (2) does the firmware "
+                f"boot standalone? try a known-good image. Not waiting out the timeout.")
+        if _time.time() >= _deadline:
+            console.wait_uart(r"login:", timeout=1.0, search_from=_start)  # raise ActionTimeout
+        _time.sleep(2.0)
     for _ in range(tries):
         # The board's UART RX FIFO overruns on a bulk write and silently drops
         # chars, so a burst `root\r` / `echo ...` can arrive corrupted and the
