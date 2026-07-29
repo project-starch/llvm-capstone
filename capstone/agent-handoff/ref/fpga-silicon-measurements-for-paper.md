@@ -570,10 +570,10 @@ collision). memsys5 arena reduced 1 MiB → 256 KiB because under gp-captable ev
 global's storage is carved from `dom_data` and is therefore charged against the
 domain's stack budget, not just image space.
 
-**Comparison, not replacement.** The previously reported ~2,845 instructions/borrow
+**Comparison, not replacement.** The previously reported ~2,863 instructions/borrow
 came from the NON-silicon build (shrink on, gp-free off). The silicon figure is
 **lower**, which is the expected direction: `-capstone-shrink-globals=false` removes
-the per-access narrowing sequence. Do not present 1,975 as a correction of 2,845 —
+the per-access narrowing sequence. Do not present 1,975 as a correction of 2,863 —
 they are different configurations, and the honest statement is that the boundary cost
 is ~2,000 instructions/borrow in the configuration the silicon run uses.
 
