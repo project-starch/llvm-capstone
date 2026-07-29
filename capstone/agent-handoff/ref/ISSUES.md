@@ -982,7 +982,7 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
   `fw_jump.elf.good` = `6724bcb3`).
 - Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
 
-### C-13 — RUN_CAP_INIT's `jalr` on a plain integer wedges silicon `ROOT-CAUSED 2026-07-29`
+### C-13 — a single `lla` (auipc) in domain glue wedges silicon `ROOT-CAUSED 2026-07-29`
 Found 2026-07-29 by a one-variable control, after it had already cost several board
 sessions and a firmware rebuild.
 
@@ -1011,7 +1011,44 @@ applied to QEMU and not to silicon. `interp` was introduced, gated on QEMU, and 
 used for every subsequent board run *including the controls*, so nothing in the setup
 could reveal it.
 
-**ROOT CAUSE: `RUN_CAP_INIT`.** Bisected on hardware with `beebs_prime` (known-good,
+**ROOT CAUSE: `lla` / `auipc` executed inside a domain.** Isolated to ONE instruction
+pair by staged bisection on `beebs_prime`, one variable per boot, every build
+QEMU-gated first:
+
+    stage 1  minimal carve loop only                    PASS
+    stage 2  + early delin(sp) + s1 blob view           PASS
+    stage 4  + ONE `lla`, nothing else                  FAIL   <-- one instruction
+    stage 3  + full RUN_CAP_INIT                        FAIL
+
+**The earlier "it is the indirect call" conclusion was wrong**, and the reason is worth
+keeping: `beebs_prime`'s cap-init table is EMPTY, so in stage 3 the only instructions
+that ever executed were two `lla`s and a `bgeu` -- the `jalr` never ran. Blaming the
+call was an inference from "cap-init is the block that differs" without checking which
+instructions inside it actually execute for this rung.
+
+**Scope is much wider than the glue, and this is the important part:**
+- **R-9 is very likely THIS.** The large-RO copy path emits `lla <sym>` and
+  `lla __gpfree_globals_base`; the zero-init and unrolled paths emit none. That splits
+  the ladder exactly along the observed line -- `ns`/`crc32big` (copy path, `lla`) fail;
+  `bs`/`cover`/`prime`/`mont64`/`ctrsanity` (no `lla`) pass. Every "kernel shape"
+  hypothesis under R-9 was untestable, because the variants all kept the `lla`.
+- **The `selectLGA` function-pointer change is implicated.** Code symbols now lower to a
+  raw `PseudoLLA` -- i.e. `auipc` -- which is green on QEMU and untested on silicon.
+  SQLite's method tables depend on it.
+- **SQLite is hit twice**: copy path and function pointers.
+
+**This looks like a platform constraint, not a bug in our glue**, and is worth a
+board-owner question: is `auipc` expected to work in C-mode with a bounded PCC? A
+plausible mechanism is that `auipc` computes from a PC that is PCC-cursor-relative in a
+way the RTL does not implement as QEMU does. **Do not report it as fact until asked** --
+what is measured is that one `lla` turns a passing rung into a hang.
+
+**Workaround direction:** avoid `auipc` in domain code entirely. Offsets that today come
+from `lla A - lla B` are link-time constants and can be baked as immediates by the
+generator or the compiler; that is the same move that fixed the private-symbol problem
+in C-4b.
+
+*Superseded reasoning follows.* Bisected on hardware with `beebs_prime` (known-good,
 3 KB, one boot each), one variable per stage, each build QEMU-gated first:
 
     stage 1  minimal carve loop only                    PASS

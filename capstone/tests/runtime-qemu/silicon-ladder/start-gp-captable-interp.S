@@ -104,6 +104,15 @@
   /* Skipped on a reentry for the same reason the table build is: re-running the
      initializers would reset every pointer-valued global to its image value,
      silently discarding whatever the previous entry stored there. */
+#if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE == 4
+  /* STAGE 4: one `lla` and nothing else. beebs_prime's cap-init table is EMPTY, so in
+     stage 3 the only instructions that actually executed were two llas and a bgeu --
+     the jalr never ran. If stage 4 fails, the culprit is `lla` (auipc) in domain glue,
+     not the indirect call. That would also explain R-9: the large-RO copy path emits
+     `lla <sym>` while the zero-init/unrolled paths emit none. */
+  lla   t3, __capstone_cap_init_start
+  j     79f
+#endif
 #if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE < 3
   j     79f                          /* diagnostic: skip cap-init entirely             */
 #endif
