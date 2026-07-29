@@ -63,6 +63,26 @@ def _compile(rx: Union[str, Pattern[str]]) -> Pattern[str]:
     return rx if hasattr(rx, "search") else re.compile(rx)
 
 
+def _redact(msg: str, url: str) -> str:
+    """Strip the secret board URL/host/token out of a message before it can be logged."""
+    out = str(msg)
+    if url:
+        out = out.replace(url, "<FPGA-CONSOLE-URL>")
+        # host on its own (exception text often carries only host=..., not the full URL)
+        try:
+            from urllib.parse import urlparse
+            h = urlparse(url).hostname
+            if h:
+                out = out.replace(h, "<FPGA-CONSOLE-HOST>")
+        except Exception:
+            pass
+        # and any path segment, which is where the token lives
+        for seg in url.split("/"):
+            if len(seg) >= 12 and seg not in ("<FPGA-CONSOLE-URL>",):
+                out = out.replace(seg, "<REDACTED>")
+    return out
+
+
 class FpgaConsole:
     def __init__(
         self,
@@ -136,14 +156,22 @@ class FpgaConsole:
         if C.CONNECT.auth_key and self.token:
             auth = {C.CONNECT.auth_key: self.token}
         self._log(f"connecting (ns={C.CONNECT.namespace}, path={self._socketio_path})")
-        self.sio.connect(
-            self.url,
-            auth=auth,
-            socketio_path=self._socketio_path,
-            namespaces=[C.CONNECT.namespace],
-            wait=True,
-            wait_timeout=timeout,
-        )
+        # REDACT THE BOARD HOST FROM ANY EXCEPTION. socketio/urllib3 put the full host --
+        # and for some failure modes the token-bearing path -- into the exception message,
+        # which then lands verbatim in a captured run log. The board URL is secret and a
+        # hard project rule says it must never be echoed into a log. Seen for real on
+        # 2026-07-29: a connect timeout wrote the hostname into a run log.
+        try:
+            self.sio.connect(
+                self.url,
+                auth=auth,
+                socketio_path=self._socketio_path,
+                namespaces=[C.CONNECT.namespace],
+                wait=True,
+                wait_timeout=timeout,
+            )
+        except Exception as e:
+            raise type(e)(_redact(str(e), self.url)) from None
         # The 'connect' handler (installed in _install_handlers) mirrors the
         # browser client by emitting request_history on this and every reconnect.
         self._log("connected")

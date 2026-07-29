@@ -109,6 +109,10 @@ if [[ "$DOMAIN_GLUE" == "interp" ]]; then
   "$CLANG" -target capstone64-unknown-elf -ffreestanding \
     ${INTERP_FAKE_COUNT:+-DINTERP_FAKE_COUNT=$INTERP_FAKE_COUNT} \
     ${INTERP_DIAG_STAGE:+-DINTERP_DIAG_STAGE=$INTERP_DIAG_STAGE} \
+    ${INTERP_PEEK_OFF:+-DINTERP_PEEK_OFF=$INTERP_PEEK_OFF} \
+    ${INTERP_PEEK_MODE:+-DINTERP_PEEK_MODE=$INTERP_PEEK_MODE} \
+    ${INTERP_SKIP_CAPINIT:+-DINTERP_SKIP_CAPINIT=$INTERP_SKIP_CAPINIT} \
+    ${INTERP_SKIP_GPPARK:+-DINTERP_SKIP_GPPARK=$INTERP_SKIP_GPPARK} \
     -c "$INTERP_GLUE" -o "$OBJ_DIR/start.o"
 else
   # 2. generate the per-app cap-table builder from the descriptor

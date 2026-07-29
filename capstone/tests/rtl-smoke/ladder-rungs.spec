@@ -145,12 +145,24 @@ beebs_prime1m:beebs_prime_kernel.h:prime_compute:-O1:DOMAIN_WINDOW=0x100000
 # and failed on a re-run with no change at all. Nothing can be attributed until the
 # failure RATE is known. They differ only in entry VA, an axis already validated as
 # measurement-safe when R-3 was found address-keyed (0.03% across boot positions).
-beebs_primer1:beebs_prime_kernel.h:prime_compute:-O1
-beebs_primer2:beebs_prime_kernel.h:prime_compute:-O1
-beebs_primer3:beebs_prime_kernel.h:prime_compute:-O1
-beebs_primer4:beebs_prime_kernel.h:prime_compute:-O1
+beebs_primer1:beebs_prime_kernel.h:prime_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=7
+beebs_primer2:beebs_prime_kernel.h:prime_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=8
+beebs_primer3:beebs_prime_kernel.h:prime_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=8
+beebs_primer4:beebs_prime_kernel.h:prime_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=9
 # DESCRIPTOR-STRESS rung (2026-07-29). Smallest domain exercising EVERY glue path
 # SQLite needs: zero-fill, bulk copy, byte tail, a >2040 B global, and a private .L
 # symbol -- none of which beebs_prime (1 zero-init global at -O1) reaches. Oracle
 # 43662404; descriptor is 6 records. Bridges the 1-global bisection to SQLite's 1,059.
 gpstress:gpstress_kernel.h:gpstress_compute:-O1
+# BLOB-PEEK PROBE (2026-07-29). Returns the 64-bit word the DOMAIN actually reads from
+# the monitor-copied blob at offset 8 -- the word stage 8 uses as `count`. Every C-13 step
+# so far INFERRED the blob contents; this observes them. retval 1 = copy correct;
+# retval 0 = blob zeroed/absent (fix the copy DESTINATION); anything else names the
+# corruption. Requires INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11.
+blobpeek:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11
+# Descriptor-header MAP: same probe, different offsets, so one boot shows whether ANY
+# of the blob is present. Expected on a correct copy: +0=0, +8=1, +32=8, +48=-1.
+# All zero across every offset => the blob is simply not there.
+blobpeek0:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_OFF=0
+blobpeek32:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_OFF=32
+blobpeek48:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_OFF=48

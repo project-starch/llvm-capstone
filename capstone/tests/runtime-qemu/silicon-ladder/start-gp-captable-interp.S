@@ -285,7 +285,36 @@
                         scalars down contiguously (the descriptor's own image bytes are
                         verified correct: built_flag=0, count=1).
    t3 is dead here -- its last use was `scc(s1, s1, t3)` in the entry block. */
-#if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE == 10
+#if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE == 11
+  /* STAGE 11 -- OBSERVE the blob instead of inferring it. Reads one word, keeps it in s6,
+     and builds with a fake count so the domain still runs; the zero-fill path below
+     publishes s6 as the global's value, which the harness prints as retval.
+     s6 is untouched in between (the builder uses t0-t6, s1-s4).
+
+     INTERP_PEEK_OFF selects WHICH word, so one boot can map the whole descriptor header
+     instead of arguing about one ambiguous zero. Expected values for a correct copy,
+     from the image (verified statically):
+        +0  built_flag   0     <- ZERO, so indistinguishable from an empty page: useless alone
+        +8  count        1
+        +32 rec0.size    8     <- nonzero, unambiguous
+        +40 rec0.align   8     <- nonzero, unambiguous
+        +48 rec0.blob_off -1   <- 0xFFFFFFFF as a 32-bit retval: unmistakable
+     A correct copy makes +32/+40/+48 clearly nonzero. All-zero across every offset means
+     the blob is simply not there, and the fix belongs at the copy's DESTINATION.
+
+     INTERP_PEEK_MODE=1 instead publishes sp.BASE -- the address the glue believes the
+     blob starts at. Non-comparable to the monitor's own value directly, but a wildly
+     implausible base (0, or outside the domain's allocation) would be decisive. */
+#ifndef INTERP_PEEK_OFF
+#define INTERP_PEEK_OFF 8
+#endif
+#if defined(INTERP_PEEK_MODE) && INTERP_PEEK_MODE == 1
+  lcc(s6, sp, 3)                     /* publish sp.base instead of a blob word          */
+#else
+  ld    s6, INTERP_PEEK_OFF(s1)
+#endif
+  li    s4, INTERP_FAKE_COUNT
+#elif defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE == 10
   ld    t3, 8(s1)                    /* STAGE 10: the load under test, value DISCARDED */
   li    s4, INTERP_FAKE_COUNT
 #elif defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE < 8
@@ -364,7 +393,11 @@
 31:
   li    a6, 8
   blt   t4, a6, 32f
+#if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE == 11
+  sd    s6, 0(t6)                    /* STAGE 11: publish the peeked blob word          */
+#else
   sd    x0, 0(t6)
+#endif
   cincoffsetimm(t6, t6, 8)
   addi  t4, t4, -8
   j     31b
