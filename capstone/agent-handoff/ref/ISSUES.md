@@ -543,6 +543,53 @@ M-mode appears to spin (`capstone_error` = `while(1)`); only a power-cycle recov
 
 ---
 
+### R-10 — the memory subsystem decides "this is a capability" from BIT CONTENT, not cap_type `CONFIRMED 2026-07-29 — RTL defect; causal link to C-13 not yet proven`
+
+**Confirmed by direct quote, verified independently:**
+
+    core/cache_subsystem/wt_axi_adapter.sv:196   assign is_cap_req = |dcache_data.user;
+    core/cache_subsystem/wt_dcache_mem.sv:138    assign st_wr_cap  = |wr_user_i;
+
+Both decide whether a 16-byte granule "contains a capability" by **OR-reducing the whole
+64-bit metadata word**. Neither file references `cap_type` even once (0 occurrences in
+each, checked). So the architectural notion of a capability — `cap_type != NOT_CAP`,
+bits [30:28] of the metadata word (`ariane_pkg.sv:646`) — is **never consulted by the
+memory subsystem**. The shadow tag is set from raw bit content.
+
+**Consequence.** Any 16-byte capability-width store (`stc`) whose HIGH 8 bytes are
+nonzero marks its destination granule as holding a capability, even when the value is
+plainly not one. Copying ordinary scalar data with `ldc`/`stc` therefore poisons the
+shadow tag across the whole copied region.
+
+**Where this bites us.** The monitor copies the entire globals blob into `dom_data` with
+16-byte capability accesses (`sbi_capstone.c:400-404`, `dom_data[ci] = dom_code[...]`,
+both `__linear void *`). Its own comment asserts the bytes "round-trip unchanged" — the
+BYTES do; the shadow tag does not. For the descriptor, `count = 1` sits in the high half
+of granule 0, so `|1 = 1` and that granule is mis-tagged. For SQLite (1,059 globals, most
+initialized) it would be most of the blob.
+
+**QEMU cannot reproduce this class at all.** Its capability tag is a discrete per-register
+boolean plus a side table (`cap.h:93`, `cap_mem_map`), content-independent, and
+`helper_compress_cap` returns 0 for an untagged source (`op_helper.c:1155-1164`), so the
+destination is never marked. Same shape of blind spot as the DELIN divergence (C-13).
+
+**NOT yet established:** that this mis-tagging is what *wedges* the board. The data plane
+reads symmetrically (`wt_dcache_mem.sv:261`, banks muxed by address bit 3) with no fault
+found tied to the tag, and no explicit fault condition was located in `wt_dcache_ctrl.sv`
+or `wt_dcache_missunit.sv`. The board experiment that separates "the load faults" from
+"the value is wrong" is INTERP_DIAG_STAGE=10 (see C-13). Do not write this up as C-13's
+cause until that lands.
+
+**Unread, and needed to close the mechanism:** `capstone_dyn_unit.anvil` /
+`capstone_unit.anvilh` for the `_load_ep_res` vs `_load_ep_normal_res` handshake —
+`ex_stage.sv:791` decompresses EVERY load's result, not just `ldc`, and forwards it to
+the DYN unit on a channel whose ack is left dangling (`ex_stage.sv:910`).
+
+**Fix direction (unresolved):** M-mode must copy plain scalar data with scalar stores
+rather than `ldc`/`stc`. Whether capstone-c can express a non-`__linear` view of the same
+span is a compiler/ABI question, not an RTL one, and is unverified — `sbi_capstone.c` has
+no `memcpy` and no scalar-pointer cast anywhere today.
+
 ## Infrastructure / procedure
 
 ### I-1 — A sweep silently rebuilds at −O0 and discards your pre-built set `FIXED`

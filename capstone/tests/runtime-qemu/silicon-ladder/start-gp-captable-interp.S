@@ -142,8 +142,16 @@
    the confound behind the retracted lla/auipc root cause (1d83cd9260af, retracted by
    d579630011ee). Any stage that is "stage 2 plus something" must skip cap-init too.
    Verify by diffing disassembly after changing this; do not trust the #if. */
+/* INTERP_SKIP_CAPINIT is a REAL-BUILD knob (independent of INTERP_FAKE_COUNT), the
+   companion to INTERP_SKIP_GPPARK. Cap-init is the OTHER thing the real path does that
+   board-verified stage 6 does not. For a rung whose .capstone_cap_init table is empty
+   (every ladder rung), skipping it is semantically a no-op, so a pass/fail difference
+   isolates the two `lla`/`auipc` pairs and the bgeu -- and nothing else. */
 #if defined(INTERP_FAKE_COUNT) && (INTERP_DIAG_STAGE < 3 || INTERP_DIAG_STAGE >= 6)
   j     79f                          /* diagnostic: skip cap-init entirely             */
+#endif
+#if !defined(INTERP_FAKE_COUNT) && defined(INTERP_SKIP_CAPINIT)
+  j     79f                          /* real build, cap-init skipped for bisection     */
 #endif
   beqz  s5, 79f                      /* fast path: table already built, globals live   */
   lla   t3, __capstone_cap_init_start
@@ -219,6 +227,13 @@
      deterministic COPY of image bytes -- dom_data itself is __get_free_pages memory
      and is not zeroed. gp is parked at blob[16] with stc, so it keeps its tag. */
 #ifdef INTERP_FAKE_COUNT
+#if INTERP_DIAG_STAGE >= 7
+  /* STAGE 7+: USE the real built_flag (do not force the build path). Stage 6 proved a
+     load from 0(s1) succeeds but DISCARDED the value; stage 7 is the first stage whose
+     control flow depends on it. If 7 fails where 6 passed, the blob's built_flag is not
+     the 0 the image holds -- i.e. the monitor copy did not land where the glue looks. */
+  ld    t4, 0(s1)
+#else
 #if INTERP_DIAG_STAGE >= 6
   /* STAGE 6 -- CAN THE DOMAIN READ THE MONITOR-COPIED BLOB AT ALL?
      Stage 2 (entry delin present, delin fix applied) plus ONE load through the
@@ -240,6 +255,7 @@
   ld    t4, 0(s1)                    /* the load under test                            */
 #endif
   li    t4, 0                        /* diagnostic: always build, ignore what was read */
+#endif
 #else
   ld    t4, 0(s1)                    /* built_flag                                     */
 #endif
@@ -255,7 +271,24 @@
      assumption in this design never checked on hardware, and for a rung with a single
      .bss global it is the ONLY thing interp does that the generated prologue does not.
      Diagnostic only -- a real build must read the descriptor. */
-#ifdef INTERP_FAKE_COUNT
+/* STAGE 10 splits stage 8's failure in two. Board-measured: stage 7 (which LOADS and
+   USES blob offset 0) PASSES, stage 8 (which adds a load of offset 8) FAILS. Two very
+   different causes are consistent with that, and they need different fixes:
+     (i)  the LOAD at +8 itself faults, or
+     (ii) the load succeeds but the VALUE is garbage, so `count` is huge and the
+          subsequent `slli`/`sub`/`split` carves at a wild bound and faults.
+   Stage 10 performs exactly stage 8's load and then THROWS THE VALUE AWAY, using the
+   immediate count instead. So it isolates the access from the value:
+     stage 10 FAILS  -> the load at +8 faults (a hardware/access-path problem)
+     stage 10 PASSES -> the load is fine and the CONTENT at +8 is wrong, i.e. the
+                        monitor's 16-byte capability-granular copy does not lay plain
+                        scalars down contiguously (the descriptor's own image bytes are
+                        verified correct: built_flag=0, count=1).
+   t3 is dead here -- its last use was `scc(s1, s1, t3)` in the entry block. */
+#if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE == 10
+  ld    t3, 8(s1)                    /* STAGE 10: the load under test, value DISCARDED */
+  li    s4, INTERP_FAKE_COUNT
+#elif defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE < 8
   li    s4, INTERP_FAKE_COUNT
 #else
   ld    s4, 8(s1)                    /* count                                          */
@@ -271,12 +304,13 @@
 #endif
   cincoffset(s2, gp, x0)             /* s2 = moving table pointer                      */
 
-#ifndef INTERP_FAKE_COUNT
+/* STAGE 9+: derive the record pointer and read records for real. */
+#if !defined(INTERP_FAKE_COUNT) || INTERP_DIAG_STAGE == 9
   cincoffsetimm(t0, s1, 32)          /* t0 = &record[0]                                */
 #endif
   li    s3, 0
 10:
-#ifdef INTERP_FAKE_COUNT
+#if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE != 9
   li    t3, 16                       /* pretend: 16 B, zero-init -- reads no descriptor */
   li    t5, -1
 #else
@@ -344,7 +378,7 @@
 40:
   stc(t2, s2, 0)                     /* cap-table[i] = storage                         */
   cincoffsetimm(s2, s2, 16)
-#ifndef INTERP_FAKE_COUNT
+#if !defined(INTERP_FAKE_COUNT) || INTERP_DIAG_STAGE == 9
   cincoffsetimm(t0, t0, 24)          /* next record                                    */
 #endif
   addi  s3, s3, 1
@@ -367,7 +401,12 @@
 #if INTERP_SP_LINEAR
   delin(sp)                          /* entry delin was skipped: sp is still LIN here  */
 #endif
-#ifndef INTERP_FAKE_COUNT
+/* INTERP_SKIP_GPPARK is a REAL-BUILD diagnostic knob (independent of
+   INTERP_FAKE_COUNT). This `stc` is a CAPABILITY store into the monitor-copied blob --
+   the only capability-width write the glue makes into dom_data, and one of just two
+   things the real path does that the board-verified stage 6 does not. Skipping it
+   costs only the reentry fast path, which the ladder rungs never take (one entry). */
+#if !defined(INTERP_FAKE_COUNT) && !defined(INTERP_SKIP_GPPARK)
   stc(gp, s1, 16)                    /* park gp for the reentry fast path              */
 #endif
 99:
