@@ -33,6 +33,17 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
     collaborator/PI names). Treat any hit as a release-blocking error — fix
     before committing. If a named commit was already pushed, amend/rewrite and
     force-push, and notify the other lanes (they must re-sync).
+    Run it with the script, which also catches emails, attribution trailers,
+    `user@host` build strings, debug files and the FPGA token:
+
+        bash capstone/tests/precommit-scan.sh --msg <msgfile>    # exit 1 = BLOCKED
+
+    This is a **script, not a subagent**, deliberately: a release gate on an absolute
+    rule must be deterministic. Never delegate this check, and never weaken a pattern
+    to make it pass. The exact-name list lives **outside the repo** at
+    `~/.claude-c/secrets/name-denylist.txt` (mode 600) — putting the names in a
+    committed file would itself break the rule. Keep that file populated; without it
+    the script warns and runs only its name-independent heuristics.
 - No `Co-Authored-By:` lines in commits.
 - Never commit debug/report files (`*_DEBUG_CHECKPOINT.md`, session notes).
 - Active plans live in `capstone/agent-handoff/plans/` (committed, portable across machines and agents).
@@ -117,14 +128,33 @@ suites — the shared `rootfs.ext2` write-lock means never two in parallel;
 `ninja -j90` never `-j112`; never commit unless asked; submodule source stays
 uncommitted). Subagents do not recurse.
 
-- **Delegate** (notify the user when it's substantial): broad read-only code/file
-  search → the built-in **Explore** agent; running the regression corpus / lit /
-  QEMU suites for validation → the **corpus-runner** agent (Sonnet, read-only,
-  serialized, never touches the board); bounded multi-step research with a clear
-  question → **general-purpose**.
+- **Delegate** (notify the user when it's substantial):
+  - broad read-only code/file search → built-in **Explore**
+  - regression corpus / lit / QEMU suites → **corpus-runner** (read-only, serialized,
+    never touches the board)
+  - "what does the SILICON actually do?", and any FPGA-only failure that QEMU does not
+    reproduce → **rtl-oracle** (reads `capstone-ariane` `.anvil` sources and diffs them
+    against our QEMU helpers)
+  - verifying a root-cause claim / "X is fixed" / "Y is ruled out" **before** it enters
+    ISSUES.md, a commit message, or the paper → **claim-auditor** (adversarial; tries to
+    refute)
+  - classifying a large board/QEMU run log → **board-log-forensics**
+  - checking paper numbers against the measurements doc → **paper-numbers-checker**
+    (read-only on `paper/`; reports, never edits)
+  - bounded multi-step research with a clear question → **general-purpose**
 - **Keep in the main Opus session** (never delegate to subagents): compiler/codegen
-  and capability-ABI changes; subtle-correctness or concurrency debugging; the paper;
-  commits; and anything involving real-person names.
+  and capability-ABI changes; subtle-correctness or concurrency debugging; **choosing the
+  next experiment in a live investigation**; the paper; commits; and anything involving
+  real-person names.
+
+**Treat every subagent report as a claim, not a fact.** Findings that will be acted on,
+committed, or published must be verified against the primary source — a quoted `file:line`
+you can re-read, or a command you re-run. A confident subagent report is exactly as
+trustworthy as a confident guess by this session, which the history in `ISSUES.md` shows
+is not very. Agents are instructed to quote evidence and to say UNRESOLVED; hold them to
+it, and treat a conclusion with no quoted evidence as unverified.
+
+Full roster, rationale, and prompt patterns: **`agent-handoff/ref/SUBAGENTS.md`**.
 
 **FPGA/board sessions may be run by EITHER Opus lane (A or B)** — B is explicitly
 **not** prohibited from the board (permanent rule). The board is a single shared
@@ -134,7 +164,8 @@ hand off sequentially. (Built-in **subagents** still never touch the board; the
 corpus-runner is board-free.)
 
 Peer **lane B** (a separate Opus session on `capstone-bootstrap-b`) is a different
-thing from subagents — see `capstone/agent-handoff/DELEGATION.md`. A third category
+thing from subagents — see `capstone/agent-handoff/ref/SUBAGENTS.md` (the peer-lane
+guide is archived at `capstone/agent-handoff/history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`). A third category
 is an **external collaborator running their own (non-Claude) coding agent**: give
 them a **self-contained, stock-toolchain** task doc in `plans/` that is **decoupled
 from our in-flux compiler/ABI/board** (so the churn here can't block them), and keep

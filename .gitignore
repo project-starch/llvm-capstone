@@ -62,7 +62,12 @@ autoconf/autom4te.cache
 /cmake-build*
 # Coding assistants' stuff (upstream ignores these; Capstone fork tracks CLAUDE.md)
 !/CLAUDE.md
-/.claude/
+# Ignore local/machine-specific Claude state, but TRACK the subagent definitions:
+# they are project infrastructure (roster + inherited hard constraints), contain no
+# secrets or machine paths, and must travel with the repo so a fresh clone or another
+# lane gets them. settings*.json stay ignored -- they hold local paths and permissions.
+/.claude/*
+!/.claude/agents/
 /GEMINI.md
 /.gemini/
 

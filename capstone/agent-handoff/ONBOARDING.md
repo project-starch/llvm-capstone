@@ -12,7 +12,8 @@ Fast-track for anyone (developer or AI assistant) starting from scratch.
 > can skip the repo-build steps below unless it says otherwise.
 >
 > **Contributing to the core repo?** Work happens in two peer lanes — Lane A on
-> `capstone-bootstrap`, Lane B on `capstone-bootstrap-b` — under the rules in `DELEGATION.md`
+> `capstone-bootstrap`, Lane B on `capstone-bootstrap-b` — under the rules in `CLAUDE.md`
+> (peer-lane guide archived at `history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`)
 > and the hard constraints in the repo-root `CLAUDE.md`. Read both before committing.
 
 ---

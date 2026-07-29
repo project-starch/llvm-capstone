@@ -29,7 +29,9 @@ Work is split across two peer agent lanes plus, when needed, an external collabo
 - **Lane A** → commits to `capstone-bootstrap`. **Lane B** → commits to
   `capstone-bootstrap-b`. Both branch off the shared mainline; sync via
   `git merge origin/capstone-bootstrap`. The A↔B split, hand-off rules, and the permanent
-  repository rules are in **`DELEGATION.md`** (read it before delegating).
+  repository rules are in **`CLAUDE.md`**; subagent roster and rules in
+  **`ref/SUBAGENTS.md`** (read it before delegating). The old A↔B peer-lane guide is
+  archived at `history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`.
 - **External collaborators** using their own coding agent get a **self-contained,
   stock-toolchain** task doc under `plans/` (e.g. `plans/xlang-repro-task.md`, the
   cross-language reproduction task) that does *not* depend on our in-flux compiler/ABI. The
@@ -40,7 +42,7 @@ Work is split across two peer agent lanes plus, when needed, an external collabo
 ```
 agent-handoff/
 ├── ONBOARDING.md          fast-track setup (incl. non-Claude-agent + collaborator callout)
-├── DELEGATION.md          A↔B lane split + permanent repository rules
+├── ref/SUBAGENTS.md       subagent roster, inherited rules, how to read their output
 ├── new-chat-prompt.md     prompt template for resuming a session
 ├── state/                 VOLATILE — rewrite after each milestone
 │   ├── current-state.md   what is verified right now (short)
