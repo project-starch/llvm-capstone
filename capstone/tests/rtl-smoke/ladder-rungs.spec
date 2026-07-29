@@ -180,3 +180,13 @@ blobpeekm3:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAG
 #   +96  -> 1515847680 and +104 -> 1515847681 confirms a clean -96 displacement
 blobpeekp96:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_OFF=96
 blobpeekp104:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_OFF=104
+# C-13 follow-up: ONE initializer path per rung, so a wrong checksum names the broken
+# mechanism. gpstress (all five together) runs on silicon but computes 444323487
+# against oracle 43662404, so the table build and gp delivery are correct and some
+# initializer DATA is wrong. Oracles: gpsz 607423941, gpcp 23404485, gptl 4086684573,
+# gpbg 494199893, gppv 2290983877.
+gpsz:gpsz_kernel.h:gpsz_compute:-O1
+gpcp:gpcp_kernel.h:gpcp_compute:-O1
+gptl:gptl_kernel.h:gptl_compute:-O1
+gpbg:gpbg_kernel.h:gpbg_compute:-O1
+gppv:gppv_kernel.h:gppv_compute:-O1
