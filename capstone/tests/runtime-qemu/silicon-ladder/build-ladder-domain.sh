@@ -107,6 +107,7 @@ if [[ "$DOMAIN_GLUE" == "interp" ]]; then
   # it at entry. O(1) .text regardless of how many globals the domain has.
   echo "  glue: descriptor-driven interpreter (no generated prologue)"
   "$CLANG" -target capstone64-unknown-elf -ffreestanding \
+    ${INTERP_FAKE_COUNT:+-DINTERP_FAKE_COUNT=$INTERP_FAKE_COUNT} \
     -c "$INTERP_GLUE" -o "$OBJ_DIR/start.o"
 else
   # 2. generate the per-app cap-table builder from the descriptor

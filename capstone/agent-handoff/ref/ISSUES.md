@@ -1011,6 +1011,31 @@ applied to QEMU and not to silicon. `interp` was introduced, gated on QEMU, and 
 used for every subsequent board run *including the controls*, so nothing in the setup
 could reveal it.
 
+**Descriptor READ eliminated 2026-07-29.** The leading suspect was the runtime read of
+the monitor-copied blob -- the one assumption in the design never checked on hardware.
+Built `interp` with `INTERP_FAKE_COUNT=1`, which replaces the read with immediates
+(`li s4,1` / `li t3,16` / `li t5,-1`) so no descriptor field is touched, QEMU-gated it
+(`beebs_prime` returns 582955588), and ran it on the board: **still hangs.** So the blob
+read is not the cause, and the monitor's copy is not implicated either.
+
+Firmware is also eliminated, by the full matrix on one rung:
+
+    generated + known-good prebuilt   PASS
+    generated + rebuilt firmware      PASS   <- my firmware is fine
+    interp    + known-good prebuilt   FAIL
+    interp    + rebuilt firmware      FAIL
+
+**What is left in `interp` that the generated prologue does not do**, for a rung with a
+single `.bss` global:
+1. `delin(sp)` at the TOP (generated delins `sp` last). **R-2 is literally "`delin` in
+   domain code wedges the board"** -- this is the strongest remaining candidate.
+2. `cincoffset(s1, sp, x0)` + `scc(s1, s1, t3)` to make a second view of `sp`.
+3. `RUN_CAP_INIT`, which runs even when the table is empty (two `lla`s and a `bgeu`).
+4. s-register use (`s1`-`s5`) across the builder.
+
+Test them in that order, one variable per build, `beebs_prime` as the rung -- and note
+that (1) and (3) can each be removed independently without touching the rest.
+
 **Next:** bisect the glue against the generated prologue on hardware. The two differ in
 that `interp` reads the descriptor from the blob at runtime, uses `s1`/`s2`/`s3`/`s4`
 across the builder, and calls `RUN_CAP_INIT`. The first suspect is the runtime

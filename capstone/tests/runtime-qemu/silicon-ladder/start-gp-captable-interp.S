@@ -168,7 +168,17 @@
   j     99f
 5:
   li    s5, 1                        /* s5 = 1: building now                           */
+  /* INTERP_FAKE_COUNT=N replaces the runtime descriptor READ with an immediate, to
+     test on silicon whether the domain can read the monitor-copied blob at all. The
+     monitor's WRITE into dom_data is proven; the domain's READ back out is the one
+     assumption in this design never checked on hardware, and for a rung with a single
+     .bss global it is the ONLY thing interp does that the generated prologue does not.
+     Diagnostic only -- a real build must read the descriptor. */
+#ifdef INTERP_FAKE_COUNT
+  li    s4, INTERP_FAKE_COUNT
+#else
   ld    s4, 8(s1)                    /* count                                          */
+#endif
   beqz  s4, 99f                      /* no globals: nothing to build                   */
 
   lcc(t1, sp, 4)                     /* t1 = sp.END                                    */
@@ -181,8 +191,13 @@
   cincoffsetimm(t0, s1, 32)          /* t0 = &record[0]                                */
   li    s3, 0
 10:
+#ifdef INTERP_FAKE_COUNT
+  li    t3, 16                       /* pretend: 16 B, zero-init -- reads no descriptor */
+  li    t5, -1
+#else
   ld    t3, 0(t0)                    /* size                                           */
   ld    t5, 16(t0)                   /* blob_off (-1 => zero-init)                     */
+#endif
 
   /* stor = align_up(size,16), minimum 16 so a zero-size global still gets a
      representable, non-degenerate storage capability rather than an empty split. */
