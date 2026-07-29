@@ -166,3 +166,17 @@ blobpeek:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=
 blobpeek0:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_OFF=0
 blobpeek32:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_OFF=32
 blobpeek48:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_OFF=48
+# sp geometry as the DOMAIN sees it: 1=sp.base, 2=sp.end, 3=end-base (region size).
+# For these probe domains sp==dom_data implies size == tot_size-code_size-DOMAIN_DATA_SIZE
+# == 131072-4192-1536 == 125344. A different size means the glue and the monitor are
+# not talking about the same region, which is where the missing blob would come from.
+blobpeekm1:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_MODE=1
+blobpeekm2:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_MODE=2
+blobpeekm3:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_MODE=3
+# DISPLACEMENT TEST. Geometry says the domain's blob base sits 96 bytes BELOW the
+# monitor's dom_data base (sp.base = base+gpoff+DDS, monitor writes at
+# base+code_size+DDS; the difference is exactly code_size-gpoff = 96). If so, the
+# monitor's gradient word k=0 lands at the domain's offset +96.
+#   +96  -> 1515847680 and +104 -> 1515847681 confirms a clean -96 displacement
+blobpeekp96:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_OFF=96
+blobpeekp104:blobpeek_kernel.h:bp_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=11 INTERP_PEEK_OFF=104

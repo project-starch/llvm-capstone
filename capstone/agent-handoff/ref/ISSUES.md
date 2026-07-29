@@ -543,6 +543,51 @@ M-mode appears to spin (`capstone_error` = `while(1)`); only a power-cycle recov
 
 ---
 
+### C-13 MECHANISM FULLY CHARACTERISED 2026-07-29 — the glue reads the blob 96 bytes too low
+
+**The copy WORKS. The blob is present. The glue looks in the wrong place.**
+
+Board-measured with a probe rung (`blobpeek`, INTERP_DIAG_STAGE=11) that publishes one
+word of the blob as the domain's retval:
+
+    domain offset +96  -> 0   == descriptor built_flag
+    domain offset +104 -> 1   == descriptor count
+    domain offset +0/+8/+32/+48 -> all 0 (the zeroed dom_seal tail)
+
+So the descriptor's byte 0 sits at domain offset **+96**, not 0. 96 is exactly
+`code_size - gpoff` (4192 - 4096) — the blob size.
+
+Corroborated by three independent measurements that all agree:
+  - `sp` region size          125,440  (source model says 125,344)
+  - `sp.base mod 128 KiB`     5,632 = gpoff + DOMAIN_DATA_SIZE
+  - monitor's dom_data.base   5,728 = code_size + DOMAIN_DATA_SIZE  (from source)
+A monitor-written gradient at dom_data[0..255] was invisible at domain +0 — and the
+words at +96/+104 hold the real descriptor, i.e. the copy overwrote the gradient. Both
+facts confirm the copy executes and lands at dom_data.base.
+
+**Consequence, and why every earlier symptom followed:** the glue reads `count` from its
+own base+8, which is 88 bytes below the descriptor, inside the zeroed seal region. It
+gets 0, takes `beqz s4, 99f`, skips the whole table build, never establishes gp, and
+domain_main faults on its first `ldc gp[i]`. Stage 7 "passed" only because built_flag's
+correct value is also 0 — zeroed memory is indistinguishable from a correct read there.
+
+**NOT YET EXPLAINED: why sp.base != dom_data.base.** create_domain computes
+dom_data = __split(dom_seal, base + code_size + DOMAIN_DATA_SIZE) and seals it into slot
+2; code_size is 4192 (verified: image_size 4184 for every probe domain, controller passes
+it through, module forwards untouched, dispatch is arg0..arg4 in order, no reassignment
+after the 16-byte rounding). Yet the domain's sp starts at base + gpoff + DOMAIN_DATA_SIZE.
+The discrepancy is exactly code_size - gpoff, i.e. ONE TERM uses gpoff where the other
+uses code_size. Source reading has not located it; three separate attempts derived the
+wrong answer, which is why this entry records measurements rather than a mechanism.
+
+**FIX OPTIONS**
+1. Make sp == dom_data (correct fix). Requires finding the term above; look at the
+   seal->cscratch handoff and the domain switcher, not at create_domain's arithmetic.
+2. Make the glue LOCATE the descriptor instead of assuming offset 0: put a magic word
+   first in .capstone_gp_initdesc and have the glue scan the first few words for it.
+   Robust to any displacement, contained to compiler + glue, and unblocks SQLite without
+   resolving (1). Pragmatic given the deadline.
+
 ### R-10 — a 16-byte capability copy MANGLES plain scalar data in its high half `ROOT CAUSE of C-13, board-confirmed 2026-07-29`
 
 **THE MECHANISM, complete.** A capability's two halves are stored differently:

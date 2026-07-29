@@ -309,7 +309,21 @@
 #define INTERP_PEEK_OFF 8
 #endif
 #if defined(INTERP_PEEK_MODE) && INTERP_PEEK_MODE == 1
-  lcc(s6, sp, 3)                     /* publish sp.base instead of a blob word          */
+  lcc(s6, sp, 3)                     /* publish sp.BASE (low 32 bits reach retval)      */
+#elif defined(INTERP_PEEK_MODE) && INTERP_PEEK_MODE == 2
+  lcc(s6, sp, 4)                     /* publish sp.END                                  */
+#elif defined(INTERP_PEEK_MODE) && INTERP_PEEK_MODE == 3
+  /* PUBLISH THE REGION SIZE -- the single most diagnostic number available to the
+     domain, and immune to not knowing the physical base. If sp really is dom_data then
+     end-base must be exactly tot_size - code_size - DOMAIN_DATA_SIZE
+     = 131072 - 4192 - 1536 = 125344 for these probe domains.
+       125344    -> sp IS dom_data; the glue looks in the right place, so the monitor
+                    wrote the blob somewhere else
+       something else -> sp is NOT the region the monitor copied into, and the
+                    destination mismatch is on the glue/handoff side */
+  lcc(s6, sp, 4)
+  lcc(t3, sp, 3)
+  sub   s6, s6, t3
 #else
   ld    s6, INTERP_PEEK_OFF(s1)
 #endif
