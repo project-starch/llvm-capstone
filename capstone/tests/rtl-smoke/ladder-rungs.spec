@@ -149,3 +149,8 @@ beebs_primer1:beebs_prime_kernel.h:prime_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_
 beebs_primer2:beebs_prime_kernel.h:prime_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=6
 beebs_primer3:beebs_prime_kernel.h:prime_compute:-O1
 beebs_primer4:beebs_prime_kernel.h:prime_compute:-O1
+# DESCRIPTOR-STRESS rung (2026-07-29). Smallest domain exercising EVERY glue path
+# SQLite needs: zero-fill, bulk copy, byte tail, a >2040 B global, and a private .L
+# symbol -- none of which beebs_prime (1 zero-init global at -O1) reaches. Oracle
+# 43662404; descriptor is 6 records. Bridges the 1-global bisection to SQLite's 1,059.
+gpstress:gpstress_kernel.h:gpstress_compute:-O1
