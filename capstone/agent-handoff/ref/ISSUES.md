@@ -543,7 +543,60 @@ M-mode appears to spin (`capstone_error` = `while(1)`); only a power-cycle recov
 
 ---
 
-### R-10 — the memory subsystem decides "this is a capability" from BIT CONTENT, not cap_type `CONFIRMED 2026-07-29 — RTL defect; causal link to C-13 not yet proven`
+### R-10 — a 16-byte capability copy MANGLES plain scalar data in its high half `ROOT CAUSE of C-13, board-confirmed 2026-07-29`
+
+**THE MECHANISM, complete.** A capability's two halves are stored differently:
+
+    low  8 bytes = cursor   -> written RAW      (wt_axi_adapter.sv:201, axi_wr_data[0] = dcache_data.data)
+    high 8 bytes = metadata -> written ENCODED  (stored as compress_cap(...), ariane_pkg.sv:809)
+
+`compress_bounds` (`ariane_pkg.sv`) is a genuine LOSSY encoder: leading-zero count, an
+exponent E, and truncation to 21/14/12-bit fields. It is closed over real capabilities
+and **not** over arbitrary bit patterns.
+
+So the monitor's copy `dom_data[ci] = dom_code[gpoff_c + ci]` (`sbi_capstone.c:400-404`,
+both `__linear void *`, i.e. one `ldc` + one `stc` per 16 bytes) does
+decompress-then-recompress on the high half of every granule. Plain scalar data does not
+survive it. The low half, being the raw cursor, does.
+
+**BOARD-CONFIRMED, 4 rungs in one boot:**
+
+    stage 7  reads blob +0 and USES it                    PASS  (582955588)
+    stage 10 reads blob +8 and DISCARDS the value         PASS  x2
+    stage 8  reads blob +8 and USES it as `count`         FAIL
+
+The load does NOT fault -- stage 10 performs the identical access and passes twice. The
+VALUE is wrong. A mangled `count` then makes `slli`/`sub`/`split` carve at a wild bound,
+which is the wedge. The image descriptor is verified correct (built_flag=0, count=1), so
+the corruption happens in the copy, not the compiler.
+
+The monitor's own comment -- "the image bytes here are const initializer data with no
+capability tags, so the 128 bits round-trip unchanged" -- is FALSE on real silicon.
+
+**Secondary defect, same root.** `is_cap_req = |dcache_data.user`
+(`wt_axi_adapter.sv:196`) and `st_wr_cap = |wr_user_i` (`wt_dcache_mem.sv:138`) decide
+"holds a capability" by OR-reducing the metadata word; neither file references `cap_type`
+(0 occurrences in each), so `cap_type == NOT_CAP` is never consulted. A consequence worth
+noting separately: when the high half is ZERO, `is_cap_req = 0` sets `axi_wr_blen = 0`
+(`:209`), so only ONE beat is written and the high 8 bytes are left at whatever was in
+DRAM. That also means `dom_seal[i] = 0` zeroes only half of each granule.
+
+**QEMU cannot reproduce any of this.** It stores exact fat structs with a discrete tag
+(`cap.h:93`, `cap_mem_map`); there is no lossy codec and no content-derived tag. Third
+RTL/QEMU divergence to cause a multi-session blocker, after DELIN and this.
+
+**FIX DIRECTIONS (not yet implemented):**
+1. *Monitor copies scalars with scalar accesses.* The correct general fix -- it also fixes
+   the bulk initializer data, which matters at SQLite scale (1,059 globals). Open question
+   is whether capstone-c can express a non-`__linear` view of the same span so the
+   compiler emits `ld`/`sd` instead of `ldc`/`stc`. `sbi_capstone.c` has no `memcpy` and
+   no scalar-pointer cast today. UNVERIFIED.
+2. *Descriptor avoids metadata halves.* Lay the descriptor out so every 8-byte scalar sits
+   in the LOW half of its own 16-byte granule. Purely a compiler+glue change, no monitor
+   change. Fixes the descriptor but NOT the bulk initializer data, so it unblocks the
+   glue and not SQLite's globals.
+
+Both may be needed: (2) to unblock quickly, (1) for correctness at scale.
 
 **Confirmed by direct quote, verified independently:**
 
