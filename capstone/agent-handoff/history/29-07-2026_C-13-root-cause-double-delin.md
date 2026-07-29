@@ -1,7 +1,13 @@
 # C-13 root cause: `delin` is NOT idempotent on silicon, and the interp glue delins four times
 
 **Date:** 2026-07-29
-**Status:** ROOT-CAUSED and fixed in `silicon-ladder/start-gp-captable-interp.S`; board re-test pending.
+**Status:** A real defect, found and fixed. It explains the stage-1 vs stage-2 result
+completely — but it did **NOT** close C-13: with the fix in place the **real** interp path
+still failed on hardware (`beebs_primer1`, 2 attempts, 2026-07-29). Either the fix is
+insufficient or there is a second independent failure, the prime suspect being the
+descriptor read out of the monitor-copied blob — the one part of the design never checked
+on silicon. Next step is stage 2 (fix, no descriptor read) x4 to tell those apart.
+Read the "The bug" section as established, and the closing claims as not yet earned.
 **Blocks:** SQLite on hardware (the descriptor-driven glue is the only path that can
 express SQLite's globals, so a defect in it blocks the benchmark and nothing else).
 

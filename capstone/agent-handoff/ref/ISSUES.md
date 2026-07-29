@@ -72,7 +72,24 @@ same object. Not loop-specific. QEMU executes every probe correctly.
     conflated. R-1's scope is unchanged by it; its completeness as an explanation of the whole
     board's behaviour is not.
 
-### R-2 — `delin` in domain code wedges the board `WORKED AROUND`
+### R-2 — `delin` in domain code wedges the board `EXPLAINED 2026-07-29 by C-13 — not an RTL defect`
+
+**This is not a hardware fault and not specific to domain code.** It is the C-13 root
+cause seen from the other end: the RTL's `DELIN` accepts `CAP_TYPE_LINEAR` only, and a
+capability **loaded from the gp cap-table is already `NONLIN`** — cap-table storage caps
+are produced by `SPLIT` from an `sp` the entry glue already delin'd, and `SPLIT` preserves
+`cap_type`. So the delin in the repro was a *second* delin on a non-linear capability,
+which the RTL correctly rejects. QEMU's `helper_csdelin` returns early in that case, which
+is why the repro looked like an RTL-only defect. The description below ("a delin on a
+capability loaded from the gp cap-table") states the precondition exactly.
+
+Correct rule: **never `delin` a capability obtained from the gp cap-table.** It is already
+non-linear, so the `delin` is redundant as well as fatal. See C-13, and
+`history/29-07-2026_C-13-root-cause-double-delin.md`.
+
+The original text follows; the observation was sound, the "RTL wedges on delin"
+interpretation was not.
+
 A `delin` executed in domain code on a capability loaded from the gp cap-table wedges the board
 (power-cycle to recover). Proven against a size-matched `addi x0,x0,0` control at the same address,
 so it is the instruction and not code layout.
@@ -314,7 +331,22 @@ software-side explanation *more* likely, not less.
 - **Repro:** `tests/runtime-qemu/silicon-ladder/expint_diag_fpga_app.c`, `-O1`,
   expected `dbg7=3883`, board returns 2.
 
-### R-9 — `beebs_ns` hangs although its tables are never written `OPEN — R-1 does not predict it`
+### R-9 — `beebs_ns` hangs although its tables are never written `LIKELY EXPLAINED 2026-07-29 by C-13 — re-test required`
+
+**Leading explanation, not yet confirmed on hardware: the copy-path double delin.**
+`beebs_ns` takes the large-RO **copy path**, and the C-4b fix prepends `delin(sp)` to the
+generated glue *only for copy-path rungs* — which made that glue's later `delin(gp)`,
+`delin(t2)` and trailing `delin(sp)` faults on silicon, since `SPLIT` preserves `cap_type`
+and the RTL's `DELIN` is `LINEAR`-only. Copy-path rungs are exactly the set that hangs on
+the board while passing under QEMU, which is R-9's signature.
+
+Fixed in `39f652b6e704`: `beebs_ns` and `beebs_crc32big` drop from 5+ delins to 1;
+non-copy-path rungs verified byte-identical. QEMU still green (it cannot see this bug).
+**Re-run `beebs_ns` on the board** — if it passes, R-9 closes and may yield a 9th measured
+row. Note the earlier "all four variants hang" boot used `interp` and is void regardless.
+
+Original entry follows.
+
 Measured 2026-07-28, first silicon attempt, reproduced across two independent board runs.
 
 `beebs_ns` (BEEBS `ns`, four nested loops linearly scanning a 4-D lookup table) passes the
@@ -982,7 +1014,66 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
   `fw_jump.elf.good` = `6724bcb3`).
 - Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
 
-### C-13 — interp glue fails on silicon NON-DETERMINISTICALLY `OPEN — bisection invalid`
+### C-13 — interp glue fails on silicon `PARTIALLY EXPLAINED 2026-07-29 — double delin found and fixed, but REAL interp STILL FAILS`
+
+**STATUS, stated precisely.** A real defect was found and fixed (below), and it fully
+accounts for the stage-1 vs stage-2 difference. It does **not** yet account for C-13:
+with the fix in place, the **real** interp path (no `INTERP_FAKE_COUNT`) still produced
+no END marker on hardware — `beebs_primer1`, 2 attempts, 2026-07-29. So either the fix is
+insufficient, or there is a SECOND independent failure.
+
+The prime suspect for the remainder is the one thing real interp does that stage 2 does
+not: **read the descriptor out of the monitor-copied blob in `dom_data`**. The glue's own
+comment flags it as "the one assumption in this design never checked on hardware" — the
+monitor's WRITE is proven, the domain's READ back is not. Next isolation step is stage 2
+(fix, no descriptor read) x4: if stage 2 now passes, the delin fix works and the
+descriptor read is the second bug; if stage 2 still fails, the delin fix is not the
+answer.
+
+**Do not record C-13 as closed on the strength of the delin fix alone.**
+
+**Defect found and fixed: `delin` is not idempotent on silicon, and the glue delin'd four times.**
+Full write-up: `history/29-07-2026_C-13-root-cause-double-delin.md`. Commits
+`7e83841b5113` (glue) and `39f652b6e704` (generator + domain code).
+
+The RTL's `DELIN` (`capstone-ariane/core/anvil_build/capstone_dyn_unit.anvil`) accepts
+`CAP_TYPE_LINEAR` **only** and raises `UNEXPECTED_CAP_TYPE` otherwise. Our QEMU
+`helper_csdelin` (`op_helper.c:900`) was patched to return early when the capability is
+already `NONLIN`, so a double `delin` is a **silent no-op under emulation and a hard
+fault on hardware**. `SPLIT` preserves `cap_type`, so once `sp` is delin'd at entry every
+capability split from it is already `NONLIN`. The glue delin'd `sp`, then `gp`, `t2` and
+`sp` again — three fatal. `delin(gp)` faults first. The generated glue never delins `sp`
+early, which is exactly why it passes and `interp` does not.
+
+Evidence — one fixed configuration repeated, not a single sample:
+
+    stage 1 (no entry delin, sp stays LIN):  4/4 PASS  retval 582955588 == oracle, ~9722 cyc
+    stage 2 (entry delin present):           3/3 FAIL
+    real interp, WITH the fix:               FAILS    <-- the fix did not close C-13
+
+The first two lines are what the delin finding explains. The third is why C-13 stays open.
+
+**Two further instances of the same bug, found by audit** (see `39f652b6e704`):
+- **Generated glue, copy path only.** The C-4b fix prepends `delin(sp)`, which turned
+  that glue's `delin(gp)`/`delin(t2)`/tail `delin(sp)` into faults. Copy-path rungs are
+  exactly the ones that hang on the board while passing on QEMU → **likely root cause of
+  R-9**. Non-copy-path rungs verified byte-identical; `beebs_ns`/`beebs_crc32big` drop
+  from 5+ delins to 1.
+- **`output_text()` in `sqlite_capstone_domain.c`.** Delin'd `text`, which under
+  gp-captable is a cap-table storage capability and therefore already `NONLIN`. On
+  SQLite's critical path — it prints every success marker, so the domain would have
+  wedged before emitting one. Compiled out under `-DCAPSTONE_GP_CAPTABLE_ABI`.
+
+**Do not use a runtime cap-type check to make a `delin` safe:** `lcc zimm=1` returns
+`cap_type` on QEMU but `cap_type - 1` on this RTL, so the test is not portable.
+
+**QEMU cannot detect any of this** — its `delin` is idempotent. QEMU runs prove
+no-regression only. Recommended follow-up: make QEMU's `delin` strict (or put the
+leniency behind an off-by-default flag) so this class becomes emulator-visible.
+
+---
+
+**Original entry (retained for the record).**
 Found 2026-07-29 by a one-variable control, after it had already cost several board
 sessions and a firmware rebuild.
 
