@@ -78,7 +78,21 @@ printf 'glue     : %s   one-boot=%s distinct-va=%s\n' \
 printf 'log      : %s\n\n' "$LOG"
 
 cd "$HERE" || exit 1
-timeout "${BOARD_TIMEOUT:-5400}" python3 fpga_driver/run_ladder_perf_fpga.py > "$LOG" 2>&1
+# USE THE VENV INTERPRETER IF IT HAS websocket-client. Without it python-socketio falls
+# back to the POLLING transport, which batches and reorders -- and measured on 2026-07-30
+# the fast transfer tier (burst=16) failed its sha check 5 times out of 5, i.e. 100%, so
+# every transfer degraded to 1 char/emit and one degraded further still. The audit costed
+# the retry ladder at 47-90% of a session's wall clock. A real WebSocket is the cheapest
+# thing that might fix the corruption at its source rather than working around it.
+PY=python3
+if [[ -x /tmp/capstone/fpga-venv/bin/python ]] && \
+   /tmp/capstone/fpga-venv/bin/python -c "import websocket" 2>/dev/null; then
+  PY=/tmp/capstone/fpga-venv/bin/python
+  echo "python   : venv (websocket transport available)"
+else
+  echo "python   : system python3 -- POLLING transport only, transfers will be slow"
+fi
+timeout "${BOARD_TIMEOUT:-5400}" "$PY" fpga_driver/run_ladder_perf_fpga.py > "$LOG" 2>&1
 rc=$?
 
 echo

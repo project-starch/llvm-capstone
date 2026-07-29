@@ -198,3 +198,14 @@ gppv:gppv_kernel.h:gppv_compute:-O1
 # Requires the globals_off packing just added to ladder_perf_ctl.c; without it the
 # monitor would use gpoff=0x1000 and try to copy 1.3 MB of .text as globals.
 bigwin:beebs_prime_kernel.h:prime_compute:-O1:DOMAIN_WINDOW=0x140000
+# COUNT-ONLY bisection: N identical zero-init globals, so the sole variable is how
+# many. Single-global rungs pass on silicon; gpstress (6 mixed) returns wrong data;
+# SQLite has 1059. Oracles: gpn2 3976364985, gpn4 3360062749, gpn8 3612400309,
+# gpn64 2631595461.
+gpn2:gpn2_kernel.h:gpn2_compute:-O1
+gpn4:gpn4_kernel.h:gpn4_compute:-O1
+gpn8:gpn8_kernel.h:gpn8_compute:-O1:DOMAIN_WINDOW=0x8000
+gpn64:gpn64_kernel.h:gpn64_compute:-O1:DOMAIN_WINDOW=0x8000
+gpn16:gpn16_kernel.h:gpn16_compute:-O1:DOMAIN_WINDOW=0x8000
+gpn32:gpn32_kernel.h:gpn32_compute:-O1:DOMAIN_WINDOW=0x8000
+bigmany:bigmany_kernel.h:bigmany_compute:-O1:DOMAIN_WINDOW=0x140000
