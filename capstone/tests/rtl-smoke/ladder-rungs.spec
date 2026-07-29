@@ -145,10 +145,10 @@ beebs_prime1m:beebs_prime_kernel.h:prime_compute:-O1:DOMAIN_WINDOW=0x100000
 # and failed on a re-run with no change at all. Nothing can be attributed until the
 # failure RATE is known. They differ only in entry VA, an axis already validated as
 # measurement-safe when R-3 was found address-keyed (0.03% across boot positions).
-beebs_primer1:beebs_prime_kernel.h:prime_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=7
-beebs_primer2:beebs_prime_kernel.h:prime_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=10
-beebs_primer3:beebs_prime_kernel.h:prime_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=8
-beebs_primer4:beebs_prime_kernel.h:prime_compute:-O1:INTERP_FAKE_COUNT=1 INTERP_DIAG_STAGE=10
+beebs_primer1:beebs_prime_kernel.h:prime_compute:-O1
+beebs_primer2:beebs_prime_kernel.h:prime_compute:-O1
+beebs_primer3:beebs_prime_kernel.h:prime_compute:-O1
+beebs_primer4:beebs_prime_kernel.h:prime_compute:-O1
 # DESCRIPTOR-STRESS rung (2026-07-29). Smallest domain exercising EVERY glue path
 # SQLite needs: zero-fill, bulk copy, byte tail, a >2040 B global, and a private .L
 # symbol -- none of which beebs_prime (1 zero-init global at -O1) reaches. Oracle

@@ -585,6 +585,32 @@ DRAM. That also means `dom_seal[i] = 0` zeroes only half of each granule.
 (`cap.h:93`, `cap_mem_map`); there is no lossy codec and no content-derived tag. Third
 RTL/QEMU divergence to cause a multi-session blocker, after DELIN and this.
 
+**FIX IMPLEMENTED 2026-07-29, AND IT DID NOT UNBLOCK THE REAL PATH.** Root cause of the
+16-byte copy turned out to be a capstone-c DECLARATOR BUG, not a design choice:
+`__linear void *mem_l, *dom_code, *dom_data, *mem_r;` accumulates the `*` across
+declarators (dag_builder mutates the shared decl type and never resets it), so only
+`mem_l` got `void *` -- `dom_code` became `void **` and `dom_data` `void ***`.
+Dereferencing them therefore yielded a POINTER (16 B), which is why the copy emitted
+`ldc`/`stc` at all. Fix = one declarator per declaration, plus `>> 4` -> `>> 3`.
+Verified by regenerating the monitor: exactly 6 instructions change in 4,653, and the
+two that matter become scalar `ld`/`sd`. Confirmed present in the shipped firmware
+(size 17,466,376, create_domain labels 30, `ld a4, 0(a3)` / `sd a4, 0(a7)` in the loop).
+
+**Board result with that firmware: real interp STILL FAILS.** `beebs_primer1` and
+`gpstress`, both real interp, both no END marker. The primer domain was byte-identical
+to the one that failed before (sha 3e3980cd), so the monitor was the only variable.
+
+So the copy corruption was REAL and board-confirmed (stage 8 fails / stage 10 passes on
+the identical load), and fixing it is NECESSARY -- but it is NOT SUFFICIENT. Something
+else also breaks the real path. **Do not record C-13 as fixed.**
+
+Next experiment, one variable: re-run the stage ladder against the FIXED firmware.
+Stage 8 (reads `count` from blob+8, the previously-mangled half) is the discriminator --
+  stage 8 now PASSES -> the copy fix repaired the read; the remaining fault is downstream
+                        in the record reads / gp-park / cap-init, all of which have knobs
+  stage 8 still FAILS -> the copy fix did not repair the read and the mechanism story
+                        above is incomplete despite being individually verified
+
 **FIX DIRECTIONS (not yet implemented):**
 1. *Monitor copies scalars with scalar accesses.* The correct general fix -- it also fixes
    the bulk initializer data, which matters at SQLite scale (1,059 globals). Open question
