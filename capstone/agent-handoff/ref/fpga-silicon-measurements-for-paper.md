@@ -196,7 +196,7 @@ describes rather than a weaker one.
 
 **`beebs_aha_mont64` is the independent confirmation `cover` needed** (added 2026-07-28).
 It retires **256,699 vs 256,622** instructions — **77 apart out of 256,000, a ratio of
-1.0003×** — for 1.022× the cycles. Its value is that it reaches the same place as `cover`
+1.0003×** — for 1.023× the cycles. Its value is that it reaches the same place as `cover`
 by a completely different route: `cover` is control-flow (180 switch dispatches, no data),
 `mont64` is straight-line 64-bit arithmetic (a 64-iteration shift-and-subtract modulus, a
 64-iteration binary GCD, 64×64→128 multiplies) with 24 B of scalar globals and no array of
@@ -256,7 +256,7 @@ written once and R-9 falsified it the next day.
 | `beebs_cnt` | 1.353 | **1.319** | 1.026 | **extra instructions** |
 | `beebs_bs` | 1.537 | 1.058 | **1.452** | **stalls** |
 | `beebs_recursion` | 1.957 | **1.458** | **1.342** | both |
-| `beebs_aha_mont64` | 1.022 | 1.000 | 1.022 | neither — no data to access |
+| `beebs_aha_mont64` | 1.023 | 1.000 | 1.023 | neither — no data to access |
 
 - **`cnt` (bulk array work)** — nearly all cost is the +31.9 % instructions our globals
   ABI emits (`ldc gp[i]` per global reference); per-instruction speed barely moves.
