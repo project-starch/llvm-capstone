@@ -190,3 +190,11 @@ gpcp:gpcp_kernel.h:gpcp_compute:-O1
 gptl:gptl_kernel.h:gptl_compute:-O1
 gpbg:gpbg_kernel.h:gpbg_compute:-O1
 gppv:gppv_kernel.h:gppv_compute:-O1
+# SIZE-vs-CONTENT discriminator for the SQLite domain-creation hang. Trivial kernel
+# (beebs_prime) but SQLite's SHAPE: a 0x140000 globals window pads the image to
+# ~1.31 MB, so the module allocates the same order-9 2 MiB region and the monitor
+# does the same large splits. HANGS -> 2 MiB domain creation is broken generally.
+# PASSES -> something in SQLite's own image is responsible. Oracle 582955588.
+# Requires the globals_off packing just added to ladder_perf_ctl.c; without it the
+# monitor would use gpoff=0x1000 and try to copy 1.3 MB of .text as globals.
+bigwin:beebs_prime_kernel.h:prime_compute:-O1:DOMAIN_WINDOW=0x140000

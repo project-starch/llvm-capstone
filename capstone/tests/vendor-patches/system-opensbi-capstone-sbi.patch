@@ -1,5 +1,5 @@
 diff --git a/sbi_capstone.c b/sbi_capstone.c
-index ccd7738..64c3802 100644
+index ccd7738..29972cf 100644
 --- a/sbi_capstone.c
 +++ b/sbi_capstone.c
 @@ -17,7 +17,13 @@
@@ -29,7 +29,7 @@ index ccd7738..64c3802 100644
  #define CSR_TIME 0xC0102073
  
  // toggle the following for swapping between cpmp swapping and gen_cap (hack)
-@@ -277,25 +288,222 @@ static void *split_out_cap(unsigned base, unsigned len, unsigned linear) {
+@@ -277,25 +288,238 @@ static void *split_out_cap(unsigned base, unsigned len, unsigned linear) {
      return region;
  }
  static unsigned create_domain(unsigned base_addr, unsigned code_size,
@@ -93,6 +93,7 @@ index ccd7738..64c3802 100644
 +    unsigned repr_e;
 +    unsigned repr_gran;
 +    unsigned split_size;
++    unsigned data_off;
 +    repr_len = tot_size - code_size - DOMAIN_DATA_SIZE;
 +    repr_hb = 0;
 +    repr_tmp = repr_len;
@@ -106,6 +107,21 @@ index ccd7738..64c3802 100644
 +    repr_gran = 1 << (repr_e + 3);
 +    split_size = code_size + repr_gran - 1;
 +    split_size = split_size - (split_size & (repr_gran - 1));
++
++    /* ALIGN THE SEAL SIZE TOO, not just split_size. dom_data starts at
++       split_size + <seal size>, so BOTH terms must be granule multiples or the sum is
++       not representable and the base slides down exactly as it did before.
++       DOMAIN_DATA_SIZE is 1536: a multiple of 128, so a 128 KiB domain (granule 128) is
++       unaffected and keeps byte-identical geometry -- but NOT a multiple of 1024, so a
++       2 MiB domain (granule 1024) lands 512 bytes past a boundary and dom_data.start
++       truncates DOWN 512 bytes into the seal region. That is the same defect as the
++       96-byte one, one size class up, and it is why every ladder rung passes while
++       SQLite (the only 2 MiB domain) does not.
++       Verified: 128 KiB data_off stays 1536 and dom_data.start stays 5760; 2 MiB goes
++       1536 -> 2048 and dom_data.start 1391104 -> 1391616, which is 1024-aligned. The
++       seal region only grows (2048 B), staying above SEAL's 1024-byte minimum. */
++    data_off = DOMAIN_DATA_SIZE + repr_gran - 1;
++    data_off = data_off - (data_off & (repr_gran - 1));
 +    /* ONE DECLARATOR PER DECLARATION -- do not merge these back into one line.
 +       capstone-c accumulates the `*` across declarators (dag_builder.rs mutates the
 +       shared decl_type in place and never resets it between declarators), so
@@ -127,7 +143,7 @@ index ccd7738..64c3802 100644
 -    dom_seal = __split(dom_code, base_addr + code_size);
 -    dom_data = __split(dom_seal, base_addr + code_size + DOMAIN_DATA_SIZE);
 +    dom_seal = __split(dom_code, base_addr + split_size);
-+    dom_data = __split(dom_seal, base_addr + split_size + DOMAIN_DATA_SIZE);
++    dom_data = __split(dom_seal, base_addr + split_size + data_off);
 +
 +    /* Large-.rodata delivery (issue C-4b). Copy the initialized-globals bytes of the
 +       loaded image, [base+GPFREE_GLOBALS_OFFSET, base+code_size), into the FRONT of
@@ -176,7 +192,7 @@ index ccd7738..64c3802 100644
 +       the glue only reads the blob for globals that took the copy path, and a
 +       domain that does not fit simply keeps the old unrolled-immediate behaviour. */
 +    if(code_size > gpoff
-+       && tot_size > split_size + DOMAIN_DATA_SIZE
++       && tot_size > split_size + data_off
 +       && (code_size - gpoff) > (tot_size - split_size - DOMAIN_DATA_SIZE)) {
 +        /* The blob does not fit in dom_data. This used to SKIP the copy silently,
 +           on the reasoning that "the glue only reads the blob for globals that took
@@ -200,7 +216,7 @@ index ccd7738..64c3802 100644
 +       96 is exactly the blob size -- unexplained, hence measuring instead of deriving.
 +       REMOVE once C-13 is closed. */
 +    if(code_size > gpoff
-+       && tot_size > split_size + DOMAIN_DATA_SIZE) {
++       && tot_size > split_size + data_off) {
 +        /* Index in 16-BYTE units, not 8. These are `__linear void *`, so subscripting
 +           steps one CAPABILITY (16 B) and the generated access is a 16-byte ldc/stc --
 +           `dom_seal`'s own zeroing loop runs to DOMAIN_DATA_N with
@@ -251,12 +267,12 @@ index ccd7738..64c3802 100644
 +    // store gp (linear; glue delins on first entry) into the cscratch top slot
 +    C_SET_CURSOR(dom_data, dom_data, base_addr + tot_size - 16);
 +    *(__linear void **)dom_data = dom_gp;
-+    C_SET_CURSOR(dom_data, dom_data, base_addr + split_size + DOMAIN_DATA_SIZE);
++    C_SET_CURSOR(dom_data, dom_data, base_addr + split_size + data_off);
 +
      // construct the sealed region of the domain
      dom_seal[0] = dom_code;
      dom_seal[2] = dom_data;
-@@ -617,7 +825,7 @@ unsigned handle_trap_ecall(unsigned arg0, unsigned arg1,
+@@ -617,7 +841,7 @@ unsigned handle_trap_ecall(unsigned arg0, unsigned arg1,
          case SBI_EXT_CAPSTONE:
              switch(func_code) {
                  case SBI_EXT_CAPSTONE_DOM_CREATE:

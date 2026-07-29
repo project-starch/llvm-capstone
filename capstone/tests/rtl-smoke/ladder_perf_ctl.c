@@ -107,6 +107,13 @@ static int memeq_(const void *a, const void *b, ulong n) {
   while (n--) if (*x++ != *y++) return 0;
   return 1;
 }
+
+/* Freestanding string compare: no libc here. Used to find .capstone_gp_initdesc among
+   the section names. */
+static int streq_(const char *a, const char *b) {
+  while (*a && *b && *a == *b) { a++; b++; }
+  return *a == *b;
+}
 static void puts_(const char *s) {
   ulong n = 0;
   while (s[n]) n++;
@@ -174,6 +181,10 @@ struct Phdr {
   u32 p_type; u32 p_flags; u64 p_offset; u64 p_vaddr; u64 p_paddr;
   u64 p_filesz; u64 p_memsz; u64 p_align;
 };
+struct Shdr {
+  u32 sh_name; u32 sh_type; u64 sh_flags; u64 sh_addr; u64 sh_offset;
+  u64 sh_size; u32 sh_link; u32 sh_info; u64 sh_addralign; u64 sh_entsize;
+};
 #define PT_LOAD 1
 #define PF_X    1
 #define EM_RISCV 243
@@ -201,7 +212,8 @@ static const unsigned char ELF_MAGIC[4] = {0x7f, 'E', 'L', 'F'};
 
 static int dev_fd;
 
-struct ElfCode { void *map_base; ulong map_len; ulong code_start, code_len, entry_offset; };
+struct ElfCode { void *map_base; ulong map_len; ulong code_start, code_len, entry_offset;
+                 ulong globals_off; };
 
 static int load_elf_code(const char *path, struct ElfCode *res) {
   int fd = sys_open(path, O_RDONLY);
@@ -242,11 +254,42 @@ static int load_elf_code(const char *path, struct ElfCode *res) {
     }
     memcpy_(img + off, (char *)eh + ph[i].p_offset, ph[i].p_filesz);
   }
+  /* GLOBALS OFFSET, from the section headers. The monitor needs to know where the
+     globals region starts inside the image so it can copy the initializer blob and
+     split gp at the right boundary. It defaults to 0x1000, which is right only for a
+     4 KiB code window; a domain with a large .text (SQLite: globals at 0x140000) needs
+     the real value or the monitor copies .text as though it were globals and splits PCC
+     4 KiB in.
+     .capstone_gp_initdesc is placed FIRST in the globals region by link-gpfree.ld, so
+     its address minus the image base IS the offset. Read from section headers rather
+     than symbols: no symtab walk, and the section is KEEP'd so --gc-sections cannot
+     drop it. Same mechanism libcapstone uses; the ladder controller lacked it, which is
+     why no ladder rung could ever exercise a large window.
+     MUST be read BEFORE the munmap below: `eh` is unmapped there, so parsing after it is
+     a use-after-unmap. The identical mistake was made in libcapstone and is recorded in
+     that file; I repeated it here and it wedged the board on BOTH rungs, including a
+     control that had passed an hour earlier. A garbage globals_off makes the monitor
+     split gp out of bounds, which faults in M-mode -- a silent, total hang. */
+  res->globals_off = 0;
+  if (eh->e_shoff != 0 && eh->e_shnum != 0 && eh->e_shstrndx < eh->e_shnum) {
+    struct Shdr *sh = (struct Shdr *)((char *)eh + eh->e_shoff);
+    const char *strtab = (const char *)eh + sh[eh->e_shstrndx].sh_offset;
+    int s;
+    for (s = 0; s < eh->e_shnum; s++) {
+      const char *nm = strtab + sh[s].sh_name;
+      if (nm[0]=='.' && nm[1]=='c' && nm[2]=='a' && nm[3]=='p' &&
+          streq_(nm, ".capstone_gp_initdesc")) {
+        if (sh[s].sh_addr >= lstart) res->globals_off = sh[s].sh_addr - lstart;
+        break;
+      }
+    }
+  }
   sys_munmap(eh, (ulong)fsize);
   sys_close(fd);
   res->map_base = img; res->map_len = image_size;
   res->code_start = (ulong)img; res->code_len = image_size;
   res->entry_offset = entry - lstart;
+
   return 0;
 bad:
   sys_munmap(eh, (ulong)fsize);
@@ -261,7 +304,11 @@ static dom_id_t create_dom(const char *c_path) {
   memset_(&a, 0, sizeof(a));
   a.code_begin = (void *)c.code_start;
   a.code_len = c.code_len;
-  a.entry_offset = c.entry_offset;
+  /* Packed into entry_offset's high 32 bits: the kernel module forwards this word
+     untouched, so no ioctl struct change is needed in two submodule trees. The monitor
+     unpacks with two 16-bit shifts (a single >>32 is evaluated at 32 bits by capstone-c).
+     Entry offsets are far below 2^32, so the packing is unambiguous. */
+  a.entry_offset = c.entry_offset | (c.globals_off << 32);
   a.s_load_len = 0;
   a.dom_id = (dom_id_t)-1;
   long r = sys_ioctl(dev_fd, IOCTL_DOM_CREATE, &a);
