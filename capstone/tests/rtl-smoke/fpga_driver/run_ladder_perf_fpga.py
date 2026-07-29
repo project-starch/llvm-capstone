@@ -62,6 +62,11 @@ RUNGS = (os.environ.get("LADDER_RUNGS") or
 CAPTURE = "/tmp/capstone/board-run-ladder-perf.uart.txt"
 RESULTS_OUT = "/tmp/capstone/ladder-perf-results.txt"
 CTL_REMOTE = "/tmp/lpc"
+# Seconds to wait for a rung's END marker. Threaded into the timeout AND the log
+# message: they used to be 75 and "120s", so every wedge was mis-reported.
+EXEC_TIMEOUT = int(os.environ.get("LADDER_EXEC_TIMEOUT") or 75)
+# See the exec loop: a wedged board never recovers on a second attempt.
+EXEC_ATTEMPTS = int(os.environ.get("LADDER_EXEC_ATTEMPTS") or 1)
 
 def log(m): print(f"[run] {m}", file=sys.stderr, flush=True)
 def sha16(p): return hashlib.sha256(open(p, "rb").read()).hexdigest()[:16]
@@ -311,6 +316,10 @@ def main():
         ctl_gz = gzip_file(ctl)
         ctl_sha = sha16(ctl)
         booted_once = [False]
+        # Does the guest currently hold THIS controller binary? Cleared by any
+        # cold boot (which wipes /tmp) so the controller is re-sent exactly once
+        # per boot instead of once per rung. See the transfer block below.
+        ctl_present = [False]
         # One rung per FULL power-cycle + reload: each domain runs as the first of
         # a clean boot, sidestepping the multi-domain same-VA icache hang. ~2.5 min
         # per rung (the JTAG reload dominates); the domains themselves are tiny.
@@ -343,7 +352,25 @@ def main():
                             f"(attempt {boot_attempt})")
                         cold_boot(console, prompt)
                         booted_once[0] = True
-                    fast_put(console, ctl_gz, "/tmp/lpc.gz", CTL_REMOTE, ctl_sha, True, log)
+                        ctl_present[0] = False   # a cold boot wipes the guest's /tmp
+                    # THE CONTROLLER SURVIVES A REUSED BOOT, so re-sending it every rung
+                    # was pure waste: it is the LARGER of the two transfers (2,808 base64
+                    # chars vs ~1,950 for a domain) and it is byte-identical across the
+                    # whole sweep. Measured over three sessions, re-transferring it cost
+                    # 527-914 s -- 24-41% of total wall-clock -- because a transfer that
+                    # loses a character restarts the WHOLE file and then drops to the
+                    # 1-char tier. Sending it once per boot removes that exposure
+                    # entirely for every rung after the first.
+                    # Guarded on ctl_present rather than on ONE_BOOT so the invariant is
+                    # "the guest has this exact controller", which a cold boot clears.
+                    # fast_put's whole-file SHA-256 gate is untouched; if the controller
+                    # is somehow absent or corrupt the rung fails loudly at exec rather
+                    # than measuring a stale binary.
+                    if not ctl_present[0]:
+                        fast_put(console, ctl_gz, "/tmp/lpc.gz", CTL_REMOTE, ctl_sha, True, log)
+                        ctl_present[0] = True
+                    else:
+                        log(f"  {r}: controller already on the guest, skipping transfer")
                     fast_put(console, dom_gz, f"/tmp/{r}.gz", dom_remote,
                              dom_sha, False, log)
                     break
@@ -354,6 +381,7 @@ def main():
             else:
                 results[r] = (None, None, None)
                 booted_once[0] = False   # force a fresh boot for the next rung
+                ctl_present[0] = False   # ...which wipes /tmp, so re-send the ctl
                 log(f"  {r}: boot/transfer failed on every attempt; skipping")
                 if not getattr(console.sio, "connected", False):
                     wait_connected(console, 45)
@@ -361,10 +389,20 @@ def main():
             # As the first domain of a fresh boot, a rung either returns quickly
             # (matmult was <1 ms) or the cscall genuinely hangs -- retrying the same
             # first-domain condition won't help, so keep the budget tight.
-            for attempt in range(1, 3):
+            #
+            # ONE attempt by default (was two). A rung that produces no END marker has
+            # WEDGED the board in M-mode: attempt 2 re-runs the same command against a
+            # dead machine, so it cannot recover and only burns EXEC_TIMEOUT seconds.
+            # Measured: 8/8 second attempts across three sessions here, and 33/33 across
+            # the wider log corpus, were followed by "FAILED to produce a RESULT" --
+            # not one recovery ever. At 75 s each that was ~225 s wasted per 3-failure
+            # session, and bisection sessions are mostly failures by design.
+            # LADDER_EXEC_ATTEMPTS restores the old behaviour if a transient (non-wedge)
+            # exec failure is ever observed.
+            for attempt in range(1, EXEC_ATTEMPTS + 1):
                 cmd = f"echo B''G{r}; {CTL_REMOTE} {r} {dom_remote}; echo E''ND{r}=$?"
                 try:
-                    out = console.run_command(cmd, rf"END{r}=\d", timeout=75)
+                    out = console.run_command(cmd, rf"END{r}=\d", timeout=EXEC_TIMEOUT)
                     m = re.search(rf"RESULT {r} retval=(\d+) cycles=(\d+) ran=(\d+)", out)
                     if m:
                         results[r] = (m.group(1), int(m.group(2)), m.group(3))
@@ -386,13 +424,14 @@ def main():
                         break
                     log(f"  {r}: ran but no RESULT line; attempt {attempt}")
                 except ActionTimeout:
-                    log(f"  {r}: no END marker in 120s (attempt {attempt})")
+                    log(f"  {r}: no END marker in {EXEC_TIMEOUT}s (attempt {attempt})")
                     # A rung that never returned may have WEDGED the boot. In
                     # one-boot mode the next rung would "reuse" a dead boot and
                     # fail too: on 2026-07-28 one hanging rung cost the four after
                     # it, all of which had worked minutes earlier. Force a fresh
                     # boot so one failure stays one failure.
                     booted_once[0] = False
+                    ctl_present[0] = False
                 except BadNamespaceError:
                     log(f"  {r}: socket dropped; reconnecting"); wait_connected(console, 45)
                 time.sleep(2)
