@@ -1064,8 +1064,18 @@ The first two lines are what the delin finding explains. The third is why C-13 s
   SQLite's critical path — it prints every success marker, so the domain would have
   wedged before emitting one. Compiled out under `-DCAPSTONE_GP_CAPTABLE_ABI`.
 
-**Do not use a runtime cap-type check to make a `delin` safe:** `lcc zimm=1` returns
-`cap_type` on QEMU but `cap_type - 1` on this RTL, so the test is not portable.
+**CORRECTION (2026-07-29, same day):** an earlier version of this entry claimed `lcc
+zimm=1` is non-portable because the RTL returns `cap_type - 1` and QEMU returns
+`cap_type`. **That was wrong.** The RTL enum starts at `NOT_CAP = 0`
+(`capstone_unit.anvilh`), so it is offset by one from QEMU's, where `CAP_TYPE_LIN = 0`
+(`cap.h`) — and the `- 1` is precisely that conversion: `LINEAR(1) - 1 == LIN(0)`,
+`NONLIN(2) - 1 == NONLIN(1)`, through `SEALEDRET(6) - 1 == 5`. **`lcc zimm=1` MATCHES
+across QEMU and silicon, and a runtime cap-type test IS portable.** The `delin` fixes use
+compile-time gating because it is free, not because a runtime test would be unsound.
+
+What genuinely is not portable is the **raw enumeration** wherever it appears outside
+`lcc` — compressed capability metadata, the `captype` debug instruction, any hand-written
+type constant. Those are offset by one between the two targets.
 
 **QEMU cannot detect any of this** — its `delin` is idempotent. QEMU runs prove
 no-regression only. Recommended follow-up: make QEMU's `delin` strict (or put the

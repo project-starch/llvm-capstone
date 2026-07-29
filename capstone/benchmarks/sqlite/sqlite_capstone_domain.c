@@ -34,8 +34,12 @@ static void output_text(const char *text) {
      glue. Since `text` is already non-linear, dropping the delin is a semantic no-op.
      Kept for the non-gp-captable builds (the QEMU pure-cap row domains), where the
      string capability can still be linear.
-     NOT a runtime check on purpose: `lcc zimm=1` returns cap_type on QEMU but
-     cap_type-1 on this RTL, so a type test would not be portable. */
+     Compile-time rather than a runtime cap-type test simply because it is free: the ABI
+     is known at build time. (An earlier version of this comment claimed a runtime test
+     would be non-portable because `lcc zimm=1` returns cap_type on QEMU and cap_type-1
+     on the RTL. That was WRONG: the RTL enum has NOT_CAP=0 and so is offset by one from
+     QEMU's, where LIN=0, and the -1 is exactly that conversion. LINEAR(1)-1 == LIN(0).
+     A runtime test via lcc zimm=1 IS portable.) */
   CAPSTONE_DELIN(text);
 #endif
   char *payload = (char *)hostcall_payload;
