@@ -64,6 +64,33 @@ if command -v "${CAPSTONE_LLVM_BIN:-}/llvm-nm" >/dev/null 2>&1; then
   fi
 fi
 
+# ---- PAYLOAD FRESHNESS: does the firmware embed the kernel that was actually built? --
+# Measured 2026-07-30: the documented rebuild recipe links fw_payload.bin ~25 s BEFORE the
+# kernel image finishes, because BR2_TARGET_OPENSBI_LINUX_PAYLOAD is commented out and the
+# payload is injected out-of-band via LINUX_PAYLOAD=1 -- so buildroot has no ordering edge
+# from opensbi to the kernel. The firmware then carries a kernel (and initramfs, and every
+# baked domain) one generation old, at the correct SIZE, which is why a size-only guard
+# cannot see it. Compare CONTENT.
+IMGF="$REPO/capstone/caplifive-system/sw/buildroot/build/images/Image"
+if [[ -f "$IMGF" && -r "$FPGA_FW" ]]; then
+  if ! python3 - "$IMGF" "$FPGA_FW" <<'PYEOF'
+import sys, hashlib
+img = open(sys.argv[1], 'rb').read()
+fw  = open(sys.argv[2], 'rb').read()
+emb = fw[0x200000:0x200000 + len(img)]
+ok = emb == img
+print("payload  : %s (kernel %s)" % (
+    "matches build/images/Image" if ok else "STALE -- embeds a DIFFERENT kernel",
+    hashlib.sha256(img).hexdigest()[:16]))
+sys.exit(0 if ok else 1)
+PYEOF
+  then
+    echo "           ^^ rebuild with: make -C buildroot ... linux-rebuild-with-initramfs" >&2
+    echo "              THEN relink opensbi. Results from this firmware may not reflect" >&2
+    echo "              your latest kernel/initramfs/baked domains." >&2
+  fi
+fi
+
 export LADDER_ONE_BOOT=${LADDER_ONE_BOOT:-1}
 export LADDER_DISTINCT_VA=${LADDER_DISTINCT_VA:-1}
 export DOMAIN_GLUE=${DOMAIN_GLUE:-interp}

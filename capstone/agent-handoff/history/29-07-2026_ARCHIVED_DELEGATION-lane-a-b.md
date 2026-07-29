@@ -1,3 +1,20 @@
+> **ARCHIVED 2026-07-29 — kept for reference, not a live rules document.**
+>
+> This described the A ↔ B peer-lane split when two Opus sessions were running in
+> parallel. That arrangement is dormant; revive this file if peer lanes resume.
+>
+> **Where its content lives now:**
+> - The "Permanent repository rules" below were never canonical here — the file itself
+>   names `CLAUDE.md` "Hard constraints" as the source. **Use `CLAUDE.md`.**
+> - Rules for **built-in subagents** (roster, inherited constraints, how to prompt and
+>   how to read their output): `agent-handoff/ref/SUBAGENTS.md`.
+> - The name/secret release gate is now a deterministic script:
+>   `capstone/tests/precommit-scan.sh`.
+>
+> Some older task briefs in `plans/` still reference the pre-archive path
+> `agent-handoff/DELEGATION.md`. Those are point-in-time handoff artifacts; they were
+> left as written rather than rewritten after the fact.
+
 # Delegating across agent lanes (A ↔ B)
 
 Durable guide for how the two peer lanes split work. Read alongside `CLAUDE.md`
