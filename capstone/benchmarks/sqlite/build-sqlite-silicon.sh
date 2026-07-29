@@ -68,7 +68,13 @@ SQLITE_DEFINES=$(sed -n '/^SQLITE_DEFINES=(/,/^)/p' "$SCRIPT_DIR/build-sqlite-ca
 SILICON=(-mllvm -capstone-gp-captable
          -mllvm -capstone-shrink-stack=false
          -mllvm -capstone-shrink-globals=false
-         -fno-jump-tables)
+         -fno-jump-tables
+         # Tells domain sources they are on the gp-captable ABI, where every global is
+         # reached through a cap-table storage capability that is ALREADY NONLIN. Domain
+         # code must not delin such a capability: the RTL's DELIN takes CAP_TYPE_LINEAR
+         # only and faults otherwise (QEMU's is idempotent, so it hides this). See
+         # output_text() in sqlite_capstone_domain.c and C-13.
+         -DCAPSTONE_GP_CAPTABLE_ABI=1)
 
 COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -ffreestanding -fno-builtin -fno-optimize-sibling-calls

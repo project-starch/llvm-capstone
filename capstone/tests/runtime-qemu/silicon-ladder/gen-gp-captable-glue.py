@@ -291,6 +291,36 @@ def main():
     # eligibility predicate, so the two cannot drift apart.
     uses_copy_path = any("large-RO: copy" in l for l in lines)
     if uses_copy_path:
+        # ---- C-13: with sp pre-delin'd, EVERY LATER delin IS FATAL ON SILICON. ------
+        #
+        # The RTL's DELIN (capstone-ariane capstone_dyn_unit.anvil) accepts
+        # CAP_TYPE_LINEAR only and raises UNEXPECTED_CAP_TYPE otherwise -- it is NOT
+        # idempotent. Our QEMU helper_csdelin returns early for an already-NONLIN cap,
+        # so a double delin is a silent no-op under emulation and a hard fault on the
+        # board. SPLIT preserves cap_type (modify_cap_start/_end/_revnode copy it
+        # through), so once the C-4b prologue delins sp, the gp and t2 caps split from
+        # it are ALREADY NONLIN, as is sp itself at the tail.
+        #
+        # So the copy-path pre-delin above silently turned delin(gp), delin(t2) and the
+        # trailing delin(sp) into faults. This is the likely root cause of R-9
+        # (beebs_ns hangs) and of copy-path rungs failing on hardware while passing on
+        # QEMU -- copy-path rungs are exactly the ones that get the pre-delin.
+        #
+        # Dropping them is a semantic no-op: those capabilities are non-linear already.
+        # Gated on uses_copy_path so every non-copy-path rung stays BYTE-IDENTICAL.
+        def _drop_redundant_delins(seq):
+            out = []
+            for l in seq:
+                if l.strip().startswith("delin("):
+                    out.append("  /* C-13: %s dropped -- already NONLIN via the "
+                               "pre-delin'd sp; delin is LINEAR-only on silicon */"
+                               % l.strip())
+                    continue
+                out.append(l)
+            return out
+
+        prologue = _drop_redundant_delins(prologue)
+        lines = _drop_redundant_delins(lines)
         prologue = ["  delin(sp)                      /* C-4b: sp is LIN; the copy path's",
                     "                                    cincoffset would consume it */"] + prologue
 

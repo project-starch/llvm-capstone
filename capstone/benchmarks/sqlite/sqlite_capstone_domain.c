@@ -24,8 +24,24 @@ static unsigned shared_region_count;
 static void output_text(const char *text) {
   if (!hostcall_metadata || !hostcall_payload)
     return;
+#ifndef CAPSTONE_GP_CAPTABLE_ABI
+  /* Under the gp-captable (silicon) ABI this delin is BOTH redundant AND FATAL, so it
+     is compiled out. `text` points into a cap-table storage capability, and those are
+     produced by `split` from `sp` -- which the entry glue already delin'd -- so they
+     arrive NONLIN. The RTL's DELIN accepts CAP_TYPE_LINEAR only and raises
+     UNEXPECTED_CAP_TYPE otherwise; our QEMU helper_csdelin returns early instead, which
+     is why this never showed up under emulation. Same root cause as C-13 in the entry
+     glue. Since `text` is already non-linear, dropping the delin is a semantic no-op.
+     Kept for the non-gp-captable builds (the QEMU pure-cap row domains), where the
+     string capability can still be linear.
+     NOT a runtime check on purpose: `lcc zimm=1` returns cap_type on QEMU but
+     cap_type-1 on this RTL, so a type test would not be portable. */
   CAPSTONE_DELIN(text);
+#endif
   char *payload = (char *)hostcall_payload;
+  /* This one stays in every build. `payload` is the HOST capability loaded fresh out of
+     its global each call, not a cap-table storage cap -- it is still linear here, and the
+     copy on the line above would consume it without the delin. */
   CAPSTONE_DELIN(payload);
   unsigned long offset = hostcall_metadata->length;
   while (*text && offset + 1 < SQLITE_HC_REGION_SIZE)
