@@ -41,6 +41,7 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Module.h"
 #include "llvm/InitializePasses.h"
@@ -49,6 +50,28 @@
 using namespace llvm;
 
 #define DEBUG_TYPE "capstone-cap-global-init"
+
+// DIAGNOSTIC ONLY -- emit at most the first N capability stores.
+//
+// This function is straight-line (one store per capability leaf, no loop) and is called
+// exactly once, through the .capstone_cap_init table, so it cannot be bisected from the
+// glue side the way the carve loop can with INTERP_BUILD_LIMIT. Building with a limit and
+// halving it is what converts "cap-init faults somewhere" into "leaf K faults".
+//
+// Measured 2026-07-31: skipping cap-init entirely clears an OOB fault at the domain's
+// first entry (a 16-byte capability accessed at +32), so the offending store is one of
+// these leaves. Never ship a build with this set: the leaves past the limit keep their
+// untagged static initialisers, and using one is a capability fault on QEMU and a silent
+// pipeline stall on this silicon (issue R-5).
+static cl::opt<unsigned> CapstoneCapInitLimit(
+    "capstone-cap-init-limit", cl::init(0), cl::Hidden,
+    cl::desc("Capstone: emit only the first N capability initializer stores "
+             "(0 = all). Diagnostic bisect knob; never use in a shipping build."));
+
+static cl::opt<bool> CapstoneCapInitPrint(
+    "capstone-cap-init-print", cl::init(false), cl::Hidden,
+    cl::desc("Capstone: print each capability initializer leaf (index, holder, path, "
+             "target) as it is emitted. Pairs with -capstone-cap-init-limit."));
 #define PASS_NAME "Capstone capability-global initialization"
 
 static constexpr unsigned CapAS = 200;
@@ -185,7 +208,22 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
   IRBuilder<> B(BB);
 
   Type *I32 = Type::getInt32Ty(Ctx);
+  unsigned Emitted = 0;
   for (const StoreItem &It : Items) {
+    if (CapstoneCapInitLimit && Emitted >= CapstoneCapInitLimit)
+      break;
+    // Companion to the limit: once a bisect names an index, this says WHICH global that
+    // index is, without having to re-derive it from a disassembly or an IR dump.
+    if (CapstoneCapInitPrint) {
+      errs() << "capstone-cap-init: leaf " << Emitted << " holder="
+             << It.Holder->getName() << " path=";
+      for (uint64_t P : It.Path)
+        errs() << "[" << P << "]";
+      errs() << " value=" << It.Value->getName()
+             << " holder_size="
+             << M.getDataLayout().getTypeAllocSize(It.AggTy) << "\n";
+    }
+    ++Emitted;
     // GEP index path: a leading 0 to step through the holder pointer, then the
     // recorded element/field indices down to the capability slot. Struct member
     // indices must be i32; array indices are i64 -- pick per level by walking
