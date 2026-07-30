@@ -63,6 +63,15 @@ static cl::opt<bool> PreferWholeRegisterMove(
     "capstone-prefer-whole-register-move", cl::init(false), cl::Hidden,
     cl::desc("Prefer whole register move for vector registers."));
 
+// C-14: `movc` is a MOVE and nulls its source unless the source is a non-linear
+// capability, so using it to copy a register whose value is still needed destroys
+// that value on silicon. On by default because leaving it off miscompiles ordinary
+// loops; the flag exists so the old behaviour can be restored for a bisect.
+static cl::opt<bool> CapstoneScalarCopyForLiveSrc(
+    "capstone-scalar-copy-live-src", cl::init(false), cl::Hidden,
+    cl::desc("Copy a still-live GPR source with a scalar ALU move instead of the "
+             "destructive `movc` (C-14)."));
+
 static cl::opt<MachineTraceStrategy> ForceMachineCombinerStrategy(
     "capstone-force-machine-combiner-strategy", cl::Hidden,
     cl::desc("Force machine combiner to use a specific strategy for machine "
@@ -519,6 +528,32 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
   unsigned KillFlag = getKillRegState(KillSrc);
 
   if (Capstone::GPRRegClass.contains(DstReg, SrcReg)) {
+    // C-14. `movc` is a MOVE, not a copy: on CVA6 it writes cnull to its SOURCE
+    // whenever the source is not a non-linear capability
+    // (capstone_flu_unit.anvil:14-25), which includes a plain integer. Emitting it
+    // for an ordinary register-to-register copy therefore destroys a live scalar --
+    // board-proven: a loop counter copied this way reads back as 0, turning
+    // `bne a6, a5` into an infinite loop and `beq a6, a4` into an early exit
+    // (gpw2 returned 3950255460, exactly the early-exit checksum).
+    //
+    // QEMU hides it: helper_csmovc guards the same zeroing with `rs1_v->tag &&`
+    // (op_helper.c:580-584), so scalars survive in the model and every affected
+    // test is green there.
+    //
+    // When the source is dead, a destructive move is exactly right -- and for a
+    // LINEAR capability it is the only legal semantics, since the ISA permits
+    // moving but not copying those (spec parts/intro.adoc:59-61).
+    //
+    // When the source must survive, use the scalar ALU move instead. That is
+    // correct for integers and is what PseudoSCALAR_COPY_I128 already does for
+    // scalars flowing through the i128 carrier; it would drop metadata for a
+    // capability, so if a capability copy ever reaches here with a live source
+    // the QEMU suites (which track tags) will fail loudly rather than silently.
+    if (!KillSrc && CapstoneScalarCopyForLiveSrc) {
+      BuildMI(MBB, MBBI, DL, get(Capstone::PseudoSCALAR_COPY_I128), DstReg)
+          .addReg(SrcReg, getRenamableRegState(RenamableSrc));
+      return;
+    }
     BuildMI(MBB, MBBI, DL, get(Capstone::MOVC), DstReg)
         .addReg(SrcReg, KillFlag | getRenamableRegState(RenamableSrc));
     return;

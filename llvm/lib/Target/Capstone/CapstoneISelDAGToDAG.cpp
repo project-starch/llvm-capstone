@@ -109,10 +109,29 @@ cl::opt<bool> CapstoneGpCaptable(
 // access side and the runtime table agree on which slot holds which global.
 // Returns -1 for a value that is not an indexable domain global (function,
 // declaration, unsized/thread-local, constant pool, etc.).
+// The single definition of "does this global get a cap-table slot". The early-out
+// below and the enumeration that assigns indices MUST agree exactly -- the entry glue
+// walks the descriptor in this same order and assigns slot i to record i, so any
+// disagreement silently permutes every global in the domain. Keeping one predicate is
+// what makes that impossible rather than merely unlikely.
+static bool isGpCaptableGlobal(const GlobalVariable &GVar) {
+  if (GVar.isDeclaration() || GVar.isThreadLocal() ||
+      !GVar.getValueType()->isSized())
+    return false;
+  // llvm.used / llvm.compiler.used / llvm.global_ctors and friends are appending
+  // linkage MARKERS, not data. Giving one a slot emits a descriptor record and a
+  // table entry for a symbol the linker never materializes:
+  //   ld.lld: error: undefined symbol: llvm.compiler.used
+  //           referenced by .capstone_gp_table+0x48
+  // Any translation unit using __attribute__((used)) hits this.
+  if (GVar.hasAppendingLinkage() || GVar.getName().starts_with("llvm."))
+    return false;
+  return true;
+}
+
 int getGpCaptableIndex(const GlobalValue *GV) {
   const auto *GVar = dyn_cast<GlobalVariable>(GV);
-  if (!GVar || GVar->isDeclaration() || GVar->isThreadLocal() ||
-      !GVar->getValueType()->isSized())
+  if (!GVar || !isGpCaptableGlobal(*GVar))
     return -1;
 
   // Memoized per module. The scan itself is O(N) and this is called once per
