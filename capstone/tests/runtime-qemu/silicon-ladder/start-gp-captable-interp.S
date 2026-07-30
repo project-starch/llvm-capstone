@@ -172,7 +172,26 @@
   mv    a7, t3                       /* a7 = runtime IMAGE address of the entry       */
 70:
   ldc(a6, sp, 16)
+#ifdef INTERP_CAPINIT_IMAGE_TABLE
+  /* DIAGNOSTIC: read the entry's delta from the IMAGE (a7) rather than from the monitor's
+     copy of it in dom_data (a6). Both should hold the same bytes -- the table lives in the
+     globals region, so it is copied -- and a difference means the blob copy or the offset
+     into it is wrong, which would send this `jalr` to an arbitrary address. Observed:
+     execution reaching sqlite3_aggregate_context on what should be a capability-stash
+     entry, i.e. control transferred somewhere it was never meant to go.
+
+     RESULT (2026-07-31): this DOES NOT WORK and the knob is kept only to record why.
+     `lla` yields a plain INTEGER address under the gp-free ABI, and a bare `ld` through an
+     integer base is rejected:
+         Cap mem access requires capability: pc = ..., rs1 = x17, imm = 0
+         domain halted by capability fault: cause = 24
+     Reading the table through the blob capability (a6) is therefore not an accident of the
+     implementation, it is the only legal way to reach those bytes from the glue. Do not
+     "simplify" it back to an image-relative load. */
+  ld    t0, 0(a7)
+#else
   ld    t0, 0(a6)                    /* t0 = initfn - entry (link-time relative)      */
+#endif
   add   t0, a7, t0                   /* -> initfn runtime address                     */
   jalr  ra, 0(t0)                    /* plain call: gp-free ABI, within PCC           */
   ldc(a6, sp, 16)                    /* reload: the callee may have clobbered it      */
