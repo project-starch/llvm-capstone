@@ -22,7 +22,7 @@ using namespace llvm;
 
 // C-14 fixup, off by default until it is proven not to regress the corpus.
 static cl::opt<bool> CapstoneFixDestructiveCopies(
-    "capstone-fix-destructive-copies", cl::init(false), cl::Hidden,
+    "capstone-fix-destructive-copies", cl::init(true), cl::Hidden,
     cl::desc("Rewrite `movc rd, rs` to a scalar move when rs is provably an "
              "integer that stays live (C-14)."));
 
