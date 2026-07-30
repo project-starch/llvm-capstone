@@ -541,6 +541,13 @@ _start:
 __test_entry:
   ccsrrw(sp, cscratch, x0)           /* sp = dom_data (cscratch) DATA region */
   BUILD_GP_CAPTABLE_INTERP
+#ifdef INTERP_PEEK_GP
+  /* Print gp itself (the cap-table base) so a faulting address can be tested for being
+     INSIDE THE TABLE. A 16-byte capability is exactly one table entry, so a pointer bounded
+     to 16 bytes is the signature of code that used the ADDRESS OF A SLOT where it should
+     have `ldc`-ed the slot to obtain the object's capability. QEMU-only debug op. */
+  .insn r 0x5b, 0x1, 0x43, x0, gp, x0
+#endif
 #ifdef INTERP_PEEK_SLOT
   /* Print the capability the builder actually installed in gp[INTERP_PEEK_SLOT], right
      after the table is built and before anything uses it. The DESCRIPTOR for a slot can be
