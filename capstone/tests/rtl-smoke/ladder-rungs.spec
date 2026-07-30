@@ -216,3 +216,4 @@ gpw2:gpw2_kernel.h:gpw2_compute:-O1
 gpw4:gpw4_kernel.h:gpw4_compute:-O1
 gpw8:gpw8_kernel.h:gpw8_compute:-O1
 gpw16:gpw16_kernel.h:gpw16_compute:-O1
+gpw16b:gpw16b_kernel.h:gpw16b_compute:-O1
