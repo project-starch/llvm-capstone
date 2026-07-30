@@ -86,8 +86,15 @@ static cl::opt<bool> CapstoneMergeStrings(
 // any offset is reachable -- but a bound keeps the blast radius of the lost
 // mutual bounds finite, and keeps each container's length comfortably inside the
 // representable-bounds window the carve needs.
+// 4096 is a REPRESENTABILITY limit, not a tuning choice. Capability bounds are compressed,
+// and the encoder's granule for a length L is 1 << (max(0, floor(log2 L) - 12) + 3): below
+// 4096 bytes that is 8, so the glue's 16-byte carve alignment always yields exact bounds.
+// A single 21,211-byte container needs 32-byte granularity, which the carve does not
+// provide -- the resulting capability is not exactly representable and the domain died
+// before it ever reached domain_main. Several small containers save just as many carves as
+// one big one (885 literals -> ~6 slots either way).
 static cl::opt<unsigned> CapstoneMergeStrMaxBytes(
-    "capstone-merge-string-max-bytes", cl::init(32768), cl::Hidden,
+    "capstone-merge-string-max-bytes", cl::init(4096), cl::Hidden,
     cl::desc("Capstone: maximum bytes per merged string container"));
 
 extern cl::opt<bool> CapstoneGpCaptable;

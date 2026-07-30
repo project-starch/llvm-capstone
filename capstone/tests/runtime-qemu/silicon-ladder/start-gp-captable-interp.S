@@ -581,6 +581,20 @@ test:
 
   ldc(a0, sp, 80)                    /* a0 = res */
   ld a1, 64(sp)                      /* a1 = func */
+#ifdef INTERP_PEEK_PRECALL
+  /* Print the frame state immediately before entering domain_main. With string merging on,
+     the domain dies at its first entry with cause = 1, pc = 0 -- an instruction fetch at
+     null with no preceding memory fault -- and cap-init's own body has been cleared (call
+     target exact, ra never written). That leaves the glue's post-cap-init unwind: if the
+     blob-cap restore or the `sp += 32` left sp or the parked return capability wrong, the
+     next control transfer is what fails. Printing sp, the parked return cap and the two
+     arguments says which, instead of inferring it. QEMU-only debug op (funct7 0x43). */
+  .insn r 0x5b, 0x1, 0x43, x0, sp, x0
+  ldc(t0, sp, 48)
+  .insn r 0x5b, 0x1, 0x43, x0, t0, x0
+  .insn r 0x5b, 0x1, 0x43, x0, a0, x0
+  .insn r 0x5b, 0x1, 0x43, x0, a1, x0
+#endif
   call domain_main
 
   lla t2, __test_reentry

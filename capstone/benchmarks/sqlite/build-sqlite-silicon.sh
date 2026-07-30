@@ -127,7 +127,15 @@ SILICON_TRIM=(
 # Opt in with SQLITE_TRIM=1 only to re-measure the carve count; never for a correctness run.
 [[ "${SQLITE_TRIM:-0}" == "1" ]] || SILICON_TRIM=()
 
-SILICON=(-mllvm -capstone-gp-captable
+# STRING MERGING IS REQUIRED FOR THIS DOMAIN, not an optimisation. One capability carve per
+# global costs one revocation node, and the board's allocator wraps after 1021: untrimmed
+# SQLite needs 1059 carves and overflowed the pool on silicon (measured 2026-07-31, head=74
+# with the overflow flag set). Merging the private read-only string literals takes it to 179
+# carves, ~215 allocations total. Enabled HERE rather than by default so the silicon-ladder
+# rungs keep their measured geometry -- tab:spatialcost's BEEBS numbers were deliberately
+# taken with merging off and must not silently change.
+SILICON=(-mllvm -capstone-merge-string-constants=true
+         -mllvm -capstone-gp-captable
          -mllvm -capstone-shrink-stack=false
          -mllvm -capstone-shrink-globals=false
          -fno-jump-tables
