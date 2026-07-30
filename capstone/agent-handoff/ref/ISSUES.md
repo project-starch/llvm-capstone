@@ -1185,6 +1185,40 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
   `fw_jump.elf.good` = `6724bcb3`).
 - Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
 
+### R-12 — rev-node exhaustion is SILENT CORRUPTION, not a fault `OPEN, will bite at call_dom`
+
+The revocation-node allocator's `head` is 10 bits (`capstone-ariane/core/anvil_build/capstone_rev_node.anvil:168`), so allocation
+**#1025 wraps to node id 0 and reuses live ids**. `overflow_flag` reaches only a debug LED
+(`cva6.sv:1185`) -- nothing traps, nothing prints. Only `SPLIT` and `MREV` allocate
+(`capstone_dyn_unit.anvil:136, :91`); `ldc`/`stc`/`cincoffset` allocate nothing
+(`:330-332, :399`, `capstone_flu_unit.anvil:29-44`).
+
+`create_domain` does **5** splits, so this is NOT the current SQLite blocker. But SQLite's
+entry glue does **1,060** splits (1 table + 1,059 globals) and will be the first domain to
+cross 1,024 -- at `call_dom`, i.e. the moment after the present wedge is cleared. No
+ladder rung approaches it (bigmany: 65).
+
+### R-13 — `CINCOFFSET` duplicates a linear capability, untracked `OPEN`
+
+It writes the unmodified `rs1` back alongside `rd` with the same `revnode_id` and
+`CAP_TYPE_LINEAR` (`capstone_flu_unit.anvil:29-44`, `commit_stage.sv:278`), so one linear
+capability becomes two with no bookkeeping. Sits directly next to C-14 in kind: an
+instruction whose source-register behaviour diverges from what the compiler assumes.
+
+### I-4 — every monitor error is invisible on the FPGA `OPEN, cheap fix identified`
+
+`capstone_error` is `C_PRINT(...)` + `while(1)`, and `C_PRINT` is `csrw 0x800` -- the RTL
+trace, NOT the UART. So all five silent-spin sites look identical to a hang on the board:
+`handle_interrupt` default (`sbi_capstone.c:898-900`), `handle_exception` default
+(`:973-977`), illegal-instruction-not-`time` (`:959-963`), `swap_cpmp` -> `capstone_error`
+(`:917-923`), and two in `split_out_cap` (`:236, :246`).
+
+**Fix, zero board cost to develop:** give `capstone_error` a real UART putchar via
+`split_out_cap(0x10000000, 0x100, 0)` -- the same mechanism the monitor already uses for
+`mtime` (`sbi_capstone_dom.c:32-36`). Every future wedge would then name its own site
+instead of presenting as silence. This is the highest-leverage change available for board
+debugging and should be done before more board sessions are spent guessing.
+
 ### C-14 — the COMPILER uses `movc` (a MOVE) for scalar register copies `ROOT-CAUSED 2026-07-30`
 
 > **ATTRIBUTION WAS REVISED TWICE ON 2026-07-30. Read this box before the rest.**
