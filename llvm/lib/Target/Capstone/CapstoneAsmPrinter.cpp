@@ -961,7 +961,19 @@ void CapstoneAsmPrinter::emitGpCaptableInitDesc(const Module &M) {
   //
   // Value is ASCII "CAPSDESC" so it is greppable in a memory dump and cannot plausibly
   // occur in zeroed or uninitialised memory.
-  OutStreamer->emitIntValue(0x4341505344455343ULL, /*Size=*/8); // magic 'CAPSDESC'
+  // NOT EMITTED. Prepending this shifted built_flag to +8 and count to +16 while the
+  // entry glue still read them at +0 and +8, so the glue took the magic as built_flag,
+  // concluded the table was already built, skipped the build, never established gp, and
+  // faulted on the first `ldc gp[i]`. Every gp-captable rung failed identically under
+  // QEMU (cause = 7) the moment a compiler carrying this was actually built -- it was
+  // added as "inert" but the glue-side scan was never wired up, so nothing consumed it
+  // and the layout change was pure regression.
+  //
+  // Keep the idea, not the placement: making the descriptor self-locating is worth doing,
+  // but the magic has to go somewhere that does not move the fields the glue already
+  // reads, and it has to land in the same commit as the glue-side scan that uses it.
+  //
+  // OutStreamer->emitIntValue(0x4341505344455343ULL, 8); // magic 'CAPSDESC'
   OutStreamer->emitIntValue(0, /*Size=*/8);            // built_flag
   OutStreamer->emitIntValue(Table.size(), /*Size=*/8); // count
   OutStreamer->emitIntValue(0, /*Size=*/8);            // gp_slot[0]
