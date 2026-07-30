@@ -19,7 +19,7 @@ the on-board size and compares it against the local build before running anythin
 
     usage: FPGA_URL=... FPGA_FW=<fw_payload.bin> python3 run_sqlite_baked_fpga.py
 """
-import sys, os, pathlib, re, time
+import sys, os, pathlib, re, time, hashlib
 
 DRV = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(DRV.parent))
@@ -164,8 +164,31 @@ def main():
         log(f"took the lock; bitstream = {rb!r}")
         log(f"uploading firmware ({IMG.stat().st_size} bytes)")
         console.upload_boot_image(IMG_NAME, str(IMG))
-        cold_boot(console, C.GDB_PROMPT)
+        # IMG_NAME must be passed: cold_boot() lives in run_ladder_perf_fpga and a bare
+        # IMG_NAME there is the LADDER's hardcoded image name, not ours.
+        cold_boot(console, C.GDB_PROMPT, IMG_NAME)
         log("booted to a root shell with /dev/capstone present")
+
+        # Prove the RUNNING system is the image we just uploaded. Verifying the firmware
+        # FILE is not enough -- the JTAG load can pull a different stored image, and then
+        # every symptom is attributed to the domain. Compare on-board hashes to local ones;
+        # `ls` sizes are not enough either (a stale and a current domain were both 1623008
+        # bytes on 2026-07-30).
+        for local, remote in ((LOCAL_HOST, HOST), (LOCAL_DOM, DOM)):
+            if not local.is_file() or os.environ.get("SQLITE_HOST") or os.environ.get("SQLITE_DOM"):
+                continue          # probe mode substitutes shell snippets for these paths
+            want = hashlib.sha256(local.read_bytes()).hexdigest()[:16]
+            mark = console.uart_mark()
+            console.run_command(f"sha256sum {remote} | cut -c1-16", r"[0-9a-f]{16}", timeout=60)
+            got = re.findall(r"\b([0-9a-f]{16})\b", console.uart_since(mark))
+            if want not in got:
+                raise SystemExit(
+                    f"STALE BOOT -- on-board {remote} does not match the local build.\n"
+                    f"  local  sha256[:16] = {want}\n  on board            = {got or 'none'}\n"
+                    f"The board booted a different stored image than the one uploaded "
+                    f"({IMG_NAME}). Do NOT interpret any failure past this point as a "
+                    f"domain or monitor bug.")
+            log(f"on-board {remote} matches the local build ({want})")
 
         # Prove the baked artifacts exist and match the local build BEFORE running.
         out = sh(console, f"ls -l {DOM} {HOST} 2>&1 | cat", timeout=30)

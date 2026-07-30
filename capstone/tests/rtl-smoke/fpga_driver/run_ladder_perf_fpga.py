@@ -65,6 +65,10 @@ CTL_REMOTE = "/tmp/lpc"
 # Seconds to wait for a rung's END marker. Threaded into the timeout AND the log
 # message: they used to be 75 and "120s", so every wedge was mis-reported.
 EXEC_TIMEOUT = int(os.environ.get("LADDER_EXEC_TIMEOUT") or 75)
+# Abort on UART silence, same as the SQLite runner. A wedged rung in a multi-rung sweep
+# otherwise burns the full EXEC_TIMEOUT per rung; with 6 rungs that is minutes of holding a
+# shared board waiting for output that will never come. Progress resets the clock.
+EXEC_IDLE = int(os.environ.get("LADDER_EXEC_IDLE") or 40)
 # See the exec loop: a wedged board never recovers on a second attempt.
 EXEC_ATTEMPTS = int(os.environ.get("LADDER_EXEC_ATTEMPTS") or 1)
 
@@ -126,21 +130,33 @@ def ensure_capstone_dev(console):
     if "DEVNO" in out or "DEVOK" not in out:
         raise RuntimeError(f"/dev/capstone missing (insmod failed?):\n{out}")
 
-def cold_boot(console, prompt):
+def cold_boot(console, prompt, img_name=None):
     """Full power-cycle + JTAG firmware reload -> fresh boot. Each rung runs as the
     FIRST domain of a clean boot (clean icache). A warm `monitor reset halt` does
     NOT work here -- the fw_payload OpenSBI does not re-enter cleanly from a soft
     reset (its one-time hart/DDR init is not re-runnable), so a real power-cycle is
     required. The image must already be in the console store (upload_boot_image);
     load_image JTAG-copies store->DDR (~2 min). Returns with a confirmed root shell
-    and /dev/capstone loaded (the initramfs is re-unpacked, so /tmp starts empty)."""
+    and /dev/capstone loaded (the initramfs is re-unpacked, so /tmp starts empty).
+
+    PASS `img_name` EXPLICITLY when the caller uploaded under its own name. This function
+    lives in THIS module, so a bare `IMG_NAME` resolves to THIS module's global -- the
+    hardcoded ladder image below -- regardless of which runner calls it. That cost a whole
+    session on 2026-07-30: run_sqlite_baked_fpga.py computes a CONTENT-HASHED name, uploaded
+    its 17.4 MB firmware under it, and then cold_boot JTAG-loaded the ladder's stale stored
+    image instead. The board booted a JULY 19 initramfs, so the freshly staged
+    sqlite_host.user was absent and the shell answered `not found` (exit 127) -- which reads
+    as a domain failure and sent the investigation into the monitor. It had worked until then
+    only because callers exported FPGA_FW_NAME, which BOTH modules happen to read from the
+    environment; a content-hash default silently broke that coupling."""
+    name = img_name or IMG_NAME
     console.power(False); time.sleep(POWER_CYCLE_OFF)
     console.power(True); time.sleep(POWER_ON_SETTLE)
     console.gdb_start()
     try:
         console.gdb_cmd("monitor reset halt", prompt, timeout=60.0)
         time.sleep(4.0)
-        console.gdb_cmd(f"monitor load_image images/{IMG_NAME} 0x80000000 bin",
+        console.gdb_cmd(f"monitor load_image images/{name} 0x80000000 bin",
                         prompt, timeout=300.0)
         console.gdb_cmd("set $pc = 0x80000000", prompt)
         console.gdb_cmd("set $a0 = 0", prompt)
@@ -402,7 +418,7 @@ def main():
             for attempt in range(1, EXEC_ATTEMPTS + 1):
                 cmd = f"echo B''G{r}; {CTL_REMOTE} {r} {dom_remote}; echo E''ND{r}=$?"
                 try:
-                    out = console.run_command(cmd, rf"END{r}=\d", timeout=EXEC_TIMEOUT)
+                    out = console.run_command(cmd, rf"END{r}=\d", timeout=EXEC_TIMEOUT, idle_timeout=EXEC_IDLE)
                     m = re.search(rf"RESULT {r} retval=(\d+) cycles=(\d+) ran=(\d+)", out)
                     if m:
                         results[r] = (m.group(1), int(m.group(2)), m.group(3))
