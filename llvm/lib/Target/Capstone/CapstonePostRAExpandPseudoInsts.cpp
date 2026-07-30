@@ -130,7 +130,7 @@ bool CapstonePostRAExpandPseudo::fixupDestructiveCopies(MachineBasicBlock &MBB) 
     // the destructive move is harmless (and for a linear capability it is the only
     // legal semantics anyway).
     bool ScalarUse = false, Decided = false;
-    auto Scan = [&](MachineBasicBlock::iterator B, MachineBasicBlock::iterator End) {
+    auto Scan = [&](MachineBasicBlock::const_iterator B, MachineBasicBlock::const_iterator End) {
       for (auto J = B; J != End && !Decided; ++J) {
         if (J->readsRegister(Src, TRI)) {
           ScalarUse = isScalarIntegerUse(J->getOpcode());
@@ -146,6 +146,22 @@ bool CapstonePostRAExpandPseudo::fixupDestructiveCopies(MachineBasicBlock &MBB) 
     Scan(std::next(I), MBB.end());
     if (!Decided && SelfLoop)
       Scan(MBB.begin(), I);
+
+    // Cross-block: if the answer is not in this block, follow SINGLE-SUCCESSOR edges.
+    // Sound because a block with exactly one successor sends every path there, so the
+    // first use found downstream really is the first use. Bounded, and it stops at the
+    // first branch -- anything needing a join is left alone and keeps MOVC.
+    // SQLite had ~5 sites the block-local scan could not classify; this is for those.
+    const MachineBasicBlock *Cur = &MBB;
+    for (unsigned Hops = 0; !Decided && Hops < 4; ++Hops) {
+      if (Cur->succ_size() != 1)
+        break;
+      MachineBasicBlock *Succ = *Cur->succ_begin();
+      if (Succ == &MBB)
+        break; // already covered by the self-loop scan above
+      Scan(Succ->begin(), Succ->end());
+      Cur = Succ;
+    }
 
     if (!Decided || !ScalarUse) {
       I = Next;
