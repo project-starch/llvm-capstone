@@ -759,3 +759,46 @@ under QEMU and the offset demonstrably reaches the monitor on silicon.
   prepared statements, UPDATE/DELETE, aggregates, sorter, JOIN, GROUP BY, string
   functions) plus CoreMark, the RV8 suite and 82 BEEBS kernels execute as
   pure-capability domains returning correct results. **QEMU-backed**, not silicon.
+
+## §4d — R-12 CONFIRMED ON SILICON: the revocation-node pool wraps under SQLite (2026-07-31)
+
+First hardware observation of the rev-node allocator overflow. Until now R-12 was predicted
+from the RTL and never measured.
+
+Method: run the SQLite domain on the board until it wedges, then read the allocator state
+off the debug-LED mux WITHOUT resetting (a reset clears it). The mux is selected by the
+board switches -- `debug_byte_sel = switches[7:5]`, `debug_reg_sel = switches[4:0]`
+(cva6.sv:874-877); the rev-node registers are direct 8-bit assignments in the `debug_reg_sel`
+case (cva6.sv:1184-1186), so only the low five switches matter.
+
+    rev_node_head[7:0]                 switches 249  ->  0x4a  = 74
+    {overflow, 5'b0, head[9:8]}        switches 250  ->  0x80  -> overflow = 1, head[9:8] = 0
+    rev_node_serving_idx[7:0]          switches 251  ->  0x00
+    stall flags                        switches 225  ->  0x84  -> stall_issue = 1
+
+**overflow = 1, and head = 74.** The allocator's head is 10 bits initialised to 3
+(capstone_rev_node.anvil:160,168) and bumped once per `split`/`mrev`. A final head of 74
+after a wrap means 1095 allocations: SQLite's 1059 per-global carves, the cap-table split,
+and ~35 for the monitor's create_domain / two create_regions / two map_regions / share. The
+usable pool is 1021 (1024 minus the head's initial 3), so it wrapped by 74 and reused live
+node ids.
+
+Consequence, and why the failure has no trap: every `stc` blocks on a revocation-node query
+with no timeout (capstone_dyn_unit.anvil:395-404, `recv rev_node_ep.query_res` with no abort
+path), and id reuse can splice a node into the `next` chain twice. REVOKE_NODE
+(capstone_rev_node.anvil:13-32) has no visit bound and no cycle detection, so it walks
+forever, never re-enters IDLE_STAGE, and no later query is answered. The core stalls at
+issue rather than faulting -- consistent with `stall_issue = 1` and a non-advancing
+`serving_idx`, and with the board showing SHA5 then silence.
+
+The overflow flag reaches only a debug LED: there is no CSR, no interrupt, and no watchdog
+anywhere in the design (grep of core/ and corev_apu/ finds only testbench timeouts). So on
+this silicon the condition is invisible to software by construction.
+
+Provenance: the domain measured here is byte-identical to the one that passes end-to-end
+under QEMU in the silicon config (__CAPSTONE_SQLITE_SILICON_PASSED__), hash-verified on the
+board before execution (sqlite_silicon.dom 8e1cb920..., sqlite_host.user 052286d2...). No
+diagnostic clamp and no feature trim. This is a silicon-only divergence.
+
+Scope: this bounds any domain to ~1021 capability carves, i.e. ~1021 globals with one
+capability per object. It is a property of the prototype board, not of the Capstone design.
