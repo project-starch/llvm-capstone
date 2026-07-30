@@ -1,0 +1,94 @@
+diff --git a/package/modcapstone/userspace/lib/libcapstone.c b/package/modcapstone/userspace/lib/libcapstone.c
+index 34abcf5..376e42d 100644
+--- a/package/modcapstone/userspace/lib/libcapstone.c
++++ b/package/modcapstone/userspace/lib/libcapstone.c
+@@ -19,8 +19,29 @@
+ #define MAX_REGION_N 64
+ #define MAP_SIZE_LIMIT 0x10000000
+ #define DEBUG_COUNTER_SWITCH_U 0
++/* Guarded, matching the caplifive-system copy. `.insn r 0x5b, 0x1, 0x45` is QEMU's
++   csdebugcount (insn32.decode:991, helper op_helper.c:1440) -- one of the QEMU-private
++   debug block at funct7 0x40-0x48. It has no definition in capstone-spec (highest funct7
++   there is 0x21 RETURN / 0x0D CAPENTER) and none in capstone-ariane: the RTL decoder's
++   funct7 default sets no illegal flag (decoder.sv:1291), so the word reaches the Capstone
++   FLU as a bogus op and its dispatch wildcard raises ILLEGAL_INSTRUCTION
++   (capstone_flu_unit.anvil:476-503).
++
++   Under QEMU it silently bumps env->capstone_debug_counters[], invisible to the guest.
++   On the FPGA it kills the process. Board-proven 2026-07-30: SQLite died at mepc 0x1e84,
++   52 bytes into create_region, on word 8ae7905b -- this macro.
++
++   Unguarded here while the caplifive-system copy has had the guard all along, so any
++   build that used THIS file for a hardware target shipped the fault. Guarding rather
++   than swapping files, because this copy is the only one with the globals-offset
++   packing. Define CAPSTONE_DEBUG_ENABLE to get the counters back under QEMU. */
++#ifdef CAPSTONE_DEBUG_ENABLE
+ #define debug_counter_inc(counter_no, delta) __asm__ volatile(".insn r 0x5b, 0x1, 0x45, x0, %0, %1" :: "r"(counter_no), "r"(delta))
+ #define debug_counter_tick(counter_no) debug_counter_inc((counter_no), 1)
++#else
++#define debug_counter_inc(counter_no, delta)
++#define debug_counter_tick(counter_no)
++#endif
+ 
+ struct ElfCode {
+     int fd;
+@@ -186,6 +207,50 @@ static int load_elf_code(const char *file_name, struct ElfCode *res) {
+                phdrs[ph_idx].p_filesz);
+     }
+ 
++    /* Pack the GLOBALS OFFSET into entry_offset's high 32 bits.
++     *
++     * create_domain needs to know where the domain's globals region starts: it splits
++     * PCC there and copies the initializer blob from there. It cannot be a shared
++     * constant, because .text must fit BELOW it -- 0x1000 suits a BEEBS kernel and is
++     * hopeless for SQLite at 2.2 MB of .text, and one firmware serves both.
++     *
++     * Packed into entry_offset rather than sent as its own argument because the kernel
++     * module forwards m_args.entry_offset straight through as arg3 and never inspects
++     * it, so the module is a pure conduit and needs no change. The alternative -- a new
++     * field in ioctl_dom_create_args -- would mean editing the struct in two separate
++     * submodule trees and rebuilding the module and the rootfs, for the same result.
++     * (An in-image header read by the monitor was tried first and reverted: it needed a
++     * capstone-c scalar read through the image capability and broke every rung.)
++     *
++     * The offset is the address of .capstone_gp_initdesc, which link-gpfree.ld places
++     * FIRST in the globals region. Section headers rather than the symbol table because
++     * the section is already KEEP'd and this avoids a symtab walk. Absent section => 0
++     * => the monitor keeps its historical 0x1000 default, so a domain built before this
++     * behaves exactly as it used to. */
++    unsigned long globals_off = 0;
++    if (elf_header->e_shoff && elf_header->e_shstrndx < elf_header->e_shnum) {
++        Elf64_Shdr *shdrs = (Elf64_Shdr*)(((void*)elf_header) + elf_header->e_shoff);
++        const char *shstr = (const char*)(((void*)elf_header) + shdrs[elf_header->e_shstrndx].sh_offset);
++        for (int sh = 0; sh < elf_header->e_shnum; sh++) {
++            if (!strcmp(shstr + shdrs[sh].sh_name, ".capstone_gp_initdesc")) {
++                if (shdrs[sh].sh_addr >= loadable_start)
++                    globals_off = shdrs[sh].sh_addr - loadable_start;
++                break;
++            }
++        }
++    }
++    /* NOTE: this walk MUST stay above the munmap below -- it dereferences the
++       mapped ELF. Placing it after cost a segfault in the loader. */
++
++    unsigned long entry_off = entry_addr - loadable_start;
++    if (entry_off >> 32) {
++        fprintf(stderr, "entry offset %lu does not fit 32 bits; cannot pack globals offset\n",
++                entry_off);
++        retval = 1;
++        goto clean_up_mmap;
++    }
++    printf("Globals offset = 0x%lx\n", globals_off);
++
+     munmap(elf_header, file_stat.st_size);
+     close(elf_fd);
+ 
+@@ -195,7 +260,7 @@ static int load_elf_code(const char *file_name, struct ElfCode *res) {
+     res->size = file_stat.st_size;
+     res->code_start = (unsigned long)image_base;
+     res->code_len = image_size;
+-    res->entry_offset = entry_addr - loadable_start;
++    res->entry_offset = entry_off | (globals_off << 32);
+     res->loadable_size = image_size;
+ 
+     printf("Loadable size = %lu\n", res->loadable_size);

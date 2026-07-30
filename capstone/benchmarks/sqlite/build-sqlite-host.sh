@@ -8,21 +8,23 @@ OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/sqlite-build}
 OUT_HOST=${OUT_HOST:-$OUT_DIR/sqlite_host.user}
 HOST_SRC=${HOST_SRC:-$SCRIPT_DIR/sqlite_host.c}
 GUEST_CC=${GUEST_CC:-$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-linux-gnu-gcc}
-# MUST be the caplifive-SYSTEM copy, not caplifive-buildroot. The two trees have diverged
-# and the difference is fatal on hardware: buildroot's copy defines
-#   debug_counter_inc -> __asm__ volatile(".insn r 0x5b, 0x1, 0x45, x0, ...")
-# UNCONDITIONALLY, while caplifive-system's guards it behind #ifdef CAPSTONE_DEBUG_ENABLE
-# (never defined, so it compiles to nothing). funct7 0x45 is not in capstone-spec
-# (highest defined is 0100001 = RETURN) and not in our LLVM backend, so it is a
-# QEMU-only debug hook. QEMU tolerates it; the FPGA raises ILLEGAL INSTRUCTION.
+# The caplifive-BUILDROOT copy is correct here and must NOT be swapped for the
+# caplifive-system one. It is the only copy carrying the globals-offset packing
+# (entry_off | (globals_off << 32)); the caplifive-system copy is 5 KB older with zero
+# globals_off references, so building against it silently delivers gpoff = 0x1000
+# instead of 0x140000 -- dom_gp then covers only the first 4 KiB of a 1.39 MB image and
+# the monitor copies .text as though it were globals. Measured: that build printed no
+# "Globals offset" line at all and call_dom returned -1.
 #
-# Board-proven 2026-07-30: SQLite died at mepc 0x1e84, 52 bytes into create_region,
-# on word 8ae7905b -- exactly this encoding. The monitor diagnostics named the site
-# (ILLX) and the load-base markers placed it inside the host image. Ladder rungs never
-# hit it because ladder_perf_ctl.c is -nostdlib and hand-rolls the ioctl path, so it
-# never links libcapstone at all -- which is why bigblob reproduced every
-# create_domain input and still passed.
-LIBCAPSTONE_C="$CAPSTONE_REPO_ROOT/capstone/caplifive-system/sw/buildroot/package/modcapstone/userspace/lib/libcapstone.c"
+# What this copy DOES need is the guard the caplifive-system copy already has. Its
+# debug_counter_inc is unconditional and emits `.insn r 0x5b, 0x1, 0x45` = QEMU's
+# csdebugcount, a QEMU-private debug op (funct7 >= 0x40 on opcode 0x5b is the whole
+# QEMU-only block; CVA6 puts its debug ops on opcode 0x7b and has no counter op).
+# QEMU bumps an emulator-side array; the FPGA raises ILLEGAL_INSTRUCTION. Board-proven
+# at mepc 0x1e84, 52 bytes into create_region, word 8ae7905b.
+#
+# So: keep this file, and compile the counters out via the macro below.
+LIBCAPSTONE_C="$CAPSTONE_REPO_ROOT/capstone/caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.c"
 
 mkdir -p "$OUT_DIR"
 
