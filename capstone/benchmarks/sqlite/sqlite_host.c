@@ -26,6 +26,13 @@ int main(int argc, char **argv) {
   if ((long)domain < 0)
     return fail_cleanup("create_dom failed", (unsigned long)domain);
 
+  /* PHASE MARKERS. On silicon a monitor fault is C_PRINT + while(1), and C_PRINT
+     goes to the RTL trace, not the UART -- so a wedge in create_dom and a wedge in
+     the domain's entry glue look identical from the console: silence after
+     libcapstone's last line. These two lines separate them, which is the whole
+     difference between debugging the monitor and debugging the glue. */
+  fprintf(stderr, "sqlite-host: create_dom ok (id=%lu)\n", (unsigned long)domain);
+
   region_id_t metadata_region = create_region(SQLITE_HC_REGION_SIZE);
   region_id_t payload_region = create_region(SQLITE_HC_REGION_SIZE);
   struct sqlite_hostcall_v0 *metadata =
@@ -44,7 +51,9 @@ int main(int argc, char **argv) {
                           SQLITE_HC_ANNOTATION_PERM_INOUT,
                           SQLITE_HC_ANNOTATION_REV_SHARED);
 
+  fprintf(stderr, "sqlite-host: regions shared, entering domain\n");
   unsigned long result = call_dom(domain);
+  fprintf(stderr, "sqlite-host: domain returned\n");
   if (metadata->length > 0 && metadata->length <= SQLITE_HC_REGION_SIZE) {
     (void)write(STDOUT_FILENO, payload, (size_t)metadata->length);
     fflush(stdout);
