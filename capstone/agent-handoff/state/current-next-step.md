@@ -1,99 +1,108 @@
 # Current recommended next step
 
-## 2026-07-30 — C-14: silicon-only domain wedge, narrowed but NOT root-caused
+## 2026-07-30 (evening) — SQLite on silicon: SBI args 1-3 arrive as zero
 
-### What is solid (all measured today, every run with a control in the same session)
+### Exact position
 
-| rung | shape | silicon |
-|------|-------|---------|
-| beebs_primer1 | scalar global | PASS 582955588 (5 sessions) |
-| gpsz | 1 static, 64 elems, 256 B | PASS 607423941 |
-| gpcp | 1 static, 256 B | PASS 23404485 |
-| gpw2 | 1 static, 2 elems, 8 B | ran (value unchecked, oracle was broken) |
-| **gpw16b** | **1 static, 16 elems, 64 B** | **PASS 583391941** |
-| **gpw16** | **1 static, 16 elems, 64 B** | **FAIL** |
-| gpw4, gpw8 | 4 / 8 elems | FAIL |
-| gpn1use0 | 1 global, 4 elems | FAIL |
-| gpn2, gpn4, gpn2use0, gpn2use1 | 2-4 globals | FAIL |
-| gpstress | 6 mixed | wrong value, does not wedge |
-| SQLite | 1059 globals | FAIL (wedges in create/entry) |
+Deterministic, reproduces in ~4 minutes:
 
-**gpw16b vs gpw16 is the one solid one-variable result**: same size, same element count,
-same access shape, same session. gpw16's store loop reuses the address register as the
-loop counter --
+```
+Globals offset = 0x140000        host built correctly
+SQ: A/dom-ok id=0                create_dom works
+SQ: B/mkregion1 / C/mkregion2    both create_regions work
+SQ: D/mapped r1=12 r2=14         both map_regions work
+SQ: E/share1                     first shared_region_annotated
+ECSA                 dom_id  = 0    <- correct, dom_id IS 0
+(SHA0)               dom_id  = 0    <- correct
+RGID:00000000        region_id = 0  <- WRONG, host passed 12
+APRM:00000000        perm      = 0  <- WRONG, host passed 0x1
+AREV:00000000        rev       = 0  <- WRONG, host passed 0x2
+<silence>
+```
 
-    cincoffset a4, a3, a4   ; a4 becomes a CAPABILITY (&g[i])
-    sw    a6, 0(a4)
-    movc  a4, a6            ; a live SCALAR written over that same register
-    bne   a6, a5, back      ; next iteration consumes a4 as an integer
+**SBI argument position 0 survives; positions 1, 2 and 3 arrive as zero.**
 
--- and gpw16b (gpsz's value expression, `i*3+7` instead of `i+1`) keeps the index in its
-own integer register and passes. The compiler emits the reuse form only when the stored
-value is derived from the index.
+That signature matters: `copy_from_user` would have lost `dom_id` too, so the module's
+struct copy is fine. The loss is in argument *registers*, between
+`sbi_ecall(EXT, FID, dom_id, region_id, perm, rev, 0, 0)`
+(`modcapstone/module/capstone.c:211-212`, verified correct) and the monitor's extraction.
 
-Plausible mechanism: CVA6 keeps capability metadata in a SEPARATE shadow register file,
-so a register can carry capability state that a scalar write does not clear. QEMU keeps
-one unified value per register, which is why every one of these rungs is QEMU-green.
+It also explains the hang without any further hypothesis: with `region_id == 0` the bounds
+check `region_id >= region_n` PASSES, so `SHAB` never fires and the handler proceeds to
+operate on **region 0 instead of region 12** -- the wrong region, with perm=0 and rev=0.
 
-### WHY THIS IS NOT YET THE ROOT CAUSE
+### THE NEXT STEP
 
-`check-movc-reuse.py` scores **5 of 8** against known board outcomes. It misses `gpn2`
-and `gpn4` (both FAIL with no reuse detected) and false-positives on `gpw2` (has the
-pattern, did not wedge). So either something else is also in play, or the reuse is one
-surface of a broader hazard. Do not adopt it as the cause on the strength of the pair.
+Compare how `arg1`/`arg2`/`arg3` are marshalled at the monitor's ecall entry against
+`arg0`. Start at the trap glue (`sbi_capstone.S`) and the dispatch in
+`sbi_capstone.c` around line 1181.
 
-### TWO HYPOTHESES WERE RETRACTED TODAY — do not re-derive either
+**The strongest clue is already in the tree:** `DOM_CREATE` works, and it packs its extra
+value into the HIGH HALF of an existing argument
+(`arg3 = entry_offset | (globals_off << 32)`) with the stated reason that the struct could
+not be changed. If the trap glue only marshals a subset of arguments, that packing is the
+workaround that has been masking this defect all along -- and every SBI call taking more
+than one or two arguments is suspect.
 
-1. **"More than one global fails."** Held for most of the day and looked exact. Killed by
-   `gpn1use0` (count=1, FAILS) and `gpsz` (count=1, 64 register-indexed elements,
-   PASSES). Count correlated only because the multi-global rungs were all 16-byte arrays.
-2. **"A global of exactly 16 bytes fails."** Killed by the size sweep: gpw8 (32 B) and
-   gpw16 (64 B) also fail, while gpsz (256 B) passes. The size table that motivated it
-   had mixed today's runs with historical ones.
+Check specifically: how many argument registers the glue actually saves/forwards, and
+whether `shared_region_annotated` is simply past that limit.
 
-**Method lesson behind both:** a correlation across rungs measured in DIFFERENT sessions
-is not evidence. Re-measure the baseline in the same session before building on a split.
-(gpsz/gpcp were re-verified today and are genuinely passing, so the baseline is real.)
+### THEN, in order
 
-### DEAD, with evidence (keep them dead)
+1. Re-run (~4 min). If args arrive correctly and the share completes, the next stop is
+   `call_dom` -- where **R-12** becomes live for the first time: 1,060 glue splits against
+   a 1,024-entry rev-node pool whose `head` is 10 bits, so allocation #1025 wraps to id 0
+   and reuses live ids **silently** (`overflow_flag` reaches only a debug LED). Predicted,
+   never yet observed, because execution has never got that far.
+2. If R-12 does bite, the discriminator is built: `INTERP_BUILD_LIMIT` under 1024 keeps the
+   table geometry identical while never exhausting the pool.
+3. R-12's fix is genuinely large (widen the pool = RTL/board owner; one capability per
+   section = ABI change costing the per-object property the paper claims; reclaim on drop =
+   RTL implements drop as invalidate-only). That is the point to stop and take stock.
 
-* Descriptor record order vs cap-table index order — same enumeration in both emitters
-  (`CapstoneAsmPrinter.cpp:857,938`; `CapstoneISelDAGToDAG.cpp:134-138`).
-* `ldc rd, imm(gp)` mis-decoded — RTL matches QEMU exactly
-  (`decoder.sv:1300-1315,1767-1770`; `capstone_dyn_unit.anvil:296-297,318-328`).
-* Unrepresentable capability bases — `split` sets cursor == base, the cursorless branch,
-  base exact at any alignment (R-11).
-* Coarse capability tag granularity — one dcache line IS one capability
-  (`DcacheLineWidth`=128, per-line `cap_tag_q`, `wt_dcache_mem.sv:134-136,409-421`);
-  QEMU buckets per 16 B (`cap_mem_map.c:5-19`). Also refuted empirically: it predicted
-  gpn2use1 would pass, and it failed.
-* The documented register-indexed-load fault (`history/27-07-2026_17-05-00`) as the
-  mechanism — its trigger is stores to more than one location; gpsz does 64 and passes.
-* The glue's carve loop — `INTERP_BUILD_LIMIT=1` (2-entry table, one iteration) still
-  fails, and gpn1use0 fails at count=1.
+### Tools that now exist -- use them, do not rebuild them
 
-### NEXT
+* **Monitor errors print to the UART** (I-4). 28+ tags: `ECSA/ECSZ` dispatch, `SHA0-SHA6`
+  through the share handler, `SPLA/SPLB` in `split_out_cap`, `IRQX/EXCX/ILLX` in the
+  handlers, plus operand lines. `SHA5` is the last marker before M-mode is left, so
+  "SHA5 then silence" exonerates the monitor and implicates the domain.
+* **Idle-abort** (`SQLITE_RUN_IDLE=75`): a wedge costs ~75 s instead of 15 min. Validated
+  on hardware. Any UART progress resets the clock.
+* **`SQLITE_DOM` override**: probe with a bogus domain path, no firmware rebuild.
+* **`bigblob`** rung: SQLite's create-time geometry (2 MiB, globals 0x140000, 9,850-word
+  blob copy) that PASSES. Use it as the same-firmware control in every session.
 
-1. **Explain gpn2/gpn4.** They fail without the reuse pattern. Diff `gpn2`'s domain_main
-   against `gpw16b`'s and find what else differs. This is free — no board.
-2. **Re-run gpw2 with a working oracle.** Its host printf was generated as `printf("%%u")`
-   so every gpw oracle file held the literal text `%u`; gpw2's "pass" means only that it
-   did not wedge. Fixed in-tree, needs one rerun.
-3. **If the reuse pattern survives (1),** the fix is compiler-side: stop reusing a
-   register that holds a live capability as a scalar loop counter. Verify with
-   `check-movc-reuse.py`, then re-run gpw16, gpn2, and SQLite.
-4. **Do not touch the paper's SQLite claim yet.** It currently says SQLite has not run on
-   the board, which remains accurate.
+### Hard-won rules (each cost real time today)
 
-### PROCESS RULES (each cost a session)
+1. **Tags are numeric constants** -- `capstone-c` materialises them with `lui`+`addi`, so
+   grepping the firmware for `"SPLA"` proves NOTHING. Check decimal immediates in the
+   regenerated `.c.S`.
+2. **Delete `sbi_capstone_dom.c.S`** before any monitor rebuild, or it relinks stale. A
+   stale one hid an uncommitted change for hours.
+3. **A report line must fit 16 bytes** (the 16550 TX FIFO). `TAG:` + 8 hex + CRLF = 15.
+   16 hex digits = 23 bytes and silently truncates the operand. Do not widen; print two
+   halves under separate tags.
+4. **Absolute paths in board commands.** Five failures today from a path relative to a
+   directory the shell had left.
+5. **Compare artifacts by CONTENT.** Stale and current SQLite domains are both 1,623,008
+   bytes; a size check says "match".
+6. **Rebuilding the kernel invalidates `modcapstone`** -- `insmod` then fails and the run
+   dies before reaching anything. Order: stage -> `linux-rebuild-with-initramfs` ->
+   `modcapstone-rebuild` -> `opensbi-rebuild`.
+7. **`build-sqlite-host.sh` must use the caplifive-BUILDROOT libcapstone.** It is the only
+   copy with the globals-offset packing; the caplifive-system copy is 5 KB older with
+   zero `globals_off` references and silently delivers gpoff = 0x1000.
 
-1. ONE board session at a time; concurrent runners produce a bootrom loop that looks
-   exactly like corrupt firmware.
-2. `pgrep -f 'fpga_driver/run_'` matches its own command line — use `grep -E 'run[_]'`.
-3. Do not `rm -f` the board lock before a run; it defeats the launcher's flock.
-4. Never rebuild an artifact a live session depends on.
-5. Compare artifacts by CONTENT, never size.
-6. A UART capture is an ACCUMULATING buffer and can hold several unrelated sessions.
-7. Verify a diagnostic knob actually reached the binary before trusting its result.
-8. Always put a known-good control in the SAME session as the experiment.
-9. Check a generated oracle is a NUMBER before believing a "pass".
+### Retracted today -- do not resurrect without new evidence
+
+"More than one global fails"; "a 16-byte global fails"; unrepresentable capability bases in
+the glue; coarse capability tag granularity; the documented register-indexed-load fault as
+this mechanism; two-regions-required; rev-node exhaustion as the CURRENT cause (it remains
+a real, predicted, unobserved FUTURE blocker); and "the monitor is at fault" in general --
+`bigblob` passes on the identical firmware, so the mechanism is sound.
+
+### Status against the descope ladder
+
+Level 3 -- "SQLite green in the silicon config under QEMU plus a documented board attempt
+naming the specific blocker" -- is comfortably met, and the blocker is named to the
+argument register. Level 1 (existence proof on silicon) is not.
