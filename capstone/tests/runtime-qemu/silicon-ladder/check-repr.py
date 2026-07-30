@@ -66,17 +66,23 @@ def check(path):
             for i in range(count)]
 
     bad = []
-    tbl = count * 16
-    if tbl % granule(tbl):
-        bad.append(("cap-table", tbl, granule(tbl), tbl, tbl % granule(tbl)))
+    cur = 0                         # base of the current capability = END - cur
 
-    cur = tbl                       # base of the current capability = END - cur
+    def carve(name, length, cur):
+        """Replay the glue's CARVE macro and flag any inexact result."""
+        g = granule(length)
+        if length >= 16384:
+            cur += -cur % g                     # align the top down (pad dropped)
+            length += -length % g               # round the length up
+        cur += length
+        if cur % granule(length):
+            bad.append((name, length, granule(length), cur,
+                        cur % granule(length)))
+        return cur
+
+    cur = carve("cap-table", count * 16, cur)
     for i, (size, _align, _blob_off) in enumerate(recs):
-        stor = max((size + 15) & ~15, 16)
-        cur += stor
-        g = granule(stor)
-        if cur % g:
-            bad.append(("global[%d]" % i, stor, g, cur, cur % g))
+        cur = carve("global[%d]" % i, max((size + 15) & ~15, 16), cur)
 
     status = "OK" if not bad else "UNREPRESENTABLE x%d" % len(bad)
     print("%-28s count=%-5d carve=%-8d %s" %
