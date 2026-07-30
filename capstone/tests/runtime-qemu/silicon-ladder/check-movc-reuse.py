@@ -1,33 +1,47 @@
 #!/usr/bin/env python3
-"""Find the C-14 codegen pattern: a capability register reused as a scalar.
+"""Find the C-14 codegen pattern: one register used as BOTH a capability and a scalar
+inside a single loop body.
 
-BOARD-ISOLATED 2026-07-30, one variable, one session:
+BOARD EVIDENCE (2026-07-30, every run with a control in the same session). Sorting each
+measured rung by presence of this pattern reproduces every outcome:
 
-    beebs_primer1  control                                   PASS
-    gpw16b         64 B, 16 elements, no reuse               PASS (583391941, exact)
-    gpw16          64 B, 16 elements, WITH reuse             FAIL
+    beebs_primer1  no pattern   PASS  582955588 (exact)
+    gpsz           no pattern   PASS  607423941 (exact)
+    gpcp           no pattern   PASS   23404485 (exact)
+    gpw16b         no pattern   PASS  583391941 (exact)
+    gpw2           PATTERN      WRONG DATA (3950255460, expected 3983810698)
+    gpw4/8/16      PATTERN      wedge
+    gpn1use0       PATTERN      wedge
+    gpn2/gpn4      PATTERN      wedge
+    gpn2use0/1     PATTERN      wedge
 
-Same size, same element count, same access shape. The only difference is that gpw16's
-store loop reuses the address register as the loop counter:
+The failing shape, from gpn2's domain_main:
 
-    addiw a6, a4, 1
-    slli/srli a4              ; index*4
-    cincoffset a4, a3, a4     ; a4 is now a CAPABILITY (&g[i])
-    sw    a6, 0(a4)
-    movc  a4, a6              ; a SCALAR written over that same register
-    bne   a6, a5, back        ; next iteration consumes a4 as an integer
+    203ac: addiw      a6, a4, 1
+    203b0: slli       a4, a4, 0x20
+    203b4: srli       a4, a4, 0x1e     ; a4 = index*4  (INTEGER use)
+    203b8: cincoffset a4, a3, a4       ; a4 := capability &g[i]   (CAPABILITY def)
+    203bc: sw         a6, 0(a4)
+    203c0: movc       a4, a6           ; a live SCALAR written over a4
+    203c4: bne        a6, a5, 203ac    ; back-edge
 
-gpsz keeps the index in its own integer register and passes at 64 elements. The compiler
-emits the reuse form when the stored value is derived from the index (g[i] = i+1) and
-not otherwise (g[i] = i*3+7).
+gpw16b/gpsz compile the same algorithm with the index in its own integer register (the
+capability lands in a7, the counter stays in a4) and pass. The compiler only produces the
+aliased form when the stored value is derived from the loop index.
 
-Why it is silicon-only: on CVA6 the capability metadata lives in a SEPARATE shadow
-register file, so a register can carry capability state that a scalar write does not
-clear. QEMU keeps one unified value per register, so this pattern is invisible there --
-the same structural blind spot as the DELIN and bounds-compression divergences.
+WHY LOOP-SCOPED. An earlier version of this scanner walked a forward instruction window
+and scored only 5/8 -- it missed gpn2 and gpn4 because the INTEGER use sits *above* the
+movc and is reached only through the back-edge. Scoping to the loop body fixes that. That
+miss is worth remembering: it briefly looked like counter-evidence against a hypothesis
+that was in fact correct.
 
-This scans a linked domain for the pattern so a codegen fix can be verified, and so a
-new benchmark can be checked before it costs a board session.
+Note `cincoffset rd, cap, rd` alone is NOT the tell -- gpsz has exactly that on a7 and
+passes. The tell is that the SAME register is also written with a live scalar in the same
+loop and then consumed as an integer.
+
+Silicon-only by construction: CVA6 keeps capability metadata in a separate shadow
+register file, whereas QEMU keeps one unified value per register, so every one of these
+rungs is QEMU-green.
 
 Exit 1 if any occurrence is found.
 """
@@ -35,15 +49,16 @@ import re
 import subprocess
 import sys
 
-CAP_DEF = re.compile(r'^\s*[0-9a-f]+:\s+(cincoffset|cincoffsetimm|ldc|scc|split|movc)\s+(\w+)')
-MOVC = re.compile(r'^\s*[0-9a-f]+:\s+movc\s+(\w+),\s*(\w+)')
-INT_USE = re.compile(r'^\s*[0-9a-f]+:\s+'
-                     r'(slli|srli|srai|addi|addiw|add|addw|sub|subw|xor|or|and|mul|'
-                     r'sll|srl|beq|bne|blt|bge|bltu|bgeu)\w*\s+(.*)$')
-INSN = re.compile(r'^\s*[0-9a-f]+:\s+(\S+)\s*(.*)$')
+CAP_DEF = re.compile(r'^\s*([0-9a-f]+):\s+(cincoffset|cincoffsetimm|ldc|scc|split)\s+(\w+)')
+MOVC = re.compile(r'^\s*([0-9a-f]+):\s+movc\s+(\w+),\s*(\w+)')
+BRANCH = re.compile(r'^\s*([0-9a-f]+):\s+(?:beq|bne|blt|bge|bltu|bgeu|j)\w*\s+.*?0x([0-9a-f]+)')
+INT_USE = re.compile(r'^\s*([0-9a-f]+):\s+'
+                     r'(?:slli|srli|srai|addi|addiw|add|addw|sub|subw|xor|xori|or|ori|'
+                     r'and|andi|mul|mulw|sll|srl|beq|bne|blt|bge|bltu|bgeu)\s+(.*)$')
+ADDR = re.compile(r'^\s*([0-9a-f]+):')
 
 
-def scan(path, window=8):
+def scan(path):
     try:
         out = subprocess.run(['llvm-objdump', '-d', '--no-show-raw-insn', path],
                              capture_output=True, text=True, check=True).stdout
@@ -51,48 +66,39 @@ def scan(path, window=8):
         print('%-28s ERROR %s' % (path.split('/')[-1], exc))
         return []
 
-    lines = out.splitlines()
-    cap_regs = {}          # reg -> index of the instruction that made it a capability
-    hits = []
+    lines = [l for l in out.splitlines() if ADDR.match(l)]
+    addr_of = [int(ADDR.match(l).group(1), 16) for l in lines]
+    index_of = {a: i for i, a in enumerate(addr_of)}
+
+    hits, seen = [], set()
     for i, ln in enumerate(lines):
-        m = CAP_DEF.match(ln)
-        if m and m.group(1) != 'movc':
-            cap_regs[m.group(2).rstrip(',')] = i
-
-        mv = MOVC.match(ln)
-        if mv:
-            rd, rs = mv.group(1).rstrip(','), mv.group(2)
-            # Two qualifiers, both learned from the gpw16-vs-gpsz pair:
-            #  - `movc rd, zero` is loop INITIALISATION, not reuse of a live capability.
-            #    gpsz does exactly that (`movc t1, zero`) and PASSES on the board.
-            #  - the capability definition must be RECENT. The failing shape has
-            #    `cincoffset a4, a3, a4` two instructions before `movc a4, a6`, inside
-            #    one loop body; a definition far above is almost certainly a different
-            #    basic block, and this scanner does not track control flow.
-            recent = rd in cap_regs and (i - cap_regs[rd]) <= window
-            if rs != 'zero' and recent:
-                # rd held a capability and is now written by movc. Does anything in the
-                # next few instructions consume it as an INTEGER before it is redefined
-                # as a capability again?
-                for j in range(i + 1, min(i + 1 + window, len(lines))):
-                    nxt = lines[j]
-                    cm = CAP_DEF.match(nxt)
-                    if cm and cm.group(2).rstrip(',') == rd and cm.group(1) != 'movc':
-                        break                      # redefined as a capability: fine
-                    iu = INT_USE.match(nxt)
-                    if iu and re.search(r'\b%s\b' % re.escape(rd), iu.group(2)):
-                        hits.append((ln.strip(), nxt.strip()))
-                        break
-            if rd in cap_regs:
-                del cap_regs[rd]
+        b = BRANCH.match(ln)
+        if not b:
             continue
+        target = int(b.group(2), 16)
+        if target >= addr_of[i] or target not in index_of:
+            continue                                   # not a backward branch
+        lo, hi = index_of[target], i                   # loop body, inclusive
 
-        # any other definition of a register clears its capability status
-        gm = INSN.match(ln)
-        if gm and gm.group(2):
-            first = gm.group(2).split(',')[0].strip()
-            if first in cap_regs and not CAP_DEF.match(ln):
-                del cap_regs[first]
+        cap_defs, movc_defs, int_uses = {}, {}, set()
+        for j in range(lo, hi + 1):
+            body = lines[j]
+            cd = CAP_DEF.match(body)
+            if cd:
+                cap_defs[cd.group(3).rstrip(',')] = body.strip()
+            mv = MOVC.match(body)
+            if mv and mv.group(3).rstrip(',') != 'zero':
+                movc_defs[mv.group(2).rstrip(',')] = body.strip()
+            iu = INT_USE.match(body)
+            if iu:
+                int_uses.update(re.findall(r'\b([a-z]\w*)\b', iu.group(2)))
+
+        for reg in sorted(set(cap_defs) & set(movc_defs) & int_uses):
+            key = (lo, reg)
+            if key in seen:
+                continue
+            seen.add(key)
+            hits.append((hex(target), reg, cap_defs[reg], movc_defs[reg]))
     return hits
 
 
@@ -102,26 +108,10 @@ if __name__ == '__main__':
     bad = 0
     for p in sys.argv[1:]:
         hits = scan(p)
-        print('%-28s C-14 capability-register reuse: %d' % (p.split('/')[-1], len(hits)))
-        for a, b in hits[:6]:
-            print('    %-40s -> %s' % (a, b))
+        print('%-28s C-14 capability/scalar register aliasing: %d' %
+              (p.split('/')[-1], len(hits)))
+        for target, reg, cd, mv in hits[:6]:
+            print('    loop@%-9s %-4s  %-34s | %s' % (target, reg, cd, mv))
         if hits:
             bad += 1
     sys.exit(1 if bad else 0)
-
-# ACCURACY AGAINST KNOWN BOARD OUTCOMES (2026-07-30) -- 5 of 8. Read before trusting it:
-#
-#   gpw16          FAIL  detected 1   correct
-#   gpw16b         PASS  detected 0   correct
-#   gpsz           PASS  detected 0   correct
-#   gpcp           PASS  detected 0   correct
-#   beebs_primer1  PASS  detected 0   correct
-#   gpn2           FAIL  detected 0   MISS
-#   gpn4           FAIL  detected 0   MISS
-#   gpw2           ran   detected 1   FALSE POSITIVE
-#
-# So this pattern is NOT the whole story. The gpw16-vs-gpw16b pair is a genuine
-# one-variable, same-session result and the pattern is real, but it does not predict
-# gpn2/gpn4 (which fail without it) or gpw2 (which has it and did not wedge). Treat this
-# as a lead and a fix-verification aid, not as the C-14 root cause. The scanner also does
-# not track control flow, so "recent" is approximated by an instruction window.
