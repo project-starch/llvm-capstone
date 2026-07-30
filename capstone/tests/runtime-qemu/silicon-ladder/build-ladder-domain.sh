@@ -113,6 +113,7 @@ if [[ "$DOMAIN_GLUE" == "interp" ]]; then
     ${INTERP_PEEK_MODE:+-DINTERP_PEEK_MODE=$INTERP_PEEK_MODE} \
     ${INTERP_SKIP_CAPINIT:+-DINTERP_SKIP_CAPINIT=$INTERP_SKIP_CAPINIT} \
     ${INTERP_SKIP_GPPARK:+-DINTERP_SKIP_GPPARK=$INTERP_SKIP_GPPARK} \
+    ${INTERP_BUILD_LIMIT:+-DINTERP_BUILD_LIMIT=$INTERP_BUILD_LIMIT} \
     -c "$INTERP_GLUE" -o "$OBJ_DIR/start.o"
 else
   # 2. generate the per-app cap-table builder from the descriptor
