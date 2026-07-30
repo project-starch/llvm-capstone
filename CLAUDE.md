@@ -69,6 +69,34 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
   right default — that doc exists precisely so results can land without touching the paper.
   When permission *is* given: never `git push` the paper submodule (Overleaf owns the remote),
   and leave the parent's submodule pointer unbumped.
+  **Go-ahead is per session and per AREA, not per edit.** Once the project lead approves a
+  class of change ("fix the numbers", "apply 2, 4, 5, 6"), further mechanical instances of
+  that class need no fresh approval — asking again is friction, not caution. Structural
+  reordering and authorial content (abstract, new prose, section order) still need their own
+  go-ahead.
+
+## A checkpoint is not a decision point
+
+**When the next step is known and inside the current goal, take it and report afterwards.**
+Do not stop to confirm. Finishing a diagnostic and knowing what follows is a status update,
+not a permission request; turning it into one wastes a turn and, on this project, board
+time.
+
+Ask only when:
+- proceeding under any assumption would be **unsafe or irreversible** — bitstream reflash,
+  force-push, destructive delete, anything outward-facing;
+- the answer is **genuinely the project lead's** (paper framing, authorial content, project
+  direction);
+- **or you have RETRACTED a conclusion.** That one is worth surfacing every time. A session
+  that produced seven retractions produced them because reasoning ran one step past the
+  evidence — the lead needs to see that, whereas next steps they do not.
+
+**Never bundle.** If eight items need no permission and one does, do the eight and ask the
+one question at the end. Stalling finished work behind an open question is the single most
+common way this goes wrong.
+
+Corollary: pause when you have **concluded** something, not when you have **finished**
+something.
 
 ## Context & compaction
 

@@ -58,7 +58,14 @@ fi
 [[ -n "$MSG_FILE" && -f "$MSG_FILE" ]] && cat "$MSG_FILE" >> "$TMP"
 
 if [[ ! -s "$TMP" ]]; then
-  echo "precommit-scan: nothing staged to scan."
+  # A gate on an absolute rule must not pass silently when it inspected nothing. This
+  # printed "nothing staged to scan" and exited 0 for every message-only commit
+  # (git commit --allow-empty, used heavily for findings), so those commit MESSAGES were
+  # never scanned for names -- the exact content most likely to name a person. Warn loudly
+  # and say what to do; still exit 0 so it cannot block a legitimately empty scan.
+  echo "precommit-scan: WARNING -- nothing to scan (no staged diff, no --msg file)."
+  echo "  If this is a message-only commit, the MESSAGE WAS NOT SCANNED."
+  echo "  Scan it explicitly:  bash capstone/tests/precommit-scan.sh --msg <msgfile>"
   exit 0
 fi
 
