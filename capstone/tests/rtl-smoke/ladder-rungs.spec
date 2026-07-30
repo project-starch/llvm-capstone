@@ -209,3 +209,5 @@ gpn64:gpn64_kernel.h:gpn64_compute:-O1:DOMAIN_WINDOW=0x8000
 gpn16:gpn16_kernel.h:gpn16_compute:-O1:DOMAIN_WINDOW=0x8000
 gpn32:gpn32_kernel.h:gpn32_compute:-O1:DOMAIN_WINDOW=0x8000
 bigmany:bigmany_kernel.h:bigmany_compute:-O1:DOMAIN_WINDOW=0x140000
+gpn2use1:gpn2use1_kernel.h:gpn2use1_compute:-O1
+gpn2use0:gpn2use0_kernel.h:gpn2use0_compute:-O1
