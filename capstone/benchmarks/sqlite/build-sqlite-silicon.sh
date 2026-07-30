@@ -111,8 +111,21 @@ SILICON_TRIM=(
   # OMIT_PRAGMA compiles but does not LINK: the prebuilt parser still calls
   # sqlite3Pragma / sqlite3PragmaVtabRegister. Same amalgamation limit as the grammar set.
 )
-# Escape hatch for bisecting the trim itself.
-[[ "${SQLITE_NO_TRIM:-0}" == "1" ]] && SILICON_TRIM=()
+# OFF BY DEFAULT -- THE TRIM BREAKS SQLITE. Measured 2026-07-31: with these OMITs the
+# silicon build compiles and links clean but fails under QEMU with a capability fault at the
+# domain's first entry; with SQLITE_NO_TRIM=1 the SAME tree passes end-to-end
+# (__CAPSTONE_SQLITE_SILICON_PASSED__). SQLite supports SQLITE_OMIT_* only when building
+# from canonical sources; against the prebuilt amalgamation some of them compile and then
+# misbehave, which is what happened here.
+#
+# This cost a long detour: the resulting fault was investigated as a cap-init bug and
+# bisected to a specific initializer leaf before the trim itself was tested properly. The
+# earlier "baseline without the trim also fails" check was INVALID -- SQLITE_NO_TRIM was set
+# only as a prefix on the build command, and run-sqlite-silicon.sh:19 rebuilds the domain
+# unconditionally, so the run silently restored the trim.
+#
+# Opt in with SQLITE_TRIM=1 only to re-measure the carve count; never for a correctness run.
+[[ "${SQLITE_TRIM:-0}" == "1" ]] || SILICON_TRIM=()
 
 SILICON=(-mllvm -capstone-gp-captable
          -mllvm -capstone-shrink-stack=false
