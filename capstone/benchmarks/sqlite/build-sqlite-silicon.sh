@@ -65,6 +65,55 @@ cp -f "$SCRIPT_DIR/sqlite_silicon_amalgam.c" "$OBJ_DIR/amalgam.c"
 SQLITE_DEFINES=$(sed -n '/^SQLITE_DEFINES=(/,/^)/p' "$SCRIPT_DIR/build-sqlite-capstone.sh" \
                  | grep -oE '\-D[A-Za-z0-9_]+(=[^ ]*)?' | tr '\n' ' ')
 
+# CARVE-COUNT TRIM -- silicon only, and load-bearing rather than cosmetic.
+#
+# The entry glue performs one `split` per global to carve its capability, and every split
+# allocates a revocation node. The RTL allocator's head is 10 bits starting at 3
+# (capstone_rev_node.anvil:160,168), so allocation ~#1022 wraps to id 0 and reuses LIVE
+# ids. Reuse can splice a node into the `next` chain twice, and REVOKE_NODE (:13-32) has
+# no visit bound and no cycle detection -- it then walks forever and never answers another
+# query. Since every `stc` blocks on a revocation-node query with no timeout
+# (capstone_dyn_unit.anvil:395-404), the next capability store hangs with no trap.
+#
+# Untrimmed SQLite needs 1059 carves, which is over that limit. These OMITs each remove
+# whole global tables rather than a few bytes, and none of them touches what the five
+# success markers exercise (CREATE/INSERT/SELECT, transactions, a secondary index,
+# prepared bound statements, UPDATE/DELETE, aggregates and the sorter, JOIN, GROUP BY,
+# string functions). Verify with gp-carve-count.py and with run-sqlite-silicon.sh under
+# QEMU -- a trim that fits the pool but breaks SQLite is worthless.
+#
+# This is a silicon-only deviation and must be reported alongside any board number.
+# AMALGAMATION-SAFE ONLY. SQLite supports SQLITE_OMIT_* officially only when building
+# from canonical sources, because most of them require regenerating parse.c with lemon.
+# Against the prebuilt amalgamation, OMIT_TRIGGER / OMIT_VIEW / OMIT_CTE / OMIT_WINDOWFUNC
+# / OMIT_UPSERT / OMIT_VIRTUALTABLE / OMIT_ATTACH / OMIT_ANALYZE / OMIT_VACUUM /
+# OMIT_REINDEX / OMIT_AUTOVACUUM all fail to compile -- the parser tables still reference
+# sqlite3TriggerInsertStep, sqlite3WindowListDelete, sqlite3CteNew and friends. Measured,
+# not assumed: 20 errors of exactly that shape. Do not re-add them without regenerating
+# the amalgamation.
+SILICON_TRIM=(
+  -DSQLITE_OMIT_AUTHORIZATION=1
+  -DSQLITE_OMIT_TRACE=1
+  -DSQLITE_OMIT_PROGRESS_CALLBACK=1
+  -DSQLITE_OMIT_INTROSPECTION_PRAGMAS=1
+  -DSQLITE_OMIT_XFER_OPT=1
+  -DSQLITE_OMIT_COMPLETE=1
+  # Non-grammar omissions: these delete function-definition tables and their name
+  # strings without changing the token stream, so the prebuilt parser stays valid.
+  -DSQLITE_OMIT_DATETIME_FUNCS=1
+  -DSQLITE_OMIT_LIKE_OPTIMIZATION=1
+  -DSQLITE_OMIT_OR_OPTIMIZATION=1
+  -DSQLITE_OMIT_BETWEEN_OPTIMIZATION=1
+  -DSQLITE_OMIT_TRUNCATE_OPTIMIZATION=1
+  -DSQLITE_OMIT_QUICKBALANCE=1
+  -DSQLITE_OMIT_SCHEMA_VERSION_PRAGMAS=1
+  -DSQLITE_OMIT_FLAG_PRAGMAS=1
+  # OMIT_PRAGMA compiles but does not LINK: the prebuilt parser still calls
+  # sqlite3Pragma / sqlite3PragmaVtabRegister. Same amalgamation limit as the grammar set.
+)
+# Escape hatch for bisecting the trim itself.
+[[ "${SQLITE_NO_TRIM:-0}" == "1" ]] && SILICON_TRIM=()
+
 SILICON=(-mllvm -capstone-gp-captable
          -mllvm -capstone-shrink-stack=false
          -mllvm -capstone-shrink-globals=false
@@ -75,6 +124,10 @@ SILICON=(-mllvm -capstone-gp-captable
          # only and faults otherwise (QEMU's is idempotent, so it hides this). See
          # output_text() in sqlite_capstone_domain.c and C-13.
          -DCAPSTONE_GP_CAPTABLE_ABI=1)
+# EXTRA_MLLVM lets a bisect turn one backend pass off without editing this script, e.g.
+#   EXTRA_MLLVM="-mllvm -capstone-fix-destructive-copies=false"
+read -r -a _extra_mllvm <<< "${EXTRA_MLLVM:-}"
+SILICON+=("${_extra_mllvm[@]}")
 
 COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -ffreestanding -fno-builtin -fno-optimize-sibling-calls
@@ -83,13 +136,13 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -I"$(dirname "$PATCHED")" -I"$BUILTINS")
 
 echo "== compiling the single silicon TU (this is the first time SQLite sees the silicon ABI)"
-"$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "$OPT" \
+"$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$OPT" \
   -DSQLITE_HEAP_SIZE=$HEAP \
   -c "$OBJ_DIR/amalgam.c" -o "$OBJ_DIR/amalgam.o"
 
 echo "== compiling the no-globals support objects separately (they cannot collide)"
 for pair in "libc:$ADAPTED/capstone_sqlite_libc.c" "beebs_string:$BEEBS_STRING"; do
-  "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "$OPT" \
+  "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$OPT" \
     -c "${pair#*:}" -o "$OBJ_DIR/${pair%%:*}.o"
 done
 BUILTIN_OBJS=()

@@ -151,8 +151,16 @@ int getGpCaptableIndex(const GlobalValue *GV) {
     Cache.clear();
     int Index = 0;
     for (const GlobalVariable &Cand : M->globals()) {
-      if (Cand.isDeclaration() || Cand.isThreadLocal() ||
-          !Cand.getValueType()->isSized())
+      // MUST be the same predicate as the early-out above, not a copy of part of it.
+      // It used to re-test only isDeclaration/isThreadLocal/isSized, so an appending
+      // or `llvm.*` global was COUNTED here while being rejected there: it consumed an
+      // index but got no descriptor record and no table entry, shifting every later
+      // global down by one slot relative to the table the glue builds. The code then
+      // loads a neighbouring object's capability -- measured under QEMU as
+      //   Cap mem access OOB: cursor=1017ab110 imm=32 size=16 bounds=(...b110, ...b120)
+      // i.e. a 16-byte slot indexed at +32, because the access believed it held the
+      // 80-byte array that actually lives one slot further on.
+      if (!isGpCaptableGlobal(Cand))
         continue;
       Cache[&Cand] = Index++;
     }

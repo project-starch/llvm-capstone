@@ -44,6 +44,27 @@ for f in "$SRC_DOM" "$SRC_USR"; do
   [[ -f "$f" ]] || { echo "missing build output: $f" >&2; exit 1; }
 done
 
+# REFUSE to stage a diagnostic build as the canonical domain.
+#
+# This is not hypothetical tidiness. On 2026-07-30 an INTERP_BUILD_LIMIT=900 build was
+# staged here and baked into firmware; it carves the cap table at full size but fills only
+# the first 900 of 1059 slots, so the first `ldc` from an unfilled slot yields an untagged
+# capability and the `stc` through it stalls the pipeline with no trap. That produced a
+# reproducible "SQLite hangs on silicon" signature -- pc frozen, mcause=0 -- which was
+# investigated as a hardware defect for hours. It was our own diagnostic knob.
+#
+# The clamp is invisible in the descriptor (`count` still reads 1059) because it is applied
+# to the glue's loop counter at run time, so this checks the ENTRY CODE of the artifact
+# about to be staged. Variants keep their own filenames and are unaffected.
+if ! python3 "$SCRIPT_DIR/gp-carve-count.py" "$SRC_DOM" "${CARVE_BUDGET:-1000}"; then
+  echo "" >&2
+  echo "REFUSING TO STAGE $SRC_DOM as the canonical sqlite_silicon.dom." >&2
+  echo "Rebuild with INTERP_EXTRA_CFLAGS unset, or stage a variant under its own name." >&2
+  echo "Override deliberately with STAGE_ALLOW_DIAGNOSTIC=1 (do not use for a real run)." >&2
+  [[ "${STAGE_ALLOW_DIAGNOSTIC:-0}" == "1" ]] || exit 1
+  echo "STAGE_ALLOW_DIAGNOSTIC=1 set -- proceeding anyway." >&2
+fi
+
 for OVERLAY in "${OVERLAYS[@]}"; do
   mkdir -p "$OVERLAY"
   cp -f "$SRC_DOM" "$OVERLAY/"
