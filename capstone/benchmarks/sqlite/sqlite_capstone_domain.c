@@ -316,6 +316,12 @@ static int run_sqlite(void) {
 }
 
 void domain_main(unsigned *res, unsigned func) {
+  /* DIAGNOSTIC (CAPSTONE_DIAG_FUNC): report the entry argument instead of acting on it.
+     The first share entry was observed dying deep inside SQLite's VFS setup, which is only
+     reachable when `func` is not REGION_SHARE -- i.e. the domain ran the whole database on
+     an entry that should merely stash a capability. Writing func into the shared region
+     lets the HOST print what actually arrived, rather than inferring it from where the
+     domain crashed. */
   if (func == CAPSTONE_DPI_REGION_SHARE) {
     if (shared_region_count == 0)
       hostcall_metadata = (volatile struct sqlite_hostcall_v0 *)res;
@@ -325,6 +331,16 @@ void domain_main(unsigned *res, unsigned func) {
     return;
   }
 
+#ifdef CAPSTONE_DIAG_FUNC
+  /* Report the entry argument on the NON-share path instead of running the database.
+     Reaching here on the first entry is the anomaly: it means `func` did not arrive as
+     REGION_SHARE, and the domain went on to run all of SQLite on an entry that should
+     merely stash a capability (dying in VFS setup). Reporting the value distinguishes
+     "argument corrupted" from "dispatch logic wrong". */
+  if (res)
+    *res = 0xDEAD0000u | (func & 0xffffu);
+  return;
+#endif
   if (hostcall_metadata)
     hostcall_metadata->length = 0;
   (void)run_sqlite();

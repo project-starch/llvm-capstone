@@ -126,7 +126,7 @@ SILICON=(-mllvm -capstone-gp-captable
          -DCAPSTONE_GP_CAPTABLE_ABI=1)
 # EXTRA_MLLVM lets a bisect turn one backend pass off without editing this script, e.g.
 #   EXTRA_MLLVM="-mllvm -capstone-fix-destructive-copies=false"
-read -r -a _extra_mllvm <<< "${EXTRA_MLLVM:-}"
+read -r -a _extra_mllvm <<< "${EXTRA_MLLVM:-} ${SQLITE_DIAG:-}"
 SILICON+=("${_extra_mllvm[@]}")
 
 COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
