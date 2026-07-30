@@ -212,3 +212,7 @@ bigmany:bigmany_kernel.h:bigmany_compute:-O1:DOMAIN_WINDOW=0x140000
 gpn2use1:gpn2use1_kernel.h:gpn2use1_compute:-O1
 gpn2use0:gpn2use0_kernel.h:gpn2use0_compute:-O1
 gpn1use0:gpn1use0_kernel.h:gpn1use0_compute:-O1
+gpw2:gpw2_kernel.h:gpw2_compute:-O1
+gpw4:gpw4_kernel.h:gpw4_compute:-O1
+gpw8:gpw8_kernel.h:gpw8_compute:-O1
+gpw16:gpw16_kernel.h:gpw16_compute:-O1
