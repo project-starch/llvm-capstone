@@ -23,6 +23,7 @@ Condition-guarded event log + per-event latest-state map + a UART text buffer.
 
 from __future__ import annotations
 
+import os
 import re
 import threading
 import time
@@ -241,7 +242,14 @@ class FpgaConsole:
                 self._gdb += self._extract_gdb_text(data)
             self._cond.notify_all()
         if event == C.LISTEN["uart_output"]:
-            self._log(f"[uart] +{len(self._extract_uart_text(data))}B")
+            # Log the DECODED text, not just a byte count. Previously this printed
+            # "[uart] +145B" and the text only became visible when run_command()
+            # RETURNED, so a run in progress looked identical to a dead one -- which is
+            # why board progress was invisible mid-run and why conclusions were twice
+            # drawn from a 400-byte truncated tail after the fact. Costs nothing and
+            # makes a live run readable.
+            _txt = self._extract_uart_text(data)
+            self._log("[uart] " + repr(_txt) if _txt else f"[uart] +0B")
         else:
             self._log(f"[event] {event}: {data!r}")
 
@@ -690,6 +698,54 @@ class FpgaConsole:
         return None if v is None else bool(v)
 
     # -- UART command helper (runs the .user/.dom pairs) --------------------
+    # -- run-scoped UART access -------------------------------------------
+    # The UART buffer ACCUMULATES across every command and every boot in a session, and
+    # the captured log file accumulates across SESSIONS. Grepping that file and attributing
+    # what you find to the current run is how a whole day's analysis went wrong on
+    # 2026-07-30: an ILLX tag and an MEPC value from a firmware three rebuilds earlier were
+    # read as current output, and a monitor tag that never fired at all was assumed present.
+    # Any diagnostic read MUST be bounded by a mark taken before the command ran.
+    def uart_mark(self) -> int:
+        """Buffer position to read from. Take this BEFORE issuing a command."""
+        with self._cond:
+            return len(self._uart)
+
+    def uart_since(self, mark: int) -> str:
+        """UART text produced since `mark` -- the only provenance-safe read."""
+        with self._cond:
+            return self._uart[mark:]
+
+    # 16 = the ns16550a RX FIFO depth, so one burst fills it at most once.
+    UART_BURST = int(os.environ.get("FPGA_UART_BURST", "16") or 0)
+    UART_BURST_DELAY = float(os.environ.get("FPGA_UART_BURST_DELAY") or 0.02)
+    UART_ECHO_TIMEOUT = float(os.environ.get("FPGA_UART_ECHO_TIMEOUT") or 1.5)
+
+    @staticmethod
+    def _echo_normalise(text: str) -> str:
+        """Echoed input as the shell RECEIVED it.
+
+        A long command wraps in the terminal, which injects CR/LF (and sometimes colour
+        escapes) INTO THE MIDDLE OF A WORD -- an observed echo split
+        `/lib/ld-linu` + newline + `x-riscv64-lp64d.so.1`. Comparing raw text would call
+        that a corruption and fall back every time, which would silently undo the speedup
+        while looking like it worked. Spaces are preserved so a DROPPED space still fails
+        the check."""
+        return re.sub(r"\x1b\[[0-9;?]*[a-zA-Z]", "", text).replace("\r", "").replace("\n", "")
+
+    def _type_burst(self, command: str, start: int) -> bool:
+        """Type `command` (no Enter) in bursts. True iff the shell echoed it back intact."""
+        if self.UART_BURST <= 1:
+            return False                      # kill switch: take the char-by-char path
+        for i in range(0, len(command), self.UART_BURST):
+            self._emit("uart_send", text=command[i:i + self.UART_BURST])
+            time.sleep(self.UART_BURST_DELAY)
+        deadline = time.time() + self.UART_ECHO_TIMEOUT
+        while time.time() < deadline:
+            if command in self._echo_normalise(self.uart_text[start:]):
+                return True
+            time.sleep(0.05)
+        return False
+
     def run_command(
         self,
         command: str,
@@ -703,15 +759,41 @@ class FpgaConsole:
         The board's UART RX FIFO overruns on a bulk write and silently drops
         characters (a long command like the .user/.dom path arrives corrupted
         and the shell errors on a garbled path -- `borrow_cost` -> `row_cost`).
-        So the keystrokes are throttled char-by-char, the same mitigation
-        login_root uses. A leading Ctrl-U clears any partial line a prior
-        dropped char may have left in the input buffer."""
+        A leading Ctrl-U clears any partial line a prior dropped char may have
+        left in the input buffer.
+
+        The char-by-char throttle that mitigated this cost 50 ms PER CHARACTER, which made
+        typing a command dramatically more expensive per byte than SENDING A WHOLE PROGRAM:
+        fast_xfer moves 16 chars per emit at 0.02 s (1.25 ms/char), so file transfer was 40x
+        faster per byte than typing `echo ...`. Measured on a real SQLite session, its four
+        commands are ~266 typed characters = ~13 s of pure sleep.
+
+        So type in bursts and VERIFY, rather than typing slowly and hoping. 16 is the
+        ns16550a FIFO depth, so a burst fills it at most exactly once and drains in ~1.4 ms
+        at 115200 baud -- an order of magnitude under the inter-burst delay. The bound comes
+        from the hardware, not from a guess.
+
+        The verification is the part that makes this safe, and it is why the burst could not
+        simply be copied from fast_xfer: fast_xfer re-reads each chunk's sha and retries, so
+        it can afford to be wrong, whereas run_command has NO integrity check -- a corrupted
+        command just runs and produces a misleading failure. Here the shell's own echo is
+        the check: if the typed line does not come back intact before Enter is pressed, the
+        line is cleared and retyped on the proven char-by-char tier. Worst case is the old
+        behaviour plus one short echo wait; a silently garbled command is not possible.
+
+        FPGA_UART_BURST=0 forces the old path outright."""
         self._emit("uart_send", text="\x15")  # Ctrl-U: clear the input line
         time.sleep(0.2)
         start = len(self.uart_text)
-        for ch in command:
-            self._emit("uart_send", text=ch)
-            time.sleep(0.05)
+        if not self._type_burst(command, start):
+            # Echo did not come back intact (or the shell is not echoing at all): clear the
+            # line and fall back to the throttle that is known to work.
+            self._emit("uart_send", text="\x15")
+            time.sleep(0.2)
+            start = len(self.uart_text)
+            for ch in command:
+                self._emit("uart_send", text=ch)
+                time.sleep(0.05)
         self._emit("uart_send", text="\r")
         m = self.wait_uart(done_marker, timeout=timeout, search_from=start,
                            idle_timeout=idle_timeout)
