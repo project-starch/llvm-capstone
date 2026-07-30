@@ -98,6 +98,13 @@ common way this goes wrong.
 Corollary: pause when you have **concluded** something, not when you have **finished**
 something.
 
+A standing instruction stays standing. "Proceed", "don't ask", "keep going until it runs"
+covers the whole goal, not the next step of it — so it does not need renewing at each
+checkpoint, and re-asking reads as not having heard it. The same goes for an approval
+covering a class of work: once a kind of change is approved, further mechanical instances
+of that same kind are already covered. Genuinely new territory, or anything in the
+ask-only list above, still is not.
+
 ## Context & compaction
 
 Board-debug threads here run long. **Do NOT routinely recommend `/compact`.** Keep
