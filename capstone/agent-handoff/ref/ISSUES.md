@@ -1185,7 +1185,92 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
   `fw_jump.elf.good` = `6724bcb3`).
 - Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
 
-### C-13 — interp glue fails on silicon `PARTIALLY EXPLAINED 2026-07-29 — double delin found and fixed, but REAL interp STILL FAILS`
+### C-14 — a domain with MORE THAN ONE global fails on silicon `OPEN 2026-07-30 — minimal reproducer isolated`
+
+**The split is exact.** Sorting every silicon result by the domain's global count:
+
+| count | rungs | silicon |
+|------:|-------|---------|
+| 1 | beebs_primer1, bigwin, gpsz, gpcp, gptl, gpbg, gppv | all PASS |
+| 2 | gpn2 | HANG |
+| 4, 8, 16, 32, 64 | gpn4, gpn8, gpn16, gpn32, gpn64, bigmany | all HANG |
+| 6 | gpstress | wrong value (444323487) |
+| 1059 | SQLite | HANG |
+
+**Two globals is the minimal reproducer**, established with a control in the SAME boot
+(`LADDER_ONE_BOOT=1`, both transfers sha-verified, no reboot between them):
+`beebs_primer1` returned 582955588 at 9775 cycles, then `gpn2` produced no END marker in
+75 s. This is what the SQLite "hang" actually is; SQLite is not special.
+
+**This supersedes the reading that the five initializer paths were validated.** `gpsz`,
+`gpcp`, `gptl`, `gpbg` and `gppv` each have exactly ONE global, so none of them ever ran
+the carve loop's second iteration. The paths are fine; the loop is not.
+
+**Symptom.** `domain ID = 0` prints, then nothing — no `mcause`, `mepc`, `badaddr` or
+`panic` anywhere in the capture. On silicon a monitor fault is `C_PRINT` + `while(1)` and
+C_PRINT goes to the RTL trace, so a wedge and a hang are indistinguishable on the console.
+
+**QEMU cannot see it, structurally.** gpn2, gpn4, gpn8 and SQLite are all green under
+QEMU with `DOMAIN_GLUE=interp`. `helper_cssplit` keeps full 64-bit `{cursor, base, end}`
+and never calls `cap_compress` (`op_helper.c:848-870`), and a tagged load overwrites the
+decompressed bounds with exact ones from an out-of-band shadow map
+(`op_helper.c:1128-1140`); the RTL round-trips EVERY capability write-back through
+`compress_bounds` (`ex_stage.sv:1080-1098`) because the compressed form IS the
+architectural register state. **A QEMU-green interp result is not evidence about
+silicon.** Same shape as the DELIN divergence.
+
+**Refuted, both without board time:**
+- *Descriptor record order != cap-table index order.* `emitGpCaptableTable` and
+  `emitGpCaptableInitDesc` both walk `M.globals()` with the same filter
+  (`CapstoneAsmPrinter.cpp:857, 938`) and `getGpCaptableIndex` assigns indices in that
+  order (`CapstoneISelDAGToDAG.cpp:134-138`). Record i IS slot i. Would have been a
+  perfect no-op at count 1, hence worth checking.
+- *`ldc rd, 16(gp)` is mis-decoded.* RTL uses the standard sign-extended 12-bit
+  immediate added raw to the cursor, with the same address for the bounds check and the
+  access and a trap on 16-byte misalignment — identical to QEMU
+  (`decoder.sv:1300-1315, 1767-1770`; `capstone_dyn_unit.anvil:296-297, 318-328`).
+- *Unrepresentable capability bases.* `split` sets cursor == base, selecting the
+  cursorless branch where the base is exact at any alignment (see R-11).
+- *Capability stack spills.* `beebs_primer1` already spills a capability
+  (`stc 16(sp)` / `ldc 16(sp)` in `domain_main`) and passes.
+
+**In flight.** `gpn2use0` / `gpn2use1` — both build a 2-entry table and run the carve
+loop twice, but each reads only ONE slot (verified by disassembly): use0 reads slot 0,
+use1 reads slot 1. Both pass => the fault needs two live slots. use0 fails alone => slot
+0 was corrupted after being written, which points at the second store. Both fail =>
+building a 2-entry table is itself fatal, and `INTERP_BUILD_LIMIT=1` then separates the
+second split/store from the table split.
+
+### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `OPEN, not yet hit`
+
+`compress_bounds` has two branches selected by `bounds.start == cursor`
+(`ariane_pkg.sv:749`). `split` sets cursor == base on both outputs
+(`capstone_dyn_unit.anvil:139-144`), so carved capabilities take the **cursorless**
+branch: the base is returned as `start: cursor` verbatim (`ariane_pkg.sv:662-665`),
+exact at any alignment, while the TOP is truncated DOWN to a multiple of 2**E with E set
+by the highest bit at which base and top differ, floored at bit 20. E is 0 — and the
+capability exact — only while base and top share one 2 MiB window.
+
+Domains are exact **by construction** today: the module rounds the allocation to a
+power-of-two page count (`capstone.c:83-84`) and the allocator returns it aligned, so
+everything sits in one window. Past 2 MiB, interior splits straddle a boundary and
+globals silently get SHORT capabilities. `check-repr.py` fails a build at that cliff.
+
+The other branch (`ariane_pkg.sv:769-806`, reached once cursor != base) is the
+`granule(L) = 1 << (max(0, floor(log2 L) - 12) + 3)` rule with the base truncated down —
+that one is C-13, caused by the monitor's `C_SET_CURSOR`. Applying it to the glue's carve
+instead was a wrong fix (765da7f8, reverted in 91685f14); do not re-derive it.
+
+### C-15 — `getGpCaptableIndex` gives `llvm.compiler.used` a cap-table slot `FIX WRITTEN, NOT YET BUILT`
+
+Any TU using `__attribute__((used))` fails to link:
+`ld.lld: error: undefined symbol: llvm.compiler.used, referenced by
+.capstone_gp_table+0x48`. LLVM-reserved appending-linkage globals are markers, not data.
+Found while building the gpn2use1 rung. Fix factors the predicate into a single
+`isGpCaptableGlobal` so the early-out and the index-assigning enumeration cannot drift —
+they define the ABI order the glue depends on.
+
+### C-13 — interp glue fails on silicon `SUPERSEDED BY C-14 2026-07-30 — real interp PASSES at count=1`
 
 **STATUS, stated precisely.** A real defect was found and fixed (below), and it fully
 accounts for the stage-1 vs stage-2 difference. It does **not** yet account for C-13:
