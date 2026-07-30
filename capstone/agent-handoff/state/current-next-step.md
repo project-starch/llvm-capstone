@@ -1,105 +1,99 @@
 # Current recommended next step
 
-## 2026-07-30 — C-14: a global of EXACTLY 16 BYTES wedges the domain on silicon
+## 2026-07-30 — C-14: silicon-only domain wedge, narrowed but NOT root-caused
 
-### The evidence, sorted by global SIZE
+### What is solid (all measured today, every run with a control in the same session)
 
-| result | rung | global sizes |
-|--------|------|--------------|
-| PASS | beebs_primer1, bigwin | 4 |
-| PASS | gptl | 13 |
-| PASS | gpsz, gpcp | 256 |
-| PASS | gppv | 512 |
-| PASS | gpbg | 2400 |
-| **FAIL** | gpn1use0 | **16** |
-| **FAIL** | gpn2use0, gpn2use1, gpn2 | **16, 16** |
-| **FAIL** | gpn4, gpn8, bigmany | **16 x N** |
-| wrong value | gpstress | 4, 256, 2400, 256, 13, 512 |
+| rung | shape | silicon |
+|------|-------|---------|
+| beebs_primer1 | scalar global | PASS 582955588 (5 sessions) |
+| gpsz | 1 static, 64 elems, 256 B | PASS 607423941 |
+| gpcp | 1 static, 256 B | PASS 23404485 |
+| gpw2 | 1 static, 2 elems, 8 B | ran (value unchecked, oracle was broken) |
+| **gpw16b** | **1 static, 16 elems, 64 B** | **PASS 583391941** |
+| **gpw16** | **1 static, 16 elems, 64 B** | **FAIL** |
+| gpw4, gpw8 | 4 / 8 elems | FAIL |
+| gpn1use0 | 1 global, 4 elems | FAIL |
+| gpn2, gpn4, gpn2use0, gpn2use1 | 2-4 globals | FAIL |
+| gpstress | 6 mixed | wrong value, does not wedge |
+| SQLite | 1059 globals | FAIL (wedges in create/entry) |
 
-**Every failing rung's globals are exactly 16 bytes and nothing else. No passing rung
-has one.** 13 rungs, no exceptions.
+**gpw16b vs gpw16 is the one solid one-variable result**: same size, same element count,
+same access shape, same session. gpw16's store loop reuses the address register as the
+loop counter --
 
-`gpstress` is the odd one out and is probably a SECOND, separate defect: it has no
-16-byte global, and it returns a wrong value rather than wedging.
+    cincoffset a4, a3, a4   ; a4 becomes a CAPABILITY (&g[i])
+    sw    a6, 0(a4)
+    movc  a4, a6            ; a live SCALAR written over that same register
+    bne   a6, a5, back      ; next iteration consumes a4 as an integer
 
-### THIS SUPERSEDES THE "MORE THAN ONE GLOBAL" READING FROM EARLIER TODAY
+-- and gpw16b (gpsz's value expression, `i*3+7` instead of `i+1`) keeps the index in its
+own integer register and passes. The compiler emits the reuse form only when the stored
+value is derived from the index.
 
-Count looked like a perfect split for most of the day, and it was wrong. It correlated
-only because every multi-global rung happened to be built from 16-byte arrays. Two
-results broke it:
+Plausible mechanism: CVA6 keeps capability metadata in a SEPARATE shadow register file,
+so a register can carry capability state that a scalar write does not clear. QEMU keeps
+one unified value per register, which is why every one of these rungs is QEMU-green.
 
-  * `gpn1use0` -- **count=1** -- FAILED, with beebs_primer1 passing in the same session.
-    It is byte-for-byte gpn2use0 minus one never-accessed global.
-  * `gpsz` -- ONE static global, 64 elements, the SAME register-indexed
-    store-then-load shape as gpn1use0 -- PASSES.
+### WHY THIS IS NOT YET THE ROOT CAUSE
 
-Anything written earlier about "the carve loop's second iteration" is void. The loop is
-fine; `INTERP_BUILD_LIMIT=1` on gpn2use0 (2-entry table, one iteration) still failed,
-which was the first sign the count story was wrong.
+`check-movc-reuse.py` scores **5 of 8** against known board outcomes. It misses `gpn2`
+and `gpn4` (both FAIL with no reuse detected) and false-positives on `gpw2` (has the
+pattern, did not wedge). So either something else is also in play, or the reuse is one
+surface of a broader hazard. Do not adopt it as the cause on the strength of the pair.
 
-### FIVE HYPOTHESES ARE DEAD (keep them dead)
+### TWO HYPOTHESES WERE RETRACTED TODAY — do not re-derive either
 
-1. *Descriptor record order != cap-table index order.* Both emitters walk `M.globals()`
-   with the same filter (`CapstoneAsmPrinter.cpp:857, 938`) and `getGpCaptableIndex`
-   assigns indices in that order (`CapstoneISelDAGToDAG.cpp:134-138`).
-2. *`ldc rd, 16(gp)` mis-decoded.* RTL uses the standard sign-extended 12-bit immediate
-   added raw to the cursor, same address for the bounds check and the access, trap on
-   misalignment -- identical to QEMU (`decoder.sv:1300-1315, 1767-1770`;
-   `capstone_dyn_unit.anvil:296-297, 318-328`).
-3. *Unrepresentable capability bases.* `split` sets cursor == base, selecting the
-   cursorless branch, where the base is exact at any alignment (R-11).
-4. *Coarse capability tag granularity.* `DcacheLineWidth` is 128 bits so one line IS one
-   capability, one `cap_tag_q` bit per line (`wt_dcache_mem.sv:134-136, 409-421`); QEMU
-   buckets per 16 bytes (`cap_mem_map.c:5-19`). Both exactly 16-byte granular. Also
-   refuted empirically: it predicted gpn2use1 would pass, and it failed.
-5. *The documented register-indexed-load fault* (`history/27-07-2026_17-05-00`) as the
-   mechanism. Its trigger is stores to more than one location; `gpsz` does 64 and passes.
+1. **"More than one global fails."** Held for most of the day and looked exact. Killed by
+   `gpn1use0` (count=1, FAILS) and `gpsz` (count=1, 64 register-indexed elements,
+   PASSES). Count correlated only because the multi-global rungs were all 16-byte arrays.
+2. **"A global of exactly 16 bytes fails."** Killed by the size sweep: gpw8 (32 B) and
+   gpw16 (64 B) also fail, while gpsz (256 B) passes. The size table that motivated it
+   had mixed today's runs with historical ones.
 
-### IN FLIGHT: the direct test
+**Method lesson behind both:** a correlation across rungs measured in DIFFERENT sessions
+is not evidence. Re-measure the baseline in the same session before building on a split.
+(gpsz/gpcp were re-verified today and are genuinely passing, so the baseline is real.)
 
-`gpw2 / gpw4 / gpw8 / gpw16` -- identical kernel shape, only the array size changes
-(8 / 16 / 32 / 64 bytes), all count=1, all slot-0-only, all QEMU-gated (3983810698 /
-1463068797 / 671377293 / 2928574773). Control `beebs_primer1` in the same session.
+### DEAD, with evidence (keep them dead)
 
-**Prediction on the record: gpw4 (16 B) FAILS, gpw2 / gpw8 / gpw16 PASS.**
+* Descriptor record order vs cap-table index order — same enumeration in both emitters
+  (`CapstoneAsmPrinter.cpp:857,938`; `CapstoneISelDAGToDAG.cpp:134-138`).
+* `ldc rd, imm(gp)` mis-decoded — RTL matches QEMU exactly
+  (`decoder.sv:1300-1315,1767-1770`; `capstone_dyn_unit.anvil:296-297,318-328`).
+* Unrepresentable capability bases — `split` sets cursor == base, the cursorless branch,
+  base exact at any alignment (R-11).
+* Coarse capability tag granularity — one dcache line IS one capability
+  (`DcacheLineWidth`=128, per-line `cap_tag_q`, `wt_dcache_mem.sv:134-136,409-421`);
+  QEMU buckets per 16 B (`cap_mem_map.c:5-19`). Also refuted empirically: it predicted
+  gpn2use1 would pass, and it failed.
+* The documented register-indexed-load fault (`history/27-07-2026_17-05-00`) as the
+  mechanism — its trigger is stores to more than one location; gpsz does 64 and passes.
+* The glue's carve loop — `INTERP_BUILD_LIMIT=1` (2-entry table, one iteration) still
+  fails, and gpn1use0 fails at count=1.
 
-  * Confirmed -> C-14 is "a 16-byte global", the correlation becomes a demonstration,
-    and the next question is the mechanism (see below).
-  * Refuted -> the size table is a coincidence across 13 rungs and the real variable is
-    something all the 16-byte rungs share that gpw4 does not.
+### NEXT
 
-### WHY 16 MIGHT BE SPECIAL (mechanism, NOT yet demonstrated)
-
-16 bytes is exactly one capability and, on this RTL, exactly one dcache line. The line
-carries a single `cap_tag_q` bit, and bank 1 of the line holds capability METADATA when
-the line is tagged and ordinary data when it is not
-(`wt_dcache_mem.sv:151-161, 216-221`). A 16-byte global's storage capability spans
-exactly one such line, so scalar stores into it and the tag bookkeeping for "this line
-holds a capability" occupy the same granule.
-
-Note the glue rounds every global up to at least 16 bytes
-(`stor = max(align_up(size,16), 16)`), so a 4-byte global ALSO gets a 16-byte storage
-capability and still passes -- the difference must be in which bytes the domain actually
-touches, not in the capability's length. `gptl` (13 bytes) passing is the awkward data
-point for any pure "bank 1 is touched" story, so do not commit to that mechanism yet.
-
-### IF CONFIRMED, THE LIKELY FIX
-
-Pad every gp-captable global's storage to more than 16 bytes in the glue's carve
-(`stor = max(align_up(size,16), 32)`), or have the compiler over-align/pad 16-byte
-globals. Both are cheap. Validate on gpw4 first, then SQLite -- which has **37 globals of
-exactly 16 bytes**, so it is expected to fail on this mechanism and to be unblocked by
-the same fix.
+1. **Explain gpn2/gpn4.** They fail without the reuse pattern. Diff `gpn2`'s domain_main
+   against `gpw16b`'s and find what else differs. This is free — no board.
+2. **Re-run gpw2 with a working oracle.** Its host printf was generated as `printf("%%u")`
+   so every gpw oracle file held the literal text `%u`; gpw2's "pass" means only that it
+   did not wedge. Fixed in-tree, needs one rerun.
+3. **If the reuse pattern survives (1),** the fix is compiler-side: stop reusing a
+   register that holds a live capability as a scalar loop counter. Verify with
+   `check-movc-reuse.py`, then re-run gpw16, gpn2, and SQLite.
+4. **Do not touch the paper's SQLite claim yet.** It currently says SQLite has not run on
+   the board, which remains accurate.
 
 ### PROCESS RULES (each cost a session)
 
-1. **ONE board session at a time.** Concurrent runners power-cycle each other mid-load
-   and produce a bootrom loop that looks exactly like corrupt firmware.
-2. `pgrep -f 'fpga_driver/run_'` **matches its own command line**. Use `grep -E 'run[_]'`.
-3. **Do not `rm -f` the board lock** before a run -- it defeats the launcher's flock.
+1. ONE board session at a time; concurrent runners produce a bootrom loop that looks
+   exactly like corrupt firmware.
+2. `pgrep -f 'fpga_driver/run_'` matches its own command line — use `grep -E 'run[_]'`.
+3. Do not `rm -f` the board lock before a run; it defeats the launcher's flock.
 4. Never rebuild an artifact a live session depends on.
 5. Compare artifacts by CONTENT, never size.
 6. A UART capture is an ACCUMULATING buffer and can hold several unrelated sessions.
-7. **Verify a diagnostic knob actually reached the binary** before trusting its result
-   (the INTERP_BUILD_LIMIT clamp was checked in the FPGA disassembly first).
+7. Verify a diagnostic knob actually reached the binary before trusting its result.
 8. Always put a known-good control in the SAME session as the experiment.
+9. Check a generated oracle is a NUMBER before believing a "pass".
