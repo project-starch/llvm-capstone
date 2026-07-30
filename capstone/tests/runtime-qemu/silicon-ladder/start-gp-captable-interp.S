@@ -193,6 +193,34 @@
   ld    t0, 0(a6)                    /* t0 = initfn - entry (link-time relative)      */
 #endif
   add   t0, a7, t0                   /* -> initfn runtime address                     */
+#ifdef INTERP_PEEK_CAPINIT_TARGET
+  /* DIAGNOSTIC: publish the computed call target instead of calling it. The target is
+     (image address of the table entry) + (delta read from the monitor's COPY of that entry
+     in dom_data). Everything about that chain checks out statically -- the ELF entry
+     resolves to __capstone_cap_init, and the table sits at blob offset 0x12700 well inside
+     the 78768-byte copied region -- so the remaining question is what the glue actually
+     reads at run time. The host prints this as `obs=`. Compare against
+     pcc_base + (0x141b70 - 0x10000); anything else means the delta or the blob base is
+     wrong, and the `jalr` is transferring control to an arbitrary function. */
+  /* 112, not 80: test: parks res at 80(sp), then RUN_CAP_INIT drops sp by 32 before this
+     loop, so the slot is 32 higher from in here. Reading 80(sp) lands on the parked RETURN
+     capability and faults. */
+  /* csdebugprint is a QEMU-ONLY debug op (funct7 0x43 on opcode 0x5b); the FPGA decoder
+     has nothing there. It prints the named register straight to the emulator console,
+     which beats routing a value through the shared region -- the host only reports `obs`
+     on its own failure paths and would never surface it. QEMU-only, so this knob must
+     never be set for a board build. */
+  .insn r 0x5b, 0x1, 0x43, x0, t0, x0
+  ldc(a2, sp, 112)                   /* a2 = res capability parked by test:            */
+  sw    t0, 0(a2)
+  /* Unwind exactly as the normal path does before leaving. Branching straight to 78f skips
+     BOTH the blob-cap restore and the `sp += 32`, leaving sp 32 bytes low for the rest of
+     the domain -- which shows up as an unrelated fault in whatever runs next (strlen, in
+     the first attempt). A diagnostic that changes the frame is measuring itself. */
+  ldc(s1, sp, 0)
+  cincoffsetimm(sp, sp, 32)
+  j     78f
+#endif
   jalr  ra, 0(t0)                    /* plain call: gp-free ABI, within PCC           */
   ldc(a6, sp, 16)                    /* reload: the callee may have clobbered it      */
   cincoffsetimm(a6, a6, 8)
@@ -513,6 +541,19 @@ _start:
 __test_entry:
   ccsrrw(sp, cscratch, x0)           /* sp = dom_data (cscratch) DATA region */
   BUILD_GP_CAPTABLE_INTERP
+#ifdef INTERP_PEEK_SLOT
+  /* Print the capability the builder actually installed in gp[INTERP_PEEK_SLOT], right
+     after the table is built and before anything uses it. The DESCRIPTOR for a slot can be
+     verified statically (and is: slot 903 records size 464, matching the symbol), but
+     nothing until now has checked what the glue BUILT from it. A holder whose runtime
+     bounds are wrong would let a cap-init store land outside its global -- which is the
+     only remaining way a store can corrupt the frame and send a later `ret` into an
+     unrelated function. QEMU-only (csdebugprint); never set for a board build. */
+  li    t5, (INTERP_PEEK_SLOT) * 16
+  cincoffset(t6, gp, t5)
+  ldc(t6, t6, 0)
+  .insn r 0x5b, 0x1, 0x43, x0, t6, x0
+#endif
   j test
 
 .text
