@@ -174,9 +174,20 @@ def main():
         # every symptom is attributed to the domain. Compare on-board hashes to local ones;
         # `ls` sizes are not enough either (a stale and a current domain were both 1623008
         # bytes on 2026-07-30).
-        for local, remote in ((LOCAL_HOST, HOST), (LOCAL_DOM, DOM)):
-            if not local.is_file() or os.environ.get("SQLITE_HOST") or os.environ.get("SQLITE_DOM"):
-                continue          # probe mode substitutes shell snippets for these paths
+        # SQLITE_LOCAL_DOM names the local file an overridden SQLITE_DOM should match, so a
+        # multi-variant session (several .dom baked into one firmware) keeps the stale-boot
+        # gate instead of silently losing it. Without it an override skips the check, which
+        # is how a run tested the UNCLAMPED domain while the log said "limit=900": staging
+        # re-runs build-sqlite-silicon.sh unconditionally (stage-sqlite-in-rootfs.sh:38), so
+        # a flag passed only to the earlier standalone build was dropped on the rebuild.
+        checks = [(LOCAL_HOST, HOST)] if not os.environ.get("SQLITE_HOST") else []
+        if os.environ.get("SQLITE_LOCAL_DOM"):
+            checks.append((pathlib.Path(os.environ["SQLITE_LOCAL_DOM"]), DOM))
+        elif not os.environ.get("SQLITE_DOM"):
+            checks.append((LOCAL_DOM, DOM))
+        for local, remote in checks:
+            if not local.is_file():
+                continue
             want = hashlib.sha256(local.read_bytes()).hexdigest()[:16]
             mark = console.uart_mark()
             console.run_command(f"sha256sum {remote} | cut -c1-16", r"[0-9a-f]{16}", timeout=60)
