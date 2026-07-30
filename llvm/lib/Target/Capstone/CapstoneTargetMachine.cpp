@@ -454,6 +454,11 @@ void CapstonePassConfig::addIRPasses() {
   // Materialize capability globals in place at runtime (tags cannot live in the
   // static image). Runs at all opt levels; only synthesizes code when the module
   // actually has capability globals.
+  // BEFORE cap-init, on purpose: cap-init walks initializers for capability leaves,
+  // and merging first means a pointer-to-literal initializer is already a GEP into
+  // the container (which needsMaterialization() peels). The other order would leave
+  // cap-init referring to globals this pass then erases.
+  addPass(createCapstoneMergeStrConstantsPass());
   addPass(createCapstoneCapGlobalInitPass());
 
   if (getOptLevel() != CodeGenOptLevel::None) {

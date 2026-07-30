@@ -34,6 +34,11 @@ void initializeCapstoneCodeGenPreparePass(PassRegistry &);
 ModulePass *createCapstoneCapGlobalInitPass();
 void initializeCapstoneCapGlobalInitPass(PassRegistry &);
 
+// Merges private read-only string constants into one cap-table slot. Needed because
+// every global costs a revocation-node allocation and the board's pool is 1021.
+ModulePass *createCapstoneMergeStrConstantsPass();
+void initializeCapstoneMergeStrConstantsPass(PassRegistry &);
+
 FunctionPass *createCapstoneDeadRegisterDefinitionsPass();
 void initializeCapstoneDeadRegisterDefinitionsPass(PassRegistry &);
 
