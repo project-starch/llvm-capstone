@@ -1185,7 +1185,75 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
   `fw_jump.elf.good` = `6724bcb3`).
 - Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
 
-### C-14 — a domain with MORE THAN ONE global fails on silicon `OPEN 2026-07-30 — minimal reproducer isolated`
+### C-14 — RTL `movc` DESTROYS ITS SOURCE REGISTER `ROOT-CAUSED 2026-07-30, proven numerically`
+
+**The defect.** `capstone_flu_unit.anvil:13-21`, MOVC with `rs1 != rd`:
+
+    if(data.cap_rs1.metadata.cap_type==cap_type_t::CAP_TYPE_NONLIN){
+        let rs1 = data.cap_rs1;          // source preserved
+        let rd  = rs1;
+    } else {
+        let rs1 = call create_cnull();   // SOURCE ZEROED
+        let rd  = data.cap_rs1;
+    }
+
+A plain scalar is `NOT_CAP`, so it takes the else branch and the source register is
+nulled (`create_cnull` zeroes cursor and metadata, `capstone_unit.anvilh:383-384`).
+
+QEMU (`op_helper.c:580-584`) guards the same zeroing with `rs1_v->tag &&
+!captype_is_copyable(...)`. A scalar has `tag == false`, so **QEMU preserves what silicon
+destroys.** DIVERGENT, and invisible to every QEMU test.
+
+**Delivery mechanism.** `copyPhysReg` emits MOVC for every GPR-to-GPR copy
+(`CapstoneInstrInfo.cpp:520-523`), so ordinary register moves inherit it. The write
+reaches the register file through an rs1 write-back port gated only by
+`cap_result.valid` (`commit_stage.sv:278-281`), i.e. for EVERY op in `check_cap_op`.
+A narrower set was evidently intended: `check_fwd_rs1` lists
+`{SPLIT, MOVC, CJALR, CCSRRW, STC}` (`ariane_pkg.sv:925-931`) and is **dead code** --
+defined and referenced nowhere in the tree, verified by grep. The broad gate is harmless
+for ops that echo rs1 faithfully (CINCOFFSET does, `capstone_flu_unit.anvil:37-44`) and
+fatal for MOVC, which writes a null.
+
+**Both failure modes follow mechanically.** In gpn2:
+
+    203c0: movc a4, a6       ; a4 := a6, and on silicon a6 := 0
+    203c4: bne  a6, a5, back ; a6 is 0, a5 is 4 -> always taken -> INFINITE LOOP
+
+That is the wedge: the domain never faults, it spins, which is why no capture ever showed
+an `mcause`, `mepc` or `badaddr`.
+
+**NUMERIC PROOF** of the other mode. `gpw2` ends its loop with `beq a6, a4` rather than
+`bne`. With `a6` zeroed, `0 != 1`, the loop exits one iteration early and `g[1]` is never
+written. Predicted checksum for `g = {1, 0}`: **3950255460**. The board returned exactly
+**3950255460**. Derived before inspection, bit-for-bit.
+
+**Scope.** Every measured rung sorts correctly: the four that pass have no `movc` whose
+source is read afterwards; the nine that fail do. SQLite has 444 occurrences of the
+pattern. `gpstress` has none and does NOT wedge -- it returns wrong data, so it stays a
+separate defect.
+
+**Fix is a design decision, not a one-liner.** No single instruction copies both scalars
+and capabilities while preserving the source:
+
+| candidate | scalars | capabilities |
+|---|---|---|
+| `addi rd, rs, 0` | correct, preserves source | drops capability metadata |
+| `movc rd, rs` | DESTROYS source | correct for NONLIN only |
+| `cincoffset rd, rs, x0` | RTL preserves rs1; QEMU nulls it (C-4b) | same divergence |
+| `cincoffsetimm rd, rs, 0` | traps UNEXPECTED_OPERAND on NOT_CAP (`:49-52`) | -- |
+
+`copyPhysReg` cannot tell them apart -- scalars and capabilities share the GPR class. A
+correct fix needs the type distinction (separate register classes, or a copy pseudo
+selected by type at ISel). See `plans/` for the proposal.
+
+**Retracted on the way here** (four hypotheses, all mine): more-than-one-global,
+exactly-16-byte globals, unrepresentable capability bases, and stale shadow-RF metadata
+poisoning cincoffset's offset. The last was refuted by the same RTL read that found the
+real cause: ordinary ALU writes DO invalidate the metadata shadow entry, because the
+metadata regfile shares its write-enable with the integer regfile
+(`issue_read_operands.sv:1695-1709`, `commit_stage.sv:271-279`).
+
+### C-14 (superseded framing) — "a domain with MORE THAN ONE global fails" `RETRACTED`
 
 **The split is exact.** Sorting every silicon result by the domain's global count:
 
