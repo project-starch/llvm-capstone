@@ -29,10 +29,87 @@ from fpga_driver.run_ladder_perf_fpga import cold_boot, nvbit, sh, install_resil
 
 URL = os.environ.get("FPGA_URL")
 IMG = pathlib.Path(os.environ["FPGA_FW"])
-IMG_NAME = os.environ.get("FPGA_FW_NAME") or IMG.name
+def _hash_name(path: pathlib.Path) -> str:
+    """Name the stored boot image by CONTENT, not by a timestamp.
+
+    Callers were passing FPGA_FW_NAME="fw_xx$(date +%H%M%S).bin" to dodge stale entries in
+    the board's image store. That works but GUARANTEES a fresh 17.4 MB HTTPS upload every
+    run (~30-90 s), and a timestamp proves nothing about freshness anyway. A content hash
+    proves everything: identical firmware reuses the stored image, changed firmware gets a
+    new name automatically. 18 uploads today, several byte-identical."""
+    import hashlib
+    h = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+    return f"fw_{h}.bin"
+
+
+IMG_NAME = os.environ.get("FPGA_FW_NAME") or _hash_name(IMG)
+
+
+def assert_firmware_embeds_current_initramfs(fw: pathlib.Path) -> None:
+    """Refuse to flash a firmware that carries a STALE initramfs.
+
+    Measured 2026-07-30, and it silently invalidated a run: `make build A=opensbi-rebuild`
+    LINKS fw_payload.bin and only THEN lets buildroot regenerate build/images/, so the
+    firmware embeds the PREVIOUS generation kernel+initramfs. The freshly staged
+    sqlite_host.user was present in rootfs.cpio and absent from the firmware, and the board
+    answered `-sh: /test-domains/sqlite_host.user: not found` (exit 127) -- i.e. the run
+    tested nothing while looking like a domain failure. Relinking a second time, with the
+    images already final, fixes it.
+
+    Because of that ordering, RE-RUNNING the same target does not converge: each invocation
+    relinks and then regenerates the images again. What works is relinking ONCE MORE after a
+    generation whose images already contain what you staged -- so this check has to compare
+    against the artifact under test, not against a timestamp.
+
+    Three tempting checks that do NOT work, all tried:
+      * mtimes -- fw/gz/Image land ~13 s apart in ONE `make`, which reads as "same build";
+      * `fw.find(Image[:4096])` -- those bytes are the kernel header, identical across
+        generations, so it returns True for a stale firmware;
+      * `fw.find(rootfs.cpio.gz[:4096])` -- GZIP EMBEDS AN MTIME, so a freshly regenerated
+        .gz is byte-different from the one inside the firmware even when the packed files
+        are identical. This reports every firmware stale, including correct ones.
+
+    So: locate the gzip member inside the firmware, DECOMPRESS it, and look for the actual
+    binaries we are about to run. That is invariant to compression metadata and to which
+    build generation produced it.
+    """
+    import zlib
+    blob = fw.read_bytes()
+    off = 0
+    while True:
+        i = blob.find(b"\x1f\x8b\x08", off)
+        if i < 0:
+            log(f"WARNING: no initramfs found in {fw.name}, freshness NOT verified")
+            return
+        off = i + 1
+        try:
+            cpio = zlib.decompressobj(31).decompress(blob[i:])
+        except zlib.error:
+            continue
+        if len(cpio) > 100_000:      # skip small incidental gzip-looking members
+            break
+
+    missing = []
+    for local in (LOCAL_HOST, LOCAL_DOM):
+        if not local.is_file():
+            continue
+        if cpio.find(local.read_bytes()) < 0:
+            missing.append(local.name)
+    if missing:
+        raise SystemExit(
+            f"STALE FIRMWARE -- {fw.name} embeds an initramfs whose {', '.join(missing)} "
+            f"differ(s) from the local build.\nRe-link it now that the images are final:\n"
+            f"  make build LINUX_PAYLOAD=1 A=opensbi-rebuild CAPSTONE_CC_PATH=...\n"
+            f"Flashing this runs the PREVIOUS generation and proves nothing (it answers "
+            f"`-sh: ...: not found`, exit 127, which looks like a domain failure).")
+    log(f"firmware carries the current binaries (initramfs {len(cpio)} bytes, verified "
+        f"by decompressed content)")
+
+
 BITSTREAM = "working-caplifive-captype-fixed.bit"
 TMP = pathlib.Path(os.environ.get("CAPSTONE_TMP_ROOT", "/tmp/capstone"))
 LOCAL_DOM = TMP / "sqlite-silicon" / "sqlite_silicon.dom"
+LOCAL_HOST = TMP / "sqlite-build" / "sqlite_host.user"
 
 # Overridable so a probe can be run against the ALREADY-BAKED image without a firmware
 # rebuild (which costs ~35 min: stage -> linux-rebuild-with-initramfs ->
@@ -66,6 +143,7 @@ def main():
         raise SystemExit("FPGA_URL not set")
     if not IMG.is_file():
         raise SystemExit(f"missing firmware: {IMG}")
+    assert_firmware_embeds_current_initramfs(IMG)
     local_size = LOCAL_DOM.stat().st_size if LOCAL_DOM.is_file() else -1
     log(f"local build: {LOCAL_DOM} = {local_size} bytes")
     if os.environ.get("SQLITE_DOM"):
@@ -105,7 +183,23 @@ def main():
 
         log("running SQLite from the baked image (no transfer)")
         t0 = time.time()
-        out = console.run_command(f"{HOST} {DOM}; echo D''N_$?", r"DN_\d", timeout=RUN_TIMEOUT, idle_timeout=RUN_IDLE)
+        # Mark the buffer BEFORE the command so the diagnostic read is provenance-safe,
+        # and dump the run-scoped text on failure too -- otherwise a wedge leaves only the
+        # 400-byte tail in the exception and the temptation is to grep the accumulated log,
+        # which mixes in output from earlier firmware.
+        _mark = console.uart_mark()
+        _scoped_path = os.environ.get("SQLITE_SCOPED_OUT") or "/tmp/capstone/sqlite-run-scoped.txt"
+        try:
+            out = console.run_command(f"{HOST} {DOM}; echo D''N_$?", r"DN_\d",
+                                      timeout=RUN_TIMEOUT, idle_timeout=RUN_IDLE)
+        finally:
+            try:
+                with open(_scoped_path, "w") as _f:
+                    _f.write(console.uart_since(_mark))
+                log(f"run-scoped UART -> {_scoped_path} "
+                    f"(THIS RUN ONLY; do not grep the accumulated log)")
+            except OSError:
+                pass
         log(f"run took {time.time()-t0:.0f}s")
         print(out)
 
