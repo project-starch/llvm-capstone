@@ -1,7 +1,17 @@
-# C-14 fix proposal — `movc` destroys its source register
+# C-14 fix proposal — the compiler uses `movc` (a MOVE) for scalar copies
 
 **Status:** proposal, awaiting a decision. Nothing implemented.
-**Root cause:** see `ref/ISSUES.md` C-14. Proven numerically 2026-07-30.
+**Root cause:** see `ref/ISSUES.md` C-14.
+
+> **CORRECTED 2026-07-30.** An earlier version of this document treated the hardware as
+> buggy and listed "patch the RTL and reflash" as a live option. The ISA spec says
+> otherwise: `capstone-spec/parts/cap-man-insn.adoc:33-37` requires MOVC to write `cnull`
+> to its source whenever the source is not a non-linear capability (`type != 1`), and a
+> scalar qualifies. `parts/intro.adoc:59-61` states the intent: instructions "can only
+> move, but not copy, linear capabilities". **MOVC is a MOVE by design. The RTL is
+> conforming, QEMU is the deviant implementation, and the compiler is the bug.**
+> Patching the RTL is now explicitly the WRONG answer -- it would make the board
+> non-conforming and invalidate every silicon measurement taken so far.
 
 ## The constraint
 
@@ -60,17 +70,87 @@ after the instruction, substitute a safe form.
 - Verification is cheap: `tests/runtime-qemu/silicon-ladder/check-movc-reuse.py` already
   classifies all 13 measured rungs correctly and reports 444 sites in SQLite.
 
-### D. Ask the board owner to fix the RTL
-`movc`'s guard should test "is this actually a capability" rather than "is it NONLIN",
-matching QEMU. Worth raising regardless of what we do in the compiler, because the
+### D. Fix QEMU to match the spec (NOT the RTL)
+QEMU's `helper_csmovc` adds an `rs1_v->tag &&` conjunct that the spec does not have, so it
+silently preserves scalar sources that a conforming core destroys. Removing that conjunct
+makes QEMU spec-accurate and turns this entire bug class into something the model can
+catch before it ever reaches the board -- which is the real long-term win, because the
+same blind spot hid DELIN and the bounds-compression divergence. Worth raising regardless of what we do in the compiler, because the
 divergence will bite any future toolchain.
 
-- Right long-term answer, but needs a bitstream rebuild and is not under our control, so
-  it cannot be the plan for the deadline.
-- Also worth reporting: `check_fwd_rs1` (`ariane_pkg.sv:925-931`) lists
-  `{SPLIT, MOVC, CJALR, CCSRRW, STC}` and is **dead code**, while the rs1 write-back is
-  actually gated on the much broader `check_cap_op` (`commit_stage.sv:278-281`). That
-  looks like an unintended widening and is a second thing for the board owner to confirm.
+- Cheap, entirely in our tree, and no board time. It will make some currently-green QEMU
+  tests fail -- that is the point, those are the latent silicon bugs.
+- Still worth reporting to the board owner separately: `check_fwd_rs1`
+  (`ariane_pkg.sv:925-931`) lists `{SPLIT, MOVC, CJALR, CCSRRW, STC}` and is **dead code**,
+  while the rs1 write-back is gated on the much broader `check_cap_op`
+  (`commit_stage.sv:278-281`). That widening is unrelated to C-14's attribution but looks
+  unintended.
+
+## Is `movc` consuming its source a bug at all?
+
+**No. It is the specified behaviour, and the RTL implements it correctly.**
+
+`capstone-spec/parts/cap-man-insn.adoc:33-37`:
+
+    * If `rs1 = rd`, the instruction is a no-op.
+    * Otherwise
+    . Write `x[rs1]` to `x[rd]`.
+    . If `x[rs1]` is not a non-linear capability (i.e., `type != 1`),
+      write `cnull` to `x[rs1]`.
+
+Types are `0` linear, `1` non-linear, `3` uninitialised, `5` sealed-return
+(`parts/existing-insn.adoc:60-65`). A plain scalar is not a non-linear capability, so
+`type != 1` holds and the source MUST be zeroed. `parts/intro.adoc:59-61` gives the
+intent: instructions "can only **move**, but not copy, linear capabilities between
+general-purpose registers." MOVC is a MOVE.
+
+Our own C3 note (`capstone-qemu/tests/capstone-mrev-codegen/README.md:117-124`) already
+called this "correct linear-capability semantics"; what nobody checked was that it applies
+to scalars too.
+
+So the attribution is:
+* **RTL: conforming.** Do not patch it.
+* **QEMU: deviates.** `helper_csmovc` adds an `rs1_v->tag &&` conjunct the spec does not
+  have, exempting scalars. That deviation is why every one of these bugs is QEMU-green.
+* **LLVM: the bug.** `copyPhysReg` emits a MOVE where a COPY was meant. Wrong on any
+  conforming implementation, independent of this board.
+
+Option C is therefore **not a workaround for a hardware defect** -- it is the correctness
+fix the compiler needs regardless of which core runs the code.
+
+## If we CAN patch the RTL and reflash, is C still best?
+
+**Yes -- and stronger than before: patching the RTL is now the wrong thing to do at all,
+not merely the expensive thing.** The spec mandates the current behaviour, so a patch
+would take the board out of conformance and make our measurements describe a core nobody
+else has. The reasons below were written when this looked like a hardware bug; they remain
+true as secondary costs, but conformance is now the decisive argument.
+
+* **It invalidates the measured perf numbers.** Every silicon cycle count we have was taken
+  on the current bitstream. A new bitstream means either re-measuring the whole ladder or
+  publishing a table that mixes two hardware revisions. With the deadline on 2026-08-02
+  there is not enough board time to re-run the set.
+* **Reflashing is a hard stop** requiring explicit human approval, and needs the
+  Anvil -> SystemVerilog -> Vivado flow, which is hours and is not currently set up here.
+* **It changes what we are measuring.** A patched core is no longer the Capstone hardware
+  the paper describes. Defensible if documented, but that is the project lead's framing
+  call, not a lane's.
+* **C costs nothing in performance.** `addi rd, rs, 0` replaces `movc rd, rs` one-for-one,
+  same instruction count, so the existing measurements stay comparable. This is the
+  decisive practical point: the workaround does not distort the numbers the paper reports.
+* **Both fixes address exactly the same defect.** Neither changes the C3 behaviour for
+  genuine capability copies, which is intended. So the RTL fix buys correctness for other
+  toolchains, not extra coverage for us.
+
+The one real argument for the RTL fix is **completeness**: a compiler fix can miss copies
+the register allocator invents, whereas the hardware fix is total. That is measurable
+rather than speculative -- `check-movc-reuse.py` currently reports 444 sites in SQLite, so
+if the compiler fix drives that to 0 the coverage question is answered without a reflash.
+
+**Recommended order:** C now; D (report to the board owner) in parallel, since it costs one
+short message and fixes it properly for everyone; the RTL patch + reflash only after the
+deadline, or sooner if C turns out to be incomplete. If a reflash does happen, budget board
+time to re-run the full ladder, not just the failing rungs.
 
 ## Recommendation
 

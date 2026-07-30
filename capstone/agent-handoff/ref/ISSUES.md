@@ -1185,9 +1185,55 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
   `fw_jump.elf.good` = `6724bcb3`).
 - Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
 
-### C-14 — RTL `movc` DESTROYS ITS SOURCE REGISTER `ROOT-CAUSED 2026-07-30, proven numerically`
+### C-14 — the COMPILER uses `movc` (a MOVE) for scalar register copies `ROOT-CAUSED 2026-07-30`
 
-**The defect.** `capstone_flu_unit.anvil:13-21`, MOVC with `rs1 != rd`:
+> **CORRECTION, same day.** This entry first blamed the RTL. That was WRONG. The ISA spec
+> requires exactly what the RTL does. **The hardware is spec-compliant; the compiler is
+> misusing the instruction, and QEMU is the implementation that deviates.** The original
+> analysis is kept below because the mechanism and the numeric proof are unchanged -- only
+> the attribution moves.
+
+**What the spec says.** `capstone-spec/parts/cap-man-insn.adoc:33-37`, MOVC:
+
+    * If `rs1 = rd`, the instruction is a no-op.
+    * Otherwise
+    . Write `x[rs1]` to `x[rd]`.
+    . If `x[rs1]` is not a non-linear capability (i.e., `type != 1`),
+      write `cnull` to `x[rs1]`.
+
+Type encoding: `0` linear, `1` non-linear, `3` uninitialised, `5` sealed-return
+(`parts/existing-insn.adoc:60-65`). A plain scalar is not a non-linear capability, so
+`type != 1` holds and **the spec mandates zeroing the source.** `parts/intro.adoc:59-61`
+states the design intent plainly: instructions "can only **move**, but not copy, linear
+capabilities between general-purpose registers."
+
+**So MOVC is a MOVE, by design.** It is the wrong instruction for an ordinary
+register-to-register copy of a scalar, on any conforming implementation.
+
+**Who is wrong, precisely:**
+
+| component | behaviour | verdict |
+|---|---|---|
+| RTL (`capstone_flu_unit.anvil:13-21`) | zeroes source unless `type == NONLIN` | **spec-compliant** |
+| QEMU (`op_helper.c:580-584`) | adds `rs1_v->tag &&`, exempting scalars | **deviates from spec** -- and this is what hid the bug from every QEMU test |
+| LLVM (`CapstoneInstrInfo.cpp:520-523`) | emits MOVC for *every* GPR-to-GPR copy | **the actual bug** |
+
+**Correct rule for the compiler:**
+* scalar copy -> `addi rd, rs, 0` (`mv`). MOVC is simply wrong here.
+* non-linear capability copy -> MOVC is correct and preserves the source (`type == 1`).
+* linear capability -> cannot be copied at all, by design. MOVC moves it, which is the
+  only legal semantics; the IR should never ask for a duplicate.
+
+**DO NOT PATCH THE RTL FOR THIS.** Changing MOVC's guard would make the board
+*non-conforming* and would invalidate every silicon measurement taken so far. The
+implementation that should change to match the spec is QEMU -- doing so would make this
+whole class of bug visible in the model instead of only on hardware.
+
+---
+
+**Original mechanism analysis (unchanged and still correct as to WHAT happens):**
+
+`capstone_flu_unit.anvil:13-21`, MOVC with `rs1 != rd`:
 
     if(data.cap_rs1.metadata.cap_type==cap_type_t::CAP_TYPE_NONLIN){
         let rs1 = data.cap_rs1;          // source preserved
@@ -1233,7 +1279,9 @@ pattern. `gpstress` has none and does NOT wedge -- it returns wrong data, so it 
 separate defect.
 
 **Fix is a design decision, not a one-liner.** No single instruction copies both scalars
-and capabilities while preserving the source:
+and capabilities while preserving the source -- and per the spec, none should: copying a
+linear capability is deliberately impossible. What the compiler needs is to pick the right
+instruction per type:
 
 | candidate | scalars | capabilities |
 |---|---|---|
@@ -1244,7 +1292,10 @@ and capabilities while preserving the source:
 
 `copyPhysReg` cannot tell them apart -- scalars and capabilities share the GPR class. A
 correct fix needs the type distinction (separate register classes, or a copy pseudo
-selected by type at ISel). See `plans/` for the proposal.
+selected by type at ISel). See `plans/c14-movc-source-destruction-fix.md`.
+
+This is a CORRECTNESS fix, not a workaround for a hardware defect: emitting a move where a
+copy was meant is wrong against the spec regardless of which core runs it.
 
 **Retracted on the way here** (four hypotheses, all mine): more-than-one-global,
 exactly-16-byte globals, unrepresentable capability bases, and stale shadow-RF metadata
