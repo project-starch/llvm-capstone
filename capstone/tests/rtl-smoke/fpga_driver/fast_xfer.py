@@ -87,13 +87,34 @@ def _put_once(console, b64, remote_gz, remote_bin, bin_sha, delay, chunk, log,
         # Escape any wedged continuation left by a prior attempt, then truncate
         # the target from a known-clean prompt.
         _resync(console)
-        console.run_command(f": > {remote_gz}; echo D''N_$?", r"DN_\d", timeout=20)
+        console.run_command(f": > {remote_gz}; echo D''N_$?", r"DN_\d", timeout=20,
+                            idle_timeout=8)
         for k, i in enumerate(range(0, len(b64), chunk)):
             piece = b64[i:i + chunk]
             start = len(console.uart_text)
             _type_line(console, f"printf %s '{piece}' >> {remote_gz}; echo D''N_$?",
                        delay, burst)
-            console.wait_uart(r"DN_\d", timeout=60, search_from=start)
+            # WEDGE DETECTED BY SILENCE, not by a 60s wall clock. This wait starts AFTER
+            # the line is typed, and uart_send is fire-and-forget over websocket
+            # (config.EMIT has no expects_ack), so there is no delivery backlog to absorb
+            # -- all that remains is the board echoing the line and running one printf,
+            # i.e. well under a second. The 60s only ever elapsed on the failure path: a
+            # dropped quote parks the shell at a `> ` continuation that eats every
+            # following command, so DN_ never arrives and each wedged tier burned a full
+            # minute before escalating.
+            #
+            # idle_timeout is the better guard than a smaller total, because the board
+            # ECHOES the line as it arrives: progress keeps resetting the clock, so a
+            # slow-but-live delivery is untouched, while a wedge (total silence) trips in
+            # ~8s. Total kept generous for the same reason.
+            console.wait_uart(r"DN_\d", timeout=60, search_from=start, idle_timeout=8)
+        # 60s KEPT, and deliberately NO idle_timeout. This is the one wait here that does
+        # real board-side work: base64-decode, gunzip and sha256sum of the decompressed
+        # image, which for a ladder domain is up to ~1.4 MB on a ~50 MHz soft core with no
+        # crypto acceleration. I have no measurement of that throughput, so shrinking this
+        # would be guessing. idle_timeout is actively WRONG here: the board emits nothing
+        # at all while computing, so silence is the expected state and an idle guard would
+        # abort a perfectly healthy hash.
         out = console.run_command(
             f"base64 -d {remote_gz} | gunzip -c > {remote_bin}; "
             f"echo S$(sha256sum {remote_bin} | cut -c1-16)S",
@@ -126,7 +147,8 @@ def fast_put(console, local_gz, remote_gz, remote_bin, bin_sha, do_exec, log,
         if _put_once(console, b64, remote_gz, remote_bin, bin_sha, delay, chunk, log,
                      bu):
             if do_exec:
-                console.run_command(f"chmod 0755 {remote_bin}; echo D''N_$?", r"DN_\d", 20)
+                console.run_command(f"chmod 0755 {remote_bin}; echo D''N_$?", r"DN_\d", 20,
+                                    idle_timeout=8)
             return True
         log(f"  {remote_bin}: retrying at slower settings")
     raise RuntimeError(f"{remote_bin} failed even at safest settings")
