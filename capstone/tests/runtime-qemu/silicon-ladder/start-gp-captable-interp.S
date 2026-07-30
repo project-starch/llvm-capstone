@@ -81,56 +81,6 @@
 #define cscratch 0x004
 #endif
 
-/* ---- capability bounds representability (C-13, glue side) -------------------
-   CVA6's compress_bounds encodes a base exactly only when it is a multiple of
-
-       granule(L) = 1 << (max(0, floor(log2 L) - 12) + 3)
-
-   An unaligned base is truncated DOWNWARD, so the capability silently overlaps
-   its neighbour -- the same failure that put dom_data.base 96 bytes low and cost
-   the C-13 hunt. That was fixed in the monitor's split geometry; the glue's own
-   per-global carve had the same hole.
-
-   Lengths below 16384 have a granule of 8 or 16 and are already covered by the
-   16-byte carve, so this path is DEAD for every rung built to date and wakes up
-   only for a global >= 16 KiB or a cap table of >= 1024 entries. SQLite is the
-   first domain to have either (a 256 KiB global, and 1059 entries). */
-
-/* \dst = granule(\len). Valid only for \len >= 16384; callers branch around it
-   otherwise. Clobbers \dst and \tmp. */
-.macro REPR_GRAN dst, tmp, len
-  li    \dst, 3                      /* e+3, e = 0                                */
-  srli  \tmp, \len, 13               /* >= 2 here, so the loop runs at least once */
-53:
-  addi  \dst, \dst, 1
-  srli  \tmp, \tmp, 1
-  bnez  \tmp, 53b
-  li    \tmp, 1
-  sll   \dst, \tmp, \dst
-.endm
-
-/* Carve \len bytes off the top of sp into \cap, keeping BOTH endpoints granule-
-   aligned so the result is exactly representable. \top is the running split
-   point and is updated. Clobbers \s0, \s1, \s2 (and \len, which is rounded up --
-   the caller's pad-zeroing loop then covers the extra bytes). */
-.macro CARVE cap, top, len, s0, s1, s2
-  li    \s0, 16384
-  bltu  \len, \s0, 52f               /* granule <= 16: 16-byte carve already suffices */
-  REPR_GRAN \s0, \s1, \len
-  addi  \s1, \s0, -1                 /* granule - 1                                   */
-  not   \s2, \s1                     /* ~(granule - 1)                                */
-  and   \s0, \top, \s2
-  beq   \s0, \top, 51f
-  split(\cap, sp, \s0)               /* drop a pad so the TOP is granule-aligned      */
-  mv    \top, \s0
-51:
-  add   \len, \len, \s1
-  and   \len, \len, \s2              /* round the length so the BASE is aligned too   */
-52:
-  sub   \top, \top, \len
-  split(\cap, sp, \top)
-.endm
-
 .text
 
 /* Build the per-global capability table from .capstone_gp_initdesc.
@@ -390,7 +340,8 @@
 
   lcc(t1, sp, 4)                     /* t1 = sp.END                                    */
   slli  t3, s4, 4                    /* count * 16                                     */
-  CARVE gp, t1, t3, a5, a6, a7       /* gp = [t1,END) table; sp = [base,t1)            */
+  sub   t1, t1, t3
+  split(gp, sp, t1)                  /* gp = [t1,END) table; sp = [base,t1)            */
 #if INTERP_SP_LINEAR
   delin(gp)                          /* only needed when sp was still LIN (see C-13)   */
 #endif
@@ -417,7 +368,8 @@
   bnez  t4, 11f
   li    t4, 16
 11:
-  CARVE t2, t1, t4, a5, a6, a7       /* t2 = storage cap (granule-aligned if large)    */
+  sub   t1, t1, t4
+  split(t2, sp, t1)                  /* t2 = storage cap                               */
 #if INTERP_SP_LINEAR
   delin(t2)                          /* only needed when sp was still LIN (see C-13)   */
 #endif

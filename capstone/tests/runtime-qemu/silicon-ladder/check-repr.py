@@ -1,41 +1,72 @@
 #!/usr/bin/env python3
-"""Report gp-captable capabilities the silicon cannot represent exactly.
+"""Check gp-captable domains against CVA6's ACTUAL bounds-compression behaviour.
 
-The glue (start-gp-captable-interp.S) carves the cap table and then every global
-DOWNWARD from sp.END, 16 bytes at a time:
+THE RULE, from the RTL (capstone-ariane/core/include/ariane_pkg.sv).
+compress_bounds has two branches, selected by whether the cursor sits on the base:
 
-    t1 = sp.END - count*16      ; split -> cap table  [t1, END)
-    loop i: t1 -= max(align_up(size_i,16),16) ; split -> global i [t1, prev_t1)
+    if (bounds.start == cursor) begin   // "cursorless" -- ariane_pkg.sv:749-751
 
-CVA6's compress_bounds only encodes a base exactly when it is a multiple of the
-region's representability granule
+`split` sets cursor == base on BOTH of its outputs (capstone_dyn_unit.anvil:139-144),
+so every capability the glue carves takes the cursorless branch. There:
 
-    granule(L) = 1 << (max(0, floor(log2 L) - 12) + 3)
+  * the BASE is exact at any alignment -- decompress returns `start: cursor`
+    verbatim (ariane_pkg.sv:662-665). There is no base rounding in this branch.
+  * the TOP is truncated DOWN to a multiple of 2**E, where E is derived from the
+    highest bit at which cursor and top DIFFER, floored at bit 20:
 
-so a length below 8192 needs 8-byte alignment (always satisfied -- the carve is
-16-aligned), 8192..16383 needs 16, 16384..32767 needs 32, and so on.  A base that
-is not granule-aligned is truncated DOWNWARD, silently overlapping its neighbour.
-That is the same failure mode as C-13, which was fixed in the monitor's split
-geometry but never in the glue's per-global carve.
+        lz = 63; while (lz > 20 && bit(cursor,lz) == bit(top,lz)) lz--;
+        E  = lz - 20;                                  // ariane_pkg.sv:752-759
 
-Only two things can trip it in practice: a single global >= 16384 bytes, and a cap
-table of >= 1024 entries (count*16 >= 16384).  Everything smaller is covered by the
-16-byte carve alignment.
+    So E is 0 -- and the capability exact -- whenever base and top lie in the same
+    2 MiB (2**21) window. E only goes positive when [base, top) STRADDLES a 2 MiB
+    boundary, and then the top silently loses its low E bits.
 
-Exit status 1 if any capability is unrepresentable, so this can gate a build.
+WHAT THIS MEANS FOR US. A domain that is <= 2 MiB and 2 MiB-aligned has every
+interior capability inside one window (E = 0, exact), and any capability whose top
+is exactly the window edge has a top that is a multiple of 2**21 and so survives
+truncation too. Both hold today: the kernel module rounds the allocation up to a
+power-of-two page count (capstone.c:83-84) and the page allocator returns it
+2**order-page aligned. Domains are therefore exact BY CONSTRUCTION, not by luck --
+which is why no ladder rung has ever hit this.
+
+IT STOPS HOLDING THE MOMENT A DOMAIN EXCEEDS 2 MiB. Then interior splits straddle a
+window boundary, tops truncate DOWNWARD, and a global silently gets a shorter
+capability than it asked for. That is a real cliff sitting just past SQLite's
+current size, so this script exists to fail the build when a domain reaches it.
+
+AND QEMU CANNOT SEE ANY OF IT. helper_cssplit works on full 64-bit base/end/cursor
+and never calls cap_compress (op_helper.c:848-870); tagged loads even restore exact
+bounds from an out-of-band shadow map, bypassing the lossy decode entirely. RTL
+round-trips EVERY capability write-back through compress_bounds (ex_stage.sv:
+1080-1098) because the compressed form IS the architectural register state. So a
+top-truncation bug passes under QEMU forever. Same shape as the DELIN divergence.
+
+NOTE the OTHER branch is the one with the granule(L) = 1 << (max(0, hb(L)-12) + 3)
+rule, base truncated down and top rounded up (ariane_pkg.sv:769-806). It applies
+only once cursor != base -- e.g. after a cincoffset, or after the monitor's
+C_SET_CURSOR. That is exactly what C-13 turned out to be, and it is why the granule
+model belongs in the monitor's split geometry and NOT in the glue's carve.
+
+Exit status 1 if any domain is at risk.
 """
 import struct
 import subprocess
 import sys
 
+WINDOW_BITS = 21                      # ariane_pkg.sv floors the scan at bit 20
+WINDOW = 1 << WINDOW_BITS
 
-def granule(length):
-    hb = length.bit_length() - 1 if length > 1 else 0
-    return 1 << (max(0, hb - 12) + 3)
+
+def cursorless_top_exact(base, top):
+    """Replay ariane_pkg.sv:752-759 for a split-produced (cursor == base) cap."""
+    lz = 63
+    while lz > 20 and ((base >> lz) & 1) == ((top >> lz) & 1):
+        lz -= 1
+    e = lz - 20
+    return top % (1 << e) == 0, e
 
 
 def find_initdesc(path):
-    """Return the descriptor's file offset via readelf, or None if absent."""
     for tool in ("llvm-readelf", "readelf"):
         try:
             out = subprocess.run([tool, "-SW", path], capture_output=True,
@@ -43,53 +74,58 @@ def find_initdesc(path):
         except (OSError, subprocess.CalledProcessError):
             continue
         for line in out.splitlines():
-            if ".capstone_gp_initdesc" not in line:
-                continue
-            f = line.split()
-            i = f.index(".capstone_gp_initdesc")
-            # [Nr] Name Type Address Off Size ...
-            return int(f[i + 3], 16)
+            if ".capstone_gp_initdesc" in line:
+                f = line.split()
+                return int(f[f.index(".capstone_gp_initdesc") + 3], 16)
         return None
     return None
 
 
 def check(path):
+    name = path.split("/")[-1]
     off = find_initdesc(path)
     if off is None:
-        print("%-28s no .capstone_gp_initdesc (not a gp-captable domain)" %
-              path.split("/")[-1])
+        print("%-28s no .capstone_gp_initdesc (not a gp-captable domain)" % name)
         return []
 
-    blob = open(path, "rb").read()
-    _built, count = struct.unpack_from("<QQ", blob, off)
-    recs = [struct.unpack_from("<QQq", blob, off + 32 + 24 * i)
+    img = open(path, "rb").read()
+    _built, count = struct.unpack_from("<QQ", img, off)
+    recs = [struct.unpack_from("<QQq", img, off + 32 + 24 * i)
             for i in range(count)]
 
+    carve = count * 16 + sum(max((s + 15) & ~15, 16) for s, _a, _b in recs)
+
     bad = []
-    cur = 0                         # base of the current capability = END - cur
+    # The domain is allocated as a power-of-two page run, so model it as a region
+    # based at 0 of that size; base 0 is the worst case for window alignment only
+    # if the size exceeds one window, which is exactly what we are testing for.
+    pages = (len(img) + 65536 - 1) // 4096 + 1
+    order = max(0, (pages - 1).bit_length())
+    tot = (1 << order) * 4096
 
-    def carve(name, length, cur):
-        """Replay the glue's CARVE macro and flag any inexact result."""
-        g = granule(length)
-        if length >= 16384:
-            cur += -cur % g                     # align the top down (pad dropped)
-            length += -length % g               # round the length up
-        cur += length
-        if cur % granule(length):
-            bad.append((name, length, granule(length), cur,
-                        cur % granule(length)))
-        return cur
+    if tot > WINDOW:
+        # Interior splits now straddle a 2 MiB boundary. Replay the carve at a
+        # WINDOW-aligned base and report any capability whose top truncates.
+        top = tot
+        for label, length in ([("cap-table", count * 16)] +
+                              [("global[%d]" % i, max((s + 15) & ~15, 16))
+                               for i, (s, _a, _b) in enumerate(recs)]):
+            base = top - length
+            ok, e = cursorless_top_exact(base, top)
+            if not ok:
+                bad.append((label, length, base, top, e,
+                            top - (top >> e << e)))
+            top = base
 
-    cur = carve("cap-table", count * 16, cur)
-    for i, (size, _align, _blob_off) in enumerate(recs):
-        cur = carve("global[%d]" % i, max((size + 15) & ~15, 16), cur)
-
-    status = "OK" if not bad else "UNREPRESENTABLE x%d" % len(bad)
-    print("%-28s count=%-5d carve=%-8d %s" %
-          (path.split("/")[-1], count, cur, status))
-    for name, length, g, base_off, mis in bad:
-        print("    %-12s len=%-8d granule=%-4d base=END-%-8d misaligned by %d"
-              % (name, length, g, base_off, mis))
+    status = ("OK" if not bad else "TOP-TRUNCATION x%d" % len(bad))
+    print("%-28s count=%-5d carve=%-8d tot=%-9d %s" %
+          (name, count, carve, tot, status))
+    if tot > WINDOW and not bad:
+        print("    note: domain is %d bytes, past the 2 MiB window -- exact only "
+              "because every top happens to be aligned; treat as fragile" % tot)
+    for label, length, base, top, e, lost in bad:
+        print("    %-12s len=%-8d [%#x,%#x) straddles a 2 MiB window: E=%d, "
+              "top loses %d bytes" % (label, length, base, top, e, lost))
     return bad
 
 
