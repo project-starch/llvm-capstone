@@ -69,11 +69,6 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
   right default — that doc exists precisely so results can land without touching the paper.
   When permission *is* given: never `git push` the paper submodule (Overleaf owns the remote),
   and leave the parent's submodule pointer unbumped.
-  **Go-ahead is per session and per AREA, not per edit.** Once the project lead approves a
-  class of change ("fix the numbers", "apply 2, 4, 5, 6"), further mechanical instances of
-  that class need no fresh approval — asking again is friction, not caution. Structural
-  reordering and authorial content (abstract, new prose, section order) still need their own
-  go-ahead.
 
 ## A checkpoint is not a decision point
 
@@ -100,10 +95,13 @@ something.
 
 A standing instruction stays standing. "Proceed", "don't ask", "keep going until it runs"
 covers the whole goal, not the next step of it — so it does not need renewing at each
-checkpoint, and re-asking reads as not having heard it. The same goes for an approval
-covering a class of work: once a kind of change is approved, further mechanical instances
-of that same kind are already covered. Genuinely new territory, or anything in the
-ask-only list above, still is not.
+checkpoint, and re-asking reads as not having heard it.
+
+This section is about *checkpoints inside work already asked for*. It does NOT relax
+anything under "Hard constraints" — those are the project lead's rules, and an agent must
+not widen its own permissions by editing this file. In particular the paper rule stands as
+written: if the scope of a given go-ahead is unclear, ask, and asking there is not the
+friction this section is about.
 
 ## Context & compaction
 
