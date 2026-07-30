@@ -348,6 +348,18 @@ static int run(const char *name, const char *dom_path) {
   dev_fd = sys_open(CAPSTONE_DEV_PATH_STR, O_NONBLOCK | O_RDWR);
   if (dev_fd < 0) { puts_(TAG ": open /dev/capstone failed\n"); return 1; }
 
+  /* PHASE MARKER, one write, before the ioctl. Without it a wedge INSIDE domain
+     creation and a wedge just AFTER it are indistinguishable on the console: both
+     end the capture with no further output. That ambiguity cost the SQLite bring-up
+     several board runs (see the phase markers added to sqlite_host.c), and the 2 MiB
+     rungs are exactly where it matters, since their create_domain does an M-mode
+     copy three orders of magnitude longer than a small rung's.
+     The text is chosen so its FIRST 16 CHARACTERS are unique against the line below
+     ("ladder-perf: A/p" vs "ladder-perf: <rung>"): the observed board failure
+     truncates output at a 16-byte tty flush boundary, so a marker that is only
+     distinguishable past character 16 does not survive the failure it exists to
+     observe. */
+  puts_(TAG ": A/pre-create-dom\n");
   dom_id_t dom = create_dom(dom_path);
   if ((long)dom < 0) { puts_(TAG ": create_dom failed\n"); return 1; }
   puts_(TAG ": "); puts_(name); puts_(" domain ID = "); putu_(dom); puts_("\n");

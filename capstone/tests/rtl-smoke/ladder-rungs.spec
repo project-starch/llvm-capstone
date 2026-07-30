@@ -209,6 +209,18 @@ gpn64:gpn64_kernel.h:gpn64_compute:-O1:DOMAIN_WINDOW=0x8000
 gpn16:gpn16_kernel.h:gpn16_compute:-O1:DOMAIN_WINDOW=0x8000
 gpn32:gpn32_kernel.h:gpn32_compute:-O1:DOMAIN_WINDOW=0x8000
 bigmany:bigmany_kernel.h:bigmany_compute:-O1:DOMAIN_WINDOW=0x140000
+# SQLite's INITIALIZER BLOB SIZE (2026-07-30). bigwin and bigmany pin gpoff, tot_size
+# and record count at SQLite's values and both PASS, which leaves exactly one
+# create-time input uncovered: the blob the monitor word-copies into dom_data at
+# create time (sbi_capstone.c:493-499). bigwin's is 88 B, bigmany's ~1.6 KB, SQLite's
+# is 78,760 B = 9,845 M-mode iterations. This rung sets the blob to ~78.7 KB with one
+# initialized array and holds everything else at bigwin's values, so it is the same
+# 1.39 MB image and the same order-9 2 MiB allocation as SQLite with none of SQLite's
+# code. WEDGES -> the SQLite wedge is create-time and blob-driven, reproducible in a
+# rung that rebuilds in seconds. PASSES -> every create_domain input is covered by a
+# passing rung and the suspect moves to the glibc-linked SQLite host, which no ladder
+# controller has ever tested. Oracle 4141001435.
+bigblob:bigblob_kernel.h:bigblob_compute:-O1:DOMAIN_WINDOW=0x140000
 gpn2use1:gpn2use1_kernel.h:gpn2use1_compute:-O1
 gpn2use0:gpn2use0_kernel.h:gpn2use0_compute:-O1
 gpn1use0:gpn1use0_kernel.h:gpn1use0_compute:-O1
