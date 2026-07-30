@@ -1187,11 +1187,36 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
 
 ### C-14 — the COMPILER uses `movc` (a MOVE) for scalar register copies `ROOT-CAUSED 2026-07-30`
 
-> **CORRECTION, same day.** This entry first blamed the RTL. That was WRONG. The ISA spec
-> requires exactly what the RTL does. **The hardware is spec-compliant; the compiler is
-> misusing the instruction, and QEMU is the implementation that deviates.** The original
-> analysis is kept below because the mechanism and the numeric proof are unchanged -- only
-> the attribution moves.
+> **ATTRIBUTION WAS REVISED TWICE ON 2026-07-30. Read this box before the rest.**
+>
+> v1 "the RTL is buggy" -> v2 "the spec mandates it, the RTL is conforming, QEMU deviates"
+> -> **v3 (current): the spec is UNDER-SPECIFIED here; the weight of evidence favours
+> scalars being EXEMPT, so the RTL's MOVC is probably an oversight -- but this must be put
+> to the board owner as a QUESTION, not an accusation.**
+>
+> What killed v2 (all verified in-tree):
+> * `parts/mem-access-insn.adoc:45` glosses the very parenthetical v2 relied on --
+>   "not **a scalar or** a non-linear capability (i.e., `type != 1`)". So in the spec's own
+>   usage `type != 1` is shorthand for "scalar or non-linear", which EXEMPTS scalars.
+> * `parts/mem-access-insn.adoc:105`, the one other place the consumption rule meets a
+>   possibly-scalar operand (STC), writes the guard explicitly: "If `x[rs2]` **is a
+>   capability and** `x[rs2].type` is not `1`". That is literally QEMU's `tag &&`.
+> * `parts/prog-model.adoc:219-222`: a register holds "either a capability **or** a raw
+>   `XLEN`-bit integer", so `type` is undefined for an integer and the MOVC clause's test
+>   does not cleanly apply to one.
+> * Spec commit `a1db3c2` ("MOVC now works with non-capabilities without generating
+>   faults") removed the not-a-capability exception but never revised the consumption
+>   clause -- so that clause was written when `rs1` was guaranteed to be a capability.
+> * QEMU's guard is deliberate, not an accident: commit `b9c53f0d09`, subject
+>   "[Capstone] movc allows scalars", is the change that added `rs1_v->tag &&`.
+> * The RTL contradicts ITSELF: its STC exempts scalars
+>   (`capstone_dyn_unit.anvil:408`, `if(rs2_v.metadata.cap_type != NOT_CAP)`) while its
+>   MOVC does not (`capstone_flu_unit.anvil:14-25`). Internal inconsistency is the usual
+>   signature of an oversight rather than a design choice.
+>
+> **What is NOT in doubt, through all three versions:** the mechanism (MOVC zeroes a scalar
+> source on this silicon), the numeric proof, and that LLVM is emitting the wrong
+> instruction. Only blame moved.
 
 **What the spec says.** `capstone-spec/parts/cap-man-insn.adoc:33-37`, MOVC:
 
@@ -1224,10 +1249,22 @@ register-to-register copy of a scalar, on any conforming implementation.
 * linear capability -> cannot be copied at all, by design. MOVC moves it, which is the
   only legal semantics; the IR should never ask for a duplicate.
 
-**DO NOT PATCH THE RTL FOR THIS.** Changing MOVC's guard would make the board
-*non-conforming* and would invalidate every silicon measurement taken so far. The
-implementation that should change to match the spec is QEMU -- doing so would make this
-whole class of bug visible in the model instead of only on hardware.
+**STILL DO NOT PATCH THE RTL, but for a different reason than v2 gave.** Not because the
+RTL is conforming -- it probably is not -- but because a reflash invalidates every silicon
+measurement taken so far, is a hard stop needing approval, and the fix we control (the
+compiler) is free and lossless. Ask the board owner which behaviour is normative; do not
+assert that theirs is wrong.
+
+**The LLVM bug is bigger than the scalar case.** `CapstoneInstrInfo.td:2455-2460` declares
+MOVC with `hasSideEffects = 0` and `$rs1` as a pure USE with no def. LLVM therefore
+believes MOVC never clobbers its source -- which is wrong for LINEAR capabilities on ANY
+implementation, since every reading of the spec agrees those are consumed. Fixing only the
+scalar path leaves that hole open.
+
+**The fix is cheaper than first estimated:** `PseudoSCALAR_COPY_I128`
+(`CapstoneInstrInfo.td:2446-2447`) already exists and expands to `ADDI`. The scalar-copy
+machinery is in the backend; what is missing is routing scalar GPR copies through it
+instead of through MOVC.
 
 ---
 

@@ -3,15 +3,18 @@
 **Status:** proposal, awaiting a decision. Nothing implemented.
 **Root cause:** see `ref/ISSUES.md` C-14.
 
-> **CORRECTED 2026-07-30.** An earlier version of this document treated the hardware as
-> buggy and listed "patch the RTL and reflash" as a live option. The ISA spec says
-> otherwise: `capstone-spec/parts/cap-man-insn.adoc:33-37` requires MOVC to write `cnull`
-> to its source whenever the source is not a non-linear capability (`type != 1`), and a
-> scalar qualifies. `parts/intro.adoc:59-61` states the intent: instructions "can only
-> move, but not copy, linear capabilities". **MOVC is a MOVE by design. The RTL is
-> conforming, QEMU is the deviant implementation, and the compiler is the bug.**
-> Patching the RTL is now explicitly the WRONG answer -- it would make the board
-> non-conforming and invalidate every silicon measurement taken so far.
+> **REVISED TWICE ON 2026-07-30 -- see `ref/ISSUES.md` C-14 for the full trail.** The
+> current position is: the spec is UNDER-SPECIFIED for MOVC with a scalar source, and the
+> weight of evidence favours scalars being EXEMPT (`mem-access-insn.adoc:45` glosses
+> `type != 1` as "scalar or non-linear"; `:105` writes an explicit "is a capability" guard
+> for STC; the MOVC clause predates scalars being allowed at all, spec commit `a1db3c2`;
+> QEMU's guard is deliberate, commit `b9c53f0d09` "movc allows scalars"; and the RTL's own
+> STC exempts scalars while its MOVC does not). So the RTL's MOVC is probably an oversight
+> -- but that goes to the board owner as a QUESTION about which behaviour is normative,
+> never as an accusation.
+>
+> Unchanged throughout: the mechanism, the numeric proof, and that LLVM emits the wrong
+> instruction. Option C is the plan regardless of how the spec question resolves.
 
 ## The constraint
 
