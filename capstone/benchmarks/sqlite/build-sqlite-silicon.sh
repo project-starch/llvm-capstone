@@ -108,7 +108,13 @@ done
 link() {  # $1 = globals offset literal, $2 = output
   local lds="$OBJ_DIR/link.ld"
   sed "s/0x10000 + 0x1000/0x10000 + $1/" "$GPFREE/link-gpfree.ld" > "$lds"
+  # INTERP_BUILD_LIMIT=<N> (diagnostic only) clamps how many carve iterations the glue
+  # runs while leaving the cap-table geometry byte-identical. It is the discriminator for
+  # R-12: SQLite's descriptor count is 1059, so the builder performs ~1060 `split`s against
+  # a 1024-entry rev-node pool whose head is 10 bits -- allocation #1025 wraps to id 0 and
+  # reuses live ids silently. A limit below 1024 never exhausts the pool.
   "$CAPSTONE_CLANG" -target capstone64-unknown-elf -ffreestanding \
+    ${INTERP_EXTRA_CFLAGS:-} \
     -c "$LADDER/start-gp-captable-interp.S" -o "$OBJ_DIR/start.o"
   "$CAPSTONE_LD_LLD" -T "$lds" -o "$2" \
     "$OBJ_DIR/start.o" "$OBJ_DIR/amalgam.o" "$OBJ_DIR/libc.o" \
