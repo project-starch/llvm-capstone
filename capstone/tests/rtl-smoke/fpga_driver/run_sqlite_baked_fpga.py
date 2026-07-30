@@ -34,8 +34,21 @@ BITSTREAM = "working-caplifive-captype-fixed.bit"
 TMP = pathlib.Path(os.environ.get("CAPSTONE_TMP_ROOT", "/tmp/capstone"))
 LOCAL_DOM = TMP / "sqlite-silicon" / "sqlite_silicon.dom"
 
-DOM = "/test-domains/sqlite_silicon.dom"
-HOST = "/test-domains/sqlite_host.user"
+# Overridable so a probe can be run against the ALREADY-BAKED image without a firmware
+# rebuild (which costs ~35 min: stage -> linux-rebuild-with-initramfs ->
+# modcapstone-rebuild -> opensbi relink). The decisive use is pointing SQLITE_DOM at a
+# nonexistent file so create_dom fails early: if the host's failure message still prints,
+# fprintf works and the wedge is state left behind by a SUCCESSFUL create_dom; if that
+# print also truncates, stdio/glibc is implicated independently of create_dom.
+DOM = os.environ.get("SQLITE_DOM") or "/test-domains/sqlite_silicon.dom"
+HOST = os.environ.get("SQLITE_HOST") or "/test-domains/sqlite_host.user"
+RUN_TIMEOUT = int(os.environ.get("SQLITE_RUN_TIMEOUT") or 300)
+# Abort as soon as the UART goes quiet: a wedged domain emits NOTHING, so the whole
+# RUN_TIMEOUT is spent waiting for output that will never arrive. Measured 2026-07-30: a
+# run sat idle 10.5 minutes of a 15-minute budget with the log frozen, and each such run
+# costs a board session. Any progress resets the clock, so a slow-but-live workload is
+# unaffected -- only silence trips it. A working run emits its markers within seconds.
+RUN_IDLE = int(os.environ.get("SQLITE_RUN_IDLE") or 75)
 
 # The five markers run-sqlite-memory.sh gates on under QEMU. Same criterion here so a
 # silicon pass means the same thing a QEMU pass does.
@@ -55,6 +68,8 @@ def main():
         raise SystemExit(f"missing firmware: {IMG}")
     local_size = LOCAL_DOM.stat().st_size if LOCAL_DOM.is_file() else -1
     log(f"local build: {LOCAL_DOM} = {local_size} bytes")
+    if os.environ.get("SQLITE_DOM"):
+        log(f"PROBE MODE: running {HOST} {DOM} -- freshness check skipped")
 
     console = FpgaConsole(URL, logger=lambda m: print(f"[fpga] {m}", file=sys.stderr))
     console.connect()
@@ -90,7 +105,7 @@ def main():
 
         log("running SQLite from the baked image (no transfer)")
         t0 = time.time()
-        out = console.run_command(f"{HOST} {DOM}; echo D''N_$?", r"DN_\d", timeout=1800)
+        out = console.run_command(f"{HOST} {DOM}; echo D''N_$?", r"DN_\d", timeout=RUN_TIMEOUT, idle_timeout=RUN_IDLE)
         log(f"run took {time.time()-t0:.0f}s")
         print(out)
 

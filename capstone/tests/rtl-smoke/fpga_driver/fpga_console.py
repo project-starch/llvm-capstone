@@ -356,24 +356,48 @@ class FpgaConsole:
         timeout: float = 120.0,
         *,
         search_from: int = 0,
+        idle_timeout: Optional[float] = None,
     ) -> "re.Match[str]":
         """Block until the UART text matches `pattern`, searched from index
         `search_from` onward -- so a marker split across chunks still matches, but
-        a stale marker from an earlier command is skipped."""
+        a stale marker from an earlier command is skipped.
+
+        `idle_timeout`, when set, aborts early if NO new UART byte arrives for that
+        many seconds. A wedged domain produces total silence, so the overall
+        `timeout` is spent waiting for something that will never come: a SQLite run
+        sat idle for 10.5 minutes of a 15-minute budget with a frozen log, and every
+        such run costs a board session. Progress resets the idle clock, so a slow but
+        live workload is unaffected -- only silence trips it.
+
+        Off by default so existing callers keep their exact behaviour."""
         rx = _compile(pattern)
         deadline = time.monotonic() + timeout
+        last_len = len(self._uart)
+        last_progress = time.monotonic()
         with self._cond:
             while True:
                 m = rx.search(self._uart, search_from)
                 if m:
                     return m
-                remaining = deadline - time.monotonic()
+                now = time.monotonic()
+                if len(self._uart) != last_len:
+                    last_len = len(self._uart)
+                    last_progress = now
+                if idle_timeout is not None and now - last_progress >= idle_timeout:
+                    tail = self._uart[-400:]
+                    raise ActionTimeout(
+                        f"UART idle {idle_timeout:.0f}s while waiting for "
+                        f"/{rx.pattern}/ (wedged, not slow); last 400B: {tail!r}"
+                    )
+                remaining = deadline - now
                 if remaining <= 0:
                     tail = self._uart[-400:]
                     raise ActionTimeout(
                         f"timed out waiting for UART /{rx.pattern}/; last 400B: {tail!r}"
                     )
-                self._cond.wait(timeout=remaining)
+                if idle_timeout is not None:
+                    remaining = min(remaining, idle_timeout - (now - last_progress))
+                self._cond.wait(timeout=max(0.05, remaining))
 
     def wait_gdb(
         self,
@@ -671,6 +695,7 @@ class FpgaConsole:
         command: str,
         done_marker: Union[str, Pattern[str]],
         timeout: float = 180.0,
+        idle_timeout: Optional[float] = None,
     ) -> str:
         """Type `command` into the terminal and return the UART text emitted
         until `done_marker` matches.
@@ -688,6 +713,7 @@ class FpgaConsole:
             self._emit("uart_send", text=ch)
             time.sleep(0.05)
         self._emit("uart_send", text="\r")
-        m = self.wait_uart(done_marker, timeout=timeout, search_from=start)
+        m = self.wait_uart(done_marker, timeout=timeout, search_from=start,
+                           idle_timeout=idle_timeout)
         with self._cond:
             return self._uart[start:m.end()]
