@@ -347,6 +347,24 @@
 #endif
   cincoffset(s2, gp, x0)             /* s2 = moving table pointer                      */
 
+/* INTERP_BUILD_LIMIT -- build only the first N entries while the TABLE stays full size.
+   Clamped here, AFTER the table split, precisely so the cap-table geometry is identical
+   to an unclamped build and the only variable is how many carve iterations run.
+
+   This is the bisect for the two-global failure. A domain that reads ONLY slot 0
+   (gpn2use0) still has a 2-entry table and a 2-record descriptor; with the limit at 1
+   the glue performs one split and one stc instead of two. So:
+     limit=1 PASSES, unclamped FAILS -> the SECOND split/store is what breaks it
+     both FAIL                       -> the damage is already done by the table split
+                                        or by something outside the loop entirely
+   Diagnostic only; never set in a shipping build. */
+#ifdef INTERP_BUILD_LIMIT
+  li    t3, INTERP_BUILD_LIMIT
+  bge   t3, s4, 96f
+  mv    s4, t3
+96:
+#endif
+
 /* STAGE 9+: derive the record pointer and read records for real. */
 #if !defined(INTERP_FAKE_COUNT) || INTERP_DIAG_STAGE == 9
   cincoffsetimm(t0, s1, 32)          /* t0 = &record[0]                                */
