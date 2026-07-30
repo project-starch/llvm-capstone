@@ -43,12 +43,44 @@ The RTL read (see below) says why this is not bad luck:
 So any bug in capability bounds handling passes QEMU forever. Same shape as the DELIN
 divergence. **A QEMU-green interp result is not evidence about silicon.**
 
-### IN FLIGHT: the minimal reproducer
+### NARROWED: BUILDING the second entry is what breaks it
 
-Board run of `beebs_primer1` (count=1 control), `gpn2`, `gpn4` in one session, both
-QEMU-gated (oracles 582955588 / 3976364985 / 3360062749). If `gpn2` hangs, count=2 is
-the minimal reproducer and everything after this is a two-global debug, which the
-`INTERP_FAKE_COUNT` / `INTERP_DIAG_STAGE` machinery already in the glue can bisect.
+Three board sessions, each with a passing control in the same session:
+
+| rung | table | domain reads | result |
+|------|-------|--------------|--------|
+| beebs_primer1 | 1 entry | slot 0 | PASS (582955588, ~9760 cyc) |
+| gpn2 | 2 entries | slots 0 and 1 | FAIL |
+| gpn4 | 4 entries | slots 0-3 | FAIL |
+| **gpn2use0** | **2 entries** | **slot 0 only** | **FAIL** |
+| **gpn2use1** | **2 entries** | **slot 1 only** | **FAIL** |
+
+So it is NOT which slot is read, NOT "two live slots", and NOT the access pattern.
+Merely building a second cap-table entry breaks the domain.
+
+That also kills two more hypotheses:
+  * *tag granularity corrupting slot 0* -- would have left slot 1 intact, so gpn2use1
+    should have passed. Independently refuted in the RTL: `DcacheLineWidth` is 128 bits,
+    so one cache line IS one capability, with a per-line `cap_tag_q` bit
+    (`wt_dcache_mem.sv:134-136, 409-421`); QEMU buckets tags per 16 bytes
+    (`cap_mem_map.c:5-19`). Both exactly 16-byte granular.
+  * *the documented register-indexed-load fault*
+    (`history/27-07-2026_17-05-00`) as the whole story -- its trigger is stores to more
+    than ONE location in domain code, and both these rungs write exactly one global.
+    (It may still be a contributing factor; it is not the whole mechanism.)
+
+### IN FLIGHT: split vs store
+
+`INTERP_BUILD_LIMIT=1` on `gpn2use0` -- keeps the 2-entry table geometry and the 2-record
+descriptor, but runs the carve loop ONCE (one split, one stc). Control `beebs_primer1` in
+the same session (count=1, so the clamp is a no-op for it).
+
+  * PASSES -> the SECOND split or the SECOND stc is the culprit. Next: separate them.
+  * FAILS  -> the damage is the table split itself (a 32-byte vs 16-byte table
+    capability) or something outside the loop. Next: `gpn1use0` vs `gpn2use0`, which is
+    byte-for-byte the same compute and the same slot-0-only access with the ONLY
+    difference being the extra descriptor record -- a tighter control than
+    beebs_primer1, already built and QEMU-gated at oracle 1463068797.
 
 ### HYPOTHESES, with the two already dead
 
