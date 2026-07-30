@@ -144,10 +144,22 @@ int getGpCaptableIndex(const GlobalValue *GV) {
   // another; the map is rebuilt whenever the module pointer changes. Enumeration
   // order and the filter predicate are unchanged -- this is purely a lookup cache,
   // and the ordering it caches is the ABI contract shared with the entry glue.
+  //
+  // KEYED ON THE GLOBAL COUNT AS WELL AS THE MODULE POINTER. The module pointer does not
+  // change when a pass ADDS or DELETES a global, so a cache keyed on it alone silently
+  // survives a mutation and keeps handing out pre-mutation indices. The descriptor and
+  // cap-table emitters run later, at AsmPrinter time, and renumber positionally from the
+  // module as it is THEN -- so one deleted global shifts every later slot by one while the
+  // already-lowered code still uses the old index. Measured as: a capability store at
+  // +0x20 landing in a 16-byte slot, because the code addressed slot 904
+  // (trimFunc.azOne, one capability) while meaning slot 905 (typeofFunc.azType, 80 bytes,
+  // stores at 0x0/0x10/0x20/0x30/0x40). Cheap to detect, and a wrong slot is silent.
   static const Module *CachedM = nullptr;
+  static size_t CachedGlobals = 0;
   static DenseMap<const GlobalVariable *, int> Cache;
   const Module *M = GVar->getParent();
-  if (M != CachedM) {
+  const size_t NumGlobals = M->global_size();
+  if (M != CachedM || NumGlobals != CachedGlobals) {
     Cache.clear();
     int Index = 0;
     for (const GlobalVariable &Cand : M->globals()) {
@@ -165,6 +177,7 @@ int getGpCaptableIndex(const GlobalValue *GV) {
       Cache[&Cand] = Index++;
     }
     CachedM = M;
+    CachedGlobals = NumGlobals;
   }
   auto It = Cache.find(GVar);
   return It == Cache.end() ? -1 : It->second;
