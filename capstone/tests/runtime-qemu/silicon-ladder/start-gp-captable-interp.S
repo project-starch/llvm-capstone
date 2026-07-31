@@ -706,6 +706,28 @@ test:
   .insn r 0x5b, 0x1, 0x43, x0, a0, x0
   .insn r 0x5b, 0x1, 0x43, x0, a1, x0
 #endif
+#if defined(INTERP_FENCE_BEFORE_MAIN)
+  /* MEMORY ORDERING BETWEEN THE GLUE'S WRITES AND THE DOMAIN'S READS.
+     The carve loop and __capstone_cap_init between them STORE every global in the domain --
+     blob copies, zero fills, and one capability store per cap-init leaf -- and domain_main
+     is the first code to LOAD them. There is no fence anywhere in this file, so nothing
+     orders those stores against those loads.
+
+     Evidence this matters, measured on silicon 2026-08-01:
+       * stage 66 walks the SAME element TWICE through the SAME pointer and is
+         DETERMINISTIC at rc=2 (0b10) across three runs in one boot: the FIRST walk overruns
+         and the SECOND terminates correctly. Straight-line code, identical loops, same
+         memory -- so the bytes genuinely read back differently the first time.
+       * stage 63 (four identical arrays) is NON-DETERMINISTIC across runs in a single boot:
+         0x0E then 0x0F. A deterministic logic bug cannot vary run to run.
+     First-read-stale plus run-to-run variation is a coherency signature, not a logic bug.
+
+     `fence rw,rw` is the minimal correct barrier here. Gated rather than unconditional
+     because the last two changes to this file were made on unverified reasoning and one had
+     to be reverted; this gets measured on the deterministic probe (stage 66: 2 -> 3 would
+     confirm) before it becomes the default. */
+  fence rw, rw
+#endif
   call domain_main
 
   lla t2, __test_reentry

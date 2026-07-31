@@ -300,3 +300,63 @@ settle it. Outcomes:
 * repeats disagree -> the campaign has been sampling a non-deterministic quantity, and every
   single-sample conclusion (including "lit[1] is the bad one", which drove days of work) must
   be re-taken with repetition before it means anything.
+
+## DETERMINISM TESTED — and the fence hypothesis REFUTED
+
+Same binaries run repeatedly inside ONE boot:
+
+    wd66  x3   rc=2, 2, 2          DETERMINISTIC
+    wd63  x2   rc=0x0E, 0x0F       NON-DETERMINISTIC
+
+**`wd63` varies run to run.** `0b1110` then `0b1111` — on the second run array 0 overran too.
+So "the first walk succeeds" was a SAMPLING ARTIFACT, and more importantly: this campaign has
+been drawing conclusions from single samples of a quantity that varies. That includes
+`stage 52 = 0xC1` ("lit[1] is the bad one"), which drove days of bisection. **Any conclusion
+resting on one board observation must be re-taken with repetition before it means anything.**
+
+**`wd66` is deterministic at 2** — five samples now. Walking the SAME element TWICE through the
+SAME pointer: first walk overruns, second terminates correctly, every time.
+
+### The fence does nothing
+
+The glue contains no fence anywhere: the carve loop and `__capstone_cap_init` store every
+global, `domain_main` is the first code to load them, nothing orders the two. First-read-stale
+plus run-to-run variation is a textbook coherency signature, so `fence rw, rw` was added before
+`call domain_main` (gated on `INTERP_FENCE_BEFORE_MAIN`, verified present in the binary: 1
+fence instruction vs 0).
+
+Result: **no change at all.**
+
+    fn66 x2  rc=2, 2      identical to no-fence wd66=2
+    fn63 x2  rc=0x0F, 0x0E  still varying
+
+So this is not store visibility. It does not rule out the tag cache or `fence.i`, but the
+minimal correct barrier has zero effect, which is strong evidence against the mechanism.
+Flag stays off by default.
+
+### The two loops are byte-identical — verified, not assumed
+
+Full disassembly of `run_sqlite_staged` (9088 bytes, by address range) shows stage 66's two
+walk loops at `0x36994` and `0x36a40`: **23 instructions each, identical opcodes and operands**,
+differing only in branch target addresses. Identical code, same pointer, same memory,
+deterministically different results.
+
+### Instrument misread caught here (same family as the four from 31-07)
+
+`llvm-objdump --disassemble-symbols=run_sqlite_staged` silently TRUNCATED at ~470 of 9088
+bytes, stopping at a local `.Lpcrel` label. That produced "the function contains only 3 byte
+loads", from which "stage 66 never compiled" nearly followed — both false. The real count is 9,
+and the probe is present (`capstone_probe_lit`, 256 B; `domain_main` passes `li a0, 0x42` = 66).
+**Use `--start-address/--stop-address` for whole-function disassembly here; verify the
+disassembled byte count against the symbol size.**
+
+### Where this leaves the SQLite blocker
+
+Established and reproducible: a livelock; provably correct emitted pointers; access-shape
+dependence; one deterministic reproducer (`wd66`); and genuine run-to-run non-determinism in
+another (`wd63`). Refuted by measurement: cincoffset-consumes, STC-clears-register, carve
+exhaustion, LDC-consumes-slot, self-inflicted arrays, array identity, granule-as-root-cause,
+"first walk succeeds", and store-ordering/fence.
+
+The non-determinism is now the most important open fact, because it invalidates the evidentiary
+basis of the earlier bisection rather than merely competing with it.
