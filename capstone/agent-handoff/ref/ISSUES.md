@@ -1809,3 +1809,49 @@ plus the rebuild command instead. An issue without a reproducer is
 a rumour — write the probe first. Every probe must be **QEMU-verified before the board** so a
 board deviation is unambiguous, and must **return a diagnostic rather than hang** (a hung domain
 reports nothing at all).
+
+### R-15 — cap-init capability stores into a LARGE holder wedge the entry path `OPEN — bracketed 2160..9216 bytes`
+
+Found 2026-07-31 while testing the R-14 workaround, which turned out to be a regression and
+therefore a much better minimal case than the thing it was meant to fix.
+
+With `SQLITE_STATIC_BUILTINS=1`, **stage 0 — a domain that does nothing but return — WEDGES.**
+The only thing that runs before it is `__capstone_cap_init`.
+
+Bisected with `-mllvm -capstone-cap-init-limit=<n>`, six domains in ONE boot:
+
+| domain | cap-init stores | result |
+|---|---|---|
+| control, no workaround | 406 | **rc=0 PASS** |
+| workaround, limit 200 | 200 | **rc=0 PASS** |
+| workaround, limit 350 | 350 | **WEDGE** |
+
+**It is not the store count** — the control passes at 406 while the workaround wedges at 350.
+`-mllvm -capstone-cap-init-print` places the boundary precisely: `aBuiltinFunc`'s leaves run
+223–381, so limit 200 stops before them and limit 350 lands inside them.
+
+What makes that holder different from every other one, measured across all 562 leaves:
+
+| holder | size | works? |
+|---|---|---|
+| `sqlite3RegisterBuiltinFunctions.aBuiltinFunc` | **9216** | **WEDGES** |
+| `sqlite3WindowFunctions.aWindowFuncs` | 2160 | yes |
+| `aPragmaName` | 1824 | yes |
+| `sqlite3AlterFunctions.aAlterTableFuncs` | 1296 | yes |
+
+It is **4.3× larger than any other holder**, and carries 159 leaves against a maximum of 75
+elsewhere. Both size and leaves-per-holder are confounded and need separating.
+
+- **Repro:** synthetic, no SQLite — `CAPSTONE_SQLITE_STAGE=30..34` in
+  `benchmarks/sqlite/sqlite_capstone_domain.c` builds a single `static` array of 40 / 100 /
+  160 / 300 / 580 capability leaves and reads it back. Sizes bracket the working 2160 and the
+  failing 9216.
+- **Relation to R-14:** unclear and must not be assumed. R-14 is a *runtime straight-line*
+  construction on the stack; this is *cap-init* storing into a global. They may share a cause
+  or be unrelated.
+- **Consequence:** it explains why `build-sqlite-capstone.sh` de-statics `aBuiltinFunc` in the
+  first place. That patch is not obsolete — the assumption that `CapstoneCapGlobalInit` had
+  made it unnecessary is what produced this regression.
+- **Impact:** caps how large a single capability-bearing global may be in any domain. Not yet
+  characterised, so the practical limit is unknown.
+

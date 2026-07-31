@@ -488,6 +488,36 @@ static int run_sqlite_staged(int stage) {
         ok++;
     return ok;                        /* expect 16 in every case */
   }
+  /* Stages 30-34: CAP-INIT HOLDER SIZE. Board 2026-07-31: with SQLITE_STATIC_BUILTINS=1,
+     stage 0 (which does nothing but return) WEDGES, and the cap-init-limit bisection puts the
+     failure inside aBuiltinFunc's leaf range (leaves 223-381, holder_size=9216). The control
+     passes at 406 leaves, so it is NOT the total store count. aBuiltinFunc is 4.3x larger
+     than any other holder (9216 vs 2160 for aWindowFuncs, which works), and carries 159
+     leaves against a maximum of 75 elsewhere.
+     These are synthetic: one global array of N capability leaves, initialised by cap-init,
+     then read back. No SQLite involved. Sizes bracket the working 2160 and the failing 9216.
+     Returns how many entries survived, capped at 255. */
+#define CAPSTONE_HOLDER_N(st) ((st) == 30 ? 40u : (st) == 31 ? 100u : \
+                               (st) == 32 ? 160u : (st) == 33 ? 300u : 580u)
+  if (stage >= 30 && stage <= 34) {
+    /* Each element points into a distinct place so the leaves are not all identical; the
+       holder is `static`, so every element is a cap-init leaf rather than a runtime store. */
+    static const char *big30[40];
+    static const char *big31[100];
+    static const char *big32[160];
+    static const char *big33[300];
+    static const char *big34[580];
+    const char **p = stage == 30 ? big30 : stage == 31 ? big31 :
+                     stage == 32 ? big32 : stage == 33 ? big33 : big34;
+    unsigned n = CAPSTONE_HOLDER_N(stage), i, ok = 0;
+    /* Fill at run time only if cap-init left them null -- the point is to READ what cap-init
+       (or its absence) produced, not to overwrite it. */
+    for (i = 0; i < n; i++)
+      if (p[i] == 0) p[i] = "x";
+    for (i = 0; i < n; i++)
+      if (p[i] && sqlite3Strlen30(p[i]) >= 0) ok++;
+    return (int)(ok > 255 ? 255 : ok);
+  }
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
