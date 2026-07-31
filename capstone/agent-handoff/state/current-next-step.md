@@ -1,98 +1,93 @@
 # Current recommended next step
 
-## 2026-07-31 (late, second half) — the livelock is localised; codegen is EXONERATED
+## 2026-08-01 (early) — READ THIS FIRST: results on this board are NOT always reproducible
 
-### Where the SQLite blocker actually stands
+### The finding that changes how everything else must be read
 
-The bisection reached `sqlite3RegisterBuiltinFunctions`, and inside it the failure is now a
-**LIVELOCK, not a deadlock**. Stage 51 (a bounded `strlen`) returned **`rc = 0xB1`**: the
-domain RAN and RETURNED. That retires every hypothesis requiring the core to stop, including
-the RTL load-syncer arming leak.
+Determinism had never been tested in this campaign. It has now. Running the SAME binaries
+repeatedly inside ONE boot:
 
-Localisation from there:
+    wd66  x3   rc = 2, 2, 2          DETERMINISTIC
+    wd63  x2   rc = 0x0E, 0x0F       NON-DETERMINISTIC
+    fn63  x2   rc = 0x0F, 0x0E       NON-DETERMINISTIC (confirms it)
 
-* stage 52 = `0xC1` — `lit[1]` is the first literal whose walk never terminates.
-* stage 53 = `0xDF` — `lit[0]`'s first 8 bytes are `l t r i m \0 r t`. Correct for a MERGED
-  container (an earlier prediction of `0x1F` was wrong: only byte 5 is the NUL; bytes 6,7
-  are the next literal). So `lit[0]` is fine AND `lit[1]`'s bytes are demonstrably present.
+**`wd63` returns different answers on identical back-to-back runs.** Consequences:
 
-### What was PROVED offline while the board was down (do not re-litigate)
+1. **"The first walk succeeds, later ones fail" is RETRACTED** — it was built on `wd63 = 0x0E`,
+   and the next run gave `0x0F` (array 0 overran too).
+2. **Every single-sample conclusion in this campaign is unsafe**, including
+   `stage 52 = 0xC1` ("`lit[1]` is the bad one"), which drove days of bisection. A result seen
+   once is a sample, not a fact.
+3. **Run every probe at least 3x from now on.** The runner accepts the same `.dom` repeated in
+   `SQLITE_STAGE_DOMS`; repetitions inside one boot are nearly free.
 
-Full trail: `history/31-07-2026_22-40-00_capinit-literal-leaves-codegen-is-correct.md`.
+### What is genuinely established (and reproducible)
 
-1. **The emitted pointers are correct.** `__capstone_cap_init` derives the literals with
-   `cincoffsetimm` at `0x6da / 0x6e0 / 0x6e6` — deltas of exactly **6 and 6**, matching the
-   merged `.rodata` container at `0x16e52e`. The 16 capabilities feed THREE `lit` arrays
-   across **1544 instructions with zero calls and zero branches**; the only reused register
-   (`a0`) is correctly spilled to `0x260(sp)` and reloaded. **Cap-init is not producing bad
-   pointers. Stop looking there.**
-2. **`cincoffset` does NOT consume its source** (`capstone_flu_unit.anvil:43,:62` return
-   `rs1` unchanged). The theory that `lit[0]` survives and everything after it derives from
-   `cnull` fits the symptom perfectly and is nonetheless WRONG.
-3. **`STC` does NOT clear its source register** for LINEAR/NONLIN
-   (`capstone_dyn_unit.anvil:427`); only the UNINIT path nulls it. The documented linear
-   clearing is on **LDC**, and it clears MEMORY, not the register.
-4. **Carve exhaustion is not in play.** Measured from `.capstone_gp_initdesc`: 183 carves
-   (`wd54/55/56`), 184 (`wd57/58/59`), 179 (`sqlite_silicon.dom`) against a ~1000 budget.
-   The 1059 figure belongs to the FULL SQLite build, not to staged probes.
+* **It is a LIVELOCK, not a hang.** Stage 51 returns `0xB1` — the domain runs and RETURNS.
+  Every hypothesis requiring the core to stop is retired.
+* **The emitted pointers are provably correct.** `__capstone_cap_init` derives the literals at
+  `0x6da / 0x6e0 / 0x6e6` — deltas of exactly 6 — matching the merged `.rodata` container.
+  1544 straight-line instructions, zero calls, zero branches; the one reused register is
+  correctly spilled and reloaded. (Proof about EMITTED code, not about runtime values.)
+* **`wd66` is a deterministic reproducer** (5 samples, all `2`): the same element walked TWICE
+  through the SAME pointer — first walk overruns, second terminates correctly. Its two walk
+  loops were verified byte-identical (23 instructions each, `0x36994` / `0x36a40`, only branch
+  targets differ). Use `wd66` as the vehicle for any further bisection; it is the only stable
+  failing case found.
 
-### The live hypothesis (probes built, stages 57-59)
+### Refuted BY MEASUREMENT (do not revive without new evidence)
 
-`LDC` clears its MEMORY source when the loaded capability is linear. Stage 52 walks `lit[i]`
-by LOADING each element out of the array; stages 53/54 name `lit[0]`/`lit[1]` directly, where
-the value can stay in a register and never be reloaded. That asymmetry fits every observation.
+| hypothesis | how it died |
+|---|---|
+| `cincoffset` consumes its source | `flu_unit.anvil:43,:62` return `rs1` unchanged |
+| `STC` clears its source register | `dyn_unit.anvil:427` returns `rs2_v` unchanged |
+| carve/rev-node pool exhaustion | 183 carves measured against a ~1000 budget |
+| `LDC` consumes its memory slot | stage 57/58 = 7 (two reads, both non-NULL and equal) |
+| the SHA5 wedge is self-inflicted | UNGUARDED `wd51` returned `0xB1`, unchanged |
+| array identity ("Nth array is broken") | `wd60/61/62`, one shared array, only the loop failed |
+| granule misalignment is the root cause | `ga60 = 0xC1`, identical with granule-aligned glue |
+| "first walk succeeds" | `wd66 = 2` inverts it; `wd63` varies anyway |
+| store ordering / missing fence | `fence rw,rw` before `domain_main`: `fn66 = 2`, no change |
 
-* **57** — read `lit[1]` twice through a `volatile` array pointer. `7` = both reads fine
-  (refutes consumption); `5` = second read NULL, i.e. **the load consumed the slot**.
-* **58** — same for `lit[0]`; the control. If 58 also shows consumption the behaviour is
-  uniform and stage 52 only appeared to single out `lit[1]`.
-* **59** — read `lit[1]` once, then bounded-walk it. Expect `5` ("rtrim"); `0xB2` on overrun.
-  Separates "slot consumed" from "walk broken" for the same element.
+### Real but LATENT (fix on its own merits, NOT this bug)
 
-### THE REGRESSION TO CLEAR FIRST — a SHA5 wedge that is probably self-inflicted
+* **Carve base granule misalignment.** idx 170, `sqlite_heap`, 262144 B, granule 512,
+  `base % g = 64`, `len % g = 0`. Simulation over the real descriptor: granule-align OFF -> 1
+  unrepresentable carve, ON -> 0, for every plausible region top. **The 2026-07-31 revert note
+  had the failing end backwards** (it blamed the length; the length is fine). `ga60` shows
+  enabling it does not fix the livelock, so it is a separate correctness issue.
+  Knob: `INTERP_GRANULE_ALIGN=1`.
+* **`wd65` wedges where `wd62` returns 5** — same array, same single walk, differing only in a
+  `volatile` pointer load, and the failure modes differ (domain death vs overrun-and-return).
+  Open thread; do NOT assume it shares a cause with the livelock.
+* Domains run with `mtvec = ctvec = 0` (no monitor writes `dom_seal[1]`) — upstream design
+  question, deliberately not patched unilaterally.
 
-`wd55` wedged at **SHA5**. Per `sbi_capstone.c:73-76`, "SHA5 then silence" means the hang is
-in the **DOMAIN's region-share entry, not the monitor** — i.e. entry-glue territory, BEFORE
-cap-init, which is exactly where the one confirmed root cause (an unaligned 8-byte `ld`)
-lived.
+### Next step
 
-Cause almost certainly ours: `stage` is a function PARAMETER and the probes build at `-O0`,
-so nothing folds and **every staged block's arrays land in every probe binary**. Adding
-stages 54-59 silently grew `wd51` from 2 literal arrays to 4, changing the glue's blob-copy
-workload for the very domain used as a control. Initialised statics force a blob copy.
+Re-take the foundational bisection results WITH REPETITION, starting with stage 52, and treat
+any result that varies as unusable until characterised. `wd66` is the stable vehicle for
+narrowing the livelock itself.
 
-**Fixed by `#if CAPSTONE_SQLITE_STAGE == ...` guards around each staged block** so a build
-contains only its own arrays. Re-verify a guarded `wd51` returns `0xB1` before trusting any
-54-59 result.
+### Tooling and traps (all of these bit during 31-07/01-08)
 
-### Run order for the next board load (controls FIRST, wedger LAST)
-
-    wd51 (expect 0xB1)  wd53 (0xDF)  wd57 (7)  wd58 (7)  wd59 (5)  wd54 (0xDF)  wd56 (6)  wd55 (6)
-
-`wd55`/`wd56`'s expected value of **6 is proved, not assumed**, so a wrong delta is a
-silicon-execution finding and a correct one implicates the walk.
-
-### Traps that bit again TODAY — read before touching the board
-
-1. **Never read `board-<tag>.log` for results.** It carries the accumulated console
-   scrollback; grepping it returned markers for stages 30..53 from earlier runs and none from
-   the run just performed. **Only `PROBE_SCOPED_OUT` is valid.** The tell was markers for
-   stages that were not even in `SQLITE_STAGE_DOMS`.
-2. **Prune and ordering must be decided together.** Shrinking the initramfs removed
-   `wd51/52/53`, so the next load had NO control; when its only domain wedged there was no
-   way to separate "this probe wedges" from "everything wedges now".
-3. **Prune only your OWN staged domains.** Never `rm` package-installed ones (`fib`, `sbi`,
-   `smode`, `thread`) or anything else inside `build/target/` — that desyncs buildroot's
-   stamp files and cost six consecutive boot failures. Keep `sqlite_silicon.dom` and
-   `sqlite_host.user` (the freshness gate's reference artifacts).
-4. **Image size:** 10.5 MB and 12.1 MB boot; 26 MB and 46 MB do not. 18.6 MB is untested as
-   of this writing.
-5. Use `build-stage-probes.sh` to build probe batches — it prints per-artifact hashes and a
-   distinct-hash count, so a silently-cached build cannot pass as a fresh one.
-
-### Board/infra note
-
-The console tunnel went down mid-session: DNS resolved and TCP :443 connected instantly
-while the **TLS handshake timed out**. That presents as a boot failure in the runner's
-output; it is not one. `fpga_console.connect()` was also leaking the secret path token into
-every captured log — fixed, and the token scrubbed from 75 existing files.
+1. **Never read `board-<tag>.log` for results** — it carries the accumulated console
+   scrollback, so it returns markers from EARLIER runs. Only `PROBE_SCOPED_OUT` is valid.
+2. **Never pattern-match a string your own command line contains.** `while pgrep -f "make
+   build LINUX_PAYLOAD"` matched itself and deadlocked six shells for ~50 minutes while
+   reporting false progress. Use a bracket pattern (`"[m]ake ..."`).
+3. **A domain earns an early slot only if THAT EXACT BINARY has returned before.** Guarded
+   `wd53` and `wd65` were placed early as "controls" on source-level identity after the binary
+   changed underneath; each wedge ended its run.
+4. **`llvm-objdump --disassemble-symbols` silently truncates** (~470 of 9088 bytes, stopping at
+   a local `.Lpcrel` label). Use `--start-address/--stop-address` and check the disassembled
+   size against the symbol size.
+5. **Prune only your OWN staged domains** — never package-installed ones (`fib`, `sbi`,
+   `smode`, `thread`), which desyncs buildroot's stamps (six boot failures). Keep
+   `sqlite_silicon.dom` and `sqlite_host.user` for the freshness gate.
+6. **Each staged block's statics land in EVERY build** unless `#if`-guarded — `stage` is a
+   function parameter and probes build at `-O0`, so nothing folds. Guards are in place for
+   stages 51-66; keep adding them.
+7. Build probe batches with `build-stage-probes.sh` — it prints per-artifact hashes and a
+   distinct-hash count, so a silently-cached build cannot pass as fresh.
+8. Image size: 10.5-15.4 MB boot fine; 26 MB and 46 MB do not.
