@@ -502,24 +502,24 @@ static int run_sqlite_staged(int stage) {
   if (stage >= 30 && stage <= 34) {
     /* Each element points into a distinct place so the leaves are not all identical; the
        holder is `static`, so every element is a cap-init leaf rather than a runtime store. */
-    static const char *big30[40];
-    static const char *big31[100];
-    static const char *big32[160];
-    static const char *big33[300];
-    static const char *big34[580];
+    /* ONE holder per build, sized at COMPILE time. Two ways this probe has already been
+       inert, both caught by gating on the cap-init store count before spending a board
+       session:
+         1. declared without initialisers -> zero-init .bss -> ZERO cap-init leaves, all
+            five builds identical at 406 stores;
+         2. declaring all five arrays in one translation unit -> every build carries every
+            array (they are `static`, so selection at run time does not remove them), all
+            five identical at 1757 stores.
+       Only a compile-time-selected single array actually varies the holder under test. The
+       range designator is a GNU extension clang accepts. */
+    static const char *holder[CAPSTONE_HOLDER_N(CAPSTONE_SQLITE_STAGE)] =
+        { [0 ... CAPSTONE_HOLDER_N(CAPSTONE_SQLITE_STAGE) - 1] = "h" };
     /* A switch, NOT a ternary chain. `cond ? ptrA : ptrB` lowers to an i128
        CapstoneISD::SELECT_CC, for which this backend has no RV64 pattern -- it aborts with
        "Cannot select" (documented in history/31-07-2026 ... i128-selectcc-gap). All five of
        these builds died on exactly that, having been written with a ternary chain. A switch
        lowers to branches and avoids the node entirely. */
-    const char **p;
-    switch (stage) {
-      case 30: p = big30; break;
-      case 31: p = big31; break;
-      case 32: p = big32; break;
-      case 33: p = big33; break;
-      default: p = big34; break;
-    }
+    const char **p = holder;
     unsigned n = CAPSTONE_HOLDER_N(stage), i, ok = 0;
     /* Fill at run time only if cap-init left them null -- the point is to READ what cap-init
        (or its absence) produced, not to overwrite it. */

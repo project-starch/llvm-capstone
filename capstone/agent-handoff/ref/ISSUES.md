@@ -1810,48 +1810,77 @@ a rumour — write the probe first. Every probe must be **QEMU-verified before t
 board deviation is unambiguous, and must **return a diagnostic rather than hang** (a hung domain
 reports nothing at all).
 
-### R-15 — cap-init capability stores into a LARGE holder wedge the entry path `OPEN — bracketed 2160..9216 bytes`
+### R-15 — a domain with a 9216-byte capability-bearing global wedges `OPEN — ATTRIBUTION RETRACTED 2026-07-31`
 
-Found 2026-07-31 while testing the R-14 workaround, which turned out to be a regression and
-therefore a much better minimal case than the thing it was meant to fix.
+**Read the retraction before using this entry.** The observable is real; the mechanism
+originally recorded here was wrong and has been withdrawn after an adversarial audit.
 
-With `SQLITE_STATIC_BUILTINS=1`, **stage 0 — a domain that does nothing but return — WEDGES.**
-The only thing that runs before it is `__capstone_cap_init`.
+**What is actually observed.** With `SQLITE_STATIC_BUILTINS=1` (the R-14 workaround, which
+moves `sqlite3RegisterBuiltinFunctions.aBuiltinFunc` from a stack array to a 9216-byte
+compile-time-initialised global), a domain that does nothing but return WEDGES. Without it,
+the same domain returns `rc=0`.
 
-Bisected with `-mllvm -capstone-cap-init-limit=<n>`, six domains in ONE boot:
+**What was withdrawn, and why:**
 
-| domain | cap-init stores | result |
+* **"Six domains in one boot."** Three ran. `run_sqlite_stages_fpga.py:120-123` breaks on the
+  first wedge, so `ci-450`, `ci-550` and `ci-full` were never executed. The bracket rests on
+  ctl / 200 / 350 only.
+* **"The wedge is in cap-init."** NOT SHOWN, and the evidence points the other way. `ci_350`'s
+  last output is `SHA5:00000002`, mid-way through the FIRST share entry — it never printed
+  `SHA6`, `ECSZ`, `SQ: F/share2` or `SQ: G/enter`. `__capstone_cap_init` runs *after*
+  `call_dom`, so on this run **it never executed at all**. The two earlier wedges of the same
+  workaround build both printed `SQ: G/enter` before dying, so the console does deliver that
+  marker at an entry wedge — `ci_350` has a materially different signature.
+* **"aBuiltinFunc is implicated."** The 200→350 window admits **ten** holders, not one:
+  `pragmaFunclistLine.azEnc`, `sqlite3Attach.attach_func`, `sqlite3ParseUri.aCacheMode`,
+  `sqlite3ParseUri.aOpenMode`, `sqlite3Detach.detach_func`, `openStatTable.aTable`,
+  `statInitFuncdef`, `statPushFuncdef`, `statGetFuncdef`, and `aBuiltinFunc`. Nothing in the
+  data separates them.
+* **"Control passes at 406 stores."** 403. The 406 count included three callee-save `stc`
+  spills to `sp`.
+* **"It is not the store count."** The comparison is confounded. `ctl` and the workaround
+  build differ in far more than store count: `.data` +9216, `.bss` −10240,
+  `aBuiltinFunc` moves `.bss`→`.data`, and **descriptor record 150 flips `blob_off` from the
+  `-1` zero-init sentinel to `52240`** — so the entry glue goes from *zero-filling* a
+  9216-byte carve to *copying* 9216 bytes into it, before cap-init is reached.
+* **n=1**, one fixed order (ctl→200→350), no repeat, no order swap. The rev-node pool is a
+  bump allocator with no reclamation and `ci_350` ran third.
+
+**REFUTED 2026-07-31 (synthetic probe, board):** neither leaves-per-holder nor total
+cap-init store count explains it. Five synthetic single-holder domains, one boot, no SQLite:
+
+| leaves in ONE holder | total cap-init stores | returned |
 |---|---|---|
-| control, no workaround | 406 | **rc=0 PASS** |
-| workaround, limit 200 | 200 | **rc=0 PASS** |
-| workaround, limit 350 | 350 | **WEDGE** |
+| 40 | 446 | 40 — correct |
+| 100 | 506 | 100 — correct |
+| 160 | 577 | **0 — mismatch, non-monotonic, see below** |
+| 300 | 733 | 255 (capped) — correct |
+| 580 | 1017 | 255 (capped) — correct |
 
-**It is not the store count** — the control passes at 406 while the workaround wedges at 350.
-`-mllvm -capstone-cap-init-print` places the boundary precisely: `aBuiltinFunc`'s leaves run
-223–381, so limit 200 stops before them and limit 350 lands inside them.
+A holder with **580 leaves and 1017 total stores returns correctly**, against `aBuiltinFunc`'s
+159 leaves and 596 total that wedge. So the size/count hypothesis is dead in both forms.
 
-What makes that holder different from every other one, measured across all 562 leaves:
+The 160-leaf mismatch is **non-monotonic** (160 fails, 300 and 580 pass), which points at the
+probe rather than the platform — a genuine threshold cannot be crossed and then uncrossed.
+n=1, not re-run, do not build on it.
 
-| holder | size | works? |
-|---|---|---|
-| `sqlite3RegisterBuiltinFunctions.aBuiltinFunc` | **9216** | **WEDGES** |
-| `sqlite3WindowFunctions.aWindowFuncs` | 2160 | yes |
-| `aPragmaName` | 1824 | yes |
-| `sqlite3AlterFunctions.aAlterTableFuncs` | 1296 | yes |
+**What is left of R-15:** only the bare observable — `SQLITE_STATIC_BUILTINS=1` makes a
+do-nothing domain wedge, and without it the same domain returns rc=0. Every proposed
+mechanism has now been refuted. The most likely remaining difference is the one the audit
+surfaced and nobody has tested: descriptor record 150 flips `blob_off` from the `-1`
+zero-init sentinel to `52240`, so the entry glue goes from *zero-filling* a 9216-byte carve
+to *copying* 9216 bytes into it — before cap-init runs at all.
 
-It is **4.3× larger than any other holder**, and carries 159 leaves against a maximum of 75
-elsewhere. Both size and leaves-per-holder are confounded and need separating.
+**What survives:** `-capstone-cap-init-limit` truncates in the same order
+`-capstone-cap-init-print` prints (`CapstoneCapGlobalInit.cpp:213-236`; confirmed empirically
+— each build's store sequence is an exact prefix of the next). All six `.dom` hashes differ,
+so the flag took effect. `limit=200` returns and `limit=350` wedges — as an observation.
 
-- **Repro:** synthetic, no SQLite — `CAPSTONE_SQLITE_STAGE=30..34` in
-  `benchmarks/sqlite/sqlite_capstone_domain.c` builds a single `static` array of 40 / 100 /
-  160 / 300 / 580 capability leaves and reads it back. Sizes bracket the working 2160 and the
-  failing 9216.
-- **Relation to R-14:** unclear and must not be assumed. R-14 is a *runtime straight-line*
-  construction on the stack; this is *cap-init* storing into a global. They may share a cause
-  or be unrelated.
-- **Consequence:** it explains why `build-sqlite-capstone.sh` de-statics `aBuiltinFunc` in the
-  first place. That patch is not obsolete — the assumption that `CapstoneCapGlobalInit` had
-  made it unnecessary is what produced this regression.
-- **Impact:** caps how large a single capability-bearing global may be in any domain. Not yet
-  characterised, so the practical limit is unknown.
+**Next experiments, in order:** (1) re-run `ci_350` alone, first in a fresh boot, ×3 — one
+pass voids the bracket; (2) build `limit=223` vs `limit=224` and run them adjacently, the
+only pair that separates `aBuiltinFunc` from the nine co-entering holders; (3) only then
+bisect inside 223–381.
+
+**Repro:** `CAPSTONE_SQLITE_STAGE=30..34` — **NOT YET RUN SUCCESSFULLY.** Its first attempt
+built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are now fixed.
 
