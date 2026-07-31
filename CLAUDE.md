@@ -130,6 +130,28 @@ order, and put a probe you expect to hang last.
 `#ifdef`, never as `#ifdef`s threaded through the production path — otherwise the
 bisection is about a build that doesn't matter.
 
+**5. Batch HYPOTHESES, not just stages of one hypothesis — and batch them WIDE.** This is
+the rule that kept being missed on 2026-07-31 *after* the rest of this section was written:
+the ladder got batched, but each new idea then went to the board on its own. Three loads
+(`w10/w2/w3`, then `wc0/wc9`, then a full run) tested what one load of six domains would
+have. A firmware rebuild plus JTAG load plus boot costs ~5 minutes and covers *every* `.dom`
+in the image, so the marginal cost of the seventh variant is a few seconds of run time.
+
+Before spending a load, write down every question currently open and build a domain for each
+one — including the controls. Concretely, the load that should have been run instead of
+those three: does cap-init still work at the higher store count (stage 0), does the last
+known-good stage still pass (stage 9), does the changed function pass now (stage 10), does
+the next stage up pass (stage 2, stage 3), plus the two ordering controls. Six domains, one
+boot, and no need to guess which single question was the most valuable.
+
+**Ordering under batching is what makes it safe:** a wedge kills the rest of the session, so
+put every domain you expect to RETURN first, in ascending order, and at most ONE
+expected-to-wedge domain last. If two might wedge, they need two loads — or accept losing
+whatever follows the first.
+
+Never send a single-domain load unless it is the final confirmation run of something already
+bisected.
+
 Corollary for instrumentation: prefer a diagnostic that **converts a hang into a wrong
 answer** (a clamp, an early return, a bounded loop) over one that only observes the hang.
 Observation of a wedged core is unreliable here — the debug register path has twice
