@@ -103,6 +103,28 @@ def main():
             # domain failure), and it is what currently makes pruning the overlay unsafe:
             # today nothing is ever deleted, so a locally-present domain is necessarily in
             # the firmware, and that accident is the only thing masking this hole.
+            # A DOMAIN THAT WAS NEVER STAGED MUST NOT READ AS SUCCESS EITHER.
+            #
+            # The exit-127 check below catches the SHELL failing to find the host binary. It
+            # does NOT catch the far more common case: the host binary exists and runs, the
+            # .dom does not, so the host reports its own failure and exits 1. DN_1 matches
+            # r"DN_\d", so the domain was recorded as having returned, and with no staged
+            # marker in its output the summary printed "Every domain in this set returned
+            # rc=0" -- a clean false pass. Measured 2026-07-31: five domains whose builds had
+            # ALL failed, staged nothing, and the run reported success.
+            #
+            # So: a run that produced no `SQ: obs=` marker at all, or a marker that is not a
+            # staged marker, is a HARD failure. A domain that actually ran always emits one.
+            m_obs = re.search(r"SQ: obs=(\d+)", text)
+            if m_obs is None or (int(m_obs.group(1)) >> 16) != 0x5A6E:
+                got = "no SQ: obs= marker" if m_obs is None else f"obs={m_obs.group(1)}"
+                raise SystemExit(
+                    f"HARD STOP: {dom} produced {got}, not a staged marker.\n"
+                    f"The domain almost certainly was not staged (a failed build stages "
+                    f"nothing, and the host then exits 1, which matches the success regex).\n"
+                    f"Verify the .dom exists in the overlay AND in the firmware before "
+                    f"trusting any result from this session.")
+
             m_rc = re.search(r"DN_(\d+)", text)
             if m_rc and int(m_rc.group(1)) == 127:
                 raise SystemExit(

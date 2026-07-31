@@ -507,8 +507,19 @@ static int run_sqlite_staged(int stage) {
     static const char *big32[160];
     static const char *big33[300];
     static const char *big34[580];
-    const char **p = stage == 30 ? big30 : stage == 31 ? big31 :
-                     stage == 32 ? big32 : stage == 33 ? big33 : big34;
+    /* A switch, NOT a ternary chain. `cond ? ptrA : ptrB` lowers to an i128
+       CapstoneISD::SELECT_CC, for which this backend has no RV64 pattern -- it aborts with
+       "Cannot select" (documented in history/31-07-2026 ... i128-selectcc-gap). All five of
+       these builds died on exactly that, having been written with a ternary chain. A switch
+       lowers to branches and avoids the node entirely. */
+    const char **p;
+    switch (stage) {
+      case 30: p = big30; break;
+      case 31: p = big31; break;
+      case 32: p = big32; break;
+      case 33: p = big33; break;
+      default: p = big34; break;
+    }
     unsigned n = CAPSTONE_HOLDER_N(stage), i, ok = 0;
     /* Fill at run time only if cap-init left them null -- the point is to READ what cap-init
        (or its absence) produced, not to overwrite it. */
