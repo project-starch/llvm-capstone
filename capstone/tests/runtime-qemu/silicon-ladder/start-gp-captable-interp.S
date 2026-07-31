@@ -463,6 +463,12 @@
      So align BOTH ends of every carve to that global's own granule: round the running top
      DOWN and the storage size UP. Costs at most granule-1 bytes of padding per global, and
      only for globals >= 8192 bytes, of which this domain has one. */
+/* INTERP_NO_GRANULE_ALIGN=1 disables this, as a CONTROL. The granule alignment below was
+   added 2026-07-31 and touches a4/a5/a6 and t1/t4 in the middle of the carve loop; when
+   string CONTENTS later turned out to be wrong on silicon (strlen of a 21-char literal
+   returning 1), the first thing to rule out was whether this edit caused it. Keep the knob
+   so that control can be re-run cheaply rather than reasoned about. */
+#if !defined(INTERP_NO_GRANULE_ALIGN)
   li    a4, 8                        /* a4 = granule                                    */
   mv    a5, t4
 12:
@@ -477,6 +483,7 @@
   add   t4, t4, a5
   and   t4, t4, a6                   /* stor = align_up(stor, granule)                  */
   and   t1, t1, a6                   /* top  = align_down(top, granule)                 */
+#endif
   sub   t1, t1, t4
   split(t2, sp, t1)                  /* t2 = storage cap                               */
 #if INTERP_SP_LINEAR
@@ -490,6 +497,24 @@
   /* ---- copy `size` bytes from blob+blob_off, 8 at a time, then a byte tail ---- */
   cincoffset(a4, s1, t5)             /* a4 = src = blob + blob_off                     */
   mv    a5, t3                       /* a5 = bytes left to copy                        */
+  /* UNALIGNED SOURCE -> BYTE COPY. The fast path below issues `ld` (8 bytes) from
+     blob+blob_off, and blob_off is NOT 8-byte aligned for most globals: measured on the
+     SQLite domain, 67 of 176 records have blob_off%8 != 0 (e.g. idx=1 blob_off=4375,
+     idx=4 blob_off=4385). The destination is always fine -- carves are >=16-aligned -- so
+     only the source matters, and blob itself is aligned, so blob_off&7 IS the misalignment.
+
+     QEMU services an unaligned `ld` transparently, which is why this never showed under
+     emulation. CVA6 does not, and the result is not a clean trap: on the board a 21-char
+     literal read back as byte 0 correct, bytes 1-4 ZERO, bytes 5-8 correct (strlen
+     returned 1 instead of 21). That corrupts every merged string container, which is why
+     sqlite3RegisterBuiltinFunctions -- the first code to hash function NAMES -- was the
+     bisected wedge point.
+
+     The byte loop at 21 already copies a5 bytes correctly; it was only ever used as the
+     size%8 tail. Sending the whole object there when the source is unaligned costs a few
+     ms once per entry and is unconditionally correct. */
+  andi  a6, t5, 7
+  bnez  a6, 21f
 20:
   li    a6, 8
   blt   a5, a6, 21f

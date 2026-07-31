@@ -339,6 +339,21 @@ static int run_sqlite_staged(int stage) {
       total += sqlite3Strlen30(names[i]);
     return total;               /* expect 5 + 8 + 11 + 12 = 36 */
   }
+  if (stage == 14) {
+    /* WHICH BYTES of a string literal survived? Board 2026-07-31: strlen of the 21-char
+       "capstone_probe_string" returned 1, i.e. s[0] is non-zero and s[1] is zero. That is
+       the signature of "a little was copied, the rest zero-filled", which is what the entry
+       glue's carve loop does (copy `size` bytes from the blob, zero the tail).
+       Returns a BITMAP of s[1..8] being non-zero, so one 8-bit return says exactly how far
+       the good data extends. Expected 0xFF ("apstone_" all non-zero); 0x00 means only byte
+       0 survived; a partial value gives the exact cut-off. */
+    const char *s = "capstone_probe_string";
+    unsigned m = 0, i;
+    for (i = 0; i < 8; i++)
+      if (s[i + 1])
+        m |= 1u << i;
+    return (int)m;
+  }
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
