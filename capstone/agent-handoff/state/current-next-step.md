@@ -1,127 +1,100 @@
 # Current recommended next step
 
-## 2026-07-31 — SQLite on silicon: down to ONE instruction, and it is ours
+## 2026-07-31 (late) — READ THE CORRECTIONS FIRST. Several instruments were misread.
 
-### Where it actually is
+### Board status: UNUSABLE as of ~21:30
 
-**The domain runs on the board through both share entries into its run entry, then stalls
-in `strlen`. No rows.** Position, verbatim from the run-scoped capture (`SQ:` markers are
-`sqlite_host.c`'s FIFO-safe markers, ≤16 bytes so they always escape):
+Six consecutive sessions failed before running anything. The board boots (kernel reaches
+~82 s) but never reaches `login:`, while emitting hundreds of
+`remote fence extension is not available in SBI v1.0`. Earlier failures showed repeating
+`0xDEAD…` on the UART after a wedge. Power-cycling from the driver does not clear it.
+**Needs a manual reset or bitstream reload before any further board work.**
 
-```
-SQ: A/dom-ok ... SQ: D/mapped
-SQ: E/share1 ... SHA6, ECSZ        <- share entry 1 returns
-SQ: F/share2 ... SHA6, ECSZ        <- share entry 2 returns
-SQ: G/enter
-<nothing>
-```
+### THE CORRECTIONS — these invalidate a lot of earlier reasoning
 
-Everything up to `G/enter` is new since 2026-07-29 and is solid. What is left is a single
-instruction.
+Verified against source, not argued:
 
-### The stall, measured on the CURRENT build (`a41c6a6a`)
+1. **`ex_commit.valid` is the EXCEPTION-valid bit, not a retirement bit.**
+   `cva6.sv:500` — `exception_t ex_commit; // exception from commit stage`, wired to
+   `.exception_o` at `:1800`. **Nothing in this campaign ever measured that the core stopped
+   retiring.** The bit that does report it, `commit_instr_id_commit[0].valid`, lives in bank
+   `debug_byte_sel = 3'b110, reg_sel = 0` (`cva6.sv:1200`) and has **never been sampled**.
 
-`probe_sqlite_wedge.py` with `PROBE_STEPI=1`, pc identical across three `stepi`:
+2. **`stall_issue = 1` is not evidence of a hang.** `issue_read_operands.sv:390` —
+   `stall_issue_o = stall_raw[0]`, asserted by any unforwardable RAW dependency. `strlen`'s
+   loop is four mutually dependent instructions, so `stall_issue = 1` is its **steady state
+   while running normally**.
 
-```
-pc = 0x81f3cc78  ->  image VA 0x14cc78     (VA = 0x10000 + (pc - 0x81E00000))
-ra = 0x81e06b2c  ->  image VA 0x16b2c = sqlite3Strlen30
-mcause = 0
-a0 = 0x0
-```
+3. **Domains run with `mtvec = ctvec = 0`, so an in-domain fault has NO HANDLER.**
+   `sbi_capstone.c` zeroes all `dom_seal[]` slots and writes only 0, 2 and 3. Slot 1 *is*
+   `{ctvec, mtvec}` (`csr_regfile.sv:399`) and *is* swapped on domain entry.
+   **Consequence: "nothing was printed, therefore no trap was taken" — used repeatedly in
+   this campaign to kill hypotheses — was NEVER a valid inference.** In 57 board sessions no
+   in-domain fault has ever printed `EXCX`/`MCAU`/`MEPC`.
+   NOTE: **no monitor implementation anywhere writes slot 1** — not the reference, not either
+   fork. This is upstream design, not a local regression. Choosing an `mtvec` value is a
+   design decision, not a patch to apply unilaterally.
 
-VA `0x14cc78` is inside `strlen`:
+4. **The load-syncer arming leak is refuted by our own capture.** It requires `req_set == 1`
+   to persist; `board-regs.log:784` decoded and printed `load_syncer_req = 0` and
+   `store_syncer_req = 0` on the wedged core. The `:306` vs `STC:369-370` asymmetry is still
+   a real one-line difference worth reporting, but it is **not** this failure.
 
-```
-14cc6c: movc          a2, a0        <- a0 linear? then a0 := cnull HERE
-14cc70: movc          a1, a2        <- a2 still live -> a2 := cnull
-14cc74: lbu           a3, 0x0(a2)
-14cc78: cincoffsetimm a2, a2, 0x1   <-- FROZEN. operand is not a capability
-```
+5. **R-14 double-counted its evidence.** The register capture attributed to an independent
+   "20-line synthetic" is `sqlite_silicon.dom` built as **stage 18** — a SQLite staged build.
 
-**`movc` is a MOVE, not a copy.** `capstone_flu_unit.anvil:6-27`: when `rd != rs1` and the
-source is not `CAP_TYPE_NONLIN`, it writes `cnull` to the SOURCE. The measured `a0 = 0x0`
-is exactly what `movc a2, a0` leaves behind if `a0` was linear. So the string capability
-reaching `strlen` is **linear**, and register allocation emitted `movc` for a copy whose
-source stays live.
+6. **`0x81f3c71c` was manufactured.** It was composed from eight pc bytes read ~1.2 s apart
+   on a possibly-running core. Never compose a pc from separately-timed byte reads.
 
-Independent support: the previous build (`ad0aca1f`, `-O0`, completely different codegen —
-the pointer round-tripped through a stack slot instead) froze at VA `0x14d884`, which is
-the *semantically identical* instruction: the capability-cursor increment in `strlen`.
-Two unrelated instruction sequences, same failure point.
+**Net: the "core deadlock" framing is unsupported. The signature fits a LIVELOCK IN DOMAIN
+CODE equally well, and no experiment so far distinguishes them.**
 
-Also: **no passing silicon rung calls `strlen`** — zero references across all 20 ladder
-domains. `strlen` had never executed on this board before SQLite.
+### What is genuinely fixed and board-confirmed
 
-**Caveat, do not skip.** In that same dump `a1 = 0xca11ab1ebadcab1e` and
-`mstatus = 0xca00000000`. That constant is the AXI **error-slave** response
-(`axi_err_slv.sv:25`), so part of the register read went to an unmapped address and is
-junk. `a0 = 0x0` is consistent with the mechanism but wants a second reading before it
-carries weight on its own.
+* **Unaligned initialiser copy** (the one real root cause found today). The glue copied
+  globals with 8-byte `ld` from `blob+blob_off`, and `blob_off` is not 8-aligned for 67 of
+  176 globals; CVA6 does not service unaligned `ld`, QEMU does. Byte-survival `0xF0 → 0xFF`.
+* `movc` destroying linear sources in `strlen`/`strcmp`/`strcpy` — indexed forms
+  (`BEEBS_STRING_LINEAR_SAFE`).
+* Entry, return, `sqlite3_config(HEAP)`, `MutexInit`, `MallocInit` (memsys5),
+  `PcacheInitialize` all proven working on silicon (stages 0/1/7/8/9 return rc=0).
 
-### Next step
+### Reverted as harmful
 
-1. Establish whether `cincoffsetimm rd, rs, 0` is a **non-destructive** capability copy.
-   RTL `CINCOFFSETIMM` (`capstone_flu_unit.anvil:48-68`) returns its source unchanged via
-   `create_result_pack(..., rs1, rd)`, which reads like a copy that does not consume. If
-   that holds on both RTL and QEMU it is the natural replacement for `movc` in
-   `copyPhysReg` for capability copies. **Not verified — and if it is true, ask why**,
-   because duplicating a linear capability is what linearity exists to prevent. That
-   question is architectural, not a lowering detail.
-2. Depending on the answer, the fix is either a codegen change (non-destructive copy) or a
-   `delin` at the point the string capability enters `strlen`.
+The granule-alignment block. It aligned the base but not the length (idx 170 carve length
+262,384, `% 512 = 240`) and left **240 bytes of the memsys5 arena uninitialised** that were
+zeroed before. Off by default; `INTERP_GRANULE_ALIGN=1` to re-measure. A correct version must
+align the LENGTH, not the base.
 
-C-14's existing `-capstone-fix-destructive-copies` does **not** cover this: it only
-rewrites `movc` → `ADDI` when the source is provably a scalar integer, and leaves
-capability copies alone by design. The gap is that there is no non-destructive capability
-copy to emit.
+### The next experiment, ready to run when the board is back
 
-### Ruled out this session — do not re-investigate
+`CAPSTONE_SQLITE_STAGE=51` — the **watchdog**. Bounds the loop so a livelock RETURNS a marker
+instead of spinning. It is the only experiment that yields information in all three outcomes:
 
-* **`-O0` codegen shape.** Rebuilding the string primitives at `-O1` (loop has no
-  `ldc`/`stc` at all) changed the stall not at all. Knob kept as
-  `SQLITE_SUPPORT_OPT_LEVEL`, default off.
-* **Shadow-tag store→load race.** The AXI adapter interlocks: a load needing a tag read
-  enters `TAG_WAIT` and holds until every pending tag write takes its B-response
-  (`wt_axi_adapter.sv:406-427`). The decoupling is real but ordered. **The drafted
-  board-owner question about a tag drain/fence is therefore ANSWERED IN-TREE — do not
-  send it.**
-* **"`ldc` of a linear capability writes cnull back to memory."** Not what this RTL does
-  (`capstone_dyn_unit.anvil:296-352` is a plain load after its checks) and not what our
-  QEMU does (`trans_capstone.c.inc:146`). "A double `ldc` consumes a linear cap" is not
-  available as an explanation here.
-* **The rev-node pool.** R-12 was confirmed on hardware and then removed by construction:
-  string merging took SQLite from 1059 carves to 179. Measured at the stall: `head = 219`,
-  `OVERFLOW = 0`. It is not the blocker. (Widening the pool needs a licence and a third
-  party — last resort, and no longer needed.)
+* `rc = 0xB1` → the `strlen` walk never terminates ⇒ **livelock**, localised to one loop
+* `rc = 16`  → completes when bounded ⇒ the wedge is a budget effect, re-base the bisection
+* WEDGE      → the core genuinely stops ⇒ retires the whole livelock family
 
-### Known-separate, logged, not fixed
+Run `wk9` (or any known-good stage) first as a health control so a board problem is not
+misread as a result.
 
-* **No i128 `SELECT_CC` pattern on RV64.** `cond ? capA : capB` aborts ISel with "Cannot
-  select" at `-O1`; both `Select_GPRCAP_Using_CC_GPR` matcher entries are guarded by
-  `!is64Bit()`. Two-line reproducer and the failed fix attempt are in
-  `history/31-07-2026_14-00-00_o1-strlen-refuted-and-i128-selectcc-gap.md`. Blocks
-  `-O1`/`-O2` for any purecap code with a pointer select — which matters for performance
-  numbers — but not for SQLite, which does not need to be optimised to run.
-* `floatdidf_ng.o` emits an orphaned second `.capstone_gp_initdesc` (count=3) whose slots
-  are never carved → silent wrong doubles.
-* `caplifive.dts:35` gives Linux the full 1 GiB with no `reserved-memory` node while RTL
-  reserves `0xBC3C_0000+`.
+Also ready but **NOT trustworthy yet**: `CAPSTONE_SQLITE_STAGE=50` (C-14 in isolation, two
+`movc` from one live scalar source). The expected back-to-back same-source `movc` pair is not
+visible in the disassembly. Do not run it for a result until it is. (`movc` funct7 is `0x0A`,
+not `0x14` — the top byte `0x14` is `funct7 << 1`.)
 
-### Board driver contract
+### Traps that bit repeatedly today — read before touching the board
 
-Env `FPGA_URL` **and** `FPGA_FW` (absolute path to the ~17.4 MB
-`.../platform/fpga/ariane/firmware/fw_payload.bin`, NOT the 569 KB
-`build/images/fw_jump.bin`). Wait on the printed `RUN_DONE`/`PROBE_DONE` +
-`BOARD_RELEASED` sentinels — **never `pgrep -f`**, which matches the polling loop itself.
-Drivers exit via `hard_exit()`. Full contract: `ref/HOW-TO-LAUNCH-ON-FPGA.md`.
-
-### Build traps that are still live
-
-1. `run-sqlite-silicon.sh:19` and `stage-sqlite-in-rootfs.sh:38` **rebuild the domain
-   unconditionally**; a knob passed as a command prefix is discarded. EXPORT it and check
-   the artifact hash CHANGED before believing any negative result.
-2. QEMU `[CAPSTONE]` output goes to the harness `--log-file`, never the console, and the
-   log is opened `"w"` so each run truncates it. Copy before re-running.
-3. `run-sqlite-silicon.sh` copies from the hardcoded `sqlite-silicon/` directory, not from
-   `OUT_DIR` — setting `OUT_DIR` alone makes it stage the *previous* domain.
+1. **Prune `build/target/` AND the overlay, but KEEP `sqlite_silicon.dom` and
+   `sqlite_host.user`.** Buildroot copies the overlay into `target/` and never deletes, so
+   the initramfs regrows; at 26–46 MB domain loading silently breaks while the freshness gate
+   still passes. But those two files are the gate's reference artifacts — prune them and it
+   correctly refuses to flash.
+2. **Verify the artifact changed** (hash, store count, section size) before believing any
+   result. Three probes tested nothing today: a pointer ternary hit the i128 `SELECT_CC` gap;
+   uninitialised `static` arrays produced zero cap-init leaves; and declaring all five arrays
+   in one TU put every array in every build.
+3. **Ad-hoc board scripts must be backgrounded or install a signal handler** — a foreground
+   script killed at the tool's 2-minute limit skips its `finally` and leaves the board locked.
+4. A **ladder rung is not a control for this glue**: `build-ladder-domain.sh:22` defaults
+   `DOMAIN_GLUE=generated`, so it uses `start-gp-captable-generic.S` instead.
