@@ -23,7 +23,7 @@ import sys, os, pathlib, time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from fpga_driver import config as C
 from fpga_driver.fpga_console import FpgaConsole
-from fpga_driver.safe_cleanup import release_board, hard_exit
+from fpga_driver.safe_cleanup import release_board, hard_exit, install_release_on_signal
 from fpga_driver.run_ladder_perf_fpga import cold_boot, nvbit, install_resilient_emit
 from fpga_driver.run_sqlite_baked_fpga import (
     IMG, IMG_NAME, BITSTREAM, assert_firmware_embeds_current_initramfs)
@@ -50,6 +50,8 @@ def main():
     locked = False
     try:
         console.lock(); locked = True
+        # Arm BEFORE any long wait: a killed driver must still release the board.
+        install_release_on_signal(console)
         rb = nvbit(console)
         if rb != BITSTREAM:
             raise SystemExit(f"HARD STOP: resident bitstream is {rb!r}, expected {BITSTREAM!r}")

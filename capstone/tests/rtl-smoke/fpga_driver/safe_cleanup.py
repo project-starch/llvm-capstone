@@ -92,6 +92,34 @@ def release_board(console, *, switches_off=None, label="session"):
     print("BOARD_RELEASED", flush=True)
 
 
+def install_release_on_signal(console, *, switches_off=None):
+    """Release the board on SIGTERM/SIGINT instead of leaving it locked and powered.
+
+    `finally` does NOT cover this. SIGTERM's default action terminates the process
+    outright, so a driver killed from the outside skips its teardown entirely and leaves
+    the board locked, powered, and holding the flock -- which then blocks every later
+    session. Measured 2026-07-31: a run was killed while sitting in a (badly chosen)
+    15-minute idle window; RUN_DONE and BOARD_RELEASED never printed and the board had to
+    be released by hand.
+
+    Killing a board driver is a NORMAL operation, not an anomaly -- a human watching the
+    GUI sees the run is over well before any timeout expires -- so it has to be as safe as
+    a clean exit.
+    """
+    def _handler(signum, _frm):
+        print(f"[cleanup] signal {signum} -- releasing the board before exit", flush=True)
+        try:
+            release_board(console, switches_off=switches_off, label="signal")
+        finally:
+            hard_exit(130)
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        try:
+            signal.signal(sig, _handler)
+        except (ValueError, OSError):
+            pass
+
+
 def hard_exit(rc):
     """Exit NOW, skipping interpreter teardown.
 
