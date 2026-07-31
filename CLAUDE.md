@@ -103,6 +103,39 @@ not widen its own permissions by editing this file. In particular the paper rule
 written: if the scope of a given go-ahead is unclear, ask, and asking there is not the
 friction this section is about.
 
+## Debugging a blocker: BATCH VARIANTS, and make every run RETURN
+
+Default method for any "it hangs/fails somewhere on the board and we don't know where"
+problem. Learned the expensive way on 2026-07-31: six board sessions were spent probing a
+wedge one hypothesis at a time and produced nothing usable — the eventual answer came from
+one session that ran four variants.
+
+**1. Make every run produce a result.** A wedged domain emits nothing, so a failed run only
+ever says "somewhere after the last marker" — one bit per session, and possibly a bit about
+the wrong function. Build variants that stop early and **return a marker** (stage number +
+error code) instead of running to the failure. A build that returns always yields data, so
+the bisection converges instead of guessing.
+
+**2. Batch them into ONE boot.** Booting the board is ~2–3 min and dominates a short run,
+so N hypotheses as N sessions is mostly boot time. Stage all the variants into the same
+initramfs (they are just extra `.dom` files, one firmware rebuild covers all of them) and
+run them in sequence from a single boot. `run_sqlite_stages_fpga.py` is the worked example.
+
+**3. Order them so the cheap/safe ones run first.** A wedge takes the core with it, so
+everything after the first wedge is lost. That is not a limitation to engineer around —
+the first variant that fails to return *is* the bisection point. Put ascending stages in
+order, and put a probe you expect to hang last.
+
+**4. Keep the real path byte-identical.** Put staged logic in a separate function behind
+`#ifdef`, never as `#ifdef`s threaded through the production path — otherwise the
+bisection is about a build that doesn't matter.
+
+Corollary for instrumentation: prefer a diagnostic that **converts a hang into a wrong
+answer** (a clamp, an early return, a bounded loop) over one that only observes the hang.
+Observation of a wedged core is unreliable here — the debug register path has twice
+returned AXI error-slave junk (`0xca11ab1ebadcab1e`), and a pc sampled under `stepi` says
+nothing about free-running execution.
+
 ## Context & compaction
 
 Board-debug threads here run long. **Do NOT routinely recommend `/compact`.** Keep
