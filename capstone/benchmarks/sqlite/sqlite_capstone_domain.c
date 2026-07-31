@@ -245,6 +245,20 @@ static int run_sqlite_extended(sqlite3 *db) {
                 the 256 KB global whose carve needed the granule fix.
      stage 2 -- after sqlite3_initialize().
      stage 3 -- after sqlite3_open(":memory:"). First real allocation traffic. */
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 62
+/* ONE array, at FILE SCOPE, shared by stages 60-62 -- the confound remover.
+   Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
+   cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
+   different addresses, initialised by different blocks of __capstone_cap_init. The observed
+   split (52 = lit[1] never terminates, 59 = lit[1] walks fine and returns 5) therefore does
+   NOT isolate the access pattern -- it is equally consistent with "the Nth cap-init'd array
+   is broken and the Mth is fine". Those two explanations demand completely different fixes.
+   60/61/62 read THIS array and differ ONLY in how they touch it. */
+static const char *const capstone_probe_lit[16] = {
+  "ltrim", "rtrim", "trim", "max", "min", "typeof", "length", "instr",
+  "substr", "upper", "lower", "coalesce", "hex", "unhex", "quote", "replace" };
+#endif
+
 static int run_sqlite_staged(int stage) {
   sqlite3 *db = 0;
   int rc;
@@ -748,6 +762,47 @@ static int run_sqlite_staged(int stage) {
       if (!a) return 0xD1u;          /* slot was already empty on the FIRST read */
       while (a[guard]) { if (++guard > 64u) return 0xB2u; }
       return (int)guard;             /* expect 5 for "rtrim" */
+    }
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 62
+  if (stage >= 60 && stage <= 62) {
+    /* Same array (file-scope capstone_probe_lit), three access shapes. This is the only
+       comparison so far in which the ARRAY is held constant, so whatever differs here is
+       the access pattern and nothing else.
+         60: stage-52 shape -- loop i=0..15, walk each element. Expect 16.
+             0xC0|i on the first element that overruns.
+         61: stage-54 shape -- z = lit[1] (plain, non-volatile), bitmap of bytes 0..7.
+             Expect 0xDF ("rtrim\0" + the next literal's first byte).
+         62: stage-59 shape -- volatile read of lit[1], then bounded walk. Expect 5.
+       If 60 overruns while 62 returns 5, the access pattern is the mechanism and the array
+       is exonerated. If all three agree, the earlier 52-vs-59 split was about WHICH array,
+       and the fault is in cap-init's later blocks rather than in any walk. */
+    unsigned i, guard;
+    if (stage == 60) {
+      for (i = 0; i < 16; i++) {
+        const char *z = capstone_probe_lit[i];
+        if (!z) return 0xD0u | i;
+        guard = 0;
+        while (z[guard]) { if (++guard > (1u << 16)) return 0xC0u | i; }
+      }
+      return 16;
+    }
+    if (stage == 61) {
+      const char *z = capstone_probe_lit[1];
+      unsigned m = 0;
+      if (!z) return 0xD1u;
+      for (i = 0; i < 8; i++)
+        if (z[i]) m |= 1u << i;
+      return (int)m;
+    }
+    {
+      const char *const volatile *vp = capstone_probe_lit;
+      const char *a = vp[1];
+      guard = 0;
+      if (!a) return 0xD1u;
+      while (a[guard]) { if (++guard > 64u) return 0xB2u; }
+      return (int)guard;
     }
   }
 #endif
