@@ -91,6 +91,28 @@ def main():
                 wedged = True
                 log(f"{dom}: no return within {PER_DOM:.0f}s ({type(exc).__name__})")
             text = console.uart_since(mark)
+
+            # A MISSING DOMAIN MUST NOT READ AS SUCCESS.
+            #
+            # `sh` answers a nonexistent path with "not found" and exit 127, so the echo
+            # prints DN_127 -- which MATCHES the r"DN_\d" success pattern. Without this
+            # check the domain is recorded as having run, `obs` is None, the first-bad test
+            # never fires, and the summary prints "every domain returned rc=0", i.e. a
+            # confident pass from a session that executed nothing. That is the same class
+            # of failure as the 2026-07-30 stale-initramfs incident (exit 127 read as a
+            # domain failure), and it is what currently makes pruning the overlay unsafe:
+            # today nothing is ever deleted, so a locally-present domain is necessarily in
+            # the firmware, and that accident is the only thing masking this hole.
+            m_rc = re.search(r"DN_(\d+)", text)
+            if m_rc and int(m_rc.group(1)) == 127:
+                raise SystemExit(
+                    f"HARD STOP: {dom} is NOT PRESENT on the board (exit 127).\n"
+                    f"The firmware does not carry it -- re-stage and relink, do not trust "
+                    f"any result from this session.")
+            if "not found" in text and "SQ: " not in text:
+                raise SystemExit(
+                    f"HARD STOP: {dom} produced no domain output and the shell reported "
+                    f"'not found'. Treating this as a pass would test nothing.")
             transcript.append(f"===== {dom} =====\n{text}\n")
             m = re.search(r"SQ: obs=(\d+)", text)
             obs = int(m.group(1)) if m else None
