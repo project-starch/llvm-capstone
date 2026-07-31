@@ -716,6 +716,30 @@ no `memcpy` and no scalar-pointer cast anywhere today.
 
 ### R-14 — straight-line init of a struct array with distinct string constants wedges `OPEN — cause NOT established`
 
+**CORRECTIONS 2026-07-31 (wide audit, all verified against source):**
+
+* **The candidate mechanism is REFUTED by our own capture.** The load-syncer arming leak
+  (`capstone_dyn_unit.anvil:302-307`, commit `3a59ac52c485`) requires `req_set == 1` to
+  persist. `board-regs.log` decoded and printed `load_syncer_req=0` and `store_syncer_req=0`
+  on the wedged core. It was read and not noticed. The asymmetry at `:306` is still a real
+  one-line difference from `STC:369-370`, but it is NOT this failure.
+* **"The core stops retiring" was never measured.** `cva6.sv:500` — `ex_commit` is
+  `// exception from commit stage`, wired to `.exception_o`. `ex_commit.valid = 0` means no
+  exception is committing, nothing about retirement. The bit that does report retirement,
+  `commit_instr_id_commit[0].valid`, is in bank `debug_byte_sel = 3'b110` and has never been
+  sampled.
+* **`stall_issue = 1` is not evidence of a hang.** `issue_read_operands.sv:390` —
+  `stall_issue_o = stall_raw[0]`, a RAW hazard. `strlen`'s loop is four mutually dependent
+  instructions, so `stall_issue = 1` is its steady state while RUNNING.
+* **The evidence was double-counted.** The register capture attributed here to an
+  independent "20-line synthetic" is `sqlite_silicon.dom` built as stage 18 — a SQLite
+  staged build, not a separate artifact. The two lines of evidence are one.
+
+Consequence: the failure class may be a LIVELOCK IN DOMAIN CODE rather than a core
+deadlock, and no experiment run so far distinguishes them — every probe either returned or
+produced silence. Sampling `debug_byte_sel = 3'b110 / reg_sel = 0` (retirement) on a wedged
+core is the measurement that would.
+
 A 20-line C function with no SQLite in it wedges the core: no return, no output, no reported
 trap. It is the blocker behind `sqlite3RegisterBuiltinFunctions`, which is where the SQLite
 domain stops on silicon.
