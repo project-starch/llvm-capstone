@@ -155,12 +155,31 @@ int memcmp(const void *a, const void *b, bsize_t n) {
 #define BEEBS_PRINT_CAP(p) ((void)0)
 #endif
 
+/* BEEBS_STRLEN_CLAMP=<n> — DIAGNOSTIC. Give up after n bytes instead of scanning forever.
+ *
+ * Not a fix and never correct: a string longer than the clamp gets the wrong length. It
+ * exists to turn one specific silicon failure into information. On the board strlen scanned
+ * 31,342,951 bytes -- 120x the widest legitimate string capability in this domain (256 KB,
+ * the heap) -- and the core wedged, presumably on reaching unmapped memory. Everything
+ * after that point is invisible, so a single bad string hides the entire rest of the run.
+ *
+ * With the clamp the runaway returns a wrong answer instead of killing the core, and the
+ * domain keeps going. That answers the question the wedge cannot: is this ONE bad string
+ * with a working SQLite behind it, or the first of many failures? Pick n well above any
+ * real SQLite string (64 KiB) so a clamped return is unambiguously the pathological case
+ * and never a normal one -- under QEMU it must be unreachable, which the QEMU gate checks.
+ */
 #ifdef BEEBS_STRING_LINEAR_SAFE
 bsize_t strlen(const char *s) {
   bsize_t i = 0;
   BEEBS_PRINT_CAP(s);
+#ifdef BEEBS_STRLEN_CLAMP
+  while (i < (bsize_t)(BEEBS_STRLEN_CLAMP) && s[i])
+    i++;
+#else
   while (s[i])
     i++;
+#endif
   return i;
 }
 #else

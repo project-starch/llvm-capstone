@@ -35,7 +35,34 @@ OVERLAYS=(
   "$ROOT/capstone/caplifive-system/sw/buildroot/overlay/test-domains" # FPGA
 )
 
-bash "$SCRIPT_DIR/build-sqlite-silicon.sh"
+# SKIP_BUILD=1 -- reuse the domain already on disk instead of rebuilding it.
+#
+# The rebuild here is unconditional by design: staging a domain that does not match the
+# sources is how a board session silently measures the wrong binary, and that has happened.
+# But the common workflow is `run-sqlite-silicon.sh` (QEMU gate) immediately followed by
+# this script, and the gate ALREADY built the identical domain seconds earlier. Rebuilding
+# the 9.5 MB amalgamation a second time costs ~4 minutes per attempt, all of it with the
+# FPGA sitting idle waiting for a firmware it cannot start until the compile finishes.
+#
+# So the rebuild is skippable, but only against a RECORDED HASH rather than a promise: the
+# caller passes the sha256 it verified, and staging refuses if the artifact on disk is not
+# that one. That keeps the protection (never stage an unverified binary) and drops the
+# duplicate work. Without SKIP_BUILD the behaviour is unchanged.
+if [[ "${SKIP_BUILD:-0}" == "1" ]]; then
+  [[ -n "${EXPECT_DOM_SHA:-}" ]] || {
+    echo "SKIP_BUILD=1 requires EXPECT_DOM_SHA=<sha256 of the domain you verified>" >&2
+    exit 1; }
+  _dom=$CAPSTONE_TMP_ROOT/sqlite-silicon/sqlite_silicon.dom
+  _have=$(sha256sum "$_dom" 2>/dev/null | cut -d' ' -f1)
+  if [[ "$_have" != "$EXPECT_DOM_SHA" ]]; then
+    echo "REFUSING to skip the build: $_dom is $_have, expected $EXPECT_DOM_SHA" >&2
+    echo "The artifact on disk is not the one you verified. Re-run without SKIP_BUILD." >&2
+    exit 1
+  fi
+  echo "== reusing verified domain $_have (SKIP_BUILD=1)"
+else
+  bash "$SCRIPT_DIR/build-sqlite-silicon.sh"
+fi
 bash "$SCRIPT_DIR/build-sqlite-host.sh"
 
 SRC_DOM=$CAPSTONE_TMP_ROOT/sqlite-silicon/sqlite_silicon.dom
