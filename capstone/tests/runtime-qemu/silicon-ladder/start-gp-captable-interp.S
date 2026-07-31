@@ -468,6 +468,22 @@
    string CONTENTS later turned out to be wrong on silicon (strlen of a 21-char literal
    returning 1), the first thing to rule out was whether this edit caused it. Keep the knob
    so that control can be re-run cheaply rather than reasoned about. */
+/* CORRECTION 2026-07-31 (later the same day): the revert note below is WRONG about WHICH
+   end is misaligned, and the block does in fact fix every carve. Replaying this exact loop
+   over the real descriptor of a built probe domain (same granule shift loop, same
+   stor = max(16, align_up(size,16)), top descending) gives:
+
+       granule-align OFF -> 1 carve not representable:
+           idx 170  size=262144  stor=262144  granule=512  base%g=64  len%g=0
+       granule-align ON  -> 0 carves not representable
+
+   identical for every plausible region top tried, so it does not depend on where dom_data
+   lands. len%g is ZERO: the LENGTH was always fine and the BASE is what is misaligned.
+   align_up(262144,512) == 262144, so this block's stor adjustment is a no-op for that
+   object and its `top = align_down(top, granule)` is precisely the missing piece.
+
+   Still off by default until confirmed on silicon, because the last decision here was taken
+   from an unverified claim and reversing it on another one would repeat the mistake. */
 /* DISABLED BY DEFAULT 2026-07-31, same day it was added. Enable with INTERP_GRANULE_ALIGN=1
    only to re-measure it.
    It was added to make carve bounds exactly representable, and it does NOT achieve that: it
