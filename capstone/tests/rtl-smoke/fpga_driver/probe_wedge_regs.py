@@ -121,6 +121,23 @@ def main():
         cold_boot(console, C.GDB_PROMPT, IMG_NAME)
         log("booted; launching the domain (expected to wedge), then reading the mux")
 
+        # CLEAR THE TRAP LOG FIRST, or the reading is worthless.
+        #
+        # recent_nontrivial_* latches ANY trap except interrupts (cause 0) and illegal
+        # instruction (cause 2) -- cva6.sv:1078-1083. Linux runs in S-mode and issues SBI
+        # ecalls constantly, and ENV_CALL_SMODE is cause 9, so by the time a domain runs the
+        # log is already full of routine kernel traffic. Measured 2026-07-31: a first read
+        # returned trap_seen=1 mcause=9 and was briefly taken as evidence about the wedge; it
+        # was a stale SBI call from boot.
+        #
+        # cva6.sv:984 gives the clear: debug_byte_sel=3'b101 with debug_reg_sel=5'b11111,
+        # i.e. switches = 0b10111111 = 191. Pulse that AFTER boot and BEFORE launching the
+        # domain, then anything latched afterwards belongs to the run under test.
+        log("clearing the trap log (switches=191) so the reading is attributable")
+        set_switches(console, 191)
+        time.sleep(1.0)
+        set_switches(console, 0)
+
         try:
             console.run_command(f"{HOST} {DOM}; echo D''N_$?", r"DN_\d",
                                 timeout=SETTLE, idle_timeout=SETTLE)
