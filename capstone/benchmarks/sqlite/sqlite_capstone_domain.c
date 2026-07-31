@@ -611,6 +611,74 @@ static int run_sqlite_staged(int stage) {
     }
     return ok;                          /* expect 16 */
   }
+  if (stage == 52 || stage == 53) {
+    /* WHICH literal, and WHAT does it contain? Stage 51 returned 0xB1 -- a bounded strlen
+       never terminated, so the domain was RUNNING, not hung. These two localise it.
+         52: return 0xC0|i for the FIRST literal whose walk overruns; 16 if all terminate.
+         53: byte-survival bitmap of that literal's first 8 bytes -- 0xFF means the bytes
+             arrived intact and the fault is in the WALK, not the DATA; anything less is the
+             data being wrong on silicon again, i.e. the unaligned-copy fix is incomplete.
+       Same literal set as stage 51 so the two are directly comparable. */
+    static const char *const lit[16] = {
+      "ltrim", "rtrim", "trim", "max", "min", "typeof", "length", "instr",
+      "substr", "upper", "lower", "coalesce", "hex", "unhex", "quote", "replace" };
+    unsigned i, guard;
+    if (stage == 52) {
+      for (i = 0; i < 16; i++) {
+        const char *z = lit[i];
+        if (!z) return 0xD0u | i;              /* 0xDn = literal n is a NULL pointer */
+        guard = 0;
+        while (z[guard]) { if (++guard > (1u << 16)) return 0xC0u | i; }
+      }
+      return 16;                                /* all sixteen terminate */
+    }
+    /* stage 53: bytes 0..7 of lit[0] ("ltrim" -- 5 chars then NUL, so bits 0..4 set,
+       bits 5..7 clear => expect 0x1F if the data is correct). */
+    {
+      const char *z = lit[0];
+      unsigned m = 0;
+      if (!z) return 0xD0u;
+      for (i = 0; i < 8; i++)
+        if (z[i]) m |= 1u << i;
+      return (int)m;                            /* expect 0x1F for "ltrim" */
+    }
+  }
+  if (stage >= 54 && stage <= 56) {
+    /* lit[0] walks fine and its bytes are correct (stage 53 = 0xDF = "ltrim" + NUL + "rt",
+       which is right for a MERGED container -- my earlier 0x1F expectation wrongly assumed
+       bytes 5..7 were zero). lit[1] never terminates (stage 52 = 0xC1) even though its bytes
+       are visibly present as bits 6,7 of that same bitmap. So the DATA is there and the
+       POINTER is the suspect.
+         54: byte bitmap of lit[1] itself -- if it matches lit[0]'s shape the pointer is fine
+             and the fault is in the walk; if it is 0xFF the pointer lands somewhere with no
+             NUL nearby.
+         55: (lit[1] - lit[0]) as a byte. For "ltrim\0" the correct delta is 6. Anything else
+             means cap-init produced a wrong offset for the second leaf.
+         56: same delta for (lit[2] - lit[1]); "rtrim\0" is also 6. Distinguishes "only leaf 1
+             is wrong" from "every leaf after the first is wrong". */
+    static const char *const lit[16] = {
+      "ltrim", "rtrim", "trim", "max", "min", "typeof", "length", "instr",
+      "substr", "upper", "lower", "coalesce", "hex", "unhex", "quote", "replace" };
+    unsigned i;
+    if (stage == 54) {
+      const char *z = lit[1];
+      unsigned m = 0;
+      if (!z) return 0xD0u;
+      for (i = 0; i < 8; i++)
+        if (z[i]) m |= 1u << i;
+      return (int)m;                 /* expect 0xDF, same shape as lit[0] */
+    }
+    {
+      /* Pointer delta, low byte. Plain C subtraction, NOT hand-rolled asm: the compiler
+         emits lcc/lcc/sub for it, which is exactly what strlen's epilogue does. A
+         hand-written `.insn` got the lcc funct7 wrong once already (it is 0x04, with the
+         zimm in the rs2 field, not 0x08). */
+      const char *p, *q;
+      if (stage == 55) { p = lit[0]; q = lit[1]; }
+      else             { p = lit[1]; q = lit[2]; }
+      return (int)(((unsigned long)(q - p)) & 0xff);   /* expect 6 for both */
+    }
+  }
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
