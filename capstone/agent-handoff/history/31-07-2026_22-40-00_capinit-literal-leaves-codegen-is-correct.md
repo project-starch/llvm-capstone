@@ -120,3 +120,58 @@ on the staged bisection at all.
    SHA5 there was no way to tell "this probe wedges" from "everything wedges now". The batch
    rule already says to include controls; a prune step silently violated it. Prune and
    ordering must be decided together.
+
+## Board results 2026-07-31 late (BOARD_RC=0, run-scoped) — TWO MORE REFUTATIONS
+
+    wd51  stage 51  rc=0xB1   watchdog CONTROL, UNGUARDED build   want 0xB1  OK
+    wd53  stage 53  rc=0xDF   lit[0] bitmap CONTROL               want 0xDF  OK
+    wd57  stage 57  rc=7      lit[1] read twice via volatile      want 7     OK
+    wd58  stage 58  rc=7      lit[0] read twice, control          want 7     OK
+    wd59  stage 59  rc=5      walk lit[1] after one read          want 5     OK
+    wd54  stage 54  WEDGED    lit[1] bitmap, plain pointer
+
+**"The SHA5 wedge is self-inflicted" — REFUTED.** The UNGUARDED `wd51`, carrying all three
+foreign `lit` arrays contributed by stages 52-59, returned `0xB1` — identical to its result
+before those stages existed. `wd53` likewise returned `0xDF`. So the injected arrays do not
+cause the wedge; `wd55`/`wd54` wedge for their own reasons, not universally. The `#if` guards
+are hygiene (they remove the "every array in every build" trap), **not** the fix. The claim
+had been stated as "very likely self-inflicted" on correlation alone while counter-evidence
+was already available: `wd51` carried one foreign array when it first returned `0xB1`, so the
+story required "one harmless, three fatal" with nothing supporting it.
+
+**"LDC consumes its memory source" — REFUTED.** Stage 57 reads `lit[1]` twice through a
+`volatile` array pointer and returns **7**: both reads non-NULL AND equal. Stage 58 does the
+same for `lit[0]` and also returns 7. The documented linear-clearing does not fire here.
+
+**And `lit[1]` is fine in isolation.** Stage 59 reads `lit[1]` once and walks it: **rc=5**,
+the correct index of the NUL in `"rtrim"`. Pointer, data and walk are all correct for that
+element — which flatly contradicts stage 52's `0xC1` ("`lit[1]` never terminates").
+
+## THE CONFOUND that invalidates the 52-vs-59 comparison
+
+Every staged block declared its OWN local `static const char *const lit[16]`. In an unguarded
+build all of them exist, so:
+
+* stage 52 reads the **second** cap-init'd array,
+* stage 54 reads the **third**,
+* stage 59 reads the **fourth**.
+
+Different objects, different addresses, initialised by different blocks of
+`__capstone_cap_init`. So "52 fails, 59 works" does **not** isolate the access pattern; it is
+equally consistent with *the Nth cap-init'd array is broken and the Mth is fine*. Those two
+explanations need completely different fixes, and nothing measured so far separates them.
+
+Note this also re-frames the static proof above: it showed all three arrays receive correct
+pointers **in the emitted code**. It did not show they receive correct pointers at RUNTIME.
+
+## Next experiment — stages 60/61/62, one array, three shapes
+
+A single **file-scope** `capstone_probe_lit[16]`, read three ways:
+
+* **60** — stage-52 shape: loop `i=0..15`, walk each. Expect **16**; `0xC0|i` on overrun.
+* **61** — stage-54 shape: plain `z = lit[1]`, bitmap bytes 0..7. Expect **0xDF**.
+* **62** — stage-59 shape: volatile read of `lit[1]`, bounded walk. Expect **5**.
+
+Discriminator: if 60 overruns while 62 returns 5, the ACCESS PATTERN is the mechanism and the
+array is exonerated. If all three agree, the 52-vs-59 split was about WHICH array, and the
+fault is in cap-init's later blocks at runtime, not in any walk.
