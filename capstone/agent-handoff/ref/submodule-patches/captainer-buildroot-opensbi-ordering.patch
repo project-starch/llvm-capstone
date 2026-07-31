@@ -1,0 +1,42 @@
+diff --git a/Makefile b/Makefile
+index 77d00e7..6b06a92 100644
+--- a/Makefile
++++ b/Makefile
+@@ -29,10 +29,31 @@ build-vanilla:
+ 		LD_LIBRARY_PATH="" $(MAKE) -C buildroot BR2_EXTERNAL="$(BUILDROOT_EXTERNAL)" O="$(CONFIG_PATH)" -j $(shell nproc); \
+ 	fi
+ 
++# ORDERING. Most A= targets FEED the rootfs -- modcapstone-rebuild installs capstone.ko and
++# capstone-test-domains installs *.dom into TARGET_DIR -- so they must run BEFORE the bare
++# pass rolls the cpio and builds Image. opensbi-rebuild is the exception: it CONSUMES
++# images/Image (platform/fpga/ariane/objects.mk sets FW_PAYLOAD_PATH=../../images/Image), so
++# running it first links the PREVIOUS generation's kernel into fw_payload.bin.
++#
++# That is why the FPGA recipe has to invoke `make build A=opensbi-rebuild` TWICE to converge:
++# the first run links a stale Image and the second happens to link the right one because the
++# two generations are identical. Measured 2026-07-31 on this tree: fw_payload.bin was written
++# 30.8 s BEFORE the images/Image it claims to embed. It is also how a board session once ran
++# a day-old initramfs and answered `not found` (exit 127), which read as a domain failure.
++#
++# So: for opensbi-rebuild ONLY, run the bare pass first and relink after. The firmware then
++# embeds the final Image by construction rather than by the accident that Image1 == Image2,
++# and one full buildroot pass per iteration disappears. Deliberately NOT a blanket swap --
++# that would ship a stale .ko/.dom and relocate the wrong-binary bug onto /test-domains/.
+ build: $(CAPSTONE_S_OUTPUT)
+-	LD_LIBRARY_PATH="" $(MAKE) -C buildroot BR2_EXTERNAL="$(BUILDROOT_EXTERNAL)" O="$(CONFIG_PATH)" $(A) -j $(shell nproc)
+-	if [ -n "$(A)" ]; then \
++	if [ "$(A)" = "opensbi-rebuild" ]; then \
+ 		LD_LIBRARY_PATH="" $(MAKE) -C buildroot BR2_EXTERNAL="$(BUILDROOT_EXTERNAL)" O="$(CONFIG_PATH)" -j $(shell nproc); \
++		LD_LIBRARY_PATH="" $(MAKE) -C buildroot BR2_EXTERNAL="$(BUILDROOT_EXTERNAL)" O="$(CONFIG_PATH)" $(A) -j $(shell nproc); \
++	else \
++		LD_LIBRARY_PATH="" $(MAKE) -C buildroot BR2_EXTERNAL="$(BUILDROOT_EXTERNAL)" O="$(CONFIG_PATH)" $(A) -j $(shell nproc); \
++		if [ -n "$(A)" ]; then \
++			LD_LIBRARY_PATH="" $(MAKE) -C buildroot BR2_EXTERNAL="$(BUILDROOT_EXTERNAL)" O="$(CONFIG_PATH)" -j $(shell nproc); \
++		fi; \
+ 	fi
+ 
+ QEMU_BUILD = $(CURDIR)/build/images
+
+--- provenance ---
+repo: project-starch/captainer-buildroot (nested submodule sw/buildroot of caplifive-system)
+base: 8c5518d Updated capstone-sbi to fix discrepancy with QEMU
