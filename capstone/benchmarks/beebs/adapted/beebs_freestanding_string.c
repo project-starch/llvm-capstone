@@ -191,6 +191,31 @@ bsize_t strlen(const char *s) {
 }
 #endif
 
+/* strcmp/strcpy get the same treatment as strlen under BEEBS_STRING_LINEAR_SAFE, and for
+   the same reason -- see the strlen header comment. Walking a pointer compiles to a loop
+   that COPIES the cursor (`movc`, which capstone_flu_unit.anvil:6-27 makes destructive for
+   a non-NONLIN source) and advances it in place; indexing lowers to CINCOFFSET reg-reg,
+   which returns rs1 UNCHANGED (capstone_flu_unit.anvil:29-46).
+   These two were missed when strlen was converted, and that omission is exactly why the
+   board still wedged in sqlite3RegisterBuiltinFunctions after the string DATA was fixed:
+   the patched amalgamation runs `strcmp(zName, "ltrim")` and nine more like it for EVERY
+   builtin function, so strcmp is on that path ~10x per entry. memcpy/memmove/memset/memcmp
+   need no change -- they already index (`for (; i < n; i++)`). */
+#ifdef BEEBS_STRING_LINEAR_SAFE
+int strcmp(const char *a, const char *b) {
+  bsize_t i = 0;
+  while (a[i] && a[i] == b[i])
+    i++;
+  return (int)(unsigned char)a[i] - (int)(unsigned char)b[i];
+}
+
+char *strcpy(char *dst, const char *src) {
+  bsize_t i = 0;
+  while ((dst[i] = src[i]) != '\0')
+    i++;
+  return dst;
+}
+#else
 int strcmp(const char *a, const char *b) {
   while (*a && (*a == *b)) {
     a++;
@@ -205,6 +230,7 @@ char *strcpy(char *dst, const char *src) {
     ;
   return dst;
 }
+#endif
 
 #ifdef BEEBS_FREESTANDING_STRING_TEST
 #include <stdio.h>

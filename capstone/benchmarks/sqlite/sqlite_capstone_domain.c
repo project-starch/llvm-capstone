@@ -354,6 +354,34 @@ static int run_sqlite_staged(int stage) {
         m |= 1u << i;
     return (int)m;
   }
+  if (stage == 15) {
+    /* STORE-BURST probe. sqlite3RegisterBuiltinFunctions issues 593 capability stores (stc)
+       inside 1380 instructions -- ~62% store density, an order of magnitude denser than
+       anything that has ever run on this bitstream (sqlite3_config 84 stc, memsys5Init 9,
+       PcacheInitialize 1, os_init 2). It still wedges after the unaligned-copy fix, so
+       density is the remaining thing that makes it unique.
+       Writes 512 capabilities into a local array, reads them all back, returns how many
+       survived (capped at 255). A clean 255 exonerates store bursts; a wedge reproduces the
+       failure in ~20 lines with no SQLite at all -- which is the artifact to hand over. */
+    const char *buf[512];
+    unsigned i, ok = 0;
+    for (i = 0; i < 512; i++)
+      buf[i] = "capstone_probe_string" + (i & 15);
+    for (i = 0; i < 512; i++)
+      if (buf[i] && buf[i][0])
+        ok++;
+    return (int)(ok > 255 ? 255 : ok);
+  }
+  if (stage == 16) {
+    /* SCALE probe: same shape as the FuncDef array -- many local structs, each holding a
+       string pointer -- but a fraction of the size. Separates "this construct is broken"
+       from "this construct breaks above some size". */
+    struct { const char *z; int n; } a[128];
+    unsigned i; int total = 0;
+    for (i = 0; i < 128; i++) { a[i].z = "alpha"; a[i].n = (int)i; }
+    for (i = 0; i < 128; i++) total += sqlite3Strlen30(a[i].z);
+    return total & 0xff;                 /* expect 128*5 = 640 -> 0x80 */
+  }
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
