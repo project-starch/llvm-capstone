@@ -157,8 +157,13 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -I"$(dirname "$PATCHED")" -I"$BUILTINS")
 
 echo "== compiling the single silicon TU (this is the first time SQLite sees the silicon ABI)"
+# DOMAIN_EXTRA_DEFS reaches sqlite_capstone_domain.c (it is #included by amalgam.c), so a
+# diagnostic build can be produced without editing this script -- e.g.
+#   DOMAIN_EXTRA_DEFS=-DCAPSTONE_SQLITE_STAGE=2
+# for the staged-return bisection. Empty by default, so the normal build is unaffected.
+read -r -a _domain_defs <<< "${DOMAIN_EXTRA_DEFS:-}"
 "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$OPT" \
-  -DSQLITE_HEAP_SIZE=$HEAP \
+  -DSQLITE_HEAP_SIZE=$HEAP "${_domain_defs[@]}" \
   -c "$OBJ_DIR/amalgam.c" -o "$OBJ_DIR/amalgam.o"
 
 echo "== compiling the no-globals support objects separately (they cannot collide)"

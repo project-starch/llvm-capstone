@@ -235,6 +235,32 @@ static int run_sqlite_extended(sqlite3 *db) {
   return SQLITE_OK;
 }
 
+#ifdef CAPSTONE_SQLITE_STAGE
+/* The first four steps of run_sqlite(), each individually stoppable. Deliberately a
+   separate function rather than #ifdefs sprinkled through run_sqlite(): the real path must
+   stay byte-identical, or a bisection result says nothing about the build that matters.
+     stage 0 -- return at once. Proves entry + return works and the shared region is
+                writable; everything else depends on this and it has never been shown.
+     stage 1 -- after sqlite3_config(SQLITE_CONFIG_HEAP, ...). First touch of sqlite_heap,
+                the 256 KB global whose carve needed the granule fix.
+     stage 2 -- after sqlite3_initialize().
+     stage 3 -- after sqlite3_open(":memory:"). First real allocation traffic. */
+static int run_sqlite_staged(int stage) {
+  sqlite3 *db = 0;
+  int rc;
+  if (stage <= 0)
+    return 0;
+  rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+  if (rc != SQLITE_OK || stage <= 1)
+    return rc;
+  rc = sqlite3_initialize();
+  if (rc != SQLITE_OK || stage <= 2)
+    return rc;
+  rc = sqlite3_open(":memory:", &db);
+  return rc;
+}
+#endif
+
 static int run_sqlite(void) {
   sqlite3 *db = 0;
   sqlite3_stmt *statement = 0;
@@ -343,6 +369,19 @@ void domain_main(unsigned *res, unsigned func) {
 #endif
   if (hostcall_metadata)
     hostcall_metadata->length = 0;
+#ifdef CAPSTONE_SQLITE_STAGE
+  /* STAGED BISECTION. Run only the first N steps of run_sqlite() and RETURN, writing a
+     marker the host can print.
+     Why staged returns rather than more wedge probes: a wedge produces no output at all,
+     so every failed board run says only "somewhere after SQ: G/enter" and costs a whole
+     session to learn one bit. Six sessions were spent that way narrowing inside strlen,
+     which the clamp experiment then showed was not even spinning. A build that RETURNS
+     always yields a result, so the bisection converges instead of guessing.
+     Marker: 0x5A6E_ssrr -- ss = stage reached, rr = the SQLite rc at that point. */
+  *res = 0x5A6E0000u | ((unsigned)(CAPSTONE_SQLITE_STAGE) << 8) |
+         ((unsigned)run_sqlite_staged(CAPSTONE_SQLITE_STAGE) & 0xffu);
+  return;
+#endif
   (void)run_sqlite();
   *res = SQLITE_HC_RET_DONE;
 }
