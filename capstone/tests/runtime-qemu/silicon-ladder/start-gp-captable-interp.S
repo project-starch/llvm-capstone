@@ -448,6 +448,35 @@
   bnez  t4, 11f
   li    t4, 16
 11:
+  /* BOUNDS REPRESENTABILITY. A capability's bounds are encoded with a granule of
+       1 << (max(0, floor(log2 len) - 12) + 3)
+     so 16-byte alignment is exact only while that granule is <= 16, i.e. len < 8192.
+     Above it the hardware CANNOT represent a 16-aligned base/length and must round the
+     encoded bounds outward -- which silently moves the object the cap-table entry points
+     at. This is the same rule that caps merged string containers at 4096 bytes.
+
+     Measured 2026-07-31 on the SQLite domain: of 179 globals exactly ONE trips it --
+     index 170, sqlite_heap, 262144 bytes, granule 512 -- and it is precisely the object
+     whose contents strlen reads. QEMU tolerated it; on silicon strlen ran off the end of
+     the heap and scanned 31,342,951 bytes.
+
+     So align BOTH ends of every carve to that global's own granule: round the running top
+     DOWN and the storage size UP. Costs at most granule-1 bytes of padding per global, and
+     only for globals >= 8192 bytes, of which this domain has one. */
+  li    a4, 8                        /* a4 = granule                                    */
+  mv    a5, t4
+12:
+  li    a6, 8192
+  blt   a5, a6, 13f
+  slli  a4, a4, 1
+  srli  a5, a5, 1
+  j     12b
+13:
+  addi  a5, a4, -1                   /* a5 = granule - 1                                */
+  not   a6, a5                       /* a6 = ~(granule - 1)                             */
+  add   t4, t4, a5
+  and   t4, t4, a6                   /* stor = align_up(stor, granule)                  */
+  and   t1, t1, a6                   /* top  = align_down(top, granule)                 */
   sub   t1, t1, t4
   split(t2, sp, t1)                  /* t2 = storage cap                               */
 #if INTERP_SP_LINEAR
