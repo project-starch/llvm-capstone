@@ -274,3 +274,62 @@ until a probe returns the two guard VALUES rather than a pass/fail bitmap.
    question.
 3. If consumption is confirmed, read the rev-node allocator state via the debug mux
    (`rev_node_head` / overflow, sel `11001`/`11010`) before and after a walk.
+
+## CORRECTION (multi-agent audit, verified against primary logs): the walk-count ladder was CONFOUNDED
+
+Two claims recorded above are wrong. Both were checked directly, not argued.
+
+**1. "3 walks always wedge — 4 binaries, 4 boots" is really 2 binaries, 2 boots.**
+`wd73` and `wd74` NEVER ENTERED THE DOMAIN. Counting `SQ: G/enter` in the run-scoped files
+(each contains the `wd71` control first, so the control accounts for one):
+
+    sqlite-pad72.txt  G/enter=2, F/share2=2, SHA6=4, last line "SQ: G/enter"  -> wd72 ENTERED, wedged in-domain
+    sqlite-pad73.txt  G/enter=1, F/share2=1, SHA6=2, last line "SHA5:00000001" -> wd73 died in region-share
+    sqlite-pad74.txt  G/enter=1, F/share2=1, SHA6=2, last line "SHA5:00000001" -> wd74 died in region-share
+
+They executed **zero walks**, so they are not data points about walk count at all. The real
+support is `wd67` and `wd72` — n=2, each a single sample by the record's own rule.
+
+**2. "Instruction placement REFUTED" is wrong, and probably backwards.** `wd72` (0 pad),
+`wd73` (+32B) and `wd74` (+64B) are the same source; the UNPADDED one reached the domain body
+and the two PADDED ones did not. Padding changed *where* the failure happened. That is
+placement mattering, recorded as placement being ruled out.
+
+**3. `wd63` falsifies a monotone walk-count/ldc threshold outright.** Its inner `break` exits
+only the `while`, so all four iterations run: **four walks, and it RETURNS** (`0x0E`/`0x0F`,
+seen in two separate boots). At `-O0` that is hundreds of `ldc` from one stack slot — far more
+than the ~18 the 3-walk story implies is fatal.
+
+**What actually survives:** `>= 3 walks through the SAME pointer` fails (n=2), while 4 walks
+through FOUR DIFFERENT pointers return. "Same pointer" vs "count" has never been separated,
+and the walks also differ in iteration count (a terminating walk is ~6 iterations, an
+overrunning one is 65), so the x-axis was never controlled.
+
+## THE HIGHEST-VALUE FINDING: a "wedge" is probably an UNTRAPPED EXCEPTION, not a stalled core
+
+Verified against primary sources:
+
+* The monitor zeroes all sealed slots and writes only 0, 2, 3 —
+  `sbi_capstone.c:760` (`dom_seal[i] = 0`), `:782`, `:783`, `:784`. **Slot 1 is never written.**
+* Slot 1 *is* `{ctvec, mtvec}` and *is* swapped in on domain entry — `csr_regfile.sv:399`
+  (`7'd1: dom_switch_reg_resp_o = {ctvec_q, mtvec_q};`).
+* Capability faults are ordinary traps (`ex_stage.sv:469`, `cva6.sv:1357`, cause `23 + code`;
+  `capstone_unit.anvilh:289-296`), and with `mtvec = 0` they vector to pc=0, which is outside
+  PCC and re-faults forever — silently, because the monitor's `EXCX` report is unreachable.
+
+So an in-domain fault and a hung core are INDISTINGUISHABLE today, and "wedge" has been read as
+"hang" throughout this campaign without evidence. This is a measurement defect, and fixing it
+is worth more than any single hypothesis: it converts every future wedge into a returnable
+marker and removes the sampling limit that makes wedging probes unrepeatable within a boot.
+
+**Cheap confirmation available now, no code change:** run a wedging domain (`wd67`) and then
+read the trap latch via the debug mux with `probe_wedge_regs.py` (switches=255 trap latch;
+clear via switches=191 first). A latched trap proves the wedge is an exception.
+
+## Latent bugs worth their own ISSUES.md entries (NOT this bug)
+
+* `capstone_dyn_unit.anvil:302` sends `cap_load_ri.init` BEFORE the `NOT_CAP` check at
+  `:303-306`, and it is the only error branch with no `abort_accumulation_load` — leaves
+  `req_set` sticky.
+* `scoreboard.sv:320-324` hardwires `wb[1..3].cap_data = '0`, forwarded at fixed priority
+  (`issue_read_operands.sv:786-807`).
