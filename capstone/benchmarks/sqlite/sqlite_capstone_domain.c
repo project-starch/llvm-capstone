@@ -393,8 +393,11 @@ static int run_sqlite_staged(int stage) {
        string data (fixed), 512 capability stores (pass), 128 local structs (pass), strlen on
        cap-table literals (pass), strcmp/strcpy linear-safety (fixed, still wedges).
        Returns how many survived the round trip; expect 8. */
-    static struct { const char *z; int n; } g[8];
-    struct { const char *z; int n; } l[8];
+    /* Named type: two separate anonymous struct declarations are DISTINCT types in C, so
+       the element-wise assignment below would not compile against an anonymous pair. */
+    struct capstone_kv { const char *z; int n; };
+    static struct capstone_kv g[8];
+    struct capstone_kv l[8];
     unsigned i; int ok = 0;
     for (i = 0; i < 8; i++) { l[i].z = "alpha"; l[i].n = (int)i; }
     for (i = 0; i < 8; i++) g[i] = l[i];
@@ -402,6 +405,45 @@ static int run_sqlite_staged(int stage) {
       if (g[i].z && sqlite3Strlen30(g[i].z) == 5 && g[i].n == (int)i)
         ok++;
     return ok;
+  }
+  if (stage == 18 || stage == 19) {
+    /* STRAIGHT-LINE init of a local array with DISTINCT capability constants -- the exact
+       shape of capstoneBuiltinFunc[], and the one thing still untested.
+       Board 2026-07-31: clamping the registration loops to ONE entry (BUILTIN_LIMIT=1) still
+       WEDGES, and the clamp does not touch the array INITIALISER -- so the wedge happens
+       while BUILDING the local array, before any copy, strcmp or hash insertion.
+       stage 15 already stored 512 capabilities into a local array and passed, but it stored
+       the SAME pointer in a LOOP. The real code is straight-line with ~72 DISTINCT constants,
+       each materialised separately. That difference is what these two probe, at two sizes so
+       a threshold shows up: 18 -> 16 entries, 19 -> 64 entries.
+       Returns the number of entries that read back correctly (capped at 255). */
+    struct kv { const char *z; const char *y; };
+    struct kv a[64];
+    unsigned n = (stage == 18) ? 16u : 64u, i;
+    int ok = 0;
+    /* Deliberately NOT a loop: each element gets its own distinct constants, so the
+       compiler must materialise a separate capability per store, as it does for FuncDef. */
+    a[0].z = "ltrim";      a[0].y = "aaa0";
+    a[1].z = "rtrim";      a[1].y = "aaa1";
+    a[2].z = "trim";       a[2].y = "aaa2";
+    a[3].z = "max";        a[3].y = "aaa3";
+    a[4].z = "min";        a[4].y = "aaa4";
+    a[5].z = "typeof";     a[5].y = "aaa5";
+    a[6].z = "length";     a[6].y = "aaa6";
+    a[7].z = "instr";      a[7].y = "aaa7";
+    a[8].z = "substr";     a[8].y = "aaa8";
+    a[9].z = "upper";      a[9].y = "aaa9";
+    a[10].z = "lower";     a[10].y = "aab0";
+    a[11].z = "coalesce";  a[11].y = "aab1";
+    a[12].z = "hex";       a[12].y = "aab2";
+    a[13].z = "unhex";     a[13].y = "aab3";
+    a[14].z = "quote";     a[14].y = "aab4";
+    a[15].z = "replace";   a[15].y = "aab5";
+    for (i = 16; i < 64; i++) { a[i].z = "filler"; a[i].y = "fill"; }
+    for (i = 0; i < n; i++)
+      if (a[i].z && a[i].y && sqlite3Strlen30(a[i].z) > 0 && sqlite3Strlen30(a[i].y) > 0)
+        ok++;
+    return ok > 255 ? 255 : ok;      /* expect 16 for stage 18, 64 for stage 19 */
   }
   if (stage <= 0)
     return 0;

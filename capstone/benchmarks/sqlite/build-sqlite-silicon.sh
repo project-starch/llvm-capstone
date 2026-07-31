@@ -56,6 +56,32 @@ fi
 
 # Stage the amalgamation's includes side by side so plain #include works.
 cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
+
+# BUILTIN_LIMIT=<n> -- DIAGNOSTIC ONLY. Clamp how many builtin functions
+# sqlite3RegisterBuiltinFunctions processes, so the count can be bisected on the board.
+#
+# That function is the bisected wedge point (stages 7/8/9 return rc=0, stage 10 wedges) and
+# every construct inside it has now been isolated and cleared individually: string data
+# (unaligned-copy fix, board-confirmed 0xFF), 512 capability stores, 128 local structs
+# holding string pointers, strlen on cap-table literals, strcmp/strcpy linear-safety, a
+# stack->global struct assignment carrying a capability, a >2048-byte register-built stack
+# frame, and gp offsets (max index 175 of 176, in range). The remaining untested variable is
+# SCALE: it processes ~72 entries and touches ~176 distinct cap-table slots, where every
+# probe touched one or two.
+#
+# limit=1 wedging  -> the construct itself is broken, and one entry is a minimal reproducer.
+# limit=1 passing and limit=N wedging -> it is a count/scale effect, and the bisection gives
+# the exact threshold, which is the number to hand the board owner.
+if [[ -n "${BUILTIN_LIMIT:-}" ]]; then
+  echo "== DIAGNOSTIC: clamping builtin-function registration to $BUILTIN_LIMIT entries"
+  sed -i \
+    -e "s/capstoneI<ArraySize(capstoneBuiltinFunc)/capstoneI<(int)($BUILTIN_LIMIT)/" \
+    -e "s/capstoneI<ArraySize(aBuiltinFunc)/capstoneI<(int)($BUILTIN_LIMIT)/" \
+    -e "s/sqlite3InsertBuiltinFuncs(aBuiltinFunc, ArraySize(aBuiltinFunc))/sqlite3InsertBuiltinFuncs(aBuiltinFunc, (int)($BUILTIN_LIMIT))/" \
+    "$OBJ_DIR/sqlite3-capstone.c"
+  grep -c "$BUILTIN_LIMIT" "$OBJ_DIR/sqlite3-capstone.c" >/dev/null || {
+    echo "BUILTIN_LIMIT clamp did not apply -- the amalgamation patch shape changed" >&2; exit 1; }
+fi
 cp -f "$VFS_DIR/capstone_sqlite_vfs.c"    "$OBJ_DIR/capstone_sqlite_vfs.c"
 cp -f "$VFS_DIR/../sqlite-vfs-skeleton/capstone_sqlite_os.c" "$OBJ_DIR/capstone_sqlite_os.c" 2>/dev/null \
   || cp -f "$ADAPTED/capstone_sqlite_os.c" "$OBJ_DIR/capstone_sqlite_os.c"
