@@ -445,6 +445,49 @@ static int run_sqlite_staged(int stage) {
         ok++;
     return ok > 255 ? 255 : ok;      /* expect 16 for stage 18, 64 for stage 19 */
   }
+  /* Stages 20-22 split stage 18, which WEDGES, against stage 13, which PASSES. Stage 18
+     changed FOUR things at once relative to stage 13 -- number of distinct literals (4 -> 16),
+     element type (const char* -> a 2-pointer struct), array length (4 -> 64), and an extra
+     filler loop -- so on its own it does not say which one matters. Each stage below changes
+     exactly ONE of them back. Poor hygiene to have bundled them; these unbundle it. */
+  if (stage >= 20 && stage <= 22) {
+    struct kv2 { const char *z; const char *y; };
+    struct kv2 a[64];
+    unsigned i;
+    int ok = 0;
+    if (stage == 20) {
+      /* stage 18 but only FOUR distinct literals. Isolates the COUNT of distinct constants. */
+      a[0].z = "ltrim"; a[0].y = "aaa0";
+      a[1].z = "rtrim"; a[1].y = "aaa1";
+      a[2].z = "trim";  a[2].y = "aaa2";
+      a[3].z = "max";   a[3].y = "aaa3";
+      for (i = 4; i < 64; i++) { a[i].z = "filler"; a[i].y = "fill"; }
+    } else if (stage == 21) {
+      /* stage 18's SIXTEEN distinct literals, but assigned through a LOOP from a static
+         table instead of straight-line. Isolates STRAIGHT-LINE materialisation. */
+      static const char *const tbl[16] = {
+        "ltrim", "rtrim", "trim", "max", "min", "typeof", "length", "instr",
+        "substr", "upper", "lower", "coalesce", "hex", "unhex", "quote", "replace" };
+      for (i = 0; i < 16; i++) { a[i].z = tbl[i]; a[i].y = "aaa0"; }
+      for (i = 16; i < 64; i++) { a[i].z = "filler"; a[i].y = "fill"; }
+    } else {
+      /* stage 22: sixteen distinct literals straight-line into a FLAT pointer array, no
+         struct. Isolates the 2-pointer STRUCT element type. */
+      const char *f[64];
+      f[0] = "ltrim"; f[1] = "rtrim"; f[2] = "trim";   f[3] = "max";
+      f[4] = "min";   f[5] = "typeof"; f[6] = "length"; f[7] = "instr";
+      f[8] = "substr"; f[9] = "upper"; f[10] = "lower"; f[11] = "coalesce";
+      f[12] = "hex";  f[13] = "unhex"; f[14] = "quote"; f[15] = "replace";
+      for (i = 16; i < 64; i++) f[i] = "filler";
+      for (i = 0; i < 16; i++)
+        if (f[i] && sqlite3Strlen30(f[i]) > 0) ok++;
+      return ok;
+    }
+    for (i = 0; i < 16; i++)
+      if (a[i].z && a[i].y && sqlite3Strlen30(a[i].z) > 0 && sqlite3Strlen30(a[i].y) > 0)
+        ok++;
+    return ok;                        /* expect 16 in every case */
+  }
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
