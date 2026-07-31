@@ -162,8 +162,28 @@ echo "== compiling the single silicon TU (this is the first time SQLite sees the
   -c "$OBJ_DIR/amalgam.c" -o "$OBJ_DIR/amalgam.o"
 
 echo "== compiling the no-globals support objects separately (they cannot collide)"
+# SUPPORT_OPT is separate from $OPT because these two objects hold the string primitives
+# (strlen/strcmp/memcpy) and are therefore where the domain spends its tight loops, while
+# the amalgamation is where -O1 currently cannot go.
+#
+# At -O0 every pointer is spilled, so `strlen` round-trips its walking pointer through a
+# stack CAPABILITY slot twice per iteration -- `ldc`, `lbu`, `ldc` again from the same
+# slot, `cincoffsetimm`, `stc`. The board froze at exactly the `cincoffsetimm` of that
+# sequence (image VA 0x14d884, ra -> sqlite3Strlen30), pc not advancing under stepi with
+# mcause=0. At -O1 the whole pattern is gone: the pointer stays in a register and the loop
+# contains no ldc/stc at all. Whether the round-trip is the CAUSE is not established --
+# QEMU executes the -O0 form happily, so the board is the only oracle -- but it is the one
+# construct at the frozen pc that -O1 removes.
+#
+# Why not raise $OPT itself: the amalgamation does not compile above -O0. `cond ? capA :
+# capB` reaches ISel as an i128 CapstoneISD::SELECT_CC, and the only patterns for it
+# (Select_GPRCAP_Using_CC_GPR) are emitted under !is64Bit(), so on capstone64 there is no
+# i128 select pattern and the backend aborts with "Cannot select". Reproducer:
+# `char *pick(int n, char *a, char *b) { return n == 10 ? a : b; }` at -O1. The n==0 form
+# compiles because SelectCC_GPR_rrirr adds a separate explicit Pat for a zero rhs.
+SUPPORT_OPT=${SQLITE_SUPPORT_OPT_LEVEL:-$OPT}
 for pair in "libc:$ADAPTED/capstone_sqlite_libc.c" "beebs_string:$BEEBS_STRING"; do
-  "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$OPT" \
+  "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$SUPPORT_OPT" \
     -c "${pair#*:}" -o "$OBJ_DIR/${pair%%:*}.o"
 done
 BUILTIN_OBJS=()

@@ -6,8 +6,60 @@
 #include "../../caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.h"
 #include "sqlite_hostcall.h"
 
+/* MARKERS WITHOUT STDIO, AND SHORT ENOUGH TO ESCAPE.
+ *
+ * Two independent properties, both forced by the board capture (2026-07-30, three
+ * SQLite attempts): after libcapstone's last line the console shows at most
+ * "sqlite-host: cre" -- 16 bytes, the 8250 TX FIFO depth -- and then the *bootrom*
+ * banner, i.e. the core RESETS. Only what is already sitting in the FIFO ever
+ * transmits, so a marker longer than 16 bytes is a marker that cannot be read.
+ *
+ * 1. write(2), not fprintf(). Removes glibc's vfprintf engine (buffering mode
+ *    selection, the unbuffered-stderr stack buffer, __printf_buffer's dispatch) from
+ *    the one instrument that has to survive the failure. This is exactly what every
+ *    freestanding ladder controller already does successfully on this board
+ *    (rtl-smoke/ladder_perf_ctl.c `puts_`), so the marker path becomes identical to a
+ *    proven-working one. No varargs, no locale, no buffering, one syscall.
+ * 2. Every marker is <= 16 bytes, so one FIFO load carries a whole marker and the
+ *    LAST marker on the console names the last phase reached. Values go on their own
+ *    following line, so a lost value can never cost a lost phase.
+ *
+ * Phases: A dom-ok, B before create_region #1, C before #2, D both mapped,
+ * E before share #1, F before share #2, G before call_dom, H after call_dom,
+ * X the failure path. */
+static void mark(const char *s) {
+  unsigned long n = 0;
+  while (s[n])
+    n++;
+  (void)write(STDOUT_FILENO, s, n);   /* fd 1: stderr resets the core */
+}
+
+/* Decimal, no varargs: hand-rolled so the value-carrying markers keep their meaning
+   without reintroducing stdio. Single write, so it cannot tear between digits. */
+static void mark_u(const char *prefix, unsigned long v) {
+  char buf[24];
+  int i = (int)sizeof(buf);
+  if (!v)
+    buf[--i] = '0';
+  while (v) {
+    buf[--i] = (char)('0' + (v % 10));
+    v /= 10;
+  }
+  mark(prefix);
+  (void)write(STDOUT_FILENO, buf + i, sizeof(buf) - (unsigned long)i);
+  mark("\n");
+}
+
 static int fail_cleanup(const char *message, unsigned long value) {
-  fprintf(stderr, "sqlite-host: %s (observed=%lu)\n", message, value);
+  /* X FIRST, on purpose. "sqlite-host: create_dom failed (observed=...)",
+     "sqlite-host: create_dom ok (id=...)" and "sqlite-host: create_region #1" all
+     share their first 16 characters, so the previous markers could not tell a FAILED
+     create_dom from a successful one -- and a failed create_dom means the ioctl
+     returned an error, which is a completely different bug from a wedge. */
+  mark("SQ: X/fail\n");
+  mark_u("SQ: obs=", value);
+  mark(message);
+  mark("\n");
   capstone_cleanup();
   return 1;
 }
@@ -18,7 +70,7 @@ int main(int argc, char **argv) {
     return 2;
   }
   if (capstone_init()) {
-    fprintf(stderr, "sqlite-host: failed to initialize Capstone\n");
+    mark("SQ: no-init\n");
     return 1;
   }
 
@@ -31,7 +83,8 @@ int main(int argc, char **argv) {
      the domain's entry glue look identical from the console: silence after
      libcapstone's last line. These two lines separate them, which is the whole
      difference between debugging the monitor and debugging the glue. */
-  fprintf(stderr, "sqlite-host: A/dom-ok id=%lu\n", (unsigned long)domain);
+  mark("SQ: A/dom-ok\n");
+  mark_u("SQ: id=", (unsigned long)domain);
 
   /* FINE-GRAINED PHASE MARKERS. The board wedges somewhere between "create_dom ok"
      and "entering domain", and the monitor's region path has two silent `while(1)`s
@@ -39,12 +92,20 @@ int main(int argc, char **argv) {
      We don't support this for now"). SQLite is the first domain to create and share
      TWO regions, so no ladder rung covers this. One marker per call turns a 6-call
      gap into a single named culprit, which is worth one board run. */
-  fprintf(stderr, "sqlite-host: B/mkregion1\n");
+  /* Attribute the faulting pc to an object. The first diagnosed run trapped ILLEGAL
+     INSTRUCTION at (32-bit-truncated) 0xBDB30E3C during create_region -- neither the
+     monitor (0x8001xxxx) nor the domain (0x10000). This host is a dynamic PIE, so print a
+     known libc address and a known host-image address; subtracting identifies which
+     mapping contains the fault, without parsing /proc/self/maps in a wedging process. */
+  mark_u("SQ: libc=", (unsigned long)(void *)&printf);
+  mark_u("SQ: self=", (unsigned long)(void *)&main);
+  mark("SQ: B/mkregion1\n");
   region_id_t metadata_region = create_region(SQLITE_HC_REGION_SIZE);
-  fprintf(stderr, "sqlite-host: C/mkregion2\n");
+  mark("SQ: C/mkregion2\n");
   region_id_t payload_region = create_region(SQLITE_HC_REGION_SIZE);
-  fprintf(stderr, "sqlite-host: D/mapped %ld,%ld\n",
-          (long)metadata_region, (long)payload_region);
+  mark("SQ: D/mapped\n");
+  mark_u("SQ: r1=", (unsigned long)metadata_region);
+  mark_u("SQ: r2=", (unsigned long)payload_region);
   struct sqlite_hostcall_v0 *metadata =
       (struct sqlite_hostcall_v0 *)map_region(metadata_region,
                                               SQLITE_HC_REGION_SIZE);
@@ -54,18 +115,18 @@ int main(int argc, char **argv) {
 
   memset(metadata, 0, SQLITE_HC_REGION_SIZE);
   memset(payload, 0, SQLITE_HC_REGION_SIZE);
-  fprintf(stderr, "sqlite-host: E/share1\n");
+  mark("SQ: E/share1\n");
   shared_region_annotated(domain, metadata_region,
                           SQLITE_HC_ANNOTATION_PERM_INOUT,
                           SQLITE_HC_ANNOTATION_REV_SHARED);
-  fprintf(stderr, "sqlite-host: F/share2\n");
+  mark("SQ: F/share2\n");
   shared_region_annotated(domain, payload_region,
                           SQLITE_HC_ANNOTATION_PERM_INOUT,
                           SQLITE_HC_ANNOTATION_REV_SHARED);
 
-  fprintf(stderr, "sqlite-host: G/enter-dom\n");
+  mark("SQ: G/enter\n");
   unsigned long result = call_dom(domain);
-  fprintf(stderr, "sqlite-host: H/dom-returned\n");
+  mark("SQ: H/return\n");
   if (metadata->length > 0 && metadata->length <= SQLITE_HC_REGION_SIZE) {
     (void)write(STDOUT_FILENO, payload, (size_t)metadata->length);
     fflush(stdout);
@@ -74,7 +135,7 @@ int main(int argc, char **argv) {
     return fail_cleanup("unexpected domain return", result);
 
   if (capstone_cleanup()) {
-    fprintf(stderr, "sqlite-host: failed to clean up Capstone\n");
+    mark("SQ: no-cleanup\n");
     return 1;
   }
   return 0;

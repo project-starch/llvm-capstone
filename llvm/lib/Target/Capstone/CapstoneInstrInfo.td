@@ -1737,6 +1737,13 @@ multiclass SelectCC_GPR_rrirr<DAGOperand valty, ValueType vt> {
 let Predicates = [NoConditionalMoveFusion] in
 defm Select_GPR : SelectCC_GPR_rrirr<GPR, XLenVT>;
 
+// NOTE (2026-07-31): this instantiation does NOT cover RV64. Both
+// Select_GPRCAP_Using_CC_GPR entries in the generated matcher come out guarded by
+// `!Subtarget->is64Bit()`, so on capstone64 an i128 select has no pattern at all and ISel
+// aborts with "Cannot select: i128 = CapstoneISD::SELECT_CC". Adding explicit i64-typed
+// Pats here does not help -- TableGen drops those too, silently, with no
+// --warn-on-skipped-patterns diagnostic. Not yet root-caused; see
+// agent-handoff/history/ for the investigation and the two-line reproducer.
 defm Select_GPRCAP : SelectCC_GPR_rrirr<GPR, i128>;
 
 class SelectCompressOpt<CondCode Cond>

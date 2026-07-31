@@ -22,6 +22,7 @@ network waits: the alarm interrupts the syscall, which a thread-based timeout ca
 without leaving the thread stuck forever. Only usable on the main thread of a POSIX process,
 which is exactly how these drivers run.
 """
+import os
 import signal
 import sys
 
@@ -82,4 +83,27 @@ def release_board(console, *, switches_off=None, label="session"):
         bounded("switches->0", 20, switches_off)
     bounded("power off", 30, console.power, False)
     bounded("unlock", 20, console.unlock)
+    # Drop the websocket too. Without this the board is genuinely free but the PROCESS is
+    # not: python-socketio keeps a non-daemon background thread with reconnection enabled,
+    # so the driver sits there emitting `user_count` events long after RUN_DONE. Measured
+    # 2026-07-31 -- a run printed RUN_DONE and BOARD_RELEASED and then stayed alive, which
+    # from outside is indistinguishable from a board session still in progress.
+    bounded("disconnect", 10, console.close)
     print("BOARD_RELEASED", flush=True)
+
+
+def hard_exit(rc):
+    """Exit NOW, skipping interpreter teardown.
+
+    `sys.exit()` only unwinds the main thread; it then waits on every non-daemon thread,
+    and socketio's survives `disconnect()` often enough that it cannot be relied on. These
+    drivers have nothing to flush past this point -- the board is released and the results
+    are already on disk and on stdout -- so leaving is strictly better than waiting.
+    Streams are flushed explicitly because os._exit does not.
+    """
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except Exception:
+        pass
+    os._exit(int(rc) if rc is not None else 0)

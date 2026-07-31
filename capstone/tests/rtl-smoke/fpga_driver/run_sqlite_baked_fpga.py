@@ -25,7 +25,7 @@ DRV = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(DRV.parent))
 from fpga_driver import config as C
 from fpga_driver.fpga_console import FpgaConsole
-from fpga_driver.safe_cleanup import release_board
+from fpga_driver.safe_cleanup import release_board, hard_exit
 from fpga_driver.run_ladder_perf_fpga import cold_boot, nvbit, sh, install_resilient_emit
 
 URL = os.environ.get("FPGA_URL")
@@ -260,4 +260,7 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # hard_exit, not sys.exit: the board is already released by main()'s finally, but
+    # socketio's non-daemon thread can keep the interpreter alive afterwards, which
+    # reads from outside as a board session still running.
+    hard_exit(main())
