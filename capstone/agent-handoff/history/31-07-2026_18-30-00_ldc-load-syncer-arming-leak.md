@@ -123,3 +123,42 @@ being right.
 * **Board-validated workaround:** variant C. Building the array in a loop from a static table
   instead of straight-line passes on silicon. That is a software fix and needs no RTL change,
   so it should be tried before this hypothesis is pursued further.
+
+---
+
+## Workaround implemented 2026-07-31 — `SQLITE_STATIC_BUILTINS=1`
+
+**Idea:** do not reshape the straight-line construction — remove it.
+
+`build-sqlite-capstone.sh` strips `static` from
+
+```c
+static FuncDef aBuiltinFunc[] = { ... };
+```
+
+turning a compile-time-initialised **global** into a **stack** array built straight-line at
+run time and then copied element-wise into a separate static. That is precisely variant A,
+the shape that wedges.
+
+The de-static predates `CapstoneCapGlobalInit`. We now emit `__capstone_cap_init`, which
+stores every capability leaf of a global initialiser at domain entry — and the current SQLite
+domain **already performs 394 such stores and works** (stages 0–9 return rc=0). So the
+machinery handles this at scale on silicon today.
+
+Restoring the `static` therefore:
+
+* removes the straight-line stack construction **entirely**, rather than reshaping it;
+* deletes the element-wise copy loop, which has nothing to copy from any more;
+* routes the same data through a path that is already exercised and passing;
+* costs one extra carve (179 → 180, against a ~1000 budget) and adds capability leaves to
+  cap-init.
+
+Implemented as an opt-in post-patch in `build-sqlite-silicon.sh` (`SQLITE_STATIC_BUILTINS=1`)
+that rewrites the generated amalgamation and **fails loudly** if the patch shape has changed
+or any stale `capstoneBuiltinFunc` reference survives — so it cannot silently half-apply.
+
+If it passes on the board it should become the default and the de-static should be deleted
+from `build-sqlite-capstone.sh` outright.
+
+**Why this is a workaround and not a fix:** it avoids the construct; it does not explain it.
+R-14 stays OPEN with the cause unestablished either way. Variants A–D remain the reproducer.

@@ -72,6 +72,52 @@ cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
 # limit=1 wedging  -> the construct itself is broken, and one entry is a minimal reproducer.
 # limit=1 passing and limit=N wedging -> it is a count/scale effect, and the bisection gives
 # the exact threshold, which is the number to hand the board owner.
+# SQLITE_STATIC_BUILTINS=1 -- WORKAROUND for R-14, and arguably the correct shape now.
+#
+# R-14: straight-line materialisation of distinct string constants into a struct array wedges
+# the board (variant A), while the same data assigned in a loop from a static table is fine
+# (variant C) and a flat pointer array is fine (variant D). sqlite3RegisterBuiltinFunctions
+# builds exactly the wedging shape, because build-sqlite-capstone.sh strips `static` from
+#     static FuncDef aBuiltinFunc[] = { ... }
+# turning a compile-time-initialised GLOBAL into a STACK array constructed straight-line at
+# run time, then copied element-wise into a separate static.
+#
+# That de-static predates CapstoneCapGlobalInit. We now emit __capstone_cap_init, which
+# stores each capability leaf of a global initialiser at domain entry -- the current SQLite
+# domain already does 394 such stores and works, so the machinery handles this at scale.
+# Putting the array back to `static` therefore removes the straight-line stack construction
+# ENTIRELY rather than reshaping it, and routes the same data through a path that is already
+# exercised and passing.
+#
+# Opt-in while it is unproven on the board. If it works it should become the default and the
+# de-static should be deleted from build-sqlite-capstone.sh.
+if [[ "${SQLITE_STATIC_BUILTINS:-0}" == "1" ]]; then
+  echo "== R-14 WORKAROUND: restoring aBuiltinFunc to a compile-time-initialised static"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PY'
+import sys, re, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text()
+before = s
+# 1. undo the de-static: the stack array becomes the real static again.
+s = s.replace("  FuncDef capstoneBuiltinFunc[] = {",
+              "  static FuncDef aBuiltinFunc[] = {", 1)
+# 2. drop the separate zero-init static that the patch introduced.
+s = s.replace("  static FuncDef aBuiltinFunc[ArraySize(capstoneBuiltinFunc)];\n", "", 1)
+# 3. drop the element-wise copy loop -- there is nothing to copy from any more.
+s = re.sub(r"  for\(int capstoneI=0; capstoneI<[^\n]*ArraySize\(capstoneBuiltinFunc\)[^\n]*\)\{\n"
+           r"    aBuiltinFunc\[capstoneI\] = capstoneBuiltinFunc\[capstoneI\];\n  \}\n",
+           "", s, count=1)
+# 4. any surviving reference to the removed name now means the static.
+s = s.replace("ArraySize(capstoneBuiltinFunc)", "ArraySize(aBuiltinFunc)")
+s = s.replace("capstoneBuiltinFunc", "aBuiltinFunc")
+if s == before:
+    sys.exit("SQLITE_STATIC_BUILTINS: nothing was rewritten -- the patch shape changed")
+if "capstoneBuiltinFunc" in s:
+    sys.exit("SQLITE_STATIC_BUILTINS: stale references remain")
+p.write_text(s)
+print("   rewrote aBuiltinFunc to a static initialiser; copy loop removed")
+PY
+fi
+
 if [[ -n "${BUILTIN_LIMIT:-}" ]]; then
   echo "== DIAGNOSTIC: clamping builtin-function registration to $BUILTIN_LIMIT entries"
   sed -i \
