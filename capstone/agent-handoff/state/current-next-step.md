@@ -119,3 +119,32 @@ polling `pgrep -f <pattern>` where its own command line contained the pattern �
 where a bracket pattern (`"[b]uild-..."`) still matched because the same script later invoked
 the real string. Six shells hung ~50 minutes on the first occurrence while reporting false
 progress. Sequence steps inside ONE script instead of polling for another task.
+
+## The blocker is SOLID, not intermittent (3 separate boots, 2026-08-01)
+
+Because a wedge ends its session, stage 10 was sampled across three SEPARATE boots, each
+running `wd66` first as a liveness control:
+
+    boot1: WEDGED    boot2: WEDGED    boot3: WEDGED
+    samples=3  successes=0  ->  ALWAYS FAILS
+
+**`sqlite3RegisterBuiltinFunctions` fails every time.** This closes the possibility raised by
+`wd63`'s run-to-run variation that SQLite might sometimes get through — there is no retry path
+to an existence proof. It is also the first wedge in this campaign established as reproducible
+rather than assumed from a single sample.
+
+Note what this does and does not say: the BLOCKER is deterministic across boots, while some
+PROBES (`wd63`) vary within a boot. Both are true; they are different quantities. The
+non-determinism does not rescue the blocker, and it does not excuse the earlier single-sample
+conclusions either.
+
+### Where to resume
+
+`wd66` remains the only stable failing reproducer (7 samples, all `2`): the same element walked
+twice through the same pointer, first walk overruns, second terminates, with the two loops
+verified byte-identical. Narrowing that is the live thread — it is small, deterministic, and
+sits in the same code family (data-dependent string walk) as the blocker.
+
+Do NOT resume by re-deriving "lit[1] is broken": that came from `stage 52 = 0xC1`, a single
+sample that could not be re-taken (the guarded rebuild wedges), and `wd62`/`wd59` both show
+`lit[1]` walking correctly in isolation.
