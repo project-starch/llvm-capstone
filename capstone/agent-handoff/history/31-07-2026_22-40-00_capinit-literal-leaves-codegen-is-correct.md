@@ -265,3 +265,38 @@ overrunning and returning a marker. Treat as a separate open thread; do not assu
 Removes the last confound (different element, different array, different index) by walking
 `capstone_probe_lit[1]` twice in a row and returning a 2-bit map. `3` refutes the statement
 above; `1` confirms it exactly.
+
+## RETRACTED: "the first walk succeeds, every later one fails"
+
+Stage 66 walks the SAME element twice through the same pointer:
+
+    wd51  stage 51  rc=0xB1  control                          want 0xB1  OK
+    wd66  stage 66  rc=2     SAME element walked TWICE        want 3     FAILS
+    wd63  stage 63  rc=0x0E  four identical arrays            (reproduced)
+    wd64  stage 64  WEDGED
+
+`rc = 2` is `0b10`: bit0 clear, bit1 set — **the FIRST walk overran and the SECOND
+terminated correctly.** The prediction was `1`. The rule is withdrawn: it is not "first
+succeeds", and stage 63 (`0x0E`, first fine, rest overrun) from the SAME session is its exact
+mirror image, so no "Nth walk" rule can cover both.
+
+**The part that matters more than the retraction:** in stage 66 both loops read the same
+pointer over the same memory, in straight-line code, and got different answers. No
+deterministic bug in the walk can produce that. The bytes themselves read back differently
+between two adjacent identical loops.
+
+### Determinism has never been tested, and everything so far assumed it
+
+Every hypothesis in this campaign — including all eight refuted ones — assumed a fixed binary
+on fixed data yields a fixed result. No experiment has ever checked. Stage 66 is the first
+direct evidence against it, and if results are not reproducible then the entire bisection
+history is built on single samples of a varying quantity.
+
+Running the same binaries repeatedly inside one boot (`wd66, wd66, wd63, wd63, wd66`) to
+settle it. Outcomes:
+
+* all repeats agree -> results are deterministic; stage 66's inversion is real and the
+  mechanism is inside the walk, and stage 63 vs 66 needs a structural explanation.
+* repeats disagree -> the campaign has been sampling a non-deterministic quantity, and every
+  single-sample conclusion (including "lit[1] is the bad one", which drove days of work) must
+  be re-taken with repetition before it means anything.
