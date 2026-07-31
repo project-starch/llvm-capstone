@@ -382,6 +382,27 @@ static int run_sqlite_staged(int stage) {
     for (i = 0; i < 128; i++) total += sqlite3Strlen30(a[i].z);
     return total & 0xff;                 /* expect 128*5 = 640 -> 0x80 */
   }
+  if (stage == 17) {
+    /* STACK -> GLOBAL struct assignment carrying a CAPABILITY. This is the one construct in
+       sqlite3RegisterBuiltinFunctions that no probe has replicated. The patched amalgamation
+       builds the FuncDef array as a LOCAL (build-sqlite-capstone.sh:75 strips `static`) and
+       then copies it element-by-element into a real static:
+           aBuiltinFunc[capstoneI] = capstoneBuiltinFunc[capstoneI];
+       Each element carries a zName capability, so this moves capabilities from a stack
+       object into cap-table storage. Everything else in that function is now accounted for:
+       string data (fixed), 512 capability stores (pass), 128 local structs (pass), strlen on
+       cap-table literals (pass), strcmp/strcpy linear-safety (fixed, still wedges).
+       Returns how many survived the round trip; expect 8. */
+    static struct { const char *z; int n; } g[8];
+    struct { const char *z; int n; } l[8];
+    unsigned i; int ok = 0;
+    for (i = 0; i < 8; i++) { l[i].z = "alpha"; l[i].n = (int)i; }
+    for (i = 0; i < 8; i++) g[i] = l[i];
+    for (i = 0; i < 8; i++)
+      if (g[i].z && sqlite3Strlen30(g[i].z) == 5 && g[i].n == (int)i)
+        ok++;
+    return ok;
+  }
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
