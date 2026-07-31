@@ -182,8 +182,16 @@ echo "== compiling the no-globals support objects separately (they cannot collid
 # `char *pick(int n, char *a, char *b) { return n == 10 ? a : b; }` at -O1. The n==0 form
 # compiles because SelectCC_GPR_rrirr adds a separate explicit Pat for a zero rhs.
 SUPPORT_OPT=${SQLITE_SUPPORT_OPT_LEVEL:-$OPT}
+# BEEBS_STRING_LINEAR_SAFE: index instead of walking, so the string primitives never copy
+# or advance a capability that may be LINEAR. SQLite is the first thing here to call strlen
+# on hardware (no ladder rung references it), and both the -O0 and -O1 pointer-walking
+# forms freeze on the board at the instruction that advances the pointer. See the header
+# comment on strlen in beebs_freestanding_string.c for the RTL citations. Set only here --
+# the ladder rungs keep the walking form so their published geometry is unchanged.
+SUPPORT_DEFS=(-DBEEBS_STRING_LINEAR_SAFE=1)
 for pair in "libc:$ADAPTED/capstone_sqlite_libc.c" "beebs_string:$BEEBS_STRING"; do
-  "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$SUPPORT_OPT" \
+  "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" \
+    "${SUPPORT_DEFS[@]}" "$SUPPORT_OPT" \
     -c "${pair#*:}" -o "$OBJ_DIR/${pair%%:*}.o"
 done
 BUILTIN_OBJS=()

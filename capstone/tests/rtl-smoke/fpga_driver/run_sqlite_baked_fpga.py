@@ -126,6 +126,16 @@ RUN_TIMEOUT = int(os.environ.get("SQLITE_RUN_TIMEOUT") or 300)
 # run sat idle 10.5 minutes of a 15-minute budget with the log frozen, and each such run
 # costs a board session. Any progress resets the clock, so a slow-but-live workload is
 # unaffected -- only silence trips it. A working run emits its markers within seconds.
+#
+# CAVEAT ADDED 2026-07-31 -- the premise "silence means wedged" no longer holds and 75 is
+# now too aggressive for a real run. It was written when the domain froze at a pinned pc,
+# where silence really was terminal. Since the linear-safe string primitives landed the
+# core EXECUTES (pc advances under stepi), and SQLite between `SQ: G/enter` and its first
+# row is legitimately silent while it opens the database and runs CREATE/INSERT. A run
+# aborted at 75 s idle on exactly that stretch and was nearly read as another wedge.
+# Distinguish the two with probe_sqlite_wedge.py + PROBE_STEPI=1 -- an advancing pc means
+# raise SQLITE_RUN_IDLE, not that the domain is dead. Default kept low so a genuine wedge
+# still fails fast; raise it explicitly when the core is known to be live.
 RUN_IDLE = int(os.environ.get("SQLITE_RUN_IDLE") or 75)
 
 # The five markers run-sqlite-memory.sh gates on under QEMU. Same criterion here so a

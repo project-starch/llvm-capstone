@@ -109,12 +109,48 @@ int memcmp(const void *a, const void *b, bsize_t n) {
   return 0;
 }
 
+/* BEEBS_STRING_LINEAR_SAFE — index, never walk, when the argument may be a LINEAR
+ * capability.
+ *
+ * The pointer-walking form below is the natural one and is what every BEEBS rung uses,
+ * but it is hostile to linear capabilities, and SQLite on silicon is the first thing here
+ * ever to call strlen on the board (zero strlen references across all 20 ladder domains).
+ * Walking compiles to a loop that COPIES the cursor:
+ *
+ *     movc          a1, a2        <- keeps the pre-increment pointer for `p - s`
+ *     lbu           a3, 0x0(a2)
+ *     cincoffsetimm a2, a2, 0x1
+ *     bnez          a3, ...
+ *
+ * `movc` is a MOVE: capstone_flu_unit.anvil:6-27 writes cnull to the SOURCE whenever
+ * rd != rs1 and the source is not CAP_TYPE_NONLIN. So on a linear argument the first
+ * iteration destroys the very pointer it is walking. The -O0 form avoids the in-loop
+ * `movc` but still ends every iteration on `cincoffsetimm` of the live pointer, and both
+ * builds freeze at that instruction on hardware.
+ *
+ * Indexing avoids the whole shape. `s[i]` lowers to CINCOFFSET (reg-reg) into a scratch
+ * register plus the load; CINCOFFSET returns rs1 UNCHANGED (capstone_flu_unit.anvil:29-46,
+ * `create_result_pack(..., rs1, rd)`), so `s` is never consumed and never incremented.
+ * The length is the counter, so there is no `p - s` and hence no trailing `lcc` pair.
+ *
+ * Opt-in rather than default: the ladder rungs' measured geometry backs a published table
+ * and must not change silently. Enabled only by the SQLite silicon build.
+ */
+#ifdef BEEBS_STRING_LINEAR_SAFE
+bsize_t strlen(const char *s) {
+  bsize_t i = 0;
+  while (s[i])
+    i++;
+  return i;
+}
+#else
 bsize_t strlen(const char *s) {
   const char *p = s;
   while (*p)
     p++;
   return (bsize_t)(p - s);
 }
+#endif
 
 int strcmp(const char *a, const char *b) {
   while (*a && (*a == *b)) {
