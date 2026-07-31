@@ -187,3 +187,36 @@ carve base/length the glue computes for it, and the granule those imply. That is
 diff over two artifacts already on disk — no board time — and it is the first time in this
 campaign the comparison has been between two binaries that differ ONLY in outcome, not in
 what they are testing.
+
+### ...and the LAYOUT explanation is refuted too (offline, no board time)
+
+Static diff of the PASSING (`wd71`) and FAILING (`wd66`) binaries:
+
+* **Identical layout.** Both: 182 carves; `capstone_probe_lit` at vaddr `0x169c70`
+  (`addr%16 = 0`, `addr%512 = 112`); the six 256-byte carves have identical indices, storage
+  sizes, relative bases and blob offsets. Nothing about the data placement differs.
+* **Identical loop code.** `wd66`'s first walk and `wd71`'s bare walk share the **same 21
+  instructions** — `lui cincoffset cincoffsetimm ldc lui cincoffset cincoffsetimm lwu
+  cincoffset lbu beqz j lui cincoffset cincoffsetimm lw addiw sw li bltu j` — i.e. the entire
+  loop body (load, test, increment, bound-check, branch). They diverge only AFTER the loop:
+  `wd66` breaks and falls through, `wd71` returns `0xB6` (`cincoffsetimm li sw j j`).
+
+So the previous entry's conclusion ("the variable is the binary layout") is **withdrawn**. The
+layout is the same, the executed loop is the same, and the results are still opposite and
+still stable per binary.
+
+**What actually differs between them, and is therefore all that is left:**
+
+1. the ADDRESS of the loop (`0x36994` in `wd66` vs `0x36be4` in `wd71`) — i.e. instruction
+   placement / I-cache line, not data;
+2. the post-loop code path;
+3. the surrounding stage code compiled into each binary.
+
+That is a precisely posed question and a cheap one: build ONE binary containing both shapes
+(the two-walk form and the bare form) so the comparison is within a single image, then vary
+only the loop's alignment (e.g. `.balign` padding before it) and see whether the outcome
+follows the address. If it does, this is instruction placement, which is a very different
+class of bug from everything chased so far.
+
+**Do not** re-derive a data-side explanation without first refuting the address hypothesis:
+the data side is now excluded by direct comparison of the two artifacts, not by argument.
