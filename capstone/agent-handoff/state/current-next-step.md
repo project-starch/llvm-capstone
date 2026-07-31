@@ -1,100 +1,98 @@
 # Current recommended next step
 
-## 2026-07-31 (late) — READ THE CORRECTIONS FIRST. Several instruments were misread.
+## 2026-07-31 (late, second half) — the livelock is localised; codegen is EXONERATED
 
-### Board status: UNUSABLE as of ~21:30
+### Where the SQLite blocker actually stands
 
-Six consecutive sessions failed before running anything. The board boots (kernel reaches
-~82 s) but never reaches `login:`, while emitting hundreds of
-`remote fence extension is not available in SBI v1.0`. Earlier failures showed repeating
-`0xDEAD…` on the UART after a wedge. Power-cycling from the driver does not clear it.
-**Needs a manual reset or bitstream reload before any further board work.**
+The bisection reached `sqlite3RegisterBuiltinFunctions`, and inside it the failure is now a
+**LIVELOCK, not a deadlock**. Stage 51 (a bounded `strlen`) returned **`rc = 0xB1`**: the
+domain RAN and RETURNED. That retires every hypothesis requiring the core to stop, including
+the RTL load-syncer arming leak.
 
-### THE CORRECTIONS — these invalidate a lot of earlier reasoning
+Localisation from there:
 
-Verified against source, not argued:
+* stage 52 = `0xC1` — `lit[1]` is the first literal whose walk never terminates.
+* stage 53 = `0xDF` — `lit[0]`'s first 8 bytes are `l t r i m \0 r t`. Correct for a MERGED
+  container (an earlier prediction of `0x1F` was wrong: only byte 5 is the NUL; bytes 6,7
+  are the next literal). So `lit[0]` is fine AND `lit[1]`'s bytes are demonstrably present.
 
-1. **`ex_commit.valid` is the EXCEPTION-valid bit, not a retirement bit.**
-   `cva6.sv:500` — `exception_t ex_commit; // exception from commit stage`, wired to
-   `.exception_o` at `:1800`. **Nothing in this campaign ever measured that the core stopped
-   retiring.** The bit that does report it, `commit_instr_id_commit[0].valid`, lives in bank
-   `debug_byte_sel = 3'b110, reg_sel = 0` (`cva6.sv:1200`) and has **never been sampled**.
+### What was PROVED offline while the board was down (do not re-litigate)
 
-2. **`stall_issue = 1` is not evidence of a hang.** `issue_read_operands.sv:390` —
-   `stall_issue_o = stall_raw[0]`, asserted by any unforwardable RAW dependency. `strlen`'s
-   loop is four mutually dependent instructions, so `stall_issue = 1` is its **steady state
-   while running normally**.
+Full trail: `history/31-07-2026_22-40-00_capinit-literal-leaves-codegen-is-correct.md`.
 
-3. **Domains run with `mtvec = ctvec = 0`, so an in-domain fault has NO HANDLER.**
-   `sbi_capstone.c` zeroes all `dom_seal[]` slots and writes only 0, 2 and 3. Slot 1 *is*
-   `{ctvec, mtvec}` (`csr_regfile.sv:399`) and *is* swapped on domain entry.
-   **Consequence: "nothing was printed, therefore no trap was taken" — used repeatedly in
-   this campaign to kill hypotheses — was NEVER a valid inference.** In 57 board sessions no
-   in-domain fault has ever printed `EXCX`/`MCAU`/`MEPC`.
-   NOTE: **no monitor implementation anywhere writes slot 1** — not the reference, not either
-   fork. This is upstream design, not a local regression. Choosing an `mtvec` value is a
-   design decision, not a patch to apply unilaterally.
+1. **The emitted pointers are correct.** `__capstone_cap_init` derives the literals with
+   `cincoffsetimm` at `0x6da / 0x6e0 / 0x6e6` — deltas of exactly **6 and 6**, matching the
+   merged `.rodata` container at `0x16e52e`. The 16 capabilities feed THREE `lit` arrays
+   across **1544 instructions with zero calls and zero branches**; the only reused register
+   (`a0`) is correctly spilled to `0x260(sp)` and reloaded. **Cap-init is not producing bad
+   pointers. Stop looking there.**
+2. **`cincoffset` does NOT consume its source** (`capstone_flu_unit.anvil:43,:62` return
+   `rs1` unchanged). The theory that `lit[0]` survives and everything after it derives from
+   `cnull` fits the symptom perfectly and is nonetheless WRONG.
+3. **`STC` does NOT clear its source register** for LINEAR/NONLIN
+   (`capstone_dyn_unit.anvil:427`); only the UNINIT path nulls it. The documented linear
+   clearing is on **LDC**, and it clears MEMORY, not the register.
+4. **Carve exhaustion is not in play.** Measured from `.capstone_gp_initdesc`: 183 carves
+   (`wd54/55/56`), 184 (`wd57/58/59`), 179 (`sqlite_silicon.dom`) against a ~1000 budget.
+   The 1059 figure belongs to the FULL SQLite build, not to staged probes.
 
-4. **The load-syncer arming leak is refuted by our own capture.** It requires `req_set == 1`
-   to persist; `board-regs.log:784` decoded and printed `load_syncer_req = 0` and
-   `store_syncer_req = 0` on the wedged core. The `:306` vs `STC:369-370` asymmetry is still
-   a real one-line difference worth reporting, but it is **not** this failure.
+### The live hypothesis (probes built, stages 57-59)
 
-5. **R-14 double-counted its evidence.** The register capture attributed to an independent
-   "20-line synthetic" is `sqlite_silicon.dom` built as **stage 18** — a SQLite staged build.
+`LDC` clears its MEMORY source when the loaded capability is linear. Stage 52 walks `lit[i]`
+by LOADING each element out of the array; stages 53/54 name `lit[0]`/`lit[1]` directly, where
+the value can stay in a register and never be reloaded. That asymmetry fits every observation.
 
-6. **`0x81f3c71c` was manufactured.** It was composed from eight pc bytes read ~1.2 s apart
-   on a possibly-running core. Never compose a pc from separately-timed byte reads.
+* **57** — read `lit[1]` twice through a `volatile` array pointer. `7` = both reads fine
+  (refutes consumption); `5` = second read NULL, i.e. **the load consumed the slot**.
+* **58** — same for `lit[0]`; the control. If 58 also shows consumption the behaviour is
+  uniform and stage 52 only appeared to single out `lit[1]`.
+* **59** — read `lit[1]` once, then bounded-walk it. Expect `5` ("rtrim"); `0xB2` on overrun.
+  Separates "slot consumed" from "walk broken" for the same element.
 
-**Net: the "core deadlock" framing is unsupported. The signature fits a LIVELOCK IN DOMAIN
-CODE equally well, and no experiment so far distinguishes them.**
+### THE REGRESSION TO CLEAR FIRST — a SHA5 wedge that is probably self-inflicted
 
-### What is genuinely fixed and board-confirmed
+`wd55` wedged at **SHA5**. Per `sbi_capstone.c:73-76`, "SHA5 then silence" means the hang is
+in the **DOMAIN's region-share entry, not the monitor** — i.e. entry-glue territory, BEFORE
+cap-init, which is exactly where the one confirmed root cause (an unaligned 8-byte `ld`)
+lived.
 
-* **Unaligned initialiser copy** (the one real root cause found today). The glue copied
-  globals with 8-byte `ld` from `blob+blob_off`, and `blob_off` is not 8-aligned for 67 of
-  176 globals; CVA6 does not service unaligned `ld`, QEMU does. Byte-survival `0xF0 → 0xFF`.
-* `movc` destroying linear sources in `strlen`/`strcmp`/`strcpy` — indexed forms
-  (`BEEBS_STRING_LINEAR_SAFE`).
-* Entry, return, `sqlite3_config(HEAP)`, `MutexInit`, `MallocInit` (memsys5),
-  `PcacheInitialize` all proven working on silicon (stages 0/1/7/8/9 return rc=0).
+Cause almost certainly ours: `stage` is a function PARAMETER and the probes build at `-O0`,
+so nothing folds and **every staged block's arrays land in every probe binary**. Adding
+stages 54-59 silently grew `wd51` from 2 literal arrays to 4, changing the glue's blob-copy
+workload for the very domain used as a control. Initialised statics force a blob copy.
 
-### Reverted as harmful
+**Fixed by `#if CAPSTONE_SQLITE_STAGE == ...` guards around each staged block** so a build
+contains only its own arrays. Re-verify a guarded `wd51` returns `0xB1` before trusting any
+54-59 result.
 
-The granule-alignment block. It aligned the base but not the length (idx 170 carve length
-262,384, `% 512 = 240`) and left **240 bytes of the memsys5 arena uninitialised** that were
-zeroed before. Off by default; `INTERP_GRANULE_ALIGN=1` to re-measure. A correct version must
-align the LENGTH, not the base.
+### Run order for the next board load (controls FIRST, wedger LAST)
 
-### The next experiment, ready to run when the board is back
+    wd51 (expect 0xB1)  wd53 (0xDF)  wd57 (7)  wd58 (7)  wd59 (5)  wd54 (0xDF)  wd56 (6)  wd55 (6)
 
-`CAPSTONE_SQLITE_STAGE=51` — the **watchdog**. Bounds the loop so a livelock RETURNS a marker
-instead of spinning. It is the only experiment that yields information in all three outcomes:
+`wd55`/`wd56`'s expected value of **6 is proved, not assumed**, so a wrong delta is a
+silicon-execution finding and a correct one implicates the walk.
 
-* `rc = 0xB1` → the `strlen` walk never terminates ⇒ **livelock**, localised to one loop
-* `rc = 16`  → completes when bounded ⇒ the wedge is a budget effect, re-base the bisection
-* WEDGE      → the core genuinely stops ⇒ retires the whole livelock family
+### Traps that bit again TODAY — read before touching the board
 
-Run `wk9` (or any known-good stage) first as a health control so a board problem is not
-misread as a result.
+1. **Never read `board-<tag>.log` for results.** It carries the accumulated console
+   scrollback; grepping it returned markers for stages 30..53 from earlier runs and none from
+   the run just performed. **Only `PROBE_SCOPED_OUT` is valid.** The tell was markers for
+   stages that were not even in `SQLITE_STAGE_DOMS`.
+2. **Prune and ordering must be decided together.** Shrinking the initramfs removed
+   `wd51/52/53`, so the next load had NO control; when its only domain wedged there was no
+   way to separate "this probe wedges" from "everything wedges now".
+3. **Prune only your OWN staged domains.** Never `rm` package-installed ones (`fib`, `sbi`,
+   `smode`, `thread`) or anything else inside `build/target/` — that desyncs buildroot's
+   stamp files and cost six consecutive boot failures. Keep `sqlite_silicon.dom` and
+   `sqlite_host.user` (the freshness gate's reference artifacts).
+4. **Image size:** 10.5 MB and 12.1 MB boot; 26 MB and 46 MB do not. 18.6 MB is untested as
+   of this writing.
+5. Use `build-stage-probes.sh` to build probe batches — it prints per-artifact hashes and a
+   distinct-hash count, so a silently-cached build cannot pass as a fresh one.
 
-Also ready but **NOT trustworthy yet**: `CAPSTONE_SQLITE_STAGE=50` (C-14 in isolation, two
-`movc` from one live scalar source). The expected back-to-back same-source `movc` pair is not
-visible in the disassembly. Do not run it for a result until it is. (`movc` funct7 is `0x0A`,
-not `0x14` — the top byte `0x14` is `funct7 << 1`.)
+### Board/infra note
 
-### Traps that bit repeatedly today — read before touching the board
-
-1. **Prune `build/target/` AND the overlay, but KEEP `sqlite_silicon.dom` and
-   `sqlite_host.user`.** Buildroot copies the overlay into `target/` and never deletes, so
-   the initramfs regrows; at 26–46 MB domain loading silently breaks while the freshness gate
-   still passes. But those two files are the gate's reference artifacts — prune them and it
-   correctly refuses to flash.
-2. **Verify the artifact changed** (hash, store count, section size) before believing any
-   result. Three probes tested nothing today: a pointer ternary hit the i128 `SELECT_CC` gap;
-   uninitialised `static` arrays produced zero cap-init leaves; and declaring all five arrays
-   in one TU put every array in every build.
-3. **Ad-hoc board scripts must be backgrounded or install a signal handler** — a foreground
-   script killed at the tool's 2-minute limit skips its `finally` and leaves the board locked.
-4. A **ladder rung is not a control for this glue**: `build-ladder-domain.sh:22` defaults
-   `DOMAIN_GLUE=generated`, so it uses `start-gp-captable-generic.S` instead.
+The console tunnel went down mid-session: DNS resolved and TCP :443 connected instantly
+while the **TLS handshake timed out**. That presents as a boot failure in the runner's
+output; it is not one. `fpga_console.connect()` was also leaking the secret path token into
+every captured log — fixed, and the token scrubbed from 75 existing files.

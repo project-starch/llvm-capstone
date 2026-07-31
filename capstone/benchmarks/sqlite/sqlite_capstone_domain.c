@@ -579,6 +579,13 @@ static int run_sqlite_staged(int stage) {
     if (b == 5 && c == 0) return 50;   /* C-14 CONFIRMED on this bitstream     */
     return 51;                          /* neither -- unexpected              */
   }
+/* GUARDED so this block's static arrays exist ONLY in its own build. `stage` is a function
+   parameter and this is built -O0, so the compiler folds nothing: without the #if, EVERY
+   staged block's arrays land in EVERY probe binary. That is not cosmetic -- it is the
+   documented trap that already made three probes test nothing, and it silently grew wd51
+   from 2 literal arrays to 4 when stages 54-59 were added, changing the glue's blob-copy
+   workload for a domain whose result was being used as a control. */
+#if CAPSTONE_SQLITE_STAGE == 51
   if (stage == 51) {
     /* WATCHDOG form of stage 18. Bounds the loop so a LIVELOCK RETURNS a marker naming the
        site instead of spinning forever. This is the instrument the campaign has lacked:
@@ -611,6 +618,14 @@ static int run_sqlite_staged(int stage) {
     }
     return ok;                          /* expect 16 */
   }
+#endif
+/* GUARDED so this block's static arrays exist ONLY in its own build. `stage` is a function
+   parameter and this is built -O0, so the compiler folds nothing: without the #if, EVERY
+   staged block's arrays land in EVERY probe binary. That is not cosmetic -- it is the
+   documented trap that already made three probes test nothing, and it silently grew wd51
+   from 2 literal arrays to 4 when stages 54-59 were added, changing the glue's blob-copy
+   workload for a domain whose result was being used as a control. */
+#if CAPSTONE_SQLITE_STAGE >= 52 && CAPSTONE_SQLITE_STAGE <= 53
   if (stage == 52 || stage == 53) {
     /* WHICH literal, and WHAT does it contain? Stage 51 returned 0xB1 -- a bounded strlen
        never terminated, so the domain was RUNNING, not hung. These two localise it.
@@ -643,6 +658,14 @@ static int run_sqlite_staged(int stage) {
       return (int)m;                            /* expect 0x1F for "ltrim" */
     }
   }
+#endif
+/* GUARDED so this block's static arrays exist ONLY in its own build. `stage` is a function
+   parameter and this is built -O0, so the compiler folds nothing: without the #if, EVERY
+   staged block's arrays land in EVERY probe binary. That is not cosmetic -- it is the
+   documented trap that already made three probes test nothing, and it silently grew wd51
+   from 2 literal arrays to 4 when stages 54-59 were added, changing the glue's blob-copy
+   workload for a domain whose result was being used as a control. */
+#if CAPSTONE_SQLITE_STAGE >= 54 && CAPSTONE_SQLITE_STAGE <= 56
   if (stage >= 54 && stage <= 56) {
     /* lit[0] walks fine and its bytes are correct (stage 53 = 0xDF = "ltrim" + NUL + "rt",
        which is right for a MERGED container -- my earlier 0x1F expectation wrongly assumed
@@ -679,6 +702,14 @@ static int run_sqlite_staged(int stage) {
       return (int)(((unsigned long)(q - p)) & 0xff);   /* expect 6 for both */
     }
   }
+#endif
+/* GUARDED so this block's static arrays exist ONLY in its own build. `stage` is a function
+   parameter and this is built -O0, so the compiler folds nothing: without the #if, EVERY
+   staged block's arrays land in EVERY probe binary. That is not cosmetic -- it is the
+   documented trap that already made three probes test nothing, and it silently grew wd51
+   from 2 literal arrays to 4 when stages 54-59 were added, changing the glue's blob-copy
+   workload for a domain whose result was being used as a control. */
+#if CAPSTONE_SQLITE_STAGE >= 57 && CAPSTONE_SQLITE_STAGE <= 59
   if (stage >= 57 && stage <= 59) {
     /* DOES READING THE ARRAY CONSUME IT? capstone-ariane's documented LDC behaviour is
        "after an LDC that loads a linear capability, the source memory location is cleared
@@ -719,6 +750,7 @@ static int run_sqlite_staged(int stage) {
       return (int)guard;             /* expect 5 for "rtrim" */
     }
   }
+#endif
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
