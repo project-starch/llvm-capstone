@@ -23,6 +23,7 @@ import sys, os, pathlib, time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from fpga_driver import config as C
 from fpga_driver.fpga_console import FpgaConsole
+from fpga_driver.safe_cleanup import release_board
 from fpga_driver.run_ladder_perf_fpga import cold_boot, nvbit, install_resilient_emit
 from fpga_driver.run_sqlite_baked_fpga import (
     IMG, IMG_NAME, BITSTREAM, assert_firmware_embeds_current_initramfs)
@@ -134,11 +135,7 @@ def main():
         # holding the board lock for 24 minutes while its results were already available).
         # Printed FIRST in the finally block so it appears even if power-off or unlock throws.
         print("PROBE_DONE", flush=True)
-        try:
-            console.power(False); log("powered off")
-        finally:
-            if locked:
-                console.unlock(); log("unlocked")
+        release_board(console, label="wedge probe")
 
 
 if __name__ == "__main__":

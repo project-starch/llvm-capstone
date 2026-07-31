@@ -33,6 +33,7 @@ import time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from fpga_driver import config as C
 from fpga_driver.fpga_console import FpgaConsole
+from fpga_driver.safe_cleanup import release_board
 from fpga_driver.run_ladder_perf_fpga import cold_boot, nvbit, install_resilient_emit
 from fpga_driver.run_sqlite_baked_fpga import (
     IMG, IMG_NAME, BITSTREAM, assert_firmware_embeds_current_initramfs)
@@ -115,15 +116,12 @@ def main():
         # polling `ps`, which is racy and matches the poller's own command line. Printed
         # FIRST so it survives a throwing power-off or unlock.
         print("PROBE_DONE", flush=True)
-        try:
-            set_switches(console, 0)
-        except Exception:
-            pass
-        try:
-            console.power(False); log("powered off")
-        finally:
-            if locked:
-                console.unlock(); log("unlocked")
+        # Time-boxed teardown. This exact block previously hung for 16 minutes inside
+        # set_switches, holding the flock with the board powered on and blocking the next
+        # session. Releasing the board beats tidying it.
+        release_board(console,
+                      switches_off=(lambda: set_switches(console, 0)),
+                      label="revnode probe")
 
 
 if __name__ == "__main__":

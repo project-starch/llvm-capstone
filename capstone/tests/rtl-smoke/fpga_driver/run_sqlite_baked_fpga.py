@@ -25,6 +25,7 @@ DRV = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(DRV.parent))
 from fpga_driver import config as C
 from fpga_driver.fpga_console import FpgaConsole
+from fpga_driver.safe_cleanup import release_board
 from fpga_driver.run_ladder_perf_fpga import cold_boot, nvbit, sh, install_resilient_emit
 
 URL = os.environ.get("FPGA_URL")
@@ -253,18 +254,9 @@ def main():
         # polling `ps`, which is racy and matches the poller's own command line. Printed
         # FIRST so it survives a throwing power-off or unlock.
         print("RUN_DONE", flush=True)
-        # Always leave the board powered off and unlocked, even on exception.
-        try:
-            console.power(False); log("powered off")
-        except Exception as e:
-            log(f"power off failed: {e}")
-        try:
-            if locked:
-                console.unlock(); log("unlocked")
-        except Exception as e:
-            log(f"unlock failed: {e}")
-        console.close()
-    return rc
+        # Time-boxed: power-off and unlock each wait on a board event and can block
+        # forever, which strands the flock and every session queued behind it.
+        release_board(console, label="sqlite run")
 
 
 if __name__ == "__main__":
