@@ -121,8 +121,14 @@ def main():
                 first_bad = (dom, wedged, d)
 
         if first_bad is None:
-            print("\nAll staged domains returned rc=0. The failure is LATER than stage 3 "
-                  "-- past sqlite3_open, in the CREATE/INSERT/SELECT body.", flush=True)
+            # Deliberately does NOT name a stage. An earlier version said "the failure is
+            # later than stage 3", which is only true for the default ascending ladder; run
+            # with a PROBE set (stages 4/6/5) it printed a confident conclusion about
+            # sqlite3_open that the run had not tested at all. State what was observed and
+            # let the caller draw the boundary.
+            ran = ", ".join(pathlib.Path(d).stem for d, _, _, _ in results)
+            print(f"\nEvery domain in this set returned rc=0 ({ran}). The failure is "
+                  f"outside what these stages cover -- widen or re-split.", flush=True)
         else:
             dom, wedged, d = first_bad
             if wedged:

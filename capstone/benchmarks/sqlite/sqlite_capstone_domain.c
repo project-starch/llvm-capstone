@@ -280,6 +280,65 @@ static int run_sqlite_staged(int stage) {
   }
   if (stage == 6)
     return sqlite3_os_init();   /* our VFS registration, no heap traffic */
+  /* Stages 7-10 split sqlite3_initialize() at ITS OWN internal boundaries. Board result
+     2026-07-31: stages 4/5/6 all returned rc=0, so the heap is writable across its whole
+     256 KB range (endpoints included -- the carve-granule fix holds on hardware) and VFS
+     registration works, yet initialize() still wedges. So the fault is in one of the
+     remaining steps, not in raw heap access.
+     Callable because sqlite_capstone_domain.c is #included into the amalgamation TU, so
+     SQLITE_PRIVATE functions are in scope. Each stage re-does the CONFIG_HEAP call first
+     because memsys5 is the allocator these steps depend on. */
+  if (stage >= 7 && stage <= 10) {
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK)
+      return rc;
+    if (stage == 7)
+      return sqlite3MutexInit();          /* no-op at THREADSAFE=0; proves the call path  */
+    if (stage == 8)
+      return sqlite3MallocInit();         /* memsys5Init: builds zone headers IN the heap */
+    if (stage == 9) {
+      rc = sqlite3MallocInit();
+      if (rc != SQLITE_OK) return rc;
+      return sqlite3PcacheInitialize();
+    }
+    rc = sqlite3MallocInit();             /* stage 10 */
+    if (rc != SQLITE_OK) return rc;
+    sqlite3RegisterBuiltinFunctions();    /* writes the global function hash table        */
+    return 0;
+  }
+  /* Stages 11-13 hunt a MINIMAL reproducer inside sqlite3RegisterBuiltinFunctions, which
+     board-bisected as the wedge (stages 7/8/9 return rc=0, stage 10 wedges). That function
+     builds a large LOCAL array of FuncDef structs -- each holding a zName string pointer
+     and several function pointers -- and then hashes each name, which is how it reaches
+     sqlite3Strlen30, the `ra` seen in every wedge dump today.
+     Ruled out already: the frame is ~2 KB against 339 KB of stack; the array is built
+     capability-preserving (593 stc vs 65 sd, no byte-copy template); and the 54
+     auipc-formed values are function pointers, not zName -- auipc is untagged on BOTH
+     QEMU (trans_rvi.c.inc trans_auipc uses gen_set_gpr) and RTL, and QEMU logged 380
+     strlen arguments with ZERO untagged ones. */
+  if (stage == 11)
+    /* strlen on a plain literal: does the merged-container string path work at all? */
+    return sqlite3Strlen30("capstone_probe_string");
+  if (stage == 12) {
+    /* Same string, but ROUND-TRIPPED through a local capability slot first -- that is what
+       building the FuncDef array does. Separates "the string capability is bad" from "a
+       capability stored into and reloaded from a local struct is bad". */
+    struct { const char *z; int n; } local;
+    local.z = "capstone_probe_string";
+    local.n = 0;
+    return sqlite3Strlen30(local.z);
+  }
+  if (stage == 13) {
+    /* An ARRAY of them, indexed at run time so the compiler cannot fold it: closest thing
+       to the real aBuiltinFunc construction without SQLite's machinery. */
+    const char *names[4];
+    int total = 0, i;
+    names[0] = "alpha"; names[1] = "beta_two";
+    names[2] = "gamma_three"; names[3] = "delta_four_x";
+    for (i = 0; i < 4; i++)
+      total += sqlite3Strlen30(names[i]);
+    return total;               /* expect 5 + 8 + 11 + 12 = 36 */
+  }
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
