@@ -136,9 +136,29 @@ int memcmp(const void *a, const void *b, bsize_t n) {
  * Opt-in rather than default: the ladder rungs' measured geometry backs a published table
  * and must not change silently. Enabled only by the SQLite silicon build.
  */
+/* BEEBS_STRING_DEBUG_BOUNDS — print the ARGUMENT's capability bounds on every strlen call.
+ *
+ * QEMU-ONLY: csdebugprint is funct7 0x43 on opcode 0x5b and the FPGA decoder has nothing
+ * there, so a board build must never set this. Output goes to the emulator console as
+ * `Print = Cap(type, perms, cursor, base, end)` (op_helper.c:1439), i.e. it shows the
+ * bounds directly rather than making them be inferred.
+ *
+ * Why it exists: on silicon strlen scanned 31,342,951 characters before the core wedged,
+ * against a total domain image of 1.37 MB. Either the string capability really does carry
+ * region-sized bounds — in which case this prints them and the bug is found offline — or
+ * it does not and the 31 M figure needs a different explanation. Cheap either way, and it
+ * needs no board time.
+ */
+#ifdef BEEBS_STRING_DEBUG_BOUNDS
+#define BEEBS_PRINT_CAP(p) __asm__ volatile(".insn r 0x5b, 0x1, 0x43, x0, %0, x0" :: "r"(p))
+#else
+#define BEEBS_PRINT_CAP(p) ((void)0)
+#endif
+
 #ifdef BEEBS_STRING_LINEAR_SAFE
 bsize_t strlen(const char *s) {
   bsize_t i = 0;
+  BEEBS_PRINT_CAP(s);
   while (s[i])
     i++;
   return i;

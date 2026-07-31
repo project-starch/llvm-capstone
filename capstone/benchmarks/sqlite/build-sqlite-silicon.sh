@@ -188,7 +188,7 @@ SUPPORT_OPT=${SQLITE_SUPPORT_OPT_LEVEL:-$OPT}
 # forms freeze on the board at the instruction that advances the pointer. See the header
 # comment on strlen in beebs_freestanding_string.c for the RTL citations. Set only here --
 # the ladder rungs keep the walking form so their published geometry is unchanged.
-SUPPORT_DEFS=(-DBEEBS_STRING_LINEAR_SAFE=1)
+SUPPORT_DEFS=(-DBEEBS_STRING_LINEAR_SAFE=1 ${BEEBS_STRING_EXTRA_DEFS:-})
 for pair in "libc:$ADAPTED/capstone_sqlite_libc.c" "beebs_string:$BEEBS_STRING"; do
   "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" \
     "${SUPPORT_DEFS[@]}" "$SUPPORT_OPT" \
