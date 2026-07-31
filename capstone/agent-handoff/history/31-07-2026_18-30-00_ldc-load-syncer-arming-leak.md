@@ -93,10 +93,10 @@ Not settleable from the tree: whether Anvil resets procedure registers on `loop
 dyn_ep.flush` (`:520`). `find capstone/caplifive-system -iname "*dyn_unit*"` returns only the
 `.anvil` — no generated Verilog — so `req_set`'s behaviour across a flush cannot be read here.
 
-## What to send the board owner
+## What is needed to settle this (RTL-side)
 
 1. The one-line asymmetry above (`:306` versus `:369-370`) — it is a defect on its own merits
-   whether or not it is our wedge.
+   whether or not it is our wedge. Registered as R-14 in ref/ISSUES.md.
 2. The question that cannot be answered from the sources in this repo: **does a pipeline
    flush reset `req_set` / `cap_trans_id` in the load and store syncers?** If not, any
    abandoned capability access arms an 8-value comparator that will silently swallow a later
@@ -111,3 +111,15 @@ root cause until the trigger is established. The independent bisection —
 `sqlite_stage20/21/22`, which unbundle the four variables of the 20-line reproducer — is the
 line of evidence that should confirm or refute it, and it does not depend on this hypothesis
 being right.
+
+---
+
+## Cross-references
+
+* Registry entry: **R-14** in `ref/ISSUES.md` — the observable failure and its four variants.
+* Reproducer bundle: `/tmp/capstone/R14-strline-struct-repro.tar.gz` — four ready-to-run
+  `.dom` files (A wedges, B returns a wrong value, C and D are correct), the source, the run
+  recipe, and the wedged-core register dump.
+* **Board-validated workaround:** variant C. Building the array in a loop from a static table
+  instead of straight-line passes on silicon. That is a software fix and needs no RTL change,
+  so it should be tried before this hypothesis is pursued further.

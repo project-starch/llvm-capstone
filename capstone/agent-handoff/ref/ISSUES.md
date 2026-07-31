@@ -6,7 +6,7 @@ Single index of everything currently broken, with a pointer to a reproducer for 
 Convention: **R-n** = RTL/hardware, **C-n** = our compiler/toolchain, **I-n** = infrastructure.
 Status: `OPEN` · `CHARACTERISED` (mechanism known, unfixed) · `WORKED AROUND` · `FIXED` · `CLOSED`.
 
-Last updated 2026-07-27.
+Last updated 2026-07-31.
 
 ---
 
@@ -713,6 +713,55 @@ the DYN unit on a channel whose ack is left dangling (`ex_stage.sv:910`).
 rather than `ldc`/`stc`. Whether capstone-c can express a non-`__linear` view of the same
 span is a compiler/ABI question, not an RTL one, and is unverified — `sbi_capstone.c` has
 no `memcpy` and no scalar-pointer cast anywhere today.
+
+### R-14 — straight-line init of a struct array with distinct string constants wedges `OPEN — cause NOT established`
+
+A 20-line C function with no SQLite in it wedges the core: no return, no output, no reported
+trap. It is the blocker behind `sqlite3RegisterBuiltinFunctions`, which is where the SQLite
+domain stops on silicon.
+
+Four variants differing by exactly one variable each (board-measured 2026-07-31):
+
+| variant | shape | result |
+|---|---|---|
+| A | 16 distinct literals, **straight-line**, `struct{2 ptr}[64]` | **WEDGE** |
+| B | 4 distinct straight-line + loop filler, same struct | **returns 4**, expected 16 |
+| C | 16 distinct via **loop from a static table**, same struct | returns 16 (correct) |
+| D | 16 distinct **straight-line**, flat `const char*[64]` | returns 16 (correct) |
+
+So it needs **both** straight-line materialisation **and** the struct element type; either
+alone is fine. **Variant B is the important one** — it returns a WRONG VALUE instead of
+hanging, i.e. the same construct corrupts silently at smaller scale, with the twelve
+loop-assigned entries failing and the four straight-line ones passing.
+
+- **Repro:** `/tmp/capstone/R14-strline-struct-repro.tar.gz` (four ready-to-run `.dom` files,
+  source, and the run recipe). Put variant A last in any batch — a wedged domain takes the
+  core with it.
+- **Wedged-core state:** `privM=1`, `flu_ready=dyn_ready=lsu_ready=1`, `ex_commit.valid=0`,
+  `stall_issue=1`, all other status bits 0; commit pc = image VA `0x14c71c`, the `bnez`
+  closing `strlen`'s loop. Selectors verified against `cva6.sv:1090-1215`.
+- **Candidate mechanism, NOT established:**
+  `history/31-07-2026_18-30-00_ldc-load-syncer-arming-leak.md`. `capstone_dyn_unit.anvil:306`
+  arms the load syncer and never disarms it on the `NOT_CAP` path, while `STC:369-370` does.
+  A stale arming on a 3-bit `trans_id` would make a later unrelated load be consumed instead
+  of forwarded — which matches "stalled at issue, every unit ready, nothing committing"
+  exactly. **The asymmetry is verified by quote; its role here is not.** That arm raises
+  cause 24, which would have overwritten the latched cause-9 in the trap log, and did not;
+  and variant B's selective corruption fits a swallowed load poorly.
+- **Confidence it is hardware:** NOT established. It could equally be our codegen for
+  straight-line capability materialisation into adjacent struct fields. Do not present it as
+  a hardware defect until the trigger is settled.
+- **Open question, not answerable from this tree:** does a pipeline flush reset `req_set` /
+  `cap_trans_id` in the load/store syncers (`capstone_dyn_unit.anvil:521-522`)? Only the
+  `.anvil` is present here, no generated Verilog. If it does not, any capability access
+  abandoned between `send cap_load_ri.init(...)` (`:302`) and its `req`/`res` pair
+  (`:343-345`) leaves an 8-value comparator armed that will match and consume an unrelated
+  later load.
+- **Workaround, board-validated:** variant C passes. Building the array **in a loop from a
+  static table** instead of straight-line avoids it. Applying that shape to the patched
+  `capstoneBuiltinFunc[]` is the obvious next move and needs no RTL change.
+- **Impact:** SQLite cannot complete `sqlite3_initialize()` on silicon.
+
 
 ## Infrastructure / procedure
 
