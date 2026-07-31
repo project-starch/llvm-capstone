@@ -241,7 +241,7 @@
 79:
 .endm
 
-.macro BUILD_GP_CAPTABLE_INTERP
+.macro BUILD_GP_CAPTABLE_INTERP first_entry=1
 #if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE < 2
   /* Diagnostic build: no descriptor is read, so no blob view is needed -- which also
      lets us drop the early delin(sp). That matters because R-2 is literally "delin in
@@ -251,7 +251,22 @@
 #else
   /* STAGE 2 restores exactly this block and nothing else, so a board run attributes
      the failure to the early delin(sp) + sp-derived view rather than to cap-init. */
+  /* FIRST ENTRY ONLY. sp arrives LINEAR from the monitor and must be delin'd once, or
+     the cincoffset below consumes it (C-4b). But on a REENTRY sp comes back from cscratch
+     ALREADY NONLIN -- the exit path stashes the delin'd sp -- and DELIN is LINEAR-ONLY on
+     silicon: capstone_dyn_unit.anvil:447-448 raises UNEXPECTED_CAP_TYPE for any cap_type
+     that is not CAP_TYPE_LINEAR. Our QEMU returns early for NONLIN and treats delin as
+     idempotent (op_helper.c:905-910), so the second delin is invisible under emulation and
+     fatal on hardware -- QEMU-green / FPGA-dead by construction.
+     This is R-2's shape ("delin in domain code wedges the board"). C-13 removed the
+     TRAILING delin but left this one, safe only under the assumption stated at :520 --
+     "the reentry fast path, which the ladder rungs never take". SQLite is the first domain
+     to take it: it dies on its SECOND entry, before the built_flag is even read.
+     NOTE: QEMU CANNOT validate this fix -- delin is idempotent there, so both versions
+     pass. Only the board can. */
+  .if \first_entry
   delin(sp)                          /* C-4b: sp arrives LIN; cincoffset would eat it */
+  .endif
   cincoffset(s1, sp, x0)
   lcc(t3, sp, 3)                     /* t3 = sp.base                                   */
   scc(s1, s1, t3)                    /* s1 = blob view, cursor forced to the base      */
@@ -533,7 +548,7 @@ __test_reentry:
      global moves, and the domain reads storage that holds nothing. QEMU-only debug op. */
   .insn r 0x5b, 0x1, 0x43, x0, sp, x0
 #endif
-  BUILD_GP_CAPTABLE_INTERP
+  BUILD_GP_CAPTABLE_INTERP 0
   ldc(t0, sp, -32)
   ccsrrw(x0, cscratch, t0)
   ld t0, -40(sp)
