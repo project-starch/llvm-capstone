@@ -156,7 +156,15 @@ class FpgaConsole:
         auth = None
         if C.CONNECT.auth_key and self.token:
             auth = {C.CONNECT.auth_key: self.token}
-        self._log(f"connecting (ns={C.CONNECT.namespace}, path={self._socketio_path})")
+        # The socket.io path is derived from the secret URL and CONTAINS THE TOKEN, so it
+        # must go through _redact like every other logged string -- printing it raw leaked
+        # the token into /tmp/capstone/board-*.log, which gets quoted into reports.
+        self._log(
+            _redact(
+                f"connecting (ns={C.CONNECT.namespace}, path={self._socketio_path})",
+                self.url,
+            )
+        )
         # REDACT THE BOARD HOST FROM ANY EXCEPTION. socketio/urllib3 put the full host --
         # and for some failure modes the token-bearing path -- into the exception message,
         # which then lands verbatim in a captured run log. The board URL is secret and a
