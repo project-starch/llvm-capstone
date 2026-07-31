@@ -217,3 +217,51 @@ remaining candidates are (a) walking one element corrupts the next, or (b) the v
 
 plus stage 63 (four identical arrays, bitmap of which overran) and `ga60` (the loop shape
 against a granule-aligned glue, to check whether granule-align rescues it anyway).
+
+## THE PATTERN: the FIRST data-dependent walk succeeds, every later one fails
+
+Board, `BOARD_RC=0`, run-scoped:
+
+    wd51   stage 51  rc=0xB1  control                              want 0xB1  OK
+    ga60   stage 60  rc=0xC1  LOOP shape + GRANULE-ALIGNED glue     want 16    FAILS
+    wd63   stage 63  rc=0x0E  bitmap over FOUR identical arrays      want 0     FAILS
+    wd65   stage 65  WEDGED   plain pointer + while-walk, shared array
+
+**`ga60` closes the granule question on silicon.** The loop fails identically (`0xC1`) with
+the granule-aligned glue, so the retraction made earlier from `wd60/61/62` is now confirmed by
+measurement rather than inference. idx 170's misaligned base stays on the books as a latent
+defect; it is not this bug.
+
+**`wd63 = 0x0E` is the key result.** Four file-scope arrays with IDENTICAL contents, walked in
+one loop: bit0 clear, bits 1/2/3 set — array 0's walk terminates, arrays 1, 2 and 3 all
+overrun. Identical objects, so nothing distinguishes them except ORDER.
+
+Every observation now fits one statement, with array identity, index value and pointer
+provenance all dropping out:
+
+| probe | walks performed | result |
+|---|---|---|
+| 61 | one (plain, indexed reads) | correct `0xDF` |
+| 62 | one (volatile load, then walk) | correct `5` |
+| 60 | lit[0] then lit[1] ... | first OK, second overruns (`0xC1`) |
+| 63 | array a, then b, c, d | first OK, rest overrun (`0x0E`) |
+| 51 | 16 walks over a local struct array | overruns (`0xB1`) |
+
+> **The first data-dependent string walk in a domain succeeds. Every subsequent one fails.**
+
+This subsumes the earlier "access pattern is the mechanism" finding and sharpens it: it is not
+the loop construct per se, it is that a *second* walk happens at all. It also explains why the
+whole campaign kept implicating `lit[1]` — `lit[1]` is simply whatever gets walked second.
+
+### Still unexplained, and NOT to be folded into the above
+
+`wd65` (plain pointer + `while` walk, shared array) **wedges**, while `wd62` (volatile pointer
+load, same array, same walk) returns 5. Both perform a SINGLE walk, so "first walk works" does
+not cover `wd65`. The failure modes also differ — `wd65` kills the domain outright rather than
+overrunning and returning a marker. Treat as a separate open thread; do not assume one cause.
+
+### Next: stage 66 — the same element, walked twice
+
+Removes the last confound (different element, different array, different index) by walking
+`capstone_probe_lit[1]` twice in a row and returning a 2-bit map. `3` refutes the statement
+above; `1` confirms it exactly.

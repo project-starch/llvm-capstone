@@ -258,8 +258,8 @@ static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 65
-/* ONE array, at FILE SCOPE, shared by stages 60-65 -- the confound remover.
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 66
+/* ONE array, at FILE SCOPE, shared by stages 60-66 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
    cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
    different addresses, initialised by different blocks of __capstone_cap_init. The observed
@@ -853,6 +853,28 @@ static int run_sqlite_staged(int stage) {
     guard = 0;
     while (z[guard]) { if (++guard > 64u) return 0xB3u; }
     return (int)(0x40u | (guard & 0xfu));                     /* expect 0x45 */
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE == 66
+  if (stage == 66) {
+    /* IS IT "THE FIRST WALK ONLY"? Stage 63 walked element 1 of four IDENTICAL file-scope
+       arrays and returned 0x0E -- array 0 fine, arrays 1,2,3 all overran. Stage 60 walked
+       lit[0] (fine) then lit[1] (overran). Stages 61/62 did a SINGLE walk and were correct.
+       Every one of those is explained by "the first data-dependent walk succeeds and every
+       later one fails", with nothing to do with which array or which index.
+       This tests it with the confound gone entirely: walk THE SAME element twice.
+         bit0 = first walk terminated, bit1 = second walk terminated.
+         3 = both fine (refutes it). 1 = only the first terminated (confirms it). */
+    unsigned guard, m = 0;
+    const char *z = capstone_probe_lit[1];
+    if (!z) return 0xD1u;
+    guard = 0;
+    while (z[guard]) { if (++guard > 64u) break; }
+    if (guard <= 64u) m |= 1u;
+    guard = 0;
+    while (z[guard]) { if (++guard > 64u) break; }
+    if (guard <= 64u) m |= 2u;
+    return (int)m;                    /* expect 3; 1 => only the first walk works */
   }
 #endif
   if (stage <= 0)
