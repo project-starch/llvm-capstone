@@ -83,6 +83,28 @@ def main():
         log(f"booted once; running {len(DOMS)} staged domains in sequence")
 
         for dom in DOMS:
+            # CLEAR THE TRAP LATCH BEFORE EACH DOMAIN, or the wedge read below is worthless.
+            #
+            # recent_nontrivial_*_log_q latches ANY trap except cause 0 (interrupt) and cause 2
+            # (illegal instruction) -- cva6.sv:1077-1083 -- and is otherwise cleared only on
+            # reset. mcause 9 is ECALL-from-S-mode, which OpenSBI and Linux emit constantly
+            # during boot, so by the time a domain runs the latch is already set from normal
+            # operation. On 2026-08-01 a wedge read returned 0x89 (seen=1, mcause=9) and was
+            # very nearly reported as "the domain took an untrapped capability fault"; it was
+            # a stale boot ecall. Capability faults are cause 23+code (24..28), not 9.
+            #
+            # cva6.sv:984: debug_byte_sel=3'b101 with debug_reg_sel=5'b11111, i.e.
+            # switches = 0b10111111 = 191, clears the log. probe_wedge_regs.py:131-139 already
+            # did this; the batch runner did not, which is what made the reading unattributable.
+            try:
+                for bit in range(8):
+                    console.set_switch(bit, bool(191 & (1 << bit)))
+                time.sleep(1.0)
+                for bit in range(8):
+                    console.set_switch(bit, False)
+            except Exception as exc:  # never let instrumentation abort the run
+                log(f"trap-log clear failed ({type(exc).__name__}) -- wedge reads will be stale")
+
             mark = console.uart_mark()
             wedged = False
             try:
@@ -226,9 +248,14 @@ def main():
             # with a PROBE set (stages 4/6/5) it printed a confident conclusion about
             # sqlite3_open that the run had not tested at all. State what was observed and
             # let the caller draw the boundary.
-            ran = ", ".join(pathlib.Path(d).stem for d, _, _, _ in results)
-            print(f"\nEvery domain in this set returned rc=0 ({ran}). The failure is "
-                  f"outside what these stages cover -- widen or re-split.", flush=True)
+            # Report the ACTUAL values. An earlier version printed "returned rc=0" as fixed
+            # text regardless of what came back -- it said rc=0 for a run whose rc was 177,
+            # which is the wrong-but-confident output this project keeps being bitten by.
+            got = ", ".join(
+                f"{pathlib.Path(d).stem}=rc{decode(o)[1]}" if decode(o) else
+                f"{pathlib.Path(d).stem}=?" for d, _, o, _ in results)
+            print(f"\nEvery domain returned ({got}). No domain wedged; whether those values "
+                  f"are CORRECT is the caller's judgement, not this runner's.", flush=True)
         else:
             dom, wedged, d = first_bad
             if wedged:
