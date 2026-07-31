@@ -248,6 +248,11 @@ def main():
         rc = 0 if ok else 1
         print("SQLITE ON SILICON: " + ("PASS" if ok else "FAIL"))
     finally:
+        # COMPLETION SENTINEL -- see probe_sqlite_wedge.py for why this exists: without a
+        # definite end-of-run marker, telling a finished session from a hung one means
+        # polling `ps`, which is racy and matches the poller's own command line. Printed
+        # FIRST so it survives a throwing power-off or unlock.
+        print("RUN_DONE", flush=True)
         # Always leave the board powered off and unlocked, even on exception.
         try:
             console.power(False); log("powered off")

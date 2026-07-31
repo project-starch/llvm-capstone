@@ -128,6 +128,12 @@ def main():
             console.gdb_stop()
         return 0
     finally:
+        # COMPLETION SENTINEL. Without a definite end-of-run marker the only way to tell a
+        # finished session from a hung one is to poll `ps`, which is both racy and prone to
+        # matching the poller's own command line -- that cost real idle time (a probe sat
+        # holding the board lock for 24 minutes while its results were already available).
+        # Printed FIRST in the finally block so it appears even if power-off or unlock throws.
+        print("PROBE_DONE", flush=True)
         try:
             console.power(False); log("powered off")
         finally:

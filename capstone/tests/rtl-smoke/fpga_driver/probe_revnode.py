@@ -110,6 +110,11 @@ def main():
                       f"({val:3}) bits={raw}", flush=True)
         return 0
     finally:
+        # COMPLETION SENTINEL -- see probe_sqlite_wedge.py for why this exists: without a
+        # definite end-of-run marker, telling a finished session from a hung one means
+        # polling `ps`, which is racy and matches the poller's own command line. Printed
+        # FIRST so it survives a throwing power-off or unlock.
+        print("PROBE_DONE", flush=True)
         try:
             set_switches(console, 0)
         except Exception:
