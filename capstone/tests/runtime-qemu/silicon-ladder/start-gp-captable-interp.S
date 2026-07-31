@@ -526,6 +526,13 @@
 
 __test_reentry:
   ccsrrw(sp, cscratch, x0)
+#ifdef INTERP_PEEK_SP
+  /* Print sp at BOTH entry points. The re-carve-on-reentry fix depends on this being the
+     SAME region each time; if the first entry's carve loop consumed sp by repeated `split`
+     and cscratch holds the post-carve remainder, the second carve starts smaller, every
+     global moves, and the domain reads storage that holds nothing. QEMU-only debug op. */
+  .insn r 0x5b, 0x1, 0x43, x0, sp, x0
+#endif
   BUILD_GP_CAPTABLE_INTERP
   ldc(t0, sp, -32)
   ccsrrw(x0, cscratch, t0)
@@ -540,6 +547,9 @@ __test_reentry:
 _start:
 __test_entry:
   ccsrrw(sp, cscratch, x0)           /* sp = dom_data (cscratch) DATA region */
+#ifdef INTERP_PEEK_SP
+  .insn r 0x5b, 0x1, 0x43, x0, sp, x0
+#endif
   BUILD_GP_CAPTABLE_INTERP
 #ifdef INTERP_PEEK_GP
   /* Print gp itself (the cap-table base) so a faulting address can be tested for being
