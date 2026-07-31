@@ -18,7 +18,7 @@ causes a later load through a *different* capability register to miss an earlier
 address — though the addresses are distinct and both capabilities are in-bounds derivations of the
 same object. Not loop-specific. QEMU executes every probe correctly.
 
-- **Repro:** `/tmp/capstone/capstone-lsu-hazard-repro.tar.gz`; sources
+- **Repro:** `tests/fpga-repros/R01-lsu-hazard/`; sources
   `tests/runtime-qemu/silicon-ladder/rawhazard{_kernel.h,5,6,7}_fpga_app.c`
 - **Evidence:** `history/27-07-2026_17-05-00_RESULTS-culprit-found-register-indexed-load-misses-pending-stores.md`
 - **Mitigations tried (7, all failed):** fence before load, fence after every store, register
@@ -94,7 +94,7 @@ A `delin` executed in domain code on a capability loaded from the gp cap-table w
 (power-cycle to recover). Proven against a size-matched `addi x0,x0,0` control at the same address,
 so it is the instruction and not code layout.
 
-- **Repro:** `/tmp/capstone/capstone-delin-repro.tar.gz` (superseded — now a secondary item in the
+- **Repro:** `tests/fpga-repros/R02-delin/` (superseded — now a secondary item in the
   R-1 package); probe knob `LADDER_CM_WITH_DELIN`
 - **Evidence:** `history/27-07-2026_04-33-58_RESULTS-delin-wedges-the-RTL-controlled-and-second-fault-isolated.md`
 - **Workaround:** the `delin` was ours and unnecessary — removed from the default build, which
@@ -734,9 +734,9 @@ alone is fine. **Variant B is the important one** — it returns a WRONG VALUE i
 hanging, i.e. the same construct corrupts silently at smaller scale, with the twelve
 loop-assigned entries failing and the four straight-line ones passing.
 
-- **Repro:** `/tmp/capstone/R14-strline-struct-repro.tar.gz` (four ready-to-run `.dom` files,
-  source, and the run recipe). Put variant A last in any batch — a wedged domain takes the
-  core with it.
+- **Repro:** `tests/fpga-repros/R14-strline-struct/` (source, run recipe, and the rebuild
+  commands for the four domains — the `.dom` files themselves are ~1.5 MB each and are not
+  tracked). Put variant A last in any batch — a wedged domain takes the core with it.
 - **Wedged-core state:** `privM=1`, `flu_ready=dyn_ready=lsu_ready=1`, `ex_commit.valid=0`,
   `stall_issue=1`, all other status bits 0; commit pc = image VA `0x14c71c`, the `bnez`
   closing `strlen`'s loop. Selectors verified against `cva6.sv:1090-1215`.
@@ -1800,8 +1800,12 @@ RISCV lit (6 `emutls*` failures **verified pre-existing** by stash-rebuild-repro
 
 ## How to add an entry
 
-One heading per issue with: a one-line statement of the behaviour, a **runnable repro** (path or
-tarball), the evidence note, what has been tried, and the impact. An issue without a reproducer is
+One heading per issue with: a one-line statement of the behaviour, a **runnable repro**, the
+evidence note, what has been tried, and the impact. Board reproducers go in
+`tests/fpga-repros/R<nn>-<slug>/` — **committed, never `/tmp`**, which loses them on reboot
+and makes them unreviewable. Keep frozen `.dom` images with the package when they are small
+(the exact binary that reproduced is the point); when they are megabytes, ship the source
+plus the rebuild command instead. An issue without a reproducer is
 a rumour — write the probe first. Every probe must be **QEMU-verified before the board** so a
 board deviation is unambiguous, and must **return a diagnostic rather than hang** (a hung domain
 reports nothing at all).
