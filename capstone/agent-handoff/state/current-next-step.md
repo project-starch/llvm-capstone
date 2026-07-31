@@ -220,3 +220,57 @@ class of bug from everything chased so far.
 
 **Do not** re-derive a data-side explanation without first refuting the address hypothesis:
 the data side is now excluded by direct comparison of the two artifacts, not by argument.
+
+## Instruction placement REFUTED; a reproducible WALK-COUNT effect emerges
+
+One binary containing BOTH shapes (bare walk, then the paired walks), with only the paired
+walks' address moved by padding. Three SEPARATE boots, `wd71` control first in each:
+
+    wd72  pad   0 bytes  @0x36ab4   WEDGED   (control wd71 = 0x45)
+    wd73  pad +24 bytes  @0x36acc   WEDGED   (control wd71 = 0x45)
+    wd74  pad +56 bytes  @0x36aec   WEDGED   (control wd71 = 0x45)
+
+**Instruction placement is refuted** — the outcome does not follow the address. The control
+returned correctly in all three boots, so the board was healthy and these are real results.
+
+### The pattern that IS supported
+
+Counting DATA-DEPENDENT WALKS performed by the domain:
+
+| walks | binaries | result | samples |
+|---|---|---|---|
+| 1 | `wd71` | `0x45`, correct | 6 |
+| 2 | `wd66` | returns `2` | 7 |
+| 3 | `wd67`, `wd72`, `wd73`, `wd74` | **WEDGE** | 4 binaries, 4 boots |
+
+`wd67` (three walks of one element) and `wd72/73/74` (one bare + two paired) are different
+code in different binaries and wedge independently at the same walk count. One walk always
+works; three walks always wedge. This is the first pattern in the campaign reproduced across
+multiple binaries AND multiple boots.
+
+It also subsumes the older observations without needing them to be about `lit[1]`: stage 52
+walked 16 elements, stage 51 walked 16, stage 63 walked 4 — all high-count, all failing.
+Stages 61/62 did ONE walk each and both passed.
+
+**Shape of the mechanism:** monotonic degradation with the number of walks points at something
+CONSUMED per walk and never released, rather than at any property of the data, the pointer, the
+array, the layout or the code address — all of which are now excluded by direct measurement.
+The rev-node pool is a fixed-size BUMP allocator with no reclamation
+([[project_fpga_silicon_measurement_status]]), which is the right shape; note the earlier carve
+count (183 vs ~1000 budget) only measured carves at ENTRY, not per-walk consumption at runtime.
+
+### Caveat that must not be smoothed over
+
+`wd66` reports `rc=2` = bit0 clear, bit1 set, i.e. "first walk failed, second succeeded". That
+is the OPPOSITE order from a consumption story, and it has never been explained. Either the bit
+encoding is being misread or something clobbers `m`. **Do not build on `wd66`'s bit order**
+until a probe returns the two guard VALUES rather than a pass/fail bitmap.
+
+### Next
+
+1. Probe walk-count directly: N walks for N = 1,2,3,4 in one binary, returning the count
+   completed before failure rather than a bitmap.
+2. Have the probe return the raw `guard` value of each walk, to settle the `wd66` bit-order
+   question.
+3. If consumption is confirmed, read the rev-node allocator state via the debug mux
+   (`rev_node_head` / overflow, sel `11001`/`11010`) before and after a walk.

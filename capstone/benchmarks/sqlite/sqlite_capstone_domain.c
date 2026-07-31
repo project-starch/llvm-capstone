@@ -258,8 +258,8 @@ static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 71
-/* ONE array, at FILE SCOPE, shared by stages 60-71 -- the confound remover.
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 74
+/* ONE array, at FILE SCOPE, shared by stages 60-74 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
    cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
    different addresses, initialised by different blocks of __capstone_cap_init. The observed
@@ -949,6 +949,48 @@ static int run_sqlite_staged(int stage) {
     guard = 0;                           /* stage 71: bare first walk, no pre-touch */
     while (z[guard]) { if (++guard > 64u) return 0xB6u; }
     return (int)(0x40u | (guard & 0xfu));
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE >= 72 && CAPSTONE_SQLITE_STAGE <= 74
+/* Pad in INSTRUCTION bytes before the paired walks, to move their address without changing
+   anything else. 72 = 0 bytes, 73 = 32 bytes, 74 = 64 bytes. */
+#if CAPSTONE_SQLITE_STAGE == 72
+#define CAPSTONE_ADDR_PAD() do { } while (0)
+#elif CAPSTONE_SQLITE_STAGE == 73
+#define CAPSTONE_ADDR_PAD() __asm__ volatile(".rept 8\n\tnop\n\t.endr")
+#else
+#define CAPSTONE_ADDR_PAD() __asm__ volatile(".rept 16\n\tnop\n\t.endr")
+#endif
+  if (stage >= 72 && stage <= 74) {
+    /* BOTH SHAPES IN ONE BINARY -- the confound every previous comparison had.
+       wd71 (bare walk) passes 3/3 and wd66 (same walk, first of a pair) fails 7/7, but they
+       are DIFFERENT binaries. Their data layout is identical (182 carves, same symbol vaddr,
+       same carve bases) and their loop bodies are the same 21 instructions, so the only
+       remaining differences are the loop's ADDRESS and its surrounding code.
+       Here both shapes run in ONE image against ONE array:
+         bit0 = bare walk terminated        (the wd71 shape)
+         bit1 = first walk of the pair      (the wd66 shape)
+         bit2 = second walk of the pair
+       7 = everything works => the failure needs BOTH shapes in separate images, i.e. it is
+           about the image, not the shape.
+       5 = bare works, paired-first fails => reproduced WITHIN one binary; the shape/context
+           is the variable and the address hypothesis is unnecessary.
+       Stages 73/74 repeat it with 32 and 64 bytes of nops before the paired walks, moving
+       their address and nothing else. If the outcome tracks the padding, it is INSTRUCTION
+       PLACEMENT. */
+    unsigned guard, m = 0, k;
+    const char *z = capstone_probe_lit[1];
+    if (!z) return 0xD1u;
+    guard = 0;                                    /* --- bare walk (wd71 shape) --- */
+    while (z[guard]) { if (++guard > 64u) break; }
+    if (guard <= 64u) m |= 1u;
+    CAPSTONE_ADDR_PAD();
+    for (k = 0; k < 2; k++) {                     /* --- paired walks (wd66 shape) --- */
+      guard = 0;
+      while (z[guard]) { if (++guard > 64u) break; }
+      if (guard <= 64u) m |= 1u << (k + 1);
+    }
+    return (int)m;
   }
 #endif
   if (stage <= 0)
