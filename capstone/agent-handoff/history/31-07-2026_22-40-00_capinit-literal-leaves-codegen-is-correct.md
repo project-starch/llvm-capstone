@@ -91,3 +91,32 @@ Unreachable. DNS resolves and TCP :443 connects instantly, but the **TLS handsha
 out** (15 s) — the console tunnel is up with its backend not answering. Three consecutive
 runner attempts failed at `connect()`. Nothing was flashed; the firmware built and passed
 its freshness check (initramfs 10,495,488 bytes, verified by decompressed content).
+
+## Addendum — a third hypothesis measured and killed
+
+The staged probes each add their own 16-element `lit` array plus 16 string literals, and the
+known "every array lands in every build" trap means all of them are present in all of them.
+That made carve-budget exhaustion (the ~1000-entry rev-node pool, R-12) an obvious suspect
+for the SHA5 wedge.
+
+**Measured, not assumed:** reading `count` from the `.capstone_gp_initdesc` header of each
+staged domain gives **183 carves** for `wd54/55/56`, **184** for `wd57/58/59`, and **179** for
+`sqlite_silicon.dom`. All are an order of magnitude below the budget. The 1059-carve figure
+that motivated the original trim belongs to the FULL SQLite build, not to these staged
+probes, which return long before most of SQLite is referenced.
+
+So carve exhaustion is not the SHA5 wedge, and the pool budget is not currently a constraint
+on the staged bisection at all.
+
+## Addendum 2 — two process errors in this session, both self-caught
+
+1. **Read the accumulated console buffer as results.** `board-<tag>.log` carries the whole
+   console scrollback, so grepping it for `SQ: obs=` returned markers for stages 30..53 from
+   EARLIER runs and none from the run just performed. Only the run-scoped file
+   (`PROBE_SCOPED_OUT`) is valid. This is already documented and was done anyway; the tell
+   was markers for stages that were not in `SQLITE_STAGE_DOMS`.
+2. **Pruned the controls out of the image.** Trimming the initramfs removed `wd51/52/53`,
+   so the load that followed had no known-good domain in it. When its only domain wedged at
+   SHA5 there was no way to tell "this probe wedges" from "everything wedges now". The batch
+   rule already says to include controls; a prune step silently violated it. Prune and
+   ordering must be decided together.
