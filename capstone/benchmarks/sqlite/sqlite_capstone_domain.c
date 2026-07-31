@@ -245,6 +245,27 @@ static int run_sqlite_extended(sqlite3 *db) {
                 the 256 KB global whose carve needed the granule fix.
      stage 2 -- after sqlite3_initialize().
      stage 3 -- after sqlite3_open(":memory:"). First real allocation traffic. */
+#if CAPSTONE_SQLITE_STAGE == 63
+/* FOUR file-scope arrays with identical contents, to test "the Nth cap-init'd array is
+   broken while the first is fine" directly. Walks element 1 of each and returns a BITMAP:
+   bit k set = array k's lit[1] overran. 0 = all four fine. One domain, four answers.
+   (Distinct contents per array would change their cap-init leaves; identical contents keep
+   everything constant except ORDER of initialisation, which is the variable under test.) */
+#define CAPSTONE_LITSET { "ltrim", "rtrim", "trim", "max", "min", "typeof", "length", \
+  "instr", "substr", "upper", "lower", "coalesce", "hex", "unhex", "quote", "replace" }
+static const char *const capstone_lit_a[16] = CAPSTONE_LITSET;
+static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
+static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
+static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
+#endif
+#if CAPSTONE_SQLITE_STAGE >= 64 && CAPSTONE_SQLITE_STAGE <= 65
+/* Does walking one element break the NEXT one? Stage 52's loop walked lit[0] before lit[1];
+   stage 59 walked lit[1] alone and it was fine. If the first walk leaves state behind, order
+   is the variable. Both stages use the same file-scope array. */
+static const char *const capstone_pair_lit[16] = {
+  "ltrim", "rtrim", "trim", "max", "min", "typeof", "length", "instr",
+  "substr", "upper", "lower", "coalesce", "hex", "unhex", "quote", "replace" };
+#endif
 #if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 62
 /* ONE array, at FILE SCOPE, shared by stages 60-62 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
@@ -804,6 +825,42 @@ static int run_sqlite_staged(int stage) {
       while (a[guard]) { if (++guard > 64u) return 0xB2u; }
       return (int)guard;
     }
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE == 63
+  if (stage == 63) {
+    /* bit k = array k's lit[1] overran. 0 => all four arrays fine. */
+    const char *const *sets[4] = { capstone_lit_a, capstone_lit_b,
+                                   capstone_lit_c, capstone_lit_d };
+    unsigned k, guard, bad = 0;
+    for (k = 0; k < 4; k++) {
+      const char *z = sets[k][1];
+      if (!z) { bad |= 1u << k; continue; }
+      guard = 0;
+      while (z[guard]) { if (++guard > 64u) { bad |= 1u << k; break; } }
+    }
+    return (int)bad;
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE >= 64 && CAPSTONE_SQLITE_STAGE <= 65
+  if (stage == 64 || stage == 65) {
+    /* 64: walk lit[0] THEN lit[1] -- the stage-52 order, but only two elements.
+       65: walk lit[1] alone, same array -- the stage-59 shape, as the control.
+       Return 0x40 | (index of first NUL in lit[1]); expect 0x45 (5) in BOTH.
+       If 64 returns 0xB3 and 65 returns 0x45, walking lit[0] first is what breaks lit[1]. */
+    unsigned guard;
+    const char *z;
+    if (stage == 64) {
+      z = capstone_pair_lit[0];
+      if (!z) return 0xD0u;
+      guard = 0;
+      while (z[guard]) { if (++guard > 64u) return 0xB0u; }   /* lit[0] itself overran */
+    }
+    z = capstone_pair_lit[1];
+    if (!z) return 0xD1u;
+    guard = 0;
+    while (z[guard]) { if (++guard > 64u) return 0xB3u; }
+    return (int)(0x40u | (guard & 0xfu));                     /* expect 0x45 */
   }
 #endif
   if (stage <= 0)
