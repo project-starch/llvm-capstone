@@ -91,3 +91,31 @@ narrowing the livelock itself.
 7. Build probe batches with `build-stage-probes.sh` — it prints per-artifact hashes and a
    distinct-hash count, so a silently-cached build cannot pass as fresh.
 8. Image size: 10.5-15.4 MB boot fine; 26 MB and 46 MB do not.
+
+## STRUCTURAL LIMIT ON SAMPLING (learned 2026-08-01, affects how to read every result)
+
+**A wedge ends the board session, so a WEDGING domain can never be repeated inside one boot.**
+Every "n=2/n=3, deterministic" figure recorded above is therefore necessarily from a
+RETURNING domain (`wd66`, `wd61`, `wd62`, `wd63`). Every wedging result — `wd10`, `wd52`,
+`wd53`, `wd65`, `wd67` — is a SINGLE sample by construction, not by choice. "Wedges
+consistently" has never actually been established for any of them.
+
+Consequences for method:
+
+1. To repeat a wedging case, use **separate boots** (~5 min each). Batch the returning probes
+   within a boot; batch the wedging ones across boots.
+2. **Prefer a probe that RETURNS a marker over one that wedges** — that is what the stage-51
+   watchdog achieved (silence -> `0xB1`) and it is what made any of this measurable. When
+   bisecting a wedging stage, build the bounded/early-return variant FIRST.
+3. Do not describe a wedge as reproducible without naming how many boots it was seen in.
+
+Also: **stage N ⊃ stage M for M < N on the normal path.** Stage 3 (`sqlite3_open`) contains
+`sqlite3_initialize`, which contains `sqlite3RegisterBuiltinFunctions` (stage 10). Ordering
+stage 3 before stage 10 guarantees the run dies before reaching 10. Order staged probes so a
+superset never precedes the subset it depends on.
+
+Also: **never wait on a process by name.** Three separate deadlocks were caused by a command
+polling `pgrep -f <pattern>` where its own command line contained the pattern — including once
+where a bracket pattern (`"[b]uild-..."`) still matched because the same script later invoked
+the real string. Six shells hung ~50 minutes on the first occurrence while reporting false
+progress. Sequence steps inside ONE script instead of polling for another task.
