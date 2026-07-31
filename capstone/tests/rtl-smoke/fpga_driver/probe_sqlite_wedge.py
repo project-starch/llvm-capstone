@@ -92,10 +92,19 @@ def main():
                           flush=True)
                 except Exception as exc:
                     print(f"[probe] pc sample {i} UNREAD ({type(exc).__name__})", flush=True)
-                if i < 2:
-                    console.gdb_cmd("monitor resume", C.GDB_PROMPT, timeout=20.0)
-                    time.sleep(2.0)
-                    console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=20.0)
+                if i < len(range(3)) - 1:
+                    # PROBE_STEPI single-steps instead of resume/halt. That distinction is
+                    # the whole measurement here: a tight loop resumed and re-halted can be
+                    # caught at the SAME pc every time by a deterministic debug module, so
+                    # an unchanging pc across resume/halt does NOT prove an instruction is
+                    # stuck. stepi executes exactly one instruction, so pc either advances
+                    # (the loop is live) or it does not (the instruction never retires).
+                    if os.environ.get("PROBE_STEPI"):
+                        console.gdb_cmd("stepi", C.GDB_PROMPT, timeout=30.0)
+                    else:
+                        console.gdb_cmd("monitor resume", C.GDB_PROMPT, timeout=20.0)
+                        time.sleep(2.0)
+                        console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=20.0)
 
             start = len(console.gdb_text)
             console._emit("gdb_input", text="x/24i $pc-32\n")
