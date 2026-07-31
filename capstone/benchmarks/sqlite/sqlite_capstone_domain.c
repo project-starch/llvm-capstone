@@ -679,6 +679,46 @@ static int run_sqlite_staged(int stage) {
       return (int)(((unsigned long)(q - p)) & 0xff);   /* expect 6 for both */
     }
   }
+  if (stage >= 57 && stage <= 59) {
+    /* DOES READING THE ARRAY CONSUME IT? capstone-ariane's documented LDC behaviour is
+       "after an LDC that loads a linear capability, the source memory location is cleared
+       to prevent aliasing". Stage 52 walks lit[i] by LOADING each element out of the array
+       (ldc), whereas stages 53/54 name lit[0]/lit[1] directly and the compiler may keep the
+       value in a register and never reload. That asymmetry fits the evidence exactly:
+       lit[0] good, lit[1] bad, data provably present, pointers provably correct
+       (31-07-2026_22-40-00_capinit-literal-leaves-codegen-is-correct.md).
+       If the leaves are stored LINEAR, the first ldc of a slot empties that slot.
+         57: read lit[1] TWICE through a volatile array pointer so neither read is CSE'd.
+             bit0 = first read non-NULL, bit1 = second read non-NULL, bit2 = the two agree.
+             7 = both reads fine (refutes consumption). 5 = second read came back NULL,
+             i.e. the load CONSUMED the slot. 3 = both non-NULL but different.
+         58: same for lit[0] -- the control. If 58 also reports consumption then this is
+             uniform behaviour and stage 52 only *looked* like it singled out lit[1].
+         59: read lit[1] once via the volatile pointer, then bounded-walk it; return the
+             index of the first NUL (expect 5 for "rtrim"), or 0xB2 on overrun. Separates
+             "the slot is consumed" from "the walk is broken" for the same element. */
+    static const char *const lit[16] = {
+      "ltrim", "rtrim", "trim", "max", "min", "typeof", "length", "instr",
+      "substr", "upper", "lower", "coalesce", "hex", "unhex", "quote", "replace" };
+    /* volatile so each subscript is a real load from the array, not a cached register. */
+    const char *const volatile *vp = lit;
+    unsigned idx = (stage == 58) ? 0u : 1u;
+    const char *a = vp[idx];
+    const char *b = vp[idx];
+    if (stage != 59) {
+      unsigned m = 0;
+      if (a) m |= 1u;
+      if (b) m |= 2u;
+      if (a == b) m |= 4u;
+      return (int)m;                 /* expect 7; 5 => the load consumed the slot */
+    }
+    {
+      unsigned guard = 0;
+      if (!a) return 0xD1u;          /* slot was already empty on the FIRST read */
+      while (a[guard]) { if (++guard > 64u) return 0xB2u; }
+      return (int)guard;             /* expect 5 for "rtrim" */
+    }
+  }
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
