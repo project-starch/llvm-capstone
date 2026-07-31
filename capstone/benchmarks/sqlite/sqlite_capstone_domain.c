@@ -258,8 +258,8 @@ static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 66
-/* ONE array, at FILE SCOPE, shared by stages 60-66 -- the confound remover.
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 71
+/* ONE array, at FILE SCOPE, shared by stages 60-71 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
    cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
    different addresses, initialised by different blocks of __capstone_cap_init. The observed
@@ -875,6 +875,80 @@ static int run_sqlite_staged(int stage) {
     while (z[guard]) { if (++guard > 64u) break; }
     if (guard <= 64u) m |= 2u;
     return (int)m;                    /* expect 3; 1 => only the first walk works */
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE >= 67 && CAPSTONE_SQLITE_STAGE <= 68
+  if (stage == 67 || stage == 68) {
+    /* Sharpening the ONE deterministic reproducer. Stage 66 walks lit[1] twice through the
+       same pointer and is stable at rc=2 (0b10) across six samples: first walk overruns,
+       second terminates. The two loops were verified byte-identical (23 insns each), so the
+       code is not the difference.
+         67: walk lit[1] THREE times -> 3-bit map. 0b110 (=6) means "only the very first walk
+             fails" and the effect does not repeat. 0b010 (=2) would mean it alternates.
+         68: walk a DIFFERENT element (lit[0]) FIRST as a sacrificial warm-up, then walk
+             lit[1] twice -> bits 1,2 for the two lit[1] walks, bit 0 for the warm-up.
+             If lit[1] then succeeds BOTH times (bits 1,2 set), the failure attaches to the
+             first walk IN THE DOMAIN, not to the element -- which would finally explain why
+             lit[1] looked uniquely guilty for days: it is simply what gets walked second. */
+    unsigned guard, m = 0, k;
+    const char *z1 = capstone_probe_lit[1];
+    if (!z1) return 0xD1u;
+    if (stage == 68) {
+      const char *z0 = capstone_probe_lit[0];
+      if (!z0) return 0xD0u;
+      guard = 0;
+      while (z0[guard]) { if (++guard > 64u) break; }
+      if (guard <= 64u) m |= 1u;                 /* bit0 = warm-up walk terminated */
+      for (k = 0; k < 2; k++) {
+        guard = 0;
+        while (z1[guard]) { if (++guard > 64u) break; }
+        if (guard <= 64u) m |= 1u << (k + 1);    /* bits 1,2 = the two lit[1] walks */
+      }
+      return (int)m;                             /* 0b111 = 7 if the warm-up absorbs it */
+    }
+    for (k = 0; k < 3; k++) {
+      guard = 0;
+      while (z1[guard]) { if (++guard > 64u) break; }
+      if (guard <= 64u) m |= 1u << k;
+    }
+    return (int)m;                               /* expect 0b110 = 6 if only the first fails */
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE >= 69 && CAPSTONE_SQLITE_STAGE <= 71
+  if (stage >= 69 && stage <= 71) {
+    /* Narrowing wd66 -- the only stable failing reproducer (7 samples, rc=2: first walk of
+       lit[1] overruns, second terminates, loops byte-identical).
+       The contrast that matters: stage 61 reads z[0..7] in a COUNTED loop and is correct
+       (0xDF, 2 samples); stage 66's walk is DATA-DEPENDENT (`while (z[guard])`) and its first
+       pass fails. So the variable is either (a) the memory needs touching once before it
+       reads correctly, or (b) the data-dependent loop shape itself is what fails.
+         69: counted read of z[0..7] FIRST (the stage-61 shape, result discarded), THEN the
+             walk. If the walk now terminates, a prior touch PRIMES the memory -> (a).
+             returns 0x40|guard, expect 0x45; 0xB4 if it still overruns.
+         70: same walk written as a COUNTED loop with the NUL test inside the body, i.e.
+             identical semantics, different branch structure. If 70 terminates where 66's
+             first walk does not, the DATA-DEPENDENT branch is the variable -> (b).
+             returns 0x40|index-of-NUL, expect 0x45; 0xB5 if not found in 64.
+         71: control -- the bare first walk alone, nothing before it. Expect 0xB6 (overrun),
+             confirming the baseline in this same binary rather than across builds. */
+    unsigned guard, i, sink = 0;
+    const char *z = capstone_probe_lit[1];
+    if (!z) return 0xD1u;
+    if (stage == 69) {
+      for (i = 0; i < 8; i++)            /* counted pre-touch, stage-61 shape */
+        if (z[i]) sink |= 1u << i;
+      guard = 0;
+      while (z[guard]) { if (++guard > 64u) return 0xB4u; }
+      return (int)(0x40u | (guard & 0xfu));
+    }
+    if (stage == 70) {
+      for (i = 0; i < 64u; i++)          /* counted loop, NUL test in the body */
+        if (z[i] == 0) return (int)(0x40u | (i & 0xfu));
+      return 0xB5u;
+    }
+    guard = 0;                           /* stage 71: bare first walk, no pre-touch */
+    while (z[guard]) { if (++guard > 64u) return 0xB6u; }
+    return (int)(0x40u | (guard & 0xfu));
   }
 #endif
   if (stage <= 0)

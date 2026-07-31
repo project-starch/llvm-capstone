@@ -148,3 +148,42 @@ sits in the same code family (data-dependent string walk) as the blocker.
 Do NOT resume by re-deriving "lit[1] is broken": that came from `stage 52 = 0xC1`, a single
 sample that could not be re-taken (the guarded rebuild wedges), and `wd62`/`wd59` both show
 `lit[1]` walking correctly in isolation.
+
+## RETRACTED AGAIN: it is not "the first walk". It is the BINARY LAYOUT.
+
+Same-binary baseline, run in one boot (this is the like-for-like comparison that was missing
+every previous time):
+
+    wd70  counted loop, NUL test in body   rc=0x45  x4   correct, deterministic
+    wd71  BARE walk of lit[1], nothing before it   rc=0x45  x3   CORRECT, deterministic
+    wd66  same walk, as the first of two    rc=2     x7   first walk overruns, deterministic
+
+`wd71` performs exactly the operation `wd66` calls "the first walk" — same element, same array,
+same `while (z[guard])` source — and it TERMINATES CORRECTLY at index 5, three for three.
+
+**So "the first data-dependent walk fails" is retracted.** Walk ordering is not the variable.
+Each binary is internally deterministic and different binaries with identical C semantics give
+opposite answers, so **the variable is the LAYOUT of the built domain.**
+
+This is the thread flagged repeatedly all session without a name:
+
+* guarded `wd52`, `wd53`, `wd65` wedge where their UNGUARDED builds returned;
+* `wd54`/`wd55` wedge while logically identical probes return;
+* `wd66` fails where `wd71` succeeds on the same operation.
+
+All one phenomenon: **whether a given domain's string walk works is decided by how that domain
+was laid out, and is then stable for that binary.**
+
+Caveat, do not over-unify: `wd63` varies WITHIN a single binary across runs in one boot
+(`0x0E` / `0x0F`). Layout cannot explain that. There are at least two effects here, and they
+must not be merged on convenience.
+
+### What this makes worth doing next
+
+The question is now well posed and cheap to attack offline: **what differs in the LAYOUT
+between a passing binary (`wd71`) and a failing one (`wd66`)?** Both contain
+`capstone_probe_lit`; compare, for that symbol and its carve, the address, the alignment, the
+carve base/length the glue computes for it, and the granule those imply. That is a static
+diff over two artifacts already on disk — no board time — and it is the first time in this
+campaign the comparison has been between two binaries that differ ONLY in outcome, not in
+what they are testing.
