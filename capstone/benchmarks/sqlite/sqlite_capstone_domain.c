@@ -248,6 +248,38 @@ static int run_sqlite_extended(sqlite3 *db) {
 static int run_sqlite_staged(int stage) {
   sqlite3 *db = 0;
   int rc;
+  /* Stages 4-6 split what stage 2 (sqlite3_initialize) does, in dependency order. Board
+     result 2026-07-31: stage 0 and stage 1 RETURN rc=0, stage 2 WEDGES -- so entry/return
+     and sqlite3_config(HEAP) are fine on silicon and the fault is inside initialize().
+     The first thing initialize() does that stage 1 did not is WRITE into the 256 KB heap
+     (memsys5Init builds its zone headers there); stage 1 only recorded the pointer. These
+     stages separate "the heap capability cannot be written across its range" from
+     "something else in initialize()". They are numbered above the normal ladder so the
+     ordinary stages keep their meanings. */
+  if (stage == 4) {
+    /* Bounds probe: touch first, middle and last byte and read each back. Returns a bitmap
+       of which offsets did NOT survive, so a partial failure is distinguishable from a
+       total one -- an incorrectly rounded carve would fail the LAST byte and pass the
+       first, which is exactly the granule bug's signature. */
+    volatile unsigned char *h = sqlite_heap;
+    unsigned bad = 0;
+    h[0] = 0xA5; if (h[0] != 0xA5) bad |= 1u;
+    h[sizeof(sqlite_heap) / 2] = 0x5A;
+    if (h[sizeof(sqlite_heap) / 2] != 0x5A) bad |= 2u;
+    h[sizeof(sqlite_heap) - 1] = 0x3C;
+    if (h[sizeof(sqlite_heap) - 1] != 0x3C) bad |= 4u;
+    return (int)bad;
+  }
+  if (stage == 5) {
+    /* Whole-range write. If the bounds probe passes but this wedges, the failure depends on
+       the ACCESS COUNT or on crossing some interior boundary, not on the endpoints. */
+    volatile unsigned char *h = sqlite_heap;
+    for (unsigned long i = 0; i < sizeof(sqlite_heap); i++)
+      h[i] = (unsigned char)i;
+    return 0;
+  }
+  if (stage == 6)
+    return sqlite3_os_init();   /* our VFS registration, no heap traffic */
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
