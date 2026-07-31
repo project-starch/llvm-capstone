@@ -258,16 +258,8 @@ static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 64 && CAPSTONE_SQLITE_STAGE <= 65
-/* Does walking one element break the NEXT one? Stage 52's loop walked lit[0] before lit[1];
-   stage 59 walked lit[1] alone and it was fine. If the first walk leaves state behind, order
-   is the variable. Both stages use the same file-scope array. */
-static const char *const capstone_pair_lit[16] = {
-  "ltrim", "rtrim", "trim", "max", "min", "typeof", "length", "instr",
-  "substr", "upper", "lower", "coalesce", "hex", "unhex", "quote", "replace" };
-#endif
-#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 62
-/* ONE array, at FILE SCOPE, shared by stages 60-62 -- the confound remover.
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 65
+/* ONE array, at FILE SCOPE, shared by stages 60-65 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
    cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
    different addresses, initialised by different blocks of __capstone_cap_init. The observed
@@ -851,12 +843,12 @@ static int run_sqlite_staged(int stage) {
     unsigned guard;
     const char *z;
     if (stage == 64) {
-      z = capstone_pair_lit[0];
+      z = capstone_probe_lit[0];
       if (!z) return 0xD0u;
       guard = 0;
       while (z[guard]) { if (++guard > 64u) return 0xB0u; }   /* lit[0] itself overran */
     }
-    z = capstone_pair_lit[1];
+    z = capstone_probe_lit[1];
     if (!z) return 0xD1u;
     guard = 0;
     while (z[guard]) { if (++guard > 64u) return 0xB3u; }
