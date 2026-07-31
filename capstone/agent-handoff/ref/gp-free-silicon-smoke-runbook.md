@@ -66,6 +66,14 @@ fabrication, no ctvec), runs the globals + call-graph workload, writes the resul
 is the silicon confirmation of cscratch `gp` delivery. For the cycle number, wrap
 the workload in `mcycle` reads (see `tests/rtl-smoke/fpga_instrument.h`).
 
+**If you drive it with one of the three maintained drivers** (`run_sqlite_baked_fpga.py`,
+`probe_sqlite_wedge.py`, `probe_revnode.py`) rather than an ad-hoc script: export BOTH
+`FPGA_URL` and `FPGA_FW` (absolute path to the ~17.4 MB
+`.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin` — **not** the
+569 KB `build/images/fw_jump.bin`, which is the QEMU monitor). Wait on the printed
+`RUN_DONE`/`PROBE_DONE` + `BOARD_RELEASED` sentinels, never on `pgrep`. Full contract:
+`ref/HOW-TO-LAUNCH-ON-FPGA.md`, "The board-driver contract".
+
 ## Notes / risks (from prior board sessions)
 
 - `domreturn` reset at high revoke counts is a temporal-op issue and irrelevant to

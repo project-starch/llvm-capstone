@@ -190,6 +190,55 @@ does its job and falls off the end keeps running and holds a console session —
 up as an inflated `users connected:` count and looks like someone else is on the board.
 One such script lived 49 minutes. Always `disconnect()`, or run it under `timeout`.
 
+## The board-driver contract (2026-07-31) — read before waiting on ANY run
+
+Three drivers follow it: `run_sqlite_baked_fpga.py`, `probe_sqlite_wedge.py`,
+`probe_revnode.py`. All of it exists because "is the board still busy?" was answered
+wrongly, repeatedly, and each wrong answer cost either board time or an idle session.
+
+**Required environment.** Both, or the driver dies before touching the board:
+
+| Var | What | Failure if unset |
+|---|---|---|
+| `FPGA_URL` | console URL **with token** — a credential | `FPGA_URL not set` |
+| `FPGA_FW`  | absolute path to `fw_payload.bin` | `KeyError: 'FPGA_FW'` at import |
+
+`FPGA_FW` has no default on purpose — an implicit one silently flashes whatever was built
+last. The FPGA firmware is **not** in `build/images/`; it is
+`caplifive-system/sw/buildroot/build/build/opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin`
+(~17.4 MB). `build/images/` holds only `fw_jump.bin` (~569 KB), which is the QEMU monitor
+and will not boot the board. Getting this wrong throws at *import*, i.e. before the run —
+so a stale `sqlite-run-scoped.txt` from an earlier session is still sitting on disk and
+reads exactly like a fresh result. **Always confirm the driver actually ran before reading
+its output file.**
+
+**Completion is signalled, never inferred.** Every driver prints, in this order:
+
+```
+RUN_DONE | PROBE_DONE     <- first statement in finally; survives a throwing teardown
+BOARD_RELEASED            <- switches -> power off -> unlock -> disconnect, each time-boxed
+```
+
+Poll for those strings. **Never poll with `pgrep -f <pattern>`** — the polling loop's own
+command line contains the pattern, so it matches itself and spins forever. Six such loops
+ran here for up to 21 hours. Bound every wait with `for i in $(seq 1 N); do ...; done`.
+
+**Drivers exit via `hard_exit()`, not `sys.exit()`.** `sys.exit` unwinds the main thread
+and then *waits on every non-daemon thread*; socketio's survives `disconnect()` often
+enough that it cannot be relied on. Measured 2026-07-31: a run printed `RUN_DONE` and
+`BOARD_RELEASED` and then stayed alive emitting `user_count` events — the board was
+genuinely free, but from outside it was indistinguishable from a session still in
+progress, and it was reported as phantom board activity. `hard_exit` flushes the streams
+and calls `os._exit`, preserving the exit code.
+
+**Teardown is time-boxed and ordered least-important-first** (`safe_cleanup.py`): switches,
+then power, then unlock, then disconnect. Each step waits on a board event and can block
+forever while holding the flock — which strands every session queued behind it. A step
+that will not complete is abandoned and logged rather than waited on, because releasing
+the board matters more than tidying it. Precedent: `probe_revnode.py` once sat 16 minutes
+inside `set_switches(console, 0)` with the board powered and the lock held, after all four
+of its LED reads were already on disk.
+
 ## Non-negotiables
 
 Lock → power-cycle → run → **power off + unlock in `finally`** (never leave it

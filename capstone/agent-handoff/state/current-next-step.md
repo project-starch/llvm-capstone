@@ -1,124 +1,127 @@
 # Current recommended next step
 
-## 2026-08-01 — SQLite on silicon: the pool ceiling is GONE; one entry-protocol problem left
+## 2026-07-31 — SQLite on silicon: down to ONE instruction, and it is ours
 
 ### Where it actually is
 
-The domain now runs on the board far past where it ever did. Board run, both binaries
-hash-verified before execution:
+**The domain runs on the board through both share entries into its run entry, then stalls
+in `strlen`. No rows.** Position, verbatim from the run-scoped capture (`SQ:` markers are
+`sqlite_host.c`'s FIFO-safe markers, ≤16 bytes so they always escape):
 
 ```
-SQ: E/share1 ... SHA5, SHA6, ECSZ     <- SHA6 had NEVER appeared before
-SQ: F/share2 ... SHA0 .. SHA5         <- second entry, then silence
+SQ: A/dom-ok ... SQ: D/mapped
+SQ: E/share1 ... SHA6, ECSZ        <- share entry 1 returns
+SQ: F/share2 ... SHA6, ECSZ        <- share entry 2 returns
+SQ: G/enter
+<nothing>
 ```
 
-`SHA6` is "the domain returned from the share entry". The first entry now builds a 179-slot
-cap table, runs cap-init, and returns. SQLite does **not** yet produce a row.
+Everything up to `G/enter` is new since 2026-07-29 and is solid. What is left is a single
+instruction.
 
-### What cleared the old blocker
+### The stall, measured on the CURRENT build (`a41c6a6a`)
 
-**R-12 confirmed on hardware, then removed by construction.** Reading the debug-LED mux on
-the wedged core (switch-selected, `cva6.sv:874-877`, registers at `:1184-1186`):
+`probe_sqlite_wedge.py` with `PROBE_STEPI=1`, pc identical across three `stepi`:
 
 ```
-switches 249 -> rev_node_head[7:0]          = 0x4a (74)
-switches 250 -> {overflow, 5'b0, head[9:8]} = 0x80  -> OVERFLOW = 1
-switches 251 -> serving_idx[7:0]            = 0x00  (not advancing)
-switches 225 -> stall flags                 = 0x84  -> stall_issue = 1
+pc = 0x81f3cc78  ->  image VA 0x14cc78     (VA = 0x10000 + (pc - 0x81E00000))
+ra = 0x81e06b2c  ->  image VA 0x16b2c = sqlite3Strlen30
+mcause = 0
+a0 = 0x0
 ```
 
-head starts at 3 and bumps per split, so head=74 after one wrap = **1095 allocations against
-a usable 1021**. SQLite's 1059 carves + table split + ~35 monitor allocations.
+VA `0x14cc78` is inside `strlen`:
 
-Fixed by merging private read-only string constants: **1059 -> 179 carves**, ~215
-allocations. `CapstoneMergeStrConstants.cpp`, enabled in `build-sqlite-silicon.sh` only (the
-ladder keeps merging OFF so `tab:spatialcost`'s BEEBS geometry is unchanged). The container
-cap of **4096 bytes is a representability limit, not a tuning knob** — bounds granule is
-`1 << (max(0, floor(log2 L) - 12) + 3)`, so below 4096 it is 8 and the glue's 16-byte carve
-alignment gives exact bounds. A single 21,211-byte container is NOT representable and the
-domain dies before `domain_main`.
+```
+14cc6c: movc          a2, a0        <- a0 linear? then a0 := cnull HERE
+14cc70: movc          a1, a2        <- a2 still live -> a2 := cnull
+14cc74: lbu           a3, 0x0(a2)
+14cc78: cincoffsetimm a2, a2, 0x1   <-- FROZEN. operand is not a capability
+```
 
-### THE REMAINING PROBLEM, and it is ours not the board owner's
+**`movc` is a MOVE, not a copy.** `capstone_flu_unit.anvil:6-27`: when `rd != rs1` and the
+source is not `CAP_TYPE_NONLIN`, it writes `cnull` to the SOURCE. The measured `a0 = 0x0`
+is exactly what `movc a2, a0` leaves behind if `a0` was linear. So the string capability
+reaching `strlen` is **linear**, and register allocation emitted `movc` for a copy whose
+source stays live.
 
-The second entry is a reentry through `__test_reentry`. It needs `gp` back. Two routes exist
-and **both are blocked**:
+Independent support: the previous build (`ad0aca1f`, `-O0`, completely different codegen —
+the pointer round-tripped through a stack slot instead) froze at VA `0x14d884`, which is
+the *semantically identical* instruction: the capability-cursor increment in `strlen`.
+Two unrelated instruction sequences, same failure point.
 
-1. **Park and reload** (what the glue does): `stc gp` into the descriptor's gp_slot, reload
-   with `ldc` on reentry. Fails on silicon. Clean discriminator: building with
-   `INTERP_SKIP_GPPARK` makes **QEMU** fail at exactly the same entry with
-   `Cap mem access requires capability, cause 24`. So the parked capability reads back
-   untagged on hardware.
-2. **Re-derive by re-carving**: tried, reverted. **`sp` SHRINKS across entries** — measured
-   via `INTERP_PEEK_SP`:
-   ```
-   entry 1  base 0x10175e720  end 0x101800000
-   entry 2  base 0x10175e720  end 0x1017af5d0   <- 330,800 bytes consumed by the carve
-   ```
-   The carve splits storage off the top, so after entry 1 the domain holds **no capability
-   covering its own globals** and cannot re-derive one. Re-carving from the shrunken region
-   puts every global at a new address: the attempt reached `G/enter` and produced no rows.
+Also: **no passing silicon rung calls `strlen`** — zero references across all 20 ladder
+domains. `strlen` had never executed on this board before SQLite.
 
-**So the fix must hand the domain a capability covering the carved storage on each entry.**
-`cscratch` is the channel and the monitor is ours (`caplifive-system`), so this is fixable
-without the board owner. Note the linearity constraint before designing: `sp`/`cscratch` are
-capabilities, `movc` consumes a linear source (C-4b), and `split` consumes too — so
-"keep a spare copy of the full region" is not free and needs care.
+**Caveat, do not skip.** In that same dump `a1 = 0xca11ab1ebadcab1e` and
+`mstatus = 0xca00000000`. That constant is the AXI **error-slave** response
+(`axi_err_slv.sv:25`), so part of the register read went to an unmapped address and is
+junk. `a0 = 0x0` is consistent with the mechanism but wants a second reading before it
+carries weight on its own.
 
-### RTL context for that design (verified by quote, do not re-derive)
+### Next step
 
-* **No flush/clear on domain switch.** `capstone_dom_switcher.anvil` never references the
-  cache/tag subsystem; `grep dom_switch|CAPENTER core/cache_subsystem/*.sv` = ZERO hits.
-* **Tag writes are fire-and-forget.** A capability store issues the DATA write, then the tag
-  byte as a SEPARATE AXI transaction (`wt_axi_adapter.sv:398-402`); its B-response is
-  explicitly discarded (`:846` "silently consume it ... don't signal to dcache"). Nothing —
-  no fence, no switch — waits on `tag_wr_pend_q`. QEMU cannot model this; its tag update is
-  synchronous. NOT promoted to "the cause": a fire-and-forget window explaining a
-  100%-reproducible failure is not obvious, and settling it needs an ILA capture.
-* Second candidate, unresolved: RTL keys shadow tags on PHYSICAL address, QEMU's `cm_map` is
-  populated pre-translation. Relevance depends on paging state, which was not established.
+1. Establish whether `cincoffsetimm rd, rs, 0` is a **non-destructive** capability copy.
+   RTL `CINCOFFSETIMM` (`capstone_flu_unit.anvil:48-68`) returns its source unchanged via
+   `create_result_pack(..., rs1, rd)`, which reads like a copy that does not consume. If
+   that holds on both RTL and QEMU it is the natural replacement for `movc` in
+   `copyPhysReg` for capability copies. **Not verified — and if it is true, ask why**,
+   because duplicating a linear capability is what linearity exists to prevent. That
+   question is architectural, not a lowering detail.
+2. Depending on the answer, the fix is either a codegen change (non-destructive copy) or a
+   `delin` at the point the string capability enters `strlen`.
 
-### Tools and traps that will save the next session hours
+C-14's existing `-capstone-fix-destructive-copies` does **not** cover this: it only
+rewrites `movc` → `ADDI` when the source is provably a scalar integer, and leaves
+capability copies alone by design. The gap is that there is no non-destructive capability
+copy to emit.
 
-1. **QEMU `[CAPSTONE]` debug output goes to the harness `--log-file`, NEVER the console.**
-   `run-sqlite-silicon.sh` writes `$CAPSTONE_TMP_ROOT/sqlite-silicon.log`. It only reaches
-   the console when an exception dumps it — which is why the lines appear on FAILING runs and
-   vanish on PASSING ones. The log is opened `"w"`, so each run TRUNCATES it: copy before
-   re-running.
-2. **`run-sqlite-silicon.sh:19` and `stage-sqlite-in-rootfs.sh:38` REBUILD the domain
-   unconditionally.** A knob passed as a prefix on the build command only is silently
-   discarded. EXPORT it, and check the artifact HASH CHANGED before believing any negative
-   result. This invalidated four experiments in one day.
-3. **Never `until ! pgrep -f <pattern>`** — the loop's own command line contains the pattern,
-   so it matches itself and spins forever. Six such loops ran for up to 21 HOURS. Bound every
-   poll loop with `for i in $(seq 1 N)`.
-4. **Diagnostic knobs, all `#ifdef`-guarded and inert by default**: `INTERP_PEEK_SP`,
-   `INTERP_PEEK_GP`, `INTERP_PEEK_SLOT=<n>`, `INTERP_PEEK_CAPINIT_TARGET`,
-   `INTERP_SKIP_GPPARK`, `INTERP_SKIP_CAPINIT`, `INTERP_BUILD_LIMIT`,
-   `-mllvm -capstone-cap-init-limit=<n>`, `-mllvm -capstone-cap-init-print`. `csdebugprint`
-   (funct7 0x43) is **QEMU-ONLY** — never in a board build.
-5. **Board probes**: `probe_sqlite_wedge.py` (halt + trap CSRs + disassembly),
-   `probe_revnode.py` (allocator state off the LED mux). Read `pc` as
-   `0x10000 + (pc - pcc_base)`, and remember a post-trap dump shows M-MODE registers, not the
-   domain's.
-6. **Gates that now exist**: firmware freshness (decompresses the initramfs and compares
-   binaries), stale-boot (`sha256` on board vs local), and a staging refusal for diagnostic
-   builds (`gp-carve-count.py` detects a baked `INTERP_BUILD_LIMIT`).
+### Ruled out this session — do not re-investigate
 
-### Provenance answers (do not re-investigate)
+* **`-O0` codegen shape.** Rebuilding the string primitives at `-O1` (loop has no
+  `ldc`/`stc` at all) changed the stall not at all. Knob kept as
+  `SQLITE_SUPPORT_OPT_LEVEL`, default off.
+* **Shadow-tag store→load race.** The AXI adapter interlocks: a load needing a tag read
+  enters `TAG_WAIT` and holds until every pending tag write takes its B-response
+  (`wt_axi_adapter.sv:406-427`). The decoupling is real but ordered. **The drafted
+  board-owner question about a tag drain/fence is therefore ANSWERED IN-TREE — do not
+  send it.**
+* **"`ldc` of a linear capability writes cnull back to memory."** Not what this RTL does
+  (`capstone_dyn_unit.anvil:296-352` is a plain load after its checks) and not what our
+  QEMU does (`trans_capstone.c.inc:146`). "A double `ldc` consumes a linear cap" is not
+  available as an explanation here.
+* **The rev-node pool.** R-12 was confirmed on hardware and then removed by construction:
+  string merging took SQLite from 1059 carves to 179. Measured at the stall: `head = 219`,
+  `OVERFLOW = 0`. It is not the blocker. (Widening the pool needs a licence and a third
+  party — last resort, and no longer needed.)
 
-* The bitstream is synthesised from **`caplifive-system/hw/rtl` = `caplifive-cva6`**
-  (`scripts/build-rtl.sh:29-35`). `capstone-ariane` is referenced by NOTHING in any build.
-* We cannot build a bitstream here: no Vivado, and programming is physical.
+### Known-separate, logged, not fixed
 
-### The one genuine board-owner question
+* **No i128 `SELECT_CC` pattern on RV64.** `cond ? capA : capB` aborts ISel with "Cannot
+  select" at `-O1`; both `Select_GPRCAP_Using_CC_GPR` matcher entries are guarded by
+  `!is64Bit()`. Two-line reproducer and the failed fix attempt are in
+  `history/31-07-2026_14-00-00_o1-strlen-refuted-and-i128-selectcc-gap.md`. Blocks
+  `-O1`/`-O2` for any purecap code with a pointer select — which matters for performance
+  numbers — but not for SQLite, which does not need to be optimised to run.
+* `floatdidf_ng.o` emits an orphaned second `.capstone_gp_initdesc` (count=3) whose slots
+  are never carved → silent wrong doubles.
+* `caplifive.dts:35` gives Linux the full 1 GiB with no `reserved-memory` node while RTL
+  reserves `0xBC3C_0000+`.
 
-Draft at `/tmp/capstone/boardowner-revnode-request.md`. It should be trimmed to: **is the
-decoupled tag write intentional, and is there any way to drain/fence pending shadow-tag
-writes before a domain switch?** No such primitive exists in `capstone_dyn_unit.anvil` or
-`capstone_flu_unit.anvil`. Widening the pool is now a nice-to-have (it would restore
-per-object bounds for strings), not the blocker.
+### Board driver contract
 
-### Status against the descope ladder
+Env `FPGA_URL` **and** `FPGA_FW` (absolute path to the ~17.4 MB
+`.../platform/fpga/ariane/firmware/fw_payload.bin`, NOT the 569 KB
+`build/images/fw_jump.bin`). Wait on the printed `RUN_DONE`/`PROBE_DONE` +
+`BOARD_RELEASED` sentinels — **never `pgrep -f`**, which matches the polling loop itself.
+Drivers exit via `hard_exit()`. Full contract: `ref/HOW-TO-LAUNCH-ON-FPGA.md`.
 
-Level 3 is met and unusually well evidenced. Level 1 (existence proof on silicon) turns
-entirely on the entry-protocol fix above.
+### Build traps that are still live
+
+1. `run-sqlite-silicon.sh:19` and `stage-sqlite-in-rootfs.sh:38` **rebuild the domain
+   unconditionally**; a knob passed as a command prefix is discarded. EXPORT it and check
+   the artifact hash CHANGED before believing any negative result.
+2. QEMU `[CAPSTONE]` output goes to the harness `--log-file`, never the console, and the
+   log is opened `"w"` so each run truncates it. Copy before re-running.
+3. `run-sqlite-silicon.sh` copies from the hardcoded `sqlite-silicon/` directory, not from
+   `OUT_DIR` — setting `OUT_DIR` alone makes it stage the *previous* domain.
