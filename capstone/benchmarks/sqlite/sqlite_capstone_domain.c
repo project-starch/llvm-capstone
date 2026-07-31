@@ -529,6 +529,88 @@ static int run_sqlite_staged(int stage) {
       if (p[i] && sqlite3Strlen30(p[i]) >= 0) ok++;
     return (int)(ok > 255 ? 255 : ok);
   }
+  /* Stages 40-44: BLOB COPY vs ZERO-FILL in the entry glue.
+     The R-14 workaround flips .capstone_gp_initdesc record 150 from blob_off = -1 (the
+     zero-init sentinel) to blob_off = 52240, so the glue stops zero-filling a 9216-byte
+     carve and starts COPYING 9216 bytes into it -- the largest blob copy in the domain, and
+     it runs BEFORE cap-init. That build wedges at SHA5, mid FIRST SHARE ENTRY, before
+     SQ: G/enter, i.e. in glue territory. Today's one confirmed root cause (an unaligned
+     8-byte ld) lived in exactly that copy loop.
+     An INITIALISED static forces a blob copy; an uninitialised one gets blob_off = -1 and is
+     zero-filled. Stage 44 is the control: same 9216 bytes, zero-init, so same carve geometry
+     with NO copy. If 42 wedges and 44 returns, the copy path is implicated and the carve size
+     is exonerated. Sizes bracket the failing 9216 in both directions. */
+#define CAPSTONE_BLOB_N(st) ((st) == 40 ? 1024 : (st) == 41 ? 4096 : \
+                             (st) == 43 ? 16384 : 9216)
+  if (stage >= 40 && stage <= 44) {
+    /* Initialised -> real blob_off -> the glue COPIES it. */
+    static const unsigned char blobdata[CAPSTONE_BLOB_N(CAPSTONE_SQLITE_STAGE)] =
+        { [0 ... CAPSTONE_BLOB_N(CAPSTONE_SQLITE_STAGE) - 1] = 0x5A };
+    /* Uninitialised -> blob_off = -1 -> the glue ZERO-FILLS it. Stage 44 reads this one. */
+    static unsigned char zerodata[9216];
+    unsigned n = CAPSTONE_BLOB_N(stage), i, bad = 0;
+    if (stage == 44) {
+      for (i = 0; i < sizeof(zerodata); i++)
+        if (zerodata[i] != 0) bad++;
+      return bad ? (int)(bad > 254 ? 254 : bad) : 255;   /* 255 == all zero, as expected */
+    }
+    /* Every byte must read back as 0x5A. Return the count of BAD bytes so a partial copy is
+       distinguishable from a total failure; 255 means the whole blob arrived intact. */
+    for (i = 0; i < n; i++)
+      if (blobdata[i] != 0x5A) bad++;
+    return bad ? (int)(bad > 254 ? 254 : bad) : 255;
+  }
+  if (stage == 50) {
+    /* C-14 IN ISOLATION, two instructions. `movc rd, rs` writes cnull to rs unless rs is a
+       NONLIN capability (capstone_flu_unit.anvil:19-24); a plain integer is NOT_CAP, so on
+       silicon the first movc destroys `src` and the second copies zero. QEMU guards the same
+       zeroing with rs1_v->tag (op_helper.c:580-584), so it returns 55 there.
+       C-14 has only ever been demonstrated through a whole-loop checksum on gpw2; this tests
+       the INSTRUCTION. 50 means every live-source movc in an image is a live hazard. */
+    unsigned long src = 5, b = 0, c = 0;
+    /* funct7 = 0x0A, verified by decoding a real `movc` emitted by the compiler:
+       word 0x1401145b -> opcode 0x5b, funct3 0x1, funct7 (bits 31:25) = 0x0A. The 0x14
+       visible in the top byte is funct7<<1, and writing 0x14 as the funct7 assembles a
+       DIFFERENT instruction entirely -- which the first version of this probe did. */
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x0a, %0, %2, x0\n\t"
+                     ".insn r 0x5b, 0x1, 0x0a, %1, %2, x0"
+                     : "=&r"(b), "=&r"(c), "+r"(src));
+    if (b == 5 && c == 5) return 55;   /* movc preserved a live scalar source */
+    if (b == 5 && c == 0) return 50;   /* C-14 CONFIRMED on this bitstream     */
+    return 51;                          /* neither -- unexpected              */
+  }
+  if (stage == 51) {
+    /* WATCHDOG form of stage 18. Bounds the loop so a LIVELOCK RETURNS a marker naming the
+       site instead of spinning forever. This is the instrument the campaign has lacked:
+       every wedge so far produced silence, and silence cannot distinguish "the core stopped"
+       from "the domain is still running a loop that never ends" -- especially now that
+       ex_commit.valid is known to be the exception bit and stall_issue=1 is the steady state
+       of a RAW-dependent loop.
+         rc 0xB1 -> the strlen walk never terminated  => LIVELOCK, localised
+         rc 16   -> stage 18 completes when bounded    => the wedge is a budget effect
+         WEDGE   -> the core genuinely stops, and it is NOT a domain-code loop */
+    struct kv3 { const char *z; const char *y; };
+    struct kv3 a[64];
+    unsigned i, guard;
+    int ok = 0;
+    a[0].z="ltrim";  a[0].y="aaa0";  a[1].z="rtrim";  a[1].y="aaa1";
+    a[2].z="trim";   a[2].y="aaa2";  a[3].z="max";    a[3].y="aaa3";
+    a[4].z="min";    a[4].y="aaa4";  a[5].z="typeof"; a[5].y="aaa5";
+    a[6].z="length"; a[6].y="aaa6";  a[7].z="instr";  a[7].y="aaa7";
+    a[8].z="substr"; a[8].y="aaa8";  a[9].z="upper";  a[9].y="aaa9";
+    a[10].z="lower"; a[10].y="aab0"; a[11].z="coalesce"; a[11].y="aab1";
+    a[12].z="hex";   a[12].y="aab2"; a[13].z="unhex"; a[13].y="aab3";
+    a[14].z="quote"; a[14].y="aab4"; a[15].z="replace"; a[15].y="aab5";
+    for (i = 16; i < 64; i++) { a[i].z = "filler"; a[i].y = "fill"; }
+    for (i = 0; i < 16; i++) {
+      const char *z = a[i].z;
+      if (!z) continue;
+      guard = 0;
+      while (z[guard]) { if (++guard > (1u << 16)) return 0xB1; }  /* bounded strlen */
+      if (guard > 0) ok++;
+    }
+    return ok;                          /* expect 16 */
+  }
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);

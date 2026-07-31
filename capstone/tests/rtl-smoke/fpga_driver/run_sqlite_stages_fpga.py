@@ -204,7 +204,20 @@ def main():
                 verdict = f"no marker (obs={obs})"
             name = STAGE_NAMES.get(decode(obs)[0] if d else -1, "")
             print(f"  {dom:44} {verdict}{('   -- ' + name) if name else ''}", flush=True)
-            if first_bad is None and (wedged or (d and d[1] != 0)):
+            # A NON-ZERO rc IS NOT A FAILURE. Only a WEDGE is.
+            #
+            # This rule used to score any non-zero rc as the first failure and stop the
+            # ladder. That is wrong for every probe whose SUCCESS value is non-zero -- the
+            # h30..h34 holder ladder returns 40/100/160/255, the byte-survival probes return
+            # 255, the watchdog markers are 0xB1..0xB6, and c14fan returns 50 or 55. It
+            # printed "FIRST FAILURE: h30 returned a nonzero rc 40" for a correct result and
+            # let h32's genuine rc=0 mismatch pass unflagged, and it would abort any batch
+            # after the first watchdog marker.
+            #
+            # Expected values are the caller's business, not this runner's: it cannot know
+            # what a given stage should return. So it reports what came back and flags only
+            # what it can judge on its own -- a domain that never returned.
+            if first_bad is None and wedged:
                 first_bad = (dom, wedged, d)
 
         if first_bad is None:
