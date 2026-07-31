@@ -21,6 +21,7 @@ it -- that is not a limitation to work around, it is the answer. Stop there and 
 import os
 import pathlib
 import re
+import time
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
@@ -115,8 +116,13 @@ def main():
             #
             # So: a run that produced no `SQ: obs=` marker at all, or a marker that is not a
             # staged marker, is a HARD failure. A domain that actually ran always emits one.
+            # ONLY when the domain RETURNED. A wedged domain legitimately produces no marker,
+            # and an earlier version of this check ran unconditionally -- so it hard-stopped on
+            # every genuine wedge, which is the case it is supposed to let through, and
+            # suppressed the in-session debug-mux read below. The check is for "the shell came
+            # back but nothing ran", not for "the core died".
             m_obs = re.search(r"SQ: obs=(\d+)", text)
-            if m_obs is None or (int(m_obs.group(1)) >> 16) != 0x5A6E:
+            if not wedged and (m_obs is None or (int(m_obs.group(1)) >> 16) != 0x5A6E):
                 got = "no SQ: obs= marker" if m_obs is None else f"obs={m_obs.group(1)}"
                 raise SystemExit(
                     f"HARD STOP: {dom} produced {got}, not a staged marker.\n"
@@ -140,6 +146,43 @@ def main():
             obs = int(m.group(1)) if m else None
             results.append((dom, wedged, obs, "SQ: H/return" in text))
             if wedged:
+                # INSTRUMENT THE WEDGE HERE, IN THIS SESSION.
+                #
+                # The core is wedged RIGHT NOW, with the lock held, the board powered and the
+                # console live. Reading the debug mux costs ~20 s. Doing it in a separate
+                # session costs a full boot -- upload, JTAG load, kernel, initramfs -- roughly
+                # 200 s, and re-creates the state by re-running rather than observing the
+                # state that actually failed. Every wedge investigated this way so far paid
+                # that cost for no reason.
+                #
+                # Selectors verified against cva6.sv:1090-1215; byte_sel must be 0b111, so the
+                # switch value is 224 + reg_sel. Decoded by name because a raw hex byte has
+                # been misread twice (0x84 and 0x89 both were).
+                log("WEDGED -- reading the debug mux now, before releasing the board")
+                try:
+                    for sw, label, kind in ((255, "TRAP LOG {seen,mcause[6:0]}", "trap"),
+                                            (224, "{excommit,ldsync,stsync,lsu_rdy,dyn_rdy,"
+                                                  "flu_rdy,flush,privM}", "ready"),
+                                            (225, "{tbe,wstore,wload,wrev,domsw,stall,memwr,"
+                                                  "memwait}", "status")):
+                        for bit in range(8):
+                            console.set_switch(bit, bool(sw & (1 << bit)))
+                        time.sleep(1.2)
+                        st = console.latest(C.LISTEN.get("led_state", "led_state"))
+                        bits = st.get("states") if isinstance(st, dict) else None
+                        v = sum((1 << i) for i, b in enumerate(bits) if b) if bits else None
+                        print(f"  [wedge] sw={sw:3} {label:52} "
+                              f"{'UNREAD' if v is None else f'0x{v:02x} {v:08b}'}", flush=True)
+                        if v is not None and kind == "ready":
+                            names = ["privM", "flush", "flu_ready", "dyn_ready", "lsu_ready",
+                                     "store_syncer", "load_syncer", "ex_commit.valid"]
+                            print("          " + " ".join(f"{n}={(v >> i) & 1}"
+                                                          for i, n in enumerate(names)),
+                                  flush=True)
+                    for bit in range(8):
+                        console.set_switch(bit, False)
+                except Exception as exc:
+                    log(f"debug-mux read failed ({type(exc).__name__}) -- continuing to teardown")
                 log("STOPPING: a wedged domain takes the core with it, so nothing after "
                     "this point would be meaningful")
                 break

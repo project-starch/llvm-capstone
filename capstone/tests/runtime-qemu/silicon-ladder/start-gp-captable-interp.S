@@ -468,7 +468,23 @@
    string CONTENTS later turned out to be wrong on silicon (strlen of a 21-char literal
    returning 1), the first thing to rule out was whether this edit caused it. Keep the knob
    so that control can be re-run cheaply rather than reasoned about. */
-#if !defined(INTERP_NO_GRANULE_ALIGN)
+/* DISABLED BY DEFAULT 2026-07-31, same day it was added. Enable with INTERP_GRANULE_ALIGN=1
+   only to re-measure it.
+   It was added to make carve bounds exactly representable, and it does NOT achieve that: it
+   masks `t1` BEFORE `sub t1,t1,t4`, but the carve's upper end is the PREVIOUS iteration's
+   `t1`, so the BASE ends up granule-aligned and the LENGTH does not. Audited on the real
+   descriptor: idx 170 (sqlite_heap, 262,144 B, granule 512) gets a carve length of 262,384,
+   and 262,384 % 512 = 240 -- still unrepresentable, so the top must round outward.
+   Worse, it introduced a NEW defect: the zero-fill writes `t4` = 262,144 bytes into a
+   262,384-byte carve, so the top 240 bytes of the memsys5 arena capability are now whatever
+   the page allocator left there. They were zeroed before this block existed.
+   And it fixed nothing measurable: 14 domains carrying this exact code pass SHA5->SHA6
+   twice, and simulation over the real descriptors shows the residual misalignment is LARGER
+   in a domain that passes (304 B) than in the one that wedges (240 B), i.e. it is
+   non-discriminating.
+   A correct version must align the LENGTH (mask after the subtraction, or align every carve
+   to one global maximum granule), not the base. Until then, off. */
+#if defined(INTERP_GRANULE_ALIGN)
   li    a4, 8                        /* a4 = granule                                    */
   mv    a5, t4
 12:
