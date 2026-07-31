@@ -175,3 +175,45 @@ A single **file-scope** `capstone_probe_lit[16]`, read three ways:
 Discriminator: if 60 overruns while 62 returns 5, the ACCESS PATTERN is the mechanism and the
 array is exonerated. If all three agree, the 52-vs-59 split was about WHICH array, and the
 fault is in cap-init's later blocks at runtime, not in any walk.
+
+## THE CONFOUND-FREE RESULT — the ACCESS PATTERN is the mechanism
+
+One file-scope array (`capstone_probe_lit[16]`), three access shapes, same addresses, same
+layout, same build flags. Board, `BOARD_RC=0`, run-scoped:
+
+    wd51  stage 51  rc=0xB1   control                        want 0xB1  OK
+    wd60  stage 60  rc=0xC1   LOOP  for i=0..15, walk each    want 16    FAILS
+    wd61  stage 61  rc=0xDF   PLAIN z = lit[1], bitmap        want 0xDF  OK
+    wd62  stage 62  rc=5      VOLATILE read of lit[1], walk   want 5     OK
+
+**Array identity is exonerated and the access pattern is the mechanism.** All three read the
+identical object, so "the Nth cap-init'd array is broken" is dead, and so is every
+layout-based explanation for THIS failure.
+
+### That includes the granule hypothesis — retracted as the root cause
+
+Immediately before this ran, the granule base misalignment (idx 170, `sqlite_heap`, 256 KB,
+granule 512, `base%g = 64`) was the leading candidate, with a mechanism that looked
+compelling: outward bounds rounding makes the heap capability overlap neighbouring carves, so
+memsys5 zeroing its arena clobbers adjacent globals — which would explain literal bytes being
+present while a walk never terminates.
+
+`wd60/61/62` refute it for this failure: the three probes share one array at one address under
+one glue build, and only the loop fails. A layout defect cannot be selective by access shape.
+
+The granule finding still stands on its own terms — the simulation showing OFF -> 1
+unrepresentable carve and ON -> 0 is correct, and idx 170's base really is misaligned — but it
+is a **latent defect, not this bug**. Keep the flag off by default until it is tested for its
+own sake.
+
+### What is left
+
+`wd60`'s loop walks `lit[0]` BEFORE `lit[1]`; `wd61`/`wd62` touch `lit[1]` alone. So the
+remaining candidates are (a) walking one element corrupts the next, or (b) the variable-index
+`lit[i]` form differs from the constant-index form. Stages 64/65 separate exactly this:
+
+    64: walk lit[0] then lit[1], same array   expect 0x45, 0xB3 if the first walk breaks it
+    65: walk lit[1] alone, same array         expect 0x45  (control)
+
+plus stage 63 (four identical arrays, bitmap of which overran) and `ga60` (the loop shape
+against a granule-aligned glue, to check whether granule-align rescues it anyway).
