@@ -51,6 +51,50 @@ wedged domain is always last by construction. Only the identical-domain repetiti
 usable position data. (An earlier draft of this section reported a flat "16% background rate"
 from that circular view and over-generalised; corrected here.)
 
+### RETRACTED: the ceiling is NOT SPLB. (That conclusion read REPLAYED HISTORY.)
+
+An earlier entry claimed "all four rate boots end with `SPLB:0000E006`, so the background wedge
+is the exact-fit region spin". **That was wrong.** Splitting each log at the runner's
+`booted once` marker:
+
+    board-rate1..4.log:  SPLB before 'booted once' (replayed history) = 1
+                         SPLB after  'booted once' (the actual run)   = 0
+
+Every SPLB occurrence was console history replayed on connect, not output from the run. This is
+the accumulated-buffer trap already documented in section 9 — hit a second time in one day, on
+a conclusion rather than a result.
+
+**Independent confirmation that the ceiling is not SPLB:** the SPLB fix was enabled and verified
+active in the built firmware (`0xe007` present, `0xe006` absent from the regenerated
+`sbi_capstone_dom.c.S`), and the control STILL wedged at run 6:
+
+    with the fix:  ok ok ok ok ok W    (5 correct, wedge at run 6, ZERO SPLB in the run segment)
+
+So the SPLB fix is a genuine defect fix — the exact-fit spin no longer happens — but it does
+NOT remove the ~6-run ceiling.
+
+### What the ceiling actually looks like
+
+Last markers of the RUN segment (history excluded), both with and without the fix:
+
+    ... SQ: G/enter  SQ: H/return  SQ: X/fail  SQ: obs  SQ: A/dom  SQ: id  SQ: libc
+        SQ: self  SQ: B/mkregion1  [SQ: C/mkregion2]   <-- ends here
+
+The previous domain completed normally (`G/enter` -> `H/return`), and the NEXT domain dies in
+**host-side region creation**, between `B/mkregion1` and `C/mkregion2` — with **no monitor tag
+at all**: no SPLA, no SPLB, no RGNO, no SHAB. That is a different site from every named one.
+
+Note `SQ: X/fail` appears before each new domain starts: the host reports the previous run's
+marker as a failure because a control returning `0x45` is not the host's expected success value.
+That is cosmetic and unrelated.
+
+### Next
+
+Instrument the host's `mkregion1`/`mkregion2` path (the ioctl that creates a region) rather than
+the monitor — the monitor never gets to report, so the failure is on the Linux/host side or in
+the ioctl entry before any capstone_report site. Reading `dmesg`/driver state after the wedge
+would be the cheapest next probe, and needs no monitor change.
+
 ### What is exhausted after ~6 runs
 
 Unknown, and now the sharpest question in this document — it is measurable with no SQLite in
