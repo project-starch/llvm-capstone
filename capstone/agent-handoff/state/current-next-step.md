@@ -484,3 +484,54 @@ unit's `get_rev_node` (`capstone_rev_node.anvil:36-41`) likewise blocks on
 construction: no trap, no diagnostic, board dead until power-cycle. That is a robustness defect
 worth its own ISSUES.md entry regardless of what triggers it, and it is the reason this
 campaign produced silence instead of error codes for days.
+
+## RETRACTED: "the wedge is a rev-node query stall". The signature was never controlled.
+
+A HEALTHY baseline was finally read — the same registers after `wd71`, which RETURNS `0x45`
+(6/6 samples) — using `probe_wedge_regs.py`, which reads registers even when the run completes.
+
+    sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait}
+      healthy (returned) : 0xd5 = tbe=1 wstore=1 wload=0 wrev=1 domsw=0 stall=1 memwr=0 memwait=1
+      wedge   (mt10)     : 0x95 = tbe=1 wstore=0 wload=0 wrev=1 domsw=0 stall=1 memwr=0 memwait=1
+
+**`wrev = 1` and `memwait = 1` in BOTH.** They are the RESTING state of those bits, not evidence
+of a blocked query. The claim that "every wedge shows the dyn unit blocked in
+get_node_query_validity while the rev unit waits on the node-table read" rested on reading
+those bits at four wedges and never once at a success. It is **withdrawn**.
+
+This is the same missing-control error as the earlier retractions (guarded-vs-unguarded, walk
+count, instruction placement): a signature compared only against other instances of itself.
+
+### What the controlled comparison actually shows
+
+The only bit that differs in `sw=225` is **`wstore` (1 -> 0)**. On `sw=224`:
+
+      healthy : 0xff = excommit=1 ldsync=1 stsync=1 lsu_rdy=1 dyn_rdy=1 flu_rdy=1 flush=1 privM=1
+      wedge   : 0x5d = excommit=0 ldsync=1 stsync=0 lsu_rdy=1 dyn_rdy=1 flu_rdy=1 flush=0 privM=1
+
+differing in **`stsync` (1 -> 0)**, `excommit` (1 -> 0) and `flush` (1 -> 0). So what changes at
+a wedge is STORE-side, not rev-query-side.
+
+**Caveat on the healthy `sw=224 = 0xff`:** all-ones is suspicious as a reading — it may be a
+bus-idle/default rather than real state, in which case the `sw=224` deltas are meaningless too.
+`sw=225 = 0xd5` is not all-ones and is therefore the more trustworthy of the two. Do not build
+on the `sw=224` deltas until 0xff is confirmed to be real state.
+
+### What SURVIVES from the rev-node work
+
+* `get_node_query_validity` (`capstone_dyn_unit.anvil:106-112`) and `get_rev_node`
+  (`capstone_rev_node.anvil:36-41`) genuinely have **no timeout and no abort path** — read from
+  source, independent of any board reading. Any unanswered query IS an unrecoverable hang by
+  construction. Still worth an ISSUES.md entry as a robustness defect; it is simply not
+  established that it is what bites us.
+* `rev_node_head = 413, overflow = 0` at the wedge: the allocator had not wrapped. Exhaustion
+  remains refuted as the trigger (healthy read: head = 222, overflow = 0).
+* Route A stands: with a reachable `mtvec` handler the wedge was unchanged while the control
+  returned, so it is not an ordinary trap. (Pending the auditor's check on whether capability
+  faults use `mtvec` at all.)
+
+### Rule this cost yet another retraction to learn
+
+**Never read a debug register only at the failure.** Read it at a SUCCESS in the same session
+first. A "signature" seen at four wedges means nothing without the healthy value; three of the
+eight bits here were identical in both states.
