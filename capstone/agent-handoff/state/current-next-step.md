@@ -435,3 +435,52 @@ the rev-node unit is itself blocked elsewhere; or a request/response mismatch lo
 Route A stays in the tree, gated OFF (`INTERP_DOMAIN_MTVEC`), verified byte-identical when off
 (wd71 sha 27477e88aa49297e both before and after). It is still the right tool for any FUTURE
 fault-vs-stall question, which is exactly what it settled here.
+
+## Rev-node state at the wedge: allocator is HEALTHY; serving_idx cannot answer the question
+
+Read at the stage-10 wedge (selectors verified against `cva6.sv:1184-1189`, not taken from the
+probe's labels):
+
+    rev_node_head = 413      overflow = 0
+    serving_idx   = 0        init_seen = 0   mrev_seen = 0   (all four bytes zero)
+
+**Allocator exhaustion is REFUTED as the trigger.** head is 413 of a ~1021 pool with
+overflow=0, so the bump allocator had not wrapped and ids were not being reused. That retires
+the R-12 pool-exhaustion story for this failure — it has been re-proposed repeatedly across
+this campaign and is now excluded by direct measurement.
+
+**CORRECTION — `serving_idx` does not mean what the probe's label implies.** It is assigned
+ONLY in the `rev_req` (revoke) handler, `capstone_rev_node.anvil:131-134`
+(`} else try msg = recv ep.rev_req { ... set serving_idx := msg; ...`), and never in the
+`query_req` path at `:55-61`. So `serving_idx = 0` means "no revoke request has ever been
+served", NOT "node 0 is being queried". An earlier decode here read it as "serving node 0,
+below the id space" — that was wrong and is withdrawn. The debug word is
+`{mrev_seen, init_seen, serving_idx[29:0]}` (`:215`).
+
+**Consequence: there is no debug register that exposes the QUERIED node id.** The queried id
+lives only in the `query_req` message. Reading it would need an RTL change and therefore a
+bitstream reflash, which is not available here.
+
+### So do it from software instead — the next probe
+
+The queried id is the `revnode_id` in the metadata of the capability being loaded. A domain
+can read that with `lcc` BEFORE performing the load that hangs, and return it as a marker:
+
+* sane id, `3 <= id < head` -> the capability is well-formed and the hardware failed to answer
+  a legitimate query => RTL defect.
+* `id == 0` or `id >= 1024` -> the capability carries a bogus revnode_id => our side produced
+  it (cap-init, a stale/uninitialised slot, or a load of untagged memory), and the RTL's only
+  fault is hanging instead of erroring.
+
+Note `lcc` encoding: funct7 is **0x04** with the zimm in the rs2 field (0x08 was wrong and cost
+a build). Prefer a C-level read if one exists before hand-rolling `.insn`.
+
+### Independent of the trigger: report this defect
+
+`get_node_query_validity` (`capstone_dyn_unit.anvil:106-112`) is
+`send query_req >> recv query_res` with **no timeout and no abort path**, and the rev-node
+unit's `get_rev_node` (`capstone_rev_node.anvil:36-41`) likewise blocks on
+`recv mem_ch.read_res`. Any unanswered query is therefore an unrecoverable machine hang by
+construction: no trap, no diagnostic, board dead until power-cycle. That is a robustness defect
+worth its own ISSUES.md entry regardless of what triggers it, and it is the reason this
+campaign produced silence instead of error codes for days.

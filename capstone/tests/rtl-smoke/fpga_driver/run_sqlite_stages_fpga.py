@@ -186,7 +186,34 @@ def main():
                                             (224, "{excommit,ldsync,stsync,lsu_rdy,dyn_rdy,"
                                                   "flu_rdy,flush,privM}", "ready"),
                                             (225, "{tbe,wstore,wload,wrev,domsw,stall,memwr,"
-                                                  "memwait}", "status")):
+                                                  "memwait}", "status"),
+                                            # REV-NODE ALLOCATOR STATE. Every wedge so far
+                                            # reads sw=225 = 0x95, i.e. wrev=1 AND memwait=1:
+                                            # the dyn unit is blocked in
+                                            # get_node_query_validity
+                                            # (capstone_dyn_unit.anvil:106-112, a `recv` with no
+                                            # abort path) while the rev-node unit is itself
+                                            # waiting on the node-table memory read inside
+                                            # get_rev_node (capstone_rev_node.anvil:36-41).
+                                            # head/overflow/serving_idx say WHICH node id was
+                                            # being queried and whether the bump allocator had
+                                            # wrapped -- i.e. whether the id is plausible or
+                                            # garbage, which separates "RTL drops a valid
+                                            # query" from "we queried an unmappable id".
+                                            (249, "rev_node_head[7:0]", "raw"),
+                                            (250, "{overflow,0,head[9:8]}", "raw"),
+                                            # serving_idx is 32 bits across 11011..11110
+                                            # (cva6.sv:1186-1189). Reading only the low byte
+                                            # cannot tell a legitimate node id from garbage,
+                                            # which is exactly the discriminator needed:
+                                            # a sane id (< head) means the hardware failed to
+                                            # answer a VALID query; a huge/garbage id means we
+                                            # queried an unmappable node and the RTL hung
+                                            # instead of erroring.
+                                            (251, "rev_node_serving_idx[7:0]", "raw"),
+                                            (252, "rev_node_serving_idx[15:8]", "raw"),
+                                            (253, "rev_node_serving_idx[23:16]", "raw"),
+                                            (254, "rev_node_serving_idx[31:24]", "raw")):
                         for bit in range(8):
                             console.set_switch(bit, bool(sw & (1 << bit)))
                         time.sleep(1.2)
