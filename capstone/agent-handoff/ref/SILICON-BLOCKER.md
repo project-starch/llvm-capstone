@@ -6,18 +6,60 @@ Last updated: 2026-08-01.
 
 ---
 
-## 0. READ FIRST — THERE IS A BACKGROUND WEDGE RATE. SINGLE SAMPLES ARE WORTHLESS.
+## 0. READ FIRST — WEDGES ARE POSITION-DEPENDENT: ~6 DOMAIN RUNS PER BOOT, THEN IT WEDGES
 
-`wd71` — the trivial control domain (one string walk, one return, no SQLite) that had returned
-`0x45` in roughly ten prior runs and was used all session as the "board is healthy" check — was
-run 8 times consecutively in ONE boot:
+Measured by running the TRIVIAL control (`wd71`: one walk, one return, no SQLite) repeatedly
+inside one boot, four boots:
 
-    run order:  ok ok ok ok ok W
-    wd71   n=6   correct=5   wedged=1     failure rate = 1/6
+    boot1: 6 correct then WEDGE
+    boot2: 5 correct then WEDGE
+    boot3: 5 correct then WEDGE
+    boot4: 5 correct then WEDGE
+    ---------------------------------------------
+    21 correct, 4 wedges over 25 runs
 
-**The same binary, in the same boot, wedged on the 6th run.** So a wedge is not, by itself,
-evidence about the domain under test. There is a background failure rate of roughly 1-in-6 on
-the simplest domain that exists here.
+**This is NOT a uniform 16% failure rate.** Positions 1-5 are **21 successes, 0 failures**; the
+wedge lands at position 6 or 7 in EVERY boot. A random 16% process would give wildly varying
+run lengths (1, 12, 3, 8...). The regularity means **something is exhausted after ~6 domain
+runs in a boot**, and the domain under test does not matter — these were 25 runs of the same
+trivial image.
+
+### The rule this gives, and it is simple
+
+* **A wedge at position <= 5 in a boot is MEANINGFUL** — background failure there is 0/21.
+* **A wedge at position >= 6 is SUSPECT** — that is where the control fails too.
+* **Never put the domain under test late in a batch.** Put it FIRST after a single control.
+
+### Which recorded results this affects
+
+Re-checked across every batch log. Results whose first wedge landed at position >= 6, i.e. in
+the exhaustion zone, and which therefore prove nothing about the domain:
+
+    sqlite-fence.txt   pos 6   fn60.dom
+    sqlite-n69b.txt    pos 6   wd69.dom
+    sqlite-rep.txt     pos 6   wd52.dom
+    sqlite-wdb.txt     pos 6   wd54.dom
+
+Everything that wedged at position 2-5 STANDS, including the blocker: `wd10`/`mt10` wedged at
+**position 2** in five separate boots (`boot1`, `boot2`, `boot3`, `goal2`, `mcause`,
+`ra-mt10`), where the control has never failed. **The stage-10 blocker is real.**
+
+### A caveat on the obvious cross-check
+
+Tabulating "wedge position" across MIXED batches is circular: a wedge ends the session, so the
+wedged domain is always last by construction. Only the identical-domain repetition above gives
+usable position data. (An earlier draft of this section reported a flat "16% background rate"
+from that circular view and over-generalised; corrected here.)
+
+### What is exhausted after ~6 runs
+
+Unknown, and now the sharpest question in this document — it is measurable with no SQLite in
+the picture at all. Monitor-side candidates that grow monotonically per domain run: region ids
+(`rgid` observed climbing 12 -> 17 -> 23 -> 25 -> 29 within one boot), domain ids,
+`CAPSTONE_MAX_REGION_N` array slots, CPMP register slots, and rev-node allocations. Read
+`region_n` / `dom_n` at the wedge, or instrument the monitor to report them per run.
+
+
 
 ### Consequences — these apply to EVERY result in this document
 
