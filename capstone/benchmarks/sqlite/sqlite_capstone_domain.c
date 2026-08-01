@@ -258,8 +258,8 @@ static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 74
-/* ONE array, at FILE SCOPE, shared by stages 60-74 -- the confound remover.
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 76
+/* ONE array, at FILE SCOPE, shared by stages 60-76 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
    cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
    different addresses, initialised by different blocks of __capstone_cap_init. The observed
@@ -1012,6 +1012,30 @@ static int run_sqlite_staged(int stage) {
                      "csrw mtvec, zero"
                      : "=r"(got) : "r"(0x40UL) : "memory");
     return (int)(got & 0xffUL);
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE == 76
+  if (stage == 76) {
+    /* POSITIVE CONTROL for Route A. The mtvec handler has never been shown to CATCH anything:
+       mt71 returned normally, so .Ldomain_trap was never entered, and "mt10 still wedged with
+       a handler installed" only means "not an exception" IF the handler works at all. This
+       domain faults ON PURPOSE.
+       capstone_probe_lit is 256 bytes; dereferencing ~1 MB past its base must raise
+       OUT_OF_BOUNDS (capstone_dyn_unit.anvil:322-325), a cause the latch DOES record
+       (mcause 23+5 = 28; the region-share family already shows 24 latching fine).
+       Three distinguishable outcomes:
+         RETURN WITH NO MARKER -> the handler caught the fault and took the normal return path.
+             The runner reports "produced no SQ: obs= marker", which here is SUCCESS, not an
+             error. Route A works and "not an exception" becomes an earned inference.
+         rc = 0x77             -> no fault was raised at all; the bounds check did not fire and
+             this control is invalid as written.
+         WEDGE                 -> the handler does NOT work; the Route A conclusion collapses
+             and every "still wedged with mtvec set" result is uninterpretable. */
+    const char *const volatile *vp = capstone_probe_lit;
+    const volatile char *base = (const volatile char *)(const void *)vp;
+    const volatile char *far = base + (1024 * 1024);
+    unsigned char v = (unsigned char)*far;      /* expected to FAULT here */
+    return (int)(0x77u ^ (v & 0u));             /* only reached if no fault fired */
   }
 #endif
   if (stage <= 0)

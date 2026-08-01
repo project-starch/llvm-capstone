@@ -597,3 +597,43 @@ with `INTERP_DOMAIN_MTVEC=1`:
 * it wedges -> the Route A result collapses and the handler never worked.
 
 Order in one boot: deliberate-fault domain, then `wd71`, then the wedger last.
+
+## Route A remains UNVERIFIED — and the control turned up something else
+
+The positive control (stage 76: dereference 1 MB past `capstone_probe_lit`, a 256-byte
+cap-table global, built with `INTERP_DOMAIN_MTVEC=1`) returned **rc = 0x77**, i.e. **no fault
+fired**. `mt71` returned `0x45` in the same session, so the board was healthy.
+
+The load really did execute — it is not dead code eliminated by the compiler (the pointer is
+`volatile`), confirmed in the disassembly of `mt76.dom`:
+
+    36970: lui        a1, 0x100        ; +1 MiB
+    36974: cincoffset a1, a0, a1       ; offset the capability by 1 MiB
+    3698c: lbu        a0, 0x0(a0)      ; the load -- present and executed
+    369a4: li         a0, 0x77         ; returned normally
+
+**Consequences:**
+
+1. **Route A is NOT verified.** No run has ever shown `.Ldomain_trap` catching a fault, so
+   "mt10 still wedged with a handler installed => the wedge is not an exception" remains an
+   ASSUMPTION. Do not cite it as established. Needs a fault the hardware definitely raises.
+2. **A byte load 1 MB beyond a 256-byte global's capability did not fault.** Either the storage
+   capability handed out for that global is much wider than the object, or bounds are not
+   enforced on this path. Both are worth chasing on their own merits — the first would mean
+   cap-table carves over-grant, the second would be a spatial-safety hole. Neither is
+   established yet; the next step is to read the capability's own base/length (via `lcc`
+   fields, NOT the validity query, which uses the hanging channel) and compare against the
+   256-byte object.
+
+**Better fault candidates for a retry of the control** (pick one the RTL definitely raises):
+`UNEXPECTED_CAP_TYPE` by using a scalar where a capability is required; `INSUFFICIENT_PERMISSION`
+by storing through a read-only capability; or the region-share path itself, which already
+demonstrably latches mcause 24 (the `0x84` family) — that family is the natural positive
+control, since it is a fault that IS occurring.
+
+### Method note
+
+This is the fourth time a probe was invalid rather than the hypothesis being wrong. The build
+caught this one (`capstone_probe_lit` undeclared, because a guard-widening `replace` silently
+matched nothing — it had no assertion). Every generated edit in this file must assert its
+anchor matched.
