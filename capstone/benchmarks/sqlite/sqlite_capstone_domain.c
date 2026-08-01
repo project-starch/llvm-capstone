@@ -258,8 +258,8 @@ static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 83
-/* ONE array, at FILE SCOPE, shared by stages 60-83 -- the confound remover.
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 85
+/* ONE array, at FILE SCOPE, shared by stages 60-85 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
    cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
    different addresses, initialised by different blocks of __capstone_cap_init. The observed
@@ -1167,6 +1167,33 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
     }
     if (g > 15u) g = 15u;
     return (int)(0x40u | g);
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE >= 84 && CAPSTONE_SQLITE_STAGE <= 85
+  if (stage == 84 || stage == 85) {
+    /* WHICH PART OF THE READ-MODIFY-WRITE IS LOST? Stages 82/83 proved both walks compute
+       guard=5 correctly, yet wd66 returns 2 instead of 3 -- so the FIRST `m |= 1u` is lost
+       while the second `m |= 2u` survives. These isolate that update.
+         84: do walk 1, apply ONLY the first update, return 0x70 | m.
+             0x71 => the update survives when it is the ONLY one; the loss needs the second
+                     walk/update to follow it.
+             0x70 => the first update is lost even alone; the RMW itself is broken and this is
+                     a 3-line reproducer.
+         85: the full wd66 sequence, re-encoded as 0x70 | m so the value cannot be confused
+             with wd66's own encoding. Expect 0x73; 0x72 reproduces wd66 under a new encoding
+             and rules out the encoding being the problem.
+       One value per domain, deliberately -- wd81 returned two and wedged. */
+    const char *z = capstone_probe_lit[1];
+    unsigned guard = 0, m = 0;
+    if (!z) return 0xD1u;
+    while (z[guard]) { if (++guard > 64u) break; }
+    if (guard <= 64u) m |= 1u;
+    if (stage == 85) {
+      guard = 0;
+      while (z[guard]) { if (++guard > 64u) break; }
+      if (guard <= 64u) m |= 2u;
+    }
+    return (int)(0x70u | (m & 0xfu));
   }
 #endif
   if (stage <= 0)

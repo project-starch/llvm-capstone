@@ -384,6 +384,51 @@ is read correctly. The decode was never checked against a probe that returns the
 and when one finally was built (`wd81`, both guards at once) it WEDGED, which delayed the check
 further. Splitting it into one number per domain (`wd82`, `wd83`) settled it immediately.
 
+## 8g. RETRACTED AGAIN: no accumulator bug either. The phenomenon is BUILD-TO-BUILD.
+
+One boot, freshly reflashed hardware:
+
+    wd71   control                                   rc = 0x45
+    wd84   walk 1 + the FIRST update only, x2        rc = 0x71   m = 1   CORRECT
+    wd85   the FULL wd66 sequence, re-encoded        rc = 0x73   m = 3   CORRECT
+    wd66   the same sequence, its own encoding       rc = 0x02           WRONG
+
+`wd85` performs exactly what `wd66` performs — walk, `m |= 1`, walk, `m |= 2` — and returns
+**m = 3**, the correct value. So the first update is NOT lost, and the accumulator finding
+recorded in 8f is **withdrawn**. `wd84` further shows the first update survives in isolation.
+
+### What is actually left, and it has been present the whole time
+
+**Identical C logic, built into a DIFFERENT BINARY, produces a DIFFERENT RESULT — and each
+binary is internally deterministic.** The same pattern, repeatedly:
+
+| pair | same source logic | outcome |
+|---|---|---|
+| `wd66` vs `wd85` | walk, `m|=1`, walk, `m|=2` | `2` vs `3` (correct) |
+| `wd77` vs `wd78`/`wd79` | two `lcc` reads, 1048 stores each | returns vs wedges |
+| guarded vs unguarded `wd52`/`wd53` | same probe | wedges vs returns |
+| `wd71` vs `wd81` | one walk vs two, trivially different | returns vs wedges |
+
+Every "mechanism" this campaign proposed — the `lit[1]` walk, walk count, the first-walk
+anomaly, the accumulator loss — was a different sampling of THIS. Each looked specific because
+the comparison was between two binaries, and the binary was never the controlled variable.
+
+**Consequence for method:** a probe that differs from its control in ANY way other than the one
+being tested is measuring this phenomenon, not the hypothesis. The only comparisons that have
+survived scrutiny all session were within ONE binary (`wd60/61/62` on a shared array) or against
+a healthy reading of the SAME register.
+
+**Consequence for the blocker:** the stage-10 wedge may itself be an instance rather than a
+distinct bug. It is reproducible across 3 boots, but it has never been compared against a
+control binary that differs ONLY in the code under test.
+
+### Next step on this thread
+
+Characterise the build-to-build variation directly instead of chasing its symptoms: take ONE
+source, build it N times with only a benign perturbation (e.g. an added no-op global that shifts
+nothing semantically), and see how many of the N binaries misbehave. If a meaningful fraction
+do, that is the finding, and it subsumes most of this document.
+
 ## 9. Instrument and method traps (all of these bit during this campaign)
 
 1. **Never read a debug register only at the failure.** Read it at a SUCCESS first. Three of
