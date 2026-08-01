@@ -429,6 +429,50 @@ source, build it N times with only a benign perturbation (e.g. an added no-op gl
 nothing semantically), and see how many of the N binaries misbehave. If a meaningful fraction
 do, that is the finding, and it subsumes most of this document.
 
+## 8h. The variation is SYSTEMATIC, not random — and padding is not the trigger
+
+Six binaries from ONE source, differing only by N no-ops before the sequence, each run in its
+OWN boot with the `wd71` control first:
+
+    BALLAST=0    WEDGED     (control 0x45)
+    BALLAST=4    WEDGED     (control 0x45)
+    BALLAST=8    WEDGED     (control 0x45)
+    BALLAST=12   no output
+    BALLAST=16   WEDGED     (control 0x45)
+    BALLAST=20   WEDGED     (control 0x45)
+
+**5 of 5 measured binaries wedge.** The control returned `0x45` in every boot, so the board was
+healthy and these are real. Yet `wd85` — which performs the SAME sequence (walk, `m |= 1`,
+walk, `m |= 2`, return `0x70 | m`) — returns the correct `0x73`.
+
+**This corrects the framing in 8g.** The phenomenon is NOT random build-to-build luck: five
+DISTINCT binaries fail the same way. Something specific and deterministic about the stage-86
+build fails, while the stage-85 build succeeds. Padding — i.e. pure code placement — is
+**excluded**, which is the one thing this experiment does settle cleanly.
+
+### The remaining difference between the two, and it is small
+
+    stage 85:  ... first walk ...  if (stage == 85) { second walk; m |= 2u; }   -> RETURNS 0x73
+    stage 86:  ... first walk ...  second walk; m |= 2u;                        -> WEDGES 5/5
+
+Both execute both walks (the stage-85 predicate is true at run time). The difference is that
+stage 85 reaches its second walk through a RUNTIME BRANCH while stage 86 falls into it
+straight-line. That is the smallest delta yet between a passing and a failing domain, and both
+sides are reproducible — `wd85` returned in its run, and stage 86 failed in five.
+
+**This is the most tractable open lead in the document.** It is two builds of one function
+differing by one conditional, with a known-good and known-bad side, no SQLite logic, and a
+control that passes in the same boots.
+
+### Next
+
+1. Disassemble `wd85` and `bal0` side by side across the whole probe block — not just the loop —
+   and diff. The delta should be small enough to read instruction by instruction.
+2. Build a stage-87 that is stage 86 plus an always-true runtime branch around the second walk,
+   to test the branch-vs-straight-line hypothesis directly.
+3. Do NOT generalise from "5/5 wedged" to "all such code wedges" until at least one more
+   passing/failing pair is characterised; the sample is one code shape.
+
 ## 9. Instrument and method traps (all of these bit during this campaign)
 
 1. **Never read a debug register only at the failure.** Read it at a SUCCESS first. Three of

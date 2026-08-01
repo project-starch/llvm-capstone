@@ -2,6 +2,8 @@
 #include "sqlite_hostcall.h"
 
 #define CAPSTONE_DPI_REGION_SHARE 1U
+#define STR__(x) #x
+#define STR_(x) STR__(x)
 /* Overridable so the silicon build can shrink it. Under -capstone-gp-captable every
    global's storage is CARVED FROM dom_data, and dom_data is what is left of a
    power-of-two page allocation after the image -- so this array is charged directly
@@ -258,8 +260,8 @@ static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 85
-/* ONE array, at FILE SCOPE, shared by stages 60-85 -- the confound remover.
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 86
+/* ONE array, at FILE SCOPE, shared by stages 60-86 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
    cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
    different addresses, initialised by different blocks of __capstone_cap_init. The observed
@@ -1193,6 +1195,35 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
       while (z[guard]) { if (++guard > 64u) break; }
       if (guard <= 64u) m |= 2u;
     }
+    return (int)(0x70u | (m & 0xfu));
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE == 86
+#ifndef BALLAST_NOPS
+#define BALLAST_NOPS 0
+#endif
+  if (stage == 86) {
+    /* CHARACTERISE THE BUILD-TO-BUILD VARIATION DIRECTLY.
+       wd85 (this exact sequence) returns the correct m=3; wd66 (the same sequence, different
+       binary) returns 2. Four such pairs are on record. So the variable is the BINARY, not any
+       mechanism proposed so far. This measures the variation instead of chasing its symptoms.
+       BALLAST_NOPS inserts N no-ops before the sequence: pure code-layout shift, no data, no
+       extra globals, no semantic change whatsoever. Build several N and count how many of the
+       resulting binaries get the WRONG answer.
+         expected, every build: m = 3 -> rc = 0x73
+         any build returning something else is an instance of the variation, and the RATE
+         across N builds is the finding. */
+    const char *z = capstone_probe_lit[1];
+    unsigned guard = 0, m = 0;
+    if (!z) return 0xD1u;
+#if BALLAST_NOPS > 0
+    __asm__ volatile(".rept " STR_(BALLAST_NOPS) "\n\tnop\n\t.endr");
+#endif
+    while (z[guard]) { if (++guard > 64u) break; }
+    if (guard <= 64u) m |= 1u;
+    guard = 0;
+    while (z[guard]) { if (++guard > 64u) break; }
+    if (guard <= 64u) m |= 2u;
     return (int)(0x70u | (m & 0xfu));
   }
 #endif
