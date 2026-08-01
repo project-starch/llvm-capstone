@@ -119,9 +119,81 @@ compression aliasing; another `0x77` supports the over-grant reading.
 * **`mtvec = 0` in domains** means an in-domain fault has no handler and cannot print. Upstream
   design question; not to be patched unilaterally.
 
-## 8b. STRONGEST LEAD: a cap-init CAPABILITY-STORE THRESHOLD (MEASURED 2026-08-01)
+## 8b. RETRACTED — the "cap-init store threshold" was a FOUR-WAY CONFOUND
 
-Stage 80 is an entry-and-return domain that touches one array element and returns. The ONLY
+**The 1222..1263 threshold is WRONG. Do not cite it. Do not rebuild on it.**
+
+Verified against the primary logs and the monitor source, not argued:
+
+**(a) `pad200` never ran cap-init at all.** In `board-pad.log` its last marker is
+`SQ: C/mkregion2SPLB:0000E006` — it died during REGION CREATION, with no `D/mapped`, no
+`E/share1`, no `G/enter`. In `board-bis.log` the last domain (`SQ: id=4`) shows
+`SHA5:00000004` and no following `G/enter`. In neither run did `__capstone_cap_init` execute a
+single `stc`. A threshold in cap-init stores cannot be measured by a domain that never reaches
+cap-init.
+
+**(b) The failure site is a DELIBERATE MONITOR SPIN, not silicon.**
+`sbi_capstone.c:494-504`:
+
+        if (base + len == region_end) {
+            if (base == region_base) {
+                // matching region. We don't support this for now
+                capstone_report(CAPSTONE_TAG_SPLB, CAPSTONE_ERR_SPLIT_EXACT);
+                ... capstone_uart_flush();
+                while(1);
+
+`CAPSTONE_TAG_SPLB` = "split_out_cap: exact-fit region unsupported" (`:44`),
+`CAPSTONE_ERR_SPLIT_EXACT = 0xe006` (`:58`). The predicate is a HOST MMAP ADDRESS COINCIDENCE —
+the requested region exactly matching an existing one. It is an UNIMPLEMENTED CASE in our own
+monitor, upstream of the domain and upstream of cap-init.
+
+**(c) Store count does not determine the outcome.** Direct counterexample, measured on the
+artifacts: `wd77`, `wd78`, `wd79` all have **exactly 1048** cap-init stores and are three
+distinct binaries (md5 `9c9bd9c3…`, `fbaef16d…`, `c59b396a…`). `wd77` RETURNS; `wd78` and
+`wd79` WEDGE. Same count, opposite outcomes.
+
+**(d) The ladder confounded pad count with SEQUENCE POSITION.** `pad200` was always run LAST and
+always had the highest domain id (`SQ: id=3`, then `id=4`). Monitor region ids grow monotonically
+through a boot (`rgid=12 → 17 → 23 → 25 → 29`). No low-pad build was ever run last, and `pad200`
+was never run first.
+
+**What actually survives:** nothing about cap-init store counts. The `sb0` "corroboration" (1257
+stores, wedges at entry) is the same confound — it also fails before the domain runs.
+
+**Method failure to learn from:** the ladder looked like a controlled experiment because ONE
+variable was varied deliberately. Three others varied with it (image size, sequence position,
+host allocation state), and the outcome was never checked against the marker trail to confirm
+the domain even reached the code under test. **Always confirm the failure SITE (marker trail)
+before attributing a wedge to the thing the probe varies.**
+
+---
+
+## 8c. What the same investigation established instead (offline, verified)
+
+* **RTL fixed-capacity structures are ELIMINATED as the mechanism.** Verified inventory:
+  scoreboard 8, store buffer 4/4, `MaxOutstandingStores` 7, wbuf 8, AXI MetaFifo 4, dcache 2048
+  lines, icache 1024, rev-node pool 1024, dom-switcher 67, TLB/PMP 16. A sweep of `core/` and
+  `corev_apu/` finds NO depth in 1222..1263 and no byte bound in the corresponding range.
+* **Tag memory is ELIMINATED.** `ariane_pkg.sv:586-590` and `wt_axi_adapter.sv:148-149`:
+  `tag_addr = TAG_MEM_BASE + ((paddr - DATA_MEM_BASE) >> 4)` — a pure function of physical
+  address, with no counter, allocator or high-water mark, so store COUNT cannot advance it.
+  The arithmetic also shows the shadow tag region ends exactly at `CAP_REVNODE_MEM_BASE`
+  (`0xBC3C_0000 + ((0xBC3C_0000-0x8000_0000)>>4) = 0xBFFF_C000`), abutting the node table with
+  zero slack — it cannot overflow into it.
+* **A real codegen shape change exists but is on the WRONG side of the boundary.**
+  `__capstone_cap_init` grows `0x2c98 → 0x41f4` and `ldc` count `111 → 1413` between `pad150`
+  and `pad175`, i.e. the register allocator collapses into per-leaf spill reloads. But `pad175`
+  is already fully in the new shape and RETURNS, so it is not the wedge boundary. Its real
+  consequence is that the ladder rungs are NOT one monotone family.
+* **NEW, and independently actionable: `split_out_cap` cannot handle an exact-fit region.**
+  That is a genuine unimplemented case in our monitor (`sbi_capstone.c:496-504`) that hangs the
+  board whenever the host allocator happens to hand back an exactly-matching region. It is
+  almost certainly responsible for a share of the "random" wedges in this campaign, and it is
+  OURS to fix, not the hardware's.
+
+
+(HISTORICAL, RETRACTED — kept only so the reasoning can be audited.) Stage 80 is an
+entry-and-return domain that touches one array element and returns. The claim WAS that the only
 variable across these builds is how many capability leaves `__capstone_cap_init` must store
 (`CAPINIT_PAD=N` adds N initialised pointers). No SQLite code runs at all — no strings, no
 walks, no hash tables, no allocator traffic.
