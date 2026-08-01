@@ -333,3 +333,43 @@ clear via switches=191 first). A latched trap proves the wedge is an exception.
   `req_set` sticky.
 * `scoreboard.sv:320-324` hardwires `wb[1..3].cap_data = '0`, forwarded at fixed priority
   (`issue_read_operands.sv:786-807`).
+
+## Trap-latch read on the REAL blocker (stage 10), latch cleared per domain — 2026-08-01
+
+    clear failures: 0
+    sw=255 TRAP LOG   0x89  trap_seen=1  mcause=9   (ECALL from S-mode)
+    sw=224            0x5d  excommit=0 ldsync=1 stsync=0 lsu_rdy=1 dyn_rdy=1 flu_rdy=1
+                            flush=0 privM=1
+
+**The clear worked but cannot isolate a domain fault**, because the domain is ENTERED via an
+S-mode ECALL, which re-latches cause 9 straight after the clear.
+
+**However, this is weak evidence AGAINST the untrapped-capability-fault hypothesis.** A
+capability fault inside the domain occurs AFTER the entry ecall, so it would OVERWRITE the
+latch (which keeps the most recent nontrivial trap, `cva6.sv:1077-1083`). The latch still
+reads 9. So either no committed capability exception occurred, or capability faults do not
+reach `ex_commit.valid` with a non-zero cause on this path.
+
+Caveat: this argument depends on capability faults actually reaching `ex_commit.valid`
+un-filtered. Verify that before treating hypothesis #1 as refuted — do NOT record it as
+refuted on this alone.
+
+**`privM = 1` at the wedge** says the core is in MACHINE mode, i.e. not executing domain code,
+which is consistent with being stuck in the monitor or at pc=0 — and is NOT consistent with a
+plain in-domain livelock. `excommit = 0` (that bit is the exception-valid bit, `cva6.sv:500`)
+means no exception is being signalled at the sampling instant.
+
+### What this changes about the next step
+
+The trap latch cannot answer the hang-vs-fault question while the entry ecall keeps
+overwriting it. Two ways forward, in order:
+
+1. **Give the domain a real `mtvec`** so a fault REPORTS rather than vanishing. This is the
+   force multiplier: it converts every wedge into a returnable marker with cause and epc, and
+   removes the sampling limit that makes wedging probes unrepeatable within a boot. Either set
+   it in the entry glue (our code — first check whether the domain may write `mtvec` at its
+   privilege) or have the monitor populate `dom_seal[1]`. **The monitor route is a design
+   decision and must be proposed, not applied unilaterally.**
+2. **Sample `privM` and `mepc` repeatedly at the wedge**, not once. A single sample cannot
+   distinguish "stuck at pc=0 in M-mode" from "sampled during a monitor entry". The mepc log
+   (`recent_nontrivial_mepc_log_q`) is available on its own selector.
