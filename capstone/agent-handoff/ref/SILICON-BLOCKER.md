@@ -133,7 +133,16 @@ walks, no hash tables, no allocator traffic.
     pad200          1263        WEDGED
     pad260          1381        (never ran -- the wedge ended the session)
 
-**There is a threshold between 1134 and 1263 capability stores in cap-init.**
+**There is a threshold between 1222 and 1263 capability stores in cap-init.** (CONFIRMED in a
+second, independent boot — see the bisection below.)
+
+    pad120   1134   rc=0x61   PASSES
+    pad150   1184   rc=0x61   PASSES
+    pad175   1222   rc=0x61   PASSES
+    pad200   1263   WEDGED    (wedged in TWO separate boots)
+
+`pad200` wedging twice, in different sessions, clears the single-sample caveat: this is the
+only wedge in the campaign reproduced across boots other than stage 10 itself.
 
 Cross-check: `sb0` (STATIC_BUILTINS at stage 0) has **1257** stores and wedges AT ENTRY — inside
 the same band, from a completely different source change. Two independent routes to the same
@@ -155,6 +164,13 @@ path, which also makes it the first that could be handed over as a hardware-side
 what is exhausted at that count. Candidates: a fixed-depth structure in the store path, a
 tag-cache capacity, or total bytes rather than store count (vary leaf SIZE at constant count to
 separate those two).
+
+CORRECTION on that last point: with this probe design, store count and capability BYTES are
+proportional by construction — every cap-init leaf is one 16-byte capability store — so they
+cannot be separated by varying the pad. What the ladder DOES isolate is stores from CARVES: the
+pad is a single array, i.e. ONE extra carve carrying N extra stores, and the carve count is
+therefore constant across the ladder. The threshold is in the store count, not the number of
+globals.
 
 ## 9. Instrument and method traps (all of these bit during this campaign)
 
