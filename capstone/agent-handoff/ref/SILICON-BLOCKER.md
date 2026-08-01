@@ -144,6 +144,46 @@ separate boots** — the only wedge in this campaign established across multiple
 than from a single sample. A "wedge" means the domain emits no marker and the board session
 must be torn down.
 
+## 1a. RETRACTION FIRST: there is NO size threshold. The failure is BUILD-dependent.
+
+Filling in the ladder destroyed the threshold claim recorded in 1b:
+
+    N=48   ALL CORRECT
+    N=52   ALL CORRECT
+    N=56   index 55 BAD        (2/2 in one boot -- deterministic FOR THAT BINARY)
+    N=60   ALL CORRECT         <-- passes, ABOVE the size that fails
+    N=64   WEDGED
+    N=72   WEDGED
+    N=96   WEDGED  (3 builds)
+
+**Non-monotonic: 56 fails, 60 passes.** So "correct at N<=48, fails above ~48" is WRONG and is
+withdrawn, as is the "threshold between 48 and 72". Size is not the determinant.
+
+What the data actually supports is the pattern seen all session: **a given BUILD either works or
+does not, deterministically for that build, and size only loosely correlates.** `idx56` failing
+2/2 in one boot is real for `idx56`; it says nothing about "N=56" as a class, because `ix60`
+with more entries is fine.
+
+**Everything in 1b that depends on a threshold is therefore unsupported**, including the
+inference that SQLite's 72 entries put it "above the threshold". The SQLite link is now only:
+`RegisterBuiltinFunctions` builds this shape, and this shape fails in some builds.
+
+### What DOES survive, and it is still the best artefact in this campaign
+
+* A local array of N structs with distinct string literals can leave its LAST entry's `zName`
+  unreadable while every earlier entry is fine (`idx56`: first bad index 55, 2/2).
+* That is a WRONG ANSWER, not a wedge, so it can be sampled repeatedly within a boot -- the only
+  failure in this campaign with that property.
+* A validated control exists (`idx48` -> `0xFF`, all correct) and the probe reports an index, an
+  encoding that cannot alias correct with incorrect.
+
+### What this means for the method
+
+Per-N single samples cannot establish a size effect while build-to-build variation is
+uncontrolled. To claim any threshold, each N needs several INDEPENDENT BUILDS (e.g. vary a
+no-op) and a failure RATE per N -- not one build per N. That is a large amount of board time
+and should be planned as such rather than inferred from a ladder.
+
 ## 1b. ROOT CAUSE LOCALISED: a straight-line struct array of ~72 entries wedges the core
 
 **Standalone reproducer, no SQLite in the path.** A local array of N structs, each holding a
