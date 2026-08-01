@@ -258,8 +258,8 @@ static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 76
-/* ONE array, at FILE SCOPE, shared by stages 60-76 -- the confound remover.
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 77
+/* ONE array, at FILE SCOPE, shared by stages 60-77 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
    cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
    different addresses, initialised by different blocks of __capstone_cap_init. The observed
@@ -1036,6 +1036,39 @@ static int run_sqlite_staged(int stage) {
     const volatile char *far = base + (1024 * 1024);
     unsigned char v = (unsigned char)*far;      /* expected to FAULT here */
     return (int)(0x77u ^ (v & 0u));             /* only reached if no fault fired */
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE == 77
+  if (stage == 77) {
+    /* MEASURE THE CAPABILITY'S ACTUAL BOUNDS. Stage 76 read 1 MB past capstone_probe_lit (a
+       256-byte cap-table global) and did NOT fault, which means either the storage capability
+       is far wider than the object (cap-table carves over-granting) or bounds are not enforced
+       on that path. This distinguishes them by reading the bounds directly.
+       lcc field map, capstone_dyn_unit.anvil:182-191: zimm 3 = start, zimm 4 = end. NEITHER
+       touches the rev-node channel -- only zimm 0 (validity) does, and that is the channel
+       that hangs, so it must not be used here.
+       Encoding is the in-tree one (start-gpfree-captable.S:34):
+         .insn r 0x5b, 0x1, 0x4, rd, rs, x<zimm>
+       Returns (class << 4) | min(15, floor(log2(len))):
+         class 1 = len is exactly 256  -> bounds correct; stage 76's non-fault is a BOUNDS
+                   ENFORCEMENT hole, which is a spatial-safety defect.
+         class 4 = len >= 1 MiB        -> the capability really does cover the +1 MiB access,
+                   so the carve OVER-GRANTS and enforcement is fine.
+         class 3 = 256 < len < 1 MiB   -> over-grants, but not enough to explain stage 76.
+         class 2 = len < 256           -> under-grants; different bug again. */
+    const char *const volatile *vp = capstone_probe_lit;
+    const void *base = (const void *)vp;
+    unsigned long st = 0, en = 0;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x3" : "=r"(st) : "r"(base));
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x4" : "=r"(en) : "r"(base));
+    unsigned long len = (en > st) ? (en - st) : 0UL;
+    unsigned cls;
+    if (len == 256UL)                cls = 1u;
+    else if (len >= (1UL << 20))     cls = 4u;
+    else if (len > 256UL)            cls = 3u;
+    else                             cls = 2u;
+    unsigned lg = 0; while ((lg < 15u) && ((1UL << (lg + 1)) <= len)) lg++;
+    return (int)((cls << 4) | lg);
   }
 #endif
   if (stage <= 0)

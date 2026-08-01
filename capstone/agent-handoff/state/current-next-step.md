@@ -637,3 +637,40 @@ This is the fourth time a probe was invalid rather than the hypothesis being wro
 caught this one (`capstone_probe_lit` undeclared, because a guard-widening `replace` silently
 matched nothing — it had no assertion). Every generated edit in this file must assert its
 anchor matched.
+
+## MEASURED: the capability used for a 256-byte global spans >= 1 MiB (over-grant)
+
+Stage 77 reads the capability's own bounds with `lcc` zimm 3 (start) and zimm 4 (end)
+(`capstone_dyn_unit.anvil:186-187`), using the in-tree encoding
+(`.insn r 0x5b, 0x1, 0x4, rd, rs, x<zimm>`, `start-gpfree-captable.S:34`). Deliberately NOT
+zimm 0 — that is the validity query, on the channel that hangs.
+
+    wd71 (control)  rc = 0x45
+    wd77            rc = 0x4F   class 4  -> end - start >= 1 MiB      (2/2 samples)
+
+`capstone_probe_lit` is **256 bytes**. The capability reaching it covers **at least 1 MiB**.
+
+**This resolves stage 76 and inverts its reading.** Bounds ARE enforced; the 1 MiB overshoot
+did not fault because it was genuinely IN BOUNDS. There is no enforcement hole — there is an
+authority-granting bug.
+
+**Why it matters beyond this investigation.** The whole point of `-capstone-gp-captable` is one
+narrow capability per global. If every global's storage capability spans >= 1 MiB, then
+per-object spatial safety is not actually being delivered by the ABI as built: an overflow of
+any global can reach ~1 MiB of neighbouring globals without a fault. Any claim in the write-up
+about per-global bounds must be checked against this measurement before it is made.
+
+**Not yet distinguished** (a source-side trace is running):
+1. the glue's carve/`split` produces an over-wide storage capability (so every global is
+   affected), or
+2. the compiler is not using the per-global storage capability at all here and instead reaches
+   the object through a wider region capability (so the carve is fine and codegen is at fault).
+
+Both are real defects; they need different fixes. Check the glue's `split(t2, sp, t1)` against
+`SPLIT` in the RTL (does the result inherit the parent's `end`?), and check what the cap-table
+entry actually holds.
+
+**Measurement limitation to fix on the next pass:** stage 77 clamps `log2(len)` at 15, so the
+reading only proves `len >= 1 MiB` and cannot say how much larger. Return the raw `start` and
+`end` (or `log2` unclamped) to size the over-grant exactly — 1 MiB vs the whole data region are
+very different findings.
