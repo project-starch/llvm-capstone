@@ -473,6 +473,48 @@ control that passes in the same boots.
 3. Do NOT generalise from "5/5 wedged" to "all such code wedges" until at least one more
    passing/failing pair is characterised; the sample is one code shape.
 
+## 8i. CORRECTION: the variation is INTRA-BINARY. "Deterministic per binary" is refuted.
+
+    wd71  control                       rc = 0x45
+    wd85  has the guard (known good)    rc = 0x73
+    wd87  guard restored, run 1         rc = 0x73
+    wd87  guard restored, run 2         WEDGED     <-- SAME BINARY, SAME BOOT
+
+`wd87` both RETURNED and WEDGED from one binary in one boot. Two consequences, both correcting
+entries above:
+
+1. **"Restoring the branch fixes it" is NOT supported.** The analysis script printed that
+   conclusion because it filtered `None` (wedge) out of the sample before testing whether every
+   remaining value was `0x73`. A wedge is a RESULT, not a missing datum. The branch hypothesis
+   is UNRESOLVED, not confirmed.
+2. **"Each binary is internally deterministic" (8g, 8h) is REFUTED.** The same image gives
+   different outcomes on consecutive runs in one boot. `wd63` (`0x0E` then `0x0F`, one boot)
+   showed this earlier and was not generalised.
+
+### What this means for everything above
+
+Most of this document's history is single-sample comparisons between binaries. If the SAME
+binary can both pass and wedge, then:
+
+* every "binary A passes, binary B fails" pair — `wd66`/`wd85`, `wd77`/`wd78`, guarded vs
+  unguarded, `wd71`/`wd81`, stage 85 vs stage 86 — may be sampling ONE nondeterministic
+  process rather than a difference between the binaries at all;
+* the "5/5 wedged" ballast result (8h) is consistent with a high failure PROBABILITY, not with a
+  systematic property of stage 86;
+* the only claims that survive are those measured with repetition on ONE binary.
+
+**The correct unit of measurement is a RATE, not an outcome.** Any future claim of the form
+"X fails / Y passes" must report n and the number of failures for each, from repeated runs of
+the same image.
+
+### Immediate next step
+
+Take the two most-used images (`wd71`, which has returned `0x45` in ~10 runs, and `wd85`) and
+run each 5-10 times within one boot to establish their failure rates. If `wd71` is genuinely
+0/10 and `wd85` is 0/n while `wd87` is ~1/2, the rate differs by image and there is something to
+explain. If everything shows a nonzero rate, the phenomenon is global and the entire
+per-mechanism framing of this document is the wrong shape.
+
 ## 9. Instrument and method traps (all of these bit during this campaign)
 
 1. **Never read a debug register only at the failure.** Read it at a SUCCESS first. Three of

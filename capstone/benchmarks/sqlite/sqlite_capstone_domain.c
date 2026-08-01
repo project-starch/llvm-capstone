@@ -260,8 +260,8 @@ static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 86
-/* ONE array, at FILE SCOPE, shared by stages 60-86 -- the confound remover.
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 87
+/* ONE array, at FILE SCOPE, shared by stages 60-87 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
    cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
    different addresses, initialised by different blocks of __capstone_cap_init. The observed
@@ -1224,6 +1224,34 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
     guard = 0;
     while (z[guard]) { if (++guard > 64u) break; }
     if (guard <= 64u) m |= 2u;
+    return (int)(0x70u | (m & 0xfu));
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE == 87
+  if (stage == 87) {
+    /* BRANCH vs STRAIGHT-LINE, tested directly.
+       Disassembling the passing (wd85) and failing (bal0) binaries shows a 31-line diff whose
+       ONLY semantic content is that wd85 reaches its second walk through a runtime branch:
+           cincoffsetimm a0, s0, -0x38 ; lw a0, 0(a0) ; li a1, 0x55 ; bne a0, a1, ...
+       while bal0 falls into it straight-line. The walk loops themselves are byte-identical
+       (they do not appear in the diff at all). Everything else in the diff is stage constants
+       and the offsets those shift.
+       Stage 87 is stage 86 with that guard restored, in the same shape stage 85 used:
+         returns 0x73 -> the BRANCH is what matters; straight-line fall-through into the
+                         second walk is the failing construct, and this is a two-build,
+                         one-conditional reproducer.
+         WEDGES       -> the branch is not sufficient; wd85 passes for some other reason and
+                         the diff's remaining content (constants/offsets) is where to look. */
+    const char *z = capstone_probe_lit[1];
+    unsigned guard = 0, m = 0;
+    if (!z) return 0xD1u;
+    while (z[guard]) { if (++guard > 64u) break; }
+    if (guard <= 64u) m |= 1u;
+    if (stage == 87) {                    /* the restored guard -- always true at run time */
+      guard = 0;
+      while (z[guard]) { if (++guard > 64u) break; }
+      if (guard <= 64u) m |= 2u;
+    }
     return (int)(0x70u | (m & 0xfu));
   }
 #endif
