@@ -144,6 +144,58 @@ separate boots** — the only wedge in this campaign established across multiple
 than from a single sample. A "wedge" means the domain emits no marker and the board session
 must be torn down.
 
+## 1. WHAT IS ACTUALLY ESTABLISHED (audited 2026-08-02; read this before any ladder below)
+
+An adversarial audit re-read the raw logs rather than this document, and the ladder as
+previously written mixed two different probe programs and under-sampled every point except one.
+Corrected table, with sample counts:
+
+| N | evidence | verdict |
+|---|---|---|
+| 48 | `g48` 48/48 correct; `idx48` -> `0xFF` | PASSES (2 builds) |
+| 52 | `ix52` -> `0xFF` | passes (1 build, 1 run) |
+| **56** | `g56` 55/56 (one bad); `idx56` first-bad=55 **twice**; `d56` WEDGED | **FAILS — 3 independent builds, 2 different probe programs, 3 boots** |
+| 60 | `ix60` -> `0xFF` | passes (1 build, 1 run — UNREPLICATED) |
+| 64 | `g64` **RETURNED** (rc=0xC0); `ix64` **WEDGED** | **CONTRADICTORY — 2 builds, opposite outcomes** |
+| 72, 96 | wedged | 4 builds |
+
+**Robust:** N=56 corrupts exactly one entry — the last — reproducibly, across independent
+builds and probe programs. That is the finding.
+
+**NOT established:** any size law. "N=64 wedges" was `ix64` only; `g64` returned. The
+non-monotonic "56 fails / 60 passes" inversion rests on ONE unreplicated N=60 run. Both the
+"threshold" story and the "non-monotonic" story are under-sampled.
+
+**Supported instead:** the same N can give opposite outcomes in different builds (N=64, two
+builds). Outcome tracks the BUILD, not the entry count.
+
+### Control reliability (measured, corrects an earlier alarm)
+
+`wd71` across all logs: **60 returns, 2 wedges**. The earlier "~1-in-6 background rate" was an
+artefact of measuring inside the exhaustion zone; at slots 1-5 the control is highly reliable,
+so a failure at slots 1-3 IS meaningful. All ladder data sits at slots 1-3 and is uncontaminated.
+
+### Ruled out offline by the audit (do not re-propose)
+
+* **Bounds-compression unrepresentability.** `compress_bounds`/`decompress_bounds` were
+  reimplemented verbatim from `ariane_pkg.sv:656` and `:749` (including the cursorless branch
+  and the +-2^(E+14) corrections) and round-tripped for all five builds' `(stor, off)` pairs over
+  every 16-aligned base in a 1 MiB window: **zero failures**. For these lengths `E=0` and the
+  encoding is exact.
+* **An "index >= 32 switches to runtime cincoffset" discontinuity.** `idx48` entries 32..47 use
+  that form and all read back correctly.
+* **A layout/mod-32 predictor.** One was found that fit all five stage-94 builds
+  (`total mod 32` = 16,16,0,16,0 -> PASS,PASS,FAIL,PASS,WEDGE) and was then **refuted by the
+  audit itself** against the six stage-92 builds already on disk (g4 and g32 have `total%32 = 0`
+  and are correct; g72 has 16 and wedges).
+
+### There is NO instruction-level difference at the failing entry
+
+Disassembled across all five builds: the last entry's code is the same shape AND the same frame
+offset (`s0-0x4700`) in every one; only the string's container offset changes, by exactly
+`container_size - 5` as the container size requires. The reader is identical too. So whatever
+differs is address/layout or timing — **not code**.
+
 ## 1a. RETRACTION FIRST: there is NO size threshold. The failure is BUILD-dependent.
 
 Filling in the ladder destroyed the threshold claim recorded in 1b:
