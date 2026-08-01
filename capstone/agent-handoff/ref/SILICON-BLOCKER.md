@@ -181,6 +181,40 @@ Scoped retest built: `BUILTIN_LIMIT=0` and `=1` at **stage 10**, which stops ins
   reached before any entry is processed, and the whole "RegisterBuiltinFunctions is the wedge
   point" framing needs re-checking.
 
+### CORRECTION: `BUILTIN_LIMIT` was the WRONG KNOB (2026-08-01, MEASURED + SOURCE)
+
+Scoped retest at stage 10: **`BUILTIN_LIMIT=0` WEDGES** (control `wd71` returned `0x45`).
+Zero builtin entries processed, still wedged.
+
+That looks like it exonerates the builtin path, and it does NOT. Reading the amalgamation at
+the definition (`sqlite3-capstone.c:137217`):
+
+    SQLITE_PRIVATE void sqlite3RegisterBuiltinFunctions(void){
+      FuncDef capstoneBuiltinFunc[] = { ... ~72 entries ... };
+
+The array is a **LOCAL** — `build-sqlite-capstone.sh` strips `static` — so it is constructed on
+the STACK, straight-line, at run time. `BUILTIN_LIMIT` rewrites only the INSERTION loop bound
+(`capstoneI<ArraySize(...)` -> `capstoneI<0`, `build-sqlite-silicon.sh:124-126`). **It never
+reduces the construction.** At `limit=0` the full ~72-entry array is still built on the stack
+before the (now empty) insertion loop runs.
+
+So `limit=0` wedging is entirely consistent with the STRAIGHT-LINE CONSTRUCTION being the
+culprit — which is exactly the R-14 shape (straight-line materialisation of distinct string
+constants into a struct array wedges; the same data assigned in a loop, or as a flat pointer
+array, is fine).
+
+**Consequences:**
+* The "~72 entries / scale effect" theory that motivated `BUILTIN_LIMIT` is untestable with
+  that knob and remains neither confirmed nor refuted.
+* Stage 10 remains the wedge point, and the suspect narrows to the array CONSTRUCTION rather
+  than the hash insertion.
+* `SQLITE_STATIC_BUILTINS=1` targets exactly this: it restores `static`, turning the run-time
+  stack construction into a compile-time global initialised through `__capstone_cap_init`
+  (machinery that already performs 394 capability-leaf stores successfully in this domain). It
+  was dismissed earlier as "a regression that breaks even stage 0" — a SINGLE-SAMPLE verdict
+  from the period when many single-sample verdicts in this campaign turned out wrong. **It is
+  being re-tested at stage 0 and stage 10.**
+
 ### Workaround status
 
 **Not yet available.** `SQLITE_STATIC_BUILTINS=1` was tried earlier and is a REGRESSION (it
