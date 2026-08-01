@@ -181,6 +181,52 @@ whether the capability's BOUNDS are also wrong or only its cursor. If bounds are
 the cursor is wrong, the fault is in the `cincoffset` that computes the container offset for
 that entry, not in the capability's provenance.
 
+## 0a2. BOUNDS LOOK RIGHT, CURSOR IS WRONG — the fault is the offset, not the derivation
+
+Reading the bad capability field by field, one per domain, `SQ: G/enter` verified for each:
+
+    CURSOR low byte   0x00    entered=True    (2 samples, both entered)
+    END    low byte   0xE0    entered=True
+    START             WEDGED  entered=False   -> Family A, no information
+
+**Arithmetic (this is what makes a low byte usable):**
+
+* The merged-string container for N=56 is 3911 bytes; its carve is
+  `align_up(3911,16) = 3920 = 0xF50`.
+* Carve bases are 16-aligned, so `end = base + 0xF50` must have low nibble 0. Observed `0xE0`
+  fits, and implies `base_low = 0x90`.
+* `"fn55"` is at container offset `3906 = 0xF42`, so a CORRECT cursor is `base + 0xF42`, whose
+  low byte would be `0x90 + 0x42 = 0xD2`.
+* Observed cursor low byte: **`0x00`**.
+
+Independently of the base: offset `0xF42` has low nibble 2 and a 16-aligned base has low nibble
+0, so ANY correct cursor ends in nibble **2**. `0x00` ends in nibble 0. **The cursor cannot be
+`container_base + 3906` for any legal base** — this is not an aliasing coincidence, and it does
+not depend on the sample count.
+
+**Conclusion:** the capability in the bad slot is well-formed and its BOUNDS are consistent with
+being derived correctly from the container. Only its CURSOR is wrong. Combined with the earlier
+finding that the tag survived (`lcc` did not trap), the fault is neither a dropped store, nor a
+lost tag, nor a bad provenance — it is the **cursor value** for that one entry.
+
+That points at the `cincoffset` that adds this entry's container offset:
+
+    386c4: addi        a6, a6, -0xbe     # 3906, the container offset of "fn55"
+    386c8: cincoffset  a5, a5, a6        # container capability + 3906   <-- the suspect
+    386cc: stc         a5, 0x0(a0)       # store into arr[55].zName
+
+with the caveat that this exact instruction sequence is byte-identical in builds that WORK.
+
+### Still open
+
+* `START` was never read (its domain died in region-share). Without it, "bounds are right" rests
+  on `END` alone.
+* The cursor's other three bytes are unread, so its actual value is unknown — only that it is
+  not the correct one.
+* A load through it does NOT trap (the original probe read a byte and returned an index rather
+  than wedging), so the cursor is still WITHIN the capability's bounds. It is a wrong address
+  inside a correct region, not an out-of-bounds pointer.
+
 ## 0b. NEAR-MISS WORTH RECORDING: mcause=24 does NOT imply the code under test trapped
 
 Attempting to read the bad slot's capability type (`lcc` zimm=1 on `arr[55].zName`), the domain
