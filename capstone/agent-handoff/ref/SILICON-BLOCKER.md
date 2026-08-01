@@ -274,6 +274,74 @@ buildroot's stamps and previously caused six consecutive boot failures. Recovere
 `.stamp_target_installed` for `capstone-sbi-domain` and `capstone-test-domains` and rebuilding.
 **Enumerate probe names explicitly; never prefix-glob in the staged tree.**
 
+## 8e. MINIMAL REPRODUCERS (copy-pasteable)
+
+All builds go through `build-stage-probes.sh`, which prints per-artifact hashes and a
+distinct-hash count so a silently-cached build cannot pass as fresh. Common preamble:
+
+    cd <REPO-ROOT>            # the llvm-capstone checkout
+    source capstone/tests/capstone-test-env.sh
+    export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"
+    export FPGA_FW="$PWD/capstone/caplifive-system/sw/buildroot/build/build/opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin"
+
+**Before any run:** confirm the resident bitstream is `working-caplifive-captype-fixed.bit`.
+It was found to be `None` (stock OpenPiton+Ariane) at the start of a session.
+
+### R1 — THE BLOCKER: stage 10 wedges (3/3 separate boots)
+
+    PROBE_DEST=/tmp/capstone/repro bash capstone/benchmarks/sqlite/build-stage-probes.sh 10
+    # stage into the initramfs, rebuild firmware, then:
+    export SQLITE_STAGE_DOMS="/test-domains/wd71.dom,/test-domains/wd10.dom"
+    export SQLITE_STAGE_TIMEOUT=180 PROBE_SCOPED_OUT=/tmp/capstone/r1.txt
+    python3 capstone/tests/rtl-smoke/fpga_driver/run_sqlite_stages_fpga.py
+
+Expected: `wd71` -> `rc=0x45`; `wd10` -> WEDGED, having printed `SQ: G/enter` (it DOES enter the
+domain). Source: `sqlite_capstone_domain.c`, stage 10 = `sqlite3MallocInit()` +
+`sqlite3RegisterBuiltinFunctions()`. Stage 9 (`MallocInit` + `PcacheInitialize`) returns `rc=0`.
+
+### R2 — the deterministic wrong-answer reproducer (7 samples, all `rc=2`)
+
+    PROBE_DEST=/tmp/capstone/repro bash capstone/benchmarks/sqlite/build-stage-probes.sh 66
+    export SQLITE_STAGE_DOMS="/test-domains/wd71.dom,/test-domains/wd66.dom,/test-domains/wd66.dom"
+
+Stage 66 walks `capstone_probe_lit[1]` ("rtrim") TWICE through the same pointer and returns a
+2-bit map. Observed `rc=2` on every sample. **The decode is UNVALIDATED** — `2` reads as "first
+walk overran, second terminated", but is equally consistent with a clobbered accumulator. The
+two loops were verified byte-identical (23 instructions each, `0x36994` / `0x36a40`).
+`wd81`, built to return the raw guard values instead, WEDGES.
+
+### R3 — the health control (6+ samples, all `rc=0x45`)
+
+    PROBE_DEST=/tmp/capstone/repro bash capstone/benchmarks/sqlite/build-stage-probes.sh 71
+
+Stage 71 walks the same element ONCE and returns `0x40 | index-of-NUL` = `0x45`. Put it FIRST in
+every batch; a value other than `0x45` means the session is bad, not the experiment.
+
+### R4 — SPLB: our monitor hangs on an exact-fit region (OURS TO FIX)
+
+Not yet reduced to a deterministic trigger — it fires when the host allocator returns a region
+exactly matching an existing one, which is layout-dependent. Signature in the UART log:
+
+    SQ: C/mkregion2SPLB:0000E006
+
+Source: `sbi_capstone.c:494-504` — `if (base + len == region_end) { if (base == region_base) {
+... while(1); } }`, tagged `CAPSTONE_TAG_SPLB` ("split_out_cap: exact-fit region unsupported",
+`:44`) with `CAPSTONE_ERR_SPLIT_EXACT = 0xe006` (`:58`). Any wedge whose last marker is
+`SPLB:0000E006` is THIS, not silicon — check for it before attributing a wedge to hardware.
+
+### R5 — the wedge-triage procedure (do this for EVERY wedge)
+
+1. Find the last UART marker for that domain. `SPLB:0000E006` -> R4, ours. `SHA5` with no
+   `SHA6` -> region-share (Family A). `SQ: G/enter` with no `SQ: H/return` -> in-domain
+   (Family B).
+2. Read the debug mux at the wedge — the runner does this automatically (`sw=255`, `224`, `225`,
+   `249`-`254`) and clears the trap latch before each domain.
+3. **Compare against the HEALTHY values, never against other wedges:** healthy `sw=225 = 0xd5`,
+   `sw=224 = 0xff`. `wrev`/`memwait` are SET in the healthy state — they are resting values and
+   mean nothing on their own.
+4. `sw=255` bit7 = trap_seen, bits[6:0] = mcause. `24` = a real capability exception
+   (`UNEXPECTED_OPERAND`); `9` = a stale ECALL from domain entry, i.e. no new trap.
+
 ## 9. Instrument and method traps (all of these bit during this campaign)
 
 1. **Never read a debug register only at the failure.** Read it at a SUCCESS first. Three of

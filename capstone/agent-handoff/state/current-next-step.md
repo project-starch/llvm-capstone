@@ -1,5 +1,12 @@
 # Current recommended next step
 
+> **THE BLOCKER HAS A DEDICATED LIVING DOCUMENT:**
+> `capstone/agent-handoff/ref/SILICON-BLOCKER.md` — everything known, with every claim tagged
+> MEASURED / SOURCE / INFERRED, the refuted table, the two wedge families, **minimal
+> reproducers (section 8e)** and the wedge-triage procedure. Read it before this file; several
+> conclusions recorded below were later retracted there.
+
+
 ## 2026-08-01 (early) — READ THIS FIRST: results on this board are NOT always reproducible
 
 ### The finding that changes how everything else must be read
