@@ -6,6 +6,49 @@ Last updated: 2026-08-01.
 
 ---
 
+## 0. READ FIRST — THERE IS A BACKGROUND WEDGE RATE. SINGLE SAMPLES ARE WORTHLESS.
+
+`wd71` — the trivial control domain (one string walk, one return, no SQLite) that had returned
+`0x45` in roughly ten prior runs and was used all session as the "board is healthy" check — was
+run 8 times consecutively in ONE boot:
+
+    run order:  ok ok ok ok ok W
+    wd71   n=6   correct=5   wedged=1     failure rate = 1/6
+
+**The same binary, in the same boot, wedged on the 6th run.** So a wedge is not, by itself,
+evidence about the domain under test. There is a background failure rate of roughly 1-in-6 on
+the simplest domain that exists here.
+
+### Consequences — these apply to EVERY result in this document
+
+* **Any single-sample wedge means nothing.** Most wedges recorded here are single samples by
+  construction (a wedge ends the board session), so most "X wedges" entries are consistent with
+  pure background.
+* **Every A-passes/B-fails pair is suspect**: `wd66`/`wd85`, `wd77`/`wd78`, guarded vs
+  unguarded, stage 85 vs 86, the ballast ladder. All were single samples per image.
+* **The measured unit must be a RATE**, with n reported. "X failed" is not a result; "X failed
+  k of n" is.
+* **The stage-10 blocker is probably still real**: it wedged in 3 of 3 separate boots, and at a
+  1/6 background rate that is p ~ 0.5%. But its rate has never been measured either, and it
+  deserves the same treatment.
+* A control that PASSES still proves the board booted and the image loaded — that use remains
+  valid. A control that passes does NOT prove the following wedge is meaningful.
+
+### What this explains
+
+The "unexplained build-to-build sensitivity" running through this whole document — identical
+logic behaving differently in different binaries, guarded vs unguarded, with and without
+padding — is, at least in part, this background rate sampled once per image. The mechanisms
+proposed and retracted (walk count, first-walk anomaly, accumulator loss, cap-init threshold,
+layout, instruction placement) were all inferred from exactly that kind of single-sample
+comparison.
+
+### The one experiment that should precede all others
+
+Measure the background rate properly: run `wd71` alone, many times, across several boots, and
+report k/n. Everything else in this document should then be re-stated as a rate against that
+baseline, and anything not exceeding it should be struck.
+
 ## 1. The blocker in one paragraph
 
 SQLite does not run on the FPGA. The failure is inside `sqlite3RegisterBuiltinFunctions`:
