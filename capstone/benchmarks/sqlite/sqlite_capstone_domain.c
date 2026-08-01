@@ -993,6 +993,27 @@ static int run_sqlite_staged(int stage) {
     return (int)m;
   }
 #endif
+#if CAPSTONE_SQLITE_STAGE == 75
+  if (stage == 75) {
+    /* CAN A DOMAIN WRITE mtvec? Route A (give the domain a trap handler so faults REPORT
+       instead of vanishing) depends entirely on this, and guessing wrong means a silent
+       wedge -- csrw from too low a privilege raises ILLEGAL INSTRUCTION, which is cause 2 and
+       is EXCLUDED from the trap latch (cva6.sv:1077-1083), so it would look exactly like a
+       hang and teach us nothing.
+       So: probe it from inside a domain BEFORE touching the entry glue. Write a recognisable
+       aligned value, read it back, restore 0, and return the low byte.
+         0x40 -> the write took effect: the domain may set mtvec, Route A is viable.
+         0x00 -> the CSR is there but the write was ignored/masked.
+         WEDGE-> the csrw itself trapped: the domain may NOT write mtvec, Route A is dead and
+                 the monitor (dom_seal[1]) is the only way. */
+    unsigned long got = 0;
+    __asm__ volatile("csrw mtvec, %1\n\t"
+                     "csrr %0, mtvec\n\t"
+                     "csrw mtvec, zero"
+                     : "=r"(got) : "r"(0x40UL) : "memory");
+    return (int)(got & 0xffUL);
+  }
+#endif
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);

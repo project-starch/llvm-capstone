@@ -373,3 +373,65 @@ overwriting it. Two ways forward, in order:
 2. **Sample `privM` and `mepc` repeatedly at the wedge**, not once. A single sample cannot
    distinguish "stuck at pc=0 in M-mode" from "sampled during a monitor entry". The mepc log
    (`recent_nontrivial_mepc_log_q`) is available on its own selector.
+
+## ROOT-CAUSE LOCALISATION: every wedge is the DYN UNIT BLOCKED ON A REV-NODE QUERY
+
+Route A (give the domain an `mtvec` so faults report) was built and run. It did NOT convert
+wedges into returns — and that is the decisive result, because it REFUTES the untrapped-fault
+hypothesis rather than confirming it.
+
+    mt71 (control, flag ON)  rc=0x45   handler does not perturb a working domain
+    mt67 (3 walks)           WEDGED    with a valid mtvec handler in the domain image
+    mt10 (the real blocker)  WEDGED    same
+
+With `mtvec` pointing at a reachable handler, a genuine trap WOULD have been caught. It was
+not. **The wedge is not an exception.** (Board-confirmed prerequisite: a domain can write
+mtvec — stage 75 wrote 0x40 and read 0x40 back.)
+
+### The signature, identical across FOUR wedges in FOUR binaries
+
+    sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} = 0x95 = 1001 0101
+      tbe=1  wstore=0  wload=0  wrev=1  domsw=0  stall=1  memwr=0  memwait=1
+
+Seen in `board-ra-mt67.log`, `board-ra-mt10.log`, `board-mcause.log` (wd10) and
+`board-pad72.log` (wd72) — same value every time.
+
+* **`wrev = 1`** — `waiting_for_rev_res`, set immediately before the blocking `recv` in
+  `get_node_query_validity` (`capstone_dyn_unit.anvil:106-112`):
+  `set waiting_for_rev_res := 1'b1 >> send rev_node_ep.query_req(revnode_id) >>
+   let vali = recv rev_node_ep.query_res >> ...` — **there is no abort or timeout path**, so an
+  unanswered query blocks the unit forever.
+* **`memwait = 1`** with `wrev = 1` is, per the debug-mux decoder, *blocked on the node-table
+  D$ access*.
+* `stall = 1`, and `excommit = 0` on the companion read (`sw=224`, `ex_commit.valid` is the
+  exception bit, `cva6.sv:500`) — consistent with a stalled pipeline and no exception pending.
+
+**So a "wedge" is: a capability load issues a revocation-node validity query, the query is
+never answered, and the dyn unit waits forever.** That is a hardware stall, which is why no
+trap handler can catch it and why the core never advances.
+
+This is consistent with everything that survived: it is not the data, the pointer, the array,
+the layout, the code address, store ordering, or walk count — all excluded by measurement. It
+also explains why `mtvec` (Route A) could not help, and why the failure looks deterministic per
+binary yet varies with unrelated-seeming changes: what varies is whether a given execution
+reaches a query that goes unanswered.
+
+### What this does NOT yet establish
+
+WHY a query goes unanswered. Candidates, in order: the node-table D$ access never completes;
+the rev-node unit is itself blocked elsewhere; or a request/response mismatch loses the reply.
+`capstone_rev_node.anvil` and the node-table memory path are where to look next.
+
+### Next steps
+
+1. Read `rev_node_head` and the overflow flag at the wedge (selectors `11001`/`11010`) to see
+   the allocator state when the query hangs. Add them to the runner's wedge read.
+2. Trace the query path in `capstone_rev_node.anvil`: what makes it not answer a `query_req`?
+   Look for a state where it is waiting on memory that never returns, or an ordering rule that
+   drops a request.
+3. Route B (`dom_seal[1]` in the monitor) is NOT needed for this: the wedge is not a trap, so a
+   trap vector cannot help. Do not spend the firmware risk on it for this purpose.
+
+Route A stays in the tree, gated OFF (`INTERP_DOMAIN_MTVEC`), verified byte-identical when off
+(wd71 sha 27477e88aa49297e both before and after). It is still the right tool for any FUTURE
+fault-vs-stall question, which is exactly what it settled here.

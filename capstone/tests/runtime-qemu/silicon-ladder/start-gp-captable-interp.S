@@ -728,8 +728,26 @@ test:
      confirm) before it becomes the default. */
   fence rw, rw
 #endif
+#if defined(INTERP_DOMAIN_MTVEC)
+  /* ROUTE A: give the domain a trap vector so an in-domain fault RETURNS instead of vanishing.
+     The monitor never writes dom_seal[1] (sbi_capstone.c:760,782-784) and slot 1 IS
+     {ctvec,mtvec} (csr_regfile.sv:399), so a domain runs with mtvec=0: any fault vectors to
+     pc=0, lands outside PCC and re-faults forever, silently. That is why a fault and a hung
+     core are indistinguishable, and why every wedge so far has been unrepeatable (a wedge
+     ends the board session).
+     Board-confirmed prerequisite: a domain CAN write mtvec -- stage 75 wrote 0x40 and read
+     0x40 back (2026-08-01). If it could not, this csrw would raise ILLEGAL INSTRUCTION, which
+     is cause 2 and is excluded from the trap latch, i.e. it would look exactly like a hang.
+     The handler simply jumps to the normal return sequence, which already captures mcause and
+     mtval to the stack. Converting a wedge into a RETURN is the whole point: it makes wedging
+     probes repeatable within one boot.
+     Gated: OFF unless built with INTERP_DOMAIN_MTVEC=1, so ordinary builds are untouched. */
+  lla   t0, .Ldomain_trap
+  csrw  mtvec, t0
+#endif
   call domain_main
 
+.Ldomain_returned:
   lla t2, __test_reentry
   ldc(t1, sp, 48)                    /* t1 = entry return cap */
   li ra, 0
@@ -773,6 +791,15 @@ test:
 
 .Ltest_ret:
   j .Ltest_ret
+
+#if defined(INTERP_DOMAIN_MTVEC)
+  /* Placed AFTER the infinite loop above, so it is never reached by fall-through -- it is
+     only ever entered by the trap vector. mtvec requires a 4-byte-aligned target and mode 0
+     (direct), which `lla` of an aligned label gives. */
+  .balign 4
+.Ldomain_trap:
+  j .Ldomain_returned
+#endif
 
   .align 4
   .section .gct
