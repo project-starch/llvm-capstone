@@ -258,8 +258,8 @@ static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 79
-/* ONE array, at FILE SCOPE, shared by stages 60-79 -- the confound remover.
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 81
+/* ONE array, at FILE SCOPE, shared by stages 60-81 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
    cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
    different addresses, initialised by different blocks of __capstone_cap_init. The observed
@@ -1120,6 +1120,28 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
   if (stage == 80) {
     /* Touch one element so the array is certainly emitted and cap-init'd, then return fast. */
     return (int)(0x60u | ((unsigned long)capstone_pad[0] & 1u));
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE == 81
+  if (stage == 81) {
+    /* RAW GUARD VALUES for the wd66 reproducer. wd66 is deterministic at rc=2 across 7 samples,
+       decoded as "first walk overran, second terminated" -- but that decode has NEVER been
+       validated, and rc=2 is also what a clobbered accumulator would give. This returns the two
+       walk results DIRECTLY instead of a bitmap:
+         low nibble  = min(15, guard after walk 1)
+         high nibble = min(15, guard after walk 2)
+       0x55 => both walks found the NUL at index 5, i.e. wd66's bitmap decode was WRONG and
+               there is no first-walk anomaly at all.
+       0x5F => walk 1 ran past 15 (consistent with the overrun reading), walk 2 correct.
+       anything else names exactly what each walk computed, which the bitmap cannot. */
+    const char *z = capstone_probe_lit[1];
+    unsigned g1 = 0, g2 = 0;
+    if (!z) return 0xD1u;
+    while (z[g1]) { if (++g1 > 64u) break; }
+    while (z[g2]) { if (++g2 > 64u) break; }
+    if (g1 > 15u) g1 = 15u;
+    if (g2 > 15u) g2 = 15u;
+    return (int)((g2 << 4) | g1);
   }
 #endif
   if (stage <= 0)

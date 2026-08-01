@@ -244,6 +244,36 @@ pad is a single array, i.e. ONE extra carve carrying N extra stores, and the car
 therefore constant across the ladder. The threshold is in the store count, not the number of
 globals.
 
+## 8d. Session close-out 2026-08-01 (post-reflash)
+
+**Board reflashed and verified.** The resident NV bitstream read as `None` and the board came up
+on a STOCK OpenPiton+Ariane design — no Capstone bitstream resident. Reflashed to
+`working-caplifive-captype-fixed.bit` (90 s), verified by re-reading rather than trusting the
+flash call, and it persisted across reconnect. **Check the resident bitstream at the START of a
+session; do not assume continuity from the previous one.** The runners' hard-stop would have
+caught it, but only after a wasted build.
+
+**Post-reflash health is good:** `wd71` returns `0x45`.
+
+**`wd66`'s decode is STILL UNVALIDATED.** `wd81` — the probe built to return the two raw guard
+values instead of a bitmap — WEDGED, so the question stands: `wd66 = 2` has been read as "first
+walk overran, second succeeded" on the strength of a bitmap decode nobody has checked, and
+`rc = 2` is equally consistent with a clobbered accumulator. **Do not cite the first-walk anomaly
+as established.** `wd81` differs from `wd66` only in trivial ways (loops back-to-back, clamp at
+the end instead of a conditional between them) and wedges where `wd66` returns — another
+instance of the unexplained build-to-build sensitivity.
+
+**The SQLite blocker is NOT the SPLB monitor spin.** Every stage-10 run reaches `SQ: G/enter`
+and then wedges in-domain, so it is a genuine Family-B failure. SPLB is a SEPARATE, ours-to-fix
+defect (`sbi_capstone.c:496-504`, exact-fit region unsupported -> `while(1)`) that corrupted the
+`pad200` results and plausibly other "random" wedges in this campaign.
+
+**Operational error to avoid repeating:** a cleanup glob `sb*.dom`, written for the `sb0`/`sb10`
+probes, also matched **`sbi.dom`** — a package-installed domain. Deleting those desyncs
+buildroot's stamps and previously caused six consecutive boot failures. Recovered by clearing
+`.stamp_target_installed` for `capstone-sbi-domain` and `capstone-test-domains` and rebuilding.
+**Enumerate probe names explicitly; never prefix-glob in the staged tree.**
+
 ## 9. Instrument and method traps (all of these bit during this campaign)
 
 1. **Never read a debug register only at the failure.** Read it at a SUCCESS first. Three of
