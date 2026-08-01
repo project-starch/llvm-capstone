@@ -258,8 +258,8 @@ static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 81
-/* ONE array, at FILE SCOPE, shared by stages 60-81 -- the confound remover.
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 83
+/* ONE array, at FILE SCOPE, shared by stages 60-83 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
    cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
    different addresses, initialised by different blocks of __capstone_cap_init. The observed
@@ -1142,6 +1142,31 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
     if (g1 > 15u) g1 = 15u;
     if (g2 > 15u) g2 = 15u;
     return (int)((g2 << 4) | g1);
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE >= 82 && CAPSTONE_SQLITE_STAGE <= 83
+  if (stage == 82 || stage == 83) {
+    /* VALIDATE THE wd66 DECODE, one walk at a time. wd66 returns rc=2 deterministically and
+       that has been read as "walk 1 overran, walk 2 terminated" -- but rc=2 is equally what a
+       clobbered accumulator gives, and wd81 (which returned both guards at once) WEDGED.
+       Split it so each domain reports ONE number and nothing else:
+         82: do walk 1 ONLY, return 0x40 | min(15, guard).   Expect 0x45.
+         83: do walk 1, DISCARD it, then walk 2, return 0x40 | min(15, guard2). Expect 0x45.
+       82 = 0x45 and 83 = 0x45  -> both walks are fine and wd66's bitmap decode is WRONG;
+                                   the first-walk anomaly never existed. RETRACT it.
+       82 = 0x4F                -> walk 1 really does overrun; the wd66 reading HOLDS.
+       Deliberately no accumulator, no bitmap, no second value in the same domain -- the whole
+       point is to remove the encoding that has never been validated. */
+    const char *z = capstone_probe_lit[1];
+    unsigned g = 0;
+    if (!z) return 0xD1u;
+    while (z[g]) { if (++g > 64u) break; }
+    if (stage == 83) {
+      g = 0;
+      while (z[g]) { if (++g > 64u) break; }
+    }
+    if (g > 15u) g = 15u;
+    return (int)(0x40u | g);
   }
 #endif
   if (stage <= 0)

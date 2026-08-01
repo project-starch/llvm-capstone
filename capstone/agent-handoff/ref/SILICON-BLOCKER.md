@@ -342,6 +342,48 @@ Source: `sbi_capstone.c:494-504` — `if (base + len == region_end) { if (base =
 4. `sw=255` bit7 = trap_seen, bits[6:0] = mcause. `24` = a real capability exception
    (`UNEXPECTED_OPERAND`); `9` = a stale ECALL from domain entry, i.e. no new trap.
 
+## 8f. RETRACTED: the "first walk overruns" anomaly. The walks were always fine.
+
+Measured in ONE boot, on freshly-reflashed hardware:
+
+    wd71  control                              rc = 0x45
+    wd82  walk 1 ONLY                          rc = 0x45   guard = 5   CORRECT
+    wd83  walk 2 (after a discarded walk 1)    rc = 0x45   guard = 5   CORRECT
+    wd66  the two-walk bitmap probe            rc = 0x02
+
+Both walks of `capstone_probe_lit[1]` ("rtrim") terminate at the NUL, index 5, exactly as they
+should — walk 1 included. **`lit[1]` was never broken, and there is no first-walk anomaly.**
+Every statement in this campaign of the form "the first walk overruns", "lit[1] never
+terminates", or "walk N fails" is WITHDRAWN. They all trace back to `wd66`'s bitmap, which was
+never validated.
+
+### What `wd66` actually reproduces (still real, still deterministic)
+
+With both walks provably correct, `wd66` should return `3`. It returns `2` on every one of 7+
+samples. So the lost bit is the ACCUMULATOR update, not the walk:
+
+    guard = 0; while (z[guard]) { if (++guard > 64u) break; }
+    if (guard <= 64u) m |= 1u;      <-- this update is LOST (bit0 never set)
+    guard = 0; while (z[guard]) { if (++guard > 64u) break; }
+    if (guard <= 64u) m |= 2u;      <-- this one survives (bit1 set)
+
+`guard` is demonstrably 5 at both points, so the predicate is true both times. A deterministic
+loss of the FIRST read-modify-write to a local, with the SECOND surviving, is a much sharper
+and smaller phenomenon than a string-walk failure — and it is a genuine miscompute, not a probe
+artefact, because stages 82/83 confirm the inputs.
+
+**Do not re-derive the walk story.** The next step on this reproducer is to instrument `m`
+itself: return `m` after the first update only, and separately return `guard` and `m` from the
+same domain, to establish whether the OR, the store, or the reload is what is lost.
+
+### Why this went unnoticed for so long
+
+`wd66` was deterministic (7 samples), which was mistaken for "trustworthy". Determinism only
+means the probe reports the same thing every time; it says nothing about whether the ENCODING
+is read correctly. The decode was never checked against a probe that returns the raw quantity —
+and when one finally was built (`wd81`, both guards at once) it WEDGED, which delayed the check
+further. Splitting it into one number per domain (`wd82`, `wd83`) settled it immediately.
+
 ## 9. Instrument and method traps (all of these bit during this campaign)
 
 1. **Never read a debug register only at the failure.** Read it at a SUCCESS first. Three of
