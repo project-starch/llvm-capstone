@@ -1108,6 +1108,20 @@ static int run_sqlite_staged(int stage) {
     }
   }
 #endif
+#if defined(CAPINIT_PAD)
+/* CAP-INIT STORE-COUNT BISECTION. sb0 (STATIC_BUILTINS at stage 0) wedges at ENTRY with 1257
+   capability stores in __capstone_cap_init, while wd71 RETURNS with 1048. Stage 0 runs no
+   SQLite code at all, so an entry-time wedge is attributable to cap-init and nothing else.
+   This adds exactly CAPINIT_PAD extra capability leaves -- each element is an initialised
+   pointer, so each becomes one `stc` in cap_init -- and otherwise returns immediately.
+   Vary CAPINIT_PAD to walk the store count between the known-good 1048 and the known-bad
+   1257 and find the threshold, if there is one. */
+static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] = "x" };
+  if (stage == 80) {
+    /* Touch one element so the array is certainly emitted and cap-init'd, then return fast. */
+    return (int)(0x60u | ((unsigned long)capstone_pad[0] & 1u));
+  }
+#endif
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);

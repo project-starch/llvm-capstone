@@ -119,6 +119,43 @@ compression aliasing; another `0x77` supports the over-grant reading.
 * **`mtvec = 0` in domains** means an in-domain fault has no handler and cannot print. Upstream
   design question; not to be patched unilaterally.
 
+## 8b. STRONGEST LEAD: a cap-init CAPABILITY-STORE THRESHOLD (MEASURED 2026-08-01)
+
+Stage 80 is an entry-and-return domain that touches one array element and returns. The ONLY
+variable across these builds is how many capability leaves `__capstone_cap_init` must store
+(`CAPINIT_PAD=N` adds N initialised pointers). No SQLite code runs at all — no strings, no
+walks, no hash tables, no allocator traffic.
+
+    domain    cap_init stores   result
+    wd71            1048        rc = 0x45   (independent control)
+    pad1            1015        rc = 0x61   RETURNS
+    pad120          1134        rc = 0x61   RETURNS
+    pad200          1263        WEDGED
+    pad260          1381        (never ran -- the wedge ended the session)
+
+**There is a threshold between 1134 and 1263 capability stores in cap-init.**
+
+Cross-check: `sb0` (STATIC_BUILTINS at stage 0) has **1257** stores and wedges AT ENTRY — inside
+the same band, from a completely different source change. Two independent routes to the same
+region.
+
+This is the first mechanism in the campaign with a NUMBER attached and no SQLite logic in the
+path, which also makes it the first that could be handed over as a hardware-side reproducer.
+
+**Caveats, stated plainly:**
+* `pad200`'s wedge is a SINGLE sample — a wedge ends the session, so it cannot be repeated
+  within a boot. Confirm across separate boots before quoting the number.
+* The bound is wide (1134..1263). Narrow it before reporting.
+* It does NOT explain the in-domain (`0x95`) family on its own: `b10n0` wedges at stage 10 with
+  only 1017 stores, below the passing 1134. So either there are two mechanisms, or store count
+  is a proxy for something else (total leaf bytes, a specific leaf, an address pattern).
+* 1024 — the rev-node pool size — is NOT the boundary: 1134 stores passes.
+
+**Next:** bisect 1134..1263 with intermediate pads, repeat `pad200` across boots, and then ask
+what is exhausted at that count. Candidates: a fixed-depth structure in the store path, a
+tag-cache capacity, or total bytes rather than store count (vary leaf SIZE at constant count to
+separate those two).
+
 ## 9. Instrument and method traps (all of these bit during this campaign)
 
 1. **Never read a debug register only at the failure.** Read it at a SUCCESS first. Three of
