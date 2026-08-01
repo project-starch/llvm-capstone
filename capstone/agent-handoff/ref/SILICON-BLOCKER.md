@@ -179,6 +179,30 @@ at the threshold — which is why `sqlite3RegisterBuiltinFunctions` wedges.
 This is the R-14 shape ("straight-line materialisation of distinct string constants into a
 struct array") finally isolated with a size threshold and no SQLite dependency.
 
+### Refinement: above the threshold the construct MISCOMPUTES or WEDGES, and both occur
+
+    N=56, build "g56"  (count encoding)     RETURNED, count = 55 of 56   <-- WRONG ANSWER
+    N=56, build "d56"  (deficit encoding)   WEDGED
+    N=48 and below                          RETURNED, correct            (5 boots)
+    N=72 / N=96                             WEDGED                       (4 builds)
+
+So the failure has TWO manifestations at the same entry count, depending on the build: a
+silent wrong answer (one entry's `zName` not reading back as expected) or a wedge. That is
+consistent with one underlying fault whose visible effect depends on layout, and it means
+**a returning run is not proof of correctness** for this construct -- the count has to be
+checked, which is why the probe now returns a deficit rather than a marker.
+
+The wrong-answer form is the more useful one: it returns, so it can be repeated within a boot,
+and the deficit says how many entries were corrupted. Chase THAT, not the wedge.
+
+### A probe-design correction worth keeping
+
+The first version of this ladder returned `0xC0 | (count & 0x3f)`, which WRAPS at 64: `N=64`
+correct and `N=72` miscounted-to-64 both render as `0xC0`, and an auto-generated conclusion
+("shared literals return, so distinct literals are the variable") was drawn from exactly that
+ambiguity and had to be withdrawn. Encode a DEFICIT (expected - actual), never a raw count, so
+a wrong answer cannot alias a right one.
+
 ### Caveats, stated
 
 * The N=72 wedge is ONE sample; a wedge ends the session so it cannot be repeated in-boot. The

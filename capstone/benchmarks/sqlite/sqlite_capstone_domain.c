@@ -1585,10 +1585,328 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
       { "fn95", (void *)0, (void *)0, (unsigned char)95 },
 #endif
     };
-    unsigned i, ok = 0;
-    for (i = 0; i < (sizeof(arr) / sizeof(arr[0])); i++)
+    unsigned i, n = (unsigned)(sizeof(arr) / sizeof(arr[0])), ok = 0;
+    for (i = 0; i < n; i++)
       if (arr[i].zName && arr[i].zName[0] == 'f') ok++;
-    return (int)(0xC0u | (ok & 0x3fu));
+    /* Return the DEFICIT, not the count. `0xC0 | (count & 0x3f)` wrapped at 64 and made
+       N=64 and N=72 indistinguishable from a miscount of 0 -- g64 and sh72 both returned
+       0xC0 and could not be read. The deficit is 0 when correct and small when not, so it
+       never wraps and a wrong answer is unmistakable. */
+    return (int)(0xA0u | ((n - ok) & 0x1fu));
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE == 93
+#ifndef PROBE_FD_N
+#define PROBE_FD_N 72
+#endif
+  if (stage == 93) {
+    /* BREAK THE CONFOUND. Stage 92 showed a straight-line struct array wedges above ~48-72
+       entries, but four things scale together there: entry COUNT, the number of DISTINCT
+       string literals, the stack frame size, and the `stc` count. This is stage 92 with the
+       identical entry count and struct layout, but every entry points at ONE SHARED literal,
+       so the number of distinct string constants is 1 regardless of N.
+         N=72 RETURNS here but wedged in stage 92  -> DISTINCT LITERALS are the variable, not
+                                                      entry count or frame size.
+         N=72 WEDGES here too                      -> literals are irrelevant; it is the count,
+                                                      the frame, or the store volume. */
+    static const char kShared[] = "fnX";
+    struct probe_fd { const char *zName; void *p1; void *p2; unsigned char flags; };
+    struct probe_fd arr[] = {
+      { kShared, (void *)0, (void *)0, (unsigned char)0 },
+#if PROBE_FD_N > 1
+      { kShared, (void *)0, (void *)0, (unsigned char)1 },
+#endif
+#if PROBE_FD_N > 2
+      { kShared, (void *)0, (void *)0, (unsigned char)2 },
+#endif
+#if PROBE_FD_N > 3
+      { kShared, (void *)0, (void *)0, (unsigned char)3 },
+#endif
+#if PROBE_FD_N > 4
+      { kShared, (void *)0, (void *)0, (unsigned char)4 },
+#endif
+#if PROBE_FD_N > 5
+      { kShared, (void *)0, (void *)0, (unsigned char)5 },
+#endif
+#if PROBE_FD_N > 6
+      { kShared, (void *)0, (void *)0, (unsigned char)6 },
+#endif
+#if PROBE_FD_N > 7
+      { kShared, (void *)0, (void *)0, (unsigned char)7 },
+#endif
+#if PROBE_FD_N > 8
+      { kShared, (void *)0, (void *)0, (unsigned char)8 },
+#endif
+#if PROBE_FD_N > 9
+      { kShared, (void *)0, (void *)0, (unsigned char)9 },
+#endif
+#if PROBE_FD_N > 10
+      { kShared, (void *)0, (void *)0, (unsigned char)10 },
+#endif
+#if PROBE_FD_N > 11
+      { kShared, (void *)0, (void *)0, (unsigned char)11 },
+#endif
+#if PROBE_FD_N > 12
+      { kShared, (void *)0, (void *)0, (unsigned char)12 },
+#endif
+#if PROBE_FD_N > 13
+      { kShared, (void *)0, (void *)0, (unsigned char)13 },
+#endif
+#if PROBE_FD_N > 14
+      { kShared, (void *)0, (void *)0, (unsigned char)14 },
+#endif
+#if PROBE_FD_N > 15
+      { kShared, (void *)0, (void *)0, (unsigned char)15 },
+#endif
+#if PROBE_FD_N > 16
+      { kShared, (void *)0, (void *)0, (unsigned char)16 },
+#endif
+#if PROBE_FD_N > 17
+      { kShared, (void *)0, (void *)0, (unsigned char)17 },
+#endif
+#if PROBE_FD_N > 18
+      { kShared, (void *)0, (void *)0, (unsigned char)18 },
+#endif
+#if PROBE_FD_N > 19
+      { kShared, (void *)0, (void *)0, (unsigned char)19 },
+#endif
+#if PROBE_FD_N > 20
+      { kShared, (void *)0, (void *)0, (unsigned char)20 },
+#endif
+#if PROBE_FD_N > 21
+      { kShared, (void *)0, (void *)0, (unsigned char)21 },
+#endif
+#if PROBE_FD_N > 22
+      { kShared, (void *)0, (void *)0, (unsigned char)22 },
+#endif
+#if PROBE_FD_N > 23
+      { kShared, (void *)0, (void *)0, (unsigned char)23 },
+#endif
+#if PROBE_FD_N > 24
+      { kShared, (void *)0, (void *)0, (unsigned char)24 },
+#endif
+#if PROBE_FD_N > 25
+      { kShared, (void *)0, (void *)0, (unsigned char)25 },
+#endif
+#if PROBE_FD_N > 26
+      { kShared, (void *)0, (void *)0, (unsigned char)26 },
+#endif
+#if PROBE_FD_N > 27
+      { kShared, (void *)0, (void *)0, (unsigned char)27 },
+#endif
+#if PROBE_FD_N > 28
+      { kShared, (void *)0, (void *)0, (unsigned char)28 },
+#endif
+#if PROBE_FD_N > 29
+      { kShared, (void *)0, (void *)0, (unsigned char)29 },
+#endif
+#if PROBE_FD_N > 30
+      { kShared, (void *)0, (void *)0, (unsigned char)30 },
+#endif
+#if PROBE_FD_N > 31
+      { kShared, (void *)0, (void *)0, (unsigned char)31 },
+#endif
+#if PROBE_FD_N > 32
+      { kShared, (void *)0, (void *)0, (unsigned char)32 },
+#endif
+#if PROBE_FD_N > 33
+      { kShared, (void *)0, (void *)0, (unsigned char)33 },
+#endif
+#if PROBE_FD_N > 34
+      { kShared, (void *)0, (void *)0, (unsigned char)34 },
+#endif
+#if PROBE_FD_N > 35
+      { kShared, (void *)0, (void *)0, (unsigned char)35 },
+#endif
+#if PROBE_FD_N > 36
+      { kShared, (void *)0, (void *)0, (unsigned char)36 },
+#endif
+#if PROBE_FD_N > 37
+      { kShared, (void *)0, (void *)0, (unsigned char)37 },
+#endif
+#if PROBE_FD_N > 38
+      { kShared, (void *)0, (void *)0, (unsigned char)38 },
+#endif
+#if PROBE_FD_N > 39
+      { kShared, (void *)0, (void *)0, (unsigned char)39 },
+#endif
+#if PROBE_FD_N > 40
+      { kShared, (void *)0, (void *)0, (unsigned char)40 },
+#endif
+#if PROBE_FD_N > 41
+      { kShared, (void *)0, (void *)0, (unsigned char)41 },
+#endif
+#if PROBE_FD_N > 42
+      { kShared, (void *)0, (void *)0, (unsigned char)42 },
+#endif
+#if PROBE_FD_N > 43
+      { kShared, (void *)0, (void *)0, (unsigned char)43 },
+#endif
+#if PROBE_FD_N > 44
+      { kShared, (void *)0, (void *)0, (unsigned char)44 },
+#endif
+#if PROBE_FD_N > 45
+      { kShared, (void *)0, (void *)0, (unsigned char)45 },
+#endif
+#if PROBE_FD_N > 46
+      { kShared, (void *)0, (void *)0, (unsigned char)46 },
+#endif
+#if PROBE_FD_N > 47
+      { kShared, (void *)0, (void *)0, (unsigned char)47 },
+#endif
+#if PROBE_FD_N > 48
+      { kShared, (void *)0, (void *)0, (unsigned char)48 },
+#endif
+#if PROBE_FD_N > 49
+      { kShared, (void *)0, (void *)0, (unsigned char)49 },
+#endif
+#if PROBE_FD_N > 50
+      { kShared, (void *)0, (void *)0, (unsigned char)50 },
+#endif
+#if PROBE_FD_N > 51
+      { kShared, (void *)0, (void *)0, (unsigned char)51 },
+#endif
+#if PROBE_FD_N > 52
+      { kShared, (void *)0, (void *)0, (unsigned char)52 },
+#endif
+#if PROBE_FD_N > 53
+      { kShared, (void *)0, (void *)0, (unsigned char)53 },
+#endif
+#if PROBE_FD_N > 54
+      { kShared, (void *)0, (void *)0, (unsigned char)54 },
+#endif
+#if PROBE_FD_N > 55
+      { kShared, (void *)0, (void *)0, (unsigned char)55 },
+#endif
+#if PROBE_FD_N > 56
+      { kShared, (void *)0, (void *)0, (unsigned char)56 },
+#endif
+#if PROBE_FD_N > 57
+      { kShared, (void *)0, (void *)0, (unsigned char)57 },
+#endif
+#if PROBE_FD_N > 58
+      { kShared, (void *)0, (void *)0, (unsigned char)58 },
+#endif
+#if PROBE_FD_N > 59
+      { kShared, (void *)0, (void *)0, (unsigned char)59 },
+#endif
+#if PROBE_FD_N > 60
+      { kShared, (void *)0, (void *)0, (unsigned char)60 },
+#endif
+#if PROBE_FD_N > 61
+      { kShared, (void *)0, (void *)0, (unsigned char)61 },
+#endif
+#if PROBE_FD_N > 62
+      { kShared, (void *)0, (void *)0, (unsigned char)62 },
+#endif
+#if PROBE_FD_N > 63
+      { kShared, (void *)0, (void *)0, (unsigned char)63 },
+#endif
+#if PROBE_FD_N > 64
+      { kShared, (void *)0, (void *)0, (unsigned char)64 },
+#endif
+#if PROBE_FD_N > 65
+      { kShared, (void *)0, (void *)0, (unsigned char)65 },
+#endif
+#if PROBE_FD_N > 66
+      { kShared, (void *)0, (void *)0, (unsigned char)66 },
+#endif
+#if PROBE_FD_N > 67
+      { kShared, (void *)0, (void *)0, (unsigned char)67 },
+#endif
+#if PROBE_FD_N > 68
+      { kShared, (void *)0, (void *)0, (unsigned char)68 },
+#endif
+#if PROBE_FD_N > 69
+      { kShared, (void *)0, (void *)0, (unsigned char)69 },
+#endif
+#if PROBE_FD_N > 70
+      { kShared, (void *)0, (void *)0, (unsigned char)70 },
+#endif
+#if PROBE_FD_N > 71
+      { kShared, (void *)0, (void *)0, (unsigned char)71 },
+#endif
+#if PROBE_FD_N > 72
+      { kShared, (void *)0, (void *)0, (unsigned char)72 },
+#endif
+#if PROBE_FD_N > 73
+      { kShared, (void *)0, (void *)0, (unsigned char)73 },
+#endif
+#if PROBE_FD_N > 74
+      { kShared, (void *)0, (void *)0, (unsigned char)74 },
+#endif
+#if PROBE_FD_N > 75
+      { kShared, (void *)0, (void *)0, (unsigned char)75 },
+#endif
+#if PROBE_FD_N > 76
+      { kShared, (void *)0, (void *)0, (unsigned char)76 },
+#endif
+#if PROBE_FD_N > 77
+      { kShared, (void *)0, (void *)0, (unsigned char)77 },
+#endif
+#if PROBE_FD_N > 78
+      { kShared, (void *)0, (void *)0, (unsigned char)78 },
+#endif
+#if PROBE_FD_N > 79
+      { kShared, (void *)0, (void *)0, (unsigned char)79 },
+#endif
+#if PROBE_FD_N > 80
+      { kShared, (void *)0, (void *)0, (unsigned char)80 },
+#endif
+#if PROBE_FD_N > 81
+      { kShared, (void *)0, (void *)0, (unsigned char)81 },
+#endif
+#if PROBE_FD_N > 82
+      { kShared, (void *)0, (void *)0, (unsigned char)82 },
+#endif
+#if PROBE_FD_N > 83
+      { kShared, (void *)0, (void *)0, (unsigned char)83 },
+#endif
+#if PROBE_FD_N > 84
+      { kShared, (void *)0, (void *)0, (unsigned char)84 },
+#endif
+#if PROBE_FD_N > 85
+      { kShared, (void *)0, (void *)0, (unsigned char)85 },
+#endif
+#if PROBE_FD_N > 86
+      { kShared, (void *)0, (void *)0, (unsigned char)86 },
+#endif
+#if PROBE_FD_N > 87
+      { kShared, (void *)0, (void *)0, (unsigned char)87 },
+#endif
+#if PROBE_FD_N > 88
+      { kShared, (void *)0, (void *)0, (unsigned char)88 },
+#endif
+#if PROBE_FD_N > 89
+      { kShared, (void *)0, (void *)0, (unsigned char)89 },
+#endif
+#if PROBE_FD_N > 90
+      { kShared, (void *)0, (void *)0, (unsigned char)90 },
+#endif
+#if PROBE_FD_N > 91
+      { kShared, (void *)0, (void *)0, (unsigned char)91 },
+#endif
+#if PROBE_FD_N > 92
+      { kShared, (void *)0, (void *)0, (unsigned char)92 },
+#endif
+#if PROBE_FD_N > 93
+      { kShared, (void *)0, (void *)0, (unsigned char)93 },
+#endif
+#if PROBE_FD_N > 94
+      { kShared, (void *)0, (void *)0, (unsigned char)94 },
+#endif
+#if PROBE_FD_N > 95
+      { kShared, (void *)0, (void *)0, (unsigned char)95 },
+#endif
+    };
+    unsigned i, n = (unsigned)(sizeof(arr) / sizeof(arr[0])), ok = 0;
+    for (i = 0; i < n; i++)
+      if (arr[i].zName && arr[i].zName[0] == 'f') ok++;
+    /* Return the DEFICIT, not the count. `0xC0 | (count & 0x3f)` wrapped at 64 and made
+       N=64 and N=72 indistinguishable from a miscount of 0 -- g64 and sh72 both returned
+       0xC0 and could not be read. The deficit is 0 when correct and small when not, so it
+       never wraps and a wrong answer is unmistakable. */
+    return (int)(0xA0u | ((n - ok) & 0x1fu));
   }
 #endif
   if (stage <= 0)
