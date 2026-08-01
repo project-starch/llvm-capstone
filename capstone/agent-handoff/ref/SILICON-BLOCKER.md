@@ -144,6 +144,59 @@ separate boots** — the only wedge in this campaign established across multiple
 than from a single sample. A "wedge" means the domain emits no marker and the board session
 must be torn down.
 
+## 1b. ROOT CAUSE LOCALISED: a straight-line struct array of ~72 entries wedges the core
+
+**Standalone reproducer, no SQLite in the path.** A local array of N structs, each holding a
+DISTINCT string literal plus two pointers, initialised straight-line:
+
+    struct probe_fd { const char *zName; void *p1; void *p2; unsigned char flags; };
+    struct probe_fd arr[] = { { "fn0", 0, 0, 0 }, { "fn1", 0, 0, 1 }, ... };
+
+Measured, each at position 2 with the `wd71` control returning `0x45` in the same boot:
+
+    N=1    stc=126   returned 0xC1     OK
+    N=4    stc=141   returned 0xC4     OK
+    N=16   stc=177   returned 0xD0     OK
+    N=32   stc=225   returned 0xE0     OK
+    N=48   stc=282   returned 0xF0     OK
+    N=72   stc=362   WEDGED
+    N=96             WEDGED  (3 independent builds, all wedged)
+
+**Threshold between 48 and 72 entries.** SQLite's builtin `FuncDef` array has **72** entries —
+at the threshold — which is why `sqlite3RegisterBuiltinFunctions` wedges.
+
+### How this was reached (elimination, not hypothesis)
+
+1. Stage 9 (`MallocInit` + `PcacheInitialize`) RETURNS; stage 10 (`+ RegisterBuiltinFunctions`)
+   WEDGES at position 2 in five separate boots.
+2. Stages 88/89/90: `sqlite3WindowFunctions`, `sqlite3RegisterDateTimeFunctions` and
+   `sqlite3RegisterJsonFunctions` each RETURN -> all three exonerated.
+3. `BUILTIN_LIMIT=0` skips the `strcmp` loop and inserts ZERO entries, and still wedges -> the
+   remaining work in that path is the array CONSTRUCTION.
+4. Stage 92 rebuilds only that construction, with nothing else, and reproduces the wedge above a
+   size threshold.
+
+This is the R-14 shape ("straight-line materialisation of distinct string constants into a
+struct array") finally isolated with a size threshold and no SQLite dependency.
+
+### Caveats, stated
+
+* The N=72 wedge is ONE sample; a wedge ends the session so it cannot be repeated in-boot. The
+  claim "above threshold wedges" rests on N=72 (1) plus N=96 (3 independent builds) = 4 samples.
+  N<=48 returning is 5 samples across 5 boots.
+* The threshold is bracketed (48..72), not pinned. Bisect 56/64 to narrow it.
+* What scales with N is confounded: entry count, distinct string literals, total stack frame,
+  and cap-init/`stc` count all grow together. The next experiments should vary ONE: same entry
+  count with SHARED string literals; same count with larger structs; same count spread across
+  two smaller arrays.
+
+### Why this matters
+
+It is the first artefact in this campaign compact enough to hand over as a hardware question:
+a few dozen lines of ordinary C, a known-good side (N<=48), a known-bad side (N>=72), a control
+that passes in the same boot, and no SQLite, allocator, hash table or string walking anywhere in
+the path.
+
 ## 2. Root cause
 
 **NOT FOUND.** No mechanism has survived measurement. Do not present any of the below as the
