@@ -258,8 +258,8 @@ static const char *const capstone_lit_b[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_c[16] = CAPSTONE_LITSET;
 static const char *const capstone_lit_d[16] = CAPSTONE_LITSET;
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 77
-/* ONE array, at FILE SCOPE, shared by stages 60-77 -- the confound remover.
+#if CAPSTONE_SQLITE_STAGE >= 60 && CAPSTONE_SQLITE_STAGE <= 79
+/* ONE array, at FILE SCOPE, shared by stages 60-79 -- the confound remover.
    Every earlier staged block declared its OWN local `lit`, so stage 52 read the second
    cap-init'd array, stage 54 the third and stage 59 the fourth: different objects at
    different addresses, initialised by different blocks of __capstone_cap_init. The observed
@@ -1069,6 +1069,43 @@ static int run_sqlite_staged(int stage) {
     else                             cls = 2u;
     unsigned lg = 0; while ((lg < 15u) && ((1UL << (lg + 1)) <= len)) lg++;
     return (int)((cls << 4) | lg);
+  }
+#endif
+#if CAPSTONE_SQLITE_STAGE >= 78 && CAPSTONE_SQLITE_STAGE <= 79
+  if (stage == 78 || stage == 79) {
+    /* RESOLVE A CONFLICT between a board measurement and a source analysis.
+       Stage 77 measured class 4 (len >= 1 MiB) for a 256-byte global, twice. A source-side
+       trace instead predicts len == 256 EXACTLY, and explains stage 76's non-fault by
+       capability COMPRESSION: register caps hold 64-bit compressed metadata whose bounds are
+       reconstructed from the CURSOR (ariane_pkg.sv:692-693), so an offset that is a whole
+       multiple of the 2^(E+14) alias period decodes to a window that has slid along with the
+       pointer. Under that model the LENGTH is always 256 and only the position moves.
+       Both cannot be right. Stage 77 clamped log2 at 15, so it could not show the magnitude.
+         78: return floor(log2(end - start)) UNCLAMPED, plus bit7 set iff len == 256 exactly.
+             8 => 256 bytes (source analysis right, stage 77's class was wrong)
+             20 => 1 MiB, 24 => 16 MiB, etc.
+         79: the DECIDER for the sliding-bounds model -- read start on the BASE pointer and
+             start on the FAR pointer (base + 1 MiB), and return the difference in MiB.
+             0  => bounds did NOT move: the capability genuinely spans the range.
+             1  => start moved by exactly 1 MiB with the pointer: compression aliasing
+                   confirmed, and the capability never really covered that memory. */
+    const char *const volatile *vp = capstone_probe_lit;
+    const void *base = (const void *)vp;
+    unsigned long st = 0, en = 0;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x3" : "=r"(st) : "r"(base));
+    if (stage == 78) {
+      __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x4" : "=r"(en) : "r"(base));
+      unsigned long len = (en > st) ? (en - st) : 0UL;
+      unsigned lg = 0; while ((lg < 63u) && ((1UL << (lg + 1)) <= len)) lg++;
+      return (int)((len == 256UL ? 0x80u : 0u) | (lg & 0x7fu));
+    }
+    {
+      const volatile char *far = (const volatile char *)base + (1024 * 1024);
+      unsigned long st_far = 0;
+      __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x3" : "=r"(st_far) : "r"(far));
+      unsigned long d = (st_far > st) ? (st_far - st) : 0UL;
+      return (int)((d >> 20) & 0xffUL);      /* in MiB: 0 = did not move, 1 = slid 1 MiB */
+    }
   }
 #endif
   if (stage <= 0)

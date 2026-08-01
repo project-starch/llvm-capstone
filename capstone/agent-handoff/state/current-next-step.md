@@ -674,3 +674,72 @@ entry actually holds.
 reading only proves `len >= 1 MiB` and cannot say how much larger. Return the raw `start` and
 `end` (or `log2` unclamped) to size the over-grant exactly — 1 MiB vs the whole data region are
 very different findings.
+
+## CONTESTED: the "capability spans >= 1 MiB" measurement is NOT settled
+
+Two independent lines disagree and neither has won:
+
+**Board (stage 77, 2/2 samples):** `lcc` zimm 3/4 on the pointer to `capstone_probe_lit`
+returned class 4, i.e. `end - start >= 1 MiB` for a 256-byte global.
+
+**Source trace (quoted, reproducible):** the carve is EXACTLY 256 bytes —
+`stor = max(16, align_up(size,16))` (`start-gp-captable-interp.S:446-449`), and `SPLIT` narrows
+the parent in the same instruction, writing it back (`capstone_dyn_unit.anvil:140-144`,
+`commit_stage.sv:280-281`), so carve *i* ends where carve *i-1* began. No over-grant is
+possible from that path. It also shows ordinary `lbu` IS bounds-checked
+(`load_store_unit.sv:970-971`, cause 28).
+
+Its alternative explanation for stage 76's non-fault is **capability compression**: register
+capabilities hold 64-bit compressed metadata whose bounds are reconstructed from the CURRENT
+cursor — `ariane_pkg.sv:692-693`:
+
+    b = xlen_t'({cursor >> (E+14), B[13:0]}) << E;
+    t = xlen_t'({cursor >> (E+14), T[13:0]}) << E;
+
+so an offset that is a whole multiple of 2^(E+14) decodes to a window that has SLID with the
+pointer. Re-implementing that arithmetic predicts: `+0x100` faults, `+0x200` faults,
+`+0x100000` does NOT (stage 76's exact offset), `+0x100200` faults again. `CINCOFFSET` performs
+no representability check (`capstone_flu_unit.anvil:41-42`).
+
+**Attempts to settle it both WEDGED**, so nothing was learned:
+
+    wd78 (unclamped log2 of end-start)                 WEDGED
+    wd79 (start at base vs start at base+1MiB)         WEDGED
+    wd71 control returned 0x45 in both sessions
+
+Note `wd77` — nearly identical code, two `lcc` reads — RETURNS. `wd78` adds only a loop and
+wedges. That is the same unexplained build-to-build sensitivity seen all session, and it means
+these wedges are not evidence about bounds.
+
+### Which reading to prefer, and why
+
+**Treat the over-grant claim as UNPROVEN and lean toward the compression explanation** until
+measured. The source trace quotes the mechanism, reimplements it, and predicts a PATTERN across
+offsets; the board result is a single quantity read at one cursor, from which a security
+conclusion was generalised. An earlier commit here stated the over-grant as fact and drew a
+consequence for the write-up's spatial-safety claims — that consequence is withdrawn pending
+evidence.
+
+### The test that settles it, and it needs no new instrumentation
+
+Run stage 76 (the plain out-of-bounds read that returned `0x77`) with the offset changed from
+`1024*1024` to `1024*1024 + 512`:
+
+* **faults / behaves differently** -> compression aliasing confirmed; the capability never
+  covered that memory, and the defect is that EFFECTIVE bounds move with the cursor at
+  alias-period offsets — subtler than an over-grant and invisible to inspecting a capability
+  at rest.
+* **also returns `0x77`** -> the range really is accessible and the over-grant reading stands.
+
+Prefer this over more `lcc` probes: it reuses a domain shape that has already RETURNED, whereas
+the two `lcc`-based deciders both wedged.
+
+### Independent of the above, and worth reporting on its own
+
+QEMU keeps FAT register capabilities with exact bounds and DOES bounds-check ordinary loads
+(`insn_trans/trans_rvi.c.inc:286-292` -> `op_helper.c:1107`), so it would have faulted where the
+silicon did not. Emulation is STRICTER than hardware here. Any spatial violation landing on an
+alias boundary passes on silicon and traps under QEMU — a silicon-only gap no amount of
+emulation testing can surface. Also: `RISCV_EXCP_CAP_OOB` (0x1c) is defined in
+`capstone-qemu/target/riscv/cpu_bits.h:697` and never raised; the OOB path raises
+`LOAD_ACCESS_FAULT` instead, so QEMU's mcause will not match the RTL's 28.
