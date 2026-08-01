@@ -535,3 +535,65 @@ on the `sw=224` deltas until 0xff is confirmed to be real state.
 **Never read a debug register only at the failure.** Read it at a SUCCESS in the same session
 first. A "signature" seen at four wedges means nothing without the healthy value; three of the
 eight bits here were identical in both states.
+
+## THERE ARE TWO WEDGE POPULATIONS, NOT ONE — and one of them IS a capability exception
+
+An adversarial audit found that this campaign has been treating two distinct failures as one.
+Verified directly over every board log in `/tmp/capstone`:
+
+    sw=225   sw=255                          count  runs
+    0x84     0x98 = trap_seen=1, mcause=24     12   pad73, pad74, fence, wda..wdg, rep, n69b
+    0x95     0x89 = trap_seen=1, mcause=9      13   mt10, mt67, wd67, boot1..3, goal2, pad72
+    0xd5     0x8f                               1   wd71 (HEALTHY, returned)
+
+`mcause = 24` is a REAL capability exception: `ex_code` numbering is
+`UNEXPECTED_OPERAND = 24` (`capstone_unit.anvilh:289-291`), and the cause is formed as
+`64'd23 + exception_code[3:0]` (`cva6.sv:1357`, `ex_stage.sv:469`).
+
+**This also closes the caveat left open earlier:** capability faults DO reach
+`ex_commit.valid` with a non-zero cause, so the latch does record them. The earlier
+"weak evidence against a fault" reasoning was applied to the wrong population.
+
+The split lines up exactly with a fact established independently by counting `SQ: G/enter`:
+`pad73`/`pad74` are the runs that **never entered the domain** (they died in region-share) —
+and they are the mcause-24 family. The in-domain wedges (`mt10`, `mt67`) are the `0x95`
+family, whose only latched trap is the stale entry ECALL.
+
+So:
+
+* **Family A — `0x84` / mcause 24 (UNEXPECTED_OPERAND).** Fails during REGION-SHARE, before
+  `domain_main`. A genuine capability exception, taken with `mtvec = 0`, hence silent.
+* **Family B — `0x95` / mcause 9 (stale).** Fails INSIDE the domain. No new trap latched.
+  `wrev`/`memwait` are set here but are ALSO set in the healthy control (`0xd5`), so they are
+  resting state and say nothing.
+
+**Do not merge these again.** Every "the blocker wedges N times" count in this file mixes them.
+
+### Other findings from the audit, verified
+
+* **Bit order is CORRECT** — `cva6.sv:1107-1116` is MSB-first and the runner packs `states[i]`
+  to bit `i` and prints MSB-first. Independent calibration: `0x89` -> mcause 9 (ECALL from
+  S-mode, exactly what domain entry emits); reversed would be 17, reserved. So the decode is
+  sound; the error was interpretation, not decoding.
+* **`dyn_rdy = 1` at every `0x95` wedge** (`sw=224 = 0x5d`). `capstone_dyn_ready_o` is
+  `!valid & ready_q` (`ex_stage.sv:837-838`) and `send ep.rtr(1'd1)` happens once at the top of
+  the dyn unit's main loop (`capstone_dyn_unit.anvil:480`). A unit parked inside
+  `get_node_query_validity` could not be re-asserting `rtr`. This is further evidence against
+  the (already retracted) "dyn unit blocked forever" reading.
+* **Provenance error of mine:** `head=413/overflow=0` came from `board-revstate.log`, a
+  different, later run than the four logs quoted for the `0x95` signature — the two were
+  presented together as if from one wedge. The rev-node selectors are absent from those four
+  logs entirely.
+
+### The positive control the mtvec experiment never had
+
+`mt71` returned `0x45`, i.e. it never faulted, so nothing ever entered `.Ldomain_trap`. No run
+has yet shown the handler catching a fault. Build a domain that **deliberately** faults (an
+`ldc` past the end of a bounded capability -> `OUT_OF_BOUNDS`, `capstone_dyn_unit.anvil:322-325`)
+with `INTERP_DOMAIN_MTVEC=1`:
+
+* it returns via `.Ldomain_trap` -> "the wedge is not an exception" becomes an earned inference
+  for Family B;
+* it wedges -> the Route A result collapses and the handler never worked.
+
+Order in one boot: deliberate-fault domain, then `wd71`, then the wedger last.
