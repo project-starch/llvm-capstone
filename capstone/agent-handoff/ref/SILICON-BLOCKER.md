@@ -215,6 +215,50 @@ array, is fine).
   from the period when many single-sample verdicts in this campaign turned out wrong. **It is
   being re-tested at stage 0 and stage 10.**
 
+### Workaround attempt 2: `SQLITE_STATIC_BUILTINS=1` — CONFIRMED REGRESSION (MEASURED)
+
+The patch was verified to apply before spending board time (`static FuncDef aBuiltinFunc[] = {`
+present, `capstoneBuiltinFunc` gone — an initial grep for the OLD name returned 0 and would have
+read as "patch failed" if trusted).
+
+    wd71  rc = 0x45   control OK
+    sb0   WEDGED      STATIC_BUILTINS at STAGE 0
+
+**Stage 0 is entry-and-immediate-return** — the domain runs no SQLite code at all. So restoring
+the array to a compile-time `static` breaks the domain BEFORE any code executes; the only thing
+that changed is what `__capstone_cap_init` must materialise. The earlier "breaks even stage 0"
+verdict is CONFIRMED, not a single-sample error. This workaround is closed.
+
+### The convergence worth chasing
+
+Both ways of materialising the same ~72-entry `FuncDef` array fail:
+
+* as a LOCAL (straight-line stack construction) -> stage 10 wedges;
+* as a `static` (cap-init leaves) -> stage 0 wedges, i.e. even earlier.
+
+Measured cap-init cost:
+
+    build             cap_init size   capability stores (stc)   outcome
+    sb0   (static)        16248                1257             WEDGES AT ENTRY
+    b10n0 (clamp 0)       10768                1017             wedges at stage 10
+    wd71  (probe)         10768                1048             RETURNS
+
+Carve counts are ~equal (181/181/182) — the array is ONE global, so it adds one carve, not 72.
+Store count alone does NOT predict the outcome (1017 wedges, 1048 returns), so there is no
+simple monotonic threshold across different failure points.
+
+**But `sb0` is the cleanest signal in the campaign:** it wedges at ENTRY, where the only work is
+cap-init, with ~20% more capability stores than the largest known-good build. That makes
+"cap-init fails somewhere above ~1048 stores" a sharp, cheap hypothesis — and unlike the
+in-domain wedges it involves no SQLite logic at all.
+
+**Next test (bisection, entry-time only):** build domains whose cap-init store count is varied
+between ~1048 and ~1257 (e.g. by adding N dummy initialised globals holding capability leaves to
+a stage-0 domain) and find the threshold. Stage 0 is the ideal vehicle: it returns immediately,
+so any wedge is attributable to cap-init and nothing else. If a threshold exists, it is a
+concrete number to hand over, and it would also explain the region-share (Family A) failures,
+which happen before `domain_main` for the same reason.
+
 ### Workaround status
 
 **Not yet available.** `SQLITE_STATIC_BUILTINS=1` was tried earlier and is a REGRESSION (it
