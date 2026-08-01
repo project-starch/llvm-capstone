@@ -144,6 +144,32 @@ separate boots** — the only wedge in this campaign established across multiple
 than from a single sample. A "wedge" means the domain emits no marker and the board session
 must be torn down.
 
+## 0b. NEAR-MISS WORTH RECORDING: mcause=24 does NOT imply the code under test trapped
+
+Attempting to read the bad slot's capability type (`lcc` zimm=1 on `arr[55].zName`), the domain
+wedged and the cleared trap latch showed **`mcause = 24` (UNEXPECTED_OPERAND)**. `LCC` raises
+exactly that when its operand is `NOT_CAP` (`capstone_dyn_unit.anvil:171-173`), so the obvious
+reading was "the stored pointer lost its tag" — the hypothesis stated in advance.
+
+**That reading is wrong.** Checking the marker trail for that domain:
+
+    w95   reached G/enter = FALSE   H/return = FALSE
+          last markers: SHA2 ... BASE:815FF000 ALEN:00001000 SHA3 SHA4 SHA5
+
+It died in the REGION-SHARE path, before the domain ran. The `lcc` never executed. The
+`mcause=24` is a **Family-A** fault (section 5) — the same signature as `pad73`/`pad74` — and
+says nothing about the slot.
+
+**Rule, since this nearly produced a false root cause:** `mcause=24` is ambiguous between
+Family A (region-share, before `G/enter`) and any in-domain `UNEXPECTED_OPERAND`. **Always
+confirm `SQ: G/enter` appears for that domain before attributing a trap to the code under
+test.** This is the third time in this campaign that a marker-trail check overturned a
+conclusion drawn from a register reading.
+
+The slot-content question — pointer wrong / tag lost / data wrong — therefore remains OPEN.
+`w96` (cursor) and `w97` (data via the container) never ran, because the wedge ended the
+session.
+
 ## 1. WHAT IS ACTUALLY ESTABLISHED (audited 2026-08-02; read this before any ladder below)
 
 An adversarial audit re-read the raw logs rather than this document, and the ladder as
