@@ -144,6 +144,43 @@ separate boots** — the only wedge in this campaign established across multiple
 than from a single sample. A "wedge" means the domain emits no marker and the board session
 must be torn down.
 
+## 0a. FIRST DIRECT READING OF THE BAD SLOT: tag INTACT, cursor WRONG
+
+Reading `arr[N-1].zName` in the failing build (N=56), each probe in its own boot, and with
+`SQ: G/enter` checked per domain so Family-A faults cannot be mistaken for results:
+
+    stage 97  (data byte via arr[])   WEDGED, entered=FALSE  -> Family A, no information
+    stage 96  (cursor, lcc zimm=2)    returned 0x00, entered=TRUE   <-- the one real reading
+    stage 95  (cap type, lcc zimm=1)  WEDGED, entered=FALSE  -> Family A, no information
+
+**Two conclusions from stage 96:**
+
+1. **The tag is INTACT.** `LCC` raises `UNEXPECTED_OPERAND` when its operand is `NOT_CAP`
+   (`capstone_dyn_unit.anvil:171-173`). Stage 96 executed `lcc` on that slot and RETURNED
+   normally, so the slot holds a valid capability. **The "the store lost its tag" hypothesis,
+   which was stated in advance, is REFUTED.**
+2. **The cursor is WRONG.** Its low byte reads `0x00`. `"fn55"` sits at container offset
+   3906 = `0xF42`, so an aligned container base should give a low byte of `0x42`.
+
+So the failure is **not** a lost store and **not** a lost tag: a well-formed capability is
+present in the slot, pointing at the wrong address. That is why dereferencing it yields a byte
+that is not `'f'` rather than trapping.
+
+### Caveats
+
+* ONE sample, and only the LOW BYTE of the cursor. `0x00` is consistent with a zero cursor but
+  could in principle alias (it would need the container base to end in `0xBE`).
+* Stages 95 and 97 produced nothing — both died in region-share before entering. The data-side
+  question (is the literal itself intact?) is still open.
+
+### Next
+
+Read more of the cursor and the bounds, one value per domain to avoid the two-value probes that
+have wedged: cursor bytes 1/2/3 (`lcc` zimm=2 shifted), and `start`/`end` (zimm 3/4) to see
+whether the capability's BOUNDS are also wrong or only its cursor. If bounds are right and only
+the cursor is wrong, the fault is in the `cincoffset` that computes the container offset for
+that entry, not in the capability's provenance.
+
 ## 0b. NEAR-MISS WORTH RECORDING: mcause=24 does NOT imply the code under test trapped
 
 Attempting to read the bad slot's capability type (`lcc` zimm=1 on `arr[55].zName`), the domain
