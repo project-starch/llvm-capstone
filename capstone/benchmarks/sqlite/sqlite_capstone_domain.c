@@ -1909,6 +1909,313 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
     return (int)(0xA0u | ((n - ok) & 0x1fu));
   }
 #endif
+#if CAPSTONE_SQLITE_STAGE == 94
+#ifndef PROBE_FD_N
+#define PROBE_FD_N 56
+#endif
+  if (stage == 94) {
+    /* WHICH ENTRY IS WRONG? The N=56 build returned a count of 55 of 56 -- one entry's zName
+       did not read back starting with 'f'. A count says how many; this says WHICH, which
+       names the failing cap-table slot directly.
+       Returns: the INDEX of the first bad entry (0..95), or 0xFF if every entry is correct.
+       Index and "all correct" cannot alias, unlike the earlier count encoding that wrapped
+       at 64 and produced a withdrawn conclusion. */
+    struct probe_fd { const char *zName; void *p1; void *p2; unsigned char flags; };
+    struct probe_fd arr[] = {
+      { "fn0", (void *)0, (void *)0, (unsigned char)0 },
+#if PROBE_FD_N > 1
+      { "fn1", (void *)0, (void *)0, (unsigned char)1 },
+#endif
+#if PROBE_FD_N > 2
+      { "fn2", (void *)0, (void *)0, (unsigned char)2 },
+#endif
+#if PROBE_FD_N > 3
+      { "fn3", (void *)0, (void *)0, (unsigned char)3 },
+#endif
+#if PROBE_FD_N > 4
+      { "fn4", (void *)0, (void *)0, (unsigned char)4 },
+#endif
+#if PROBE_FD_N > 5
+      { "fn5", (void *)0, (void *)0, (unsigned char)5 },
+#endif
+#if PROBE_FD_N > 6
+      { "fn6", (void *)0, (void *)0, (unsigned char)6 },
+#endif
+#if PROBE_FD_N > 7
+      { "fn7", (void *)0, (void *)0, (unsigned char)7 },
+#endif
+#if PROBE_FD_N > 8
+      { "fn8", (void *)0, (void *)0, (unsigned char)8 },
+#endif
+#if PROBE_FD_N > 9
+      { "fn9", (void *)0, (void *)0, (unsigned char)9 },
+#endif
+#if PROBE_FD_N > 10
+      { "fn10", (void *)0, (void *)0, (unsigned char)10 },
+#endif
+#if PROBE_FD_N > 11
+      { "fn11", (void *)0, (void *)0, (unsigned char)11 },
+#endif
+#if PROBE_FD_N > 12
+      { "fn12", (void *)0, (void *)0, (unsigned char)12 },
+#endif
+#if PROBE_FD_N > 13
+      { "fn13", (void *)0, (void *)0, (unsigned char)13 },
+#endif
+#if PROBE_FD_N > 14
+      { "fn14", (void *)0, (void *)0, (unsigned char)14 },
+#endif
+#if PROBE_FD_N > 15
+      { "fn15", (void *)0, (void *)0, (unsigned char)15 },
+#endif
+#if PROBE_FD_N > 16
+      { "fn16", (void *)0, (void *)0, (unsigned char)16 },
+#endif
+#if PROBE_FD_N > 17
+      { "fn17", (void *)0, (void *)0, (unsigned char)17 },
+#endif
+#if PROBE_FD_N > 18
+      { "fn18", (void *)0, (void *)0, (unsigned char)18 },
+#endif
+#if PROBE_FD_N > 19
+      { "fn19", (void *)0, (void *)0, (unsigned char)19 },
+#endif
+#if PROBE_FD_N > 20
+      { "fn20", (void *)0, (void *)0, (unsigned char)20 },
+#endif
+#if PROBE_FD_N > 21
+      { "fn21", (void *)0, (void *)0, (unsigned char)21 },
+#endif
+#if PROBE_FD_N > 22
+      { "fn22", (void *)0, (void *)0, (unsigned char)22 },
+#endif
+#if PROBE_FD_N > 23
+      { "fn23", (void *)0, (void *)0, (unsigned char)23 },
+#endif
+#if PROBE_FD_N > 24
+      { "fn24", (void *)0, (void *)0, (unsigned char)24 },
+#endif
+#if PROBE_FD_N > 25
+      { "fn25", (void *)0, (void *)0, (unsigned char)25 },
+#endif
+#if PROBE_FD_N > 26
+      { "fn26", (void *)0, (void *)0, (unsigned char)26 },
+#endif
+#if PROBE_FD_N > 27
+      { "fn27", (void *)0, (void *)0, (unsigned char)27 },
+#endif
+#if PROBE_FD_N > 28
+      { "fn28", (void *)0, (void *)0, (unsigned char)28 },
+#endif
+#if PROBE_FD_N > 29
+      { "fn29", (void *)0, (void *)0, (unsigned char)29 },
+#endif
+#if PROBE_FD_N > 30
+      { "fn30", (void *)0, (void *)0, (unsigned char)30 },
+#endif
+#if PROBE_FD_N > 31
+      { "fn31", (void *)0, (void *)0, (unsigned char)31 },
+#endif
+#if PROBE_FD_N > 32
+      { "fn32", (void *)0, (void *)0, (unsigned char)32 },
+#endif
+#if PROBE_FD_N > 33
+      { "fn33", (void *)0, (void *)0, (unsigned char)33 },
+#endif
+#if PROBE_FD_N > 34
+      { "fn34", (void *)0, (void *)0, (unsigned char)34 },
+#endif
+#if PROBE_FD_N > 35
+      { "fn35", (void *)0, (void *)0, (unsigned char)35 },
+#endif
+#if PROBE_FD_N > 36
+      { "fn36", (void *)0, (void *)0, (unsigned char)36 },
+#endif
+#if PROBE_FD_N > 37
+      { "fn37", (void *)0, (void *)0, (unsigned char)37 },
+#endif
+#if PROBE_FD_N > 38
+      { "fn38", (void *)0, (void *)0, (unsigned char)38 },
+#endif
+#if PROBE_FD_N > 39
+      { "fn39", (void *)0, (void *)0, (unsigned char)39 },
+#endif
+#if PROBE_FD_N > 40
+      { "fn40", (void *)0, (void *)0, (unsigned char)40 },
+#endif
+#if PROBE_FD_N > 41
+      { "fn41", (void *)0, (void *)0, (unsigned char)41 },
+#endif
+#if PROBE_FD_N > 42
+      { "fn42", (void *)0, (void *)0, (unsigned char)42 },
+#endif
+#if PROBE_FD_N > 43
+      { "fn43", (void *)0, (void *)0, (unsigned char)43 },
+#endif
+#if PROBE_FD_N > 44
+      { "fn44", (void *)0, (void *)0, (unsigned char)44 },
+#endif
+#if PROBE_FD_N > 45
+      { "fn45", (void *)0, (void *)0, (unsigned char)45 },
+#endif
+#if PROBE_FD_N > 46
+      { "fn46", (void *)0, (void *)0, (unsigned char)46 },
+#endif
+#if PROBE_FD_N > 47
+      { "fn47", (void *)0, (void *)0, (unsigned char)47 },
+#endif
+#if PROBE_FD_N > 48
+      { "fn48", (void *)0, (void *)0, (unsigned char)48 },
+#endif
+#if PROBE_FD_N > 49
+      { "fn49", (void *)0, (void *)0, (unsigned char)49 },
+#endif
+#if PROBE_FD_N > 50
+      { "fn50", (void *)0, (void *)0, (unsigned char)50 },
+#endif
+#if PROBE_FD_N > 51
+      { "fn51", (void *)0, (void *)0, (unsigned char)51 },
+#endif
+#if PROBE_FD_N > 52
+      { "fn52", (void *)0, (void *)0, (unsigned char)52 },
+#endif
+#if PROBE_FD_N > 53
+      { "fn53", (void *)0, (void *)0, (unsigned char)53 },
+#endif
+#if PROBE_FD_N > 54
+      { "fn54", (void *)0, (void *)0, (unsigned char)54 },
+#endif
+#if PROBE_FD_N > 55
+      { "fn55", (void *)0, (void *)0, (unsigned char)55 },
+#endif
+#if PROBE_FD_N > 56
+      { "fn56", (void *)0, (void *)0, (unsigned char)56 },
+#endif
+#if PROBE_FD_N > 57
+      { "fn57", (void *)0, (void *)0, (unsigned char)57 },
+#endif
+#if PROBE_FD_N > 58
+      { "fn58", (void *)0, (void *)0, (unsigned char)58 },
+#endif
+#if PROBE_FD_N > 59
+      { "fn59", (void *)0, (void *)0, (unsigned char)59 },
+#endif
+#if PROBE_FD_N > 60
+      { "fn60", (void *)0, (void *)0, (unsigned char)60 },
+#endif
+#if PROBE_FD_N > 61
+      { "fn61", (void *)0, (void *)0, (unsigned char)61 },
+#endif
+#if PROBE_FD_N > 62
+      { "fn62", (void *)0, (void *)0, (unsigned char)62 },
+#endif
+#if PROBE_FD_N > 63
+      { "fn63", (void *)0, (void *)0, (unsigned char)63 },
+#endif
+#if PROBE_FD_N > 64
+      { "fn64", (void *)0, (void *)0, (unsigned char)64 },
+#endif
+#if PROBE_FD_N > 65
+      { "fn65", (void *)0, (void *)0, (unsigned char)65 },
+#endif
+#if PROBE_FD_N > 66
+      { "fn66", (void *)0, (void *)0, (unsigned char)66 },
+#endif
+#if PROBE_FD_N > 67
+      { "fn67", (void *)0, (void *)0, (unsigned char)67 },
+#endif
+#if PROBE_FD_N > 68
+      { "fn68", (void *)0, (void *)0, (unsigned char)68 },
+#endif
+#if PROBE_FD_N > 69
+      { "fn69", (void *)0, (void *)0, (unsigned char)69 },
+#endif
+#if PROBE_FD_N > 70
+      { "fn70", (void *)0, (void *)0, (unsigned char)70 },
+#endif
+#if PROBE_FD_N > 71
+      { "fn71", (void *)0, (void *)0, (unsigned char)71 },
+#endif
+#if PROBE_FD_N > 72
+      { "fn72", (void *)0, (void *)0, (unsigned char)72 },
+#endif
+#if PROBE_FD_N > 73
+      { "fn73", (void *)0, (void *)0, (unsigned char)73 },
+#endif
+#if PROBE_FD_N > 74
+      { "fn74", (void *)0, (void *)0, (unsigned char)74 },
+#endif
+#if PROBE_FD_N > 75
+      { "fn75", (void *)0, (void *)0, (unsigned char)75 },
+#endif
+#if PROBE_FD_N > 76
+      { "fn76", (void *)0, (void *)0, (unsigned char)76 },
+#endif
+#if PROBE_FD_N > 77
+      { "fn77", (void *)0, (void *)0, (unsigned char)77 },
+#endif
+#if PROBE_FD_N > 78
+      { "fn78", (void *)0, (void *)0, (unsigned char)78 },
+#endif
+#if PROBE_FD_N > 79
+      { "fn79", (void *)0, (void *)0, (unsigned char)79 },
+#endif
+#if PROBE_FD_N > 80
+      { "fn80", (void *)0, (void *)0, (unsigned char)80 },
+#endif
+#if PROBE_FD_N > 81
+      { "fn81", (void *)0, (void *)0, (unsigned char)81 },
+#endif
+#if PROBE_FD_N > 82
+      { "fn82", (void *)0, (void *)0, (unsigned char)82 },
+#endif
+#if PROBE_FD_N > 83
+      { "fn83", (void *)0, (void *)0, (unsigned char)83 },
+#endif
+#if PROBE_FD_N > 84
+      { "fn84", (void *)0, (void *)0, (unsigned char)84 },
+#endif
+#if PROBE_FD_N > 85
+      { "fn85", (void *)0, (void *)0, (unsigned char)85 },
+#endif
+#if PROBE_FD_N > 86
+      { "fn86", (void *)0, (void *)0, (unsigned char)86 },
+#endif
+#if PROBE_FD_N > 87
+      { "fn87", (void *)0, (void *)0, (unsigned char)87 },
+#endif
+#if PROBE_FD_N > 88
+      { "fn88", (void *)0, (void *)0, (unsigned char)88 },
+#endif
+#if PROBE_FD_N > 89
+      { "fn89", (void *)0, (void *)0, (unsigned char)89 },
+#endif
+#if PROBE_FD_N > 90
+      { "fn90", (void *)0, (void *)0, (unsigned char)90 },
+#endif
+#if PROBE_FD_N > 91
+      { "fn91", (void *)0, (void *)0, (unsigned char)91 },
+#endif
+#if PROBE_FD_N > 92
+      { "fn92", (void *)0, (void *)0, (unsigned char)92 },
+#endif
+#if PROBE_FD_N > 93
+      { "fn93", (void *)0, (void *)0, (unsigned char)93 },
+#endif
+#if PROBE_FD_N > 94
+      { "fn94", (void *)0, (void *)0, (unsigned char)94 },
+#endif
+#if PROBE_FD_N > 95
+      { "fn95", (void *)0, (void *)0, (unsigned char)95 },
+#endif
+    };
+    unsigned i, n = (unsigned)(sizeof(arr) / sizeof(arr[0]));
+    for (i = 0; i < n; i++)
+      if (!arr[i].zName || arr[i].zName[0] != 'f')
+        return (int)(i & 0xffu);
+    return 0xFF;
+  }
+#endif
   if (stage <= 0)
     return 0;
   rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);

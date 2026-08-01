@@ -179,6 +179,42 @@ at the threshold — which is why `sqlite3RegisterBuiltinFunctions` wedges.
 This is the R-14 shape ("straight-line materialisation of distinct string constants into a
 struct array") finally isolated with a size threshold and no SQLite dependency.
 
+### PINNED: it is the LAST ENTRY of the array that reads back wrong
+
+Stage 94 returns the INDEX of the first bad entry (or `0xFF` if all are correct), so the
+encoding cannot alias a wrong answer with a right one:
+
+    idx48   rc = 0xFF   ALL 48 entries correct        <- validates the probe at a known-good size
+    idx56   rc = 0x37   first bad entry = index 55    <- 2 of 2 in one boot, deterministic
+    idx56   rc = 0x37   first bad entry = index 55
+
+**Index 55 is the LAST element of the 56-entry array.** Entries 0..54 all read back correctly.
+
+This rules out a fixed-index threshold: if the fault were "entries at index >= 48 are corrupt",
+the first bad index would be reported as 48, not 55. It is specifically the FINAL element of the
+straight-line initialisation, and it is consistent with the earlier count result (55 correct of
+56 -> exactly one bad entry).
+
+**Restated minimal claim:** in a straight-line local array of N structs each holding a distinct
+string literal, once N exceeds ~48 the LAST entry's `zName` pointer does not read back as
+written. At larger N (72, 96) the domain wedges instead of returning a wrong answer.
+
+**How this produces the SQLite blocker:** `sqlite3RegisterBuiltinFunctions` builds exactly this
+shape with 72 entries. A corrupt `zName` on the final entry is then hashed by
+`sqlite3InsertBuiltinFuncs` -> `sqlite3Strlen30` walks a bad pointer -> the livelock/wedge that
+has been the blocker all along. That also explains why every earlier probe kept implicating
+"strlen" and "lit[1]": those were downstream of a corrupt pointer, not the fault itself.
+
+### The next questions, now narrow
+
+1. Is it always the LAST entry, or the entry at some fixed OFFSET from the end? Test N=52, 60,
+   64 and see whether the reported index tracks N-1 each time.
+2. Is the pointer wrong, or the memory it points at? Return the low bytes of
+   `arr[N-1].zName` rather than testing its first character.
+3. Does it depend on the struct's OTHER fields? Drop `p1`/`p2` and see whether the threshold
+   moves -- that separates "too many capability leaves" from "too large a frame".
+4. Does the same happen for a `static` array (cap-init path) as for a local (stack path)?
+
 ### Refinement: above the threshold the construct MISCOMPUTES or WEDGES, and both occur
 
     N=56, build "g56"  (count encoding)     RETURNED, count = 55 of 56   <-- WRONG ANSWER
