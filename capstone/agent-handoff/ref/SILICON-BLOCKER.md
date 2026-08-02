@@ -327,10 +327,21 @@ Two consequences that matter more than the ceiling itself:
 * **It does NOT explain the position-2 probe wedges.** After one control domain `head` is only
   ~190 of 1020. Those failures are a genuinely different fault, and per the retraction above
   they are in-domain on first entry.
-* **Full SQLite cannot finish its carve loop at all.** It performs **1059 carves against a
-  1020 pool**, so `head` wraps *during* cap-init and reuse splices the node list — no later
-  `stc` is ever answered. Trimming the carve count under the pool budget is therefore not an
-  optimisation, it is a precondition, and no amount of slot-level debugging substitutes for it.
+* **RETRACTED within the hour: "full SQLite needs 1059 carves and overflows the pool".**
+  1059 is the count *without* string merging. The silicon build enables
+  `-capstone-merge-string-constants=true` by default (`build-sqlite-silicon.sh:210`), and the
+  actually-staged domain measures **179 carves**:
+
+        179 carves   .../overlay/test-domains/sqlite_silicon.dom      (MEASURED, offline)
+
+  179 of 1020 is not close to the pool limit. **Pool exhaustion is NOT the SQLite blocker**,
+  and trimming the carve count is not the fix. I asserted the opposite from a stale figure in
+  a source comment instead of measuring the artefact — the same mistake, in the same file,
+  that the comment at `:186` records having cost "a long detour" once already.
+
+  What this does say is that SQLite (179) sits in the **same carve regime as the probes**
+  (181) — and the probes are exactly what wedges in-domain on first entry. That is
+  corroboration that the SQLite blocker and the position-2 probe wedge are one fault, not two.
 
 ## 0a3. DIRECT MEASUREMENT: the cursor is off by 57 bytes — and Family A now blocks the work
 
