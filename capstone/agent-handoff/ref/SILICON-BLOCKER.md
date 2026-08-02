@@ -6,6 +6,37 @@ Last updated: 2026-08-01.
 
 ---
 
+## R-14 STILL WEDGES ON SILICON AFTER C-16 — and the watchdog proved the board was really working
+
+    QEMU (fixed compiler)   stage 111 (variant B) -> 16   stage 110 (variant A) -> 16   asserts=0
+    BOARD (fixed compiler)  pos1 r111.dom -> NO RETURN, last marker SQ: G/enter
+
+So the R-14 construct still fails on hardware with C-16 fixed, while the *same source* returns
+the correct 16 under QEMU. `r110` never ran — the runner stops at the first failure, by design.
+
+**One honest caveat on comparability.** Pre-fix, variant B *returned 4*; here it does not return
+at all. Do NOT read that as "the fix made it worse": these are different binaries. The old
+variant B was a standalone fpga-repro domain built from `strline_struct_repro.c`; `r111` is the
+same *shape* embedded as a staged probe inside the SQLite amalgamation, with entirely different
+surrounding code and globals. The shapes match; the binaries do not. A like-for-like comparison
+needs the standalone repro rebuilt with the fixed compiler.
+
+### The watchdog earned its place on this run
+
+    QUIET  420s .. 525s   no UART for 75s .. 180s   (limit 240s)
+    ALIVE  540s  +4047B
+    ALIVE  555s  +1985B
+    GONE   555s  runner PID no longer running
+    ENDED  555s
+
+This is exactly the information that was missing before: through the 180 s of silence the
+watchdog kept reporting *how long* the board had been quiet against the limit, so "wedged
+domain" was distinguishable from "runner died" from "still working" **while it was happening**,
+not afterwards. The run then resumed (the runner writing its summary) and ended cleanly.
+
+Standing rule going forward: **every board session gets the watchdog as a second process.**
+`bash capstone/tests/rtl-smoke/board-watchdog.sh <uart-log> <idle-limit> <runner-pid>`.
+
 ## THE REMAINING BLOCKER IS SILICON-ONLY AND IS *NOT* C-16 — TWO RESULTS THAT SETTLE IT
 
 ### 1. Stage 10 still fails on silicon with the fixed compiler
