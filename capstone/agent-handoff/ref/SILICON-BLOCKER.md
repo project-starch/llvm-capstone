@@ -1132,53 +1132,71 @@ implementation. The check took one QEMU run.
 
 ---
 
-## SUMMARY — current best understanding (2026-08-02)
+## SUMMARY — current best understanding (2026-08-03, rewritten end of session)
 
-There are **three separate failures**, repeatedly conflated in earlier drafts. Keep them apart.
+Three separate failures. Keep them apart; earlier drafts conflated them repeatedly.
 
 | # | Failure | Where it stops | Status |
 |---|---------|----------------|--------|
-| 1 | **Rev-node pool exhaustion** | fails *before* `share1` (`pre-share`), 6/6 at position 6 | **SOLVED.** 1020-node bump allocator, no reclamation; ~182 splits/domain -> 5.5 runs/boot vs measured 6/5/5/5 (0a4) |
-| 2 | **`SHA5` stall** | monitor hands off, domain never returns from its FIRST entry | **OPEN.** 32% at slot 2 vs 2.8% at slot 1 (0a10). Monitor exonerated (0a11) |
-| 3 | **The SQLite blocker** | passes both shares, reaches `G/enter`, stalls in the main run | **OPEN.** Wrong cursor in a merged-string capability (0a3) |
+| 1 | **Rev-node pool exhaustion** | before `share1` (`pre-share`) | **SOLVED.** 1020-node bump allocator, no reclamation; ~182 splits/domain -> 5.5 runs/boot vs measured 6/5/5/5 |
+| 2 | **`SHA5` entry stall** (R-16) | monitor hands off; domain never returns from its FIRST entry | **OPEN, attribution NOT established.** Intermittent; ~10x worse at slot 2 than slot 1 |
+| 3 | **The SQLite blocker** (= R-14) | passes both shares, reaches `G/enter`, wedges in the main run | **OPEN, but LOCATED:** `sqlite3RegisterBuiltinFunctions` |
 
-### What is established
+### Established, control-validated (each taken WITHIN one boot, control returning alongside)
 
-* Pool exhaustion arithmetic, confirmed from RTL **and** measurement (0a4).
-* The `SHA5` stall is in the domain, not the monitor: `SHA5` = "about to leave M-mode",
-  `SHA6` = "returned"; the stall sits between them (0a4). The **first** entry is where the glue
-  builds the 179-entry cap table and runs `__capstone_cap_init`.
-* Slot 2 stalls ~10x more often than slot 1, from 274 tabulated launches (0a10).
-* SQLite is **179 carves**, not 1059 — the pool is NOT its blocker (0a3).
-* The cursor of the bad slot is wrong by a measured, self-referential −57 bytes (0a3).
-* The cursor is carried in **full 64 bits**; only bounds are compressed, and they are decoded
-  *from* the cursor — so "bounds look right" is not evidence of anything (0a12).
+* **The SQLite blocker is `sqlite3RegisterBuiltinFunctions`.** Confirmed 3x independently,
+  the last on a freshly reflashed board with rebuilt firmware:
+  `f10:0 = rc0 | f10:9 = rc0 | f10:10 = WEDGE`. Stage 9 does real allocator work
+  (memsys5 zone headers across 256 KB) and returns, so the delta is that one function.
+* **R-14 variants A and B wedge**, each with `:0` returning in the same boot.
+* **Minimal repro:** four straight-line assignments of distinct string literals into a
+  two-capability struct array — ~10 lines, no SQLite. `r14a_app.c` / `r14b_app.c`, board
+  selectors `:110` / `:111`.
+* **C-16 — a REAL compiler bug, found and FIXED today.** `SelectionDAG::getMemset` typed its
+  destination argument in addrspace 0, truncating a 128-bit capability and stripping the tag.
+  Fixed by taking the AS from `DstPtrInfo`; ladder 6/6; board-free reproducer `strarray_app.c`
+  (oracle 420). **C-16 is NOT the SQLite blocker** — the blocker survives it.
 
-### What is refuted (do not revisit)
+### Mechanism: what the RTL rules out, and the one live candidate
 
-* "The ceiling is SPLB" — misread replayed console history.
-* "The SPLB exact-fit fix caused the SHA5 stall" — reverted and tested; stall survives (0a11).
-* "SQLite needs 1059 carves and overflows the pool" — pre-string-merging figure (0a3).
-* "Stage 10 and the probe stall are one fault" — different stopping points (0a4).
-* "The reproducer has a 49-byte unaligned stride" — `sizeof`=64, `_Alignof`=16 (0a9).
-* Threshold/size theories generally — N=56 fails, N=60 passes (0a9).
-* Stages 11-15 as evidence — pre-dating the unaligned-copy fix, which resolved them (0a8).
+* **`cincoffset` does NOT consume a linear `rs1`** — REFUTED from `capstone_flu_unit.anvil:29-68`;
+  `rs1` passes through unchanged. That consume exists only in QEMU's helper.
+* **`stc` rejects a non-zero immediate through an UNINIT destination** (`dyn_unit:378`) and
+  **nulls the stored capability through an UNINIT destination** (`:54`). This fits the
+  struct-vs-scalar split exactly (struct fields -> non-zero store immediates; separate scalars ->
+  all `imm=0`). **Counter-evidence:** UNINIT is produced only by `REVOKE`, and stage 9 passes
+  while doing non-zero-immediate stores — so the precondition is unproven.
+* Discriminating test built and QEMU-gated: minimisation ladder `140`-`146`.
 
-### Working rules
+### Refuted — do not revisit
 
-* **Run the domain under test at position 1**, and repeat any single result — slot 1 still has
-  a ~3% stall floor.
-* Expected yield is **under two domains per boot**, because a stall ends the session. Budget
-  experiments accordingly; this, not the pool, is the throughput limit.
-* Always split console output at `booted once` — replayed history has been misread twice.
-* Confirm `SQ: G/enter` before attributing anything to the domain's main run.
+* "The ceiling is SPLB"; "the SPLB fix caused the SHA5 stall"; "SQLite needs 1059 carves";
+  "stage 10 and the probe stall are one fault"; "the reproducer has a 49-byte unaligned stride"
+  (`sizeof`=64, `_Alignof`=16); size/threshold theories; stages 11-15 as evidence (pre-date the
+  unaligned-copy fix); "cincoffset consumes a linear rs1".
+* **The stage-100 cursor measurements (-57 bytes etc.)** — the probe itself did untagged
+  capability arithmetic. Withdrawn.
+* **Everything recorded 21:00-22:33 on 2026-08-02** — our own watchdog matched a `SHA5` from
+  replayed console scrollback and killed runners before boot. 13/13 checked runs have 0 SHA
+  markers after their own `load_image`. That window's "board stopped accepting images",
+  "initramfs bloat refuted" and "R-16 is build-dependent" all fall with it; those questions
+  return to **unknown**, not answered.
 
-### Biggest open question
+### Working rules (learned expensively)
 
-Whether the bad cursor is **stored** wrong or **read** wrong. The RTL says `stc`/`ldc` carry
-the cursor verbatim and range/alignment-check it (0a12), so "stored wrong" is the strong prior
-and the fault would then be in the address arithmetic. `x101` measures this directly and has
-never yet executed.
+* **Run `:0` first on every staged image.** Free in any staged image (`if (stage <= 0) return 0;`
+  is outside every `#if`). Control returns -> that boot's results are evidence; control wedges ->
+  discard them all.
+* **Classify before recording.** `SHA5`-without-`SHA6` = entry stall (domain never ran);
+  `LIBUSB_ERROR_NO_DEVICE` = JTAG adapter gone; `__CAPSTONE_INFRA_FLAKE__` = QEMU boot flake.
+  None are results. The runner's "FIRST FAILURE" line collapses them into "did not return".
+* **Never scan a whole board log.** The console replays the previous boot's scrollback on
+  connect; always split at the run's own `load_image` / `booted once`.
+* **Firmware rebuild order is `A=linux-rebuild` THEN `A=opensbi-rebuild`.** Buildroot does not
+  track the overlay->cpio dependency; skipping the first step relinks around a stale initramfs
+  and the image does not change at all.
+* **Never edit a running script**; never wait on a sentinel without watching the producer PID
+  (`wait-for.sh`); never reuse an output filename (a stale transcript reads as a live result).
 
 ---
 
