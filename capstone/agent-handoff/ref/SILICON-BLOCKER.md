@@ -381,6 +381,51 @@ only, all of which post-date the unaligned-copy fix.
 with no indication that a fix separates them, which is exactly the shape of the three
 summary-vs-artefact errors made earlier in this thread.)
 
+## 0a9. THE N-DEPENDENCE IS NON-MONOTONE, AND THE REPRODUCER MAY NOT MODEL SQLITE FAITHFULLY
+
+### Stage 94 across array sizes (index of first bad entry; 0xFF = none bad)
+
+    N=48   idx48.dom  rc=0xff  none bad          pos 2
+    N=52   ix52.dom   rc=0xff  none bad          pos 2
+    N=56   idx56.dom  rc=0x37  entry 55 = LAST   pos 3  }  same domain, two positions,
+    N=56   idx56.dom  rc=0x37  entry 55 = LAST   pos 4  }  same answer -- REPRODUCIBLE
+    N=60   ix60.dom   rc=0xff  none bad          pos 3
+
+**N=56 fails and N=60 passes.** So this is NOT a size threshold, and any "arrays larger than
+X break" statement is refuted by its own data — consistent with the threshold retractions
+already recorded in section 1a. Whatever selects entry 55 of a 56-entry array does not select
+entry 59 of a 60-entry one.
+
+Note also that the two N=56 runs sit at positions 3 and 4 and agree exactly, which is a
+useful independent check: the wrong-cursor result is stable across position even though the
+SHA5 *entry* wedge is position-sensitive. The two faults really are separate (0a4).
+
+### Caveat on the reproducer, from the disassembly
+
+The probe's per-entry code is (`x100.dom`, `run_sqlite_staged`):
+
+    stc  a5, 0x0(a0)      ; zName
+    stc  a4, 0x10(a0)     ; p1
+    stc  a4, 0x20(a0)     ; p2
+    sb   a4, 0x30(a0)     ; flags
+    addi a0, a0, 0x31     ; <-- stride = 49 bytes
+
+A 49-byte stride means every entry after the first has its capability slots at **unaligned**
+addresses. SQLite's real `FuncDef` array is naturally aligned. So the minimal reproducer may
+be exercising an unaligned-capability-store path that the actual `aBuiltinFunc` construction
+never takes.
+
+Two things keep this from being fatal to the reproducer, but it must be stated:
+
+* misalignment alone is clearly not sufficient — entries 1..54 are equally misaligned and are
+  all fine, and N=48/52/60 are clean throughout;
+* the fault still reproduces, so *something* real is being hit.
+
+**Before the reproducer is handed to anyone as "the minimal case", it needs a variant with a
+naturally-aligned struct.** If the aligned variant is clean, the reproducer is about
+unaligned capability stores and is NOT a model of the SQLite blocker — and the R-14 story
+(straight-line materialisation) would need re-examining on that basis. This is untested.
+
 ## 0a5. THE SHA5 WEDGE TRACKS POSITION-2 + SQLITE-DERIVED, AND R-14 HAS A QEMU-GREEN FIX
 
 ### The R-14 workaround now exists and passes QEMU
