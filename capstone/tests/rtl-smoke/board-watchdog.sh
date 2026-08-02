@@ -68,6 +68,25 @@ while true; do
     echo "ALIVE   ${now_elapsed}s  +${delta}B"
   else
     idle=$(( SECONDS - last_change ))
+    # NO-BOOT: load_image issued but the board never printed a boot banner. Seen when the
+    # JTAG transfer silently moves nothing -- the log shows load_image, set $pc, continue, and
+    # then dead air, with no "downloaded N bytes" line. The runner would otherwise burn its
+    # whole per-domain budget on a board that has no image in DDR.
+    if [ "$ABORT_ON_ENTRY_STALL" = "1" ] && [ "$idle" -ge "$ENTRY_STALL_S" ] && [ -f "$LOG" ]; then
+      scan0=$(tail -c "+${START_SIZE:-1}" "$LOG" 2>/dev/null)
+      case "$scan0" in
+        *load_image*)
+          case "$scan0" in
+            *"Hello World"*|*"downloaded "*) ;;    # boot started or image transferred: fine
+            *)
+              echo "NO-BOOT ${now_elapsed}s  load_image issued, no boot banner and no download for ${idle}s"
+              echo "  -> JTAG transfer moved nothing; this boot is dead. Aborting runner."
+              [ -n "$RUNNER_PID" ] && kill -0 "$RUNNER_PID" 2>/dev/null && kill -TERM "$RUNNER_PID" 2>/dev/null
+              echo "ENDED   ${now_elapsed}s"; exit 0 ;;
+          esac ;;
+      esac
+    fi
+
     # Entry stall: the LAST capability-share marker in the log is SHA5 with no SHA6 after it.
     if [ "$ABORT_ON_ENTRY_STALL" = "1" ] && [ "$idle" -ge "$ENTRY_STALL_S" ] && [ -f "$LOG" ]; then
       # ONLY look at bytes written AFTER this watchdog started, and only after the board has
