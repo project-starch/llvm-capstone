@@ -6,6 +6,52 @@ Last updated: 2026-08-01.
 
 ---
 
+## !!!!! FIXED AND VERIFIED (QEMU): memset destination typed in AS0 instead of AS200
+
+### The defect
+
+`SelectionDAG::getMemset` (`llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:9380`) built the
+destination argument type with `PointerType::getUnqual(Ctx)` — an **addrspace(0)** pointer.
+Here AS0 is a 64-bit integer address while the real destination is an AS200 **128-bit
+capability**, so the declared argument type is narrower than the value and call lowering
+inserts a `TRUNCATE` of the pointer.
+
+The MIR showed it with the correct case immediately adjacent:
+
+    %8:gpr  = PseudoTRUNC_CAP %5      ; truncate the array base -- TAG GONE
+    %9:gpr  = ADDI killed %8, 49      ; tail-padding address
+    $x10    = COPY %9                 ; passed as memset's destination
+    ...
+    %13:gpr = CIncOffsetImm %5, 64    ; next element -- CORRECT, tag preserved
+
+The IR was correct throughout (`getelementptr inbounds i8, ptr addrspace(200) %0, i128 49`,
+no `ptrtoint`), which is what proved the bug was in the backend and not the frontend.
+
+### The fix
+
+Take the address space from `DstPtrInfo`, which was already in scope and already used for
+`checkAddrSpaceIsValidForLibcall`:
+
+    Type *DstPtrTy = PointerType::get(Ctx, DstPtrInfo.getAddrSpace());
+
+For AS0 targets this is exactly what `getUnqual()` returned, so it is a no-op for every other
+target.
+
+### Verified
+
+    generated code   before: 8x `addi ..., 49`   after: 0x  ->  `cincoffsetimm a0, a0, 49`
+    reproducer       before: helper_cscincoffsetimm assertion
+                     after:  PASS, retval = 420 (matches the native oracle)
+
+`strarray_app.c` + `strarray_host.c` are committed as the regression test:
+`DOMAIN_OPT_LEVEL=-O0 bash run-ladder-qemu.sh strarray`, ~1 minute, no board.
+
+### Status of the workaround
+
+`SQLITE_STATIC_BUILTINS=1` remains OFF by default and should stay a workaround, not the fix —
+it worked only because it deleted the local aggregate initialiser. With the compiler fixed, the
+non-static path is the one to validate and ship.
+
 ## !!!! ROOT CAUSE FOUND: AGGREGATE-INITIALISER TAIL PADDING IS ADDRESSED WITH `addi`, STRIPPING THE TAG
 
 **Minimal reproducer, no board, no SQLite, no monitor: 4552-byte domain, 8 array elements.**
