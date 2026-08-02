@@ -264,6 +264,74 @@ straight-line struct array holds a valid capability (tag intact, bounds consiste
 container) whose CURSOR is wrong. Not established: why; whether the error is at store or at
 load; whether the larger-N wedges are the same fault; and whether it is what stops SQLite.
 
+## 0a4. RETRACTION + the rev-node pool arithmetic, now CONFIRMED against the RTL
+
+### RETRACTED: "the five failures died in region-share between B/mkregion1 and C/mkregion2"
+
+That is what section 0a3 says and it is **wrong**. It came from the runner's coarse
+`entered=False` classifier, not from the logs. Re-reading the five run-scoped captures, every
+one of them gets much further, and all five stop at the **same** point:
+
+    z100_2, z101_1, z101_2, z102_1, z102_2   last line = "SHA5:00000001"   (5/5 identical)
+
+Five identical stopping points is not a capture artifact. And `SHA5` is decisive
+(SOURCE, `sbi_capstone.c:111` and `:1020-1026`):
+
+    #define CAPSTONE_TAG_SHA5 ... "about to leave M-mode for the domain"
+    #define CAPSTONE_TAG_SHA6 ... "the domain returned from the share entry"
+    capstone_trace(CAPSTONE_TAG_SHA5, dom_id);
+    d = __domcallsaves(d, CAPSTONE_DPI_REGION_SHARE, r);
+    capstone_trace(CAPSTONE_TAG_SHA6, dom_id);
+
+The comment at that site anticipated exactly this reading: "SHA5 followed by silence means the
+domain never came back and the monitor is exonerated". So:
+
+* **The monitor is exonerated.** It completed the whole share and handed off.
+* **The wedge is INSIDE the domain**, on the domain's *first* entry — `E/share1` is an entry,
+  not merely a table update — i.e. while the entry glue runs its carve loop and cap-init,
+  well before the main `G/enter` run.
+
+The earlier "no monitor tag at all" description belongs to the separate ceiling failure between
+`B/mkregion1` and `C/mkregion2`; conflating the two was the error.
+
+### CONFIRMED (SOURCE + MEASURED): the ~6-runs-per-boot ceiling is rev-node pool exhaustion
+
+Every `split` allocates a revocation node, the allocator is a monotonic bump with no
+reclamation, and the pool is 10 bits:
+
+    capstone_dyn_unit.anvil:135   send rev_node_ep.init_req(rs1.metadata.revnode_id)   <- SPLIT
+    capstone_rev_node.anvil:77-78 set node_id := #{20'd0,*head}; set head := *head+10'd1;
+    capstone_rev_node.anvil:160   set head := 10'd3          (start)
+    capstone_rev_node.anvil:168   reg head : logic[10]       (10 bits)
+    capstone_rev_node.anvil:217   if *head == 10'd1023 { overflow_flag := 1'b1 }
+
+Only `drop_req` touches a node and it merely clears `valid` (`:61-68`) — it never lowers
+`head`. So a boot has **1023 − 3 = 1020** allocations before `head` wraps and starts reusing
+live ids.
+
+Measured carve counts (`.capstone_gp_initdesc` header `count`, offline):
+
+    wd71.dom  182     x100.dom 181     x101.dom 181     x102.dom 181
+
+The glue builds the table on the first entry only (`start-gp-captable-interp.S:275-280`,
+idempotent entry), so a domain run costs ~182 splits plus a handful of monitor allocations:
+
+    1020 / ~185  =  5.5 domain runs per boot
+
+and the measured ceiling was **6, 5, 5, 5** over four boots (21 correct / 25 runs). The
+arithmetic and the measurement agree. This was previously INFERRED as R-12; it is now
+confirmed from both ends.
+
+Two consequences that matter more than the ceiling itself:
+
+* **It does NOT explain the position-2 probe wedges.** After one control domain `head` is only
+  ~190 of 1020. Those failures are a genuinely different fault, and per the retraction above
+  they are in-domain on first entry.
+* **Full SQLite cannot finish its carve loop at all.** It performs **1059 carves against a
+  1020 pool**, so `head` wraps *during* cap-init and reuse splices the node list — no later
+  `stc` is ever answered. Trimming the carve count under the pool budget is therefore not an
+  optimisation, it is a precondition, and no amount of slot-level debugging substitutes for it.
+
 ## 0a3. DIRECT MEASUREMENT: the cursor is off by 57 bytes — and Family A now blocks the work
 
     stage 100   delta(arr[55] - arr[0]) = 0x09   expected 0x42   entered=TRUE
