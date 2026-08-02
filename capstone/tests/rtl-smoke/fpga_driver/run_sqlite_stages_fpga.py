@@ -82,7 +82,23 @@ def main():
         cold_boot(console, C.GDB_PROMPT, IMG_NAME)
         log(f"booted once; running {len(DOMS)} staged domains in sequence")
 
-        for dom in DOMS:
+        for dom_spec in DOMS:
+            # "path" or "path:selector". The optional selector is passed to the host as its
+            # second argument, which publishes it in the shared region so the DOMAIN picks the
+            # probe at RUN TIME (see sqlite_capstone_domain.c, magic 0x5A6E00nn).
+            #
+            # This exists because the SHA5 entry stall is BUILD-DEPENDENT, not random: some
+            # images enter reliably and others stall reliably (x101 6/6, r112 3/3), and the
+            # runner stops at the first failure, so a stalling image at position 1 masks
+            # everything behind it. Retrying a stalling binary is futile. Selecting the probe
+            # at run time lets every measurement ride an image that is KNOWN to enter, instead
+            # of drawing a fresh ticket per probe.
+            if ":" in dom_spec:
+                dom, selector = dom_spec.rsplit(":", 1)
+                host_args = f"{dom} {selector}"
+            else:
+                dom, selector = dom_spec, None
+                host_args = dom
             # CLEAR THE TRAP LATCH BEFORE EACH DOMAIN, or the wedge read below is worthless.
             #
             # recent_nontrivial_*_log_q latches ANY trap except cause 0 (interrupt) and cause 2
@@ -108,7 +124,7 @@ def main():
             mark = console.uart_mark()
             wedged = False
             try:
-                console.run_command(f"{HOST} {dom}; echo D''N_$?", r"DN_\d",
+                console.run_command(f"{HOST} {host_args}; echo D''N_$?", r"DN_\d",
                                     timeout=PER_DOM, idle_timeout=PER_DOM)
             except Exception as exc:
                 wedged = True
@@ -163,10 +179,11 @@ def main():
                 raise SystemExit(
                     f"HARD STOP: {dom} produced no domain output and the shell reported "
                     f"'not found'. Treating this as a pass would test nothing.")
-            transcript.append(f"===== {dom} =====\n{text}\n")
+            label = f"{dom}:{selector}" if selector else dom
+            transcript.append(f"===== {label} =====\n{text}\n")
             m = re.search(r"SQ: obs=(\d+)", text)
             obs = int(m.group(1)) if m else None
-            results.append((dom, wedged, obs, "SQ: H/return" in text))
+            results.append((label, wedged, obs, "SQ: H/return" in text))
             if wedged:
                 # INSTRUMENT THE WEDGE HERE, IN THIS SESSION.
                 #
