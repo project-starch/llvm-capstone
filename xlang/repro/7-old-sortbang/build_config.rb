@@ -20,8 +20,6 @@ MRuby::Build.new('host') do |conf|
   conf.linker.flags << "-fsanitize=address"
 
   conf.gembox 'default'
-  conf.gem core: 'mruby-bigint'
-  conf.gem core: 'mruby-rational'
 end
 
 MRuby::CrossBuild.new('riscv64') do |conf|
@@ -42,6 +40,4 @@ MRuby::CrossBuild.new('riscv64') do |conf|
   end
 
   conf.gembox 'default'
-  conf.gem core: 'mruby-bigint'
-  conf.gem core: 'mruby-rational'
 end

@@ -1,0 +1,23 @@
+# Canonical measured outcomes for the xlang Capstone column.
+# Retries have REPLACED the first-pass NORESULTs; no NORESULT is a result.
+# reproduce.sh checks a fresh run against this file and fails on any difference.
+#
+# mechanism: revocation = FAULT with revoke and MISS in control (attributable)
+#            bounds     = FAULT in BOTH variants (revoke-independent)
+#            none       = MISS in both
+key	row	revoke	control	mechanism
+1	rlua_userdata_uaf	FAULT	MISS	revocation
+2	rlua_escaped_handle_uar	MISS	MISS	none
+3	libpulse_iterator_uaf	FAULT	MISS	revocation
+4	mruby_vmstack_uaf	FAULT	MISS	revocation
+5	mruby_kwargs_uaf	FAULT	MISS	revocation
+6	mruby_bytecode_overflow	FAULT	FAULT	bounds
+7	secp256k1_preallocated_uaf	FAULT	MISS	revocation
+8	mruby_values_at_uaf	FAULT	MISS	revocation
+9	mruby_irep_pool_uaf	FAULT	MISS	revocation
+10	mruby_range_uaf	FAULT	MISS	revocation
+11	mruby_upvar_overflow	FAULT	FAULT	bounds
+12	mruby_io_dataptr_uaf	FAULT	MISS	revocation
+13	mruby_hash_slice_uaf	FAULT	MISS	revocation
+14	mruby_gc_stackroot_uaf	FAULT	MISS	revocation
+15	mruby_sprintf_argv_uaf	FAULT	MISS	revocation

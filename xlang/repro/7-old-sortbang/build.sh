@@ -9,7 +9,7 @@ set -euo pipefail
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MRUBY_DIR="$DIR/mruby"
-VULN_COMMIT=cda2567c36ca33cd404908ce2fa7bd55ea2a8ed9
+VULN_COMMIT=ec58dca22f0e
 
 echo "=== [1/2] Sourcing and pinning mruby ==="
 if [ ! -d "$MRUBY_DIR" ]; then

@@ -12,9 +12,13 @@ import pexpect
 
 def main():
     if len(sys.argv) < 3:
-        print("usage: cheri-run.py <qemu-argv-file> <out-log>", file=sys.stderr)
+        print("usage: cheri-run.py <qemu-argv-file> <out-log> [guest-dir]",
+              file=sys.stderr)
         return 2
     argv_file, out_log = sys.argv[1], sys.argv[2]
+    # Which corpus overlay to drive inside the guest. Defaults to the sqlite
+    # baseline; the xlang baseline passes /root/cheri-baseline-xlang.
+    guest_dir = sys.argv[3] if len(sys.argv) > 3 else "/root/cheri-baseline"
     with open(argv_file) as f:
         argv = [ln.rstrip("\n") for ln in f if ln.strip()]
     cmd, args = argv[0], argv[1:]
@@ -37,7 +41,7 @@ def main():
         q.expect(r"# ", timeout=30)
 
         for cfg in ("spatial", "temporal", "eager"):
-            q.sendline(f"sh /root/cheri-baseline/run-in-guest.sh {cfg}")
+            q.sendline(f"sh {guest_dir}/run-in-guest.sh {cfg}")
             q.expect(rf"===CHERI-BASELINE-END cfg={cfg}===", timeout=600)
             q.expect(r"# ", timeout=30)
 

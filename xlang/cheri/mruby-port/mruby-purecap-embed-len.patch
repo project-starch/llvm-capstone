@@ -1,0 +1,13 @@
+diff --git i/include/mruby/string.h w/include/mruby/string.h
+index faa0d055b..6fea7ab42 100644
+--- i/include/mruby/string.h
++++ w/include/mruby/string.h
+@@ -110,7 +110,7 @@ struct RStringEmbed {
+ #define MRB_STR_EMBED     8  /* type flags up to here */
+ #define MRB_STR_ASCII    16
+ #define MRB_STR_EMBED_LEN_SHIFT 6
+-#define MRB_STR_EMBED_LEN_BIT 5
++#define MRB_STR_EMBED_LEN_BIT 6
+ #define MRB_STR_EMBED_LEN_MASK (((1 << MRB_STR_EMBED_LEN_BIT) - 1) << MRB_STR_EMBED_LEN_SHIFT)
+ #define MRB_STR_TYPE_MASK 15
+ 

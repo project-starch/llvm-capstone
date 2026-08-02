@@ -1,5 +1,13 @@
 # xlang — next task set (Phase-2 seam)
 
+> **SUPERSEDED 2026-08-01 by `capstone-column-xlang.md`.** This doc planned the
+> Capstone column via *real mruby* (the `mrb_open_allocf` seam). That route is
+> dropped in favour of shims on both columns — faster, and it collapses the three
+> seam mechanisms below (mruby allocf, Rust `#[global_allocator]`, `LD_PRELOAD`
+> into prebuilt `libpulse.so`) into plain C. **Item 2, the capability-allocator
+> contract, is carried forward unchanged and is still the highest-leverage item.**
+> Items 1 and 3–5 are moot. Kept for the reasoning, which stands.
+
 **Written 2026-07-27.** Supersedes `xlang-phase1-followups-TODO.md`, whose items 1–3
 are closed and whose item 4 is now the subject of this doc.
 
@@ -82,7 +90,7 @@ Note row 1's constraint, established last week: the `ptr::read` patch stays. The
 unpatched-upstream alternative was built and run and it degrades the artifact —
 `mem::replace` writes undef bytes back into the userdata slot, so the fault becomes a
 wild read ASan cannot attribute to any allocation, which is the wrong evidence for this
-row. Don't re-litigate it; `xlang/1/target.md` has the reasoning.
+row. Don't re-litigate it; `xlang/repro/1/target.md` has the reasoning.
 
 ## 5. Row 3 — leave for last
 
