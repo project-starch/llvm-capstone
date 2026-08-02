@@ -1,0 +1,38 @@
+# xlang corpus -> CHERI baseline: per-row lifecycle audit + PREDICTIONS.
+#
+# Step 0 of plans/cheri-baseline-xlang.md. Predictions are recorded HERE, BEFORE
+# any CHERI run; that is the point of this file. Sources: xlang/<row>/asan.txt
+# (allocator route, region size, overflow distance) and xlang/<row>/target.md +
+# README.md (upstream ref, trigger parameters, caveats).
+#
+# Rows 1-3 excluded: no purecap Rust toolchain. Row 7 excluded: does not exist
+# as specified (settled against NVD). 11 measured rows.
+#
+# allocroute: how the dangling/overflowed memory dies. This is what decides
+#   whether CHERI revocation can see it at all.
+#     realloc-vmstack = mrb_realloc moves the VM register stack; old block freed
+#     gc-sweep        = mrb_free from the GC sweep/obj_free path
+#     direct-free     = explicit mrb_free in gem/runtime code
+#     none            = spatial overflow, nothing is freed
+#
+# pred_spatial / pred_async / pred_eager use the sqlite taxonomy:
+#   SYNC  = BLOCKED-SYNC (faults with no revocation)
+#   SWEEP = BLOCKED-SWEEP (caught only by revocation, not at the contract point)
+#   MISS  = survives
+#
+# cols: row  shim  hostoracle  defectclass  allocroute  geometry  trigger_params  pred_spatial  pred_async  pred_eager  upstream
+1	shims/rlua_userdata_uaf.c	heap-use-after-free	uaf-freed	direct-free	R43 at +0 of a 43-byte Rust-owned userdata buffer	Lua __gc runs rlua::util::destructor which drops the Rust value; the resurrected userdata handle then reads it	MISS	MISS	SWEEP	rlua#19 -- duplicates the allocator-visible UAF shape by construction
+2	shims/rlua_escaped_handle_uar.c	stack-use-after-return	stack-uar	none-stack	R8 at frame offset 576 (slot 72), storage reused by a later frame	unconstrained callback lifetime: a Table handle escapes the closure scope; no allocator involved	MISS	MISS	MISS	rlua#97 -- revocation is heap-only, so nothing to act on
+3	shims/libpulse_iterator_uaf.c	heap-use-after-free	uaf-freed	direct-free	R8 at +32 of a 1072-byte pa_proplist	Iterator keeps a raw copy of the C pa_proplist* with no lifetime tie; into_iter's Drop calls pa_proplist_free, next() then iterates through the copy	MISS	MISS	SWEEP	GHSA-f56g-chqp-22m9
+4	shims/mruby_vmstack_uaf.c	heap-use-after-free	uaf-freed	realloc-vmstack	W8 at +16 of 1024B VM stack	recurse(150), 100 locals/frame, heap fragmented to force out-of-place realloc	MISS	MISS	SWEEP	CVE-2022-1071
+5	shims/mruby_kwargs_uaf.c	heap-use-after-free	uaf-freed	realloc-vmstack	R8 at +72 of 1024B VM stack	recurse(150), 100 locals/frame, 3 kwargs so a later iteration reads stale regs	MISS	MISS	SWEEP	CVE-2022-1934
+6	shims/mruby_bytecode_overflow.c	heap-buffer-overflow	spatial-overflow-write	none	W8 at +32 PAST a 1024B VM stack	PINNED: recursion depth >=29 (trigger uses 30); ^u undefined; match in statement position. Below 29 the write stays IN BOUNDS -> spurious MISS	SYNC	SYNC	SYNC	CVE-2026-1979
+7	shims/secp256k1_preallocated_uaf.c	heap-use-after-free	uaf-freed	direct-free	R8 at +40 of a 208-byte host-owned preallocated context	host (Rust) lends its Vec to libsecp256k1 via preallocated_gen_new; a wrong lifetime bound lets the C context outlive it, and Vec::drop frees it while the engine still holds the pointer	MISS	MISS	SWEEP	RUSTSEC-2022-0070 -- the corpus's cleanest cross-domain LEND: host owns and frees, engine holds
+8	shims/mruby_values_at_uaf.c	heap-use-after-free	uaf-freed	realloc-vmstack	R8 at +128 of 2048B VM stack	recurse(150), 100 locals/frame, 3 values_at lookups; free on #2, UAF on #3	MISS	MISS	SWEEP	mruby#4926
+9	shims/mruby_irep_pool_uaf.c	heap-use-after-free	uaf-freed	gc-sweep	R4 at +0 of 48B irep pool string	eval'd Proc holding a [1..-2] FSHARED slice; p=nil; explicit GC.start	MISS	MISS	SWEEP	mruby#3829
+10	shims/mruby_range_uaf.c	heap-use-after-free	uaf-freed	realloc-vmstack	W8 at +16 of 1024B VM stack	recurse(150) on FIRST invocation only, 100 locals/frame. Compiler must cache &regs[a] across the call	MISS	MISS	SWEEP	CVE-2022-1106
+11	shims/mruby_upvar_overflow.c	heap-buffer-overflow	spatial-overflow-read	none	R16 at +528 PAST a 4096B region	PINNED: nesting depth 129 (window 129-254; 255+ rejected by codegen) AND >=~80 outer locals (trigger uses exactly 80). Below ~80 the read is IN BOUNDS -> spurious MISS	SYNC	SYNC	SYNC	CVE-2018-10191
+12	shims/mruby_io_dataptr_uaf.c	heap-use-after-free	uaf-freed	direct-free	R4 at +0 of 16B mrb_io struct	initialize_copy frees DATA_PTR then longjmps out on TypeError; File#close then reads it	MISS	MISS	SWEEP	mruby#4001
+13	shims/mruby_hash_slice_uaf.c	heap-use-after-free	uaf-freed	realloc-vmstack	R16 at +128 of 2048B VM stack	Hash#slice with an #eql? callback re-entering the VM; stale argv held in a C local across a loop	MISS	MISS	SWEEP	mruby#4927
+14	shims/mruby_gc_stackroot_uaf.c	heap-use-after-free	uaf-freed	gc-sweep	R4 at +49152 of a 49200B GC heap page	needs MRB_GC_STRESS; stale slots above the shrunken stack limit re-covered by a later growth	MISS	MISS	SWEEP	mruby#3596
+15	shims/mruby_sprintf_argv_uaf.c	heap-use-after-free	uaf-freed	realloc-vmstack	R16 at +80 of 2048B VM stack	recurse(150), 96 locals/frame, sprintf with 2 args: free during arg1 to_s, stale argv read for arg2	MISS	MISS	SWEEP	mruby#3722
