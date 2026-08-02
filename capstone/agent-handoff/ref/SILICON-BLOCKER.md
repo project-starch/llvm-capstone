@@ -181,6 +181,54 @@ Cheapest discriminator: read **mepc/mtval** at the wedge (names the faulting ins
 outright), or build arms writing a[0] only vs a[3] only — if the fault tracks the offset it is
 (1), if it tracks which literal is stored it is (2).
 
+### 2026-08-03 later — THE FAULT IS NONDETERMINISTIC; three "axes" refuted
+
+All measured on images whose `:0` control returned in the same boot, with `f10:0` passing too.
+
+    n144  :141  = 1  (CORRECT)   x3 boots      1 entry, 2 stores
+    n144  :142  = WEDGE                        2 entries, 4 stores
+    n144  :143  = WEDGE                        4 entries, 8 stores, ONE literal ("dup")
+    n144  :145  = WEDGE                        4 entries, 8 stores, 5 literals
+    co    :141  = WEDGE          attempt 1     SAME SOURCE ARM as n144:141
+    co    :141  = 0 (exp 1)      attempt 3     SAME SOURCE ARM, third distinct outcome
+    co    :147  = 1  (CORRECT)                 2 stores at HIGH offsets 0x60,0x70
+    co    :148  = 2  (CORRECT)                 3 stores at low offsets
+    rt    :149  = 80,80,80                     8/8 cursors round-trip, 0 nulls
+
+**Refuted, in order:**
+
+* **"Distinct string literals are the trigger."** `:143` stores the SAME literal eight times —
+  one derived capability, no distinctness at all — and wedges. This kills the merged-blob
+  derivation story that the disassembly suggested (all values derived from one blob base by
+  `cincoffsetimm`).
+* **"Offset/bounds of the destination slot."** `:147` puts both stores at the HIGH offsets
+  (0x60/0x70) and returns correctly.
+* **"Store count, boundary between 2 and 4."** `:148` does 3 stores and returns correctly; and
+  `:141` (2 stores) both WEDGED and returned 0 in a later image. **The boundary was an artefact
+  of one image** — recorded here because it was briefly stated as a result.
+
+**The finding that replaces them: the same source arm produces three different outcomes.**
+`:141` returned 1 (n144, 3 boots), wedged (co attempt 1), and returned 0 (co attempt 3). Frame
+size is byte-identical between those images (~26 KB prologue in both, verified by
+disassembly), so it is not frame geometry.
+
+**Current reading (INFERRED, not established).** A capability stored into the stack array is
+not reliably usable when read back: sometimes correct, sometimes null (arm returns 0), and
+sometimes right-address/wrong-bounds, whose dereference is exactly the measured
+`mcause=28 OUT_OF_BOUNDS`. Arm `:149` does NOT refute this: `q == p` compares only the 64-bit
+cursor, so a capability can lose tag or bounds and still compare equal — 80 proves the ADDRESS
+survived, not the capability.
+
+**Next probe, in flight:** arm `:150` dereferences the literal repeatedly WITHOUT any stack
+round-trip. If `:150` returns 8 while `:141` faults or returns 0, the damage is in the
+round-trip rather than in the literal's capability. (`ct.dom` carrying it has entry-stalled
+twice so far; redraw as usual.)
+
+**Not attempted, and why:** `-capstone-merge-string-constants=false` would test the blob story
+directly, but it takes the image to **1026 carves** against a ~1020-entry rev-node pool
+(measured: 181 carves with merging on). It would fail from pool overflow rather than from the
+question being asked, so it is confounded as built and no board time was spent on it.
+
 **A control that passes is not a control that always passes.** `f10.dom:0` returned 2/2 under
 firmware `8686cad424cb`, then WEDGED after `SQ: G/enter` under `8c6f5d30905e`, then returned
 2/2 again in later boots of that same firmware. So the control is ~non-deterministic at roughly

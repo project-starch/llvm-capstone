@@ -2856,7 +2856,7 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
     return (int)(v & 0xffUL);
   }
 #endif
-#if (CAPSTONE_SQLITE_STAGE >= 120 && CAPSTONE_SQLITE_STAGE <= 129) || (CAPSTONE_SQLITE_STAGE >= 140 && CAPSTONE_SQLITE_STAGE <= 146)
+#if (CAPSTONE_SQLITE_STAGE >= 120 && CAPSTONE_SQLITE_STAGE <= 129) || (CAPSTONE_SQLITE_STAGE >= 140 && CAPSTONE_SQLITE_STAGE <= 150)
   /* R-14 N-THRESHOLD SWEEP, with no added static data.
      Both SQLite routes are blocked: the straight-line local wedges in-domain (R-14, validated
      at stage 10 with two returning controls), and making it a static triggers R-16 (5/5).
@@ -2910,7 +2910,7 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
      Reading: the first arm that wedges names the ingredient. 143 vs 144 isolates DISTINCT
      literals; 145 isolates two-fields-per-entry; 146 isolates the struct entirely; 140 vs 141
      isolates the array. */
-  if (stage >= 140 && stage <= 146) {
+  if (stage >= 140 && stage <= 150) {
     struct kv5 { const char *z; const char *y; };
     unsigned i; int ok = 0;
     /* CAPSTONE_LADDER_ONLY=<n> compiles ONLY arm <n> into the image.
@@ -2944,6 +2944,67 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
     {
       struct kv5 a[64];
       unsigned n = 0;
+      /* 147/148 separate STORE COUNT from OFFSET SPAN, which arms 141-145 confound: every arm
+         that wedges also reaches higher offsets than the one that returns.
+           141 -> 2 stores at 0x00,0x10           RETURNS 1   (measured)
+           142 -> 4 stores at 0x00..0x30          WEDGES      (measured)
+           143 -> 8 stores at 0x00..0x70, ONE literal  WEDGES  (measured; so distinctness is
+                                                                NOT the axis)
+         147 keeps the count at 2 but moves BOTH stores to high offsets; 148 keeps offsets low
+         but raises the count to 3. If 147 wedges the axis is the offset/bounds; if 148 wedges
+         and 147 returns, it is the count. */
+      /* 149 -- PURE STORE/LOAD ROUND-TRIP. No dereference anywhere, so this arm CANNOT wedge
+         on a bad pointer: it converts the failure into a number, per the project rule that a
+         diagnostic should turn a hang into a wrong answer.
+         Motivation (measured): arm 141 returned 1 correctly in n144.dom (3 boots), WEDGED in
+         co.dom attempt 1, and returned 0 in co.dom attempt 3 -- same source, so the fault is
+         NONDETERMINISTIC and the earlier "2 stores fine, 4 wedge" boundary was an artifact of
+         one image. If a stored capability is sometimes unreadable, this counts exactly how
+         often: `good` is how many of 8 slots round-tripped, `nulls` how many came back null.
+         Returned as good*10 + nulls so one number carries both. Expect 80. */
+      /* 150 -- THE CONTROL FOR 149. Dereference the cap-table literal REPEATEDLY WITHOUT ever
+         storing it to the stack array. If 150 returns 8 while 141 (same deref, but through a
+         store/load round-trip) faults or returns 0, the damage is in the ROUND-TRIP, not in the
+         literal's capability.
+         This control is needed because 149's `q == p` compares only the 64-bit cursor: a
+         capability can lose its tag or bounds and still compare equal in C, so 149 returning 80
+         proves the ADDRESS survived, not the capability. mcause=28 (OUT_OF_BOUNDS) on the
+         wedging arms is exactly what a right-address/wrong-bounds capability produces. */
+      if (stage == 150) {
+        const char *p = "ltrim";
+        unsigned k, n; int good = 0;
+        for (k = 0; k < 8; k++) { n = 0; while (p && p[n]) n++; if (n > 0) good++; }
+        return good;                             /* expect 8 */
+      }
+      if (stage == 149) {
+        const char *p = "ltrim";
+        unsigned k; int good = 0, nulls = 0;
+        for (k = 0; k < 8; k++) a[k].z = p;
+        for (k = 0; k < 8; k++) {
+          const char *q = a[k].z;
+          if (q == p) good++;
+          else if (q == 0) nulls++;
+        }
+        return good * 10 + nulls;                /* expect 80 */
+      }
+      if (stage == 147) {                        /* 2 stores, HIGH offsets (0x60,0x70) */
+        a[3].z = "ltrim"; a[3].y = "aaa0";
+        { unsigned nz=0, ny=0; const char *z=a[3].z, *y=a[3].y;
+          while (z && z[nz]) nz++;
+          while (y && y[ny]) ny++;
+          if (z && y && nz > 0 && ny > 0) ok++; }
+        return ok;                               /* expect 1 */
+      }
+      if (stage == 148) {                        /* 3 stores, LOW offsets (0x00,0x10,0x20) */
+        a[0].z = "ltrim"; a[0].y = "aaa0"; a[1].z = "rtrim";
+        { unsigned nz=0, ny=0, n1=0; const char *z=a[0].z, *y=a[0].y, *z1=a[1].z;
+          while (z && z[nz]) nz++;
+          while (y && y[ny]) ny++;
+          while (z1 && z1[n1]) n1++;
+          if (z && y && nz > 0 && ny > 0) ok++;
+          if (z1 && n1 > 0) ok++; }
+        return ok;                               /* expect 2 */
+      }
       if (stage == 141) { a[0].z="ltrim"; a[0].y="aaa0"; n = 1; }
       else if (stage == 142) { a[0].z="ltrim"; a[0].y="aaa0"; a[1].z="rtrim"; a[1].y="aaa1"; n = 2; }
       else if (stage == 143) { a[0].z="dup"; a[0].y="dup"; a[1].z="dup"; a[1].y="dup";
