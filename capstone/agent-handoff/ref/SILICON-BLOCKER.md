@@ -6,6 +6,37 @@ Last updated: 2026-08-02.
 
 ---
 
+## CORRECTION: carve count does NOT predict the R-16 entry stall
+
+Earlier I wrote that removing one capability-bearing global (182 -> 181 carves) "flipped an
+image from stalling to entering" and called it the first mechanistic handle on R-16. The full
+table refutes the general claim:
+
+    182 carves   STALL 4/4     r112, r113, v110, w113
+    181 carves   MIXED         ENTER: r110, r111, f10, n112
+                               STALL: sb10, st10, x101
+    179 carves   ENTER         sqlite_silicon
+
+So **182 has always stalled, but 181 does not predict entry** — four 181-carve images enter and
+three stall. The `n112` experiment was a real controlled comparison (same source, one arm
+removed, entered 3/3 where the 182 builds stalled 4/4), but it does not generalise: carve count
+is not the discriminator, and **R-16 remains unexplained**.
+
+Every structural attribute checked so far fails to separate entering from stalling images:
+carve count, `.text` size, merged-string bytes, and dom_data geometry (byte-identical across the
+divide). Whatever selects an image is not visible in any of them.
+
+### Practical consequence for the workaround
+
+`SQLITE_STATIC_BUILTINS=1` — the one change that removes the exact construct the blocker was
+pinned to — **still has no silicon measurement**, because both images built with it (`st10`,
+`sb10`) entry-stalled before executing any code (`sb10` 3/3). This is R-16 blocking the
+validation of the fix for R-14/the SQLite blocker.
+
+Since R-16 is per-image and unpredictable, the only available lever is to draw a different
+image. With the watchdog's live entry-stall abort a losing draw now costs ~30 s instead of
+~600 s, which makes drawing several builds affordable — that is the approach in flight.
+
 ## THE SQLITE BLOCKER, CONTROL-VALIDATED: it is `sqlite3RegisterBuiltinFunctions`
 
 Every earlier SQLite verdict on silicon was recorded WITHOUT a control. This one has two, in
