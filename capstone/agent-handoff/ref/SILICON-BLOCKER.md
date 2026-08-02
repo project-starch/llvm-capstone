@@ -6,6 +6,49 @@ Last updated: 2026-08-02.
 
 ---
 
+## THE SQLITE BLOCKER, CONTROL-VALIDATED: it is `sqlite3RegisterBuiltinFunctions`
+
+Every earlier SQLite verdict on silicon was recorded WITHOUT a control. This one has two, in
+the same image and the same boot (`f10.dom`, fixed compiler, no workaround):
+
+    :0   CONTROL trivial `return 0`              RETURNED rc=0
+    :9   sqlite3MallocInit + PcacheInitialize    RETURNED rc=0
+    :10  + sqlite3RegisterBuiltinFunctions       IN-DOMAIN WEDGE
+
+`stage 9` is the strong control: it does real allocator work (memsys5 zone headers in the
+256 KB heap) and returns cleanly. The ONLY delta to stage 10 is
+`sqlite3RegisterBuiltinFunctions`. So:
+
+**The SQLite silicon blocker is `sqlite3RegisterBuiltinFunctions`, and it survives C-16.**
+
+### It is the same fault as R-14, and both ends are now control-validated
+
+    R-14 variant A (standalone shape)   control returns, A wedges    VALIDATED
+    R-14 variant B (standalone shape)   control returns, B wedges    VALIDATED
+    SQLite stage 10 (real code)         2 controls return, 10 wedges VALIDATED
+
+`sqlite3RegisterBuiltinFunctions` builds a straight-line struct array of string constants —
+exactly the R-14 variant-A/B shape. Three independent control-validated measurements now agree,
+where before today the evidence was a mix of uncontrolled wedges and (as it turned out) two
+artifacts.
+
+### What is NOT yet shown
+
+* Variants C and D still have no valid silicon measurement, so "both ingredients required"
+  (struct type AND straight-line materialisation) remains unproven — the shape could be
+  narrower or broader than R-14's pre-fix table claims.
+* Attribution is still open: this is a construct that QEMU executes correctly and silicon does
+  not, which is consistent with hardware but does not prove it (C-16 was exactly that pattern
+  and turned out to be ours).
+
+### Test in flight: does the workaround actually work on silicon?
+
+`SQLITE_STATIC_BUILTINS=1` deletes the straight-line local entirely (compile-time-initialised
+static instead). It is QEMU-green — stage 10 returns `rc=0` — but has **never been validated on
+silicon**: the earlier `st10` image hit the R-16 entry stall before running any code, so it
+yielded nothing. Running it now with the same `:0` / `:9` / `:10` control ladder. If stage 10
+returns, SQLite has a working silicon path for the first time.
+
 ## VALIDATED: variant A's wedge IS variant-specific — control returns in the SAME image
 
     r110.dom, position 1, one boot:
