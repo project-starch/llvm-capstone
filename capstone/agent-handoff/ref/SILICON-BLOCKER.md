@@ -86,6 +86,41 @@ answerable cheaply. Anyone picking this up should budget several boots for it, o
 probe that answers the same question from a domain that *does* reliably enter — the full
 `sqlite_silicon.dom` is currently the only build that has entered reliably at position 1.
 
+## 0ab. NO STRUCTURAL SIGNATURE SEPARATES STALLING BUILDS FROM ENTERING ONES
+
+Checked, because "the probe builds have more/bigger globals so cap-init has more to do" is the
+obvious explanation and it is wrong:
+
+    build            carves   .text      merged_strs (symbols / bytes)   behaviour
+    sqlite_silicon     179    1307584    6 / 21211                       ENTERS (pos 1)
+    wd71               182    1321068    5 / 19965                       ENTERS (reliably)
+    st10               181    1320392    5 / 19965                       STALLED at SHA5
+    x100 / x101        181    1328644    5 / 20235                       STALLED at SHA5
+
+`wd71` and `st10` have **identical** merged-string totals (19965 bytes, 5 symbols) and nearly
+identical `.text`, yet one enters reliably and the other stalled. Carve count does not separate
+them either — 179 enters, 182 enters, 181 stalls.
+
+So the amount of cap-init work is NOT what decides it, and there is no cheap static predictor
+of which build will stall. Do not spend another session looking for one on these axes.
+
+### Design consequence: make the probe a RUNTIME choice, not a build-time one
+
+Every probe today is a separate binary (`-DCAPSTONE_SQLITE_STAGE=N`), so each measurement
+re-enters the stall lottery with a *different* image, and `x101` has now lost that lottery 5
+times running. The fix is to stop varying the binary:
+
+* build ONE domain — ideally `sqlite_silicon.dom`, the only build that has entered reliably at
+  position 1 — and have it read a probe selector out of the shared region at entry, then
+  dispatch to the requested measurement;
+* the host already writes the shared region, so selecting a probe costs no rebuild, no
+  firmware relink, and no new image;
+* a boot that enters can then run *several* probes in sequence rather than one, which also
+  sidesteps the under-two-domains-per-boot limit from 0a10.
+
+This is the single highest-leverage change available for the measurement campaign, and it is
+untried. It does not fix the blocker; it makes the blocker measurable.
+
 ## 0. READ FIRST — WEDGES ARE POSITION-DEPENDENT: ~6 DOMAIN RUNS PER BOOT, THEN IT WEDGES
 
 Measured by running the TRIVIAL control (`wd71`: one walk, one return, no SQLite) repeatedly
