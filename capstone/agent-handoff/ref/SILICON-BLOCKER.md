@@ -109,6 +109,56 @@ further silicon measurement is possible and additional boots produce zero-inform
 The productive work left is offline: the `cincoffset`-consumes-linear-`rs1` mechanism and its
 two-derivation test, which is written up and ready to run the moment the board recovers.
 
+## RTL RULES THAT BEAR ON THE BLOCKER — one candidate, with its own counter-evidence
+
+Read from `capstone_dyn_unit.anvil` while the board ran. Recording all three, including the
+one that argues against the candidate, so the next session does not re-derive them.
+
+### 1. `stc` through an UNINIT destination REJECTS a non-zero immediate  (`:378`)
+
+    } else if((rs1.metadata.cap_type==CAP_TYPE_UNINIT)&&(imm!=64'd0)){
+        call raise_exception(data.trans_id,ex_code::ILLEGAL_OPERAND_VALUE)
+
+This maps onto the observed struct-vs-scalar split exactly. Minimal codegen, `-O0`:
+
+    struct kv v;  v.z=..; v.y=..     ->  stc a1, 0(a0)  ;  stc a1, 16(a0)   <- imm 16, NON-ZERO
+    const char *p, *q;               ->  stc a1, 0(a0)  ;  stc a1, 0(a2)    <- both imm 0
+
+Struct fields produce non-zero store immediates; separate scalars each get their own address
+computation and store at offset 0. That is precisely R-14's "needs the struct element type".
+
+### 2. `stc` NULLS the stored capability — but ONLY through an UNINIT destination (`:54-56`)
+
+    else if(rs1_v.metadata.cap_type==CAP_TYPE_UNINIT){ ...
+        if(rs2_v.metadata.cap_type!=NOT_CAP){ let rcnull = create_cnull(); ... }
+
+In the normal path the result pack is `(rs1_v, rs2_v)` — unchanged. So a store does NOT consume
+the stored capability unless the destination is UNINIT. Combined with (1), an UNINIT destination
+would break the minimal sequence twice over:
+
+    ldc a1, 0(gp)  ;  stc a1, 0(a0)  ;  cincoffsetimm a1, a1, 6   <- a1 nulled by the store
+
+### 3. The counter-evidence: UNINIT comes only from `REVOKE`, and stage 9 works
+
+`modify_cap_type(..., CAP_TYPE_UNINIT)` appears once, inside `func REVOKE` (`:43-67`): revoking
+a capability that lacks write permission yields UNINIT. A freshly carved domain stack should not
+be UNINIT.
+
+Decisively: **stage 9 RETURNS `rc=0`**, and `sqlite3MallocInit` writes memsys5 zone headers all
+over the 256 KB heap — necessarily with non-zero store immediates. If the domain's stack or heap
+were UNINIT, stage 9 would trap too. It does not.
+
+**So (1) and (2) are real ISA rules that fit the shape, but the precondition (UNINIT
+destination) is contradicted by a control that passes.** Not a resolved cause — a candidate
+whose precondition must be demonstrated, not assumed.
+
+### The test that discriminates it, already built
+
+Minimisation ladder stage **146** (four plain scalar pointers — every store `imm=0`) versus
+**145/144** (struct fields — non-zero immediates). If 146 returns while the struct arms wedge,
+the non-zero-immediate path is implicated whatever the destination type turns out to be. If both
+wedge, immediates are not the axis at all.
+
 ## REFUTED FROM THE RTL: `cincoffset` does NOT consume a linear rs1 — and a correction to C-16's write-up
 
 Read directly from `capstone_flu_unit.anvil:29-68` (SOURCE, primary):

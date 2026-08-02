@@ -2856,7 +2856,7 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
     return (int)(v & 0xffUL);
   }
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 120 && CAPSTONE_SQLITE_STAGE <= 127
+#if (CAPSTONE_SQLITE_STAGE >= 120 && CAPSTONE_SQLITE_STAGE <= 129) || (CAPSTONE_SQLITE_STAGE >= 140 && CAPSTONE_SQLITE_STAGE <= 146)
   /* R-14 N-THRESHOLD SWEEP, with no added static data.
      Both SQLite routes are blocked: the straight-line local wedges in-domain (R-14, validated
      at stage 10 with two returning controls), and making it a static triggers R-16 (5/5).
@@ -2878,6 +2878,97 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
              reshaping of aBuiltinFunc can help and SQLite is unreachable by this route.
        127 = same but a FLAT pointer array, to separate "struct field" from "capability store
              in a loop" if 126 wedges.  Both expect 64. */
+  /* 128/129 -- THE MECHANISM TEST for the SQLite blocker.
+     Straight-line codegen derives EVERY literal from ONE cap-table capability:
+         ldc            a1, 0(gp)
+         cincoffsetimm  a2, a1, 6      <- rd != rs1
+         cincoffsetimm  a2, a1, 11     <- reuses a1
+     helper_cscincoffset consumes rs1 ONLY when rs1 != rd:
+         if (rs1 != rd) { *rd = *rs1; if (!copyable(rs1)) *rs1 = NULL; }
+     If that capability is LINEAR on silicon, the FIRST derivation nulls it and every later one
+     reads a nulled base. The loop form never trips this because it writes back into the same
+     register (rd == rs1).
+       128 = TWO derivations with rd != rs1 from ONE base, then read through the SECOND.
+             Predict: garbage/wedge on silicon, correct under QEMU.
+       129 = the SAME +8, but CHAINED so rd == rs1 each time. Predict: correct everywhere.
+     Both return the byte at base+8, which is 'B' = 0x42. One bit of difference between the
+     two probes -- that is the whole experiment. */
+  /* 140-146 -- MINIMISATION LADDER for the R-14 / SQLite construct.
+     The current minimal case is 4 straight-line entries into struct kv a[64] (8 capability
+     stores). These strip it further, one variable at a time, so the smallest failing form can
+     be named exactly. Every arm returns a small number, so a run always yields data.
+     No statics, no extra globals -- carve count must stay at the entering group's value.
+
+       140  ONE struct VARIABLE, no array at all, 2 distinct literals   (2 cap stores)
+       141  array[64], ONE entry  (a[0] only), 2 distinct literals      (2 cap stores)
+       142  array[64], TWO entries, distinct literals                   (4 cap stores)
+       143  array[64], FOUR entries, THE SAME literal in every field    (8 stores, no distinct)
+       144  array[64], FOUR entries, distinct literals  == known-wedging control
+       145  array[64], FOUR entries, ONE field per entry (z only)       (4 stores, struct)
+       146  FOUR plain scalar pointers, no struct, no array, distinct   (4 stores)
+
+     Reading: the first arm that wedges names the ingredient. 143 vs 144 isolates DISTINCT
+     literals; 145 isolates two-fields-per-entry; 146 isolates the struct entirely; 140 vs 141
+     isolates the array. */
+  if (stage >= 140 && stage <= 146) {
+    struct kv5 { const char *z; const char *y; };
+    unsigned i; int ok = 0;
+    if (stage == 140) {
+      struct kv5 v;
+      v.z = "ltrim"; v.y = "aaa0";
+      { unsigned a1=0,b1=0; const char *z=v.z,*y=v.y;
+        while (z&&z[a1]) a1++; while (y&&y[b1]) b1++;
+        if (z&&y&&a1&&b1) ok++; }
+      return ok;                               /* expect 1 */
+    }
+    if (stage == 146) {
+      const char *p0="ltrim", *p1="rtrim", *p2="trim", *p3="max";
+      const char *arr[4]; arr[0]=p0; arr[1]=p1; arr[2]=p2; arr[3]=p3;
+      for (i=0;i<4;i++){ unsigned n=0; const char *z=arr[i]; while(z&&z[n])n++; if(z&&n)ok++; }
+      return ok;                               /* expect 4 */
+    }
+    {
+      struct kv5 a[64];
+      unsigned n = 0;
+      if (stage == 141) { a[0].z="ltrim"; a[0].y="aaa0"; n = 1; }
+      else if (stage == 142) { a[0].z="ltrim"; a[0].y="aaa0"; a[1].z="rtrim"; a[1].y="aaa1"; n = 2; }
+      else if (stage == 143) { a[0].z="dup"; a[0].y="dup"; a[1].z="dup"; a[1].y="dup";
+                               a[2].z="dup"; a[2].y="dup"; a[3].z="dup"; a[3].y="dup"; n = 4; }
+      else if (stage == 145) { a[0].z="ltrim"; a[1].z="rtrim"; a[2].z="trim"; a[3].z="max";
+                               a[0].y="s"; a[1].y="s"; a[2].y="s"; a[3].y="s"; n = 4; }
+      else { a[0].z="ltrim"; a[0].y="aaa0"; a[1].z="rtrim"; a[1].y="aaa1";
+             a[2].z="trim";  a[2].y="aaa2"; a[3].z="max";   a[3].y="aaa3"; n = 4; }
+      for (i = 0; i < n; i++) {
+        unsigned nz=0, ny=0; const char *z=a[i].z, *y=a[i].y;
+        while (z && z[nz]) nz++;
+        while (y && y[ny]) ny++;
+        if (z && y && nz > 0 && ny > 0) ok++;
+      }
+      return ok;                               /* expect n */
+    }
+  }
+  if (stage == 128 || stage == 129) {
+    const char *base = "AxxxxxxxByyyyyyy";   /* [0]='A'  [8]='B' */
+    const char *p2 = 0;
+    if (stage == 128) {
+      const char *p1 = 0;
+      /* two INDEPENDENT derivations from `base`: each has rd != rs1 */
+      /* cincoffsetimm rd, rs, off  ==  .insn i 0x5b, 0x2, rd, off(rs)
+         (encoding taken from start-gp-captable-interp.S:72, not guessed) */
+      __asm__ volatile(".insn i 0x5b, 0x2, %0, 0(%2)\n\t"
+                       ".insn i 0x5b, 0x2, %1, 8(%2)"
+                       : "=&r"(p1), "=&r"(p2) : "r"(base));
+      (void)p1;
+    } else {
+      /* same total offset, chained: rd == rs1 both times */
+      const char *q = base;
+      __asm__ volatile(".insn i 0x5b, 0x2, %0, 4(%0)\n\t"
+                       ".insn i 0x5b, 0x2, %0, 4(%0)"
+                       : "+r"(q));
+      p2 = q;
+    }
+    return (int)((unsigned long)(unsigned char)p2[0] & 0xff);   /* expect 0x42 'B' */
+  }
   if (stage == 126 || stage == 127) {
     unsigned i; int ok = 0;
     if (stage == 126) {
