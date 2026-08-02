@@ -6,6 +6,41 @@ Last updated: 2026-08-01.
 
 ---
 
+## BLOCKER RESOLVED UNDER QEMU — the original shape passes with NO workaround
+
+    stage 10 NON-STATIC (sqlite3RegisterBuiltinFunctions, local aBuiltinFunc array)
+        -> RETURNED stage=10 rc=0x00, asserts=0
+
+    FULL SQLite QEMU gate, SQLITE_STATIC_BUILTINS unset
+        -> exit 0, __CAPSTONE_SQLITE_SILICON_PASSED__, asserts=0
+
+Stage 10 is the construct that has blocked this campaign, and it now returns cleanly with the
+workaround OFF. The full five-marker gate passes on the same build.
+
+**The blocker was our compiler, not the silicon.** Restated plainly for the record: every
+symptom previously attributed to the board miscomputing a pointer was `memset` writing 15 bytes
+of struct tail padding through an **untagged, garbage pointer**, once per array element. It is
+silent on hardware only because the RTL does not check a `cincoffset` base — `SPLIT`, `LDC` and
+`STC` all validate their operands, but `cincoffset`/`cincoffsetimm` do not.
+
+### What still needs doing (in order)
+
+1. **Ladder regression under QEMU** — the fix touches generic `SelectionDAG` code, so the
+   ladder rungs must be re-run before anything ships. Serialise: QEMU suites share the
+   `rootfs.ext2` write-lock.
+2. **Board run** — firmware rebuilt with the fixed, no-workaround domain.
+3. Re-examine every "silicon miscompute" claim in this document and in `ISSUES.md` against this
+   root cause; several are likely the same bug.
+4. Consider whether `SQLITE_STATIC_BUILTINS` should be deleted outright now that the real fix
+   exists, rather than left as a knob.
+
+### Caveat that must travel with this
+
+QEMU passing is necessary, not sufficient: QEMU **asserts** on an untagged `cincoffset` base
+while the RTL silently accepts it, which is exactly why this bug survived so long on the board
+while never being seen under QEMU — because the staged probes were never run under QEMU. The
+board run is still the deciding test.
+
 ## !!!!! FIXED AND VERIFIED (QEMU): memset destination typed in AS0 instead of AS200
 
 ### The defect
