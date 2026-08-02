@@ -264,6 +264,38 @@ straight-line struct array holds a valid capability (tag intact, bounds consiste
 container) whose CURSOR is wrong. Not established: why; whether the error is at store or at
 load; whether the larger-N wedges are the same fault; and whether it is what stops SQLite.
 
+## 0a3. DIRECT MEASUREMENT: the cursor is off by 57 bytes — and Family A now blocks the work
+
+    stage 100   delta(arr[55] - arr[0]) = 0x09   expected 0x42   entered=TRUE
+                => the stored cursor is 57 bytes BELOW where it should be
+
+This is self-referential — it subtracts two cursors read in the same domain — so unlike the
+earlier `0x00` low-byte reading it needs no knowledge of the runtime container base and no
+alignment argument. Two independent methods now agree the cursor is wrong:
+
+* raw cursor low byte `0x00`, where any correct cursor must end in nibble 2 (offset `0xF42`
+  plus a 16-aligned base);
+* delta from entry 0 reads `0x09` where `0x42` is correct.
+
+Both are single samples that ENTERED the domain (verified by `SQ: G/enter`).
+
+### The blocking problem is now Family A, not the slot
+
+Across the last two rounds: **1 of 6 attempts entered the domain.** The other five died in
+region-share before `G/enter`, with the `wd71` control returning `0x45` in every one of those
+boots — so the board was healthy and this is not exhaustion (all runs were at slot 2).
+
+Consequences:
+* `stage 101` (stored-wrong vs read-wrong — the biggest open fork) has NEVER executed.
+* `stage 102` (the neighbour control that would validate the whole method) has never executed.
+* Any further slot-level work costs ~6 boots per reading at the current entry rate.
+
+**So the next thing worth fixing is the region-share failure itself.** It is distinct from the
+SPLB exact-fit spin already fixed: the ceiling work showed a failure between `SQ: B/mkregion1`
+and `SQ: C/mkregion2` that emits NO monitor tag at all — not SPLA, SPLB, RGNO or SHAB — so the
+monitor never reaches a reporting site. Instrumenting the host-side mkregion path (the ioctl and
+driver) is the cheapest way in, and needs no firmware change.
+
 ## 0b. NEAR-MISS WORTH RECORDING: mcause=24 does NOT imply the code under test trapped
 
 Attempting to read the bad slot's capability type (`lcc` zimm=1 on `arr[55].zName`), the domain
