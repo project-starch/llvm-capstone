@@ -6,7 +6,7 @@ Single index of everything currently broken, with a pointer to a reproducer for 
 Convention: **R-n** = RTL/hardware, **C-n** = our compiler/toolchain, **I-n** = infrastructure.
 Status: `OPEN` · `CHARACTERISED` (mechanism known, unfixed) · `WORKED AROUND` · `FIXED` · `CLOSED`.
 
-Last updated 2026-07-31.
+Last updated 2026-08-02.
 
 ---
 
@@ -714,7 +714,24 @@ rather than `ldc`/`stc`. Whether capstone-c can express a non-`__linear` view of
 span is a compiler/ABI question, not an RTL one, and is unverified — `sbi_capstone.c` has
 no `memcpy` and no scalar-pointer cast anywhere today.
 
-### R-14 — straight-line init of a struct array with distinct string constants wedges `OPEN — cause NOT established`
+### R-14 — straight-line init of a struct array with distinct string constants wedges `PARTLY SUPERSEDED BY C-16 2026-08-02`
+
+**Read C-16 first.** The *SQLite* blocker behind this entry is now root-caused and FIXED: it was
+a compiler bug (`memset` destination typed in AS0, stripping the capability tag), not hardware.
+Stage 10 and the full SQLite QEMU gate now pass with no workaround.
+
+**But R-14 is NOT simply closed by that**, and the difference matters:
+
+* C-16 needs a struct with **tail padding**, because the trigger is the initialiser's
+  padding-zeroing `memset`. Variant A below is `struct{2 ptr}` = 32 bytes with **no tail
+  padding**, so no `memset` is emitted and C-16 does not explain it.
+* Variant D (flat `const char*[64]`, also no padding) is correct, so "struct vs flat" is still
+  an unexplained axis.
+
+**Required next step:** re-run all four variants below with the fixed compiler. If A and B now
+pass, R-14 closes as a duplicate of C-16 and the "confidence it is hardware" note was right to
+stay unconvinced. If A still wedges, R-14 is a genuinely separate defect and everything below
+still applies. Until that re-run, treat the variant table as PRE-FIX data.
 
 **CORRECTIONS 2026-07-31 (wide audit, all verified against source):**
 
@@ -786,6 +803,42 @@ loop-assigned entries failing and the four straight-line ones passing.
   `capstoneBuiltinFunc[]` is the obvious next move and needs no RTL change.
 - **Impact:** SQLite cannot complete `sqlite3_initialize()` on silicon.
 
+
+### C-16 — `memset` destination typed in AS0 strips the capability tag `FIXED 2026-08-02`
+
+**This was the SQLite blocker.** `SelectionDAG::getMemset`
+(`llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp:9380`) built the destination argument type with
+`PointerType::getUnqual(Ctx)` — an **addrspace(0)** pointer. AS0 here is a 64-bit integer
+address while the real destination is an AS200 128-bit capability, so the declared argument type
+is narrower than the value and call lowering inserts a `TRUNCATE` of the pointer.
+
+    %8:gpr  = PseudoTRUNC_CAP %5      ; truncate the array base -- TAG GONE
+    %9:gpr  = ADDI killed %8, 49      ; tail-padding address
+    $x10    = COPY %9                 ; passed as memset's destination
+    %13:gpr = CIncOffsetImm %5, 64    ; next element -- CORRECT, tag preserved
+
+`memset`'s own `p++` is then `cincoffsetimm` on an untagged base. **QEMU asserts on that; the
+RTL does not check a `cincoffset` base at all** (`SPLIT`, `LDC`, `STC` all validate their
+operands, `cincoffset`/`cincoffsetimm` do not) — so on silicon the untagged pointer is used and
+`memset` writes through a garbage address while execution continues. Silent memory corruption,
+once per array element.
+
+Triggered by any **struct with tail padding in an aggregate initialiser**: the initialiser
+zero-fills the padding via `memset`. `sqlite3RegisterBuiltinFunctions`' `FuncDef` array is
+exactly that shape.
+
+- **Fix:** take the address space from `DstPtrInfo` (already in scope, already used for
+  `checkAddrSpaceIsValidForLibcall`). No-op for AS0 targets.
+- **Repro / regression test:** `tests/runtime-qemu/silicon-ladder/strarray_app.c` +
+  `strarray_host.c`, oracle 420. `DOMAIN_OPT_LEVEL=-O0 bash run-ladder-qemu.sh strarray`.
+  ~1 minute, no board.
+- **Verified:** codegen `addi ...,49` x8 -> 0, replaced by `cincoffsetimm`; reproducer PASS
+  (retval 420); **stage 10 non-static returns rc=0x00**; **full SQLite QEMU gate passes with
+  `SQLITE_STATIC_BUILTINS` unset**.
+- **Why it hid so long:** the staged probes were built and shipped to the board for four
+  sessions without ever being run under QEMU — the one tool that would have asserted on it.
+
+---
 
 ## Infrastructure / procedure
 
