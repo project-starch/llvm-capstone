@@ -100,7 +100,15 @@ while true; do
       # PREVIOUS boot and aborts a perfectly healthy run before it has even booted. That bug
       # killed 24 runs over ~87 minutes on 2026-08-02 and produced the false conclusion that
       # "the board stopped accepting images".
-      scan=$(tail -c "+${START_SIZE:-1}" "$LOG" 2>/dev/null)
+      # SCAN FROM THIS RUN'S OWN load_image EMIT, not from a byte offset captured at start.
+      # START_SIZE was always ~1 because every caller does `rm -f "$LOG"` before launching the
+      # runner, so the log is empty when the watchdog starts and the console's ~548 KB of
+      # replayed scrollback lands INSIDE the window. Measured post-"fix": iglog-234029 had its
+      # last SHA marker at offset 492011 and its own load_image at 548318, and the abort still
+      # fired at 255 s. Only the 45->180 s threshold bump was actually helping.
+      # The driver's `emit gdb_input <- {'text': 'monitor load_image` line is emitted by THIS
+      # run, so everything after its last occurrence is unambiguously ours.
+      scan=$(awk '/emit gdb_input .*monitor load_image/{buf=""} {buf=buf $0 "\n"} END{printf "%s", buf}' "$LOG" 2>/dev/null)
       # require the image to have been handed over in THIS run before any stall verdict
       case "$scan" in *load_image*) ;; *) lastmark=""; scan="";; esac
       lastmark=$(printf '%s' "$scan" | sed -n 's/.*\(SHA[56]:[0-9A-F]*\).*/\1/p' | tail -1)
