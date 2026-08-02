@@ -1,0 +1,39 @@
+== clean build ==
+== building 15 rows x 2 variants ==
+== building host ==
+== running 30 boots ==
+  rlua_userdata_uaf            revoke   FAULT
+  rlua_userdata_uaf            control  MISS
+  rlua_escaped_handle_uar      revoke   MISS
+  rlua_escaped_handle_uar      control  MISS
+  libpulse_iterator_uaf        revoke   FAULT
+  libpulse_iterator_uaf        control  MISS
+  mruby_vmstack_uaf            revoke   FAULT
+  mruby_vmstack_uaf            control  MISS
+  mruby_kwargs_uaf             revoke   FAULT
+  mruby_kwargs_uaf             control  MISS
+  mruby_bytecode_overflow      revoke   FAULT
+  mruby_bytecode_overflow      control  FAULT
+  secp256k1_preallocated_uaf   revoke   FAULT
+  secp256k1_preallocated_uaf   control  MISS
+  mruby_values_at_uaf          revoke   FAULT
+  mruby_values_at_uaf          control  MISS
+  mruby_irep_pool_uaf          revoke   FAULT
+  mruby_irep_pool_uaf          control  MISS
+  mruby_range_uaf              revoke   FAULT
+  mruby_range_uaf              control  MISS
+  mruby_upvar_overflow         revoke   FAULT
+  mruby_upvar_overflow         control  FAULT
+  mruby_io_dataptr_uaf         revoke   FAULT
+  mruby_io_dataptr_uaf         control  MISS
+  mruby_hash_slice_uaf         revoke   FAULT
+  mruby_hash_slice_uaf         control  MISS
+  mruby_gc_stackroot_uaf       revoke   FAULT
+  mruby_gc_stackroot_uaf       control  MISS
+  mruby_sprintf_argv_uaf       revoke   FAULT
+  mruby_sprintf_argv_uaf       control  MISS
+
+== verifying against expected-results.tsv ==
+REPRODUCED  15/15 rows identical to expected-results.tsv
+
+logs: /tmp/capstone/xlang-capstone-repro

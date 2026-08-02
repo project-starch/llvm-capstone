@@ -1,0 +1,43 @@
+# xlang Capstone column — PREDICTIONS, committed BEFORE the runs.
+#
+# This file is the reason the column is a test rather than a description. The
+# CHERI column did the same (../cheri/rows.tsv) and all 14 predictions held;
+# predicting after the fact proves nothing.
+#
+# Configs. Capstone has two that map onto CHERI's three:
+#   bounds   = spatial only, no revocation      <-> CHERI "spatial"
+#   revoke   = revoke-on-free                   <-> CHERI "eager"
+# There is NO Capstone analogue of CHERI's async quarantine default. That is a
+# fact about the mechanisms, reported rather than papered over.
+#
+# Only the `revoke` config is predicted and run here; `bounds` needs a
+# non-revoking arena allocator that does not exist yet.
+#
+# expect_revoke:
+#   FAULT   the stale access is prevented (abort on cincoffset, or a delivered
+#           cause-24/25 monitor fault -- both count as prevented; see the
+#           2026-08-01 history note on why the manifestation differs)
+#   MISS    the stale access completes and the row reports
+#           "use-after-free-survived"
+#   INVALID the harness could not measure the row (arena depleted, realloc grew
+#           in place). NOT a verdict.
+#
+# control (XLANG_NO_REVOKE) must be MISS for every temporal row, or that row's
+# FAULT is not attributable to the revoke and must not be scored.
+#
+key	row	shim	alloc_route	expect_revoke	expect_control	why
+7	secp256k1_preallocated_uaf	standalone	shim malloc/free	FAULT	MISS	first measured before this prediction existed; RE-MEASURED against it by the 2026-08-02 clean reproduction, which came back 15/15 identical. It counts now.
+4	mruby_vmstack_uaf	template	stack realloc	FAULT	MISS	same shape as row 10, verified: cached regs pointer, stack moved+revoked
+5	mruby_kwargs_uaf	template	stack realloc	FAULT	MISS	same template
+8	mruby_values_at_uaf	template	stack realloc	FAULT	MISS	same template
+10	mruby_range_uaf	template	stack realloc	FAULT	MISS	MEASURED 2026-08-01: aborts on cincoffset; control returned
+13	mruby_hash_slice_uaf	template	stack realloc	FAULT	MISS	same template
+15	mruby_sprintf_argv_uaf	template	stack realloc	FAULT	MISS	same template
+9	mruby_irep_pool_uaf	standalone	gc sweep -> free	FAULT	MISS	GC sweep calls mrb_free -> rof_free, so the pool string IS revoked
+14	mruby_gc_stackroot_uaf	standalone	gc sweep -> free	FAULT	MISS	same: the swept object's free revokes
+12	mruby_io_dataptr_uaf	standalone	explicit mrb_free	FAULT	MISS	gem frees DATA_PTR explicitly; the dangling handle is revoked
+1	rlua_userdata_uaf	standalone	shim malloc/free	FAULT	MISS	routed to rof via our stdlib.h, so the shim's own free revokes
+3	libpulse_iterator_uaf	standalone	shim malloc/free	FAULT	MISS	same routing; the C object's free revokes the iterator's copy
+11	mruby_upvar_overflow	standalone	heap, in-bounds walk	MISS	MISS	SPATIAL row. Revocation is irrelevant; nothing is freed. Needs BOUNDS, and this config has no bounds enforcement on the walk, so expect no catch.
+6	mruby_bytecode_overflow	standalone	none	MISS	MISS	SPATIAL row, same reasoning. CHERI caught it in ALL configs via bounds; the revoke config alone should not.
+2	rlua_escaped_handle_uar	standalone	none (stack)	MISS	MISS	STACK-use-after-return. No allocator is involved at all, so no allocator-based mechanism can see it. CHERI missed it in all three configs.
