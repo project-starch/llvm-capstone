@@ -6,7 +6,67 @@ Last updated: 2026-08-02.
 
 ---
 
-## R-16 REMAINS UNEXPLAINED — initramfs bloat REFUTED, and everything else too
+## !!!! READ FIRST — A ~90-MINUTE WINDOW OF THIS DOCUMENT IS INVALID (instrumentation bug)
+
+**Between 21:00 and 22:33 on 2026-08-02 every "entry stall" recorded here is an artefact of our
+own watchdog, not a board behaviour.**
+
+`board-watchdog.sh` grepped the WHOLE UART log for the last `SHA5`/`SHA6` marker. The console
+replays ~548 KB of the PREVIOUS boot's scrollback when the driver connects, so the watchdog
+matched a `SHA5` from an earlier boot and killed the runner seconds after `load_image` —
+**before the board had booted at all**. Verified on every run in the window:
+
+    run log                lines   SHA after its own load_image   SHA in scrollback
+    board-waa.log            170            0                          50
+    board-ts{p,q,r}.log    54-60            0                          50
+    board-kg{1,2}.log      56-62            0                          50
+    sllog-222003-{1,2}.log 57-63            0                          50
+    rflog-222930-{1,2}.log 55-59            0                          50
+    pzlog-222631-1.log        59            0                          50
+
+13 of 13 checked: zero markers after their own `load_image`. The runs never executed.
+
+### Sections invalidated by this — do NOT build on them
+
+* **"THE BOARD STOPPED ACCEPTING ANY IMAGE AT ~20:40"** — REFUTED. The board was never given a
+  chance. It ran a full three-domain ladder at 22:50 (`:0` and `:9` returned, `:10` wedged).
+* **"R-16 REMAINS UNEXPLAINED — initramfs bloat REFUTED"** — the disproof rested on
+  `sllog-222003-*`, both false aborts. Initramfs bloat is **untested**, not refuted.
+* **"RETRACTED: R-16 is build-dependent — THE KNOWN-GOOD IMAGE NOW STALLS TOO"** — rested on
+  `board-kg{1,2}`, both false aborts. **That retraction is itself withdrawn**; R-16
+  build-dependence returns to *unknown*, neither established nor refuted.
+* **"THE WORKAROUND RELIABLY TRIGGERS R-16 — 5/5"** — `waa`/`wab`/`wac` were false aborts AND
+  byte-identical to each other (see below). At most `st10`/`sb10` remain, i.e. 2 samples.
+* **"carve count does NOT predict … 182 stalls 8/8"** — `tsp`/`tsq`/`tsr` were false aborts and
+  byte-identical; the 8/8 count is not supportable.
+
+### A second, independent defect: "perturbed draws" were the SAME binary
+
+`CAPSTONE_TS_PAD` / `CAPSTONE_WA_PAD` are referenced nowhere in `capstone/benchmarks/`, so the
+`-D` flags were dead and the "independent draws" were duplicates:
+
+    9b0e5331d62392ed  tsp.dom  tsq.dom  tsr.dom
+    8ff50a38d6a8b977  waa.dom  wab.dom  wac.dom
+
+So "five independently built binaries" was **two**, and "eight out of eight" was **four**.
+
+### What is NOT affected
+
+* Anything recorded **before 21:00**.
+* **Every control-validated result**, because each compares a control and a failure *inside one
+  boot*: `f10:0`+`f10:9` return / `f10:10` wedges; `r110:0` returns / `r110:110` wedges;
+  `r110:0` returns / `r110:111` wedges.
+* **C-16** (the `memset` AS0 tag-strip) — found, fixed, ladder 6/6, board-free reproducer.
+* The **SQLite blocker**, re-confirmed 22:50 on a freshly reflashed board with the fixed
+  watchdog: `sqlite3RegisterBuiltinFunctions` wedges while `sqlite3MallocInit` +
+  `sqlite3PcacheInitialize` return in the same boot.
+
+The watchdog now scans only bytes written after it starts, requires `load_image` in the current
+run before any stall verdict, defaults to 180 s, and checks liveness before signalling.
+
+---
+
+## R-16 REMAINS UNEXPLAINED — initramfs bloat REFUTED, and everything else too  `INVALID — evidence was false aborts, see READ FIRST`
 
 The firmware grew 15.4 -> 30.0 MB across the session as 24 dead probe images accumulated in
 buildroot's **target** dir (pruning the overlay alone does nothing — the target dir is what is
@@ -108,7 +168,7 @@ explains the data; it is not a measurement. Two tests would settle it, neither r
 **If confirmed, the fix is compiler-side and small**: never derive twice from a cap-table
 capability with `rd != rs1` — chain through the same register, or reload per use.
 
-## THE BOARD STOPPED ACCEPTING ANY IMAGE AT ~20:40 — a fresh firmware does NOT restore it
+## THE BOARD STOPPED ACCEPTING ANY IMAGE AT ~20:40 — a fresh firmware does NOT restore it  `REFUTED 2026-08-02 — watchdog artefact, see READ FIRST`
 
     fresh firmware rebuild (no domain changes), r110.dom unchanged:
       attempt 1  ENTRY-STALL
@@ -156,7 +216,7 @@ ask-first action under CLAUDE.md (irreversible / outward-facing), so it is NOT b
 unilaterally. Until the board accepts images again, no further silicon measurement is possible
 and additional boots would only add more zero-information runs.
 
-## !! RETRACTED: "R-16 is build-dependent" — THE KNOWN-GOOD IMAGE NOW STALLS TOO
+## !! RETRACTED: "R-16 is build-dependent" — THE KNOWN-GOOD IMAGE NOW STALLS TOO  `RETRACTION WITHDRAWN — kg runs were false aborts`
 
     r110.dom, which ENTERED 3/3 earlier today (~19:05-19:20, control returned rc=0):
       21:46  attempt 1  ENTRY-STALL
@@ -234,7 +294,7 @@ That is the one remaining shape with a plausible path to running SQLite on this 
 is exactly the workaround `ISSUES.md` R-14 recommended before any of this was measured:
 **build `aBuiltinFunc` in a loop from a static table instead of straight-line.**
 
-## THE WORKAROUND RELIABLY TRIGGERS R-16 — 5/5 static-builtins images entry-stall
+## THE WORKAROUND RELIABLY TRIGGERS R-16 — 5/5 static-builtins images entry-stall  `OVERSTATED — 2 distinct binaries, 3 false aborts`
 
     image                     behaviour                 .data
     r110 r111 f10 n112        ENTER                     15088
@@ -280,7 +340,7 @@ LOOP from a small static table) is the obvious candidate — it was the pre-fix
 board-validated-correct shape, and its static table is far smaller than the whole `FuncDef`
 array. It has never been tried against real SQLite.
 
-## CORRECTION: carve count does NOT predict the R-16 entry stall
+## CORRECTION: carve count does NOT predict the R-16 entry stall  `the 182=8/8 count is unsupportable — duplicates + false aborts`
 
 Earlier I wrote that removing one capability-bearing global (182 -> 181 carves) "flipped an
 image from stalling to entering" and called it the first mechanistic handle on R-16. The full

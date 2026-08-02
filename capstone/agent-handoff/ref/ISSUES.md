@@ -894,6 +894,25 @@ exactly that shape.
 
 ### R-16 — domain never returns from its FIRST entry (`SHA5` stall) `OPEN — attribution NOT established`
 
+**UPDATE 2026-08-02 23:1x — two corrections, both narrowing this entry.**
+
+1. **Do not count any "entry stall" from 21:00-22:33 as an R-16 instance.** In that window
+   `board-watchdog.sh` matched a `SHA5` from the console's replayed previous-boot scrollback and
+   killed runners seconds after `load_image`, before the board booted. 13 of 13 checked runs in
+   that window have ZERO `SHA` markers after their own `load_image` and 50 before it. The
+   watchdog is fixed (run-scoped scan + `load_image` gate); the affected runs are
+   `waa/wab/wac`, `tsp/tsq/tsr`, `kg1/kg2`, `sllog-*`, `rflog-*`, `pzlog-*`.
+   In particular the conclusion "the board stopped accepting any image" is **refuted**.
+
+2. **R-16 is not currently blocking.** At 22:50, on a freshly reflashed board with the fixed
+   watchdog, a three-domain ladder ran: `f10:0` returned `rc=0`, `f10:9` returned `rc=0`, and
+   `f10:10` wedged in-domain. So domains enter fine right now, and the SQLite blocker (R-14
+   shape) reproduces cleanly with two controls returning in the same boot.
+
+Also: the bullet below saying `r110`/`r111` "each entered **1/1** only" understates the entering
+side — `r110` entered **3/3** in the 19:05-19:20 repeat test (control returned each time). The
+"per-BOOT coin toss not excluded" caveat still stands, but it is a weaker doubt than written.
+
 **Now the primary blocker for the whole measurement campaign**, ahead of R-14 and ahead of
 SQLite itself. The monitor completes a region share and hands off; the domain never comes back.
 Last UART line is `SHA5:xxxx`.
