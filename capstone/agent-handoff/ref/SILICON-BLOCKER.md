@@ -6,41 +6,6 @@ Last updated: 2026-08-02.
 
 ---
 
-## REFLASH ATTEMPTED (authorised) AND REJECTED BY THE BOARD — bitstream verified intact
-
-    resident bitstream : 'working-caplifive-captype-fixed.bit'
-    reflash target     : 'working-caplifive-captype-fixed.bit'      (deliberately the SAME one)
-    flash_bitstream()  -> ActionError: flash_state: board reported 'error'
-
-Safety check immediately afterwards:
-
-    resident bitstream : working-caplifive-captype-fixed.bit        (unchanged, intact)
-
-The reflash was written to rewrite **the same** known-good bitstream and to ABORT if the
-resident name did not match, so it could never switch the board to a different image. The board
-rejected the flash outright; the resident bitstream is unchanged and the board lock was
-released.
-
-**So the last remaining remedy is unavailable, not merely declined.** The board:
-
-* is reachable (console lock, `nvbit` read, power control all work),
-* carries the correct bitstream,
-* boots Linux and runs the host loader (`SQ: A/dom-ok` .. `SQ: E/share1` appear every time),
-* but has not entered a domain since ~20:40 under any condition tried, and
-* refuses a bitstream reflash.
-
-### This is now a board-owner item
-
-Everything an agent can do from this side is exhausted and recorded: image identity, firmware
-generation, thermal/power cycling, initramfs size (restored to the byte-identical known-good
-image), bitstream name, carve count and dom_data geometry are all eliminated by measurement,
-and the reflash errors out. The failure is upstream of anything in this repo.
-
-What to hand over: the domain reaches `SQ: E/share1`, the monitor emits `SHA5` (about to leave
-M-mode for the domain) and never emits `SHA6` (domain returned). That is a
-monitor-hands-off/domain-never-returns failure at the FIRST entry, reproducible on every image
-including ones that entered earlier the same day.
-
 ## R-16 REMAINS UNEXPLAINED — initramfs bloat REFUTED, and everything else too
 
 The firmware grew 15.4 -> 30.0 MB across the session as 24 dead probe images accumulated in
