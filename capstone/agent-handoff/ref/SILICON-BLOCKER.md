@@ -6,6 +6,42 @@ Last updated: 2026-08-02.
 
 ---
 
+## RETRACTED: "variant D wedges on silicon" — THE CONTROL WEDGED TOO
+
+    n112.dom (181 carves, stage-113 static table removed), position 1:
+      sel=112  variant D   ENTERED then IN-DOMAIN WEDGE   (3 runs, reproducible)
+      sel=0    CONTROL     ENTERED then IN-DOMAIN WEDGE   <-- trivial `return 0`, NO array code
+
+Selector 0 executes `if (stage <= 0) return 0;` in `run_sqlite_staged` — no struct, no array,
+no string literals. It reached `SQ: G/enter` and wedged exactly like variant D.
+
+**Therefore every in-domain wedge from this image is void as evidence about the variant it was
+supposedly testing**, including the reproducible "variant D wedges 3/3" recorded above. D's
+result said nothing about D. Withdrawn.
+
+The control was available at ZERO build cost the whole time: `if (stage <= 0) return 0;` is
+**not inside any `#if`**, so **selector 0 is live in every staged image ever built**. It should
+have been the first selector run on any new image, before any variant verdict was recorded.
+Making that the standing rule:
+
+> **Run `:0` first on every staged image.** If the trivial control does not return, nothing
+> else that image reports is interpretable.
+
+### What still stands from that image
+
+**The R-16 entry result is unaffected**, because it is decided *before* any domain code runs:
+`n112` reached `SQ: G/enter` in 3/3 runs (both shares complete), against 4/4 entry stalls for
+the 182-carve builds. Entry and post-entry behaviour are independent — that is the whole point
+of the classification rule in this document.
+
+### Live suspect for the post-entry wedge
+
+Every selector path has one thing the no-selector path lacks: the domain reads
+`hostcall_metadata->opcode` from the shared region at entry to pick its probe. If that read is
+what wedges on silicon, the runtime-selector mechanism is unusable on hardware — QEMU-green but
+board-fatal, the same asymmetry that hid C-16. Test in flight: run `n112.dom` with NO selector,
+which runs the same variant D via the compile-time constant and never touches the shared region.
+
 ## DOM_DATA GEOMETRY IS IDENTICAL BETWEEN ENTERING AND STALLING IMAGES — and "enters reliably" was n=1
 
 ### Geometry does not discriminate
