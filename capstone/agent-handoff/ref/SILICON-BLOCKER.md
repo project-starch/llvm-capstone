@@ -6,6 +6,53 @@ Last updated: 2026-08-01.
 
 ---
 
+## !! INVALIDATED: THE STAGE-100 "CURSOR IS OFF BY 57 BYTES" MEASUREMENT
+
+**The probe that produced it is malformed.** Run under QEMU, the *original* `x100.dom` — the
+exact binary that returned `0x09` on the board — reaches `SQ: G/enter` and then dies on:
+
+    qemu-system-riscv64: target/riscv/op_helper.c:627:
+      helper_cscincoffset: Assertion `rs1_v->tag' failed.
+
+i.e. the probe performs `cincoffset` on an **untagged** register. Verified pre-existing, not
+introduced by the runtime-selector change: the pre-change binary straight out of the staged
+overlay does it too.
+
+### Why this invalidates the measurement rather than merely annotating it
+
+QEMU *asserts* on capability arithmetic against an untagged value; the RTL does not check it
+and simply produces a value. So on silicon the probe computed and returned **whatever
+untagged `cincoffset` yields**, and `0x09` is consistent with garbage from the probe's own
+read path rather than with the array slot's cursor. The two explanations are not
+distinguishable from the data we have, and the probe cannot arbitrate between them because
+the probe is the thing that is broken.
+
+Consequently the following, all built on stages 95-102, are **withdrawn as measurements**:
+
+* "the cursor delta is off by −57 bytes" (0a3) — the headline direct measurement;
+* "the cursor's raw low byte is `0x00` where it must end in nibble 2" (0a) — same probe family;
+* "the bad slot holds a valid capability with correct bounds but a wrong cursor" — the tag and
+  bounds readings come from the same `lcc` sequence in the same broken block.
+
+What survives is only the *stage 94* family, which returns an index rather than doing
+capability arithmetic: N=48/52/60 clean, N=56 reproducibly bad at entry 55 (0a9). That
+remains the strongest evidence that something is genuinely wrong with the array, and it is now
+the ONLY surviving evidence of it.
+
+### What has to happen before any cursor claim is made again
+
+1. Find the untagged `cincoffset` in the stage 100-102 block and fix it — the probe must run
+   clean under QEMU before it is trusted on silicon. **QEMU-gate every probe from now on**;
+   these were built and shipped to the board without ever being run under QEMU, which is how a
+   broken instrument produced four sessions of "measurements".
+2. Re-run the delta and neighbour-control probes with the fixed instrument.
+
+This is the most expensive error in this thread: it was not a misread of a log or a stale
+figure, it was trusting an instrument that had never been checked against the reference
+implementation. The check took one QEMU run.
+
+---
+
 ## SUMMARY — current best understanding (2026-08-02)
 
 There are **three separate failures**, repeatedly conflated in earlier drafts. Keep them apart.
