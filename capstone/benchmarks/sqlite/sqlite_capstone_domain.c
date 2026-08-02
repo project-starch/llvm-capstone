@@ -2856,11 +2856,11 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
     return (int)(v & 0xffUL);
   }
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 100 && CAPSTONE_SQLITE_STAGE <= 102
+#if CAPSTONE_SQLITE_STAGE >= 100 && CAPSTONE_SQLITE_STAGE <= 105
 #ifndef PROBE_FD_N
 #define PROBE_FD_N 56
 #endif
-  if (stage >= 100 && stage <= 102) {
+  if (stage >= 100 && stage <= 105) {
     /* THREE QUESTIONS THE CURSOR READING CANNOT ANSWER ON ITS OWN.
        Known: arr[N-1].zName is a VALID capability (lcc does not trap) whose bounds fit the
        container but whose cursor is wrong (low byte 0x00; any correct cursor ends in nibble 2).
@@ -3165,6 +3165,25 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
 #endif
     };
     unsigned n = (unsigned)(sizeof(arr) / sizeof(arr[0]));
+    /* 103/104/105 ADDED 2026-08-02, after QEMU showed stages 100-102 do `cincoffset` on an
+       UNTAGGED register (helper_cscincoffset assertion) and are therefore not a trustworthy
+       instrument. These three separate "is the instrument broken" from "is the array broken",
+       and none of them uses inline-asm lcc.
+         103: build the array and return n. Touches NO pointer at all. If QEMU still asserts
+              here, the untagged cincoffset is in the ARRAY CONSTRUCTION -- a real miscompile,
+              not an instrument fault -- and that is the finding. If it runs clean, the fault
+              is in the 100-102 read path and only the instrument was broken.
+         104: delta arr[n-1].zName - arr[0].zName via INTEGER CASTS. Casting a capability to
+              unsigned long yields its cursor without any capability arithmetic, so this is
+              the 100 measurement with the broken part removed.
+         105: same, but arr[n-2] -- the neighbour control for 104. */
+    if (stage == 103)
+      return (int)(n & 0xffu);
+    if (stage == 104 || stage == 105) {
+      unsigned long a0 = (unsigned long)(arr[0].zName);
+      unsigned long ax = (unsigned long)(arr[(stage == 105) ? (n - 2) : (n - 1)].zName);
+      return (int)((ax - a0) & 0xffUL);
+    }
     if (stage == 101) {
       const char *volatile a = arr[n - 1].zName;
       const char *volatile b = arr[n - 1].zName;

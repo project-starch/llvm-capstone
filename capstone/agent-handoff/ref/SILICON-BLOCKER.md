@@ -6,6 +6,62 @@ Last updated: 2026-08-01.
 
 ---
 
+## !!! ROOT CAUSE CANDIDATE: THE ARRAY CONSTRUCTION ITSELF DOES `cincoffset` ON AN UNTAGGED REGISTER
+
+This reattributes the blocker from silicon to **our codegen**.
+
+### The bisection
+
+Stage 103 was added for exactly this question: it builds the probe array and returns `n`,
+touching **no pointer** — no `lcc`, no inline asm, no pointer arithmetic in the probe. Under
+QEMU:
+
+    sel=103  (build array, return n)      -> ASSERT   helper_cscincoffset: rs1_v->tag
+    sel=104  (delta via integer casts)    -> ASSERT
+    sel=105  (neighbour, integer casts)   -> ASSERT
+
+**103 asserting settles it.** The fault is in the ARRAY CONSTRUCTION, not in the probe's read
+path. The instrument was also broken (0a, previous section), but fixing the instrument does
+not make the assert go away, because the array is built before any measurement happens.
+
+The QEMU helper is unambiguous (`op_helper.c:615-640`):
+
+    assert(rs1_v->tag);                       // the BASE of cincoffset must be tagged
+    capaddr_t offset = rs2_v->tag ? ... : rs2_v->val.scalar;   // the OFFSET may be a scalar
+
+So the generated code performs capability arithmetic whose **base** has no tag.
+
+### Why this explains everything the "wrong cursor" story explained, and better
+
+* **QEMU asserts; the RTL does not check.** `SPLIT`, `LDC` and `STC` all validate operands and
+  raise exceptions, but nothing in the RTL requires a tagged `cincoffset` base — so on silicon
+  the instruction produces a value and execution continues with a **garbage pointer**. That is
+  precisely the "pointer into the merged string blob is wrong" symptom, without needing any
+  silicon defect at all.
+* **It is a compiler bug, not an RTL defect.** Everything attributed to "the board miscomputes
+  the cursor" should be re-examined under this hypothesis first.
+* **It is consistent with the non-monotone N-dependence** (N=48/52/60 clean, N=56 bad at entry
+  55, 0a9): if the untagged base arises from register allocation / spilling, whether it happens
+  at all — and at which element — depends on register pressure, which does not vary monotonically
+  with array size.
+
+### Not yet established
+
+* **Where** the untagged value comes from. A static scan of the `x100` disassembly found 6
+  stack slots written only with `sw` and later read with `ldc`, which would lose the tag — but
+  that scan resolves stack bases heuristically and may alias, so it is a LEAD, not evidence.
+  The honest statement is: QEMU proves the base is untagged; the mechanism producing it is
+  unidentified.
+* Whether the same construct appears in real `sqlite3RegisterBuiltinFunctions` codegen, or only
+  in the probe's synthetic array.
+* An N-sweep (8/32/48/56) is running to test whether the assert is register-pressure driven.
+
+### Immediate consequence
+
+If this reproduces in a small standalone case, it is a **self-contained LLVM bug report** that
+needs no board, no monitor and no FPGA — which is a far better artefact than anything this
+campaign has produced so far, and it is reproducible under QEMU in ~60 seconds.
+
 ## !! INVALIDATED: THE STAGE-100 "CURSOR IS OFF BY 57 BYTES" MEASUREMENT
 
 **The probe that produced it is malformed.** Run under QEMU, the *original* `x100.dom` — the
