@@ -400,31 +400,31 @@ Note also that the two N=56 runs sit at positions 3 and 4 and agree exactly, whi
 useful independent check: the wrong-cursor result is stable across position even though the
 SHA5 *entry* wedge is position-sensitive. The two faults really are separate (0a4).
 
-### Caveat on the reproducer, from the disassembly
+### RETRACTED IMMEDIATELY: "the reproducer's struct has a 49-byte unaligned stride"
 
-The probe's per-entry code is (`x100.dom`, `run_sqlite_staged`):
+I read `addi a0, a0, 0x31` in the per-entry code as the array stride, concluded the struct
+was 49 bytes with byte-aligned capability slots, and wrote that the reproducer might be
+exercising an unaligned-store path SQLite never takes. **That is wrong.** Asked directly,
+the compiler says (MEASURED, `aligncheck.c` compiled with the real target flags):
 
-    stc  a5, 0x0(a0)      ; zName
-    stc  a4, 0x10(a0)     ; p1
-    stc  a4, 0x20(a0)     ; p2
-    sb   a4, 0x30(a0)     ; flags
-    addi a0, a0, 0x31     ; <-- stride = 49 bytes
+    sizeof(struct probe_fd) = 0x40 = 64      _Alignof(struct probe_fd) = 0x10 = 16
+    sizeof(void *)          = 0x10 = 16      _Alignof(void *)          = 0x10 = 16
+    sizeof(struct two_ptr)  = 0x20 = 32
 
-A 49-byte stride means every entry after the first has its capability slots at **unaligned**
-addresses. SQLite's real `FuncDef` array is naturally aligned. So the minimal reproducer may
-be exercising an unaligned-capability-store path that the actual `aBuiltinFunc` construction
-never takes.
+The ABI aligns capabilities correctly and the struct is 64 bytes: three capabilities at
+offsets 0/16/32, `flags` at 48, 15 bytes of tail padding. `0x31` is 49 = the address just
+past `flags`, computed as the argument to the `jalr` on the very next instruction — a
+tail-padding zero-fill call, not an array advance. The real stride never appears as an
+immediate; each entry's base comes from a per-entry offset loaded from a spill slot
+(`ldc a7, -0x790(a1)`, `-0x780`, ...) and added with `cincoffset`.
 
-Two things keep this from being fatal to the reproducer, but it must be stated:
+So there is **no alignment concern**, the reproducer is not disqualified on those grounds,
+and no aligned-struct variant is needed. What survives from this section is only the
+non-monotone N-dependence above, which stands on its own.
 
-* misalignment alone is clearly not sufficient — entries 1..54 are equally misaligned and are
-  all fine, and N=48/52/60 are clean throughout;
-* the fault still reproduces, so *something* real is being hit.
-
-**Before the reproducer is handed to anyone as "the minimal case", it needs a variant with a
-naturally-aligned struct.** If the aligned variant is clean, the reproducer is about
-unaligned capability stores and is NOT a model of the SQLite blocker — and the R-14 story
-(straight-line materialisation) would need re-examining on that basis. This is untested.
+(Fourth correction in this thread, and the first one caught *before* acting on it rather than
+after — the check that caught it was compiling a five-line file instead of reasoning about an
+immediate.)
 
 ## 0a5. THE SHA5 WEDGE TRACKS POSITION-2 + SQLITE-DERIVED, AND R-14 HAS A QEMU-GREEN FIX
 
