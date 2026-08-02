@@ -6,6 +6,56 @@ Last updated: 2026-08-01.
 
 ---
 
+## SUMMARY — current best understanding (2026-08-02)
+
+There are **three separate failures**, repeatedly conflated in earlier drafts. Keep them apart.
+
+| # | Failure | Where it stops | Status |
+|---|---------|----------------|--------|
+| 1 | **Rev-node pool exhaustion** | fails *before* `share1` (`pre-share`), 6/6 at position 6 | **SOLVED.** 1020-node bump allocator, no reclamation; ~182 splits/domain -> 5.5 runs/boot vs measured 6/5/5/5 (0a4) |
+| 2 | **`SHA5` stall** | monitor hands off, domain never returns from its FIRST entry | **OPEN.** 32% at slot 2 vs 2.8% at slot 1 (0a10). Monitor exonerated (0a11) |
+| 3 | **The SQLite blocker** | passes both shares, reaches `G/enter`, stalls in the main run | **OPEN.** Wrong cursor in a merged-string capability (0a3) |
+
+### What is established
+
+* Pool exhaustion arithmetic, confirmed from RTL **and** measurement (0a4).
+* The `SHA5` stall is in the domain, not the monitor: `SHA5` = "about to leave M-mode",
+  `SHA6` = "returned"; the stall sits between them (0a4). The **first** entry is where the glue
+  builds the 179-entry cap table and runs `__capstone_cap_init`.
+* Slot 2 stalls ~10x more often than slot 1, from 274 tabulated launches (0a10).
+* SQLite is **179 carves**, not 1059 — the pool is NOT its blocker (0a3).
+* The cursor of the bad slot is wrong by a measured, self-referential −57 bytes (0a3).
+* The cursor is carried in **full 64 bits**; only bounds are compressed, and they are decoded
+  *from* the cursor — so "bounds look right" is not evidence of anything (0a12).
+
+### What is refuted (do not revisit)
+
+* "The ceiling is SPLB" — misread replayed console history.
+* "The SPLB exact-fit fix caused the SHA5 stall" — reverted and tested; stall survives (0a11).
+* "SQLite needs 1059 carves and overflows the pool" — pre-string-merging figure (0a3).
+* "Stage 10 and the probe stall are one fault" — different stopping points (0a4).
+* "The reproducer has a 49-byte unaligned stride" — `sizeof`=64, `_Alignof`=16 (0a9).
+* Threshold/size theories generally — N=56 fails, N=60 passes (0a9).
+* Stages 11-15 as evidence — pre-dating the unaligned-copy fix, which resolved them (0a8).
+
+### Working rules
+
+* **Run the domain under test at position 1**, and repeat any single result — slot 1 still has
+  a ~3% stall floor.
+* Expected yield is **under two domains per boot**, because a stall ends the session. Budget
+  experiments accordingly; this, not the pool, is the throughput limit.
+* Always split console output at `booted once` — replayed history has been misread twice.
+* Confirm `SQ: G/enter` before attributing anything to the domain's main run.
+
+### Biggest open question
+
+Whether the bad cursor is **stored** wrong or **read** wrong. The RTL says `stc`/`ldc` carry
+the cursor verbatim and range/alignment-check it (0a12), so "stored wrong" is the strong prior
+and the fault would then be in the address arithmetic. `x101` measures this directly and has
+never yet executed.
+
+---
+
 ## 0. READ FIRST — WEDGES ARE POSITION-DEPENDENT: ~6 DOMAIN RUNS PER BOOT, THEN IT WEDGES
 
 Measured by running the TRIVIAL control (`wd71`: one walk, one return, no SQLite) repeatedly
