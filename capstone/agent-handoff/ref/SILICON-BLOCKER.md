@@ -6,6 +6,52 @@ Last updated: 2026-08-02.
 
 ---
 
+## THE WORKAROUND RELIABLY TRIGGERS R-16 — 5/5 static-builtins images entry-stall
+
+    image                     behaviour                 .data
+    r110 r111 f10 n112        ENTER                     15088
+    sqlite_silicon            ENTER                      5872
+    sb10 st10 waa wab wac     STALL (static-builtins)   24304    <- 5 of 5
+    r112 x101                 STALL                     15088
+
+**Every image built with `SQLITE_STATIC_BUILTINS=1` entry-stalls: 5 for 5, across five
+independently built binaries** (including three deliberately perturbed draws, `waa`/`wab`/`wac`,
+built specifically to get a different outcome). That is not a lottery that can be won by
+redrawing.
+
+### Why this is mechanistically unsurprising
+
+The workaround makes `aBuiltinFunc` a compile-time-initialised **global** instead of a
+straight-line local. That adds ~9 KB of initialised `.data` (24304 vs 15088) whose capability
+leaves the entry glue must copy from the blob and initialise via `__capstone_cap_init` — at the
+domain's FIRST entry, which is precisely where R-16 stalls. The workaround moves the work out
+of the main run and into the one place that is already failing.
+
+**So the fix for the SQLite blocker cannot be validated on silicon in its current form**: it
+converts an R-14 in-domain wedge into an R-16 entry stall. QEMU shows none of this because QEMU
+does not reproduce R-16 at all.
+
+### What this does NOT establish
+
+`.data` size alone does not discriminate — `r112` and `x101` stall at 15088, the same value as
+four entering images. So "bigger initialised data" is a correlate within the static-builtins
+family, not a general rule, and R-16 stays unexplained. The honest statement is: *the
+static-builtins configuration is reliably associated with the entry stall*, mechanism plausible
+but unproven.
+
+### Consequence for the SQLite path
+
+Both routes are now blocked by different faults:
+
+    keep the local array   -> R-14 in-domain wedge at sqlite3RegisterBuiltinFunctions (validated)
+    make it a static       -> R-16 entry stall, 5/5 (this section)
+
+A third shape is needed that avoids both: something that neither materialises the array
+straight-line at run time NOR adds a large initialised global. R-14 variant C (fill a local in a
+LOOP from a small static table) is the obvious candidate — it was the pre-fix
+board-validated-correct shape, and its static table is far smaller than the whole `FuncDef`
+array. It has never been tried against real SQLite.
+
 ## CORRECTION: carve count does NOT predict the R-16 entry stall
 
 Earlier I wrote that removing one capability-bearing global (182 -> 181 carves) "flipped an
