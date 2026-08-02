@@ -2856,7 +2856,7 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
     return (int)(v & 0xffUL);
   }
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 110 && CAPSTONE_SQLITE_STAGE <= 111
+#if CAPSTONE_SQLITE_STAGE >= 110 && CAPSTONE_SQLITE_STAGE <= 113
   /* R-14 variants A and B as STAGED probes, so they can run on the board through the same
      host/runner as everything else (the ladder .dom files are not staged in the initramfs).
      Reduced verbatim from tests/fpga-repros/R14-strline-struct/.
@@ -2874,6 +2874,40 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
 
      111 is the safe/valuable one: it RETURNS a wrong number instead of wedging, so run it
      FIRST and put 110 last (a wedge takes the core with it).  */
+  /* 112/113 = the R-14 CONTROLS, which the board reports as CORRECT (16).
+       112 = variant D: same straight-line materialisation as A, but a FLAT `const char *[64]`
+             instead of a struct. Isolates "struct element type" as a necessary ingredient.
+       113 = variant C: same struct as A, but filled in a LOOP from a static table. Isolates
+             "straight-line materialisation" as the other necessary ingredient.
+     Both are expected to RETURN, so they are safe to run first in a batch. If they still
+     return 16 post-C-16 while A and B (110/111) wedge, the remaining fault is pinned to
+     straight-line materialisation INTO STRUCT FIELDS specifically -- both ingredients
+     required, which is a far sharper target than "struct array init". */
+  if (stage == 112) {
+    const char *f[64]; unsigned i; int ok = 0;
+    f[0]="ltrim"; f[1]="rtrim"; f[2]="trim"; f[3]="max"; f[4]="min"; f[5]="typeof";
+    f[6]="length"; f[7]="instr"; f[8]="substr"; f[9]="upper"; f[10]="lower";
+    f[11]="coalesce"; f[12]="hex"; f[13]="unhex"; f[14]="quote"; f[15]="replace";
+    for (i=16;i<64;i++) f[i]="filler";
+    for (i=0;i<16;i++) { unsigned n=0; const char *z=f[i]; while (z && z[n]) n++; if (z && n>0) ok++; }
+    return ok;                              /* expect 16 */
+  }
+  if (stage == 113) {
+    static const char *const tbl[16] = {
+      "ltrim","rtrim","trim","max","min","typeof","length","instr",
+      "substr","upper","lower","coalesce","hex","unhex","quote","replace" };
+    struct kv2 { const char *z; const char *y; };
+    struct kv2 a[64]; unsigned i; int ok = 0;
+    for (i=0;i<16;i++){ a[i].z=tbl[i]; a[i].y="aaa0"; }
+    for (i=16;i<64;i++){ a[i].z="filler"; a[i].y="fill"; }
+    for (i=0;i<16;i++) {
+      unsigned nz=0, ny=0; const char *z=a[i].z, *y=a[i].y;
+      while (z && z[nz]) nz++;
+      while (y && y[ny]) ny++;
+      if (z && y && nz>0 && ny>0) ok++;
+    }
+    return ok;                              /* expect 16 */
+  }
   if (stage >= 110 && stage <= 111) {
     struct kv { const char *z; const char *y; };
     struct kv a[64];

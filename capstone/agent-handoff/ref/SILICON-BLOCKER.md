@@ -6,6 +6,41 @@ Last updated: 2026-08-01.
 
 ---
 
+## CLASSIFY BEFORE RECORDING: an entry stall is NOT a result about the domain
+
+Two board failures look identical in a summary and mean opposite things. Always read the LAST
+MARKER, never just "did not return":
+
+    last marker = SHA5:xxxx      ENTRY STALL. The monitor handed off and the domain never came
+                                 back from its FIRST entry. The domain's own code never ran.
+                                 -> tells you NOTHING about the domain. RETRY.
+
+    last marker = SQ: G/enter    IN-DOMAIN WEDGE. The domain entered and hung in its own code.
+                                 -> a genuine result about the domain under test.
+
+    SQ: obs=<n>                  RETURNED. A number, always usable.
+
+This was not academic. On 2026-08-02 the variant-D **control** (`r112`, expected to return 16)
+came back `NO RETURN, last=SHA5:00000000`. Recorded naively that reads "variant D fails on
+silicon", which would have destroyed the entire A/B-vs-C/D comparison the experiment exists to
+make — D is the control that isolates "struct element type" as a necessary ingredient. The
+domain had not executed a single one of its own instructions. Both controls had already passed
+the QEMU gate (112 -> 16, 113 -> 16), so the domains themselves were sound.
+
+**The runner's own "FIRST FAILURE" summary does not make this distinction** — it reports "did
+not return" for both. The distinction has to be made when reading the scoped log.
+
+### Retry discipline, now automated
+
+    ENTRY-STALL(SHA5)     domain never ran        -> retry, up to 3x
+    RETURNED:<n>          real result             -> stop
+    NO-RETURN(last=...)   real in-domain wedge    -> stop
+
+Same principle as the `__CAPSTONE_INFRA_FLAKE__` retry: **a failure that happened before the
+thing under test began is not evidence about the thing under test.** Two separate results were
+nearly recorded as findings today for want of that rule — the QEMU infra flake on `r14b -O0`,
+and this entry stall on `r112`.
+
 ## R-14 STILL WEDGES ON SILICON AFTER C-16 — and the watchdog proved the board was really working
 
     QEMU (fixed compiler)   stage 111 (variant B) -> 16   stage 110 (variant A) -> 16   asserts=0
