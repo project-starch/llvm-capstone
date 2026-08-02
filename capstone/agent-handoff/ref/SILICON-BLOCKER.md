@@ -426,6 +426,46 @@ non-monotone N-dependence above, which stands on its own.
 after — the check that caught it was compiling a five-line file instead of reasoning about an
 immediate.)
 
+## 0a10. THE WHOLE CORPUS, TABULATED: SLOT 2 STALLS ~10x MORE OFTEN THAN SLOT 1
+
+Every domain launch in every run-scoped log was re-parsed (274 launches), classified by its
+last marker, and bucketed by position. This replaces every impression-based statement about
+position in the sections above.
+
+    pos 1: n=107   RETURNED=99 (93%)   SHA5-stall= 3 (2.8%)   entered-no-return=5
+    pos 2: n= 96   RETURNED=48 (50%)   SHA5-stall=31 ( 32%)   entered-no-return=17
+    pos 3: n= 30   RETURNED=28         SHA5-stall= 1          entered-no-return=1
+    pos 4: n= 22   RETURNED=16         SHA5-stall= 3          pre-share=2
+    pos 5: n= 13   RETURNED=11         SHA5-stall= 2
+    pos 6: n=  6   pre-share=6 (100%)
+
+### What is sound here, and what is not
+
+**Sound:** positions 1 and 2 are both *unconditioned* — every boot reaches them — so the
+comparison is fair. **The second domain launched in a boot stalls at `SHA5` about ten times
+more often than the first** (32% vs 2.8%). That is far too large to be noise at n=96/107.
+
+**NOT sound:** positions 3-5 look healthy, but they are **survivorship-biased**. A stall ends
+the session, so a position-3 sample exists only in boots where position 2 already succeeded.
+Their low rates say nothing, and any claim of the form "only slot 2 is bad, slot 3 is fine"
+is unsupported by this table. An earlier draft of this section drew exactly that conclusion
+before noticing the conditioning.
+
+**Position 6 is a different failure entirely**: 6 of 6 fail *before* `share1` (`pre-share`),
+which is the rev-node pool exhaustion of 0a4, not the `SHA5` stall.
+
+### Consequences
+
+* `SHA5` stalls are **not exclusive** to slot 2 — 3 of 107 happen at slot 1 (`wk9`, `wd55`,
+  `wk0`). So "run it at position 1" reduces the failure rate roughly tenfold; it does not
+  eliminate it. Any single position-1 result still needs a repeat before it is load-bearing.
+* Correspondingly, the section 0a6 framing "the SHA5 wedge is position-dependent" is right in
+  direction but was stated too strongly from a handful of runs. The honest version is a
+  10x rate difference between slot 1 and slot 2, with a residual ~3% floor at slot 1.
+* Because a stall ends the boot, the *expected* number of usable results per boot is roughly
+  1 + 0.68 + ... — i.e. under two. That, not the 1020-node ceiling, is what actually limits
+  throughput today.
+
 ## 0a5. THE SHA5 WEDGE TRACKS POSITION-2 + SQLITE-DERIVED, AND R-14 HAS A QEMU-GREEN FIX
 
 ### The R-14 workaround now exists and passes QEMU
