@@ -109,6 +109,58 @@ further silicon measurement is possible and additional boots produce zero-inform
 The productive work left is offline: the `cincoffset`-consumes-linear-`rs1` mechanism and its
 two-derivation test, which is written up and ready to run the moment the board recovers.
 
+## REFUTED FROM THE RTL: `cincoffset` does NOT consume a linear rs1 — and a correction to C-16's write-up
+
+Read directly from `capstone_flu_unit.anvil:29-68` (SOURCE, primary):
+
+    func CINCOFFSETIMM(data){
+        if(data.cap_rs1.metadata.cap_type==cap_type_t::NOT_CAP){
+            call raise_exception(data.trans_id,ex_code::UNEXPECTED_OPERAND)   // <-- DOES check
+        } else { ...
+            let rs1 = data.cap_rs1;
+            let new_cursor = rs1.cursor + val;
+            let rd = call create_capability(rs1.metadata,new_cursor);
+            let result = call create_result_pack(...,rs1,rd);   // rs1 passed through UNCHANGED
+
+### 1. The consume hypothesis is dead
+
+The RTL passes `rs1` through the result pack **unchanged**. There is no `rs1 != rd` test, no
+linearity check, and no nulling anywhere in `CINCOFFSET` or `CINCOFFSETIMM`. The
+consume-on-non-copyable behaviour exists **only in QEMU's helper**
+(`op_helper.c`: `if (rs1 != rd) { ... if(!captype_is_copyable) *rs1_v = NULL; }`).
+
+So "silicon treats the cap-table capability as LINEAR and the first derivation nulls it" is
+**REFUTED**. Straight-line vs loop codegen (`rd != rs1` vs `rd == rs1`) cannot matter on
+silicon for this reason, and the 128/129 probe should show no difference. The asymmetry runs
+the OPPOSITE way to what I assumed: QEMU is the stricter model here, not the RTL.
+
+### 2. Correction to the C-16 write-up
+
+I wrote, in the C-16 sections and in `ISSUES.md`, that "nothing in the RTL requires a tagged
+`cincoffset` base, so the untagged pointer is silently used". That is **wrong for the immediate
+form**: `CINCOFFSETIMM` explicitly raises `UNEXPECTED_OPERAND` on a `NOT_CAP` base.
+
+It is right for the **register** form, but only because the check is commented out:
+
+    func CINCOFFSET(data){
+        // FIXME: wait for the non-cap instructions to set metadata properly
+        // if((data.cap_rs1.metadata.cap_type==cap_type_t::NOT_CAP)|| ... ){
+        //     call raise_exception(data.trans_id,ex_code::UNEXPECTED_OPERAND)
+        // } else
+        if((...UNINIT)||(...SEALED)){ raise } else { ...proceeds... }
+
+So on silicon an untagged base **traps** through `cincoffsetimm` and **is silently accepted**
+through `cincoffset`. C-16 remains a real bug (QEMU asserted, the MIR showed the tag being
+stripped, the fix changed the emitted instruction), but the claim about how it manifests on
+hardware must be stated per-form, not blanket.
+
+### What this leaves for the SQLite blocker
+
+Still open. The straight-line construct wedges with controls returning; the mechanism is NOT
+cincoffset consumption. A trap is now a live candidate — an untagged base reaching
+`cincoffsetimm` raises `UNEXPECTED_OPERAND`, and R-5 records that illegal capability ops wedge
+rather than report — but nothing yet explains what would untag the base in the first place.
+
 ## MECHANISM HYPOTHESIS FOR R-14 / THE SQLITE BLOCKER: `cincoffset` CONSUMES A LINEAR rs1
 
 Found by diffing the codegen of the two shapes (offline, no board). Merged string constants
