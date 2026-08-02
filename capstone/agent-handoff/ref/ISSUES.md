@@ -728,6 +728,27 @@ Stage 10 and the full SQLite QEMU gate now pass with no workaround.
 * Variant D (flat `const char*[64]`, also no padding) is correct, so "struct vs flat" is still
   an unexplained axis.
 
+**UPDATE 2026-08-02 (post-fix, measured):** the re-run happened. Variants A and B still fail on
+silicon with the C-16 fix in place, and both are QEMU-clean:
+
+    QEMU (fixed compiler)   r14a -O0/-O1 -> 16      r14b -O0/-O1 -> 16
+                            stages 110/111/112/113 from one image -> 16 each
+    BOARD (fixed compiler)  variant A (r110) -> IN-DOMAIN WEDGE after SQ: G/enter
+                            variant B (r111) -> IN-DOMAIN WEDGE after SQ: G/enter
+
+So **R-14 does not close as a duplicate of C-16** — it is a separate, silicon-only fault that
+QEMU cannot see. Note variant B previously *returned 4*; as a staged probe it wedges instead,
+but those are different binaries (standalone fpga-repro vs. the same shape inside the SQLite
+amalgamation), so that is NOT evidence the fix made anything worse.
+
+The C and D **controls are still unmeasured post-fix** — every attempt to run them was killed by
+the R-16 entry stall before the domain executed. Until they run, "both ingredients required"
+rests on pre-fix data.
+
+New QEMU-gated rungs, one source building both a QEMU domain and a board domain:
+`tests/runtime-qemu/silicon-ladder/r14a_app.c`, `r14b_app.c`, `r14d_app.c` (+ `_host.c` oracles,
+all 16).
+
 **Required next step:** re-run all four variants below with the fixed compiler. If A and B now
 pass, R-14 closes as a duplicate of C-16 and the "confidence it is hardware" note was right to
 stay unconvinced. If A still wedges, R-14 is a genuinely separate defect and everything below
@@ -837,6 +858,41 @@ exactly that shape.
   `SQLITE_STATIC_BUILTINS` unset**.
 - **Why it hid so long:** the staged probes were built and shipped to the board for four
   sessions without ever being run under QEMU — the one tool that would have asserted on it.
+
+---
+
+### R-16 — domain never returns from its FIRST entry (`SHA5` stall) `OPEN — attribution NOT established`
+
+**Now the primary blocker for the whole measurement campaign**, ahead of R-14 and ahead of
+SQLite itself. The monitor completes a region share and hands off; the domain never comes back.
+Last UART line is `SHA5:xxxx`.
+
+`SHA5` = "about to leave M-mode for the domain", `SHA6` = "the domain returned from the share
+entry" (`sbi_capstone.c:111`, `:1020-1026`). A stop between them means the monitor is exonerated
+and the domain died on its FIRST entry — which is where the glue builds the cap table (one
+`split` per global) and runs `__capstone_cap_init`. **The domain's own code never runs**, so such
+a run carries NO information about the domain under test and must never be recorded as one.
+
+- **Not QEMU-visible.** Every image that stalls on the board runs clean under QEMU.
+- **Per-image repetition, but the "entering" side is thin:** `x101` stalled 6/6, `r112` 3/3,
+  `r113` 1/1, `v110` 1/1, `st10` 1/1; `r110`/`r111` each entered **1/1** only. So it is
+  reproducible for stalling images and merely assumed for entering ones — a per-BOOT coin toss
+  is not excluded.
+- **Ruled out as discriminators (all MEASURED):** dom_data geometry — `r110` (entered) and
+  `r112`/`r113`/`v110` (stalled) have byte-identical blob/cap-table/storage/stack/globals-offset,
+  as do `r111` (entered) and `st10` (stalled); also carve count, `.text` size and merged-string
+  bytes.
+- **It defeats the runtime-selector workaround.** One image carrying all probes dispatches
+  correctly under QEMU, but if that image stalls, selection never gets a chance — and any rebuild
+  is a fresh draw, so "it enters" cannot be carried across builds.
+- **Retrying the same binary is futile** (three boots spent on `r112`). Retry is correct for an
+  `__CAPSTONE_INFRA_FLAKE__`; for an entry stall, change the binary or the order.
+- **Position:** slot 2 stalls ~10x more often than slot 1 (32% vs 2.8% over 274 launches), but
+  those are pooled figures across many binaries and should not be used as a per-image probability.
+
+**Next step:** it is board-only and not reproducible offline, so it needs instrumentation rather
+than a reproducer. Every board session should run `tests/rtl-smoke/board-watchdog.sh` alongside
+the runner so a stall is distinguishable from a dead runner and from normal work while it happens.
 
 ---
 
