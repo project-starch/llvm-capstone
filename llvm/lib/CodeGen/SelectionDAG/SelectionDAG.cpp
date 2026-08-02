@@ -9367,18 +9367,38 @@ SDValue SelectionDAG::getMemset(SDValue Chain, const SDLoc &dl, SDValue Dst,
 
   const char *BzeroName = getTargetLoweringInfo().getLibcallName(RTLIB::BZERO);
 
+  // Type the destination argument in the pointer's OWN address space, not AS0.
+  //
+  // PointerType::getUnqual() builds an addrspace(0) pointer. On a target where AS0
+  // is a plain integer address but the memset destination lives in a wider pointer
+  // address space (e.g. 128-bit capabilities in AS200), the declared argument type
+  // is narrower than the value, so call lowering inserts a TRUNCATE of the pointer.
+  // On Capstone that truncate becomes PseudoTRUNC_CAP + ADDI, which strips the
+  // capability tag: the callee then receives an untagged pointer and any pointer
+  // arithmetic inside it (memset's own `p++`) is capability arithmetic on an
+  // untagged base. QEMU asserts on that; the RTL does not check it and silently
+  // writes through a garbage address.
+  //
+  // This was the aggregate-initialiser tail-padding bug: `struct { ptr; ptr; ptr;
+  // char; }` has 15 bytes of tail padding, the initialiser zero-fills it via memset,
+  // and every element of such an array corrupted memory on silicon.
+  //
+  // For AS0 targets PointerType::get(Ctx, 0) is exactly what getUnqual() returned,
+  // so this is a no-op everywhere else.
+  Type *DstPtrTy = PointerType::get(Ctx, DstPtrInfo.getAddrSpace());
+
   bool UseBZero = isNullConstant(Src) && BzeroName;
   // If zeroing out and bzero is present, use it.
   if (UseBZero) {
     TargetLowering::ArgListTy Args;
-    Args.emplace_back(Dst, PointerType::getUnqual(Ctx));
+    Args.emplace_back(Dst, DstPtrTy);
     Args.emplace_back(Size, DL.getIntPtrType(Ctx));
     CLI.setLibCallee(
         TLI->getLibcallCallingConv(RTLIB::BZERO), Type::getVoidTy(Ctx),
         getExternalSymbol(BzeroName, TLI->getPointerTy(DL)), std::move(Args));
   } else {
     TargetLowering::ArgListTy Args;
-    Args.emplace_back(Dst, PointerType::getUnqual(Ctx));
+    Args.emplace_back(Dst, DstPtrTy);
     Args.emplace_back(Src, Src.getValueType().getTypeForEVT(Ctx));
     Args.emplace_back(Size, DL.getIntPtrType(Ctx));
     CLI.setLibCallee(TLI->getLibcallCallingConv(RTLIB::MEMSET),
