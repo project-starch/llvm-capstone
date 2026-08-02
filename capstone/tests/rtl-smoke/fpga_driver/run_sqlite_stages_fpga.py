@@ -82,7 +82,7 @@ def main():
         cold_boot(console, C.GDB_PROMPT, IMG_NAME)
         log(f"booted once; running {len(DOMS)} staged domains in sequence")
 
-        for dom_spec in DOMS:
+        for dom_idx, dom_spec in enumerate(DOMS, 1):
             # "path" or "path:selector". The optional selector is passed to the host as its
             # second argument, which publishes it in the shared region so the DOMAIN picks the
             # probe at RUN TIME (see sqlite_capstone_domain.c, magic 0x5A6E00nn).
@@ -99,6 +99,7 @@ def main():
             else:
                 dom, selector = dom_spec, None
                 host_args = dom
+            label = f"{dom}:{selector}" if selector else dom
             # CLEAR THE TRAP LATCH BEFORE EACH DOMAIN, or the wedge read below is worthless.
             #
             # recent_nontrivial_*_log_q latches ANY trap except cause 0 (interrupt) and cause 2
@@ -123,12 +124,33 @@ def main():
 
             mark = console.uart_mark()
             wedged = False
+            # NAME EVERY TEST ON THE UART, not just in this runner's local log.
+            #
+            # A single boot runs several domains back to back, so a human watching the board
+            # console (or anyone reading a captured log later) otherwise sees an undifferentiated
+            # stream of `SQ:` markers with no way to tell which domain produced them -- and when
+            # one wedges, no way to tell WHICH one wedged without counting markers by hand.
+            # Echoing the banner ON THE BOARD puts it in the UART stream itself, so it appears
+            # live in the console GUI and inside `uart_since(mark)` (hence in the transcript).
+            #
+            # The prefix is `###`, deliberately NOT `SQ: `: the missing-domain guard below tests
+            # `"SQ: " not in text`, so a banner carrying that string would make every run look
+            # like it produced domain output and would silently disable the guard.
+            n_tot = len(DOMS)
+            start_banner = f"### TEST {dom_idx}/{n_tot} START {label} ###"
+            log(f"--> TEST {dom_idx}/{n_tot}  {label}")
+            t_dom = time.time()
             try:
-                console.run_command(f"{HOST} {host_args}; echo D''N_$?", r"DN_\d",
-                                    timeout=PER_DOM, idle_timeout=PER_DOM)
+                console.run_command(
+                    f"echo '{start_banner}'; {HOST} {host_args}; rc=$?; "
+                    f'echo "### TEST {dom_idx}/{n_tot} END {label} rc=$rc ###"; '
+                    f"echo D''N_$rc",
+                    r"DN_\d", timeout=PER_DOM, idle_timeout=PER_DOM)
+                log(f"<-- TEST {dom_idx}/{n_tot}  {label}  returned in {time.time()-t_dom:.0f}s")
             except Exception as exc:
                 wedged = True
-                log(f"{dom}: no return within {PER_DOM:.0f}s ({type(exc).__name__})")
+                log(f"<-- TEST {dom_idx}/{n_tot}  {label}  NO RETURN within "
+                    f"{PER_DOM:.0f}s ({type(exc).__name__}) -- everything after this is lost")
             text = console.uart_since(mark)
 
             # A MISSING DOMAIN MUST NOT READ AS SUCCESS.
@@ -179,7 +201,6 @@ def main():
                 raise SystemExit(
                     f"HARD STOP: {dom} produced no domain output and the shell reported "
                     f"'not found'. Treating this as a pass would test nothing.")
-            label = f"{dom}:{selector}" if selector else dom
             transcript.append(f"===== {label} =====\n{text}\n")
             m = re.search(r"SQ: obs=(\d+)", text)
             obs = int(m.group(1)) if m else None

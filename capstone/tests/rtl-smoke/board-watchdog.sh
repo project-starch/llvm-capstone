@@ -25,7 +25,7 @@
 #
 # Usage:
 #   bash board-watchdog.sh <uart-log> [idle-limit-s] [runner-pid]
-#   ABORT_ON_ENTRY_STALL=1 ENTRY_STALL_S=45 bash board-watchdog.sh ...
+#   ABORT_ON_ENTRY_STALL=1 ENTRY_STALL_S=260 bash board-watchdog.sh ...
 #   (runner-pid omitted -> liveness is not checked, only UART idle is reported)
 #
 # Emits ONE LINE PER CHECK on stdout, so it can be piped into a Monitor:
@@ -41,7 +41,13 @@ LIMIT=${2:-180}
 RUNNER_PID=${3:-}
 INTERVAL=${WATCHDOG_INTERVAL:-15}
 ABORT_ON_ENTRY_STALL=${ABORT_ON_ENTRY_STALL:-0}
-ENTRY_STALL_S=${ENTRY_STALL_S:-180}   # healthy boots have gone 120 s silent; 45 was far too low
+# MEASURED, not guessed: the JTAG upload runs at ~130 KiB/s, so a 17.4 MB firmware is ~133 s
+# of completely legitimate UART silence, and larger images have taken 227 s. Anything below
+# that aborts healthy runs DURING THE UPLOAD -- which is what produced a whole session of
+# false "the board will not boot" / "cyclic boot" / "the firmware is broken" diagnoses on
+# 2026-08-02. The earlier comment here said "healthy boots have gone 120 s silent"; that
+# figure predated the upload measurement and was itself an underestimate. Do not lower this.
+ENTRY_STALL_S=${ENTRY_STALL_S:-260}
 
 start=$SECONDS
 # byte offset of the log when we started: everything before it is replayed scrollback
@@ -73,7 +79,11 @@ while true; do
     # then dead air, with no "downloaded N bytes" line. The runner would otherwise burn its
     # whole per-domain budget on a board that has no image in DDR.
     if [ "$ABORT_ON_ENTRY_STALL" = "1" ] && [ "$idle" -ge "$ENTRY_STALL_S" ] && [ -f "$LOG" ]; then
-      scan0=$(tail -c "+${START_SIZE:-1}" "$LOG" 2>/dev/null)
+      # RUN-SCOPED, same reason as the entry-stall scan below: `tail -c +$START_SIZE` was
+      # effectively the whole log (START_SIZE is ~1 because callers rm the log first), so the
+      # replayed scrollback's own `buildroot login` matched the healthy case and this check
+      # could never fire. That direction is a false NEGATIVE -- dead boots ran to full timeout.
+      scan0=$(awk '/emit gdb_input .*monitor load_image/{buf=""} {buf=buf $0 "\n"} END{printf "%s", buf}' "$LOG" 2>/dev/null)
       case "$scan0" in
         *load_image*)
           case "$scan0" in

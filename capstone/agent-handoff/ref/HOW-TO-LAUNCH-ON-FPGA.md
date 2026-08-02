@@ -18,8 +18,26 @@ can also use the browser GUI. Every step and gotcha is in the KB files below.
 **Running SQLite, or any staged probe?** Read
 §"Running SQLite (and any staged probe) on the board" below FIRST — it carries the
 `dom:selector` mechanism, the mandatory `:0` control, the result-classification table
-(an entry stall is not a result), and the six hazards that cost ~2 hours of board time
+(an entry stall is not a result), and the ten hazards that cost hours of board time
 on 2026-08-02.
+
+## STOP — the five settings that have wasted the most board time
+
+Check these before every run. Each one has produced a confident, wrong conclusion about
+the *hardware* when the actual fault was in the harness.
+
+| # | Setting | Wrong value costs |
+|---|---|---|
+| 1 | `ENTRY_STALL_S` ≥ **260** | JTAG upload is **133–227 s of legitimate silence** (~130 KiB/s). The 45 s default aborted runs mid-upload and produced "the board won't boot" / "cyclic boot" / "firmware is broken" — all false. |
+| 2 | Scan only **this run's** output | The console replays ~548 KB of the previous boot on connect. Grepping the whole log finds stale `SHA5`/banner markers. Split at this run's `load_image`. |
+| 3 | Unique `PROBE_SCOPED_OUT`, `rm -f` first | The transcript is written only at the end, so a killed run leaves the previous one in place and it reads as current. |
+| 4 | `gdb_state` is `idle` before starting | A `kill -9`'d runner orphans the GDB session in `error`; every later run then times out before `load_image`. Survives power-cycle; only `gdb_stop()` clears it. |
+| 5 | Firmware identity by **hash** | Buildroot pads in 2 MiB steps, so same-size ≠ same-image. Overlay edits also need `A=linux-rebuild`, not just an OpenSBI relink. |
+
+**Before concluding the board or firmware is broken, rule out the harness.** On 2026-08-02
+the large majority of apparent board failures were self-inflicted by rows 1–4; the same
+firmware file was declared dead six times and then booted five times with no rebuild in
+between.
 
 ## The 4 KB files (read in this order)
 
@@ -284,6 +302,41 @@ share one `#if` block.
 Why it matters: one binary per probe means every measurement is a fresh roll of the
 build/boot dice. Run-time selection lets several questions ride one image and one boot.
 
+### Every test names itself on the UART
+
+Because one boot runs several domains back to back, the runner echoes a banner **on the
+board** around each one, so it appears live in the console GUI and inside the transcript:
+
+```
+### TEST 3/5 START /test-domains/min.dom:146 ###
+SQ: A/dom-ok ... SQ: obs=1516338
+### TEST 3/5 END /test-domains/min.dom:146 rc=0 ###
+```
+
+and locally, `--> TEST 3/5  <label>` / `<-- TEST 3/5  <label>  returned in 12s`, or
+`NO RETURN within 150s -- everything after this is lost`. Without this, a wedge mid-sequence
+had to be attributed by counting `SQ:` markers by hand, and the run that stalled was
+routinely mis-identified.
+
+The prefix is `###` and **must not be `SQ: `**: the missing-domain guard tests
+`"SQ: " not in text`, so banners carrying that string would make every run look like it
+produced domain output and would silently disable the guard.
+
+### Retrying: REDRAW the image, do not re-run it
+
+An entry stall wedges the boot, so a losing draw costs the whole attempt — which makes a
+retry loop look attractive. But R-16 is **per-image and deterministic**: `min.dom` stalled
+2/2 under a correctly-calibrated watchdog, and `sb10` 3/3, `x101` 6/6, `r112` 3/3 before it.
+Re-running the same binary is N identical losing tickets and pure board time.
+
+So a retry loop must **rebuild or switch image between attempts**. Stage several distinct
+images that carry the same probes and walk them; a bounded 2 attempts is right for genuine
+*infra* flakes (JTAG/upload), which are transient, and more than that only pays if each
+attempt draws a new binary. Cheap way to draw: vary `CAPSTONE_SQLITE_STAGE` within a single
+`#if` block, so every image carries the whole ladder and the probe code under test stays
+byte-identical across draws — the draw then cannot confound the result. Always `sha256sum`
+the set and abort if any two match.
+
 ### ALWAYS run `:0` first. A verdict from an image whose control did not return is noise.
 
 `run_sqlite_staged()` begins `if (stage <= 0) return 0;`, and that early return is **not
@@ -325,9 +378,21 @@ exactly like healthy progress. Run these as a second process:
 ```bash
 python3 .../run_sqlite_stages_fpga.py > "$LOG" 2>&1 &
 R=$!
-ABORT_ON_ENTRY_STALL=1 bash capstone/tests/rtl-smoke/board-watchdog.sh "$LOG" 300 "$R" &
+ABORT_ON_ENTRY_STALL=1 ENTRY_STALL_S=260 \
+  bash capstone/tests/rtl-smoke/board-watchdog.sh "$LOG" 300 "$R" &
 wait $R
 ```
+
+**Calibrate `ENTRY_STALL_S` against the JTAG upload, not against a guess.** This is the
+single most expensive mis-setting in the harness's history. Measured 2026-08-02: the JTAG
+transfer runs at **~130 KiB/s**, so a 17.4 MB firmware is **~133 s** of complete UART
+silence and larger images have taken **227 s** — all of it perfectly healthy. The default
+was **45 s**. The watchdog therefore aborted essentially every run mid-upload, and the
+resulting "the board will not boot" / "cyclic boot" / "firmware is broken" diagnoses were
+all harness artefacts: the same firmware file was declared dead six times and then booted
+five times in a row with no rebuild in between. **Use ≥ 260 s.** An earlier version of this
+line said "healthy boots have gone 120 s quiet" — that figure predated the upload
+measurement and is an underestimate; do not restore it.
 
 `board-watchdog.sh <uart-log> [idle-limit-s] [runner-pid]` emits one line per interval:
 `ALIVE +<bytes>` / `QUIET <idle>s` / `STALE` / `ENTRY-STALL` (aborts the runner) / `GONE`
@@ -345,8 +410,19 @@ sentinel alone hangs forever if the producer crashes.
    boundary — the last `load_image`, or the runner's `booted once`. A watchdog that
    grepped the whole log matched a stale `SHA5` and killed ~24 healthy runs over ~87
    minutes right after `load_image`, before the board had even booted, and produced the
-   false conclusion "the board stopped accepting images". `ENTRY_STALL_S` must also stay
-   above real boot silence: healthy boots have gone **120 s** quiet.
+   false conclusion "the board stopped accepting images". Scope the scan to **this run's
+   own `load_image` emit**, not to a byte offset captured at startup: callers `rm -f "$LOG"`
+   before launching, so any "remember the starting size" fix is inert — it measured ~1 byte
+   every time and silently did nothing for an entire session while appearing to be the fix.
+   The working form is
+
+   ```bash
+   scan=$(awk '/emit gdb_input .*monitor load_image/{buf=""} {buf=buf $0 "\n"} END{printf "%s", buf}' "$LOG")
+   ```
+
+   and `NO-BOOT` keys on `buildroot login` / `SQ: `, never on the bootrom banner (the banner
+   appears in replayed scrollback: 45 copies before `load_image`, 0 after — which is what
+   was misread as "cyclic boot").
 2. **Never reuse `PROBE_SCOPED_OUT` between runs, and delete it first.** The runner writes
    the transcript only at the end, so a killed run leaves the PREVIOUS run's file in place
    and the classifier reports it as current. A 5-hour-old result about a different domain
@@ -367,6 +443,31 @@ sentinel alone hangs forever if the producer crashes.
    destination dir, not the stages just built, and no caller checks it.
 6. **Domains are big; keep only what the current experiment needs.** Every `.dom` left in
    the target dir rides the firmware over JTAG on every boot.
+7. **Never `kill -9` a board runner.** It bypasses the `finally` that calls
+   `release_board()`, which leaves the **server-side GDB/OpenOCD session orphaned in
+   `error`**. `gdb_start()` no-ops unless the state is `idle|error` and only waits for
+   `running`, so every subsequent run then dies with
+   `ActionTimeout: timed out waiting for event 'gdb_state'` and never issues `load_image` —
+   indistinguishable from "the board is broken", and it survives a power cycle *and* a lock
+   release. Only `gdb_stop()` clears it (`/tmp/capstone/gdb-recover.py`). Stop runners with
+   `TERM` and let teardown run; check `gdb_state` is `idle` before blaming the board.
+8. **Firmware identity is the hash, never the size.** Buildroot pads images in **2 MiB**
+   steps, so a rebuilt firmware routinely has a byte-identical *size* and completely
+   different contents — two builds compared here matched at 17466376 bytes and differed in
+   3.8 M bytes (`md5 e1a17f74…` vs `79084b88…`). "Same size, so it's the known-good image"
+   is not a check. `md5sum`/`sha256sum` it.
+9. **Overlay edits need `A=linux-rebuild`.** Buildroot does not track
+   `overlay/test-domains/` → cpio as a dependency, so staging or pruning a `.dom` and then
+   rebuilding only OpenSBI produces firmware whose initramfs is unchanged. Symptom: the
+   image size does not move no matter what you delete, and the board keeps running the
+   *old* domain while you attribute its results to the new one. Order is
+   `A=linux-rebuild` → `A=opensbi-rebuild`.
+10. **Before concluding the board or firmware is broken, rule out the harness.** Of the
+    apparent board failures on 2026-08-02, the large majority were self-inflicted (items
+    1, 4, 7 above). The discriminator that settled it was blunt and worth reusing: the
+    *same firmware file* was "dead" six times and then booted five times with no rebuild
+    between — so the variable was not the firmware. Diff what actually changed in the
+    harness before spending a rebuild or a reflash.
 
 ### Full SQLite (not staged)
 
