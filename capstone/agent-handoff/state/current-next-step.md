@@ -7,6 +7,55 @@
 > conclusions recorded below were later retracted there.
 
 
+## 2026-08-02 — C-16 FOUND AND FIXED (a COMPILER bug), but SILICON IS STILL BLOCKED
+
+### Read this before anything else in this file
+
+**The SQLite blocker was largely our own codegen, not the RTL.** `SelectionDAG::getMemset`
+typed its destination argument in **addrspace 0** (`PointerType::getUnqual`), while the real
+destination is an AS200 **128-bit capability**. Call lowering therefore truncated the pointer
+(`PseudoTRUNC_CAP` + `ADDI`), stripping the tag, and `memset` then did capability arithmetic on
+an untagged base — writing 15 bytes of struct tail padding **through a garbage address, once
+per array element**. Silent on hardware because the RTL does not check a `cincoffset` base.
+
+Fixed by taking the address space from `DstPtrInfo`. No-op for AS0 targets.
+Registered as **C-16 FIXED** in `ref/ISSUES.md`.
+
+    reproducer   silicon-ladder/strarray_app.c (+ _host.c, oracle 420)
+                 DOMAIN_OPT_LEVEL=-O0 bash run-ladder-qemu.sh strarray   -- ~1 min, NO BOARD
+    verified     codegen addi x8 -> cincoffsetimm; reproducer PASS
+                 stage 10 NON-STATIC rc=0x00; full SQLite QEMU gate PASSES with no workaround
+                 ladder 6/6
+
+### But the board still does not run SQLite
+
+Fixed compiler, no workaround, position 1: both shares complete, `SQ: G/enter` reached, then
+**600 s of silence** and abort. So **at least one more fault exists and it is silicon-only**.
+Do not present C-16 as having unblocked the board.
+
+### The methodological rule this session established
+
+**QEMU-gate every probe before shipping it to the board.** The staged probes were built and
+sent to the board for four sessions without ever being run under QEMU — the one tool that
+asserts on untagged capability arithmetic. A broken instrument produced four sessions of
+"measurements", and the stage-100 "cursor is off by 57 bytes" result was INVALIDATED because
+of it. QEMU passing is necessary and NOT sufficient (QEMU asserts, the RTL accepts silently) —
+but QEMU *failing* is free and immediate.
+
+### Next steps, in order
+
+1. **Staged split on silicon with the fixed compiler** (f10/f2/f3 built and staged; run may be
+   in flight). Stage 10 first: if it now returns, the remaining blocker moved later into
+   `sqlite3_initialize`/`open`; if it still stalls, C-16 was only part of the same construct.
+2. **Re-run the four R-14 variants with the fixed compiler.** R-14 is marked PARTLY SUPERSEDED,
+   not closed: variant A is an unpadded 2-pointer struct, emits no `memset`, and is therefore
+   NOT explained by C-16. If A now passes, R-14 closes as a duplicate.
+3. Re-read every "silicon miscomputes" claim in `SILICON-BLOCKER.md` and `ISSUES.md` against
+   C-16 — several are plausibly the same bug.
+4. Decide whether to delete `SQLITE_STATIC_BUILTINS` now that the real fix exists.
+
+---
+
 ## 2026-08-01 (early) — READ THIS FIRST: results on this board are NOT always reproducible
 
 ### The finding that changes how everything else must be read
