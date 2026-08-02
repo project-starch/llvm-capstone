@@ -15,6 +15,12 @@ can also use the browser GUI. Every step and gotcha is in the KB files below.
 > **power off + unlock**. Board is flaky/slow (~2 min to JTAG-load 15 MB); one
 > persistent write only (bitstream re-flash) and only if authorized.
 
+**Running SQLite, or any staged probe?** Read
+§"Running SQLite (and any staged probe) on the board" below FIRST — it carries the
+`dom:selector` mechanism, the mandatory `:0` control, the result-classification table
+(an entry stall is not a result), and the six hazards that cost ~2 hours of board time
+on 2026-08-02.
+
 ## The 4 KB files (read in this order)
 
 1. `ref/HOW-TO-LAUNCH-ON-FPGA.md` — this file (the map).
@@ -238,6 +244,137 @@ that will not complete is abandoned and logged rather than waited on, because re
 the board matters more than tidying it. Precedent: `probe_revnode.py` once sat 16 minutes
 inside `set_switches(console, 0)` with the board powered and the lock held, after all four
 of its LED reads were already on disk.
+
+## Running SQLite (and any staged probe) on the board — 2026-08-02
+
+SQLite does not run as a one-shot binary. It runs as a **domain** loaded by a host
+loader, and it is investigated through **staged probes**: builds that execute the first
+N steps of `run_sqlite()` and RETURN a marker instead of running to the failure. Use
+this path for SQLite and for anything else that needs more than a single pass/fail.
+
+### The runner and its inputs
+
+```bash
+export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"   # credential, never commit
+export FPGA_FW=.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin
+export SQLITE_STAGE_DOMS="/test-domains/f10.dom:0,/test-domains/f10.dom:9,/test-domains/f10.dom:10"
+export SQLITE_STAGE_TIMEOUT=200
+export PROBE_SCOPED_OUT=/tmp/capstone/scoped-$(date +%H%M%S).txt   # UNIQUE per run, see below
+python3 capstone/tests/rtl-smoke/fpga_driver/run_sqlite_stages_fpga.py
+```
+
+Domains run **in the listed order, and the runner stops at the first one that does not
+return** — a wedged domain takes the core with it, so everything after it is lost. Put
+ascending stages in order, controls first, and at most ONE expected-to-wedge domain last.
+
+### `dom:selector` — one image, many probes
+
+An entry may carry an optional `:selector`, passed to the host as `argv[2]`, published in
+the shared region's `opcode` field, and read by the domain (magic-guarded `0x5A6E00nn`,
+`sqlite_capstone_domain.c`) to choose its probe **at run time**:
+
+    /test-domains/mech.dom:0,/test-domains/mech.dom:129,/test-domains/mech.dom:128
+
+Without a suffix the domain uses its compile-time `CAPSTONE_SQLITE_STAGE`, so every
+existing invocation is unchanged. Only stages compiled INTO that image can be selected —
+the `#if` ranges still gate what exists, so a selector outside the compiled range silently
+falls through into the real SQLite path and measures the wrong thing. Group probes that
+share one `#if` block.
+
+Why it matters: one binary per probe means every measurement is a fresh roll of the
+build/boot dice. Run-time selection lets several questions ride one image and one boot.
+
+### ALWAYS run `:0` first. A verdict from an image whose control did not return is noise.
+
+`run_sqlite_staged()` begins `if (stage <= 0) return 0;`, and that early return is **not
+inside any `#if`** — so **selector `:0` is live in every staged image ever built**, at zero
+build cost.
+
+    :0 RETURNS  -> the image's entry, glue, reentry, marker write and return path all work,
+                   so a later wedge in that image belongs to the CONSTRUCT under test.
+    :0 WEDGES   -> the image is unsound; every other verdict from it is void.
+
+Both outcomes were observed on 2026-08-02. On `f10`, `:0` and `:9` returned and `:10`
+wedged — that is what makes "the blocker is `sqlite3RegisterBuiltinFunctions`" a result.
+On `n112`, `:0` itself wedged, and five earlier "variant D wedges" readings from that image
+had to be withdrawn.
+
+### Classify before recording: three things are NOT results
+
+Read the **last marker** of the domain's block, never just "did not return":
+
+| Last marker | Meaning | What to do |
+|---|---|---|
+| `SQ: obs=<n>` | returned a value | record it |
+| `SQ: G/enter` then silence | entered, wedged in its own code | record it — a real result |
+| `SHA5:xxxx` (no `SHA6`) | **entry stall** — monitor handed off, domain never ran | retry; carries no information |
+| no `Ok, good file.` / JTAG errors | **infra** — board never ran the image | retry |
+| `__CAPSTONE_INFRA_FLAKE__` | QEMU/boot flake | retry |
+
+`SHA5` = "about to leave M-mode for the domain", `SHA6` = "the domain returned"
+(`sbi_capstone.c`). The runner's own "FIRST FAILURE" summary collapses the first three
+rows into "did not return" — the distinction has to be made when reading the scoped log.
+**A failure that happened before the thing under test began is not evidence about the
+thing under test.**
+
+### Supervise every board run with the watchdog, and wait with `wait-for.sh`
+
+A wedged domain emits nothing and a dead runner writes nothing; from outside both look
+exactly like healthy progress. Run these as a second process:
+
+```bash
+python3 .../run_sqlite_stages_fpga.py > "$LOG" 2>&1 &
+R=$!
+ABORT_ON_ENTRY_STALL=1 bash capstone/tests/rtl-smoke/board-watchdog.sh "$LOG" 300 "$R" &
+wait $R
+```
+
+`board-watchdog.sh <uart-log> [idle-limit-s] [runner-pid]` emits one line per interval:
+`ALIVE +<bytes>` / `QUIET <idle>s` / `STALE` / `ENTRY-STALL` (aborts the runner) / `GONE`
+(runner died) / `ENDED`. Liveness is `kill -0 <pid>` — **never `pgrep -f <pattern>`**,
+which matches the watchdog's own command line and reports the runner alive forever.
+
+`wait-for.sh <file> <sentinel> <pid> [timeout]` returns on the sentinel **or the producer
+dying**: exit 0 = sentinel, 3 = producer died without it, 4 = timeout. Waiting on a
+sentinel alone hangs forever if the producer crashes.
+
+### Hazards that cost real board time on 2026-08-02 — check these first
+
+1. **The console REPLAYS the previous boot's scrollback (~548 KB) on connect.** Any
+   grep over a whole board log finds markers from an EARLIER run. Split at the run
+   boundary — the last `load_image`, or the runner's `booted once`. A watchdog that
+   grepped the whole log matched a stale `SHA5` and killed ~24 healthy runs over ~87
+   minutes right after `load_image`, before the board had even booted, and produced the
+   false conclusion "the board stopped accepting images". `ENTRY_STALL_S` must also stay
+   above real boot silence: healthy boots have gone **120 s** quiet.
+2. **Never reuse `PROBE_SCOPED_OUT` between runs, and delete it first.** The runner writes
+   the transcript only at the end, so a killed run leaves the PREVIOUS run's file in place
+   and the classifier reports it as current. A 5-hour-old result about a different domain
+   image was once reported as a fresh measurement. Stamp the filename and `rm -f` it.
+   Cross-check the transcript's `===== <path> =====` header against the image you ran.
+3. **Pruning the overlay does NOT shrink the initramfs.** Buildroot packs
+   `build/target/test-domains/`, not `overlay/test-domains/`. Remove stale `.dom` files
+   from the target dir too — **by explicit name**, never a glob: a prefix glob once
+   deleted the package-installed `sbi.dom`. The image grew 15.4 MB -> 30.0 MB across one
+   session because dead probe images accumulated there.
+4. **Never edit a script while it is running.** Bash reads scripts incrementally, so the
+   edit corrupts the tail it has not yet reached; a run died on a syntax error before
+   printing its sentinel and stranded a waiter for ~9 minutes. Copy it, edit the copy.
+5. **Verify perturbed builds are actually different.** Passing an unused `-DFOO=n` through
+   `DOMAIN_EXTRA_DEFS` produces byte-identical binaries. Three "independent draws" were one
+   binary counted three times. `sha256sum` the outputs and abort if any two match — note
+   the "distinct hashes" line printed by `build-stage-probes.sh` counts every file in the
+   destination dir, not the stages just built, and no caller checks it.
+6. **Domains are big; keep only what the current experiment needs.** Every `.dom` left in
+   the target dir rides the firmware over JTAG on every boot.
+
+### Full SQLite (not staged)
+
+`run_sqlite_baked_fpga.py` runs the real domain and gates on the five success markers in
+the run-scoped file. Give it room: silence between `SQ: G/enter` and the first row is
+legitimate while it opens the database and runs CREATE/INSERT, and a run was once aborted
+on exactly that stretch and read as a wedge. Set `SQLITE_RUN_IDLE` well above the default
+75 s (600 s is reasonable) and `SQLITE_RUN_TIMEOUT` to match.
 
 ## Non-negotiables
 
