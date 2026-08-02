@@ -56,6 +56,36 @@ never yet executed.
 
 ---
 
+## 0aa. TODAY'S POSITION-1 RUNS DO NOT MATCH THE HISTORICAL SLOT-1 RATE
+
+Three position-1 attempts on 2026-08-02, after the SPLB revert:
+
+    sqlite_silicon.dom   passed both shares, reached SQ: G/enter, then silent
+    st10.dom             STALLED at SHA5:00000000  (first entry)
+    x101.dom             STALLED at SHA5:00000000  (first entry)
+
+Two stalls in three attempts, against a corpus base rate of **2.8%** for slot-1 stalls over
+107 historical launches (0a10). Under that rate, 2-of-3 has probability ~0.2%. So slot 1 is
+**not** behaving today the way it behaved across the corpus.
+
+That is a real discrepancy and it is NOT explained by anything established so far:
+
+* it is not the SPLB fix — that is reverted, and `st10`/`x101` stalled *after* the revert;
+* it is not the pool — these are the FIRST domain in their boots, `head` is fresh;
+* it is not position — position 1 is as good as it gets.
+
+**Candidates, none tested:** the firmware rebuilt today differs from the historical one in
+ways beyond the monitor (kernel/initramfs regenerated twice); the corpus base rate is pooled
+over many different domain builds and may not apply to these particular ones; or the board
+itself is in a different state (it has been power-cycled far more times today than on any
+previous day).
+
+**Consequence for planning:** `x101` has now failed to execute in **5 of 5 attempts** across
+three sessions, so the store-vs-load question remains unmeasured and should not be assumed
+answerable cheaply. Anyone picking this up should budget several boots for it, or design a
+probe that answers the same question from a domain that *does* reliably enter — the full
+`sqlite_silicon.dom` is currently the only build that has entered reliably at position 1.
+
 ## 0. READ FIRST — WEDGES ARE POSITION-DEPENDENT: ~6 DOMAIN RUNS PER BOOT, THEN IT WEDGES
 
 Measured by running the TRIVIAL control (`wd71`: one walk, one return, no SQLite) repeatedly
