@@ -466,6 +466,52 @@ which is the rev-node pool exhaustion of 0a4, not the `SHA5` stall.
   1 + 0.68 + ... — i.e. under two. That, not the 1020-node ceiling, is what actually limits
   throughput today.
 
+## 0a11. REFUTED: THE SPLB EXACT-FIT FIX IS NOT THE CAUSE — THE MONITOR IS EXONERATED
+
+The A/B test ran. `CAPSTONE_SPLIT_EXACT_FIT` was commented out in **both** monitor copies, the
+generated `.c.S` was deleted so the wrapper really regenerated, and the rebuild was verified
+from the regenerated assembly: the split path now emits `SPLB`/`0xe006` (the original spin)
+and the `EXACT_MID` path is gone. `diff` against the Aug-1 backup shows only 3 hunks, all
+SPLB, all now inert — i.e. the monitor is functionally what ran on Aug 1.
+
+Result (2026-08-02, reverted firmware):
+
+    pos 1   st10.dom   last marker = SHA5:00000000     STALLED
+
+**The stall survives the revert.** So the SPLB exact-fit fix is NOT the cause of the `SHA5`
+stall, the "position 2 regressed because of my monitor change" hypothesis from 0a6 is
+**refuted**, and the monitor is exonerated for this failure.
+
+Recorded as a hypothesis killed by its own test, which is the cheap outcome — it cost one
+firmware rebuild and one boot, and it removes the most plausible-looking suspect.
+
+### What the same run says about position
+
+`st10` stalled at **position 1**, where the corpus base rate for a `SHA5` stall is 2.8%
+(0a10). One sample is not proof, but hitting a 1-in-35 event on the first attempt is at least
+suggestive that this particular build is not drawing from the same distribution — i.e. that
+`st10` is genuinely more prone to stalling than the corpus average, rather than unlucky.
+
+Note this sits awkwardly beside the other static-builtins result: `sqlite_silicon.dom`, built
+the same way, **passed both shares at position 1** and reached `G/enter`. So "static builtins
+stalls in cap-init" is NOT a clean rule either. Both are n=1 at position 1 and both need
+repeats before anything is built on them.
+
+### The open mechanism question this sharpens
+
+The static-builtins workaround does not remove the straight-line array construction so much as
+**relocate** it: as a `static`, `aBuiltinFunc` becomes a global whose capability leaves are
+written by `__capstone_cap_init` at the domain's FIRST entry — which is `share1`, exactly where
+`st10` now stalls. Under the old non-static build the same data was built on the stack during
+the main run, and `wd10`/`mt10` stalled after `G/enter`. That is a suspicious coincidence:
+
+    non-static builds  -> stall AFTER G/enter (main run)
+    static build st10  -> stall AT share1     (cap-init, first entry)
+
+If that holds up, the R-14 workaround moves the fault rather than fixing it, and QEMU passing
+end-to-end says only that QEMU does not enforce whatever the RTL enforces. **Not established:**
+`sqlite_silicon` is the counter-example above, and no repeat has been run.
+
 ## 0a5. THE SHA5 WEDGE TRACKS POSITION-2 + SQLITE-DERIVED, AND R-14 HAS A QEMU-GREEN FIX
 
 ### The R-14 workaround now exists and passes QEMU
