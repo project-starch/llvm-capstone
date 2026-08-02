@@ -3313,8 +3313,23 @@ void domain_main(unsigned *res, unsigned func) {
      which the clamp experiment then showed was not even spinning. A build that RETURNS
      always yields a result, so the bisection converges instead of guessing.
      Marker: 0x5A6E_ssrr -- ss = stage reached, rr = the SQLite rc at that point. */
-  *res = 0x5A6E0000u | ((unsigned)(CAPSTONE_SQLITE_STAGE) << 8) |
-         ((unsigned)run_sqlite_staged(CAPSTONE_SQLITE_STAGE) & 0xffu);
+  /* RUNTIME PROBE SELECTION. run_sqlite_staged() already dispatches on a runtime `stage`;
+     only this call site was a compile-time constant, which is what forced one binary per
+     probe. The host may publish a selector in the shared region's `opcode` field, magic-
+     guarded (0x5A6E00nn) so a zeroed/unset region falls back to the built-in stage and every
+     existing build behaves byte-identically. Only stages compiled into THIS image can be
+     selected -- the #if blocks still gate what exists -- so the useful grouping is a range
+     that shares one block (e.g. 100-102). */
+  {
+    unsigned stage_sel = (unsigned)(CAPSTONE_SQLITE_STAGE);
+    if (hostcall_metadata) {
+      sqlite_hostcall_u64_t sel = hostcall_metadata->opcode;
+      if ((sel & 0xffffff00UL) == 0x5A6E0000UL)
+        stage_sel = (unsigned)(sel & 0xffUL);
+    }
+    *res = 0x5A6E0000u | (stage_sel << 8) |
+           ((unsigned)run_sqlite_staged((int)stage_sel) & 0xffu);
+  }
   return;
 #endif
   (void)run_sqlite();

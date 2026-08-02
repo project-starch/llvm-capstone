@@ -65,9 +65,22 @@ static int fail_cleanup(const char *message, unsigned long value) {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
-    fprintf(stderr, "usage: %s <sqlite-domain.dom>\n", argv[0]);
+  if (argc != 2 && argc != 3) {
+    fprintf(stderr, "usage: %s <sqlite-domain.dom> [probe-stage]\n", argv[0]);
     return 2;
+  }
+  /* RUNTIME PROBE SELECTION (optional 2nd argument).
+     Every probe used to be its OWN binary (-DCAPSTONE_SQLITE_STAGE=N), so each measurement
+     drew a fresh ticket in the SHA5 stall lottery with a different image -- x101 lost that
+     lottery 5 times running and its question is still unmeasured. Passing the stage at run
+     time instead lets ONE domain image answer several questions, and lets the probe run in
+     the image that is already known to enter. Omitted -> the domain keeps its built-in
+     stage, so every existing invocation behaves exactly as before. */
+  unsigned long probe_stage = 0;
+  int have_probe_stage = 0;
+  if (argc == 3) {
+    probe_stage = strtoul(argv[2], NULL, 0);
+    have_probe_stage = 1;
   }
   if (capstone_init()) {
     mark("SQ: no-init\n");
@@ -115,6 +128,10 @@ int main(int argc, char **argv) {
 
   memset(metadata, 0, SQLITE_HC_REGION_SIZE);
   memset(payload, 0, SQLITE_HC_REGION_SIZE);
+  /* Publish the probe selector AFTER the memset and BEFORE the domain runs. Magic-guarded so
+     an unset region is indistinguishable from today's behaviour. */
+  if (have_probe_stage)
+    metadata->opcode = 0x5A6E0000UL | (probe_stage & 0xffUL);
   mark("SQ: E/share1\n");
   shared_region_annotated(domain, metadata_region,
                           SQLITE_HC_ANNOTATION_PERM_INOUT,

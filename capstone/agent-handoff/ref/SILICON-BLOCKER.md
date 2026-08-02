@@ -80,7 +80,7 @@ over many different domain builds and may not apply to these particular ones; or
 itself is in a different state (it has been power-cycled far more times today than on any
 previous day).
 
-**Consequence for planning:** `x101` has now failed to execute in **5 of 5 attempts** across
+**Consequence for planning:** `x101` has now failed to execute in **6 of 6 attempts** across
 three sessions, so the store-vs-load question remains unmeasured and should not be assumed
 answerable cheaply. Anyone picking this up should budget several boots for it, or design a
 probe that answers the same question from a domain that *does* reliably enter — the full
