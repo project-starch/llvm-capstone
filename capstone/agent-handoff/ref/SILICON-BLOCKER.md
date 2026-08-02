@@ -352,6 +352,35 @@ puts `st10` at position 1 — so the R-14 test still lands even if the revert ch
 followed by `st9` and `wd71` at positions 2-3 as the regression check, and full SQLite last
 with a much longer budget.
 
+## 0a8. PROVENANCE: STAGES 11-14 ARE A *RESOLVED* BUG — DO NOT RE-THEORISE ON THEM
+
+Every staged marker ever returned was re-decoded and traced back to its log and position.
+The string-literal stages tell a clean before/after story that is easy to misread if you only
+look at the numbers:
+
+    stage 11  rc=0x01  pos=1  sqlite-stages111213.txt   strlen("capstone_probe_string") = 1
+    stage 12  rc=0x01  pos=2  sqlite-stages111213.txt   same, via a local struct slot
+    stage 13  rc=0x07  pos=3  sqlite-stages111213.txt   4 names, sum of strlens (expect 36)
+    stage 14  rc=0xf0  pos=1  sqlite-stage14.txt        bitmap of s[1..8] non-zero
+    stage 14  rc=0xf0  pos=2  sqlite-stage14.txt        (control domain, same result)
+    ---- the unaligned-copy fix lands here ----
+    stage 14  rc=0xff  pos=1  sqlite-unalign.txt        sqlite_stage14fix.dom -- ALL BYTES GOOD
+    stage 13  rc=0x24  pos=1  sqlite-burst.txt          = 36 decimal -- CORRECT
+
+`0xf0` means `s[1..4]` were zero while `s[0]` and `s[5..8]` were fine — a four-byte hole, not
+the "a little copied, rest zero-filled" tail that the stage-14 comment predicted. That hole
+was the **unaligned copy in the entry glue's blob copy**, and it is FIXED: the same probe
+returns `0xff` afterwards, and stage 13 returns the correct 36.
+
+**Consequence for anyone reading the numbers table:** stages 11-15 are pre-fix artefacts.
+They are not evidence about the current blocker and a theory built on them is a theory about
+a bug that no longer exists. The live evidence for the wrong-cursor fault is stages 95-102
+only, all of which post-date the unaligned-copy fix.
+
+(Recorded because the raw marker table lists `stage 14 rc=0xf0` and `rc=0xff` side by side
+with no indication that a fix separates them, which is exactly the shape of the three
+summary-vs-artefact errors made earlier in this thread.)
+
 ## 0a5. THE SHA5 WEDGE TRACKS POSITION-2 + SQLITE-DERIVED, AND R-14 HAS A QEMU-GREEN FIX
 
 ### The R-14 workaround now exists and passes QEMU
