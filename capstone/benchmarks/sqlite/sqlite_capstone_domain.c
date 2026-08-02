@@ -2856,6 +2856,52 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
     return (int)(v & 0xffUL);
   }
 #endif
+#if CAPSTONE_SQLITE_STAGE >= 110 && CAPSTONE_SQLITE_STAGE <= 111
+  /* R-14 variants A and B as STAGED probes, so they can run on the board through the same
+     host/runner as everything else (the ladder .dom files are not staged in the initramfs).
+     Reduced verbatim from tests/fpga-repros/R14-strline-struct/.
+
+     Both are QEMU-CLEAN with the C-16 fix (r14a/r14b ladder rungs return 16 at -O0 and -O1),
+     while the board previously WEDGED on A and returned 4 for B. These stages re-ask that
+     question with the fixed compiler.
+
+     C-16 does NOT apply here: `struct kv` is two capabilities = 32 B with no tail padding,
+     and the array is uninitialised then assigned element-by-element, so there is no
+     initialiser memset at all.
+
+       110 = variant A (16 straight-line)  -- expect 16 (0x10); board previously WEDGED
+       111 = variant B ( 4 straight-line)  -- expect 16 (0x10); board previously returned 4
+
+     111 is the safe/valuable one: it RETURNS a wrong number instead of wedging, so run it
+     FIRST and put 110 last (a wedge takes the core with it).  */
+  if (stage >= 110 && stage <= 111) {
+    struct kv { const char *z; const char *y; };
+    struct kv a[64];
+    unsigned i;
+    int ok = 0;
+    a[0].z="ltrim"; a[0].y="aaa0"; a[1].z="rtrim"; a[1].y="aaa1";
+    a[2].z="trim";  a[2].y="aaa2"; a[3].z="max";   a[3].y="aaa3";
+    if (stage == 110) {
+      a[4].z="min";    a[4].y="aaa4";  a[5].z="typeof";   a[5].y="aaa5";
+      a[6].z="length"; a[6].y="aaa6";  a[7].z="instr";    a[7].y="aaa7";
+      a[8].z="substr"; a[8].y="aaa8";  a[9].z="upper";    a[9].y="aaa9";
+      a[10].z="lower"; a[10].y="aab0"; a[11].z="coalesce";a[11].y="aab1";
+      a[12].z="hex";   a[12].y="aab2"; a[13].z="unhex";   a[13].y="aab3";
+      a[14].z="quote"; a[14].y="aab4"; a[15].z="replace"; a[15].y="aab5";
+      for (i = 16; i < 64; i++) { a[i].z = "filler"; a[i].y = "fill"; }
+    } else {
+      for (i = 4; i < 64; i++) { a[i].z = "filler"; a[i].y = "fill"; }
+    }
+    for (i = 0; i < 16; i++) {
+      unsigned nz = 0, ny = 0;
+      const char *z = a[i].z, *y = a[i].y;
+      while (z && z[nz]) nz++;
+      while (y && y[ny]) ny++;
+      if (z && y && nz > 0 && ny > 0) ok++;
+    }
+    return ok;                            /* expect 16 = 0x10 */
+  }
+#endif
 #if CAPSTONE_SQLITE_STAGE >= 100 && CAPSTONE_SQLITE_STAGE <= 105
 #ifndef PROBE_FD_N
 #define PROBE_FD_N 56
