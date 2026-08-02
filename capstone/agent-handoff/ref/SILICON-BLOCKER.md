@@ -227,6 +227,43 @@ with the caveat that this exact instruction sequence is byte-identical in builds
   than wedging), so the cursor is still WITHIN the capability's bounds. It is a wrong address
   inside a correct region, not an out-of-bounds pointer.
 
+## 0c. BUILT AND STAGED, NOT YET RUN (console went down mid-experiment)
+
+Three probes are built, staged and in the firmware; the console became unreachable (TLS
+handshake timeout, 3/3) before they produced results. Each answers something the readings so far
+cannot. Re-run them first when the board is back — no rebuild needed.
+
+    stage 102   delta(arr[54] - arr[0])   expect 0x3C   the NEIGHBOUR control: validates the
+                                                        method and confirms entry 54 is correct.
+                                                        Run FIRST -- if this is wrong, "only the
+                                                        last entry" is false.
+    stage 100   delta(arr[55] - arr[0])   expect 0x42   the first DIRECT measure of the error.
+                                                        Self-referencing, so it needs no
+                                                        knowledge of the runtime base. The
+                                                        deviation from 0x42 IS the fault size.
+    stage 101   same slot read TWICE      expect 0xB0   0xB0 = the two reads AGREE -> the value
+                                                        was STORED wrong. 0xB1 = they DIFFER ->
+                                                        it is corrupted on READ. Nothing
+                                                        measured so far separates these two, and
+                                                        they are different bugs.
+
+### The two experiments that would close the picture
+
+1. **Read `START`** (`lcc` zimm=3). Its domain died in region-share, so "the bounds are right"
+   currently rests on `END` alone.
+2. **Test whether SQLite passes stage 10 when this construct is avoided.** This is the only
+   experiment that converts "this explains the blocker" into "this IS the blocker", and it has
+   never been run. Concretely: build the SQLite domain with the builtin array restructured so it
+   is not a straight-line local (e.g. filled by a loop from a static table -- the R-14 variant C
+   shape that was already known to behave), and see whether stage 10 returns.
+
+### Honest status of the cause
+
+**Not understood.** What is established is a symptom: in some builds, the LAST entry of a
+straight-line struct array holds a valid capability (tag intact, bounds consistent with the
+container) whose CURSOR is wrong. Not established: why; whether the error is at store or at
+load; whether the larger-N wedges are the same fault; and whether it is what stops SQLite.
+
 ## 0b. NEAR-MISS WORTH RECORDING: mcause=24 does NOT imply the code under test trapped
 
 Attempting to read the bad slot's capability type (`lcc` zimm=1 on `arr[55].zName`), the domain
