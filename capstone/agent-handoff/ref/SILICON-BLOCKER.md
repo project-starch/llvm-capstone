@@ -6,6 +6,49 @@ Last updated: 2026-08-02.
 
 ---
 
+## !! RETRACTED: "R-16 is build-dependent" — THE KNOWN-GOOD IMAGE NOW STALLS TOO
+
+    r110.dom, which ENTERED 3/3 earlier today (~19:05-19:20, control returned rc=0):
+      21:46  attempt 1  ENTRY-STALL
+      21:48  attempt 2  ENTRY-STALL
+
+Same binary, same selector, same position. **So the per-image model is wrong**, and with it:
+
+* **"R-16 is build-dependent"** — RETRACTED. It rested on `r110` entering 3/3 while `x101`/`r112`
+  stalled; `r110` now stalls, so image identity does not determine entry.
+* **">=182 carves stalls 8/8" as a predictive rule** — WITHDRAWN as a pre-flight filter. Every
+  182 image was built late in the session; the correlation is confounded with time/firmware
+  generation, not established as causal.
+* **"5/5 static-builtins images stall"** — the observation stands, but the attribution to the
+  static-builtins configuration does not: those five were all built in the same late window.
+
+### What actually correlates: FIRMWARE GENERATION, not domain image
+
+    ~19:00-20:16   r110 ENTER 3/3, n112 ENTER 3/3, f10 ENTER (controls returned)
+    ~20:40 onward  EVERY image stalls: sb10, waa, wab, wac, t120, tsp, tsq, tsr, u120, L126,
+                   and now r110 itself -- 11+ attempts, 6+ distinct images, 0 entries
+
+The firmware was rebuilt repeatedly across that boundary (w113, sb, ts, u, L builds). **The
+monitor and the entry glue live in the firmware**, and the stall is precisely a
+monitor-hands-off/domain-never-returns failure — so a firmware generation is a far more
+plausible carrier of this than the domain binary.
+
+### Consequence
+
+Every conclusion drawn today from "image X enters / image Y stalls" needs re-reading as
+possibly "firmware generation N was healthy / generation N+k is not". The *control-validated
+in-domain results* are unaffected — `r110:0` returned while `r110:110` wedged in the SAME boot,
+and `f10:0`/`f10:9` returned while `f10:10` wedged in the SAME boot. Those comparisons are
+internal to one boot and one firmware, which is exactly why the control matters.
+
+**So the SQLite blocker finding survives**: `sqlite3RegisterBuiltinFunctions` wedges with two
+controls returning alongside it. What does NOT survive is the R-16 model built around it.
+
+### Next test
+
+Rebuild the firmware and re-run `r110` unchanged. If it enters again, firmware generation is
+the variable and R-16 is a property of the build/flash cycle rather than of any domain.
+
 ## THE N-THRESHOLD IS <= 4: CLAMPING THE BUILTIN COUNT CANNOT WORK
 
 I built a six-point N sweep (4/8/16/32/48/64) to find the largest straight-line struct array

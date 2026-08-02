@@ -2856,7 +2856,7 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
     return (int)(v & 0xffUL);
   }
 #endif
-#if CAPSTONE_SQLITE_STAGE >= 120 && CAPSTONE_SQLITE_STAGE <= 125
+#if CAPSTONE_SQLITE_STAGE >= 120 && CAPSTONE_SQLITE_STAGE <= 127
   /* R-14 N-THRESHOLD SWEEP, with no added static data.
      Both SQLite routes are blocked: the straight-line local wedges in-domain (R-14, validated
      at stage 10 with two returning controls), and making it a static triggers R-16 (5/5).
@@ -2866,6 +2866,41 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
      Deliberately NO static table and no extra globals -- adding either is what pushed the
      static-builtins images into the entry stall. Each arm returns the count it verified, so
      every run yields a number rather than a hang. Expect N. */
+  /* 126/127 -- THE MISSING CONTROL for "is it straight-line, or is it struct fields at all?"
+     Variant B wedges, but B is FOUR straight-line entries PLUS sixty loop-filled ones, so its
+     wedge does not say which half is at fault. These two isolate that, and neither adds a
+     global (no static table), so the carve count stays at 181 -- images at >=182 have
+     entry-stalled 8/8 and are not worth a boot.
+       126 = ZERO straight-line: all 64 entries assigned in a LOOP from one literal.
+             Returns -> loop assignment into struct fields is SAFE, and straight-line
+             materialisation is the culprit; reshaping SQLite's array can work.
+             Wedges  -> even loop assignment into struct capability fields wedges; no
+             reshaping of aBuiltinFunc can help and SQLite is unreachable by this route.
+       127 = same but a FLAT pointer array, to separate "struct field" from "capability store
+             in a loop" if 126 wedges.  Both expect 64. */
+  if (stage == 126 || stage == 127) {
+    unsigned i; int ok = 0;
+    if (stage == 126) {
+      struct kv4 { const char *z; const char *y; };
+      struct kv4 a[64];
+      for (i = 0; i < 64; i++) { a[i].z = "filler"; a[i].y = "fill"; }
+      for (i = 0; i < 64; i++) {
+        unsigned nz = 0, ny = 0; const char *z = a[i].z, *y = a[i].y;
+        while (z && z[nz]) nz++;
+        while (y && y[ny]) ny++;
+        if (z && y && nz > 0 && ny > 0) ok++;
+      }
+    } else {
+      const char *f[64];
+      for (i = 0; i < 64; i++) f[i] = "filler";
+      for (i = 0; i < 64; i++) {
+        unsigned n = 0; const char *z = f[i];
+        while (z && z[n]) n++;
+        if (z && n > 0) ok++;
+      }
+    }
+    return ok & 0xff;                        /* expect 64 */
+  }
   if (stage >= 120 && stage <= 125) {
     /* NO static table here, on purpose and this time actually: a `static const unsigned
        ns[6]` costs ONE extra cap-table global, which took the image from 181 to 182 carves,
