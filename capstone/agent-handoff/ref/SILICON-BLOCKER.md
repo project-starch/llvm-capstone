@@ -318,6 +318,40 @@ Until this is resolved, **put the domain under test at position 1**. Every slot-
 result that cost six boots was paid for by a convention — control first — that is now known
 to be the expensive part.
 
+## 0a7. FULL SQLITE AT POSITION 1: ENTERS, THEN SILENT — AMBIGUOUS, NOT YET A WEDGE
+
+Run 2026-08-02, `sqlite_silicon.dom` built with `SQLITE_STATIC_BUILTINS=1`, at position 1:
+
+    SQ: A/dom-ok ... B/mkregion1 ... C/mkregion2 ... D/mapped ... E/share1 ... F/share2
+    SQ: G/enter
+    <silence for the full 300 s budget>
+
+Then the per-domain timeout fired and took the session, so `st10` and `st9` never ran.
+
+**Do not record this as a wedge.** Silence between `G/enter` and the first row is exactly the
+stretch that `run_sqlite_baked_fpga.py:126-135` warns about: since the linear-safe string
+primitives landed the core EXECUTES there, and a previous run was aborted on that stretch and
+nearly read as a wedge. 300 s may simply be too short on silicon for open + CREATE + INSERT.
+
+The two are distinguishable and neither has been done for this build:
+
+* `probe_sqlite_wedge.py` with `PROBE_STEPI=1` — an advancing pc means alive, not dead;
+* simply raising `SQLITE_STAGE_TIMEOUT` well past 300 s.
+
+### The real cost problem this exposes
+
+With position 2 broken, **a boot yields exactly one domain result**. The staged-probe method
+— whose entire value is N hypotheses per boot — is currently delivering N=1, which is the
+regime CLAUDE.md's batch-variants rule exists to prevent. Restoring position 2 is therefore
+worth more than any single further probe, because it is a ~5x multiplier on every experiment
+after it.
+
+Action taken: firmware rebuilt with `CAPSTONE_SPLIT_EXACT_FIT` commented out (both monitor
+copies edited, generated `.c.S` removed so the wrapper actually regenerates). The next load
+puts `st10` at position 1 — so the R-14 test still lands even if the revert changes nothing —
+followed by `st9` and `wd71` at positions 2-3 as the regression check, and full SQLite last
+with a much longer budget.
+
 ## 0a5. THE SHA5 WEDGE TRACKS POSITION-2 + SQLITE-DERIVED, AND R-14 HAS A QEMU-GREEN FIX
 
 ### The R-14 workaround now exists and passes QEMU
