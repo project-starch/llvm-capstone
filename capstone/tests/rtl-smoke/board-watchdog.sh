@@ -77,7 +77,12 @@ while true; do
       case "$scan0" in
         *load_image*)
           case "$scan0" in
-            *"Hello World"*|*"downloaded "*) ;;    # boot started or image transferred: fine
+            # HEALTH SIGNAL IS THE LOGIN PROMPT, NOT THE BOOTROM BANNER. Measured:
+            # healthy runs show ZERO "Hello World" after their own load_image (the
+            # banner prints at power-on, before the load), but DO show `buildroot
+            # login` and tens of KB of kernel output. A dead boot shows ~900 bytes
+            # and neither. Keying on the banner would never have fired.
+            *"buildroot login"*|*"SQ: "*) ;;        # userspace reached: fine
             *)
               echo "NO-BOOT ${now_elapsed}s  load_image issued, no boot banner and no download for ${idle}s"
               echo "  -> JTAG transfer moved nothing; this boot is dead. Aborting runner."
