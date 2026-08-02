@@ -339,9 +339,28 @@ Two consequences that matter more than the ceiling itself:
   a source comment instead of measuring the artefact — the same mistake, in the same file,
   that the comment at `:186` records having cost "a long detour" once already.
 
-  What this does say is that SQLite (179) sits in the **same carve regime as the probes**
-  (181) — and the probes are exactly what wedges in-domain on first entry. That is
-  corroboration that the SQLite blocker and the position-2 probe wedge are one fault, not two.
+  I then wrote that SQLite (179 carves) sitting in the same regime as the probes (181) was
+  "corroboration that the SQLite blocker and the position-2 probe wedge are one fault, not
+  two". **That is also withdrawn** — checked against the logs immediately afterwards, the two
+  stop in *different places*:
+
+      stage 10 (wd10/mt10)   share1 SHA0..SHA6, share2 SHA0..SHA6, ECSZ, "SQ: G/enter", then
+                             silence  -- wedges in the MAIN run, having completed both shares
+                             (6 boots: boot1, boot2, boot3, goal2, mcause, ra-mt10 -- all 6
+                             identical, DETERMINISTIC)
+
+      probes x100/101/102    stop inside the FIRST share at "SHA5:00000001", never reaching
+                             SHA6 -- and NOT deterministic: x100 completed the whole run in
+                             one boot and wedged at SHA5 in another, same image, same position
+
+Different entry, different determinism. Equal carve counts say only that both are in the same
+regime; they are not evidence of a shared fault, and the differing stopping points are weak
+evidence *against* one. Treat them as two open faults until something actually links them.
+
+**Three corrections in a row on this thread** (Family A classification, the 1059 figure, this
+one), all from asserting past the evidence rather than reading the artefact. The pattern is
+worth naming: each one came from a *summary* — my own classifier, a source comment, a carve
+count — where the primary log or binary was one command away.
 
 ## 0a3. DIRECT MEASUREMENT: the cursor is off by 57 bytes — and Family A now blocks the work
 
