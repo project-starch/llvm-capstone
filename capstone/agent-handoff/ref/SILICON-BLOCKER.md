@@ -101,6 +101,40 @@ can be measured at all**. `n144` was measurable and `n140`/`n146` were not, for 
 unrelated to what they test. Any claim of the form "arm X wedges and arm Y does not" must state
 which arms were actually reachable.
 
+### Redraw outcome — arm 146 is STILL UNMEASURED after six attempts
+
+    n146   :0=STALL                      (x2, one boot void on the control)
+    q141   f10ctl=0 | :0=STALL
+    q142   f10ctl=0 | :0=STALL
+    q143   f10ctl=0 | :0=STALL
+    q145   f10ctl=0 | :0=0 | :146=STALL  <-- image ENTERED for :0, then hung on :146
+
+`q145` is the informative one and it needs reading from the transcript, not from the runner's
+label. Its `:146` block ends:
+
+    SQ: A/dom-ok  B/mkregion1  C/mkregion2  D/mapped  E/share1  SHA5:00000002   [end]
+
+no `SHA6`, no `F/share2`, no `G/enter`. So it hung **inside the FIRST capability-share call**,
+earlier than domain entry — the arm's code never executed and **arm 146 has no verdict**. The
+classifier prints `146=STALL`, which is right in kind but reads like a statement about the arm;
+it is not.
+
+Two consequences worth keeping:
+
+* **R-16 is not strictly per-image.** The SAME `q145` binary, in the SAME boot, entered for
+  `:0` and then hung at `:146`. The per-image-determinism model (used above to justify
+  redrawing rather than re-running) is therefore incomplete: it holds across boots for a given
+  image, but a later invocation within one boot can still hang. Redrawing remains the right
+  strategy — six images, one entry — but "deterministic" overstates it.
+* **`SHA5` last does not mean "entry stall" by itself.** A domain that enters and wedges
+  immediately would also leave `SHA5` last. Distinguish on `SQ: G/enter`: present => the domain
+  ran (a real wedge, as in `n144:144`); absent => it never entered (as here).
+
+**Where this leaves the minimisation.** The array arm (`n144`) is the only one measured, and it
+wedges 2/2. The two arms that would isolate the ingredient — `n140` (struct, no array) and
+`n146` (scalars, no struct) — have never entered, across 8 images and 9 boots. Isolating the
+ingredient therefore needs a way around R-16, not more redraws of the same shape.
+
 **A control that passes is not a control that always passes.** `f10.dom:0` returned 2/2 under
 firmware `8686cad424cb`, then WEDGED after `SQ: G/enter` under `8c6f5d30905e`, then returned
 2/2 again in later boots of that same firmware. So the control is ~non-deterministic at roughly
