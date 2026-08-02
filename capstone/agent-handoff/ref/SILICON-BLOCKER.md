@@ -264,6 +264,60 @@ straight-line struct array holds a valid capability (tag intact, bounds consiste
 container) whose CURSOR is wrong. Not established: why; whether the error is at store or at
 load; whether the larger-N wedges are the same fault; and whether it is what stops SQLite.
 
+## 0a6. THE SHA5 WEDGE IS POSITION-DEPENDENT, AND POSITION 2 REGRESSED BETWEEN AUG 1 AND AUG 2
+
+### Measured: a SQLite-derived domain at position 1 enters cleanly
+
+Running `sqlite_silicon.dom` FIRST, with no control ahead of it, it passed **both** shares
+(`SHA5:00000000` / `SHA6:00000000` on each) and reached `SQ: G/enter` (MEASURED, 2026-08-02).
+
+That settles the fork left open in 0a5: explanation **(a)** holds. SQLite-derived domains do
+NOT wedge in `share1` as such — they wedge in `share1` **at position 2**. The domain content
+is not what decides it.
+
+### And position 2 has not always been broken — it regressed
+
+The Aug-1 baseline, re-checked from the logs rather than memory:
+
+    boot1, boot2, boot3, goal2   wd10.dom at POSITION 2   -> reached SQ: G/enter
+    mcause                       wd10.dom at POSITION 2   -> reached SQ: G/enter
+    ra-mt10                      mt10.dom at POSITION 2   -> reached SQ: G/enter
+
+Six of six, all at position 2, all passing both shares. Against Aug-2:
+
+    z100_2, z101_1, z101_2, z102_1, z102_2, static/st9   position 2  -> stopped at SHA5
+
+So position 2 was healthy on Aug-1 firmware and is broken on Aug-2 firmware.
+
+### The prime suspect is a regression I introduced
+
+The one firmware change in that window is the **SPLB exact-fit fix** in the monitor
+(`sbi_capstone.c`, mtime 2026-08-01 22:42), which on an exact fit does `region_n -= 1`
+instead of spinning. It sits in the region path that `share` consumes.
+
+Worth stating plainly: that fix was written to cure the ~6-run ceiling, and the "the ceiling
+is SPLB" conclusion was **later retracted** as a misreading of replayed console history. So
+the likely situation is a fix for a non-problem that broke domain slot 2.
+
+**This is not yet established.** The correlation is temporal and **confounded**: the Aug-2
+domains are different builds from the Aug-1 ones. Two things that do NOT support it:
+
+* region ids do not discriminate — `r1=17 r2=19` appears in both a working run (`z100_1`) and
+  three wedged ones;
+* the `INTERP_DOMAIN_MTVEC` glue gate, the other change in the window, is **OFF in every
+  built domain** (0 `csrw mtvec` occurrences in `x100`, `st9`, `wd71`) — checked, not assumed.
+
+**The clean discriminator is one load**: run the *Aug-1* `wd10.dom` (still on disk) at
+position 2 on *today's* firmware, monitor otherwise unchanged. Reaches `G/enter` → the
+firmware is fine and the Aug-2 domains differ. Stops at `SHA5` → today's monitor is the
+regression, and reverting it restores ~6 usable domain slots per boot.
+
+### Practical consequence, independent of the cause
+
+Until this is resolved, **put the domain under test at position 1**. Every slot-level probe
+result that cost six boots was paid for by a convention — control first — that is now known
+to be the expensive part.
+
 ## 0a5. THE SHA5 WEDGE TRACKS POSITION-2 + SQLITE-DERIVED, AND R-14 HAS A QEMU-GREEN FIX
 
 ### The R-14 workaround now exists and passes QEMU
