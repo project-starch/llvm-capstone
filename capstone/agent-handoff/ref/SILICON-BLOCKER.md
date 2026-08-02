@@ -6,6 +6,43 @@ Last updated: 2026-08-01.
 
 ---
 
+## THE ENTRY STALL IS BUILD-DEPENDENT, NOT A FLAT RANDOM RATE — POOLING HID THE STRUCTURE
+
+Section 0a10 measured a slot-1 `SHA5` entry-stall rate of 2.8% over 107 launches and called it
+a "residual floor". That number is real but the *model* behind it is wrong: it pools many
+different binaries, and the per-binary behaviour is bimodal, not uniform.
+
+Position-1 launches, grouped by binary:
+
+    ENTER RELIABLY          sqlite_silicon, f10, r110, r111   -> reached SQ: G/enter
+    ENTRY-STALL RELIABLY    x101   6/6 stalls
+                            r112   3/3 stalls
+                            st10   stalled
+
+A binary that stalls does so repeatedly; a binary that enters does so repeatedly. A flat 2.8%
+process cannot produce 6/6 and 3/3 on specific images while others never stall.
+
+### Two consequences, both practical
+
+* **Retrying the same binary is close to futile.** The `r112` retry loop spent three boots
+  re-drawing the same losing ticket. Retry is the right response to an *infra flake*; for an
+  entry stall the right response is to **change the binary or the order**.
+* **The runner stops at the first failure**, so a stalling domain at position 1 permanently
+  masks everything behind it. `r113` never got a single turn while `r112` sat in front of it.
+  Reordering is free and was the move that should have been made after the first stall, not
+  the third.
+
+### What this does NOT establish
+
+Why a given image stalls. Nothing structural has separated the stalling from the entering
+builds — carve count, `.text` size and merged-string bytes were all checked and none
+discriminate (see the section on structural signatures). So "build-dependent" here means
+"reproducible per image", not "explained".
+
+**Revised reading of 0a10:** the slot-1-vs-slot-2 comparison (2.8% vs 32%) still stands as a
+measurement, but neither number should be used as a per-run failure probability for a
+*particular* domain. For planning, assume a given image either enters or does not.
+
 ## CLASSIFY BEFORE RECORDING: an entry stall is NOT a result about the domain
 
 Two board failures look identical in a summary and mean opposite things. Always read the LAST
