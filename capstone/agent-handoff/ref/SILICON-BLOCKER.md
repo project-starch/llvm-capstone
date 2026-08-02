@@ -6,6 +6,49 @@ Last updated: 2026-08-02.
 
 ---
 
+## R-16 REMAINS UNEXPLAINED — initramfs bloat REFUTED, and everything else too
+
+The firmware grew 15.4 -> 30.0 MB across the session as 24 dead probe images accumulated in
+buildroot's **target** dir (pruning the overlay alone does nothing — the target dir is what is
+packed). That looked like a strong self-inflicted explanation, and the entry failures did begin
+around 26-28 MB.
+
+Pruning the target dir by explicit name brought the firmware back to **17466376 bytes —
+byte-identical to the known-good Aug-1 image**. It still entry-stalls, 2/2.
+
+**So initramfs size is not the cause.** Full list of hypotheses now eliminated by measurement:
+
+    domain image identity     r110 entered 3/3 at 19:05, stalls now -- same binary
+    firmware generation       fresh rebuild, no domain changes -- stalls
+    thermal / power state     300 s powered off, then retest -- stalls
+    initramfs / firmware size back to the known-good byte count -- stalls
+    bitstream                 nvbit matches working-caplifive-captype-fixed.bit throughout
+    carve count               181 images both enter and stall; 182 correlation was confounded
+    dom_data geometry         byte-identical across the entering/stalling divide
+
+Note the power cycle already reconfigures the FPGA from flash, so plain FPGA configuration
+state is covered by the thermal test and is also not it.
+
+**R-16 is therefore unexplained, and since ~20:40 the board has not entered a domain under any
+condition tried.** Everything after that timestamp carries no information about domains.
+
+### What is NOT affected
+
+Every control-validated result, because each compared a control and a failing case **inside one
+boot**:
+
+    f10:0 rc=0 | f10:9 rc=0 | f10:10 WEDGE     the SQLite blocker
+    r110:0 rc=0 | r110:110 WEDGE                R-14 variant A
+    r110:0 rc=0 | r110:111 WEDGE                R-14 variant B
+
+### Remaining untried remedy
+
+A **bitstream reflash** is the only untried remedy; it was offered and declined, and is
+ask-first under CLAUDE.md, so it has not been done. Until the board enters domains again, no
+further silicon measurement is possible and additional boots produce zero-information runs.
+The productive work left is offline: the `cincoffset`-consumes-linear-`rs1` mechanism and its
+two-derivation test, which is written up and ready to run the moment the board recovers.
+
 ## MECHANISM HYPOTHESIS FOR R-14 / THE SQLITE BLOCKER: `cincoffset` CONSUMES A LINEAR rs1
 
 Found by diffing the codegen of the two shapes (offline, no board). Merged string constants
