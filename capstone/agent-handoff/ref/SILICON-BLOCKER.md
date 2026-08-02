@@ -6,6 +6,44 @@ Last updated: 2026-08-01.
 
 ---
 
+## DOM_DATA GEOMETRY IS IDENTICAL BETWEEN ENTERING AND STALLING IMAGES — and "enters reliably" was n=1
+
+### Geometry does not discriminate
+
+    image             group   blob    captable  storage   STACK    globals_off
+    r110              ENTER   75392     2912     354576   211088   0x150000
+    r112              STALL   75392     2912     354576   211088   0x150000
+    r113              STALL   75392     2912     354576   211088   0x150000
+    v110              STALL   75392     2912     354576   211088   0x150000
+    r111              ENTER   75120     2896     354320   211904   0x150000
+    st10              STALL   75120     2896     354320   211904   0x150000
+
+`r110` (entered) and `r112`/`r113`/`v110` (stalled) have **byte-identical dom_data geometry**;
+so do `r111` (entered) and `st10` (stalled). The carve loop and cap-init work against exactly
+the same layout in both groups, so **size/layout is ruled out** as the cause of the entry
+stall — as are carve count and `.text` size, which also fail to separate the groups (181 carves
+appears on both sides; `st10` stalls with *smaller* `.text` than the entering `r110`).
+
+### Correction: the "entering" images have n=1
+
+I wrote that `r110`/`r111` "enter reliably". That was too strong and is corrected here:
+
+    x101   STALLED 6/6      (strong)
+    r112   STALLED 3/3      (moderate)
+    r110   entered 1/1      (n=1)
+    r111   entered 1/1      (n=1)
+    v110   stalled 1/1      (n=1)
+
+The stalling side has real repetition behind it; the entering side does not. So
+"build-dependent" is supported for the *stalling* images and **assumed** for the entering ones.
+Given that `r110` and `r112` share identical geometry and differ only by ~1.6 KB of compiled
+stage code, the alternative — that entry is a per-BOOT coin toss and `r110` simply got lucky
+once — is not yet excluded.
+
+**Test running:** `r110` three times at position 1. 3/3 entering supports a genuine per-image
+split; any stall means "build-dependent" is wrong and the stall is boot-level, which would make
+every single-sample entry/stall attribution in this document unsafe.
+
 ## THE ENTRY STALL IS NOW THE PRIMARY BLOCKER — IT DEFEATS THE RUNTIME-SELECTOR WORKAROUND
 
 The runtime selector was built precisely to dodge the build-dependent entry stall: put every
