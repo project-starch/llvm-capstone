@@ -6,6 +6,59 @@ Last updated: 2026-08-01.
 
 ---
 
+## !!!! ROOT CAUSE FOUND: AGGREGATE-INITIALISER TAIL PADDING IS ADDRESSED WITH `addi`, STRIPPING THE TAG
+
+**Minimal reproducer, no board, no SQLite, no monitor: 4552-byte domain, 8 array elements.**
+`capstone/tests/runtime-qemu/silicon-ladder/strarray_app.c` (+ `strarray_host.c`, oracle 420).
+Run with `DOMAIN_OPT_LEVEL=-O0 bash run-ladder-qemu.sh strarray` — fails in about a minute:
+
+    qemu-system-riscv64: op_helper.c:655: helper_cscincoffsetimm: Assertion `rs1_v->tag' failed.
+
+### The generated code
+
+For each element of a local `struct fd { const char *z; void *p1, *p2; unsigned char f; }`
+(three capabilities at 0/16/32, `f` at 48, **15 bytes of tail padding**):
+
+    sb    a4, 112(a5)      ; store the flags byte
+    mv    a0, a0
+    addi  a0, a0, 49       ; <-- INTEGER add computes &tail_padding
+    jalr  a3               ; memset(dest, 0, 15)
+
+`addi` is integer arithmetic: applied to a capability register it produces an **untagged
+scalar**. That scalar is passed to `memset` as the destination, and `memset`'s `p++` is
+`cincoffsetimm` on an untagged base — which QEMU asserts on and the RTL does not check.
+
+**The bug: the aggregate initialiser's tail-padding zero-fill computes its destination address
+with `addi` instead of `cincoffsetimm`, so the capability tag is stripped before the pointer is
+used.** The correct lowering is `cincoffsetimm a0, a0, 49`, which preserves the tag.
+
+### Why this is the blocker
+
+* **On silicon there is no check.** `SPLIT`/`LDC`/`STC` all validate their operands and raise
+  exceptions, but nothing in the RTL requires a tagged `cincoffset`/`cincoffsetimm` base. So the
+  untagged pointer is used, `memset` writes 15 bytes **through a garbage address**, and
+  execution continues. That is a silent memory corruption once per array element.
+* It needs **only a struct with tail padding in an aggregate initialiser** — which is exactly
+  what `sqlite3RegisterBuiltinFunctions` builds, and exactly the R-14 shape.
+* It is **size-independent** (N=8 through 56 all fail) and **not** register pressure, matching
+  the controls.
+
+### What this retires
+
+* The blocker is a **compiler bug, not an RTL/silicon defect**. Every "the board miscomputes"
+  claim in this document should be re-read with that in mind.
+* It explains the corrupted string pointers without any wrong-cursor mechanism, and the
+  wrong-cursor measurements were themselves invalid (see the INVALIDATED section).
+* `SQLITE_STATIC_BUILTINS=1` works **because it removes the local aggregate initialiser
+  entirely** — stage 10 with it returns clean under QEMU (`rc=0x00`, 0 asserts). It is a
+  genuine workaround, but it treats the symptom; other struct-array initialisers with tail
+  padding remain affected.
+
+### Next
+
+Fix the lowering (tail-padding memset destination must be `cincoffsetimm`), then re-run the
+QEMU gate and the ladder. The reproducer above is the regression test.
+
 ## !!! ROOT CAUSE CANDIDATE: THE ARRAY CONSTRUCTION ITSELF DOES `cincoffset` ON AN UNTAGGED REGISTER
 
 This reattributes the blocker from silicon to **our codegen**.
