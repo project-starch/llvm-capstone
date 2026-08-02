@@ -2856,6 +2856,57 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
     return (int)(v & 0xffUL);
   }
 #endif
+#if CAPSTONE_SQLITE_STAGE >= 120 && CAPSTONE_SQLITE_STAGE <= 125
+  /* R-14 N-THRESHOLD SWEEP, with no added static data.
+     Both SQLite routes are blocked: the straight-line local wedges in-domain (R-14, validated
+     at stage 10 with two returning controls), and making it a static triggers R-16 (5/5).
+     A third option is to keep the straight-line shape but make it SMALL. This finds the
+     largest N that still returns on silicon.
+       120=N4  121=N8  122=N16  123=N32  124=N48  125=N64
+     Deliberately NO static table and no extra globals -- adding either is what pushed the
+     static-builtins images into the entry stall. Each arm returns the count it verified, so
+     every run yields a number rather than a hang. Expect N. */
+  if (stage >= 120 && stage <= 125) {
+    /* NO static table here, on purpose and this time actually: a `static const unsigned
+       ns[6]` costs ONE extra cap-table global, which took the image from 181 to 182 carves,
+       and every 182-carve image observed so far entry-stalls (8/8). A switch keeps the
+       constants in the instruction stream and the carve count unchanged. */
+    unsigned n = 4;
+    switch (stage) {
+      case 120: n = 4;  break;
+      case 121: n = 8;  break;
+      case 122: n = 16; break;
+      case 123: n = 32; break;
+      case 124: n = 48; break;
+      default:  n = 64; break;
+    }
+    struct kv3 { const char *z; const char *y; };
+    struct kv3 a[64];
+    unsigned i; int ok = 0;
+    /* straight-line materialisation of DISTINCT literals -- the R-14 variant-A shape */
+    a[0].z="ltrim";    a[0].y="aaa0";   a[1].z="rtrim";    a[1].y="aaa1";
+    a[2].z="trim";     a[2].y="aaa2";   a[3].z="max";      a[3].y="aaa3";
+    if (n > 4) {
+      a[4].z="min";    a[4].y="aaa4";   a[5].z="typeof";   a[5].y="aaa5";
+      a[6].z="length"; a[6].y="aaa6";   a[7].z="instr";    a[7].y="aaa7";
+    }
+    if (n > 8) {
+      a[8].z="substr"; a[8].y="aaa8";   a[9].z="upper";    a[9].y="aaa9";
+      a[10].z="lower"; a[10].y="aab0";  a[11].z="coalesce";a[11].y="aab1";
+      a[12].z="hex";   a[12].y="aab2";  a[13].z="unhex";   a[13].y="aab3";
+      a[14].z="quote"; a[14].y="aab4";  a[15].z="replace"; a[15].y="aab5";
+    }
+    for (i = (n > 16 ? 16 : n); i < n; i++) { a[i].z = "filler"; a[i].y = "fill"; }
+    for (i = 0; i < n; i++) {
+      unsigned nz = 0, ny = 0;
+      const char *z = a[i].z, *y = a[i].y;
+      while (z && z[nz]) nz++;
+      while (y && y[ny]) ny++;
+      if (z && y && nz > 0 && ny > 0) ok++;
+    }
+    return ok & 0xff;                      /* expect n */
+  }
+#endif
 #if CAPSTONE_SQLITE_STAGE >= 110 && CAPSTONE_SQLITE_STAGE <= 113
   /* R-14 variants A and B as STAGED probes, so they can run on the board through the same
      host/runner as everything else (the ladder .dom files are not staged in the initramfs).
