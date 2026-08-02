@@ -6,6 +6,41 @@ Last updated: 2026-08-02.
 
 ---
 
+## THE N-THRESHOLD IS <= 4: CLAMPING THE BUILTIN COUNT CANNOT WORK
+
+I built a six-point N sweep (4/8/16/32/48/64) to find the largest straight-line struct array
+that still returns on silicon. **That was unnecessary — the answer was already in
+control-validated data.**
+
+    r110.dom:0    CONTROL trivial return                    RETURNED rc=0
+    r110.dom:111  variant B -- FOUR straight-line entries   IN-DOMAIN WEDGE
+
+Variant B materialises only `a[0]`..`a[3]` straight-line and fills the remaining 60 entries in
+a loop. It wedges, with its control returning in the same boot. So **four straight-line
+struct-field materialisations are already enough to wedge**, and there is no N small enough to
+be useful — SQLite needs far more than four builtins.
+
+**Clamping the builtin count is therefore not a viable path**, and the sweep images
+(`t120`/`tsp`/`tsq`/`tsr`/`u120`) were board time spent re-deriving a known result. The lesson
+is procedural: before designing a new experiment, check whether an existing control-validated
+run already answers it.
+
+### Where that leaves the three candidate shapes
+
+    straight-line local        R-14 in-domain wedge, at N as low as 4      (validated)
+    static initialised global  R-16 entry stall, 5/5                        (validated)
+    loop from a static table   NEVER TESTED against real SQLite            (variant C shape)
+
+Only the third is untried, and there is a specific reason to think it is worth one attempt:
+the R-16 entry stall correlates with carve count (>=182 stalls 8/8), and every probe image that
+tried variant C's shape carried the probe harness's own globals on top. **The real
+`sqlite_silicon` image sits at 179 carves and enters**, so adding variant C's small static
+name table (+1 carve -> 180) would still land below the 182 line that has stalled every time.
+
+That is the one remaining shape with a plausible path to running SQLite on this silicon, and it
+is exactly the workaround `ISSUES.md` R-14 recommended before any of this was measured:
+**build `aBuiltinFunc` in a loop from a static table instead of straight-line.**
+
 ## THE WORKAROUND RELIABLY TRIGGERS R-16 — 5/5 static-builtins images entry-stall
 
     image                     behaviour                 .data
