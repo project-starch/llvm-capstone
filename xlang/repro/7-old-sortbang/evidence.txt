@@ -1,0 +1,43 @@
+# Row 7 (CVE-2025-13120 / mruby #6649) — captured evidence, 2026-08-02
+#
+# There is deliberately NO asan.txt for this row. Every other row's oracle is an
+# ASan trace; this row's oracle is the PLAIN build's SIGSEGV, because ASan and
+# valgrind both mask the defect. Naming a file asan.txt here would imply a
+# sanitizer caught it, which is the opposite of the finding.
+
+=== plain build (-g -O1, no sanitizer) — THE ORACLE ===
+$ ./mruby/build/plain/bin/mruby trigger.rb
+$ echo $?
+139                      # SIGSEGV, 3 runs of 3
+
+$ gdb -batch -ex run -ex 'bt 6' --args ./mruby/build/plain/bin/mruby trigger.rb
+Program received signal SIGSEGV, Segmentation fault.
+#0  mrb_obj_is_kind_of  src/object.c:558
+#1  cmpnum              src/numeric.c:2119
+#2  num_lt              src/numeric.c:2185
+#3  mrb_vm_exec         src/vm.c:2247
+#4  mrb_vm_run          src/vm.c:1613
+#5  mrb_yield_argv      src/vm.c:1288
+
+A stale mrb_value, read through the backing-store pointer cached by heap sort,
+is passed to the comparison block; comparing it dereferences garbage.
+
+=== ASan build — MASKS the defect ===
+trace (most recent call last):
+	[1] trigger.rb:19
+trigger.rb:19:in sort!: array modified during sort (RuntimeError)
+
+=== valgrind on the plain build — ALSO MASKS it ===
+==302476== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+exit=1
+
+=== why both tools are blind ===
+The pre-fix guard is `if (RARRAY_PTR(ary) != p) raise "array modified during
+sort"`. ASan and valgrind both replace realloc with an always-moving
+implementation, so the pointer changes, the guard fires, and the defect never
+occurs. The system allocator satisfies the 100 -> 2 element shrink IN PLACE:
+the pointer is unchanged, the guard passes, and heap sort keeps indexing a
+buffer that is now far smaller.
+
+The sanitizer does not fail to observe the defect. It PREVENTS it, by changing
+the allocator behaviour the defect depends on. See target.md.

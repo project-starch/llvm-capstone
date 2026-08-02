@@ -1,11 +1,36 @@
-# xlang — cross-language FFI memory-safety reproduction corpus
+# xlang — cross-language FFI memory-safety corpus
 
-Phase-1 artifacts for `capstone/agent-handoff/plans/xlang-repro-task.md`. One
-directory per row, each self-contained and buildable with a **stock toolchain** —
-no Capstone compiler, no QEMU fork, no FPGA.
+One corpus, measured under three memory-safety regimes. The tree is organised by
+**column**, so each regime's artifacts sit next to the corpus they describe:
 
-**14 of 15 rows reproduce.** Row 7 does not, and the evidence suggests the row as
-specified does not exist.
+```
+xlang/
+├── repro/     the defects, on stock toolchains — x86 ASan + RISC-V QEMU
+├── cheri/     the same defects under CHERI-RISC-V purecap
+└── capstone/  our column — 15 rows measured, 14/15 blocked
+```
+
+`repro/` is the ground truth and deliberately depends on nothing of ours: stock
+toolchain, no Capstone compiler, no QEMU fork, no FPGA. The measurement columns
+read from it; it never reads from them. That one-way direction is what lets the
+corpus be built and run by someone without our stack.
+
+**Measured so far: see `RESULTS.md`** — one page covering all three columns,
+what is reproduced, how to re-run it, and what is still missing.
+
+**Where things stand.** `repro/`: **all 15 rows reproduce.** Row 7 as originally
+specified does not exist; it was replaced on 2026-08-02 with RUSTSEC-2022-0070,
+a real Rust↔C use-after-free (see `repro/7/target.md`). `cheri/`: all 15 rows
+measured across 3 revocation configs, reported as an upper bound — see its
+`RESULTS.md` for why. `capstone/`: all 15 rows measured, 14/15 blocked
+(12 by revocation, 2 by bounds), reproduced from a clean rebuild — see its
+`RESULTS.md` and `reproduce.sh`.
+
+`shim/` (an mruby host embedder for running the *real* engine under a capability
+allocator) was removed on 2026-08-02: that route was dropped in favour of shims
+on both columns, and nothing in the measurement path referenced it.
+
+The rest of this file documents `repro/`. Each column's own README covers itself.
 
 ## Status summary
 
@@ -17,21 +42,26 @@ specified does not exist.
 | 4 | Ruby↔C | CVE-2022-1071 | ✅ heap-use-after-free | temporal | ✅ SIGSEGV (139) |
 | 5 | Ruby↔C | CVE-2022-1934 | ✅ heap-use-after-free | temporal | runs, exit 0 |
 | 6 | Ruby↔C | CVE-2026-1979 | ✅ heap-buffer-overflow (WRITE) | **spatial** | ✅ SIGSEGV (139) |
-| 7 | Ruby↔C gem | "mruby #6701 / bigint" | ❌ **not reproduced** | — | runs, exit 0 |
-| 8 | Ruby↔C gem | mruby #4926 | ✅ heap-use-after-free | temporal | runs, exit 0 |
+| 7 | Rust→C | RUSTSEC-2022-0070 | ✅ invalid read (valgrind) | temporal | n/a — see below |
+| 8 | Ruby↔C gem | mruby #4926 / CVE-2020-6838 | ✅ heap-use-after-free | temporal | runs, exit 0 |
 | 9 | Ruby↔C | mruby #3829 | ✅ heap-use-after-free | temporal | ✅ SIGSEGV (139) |
 | 10 | Ruby↔C | CVE-2022-1106 | ✅ heap-use-after-free | temporal | runs, exit 0 |
 | 11 | Ruby↔C | CVE-2018-10191 | ✅ heap-buffer-overflow | **spatial** | ✅ SIGSEGV (139) |
-| 12 | Ruby↔C gem | mruby #4001 | ✅ heap-use-after-free | temporal | exit 1, caught `IOError` |
-| 13 | Ruby↔C gem | mruby #4927 | ✅ heap-use-after-free | temporal | runs, exit 0 |
-| 14 | Ruby↔C | mruby #3596 | ✅ heap-use-after-free | temporal | runs, exit 0 |
+| 12 | Ruby↔C gem | mruby #4001 / CVE-2018-10199 | ✅ heap-use-after-free | temporal | exit 1, caught `IOError` |
+| 13 | Ruby↔C gem | mruby #4927 / CVE-2020-6840 | ✅ heap-use-after-free | temporal | runs, exit 0 |
+| 14 | Ruby↔C | mruby #3596 / CVE-2017-9527 | ✅ heap-use-after-free | temporal | runs, exit 0 |
 | 15 | Ruby↔C | mruby #3722 | ✅ heap-use-after-free | temporal | ✅ SIGSEGV (139)¹ |
 
 ¹ Row 15's QEMU fault is **heap-layout sensitive**: it segfaults when invoked with
 absolute paths (as `run.sh` does) and exits 0 with short relative paths. Both are
-individually deterministic. See `15/`.
+individually deterministic. See `repro/15/`.
 
-**Crash sites** are recorded per row in `<row>/target.md`; `<row>/asan.txt` holds
+Four rows carried only an upstream issue number until 2026-08-02; an NVD sweep of
+all 46 mruby CVEs matched them to assigned CVE IDs, each verified by the defect
+function being present at that row's pinned commit and the pin falling inside the
+CVE's stated version range.
+
+**Crash sites** are recorded per row in `repro/<row>/target.md`; `repro/<row>/asan.txt` holds
 the captured trace.
 
 ## Three findings that affect how this corpus should be described
@@ -46,10 +76,10 @@ hold:
 - **Row 11** (`OP_GETUPVAR` scope-level truncation) reproduces as
   `heap-buffer-overflow`. The plausible temporal path is closed at this mruby
   version by `envadjust()`, which rewrites `REnv::stack` on every stack realloc.
-  Two attempts to force a dangling environment both failed. See `11/target.md`.
+  Two attempts to force a dangling environment both failed. See `repro/11/target.md`.
 - **Row 6** (pattern-matching bytecode corruption) reproduces as
   `heap-buffer-overflow` **WRITE**. A corrupted register operand stores past the
-  end of the VM stack; nothing is freed and reused. See `6/target.md`.
+  end of the VM stack; nothing is freed and reused. See `repro/6/target.md`.
 
 Neither is addressed by revocation — bounds are what stop them. Each row's
 `target.md` lays out the options (reclassify vs. drop from the temporal subset),
@@ -60,7 +90,7 @@ For row 6 the spatial reading is not merely our own: NVD assigns **CWE-119 as we
 as CWE-416** to CVE-2026-1979. Only the CNA's prose description calls it a
 use-after-free.
 
-### 2. Row 7 appears not to exist as specified
+### 2. Row 7 as specified does not exist — REPLACED 2026-08-02
 
 Three independent problems, each verified against the source:
 
@@ -75,15 +105,22 @@ Three independent problems, each verified against the source:
   (`mrb_obj_alloc` → `gc_protect` roots every new object; nothing in the bigint or
   rational path saves/restores the arena).
 
-The build works and is kept, so only a trigger would be missing if the row is real.
-Full argument in `7/target.md`.
+**Row 7 is now RUSTSEC-2022-0070**, a use-after-free across the Rust↔C
+`secp256k1`/`libsecp256k1` boundary, reachable from entirely safe Rust. It was
+chosen over a second candidate (CVE-2025-13120, `Array#sort!`) because its free
+is a real heap deallocation that a revocation mechanism can act on, whereas the
+`sort!` defect's "free" is a shrink-in-place with no free at all.
+
+The original analysis, and the rejected candidate with its own finding — that
+**both ASan and valgrind mask the `sort!` defect by replacing `realloc` with an
+always-moving implementation** — are kept at `repro/7-old-sortbang/`.
 
 ### 3. Row 3 needs valgrind, not AddressSanitizer
 
 Row 3's stale dereference executes inside prebuilt `libpulse.so`, which carries no
 sanitizer instrumentation. ASan poisons the region on free but never sees the read,
 so the ASan build exits 0; valgrind instruments at machine level and catches it.
-`3/asan.txt` therefore holds a valgrind report, and `3/run.sh` runs both legs so the
+`repro/3/asan.txt` therefore holds a valgrind report, and `repro/3/run.sh` runs both legs so the
 clean ASan pass is not mistaken for a failed reproduction.
 
 This generalises: **for Rust→C rows where the stale dereference lands in a prebuilt
@@ -124,7 +161,7 @@ Without these patches neither row builds at all on any post-2020 toolchain.
 Every row follows task spec §2:
 
 ```
-<row>/
+repro/<row>/
 ├── target.md      pinned commit(s), crash sites, verdict, caveats
 ├── build.sh       clean checkout -> runnable binary (stock toolchain)
 ├── <trigger>      trigger.rb, or trigger.lua + src/main.rs for Rust rows
@@ -138,10 +175,18 @@ Rows 4–15 also carry `build_config.rb` (mruby host+ASan and riscv64 targets).
 Rows 6 additionally has `bytecode-diff.txt`, a differential disassembly against a
 fixed compiler.
 
-## Running a row
+## Running the corpus
 
 ```bash
-cd <row> && ./build.sh && ./run.sh
+repro/reproduce.sh            # all 15 rows; exits non-zero if any stops reproducing
+repro/reproduce.sh --build    # build first
+repro/reproduce.sh --rows 7 10
+```
+
+Or one row at a time:
+
+```bash
+cd repro/<row> && ./build.sh && ./run.sh
 ```
 
 Each `run.sh` exits non-zero if the expected violation does not appear, so the
@@ -162,9 +207,14 @@ rustc/cargo 1.96.1 + nightly, valgrind, libpulse 17.0.
 Build trees (`mruby/`, `rlua/`, `pulse-binding-rust/`, `target/`) are gitignored and
 created on demand; the full corpus is roughly 3 GB built.
 
-## Out of scope here
+## Out of scope for `repro/`
 
-Per task spec §9: nothing in this directory uses the Capstone capability compiler,
+Per task spec §9: nothing under `repro/` uses the Capstone capability compiler,
 capability-protected domains, revocation, or the FPGA. Each `boundary.md` ends with
 a note on what a capability mechanism *would* do at that row's free site, but
 nothing is implemented.
+
+That is a property worth preserving rather than an omission: it is what keeps
+`repro/` runnable by someone with no part of our stack, and what makes it a fair
+baseline for the columns that measure against it. The mechanisms live in the
+sibling columns — `cheri/` today, `capstone/` when it exists.

@@ -32,12 +32,15 @@ if ! pkg-config --exists libpulse; then
 fi
 echo "system libpulse: $(pkg-config --modversion libpulse)"
 
-echo "=== [2/2] Building native + ASan ==="
-# ASan for Rust is nightly-only; --target keeps build scripts uninstrumented.
-# -Zbuild-std is unnecessary: the freed object is a C heap allocation made by
-# libpulse, and ASan's malloc/free interceptors see it regardless.
+echo "=== [2/2] Building native (debug info, deliberately NO ASan) ==="
+# This row's instrument is valgrind, not ASan: the stale read happens inside
+# prebuilt, uninstrumented libpulse.so, where ASan is blind.
+#
+# Do NOT add -Zsanitizer=address here. valgrind cannot instrument an ASan
+# binary with current toolchains -- it produces no report at all and exits 0,
+# which run.sh cannot distinguish from "no defect". Cost a rebuild to learn.
 cd "$DIR"
-RUSTFLAGS="-Zsanitizer=address -g" \
+RUSTFLAGS="-g" \
     cargo +nightly build --target x86_64-unknown-linux-gnu
 
 echo "=== Build Complete ==="
