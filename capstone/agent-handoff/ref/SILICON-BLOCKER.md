@@ -6,6 +6,42 @@ Last updated: 2026-08-02.
 
 ---
 
+## VALIDATED: variant A's wedge IS variant-specific — control returns in the SAME image
+
+    r110.dom, position 1, one boot:
+      sel=0    CONTROL trivial `return 0`   RETURNED rc=0
+      sel=110  variant A                    IN-DOMAIN WEDGE
+
+This is the check that was missing when the variant-D result was recorded, and here it
+**passes**: the trivial control returns from the same image, in the same boot, moments before
+variant A wedges. So `r110`'s entry, glue reentry, marker write and return path are all sound,
+and variant A's wedge is a property of **variant A**, not of the image.
+
+**"R-14 variant A still wedges on silicon after C-16" therefore STANDS.**
+
+### And it explains the n112 divergence
+
+    r110   control RETURNS  -> image sound   -> its variant verdicts are interpretable
+    n112   control WEDGES   -> image broken  -> its variant verdicts are void (5 runs, all
+                                               selectors incl. `:0` and no-selector at all)
+
+Two different failures that both presented as "in-domain wedge". The control is what separates
+them, and it costs nothing. Restating the rule, now demonstrated in both directions:
+
+> **Run `:0` first on every staged image.** A returning control makes that image's wedges
+> evidence; a wedging control makes them noise.
+
+### Status of the R-14 post-fix table
+
+    variant A (110)   WEDGES on silicon, control-validated      QEMU: returns 16
+    variant B (111)   wedge recorded, control validation IN FLIGHT
+    variant D (112)   VOID -- only ever measured on the broken n112 image
+    variant C (113)   never measured on silicon; its static table is the object whose
+                      presence flips an image into the R-16 entry stall (4/4 vs 2/2)
+
+So the "both ingredients required" claim still cannot be settled: A is confirmed, B is pending,
+and C/D have no valid silicon measurement at all.
+
 ## RETRACTED: "variant D wedges on silicon" — THE CONTROL WEDGED TOO
 
     n112.dom (181 carves, stage-113 static table removed), position 1:
