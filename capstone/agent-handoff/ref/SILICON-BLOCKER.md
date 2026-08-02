@@ -6,6 +6,47 @@ Last updated: 2026-08-01.
 
 ---
 
+## THE ENTRY STALL IS NOW THE PRIMARY BLOCKER — IT DEFEATS THE RUNTIME-SELECTOR WORKAROUND
+
+The runtime selector was built precisely to dodge the build-dependent entry stall: put every
+probe in ONE image that is known to enter, and select at run time. It works perfectly under
+QEMU — all four R-14 variants dispatch correctly from a single image:
+
+    QEMU  sel=113 -> 16    sel=112 -> 16    sel=111 -> 16    sel=110 -> 16
+
+On the board, that image (`v110.dom`) **entry-stalled at position 1** and the run ended with
+zero variants measured.
+
+### Why this matters more than the variant table
+
+The workaround assumed there is a stable set of "images that enter". There is not. `r110` and
+`r111` enter reliably; `v110` is the *same source* rebuilt with two extra stages compiled in,
+and it stalls. So:
+
+* **Any rebuild is a fresh draw.** You cannot carry the "it enters" property across a build.
+* **The selector cannot rescue a stalling image** — the stall happens before any domain code
+  runs, so run-time selection never gets a chance.
+* **Reusing an old entering image is not general**: `r110` was built when only stages 110-111
+  existed, so selectors 112/113 fall through its compiled `if` range into the real SQLite path
+  and would silently measure the wrong thing. An old image can only answer the probes that were
+  compiled into it.
+
+### Consequence for planning
+
+**The entry stall is now the primary blocker for the whole measurement campaign** — ahead of
+R-14 and ahead of SQLite itself. Every remaining question (the R-14 ingredient split, the
+store-vs-load fork, anything else) is gated behind "can this image enter", and that is currently
+a coin toss that cannot be influenced by retrying, reordering, or restructuring the probe.
+
+Today's position-1 tally, by whether the domain's own code ever ran:
+
+    ENTERED   sqlite_silicon, f10, r110, r111
+    STALLED   st10, x101 (6/6), r112 (3/3), r113, v110
+
+**Root-causing the SHA5 entry stall should now take priority over further variant work.** It is
+a monitor-hands-off/domain-never-returns failure at the FIRST entry, which is where the glue
+builds the cap table and runs `__capstone_cap_init` — and unlike R-14 it is not QEMU-visible.
+
 ## THE ENTRY STALL IS BUILD-DEPENDENT, NOT A FLAT RANDOM RATE — POOLING HID THE STRUCTURE
 
 Section 0a10 measured a slot-1 `SHA5` entry-stall rate of 2.8% over 107 launches and called it
