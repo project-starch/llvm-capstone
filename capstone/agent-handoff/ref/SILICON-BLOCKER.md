@@ -45,6 +45,28 @@ So the generated code performs capability arithmetic whose **base** has no tag.
   at all — and at which element — depends on register pressure, which does not vary monotonically
   with array size.
 
+### CONFIRMED by controls: the array block is the trigger, and it is size-independent
+
+    stage 0    (same staged harness, 100-105 block NOT compiled, no array)  RETURNED rc=0x00, asserts=0
+    stage 103  PROBE_FD_N=8                                                 ASSERT
+    stage 103  PROBE_FD_N=32                                                ASSERT
+    stage 103  PROBE_FD_N=48                                                ASSERT
+    stage 103  PROBE_FD_N=56                                                ASSERT
+
+Two things follow, and both matter:
+
+* **The staged harness is exonerated.** Stage 0 runs the identical entry/return/marker path
+  with no probe array and is clean, so the fault is not in the staging machinery, the runtime
+  selector, or the shared-region write.
+* **It is NOT register pressure and NOT a size threshold.** N=8 asserts exactly like N=56.
+  This kills the spill hypothesis that the disassembly scan suggested, and it also means the
+  earlier non-monotone stage-94 pattern (N=48/52/60 "clean", N=56 "bad") was measuring
+  something else entirely — those builds were all emitting the same broken construct.
+
+**A straight-line local array of structs whose first member is a string literal makes the
+compiler emit `cincoffset` with an untagged base, at any size from 8 elements up.** QEMU
+catches it in about a minute with no board involved.
+
 ### Not yet established
 
 * **Where** the untagged value comes from. A static scan of the `x100` disassembly found 6
