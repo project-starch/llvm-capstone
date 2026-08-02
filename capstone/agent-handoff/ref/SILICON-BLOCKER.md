@@ -264,6 +264,54 @@ straight-line struct array holds a valid capability (tag intact, bounds consiste
 container) whose CURSOR is wrong. Not established: why; whether the error is at store or at
 load; whether the larger-N wedges are the same fault; and whether it is what stops SQLite.
 
+## 0a5. THE SHA5 WEDGE TRACKS POSITION-2 + SQLITE-DERIVED, AND R-14 HAS A QEMU-GREEN FIX
+
+### The R-14 workaround now exists and passes QEMU
+
+`sqlite3RegisterBuiltinFunctions` builds the exact wedging shape because
+`build-sqlite-capstone.sh:75` strips `static` from
+
+    static FuncDef aBuiltinFunc[] = { ... }
+
+turning a compile-time-initialised global into a **stack array constructed straight-line at
+run time**, then copied element-wise into a separate static. That de-static is ours, not
+upstream SQLite's.
+
+`SQLITE_STATIC_BUILTINS=1` (`build-sqlite-silicon.sh:94`) puts it back. Verified this session:
+
+* patch applies cleanly — 0 surviving `capstoneBuiltinFunc` references, copy loop removed;
+* carve count **unchanged at 179** (it removes one zero-init static and adds one initialised
+  one, so the pool budget is unaffected);
+* **QEMU silicon config passes end-to-end: `__CAPSTONE_SQLITE_SILICON_PASSED__`** (MEASURED).
+
+It is still **unproven on the board** — that is the run in flight.
+
+### The SHA5 wedge correlates with position 2 AND with being SQLite-derived
+
+Tabulating every domain launch whose stopping point is known:
+
+    position 1   wd71 (trivial control, 182 carves)     returns 0x45     never failed
+    position 2   x100 / x101 / x102 / st9 (SQLite-derived, 179-181 carves)
+                                                        stopped at SHA5  6 of 7
+
+The single exception is `x100` in boot `z100_1`, which completed a full run at position 2 and
+returned `0x09`. So it is not a hard rule, but 6/7 is far from noise.
+
+Two explanations remain, and they are cleanly separable:
+
+* **(a)** position 2 is bad for these domains, or
+* **(b)** SQLite-derived domains wedge in `share1` regardless of position, and `wd71` is fine
+  only because it is trivial.
+
+Nothing measured so far distinguishes them, because **a SQLite-derived domain has never been
+run at position 1** — every batch put the control there. That is a gap created by the
+batching convention itself, not by the hardware.
+
+**The discriminator is one run**: put the SQLite domain FIRST, with no control ahead of it.
+Under (a) it enters; under (b) it stops at SHA5 exactly as at position 2. That run doubles as
+the deliverable, since a full `sqlite_silicon.dom` that enters and prints its rows IS the
+existence proof.
+
 ## 0a4. RETRACTION + the rev-node pool arithmetic, now CONFIRMED against the RTL
 
 ### RETRACTED: "the five failures died in region-share between B/mkregion1 and C/mkregion2"
