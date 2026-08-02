@@ -1132,6 +1132,41 @@ implementation. The check took one QEMU run.
 
 ---
 
+## BOARD-SIDE DEGRADATION 2026-08-03 00:31-01:00 — four stages, ending with GDB not starting
+
+Not a domain problem and not a firmware problem. Recorded so the next session recognises it
+instead of re-debugging the compiler.
+
+    00:31   load_image=2  downloaded=0  SQ_after=6    ran, produced some output
+    00:37   load_image=2  downloaded=0                JTAG transfer moved nothing (silent)
+    00:41   load_image=2  downloaded=1  SQ_after=0    transferred OK, board never reached userspace
+    00:47+  load_image=0  gdb_timeout=1               gdb_start() times out; load_image NEVER issued
+    00:53-01:00  6/6 attempts NO-TRANSCRIPT           same, after a full power-off + unlock + hold
+
+`ActionTimeout: timed out waiting for event 'gdb_state'` means the debug session never comes up,
+so no image is ever transferred. That is upstream of the driver: retrying only re-times-out.
+
+**A full board reset does NOT clear it.** Tried explicitly: take the lock, power OFF, hold 45 s,
+release the lock, disconnect, wait 30 s, reconnect. The bitstream still reads correctly
+(`working-caplifive-captype-fixed.bit`) and the console lock still works — only the GDB/OpenOCD
+side is dead. Consistent with the on-board debug stack (OpenOCD/FTDI) being wedged, which a
+power toggle of the FPGA does not restart.
+
+**Remedy is physical/owner-side**: restart the debug adapter (USB replug) or whatever restarts
+the gdb server behind the console. Earlier in the same session `LIBUSB_ERROR_NO_DEVICE` appeared
+directly, so the adapter has dropped off USB at least once tonight.
+
+### How to tell these apart quickly (all are NOT results)
+
+    gdb_state timeout          -> debug session never started; load_image count is 0
+    LIBUSB_ERROR_NO_DEVICE     -> adapter gone from the USB bus
+    load_image but no download -> transfer silently moved nothing
+    download but no `buildroot login` / `SQ:` after load_image -> board never reached userspace
+
+`board-watchdog.sh` now aborts the last two within ~15 s (`NO-BOOT`), keyed on the login prompt
+rather than the bootrom banner — healthy runs show ZERO banners after their own `load_image`,
+because the banner prints at power-on.
+
 ## SUMMARY — current best understanding (2026-08-03, rewritten end of session)
 
 Three separate failures. Keep them apart; earlier drafts conflated them repeatedly.
