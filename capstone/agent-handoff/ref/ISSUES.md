@@ -716,6 +716,37 @@ no `memcpy` and no scalar-pointer cast anywhere today.
 
 ### R-14 — straight-line init of a struct array with distinct string constants wedges `PARTLY SUPERSEDED BY C-16 2026-08-02`
 
+**MINIMAL CASE, control-validated on silicon 2026-08-02.** Four straight-line assignments of
+distinct string literals into a two-capability struct array. No SQLite, no allocator, ~10 lines:
+
+```c
+struct kv { const char *z; const char *y; };      /* 2 capabilities, 32 B, no tail padding */
+struct kv a[64];
+a[0].z="ltrim"; a[0].y="aaa0";   a[1].z="rtrim"; a[1].y="aaa1";
+a[2].z="trim";  a[2].y="aaa2";   a[3].z="max";   a[3].y="aaa3";
+for (i=4;i<64;i++){ a[i].z="filler"; a[i].y="fill"; }
+for (i=0;i<16;i++) if (a[i].z && a[i].y && strlen(a[i].z)>0 && strlen(a[i].y)>0) ok++;
+return ok;                                        /* expect 16; silicon: WEDGES */
+```
+
+* **Control-validated**: in the SAME boot and image, a trivial `return 0` (selector `:0`)
+  RETURNED `rc=0` immediately before this wedged. So the wedge belongs to the construct, not
+  to the image or the boot.
+* **N as low as 4** is enough — so clamping the count is not a workaround.
+* **QEMU-clean** at `-O0` and `-O1` (returns 16) with the C-16 fix in place, so this is NOT the
+  untagged-capability-arithmetic class that QEMU asserts on.
+* **Rungs**: `tests/runtime-qemu/silicon-ladder/r14a_app.c` (16 straight-line) and
+  `r14b_app.c` (4 straight-line), each with a native host oracle; board equivalents are
+  selectors `:110` / `:111` of any staged SQLite probe image.
+* **Same fault reaches SQLite**: `f10:0` and `f10:9` returned `rc=0` while `f10:10`
+  (`sqlite3MallocInit` + `sqlite3RegisterBuiltinFunctions`) wedged, in one boot.
+  `sqlite3RegisterBuiltinFunctions` builds exactly this shape.
+
+**Not established**: attribution. QEMU executes it correctly and silicon does not, which is
+consistent with hardware but is precisely the pattern C-16 showed before turning out to be a
+compiler bug of ours. Do not present as a hardware defect without further evidence.
+
+
 **Read C-16 first.** The *SQLite* blocker behind this entry is now root-caused and FIXED: it was
 a compiler bug (`memset` destination typed in AS0, stripping the capability tag), not hardware.
 Stage 10 and the full SQLite QEMU gate now pass with no workaround.
