@@ -6,6 +6,54 @@ Last updated: 2026-08-02.
 
 ---
 
+## THE BOARD STOPPED ACCEPTING ANY IMAGE AT ~20:40 — a fresh firmware does NOT restore it
+
+    fresh firmware rebuild (no domain changes), r110.dom unchanged:
+      attempt 1  ENTRY-STALL
+      attempt 2  ENTRY-STALL
+
+So the firmware-generation hypothesis is **not** confirmed either: rebuilding and reflashing the
+firmware did not bring back the behaviour `r110` had at 19:05-19:20.
+
+### The full timeline, which is now the primary evidence
+
+    ~19:00-20:16   r110 ENTER 3/3 | n112 ENTER 3/3 | f10 ENTER (controls returned)
+    ~20:40 -> now  sb10, waa, wab, wac, t120, tsp, tsq, tsr, u120, L126, r110(x2), r110 on
+                   FRESH firmware (x2)  ->  13+ attempts, 7 distinct images, ZERO entries
+
+Nothing has entered the domain since roughly 20:40, across every image tried, including one that
+had entered three times earlier and one built from a freshly rebuilt firmware. **This is a
+board-level state change, not a property of any domain image or firmware build.**
+
+Candidates not yet separated: thermal/power state after ~25 power cycles today; the resident
+bitstream drifting into a bad state; or accumulated JTAG/debug-module state (two JTAG failures
+were already seen today: "Timed out after 120s waiting for busy to go low", "Failed to read priv
+register", "Protocol error with Rcmd").
+
+### What this invalidates and what it does not
+
+Already retracted above: the per-image model, the carve-count pre-flight rule, and the
+static-builtins attribution. Add to that: **any cross-boot comparison from today's later
+session is unsafe**, because the board's acceptance of images changed underneath it.
+
+**Unaffected, and worth restating**: every result taken WITHIN a single boot, where a control
+returned alongside the failing case.
+
+    f10:0 ret rc=0 | f10:9 ret rc=0 | f10:10 WEDGE      -- the SQLite blocker
+    r110:0 ret rc=0 | r110:110 WEDGE                     -- R-14 variant A
+    r110:0 ret rc=0 | r110:111 WEDGE                     -- R-14 variant B
+
+Those are internal to one boot and one firmware and survive the board-state change entirely.
+This is the strongest practical argument for the control discipline: it is the only thing from
+today's board work that is not now in doubt.
+
+### Next action requires a decision, not another experiment
+
+The obvious step is a **bitstream reflash** to clear board state. That is explicitly an
+ask-first action under CLAUDE.md (irreversible / outward-facing), so it is NOT being done
+unilaterally. Until the board accepts images again, no further silicon measurement is possible
+and additional boots would only add more zero-information runs.
+
 ## !! RETRACTED: "R-16 is build-dependent" — THE KNOWN-GOOD IMAGE NOW STALLS TOO
 
     r110.dom, which ENTERED 3/3 earlier today (~19:05-19:20, control returned rc=0):
