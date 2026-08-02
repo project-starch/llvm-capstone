@@ -135,6 +135,52 @@ wedges 2/2. The two arms that would isolate the ingredient — `n140` (struct, n
 `n146` (scalars, no struct) — have never entered, across 8 images and 9 boots. Isolating the
 ingredient therefore needs a way around R-16, not more redraws of the same shape.
 
+### What the wedge ACTUALLY is (MEASURED, in-session debug mux, reproducible 2/2)
+
+The runner reads the debug mux while the core is still wedged, with the trap latch cleared
+before each domain, so this is attributable to `n144:144`. Identical in both wedge runs:
+
+    sw=255  TRAP LOG {seen,mcause[6:0]}   0x9c   seen=1, mcause=28
+    sw=224  {excommit,...,flush,privM}    0x9f   privM=1   <- core is in M-MODE
+    sw=225  {tbe,wstore,wload,wrev,...}   0x80   wrev=0, memwait=0
+    sw=249/250  rev_node_head             602    overflow=0
+    sw=251-254  rev_node_serving_idx      0
+
+`ex_code` (`capstone_unit.anvilh:289`) numbers the capability faults 24..29 —
+UNEXPECTED_OPERAND 24, INVALID_CAPABILITY 25, UNEXPECTED_CAP_TYPE 26,
+INSUFFICIENT_PERMISSION 27, **OUT_OF_BOUNDS 28**, ILLEGAL_OPERAND_VALUE 29. So:
+
+**The domain takes an OUT_OF_BOUNDS capability fault, traps to M-mode, and the M-mode side
+wedges.** It is not a silent hang in the store path — a real exception is raised and taken.
+
+REFUTED by this reading, all three previously plausible:
+
+* **R-12 / revocation-node hang** — the leading prior theory. `wrev=0`, `serving_idx=0`,
+  head=602 of 1023 with `overflow=0`. Not blocked on a node query, pool not exhausted, rev
+  unit not walking. The `stc` path's unbounded `get_node_query_validity`
+  (`capstone_dyn_unit.anvil:399`) is real but is NOT what fires here.
+* **`stc` consumes its source capability** (the spill-then-reuse story: the compiler spills the
+  merged-string blob cap `a1` with `stc a1,-0x440(a2)` and keeps deriving from `a1`).
+  `capstone_dyn_unit.anvil:428` returns `rs2_v` unchanged on the normal path; only an UNINIT
+  destination writes `cnull` back (`:408-416`).
+* **Plain stack exhaustion.** `run_sqlite_staged` allocates a ~26 KB frame
+  (`cincoffsetimm sp,sp,-0x7f0` then `cincoffset sp,sp,a1` with a1=-0x5EA0), while
+  `domdata-budget.py` reports **211824 bytes of stack** in `dom_data`. Fits with 8x margin.
+
+**Open — which capability is out of bounds.** Not yet identified. The two candidates worth
+separating, both visible in the arm's disassembly around `0x3563c`:
+
+1. the **destination** `a2` (`cincoffset a2,s0,<-0x4000>` then `cincoffsetimm a2,a2,0x5a0`),
+   i.e. the stack-array pointer, versus
+2. the **stored values**, each derived from the merged-string blob base `a1` by
+   `cincoffsetimm a4,a1,0x6da` / `cincoffset a4,a1,<reg>` — if `a1` carries per-string rather
+   than per-blob bounds, offsetting it to a *different* literal is out of bounds by
+   construction, which would make `-capstone-merge-string-constants=true` the trigger.
+
+Cheapest discriminator: read **mepc/mtval** at the wedge (names the faulting instruction
+outright), or build arms writing a[0] only vs a[3] only — if the fault tracks the offset it is
+(1), if it tracks which literal is stored it is (2).
+
 **A control that passes is not a control that always passes.** `f10.dom:0` returned 2/2 under
 firmware `8686cad424cb`, then WEDGED after `SQ: G/enter` under `8c6f5d30905e`, then returned
 2/2 again in later boots of that same firmware. So the control is ~non-deterministic at roughly
