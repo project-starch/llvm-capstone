@@ -6,6 +6,54 @@ Last updated: 2026-08-01.
 
 ---
 
+## THE REMAINING BLOCKER IS SILICON-ONLY AND IS *NOT* C-16 — TWO RESULTS THAT SETTLE IT
+
+### 1. Stage 10 still fails on silicon with the fixed compiler
+
+    2026-08-02, f10.dom (stage 10, FIXED compiler, NO workaround), position 1
+      pos1 f10.dom   NO RETURN   last = SQ: G/enter
+
+So C-16 did **not** fix the stage-10 silicon failure. The construct still stalls on hardware
+after the domain enters. Combined with the full-SQLite run (also silent after `G/enter`), both
+of today's board runs agree.
+
+### 2. R-14 variant A is QEMU-CLEAN and silicon-wedging
+
+R-14 variant A is now a proper QEMU-gated rung (`silicon-ladder/r14a_app.c` + `r14a_host.c`,
+oracle 16), reduced verbatim from the fpga-repro:
+
+    r14a  -O0   PASS  retval = 16
+    r14a  -O1   PASS  retval = 16
+
+against a board result of **WEDGE**. And C-16 provably cannot explain it:
+
+    struct kv { const char *z; const char *y; };   /* 2 capabilities = 32 B, NO tail padding */
+    struct kv a[64];                                /* uninitialised, assigned element-by-element */
+
+No tail padding means no padding-`memset`; no aggregate initialiser means no initialiser
+`memset` at all. C-16's trigger is absent by construction.
+
+### What follows
+
+* **R-14 is a genuinely separate defect from C-16**, and is the prime candidate for the
+  remaining SQLite blocker. Marking it "PARTLY SUPERSEDED" rather than closing it was correct.
+* **QEMU cannot see it.** The rung passes at both optimisation levels with the fixed compiler,
+  so this is not an untagged-capability-arithmetic bug — QEMU asserts on those, which is
+  exactly how C-16 was caught.
+* **That still is not proof of a hardware defect**, and the registry's existing caution should
+  stand. QEMU passing rules out the class of codegen faults QEMU models; it does not rule out
+  codegen whose effect QEMU's memory model happens to tolerate. R-1 (the FPGA-only load/store
+  hazard, likewise never reproduced under QEMU) is the obvious neighbour and may be the same
+  underlying thing.
+
+### The best next experiment
+
+`r14a` is now a **one-command QEMU rung and a board domain from the same source**, which the
+old fpga-repro was not. Run variants B/C/D the same way: **variant B is the valuable one** — it
+returns a WRONG VALUE (4 instead of 16) rather than wedging, so it converts a hang into a
+number, which is exactly the "make every run RETURN" method that this project's own debugging
+rule prescribes. A wrong value can be bisected; a wedge cannot.
+
 ## BOARD RESULT AFTER THE C-16 FIX: STILL BLOCKED — QEMU GREEN, SILICON SILENT
 
     2026-08-02, fixed compiler, no workaround, position 1
