@@ -2913,6 +2913,15 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
   if (stage >= 140 && stage <= 146) {
     struct kv5 { const char *z; const char *y; };
     unsigned i; int ok = 0;
+    /* CAPSTONE_LADDER_ONLY=<n> compiles ONLY arm <n> into the image.
+       Why: every image carrying the whole 140-146 block entry-stalls (R-16) -- d140 and d141
+       stalled while f10.dom, built by the SAME script and differing only in which stage block
+       compiles, returned in the very same boots. Selector :0 returns before any ladder code
+       runs, so the block's mere PRESENCE is what blocks entry: a layout/size effect, not an
+       execution one. Narrowing the compiled arm is therefore the minimisation that matters --
+       it asks which INGREDIENT of the block (the 2 KB `a[64]` stack array, the struct, or
+       neither) carries the property, and an arm that enters is measurable at last. */
+#if !defined(CAPSTONE_LADDER_ONLY) || CAPSTONE_LADDER_ONLY == 140
     if (stage == 140) {
       struct kv5 v;
       v.z = "ltrim"; v.y = "aaa0";
@@ -2921,12 +2930,17 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
         if (z&&y&&a1&&b1) ok++; }
       return ok;                               /* expect 1 */
     }
+#endif
+#if !defined(CAPSTONE_LADDER_ONLY) || CAPSTONE_LADDER_ONLY == 146
     if (stage == 146) {
       const char *p0="ltrim", *p1="rtrim", *p2="trim", *p3="max";
       const char *arr[4]; arr[0]=p0; arr[1]=p1; arr[2]=p2; arr[3]=p3;
       for (i=0;i<4;i++){ unsigned n=0; const char *z=arr[i]; while(z&&z[n])n++; if(z&&n)ok++; }
       return ok;                               /* expect 4 */
     }
+#endif
+#if !defined(CAPSTONE_LADDER_ONLY) || \
+    (CAPSTONE_LADDER_ONLY != 140 && CAPSTONE_LADDER_ONLY != 146)
     {
       struct kv5 a[64];
       unsigned n = 0;
@@ -2946,6 +2960,12 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
       }
       return ok;                               /* expect n */
     }
+#endif
+    /* Reached only when CAPSTONE_LADDER_ONLY excluded the arm the selector asked for. Return
+       a DISTINCT sentinel rather than 0: 0 is stage :0's legitimate answer, so sharing it
+       would make "the arm was not compiled in" indistinguishable from a successful control. */
+    (void)i;
+    return 99;
   }
   if (stage == 128 || stage == 129) {
     const char *base = "AxxxxxxxByyyyyyy";   /* [0]='A'  [8]='B' */

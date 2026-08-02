@@ -2,9 +2,111 @@
 
 **Living document.** Update it whenever a claim is added, refuted, or measured. Every entry
 must say how it is known: MEASURED (board), SOURCE (quoted file:line), or INFERRED.
-Last updated: 2026-08-02.
+Last updated: 2026-08-03.
 
 ---
+
+## 2026-08-03 — R-16 SEPARATED FROM BOARD HEALTH FOR THE FIRST TIME (MEASURED)
+
+Every previous R-16 reading was ambiguous: an image that did not enter looked exactly like a
+board, firmware or boot failure, which is how a whole session was spent blaming the board. The
+fix is a **per-boot health control** — run a KNOWN-ENTERING image first, in the same boot, from
+the same firmware:
+
+    SQLITE_STAGE_DOMS="/test-domains/f10.dom:0,/test-domains/<image>.dom:0,..."
+
+MEASURED (2026-08-03, firmware md5 `8686cad424cb`, bitstream `working-caplifive-captype-fixed`):
+
+    draw d140   f10ctl=0 (RETURNED)   d140:0 = STALL
+    draw d141   f10ctl=0 (RETURNED)   d141:0 = STALL
+
+So in the *same boot*, on the *same firmware*, a known-good image enters and the image under
+test does not. **R-16 is a property of the image, not of the board or the firmware.** That was
+previously assumed; it is now measured, and it makes every later stall verdict attributable.
+
+### The whole 140-146 family stalls, and it is not a lottery
+
+`min.dom` stalled 2/2 under a correctly-calibrated watchdog (`ENTRY_STALL_S=260`; the earlier
+45 s default aborted runs mid-upload — see HOW-TO-LAUNCH-ON-FPGA.md). `d140` and `d141` then
+stalled with the control returning. All are built by `build-sqlite-silicon.sh` and differ ONLY
+in `CAPSTONE_SQLITE_STAGE`, which selects which `#if` block compiles; `f10.dom` is the same
+builder with stage 10.
+
+I proposed from this that the 140-146 block's **presence in the image** blocks entry — a
+layout effect rather than an execution one, since `:0` returns before any ladder code runs
+(`run_sqlite_staged()` opens `if (stage <= 0) return 0;`).
+
+**RETRACTED the same session, by the narrowed images below.** `n144` CONTAINS the block and
+its `:0` returned cleanly; `n140` contains a strictly smaller version of it and stalled. So
+presence of the block does not determine entry, and **R-16 remains unexplained** — carve count,
+`.text` size, merged-string bytes, dom_data geometry and now "carries the ladder block" all
+fail to separate entering from stalling images. Recorded because the inference ran one step
+past the evidence: two near-replicate draws (differing in one constant) were treated as
+evidence for a general structural claim.
+
+### `CAPSTONE_LADDER_ONLY` — the minimisation now in flight
+
+`sqlite_capstone_domain.c` gained `CAPSTONE_LADDER_ONLY=<n>`, compiling exactly one ladder arm,
+to ask which ingredient carries the property:
+
+    n146   four plain scalars + arr[4]    no struct, no 64-entry array
+    n140   one struct VARIABLE            struct, no array
+    n144   struct kv5 a[64]               the 2 KB stack array
+
+An arm excluded by the knob returns the sentinel **99**, deliberately not 0, so "not compiled
+in" can never be misread as stage `:0`'s legitimate answer.
+
+### MEASURED result — R-14 reproduced on silicon with BOTH controls passing
+
+    n146   f10ctl=WEDGE                    VOID -- control failed, no verdict
+    n146   f10ctl=0  | :0=STALL            re-run: R-16 on this image too; arm not measured
+    n140   f10ctl=0  | :0=STALL            R-16 on this image; arm never measured
+    n144   f10ctl=0  | :0=0 | :144=WEDGE   <-- the result
+    n144   f10ctl=0  | :0=0 | :144=WEDGE   CONFIRMED 2/2, deterministic
+
+`n144` is the first clean silicon measurement of the R-14 construct. All three verdicts come
+from ONE boot, and the two controls both pass: the board/firmware are healthy (`f10ctl=0`) and
+this image enters (`:0=0`, so no R-16). Only then does the construct wedge. Every earlier R-14
+"wedge" was confounded with a possible entry stall; this one is not.
+
+The construct that wedges (`CAPSTONE_LADDER_ONLY=144`, nothing else compiled from the block):
+
+```c
+struct kv5 { const char *z; const char *y; };
+struct kv5 a[64];
+a[0].z="ltrim"; a[0].y="aaa0";  a[1].z="rtrim"; a[1].y="aaa1";
+a[2].z="trim";  a[2].y="aaa2";  a[3].z="max";   a[3].y="aaa3";
+for (i = 0; i < 4; i++) {
+  unsigned nz=0, ny=0; const char *z=a[i].z, *y=a[i].y;
+  while (z && z[nz]) nz++;
+  while (y && y[ny]) ny++;
+  if (z && y && nz > 0 && ny > 0) ok++;
+}
+return ok;                        /* expect 4; the domain never returns */
+```
+
+Eight capability stores into a stack array of structs, then a read-back loop. This is the same
+shape as `sqlite3RegisterBuiltinFunctions`'s local `FuncDef capstoneBuiltinFunc[]`, which is the
+control-validated SQLite blocker — so the minimal repro and the real blocker now match.
+
+**Open, in flight:** `n146` (four plain scalars, no struct, no array) is the discriminator —
+if it RETURNS 4 the struct/array is implicated; if it WEDGES the construct is not the axis at
+all and the fault lies in something all these images share. Both `n146` boots so far failed to
+enter (one void control, one genuine stall), so the arm is still unmeasured. Four redraws
+(`q141/q142/q143/q145`, arm 146 pinned via `CAPSTONE_LADDER_ONLY=146`, differing only in the
+compiled default stage) are staged to find one that enters.
+
+Note what this costs: R-16 does not merely add retries, it **silently biases which constructs
+can be measured at all**. `n144` was measurable and `n140`/`n146` were not, for reasons
+unrelated to what they test. Any claim of the form "arm X wedges and arm Y does not" must state
+which arms were actually reachable.
+
+**A control that passes is not a control that always passes.** `f10.dom:0` returned 2/2 under
+firmware `8686cad424cb`, then WEDGED after `SQ: G/enter` under `8c6f5d30905e`, then returned
+2/2 again in later boots of that same firmware. So the control is ~non-deterministic at roughly
+1-in-5, and a single control pass is weaker evidence than it looks — but a control FAILURE is
+still decisive, and voiding that boot is what kept the `n146` slot honest instead of recording
+a stall that had not been established.
 
 ## !!!! READ FIRST — A ~90-MINUTE WINDOW OF THIS DOCUMENT IS INVALID (instrumentation bug)
 
