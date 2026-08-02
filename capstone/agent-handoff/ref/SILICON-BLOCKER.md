@@ -512,6 +512,37 @@ If that holds up, the R-14 workaround moves the fault rather than fixing it, and
 end-to-end says only that QEMU does not enforce whatever the RTL enforces. **Not established:**
 `sqlite_silicon` is the counter-example above, and no repeat has been run.
 
+## 0a12. RTL FACT: THE CURSOR IS EXACT, THE BOUNDS ARE DERIVED FROM IT — SO "BOUNDS OK" PROVES NOTHING
+
+From `ariane_pkg.sv:714-748` (SOURCE):
+
+    function automatic fat_cap_t decompress_cap(input xlen_t cursor, input xlen_t metadata);
+      return '{ metadata: decompress_cap_metadata(metadata, cursor), cursor: cursor };
+
+    function automatic fat_cap_metadata_t decompress_cap_metadata(metadata, cursor);
+      ...
+      bounds = decompress_bounds(metadata.bounds, cursor);   // <-- bounds depend on cursor
+
+Two consequences, and the second one costs us an argument we were relying on.
+
+**1. A wrong cursor is NOT compression rounding.** The cursor is carried in full 64 bits and
+is not part of the compressed metadata; only the bounds are compressed, CHERI-style. So the
+tempting explanation — "the container is big enough that the cursor gets rounded to a
+granule, and −57 bytes is inside one granule" — is wrong at the format level. Checked before
+being written down anywhere as a conclusion.
+
+**2. "The bounds are consistent with the container" is not independent evidence.** Sections 0
+and 0a report the bad slot as having *correct bounds* but a *wrong cursor*, and treated the
+correct bounds as showing the capability was otherwise intact. But the bounds are
+**reconstructed from the cursor at read time**. For a small cursor error the decoded bounds
+come out unchanged by construction, so `lcc` zimm=3/4 readings cannot corroborate anything —
+they are a function of the cursor we already know is wrong.
+
+What survives: the *cursor* readings (raw low byte `0x00`; delta `0x09` where `0x42` is
+correct) and the *tag* being intact (`lcc` did not trap). What does not survive: any claim
+that the bounds were independently verified as correct. Sections 0a and 0b should be read
+with that correction.
+
 ## 0a5. THE SHA5 WEDGE TRACKS POSITION-2 + SQLITE-DERIVED, AND R-14 HAS A QEMU-GREEN FIX
 
 ### The R-14 workaround now exists and passes QEMU
