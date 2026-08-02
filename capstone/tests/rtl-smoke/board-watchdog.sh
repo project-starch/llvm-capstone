@@ -41,9 +41,11 @@ LIMIT=${2:-180}
 RUNNER_PID=${3:-}
 INTERVAL=${WATCHDOG_INTERVAL:-15}
 ABORT_ON_ENTRY_STALL=${ABORT_ON_ENTRY_STALL:-0}
-ENTRY_STALL_S=${ENTRY_STALL_S:-45}
+ENTRY_STALL_S=${ENTRY_STALL_S:-180}   # healthy boots have gone 120 s silent; 45 was far too low
 
 start=$SECONDS
+# byte offset of the log when we started: everything before it is replayed scrollback
+START_SIZE=$( [ -f "$LOG" ] && echo $(( $(stat -c%s "$LOG") + 1 )) || echo 1 )
 last_size=-1
 last_change=$SECONDS
 
@@ -68,9 +70,22 @@ while true; do
     idle=$(( SECONDS - last_change ))
     # Entry stall: the LAST capability-share marker in the log is SHA5 with no SHA6 after it.
     if [ "$ABORT_ON_ENTRY_STALL" = "1" ] && [ "$idle" -ge "$ENTRY_STALL_S" ] && [ -f "$LOG" ]; then
-      lastmark=$(grep -ao 'SHA[56]:[0-9A-F]*' "$LOG" 2>/dev/null | tail -1)
+      # ONLY look at bytes written AFTER this watchdog started, and only after the board has
+      # actually been given the image. The console REPLAYS the previous boot's scrollback
+      # (~548 KB) when the driver connects, so grepping the whole log finds a SHA5 from a
+      # PREVIOUS boot and aborts a perfectly healthy run before it has even booted. That bug
+      # killed 24 runs over ~87 minutes on 2026-08-02 and produced the false conclusion that
+      # "the board stopped accepting images".
+      scan=$(tail -c "+${START_SIZE:-1}" "$LOG" 2>/dev/null)
+      # require the image to have been handed over in THIS run before any stall verdict
+      case "$scan" in *load_image*) ;; *) lastmark=""; scan="";; esac
+      lastmark=$(printf '%s' "$scan" | sed -n 's/.*\(SHA[56]:[0-9A-F]*\).*/\1/p' | tail -1)
       case "$lastmark" in
         SHA5:*)
+          if [ -n "$RUNNER_PID" ] && ! kill -0 "$RUNNER_PID" 2>/dev/null; then
+            echo "GONE    ${now_elapsed}s  runner already exited; not sending a stray TERM"
+            echo "ENDED   ${now_elapsed}s"; exit 0
+          fi
           echo "ENTRY-STALL ${now_elapsed}s  last share marker=$lastmark, no SHA6 for ${idle}s"
           echo "  -> domain never ran; the rest of this boot is worthless. Aborting runner."
           [ -n "$RUNNER_PID" ] && kill -TERM "$RUNNER_PID" 2>/dev/null
