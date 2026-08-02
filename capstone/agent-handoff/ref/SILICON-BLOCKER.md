@@ -6,6 +6,46 @@ Last updated: 2026-08-01.
 
 ---
 
+## BOARD RESULT AFTER THE C-16 FIX: STILL BLOCKED — QEMU GREEN, SILICON SILENT
+
+    2026-08-02, fixed compiler, no workaround, position 1
+      SQ: A/dom-ok ... B/mkregion1 ... C/mkregion2 ... D/mapped
+      SQ: E/share1 (SHA0..SHA6, ECSZ)   SQ: F/share2 (SHA0..SHA6, ECSZ)
+      SQ: G/enter
+      <UART idle 600 s>   -> ActionTimeout, run aborted, board released
+
+**C-16 did not unblock silicon.** State this plainly: the fix is real and verified (codegen,
+reproducer, stage 10 non-static, full QEMU gate, ladder 6/6), but **SQLite still produces no
+rows on the board**. Both shares now complete and the domain enters, then nothing for ten
+minutes.
+
+600 s of total silence is not the "legitimately slow" case — a working run emits its first row
+well before that, and the idle budget was raised to 600 s specifically so that slowness could
+not be mistaken for a stall. So this is a genuine stall (or a broken output path), not
+impatience on the runner's part.
+
+### What this means, and what it does not
+
+* **It does NOT invalidate C-16.** That bug was proven independently: QEMU asserts on it, the
+  MIR shows the tag being stripped, and the fix changes the generated instruction. It was a
+  real silent-corruption bug on hardware regardless of whether it was the *only* one.
+* **It DOES mean there is at least one more fault**, and it is silicon-only — QEMU executes the
+  same domain end-to-end. Candidates, in rough order of prior plausibility: R-1 (the FPGA-only
+  load/store hazard, which QEMU has never reproduced), R-14 variant A (the unpadded 2-pointer
+  struct that C-16 explicitly does NOT explain), or the `SHA5`-class stall appearing later in
+  the run rather than at entry.
+* **The QEMU-vs-silicon asymmetry is now a known, named hazard**: QEMU asserts on untagged
+  capability arithmetic, the RTL accepts it silently. A QEMU pass is necessary and NOT
+  sufficient, and this run is the proof.
+
+### Next step, and it is cheap
+
+Re-run the **staged ladder** on the board with the fixed compiler — stage 10 first, since that
+is the stage that previously failed on silicon and the one C-16 was supposed to fix. If stage 10
+now returns, C-16 fixed the entry-side fault and the remaining blocker is later in
+`sqlite3_initialize`/`open`; if it still stalls, the remaining fault is in the same construct and
+C-16 was only part of it. Then stages 2 and 3. That is one boot for a decisive split.
+
 ## REGRESSION STATUS AFTER THE C-16 FIX
 
 The fix is in generic `SelectionDAG` code, so it was gated before shipping:
