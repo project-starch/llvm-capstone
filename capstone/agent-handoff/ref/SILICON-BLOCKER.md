@@ -6,6 +6,65 @@ Last updated: 2026-08-02.
 
 ---
 
+## MECHANISM HYPOTHESIS FOR R-14 / THE SQLITE BLOCKER: `cincoffset` CONSUMES A LINEAR rs1
+
+Found by diffing the codegen of the two shapes (offline, no board). Merged string constants
+give ONE blob capability per cap-table slot; every literal is a `cincoffsetimm` from it.
+
+**Straight-line (WEDGES on silicon at N>=4, control-validated):**
+
+    ldc            a1, 0(gp)        ; blob capability, loaded ONCE
+    cincoffsetimm  a2, a1, 6        ; rd=a2 != rs1=a1
+    stc            a2, 16(a0)
+    cincoffsetimm  a2, a1, 11       ; reuses a1
+    cincoffsetimm  a2, a1, 17       ; reuses a1 ... 8 derivations from one a1
+
+**Loop-assigned (the shape that is not known to wedge):**
+
+    ldc            a0, 0(gp)        ; reloaded in the loop body
+    cincoffsetimm  a3, a0, 41       ; rd != rs1
+    cincoffsetimm  a0, a0, 48       ; rd == rs1   <-- writes back into itself
+
+### The rule that separates them
+
+`helper_cscincoffset` (`op_helper.c`):
+
+    if (rs1 != rd) {
+        *rd_v = *rs1_v;
+        if (!captype_is_copyable(rs1_v->val.cap.type))
+            *rs1_v = CAPREGVAL_NULL;          // CONSUMES rs1
+    }
+
+The consume is gated on **`rs1 != rd`**. The straight-line form uses a fresh destination each
+time, so if the cap-table capability is **LINEAR (non-copyable)** the FIRST `cincoffsetimm`
+nulls `a1` and the remaining seven derive from a nulled register — producing garbage pointers,
+which is precisely the observed corruption. The loop form writes back into the same register,
+so nothing is ever consumed.
+
+**Why QEMU never reproduces it:** on QEMU the cap-table capability is NONLIN (copyable), so the
+consume branch never fires. If the RTL treats it as LINEAR, silicon diverges exactly here —
+and the RTL does not check a `cincoffset` base, so it produces a value and keeps going.
+
+### Why this fits every control-validated observation
+
+* straight-line wedges, loop-from-table does not (R-14 variants A/B vs C)
+* N as low as 4 fails — only TWO derivations are needed for the second to read a nulled base
+* `sqlite3RegisterBuiltinFunctions` is straight-line over ~200 entries: same shape, same fault
+* QEMU-clean at `-O0` and `-O1`, silicon-wedging — the exact asymmetry seen
+
+### NOT established
+
+The cap type on silicon has not been read. This is a codegen+ISA-semantics hypothesis that
+explains the data; it is not a measurement. Two tests would settle it, neither run yet:
+
+1. **Two-derivation probe**: `rd != rs1` twice from one `ldc` (predict WEDGE) versus the same
+   two derivations chained `rd == rs1` (predict RETURN). Tiny, no added globals.
+2. Read the cap type of the `gp[i]` capability directly (`lcc` zimm=1) — but `lcc` probes have
+   been unreliable here, so (1) is the better instrument.
+
+**If confirmed, the fix is compiler-side and small**: never derive twice from a cap-table
+capability with `rd != rs1` — chain through the same register, or reload per use.
+
 ## THE BOARD STOPPED ACCEPTING ANY IMAGE AT ~20:40 — a fresh firmware does NOT restore it
 
     fresh firmware rebuild (no domain changes), r110.dom unchanged:
