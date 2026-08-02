@@ -6,6 +6,21 @@ Last updated: 2026-08-01.
 
 ---
 
+## REGRESSION STATUS AFTER THE C-16 FIX
+
+The fix is in generic `SelectionDAG` code, so it was gated before shipping:
+
+    ladder (DOMAIN_OPT_LEVEL=-O1, QEMU)
+      matmult_int  PASS      beebs_prime      PASS      beebs_bs   PASS
+      beebs_cover  PASS      beebs_aha_mont64 PASS      strarray   PASS
+      => 6 passed, 0 failed
+
+`strarray` is the new C-16 regression test; the other five are pre-existing rungs and are
+unchanged by the fix, which is the point of running them.
+
+Note `matmult_int` passes here at `-O1` under QEMU — that says nothing about R-1, which is an
+FPGA-only load/store hazard that QEMU does not reproduce. Do not read this row as R-1 progress.
+
 ## BLOCKER RESOLVED UNDER QEMU — the original shape passes with NO workaround
 
     stage 10 NON-STATIC (sqlite3RegisterBuiltinFunctions, local aBuiltinFunc array)
