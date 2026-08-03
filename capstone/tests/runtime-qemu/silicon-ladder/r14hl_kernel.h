@@ -7,8 +7,11 @@
  * re-loaded from the SAME cap-table slot every iteration (`ldc a2, 0x0(gp)` sits inside the
  * loop, so it executes 4x instead of once).
  *
- * This arm keeps (a) -- identical loop, identical computed addresses -- and removes (b) by
- * loading each literal once into a local before the loop. So:
+ * This arm keeps (a) -- identical loop, identical computed addresses -- and changes (b).
+ * CAREFUL, the source-level reading is wrong: at -O0 these locals are SPILLED, so the loop
+ * still executes the same number of dynamic ldc's as r14lp (2 per iteration). What actually
+ * differs is WHICH memory is re-read -- a STACK slot here (`ldc a0, 0x0(a0)`) versus the
+ * CAP-TABLE (`ldc a2, 0x0(gp)`) in r14lp. Do not describe this arm as "ldc hoisted". So:
  *    HL passes  => repeated `ldc` from one slot is the trigger, NOT the computed address.
  *    HL fails   => the computed address is the trigger, and the ldc placement is innocent.
  *

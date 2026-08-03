@@ -353,13 +353,40 @@ same register-form `cincoffset` computed addresses, same eight capability stores
     r14lp    None    4       None    None     NO      SAME loop, ldc from gp INSIDE the loop
     r14sl    4       4       4759    1092     YES     closing bracket
 
-CONFIRMED by an INTERLEAVED repeat in one boot (`r14hl r14lp r14hl r14lp r14hl`):
+Totals across the session: **`r14hl` 5/5 pass, `r14lp` 6/6 fail, `r14sl` 6/6 pass.**
 
-    r14hl  4  YES (5252/1246)  |  r14lp  None NO  |  r14hl  4  YES  |  r14lp  None NO  |  r14hl  4  YES
+**CORRECTIONS to how this was first written up (found by an adversarial audit, then verified
+against the UART capture):**
 
-Totals: **`r14hl` 4/4 pass, `r14lp` 5/5 fail, `r14sl` 5/5 pass**, with `r14hl` bit-identical
-(5252 cycles / 1246 instret) every time. Alternating them inside a single boot removes any
-boot-to-boot or ordering explanation.
+* **There was never a "same boot" bracket, and no interleaving.** The driver forces a cold boot
+  after any rung that produces no END marker (`run_ladder_perf_fpga.py:443-449` resets
+  `booted_once`), so *nothing can ever run in the same boot after a failing rung*. Every
+  `BGr14lp` in the capture is followed immediately by an OpenSBI banner. The "pass-fail-pass in
+  one boot, strongest control available" statement was false; so was "alternating them inside a
+  single boot removes ordering effects".
+* **Cycles are NOT bit-identical**; only `instret` is. Measured spread: `r14sl` 4752/4754/4759/
+  4768/4770/4771 (1092 instret), `r14hl` 5250/5251/5252/5266 (1246 instret). Quote instret for
+  determinism and give cycles as a <=0.4% band.
+
+#### The R-3 same-VA confound — TESTED AND EXCLUDED
+
+All three rungs link at **`entry=0x10000`** (`readelf -h`; `DOMAIN_BASE_VA` was never set), and
+the sweeps used `LADDER_ONE_BOOT=1`. The runner's own precondition
+(`run_ladder_perf_fpga.py:357-363`) says one-boot is *"Only valid when the rungs are linked at
+DISTINCT entry VAs … because R-3 hangs a second domain reused at the SAME VA within one boot"*,
+and warns the failure mode is *"a silent hang that looks like a rung result"* — exactly
+`r14lp`'s symptom. Reconstructed from banners, `r14lp` had never run first-in-boot.
+
+Re-run with `LADDER_ONE_BOOT` unset, i.e. a power cycle per rung so EVERY rung is the first
+domain of a clean boot:
+
+    r14lp    None    4    NO      <- first domain of its own fresh boot
+    r14hl    4       4    YES
+    r14sl    4       4    YES
+
+Capture confirms it: boot at line 8968 -> `BGr14lp` at 9956 with no domain in between.
+**`r14lp` fails as the first domain of a clean boot, so R-3/position-in-boot is excluded** and
+the arm, not the position, is the discriminator.
 
 **Therefore:**
 
@@ -376,8 +403,22 @@ boot-to-boot or ordering explanation.
 location is cleared to prevent aliasing"*: first `ldc gp[i]` clears the slot, later ones read a
 cleared entry. **The precondition does not hold.** `gen-gp-captable-glue.py:192-193,263` emits
 `split(t2, sp, t1)` then **`delin(t2)`** before `stc(t2, gp, i*16)`, and the built binary
-confirms it — `delin t2` immediately precedes every `stc t2, N(gp)` (8 delins, plus
-`delin gp`). **Cap-table entries are NONLIN, so the LINEAR-only clearing cannot fire on them.**
+confirms it — `delin t2` immediately precedes every `stc t2, N(gp)`. (Count corrected: `r14lp`
+has **8 `delin`s total** = 2 glue copies, `_start` and `__test_reentry`, x {gp, t2, t2, sp},
+for **2** cap-table entries — not "8 delins plus delin gp".) **Cap-table entries are NONLIN, so
+the clearing cannot fire on them.**
+
+Two further corrections from the audit, both verified:
+* The clearing is **not** LINEAR-only. `core/load_unit.sv:448` (also 545/661/714) fires for
+  `{LINEAR, REVOKE, UNINIT, SEALED, SEALEDRET}` on the **loaded value's** type
+  (`load_unit.sv:167`). NONLIN (`ariane_pkg.sv:648`) is excluded, so the retraction stands —
+  but `capstone-ariane/CLAUDE.md`'s "clearing on LDC … loads a linear capability" is WRONG as
+  written and two documents now reason from that sentence.
+* Entries are NONLIN on **both** generator paths, not only via `delin`: the copy path
+  (`_drop_redundant_delins`) emits no `delin` at all, but `SPLIT` preserves `cap_type`
+  (`capstone_unit.anvilh:412-435`) and `sp` is pre-delin'd there, so everything split from it is
+  already NONLIN. Independent confirmation that `t2` really was LINEAR at `delin` time: RTL
+  `DELIN` (`capstone_dyn_unit.anvil:447`) traps on non-LINEAR, and these domains run.
 Also note `func LDC` (`capstone_dyn_unit.anvil:293-352`) contains no clearing logic at all; it
 delegates to `cap_load_ri`, so the condition lives in the LSU/cache path and was never read.
 
@@ -394,20 +435,35 @@ cap-table entry becomes that after a repeated `ldc`.
 
 * `r14b_app.c`'s own note — four STRAIGHT-LINE entries pass (one `ldc` per literal), twelve
   LOOP-ASSIGNED ones fail (the same `"filler"`/`"fill"` slot reloaded each iteration).
-* **The nondeterminism.** Whether a reload is emitted depends on register allocation and
-  spilling, which shift with image layout — so the SAME source arm returned 1, wedged, and
-  returned 0 in different images. It was never nondeterministic hardware; it was different
-  codegen.
+* **The nondeterminism — this explanation is REFUTED.** I wrote that differing register
+  allocation/spilling changed whether a reload was emitted, so it "was never nondeterministic
+  hardware, it was different codegen". The table 190 lines above kills it: `co :141 = WEDGE`
+  (attempt 1) and `co :141 = 0` (attempt 3) are **the same binary, two attempts, two different
+  outcomes** — codegen cannot differ between attempts on one image. The nondeterminism is real
+  and remains unexplained. (Still worth doing: diff the `:141` arm between `n144` and `co` and
+  count static `ldc <slot>(gp)`; equal counts would refute the codegen story for that pair too.)
 * The `-O0`-only `strlen` freeze already recorded in `build-sqlite-silicon.sh:245` — at `-O1`
   the pointer stays in a register and the reload disappears.
 * Why merging changes behaviour without being the cause: merging puts every literal in ONE
   slot, so N distinct literals become N loads of the SAME slot.
 
-**Compiler-side fix (the bug is ours, not the board's):** never emit more than one `ldc` from a
-given cap-table slot on a path — materialise the capability once and keep/copy it — or make
-cap-table entries non-linear so the clearing does not apply. Note `build-sqlite-silicon.sh`
-asserts entries are "ALREADY NONLIN"; that claim is now in doubt and should be checked against
-`gen-gp-captable-glue.py` and the table's actual `cap_type`.
+**What `r14hl` actually is — the header comment on it is WRONG.** At `-O0` the "hoisted" locals
+are spilled, so `r14hl`'s loop executes the SAME number of dynamic `ldc`s as `r14lp` (2 per
+iteration, 8 total). The difference is not "hoisted vs not"; it is **which memory is re-read**:
+`ldc a0, 0x0(a0)` from a stack slot (hl) versus `ldc a2, 0x0(gp)` from the cap-table (lp).
+
+**Alternatives the pair still cannot separate** (all consistent with dynamic `ldc`-from-`gp` =
+2/2/8 for sl/hl/lp):
+1. *repetition* — more than one `ldc` from the SAME cap-table slot;
+2. *count alone* — more than two `ldc`s from `gp` anywhere. Discriminate with an UNROLLED
+   straight-line arm doing 8x `ldc gp[0]`;
+3. *the base register/region* — `gp` (a 32-byte cap-table cap `split` from the top of `sp`) as
+   an LDC base versus a stack-derived cap. Discriminate with `movc t, gp` once outside the loop
+   then `ldc x, 0(t)` inside: same memory, same repetition, different base capability.
+
+No compiler-side fix should be proposed until one of these is chosen — the earlier
+"never emit more than one `ldc` per cap-table slot" recommendation assumed (1) and was written
+while the refuted linear-clearing mechanism was still standing.
 
 Caveats kept deliberately, given how many claims were retracted this session: `r14lp` "failed"
 means no END marker within 120 s, i.e. a hang, and the mcause has not yet been read for THIS
