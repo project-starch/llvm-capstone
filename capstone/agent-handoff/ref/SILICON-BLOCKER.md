@@ -342,6 +342,29 @@ else measured: `:147`/`:148` (straight-line) passed; `:142`/`:143`/`:145` all co
 loop-driven read-back over entries; and `r14b`'s own note that its straight-line entries pass
 while its loop-assigned ones fail.
 
+#### 2026-08-03 — WORKAROUND: move the big local OUT of the frame (outlining does NOT work)
+
+Two candidates, each the only unknown in its own boot, after a known-good control:
+
+    w1stat   4      OK      the big local array becomes a file-scope STATIC
+    w3out    0      WRONG   stores outlined into a noinline helper -> SILENT MISCOMPUTE
+    k1200    None   FAIL    reference: this firmware still reproduces the bug
+
+**`w1stat` WORKS.** Moving the large local out of the frame removes the failure even with the
+1200 B pad still present. This is exactly what `SQLITE_STATIC_BUILTINS=1` already does for
+`sqlite3RegisterBuiltinFunctions`, so the SQLite workaround is on the shelf and now has a
+minimal-repro validation behind it.
+
+**`w3out` IS A TRAP — do not use outlining.** Keeping the array local but moving the stores into
+a `noinline` helper (whose own frame is tiny and whose base is a plain argument, verified: 0 lui
+sites) returns **0 where 4 is correct**. It converts a hang into a SILENT WRONG ANSWER, which is
+strictly worse: a wedge is at least loud. Recorded because it is the natural thing to try next
+and it looks correct at the source level.
+
+Note this also further constrains the fault: `w3out`'s helper stores through an argument-derived
+base in a small frame and is still wrong, so "the storing function must have a big frame" is not
+the whole story either — the CALLER's frame is big, and the array being addressed lives in it.
+
 #### 2026-08-03 — VERDICT: R-14 is an RTL DEFECT, not a codegen bug
 
 Three independent lines now agree, and the compiler-side explanations have all failed.
