@@ -6,6 +6,40 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — CORRECTION: the cap-init capability is WRONG-VALUED, not NULL
+
+`wdrf` dereferences a cap-init'd global UNGUARDED (no null test), the way SQLite uses such
+globals:
+
+    static char  wdrf_data[64] = { 'A', 0 };
+    static char *wdrf_p = wdrf_data;
+    return wdrf_p[0];                       /* expect 65 = 'A' */
+
+    QEMU  : 65   correct
+    board : 2    WRONG -- and note: NO fault, NO hang, control returned 4 in the same boot
+
+**So "the stores do not take effect / come back NULL" is too strong — retracted.** The
+capability is present and dereferenceable; it points at the WRONG PLACE. Reads yield 2 here and
+0 in `wbare` where 'A'=65 is expected, so the value differs between builds — garbage, not a
+consistent constant, and not a trap.
+
+Re-reading `wbare` (-62 => n==0) with this: `n = (p1 ? p1[0] : 0) + (p2 ? 1 : 0)`. n==0 is
+satisfied by p1 non-null with `p1[0] == 0` AND p2 null — consistent with wrong-valued
+capabilities rather than uniformly null ones.
+
+**Revised statement of the silicon fault:** `__capstone_cap_init`'s capability stores land, but
+the capability subsequently read back from the global has an incorrect cursor/bounds, silently
+and without trapping. QEMU produces the correct capability from the identical binary.
+
+**This is also NOT yet linked to the R-16 hang.** `wdrf` was built to convert the fault into a
+hang if they were the same defect; it returned a wrong value instead. So the NULL/wrong-value
+fault and the entry stall remain two separate observations, and the "same defect at different
+scales" idea is now weaker, not stronger.
+
+Two subagents are running on this: one reading `capstone-c` for how the reference implementation
+initialises capability-bearing globals, one reading the `capstone-ariane` RTL for a path where a
+capability store lands with cursor but wrong/garbage metadata and no exception.
+
 ## 2026-08-03 — CONFIRMED: `__capstone_cap_init`'s capability stores DO NOT TAKE EFFECT ON SILICON
 
 The decider. `wbare` uses BARE-SYMBOL initialisers only, so the compiler bug below cannot apply;
