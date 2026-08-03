@@ -6,6 +6,45 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — RESOLVED: the GENERATED glue never initialises capability-bearing globals
+
+One-variable pair, same source, same boot, in-boot control:
+
+    r14sl   4     OK      control
+    wbi     4     OK      DOMAIN_GLUE=interp     -- cap-init RUNS
+    wbare   -62   WRONG   DOMAIN_GLUE=generated  -- cap-init is dead code
+
+**So `__capstone_cap_init` WORKS on silicon, and there is no hardware fault here.** Capability-
+bearing initialised globals are correct on the board when the glue actually calls the
+initialiser. Everything I wrote about a silicon cap-init defect is retracted; the cause was
+entirely on our side.
+
+**The real defect, and it is ours:** `start-gp-captable-generic.S` contains **zero** references
+to `cap_init` (`start-gp-captable-interp.S` has 15), while `build-ladder-domain.sh:22` makes
+`generated` the **default**. So any domain built through the ladder path with a capability-
+bearing initialised global silently gets an UNTAGGED global — the raw 8-byte address word from
+the monitor's template copy — and no capability tag. QEMU is permissive about that; silicon is
+not. The failure is silent at build time and looks exactly like a hardware bug at run time.
+
+Fix options, in order of preference:
+1. have the generated glue call `__capstone_cap_init` when the image defines one (the symbol's
+   presence is already discoverable — it is what `.capstone_cap_init` records); or
+2. make the build FAIL LOUDLY when `DOMAIN_GLUE=generated` is combined with a non-empty
+   `.capstone_cap_init`, so the mis-pairing cannot be built at all.
+
+(2) is a few lines in `build-ladder-domain.sh` and would have saved this entire detour.
+
+**Scope of what this does and does not overturn.** It retracts only the cap-init thread
+(`wcap`, `wbare`, `wdrf`, `wc64`, `wc160`). It does NOT touch: the R-16 elimination table
+(image size, carve count, their conjunction, dom_data geometry, blob size, loader — those rungs
+have no capability-bearing globals, so the generated glue was adequate for them), or R-14
+(`k800`/`k1200`, `zoff`, `h2adj`/`h2far`), which remains a confirmed silicon fault with a
+packaged reproducer.
+
+**R-16 itself is still open**, and the glue axis is now properly testable: `wbi` proves the
+interp glue works end-to-end at SQLite's geometry on an 11 KB rung, so a rung/SQLite comparison
+across `DOMAIN_GLUE` is finally a valid one-variable pair.
+
 ## 2026-08-03 — RETRACTED: `wbare`/`wcap`/`wdrf` never ran cap-init at all (WRONG GLUE)
 
 **The probes did not test what I said they tested.**
