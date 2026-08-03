@@ -116,7 +116,10 @@ a READ overflow and faults `cause = 5` (load).
 | shape | rows | manifestation |
 |---|---|---|
 | dereferences the stale pointer directly | 9, 12, 14 | **`cause = 24`, domain halted by the monitor** — a delivered capability fault |
-| computes `regs + ACCESS_OFF` first | 1, 3, 4, 5, 8, 10, 13, 15 | QEMU `assert(rs1_v->tag)` in `cscincoffsetimm` |
+| computes `regs + ACCESS_OFF` first | 1, 3, 4, 5, 7, 8, 10, 13, 15 | QEMU `assert(rs1_v->tag)` in `cscincoffsetimm` (row 1: in `cscincoffset`) |
+
+*(Corrected 2026-08-03: row 7, measured after this table was first written, is
+in the assert group — 9 rows, not 8. The counts below are corrected to match.)*
 
 The second group hits an **emulator gap, not a mechanism failure**:
 `op_helper.c` has 13 bare tag asserts against 46 real `riscv_raise_exception`
@@ -125,8 +128,8 @@ revoke itself reaches the delivered-fault path is shown independently by the
 `DELIVERY=1` probe (allocate / revoke / dereference at offset 0, with its own
 control) and by rows 9, 12 and 14, which take that path naturally.
 
-**What this means for the verdicts.** For all 11 temporal rows the stale access
-was *prevented* and the control proves the revoke is why. For the 8 rows in the
+**What this means for the verdicts.** For all 12 temporal rows the stale access
+was *prevented* and the control proves the revoke is why. For the 9 rows in the
 second group, whether real hardware delivers a fault on the arithmetic or yields
 an untagged capability whose subsequent store faults `cause = 24` is unresolved —
 but the row is blocked either way, since the only escape would be arithmetic
@@ -135,6 +138,18 @@ or silicon.
 
 ## Caveats
 
+- **Compiler provenance, audited 2026-08-03.** The column and its reproduction
+  were measured 2026-08-02 13:37–15:37 with a clang built 2026-07-28 — i.e.
+  BEFORE the C-16 fix (`1faf145ef1c7`, 15:30). Raised as a confound because a
+  C-16 miscompile trips the same `assert(rs1_v->tag)` the nine assert rows
+  report. Demonstrated unaffected: all 30 domain binaries rebuilt with the
+  post-fix compiler are byte-identical to the measured ones once debug info is
+  stripped (code and data); no C-16 codegen signature (`PseudoTRUNC_CAP` feeding
+  a memset destination) exists in any of them; every temporal row's control —
+  which a revocation-independent miscompile would also crash — ran to
+  completion; and rows 1 and 5 re-run end-to-end on the post-fix compiler
+  reproduce FAULT/MISS. Adversarially audited. Full trail and hash manifest:
+  `capstone/agent-handoff/history/03-08-2026_09-42-37_c16-xlang-column-provenance-audit.md`.
 - **Shims, not real software — on both columns.** Real engines recycle objects
   on internal free lists that no revocation scheme observes, so both columns are
   upper bounds. The bias is symmetric because both compile the identical shim
