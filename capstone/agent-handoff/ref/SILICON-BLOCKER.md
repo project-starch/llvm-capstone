@@ -353,6 +353,14 @@ same register-form `cincoffset` computed addresses, same eight capability stores
     r14lp    None    4       None    None     NO      SAME loop, ldc from gp INSIDE the loop
     r14sl    4       4       4759    1092     YES     closing bracket
 
+CONFIRMED by an INTERLEAVED repeat in one boot (`r14hl r14lp r14hl r14lp r14hl`):
+
+    r14hl  4  YES (5252/1246)  |  r14lp  None NO  |  r14hl  4  YES  |  r14lp  None NO  |  r14hl  4  YES
+
+Totals: **`r14hl` 4/4 pass, `r14lp` 5/5 fail, `r14sl` 5/5 pass**, with `r14hl` bit-identical
+(5252 cycles / 1246 instret) every time. Alternating them inside a single boot removes any
+boot-to-boot or ordering explanation.
+
 **Therefore:**
 
 * the **computed (loop-variable) address is innocent** — `r14hl` uses it and passes, which
@@ -363,12 +371,24 @@ same register-form `cincoffset` computed addresses, same eight capability stores
 * **re-loading the SAME gp cap-table slot is the trigger** — the one thing only `r14lp` does
   (`ldc a2, 0x0(gp)` inside the loop, executed 4x instead of once).
 
-**Mechanism, and it is documented in the RTL, not inferred:** `capstone-ariane/CLAUDE.md`:
-*"Linear capability clearing on LDC: after an LDC that loads a linear capability, the source
-memory location is cleared to prevent aliasing."* The first `ldc gp[i]` CLEARS the cap-table
-slot; every later `ldc` of that slot reads a cleared entry. That is precisely a
-right-address/wrong-bounds capability, whose dereference is the measured
-`mcause=28 OUT_OF_BOUNDS`, and whose null case is an arm returning 0.
+**MECHANISM RETRACTED — the linear-clearing explanation is REFUTED.** I proposed
+`capstone-ariane/CLAUDE.md`'s *"after an LDC that loads a linear capability, the source memory
+location is cleared to prevent aliasing"*: first `ldc gp[i]` clears the slot, later ones read a
+cleared entry. **The precondition does not hold.** `gen-gp-captable-glue.py:192-193,263` emits
+`split(t2, sp, t1)` then **`delin(t2)`** before `stc(t2, gp, i*16)`, and the built binary
+confirms it — `delin t2` immediately precedes every `stc t2, N(gp)` (8 delins, plus
+`delin gp`). **Cap-table entries are NONLIN, so the LINEAR-only clearing cannot fire on them.**
+Also note `func LDC` (`capstone_dyn_unit.anvil:293-352`) contains no clearing logic at all; it
+delegates to `cap_load_ri`, so the condition lives in the LSU/cache path and was never read.
+
+This is the third time this session an explanation was built on a documented behaviour whose
+precondition was not checked against THIS build (the others: the merged-blob derivation story,
+and the computed-address story). The empirical result below stands on its own; the WHY is
+open again.
+
+The observed consequence remains a right-address/wrong-bounds or null capability — the measured
+`mcause=28 OUT_OF_BOUNDS` and the arms returning 0 — but nothing currently explains how a NONLIN
+cap-table entry becomes that after a repeated `ldc`.
 
 **It explains every prior observation, including the ones that defeated the earlier axes:**
 
