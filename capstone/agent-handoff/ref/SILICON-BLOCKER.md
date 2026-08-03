@@ -6,6 +6,44 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-04 — Defect 2: SOURCE pointer refuted; records 1+ are getting ZEROS, not stale data
+
+`sv` gives all three globals the SAME initial value (7). If the blob source pointer never
+advanced, every record would copy record 0's bytes -- identical by construction -- and all three
+would be correct (777).
+
+    sv = 700   ->  sv0 = 0, sv1 = 0, sv2 = 7
+
+Still only the first-processed record lands. **The source pointer is NOT the defect**, and the
+"every record copies record 0's data" model is refuted: later records receive **zeros**, not
+duplicated data.
+
+Combined with the cap table being proven correct and distinct (`pk = 117`), that leaves a narrow
+set:
+
+* records 1+ take the **zero-init path**. The descriptor's `blob_off == -1` means ".bss, fill
+  with zeros" (`ld t5, 16(t0)` reads it per record). If `t5` is clobbered inside the loop, or the
+  field is misread for later records, they are memset to zero instead of copied -- which is
+  EXACTLY "zeros, not stale data".
+* or the copy is **skipped** for records 1+ because a loop counter (`a5`/`a6`) is not
+  re-established per record, leaving nothing to copy.
+
+Both predict zeros; both are loop-carried state; neither involves the carve, the slot pointer,
+or the source. **`t5` is the prime suspect** because it is read once per record and its `-1`
+sentinel selects the zero-fill branch.
+
+**Next probe:** publish the per-record `blob_off` the loop actually read (same return-a-number
+technique as `pk`, which is what finally made progress here). If record 1 sees `-1` where the
+descriptor holds a real offset, the bug is `t5` clobbering and the fix is a register reallocation
+in the loop.
+
+Elimination table for defect 2 so far — all MEASURED, each a one-variable probe:
+    cap-table slot pointer   fresh-from-gp derivation changed nothing      NOT IT
+    split not consuming sp   RTL writes narrowed rs1 unconditionally       NOT IT
+    the carve / slots        pk=117: valid, distinct, NONLIN               NOT IT
+    blob source pointer      sv=700 with identical values                  NOT IT
+    zero-init path / counter                                               <- REMAINING
+
 ## 2026-08-04 — DEFECT 2 LOCALISED: the cap table is CORRECT; only ONE record's COPY lands
 
 Two direct observations, replacing inference with measurement.
