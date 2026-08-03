@@ -6,6 +6,45 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — CONFIRMED: `__capstone_cap_init`'s capability stores DO NOT TAKE EFFECT ON SILICON
+
+The decider. `wbare` uses BARE-SYMBOL initialisers only, so the compiler bug below cannot apply;
+`-capstone-cap-init-print` confirms both leaves resolve:
+
+    leaf 0 holder=wbare_p1 value=wbare_data holder_size=16
+    leaf 1 holder=wbare_p2 value=wbare_data holder_size=16
+
+    QEMU  : __CAPSTONE_LADDER_WBARE_PASSED__ (retval = 4)   correct
+    board : retval = 4294967234 ( = -62 )                   BOTH pointers NULL
+    control r14sl in the same boot: 4  OK
+
+**So there are two independent faults, and this is the second one, now proven:**
+
+    1. COMPILER  base+offset cap-global initialisers lose their value (empty `value=` in the
+                 print output). Reproduces under QEMU. Ours, in CapstoneCapGlobalInit.cpp.
+    2. SILICON   even fully-resolved capability stores in __capstone_cap_init do not take
+                 effect on hardware, while QEMU executes the same binary correctly.
+
+**THE MINIMAL REPRO — three lines, ~11 KB domain, no SQLite, no struct, no loop:**
+
+```c
+static char  wbare_data[64] = { 'A', 0 };
+static char *wbare_p1 = wbare_data;
+static char *wbare_p2 = wbare_data;
+/* n = (p1 ? p1[0] : 0) + (p2 ? 1 : 0);  return n - 62;   QEMU 4, silicon -62 */
+```
+
+`__capstone_cap_init` is the routine the glue calls **before `domain_main`**, and it is the code
+path R-16 stalls in. Every other axis was eliminated by a one-variable pair with an in-boot
+control: image size, carve count, their conjunction, dom_data geometry, blob size, and the
+loader (a stalling image stalls under `lpc` too).
+
+**Still to establish:** whether this NULL-store fault and the R-16 *hang* are the same defect at
+different scales. `wbare` returns rather than hanging, so that link is inferred, not measured.
+The next probe is a rung that USES a cap-init'd global the way SQLite does (dereference through
+it rather than null-testing it), which should convert the NULL into the fault the SQLite images
+take.
+
 ## 2026-08-03 — ROOT CAUSE of the NULL capabilities: cap-init drops `base + offset` initialisers
 
 `-mllvm -capstone-cap-init-print` (the flag the pass provides for exactly this) names it:
