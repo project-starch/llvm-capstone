@@ -12,6 +12,7 @@ reproducer is not an issue; a reproducer that only exists in `/tmp` is not much 
 | `R01-lsu-hazard/` | **R-1** | a load through one capability register misses a store through another |
 | `R02-delin/` | **R-2** | `delin` in domain code wedges the board — `delin.s` vs `nop.s`, one instruction apart |
 | `R14-strline-struct/` | **R-14** | straight-line init of a struct array with distinct string constants wedges |
+| `R14-frame-pad/` | **R-14** | **the one to hand over.** Two ~10 KB domains whose source differs only in the size of a dead `volatile` pad: one returns 4, the other never returns. Ships bounds/type measurements showing the faulting access is architecturally legal |
 
 ## What is committed, and what is not
 
@@ -19,8 +20,13 @@ reproducer is not an issue; a reproducer that only exists in `/tmp` is not much 
 the point of a reproducer is the exact binary that reproduced, and a rebuild against a
 moved compiler may not. They are small enough to carry.
 
-`R14` ships **source and documentation only**. Its four domains are ~1.5 MB each (6 MB
-total) because each is a full SQLite build, which is too much to track. Rebuild them with:
+`R14-frame-pad` includes its **frozen `.dom` images and the `lpc` controller** (~41 KB for all
+five), pinned by `images/SHA256SUMS`. It is a standalone silicon-ladder rung, not a SQLite
+build, which is exactly why it is small enough to carry — and why it should be preferred over
+`R14-strline-struct` for any hand-over.
+
+`R14-strline-struct` ships **source and documentation only**. Its four domains are ~1.5 MB each
+(6 MB total) because each is a full SQLite build, which is too much to track. Rebuild them with:
 
     export SQLITE_SUPPORT_OPT_LEVEL=-O1
     for S in 18 20 21 22; do

@@ -47,9 +47,18 @@ but QEMU *failing* is free and immediate.
 1. **Staged split on silicon with the fixed compiler** (f10/f2/f3 built and staged; run may be
    in flight). Stage 10 first: if it now returns, the remaining blocker moved later into
    `sqlite3_initialize`/`open`; if it still stalls, C-16 was only part of the same construct.
-2. **Re-run the four R-14 variants with the fixed compiler.** R-14 is marked PARTLY SUPERSEDED,
-   not closed: variant A is an unpadded 2-pointer struct, emits no `memset`, and is therefore
-   NOT explained by C-16. If A now passes, R-14 closes as a duplicate.
+2. ~~**Re-run the four R-14 variants with the fixed compiler.**~~ **DONE 2026-08-03 — R-14 does
+   NOT close as a C-16 duplicate.** It is reproduced on silicon and now looks like an **RTL
+   defect**: the failing capability store is measurably in bounds (type NONLIN, cursor ≥ start,
+   cursor+16 ≤ end, 1312 B of headroom), the identical binary is correct under QEMU, and every
+   compiler-side mechanism proposed was refuted on the board. Reproducer packaged for hand-over
+   at **`capstone/tests/fpga-repros/R14-frame-pad/`** (`k800` returns 4, `k1200` never returns,
+   sources differ only in the size of a dead `volatile` pad).
+   **Remaining, cheapest first:** read `lcc` field 5 (`perm`) at the failing address — a missing
+   write permission would be a legitimate reason to fault and would point back at the glue;
+   then read `lcc` off the faulting `stc`'s own base register; then get `mcause`/`mepc` for
+   `k1200` itself by adding the debug-mux read (already in `run_sqlite_stages_fpga.py`) to
+   `run_baked_rungs_fpga.py`.
 3. Re-read every "silicon miscomputes" claim in `SILICON-BLOCKER.md` and `ISSUES.md` against
    C-16 — several are plausibly the same bug.
 4. Decide whether to delete `SQLITE_STATIC_BUILTINS` now that the real fix exists.

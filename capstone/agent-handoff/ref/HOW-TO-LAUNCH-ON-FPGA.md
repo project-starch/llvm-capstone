@@ -52,6 +52,11 @@ between.
    (fpga/ariane from caplifive-system, embed FDT+kernel, regen `.c.S`). Plus
    `project_silicon_gp_delivery_boardowner_guidance`, `reference_fpga_rtl_platform`.
 
+**Reproducers to hand over live in `capstone/tests/fpga-repros/`** — one directory per issue,
+each with its own README and (where the images are small enough) the frozen `.dom` files pinned
+by `SHA256SUMS`. `R14-frame-pad/` is the current R-14 hand-over package and runs entirely
+through the baked-image path below.
+
 ## Tooling (already on disk)
 
 - Driver + venv: `/tmp/capstone/fpga-venv/bin/python`, drivers under

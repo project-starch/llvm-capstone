@@ -373,6 +373,11 @@ loops (`e3rd`/`e4wr`), and finally the non-zero `stc` immediate -- `zoff` forces
 not handing it a malformed or undersized capability. This is the finding to take to the board
 owner.
 
+**PACKAGED AS `capstone/tests/fpga-repros/R14-frame-pad/`** -- frozen `.dom` images + the `lpc`
+controller (~41 KB total, pinned by `images/SHA256SUMS`), sources, run instructions, the
+refuted-hypotheses table, and an explicit "what is NOT established" section. That directory is
+the thing to hand over; it supersedes `R14-strline-struct/`.
+
 **The hand-off artifact is built and self-contained** -- no SQLite, no compiler needed to
 reproduce, ~11 KB each, baked into the image:
 

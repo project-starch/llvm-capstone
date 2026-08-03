@@ -714,7 +714,27 @@ rather than `ldc`/`stc`. Whether capstone-c can express a non-`__linear` view of
 span is a compiler/ABI question, not an RTL one, and is unverified — `sbi_capstone.c` has
 no `memcpy` and no scalar-pointer cast anywhere today.
 
-### R-14 — struct-array init wedges `OPEN — REPRODUCED ON SILICON 2026-08-03; title is now WRONG`
+### R-14 — struct-array init wedges `OPEN — LIKELY AN RTL DEFECT 2026-08-03; title is now WRONG`
+
+> **REPRODUCER TO HAND OVER: `capstone/tests/fpga-repros/R14-frame-pad/`** — two ~10 KB domains
+> whose source differs ONLY in the size of a dead `volatile char pad[]`: `k800` returns 4,
+> `k1200` never returns. Frozen `.dom` images are committed and pinned by `SHA256SUMS`. It
+> supersedes `R14-strline-struct/` (1.5 MB SQLite builds, four confounded variables).
+>
+> **The evidence points at the RTL, not the compiler.** At the address the failing store
+> targets, the capability is measurably well formed — `bnd2` returns 107 = type NONLIN with
+> cursor ≥ start, cursor+16 ≤ end, and start 16-aligned; `bnds` returns 1322, i.e. **1312 bytes
+> of headroom** against a 16-byte store. The identical binary computes the correct answer under
+> QEMU. And every compiler-side mechanism proposed was tested on the board and refuted
+> (merged string constants, repeated `ldc` from one slot, `ldc` count, capability stores as
+> such, `ldc`+store in one loop, frame size alone, loops, and the non-zero `stc` immediate —
+> `zoff` forces `imm=0` and still fails). So the hardware appears to fault an architecturally
+> legal capability store.
+>
+> **NOT established** (see the repro README): permissions were never read (`lcc` field 5); the
+> probes measure a capability materialised for a `volatile` access rather than provably the
+> faulting `stc`'s own base register; and no `mcause`/`mepc` has been read for `k1200` itself —
+> the `mcause=28` below came from a different, SQLite-derived domain.
 
 > **2026-08-03 — read `ref/SILICON-BLOCKER.md` first.** Reproduced with BOTH controls passing
 > in one boot (`f10ctl=0 | :0=0 | :144=WEDGE`, 2/2). The wedge is a **capability
