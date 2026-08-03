@@ -6,6 +6,42 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-04 — The copy loop IS involved: rounding its length is a PARTIAL fix (0 -> 1 of 2)
+
+Located the blob->storage copy in `BUILD_GP_CAPTABLE_INTERP`: it sets the remaining-byte
+counter from the RAW descriptor size (`mv a5, t3`), takes an 8-byte fast path
+(`li a6,8; blt a5,a6,21f; ld/sd; addi a5,a5,-8`) and falls into a **byte-wise tail**
+(`addi a5,a5,-1`) for the remainder. Non-8-multiple globals are exactly the inputs that reach
+that tail.
+
+Tested a one-line change — round the copy length up to 8 so the tail never runs. Safe by
+construction: the carve is already `align_up(size,16)`, so writing up to 7 bytes past `size`
+stays inside the global's own carve.
+
+    r14sl   4   OK      control
+    fxe8    2   OK      fixed glue, char[8]  (unchanged, as expected)
+    fxe2    1   WRONG   fixed glue, char[2]  -- was 0, now 1 of 2 globals correct
+    sze2    0   WRONG   unfixed glue, char[2]
+
+**So the byte-wise tail is PART of the defect but not all of it.** One global of the two now
+initialises; the other still does not. The fix direction is confirmed and the remaining error is
+narrower than before, but this is not a working fix.
+
+**The change has been REVERTED** — `start-gp-captable-interp.S` is back at its committed state.
+A half-fix in glue shared by every interp build would silently change behaviour for SQLite and
+every future rung while still being wrong; the backup of the attempt is at
+`/tmp/capstone/interp-glue.bak` and the exact edit is described above, so it is one command to
+re-apply when someone can finish it.
+
+**Next, in order:**
+1. Work out why exactly ONE of two identical `char[2]` globals is fixed by the rounding. The
+   asymmetry is the strongest clue available — two identical globals, same size, same path, and
+   they behave differently. Suspect the per-global `blob_off` arithmetic or the destination
+   pointer advance, not the length.
+2. Only then re-apply the rounding as part of a complete fix.
+3. The SQLite test (pad globals to 8-byte multiples, run stage 10) is still worth doing
+   independently — it does not depend on the glue fix and answers whether R-16 is this bug.
+
 ## 2026-08-04 — Narrowing the interp size fault: the CARVE is not the bug
 
 Source read following the `sze8` PASS / `sze2` FAIL pair. What is now excluded inside the glue:
