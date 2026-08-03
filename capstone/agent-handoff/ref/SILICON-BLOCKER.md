@@ -342,6 +342,49 @@ else measured: `:147`/`:148` (straight-line) passed; `:142`/`:143`/`:145` all co
 loop-driven read-back over entries; and `r14b`'s own note that its straight-line entries pass
 while its loop-assigned ones fail.
 
+#### 2026-08-03 — COMPILER vs RTL: the evidence points at the RTL
+
+Two probes aimed at the question that decides who fixes this.
+
+    rung    retval        meaning
+    r14sl   4    OK       boot control
+    bnds    1322          headroom (end - cursor) = 1312 B at the failing address
+    zoff    NO RESULT     the predicted COMPILER FIX -- all stores forced to imm=0 -- STILL FAILS
+    k1200   NO RESULT     reference: this firmware still reproduces the failure
+
+**1. The failing access is IN BOUNDS, so the compiler is not handing the hardware an
+undersized capability.** `bnds` reads the capability at `&a[3].y` -- the address the failing
+store targets -- with `lcc` (field map `capstone_dyn_unit.anvil:182-188`: 2=cursor, 4=end) and
+returns `end-cursor+10`. Measured **1312 bytes of headroom**, against a 16-byte capability
+store. `bnds` performs no capability store itself, so it cannot wedge and always returns.
+
+If the bounds legitimately cover the access, an `stc` there is a LEGAL operation and faulting
+it is an RTL defect. **This is the first direct evidence that R-14 is a hardware bug rather
+than a codegen bug.**
+
+**2. The predicted compiler fix does NOT work — mechanism retracted again.** `zoff` is the
+`k1200` shape with every capability store forced through an explicitly materialised address, so
+the emitted stores are `stc 0x0(a0..a3)` with NO non-zero immediate anywhere (verified in the
+disassembly before running). It still fails. So *"an `stc` with a non-zero immediate off a
+lui-derived base"* -- the characterisation recorded one section below -- is **REFUTED**: the
+immediate is not the mechanism, and no codegen constraint on immediates would fix this.
+
+**Caveats, stated because this is the third mechanism to fall in one session:**
+* `bnds` measured a pointer the compiler materialised for a `volatile` access; that is
+  *a* capability to the failing address, not provably the *same* register the failing `stc`
+  uses. Confirm by reading `lcc` fields of the base immediately before the faulting store.
+* `zoff` uses `volatile` pointers, which changes more than the immediate; the honest reading is
+  "forcing imm=0 does not rescue it", not "imm=0 is irrelevant in isolation".
+* No `mcause`/`mepc` has been read for `k1200`/`zoff` themselves; every `mcause=28
+  OUT_OF_BOUNDS` reading still comes from the SQLite-derived `:144`.
+
+**What this makes the next step.** The compiler-side story has now failed three times
+(merged-string blob, repeated `ldc`, non-zero immediate), while the in-bounds measurement
+points at the RTL. Priority is to read `mcause`/`mepc` on one of THESE rungs -- the baked driver
+needs the debug-mux read that `run_sqlite_stages_fpga.py` already does on wedge -- and then hand
+the board owner a self-contained repro: `k800` (passes) vs `k1200` (fails), identical source
+apart from a dead pad, plus the `bnds` headroom measurement.
+
 #### 2026-08-03 FINAL — `stc` with a NON-ZERO immediate off a lui-derived base
 
 Sharpest characterisation so far, and the first stated as an INSTRUCTION PATTERN.
