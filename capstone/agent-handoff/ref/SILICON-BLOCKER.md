@@ -6,6 +6,52 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — RETRACTED: `wbare`/`wcap`/`wdrf` never ran cap-init at all (WRONG GLUE)
+
+**The probes did not test what I said they tested.**
+
+    build-ladder-domain.sh:22   DOMAIN_GLUE=${DOMAIN_GLUE:-generated}    <- I never set it
+    start-gp-captable-generic.S  0 references to cap_init  -> NEVER CALLS __capstone_cap_init
+    start-gp-captable-interp.S  15 references
+
+Every rung I built (`wcap`, `wbare`, `wdrf`, `wc64`, `wc160`) used the **generated** glue, which
+does not call `__capstone_cap_init`. The function is emitted into the binary — I disassembled it
+and reasoned about its `stc` immediates — but **it is dead code in those images**. So:
+
+* **"`__capstone_cap_init`'s capability stores do not take effect on silicon" is RETRACTED.**
+  The stores never executed. Nothing about cap-init was measured.
+* The `-62` / `2` results have a much simpler explanation: with cap-init never run, a
+  capability-bearing initialised global receives only the raw 8-byte address word from the
+  monitor's template copy (plain `ld`/`sd`, `sbi_capstone.c:786-791`), and **never gets a
+  capability tag**. An untagged word is not a usable capability on silicon; QEMU is permissive
+  about it. That is a configuration error in my probe, not a hardware defect.
+* It also explains `wc64`/`wc160` returning 0 **under QEMU too** — untagged globals, not a
+  miscompile, and not the print artifact either.
+
+**What this does NOT retract:** the elimination table stands (image size, carve count, their
+conjunction, dom_data geometry, blob size, and the loader were each ruled out by one-variable
+pairs whose rungs did not depend on cap-init), and R-14 stands (`k800`/`k1200`, `zoff`,
+`h2adj`/`h2far` — all measured, none involving cap-init).
+
+**The corrected experiment, and it is now the obvious one:** rebuild `wbare` with
+`DOMAIN_GLUE=interp` so cap-init actually runs, and compare against the `generated` build in the
+same boot with an `r14sl` control:
+
+    interp returns 4, generated returns -62  -> cap-init is REQUIRED and works; my probes were
+                                                simply mis-built, and there is no silicon fault here
+    interp also returns -62                  -> NOW there is a real cap-init fault, measured for
+                                                the first time, with a three-line repro
+
+This also finally makes the glue axis testable for R-16, because the earlier
+`DOMAIN_GLUE=interp` attempt failed for a linker-script reason since corrected (use the DEFAULT
+`link-gpfree.ld` with `DOMAIN_WINDOW=`, never the `-sq`/`-2m`/`-32k` scripts).
+
+**Method note worth keeping:** the QEMU differential caught four bad probes today, but it could
+not catch this one — a probe where the code under test never executes passes QEMU *and* looks
+plausible on silicon. The check that would have caught it is the one already written in the
+board-run skill: *verify the artifact does what the source says*, extended from "is the
+construct present" to **"is it reached"**.
+
 ## 2026-08-03 — RTL STUDY: cap-init is NOT R-14's mechanism (closed from the disassembly)
 
 An RTL read of `capstone-ariane` flagged one shared-mechanism candidate as most promising and
