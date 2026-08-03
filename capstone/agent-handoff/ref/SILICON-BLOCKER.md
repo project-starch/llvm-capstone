@@ -6,6 +6,48 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — MINIMAL REPRO AT RUNG SCALE: `__capstone_cap_init` produces NULL capabilities
+
+**Ten lines of C, ~11 KB domain, QEMU-correct, silicon-wrong.**
+
+    static char  wcap_data[64] = { 'A', 0 };
+    static char *wcap_ptr  = wcap_data;        /* capability-bearing INITIALISED globals */
+    static char *wcap_ptr2 = wcap_data + 16;
+    ... n = (wcap_ptr ? wcap_ptr[0] : 0) + (wcap_ptr2 ? 1 : 0);  return n - 62;
+
+    QEMU  : __CAPSTONE_LADDER_WCAP_PASSED__ (retval = 4)    correct
+    board : RESULT wcap retval=4294967234  ( = -62 )        n == 0
+
+`-62` means **both** pointers tested false: the capability-bearing globals came back NULL on
+silicon. The same binary initialises them correctly under QEMU.
+
+**Why this was never hit before — the presence-vs-execution trap.** `.capstone_cap_init` is
+**size 0 in every ladder rung ever run** (`r14sl`, `wbhi`: `size=000000`) and non-empty in every
+SQLite image (`f10`: `size=000008`). The routine builds capability-bearing globals AT DOMAIN
+ENTRY — exactly where R-16 stalls — and no rung had ever executed a single byte of it. Five
+rounds of minimisation scaled size, carves and geometry while leaving this code dead.
+`wcap` is the first rung with `cap_init size=000008`, matching SQLite.
+
+**Everything else is ruled out**, each by a one-variable pair with an in-boot control:
+
+    image size            rz1m   1087 KB, 1 carve              PASS
+    carve count           rc192  192 carves / 3072 B table     PASS   (> SQLite's 181/2896)
+    both together         rzc1m  192 carves + 1.1 MB           PASS
+    dom_data geometry     wsq    order 9, globals_off=0x150000 PASS   (SQLite's exact layout)
+    blob size             wbhi   blob 90320                    PASS   (> the 84336 that stalls)
+    the loader            strim  stalls under lpc AND sqlite_host      (loader exonerated)
+    ---
+    cap-bearing globals   wcap   returns -62 instead of 4      FAIL   <-- silicon only
+
+**Status: this is a NULL-capability miscompute, not yet the entry stall itself.** `wcap`
+entered and returned (SHA5->SHA6->RESULT); R-16 hangs. The honest claim is that the code path
+R-16 lives in is demonstrably broken on silicon at rung scale, in a repro that costs one boot.
+Whether more cap-bearing globals turn "returns NULL" into "hangs" is the next experiment: scale
+`wcap` to tens/hundreds of capability-bearing initialised globals, which is what SQLite has.
+
+Also settled in passing: the `SHA5` operand is a domain-sequence index, not a failure code —
+`wsq` showed `SHA5:00000001 -> SHA6:00000001` and PASSED. Do not read it as diagnostic.
+
 ## 2026-08-03 — R-16: THE LOADER IS EXONERATED, the IMAGE carries the stall (MEASURED)
 
 The zero-rebuild experiment the audit proposed, run in one boot with the control first. A
