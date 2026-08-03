@@ -342,6 +342,36 @@ else measured: `:147`/`:148` (straight-line) passed; `:142`/`:143`/`:145` all co
 loop-driven read-back over entries; and `r14b`'s own note that its straight-line entries pass
 while its loop-assigned ones fail.
 
+#### 2026-08-03 — SQLite + workaround: BLOCKED BY R-16, not by R-14
+
+The workaround validated on the minimal repro (`w1stat`) was carried to SQLite:
+`SQLITE_STATIC_BUILTINS=1`, stage-10 domain, **181 carves** (inside the ~1020 rev-node budget),
+1633312 B. Four distinct draws built and tested, each in its own boot with `f10:0` first:
+
+    swa    :0  ENTRY STALL (R-16)      no SQ: G/enter -- the domain never ran
+    swa8   :0  ENTRY STALL (R-16)      no SQ: G/enter
+    swa9   :0  ENTRY STALL (R-16)      no SQ: G/enter
+    swa11      VOID -- the f10 CONTROL itself wedged, so that boot carries no verdict
+
+**The workaround was never exercised.** `:0` returns before any SQLite code runs, so an entry
+stall says nothing about whether the static-builtins change fixes stage 10. This is the same
+wall that stopped `st10`/`sb10` earlier in the investigation, and it now stands at 5 static-
+builtins images that never entered.
+
+Deliberately NOT concluding "static-builtins images are cursed" — that is the same shape as the
+"block presence blocks entry" claim already retracted above, and the sample is again a set of
+near-replicate draws differing in one constant. What IS supportable:
+
+* **R-16, not R-14, is now the binding constraint on getting SQLite onto silicon.** R-14 has a
+  validated workaround at minimal-repro scale; R-16 has no workaround, no mechanism, and blocks
+  measurement of everything at SQLite scale.
+* The `f10` control wedging in the `swa11` boot is a fresh reminder that a single control pass
+  is weak evidence — the control itself fails roughly 1 in 5.
+
+**Strategic consequence.** Further R-14 refinement is cheap (11 KB rungs, ~5 min/boot) but no
+longer on the critical path for SQLite. The critical path is R-16: it is per-image, unexplained,
+survives every structural attribute checked, and it is what makes large images unmeasurable.
+
 #### 2026-08-03 — WORKAROUND: move the big local OUT of the frame (outlining does NOT work)
 
 Two candidates, each the only unknown in its own boot, after a known-good control:
