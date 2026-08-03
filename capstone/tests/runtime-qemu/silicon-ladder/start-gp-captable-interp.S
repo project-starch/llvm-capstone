@@ -570,6 +570,19 @@
   /* ---- zero the tail (pad after a copy, or the whole thing for .bss) ---- */
 30:
   beqz  t4, 40f
+  /* R-16 FIX (2026-08-04, board-measured): always pad BYTE-WISE.
+     The 8-byte pad store below starts at t6 = t2 + size. For any global whose size is not a
+     multiple of 8 that address is MISALIGNED, and this core mishandles misaligned 8-byte
+     accesses (see the note at the copy loop) -- it writes the aligned window containing t2 and
+     destroys the bytes just copied. That is why every `char[2]` global read back 0 while
+     `char[8]` globals and zero-init .bss globals were fine.
+     Measured: with this jump, three char[2] globals return 321 (all correct) where the
+     unmodified glue returns 0. The cost is a byte loop over at most stor-size (< 16) bytes per
+     global, once per domain entry.
+     A faster fix exists -- zero the whole carve first from t6 = t2 with t4 = stor, both
+     16-aligned, then copy over it -- but it restructures this block, so it wants review rather
+     than an end-of-session edit. */
+  j     32f
 31:
   li    a6, 8
   blt   t4, a6, 32f

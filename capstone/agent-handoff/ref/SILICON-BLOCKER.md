@@ -1,5 +1,42 @@
 # The silicon blocker — everything known
 
+## 2026-08-04 — The pad fix is VERIFIED and LANDED. It does NOT fix R-16.
+
+    fn1  1/1   OK        one   char[2] global
+    fn2  2/2   OK        two   char[2] globals
+    fn3  3/3   OK        three char[2] globals      (all were 0/N before)
+
+The fix is committed to `start-gp-captable-interp.S`: always pad byte-wise, skipping the 8-byte
+pad store whose first access is misaligned whenever `size % 8 != 0`.
+
+**But SQLite still entry-stalls with the fixed glue:**
+
+    f10.dom:0   RETURNED          (control, same boot)
+    sfx.dom:0   ENTRY STALL       stage-10 image, STATIC_BUILTINS=1, fixed glue
+
+`:0` returns before any SQLite code runs, and there is no `SQ: G/enter`, so the domain never
+started. **R-16 is NOT the pad bug.** The correlation that made it look promising —
+interp glue + non-8-multiple globals — was real and is now fixed, but it was a different fault
+that happened to live in the same code.
+
+**What the session actually produced, stated honestly:**
+* A real, board-verified glue bug found, root-caused and fixed (globals with `size % 8 != 0`
+  silently read back as zero under the interp glue). This affected every such global in every
+  interp-built domain, including SQLite.
+* R-14: confirmed silicon fault, packaged hand-off reproducer, unchanged.
+* R-16: still open. Ruled out this session by one-variable pairs with in-boot controls: image
+  size, carve count, their conjunction, dom_data geometry, blob size, the loader, and now the
+  pad/globals-init bug.
+
+**Next for R-16** — the honest list, nothing here is close to a mechanism yet:
+1. The bounds question from the pad investigation is still unanswered and may be the bigger
+   finding: a 6-byte overrun crossed a 16-byte carve without trapping. Extend `pk` to read slot
+   ENDS (`lcc` field 4). `end0 == end1` => carves overlap (`split` not narrowing `sp`);
+   `end1 == start0` => the LSU is not enforcing its upper bound.
+2. R-16 has never been reproduced outside SQLite-derived images. Everything cheap has been tried;
+   what has NOT is instrumenting the monitor side of the entry path, where the stall actually
+   occurs (`SHA5` with no `SHA6`).
+
 ## 2026-08-04 — ROOT CAUSE CONFIRMED: the zero-PAD store in the interp glue. ONE defect, and it is OURS.
 
 **Measured, decisive:** forcing the pad loop to go byte-wise (a single `j 32f` at label `30`,
