@@ -6,6 +6,55 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — R-16 REFRAMED: it tracks SQLITE_STATIC_BUILTINS, and the two issues are COUPLED
+
+**A false premise ran through this whole investigation, including my own write-ups above:**
+"small ladder rungs enter, SQLite-derived images stall". **`f10` is an SQLite-derived image** --
+built by `build-sqlite-silicon.sh`, 1624096 B, 181 carves, allocation order 9 -- and it has
+ENTERED reliably as the in-boot control dozens of times today. So image size, carve count and
+dom_data class were never able to be the axis, which is consistent with rounds 1-5 ruling every
+one of them out, and I should have noticed that the control itself refuted the premise.
+
+**What actually separates them is one build flag.** Every image built with
+`SQLITE_STATIC_BUILTINS=1` has entry-stalled -- `st10`, `sb10`, `swa`, `swa8`, `swa9`, `strim`:
+**6/6** -- while `f10`, the same builder without the flag, enters. That is a one-variable pair
+with six replicates on the failing side.
+
+**The geometric difference is the BLOB** (`domdata-budget.py`), and it is the only one:
+
+    image   blob     cap table        storage   allocation      verdict
+    f10     75120    2896 (181 gl)    354320    order 9 / 2 MB  ENTERS
+    swa     84336    2896 (181 gl)    354320    order 9 / 2 MB  STALLS
+    strim   82592    2784 (174 gl)    352736    order 9 / 2 MB  STALLS
+
+Carve count, storage and allocation class are identical or near-identical; only the blob moves,
+by ~9 KB. **The blob is the initialised-globals template that is COPIED AT DOMAIN ENTRY, before
+`domain_main` runs** -- exactly where R-16 stalls. It also explains why five rounds of ladder
+probes never reproduced it: `.bss` is uninitialised and `.rodata` padding is never copied, so
+none of them grew the blob at all.
+
+### The practical consequence: R-14's workaround TRIGGERS R-16
+
+`SQLITE_STATIC_BUILTINS=1` restores `aBuiltinFunc` to a compile-time-initialised static, which
+is precisely what adds ~9 KB of initialised globals to the blob. So the R-14 workaround is what
+pushes the image across the R-16 threshold. **That is why it could never be validated on
+SQLite** -- and it is not a coincidence to be worked around by redrawing: every draw carries the
+same extra blob.
+
+Consequence for the default flipped earlier today: `SQLITE_STATIC_BUILTINS` now defaults to 1,
+which fixes R-14 and guarantees R-16. Either the blob threshold gets understood, or the R-14
+workaround needs a form that does NOT add initialised globals (e.g. a static that is
+zero-initialised and filled at run time, keeping it in `.bss` rather than the blob). **That
+last idea is cheap and is the obvious next experiment.**
+
+### Status of the blob axis on the ladder path
+
+Attempted and NOT yet working: growing the blob with a large initialised array. `static` fails
+to link (`undefined symbol`) because the generator's large-RO copy path emits `lla <sym>` and
+needs external linkage; made file-scope it links, but with the custom linker script the reported
+`globals_off` collapses to 0x410 and the blob reads as ~1.4 MB, i.e. the measurement is not
+meaningful yet. Unresolved plumbing, not a board result.
+
 ## 2026-08-03 — R-16 ROUNDS 3-5: three more axes ruled out; the last two are TOOL-BLOCKED
 
 **Enabling fix landed first.** `gen-gp-captable-glue.py` used to `die()` above 127 globals
