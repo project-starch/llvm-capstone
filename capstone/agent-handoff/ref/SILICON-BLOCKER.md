@@ -1,5 +1,60 @@
 # The silicon blocker — everything known
 
+## 2026-08-04 — ROOT CAUSE CONFIRMED: the zero-PAD store in the interp glue. ONE defect, and it is OURS.
+
+**Measured, decisive:** forcing the pad loop to go byte-wise (a single `j 32f` at label `30`,
+removing every 8-byte pad store, with the copy length UNCHANGED) makes the three-global probe
+return **321 — fully correct**, against 0 for the committed glue. In-boot control passed; QEMU
+correct throughout.
+
+    committed glue                      vv = 0     all three globals zero
+    + byte-wise pad (one instruction)   dd = 321   ALL THREE CORRECT
+
+**The defect** (`start-gp-captable-interp.S`, record loop): after copying `size` bytes the glue
+zero-pads the rest of the carve starting at `t6 = t2 + size`. For a global whose size is not a
+multiple of 8, that first pad store is an **8-byte `sd` at a misaligned address** — and the file
+already documents this core as mishandling misaligned 8-byte accesses. It writes the aligned
+window containing `t2`, destroying the bytes just copied. Hence: every global with
+`size % 8 != 0` reads back zero; `char[8]` globals are unaffected (`t6 = t2+8`, aligned); and
+zero-init `.bss` globals never reach it (they enter with `t6 = t2`, 16-aligned).
+
+**TWO of my own conclusions are retracted:**
+* *"Defect 1 is the byte-wise tail of the COPY."* Wrong — the byte tail works. Records 1 and 2
+  in the `vf` run had `blob_off & 7 != 0`, took the tail, and record 2's data landed correctly.
+* *"Defect 2 is a second, separate fault; descriptors are walked in reverse so the survivor is
+  the FIRST-processed record."* Wrong on both counts. The descriptor is in DECLARATION order —
+  verified in the measured binary: `vv0@0x1600c0, vv1@0x1600c2, vv2@0x1600c4`, `blob_off`
+  0xc0/0xc2/0xc4 — so the survivor is the **LAST**-processed record. There is no second defect:
+  my own incomplete "fix" (rounding only the COPY length, leaving `sub t4,t4,t3` on the raw size
+  at `:568`) made the copy write 8 and the pad write 14 into a 16-byte carve — 22 bytes, a
+  6-byte overrun into the PREVIOUS record's storage, since carves descend. That manufactured the
+  "only one record survives" pattern I then spent five hypotheses chasing.
+
+**Everything now has one explanation**: `vv=0`, `vf=300`, `sv=700`, `al=700`, `mg1=0/1`,
+`mf2=1/2`, `mf3=1/3`, `char[8]` passing, `.bss` rungs always passing.
+
+**The fix** (not yet applied — it should be reviewed, not rushed in at the end of a session):
+zero the carve FIRST with `t6 = t2` and `t4 = stor` (both 16-aligned, so every store is an
+aligned `sd` and the byte loop never runs), THEN copy `size` bytes over it with the existing tail.
+That removes the misaligned store and the length mismatch together and assumes nothing about
+hardware alignment behaviour. The smaller alternative — keep the structure, round the copy length
+AND change `:568` to subtract the rounded length — works arithmetically but still over-reads the
+blob and leaves neighbour bytes rather than zeros in the pad.
+
+**One thing left genuinely open, and it may be bigger than this bug.** With my incomplete fix the
+6-byte overrun crossed out of a 16-byte carve and did NOT trap, although
+`load_store_unit.sv:970-972` implements an exact upper-bound check. Either the board's bitstream
+does not enforce the upper bound as written, or `split` is not actually narrowing `sp` so the
+carves overlap upward. The `pk` probe compared slot STARTS and types only, so it does not settle
+this. Cheapest discriminator: extend `pk` to `lcc` field 4 (END) of slots 0 and 1 —
+`end0 == end1` means overlapping carves; `end1 == start0` means the LSU is not enforcing the
+upper bound, which belongs in ISSUES.md as its own finding.
+
+**R-16 link: still not established.** This is a wrong-VALUE fault; R-16 is a HANG. The next step
+is unchanged — fix the pad, rebuild an SQLite stage-10 image, and see whether it enters.
+
+
+
 **Living document.** Update it whenever a claim is added, refuted, or measured. Every entry
 must say how it is known: MEASURED (board), SOURCE (quoted file:line), or INFERRED.
 Last updated: 2026-08-03.
