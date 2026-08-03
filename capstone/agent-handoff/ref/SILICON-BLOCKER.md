@@ -6,6 +6,44 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-04 — ROOT CAUSE: TWO defects in the interp glue's globals copy
+
+Probes with DISTINCT per-global values and an individual check per global, so the return value
+counts correctly-initialised globals instead of summing them (which hid which one failed).
+
+    unfixed glue          mg1 = 0/1    mg2 = 0/2    mg3 = 0/3
+    copy length -> 8      mf1 = 1/1 OK mf2 = 1/2    mf3 = 1/3
+
+**MINIMAL REPRO is now ONE global**: a single `static char m[2] = {1,0};` under the interp glue
+reads back 0 on silicon (`mg1`), QEMU correct, in-boot control passing. No struct, no loop, no
+second global.
+
+**Defect 1 — the byte-wise tail.** For a size-2 global the copy's `blt a5,8,21f` branches
+straight to the byte tail, so the tail is the ONLY path that runs. Rounding the copy length up
+to 8 (`addi a5,t3,7; andi a5,a5,-8`) makes the single-global case CORRECT (`mg1` 0 -> `mf1` 1).
+Safe by construction: the carve is already `align_up(size,16)`.
+
+**Defect 2 — the per-iteration advance.** With the length fixed, **exactly ONE global is correct
+at every count** — 1 of 1, 1 of 2, 1 of 3. So globals after the first are still not initialised,
+independently of size handling. Something the loop carries between descriptor records (the
+destination pointer `t6`, the blob source, or the descriptor pointer `t0`) does not advance
+correctly, so only record 0 lands.
+
+**Defect 2 is the one that matters for SQLite**, and it is the best R-16 candidate yet: an image
+with 181 globals of which only the first initialises is catastrophically broken before
+`domain_main`, which is exactly where R-16 stalls. Note it is INDEPENDENT of size — it would
+break an all-8-multiple image too.
+
+**Status of the fix:** the length rounding is REVERTED in-tree (backup at
+`/tmp/capstone/interp-glue.bak`, edit quoted above). It is a genuine partial fix but landing it
+alone would leave the far more damaging defect 2 in place while making the symptom look better.
+
+**Next:**
+1. Read the loop's inter-record state (`t0`, `t6`, blob source) and find why record 1 is not
+   written. This is a source question, no board time.
+2. Fix both, then re-run `mg1`/`mg2`/`mg3` — success is 1/1, 2/2, 3/3.
+3. Then SQLite stage 10, which is the R-16 test.
+
 ## 2026-08-04 — The copy loop IS involved: rounding its length is a PARTIAL fix (0 -> 1 of 2)
 
 Located the blob->storage copy in `BUILD_GP_CAPTABLE_INTERP`: it sets the remaining-byte
