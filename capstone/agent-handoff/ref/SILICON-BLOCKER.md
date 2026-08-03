@@ -280,8 +280,73 @@ And `r14b_app.c` already records the shape of the failure:
 which points at capability stores through a **computed (loop-variable) address** rather than at
 immediate-offset stores — a different axis from everything tested tonight, and not yet examined.
 
-Runner: `run_ladder_perf_fpga.py`, rungs overridable via `LADDER_RUNGS`, one rung per clean
-boot; `DOMAIN_EXTRA_CFLAGS` toggles the merge flag per build.
+Runner: `run_ladder_perf_fpga.py`, rungs overridable via `LADDER_RUNGS`, `LADDER_ONE_BOOT=1`
+to run them all in one boot; `DOMAIN_EXTRA_CFLAGS` toggles the merge flag per build. **This
+runner transfers each `.dom` over UART (gzip+base64, per-chunk sha), so it needs NO firmware
+rebuild and no initramfs staging** — the entire rebuild/restage/reflash loop that dominated
+2026-08-03 disappears. Cost is UART time: 16 chars per emit, so an ~11 KB domain is minutes.
+
+### The STRAIGHT-LINE vs LOOP discriminator (built 2026-08-03, running)
+
+The axis none of the `:14x` arms tested. `r14b_app.c` records that its four straight-line
+entries pass and its twelve loop-assigned ones fail, i.e. the suspect is a capability store
+through a **computed (loop-variable) address**, not an immediate-offset store.
+
+Two rungs isolate exactly that, holding everything else constant — the SAME two literals in
+every field, the SAME number of capability stores, the SAME array slots, the SAME read-back
+loop. Confirmed matched at build time: **both are 2 globals, table 32 B, `ldc-gp=2`**.
+
+    r14sl   a[0..3].z/.y assigned STRAIGHT-LINE (immediate offsets)   oracle 4
+    r14lp   the same four entries assigned IN A LOOP (computed addr)  oracle 4
+    r14b    the known-failing reference, same batch                   oracle 16
+
+Reading: `r14sl` passing while `r14lp` fails names the addressing form as the trigger, and
+would be the first mechanism-level answer for R-14. Both failing points away from the store
+form entirely. Both passing means 4 loop-assigned entries are not enough and the count matters
+after all — in which case raise `r14lp` to 16 entries, since `r14b` fails on its 12
+loop-assigned ones.
+
+Files: `silicon-ladder/r14{sl,lp,b}_kernel.h`, `_fpga_app.c`, `_host.c`.
+
+#### MEASURED 2026-08-03 — the loop arm fails, the straight-line arm passes
+
+    rung     retval  oracle  cycles  instret  correct
+    r14sl    4       4       4752    1092     YES     straight-line, immediate offsets
+    r14lp    None    4       None    None     NO      SAME 4 entries, assigned in a LOOP
+    r14b     None    16      None    None     NO      <- NO INFORMATION, see below
+
+`r14sl` ran FIRST in the boot and passed, so it is also that boot's health control: the board,
+firmware and transfer path were all good when `r14lp` failed. The two differ only in how the
+store address is formed.
+
+**CONFIRMED 2/2, with a pass-fail-pass bracket.** Second run, `LADDER_RUNGS="r14sl r14lp r14sl"`:
+
+    r14sl    4       4       4771   1092   YES
+    r14lp    None    4       None   None   NO
+    r14sl    4       4       4771   1092   YES    <- ran AFTER the failure, still correct
+
+The trailing `r14sl` passing after `r14lp` failed, in the SAME boot, is the strongest control
+available here: the board stayed healthy across the failure, and `r14sl` is bit-for-bit
+deterministic (4771 cycles / 1092 instret in both runs).
+
+It also corrects a caveat written after run 1: `r14lp` does NOT take the core with it, so
+`r14b`'s failure in run 1 was informative rather than collateral. (`r14b`'s historical
+behaviour was RETURNS 4 where 16 is correct, under the older non-perf harness; under this
+harness it produces no END marker. Different domain_main, so do not treat the two as the same
+measurement.)
+
+This is the first result that names a MECHANISM rather than excluding one: a capability store
+to a stack struct array through a **computed (loop-variable) address** fails where the
+identical store through an **immediate offset** succeeds. It is consistent with everything
+else measured: `:147`/`:148` (straight-line) passed; `:142`/`:143`/`:145` all contain
+loop-driven read-back over entries; and `r14b`'s own note that its straight-line entries pass
+while its loop-assigned ones fail.
+
+Caveats kept deliberately, given how many claims were retracted this session: `r14lp` "failed"
+means no END marker within 120 s, i.e. a hang, and the mcause has not yet been read for THIS
+rung; and the two binaries, while matched on globals and cap-table size, have not been diffed
+instruction-by-instruction to confirm the loop form is the only codegen difference. Both are
+cheap to close and are the obvious next steps.
 
 **A control that passes is not a control that always passes.** `f10.dom:0` returned 2/2 under
 firmware `8686cad424cb`, then WEDGED after `SQ: G/enter` under `8c6f5d30905e`, then returned
