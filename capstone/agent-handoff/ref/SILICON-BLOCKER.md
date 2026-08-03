@@ -6,6 +6,45 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — ROOT CAUSE of the NULL capabilities: cap-init drops `base + offset` initialisers
+
+`-mllvm -capstone-cap-init-print` (the flag the pass provides for exactly this) names it:
+
+    wcap : leaf 0  holder=wcap_ptr   path=  value=wcap_data  holder_size=16   <- resolved
+    wcap : leaf 1  holder=wcap_ptr2  path=  value=           holder_size=16   <- EMPTY
+    wc64 : leaf 0  holder=wc64_p0    path=  value=wc64_data                   <- resolved
+    wc64 : leaf 1..63                path=  value=                            <- ALL EMPTY
+
+Store counts are correct (2 for `wcap`, 64 for `wc64`), so nothing is truncated -- the clamp is
+disabled and the stores exist. **What is missing is the VALUE.** Only an initialiser that is a
+bare symbol (`= wcap_data`) resolves; every `base + offset` form
+(`wcap_data + 16`, `wc64_data + i%48`) emits a store with an empty value, which lands as a NULL
+capability. `CapstoneCapGlobalInit.cpp` is a compiler pass, so **this is ours, not the board's.**
+
+**It explains the invalid scale probes.** `wc64`/`wc160` used `data + i%48` for every pointer,
+so all 64/160 were empty-valued and NULL under QEMU AND silicon -- which is precisely why they
+returned 0 in both. They were not "broken builds" in some vague sense: they were miscompiled by
+this bug, and the QEMU differential correctly refused to call that a silicon result.
+
+**What it does NOT yet explain.** `wcap`'s leaf 0 IS resolved (`value=wcap_data`), yet silicon
+returned -62, i.e. `n == 0`, meaning `wcap_ptr` was ALSO null on hardware while QEMU read it
+correctly (retval 4). So there are two distinct failures in play:
+
+    1. COMPILER: `base + offset` cap-global initialisers lose their value  -- proven above,
+       reproduces under QEMU, ours to fix in CapstoneCapGlobalInit.cpp.
+    2. SILICON:  even a correctly-resolved leaf 0 reads back NULL on the board but not under
+       QEMU -- this is the silicon-only part of `wcap`, and it is still unexplained.
+
+**Next, in order:** (a) fix (1) -- find where the pass resolves the initialiser operand and why
+a GEP/offset constant expression yields no value; (b) rebuild `wcap` with a bare-symbol-only
+variant (`p1 = data; p2 = data;`) so BOTH leaves resolve, and re-run on the board: if it still
+returns NULL, (2) is confirmed as an independent silicon fault with a two-line repro; if it now
+returns 4, then (1) was the whole story and the "silicon-only" reading of `wcap` was an artefact
+of a miscompiled second leaf.
+
+**(b) is one compile plus one boot, and it decides whether R-16 is a compiler bug or a hardware
+bug.** Do it before anything else.
+
 ## 2026-08-03 — SOURCE READ: the 8-byte `.capstone_cap_init` clue was a RED HERRING
 
 Read `llvm/lib/Target/Capstone/CapstoneCapGlobalInit.cpp` before spending more board time.
