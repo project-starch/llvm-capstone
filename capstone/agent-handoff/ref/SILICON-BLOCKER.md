@@ -6,6 +6,38 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-04 — Defect 2 is NOT the cap-table slot pointer (chained-cincoffsetimm hypothesis REFUTED)
+
+Hypothesis: `cincoffsetimm(s2, s2, 16)` at the end of the record loop is the CHAINED form
+(`rd == rs1`), so `s2` becomes unusable after its first derivation and only record 0's slot is
+written. This project had already built stages 128/129 to test chained-vs-independent derivation
+and never measured them, so it looked promising.
+
+Tested by deriving the slot FRESH from `gp` every record instead of chaining
+(`slli a4,s3,4; cincoffset(a4,gp,a4); stc(t2,a4,0)`), on top of the copy-length fix:
+
+    r14sl   4   OK      control
+    g1      1/1 OK
+    g2      1/2 WRONG   <- unchanged
+    g3      1/3 WRONG   <- unchanged
+
+**No change.** Exactly one global still initialises at every count, so the cap-table slot pointer
+is NOT the defect. Chained `cincoffsetimm` is exonerated for this path.
+
+**Where defect 2 must therefore live:** the other per-record state — the STORAGE carve
+(`split(t2, sp, t1)` with `t1` walking down) or the blob source pointer. The carve is the more
+suspicious of the two: the GENERATED glue performs the same `split` per global and works at 192
+globals, but it is UNROLLED straight-line code, whereas this is a loop reusing `sp`/`t1` across
+iterations. If `sp` or `t1` is degraded by the first `split`, every later carve is wrong while
+record 0's is fine — which is exactly the observed shape.
+
+**Next probe, and it is cheap:** make the loop derive its carve base fresh each record (or
+unroll two records by hand) and see whether record 1 lands. If it does, the defect is the reuse
+of `sp`/`t1` across `split`s, and the generated glue works only because it never reuses them.
+
+Both fixes are REVERTED in-tree; the glue is at its committed state. Backup of the two-fix
+version: `/tmp/capstone/interp-glue.bak` is the ORIGINAL, so re-apply from the quoted edits.
+
 ## 2026-08-04 — ROOT CAUSE: TWO defects in the interp glue's globals copy
 
 Probes with DISTINCT per-global values and an individual check per global, so the return value
