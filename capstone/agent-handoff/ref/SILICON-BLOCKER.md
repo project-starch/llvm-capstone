@@ -6,6 +6,46 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — R-16 LEAD: interp glue AND many carves is a silicon-only failure (conjunction)
+
+The last untested combination, and it is the one SQLite actually uses.
+
+    r14sl   4     OK      control
+    wbi     4     OK      interp glue + 2 globals + SQLite geometry
+    ri192   0     WRONG   interp glue + 192 carves + SQLite geometry   (QEMU returns 192)
+
+Valid differential: QEMU computes 192 from the identical binary, silicon returns 0 — every one
+of the 192 globals reads as zero. Contrast with the two halves, each already measured:
+
+    interp glue alone      wbi     2 globals,  interp     -> PASS
+    many carves alone      rc192   192 carves, generated  -> PASS
+    BOTH                   ri192   192 carves, interp     -> FAIL
+
+**So it is a conjunction, and it matches SQLite's configuration** (interp glue, 181 carves).
+This is the first rung-scale silicon failure that reproduces SQLite's own build shape, and the
+first real progress on R-16 since the elimination table.
+
+Note what it revises: "carve count is ruled out" was established with `rc192` on the GENERATED
+glue, and stands only for that glue. Under interp, 192 carves fails. The elimination table
+entries should be read as glue-qualified from here on.
+
+**Mechanism candidate, not yet established.** The interp glue is descriptor-driven — a FIXED
+loop over `.capstone_gp_initdesc` records — where the generated glue emits straight-line
+per-global code. All 192 reading zero points at that loop failing to populate the cap table on
+silicon while QEMU's looser model tolerates it. Next probes, cheapest first:
+
+1. **Bisect the carve count under interp**: build ri16 / ri64 / ri128 and find where it breaks.
+   That gives a threshold, and a threshold is what makes this diagnosable.
+2. If a threshold exists, compare it against the 12-bit immediate boundary (127 globals /
+   2047 B table) that the generated glue used to `die()` on — the interp loop may have an
+   analogous limit it silently exceeds rather than diagnosing.
+3. Read the interp glue's descriptor loop (`start-gp-captable-interp.S:117-243`) for an
+   offset/counter that could overflow or wrap at scale.
+
+**Whether this IS R-16 is not yet established:** `ri192` RETURNS 0, whereas R-16 HANGS at entry.
+Same configuration, different symptom. It may be the same defect with the SQLite images failing
+harder, or a second fault in the same glue. Do not conflate them without measuring.
+
 ## 2026-08-03 — RESOLVED: the GENERATED glue never initialises capability-bearing globals
 
 One-variable pair, same source, same boot, in-boot control:
