@@ -714,7 +714,31 @@ rather than `ldc`/`stc`. Whether capstone-c can express a non-`__linear` view of
 span is a compiler/ABI question, not an RTL one, and is unverified — `sbi_capstone.c` has
 no `memcpy` and no scalar-pointer cast anywhere today.
 
-### R-14 — straight-line init of a struct array with distinct string constants wedges `PARTLY SUPERSEDED BY C-16 2026-08-02`
+### R-14 — struct-array init wedges `OPEN — REPRODUCED ON SILICON 2026-08-03; title is now WRONG`
+
+> **2026-08-03 — read `ref/SILICON-BLOCKER.md` first.** Reproduced with BOTH controls passing
+> in one boot (`f10ctl=0 | :0=0 | :144=WEDGE`, 2/2). The wedge is a **capability
+> OUT_OF_BOUNDS fault (mcause=28) taken into M-mode**, where the M-mode side hangs — NOT a
+> revocation-node stall (`wrev=0`, `serving_idx=0`, rev head 602/1023, `overflow=0`).
+>
+> **This heading no longer describes the fault.** Refuted since it was written:
+> * *"distinct string constants"* — `:143` stores the SAME literal 8x and still wedges, and the
+>   standalone `r14b` fails with string merging OFF (`cl::init(false)`, never set by
+>   `build-ladder-domain.sh`). Merging is not necessary for the fault.
+> * *"straight-line"* — `r14b_app.c` records the opposite: its four STRAIGHT-LINE entries pass
+>   and its twelve LOOP-ASSIGNED ones fail.
+> * *offset, and store count* — `:147` (2 stores at high offsets) and `:148` (3 stores) both
+>   return correctly.
+>
+> **The fault is NONDETERMINISTIC**: the same source arm `:141` returned 1 (3 boots), wedged,
+> and returned 0 across images whose frames are byte-identical. Any statement of the form
+> "N stores wedge" is unsafe — one such boundary was already retracted.
+>
+> Current reading (INFERRED): a capability stored to the stack array is not reliably usable on
+> read-back — sometimes correct, sometimes null (returns 0), sometimes right-address/wrong-bounds
+> (dereference => the measured OUT_OF_BOUNDS). Next probe is `:150`, still unmeasured after 5
+> images because R-16 blocks it. Prefer the **standalone** repro (`r14b.dom`, 10896 B, 10
+> carves) over the SQLite-derived images (1624128 B, 181 carves).
 
 **MINIMAL CASE, control-validated on silicon 2026-08-02.** Four straight-line assignments of
 distinct string literals into a two-capability struct array. No SQLite, no allocator, ~10 lines:
@@ -892,7 +916,25 @@ exactly that shape.
 
 ---
 
-### R-16 — domain never returns from its FIRST entry (`SHA5` stall) `OPEN — attribution NOT established`
+### R-16 — domain never returns from its FIRST entry (`SHA5` stall) `OPEN — still unexplained 2026-08-03`
+
+> **2026-08-03.** Now separated from board health for the first time: run a KNOWN-ENTERING
+> image (`f10.dom:0`) as the FIRST domain of every boot. Measured `f10ctl=0` while the image
+> under test stalled in the same boot, on the same firmware — so R-16 is a property of the
+> IMAGE, not of the board or firmware. Every stall verdict must carry such a control; a boot
+> whose control fails is VOID (the control itself wedges ~1 in 5).
+>
+> **Not strictly per-image, either:** `q145` entered for `:0` and hung at `:146`, and `c142`
+> entered for `:0` twice and stalled on `:150` twice — same binary, same boot. So it tracks
+> which invocation runs too, and "deterministic per image" overstates it. Retrying the same
+> binary is still futile; REDRAW instead.
+>
+> `SHA5` last does NOT by itself mean an entry stall — a domain that enters and wedges
+> immediately leaves `SHA5` last too. Distinguish on `SQ: G/enter`: present => it ran.
+>
+> Still unexplained: carve count, `.text` size, merged-string bytes, dom_data geometry, and
+> "carries the ladder block" all fail to separate entering from stalling images. It has blocked
+> 2 of 3 minimisation arms all night, so it **biases which constructs are measurable at all**.
 
 **UPDATE 2026-08-02 23:1x — two corrections, both narrowing this entry.**
 
