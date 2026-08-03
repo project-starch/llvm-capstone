@@ -6,6 +6,31 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — SCALE PROBES wc64/wc160 ARE INVALID (broken under QEMU too)
+
+Scaling `wcap` to 64 and 160 capability-bearing initialised globals to see whether "returns
+NULL" becomes "hangs":
+
+    r14sl    4            OK      control
+    wcap     -62          WRONG   VALID -- QEMU returns 4 from the same binary
+    wc64     0 (exp 64)   WRONG   INVALID -- see below
+    wc160    0 (exp 160)  WRONG   INVALID -- QEMU also returns 0
+
+`wc160` returns **0 under QEMU** (`Called dom (1-th time) retval = 0`), so the scale probes are
+broken builds, not silicon results — the fourth invalid probe this investigation, and the fourth
+caught by the QEMU differential before it was reported as a board finding.
+
+**A clue in the failure:** `.capstone_cap_init` is `size=000008` for `wcap` (2 cap-bearing
+globals), `wc64` (64) and `wc160` (160) alike — it does NOT scale with the number of
+capability-bearing globals. Either the section holds a count/pointer rather than per-global
+records, or only one global is being registered and the rest are never initialised at all, which
+would explain 0 under both QEMU and silicon. Read `CapstoneCapGlobalInit.cpp` and the glue's
+consumer before building another scale probe.
+
+**So the standing minimal repro remains `wcap`** — 2 capability-bearing initialised globals,
+QEMU 4 / silicon -62 — and the "does it become a hang at scale" question is UNANSWERED, not
+answered negatively.
+
 ## 2026-08-03 — MINIMAL REPRO AT RUNG SCALE: `__capstone_cap_init` produces NULL capabilities
 
 **Ten lines of C, ~11 KB domain, QEMU-correct, silicon-wrong.**
