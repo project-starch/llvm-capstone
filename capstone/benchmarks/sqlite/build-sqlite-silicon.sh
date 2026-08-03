@@ -89,9 +89,19 @@ cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
 # ENTIRELY rather than reshaping it, and routes the same data through a path that is already
 # exercised and passing.
 #
-# Opt-in while it is unproven on the board. If it works it should become the default and the
-# de-static should be deleted from build-sqlite-capstone.sh.
-if [[ "${SQLITE_STATIC_BUILTINS:-0}" == "1" ]]; then
+# DEFAULT ON since 2026-08-03. The R-14 construct it removes is a CONFIRMED silicon failure and
+# the workaround is validated at minimal-repro scale: `w1stat` (the big local array moved to a
+# file-scope static) RETURNS 4 on the board where the identical code with the array on the stack
+# (`k1200`) never returns. So leaving the known-failing shape in the default build only
+# guarantees stage 10 wedges.
+#
+# It is NOT yet validated on SQLITE itself: all five static-builtins images built so far
+# (st10, sb10, swa, swa8, swa9) entry-stalled (R-16) before executing any code, so the change has
+# never actually run at SQLite scale. That is an R-16 blockage, not evidence against the
+# workaround -- see ref/SILICON-BLOCKER.md.
+#
+# Set SQLITE_STATIC_BUILTINS=0 to get the old de-static shape back (the R-14 reproducer).
+if [[ "${SQLITE_STATIC_BUILTINS:-1}" == "1" ]]; then
   echo "== R-14 WORKAROUND: restoring aBuiltinFunc to a compile-time-initialised static"
   python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PY'
 import sys, re, pathlib

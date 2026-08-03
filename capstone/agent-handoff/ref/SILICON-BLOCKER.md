@@ -6,6 +6,46 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — R-16 MINIMISATION ROUND 1: carve count and image size are BOTH RULED OUT
+
+First application of the minimise-first strategy to R-16 rather than R-14. The unexploited
+clue: every ~10 KB ladder rung has ENTERED reliably, every 1.6 MB SQLite-derived image has
+ENTRY-STALLED. Two ladders separate the obvious axes, each holding the other fixed, each run
+ascending with `r14sl` as the in-boot control.
+
+    AXIS 1 -- carve count (image ~40-44 KB throughout)
+      rc32   carves=32   image=40336    -> 32   OK
+      rc64   carves=64   image=42224    -> 64   OK
+      rc96   carves=96   image=44112    -> 96   OK
+
+    AXIS 2 -- image size (carves = 1 throughout)
+      rz64k  carves=1    image=104264   -> 7    OK
+      rz256k carves=1    image=300872   -> 7    OK
+      rz1m   carves=1    image=1087304  -> 7    OK
+
+**Both axes pass end to end.** Carve count up to 96 and image size up to **1087 KB** -- two
+thirds of the 1633 KB SQLite image -- neither triggers an entry stall. So R-16 is NOT simply
+"the image got big" and NOT simply "too many cap-table entries", which were the two natural
+first guesses and are now excluded.
+
+**Ceiling worth knowing:** the carve axis cannot go past ~127 on this glue --
+`gen-gp-captable-glue.py` aborts with *"cap-table (2048 B) exceeds a 12-bit immediate; needs
+li+sub (TODO)"*. SQLite reaches 181 only because it uses a DIFFERENT glue
+(`start-gp-captable-interp.S`). That is now the most interesting remaining difference.
+
+**What still differs between the passing `rz1m` and the stalling SQLite images** — the next
+axes to test, in order of promise:
+
+1. **The entry glue itself.** Ladder rungs use `start-gp-captable-generic.S`; SQLite uses
+   `start-gp-captable-interp.S`. Entirely different entry code, and R-16 is an ENTRY stall.
+   This is the strongest remaining candidate and has never been varied.
+2. **Carves ABOVE 127**, which needs the interp glue or the `li+sub` TODO fixed.
+3. **The combination** (large image AND many carves) -- each is individually harmless, and this
+   investigation has already produced one genuine conjunction (R-14's).
+4. `dom_data` geometry, e.g. `SQLITE_HEAP_SIZE=256 KB`, which the rungs do not have.
+
+Cost so far: 2 boots, ~12 minutes, and it eliminated the two leading hypotheses.
+
 ## 2026-08-03 — R-16 SEPARATED FROM BOARD HEALTH FOR THE FIRST TIME (MEASURED)
 
 Every previous R-16 reading was ambiguous: an image that did not enter looked exactly like a
