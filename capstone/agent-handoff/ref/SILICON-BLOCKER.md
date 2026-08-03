@@ -6,6 +6,62 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — R-16 ROUNDS 3-5: three more axes ruled out; the last two are TOOL-BLOCKED
+
+**Enabling fix landed first.** `gen-gp-captable-glue.py` used to `die()` above 127 globals
+("cap-table (%d B) exceeds a 12-bit immediate; needs li+sub (TODO)"), which is exactly why the
+rungs (<=96 carves) and SQLite (181) could never be compared on one glue. Two 12-bit limits were
+involved and both are now handled: the table reservation (`addi` -> `li`+`sub`) and the
+per-entry store offset (`stc t2, i*16(gp)` -> `li`/`cincoffset` register form past entry 127).
+The <=2047 path is byte-identical, verified: `rc96` hashes the same before and after.
+
+**Measured, each with an in-boot control, QEMU-validated first:**
+
+    rc128   128 carves, 2048 B table                    -> 128   OK
+    rc192   192 carves, 3072 B table  (> SQLite's 181/2896)  -> 192   OK
+    rzc1m   192 carves AND ~1.1 MB image, together      -> 192   OK
+
+So **carve count is ruled out even ABOVE SQLite's value**, and the conjunction of size and
+carves — the shape that turned out to be R-14's answer — is ruled out too. Together with
+rounds 1-2: image size (to 1087 KB), carve count (to 192), cap-table size (to 3072 B) and
+their conjunction all fail to reproduce R-16.
+
+**What actually distinguishes the stalling images, per `domdata-budget.py`:**
+
+    every passing rung   allocation pages=18   order=5   tot_size=131072    globals_off small
+    every SQLite image   allocation pages=371  order=9   tot_size=2097152   globals_off=0x150000
+
+That geometry — not image size, not carve count — is the remaining difference. Two attempts to
+mirror it on the ladder path, and BOTH are blocked by the harness rather than by the board:
+
+* **`.bss` growth** (raise storage into the order-9 class): fails with
+  `capstone_error 0xB10B` (blob does not fit) at 64 KB and above with the 32 KB globals window.
+* **Large globals offset** (`link-gpfree-sq.ld`, 0x150000, mirroring SQLite exactly): still
+  `0xB10B`, even trimmed to 361 pages, i.e. BELOW SQLite's 371. Cause is the controller:
+  `ladder_perf_ctl` does not pack a large globals offset into `entry_offset`, so the monitor
+  falls back to 0x1000 — the failure mode `run-sqlite-silicon.sh` already documents for a stale
+  `sqlite_host.user`.
+
+**Both failures were caught by the QEMU differential before reaching the board**, as was the
+`DOMAIN_GLUE=interp` breakage in round 2. Three invalid probes, zero false silicon findings —
+the QEMU gate is doing the work the retractions used to.
+
+### Where R-16 stands, and the one path left
+
+Ruled out: image size, carve count, cap-table size, their conjunction, and (for R-14) every
+compiler-side mechanism. Untested and tool-blocked: the **interp glue** and the **dom_data
+geometry / globals-offset class**. Nothing reproduces R-16 outside SQLite-derived images.
+
+Minimise-from-below has reached the limit of the ladder harness. The remaining approach is
+**minimise-from-above**: keep `build-sqlite-silicon.sh` (which sizes the globals offset, packs
+`entry_offset` via `sqlite_host.user`, and uses the interp glue — all the machinery the ladder
+path lacks) and shrink the PROGRAM instead. Note this is already partly informative: `:0`
+returns before any SQLite code runs and still stalls, so the program is NOT the variable —
+which means the target is to shrink the IMAGE while keeping the SQLite build path, e.g. via
+`SQLITE_TRIM=1` / `SQLITE_OMIT_*` until the geometry crosses back into the passing class.
+Alternatively, teach `ladder_perf_ctl` to pack the globals offset, which makes the whole
+geometry axis testable at 11 KB rung cost.
+
 ## 2026-08-03 — R-16 ROUND 2: the glue axis is NOT YET TESTABLE (the pairing tool is broken)
 
 The most promising remaining axis was the entry glue: ladder rungs use

@@ -153,11 +153,25 @@ def main():
     symtab = read_symtab(main_o) if init_map else {}
 
     table_bytes = count * 16
-    if table_bytes > 2047:
-        die("cap-table (%d B) exceeds a 12-bit immediate; needs li+sub (TODO)" % table_bytes)
 
-    prologue = ["  lcc(t1, sp, 4)                 /* t1 = sp.END */",
-                "  addi t1, t1, -%d               /* reserve N*16 cap-table */" % table_bytes,
+    # Reserving the cap-table was `addi t1, t1, -table_bytes`, whose immediate is 12-bit
+    # SIGNED, so it caps the table at 2047 B = 127 globals and used to die() above that.
+    # That ceiling is not merely inconvenient: it is exactly why the silicon-ladder rungs
+    # (<=96 carves) and the SQLite images (181 carves, 2896 B table) could never be compared
+    # on the same glue, which left an untested band across the boundary while investigating
+    # R-16. Fall back to li+sub past the immediate range.
+    #
+    # t2 is the correct scratch: the macro's documented contract is "Clobbers t1,t2"
+    # (start-gp-captable-generic.S), and t2 is reassigned by the `split(t2, ...)` below
+    # before any use. The <=2047 path is left byte-identical so every existing rung's
+    # codegen is unchanged.
+    if table_bytes <= 2047:
+        reserve = ["  addi t1, t1, -%d               /* reserve N*16 cap-table */" % table_bytes]
+    else:
+        reserve = ["  li t2, %d                      /* table > 12-bit imm: li+sub */" % table_bytes,
+                   "  sub t1, t1, t2                 /* reserve N*16 cap-table */"]
+
+    prologue = ["  lcc(t1, sp, 4)                 /* t1 = sp.END */"] + reserve + [
                 "  split(gp, sp, t1)              /* gp = [t1,END) table; sp = [base,t1) */",
                 "  delin(gp)"]
     lines = []
@@ -260,7 +274,17 @@ def main():
                     else:
                         lines.append("  li t3, 0x%x" % word)
                         lines.append("  sd t3, %d(t2)" % k)
-        lines.append("  stc(t2, gp, %d)               /* cap-table[%d] */" % (i * 16, i))
+        # The cap-table store offset is ALSO a 12-bit signed immediate, so entries past
+        # index 127 cannot be reached with `stc(t2, gp, i*16)`. Use the register form of
+        # cincoffset to materialise the slot address instead -- no immediate involved.
+        # t3/t4 are dead here: both are scratch for the init-copy above, which has already
+        # finished for this entry. gp is unharmed, cincoffset passes rs1 through unchanged.
+        if i * 16 <= 2047:
+            lines.append("  stc(t2, gp, %d)               /* cap-table[%d] */" % (i * 16, i))
+        else:
+            lines.append("  li t3, %d" % (i * 16))
+            lines.append("  cincoffset(t4, gp, t3)        /* t4 = &cap-table[%d] */" % i)
+            lines.append("  stc(t2, t4, 0)                /* cap-table[%d] */" % i)
 
     lines += ["  scc(sp, sp, t1)               /* sp.cursor = top of remaining stack */",
               "  delin(sp)", ".endm"]
