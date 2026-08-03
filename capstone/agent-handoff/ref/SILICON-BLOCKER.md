@@ -6,6 +6,47 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — R-16 ROUND 2: the glue axis is NOT YET TESTABLE (the pairing tool is broken)
+
+The most promising remaining axis was the entry glue: ladder rungs use
+`start-gp-captable-generic.S`, SQLite uses `start-gp-captable-interp.S`, and R-16 is an ENTRY
+stall. `build-ladder-domain.sh` exposes `DOMAIN_GLUE=interp`, which looked like a ready-made
+one-variable pair.
+
+Board result, ascending with `r14sl` (generic) as the in-boot control:
+
+    r14sl      4   OK      generic glue, control
+    gi_r14sl   0   WRONG   SAME SOURCE, interp glue      (oracle 4)
+    gi_rz1m    0   WRONG   SAME SOURCE, interp glue      (oracle 7)
+
+**This is NOT a silicon finding — the interp build is simply broken for these rungs.** QEMU
+differential on the identical pair:
+
+    generic glue   QEMU = 4   board = 4     correct
+    interp  glue   QEMU = 0   board = 0     wrong in BOTH
+
+Returning exactly 0 is the "every global reads as zero" signature, and it reproduces under
+emulation, so `DOMAIN_GLUE=interp` does not initialise the ladder's generated cap-table. The
+descriptor-driven glue evidently needs the descriptor emission that the SQLite path provides and
+this path does not.
+
+**So the glue axis remains UNTESTED**, and the tool that was supposed to test it needs fixing
+first. Recorded because the board result on its own looks exactly like a silicon miscompute, and
+reporting it as one would have been the fourth false mechanism of this investigation. One QEMU
+run cost less than a retraction.
+
+Ways forward on this axis, cheapest first:
+1. Fix `DOMAIN_GLUE=interp` in `build-ladder-domain.sh` so it emits/consumes the descriptors the
+   interp glue expects — then the one-variable pair exists and costs one boot.
+2. Go the other way: build a MINIMAL domain through `build-sqlite-silicon.sh` (which already
+   uses the interp glue) with the amalgamation reduced to nothing, so the SQLite-side variable
+   is the program rather than the glue.
+3. Leave the glue and vary carves ABOVE 127, which needs the `li+sub` TODO in
+   `gen-gp-captable-glue.py` fixed regardless.
+
+**R-16 status after two rounds:** carve count (to 96) and image size (to 1087 KB) are ruled out;
+the glue is untested; nothing yet reproduces R-16 outside the SQLite-derived images.
+
 ## 2026-08-03 — R-16 MINIMISATION ROUND 1: carve count and image size are BOTH RULED OUT
 
 First application of the minimise-first strategy to R-16 rather than R-14. The unexploited
