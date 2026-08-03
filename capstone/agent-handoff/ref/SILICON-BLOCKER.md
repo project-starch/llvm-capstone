@@ -219,10 +219,24 @@ sometimes right-address/wrong-bounds, whose dereference is exactly the measured
 cursor, so a capability can lose tag or bounds and still compare equal — 80 proves the ADDRESS
 survived, not the capability.
 
-**Next probe, in flight:** arm `:150` dereferences the literal repeatedly WITHOUT any stack
-round-trip. If `:150` returns 8 while `:141` faults or returns 0, the damage is in the
-round-trip rather than in the literal's capability. (`ct.dom` carrying it has entry-stalled
-twice so far; redraw as usual.)
+**Next probe, STILL UNMEASURED after 5 images / 9 boots:** arm `:150` dereferences the literal
+repeatedly WITHOUT any stack round-trip. If `:150` returns 8 while `:141` faults or returns 0,
+the damage is in the round-trip rather than in the literal's capability. Every image carrying
+it has failed before reaching it:
+
+    ct    :0=STALL x3 (+1 void control)
+    c141  :0=STALL     c143  :0=STALL     c145  :0=STALL
+    c142  :0=0, then :150=STALL   x2      <- enters, but stalls ON the 150 invocation
+
+Do NOT read "images carrying arm 150 are cursed" into this yet — that is the same shape as the
+"block presence blocks entry" claim already retracted above, on a sample of five near-replicate
+draws. What is fair to say: `:150` is the one probe that would separate round-trip damage from
+literal damage, and R-16 has blocked it on every attempt so far.
+
+Worth noting for whoever picks this up: `c142` failing ON the `:150` invocation while its `:0`
+returns twice means the stall is not purely a property of the image — it tracks which
+invocation runs, consistent with the `q145` observation above that the same binary entered for
+`:0` and hung at `:146` in one boot.
 
 **Not attempted, and why:** `-capstone-merge-string-constants=false` would test the blob story
 directly, but it takes the image to **1026 carves** against a ~1020-entry rev-node pool
