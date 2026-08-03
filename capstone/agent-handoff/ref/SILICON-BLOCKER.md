@@ -6,6 +6,56 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — RETRACTED: there is NO `base + offset` compiler bug (print artifact)
+
+I reported a compiler root cause -- "cap-init drops `base + offset` initialisers, this is ours,
+not the board's" -- on the strength of `-capstone-cap-init-print` showing `value=` blank for
+those leaves. **It is a diagnostic-print artifact.** Verified in the emitted binary:
+
+    __capstone_cap_init:
+      ldc  a1, 0x0(gp)          # slot cap for wcap_ptr
+      ldc  a0, 0x20(gp)         # cap for wcap_data
+      stc  a0, 0x0(a1)          # wcap_ptr  = wcap_data
+      cincoffsetimm a0, a0, 0x10   # <-- THE +16 IS APPLIED
+      ldc  a1, 0x10(gp)
+      stc  a0, 0x0(a1)          # wcap_ptr2 = wcap_data + 16
+
+The print is `errs() << It.Value->getName()` (`CapstoneCapGlobalInit.cpp:222`), and for a
+`base + offset` initialiser `It.Value` is an **unnamed `ConstantExpr` GEP**, so `getName()`
+returns `""`. The pass's own comment at `:112-115` says the full interior pointer is what gets
+stored. Nothing is dropped.
+
+**Consequences:** (a) there is ONE fault here, not two -- the "compiler bug + silicon bug" split
+is withdrawn; (b) `wc64`/`wc160` were NOT "miscompiled by this bug", so why they return 0 under
+QEMU is open again; (c) the only real defect in the pass is the print itself -- it should show
+the operand, not `getName()`.
+
+**Reframing that matters more than the retraction.** `wbare`'s null test compiles to an 8-byte
+INTEGER load of the address word (`ldc a0,0(gp)` then `ld a0,0(a0)`), and the glue's carve loop
+copies the `.data` template -- `.quad wbare_data`, a nonzero link-time address -- into that same
+storage (`start-gp-captable-interp.S:534-560`). So a slot reading back ZERO does not mean "the
+store never happened": something actively wrote zeros over a nonzero template.
+
+Leading explanation, single-fault: **`ldc a0, 0x20(gp)` returned a null/zero capability and the
+`stc` faithfully wrote 16 zero bytes.** The same `a0` feeds both slots, which explains both
+leaves and the clean return. That puts the defect on the LOAD FROM THE CAP TABLE, the same
+family as the isolated `r14lp` result, and `__capstone_cap_init` does three `ldc gp[i]` where the
+passing control `r14sl` does two.
+
+**Cheapest discriminator, one boot, no new mechanism:** build the same rung with
+`DOMAIN_GLUE=generated`, whose glue never calls cap-init at all (`start-gp-captable-generic.S`
+has no `RUN_CAP_INIT`), and compare the address word against the `interp` build. Nonzero with
+`generated` and zero with `interp` => the zeros are written BY cap-init. Zero in both => the
+template copy is at fault and cap-init is exonerated. Run both alongside an `r14sl` control.
+
+**Also worth knowing: capstone-c is not a reference for this problem.** It has no static
+initialisers at all -- `visit_declaration` never reads `init_declarator.initializer`
+(`capstone-c/src/lang.rs:346-368`), and a `char *p = data;` at file scope makes the reference
+compiler panic. Its globals are runtime-carved and uninitialised. Where it does store a
+capability it emits exactly our shape (`ldc gp[i]`; `stc`) with no extra `delin`/`scc`/`split`,
+and its `AddressOf` uses `ldc` + `cincoffsetimm` byte-for-byte as we do. Its own samples never
+exercise the global path.
+
 ## 2026-08-03 — CORRECTION: the cap-init capability is WRONG-VALUED, not NULL
 
 `wdrf` dereferences a cap-init'd global UNGUARDED (no null test), the way SQLite uses such
