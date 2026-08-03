@@ -1,5 +1,10 @@
 # Minimising the FPGA debug cycle
 
+> **2026-08-03:** this doc cites `run_ladder_perf_fpga.py` for boot/gdb behaviour, which is
+> still shared code — but that driver is **DEPRECATED** as a way to deliver a program (it
+> UART-transfers). Bake programs into the image and use `run_baked_rungs_fpga.py` /
+> `run_sqlite_stages_fpga.py`. See `HOW-TO-LAUNCH-ON-FPGA.md` §"UART TRANSFER IS RETIRED".
+
 Read-only investigation, 2026-07-31. No file was edited, no build run, the board was not touched.
 All paths below are relative to `<REPO>/` unless absolute.
 Every number is tagged **M** (measured — reproducible from a quoted file, log or mtime) or **I** (inferred — derived from a measured rate/fit, or bounded by accounting).

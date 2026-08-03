@@ -66,6 +66,8 @@ FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)" \
 
 # capability half
 bash capstone/tests/rtl-smoke/build-ladder-fpga.sh <rungs...>
+# DEPRECATED (UART-transfers each rung). Bake the rungs in instead and use:
+#   BAKED_RUNGS="<rungs...>" python -m fpga_driver.run_baked_rungs_fpga
 FPGA_URL=... LADDER_OPT=<level> python fpga_driver/run_ladder_perf_fpga.py
 ```
 
@@ -85,10 +87,12 @@ builds the rungs that need them at 4 KiB with the broken copy path. That is why
 not reintroduce these as env vars** — a per-rung build property belongs in the one file
 both halves read, same as `-O`. The baseline half discards field 5 deliberately.
 
-**Transfers must show `burst=16` on the FIRST attempt.** `fast_put` sends 16 chars per
-socket.io emit; `burst=1` on the first line means the burst tier was bypassed and the
-transfer will be ~15× slower (it used to emit one round-trip per character). See
-`HOW-TO-LAUNCH-ON-FPGA.md` "Tier-1b".
+**RETIRED 2026-08-03 — there are no transfers any more.** This section used to require
+`burst=16` on the first attempt of a `fast_put`. UART delivery is now banned outright: bake
+the rungs into the buildroot image and invoke them from the shell. `run_ladder_perf_fpga.py`
+is DEPRECATED (it transfers); the sanctioned driver is
+`fpga_driver/run_baked_rungs_fpga.py`, which runs a whole set in ONE boot with no transfer at
+all. See `HOW-TO-LAUNCH-ON-FPGA.md` §"UART TRANSFER IS RETIRED".
 
 **Throughput:** `LADDER_DISTINCT_VA=1` + `LADDER_ONE_BOOT=1` runs a whole sweep in one
 boot instead of one boot per rung (R-3 is address-keyed). Validated measurement-safe: a

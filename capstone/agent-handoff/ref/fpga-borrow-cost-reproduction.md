@@ -93,8 +93,13 @@ built-in (`/dev/capstone` at boot) and the freestanding tools (`base64`, `gunzip
 - `capstone.ko` must match the UP vermagic if loaded via `insmod`; the built-in path
   avoids this (and `insmod` can hang this CVA6's module loader).
 
-The probe binaries do **not** need to be baked in — the runner UART-transfers them at
-run time (§7). Full container build recipe: `history/19-07-2026_*fpga-mode-build-run*.md`.
+The probe binaries **MUST be baked in** (2026-08-03). An earlier revision of this line said
+they "do not need to be baked in — the runner UART-transfers them at run time"; UART delivery
+is now retired, because each socket.io emit carries 16 chars over an HTTPS round trip and a
+~10 KB domain costs minutes, while a baked one is free inside the JTAG upload that happens
+anyway. Copy them into `overlay/test-domains/` AND `build/target/test-domains/`, then
+`A=linux-rebuild` followed by `A=opensbi-rebuild`. Full container build recipe:
+`history/19-07-2026_*fpga-mode-build-run*.md`.
 
 ## 6. Bitstream
 
@@ -113,8 +118,9 @@ overwrote it), re-flash the board owner's file (the one authorized persistent wr
 `board_run_breakdown.py` (in `/tmp/capstone/`) does the whole flow and is the
 template: connect → lock → **verify bitstream** (re-flash if wrong) → power-cycle →
 `upload_boot_image` → gdb `load_image` @0x80000000 → `set $pc`, `$a0=0`, continue →
-wait for `login` → quiet the console → confirm `/dev/capstone` → UART-transfer the
-controller+domain (gzip+base64, per-chunk sha256, retry) → run bracketed by unique
+wait for `login` → quiet the console → confirm `/dev/capstone` → **invoke the BAKED
+controller+domain from the shell** (`/test-domains/...`; the UART-transfer step it used to do
+here — gzip+base64, per-chunk sha256, retry — is retired) → run bracketed by unique
 BEGIN/END markers → harvest the `RESULT` line → **power off + unlock in `finally`**.
 Run it under the venv; the resilient socket wrapper survives transient drops.
 

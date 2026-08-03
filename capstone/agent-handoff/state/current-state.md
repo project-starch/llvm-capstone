@@ -2,6 +2,24 @@
 
 Minimal snapshot. Read first in every session.
 
+## HOW PROGRAMS REACH THE BOARD CHANGED (2026-08-03) — UART TRANSFER IS RETIRED
+
+**Never ship a program to the board over the UART console again.** Bake it into the buildroot
+image (`overlay/test-domains/` AND `build/target/test-domains/`, then `A=linux-rebuild`
+followed by `A=opensbi-rebuild`) and invoke it from the shell. Measured: a ~10 KB domain took
+MINUTES to transfer (16 chars per socket.io emit, each an HTTPS round trip), while the same set
+baked in ran **10 domains in ONE boot in ~5 minutes** — the JTAG upload happens anyway.
+
+* Sanctioned drivers: `fpga_driver/run_baked_rungs_fpga.py` (ladder rungs),
+  `fpga_driver/run_sqlite_stages_fpga.py` (SQLite / staged probes).
+* DEPRECATED, each now carrying a header saying so: `run_ladder_perf_fpga.py`,
+  `run_sqlite_fpga.py`, `run_ladder_base_fpga.py`. They still transfer.
+* **The baked driver does not reboot between programs**, so everything after the first
+  failure is collateral: at most ONE unknown per boot, last, after a known-good control.
+
+Full rules: `ref/HOW-TO-LAUNCH-ON-FPGA.md` §"UART TRANSFER IS RETIRED". Older sections of THIS
+file that describe `fast_xfer`/tier-1 transfer as current (below, ~lines 350-365) are history.
+
 ## Latest (2026-07-28) — bare-metal baseline works; ALL overheads revised UP
 
 **Read `history/28-07-2026_02-30-00_RESULTS-bare-metal-baseline-works-*` before any

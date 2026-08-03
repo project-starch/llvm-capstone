@@ -10,9 +10,10 @@ can also use the browser GUI. Every step and gotcha is in the KB files below.
 > `capstone/agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md` first, then the runbook
 > `ref/gp-free-silicon-smoke-runbook.md` and KB
 > `history/22-07-2026_18-05-00_gp-free-silicon-smoke-firmware-fixed-createdomain-hangs.md`.
-> Build the firmware with the recipe in memory `project_fpga_fw_payload_build_recipe`,
-> lock the board, power-cycle, boot, transfer + run, harvest the result, then
-> **power off + unlock**. Board is flaky/slow (~2 min to JTAG-load 15 MB); one
+> BAKE the program into the buildroot image (never ship it over UART — see
+> §"UART TRANSFER IS RETIRED"), build the firmware with the recipe in memory
+> `project_fpga_fw_payload_build_recipe`, lock the board, power-cycle, boot, invoke the
+> baked program from the shell, harvest the result, then **power off + unlock**. Board is flaky/slow (~2 min to JTAG-load 15 MB); one
 > persistent write only (bitstream re-flash) and only if authorized.
 
 **Running SQLite, or any staged probe?** Read
@@ -53,9 +54,11 @@ between.
 
 ## Tooling (already on disk)
 
-- Driver + venv: `/tmp/capstone/fpga-venv/bin/python`, drivers `board_run_*.py`
-  (boot fw → UART-transfer gzip+base64 sha-verified → run → harvest),
-  `board_reflash_only.py` (re-flash only). Protocol: `tests/rtl-smoke/socketio-api.md`,
+- Driver + venv: `/tmp/capstone/fpga-venv/bin/python`, drivers under
+  `tests/rtl-smoke/fpga_driver/`. The sanctioned ones boot the firmware and invoke a
+  program ALREADY BAKED INTO THE IMAGE (`run_baked_rungs_fpga.py`,
+  `run_sqlite_stages_fpga.py`); the UART-transferring ones are deprecated — see
+  §"UART TRANSFER IS RETIRED". `board_reflash_only.py` (re-flash only). Protocol: `tests/rtl-smoke/socketio-api.md`,
   `tests/rtl-smoke/fpga_driver/`.
 - Board URL token: **`FPGA_URL` environment variable, for the duration of ONE run.**
   The console URL embeds the access token in its path, so it is a credential: never
@@ -66,64 +69,70 @@ between.
 - A local `.bit` is NOT needed — re-flash names the **server-side** bitstream
   `working-caplifive-captype-fixed.bit`.
 
-## Running faster + running a suite (transfer tiers)
+## UART TRANSFER IS RETIRED — BAKE EVERY PROGRAM INTO THE IMAGE
 
-The old bottleneck was per-run UART transfer. Two levers, in order:
+**Standing rule (2026-08-03): do not ship a program to the board over the UART console.**
+Put it in the buildroot image and let it ride the firmware over JTAG, which happens anyway.
+The transfer tiers below this line are kept only as history so nobody rebuilds them.
 
-- **Tier-1 `fast_xfer` (DONE, board-validated ~3×).** Use
-  `tests/rtl-smoke/fpga_driver/fast_xfer.py` `fast_put` for every domain transfer
-  (direct-append base64 chunks, single final-sha guard, safe-retry on mismatch). A
-  controller is now ~30 s vs ~4 min. Memory `project_board_transfer_tiers`.
-- **Tier-1b BURSTING — do not regress to one emit per character (2026-07-28).**
-  `fast_put`'s first tier now sends **16 characters per socket.io emit**, ~15× fewer
-  round-trips. It had been emitting **one `uart_send` per character**, so a 6,032-char
-  domain cost 6,032 HTTPS round-trips — and the round-trip, not the UART, was the
-  wall clock.
-  **The char-by-char throttle was solving a real problem, just not this one.** The
-  board's ns16550a RX FIFO does overrun on a bulk write and silently drop characters
-  (`fpga_console.run_command` records `borrow_cost` arriving as `row_cost`). But that
-  bounds **bytes in flight before the UART drains**, not bytes per emit. 16 = the
-  FIFO depth, so a burst fills it at most once and drains in ~1.4 ms at 115200 baud,
-  against a ~20 ms inter-burst delay.
-  Guarded exactly like the existing tiers: whole-file sha after every attempt,
-  escalating `burst(16) → fast(1) → safe(1) → safest(1)`. The last three are the old
-  behaviour verbatim, so a board that cannot take bursts costs one wasted attempt and
-  nothing else. Verified offline that burst=16 emits a **byte-identical** stream to
-  burst=1 and never exceeds 16 chars per emit.
-  **If a transfer looks slow again, check this first** — the symptom is a log line
-  with `burst=1` on the FIRST attempt rather than `burst=16`.
-- **Batch many domains in ONE session — BLOCKED today by the multi-domain hang.**
-  The firmware JTAG-load (~2 min, 15 MB) dominates, so in principle you boot once
-  and loop `fast_put dom → run → read mcycle → next`. **But a second domain reused
-  at the same entry VA (`0x10000`) within one boot silently hangs its `cscall`** —
-  the missing domain-boundary `fence.i` / icache-coherence gap (RTL does no icache
-  invalidate on the switch). Until that monitor fix lands, each rung must run as the
-  *first* domain of a clean boot ⇒ **one full power-cycle + firmware reload per
-  rung (~2.5 min each)**. This per-rung cost is the real board-time bottleneck, and
-  **no transfer tier removes it** — the unlock is the `fence.i` domain-boundary fix
-  (`plans/curried-crunching-gizmo.md`), which is a monitor change gated on
-  monitor-regen (see below).
-- **Tier-2b / "route B" (JTAG `load_image` + resident/baked controller)** — the
-  suite/SQLite scaling path. Two variants, and a key clarification learned 2026-07-25:
-  - **Route A — live poke** (gdb `monitor load_image dom <addr>` into a reserved RAM
-    region): **confirm the reserved-region address/size with the board owner before
-    use — never guess a RAM address** (else it stomps the booted kernel). This is what
-    the "never guess an address" rule guards.
-  - **Route B — bake domains into the firmware initramfs and reload the whole image**
-    ("recompile the image"): needs **no** reserved address (the `fw_payload` has a
-    built-in initramfs), but requires a firmware-image rebuild ⇒ **gated on the
-    monitor-regen boot-hang** (below).
-  - **Neither route cuts the per-rung power-cycle cost** — both still reload the image
-    per boot and both still hit the same-VA multi-domain hang. Tier-2b is the on-ramp
-    for domains too big for Tier-1 transfer (SQLite-scale), **not** a speedup for a
-    handful of tiny integer rungs (Tier-1 in one session is right for those). Design:
-    `plans/sqlite-on-silicon-scoping.md` §"Delivery mechanism".
+**Why.** UART delivery moves 16 characters per socket.io emit, and each emit is an HTTPS
+round trip — the network, not the UART, is the wall clock. Measured 2026-08-03: shipping a
+~10 KB domain took **minutes**, while the same set BAKED INTO THE IMAGE ran **10 domains in
+ONE boot in ~5 minutes**, because a 10 KB domain is free inside a JTAG upload that is already
+happening. The board owner's own answer, when asked how to deliver a binary, was in substance
+*"isn't it built into the buildroot image and loaded through JTAG? Why do we need UART?"*
 
-- **GOTCHA — never run stale domain binaries.** The ladder-perf runner reuses an
-  existing `<rung>.dom` and does **not** rebuild it. On 2026-07-25 this made a sweep
-  run pre-fix binaries and report 4 bogus "silicon miscompiles" that were actually an
-  already-fixed compiler bug. **Delete `$OUT_DIR/ladder-fpga/*.dom` (or force-rebuild)
-  before every sweep** so the current compiler is exercised.
+### The one workflow
+
+```bash
+O=capstone/caplifive-system/sw/buildroot/overlay/test-domains
+T=capstone/caplifive-system/sw/buildroot/build/target/test-domains
+cp -f <artifact> "$O/" && cp -f <artifact> "$T/"      # BOTH dirs -- buildroot packs $T
+cd capstone/caplifive-system/sw/buildroot
+make build LINUX_PAYLOAD=1 A=linux-rebuild  CAPSTONE_CC_PATH="$(realpath ../../../capstone-c)"
+make build LINUX_PAYLOAD=1 A=opensbi-rebuild CAPSTONE_CC_PATH="$(realpath ../../../capstone-c)"
+```
+
+`A=linux-rebuild` FIRST: buildroot does not track `overlay/` -> cpio, so an OpenSBI-only
+relink silently ships the OLD initramfs. Then run with a driver that invokes the baked
+artifact from the shell:
+
+| What you are running | Driver | Invocation on the board |
+|---|---|---|
+| silicon-ladder rungs | `fpga_driver/run_baked_rungs_fpga.py` | `/test-domains/lpc <rung> /test-domains/<rung>.dom` |
+| SQLite / staged probes | `fpga_driver/run_sqlite_stages_fpga.py` | `/test-domains/sqlite_host.user <dom> [selector]` |
+
+```bash
+export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"   # credential, never commit
+export FPGA_FW=.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin
+BAKED_RUNGS="clp1 clp8 r14sl" python3 -m fpga_driver.run_baked_rungs_fpga
+```
+
+### THE DRIVER DOES NOT REBOOT BETWEEN PROGRAMS
+
+A wedged program takes the core, so **every program after the first failure is collateral,
+not a result.** This produced a wrong verdict within an hour of the baked path existing:
+`e3rd` failed at position 4 of a 6-program boot, and `e4wr` and `r14lp` were recorded as
+failures; re-tested one-unknown-per-boot, **`e4wr` passes**. Rules:
+
+* at most **ONE unknown per boot**, placed **last**, after a known-good control;
+* read a run **no further than its first failure**;
+* everything expected to return goes first, in ascending order.
+
+### Retired: the UART transfer tiers (do not rebuild these)
+
+`fast_xfer.py` (`fast_put`), the `burst(16) -> fast -> safe -> safest` escalation and the
+`gzip+base64` + per-chunk-sha protocol were a real ~3x win over one-emit-per-character, and
+the 16-char burst is the ns16550a FIFO depth so it was correctly derived. None of that matters
+now: baking removes the transfer entirely. `run_ladder_perf_fpga.py`, `run_sqlite_fpga.py` and
+`run_ladder_base_fpga.py` still transfer and are **deprecated** — each now carries a header
+saying so. Keep `fast_xfer.py` on disk only because those legacy drivers import it.
+
+One thing from that era that is NOT retired, because it is about the board and not the
+transport: **a second domain reused at the same entry VA (`0x10000`) within one boot can
+silently hang its `cscall`** (R-3, no icache invalidate on domain switch). Baking does not fix
+it. Either link rungs at distinct `DOMAIN_BASE_VA`s, or accept one program per boot — and
+never enable a one-boot sweep across same-VA domains without saying so in the write-up.
 
 ## Rebuilding the monitor — SOLVED 2026-07-28, but delete the stale objects first
 
@@ -160,6 +169,9 @@ path); until it's pinned in-tree, **use the existing working prebuilt as-is** fo
 board runs. Memory `project_opensbi_monitor_rebuild_include_wrapper`.
 
 ## Large domains go in the BUILDROOT IMAGE over JTAG, not over UART (2026-07-28)
+
+> **Superseded 2026-08-03 by §"UART TRANSFER IS RETIRED": this now applies to EVERY program,
+> not just large ones.** Kept for the board owner's rationale below.
 
 For anything bigger than a few tens of KB, build it into the FPGA buildroot image and
 let it ride the firmware over JTAG. The board owner's answer when asked how to deliver
