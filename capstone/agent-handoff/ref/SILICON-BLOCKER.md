@@ -6,6 +6,36 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-04 — Also REFUTED: the "NONLIN sp is not consumed by split" theory
+
+The interp glue does `delin(sp)` early (`start-gp-captable-interp.S`, C-4b), while the generated
+glue delins only on the copy path. That suggested: once `sp` is NONLIN, `split(t2, sp, t1)`
+returns `t2` without narrowing `sp`, so every record carves the SAME region and only one global
+ends up correct — which matches the 1/1, 1/2, 1/3 shape exactly.
+
+**The RTL says otherwise** (`capstone_dyn_unit.anvil`, `func SPLIT`, :139-145):
+
+    let rs1_orig = rs1;
+    let rs1 = call modify_cap_end(rs1, val);         /* rs1 keeps [start, val) */
+    let rd  = call modify_cap_start(rs1_orig, val);  /* rd  gets [val, end)    */
+    let result = call create_result_pack(..., rs1, rd);   /* BOTH written back */
+
+The write-back of the narrowed `rs1` is unconditional; the LINEAR/NONLIN test at `:120` is a
+type GUARD, not a gate on the update. So `split` narrows `sp` whether it is LINEAR or NONLIN,
+and this theory is refuted without spending a boot.
+
+**Standing state of defect 2** — "only record 0 initialises, at every global count":
+* NOT the cap-table slot pointer (fresh-from-`gp` derivation changed nothing) — MEASURED.
+* NOT `split` failing to consume a NONLIN `sp` — REFUTED from the RTL above.
+* Remaining candidates: the blob SOURCE pointer's per-record advance, or `t1`'s walk-down
+  arithmetic, or the descriptor read itself returning stale/zero fields for records 1+.
+  The cheapest discriminator is a probe that RETURNS the per-record values the loop computed
+  (blob_off, size, the carve base) for records 0 and 1, rather than inferring them from whether
+  the global ended up correct — the loop already has a diagnostic-publish mechanism
+  (`INTERP_PEEK_OFF`, STAGE 11) built for exactly this.
+
+Glue is at its committed state; both experimental fixes reverted.
+
 ## 2026-08-04 — Defect 2 is NOT the cap-table slot pointer (chained-cincoffsetimm hypothesis REFUTED)
 
 Hypothesis: `cincoffsetimm(s2, s2, 16)` at the end of the record loop is the CHAINED form
