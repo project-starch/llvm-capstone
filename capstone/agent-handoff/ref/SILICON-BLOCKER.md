@@ -6,6 +6,55 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — RTL STUDY: cap-init is NOT R-14's mechanism (closed from the disassembly)
+
+An RTL read of `capstone-ariane` flagged one shared-mechanism candidate as most promising and
+left it open pending disassembly: does `__capstone_cap_init` emit R-14's failing shape — an
+`stc` with a NON-ZERO immediate off a register-form `cincoffset` base? **It does not:**
+
+    ldc  a1, 0x0(gp)
+    ldc  a0, 0x20(gp)
+    stc  a0, 0x0(a1)            <- immediate 0x0, base from ldc gp[i]
+    cincoffsetimm a0, a0, 0x10
+    ldc  a1, 0x10(gp)
+    stc  a0, 0x0(a1)            <- immediate 0x0
+
+Both stores use **imm=0** with a cap-table-derived base. R-14 fails specifically on non-zero
+immediates off a register-form `cincoffset` base (`k1200` fails / `h2adj` passes), and `zoff`
+already showed that forcing imm=0 does NOT rescue R-14. **So the cap-init fault and R-14 are
+different shapes** — the "same defect at different scales" idea is refuted from both ends, and
+should stop being repeated.
+
+**What the RTL read established (quoted, worth keeping):**
+
+* `STC` checks only the DESTINATION (`rs1`) — type, permission, bounds, revocation validity
+  (`capstone_dyn_unit.anvil:356-430`). An invalid destination FAULTS; it does not silently
+  miscompute. So "the destination slot was invalid" does not explain a silent wrong value.
+* Cursor and compressed metadata are written in the SAME commit-queue entry / same physical
+  request (`store_buffer.sv:171-176`), so the "cursor lands but metadata doesn't" hypothesis is
+  **REFUTED** — there is no split-write path.
+* The monitor's globals blob copy is one-shot inside `create_domain`, strictly before first
+  entry (`sbi_capstone.c:589-836,792-796`), using plain `ld`/`sd` by design so it never touches
+  `compress_cap`. So blob-copy-clobbers-cap-init is not an ordering inversion at monitor level.
+* **A real, structural, QEMU-invisible divergence exists:** the RTL compresses bounds losslessly
+  only in special cases (`compress_bounds`/`compress_cap`, `ariane_pkg.sv:753-835`), while
+  QEMU's memory-side tracking (`cm_map`, `op_helper.c`) keeps EXACT fat bounds and never
+  compresses. A whole class of precision-loss bugs therefore cannot reproduce under QEMU by
+  construction. Not proven to be `wbare`'s cause — `wbare`'s bare-symbol initialisers hit the
+  compressor's lossless `cursorless` branch — but it is the standing reason QEMU agreement is
+  weak evidence about silicon.
+
+**Still UNRESOLVED and needing more than a source read:** whether the glue re-runs cap-init on
+re-entry; a race in the `STC` exception-vs-commit handshake (`capstone_store_syncer`,
+`dyn_unit.anvil:680-751`); and a cache-level forwarding hazard between the blob copy's plain
+`sd` and a later `stc` to the same line. The first is a source question; the last two need
+simulation, not reading.
+
+**The cheapest open experiment is unchanged and still unrun:** build the same rung with
+`DOMAIN_GLUE=generated` (whose glue never calls cap-init) and compare the address word against
+the `interp` build — it decides whether the zeros are written BY cap-init or by the template
+copy, in one boot.
+
 ## 2026-08-03 — RETRACTED: there is NO `base + offset` compiler bug (print artifact)
 
 I reported a compiler root cause -- "cap-init drops `base + offset` initialisers, this is ours,
