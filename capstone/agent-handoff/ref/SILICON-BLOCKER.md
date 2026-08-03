@@ -6,6 +6,52 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — AUDIT CORRECTIONS to the R-16 rounds (three of my claims were wrong)
+
+Independently verified against the sources; each was load-bearing.
+
+1. **"`ladder_perf_ctl` does not pack the globals offset, so the monitor falls back to 0x1000"
+   — REFUTED.** `capstone/tests/rtl-smoke/ladder_perf_ctl.c:282,311` derives it from the section
+   address and packs it: `a.entry_offset = c.entry_offset | (c.globals_off << 32)`. The rungs
+   prove it works: `rz1m` returned 7 with `globals_off=0x108020`.
+
+2. **My custom linker scripts CAUSED the 0xB10B I blamed on the controller.**
+   `build-ladder-domain.sh:42-45` already accepts `DOMAIN_WINDOW=<any>` and seds it into the
+   correct script — the same mechanism `build-sqlite-silicon.sh:299` uses. My hand-made
+   `link-gpfree-sq.ld` / `-2m.ld` (and the stock `-32k.ld`) do **not** place
+   `.capstone_gp_initdesc`, so lld orphan-places it next to `.text`, `globals_off` reads as
+   ~0x3f0, and the monitor's guard (`sbi_capstone.c:744-754`) fires arithmetically.
+   `DOMAIN_WINDOW=0x150000` gives an 11 KB rung with SQLite's geometry today, no new script.
+   **Treat `-sq`/`-2m`/`-32k` as traps** until they place initdesc and put `.bss` in the
+   `PT_NULL` nobits phdr the way `link-gpfree.ld:53-58,88-97` does.
+
+3. **"Every passing rung is order-5 / 128 KB" — FALSE.** Only the tiny control is.
+   `rz1m` = pages 281 and `rzc1m` = pages 283, both **order 9 / 2 MB** — already the class I
+   called unique to the stalling images. Verified with the project's own budget script.
+
+The audit also reached, independently, the same conclusion as the section below: **`f10` — the
+known-good in-boot control — has pages-for-pages the stalling geometry (371 pages, order 9,
+`globals_off=0x150000`, blob 75120)**, so no static geometry attribute can be the discriminator.
+It further notes `sqlite_silicon` (full SQLite, 179 carves) is recorded ENTERING reliably at
+`SILICON-BLOCKER.md:1536,1551`, i.e. the premise "all SQLite images stall" was refuted 1200
+lines earlier in this very document and I relaunched from it anyway.
+
+**Also flagged, and correct:** every "ruled out" rung verdict is N=1, on a failure this document
+itself records as not strictly per-image. Those axes are *not* safely ruled out; they need a
+stall-RATE (3-5 runs per image in one boot) before the wording goes anywhere durable.
+
+### Best next experiment (from the audit, and better than mine): swap the LOADER, not the image
+
+Zero rebuilds. Run an already-stalling `.dom` through the ladder controller `lpc` in the same
+boot as `sqlite_host.user`. Both binaries are already in the initramfs. The two loaders differ
+in ways never varied: `lpc` builds an anonymous pre-`memset`, per-segment-`memcpy`'d buffer
+(`ladder_perf_ctl.c:243-254`), while `libcapstone.c:135-137` passes a pointer into a
+`MAP_SHARED` file mapping that the kernel `copy_from_user`s 1.4 MB from; `lpc` creates one
+region and one share, `sqlite_host.c:115-140` creates two and shares twice.
+
+    enters under lpc, stalls under sqlite_host -> the IMAGE is exonerated; the loader is the variable
+    stalls under both                          -> the image is implicated, and the ladder becomes a valid vehicle
+
 ## 2026-08-03 — R-16 REFRAMED: it tracks SQLITE_STATIC_BUILTINS, and the two issues are COUPLED
 
 **A false premise ran through this whole investigation, including my own write-ups above:**
