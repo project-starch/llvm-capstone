@@ -6,6 +6,47 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-04 — DEFECT 2 LOCALISED: the cap table is CORRECT; only ONE record's COPY lands
+
+Two direct observations, replacing inference with measurement.
+
+**1. The cap table is fine.** `pk` reads slots 0 and 1 with `ldc gp[i]` and inspects them with
+`lcc` (so the diagnostic does not depend on global init):
+
+    pk = 117  ->  type0 = type1 = 1 (NONLIN), flags = 7:
+                  slot0.start != 0, slot1.start != 0, and the two are DISTINCT
+
+So the record loop carves per-record correctly and populates every slot with a valid, distinct
+storage capability. **The carve, the slot pointer and the descriptor walk are all exonerated.**
+Defect 2 is purely in the CONTENT copied into those (correct) carves.
+
+**2. Exactly one record's copy lands — and it is NOT record 0.** `vv` returns the actual bytes of
+three distinct globals as `b0 + 10*b1 + 100*b2` (correct = 321):
+
+    unfixed glue          vv = 0     all three zero (defect 1: size-2 goes to the byte tail)
+    with copy-length fix  vf = 300   b2 = 3 CORRECT, b1 = 0, b0 = 0
+
+Only the LAST-DECLARED global has its data. Since the glue walks descriptors in the reverse of
+declaration order, that is the **first-processed** record. So the shape is: *the first copy the
+loop performs succeeds; every later copy silently does nothing.*
+
+This corrects the earlier reading of `mf2`/`mf3` = 1: I assumed "record 0 works". It is the
+first-PROCESSED record that works, which is a different statement and points at loop-carried
+state in the COPY, not at ordering of the globals.
+
+**What remains for defect 2:** the copy's per-record source/destination state — the blob view
+`s1`, the destination pointer `t6`, or the byte counters `a5`/`a6` — is not re-established for
+the second and later records. The carve and cap-table are proven good, so nothing outside the
+copy needs re-examining.
+
+**Cheapest next probe:** publish the copy's source and destination ADDRESSES for the first two
+records (same `lcc`/return-a-number technique as `pk`), rather than inferring them from the
+bytes. If the destination is identical across records the destination pointer is stale; if the
+source is identical the blob view is; if both advance correctly the failure is in the loop's
+counter reset.
+
+Glue reverted to its committed state.
+
 ## 2026-08-04 — Also REFUTED: the "NONLIN sp is not consumed by split" theory
 
 The interp glue does `delin(sp)` early (`start-gp-captable-interp.S`, C-4b), while the generated
