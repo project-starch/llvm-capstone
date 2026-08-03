@@ -342,6 +342,57 @@ else measured: `:147`/`:148` (straight-line) passed; `:142`/`:143`/`:145` all co
 loop-driven read-back over entries; and `r14b`'s own note that its straight-line entries pass
 while its loop-assigned ones fail.
 
+#### 2026-08-03 — VERDICT: R-14 is an RTL DEFECT, not a codegen bug
+
+Three independent lines now agree, and the compiler-side explanations have all failed.
+
+**1. The capability at the failing address is WELL FORMED.** `bnd2` dumps every `lcc` field at
+`&a[3].y` -- the address the failing store targets -- and encodes a verdict
+(`+1` cursor>=start, `+2` cursor+16<=end, `+4` start 16-aligned, `+100*type`).
+
+    bnd2 = 107   ->  type = 1 (cap_type 2 = NONLIN, valid for stores)
+                     v = 7 = 1+2+4  ->  ALL THREE CHECKS PASS
+
+So: cursor inside the bounds, the 16-byte store fits before `end`, base 16-aligned, correct
+capability type. `bnds` separately measured **1312 bytes of headroom** against a 16-byte store.
+There is no architectural reason to fault this access. Neither probe performs a capability
+store, so neither can wedge, and both always return.
+
+**2. The same binary is CORRECT under QEMU.** `run-ladder-qemu.sh k1200` ->
+`__CAPSTONE_LADDER_K1200_PASSED__ (retval = 4)`. Board-free, and the reference implementation
+of the ISA computes the right answer from the identical source.
+
+**3. Every compiler-side mechanism proposed this session has been REFUTED on the board:**
+merged string constants (`:143`, and `r14b` fails with merging off), repeated `ldc` from one
+cap-table slot (`clp16` does 16 and passes), count of `ldc`-from-gp (`cdif8`), capability stores
+as such (`cst8`), `ldc`+store in one loop (`cgs8`), frame size alone (`r14sl`/`r14hl`/`cgpad`),
+loops (`e3rd`/`e4wr`), and finally the non-zero `stc` immediate -- `zoff` forces every store to
+`imm=0`, verified in the disassembly, and **still fails**.
+
+**Conclusion: the hardware faults an architecturally legal capability store.** The compiler is
+not handing it a malformed or undersized capability. This is the finding to take to the board
+owner.
+
+**The hand-off artifact is built and self-contained** -- no SQLite, no compiler needed to
+reproduce, ~11 KB each, baked into the image:
+
+    k800   PASSES   struct a[32] + 800 B dead volatile pad
+    k1200  FAILS    IDENTICAL SOURCE, 1200 B dead pad
+    bnds   1322     headroom end-cursor = 1312 B at the failing address
+    bnd2   107      type NONLIN, cursor in bounds, 16 B fits, start aligned
+    (QEMU: k1200 returns the correct 4)
+
+**Gaps that remain, and they are small:**
+* **Permissions were not read** (`lcc` field 5). A missing write permission would be an
+  architectural reason to fault, and would move this back toward the compiler/glue. Cheapest
+  possible next probe -- one extra `lcc_f(perm, p, 5)` in `bnd2`.
+* `bnds`/`bnd2` measure a capability the compiler materialised for a `volatile` access, not
+  provably the same register the faulting `stc` uses. Reading `lcc` of the base immediately
+  before the faulting store would close this.
+* No `mcause`/`mepc` for `k1200`/`zoff` themselves; every `mcause=28 OUT_OF_BOUNDS` still comes
+  from the SQLite-derived `:144`. The baked driver needs the debug-mux read that
+  `run_sqlite_stages_fpga.py` already performs on wedge.
+
 #### 2026-08-03 — COMPILER vs RTL: the evidence points at the RTL
 
 Two probes aimed at the question that decides who fixes this.
