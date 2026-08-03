@@ -342,6 +342,53 @@ else measured: `:147`/`:148` (straight-line) passed; `:142`/`:143`/`:145` all co
 loop-driven read-back over entries; and `r14b`'s own note that its straight-line entries pass
 while its loop-assigned ones fail.
 
+#### ROOT CAUSE ISOLATED 2026-08-03 — repeated `ldc` from the SAME cap-table slot
+
+Third arm, `r14hl`: the loop of `r14lp` with the cap-table loads HOISTED out of it. Same loop,
+same register-form `cincoffset` computed addresses, same eight capability stores.
+
+    rung     retval  oracle  cycles  instret  correct
+    r14sl    4       4       4759    1092     YES     straight-line, one ldc per literal
+    r14hl    4       4       5251    1246     YES     SAME loop + computed addrs, ldc HOISTED
+    r14lp    None    4       None    None     NO      SAME loop, ldc from gp INSIDE the loop
+    r14sl    4       4       4759    1092     YES     closing bracket
+
+**Therefore:**
+
+* the **computed (loop-variable) address is innocent** — `r14hl` uses it and passes, which
+  retracts the mechanism named one step earlier ("a store through a computed address fails");
+* **repeated `ldc` from a STACK slot is innocent** — at `-O0` `r14hl`'s loop reloads the hoisted
+  literal from a stack slot every iteration (`ldc a0, 0x0(a0)`, verified in the disassembly)
+  and still passes;
+* **re-loading the SAME gp cap-table slot is the trigger** — the one thing only `r14lp` does
+  (`ldc a2, 0x0(gp)` inside the loop, executed 4x instead of once).
+
+**Mechanism, and it is documented in the RTL, not inferred:** `capstone-ariane/CLAUDE.md`:
+*"Linear capability clearing on LDC: after an LDC that loads a linear capability, the source
+memory location is cleared to prevent aliasing."* The first `ldc gp[i]` CLEARS the cap-table
+slot; every later `ldc` of that slot reads a cleared entry. That is precisely a
+right-address/wrong-bounds capability, whose dereference is the measured
+`mcause=28 OUT_OF_BOUNDS`, and whose null case is an arm returning 0.
+
+**It explains every prior observation, including the ones that defeated the earlier axes:**
+
+* `r14b_app.c`'s own note — four STRAIGHT-LINE entries pass (one `ldc` per literal), twelve
+  LOOP-ASSIGNED ones fail (the same `"filler"`/`"fill"` slot reloaded each iteration).
+* **The nondeterminism.** Whether a reload is emitted depends on register allocation and
+  spilling, which shift with image layout — so the SAME source arm returned 1, wedged, and
+  returned 0 in different images. It was never nondeterministic hardware; it was different
+  codegen.
+* The `-O0`-only `strlen` freeze already recorded in `build-sqlite-silicon.sh:245` — at `-O1`
+  the pointer stays in a register and the reload disappears.
+* Why merging changes behaviour without being the cause: merging puts every literal in ONE
+  slot, so N distinct literals become N loads of the SAME slot.
+
+**Compiler-side fix (the bug is ours, not the board's):** never emit more than one `ldc` from a
+given cap-table slot on a path — materialise the capability once and keep/copy it — or make
+cap-table entries non-linear so the clearing does not apply. Note `build-sqlite-silicon.sh`
+asserts entries are "ALREADY NONLIN"; that claim is now in doubt and should be checked against
+`gen-gp-captable-glue.py` and the table's actual `cap_type`.
+
 Caveats kept deliberately, given how many claims were retracted this session: `r14lp` "failed"
 means no END marker within 120 s, i.e. a hang, and the mcause has not yet been read for THIS
 rung; and the two binaries, while matched on globals and cap-table size, have not been diffed
