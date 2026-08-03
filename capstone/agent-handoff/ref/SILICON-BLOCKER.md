@@ -6,6 +6,42 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — SHARPENED: the interp glue fails on silicon at a LOW global count (3..32)
+
+Bisection under `DOMAIN_GLUE=interp`, one boot, control first, every image QEMU-validated:
+
+    r14sl    4    OK      control (generated glue)
+    wbi      4    OK      interp,   2 globals
+    ri32     0    WRONG   interp,  32 globals
+    ri64     0    WRONG   interp,  64
+    ri96     0    WRONG   interp,  96
+    ri128    0    WRONG   interp, 128
+    ri192    0    WRONG   interp, 192
+
+**It is not a scale effect.** Everything from 32 up fails identically (all globals read zero),
+and the same sources on the GENERATED glue pass at every one of those counts (`rc32`..`rc192`,
+measured earlier). So the boundary is somewhere in **3..32 globals**, not near SQLite's 181 and
+not near the 127/2047 B 12-bit limit I expected to find.
+
+Caveat on the pair: `wbi` has 2 CAPABILITY-BEARING globals while `ri32` has 32 plain `char[2]`
+globals, so count is not the only difference between the passing and failing arms. The clean
+next step is to bisect with the SAME kind of global: build `ri4`, `ri8`, `ri16` from the `rc`
+sources under interp and find the first failing count.
+
+**Why this matters for R-16.** SQLite uses the interp glue with 181 globals, i.e. far past this
+boundary — so every SQLite image has been running on a glue configuration that fails on silicon
+at a tenth of that population. This is now the most likely explanation for R-16 that has ever
+been on the table, and it is reproducible in an 11 KB-source rung.
+
+**Still not established:** `ri*` RETURN 0 while R-16 HANGS. Same glue, same over-threshold
+population, different symptom. Treat "the interp glue is broken on silicon above a small global
+count" as measured, and "therefore R-16" as a hypothesis until a rung actually hangs.
+
+**Next, cheapest first:** (1) bisect 4/8/16 under interp with the `rc` sources for the exact
+threshold; (2) read `start-gp-captable-interp.S:117-243` for a counter, offset or register reuse
+that breaks past a handful of descriptors; (3) diff the interp glue's emitted loop against the
+generated glue's straight-line code for the same rung — the generated one works at 192.
+
 ## 2026-08-03 — R-16 LEAD: interp glue AND many carves is a silicon-only failure (conjunction)
 
 The last untested combination, and it is the one SQLite actually uses.
