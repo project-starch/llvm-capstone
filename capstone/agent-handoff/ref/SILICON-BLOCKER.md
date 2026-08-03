@@ -238,10 +238,50 @@ returns twice means the stall is not purely a property of the image — it track
 invocation runs, consistent with the `q145` observation above that the same binary entered for
 `:0` and hung at `:146` in one boot.
 
-**Not attempted, and why:** `-capstone-merge-string-constants=false` would test the blob story
-directly, but it takes the image to **1026 carves** against a ~1020-entry rev-node pool
-(measured: 181 carves with merging on). It would fail from pool overflow rather than from the
-question being asked, so it is confounded as built and no board time was spent on it.
+### String merging is NOT the trigger — settled, and the earlier "confounded" note was wrong
+
+I first built `-capstone-merge-string-constants=false` through `build-sqlite-silicon.sh`,
+measured **1026 carves** against the ~1020 rev-node pool, and recorded the test as confounded.
+**That was a statement about SQLITE, not about the repro** — the build compiles the whole
+amalgamation, so the 1026 carves are SQLite's globals. The minimal repro contributes ~10.
+
+Settled without spending a boot:
+
+* `CapstoneMergeStrConstants.cpp:80` declares the flag `cl::init(false)` — **merging is OFF by
+  default**, and `build-ladder-domain.sh` never sets it (`build-sqlite-silicon.sh` enables it
+  explicitly, with a comment saying it is opt-in precisely so ladder rungs keep their geometry).
+* Therefore the standalone `r14b_app.c`, **board-measured returning 4 where 16 is correct**,
+  was built with merging **OFF**. The fault reproduces without merged string constants.
+* Independently, `:143` stores the SAME literal eight times — one derived capability — and
+  still wedges.
+
+Two independent directions, same answer: **merged string constants are not necessary for the
+fault.** The disassembly's "everything derives from one blob base by `cincoffsetimm`" is a true
+description of the merged build and a false explanation of the bug.
+
+Both arms are built and differ properly, for whoever runs the direct comparison:
+
+    r14b.dom        merging OFF   10 globals, table 160 B, ldc-gp=10, 10896 B
+    r14b_merge.dom  merging ON     1 global,  table  16 B, ldc-gp=2,  10272 B
+
+### USE THE STANDALONE REPRO — it is 150x smaller and should dodge R-16
+
+`r14b.dom` is **10896 bytes with 10 carves**. The SQLite-derived ladder images are **1624128
+bytes with 181 carves**. Every measurement blocked tonight was blocked by R-16 on the big
+images; the small one has a completely different profile, and being ~11 KB many variants fit in
+one firmware, so a batch costs one boot instead of one boot per draw.
+
+It is also the better instrument on its own terms: `r14b` **returns 4 where 16 is correct**
+rather than wedging, so every run yields a number (the project's "make every run RETURN" rule).
+And `r14b_app.c` already records the shape of the failure:
+
+    the four STRAIGHT-LINE entries pass, the twelve LOOP-ASSIGNED ones fail
+
+which points at capability stores through a **computed (loop-variable) address** rather than at
+immediate-offset stores — a different axis from everything tested tonight, and not yet examined.
+
+Runner: `run_ladder_perf_fpga.py`, rungs overridable via `LADDER_RUNGS`, one rung per clean
+boot; `DOMAIN_EXTRA_CFLAGS` toggles the merge flag per build.
 
 **A control that passes is not a control that always passes.** `f10.dom:0` returned 2/2 under
 firmware `8686cad424cb`, then WEDGED after `SQ: G/enter` under `8c6f5d30905e`, then returned
