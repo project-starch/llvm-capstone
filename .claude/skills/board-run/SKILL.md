@@ -1,0 +1,142 @@
+---
+name: board-run
+description: >-
+  Run a program on the Capstone CVA6 FPGA board: bake it into the buildroot image, boot,
+  invoke it, classify the result, release the board. Use for ANY board execution — silicon
+  ladder rungs, SQLite staged probes, a new minimal repro — and before interpreting a run
+  that produced no result. Covers the ordering rule that makes verdicts valid, the
+  entry-stall vs real-wedge distinction, and the checks that must pass BEFORE spending a
+  boot. Never ship a program over UART.
+---
+
+# Running a program on the Capstone FPGA
+
+Board time is the scarce resource and most wrong verdicts in this project came from the
+harness, not the hardware. This skill is the decision procedure. Full background:
+`capstone/agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md`.
+
+## 0. Before you spend a boot — three offline checks
+
+Each of these has cost real board time when skipped.
+
+1. **Verify the artifact does what the source says.** Disassemble and confirm the construct
+   under test is actually present. A "repeat the load N times" ladder was CSE'd into ONE
+   `ldc` regardless of N — memory barriers did not stop it — so the whole set tested nothing.
+   ```bash
+   llvm/cmake-build-debug/bin/llvm-objdump -d --triple=capstone64-unknown-elf <x>.dom
+   ```
+2. **Make every run RETURN a number.** A probe that hangs yields one bit ("somewhere after
+   the last marker"). A probe that returns a wrong value tells you which slot, how many, and
+   is bisectable. Prefer a clamp/early-return/sentinel over observing a hang.
+3. **Give each arm a distinct sentinel.** Never reuse a value that a legitimate control also
+   returns, or "not compiled in" reads as "control passed".
+
+## 1. Bake it in — never UART
+
+UART delivery is 16 chars per HTTPS round trip: minutes per ~10 KB domain. Baked, ten
+domains run in ONE boot in ~5 minutes, because a 10 KB file is free inside a JTAG upload
+that happens anyway.
+
+```bash
+O=capstone/caplifive-system/sw/buildroot/overlay/test-domains
+T=capstone/caplifive-system/sw/buildroot/build/target/test-domains
+cp -f <artifact> "$O/" && cp -f <artifact> "$T/"      # BOTH — buildroot packs $T
+cd capstone/caplifive-system/sw/buildroot
+make build LINUX_PAYLOAD=1 A=linux-rebuild  CAPSTONE_CC_PATH="$(realpath ../../../capstone-c)"
+make build LINUX_PAYLOAD=1 A=opensbi-rebuild CAPSTONE_CC_PATH="$(realpath ../../../capstone-c)"
+```
+
+`A=linux-rebuild` **first**: buildroot does not track `overlay/` → cpio, so an OpenSBI-only
+relink silently ships the OLD initramfs. Prune stale big `.dom` files by **explicit name**
+(never a glob — a prefix glob once deleted the package-installed `sbi.dom`).
+
+Firmware identity is the **hash, never the size**: buildroot pads in 2 MiB steps, so two
+different images routinely have identical sizes.
+
+## 2. Run it
+
+```bash
+export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"   # credential — never commit/echo
+export FPGA_FW=.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin
+```
+
+| Running | Driver | Key env |
+|---|---|---|
+| ladder rungs | `fpga_driver/run_baked_rungs_fpga.py` | `BAKED_RUNGS`, `BAKED_TIMEOUT`, `LADDER_FPGA_DIR`, `BAKED_OUT` |
+| SQLite / staged probes | `fpga_driver/run_sqlite_stages_fpga.py` | `SQLITE_STAGE_DOMS` (`dom:selector`), `SQLITE_STAGE_TIMEOUT`, `PROBE_SCOPED_OUT` |
+
+```bash
+cd capstone/tests/rtl-smoke
+BAKED_RUNGS="ctl_rung unknown_rung" python3 -m fpga_driver.run_baked_rungs_fpga
+```
+
+`FPGA_FW` has no default on purpose — an implicit one silently boots whatever was built last.
+
+## 3. THE ORDERING RULE — this is what makes a verdict valid
+
+**The drivers do not reboot between programs, and a wedged program takes the core.**
+Everything after the first failure is collateral, not a result.
+
+* **At most ONE unknown per boot**, placed **last**, after a known-good control.
+* **Read a run no further than its first failure.**
+* Everything expected to return goes first, ascending.
+
+This produced a wrong verdict within an hour of the baked path existing: an arm failed at
+position 4 of a 6-program boot, and positions 5 and 6 were recorded as failures. Re-tested
+one-per-boot, position 5 **passed**.
+
+**Always run a known-good control FIRST in every boot.** It separates "this image failed"
+from "board/firmware/boot failed" — and the control itself fails roughly 1 in 5, so a boot
+whose control fails is **VOID**, carrying no verdict about anything.
+
+If using `run_ladder_perf_fpga.py` with `LADDER_ONE_BOOT=1`, rungs must be linked at
+**distinct entry VAs** (`DOMAIN_BASE_VA`), or R-3 silently hangs a second domain reused at
+the same VA — a hang that looks exactly like a rung result.
+
+## 4. Classify — three things are NOT results
+
+Read the **last marker** in the run-scoped transcript, never "did not return":
+
+| Evidence | Meaning |
+|---|---|
+| `SQ: obs=<n>` / `RESULT … retval=` | a result — record it |
+| `SQ: G/enter` present, no `H/return` | entered and wedged — a **real** result |
+| no `SQ: G/enter` (ends at `SHA5:`) | **entry stall (R-16)** — the domain never ran; says nothing about the code |
+| no boot banner / JTAG errors | infra — retry |
+
+`SHA5` last does **not** by itself mean an entry stall: a domain that enters and wedges
+immediately also leaves `SHA5` last. **Distinguish on `SQ: G/enter`.**
+
+A wrong *value* is a result too, and a valuable one — it is bisectable where a hang is not.
+
+**Retrying an entry stall is futile — R-16 is per-image.** REDRAW instead: rebuild with a
+harmless constant varied (e.g. a different compiled-in default stage) so the code under test
+is byte-identical across draws. Always `sha256sum` the set and abort if any two match.
+
+## 5. Release the board, always
+
+Lock → power-cycle → run → **power off + unlock in `finally`**. The drivers do this via
+`safe_cleanup.release_board`.
+
+* **Never `kill -9` a runner.** It orphans the server-side GDB session in `error`; every
+  later run then times out before `load_image`, and it survives a power cycle. Only
+  `gdb_stop()` clears it.
+* Signal by **verified PID**, never a bare `pgrep -f <pattern>` — that matches your own
+  shell, and once matched an editor with the script open and closed it.
+* Confirm `gdb_state` is `idle` before blaming the board.
+
+## 6. Before concluding the hardware is broken
+
+Rule out the harness first. On 2026-08-02 the large majority of apparent board failures were
+self-inflicted; the same firmware file was declared dead six times, then booted five times
+with no rebuild in between. The discriminator that settled it: the variable was the harness,
+not the firmware — diff what actually changed on our side before spending a rebuild or a
+reflash.
+
+**Bitstream re-flash is ask-first, always.**
+
+## Reporting a result
+
+State which arms were **reachable**, not just which failed — R-16 biases *which constructs
+can be measured at all*, so "arm X fails and arm Y does not" is unsupportable unless Y
+actually entered. Quote the control's verdict alongside every result.

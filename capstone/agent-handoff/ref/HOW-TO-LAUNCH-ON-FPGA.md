@@ -4,6 +4,10 @@ Paste this to an agent (or follow it yourself). The board is a browser/websocket
 CVA6+Capstone FPGA — **no SSH**; an agent drives it via the Python driver, a human
 can also use the browser GUI. Every step and gotcha is in the KB files below.
 
+**There is a skill for this:** `.claude/skills/board-run/SKILL.md` carries the decision
+procedure (bake → order → classify → release) and auto-loads when a task involves running
+something on the board. This file remains the full reference behind it.
+
 ## One-line instruction to give an agent
 
 > Run `<domain/binary>` on the Capstone FPGA. Read

@@ -68,6 +68,7 @@ autoconf/autom4te.cache
 # lane gets them. settings*.json stay ignored -- they hold local paths and permissions.
 /.claude/*
 !/.claude/agents/
+!/.claude/skills/
 /GEMINI.md
 /.gemini/
 
