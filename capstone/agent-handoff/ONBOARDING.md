@@ -11,6 +11,12 @@ Fast-track for anyone (developer or AI assistant) starting from scratch.
 > task, `plans/xlang-repro-task.md`)? That doc is authoritative and stock-toolchain only — you
 > can skip the repo-build steps below unless it says otherwise.
 >
+> **Going to run something on the FPGA board?** A skill covers it: `.claude/skills/board-run/`
+> auto-loads the bake -> boot -> invoke -> classify -> release procedure, including the
+> ordering rule that decides whether a verdict is even valid. `ref/HOW-TO-LAUNCH-ON-FPGA.md`
+> is the full reference behind it. (Non-Claude agents do not auto-load skills — paste the
+> SKILL.md in as context.)
+>
 > **Contributing to the core repo?** Work happens in two peer lanes — Lane A on
 > `capstone-bootstrap`, Lane B on `capstone-bootstrap-b` — under the rules in `CLAUDE.md`
 > (peer-lane guide archived at `history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`)

@@ -7,6 +7,11 @@ chain is already proven functionally on QEMU
 (`history/22-07-2026_16-09-12_gp-free-domain-bringup-qemu-proof.md`); this is the
 silicon port.
 
+> **Execution mechanics are now a skill.** `.claude/skills/board-run/` carries the current
+> procedure (bake into the image — never UART — boot, invoke, classify, release) and
+> auto-loads. Prefer it over any transfer steps described below; this runbook predates the
+> baked-image workflow and is kept for the domain/controller build details.
+
 ## Prereqs (state)
 
 - Branch `capstone-gp-free`: gp-free compiler committed (`88054a14`).

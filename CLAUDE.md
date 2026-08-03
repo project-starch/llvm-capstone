@@ -105,6 +105,9 @@ friction this section is about.
 
 ## Debugging a blocker: BATCH VARIANTS, and make every run RETURN
 
+*(Execution mechanics — bake, boot, invoke, classify, release — live in the `board-run` skill,
+which auto-loads. This section is the experiment-design half: what to build and in what order.)*
+
 Default method for any "it hangs/fails somewhere on the board and we don't know where"
 problem. Learned the expensive way on 2026-07-31: six board sessions were spent probing a
 wedge one hypothesis at a time and produced nothing usable — the eventual answer came from
@@ -201,10 +204,31 @@ to preserve beyond the obvious.
 | Active WIP plans | `capstone/agent-handoff/plans/` |
 | Bug-fix investigations, root-cause trails, audits | `capstone/agent-handoff/history/` (dated `DD-MM-YYYY_HH-MM-SS_name.md`) |
 | Archived session notes | `capstone/agent-handoff/history/` |
+| Skills (auto-loading procedures) | `.claude/skills/<name>/SKILL.md` |
 
 **`design/` is for design decisions and architecture only.** A bug fix,
 root-cause investigation, or audit — even a substantial one — is *not* a design
 decision; it belongs in `history/` as a dated note, not in `design/`.
+
+## Skills
+
+A **skill** is a procedure that auto-loads when a task matches its `description` — no one has
+to remember to open a reference doc. That makes it the right home for a workflow applied under
+time pressure on a shared resource, where the cost of skipping a step is a wrong verdict.
+
+| Skill | Use it for |
+|---|---|
+| `board-run` | ANY board execution: bake into the image, boot, invoke, classify, release. Also read it before interpreting a run that produced no result. |
+
+A skill is just `.claude/skills/<name>/SKILL.md` with YAML frontmatter (`name`, `description`);
+no tooling is needed to add one. Two things to know:
+
+- **`.gitignore` ignores `/.claude/*`.** Tracked subtrees need an explicit negation — there are
+  now `!/.claude/agents/` and `!/.claude/skills/`. Without one a new skill is silently NOT
+  committed, and the commit message describes a file that isn't there. Check `git ls-files`.
+- **Skills are not subagents.** A skill loads instructions into the *current* session; a
+  subagent runs work in a *separate* context. Use a skill for "how do I do this correctly",
+  a subagent for "go do this and report back".
 
 ## Delegating to subagents
 

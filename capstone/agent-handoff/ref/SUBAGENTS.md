@@ -1,5 +1,11 @@
 # Subagents: roster, when to use them, and the rules they inherit
 
+> **Skills are not subagents.** A skill (`.claude/skills/<name>/SKILL.md`) loads a procedure
+> into the CURRENT session and auto-loads on description match; a subagent runs work in a
+> SEPARATE context and reports back. Use a skill for "how do I do this correctly" (e.g.
+> `board-run` for FPGA execution), a subagent for "go do this and report back".
+
+
 Built-in subagents are a different thing from **peer lane B** (a separate Opus session —
 see the archived `../history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`) and from an **external collaborator's own agent** (see the ONBOARDING
 callout). This file covers only the in-session subagents defined in `.claude/agents/`.
