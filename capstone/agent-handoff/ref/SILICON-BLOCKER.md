@@ -342,6 +342,71 @@ else measured: `:147`/`:148` (straight-line) passed; `:142`/`:143`/`:145` all co
 loop-driven read-back over entries; and `r14b`'s own note that its straight-line entries pass
 while its loop-assigned ones fail.
 
+#### 2026-08-03 LATER — BAKED-IN RUNGS, and the characterisation that survives
+
+**Method change that made this possible.** The rungs are now BAKED INTO THE FIRMWARE
+(`overlay/test-domains/` + `lpc` controller) and driven from the shell by
+`fpga_driver/run_baked_rungs_fpga.py`, instead of shipped over UART by
+`run_ladder_perf_fpga.py`. UART transfer was 16 chars per HTTPS round trip -- minutes per
+domain. Baked: **10 rungs in ONE boot in ~5 minutes.** The domains are ~10 KB, so they cost
+nothing on the JTAG upload that happens anyway.
+
+**READ THIS BEFORE USING THE DRIVER: it does NOT reboot between rungs.** A wedged rung takes
+the core, so every rung after the first failure is COLLATERAL, not a result. This bit us
+immediately: in the bisection sweep `e3rd` failed at position 4, and `e4wr` (5) and `r14lp` (6)
+were recorded as failures. Re-tested one-unknown-per-boot, **`e4wr` PASSES**. Rule: put at most
+ONE unknown per boot, last, after a known-good control.
+
+**Valid results only** (each read no further than its run's first failure):
+
+    arm      caps stored per loop iteration   frame(prologue)  lui sites  verdict
+    e1sml    2  (.z and .y), a[8]                    608           0       PASS
+    e2one    1  (.z only),   a[64]                  1088           0       PASS
+    f2nop    2, a[32]                               2176           0       PASS
+    cgs8     1, p[8]                                small          0       PASS
+    cgpad    1, p[8] + 2200 B padding               4960          16       PASS
+    r14sl    stores UNROLLED, a[64]                 4256          16       PASS
+    e4wr     stores UNROLLED, a[64]                 4256          16       PASS
+    r14hl    2, but literal loaded from STACK       4288          23       PASS
+    clp1..16 16 x ldc gp[0] in a loop, no stores    small          0       PASS
+    cdif8    8 ldc from 8 DISTINCT slots            small          0       PASS
+    cst8     8 capability stores, straight-line     small          0       PASS
+    ---
+    e3rd     2 per iteration, read unrolled         4224          27       FAIL
+    f1pad    2 per iteration, a[32] + 1400 B pad    4960          16       FAIL
+    r14lp    2 per iteration                        4224          19       FAIL
+
+**What is REFUTED by this table** (each had been proposed, some by me as a "root cause"):
+
+* *repeated `ldc` from one cap-table slot* — `clp16` does 16 and passes.
+* *count of `ldc`-from-gp* — `cdif8` does 8 from 8 distinct slots and passes.
+* *capability stores as such* — `cst8` does 8 and passes.
+* *`ldc`-from-gp + capability store in one loop* — `cgs8` does exactly that and passes.
+* *frame size alone* — `r14sl`, `e4wr`, `r14hl`, `cgpad` all have big lui-addressed frames and
+  pass. Frame size is NECESSARY (every small-frame arm passes) but NOT sufficient.
+* *loops* — `e3rd` unrolls the read loop and still fails; `e4wr` unrolls the store loop and
+  passes. So it is the STORE side, not looping in general.
+* *the array's size or the struct* — `f1pad` has only a[32] (1024 B, identical to the passing
+  `f2nop`) and fails purely because dead padding enlarges the frame.
+
+**What survives — the trigger is a CONJUNCTION**, and each half is individually harmless:
+
+    a big (lui-addressed) frame  AND  a loop storing TWO capabilities per iteration
+    to a computed struct element (offsets 0x0 and 0x10 off a recomputed base)
+
+`cgpad` isolates one half (big frame, ONE cap per iteration -> passes); `e1sml` isolates the
+other (two caps per iteration, small frame -> passes). Only together do they fail. In `r14lp`'s
+disassembly each iteration recomputes the element base and stores twice:
+`cincoffset a3,a0,a2; ldc a2,0x0(gp); stc a2,0x0(a3)` then
+`cincoffset a1,a0,a1; ldc a0,0x10(gp); stc a0,0x10(a1)`.
+
+Consistent with the SQLite blocker: `sqlite3RegisterBuiltinFunctions` builds a large local
+`FuncDef` array (big frame) with multiple capability fields written per entry.
+
+**Next probe (untested):** whether "two caps per iteration" specifically means two stores to a
+RECOMPUTED base, or simply two stores per iteration. Flat `p[2*i] = g0; p[2*i+1] = g1;` with
+padding for a big frame separates them, and needs no struct at all.
+
 #### ROOT CAUSE ISOLATED 2026-08-03 — repeated `ldc` from the SAME cap-table slot
 
 Third arm, `r14hl`: the loop of `r14lp` with the cap-table loads HOISTED out of it. Same loop,
