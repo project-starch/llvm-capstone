@@ -6,6 +6,40 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — R-16: THE LOADER IS EXONERATED, the IMAGE carries the stall (MEASURED)
+
+The zero-rebuild experiment the audit proposed, run in one boot with the control first. A
+known-stalling SQLite image (`strim`, `SQLITE_STATIC_BUILTINS=1`) was loaded by the LADDER
+controller `lpc` instead of `sqlite_host.user`:
+
+    r14sl (control) via lpc :  SHA5:00000000 -> SHA6:00000000 -> RESULT retval=4   ENTERED
+    strim           via lpc :  SHA5:00000001 -> no SHA6                            ENTRY STALL
+
+**It stalls under BOTH loaders.** By the pre-agreed decision rule that means the loader is NOT
+the variable, and the image is. This eliminates in one boot every loader-side difference that
+had never been varied:
+
+* `lpc` builds an anonymous, pre-`memset`, per-segment-`memcpy`'d buffer
+  (`ladder_perf_ctl.c:243-254`); `libcapstone.c:135-137` passes a pointer into a `MAP_SHARED`
+  file mapping the kernel then `copy_from_user`s ~1.4 MB from (`module/capstone.c:98`).
+* `lpc` creates ONE region and ONE share; `sqlite_host.c:115-140` creates two and shares twice.
+
+None of that matters to R-16.
+
+**Two consequences.**
+
+1. **The ladder is now a valid vehicle for R-16.** Its loader reproduces the stall on a real
+   stalling image, so a rung built with SQLite's geometry is a legitimate comparison — and
+   `DOMAIN_WINDOW=0x150000` on `build-ladder-domain.sh` produces exactly that at ~11 KB, with no
+   new linker script (see the corrections above). That is the minimal-repro path, now unblocked.
+2. **The `SHA5` argument differs**: `00000000` for the entering control vs `00000001` for the
+   staller. Worth reading `sbi_capstone.c`'s SHA5 emit to learn what that operand is — it may
+   name the failing step directly, and it is free to check offline.
+
+Method note: this cost ONE boot and no rebuild, because both binaries and both controllers were
+already in the initramfs. It eliminated a whole half of the search space that five rounds of
+building could not.
+
 ## 2026-08-03 — AUDIT CORRECTIONS to the R-16 rounds (three of my claims were wrong)
 
 Independently verified against the sources; each was load-bearing.
