@@ -72,6 +72,14 @@ BAKED_RUNGS="ctl_rung unknown_rung" python3 -m fpga_driver.run_baked_rungs_fpga
 
 `FPGA_FW` has no default on purpose — an implicit one silently boots whatever was built last.
 
+**If you supervise the run with `board-watchdog.sh` (the SQLite staged path does), keep
+`ENTRY_STALL_S` ≥ 260.** The JTAG upload is **133–227 s of entirely legitimate UART silence**
+(~130 KiB/s), so a lower threshold aborts healthy runs *mid-upload*. The old 45 s default did
+exactly that and produced a session's worth of false "will not boot" / "cyclic boot" /
+"firmware is broken" diagnoses. Scope any log scan to **this run's own `load_image`** — the
+console replays ~548 KB of the previous boot on connect, so grepping the whole log matches
+stale markers.
+
 ## 3. THE ORDERING RULE — this is what makes a verdict valid
 
 **The drivers do not reboot between programs, and a wedged program takes the core.**
