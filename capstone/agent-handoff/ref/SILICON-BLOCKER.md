@@ -6,6 +6,33 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — SOURCE READ: the 8-byte `.capstone_cap_init` clue was a RED HERRING
+
+Read `llvm/lib/Target/Capstone/CapstoneCapGlobalInit.cpp` before spending more board time.
+
+* **`size=000008` regardless of global count is BY DESIGN.** The section holds a single
+  PC-relative table entry pointing at a synthesized `void __capstone_cap_init(void)`
+  (`:196-205`), which the domain glue calls before `domain_main` (`:23`). It is one function
+  pointer, NOT per-global records. My reading of "it does not scale, so globals are
+  under-registered" was wrong — retracted.
+* **The diagnostic clamp is NOT active.** `capstone-cap-init-limit` is `cl::init(0)`
+  (`:67`), i.e. disabled, so truncation does not explain `wc64`/`wc160` returning 0.
+* The per-global stores are emitted straight-line into that function, one store per capability
+  leaf, and are marked **volatile so they are never elided** (`:19-26`).
+
+**So why `wc64`/`wc160` return 0 under QEMU is still unknown**, and those probes remain invalid.
+The standing minimal repro is unchanged: **`wcap`**, 2 capability-bearing initialised globals,
+QEMU 4 vs silicon -62.
+
+**Next diagnostic, and it is built for exactly this:** `capstone-cap-init-print` (`:72`, also
+`cl::init(false)`) names WHICH global each emitted store corresponds to, and
+`capstone-cap-init-limit=N` bisects to the offending index — the header at `:54-62` says the
+limit exists so a bisect can name the first bad store, and records that a previous bisect
+localised a failure to "the first entry, a 16-byte capability accessed at +32". Run
+`-mllvm -capstone-cap-init-print` on `wcap` and on `wc64` first: if `wc64` emits far fewer
+stores than 64, the probe is malformed at the IR level and the board result was never
+meaningful; if it emits 64, the fault is downstream and `wc64` becomes a valid scale probe.
+
 ## 2026-08-03 — SCALE PROBES wc64/wc160 ARE INVALID (broken under QEMU too)
 
 Scaling `wcap` to 64 and 160 capability-bearing initialised globals to see whether "returns
