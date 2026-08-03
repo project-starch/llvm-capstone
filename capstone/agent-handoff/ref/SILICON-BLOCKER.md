@@ -6,6 +6,49 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-03 — ROOT CAUSE: the interp glue mishandles globals whose size is NOT an 8-byte multiple
+
+**One-variable pair. Same global COUNT (2), same code, only the size differs:**
+
+    r14sl   4   OK      control (generated glue)
+    wbi     4   OK      interp, globals 64 B and 8 B
+    sze8    2   OK      interp, two char[8]   -- 8-byte multiple
+    sze2    0   WRONG   interp, two char[2]   -- NOT an 8-byte multiple
+
+QEMU computes the right answer for both. On silicon, the non-8-multiple build returns 0 --
+every global reads as zero.
+
+**This retires the "count" story entirely.** The bisection that looked like a low count
+threshold (`ri2`/`ri4`/`ri8`/`ri16`/`ri32`/.../`ri192` all failing, `wbi` passing) was an
+artefact of my probe sources: every `rc*` rung used `char[2]` globals, and `wbare`/`wbi` used a
+64-byte array plus 8-byte pointers. Count never mattered; SIZE did. Correspondingly the earlier
+"interp + many carves is a conjunction" reading is withdrawn -- `ri192` failed for the same size
+reason as `ri2`.
+
+**It is consistent with the glue's own documented constraint.** `gen-gp-captable-glue.py` rejects
+non-copy-eligible globals with *"needs the large-RO copy path (file-scope symbol, 8-mult size)"*
+and computes `size % 8`; the monitor's blob copy is explicitly in **8-byte units**
+(`sbi_capstone.c:786-791`, "8-BYTE UNITS now, not 16 ... emits a scalar ld/sd"). A global whose
+size is not a multiple of 8 therefore has a tail the 8-byte-granular path cannot express. The
+generated glue emits straight-line per-global code and does not hit this; the interp glue's
+descriptor-driven loop does.
+
+**Why this is very likely R-16's cause.** SQLite is full of globals with non-8-multiple sizes
+(char arrays, small structs, string tables) and it uses the interp glue. Every SQLite image has
+been running a glue path that silently mis-initialises exactly those globals on silicon.
+
+**What is measured vs inferred:**
+* MEASURED: interp glue + non-8-multiple global sizes => all globals read 0 on silicon, correct
+  under QEMU, with an in-boot control passing. One-variable pair (`sze8` vs `sze2`).
+* INFERRED, not yet shown: that this is the same defect as R-16's ENTRY STALL. `sze2` returns 0;
+  R-16 hangs. Same glue, same class of input, different symptom.
+
+**Next:** (1) find the exact tail handling in `start-gp-captable-interp.S`'s copy loop and in
+`gen-gp-captable-glue.py`'s descriptor emission -- the fix is likely rounding the per-global
+copy length up to 8 or handling the remainder; (2) rebuild an SQLite stage-10 image with all
+globals padded to 8-byte multiples and see whether it enters; that is the direct test of the
+R-16 link and it needs no new mechanism.
+
 ## 2026-08-03 — SHARPENED: the interp glue fails on silicon at a LOW global count (3..32)
 
 Bisection under `DOMAIN_GLUE=interp`, one boot, control first, every image QEMU-validated:
