@@ -26,6 +26,19 @@ something on the board. This file remains the full reference behind it.
 (an entry stall is not a result), and the ten hazards that cost hours of board time
 on 2026-08-02.
 
+## Two build knobs that are NOT optional, and one linker-script trap
+
+| Knob | Default | Why it matters |
+|---|---|---|
+| `DOMAIN_GLUE` | **`generated`** | The default glue has **zero** references to `cap_init`; `interp` has 15. A domain with capability-bearing initialised globals built on the default silently gets UNTAGGED globals — correct under QEMU, wrong on silicon, no build-time signal. Five probes were invalidated by this in one session. |
+| `DOMAIN_WINDOW` | `0x1000` | Sets the globals window (`build-ladder-domain.sh:42-45`). `DOMAIN_WINDOW=0x150000` gives an 11 KB rung SQLite's exact geometry. Distinct from `DOMAIN_BASE_VA` (`:66-67`), which relocates the ENTRY. |
+
+**Never hand-write a linker script for this.** `link-gpfree-32k.ld` does not place
+`.capstone_gp_initdesc`, so lld orphan-places it next to `.text`, `globals_off` reads as ~0x3f0,
+and the monitor aborts with `capstone_error 0xB10B` ("blob does not fit"). Two further hand-made
+variants (`-sq`, `-2m`) had the same defect and have been deleted. Use the DEFAULT
+`link-gpfree.ld` with `DOMAIN_WINDOW`.
+
 ## STOP — the five settings that have wasted the most board time
 
 Check these before every run. Each one has produced a confident, wrong conclusion about

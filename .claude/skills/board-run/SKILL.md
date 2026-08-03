@@ -30,6 +30,27 @@ Each of these has cost real board time when skipped.
    is bisectable. Prefer a clamp/early-return/sentinel over observing a hang.
 3. **Give each arm a distinct sentinel.** Never reuse a value that a legitimate control also
    returns, or "not compiled in" reads as "control passed".
+4. **Is the construct REACHED, not just present?** The costliest error of the 2026-08 session:
+   five probes were built against a glue that never calls the code they tested. The symbol was in
+   the binary and disassembled fine — it was dead. `DOMAIN_GLUE` defaults to **`generated`**
+   (`build-ladder-domain.sh:22`), and `start-gp-captable-generic.S` has **zero** references to
+   `cap_init`, while `start-gp-captable-interp.S` has 15. So:
+
+   * a probe with **capability-bearing initialised globals** (`static char *p = data;`) MUST be
+     built `DOMAIN_GLUE=interp`, or those globals silently never get a tag — correct under QEMU,
+     wrong on silicon, with no build-time signal;
+   * confirm reachability, e.g. `grep -c cap_init` on the glue you actually built with, or a
+     probe whose value can only be produced by the code under test.
+
+   Note the QEMU differential CANNOT catch this class: code that never runs passes emulation too.
+
+5. **Sizing knobs — use the ones that exist.** `DOMAIN_WINDOW=<bytes>` sets the globals window
+   (`build-ladder-domain.sh:42-45`) and `DOMAIN_BASE_VA=` relocates the entry (`:66-67`); they
+   are different things. `DOMAIN_WINDOW=0x150000` reproduces SQLite's geometry on an 11 KB rung.
+   **Do not hand-write a linker script:** `link-gpfree-32k.ld` does NOT place
+   `.capstone_gp_initdesc`, so lld orphan-places it, `globals_off` reads as ~0x3f0 and the
+   monitor aborts with `capstone_error 0xB10B`. Use the DEFAULT `link-gpfree.ld` plus
+   `DOMAIN_WINDOW`.
 
 ## 1. Bake it in — never UART
 
