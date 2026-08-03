@@ -342,6 +342,53 @@ else measured: `:147`/`:148` (straight-line) passed; `:142`/`:143`/`:145` all co
 loop-driven read-back over entries; and `r14b`'s own note that its straight-line entries pass
 while its loop-assigned ones fail.
 
+#### 2026-08-03 FINAL — `stc` with a NON-ZERO immediate off a lui-derived base
+
+Sharpest characterisation so far, and the first stated as an INSTRUCTION PATTERN.
+
+    rung    verdict         what it is
+    k800    PASS            struct a[32] + 800 B pad -> frame 3776, lui-addressing sites = 0
+    k1200   FAIL            IDENTICAL source, 1200 B pad -> frame 4576, lui sites = 13
+    h2adj   PASS  (524)     flat p[16], two stores/iteration, big frame, BOTH at offset 0x0
+    h2far   WRONG (272)     flat p[16], two stores/iteration to p[i] and p[i+8]
+
+`k800`/`k1200` differ ONLY in the size of a dead `volatile char pad[]`. The predicate that
+flips with them is compiler-observable and is NOT raw frame size: it is whether the frame needs
+`lui`+register-form `cincoffset` to be addressed. (`f2nop` at frame 2176 has zero lui sites and
+passes; the switch happens between pad 800 -> 3776 B / 0 sites and pad 1200 -> 4576 B / 13
+sites.)
+
+The store forms settle what "the conjunction" actually was:
+
+    k1200 (FAILS):   stc 0x0(a3)   and   stc 0x10(a1)     <- NON-ZERO immediate
+    h2adj (PASSES):  stc 0x0(a1)   and   stc 0x0(a3)      <- both ZERO immediate
+
+So it is not "two capabilities per iteration", not the struct, and not the loop. **It is a
+capability store whose immediate offset is NON-ZERO and whose base register was produced by a
+register-form `cincoffset` (the lui frame-addressing idiom).** With the field offset folded
+into the `stc` immediate the access is wrong; with the address fully materialised into the base
+(`imm=0`) the identical work succeeds.
+
+`h2far` is the same fault in a milder form: it RETURNED 272 where 524 is correct, so the
+failure mode spans wrong-value and hang, consistent with the earlier
+`mcause=28 OUT_OF_BOUNDS` and with the arms that returned 0. A derived base whose bounds are
+wrong faults at +0x10 while +0x0 is still inside.
+
+**Retracted from the section below:** "the trigger is a big frame AND a loop storing TWO
+capabilities per iteration to a computed struct element". `h2adj` does exactly that (big frame,
+two capability stores per iteration, computed element) and PASSES -- because both its stores
+use immediate 0. The conjunction was a description of `r14lp`'s codegen, not the mechanism.
+
+**Predicted compiler fix, not yet tested:** when the base of a capability store is
+register-derived, do not fold the field offset into the `stc` immediate -- materialise
+`base+off` and emit `stc rs, 0(base)`. Cheapest confirmation: a probe that writes `a[i].y`
+through an explicitly computed `&a[i].y`, in the `k1200` shape. If that passes, the fix is a
+codegen constraint and R-14 is closed on the compiler side.
+
+**Also still open:** read `mcause`/`mepc` for one of THESE rungs. Every `mcause=28` reading so
+far came from the SQLite-derived `:144`, not from `k1200`/`r14lp`; the baked driver does not
+yet do the debug-mux read that `run_sqlite_stages_fpga.py` does on wedge.
+
 #### 2026-08-03 LATER — BAKED-IN RUNGS, and the characterisation that survives
 
 **Method change that made this possible.** The rungs are now BAKED INTO THE FIRMWARE
