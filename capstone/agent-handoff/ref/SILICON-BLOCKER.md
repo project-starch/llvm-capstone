@@ -6,6 +6,43 @@ Last updated: 2026-08-03.
 
 ---
 
+## 2026-08-04 — Narrowing the interp size fault: the CARVE is not the bug
+
+Source read following the `sze8` PASS / `sze2` FAIL pair. What is now excluded inside the glue:
+
+* **The per-global carve DOES round up.** `start-gp-captable-interp.S` (record loop):
+  `addi t4, t3, 15` / `andi t4, t4, -16`, i.e. `stor = align_up(size, 16)`, matching the
+  generated glue's `align_up(size, 16)` (`gen-gp-captable-glue.py:181`). So a `char[2]` global
+  gets a correctly-sized, 16-aligned carve; the storage capability is not undersized.
+* **The granule-alignment block is DISABLED.** The `li a4, 8 /* granule */` code sits under
+  `#if defined(INTERP_GRANULE_ALIGN)`, and its own comment records it as off and
+  non-discriminating ("the residual misalignment is LARGER in a domain that passes (304 B) than
+  in the one that wedges (240 B)"). It is not in play.
+
+So the fault is NOT the carve size and NOT that disabled granule path. It remains somewhere in
+how the initialised CONTENT reaches the carved storage for a non-8-multiple global — the monitor's
+blob copy is 8-byte granular by construction (`sbi_capstone.c:786-791`), and the descriptor
+carries the raw `size` (24 B records: `u64 size ; u64 align ; i64 blob_off`, `blob_off == -1`
+meaning zero-init). **I did not locate the blob->storage copy loop itself, so the final mechanism
+is NOT established — do not write one into ISSUES.md on the strength of this section.**
+
+**What IS established and is the usable result:**
+
+    sze8   2   OK      interp, two char[8]   -- 8-byte multiple
+    sze2   0   WRONG   interp, two char[2]   -- NOT an 8-byte multiple
+
+one variable, in-boot control passing, QEMU correct for both. That is a genuine, minimal,
+silicon-only reproducer and it is enough to act on.
+
+**Two next steps, both cheap and independent:**
+1. **Find the copy.** Grep the record loop for the load/store pair that moves `blob_off`
+   content into the carved storage and check its length handling against a size of 2. If it
+   iterates in 8-byte units bounded by the raw size, `floor(2/8) == 0` iterations explains
+   everything -- but that is a hypothesis until the loop is read.
+2. **Test the R-16 link directly, no source needed:** pad SQLite's globals to 8-byte multiples
+   and see whether a stage-10 image enters. If it does, R-16 is this bug and the whole SQLite
+   blocker falls out of it.
+
 ## 2026-08-03 — ROOT CAUSE: the interp glue mishandles globals whose size is NOT an 8-byte multiple
 
 **One-variable pair. Same global COUNT (2), same code, only the size differs:**
