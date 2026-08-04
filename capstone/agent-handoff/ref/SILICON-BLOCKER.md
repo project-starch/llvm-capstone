@@ -1,5 +1,35 @@
 # The silicon blocker — everything known
 
+## 2026-08-04 — CAUTION: the `SHA5`/`SHA6` markers have NO locatable source in this tree
+
+Starting the monitor-side instrumentation (plan step 4) turned up something that undercuts the
+evidence base for R-16 itself:
+
+* `grep -rn "SHA5"` across `capstone/benchmarks`, `capstone/tests` and
+  `capstone/caplifive-system` sources returns **no emitter** — the only hits are unrelated GCC
+  testsuite files and one COMMENT in `sqlite_host.c:74`.
+* The monitor's own print macro is `#define C_PRINT(v) __asm__ volatile("csrw 0x800, %0" ...)`
+  (`sbi_capstone.c:33`), and this project's own notes state `csrw 0x800` goes to the **RTL
+  trace, not the UART**. So the monitor cannot be printing them either.
+
+Yet the markers appear in every board transcript. **They are emitted by something not visible in
+the source I searched** — a prebuilt monitor binary, the kernel module, or a component outside
+these trees.
+
+**Why this matters:** the whole R-16 definition rests on them. "`SHA5` with no `SHA6` = the
+monitor handed off and the domain never ran" is inherited from documentation, and I have used it
+all session to classify stalls versus wedges — including in the elimination table. It has never
+been verified against an emitter. If the mapping is wrong, some of those classifications are
+wrong with it.
+
+**Before more R-16 work, establish what emits them**, e.g. `strings`/`objdump` on the built
+`fw_payload.bin` and the `modcapstone` object, or a `grep -r` over the whole submodule including
+build artifacts. Until then, treat marker-based classifications as provisional.
+
+This does NOT affect results that rest on returned VALUES rather than markers — the pad-bug
+root-cause chain (`vv`/`vf`/`sv`/`al`/`dd`/`fn*`), R-14 (`k800`/`k1200`), and every rung verdict
+where an oracle was compared. It affects specifically the entry-stall-versus-wedge distinction.
+
 ## 2026-08-04 — The pad fix is VERIFIED and LANDED. It does NOT fix R-16.
 
     fn1  1/1   OK        one   char[2] global
