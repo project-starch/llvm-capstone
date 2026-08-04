@@ -1,5 +1,34 @@
 # The silicon blocker — everything known
 
+## 2026-08-04 — BUILTIN_LIMIT cannot bisect R-16 (runtime knob vs a static-image fault)
+
+    f10.dom:0   RETURNED       control, same boot
+    bl1.dom:0   ENTRY STALL    STATIC_BUILTINS=1, BUILTIN_LIMIT=1
+
+`BUILTIN_LIMIT` rewrites the loop bound that PROCESSES builtins
+(`build-sqlite-silicon.sh:134`, `capstoneI<(int)(N)`). It does not change the static array, the
+globals, or anything else in the image — and the two images are the same size (1633312 B) with
+only a different hash. R-16 stalls before any SQLite code runs, so a runtime clamp cannot reach
+it. Confirmed rather than assumed, at a cost of one boot.
+
+**Corrected step 2.** The lever must change the image STATICALLY. What
+`SQLITE_STATIC_BUILTINS=1` actually does is restore `aBuiltinFunc` to a compile-time-initialised
+static, which grows the initialised-globals blob 75120 -> 84336 (measured). So the quantity to
+bisect is the **number of ENTRIES in that static array**, which changes the blob, not the loop
+bound. That needs a source patch in the same style as the existing `SQLITE_STATIC_BUILTINS` sed
+— truncate the initialiser list to N entries — giving a blob-size sweep between the known-good
+`f10` (75120, ENTERS) and the known-bad `swa` (84336, STALLS).
+
+Caveat to carry: a ladder rung with blob 90320 PASSED (`wbhi`), so blob size alone is not
+sufficient on the ladder path. But `f10`/`swa` are the same builder one flag apart, which is the
+only clean one-variable pair R-16 has, and the blob is the only measured difference between
+them. Worth the sweep; do not pre-judge it from the ladder result.
+
+**Plan status:** step 1 (re-confirm the pair) effectively done — `f10` has now returned as the
+in-boot control in every recent run while every `STATIC_BUILTINS=1` image stalled, 8/8. Step 2
+needs the rewrite above. Step 4 is redirected to the domain-side region-share path per the
+monitor's own note. Step 5 (the untrapped overrun) remains independent and untouched.
+
 ## 2026-08-04 — RESOLVED: the markers ARE the monitor's, and their meaning is CONFIRMED in code
 
 The caution below is lifted. The emitter exists; I was grepping the wrong copy of the file.
