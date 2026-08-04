@@ -1,5 +1,35 @@
 # The silicon blocker — everything known
 
+## 2026-08-04 — Attempt at a SMALLER bounds repro: INVALID PROBE, result inconclusive
+
+`ob2` tried to shrink the reproducer by removing its dependence on the cap-table, the interp
+glue and `DOMAIN_WINDOW`: carve a 16-byte capability off the top of the domain's own stack with
+`split(win, sp, sp.end-16)`, verify it with `lcc`, then store 8 bytes past its end.
+
+    ob2 = NO RESULT (did not return)
+
+**Do NOT read this as "enforcement works".** `split` NARROWS `rs1`, so splitting `sp` removes
+16 bytes from the top of the domain's own stack. If the stack cursor was inside that region the
+domain corrupted its own stack before reaching the test store — the probe is defective and the
+run is inconclusive either way.
+
+**The standing reproducer is unchanged and remains `oob` (retval 42):** it takes an EXISTING
+16-byte capability from cap-table slot 0 (`ldc gp[0]`), which it does not create and therefore
+cannot damage, and stores past its end. Paired with `pk2 = 16`, which independently establishes
+that the slot really is 16 bytes and that carves are adjacent rather than overlapping.
+
+**To actually shrink it**, the capability under test must be bounded WITHOUT touching anything
+the domain is still using. Options, in order of preference:
+1. split off a region from the SHARED region capability (`res`, domain_main's first argument)
+   rather than from `sp` — it is passed in, its size is known, and the domain is not executing
+   out of it;
+2. keep `sp` but split from a COPY made with `movc`/`cincoffset` first, so the live stack
+   capability is never narrowed — needs checking that the copy is independently bounded;
+3. accept the `oob` version: it is already ~11 KB, self-contained, and needs no SQLite.
+
+(3) is a perfectly good hand-off artifact; (1) is the version worth building if a smaller one is
+wanted. The `ob2` probe should not be run again as written.
+
 ## 2026-08-04 — MAJOR: capability UPPER BOUND is NOT ENFORCED on stores (direct, deliberate test)
 
 **Measured, two independent probes, in-boot control passing, one boot:**
