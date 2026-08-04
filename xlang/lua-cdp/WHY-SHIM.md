@@ -68,3 +68,33 @@ real libraries cannot run on Capstone, we compare distilled shims, not full
 applications. That gap between the two platforms *is* the separate **compatibility**
 axis — the shim measures **security** fairly; it does not claim Capstone can run
 the real software.
+
+---
+
+## Project position on the three reasons (recorded on integration)
+
+The three reasons above are the collaborator's. On integration into the main branch the
+project lead accepted **reason 1 only**, and explicitly did **not** accept reasons 2 and 3.
+Recording that here so the distinction survives into the write-up:
+
+- **Reason 1 (Capstone cannot run the real thing) — ACCEPTED.** A Capstone domain is
+  freestanding, and the real reproductions need an OS, syscalls and third-party native
+  libraries. This is a genuine, checkable constraint and it is the *actual* reason the corpus
+  is measured through shims.
+- **Reasons 2 (fairness) and 3 (isolation) — NOT accepted as justifications.** They are real
+  *properties* of the shim method, but presenting them as reasons to prefer a shim inverts
+  cause and effect: the shim was forced by reason 1, and 2/3 are consequences we then benefit
+  from. Framing a limitation as a design virtue is the kind of thing a reviewer discounts, and
+  it weakens an otherwise strong result.
+- **The preferred direction is full Lua on BOTH platforms.** That is what would make the
+  comparison unarguable. It is blocked on dependency/porting work, not on principle, and it
+  stays an open item rather than something the shim closes.
+
+**Consequence for the write-up.** State the shim as a *limitation with a mitigation* — "the
+real libraries cannot run on Capstone, so we measure distilled shims; the same source runs on
+both sides, so the comparison remains controlled" — not as a methodological preference. The
+paper-facing doc `capstone/agent-handoff/ref/xlang-security-measurements-for-paper.md` already
+phrases it this way (both columns are upper bounds; the symmetry makes the *comparison* fair
+"even though neither absolute is realistic"), and that is the phrasing to keep.
+
+This changes no measurement. The numbers, the fidelity gate and the controls are unaffected.
