@@ -53,7 +53,11 @@ IMG = pathlib.Path(os.environ.get("FPGA_FW",
 TMP = pathlib.Path(os.environ.get("CAPSTONE_TMP_ROOT", "/tmp/capstone"))
 DOM = pathlib.Path(os.environ.get("SQLITE_DOM", TMP / "sqlite-silicon" / "sqlite_silicon.dom"))
 HOST = pathlib.Path(os.environ.get("SQLITE_HOST", TMP / "sqlite-build" / "sqlite_host.user"))
-BITSTREAM = "working-caplifive-captype-fixed.bit"
+# Resident-bitstream guard. Reflashed 2026-08-04 to caplifive_fixed_forward.bit, which
+# carries the operand-forwarding fix (capstone-ariane 7aac52f93). Overridable so the next
+# reflash needs no code change mid-session -- the guard exists to stop a run from silently
+# measuring the WRONG silicon, and on 2026-08-04 it did exactly that.
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_fixed_forward.bit")
 
 
 def log(m): print(f"[sqlite] {m}", file=sys.stderr, flush=True)

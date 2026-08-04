@@ -40,7 +40,11 @@ RUNGS = (os.environ.get("BAKED_RUNGS") or "clp1 clp8").split()
 TIMEOUT = float(os.environ.get("BAKED_TIMEOUT") or 120)
 ART = pathlib.Path(os.environ.get("LADDER_FPGA_DIR") or "/tmp/capstone/ladder-fpga")
 OUT = os.environ.get("BAKED_OUT") or "/tmp/capstone/baked-rungs.txt"
-BITSTREAM = "working-caplifive-captype-fixed.bit"
+# Resident-bitstream guard. Reflashed 2026-08-04 to caplifive_fixed_forward.bit, which
+# carries the operand-forwarding fix (capstone-ariane 7aac52f93). Overridable so the next
+# reflash needs no code change mid-session -- the guard exists to stop a run from silently
+# measuring the WRONG silicon, and on 2026-08-04 it did exactly that.
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_fixed_forward.bit")
 
 
 def log(m):

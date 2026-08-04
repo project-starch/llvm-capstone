@@ -28,6 +28,7 @@ Adapted from the proven /tmp/capstone/board_run_gpfree.py (the 554745961 silicon
 run). Artifacts come from build-ladder-fpga.sh's OUT_DIR (default
 $CAPSTONE_TMP_ROOT/ladder-fpga): ladder_perf_ctl, <rung>.dom, <rung>.oracle.
 """
+import os
 import sys, os, time, base64, hashlib, re, pathlib, gzip, subprocess
 
 DRV = pathlib.Path(__file__).resolve().parent
@@ -59,7 +60,11 @@ URL = _board_url()
 IMG = pathlib.Path(os.environ.get("FPGA_FW") or
                    os.path.expanduser("~/capstone-b-artifacts/fw_payload_fpga_up_gpfree.bin"))
 IMG_NAME = os.environ.get("FPGA_FW_NAME") or "fw_payload_fpga_up_gpfree.bin"
-BITSTREAM = "working-caplifive-captype-fixed.bit"
+# Resident-bitstream guard. Reflashed 2026-08-04 to caplifive_fixed_forward.bit, which
+# carries the operand-forwarding fix (capstone-ariane 7aac52f93). Overridable so the next
+# reflash needs no code change mid-session -- the guard exists to stop a run from silently
+# measuring the WRONG silicon, and on 2026-08-04 it did exactly that.
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_fixed_forward.bit")
 
 # Must match build-ladder-fpga.sh's OUT_DIR default ($CAPSTONE_TMP_ROOT/ladder-fpga),
 # else the runner reads a different dir than the build writes and can pick up stale

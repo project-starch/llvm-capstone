@@ -15,6 +15,7 @@ Board etiquette (non-negotiable): verifies the resident bitstream before measuri
 ALWAYS powers off + unlocks in finally. The board URL/token is read from FPGA_URL
 and never echoed.
 """
+import os
 import sys, os, time, re, pathlib
 
 DRV = pathlib.Path(__file__).resolve().parent
@@ -38,7 +39,11 @@ ART = pathlib.Path(os.environ.get("BASE_BARE_DIR") or
                                 "ladder-base-bare"))
 IMG = ART / "fw_payload_base_bare.bin"
 IMG_NAME = "fw_payload_base_bare.bin"
-BITSTREAM = "working-caplifive-captype-fixed.bit"
+# Resident-bitstream guard. Reflashed 2026-08-04 to caplifive_fixed_forward.bit, which
+# carries the operand-forwarding fix (capstone-ariane 7aac52f93). Overridable so the next
+# reflash needs no code change mid-session -- the guard exists to stop a run from silently
+# measuring the WRONG silicon, and on 2026-08-04 it did exactly that.
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_fixed_forward.bit")
 CAPTURE = "/tmp/capstone/board-run-base-bare.uart.txt"
 
 

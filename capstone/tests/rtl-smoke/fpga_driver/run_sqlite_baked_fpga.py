@@ -19,6 +19,7 @@ the on-board size and compares it against the local build before running anythin
 
     usage: FPGA_URL=... FPGA_FW=<fw_payload.bin> python3 run_sqlite_baked_fpga.py
 """
+import os
 import sys, os, pathlib, re, time, hashlib
 
 DRV = pathlib.Path(__file__).resolve().parent
@@ -107,7 +108,11 @@ def assert_firmware_embeds_current_initramfs(fw: pathlib.Path) -> None:
         f"by decompressed content)")
 
 
-BITSTREAM = "working-caplifive-captype-fixed.bit"
+# Resident-bitstream guard. Reflashed 2026-08-04 to caplifive_fixed_forward.bit, which
+# carries the operand-forwarding fix (capstone-ariane 7aac52f93). Overridable so the next
+# reflash needs no code change mid-session -- the guard exists to stop a run from silently
+# measuring the WRONG silicon, and on 2026-08-04 it did exactly that.
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_fixed_forward.bit")
 TMP = pathlib.Path(os.environ.get("CAPSTONE_TMP_ROOT", "/tmp/capstone"))
 LOCAL_DOM = TMP / "sqlite-silicon" / "sqlite_silicon.dom"
 LOCAL_HOST = TMP / "sqlite-build" / "sqlite_host.user"

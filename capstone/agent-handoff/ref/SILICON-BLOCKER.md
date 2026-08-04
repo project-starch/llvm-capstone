@@ -1,5 +1,70 @@
 # The silicon blocker — everything known
 
+## 2026-08-04 — NEW BITSTREAM `caplifive_fixed_forward.bit`: R-16 is RESOLVED
+
+The board owner supplied and the board was reflashed to **`caplifive_fixed_forward.bit`**,
+carrying the operand-forwarding fix (`capstone-ariane 7aac52f93`, "Fixed an operand
+forwarding bug", `issue_read_operands.sv`: capability-metadata forwarding selected by an
+over-broad `check_cap_op`, narrowed to `check_fwd_rs1`).
+
+**Every board result recorded before 2026-08-04 was measured on the OLD bitstream
+(`working-caplifive-captype-fixed.bit`) and must be re-checked before it is relied on.**
+
+### R-16 (SQLite entry stall) — RESOLVED
+
+| image | old bitstream | new bitstream |
+|---|---|---|
+| `sb1` = SQLITE_STATIC_BUILTINS=**1** (the R-16 reproducer) | entry-stalled **8/8**, never any `SQ: G/enter` | **`SQ: G/enter` present — it enters** |
+
+Verdict taken on a boot whose control `f10:0` both entered **and** returned (`SQ: obs=`);
+two earlier attempts were VOID because the control wedged, and are discarded. The entry
+stall was the forwarding bug.
+
+### R-14 — the pair now passes
+
+`k1200` (the failing half) returns 4, `k800` returns 4, control `r14sl` passed first in the
+boot. On the old bitstream `k800` passed and `k1200` failed on source differing only in dead
+pad size. Being repeated across further boots before this is called closed, because R-14 was
+reported as non-deterministic across boots.
+
+**`SQLITE_STATIC_BUILTINS=1` is the R-14 workaround** (`build-sqlite-silicon.sh:75`) and =1
+is exactly the shape that entry-stalled — so **R-16 was created by the R-14 workaround**. If
+R-14 is confirmed fixed in silicon the workaround can come off, which also removes the
+configuration that produced R-16.
+
+### The blocker has MOVED: both shapes now enter and wedge
+
+At selector `:0` — which returns before any ladder code runs — both SQLite shapes now show
+`SQ: G/enter` with no `SQ: H/return`:
+
+| image | carves | size | result |
+|---|---|---|---|
+| `sb0` = STATIC_BUILTINS=0 | 179 | 1,607,832 | enters, **wedges** (reproduced 2×) |
+| `sb1` = STATIC_BUILTINS=1 | 179 | 1,551,512 | enters, **wedges** |
+
+Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-init carve
+loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
+result and is bisectable, unlike an entry stall.
+
+### The enforcement question is UNCHANGED by the new bitstream
+
+`obn` = 1657, `ob5` = 1645, `oba` = 1651 — identical to the old bitstream. The LSU
+capability check is still inert for plain integer loads/stores, so that finding is not
+about forwarding either. See the retraction below; it stands.
+
+### Traps for the next session
+
+* **The staged `sqlite_silicon.dom` was stale** — a STATIC_BUILTINS=0 build, though the
+  builder now defaults to 1. It cost a board session: its `SQ: G/enter` was read as "R-16 is
+  gone" when it was simply the shape that always entered. **Identify a staged image by
+  rebuilding both variants and comparing size/carve count**, never by its filename.
+* The bitstream guard in the drivers is now `os.environ.get("FPGA_BITSTREAM",
+  "caplifive_fixed_forward.bit")`. It did its job: it hard-stopped the first run after the
+  reflash rather than silently measuring the wrong silicon.
+* A third bitstream, `caplifive_65536_nodes.bit` (larger revocation-node pool), exists.
+  **Whether it also contains the forwarding fix is unconfirmed** — if it does not,
+  reflashing to it reintroduces R-14 and R-16.
+
 ## 2026-08-04 — RETRACTION: the bounds finding is NOT a reportable hardware defect
 
 **Retracted claim:** "the silicon does not enforce capability bounds on intra-domain
