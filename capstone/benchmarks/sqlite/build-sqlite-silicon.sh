@@ -208,6 +208,13 @@ if BODY in s:
         # NO RET  -> no NUL in 32 bytes, so zName does not point at the expected name and
         #            the "wedge" is an infinite strlen over wrong data.
         "#if CAPSTONE_INSERT_STOP==9\n    { int k_=0; while(k_<32 && zName[k_]) k_++; if(k_<32) return; }\n#endif\n"
+        # Value channel: the clamp sits in a void function, so a byte can only be reported as
+        # "returned or not". 10 returns iff zName[0] is the expected 's'; 11 returns iff the
+        # first EIGHT bytes sum to 867 == sum("sqlite_r"). The literal is verified present and
+        # correctly placed inside merged string container descriptor 177 in the IMAGE, so
+        # these test what the glue copy produced at RUNTIME.
+        "#if CAPSTONE_INSERT_STOP==10\n    if(zName[0]==0x73) return;\n#endif\n"
+        "#if CAPSTONE_INSERT_STOP==11\n    { int k_=0,s_=0; for(k_=0;k_<8;k_++) s_+=(unsigned char)zName[k_]; if(s_==867) return; }\n#endif\n"
         "    int nName = sqlite3Strlen30(zName);\n"
         "#if CAPSTONE_INSERT_STOP==2\n    if(nName>=0) return;\n#endif\n"
         "    int h = SQLITE_FUNC_HASH(zName[0], nName);\n"

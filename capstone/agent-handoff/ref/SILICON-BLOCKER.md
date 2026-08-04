@@ -46,6 +46,51 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-04 — CONFIRMED: the glue does not correctly materialise a MERGED STRING
+### CONTAINER; the pointer is innocent
+
+Final step of the bisection. Same image throughout, control returning in the same boot.
+
+| probe (all on `q10.dom`, one image) | board |
+|---|---|
+| stage 9 — `MallocInit` + `PcacheInitialize` (control) | RETURN |
+| `zName[0] == 's'` ? (`INSERT_STOP=10`) | **NO return** → byte 0 is NOT `'s'` |
+| stage 11 — `Strlen30` on a **direct string literal**, no struct field involved | **NO return** |
+
+**Stage 11 is the decisive one.** It never touches `zName`, `aAlterTableFuncs`, or any global
+struct field — it reads a plain literal. It hangs on the same image whose control returns. And
+`capstone_probe_string` and `sqlite_rename_column` live in the **same** merged container,
+**descriptor 177** (size 3516, align 1, blob_off 56260), verified by parsing
+`.capstone_gp_initdesc` against the file offsets of both literals.
+
+**So the pointer and the offset are innocent.** What is wrong is the **contents of the merged
+string container at runtime**. The literal bytes are provably correct in the image file; they
+are not correct in the domain after the glue's initialized-globals copy.
+
+**Chain, end to end, each step control-validated:**
+1. `sqlite3Strlen30` never returns → an infinite loop, not a trap (`p8` bounded returns, `p9`
+   conditional-on-NUL does not, so there is no terminator).
+2. The loads work and do not fault (`p7`), so nothing is out of bounds — the inert LSU
+   capability check is irrelevant here.
+3. The call boundary is innocent (`p5`, an inline byte-walk with no call, hangs identically).
+4. The pointer is innocent (stage 11, a direct literal in the same container, hangs).
+5. The image is correct (both literals found at the expected offsets inside descriptor 177).
+   ⟹ **the glue's copy of that container into the domain is what is broken.**
+
+**Image-dependent, which matters for the fix.** Stage 11 RETURNS on `f10` (181 descriptors)
+and hangs on `q10` (178). So it is not "merged containers never work" — it is a specific
+container in a specific layout, and descriptor 177 is the **last** of 178. That is a hint, not
+a result: whether the fault is index-related, a boundary in the descending carve loop, or the
+copy's own tail handling is **not yet established**.
+
+**Not a silicon defect.** Everything about this presented as a hardware wedge and is not one.
+A non-terminating loop emits no marker and is indistinguishable from a hang from the outside,
+which is why it survived a full day of hardware hypotheses.
+
+**Next:** dump container 177's bytes in-domain (compare against the image), and check the
+carve/copy for the final descriptors — the loop descends, so index 177 is the lowest carve and
+the closest to the remaining stack.
+
 ### 2026-08-04 — SQLite ROOT CAUSE: it is NOT a hardware wedge, it is an INFINITE `strlen`
 ### over an unterminated string reached via a global struct field
 
