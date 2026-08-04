@@ -37,6 +37,7 @@
 #define NULL ((void *)0)
 #endif
 #define EOF (-1)
+#define BUFSIZ 512
 
 /* Lua builds without internal asserts by default (lua_assert = ((void)0)); make
  * a bare assert() a no-op in case any TU includes <assert.h>. */
@@ -95,8 +96,32 @@ struct lconv *localeconv(void);
 typedef long time_t;
 time_t time(time_t *);
 
-/* ---- setjmp.h  (capability-wide slots: capstone64 saved regs are 16 B) --- */
-typedef struct { long long __c[32]; } __capstone_jmpbuf[1]; /* 16 caps x 16 B = 256 B */
+/* ---- hosted stubs: declared so lauxlib/lbaselib/ltablib link. These paths are
+ * NEVER taken in the domain -- scripts load via luaL_loadbufferx (not the fopen
+ * file loader), print/error route to the domain writer, and the sort-pivot clock
+ * is stubbed. Implementations (all error/no-op stubs) live in the libc TU. ---- */
+extern int errno;
+char  *strerror(int);
+typedef long clock_t;
+clock_t clock(void);
+extern FILE *stdin, *stdout, *stderr;
+FILE  *fopen(const char *, const char *);
+FILE  *freopen(const char *, const char *, FILE *);
+int    fclose(FILE *);
+unsigned long fread(void *, unsigned long, unsigned long, FILE *);
+unsigned long fwrite(const void *, unsigned long, unsigned long, FILE *);
+int    fflush(FILE *);
+int    fprintf(FILE *, const char *, ...);
+int    getc(FILE *);
+int    ungetc(int, FILE *);
+int    feof(FILE *);
+int    ferror(FILE *);
+
+/* ---- setjmp.h  (capability-wide slots: capstone64 saved regs are 16 B) ---
+ * 14 saved capabilities (ra, sp, s0-s11) x 16 B = 224 B, 16-byte aligned --
+ * stc/ldc DROP the capability tag on a non-16-aligned address. See
+ * capstone-lua/capstone_setjmp.S. */
+typedef struct __attribute__((aligned(16))) { long long __c[28]; } __capstone_jmpbuf[1];
 #define jmp_buf __capstone_jmpbuf
 int  setjmp(jmp_buf);
 void longjmp(jmp_buf, int);
