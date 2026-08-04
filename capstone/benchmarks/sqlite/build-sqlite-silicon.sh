@@ -143,6 +143,30 @@ if [[ -n "${BUILTIN_LIMIT:-}" ]]; then
   grep -c "$BUILTIN_LIMIT" "$OBJ_DIR/sqlite3-capstone.c" >/dev/null || {
     echo "BUILTIN_LIMIT clamp did not apply -- the amalgamation patch shape changed" >&2; exit 1; }
 fi
+# CAPSTONE_TEXT_PAD=N -- insert N bytes of dead, never-called code at the TOP of the
+# amalgamation and change NOTHING else. No early return, no control-flow change: this shifts
+# every following function by N bytes and is the null-shift control the audit asked for.
+#
+# Why: uc vs g1 differ by an opaque early return inside an UNCALLED function, and g1's stage 11
+# hangs while uc's returns -- verified in one boot with position controlled both ways. But that
+# edit also moved 1931 functions by +52 bytes and relocated `strlen` itself from 0x14fc1c to
+# 0x14fc50, a different 16-byte alignment. "The edit" and "the shift" are the same intervention
+# there. Varying ONLY the shift separates them.
+if [[ -n "${CAPSTONE_TEXT_PAD:-}" ]]; then
+  echo "== TEXT PAD: inserting ${CAPSTONE_TEXT_PAD} bytes of dead code ahead of everything"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_TEXT_PAD" <<'PYPAD'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); n = int(sys.argv[2])
+if n % 4:
+    sys.exit("FATAL: CAPSTONE_TEXT_PAD must be a multiple of 4 (instruction size)")
+nops = "\n".join(['  __asm__ volatile("nop");'] * (n // 4))
+pad = ('__attribute__((used,noinline)) static void capstone_text_pad(void)\n{\n'
+       + nops + '\n}\n')
+p.write_text(pad + p.read_text())
+print(f"   inserted {n} bytes ({n//4} nops) of dead code")
+PYPAD
+fi
+
 # SQLITE_REG_BISECT=1 -- split sqlite3RegisterBuiltinFunctions into its sub-steps behind a
 # COMPILE-TIME limit, one image per point.
 #
@@ -171,13 +195,15 @@ steps = [("  sqlite3AlterFunctions();", 2),
          ("  sqlite3InsertBuiltinFuncs(aBuiltinFunc, ArraySize(aBuiltinFunc))", 7)]
 s = ("#ifndef CAPSTONE_REG_LIMIT\n#define CAPSTONE_REG_LIMIT 0\n#endif\n"
      "#ifndef CAPSTONE_ALTER_LIMIT\n#define CAPSTONE_ALTER_LIMIT -1\n#endif\n"
-     "#ifndef CAPSTONE_INSERT_STOP\n#define CAPSTONE_INSERT_STOP 0\n#endif\n") + s
-s = s.replace(FN, FN + "\n#if CAPSTONE_REG_LIMIT==1\n  return;\n#endif", 1)
+     "#ifndef CAPSTONE_INSERT_STOP\n#define CAPSTONE_INSERT_STOP 0\n#endif\n"
+     "#define CAPSTONE_STOP() do { int cs_=1; __asm__ volatile(\"\" : \"+r\"(cs_)); "
+     "if (cs_) return; } while (0)\n") + s
+s = s.replace(FN, FN + "\n#if CAPSTONE_REG_LIMIT==1\n  CAPSTONE_STOP();\n#endif", 1)
 applied = []
 for anchor, k in steps:
     if anchor not in s:
         continue
-    s = s.replace(anchor, "#if CAPSTONE_REG_LIMIT==%d\n  return;\n#endif\n%s" % (k, anchor), 1)
+    s = s.replace(anchor, "#if CAPSTONE_REG_LIMIT==%d\n  CAPSTONE_STOP();\n#endif\n%s" % (k, anchor), 1)
     applied.append(k)
 # CAPSTONE_INSERT_STOP=N: split the ONE loop iteration of sqlite3InsertBuiltinFuncs that
 # board-bisected as the wedge (0 entries returns, 1 entry wedges). Compile-time, so no new
@@ -461,6 +487,38 @@ NHDR=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$OUT_DIR/sqlite_silicon.dom" | gre
 echo "   .capstone_gp_table sections: $NHDR (must be 1 -- more means a multi-TU index collision)"
 python3 "$LADDER/domdata-budget.py" "$OUT_DIR/sqlite_silicon.dom" || true
 echo "Built $OUT_DIR/sqlite_silicon.dom"
+
+# DESCRIPTOR-IDENTITY GATE. This image's behaviour depends on its GLOBAL SET: adding globals
+# entry-stalls it (the runtime clamp, 179->183 carves, stalled 3/3 without executing an
+# instruction), and dropping globals via DCE behind a clamp changes which code hangs (the
+# compile-time clamp, 181->178, made stage 11 hang when it returns unclamped). Four separate
+# conclusions died to this. So any instrumented build MUST leave .capstone_gp_initdesc
+# byte-identical to its uninstrumented reference, and is refused otherwise.
+#
+#   CAPSTONE_DESC_REF=/path/to/unclamped.dom
+if [[ -n "${CAPSTONE_DESC_REF:-}" ]]; then
+  python3 - "$OUT_DIR/sqlite_silicon.dom" "$CAPSTONE_DESC_REF" <<'PYDESC' || exit 1
+import sys, pathlib, subprocess, struct
+def desc(p):
+    out = subprocess.run(["llvm/cmake-build-debug/bin/llvm-readelf","-SW",p],
+                         capture_output=True, text=True).stdout
+    off = size = None
+    for l in out.splitlines():
+        if "initdesc" in l:
+            f = l.split(); off = int(f[5],16); size = int(f[6],16)
+    if off is None: sys.exit(f"FATAL: no .capstone_gp_initdesc in {p}")
+    d = pathlib.Path(p).read_bytes()[off:off+size]
+    return d, struct.unpack_from("<Q", d, 8)[0]
+a, na = desc(sys.argv[1]); b, nb = desc(sys.argv[2])
+if a != b:
+    first = next((i for i,(x,y) in enumerate(zip(a,b)) if x!=y), min(len(a),len(b)))
+    sys.exit(f"FATAL: descriptor table differs from the reference "
+             f"(carves {na} vs {nb}, first difference at byte {first}). The instrumentation "
+             f"changed the global set, so any verdict from this image would be about the "
+             f"instrument, not the bug.")
+print(f"   descriptor table identical to reference ({na} carves)")
+PYDESC
+fi
 
 # Artifact check: a staged build MUST contain the 0x5A6E marker and the staged-only literal.
 # Checking the flag is not enough -- this verifies what actually got compiled.

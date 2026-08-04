@@ -46,6 +46,52 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-05 — CONFIRMED: PURE CODE DISPLACEMENT flips the hang. Position excluded both ways.
+
+Two results, in order.
+
+**1. The position confound is eliminated.** One boot, one firmware relink, both `.dom`s verified
+byte-present in the initramfs (the shipped gate only checks the canonical `sqlite_silicon.dom`,
+which is how three earlier `g1` boots ran without `g1.dom` ever being checked):
+
+    pos1  uc:11   RETURN  obs=1517161237     <- first-position: the cell that was empty
+    pos2  uc:9    RETURN
+    pos3  g1:9    RETURN                     <- the g1 image itself is fine
+    pos4  g1:11   NO RETURN                  <- behind three returning domains
+
+`uc:11` returns as the FIRST invocation of a fresh boot, so "first invocation" is excluded.
+`g1:11` hangs at position 4 behind a returning control, so "no control in the boot" is
+excluded. `g1:9` returning shows the g1 image is not broken in general — only stage 11 hangs.
+
+**2. A PURE code shift is sufficient — no edit to any executed path required.** `pad0` is `uc`
+plus one **empty, never-called** function (`CAPSTONE_TEXT_PAD=0` still emits a `used` stub):
++120 bytes of image, `sqlite3Strlen30` moved `0x16afc` → `0x16b20`. No control-flow change, no
+semantic change anywhere.
+
+    uc:11    RETURN     (position 1)
+    pad0:11  NO RETURN  (position 1, two independent boots)
+
+So the trigger is **displacement of code**, not the opaque-stop construct and not any
+modification of a path that executes. This is the null-shift control the audit asked for, and
+it separates the two hypotheses that were previously inseparable.
+
+**Scope, from the small-image scans** (all correct, so the effect is not reproduced by any of
+these alone): global count to 208 carves; `.text` to 1,324,372 bytes (past SQLite's 1,320,604);
+carve count to 1408, past the 1021 rev-node pool limit. Those used the ladder host/glue, so
+they bound the effect rather than excluding it for the SQLite image.
+
+**Not yet established:** whether *every* shift hangs or only particular alignments. The scan
+that would answer it (`pad16/32/48/52`) did not run — `pad0` wedges at position 1 and takes the
+boot with it, so each pad needs its own boot. `pad52` is the interesting one: it is the only
+draw that lands `sqlite3Strlen30` at `align%16 = 4` rather than 0.
+
+**Why this is the right thing to hand over.** "A ~1.5 MB pure-capability domain hangs or not
+depending on where its code sits, with no semantic change" is a precise, reproducible statement
+backed by a one-function diff, and it is silent — no trap, no marker. The RTL audit found no
+capability check anywhere in the fetch path (`core/frontend/`, `core/cache_subsystem/cva6_icache.sv`
+contain zero capability tokens), so if this is a fetch-side effect it is invisible to every
+software probe, which matches a full day of failed instrumentation.
+
 ### 2026-08-05 — RETRACTION: the "uncalled function" anomaly is CONFOUNDED WITH RUN POSITION
 
 **Retracted:** "editing a function the executed path never calls deterministically changes
