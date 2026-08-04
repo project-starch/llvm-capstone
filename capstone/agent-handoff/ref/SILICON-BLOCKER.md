@@ -46,6 +46,49 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-05 — CORRECTION: the pads were NOT semantically neutral. The variable is the
+### STATIC CAPABILITY TABLE (`.gct`), not code displacement.
+
+**Corrected:** "pure code displacement flips the hang." The intervention was not neutral, and my
+own section diff shows it. Adding a `__attribute__((used))` static function changes:
+
+    .gct                 108 -> 188 bytes  (+80 = FIVE extra capability entries)
+    .capstone_gp_table   0x1b7790 -> 0x1b77e0   (relocated by 0x50 as a consequence)
+    .text                +36
+    .capstone_gp_initdesc  IDENTICAL (4488 bytes, 181 carves in both)
+
+`.gct` is the **static capability table** (`__llvm_static_cap_gct_begin` / `__capstone_gct_start`)
+— the list `__capstone_cap_init` walks to materialise capabilities at domain startup. So every
+"dead code" pad added five capabilities for cap-init to build. That is a behavioural change, not
+a layout one, and it invalidates the neutrality claim.
+
+**It also explains why my gate missed it.** The descriptor-identity gate compares
+`.capstone_gp_initdesc` — byte-identical here — and says nothing about `.gct` or about
+`.capstone_gp_table`'s address. Both moved. **Any future gate must cover `.gct` size and every
+capability-bearing section's address, not just the descriptor table.**
+
+**What is measured, and stands:**
+
+    uc      .gct=108   RETURN  (3 observations, incl. first-position)
+    g1      clamp      hang    (4 observations, incl. behind a returning control)
+    dp0     .gct=188   hang    (amalgamation byte-identical to uc, strlen at the SAME address)
+    dp64    .gct=188   hang
+    pad0..52           hang    (5 draws, differing internal .text layout, all same image size)
+    sz2048/8192        hang
+
+`dp0` remains the sharpest single comparison: identical amalgamation, `sqlite3Strlen30` at the
+identical address `0x16afc`, differing only in `.gct` (+5 entries) and the sections after it.
+
+**Also corrected:** "image size is the discriminator" is wrong too. `sz2048`, `sz8192` and
+`sz16384` are all **exactly** 1,624,216 bytes — the same as `dp0` — because `.text` has slack
+before the fixed globals offset, so appending up to 16 KB of code does not change the image
+size at all. Size was never the varying quantity.
+
+**Next, and it is now a one-variable experiment:** vary the number of `.gct` entries directly —
+add static capability initialisers (e.g. `static void *p = &something;`) in a count sweep, with
+no other change — and find the threshold. If the hang tracks `.gct` entry count, the mechanism
+is in `__capstone_cap_init` or in what it allocates, which is squarely our side.
+
 ### 2026-08-05 — CONFIRMED: PURE CODE DISPLACEMENT flips the hang. Position excluded both ways.
 
 Two results, in order.

@@ -289,6 +289,28 @@ cp -f "$VFS_DIR/../sqlite-vfs-skeleton/capstone_sqlite_os.c" "$OBJ_DIR/capstone_
   || cp -f "$ADAPTED/capstone_sqlite_os.c" "$OBJ_DIR/capstone_sqlite_os.c"
 cp -f "${DOMAIN_SRC:-$SCRIPT_DIR/sqlite_capstone_domain.c}" "$OBJ_DIR/sqlite_capstone_domain.c"
 cp -f "$SCRIPT_DIR/sqlite_silicon_amalgam.c" "$OBJ_DIR/amalgam.c"
+# CAPSTONE_DOMAIN_PAD=N -- append N bytes of dead, never-called code to the DOMAIN file,
+# leaving the amalgamation completely untouched.
+#
+# Control for a confound: every perturbation so far (g1, pad0..pad52) was injected by the python
+# rewrite of sqlite3-capstone.c, which also renumbers every __LINE__ in the file (178 constants
+# changed in g1). The two builds that WORK (uc, f10) are both un-rewritten. So "modified" is
+# confounded with "amalgamation rewritten". This knob perturbs code layout WITHOUT rewriting the
+# amalgamation, separating the two.
+if [[ -n "${CAPSTONE_DOMAIN_PAD:-}" ]]; then
+  echo "== DOMAIN PAD: ${CAPSTONE_DOMAIN_PAD} bytes of dead code appended to the domain file"
+  python3 - "$OBJ_DIR/sqlite_capstone_domain.c" "$CAPSTONE_DOMAIN_PAD" <<'PYDPAD'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); n = int(sys.argv[2])
+if n % 4: sys.exit("FATAL: CAPSTONE_DOMAIN_PAD must be a multiple of 4")
+nops = "\n".join(['  __asm__ volatile("nop");'] * (n // 4))
+p.write_text(p.read_text() +
+  "\n__attribute__((used,noinline)) static void capstone_domain_pad(void)\n{\n" + nops + "\n}\n")
+print(f"   appended {n} bytes ({n//4} nops); amalgamation untouched")
+PYDPAD
+fi
+
+
 
 SQLITE_DEFINES=$(sed -n '/^SQLITE_DEFINES=(/,/^)/p' "$SCRIPT_DIR/build-sqlite-capstone.sh" \
                  | grep -oE '\-D[A-Za-z0-9_]+(=[^ ]*)?' | tr '\n' ' ')
