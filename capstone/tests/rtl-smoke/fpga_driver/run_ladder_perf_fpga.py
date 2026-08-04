@@ -168,6 +168,33 @@ def ensure_capstone_dev(console):
                                "[ -e /dev/capstone ] && echo DEV''OK || echo DEV''NO", timeout=30)
     if "DEVNO" in out or "DEVOK" not in out:
         raise RuntimeError(f"/dev/capstone missing (insmod failed?):\n{out}")
+    drop_setup_log(console)
+
+
+def drop_setup_log(console):
+    """Wipe the harness's own setup exchanges from the OPERATOR's console.
+
+    Three exchanges are pure harness bookkeeping and carry no information about the run:
+    the login readiness probe (`echo RDYOK` / `RDYOK`), the printk quieting, and the
+    insmod/device check (`DEVOK` / `DN_0`). They must still be TYPED and MATCHED -- they are
+    the drivers' synchronisation contract -- so they cannot simply be deleted, and the login
+    probe's echo cannot be suppressed at all (any `stty -echo` would itself echo first).
+
+    They can, however, be dropped once they have served their purpose. `uart_clear` empties
+    the board server's ring buffer, which is what the browser console renders; the driver
+    matches against its OWN accumulated `_uart` string, which is untouched. So this changes
+    only what a human sees, never what the driver sees.
+
+    Deliberately NOT a blanket `stty -echo`: an earlier attempt did that and silenced every
+    per-test command line as well, which is exactly the information the console is watched
+    for. Set BOARD_KEEP_SETUP_LOG=1 to keep the setup chatter visible when debugging the
+    harness itself."""
+    if os.environ.get("BOARD_KEEP_SETUP_LOG") == "1":
+        return
+    try:
+        console._emit("uart_clear")
+    except Exception as exc:                       # never let cosmetics break a run
+        log(f"uart_clear unavailable ({type(exc).__name__}); setup chatter stays visible")
 
 def cold_boot(console, prompt, img_name=None):
     """Full power-cycle + JTAG firmware reload -> fresh boot. Each rung runs as the
