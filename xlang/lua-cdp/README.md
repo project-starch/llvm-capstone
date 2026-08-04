@@ -66,6 +66,15 @@ sandbox).** Kept on disk as documented references (`CASE.md` + `boundary.md` +
 - `corona-858/` — no prebuilt Solar2D SDK; needs the full Corona engine
   (`librtt` + Box2D). Boundary source-confirmed against the real tree.
 
+**Verified spare (reproduced, not counted in the 15).** A 16th case that
+landed after the count was fixed; kept as a documented, passing swap-in
+candidate rather than renumbering the 15:
+- `luv-503/` — luv stores a coroutine's `lua_State*` (`ctx->L`, luv.c:865)
+  and derefs it in later callbacks after the coroutine is GC'd. valgrind
+  invalid-read in `lua_settop` ← `luv_close_cb` (handle.c:99); vuln `e2d3d18`
+  vs fix `ba4589c`. `./build.sh && ./run.sh` PASSes. (Note: ASan can't observe
+  it — the deref is in uninstrumented liblua — so this case uses valgrind.)
+
 **Reproduction order** (cheapest deps / most deterministic first): 4 `cffi-lua`,
 1 `lua-openssl`, 2 `ldbus`, 3 `xmlua`, 11/12 `lgi`, 8/9/15 `sol2`/`LuaBridge`,
 13 `luaossl`, 5 `lua-SDL2`, 10 `wxLua`, 6 `wireshark`, 14 `tarantool` (docker).

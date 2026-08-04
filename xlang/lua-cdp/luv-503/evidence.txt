@@ -1,0 +1,37 @@
+Evidence for luv #503 — CAPTURED BY US.
+
+Env: PUC Lua 5.4.7 (shared toolchain), libuv 1.51.0 (shared), gcc 15, luv cmake
+module build (-g -O0, no ASan). Detection: valgrind 3.26 memcheck.
+Repro: trigger.lua — require("luv") inside a coroutine (so luv stores that
+coroutine's lua_State in ctx->L, luv.c:865), keep the timer in a main variable,
+GC the coroutine (ctx->L now dangling), then drive a luv close callback.
+
+Why valgrind and not ASan: the faulting dereference of the freed lua_State
+happens INSIDE liblua5.4.so (lua_settop / luaL_unref), which is not
+ASan-instrumented; and ASan's quarantine keeps the freed bytes intact, so the
+stale read silently succeeds and prints DONE. valgrind instruments liblua too
+and flags the read. (Issue #503 itself was diagnosed under valgrind.)
+
+===== VULN (e2d3d18, parent of the #503 fix) =====
+==ERROR: valgrind Invalid read of size 8
+    at lua_settop        (liblua5.4.so)
+    by luv_call_callback (lhandle.c:91)      <- lua_pop(L,0) on the freed L
+    by luv_close_cb      (handle.c:99)       <- L = data->ctx->L (freed coroutine)
+  Address is 24 bytes inside a block of size 208 free'd   <- the coroutine lua_State
+...
+==ERROR: valgrind Invalid read of size 8
+    by luaL_unref        (liblua5.4.so)
+    by luv_unref_handle  (lhandle.c:106)
+    by luv_close_cb      (handle.c:100)
+  Address is inside the same 208-byte block free'd
+(208 bytes = sizeof(lua_State); freed via luaM_free_ <- Lua GC of the collected
+coroutine thread.)
+
+===== CONTROL: FIXED (ba4589c "Use main thread of current Lua state ...") =====
+DONE
+valgrind: 0 errors. The fix stores the main thread (LUA_RIDX_MAINTHREAD) in
+ctx->L, which is never collected, so the close callback dereferences a live L.
+
+Differential (Invalid read of the freed coroutine lua_State via lua_settop in
+luv_close_cb on the vulnerable tree; clean on the fix) confirms the #503
+long-lived-lua_State UAF.
