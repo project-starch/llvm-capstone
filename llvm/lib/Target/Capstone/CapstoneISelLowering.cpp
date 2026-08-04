@@ -10489,13 +10489,35 @@ SDValue CapstoneTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const
       RHS = CondV.getOperand(1);
       CCVal = cast<CondCodeSDNode>(CondV.getOperand(2))->get();
       translateSetCCForBranch(DL, LHS, RHS, CCVal, DAG, Subtarget);
-
-      if (auto *RHSC = dyn_cast<ConstantSDNode>(RHS)) {
-        if (!RHSC->isZero())
-          return SDValue();
-        RHS = DAG.getRegister(Capstone::X0, XLenVT);
-      }
     }
+
+    // The Select_GPRCAP_Using_CC_GPR pseudo compares two GPRs, so both compare
+    // operands must be register values -- unlike the pattern-matched non-i128
+    // path, building the machine node here bypasses ISel's automatic constant
+    // materialization. A constant can appear on either side: the original SETCC
+    // RHS is frequently a non-zero constant (e.g. `n == LUA_MININTEGER` at
+    // lstrlib.c:1190), and translateSetCCForBranch can move a constant onto LHS
+    // (X < 1 becomes 0 >= X). Materialize any constant compare operand into a
+    // GPR: X0 for zero, otherwise a plain integer load (li) via a
+    // CopyToReg/CopyFromReg, the same device used for the capability arms above.
+    // This feeds ONLY the branch comparison; the capability true/false values
+    // are untouched, so the selected capability's tag is unaffected. (Bailing
+    // here instead -- as an earlier version did on a non-zero RHS -- fell through
+    // to lowerBranchSelect(), which forms an i128 CapstoneISD::SELECT_CC that has
+    // no RV64 selection pattern and aborts with "Cannot select".)
+    auto materializeXLenCompareOperand = [&](SDValue V) -> SDValue {
+      auto *C = dyn_cast<ConstantSDNode>(V);
+      if (!C)
+        return V;
+      if (C->isZero())
+        return DAG.getRegister(Capstone::X0, XLenVT);
+      Register VReg = DAG.getMachineFunction().getRegInfo().createVirtualRegister(
+          &Capstone::GPRRegClass);
+      SDValue Chain = DAG.getCopyToReg(DAG.getEntryNode(), DL, VReg, V);
+      return DAG.getCopyFromReg(Chain, DL, VReg, XLenVT);
+    };
+    LHS = materializeXLenCompareOperand(LHS);
+    RHS = materializeXLenCompareOperand(RHS);
 
     SDValue TargetCC = DAG.getTargetConstant(getCapstoneCCForIntCC(CCVal), DL,
                                             XLenVT);
