@@ -46,6 +46,57 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-05 — RETRACTION: the "uncalled function" anomaly is CONFOUNDED WITH RUN POSITION
+
+**Retracted:** "editing a function the executed path never calls deterministically changes
+whether an unrelated function hangs." The evidence does not support it — the two arms were
+never run under matched conditions.
+
+    uc:11  returned   -- BOTH observations at position 2, behind a returning uc:9
+    g1:11  no return  -- ALL THREE observations at position 1, with NOTHING else in the boot
+
+**`uc:11` was never run first-position; `g1:11` was never run behind a returning control.** The
+discriminating cell is empty, and image is perfectly confounded with position. By this
+project's own standard (`SILICON-BLOCKER.md:20` — a boot whose control does not return is
+VOID) all three `g1` boots are the discarded shape. They also ran from a *different firmware
+relink* than the `uc` arm, which is a second uncontrolled variable.
+
+**"They differ only by an opaque early return" is also false of the binary.** True of the
+logic; not of the image. Measured: `.text` grew 52 bytes, **1931 of 2223 functions shifted by
++52**, and 178 compiled-in `__LINE__` constants changed (the REG_BISECT patch inserts lines).
+Critically, **`strlen` itself moved** (`0x14fc1c` → `0x14fc50`, a different 16-byte alignment) —
+so the code stage 11 actually executes is not at the same address in the two builds. "The
+edit" and "the layout shift" are the same intervention and cannot be separated by this
+experiment.
+
+**Corrections to the exclusion scans:**
+* The `cp` scan is **stronger** than recorded: it reaches `.text` = **1,324,372** (SQLite's is
+  1,320,604) and returns correctly. The table previously said 370,004.
+* The `gc` scan's stated method was wrong: the probe is **not** byte-identical across draws
+  (the store loop scales with N and the read target moves), and only the 184- and 208-carve
+  draws have board artifacts — **both above 181**, so the claimed "straddle of the 178/181
+  boundary" is unevidenced.
+* Both scans use the ladder host/glue, not the SQLite host, so a null result there does not
+  exclude a variable for the SQLite image.
+
+**New scan, and a caveat on it.** `rv600/rv1000/rv1400` (608/1008/1408 carves, one domain per
+boot since the pool does not reclaim) all returned correctly — the initial "WRONG" verdicts
+were a bad oracle of mine that assumed every draw reads `lit[2]`; the correct expectations are
+9600/9000/9400, which is exactly what came back. **This does not yet exclude pool exhaustion**:
+the RTL allocates on `INIT`/`MREV`, and it is not established that a `split` per carve allocates
+a node at all, so 1408 carves may be far fewer than 1408 allocations.
+
+**Standing RTL facts worth keeping** (from the sources, bitstream-accurate): the pool is
+`reg head : logic[10]` initialised to 3 → **1021 allocatable ids**; on exhaustion
+`set head := *head+10'd1` **wraps silently to 0** and aliases onto the sentinel — no stall, no
+exception (the stall-on-full fix `91ea10837` postdates this bitstream); `REVOKE_NODE` walks
+`next` with no step bound; and it is a single shared process, so one stuck walk blocks every
+later rev-node request. That remains a plausible silent-hang mechanism, just not one this scan
+tested.
+
+**The single boot that settles the position confound:** `uc:11` (pos 1) → `uc:9` (pos 2) →
+`g1:9` (pos 3) → `g1:11` (pos 4). That fills both empty cells at once.
+
 ### 2026-08-05 — The real anomaly, sharpened: editing a function the path NEVER CALLS
 ### deterministically changes whether an unrelated function hangs
 
