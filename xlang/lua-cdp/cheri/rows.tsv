@@ -1,0 +1,41 @@
+# Lua-CDP CHERI baseline column — PREDICTIONS, committed BEFORE the runs.
+#
+# The CHERI half of the fair comparison for xlang/lua-cdp/. The SAME shim source
+# as the Capstone column (../shims/*.c) is compiled purecap and run as an
+# ordinary CheriBSD process under the three revocation configs. Only the
+# capability mechanism differs; the workload is identical.
+#
+# Keys match ../capstone/rows.tsv. classify.py requires a NUMERIC key (col 1);
+# col 2's basename is the purecap binary.
+#
+# Every row is a temporal cross-domain UAF, so the prediction is uniform and
+# follows the mruby CHERI column's measured pattern for direct-free / GC-free
+# UAFs (../../cheri/rows.tsv rows 1, 12):
+#   spatial  MISS   revocation OFF: the freed block is still in-bounds, so the
+#                   stale access succeeds — CHERI spatial safety cannot see a
+#                   temporal UAF.
+#   async    MISS   revocation ON, async quarantine (the DEPLOYED default): the
+#                   sweep has not run at the contract point, so the capability is
+#                   not yet revoked and the stale access completes. THIS IS THE
+#                   HEADLINE — the default config does not catch it synchronously.
+#   eager    SWEEP  revocation ON, revoke on every free: the free revokes
+#                   immediately, so the stale access faults (SIGPROT). This is the
+#                   config that maps onto Capstone's revoke-on-free.
+#
+# Taxonomy (classify.py, from exit code): SYNC = fault under spatial;
+#   SWEEP(async|eager) = fault only with revocation; MISS = completed.
+#
+# key	shim	pred_spatial	pred_async	pred_eager	case
+1	shims/luac_openssl_ctx_uaf.c	MISS	MISS	SWEEP	lua-openssl-141 EVP_CIPHER_CTX
+2	shims/luac_ldbus_message_uaf.c	MISS	MISS	SWEEP	ldbus-20 DBusMessage
+3	shims/luac_ffi_closure_uaf.c	MISS	MISS	SWEEP	cffi-lua-57 closure_data
+4	shims/luac_sdl_window_uaf.c	MISS	MISS	SWEEP	lua-sdl2-75 SDL_Window
+5	shims/luac_tvbuff_uaf.c	MISS	MISS	SWEEP	wireshark-16807 tvbuff
+6	shims/luac_uv_fs_uaf.c	MISS	MISS	SWEEP	luv-696 uv_fs_t
+7	shims/luac_lgi_cairo_region_uaf.c	MISS	MISS	SWEEP	lgi-122 cairo_region_t
+8	shims/luac_lgi_garray_uaf.c	MISS	MISS	SWEEP	lgi-65 GArray
+9	shims/luac_x509_store_dblfree.c	MISS	MISS	SWEEP	luaossl-124 X509_STORE
+10	shims/luac_pgconn_uaf.c	MISS	MISS	SWEEP	luadbi-35 PGconn
+11	shims/luac_luv_costate_uar.c	MISS	MISS	SWEEP	luv-503 coroutine lua_State
+12	shims/luac_curl_multi_backptr_uaf.c	MISS	MISS	SWEEP	lua-curl-80 lcurl_multi_t
+13	shims/luac_lmdb_value_uaf.c	MISS	MISS	SWEEP	lmdb value-after-txn

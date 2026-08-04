@@ -1,0 +1,48 @@
+Evidence for lua-hiredis — BLOCKED (no filed hard-tier CDP UAF). CAPTURED BY US.
+
+Env: PUC Lua 5.4.7 (shared toolchain), hiredis 1.2.0 + redis-server 8.0.5,
+gcc 15.2 ASan. Binding: agladysh/lua-hiredis @ 5df62990f, built ASan against the
+toolchain lua + system hiredis; run under a private redis (unix socket).
+
+===== EMPIRICAL: the described CDP shape is ABSENT (safe by construction) =====
+$ ./build.sh && ./run.sh
+built: .work/hiredis.so (agladysh/lua-hiredis @ 5df62990f, ASan)
+--- trigger output ---
+OK-reply-is-a-lua-copy
+OK-context-not-double-freed
+--- safe-by-construction: reply_copy=1 ctx_safe=1 no_asan_report=1 ---
+BLOCKED: lua-hiredis has no filed hard-tier Lua<->C CDP UAF.
+run rc=3
+
+  reply path: LRANGE returns a Lua `table` (#=5). After dropping all references,
+  two full collectgarbage() and 5000 fresh 64-byte allocations (to reuse any
+  freed C block), reply[1]=="v1" and reply[5]=="v5" still hold, and ASan emits
+  NO heap-use-after-free. Proof that Lua holds a COPY, not a redisReply* handle.
+  context path: c:close() (redisFree + pContext=NULL) followed by __gc (the same
+  null-guarded lconn_close) does not double-free; ASan clean.
+
+===== SOURCE (agladysh/lua-hiredis @ 5df62990f, src/lua-hiredis.c) =====
+:266  push_reply(): materialises reply -> lua_pushlstring / lua_pushinteger /
+      lua_createtable; recurses over pReply->element[i] at :322. No lua_newuserdata,
+      no stored reply pointer.
+:359  lconn_command: nret = push_reply(...);
+:364      freeReplyObject(pReply);   <- reply freed IN-CALL, after the copy.
+:184  connection userdata wraps redisContext* (the only wrapped native resource).
+:409  lconn_close: if (pConn->pContext != NULL) { redisFree(...); pContext=NULL; }
+:424  #define lconn_gc lconn_close   <- __gc == close, idempotent (null-guarded).
+:189  check_connection: errors if pContext==NULL (no use-after-close).
+
+===== ECOSYSTEM SEARCH (2026-08-04) =====
+agladysh/lua-hiredis: issues #1 (TYPE), #2 (nested-bulk parse depth), #4 (Lua 5.2)
+  -- NONE a UAF/double-free. PRs #3/#5/#6/#7 + full commit log: Lua-version compat
+  and packaging only; no UAF/double-free fix commit.
+C forks nmreis/lua-hiredis (Lua 5.2) and zs-soft/lua-hiredis-cluster carry the
+  IDENTICAL deep-copy push_reply + immediate freeReplyObject design (verified);
+  empty issue trackers. ~30 network forks are 2014 mass-mirrors, none divergent.
+miketang84/bamboo-redis: pure-Lua, no C boundary.
+FFI (koolhazz/hiredis_ffi): LuaJIT-FFI, out of scope for the PUC-Lua C-module
+  toolchain; no filed CDP UAF.
+
+Conclusion: no clean, filed, hard-tier Lua<->C CDP use-after-free exists in the
+lua-hiredis ecosystem. The binding is safe by construction for both native
+resources. BLOCKED per task instruction (do NOT force a non-CDP/reconstructed bug).

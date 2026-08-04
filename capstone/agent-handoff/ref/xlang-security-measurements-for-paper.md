@@ -77,12 +77,18 @@ is what Capstone is designed to do.
   lends and would still qualify; the six VM-register-stack rows (4, 5, 8, 10,
   13, 15) would not, because their stale pointer is engine-internal and never
   crosses a domain line. **That number is unmeasured.**
-- **8 of Capstone's 12 temporal catches manifest as a QEMU assert** rather than a
+- **9 of Capstone's 12 temporal catches manifest as a QEMU assert** rather than a
   delivered monitor fault, because the rows compute `regs + offset` on an
   untagged capability and `op_helper.c` has no exception path for that (13 bare
   tag asserts against 46 real raises). The access is prevented either way — the
   only escape would be arithmetic that restored a tag — but which fault real
-  hardware delivers is unresolved and needs RTL or silicon.
+  hardware delivers is unresolved and needs RTL or silicon. (Count corrected
+  from 8 on 2026-08-03 — row 7 is in the assert group. Same day, the column's
+  compiler provenance was audited against C-16, which trips the same assert:
+  the column was measured pre-fix but is demonstrated unaffected — all 30
+  binaries byte-identical under the post-fix compiler, controls run to
+  completion, rows 1 and 5 re-run green. Trail:
+  `agent-handoff/history/03-08-2026_09-42-37_c16-xlang-column-provenance-audit.md`.)
 - **Row 2 is the floor for both systems.** A stack-use-after-return involves no
   allocator, so no allocator-mediated mechanism can observe it. It is in the
   corpus to mark that boundary, not as a defect either system should have caught.

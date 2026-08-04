@@ -1,0 +1,71 @@
+Evidence for LuaDBI #35 — CAPTURED BY US (not an upstream quote).
+
+Env: PostgreSQL 16.4 (built from source; the server + an ordinary libpq for the
+     server, plus a second libpq built with -fsanitize=address for the client),
+     PUC Lua 5.4.7 (shared toolchain, built shared), gcc 15.2 AddressSanitizer.
+Binding: LuaDBI PostgreSQL driver @ b1075359 (= f562ccd~1, the vulnerable tree;
+     fix = f562ccd).
+Trigger: xlang/lua-cdp/luadbi-35/trigger.lua (connect -> prepare -> close ->
+     execute; the issue #35 repro, adapted from SQLite3 to PostgreSQL).
+
+Two distinct allocations: the Lua STATEMENT full userdata (a boxed pointer
+created by lua_newuserdata in dbd_postgresql_statement_create) and a separate
+1056-byte libpq PGconn allocated by makeEmptyPGconn (via PQsetdbLogin). At the
+vulnerable commit the statement caches its OWN raw copy of the connection's
+PGconn* (dbd_postgresql.h: `PGconn *postgresql;`, set in statement_create by
+`statement->postgresql = conn->postgresql;`). db:close() runs PQfinish() which
+free()s the PGconn and nulls the CONNECTION's field, but never touches the
+statement's copy -> the statement holds a dangling PGconn*. NOT a borrowed
+pointer into a Lua string.
+
+Why libpq is ASan-built for the CLIENT: the stale read is PQstatus(), which lives
+INSIDE libpq. With an un-instrumented libpq that read is never shadow-checked, so
+ASan reports nothing (verified: PQstatus(freed) silently returns CONNECTION_BAD).
+Building the client's libpq with -fsanitize=address makes PQstatus's read of the
+freed PGconn a labelled heap-use-after-free with PQfinish/makeEmptyPGconn frames.
+The server keeps the ordinary libpq. This is the same split lua-openssl-141 uses
+(ASan libcrypto, ordinary everything else).
+
+===== VULNERABLE (b1075359 = f562ccd~1) — heap-use-after-free =====
+==ERROR: AddressSanitizer: heap-use-after-free on address 0x7c8ce33e06f8
+READ of size 4 at 0x7c8ce33e06f8 thread T0
+  USE  #0 PQstatus                 src/interfaces/libpq/fe-connect.c:7196
+       #1 statement_execute        dbd/postgresql/statement.c:145   (stmt:execute())
+       #2 luaD_pretailcall         (liblua5.4 — Lua calling the C method)
+       ...
+       #8 luaB_pcall               (liblua5.4 — pcall(stmt.execute) in the trigger)
+  FREED (by db:close())
+       #0 free
+       #1 freePGconn               src/interfaces/libpq/fe-connect.c:4468
+       #2 PQfinish                 src/interfaces/libpq/fe-connect.c:4604
+       #3 connection_close         dbd/postgresql/connection.c:141   (db:close())
+  ALLOC (by DBI.Connect)
+       #0 malloc
+       #1 makeEmptyPGconn          src/interfaces/libpq/fe-connect.c:4313
+       #2 PQsetdbLogin             src/interfaces/libpq/fe-connect.c:1829
+       #3 connection_new           dbd/postgresql/connection.c:86
+  region: 376 bytes inside a 1056-byte block (the libpq PGconn struct)
+SUMMARY: AddressSanitizer: heap-use-after-free fe-connect.c:7196 in PQstatus
+
+The vulnerable statement_execute (dbd/postgresql/statement.c:145) — note the
+"sanity check" itself is what dereferences the stale handle:
+    /* Sanity check - is database still connected? */
+    if (PQstatus(statement->postgresql) != CONNECTION_OK)   // reads the freed PGconn
+        { lua_pushstring(L, DBI_ERR_STATEMENT_BROKEN); lua_error(L); }
+statement->postgresql was copied verbatim from conn->postgresql in
+dbd_postgresql_statement_create and is never re-validated or nulled; db:close()
+freed the block it points at.
+
+===== CONTROL: FIXED (f562ccd) — no UAF =====
+NO-UAF ok=false err=Statement unavailable: database closed
+No AddressSanitizer report. The fix ("Make the statement object refer to the
+connection object, instead of the connection handle") replaces the struct field
+`PGconn *postgresql;` with `connection_t *conn;` and reads
+`statement->conn->postgresql`. After db:close() that field is NULL (the
+connection userdata is still alive — the Lua `db` variable holds it), so
+PQstatus(NULL) returns CONNECTION_BAD without dereferencing freed memory, and
+statement_execute raises DBI_ERR_STATEMENT_BROKEN cleanly (caught by pcall).
+
+The differential (heap-use-after-free on the parent, clean on the fix) is what
+makes this a verified reproduction of the cross-domain use-after-free rather than
+an incidental crash.

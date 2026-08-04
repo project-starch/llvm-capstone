@@ -1,0 +1,23 @@
+Evidence for sol2 #1373 — CAPTURED BY US.
+
+Env: PUC Lua 5.4.7 (shared toolchain), sol2 v3.5.0, gcc 15 ASan.
+Repro: verbatim upstream (godbolt z/Eb6zGaKjr); harness.cpp argv "vuln"/"control".
+
+===== VULN — heap-use-after-free =====
+==ERROR: AddressSanitizer: heap-use-after-free  READ of size 4
+  #0 sol::stack::unqualified_pusher<int>::push<int&>(lua_State*, int&)  stack_push.hpp:316
+     (pushing the interior ComplexStructA::a of `bb`)
+  ... via ComplexStructA index_call after `csc=nil; collect_garbage()x2`
+SUMMARY: heap-use-after-free stack_push.hpp:316 in sol::stack::unqualified_pusher<int>::push
+
+The freed block is the ComplexStructC userdata storage; `bb` (=csc.b) is an
+interior reference into it. Proven a reference (not a copy): `bb.b=100` is
+visible through `csc.b.b`. Two distinct allocations; NOT a string-borrow.
+
+===== CONTROL — clean =====
+(keep=csc, so the parent userdata is not collected)
+DONE
+No AddressSanitizer report.
+
+Differential (UAF when parent collected, clean when kept alive) confirms the
+UAF is caused by the parent's collection, not an incidental read.

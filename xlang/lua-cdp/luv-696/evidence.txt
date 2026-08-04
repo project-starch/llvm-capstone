@@ -1,0 +1,20 @@
+Evidence for luv #696 — CAPTURED BY US.
+
+Env: PUC Lua 5.4.7 (toolchain), libuv 1.51.0, gcc 15 ASan, luv cmake module.
+Repro: committed test "fs.scandir given to new_work" (ec6ecf5) reduced to
+trigger.lua (req=nil; collectgarbage() to free the req during the worker).
+
+===== VULN (0e4a895) =====
+AddressSanitizer:DEADLYSIGNAL
+==ERROR: AddressSanitizer: SEGV on unknown address 0x000300000022
+  #5 luv_fs_gc  src/fs.c:40
+SUMMARY: AddressSanitizer: SEGV in uv_fs_req_cleanup (libuv)
+  The scandir req userdata's __gc cleans up the uv_fs_t while the threadpool
+  worker still iterates it via uv_fs_scandir_next.
+
+===== CONTROL: FIXED (3e39f98) =====
+DONE
+No AddressSanitizer report.
+
+Differential (SEGV in luv_fs_gc on the vulnerable tree, clean on the fix)
+confirms the scandir-req lifetime bug.

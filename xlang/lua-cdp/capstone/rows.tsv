@@ -1,0 +1,44 @@
+# Lua-CDP Capstone column — PREDICTIONS, committed BEFORE the runs.
+#
+# The corpus is the 13 pure Lua<->C cross-domain-pointer use-after-frees in
+# ../ (C++ and LuaJIT cases excluded — Capstone has no libc++/STL for
+# capstone64, and LuaJIT has no capstone64 backend). Each row distills its
+# case's memory lifecycle into a standalone shim (shims/<shim>.c) using the SAME
+# revoke-on-free allocator, domain and host as the mruby column
+# (../../capstone/), reused verbatim.
+#
+# Configs (as in ../../capstone/rows.tsv): Capstone has two that map onto CHERI's
+# three:
+#   bounds  = spatial only, no revocation   <-> CHERI "spatial"
+#   revoke  = revoke-on-free                 <-> CHERI "eager"
+# There is NO Capstone analogue of CHERI's async quarantine default — a fact
+# about the mechanisms, reported not papered over. Only `revoke` is run here.
+#
+# Every row is a TEMPORAL cross-domain UAF by construction (that is what the
+# corpus is), so every prediction is the same: the free that ends the native
+# resource's life REVOKES it, and the stale access one crossing later FAULTS;
+# the no-revoke control lets that access complete and reports MISS. The control
+# is the discriminator — a FAULT whose control does not MISS is not attributable.
+#
+# fault_route: how the catch is expected to manifest under QEMU.
+#   off0      the stale access is a plain load/store at offset 0 -> a clean
+#             delivered cause-24/25 monitor fault (no pointer arithmetic).
+#   interior  the access is at offset > 0 -> the interior address is formed by
+#             cincoffset on the revoked capability, which hits QEMU's
+#             assert-on-untagged gap (an emulator limitation, still scored FAULT;
+#             see ../../capstone/ history 01-08-2026). Both count as prevented.
+#
+key	slug	shim	native_bytes	access	fault_route	expect_revoke	expect_control	mechanism
+1	lua-openssl-141	luac_openssl_ctx_uaf	168	R@0	off0	FAULT	MISS	revocation
+2	ldbus-20	luac_ldbus_message_uaf	64	R@0	off0	FAULT	MISS	revocation
+3	cffi-lua-57	luac_ffi_closure_uaf	56	R@32	interior	FAULT	MISS	revocation
+4	lua-sdl2-75	luac_sdl_window_uaf	240	R@0	off0	FAULT	MISS	revocation
+5	wireshark-16807	luac_tvbuff_uaf	72	R@16	interior	FAULT	MISS	revocation
+6	luv-696	luac_uv_fs_uaf	64	R@0	off0	FAULT	MISS	revocation
+7	lgi-122	luac_lgi_cairo_region_uaf	32	R@4	interior	FAULT	MISS	revocation
+8	lgi-65	luac_lgi_garray_uaf	16	R@0	off0	FAULT	MISS	revocation
+9	luaossl-124	luac_x509_store_dblfree	152	W@136	interior	FAULT	MISS	revocation
+10	luadbi-35	luac_pgconn_uaf	1056	R@376	interior	FAULT	MISS	revocation
+11	luv-503	luac_luv_costate_uar	208	R@24	interior	FAULT	MISS	revocation
+12	lua-curl-80	luac_curl_multi_backptr_uaf	96	W@64	interior	FAULT	MISS	revocation
+13	lmdb-value-after-txn	luac_lmdb_value_uaf	8192	R@0	off0	FAULT	MISS	revocation

@@ -1,0 +1,75 @@
+Evidence for the Lua-cURLv3 easy<->multi dangling-pointer UAF — CAPTURED BY US
+(not an upstream quote).
+
+Env: system libcurl 8.18.0 (NOT rebuilt), PUC Lua 5.4.7 (shared toolchain,
+     built shared, no ASan), gcc 15 AddressSanitizer on lcurl.so.
+Binding: Lua-cURLv3 (lcurl) @ b2e9474 (parent of the fix 56b4d05 = vulnerable
+     tree).
+Trigger: xlang/lua-cdp/lua-curl-80/trigger.lua.
+
+Two distinct Lua-GC allocations:
+  1. the EASY userdata, whose C struct lcurl_easy_t has a back-pointer
+     `multi` to the multi it was added to (set by multi:add_handle), and
+  2. the MULTI userdata (a separate 96-byte lcurl_multi_t block, allocated by
+     Lua's luaM_malloc_ for lua_newuserdata; it wraps a native CURLM*).
+add_handle records e->multi = m but installs NO Lua-side edge that keeps the
+multi reachable *from* the easy, so dropping the last Lua ref to the multi lets
+the GC collect the multi userdata while the easy still holds e->multi. This is
+NOT a borrowed pointer into a Lua string; it is a C back-pointer from one
+Lua-GC object into a second, now-freed Lua-GC object.
+
+Detection note (why libcurl is NOT ASan-built here, unlike lua-openssl #141):
+the UAF is on lcurl's OWN struct field (p->multi->L), dereferenced inside the
+instrumented lcurl.so — so ASan sees it directly. The freed block is Lua
+userdata memory (freed via Lua's l_alloc), which ASan intercepts globally.
+No instrumentation of libcurl is needed.
+
+===== VULNERABLE (b2e9474) — heap-use-after-free =====
+==ERROR: AddressSanitizer: heap-use-after-free on address 0x7c5feb5e0b60
+WRITE of size 8 at 0x7c5feb5e0b60 thread T0
+  USE  #0 lcurl_easy_cleanup            src/lceasy.c:87   ( p->multi->L = L; )
+       #1 luaD_precall / luaV_execute   (liblua5.4 — running e:close())
+  FREED (by Lua's GC collecting the multi userdata)
+       #0 free
+       #1 l_alloc                       (liblua5.4 — Lua's default allocator)
+  ALLOC (by lua_newuserdata for curl.multi())
+       #0 realloc
+       #1 luaM_malloc_                  (liblua5.4)
+  region: 64 bytes inside a 96-byte block (the lcurl_multi_t userdata)
+SUMMARY: AddressSanitizer: heap-use-after-free src/lceasy.c:87 in lcurl_easy_cleanup
+
+The vulnerable lcurl_easy_cleanup (src/lceasy.c, around line 87):
+    if(p->curl){
+      p->L = L;
+      if(p->post){ p->post->L = L; }
+      if(p->multi){ p->multi->L = L; }     // line 87 — WRITE through dangling e->multi
+      curl_easy_cleanup(p->curl);
+      if(p->multi){ p->multi->L = NULL; }
+      p->curl = NULL;
+    }
+On the vulnerable tree the multi's finalizer (lcurl_multi_cleanup) frees the
+CURLM* and unrefs its handle table but does NOT null the easies' ->multi
+back-pointers, so e->multi survives as a dangling pointer to the freed
+userdata.
+
+===== CONTROL: FIXED (56b4d05) — no UAF =====
+NO-UAF
+No AddressSanitizer report. The fix ("Fix. Cleanup easy references when calls
+multi::close") makes lcurl_multi_cleanup iterate the multi's handle table and
+set e->multi = NULL for every attached easy before the userdata is freed. The
+subsequent easy:close() then sees p->multi == NULL and skips the write.
+
+The differential (heap-use-after-free on the parent, clean on the fix) is what
+makes this a verified reproduction rather than an incidental crash.
+
+===== SCOPE / TIER NOTE (read before counting this case) =====
+The freed block is a Lua-GC *userdata* (the multi handle), not a curl-owned
+native heap object. This is therefore the SAME tier as the corpus's luv-503
+spare (C holds a raw pointer to a freed managed object and derefs it), and one
+step below the canonical native-resource cases (EVP_CIPHER_CTX, DBusMessage,
+...). It is a genuine two-object cross-domain-pointer UAF, but see CASE.md:
+the pure *native* CURL*/CURLM* variant ("easy freed while still in a multi")
+does NOT reproduce on any relevant libcurl, because libcurl's Curl_close()
+auto-removes the handle from its multi (verified in libcurl source since
+<= 7.50). That native self-protection is exactly why the reproducible bug lives
+in lcurl's own bookkeeping rather than in libcurl.

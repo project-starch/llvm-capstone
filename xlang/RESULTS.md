@@ -122,10 +122,13 @@ on an existing vehicle, so it does not meet that bar.
   bounds the boundary-only number too. Rows 1/3/7/12 are genuine cross-domain
   lends and would survive it; the six VM-register-stack rows would not, because
   their stale pointer never crosses a domain line. **Unmeasured.**
-- **8 of Capstone's 12 temporal catches manifest as a QEMU assert**, not a
+- **9 of Capstone's 12 temporal catches manifest as a QEMU assert**, not a
   delivered fault: `op_helper.c` has no exception path for arithmetic on an
   untagged capability. The access is prevented either way, but which fault real
-  hardware delivers needs RTL or silicon.
+  hardware delivers needs RTL or silicon. (Count corrected from 8 on
+  2026-08-03: row 7 is in the assert group. Compiler provenance of the column
+  was audited the same day — measured pre-C-16-fix, demonstrated unaffected;
+  see `capstone/RESULTS.md` caveats and the history note referenced there.)
 - **Corpus composition, before anyone quotes "15 rows".** 13 temporal, 2
   spatial. Six of the 13 are the *same mechanism* (a raw interior pointer cached
   across a re-entrant Ruby callback while the VM stack is reallocated). Rows 8

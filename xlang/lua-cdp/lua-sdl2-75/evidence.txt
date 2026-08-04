@@ -1,0 +1,59 @@
+Evidence for lua-SDL2 #75 — CAPTURED BY US (not an upstream quote).
+
+Env: shared PUC Lua 5.4.7 (built shared), SDL2 2.32.10, gcc 15, headless via
+xvfb-run + xdotool. Binding: lua-SDL2 @ 272a748 (= 96491c0^, parent of fix
+96491c0 = vulnerable tree). Trigger: xlang/lua-cdp/lua-sdl2-75/trigger.lua.
+
+The hit-test callback (src/window.c hitTestCallback) builds a SECOND Window
+userdata over the SAME native SDL_Window via commonPush("p") -> mustdelete=1.
+The trigger drives a real left ButtonPress over the window (xdotool) so SDL's
+X11 ProcessHitTest invokes it, then collectgarbage() finalizes the now-orphan
+duplicate; its __gc calls SDL_DestroyWindow on the live window handle A still
+holds.
+
+===== VULNERABLE (272a748) — ASan module: SDL "Invalid window" =====
+HITCOUNT 1
+BEFORE id=1
+AFTER id=0 err=[Invalid window]
+WINDOW-DESTROYED-WHILE-LIVE
+
+  win:getID() before GC -> 1 (valid). After collectgarbage() the duplicate's
+  __gc ran SDL_DestroyWindow on the window handle A still references, so getID
+  returns 0 and SDL_GetError() == "Invalid window" (SDL's CHECK_WINDOW_MAGIC,
+  window->magic was nulled + the struct freed). SDL2 itself is not ASan-built,
+  so the raw read is not flagged by ASan here — it is by valgrind, below.
+
+===== VULNERABLE (272a748) — valgrind (non-ASan module): raw UAF =====
+==NNNN== Invalid read of size 8
+==NNNN==    at 0x512E4CF: ??? (in .../libSDL2-2.0.so.0.3200.10)      # SDL_GetWindowID reads window->magic
+==NNNN==    by 0x5032DDD: l_window_getID (window.c:267)              # USE  (surviving handle A)
+==NNNN==  Address 0x4f4d680 is 0 bytes inside a block of size 240 free'd
+==NNNN==    at 0x48558BF: free (vg_replace_malloc.c:990)
+==NNNN==    by 0x514202C: ??? (in .../libSDL2-2.0.so.0.3200.10)      # SDL_DestroyWindow
+==NNNN==    by 0x5034379: l_window_gc (window.c:1002)                # FREED (GC of duplicate handle B)
+==NNNN==    by 0x4882A80: GCTM ... by 0x48795EB: luaB_collectgarbage # ...from collectgarbage()
+==NNNN==  Block was alloc'd at
+==NNNN==    at 0x4859E43: calloc (vg_replace_malloc.c:1678)
+==NNNN==    by 0x513814F: ??? (in .../libSDL2-2.0.so.0.3200.10)      # SDL_CreateWindow
+==NNNN==    by 0x5032772: l_createWindow (window.c:76)               # ALLOC (240-byte SDL_Window)
+
+  Two distinct allocations: the native 240-byte SDL_Window (calloc in
+  SDL_CreateWindow) and the Lua Window userdata handles. The free crosses at
+  l_window_gc (GC of the duplicate); the use crosses at l_window_getID (the
+  surviving handle). Textbook cross-domain-pointer UAF.
+
+===== CONTROL: FIXED (96491c0) — no UAF =====
+ASan module:                          valgrind (non-ASan module):
+HITCOUNT 1                            ==NNNN== ERROR SUMMARY: 0 errors from 0 contexts
+BEFORE id=1
+AFTER id=1 err=[]
+WINDOW-ALIVE
+
+  PR #77 replaces commonPush("p",...) with commonPushUserdata + cu->mustdelete=0,
+  so the hit-test's duplicate handle no longer owns the window; collecting it is a
+  no-op and handle A stays valid. Window survives GC; valgrind reports 0 errors.
+
+The differential (live window destroyed by GC of the duplicate on the parent;
+clean + valgrind-clean on the fix) is what makes this a verified reproduction
+rather than an incidental crash. Both builds fire the hit-test (HITCOUNT>=1), so
+the control exercises the same path and differs only in the mustdelete flag.

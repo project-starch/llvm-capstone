@@ -1,0 +1,30 @@
+# Canonical measured outcomes — Lua-CDP CHERI column.
+# reproduce.sh re-runs a fresh build+measure and FAILS on any difference.
+#
+# The three columns are the RAW per-config process outcome (as classify.py reads
+# it from the exit code): exit0 = ran to completion; SIGPROT = capability fault
+# (rc 162); SIGABRT = allocator abort (rc 134).
+#
+# cdp_async is the DERIVED security answer — "was the stale cross-domain access
+# prevented at the contract point under the deployed async default?" It is `no`
+# for every row: a fault (SIGPROT) never appears under async; the reads/writes
+# complete (exit0), and openssl's SIGABRT is the double-free detector firing at
+# the SECOND free, AFTER the stale read already completed.
+#
+# spatial is always exit0 (revocation off) — the attribution control.
+# eager is always SIGPROT — synchronous revocation catches the access.
+#
+key	row	spatial	async	eager	cdp_async_prevented
+1	luac_openssl_ctx_uaf	exit0	SIGABRT	SIGPROT	no
+2	luac_ldbus_message_uaf	exit0	exit0	SIGPROT	no
+3	luac_ffi_closure_uaf	exit0	exit0	SIGPROT	no
+4	luac_sdl_window_uaf	exit0	exit0	SIGPROT	no
+5	luac_tvbuff_uaf	exit0	exit0	SIGPROT	no
+6	luac_uv_fs_uaf	exit0	exit0	SIGPROT	no
+7	luac_lgi_cairo_region_uaf	exit0	exit0	SIGPROT	no
+8	luac_lgi_garray_uaf	exit0	exit0	SIGPROT	no
+9	luac_x509_store_dblfree	exit0	exit0	SIGPROT	no
+10	luac_pgconn_uaf	exit0	exit0	SIGPROT	no
+11	luac_luv_costate_uar	exit0	exit0	SIGPROT	no
+12	luac_curl_multi_backptr_uaf	exit0	exit0	SIGPROT	no
+13	luac_lmdb_value_uaf	exit0	exit0	SIGPROT	no

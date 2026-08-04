@@ -1,0 +1,19 @@
+Evidence for ldbus #20 — CAPTURED BY US.
+
+Env: PUC Lua 5.4.7 (toolchain), libdbus 1.16.2, dbus-run-session, gcc 15 ASan.
+Repro: issue #20 mechanism; method = ListNames (universal); trigger.lua.
+
+===== VULN (2571a9b) =====
+arg_type=nil
+  The reply DBusMessage is collected (no refcount from the iterator); its pooled
+  header is reused by 200 fresh messages; iter:get_arg_type() now reads a fresh
+  empty method-call -> DBUS_TYPE_INVALID -> nil.
+
+===== CONTROL: FIXED (5cc933b) =====
+arg_type=a
+  The iterator holds a reference to the reply (lDBusMessageIter.message), so it
+  is not collected; get_arg_type() correctly returns 'a' (array).
+
+Note: no ASan/valgrind trap — libdbus pools freed message headers, so the stale
+read stays within readable pooled memory. The nil-vs-'a' differential (identical
+code, only the fix's added reference differs) is the deterministic proof.

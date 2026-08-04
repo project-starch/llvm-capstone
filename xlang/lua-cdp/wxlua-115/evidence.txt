@@ -1,0 +1,52 @@
+Evidence for wxLua #115 — CAPTURED BY US (not an upstream quote).
+
+Env: system wxWidgets 3.2.9 (wxGTK3, release .so), PUC Lua 5.4.7 (toolchain,
+built shared from source), gcc 15 AddressSanitizer, headless under xvfb-run.
+Binding: wxLua @ b5ffacc (parent of the fix ded8e0a = vulnerable tree).
+Trigger: xlang/lua-cdp/wxlua-115/trigger.lua (AppendSubMenu + two GCs).
+Detection: ASan (the planned method was gdb; ASan gives the precise double-delete
+stack and is cleaner, so it supersedes gdb here — "ASan or gdb" is allowed).
+
+===== VULNERABLE (b5ffacc) — heap-use-after-free (double-delete) =====
+==ERROR: AddressSanitizer: heap-use-after-free ... READ of size 8
+  region: 0 bytes inside a 256-byte region  (the C++ wxMenu submenu)
+
+  USE (2nd delete — submenu userdata __gc):
+   #0 wxLua_wxMenu_delete_function(void**)      ../src/wxcore_menutool.cpp:1387  (delete o;)
+   #1 wxluaO_deletegcobject(lua_State*,int,int) ../modules/wxlua/wxllua.cpp:434
+   #2 wxlua_wxLuaBindClass__gc(lua_State*)      ../modules/wxlua/wxlbind.cpp:113
+   #7 GCTM                                      liblua5.4.so   (Lua GC finalizer)
+      ... via collectgarbage() #2
+
+  FREED (1st delete — parent wxMenu destructor deletes the submenu child):
+   #0 operator delete
+   #1 wxMenuItemBase::~wxMenuItemBase()         libwx_gtk3u_core-3.2  (delete m_subMenu)
+   #2 wxMenuBase::~wxMenuBase()                 libwx_gtk3u_core-3.2
+   #3 wxMenu::~wxMenu()                         libwx_gtk3u_core-3.2
+   #4 wxLua_wxMenu_delete_function(void**)      ../src/wxcore_menutool.cpp:1387
+   #5 wxluaO_deletegcobject                     ../modules/wxlua/wxllua.cpp:434
+   #6 wxlua_wxLuaBindClass__gc                  ../modules/wxlua/wxlbind.cpp:113
+      ... via collectgarbage() #1 (deleting the parent `menu`)
+
+  ALLOC (the coupled C++ object, distinct from the Lua userdata):
+   #0 operator new
+   #1 wxLua_wxMenu_constructor2                 ../src/wxcore_menutool.cpp:1243  (new wxMenu(...))
+
+SUMMARY: heap-use-after-free ../src/wxcore_menutool.cpp:1387 in wxLua_wxMenu_delete_function
+
+Two distinct allocations: the Lua userdata handle for `submenu` (gc-tracked by
+wxLua) and a separate 256-byte C++ wxMenu (new'd at menutool.cpp:1243).
+AppendSubMenu transfers ownership of the C++ submenu to the parent (stored in a
+wxMenuItem, deleted by ~wxMenu), but wxLua does NOT un-track the submenu userdata
+— so its __gc deletes the already-freed C++ object a second time. NOT a borrowed
+pointer into one managed object.
+
+===== CONTROL: FIXED (ded8e0a) — no UAF =====
+NO-CRASH: reached end
+No AddressSanitizer report. The fix adds `%ungc` to AppendSubMenu, emitting
+`if (wxluaO_isgcobject(L, submenu)) wxluaO_undeletegcobject(L, submenu);`
+(wxcore_menutool.cpp:197) so the submenu is removed from wxLua's gc-object list
+the moment ownership crosses to the parent; GC #2 is then a no-op.
+
+The differential (double-delete UAF on the parent commit, clean run on the fix)
+is what makes this a verified reproduction rather than an incidental crash.
