@@ -143,59 +143,74 @@ if [[ -n "${BUILTIN_LIMIT:-}" ]]; then
   grep -c "$BUILTIN_LIMIT" "$OBJ_DIR/sqlite3-capstone.c" >/dev/null || {
     echo "BUILTIN_LIMIT clamp did not apply -- the amalgamation patch shape changed" >&2; exit 1; }
 fi
-# SQLITE_REG_BISECT=1 -- split sqlite3RegisterBuiltinFunctions into its SIX sub-steps behind a
-# RUNTIME limit, so one build bisects all of them instead of one rebuild per point.
+# SQLITE_REG_BISECT=1 -- split sqlite3RegisterBuiltinFunctions into its sub-steps behind a
+# COMPILE-TIME limit, one image per point.
 #
-# Stage 10 (MallocInit + RegisterBuiltinFunctions) is the SQLite blocker as of 2026-08-04: it
-# wedges first-position on a fresh boot in BOTH build shapes, while every hand-written probe
-# (stages 11-16, 18) returns. So the bisection has to happen inside the real function.
+# Compile-time, not runtime, and that is the whole point. The runtime version added two
+# globals (179 -> 183 carves) and the resulting image ENTRY-STALLED 3/3 -- domain entry is
+# exquisitely sensitive to gp-captable layout, so instrumentation must not touch the global
+# set at all. A macro compare folds at compile time: no new globals, no layout change, and
+# exactly one early return survives per build.
 #
-# capstone_reg_limit == 0 runs the whole function, so a build with this applied and the limit
-# left at 0 behaves exactly as before; the domain sets it from the stage selector.
+# CAPSTONE_REG_LIMIT=K returns just BEFORE sub-step K (K=1 runs nothing, unset/0 runs all).
+# CAPSTONE_ALTER_LIMIT=N clamps sqlite3AlterFunctions' own entry count (-1 = unclamped).
+# Pass them via SQLITE_EXTRA_DEFS so they reach the amalgamation compile.
 if [[ "${SQLITE_REG_BISECT:-0}" == "1" ]]; then
-  echo "== BISECT: splitting sqlite3RegisterBuiltinFunctions into runtime-limited sub-steps"
+  echo "== BISECT: compile-time sub-step limit CAPSTONE_REG_LIMIT=${CAPSTONE_REG_LIMIT:-unset}"
   python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYBI'
 import sys, pathlib
 p = pathlib.Path(sys.argv[1]); s = p.read_text()
 FN = "SQLITE_PRIVATE void sqlite3RegisterBuiltinFunctions(void){"
-# Each entry: (anchor, limit value, place-before?).  A limit of K returns just AFTER step K-1,
-# so K=1 runs nothing and K=7 (or 0) runs everything.
-steps = [
-    ("  sqlite3AlterFunctions();",                                        2, True),
-    ("  for(int capstoneI=0;",                                            3, True),
-    ("  sqlite3WindowFunctions();",                                       4, True),
-    ("  sqlite3RegisterDateTimeFunctions();",                             5, True),
-    ("  sqlite3RegisterJsonFunctions();",                                 6, True),
-    ("  sqlite3InsertBuiltinFuncs(aBuiltinFunc, ArraySize(aBuiltinFunc))",7, True),
-]
 if FN not in s:
     sys.exit("REG_BISECT: sqlite3RegisterBuiltinFunctions not found -- patch shape changed")
-s = s.replace(FN, "int capstone_reg_limit = 0;\n" + FN + "\n  if(capstone_reg_limit==1) return;", 1)
+steps = [("  sqlite3AlterFunctions();", 2),
+         ("  for(int capstoneI=0;", 3),
+         ("  sqlite3WindowFunctions();", 4),
+         ("  sqlite3RegisterDateTimeFunctions();", 5),
+         ("  sqlite3RegisterJsonFunctions();", 6),
+         ("  sqlite3InsertBuiltinFuncs(aBuiltinFunc, ArraySize(aBuiltinFunc))", 7)]
+s = ("#ifndef CAPSTONE_REG_LIMIT\n#define CAPSTONE_REG_LIMIT 0\n#endif\n"
+     "#ifndef CAPSTONE_ALTER_LIMIT\n#define CAPSTONE_ALTER_LIMIT -1\n#endif\n"
+     "#ifndef CAPSTONE_INSERT_STOP\n#define CAPSTONE_INSERT_STOP 0\n#endif\n") + s
+s = s.replace(FN, FN + "\n#if CAPSTONE_REG_LIMIT==1\n  return;\n#endif", 1)
 applied = []
-for anchor, k, before in steps:
+for anchor, k in steps:
     if anchor not in s:
-        continue                      # step compiled out (e.g. SQLITE_OMIT_ALTERTABLE)
-    s = s.replace(anchor, "  if(capstone_reg_limit==%d) return;\n%s" % (k, anchor), 1)
+        continue
+    s = s.replace(anchor, "#if CAPSTONE_REG_LIMIT==%d\n  return;\n#endif\n%s" % (k, anchor), 1)
     applied.append(k)
-# Also clamp sqlite3AlterFunctions' OWN entry count at runtime. Stage 202 (MallocInit +
-# AlterFunctions only) wedges first-position on a fresh boot, and AlterFunctions is a single
-# sqlite3InsertBuiltinFuncs(aAlterTableFuncs, 9). Clamping that 9 bisects to the exact entry.
-# -1 (the default) means "unclamped", so a build with this applied and the knob untouched
-# behaves exactly as before.
+# CAPSTONE_INSERT_STOP=N: split the ONE loop iteration of sqlite3InsertBuiltinFuncs that
+# board-bisected as the wedge (0 entries returns, 1 entry wedges). Compile-time, so no new
+# globals. N returns just after sub-operation N; 0 = unclamped.
+BODY = ("    const char *zName = aDef[i].zName;\n"
+        "    int nName = sqlite3Strlen30(zName);\n"
+        "    int h = SQLITE_FUNC_HASH(zName[0], nName);\n")
+if BODY in s:
+    s = s.replace(BODY,
+        "    const char *zName = aDef[i].zName;\n"
+        "#if CAPSTONE_INSERT_STOP==1\n    if(zName) return;\n#endif\n"
+        "    int nName = sqlite3Strlen30(zName);\n"
+        "#if CAPSTONE_INSERT_STOP==2\n    if(nName>=0) return;\n#endif\n"
+        "    int h = SQLITE_FUNC_HASH(zName[0], nName);\n"
+        "#if CAPSTONE_INSERT_STOP==3\n    if(h>=0) return;\n#endif\n", 1)
+    applied.append("body")
+    SEARCH = "    pOther = sqlite3FunctionSearch(h, zName);"
+    if SEARCH in s:
+        s = s.replace(SEARCH, SEARCH + "\n#if CAPSTONE_INSERT_STOP==4\n    return;\n#endif", 1)
+        applied.append("search")
 ALT = "  sqlite3InsertBuiltinFuncs(aAlterTableFuncs, ArraySize(aAlterTableFuncs));"
 if ALT in s:
     s = s.replace(ALT,
         "  sqlite3InsertBuiltinFuncs(aAlterTableFuncs,\n"
-        "      capstone_alter_limit >= 0 ? capstone_alter_limit : (int)ArraySize(aAlterTableFuncs));", 1)
-    s = s.replace("SQLITE_PRIVATE void sqlite3AlterFunctions(void){",
-                  "int capstone_alter_limit = -1;\nSQLITE_PRIVATE void sqlite3AlterFunctions(void){", 1)
+        "      (CAPSTONE_ALTER_LIMIT >= 0 ? CAPSTONE_ALTER_LIMIT : (int)ArraySize(aAlterTableFuncs)));", 1)
     applied.append("alter")
-else:
-    sys.exit("REG_BISECT: aAlterTableFuncs insert call not found -- patch shape changed")
-if len(applied) < 3:
+if len(applied) < 4:
     sys.exit("REG_BISECT: only %d anchors matched (%r) -- patch shape changed" % (len(applied), applied))
+# No new globals may be introduced -- that is what broke the runtime version.
+if "capstone_reg_limit" in s or "capstone_alter_limit" in s:
+    sys.exit("REG_BISECT: a runtime global leaked in; the clamp must be compile-time only")
 p.write_text(s)
-print("   sub-step returns installed at limits: 1 (entry) + %s" % applied)
+print("   compile-time returns installed at limits: 1 (entry) + %s" % applied)
 PYBI
 fi
 

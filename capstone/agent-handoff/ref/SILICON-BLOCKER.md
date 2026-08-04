@@ -46,6 +46,52 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-04 — SQLite ROOT-CAUSE LOCATION: `strlen` on a `char *` loaded from a global
+### struct array
+
+Redone with **verified** instrumentation after the previous attempt turned out never to have
+executed. Every image below is artifact-checked (staged marker + probe literal), the clamp
+images are confirmed **distinct** by sha256, carve counts are stated, and every verdict comes
+from a boot whose control returned **in the same boot**.
+
+**Method change that made it work.** The clamp is now **compile-time**
+(`CAPSTONE_REG_LIMIT` / `CAPSTONE_ALTER_LIMIT` / `CAPSTONE_INSERT_STOP`, one image per point),
+not runtime. The runtime version added two globals, shifted the gp-captable 179→183 carves,
+and the image then **entry-stalled 3/3 without executing one instruction**. Instrumentation
+for this target must not touch the global set.
+
+| image | clamp | carves | board |
+|---|---|---|---|
+| `f10:9` | control, every boot | 181 | RETURN |
+| `m1` | return at first instruction of `RegisterBuiltinFunctions` | 173 | RETURN |
+| `m3` | + `sqlite3AlterFunctions()` | 178 | **entered, NO return** |
+| `a0` | `InsertBuiltinFuncs` with **0** entries | 178 | RETURN |
+| `a1` | **1** entry | 178 | **entered, NO return** |
+| `n1` | 1 entry, return after `zName = aDef[i].zName` | 178 | RETURN |
+| `n2` | 1 entry, return after `sqlite3Strlen30(zName)` | 178 | **entered, NO return** |
+
+**The wedge is the single call `sqlite3Strlen30(zName)`**, where `zName` is a `const char *`
+read from a field of the `aAlterTableFuncs` **global struct array**.
+
+**This does not contradict the earlier probes — it explains them.** Stage 11 calls
+`sqlite3Strlen30` on a plain string literal and RETURNS; stage 12 calls it on a literal
+round-tripped through a local capability slot and RETURNS. The variable is the pointer's
+**provenance**: a literal, or a copy through a local, is fine; the same call on a pointer
+**loaded out of a global struct array** wedges.
+
+**Candidate minimal repro** (not yet built or run — do this next, at instrumentation mode 0):
+
+```c
+struct kv { const char *z; int n; };
+static struct kv arr[1] = { { "alpha", 0 } };
+static unsigned probe(void) { return (unsigned)my_strlen(arr[0].z); }
+```
+
+**Still open:** whether the fault is the *load* of `arr[0].z`, the *call* passing it, or the
+*dereference* inside the callee. `n1` proves the load alone is survivable, so the remaining
+candidates are the call boundary and the dereference — one more `CAPSTONE_INSERT_STOP` point
+(inline the length loop instead of calling) separates them.
+
 ### 2026-08-04 — RETRACTION: the entire SQLite sub-step bisection is VOID (the stage
 ### selector was never compiled in)
 

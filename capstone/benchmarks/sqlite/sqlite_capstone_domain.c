@@ -362,29 +362,12 @@ static int run_sqlite_staged(int stage) {
      BOTH build shapes). AlterFunctions is one sqlite3InsertBuiltinFuncs(aAlterTableFuncs, 9),
      so clamping that count to 0..9 names the exact entry at which it dies. Each arm returns
      210 + its own count, so a wrongly-selected arm cannot read as a passing one. */
-  if (stage >= 210 && stage <= 219) {
-    extern int capstone_reg_limit;
-    extern int capstone_alter_limit;
-    int lim = stage - 210;                /* entries of aAlterTableFuncs to register */
-    rc = sqlite3MallocInit();
-    if (rc != SQLITE_OK) return rc;
-    capstone_alter_limit = lim;
-    capstone_reg_limit  = 3;              /* return right after AlterFunctions */
-    sqlite3RegisterBuiltinFunctions();
-    capstone_reg_limit  = 0;
-    capstone_alter_limit = -1;
-    return 210 + lim;
-  }
-  if (stage >= 200 && stage <= 206) {
-    extern int capstone_reg_limit;
-    int lim = stage - 199;                /* 200 -> 1 ... 206 -> 7 */
-    rc = sqlite3MallocInit();
-    if (rc != SQLITE_OK) return rc;
-    capstone_reg_limit = lim;
-    sqlite3RegisterBuiltinFunctions();
-    capstone_reg_limit = 0;
-    return 200 + lim;                     /* 201..207, distinct from every other stage */
-  }
+  /* The sub-step bisection of sqlite3RegisterBuiltinFunctions is COMPILE-TIME
+     (CAPSTONE_REG_LIMIT / CAPSTONE_ALTER_LIMIT, injected by build-sqlite-silicon.sh under
+     SQLITE_REG_BISECT=1) -- one image per point, selected at BUILD time, run at stage 10.
+     It was runtime once: that version added two globals, shifted the gp-captable from 179 to
+     183 carves, and the image then ENTRY-STALLED 3/3 without executing one instruction of the
+     domain. Instrumentation for this target must not touch the global set. */
   if (stage == 11)
     /* strlen on a plain literal: does the merged-container string path work at all? */
     return sqlite3Strlen30("capstone_probe_string");
