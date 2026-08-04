@@ -1,5 +1,38 @@
 # The silicon blocker — everything known
 
+## 2026-08-04 — RESOLVED: the markers ARE the monitor's, and their meaning is CONFIRMED in code
+
+The caution below is lifted. The emitter exists; I was grepping the wrong copy of the file.
+
+    build copy   .../build/build/opensbi-custom/lib/sbi/capstone-sbi/sbi_capstone.c   1790 lines
+    package copy .../package/capstone-sbi-domain/capstone-sbi/sbi_capstone.c          1119 lines
+
+They are DIFFERENT FILES (671 lines apart, different md5). The build copy is what is compiled
+into `fw_payload.bin`; the package copy is what every `grep` I ran this session searched. This
+is the known two-monitor-copies trap in a new form — worth remembering that **reading the
+package copy tells you nothing about the running firmware.**
+
+The build copy defines the markers explicitly:
+
+    #define CAPSTONE_TAG_SHA5 0x53484135 /* "SHA5" about to leave M-mode for the domain */
+    #define CAPSTONE_TAG_SHA6 0x53484136 /* "SHA6" the domain returned from the share entry */
+
+**So the documented semantics are correct and now verified against code**, and every
+stall-versus-wedge classification in this document stands. `strings fw_payload.bin` finds no
+"SHA5" because the tags are 32-bit integer constants printed as `TAG ':' 8-hex CRLF`, not string
+literals — which is why the binary search came up empty too.
+
+**A directly relevant note in that same file** (`:85-87`): *"The most load-bearing pair is
+SHA5/SHA6 … 'SHA5 then silence' means the hang is inside the DOMAIN's region-share."* So R-16's
+stall is attributed, by the monitor's own author, to the domain-side region-share path rather
+than to the monitor — which redirects plan step 4: instrument the domain's share entry, not the
+monitor's hand-off.
+
+**Consequence for the plan:** step 4 (monitor instrumentation) is superseded. The source to read
+is the BUILD copy, and the target is the region-share path it names. Steps 1-3 (re-confirm the
+`f10`/`swa` pair, sweep `BUILTIN_LIMIT`, shrink around the threshold) and step 5 (the untrapped
+overrun) are unchanged.
+
 ## 2026-08-04 — CAUTION: the `SHA5`/`SHA6` markers have NO locatable source in this tree
 
 Starting the monitor-side instrumentation (plan step 4) turned up something that undercuts the
