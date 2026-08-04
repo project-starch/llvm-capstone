@@ -42,6 +42,12 @@ DOMS = (os.environ.get("SQLITE_STAGE_DOMS") or
 # almost immediately, so silence here really does mean wedged -- unlike the full build,
 # where silence can mean work in progress.
 PER_DOM = float(os.environ.get("SQLITE_STAGE_TIMEOUT") or 90)
+# A wedged or entry-stalled domain emits TOTAL SILENCE, so waiting the whole per-domain
+# budget for it is pure waste -- the call site used to pass the FULL budget, which made
+# the idle check a no-op and burned the full timeout on a domain that died immediately. Any
+# UART byte resets this clock, so a slow-but-live workload is unaffected; only silence trips
+# it. Raise SQLITE_IDLE_S if a stage can legitimately go quiet for longer between SQ: markers.
+IDLE_S = float(os.environ.get("SQLITE_IDLE_S") or 30)
 OUT = os.environ.get("PROBE_SCOPED_OUT") or "/tmp/capstone/sqlite-stages.txt"
 
 STAGE_NAMES = {
@@ -145,7 +151,7 @@ def main():
                     f"echo '{start_banner}'; {HOST} {host_args}; rc=$?; "
                     f'echo "### TEST {dom_idx}/{n_tot} END {label} rc=$rc ###"; '
                     f"echo D''N_$rc",
-                    r"DN_\d", timeout=PER_DOM, idle_timeout=PER_DOM)
+                    r"DN_\d", timeout=PER_DOM, idle_timeout=IDLE_S)
                 log(f"<-- TEST {dom_idx}/{n_tot}  {label}  returned in {time.time()-t_dom:.0f}s")
             except Exception as exc:
                 wedged = True

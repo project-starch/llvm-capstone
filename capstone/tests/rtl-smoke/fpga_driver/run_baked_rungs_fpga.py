@@ -38,6 +38,13 @@ IMG_NAME = os.environ.get("FPGA_FW_NAME") or "fw_payload_fpga_up_gpfree.bin"
 CTL = os.environ.get("BAKED_CTL") or "/test-domains/lpc"
 RUNGS = (os.environ.get("BAKED_RUNGS") or "clp1 clp8").split()
 TIMEOUT = float(os.environ.get("BAKED_TIMEOUT") or 120)
+# A wedged domain emits TOTAL SILENCE, so waiting the full run budget for it is
+# pure waste -- callers used to pass idle_timeout=TIMEOUT, which made the idle
+# check a no-op and spent the whole 150s on a domain that died in the first
+# millisecond. Any UART byte resets this clock, so a slow-but-live workload is
+# unaffected; only silence trips it. Raise BAKED_IDLE_S if a workload can legitimately
+# go quiet for longer than this between markers.
+IDLE_S = float(os.environ.get("BAKED_IDLE_S", "25"))
 ART = pathlib.Path(os.environ.get("LADDER_FPGA_DIR") or "/tmp/capstone/ladder-fpga")
 OUT = os.environ.get("BAKED_OUT") or "/tmp/capstone/baked-rungs.txt"
 # Resident-bitstream guard. Reflashed 2026-08-04 to caplifive_fixed_forward.bit, which
@@ -80,7 +87,7 @@ def main():
                 console.run_command(
                     f"echo '{banner}'; {CTL} {r} /test-domains/{r}.dom; "
                     f"rc=$?; echo \"### RUNG {pos} {r} END rc=$rc ###\"; echo D''N_$rc",
-                    r"DN_\d", timeout=TIMEOUT, idle_timeout=TIMEOUT)
+                    r"DN_\d", timeout=TIMEOUT, idle_timeout=IDLE_S)
             except Exception as exc:
                 log(f"{r}: no return within {TIMEOUT:.0f}s ({type(exc).__name__})")
             text = console.uart_since(mark)

@@ -137,12 +137,34 @@ def install_resilient_emit(console):
 def sh(console, cmd, timeout=20):
     return console.run_command(f"{cmd}; echo D''N_$?", r"DN_\d+", timeout=timeout)
 
+def quiet_console(console):
+    """Stop the shell echoing every command we type back over the UART.
+
+    The per-run transcript is meant to show the TESTS, and the setup chatter buried them:
+    each driver command appeared twice (once echoed, once as output), so a 3-rung boot
+    opened with ~9 lines of harness noise before the first banner. `stty -echo` removes the
+    echoed copies; the completion markers still print, because those are program output.
+
+    Best-effort: if the image has no `stty`, the shell prints an error and we carry on with
+    echo enabled -- the drivers must not depend on this. Note it also removes a hazard the
+    old code had to work around: the echoed command line itself contained the word DEVOK,
+    so a naive substring check matched the echo rather than the result."""
+    try:
+        sh(console, "stty -echo 2>/dev/null || true", timeout=15)
+    except Exception as exc:
+        log(f"stty -echo unavailable ({type(exc).__name__}); console stays verbose")
+
+
 def ensure_capstone_dev(console):
-    """insmod capstone.ko (the UP image does not auto-load it) then verify the
-    device exists. Gate on the trailing DEVNO/DEVOK token, NOT substring presence
-    (the echoed command line itself contains the word 'DEVOK')."""
-    sh(console, "echo 1 > /proc/sys/kernel/printk")
-    out = sh(console, "[ -e /dev/capstone ] || insmod /capstone.ko 2>/dev/null; "
+    """insmod capstone.ko (the UP image does not auto-load it) then verify the device
+    exists. Gate on the trailing DEVNO/DEVOK token, NOT substring presence.
+
+    printk quieting and the insmod are ONE command with ONE marker: they used to be two
+    `sh()` calls, i.e. two echoed command lines and two DN_ markers, for no diagnostic
+    gain -- if the device is missing the DEVNO branch already says so."""
+    quiet_console(console)
+    out = sh(console, "echo 1 > /proc/sys/kernel/printk; "
+                      "[ -e /dev/capstone ] || insmod /capstone.ko 2>/dev/null; "
                       "[ -e /dev/capstone ] && echo DEV''OK || echo DEV''NO", timeout=30)
     if "DEVNO" in out or "DEVOK" not in out:
         raise RuntimeError(f"/dev/capstone missing (insmod failed?):\n{out}")
