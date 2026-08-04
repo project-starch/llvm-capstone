@@ -46,6 +46,50 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-04 — RETRACTION: the xg* bit-27 finding is the KNOWN ladder-harness artifact,
+### and it does NOT explain the SQLite blocker
+
+**Retracted:** that the `xg*` rungs are a minimal repro of the SQLite stage-10 wedge, and that
+the bit-27 corruption is a newly-found silicon defect. Both are wrong.
+
+**Board evidence that forced it** (one boot, ascending, all returned):
+
+| rung | difference from `xgn` | board |
+|---|---|---|
+| `xg0` | **identical source, instrumentation OFF** (`LADDER_NO_MINSTRET=1`) | **9 — CORRECT** |
+| `xgh` | reads the high half of the counter with `lhu` | **2048 = 0x0800** |
+| `xgf` | dead 8-byte local; counter moved to `s0-0x30`, still 32-bit `lw` | **9 — CORRECT** |
+| `xgn` | unchanged (4th consecutive boot) | 134217737 — wrong, deterministic |
+
+`xg0` is decisive: same source, instrumentation off, correct answer. **The ladder measurement
+harness is the trigger, not the C construct.**
+
+**And this was already known and documented.** `ladder_perf_domain.h:55-58` records that the
+minstret instrumentation once flipped `beebs_prime` from correct to a deterministic silicon
+miscompute (mode 4 wrong, mode 0 correct), and `:108-113` states the trigger is "an extra
+STORE through the shared-region capability", naming **`0x200`/`0x208`** as the failing
+offsets. Those are exactly `res[LADDER_INSTRET_SLOT]` and `res[LADDER_PHASE_SLOT]`
+(`64*8 = 0x200`, `65*8 = 0x208`). Modes 1-6 exist to bisect precisely this. I re-derived a
+known phenomenon and mistook it for a new one.
+
+**Critically, it cannot explain the SQLite blocker: `sqlite_capstone_domain.c` does not include
+`ladder_perf_domain.h` at all.** SQLite runs through its own domain with no ladder
+instrumentation, so whatever the harness perturbs is not what wedges SQLite stage 10.
+**Stage 10 remains unexplained.**
+
+**What genuinely survives from the xg* work** (new detail for the *known* harness bug, not a
+new bug): the corruption is in the **memory word**, not the load path — `xgh` reads the high
+half with `lhu` and gets `0x0800`; and it is **stack-slot dependent at fixed access width** —
+`xgf` moves the counter from `s0-0x28` to `s0-0x30`, keeps the 32-bit `lw`, and is correct.
+Also retracted from the earlier write-up: "frame-layout dependent" as argued from `xgw` was
+unsupported, because `s0-0x28` in `xgw` holds `i`, which is never read — `xgf` is what
+actually establishes slot dependence.
+
+**Harness fix landed alongside:** `login_root`'s 180 s deadline aborted three consecutive
+loads on a board that was booting perfectly (kernel messages still flowing at t=175 s, with
+`login:` after them). Now `LOGIN_WAIT_S`, default 420 s. Same failure shape as the
+`ENTRY_STALL_S=45` mistake: a tight timeout manufacturing a false "board is broken" verdict.
+
 ### 2026-08-04 — ROOT CAUSE (value level): a 32-bit stack slot live across a chained
 ### capability dereference gets bit 27 set
 

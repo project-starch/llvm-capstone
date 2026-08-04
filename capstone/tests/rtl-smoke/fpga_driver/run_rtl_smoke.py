@@ -121,10 +121,17 @@ def login_root(console: FpgaConsole, tries: int = 4,
     #
     # Poll for the login prompt, but bail out early if the bootrom banner repeats: seeing
     # it 3+ times AFTER this boot began means we are looping, not booting.
-    import re as _re, time as _time
+    import os as _os, re as _re, time as _time
     _BOOTROM = r"Hit any key to enter update mode"
     _start = search_from or 0
-    _deadline = _time.time() + 180.0
+    # 2026-08-04: 180 s was too tight. A healthy boot on this firmware is still emitting
+    # kernel messages ("remote fence extension is not available in SBI v1.0") past t=175 s,
+    # and `login:` lands after them -- so the deadline expired on a board that was booting
+    # perfectly, and did so three loads in a row. Same failure shape as the ENTRY_STALL_S=45
+    # mistake: a tight timeout manufacturing a false "board is broken" verdict. The bootrom
+    # loop check above is what actually catches a dead board, and it fires in seconds, so
+    # this deadline only needs to be generous.
+    _deadline = _time.time() + float(_os.environ.get("LOGIN_WAIT_S", "420"))
     while True:
         _txt = console.uart_text[_start:]
         if _re.search(r"login:", _txt):
