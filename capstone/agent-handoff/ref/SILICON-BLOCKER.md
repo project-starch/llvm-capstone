@@ -46,6 +46,51 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-04 — RETRACTION: the merged-string-container conclusion is an INSTRUMENTATION
+### ARTIFACT; the compile-time clamp changes the global set
+
+**Retracted:** "the glue does not correctly materialise a merged string container", and with it
+every verdict from the `m*`, `a*`, `n*`, `p*`, `q*` clamp images — i.e. the whole compile-time
+sub-step bisection.
+
+**The control that killed it.** A freshly built **unclamped** image (`uc`: staged,
+`STATIC_BUILTINS=0`, no `SQLITE_REG_BISECT`, **181 carves** — identical shape to `f10`), all
+three probes in one boot:
+
+    uc:9   RETURN                 control
+    uc:11  RETURN                 strlen on the direct literal WORKS
+    uc:10  entered, NO return     the real blocker, still hangs
+
+Stage 11 **returns** on the unclamped image and **hangs** on every clamped one (`q10`, `h4`,
+178 carves). The container is materialised correctly. The hang I measured was caused by the
+instrumentation.
+
+**Mechanism.** The compile-time clamp lets dead-code elimination drop the globals that the
+skipped code referenced: **181 carves unclamped → 178 clamped**. That is the same class of
+failure as the runtime clamp, which added two globals (179→183) and entry-stalled 3/3 — a
+different direction, an identical lesson.
+
+**Also refuted on the way, and worth keeping:** the single unrepresentable carve (idx 167,
+`sqlite_heap`, 262,144 B, granule 512, base%512 = 112) is **not** the cause. Rebuilt with
+`SQLITE_HEAP_SIZE=4096`, which makes **every** carve representable (verified by replaying the
+carve loop over the descriptors): stage 11 still hung. Representability is excluded.
+
+**What still stands, on unclamped images only:**
+* stage 10 hangs — reproduced on a fresh unclamped build with the control **and** stage 11
+  both returning in the same boot. This is the real, unexplained blocker.
+* stages 0, 9, 11, 12, 13, 14, 15, 16, 18 return on unclamped images.
+
+**The methodological problem, now sharp.** This SQLite image's behaviour is sensitive to its
+**global set**. Adding globals entry-stalls it; removing globals (via DCE behind a clamp)
+changes which code hangs. So *any* instrumentation that perturbs the global set cannot be used
+to bisect it, and both clamp designs did exactly that.
+
+**The constraint a working instrument must meet:** the descriptor table must be **byte-identical**
+to the unclamped build — same count, same sizes, same order. That means the skipped code's
+globals must stay referenced (e.g. a `volatile` use or `__attribute__((used))`), so only
+control flow changes. Gate every build on `carves == 181` **and** a byte-comparison of
+`.capstone_gp_initdesc` against the unclamped image, and refuse to run otherwise.
+
 ### 2026-08-04 — CONFIRMED: the glue does not correctly materialise a MERGED STRING
 ### CONTAINER; the pointer is innocent
 
