@@ -46,6 +46,46 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-04 — SQLite bisected to stage 10, and a RETRACTION about position
+
+**Retracted:** "stage 13 wedges". It does not. Stage 13 returns `obs=1517161743` when run
+**first on a fresh boot**, with the control passing after it. Both earlier readings had it in
+**5th position** of a 5-6 domain boot. The source note at stage 20 ("stage 13, which PASSES")
+was right and I contradicted it on artifact data.
+
+**Position is a confound in this driver and must be controlled for.** The drivers do not
+reboot between domains and the revocation-node pool is a 1024-entry bump allocator with NO
+reclamation, while `f10` carves 181 capabilities per domain entry — so ~5 domains is already
+near the pool. Practical rule going forward: **≤3 domains per boot, unknown FIRST**, control
+after it. A control-first ordering does not protect against this; it makes it worse.
+
+**Genuine, on a fresh boot in FIRST position, alone:**
+
+| stage | what it does | verdict |
+|---|---|---|
+| 9 | `MallocInit` + `PcacheInitialize` | returns |
+| 10 | `MallocInit` + **`sqlite3RegisterBuiltinFunctions()`** | **WEDGES** |
+| 11 | `strlen` on a plain literal | returns |
+| 12 | literal round-tripped through a local capability slot | returns |
+| 13 | array of 4 **distinct** literals, runtime-indexed, `strlen` each | returns |
+| 14 | byte-survival bitmap of a literal | returns **0xFF** — literal fully intact |
+| 15 | **512 capability stores** then read back | returns — store bursts EXONERATED |
+| 16 | 128 local structs each holding a string pointer | returns |
+
+Stage 10 wedging in first position on a fresh boot is the real SQLite blocker. It is **not**
+R-14 (fixed and verified), **not** the forwarding bug (this bitstream has the fix), not store
+density, not string-literal integrity, and not carve count or `.bss` size (`rc192` = 192
+carves and `rz1m` = 1 MB zero-fill both return).
+
+**Still to check, and NOT yet valid:** `sb0`/`sb1` at `:0` wedged in **2nd** position, so
+under the position confound those verdicts are unconfirmed and must be re-run first-position
+before being relied on.
+
+Next bisection is stages 17-22, which already exist and target the one construct no probe has
+replicated: the stack->global element-wise struct assignment carrying a capability
+(`aBuiltinFunc[i] = capstoneBuiltinFunc[i]`). Per the note at stage 20, stage 18 wedges — to
+be re-verified first-position.
+
 ### The wedge is NOT the interp-glue pad fix (excluded without spending a boot)
 
 `f10` predates both post-08-02 glue commits while `sb0`/`sb1` include them, which made the
