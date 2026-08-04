@@ -46,6 +46,43 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-04 — MINIMAL REPRO FOUND: `&global_array[i]` stored into GLOBAL storage
+
+Three ~10-line ladder rungs, all three **PASS on QEMU** with exact values (965/963/961), run
+ascending in one boot:
+
+| rung | `&globalArr[i]` is stored into | QEMU | silicon | expected |
+|---|---|---|---|---|
+| `xgl` | a **LOCAL** array of pointers | 965 | **965 OK** | 965 |
+| `xgs` | the **SAME** global object (slot 9 as head) | 963 | **536871875 WRONG** | 963 |
+| `xgx` | a **DIFFERENT** global (`xgx_head`) | 961 | **536871873 WRONG** | 961 |
+
+**The corruption is one bit, and it is identical in both failing arms:**
+
+    536871875 - 963 = 536870912 = 2^29
+    536871873 - 961 = 536870912 = 2^29
+
+Both compute the correct low bits with **bit 29 set** — address-like contamination bleeding
+into an integer result, deterministic across two different arms.
+
+**Refines the hypothesis.** `xgs` fails too, so the trigger is NOT cross-global specifically.
+It is **storing the address of a global array element into GLOBAL storage at all** — same
+object or different object both fail, while storing it into a LOCAL is fine. That is why
+every earlier probe passed: stages 11-16 and 18 stored *string literals*, never `&global[i]`.
+
+This is a miscompute, not a wedge, which makes it far more tractable than the SQLite symptom:
+it returns a number that is wrong in a specific bit rather than hanging. It is also the first
+construct all day that is QEMU-green and silicon-wrong on this bitstream.
+
+**Not yet established, and must be before this goes anywhere:**
+1. **Determinism** — one observation per arm. Re-run; R-14 taught us these can vary per boot.
+2. **Whether the traversal count `n` is correct** or whether `n` is wrong and the sentinel
+   arithmetic hides it. Split the return: one arm returning bare `n`, one returning a
+   constant after doing the stores.
+3. Whether the corrupted value is the STORED pointer or only the returned integer.
+
+Rungs: `silicon-ladder/xg{l,s,x}_kernel.h` (+ `_app.c` for QEMU, `_fpga_app.c` for the board).
+
 ### 2026-08-04 — stage 10 bisected to `sqlite3InsertBuiltinFuncs`: cross-global capability storage
 
 Bisected by splitting the REAL `sqlite3RegisterBuiltinFunctions` into its six sub-steps behind
