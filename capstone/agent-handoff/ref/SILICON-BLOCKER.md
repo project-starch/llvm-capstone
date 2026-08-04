@@ -1,5 +1,44 @@
 # The silicon blocker — everything known
 
+## 2026-08-04 — Step 2 attempt 2 (grow the passing image's blob) DID NOT TAKE — handover point
+
+Rather than truncate SQLite's builtin array, I tried the easier direction: grow `f10`'s blob to
+`swa`'s size with `-DCAPSTONE_BLOB_PAD=9216`, first as a C array, then as `.space` with a
+non-zero fill pushed into `.data`.
+
+**Neither had any effect.** Both builds came out **byte-identical in size to plain f10
+(1624096) with blob still 75120**. So the pad never reached the emitted image — not a result
+about R-16, just a probe that did not do anything. (`DOMAIN_EXTRA_DEFS` demonstrably does reach
+that file, since `-DCAPSTONE_SQLITE_STAGE=` works through the same path, so the cause is
+something else: the `.space` not surviving, or the object being reused.) The domain source has
+been reverted; nothing of this attempt is left in the tree.
+
+**Stopping here deliberately.** Two consecutive probes with zero measurable effect means the
+loop has stopped producing information, and this session's worst errors all came from continuing
+to iterate when that was true. The next person should verify the pad actually lands (check
+`stat -c%s` and the blob figure BEFORE spending a boot) or take the other direction — truncate
+the builtin array so the failing image shrinks toward the passing one.
+
+### R-16 state at handover
+
+**Ruled out**, each by a one-variable pair with an in-boot control: image size (to 1087 KB),
+carve count (to 192 / 3072 B table), their conjunction, dom_data geometry (order 9,
+`globals_off=0x150000`), blob size ON THE LADDER PATH (90320 passes), the loader (a stalling
+image stalls under `lpc` too), the interp pad/globals-init bug (fixed, and SQLite still stalls),
+and `BUILTIN_LIMIT` (a runtime knob; R-16 precedes any SQLite code).
+
+**The one clean lever**: `f10` (STATIC_BUILTINS=0) ENTERS, 8/8 as the in-boot control; every
+`STATIC_BUILTINS=1` image STALLS, 8/8. Same builder, one flag. The only measured difference is
+the blob (75120 vs 84336).
+
+**Verified this session**: the `SHA5`/`SHA6` semantics are real and confirmed in the BUILD copy
+of `sbi_capstone.c` (`CAPSTONE_TAG_SHA5/6`), and per that file's own note "SHA5 then silence"
+places the hang in the **domain's region-share entry**, not the monitor.
+
+**Open and possibly larger than R-16**: a 6-byte overrun crossed a 16-byte carve without
+trapping, despite an exact upper-bound check in `load_store_unit.sv:970-972`. Extend the `pk`
+probe to read slot ENDS to settle whether carves overlap or the LSU is not enforcing.
+
 ## 2026-08-04 — BUILTIN_LIMIT cannot bisect R-16 (runtime knob vs a static-image fault)
 
     f10.dom:0   RETURNED       control, same boot
