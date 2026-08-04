@@ -1,0 +1,47 @@
+Evidence for tarantool #1955 — UPSTREAM QUOTE (not captured by us).
+
+Status: BLOCKED (see CASE.md). This bug is detected only under AddressSanitizer,
+on a from-source ~1.10.2 tarantool (bundled LuaJIT + submodules); the stock
+prebuilt release Docker images are optimized non-ASan builds and do not fault on
+this benign UAF read. So the trace below is the reporter's, quoted verbatim from
+https://github.com/tarantool/tarantool/issues/1955 (reporter home path replaced
+with /home/<reporter>/ — the file:line frames are preserved unchanged).
+
+===== UPSTREAM ASan report =====
+==21458==ERROR: AddressSanitizer: heap-use-after-free on address 0x6180000018b0
+READ of size 4 at 0x6180000018b0 thread T0
+  USE
+    #0 in error_ref        /home/<reporter>/tarantool.git/src/diag.c:100:9
+    #1 in luaL_pusherror   /home/<reporter>/tarantool.git/src/lua/utils.c:913:2
+    #2 in lbox_error       /home/<reporter>/tarantool.git/src/lua/utils.c:924:2
+
+  FREED (previously freed by)
+    exception_destroy      src/exception.cc:45:2
+      via error_unref -> diag_clear, on the fiber-cancel path
+      (lbox_fiber_cancel, src/lua/fiber.c:459)
+
+  ALLOC (previously allocated by)
+    BuildFiberIsCancelled  src/exception.cc:264:2
+      via luaL_testcancel  src/lua/fiber.c:45:3
+
+SUMMARY: heap-use-after-free src/diag.c:100 in error_ref
+
+===== Scenario (reporter) =====
+The UAF occurs during fiber cancellation in netbox operations:
+- luaL_testcancel (fiber.c:45) builds a FiberIsCancelled exception into the diag.
+- A GC-invoked lbox_fiber_cancel (fiber.c:459) clears the diagnostics, freeing
+  the error.
+- lbox_error (utils.c:924) / luaL_pusherror (utils.c:913) then error_ref (diag.c:100)
+  the already-freed struct error -> heap-use-after-free READ of size 4.
+
+Two distinct allocations: the LuaJIT cdata (the error handle) and the separately
+allocated C `struct error`. lbox_fiber_cancel frees the struct error via the diag
+while lbox_error is still ref'ing/wrapping it. NOT a borrowed pointer into a Lua
+string.
+
+Fixed for the 1.10.3 milestone (diag/error refcount + testcancel ordering).
+
+To turn this into an OUR-captured differential a dedicated env would need a pinned
+~1.10.2 source tree built with -fsanitize=address (core + bundled LuaJIT), a
+driver that reproduces the netbox fiber-cancel window, and the 1.10.3 fixed tree
+as the clean control.

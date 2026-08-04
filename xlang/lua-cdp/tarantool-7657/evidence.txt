@@ -1,0 +1,53 @@
+Evidence for tarantool #7657 — CAPTURED BY US (not upstream quote).
+
+Env: official prebuilt release images, run via docker on Debian 13 (2026-08-03).
+  Vulnerable: tarantool/tarantool:2.8.3   (2.8.3-0-g01023dbc2, pre-#7664)
+  Fixed:      tarantool/tarantool:2.11    (2.11.5-0-g12a9ceb870, #7664 backport)
+Trigger: xlang/lua-cdp/tarantool-7657/trigger.lua
+  (the issue's `source:pairs():length()` script, with a collectgarbage('collect')
+   forced inside fetch_chunk to pin the mid-iteration GC window deterministically).
+
+This is a plain SIGSEGV bug, so it faults on the stock RELEASE images — no ASan or
+from-source build is needed. (The two coupled objects are still unambiguous: a
+LuaJIT cdata and a separately-allocated C `struct merge_source`.)
+
+===== VULNERABLE (2.8.3) — SIGSEGV, jump through a freed/nulled vtable =====
+Segmentation fault
+  code: SEGV_MAPERR
+  addr: 0
+  rip      0x0                0        <-- called through a null function pointer
+  cr2      0x0                0
+  err      0x14               20
+  trapno   0xe                14       <-- #PF page fault
+  ...
+Please file a bug at http://github.com/tarantool/tarantool/issues
+Attempting backtrace...
+#0  0x...  in crash_signal_cb+a5
+#1  0x...  in sigwaitinfo+8
+#2  0x...  in lj_BC_FUNCC+34           <-- LuaJIT calling a C FFI/builtin function
+#3  0x...  in +34                      <-- into the freed merge_source's gen path
+docker exit code: 139  (128 + SIGSEGV)
+
+Interpretation: GC ran mid-iteration and collected an intermediate merge_source
+cdata; lbox_merge_source_gc -> merge_source_unref dropped the refcount to 0 and
+destroyed the C `struct merge_source`. LuaJIT's sweep zeroed the freed slab, so
+the NEXT lbox_merge_source_gen read source->vtab->next as NULL and called through
+it -> rip=0x0, cr2=0x0 (SEGV_MAPERR at address 0). This matches the upstream
+report's `lbox_merge_source_gen+147` crash and its "merge source ... gc is called"
+debug line at iteration 5312.
+
+Determinism: 3/3 runs crashed (including the first), because the collectgarbage in
+fetch_chunk pins the free to a mid-iteration point.
+
+===== CONTROL: FIXED (2.11) — no crash =====
+7000
+docker exit code: 0
+
+The fix (PR #7664, commit e52fabf9058453efc0661092822feff609615ef1,
+"lua/merger: fix use-after-free during iteration"; backported to 2.10 as f9aecfb)
+makes lbox_merge_source_gen return the SAME cdata that was passed in, instead of
+minting a fresh un-ref'd cdata each step. Refcounting is then balanced, so the
+merge_source is never freed mid-iteration and the script completes -> 7000.
+
+The differential (SIGSEGV on 2.8.3, clean 7000 on 2.11) is what makes this a
+verified reproduction rather than an incidental crash.

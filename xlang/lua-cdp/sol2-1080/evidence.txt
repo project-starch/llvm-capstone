@@ -1,0 +1,53 @@
+Evidence for sol2 #1080 — CAPTURED BY US.
+
+Env: PUC Lua 5.4.7 (shared toolchain), sol2 v3.5.0, gcc 15 ASan.
+Repro: upstream reproducer verbatim (godbolt aG3qax buggy / Yffz4o value-copy);
+harness.cpp argv "vuln"/"control". Native Foo heap-allocated + Foo::Print reads a
+member so the logical UAF is observable under ASan (see harness.cpp header).
+
+===== VULN — heap-use-after-free =====
+Foo: 0x7bf07d5e02b0
+__name=sol.Foo*                         <- sol stored a POINTER userdata (Foo*)
+==906287==ERROR: AddressSanitizer: heap-use-after-free on address 0x7bf07d5e02b0
+READ of size 4 at 0x7bf07d5e02b0 thread T0
+    #0 Foo::Print()                                         harness.cpp:39
+    #1 sol::member_function_wrapper<int (Foo::*)(),...>::call ...  wrapper.hpp:161
+    ...
+   #10 sol::u_detail::binding<char [6], int (Foo::*)(), Foo>::call_with_  usertype_storage.hpp:90
+   #12 sol::detail::lua_cfunction_trampoline                        trampoline.hpp:108
+   #16 luaD_pretailcall            (liblua5.4.so)
+   #28 main                                                   harness.cpp:70  (test:Print())
+freed by thread T0 here:
+    #0 operator delete(void*, unsigned long)
+    #1 main                                                   harness.cpp:67  (delete m)
+previously allocated by thread T0 here:
+    #0 operator new(unsigned long)
+    #1 main                                                   harness.cpp:62  (new Foo())
+SUMMARY: AddressSanitizer: heap-use-after-free harness.cpp:39 in Foo::Print()
+
+The freed block is the native heap Foo (new'd at :62, delete'd at :67). Lua's
+global `test` still holds the "sol.Foo*" POINTER userdata that wrapped &Foo; the
+later `test:Print()` re-derefs through the full sol member-dispatch chain
+(member_function_wrapper -> lua_cfunction_trampoline -> luaD_pretailcall) and
+Foo::Print reads this->val of the freed block. Two DISTINCT allocations (the Lua
+userdata + the native Foo); NOT a string-borrow. Direction: NATIVE-frees.
+
+===== CONTROL — clean =====
+(rvalue push `storeFoo(Foo(*m))` => sol copies into a Lua-OWNED value userdata)
+Foo: 0x7bd3d51e02b0
+Foo(copy): 0x7bb3d40f0040
+Foo(copy): 0x7c23d51e01b0
+__name=sol.Foo                          <- VALUE userdata (Lua owns its own Foo)
+Print: 0x7c23d51e01b0 val=42            (call inside storeFoo, valid)
+~Foo: 0x7bb3d40f0040                     temporary destroyed
+~Foo: 0x7bd3d51e02b0                     native original delete'd (same `delete m`)
+Print: 0x7c23d51e01b0 val=42            <- test:Print() AFTER delete: reads Lua's copy, VALID
+DONE
+~Foo: 0x7c23d51e01b0                     Lua's copy destroyed at state teardown
+No AddressSanitizer report.
+
+Differential: BOTH paths new + delete the same native heap Foo; they differ ONLY
+in the push value category — lvalue `*m` (=> "sol.Foo*" pointer, dangles) vs
+rvalue `Foo(*m)` (=> "sol.Foo" copy, Lua-owned). UAF on the pointer path and a
+clean run on the copy path isolate the cause to pointer-wrap vs value-copy, not
+to the free itself.

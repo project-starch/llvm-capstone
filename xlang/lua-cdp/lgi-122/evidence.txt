@@ -1,0 +1,45 @@
+Evidence for lgi #122 — CAPTURED BY US.
+
+Env: PUC Lua 5.4.7 (shared toolchain), lgi @ 7a2276f with the issue-122 fix
+commit 94f970d8 ("Make objects unusable in the __gc metamethod") REVERTED,
+cairo 1.18.4 / libcairo.so.2.11804.4, gobject-introspection 1.86, glib 2.88,
+valgrind 3.26. The reverted 3-line guard is the metatable-nil in record_gc; with
+it removed, the verbatim issue reproducer re-derefs the freed cairo_region_t.
+
+Repro: trigger.lua = the issue's verbatim reproducer. A cairo.Region record is
+finalised first (marked-for-finalisation after the {}-proxy, so finalised before
+it); its boxed cairo_region_t is freed by lgi's record __gc. The proxy's __gc (f)
+then calls r:get_extents() on the freed region.
+
+===== VULN (trigger.lua on the reverted-guard tree) — valgrind, exit 99 =====
+==ERROR== Invalid read of size 4
+   at cairo_region_get_extents (libcairo.so.2.11804.4)
+   by ffi_call -> callable_call (callable.c:943)          <- r:get_extents()
+ Address 0x.. is 4 bytes inside a block of size 32 free'd
+   by free
+   by record_free (record.c:139)                          <- g_boxed_free
+   by record_free (record.c:127)
+   by record_gc (record.c:438)                            <- lgi record __gc
+ Block was alloc'd at
+   by calloc
+   by cairo_region_create (libcairo.so.2.11804.4)         <- cairo.Region()
+(valgrind ERROR SUMMARY: 7 errors — repeated invalid reads across the extents
+struct fields; the upstream issue reported 14 on its cairo/glib build.)
+
+===== CONTROL: trigger-control.lua on the SAME vuln tree =====
+0
+0
+DONE
+No valgrind error (exit 0). Reads the extents while the region is alive and keeps
+`r` referenced across GC; the region is freed only once nothing uses it.
+
+===== FIXED: trigger.lua on pinned HEAD (guard present) =====
+0
+DONE
+No valgrind error (exit 0). record_gc nils the finalised record's metatable, so
+the second finaliser's r:get_extents() fails at the Lua level instead of
+dereferencing the freed cairo_region_t.
+
+Differential (Invalid read in cairo_region_get_extents freed by record_gc on the
+guard-reverted tree; clean on both the safe-access control and the fixed tree)
+confirms the cairo.Region boxed-lifetime UAF.

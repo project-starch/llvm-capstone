@@ -1,0 +1,3 @@
+# per-case build trees (cloned deps, meson output) — never commit
+*/.work/
+.work/

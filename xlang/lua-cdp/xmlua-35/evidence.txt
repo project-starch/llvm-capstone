@@ -1,0 +1,20 @@
+Evidence for xmlua #35 — CAPTURED BY US.
+
+Env: LuaJIT 2.1, libxml2 .so 16.1.2, valgrind. Drives xmlua's actual buggy
+wrapper libxml2.xmlXPathEvalExpression (xmlua/libxml2.lua:650-656).
+
+===== VULN (document freed first) =====
+==842610== Invalid read of size 4
+==   at xmlXPathFreeNodeSet (libxml2.so.16.1.2)
+==   by xmlXPathFreeObject (libxml2.so.16.1.2)
+==   by xmlFreeNodeList
+valgrind exit 99.
+  The xpath object's ffi.gc finalizer reads node->type on nodes already freed by
+  xmlFreeDoc. Two distinct allocations (xpath object + xmlDoc node tree).
+
+===== CONTROL (xpath object freed first, doc/nodes still valid) =====
+DONE ; valgrind exit 0, no invalid read.
+
+Note: the high-level doc:search API guards this (Element.new(document,node),
+searchable.lua:106, keeps the doc alive); the UAF is reachable only via the
+internal low-level wrapper, which this repro exercises directly.

@@ -1,0 +1,34 @@
+Evidence for cffi-lua #57 — CAPTURED BY US (not upstream quote).
+
+Env: PUC Lua 5.4.7 (built shared from source), libffi 3.5.2, gcc 15 ASan.
+Binding: cffi-lua @ d295f029 (parent of the fix ced2cba79 = vulnerable tree).
+Trigger: xlang/lua-cdp/cffi-lua-57/trigger.lua (verbatim 5-line issue repro).
+
+===== VULNERABLE (d295f029) — heap-use-after-free =====
+==ERROR: AddressSanitizer: heap-use-after-free ... READ of size 4
+  USE  #0 cdata_meta::cb_set(lua_State*)            ../src/ffilib.cc:281
+  FREED
+       #1 ffi::destroy_closure(..., closure_data*)  ../src/ffi.cc:127
+       #2 cdata_meta::cb_free(lua_State*)           ../src/ffilib.cc:268
+  ALLOC
+       #1 make_cdata_func                           ../src/ffi.cc:271
+       #2 ffi::make_cdata(...)                      ../src/ffi.cc:1583
+       #3 ffi_module::cast_f(lua_State*)            ../src/ffilib.cc:1075
+  region: 32 bytes inside a 56-byte block (the closure_data struct)
+SUMMARY: heap-use-after-free ../src/ffilib.cc:281 in cdata_meta::cb_set
+
+Two distinct allocations: the Lua cdata (the callback handle) and a separate
+56-byte C++ closure_data (new[]'d in make_cdata_func). cb_free frees the
+closure_data without nulling the cdata's pointer; cb_set then reads it. NOT a
+borrowed pointer into a Lua string.
+
+===== CONTROL: FIXED (ced2cba79) — no UAF =====
+trigger.lua:5: bad callback
+stack traceback:
+	[C]: in method 'set'
+	trigger.lua:5: in main chunk
+No AddressSanitizer report. The fix guards cb_set/cb_free with `if (!fd.cd)
+luaL_error(...)` after nulling fd.cd, turning the UAF into a controlled error.
+
+The differential (UAF on parent, clean error on fix) is what makes this a
+verified reproduction rather than an incidental crash.

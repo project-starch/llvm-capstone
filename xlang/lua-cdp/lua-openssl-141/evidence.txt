@@ -1,0 +1,57 @@
+Evidence for lua-openssl #141 — CAPTURED BY US (not an upstream quote).
+
+Env: OpenSSL 1.1.1w (built from source, shared + enable-crypto-mdebug +
+     -fsanitize=address), PUC Lua 5.4.7 (shared toolchain, built shared),
+     gcc 15.2 AddressSanitizer.
+Binding: lua-openssl @ 0017afa (parent of the fix a436c36 = vulnerable tree).
+Trigger: xlang/lua-cdp/lua-openssl-141/trigger.lua (verbatim issue #141 repro).
+
+Two distinct allocations: the Lua full userdata (the cipher handle, a boxed
+pointer created by PUSH_OBJECT) and a separate 168-byte EVP_CIPHER_CTX
+allocated by libcrypto (CRYPTO_zalloc via EVP_CIPHER_CTX_new). close() and __gc
+are the SAME C function openssl_cipher_ctx_free (cipher_ctx_funs registers both
+{"close",...} and {"__gc",...} to it); close() frees the ctx without nulling the
+boxed pointer, so __gc frees it again. NOT a borrowed pointer into a Lua string.
+
+Why libcrypto is ASan-built: with an uninstrumented libcrypto the second free
+crashes as a bare SEGV inside EVP_CIPHER_CTX_reset (it derefs the freed ctx,
+whose header ASan has overwritten, before reaching the free() ASan intercepts).
+Instrumenting libcrypto turns that into the labelled heap-use-after-free below.
+
+===== VULNERABLE (0017afa) — heap-use-after-free =====
+==ERROR: AddressSanitizer: heap-use-after-free on address 0x7c2a46de0f40
+READ of size 8 at 0x7c2a46de0f40 thread T0
+  USE  #0 EVP_CIPHER_CTX_reset            crypto/evp/evp_enc.c:26   (= EVP_CIPHER_CTX_cleanup)
+       #1 openssl_cipher_ctx_free         src/cipher.c:551
+       #6 GCTM                            (liblua5.4 — the __gc metamethod runner)
+      #11 luaB_collectgarbage             (liblua5.4 — collectgarbage('collect'))
+  FREED (by c:close())
+       #1 CRYPTO_free                     crypto/mem.c:306
+       #2 EVP_CIPHER_CTX_free             crypto/evp/evp_enc.c:49
+       #3 openssl_cipher_ctx_free         src/cipher.c:552
+  ALLOC (by openssl.cipher.decrypt_new)
+       #2 CRYPTO_zalloc                   crypto/mem.c:230
+       #3 EVP_CIPHER_CTX_new              crypto/evp/evp_enc.c:43
+       #4 openssl_cipher_decrypt_new      src/cipher.c:400
+  region: 0 bytes inside a 168-byte block (the EVP_CIPHER_CTX struct)
+SUMMARY: AddressSanitizer: heap-use-after-free crypto/evp/evp_enc.c:26 in EVP_CIPHER_CTX_reset
+
+The vulnerable openssl_cipher_ctx_free (src/cipher.c:546-554):
+    EVP_CIPHER_CTX *ctx = CHECK_OBJECT(1, EVP_CIPHER_CTX, "openssl.evp_cipher_ctx");
+    lua_pushnil(L);
+    lua_rawsetp(L, LUA_REGISTRYINDEX, ctx);
+    EVP_CIPHER_CTX_cleanup(ctx);   // line 551 — reads freed ctx on the 2nd call
+    EVP_CIPHER_CTX_free(ctx);      // line 552 — the free (1st call)
+    return 0;
+CHECK_OBJECT reads *(EVP_CIPHER_CTX**) from the userdata box; close() never
+nulls it, so __gc dereferences the stale pointer.
+
+===== CONTROL: FIXED (a436c36) — no UAF =====
+NO-DOUBLE-FREE
+No AddressSanitizer report. The fix ("fix issue #141") adds, in
+openssl_cipher_ctx_free:  `if(!ctx) return 0;` and, after the frees,
+`FREE_OBJECT(1)` == `*(void**)lua_touserdata(L,1) = NULL`, nulling the boxed
+pointer so the __gc call re-reads NULL and returns without touching freed memory.
+
+The differential (heap-use-after-free on the parent, clean on the fix) is what
+makes this a verified reproduction rather than an incidental crash.

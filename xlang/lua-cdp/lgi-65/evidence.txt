@@ -1,0 +1,48 @@
+Evidence for lgi #65 — CAPTURED BY US.
+
+Env: PUC Lua 5.4.7 (shared toolchain), lgi @ 7a2276f with the issue-65 fix
+(commit 358371fd, "Fix marshalling array 2c with transfer != none") reverted for
+the C-array field-set path: the GI_ARRAY_TYPE_C/ARRAY guard is forced back to
+g_array_unref instead of array_detach, so a struct field that takes ownership of
+a marshalled GArray has its whole GArray (container + data) freed by the guard.
+gobject-introspection 1.86, glib 2.88 (libglib-2.0.so.0.8800.0), Gio typelib,
+valgrind 3.26.
+
+Repro: trigger.lua = the issue's verbatim reproducer. `iface.methods = { method }`
+marshals a Lua table into the GArray backing DBusInterfaceInfo.methods and wraps
+it in a Lua-GC guard. `collectgarbage()` runs the guard (guard_gc -> g_array_unref)
+and frees the GArray while the C struct still points at it; `print(iface.methods)`
+re-reads the field -> marshal_2lua_array walks the freed GArray.
+
+===== VULN (trigger.lua on the reverted-fix tree) — valgrind, exit 99 =====
+==ERROR== Invalid read of size 8
+   at marshal_2lua_array (marshal.c:562)                  <- read iface.methods
+   by lgi_marshal_field (marshal.c:1549)
+   by lgi_marshal_access (marshal.c:1574)
+ Address 0x.. is 0 bytes inside a block of size 16 free'd
+   by free
+   by guard_gc (core.c:256)                               <- the GArray guard __gc
+ Block was alloc'd at
+   by realloc -> g_realloc
+   by g_array_sized_new (libglib-2.0)                      <- iface.methods = {..}
+   by marshal_2c_array (marshal.c:383)
+   by lgi_marshal_field (marshal.c:1555)
+(followed by a second Invalid read in lgi_marshal_2lua reading the element ptr.)
+
+===== CONTROL: trigger-control.lua on the SAME vuln tree =====
+lgi.rec 0x..:Gio.DBusMethodInfo (the methods table)
+DONE
+No valgrind error (exit 0). Reads iface.methods BEFORE any GC (GArray still
+alive), then detaches the field (iface.methods = nil) so the struct no longer
+points at the GArray before it is collected.
+
+===== FIXED: trigger.lua on pinned HEAD (array_detach present) =====
+table: 0x..
+DONE
+No valgrind error (exit 0). array_detach frees only the GArray container; the
+data segment is transferred to and owned by the C struct, so the field stays
+valid.
+
+Differential (Invalid read in marshal_2lua_array freed by guard_gc on the
+reverted-fix tree; clean on both the safe-access control and the fixed tree)
+confirms the GArray-in-struct-field UAF.

@@ -1,0 +1,88 @@
+Evidence for luaossl #124 — CAPTURED BY US (not an upstream quote).
+
+Env: OpenSSL 1.1.1w (built from source, shared + -fsanitize=address), PUC Lua
+     5.4.7 (shared toolchain, built shared), gcc 15.2 AddressSanitizer.
+Binding: luaossl @ 5be1b44 (parent of the fix 1ae7073 = vulnerable tree).
+Trigger: xlang/lua-cdp/luaossl-124/trigger.lua (issue #124 setStore reproducer).
+
+WHY the bug is present here even though it is a compat shim:
+At 5be1b44 luaossl never detects that OpenSSL provides SSL_CTX_set1_cert_store
+natively (config.h.guess probes only C attributes; HAVE_SSL_CTX_set1_cert_store
+is left undefined -> HAVE_SSL_CTX_SET1_CERT_STORE == (undef || 0) == 0), so it
+ALWAYS compiles its own shim. On any OpenSSL >= 1.1.0 the X509_STORE struct is
+opaque, so HAVE_X509_STORE_REFERENCES == !OPENSSL_PREREQ(1,1,0) == 0, and the
+shim expands to:
+    #define SSL_CTX_set1_cert_store(ctx, store) SSL_CTX_set_cert_store(ctx, store)
+SSL_CTX_set_cert_store() is set0 semantics: it takes OWNERSHIP and does NOT bump
+the store's refcount. 1.1.1w satisfies ">= 1.1.0", so the buggy path is what
+sx_setStore() (src/openssl.c:8062) actually calls.
+
+Two distinct owners of ONE X509_STORE (152-byte block), each with its own free:
+  * the Lua-GC store userdata  -> xs__gc  (src/openssl.c:7610) -> X509_STORE_free
+  * the SSL_CTX (co-owner)     -> sx__gc  (src/openssl.c:8493) -> SSL_CTX_free
+                                          -> X509_STORE_free(ctx->cert_store)
+The store was created with refcount 1 by X509_STORE_new (xs_new,
+src/openssl.c:7459); setStore did NOT up-ref it, so refcount is still 1 while
+two owners hold it. First free brings it to 0 and releases the block; the second
+free reads/decrements the refcount of the already-freed block -> UAF/double free.
+
+Why libcrypto is ASan-built: the second free runs through libcrypto's
+X509_STORE_free, whose FIRST act (CRYPTO_DOWN_REF) reads+writes the freed store's
+refcount word BEFORE reaching the free() ASan intercepts. With an uninstrumented
+libcrypto that access lands on ASan-poisoned-but-unseen memory (nondeterministic
+detection / bare SEGV); instrumenting libcrypto turns it into the labelled
+heap-use-after-free below.
+
+===== VULNERABLE (5be1b44) — heap-use-after-free =====
+==ERROR: AddressSanitizer: heap-use-after-free on address 0x...368
+WRITE of size 4 at 0x...368 thread T0
+  USE / 2nd free (SSL_CTX owner)
+       #0 CRYPTO_DOWN_REF             include/internal/refcount.h:50
+       #1 X509_STORE_free             crypto/x509/x509_lu.c:212
+       #2 SSL_CTX_free                ssl/ssl_lib.c:3262
+       #3 sx__gc                      src/openssl.c:8493   (the SSL_CTX __gc)
+       #8 GCTM                        (liblua5.4 — the __gc metamethod runner)
+      #13 luaB_collectgarbage         (liblua5.4 — collectgarbage('collect'))
+  FREED / 1st free (Lua store userdata owner)
+       #0 free
+       #1 CRYPTO_free                 crypto/mem.c:312
+       #2 X509_STORE_free             crypto/x509/x509_lu.c:230
+       #3 xs__gc                      src/openssl.c:7610   (the store userdata __gc)
+  ALLOC (openssl.x509.store.new())
+       #2 CRYPTO_zalloc               crypto/mem.c:230
+       #3 X509_STORE_new              crypto/x509/x509_lu.c:162
+       #4 xs_new                      src/openssl.c:7459
+  region: 136 bytes inside a 152-byte block (the X509_STORE struct)
+SUMMARY: AddressSanitizer: heap-use-after-free include/internal/refcount.h:50 in CRYPTO_DOWN_REF
+
+The vulnerable sx_setStore (src/openssl.c:8058-8067):
+    SSL_CTX *ctx = checksimple(L, 1, SSL_CTX_CLASS);
+    X509_STORE *store = checksimple(L, 2, X509_STORE_CLASS);
+    SSL_CTX_set1_cert_store(ctx, store);   // line 8062 -> buggy set0 macro
+The macro (src/openssl.c:1858-1861), active on OpenSSL >= 1.1.0:
+    #if !HAVE_SSL_CTX_SET1_CERT_STORE
+    #if !HAVE_SSL_CTX_CERT_STORE || !HAVE_X509_STORE_REFERENCES
+    #define SSL_CTX_set1_cert_store(ctx, store) SSL_CTX_set_cert_store((ctx),(store))
+
+===== CONTROL: FIXED (1ae7073) — no UAF =====
+NO-DOUBLE-FREE
+No AddressSanitizer report. The fix ("Fix SSL_CTX_set1_cert_store refcounting
+issues. Closes #124") moves the set0 into compat_SSL_CTX_set1_cert_store and
+prepends, on the same !HAVE_X509_STORE_REFERENCES path (src/openssl.c:1865-1867):
+    if (store != NULL) X509_STORE_up_ref(store);
+    SSL_CTX_set_cert_store(ctx, store);
+so the store now has refcount 2; xs__gc and SSL_CTX_free each decrement once and
+only the second free releases the block. No double free.
+
+===== IS THE LUA-GC OBJECT ESSENTIAL? (CDP qualification) =====
+YES. In the captured trace the FIRST free is literally xs__gc — the __gc
+finalizer of the Lua x509.store userdata — i.e. the X509_STORE is owned by the
+Lua GC domain (the store userdata) AND the OpenSSL domain (the SSL_CTX). The
+double free is the collision of those two ownership domains at GC time; remove
+the Lua store userdata and its X509_STORE_free (one of the two owners) is gone.
+(The underlying set0 primitive could also be misused from pure C, but the FILED
+bug #124 and this reproduction route one ownership through the Lua store
+userdata, which is what makes it a cross-domain double-free.)
+
+The differential (heap-use-after-free on the parent, clean on the fix) is what
+makes this a verified reproduction rather than an incidental crash.

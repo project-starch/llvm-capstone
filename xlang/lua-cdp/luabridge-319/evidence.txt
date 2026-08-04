@@ -1,0 +1,17 @@
+Evidence for LuaBridge #319 — CAPTURED BY US.
+
+Env: PUC Lua 5.4.7 (shared toolchain), LuaBridge (vinniefalco) current, gcc 15.
+Repro: verbatim upstream issue code; harness.cpp with vuln/control.
+
+===== VULN (chained getA():fn()) =====
+got	-1
+  a1:getI() returns the ~A sentinel (-1): the wrapped A was destroyed (userdata
+  collected) before the read. a1 is a non-owning reference into that userdata.
+
+===== CONTROL (non-chained: local a=getA(); a:fn()) =====
+got	5
+  `a` owns a valid A copy; collectgarbage does not free it; getI() returns 5.
+
+Note: ASan does not reliably flag this — Lua reuses the freed userdata block, so
+the read lands on reused (unpoisoned) memory still holding -1. The -1 vs 5
+sentinel differential is the deterministic proof of use-after-destruction.

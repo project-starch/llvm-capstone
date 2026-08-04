@@ -1,0 +1,60 @@
+Evidence for Wireshark #16807 — CAPTURED BY US (not an upstream quote).
+
+Env: Ubuntu, stock apt TShark (Wireshark) 4.6.4, libwireshark.so.19.0.4 built
+     against liblua5.4-0 (Lua 5.4). Detection: valgrind memcheck (the apt binary
+     is not ASan-instrumented). Trigger: xlang/lua-cdp/wireshark-16807/trigger.lua
+     (verbatim from the issue's attachment), loaded via `-X lua_script:`.
+Re-dissection driver: two-pass analysis (`tshark -2`) — the headless analogue of
+     the GUI "switch between SOMEPROTO packets" that the issue uses; both re-run
+     the Lua dissector on an already-dissected packet whose tvbuff is now freed.
+
+===== A. VULNERABLE (trigger.lua, two-pass) — heap use-after-free =====
+Two identical Invalid reads (size 1 and size 4). First block verbatim:
+
+==*== Invalid read of size 1
+==*==    at 0x7599A21: tvb_ensure_bytes_exist   (libwireshark.so.19.0.4)   <- USE
+==*==    by 0x755DD3E: proto_tree_add_item_new  (libwireshark.so.19.0.4)
+==*==    by 0x89674FC: ??? (libwireshark)  \  wslua TreeItem:add(field,range)
+==*==    by 0x8968065: ??? (libwireshark)  /
+==*==    by 0xD7292FC..lua_pcallk           (liblua5.4.so.0.0.0)  <- Lua dissector
+==*==    by 0x895F089: ??? (libwireshark)      (call_dissector -> Lua)
+==*==  Address 0x16e8c210 is 16 bytes inside a block of size 72 free'd
+==*==    at 0x48A1B1D: free_sized
+==*==    by 0x7572AE8: tvb_free_chain          (libwireshark.so.19.0.4)     <- FREE
+==*==    by 0x7535DA4: epan_dissect_reset      (libwireshark.so.19.0.4)
+==*==    by 0x401666D: ??? (tshark)            (two-pass edt reset between passes)
+==*==  Block was alloc'd at
+==*==    at 0x489E858: malloc -> g_malloc
+==*==    by 0x756F33D: ??? -> tvb_new_subset_remaining   (libwireshark)     <- ALLOC
+==*==    by 0x816D489: decode_tcp_ports
+==*==    by 0x816E950: dissect_tcp_payload
+==*==    by 0x753E745: dissector_try_uint_with_data
+
+Two distinct allocations: (1) the Lua TvbRange userdata kept alive in the global
+`ProtocolState` table, and (2) the separate 72-byte C tvbuff (g_malloc'd by
+tvb_new_subset_remaining for the TCP payload). The C engine frees the tvbuff at
+epan_dissect_reset -> tvb_free_chain; the surviving TvbRange still points at it,
+so re-dissection feeds the dangling tvb into proto_tree_add_item_new ->
+tvb_ensure_bytes_exist. NOT a borrowed pointer into a single Lua object.
+
+The issue's reported crash is in tvb_offset_from_real_beginning, reached from the
+SAME proto_tree_add_item_new use-site (tvb_raw_offset <- hfinfo_bitshift <-
+proto_tree_add_item_new); 4.6.4's leaf within that add path is
+tvb_ensure_bytes_exist. Same object, same free-site, same use-site.
+
+===== B. CONTROL: trigger.lua, single-pass — clean =====
+No tvb Invalid read. Each packet is dissected once: handle_packet() stashes the
+range and it is used in the SAME call while its tvbuff is still live. Without a
+second dissection there is no stale reuse.
+
+===== C. CONTROL: trigger_fixed.lua, two-pass — clean =====
+No tvb Invalid read. The fixed script fills the ProtoField from the CURRENT live
+`buffer` on every dissection instead of caching a TvbRange, so no Lua handle
+outlives its C tvbuff.
+
+The differential (UAF only in A; clean in B and C) is what makes this a verified
+reproduction rather than an incidental warning. Reproduced 2026-08-03.
+
+Note: unrelated libre2/libsinsp "uninitialised value" warnings appear at epan
+init (the bundled falco/sinsp plugin) in ALL three runs and are noise; the PASS
+check keys on the tvb-UAF stack signature, not on valgrind's exit code.

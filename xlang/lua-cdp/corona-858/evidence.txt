@@ -1,0 +1,51 @@
+Evidence for Corona/Solar2D #858 — SOURCE-QUOTED (upstream), status BLOCKED.
+
+Not reproduced here: the crash needs the full Solar2D/Corona native engine +
+Box2D and there is no apt/prebuilt SDK (apt-cache policy solar2d corona
+corona-sdk -> 0 candidates); a from-source engine build is out of scope. The
+free-site and use-site below are read directly from the real vulnerable source
+(coronalabs/corona), which is what makes CASE.md / boundary.md complete.
+
+Fix: PR #858, commit aa4e07b82fe80de80ac493596cfbfa37f21fa47b (merge c8c3bd1).
+Vulnerable: parent 3b738fa825f825e4f1be3e04b8f2cfd2ca0762d7.
+
+===== FREE-SITE (why the wrapper is left dangling) =====
+librtt/Rtt_PhysicsWorld.cpp — PhysicsWorld::StopWorld():
+    ...
+    for ( b2Body *body = fWorld->GetBodyList(), *nextBody = NULL; ... ) {
+        nextBody = body->GetNext();
+        // (vulnerable tree) detaches only the body's DISPLAY object; joints untouched
+        ...
+        fWorld->DestroyBody( body );   // <-- ADDED BY THE FIX (#858), line 206
+    }
+    Rtt_DELETE( fWorld );              // line 209: ~b2World bulk-frees the block
+                                       // allocator (all b2Joint/b2Body/b2Fixture)
+The vulnerable tree lacks the `DestroyBody(body)` call, so ~b2World frees every
+b2Joint WITHOUT Box2D invoking the destruction listener.
+
+The listener that WOULD have severed the coupling (Rtt_PhysicsWorld.cpp:45):
+    void PhysicsDestructionListener::SayGoodbye(b2Joint* joint) {
+        UserdataWrapper *wrapper = (UserdataWrapper *)joint->GetUserData();
+        if ( wrapper && UserdataWrapper::GetFinalizedValue() != wrapper )
+            wrapper->Invalidate();     // clears the wrapper's b2Joint ref
+    }
+Registered via fWorld->SetDestructionListener(...) (line 134). Bulk-free skips it.
+
+===== USE-SITE (the dangling deref) =====
+librtt/Rtt_PhysicsJoint.cpp — PhysicsJoint::GetJoint() (line 37):
+    UserdataWrapper *wrapper = *ud;
+    result = (b2Joint*)wrapper->Dereference();   // line 46: returns the FREED
+                                                 // b2Joint* (wrapper never
+                                                 // Invalidate()d -> not NULL)
+The GC finalizer (PhysicsJoint::Finalizer) then dereferences it, same pattern as
+PhysicsJoint::removeSelf (~line 549):
+    b2Joint *baseJoint = GetJoint( L, 1 );                       // dangling ptr
+    UserdataWrapper *wrapper = (UserdataWrapper*)baseJoint->GetUserData();  // UAF read
+    baseJoint->SetUserData( UserdataWrapper::GetFinalizedValue() );         // UAF write
+=> SIGSEGV in the finalizer (the report's symptom).
+
+===== DIFFERENTIAL (would-be) =====
+Vulnerable 3b738fa8: SIGSEGV in PhysicsJoint::Finalizer via Dereference() on the
+freed b2Joint after physics.stop() + GC.
+Fixed aa4e07b8: DestroyBody() in StopWorld fires SayGoodbye -> Invalidate();
+Dereference() returns NULL; finalizer is a no-op; clean.
