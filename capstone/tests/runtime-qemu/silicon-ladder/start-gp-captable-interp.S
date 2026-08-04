@@ -581,8 +581,24 @@
      global, once per domain entry.
      A faster fix exists -- zero the whole carve first from t6 = t2 with t4 = stor, both
      16-aligned, then copy over it -- but it restructures this block, so it wants review rather
-     than an end-of-session edit. */
+     than an end-of-session edit.
+
+     COST NOTE (2026-08-04). For the COPY case the byte loop runs at most stor-size < 16 bytes,
+     which is what was measured. For the .bss case it does NOT: `bltz t5, 30f` arrives here with
+     t4 = stor, the WHOLE object, so every zero-initialized global is filled one byte at a time.
+     SQLite's sqlite_heap alone is 262,144 bytes of .bss. Correct, but it makes domain entry
+     cost proportional to total .bss in single-byte stores -- which also pollutes any
+     entry/boundary-cost measurement taken through this glue.
+
+     INTERP_PAD_BYTEWISE=0 restores the pre-fix path as a CONTROL. It reintroduces the
+     misaligned-store corruption for globals whose size % 8 != 0, so it is for A-B testing
+     only, never for a correctness run. */
+#ifndef INTERP_PAD_BYTEWISE
+#define INTERP_PAD_BYTEWISE 1
+#endif
+#if INTERP_PAD_BYTEWISE
   j     32f
+#endif
 31:
   li    a6, 8
   blt   t4, a6, 32f

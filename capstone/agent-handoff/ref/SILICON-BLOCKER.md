@@ -46,6 +46,35 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### The wedge is NOT the interp-glue pad fix (excluded without spending a boot)
+
+`f10` predates both post-08-02 glue commits while `sb0`/`sb1` include them, which made the
+pad fix (`96ff052e72d8`) the obvious suspect. It is excluded: a rebuild with
+`INTERP_PAD_BYTEWISE=0` (the pre-fix path, added as a control knob) produces
+`sha=f8bd852873f899bf`, **byte-identical to the previously staged `sqlite_silicon.dom`** --
+which had already run on the new bitstream and wedged the same way. Both pad variants enter
+and wedge, so the pad path is not the cause.
+
+Note `f10` vs `sb0` was never a one-variable comparison anyway: different SQLite builds
+(181 vs 179 carves, different sizes, two days apart). Only the `INTERP_PAD_BYTEWISE` A/B is.
+
+### Real cost defect found in passing: byte-wise .bss zero-fill
+
+The pad fix's `j 32f` was measured only on the COPY case, where the pad is `stor - size` < 16
+bytes. The `.bss` case reaches the same label with `t4 = stor`, the WHOLE object, so every
+zero-initialized global is filled one byte at a time. For the SQLite domain:
+
+    .bss zero-filled byte-wise : 273,760 bytes   (largest object: sqlite_heap, 262,144)
+    copy-case pad              :     763 bytes
+    => 274,523 single-byte stores per domain entry
+
+Correct but slow, and it makes domain-entry cost proportional to total `.bss` -- which
+**pollutes any entry/boundary-cost measurement taken through this glue**, so it must be
+fixed before those numbers are reported. The fix is the one already described in the source:
+zero the whole carve first from `t6 = t2` with `t4 = stor` (both 16-aligned, so 8-byte
+stores are legal), then copy over it. `INTERP_PAD_BYTEWISE=0` restores the pre-fix path as a
+control only -- it reintroduces the misaligned-store corruption for `size % 8 != 0`.
+
 ### The enforcement question is UNCHANGED by the new bitstream
 
 `obn` = 1657, `ob5` = 1645, `oba` = 1651 — identical to the old bitstream. The LSU
