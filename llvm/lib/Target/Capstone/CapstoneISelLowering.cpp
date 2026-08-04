@@ -8135,6 +8135,27 @@ static SDValue lowerScalarI128Shift(SDValue Op, SelectionDAG &DAG,
 
   SDLoc DL(Op);
   MVT XLenVT = Subtarget.getXLenVT();
+
+  // A constant shift amount >= XLen shifts every meaningful bit out of the low
+  // XLen half.  These i128 values carry an integer only in their low XLen bits
+  // (a capability is never shifted as an integer), and everything below computes
+  // the shift in the XLen domain and re-extends -- a model that cannot see any
+  // bit at position >= XLen.  So handle these amounts here, before that path:
+  //   * SHL by >= XLen: every source bit lands at position >= XLen, so the
+  //     low-XLen result is exactly zero.  Return an i128 zero (a defined value).
+  //   * SRL/SRA by >= XLen: the low-XLen result would come from the discarded
+  //     high half, which the XLen-domain narrowing cannot reconstruct -- bail.
+  // This guard is required, not just an optimization: feeding an i64 shift an
+  // amount >= XLen makes SelectionDAG fold the node to UNDEF, and the
+  // re-extension then propagates that undef.  That is exactly how the
+  // `shl i128 X, 64` high partial product expandMUL synthesises for a `mul i128`
+  // by a full-width constant (the modular inverse an `sdiv exact` lowers to,
+  // e.g. dividing a pointer difference by a non-power-of-two element size)
+  // became `undef`, leaving an unselectable `or(zext(lo), undef)` at isel.
+  if (Op.getConstantOperandVal(1) >= XLenVT.getSizeInBits())
+    return Op.getOpcode() == ISD::SHL ? DAG.getConstant(0, DL, MVT::i128)
+                                      : SDValue();
+
   SDValue ShiftInput = Op.getOperand(0);
   bool IsPointerDifference =
       ShiftInput.getOpcode() == ISD::SUB &&
@@ -8154,11 +8175,8 @@ static SDValue lowerScalarI128Shift(SDValue Op, SelectionDAG &DAG,
     // matches the shift's sign semantics.  This path is reached only when the
     // operand is otherwise unhandled -- i.e. exactly the cases that previously
     // hit the "Unable to legalize non-vector shift" assertion -- so it cannot
-    // regress any compile that already succeeds.  Restricted to shift amounts
-    // below XLen, where the XLen shift is well-defined.
-    unsigned ShAmtVal = Op.getConstantOperandVal(1);
-    if (ShAmtVal >= XLenVT.getSizeInBits())
-      return SDValue();
+    // regress any compile that already succeeds.  (Shift amounts >= XLen were
+    // already handled above.)
     XLenVal = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Op.getOperand(0));
     ExtOpcode = Op.getOpcode() == ISD::SRA || IsPointerDifference
                     ? ISD::SIGN_EXTEND
