@@ -46,6 +46,35 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-04 — there is NO minimal repro: every hand-written probe now PASSES
+
+Two hypotheses killed, both first-position on fresh boots:
+
+* **The element-wise capability copy is NOT the cause.** Our build patch
+  (`build-sqlite-capstone.sh:75`) rewrites SQLite's `static FuncDef aBuiltinFunc[]` into a
+  LOCAL array plus a zero-init static plus `aBuiltinFunc[i] = capstoneBuiltinFunc[i]`, and
+  `SQLITE_STATIC_BUILTINS=1` removes all three. **`sb1:10` (=1, no local array, no copy loop)
+  wedges exactly like `f10:10` (=0).** So stage 17's target construct is exonerated, and the
+  wedge is in `sqlite3RegisterBuiltinFunctions` proper in BOTH shapes.
+* **Stage 18 now PASSES** (`obs=1517163024`, control passing after it). The note at stage 20
+  calling stage 18 the wedging case is **stale** — it was measured on the old bitstream with
+  R-14 live. The forwarding fix cured it.
+
+So the probe ladder is exhausted: stages 11, 12, 13, 14, 15, 16 and 18 all return, and only
+stage 10 — the real `sqlite3RegisterBuiltinFunctions` — wedges. **We have no minimal repro,
+and nothing smaller than the full SQLite amalgamation currently reproduces it.**
+
+**Consequence for method.** Hand-written analogues have now been tried eight ways and every
+one passes, so writing a ninth is not the move. The next bisection must go *inside the real
+function*: clamp the builtin-registration loop to the first N entries and RETURN N, with N as
+the selector. That converts the hang into a number and bisects to the exact entry and
+operation — the "make every run RETURN" discipline applied to the real code rather than to a
+model of it.
+
+**Stale-note warning.** Every "stage X wedges" note in `sqlite_capstone_domain.c` predates
+the reflash and was written with R-14 live. Re-verify before trusting any of them, and
+first-position — several are now wrong in both directions.
+
 ### 2026-08-04 — SQLite bisected to stage 10, and a RETRACTION about position
 
 **Retracted:** "stage 13 wedges". It does not. Stage 13 returns `obs=1517161743` when run
