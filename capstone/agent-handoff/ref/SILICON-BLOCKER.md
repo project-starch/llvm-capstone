@@ -1,5 +1,63 @@
 # The silicon blocker — everything known
 
+## 2026-08-04 — RETRACTION: the bounds finding is NOT a reportable hardware defect
+
+**Retracted claim:** "the silicon does not enforce capability bounds on intra-domain
+accesses" (from `pk2 = 16` + `oob = 42`), which was on the list to hand to the board owner.
+It must not be sent, and it must not enter the paper as a silicon defect.
+
+**What was wrong with it.** The two halves were measured in *different* domains — `pk2`
+read slot bounds in one image, `oob` did the overrunning store in another — so neither
+"16 bytes" nor "did not trap" was ever established for the *same* capability. Separately,
+`oob` used a plain `sd`, and it was never checked whether the observed non-trap was
+specific to the bounds clause, to integer stores, or to the check as a whole.
+
+**What was then measured** (5 probes, 3 boots, a passing control first in every boot, each
+probe reporting its own capability's `lcc` bounds *and* performing its own access, so the
+two halves can no longer disagree). Every one carves exactly 16 bytes
+(`stor = max(16, align_up(size,16))`, verified offline against `.capstone_gp_initdesc`):
+
+| probe | access, relative to a **measured** 16-byte capability | result |
+|---|---|---|
+| `ob7` | 8-byte store at +0 — in bounds (control) | 1647, returns |
+| `obc` | 8-byte store at +8 — last in-bounds slot (control) | 1655, returns |
+| `ob3` | 8-byte store at +16 — out of bounds, back-to-back with producer | 1642, **no trap** |
+| `ob5` | same, 32 `nop`s forcing the operand through the register file | 1645, **no trap** |
+| `obb` | 8-byte **load** at +16 — out of bounds | 1653, **no trap** |
+| `oba` | 8-byte store at **+2040** — 127× the object size | 1651, **no trap** |
+| `obn` | store through a base with **no capability metadata** (`NOT_CAP`) | 1657, **no trap** |
+
+`obn` is the one that settles it. It violates the **first** clause of
+`core/load_store_unit.sv` `cap_violation_detection` (`NOT_CAP` → cause 24), not the bounds
+clause (cause 28). Nothing fires. **The entire block is inert in our domains** — this is not
+a bounds bug, not an off-by-one, not representable-bounds rounding, and not the capability
+metadata-forwarding bug fixed upstream by `7aac52f93` (excluded by `ob5`).
+
+**Why that is a question and not a defect report.** The block is gated on
+`capmode_i && ld_st_priv_lvl_i == riscv::PRIV_LVL_M` (`load_store_unit.sv:930-932`). If our
+domains do not satisfy that gate, skipping every clause is *correct* hardware behaviour and
+the fault is on our side. The alternative is that the board's bitstream predates or omits
+the block. Both are open; neither is "the silicon fails to enforce bounds".
+
+Established offline, so these are not in doubt: the check **is** compiled in
+(`` `define CAPSTONE_ITFC_EN `` at `core/include/capstone_cv64a6_imafdc_sv39_config_pkg.sv:17`,
+present since 2025-04-30); it **does** cover plain integer accesses (`LD`/`SD` enumerated in
+the access-size case, `:939-947`); and it landed 2026-05-10 (`2bc621336`), before the board's
+captype-fixed bitstream (`95e4c5cfb`, 2026-05-24). So per the sources it should have trapped.
+
+**Consequences.**
+1. **Do not claim silicon-enforced spatial safety for plain integer loads/stores.** Nothing
+   measured supports it; `obn` actively contradicts it.
+2. **Ask the board owner a question**, not a defect: *is the LSU capability check for integer
+   loads/stores expected to be active on this bitstream, and what sets `capmode` /
+   `ld_st_priv_lvl` for a domain entered via CAPENTER?*
+3. **This is a live lead for R-14 and possibly R-16.** If out-of-bounds integer accesses
+   silently corrupt instead of trapping, a stray store that should fault instead writes over
+   neighbouring state — which is the shape of R-14's pad-size-dependent miscompute.
+
+Probes: `silicon-ladder/{ob3,ob5,ob7,oba,obb,obc,obn}_kernel.h`. Transcripts under
+`/tmp/capstone/{ob3,ob5,obx,obn}.txt` (not committed).
+
 ## 2026-08-04 — Attempt at a SMALLER bounds repro: INVALID PROBE, result inconclusive
 
 `ob2` tried to shrink the reproducer by removing its dependence on the cap-table, the interp
