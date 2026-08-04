@@ -189,6 +189,25 @@ if BODY in s:
     s = s.replace(BODY,
         "    const char *zName = aDef[i].zName;\n"
         "#if CAPSTONE_INSERT_STOP==1\n    if(zName) return;\n#endif\n"
+        # 7 = read ONE byte of zName inline; 5 = full inline length loop. Both dereference
+        # zName WITHOUT calling sqlite3Strlen30. n1 (load only) returns and n2 (after the
+        # call) wedges, so the fault is the call boundary or the dereference; these split it.
+        "#if CAPSTONE_INSERT_STOP==7\n    if(zName[0]) return;\n#endif\n"
+        "#if CAPSTONE_INSERT_STOP==5\n    { int k_=0; while(zName[k_]) k_++; if(k_>=0) return; }\n#endif\n"
+        # 8 = the SAME byte-walk but BOUNDED to 32. p5 (unbounded) does not return while p7
+        # (one byte) does, so either the loads themselves are fatal or the string never
+        # reaches a NUL and the loop spins forever. A bounded walk separates them: if 8
+        # RETURNS, the loads are fine and p5 was an infinite loop, i.e. the string data or
+        # its capability is wrong -- a wrong ANSWER, not a fault. Converting the hang into a
+        # returning run is the only way to tell those apart.
+        "#if CAPSTONE_INSERT_STOP==8\n    { int k_=0; while(k_<32 && zName[k_]) k_++; if(k_>=0) return; }\n#endif\n"
+        # 9 = returns ONLY if a NUL is actually found within 32 bytes; otherwise it falls
+        # through to the real code and wedges. 8 returns unconditionally after &lt;=32 loads, so
+        # it proves the loads work but not that the string is terminated. This is the yes/no:
+        # RETURN  -> zName IS a terminated string, and p5 spun for some other reason
+        # NO RET  -> no NUL in 32 bytes, so zName does not point at the expected name and
+        #            the "wedge" is an infinite strlen over wrong data.
+        "#if CAPSTONE_INSERT_STOP==9\n    { int k_=0; while(k_<32 && zName[k_]) k_++; if(k_<32) return; }\n#endif\n"
         "    int nName = sqlite3Strlen30(zName);\n"
         "#if CAPSTONE_INSERT_STOP==2\n    if(nName>=0) return;\n#endif\n"
         "    int h = SQLITE_FUNC_HASH(zName[0], nName);\n"

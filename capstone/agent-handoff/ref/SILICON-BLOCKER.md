@@ -46,6 +46,52 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-04 — SQLite ROOT CAUSE: it is NOT a hardware wedge, it is an INFINITE `strlen`
+### over an unterminated string reached via a global struct field
+
+Continuing the verified compile-time bisection. All images artifact-checked, sha256-distinct,
+178 carves, every verdict from a boot whose control returned in the same boot.
+
+| stop | what runs before the return | board |
+|---|---|---|
+| `n1` | load `zName = aDef[i].zName` only | RETURN |
+| `p7` | + read **one** byte, `zName[0]`, no call | RETURN |
+| `p8` | + walk bytes **bounded to 32**, no call, return unconditionally | RETURN |
+| `p9` | + walk bounded to 32, **return ONLY if a NUL was found** | **NO return** |
+| `p5` | + walk **unbounded** to NUL, no call | **NO return** |
+| `n2` | + the real `sqlite3Strlen30(zName)` call | **NO return** |
+
+**`p8` returns and `p9` does not.** Both perform the identical 32 bounded loads; they differ
+only in whether the return is conditional on finding a terminator. So the loads work, and
+**there is no NUL in the first 32 bytes of `zName`**.
+
+**Therefore the "wedge" is an infinite loop, not a fault.** `sqlite3Strlen30` walks forever
+because the string it is given is not terminated. Nothing traps; the domain simply never
+returns, which is indistinguishable from a hardware hang from the outside — and is why every
+attempt to explain it as a silicon defect failed.
+
+**The defect is on our side, in the data.** `zName` is a pointer field of the
+`aAlterTableFuncs` **initialized global struct array**, pointing at a string literal. Reached
+this way the literal is not correctly materialized in the domain. The direct-literal path is
+fine and always has been — stage 11 (`Strlen30` on a literal) returns, stage 14 measured a
+literal's bytes as **0xFF, fully intact**, and `p7` shows byte 0 through `zName` reads without
+faulting. What is broken is a **string literal referenced from an initialized global struct's
+pointer field** under `-capstone-gp-captable`: the pointee is not carved/copied and/or the
+pointer is not relocated, so the bytes at `zName` are whatever happens to be there.
+
+**Consequences.**
+1. Stop looking for a silicon defect behind SQLite. The call boundary is exonerated (`p5` has
+   no call and still hangs), the loads are exonerated (`p8`), and the LSU capability check
+   being inert is irrelevant here because nothing is out of bounds — the loop just never ends.
+2. This is a **compiler/glue bug in initialized-global relocation**, and it is the thing to
+   fix. Every SQLite path that takes a name out of a static `FuncDef` table hits it.
+3. It explains the whole shape of the day: a non-terminating loop looks exactly like a wedge,
+   yields no marker, and cannot be distinguished from a hang without converting it into a
+   bounded run — which is what `p8`/`p9` finally did.
+
+**Next:** dump the bytes at `zName` and the descriptor/relocation for `aAlterTableFuncs` to
+confirm whether the pointer or the pointee is wrong, then fix the initialized-global path.
+
 ### 2026-08-04 — SQLite ROOT-CAUSE LOCATION: `strlen` on a `char *` loaded from a global
 ### struct array
 
