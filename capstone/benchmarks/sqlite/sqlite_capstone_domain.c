@@ -3117,7 +3117,7 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
 #if CAPSTONE_SQLITE_STAGE >= 110 && CAPSTONE_SQLITE_STAGE <= 113
   /* R-14 variants A and B as STAGED probes, so they can run on the board through the same
      host/runner as everything else (the ladder .dom files are not staged in the initramfs).
-     Reduced verbatim from tests/fpga-repros/R14-strline-struct/.
+     Reduced verbatim from tests/fpga-repros/ARCHIVED/R14-strline-struct/.
 
      Both are QEMU-CLEAN with the C-16 fix (r14a/r14b ladder rungs return 16 at -O0 and -O1),
      while the board previously WEDGED on A and returned 4 for B. These stages re-ask that

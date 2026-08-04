@@ -15,7 +15,11 @@
 # forever and the watchdog never fires. That is the self-matching-pgrep trap this project has
 # hit three times; the first draft of THIS script hit it too and a unit test caught it.
 #
-# LIVE ENTRY-STALL (R-16) DETECTION. `SHA5` means the monitor handed off to the domain; `SHA6`
+# LIVE ENTRY-STALL DETECTION. R-16 itself was FIXED IN SILICON on 2026-08-04
+# (`caplifive_fixed_forward.bit`, capability operand forwarding), so this should now fire only
+# on a bitstream lacking that fix -- which is exactly why the detection stays: it is the cheap
+# early warning that the board was reflashed to one. See capstone/tests/fpga-repros/R16-entry-stall/.
+# `SHA5` means the monitor handed off to the domain; `SHA6`
 # means the domain came back. `SHA5` with no following `SHA6` and no further UART is an entry
 # stall: the domain's code never ran, so THIS run carries no information and every later domain
 # in the same boot is lost anyway (a wedged domain takes the core). Waiting out the per-domain

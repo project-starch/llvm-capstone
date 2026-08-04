@@ -1,0 +1,9 @@
+# Exact binaries that produced the 2026-08-04 R-16 verdicts.
+#
+# NOT committed: ~1.5 MB each (package policy in ../README.md). Rebuild with the recipe in
+# 00-README.md. Build output here is NOT bit-reproducible, so a rebuild may differ in hash
+# while being the correct image -- identify by SIZE and CARVE COUNT as well.
+#
+# sha256                                                            size      carves  build
+e8abdfee5050f6fb28bd23de008aece4d53149eb53272fc44681a0a48fd2a5fb  1551512  179  SQLITE_STATIC_BUILTINS=1  (the reproducer: stalled 8/8 on the old bitstream)
+f018f690d43bdcf32ee0bc4afcb07f30484189435fc6a3d0862863fbc17d3df9  1607832  179  SQLITE_STATIC_BUILTINS=0  (control: entered)

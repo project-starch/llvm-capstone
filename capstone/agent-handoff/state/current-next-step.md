@@ -47,18 +47,22 @@ but QEMU *failing* is free and immediate.
 1. **Staged split on silicon with the fixed compiler** (f10/f2/f3 built and staged; run may be
    in flight). Stage 10 first: if it now returns, the remaining blocker moved later into
    `sqlite3_initialize`/`open`; if it still stalls, C-16 was only part of the same construct.
-2. ~~**Re-run the four R-14 variants with the fixed compiler.**~~ **DONE 2026-08-03 — R-14 does
-   NOT close as a C-16 duplicate.** It is reproduced on silicon and now looks like an **RTL
-   defect**: the failing capability store is measurably in bounds (type NONLIN, cursor ≥ start,
-   cursor+16 ≤ end, 1312 B of headroom), the identical binary is correct under QEMU, and every
-   compiler-side mechanism proposed was refuted on the board. Reproducer packaged for hand-over
-   at **`capstone/tests/fpga-repros/R14-frame-pad/`** (`k800` returns 4, `k1200` never returns,
-   sources differ only in the size of a dead `volatile` pad).
-   **Remaining, cheapest first:** read `lcc` field 5 (`perm`) at the failing address — a missing
-   write permission would be a legitimate reason to fault and would point back at the glue;
-   then read `lcc` off the faulting `stc`'s own base register; then get `mcause`/`mepc` for
-   `k1200` itself by adding the debug-mux read (already in `run_sqlite_stages_fpga.py`) to
-   `run_baked_rungs_fpga.py`.
+2. ~~**Re-run the four R-14 variants with the fixed compiler.**~~ ~~**DONE 2026-08-03 — looks
+   like an RTL defect.**~~ **CLOSED 2026-08-04 — R-14 IS FIXED IN SILICON, and so is R-16.**
+   Both were the same capability operand-forwarding bug (`capstone-ariane 7aac52f93`), fixed by
+   the bitstream **`caplifive_fixed_forward.bit`**. Verified across two valid boots with
+   controls green: `k1200` and `r14lp`, both previously failing, return the correct value; and
+   the R-16 reproducer, which entry-stalled 8/8, now enters.
+   The 2026-08-03 reading was right — the failing store really was architecturally legal
+   (type NONLIN, cursor ≥ start, cursor+16 ≤ end, 1312 B of headroom, correct under QEMU) and
+   the wrong bounds were being forwarded to the LSU. The three "remaining, cheapest first"
+   checks (read `perm`; read `lcc` off the faulting `stc`'s own base register; get
+   `mcause`/`mepc` for `k1200`) are **no longer needed** — the fix landed from the RTL side.
+   Packages: `capstone/tests/fpga-repros/ARCHIVED/R14-frame-pad/` and
+   `capstone/tests/fpga-repros/R16-entry-stall/`, both retained as **bitstream regression
+   tests**. **Every board measurement taken before the 2026-08-04 reflash is stale.** A third
+   bitstream `caplifive_65536_nodes.bit` exists whose forwarding-fix status is unconfirmed; if
+   it lacks the fix, both defects return.
 3. Re-read every "silicon miscomputes" claim in `SILICON-BLOCKER.md` and `ISSUES.md` against
    C-16 — several are plausibly the same bug.
 4. Decide whether to delete `SQLITE_STATIC_BUILTINS` now that the real fix exists.

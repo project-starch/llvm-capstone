@@ -1,5 +1,18 @@
 # R-14 reproducer — straight-line struct-array init of distinct string constants
 
+> ## ARCHIVED 2026-08-04 — FIXED IN SILICON, and already superseded before that.
+>
+> R-14 was a capability operand-forwarding bug, fixed by `capstone-ariane 7aac52f93` and
+> shipped in **`caplifive_fixed_forward.bit`**; verified on the board 2026-08-04. See
+> `../R14-frame-pad/00-README.md` for the verification, and `../README.md` for why archived
+> packages are kept.
+>
+> This package was **already superseded** by `../R14-frame-pad/` before the fix landed: its
+> failing shape confounds four variables at once and each variant is a full 1.5 MB SQLite
+> build, so it ships source only. Prefer `R14-frame-pad/` for any bitstream re-check.
+>
+> Everything from here down is the 2026-07-31 report as it stood.
+
 Board: Genesys2 CVA6+Capstone, bitstream `working-caplifive-captype-fixed.bit`.
 Measured 2026-07-31. gp-captable ABI, domains built by
 `capstone/benchmarks/sqlite/build-sqlite-silicon.sh`.

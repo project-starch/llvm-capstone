@@ -81,6 +81,20 @@ control only -- it reintroduces the misaligned-store corruption for `size % 8 !=
 capability check is still inert for plain integer loads/stores, so that finding is not
 about forwarding either. See the retraction below; it stands.
 
+### Reproducer packages (2026-08-04 reorganisation)
+
+Both defects are fixed, so both packages are now **bitstream regression tests** rather than
+hand-over material. Neither should be sent to the board owner as an open issue.
+
+| package | issue | cost to run | use |
+|---|---|---|---|
+| `capstone/tests/fpga-repros/ARCHIVED/R14-frame-pad/` | R-14 | one boot, frozen ~10 KB images | **the cheap check** — `k800` passes / `k1200` returns nothing iff the fix is missing |
+| `capstone/tests/fpga-repros/R16-entry-stall/` | R-16 | one boot + a 1.5 MB SQLite build | `run.sh` builds, stages and runs behind a control gate, printing R-16 PRESENT/ABSENT |
+
+`capstone/tests/fpga-repros/ARCHIVED/README.md` states the archive policy: a package is
+archived, not deleted, because it is the evidence the defect was real, it is a bitstream
+regression test, and its probe technique is reusable.
+
 ### Traps for the next session
 
 * **The staged `sqlite_silicon.dom` was stale** — a STATIC_BUILTINS=0 build, though the
@@ -1901,7 +1915,7 @@ loops (`e3rd`/`e4wr`), and finally the non-zero `stc` immediate -- `zoff` forces
 not handing it a malformed or undersized capability. This is the finding to take to the board
 owner.
 
-**PACKAGED AS `capstone/tests/fpga-repros/R14-frame-pad/`** -- frozen `.dom` images + the `lpc`
+**PACKAGED AS `capstone/tests/fpga-repros/ARCHIVED/R14-frame-pad/`** -- frozen `.dom` images + the `lpc`
 controller (~41 KB total, pinned by `images/SHA256SUMS`), sources, run instructions, the
 refuted-hypotheses table, and an explicit "what is NOT established" section. That directory is
 the thing to hand over; it supersedes `R14-strline-struct/`.

@@ -71,8 +71,14 @@ between.
 
 **Reproducers to hand over live in `capstone/tests/fpga-repros/`** — one directory per issue,
 each with its own README and (where the images are small enough) the frozen `.dom` files pinned
-by `SHA256SUMS`. `R14-frame-pad/` is the current R-14 hand-over package and runs entirely
-through the baked-image path below.
+by `SHA256SUMS`. Packages whose defect is fixed in silicon move to `fpga-repros/ARCHIVED/`;
+check the resolution banner before handing anything over.
+
+**R-14 and R-16 are both FIXED** as of the 2026-08-04 reflash to `caplifive_fixed_forward.bit`
+(capability operand forwarding, `capstone-ariane 7aac52f93`) — they were the same defect.
+`ARCHIVED/R14-frame-pad/` and `R16-entry-stall/` are retained as **bitstream regression
+tests**; the former is the cheaper one-boot check. **Every board measurement taken before that
+reflash is stale** and must be re-checked before it is relied on.
 
 ## Tooling (already on disk)
 
@@ -358,10 +364,16 @@ produced domain output and would silently disable the guard.
 
 ### Retrying: REDRAW the image, do not re-run it
 
+> **R-16 was fixed in silicon on 2026-08-04** (`caplifive_fixed_forward.bit`). This section is
+> retained because the failure returns on any bitstream without that fix, and because the
+> REDRAW discipline is right for any per-image board failure. If you see an entry stall now,
+> check the bitstream first — `capstone/tests/fpga-repros/R16-entry-stall/run.sh` settles it in
+> one boot.
+
 An entry stall wedges the boot, so a losing draw costs the whole attempt — which makes a
-retry loop look attractive. But R-16 is **per-image and deterministic**: `min.dom` stalled
-2/2 under a correctly-calibrated watchdog, and `sb10` 3/3, `x101` 6/6, `r112` 3/3 before it.
-Re-running the same binary is N identical losing tickets and pure board time.
+retry loop look attractive. But R-16 was **per-image and near-deterministic**: `min.dom`
+stalled 2/2 under a correctly-calibrated watchdog, and `sb10` 3/3, `x101` 6/6, `r112` 3/3
+before it. Re-running the same binary is N identical losing tickets and pure board time.
 
 So a retry loop must **rebuild or switch image between attempts**. Stage several distinct
 images that carry the same probes and walk them; a bounded 2 attempts is right for genuine

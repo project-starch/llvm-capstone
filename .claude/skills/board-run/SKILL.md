@@ -130,7 +130,7 @@ Read the **last marker** in the run-scoped transcript, never "did not return":
 |---|---|
 | `SQ: obs=<n>` / `RESULT … retval=` | a result — record it |
 | `SQ: G/enter` present, no `H/return` | entered and wedged — a **real** result |
-| no `SQ: G/enter` (ends at `SHA5:`) | **entry stall (R-16)** — the domain never ran; says nothing about the code |
+| no `SQ: G/enter` (ends at `SHA5:`) | **entry stall** — the domain never ran; says nothing about the code |
 | no boot banner / JTAG errors | infra — retry |
 
 `SHA5` last does **not** by itself mean an entry stall: a domain that enters and wedges
@@ -138,9 +138,16 @@ immediately also leaves `SHA5` last. **Distinguish on `SQ: G/enter`.**
 
 A wrong *value* is a result too, and a valuable one — it is bisectable where a hang is not.
 
-**Retrying an entry stall is futile — R-16 is per-image.** REDRAW instead: rebuild with a
-harmless constant varied (e.g. a different compiled-in default stage) so the code under test
-is byte-identical across draws. Always `sha256sum` the set and abort if any two match.
+**Entry stalls (R-16) were FIXED IN SILICON on 2026-08-04** by `caplifive_fixed_forward.bit`
+(capability operand forwarding, `capstone-ariane 7aac52f93`) — as was R-14, the same defect.
+Keep the row above: the classification still governs every run, and the failure returns if the
+board is reflashed to a bitstream without that fix. `capstone/tests/fpga-repros/R16-entry-stall/`
+checks a bitstream in one boot. If you *do* see an entry stall, suspect the bitstream first.
+
+**If it recurs, retrying the same binary is futile — it was per-image.** REDRAW instead:
+rebuild with a harmless constant varied (e.g. a different compiled-in default stage) so the
+code under test is byte-identical across draws. Always `sha256sum` the set and abort if any
+two match.
 
 ## 5. Release the board, always
 
@@ -166,6 +173,10 @@ reflash.
 
 ## Reporting a result
 
-State which arms were **reachable**, not just which failed — R-16 biases *which constructs
-can be measured at all*, so "arm X fails and arm Y does not" is unsupportable unless Y
-actually entered. Quote the control's verdict alongside every result.
+State which arms were **reachable**, not just which failed — an entry stall biases *which
+constructs can be measured at all*, so "arm X fails and arm Y does not" is unsupportable
+unless Y actually entered. Quote the control's verdict alongside every result.
+
+**Name the bitstream in any result you record.** R-14 and R-16 were both fixed by a reflash on
+2026-08-04, which invalidated every board measurement taken before it. A result without a
+bitstream is not re-checkable later.

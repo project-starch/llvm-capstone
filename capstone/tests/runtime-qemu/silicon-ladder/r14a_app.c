@@ -1,6 +1,6 @@
 /* R-14 variant A as a QEMU-gated ladder rung (2026-08-02).
 
-   Reduced verbatim from tests/fpga-repros/R14-strline-struct/strline_struct_repro.c.
+   Reduced verbatim from tests/fpga-repros/ARCHIVED/R14-strline-struct/strline_struct_repro.c.
    Board-measured 2026-07-31: this WEDGES on silicon while variants C and D return 16.
 
    Recorded here because C-16 (the memset tail-padding tag-strip) provably does NOT explain

@@ -714,9 +714,31 @@ rather than `ldc`/`stc`. Whether capstone-c can express a non-`__linear` view of
 span is a compiler/ABI question, not an RTL one, and is unverified — `sbi_capstone.c` has
 no `memcpy` and no scalar-pointer cast anywhere today.
 
-### R-14 — struct-array init wedges `OPEN — LIKELY AN RTL DEFECT 2026-08-03; title is now WRONG`
+### R-14 — struct-array init wedges `FIXED IN SILICON 2026-08-04; title is now WRONG`
 
-> **REPRODUCER TO HAND OVER: `capstone/tests/fpga-repros/R14-frame-pad/`** — two ~10 KB domains
+> **RESOLVED 2026-08-04 — capability operand-forwarding bug, fixed in the RTL.** The fix is
+> `capstone-ariane 7aac52f93` ("Fixed an operand forwarding bug", `issue_read_operands.sv`:
+> capability-metadata forwarding was selected by an over-broad `check_cap_op`, narrowed to
+> `check_fwd_rs1`), shipped as **`caplifive_fixed_forward.bit`**, board reflashed 2026-08-04.
+>
+> Verified across two valid boots with controls green: `r14sl 4`, `k800 4`, **`k1200 4`**,
+> **`r14lp 4`** — i.e. both previously-failing rungs now return the correct value. The
+> `SQLITE_STATIC_BUILTINS=1` workaround can come off.
+>
+> The 2026-08-03 reading below — that the faulting access was *architecturally legal* and the
+> defect was in the RTL rather than the compiler — proved **correct**: the capability really
+> was well formed, and the wrong bounds were being forwarded to the LSU.
+>
+> **R-16 was the same defect** reached from the other direction; see that entry.
+>
+> Reproducer packages archived to `capstone/tests/fpga-repros/ARCHIVED/R14-frame-pad/` and
+> `.../ARCHIVED/R14-strline-struct/`. They are kept as **bitstream regression tests** — a third
+> bitstream `caplifive_65536_nodes.bit` exists whose forwarding-fix status is unconfirmed, and
+> `ARCHIVED/R14-frame-pad/` checks it in one boot. **Do not hand either over as an open issue.**
+
+<details><summary>2026-08-03 report, as it stood on <code>working-caplifive-captype-fixed.bit</code></summary>
+
+> **REPRODUCER: `capstone/tests/fpga-repros/ARCHIVED/R14-frame-pad/`** — two ~10 KB domains
 > whose source differs ONLY in the size of a dead `volatile char pad[]`: `k800` returns 4,
 > `k1200` never returns. Frozen `.dom` images are committed and pinned by `SHA256SUMS`. It
 > supersedes `R14-strline-struct/` (1.5 MB SQLite builds, four confounded variables).
@@ -871,7 +893,7 @@ alone is fine. **Variant B is the important one** — it returns a WRONG VALUE i
 hanging, i.e. the same construct corrupts silently at smaller scale, with the twelve
 loop-assigned entries failing and the four straight-line ones passing.
 
-- **Repro:** `tests/fpga-repros/R14-strline-struct/` (source, run recipe, and the rebuild
+- **Repro:** `tests/fpga-repros/ARCHIVED/R14-strline-struct/` (source, run recipe, and the rebuild
   commands for the four domains — the `.dom` files themselves are ~1.5 MB each and are not
   tracked). Put variant A last in any batch — a wedged domain takes the core with it.
 - **Wedged-core state:** `privM=1`, `flu_ready=dyn_ready=lsu_ready=1`, `ex_commit.valid=0`,
@@ -934,9 +956,42 @@ exactly that shape.
 - **Why it hid so long:** the staged probes were built and shipped to the board for four
   sessions without ever being run under QEMU — the one tool that would have asserted on it.
 
+</details>
+
 ---
 
-### R-16 — domain never returns from its FIRST entry (`SHA5` stall) `OPEN — still unexplained 2026-08-03`
+### R-16 — domain never returns from its FIRST entry (`SHA5` stall) `FIXED IN SILICON 2026-08-04`
+
+> **RESOLVED 2026-08-04 — the same capability operand-forwarding bug as R-14**
+> (`capstone-ariane 7aac52f93`), shipped as **`caplifive_fixed_forward.bit`**.
+>
+> The reproducer — a SQLite domain built with `SQLITE_STATIC_BUILTINS=1` — entry-stalled
+> **8/8** on `working-caplifive-captype-fixed.bit` and **enters** on the new bitstream, on a
+> boot whose control both entered and returned.
+>
+> Note the coupling: `SQLITE_STATIC_BUILTINS=1` **is** the R-14 workaround
+> (`build-sqlite-silicon.sh:75`), so **R-16 was created by the R-14 workaround**. Two symptoms,
+> one defect.
+>
+> **We never root-caused it ourselves.** Eight axes were eliminated (image size, carve count,
+> the size+carve conjunction, `dom_data` geometry, blob size on the ladder path, the loader,
+> the interp-glue pad bug, `BUILTIN_LIMIT`) and none separated entering from stalling images;
+> the mechanism came from the RTL side. Worth stating plainly, because that eliminated-axes
+> list reads like progress and was not. In hindsight the strongest hint was the observation
+> below that the *same binary in the same boot* entered for `:0` and stalled on a later
+> selector — a per-invocation effect, which is what a pipeline forwarding hazard looks like,
+> and which the "deterministic per image" framing actively obscured.
+>
+> **Reproducer package: `capstone/tests/fpga-repros/R16-entry-stall/`** — source, build recipe,
+> pinned image hashes and a `run.sh` that builds, stages and runs it behind a control gate and
+> prints a present/absent verdict. Kept as a **bitstream acceptance test**: a third bitstream
+> `caplifive_65536_nodes.bit` (larger revocation-node pool) exists whose forwarding-fix status
+> is **unconfirmed** — if it lacks the fix, R-16 *and* R-14 both return.
+>
+> The classification rule below is NOT superseded and still governs every board run: `SHA5`
+> last does not by itself mean an entry stall — **distinguish on `SQ: G/enter`**.
+
+<details><summary>2026-08-03 investigation record, as it stood on <code>working-caplifive-captype-fixed.bit</code></summary>
 
 > **2026-08-03.** Now separated from board health for the first time: run a KNOWN-ENTERING
 > image (`f10.dom:0`) as the FIRST domain of every boot. Measured `f10ctl=0` while the image
@@ -1005,6 +1060,8 @@ a run carries NO information about the domain under test and must never be recor
 **Next step:** it is board-only and not reproducible offline, so it needs instrumentation rather
 than a reproducer. Every board session should run `tests/rtl-smoke/board-watchdog.sh` alongside
 the runner so a stall is distinguishable from a dead runner and from normal work while it happens.
+
+</details>
 
 ---
 

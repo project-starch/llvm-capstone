@@ -11,8 +11,18 @@ reproducer is not an issue; a reproducer that only exists in `/tmp` is not much 
 |---|---|---|
 | `R01-lsu-hazard/` | **R-1** | a load through one capability register misses a store through another |
 | `R02-delin/` | **R-2** | `delin` in domain code wedges the board — `delin.s` vs `nop.s`, one instruction apart |
-| `R14-strline-struct/` | **R-14** | straight-line init of a struct array with distinct string constants wedges |
-| `R14-frame-pad/` | **R-14** | **the one to hand over.** Two ~10 KB domains whose source differs only in the size of a dead `volatile` pad: one returns 4, the other never returns. Ships bounds/type measurements showing the faulting access is architecturally legal |
+| `R16-entry-stall/` | **R-16** | the domain never returns from its FIRST entry (`SHA5` stall, no `SQ: G/enter`). **Resolved** — kept as a one-boot bitstream acceptance test |
+| `ARCHIVED/` | — | packages whose defect is **fixed in silicon**; see `ARCHIVED/README.md` |
+
+**Archived 2026-08-04:** both R-14 packages (`R14-frame-pad/`, `R14-strline-struct/`) moved to
+`ARCHIVED/`. R-14 and R-16 were the **same** capability operand-forwarding bug
+(`capstone-ariane 7aac52f93`), fixed by `caplifive_fixed_forward.bit` and verified on the
+board. Neither is an open issue; do not hand either to the board owner as one.
+
+Both remain useful as **bitstream regression tests** — a third bitstream
+`caplifive_65536_nodes.bit` exists whose forwarding-fix status is unconfirmed, and either
+package answers that in one boot. `ARCHIVED/R14-frame-pad/` is the cheaper check (two ~10 KB
+domains with frozen images); `R16-entry-stall/` needs a 1.5 MB SQLite build.
 
 ## What is committed, and what is not
 
@@ -20,12 +30,17 @@ reproducer is not an issue; a reproducer that only exists in `/tmp` is not much 
 the point of a reproducer is the exact binary that reproduced, and a rebuild against a
 moved compiler may not. They are small enough to carry.
 
-`R14-frame-pad` includes its **frozen `.dom` images and the `lpc` controller** (~41 KB for all
-five), pinned by `images/SHA256SUMS`. It is a standalone silicon-ladder rung, not a SQLite
-build, which is exactly why it is small enough to carry — and why it should be preferred over
-`R14-strline-struct` for any hand-over.
+`ARCHIVED/R14-frame-pad` includes its **frozen `.dom` images and the `lpc` controller** (~41 KB
+for all five), pinned by `images/SHA256SUMS`. It is a standalone silicon-ladder rung, not a
+SQLite build, which is exactly why it is small enough to carry — and why it should be preferred
+over `ARCHIVED/R14-strline-struct` whenever an R-14-shaped check is wanted.
 
-`R14-strline-struct` ships **source and documentation only**. Its four domains are ~1.5 MB each
+`R16-entry-stall` ships **source, recipe and pinned hashes only** — its reproducer is a ~1.5 MB
+SQLite build. Its `run.sh` builds, stages and runs it with a control gate, and prints a
+present/absent verdict. Note the build is **not bit-reproducible**, so identify an image by
+size and carve count as well as by hash.
+
+`ARCHIVED/R14-strline-struct` ships **source and documentation only**. Its four domains are ~1.5 MB each
 (6 MB total) because each is a full SQLite build, which is too much to track. Rebuild them with:
 
     export SQLITE_SUPPORT_OPT_LEVEL=-O1
@@ -41,7 +56,10 @@ The staged-return scaffolding those depend on is in
 
 ## Running one
 
-Each package has its own `README.md`, and `R02` has a `run.sh`. General board procedure and
-the driver contract are in `capstone/agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md`. When
+Each package has its own `README.md`; `R02` and `R16-entry-stall` have a `run.sh`. General
+board procedure and the driver contract are in
+`capstone/agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md`, and the decision procedure is the
+`board-run` skill. **Always run a known-entering control FIRST in every boot** — it fails
+roughly 1 in 5, and a boot whose control fails is VOID and carries no verdict. When
 batching several domains into one boot, put a wedging variant **last** — a wedged domain
 takes the core with it and everything after it in that session is lost.

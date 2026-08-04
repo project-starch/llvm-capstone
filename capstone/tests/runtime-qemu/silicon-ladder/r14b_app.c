@@ -1,6 +1,6 @@
 /* R-14 variant B as a QEMU-gated ladder rung (2026-08-02).
 
-   Reduced verbatim from tests/fpga-repros/R14-strline-struct/strline_struct_repro.c.
+   Reduced verbatim from tests/fpga-repros/ARCHIVED/R14-strline-struct/strline_struct_repro.c.
    Board-measured 2026-07-31: this RETURNS 4 where 16 is correct -- it does NOT wedge.
 
    That makes it the most useful variant by a wide margin: the failure is a NUMBER, not a

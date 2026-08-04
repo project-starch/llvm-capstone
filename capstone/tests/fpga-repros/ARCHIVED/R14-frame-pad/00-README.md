@@ -1,7 +1,34 @@
 # R-14 — the hardware faults an architecturally legal capability store
 
-**Status: the evidence points at the RTL, not at the compiler.** Measured 2026-08-03 on
-`working-caplifive-captype-fixed.bit`.
+> ## ARCHIVED 2026-08-04 — FIXED IN SILICON. Do not hand this over as an open issue.
+>
+> R-14 was a **capability operand-forwarding bug**, fixed by `capstone-ariane 7aac52f93`
+> ("Fixed an operand forwarding bug", `issue_read_operands.sv`: capability-metadata forwarding
+> was selected by an over-broad `check_cap_op`, narrowed to `check_fwd_rs1`). The board was
+> reflashed to **`caplifive_fixed_forward.bit`** on 2026-08-04.
+>
+> **Verified on the new bitstream**, two valid boots, controls green:
+>
+>     r14sl 4 OK    k800 4 OK    k1200 4 OK    r14lp 4 OK
+>
+> Both previously-failing rungs — `k1200` (this package's failing half) and `r14lp` — now
+> return the correct value. The `SQLITE_STATIC_BUILTINS=1` workaround can come off.
+>
+> The package is kept as a **bitstream regression test**: if a future bitstream reintroduces
+> the failure, `k800` will pass and `k1200` will not return, exactly as documented below. That
+> matters concretely — a third bitstream `caplifive_65536_nodes.bit` (larger revocation-node
+> pool) exists whose forwarding-fix status is unconfirmed, and this is how to check it.
+>
+> The gap list in "What is NOT established" is left as written: it was accurate at the time,
+> and the fix landed from the RTL side rather than by closing those gaps. In particular the
+> reading below that the faulting access was *architecturally legal* proved correct — the
+> capability really was well formed, and the wrong bounds were being forwarded to the LSU.
+>
+> Everything from here down is the 2026-08-03 report as it stood on
+> `working-caplifive-captype-fixed.bit`.
+
+**Status (as of 2026-08-03): the evidence points at the RTL, not at the compiler.** Measured
+2026-08-03 on `working-caplifive-captype-fixed.bit`.
 
 This package supersedes `../R14-strline-struct/` as the reproducer to hand over. That one needed
 a full 1.5 MB SQLite build per variant and its failing shape had four things wrong with it at

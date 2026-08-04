@@ -89,18 +89,23 @@ cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
 # ENTIRELY rather than reshaping it, and routes the same data through a path that is already
 # exercised and passing.
 #
-# DEFAULT ON since 2026-08-03. The R-14 construct it removes is a CONFIRMED silicon failure and
-# the workaround is validated at minimal-repro scale: `w1stat` (the big local array moved to a
-# file-scope static) RETURNS 4 on the board where the identical code with the array on the stack
-# (`k1200`) never returns. So leaving the known-failing shape in the default build only
-# guarantees stage 10 wedges.
+# *** 2026-08-04: R-14 IS FIXED IN SILICON, so this is no longer needed as a workaround. ***
 #
-# It is NOT yet validated on SQLITE itself: all five static-builtins images built so far
-# (st10, sb10, swa, swa8, swa9) entry-stalled (R-16) before executing any code, so the change has
-# never actually run at SQLite scale. That is an R-16 blockage, not evidence against the
-# workaround -- see ref/SILICON-BLOCKER.md.
+# R-14 was a capability operand-forwarding bug (capstone-ariane 7aac52f93), fixed by the
+# bitstream `caplifive_fixed_forward.bit`. Verified on the board across two valid boots with
+# controls green: k1200 and r14lp -- both previously failing -- now return the correct value.
 #
-# Set SQLITE_STATIC_BUILTINS=0 to get the old de-static shape back (the R-14 reproducer).
+# It is left DEFAULT ON deliberately, on its own merits: putting aBuiltinFunc back to a
+# compile-time-initialised static removes the straight-line stack construction entirely rather
+# than reshaping it, which is the better shape regardless of the silicon bug. Set
+# SQLITE_STATIC_BUILTINS=0 for the old de-static shape (which was the R-14 reproducer).
+#
+# HISTORICAL, and the reason to be careful about flipping this: =1 was ALSO the shape that
+# entry-stalled (R-16) -- st10, sb10, swa, swa8, swa9 all stalled before executing any code, so
+# the workaround never actually ran at SQLite scale until the reflash. R-16 turned out to be the
+# SAME forwarding defect, i.e. the R-14 workaround was creating R-16. Both are fixed together,
+# and both return together if the board is reflashed to a bitstream lacking the fix -- see
+# capstone/tests/fpga-repros/R16-entry-stall/ and .../ARCHIVED/R14-frame-pad/.
 if [[ "${SQLITE_STATIC_BUILTINS:-1}" == "1" ]]; then
   echo "== R-14 WORKAROUND: restoring aBuiltinFunc to a compile-time-initialised static"
   python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PY'
