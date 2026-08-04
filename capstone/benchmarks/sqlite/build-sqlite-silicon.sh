@@ -177,11 +177,44 @@ for anchor, k, before in steps:
         continue                      # step compiled out (e.g. SQLITE_OMIT_ALTERTABLE)
     s = s.replace(anchor, "  if(capstone_reg_limit==%d) return;\n%s" % (k, anchor), 1)
     applied.append(k)
+# Also clamp sqlite3AlterFunctions' OWN entry count at runtime. Stage 202 (MallocInit +
+# AlterFunctions only) wedges first-position on a fresh boot, and AlterFunctions is a single
+# sqlite3InsertBuiltinFuncs(aAlterTableFuncs, 9). Clamping that 9 bisects to the exact entry.
+# -1 (the default) means "unclamped", so a build with this applied and the knob untouched
+# behaves exactly as before.
+ALT = "  sqlite3InsertBuiltinFuncs(aAlterTableFuncs, ArraySize(aAlterTableFuncs));"
+if ALT in s:
+    s = s.replace(ALT,
+        "  sqlite3InsertBuiltinFuncs(aAlterTableFuncs,\n"
+        "      capstone_alter_limit >= 0 ? capstone_alter_limit : (int)ArraySize(aAlterTableFuncs));", 1)
+    s = s.replace("SQLITE_PRIVATE void sqlite3AlterFunctions(void){",
+                  "int capstone_alter_limit = -1;\nSQLITE_PRIVATE void sqlite3AlterFunctions(void){", 1)
+    applied.append("alter")
+else:
+    sys.exit("REG_BISECT: aAlterTableFuncs insert call not found -- patch shape changed")
 if len(applied) < 3:
     sys.exit("REG_BISECT: only %d anchors matched (%r) -- patch shape changed" % (len(applied), applied))
 p.write_text(s)
 print("   sub-step returns installed at limits: 1 (entry) + %s" % applied)
 PYBI
+fi
+
+# PREFLIGHT GATE (added 2026-08-04 after this exact mistake cost several board sessions).
+#
+# The staged dispatch in sqlite_capstone_domain.c -- INCLUDING the read of the host's stage
+# selector -- lives inside `#ifdef CAPSTONE_SQLITE_STAGE`, and DOMAIN_EXTRA_DEFS defaults to
+# empty. So a build without it SILENTLY IGNORES the selector and runs the full workload: every
+# `dom:NNN` invocation returns the same thing, and the run looks like a legitimate verdict
+# about stage NNN when the stage never executed. Three board sessions were spent bisecting
+# sub-steps of a function that was never entered under a clamp.
+#
+# SQLITE_REG_BISECT's stages (200-206, 210-219) are reachable ONLY through that dispatch, so
+# requesting the bisect without the staged build is always a mistake. Fail loudly instead.
+if [[ "${SQLITE_REG_BISECT:-0}" == "1" ]] && [[ "${DOMAIN_EXTRA_DEFS:-}" != *CAPSTONE_SQLITE_STAGE* ]]; then
+  echo "FATAL: SQLITE_REG_BISECT=1 needs the staged dispatch compiled in, or the stage" >&2
+  echo "       selector is ignored and every stage silently runs the FULL workload." >&2
+  echo "       Add: DOMAIN_EXTRA_DEFS=-DCAPSTONE_SQLITE_STAGE=0" >&2
+  exit 1
 fi
 
 cp -f "$VFS_DIR/capstone_sqlite_vfs.c"    "$OBJ_DIR/capstone_sqlite_vfs.c"
@@ -387,3 +420,19 @@ NHDR=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$OUT_DIR/sqlite_silicon.dom" | gre
 echo "   .capstone_gp_table sections: $NHDR (must be 1 -- more means a multi-TU index collision)"
 python3 "$LADDER/domdata-budget.py" "$OUT_DIR/sqlite_silicon.dom" || true
 echo "Built $OUT_DIR/sqlite_silicon.dom"
+
+# Artifact check: a staged build MUST contain the 0x5A6E marker and the staged-only literal.
+# Checking the flag is not enough -- this verifies what actually got compiled.
+if [[ "${DOMAIN_EXTRA_DEFS:-}" == *CAPSTONE_SQLITE_STAGE* ]]; then
+  python3 - "$OUT_DIR/sqlite_silicon.dom" <<'PYCHK' || exit 1
+import sys, pathlib
+d = pathlib.Path(sys.argv[1]).read_bytes()
+marker = d.count(bytes.fromhex("6e5a"))          # lui rd, 0x5a6e0, any rd
+probe  = b"capstone_probe_string" in d           # a literal only in the staged block
+if marker == 0 or not probe:
+    sys.exit(f"FATAL: staged build requested but the artifact is NOT staged "
+             f"(marker={marker}, probe={probe}). The selector would be ignored and every "
+             f"stage would silently run the full workload.")
+print(f"   staged-dispatch verified in artifact (marker x{marker}, probe literal present)")
+PYCHK
+fi

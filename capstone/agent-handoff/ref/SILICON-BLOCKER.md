@@ -46,6 +46,50 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-04 — RETRACTION: the entire SQLite sub-step bisection is VOID (the stage
+### selector was never compiled in)
+
+**Retracted:** every conclusion drawn from a `dom:NNN` stage selector on `bis`, `bis2`, `sb0`,
+`sb0nb` or `sb1`. Specifically:
+* "stage 10 bisects to `sqlite3AlterFunctions` / `sqlite3InsertBuiltinFuncs`" — VOID
+* "stage 200/201 wedge, so merely ENTERING `sqlite3RegisterBuiltinFunctions` wedges" — VOID
+* "both shapes enter and wedge at `:0`, so the wedge is in the entry glue / cap-init carve
+  loop" — VOID; `:0` did not return before ladder code, it ran the whole workload
+
+**Why.** The staged dispatch in `sqlite_capstone_domain.c:3704-3733` — *including the read of
+the host's stage selector* — sits inside `#ifdef CAPSTONE_SQLITE_STAGE`, and
+`DOMAIN_EXTRA_DEFS` defaults to empty (`build-sqlite-silicon.sh:307`). A build without it
+**silently ignores the selector and falls through to the full `run_sqlite()`**. Verified on the
+artifacts rather than the flags — `lui rd, 0x5a6e0` always leaves bytes `6e 5a` at instruction
+offset 2-3 for any `rd`, and `capstone_probe_string` exists only inside the staged block:
+
+    f10   probe=True   marker x2    <- STAGED, its stage results are real
+    bis   probe=False  marker x0    <- NOT staged ("stage 202" ran full SQLite)
+    bis2  probe=False  marker x0    <- NOT staged ("stage 200/201" ran full SQLite)
+    sb1   probe=False  marker x0    <- NOT staged (":0" ran full SQLite)
+
+Confirmed independently on the board: `bis2.dom:9` — a stage that returns on `f10` — **wedged**.
+
+**What survives.**
+* **R-16 resolved** — `sb1` emitted `SQ: G/enter` where it previously never did. Entry is
+  observed before any selector is consulted, so this is unaffected.
+* **R-14 fixed** — ladder rungs, no staged dispatch involved.
+* **`f10` stage results are real** (`f10` IS staged): stage 10 wedges; 0, 9, 11, 12, 13, 14,
+  15, 16, 18 return — subject to the position caveat below.
+
+**Additional caveat found in the same audit:** `f10:0` at **position 1 on a fresh boot is
+non-deterministic** — four samples across the r16-final/r16-a1 scrollback read WEDGE, RETURN,
+WEDGE, RETURN on the identical image. So a single first-position verdict is not sufficient
+either; unknowns need repeats, not just good ordering.
+
+**Gate added so this cannot recur** (`build-sqlite-silicon.sh`): `SQLITE_REG_BISECT=1` without
+`CAPSTONE_SQLITE_STAGE` is now a hard error, and any staged build is verified **in the
+artifact** (marker bytes + probe literal) rather than by trusting the flag. Verified to reject
+the exact command that produced `bis2`.
+
+**Also fix before reading it:** the stage-mapping comment at `sqlite_capstone_domain.c:354-355`
+is off by one against the emitted code — limit K returns *before* sub-step K, not after.
+
 ### 2026-08-04 — RETRACTION: the xg* bit-27 finding is the KNOWN ladder-harness artifact,
 ### and it does NOT explain the SQLite blocker
 

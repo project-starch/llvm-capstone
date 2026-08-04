@@ -357,6 +357,24 @@ static int run_sqlite_staged(int stage) {
      Every arm RETURNS its own limit, so a run that returns 203 and a run that returns nothing
      at 204 names the exact sub-step. Returning the limit (not a constant) also means a
      mis-selected arm cannot masquerade as a passing one. */
+  /* Stages 210-219: bisect INSIDE sqlite3AlterFunctions, which is the sub-step that wedges
+     (stage 202 = MallocInit + AlterFunctions only, wedges first-position on a fresh boot in
+     BOTH build shapes). AlterFunctions is one sqlite3InsertBuiltinFuncs(aAlterTableFuncs, 9),
+     so clamping that count to 0..9 names the exact entry at which it dies. Each arm returns
+     210 + its own count, so a wrongly-selected arm cannot read as a passing one. */
+  if (stage >= 210 && stage <= 219) {
+    extern int capstone_reg_limit;
+    extern int capstone_alter_limit;
+    int lim = stage - 210;                /* entries of aAlterTableFuncs to register */
+    rc = sqlite3MallocInit();
+    if (rc != SQLITE_OK) return rc;
+    capstone_alter_limit = lim;
+    capstone_reg_limit  = 3;              /* return right after AlterFunctions */
+    sqlite3RegisterBuiltinFunctions();
+    capstone_reg_limit  = 0;
+    capstone_alter_limit = -1;
+    return 210 + lim;
+  }
   if (stage >= 200 && stage <= 206) {
     extern int capstone_reg_limit;
     int lim = stage - 199;                /* 200 -> 1 ... 206 -> 7 */
