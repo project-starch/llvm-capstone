@@ -1,5 +1,48 @@
 # The silicon blocker — everything known
 
+## 2026-08-04 — MAJOR: capability UPPER BOUND is NOT ENFORCED on stores (direct, deliberate test)
+
+**Measured, two independent probes, in-boot control passing, one boot:**
+
+    pk2 = 16   ->  slot0 is EXACTLY 16 bytes (end0-start0 == 16), carves DESCEND (start1 < start0),
+                   and end1 == start0: the carves are ADJACENT, not overlapping.
+                   `split` narrows `sp` correctly; there is no overlap to hide an overrun in.
+
+    oob = 42   ->  a deliberate 8-byte store at offset 16 from that 16-byte capability --
+                   entirely past its end -- COMPLETED WITHOUT TRAPPING.
+
+`load_store_unit.sv:970-972` implements an exact upper-bound check
+(`lsu_ea_full + lsu_access_sz > lsu_cap_a.metadata.bound_end` -> `cap_exception.cause = 28`).
+On this board that check does not fire for this access.
+
+**This is why the pad bug was silent.** The incomplete pad fix wrote 22 bytes into a 16-byte
+carve; the 6-byte overrun landed in the neighbouring record's storage and corrupted it with no
+exception — which is exactly the behaviour just reproduced deliberately.
+
+**Scope and caveats, stated precisely:**
+* The probe uses a plain `sd` through a capability-derived pointer inside a pure-capability
+  domain, where every access is capability-authorised. It does NOT test `stc`, loads, or
+  cross-domain accesses; those may behave differently and have not been measured.
+* The target address is the adjacent carve, which is memory the domain legitimately owns. This
+  is a violation of a capability's SUB-BOUND, not proof that a domain can escape its own region.
+  That distinction matters and should not be overstated.
+* Reproduced on `working-caplifive-captype-fixed.bit`. Whether the running bitstream matches this
+  RTL tree is unverified (noted previously as unresolvable from here).
+
+**Why it matters anyway:** intra-domain bounds are the mechanism the whole capability model uses
+to isolate objects from each other. A silently-ignored upper bound makes every sub-object bound
+in a domain advisory, and it makes any memory-safety claim measured on this board conditional on
+this being fixed or explained.
+
+**Recommended next steps:** (1) repeat with `stc` and with loads, and at larger overruns, to map
+the extent; (2) put this in front of the board owner with the two-probe reproducer — it is
+self-contained, ~11 KB, needs no SQLite; (3) treat it as outranking R-16 for attention.
+
+Probes: `silicon-ladder/pk2_kernel.h` (reads slot bounds with `lcc`, no stores, cannot wedge) and
+`silicon-ladder/oob_kernel.h` (the deliberate out-of-bounds store).
+
+
+
 ## 2026-08-04 — Step 2 attempt 2 (grow the passing image's blob) DID NOT TAKE — handover point
 
 Rather than truncate SQLite's builtin array, I tried the easier direction: grow `f10`'s blob to
