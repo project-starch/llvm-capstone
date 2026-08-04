@@ -143,6 +143,47 @@ if [[ -n "${BUILTIN_LIMIT:-}" ]]; then
   grep -c "$BUILTIN_LIMIT" "$OBJ_DIR/sqlite3-capstone.c" >/dev/null || {
     echo "BUILTIN_LIMIT clamp did not apply -- the amalgamation patch shape changed" >&2; exit 1; }
 fi
+# SQLITE_REG_BISECT=1 -- split sqlite3RegisterBuiltinFunctions into its SIX sub-steps behind a
+# RUNTIME limit, so one build bisects all of them instead of one rebuild per point.
+#
+# Stage 10 (MallocInit + RegisterBuiltinFunctions) is the SQLite blocker as of 2026-08-04: it
+# wedges first-position on a fresh boot in BOTH build shapes, while every hand-written probe
+# (stages 11-16, 18) returns. So the bisection has to happen inside the real function.
+#
+# capstone_reg_limit == 0 runs the whole function, so a build with this applied and the limit
+# left at 0 behaves exactly as before; the domain sets it from the stage selector.
+if [[ "${SQLITE_REG_BISECT:-0}" == "1" ]]; then
+  echo "== BISECT: splitting sqlite3RegisterBuiltinFunctions into runtime-limited sub-steps"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYBI'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text()
+FN = "SQLITE_PRIVATE void sqlite3RegisterBuiltinFunctions(void){"
+# Each entry: (anchor, limit value, place-before?).  A limit of K returns just AFTER step K-1,
+# so K=1 runs nothing and K=7 (or 0) runs everything.
+steps = [
+    ("  sqlite3AlterFunctions();",                                        2, True),
+    ("  for(int capstoneI=0;",                                            3, True),
+    ("  sqlite3WindowFunctions();",                                       4, True),
+    ("  sqlite3RegisterDateTimeFunctions();",                             5, True),
+    ("  sqlite3RegisterJsonFunctions();",                                 6, True),
+    ("  sqlite3InsertBuiltinFuncs(aBuiltinFunc, ArraySize(aBuiltinFunc))",7, True),
+]
+if FN not in s:
+    sys.exit("REG_BISECT: sqlite3RegisterBuiltinFunctions not found -- patch shape changed")
+s = s.replace(FN, "int capstone_reg_limit = 0;\n" + FN + "\n  if(capstone_reg_limit==1) return;", 1)
+applied = []
+for anchor, k, before in steps:
+    if anchor not in s:
+        continue                      # step compiled out (e.g. SQLITE_OMIT_ALTERTABLE)
+    s = s.replace(anchor, "  if(capstone_reg_limit==%d) return;\n%s" % (k, anchor), 1)
+    applied.append(k)
+if len(applied) < 3:
+    sys.exit("REG_BISECT: only %d anchors matched (%r) -- patch shape changed" % (len(applied), applied))
+p.write_text(s)
+print("   sub-step returns installed at limits: 1 (entry) + %s" % applied)
+PYBI
+fi
+
 cp -f "$VFS_DIR/capstone_sqlite_vfs.c"    "$OBJ_DIR/capstone_sqlite_vfs.c"
 cp -f "$VFS_DIR/../sqlite-vfs-skeleton/capstone_sqlite_os.c" "$OBJ_DIR/capstone_sqlite_os.c" 2>/dev/null \
   || cp -f "$ADAPTED/capstone_sqlite_os.c" "$OBJ_DIR/capstone_sqlite_os.c"

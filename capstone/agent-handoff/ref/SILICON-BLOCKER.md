@@ -46,6 +46,43 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-04 — stage 10 bisected to `sqlite3InsertBuiltinFuncs`: cross-global capability storage
+
+Bisected by splitting the REAL `sqlite3RegisterBuiltinFunctions` into its six sub-steps behind
+a RUNTIME limit (`SQLITE_REG_BISECT=1` in `build-sqlite-silicon.sh`, domain stages 200-206),
+so one build covers every point and each arm RETURNS its own limit.
+
+**Stage 202 (limit 3 = `MallocInit` + `sqlite3AlterFunctions()` only) WEDGES**, first position,
+fresh boot. So the wedge is in the FIRST sub-step. It is not the builtin array, not the
+capstone `strcmp` loop, not `WindowFunctions`/`DateTime`/`Json`, and not the main
+`InsertBuiltinFuncs` over `aBuiltinFunc`.
+
+`sqlite3AlterFunctions()` is a single `sqlite3InsertBuiltinFuncs(aAlterTableFuncs, 9)`. Its
+inner loop is the target:
+
+```c
+aDef[i].pNext  = 0;
+aDef[i].u.pHash = sqlite3BuiltinFunctions.a[h];
+sqlite3BuiltinFunctions.a[h] = &aDef[i];   /* &(element of global A) stored INTO global B */
+```
+
+**This is cross-global capability storage** — the address of an element of one global
+(`aAlterTableFuncs`, its own carved capability under gp-captable) stored into a different
+global (`sqlite3BuiltinFunctions.a[]`, another carved capability). Every probe that passed
+stored **string literals**; none stored the address of a global array element into another
+global. That is the untested construct and the candidate minimal repro:
+
+```c
+struct S { struct S *next; };
+static struct S arr[9];
+static struct S *head;                       /* a DIFFERENT global */
+for (i = 0; i < 9; i++) { arr[i].next = head; head = &arr[i]; }
+```
+
+**Control still owed:** stage 201 (limit 2, returns BEFORE `AlterFunctions`) has not been run.
+Until it returns, "the wedge is in `AlterFunctions`" is inference from stages 8/9 passing
+rather than a direct one-variable result. Run it first-position alongside the repro.
+
 ### 2026-08-04 — there is NO minimal repro: every hand-written probe now PASSES
 
 Two hypotheses killed, both first-position on fresh boots:

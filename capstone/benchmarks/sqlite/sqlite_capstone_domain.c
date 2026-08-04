@@ -345,6 +345,28 @@ static int run_sqlite_staged(int stage) {
      auipc-formed values are function pointers, not zName -- auipc is untagged on BOTH
      QEMU (trans_rvi.c.inc trans_auipc uses gen_set_gpr) and RTL, and QEMU logged 380
      strlen arguments with ZERO untagged ones. */
+  /* Stages 200-207: BISECT INSIDE sqlite3RegisterBuiltinFunctions (needs SQLITE_REG_BISECT=1).
+     Stage 10 wedges first-position on a fresh boot in BOTH build shapes, while every
+     hand-written analogue of it returns (11-16, 18), so the bisection must run the REAL
+     function and stop part-way. `capstone_reg_limit` is injected into the amalgamation by the
+     builder; K returns just after sub-step K-1, so:
+        200 -> limit 1  nothing (entry only)      203 -> limit 4  + WindowFunctions
+        201 -> limit 2  + AlterFunctions          204 -> limit 5  + DateTime
+        202 -> limit 3  + the capstone strcmp loop 205 -> limit 6  + Json
+        206 -> limit 7  + InsertBuiltinFuncs (== the whole function, i.e. stage 10)
+     Every arm RETURNS its own limit, so a run that returns 203 and a run that returns nothing
+     at 204 names the exact sub-step. Returning the limit (not a constant) also means a
+     mis-selected arm cannot masquerade as a passing one. */
+  if (stage >= 200 && stage <= 206) {
+    extern int capstone_reg_limit;
+    int lim = stage - 199;                /* 200 -> 1 ... 206 -> 7 */
+    rc = sqlite3MallocInit();
+    if (rc != SQLITE_OK) return rc;
+    capstone_reg_limit = lim;
+    sqlite3RegisterBuiltinFunctions();
+    capstone_reg_limit = 0;
+    return 200 + lim;                     /* 201..207, distinct from every other stage */
+  }
   if (stage == 11)
     /* strlen on a plain literal: does the merged-container string path work at all? */
     return sqlite3Strlen30("capstone_probe_string");
