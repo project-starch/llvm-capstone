@@ -46,6 +46,55 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-04 — ROOT CAUSE (value level): a 32-bit stack slot live across a chained
+### capability dereference gets bit 27 set
+
+All arms QEMU-green; board = `caplifive_fixed_forward.bit`; each verdict from a boot where the
+arms before it returned. Deterministic — `xgn` gave the identical wrong value on two boots.
+
+| rung | counter | what it returns | board | expected |
+|---|---|---|---|---|
+| `xgn` | `int`, walk `p=p->next` | the counter, raw | **134217737 = 9 + 2^27** | 9 |
+| `xgq` | `int`, same walk | counter **& 0xffff** | **9 OK** | 9 |
+| `xgz` | `long`, same walk | the counter, raw | **9 OK** | 9 |
+| `xgw` | `int`, same walk | constant, after `seen==9` | **777 OK** | 777 |
+| `xgy` | `unsigned long` accum of `p->v` | the accumulator | **36 OK** | 36 |
+| `xgr` | store `&arr[i]` to a global array, read back, compare | count | **97 OK** | 97 |
+| `xgc` | do the stores, no walk | constant | **777 OK** | 777 |
+
+**What is established.** The corruption is confined to the HIGH bits of one 32-bit stack slot:
+`xgq` masks with `0xffff` and gets the right answer, so the low bits are correct and only
+bit 27 (`0x08000000`) is wrong. Widening the counter to `long` (`xgz`, `ld`/`sd` instead of
+`lw`/`sw`) fixes it. It is **not** the stores (`xgc`, `xgr` pass), **not** the stored pointers
+(`xgr` compares each `&arr[i]` read back from a global and gets 9/9), and **not** the walk
+itself (`xgw` walks and `seen == 9` compares TRUE; `xgy` walks and accumulates correctly).
+
+**It is frame-layout dependent, which is why it hid for so long.** `xgw` reads its counter
+with the same post-loop `lw` and gets exactly 9 — same construct, different stack slot
+(`s0-0x44` vs `s0-0x28`, with the capability spill slot at `s0-0x40` in both). So the trigger
+is not "`lw` is broken"; it is this slot, in this layout.
+
+**Two working compiler-side workarounds, both board-verified:** widen the counter to 64-bit,
+or mask the result. Either unblocks the construct.
+
+**Relevance to SQLite.** `sqlite3InsertBuiltinFuncs` walks exactly this shape —
+`pOther = sqlite3FunctionSearch(h, zName)` chases `p = p->pHash` through global storage with
+an `int` loop variable live across it.
+
+**The open question, which needs RTL and is NOT answerable from the disassembly:** what writes
+`0x08000000` into that stack word? Nothing in the emitted code touches it between the correct
+`sw` and the wrong `lw`. A stray or mis-addressed store near the capability spill slot would
+explain it — and note such a store would now go **undetected**, because the LSU capability
+check is inert on this bitstream (see the retraction below). Those two findings may be the
+same defect seen from two sides.
+
+**This has the R-14 signature** — address-like bits contaminating an integer, frame-layout
+dependent, QEMU-green — yet it survives on the forwarding-fix bitstream, where `k800`,
+`k1200` and `r14lp` all pass. Whether this is residual R-14 or a sibling defect cannot be
+settled from here.
+
+Rungs: `silicon-ladder/xg{l,s,x,n,c,p,r,w,y,z,q}_kernel.h`.
+
 ### 2026-08-04 — MINIMAL REPRO FOUND: `&global_array[i]` stored into GLOBAL storage
 
 Three ~10-line ladder rungs, all three **PASS on QEMU** with exact values (965/963/961), run
