@@ -46,6 +46,37 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-05 — RETRACTION: the debug-mux "mechanism" is NOT discriminating
+
+**Retracted:** "a store page fault (mcause 15) was taken and the core is blocked on a rev-node
+query." The control kills it. Running the identical probe on `uc`, which **returns**, gives
+**byte-identical** registers to `dp0`, which hangs:
+
+    uc  (RETURNS)  sw=255 0x8f  trap_seen=1 mcause=15 | sw=224 0xff | sw=225 0xd5
+    dp0 (HANGS)    sw=255 0x8f  trap_seen=1 mcause=15 | sw=224 0xff | sw=225 0xd5
+
+`trap_seen=1 mcause=15`, `wait_rev_res=1`, `mem_wait=1` and `wait_store_syncer=1` all appear in
+the PASSING case too. They are background state — the core is running Linux by the time the
+probe reads — not the wedge signature. The tool's own docstring warns the trap log latches
+routine traffic; clearing it before the run was not sufficient, because the run itself (and
+Linux around it) generates the same traffic in both arms.
+
+**What this means for the method.** The mux readings, taken *after* the run command's timeout,
+describe whatever the core is doing at read time, not the stuck state. For the mux to be
+diagnostic it must be sampled with a baseline subtracted — read the same selectors on a
+passing run and a hanging run and use only the DIFFERENCE, which is what this control now
+provides: currently, no difference at all.
+
+**Also excluded, from the same control set:** `rev_node_head` reads 0xdd (221) with
+`overflow=0` and `serving_idx=0` on the passing run, so the 1021-entry pool is nowhere near
+exhausted at that point and the silent-wraparound path is not implicated in this workload.
+
+**Net:** every candidate mechanism is now excluded, and every candidate variable
+(`.gct`, carve count, image size, code address, amalgamation rewrite, run position, pool
+exhaustion, representability, forwarding) has been tested and excluded. What remains is a bare,
+reproducible fact: `uc` and `f10` return; **nine** structurally different perturbations of `uc`
+hang; and no software-visible state distinguishes the two cases.
+
 ### 2026-08-05 — CORRECTION: the pads were NOT semantically neutral. The variable is the
 ### STATIC CAPABILITY TABLE (`.gct`), not code displacement.
 
