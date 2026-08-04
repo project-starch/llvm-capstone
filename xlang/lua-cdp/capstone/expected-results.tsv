@@ -1,0 +1,26 @@
+# Canonical measured outcomes — Lua-CDP Capstone column.
+# reproduce.sh re-runs a fresh build+measure and FAILS on any difference.
+#
+# revoke  = revoke-on-free build; expected FAULT (the stale CDP access is caught)
+# control = identical program minus the one REVOKE; expected MISS (access completes)
+# A FAULT counts as a catch ONLY if its control MISSes — otherwise it is not
+# attributable to the revoke. Every row here is a temporal UAF, so every row is
+# FAULT/MISS/revocation.
+#
+# Measured with the corpus-agnostic allocator xlang/common/revoke_arena_domain.c,
+# -O0, ROF_MAX_SLOTS=64, 64 KiB linear arena, one QEMU boot per run.
+#
+key	row	revoke	control	mechanism
+1	luac_openssl_ctx_uaf	FAULT	MISS	revocation
+2	luac_ldbus_message_uaf	FAULT	MISS	revocation
+3	luac_ffi_closure_uaf	FAULT	MISS	revocation
+4	luac_sdl_window_uaf	FAULT	MISS	revocation
+5	luac_tvbuff_uaf	FAULT	MISS	revocation
+6	luac_uv_fs_uaf	FAULT	MISS	revocation
+7	luac_lgi_cairo_region_uaf	FAULT	MISS	revocation
+8	luac_lgi_garray_uaf	FAULT	MISS	revocation
+9	luac_x509_store_dblfree	FAULT	MISS	revocation
+10	luac_pgconn_uaf	FAULT	MISS	revocation
+11	luac_luv_costate_uar	FAULT	MISS	revocation
+12	luac_curl_multi_backptr_uaf	FAULT	MISS	revocation
+13	luac_lmdb_value_uaf	FAULT	MISS	revocation

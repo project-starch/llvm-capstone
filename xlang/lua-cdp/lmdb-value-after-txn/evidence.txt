@@ -1,0 +1,43 @@
+Evidence for LMDB value-after-txn CDP UAF — CAPTURED BY US.
+
+Env: PUC Lua 5.4.7 (shared toolchain), system liblmdb 0.9.31-1build2
+(liblmdb.so.0, BuildId 80aa3ec0...), gcc/clang ASan, 4 KB pages.
+Repro: minilmdb.c (deliberately-unsafe binding) + trigger.lua; MDB_NOSUBDIR
+single-file DB on os.tmpname(); ~280 KB value -> multi-page overflow.
+Classification: DOCUMENTED-CONTRACT reproduction (lmdb.h:249-251, :1275-1276),
+NOT a filed bug.
+
+===== VULN (txn:commit(), THEN handle:read()) =====
+==ERROR: AddressSanitizer: heap-use-after-free on address 0x...810
+    #0 l_val_read minilmdb.c:117                 <-- borrowed pointer deref
+    #1 luaD_precall (liblua5.4.so)               <-- Lua calls the handle method
+    ...
+freed by thread T0 here:
+    #0 free (asan)
+    #1 (liblmdb.so.0+0x6b7d)                     <-- LMDB frees the dirty page
+    #2 mdb_txn_commit (liblmdb.so.0+0x11dbd)
+    #3 l_commit minilmdb.c:101                   <-- END OF TRANSACTION
+previously allocated by thread T0 here:
+    #0 malloc (asan)
+    #1..#3 (liblmdb.so.0)                        <-- overflow page malloc
+    #4 mdb_cursor_put (liblmdb.so.0+0xf680)
+    #5 mdb_put (liblmdb.so.0+0x10184)
+    #6 l_put minilmdb.c:79                        <-- value written into the page
+SUMMARY: AddressSanitizer: heap-use-after-free minilmdb.c:117 in l_val_read
+
+Lifecycle is entirely inside LMDB's txn/page domain (malloc in mdb_put, free in
+mdb_txn_commit); the Lua val userdata is the borrower that crossed the boundary.
+txn:abort() is identical: freed by mdb_txn_abort via l_abort (minilmdb.c:106).
+
+===== CONTROL (handle:read() BEFORE the txn ends) =====
+read ok=true len=280000 head=LMDB-overflow-
+  The read happens while the txn is live: the borrowed pointer is still valid,
+  the full 280000-byte value comes back correct, no ASan error.
+
+Note: for a SMALL (single-page) value LMDB pools the dirty page onto
+env->me_dpages (mdb_page_free) instead of free()ing it, so ASan sees nothing —
+the same allocator-pooling that masks the free in the libdbus case. We use a
+multi-page overflow value, which mdb_dpage_free() free()s outright
+(!IS_OVERFLOW || mp_pages==1 -> pool, else free), giving the clean trap above.
+The commit-vs-read ordering differential (identical code, only when the handle
+is read differs) is the deterministic proof.
