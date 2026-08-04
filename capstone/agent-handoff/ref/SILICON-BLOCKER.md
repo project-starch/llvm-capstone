@@ -46,6 +46,48 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-05 — The real anomaly, sharpened: editing a function the path NEVER CALLS
+### deterministically changes whether an unrelated function hangs
+
+Reframed after the user's question "why not solve *why* globals change where it stalls" —
+which was the right question, and the answer turned out to be that globals are not the
+variable at all.
+
+**The anomaly, now reproducible.** `g1` and `uc` are the same SQLite build except that `g1`
+carries an opaque early return inside `sqlite3RegisterBuiltinFunctions`, and their
+`.capstone_gp_initdesc` tables are **byte-identical** (181 carves, gate-verified at build
+time). Stage 11 — `sqlite3Strlen30` on a plain string literal — **never calls that function**.
+
+    uc:11   RETURN   (2 observations)
+    g1:11   NO return (3 observations, two of them first-position on a fresh boot)
+
+So a code edit confined to an uncalled function deterministically flips an unrelated stage
+from returning to hanging, with the global set held identical.
+
+**Two axes EXCLUDED by direct scan** — small images, one variable each, probe code
+byte-identical across draws, all returning correct values:
+
+| scan | range | result |
+|---|---|---|
+| number of globals (`gc4..gc200`) | 8 → 208 carves, straddling the 178/181 boundary | **all correct** |
+| code size (`cp0..cp128`) | `.text` 1,540 → 370,004 bytes | **all correct** |
+
+Global *count* does not reproduce it, and code *size* does not reproduce it — at this scale.
+
+**What that leaves.** The SQLite images differ from these synthetics in scale and shape:
+`.text` ≈ 1.4 MB (4× the largest synthetic), 181 carves that include a 262 KB `.bss` object and
+several 9 KB objects, plus a deep call graph and function-pointer tables. The next axis to scan
+is `.text` up to ~1.4 MB, then large-object carves combined with many globals.
+
+**Why this matters more than the SQLite symptom.** "A pure-capability domain's behaviour
+depends on the layout of code it never executes" is a much sharper statement than "stage 10
+hangs", it is reproducible on demand, and it is very likely the same defect. It is also the
+reason every instrumentation attempt failed: there is no way to look inside this image without
+moving code.
+
+**Still standing, unclamped and control-validated:** stage 10 hangs (2 observations); stages
+0, 9, 11-16, 18 return; R-14 fixed; R-16 resolved; representability excluded.
+
 ### 2026-08-04 — RETRACTION: the merged-string-container conclusion is an INSTRUMENTATION
 ### ARTIFACT; the compile-time clamp changes the global set
 
