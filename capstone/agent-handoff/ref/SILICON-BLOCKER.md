@@ -1,5 +1,54 @@
 # The silicon blocker — everything known
 
+## 2026-08-05 (late) — THE GLUE RUNS DURING REGION-SHARE. Every glue-knob bisection is invalid.
+
+**The domain executes its entry glue THREE times, not once: once per `shared_region_annotated`
+(twice) and once for `call_domain`.** The first execution is during share #1, long before the
+host prints `SQ: G/enter`. So any diagnostic knob that changes how the cap table is BUILT kills
+the domain inside share #1 — before the thing it was meant to measure ever runs.
+
+Measured across seven boots, and it splits perfectly on whether the knob touches the table build:
+
+| image | glue perturbation | outcome |
+|---|---|---|
+| `mtvctl`, `mtvfault` | mtvec install in `test:` | `SHA6=0` — dies in share #1 |
+| `sq_v1` | `INTERP_BUILD_LIMIT=1` | `SHA6=0` — dies in share #1 |
+| `sq_d1` | `INTERP_FAKE_COUNT`, `DIAG_STAGE=1` | `SHA6=0` — dies in share #1 |
+| `sqlite_ctl` | none (baseline) | `SHA6=2`, `ENT1`, no `ENT2` — enters, wedges in domain |
+| `sq_v2` | `INTERP_SKIP_CAPINIT` (build untouched) | `SHA6=2`, `ENT1`, no `ENT2` — enters, wedges in domain |
+
+`INTERP_SKIP_CAPINIT` is the ONLY knob tried that leaves the table build alone, and it is the
+only perturbed image that still reaches the domain. That is the discriminator.
+
+**Consequence: `INTERP_BUILD_LIMIT` and `INTERP_FAKE_COUNT`/`INTERP_DIAG_STAGE` cannot bisect
+this failure on the SQLite path.** They are not merely noisy — they destroy the domain earlier
+than the fault under study, and their failure is then misread as an "entry stall". This is very
+likely what a share of the R-16 entry-stall family actually was.
+
+**`INTERP_DIAG_STAGE=1` is documented as "minimal glue, proven PASSING on silicon". It does NOT
+pass here** — it dies in share #1. Either that pass was measured on a ladder rung (whose
+controller shares differently) and never on the SQLite path, or it is stale with respect to the
+current bitstream. Treat the annotation as unverified on this path.
+
+### What is established about the real wedge
+
+* Control genuinely leaves M-mode (`ENT0`, `ENT1`, no `ENT2`), so **the domain owns the wedge**.
+* It reproduces at **stage 0**, which runs no SQLite work.
+* It is **not cap-init alone**: `sq_v2` skips cap-init entirely and still wedges after `ENT1`.
+* Remaining candidates, in the entry glue: the carve/`split` loop itself, or the stage-0 path in
+  `domain_main`. Distinguishing them needs an instrument that does NOT alter the table build.
+
+### The committed pc is NOT diagnostic — do not bisect on it
+
+It reads `0x000000000000087c` on EVERY wedge measured: in-domain wedges (`stages-run5/7`) and
+share-time wedges (`stages-run8`) alike, across structurally different images. A value invariant
+across different failure classes is not tracking the domain. The reader added to
+`run_sqlite_stages_fpga.py` stays (it costs nothing and may be valid in other contexts), but
+**this number must not be mapped onto a disassembly** until validated against a domain that
+returns.
+
+---
+
 ## 2026-08-05 (evening) — I RETRACT the `ctvec` root cause. Route A is NOT refuted by the RTL.
 
 **An earlier version of this section (commit 791c9a79) claimed a domain cannot install its own
