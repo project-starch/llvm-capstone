@@ -87,6 +87,10 @@ STAGE_DEF=()
 # Lua userdata/__gc/GC; LUA_CDP_NO_REVOKE=1 is the no-revoke control.
 [[ -n "${LUA_CDP_X509:-}" ]] && STAGE_DEF+=(-DLUA_CDP_X509 -DLUA_DBG_STAGE)
 [[ -n "${LUA_CDP_NO_REVOKE:-}" ]] && STAGE_DEF+=(-DLUA_CDP_NO_REVOKE)
+# LUA_CDP_UAF=1 runs the 11 single-object borrowed-view UAFs; CDP_UAF_CASE=k picks
+# the revoke case; +LUA_CDP_NO_REVOKE runs all cases as the control.
+[[ -n "${LUA_CDP_UAF:-}" ]] && STAGE_DEF+=(-DLUA_CDP_UAF -DLUA_DBG_STAGE)
+[[ -n "${CDP_UAF_CASE:-}" ]] && STAGE_DEF+=(-DCDP_UAF_CASE="${CDP_UAF_CASE}")
 
 # Assert an object owns NO gp-captable globals (no .capstone_gp_initdesc). The whole
 # ABI depends on exactly one module owning globals; a silently-globals-owning support

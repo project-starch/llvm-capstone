@@ -468,6 +468,250 @@ static void run_lua_cdp_x509(void) {
 }
 #endif /* LUA_CDP_X509 */
 
+/* The 11 single-object cross-domain UAFs of the corpus, uniform shape (only
+ * openssl_ctx and luaossl-124 are double-frees; luaossl-124 is LUA_CDP_X509 above).
+ * Each: a C object owned by a Lua-GC userdata (its __gc frees it) with a BORROWED
+ * stale pointer cached in a second handle that keeps NO reference to the owner. The
+ * GC frees+REVOKES the object; the later stale deref (read/write a field at OFF)
+ * faults. (size,off,write) are the real bug's ASan values, kept for fidelity; the
+ * catch is offset-independent (revoke invalidates the whole block).
+ *
+ * Built with -DLUA_CDP_UAF. Revoke (default): runs ONE case (-DCDP_UAF_CASE=k) ->
+ * faults=CAUGHT. Control (+LUA_CDP_NO_REVOKE): runs ALL cases fresh-state -> each
+ * completes=MISS. Markers: 500/501 owner __gc (free/revoke), 510/511 stale deref
+ * pre/post, 520 pcall returned (survived). */
+#ifdef LUA_CDP_UAF
+extern void *malloc(unsigned long);
+extern void free(void *);
+extern void xlang_set_no_revoke(void);
+
+struct uaf_case {
+  const char *name;
+  unsigned long size, off;
+  int write;
+};
+static const struct uaf_case UAF_CASES[] = {
+    {"curl_multi_backptr", 96, 64, 1}, /* lua-curl-80  : ->L back-pointer WRITE */
+    {"ffi_closure", 56, 32, 0},        /* cffi-lua-57  : ->fref READ */
+    {"ldbus_message", 64, 0, 0},       /* ldbus-20     : arg-type tag READ */
+    {"lgi_cairo_region", 32, 4, 0},    /* lgi-122      : extents READ */
+    {"lgi_garray", 16, 0, 0},          /* lgi-65       : ->len READ */
+    {"lmdb_value", 8192, 0, 0},        /* lmdb         : borrowed v->data READ */
+    {"luv_costate", 208, 24, 0},       /* luv-503      : freed lua_State field READ */
+    {"pgconn", 1056, 376, 0},          /* luadbi-35    : PQstatus READ */
+    {"sdl_window", 240, 0, 0},         /* lua-sdl2-75  : window->magic READ */
+    {"tvbuff", 72, 16, 0},             /* wireshark    : tvbuff field READ */
+    {"uv_fs", 64, 0, 0},               /* luv-696      : freed request READ */
+};
+#define N_UAF_CASES (sizeof(UAF_CASES) / sizeof(UAF_CASES[0]))
+#ifndef CDP_UAF_CASE
+#define CDP_UAF_CASE 0
+#endif
+static unsigned g_uaf_idx;
+
+static int uaf_owner_gc(lua_State *L) { /* owner __gc -> free -> REVOKE */
+  void **pp = (void **)lua_touserdata(L, 1);
+  DBG(500);
+  free(*pp);
+  DBG(501);
+  return 0;
+}
+static int uaf_new(lua_State *L) {
+  unsigned long sz = UAF_CASES[g_uaf_idx].size;
+  unsigned char *obj = (unsigned char *)malloc(sz);
+  for (unsigned long i = 0; i < sz; i++)
+    obj[i] = 0;
+  void **ud = (void **)lua_newuserdatauv(L, sizeof(void *), 0);
+  *ud = obj;
+  luaL_setmetatable(L, "uaf.owner");
+  return 1;
+}
+static int uaf_borrow(lua_State *L) { /* view: cache raw ptr, NO owner ref, NO __gc */
+  void **owner = (void **)lua_touserdata(L, 1);
+  void **ud = (void **)lua_newuserdatauv(L, sizeof(void *), 0);
+  *ud = *owner;
+  return 1;
+}
+static int uaf_use(lua_State *L) { /* stale deref of the revoked ptr */
+  void **view = (void **)lua_touserdata(L, 1);
+  DBG(510); /* before the offset computation, which is where a cincoffset case faults */
+  unsigned char *p = (unsigned char *)(*view) + UAF_CASES[g_uaf_idx].off;
+  if (UAF_CASES[g_uaf_idx].write)
+    *(volatile unsigned int *)p = 0xA5A5A5A5u; /* stale WRITE */
+  else {
+    volatile unsigned int s = *(volatile unsigned int *)p; /* stale READ */
+    (void)s;
+  }
+  DBG(511);
+  return 0;
+}
+static int uaf_docollect(lua_State *L) {
+  lua_gc(L, LUA_GCCOLLECT, 0);
+  lua_gc(L, LUA_GCCOLLECT, 0);
+  return 0;
+}
+
+static const char UAF_CHUNK[] =
+    "local h = uaf_new()\n"
+    "local v = uaf_borrow(h)\n" /* v caches h's raw C pointer, no ref to h */
+    "h = nil\n"
+    "docollect()\n"  /* h __gc -> free -> REVOKE (invalidates v's cached ptr) */
+    "uaf_use(v)\n"   /* stale deref -> FAULT (revoke) / completes (control) */
+    "return 1\n";
+
+static void uaf_one(unsigned idx) {
+  g_uaf_idx = idx;
+  output_text("UAF[");
+  output_int((long long)idx);
+  output_text("] ");
+  output_text(UAF_CASES[idx].name);
+  output_text(": ");
+  lua_State *L = luaL_newstate();
+  if (!L) {
+    output_text("newstate=NULL (arena?)\n");
+    return;
+  }
+  luaL_newmetatable(L, "uaf.owner");
+  lua_pushcfunction(L, uaf_owner_gc);
+  lua_setfield(L, -2, "__gc");
+  lua_pop(L, 1);
+  lua_pushcfunction(L, uaf_new);
+  lua_setglobal(L, "uaf_new");
+  lua_pushcfunction(L, uaf_borrow);
+  lua_setglobal(L, "uaf_borrow");
+  lua_pushcfunction(L, uaf_use);
+  lua_setglobal(L, "uaf_use");
+  lua_pushcfunction(L, uaf_docollect);
+  lua_setglobal(L, "docollect");
+  int st = luaL_loadbufferx(L, UAF_CHUNK, sizeof(UAF_CHUNK) - 1, "=uaf", NULL);
+  if (st != LUA_OK) {
+    output_text("load fail\n");
+    lua_close(L);
+    return;
+  }
+  st = lua_pcall(L, 0, 1, 0);
+  DBG(520); /* reached only if the stale deref did NOT fault */
+  if (st == LUA_OK)
+    output_text("MISS survived\n");
+  else {
+    output_text("ERR: ");
+    output_text(lua_tostring(L, -1));
+    output_text("\n");
+  }
+  lua_close(L);
+}
+
+static void run_lua_cdp_uaf(void) {
+#ifdef LUA_CDP_NO_REVOKE
+  xlang_set_no_revoke();
+  output_text("UAF mode: NO-REVOKE (control), all cases\n");
+  for (unsigned i = 0; i < N_UAF_CASES; i++)
+    uaf_one(i);
+  output_text("UAF-LADDER done\n");
+#else
+  output_text("UAF mode: REVOKE, one case\n");
+  uaf_one((unsigned)CDP_UAF_CASE);
+#endif
+}
+#endif /* LUA_CDP_UAF */
+
+/* lua-openssl #141: an EVP_CIPHER_CTX co-owned by a cipher userdata's close() and
+ * its __gc. close() frees the ctx WITHOUT nulling it (the bug); __gc then frees it
+ * again, reading the freed ctx first. Single-object double-free (cf. luaossl-124
+ * which is two userdata). Built with -DLUA_CDP_OPENSSL; +LUA_CDP_NO_REVOKE control.
+ * Markers: 500/501 close (free/revoke), 510/511 __gc stale read pre/post, 484 done. */
+#ifdef LUA_CDP_OPENSSL
+extern void *malloc(unsigned long);
+extern void free(void *);
+extern void xlang_set_no_revoke(void);
+#define OSSL_CTX_BYTES 168
+
+static int ossl_close(lua_State *L) { /* c:close() -> free, NOT nulled (the bug) */
+  void **pp = (void **)lua_touserdata(L, 1);
+  if (*pp) {
+    DBG(500);
+    free(*pp); /* crossing 1: free -> REVOKE */
+    DBG(501);
+  }
+  return 0;
+}
+static int ossl_gc(lua_State *L) { /* __gc -> free AGAIN, reading the freed ctx */
+  void **pp = (void **)lua_touserdata(L, 1);
+  unsigned char *ctx = (unsigned char *)*pp;
+  if (ctx) {
+    DBG(510);
+    volatile unsigned int s = *(volatile unsigned int *)ctx; /* crossing 2: STALE read */
+    (void)s;
+    DBG(511);
+    free(ctx);
+  }
+  return 0;
+}
+static int ossl_new(lua_State *L) {
+  unsigned char *ctx = (unsigned char *)malloc(OSSL_CTX_BYTES);
+  for (int i = 0; i < OSSL_CTX_BYTES; i++)
+    ctx[i] = 0;
+  void **ud = (void **)lua_newuserdatauv(L, sizeof(void *), 0);
+  *ud = ctx;
+  luaL_setmetatable(L, "ossl.cipher");
+  return 1;
+}
+static int ossl_docollect(lua_State *L) {
+  lua_gc(L, LUA_GCCOLLECT, 0);
+  lua_gc(L, LUA_GCCOLLECT, 0);
+  return 0;
+}
+static const char OSSL_CHUNK[] =
+    "local c = ossl_new()\n"
+    "close(c)\n"    /* crossing 1: free ctx -> REVOKE */
+    "c = nil\n"
+    "docollect()\n" /* crossing 2: __gc reads the freed ctx -> FAULT */
+    "return 1\n";
+
+static void run_lua_cdp_openssl(void) {
+#ifdef LUA_CDP_NO_REVOKE
+  xlang_set_no_revoke();
+  output_text("OSSL mode: NO-REVOKE (control)\n");
+#else
+  output_text("OSSL mode: REVOKE\n");
+#endif
+  DBG(480);
+  lua_State *L = luaL_newstate();
+  if (!L) {
+    output_text("OSSL newstate=NULL\n");
+    return;
+  }
+  DBG(481);
+  luaL_newmetatable(L, "ossl.cipher");
+  lua_pushcfunction(L, ossl_gc);
+  lua_setfield(L, -2, "__gc");
+  lua_pop(L, 1);
+  lua_pushcfunction(L, ossl_new);
+  lua_setglobal(L, "ossl_new");
+  lua_pushcfunction(L, ossl_close);
+  lua_setglobal(L, "close");
+  lua_pushcfunction(L, ossl_docollect);
+  lua_setglobal(L, "docollect");
+  DBG(482);
+  int st = luaL_loadbufferx(L, OSSL_CHUNK, sizeof(OSSL_CHUNK) - 1, "=ossl", NULL);
+  DBG(483);
+  if (st != LUA_OK) {
+    output_text("OSSL load fail\n");
+    return;
+  }
+  st = lua_pcall(L, 0, 1, 0);
+  DBG(484); /* reached only if the stale read did NOT fault */
+  if (st == LUA_OK)
+    output_text("OSSL-MISS: double-free survived\n");
+  else {
+    output_text("OSSL ERR: ");
+    output_text(lua_tostring(L, -1));
+    output_text("\n");
+  }
+  lua_close(L);
+}
+#endif /* LUA_CDP_OPENSSL */
+
 void domain_main(void *arg, unsigned func) {
   DBG(700 + func); /* every entry: 701 = share, 700 = run (survives a wedge) */
   if (func == CAPSTONE_DPI_REGION_SHARE) {
@@ -494,7 +738,9 @@ void domain_main(void *arg, unsigned func) {
   __asm__ volatile(".insn r 0x5b, 0x1, 0x43, x0, %0, x0" ::"r"((void *)&domain_main));
 #endif
 
-#ifdef LUA_CDP_X509
+#ifdef LUA_CDP_UAF
+  run_lua_cdp_uaf();
+#elif defined(LUA_CDP_X509)
   run_lua_cdp_x509();
 #elif defined(LUA_CHUNK_LADDER)
   run_lua_ladder();
