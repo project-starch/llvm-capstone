@@ -711,6 +711,26 @@ test:
   sd a0, 64(sp)
   stc(a1, sp, 80)                    /* a1 = shared region cap (res) */
 
+#if defined(INTERP_DOMAIN_MTVEC)
+  /* INSTALL THE TRAP VECTOR **BEFORE** CAP-INIT, not just before domain_main.
+     Measured 2026-08-05: with the install sited immediately before `call domain_main`, a
+     SQLite domain at stage 11 wedged with the trap latch reading 0x98 -- seen=1, mcause=24,
+     a capability fault -- and the handler-ON and handler-OFF images wedged IDENTICALLY, same
+     latch, same debug mux. The handler cannot have run. The install was simply too late:
+     RUN_CAP_INIT is straight-line capability stores over every global (179 carves for
+     SQLite), it runs BEFORE this point, and with mtvec still 0 a fault there vectors to pc=0,
+     lands outside PCC and re-faults forever -- silently, which is the whole failure mode this
+     gate exists to break.
+
+     Siting it here costs nothing and strictly dominates: mtvec is a CSR, so RUN_CAP_INIT
+     clobbering t0 afterwards is irrelevant, and cscratch is provably free across cap-init
+     (written only at the entry points and read again at the exit unwind), so the frame-cap
+     stash survives it. */
+  lla   t0, .Ldomain_trap
+  csrw  mtvec, t0
+  ccsrrw(x0, cscratch, sp)
+#endif
+
   /* Cap-init runs HERE, not at the entry points, because it CALLS: `jalr ra`
      clobbers ra, and ra holds the entry return capability that domreturn needs.
      Running it before `stc(ra, sp, 48)` destroyed that capability and the domain
@@ -757,24 +777,25 @@ test:
      confirm) before it becomes the default. */
   fence rw, rw
 #endif
-#if defined(INTERP_DOMAIN_MTVEC)
-  /* ROUTE A: give the domain a trap vector so an in-domain fault RETURNS instead of vanishing.
-     The monitor never writes dom_seal[1] (sbi_capstone.c:760,782-784) and slot 1 IS
+  /* ROUTE A rationale (the install itself now happens BEFORE cap-init, above):
+     the monitor never writes dom_seal[1] (sbi_capstone.c:760,782-784) and slot 1 IS
      {ctvec,mtvec} (csr_regfile.sv:399), so a domain runs with mtvec=0: any fault vectors to
      pc=0, lands outside PCC and re-faults forever, silently. That is why a fault and a hung
      core are indistinguishable, and why every wedge so far has been unrepeatable (a wedge
      ends the board session).
      Board-confirmed prerequisite: a domain CAN write mtvec -- stage 75 wrote 0x40 and read
-     0x40 back (2026-08-01). If it could not, this csrw would raise ILLEGAL INSTRUCTION, which
+     0x40 back (2026-08-01). If it could not, the csrw would raise ILLEGAL INSTRUCTION, which
      is cause 2 and is excluded from the trap latch, i.e. it would look exactly like a hang.
-     The handler simply jumps to the normal return sequence, which already captures mcause and
-     mtval to the stack. Converting a wedge into a RETURN is the whole point: it makes wedging
-     probes repeatable within one boot.
+     Converting a wedge into a RETURN is the whole point: it makes wedging probes repeatable
+     within one boot.
      Gated: OFF unless built with INTERP_DOMAIN_MTVEC=1, so ordinary builds are untouched. */
-  lla   t0, .Ldomain_trap
-  csrw  mtvec, t0
-#endif
   call domain_main
+#if defined(INTERP_DOMAIN_MTVEC)
+  /* Normal return: put cscratch back to zero so .Ldomain_returned sees exactly the state it
+     saw before this gate existed. The trap path below arrives at the same state by swapping
+     the stashed cap OUT, so both paths converge with identical register and CSR state. */
+  ccsrrw(x0, cscratch, x0)
+#endif
 
 .Ldomain_returned:
   lla t2, __test_reentry
@@ -827,6 +848,22 @@ test:
      (direct), which `lla` of an aligned label gives. */
   .balign 4
 .Ldomain_trap:
+  /* FAULT-PROOF BY CONSTRUCTION: two instructions, neither of which touches memory.
+     `ccsrrw` swaps the stashed glue frame capability back into sp and leaves cscratch zero
+     -- byte-identical CSR/register state to the normal-return path above -- so the shared
+     unwind at .Ldomain_returned is reached with a valid sp and its `ldc(t1, sp, 48)` resolves.
+
+     Deliberately NOT recovered here: mepc/mcause/mtval are left in their CSRs and captured by
+     .Ldomain_returned's existing `csrrw t0, mcause, x0` / mtval sequence, so this gate adds no
+     new store that could itself fault. What it buys is the discriminator that has been missing:
+     if a build with this handler RETURNS, the domain faulted; if it still hangs, no trap was
+     ever taken and the core is genuinely wedged. Those two have been indistinguishable until
+     now, and every "it does not fault" claim made without this has had to be retracted.
+
+     There is no `mret` here on purpose. mret would need mstatus.mpp = M, which only a real
+     trap sets; the monitor's dom_seal[3] has MPP=0, so a synthetic mret would drop the domain
+     to U-mode. domreturn is the exit this glue already uses and it needs no mode change. */
+  ccsrrw(sp, cscratch, x0)
   j .Ldomain_returned
 #endif
 

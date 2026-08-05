@@ -1,5 +1,70 @@
 # The silicon blocker — everything known
 
+## 2026-08-05 (evening) — ROUTE A (domain-installed `mtvec`) IS REFUTED. Root cause in the RTL.
+
+**Do not build another probe on `csrw mtvec`. It cannot work, and the RTL says why.**
+
+In capability mode the trap vector is a **capability**, not an address. `csr_regfile.sv:2346-2351`:
+
+```systemverilog
+riscv::CCSR_CTVEC: begin          // CCSR_CTVEC = 12'h000  (riscv_pkg.sv:737)
+  ccsr_rdata     = mtvec_q;       // cursor  == the address
+  ccsr_rmetadata = ctvec_q;       // capability METADATA (tag/bounds/perms)
+  mtvec_d = ccsr_we_i ? csr_wdata_i     : mtvec_q;
+  ctvec_d = ccsr_we_i ? csr_wmetadata_i : ctvec_q;
+end
+```
+
+`csrw mtvec, t0` writes the cursor and leaves `ctvec` (the metadata) at zero, so the vector is
+an UNTAGGED capability. Trapping to it faults again — the wedge is the handler, not the code
+under test. The whole register pair is one capability, which is also why `dom_seal[1]` is
+`{ctvec, mtvec}` (`csr_regfile.sv:399`) rather than two independent slots.
+
+### RETRACTED: "a domain CAN write mtvec — stage 75 wrote 0x40 and read 0x40 back"
+
+That test was insufficient and gave false confidence for four days. Reading the cursor back
+proves the cursor latched; it says nothing about the metadata, and the metadata is what makes
+the vector usable. **A read-back of one half of a capability is not evidence the capability is
+valid.**
+
+### What was measured (3 boots, 2026-08-05, `caplifive_65536_nodes.bit`)
+
+A fault-proof handler was built — two instructions, no memory access, recovering `sp` from
+`cscratch` instead of depending on it, so it cannot re-fault the way the old
+`j .Ldomain_returned` did. It was installed first before `call domain_main`, then moved before
+`RUN_CAP_INIT` to cover the carve loop. Artifact-gated each time (`csrw mtvec` present,
+handler at the vector target, flag-OFF builds byte-clean, QEMU green).
+
+| run | image | result |
+|---|---|---|
+| 1 | `sqlite_ctl` :11, handler OFF | `SQ: G/enter`, then wedge. Trap latch **0x98 = seen, mcause 24** |
+| 2 | `sqlite` :11, handler ON (late install) | wedge, latch **0x98**, debug mux IDENTICAL to run 1 |
+| 3 | `mtvfault` rung, handler ON (early install) | wedge, latch **0x98** — a DELIBERATE `ldc t1, 0(x0)` fault that should have returned 17 |
+
+The handler demonstrably never ran, in any of them.
+
+### The one genuinely new positive datum — keep this
+
+**The trap latch reads mcause 24 (capability fault) at the wedge, with the latch cleared
+immediately before each domain ran.** This is the first capability-fault cause captured at a
+SQLite wedge; the 2026-08-01 reading of 0x89 was a stale boot ECALL (cause 9) and was nearly
+misreported. So the SQLite domain *does* take a capability fault, and it vanishes because the
+vector is unusable. That is a real result and it survives the refutation above.
+
+### Next step: ROUTE B — install the vector from the MONITOR, not the domain
+
+There is **no PCC-materialising instruction** in the decoder op list
+(`ariane_pkg.sv:900,918,926` — `MOVC/CINCOFFSET/SCC/LCC/SHRINK/SPLIT/CJALR/CCSRRW/...`, no
+`auipcc`), so a domain has no obvious way to derive a valid code capability for its own vector.
+The monitor does: it already holds `dom_code` at `create_domain`, and it already writes the
+other seal slots. Writing `dom_seal[1]` with a code capability derived from `dom_code` puts a
+valid, tagged vector in place before the domain ever runs, and needs no new instruction.
+
+Open question for the board owner if Route B is awkward: is there any domain-visible way to
+obtain a PCC-derived capability, or is `CCSR_CIH` (12'h001) intended for exactly this?
+
+---
+
 ## 2026-08-04 — NEW BITSTREAM `caplifive_fixed_forward.bit`: R-16 is RESOLVED
 
 The board owner supplied and the board was reflashed to **`caplifive_fixed_forward.bit`**,

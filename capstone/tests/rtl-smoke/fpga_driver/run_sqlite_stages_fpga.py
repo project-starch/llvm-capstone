@@ -99,6 +99,18 @@ def main():
             # everything behind it. Retrying a stalling binary is futile. Selecting the probe
             # at run time lets every measurement ride an image that is KNOWN to enter, instead
             # of drawing a fresh ticket per probe.
+            # Optional per-entry HOST override: "host|path[:selector]".
+            #
+            # Without this every entry runs under HOST, which is the SQLite host; a ladder rung
+            # needs the ladder controller and a different argv shape, so the two could never
+            # share a boot. That mattered the moment a probe needed an INSTRUMENT VALIDATOR:
+            # the trap-handler fault control is a ladder rung, and a control that rides a
+            # DIFFERENT boot is not a control -- the board state it validates is the state that
+            # died with the previous boot. Same reason the batching rule exists at all.
+            if "|" in dom_spec:
+                host, dom_spec = dom_spec.split("|", 1)
+            else:
+                host = HOST
             if ":" in dom_spec:
                 dom, selector = dom_spec.rsplit(":", 1)
                 host_args = f"{dom} {selector}"
@@ -148,7 +160,7 @@ def main():
             t_dom = time.time()
             try:
                 console.run_command(
-                    f"echo '{start_banner}'; {HOST} {host_args}; rc=$?; "
+                    f"echo '{start_banner}'; {host} {host_args}; rc=$?; "
                     f'echo "### TEST {dom_idx}/{n_tot} END {label} rc=$rc ###"; '
                     f"echo D''N_$rc",
                     r"DN_\d", timeout=PER_DOM, idle_timeout=IDLE_S)
@@ -187,9 +199,22 @@ def main():
             # every genuine wedge, which is the case it is supposed to let through, and
             # suppressed the in-session debug-mux read below. The check is for "the shell came
             # back but nothing ran", not for "the core died".
+            # Check each entry against the marker ITS OWN host emits. The staged marker is
+            # SQLite-specific; a ladder rung reports `RESULT <name> retval=<n>` and never emits
+            # `SQ: obs=`, so applying the SQLite marker to a rung would hard-stop the session on
+            # a perfectly good control. The guard stays strict for BOTH -- "the shell came back
+            # but nothing ran" must not read as a pass, and that failure mode is identical for a
+            # rung whose build silently staged nothing.
+            is_sqlite = host == HOST
             m_obs = re.search(r"SQ: obs=(\d+)", text)
-            if not wedged and (m_obs is None or (int(m_obs.group(1)) >> 16) != 0x5A6E):
+            m_rv = re.search(r"RESULT\s+\S+\s+retval=(-?\d+)", text)
+            if is_sqlite:
+                bad = m_obs is None or (int(m_obs.group(1)) >> 16) != 0x5A6E
                 got = "no SQ: obs= marker" if m_obs is None else f"obs={m_obs.group(1)}"
+            else:
+                bad = m_rv is None
+                got = "no RESULT retval= marker"
+            if not wedged and bad:
                 raise SystemExit(
                     f"HARD STOP: {dom} produced {got}, not a staged marker.\n"
                     f"The domain almost certainly was not staged (a failed build stages "
@@ -208,9 +233,16 @@ def main():
                     f"HARD STOP: {dom} produced no domain output and the shell reported "
                     f"'not found'. Treating this as a pass would test nothing.")
             transcript.append(f"===== {label} =====\n{text}\n")
-            m = re.search(r"SQ: obs=(\d+)", text)
-            obs = int(m.group(1)) if m else None
-            results.append((label, wedged, obs, "SQ: H/return" in text))
+            if is_sqlite:
+                obs = int(m_obs.group(1)) if m_obs else None
+                returned = "SQ: H/return" in text
+            else:
+                # A rung's retval IS its observation, and reaching the RESULT line is its
+                # return. Recording None/False here would print a returning control as a
+                # silent failure in the summary and invalidate every verdict behind it.
+                obs = int(m_rv.group(1)) if m_rv else None
+                returned = m_rv is not None
+            results.append((label, wedged, obs, returned))
             if wedged:
                 # INSTRUMENT THE WEDGE HERE, IN THIS SESSION.
                 #
