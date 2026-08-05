@@ -1,14 +1,16 @@
 # Real Lua on the gp-captable ABI: descriptor delivery to result=400
 
 Reference Lua 5.4.7 brought up as an interpreter-scale (`-capstone-gp-captable`)
-Capstone domain. On QEMU the interpreter now runs a chunk **end to end**:
-`luaL_newstate` + `luaL_loadbufferx(LUA_OK)` + `lua_pcall` ->
-`LUA-OK result=400` for `local t={} for i=1,20 do t[i]=i*i end return t[20]`
-(base library skipped; pure core: locals, numeric for, table array-part growth over
-the tag-preserving revoking realloc, integer arithmetic, return). This note records
-what was non-obvious: how the gp-captable init descriptor is delivered on QEMU, and
-the four compiler/ABI walls between "compiles a chunk" and "runs a chunk" -- the last
-of which (Lua's computed-goto dispatch table) is the headline finding below.
+Capstone domain. On QEMU the interpreter now runs a chunk **end to end**, WITH the
+base library loaded and CALLED: `luaL_newstate` + `luaopen_base` +
+`luaL_loadbufferx(LUA_OK)` + `lua_pcall` -> `print('Lua 5.4.7 on Capstone')` (real
+output) -> `LUA-OK result=400` for
+`... local t={} for i=1,20 do t[i]=i*i end return t[20]` (numeric for, table
+array-part growth over the tag-preserving revoking realloc, integer arithmetic, a
+base-library call, return). This note records what was non-obvious: how the
+gp-captable init descriptor is delivered on QEMU, and the FIVE compiler/ABI walls
+between "compiles a chunk" and "runs full Lua" -- the headline ones being Lua's
+computed-goto dispatch table and lua_gettop's pointer-difference lowering.
 
 Commits: parent `b2ff97a` (xlang Lua port, `capstone-bootstrap-xlang`); submodule
 `8c7b973` on local branch `xlang-gp-captable-delivery` in `caplifive-buildroot`
@@ -172,10 +174,50 @@ gp-captable domain, and returns 400. The three compiler/ABI fixes it took to get
 (two i128 pointer-arith lowerings + this jump-table config) are all in place; the
 descriptor delivery (module memcpy) is unchanged.
 
-Note: the ladder's multi-chunk plumbing (`lua_settop(L,0)` between chunks) itself
-trips a separate `cscincoffsetimm` untagged assert after the first chunk returns; the
-single-chunk demo path (the real goal) does not exercise it, so it does not block
-result=400. Left as a ladder-only artifact.
+## Full Lua: the base library, and the last codegen bug (lua_gettop)
+
+With the jump-table fix, base-SKIPPED core runs (result=400). Enabling the base
+library (`luaopen_base`) then worked immediately -- the old "base wedge" was a stale
+pre-fix diagnosis; base_funcs[]'s function-pointer globals ARE tagged (only
+`&&label` code-pointer tables were not). But CALLING a base function faulted:
+`print('...')` reached `S2 base ok` + parse, then `helper_cscincoffsetimm rs1->tag`
+inside `lua_pcall`.
+
+Localised by a fresh-state chunk ladder (`return 1` / `local p=print` /
+`print()` / ...): the global LOOKUP works, the CALL faults, and `print()` with no
+args faults -- so it is the `OP_CALL` -> C-function path, which the pure-core chunk
+never exercised (it has no calls; `luaL_requiref` uses the C-API `lua_call`, not the
+`OP_CALL` bytecode). A QEMU pc-log (env->pc synced via cpu_restore_state, minus the
+PCC base) mapped the fault to `lua_gettop + 0x40`.
+
+ROOT CAUSE (5th codegen bug): `lua_gettop` is `L->top.p - (L->ci->func.p + 1)`, a
+pointer DIFFERENCE with a constant element offset. DAGCombine correctly reassociates
+`p - (q+1)` to `add(sub(p,q), -32)`, where `sub(p,q)` is a pointer difference -- a
+SCALAR byte count (32-byte StackValue -> the `-32` is the +1 element, and `>>5` is
+the /32). But `lowerADD` treated every i128 add as capability+offset and emitted
+`CIncOffset(<scalar>, -32)` -- a `cincoffsetimm` on the untagged scalar difference,
+which faults. `lua_gettop` is on the entry path of nearly every C-API/base function,
+so this blocked all base calls (print, assert, ...).
+
+FIX (backend, `lowerADD` in CapstoneISelLowering.cpp): when NEITHER operand of an
+i128 add is a capability base -- the offset is an integer offset and the base is a
+ptr-ptr SUB of two capability values (or an already-lowered sign-extended difference)
+-- lower the add in the XLen domain (`sub; addi; sign_extend`), never `CIncOffset`.
+Fires only when no capability is present, so it can never make real pointer
+arithmetic scalar. Same family as the earlier i128 fixes. Verified: `p-(q+1)` now
+`sub; addi -32; srli` (no cincoffsetimm); Capstone lit 47/47 + new
+`cap-i128-ptr-diff-const.ll`.
+
+VERIFIED ON QEMU (base ENABLED, print chunk): `S2 base ok -> parse -> pcall ->
+"Lua 5.4.7 on Capstone" (real print output) -> LUA-OK result=400`, no fault. Real
+Lua 5.4.7 with its base library runs a chunk that CALLS a base function and returns
+400 on Capstone.
+
+Note: the earlier opcode-ladder's multi-chunk plumbing (`lua_settop(L,0)` between
+chunks, one shared state) tripped this same `cscincoffsetimm` -- `lua_settop` also
+goes through the pointer-difference path -- which is why the ladder was switched to a
+fresh lua_State per snippet. The single-chunk demo never needed it. That artifact is
+now fixed by the same lowerADD change.
 
 ## Build / run
 

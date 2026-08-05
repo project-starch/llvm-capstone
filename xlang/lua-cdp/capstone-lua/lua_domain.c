@@ -239,26 +239,41 @@ static void run_lua_staged(void) {
  * If even chunk 0 ("return 1") hangs -> the call machinery (luaD_precall/luaV_execute
  * entry), not any opcode. */
 #ifdef LUA_CHUNK_LADDER
-static int ladder_one(lua_State *L, const char *src, unsigned k) {
+/* Each snippet gets a FRESH lua_State (newstate + base + close), so there is no
+ * cross-chunk lua_settop plumbing to trip a separate fault -- the marker gap is
+ * purely about the snippet. Markers 310 + k*10 + phase {0 newstate,1 load,2 pcall-pre,
+ * 3 pcall-post}. A missing pcall-post (…2 with no …3) means snippet k faulted in
+ * execution. */
+static int ladder_one(const char *src, unsigned k) {
   DBG(310 + k * 10 + 0);
+  lua_State *L = luaL_newstate();
+  if (!L) {
+    output_text("C");
+    output_int(k);
+    output_text(" newstate=NULL\n");
+    return -1;
+  }
+  /* base enabled per snippet so print/assert/etc. resolve */
+  luaL_requiref(L, LUA_GNAME, luaopen_base, 1);
+  lua_pop(L, 1);
   const char *s = (const char *)__builtin_capstone_cap_delin((void *)src);
   unsigned long len = 0;
   while (s[len])
     len++;
   int st = luaL_loadbufferx(L, src, len, "=c", NULL);
   DBG(310 + k * 10 + 1);
-  output_text("C");
-  output_int(k);
-  output_text(" load=");
-  output_int(st);
-  output_text("\n");
   if (st != LUA_OK) {
-    lua_settop(L, 0);
+    output_text("C");
+    output_int(k);
+    output_text(" load=");
+    output_int(st);
+    output_text("\n");
+    lua_close(L);
     return st;
   }
   DBG(310 + k * 10 + 2); /* pcall-pre: the suspect boundary */
   st = lua_pcall(L, 0, 1, 0);
-  DBG(310 + k * 10 + 3); /* pcall-post: MISSING for chunk k => chunk k hung */
+  DBG(310 + k * 10 + 3); /* pcall-post: MISSING for snippet k => it faulted */
   output_text("C");
   output_int(k);
   output_text(" pcall=");
@@ -273,26 +288,21 @@ static int ladder_one(lua_State *L, const char *src, unsigned k) {
       output_text("?");
   }
   output_text("\n");
-  lua_settop(L, 0);
+  lua_close(L);
   return st;
 }
 
+/* Base-call bisection: control, global LOOKUP, CALL-no-arg, CALL-with-arg, a
+ * different base fn. First snippet whose pcall-post marker is missing localises the
+ * fault (lookup vs call vs arg handling vs a specific fn). */
 static void run_lua_ladder(void) {
   DBG(300);
-  lua_State *L = luaL_newstate();
-  if (!L) {
-    output_text("LADDER newstate=NULL\n");
-    return;
-  }
-  DBG(301);
-  ladder_one(L, "return 1", 0);                       /* RETURN1 only */
-  ladder_one(L, "return 1+2", 1);                     /* integer ADD */
-  ladder_one(L, "local x=5 return x", 2);             /* locals, MOVE */
-  ladder_one(L, "return 3*4", 3);                     /* integer MUL */
-  ladder_one(L, "local t={} return 0", 4);            /* NEWTABLE + GC */
-  ladder_one(L, "local t={} t[1]=9 return t[1]", 5);  /* SETI / GETI */
-  ladder_one(L, "local s=0 for i=1,3 do s=s+i end return s", 6); /* FORPREP/FORLOOP */
-  ladder_one(L, "local t={} for i=1,20 do t[i]=i*i end return t[20]", 7); /* full */
+  ladder_one("return 1", 0);                    /* control: no base */
+  ladder_one("local p=print return 1", 1);      /* GETTABUP _ENV.print, no call */
+  ladder_one("print() return 1", 2);            /* CALL print, no args */
+  ladder_one("print('x') return 1", 3);         /* CALL print, string arg (output) */
+  ladder_one("assert(true) return 5", 4);       /* different base fn (assert) */
+  ladder_one("return type(1)==nil and 0 or 6", 5); /* type() call, compare */
   DBG(399);
   output_text("LADDER done\n");
 }
