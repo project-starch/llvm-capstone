@@ -1782,6 +1782,34 @@ use1 reads slot 1. Both pass => the fault needs two live slots. use0 fails alone
 building a 2-entry table is itself fatal, and `INTERP_BUILD_LIMIT=1` then separates the
 second split/store from the table split.
 
+### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST`
+
+**A trap and a hang are the same observation from outside.** This is not the SQLite blocker; it
+is why the SQLite blocker resisted 30+ board sessions.
+
+Verified end to end:
+* Seal slot 1 is the domain's trap vector — `csr_regfile.sv:399` (save) and `:1880-1884`
+  (restore: `reg_id 1` → `ctvec_d = data[127:64]; mtvec_d = data[63:0]`). Confirmed by its
+  neighbours: slot 2 is `{cscratch, mscratch}` (how `gp` is delivered), slot 3 is `mstatus`.
+* The monitor never writes it — `sbi_capstone.c:801` zeroes all slots, `:823-825` write only
+  0, 2 and 3.
+* A trap does not install a new PCC — `frontend.sv:425-426` sets `npc_d = trap_vector_base_i`
+  while `npc_metadata` is carried forward.
+
+So a fault jumps to pc = 0 with the domain's PCC still installed, faults again on the
+out-of-bounds fetch, and loops forever in M-mode with interrupts off and no UART.
+
+**Every "no trap was reported, so it is not a fault" inference in this project is void.**
+
+**Fix needs three parts** (a trap keeps the domain's PCC, so `mtvec` must be inside domain code):
+a handler in the glue at a fixed offset; `dom_seal[1]` set to it in `create_domain`; and a
+readback path — the handler can recover the data capability via `ccsrrw(sp, cscratch, x0)` and
+store `mcause`/`mepc`/`mtval` into a reserved `dom_data` slot, but the monitor only sees them if
+the handler can complete the domain return.
+
+Worth fixing on its own merits: **any** domain that faults for any reason is currently
+undebuggable and takes the core with it.
+
 ### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
 
 **Reproducer:** `capstone/tests/fpga-repros/S01-image-perturbation-hang/` (has `run.sh`).

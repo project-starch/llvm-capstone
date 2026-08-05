@@ -46,6 +46,48 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-05 — F1 CONFIRMED END-TO-END, and what fixing it actually requires
+
+Every link verified against the RTL and the monitor, in order:
+
+1. **Seal slot 1 IS the domain's trap vector.** `csr_regfile.sv:399`
+   `7'd1: dom_switch_reg_resp_o = {ctvec_q, mtvec_q};` (save path), and the restore path
+   `csr_regfile.sv:1880-1884` — `else if (dom_switch_req_en && dom_switch_reg_req_i.is_set)`,
+   `reg_id 1` → `ctvec_d = data[127:64]; mtvec_d = data[63:0];`. The slot mapping is confirmed
+   by its neighbours: slot 2 is `{cscratch, mscratch}` (exactly how `gp` is delivered) and slot
+   3 is `mstatus` (what the monitor writes as flags).
+2. **The monitor leaves it zero.** `sbi_capstone.c:801` `dom_seal[i] = 0;` for every slot, then
+   `:823-825` write only slots **0, 2 and 3**. Slot 1 is never assigned.
+3. **A trap does NOT install a new PCC.** `frontend.sv:425-426` sets `npc_d = trap_vector_base_i`
+   on `ex_valid_i`, while `npc_metadata` (the PC capability) is carried forward unchanged.
+
+**Therefore:** a fault in a domain jumps to pc = 0 **with the domain's own PCC still installed**.
+pc = 0 is outside that PCC, so the commit-stage check (`commit_stage.sv`, cause 28) raises again,
+which vectors to 0 again — an unbreakable fault loop, in M-mode, interrupts off, no UART.
+
+**Consequence: a trap and a hang are literally the same observation from outside.** Every
+statement of the form "no trap was reported, therefore this is not a fault" made anywhere in
+this document is void, including several of mine.
+
+**What the fix requires — it is NOT a one-line monitor change.** Because a trap keeps the
+domain's PCC, `mtvec` must point *inside the domain's code*. So a usable fix needs all three:
+ 1. a trap handler **in the domain glue** at a known fixed offset (e.g. a `j` over a handler
+    placed at `_start+4`, so the monitor can compute `base_addr + entry_offset + 4`);
+ 2. `dom_seal[1] = {ctvec, mtvec}` set in `create_domain` to that address;
+ 3. a **readback path** — the handler can recover the data capability with
+    `ccsrrw(sp, cscratch, x0)` (the same instruction `_start` already uses) and store
+    `mcause`/`mepc`/`mtval` into a reserved `dom_data` slot, but the monitor only regains
+    control if the handler can then complete the domain return. Without that last step the
+    domain still never returns and the values are unreadable.
+
+**Do this before any further board debugging.** It converts every future hang into a reported
+`mcause` — the single largest methodological unblock available, and it is entirely ours. It also
+perturbs the image, so expect it to interact with R-17; that is acceptable, because a perturbed
+image that REPORTS its fault is strictly more informative than an unperturbed one that hangs.
+
+**Note this is a real defect independent of R-17:** any domain that faults for any reason is
+undebuggable and takes the core with it. It is worth fixing on its own merits.
+
 ### 2026-08-05 — ULTRACODE: three findings that change the problem, all re-verified here
 
 A five-lens multi-agent investigation with adversarial verification. **No mechanism survived**;
