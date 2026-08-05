@@ -1,67 +1,87 @@
 # The silicon blocker — everything known
 
-## 2026-08-05 (evening) — ROUTE A (domain-installed `mtvec`) IS REFUTED. Root cause in the RTL.
+## 2026-08-05 (evening) — I RETRACT the `ctvec` root cause. Route A is NOT refuted by the RTL.
 
-**Do not build another probe on `csrw mtvec`. It cannot work, and the RTL says why.**
+**An earlier version of this section (commit 791c9a79) claimed a domain cannot install its own
+trap handler because the trap vector is a capability and `csrw mtvec` leaves it untagged. That
+is WRONG and is withdrawn. Do not act on it.**
 
-In capability mode the trap vector is a **capability**, not an address. `csr_regfile.sv:2346-2351`:
+Refuted against the RTL, verified line by line:
 
-```systemverilog
-riscv::CCSR_CTVEC: begin          // CCSR_CTVEC = 12'h000  (riscv_pkg.sv:737)
-  ccsr_rdata     = mtvec_q;       // cursor  == the address
-  ccsr_rmetadata = ctvec_q;       // capability METADATA (tag/bounds/perms)
-  mtvec_d = ccsr_we_i ? csr_wdata_i     : mtvec_q;
-  ctvec_d = ccsr_we_i ? csr_wmetadata_i : ctvec_q;
-end
-```
+* `csr_regfile.sv:2735` — `trap_vector_base_o = {mtvec_q[CVA6Cfg.VLEN-1:2], 2'b0};` is the
+  ENTIRE M-mode trap target. It is a plain address and there is no metadata companion port.
+* `frontend.sv:424-426` — on an exception `npc_d = trap_vector_base_i`, and the metadata line
+  in the same block is `npc_metadata_d = npc_metadata_q` (`:443-444`), i.e. **the PCC is
+  INHERITED** from the faulting code.
+* `ctvec_q` has **no datapath consumer anywhere**: the only references are the dom_switch
+  save/restore pair (`:399`, `:1883`), the CCSR read/write case (`:2348,2350`) and its flop.
+* `csrw mtvec` is NOT suppressed in capability mode — `ccsr_en` is asserted only for a
+  `CCSRRW` opcode (`:2531-2535`), so a plain `csrw` takes the ordinary path at `:1600-1607`
+  with no `capmode` gating.
 
-`csrw mtvec, t0` writes the cursor and leaves `ctvec` (the metadata) at zero, so the vector is
-an UNTAGGED capability. Trapping to it faults again — the wedge is the handler, not the code
-under test. The whole register pair is one capability, which is also why `dom_seal[1]` is
-`{ctvec, mtvec}` (`csr_regfile.sv:399`) rather than two independent slots.
+**Consequence, and it inverts the earlier conclusion: a domain-installed `mtvec` pointing at a
+handler inside its own code region SHOULD be delivered correctly, because the inherited PCC
+already covers it.** Route A is viable. Route B (monitor-installed `dom_seal[1]`) is also fine,
+but the reason given for preferring it was wrong.
 
-### RETRACTED: "a domain CAN write mtvec — stage 75 wrote 0x40 and read 0x40 back"
+**Also un-retracted: "stage 75 wrote 0x40 to mtvec and read 0x40 back" was VALID evidence.**
+`csr_regfile.sv:640` reads the same flop that `:2735` feeds to the trap target. There is no
+second half of a capability missing from the delivery path. My retraction of it was itself
+unjustified.
 
-That test was insufficient and gave false confidence for four days. Reading the cursor back
-proves the cursor latched; it says nothing about the metadata, and the metadata is what makes
-the vector usable. **A read-back of one half of a capability is not evidence the capability is
-valid.**
+### Why the handler did not run — the actual reason, from our own captures
 
-### What was measured (3 boots, 2026-08-05, `caplifive_65536_nodes.bit`)
+**The ladder rungs never entered the domain.** `mtvctl` and `mtvfault` both end at `SHA5` with
+**no `SHA6`** (`/tmp/capstone/mtv/stages-run.txt`, `stages-run4.txt`): they died inside the
+FIRST region share, before the domain was ever invoked. So the `csrw mtvec` never executed and
+the deliberate `ldc t1, 0(x0)` never executed. That run carried no information about the
+handler, and presenting it as "the handler did not fire" was an error of attribution.
 
-A fault-proof handler was built — two instructions, no memory access, recovering `sp` from
-`cscratch` instead of depending on it, so it cannot re-fault the way the old
-`j .Ldomain_returned` did. It was installed first before `call domain_main`, then moved before
-`RUN_CAP_INIT` to cover the carve loop. Artifact-gated each time (`csrw mtvec` present,
-handler at the vector target, flag-OFF builds byte-clean, QEMU green).
+**`SHA6` is the entered/not-entered discriminator for a ladder rung**, the way `SQ: G/enter` is
+for a SQLite domain. Record it for every run.
 
-| run | image | result |
-|---|---|---|
-| 1 | `sqlite_ctl` :11, handler OFF | `SQ: G/enter`, then wedge. Trap latch **0x98 = seen, mcause 24** |
-| 2 | `sqlite` :11, handler ON (late install) | wedge, latch **0x98**, debug mux IDENTICAL to run 1 |
-| 3 | `mtvfault` rung, handler ON (early install) | wedge, latch **0x98** — a DELIBERATE `ldc t1, 0(x0)` fault that should have returned 17 |
+### The handler as written is NOT "fault-proof by construction"
 
-The handler demonstrably never ran, in any of them.
+Two real defects, both to fix before it is used again:
 
-### The one genuinely new positive datum — keep this
+1. It falls through to `.Ldomain_returned`, which does four memory accesses
+   (`ldc(t1,sp,48)`, `stc(t0,sp,-32)`, two `sd`). The LSU capability check is live for these
+   (`load_store_unit.sv:932-977`), so the handler's tail can fault.
+2. `ccsrrw(sp, cscratch, x0)` writes ZERO into `cscratch`, so a SECOND trap arrives with
+   `sp = 0` and loops unbreakably. Read-and-restore (`ccsrrw(sp,cscratch,x0)` then
+   `ccsrrw(x0,cscratch,sp)`) fixes it at a cost of one instruction.
 
-**The trap latch reads mcause 24 (capability fault) at the wedge, with the latch cleared
-immediately before each domain ran.** This is the first capability-fault cause captured at a
-SQLite wedge; the 2026-08-01 reading of 0x89 was a stale boot ECALL (cause 9) and was nearly
-misreported. So the SQLite domain *does* take a capability fault, and it vanishes because the
-vector is unusable. That is a real result and it survives the refutation above.
+Note `mcause 24` is `UNEXPECTED_OPERAND` (`ex_stage.sv:336`, cause = 23 + code), which is
+`lsu_cap_type == NOT_CAP` (`load_store_unit.sv:958-960`) — a base register with no capability
+metadata. That fits a re-fault inside the handler tail just as well as it fits a deliberate
+null-capability load, so the latch value alone does not attribute the fault.
 
-### Next step: ROUTE B — install the vector from the MONITOR, not the domain
+### What DOES stand from 2026-08-05
 
-There is **no PCC-materialising instruction** in the decoder op list
-(`ariane_pkg.sv:900,918,926` — `MOVC/CINCOFFSET/SCC/LCC/SHRINK/SPLIT/CJALR/CCSRRW/...`, no
-`auipcc`), so a domain has no obvious way to derive a valid code capability for its own vector.
-The monitor does: it already holds `dom_code` at `create_domain`, and it already writes the
-other seal slots. Writing `dom_seal[1]` with a code capability derived from `dom_code` puts a
-valid, tagged vector in place before the domain ever runs, and needs no new instruction.
+* **SQLite wedges at stage 0** — "entry + return only" — with both region shares complete
+  (`SHA6` twice, `ECSZ` twice; `stages-run5.txt`). Since stage 0 runs no SQLite work, **the
+  blocker is not in SQLite's code.**
 
-Open question for the board owner if Route B is awkward: is there any domain-visible way to
-obtain a PCC-derived capability, or is `CCSR_CIH` (12'h001) intended for exactly this?
+  **CORRECTION — do not say "the domain entered".** I wrote that and it is unsupported.
+  `SQ: G/enter` is printed by the HOST (`sqlite_host.c:144`) BEFORE `call_dom`, and the
+  monitor's `call_domain` (`sbi_capstone.c:838`) emits **no markers at all** — every
+  `SHA*`/`ECSZ` tag belongs to the region-share path (`sbi_capstone.c:106-118`). Silence after
+  `G/enter` is therefore consistent with ALL of: the wedge is in `call_domain`, in the domain
+  switch, at the domain's first instruction, in the carve loop, or in `RUN_CAP_INIT`. Those are
+  currently indistinguishable.
+
+  **This invalidates a classification rule used across many sessions**, including the one in the
+  `board-run` skill: "`SQ: G/enter` present, no `H/return` → entered and wedged — a REAL result".
+  It is not a real result; it is an unattributed one. The rule needs the monitor to instrument
+  the enter path before it can mean what it claims.
+* The trap latch reads `0x98` (seen, mcause 24) at these wedges, with the latch cleared
+  immediately before each domain. **Provenance caveat: those mux readings were observed in the
+  runner's stdout and are NOT persisted in the `stages-run*.txt` captures** — the runner writes
+  only per-domain UART. Persist them before relying on them.
+* The runner now reads the **committed pc** at a wedge (switches 230..237). First reading:
+  `0x000000000000087c` at the stage-0 wedge. **Unvalidated** — the instrument has never been
+  checked against a domain that returns, and the value does not obviously map into a domain
+  linked at VA 0x10000. Do not bisect on it until it is validated.
 
 ---
 

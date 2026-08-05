@@ -49,6 +49,18 @@ PER_DOM = float(os.environ.get("SQLITE_STAGE_TIMEOUT") or 90)
 # it. Raise SQLITE_IDLE_S if a stage can legitimately go quiet for longer between SQ: markers.
 IDLE_S = float(os.environ.get("SQLITE_IDLE_S") or 30)
 OUT = os.environ.get("PROBE_SCOPED_OUT") or "/tmp/capstone/sqlite-stages.txt"
+# THE COMPLETE UART STREAM, exactly what the console GUI shows.
+#
+# OUT holds only per-test windows (`uart_since(mark)`), and a window CLOSES ON TIMEOUT while
+# bytes are still arriving -- so a wedged test's capture can end mid-line and lose whatever the
+# board emitted next. That produced a real disagreement between this runner's transcript and
+# what a human watching the GUI saw, and a capture that disagrees with the board makes every
+# verdict built on it unsafe. The console already accumulates everything; not writing it out was
+# pure loss. Written in the FINALLY so a timeout, a wedge or a crash still leaves the evidence.
+#
+# Caveat kept from the skill: the console replays the PREVIOUS boot on connect (~548 KB), so
+# scope any search to this run's own `load_image` rather than grepping the whole file.
+RAW_OUT = os.environ.get("PROBE_RAW_OUT") or (OUT.rsplit(".", 1)[0] + "-raw.txt")
 
 STAGE_NAMES = {
     0: "entry+return only (shared region writable)",
@@ -257,6 +269,7 @@ def main():
                 # switch value is 224 + reg_sel. Decoded by name because a raw hex byte has
                 # been misread twice (0x84 and 0x89 both were).
                 log("WEDGED -- reading the debug mux now, before releasing the board")
+                pc_bytes = {}
                 try:
                     for sw, label, kind in ((255, "TRAP LOG {seen,mcause[6:0]}", "trap"),
                                             (224, "{excommit,ldsync,stsync,lsu_rdy,dyn_rdy,"
@@ -289,23 +302,73 @@ def main():
                                             (251, "rev_node_serving_idx[7:0]", "raw"),
                                             (252, "rev_node_serving_idx[15:8]", "raw"),
                                             (253, "rev_node_serving_idx[23:16]", "raw"),
-                                            (254, "rev_node_serving_idx[31:24]", "raw")):
+                                            (254, "rev_node_serving_idx[31:24]", "raw"),
+                                            # COMMITTED pc, bytes 0..7 (reg_sel 0b00110..0b01101
+                                            # == switches 230..237, probe_wedge_regs.py:30,64).
+                                            # This runner never read it, which is why five board
+                                            # sessions reported WHAT the core was stuck on
+                                            # (wrev/memwait, mcause) and never WHERE. The last
+                                            # committed pc maps straight onto the domain's
+                                            # disassembly and names the faulting instruction --
+                                            # the single most actionable number available at a
+                                            # wedge, and it costs nothing extra because the board
+                                            # is already held and powered for the reads above.
+                                            #
+                                            # Read it LAST: it is 8 switch round-trips, and if the
+                                            # console drops out partway the cheap single-byte
+                                            # diagnostics above are already captured.
+                                            #
+                                            # Treat 0xca11ab1ebadcab1e as NO DATA, not as a pc --
+                                            # the debug path has twice returned that AXI
+                                            # error-slave pattern.
+                                            (230, "commit pc[7:0]", "pc"),
+                                            (231, "commit pc[15:8]", "pc"),
+                                            (232, "commit pc[23:16]", "pc"),
+                                            (233, "commit pc[31:24]", "pc"),
+                                            (234, "commit pc[39:32]", "pc"),
+                                            (235, "commit pc[47:40]", "pc"),
+                                            (236, "commit pc[55:48]", "pc"),
+                                            (237, "commit pc[63:56]", "pc")):
                         for bit in range(8):
                             console.set_switch(bit, bool(sw & (1 << bit)))
                         time.sleep(1.2)
                         st = console.latest(C.LISTEN.get("led_state", "led_state"))
                         bits = st.get("states") if isinstance(st, dict) else None
                         v = sum((1 << i) for i, b in enumerate(bits) if b) if bits else None
-                        print(f"  [wedge] sw={sw:3} {label:52} "
-                              f"{'UNREAD' if v is None else f'0x{v:02x} {v:08b}'}", flush=True)
+                        line = (f"  [wedge] sw={sw:3} {label:52} "
+                                f"{'UNREAD' if v is None else f'0x{v:02x} {v:08b}'}")
+                        print(line, flush=True)
+                        # Persist it. These readings were previously stdout-only, so the mcause
+                        # and ready-bit values quoted in write-ups could not be checked against
+                        # any artifact afterwards -- an audit flagged exactly that.
+                        transcript.append(line + "\n")
                         if v is not None and kind == "ready":
                             names = ["privM", "flush", "flu_ready", "dyn_ready", "lsu_ready",
                                      "store_syncer", "load_syncer", "ex_commit.valid"]
                             print("          " + " ".join(f"{n}={(v >> i) & 1}"
                                                           for i, n in enumerate(names)),
                                   flush=True)
+                        if kind == "pc":
+                            pc_bytes[sw - 230] = v
                     for bit in range(8):
                         console.set_switch(bit, False)
+
+                    # Assemble the committed pc. Report it only when ALL EIGHT bytes were read:
+                    # a partial read silently reconstructs a plausible-looking wrong address, and
+                    # a wrong address sends the next session bisecting the wrong function.
+                    if len(pc_bytes) == 8 and all(b is not None for b in pc_bytes.values()):
+                        pc = sum(pc_bytes[i] << (8 * i) for i in range(8))
+                        if pc == 0xca11ab1ebadcab1e:
+                            print("  [wedge] commit pc = AXI ERROR-SLAVE PATTERN -- NO DATA, "
+                                  "do not treat as an address", flush=True)
+                        else:
+                            print(f"  [wedge] commit pc = 0x{pc:016x}   <-- map this onto the "
+                                  f"domain disassembly to name the faulting instruction",
+                                  flush=True)
+                    else:
+                        missing = [i for i in range(8) if pc_bytes.get(i) is None]
+                        print(f"  [wedge] commit pc UNREAD (missing bytes {missing}) -- "
+                              f"reporting nothing rather than a partial address", flush=True)
                 except Exception as exc:
                     log(f"debug-mux read failed ({type(exc).__name__}) -- continuing to teardown")
                 log("STOPPING: a wedged domain takes the core with it, so nothing after "
@@ -370,6 +433,16 @@ def main():
                       f"the rc names it.", flush=True)
         return 0
     finally:
+        try:
+            raw = getattr(console, "_uart", None)
+            if raw:
+                pathlib.Path(RAW_OUT).write_text(raw)
+                print(f"[stages] FULL console stream ({len(raw)} bytes) -> {RAW_OUT}",
+                      flush=True)
+            else:
+                print("[stages] no console buffer to dump", flush=True)
+        except Exception as exc:
+            print(f"[stages] raw dump failed ({type(exc).__name__})", flush=True)
         print("RUN_DONE", flush=True)
         release_board(console, label="staged sqlite")
 

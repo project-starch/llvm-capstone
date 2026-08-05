@@ -129,9 +129,20 @@ Read the **last marker** in the run-scoped transcript, never "did not return":
 | Evidence | Meaning |
 |---|---|
 | `SQ: obs=<n>` / `RESULT … retval=` | a result — record it |
-| `SQ: G/enter` present, no `H/return` | entered and wedged — a **real** result |
+| `SQ: G/enter` present, no `H/return` | **NOT proof of entry** — see below |
+| `ENT1` present, no `ENT2` | control left M-mode: the DOMAIN owns the wedge — a **real** result |
+| `ENT0` present, no `ENT1` | died in the monitor's `call_domain`, before the switch |
 | no `SQ: G/enter` (ends at `SHA5:`) | **entry stall** — the domain never ran; says nothing about the code |
 | no boot banner / JTAG errors | infra — retry |
+
+**`SQ: G/enter` does NOT mean the domain entered.** It is printed by the HOST
+(`sqlite_host.c:144`) *before* it calls in, and the monitor's `call_domain`
+(`sbi_capstone.c:838`) was uninstrumented until 2026-08-05 — every `SHA*`/`ECSZ` tag belongs to
+the region-share path. So "G/enter then silence" was consistent with dying in `call_domain`, in
+the domain switch, at the first instruction, in the carve loop, or in cap-init, and calling it
+"entered and wedged — a real result" was an unattributed guess. Use **`ENT1`** (about to leave
+M-mode) and **`ENT2`** (domain returned) instead; for a ladder rung the equivalent entry proof
+is **`SHA6`**, whose absence means it died in the FIRST region share, before entering.
 
 `SHA5` last does **not** by itself mean an entry stall: a domain that enters and wedges
 immediately also leaves `SHA5` last. **Distinguish on `SQ: G/enter`.**
