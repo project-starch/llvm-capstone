@@ -46,6 +46,83 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-05 — ULTRACODE: three findings that change the problem, all re-verified here
+
+A five-lens multi-agent investigation with adversarial verification. **No mechanism survived**;
+three of five were killed by data already on disk. What it produced instead is more valuable.
+
+#### F1. `mtvec = 0` for every domain — a trap and a hang are THE SAME OBSERVATION
+
+`csr_regfile.sv:399` — `7'd1: dom_switch_reg_resp_o = {ctvec_q, mtvec_q};` — seal slot **1** is
+the domain's trap vector. `sbi_capstone.c:801` zeroes every slot (`dom_seal[i] = 0;`) and
+`:823-825` write only slots **0, 2 and 3**. Slot 1 is never written.
+
+**So any fault inside a domain vectors to pc = 0, lands outside PCC, and re-faults forever** —
+in M-mode, interrupts off, no UART. From outside, an ordinary capability fault is
+indistinguishable from an infinite loop.
+
+This is not the bug. **It is why the bug has resisted the entire investigation**: every "silent
+hang, no trap reported" observation was made through an instrument that cannot report a trap.
+Every inference of the form "nothing trapped, therefore it is not a fault" is void.
+
+**FIX THIS FIRST, before any further board debugging.** Writing a real trap vector into
+`dom_seal[1]` turns every future hang into a reported `mcause`. It is a monitor change, ours,
+and it is worth more than any further bisection.
+
+#### F2. The "passing" builds already return WRONG ANSWERS — and QEMU says they are silicon-specific
+
+Decoded from logs already on disk (`obs = 0x5A6E_ssrr`), re-verified here:
+
+| stage | board rc | expected | QEMU rc |
+|---|---|---|---|
+| 11 | 21 | 21 | 21 |
+| 13 | **15** | **36** (5+8+11+12) | **36 CORRECT** |
+| 16 | **124** | **128** (128×5 & 0xff) | **128 CORRECT** |
+
+`15 = 5+8+1+1` and `636 = 640−4` both decompose as *some `sqlite3Strlen30` calls returned 1* —
+the documented 2026-07-31 signature. **I recorded stages 13 and 16 as "RETURN" and never checked
+the value.** They are wrong answers, and the error is mine.
+
+**This is a far better probe than the hang:** it returns, it is cheap, it is bisectable, and the
+QEMU differential already attributes it to silicon rather than to the compiler. Make stages 13
+and 16 the primary probe and retire the hang as a signal.
+
+#### F3. RETRACTION: `.gct` was never delivered to the board at all
+
+`.gct` and `.capstone_gp_table` sit at file offset `0x163570`, **outside PT_LOAD**, which ends at
+`0x163568` and is `filesz = 0x162568` **identically in uc, dp0 and g1**. The loader copies
+PT_LOAD only (`libcapstone.c:169-171`). So the `.gct` delta and the `.capstone_gp_table`
+relocation **never reach the board**.
+
+Independently: **`g1` has `.gct` and `.capstone_gp_table` byte- and address-identical to `uc`
+(`0x1635e0`) and hangs** — the hypothesis was already dead on data in hand.
+
+Retracted with it: "+80 = five capability entries" (it is one 24-byte object + one 40-byte slot
++ 16 template bytes) and "`__capstone_cap_init` walks `.gct`" (it is straight-line code,
+byte-identical across uc/dp0/g1). **The planned `.gct` entry-count sweep tests nothing — cancel
+it.** Also: every "image size" statement in this document was about *file* size, which is
+outside the loaded segment and irrelevant.
+
+#### Exclusions corrected
+
+* **#4 "address of the executed code" DOES NOT HOLD as stated.** `sqlite3Strlen30` is at
+  `0x16afc` in both, but it *calls* `strlen`, which moves, and an immediate inside it differs
+  (`addi a1,a1,0xdc` vs `0x100`). The executed instruction stream is **not** identical.
+* **#6 "run position" is VOID for all five `pad*` draws** — they were single-domain boots with
+  no control (`### TEST 1/1`). Those five observations must be discarded.
+* **#2 "carve count"** holds only at ladder scale; the synthetic scans used a different host,
+  glue, and a 6.7 KB `.text`. Inside the SQLite configuration the only carve perturbation is
+  `dvar`, and it hangs.
+* **#3 "image size"** holds, but for the reason in F3, not the one recorded.
+
+#### The one surviving correlation, and it is confounded
+
+Every build whose `.rodata`/`.data` are byte-identical to `uc` passes; every build with
+different `.rodata`/`.data` content hangs. But code relocation and changed pointer *values* are
+collinear in every observation ever taken — you cannot move a function without changing the
+words holding its address. **Separating them needs one build that moves code without changing
+any data section**, gated offline by `llvm-objcopy --dump-section` + `cmp` before it is ever run.
+
 ### 2026-08-05 — QEMU DIFFERENTIAL: both images are correct under QEMU; only the board differs
 
 The control that should have been run first, and costs no board time.
