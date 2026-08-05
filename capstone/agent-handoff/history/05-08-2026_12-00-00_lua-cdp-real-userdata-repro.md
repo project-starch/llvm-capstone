@@ -117,14 +117,37 @@ Recipe (`xlang/lua-cdp/cheri/real/build-real-lua-cdp.sh`): CHERI-clang,
   probes (`DBGP`/`DBGC`, which Capstone defines via capstone_lua_libc.h), so the
   interpreter source stays byte-identical across platforms.
 
-STATUS: real Lua 5.4.7 builds purecap (a CheriBSD RISC-V PIE), and the luaossl-124
-reproduction (`cheri/real/cdp_x509.c` -- same userdata/__gc/setStore logic as the
-Capstone LUA_CDP_X509 domain, as a normal `main()` with CheriBSD malloc/free) builds
-and links against it purecap. NEXT: stage into the CheriBSD image and run under the
-revocation configs via the existing `cheri-baseline/` drivers (eager -> CAUGHT at the
-stale access; async/default -> MISS), and port the other 12 reproductions (same
-template). This is the CHERI column at the real-Lua fidelity, to sit beside the
-Capstone 13/13 above.
+DONE. All 13 reproductions run under the three revocation configs on CheriBSD: one
+combined binary `cheri/real/cdp_real.c` (dispatched on argv[0], copied to the 13 row
+names), built/staged/booted/classified by `cheri/run-real-lua-cheri.sh` via the same
+`cheri-baseline/` drivers the shim column uses. Two build fixes beyond the recipe
+above: `-cheri-tgot-tls` (the purecap rtld rejects traditional TLS -- "Traditional TLS
+not supported"); and openssl_ctx's __gc does the stale READ only, not the actual
+second free (an unconditional double-free trips CheriBSD malloc's own double-free
+SIGABRT under async -- allocator hardening, not the revocation being measured;
+classify.py separates it as BLOCKED-ABORT).
+
+CHERI real-Lua result (rc: exit0 = MISS, 162 = SIGPROT = CAUGHT), every row
+BLOCKED-SWEEP(eager):
+
+| config   | knobs                                        | result |
+|----------|----------------------------------------------|--------|
+| spatial  | revocation OFF                               | 0/13 caught (MISS) |
+| temporal | revocation ON, ASYNC (the DEPLOYED default)  | 0/13 caught (MISS) |
+| eager    | revocation ON, every free                    | 13/13 caught (SIGPROT) |
+
+This reproduces the shim corpus's CHERI pattern (async 0/13, eager 13/13) at
+REAL-LUA fidelity. The fair comparison now holds real Lua on BOTH platforms:
+
+  Capstone revoke-on-free : 13/13 CAUGHT   (LUA_CDP_* domains, above)
+  CHERI eager             : 13/13 CAUGHT   (= Capstone's synchronous revoke)
+  CHERI async (default)   :  0/13          (headline: the deployed config does not
+                                            catch the CDP at the contract point)
+  spatial (no revocation) :  0/13
+
+The wrapped C object stays a stub on both platforms (byte-identical fairness); what
+is now real on both is the Lua runtime -- the userdata/__gc/GC-driven free that makes
+these cross-domain. Still QEMU on both sides, not silicon.
 
 ## Reproduce
 

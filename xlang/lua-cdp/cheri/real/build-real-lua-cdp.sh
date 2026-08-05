@@ -25,8 +25,11 @@ BUILTIN=$(echo "$SDK"/lib/clang/*/include | tr ' ' '\n' | head -1)
 # (bits/floatn.h -> unsupported __float128); force sysroot-only. The prelude no-ops
 # the shared Lua source's diagnostic probes (Capstone defines them via
 # capstone_lua_libc.h), keeping the interpreter source byte-identical across platforms.
+# -ftls-model=initial-exec -cheri-tgot-tls: CheriBSD's purecap rtld rejects
+# "traditional" (general-dynamic) TLS at load ("Traditional TLS not supported");
+# the CHERI TGOT TLS model is required (same as the mruby purecap port).
 flags=(--target=riscv64-unknown-freebsd -march=rv64gcxcheri -mabi=l64pc128d
-       --sysroot="$ROOTFS" -mno-relax -O0 -w -ftls-model=initial-exec
+       --sysroot="$ROOTFS" -mno-relax -O0 -w -ftls-model=initial-exec -cheri-tgot-tls
        -include "$HERE/cheri-lua-prelude.h" -nostdinc -isystem "$BUILTIN"
        -isystem "$ROOTFS/usr/include" -I"$LUA")
 luasrcs=(); for f in "$LUA"/*.c; do case "$(basename "$f")" in luac.c|onelua.c|lua.c) ;; *) luasrcs+=("$f");; esac; done
