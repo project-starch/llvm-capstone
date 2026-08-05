@@ -134,6 +134,8 @@ Read the **last marker** in the run-scoped transcript, never "did not return":
 | `ENT0` present, no `ENT1` | died in the monitor's `call_domain`, before the switch |
 | no `SQ: G/enter` (ends at `SHA5:`) | **entry stall** — the domain never ran; says nothing about the code |
 | no boot banner / JTAG errors | infra — retry |
+| `ConnectionError`, HTTP 5xx on connect | **console/web-UI outage** — not a board fault |
+| connect OK but **zero** UART bytes all run | **AMBIGUOUS** — dead firmware *or* dead UART relay |
 
 **`SQ: G/enter` does NOT mean the domain entered.** It is printed by the HOST
 (`sqlite_host.c:144`) *before* it calls in, and the monitor's `call_domain`
@@ -201,6 +203,31 @@ self-inflicted; the same firmware file was declared dead six times, then booted 
 with no rebuild in between. The discriminator that settled it: the variable was the harness,
 not the firmware — diff what actually changed on our side before spending a rebuild or a
 reflash.
+
+**Check the console is actually up before diagnosing anything.** On 2026-08-05 the backend
+returned **HTTP 502** and a session was spent diagnosing "the board will not boot" — reflashing,
+reverting the device tree, rebuilding firmware, bisecting the monitor — against a console that
+was not talking to the hardware at all. The board owner confirmed it was a web-UI error.
+`connect()` now names this explicitly, but check it first whenever runs stop reaching the board:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}' "$FPGA_URL"      # 200 = up; 5xx = outage, stop here
+```
+
+**A run that connects but receives ZERO UART bytes does NOT prove the firmware is broken.**
+That is the failure mode that misled the same session. Silence is equally consistent with a
+console whose UART relay has failed while its HTTP side still answers — and it looks identical
+from the GUI, so "the user sees nothing either" is corroboration of nothing. Before blaming an
+image, establish that the console can carry UART at all: the connect-time replay of the previous
+boot (~548 KB) is the cheap positive control — if even that is absent, suspect the console.
+Distinguish *silence* (no bytes) from *garbage* (bytes that do not decode); the replay prefix is
+normal and is not a baud fault.
+
+**NEVER call `console.trace_dump()` — it hangs the board hard.** Measured 2026-08-05 on a
+wedged core: `trace_result` never arrives, the wait expires, and the board is left needing
+manual recovery. It cost a reflash. The function is still in `fpga_console.py` and reads like
+exactly the instrument a wedge investigation wants, which is precisely the trap. Same caution
+for the GDB tab: an orphaned session wedges every later run and only `gdb_stop()` clears it.
 
 **Bitstream re-flash is ask-first, always.**
 

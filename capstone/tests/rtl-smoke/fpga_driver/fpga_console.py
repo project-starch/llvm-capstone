@@ -180,7 +180,22 @@ class FpgaConsole:
                 wait_timeout=timeout,
             )
         except Exception as e:
-            raise type(e)(_redact(str(e), self.url)) from None
+            msg = _redact(str(e), self.url)
+            # A 5xx from the console is a WEB-UI OUTAGE, not a board fault. Confirmed with the
+            # board owner 2026-08-05 after a session spent diagnosing "the board will not boot":
+            # the console backend was returning 502 and no run could reach the hardware at all.
+            # Say so in the exception, because the default socket.io text ("Unexpected status
+            # code 502 in server response") reads like a transport hiccup and invites a retry
+            # loop or, worse, a firmware bisection against a board nobody is talking to.
+            if any(c in msg for c in ("502", "503", "504", "500")):
+                raise type(e)(
+                    f"CONSOLE IS DOWN (server {msg}). This is a WEB-UI/server outage, NOT a "
+                    f"board, bitstream or firmware fault -- do not reflash, rebuild or bisect "
+                    f"on it. Nothing can reach the hardware until the console backend is back; "
+                    f"it needs a restart by whoever operates it. Re-check with: "
+                    f"curl -s -o /dev/null -w '%{{http_code}}' \"$FPGA_URL\""
+                ) from None
+            raise type(e)(msg) from None
         # The 'connect' handler (installed in _install_handlers) mirrors the
         # browser client by emitting request_history on this and every reconnect.
         self._log("connected")

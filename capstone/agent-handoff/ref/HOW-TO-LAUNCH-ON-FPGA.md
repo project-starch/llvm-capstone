@@ -8,6 +8,27 @@ can also use the browser GUI. Every step and gotcha is in the KB files below.
 procedure (bake → order → classify → release) and auto-loads when a task involves running
 something on the board. This file remains the full reference behind it.
 
+## The console can be down, and it does not look like it
+
+**HTTP 502 from the console backend is a WEB-UI outage, not a board fault.** Confirmed with the
+board owner on 2026-08-05, after a session spent reflashing the bitstream, reverting the device
+tree, rebuilding firmware and bisecting the monitor -- all against a console that was not
+reaching the hardware. First check whenever runs stop working:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}' "$FPGA_URL"     # 200 = up, 5xx = outage; stop and get it restarted
+```
+
+`FpgaConsole.connect()` now raises a message naming this case, because the raw socket.io text
+("Unexpected status code 502 in server response") reads like a transport hiccup.
+
+**Zero UART bytes after a SUCCESSFUL connect is ambiguous, not proof of a bad image.** It is
+equally consistent with a console whose UART relay died while its HTTP side still answers. The
+GUI shows the same nothing, so a human seeing no output corroborates nothing. Positive control:
+the console replays ~548 KB of the previous boot on connect -- if even that replay is missing,
+suspect the console, not the firmware. And distinguish SILENCE (no bytes at all) from GARBAGE
+(bytes that fail to decode): the replay prefix is normal, and is not a baud mismatch.
+
 ## One-line instruction to give an agent
 
 > Run `<domain/binary>` on the Capstone FPGA. Read
