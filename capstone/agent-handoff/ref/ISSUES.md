@@ -1782,6 +1782,43 @@ use1 reads slot 1. Both pass => the fault needs two live slots. use0 fails alone
 building a 2-entry table is itself fatal, and `INTERP_BUILD_LIMIT=1` then separates the
 second split/store from the table split.
 
+### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
+
+**Reproducer:** `capstone/tests/fpga-repros/S01-image-perturbation-hang/` (has `run.sh`).
+
+Two SQLite domain images differing by **one dead, never-called, empty function**:
+
+    QEMU   uc.dom  stage 11 -> obs=1517161237      board  uc.dom  -> obs=1517161237  (5 obs)
+    QEMU   dp0.dom stage 11 -> obs=1517161237      board  dp0.dom -> NEVER RETURNS   (2 obs)
+
+Stage 11 executes only `sqlite3Strlen30` on a string literal and never calls the added function.
+The hang is silent: no trap reported, no marker, core still services the console. **Nine**
+structurally different perturbations of `uc` were built and every one hangs; only unmodified
+builds (`uc`, `f10`) return.
+
+**Attribution is NOT established.** The QEMU differential rules out a platform-independent
+compiler/glue defect — a miscompiled `dp0` would fail there too, and does not — but QEMU is our
+own model and is permissive where the RTL is not. The board may be correct while our software
+relies on something it does not guarantee, and the difference may be timing rather than function.
+
+**Tested and EXCLUDED** (see the package README for the artifact behind each): `.gct` size and
+contents; carve count (8→208 synthetic, and `dvar` at 182); image size (`sz2048/8192/16384` are
+all byte-identical in size to `dp0`); address of the executed code (`sqlite3Strlen30` is at the
+**same** address in both); the amalgamation rewrite (byte-identical); run position (controlled
+both ways); rev-node pool exhaustion (`head`=221/1021, `overflow=0`); bounds representability
+(every carve representable, still hangs); operand forwarding (fix present in this bitstream).
+
+**The debug mux is not diagnostic here** without a subtracted baseline: on the PASSING run it
+reads byte-identical to the hanging run (`sw=255` `0x8f`, `sw=224` `0xff`, `sw=225` `0xd5`).
+
+**Seven mechanisms were proposed and all seven retracted** during 2026-08-04/05. The recurring
+cause was that every intervention which could observe the system also changed its behaviour.
+Full trail in `ref/SILICON-BLOCKER.md`.
+
+**Next:** ask whether the divergence survives on `caplifive_65536_nodes.bit` (and whether that
+bitstream carries the forwarding fix). A waveform of `dp0` stage 11 around the hang would settle
+in minutes what no software-visible observable here can.
+
 ### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `OPEN, not yet hit`
 
 `compress_bounds` has two branches selected by `bounds.start == cursor`

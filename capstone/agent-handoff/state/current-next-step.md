@@ -7,6 +7,52 @@
 > conclusions recorded below were later retracted there.
 
 
+## 2026-08-05 — READ THIS FIRST. The SQLite blocker is now a REPRODUCER, not a diagnosis.
+
+**R-14 and R-16 are FIXED** in silicon by `caplifive_fixed_forward.bit` (the operand-forwarding
+fix, `capstone-ariane 7aac52f93`) and verified on the board. Both repro packages are archived or
+retained only as bitstream acceptance tests. Do not chase either.
+
+**What is actually blocking SQLite is unexplained**, and it is packaged at
+`capstone/tests/fpga-repros/S01-image-perturbation-hang/`:
+
+    QEMU   uc.dom  stage 11 -> correct        board  uc.dom  stage 11 -> correct
+    QEMU   dp0.dom stage 11 -> correct        board  dp0.dom stage 11 -> NEVER RETURNS
+
+`dp0` is `uc` plus **one dead, never-called, empty function**. Stage 11 runs only `strlen` on a
+string literal and never calls it. Nine structurally different perturbations of `uc` were built;
+**every one hangs**, and only unmodified builds return.
+
+**Before designing any experiment, read that package's README.** It lists **nine variables
+already tested and excluded** — `.gct`, carve count, image size, address of the executed code,
+the amalgamation rewrite, run position, rev-node pool exhaustion, bounds representability, and
+operand forwarding — plus the fact that the debug mux reads **identically** on a passing and a
+hanging run, so it is not diagnostic without a subtracted baseline.
+
+**Method warnings earned the hard way on 2026-08-04/05** (seven mechanisms were proposed and all
+seven retracted):
+
+* **Any instrumentation of this image changes the outcome.** Adding globals entry-stalls it;
+  removing globals via DCE changes which code hangs; an opaque clamp that left
+  `.capstone_gp_initdesc` byte-identical still flipped an unrelated stage. There is currently
+  no known way to look inside this image without perturbing it.
+* **Gate the artifact, not the flags.** `SQLITE_EXTRA_DEFS` does **not** reach the amalgamation
+  (`DOMAIN_EXTRA_DEFS` does), and the staged dispatch sits behind `#ifdef CAPSTONE_SQLITE_STAGE`
+  — a build without it silently ignores every `dom:NNN` selector and runs the full workload.
+  Three board sessions were spent bisecting stages that never executed. Both now have hard gates
+  in `build-sqlite-silicon.sh`; keep them.
+* **Position is load-bearing.** Verdicts need a control that RETURNS in the same boot, and the
+  shipped freshness gate only checks the canonical `sqlite_silicon.dom` — verify the `.dom` you
+  are actually running is byte-present in the initramfs.
+
+**Open question worth asking the board owner:** does the divergence survive on
+`caplifive_65536_nodes.bit`, and does that bitstream also carry the forwarding fix? If the
+divergence disappears there, the answer was revocation-node related after all.
+
+Full trail: `capstone/agent-handoff/ref/SILICON-BLOCKER.md`, 2026-08-04 and 2026-08-05 sections.
+
+---
+
 ## 2026-08-02 — C-16 FOUND AND FIXED (a COMPILER bug), but SILICON IS STILL BLOCKED
 
 ### Read this before anything else in this file

@@ -1,0 +1,5 @@
+# Recorded 2026-08-05. uc = unmodified; dp0 = uc + one dead never-called function;
+# dvar = uc + one dead integer global (hangs with .gct UNCHANGED -- exclusion #1).
+47eb1e0c41797abe4a4e02327e7951a93d7cc33aa2b4f26d6db121782dbdeb43  uc/sqlite_silicon.dom
+37fb8c6d044441ca823787e5d7d877069c14d033f689a97e99fde484608b945a  dp0/sqlite_silicon.dom
+01e1bf571c576f0d39112f024823e7d5928192ae2a768824ab9c1b38e4c2926a  dvar/sqlite_silicon.dom

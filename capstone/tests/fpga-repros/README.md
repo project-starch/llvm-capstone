@@ -12,6 +12,8 @@ reproducer is not an issue; a reproducer that only exists in `/tmp` is not much 
 | `R01-lsu-hazard/` | **R-1** | a load through one capability register misses a store through another |
 | `R02-delin/` | **R-2** | `delin` in domain code wedges the board — `delin.s` vs `nop.s`, one instruction apart |
 | `R16-entry-stall/` | **R-16** | the domain never returns from its FIRST entry (`SHA5` stall, no `SQ: G/enter`). **Resolved** — kept as a one-boot bitstream acceptance test |
+| `S01-image-perturbation-hang/` | *(open, unexplained)* | a ~1.6 MB domain returns, but **any** perturbation of its image makes it hang — silently, and correctly under QEMU |
+| `RTL-store-user-metadata/` | *(observation)* | every store routes capability metadata into the dcache write-user sideband; **silicon behaves correctly** — negative result kept as a regression test |
 | `ARCHIVED/` | — | packages whose defect is **fixed in silicon**; see `ARCHIVED/README.md` |
 
 **Archived 2026-08-04:** both R-14 packages (`R14-frame-pad/`, `R14-strline-struct/`) moved to
@@ -35,6 +37,13 @@ for all five), pinned by `images/SHA256SUMS`. It is a standalone silicon-ladder 
 SQLite build, which is exactly why it is small enough to carry — and why it should be preferred
 over `ARCHIVED/R14-strline-struct` whenever an R-14-shaped check is wanted.
 
+`S01-image-perturbation-hang` is the one **open** package and the only one that is *not*
+root-caused. It ships source, recipe and pinned hashes; `run.sh` builds both images, runs a QEMU
+differential (both must be correct there) and then the board pair in one boot with a live
+control. Its README carries a table of **nine variables already tested and excluded** — read it
+before designing any experiment, because every one of those was a plausible-looking hypothesis
+that a control destroyed.
+
 `R16-entry-stall` ships **source, recipe and pinned hashes only** — its reproducer is a ~1.5 MB
 SQLite build. Its `run.sh` builds, stages and runs it with a control gate, and prints a
 present/absent verdict. Note the build is **not bit-reproducible**, so identify an image by
@@ -56,7 +65,8 @@ The staged-return scaffolding those depend on is in
 
 ## Running one
 
-Each package has its own `README.md`; `R02` and `R16-entry-stall` have a `run.sh`. General
+Each package has its own `README.md`; `R02`, `R16-entry-stall`,
+`RTL-store-user-metadata` and `S01-image-perturbation-hang` have a `run.sh`. General
 board procedure and the driver contract are in
 `capstone/agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md`, and the decision procedure is the
 `board-run` skill. **Always run a known-entering control FIRST in every boot** — it fails
