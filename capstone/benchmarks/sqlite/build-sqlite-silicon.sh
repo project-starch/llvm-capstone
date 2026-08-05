@@ -450,7 +450,17 @@ echo "== compiling the no-globals support objects separately (they cannot collid
 # i128 select pattern and the backend aborts with "Cannot select". Reproducer:
 # `char *pick(int n, char *a, char *b) { return n == 10 ? a : b; }` at -O1. The n==0 form
 # compiles because SelectCC_GPR_rrirr adds a separate explicit Pat for a zero rhs.
-SUPPORT_OPT=${SQLITE_SUPPORT_OPT_LEVEL:-$OPT}
+# The string primitives default to -O1, NOT to $OPT. Board-measured 2026-08-05: at -O0
+# `strlen` re-loads its string capability from a stack slot with `ldc` on EVERY iteration, and
+# on silicon that sporadically yields 1 instead of the true length -- stage 13 returned 15, then
+# 26, then hung across three boots of the same source, where QEMU returns 36 every time. At -O1
+# the pointer stays in a register (zero `ldc` in the loop) and stage 13 returns 36 on silicon,
+# twice. This is a real wrong-answer defect, not a workaround, so it is the default.
+#
+# It does NOT fix the stage-10 hang -- that was measured separately and is independent. And it
+# cannot be raised to a whole-image -O1: that hits C-17 (`Cannot select: i128 =
+# CapstoneISD::SELECT_CC`), which is why this knob is scoped to the support files.
+SUPPORT_OPT=${SQLITE_SUPPORT_OPT_LEVEL:--O1}
 # BEEBS_STRING_LINEAR_SAFE: index instead of walking, so the string primitives never copy
 # or advance a capability that may be LINEAR. SQLite is the first thing here to call strlen
 # on hardware (no ladder rung references it), and both the -O0 and -O1 pointer-walking
