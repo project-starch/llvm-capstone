@@ -6,10 +6,14 @@ domain, and it dominated every sweep. These rungs are ~10 KB each, so putting th
 initramfs costs nothing on the JTAG upload that happens anyway, and the run becomes a shell
 command per rung.
 
-It also removes the R-3 confound that voided an earlier sweep: `run_ladder_perf_fpga.py` with
-LADDER_ONE_BOOT=1 requires DISTINCT entry VAs, and all these rungs link at 0x10000. Here every
-rung is invoked from a shell in ONE boot, and the controller reloads the domain each time, so
-position-in-boot is recorded per rung rather than assumed away -- see `pos=` in the output.
+R-3 STILL APPLIES HERE -- do not drop the relocation. An earlier version of this docstring
+claimed invoking from a shell "removes the R-3 confound". It does not. R-3 is a MISSING ICACHE
+INVALIDATE on the domain switch (ISSUES.md), so a domain reused at entry VA 0x10000 within one
+boot silently hangs its cscall; the monitor still lacks that invalidate. This runner calls
+cold_boot ONCE and then runs every rung from that single boot, which is exactly the R-3
+condition. Invoking from a shell adds no invalidate, and RECORDING position does not REMOVE a
+confound. Build each rung at a distinct DOMAIN_BASE_VA (0x10000, 0x20000, ...) or expect a
+silent hang that looks just like a rung result. Position is still reported -- see `pos=`.
 
 Usage:
     BAKED_RUNGS="clp1 clp2 clp4 clp8" python3 -m fpga_driver.run_baked_rungs_fpga
@@ -84,8 +88,17 @@ def main():
         console.lock()
         install_release_on_signal(console)
         rb = nvbit(console)
-        if rb and BITSTREAM not in rb:
-            raise SystemExit(f"HARD STOP: resident bitstream is {rb!r}, expected {BITSTREAM!r}")
+        # STRICT equality, and None must HARD STOP. The old form was
+        # `if rb and BITSTREAM not in rb`, which had two holes: nvbit() polls only 8s and
+        # returns None on timeout, so an unreadable flash_state SKIPPED the guard entirely; and
+        # a substring test lets `<name>_v2.bit` satisfy a guard set to `<name>.bit`. For an
+        # experiment whose entire independent variable IS the bitstream, either hole means
+        # silently measuring the wrong silicon. The other two runners already use `!=`.
+        if rb != BITSTREAM:
+            raise SystemExit(
+                f"HARD STOP: resident bitstream is {rb!r}, expected {BITSTREAM!r}. "
+                f"(None means flash_state was unreadable within nvbit()'s poll -- treat as "
+                f"unknown silicon, never as a pass.)")
         console.upload_boot_image(IMG_NAME, str(IMG))
         cold_boot(console, C.GDB_PROMPT, IMG_NAME)
         log(f"booted; running {len(RUNGS)} baked rungs from the shell")
@@ -98,7 +111,9 @@ def main():
                     f"echo '{banner}'; {CTL} {r} /test-domains/{r}.dom; "
                     f"rc=$?; echo \"### RUNG {pos} {r} END rc=$rc ###\"; echo D''N_$rc",
                     r"DN_\d", timeout=TIMEOUT, idle_timeout=IDLE_S)
+                wedged = False
             except Exception as exc:
+                wedged = True
                 log(f"{r}: no return within {TIMEOUT:.0f}s ({type(exc).__name__})")
             text = console.uart_since(mark)
             transcript.append(f"===== {r} (pos {pos}) =====\n{text}\n")
@@ -107,20 +122,49 @@ def main():
             results.append((r, pos, got, oracles[r]))
             log(f"  {r}: retval={got} oracle={oracles[r]} "
                 f"{'OK' if got == oracles[r] else 'MISMATCH/NO-RESULT'}")
+            if wedged:
+                # A WEDGED DOMAIN TAKES THE CORE. Everything after this point is collateral,
+                # not a result, and must not be scored -- this runner used to continue and emit
+                # five independent-looking NO-RESULT rows for what was ONE failure. R-3's own
+                # entry records the cost: "rv8_primes hung and the runner kept 'reusing' the
+                # dead boot, losing the four rungs after it -- all of which had worked minutes
+                # earlier". Stop issuing commands and label the remainder honestly.
+                for rem_pos, rem in enumerate(RUNGS[pos:], pos + 1):
+                    results.append((rem, rem_pos, "COLLATERAL", oracles[rem]))
+                log(f"STOPPING after {r} wedged: {len(RUNGS) - pos} later rung(s) are "
+                    f"collateral, not results")
+                break
     finally:
         print("RUN_DONE", flush=True)
         try:
             release_board(console, label="baked rungs")
         except Exception as exc:
             print("release warn:", exc, flush=True)
-        pathlib.Path(OUT).write_text("".join(transcript))
+        # GUARDED: this used to be bare, and it runs BEFORE the summary print. A failure here
+        # (missing /tmp/capstone, full disk) raised inside the finally and threw away results
+        # that had already been captured.
+        try:
+            pathlib.Path(OUT).write_text("".join(transcript))
+        except Exception as exc:
+            print(f"transcript write failed ({type(exc).__name__}) -- summary still follows",
+                  flush=True)
         print(f"\n==== BAKED RUNGS (one boot, {len(results)} rungs) ====", flush=True)
         print(f"{'rung':10} {'pos':>4} {'retval':>8} {'oracle':>8}  verdict", flush=True)
         for r, pos, got, orc in results:
-            v = "OK" if got == orc else ("NO RESULT" if got is None else "WRONG")
+            if got == "COLLATERAL":
+                v = "COLLATERAL (after a wedge -- NOT a result)"
+            elif got is None:
+                v = "NO RESULT (wedged)"
+            elif got == orc:
+                v = "OK"
+            else:
+                v = "WRONG"
             print(f"{r:10} {pos:>4} {str(got):>8} {orc:>8}  {v}", flush=True)
         print(f"transcript -> {OUT}", flush=True)
-    hard_exit(0)
+    # EXIT STATUS MUST REFLECT THE RUN. This was hard_exit(0) unconditionally, so a session in
+    # which every rung wedged exited 0 and any wrapper keying off status read it as success.
+    ok = bool(results) and all(g == o for _, _, g, o in results)
+    hard_exit(0 if ok else 1)
 
 
 if __name__ == "__main__":

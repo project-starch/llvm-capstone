@@ -187,7 +187,12 @@ class FpgaConsole:
             # Say so in the exception, because the default socket.io text ("Unexpected status
             # code 502 in server response") reads like a transport hiccup and invites a retry
             # loop or, worse, a firmware bisection against a board nobody is talking to.
-            if any(c in msg for c in ("502", "503", "504", "500")):
+            # Word-boundary match on an HTTP-status-shaped token. A bare substring test
+            # ("500" in msg) fires on "15000" or ":5000", and connect errors routinely carry
+            # millisecond figures, ports and byte counts -- so a genuinely dead board could be
+            # reported as "console is down, do not reflash or bisect", steering the operator
+            # away from the real fault. Exactly the misdiagnosis this message exists to prevent.
+            if re.search(r"status code (50[0-4])\b", msg):
                 raise type(e)(
                     f"CONSOLE IS DOWN (server {msg}). This is a WEB-UI/server outage, NOT a "
                     f"board, bitstream or firmware fault -- do not reflash, rebuild or bisect "
