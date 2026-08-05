@@ -228,6 +228,76 @@ static void run_lua_staged(void) {
 }
 #endif /* LUA_STAGE */
 
+/* Chunk ladder (CLAUDE.md batch-variants, applied to the INPUT instead of to a
+ * single chunk's stages). Built with -DLUA_CHUNK_LADDER. Runs a spectrum of chunks
+ * from trivial to the full demo in ONE lua_State, each with a csdebugprint marker
+ * before/after its pcall, so a HANG localises to an opcode class: the first chunk
+ * whose pcall-post marker is missing is the wedge. Ordered cheap -> complex so the
+ * first non-returning chunk is the bisection point. Separate function, so run_lua /
+ * run_lua_staged stay byte-identical. Marker scheme: 310 + k*10 + phase, phase in
+ * {0 load-pre, 1 load-post, 2 pcall-pre, 3 pcall-post}; 300/301 newstate, 399 done.
+ * If even chunk 0 ("return 1") hangs -> the call machinery (luaD_precall/luaV_execute
+ * entry), not any opcode. */
+#ifdef LUA_CHUNK_LADDER
+static int ladder_one(lua_State *L, const char *src, unsigned k) {
+  DBG(310 + k * 10 + 0);
+  const char *s = (const char *)__builtin_capstone_cap_delin((void *)src);
+  unsigned long len = 0;
+  while (s[len])
+    len++;
+  int st = luaL_loadbufferx(L, src, len, "=c", NULL);
+  DBG(310 + k * 10 + 1);
+  output_text("C");
+  output_int(k);
+  output_text(" load=");
+  output_int(st);
+  output_text("\n");
+  if (st != LUA_OK) {
+    lua_settop(L, 0);
+    return st;
+  }
+  DBG(310 + k * 10 + 2); /* pcall-pre: the suspect boundary */
+  st = lua_pcall(L, 0, 1, 0);
+  DBG(310 + k * 10 + 3); /* pcall-post: MISSING for chunk k => chunk k hung */
+  output_text("C");
+  output_int(k);
+  output_text(" pcall=");
+  output_int(st);
+  if (st == LUA_OK) {
+    int ii = 0;
+    long long r = lua_tointegerx(L, -1, &ii);
+    output_text(" r=");
+    if (ii)
+      output_int(r);
+    else
+      output_text("?");
+  }
+  output_text("\n");
+  lua_settop(L, 0);
+  return st;
+}
+
+static void run_lua_ladder(void) {
+  DBG(300);
+  lua_State *L = luaL_newstate();
+  if (!L) {
+    output_text("LADDER newstate=NULL\n");
+    return;
+  }
+  DBG(301);
+  ladder_one(L, "return 1", 0);                       /* RETURN1 only */
+  ladder_one(L, "return 1+2", 1);                     /* integer ADD */
+  ladder_one(L, "local x=5 return x", 2);             /* locals, MOVE */
+  ladder_one(L, "return 3*4", 3);                     /* integer MUL */
+  ladder_one(L, "local t={} return 0", 4);            /* NEWTABLE + GC */
+  ladder_one(L, "local t={} t[1]=9 return t[1]", 5);  /* SETI / GETI */
+  ladder_one(L, "local s=0 for i=1,3 do s=s+i end return s", 6); /* FORPREP/FORLOOP */
+  ladder_one(L, "local t={} for i=1,20 do t[i]=i*i end return t[20]", 7); /* full */
+  DBG(399);
+  output_text("LADDER done\n");
+}
+#endif /* LUA_CHUNK_LADDER */
+
 void domain_main(void *arg, unsigned func) {
   DBG(700 + func); /* every entry: 701 = share, 700 = run (survives a wedge) */
   if (func == CAPSTONE_DPI_REGION_SHARE) {
@@ -254,7 +324,9 @@ void domain_main(void *arg, unsigned func) {
   __asm__ volatile(".insn r 0x5b, 0x1, 0x43, x0, %0, x0" ::"r"((void *)&domain_main));
 #endif
 
-#ifdef LUA_STAGE
+#ifdef LUA_CHUNK_LADDER
+  run_lua_ladder();
+#elif defined(LUA_STAGE)
   run_lua_staged();
 #else
   run_lua();

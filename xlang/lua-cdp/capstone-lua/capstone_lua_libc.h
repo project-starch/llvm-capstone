@@ -20,6 +20,18 @@
 #include <stddef.h>
 #include <stdarg.h>
 
+/* QEMU-only capability-tag probes (csdebugprint): prints "Cap(...)" for a tagged
+ * capability and "Scalar(x)" for an untagged value, straight to the emulator
+ * console (survives a wedge/crash). Force-included, so usable in any Lua TU. Off
+ * unless -DLUA_DBG_RELSTACK. */
+#ifdef LUA_DBG_RELSTACK
+#define DBGP(x) __asm__ volatile(".insn r 0x5b, 0x1, 0x43, x0, %0, x0" ::"r"((unsigned long)(x)))
+#define DBGC(p) __asm__ volatile(".insn r 0x5b, 0x1, 0x43, x0, %0, x0" ::"r"((void*)(p)))
+#else
+#define DBGP(x) ((void)0)
+#define DBGC(p) ((void)0)
+#endif
+
 /* Predefine the guards of every hosted header Lua reaches. */
 #define _STDIO_H 1
 #define _STDLIB_H 1

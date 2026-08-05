@@ -53,7 +53,19 @@ SILICON=(-mllvm -capstone-merge-string-constants=true
 
 # Freestanding recipe for the Lua/libc/domain TUs (the header-shadow technique:
 # -nostdlibinc + empty hosted stubs + the force-included decl header).
+#
+# LUA_USE_JUMPTABLE=0 is REQUIRED on the capability target, not a tuning knob.
+# Lua's VM defaults (under __GNUC__/clang) to ljumptab.h's computed goto:
+#   static const void *const disptab[] = { &&L_OP_MOVE, ... }; goto *disptab[op];
+# that static table holds address-of-label (&&label) values, i.e. CODE capabilities
+# into the middle of luaV_execute. Under the gp-captable ABI those label-address
+# entries are NOT tagged by the .capstone_gp_initdesc mechanism (unlike data-pointer
+# and function-pointer globals), so the first opcode dispatch jumps through an
+# untagged capability and faults (cause=1 at the correct handler address). Forcing
+# the portable switch dispatch removes the code-capability table entirely. (Verified:
+# real Lua faulted at the disptab indirect jump on `return 1`; see the bringup note.)
 COMMON=(-target capstone64-unknown-elf
+        -DLUA_USE_JUMPTABLE=0
         -Xclang -target-feature -Xclang +m
         -ffreestanding -nostdlibinc -fno-builtin
         -ffunction-sections -fdata-sections -O0
@@ -67,6 +79,10 @@ STAGE_DEF=()
 [[ -n "${LUA_DBG_STAGE:-}" ]] && STAGE_DEF+=(-DLUA_DBG_STAGE)
 # LUA_SKIP_BASE=1 runs the pure-core chunk without opening the base library.
 [[ -n "${LUA_SKIP_BASE:-}" ]] && STAGE_DEF+=(-DLUA_SKIP_BASE)
+[[ -n "${LUA_DBG_RELSTACK:-}" ]] && STAGE_DEF+=(-DLUA_DBG_RELSTACK)
+# LUA_CHUNK_LADDER=1 runs the cheap->complex chunk ladder (one boot bisects the
+# hanging opcode class). Implies the DBG stage markers.
+[[ -n "${LUA_CHUNK_LADDER:-}" ]] && STAGE_DEF+=(-DLUA_CHUNK_LADDER -DLUA_DBG_STAGE)
 
 # Assert an object owns NO gp-captable globals (no .capstone_gp_initdesc). The whole
 # ABI depends on exactly one module owning globals; a silently-globals-owning support
