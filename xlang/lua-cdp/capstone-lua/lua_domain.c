@@ -308,6 +308,166 @@ static void run_lua_ladder(void) {
 }
 #endif /* LUA_CHUNK_LADDER */
 
+/* luaossl #124 reproduced through REAL Lua (userdata + __gc + GC), not a pure-C
+ * shim. Built with -DLUA_CDP_X509. This is the fidelity upgrade the interpreter
+ * bring-up unlocks: the cross-domain double-free is driven by Lua's own garbage
+ * collector calling finalizers, and revoke-on-free must catch the second owner's
+ * stale refcount access. The C X509_STORE / SSL_CTX are minimal stubs (only the
+ * memory lifecycle the bug depends on -- exactly what the pure-C shim already
+ * distilled); everything cross-domain (the userdata handles, the __gc metamethods,
+ * the GC-driven free) is now the genuine article.
+ *
+ *   store userdata __gc = xs__gc -> X509_STORE_free: rc 1->0 -> free -> REVOKE
+ *   ctx   userdata __gc = sx__gc -> SSL_CTX_free -> X509_STORE_free(cert_store):
+ *         reads/writes the refcount of the ALREADY-FREED store through the
+ *         set0-aliased (now revoked) capability -> FAULT on Capstone (caught).
+ * Control (-DLUA_CDP_NO_REVOKE): free does not revoke -> the second access
+ * completes -> "CDP-MISS survived".
+ *
+ * Marker trace: 480 enter, 481 newstate, 482 registered, 483 loaded; 500/501
+ * xs__gc (first free); 510 sx__gc pre-stale-access, 511 post (control only); 484
+ * pcall returned (control only). With revoke, 510 is the last marker. */
+#ifdef LUA_CDP_X509
+extern void *malloc(unsigned long);
+extern void free(void *);
+extern void xlang_set_no_revoke(void);
+
+#define X509_STORE_BYTES 152
+#define REFCOUNT_OFF 136 /* the refcount word ASan names in the real bug */
+
+typedef struct {
+  unsigned char *cert_store; /* set0 alias to the X509_STORE (no up-ref) */
+} MockSSL_CTX;
+
+/* X509_STORE_free: decrement refcount, free at 0. The `--(*rc)` is the access
+ * that faults when `store` has already been freed+revoked (the CDP contract
+ * point). free() here is the REVOKING free. */
+static void x509_store_free(unsigned char *store) {
+  if (!store)
+    return;
+  volatile unsigned int *rc = (volatile unsigned int *)(store + REFCOUNT_OFF);
+  if (--(*rc) == 0) /* stale READ+WRITE through a revoked cap -> FAULT */
+    free(store);
+}
+
+static int xs__gc(lua_State *L) { /* store userdata __gc (FIRST free) */
+  unsigned char **pp = (unsigned char **)lua_touserdata(L, 1);
+  DBG(500);
+  x509_store_free(*pp); /* rc 1->0 -> free -> REVOKE */
+  DBG(501);
+  return 0;
+}
+
+static int sx__gc(lua_State *L) { /* ctx userdata __gc (SSL_CTX_free, STALE) */
+  MockSSL_CTX **pp = (MockSSL_CTX **)lua_touserdata(L, 1);
+  MockSSL_CTX *ctx = *pp;
+  DBG(510);
+  x509_store_free(ctx->cert_store); /* cert_store revoked -> stale rc access -> FAULT */
+  DBG(511);
+  free(ctx);
+  return 0;
+}
+
+static int store_new(lua_State *L) {
+  unsigned char *store = (unsigned char *)malloc(X509_STORE_BYTES);
+  for (int i = 0; i < X509_STORE_BYTES; i++)
+    store[i] = 0;
+  *(volatile unsigned int *)(store + REFCOUNT_OFF) = 1; /* refcount = 1, no up-ref */
+  unsigned char **ud =
+      (unsigned char **)lua_newuserdatauv(L, sizeof(unsigned char *), 0);
+  *ud = store;
+  luaL_setmetatable(L, "x509.store");
+  return 1;
+}
+
+static int ctx_new(lua_State *L) {
+  MockSSL_CTX *ctx = (MockSSL_CTX *)malloc(sizeof(MockSSL_CTX));
+  ctx->cert_store = 0;
+  MockSSL_CTX **ud =
+      (MockSSL_CTX **)lua_newuserdatauv(L, sizeof(MockSSL_CTX *), 0);
+  *ud = ctx;
+  luaL_setmetatable(L, "ssl.context");
+  return 1;
+}
+
+/* ctx:setStore(store) -- the vulnerable set0: co-own the store, NO refcount
+ * up-ref, and keep NO Lua reference to the store userdata (so the GC frees it
+ * independently while the ctx still holds the raw C pointer). */
+static int ctx_setStore(lua_State *L) {
+  MockSSL_CTX **cud = (MockSSL_CTX **)lua_touserdata(L, 1);
+  unsigned char **sud = (unsigned char **)lua_touserdata(L, 2);
+  (*cud)->cert_store = *sud; /* alias; refcount STILL 1 */
+  return 0;
+}
+
+/* Drive GC from C so the reproduction needs no base library. */
+static int docollect(lua_State *L) {
+  lua_gc(L, LUA_GCCOLLECT, 0);
+  lua_gc(L, LUA_GCCOLLECT, 0); /* second pass: ensure queued finalizers run */
+  return 0;
+}
+
+static const char CDP_CHUNK[] =
+    "local ctx = ctx_new()\n"
+    "do local store = store_new() setStore(ctx, store) end\n"
+    "docollect()\n"  /* FIRST free: store __gc (xs__gc) -> free -> REVOKE */
+    "ctx = nil\n"
+    "docollect()\n"  /* SECOND: ctx __gc (sx__gc) -> stale refcount access -> FAULT */
+    "return 1\n";    /* reached only if the double-free SURVIVED (control) */
+
+static void reg_gc_meta(lua_State *L, const char *name, lua_CFunction gc) {
+  luaL_newmetatable(L, name);
+  lua_pushcfunction(L, gc);
+  lua_setfield(L, -2, "__gc");
+  lua_pop(L, 1);
+}
+
+static void run_lua_cdp_x509(void) {
+#ifdef LUA_CDP_NO_REVOKE
+  xlang_set_no_revoke(); /* control: free() does not revoke */
+  output_text("CDP mode: NO-REVOKE (control)\n");
+#else
+  output_text("CDP mode: REVOKE\n");
+#endif
+  DBG(480);
+  lua_State *L = luaL_newstate();
+  if (!L) {
+    output_text("CDP newstate=NULL\n");
+    return;
+  }
+  DBG(481);
+  reg_gc_meta(L, "x509.store", xs__gc);
+  reg_gc_meta(L, "ssl.context", sx__gc);
+  lua_pushcfunction(L, store_new);
+  lua_setglobal(L, "store_new");
+  lua_pushcfunction(L, ctx_new);
+  lua_setglobal(L, "ctx_new");
+  lua_pushcfunction(L, ctx_setStore);
+  lua_setglobal(L, "setStore");
+  lua_pushcfunction(L, docollect);
+  lua_setglobal(L, "docollect");
+  DBG(482);
+  int st = luaL_loadbufferx(L, CDP_CHUNK, sizeof(CDP_CHUNK) - 1, "=cdp", NULL);
+  DBG(483);
+  if (st != LUA_OK) {
+    output_text("CDP load fail: ");
+    output_text(lua_tostring(L, -1));
+    output_text("\n");
+    return;
+  }
+  st = lua_pcall(L, 0, 1, 0);
+  DBG(484); /* only reached if the stale access did NOT fault */
+  if (st == LUA_OK)
+    output_text("CDP-MISS: double-free survived (no fault)\n");
+  else {
+    output_text("CDP runtime error (unexpected): ");
+    output_text(lua_tostring(L, -1));
+    output_text("\n");
+  }
+  lua_close(L);
+}
+#endif /* LUA_CDP_X509 */
+
 void domain_main(void *arg, unsigned func) {
   DBG(700 + func); /* every entry: 701 = share, 700 = run (survives a wedge) */
   if (func == CAPSTONE_DPI_REGION_SHARE) {
@@ -334,7 +494,9 @@ void domain_main(void *arg, unsigned func) {
   __asm__ volatile(".insn r 0x5b, 0x1, 0x43, x0, %0, x0" ::"r"((void *)&domain_main));
 #endif
 
-#ifdef LUA_CHUNK_LADDER
+#ifdef LUA_CDP_X509
+  run_lua_cdp_x509();
+#elif defined(LUA_CHUNK_LADDER)
   run_lua_ladder();
 #elif defined(LUA_STAGE)
   run_lua_staged();

@@ -83,6 +83,10 @@ STAGE_DEF=()
 # LUA_CHUNK_LADDER=1 runs the cheap->complex chunk ladder (one boot bisects the
 # hanging opcode class). Implies the DBG stage markers.
 [[ -n "${LUA_CHUNK_LADDER:-}" ]] && STAGE_DEF+=(-DLUA_CHUNK_LADDER -DLUA_DBG_STAGE)
+# LUA_CDP_X509=1 reproduces luaossl #124 (cross-domain double-free) through real
+# Lua userdata/__gc/GC; LUA_CDP_NO_REVOKE=1 is the no-revoke control.
+[[ -n "${LUA_CDP_X509:-}" ]] && STAGE_DEF+=(-DLUA_CDP_X509 -DLUA_DBG_STAGE)
+[[ -n "${LUA_CDP_NO_REVOKE:-}" ]] && STAGE_DEF+=(-DLUA_CDP_NO_REVOKE)
 
 # Assert an object owns NO gp-captable globals (no .capstone_gp_initdesc). The whole
 # ABI depends on exactly one module owning globals; a silently-globals-owning support
