@@ -1,5 +1,65 @@
 # The silicon blocker — everything known
 
+## 2026-08-05 (night) — AUDIT: four of the day's claims RETRACTED. Read this before the two sections below.
+
+An adversarial audit refuted most of what this day concluded. Verified against primary sources.
+
+**1. RETRACTED: "matmult_int, the canonical known-good control, wedged, therefore the 65536
+bitstream is a REGRESSION."** The premise is false. `matmult_int` is a documented silicon
+**miscompile**, not a control: commit `03ca1ea85873` records it returning **1166210317 vs
+774662735** on silicon while QEMU-correct, and `ISSUES.md:28` lists it under R-1 as
+**unmeasurable**. `fpga-silicon-measurements-for-paper.md:232` says `cscall` hangs at every
+reachable config. There is also **no prior matmult_int datum on either current bitstream** (last
+result 2026-07-25/27 on `working-caplifive-captype-fixed.bit`), the monitor changed between that
+run and this one, and the boot had **no returning domain** — so by our own rule it carries no
+verdict. **There is no evidence of a bitstream regression. Do not repeat that claim.**
+
+**2. RETRACTED: the "perturbing the cap-table build kills it in share #1" table row for the
+ladder rungs.** `mtvctl.dom` is **byte-identical** to `matmult_int` built with
+`INTERP_DOMAIN_MTVEC` on (`19261bd67e758992`), and `r_matmult_int.dom` is byte-identical to the
+knob-off build (`919adb418f3a1074`). Both die at `SHA5`. So the mtvec knob is NOT what killed
+them: **every `lpc`-hosted domain died in share #1 today, with and without any knob** — which
+makes the HOST the untested variable, not the glue. The `INTERP_DOMAIN_MTVEC` install also sits
+at `start-gp-captable-interp.S` inside `test:`, i.e. OUTSIDE `BUILD_GP_CAPTABLE_INTERP`, so it
+contradicts the discriminator the row was built on. The SQLite half of that table does hold at
+the artifact level (disassembly confirms `sq_v1`/`sq_d1` touch the build and `sq_v2` does not),
+but it is n=1 per image and the S01 "any perturbation flips it" family remains a live
+alternative.
+
+**3. RETRACTED as a proof: "ENT1 with no ENT2 proves control left M-mode, so the domain owns the
+wedge."** `ENT1` is NOT the last monitor-side operation. Between the `capstone_report` that emits
+it and the `domcall`, the generated monitor runs **~95 M-mode instructions** including ~26 memory
+operations (`sbi_capstone_dom.c.S:2024-2119`) — register scrubs, 17 `ccsrrw`+`stc` capability
+saves, 9 CSR saves reaching below the allocated frame. Any of those can fault or stall in M-mode.
+`privM=1` cannot discriminate either: `csr_regfile.sv` never assigns `priv_lvl_d` on a domain
+switch, so a domain runs at the monitor's privilege. **Fix before relying on it: emit a marker
+immediately before the `domcall`, or have the GLUE emit its own first-instruction marker so the
+discriminator lives on the domain side.** The identical defect applies to the `SHA5` comment.
+
+**4. The committed-pc paragraph below has FALSE evidence.** It claims `0x87c` on every wedge. The
+captures say otherwise: `stages-run5` has **no pc at all** (it predates the reader),
+`stages-run9`/`stages-run10` read **`0x2`**, and only `run6/7/8` read `0x87c`. The conclusion
+"not diagnostic" survives on stronger grounds — `0x2` is not a plausible pc, and the **valid bit
+was never read**: `commit_instr_id_commit[0].valid` is `debug_byte_sel=3'b110, reg_sel=0`, i.e.
+**switch 192**, absent from both `probe_wedge_regs.py` and the runner. Read switch 192 with the
+pc; if it is 0 the bytes are a stale commit slot.
+
+**Two live instrument bugs found by the audit, unrelated to the above:**
+* `run_sqlite_stages_fpga.py` labels switch 250 `{overflow,0,head[9:8]}`. On the **65536**
+  bitstream that selector is `rev_node_head_ex[15:8]` — the packed encoding was removed because
+  head went 10->16 bits. **Every `sw=250` reading taken today is mislabelled.**
+* No capture records which bitstream was physically resident. The runner compares against
+  `FPGA_BITSTREAM` but never writes the result into the transcript — and that is exactly the
+  variable the regression claim turned on. Persist it.
+
+**Correction to the previous commit's wording:** `sbi_capstone_dom.c.S` is NOT "checked into the
+component tree" — it is gitignored (`components/opensbi/lib/sbi/.gitignore`). It is a generated,
+untracked build product. The staleness mechanism is unaffected and still real: `Makefile:89`
+lists only `%.c` as prerequisite, and the sibling `package/capstone-sbi-domain/Makefile:10`
+writes the same rule *correctly*, so it is an omission rather than a design.
+
+---
+
 ## 2026-08-05 (late) — THE GLUE RUNS DURING REGION-SHARE. Every glue-knob bisection is invalid.
 
 **The domain executes its entry glue THREE times, not once: once per `shared_region_annotated`
