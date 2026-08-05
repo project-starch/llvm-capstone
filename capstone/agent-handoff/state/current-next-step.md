@@ -7,6 +7,46 @@
 > conclusions recorded below were later retracted there.
 
 
+## 2026-08-05 (later) — BOARD IS ON `caplifive_65536_nodes.bit`. Read this before any run.
+
+**The resident bitstream changed.** It carries the 65536-entry revocation-node pool **and** the
+operand-forwarding fix. Two consequences, both of which cost boots today:
+
+1. **Set `FPGA_BITSTREAM=caplifive_65536_nodes.bit`.** The drivers default to
+   `caplifive_fixed_forward.bit` and will HARD STOP otherwise — that is the gate working.
+2. **The device tree must match the bitstream's memory map.** This bitstream moved
+   `CAP_TAG_MEM_BASE` `0xBC3C_0000` → `0xBC2D_2D2D`, so the DTS value became
+   `reg = <0x0 0x80000000 0x0 0x3c2d2000>`. With the old value Linux is handed shadow-tag memory
+   as RAM and dies in early init on every boot, just after `riscv-intc` — looking exactly like a
+   dead board. Recipe and verification: `ref/HOW-TO-LAUNCH-ON-FPGA.md`, "A NEW BITSTREAM CAN MOVE
+   THE MEMORY MAP". **Re-derive after every reflash.** The fix lives in UNTRACKED submodule files,
+   so it does not survive a reset — that manual section is the durable copy.
+
+**Do NOT extend the boot window to work around a stall.** Doing that hid the map mismatch for two
+boots. A fixed window is what makes a stall read as a stall.
+
+### SQLite status as of this point
+
+* **FIXED, and now the default:** the string primitives build at `-O1`
+  (`SQLITE_SUPPORT_OPT_LEVEL`). At `-O0` `strlen` re-loads its capability from a stack slot every
+  iteration and silicon sporadically returns 1 — stage 13 gave 15, then 26, then hung across three
+  boots of one source, where QEMU always gives 36. At `-O1` silicon returns 36. Whole-image `-O1`
+  is blocked by **C-17** (`i128 = CapstoneISD::SELECT_CC` not selectable).
+* **STILL BLOCKED:** stage 10 (`MallocInit` + `RegisterBuiltinFunctions`) never returns, on every
+  build. Stages 0, 9, 11–16, 18 return.
+* **RETRACTED — do not repeat this claim:** "stage 10 does not fault, because the trap handler did
+  not fire." The handler `.Ldomain_trap` is `j .Ldomain_returned`, which reloads the return
+  capability with `ldc(t1, sp, 48)` from the **glue's** frame; a trap leaves `sp` in the faulting
+  callee's frame, so the handler faults again and the loop is self-sealing (the exit path also
+  does `li sp, 0`). **A fault inside the handler is indistinguishable from the handler never
+  firing, so stage 10 is UNTESTED for faulting.**
+* **Next real step:** a handler that cannot itself fault — no `sp` dependence, recovering state
+  from `cscratch` — returning via `mret`. Note `mret` is only safe after a *real* trap, which sets
+  `mstatus.mpp = M` (`csr_regfile.sv:2075`); a synthetic bare `mret` would drop the domain to
+  U-mode because the monitor's `dom_seal[3]` has MPP=0.
+
+---
+
 ## 2026-08-05 — READ THIS FIRST. The SQLite blocker is now a REPRODUCER, not a diagnosis.
 
 **R-14 and R-16 are FIXED** in silicon by `caplifive_fixed_forward.bit` (the operand-forwarding
