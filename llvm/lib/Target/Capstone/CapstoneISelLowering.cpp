@@ -7721,13 +7721,14 @@ bool llvm::isCapstoneIntegerOffset(SDValue V) {
       isa<ConstantSDNode>(V.getNode()))
     return true;
 
-  // Scaled-index GEP pattern: (shl (sext/zext i64_val), ShiftAmt)
-  if (Opc == ISD::SHL && V.getValueType() == MVT::i128) {
-    unsigned InnerOpc = V.getOperand(0).getOpcode();
-    return InnerOpc == ISD::SIGN_EXTEND || InnerOpc == ISD::ZERO_EXTEND ||
-           InnerOpc == ISD::ANY_EXTEND ||
-           InnerOpc == ISD::SIGN_EXTEND_INREG;
-  }
+  // A left-shift producing an i128 is a scaled integer offset: a capability is
+  // never the operand of a shift, so an `shl i128` is always an offset, not a
+  // pointer. Recognising only shl(extend,...) missed shapes like shl(load,...)
+  // and the shl(sub(0,ext),...) that `p - (n+1)` lowers to, which then wrongly
+  // took the ptr-ptr cursor-difference path in lowerSUB and dropped the
+  // capability's tag (untagged cincoffset -> miscompiled pointer arithmetic).
+  if (Opc == ISD::SHL && V.getValueType() == MVT::i128)
+    return true;
 
   if (const auto *Ld = dyn_cast<LoadSDNode>(V)) {
     ISD::LoadExtType ExtType = Ld->getExtensionType();
@@ -7863,8 +7864,12 @@ static SDValue lowerSUB(SDValue Op, SelectionDAG &DAG,
           narrowOffsetForCIncOffset(Offset, DAG, Subtarget, DL, ExtOpcode);
     }
 
+    // Fallback: any other integer-offset shape. Its value lives in the low XLen
+    // bits (byte offsets fit in XLen), so truncate rather than fall through to
+    // the generic i128 expansion, which would ptrtoint(lcc)/scalar-subtract/
+    // cincoffset-a-scalar and drop the base capability's tag.
     if (!XLenOffset)
-      return SDValue();
+      XLenOffset = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Offset);
 
     SDValue Zero = DAG.getConstant(0, DL, XLenVT);
     SDValue NegXLen = DAG.getNode(ISD::SUB, DL, XLenVT, Zero, XLenOffset);
