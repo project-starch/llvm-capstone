@@ -46,6 +46,41 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-05 — QEMU DIFFERENTIAL: both images are correct under QEMU; only the board differs
+
+The control that should have been run first, and costs no board time.
+
+    QEMU   uc.dom  stage 11  ->  obs=1517161237   CORRECT
+    QEMU   dp0.dom stage 11  ->  obs=1517161237   CORRECT
+    board  uc.dom  stage 11  ->  obs=1517161237   CORRECT
+    board  dp0.dom stage 11  ->  NO RETURN
+
+Same two images, same host, same stage, same software stack. QEMU executes both correctly and
+identically; the board executes one and hangs on the other. **The divergence is board-only.**
+
+**What this does and does not license.**
+* It DOES rule out a pure compiler/glue defect that would be platform-independent: if `dp0`
+  were simply miscompiled, QEMU would fail too, and it does not.
+* It does NOT establish a hardware *bug*. QEMU is our own model and is permissive in places
+  the RTL is not (that asymmetry has caused false conclusions here before — the `delin`
+  idempotence case). The board may be behaving correctly while our software relies on
+  something it does not guarantee, and the difference could equally be timing rather than
+  function.
+
+**Honest status of the three questions.**
+* *Is it a hardware bug?* NOT ESTABLISHED. There is a silicon-specific divergence; the
+  attribution is unproven.
+* *Is there a minimal repro?* NO. It is a pair of 1.6 MB SQLite images. Every attempt to
+  shrink it failed to reproduce: global count to 208 carves, `.text` to 1,324,372 bytes,
+  carves to 1408, all correct.
+* *Is there a root cause?* NO. Seven mechanisms proposed and all seven retracted.
+
+**What is solid and hand-over-ready:** `uc` returns and `dp0` hangs on the board, reproducibly,
+in one boot; both are correct under QEMU; the source diff is one never-called function; and the
+following variables are tested and EXCLUDED — `.gct` contents, carve count, image size, address
+of the executed code, amalgamation rewrite, run position, revocation-node pool exhaustion,
+bounds representability, and operand forwarding.
+
 ### 2026-08-05 — RETRACTION: the debug-mux "mechanism" is NOT discriminating
 
 **Retracted:** "a store page fault (mcause 15) was taken and the core is blocked on a rev-node
