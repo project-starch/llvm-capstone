@@ -91,6 +91,8 @@ STAGE_DEF=()
 # the revoke case; +LUA_CDP_NO_REVOKE runs all cases as the control.
 [[ -n "${LUA_CDP_UAF:-}" ]] && STAGE_DEF+=(-DLUA_CDP_UAF -DLUA_DBG_STAGE)
 [[ -n "${CDP_UAF_CASE:-}" ]] && STAGE_DEF+=(-DCDP_UAF_CASE="${CDP_UAF_CASE}")
+# LUA_CDP_OPENSSL=1 reproduces lua-openssl #141 (close-then-__gc double-free).
+[[ -n "${LUA_CDP_OPENSSL:-}" ]] && STAGE_DEF+=(-DLUA_CDP_OPENSSL -DLUA_DBG_STAGE)
 
 # Assert an object owns NO gp-captable globals (no .capstone_gp_initdesc). The whole
 # ABI depends on exactly one module owning globals; a silently-globals-owning support

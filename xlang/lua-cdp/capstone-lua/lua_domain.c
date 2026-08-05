@@ -740,6 +740,8 @@ void domain_main(void *arg, unsigned func) {
 
 #ifdef LUA_CDP_UAF
   run_lua_cdp_uaf();
+#elif defined(LUA_CDP_OPENSSL)
+  run_lua_cdp_openssl();
 #elif defined(LUA_CDP_X509)
   run_lua_cdp_x509();
 #elif defined(LUA_CHUNK_LADDER)

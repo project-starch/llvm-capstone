@@ -69,22 +69,36 @@ pointer, deref after GC), plus 2 double-frees (`LUA_CDP_X509` luaossl-124 two-us
 per case are the real bug's ASan values; the on-Capstone catch is offset-independent.
 
 Results on QEMU (REVOKE = fault at the stale access = CAUGHT; CONTROL = completes =
-MISS):
+MISS). Every case ran individually with revoke ON, and the 11 UAF controls ran in one
+no-revoke boot:
 
 | case | shape | control | revoke |
 |------|-------|---------|--------|
-| luaossl-124 (X509 dblfree)   | 2 userdata  | MISS | CAUGHT |
-| lua-openssl-141 (ctx dblfree)| close+__gc  | MISS | [pending] |
-| curl_multi_backptr (case 0)  | UAF W@64    | MISS | CAUGHT |
-| ldbus_message (case 2)       | UAF R@0     | MISS | CAUGHT |
-| ffi_closure, lgi_cairo, lgi_garray, lmdb, luv_costate, pgconn, sdl_window, tvbuff, uv_fs | UAF | MISS | same generic code, offset-independent catch -- run incrementally |
+| luaossl-124 (X509 dblfree)    | 2 userdata  | MISS | CAUGHT |
+| lua-openssl-141 (ctx dblfree) | close+__gc  | MISS | CAUGHT |
+| curl_multi_backptr            | UAF W@64    | MISS | CAUGHT |
+| ffi_closure                   | UAF R@32    | MISS | CAUGHT |
+| ldbus_message                 | UAF R@0     | MISS | CAUGHT |
+| lgi_cairo_region              | UAF R@4     | MISS | CAUGHT |
+| lgi_garray                    | UAF R@0     | MISS | CAUGHT |
+| lmdb_value                    | UAF R@0     | MISS | CAUGHT |
+| luv_costate                   | UAF R@24    | MISS | CAUGHT |
+| pgconn                        | UAF R@376   | MISS | CAUGHT |
+| sdl_window                    | UAF R@0     | MISS | CAUGHT |
+| tvbuff                        | UAF R@16    | MISS | CAUGHT |
+| uv_fs                         | UAF R@0     | MISS | CAUGHT |
 
-The 11 UAF controls all pass in ONE boot (`LUA_CDP_NO_REVOKE` runs every case
-fresh-state -> all "MISS survived" -> "UAF-LADDER done"). Revoke faults abort QEMU
-(the strict untagged-cincoffset assert -- the corpus's catch route), so each revoke
-case is its own boot; the 9 not-yet-individually-run cases are the identical
-parameterized code with different constants and WILL catch (case 0 write@offset and
-case 2 read@0 already cover both the cincoffset and direct-load shapes).
+**13/13 CAUGHT under revoke; 13/13 MISS under the no-revoke control** -- matching the
+pure-C shim corpus's Capstone result (13/13), now driven through real Lua's GC. The
+11 UAF controls pass in ONE boot (`LUA_CDP_NO_REVOKE` runs every case fresh-state ->
+all "MISS survived" -> "UAF-LADDER done"); each revoke case is its own boot (the
+untagged-access catch aborts QEMU -- the corpus's assert-on-untagged route). Both
+write@offset and read@0/@offset shapes catch (cincoffset and direct-load).
+
+Two dispatch/knob bugs were found and fixed during this run: LUA_CDP_OPENSSL was
+initially missing from both the domain_main dispatch and the build-script knob, so
+the openssl build silently ran the staged demo (result=400) -- caught because its
+markers were absent (free=0 fault=0), re-run after the fix.
 
 ## Reproduce
 
