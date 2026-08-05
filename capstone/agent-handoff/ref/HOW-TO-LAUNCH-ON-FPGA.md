@@ -94,8 +94,9 @@ reflash is stale** and must be re-checked before it is relied on.
   it to a dotfile (an older revision of this file suggested
   `~/.config/capstone/fpga-board-url`) is still a leak. Ask the user out-of-band each
   time; in committed text write `<FPGA-CONSOLE-URL>`.
-- A local `.bit` is NOT needed — re-flash names the **server-side** bitstream
-  `working-caplifive-captype-fixed.bit`.
+- A local `.bit` is NOT needed — re-flash names the **server-side** bitstream. The resident one since the
+  2026-08-04 reflash is **`caplifive_fixed_forward.bit`** (carries the operand-forwarding
+  fix). The drivers gate on it via `FPGA_BITSTREAM`, default `caplifive_fixed_forward.bit`.
 
 ## UART TRANSFER IS RETIRED — BAKE EVERY PROGRAM INTO THE IMAGE
 
@@ -526,7 +527,8 @@ on exactly that stretch and read as a wedge. Set `SQLITE_RUN_IDLE` well above th
 ## Non-negotiables
 
 Lock → power-cycle → run → **power off + unlock in `finally`** (never leave it
-locked/on). Verify the resident bitstream is `working-caplifive-captype-fixed.bit`
-before measuring. `C_PRINT` (`csrw 0x800`) goes to the **RTL trace**, not the UART —
+locked/on). Verify the resident bitstream is `caplifive_fixed_forward.bit` before measuring
+(it replaced `working-caplifive-captype-fixed.bit` at the 2026-08-04 reflash; the
+drivers enforce this and hard-stop on a mismatch). `C_PRINT` (`csrw 0x800`) goes to the **RTL trace**, not the UART —
 don't use it as a UART probe. Signal of a live domain = the controller prints its
 first line (that's AFTER `IOCTL_DOM_CREATE` returns).

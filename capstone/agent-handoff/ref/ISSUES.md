@@ -1823,11 +1823,19 @@ out-of-bounds fetch, and loops forever in M-mode with interrupts off and no UART
 
 **Every "no trap was reported, so it is not a fault" inference in this project is void.**
 
-**Fix needs three parts** (a trap keeps the domain's PCC, so `mtvec` must be inside domain code):
-a handler in the glue at a fixed offset; `dom_seal[1]` set to it in `create_domain`; and a
-readback path — the handler can recover the data capability via `ccsrrw(sp, cscratch, x0)` and
-store `mcause`/`mepc`/`mtval` into a reserved `dom_data` slot, but the monitor only sees them if
-the handler can complete the domain return.
+**CORRECTED 2026-08-05: the fix ALREADY EXISTS and needs NO monitor change.** An earlier
+version of this entry said it required a glue handler, `dom_seal[1]` in `create_domain`, and a
+new readback path. That is wrong and would send someone to write a monitor patch that is not
+needed. `start-gp-captable-interp.S:760,824` already contains, behind **`INTERP_DOMAIN_MTVEC=1`**:
+`lla t0, .Ldomain_trap; csrw mtvec, t0` — set from INSIDE the domain (M-mode, so `csrw` is
+permitted), with `.Ldomain_trap` jumping to `.Ldomain_returned`, which already captures `mcause`
+and `mtval`. Verified in a built image: `csrw mtvec, t0` at `0x102e4`, absent without the flag.
+
+So M-1 is fixed by **building with `INTERP_EXTRA_CFLAGS=-DINTERP_DOMAIN_MTVEC=1`**. What is NOT
+yet established is whether the handler is reachable after a real fault — it touches
+`sp`/`cscratch`, so a fault that corrupted those would make it fault again and look identical to
+no handler. **Verify with `tagf`** (`fpga-repros/RTL-store-user-metadata/`, a deliberate fault):
+returning with a cause proves the handler works.
 
 Worth fixing on its own merits: **any** domain that faults for any reason is currently
 undebuggable and takes the core with it.

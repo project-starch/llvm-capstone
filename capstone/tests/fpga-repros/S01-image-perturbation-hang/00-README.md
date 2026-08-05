@@ -29,7 +29,7 @@ tested directly and **excluded** — please do not re-derive them:
 | 1 | `.gct` (static capability table) size/contents | `dvar` (one dead **integer** global) has `.gct` **unchanged** at 108 bytes and hangs |
 | 2 | number of globals / carves | synthetic scan 8 to 208 carves all correct; `dvar` at 182 carves hangs |
 | 3 | image size | `sz2048`/`sz8192`/`sz16384` are **all exactly** 1,624,216 bytes (identical to `dp0`) and all hang — `.text` slack absorbs the padding |
-| 4 | address of the executed code | `dp0` has `sqlite3Strlen30` at the **same** address `0x16afc` as `uc` |
+| 4 | address of the executed code | **PARTIAL — do not treat as a clean exclusion.** `sqlite3Strlen30` is at the same address `0x16afc` in both, but it *calls* `strlen`, which moves, and an immediate inside it differs (`addi a1,a1,0xdc` vs `0x100`). The executed instruction stream is **not** identical. |
 | 5 | the amalgamation rewrite | `dp0`'s `sqlite3-capstone.c` is **byte-identical** to `uc`'s |
 | 6 | run position / boot health | `uc:11` returns at position 1; `dp0:11` hangs at position 1 **and** at position 4 behind a returning control |
 | 7 | revocation-node pool exhaustion | debug mux: `rev_node_head` = 221 of 1021, `overflow=0` |

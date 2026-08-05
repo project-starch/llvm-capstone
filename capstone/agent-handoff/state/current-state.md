@@ -2,6 +2,49 @@
 
 Minimal snapshot. Read first in every session.
 
+## WHERE THE PROJECT ACTUALLY IS (2026-08-05) — read this before anything below
+
+**Board bitstream is `caplifive_fixed_forward.bit`** (reflashed 2026-08-04, carries the
+operand-forwarding fix `capstone-ariane 7aac52f93`). Every board result recorded BEFORE
+2026-08-04 was measured on the old bitstream and must be re-checked before being relied on.
+
+**FIXED and verified on silicon**
+* **R-14** and **R-16** — both were the same operand-forwarding bug. `k1200` and `r14lp` now
+  return 4; the R-16 reproducer now enters. Packages archived / kept only as acceptance tests.
+* **Sporadic wrong `strlen`** — at `-O0` `strlen` re-loaded its string capability from a stack
+  slot every iteration and silicon sporadically returned 1. Stage 13 gave 15, then 26, then hung
+  across three boots of one source; QEMU always 36. With the string primitives at `-O1` silicon
+  returns 36. `SQLITE_SUPPORT_OPT_LEVEL` now defaults to `-O1`.
+
+**OPEN, and these are the live ones**
+* **Stage 10 hangs — the SQLite blocker.** `sqlite3MallocInit()` +
+  `sqlite3RegisterBuiltinFunctions()`. Every current build, first position, fresh boot, controls
+  returning in the same boot. Stages 0, 9, 11-16, 18 return. Refuted as causes: the wrong
+  `strlen` (fixed, stage 10 still hangs) and a masked fault (hangs with a trap vector installed).
+* **R-17** — ANY perturbation of the SQLite image makes it hang. Nine perturbations, all hang;
+  only unmodified builds return; both correct under QEMU. Nine variables tested and excluded.
+  Reproducer: `capstone/tests/fpga-repros/S01-image-perturbation-hang/`.
+* **M-1** — domains run with `mtvec = 0`, so a fault vectors to pc=0 with the domain's PCC still
+  installed and loops forever: **a trap and a hang are the same observation**. Fix already exists
+  behind `INTERP_DOMAIN_MTVEC=1` in the glue (no monitor change). Handler reachability after a
+  real fault is unverified — check with `tagf`.
+* **C-17** — `Cannot select: i128 = CapstoneISD::SELECT_CC` blocks whole-image `-O1`.
+
+**METHOD WARNINGS — these cost the most time on 2026-08-04/05 (seven retractions)**
+* **Any instrumentation of the SQLite image changes its behaviour.** Adding globals entry-stalls
+  it; DCE removing globals changes which code hangs; a clamp leaving `.capstone_gp_initdesc`
+  byte-identical still flipped an unrelated stage. Gate on the ARTIFACT, never on the flag.
+* `SQLITE_EXTRA_DEFS` does **not** reach the amalgamation — `DOMAIN_EXTRA_DEFS` does. The staged
+  dispatch sits behind `#ifdef CAPSTONE_SQLITE_STAGE`; without it every `dom:NNN` selector is
+  silently ignored and the full workload runs. Three sessions were lost to this.
+* **A returned value is not a pass** — check it against the expected number. Stages 13 and 16
+  were recorded as passing while returning wrong answers.
+* **Position matters**: a verdict needs a control that RETURNS in the same boot, and the shipped
+  freshness gate only checks the canonical `sqlite_silicon.dom`.
+* Keep typed console lines short — the UART RX FIFO silently truncates (`sh()` now caps at 120).
+
+Full trail: `ref/SILICON-BLOCKER.md` (top sections), `ref/ISSUES.md` (R-17, M-1, C-17).
+
 ## HOW PROGRAMS REACH THE BOARD CHANGED (2026-08-03) — UART TRANSFER IS RETIRED
 
 **Never ship a program to the board over the UART console again.** Bake it into the buildroot

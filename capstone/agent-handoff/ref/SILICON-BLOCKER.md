@@ -46,7 +46,42 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
-### 2026-08-05 — the wrong-`strlen` chain, and why `-O1` (the cheapest fix) cannot be built
+### 2026-08-05 (LATER, SUPERSEDES THE SECTION BELOW) — `-O1` IS buildable and FIXES the wrong
+### `strlen`; stage 10 still hangs WITH a working trap vector
+
+Two board results after the section below was written. **Read these first; the section below is
+kept for its measurements but its title and conclusion are wrong.**
+
+**A. The wrong `strlen` is FIXED, and `-O1` was always buildable.** Whole-image `-O1` hits C-17,
+but `SQLITE_SUPPORT_OPT_LEVEL` scopes `-O1` to the string primitives and builds fine. At `-O0`
+`strlen` re-loads its string capability from a stack slot with `ldc` every iteration; at `-O1`
+the pointer stays in a register (zero `ldc` in the loop).
+
+    board  uc:13  (-O0)   15 -> 26 -> hang   across three boots of the SAME source
+    board  so1:13 (-O1)   36 CORRECT         measured twice, control passing in both boots
+    QEMU   both            36 CORRECT
+
+**`SQLITE_SUPPORT_OPT_LEVEL` now DEFAULTS to `-O1`** (`build-sqlite-silicon.sh`, commit
+`6960086d7f84`). This is a real defect fixed, not a workaround.
+
+**B. It does NOT fix stage 10, and stage 10 is NOT a masked fault.** With strings at `-O1`,
+stages 11 and 13 return correctly and stage 10 still never returns. So the chain
+"wrong `strlen` -> wrong hash -> corrupt chain -> hang" is **REFUTED on its last link**.
+
+Further: the glue already contains a domain trap handler behind **`INTERP_DOMAIN_MTVEC=1`**
+(`start-gp-captable-interp.S:760,824` — `csrw mtvec` to `.Ldomain_trap`, which jumps to the
+normal return path that already captures `mcause`/`mtval`). Built with it (`csrw mtvec, t0`
+verified present at `0x102e4`, absent in the control image), **stage 10 still hung**. A fault
+would have returned with a cause. So stage 10 is a genuine non-terminating loop, or is stuck
+somewhere the handler cannot reach.
+
+**NOT yet established:** that the handler is reachable at all. `.Ldomain_trap` jumps to
+`.Ldomain_returned`, which touches `sp`/`cscratch`; if a fault corrupted those the handler would
+fault again and look identical. **Settle it with the M-1 repro `tagf`** (deliberate fault) built
+with `INTERP_DOMAIN_MTVEC=1`: if `tagf` returns with a cause the handler works; if it still hangs
+the handler is broken and stage 10 remains untested. **That one boot is the next step.**
+
+### 2026-08-05 (SUPERSEDED — title is wrong, see above) — the wrong-`strlen` chain
 
 **Aimed at the goal — landing SQLite — not at the divergence.**
 
