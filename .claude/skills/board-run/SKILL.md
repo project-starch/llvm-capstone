@@ -206,6 +206,27 @@ with no rebuild in between. The discriminator that settled it: the variable was 
 not the firmware — diff what actually changed on our side before spending a rebuild or a
 reflash.
 
+**THE BOOTROM BANNER IS THE FIRST DISCRIMINATOR. Check it before suspecting anything you built.**
+
+The FPGA bootrom prints, on power-on, BEFORE the JTAG firmware load:
+
+```
+Hello World!
+Hit any key to enter update mode .. booting!
+init SPI / SPI initialized! / initializing SD...
+```
+
+In a healthy run this appears at UART events ~25-28, ahead of `emit gdb_start` and well ahead of
+`monitor load_image`. **It is emitted before your firmware is written to DDR, so if it is
+ABSENT the fault is upstream of everything you built** -- device tree, `.dom` staging, monitor,
+`.c.S` regeneration, branch, image size. Do not bisect a build against it.
+
+    grep -c "Hello Wo" <run.log>     # 0 with power-on in the log => board/console serial fault
+
+On 2026-08-05 a session went from "the board will not boot" through a bitstream reflash, two
+device-tree reverts, a firmware rebuild and a monitor bisection before anyone checked this. The
+banner was absent the whole time; the console was at fault, which the board owner confirmed.
+
 **Check the console is actually up before diagnosing anything.** On 2026-08-05 the backend
 returned **HTTP 502** and a session was spent diagnosing "the board will not boot" — reflashing,
 reverting the device tree, rebuilding firmware, bisecting the monitor — against a console that
