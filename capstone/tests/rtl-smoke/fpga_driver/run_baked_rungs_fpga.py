@@ -27,6 +27,7 @@ from fpga_driver import config as C                                    # noqa: E
 from fpga_driver.fpga_console import FpgaConsole                       # noqa: E402
 from fpga_driver.safe_cleanup import (release_board, hard_exit,        # noqa: E402
                                       install_release_on_signal)
+from fpga_driver.run_sqlite_baked_fpga import _hash_name  # noqa: E402
 from fpga_driver.run_ladder_perf_fpga import (cold_boot, nvbit,        # noqa: E402
                                               install_resilient_emit)
 
@@ -34,7 +35,16 @@ URL = os.environ.get("FPGA_URL")
 if not URL:
     raise SystemExit("FPGA_URL not set")
 IMG = pathlib.Path(os.environ["FPGA_FW"])          # KeyError on purpose: never default the FW
-IMG_NAME = os.environ.get("FPGA_FW_NAME") or "fw_payload_fpga_up_gpfree.bin"
+# NAME THE STORED IMAGE BY CONTENT, never by a fixed filename.
+#
+# This used to default to "fw_payload_fpga_up_gpfree.bin" -- a single slot that every run
+# overwrote. Two consequences, both bad for an A/B: the board's image store cannot tell two
+# firmwares apart, and the reassuring "19563528 bytes written" line proves nothing about WHICH
+# firmware reached DDR, because that byte count was identical across every build on 2026-08-05.
+# A content hash makes the loaded image self-identifying and lets an unchanged firmware reuse
+# the stored upload instead of re-sending ~19 MB. This is the stale-store trap cold_boot's own
+# docstring warns about, and the other runners already avoid it.
+IMG_NAME = os.environ.get("FPGA_FW_NAME") or _hash_name(IMG)
 CTL = os.environ.get("BAKED_CTL") or "/test-domains/lpc"
 RUNGS = (os.environ.get("BAKED_RUNGS") or "clp1 clp8").split()
 TIMEOUT = float(os.environ.get("BAKED_TIMEOUT") or 120)
