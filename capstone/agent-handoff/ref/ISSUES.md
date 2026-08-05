@@ -1782,6 +1782,28 @@ use1 reads slot 1. Both pass => the fault needs two live slots. use0 fails alone
 building a 2-entry table is itself fatal, and `INTERP_BUILD_LIMIT=1` then separates the
 second split/store from the table split.
 
+### C-17 — `i128 SELECT_CC` is not selectable; the SQLite domain cannot build at `-O1` `OPEN — RECURRENCE`
+
+    fatal error: error in backend: Cannot select:
+      t88: i128 = CapstoneISD::SELECT_CC t9, Constant:i64<10>, seteq:ch, t93, t92
+
+Building the SQLite domain with `SQLITE_OPT_LEVEL=-O1` crashes the backend. A `SELECT_CC`
+producing an **i128** (a capability) has no selection pattern. `-O0` never forms the select,
+which is why `OPT=${SQLITE_OPT_LEVEL:--O0}` (`build-sqlite-silicon.sh:41`) has always been the
+SQLite default — the ladder rungs, by contrast, build at `-O1`.
+
+**This is a RECURRENCE, not a new bug.** `ISSUES.md` already records an i128 `SELECT_CC` crash
+in the stage-30..34 work ("Its first attempt built nothing (i128 `SELECT_CC`) ... both are now
+fixed"). Either that fix was shape-specific or it regressed; the earlier entry does not say
+which shape it covered. **Check the previous fix before writing a new one.**
+
+The shape is ordinary and will recur elsewhere: `sqlite3Strlen30` is
+`if( z==0 ) return 0; return 0x3fffffff & (int)strlen(z);` — a null check on a pointer feeding a
+masked result is exactly what forms `select_cc` on a capability at `-O1`.
+
+**Why it matters beyond the crash:** `-O1` is the cheapest available shot at the R-17 blocker
+(see below), and this is what blocks it.
+
 ### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST`
 
 **A trap and a hang are the same observation from outside.** This is not the SQLite blocker; it
@@ -1842,6 +1864,29 @@ reads byte-identical to the hanging run (`sw=255` `0x8f`, `sw=224` `0xff`, `sw=2
 **Seven mechanisms were proposed and all seven retracted** during 2026-08-04/05. The recurring
 cause was that every intervention which could observe the system also changed its behaviour.
 Full trail in `ref/SILICON-BLOCKER.md`.
+
+**A BETTER PROBE THAN THE HANG — sporadic wrong `strlen` results (2026-08-05).** Stages that
+*return* are already wrong, which is cheaper and more bisectable than a hang:
+
+    stage 13   board 15   expected 36 (5+8+11+12)    QEMU 36  CORRECT
+    stage 16   board 124  expected 128 (128*5 & 0xff) QEMU 128 CORRECT
+
+Stage 16 calls `strlen` on the **same** literal `"alpha"` 128 times and totals 636 instead of
+640 — **4 of 128 calls returned 1**. So it is **sporadic (~3%), not length-dependent**; stage
+13's `15 = 5+8+1+1` is the same effect at 2 of 4.
+
+At `-O0` `strlen` re-loads the string capability with `ldc` **from a stack slot on every
+iteration** (`ldc a0,0x0(a0)` → `cincoffset` → `lbu`, `strlen` at `0x14fc1c` in `uc`). At `-O1`
+it would stay in a register — but `-O1` cannot build (see **C-17**).
+
+**INFERRED, NOT ESTABLISHED:** wrong `strlen` → wrong hash in `sqlite3InsertBuiltinFuncs` →
+corrupt chain → the stage-10 hang. Every link is measured *except* that last one. Do not treat
+stage 10 as explained.
+
+**CONFLICT that must be resolved before building on any of this:** `SILICON-BLOCKER.md` §0a8
+records `stage 13 rc=0x24` = **36, CORRECT**, after the unaligned-copy fix, and states that
+stages 11-14 are a *resolved* bug. Today's `f10` returns **15**. Either `f10` predates that fix,
+or it regressed. Re-run stage 13 on a current build before trusting either number.
 
 **Next:** ask whether the divergence survives on `caplifive_65536_nodes.bit` (and whether that
 bitstream carries the forwarding fix). A waveform of `dp0` stage 11 around the hang would settle

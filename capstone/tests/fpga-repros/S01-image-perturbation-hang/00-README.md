@@ -75,6 +75,29 @@ check the resident bitstream before concluding anything.
 * Verify **both** `.dom` files are byte-present in the initramfs. The shipped freshness gate
   only checks the canonical `sqlite_silicon.dom`, so a run can otherwise test a stale image.
 
+## A cheaper probe than the hang: sporadic wrong `strlen` results
+
+Stages that **return** are already wrong, and a wrong number is far more tractable than a hang:
+
+| stage | board | expected | QEMU |
+|---|---|---|---|
+| 13 | **15** | 36 (5+8+11+12) | 36 correct |
+| 16 | **124** | 128 (128×5 & 0xff) | 128 correct |
+
+Stage 16 calls `strlen` on the **same** literal `"alpha"` 128 times and totals 636, i.e. **4 of
+128 calls returned 1** — **sporadic (~3%), not length-dependent**.
+
+At `-O0` (the SQLite default, `build-sqlite-silicon.sh:41`) `strlen` re-loads the string
+capability with `ldc` from a stack slot on **every iteration**; a result of exactly 1 is what a
+failed second reload would produce. `-O1` would keep it in a register, but `-O1` **cannot
+build** — see **C-17** (`i128 SELECT_CC` not selectable, itself a recurrence).
+
+Inferred but **not established**: wrong `strlen` → wrong hash in `sqlite3InsertBuiltinFuncs` →
+corrupt chain → the stage-10 hang.
+
+**Unresolved conflict:** `SILICON-BLOCKER.md` §0a8 records stage 13 returning **36 CORRECT**
+after the unaligned-copy fix. `f10` returns 15 today. Re-run on a current build first.
+
 ## What would help most from the hardware side
 
 A waveform or simulation trace of `dp0` stage 11 around the hang. Every software-visible

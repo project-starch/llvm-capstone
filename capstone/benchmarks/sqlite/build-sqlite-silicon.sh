@@ -289,6 +289,20 @@ cp -f "$VFS_DIR/../sqlite-vfs-skeleton/capstone_sqlite_os.c" "$OBJ_DIR/capstone_
   || cp -f "$ADAPTED/capstone_sqlite_os.c" "$OBJ_DIR/capstone_sqlite_os.c"
 cp -f "${DOMAIN_SRC:-$SCRIPT_DIR/sqlite_capstone_domain.c}" "$OBJ_DIR/sqlite_capstone_domain.c"
 cp -f "$SCRIPT_DIR/sqlite_silicon_amalgam.c" "$OBJ_DIR/amalgam.c"
+# CAPSTONE_DOMAIN_VAR=1 -- append a dead integer GLOBAL (not a function) to the domain file.
+#
+# Separates two hypotheses that the function-pad conflates. A `used` static FUNCTION added five
+# .gct entries (the static capability table __capstone_cap_init walks) and zero carves. A dead
+# INTEGER global does the reverse: one more carve, and no .gct entry, because an integer
+# initialiser needs no capability. So:
+#   returns -> .gct / cap-init is the variable, and carve count is not
+#   hangs   -> any structural change hangs, and .gct is incidental
+if [[ "${CAPSTONE_DOMAIN_VAR:-0}" == "1" ]]; then
+  echo "== DOMAIN VAR: appending one dead integer global (adds a carve, no .gct entry)"
+  printf '\n__attribute__((used)) static volatile long capstone_pad_var = 7;\n' \
+    >> "$OBJ_DIR/sqlite_capstone_domain.c"
+fi
+
 # CAPSTONE_DOMAIN_PAD=N -- append N bytes of dead, never-called code to the DOMAIN file,
 # leaving the amalgamation completely untouched.
 #

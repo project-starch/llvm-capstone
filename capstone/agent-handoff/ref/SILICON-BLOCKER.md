@@ -46,6 +46,51 @@ Because `:0` returns before ladder code, the wedge is in the **entry glue / cap-
 loop (179 carves)**, not in SQLite logic. Per the classification rule this is a *real*
 result and is bisectable, unlike an entry stall.
 
+### 2026-08-05 — the wrong-`strlen` chain, and why `-O1` (the cheapest fix) cannot be built
+
+**Aimed at the goal — landing SQLite — not at the divergence.**
+
+**1. The failure is SPORADIC, not length-dependent.** Stage 16 calls `strlen` on the *same*
+literal `"alpha"` 128 times and totals **636** instead of 640, i.e. **4 of 128 calls returned
+1** (~3%). Stage 13's `15 = 5+8+1+1` is the same effect at 2 of 4. Both are correct under QEMU
+(36 and 128). My earlier reading of stage 13 as "long strings fail" was wrong — stage 16 has one
+string length and still fails.
+
+**2. Where the sporadic read lives.** `sqlite3Strlen30` is just
+`if( z==0 ) return 0; return 0x3fffffff & (int)strlen(z);` (amalgamation `:36500-36503`), and at
+`-O0` `strlen` (`0x14fc1c` in `uc`) re-loads the string capability **with `ldc` from a stack slot
+on every iteration**:
+
+    ldc  a0, 0x0(a0)        <- capability reloaded from the spill slot, every byte
+    cincoffset a0, a0, a1
+    lbu  a0, 0x0(a0)
+
+A returned length of exactly **1** is what you get if the second iteration's reload does not
+produce a usable capability. At `-O1` the pointer would stay in a register and the reload
+disappears.
+
+**3. `-O1` cannot be built — C-17.** `SQLITE_OPT_LEVEL=-O1` crashes the backend:
+`Cannot select: t88: i128 = CapstoneISD::SELECT_CC t9, Constant:i64<10>, seteq:ch, t93, t92`.
+`-O0` never forms the select, which is why `OPT=${SQLITE_OPT_LEVEL:--O0}`
+(`build-sqlite-silicon.sh:41`) is the SQLite default while the ladder builds at `-O1`. **This is
+a recurrence** — `ISSUES.md` records an i128 `SELECT_CC` crash already hit and "fixed" in the
+stage-30..34 work. Check that fix before writing another.
+
+**4. The chain to the blocker is INFERENCE.** wrong `strlen` → wrong hash in
+`sqlite3InsertBuiltinFuncs` → corrupt chain → stage 10 never returns. Everything up to the arrow
+into stage 10 is measured; that last link is not. **Stage 10 is not explained.**
+
+**5. CONFLICT with §0a8, unresolved.** §0a8 records `stage 13 rc=0x24` = **36 CORRECT** after
+the unaligned-copy fix and says stages 11-14 are a *resolved* bug — "do not re-theorise on
+them". Today's `f10` returns **15**. Either `f10` predates that fix or something regressed.
+**Re-run stage 13 on a current build before building on either number.**
+
+**Recommended order from here:** fix C-17 (bounded, testable entirely offline against QEMU),
+rebuild SQLite at `-O1`, re-measure stages 13/16/10. If the sporadic `strlen` failure disappears,
+SQLite may land without the R-17 divergence ever being explained. Note `-O1` changes the whole
+image, so it will also interact with R-17 — a working `-O1` build could still hang for the
+reason `dp0` does.
+
 ### 2026-08-05 — F1 CONFIRMED END-TO-END, and what fixing it actually requires
 
 Every link verified against the RTL and the monitor, in order:
