@@ -7926,6 +7926,39 @@ SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
       std::swap(Base, Offset);
   }
 
+  // Scalar i128 add, NOT capability+offset: when neither operand is a capability
+  // base, there is nothing to CIncOffset and emitting one would cincoffset an
+  // untagged scalar and fault (cscincoffsetimm rs1->tag). This is the shape a
+  // pointer DIFFERENCE plus a constant takes: lua_gettop's
+  // `top.p - (func.p + 1)` DAGCombines to `add(sub(top.p, func.p), -32)`, and the
+  // interpreter faults on the first C-API call through it.
+  //
+  // Offset is an integer offset (the constant/extend); the scalar Base appears in
+  // one of two forms depending on legalization order:
+  //   (a) already an integer offset itself (a sign_extended cursor difference), or
+  //   (b) still a raw ptr-ptr SUB of two capabilities (not yet lowered).
+  // Either way, do the arithmetic in the XLen domain and sign-extend back, exactly
+  // as lowerSUB's ptr-ptr branch does (byte offsets and their sums fit in XLen).
+  if (isCapstoneIntegerOffset(Offset)) {
+    MVT XLenVT = Subtarget.getXLenVT();
+    SDValue BaseScalar;
+    if (isCapstoneIntegerOffset(Base)) {
+      BaseScalar = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Base); // form (a)
+    } else if (Base.getOpcode() == ISD::SUB &&
+               isCapstoneCapabilityValue(Base.getOperand(0)) &&
+               isCapstoneCapabilityValue(Base.getOperand(1))) {
+      // form (b): a pointer difference -- (cursor(A) - cursor(B)), scalar.
+      SDValue AC = getCapstoneCapabilityCursor(Base.getOperand(0), DAG, DL, XLenVT);
+      SDValue BC = getCapstoneCapabilityCursor(Base.getOperand(1), DAG, DL, XLenVT);
+      BaseScalar = DAG.getNode(ISD::SUB, DL, XLenVT, AC, BC);
+    }
+    if (BaseScalar) {
+      SDValue O = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Offset);
+      SDValue Sum = DAG.getNode(ISD::ADD, DL, XLenVT, BaseScalar, O);
+      return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, Sum);
+    }
+  }
+
   // --- Optimization for GEP scaling (loop_test fix) ---
   // LLVM often emits: (add Base, (shl (sext i64:Index), ShAmt))
   // We want:          (CIncOffset Base, (sext (shl i64:Index, ShAmt)))
