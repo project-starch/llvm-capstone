@@ -26,8 +26,16 @@ curl -s -o /dev/null -w '%{http_code}' "$FPGA_URL"     # 200 = up, 5xx = outage;
 equally consistent with a console whose UART relay died while its HTTP side still answers. The
 GUI shows the same nothing, so a human seeing no output corroborates nothing. Positive control:
 the console replays ~548 KB of the previous boot on connect -- if even that replay is missing,
-suspect the console, not the firmware. And distinguish SILENCE (no bytes at all) from GARBAGE
-(bytes that fail to decode): the replay prefix is normal, and is not a baud mismatch.
+suspect the console, not the firmware. **Mojibake in the GUI terminal is a WEB-UI symptom, not board output.** When the console shows
+only replacement characters and no readable text, that has been the web UI failing (confirmed
+with the board owner 2026-08-05). Do not read it as a baud/clock mismatch and do not edit
+`current-speed` or `clock-frequency` in the device tree over it. A short undecodable prefix at
+the start of an otherwise working session is different and harmless -- the console replays the
+previous boot's tail on connect; the fault signal is mojibake INSTEAD OF boot text, not before it.
+
+During a GUI restart the fronting proxy returns an Apache `Proxy Error` /
+`Error reading from remote server`. That means the console is rebooting: wait and retry. It is
+not a hardware fault and no rebuild or reflash can affect it.
 
 ## One-line instruction to give an agent
 

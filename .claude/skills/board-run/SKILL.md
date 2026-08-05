@@ -136,6 +136,8 @@ Read the **last marker** in the run-scoped transcript, never "did not return":
 | no boot banner / JTAG errors | infra — retry |
 | `ConnectionError`, HTTP 5xx on connect | **console/web-UI outage** — not a board fault |
 | connect OK but **zero** UART bytes all run | **AMBIGUOUS** — dead firmware *or* dead UART relay |
+| GUI terminal shows only `?`/mojibake, no text | **web-UI fault** — not board output, not a baud problem |
+| `Proxy Error … Error reading from remote server` | the GUI is **rebooting** — transient, wait and retry |
 
 **`SQ: G/enter` does NOT mean the domain entered.** It is printed by the HOST
 (`sqlite_host.c:144`) *before* it calls in, and the monitor's `call_domain`
@@ -220,8 +222,18 @@ console whose UART relay has failed while its HTTP side still answers — and it
 from the GUI, so "the user sees nothing either" is corroboration of nothing. Before blaming an
 image, establish that the console can carry UART at all: the connect-time replay of the previous
 boot (~548 KB) is the cheap positive control — if even that is absent, suspect the console.
-Distinguish *silence* (no bytes) from *garbage* (bytes that do not decode); the replay prefix is
-normal and is not a baud fault.
+**Garbage in the GUI terminal is a WEB-UI symptom here, not board output.** When the console
+shows only replacement characters / mojibake and no readable text, that has been the web UI
+failing — confirmed with the board owner 2026-08-05. Do NOT read it as a baud-rate or
+clock-frequency mismatch and do not go editing `current-speed`/`clock-frequency` in the device
+tree over it; that is a wild-goose chase this session started. (A short undecodable prefix at
+the very start of a *working* session is separate and harmless — the console replays the tail of
+the previous boot on connect. The signal is mojibake *instead of* boot text, not *before* it.)
+
+The proxy sits in front of the console, so during a GUI restart you get an Apache
+`Proxy Error … The proxy server received an invalid response from an upstream server` /
+`Error reading from remote server`. That is the GUI coming back up: wait and retry, do not
+diagnose hardware, do not reflash. Same for a 502 that clears on its own.
 
 **NEVER call `console.trace_dump()` — it hangs the board hard.** Measured 2026-08-05 on a
 wedged core: `trace_result` never arrives, the wait expires, and the board is left needing
