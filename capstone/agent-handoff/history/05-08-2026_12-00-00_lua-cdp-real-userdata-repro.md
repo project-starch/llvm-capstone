@@ -100,6 +100,32 @@ initially missing from both the domain_main dispatch and the build-script knob, 
 the openssl build silently ran the staged demo (result=400) -- caught because its
 markers were absent (free=0 fault=0), re-run after the fix.
 
+## The CHERI half: real Lua on both platforms
+
+To make the fair comparison use real Lua on BOTH sides (the point of the whole
+exercise), the same reproductions must run on CHERI too. On CheriBSD real Lua is an
+ordinary purecap program (full OS, not freestanding), so the only gate was "does Lua
+build purecap?" -- and it does.
+
+Recipe (`xlang/lua-cdp/cheri/real/build-real-lua-cdp.sh`): CHERI-clang,
+`--target=riscv64-unknown-freebsd -march=rv64gcxcheri -mabi=l64pc128d
+--sysroot=$ROOTFS -mno-relax -ftls-model=initial-exec`, plus two fixes found here:
+- `-nostdinc -isystem <clang-builtins> -isystem $ROOTFS/usr/include`: the default
+  header search leaked to the HOST glibc (`/usr/include/bits/floatn.h` ->
+  unsupported `__float128`); forcing sysroot-only headers fixes it.
+- `-include cheri-lua-prelude.h`: no-ops the shared Lua source's leftover diagnostic
+  probes (`DBGP`/`DBGC`, which Capstone defines via capstone_lua_libc.h), so the
+  interpreter source stays byte-identical across platforms.
+
+STATUS: real Lua 5.4.7 builds purecap (a CheriBSD RISC-V PIE), and the luaossl-124
+reproduction (`cheri/real/cdp_x509.c` -- same userdata/__gc/setStore logic as the
+Capstone LUA_CDP_X509 domain, as a normal `main()` with CheriBSD malloc/free) builds
+and links against it purecap. NEXT: stage into the CheriBSD image and run under the
+revocation configs via the existing `cheri-baseline/` drivers (eager -> CAUGHT at the
+stale access; async/default -> MISS), and port the other 12 reproductions (same
+template). This is the CHERI column at the real-Lua fidelity, to sit beside the
+Capstone 13/13 above.
+
 ## Reproduce
 
 ```
