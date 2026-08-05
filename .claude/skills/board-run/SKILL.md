@@ -161,6 +161,28 @@ Lock → power-cycle → run → **power off + unlock in `finally`**. The driver
   shell, and once matched an editor with the script open and closed it.
 * Confirm `gdb_state` is `idle` before blaming the board.
 
+## 5b. After a RE-FLASH: the memory map may have moved
+
+A new bitstream can change the reserved capability-memory constants, and the device tree must
+match or Linux dies in early init — every boot, at the same point, just after
+`riscv-intc: 64 local interrupts mapped`. It looks identical to a dead board.
+
+On 2026-08-05 the 65536-node bitstream moved `CAP_TAG_MEM_BASE` from `0xBC3C_0000` to
+`0xBC2D_2D2D`; the DTS still said `0x3c3c0000`, so Linux was handed ~971 KB of shadow-tag memory
+as RAM. Two boots were spent before the map was suspected, and **extending the boot window only
+hid it** — the window must stay fixed so a stall reads as a stall.
+
+So after any reflash:
+
+1. Read `CAP_TAG_MEM_BASE` from `capstone-ariane/core/include/ariane_pkg.sv` **at the bitstream's
+   commit** (`git show <commit>:core/...`), or run `calculate_memory.py`.
+2. Set `reg = <0x0 0x80000000 0x0 (BASE - 0x80000000, page-aligned down)>` in BOTH
+   `caplifive.dts` and `configs/caplifive.dts`.
+3. Verify the value is in the **built firmware's DTB**, not just the source.
+4. Also update `FPGA_BITSTREAM` — the drivers hard-stop on a mismatch, which is the gate working.
+
+Full recipe: `agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md`.
+
 ## 6. Before concluding the hardware is broken
 
 Rule out the harness first. On 2026-08-02 the large majority of apparent board failures were

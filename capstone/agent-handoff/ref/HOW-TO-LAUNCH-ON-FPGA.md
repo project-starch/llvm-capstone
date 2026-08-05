@@ -532,3 +532,48 @@ locked/on). Verify the resident bitstream is `caplifive_fixed_forward.bit` befor
 drivers enforce this and hard-stop on a mismatch). `C_PRINT` (`csrw 0x800`) goes to the **RTL trace**, not the UART —
 don't use it as a UART probe. Signal of a live domain = the controller prints its
 first line (that's AFTER `IOCTL_DOM_CREATE` returns).
+
+## A NEW BITSTREAM CAN MOVE THE MEMORY MAP — check the device tree first
+
+**Symptom:** the board reflashes fine, then Linux dies in early init at the same point on every
+boot, right after `riscv-intc: 64 local interrupts mapped`. No panic, no progress. It looks
+exactly like a broken firmware or a bad board.
+
+**Cause:** the reserved capability-memory regions are RTL constants, and changing the
+revocation-node pool size moves them. The device tree still describes the old map, so Linux is
+handed shadow-tag memory as ordinary RAM.
+
+    core/include/ariane_pkg.sv        1021-node (7aac52f93)   65536-node (458982093)
+      CAP_REVNODE_MEM_BASE              0xBFFF_C000             0xBFF0_0000
+      CAP_TAG_MEM_BASE = MEMORY_TOP     0xBC3C_0000             0xBC2D_2D2D
+
+The pool grew 16 KiB -> 1 MiB, pushing the rev-node base down and the tag base with it. The DTS
+said `reg = <0x0 0x80000000 0x0 0x3c3c0000>` — last usable byte `0xBC3BFFFF`, which is exactly
+the OLD `MEMORY_TOP` and lands ~971 KB inside the NEW tag region.
+
+**Fix for the 65536-node bitstream** (`caplifive.dts` and `configs/caplifive.dts` in
+`caplifive-system/sw/buildroot/`):
+
+    reg = <0x0 0x80000000 0x0 0x3c2d2000>;     /* 0x3C2D2D2D rounded down to a 4 KiB page */
+
+The remaining tag region still covers `size/16`, which is what
+`tag_addr = CAP_TAG_MEM_BASE + (paddr >> 4)` requires.
+
+**RE-DERIVE THIS AFTER EVERY REFLASH.** The pool size moves both constants, so the value is
+bitstream-specific. `capstone-ariane/calculate_memory.py` prints the pair to paste. Confirm it
+landed by checking the built firmware, not the source:
+
+    python3 - <<'EOF'
+    import pathlib
+    d = pathlib.Path("<...>/fw_payload.bin").read_bytes()
+    i = d.find(bytes.fromhex("d00dfeed"))          # DTB magic
+    print(bytes.fromhex("3c2d2000") in d[i:i+0x4000])   # the NEW value present
+    print(bytes.fromhex("3c3c0000") in d[i:i+0x4000])   # the OLD value gone
+    EOF
+
+**Why this is written here and not only in the submodule:** `caplifive-system` source stays
+uncommitted by project policy, and `configs/caplifive.dts` is not even tracked there. The edit
+therefore does not survive a submodule reset or a fresh clone — this section is the durable
+copy. (A committed copy also exists on branch `capstone-bootstrap-dts-65536` in the
+`caplifive-system-dev` checkout, unpushed.)
+
