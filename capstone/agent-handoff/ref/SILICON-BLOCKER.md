@@ -354,7 +354,7 @@ add static capability initialisers (e.g. `static void *p = &something;`) in a co
 no other change — and find the threshold. If the hang tracks `.gct` entry count, the mechanism
 is in `__capstone_cap_init` or in what it allocates, which is squarely our side.
 
-### 2026-08-05 — CONFIRMED: PURE CODE DISPLACEMENT flips the hang. Position excluded both ways.
+### 2026-08-05 — [CORRECTED — the pads were NOT semantically neutral; see the correction above] CONFIRMED: PURE CODE DISPLACEMENT flips the hang. Position excluded both ways.
 
 Two results, in order.
 
@@ -451,7 +451,7 @@ tested.
 **The single boot that settles the position confound:** `uc:11` (pos 1) → `uc:9` (pos 2) →
 `g1:9` (pos 3) → `g1:11` (pos 4). That fills both empty cells at once.
 
-### 2026-08-05 — The real anomaly, sharpened: editing a function the path NEVER CALLS
+### 2026-08-05 — [RETRACTED — confounded with run position; see the retraction above] The real anomaly, sharpened: editing a function the path NEVER CALLS
 ### deterministically changes whether an unrelated function hangs
 
 Reframed after the user's question "why not solve *why* globals change where it stalls" —
@@ -538,7 +538,7 @@ globals must stay referenced (e.g. a `volatile` use or `__attribute__((used))`),
 control flow changes. Gate every build on `carves == 181` **and** a byte-comparison of
 `.capstone_gp_initdesc` against the unclamped image, and refuse to run otherwise.
 
-### 2026-08-04 — CONFIRMED: the glue does not correctly materialise a MERGED STRING
+### 2026-08-04 — [RETRACTED — see the 2026-08-05 instrumentation-artifact retraction above] CONFIRMED: the glue does not correctly materialise a MERGED STRING
 ### CONTAINER; the pointer is innocent
 
 Final step of the bisection. Same image throughout, control returning in the same boot.
@@ -583,7 +583,7 @@ which is why it survived a full day of hardware hypotheses.
 carve/copy for the final descriptors — the loop descends, so index 177 is the lowest carve and
 the closest to the remaining stack.
 
-### 2026-08-04 — SQLite ROOT CAUSE: it is NOT a hardware wedge, it is an INFINITE `strlen`
+### 2026-08-04 — [SUPERSEDED — the infinite-strlen chain was refuted 2026-08-05: with -O1 strings, stages 11/13 are correct and stage 10 still hangs] SQLite ROOT CAUSE: it is NOT a hardware wedge, it is an INFINITE `strlen`
 ### over an unterminated string reached via a global struct field
 
 Continuing the verified compile-time bisection. All images artifact-checked, sha256-distinct,
@@ -629,7 +629,7 @@ pointer is not relocated, so the bytes at `zName` are whatever happens to be the
 **Next:** dump the bytes at `zName` and the descriptor/relocation for `aAlterTableFuncs` to
 confirm whether the pointer or the pointee is wrong, then fix the initialized-global path.
 
-### 2026-08-04 — SQLite ROOT-CAUSE LOCATION: `strlen` on a `char *` loaded from a global
+### 2026-08-04 — [SUPERSEDED — this bisection ran on a NON-STAGED image; see the stage-selector retraction above] SQLite ROOT-CAUSE LOCATION: `strlen` on a `char *` loaded from a global
 ### struct array
 
 Redone with **verified** instrumentation after the previous attempt turned out never to have
@@ -763,7 +763,7 @@ loads on a board that was booting perfectly (kernel messages still flowing at t=
 `login:` after them). Now `LOGIN_WAIT_S`, default 420 s. Same failure shape as the
 `ENTRY_STALL_S=45` mistake: a tight timeout manufacturing a false "board is broken" verdict.
 
-### 2026-08-04 — ROOT CAUSE (value level): a 32-bit stack slot live across a chained
+### 2026-08-04 — [RETRACTED — this was the ladder-harness instrumentation artifact, see above] ROOT CAUSE (value level): a 32-bit stack slot live across a chained
 ### capability dereference gets bit 27 set
 
 All arms QEMU-green; board = `caplifive_fixed_forward.bit`; each verdict from a boot where the
@@ -812,7 +812,7 @@ settled from here.
 
 Rungs: `silicon-ladder/xg{l,s,x,n,c,p,r,w,y,z,q}_kernel.h`.
 
-### 2026-08-04 — MINIMAL REPRO FOUND: `&global_array[i]` stored into GLOBAL storage
+### 2026-08-04 — [RETRACTED — harness artifact; SQLite does not use the ladder harness] MINIMAL REPRO FOUND: `&global_array[i]` stored into GLOBAL storage
 
 Three ~10-line ladder rungs, all three **PASS on QEMU** with exact values (965/963/961), run
 ascending in one boot:
@@ -849,7 +849,7 @@ construct all day that is QEMU-green and silicon-wrong on this bitstream.
 
 Rungs: `silicon-ladder/xg{l,s,x}_kernel.h` (+ `_app.c` for QEMU, `_fpga_app.c` for the board).
 
-### 2026-08-04 — stage 10 bisected to `sqlite3InsertBuiltinFuncs`: cross-global capability storage
+### 2026-08-04 — [VOID — the stage selector was not compiled into that image; see the retraction above] stage 10 bisected to `sqlite3InsertBuiltinFuncs`
 
 Bisected by splitting the REAL `sqlite3RegisterBuiltinFunctions` into its six sub-steps behind
 a RUNTIME limit (`SQLITE_REG_BISECT=1` in `build-sqlite-silicon.sh`, domain stages 200-206),
@@ -1105,7 +1105,7 @@ the domain is still using. Options, in order of preference:
 (3) is a perfectly good hand-off artifact; (1) is the version worth building if a smaller one is
 wanted. The `ob2` probe should not be run again as written.
 
-## 2026-08-04 — MAJOR: capability UPPER BOUND is NOT ENFORCED on stores (direct, deliberate test)
+## 2026-08-04 — [RETRACTED — see "the bounds finding is NOT a reportable hardware defect" above; the LSU check is inert in our domains, which is a gate/config question, not a bounds defect] capability UPPER BOUND is NOT ENFORCED on stores
 
 **Measured, two independent probes, in-boot control passing, one boot:**
 
@@ -1249,7 +1249,7 @@ is the BUILD copy, and the target is the region-share path it names. Steps 1-3 (
 `f10`/`swa` pair, sweep `BUILTIN_LIMIT`, shrink around the threshold) and step 5 (the untrapped
 overrun) are unchanged.
 
-## 2026-08-04 — CAUTION: the `SHA5`/`SHA6` markers have NO locatable source in this tree
+## 2026-08-04 — [RESOLVED — the markers ARE the monitor's and their meaning is confirmed in code; see the section above] CAUTION: the `SHA5`/`SHA6` markers have NO locatable source in this tree
 
 Starting the monitor-side instrumentation (plan step 4) turned up something that undercuts the
 evidence base for R-16 itself:
@@ -3345,7 +3345,7 @@ cincoffset consumption. A trap is now a live candidate — an untagged base reac
 `cincoffsetimm` raises `UNEXPECTED_OPERAND`, and R-5 records that illegal capability ops wedge
 rather than report — but nothing yet explains what would untag the base in the first place.
 
-## MECHANISM HYPOTHESIS FOR R-14 / THE SQLITE BLOCKER: `cincoffset` CONSUMES A LINEAR rs1
+## [OBSOLETE — R-14 was the operand-forwarding bug, FIXED in silicon 2026-08-04] MECHANISM HYPOTHESIS FOR R-14: `cincoffset` CONSUMES A LINEAR rs1
 
 Found by diffing the codegen of the two shapes (offline, no board). Merged string constants
 give ONE blob capability per cap-table slot; every literal is a `cincoffsetimm` from it.

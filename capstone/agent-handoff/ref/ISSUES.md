@@ -72,108 +72,6 @@ same object. Not loop-specific. QEMU executes every probe correctly.
     conflated. R-1's scope is unchanged by it; its completeness as an explanation of the whole
     board's behaviour is not.
 
-### R-2 — `delin` in domain code wedges the board `EXPLAINED 2026-07-29 by C-13 — not an RTL defect`
-
-**This is not a hardware fault and not specific to domain code.** It is the C-13 root
-cause seen from the other end: the RTL's `DELIN` accepts `CAP_TYPE_LINEAR` only, and a
-capability **loaded from the gp cap-table is already `NONLIN`** — cap-table storage caps
-are produced by `SPLIT` from an `sp` the entry glue already delin'd, and `SPLIT` preserves
-`cap_type`. So the delin in the repro was a *second* delin on a non-linear capability,
-which the RTL correctly rejects. QEMU's `helper_csdelin` returns early in that case, which
-is why the repro looked like an RTL-only defect. The description below ("a delin on a
-capability loaded from the gp cap-table") states the precondition exactly.
-
-Correct rule: **never `delin` a capability obtained from the gp cap-table.** It is already
-non-linear, so the `delin` is redundant as well as fatal. See C-13, and
-`history/29-07-2026_C-13-root-cause-double-delin.md`.
-
-The original text follows; the observation was sound, the "RTL wedges on delin"
-interpretation was not.
-
-A `delin` executed in domain code on a capability loaded from the gp cap-table wedges the board
-(power-cycle to recover). Proven against a size-matched `addi x0,x0,0` control at the same address,
-so it is the instruction and not code layout.
-
-- **Repro:** `tests/fpga-repros/R02-delin/` (superseded — now a secondary item in the
-  R-1 package); probe knob `LADDER_CM_WITH_DELIN`
-- **Evidence:** `history/27-07-2026_04-33-58_RESULTS-delin-wedges-the-RTL-controlled-and-second-fault-isolated.md`
-- **Workaround:** the `delin` was ours and unnecessary — removed from the default build, which
-  also returns `coremark_matrix` to being a faithful copy of upstream.
-- **Probably our bug**, not the platform's: the glue already delins every cap-table entry before
-  storing it, and our QEMU was patched to tolerate the redundant case *"rather than faulting"*.
-  Only the failure *mode* (full wedge vs catchable trap) is worth the board owner's attention.
-
-### R-7 — `rv8_sha512` hangs on silicon: an INSTANCE OF R-1, not a new fault `CLOSED into R-1`
-Measured 2026-07-28. The rung builds with the C-5 window + copy-path bypass, passes the
-QEMU parity leg with its full 640 B table (oracle 1390718314), and then **hangs the
-`cscall` on the board**, both attempts.
-
-- **Its BASELINE half is clean and measured:** 540,073 cyc / 462,646 instret, 15/15 passes
-  tied at min instret, spread 0, correct oracle. So only the capability half fails.
-- **R-1 predicted PASS**: `sha512_k[i]` is a read-only indexed load with nothing ever
-  stored to that table — the `beebs_bs` shape, which passes. But `sha_w[i&15]` **is** both
-  read and written inside the compression loop, with `sha_chain[]` stored in the same
-  region, so the same-object load/store pattern R-1 describes *is* present after all. This
-  rung is therefore consistent with R-1 rather than a counter-example — unlike R-6.
-- **CONFOUND ELIMINATED — the C-5 workaround is EXONERATED.** The control
-  (`rv8_sha512s`: identical compression loop, 16-entry table, **default 4 KiB window,
-  default unrolled path, no bypass**, QEMU-green at oracle 2842840124) **hangs on silicon
-  too**. So neither the 32 KiB window nor the ~8 KB prologue is implicated: the fault is
-  the kernel's memory shape. **R-7 is an instance of R-1**, and the `DOMAIN_WINDOW=32k` /
-  `LADDER_NO_RO_COPY=1` machinery is sound and reusable for other rungs.
-- **Which also means my PASS prediction was simply a misread of my own kernel:**
-  `sha_w[i&15]` is read *and written* in the compression loop while `sha_chain[]` is stored
-  in the same region — the same-object load-with-intervening-store pattern R-1 describes.
-  Only `sha512_k` is read-only, and that was the part I looked at.
-- **Control kept in the tree** (`rv8_sha512s_*`) as the cheapest R-1 reproducer that is not
-  a synthetic probe: a real crypto kernel, 4 KiB, no special flags.
-- **Repro:** `DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1 DOMAIN_OPT_LEVEL=-O1`, artifacts in the
-  ladder dir; capability half must be run with `LADDER_REBUILD=0` (see below).
-
-**Tooling gap found while running this — FIXED 2026-07-28.** The runner's rebuild path did
-not know about `DOMAIN_WINDOW` / `LADDER_NO_RO_COPY`, so a default run would silently rebuild
-this rung at 4 KiB with the broken copy path and measure the wrong binary; `LADDER_REBUILD=0`
-with a pre-built dir was the workaround. The knobs now live in **`ladder-rungs.spec` field 5**
-and travel with the rung through `build-ladder-fpga.sh`, so a plain sweep builds it correctly
-and `LADDER_REBUILD=0` is no longer needed. Same fix shape as I-1: put the per-rung build
-property in the one file both halves read, rather than relying on an env var set by hand.
-(The baseline half discards field 5 explicitly — it is plain riscv64 with no glue to affect.)
-
-**Re-reproduced AGAIN 2026-07-28 after C-4b was fixed**, now via the copy path at the
-DEFAULT 4 KiB window with no knobs (transfer `sha 1e159a9fa415a763 OK`, first attempt):
-still no END marker in 120 s, both attempts. Expected — R-7 is an R-1 instance and the
-4 KiB control `rv8_sha512s` hangs too — but it costs nothing to confirm alongside `beebs_ns`
-and being wrong in that direction would have been worth knowing.
-
-**Re-reproduced 2026-07-28** on the burst-transfer path with the knobs coming from the spec:
-transfer clean (`sha a88b9760f76b5741 OK`, first attempt), `rv8_sha512 domain ID = 0` prints,
-then no END marker in 120 s, twice. Same hang, now on a build the runner produced itself.
-
-### C-10 — capability-spill lead: REFUTED `CLOSED`
-Proposed and killed the same evening, by the falsification checks written into the entry
-before acting on it.
-
-**The lead:** `accum_probe`'s slot stores are emitted but never land, and nearby sits
-`sd a0, 0x40(sp)` — a 128-bit capability apparently spilled with a plain 8-byte store,
-which would drop the tag and corrupt `res` on reload.
-
-**Refuted by the control:** `expint_diag`, which writes the same slots **successfully**,
-contains the **identical instruction** (`100b8: sd a0, 0x40(sp)`). Present in both the
-working and the failing probe, so it cannot be the cause. A follow-up check also killed the
-register-reuse variant: **both** probes use `a0` as the base for their slot stores
-(`sd _, 0x18(a0)`, `0x20(a0)`, …) over the same offset range.
-
-**So the two probes are structurally identical in every respect hypothesised, and
-`accum_probe`'s delivery failure is UNEXPLAINED.** Both spill `a0` the same way, both store
-through `a0`, both write `res[0]`/`res[2]` last — and only one delivers. Something outside
-this comparison differs. Do not re-run either on the board until it reproduces off-board;
-the QEMU ladder harness gives an 8-byte `res` region and so cannot exercise the debug-slot
-path at all, which is why two boots were spent learning nothing.
-
-**Value of the entry:** it is kept because the *method* worked. The falsification checks
-were written down before the fix was attempted, and they killed the theory in one command
-instead of after a codegen change. That is the practice to repeat.
-
 ### I-4 — some probes return ALL ZEROS on the board while correct under QEMU `OPEN — blocks R-6/R-8 work`
 2026-07-28. Two probes (`accum_probe`, `accum2_probe`) fail to deliver results **on the
 board** while the **identical binaries** are correct under QEMU via the new diag loader.
@@ -714,6 +612,772 @@ rather than `ldc`/`stc`. Whether capstone-c can express a non-`__linear` view of
 span is a compiler/ABI question, not an RTL one, and is unverified — `sbi_capstone.c` has
 no `memcpy` and no scalar-pointer cast anywhere today.
 
+### C-2 — `Cannot select: i128 = or` / `= xor`, mixed extends `OPEN (partially widened)`
+Blocks `rv8_qsort` and `rv8_miniz` at −O1/−O2 (both still fail 2026-07-28; −O0 passes).
+
+**The semantics question was malformed, and the answer is now settled.** It was framed as
+"do the high 64 bits mean capability metadata or a genuine 128-bit integer?" — neither.
+`lowerScalarI128Logical` computes the op in XLen and re-extends, which is exact **only while
+the i128 carrier's high half is an extension of its low half.** Matching extends preserve that
+invariant. Mixed extends break it: for `sext(a) OR zext(b)` the true 128-bit high half is
+`sign(a)`, which is **not a function of the low-half result**, so re-extending the narrow
+result under *either* rule is a **miscompile**. **The bail is correct. Do not "fix" it by
+picking an extension rule.**
+
+- **Widened safely 2026-07-28** (`CapstoneISelLowering.cpp`): when the sign-extended operand is
+  **known non-negative** (`DAG.SignBitIsZero`), its sign extension and a zero extension are the
+  same bits, so both operands agree and the invariant holds. Covers indices/sizes the optimizer
+  has already proven `>= 0`, without assuming anything about meaning.
+  Lit `i128-logical-mixed-extend.ll`; **Capstone lit 43/43**.
+- **Does NOT unblock rv8.** Re-verified with exit codes: `qsort` −O1/−O2 still
+  `Cannot select: i128 = xor`, `miniz` still `i128 = or`. Their signed operand is not provably
+  non-negative, so they are the genuinely unrepresentable case.
+  > ⚠ An intermediate report that both benchmarks "now build" was **wrong** — that check
+  > grepped output for error strings without testing the exit code, so a failing build read as
+  > success. Always gate on exit status.
+- **What the real fix needs, and why it is not a lowering patch:** the remaining case cannot be
+  represented while i128 is carried in a single capability register. Either (a) genuine
+  128-bit integers get a register-pair representation distinct from the capability carrier, or
+  (b) find why a **64-bit** `or`/`xor` is being widened to i128 at all — if the source only does
+  64-bit logic, the i128 node is an artifact upstream of this lowering and should be prevented
+  rather than lowered. **(b) is the cheaper investigation and should come first.**
+
+### C-3 — RV8 fails at runtime at −O1/−O2 `OPEN`
+**Now also reaches the ladder (2026-07-28):** the `rv8_primes` *rung* runs at −O0 and
+**HANGS at −O1** on silicon, so it is the one row in the overhead table that cannot be
+measured at the uniform level. Same family as the RV8 −O1/−O2 failures below.
+Five RV8 benchmarks now *build* at −O1/−O2 but fail 10/10 at runtime: `primes`/`aes`/`dhrystone`
+hang silently; `sha512`/`norx` take deterministic capability faults (cause 5 OOB / cause 24, same
+PC at both levels). −O0 controls all pass. **Not regressions** — code that never compiled cannot
+regress.
+- **Evidence:** `history/27-07-2026_12-59-35_three-codegen-fixes-*.md`
+- **Leads:** `sha512` faults with bounds visibly too small; `norx` with an untagged capability
+  reaching a load. Both smell like a bounds/provenance codegen bug at −O1+.
+
+### C-4 — split into a FIXED half and a remaining domain-creation bug
+Renamed from "large read-only data cannot be delivered": size was never the variable.
+
+#### C-4a — constant pools are unreachable in a domain `FIXED 2026-07-28`
+**Root cause, with the emitted sequence:**
+```
+.LCPI0_0: .quad 81985529216486895        ; .rodata.cst8 -- a CONSTANT POOL entry
+  auipc a2, %pcrel_hi(.LCPI0_0)
+  addi  a1, a2, %pcrel_lo(...)
+  scc   a1, gp, a1     ; set gp's cursor to a .rodata address
+  ld    s6, 0(a1)      ; FAULTS
+```
+A pool entry is **not** a `GlobalVariable`, so it gets no cap-table slot (correctly);
+`lowerConstantPool` then falls back to `LGA` → `scc gp`. Under gp-captable `gp` is bounded
+to the **cap table itself**, so the cursor lands out of bounds. The tell in the fault line
+is that the reported bounds are exactly the table:
+`cursor = 0x101561000, bounds = (0x10157ffd0, 0x101580000)`.
+
+**Fix:** `CapstoneSubtarget::useConstantPoolForLargeInts()` returns **false** whenever the
+gp-free/gp-captable ABI is active, so the constant is materialised inline instead. Forming
+a pool in a domain is always a miscompile, never an optimisation — the same reason
+`-fno-jump-tables` is already mandatory (a jump table is `.rodata` too).
+
+**Validated:** the previously-faulting `rv8_sha512` configuration now returns its oracle
+(`__CAPSTONE_LADDER_RV8_SHA512_PASSED__`); 0 `.LCPI` entries remain in the emitted asm;
+Capstone lit **43/43**; `beebs_bs`, `beebs_prime`, `beebs_cnt` still pass QEMU parity.
+
+> **Two wrong turns on the way, both worth remembering.** First this was called a
+> *large-data delivery* problem, because bigger constants are the ones that get pooled.
+> Then, on seeing that all named globals DID have cap-table slots, the constant-pool
+> explanation was **retracted as refuted** — but the faulting object was never a global,
+> so the descriptors could not have refuted it. The lesson is to identify the faulting
+> OBJECT before reasoning about the mechanism: a symbolised `-S` listing settled in one
+> step what two rounds of inference got wrong.
+
+#### C-4b — the large-RO COPY PATH in the generated glue is broken `FIXED 2026-07-28`
+
+**FIXED 2026-07-28. Root cause: `cincoffset` CONSUMES a linear `rs1`.**
+
+`op_helper.c:635-640` — `helper_cscincoffset` with `rd != rs1` does
+`*rd_v = *rs1_v; if(!captype_is_copyable(rs1_v->val.cap.type)) *rs1_v = CAPREGVAL_NULL;`
+and `cap.h:122` defines `captype_is_copyable(ty) { return ty == CAP_TYPE_NONLIN; }`.
+`sp` arrives from cscratch as `CAP_TYPE_LIN`, and the builder's only `delin(sp)` was its
+LAST line — so the copy path's `cincoffset(t4, sp, t5)` **nulled `sp` outright**, and the
+next `split(t2, sp, t1)` tripped `helper_cssplit`'s `assert(rs1_v->tag && !rs2_v->tag)`
+with `tag == 0`.
+
+That accounts for every observed symptom: it fired only AFTER `Created domain ID = 0`,
+only when `COPY_THRESHOLD` selected the copy path, and never in the zero-init path (which
+`cincoffset`s `t2`, already delinearized) or the unrolled path (which never `cincoffset`s
+`sp`). It is also why five careful static readings of the generated assembly missed it —
+**the assembly is correct as written; the defect is in the ISA semantics of one operand.**
+
+**Fix:** emit `delin(sp)` at the top of `BUILD_GP_CAPTABLE`. Minimal and correct rather
+than a workaround — `helper_cssplit` asserts `type == LIN || NONLIN` so every split still
+works, and `split` (unlike `cincoffset`) never consumes `rs1`. `sp` was delinearized by the
+builder's last line anyway, so this only moves that transition earlier; the capability
+handed to compiled code is unchanged.
+
+Emitted **only when a global actually took the copy path**, so every currently-measured
+rung stays byte-identical — verified by diffing generated glue against the previous
+generator (`beebs_aha_mont64`: 0 differing lines; `beebs_crc32big`: gains exactly the
+`delin` and a comment). The condition is derived from the emitted body, not by re-testing
+the eligibility predicate, so the two cannot drift.
+
+**Validated:** `beebs_crc32big` (2,048 B `const crc_32_tab`) returns oracle **1703161001**
+through the copy path — the first time that path has worked end to end. Standing ladder
+regression 6/6 green (`matmult_int` 774662735, `beebs_prime` 582955588, `beebs_bs`
+887447230, `beebs_cover` 1993178309, `ctrsanity` 43260934, `beebs_aha_mont64` 2185097489).
+
+*Previous status, kept for provenance:* the MONITOR half working, and the failure moving.
+ C-11 (the
+monitor could not be rebuilt) is fixed, so the monitor-side copy specified in
+`plans/sqlite-on-silicon-scoping.md` is now implemented, built and running:
+`create_domain` copies the image's initialized-globals bytes
+`[base+GPFREE_GLOBALS_OFFSET, base+code_size)` into the front of `dom_data`, guarded so it
+is skipped rather than overrunning when the image is large relative to the data region.
+Source is uncommitted submodule state, mirrored at
+`tests/vendor-patches/opensbi-capstone-sbi.patch`.
+
+Evidence it works: `beebs_crc32big` (2,048 B `const crc_32_tab`, external linkage, the
+rung built specifically for this path) previously **failed at domain CREATION**; it now
+prints `Created domain ID = 0` and proceeds. The regression rung `beebs_aha_mont64` still
+passes with the copy live (`retval = 2185097489`).
+
+**What remains: the same `helper_cssplit` assertion (`rs1_v->tag && !rs2_v->tag`), but
+later in the sequence** — no longer at creation, now after the domain exists. Static
+reading of the generated glue does NOT explain it: every `split` there takes `sp` (tagged)
+as rs1 and an `lcc`-derived integer as rs2, and the registers that do hold capabilities
+(`t3`, `t4` in the copy loop) are re-loaded with `li` before any later split. So the next
+step is to LOCATE the faulting `cssplit` rather than reason about it — QEMU aborts on the
+assertion, so add a print of `rs1`/`rs2` provenance in `helper_cssplit`, or break there
+under gdb, and find out whether it is in the glue at all or in the monitor's
+`create_region`/`share_region` path that runs immediately after.
+
+**One implementation trap already paid for, recorded so it is not repeated:** the copy
+must index in **16-byte** units. `__linear void *` subscripting steps one CAPABILITY and
+generates a 16-byte `ldc`/`stc` — `dom_seal`'s own zeroing loop uses the same convention
+(`DOMAIN_DATA_SIZE = 16 * DOMAIN_DATA_N`). An earlier draft used `>> 3`, walked twice the
+intended distance and stored past `dom_data`:
+`Cap mem access OOB: cursor = 101562000, size = 16, bounds = (101560000, 101561020)`.
+
+*Original entry, still accurate for the glue half:*
+
+**Not a domain-creation bug, and not about size.** Earlier notes here (now corrected) chased
+image geometry through the loader and kernel module. That was the wrong component:
+
+> `Created domain ID = 0` appears **before** the assertion in the serial log. Domain
+> creation **succeeds**; `helper_cssplit: rs1_v->tag && !rs2_v->tag` fires afterwards, in
+> the **entry glue**.
+
+**The actual trigger is a threshold in the glue generator, not a size limit.**
+`gen-gp-captable-glue.py` has `COPY_THRESHOLD = 256` and picks between two paths:
+
+| initializer size | glue path | result |
+|---|---|---|
+| 640 B (`sha512_k[80]`) | **large-RO copy loop** (`stor > 256`) | **FAILS** |
+| 128 B (`sha512_k[16]`) | unrolled `li`/`sd` immediates (`stor <= 256`) | **passes** |
+
+So every "size-dependent" symptom was just this threshold selecting a different code path.
+The large-RO copy path is the thing that is broken; it is emitted for exactly one global in
+the ladder today, which is why nothing else has hit it.
+
+**The suspect sequence** (from the generated `.inc`):
+```
+lla t4, sha512_k
+lla t5, __gpfree_globals_base
+sub t5, t4, t5               /* blob offset = sym - base */
+cincoffset(t4, sp, t5)       /* src */
+cincoffset(t3, t2, x0)       /* dst */
+```
+`lla` on a Capstone target may not yield a plain integer, so `sub` of two such values --
+and hence the operand feeding a later `split` -- is where a stray tag most plausibly comes
+from. **Verify by dumping tags, not by reading:** that inference is exactly the kind that
+has been wrong three times on this issue.
+
+**Refuted along the way, recorded so nobody repeats them:** (a) `tot_size` invariant --
+both images give `tot_size` 8192 and satisfy `tot_size > code_size + 1536`; (b) `code_len`
+carrying the exec segment -- it is `image_size`, the whole loadable image
+(`libcapstone.c:197`); (c) `dom_pages_log2` rounding -- it rounds **up** correctly
+(`dom_pages == 1 ? 0 : ilog2(dom_pages - 1) + 1`).
+
+**Experiment RUN (2026-07-28): the unrolled path is not a viable stopgap, and C-4b is
+entangled with C-5.** Raising `COPY_THRESHOLD` above 640 so the big table takes the
+unrolled `li`/`sd` path fails at link time:
+
+```
+ld.lld: error: unable to place section .text at file offset [0x1000, 0x2E77]
+```
+
+`.text` reaches **11,895 B** against the 4 KiB window — 640 B of data costs ~8 KB of
+immediate-materialisation code, exactly the reason the copy path exists. So:
+- The copy path is **necessary**, not an optimisation — it cannot simply be disabled.
+- **C-4b cannot be worked around without first lifting C-5** (the 4 KiB window), or by
+  fixing the copy path itself.
+- Threshold reverted to 256; no code change kept from this experiment.
+
+**The `lla`-produces-a-tag hypothesis is REFUTED (disassembly, 2026-07-28).** The emitted
+glue uses plain integer addressing exactly as intended:
+```
+auipc t4, 0x1 ; addi t4, t4, -0x108     ; integer address of sha512_k
+auipc t5, 0x1 ; addi t5, t5, -0x150     ; integer address of __gpfree_globals_base
+sub   t5, t4, t5                        ; plain integer offset
+<cincoffset t4, sp, t5> ; <cincoffset t3, t2, x0> ; li t6, 0x280 ; ld/sd loop
+```
+No capability reaches an operand that must be untagged in this sequence. That is the
+**fourth** hypothesis refuted on C-4b (after the `tot_size` invariant, `code_len`, and
+`dom_pages_log2`).
+
+**New observation, unexplained:** `li t6, 0x280` (640) appears **TWICE** in the domain, at
+`0x10164` and `0x10324` — two identical 640-byte copy loops, where only one global is
+640 bytes. Either the glue is emitted twice, or the generator emits a duplicate descriptor.
+A second copy loop would carve/copy storage a second time and could plausibly leave the
+register state that the next `split` chokes on.
+
+**Counted, and the GENERATOR IS CORRECT.** The emitted `.inc` contains exactly
+**1** copy loop, **3** global headers, **4** `split`s (cap table + 3 globals) and **3**
+`stc`s to the table — all as intended.
+
+**The duplicate is BY DESIGN — this lead is refuted too.**
+`start-gp-captable-generic.S` has two entry points and each expands the macro:
+```
+__test_reentry:  ccsrrw(sp, cscratch, x0) ; BUILD_GP_CAPTABLE  /* reentry */
+_start:          ccsrrw(sp, cscratch, x0) ; BUILD_GP_CAPTABLE  /* normal entry */
+```
+Two copies in the image, exactly one executed per entry. Nothing wrong with it.
+
+**Status: FIVE hypotheses proposed, FIVE refuted by measurement.** In order: the
+`tot_size` invariant; `code_len` carrying the exec segment; `dom_pages_log2` rounding;
+`lla` yielding a tagged value; a duplicated copy loop. Each looked sound on paper and each
+died on contact with a dump, a count or a disassembly.
+
+**What is solidly established, and is the whole of what a successor should trust:**
+- Domain creation **succeeds** (`Created domain ID = 0` precedes the assertion) — the fault
+  is in the **entry glue**, not `create_domain`, not the loader, not the kernel module.
+- The discriminator is `COPY_THRESHOLD = 256` selecting the **large-RO copy path**, not
+  image size: 640 B takes it and fails, 128 B takes the unrolled path and passes.
+- The copy path is **not optional** — forcing the unrolled path for 640 B blows `.text` to
+  11,895 B against the 4 KiB window, so **C-4b is entangled with C-5**.
+- The generated glue is **correct by count** (1 copy loop, 3 globals, 4 splits, 3 `stc`),
+  and the two copies in the image are the two entry points, by design.
+
+**BYPASSED 2026-07-28 — C-5 dissolves C-4b.** The copy path exists only because the
+unrolled `li`/`sd` alternative does not fit a 4 KiB window. Give it a **32 KiB** window and
+it does, so the broken path can simply not be taken:
+
+```
+DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1 DOMAIN_OPT_LEVEL=-O1 run-ladder-qemu.sh rv8_sha512
+  -> __CAPSTONE_LADDER_RV8_SHA512_PASSED__ (retval = 1390718314)
+```
+
+`rv8_sha512` now runs with its **full 640 B table** — the crypto/bitwise rung the ladder
+lacked. Both knobs are **opt-in per rung, not defaults**: changing the window changes image
+layout and this project has documented layout sensitivity (2026-07-26: four added
+instructions flipped a passing rung), so every measured rung stays at 4 KiB and its
+published number stands. `beebs_bs` and `beebs_prime` re-verified unchanged.
+
+**C-4b remains open and still matters**: the copy path is still broken, and any initializer
+needing more than ~32 KiB of unrolled materialisation will still hit it (SQLite is the
+likely first). But it no longer blocks a benchmark. When someone does fix it: **instrument,
+do not reason** — dump the capability tag at each `split` in the copy path. Five paper
+hypotheses have failed here; the sixth should not be one.
+
+**Related hazard — CHECKED 2026-07-28, NOT a bug.** `getGpCaptableIndex` derives its index
+from a global's *position* in `M.globals()`, and GlobalMerge mutates that list (it merged
+`sha_chain` + `sha_w` into one 192 B entry here), which raised the possibility of an access
+lowered against the pre-merge order loading the **wrong capability slot** — silent wrong
+data rather than a fault. It cannot happen: **GlobalMerge runs in `addPreISel`**
+(`CapstoneTargetMachine.cpp`), i.e. before instruction selection, so `lowerGlobalAddress`
+during ISel and `emitGpCaptableTable` in the AsmPrinter both see the same post-merge list.
+Confirmed empirically as well — the merged-global `rv8_sha512` build and the 6-global
+`beebs_cnt` both return their exact oracles, which mismatched indices would break.
+**Recorded because the reasoning is the useful part:** any future pass that adds or removes
+globals *after* ISel would silently break this positional scheme.
+
+### C-9 — Redundant `mv rd, rd` around inline-asm register constraints `OPEN`
+The Capstone backend emits **no-op self-moves** around an `asm volatile("" : "+r"(x))`
+tie. A 5-instruction loop body became 7 — `srai / xor / add / **mv a4,a4** / addi /
+**mv a4,a4** / bne` — where plain riscv64 emits 5 for the same source.
+
+- **Found:** 2026-07-27, while building the I-2 counter-sanity probe. It is logged because
+  it **silently defeated that probe**: the measurement depends on both targets retiring the
+  same instruction count, and the compiler manufactured a 1.4× difference out of nothing.
+- **Repro:** `tests/runtime-qemu/silicon-ladder/ctrsanity_kernel.h` with the inner
+  `__asm__ volatile("" : "+r"(acc))` restored; disassemble
+  `--triple=riscv64 --mattr=+m` and compare against `ladder-base/obj/base_ctrsanity.o`.
+- **Impact:** small in isolation (two wasted instructions per tie), but the register-pinning
+  idiom is used throughout the ladder kernels to defeat constant folding, so it inflates
+  the capability instruction count of **any** rung that uses it — i.e. it can bias an
+  overhead ratio upward. Worth a look before the next measurement round.
+- **Workaround:** keep inline-asm ties out of measured loops; use an opaque trip count and
+  a consumed result instead.
+
+### R-12 — rev-node exhaustion is SILENT CORRUPTION, not a fault `OPEN, will bite at call_dom`
+
+The revocation-node allocator's `head` is 10 bits (`capstone-ariane/core/anvil_build/capstone_rev_node.anvil:168`), so allocation
+**#1025 wraps to node id 0 and reuses live ids**. `overflow_flag` reaches only a debug LED
+(`cva6.sv:1185`) -- nothing traps, nothing prints. Only `SPLIT` and `MREV` allocate
+(`capstone_dyn_unit.anvil:136, :91`); `ldc`/`stc`/`cincoffset` allocate nothing
+(`:330-332, :399`, `capstone_flu_unit.anvil:29-44`).
+
+`create_domain` does **5** splits, so this is NOT the current SQLite blocker. But SQLite's
+entry glue does **1,060** splits (1 table + 1,059 globals) and will be the first domain to
+cross 1,024 -- at `call_dom`, i.e. the moment after the present wedge is cleared. No
+ladder rung approaches it (bigmany: 65).
+
+### R-13 — `CINCOFFSET` duplicates a linear capability, untracked `OPEN`
+
+It writes the unmodified `rs1` back alongside `rd` with the same `revnode_id` and
+`CAP_TYPE_LINEAR` (`capstone_flu_unit.anvil:29-44`, `commit_stage.sv:278`), so one linear
+capability becomes two with no bookkeeping. Sits directly next to C-14 in kind: an
+instruction whose source-register behaviour diverges from what the compiler assumes.
+
+### I-5 — every monitor error is invisible on the FPGA `OPEN, cheap fix identified`
+
+`capstone_error` is `C_PRINT(...)` + `while(1)`, and `C_PRINT` is `csrw 0x800` -- the RTL
+trace, NOT the UART. So all five silent-spin sites look identical to a hang on the board:
+`handle_interrupt` default (`sbi_capstone.c:898-900`), `handle_exception` default
+(`:973-977`), illegal-instruction-not-`time` (`:959-963`), `swap_cpmp` -> `capstone_error`
+(`:917-923`), and two in `split_out_cap` (`:236, :246`).
+
+**Fix, zero board cost to develop:** give `capstone_error` a real UART putchar via
+`split_out_cap(0x10000000, 0x100, 0)` -- the same mechanism the monitor already uses for
+`mtime` (`sbi_capstone_dom.c:32-36`). Every future wedge would then name its own site
+instead of presenting as silence. This is the highest-leverage change available for board
+debugging and should be done before more board sessions are spent guessing.
+
+### C-14 — the COMPILER uses `movc` (a MOVE) for scalar register copies `ROOT-CAUSED 2026-07-30`
+
+> **ATTRIBUTION WAS REVISED TWICE ON 2026-07-30. Read this box before the rest.**
+>
+> v1 "the RTL is buggy" -> v2 "the spec mandates it, the RTL is conforming, QEMU deviates"
+> -> **v3 (current): the spec is UNDER-SPECIFIED here; the weight of evidence favours
+> scalars being EXEMPT, so the RTL's MOVC is probably an oversight -- but this must be put
+> to the board owner as a QUESTION, not an accusation.**
+>
+> What killed v2 (all verified in-tree):
+> * `parts/mem-access-insn.adoc:45` glosses the very parenthetical v2 relied on --
+>   "not **a scalar or** a non-linear capability (i.e., `type != 1`)". So in the spec's own
+>   usage `type != 1` is shorthand for "scalar or non-linear", which EXEMPTS scalars.
+> * `parts/mem-access-insn.adoc:105`, the one other place the consumption rule meets a
+>   possibly-scalar operand (STC), writes the guard explicitly: "If `x[rs2]` **is a
+>   capability and** `x[rs2].type` is not `1`". That is literally QEMU's `tag &&`.
+> * `parts/prog-model.adoc:219-222`: a register holds "either a capability **or** a raw
+>   `XLEN`-bit integer", so `type` is undefined for an integer and the MOVC clause's test
+>   does not cleanly apply to one.
+> * Spec commit `a1db3c2` ("MOVC now works with non-capabilities without generating
+>   faults") removed the not-a-capability exception but never revised the consumption
+>   clause -- so that clause was written when `rs1` was guaranteed to be a capability.
+> * QEMU's guard is deliberate, not an accident: commit `b9c53f0d09`, subject
+>   "[Capstone] movc allows scalars", is the change that added `rs1_v->tag &&`.
+> * The RTL contradicts ITSELF: its STC exempts scalars
+>   (`capstone_dyn_unit.anvil:408`, `if(rs2_v.metadata.cap_type != NOT_CAP)`) while its
+>   MOVC does not (`capstone_flu_unit.anvil:14-25`). Internal inconsistency is the usual
+>   signature of an oversight rather than a design choice.
+>
+> **What is NOT in doubt, through all three versions:** the mechanism (MOVC zeroes a scalar
+> source on this silicon), the numeric proof, and that LLVM is emitting the wrong
+> instruction. Only blame moved.
+
+**What the spec says.** `capstone-spec/parts/cap-man-insn.adoc:33-37`, MOVC:
+
+    * If `rs1 = rd`, the instruction is a no-op.
+    * Otherwise
+    . Write `x[rs1]` to `x[rd]`.
+    . If `x[rs1]` is not a non-linear capability (i.e., `type != 1`),
+      write `cnull` to `x[rs1]`.
+
+Type encoding: `0` linear, `1` non-linear, `3` uninitialised, `5` sealed-return
+(`parts/existing-insn.adoc:60-65`). A plain scalar is not a non-linear capability, so
+`type != 1` holds and **the spec mandates zeroing the source.** `parts/intro.adoc:59-61`
+states the design intent plainly: instructions "can only **move**, but not copy, linear
+capabilities between general-purpose registers."
+
+**So MOVC is a MOVE, by design.** It is the wrong instruction for an ordinary
+register-to-register copy of a scalar, on any conforming implementation.
+
+**Who is wrong, precisely:**
+
+| component | behaviour | verdict |
+|---|---|---|
+| RTL (`capstone_flu_unit.anvil:13-21`) | zeroes source unless `type == NONLIN` | **spec-compliant** |
+| QEMU (`op_helper.c:580-584`) | adds `rs1_v->tag &&`, exempting scalars | **deviates from spec** -- and this is what hid the bug from every QEMU test |
+| LLVM (`CapstoneInstrInfo.cpp:520-523`) | emits MOVC for *every* GPR-to-GPR copy | **the actual bug** |
+
+**Correct rule for the compiler:**
+* scalar copy -> `addi rd, rs, 0` (`mv`). MOVC is simply wrong here.
+* non-linear capability copy -> MOVC is correct and preserves the source (`type == 1`).
+* linear capability -> cannot be copied at all, by design. MOVC moves it, which is the
+  only legal semantics; the IR should never ask for a duplicate.
+
+**STILL DO NOT PATCH THE RTL, but for a different reason than v2 gave.** Not because the
+RTL is conforming -- it probably is not -- but because a reflash invalidates every silicon
+measurement taken so far, is a hard stop needing approval, and the fix we control (the
+compiler) is free and lossless. Ask the board owner which behaviour is normative; do not
+assert that theirs is wrong.
+
+**The LLVM bug is bigger than the scalar case.** `CapstoneInstrInfo.td:2455-2460` declares
+MOVC with `hasSideEffects = 0` and `$rs1` as a pure USE with no def. LLVM therefore
+believes MOVC never clobbers its source -- which is wrong for LINEAR capabilities on ANY
+implementation, since every reading of the spec agrees those are consumed. Fixing only the
+scalar path leaves that hole open.
+
+**The fix is cheaper than first estimated:** `PseudoSCALAR_COPY_I128`
+(`CapstoneInstrInfo.td:2446-2447`) already exists and expands to `ADDI`. The scalar-copy
+machinery is in the backend; what is missing is routing scalar GPR copies through it
+instead of through MOVC.
+
+---
+
+**Original mechanism analysis (unchanged and still correct as to WHAT happens):**
+
+`capstone_flu_unit.anvil:13-21`, MOVC with `rs1 != rd`:
+
+    if(data.cap_rs1.metadata.cap_type==cap_type_t::CAP_TYPE_NONLIN){
+        let rs1 = data.cap_rs1;          // source preserved
+        let rd  = rs1;
+    } else {
+        let rs1 = call create_cnull();   // SOURCE ZEROED
+        let rd  = data.cap_rs1;
+    }
+
+A plain scalar is `NOT_CAP`, so it takes the else branch and the source register is
+nulled (`create_cnull` zeroes cursor and metadata, `capstone_unit.anvilh:383-384`).
+
+QEMU (`op_helper.c:580-584`) guards the same zeroing with `rs1_v->tag &&
+!captype_is_copyable(...)`. A scalar has `tag == false`, so **QEMU preserves what silicon
+destroys.** DIVERGENT, and invisible to every QEMU test.
+
+**Delivery mechanism.** `copyPhysReg` emits MOVC for every GPR-to-GPR copy
+(`CapstoneInstrInfo.cpp:520-523`), so ordinary register moves inherit it. The write
+reaches the register file through an rs1 write-back port gated only by
+`cap_result.valid` (`commit_stage.sv:278-281`), i.e. for EVERY op in `check_cap_op`.
+A narrower set was evidently intended: `check_fwd_rs1` lists
+`{SPLIT, MOVC, CJALR, CCSRRW, STC}` (`ariane_pkg.sv:925-931`) and is **dead code** --
+defined and referenced nowhere in the tree, verified by grep. The broad gate is harmless
+for ops that echo rs1 faithfully (CINCOFFSET does, `capstone_flu_unit.anvil:37-44`) and
+fatal for MOVC, which writes a null.
+
+**Both failure modes follow mechanically.** In gpn2:
+
+    203c0: movc a4, a6       ; a4 := a6, and on silicon a6 := 0
+    203c4: bne  a6, a5, back ; a6 is 0, a5 is 4 -> always taken -> INFINITE LOOP
+
+That is the wedge: the domain never faults, it spins, which is why no capture ever showed
+an `mcause`, `mepc` or `badaddr`.
+
+**NUMERIC PROOF** of the other mode. `gpw2` ends its loop with `beq a6, a4` rather than
+`bne`. With `a6` zeroed, `0 != 1`, the loop exits one iteration early and `g[1]` is never
+written. Predicted checksum for `g = {1, 0}`: **3950255460**. The board returned exactly
+**3950255460**. Derived before inspection, bit-for-bit.
+
+**Scope.** Every measured rung sorts correctly: the four that pass have no `movc` whose
+source is read afterwards; the nine that fail do. SQLite has 444 occurrences of the
+pattern. `gpstress` has none and does NOT wedge -- it returns wrong data, so it stays a
+separate defect.
+
+**Fix is a design decision, not a one-liner.** No single instruction copies both scalars
+and capabilities while preserving the source -- and per the spec, none should: copying a
+linear capability is deliberately impossible. What the compiler needs is to pick the right
+instruction per type:
+
+| candidate | scalars | capabilities |
+|---|---|---|
+| `addi rd, rs, 0` | correct, preserves source | drops capability metadata |
+| `movc rd, rs` | DESTROYS source | correct for NONLIN only |
+| `cincoffset rd, rs, x0` | RTL preserves rs1; QEMU nulls it (C-4b) | same divergence |
+| `cincoffsetimm rd, rs, 0` | traps UNEXPECTED_OPERAND on NOT_CAP (`:49-52`) | -- |
+
+`copyPhysReg` cannot tell them apart -- scalars and capabilities share the GPR class. A
+correct fix needs the type distinction (separate register classes, or a copy pseudo
+selected by type at ISel). See `plans/c14-movc-source-destruction-fix.md`.
+
+This is a CORRECTNESS fix, not a workaround for a hardware defect: emitting a move where a
+copy was meant is wrong against the spec regardless of which core runs it.
+
+**Retracted on the way here** (four hypotheses, all mine): more-than-one-global,
+exactly-16-byte globals, unrepresentable capability bases, and stale shadow-RF metadata
+poisoning cincoffset's offset. The last was refuted by the same RTL read that found the
+real cause: ordinary ALU writes DO invalidate the metadata shadow entry, because the
+metadata regfile shares its write-enable with the integer regfile
+(`issue_read_operands.sv:1695-1709`, `commit_stage.sv:271-279`).
+
+### C-17 — `i128 SELECT_CC` is not selectable; the SQLite domain cannot build at `-O1` `OPEN — RECURRENCE`
+
+    fatal error: error in backend: Cannot select:
+      t88: i128 = CapstoneISD::SELECT_CC t9, Constant:i64<10>, seteq:ch, t93, t92
+
+Building the SQLite domain with `SQLITE_OPT_LEVEL=-O1` crashes the backend. A `SELECT_CC`
+producing an **i128** (a capability) has no selection pattern. `-O0` never forms the select,
+which is why `OPT=${SQLITE_OPT_LEVEL:--O0}` (`build-sqlite-silicon.sh:41`) has always been the
+SQLite default — the ladder rungs, by contrast, build at `-O1`.
+
+**This is a RECURRENCE, not a new bug.** `ISSUES.md` already records an i128 `SELECT_CC` crash
+in the stage-30..34 work ("Its first attempt built nothing (i128 `SELECT_CC`) ... both are now
+fixed"). Either that fix was shape-specific or it regressed; the earlier entry does not say
+which shape it covered. **Check the previous fix before writing a new one.**
+
+The shape is ordinary and will recur elsewhere: `sqlite3Strlen30` is
+`if( z==0 ) return 0; return 0x3fffffff & (int)strlen(z);` — a null check on a pointer feeding a
+masked result is exactly what forms `select_cc` on a capability at `-O1`.
+
+**Why it matters beyond the crash:** `-O1` is the cheapest available shot at the R-17 blocker
+(see below), and this is what blocks it.
+
+### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST`
+
+**A trap and a hang are the same observation from outside.** This is not the SQLite blocker; it
+is why the SQLite blocker resisted 30+ board sessions.
+
+Verified end to end:
+* Seal slot 1 is the domain's trap vector — `csr_regfile.sv:399` (save) and `:1880-1884`
+  (restore: `reg_id 1` → `ctvec_d = data[127:64]; mtvec_d = data[63:0]`). Confirmed by its
+  neighbours: slot 2 is `{cscratch, mscratch}` (how `gp` is delivered), slot 3 is `mstatus`.
+* The monitor never writes it — `sbi_capstone.c:801` zeroes all slots, `:823-825` write only
+  0, 2 and 3.
+* A trap does not install a new PCC — `frontend.sv:425-426` sets `npc_d = trap_vector_base_i`
+  while `npc_metadata` is carried forward.
+
+So a fault jumps to pc = 0 with the domain's PCC still installed, faults again on the
+out-of-bounds fetch, and loops forever in M-mode with interrupts off and no UART.
+
+**Every "no trap was reported, so it is not a fault" inference in this project is void.**
+
+**CORRECTED 2026-08-05: the fix ALREADY EXISTS and needs NO monitor change.** An earlier
+version of this entry said it required a glue handler, `dom_seal[1]` in `create_domain`, and a
+new readback path. That is wrong and would send someone to write a monitor patch that is not
+needed. `start-gp-captable-interp.S:760,824` already contains, behind **`INTERP_DOMAIN_MTVEC=1`**:
+`lla t0, .Ldomain_trap; csrw mtvec, t0` — set from INSIDE the domain (M-mode, so `csrw` is
+permitted), with `.Ldomain_trap` jumping to `.Ldomain_returned`, which already captures `mcause`
+and `mtval`. Verified in a built image: `csrw mtvec, t0` at `0x102e4`, absent without the flag.
+
+So M-1 is fixed by **building with `INTERP_EXTRA_CFLAGS=-DINTERP_DOMAIN_MTVEC=1`**. What is NOT
+yet established is whether the handler is reachable after a real fault — it touches
+`sp`/`cscratch`, so a fault that corrupted those would make it fault again and look identical to
+no handler. **Verify with `tagf`** (`fpga-repros/RTL-store-user-metadata/`, a deliberate fault):
+returning with a cause proves the handler works.
+
+Worth fixing on its own merits: **any** domain that faults for any reason is currently
+undebuggable and takes the core with it.
+
+### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
+
+**Reproducer:** `capstone/tests/fpga-repros/S01-image-perturbation-hang/` (has `run.sh`).
+
+Two SQLite domain images differing by **one dead, never-called, empty function**:
+
+    QEMU   uc.dom  stage 11 -> obs=1517161237      board  uc.dom  -> obs=1517161237  (5 obs)
+    QEMU   dp0.dom stage 11 -> obs=1517161237      board  dp0.dom -> NEVER RETURNS   (2 obs)
+
+Stage 11 executes only `sqlite3Strlen30` on a string literal and never calls the added function.
+The hang is silent: no trap reported, no marker, core still services the console. **Nine**
+structurally different perturbations of `uc` were built and every one hangs; only unmodified
+builds (`uc`, `f10`) return.
+
+**Attribution is NOT established.** The QEMU differential rules out a platform-independent
+compiler/glue defect — a miscompiled `dp0` would fail there too, and does not — but QEMU is our
+own model and is permissive where the RTL is not. The board may be correct while our software
+relies on something it does not guarantee, and the difference may be timing rather than function.
+
+**Tested and EXCLUDED** (see the package README for the artifact behind each): `.gct` size and
+contents; carve count (8→208 synthetic, and `dvar` at 182); image size (`sz2048/8192/16384` are
+all byte-identical in size to `dp0`); address of the executed code (`sqlite3Strlen30` is at the
+**same** address in both); the amalgamation rewrite (byte-identical); run position (controlled
+both ways); rev-node pool exhaustion (`head`=221/1021, `overflow=0`); bounds representability
+(every carve representable, still hangs); operand forwarding (fix present in this bitstream).
+
+**The debug mux is not diagnostic here** without a subtracted baseline: on the PASSING run it
+reads byte-identical to the hanging run (`sw=255` `0x8f`, `sw=224` `0xff`, `sw=225` `0xd5`).
+
+**Seven mechanisms were proposed and all seven retracted** during 2026-08-04/05. The recurring
+cause was that every intervention which could observe the system also changed its behaviour.
+Full trail in `ref/SILICON-BLOCKER.md`.
+
+**A BETTER PROBE THAN THE HANG — sporadic wrong `strlen` results (2026-08-05).** Stages that
+*return* are already wrong, which is cheaper and more bisectable than a hang:
+
+    stage 13   board 15   expected 36 (5+8+11+12)    QEMU 36  CORRECT
+    stage 16   board 124  expected 128 (128*5 & 0xff) QEMU 128 CORRECT
+
+Stage 16 calls `strlen` on the **same** literal `"alpha"` 128 times and totals 636 instead of
+640 — **4 of 128 calls returned 1**. So it is **sporadic (~3%), not length-dependent**; stage
+13's `15 = 5+8+1+1` is the same effect at 2 of 4.
+
+At `-O0` `strlen` re-loads the string capability with `ldc` **from a stack slot on every
+iteration** (`ldc a0,0x0(a0)` → `cincoffset` → `lbu`, `strlen` at `0x14fc1c` in `uc`). At `-O1`
+it would stay in a register — but `-O1` cannot build (see **C-17**).
+
+**INFERRED, NOT ESTABLISHED:** wrong `strlen` → wrong hash in `sqlite3InsertBuiltinFuncs` →
+corrupt chain → the stage-10 hang. Every link is measured *except* that last one. Do not treat
+stage 10 as explained.
+
+**CONFLICT that must be resolved before building on any of this:** `SILICON-BLOCKER.md` §0a8
+records `stage 13 rc=0x24` = **36, CORRECT**, after the unaligned-copy fix, and states that
+stages 11-14 are a *resolved* bug. Today's `f10` returns **15**. Either `f10` predates that fix,
+or it regressed. Re-run stage 13 on a current build before trusting either number.
+
+**Next:** ask whether the divergence survives on `caplifive_65536_nodes.bit` (and whether that
+bitstream carries the forwarding fix). A waveform of `dp0` stage 11 around the hang would settle
+in minutes what no software-visible observable here can.
+
+### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `OPEN, not yet hit`
+
+`compress_bounds` has two branches selected by `bounds.start == cursor`
+(`ariane_pkg.sv:749`). `split` sets cursor == base on both outputs
+(`capstone_dyn_unit.anvil:139-144`), so carved capabilities take the **cursorless**
+branch: the base is returned as `start: cursor` verbatim (`ariane_pkg.sv:662-665`),
+exact at any alignment, while the TOP is truncated DOWN to a multiple of 2**E with E set
+by the highest bit at which base and top differ, floored at bit 20. E is 0 — and the
+capability exact — only while base and top share one 2 MiB window.
+
+Domains are exact **by construction** today: the module rounds the allocation to a
+power-of-two page count (`capstone.c:83-84`) and the allocator returns it aligned, so
+everything sits in one window. Past 2 MiB, interior splits straddle a boundary and
+globals silently get SHORT capabilities. `check-repr.py` fails a build at that cliff.
+
+The other branch (`ariane_pkg.sv:769-806`, reached once cursor != base) is the
+`granule(L) = 1 << (max(0, floor(log2 L) - 12) + 3)` rule with the base truncated down —
+that one is C-13, caused by the monitor's `C_SET_CURSOR`. Applying it to the glue's carve
+instead was a wrong fix (765da7f8, reverted in 91685f14); do not re-derive it.
+
+### C-15 — `getGpCaptableIndex` gives `llvm.compiler.used` a cap-table slot `FIX WRITTEN, NOT YET BUILT`
+
+Any TU using `__attribute__((used))` fails to link:
+`ld.lld: error: undefined symbol: llvm.compiler.used, referenced by
+.capstone_gp_table+0x48`. LLVM-reserved appending-linkage globals are markers, not data.
+Found while building the gpn2use1 rung. Fix factors the predicate into a single
+`isGpCaptableGlobal` so the early-out and the index-assigning enumeration cannot drift —
+they define the ABI order the glue depends on.
+
+### C-5 — 4 KiB code window `OPEN`
+`link-gpfree.ld` forces globals to image offset `0x1000`, capping `.text` at 4096 B. One
+hardcoded number, QEMU-validated at 16 KiB and 32 KiB and silicon-validated at 32 KiB. Lifting it
+is what full CoreMark and Dhrystone need. Task #62.
+
+---
+
+> ## READ FIRST — most OPEN `R-*` entries predate the 2026-08-04 bitstream reflash
+>
+> The board ran `working-caplifive-captype-fixed.bit` until **2026-08-04**, when it was
+> reflashed to **`caplifive_fixed_forward.bit`** (the operand-forwarding fix,
+> `capstone-ariane 7aac52f93`).
+>
+> **R-14 and R-16 were both that one bug** — two entries that had each accumulated sessions of
+> independent investigation turned out to be the same defect, and both are now FIXED and
+> archived. Every other `R-*` measured before that date is therefore **suspect**: it may already
+> be fixed, and its recorded mechanism may be wrong.
+>
+> Treat a pre-2026-08-04 `R-*` as *unverified on current silicon* until it is re-measured. Do not
+> hand one to the board owner, and do not build a theory on one, without re-running it first.
+> Re-running is usually one boot.
+>
+> Unaffected: `C-*` (compiler) and `I-*` (infrastructure) entries, which do not depend on the
+> bitstream.
+
+## Archive — fixed, kept for provenance
+
+> **Archived below on 2026-08-05.** These are FIXED, CLOSED, SUPERSEDED or RETRACTED.
+> They are kept in full for provenance -- several were re-opened once already when a
+> later session hit the same shape. Nothing here is an open issue; do not hand any of
+> it to the board owner as one.
+
+### R-2 — `delin` in domain code wedges the board `EXPLAINED 2026-07-29 by C-13 — not an RTL defect`
+
+**This is not a hardware fault and not specific to domain code.** It is the C-13 root
+cause seen from the other end: the RTL's `DELIN` accepts `CAP_TYPE_LINEAR` only, and a
+capability **loaded from the gp cap-table is already `NONLIN`** — cap-table storage caps
+are produced by `SPLIT` from an `sp` the entry glue already delin'd, and `SPLIT` preserves
+`cap_type`. So the delin in the repro was a *second* delin on a non-linear capability,
+which the RTL correctly rejects. QEMU's `helper_csdelin` returns early in that case, which
+is why the repro looked like an RTL-only defect. The description below ("a delin on a
+capability loaded from the gp cap-table") states the precondition exactly.
+
+Correct rule: **never `delin` a capability obtained from the gp cap-table.** It is already
+non-linear, so the `delin` is redundant as well as fatal. See C-13, and
+`history/29-07-2026_C-13-root-cause-double-delin.md`.
+
+The original text follows; the observation was sound, the "RTL wedges on delin"
+interpretation was not.
+
+A `delin` executed in domain code on a capability loaded from the gp cap-table wedges the board
+(power-cycle to recover). Proven against a size-matched `addi x0,x0,0` control at the same address,
+so it is the instruction and not code layout.
+
+- **Repro:** `tests/fpga-repros/R02-delin/` (superseded — now a secondary item in the
+  R-1 package); probe knob `LADDER_CM_WITH_DELIN`
+- **Evidence:** `history/27-07-2026_04-33-58_RESULTS-delin-wedges-the-RTL-controlled-and-second-fault-isolated.md`
+- **Workaround:** the `delin` was ours and unnecessary — removed from the default build, which
+  also returns `coremark_matrix` to being a faithful copy of upstream.
+- **Probably our bug**, not the platform's: the glue already delins every cap-table entry before
+  storing it, and our QEMU was patched to tolerate the redundant case *"rather than faulting"*.
+  Only the failure *mode* (full wedge vs catchable trap) is worth the board owner's attention.
+
+### R-7 — `rv8_sha512` hangs on silicon: an INSTANCE OF R-1, not a new fault `CLOSED into R-1`
+Measured 2026-07-28. The rung builds with the C-5 window + copy-path bypass, passes the
+QEMU parity leg with its full 640 B table (oracle 1390718314), and then **hangs the
+`cscall` on the board**, both attempts.
+
+- **Its BASELINE half is clean and measured:** 540,073 cyc / 462,646 instret, 15/15 passes
+  tied at min instret, spread 0, correct oracle. So only the capability half fails.
+- **R-1 predicted PASS**: `sha512_k[i]` is a read-only indexed load with nothing ever
+  stored to that table — the `beebs_bs` shape, which passes. But `sha_w[i&15]` **is** both
+  read and written inside the compression loop, with `sha_chain[]` stored in the same
+  region, so the same-object load/store pattern R-1 describes *is* present after all. This
+  rung is therefore consistent with R-1 rather than a counter-example — unlike R-6.
+- **CONFOUND ELIMINATED — the C-5 workaround is EXONERATED.** The control
+  (`rv8_sha512s`: identical compression loop, 16-entry table, **default 4 KiB window,
+  default unrolled path, no bypass**, QEMU-green at oracle 2842840124) **hangs on silicon
+  too**. So neither the 32 KiB window nor the ~8 KB prologue is implicated: the fault is
+  the kernel's memory shape. **R-7 is an instance of R-1**, and the `DOMAIN_WINDOW=32k` /
+  `LADDER_NO_RO_COPY=1` machinery is sound and reusable for other rungs.
+- **Which also means my PASS prediction was simply a misread of my own kernel:**
+  `sha_w[i&15]` is read *and written* in the compression loop while `sha_chain[]` is stored
+  in the same region — the same-object load-with-intervening-store pattern R-1 describes.
+  Only `sha512_k` is read-only, and that was the part I looked at.
+- **Control kept in the tree** (`rv8_sha512s_*`) as the cheapest R-1 reproducer that is not
+  a synthetic probe: a real crypto kernel, 4 KiB, no special flags.
+- **Repro:** `DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1 DOMAIN_OPT_LEVEL=-O1`, artifacts in the
+  ladder dir; capability half must be run with `LADDER_REBUILD=0` (see below).
+
+**Tooling gap found while running this — FIXED 2026-07-28.** The runner's rebuild path did
+not know about `DOMAIN_WINDOW` / `LADDER_NO_RO_COPY`, so a default run would silently rebuild
+this rung at 4 KiB with the broken copy path and measure the wrong binary; `LADDER_REBUILD=0`
+with a pre-built dir was the workaround. The knobs now live in **`ladder-rungs.spec` field 5**
+and travel with the rung through `build-ladder-fpga.sh`, so a plain sweep builds it correctly
+and `LADDER_REBUILD=0` is no longer needed. Same fix shape as I-1: put the per-rung build
+property in the one file both halves read, rather than relying on an env var set by hand.
+(The baseline half discards field 5 explicitly — it is plain riscv64 with no glue to affect.)
+
+**Re-reproduced AGAIN 2026-07-28 after C-4b was fixed**, now via the copy path at the
+DEFAULT 4 KiB window with no knobs (transfer `sha 1e159a9fa415a763 OK`, first attempt):
+still no END marker in 120 s, both attempts. Expected — R-7 is an R-1 instance and the
+4 KiB control `rv8_sha512s` hangs too — but it costs nothing to confirm alongside `beebs_ns`
+and being wrong in that direction would have been worth knowing.
+
+**Re-reproduced 2026-07-28** on the burst-transfer path with the knobs coming from the spec:
+transfer clean (`sha a88b9760f76b5741 OK`, first attempt), `rv8_sha512 domain ID = 0` prints,
+then no END marker in 120 s, twice. Same hang, now on a build the runner produced itself.
+
+### C-10 — capability-spill lead: REFUTED `CLOSED`
+Proposed and killed the same evening, by the falsification checks written into the entry
+before acting on it.
+
+**The lead:** `accum_probe`'s slot stores are emitted but never land, and nearby sits
+`sd a0, 0x40(sp)` — a 128-bit capability apparently spilled with a plain 8-byte store,
+which would drop the tag and corrupt `res` on reload.
+
+**Refuted by the control:** `expint_diag`, which writes the same slots **successfully**,
+contains the **identical instruction** (`100b8: sd a0, 0x40(sp)`). Present in both the
+working and the failing probe, so it cannot be the cause. A follow-up check also killed the
+register-reuse variant: **both** probes use `a0` as the base for their slot stores
+(`sd _, 0x18(a0)`, `0x20(a0)`, …) over the same offset range.
+
+**So the two probes are structurally identical in every respect hypothesised, and
+`accum_probe`'s delivery failure is UNEXPLAINED.** Both spill `a0` the same way, both store
+through `a0`, both write `res[0]`/`res[2]` last — and only one delivers. Something outside
+this comparison differs. Do not re-run either on the board until it reproduces off-board;
+the QEMU ladder harness gives an 8-byte `res` region and so cannot exercise the debug-slot
+path at all, which is why two boots were spent learning nothing.
+
+**Value of the entry:** it is kept because the *method* worked. The falsification checks
+were written down before the fix was attempted, and they killed the theory in one command
+instead of after a codegen change. That is the practice to repeat.
+
 ### R-14 — struct-array init wedges `FIXED IN SILICON 2026-08-04; title is now WRONG`
 
 > **RESOLVED 2026-08-04 — capability operand-forwarding bug, fixed in the RTL.** The fix is
@@ -1158,301 +1822,6 @@ seconds of emulation, and R-1's diagnostic family can finally be developed off-b
 
 ## Compiler / toolchain (ours)
 
-### C-2 — `Cannot select: i128 = or` / `= xor`, mixed extends `OPEN (partially widened)`
-Blocks `rv8_qsort` and `rv8_miniz` at −O1/−O2 (both still fail 2026-07-28; −O0 passes).
-
-**The semantics question was malformed, and the answer is now settled.** It was framed as
-"do the high 64 bits mean capability metadata or a genuine 128-bit integer?" — neither.
-`lowerScalarI128Logical` computes the op in XLen and re-extends, which is exact **only while
-the i128 carrier's high half is an extension of its low half.** Matching extends preserve that
-invariant. Mixed extends break it: for `sext(a) OR zext(b)` the true 128-bit high half is
-`sign(a)`, which is **not a function of the low-half result**, so re-extending the narrow
-result under *either* rule is a **miscompile**. **The bail is correct. Do not "fix" it by
-picking an extension rule.**
-
-- **Widened safely 2026-07-28** (`CapstoneISelLowering.cpp`): when the sign-extended operand is
-  **known non-negative** (`DAG.SignBitIsZero`), its sign extension and a zero extension are the
-  same bits, so both operands agree and the invariant holds. Covers indices/sizes the optimizer
-  has already proven `>= 0`, without assuming anything about meaning.
-  Lit `i128-logical-mixed-extend.ll`; **Capstone lit 43/43**.
-- **Does NOT unblock rv8.** Re-verified with exit codes: `qsort` −O1/−O2 still
-  `Cannot select: i128 = xor`, `miniz` still `i128 = or`. Their signed operand is not provably
-  non-negative, so they are the genuinely unrepresentable case.
-  > ⚠ An intermediate report that both benchmarks "now build" was **wrong** — that check
-  > grepped output for error strings without testing the exit code, so a failing build read as
-  > success. Always gate on exit status.
-- **What the real fix needs, and why it is not a lowering patch:** the remaining case cannot be
-  represented while i128 is carried in a single capability register. Either (a) genuine
-  128-bit integers get a register-pair representation distinct from the capability carrier, or
-  (b) find why a **64-bit** `or`/`xor` is being widened to i128 at all — if the source only does
-  64-bit logic, the i128 node is an artifact upstream of this lowering and should be prevented
-  rather than lowered. **(b) is the cheaper investigation and should come first.**
-
-### C-3 — RV8 fails at runtime at −O1/−O2 `OPEN`
-**Now also reaches the ladder (2026-07-28):** the `rv8_primes` *rung* runs at −O0 and
-**HANGS at −O1** on silicon, so it is the one row in the overhead table that cannot be
-measured at the uniform level. Same family as the RV8 −O1/−O2 failures below.
-Five RV8 benchmarks now *build* at −O1/−O2 but fail 10/10 at runtime: `primes`/`aes`/`dhrystone`
-hang silently; `sha512`/`norx` take deterministic capability faults (cause 5 OOB / cause 24, same
-PC at both levels). −O0 controls all pass. **Not regressions** — code that never compiled cannot
-regress.
-- **Evidence:** `history/27-07-2026_12-59-35_three-codegen-fixes-*.md`
-- **Leads:** `sha512` faults with bounds visibly too small; `norx` with an untagged capability
-  reaching a load. Both smell like a bounds/provenance codegen bug at −O1+.
-
-### C-4 — split into a FIXED half and a remaining domain-creation bug
-Renamed from "large read-only data cannot be delivered": size was never the variable.
-
-#### C-4a — constant pools are unreachable in a domain `FIXED 2026-07-28`
-**Root cause, with the emitted sequence:**
-```
-.LCPI0_0: .quad 81985529216486895        ; .rodata.cst8 -- a CONSTANT POOL entry
-  auipc a2, %pcrel_hi(.LCPI0_0)
-  addi  a1, a2, %pcrel_lo(...)
-  scc   a1, gp, a1     ; set gp's cursor to a .rodata address
-  ld    s6, 0(a1)      ; FAULTS
-```
-A pool entry is **not** a `GlobalVariable`, so it gets no cap-table slot (correctly);
-`lowerConstantPool` then falls back to `LGA` → `scc gp`. Under gp-captable `gp` is bounded
-to the **cap table itself**, so the cursor lands out of bounds. The tell in the fault line
-is that the reported bounds are exactly the table:
-`cursor = 0x101561000, bounds = (0x10157ffd0, 0x101580000)`.
-
-**Fix:** `CapstoneSubtarget::useConstantPoolForLargeInts()` returns **false** whenever the
-gp-free/gp-captable ABI is active, so the constant is materialised inline instead. Forming
-a pool in a domain is always a miscompile, never an optimisation — the same reason
-`-fno-jump-tables` is already mandatory (a jump table is `.rodata` too).
-
-**Validated:** the previously-faulting `rv8_sha512` configuration now returns its oracle
-(`__CAPSTONE_LADDER_RV8_SHA512_PASSED__`); 0 `.LCPI` entries remain in the emitted asm;
-Capstone lit **43/43**; `beebs_bs`, `beebs_prime`, `beebs_cnt` still pass QEMU parity.
-
-> **Two wrong turns on the way, both worth remembering.** First this was called a
-> *large-data delivery* problem, because bigger constants are the ones that get pooled.
-> Then, on seeing that all named globals DID have cap-table slots, the constant-pool
-> explanation was **retracted as refuted** — but the faulting object was never a global,
-> so the descriptors could not have refuted it. The lesson is to identify the faulting
-> OBJECT before reasoning about the mechanism: a symbolised `-S` listing settled in one
-> step what two rounds of inference got wrong.
-
-#### C-4b — the large-RO COPY PATH in the generated glue is broken `FIXED 2026-07-28`
-
-**FIXED 2026-07-28. Root cause: `cincoffset` CONSUMES a linear `rs1`.**
-
-`op_helper.c:635-640` — `helper_cscincoffset` with `rd != rs1` does
-`*rd_v = *rs1_v; if(!captype_is_copyable(rs1_v->val.cap.type)) *rs1_v = CAPREGVAL_NULL;`
-and `cap.h:122` defines `captype_is_copyable(ty) { return ty == CAP_TYPE_NONLIN; }`.
-`sp` arrives from cscratch as `CAP_TYPE_LIN`, and the builder's only `delin(sp)` was its
-LAST line — so the copy path's `cincoffset(t4, sp, t5)` **nulled `sp` outright**, and the
-next `split(t2, sp, t1)` tripped `helper_cssplit`'s `assert(rs1_v->tag && !rs2_v->tag)`
-with `tag == 0`.
-
-That accounts for every observed symptom: it fired only AFTER `Created domain ID = 0`,
-only when `COPY_THRESHOLD` selected the copy path, and never in the zero-init path (which
-`cincoffset`s `t2`, already delinearized) or the unrolled path (which never `cincoffset`s
-`sp`). It is also why five careful static readings of the generated assembly missed it —
-**the assembly is correct as written; the defect is in the ISA semantics of one operand.**
-
-**Fix:** emit `delin(sp)` at the top of `BUILD_GP_CAPTABLE`. Minimal and correct rather
-than a workaround — `helper_cssplit` asserts `type == LIN || NONLIN` so every split still
-works, and `split` (unlike `cincoffset`) never consumes `rs1`. `sp` was delinearized by the
-builder's last line anyway, so this only moves that transition earlier; the capability
-handed to compiled code is unchanged.
-
-Emitted **only when a global actually took the copy path**, so every currently-measured
-rung stays byte-identical — verified by diffing generated glue against the previous
-generator (`beebs_aha_mont64`: 0 differing lines; `beebs_crc32big`: gains exactly the
-`delin` and a comment). The condition is derived from the emitted body, not by re-testing
-the eligibility predicate, so the two cannot drift.
-
-**Validated:** `beebs_crc32big` (2,048 B `const crc_32_tab`) returns oracle **1703161001**
-through the copy path — the first time that path has worked end to end. Standing ladder
-regression 6/6 green (`matmult_int` 774662735, `beebs_prime` 582955588, `beebs_bs`
-887447230, `beebs_cover` 1993178309, `ctrsanity` 43260934, `beebs_aha_mont64` 2185097489).
-
-*Previous status, kept for provenance:* the MONITOR half working, and the failure moving.
- C-11 (the
-monitor could not be rebuilt) is fixed, so the monitor-side copy specified in
-`plans/sqlite-on-silicon-scoping.md` is now implemented, built and running:
-`create_domain` copies the image's initialized-globals bytes
-`[base+GPFREE_GLOBALS_OFFSET, base+code_size)` into the front of `dom_data`, guarded so it
-is skipped rather than overrunning when the image is large relative to the data region.
-Source is uncommitted submodule state, mirrored at
-`tests/vendor-patches/opensbi-capstone-sbi.patch`.
-
-Evidence it works: `beebs_crc32big` (2,048 B `const crc_32_tab`, external linkage, the
-rung built specifically for this path) previously **failed at domain CREATION**; it now
-prints `Created domain ID = 0` and proceeds. The regression rung `beebs_aha_mont64` still
-passes with the copy live (`retval = 2185097489`).
-
-**What remains: the same `helper_cssplit` assertion (`rs1_v->tag && !rs2_v->tag`), but
-later in the sequence** — no longer at creation, now after the domain exists. Static
-reading of the generated glue does NOT explain it: every `split` there takes `sp` (tagged)
-as rs1 and an `lcc`-derived integer as rs2, and the registers that do hold capabilities
-(`t3`, `t4` in the copy loop) are re-loaded with `li` before any later split. So the next
-step is to LOCATE the faulting `cssplit` rather than reason about it — QEMU aborts on the
-assertion, so add a print of `rs1`/`rs2` provenance in `helper_cssplit`, or break there
-under gdb, and find out whether it is in the glue at all or in the monitor's
-`create_region`/`share_region` path that runs immediately after.
-
-**One implementation trap already paid for, recorded so it is not repeated:** the copy
-must index in **16-byte** units. `__linear void *` subscripting steps one CAPABILITY and
-generates a 16-byte `ldc`/`stc` — `dom_seal`'s own zeroing loop uses the same convention
-(`DOMAIN_DATA_SIZE = 16 * DOMAIN_DATA_N`). An earlier draft used `>> 3`, walked twice the
-intended distance and stored past `dom_data`:
-`Cap mem access OOB: cursor = 101562000, size = 16, bounds = (101560000, 101561020)`.
-
-*Original entry, still accurate for the glue half:*
-
-**Not a domain-creation bug, and not about size.** Earlier notes here (now corrected) chased
-image geometry through the loader and kernel module. That was the wrong component:
-
-> `Created domain ID = 0` appears **before** the assertion in the serial log. Domain
-> creation **succeeds**; `helper_cssplit: rs1_v->tag && !rs2_v->tag` fires afterwards, in
-> the **entry glue**.
-
-**The actual trigger is a threshold in the glue generator, not a size limit.**
-`gen-gp-captable-glue.py` has `COPY_THRESHOLD = 256` and picks between two paths:
-
-| initializer size | glue path | result |
-|---|---|---|
-| 640 B (`sha512_k[80]`) | **large-RO copy loop** (`stor > 256`) | **FAILS** |
-| 128 B (`sha512_k[16]`) | unrolled `li`/`sd` immediates (`stor <= 256`) | **passes** |
-
-So every "size-dependent" symptom was just this threshold selecting a different code path.
-The large-RO copy path is the thing that is broken; it is emitted for exactly one global in
-the ladder today, which is why nothing else has hit it.
-
-**The suspect sequence** (from the generated `.inc`):
-```
-lla t4, sha512_k
-lla t5, __gpfree_globals_base
-sub t5, t4, t5               /* blob offset = sym - base */
-cincoffset(t4, sp, t5)       /* src */
-cincoffset(t3, t2, x0)       /* dst */
-```
-`lla` on a Capstone target may not yield a plain integer, so `sub` of two such values --
-and hence the operand feeding a later `split` -- is where a stray tag most plausibly comes
-from. **Verify by dumping tags, not by reading:** that inference is exactly the kind that
-has been wrong three times on this issue.
-
-**Refuted along the way, recorded so nobody repeats them:** (a) `tot_size` invariant --
-both images give `tot_size` 8192 and satisfy `tot_size > code_size + 1536`; (b) `code_len`
-carrying the exec segment -- it is `image_size`, the whole loadable image
-(`libcapstone.c:197`); (c) `dom_pages_log2` rounding -- it rounds **up** correctly
-(`dom_pages == 1 ? 0 : ilog2(dom_pages - 1) + 1`).
-
-**Experiment RUN (2026-07-28): the unrolled path is not a viable stopgap, and C-4b is
-entangled with C-5.** Raising `COPY_THRESHOLD` above 640 so the big table takes the
-unrolled `li`/`sd` path fails at link time:
-
-```
-ld.lld: error: unable to place section .text at file offset [0x1000, 0x2E77]
-```
-
-`.text` reaches **11,895 B** against the 4 KiB window — 640 B of data costs ~8 KB of
-immediate-materialisation code, exactly the reason the copy path exists. So:
-- The copy path is **necessary**, not an optimisation — it cannot simply be disabled.
-- **C-4b cannot be worked around without first lifting C-5** (the 4 KiB window), or by
-  fixing the copy path itself.
-- Threshold reverted to 256; no code change kept from this experiment.
-
-**The `lla`-produces-a-tag hypothesis is REFUTED (disassembly, 2026-07-28).** The emitted
-glue uses plain integer addressing exactly as intended:
-```
-auipc t4, 0x1 ; addi t4, t4, -0x108     ; integer address of sha512_k
-auipc t5, 0x1 ; addi t5, t5, -0x150     ; integer address of __gpfree_globals_base
-sub   t5, t4, t5                        ; plain integer offset
-<cincoffset t4, sp, t5> ; <cincoffset t3, t2, x0> ; li t6, 0x280 ; ld/sd loop
-```
-No capability reaches an operand that must be untagged in this sequence. That is the
-**fourth** hypothesis refuted on C-4b (after the `tot_size` invariant, `code_len`, and
-`dom_pages_log2`).
-
-**New observation, unexplained:** `li t6, 0x280` (640) appears **TWICE** in the domain, at
-`0x10164` and `0x10324` — two identical 640-byte copy loops, where only one global is
-640 bytes. Either the glue is emitted twice, or the generator emits a duplicate descriptor.
-A second copy loop would carve/copy storage a second time and could plausibly leave the
-register state that the next `split` chokes on.
-
-**Counted, and the GENERATOR IS CORRECT.** The emitted `.inc` contains exactly
-**1** copy loop, **3** global headers, **4** `split`s (cap table + 3 globals) and **3**
-`stc`s to the table — all as intended.
-
-**The duplicate is BY DESIGN — this lead is refuted too.**
-`start-gp-captable-generic.S` has two entry points and each expands the macro:
-```
-__test_reentry:  ccsrrw(sp, cscratch, x0) ; BUILD_GP_CAPTABLE  /* reentry */
-_start:          ccsrrw(sp, cscratch, x0) ; BUILD_GP_CAPTABLE  /* normal entry */
-```
-Two copies in the image, exactly one executed per entry. Nothing wrong with it.
-
-**Status: FIVE hypotheses proposed, FIVE refuted by measurement.** In order: the
-`tot_size` invariant; `code_len` carrying the exec segment; `dom_pages_log2` rounding;
-`lla` yielding a tagged value; a duplicated copy loop. Each looked sound on paper and each
-died on contact with a dump, a count or a disassembly.
-
-**What is solidly established, and is the whole of what a successor should trust:**
-- Domain creation **succeeds** (`Created domain ID = 0` precedes the assertion) — the fault
-  is in the **entry glue**, not `create_domain`, not the loader, not the kernel module.
-- The discriminator is `COPY_THRESHOLD = 256` selecting the **large-RO copy path**, not
-  image size: 640 B takes it and fails, 128 B takes the unrolled path and passes.
-- The copy path is **not optional** — forcing the unrolled path for 640 B blows `.text` to
-  11,895 B against the 4 KiB window, so **C-4b is entangled with C-5**.
-- The generated glue is **correct by count** (1 copy loop, 3 globals, 4 splits, 3 `stc`),
-  and the two copies in the image are the two entry points, by design.
-
-**BYPASSED 2026-07-28 — C-5 dissolves C-4b.** The copy path exists only because the
-unrolled `li`/`sd` alternative does not fit a 4 KiB window. Give it a **32 KiB** window and
-it does, so the broken path can simply not be taken:
-
-```
-DOMAIN_WINDOW=32k LADDER_NO_RO_COPY=1 DOMAIN_OPT_LEVEL=-O1 run-ladder-qemu.sh rv8_sha512
-  -> __CAPSTONE_LADDER_RV8_SHA512_PASSED__ (retval = 1390718314)
-```
-
-`rv8_sha512` now runs with its **full 640 B table** — the crypto/bitwise rung the ladder
-lacked. Both knobs are **opt-in per rung, not defaults**: changing the window changes image
-layout and this project has documented layout sensitivity (2026-07-26: four added
-instructions flipped a passing rung), so every measured rung stays at 4 KiB and its
-published number stands. `beebs_bs` and `beebs_prime` re-verified unchanged.
-
-**C-4b remains open and still matters**: the copy path is still broken, and any initializer
-needing more than ~32 KiB of unrolled materialisation will still hit it (SQLite is the
-likely first). But it no longer blocks a benchmark. When someone does fix it: **instrument,
-do not reason** — dump the capability tag at each `split` in the copy path. Five paper
-hypotheses have failed here; the sixth should not be one.
-
-**Related hazard — CHECKED 2026-07-28, NOT a bug.** `getGpCaptableIndex` derives its index
-from a global's *position* in `M.globals()`, and GlobalMerge mutates that list (it merged
-`sha_chain` + `sha_w` into one 192 B entry here), which raised the possibility of an access
-lowered against the pre-merge order loading the **wrong capability slot** — silent wrong
-data rather than a fault. It cannot happen: **GlobalMerge runs in `addPreISel`**
-(`CapstoneTargetMachine.cpp`), i.e. before instruction selection, so `lowerGlobalAddress`
-during ISel and `emitGpCaptableTable` in the AsmPrinter both see the same post-merge list.
-Confirmed empirically as well — the merged-global `rv8_sha512` build and the 6-global
-`beebs_cnt` both return their exact oracles, which mismatched indices would break.
-**Recorded because the reasoning is the useful part:** any future pass that adds or removes
-globals *after* ISel would silently break this positional scheme.
-
-### C-9 — Redundant `mv rd, rd` around inline-asm register constraints `OPEN`
-The Capstone backend emits **no-op self-moves** around an `asm volatile("" : "+r"(x))`
-tie. A 5-instruction loop body became 7 — `srai / xor / add / **mv a4,a4** / addi /
-**mv a4,a4** / bne` — where plain riscv64 emits 5 for the same source.
-
-- **Found:** 2026-07-27, while building the I-2 counter-sanity probe. It is logged because
-  it **silently defeated that probe**: the measurement depends on both targets retiring the
-  same instruction count, and the compiler manufactured a 1.4× difference out of nothing.
-- **Repro:** `tests/runtime-qemu/silicon-ladder/ctrsanity_kernel.h` with the inner
-  `__asm__ volatile("" : "+r"(acc))` restored; disassemble
-  `--triple=riscv64 --mattr=+m` and compare against `ladder-base/obj/base_ctrsanity.o`.
-- **Impact:** small in isolation (two wasted instructions per tie), but the register-pinning
-  idiom is used throughout the ladder kernels to defeat constant folding, so it inflates
-  the capability instruction count of **any** rung that uses it — i.e. it can bias an
-  overhead ratio upward. Worth a look before the next measurement round.
-- **Workaround:** keep inline-asm ties out of measured loops; use an opaque trip count and
-  a consumed result instead.
-
 ### C-11 — the monitor cannot be rebuilt: boot-hangs with zero serial `FIXED 2026-07-28`
 **FIXED 2026-07-28. Root cause: a stale object file, not the compiler.**
 
@@ -1536,196 +1905,6 @@ silicon has no path today. **This is the single gate, and it is not a compiler p
   `fw_jump.elf.good` = `6724bcb3`).
 - Full trail: `history/28-07-2026_14-30-00_monitor-regen-boot-hang-cause-not-established.md`.
 
-### R-12 — rev-node exhaustion is SILENT CORRUPTION, not a fault `OPEN, will bite at call_dom`
-
-The revocation-node allocator's `head` is 10 bits (`capstone-ariane/core/anvil_build/capstone_rev_node.anvil:168`), so allocation
-**#1025 wraps to node id 0 and reuses live ids**. `overflow_flag` reaches only a debug LED
-(`cva6.sv:1185`) -- nothing traps, nothing prints. Only `SPLIT` and `MREV` allocate
-(`capstone_dyn_unit.anvil:136, :91`); `ldc`/`stc`/`cincoffset` allocate nothing
-(`:330-332, :399`, `capstone_flu_unit.anvil:29-44`).
-
-`create_domain` does **5** splits, so this is NOT the current SQLite blocker. But SQLite's
-entry glue does **1,060** splits (1 table + 1,059 globals) and will be the first domain to
-cross 1,024 -- at `call_dom`, i.e. the moment after the present wedge is cleared. No
-ladder rung approaches it (bigmany: 65).
-
-### R-13 — `CINCOFFSET` duplicates a linear capability, untracked `OPEN`
-
-It writes the unmodified `rs1` back alongside `rd` with the same `revnode_id` and
-`CAP_TYPE_LINEAR` (`capstone_flu_unit.anvil:29-44`, `commit_stage.sv:278`), so one linear
-capability becomes two with no bookkeeping. Sits directly next to C-14 in kind: an
-instruction whose source-register behaviour diverges from what the compiler assumes.
-
-### I-4 — every monitor error is invisible on the FPGA `OPEN, cheap fix identified`
-
-`capstone_error` is `C_PRINT(...)` + `while(1)`, and `C_PRINT` is `csrw 0x800` -- the RTL
-trace, NOT the UART. So all five silent-spin sites look identical to a hang on the board:
-`handle_interrupt` default (`sbi_capstone.c:898-900`), `handle_exception` default
-(`:973-977`), illegal-instruction-not-`time` (`:959-963`), `swap_cpmp` -> `capstone_error`
-(`:917-923`), and two in `split_out_cap` (`:236, :246`).
-
-**Fix, zero board cost to develop:** give `capstone_error` a real UART putchar via
-`split_out_cap(0x10000000, 0x100, 0)` -- the same mechanism the monitor already uses for
-`mtime` (`sbi_capstone_dom.c:32-36`). Every future wedge would then name its own site
-instead of presenting as silence. This is the highest-leverage change available for board
-debugging and should be done before more board sessions are spent guessing.
-
-### C-14 — the COMPILER uses `movc` (a MOVE) for scalar register copies `ROOT-CAUSED 2026-07-30`
-
-> **ATTRIBUTION WAS REVISED TWICE ON 2026-07-30. Read this box before the rest.**
->
-> v1 "the RTL is buggy" -> v2 "the spec mandates it, the RTL is conforming, QEMU deviates"
-> -> **v3 (current): the spec is UNDER-SPECIFIED here; the weight of evidence favours
-> scalars being EXEMPT, so the RTL's MOVC is probably an oversight -- but this must be put
-> to the board owner as a QUESTION, not an accusation.**
->
-> What killed v2 (all verified in-tree):
-> * `parts/mem-access-insn.adoc:45` glosses the very parenthetical v2 relied on --
->   "not **a scalar or** a non-linear capability (i.e., `type != 1`)". So in the spec's own
->   usage `type != 1` is shorthand for "scalar or non-linear", which EXEMPTS scalars.
-> * `parts/mem-access-insn.adoc:105`, the one other place the consumption rule meets a
->   possibly-scalar operand (STC), writes the guard explicitly: "If `x[rs2]` **is a
->   capability and** `x[rs2].type` is not `1`". That is literally QEMU's `tag &&`.
-> * `parts/prog-model.adoc:219-222`: a register holds "either a capability **or** a raw
->   `XLEN`-bit integer", so `type` is undefined for an integer and the MOVC clause's test
->   does not cleanly apply to one.
-> * Spec commit `a1db3c2` ("MOVC now works with non-capabilities without generating
->   faults") removed the not-a-capability exception but never revised the consumption
->   clause -- so that clause was written when `rs1` was guaranteed to be a capability.
-> * QEMU's guard is deliberate, not an accident: commit `b9c53f0d09`, subject
->   "[Capstone] movc allows scalars", is the change that added `rs1_v->tag &&`.
-> * The RTL contradicts ITSELF: its STC exempts scalars
->   (`capstone_dyn_unit.anvil:408`, `if(rs2_v.metadata.cap_type != NOT_CAP)`) while its
->   MOVC does not (`capstone_flu_unit.anvil:14-25`). Internal inconsistency is the usual
->   signature of an oversight rather than a design choice.
->
-> **What is NOT in doubt, through all three versions:** the mechanism (MOVC zeroes a scalar
-> source on this silicon), the numeric proof, and that LLVM is emitting the wrong
-> instruction. Only blame moved.
-
-**What the spec says.** `capstone-spec/parts/cap-man-insn.adoc:33-37`, MOVC:
-
-    * If `rs1 = rd`, the instruction is a no-op.
-    * Otherwise
-    . Write `x[rs1]` to `x[rd]`.
-    . If `x[rs1]` is not a non-linear capability (i.e., `type != 1`),
-      write `cnull` to `x[rs1]`.
-
-Type encoding: `0` linear, `1` non-linear, `3` uninitialised, `5` sealed-return
-(`parts/existing-insn.adoc:60-65`). A plain scalar is not a non-linear capability, so
-`type != 1` holds and **the spec mandates zeroing the source.** `parts/intro.adoc:59-61`
-states the design intent plainly: instructions "can only **move**, but not copy, linear
-capabilities between general-purpose registers."
-
-**So MOVC is a MOVE, by design.** It is the wrong instruction for an ordinary
-register-to-register copy of a scalar, on any conforming implementation.
-
-**Who is wrong, precisely:**
-
-| component | behaviour | verdict |
-|---|---|---|
-| RTL (`capstone_flu_unit.anvil:13-21`) | zeroes source unless `type == NONLIN` | **spec-compliant** |
-| QEMU (`op_helper.c:580-584`) | adds `rs1_v->tag &&`, exempting scalars | **deviates from spec** -- and this is what hid the bug from every QEMU test |
-| LLVM (`CapstoneInstrInfo.cpp:520-523`) | emits MOVC for *every* GPR-to-GPR copy | **the actual bug** |
-
-**Correct rule for the compiler:**
-* scalar copy -> `addi rd, rs, 0` (`mv`). MOVC is simply wrong here.
-* non-linear capability copy -> MOVC is correct and preserves the source (`type == 1`).
-* linear capability -> cannot be copied at all, by design. MOVC moves it, which is the
-  only legal semantics; the IR should never ask for a duplicate.
-
-**STILL DO NOT PATCH THE RTL, but for a different reason than v2 gave.** Not because the
-RTL is conforming -- it probably is not -- but because a reflash invalidates every silicon
-measurement taken so far, is a hard stop needing approval, and the fix we control (the
-compiler) is free and lossless. Ask the board owner which behaviour is normative; do not
-assert that theirs is wrong.
-
-**The LLVM bug is bigger than the scalar case.** `CapstoneInstrInfo.td:2455-2460` declares
-MOVC with `hasSideEffects = 0` and `$rs1` as a pure USE with no def. LLVM therefore
-believes MOVC never clobbers its source -- which is wrong for LINEAR capabilities on ANY
-implementation, since every reading of the spec agrees those are consumed. Fixing only the
-scalar path leaves that hole open.
-
-**The fix is cheaper than first estimated:** `PseudoSCALAR_COPY_I128`
-(`CapstoneInstrInfo.td:2446-2447`) already exists and expands to `ADDI`. The scalar-copy
-machinery is in the backend; what is missing is routing scalar GPR copies through it
-instead of through MOVC.
-
----
-
-**Original mechanism analysis (unchanged and still correct as to WHAT happens):**
-
-`capstone_flu_unit.anvil:13-21`, MOVC with `rs1 != rd`:
-
-    if(data.cap_rs1.metadata.cap_type==cap_type_t::CAP_TYPE_NONLIN){
-        let rs1 = data.cap_rs1;          // source preserved
-        let rd  = rs1;
-    } else {
-        let rs1 = call create_cnull();   // SOURCE ZEROED
-        let rd  = data.cap_rs1;
-    }
-
-A plain scalar is `NOT_CAP`, so it takes the else branch and the source register is
-nulled (`create_cnull` zeroes cursor and metadata, `capstone_unit.anvilh:383-384`).
-
-QEMU (`op_helper.c:580-584`) guards the same zeroing with `rs1_v->tag &&
-!captype_is_copyable(...)`. A scalar has `tag == false`, so **QEMU preserves what silicon
-destroys.** DIVERGENT, and invisible to every QEMU test.
-
-**Delivery mechanism.** `copyPhysReg` emits MOVC for every GPR-to-GPR copy
-(`CapstoneInstrInfo.cpp:520-523`), so ordinary register moves inherit it. The write
-reaches the register file through an rs1 write-back port gated only by
-`cap_result.valid` (`commit_stage.sv:278-281`), i.e. for EVERY op in `check_cap_op`.
-A narrower set was evidently intended: `check_fwd_rs1` lists
-`{SPLIT, MOVC, CJALR, CCSRRW, STC}` (`ariane_pkg.sv:925-931`) and is **dead code** --
-defined and referenced nowhere in the tree, verified by grep. The broad gate is harmless
-for ops that echo rs1 faithfully (CINCOFFSET does, `capstone_flu_unit.anvil:37-44`) and
-fatal for MOVC, which writes a null.
-
-**Both failure modes follow mechanically.** In gpn2:
-
-    203c0: movc a4, a6       ; a4 := a6, and on silicon a6 := 0
-    203c4: bne  a6, a5, back ; a6 is 0, a5 is 4 -> always taken -> INFINITE LOOP
-
-That is the wedge: the domain never faults, it spins, which is why no capture ever showed
-an `mcause`, `mepc` or `badaddr`.
-
-**NUMERIC PROOF** of the other mode. `gpw2` ends its loop with `beq a6, a4` rather than
-`bne`. With `a6` zeroed, `0 != 1`, the loop exits one iteration early and `g[1]` is never
-written. Predicted checksum for `g = {1, 0}`: **3950255460**. The board returned exactly
-**3950255460**. Derived before inspection, bit-for-bit.
-
-**Scope.** Every measured rung sorts correctly: the four that pass have no `movc` whose
-source is read afterwards; the nine that fail do. SQLite has 444 occurrences of the
-pattern. `gpstress` has none and does NOT wedge -- it returns wrong data, so it stays a
-separate defect.
-
-**Fix is a design decision, not a one-liner.** No single instruction copies both scalars
-and capabilities while preserving the source -- and per the spec, none should: copying a
-linear capability is deliberately impossible. What the compiler needs is to pick the right
-instruction per type:
-
-| candidate | scalars | capabilities |
-|---|---|---|
-| `addi rd, rs, 0` | correct, preserves source | drops capability metadata |
-| `movc rd, rs` | DESTROYS source | correct for NONLIN only |
-| `cincoffset rd, rs, x0` | RTL preserves rs1; QEMU nulls it (C-4b) | same divergence |
-| `cincoffsetimm rd, rs, 0` | traps UNEXPECTED_OPERAND on NOT_CAP (`:49-52`) | -- |
-
-`copyPhysReg` cannot tell them apart -- scalars and capabilities share the GPR class. A
-correct fix needs the type distinction (separate register classes, or a copy pseudo
-selected by type at ISel). See `plans/c14-movc-source-destruction-fix.md`.
-
-This is a CORRECTNESS fix, not a workaround for a hardware defect: emitting a move where a
-copy was meant is wrong against the spec regardless of which core runs it.
-
-**Retracted on the way here** (four hypotheses, all mine): more-than-one-global,
-exactly-16-byte globals, unrepresentable capability bases, and stale shadow-RF metadata
-poisoning cincoffset's offset. The last was refuted by the same RTL read that found the
-real cause: ordinary ALU writes DO invalidate the metadata shadow entry, because the
-metadata regfile shares its write-enable with the integer regfile
-(`issue_read_operands.sv:1695-1709`, `commit_stage.sv:271-279`).
-
 ### C-14 (superseded framing) — "a domain with MORE THAN ONE global fails" `RETRACTED`
 
 **The split is exact.** Sorting every silicon result by the domain's global count:
@@ -1781,153 +1960,6 @@ use1 reads slot 1. Both pass => the fault needs two live slots. use0 fails alone
 0 was corrupted after being written, which points at the second store. Both fail =>
 building a 2-entry table is itself fatal, and `INTERP_BUILD_LIMIT=1` then separates the
 second split/store from the table split.
-
-### C-17 — `i128 SELECT_CC` is not selectable; the SQLite domain cannot build at `-O1` `OPEN — RECURRENCE`
-
-    fatal error: error in backend: Cannot select:
-      t88: i128 = CapstoneISD::SELECT_CC t9, Constant:i64<10>, seteq:ch, t93, t92
-
-Building the SQLite domain with `SQLITE_OPT_LEVEL=-O1` crashes the backend. A `SELECT_CC`
-producing an **i128** (a capability) has no selection pattern. `-O0` never forms the select,
-which is why `OPT=${SQLITE_OPT_LEVEL:--O0}` (`build-sqlite-silicon.sh:41`) has always been the
-SQLite default — the ladder rungs, by contrast, build at `-O1`.
-
-**This is a RECURRENCE, not a new bug.** `ISSUES.md` already records an i128 `SELECT_CC` crash
-in the stage-30..34 work ("Its first attempt built nothing (i128 `SELECT_CC`) ... both are now
-fixed"). Either that fix was shape-specific or it regressed; the earlier entry does not say
-which shape it covered. **Check the previous fix before writing a new one.**
-
-The shape is ordinary and will recur elsewhere: `sqlite3Strlen30` is
-`if( z==0 ) return 0; return 0x3fffffff & (int)strlen(z);` — a null check on a pointer feeding a
-masked result is exactly what forms `select_cc` on a capability at `-O1`.
-
-**Why it matters beyond the crash:** `-O1` is the cheapest available shot at the R-17 blocker
-(see below), and this is what blocks it.
-
-### M-1 — domains run with `mtvec = 0`, so a domain fault is an unbreakable loop `OPEN — OURS, FIX FIRST`
-
-**A trap and a hang are the same observation from outside.** This is not the SQLite blocker; it
-is why the SQLite blocker resisted 30+ board sessions.
-
-Verified end to end:
-* Seal slot 1 is the domain's trap vector — `csr_regfile.sv:399` (save) and `:1880-1884`
-  (restore: `reg_id 1` → `ctvec_d = data[127:64]; mtvec_d = data[63:0]`). Confirmed by its
-  neighbours: slot 2 is `{cscratch, mscratch}` (how `gp` is delivered), slot 3 is `mstatus`.
-* The monitor never writes it — `sbi_capstone.c:801` zeroes all slots, `:823-825` write only
-  0, 2 and 3.
-* A trap does not install a new PCC — `frontend.sv:425-426` sets `npc_d = trap_vector_base_i`
-  while `npc_metadata` is carried forward.
-
-So a fault jumps to pc = 0 with the domain's PCC still installed, faults again on the
-out-of-bounds fetch, and loops forever in M-mode with interrupts off and no UART.
-
-**Every "no trap was reported, so it is not a fault" inference in this project is void.**
-
-**CORRECTED 2026-08-05: the fix ALREADY EXISTS and needs NO monitor change.** An earlier
-version of this entry said it required a glue handler, `dom_seal[1]` in `create_domain`, and a
-new readback path. That is wrong and would send someone to write a monitor patch that is not
-needed. `start-gp-captable-interp.S:760,824` already contains, behind **`INTERP_DOMAIN_MTVEC=1`**:
-`lla t0, .Ldomain_trap; csrw mtvec, t0` — set from INSIDE the domain (M-mode, so `csrw` is
-permitted), with `.Ldomain_trap` jumping to `.Ldomain_returned`, which already captures `mcause`
-and `mtval`. Verified in a built image: `csrw mtvec, t0` at `0x102e4`, absent without the flag.
-
-So M-1 is fixed by **building with `INTERP_EXTRA_CFLAGS=-DINTERP_DOMAIN_MTVEC=1`**. What is NOT
-yet established is whether the handler is reachable after a real fault — it touches
-`sp`/`cscratch`, so a fault that corrupted those would make it fault again and look identical to
-no handler. **Verify with `tagf`** (`fpga-repros/RTL-store-user-metadata/`, a deliberate fault):
-returning with a cause proves the handler works.
-
-Worth fixing on its own merits: **any** domain that faults for any reason is currently
-undebuggable and takes the core with it.
-
-### R-17 — a ~1.6 MB domain hangs after ANY perturbation of its image `OPEN — NOT ROOT-CAUSED`
-
-**Reproducer:** `capstone/tests/fpga-repros/S01-image-perturbation-hang/` (has `run.sh`).
-
-Two SQLite domain images differing by **one dead, never-called, empty function**:
-
-    QEMU   uc.dom  stage 11 -> obs=1517161237      board  uc.dom  -> obs=1517161237  (5 obs)
-    QEMU   dp0.dom stage 11 -> obs=1517161237      board  dp0.dom -> NEVER RETURNS   (2 obs)
-
-Stage 11 executes only `sqlite3Strlen30` on a string literal and never calls the added function.
-The hang is silent: no trap reported, no marker, core still services the console. **Nine**
-structurally different perturbations of `uc` were built and every one hangs; only unmodified
-builds (`uc`, `f10`) return.
-
-**Attribution is NOT established.** The QEMU differential rules out a platform-independent
-compiler/glue defect — a miscompiled `dp0` would fail there too, and does not — but QEMU is our
-own model and is permissive where the RTL is not. The board may be correct while our software
-relies on something it does not guarantee, and the difference may be timing rather than function.
-
-**Tested and EXCLUDED** (see the package README for the artifact behind each): `.gct` size and
-contents; carve count (8→208 synthetic, and `dvar` at 182); image size (`sz2048/8192/16384` are
-all byte-identical in size to `dp0`); address of the executed code (`sqlite3Strlen30` is at the
-**same** address in both); the amalgamation rewrite (byte-identical); run position (controlled
-both ways); rev-node pool exhaustion (`head`=221/1021, `overflow=0`); bounds representability
-(every carve representable, still hangs); operand forwarding (fix present in this bitstream).
-
-**The debug mux is not diagnostic here** without a subtracted baseline: on the PASSING run it
-reads byte-identical to the hanging run (`sw=255` `0x8f`, `sw=224` `0xff`, `sw=225` `0xd5`).
-
-**Seven mechanisms were proposed and all seven retracted** during 2026-08-04/05. The recurring
-cause was that every intervention which could observe the system also changed its behaviour.
-Full trail in `ref/SILICON-BLOCKER.md`.
-
-**A BETTER PROBE THAN THE HANG — sporadic wrong `strlen` results (2026-08-05).** Stages that
-*return* are already wrong, which is cheaper and more bisectable than a hang:
-
-    stage 13   board 15   expected 36 (5+8+11+12)    QEMU 36  CORRECT
-    stage 16   board 124  expected 128 (128*5 & 0xff) QEMU 128 CORRECT
-
-Stage 16 calls `strlen` on the **same** literal `"alpha"` 128 times and totals 636 instead of
-640 — **4 of 128 calls returned 1**. So it is **sporadic (~3%), not length-dependent**; stage
-13's `15 = 5+8+1+1` is the same effect at 2 of 4.
-
-At `-O0` `strlen` re-loads the string capability with `ldc` **from a stack slot on every
-iteration** (`ldc a0,0x0(a0)` → `cincoffset` → `lbu`, `strlen` at `0x14fc1c` in `uc`). At `-O1`
-it would stay in a register — but `-O1` cannot build (see **C-17**).
-
-**INFERRED, NOT ESTABLISHED:** wrong `strlen` → wrong hash in `sqlite3InsertBuiltinFuncs` →
-corrupt chain → the stage-10 hang. Every link is measured *except* that last one. Do not treat
-stage 10 as explained.
-
-**CONFLICT that must be resolved before building on any of this:** `SILICON-BLOCKER.md` §0a8
-records `stage 13 rc=0x24` = **36, CORRECT**, after the unaligned-copy fix, and states that
-stages 11-14 are a *resolved* bug. Today's `f10` returns **15**. Either `f10` predates that fix,
-or it regressed. Re-run stage 13 on a current build before trusting either number.
-
-**Next:** ask whether the divergence survives on `caplifive_65536_nodes.bit` (and whether that
-bitstream carries the forwarding fix). A waveform of `dp0` stage 11 around the hang would settle
-in minutes what no software-visible observable here can.
-
-### R-11 — RTL truncates a capability TOP past a 2 MiB window; QEMU never does `OPEN, not yet hit`
-
-`compress_bounds` has two branches selected by `bounds.start == cursor`
-(`ariane_pkg.sv:749`). `split` sets cursor == base on both outputs
-(`capstone_dyn_unit.anvil:139-144`), so carved capabilities take the **cursorless**
-branch: the base is returned as `start: cursor` verbatim (`ariane_pkg.sv:662-665`),
-exact at any alignment, while the TOP is truncated DOWN to a multiple of 2**E with E set
-by the highest bit at which base and top differ, floored at bit 20. E is 0 — and the
-capability exact — only while base and top share one 2 MiB window.
-
-Domains are exact **by construction** today: the module rounds the allocation to a
-power-of-two page count (`capstone.c:83-84`) and the allocator returns it aligned, so
-everything sits in one window. Past 2 MiB, interior splits straddle a boundary and
-globals silently get SHORT capabilities. `check-repr.py` fails a build at that cliff.
-
-The other branch (`ariane_pkg.sv:769-806`, reached once cursor != base) is the
-`granule(L) = 1 << (max(0, floor(log2 L) - 12) + 3)` rule with the base truncated down —
-that one is C-13, caused by the monitor's `C_SET_CURSOR`. Applying it to the glue's carve
-instead was a wrong fix (765da7f8, reverted in 91685f14); do not re-derive it.
-
-### C-15 — `getGpCaptableIndex` gives `llvm.compiler.used` a cap-table slot `FIX WRITTEN, NOT YET BUILT`
-
-Any TU using `__attribute__((used))` fails to link:
-`ld.lld: error: undefined symbol: llvm.compiler.used, referenced by
-.capstone_gp_table+0x48`. LLVM-reserved appending-linkage globals are markers, not data.
-Found while building the gpn2use1 rung. Fix factors the predicate into a single
-`isGpCaptableGlobal` so the early-out and the index-assigning enumeration cannot drift —
-they define the ABI order the glue depends on.
 
 ### C-13 — interp glue fails on silicon `SUPERSEDED BY C-14 2026-07-30 — real interp PASSES at count=1`
 
@@ -2186,14 +2218,6 @@ Confirmed properly by disassembling the LINKED `fw_jump.elf`: `_create_domain.0`
 path immediately after a five-argument prologue. Checking the linked artifact rather than
 the generated `.c.S` is what settled it -- the same check that resolved C-11.
 
-### C-5 — 4 KiB code window `OPEN`
-`link-gpfree.ld` forces globals to image offset `0x1000`, capping `.text` at 4096 B. One
-hardcoded number, QEMU-validated at 16 KiB and 32 KiB and silicon-validated at 32 KiB. Lifting it
-is what full CoreMark and Dhrystone need. Task #62.
-
----
-
-## Archive — fixed, kept for provenance
 
 **Move an entry here as soon as it is fixed**, with the fix and how it was validated.
 Keep the id so older notes that cite it still resolve.

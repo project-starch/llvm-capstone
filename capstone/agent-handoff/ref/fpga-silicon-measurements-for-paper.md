@@ -5,7 +5,9 @@ FPGA. The dated notes in `history/` are the investigation trail; **this file is 
 a paper author lifts from**. Each entry states the number, the exact conditions, what
 it supersedes in the current draft, and what it does **not** establish.
 
-Vehicle throughout: Genesys 2 CVA6, bitstream `working-caplifive-captype-fixed.bit`,
+Vehicle throughout: Genesys 2 CVA6, bitstream `working-caplifive-captype-fixed.bit`
+(**superseded 2026-08-04** by `caplifive_fixed_forward.bit`; every number below predates
+that reflash and must be re-measured before it is compared with anything taken after),
 `mcycle`/`minstret` read in-domain (the unprivileged counters are gated for the
 domain). Single core.
 

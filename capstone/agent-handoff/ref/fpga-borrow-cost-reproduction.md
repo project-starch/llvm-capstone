@@ -103,7 +103,10 @@ anyway. Copy them into `overlay/test-domains/` AND `build/target/test-domains/`,
 
 ## 6. Bitstream
 
-Measure **only** on `working-caplifive-captype-fixed.bit`. Stock `ariane_xilinx.bit`
+Measure **only** on the bitstream the numbers were taken on. The recorded numbers here are
+from `working-caplifive-captype-fixed.bit`; the board was reflashed to
+`caplifive_fixed_forward.bit` on **2026-08-04**, so re-measure before comparing against
+anything taken since, and state which bitstream any new number came from. Stock `ariane_xilinx.bit`
 has no capability unit → every `cscall` resets → all data is garbage. The runner
 verifies `nv_bitstream_name` before measuring. If it is wrong (another team
 overwrote it), re-flash the board owner's file (the one authorized persistent write):

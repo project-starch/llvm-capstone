@@ -362,7 +362,7 @@ It means the read went to an **unmapped address** and the value is junk, not dat
 
 > **The only sound liveness test on this board: samples separated by wall-clock, with the core resumed in between, plus a monotone counter register.** `probe_sqlite_progress.py` does exactly this — 5 samples, 20 s apart, reading pc *and* `a0` (strlen's index). Its three verdicts are the template: pc leaves the loop ⇒ progressing; pc stays and the counter climbs ⇒ spinning on one input (a *data* bug); pc stays and the counter does not climb ⇒ genuinely stuck (`probe_sqlite_progress.py:3-24`).
 
-**`C_PRINT` (`csrw 0x800`) goes to the RTL trace, not the UART.** Do not use it as a UART probe (`HOW-TO-LAUNCH-ON-FPGA.md`, "Non-negotiables"). This is not cosmetic: `capstone_error` is `C_PRINT(...)` + `while(1)`, so **all five** monitor silent-spin sites are indistinguishable from a hang on the board — `handle_interrupt` default (`sbi_capstone.c:898-900`), `handle_exception` default (`:973-977`), illegal-instruction-not-`time` (`:959-963`), `swap_cpmp` (`:917-923`), and two in `split_out_cap` (`:236, :246`). Issue I-4 (`ISSUES.md:1208`) records a zero-board-cost fix — give `capstone_error` a real UART putchar via `split_out_cap(0x10000000, 0x100, 0)`, the same mechanism the monitor already uses for `mtime` — and calls it "the highest-leverage change available for board debugging." It is still open.
+**`C_PRINT` (`csrw 0x800`) goes to the RTL trace, not the UART.** Do not use it as a UART probe (`HOW-TO-LAUNCH-ON-FPGA.md`, "Non-negotiables"). This is not cosmetic: `capstone_error` is `C_PRINT(...)` + `while(1)`, so **all five** monitor silent-spin sites are indistinguishable from a hang on the board — `handle_interrupt` default (`sbi_capstone.c:898-900`), `handle_exception` default (`:973-977`), illegal-instruction-not-`time` (`:959-963`), `swap_cpmp` (`:917-923`), and two in `split_out_cap` (`:236, :246`). Issue I-5 (`ISSUES.md`, "every monitor error is invisible") records a zero-board-cost fix — give `capstone_error` a real UART putchar via `split_out_cap(0x10000000, 0x100, 0)`, the same mechanism the monitor already uses for `mtime` — and calls it "the highest-leverage change available for board debugging." It is still open.
 
 **`csdebugprint` (funct7 0x43 on opcode 0x5b) is not decoded by the FPGA.** A board build must never set `BEEBS_STRING_DEBUG_BOUNDS` (`beebs_freestanding_string.c:139-151`). Related: illegal/meaningless capability ops **wedge rather than trap** on this board (R-5, `ISSUES.md:539`), so an undecoded instruction does not give you an error — it gives you a dead board and a mystery.
 
@@ -398,7 +398,9 @@ Board time starts when you take the lock. Everything below is free.
 13. **Scoped output path set** (`PROBE_SCOPED_OUT` / `SQLITE_SCOPED_OUT`) and distinct from the last run's.
 14. **A known-good control in the batch** if this is a sweep rather than a bisection (I-1's lesson).
 15. **Predictions written down** (§R7).
-16. **Bitstream expectation**: the driver hard-stops unless the resident bitstream is `working-caplifive-captype-fixed.bit`. Re-flashing a shared board is never automatic — ask first.
+16. **Bitstream expectation**: the driver hard-stops unless the resident bitstream matches
+    `FPGA_BITSTREAM`, which defaults to **`caplifive_fixed_forward.bit`** since the
+    2026-08-04 reflash (it replaced `working-caplifive-captype-fixed.bit`). Re-flashing a shared board is never automatic — ask first.
 17. **Wait plan**: a bounded loop on `RUN_DONE` / `BOARD_RELEASED`. Not `pgrep`.
 
 ---

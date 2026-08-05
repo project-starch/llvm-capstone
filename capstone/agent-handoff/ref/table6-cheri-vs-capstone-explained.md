@@ -47,7 +47,7 @@ does the *deployable* config (async) catch?** Answer: for the temporal class, no
 at the contract point.
 
 ### Capstone: the contract point *is* the revocation point
-
+    
 Capstone provides linear-capability primitives that let the lender revoke a borrowed
 capability **at the logical lifetime boundary itself**, synchronously, in O(1), with no
 sweep. The primitive letters in the last column (from Table `tab:fix`):
