@@ -134,25 +134,46 @@ def install_resilient_emit(console):
         return orig(event, **kw)
     console._emit = resilient
 
+# The board's UART RX FIFO silently drops characters on a long bulk write. On 2026-08-05 a
+# 204-char setup line arrived as `/proc/sys/kernel/ppstone ] || insmod ...` -- 20 characters
+# vanished mid-word, the shell reported `can't create .../ppstone`, printk was never quieted,
+# and the run died with no useful diagnosis. The console logged `ttyS0: 1 input overrun(s)`.
+# Keep every typed line short, and FAIL LOUDLY rather than let a truncated command look like a
+# board fault.
+SH_MAX_CHARS = 120
+
 def sh(console, cmd, timeout=20):
-    return console.run_command(f"{cmd}; echo D''N_$?", r"DN_\d+", timeout=timeout)
+    line = f"{cmd}; echo D''N_$?"
+    if len(line) > SH_MAX_CHARS:
+        raise ValueError(
+            f"command is {len(line)} chars, over the {SH_MAX_CHARS}-char UART safety limit; "
+            f"the RX FIFO drops characters and the command arrives CORRUPTED. Split it.\n  {cmd}")
+    return console.run_command(line, r"DN_\d+", timeout=timeout)
 
-def quiet_setup(console, cmd, timeout=30):
-    """Run ONE setup command with its echo suppressed, then restore echo immediately.
+def quiet_setup(console, cmds, timeout=30):
+    """Run SHORT setup commands with echo suppressed, then restore echo.
 
-    2026-08-04, corrected: the first version issued a bare `stty -echo` and left it off for
-    the whole session. That silenced EVERY command echo, including the per-test lines the
-    operator reads to follow which test is running -- far more than was asked for, and it
-    removed exactly the information the console is watched for.
+    Echo is toggled by its OWN short command rather than being chained onto the setup line.
+    The chained version built a 204-char line, which the UART RX FIFO truncated mid-word
+    (2026-08-05). With echo off first, the following commands produce no echo anyway, so this
+    is both safer and quieter than the one-liner it replaces.
 
-    Only the harness's own setup chatter should be hidden. So echo is disabled, the setup
-    command runs, and echo is restored in the SAME shell line: a failure in `cmd` cannot
-    leave the terminal silent, because `stty echo` is unconditional and not `&&`-chained.
-
-    Best-effort: if the image has no `stty`, both halves no-op and the console just stays
-    verbose -- the drivers must never depend on this."""
-    return sh(console, "stty -echo 2>/dev/null; " + cmd + "; stty echo 2>/dev/null",
-              timeout=timeout)
+    `stty echo` is restored in a `finally`, so a failure in any setup command cannot leave the
+    terminal silent. Best-effort throughout: an image with no `stty` just stays verbose.
+    """
+    def _quiet(c):
+        try:
+            sh(console, c, timeout=15)
+        except Exception as exc:
+            log(f"{c!r} unavailable ({type(exc).__name__}); console stays verbose")
+    _quiet("stty -echo 2>/dev/null || true")
+    out = ""
+    try:
+        for c in cmds:
+            out += sh(console, c, timeout=timeout)
+    finally:
+        _quiet("stty echo 2>/dev/null || true")
+    return out
 
 
 def ensure_capstone_dev(console):
@@ -163,9 +184,11 @@ def ensure_capstone_dev(console):
     `sh()` calls, i.e. two echoed command lines and two DN_ markers, for no diagnostic
     gain -- if the device is missing the DEVNO branch already says so. Its echo is
     suppressed for THIS command only; per-test commands stay visible on the console."""
-    out = quiet_setup(console, "echo 1 > /proc/sys/kernel/printk; "
-                               "[ -e /dev/capstone ] || insmod /capstone.ko 2>/dev/null; "
-                               "[ -e /dev/capstone ] && echo DEV''OK || echo DEV''NO", timeout=30)
+    out = quiet_setup(console, [
+        "echo 1 > /proc/sys/kernel/printk",
+        "[ -e /dev/capstone ] || insmod /capstone.ko 2>/dev/null",
+        "[ -e /dev/capstone ] && echo DEV''OK || echo DEV''NO",
+    ], timeout=30)
     if "DEVNO" in out or "DEVOK" not in out:
         raise RuntimeError(f"/dev/capstone missing (insmod failed?):\n{out}")
     drop_setup_log(console)
