@@ -393,5 +393,10 @@ whole-array granularity. State the config; don't conflate the two axes.
 ## Constraints (repo hygiene — unchanged)
 Board sessions stay in the main Opus session (etiquette + token). No real-person
 names anywhere committed/shared. Submodule *source* stays uncommitted (firmware/
+
+> **WITHDRAWN 2026-08-05:** the "submodule source stays uncommitted" rule above no longer
+> applies. Submodule work is now COMMITTED on a branch (see CLAUDE.md). Keeping the live
+> monitor uncommitted nearly cost the trace markers every board verdict depends on.
+
 buildroot edits are local experiments). shrink-off + gp-captable are existing gated
 flags — no new default flips. Bug-fix/root-cause notes → `history/` dated.

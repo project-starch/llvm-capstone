@@ -237,8 +237,18 @@ The main (Opus) session owns planning, synthesis, reviewing subagent output, and
 all final decisions. Subagents start cold, so any that could write or run tests
 **inherit this file's hard constraints** (no real-person names; serialize QEMU
 suites — the shared `rootfs.ext2` write-lock means never two in parallel;
-`ninja -j90` never `-j112`; never commit unless asked; submodule source stays
-uncommitted). Subagents do not recurse.
+`ninja -j90` never `-j112`; never commit unless asked). Subagents do not recurse.
+
+**Submodule source SHOULD be committed.** The old rule that it "stays uncommitted" is
+withdrawn (2026-08-05). It cost real work: the live OpenSBI monitor — the file carrying the
+SHA/ECSA/RGID trace markers that every board verdict is classified by — sat 680 lines ahead of
+its last commit in a working tree only, one `git checkout` away from destroying the basis for
+the entry-stall-vs-wedge rule the drivers and the `board-run` skill both encode. The same was
+true of the device-tree memory map, a kernel-module `copy_from_user` fix, and the buildroot
+target ordering. Commit submodule work on a branch (`capstone-bootstrap`, or a task branch),
+message it like any other change, and run `precommit-scan.sh` over it — the name rules apply to
+submodule commits exactly as they do here. Pushing stays a separate decision: those remotes are
+shared, so ask before pushing.
 
 - **Delegate** (notify the user when it's substantial):
   - broad read-only code/file search → built-in **Explore**

@@ -135,6 +135,11 @@ Mechanism found 2026-07-24:
 - OPEN: exact regen make-target / capstone-cc flags unverified — confirm before building so
   the monitor isn't subtly miscompiled. Submodule *source* stays uncommitted (rule 7).
 
+> **WITHDRAWN 2026-08-05:** the "submodule source stays uncommitted" rule above no longer
+> applies. Submodule work is now COMMITTED on a branch (see CLAUDE.md). Keeping the live
+> monitor uncommitted nearly cost the trace markers every board verdict depends on.
+
+
 ### 3. End-to-end QEMU run — first light
 Run `beebs_crc32big` in a domain on QEMU (silicon config). **Expect retval
 `1703161001`** (== the runtime-table `beebs_crc32` rung's oracle — both fold the same

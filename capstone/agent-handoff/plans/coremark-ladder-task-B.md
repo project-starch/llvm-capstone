@@ -76,6 +76,11 @@ These are the full standing rules for anyone working in this repo (canonical:
    storm hangs the whole box, no SSH).
 7. **No commits into submodule *source*** (`capstone-qemu`/opensbi/buildroot/system);
    submodule source stays uncommitted.
+
+> **WITHDRAWN 2026-08-05:** the "submodule source stays uncommitted" rule above no longer
+> applies. Submodule work is now COMMITTED on a branch (see CLAUDE.md). Keeping the live
+> monitor uncommitted nearly cost the trace markers every board verdict depends on.
+
 8. **Bug-fix / root-cause / audit notes → `history/`** (dated
    `DD-MM-YYYY_HH-MM-SS_name.md`), **not `design/`** (`design/` = architecture only).
    Active plans → `plans/`.
