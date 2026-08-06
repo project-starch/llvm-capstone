@@ -3657,9 +3657,9 @@ static int run_sqlite(void) {
 }
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) <= 21 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 22 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 17
-/* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-21. Distinct bodies so
+/* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-22. Distinct bodies so
    none of them folds into another and the array keeps nine DIFFERENT function pointers --
    the whole point of the construct. Never called; only their addresses matter. */
 #define QR_CLONE_FN(n, k) \
@@ -3671,10 +3671,12 @@ QR_CLONE_FN(6, 107) QR_CLONE_FN(7, 108) QR_CLONE_FN(8, 109)
 #undef QR_CLONE_FN
 #endif
 
-#if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) == 21
+#if defined(CAPSTONE_SQLITE_QUICKRET) && \
+    ((CAPSTONE_SQLITE_QUICKRET) == 21 || (CAPSTONE_SQLITE_QUICKRET) == 22)
 /* Level 21's array and callee. The array is file-scope rather than block-scope only so the
    callee can take it by pointer the way sqlite3InsertBuiltinFuncs does; it is otherwise
    identical to level 19's, including being non-const. */
+#if (CAPSTONE_SQLITE_QUICKRET) == 21
 static FuncDef qrSplitClone21[] = {
   INTERNAL_FUNCTION(qr21_rename_column,   9, qrCloneFunc0),
   INTERNAL_FUNCTION(qr21_rename_table,    7, qrCloneFunc1),
@@ -3686,6 +3688,7 @@ static FuncDef qrSplitClone21[] = {
   INTERNAL_FUNCTION(qr21_add_constraint,  3, qrCloneFunc7),
   INTERNAL_FUNCTION(qr21_find_constraint, 2, qrCloneFunc8),
 };
+#endif
 
 /* Level 19's loop, unchanged, reached through a pointer PARAMETER. This is the single
    remaining difference between qr20 (returns) and qr16n (wedges). */
@@ -3865,9 +3868,33 @@ void domain_main(unsigned *res, unsigned func) {
       qrc = (int)lvl;
     }
 #endif
+    /* LEVEL 22 -- qr21 done properly. qr21 WEDGED where qr19 returned, but it changed THREE
+       things at once: it added the noinline pointer-parameter call, it dropped the
+       sqlite3FunctionSearch call, and it introduced a NEW file-scope 9-element FuncDef global.
+       That third one matters here -- a new global shifts the image, and image perturbation
+       moving a failure is a documented family in this project (S01).
+       And the off-SQLite pair has since cleared the shape outright: fdreg stage 4 (noinline
+       callee taking the array by pointer) RETURNS 2609 on silicon, as do stage 5 (noinline,
+       reads via gp) and stage 2 (inline). So "an argument capability wedges" is refuted at
+       low gp index in a 12-global image, and qr21's wedge is NOT yet attributed.
+       Level 22 is therefore level 19's loop over level 19's OWN array, with the ONLY change
+       being that the loop body moved behind the noinline callee. No new global, same search,
+       same array object -- a genuine single-variable pair against level 19. */
+/* LEVEL 22 rides in this same block on purpose. qr21 WEDGED where qr19 returned, but it
+   changed THREE things at once: the noinline pointer-parameter call, dropping
+   sqlite3FunctionSearch, and a NEW file-scope 9-element FuncDef global -- and a new global
+   shifts the image, which is a documented way a failure MOVES here (S01). The off-SQLite
+   pair has since cleared the shape outright: fdreg stage 4 (noinline callee taking the array
+   by pointer) RETURNS 2609 on silicon, alongside stage 5 (noinline, reads via gp) and stage 2
+   (inline). So "an argument capability wedges" is refuted at low gp index, and qr21's wedge
+   is NOT attributed.
+   Level 22 is level 19 with ONE change: the same loop, over the SAME array declared in the
+   SAME place, with the same sqlite3FunctionSearch call -- only moved behind the noinline
+   callee. No new global. That is the single-variable pair qr21 should have been. */
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
-                                      && (CAPSTONE_SQLITE_QUICKRET) <= 20
-    if (lvl >= 18 && lvl <= 20) {
+                                      && (CAPSTONE_SQLITE_QUICKRET) <= 22 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) != 21
+    if ((lvl >= 18 && lvl <= 20) || lvl == 22) {
       static FuncDef qrSplitClone[] = {
         INTERNAL_FUNCTION(qr_split_rename_column,   9, qrCloneFunc0),
         INTERNAL_FUNCTION(qr_split_rename_table,    7, qrCloneFunc1),
@@ -3900,6 +3927,9 @@ void domain_main(unsigned *res, unsigned func) {
           }
         }
       }
+#if (CAPSTONE_SQLITE_QUICKRET) == 22
+      qr_link_via_param(qrSplitClone, ArraySize(qrSplitClone));
+#endif
       qrc = (int)lvl;
       (void)qfound;
     }
