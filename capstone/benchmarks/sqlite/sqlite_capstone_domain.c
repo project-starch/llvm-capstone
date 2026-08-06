@@ -3657,7 +3657,7 @@ static int run_sqlite(void) {
 }
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) <= 39 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 41 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 17 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 25
 /* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-22. Distinct bodies so
@@ -3992,10 +3992,10 @@ void domain_main(unsigned *res, unsigned func) {
    returns; level 16 hands the same array to the real sqlite3InsertBuiltinFuncs and wedges.
    That is the SQLite blocker's minimal repro. */
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
-                                      && (CAPSTONE_SQLITE_QUICKRET) <= 39 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) <= 41 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 21 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 25
-    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28 || lvl == 29 || lvl == 30 || lvl == 31 || lvl == 32 || lvl == 33 || lvl == 34 || lvl == 35 || lvl == 36 || lvl == 37 || lvl == 38 || lvl == 39) {
+    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28 || lvl == 29 || lvl == 30 || lvl == 31 || lvl == 32 || lvl == 33 || lvl == 34 || lvl == 35 || lvl == 36 || lvl == 37 || lvl == 38 || lvl == 39 || lvl == 40 || lvl == 41) {
       static FuncDef qrSplitClone[] = {
         INTERNAL_FUNCTION(qr_split_rename_column,   9, qrCloneFunc0),
         INTERNAL_FUNCTION(qr_split_rename_table,    7, qrCloneFunc1),
@@ -4058,6 +4058,54 @@ void domain_main(unsigned *res, unsigned func) {
             qcount++;
           }
         *res = 0x9E290000u | (unsigned)(qcount & 0xffffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 40
+      /* LEVEL 40 -- is it the NEST, or an index that RESETS?
+         The conjunction from boots 27-29 (nest AND capability AND counter-index) has a
+         confound an analysis caught: in every failing level the capability index is the INNER
+         counter, which is also the only value in the frame that is written to 0 in an outer
+         body and then counted up past its bound. "Nest" and "resetting index" have never been
+         separated. This keeps the nest and the capability access but indexes with the OUTER
+         counter -- which varies, and never resets.
+             576  -> a varying capability index in a nest is harmless; it must be the INNER,
+                     RESETTING one, and L37 passed because of the reset, not the counter
+             <576 -> any varying capability index in a nest does it
+         Correct marker 0x9E410240. */
+      {
+        unsigned qcount = 0;
+        int qp, qk;
+        for (qp = 0; qp < 64; qp++)
+          for (qk = 0; qk < ArraySize(qrSplitClone); qk++) {
+            const char *volatile qz = qrSplitClone[qp & 7].zName;   /* outer ctr: never resets */
+            (void)qz;
+            qcount++;
+          }
+        *res = 0x9E410000u | (unsigned)(qcount & 0xffffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 41
+      /* LEVEL 41 -- THE MISSING CELL: a RESETTING index with NO nest.
+         L39 passed with a counter-derived index, but `qk % 9` comes from a MONOTONE counter,
+         so it never tested a resetting index outside a nest. This is one flat loop whose
+         capability index cycles 0..8 by an EXPLICIT reset -- L31's exact value history,
+         without any nesting.
+             <576 -> the trigger is a RESET-TO-0 index feeding an ldc, and nesting is
+                     incidental. That makes it a value-history property, and it would also
+                     put sqlite3InsertBuiltinFuncs back in scope, since its `i` resets per call.
+             576  -> loop STRUCTURE really is required, and nothing in the RTL read so far can
+                     express that -- the next step is frontend/replay, not the LSU.
+         Correct marker 0x9E420240. */
+      {
+        unsigned qcount = 0;
+        int qi, qk = 0;
+        for (qi = 0; qi < 576; qi++) {
+          if (qk >= (int)ArraySize(qrSplitClone)) qk = 0;         /* explicit reset, no nest */
+          { const char *volatile qz = qrSplitClone[qk].zName; (void)qz; }
+          qk++;
+          qcount++;
+        }
+        *res = 0x9E420000u | (unsigned)(qcount & 0xffffu);
         return;
       }
 #elif (CAPSTONE_SQLITE_QUICKRET) == 39
