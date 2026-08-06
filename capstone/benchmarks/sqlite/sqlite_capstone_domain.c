@@ -3657,7 +3657,7 @@ static int run_sqlite(void) {
 }
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) <= 34 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 36 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 17 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 25
 /* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-22. Distinct bodies so
@@ -3992,10 +3992,10 @@ void domain_main(unsigned *res, unsigned func) {
    returns; level 16 hands the same array to the real sqlite3InsertBuiltinFuncs and wedges.
    That is the SQLite blocker's minimal repro. */
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
-                                      && (CAPSTONE_SQLITE_QUICKRET) <= 34 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) <= 36 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 21 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 25
-    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28 || lvl == 29 || lvl == 30 || lvl == 31 || lvl == 32 || lvl == 33 || lvl == 34) {
+    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28 || lvl == 29 || lvl == 30 || lvl == 31 || lvl == 32 || lvl == 33 || lvl == 34 || lvl == 35 || lvl == 36) {
       static FuncDef qrSplitClone[] = {
         INTERNAL_FUNCTION(qr_split_rename_column,   9, qrCloneFunc0),
         INTERNAL_FUNCTION(qr_split_rename_table,    7, qrCloneFunc1),
@@ -4058,6 +4058,44 @@ void domain_main(unsigned *res, unsigned func) {
             qcount++;
           }
         *res = 0x9E290000u | (unsigned)(qcount & 0xffffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 35
+      /* LEVEL 35 -- the MINIMAL POSITIVE INSTANCE the matrix never had. Every failing level so
+         far carries extra baggage: L31 has two ldc, L32 adds an integer sw, L26/27/29 add a
+         call. This is a nest whose inner body is ONE gp-relative capability load and nothing
+         else, with a 16-bit witness. If it loses iterations, that single ldc is sufficient.
+         Correct marker 0x9E360240 (576). */
+      {
+        unsigned qcount = 0;
+        int qp, qk;
+        for (qp = 0; qp < 64; qp++)
+          for (qk = 0; qk < ArraySize(qrSplitClone); qk++) {
+            const char *volatile qz = qrSplitClone[0].zName;   /* one gp ldc, fixed index */
+            (void)qz;
+            qcount++;
+          }
+        *res = 0x9E360000u | (unsigned)(qcount & 0xffffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 36
+      /* LEVEL 36 -- the NEST-versus-SINGLE control, with a body identical to level 35's.
+         An audit found, inside my own data, that a SINGLE non-nested loop with a gp ldc in its
+         body completes 9 of 9 (L33's sentinel-init loop). That is the sharpest constraint on
+         the whole matrix, and it deserves a purpose-built measurement rather than a by-product:
+         576 iterations of the SAME body, in ONE loop instead of 64x9.
+             576 -> single loops are immune; the fault needs a NEST
+             < 576 -> the nest is irrelevant and the effect is per-iteration
+         Correct marker 0x9E370240 (576). */
+      {
+        unsigned qcount = 0;
+        int qk;
+        for (qk = 0; qk < 576; qk++) {
+          const char *volatile qz = qrSplitClone[0].zName;     /* same body as level 35 */
+          (void)qz;
+          qcount++;
+        }
+        *res = 0x9E370000u | (unsigned)(qcount & 0xffffu);
         return;
       }
 #elif (CAPSTONE_SQLITE_QUICKRET) == 34
