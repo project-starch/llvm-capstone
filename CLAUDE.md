@@ -269,6 +269,22 @@ shared, so ask before pushing.
   next experiment in a live investigation**; the paper; commits; and anything involving
   real-person names.
 
+**Run an auditor on your own judgement, without being asked, when a trigger fires.** Auditors
+refuted FOUR substantive claims on 2026-08-06 -- a `ctvec` root cause, a bitstream regression, a
+`PcacheInitialize` localization, and "this monitor fix is safe" (which would have unmasked a
+silent region-table overrun). Each cost 8-20 minutes and saved considerably more. Triggers:
+
+* before recording a **root cause or localization** in `SILICON-BLOCKER.md` / `ISSUES.md`, or in
+  a commit message that claims one;
+* before a **monitor, bitstream, or otherwise irreversible** change;
+* when a result **contradicts** a documented prior finding -- one of you is wrong and it is
+  cheaper to find out which before acting;
+* when a conclusion rests on **N=1** on a system with known nondeterminism.
+
+Not for routine passes, mechanical rebuilds, or anything already verified. And name your own
+weakest link in the prompt ("the gap I want you to attack hardest is X") -- generic "check this"
+produced thin reports; naming the soft spot produced every one of the refutations.
+
 **Treat every subagent report as a claim, not a fact.** Findings that will be acted on,
 committed, or published must be verified against the primary source — a quoted `file:line`
 you can re-read, or a command you re-run. A confident subagent report is exactly as

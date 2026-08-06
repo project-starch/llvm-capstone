@@ -15,6 +15,30 @@ Board time is the scarce resource and most wrong verdicts in this project came f
 harness, not the hardware. This skill is the decision procedure. Full background:
 `capstone/agent-handoff/ref/HOW-TO-LAUNCH-ON-FPGA.md`.
 
+## 0a. FIRST: search the handoff docs for the symptom AND the failing function name
+
+Before designing any experiment, grep `capstone/agent-handoff/` for the symptom and for the name
+of the function/construct involved. On 2026-08-06 hours went into re-deriving a localization that
+already had a **dedicated design doc** (`design/cap-local-aggregate-init-plan.md`), a **four-variant
+board experiment** that had already isolated the shape (`ref/ISSUES.md` ~:1543), and **two landed
+compiler fixes**. A single grep would have redirected the whole day.
+
+```bash
+grep -rn "<failing function>" capstone/agent-handoff/ | head
+grep -rln "<symptom phrase>"  capstone/agent-handoff/
+```
+
+Prior art also tells you which prior results are trustworthy: several were measured with
+instruments later shown to be broken, and the docs say so.
+
+## 0b. RUN THE PREFLIGHT GATE
+
+    bash capstone/tests/preflight-board-run.sh      # exit 1 = BLOCKED
+
+Deterministic, never delegated, same standing as `precommit-scan.sh`. It checks the construct is
+in the artifact, images are distinct, the control has a published passing record
+(`ref/known-good-controls.md`), the DTS matches the resident bitstream, and the slot budget.
+
 ## 0. Before you spend a boot — three offline checks
 
 Each of these has cost real board time when skipped.
