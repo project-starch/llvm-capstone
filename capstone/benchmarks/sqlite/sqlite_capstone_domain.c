@@ -3962,9 +3962,29 @@ void domain_main(unsigned *res, unsigned func) {
    by pointer) RETURNS 2609 on silicon, alongside stage 5 (noinline, reads via gp) and stage 2
    (inline). So "an argument capability wedges" is refuted at low gp index, and qr21's wedge
    is NOT attributed.
-   Level 22 is level 19 with ONE change: the same loop, over the SAME array declared in the
-   SAME place, with the same sqlite3FunctionSearch call -- only moved behind the noinline
-   callee. No new global. That is the single-variable pair qr21 should have been. */
+   CORRECTION 2026-08-06: level 22 is NOT one change from level 19; that description was
+   wrong and the "single-variable pair" claim built on it is withdrawn. At lvl==22 the qi
+   loop runs sqlite3FunctionSearch but takes NEITHER the lvl==19 nor the lvl==20 branch, so
+   it performs NO link; qr_link_via_param then links separately, with its OWN
+   sqlite3Strlen30 per element. That is THREE differences from level 19 -- link site,
+   link-via-argument, and a duplicated strlen -- not one.
+   The level images also shift 372-480 bytes against each other, roughly ten times the
+   displacement of S01's dp0, while the only layout control run was +-16 bytes. So the
+   21/22/23 verdicts are UNATTRIBUTED, and should stay that way until they can be selected
+   at RUN TIME out of one byte-identical image.
+
+   THE PAIR THAT DOES CARRY WEIGHT IS 15 vs 16, and it needs none of this machinery:
+
+       qr15 and qr16 differ by exactly TWO BYTES, at 0x242C6-7:
+           qr15   332c4: 93 05 f0 00   li a1, 0xf     -> RETURNS
+           qr16   332c4: 93 05 00 01   li a1, 0x10    -> WEDGES
+       identical file sizes (1550720), identical .text/.gct/gp_table offsets.
+
+   `lvl` is a runtime variable, so BOTH code paths are compiled into BOTH images at the same
+   addresses; only the selector constant differs. Layout cannot explain a two-byte immediate,
+   so no statistics are needed. Level 15 links the clone array with its own inline loop and
+   returns; level 16 hands the same array to the real sqlite3InsertBuiltinFuncs and wedges.
+   That is the SQLite blocker's minimal repro. */
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
                                       && (CAPSTONE_SQLITE_QUICKRET) <= 23 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 21
@@ -4008,6 +4028,46 @@ void domain_main(unsigned *res, unsigned func) {
 #endif
       qrc = (int)lvl;
       (void)qfound;
+    }
+#endif
+    /* LEVEL 25 -- MEASURE the sporadic strlen failure instead of hunting the hang.
+       S01-image-perturbation-hang/00-README.md records that on this image class strlen
+       returns a WRONG answer sporadically: "Stage 16 calls strlen on the SAME literal
+       'alpha' 128 times and totals 636, i.e. 4 of 128 calls returned 1 -- sporadic (~3%),
+       not length-dependent", with the mechanism inferred as the -O0 reload -- strlen
+       re-loads the string capability with `ldc` from a stack slot every iteration, and a
+       result of exactly 1 is what a failed second reload produces. S01 then infers, without
+       establishing it: wrong strlen -> wrong hash in sqlite3InsertBuiltinFuncs -> corrupt
+       chain -> hang.
+       That is the same primitive this ladder's own bisection landed on independently: level
+       22 reaches strlen through sqlite3Strlen30 and wedges; level 23 replaces it with a
+       local `while (z[n]) n++` and returns.
+       So stop bisecting the hang and measure the primitive. This level calls sqlite3Strlen30
+       over the nine names 64 times each and returns the SUM. The correct total is a fixed
+       number; any shortfall is exactly the number of characters lost to bad reloads, and it
+       comes back as a RETURNING wrong value rather than silence -- which is bisectable where
+       a wedge is one bit.
+       It also repairs a flaw in levels 18-23: they return `qrc = (int)lvl`, a CONSTANT, so a
+       level can "return correctly" while having computed garbage. S01 warns exactly this --
+       "stages that RETURN are already wrong". This level returns real data. */
+#if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) == 25
+    if (lvl == 25) {
+      static const char *const qrNames[9] = {
+        "sqlite_rename_column", "sqlite_rename_table", "sqlite_rename_test",
+        "sqlite_drop_column", "sqlite_rename_quotefix", "sqlite_drop_constraint",
+        "sqlite_fail", "sqlite_add_constraint", "sqlite_find_constraint",
+      };
+      /* 20+19+18+18+22+23+11+21+22 = 174 per pass, 64 passes = 11136. */
+      unsigned long qsum = 0;
+      int qp, qi;
+      for (qp = 0; qp < 64; qp++)
+        for (qi = 0; qi < 9; qi++)
+          qsum += (unsigned)sqlite3Strlen30(qrNames[qi]);
+      /* Report the SHORTFALL, so 0 means every one of the 576 calls was right and a small
+         positive number is the count of lost characters. Clamped into the marker byte. */
+      qrc = (int)((11136UL - (qsum > 11136UL ? 11136UL : qsum)) & 0xffUL);
+      *res = 0x9E250000u | ((unsigned)(qsum & 0xffffu));
+      return;
     }
 #endif
     if (lvl == 17) {
