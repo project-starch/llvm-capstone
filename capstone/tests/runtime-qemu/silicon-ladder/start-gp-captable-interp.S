@@ -821,6 +821,26 @@ test:
      within one boot.
      Gated: OFF unless built with INTERP_DOMAIN_MTVEC=1, so ordinary builds are untouched. */
   call domain_main
+
+#if defined(INTERP_RETURN_POSTCALL)
+  /* SECOND BISECTION POINT, same technique as INTERP_RETURN_PRECALL and the natural next split.
+     The precall probe proved the glue completes (obs 0x9E11 in 4 s, control green), so what
+     remains is: the call transfer into domain_main, its stage-0 body, and its return. This
+     writes its sentinel AFTER the call returns:
+        returns 0x9E22  -> domain_main RETURNED; the fault is in the glue's post-call unwind
+        wedges          -> domain_main itself never came back
+     Overwriting whatever domain_main wrote is fine: this build is a diagnostic, never a
+     measurement. a0/a1 are caller-saved and the call has clobbered them, so both are reloaded
+     from the frame rather than assumed. Gated on func so region shares stay untouched, and
+     sited below the entry path so the table build stays byte-identical to the baseline. */
+  ld    t1, 64(sp)                   /* func, reloaded: a1 is clobbered by the call */
+  li    t0, 1                        /* CAPSTONE_DPI_REGION_SHARE */
+  beq   t1, t0, 97f
+  ldc(a0, sp, 80)                    /* res, reloaded for the same reason */
+  li    t0, 0x9E22
+  sw    t0, 0(a0)
+97:
+#endif
 #if defined(INTERP_DOMAIN_MTVEC)
   /* Normal return: put cscratch back to zero so .Ldomain_returned sees exactly the state it
      saw before this gate existed. The trap path below arrives at the same state by swapping

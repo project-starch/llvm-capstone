@@ -49,6 +49,15 @@ PER_DOM = float(os.environ.get("SQLITE_STAGE_TIMEOUT") or 90)
 # it. Raise SQLITE_IDLE_S if a stage can legitimately go quiet for longer between SQ: markers.
 IDLE_S = float(os.environ.get("SQLITE_IDLE_S") or 30)
 OUT = os.environ.get("PROBE_SCOPED_OUT") or "/tmp/capstone/sqlite-stages.txt"
+# Decimal `obs` values that are legitimate results even though they are not staged 0x5A6E
+# markers -- i.e. sentinels a glue probe returns from a chosen bisection point.
+#
+# Without this the staged-marker guard hard-stops on the probe's own success value and throws
+# away every remaining test in the boot. That happened on 2026-08-06: the precall probe returned
+# 0x9E11 exactly as designed and the run aborted, wasting the slot that held the baseline. Board
+# time is the scarce resource here, so a guard that cannot tell "unknown value" from "the value
+# I asked for" costs a whole boot each time.
+PROBE_SENTINELS = {int(v) for v in (os.environ.get("PROBE_SENTINELS") or "").replace(",", " ").split()}
 # THE COMPLETE UART STREAM, exactly what the console GUI shows.
 #
 # OUT holds only per-test windows (`uart_since(mark)`), and a window CLOSES ON TIMEOUT while
@@ -221,7 +230,8 @@ def main():
             m_obs = re.search(r"SQ: obs=(\d+)", text)
             m_rv = re.search(r"RESULT\s+\S+\s+retval=(-?\d+)", text)
             if is_sqlite:
-                bad = m_obs is None or (int(m_obs.group(1)) >> 16) != 0x5A6E
+                bad = m_obs is None or ((int(m_obs.group(1)) >> 16) != 0x5A6E
+                                        and int(m_obs.group(1)) not in PROBE_SENTINELS)
                 got = "no SQ: obs= marker" if m_obs is None else f"obs={m_obs.group(1)}"
             else:
                 bad = m_rv is None
@@ -369,6 +379,13 @@ def main():
                         missing = [i for i in range(8) if pc_bytes.get(i) is None]
                         print(f"  [wedge] commit pc UNREAD (missing bytes {missing}) -- "
                               f"reporting nothing rather than a partial address", flush=True)
+                    # DO NOT CALL console.trace_dump() HERE, OR ANYWHERE ON A WEDGED CORE.
+                    # Measured 2026-08-05: the trace dump HANGS THE BOARD HARD -- `trace_result`
+                    # never arrives, the 60 s wait expires, and the board is left in a state that
+                    # needs manual recovery. It cost a reflash. The capture that used to sit here
+                    # has been removed for that reason; this comment is the guard rail, because
+                    # `trace_dump()` is still present in fpga_console.py and reads like exactly
+                    # the instrument a wedge investigation wants.
                 except Exception as exc:
                     log(f"debug-mux read failed ({type(exc).__name__}) -- continuing to teardown")
                 log("STOPPING: a wedged domain takes the core with it, so nothing after "

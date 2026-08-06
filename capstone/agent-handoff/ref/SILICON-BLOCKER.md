@@ -1,5 +1,49 @@
 # The silicon blocker — everything known
 
+## 2026-08-06 (night) — THE SQLITE HANG IS REAL, NOT A TIMEOUT. And every recent "stage N" run measured nothing.
+
+### 1. Every SQLite `stage N` run in recent sessions was measuring nothing
+
+The staged dispatch lives behind `#ifdef CAPSTONE_SQLITE_STAGE`, `DOMAIN_EXTRA_DEFS` defaults to
+empty, and **none** of the builds run on 2026-08-05/06 passed it. The `0x5A6E` marker is absent
+from all of them (`sq_OFF`, `sq_PRECALL`, `sq_POST`: 0 byte-pairs each). So `dom:0`, `dom:11`,
+`dom:10` were **silently ignored and the domain ran the FULL database every time**.
+
+That is the trap documented at `build-sqlite-silicon.sh:271-284`, which already records three
+earlier sessions lost to it. Its guard only fires under `SQLITE_REG_BISECT=1`, which was never
+set. **Gate on the ARTIFACT (`0x5A6E` present) before every SQLite boot, not on the flags.**
+
+### 2. The hang is real: 900 s, control green, no return
+
+| test | result |
+|---|---|
+| `k800` (control) | `retval=4` in **2 s** -> boot valid |
+| full SQLite workload | both shares complete, `SQ: G/enter`, **no return in 900 s** |
+
+The workload had never been given more than 90 s, so "does not return" had never been tested
+against "needs longer". It has now: **it is a genuine hang, not a stopwatch artefact.** This was
+a deliberate one-off; the budget goes back to 90 s.
+
+**Method note, and it is the right rule:** do not debug this with a longer timeout. A long budget
+destroys the only signal that distinguishes slow from stuck, and makes every experiment cost ten
+times more. Reduce the WORKLOAD instead -- the staged dispatch exists for exactly this, and the
+domain is full of fixed bounds (`for i < 512`, `< 128`, `< 64`, the prepared-INSERT loop) that
+`DOMAIN_EXTRA_DEFS` can shrink. Short timeout, small workload, early-return marker.
+
+### 3. The obstacle: the correct tool is currently broken
+
+Building WITH the staged dispatch produces an image that fails **earlier** than the unstaged one:
+it dies inside region-share #1 (`SHA5`, no `SHA6`, trap latch `0x86` = mcause 6) where the
+unstaged build completes both shares and enters the domain. So the reduced-workload method is
+blocked until that is understood. This is the S01 image-perturbation family
+(`tests/fpga-repros/S01-image-perturbation-hang/`): changing the image moves the failure, and no
+property of the change predicts where.
+
+**That is now the top SQLite question**, ahead of the hang itself -- because the hang cannot be
+bisected efficiently until a staged build survives its own region shares.
+
+---
+
 ## 2026-08-06 (evening) — THE ENTRY GLUE IS NOT THE FAULT. It completes in 4 seconds.
 
 **Measured, with a control passing in the same boot, on `caplifive_65536_nodes.bit`:**
