@@ -103,6 +103,86 @@ static bool isScalarIntegerUse(unsigned Opc) {
   }
 }
 
+// Is this value provably a SCALAR because of how it was DEFINED?
+//
+// isScalarIntegerUse proves scalar-ness from the next USE, which works for loop counters but
+// never for a function pointer: its first use is `movc`, `stc` or `jalr`, none of which imply
+// a scalar. That gap is what left C-14 live on hardware -- board-confirmed 2026-08-06, locfl3
+// wedges and the same source with the destructive movc removed returns its oracle 26.
+//
+// A PC-relative address materialisation (AUIPC, optionally + ADDI; or LUI + ADDI) produces a
+// plain integer address. It is NOT a capability: capabilities arrive via LDC, CINCOFFSET, MOVC,
+// SCC or the cap-table, never from AUIPC/LUI. So proving it here is sound where the blanket
+// `capstone-scalar-copy-live-src` default was not -- that one flipped copyPhysReg for ALL GPRs,
+// and GPRRegClass holds both scalars and capabilities, so it dropped the tag on a live
+// capability and faulted matmult_int with cause 24.
+static bool isScalarDefiningOpc(unsigned Opc) {
+  switch (Opc) {
+  case Capstone::AUIPC:
+  case Capstone::LUI:
+    return true;
+  default:
+    return false;
+  }
+}
+
+// Walk back from `MI` to the defining instruction of `Reg` within this block and decide whether
+// it is an address materialisation. Conservative: anything not proven is treated as possibly a
+// capability, so the destructive movc is left alone.
+static bool isProvablyScalarDef(const MachineInstr &MI, Register Reg,
+                                const TargetRegisterInfo *TRI) {
+  const MachineBasicBlock *MBB = MI.getParent();
+  unsigned Steps = 0;
+  for (auto J = MachineBasicBlock::const_reverse_iterator(MI.getIterator());
+       J != MBB->rend(); ++J) {
+    if (++Steps > 64)
+      return false;                       // bounded: do not walk a whole huge block
+    if (!J->modifiesRegister(Reg, TRI))
+      continue;
+    unsigned Opc = J->getOpcode();
+    if (isScalarDefiningOpc(Opc))
+      return true;                        // AUIPC/LUI directly into Reg
+    // `addi rd, rs, lo12` completing an AUIPC/LUI pair: recurse on rs once.
+    if (Opc == Capstone::ADDI && J->getNumOperands() >= 2 &&
+        J->getOperand(1).isReg() && J->getOperand(1).getReg() != Reg)
+      return isProvablyScalarDef(*J, J->getOperand(1).getReg(), TRI);
+    // A MOVC whose SOURCE is provably scalar yields a scalar. Register allocation routinely
+    // parks a materialised address in a callee-saved register first, so the real chain is
+    // auipc/addi -> aN -> `movc sN, aN` -> `movc dst, sN`. Stopping at the first MOVC misses
+    // every function pointer, which is precisely the shape that wedges on silicon.
+    if (Opc == Capstone::MOVC && J->getNumOperands() >= 2 && J->getOperand(1).isReg() &&
+        J->getOperand(1).getReg() != Reg)
+      return isProvablyScalarDef(*J, J->getOperand(1).getReg(), TRI);
+    return false;                         // defined by something else: assume capability
+  }
+  // Not defined in this block. Follow SINGLE-PREDECESSOR edges back, mirroring the forward
+  // scan's single-successor walk: with exactly one predecessor every path arrives from there,
+  // so the def found upstream really is the def. This case is the common one and not a corner
+  // -- a function pointer is materialised in the loop PREHEADER and copied in the loop BODY, so
+  // a block-local proof never fires for the shape that actually wedges on silicon.
+  unsigned Hops = 0;
+  const MachineBasicBlock *Cur = MBB;
+  while (Cur->pred_size() == 1 && ++Hops <= 4) {
+    const MachineBasicBlock *Pred = *Cur->pred_begin();
+    if (Pred == Cur)
+      break;
+    for (auto J = Pred->rbegin(); J != Pred->rend(); ++J) {
+      if (!J->modifiesRegister(Reg, TRI))
+        continue;
+      unsigned Opc = J->getOpcode();
+      if (isScalarDefiningOpc(Opc))
+        return true;
+      if ((Opc == Capstone::ADDI || Opc == Capstone::MOVC) &&
+          J->getNumOperands() >= 2 && J->getOperand(1).isReg() &&
+          J->getOperand(1).getReg() != Reg)
+        return isProvablyScalarDef(*J, J->getOperand(1).getReg(), TRI);
+      return false;
+    }
+    Cur = Pred;
+  }
+  return false;                           // unknown: keep the destructive movc
+}
+
 bool CapstonePostRAExpandPseudo::fixupDestructiveCopies(MachineBasicBlock &MBB) {
   bool Modified = false;
   if (!CapstoneFixDestructiveCopies)
@@ -161,6 +241,15 @@ bool CapstonePostRAExpandPseudo::fixupDestructiveCopies(MachineBasicBlock &MBB) 
         break; // already covered by the self-loop scan above
       Scan(Succ->begin(), Succ->end());
       Cur = Succ;
+    }
+
+    // If the USE-based proof failed, try the DEF-based one: a value materialised by
+    // AUIPC/LUI (+ADDI) is a plain address and provably not a capability. That is the
+    // function-pointer case -- its first use is movc/stc/jalr, so the use-based test can
+    // never classify it, which is exactly why C-14 stayed live on silicon for this shape.
+    if ((!Decided || !ScalarUse) && isProvablyScalarDef(*I, Src, TRI)) {
+      Decided = true;
+      ScalarUse = true;
     }
 
     if (!Decided || !ScalarUse) {

@@ -68,6 +68,25 @@ static cl::opt<bool> PreferWholeRegisterMove(
 // that value on silicon. On by default because leaving it off miscompiles ordinary
 // loops; the flag exists so the old behaviour can be restored for a bisect.
 static cl::opt<bool> CapstoneScalarCopyForLiveSrc(
+    // DEFAULT-ON since 2026-08-06. Confirmed on silicon, one boot, control green, fixed and
+    // unfixed builds of the same source side by side: locfl3 (fix off) WEDGES, locfl3fix (fix
+    // on) returns its oracle 26, same call count and shape. Mechanism: a function pointer is
+    // materialised as a SCALAR (auipc+addi), `movc` with a scalar source yields cnull AND
+    // DESTROYS THE SOURCE, so a loop that re-reads the register stores cnull and later jalrs
+    // it -- jalr 0, which with mtvec=0 is a silent hang rather than a trap.
+    // The post-RA pass alone is not enough: it only rewrites when the source's first use is an
+    // integer ALU op or a branch, so a pointer whose first use is movc/stc/jalr keeps the
+    // destructive form. Off-by-default left that class broken on hardware.
+    // REVERTED to OFF 2026-08-06, same day it was flipped on. Flipping it on IS confirmed to
+    // fix the C-14 silicon hang (locfl3 wedges with it off, returns 26 with it on), but it is
+    // WRONG as a blanket default: matmult_int then faults at -O1 with
+    // "Cap mem access requires capability, cause = 24". copyPhysReg dispatches on
+    // Capstone::GPRRegClass, the SINGLE register class used for both scalar integers AND
+    // capabilities, so at that point it cannot tell which one SrcReg holds -- and replacing
+    // `movc s1, a0` with `mv s1, a0` drops the tag when a0 holds a live CAPABILITY. The code's
+    // own comment below anticipated exactly this.
+    // The correct fix is narrower and lives in the post-RA pass, which CAN prove the source is
+    // a scalar: see CapstonePostRAExpandPseudoInsts.cpp isScalarIntegerUse.
     "capstone-scalar-copy-live-src", cl::init(false), cl::Hidden,
     cl::desc("Copy a still-live GPR source with a scalar ALU move instead of the "
              "destructive `movc` (C-14)."));
