@@ -4196,7 +4196,10 @@ void domain_main(unsigned *res, unsigned func) {
          it stops returning at all.
          9/576 is 1.5%, the same order as the ~3% sporadic strlen rate in S01. Whether that is
          the same phenomenon is NOT established and should not be asserted from a rate
-         coincidence across two different measurements. */
+         coincidence across two different measurements.
+         N=2 as of 2026-08-07: 567 twice. L32 (0/9), L33 (0/8) and L34 (wedge) also reproduce
+         exactly, so the whole matrix is deterministic and the severity spread between L31 and
+         L32 is a property of the builds, not variance. */
       {
         unsigned qcount = 0;
         int qp, qk;
