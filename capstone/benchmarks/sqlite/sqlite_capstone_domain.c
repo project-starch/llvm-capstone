@@ -3656,6 +3656,20 @@ static int run_sqlite(void) {
   return 0;
 }
 
+#if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 16
+/* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16. Distinct bodies so
+   none of them folds into another and the array keeps nine DIFFERENT function pointers --
+   the whole point of the construct. Never called; only their addresses matter. */
+#define QR_CLONE_FN(n, k) \
+  static void qrCloneFunc##n(sqlite3_context *c, int a, sqlite3_value **v) { \
+    (void)c; (void)v; if (a == (k)) sqlite3_result_int(c, (k)); }
+QR_CLONE_FN(0, 101) QR_CLONE_FN(1, 102) QR_CLONE_FN(2, 103)
+QR_CLONE_FN(3, 104) QR_CLONE_FN(4, 105) QR_CLONE_FN(5, 106)
+QR_CLONE_FN(6, 107) QR_CLONE_FN(7, 108) QR_CLONE_FN(8, 109)
+#undef QR_CLONE_FN
+#endif
+
 void domain_main(unsigned *res, unsigned func) {
   /* DIAGNOSTIC (CAPSTONE_DIAG_FUNC): report the entry argument instead of acting on it.
      The first share entry was observed dying deep inside SQLite's VFS setup, which is only
@@ -3770,6 +3784,56 @@ void domain_main(unsigned *res, unsigned func) {
        loop touching zName/pUserData; sqlite3WindowFunctions/DateTime/Json; and finally
        sqlite3InsertBuiltinFuncs. These call the separable registrators directly.
        Both re-do CONFIG_HEAP + MallocInit first, matching level 7 which returns rc=0. */
+    /* LEVELS 15-17 ask WHICH HALF of sqlite3AlterFunctions matters -- the construct, or the
+       image it sits in. The off-SQLite reproducer (silicon-ladder rung `fdreg`) rebuilt that
+       function's construct exactly -- a static array of {name string, function pointer}
+       records, its cap-init, storing &arr[i] into a global bucket table, and calling through
+       the function-pointer field -- and ALL THREE of its stages RETURN on this silicon
+       (2456/2609/2736, control k800 = 4, 2026-08-06). So the operations are fine in a
+       12-global image and something about THIS image is not.
+       These three put the same construct back inside the SQLite image, ascending:
+           15  a local clone: own array, own dummy functions, own bucket table. No SQLite
+               call at all, so a wedge here is purely "the construct, in this image".
+           16  the same clone, linked with the REAL sqlite3InsertBuiltinFuncs, so the global
+               function hash and sqlite3Strlen30/sqlite3FunctionSearch join in.
+           17  the real sqlite3AlterFunctions(), i.e. level 13's payload.
+       None of them initialises the heap. Level 13 does CONFIG_HEAP + MallocInit first, but
+       InsertBuiltinFuncs never allocates, so dropping it removes a variable rather than
+       adding one -- and if 17 returns where 13 wedged, the heap init is implicated instead. */
+    if (lvl == 17) {
+      /* The real thing, with no heap init -- level 13 minus CONFIG_HEAP/MallocInit. */
+      sqlite3AlterFunctions();
+      qrc = (int)lvl;
+    }
+#if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) <= 16
+    if (lvl >= 15 && lvl <= 16) {
+      static FuncDef qrAlterClone[] = {
+        INTERNAL_FUNCTION(qr_clone_rename_column,   9, qrCloneFunc0),
+        INTERNAL_FUNCTION(qr_clone_rename_table,    7, qrCloneFunc1),
+        INTERNAL_FUNCTION(qr_clone_rename_test,     7, qrCloneFunc2),
+        INTERNAL_FUNCTION(qr_clone_drop_column,     3, qrCloneFunc3),
+        INTERNAL_FUNCTION(qr_clone_rename_quotefix, 2, qrCloneFunc4),
+        INTERNAL_FUNCTION(qr_clone_drop_constraint, 2, qrCloneFunc5),
+        INTERNAL_FUNCTION(qr_clone_fail,            2, qrCloneFunc6),
+        INTERNAL_FUNCTION(qr_clone_add_constraint,  3, qrCloneFunc7),
+        INTERNAL_FUNCTION(qr_clone_find_constraint, 2, qrCloneFunc8),
+      };
+      static FuncDef *qrCloneBuckets[SQLITE_FUNC_HASH_SZ];
+      if (lvl == 15) {
+        int qi;
+        for (qi = 0; qi < ArraySize(qrAlterClone); qi++) {
+          const char *z = qrAlterClone[qi].zName;
+          int h = SQLITE_FUNC_HASH(z[0], sqlite3Strlen30(z));
+          qrAlterClone[qi].pNext = qrCloneBuckets[h];
+          qrCloneBuckets[h] = &qrAlterClone[qi];
+        }
+      } else {
+        sqlite3InsertBuiltinFuncs(qrAlterClone, ArraySize(qrAlterClone));
+      }
+      qrc = (int)lvl;
+    }
+#endif
     if (lvl >= 13 && lvl <= 14) {
       qrc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap,
                            (int)sizeof(sqlite_heap), 64);
