@@ -26,6 +26,16 @@
 void xlang_arena_init(void *grant) { rof_init(grant); }
 void xlang_set_no_revoke(void) { rof_no_revoke = 1; }
 
+/* Memory instrumentation getters (this TU owns the all-static rof allocator, so the
+ * counters are only reachable here). carved = every byte ever handed out (rof never
+ * reclaims arena bytes, so this is the total footprint); peak_slots = high-water of
+ * concurrently-live allocations (freed slots are reused, so rof_nslots only grows to
+ * the max simultaneous live count -> the working-set proxy); live_* = state at call. */
+unsigned long xlang_mem_carved(void) { return rof_carved_total; }
+unsigned long xlang_mem_live_bytes(void) { return rof_live_bytes; }
+unsigned xlang_mem_live_count(void) { return rof_live_count; }
+unsigned xlang_mem_peak_slots(void) { return rof_nslots; }
+
 /* Delivery probe (domain XLANG_PROBE_DELIVERY): allocate, revoke, hand the stale
  * alias back. No arithmetic is performed on it, so the next operation is a plain
  * offset-0 load — the route that yields a clean cause-25 fault. */

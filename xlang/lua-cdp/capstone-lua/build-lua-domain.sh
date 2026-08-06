@@ -39,9 +39,22 @@ OUT_DOM=${OUT_DOM:-$OUT_DIR/lua_domain.dom}
 mkdir -p "$OBJ_DIR"
 
 # Freestanding recipe for every Lua / libc / domain TU (from the port's spec).
+# -fno-jump-tables: a `switch` otherwise lowers to an ABSOLUTE-addressed jump table
+# loaded with a plain `lw` through a raw (non-capability) address, which faults
+# cause-24 ("requires capability") on Capstone — the exact fault hit in lua_gc's
+# switch(what) and singlestep's switch(g->gcstate). This is the SAME flag the WORKING
+# SQLite cjalr build carries (build-sqlite-capstone.sh COMMON_FLAGS); Lua's build was
+# simply missing it. -fno-optimize-sibling-calls matches that recipe too.
+# -DLUA_USE_JUMPTABLE=0: separate from -fno-jump-tables. Lua's VM loop (lvm.c) has
+# its OWN application-level computed-goto dispatch (ljumptab.h: `goto *disptab[op]`
+# over a table of `&&label` addresses), enabled under __GNUC__ (clang defines it).
+# Those are ABSOLUTE code addresses with no PCC bounds -> a cause-1 instruction-access
+# fault at a raw static pc on Capstone. -fno-jump-tables (a compiler switch-lowering
+# flag) does NOT touch it; this macro forces the plain `switch` dispatch instead.
 LUA_FLAGS=(-target capstone64-unknown-elf
            -Xclang -target-feature -Xclang +m
            -ffreestanding -nostdlibinc -fno-builtin
+           -fno-jump-tables -fno-optimize-sibling-calls -DLUA_USE_JUMPTABLE=0
            -ffunction-sections -fdata-sections -O0
            -include "$LIBC_DIR/capstone_lua_libc.h"
            -I"$LIBC_DIR/include" -I"$LUA_SRC")
@@ -65,7 +78,11 @@ for tu in "${LUA_TUS[@]}"; do
 done
 
 # --- domain driver (needs the hostcall struct) ---
-"$CLANG" "${LUA_FLAGS[@]}" -I"$HOSTCALL_DIR" \
+# DOMAIN_EXTRA_DEFS: extra -D flags for the driver only (bisection knobs like
+# -DLUA_STAGE=5 -DLUA_DBG_STAGE), mirroring SQLite's DOMAIN_EXTRA_DEFS convention.
+# shellcheck disable=SC2206
+DOMAIN_EXTRA_DEFS=(${DOMAIN_EXTRA_DEFS:-})
+"$CLANG" "${LUA_FLAGS[@]}" "${DOMAIN_EXTRA_DEFS[@]}" -I"$HOSTCALL_DIR" \
   -c "$LIBC_DIR/lua_domain.c" -o "$OBJ_DIR/lua_domain.o"
 OBJS+=("$OBJ_DIR/lua_domain.o")
 

@@ -101,6 +101,23 @@ static void output_int(long long v) {
   payload_put(buf, (unsigned long)i);
 }
 
+/* Dynamic instruction count under `-icount shift=0`: rdcycle advances one per
+ * retired instruction, so a delta across a region is that region's instruction
+ * count. Same readout as the tree-cost probe (revoke_cost.c) — the honest
+ * functional-model overhead proxy, not cycle-accurate timing. */
+static inline unsigned long rd_icount(void) {
+  unsigned long v;
+  __asm__ volatile("rdcycle %0" : "=r"(v));
+  return v;
+}
+
+/* csdebugcountprint (funct7 0x46): makes QEMU dump its debug counters AND (with the
+ * instrumentation added to helper_csdebugcountprint) the revocation-node high-water
+ * `REV-NODES alloced_n=...` — the QEMU-side "space" figure the domain cannot read. */
+static inline void dbg_count_print(void) {
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x46, x0, x0, x0" : : : "memory");
+}
+
 /* print()/io.write route through fwrite(stdout) -> this sink (see lua_libc.c). */
 void lua_host_write(const char *s, unsigned long n) { payload_put(s, n); }
 
@@ -158,6 +175,110 @@ static void run_lua(void) {
   output_text(" expected=400\n");
   lua_close(L);
 }
+
+/* The OFFICIAL Computer Language Benchmarks Game `binary-trees` workload, run on
+ * Capstone to sit beside the CHERI baseline (xlang/lua-cdp/cheri/bench/). Kept
+ * base-library-only ON PURPOSE: the measured cost is the tree build/traversal + the
+ * revoke-on-free GC churn, which is byte-identical to the reference; only the OS-bound
+ * reporting differs. So `io.write(string.format(...))` becomes an accumulated integer
+ * check (returned, not printed), `2^k` becomes the integer `1<<k` (same iteration
+ * count), and `math.max` is inlined — no string/math/io libs, no OS. N defaults to 6
+ * to match the CHERI reproduce script (reproduce-cheri-lua-bench.sh N=${N:-6}); the
+ * expected combined check for N=6 is 4398 (stretch 255 + inner 1984+2032 + longlived
+ * 127). Every discarded tree is real garbage the GC frees (each free REVOKES on rof),
+ * so this exercises the temporal-safety path at scale. */
+#ifndef LUA_BT_N
+#define LUA_BT_N 6
+#endif
+#define LUA_BT_STR2(x) #x
+#define LUA_BT_STR(x) LUA_BT_STR2(x)
+static const char LUA_BT_CHUNK[] =
+    "local function B(d)\n"
+    "  if d>0 then d=d-1; return { B(d), B(d) } else return {} end\n"
+    "end\n"
+    "local function C(t)\n"
+    "  if t[1] then return 1 + C(t[1]) + C(t[2]) else return 1 end\n"
+    "end\n"
+    "local N=" LUA_BT_STR(LUA_BT_N) "\n"
+    "local mind=4\n"
+    "local maxd=mind+2\n"
+    "if N>maxd then maxd=N end\n"
+    "local total=0\n"
+    "total = total + C(B(maxd+1))\n"           /* stretch tree */
+    "local ll = B(maxd)\n"                      /* long-lived tree */
+    "for depth=mind,maxd,2 do\n"
+    "  local iters = 1 << (maxd - depth + mind)\n"
+    "  local check = 0\n"
+    "  for i=1,iters do check = check + C(B(depth)) end\n"
+    "  total = total + check\n"
+    "end\n"
+    "total = total + C(ll)\n"
+    "return total\n";
+
+/* rof allocator instrumentation (Phase-2 counters live in the rof header, owned by
+ * revoke_arena_domain.c). rof_carved_total = bytes ever handed out; there is no direct
+ * "frees" counter, but every alloc in this workload is eventually freed, so the number
+ * of malloc calls ~ the number of free (revoke) calls that the delta is amortised over. */
+extern void xlang_set_no_revoke(void);
+extern unsigned long xlang_mem_carved(void);
+extern unsigned long xlang_mem_live_bytes(void);
+extern unsigned xlang_mem_live_count(void);
+extern unsigned xlang_mem_peak_slots(void);
+
+#ifdef LUA_BINTREES
+static void run_lua_bintrees(void) {
+  DBG(1000);
+#ifdef LUA_BT_NO_REVOKE
+  xlang_set_no_revoke(); /* control: free() does NOT revoke — isolates the revoke cost */
+#endif
+  lua_State *L = luaL_newstate();
+  if (!L) { output_text("BT-FAIL newstate=NULL (arena depleted?)\n"); return; }
+  DBG(1001);
+  luaL_requiref(L, LUA_GNAME, luaopen_base, 1);
+  lua_pop(L, 1);
+  DBG(1002);
+  int st = luaL_loadbufferx(L, LUA_BT_CHUNK, sizeof(LUA_BT_CHUNK) - 1, "=bt", NULL);
+  if (st != LUA_OK) {
+    output_text("BT-FAIL load: "); output_text(lua_tostring(L, -1)); output_text("\n");
+    return;
+  }
+  DBG(1003);
+  /* Bracket ONLY the benchmark pcall: newstate/base/load are identical setup in both
+   * revoke and norevoke builds and are excluded so the delta is purely the workload. */
+  unsigned long t0 = rd_icount();
+  st = lua_pcall(L, 0, 1, 0);
+  unsigned long t1 = rd_icount();
+  DBG(1004);
+  if (st != LUA_OK) {
+    output_text("BT-FAIL run: "); output_text(lua_tostring(L, -1)); output_text("\n");
+    return;
+  }
+  int isint = 0;
+  long long r = lua_tointegerx(L, -1, &isint);
+  output_text("BT-OK N=" LUA_BT_STR(LUA_BT_N)
+#ifdef LUA_BT_NO_REVOKE
+              " mode=norevoke check="
+#else
+              " mode=revoke check="
+#endif
+  );
+  if (isint) output_int(r); else output_text("(non-integer)");
+  output_text(" icount="); output_int((long long)(t1 - t0));
+  output_text("\n");
+  /* Memory: carved = total bytes ever handed out (rof never reclaims -> the whole
+   * footprint); peak_slots = high-water of concurrently-live allocations (the working
+   * set, in objects); live_* = still live now (post-benchmark, pre-close: longlived
+   * tree + interpreter state). Emitted before lua_close so live_* reflect the result. */
+  output_text("BT-MEM carved_bytes="); output_int((long long)xlang_mem_carved());
+  output_text(" peak_live_objs="); output_int((long long)xlang_mem_peak_slots());
+  output_text(" end_live_objs="); output_int((long long)xlang_mem_live_count());
+  output_text(" end_live_bytes="); output_int((long long)xlang_mem_live_bytes());
+  output_text("\n");
+  dbg_count_print(); /* QEMU emits: REV-NODES alloced_n=<peak revocation nodes> ... */
+  lua_close(L);
+  DBG(1005);
+}
+#endif /* LUA_BINTREES */
 
 /* Bisection harness (CLAUDE.md batch-variants). Built only with -DLUA_STAGE=k, in
  * a SEPARATE function so the real run_lua() above stays byte-identical. Each stage
@@ -227,6 +348,42 @@ static void run_lua_staged(void) {
 #endif
 }
 #endif /* LUA_STAGE */
+
+/* GC-composition probe (CLAUDE.md batch-variants). singlestep() faults during
+ * luaopen_base under the rof allocator (cause 24, untagged pointer deref in GC
+ * traversal). This isolates the tracing GC as the culprit: E1 STOPS the GC before
+ * opening base + running the chunk (expected to RETURN); E2 leaves it on (the
+ * current fault). Ordered E1-first so its markers flush before E2 can wedge. E1
+ * intentionally does NOT lua_close (the incremental-free sweep is itself a traversal
+ * that could confound); the domain is one-shot, so a leak is fine. */
+#ifdef LUA_GCPROBE
+static void run_lua_gcprobe(void) {
+  DBG(600);
+  lua_State *L = luaL_newstate();
+  if (!L) { output_text("E1 newstate=NULL\n"); return; }
+  lua_gc(L, LUA_GCSTOP, 0);      /* no marking traversal from here on */
+  DBG(601);
+  luaL_requiref(L, LUA_GNAME, luaopen_base, 1);
+  lua_pop(L, 1);
+  DBG(602);
+  int st = luaL_loadbufferx(L, LUA_CHUNK, sizeof(LUA_CHUNK) - 1, "=c", NULL);
+  if (st == LUA_OK) st = lua_pcall(L, 0, 1, 0);
+  DBG(603);
+  int isint = 0; long long r = lua_tointegerx(L, -1, &isint);
+  output_text("E1 (GCSTOP) rc="); output_int(st);
+  output_text(" r="); if (isint) output_int(r); else output_text("?");
+  output_text("\n");
+
+  DBG(610);
+  lua_State *L2 = luaL_newstate();
+  if (!L2) { output_text("E2 newstate=NULL\n"); return; }
+  DBG(611);
+  luaL_requiref(L2, LUA_GNAME, luaopen_base, 1);  /* GC on: the failing path */
+  lua_pop(L2, 1);
+  DBG(612);
+  output_text("E2 (GC on) base ok\n");
+}
+#endif /* LUA_GCPROBE */
 
 /* Chunk ladder (CLAUDE.md batch-variants, applied to the INPUT instead of to a
  * single chunk's stages). Built with -DLUA_CHUNK_LADDER. Runs a spectrum of chunks
@@ -744,6 +901,10 @@ void domain_main(void *arg, unsigned func) {
   run_lua_cdp_openssl();
 #elif defined(LUA_CDP_X509)
   run_lua_cdp_x509();
+#elif defined(LUA_BINTREES)
+  run_lua_bintrees();
+#elif defined(LUA_GCPROBE)
+  run_lua_gcprobe();
 #elif defined(LUA_CHUNK_LADDER)
   run_lua_ladder();
 #elif defined(LUA_STAGE)
