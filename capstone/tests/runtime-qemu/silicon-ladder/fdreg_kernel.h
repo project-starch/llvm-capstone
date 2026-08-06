@@ -199,6 +199,21 @@ static void fdreg_link_via_param(FdregDef *aDef, int nDef) {
  *     both wedge                          -> the non-inlined CALL is the fault
  *     both return                         -> stage 4's wedge, if any, is elsewhere
  * Same oracle as stages 2 and 4 (2609) -- identical work, three derivation paths.
+ *
+ * BOARD RESULT 2026-08-06 (control k800 = 4): the THIRD case. Stage 2 (inline), stage 5
+ * (noinline, reads via gp) and stage 4 (noinline, array as a pointer parameter) ALL
+ * returned 2609. So the argument-capability shape is fine here, and the reading of the
+ * SQLite probe qr21 -- that this shape was the wedge -- was retracted on this run.
+ *
+ * That leaves a gap rather than a closed question, because the same shape inside the
+ * SQLite image DOES wedge: level 19 (loop inline) returns on two independent draws, and
+ * level 22 -- identical loop, same array, same declaration site, no new global, only moved
+ * behind the noinline callee -- wedges, both created and entered. The images differ by
+ * SCALE: this rung has 12 globals and reaches gp index 11, while the SQLite domain has 176
+ * and reaches 175, so it spends 846 accesses on the lui/addi/cincoffset/ldc path that only
+ * exists above index 127 -- a path this rung never touches at all.
+ * FDREG_STAGE=4 with FDREG_PAD=1 is precisely that test, the parameter shape ABOVE the
+ * boundary. Oracle 2769.
  */
 __attribute__((noinline))
 static void fdreg_link_via_global(int nDef) {
