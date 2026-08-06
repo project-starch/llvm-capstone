@@ -1,5 +1,60 @@
 # The silicon blocker — everything known
 
+## 2026-08-06 — ROOT CAUSE: `sqlite3RegisterBuiltinFunctions()`. Everything else in `initialize()` works.
+
+Measured at SLOT 2, control green, corrected classifier ("WAS created and entered, `SQ: A/dom-ok`
+present, no monitor tag"), so this is a genuine DOMAIN wedge, not the monitor spin:
+
+| step | result |
+|---|---|
+| `sqlite3_config(SQLITE_CONFIG_HEAP)` | rc=0 |
+| `+ sqlite3MutexInit()` (a no-op at THREADSAFE=0) | rc=0 |
+| `+ sqlite3MallocInit()` (memsys5Init) | rc=0 |
+| read `pcache2.xInit` | rc=0 (null, the expected fresh state) |
+| `sqlite3PCacheSetDefault()` | rc=2 |
+| `+ read back xInit` | rc=3 (installed, non-null) |
+| `+ sqlite3PcacheInitialize()` **including the indirect call** | **rc=0** |
+| **`+ sqlite3RegisterBuiltinFunctions()`** | **WEDGES** |
+| full `sqlite3_initialize()` | wedges (consistent) |
+
+**This independently CONFIRMS the 2026-07-31 attribution** recorded at
+`sqlite_capstone_domain.c:337-339`, which had to be treated as unproven because it came from the
+staged dispatch, whose builds were later shown unreliable. Two routes, same function.
+
+### The failing construct
+
+`sqlite3RegisterBuiltinFunctions()` (amalgamation `:137217`) builds
+`FuncDef capstoneBuiltinFunc[] = {...}` -- a **LOCAL (stack) array of ~100+ FuncDef structs**,
+each holding a `zName` string pointer and a function pointer, explicitly non-const ("The array
+cannot be constant since changes are made to the FuncDef.pHash elements at start-time").
+
+That is a stack-allocated aggregate of pointer-bearing structs, initialised by copying pointers
+out of `.rodata`. Contrast with what WORKS: `sqlite3PCacheSetDefault`'s `defaultMethods` is a
+**static const** aggregate of 13 function pointers and it copies fine (rc=2/rc=3), and
+memsys5Init's large structured write/link pass over the 256 KB heap also returns rc=0.
+
+**So the discriminator is not "aggregate of pointers" and not "indirect call" -- both of those
+are now measured WORKING. It is specifically the large LOCAL/stack pointer-bearing aggregate.**
+
+### Hypotheses RETRACTED by measurement today
+
+* "`sqlite3PcacheInitialize()` is the fault" -- it returns rc=0. The earlier wedge was the
+  monitor's slot-5 spin with the domain never created.
+* "An indirect call through a function pointer in a capability-table global hangs" -- `qr8`
+  performs exactly that call and returns rc=0.
+* "Pointer-bearing static aggregates are the failing construct" -- `SetDefault` copies 13
+  function pointers and returns.
+
+### Next
+
+Minimal reproducer, off the SQLite path entirely: a ladder rung that builds a large LOCAL array
+of structs each containing a string pointer and a function pointer, and returns a checksum.
+Grow the element count until it wedges. That gives a rung-sized repro for the board owner and
+for the compiler side, with no 1.5 MB image and no monitor spin in the way. Stages 11-13 in
+`sqlite_capstone_domain.c` were written for this exact hunt and their premise is now confirmed.
+
+---
+
 ## 2026-08-06 — ROOT CAUSE LOCATION: `sqlite3PcacheInitialize()` hangs on silicon.
 
 One boot, control green, all five images sharing globals base `0x150000` and 176 carves:
