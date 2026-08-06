@@ -157,6 +157,35 @@ static unsigned fdreg_hash(unsigned char c, unsigned n) {
   return ((unsigned)c + n * 3u) % FDREG_HASHN;
 }
 
+/* STAGE 4 -- the candidate MINIMAL REPRO of the SQLite wedge.
+ *
+ * Boot of 2026-08-06 narrowed sqlite3InsertBuiltinFuncs to one difference. Inlining its
+ * exact body -- union `u.pHash` write, `pOther` branch and all -- RETURNS (qr20, rc 20).
+ * Calling the real function with the array as a PARAMETER wedges (qr16n). Every other
+ * candidate is cleared: the static pointer-bearing array and its cap-init (fdreg 1),
+ * storing derived capabilities into a global (fdreg 2), indirect calls through the array
+ * (fdreg 3), high gp index (fdreg2p), sqlite3FunctionSearch walking the real global hash
+ * (qr18), and linking into that real global (qr19).
+ *
+ * So what is left is: `&aDef[i]` derived from an ARGUMENT capability inside a non-inlined
+ * callee, rather than from `gp` in the caller. That is what this stage isolates -- stage 2's
+ * work verbatim, moved behind `noinline` and reached through a pointer parameter.
+ *
+ * noinline is load-bearing, not a hint: if the compiler inlines it, the derivation goes back
+ * through gp and the stage silently becomes stage 2. Check the disassembly for a real call,
+ * do not assume.
+ */
+__attribute__((noinline))
+static void fdreg_link_via_param(FdregDef *aDef, int nDef) {
+  int i;
+  for (i = 0; i < nDef; i++) {
+    const char *z = aDef[i].zName;
+    unsigned h = fdreg_hash((unsigned char)z[0], fdreg_len30(z));
+    aDef[i].pNext = fdreg_buckets[h];
+    fdreg_buckets[h] = &aDef[i];
+  }
+}
+
 static unsigned fdreg_compute(void) {
   unsigned i, s = 0;
 
@@ -171,13 +200,19 @@ static unsigned fdreg_compute(void) {
   }
 
 #if FDREG_STAGE >= 2
-  /* STAGE 2 -- InsertBuiltinFuncs: store a DERIVED capability (&arr[i]) into a global. */
+  /* STAGE 2 -- InsertBuiltinFuncs: store a DERIVED capability (&arr[i]) into a global.
+     STAGE 4 does the identical work, but through a pointer PARAMETER in a noinline
+     callee -- the one difference the board narrowed the SQLite wedge to. */
+#if FDREG_STAGE == 4
+  fdreg_link_via_param(fdreg_defs, FDREG_N);
+#else
   for (i = 0; i < FDREG_N; i++) {
     const char *z = fdreg_defs[i].zName;
     unsigned h = fdreg_hash((unsigned char)z[0], fdreg_len30(z));
     fdreg_defs[i].pNext = fdreg_buckets[h];
     fdreg_buckets[h] = &fdreg_defs[i];
   }
+#endif
   /* Walk the chains back so a broken link shows up as a wrong number, not a silent pass. */
   for (i = 0; i < FDREG_HASHN; i++) {
     FdregDef *p = fdreg_buckets[i];
@@ -186,7 +221,11 @@ static unsigned fdreg_compute(void) {
   }
 #endif
 
-#if FDREG_STAGE >= 3
+/* `== 3`, not `>= 3`: stage 4 is stage 2 done through a parameter, NOT stage 3 plus
+   something. Its oracle is therefore stage 2's (2609), which is also the point -- a wrong
+   value would say the linking ran but produced different chains, where a hang says only
+   "somewhere after the last marker". */
+#if FDREG_STAGE == 3
   /* STAGE 3 -- indirect call through a capability loaded out of the global aggregate. */
   for (i = 0; i < FDREG_HASHN; i++) {
     FdregDef *p = fdreg_buckets[i];

@@ -3657,9 +3657,9 @@ static int run_sqlite(void) {
 }
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) <= 20 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 21 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 17
-/* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-20. Distinct bodies so
+/* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-21. Distinct bodies so
    none of them folds into another and the array keeps nine DIFFERENT function pointers --
    the whole point of the construct. Never called; only their addresses matter. */
 #define QR_CLONE_FN(n, k) \
@@ -3669,6 +3669,36 @@ QR_CLONE_FN(0, 101) QR_CLONE_FN(1, 102) QR_CLONE_FN(2, 103)
 QR_CLONE_FN(3, 104) QR_CLONE_FN(4, 105) QR_CLONE_FN(5, 106)
 QR_CLONE_FN(6, 107) QR_CLONE_FN(7, 108) QR_CLONE_FN(8, 109)
 #undef QR_CLONE_FN
+#endif
+
+#if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) == 21
+/* Level 21's array and callee. The array is file-scope rather than block-scope only so the
+   callee can take it by pointer the way sqlite3InsertBuiltinFuncs does; it is otherwise
+   identical to level 19's, including being non-const. */
+static FuncDef qrSplitClone21[] = {
+  INTERNAL_FUNCTION(qr21_rename_column,   9, qrCloneFunc0),
+  INTERNAL_FUNCTION(qr21_rename_table,    7, qrCloneFunc1),
+  INTERNAL_FUNCTION(qr21_rename_test,     7, qrCloneFunc2),
+  INTERNAL_FUNCTION(qr21_drop_column,     3, qrCloneFunc3),
+  INTERNAL_FUNCTION(qr21_rename_quotefix, 2, qrCloneFunc4),
+  INTERNAL_FUNCTION(qr21_drop_constraint, 2, qrCloneFunc5),
+  INTERNAL_FUNCTION(qr21_fail,            2, qrCloneFunc6),
+  INTERNAL_FUNCTION(qr21_add_constraint,  3, qrCloneFunc7),
+  INTERNAL_FUNCTION(qr21_find_constraint, 2, qrCloneFunc8),
+};
+
+/* Level 19's loop, unchanged, reached through a pointer PARAMETER. This is the single
+   remaining difference between qr20 (returns) and qr16n (wedges). */
+__attribute__((noinline))
+static void qr_link_via_param(FuncDef *aDef, int nDef) {
+  int i;
+  for (i = 0; i < nDef; i++) {
+    const char *z = aDef[i].zName;
+    int h = SQLITE_FUNC_HASH(z[0], sqlite3Strlen30(z));
+    aDef[i].pNext = sqlite3BuiltinFunctions.a[h];
+    sqlite3BuiltinFunctions.a[h] = &aDef[i];
+  }
+}
 #endif
 
 void domain_main(unsigned *res, unsigned func) {
@@ -3819,6 +3849,22 @@ void domain_main(unsigned *res, unsigned func) {
            19  18 + link into the REAL sqlite3BuiltinFunctions.a[h], pNext only. Adds (b).
            20  the exact InsertBuiltinFuncs body, inlined, including u.pHash. Adds (c),
                and must reproduce qr16 or the split is not faithful. */
+    /* LEVEL 21 -- the last difference. Board 2026-08-06: qr20 RETURNED (0x9E331414, rc 20)
+       while qr16n WEDGED, and qr20 inlines the exact InsertBuiltinFuncs body -- union
+       u.pHash write, pOther branch and all. So the union write, the branch, the real global
+       and the search are ALL cleared, and what remains is that the real function is a CALL
+       taking the array as a PARAMETER: inside it, `&aDef[i]` is derived from an argument
+       capability instead of from gp in the caller.
+       This level is level 19's loop verbatim, moved behind a noinline callee reached through
+       a pointer parameter. noinline is load-bearing: if it inlines, the derivation goes back
+       through gp and the level silently becomes level 19. Check the disassembly for a real
+       call rather than trusting the attribute. */
+#if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) == 21
+    if (lvl == 21) {
+      qr_link_via_param(qrSplitClone21, ArraySize(qrSplitClone21));
+      qrc = (int)lvl;
+    }
+#endif
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
                                       && (CAPSTONE_SQLITE_QUICKRET) <= 20
     if (lvl >= 18 && lvl <= 20) {
