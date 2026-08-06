@@ -3714,7 +3714,28 @@ static void qr_link_via_param(FuncDef *aDef, int nDef) {
    returns on two draws, 22 wedges on two), so the bisection belongs THERE.
    Level 23 vs level 22 is leaf vs non-leaf with everything else held fixed:
        23 returns and 22 wedges -> the inner call is the trigger, in this image
-       both wedge                -> the call itself is, and leafness is irrelevant */
+       both wedge                -> the call itself is, and leafness is irrelevant
+
+   BOARD 2026-08-06, boot 12, control k800 green, all four created AND entered
+   (A/dom-ok=3, G/enter=3, SHA5=7, SHA6=7): the FIRST case.
+
+       k800   returned    q19a   returned (obs 0x9E331313)
+       q23a   returned (obs 0x9E331717)          q22a   WEDGED
+
+   Inside this image, with the array, its declaration site, the search call, the padding
+   and the global count all held fixed:
+       loop inline              -> returns  (level 19, and on a second draw)
+       noinline LEAF callee     -> returns  (level 23)
+       noinline NON-LEAF callee -> WEDGES   (level 22, and on a second draw)
+
+   The difference between 22 and 23 is ONE LINE -- sqlite3Strlen30(z) versus a local
+   `while (z[n]) n++`. And the direction rules out size: the LEAF callee is BIGGER (110
+   instructions against 88) and still returns, so it is the inner CALL, not the code.
+
+   Note this is the same question fdreg stage 6 answered "returns" to, off SQLite. So the
+   trigger is not "a non-leaf callee" on its own -- it is a non-leaf callee IN THIS IMAGE,
+   and what the image contributes is still unidentified. Recorded as a localization, not a
+   root cause. */
 __attribute__((noinline))
 static void qr_link_via_param_leaf(FuncDef *aDef, int nDef) {
   int i;
