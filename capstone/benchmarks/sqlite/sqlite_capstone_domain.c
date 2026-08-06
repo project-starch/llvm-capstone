@@ -3657,7 +3657,7 @@ static int run_sqlite(void) {
 }
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) <= 27 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 28 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 17 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 25
 /* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-22. Distinct bodies so
@@ -3987,10 +3987,10 @@ void domain_main(unsigned *res, unsigned func) {
    returns; level 16 hands the same array to the real sqlite3InsertBuiltinFuncs and wedges.
    That is the SQLite blocker's minimal repro. */
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
-                                      && (CAPSTONE_SQLITE_QUICKRET) <= 27 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) <= 28 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 21 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 25
-    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27) {
+    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28) {
       static FuncDef qrSplitClone[] = {
         INTERNAL_FUNCTION(qr_split_rename_column,   9, qrCloneFunc0),
         INTERNAL_FUNCTION(qr_split_rename_table,    7, qrCloneFunc1),
@@ -4027,6 +4027,28 @@ void domain_main(unsigned *res, unsigned func) {
       qr_link_via_param(qrSplitClone, ArraySize(qrSplitClone));
 #elif (CAPSTONE_SQLITE_QUICKRET) == 23
       qr_link_via_param_leaf(qrSplitClone, ArraySize(qrSplitClone));
+#elif (CAPSTONE_SQLITE_QUICKRET) == 28
+      /* LEVEL 28 -- is it the CALL, or the loop nest? Level 27 returned qp=64 (the outer loop
+         ran all 64 iterations, correctly) with the inner counter at 9 -- one pass. So loop
+         CONTROL is fine and the ACCUMULATOR loses everything before the final pass. The
+         obvious suspect is the call in the inner body: sqlite3Strlen30 is the only thing
+         between the increments, and a callee whose frame overlapped the caller's slot would
+         do exactly this.
+         Level 28 is level 27 with the CALL REMOVED and nothing else changed -- same nest,
+         same bounds, same counters, same accumulate:
+             returns 64 (i.e. 576 & 0xff) -> the loop nest is fine, the CALL is the trigger
+             returns 9  again             -> the nest alone does it, no call needed, and the
+                                             fault is in the accumulator's stack slot itself
+         Correct marker 0x9E284040 (qp=64, count&0xff=64). */
+      {
+        unsigned qcount = 0;
+        int qp, qk;
+        for (qp = 0; qp < 64; qp++)
+          for (qk = 0; qk < ArraySize(qrSplitClone); qk++)
+            qcount++;
+        *res = 0x9E280000u | ((unsigned)(qp & 0xffu) << 8) | (unsigned)(qcount & 0xffu);
+        return;
+      }
 #elif (CAPSTONE_SQLITE_QUICKRET) == 27
       /* LEVEL 27 -- WHICH HALF of level 26 broke? Level 26 returned sum=191 on silicon where
          QEMU returns 12224 from the SAME binary: exactly ONE pass of 64, with all nine
