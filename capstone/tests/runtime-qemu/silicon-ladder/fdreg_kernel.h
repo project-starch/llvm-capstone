@@ -38,6 +38,14 @@
  * Every stage RETURNS a checksum, so a wrong value bisects where a hang would only ever
  * say "somewhere after the last marker".
  *
+ * BOARD RESULT 2026-08-06 (caplifive_65536_nodes.bit, one boot, control k800 = 4 green):
+ * all three stages RETURN their oracle -- 2456 / 2609 / 2736. So the construct alone does
+ * NOT reproduce the SQLite wedge: a static pointer-bearing array, its cap-init, storing
+ * derived capabilities into a global bucket table, and indirect calls through a function
+ * pointer loaded out of that array are all fine on this silicon. Whatever kills
+ * sqlite3AlterFunctions is a property of the SURROUNDING image, not of these operations,
+ * which is what FDREG_PAD below exists to test.
+ *
  * FDREG_PAD=<n> is an ORTHOGONAL knob: it emits <n> extra referenced globals ahead of
  * fdreg_defs, pushing it past gp index 128.
  *
