@@ -28,7 +28,7 @@ claim that had to be retracted, plus a reflash cycle and several boots. Hence th
 
 | rung | why |
 |---|---|
-| `matmult_int` | Documented silicon miscompile (R-1); `cscall` hangs at every reachable config. Wedges on BOTH bitstreams. Fine as an observation, never as a control. |
+| `matmult_int` | Documented silicon miscompile (R-1); `cscall` hangs at every reachable config. Wedges on BOTH bitstreams. Fine as an observation, never as a control. **Still true after the C-14 fix (2026-08-06), despite one boot where it returned 774662735 correctly:** the fix is BYTE-IDENTICAL at -O0 (`md5 71975c8c` with it on and off), so the recorded -O0 miscompute cannot be a C-14 instance and is untouched; and the -O1 pass moved the entry VA as well as the codegen, with the matched fix-off control present in the image but never run. See `history/06-08-2026_21-10-00_matmult-int-is-not-cleared-by-the-c14-fix.md`. A control needs a track record; one boot cannot supply one. |
 | `bnds` / `bnd2` | Diagnostic probes with NO fixed oracle -- they encode runtime capability state (`bnds` returns end−cursor+10, `bnd2` an encoded verdict). Their `.oracle` files say 0, which is meaningless. |
 | any freshly built image | R-16 is per-image: an image with no track record cannot separate "this image failed" from "the boot failed". |
 

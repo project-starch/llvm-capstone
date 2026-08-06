@@ -286,6 +286,19 @@ manual recovery. It cost a reflash. The function is still in `fpga_console.py` a
 exactly the instrument a wedge investigation wants, which is precisely the trap. Same caution
 for the GDB tab: an orphaned session wedges every later run and only `gdb_stop()` clears it.
 
+**Do NOT scan a raw UART transcript with `grep` — use `python3` byte search.** `grep` here is
+`ugrep`, and on a transcript containing control bytes it printed *nothing at all* for a string
+that a byte-level search found 8 times. A silent zero reads exactly like "absent", which is the
+worst possible failure mode for a verdict. Same family as the `awk strtonum` returning 0 and the
+hex-constant-emitted-in-decimal incidents.
+
+```python
+python3 -c "d=open('/tmp/capstone/bootN-raw.txt','rb').read(); print(d.count(b'RESULT'))"
+```
+
+Verdicts taken from a driver's own stdout summary are unaffected — the runners parse run-scoped
+text with Python regex. This applies to hand-grepping the raw capture.
+
 **Bitstream re-flash is ask-first, always.**
 
 ## Reporting a result
