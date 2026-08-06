@@ -1,5 +1,38 @@
 # The silicon blocker — everything known
 
+## 2026-08-06 (night, later) — THE DOMAIN RUNS C AND RETURNS. The hang is IN THE WORKLOAD.
+
+| test | result |
+|---|---|
+| `k800` (control) | `retval=4` in 2 s |
+| **`sq_qr` (quickret)** | **`obs=0x9E33` in 4 s -- ENTERS, RUNS C, WRITES `res`, RETURNS** |
+| `sq_staged` | wedged in region-share #1 (unchanged) |
+
+`CAPSTONE_SQLITE_QUICKRET` makes `domain_main` write a marker and return instead of running the
+database: no new globals, a handful of instructions, and it keeps the globals base at `0x150000`
+where the staged build shifts it to `0x160000`.
+
+**So the SQLite domain is structurally sound on silicon.** It creates, shares twice, enters,
+executes compiled C, writes the shared region and returns -- in 4 seconds. Nothing about the
+domain mechanism, the cap table, the glue, or the monitor is implicated. **The hang is inside
+the SQLite workload itself**, which is now reachable by bisection under a SHORT timeout.
+
+### Method, which is the real unlock
+
+Do NOT extend the timeout. A long budget destroys the only signal separating slow from stuck and
+makes every experiment cost ten times more; the 900 s run was a deliberate one-off to establish
+that the hang is real, and the budget is back to 90 s. Reduce the WORKLOAD instead and grow it
+back a piece at a time. `QUICKRET` is the minimal-perturbation way to do that -- the staged
+dispatch is the designed way, but it adds 2 globals and ~13 KB of `.text`, shifts the globals
+base by 64 KB, and that image dies earlier (S01 image-perturbation family).
+
+**Caveat on the single data point:** DCE drops 4 globals when the workload becomes unreachable
+(179 -> 175 carves), so QUICKRET is not a perfectly controlled change. The way to use it is as
+the FLOOR of a ladder -- grow the workload back until it stops returning -- not as proof on its
+own.
+
+---
+
 ## 2026-08-06 (night) — THE SQLITE HANG IS REAL, NOT A TIMEOUT. And every recent "stage N" run measured nothing.
 
 ### 1. Every SQLite `stage N` run in recent sessions was measuring nothing

@@ -3712,6 +3712,24 @@ void domain_main(unsigned *res, unsigned func) {
   }
   return;
 #endif
+#ifdef CAPSTONE_SQLITE_QUICKRET
+  /* MINIMAL WORKLOAD REDUCTION -- the smallest possible probe, added 2026-08-06.
+     Returns a marker immediately instead of running the database. No new globals, no new
+     calls, a handful of instructions.
+     Purpose: the full workload is a REAL hang (900s, control green, no return), and the
+     obvious tool for bisecting it -- the staged dispatch -- cannot be used, because building
+     with CAPSTONE_SQLITE_STAGE adds 2 globals and ~13KB of .text and shifts the globals base
+     0x150000 -> 0x160000, and THAT image dies earlier still, inside region-share #1. This is
+     the S01 image-perturbation family: the instrument moves the failure.
+     So this probe is deliberately the least invasive change that reduces the workload to
+     nothing. If it RETURNS, the domain can enter, run C, write res and return -- and the hang
+     is in the workload, which can then be grown back a piece at a time under a SHORT timeout.
+     If it WEDGES with the workload removed, the fault is structural and nothing about SQLite
+     itself is implicated.
+     Placed AFTER the func dispatch so region shares are untouched. */
+  *res = 0x9E33u;
+  return;
+#endif
   (void)run_sqlite();
   *res = SQLITE_HC_RET_DONE;
 }
