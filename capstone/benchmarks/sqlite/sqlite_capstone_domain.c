@@ -3657,7 +3657,7 @@ static int run_sqlite(void) {
 }
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) <= 31 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 32 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 17 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 25
 /* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-22. Distinct bodies so
@@ -3992,10 +3992,10 @@ void domain_main(unsigned *res, unsigned func) {
    returns; level 16 hands the same array to the real sqlite3InsertBuiltinFuncs and wedges.
    That is the SQLite blocker's minimal repro. */
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
-                                      && (CAPSTONE_SQLITE_QUICKRET) <= 31 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) <= 32 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 21 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 25
-    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28 || lvl == 29 || lvl == 30 || lvl == 31) {
+    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28 || lvl == 29 || lvl == 30 || lvl == 31 || lvl == 32) {
       static FuncDef qrSplitClone[] = {
         INTERNAL_FUNCTION(qr_split_rename_column,   9, qrCloneFunc0),
         INTERNAL_FUNCTION(qr_split_rename_table,    7, qrCloneFunc1),
@@ -4058,6 +4058,36 @@ void domain_main(unsigned *res, unsigned func) {
             qcount++;
           }
         *res = 0x9E290000u | (unsigned)(qcount & 0xffffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 32
+      /* LEVEL 32 -- the REAL discriminator. Level 29 does not separate the two readings, and
+         both the audit and I got that wrong in opposite directions: qcount IS the accumulator,
+         so "the nest ran 576 times and the adds were lost" and "the inner loop ran 9 times"
+         BOTH predict 9. A 16-bit counter only removed level 27's mod-256 alias.
+         What separates them is a witness that does NOT live on the stack. The inner body here
+         stamps the OUTER pass number into a .data field of an existing global, so the answer
+         is read back out of memory the frame cannot touch:
+             max stamp 63 -> the inner body DID run on the last outer pass; the nest completed
+                             and the stack ACCUMULATOR is what lost the adds
+             max stamp 0  -> the inner body ran only during pass 0; the inner loop's induction
+                             variable really is failing to re-init
+         `written` counts how many of the nine elements were stamped at all, so a corrupted
+         witness is distinguishable from a clean 0. Reuses qrSplitClone, adds no global, so it
+         keeps the section layout of the family that enters. Correct marker 0x9E323F09. */
+      {
+        unsigned qwritten = 0, qmax = 0;
+        int qp, qk;
+        for (qk = 0; qk < ArraySize(qrSplitClone); qk++)
+          qrSplitClone[qk].funcFlags = 0xffffffffu;      /* sentinel: never stamped */
+        for (qp = 0; qp < 64; qp++)
+          for (qk = 0; qk < ArraySize(qrSplitClone); qk++)
+            qrSplitClone[qk].funcFlags = (u32)qp;        /* stamp the OUTER pass, into .data */
+        for (qk = 0; qk < ArraySize(qrSplitClone); qk++) {
+          u32 v = qrSplitClone[qk].funcFlags;
+          if (v != 0xffffffffu) { qwritten++; if (v > qmax) qmax = v; }
+        }
+        *res = 0x9E320000u | ((qmax & 0xffu) << 8) | (qwritten & 0xffu);
         return;
       }
 #elif (CAPSTONE_SQLITE_QUICKRET) == 30
