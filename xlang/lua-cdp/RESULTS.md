@@ -4,7 +4,9 @@
 cross-domain-pointer use-after-frees.** The same distilled shim source runs on
 both platforms; only the capability mechanism differs, and each runs in its
 native deployment mode. This file is the security half — compatibility and
-performance are separate axes (see the bottom).
+performance are separate axes (see the bottom). Performance + memory on the
+official Lua binary-trees benchmark (the same 13-case Lua on both platforms)
+are now measured — see `PERF-MEMORY.md`.
 
 ## The one-sentence result
 
@@ -135,9 +137,10 @@ result.
 - **Distilled shims, not the real libraries** — the real OpenSSL/SDL2/… cannot run
   on Capstone at all (no OS/syscalls). That gap *is* the compatibility axis.
 - **QEMU, not silicon** — Capstone absolute costs need RTL/FPGA.
-- **Security only** — compatibility (coverage/porting cost) and performance
-  (revocation overhead on SQLite, the one workload that runs on both) are
-  separate, still-open axes.
+- **Security only** — compatibility (coverage/porting cost) is a separate,
+  still-open axis. Performance + memory are now measured on real Lua
+  (`binary-trees`, see `PERF-MEMORY.md`), alongside the earlier SQLite
+  revocation-overhead result — this file stays security-only by design.
 - **"async 0/13" = not caught *synchronously*** — a later sweep would revoke, but
   not at the instant of the stale access. That window is the security-relevant
   one.
