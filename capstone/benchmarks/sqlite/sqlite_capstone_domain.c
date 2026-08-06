@@ -3704,7 +3704,23 @@ static void qr_link_via_param(FuncDef *aDef, int nDef) {
 }
 #endif
 
+/* QR_DRAW -- R-16 REDRAW knob. The entry stall is PER-IMAGE and deterministic per binary
+   (x101 stalled 6/6, r112 3/3), so retrying a stalling image is futile; the remedy is to draw
+   a DIFFERENT image whose code under test is byte-identical. These nops do exactly that: they
+   shift layout and nothing else, they are emitted before any probe runs, and they cannot alter
+   semantics. Vary QR_DRAW until the domain enters, and sha256sum the set -- two draws that
+   hash the same are the same ticket. Applied EQUALLY to both halves of a level pair, or the
+   pair stops being a pair. */
+#ifndef QR_DRAW
+#define QR_DRAW 0
+#endif
+#define QR_DRAW_STR2(x) #x
+#define QR_DRAW_STR(x) QR_DRAW_STR2(x)
+
 void domain_main(unsigned *res, unsigned func) {
+#if (QR_DRAW) > 0
+  __asm__ volatile(".rept " QR_DRAW_STR(QR_DRAW) "\n\tnop\n\t.endr" ::: "memory");
+#endif
   /* DIAGNOSTIC (CAPSTONE_DIAG_FUNC): report the entry argument instead of acting on it.
      The first share entry was observed dying deep inside SQLite's VFS setup, which is only
      reachable when `func` is not REGION_SHARE -- i.e. the domain ran the whole database on
