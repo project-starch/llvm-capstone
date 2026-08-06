@@ -3657,7 +3657,7 @@ static int run_sqlite(void) {
 }
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) <= 22 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 23 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 17
 /* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-22. Distinct bodies so
    none of them folds into another and the array keeps nine DIFFERENT function pointers --
@@ -3672,7 +3672,8 @@ QR_CLONE_FN(6, 107) QR_CLONE_FN(7, 108) QR_CLONE_FN(8, 109)
 #endif
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && \
-    ((CAPSTONE_SQLITE_QUICKRET) == 21 || (CAPSTONE_SQLITE_QUICKRET) == 22)
+    ((CAPSTONE_SQLITE_QUICKRET) == 21 || (CAPSTONE_SQLITE_QUICKRET) == 22 || \
+     (CAPSTONE_SQLITE_QUICKRET) == 23)
 /* Level 21's array and callee. The array is file-scope rather than block-scope only so the
    callee can take it by pointer the way sqlite3InsertBuiltinFuncs does; it is otherwise
    identical to level 19's, including being non-const. */
@@ -3700,6 +3701,29 @@ static void qr_link_via_param(FuncDef *aDef, int nDef) {
     int h = SQLITE_FUNC_HASH(z[0], sqlite3Strlen30(z));
     aDef[i].pNext = sqlite3BuiltinFunctions.a[h];
     sqlite3BuiltinFunctions.a[h] = &aDef[i];
+  }
+}
+
+/* LEVEL 23's callee: byte-for-byte level 22's, except the strlen is a LOCAL loop instead of
+   a call to sqlite3Strlen30, which makes the callee a LEAF.
+   Why here and not in the fdreg rung: the rung has now failed to reproduce under FOUR
+   structural hypotheses -- the construct itself, gp index > 127, an argument-derived
+   capability, and a non-leaf callee -- returning its oracle every time (2456/2609/2736,
+   2769, 2609, 2609). Building UP from a 12-global image is not converging. The reproduction
+   lives inside the SQLite image, where the level-19/level-22 pair separates reliably (19
+   returns on two draws, 22 wedges on two), so the bisection belongs THERE.
+   Level 23 vs level 22 is leaf vs non-leaf with everything else held fixed:
+       23 returns and 22 wedges -> the inner call is the trigger, in this image
+       both wedge                -> the call itself is, and leafness is irrelevant */
+__attribute__((noinline))
+static void qr_link_via_param_leaf(FuncDef *aDef, int nDef) {
+  int i;
+  for (i = 0; i < nDef; i++) {
+    const char *z = aDef[i].zName;
+    int n = 0;
+    while (z[n]) n++;                      /* local, so no call: LEAF */
+    aDef[i].pNext = sqlite3BuiltinFunctions.a[SQLITE_FUNC_HASH(z[0], n)];
+    sqlite3BuiltinFunctions.a[SQLITE_FUNC_HASH(z[0], n)] = &aDef[i];
   }
 }
 #endif
@@ -3908,9 +3932,9 @@ void domain_main(unsigned *res, unsigned func) {
    SAME place, with the same sqlite3FunctionSearch call -- only moved behind the noinline
    callee. No new global. That is the single-variable pair qr21 should have been. */
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
-                                      && (CAPSTONE_SQLITE_QUICKRET) <= 22 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) <= 23 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 21
-    if ((lvl >= 18 && lvl <= 20) || lvl == 22) {
+    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23) {
       static FuncDef qrSplitClone[] = {
         INTERNAL_FUNCTION(qr_split_rename_column,   9, qrCloneFunc0),
         INTERNAL_FUNCTION(qr_split_rename_table,    7, qrCloneFunc1),
@@ -3945,6 +3969,8 @@ void domain_main(unsigned *res, unsigned func) {
       }
 #if (CAPSTONE_SQLITE_QUICKRET) == 22
       qr_link_via_param(qrSplitClone, ArraySize(qrSplitClone));
+#elif (CAPSTONE_SQLITE_QUICKRET) == 23
+      qr_link_via_param_leaf(qrSplitClone, ArraySize(qrSplitClone));
 #endif
       qrc = (int)lvl;
       (void)qfound;
