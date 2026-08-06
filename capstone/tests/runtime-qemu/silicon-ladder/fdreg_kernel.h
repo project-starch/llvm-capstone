@@ -186,6 +186,31 @@ static void fdreg_link_via_param(FdregDef *aDef, int nDef) {
   }
 }
 
+/* STAGE 5 -- the CONTROL for stage 4, and the half that makes stage 4 attributable.
+ *
+ * Stage 4 changes two things at once relative to stage 2: the work moves into a separate
+ * non-inlined function, AND the array is reached through a pointer parameter. If stage 4
+ * wedges, those two are not yet separated -- "a call wedges" and "an argument capability
+ * wedges" are very different findings.
+ *
+ * This stage takes the first without the second: same noinline callee, same call, but it
+ * reads the global directly through gp instead of taking it as an argument. So
+ *     stage 5 returns AND stage 4 wedges  -> the ARGUMENT capability is the fault
+ *     both wedge                          -> the non-inlined CALL is the fault
+ *     both return                         -> stage 4's wedge, if any, is elsewhere
+ * Same oracle as stages 2 and 4 (2609) -- identical work, three derivation paths.
+ */
+__attribute__((noinline))
+static void fdreg_link_via_global(int nDef) {
+  int i;
+  for (i = 0; i < nDef; i++) {
+    const char *z = fdreg_defs[i].zName;
+    unsigned h = fdreg_hash((unsigned char)z[0], fdreg_len30(z));
+    fdreg_defs[i].pNext = fdreg_buckets[h];
+    fdreg_buckets[h] = &fdreg_defs[i];
+  }
+}
+
 static unsigned fdreg_compute(void) {
   unsigned i, s = 0;
 
@@ -205,6 +230,8 @@ static unsigned fdreg_compute(void) {
      callee -- the one difference the board narrowed the SQLite wedge to. */
 #if FDREG_STAGE == 4
   fdreg_link_via_param(fdreg_defs, FDREG_N);
+#elif FDREG_STAGE == 5
+  fdreg_link_via_global(FDREG_N);
 #else
   for (i = 0; i < FDREG_N; i++) {
     const char *z = fdreg_defs[i].zName;
