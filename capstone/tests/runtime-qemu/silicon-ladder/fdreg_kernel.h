@@ -265,6 +265,46 @@ static void fdreg_link_via_param_nonleaf(FdregDef *aDef, int nDef) {
 static unsigned fdreg_compute(void) {
   unsigned i, s = 0;
 
+#if FDREG_STAGE == 7
+  /* STAGE 7 -- the OFF-SQLITE reproduction of the four-way conjunction.
+   *
+   * Every earlier fdreg stage returned correctly, and the reason is now known and is not that
+   * the rung is too small: EVERY loop in this file is FLAT. Max nesting is 1. The conjunction
+   * bisected inside the SQLite domain over boots 27-30 needs FOUR things at once --
+   *     a NESTED loop, a CAPABILITY access in the inner body, an index that is the INNER
+   *     counter, and that index RESETTING each outer pass
+   * -- and condition 1 was never present here, so conditions 2-4 could never combine.
+   *
+   * This stage supplies all four, in 13 KB with twelve globals, against the 1.5 MB SQLite
+   * image the effect has only ever been seen in. If it reproduces, the divergence has a
+   * standalone testcase small enough to SIMULATE, which is the step everything is now waiting
+   * on -- board bisection cannot answer what differs on an outer pass that skips its inner
+   * body, and S01 has an open request for exactly this kind of waveform.
+   *
+   * Oracle 576 either way: a shortfall is the finding, and it is a returning number rather
+   * than a hang, so it stays bisectable.
+   */
+  {
+    unsigned qc = 0;
+    int p, k;
+    /* Reads the padding globals FIRST so FDREG_PAD=1 actually reaches the cap table. Without
+       this the early return leaves them unreferenced, the linker strips them, and the padded
+       build silently has max gp index 9 -- i.e. it measures the SAME thing as the unpadded
+       one. The guard keeps `s` live without altering the result: with PAD=1 it is 160, with
+       PAD=0 it is 0, and neither is 0xFFFFFFFF. */
+    FDREG_PAD_SUM()
+    if (s == 0xFFFFFFFFu) return 0;
+    for (p = 0; p < 64; p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;   /* cap field, inner resetting counter */
+        (void)z;
+        qc++;
+      }
+    return qc;
+  }
+#endif
+
+
   /* Reads the padding globals so their cap-table slots stay live. No-op when FDREG_PAD=0. */
   FDREG_PAD_SUM()
 
