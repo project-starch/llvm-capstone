@@ -4128,7 +4128,15 @@ void domain_main(unsigned *res, unsigned func) {
         return;
       }
 #elif (CAPSTONE_SQLITE_QUICKRET) == 32
-      /* LEVEL 32 -- the REAL discriminator. Level 29 does not separate the two readings, and
+      /* CORRECTION 2026-08-07: this level's inner store is `sw a0, 0x4(a1)` -- a plain
+         INTEGER store, not an stc. Its only capability access is the `ldc 0x220(gp)` that
+         fetches the array. Anywhere this level is described as "capability STORE", that is
+         wrong. Related: L33's inner body already contains an stc AND a load and it returns
+         correctly, so the "a load plus a store wedges" reading of L34 is withdrawn. And a
+         SINGLE non-nested loop with a gp ldc in its body completes 9/9 on this silicon
+         (L33's own sentinel-init loop), so the effect is about the INNER loop of a NEST, not
+         about capability accesses in loops generally.
+         LEVEL 32 -- the REAL discriminator. Level 29 does not separate the two readings, and
          both the audit and I got that wrong in opposite directions: qcount IS the accumulator,
          so "the nest ran 576 times and the adds were lost" and "the inner loop ran 9 times"
          BOTH predict 9. A 16-bit counter only removed level 27's mod-256 alias.
