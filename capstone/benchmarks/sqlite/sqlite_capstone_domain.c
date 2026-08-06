@@ -3732,10 +3732,23 @@ static void qr_link_via_param(FuncDef *aDef, int nDef) {
    `while (z[n]) n++`. And the direction rules out size: the LEAF callee is BIGGER (110
    instructions against 88) and still returns, so it is the inner CALL, not the code.
 
-   Note this is the same question fdreg stage 6 answered "returns" to, off SQLite. So the
-   trigger is not "a non-leaf callee" on its own -- it is a non-leaf callee IN THIS IMAGE,
-   and what the image contributes is still unidentified. Recorded as a localization, not a
-   root cause. */
+   RETRACTED the same day, by returning code in this very image. `sqlite3FunctionSearch`
+   is ITSELF a noinline NON-LEAF callee -- 1 inner call, 6 stc / 10 ldc capability spills --
+   and the shared qi loop calls it NINE TIMES on levels 18, 19, 20 and 23, all of which
+   RETURN. So "a non-leaf callee wedges" is false even inside the SQLite image, not merely
+   as a general statement. Whatever separates level 22 from level 23 is narrower than "it
+   has a call", and is NOT yet identified.
+
+   The pair also is not the controlled experiment it looked like. Level 23 shifts 1791
+   functions by 108 bytes relative to level 22 (domain_main grows 20 B for the added `lvl ==
+   23` test, the leaf callee is +88 B). The only layout control actually run was QR_DRAW
+   d4-vs-d8, a 16-byte shift -- 6.75x smaller -- and S01 documents nine image perturbations
+   in this exact image class, one of them a dead never-called empty function, ALL of which
+   hung. So layout is not excluded.
+
+   What is still solid: levels 15/18/19/20/23 return and 16/21/22 wedge, every verdict with
+   A/dom-ok AND G/enter present and no monitor tag, level 22 across two draws and three runs
+   including first position. The OBSERVATION stands; the MECHANISM does not. */
 __attribute__((noinline))
 static void qr_link_via_param_leaf(FuncDef *aDef, int nDef) {
   int i;
