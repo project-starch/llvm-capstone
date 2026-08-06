@@ -3764,6 +3764,26 @@ void domain_main(unsigned *res, unsigned func) {
        array of FuncDef structs each holding a zName pointer). If pointer-bearing static
        aggregates are the failing construct, that is a far better lead than "indirect call".
        All three re-do CONFIG_HEAP + MallocInit first, matching level 7, which returns rc=0. */
+    /* LEVELS 13-14 split sqlite3RegisterBuiltinFunctions itself, which is the localized wedge
+       (qr9). Its body, with SQLITE_STATIC_BUILTINS=1, is: sqlite3AlterFunctions(); a copy loop
+       aBuiltinFunc[i] = capstoneBuiltinFunc[i] over FuncDef structs holding pointers; a second
+       loop touching zName/pUserData; sqlite3WindowFunctions/DateTime/Json; and finally
+       sqlite3InsertBuiltinFuncs. These call the separable registrators directly.
+       Both re-do CONFIG_HEAP + MallocInit first, matching level 7 which returns rc=0. */
+    if (lvl >= 13 && lvl <= 14) {
+      qrc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap,
+                           (int)sizeof(sqlite_heap), 64);
+      if (qrc == SQLITE_OK) qrc = sqlite3MallocInit();
+      if (qrc == SQLITE_OK) {
+        sqlite3AlterFunctions();                 /* level 13 stops here */
+        if (lvl >= 14) {
+          sqlite3WindowFunctions();
+          sqlite3RegisterDateTimeFunctions();
+          sqlite3RegisterJsonFunctions();
+        }
+        qrc = (int)lvl;                          /* rc echoes the level reached */
+      }
+    }
     if (lvl >= 10 && lvl <= 12) {
       qrc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap,
                            (int)sizeof(sqlite_heap), 64);
