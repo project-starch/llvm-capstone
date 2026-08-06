@@ -295,8 +295,18 @@ def main():
             # occupy that slot. It did exactly that on 2026-08-06 and produced a confident,
             # entirely false localization of a SQLite function that never executed.
             created = "SQ: A/dom-ok" in text
+            # ENTRY is a SEPARATE question from creation, and conflating them manufactures
+            # false verdicts. `SQ: A/dom-ok` only means create_dom returned; the domain can
+            # still fail to ENTER (R-16, the entry stall), in which case its markers stop at
+            # `SHA5:` with no `SHA6:` and no `SQ: G/enter`, and NOTHING of the code under test
+            # ran. This runner used to print "it WAS created and entered" on the strength of
+            # A/dom-ok alone -- on 2026-08-06 it said exactly that about qr19b, whose domain
+            # never entered (A/dom-ok=1, G/enter=0, SHA5=2, SHA6=1), which read as "this level
+            # wedges" and nearly retracted a sound bisection. The board-run skill has always
+            # keyed on `SQ: G/enter`; the runner did not.
+            entered = "SQ: G/enter" in text
             montag  = re.search(r"(SPL[AB]|ILLX):([0-9A-Fa-f]{8})", text)
-            results.append((label, wedged, obs, returned, created,
+            results.append((label, wedged, obs, returned, created, entered,
                             montag.group(0) if montag else None))
             if wedged:
                 # INSTRUMENT THE WEDGE HERE, IN THIS SESSION.
@@ -430,7 +440,7 @@ def main():
 
         print("\n=== STAGED BISECTION ===", flush=True)
         first_bad = None
-        for dom, wedged, obs, returned, created, montag in results:
+        for dom, wedged, obs, returned, created, entered, montag in results:
             d = decode(obs)
             if wedged:
                 verdict = "WEDGED (no return)"
@@ -459,7 +469,7 @@ def main():
             # what a given stage should return. So it reports what came back and flags only
             # what it can judge on its own -- a domain that never returned.
             if first_bad is None and wedged:
-                first_bad = (dom, wedged, d, created, montag)
+                first_bad = (dom, wedged, d, created, entered, montag)
 
         if first_bad is None:
             # Deliberately does NOT name a stage. An earlier version said "the failure is
@@ -472,16 +482,23 @@ def main():
             # which is the wrong-but-confident output this project keeps being bitten by.
             got = ", ".join(
                 f"{pathlib.Path(d).stem}=rc{decode(o)[1]}" if decode(o) else
-                f"{pathlib.Path(d).stem}=?" for d, _, o, _, _, _ in results)
+                f"{pathlib.Path(d).stem}=?" for d, _, o, _, _, _, _ in results)
             print(f"\nEvery domain returned ({got}). No domain wedged; whether those values "
                   f"are CORRECT is the caller's judgement, not this runner's.", flush=True)
         else:
-            dom, wedged, d, created, montag = first_bad
-            if wedged and (not created or montag):
+            dom, wedged, d, created, entered, montag = first_bad
+            if wedged and (not created or not entered or montag):
                 why = []
                 if not created:
                     why.append("no `SQ: A/dom-ok` -- create_dom never returned, so the domain "
                                "was never created and NOTHING in it executed")
+                elif not entered:
+                    why.append("no `SQ: G/enter` -- the domain was CREATED but never ENTERED "
+                               "(R-16 entry stall; markers stop at SHA5 with no SHA6), so "
+                               "NOTHING of the code under test ran. R-16 is PER-IMAGE, so "
+                               "retrying this binary is futile -- REDRAW: rebuild with a "
+                               "harmless constant varied so the code under test is "
+                               "byte-identical across draws, and sha256sum the set")
                 if montag:
                     why.append(f"monitor spin tag {montag} -- the wedge is in M-mode, in the "
                                f"MONITOR, before/outside the domain")
@@ -493,8 +510,9 @@ def main():
                       flush=True)
             elif wedged:
                 print(f"\nFIRST FAILURE: {dom} did not return, and it WAS created and entered "
-                      f"(`SQ: A/dom-ok` present, no monitor tag). Everything below that stage "
-                      f"works on silicon; the fault is inside that step.", flush=True)
+                      f"(`SQ: A/dom-ok` AND `SQ: G/enter` present, no monitor tag). Everything "
+                      f"below that stage works on silicon; the fault is inside that step.",
+                      flush=True)
             else:
                 print(f"\nFIRST FAILURE: {dom} returned a nonzero SQLite rc {d[1]} at stage "
                       f"{d[0]} -- it did NOT wedge, so this is a normal SQLite error and "
