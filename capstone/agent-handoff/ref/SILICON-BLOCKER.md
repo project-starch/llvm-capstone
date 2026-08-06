@@ -1,5 +1,56 @@
 # The silicon blocker — everything known
 
+## 2026-08-06 (evening) — THE ENTRY GLUE IS NOT THE FAULT. It completes in 4 seconds.
+
+**Measured, with a control passing in the same boot, on `caplifive_65536_nodes.bit`:**
+
+| test | result |
+|---|---|
+| `k800` (control) | `retval=4`, returned in **2 s** -> boot valid |
+| `sq_pc.dom:0` (precall probe) | **`obs=40465` = `0x9E11`, returned in 4 s** |
+| baseline `sqlite_silicon.dom:0` | not reached (runner hard-stopped on the sentinel; harness artefact) |
+
+`sq_pc` returns a sentinel from immediately **before** `call domain_main` -- i.e. after
+`BUILD_GP_CAPTABLE_INTERP` (the full ~1000-carve loop) and after `RUN_CAP_INIT`.
+
+**So the carve loop and cap-init both COMPLETE, in about four seconds. The entry glue is not
+where SQLite wedges.**
+
+### This retracts the previous section's framing
+
+The 2026-08-06 SQLite A/B concluded "the fault is in the entry glue: the carve loop and cap-init,
+which is now the target". That was an inference from "stage 0 runs no SQLite work, therefore the
+fault is in what stage 0 DOES run". The inference was too coarse -- it lumped the glue together
+with `call domain_main` and the return path. Measurement now splits them, and the glue is clean.
+
+### Why this probe is trustworthy where BUILD_LIMIT and FAKE_COUNT were not
+
+Artifact-gated: bytes `0x1000..0x12dc` of the domain -- the entry path, the table build and
+cap-init -- are **byte-identical** to the baseline build, and the first differing byte is exactly
+the insertion point (VA `0x102dc`). It is also gated on `func`, so region-share entries fall
+through untouched and both shares still complete. The two earlier knobs altered the table build
+and therefore killed the domain in share #1, before the code under study ran.
+
+### What is now implicated -- a much smaller space
+
+Everything the probe SKIPS: the `call domain_main` transfer itself, the C prologue, the
+`func != CAPSTONE_DPI_REGION_SHARE` dispatch, the stage-0 marker write, the return from
+`domain_main`, and the glue's post-call unwind.
+
+Note the probe writes to the shared region (`sw t0, 0(a0)`) and returns cleanly through
+`.Ldomain_returned`, so **writing `res` works and the domreturn path works**. That narrows it
+further: what is left is the call into `domain_main`, its body at stage 0, and its return.
+
+**Next split, same technique:** move the sentinel to immediately AFTER `call domain_main`.
+Returns -> `domain_main` completed and the fault is in the post-call unwind. Wedges ->
+`domain_main` itself. Still build-preserving, since the insertion stays below the entry path.
+
+**Harness note:** the staged-marker guard hard-stops on any `obs` whose high half is not
+`0x5A6E`, so it rejected the sentinel and skipped the remaining test. Teach it to accept
+declared probe sentinels, or the third slot is wasted on every run of this kind.
+
+---
+
 ## 2026-08-06 (later) — SQLite: NO BITSTREAM REGRESSION EITHER. The blocker is OURS.
 
 Same controlled A/B as the ladder, run on the SQLite domain: identical firmware

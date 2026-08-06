@@ -741,6 +741,37 @@ test:
 
   ldc(a0, sp, 80)                    /* a0 = res */
   ld a1, 64(sp)                      /* a1 = func */
+
+#if defined(INTERP_RETURN_PRECALL)
+  /* BISECT THE ENTRY GLUE WITHOUT TOUCHING THE CAP-TABLE BUILD.
+     Returns a sentinel from HERE -- after the carve loop and after RUN_CAP_INIT, immediately
+     before domain_main -- so the question "did the glue complete?" gets a yes/no answer:
+        returns 0x9E11        -> carve loop AND cap-init both completed; the fault is inside
+                                 domain_main (or in reaching it)
+        wedges                -> the fault is in the glue itself
+     That is the one split the evidence cannot currently make: SQLite wedges at stage 0, which
+     runs no SQLite work, so the fault is somewhere in carve / cap-init / domain_main entry.
+
+     WHY IT IS SITED HERE AND GATED ON func. The glue runs THREE times per domain -- once per
+     region share and once for call_domain (sbi_capstone.c: the share path re-enters via
+     __domcallsaves). A probe that returns unconditionally would break share #1, and a probe
+     that alters BUILD_GP_CAPTABLE_INTERP kills the domain there too: that is exactly how
+     INTERP_BUILD_LIMIT and INTERP_FAKE_COUNT/INTERP_DIAG_STAGE were shown to destroy the thing
+     they measure (SHA6 absent, dead before the code under test ran). So:
+       * nothing above this point changes -- the entry path and the table build are byte-identical
+       * share entries (func == CAPSTONE_DPI_REGION_SHARE == 1) fall through untouched, so both
+         shares still complete and SHA6 still appears twice
+       * only the REAL call is diverted
+     INTERP_SKIP_CAPINIT is the companion knob and the only other one that leaves the build
+     alone; the pair brackets cap-init. */
+  li    t0, 1                        /* CAPSTONE_DPI_REGION_SHARE */
+  beq   a1, t0, 98f                  /* a share entry: behave exactly as before */
+  li    t0, 0x9E11                   /* sentinel: "glue reached precall" */
+  sw    t0, 0(a0)                    /* res is a plain word the host prints as obs= */
+  j     .Ldomain_returned
+98:
+#endif
+
 #ifdef INTERP_PEEK_PRECALL
   /* Print the frame state immediately before entering domain_main. With string merging on,
      the domain dies at its first entry with cause = 1, pc = 0 -- an instruction fetch at
