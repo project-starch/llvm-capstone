@@ -3712,6 +3712,41 @@ void domain_main(unsigned *res, unsigned func) {
   }
   return;
 #endif
+#if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) > 0
+  /* GRADUATED WORKLOAD LADDER. Level N runs the first N phases of run_sqlite() and returns
+     0x9E33_LLrr (LL = level reached, rr = the SQLite rc). Mirrors run_sqlite()'s own order so
+     the phases are the real ones, not a re-implementation:
+        1 sqlite3_config(HEAP)   -- first touch of the 256 KB sqlite_heap
+        2 sqlite3_initialize()
+        3 sqlite3_open(":memory:")
+        4 CREATE TABLE
+        5 INSERT
+     Run ascending in ONE boot: the first level that fails to return is the answer, and every
+     level below it is a positive result. This is the bisection the blocker has never had --
+     previously the only knob was "run everything" against a 90 s budget.
+     Deliberately NOT the staged dispatch: that adds 2 globals and ~13 KB of .text, shifts the
+     globals base 0x150000 -> 0x160000, and the resulting image dies in region-share #1. */
+  {
+    unsigned lvl = (unsigned)(CAPSTONE_SQLITE_QUICKRET);
+    sqlite3 *qdb = 0;
+    int qrc = SQLITE_OK;
+    if (lvl >= 1)
+      qrc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap,
+                           (int)sizeof(sqlite_heap), 64);
+    if (lvl >= 2 && qrc == SQLITE_OK)
+      qrc = sqlite3_initialize();
+    if (lvl >= 3 && qrc == SQLITE_OK)
+      qrc = sqlite3_open(":memory:", &qdb);
+    if (lvl >= 4 && qrc == SQLITE_OK)
+      qrc = sqlite3_exec(qdb,
+          "CREATE TABLE items(name TEXT NOT NULL, value INTEGER NOT NULL);", 0, 0, 0);
+    if (lvl >= 5 && qrc == SQLITE_OK)
+      qrc = sqlite3_exec(qdb,
+          "INSERT INTO items VALUES('alpha',11),('beta',22),('gamma',33);", 0, 0, 0);
+    *res = 0x9E330000u | ((lvl & 0xffu) << 8) | ((unsigned)qrc & 0xffu);
+    return;
+  }
+#endif
 #ifdef CAPSTONE_SQLITE_QUICKRET
   /* MINIMAL WORKLOAD REDUCTION -- the smallest possible probe, added 2026-08-06.
      Returns a marker immediately instead of running the database. No new globals, no new

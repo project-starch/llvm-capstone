@@ -230,8 +230,12 @@ def main():
             m_obs = re.search(r"SQ: obs=(\d+)", text)
             m_rv = re.search(r"RESULT\s+\S+\s+retval=(-?\d+)", text)
             if is_sqlite:
-                bad = m_obs is None or ((int(m_obs.group(1)) >> 16) != 0x5A6E
-                                        and int(m_obs.group(1)) not in PROBE_SENTINELS)
+                # 0x5A6E = the staged-dispatch marker family; 0x9E33 = the QUICKRET workload
+                # ladder (0x9E33_LLrr, LL = level reached, rr = the SQLite rc). Both are real
+                # results; anything else with no declared sentinel means nothing ran.
+                _o = int(m_obs.group(1)) if m_obs else None
+                bad = m_obs is None or ((_o >> 16) not in (0x5A6E, 0x9E33)
+                                        and _o not in PROBE_SENTINELS)
                 got = "no SQ: obs= marker" if m_obs is None else f"obs={m_obs.group(1)}"
             else:
                 bad = m_rv is None

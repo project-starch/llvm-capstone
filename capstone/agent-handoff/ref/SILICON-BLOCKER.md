@@ -1,5 +1,56 @@
 # The silicon blocker — everything known
 
+## 2026-08-06 (night, final) — LOCALIZED: `sqlite3_initialize()` is where SQLite hangs.
+
+One boot, control green, workload ladder ascending:
+
+| test | result |
+|---|---|
+| `k800` (control) | `retval=4` |
+| `qr1` = `sqlite3_config(SQLITE_CONFIG_HEAP)` | **returned `0x9E330100`** -- level 1, **rc=0** |
+| `qr2` = `+ sqlite3_initialize()` | **WEDGED** |
+| `qr3`..`qr5` | collateral (not run) |
+
+**`sqlite3_config(SQLITE_CONFIG_HEAP)` SUCCEEDS on silicon** -- rc 0, and it is the first thing
+that touches the 256 KB `sqlite_heap`, so the heap object itself is reachable and writable.
+**Adding `sqlite3_initialize()` hangs.** That is the boundary.
+
+All five ladder images share the same globals base (`0x150000`) and the same carve count (176),
+differing only in code, so this is a controlled comparison -- not the layout lottery that made
+the staged-dispatch build die in region-share #1.
+
+### This CONFIRMS the old stage-10 finding, independently
+
+`current-next-step.md:35` records "stage 10 (`MallocInit` + `RegisterBuiltinFunctions`) never
+returns, on every build" -- and `sqlite3_initialize()` is exactly what calls
+`sqlite3MallocInit()` (memsys5Init, which builds zone headers INSIDE the heap) and
+`sqlite3RegisterBuiltinFunctions()` (which writes the global function hash table). The old
+conclusion was reached with an instrument that was later shown to be broken; this reaches the
+same place with a controlled ladder, a green control, and a build whose staged marker is
+verified present in the artifact. **Two independent routes to the same function.**
+
+### The implicated surface, now small
+
+Inside `sqlite3_initialize()`:
+* `sqlite3MallocInit()` -> **memsys5Init**, which builds allocator zone headers *in* the
+  256 KB heap -- i.e. a large structured write-and-link pass over a single global object
+* `sqlite3RegisterBuiltinFunctions()` -> writes the **global function hash table**
+* `sqlite3PcacheInitialize()`, `sqlite3MutexInit()` (a no-op at THREADSAFE=0)
+
+`qr1` already proves plain access to `sqlite_heap` works, so the fault is not "the heap is
+unreachable" -- it is something in how these passes *walk or link* it.
+
+### Next, and it is cheap
+
+Split level 2 the same way -- `mutexInit` only / `+MallocInit` only / `+PcacheInitialize` only /
+`+RegisterBuiltinFunctions` -- as four images in ONE boot, ascending, same globals base. The
+existing `run_sqlite_staged()` already has these exact sub-steps (lines 325-335), so they can be
+called directly from the QUICKRET block without the staged dispatch.
+
+**Do not raise the timeout to chase this.** The ladder found it in one boot at 90 s.
+
+---
+
 ## 2026-08-06 (night, later) — THE DOMAIN RUNS C AND RETURNS. The hang is IN THE WORKLOAD.
 
 | test | result |
