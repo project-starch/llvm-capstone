@@ -20,6 +20,9 @@ claim that had to be retracted, plus a reflash cycle and several boots. Hence th
 | `gpn4` | 3360062749 | both | 2026-08-06 | As above. |
 | `gpw8` | 671377293 | both | 2026-08-06 | As above. |
 | `gpw16` | 2928574773 | both | 2026-08-06 | As above. |
+| `locfl3head` | 26 | `caplifive_65536_nodes.bit` | 2026-08-06 | The C-14 acceptance test, and the reason it is listed: the SAME rung built ~1 h earlier WEDGED. Returning 26 is what proves the destructive-`movc` fix on silicon, so it doubles as "does this compiler still carry the fix". Re-verify after any change to `CapstonePostRAExpandPseudoInsts.cpp`. |
+| `fdreg1` / `fdreg2` / `fdreg3` | 2456 / 2609 / 2736 | `caplifive_65536_nodes.bit` | 2026-08-06 | Static array of {string ptr, function ptr}: cap-init, then derived-capability stores into a global, then indirect calls through the array. Ascending, so they double as a bisection. |
+| `fdreg2p` | 2769 | `caplifive_65536_nodes.bit` | 2026-08-06 | `fdreg2` padded past gp index 128, i.e. the `lui/addi/cincoffset/ldc` cap-table path. Pair with `fdreg2w` (2609), the unpadded rung at the same 32 KiB code window, or the window change is a confound. |
 
 ## NOT controls — do not use
 

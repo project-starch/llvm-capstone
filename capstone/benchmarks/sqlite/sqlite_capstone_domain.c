@@ -3657,8 +3657,9 @@ static int run_sqlite(void) {
 }
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) <= 16
-/* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16. Distinct bodies so
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 20 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) != 17
+/* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-20. Distinct bodies so
    none of them folds into another and the array keeps nine DIFFERENT function pointers --
    the whole point of the construct. Never called; only their addresses matter. */
 #define QR_CLONE_FN(n, k) \
@@ -3800,6 +3801,63 @@ void domain_main(unsigned *res, unsigned func) {
        None of them initialises the heap. Level 13 does CONFIG_HEAP + MallocInit first, but
        InsertBuiltinFuncs never allocates, so dropping it removes a variable rather than
        adding one -- and if 17 returns where 13 wedged, the heap init is implicated instead. */
+    /* LEVELS 18-20 split sqlite3InsertBuiltinFuncs, which the qr15/qr16 pair localized.
+       BOARD 2026-08-06, control k800 green, one boot: qr15 RETURNED in 4s, qr16 WEDGED
+       (created and entered -- `SQ: A/dom-ok`, no monitor tag). Same clone array, same
+       cap-init, same nine function pointers; the ONLY difference is that qr15 links the
+       elements with a hand-written loop over its own bucket table and qr16 hands them to
+       the real sqlite3InsertBuiltinFuncs. So the construct is cleared even inside the full
+       SQLite image, and the fault is in what that function does differently:
+           a) it calls sqlite3FunctionSearch, which walks the REAL global
+              sqlite3BuiltinFunctions and compares with sqlite3StrICmp;
+           b) it stores the derived capability &aDef[i] into that REAL global rather than
+              into a bucket table of ours;
+           c) it writes aDef[i].u.pHash -- a UNION member, where qr15 touched only pNext.
+       Ascending, so the first level that fails to return is the answer:
+           18  read-only: call sqlite3FunctionSearch for every name, accumulate how many
+               were found, store nothing. Isolates (a).
+           19  18 + link into the REAL sqlite3BuiltinFunctions.a[h], pNext only. Adds (b).
+           20  the exact InsertBuiltinFuncs body, inlined, including u.pHash. Adds (c),
+               and must reproduce qr16 or the split is not faithful. */
+#if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) <= 20
+    if (lvl >= 18 && lvl <= 20) {
+      static FuncDef qrSplitClone[] = {
+        INTERNAL_FUNCTION(qr_split_rename_column,   9, qrCloneFunc0),
+        INTERNAL_FUNCTION(qr_split_rename_table,    7, qrCloneFunc1),
+        INTERNAL_FUNCTION(qr_split_rename_test,     7, qrCloneFunc2),
+        INTERNAL_FUNCTION(qr_split_drop_column,     3, qrCloneFunc3),
+        INTERNAL_FUNCTION(qr_split_rename_quotefix, 2, qrCloneFunc4),
+        INTERNAL_FUNCTION(qr_split_drop_constraint, 2, qrCloneFunc5),
+        INTERNAL_FUNCTION(qr_split_fail,            2, qrCloneFunc6),
+        INTERNAL_FUNCTION(qr_split_add_constraint,  3, qrCloneFunc7),
+        INTERNAL_FUNCTION(qr_split_find_constraint, 2, qrCloneFunc8),
+      };
+      int qi, qfound = 0;
+      for (qi = 0; qi < ArraySize(qrSplitClone); qi++) {
+        const char *z = qrSplitClone[qi].zName;
+        int nName = sqlite3Strlen30(z);
+        int h = SQLITE_FUNC_HASH(z[0], nName);
+        FuncDef *pOther = sqlite3FunctionSearch(h, z);   /* level 18 does only this */
+        if (pOther) qfound++;
+        if (lvl == 19) {
+          qrSplitClone[qi].pNext = sqlite3BuiltinFunctions.a[h];
+          sqlite3BuiltinFunctions.a[h] = &qrSplitClone[qi];
+        } else if (lvl == 20) {
+          if (pOther) {
+            qrSplitClone[qi].pNext = pOther->pNext;
+            pOther->pNext = &qrSplitClone[qi];
+          } else {
+            qrSplitClone[qi].pNext = 0;
+            qrSplitClone[qi].u.pHash = sqlite3BuiltinFunctions.a[h];
+            sqlite3BuiltinFunctions.a[h] = &qrSplitClone[qi];
+          }
+        }
+      }
+      qrc = (int)lvl;
+      (void)qfound;
+    }
+#endif
     if (lvl == 17) {
       /* The real thing, with no heap init -- level 13 minus CONFIG_HEAP/MallocInit. */
       sqlite3AlterFunctions();
