@@ -1,5 +1,61 @@
 # The silicon blocker — everything known
 
+## 2026-08-06 — NO BITSTREAM REGRESSION. Two open questions closed, both positive.
+
+**Four boots, two per bitstream, nine rungs each, byte-identical firmware on both arms. Every
+retval identical across all four.**
+
+| rung | armA `caplifive_fixed_forward.bit` x2 | armB `caplifive_65536_nodes.bit` x2 | reading |
+|---|---|---|---|
+| `k800`  | 4 | 4 | control PASSES -> both boots valid |
+| `k1200` | 4 | 4 | **the 65536 bitstream DOES carry the forwarding fix** |
+| `bnds`  | 1322 | 1322 | documented value (1312 B headroom) |
+| `bnd2`  | 107 | 107 | documented value (type 1 + all three checks pass) |
+| `gpn2`  | 3976364985 | 3976364985 | correct |
+| `gpn4`  | 3360062749 | 3360062749 | correct |
+| `gpw8`  | 671377293 | 671377293 | correct |
+| `gpw16` | 2928574773 | 2928574773 | correct |
+| `matmult_int` | wedge | wedge | documented R-1 hang, on BOTH -> not bitstream-related |
+
+**1. The "65536 bitstream is a regression" claim is REFUTED by measurement**, not just by the
+earlier argument that its control was invalid. Identical behaviour on nine rungs across two
+boots per arm.
+
+**2. `caplifive_65536_nodes.bit` CARRIES THE OPERAND-FORWARDING FIX.** `k1200` is the R-14
+acceptance test -- it fails on unfixed silicon and returns 4 with the fix -- and it returns 4 on
+both bitstreams. `ISSUES.md` and `fpga-repros/README.md` record this as **unconfirmed**; it is
+now confirmed. Update them.
+
+**3. The C-14 fix is VALIDATED ON SILICON.** `gpn2`/`gpn4`/`gpw8`/`gpw16` are all documented as
+wedging under C-14 (movc source destruction). All four now return their exact oracles on both
+bitstreams. `check-movc-reuse.py` reports 0 residual sites in the baked binaries, so the
+artifacts match the claim. This is the fix-validation run described in
+`plans/c14-movc-source-destruction-fix.md`, and it passes.
+
+### Method notes that made this one trustworthy where earlier attempts were not
+
+* **The same firmware ran on both arms** (DTS `0x3c2d2000`, which is below both tag bases and
+  therefore safe on either bitstream). So the two arms were byte-identical -- no 6 MB image
+  delta, and this project has documented layout sensitivity.
+* **A real control ran first.** `k800`/`k1200` have a published passing record on
+  `fixed_forward`. The earlier attempt used `matmult_int` as its control, which is a documented
+  silicon MISCOMPILE -- that is what produced the retracted regression claim.
+* **`matmult_int` ran LAST**, because it is the only rung with an unfixed hang. It wedged in all
+  four boots, taking the core each time, and cost nothing because nothing followed it.
+* **`bnds`/`bnd2` have NO fixed oracle** -- they encode runtime capability state, so the `0` in
+  `/tmp/capstone/ladder-fpga/` is meaningless and the "WRONG" label on them is an artefact of
+  the harness, not a failure. Their values match the R-14 package exactly.
+
+### Still true, and NOT answered by this run
+
+The two bitstreams differ by **four RTL commits**, not just the node count: `CINCOFFSET` now
+traps on a scalar rs1, `STC` semantics on `UNINIT` changed, revnode exhaustion stalls instead of
+aliasing, and the capability exception cause base moved 23 -> 24. This run shows those changes
+do not disturb these nine rungs; it does NOT license any claim of the form "the pool size
+caused X". And the SQLite blocker is untouched by any of it.
+
+---
+
 ## 2026-08-05 (night) — AUDIT: four of the day's claims RETRACTED. Read this before the two sections below.
 
 An adversarial audit refuted most of what this day concluded. Verified against primary sources.
