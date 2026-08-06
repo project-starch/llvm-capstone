@@ -3657,7 +3657,7 @@ static int run_sqlite(void) {
 }
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) <= 36 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 39 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 17 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 25
 /* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-22. Distinct bodies so
@@ -3992,10 +3992,10 @@ void domain_main(unsigned *res, unsigned func) {
    returns; level 16 hands the same array to the real sqlite3InsertBuiltinFuncs and wedges.
    That is the SQLite blocker's minimal repro. */
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
-                                      && (CAPSTONE_SQLITE_QUICKRET) <= 36 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) <= 39 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 21 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 25
-    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28 || lvl == 29 || lvl == 30 || lvl == 31 || lvl == 32 || lvl == 33 || lvl == 34 || lvl == 35 || lvl == 36) {
+    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28 || lvl == 29 || lvl == 30 || lvl == 31 || lvl == 32 || lvl == 33 || lvl == 34 || lvl == 35 || lvl == 36 || lvl == 37 || lvl == 38 || lvl == 39) {
       static FuncDef qrSplitClone[] = {
         INTERNAL_FUNCTION(qr_split_rename_column,   9, qrCloneFunc0),
         INTERNAL_FUNCTION(qr_split_rename_table,    7, qrCloneFunc1),
@@ -4058,6 +4058,76 @@ void domain_main(unsigned *res, unsigned func) {
             qcount++;
           }
         *res = 0x9E290000u | (unsigned)(qcount & 0xffffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 39
+      /* LEVEL 39 -- THE BRIDGE TEST, and the missing cell of the matrix.
+         Boot 28 pinned the conjunction: the fault needs BOTH a CAPABILITY access (L38, an
+         integer field indexed by the counter, is correct) AND an index that is the LOOP
+         COUNTER (L37, a capability access at a dynamic non-counter index, is correct). L31
+         has both and loses 9 of 576, four times running.
+         Every correct single-loop control so far used a CONSTANT index (L36, and L33's
+         sentinel loop). So "single loops are immune" was never tested against the failing
+         shape. This is that test: ONE loop, no nest, body = a capability field indexed by the
+         loop counter.
+         It matters because it is EXACTLY sqlite3InsertBuiltinFuncs' shape --
+         `for(i=0;i<nDef;i++){ const char *zName = aDef[i].zName; ... }` -- a single loop
+         reading a capability field indexed by its own counter.
+             576 -> the nest is required; the blocker is NOT this fault
+             <576 -> a single loop with this shape loses iterations, and the blocker's own
+                     loop has that shape
+         Correct marker 0x9E3A0240 (576). */
+      {
+        unsigned qcount = 0;
+        int qk;
+        for (qk = 0; qk < 576; qk++) {
+          const char *volatile qz = qrSplitClone[qk % ArraySize(qrSplitClone)].zName;
+          (void)qz;
+          qcount++;
+        }
+        *res = 0x9E3A0000u | (unsigned)(qcount & 0xffffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 37
+      /* LEVEL 37 -- must the index be the LOOP COUNTER, or merely dynamic?
+         L35 (constant index [0]) is correct; L31 (index [qk], the inner counter) loses 9 of
+         576. So the surviving candidate is that the fault needs the counter to feed a
+         capability address computation. This indexes with a DYNAMIC value that is NOT the
+         counter -- a volatile fixed at 3, so the compiler must compute the address at runtime
+         exactly as L31 does, but from a value the loop never updates.
+             576 -> a dynamic index alone is harmless; it must be the COUNTER
+             <576 -> any dynamic capability index does it, and the counter is incidental
+         Correct marker 0x9E380240 (576). */
+      {
+        unsigned qcount = 0;
+        int qp, qk;
+        volatile int qfix = 3;
+        for (qp = 0; qp < 64; qp++)
+          for (qk = 0; qk < ArraySize(qrSplitClone); qk++) {
+            const char *volatile qz = qrSplitClone[qfix].zName;  /* dynamic, not the counter */
+            (void)qz;
+            qcount++;
+          }
+        *res = 0x9E380000u | (unsigned)(qcount & 0xffffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 38
+      /* LEVEL 38 -- is a capability access needed at all, or does the counter feeding ANY
+         address do it? Same nest, same use of qk as an index, but into a plain INTEGER array
+         reached through the same global -- no second ldc of a capability field.
+             576 -> the capability field load matters
+             <576 -> indexing anything by the counter is enough, capabilities are incidental
+         Uses qrSplitClone[qk].nArg, an i16 already in the struct. Correct marker 0x9E390240. */
+      {
+        unsigned qcount = 0;
+        int qp, qk, qacc = 0;
+        for (qp = 0; qp < 64; qp++)
+          for (qk = 0; qk < ArraySize(qrSplitClone); qk++) {
+            qacc += qrSplitClone[qk].nArg;    /* integer field, indexed by the counter */
+            qcount++;
+          }
+        *res = 0x9E390000u | (unsigned)(qcount & 0xffffu);
+        (void)qacc;
         return;
       }
 #elif (CAPSTONE_SQLITE_QUICKRET) == 35
