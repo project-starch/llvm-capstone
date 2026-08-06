@@ -245,11 +245,27 @@ def main():
             m_obs = re.search(r"SQ: obs=(\d+)", text)
             m_rv = re.search(r"RESULT\s+\S+\s+retval=(-?\d+)", text)
             if is_sqlite:
-                # 0x5A6E = the staged-dispatch marker family; 0x9E33 = the QUICKRET workload
-                # ladder (0x9E33_LLrr, LL = level reached, rr = the SQLite rc). Both are real
-                # results; anything else with no declared sentinel means nothing ran.
+                # 0x5A6E = the staged-dispatch marker family; 0x9Exx = the QUICKRET ladder
+                # and every probe level built on it (0x9E33_LLrr for the workload ladder,
+                # 0x9E26.. upward for the measurement probes). All are real results.
+                #
+                # MATCH ON THE FAMILY (top BYTE 0x9E), not on an enumerated value list. The
+                # old check accepted only 0x5A6E/0x9E33 plus whatever was named in
+                # PROBE_SENTINELS -- and PROBE_SENTINELS can only ever list the CORRECT
+                # values. So a probe that returned a WRONG number, which is the entire point
+                # of a measurement probe, hard-stopped the session and threw away every
+                # remaining domain in the boot. That is exactly what happened: eight boots in
+                # a row ran their control plus ONE probe and then aborted, because probe 1
+                # returned the wrong value it was built to detect. `TEST 3/N` never appeared
+                # in any of them. Cost: three slots of every four, and every level in the
+                # matrix stuck at N=1.
+                #
+                # The guard's real job is "the shell came back but nothing ran", and the
+                # family check still does that: an unstaged domain produces no `SQ: obs=` at
+                # all, and a foreign marker still fails.
                 _o = int(m_obs.group(1)) if m_obs else None
-                bad = m_obs is None or ((_o >> 16) not in (0x5A6E, 0x9E33)
+                bad = m_obs is None or ((_o >> 16) not in (0x5A6E,)
+                                        and (_o >> 24) != 0x9E
                                         and _o not in PROBE_SENTINELS)
                 got = "no SQ: obs= marker" if m_obs is None else f"obs={m_obs.group(1)}"
             else:
