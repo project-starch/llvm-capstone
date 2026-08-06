@@ -56,6 +56,22 @@ import sys
 d=open('$FW','rb').read()
 sys.exit(0 if d.count(bytes.fromhex('d00dfeed'))==1 else 1)" \
     && ok "firmware embeds exactly one FDT" || bad "firmware does not embed exactly one FDT"
+
+  # C8 -- the console REJECTS an image over 32 MB, and it does so only after the board has
+  # been locked and power-cycled, so an oversize image costs a full boot slot and returns
+  # no verdict at all:
+  #     ActionError: images/upload -> HTTP 413: 'File exceeds 32 MB limit'
+  # That is exactly what happened on 2026-08-06 at 34.2 MB. The cause is silent accumulation:
+  # each staged SQLite domain is ~1.5 MB, six of them had piled up in overlay/test-domains,
+  # and nothing in the build warns. Prune stale domains by EXPLICIT NAME -- never a glob; a
+  # prefix glob once deleted the package-installed sbi.dom.
+  FW_BYTES=$(stat -c%s "$FW")
+  FW_LIMIT=$((32 * 1024 * 1024))
+  if (( FW_BYTES > FW_LIMIT )); then
+    bad "firmware is $((FW_BYTES / 1024 / 1024)) MB; the console rejects anything over 32 MB (HTTP 413) AFTER locking and power-cycling the board, so this run would burn a slot and return nothing. Prune overlay/test-domains by explicit name and rebuild."
+  else
+    ok "firmware $((FW_BYTES / 1024 / 1024)) MB, under the console's 32 MB upload limit"
+  fi
 fi
 
 # C7 ----------------------------------------------------------------------------------------
