@@ -1,5 +1,54 @@
 # The silicon blocker — everything known
 
+## 2026-08-06 (later) — SQLite: NO BITSTREAM REGRESSION EITHER. The blocker is OURS.
+
+Same controlled A/B as the ladder, run on the SQLite domain: identical firmware
+(`cd83b4fc`, DTS `0x3c2d2000`, Aug-2 monitor, no ENT), identical sequence, only the bitstream
+changed. **A real control passed in BOTH boots**, so both carry a verdict.
+
+| | `caplifive_65536_nodes.bit` | `caplifive_fixed_forward.bit` |
+|---|---|---|
+| `k800` (control) | **retval 4 -- PASS** | **retval 4 -- PASS** |
+| `sqlite_silicon.dom:0` | WEDGED | WEDGED |
+| shares | `SHA6` x2, both complete | `SHA6` x2, both complete |
+| `SQ: G/enter` | reached | reached |
+| commit pc at wedge | `0x87c` | `0x87c` |
+
+**Conclusion: the SQLite blocker is NOT bitstream-dependent.** It reproduces identically on both
+silicon revisions, so none of the four RTL commits between them causes it, and neither the
+revocation-node pool size nor the `CINCOFFSET`/`STC`/revnode-stall changes are implicated. The
+fault is in OUR code -- the entry glue, the compiler output, or the monitor.
+
+**And it is not in SQLite's own code.** Stage 0 is "entry + return only"; it runs no SQLite work
+whatsoever. What it does run is the full entry glue: `BUILD_GP_CAPTABLE_INTERP` (the carve loop,
+~1000 carves for this image) and `RUN_CAP_INIT`. That is the target.
+
+### Why these two data points are worth more than the dozen before them
+
+Every earlier SQLite wedge observation was taken with at least one of: a console that was
+failing, a monitor whose `ENT` instrumentation reallocated `call_domain` rather than being
+additive, a device tree that did not match the resident bitstream, or **no passing control in
+the same boot**. These two have none of those defects and a green control each. Treat the
+earlier stage-0 observations as corroborating at best; treat these as the baseline.
+
+### What is now ruled out for the SQLite blocker
+
+* the bitstream / silicon revision (measured, both arms, controls green)
+* the revocation-node pool size (65536 vs 1021 makes no difference)
+* SQLite's own code (stage 0 executes none of it)
+* C-14 movc source destruction (fixed and validated on silicon the same day)
+* the operand-forwarding bug (both bitstreams carry the fix; `k1200` returns 4 on both)
+
+### What remains
+
+The entry glue, on both silicon revisions. Note the constraint discovered earlier and still in
+force: **the glue runs three times per domain** -- once per region share and once for
+`call_domain` -- so any diagnostic that changes how the cap table is BUILT kills the domain
+inside share #1, before the code under study runs. `INTERP_SKIP_CAPINIT` is the only knob tried
+so far that leaves the build alone and still reaches the domain.
+
+---
+
 ## 2026-08-06 — NO BITSTREAM REGRESSION. Two open questions closed, both positive.
 
 **Four boots, two per bitstream, nine rungs each, byte-identical firmware on both arms. Every
