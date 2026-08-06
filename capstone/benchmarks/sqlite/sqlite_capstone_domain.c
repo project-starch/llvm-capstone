@@ -3657,7 +3657,7 @@ static int run_sqlite(void) {
 }
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) <= 28 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 31 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 17 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 25
 /* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-22. Distinct bodies so
@@ -3674,7 +3674,7 @@ QR_CLONE_FN(6, 107) QR_CLONE_FN(7, 108) QR_CLONE_FN(8, 109)
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && \
     ((CAPSTONE_SQLITE_QUICKRET) == 21 || (CAPSTONE_SQLITE_QUICKRET) == 22 || \
-     (CAPSTONE_SQLITE_QUICKRET) == 23)
+     (CAPSTONE_SQLITE_QUICKRET) == 23 || (CAPSTONE_SQLITE_QUICKRET) == 30)
 /* Level 21's array and callee. The array is file-scope rather than block-scope only so the
    callee can take it by pointer the way sqlite3InsertBuiltinFuncs does; it is otherwise
    identical to level 19's, including being non-const. */
@@ -3750,6 +3750,11 @@ static void qr_link_via_param(FuncDef *aDef, int nDef) {
    What is still solid: levels 15/18/19/20/23 return and 16/21/22 wedge, every verdict with
    A/dom-ok AND G/enter present and no monitor tag, level 22 across two draws and three runs
    including first position. The OBSERVATION stands; the MECHANISM does not. */
+/* A call that touches nothing: level 30 uses it to keep the jalr while dropping the two
+   capability loads that level 28 removed along with the call. */
+__attribute__((noinline))
+static int qr_touch_nothing(void) { return 1; }
+
 __attribute__((noinline))
 static void qr_link_via_param_leaf(FuncDef *aDef, int nDef) {
   int i;
@@ -3987,10 +3992,10 @@ void domain_main(unsigned *res, unsigned func) {
    returns; level 16 hands the same array to the real sqlite3InsertBuiltinFuncs and wedges.
    That is the SQLite blocker's minimal repro. */
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
-                                      && (CAPSTONE_SQLITE_QUICKRET) <= 28 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) <= 31 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 21 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 25
-    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28) {
+    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28 || lvl == 29 || lvl == 30 || lvl == 31) {
       static FuncDef qrSplitClone[] = {
         INTERNAL_FUNCTION(qr_split_rename_column,   9, qrCloneFunc0),
         INTERNAL_FUNCTION(qr_split_rename_table,    7, qrCloneFunc1),
@@ -4027,6 +4032,66 @@ void domain_main(unsigned *res, unsigned func) {
       qr_link_via_param(qrSplitClone, ArraySize(qrSplitClone));
 #elif (CAPSTONE_SQLITE_QUICKRET) == 23
       qr_link_via_param_leaf(qrSplitClone, ArraySize(qrSplitClone));
+#elif (CAPSTONE_SQLITE_QUICKRET) == 29
+      /* LEVEL 29 -- THE DISCRIMINATOR level 27 should have been.
+         Level 27 reported qp=64 with an 8-bit count of 9, and that was read as "the nest ran
+         576 times and the accumulator lost all but 9 adds". An audit found a simpler reading
+         that fits the SAME numbers with no coincidence: the INNER loop ran 9 times TOTAL,
+         because qk failed to be re-initialised to 0 on outer passes 2..64, so `qk < 9` was
+         false immediately every pass after the first. That predicts qp==64, qcount==9, and
+         level 26's qsum==191 as one FULL and entirely CORRECT pass -- which is also why all
+         nine strlen results were right. The accumulator reading instead needs the hardware to
+         drop exactly 63/64 of the adds and land precisely on the one-pass value, for a slot
+         the program zeroes only once, before the loop.
+         Level 27 could not tell these apart because BOTH its fields are 8-bit (lbu), so its
+         "9" only ever meant qcount = 9 mod 256.
+         This level returns the count in a FULL 16 bits:
+             576 (0x240) -> the nest ran to completion; the ACCUMULATOR lost adds
+             9   (0x009) -> the inner loop really only ran 9 times; qk's RESET is the fault
+         Correct marker 0x9E290240. */
+      {
+        unsigned qcount = 0;
+        int qp, qk;
+        for (qp = 0; qp < 64; qp++)
+          for (qk = 0; qk < ArraySize(qrSplitClone); qk++) {
+            (void)sqlite3Strlen30(qrSplitClone[qk].zName);
+            qcount++;
+          }
+        *res = 0x9E290000u | (unsigned)(qcount & 0xffffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 30
+      /* LEVEL 30 -- split level 28's delta. Removing the call also removed TWO capability
+         loads (ldc 0x220(gp) for the array, ldc 0x70(a0) for zName) and the index
+         arithmetic: eleven instructions, not one. The in-tree prior suspect is the ldc, not
+         the jalr (ISSUES.md on the -O0 pointer round-trip). This keeps the CALL and drops
+         both ldc -- a noinline local leaf taking no argument. Correct marker 0x9E300240. */
+      {
+        unsigned qcount = 0;
+        int qp, qk;
+        for (qp = 0; qp < 64; qp++)
+          for (qk = 0; qk < ArraySize(qrSplitClone); qk++) {
+            (void)qr_touch_nothing();
+            qcount++;
+          }
+        *res = 0x9E300000u | (unsigned)(qcount & 0xffffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 31
+      /* LEVEL 31 -- the other half of level 30's split: keep both ldc, drop the call.
+         Correct marker 0x9E310240. */
+      {
+        unsigned qcount = 0;
+        int qp, qk;
+        for (qp = 0; qp < 64; qp++)
+          for (qk = 0; qk < ArraySize(qrSplitClone); qk++) {
+            const char *volatile qz = qrSplitClone[qk].zName;
+            (void)qz;
+            qcount++;
+          }
+        *res = 0x9E310000u | (unsigned)(qcount & 0xffffu);
+        return;
+      }
 #elif (CAPSTONE_SQLITE_QUICKRET) == 28
       /* LEVEL 28 -- is it the CALL, or the loop nest? Level 27 returned qp=64 (the outer loop
          ran all 64 iterations, correctly) with the inner counter at 9 -- one pass. So loop
