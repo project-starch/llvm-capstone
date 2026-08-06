@@ -226,6 +226,42 @@ static void fdreg_link_via_global(int nDef) {
   }
 }
 
+/* STAGE 6 -- the next single-variable step, and the one the disassembly points at.
+ *
+ * Stage 4 RETURNS on silicon at both low and high gp index (2609 / 2769), yet the same shape
+ * inside SQLite WEDGES (level 19 returns twice, level 22 wedges twice). Comparing the two
+ * callees shows a structural difference that is not about capabilities at all:
+ *
+ *     fdreg_link_via_param  0 calls inside  -- a LEAF
+ *     qr_link_via_param     1 call inside   -- NON-LEAF, and it spills/reloads the return
+ *                                              capability with 2x stc/ldc on sp
+ *
+ * SQLite's callee calls sqlite3Strlen30; fdreg's helpers all inline away. A non-leaf callee
+ * has to save `ra` -- a CAPABILITY -- across the inner call, which a leaf never does. That is
+ * the one structural thing the returning rung has never exercised in this position.
+ *
+ * So stage 6 is stage 4 with the strlen forced out of line, making the callee non-leaf.
+ * Oracle 2609, the same as stages 2, 4 and 5: identical work, and now a fourth derivation
+ * path. Check the disassembly for a call INSIDE the callee, not just for the callee itself.
+ */
+__attribute__((noinline))
+static unsigned fdreg_len30_noinline(const char *z) {
+  unsigned n = 0;
+  while (z[n]) n++;
+  return n;
+}
+
+__attribute__((noinline))
+static void fdreg_link_via_param_nonleaf(FdregDef *aDef, int nDef) {
+  int i;
+  for (i = 0; i < nDef; i++) {
+    const char *z = aDef[i].zName;
+    unsigned h = fdreg_hash((unsigned char)z[0], fdreg_len30_noinline(z));
+    aDef[i].pNext = fdreg_buckets[h];
+    fdreg_buckets[h] = &aDef[i];
+  }
+}
+
 static unsigned fdreg_compute(void) {
   unsigned i, s = 0;
 
@@ -247,6 +283,8 @@ static unsigned fdreg_compute(void) {
   fdreg_link_via_param(fdreg_defs, FDREG_N);
 #elif FDREG_STAGE == 5
   fdreg_link_via_global(FDREG_N);
+#elif FDREG_STAGE == 6
+  fdreg_link_via_param_nonleaf(fdreg_defs, FDREG_N);
 #else
   for (i = 0; i < FDREG_N; i++) {
     const char *z = fdreg_defs[i].zName;
