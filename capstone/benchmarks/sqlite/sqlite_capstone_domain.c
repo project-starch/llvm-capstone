@@ -3657,7 +3657,7 @@ static int run_sqlite(void) {
 }
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) <= 32 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 34 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 17 \
                                        && (CAPSTONE_SQLITE_QUICKRET) != 25
 /* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-22. Distinct bodies so
@@ -3992,10 +3992,10 @@ void domain_main(unsigned *res, unsigned func) {
    returns; level 16 hands the same array to the real sqlite3InsertBuiltinFuncs and wedges.
    That is the SQLite blocker's minimal repro. */
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
-                                      && (CAPSTONE_SQLITE_QUICKRET) <= 32 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) <= 34 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 21 \
                                       && (CAPSTONE_SQLITE_QUICKRET) != 25
-    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28 || lvl == 29 || lvl == 30 || lvl == 31 || lvl == 32) {
+    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27 || lvl == 28 || lvl == 29 || lvl == 30 || lvl == 31 || lvl == 32 || lvl == 33 || lvl == 34) {
       static FuncDef qrSplitClone[] = {
         INTERNAL_FUNCTION(qr_split_rename_column,   9, qrCloneFunc0),
         INTERNAL_FUNCTION(qr_split_rename_table,    7, qrCloneFunc1),
@@ -4058,6 +4058,73 @@ void domain_main(unsigned *res, unsigned func) {
             qcount++;
           }
         *res = 0x9E290000u | (unsigned)(qcount & 0xffffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 34
+      /* LEVEL 34 -- TEST or INCREMENT? Level 32 showed the inner body runs only during outer
+         pass 0. Level 33 showed qk IS 0 at the top of every pass -- read back from the outer
+         body, matching QEMU exactly (0/8) -- so the reset store and its reload are fine.
+         Those two together are strange: qk == 0, `qk < 9` should be true, and yet the body
+         does not run. Two candidates remain, and they differ in what qk holds when the inner
+         loop gives up:
+             B = highest outer pass whose inner body ran      (correct 63)
+             C = qk immediately AFTER the inner loop, last pass (correct 9)
+         B=0, C=0 -> in later passes the loop exited with qk still 0, i.e. `0 < 9` evaluated
+                     FALSE: the COMPARE/branch is the fault
+         B=0, C=9 -> qk reached 9 without the body running: the INCREMENT or the init ran away
+         B=63     -> the inner body did run late, and level 32's witness is what lied
+         All three witnesses live in .data on distinct elements, so no stack slot can forge
+         them. Marker 0x9E35, correct 0x9E353F09. */
+      {
+        int qp, qk;
+        for (qk = 0; qk < ArraySize(qrSplitClone); qk++)
+          qrSplitClone[qk].funcFlags = 0u;
+        for (qp = 0; qp < 64; qp++) {
+          qk = 0;
+          for (; qk < ArraySize(qrSplitClone); qk++) {
+            const char *volatile qz = qrSplitClone[qk].zName;   /* the capability access */
+            (void)qz;
+            qrSplitClone[1].funcFlags = (u32)qp;                /* B: last pass that ran */
+          }
+          qrSplitClone[2].funcFlags = (u32)qk;                  /* C: qk after inner loop */
+        }
+        *res = 0x9E350000u | ((qrSplitClone[1].funcFlags & 0xffu) << 8)
+                           | (qrSplitClone[2].funcFlags & 0xffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 33
+      /* LEVEL 33 -- WHICH operation is lost? Level 32 established that the inner body runs
+         only during outer pass 0 when it makes a capability access. Three things could do
+         that: the store of 0 to the inner counter never lands; it lands but the reload at the
+         loop test returns the stale 9; or the compare itself is mis-forwarded.
+         This reads the inner counter back IMMEDIATELY after setting it to 0, from the OUTER
+         body -- which is known to run all 64 passes (level 27, qp=64) -- and stamps what it
+         saw into .data:
+             max stamp 0 -> qk really is 0 at the top of every pass, so the store and this
+                            reload are FINE and the fault is in the loop test or the increment
+             max stamp 9 -> qk still reads 9, i.e. the `qk = 0` store is LOST or invisible
+         The inner body keeps a capability access, since that is the trigger. Marker 0x9E34,
+         not 0x9E33 -- 0x9E33 is the QUICKRET ladder's own marker family. Correct: 0x9E340009
+         (max stamp 0, 9 elements sentinel-cleared and written). */
+      {
+        unsigned qmax = 0, qwritten = 0;
+        int qp, qk;
+        for (qk = 0; qk < ArraySize(qrSplitClone); qk++)
+          qrSplitClone[qk].funcFlags = 0xffffffffu;
+        for (qp = 0; qp < 64; qp++) {
+          qk = 0;
+          /* read qk back at once, from the outer body, and record it */
+          qrSplitClone[qp & 7].funcFlags = (u32)qk;
+          for (; qk < ArraySize(qrSplitClone); qk++) {
+            const char *volatile qz = qrSplitClone[qk].zName;   /* the capability access */
+            (void)qz;
+          }
+        }
+        for (qk = 0; qk < ArraySize(qrSplitClone); qk++) {
+          u32 v = qrSplitClone[qk].funcFlags;
+          if (v != 0xffffffffu) { qwritten++; if (v > qmax) qmax = v; }
+        }
+        *res = 0x9E340000u | ((qmax & 0xffu) << 8) | (qwritten & 0xffu);
         return;
       }
 #elif (CAPSTONE_SQLITE_QUICKRET) == 32
