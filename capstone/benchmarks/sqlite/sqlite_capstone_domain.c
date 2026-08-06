@@ -3657,8 +3657,9 @@ static int run_sqlite(void) {
 }
 
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 15 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) <= 23 \
-                                       && (CAPSTONE_SQLITE_QUICKRET) != 17
+                                       && (CAPSTONE_SQLITE_QUICKRET) <= 27 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) != 17 \
+                                       && (CAPSTONE_SQLITE_QUICKRET) != 25
 /* Stand-ins for renameColumnFunc & co., used by QUICKRET levels 15-16 and 18-22. Distinct bodies so
    none of them folds into another and the array keeps nine DIFFERENT function pointers --
    the whole point of the construct. Never called; only their addresses matter. */
@@ -3986,9 +3987,10 @@ void domain_main(unsigned *res, unsigned func) {
    returns; level 16 hands the same array to the real sqlite3InsertBuiltinFuncs and wedges.
    That is the SQLite blocker's minimal repro. */
 #if defined(CAPSTONE_SQLITE_QUICKRET) && (CAPSTONE_SQLITE_QUICKRET) >= 18 \
-                                      && (CAPSTONE_SQLITE_QUICKRET) <= 23 \
-                                      && (CAPSTONE_SQLITE_QUICKRET) != 21
-    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23) {
+                                      && (CAPSTONE_SQLITE_QUICKRET) <= 27 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) != 21 \
+                                      && (CAPSTONE_SQLITE_QUICKRET) != 25
+    if ((lvl >= 18 && lvl <= 20) || lvl == 22 || lvl == 23 || lvl == 26 || lvl == 27) {
       static FuncDef qrSplitClone[] = {
         INTERNAL_FUNCTION(qr_split_rename_column,   9, qrCloneFunc0),
         INTERNAL_FUNCTION(qr_split_rename_table,    7, qrCloneFunc1),
@@ -4025,6 +4027,55 @@ void domain_main(unsigned *res, unsigned func) {
       qr_link_via_param(qrSplitClone, ArraySize(qrSplitClone));
 #elif (CAPSTONE_SQLITE_QUICKRET) == 23
       qr_link_via_param_leaf(qrSplitClone, ArraySize(qrSplitClone));
+#elif (CAPSTONE_SQLITE_QUICKRET) == 27
+      /* LEVEL 27 -- WHICH HALF of level 26 broke? Level 26 returned sum=191 on silicon where
+         QEMU returns 12224 from the SAME binary: exactly ONE pass of 64, with all nine
+         strlen results in that pass CORRECT. So strlen is fine and the OUTER loop is not
+         iterating. Two candidates remain and this separates them by reporting the loop's own
+         state instead of its product:
+             low  16 bits = the number of inner iterations actually executed (max 65535)
+             high 16 bits of the payload = the value of qp AFTER the loop
+         qp == 64 with a low count -> the loop ran to completion but the ACCUMULATOR lost
+                                      adds (a store/reload of qsum failing)
+         qp >= 64 early, count 9   -> qp was corrupted to an out-of-range value and the loop
+                                      exited after one pass
+         qp == 1, count 9          -> the compare/branch itself misbehaved
+         Counters are plain ints, no new global, same 18-26 family layout. */
+      {
+        unsigned qcount = 0;
+        int qp, qk;
+        for (qp = 0; qp < 64; qp++)
+          for (qk = 0; qk < ArraySize(qrSplitClone); qk++) {
+            (void)sqlite3Strlen30(qrSplitClone[qk].zName);
+            qcount++;
+          }
+        *res = 0x9E270000u | ((unsigned)(qp & 0xffu) << 8) | (unsigned)(qcount & 0xffu);
+        return;
+      }
+#elif (CAPSTONE_SQLITE_QUICKRET) == 26
+      /* LEVEL 26 -- MEASURE the sporadic strlen instead of hunting the hang.
+         S01 records strlen returning a wrong answer ~3% of the time on this image class (4 of
+         128 calls returned 1), attributed to the -O0 reload: strlen re-loads the string
+         capability with `ldc` from a stack slot every iteration. S01 then INFERS, without
+         establishing it, that a wrong strlen corrupts the hash chain and causes this hang.
+         This turns that into a NUMBER. It calls sqlite3Strlen30 over qrSplitClone's nine
+         zName pointers 64 times each and returns the SUM, so a shortfall is exactly the
+         count of characters lost to bad reloads.
+         Deliberately reuses qrSplitClone rather than declaring its own name array: level 25
+         did the latter and ENTRY-STALLED on three separate draws, because the new global
+         moved .capstone_gp_table / .capstone_gp_initdesc 1344 bytes (0x151570 -> 0x151030)
+         and turned the probe into a structurally different image. Reusing the existing array
+         adds NO capability-bearing global, so this level keeps the 18-23 family's section
+         layout -- which is the family that has actually been entering. */
+      {
+        unsigned long qsum = 0;
+        int qp, qk;
+        for (qp = 0; qp < 64; qp++)
+          for (qk = 0; qk < ArraySize(qrSplitClone); qk++)
+            qsum += (unsigned)sqlite3Strlen30(qrSplitClone[qk].zName);
+        *res = 0x9E260000u | (unsigned)(qsum & 0xffffu);
+        return;
+      }
 #endif
       qrc = (int)lvl;
       (void)qfound;
