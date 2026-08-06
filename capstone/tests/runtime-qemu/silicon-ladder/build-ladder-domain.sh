@@ -134,7 +134,17 @@ fi
 DIS=$("$CAPSTONE_LLVM_BIN/llvm-objdump" -d "$OUT")
 NCJALR=$(grep -cE '\bcjalr\b' <<<"$DIS" || true)
 NLDCGP=$(grep -cE 'ldc[[:space:]].*\(gp\)' <<<"$DIS" || true)
-echo "static: cjalr=$NCJALR ldc-gp=$NLDCGP"
+# The cap-table has TWO addressing forms and the gate must accept both. `ldc rd, imm(gp)` only
+# reaches index 127: the immediate is 12-bit signed and entries are 16 bytes, so byte offset
+# 2048 is the first one it cannot encode. Above that the compiler emits
+# lui/addi/`cincoffset rd, gp, rs`/ldc instead.
+#
+# Counting only the immediate form made the gate FAIL a perfectly good image whose globals all
+# sit above the boundary -- a padded rung with 170 cap-table entries has ZERO `imm(gp)` loads
+# and 13 `cincoffset ..., gp, ...`, and was rejected as having "no global access" when in fact
+# it accesses globals exclusively by the path we most want to test.
+NCINCGP=$(grep -cE 'cincoffset[[:space:]]+[a-z0-9]+,[[:space:]]*gp,' <<<"$DIS" || true)
+echo "static: cjalr=$NCJALR ldc-gp=$NLDCGP cincoffset-gp=$NCINCGP"
 [[ "$NCJALR" == "0" ]] || { echo "FAIL: cjalr present (not gp-free)" >&2; exit 1; }
-[[ "$NLDCGP" -ge 1 ]] || { echo "FAIL: no ldc gp[i] global access found" >&2; exit 1; }
+[[ "$NLDCGP" -ge 1 || "$NCINCGP" -ge 1 ]] || { echo "FAIL: no gp[i] global access found (neither ldc imm(gp) nor cincoffset off gp)" >&2; exit 1; }
 echo "Built $OUT"

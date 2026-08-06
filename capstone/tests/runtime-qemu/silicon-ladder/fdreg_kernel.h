@@ -71,6 +71,18 @@
 #ifndef FDREG_PAD
 #define FDREG_PAD 0
 #endif
+/* FDREG_DRAW -- R-16 REDRAW knob, the ladder counterpart of the SQLite domain's QR_DRAW.
+   The entry stall is PER-IMAGE and deterministic per binary, so retrying a stalling rung buys
+   nothing; the remedy is a DIFFERENT image whose code under test is byte-identical. These nops
+   sit at the top of the compute, before any probe runs, and shift layout and nothing else.
+   fdreg7p stalled on its first draw and there was no way to redraw a rung -- only the SQLite
+   domain had one. Vary until it enters, and sha256sum the set: two draws that hash the same
+   are the same ticket. */
+#ifndef FDREG_DRAW
+#define FDREG_DRAW 0
+#endif
+#define FDREG_DRAW_STR2(x) #x
+#define FDREG_DRAW_STR(x) FDREG_DRAW_STR2(x)
 
 #define FDREG_N     9
 #define FDREG_HASHN 23
@@ -82,18 +94,17 @@ static volatile unsigned fdreg_gate = 1u;  /* satisfies the ldc gp[i] build gate
    nothing. Volatile so the reads survive -O1 and the slots stay live. */
 #define FDREG_P8(b)  FDREG_P1(b##0) FDREG_P1(b##1) FDREG_P1(b##2) FDREG_P1(b##3) \
                      FDREG_P1(b##4) FDREG_P1(b##5) FDREG_P1(b##6) FDREG_P1(b##7)
-#define FDREG_P1(i)  static volatile unsigned fdreg_pad_##i = 1u;
+/* `used` so the linker KEEPS them without any code to read them. The original version kept
+   them alive by summing all 160 in the compute, which cost ~3.8 KB of .text, forced
+   DOMAIN_WINDOW=32k, and produced images that ENTRY-STALLED on every draw tried (fdreg7p,
+   f7p8). The cap-table slot is what the probe needs, not the read. */
+#define FDREG_P1(i)  static volatile unsigned fdreg_pad_##i __attribute__((used)) = 1u;
 FDREG_P8(0) FDREG_P8(1) FDREG_P8(2) FDREG_P8(3) FDREG_P8(4)
 FDREG_P8(5) FDREG_P8(6) FDREG_P8(7) FDREG_P8(8) FDREG_P8(9)
 FDREG_P8(a) FDREG_P8(b) FDREG_P8(c) FDREG_P8(d) FDREG_P8(e)
 FDREG_P8(f) FDREG_P8(g) FDREG_P8(h) FDREG_P8(i) FDREG_P8(j)
-#undef FDREG_P1
-#define FDREG_P1(i)  s += fdreg_pad_##i;
-#define FDREG_PAD_SUM() \
-  FDREG_P8(0) FDREG_P8(1) FDREG_P8(2) FDREG_P8(3) FDREG_P8(4) \
-  FDREG_P8(5) FDREG_P8(6) FDREG_P8(7) FDREG_P8(8) FDREG_P8(9) \
-  FDREG_P8(a) FDREG_P8(b) FDREG_P8(c) FDREG_P8(d) FDREG_P8(e) \
-  FDREG_P8(f) FDREG_P8(g) FDREG_P8(h) FDREG_P8(i) FDREG_P8(j)
+/* No read loop: `used` already keeps every padding global and its cap-table slot. */
+#define FDREG_PAD_SUM() do {} while (0);
 #else
 #define FDREG_PAD_SUM() do {} while (0);
 #endif
@@ -264,6 +275,9 @@ static void fdreg_link_via_param_nonleaf(FdregDef *aDef, int nDef) {
 
 static unsigned fdreg_compute(void) {
   unsigned i, s = 0;
+#if (FDREG_DRAW) > 0
+  __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
+#endif
 
 #if FDREG_STAGE == 7
   /* STAGE 7 -- the OFF-SQLITE reproduction of the four-way conjunction.
