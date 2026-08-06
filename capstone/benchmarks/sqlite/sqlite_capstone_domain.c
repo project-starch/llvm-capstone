@@ -4176,7 +4176,19 @@ void domain_main(unsigned *res, unsigned func) {
       }
 #elif (CAPSTONE_SQLITE_QUICKRET) == 31
       /* LEVEL 31 -- the other half of level 30's split: keep both ldc, drop the call.
-         Correct marker 0x9E310240. */
+         Correct marker 0x9E310240.
+         BOARD 2026-08-07, run FIRST in its boot after being lost as collateral four times:
+         567, where QEMU gives 576. NINE missing -- exactly one pass of sixty-four.
+         That matters beyond this level: it makes the loss GRADED. L29 and L32 lose 567 of
+         576 (the inner body runs only during pass 0); L31 loses 9. So "a capability access in
+         the inner body means the body runs only in the first pass" is FALSE as a general
+         statement and is withdrawn -- L31 executed 63 of its 64 passes. What survives is that
+         a capability access in the inner body costs iterations, by an amount that varies by
+         two orders of magnitude between levels, and that with BOTH a load and a store (L34)
+         it stops returning at all.
+         9/576 is 1.5%, the same order as the ~3% sporadic strlen rate in S01. Whether that is
+         the same phenomenon is NOT established and should not be asserted from a rate
+         coincidence across two different measurements. */
       {
         unsigned qcount = 0;
         int qp, qk;
