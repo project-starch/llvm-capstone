@@ -13,12 +13,18 @@
 //===----------------------------------------------------------------------===//
 
 #include "Capstone.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/ADT/SmallSet.h"
 #include "CapstoneInstrInfo.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/Support/CommandLine.h"
 
 using namespace llvm;
+
+#define DEBUG_TYPE "capstone-postra-expand"
+
+
 
 // C-14 fixup, off by default until it is proven not to regress the corpus.
 static cl::opt<bool> CapstoneFixDestructiveCopies(
@@ -30,6 +36,14 @@ static cl::opt<bool> CapstoneFixDestructiveCopies(
   "Capstone post-regalloc pseudo instruction expansion pass"
 
 namespace {
+
+// Populated once per function by runOnMachineFunction before any block is processed.
+static SmallSet<Register, 16> ScalarAddrRegs;
+
+static void computeScalarAddressRegs(const MachineFunction &MF,
+                                     const TargetRegisterInfo *TRI,
+                                     SmallSet<Register, 16> &Scalar);
+
 
 class CapstonePostRAExpandPseudo : public MachineFunctionPass {
 public:
@@ -57,6 +71,8 @@ private:
 char CapstonePostRAExpandPseudo::ID = 0;
 
 bool CapstonePostRAExpandPseudo::runOnMachineFunction(MachineFunction &MF) {
+  ScalarAddrRegs.clear();
+  computeScalarAddressRegs(MF, MF.getSubtarget().getRegisterInfo(), ScalarAddrRegs);
   TII = static_cast<const CapstoneInstrInfo *>(MF.getSubtarget().getInstrInfo());
   TRI = MF.getSubtarget().getRegisterInfo();
   bool Modified = false;
@@ -126,61 +142,83 @@ static bool isScalarDefiningOpc(unsigned Opc) {
   }
 }
 
-// Walk back from `MI` to the defining instruction of `Reg` within this block and decide whether
-// it is an address materialisation. Conservative: anything not proven is treated as possibly a
-// capability, so the destructive movc is left alone.
-static bool isProvablyScalarDef(const MachineInstr &MI, Register Reg,
-                                const TargetRegisterInfo *TRI) {
-  const MachineBasicBlock *MBB = MI.getParent();
-  unsigned Steps = 0;
-  for (auto J = MachineBasicBlock::const_reverse_iterator(MI.getIterator());
-       J != MBB->rend(); ++J) {
-    if (++Steps > 64)
-      return false;                       // bounded: do not walk a whole huge block
-    if (!J->modifiesRegister(Reg, TRI))
-      continue;
-    unsigned Opc = J->getOpcode();
-    if (isScalarDefiningOpc(Opc))
-      return true;                        // AUIPC/LUI directly into Reg
-    // `addi rd, rs, lo12` completing an AUIPC/LUI pair: recurse on rs once.
-    if (Opc == Capstone::ADDI && J->getNumOperands() >= 2 &&
-        J->getOperand(1).isReg() && J->getOperand(1).getReg() != Reg)
-      return isProvablyScalarDef(*J, J->getOperand(1).getReg(), TRI);
-    // A MOVC whose SOURCE is provably scalar yields a scalar. Register allocation routinely
-    // parks a materialised address in a callee-saved register first, so the real chain is
-    // auipc/addi -> aN -> `movc sN, aN` -> `movc dst, sN`. Stopping at the first MOVC misses
-    // every function pointer, which is precisely the shape that wedges on silicon.
-    if (Opc == Capstone::MOVC && J->getNumOperands() >= 2 && J->getOperand(1).isReg() &&
-        J->getOperand(1).getReg() != Reg)
-      return isProvablyScalarDef(*J, J->getOperand(1).getReg(), TRI);
-    return false;                         // defined by something else: assume capability
-  }
-  // Not defined in this block. Follow SINGLE-PREDECESSOR edges back, mirroring the forward
-  // scan's single-successor walk: with exactly one predecessor every path arrives from there,
-  // so the def found upstream really is the def. This case is the common one and not a corner
-  // -- a function pointer is materialised in the loop PREHEADER and copied in the loop BODY, so
-  // a block-local proof never fires for the shape that actually wedges on silicon.
-  unsigned Hops = 0;
-  const MachineBasicBlock *Cur = MBB;
-  while (Cur->pred_size() == 1 && ++Hops <= 4) {
-    const MachineBasicBlock *Pred = *Cur->pred_begin();
-    if (Pred == Cur)
-      break;
-    for (auto J = Pred->rbegin(); J != Pred->rend(); ++J) {
-      if (!J->modifiesRegister(Reg, TRI))
-        continue;
-      unsigned Opc = J->getOpcode();
-      if (isScalarDefiningOpc(Opc))
-        return true;
-      if ((Opc == Capstone::ADDI || Opc == Capstone::MOVC) &&
-          J->getNumOperands() >= 2 && J->getOperand(1).isReg() &&
-          J->getOperand(1).getReg() != Reg)
-        return isProvablyScalarDef(*J, J->getOperand(1).getReg(), TRI);
-      return false;
+// NOTE (2026-08-06): THIS ANALYSIS DOES NOT WORK, and the reason rules out the whole approach.
+//
+// A physical register is REUSED across a function. The function pointers land in callee-saved
+// registers (s3/s4 here), and the prologue/epilogue define those with `ldc sN, off(sp)` -- a
+// non-materialising def -- so any "every def of this register is an address materialisation"
+// rule disqualifies them immediately. Verified with -debug-only=capstone-postra-expand: the
+// pass sees `movc $x10, $x20` and `movc $x10, $x19` with scalarAddr=0 for both.
+//
+// Two earlier shapes failed for related reasons and are recorded so they are not retried:
+//   * block-local backward walk -- the pointer is materialised in the loop PREHEADER and copied
+//     in the BODY, so the def is never in the same block;
+//   * single-predecessor CFG walk -- a loop body has two predecessors (preheader + back-edge),
+//     so the walk gives up exactly where it is needed.
+//
+// The real fix belongs PRE-RA, where a materialised address is a distinct virtual register with
+// an unambiguous single definition, instead of a physical register shared with spills, reloads
+// and every other value the allocator put there. Post-RA is simply too late to tell a scalar
+// from a capability, which is the same reason the blanket `capstone-scalar-copy-live-src`
+// default in copyPhysReg is unsafe.
+//
+// Which physical registers hold a value that is PROVABLY a plain scalar address?
+//
+// Computed over the whole function as a fixpoint, not by walking the CFG. A backward walk fails
+// on exactly the shape that matters: the pointer is materialised in the loop PREHEADER and
+// copied in the loop BODY, and a loop body has two predecessors (preheader + back-edge), so any
+// single-predecessor restriction gives up. Verified with -debug-only: the pass saw
+// `movc $x10, $x20` with the def of $x20 unreachable that way.
+//
+// A register qualifies only if EVERY definition of it in the function is an address
+// materialisation -- AUIPC/LUI, an ADDI completing one, or a MOVC copying another qualifying
+// register. Since a single non-qualifying def disqualifies it, the result is safe under any
+// control flow: whichever path reached the copy, the value came from one of those defs.
+//
+// Capabilities never arrive this way -- they come from LDC, CINCOFFSET, SCC, CAPENTER or the
+// cap table -- so this cannot misclassify a capability as a scalar. That is the distinction
+// copyPhysReg cannot make, because GPRRegClass holds both, which is why the blanket
+// `capstone-scalar-copy-live-src` default broke matmult_int with cause 24.
+static void computeScalarAddressRegs(const MachineFunction &MF,
+                                     const TargetRegisterInfo *TRI,
+                                     SmallSet<Register, 16> &Scalar) {
+  // Seed: registers defined ONLY by AUIPC/LUI, or by ADDI whose source is already seeded.
+  bool Changed = true;
+  SmallSet<Register, 16> Disqualified;
+  for (unsigned Round = 0; Changed && Round < 8; ++Round) {
+    Changed = false;
+    for (const MachineBasicBlock &MBB : MF) {
+      for (const MachineInstr &MI : MBB) {
+        for (const MachineOperand &MO : MI.operands()) {
+          if (!MO.isReg() || !MO.isDef() || !MO.getReg().isPhysical())
+            continue;
+          Register R = MO.getReg();
+          if (Disqualified.count(R))
+            continue;
+          unsigned Opc = MI.getOpcode();
+          bool Ok = false;
+          if (Opc == Capstone::AUIPC || Opc == Capstone::LUI) {
+            Ok = true;
+          } else if ((Opc == Capstone::ADDI || Opc == Capstone::MOVC) &&
+                     MI.getNumOperands() >= 2 && MI.getOperand(1).isReg()) {
+            Register Src = MI.getOperand(1).getReg();
+            Ok = Src != Capstone::X0 && Scalar.count(Src) && !Disqualified.count(Src);
+          }
+          if (!Ok) {
+            // A non-materialising def poisons the register permanently.
+            if (Scalar.erase(R) || !Disqualified.count(R))
+              Changed = true;
+            Disqualified.insert(R);
+          } else if (!Scalar.count(R)) {
+            Scalar.insert(R);
+            Changed = true;
+          }
+        }
+      }
     }
-    Cur = Pred;
   }
-  return false;                           // unknown: keep the destructive movc
+  for (Register R : Disqualified)
+    Scalar.erase(R);
 }
 
 bool CapstonePostRAExpandPseudo::fixupDestructiveCopies(MachineBasicBlock &MBB) {
@@ -247,7 +285,14 @@ bool CapstonePostRAExpandPseudo::fixupDestructiveCopies(MachineBasicBlock &MBB) 
     // AUIPC/LUI (+ADDI) is a plain address and provably not a capability. That is the
     // function-pointer case -- its first use is movc/stc/jalr, so the use-based test can
     // never classify it, which is exactly why C-14 stayed live on silicon for this shape.
-    if ((!Decided || !ScalarUse) && isProvablyScalarDef(*I, Src, TRI)) {
+    LLVM_DEBUG(dbgs() << "C14: movc dst=" << printReg(Dst, TRI) << " src="
+                      << printReg(Src, TRI) << " Decided=" << Decided
+                      << " ScalarUse=" << ScalarUse
+                      << " scalarAddr=" << ScalarAddrRegs.count(Src) << "\n");
+    // The USE-based proof cannot classify a function pointer -- its first use is movc/stc/jalr.
+    // The DEF-based one can: if every definition of Src in this function is an address
+    // materialisation, it is a scalar and the destructive movc is unnecessary.
+    if ((!Decided || !ScalarUse) && ScalarAddrRegs.count(Src)) {
       Decided = true;
       ScalarUse = true;
     }
