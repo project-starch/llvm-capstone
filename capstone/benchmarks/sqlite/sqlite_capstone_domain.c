@@ -3751,6 +3751,40 @@ void domain_main(unsigned *res, unsigned func) {
        later steps depend on -- same reason the staged version does.
        Callable because this file is #included into the amalgamation TU, so the SQLITE_PRIVATE
        symbols are in scope. */
+    /* LEVELS 10-12 split sqlite3PcacheInitialize() itself, which level 8 showed to wedge.
+       Its body is three separable things (amalgamation sqlite3-capstone.c:57063):
+           read  sqlite3GlobalConfig.pcache2.xInit          -> level 10
+           call  sqlite3PCacheSetDefault() if that was 0    -> level 11
+           call  through the pointer: xInit(pArg)           -> level 12 re-reads it after
+       sqlite3PCacheSetDefault materialises `static const sqlite3_pcache_methods2
+       defaultMethods` -- an aggregate holding THIRTEEN function pointers -- and hands it to
+       sqlite3_config(SQLITE_CONFIG_PCACHE2,...). On the gp-captable ABI that aggregate is a
+       global whose pointer members are capability leaves initialised by __capstone_cap_init,
+       which is the same shape the old notes attribute to RegisterBuiltinFunctions (a large
+       array of FuncDef structs each holding a zName pointer). If pointer-bearing static
+       aggregates are the failing construct, that is a far better lead than "indirect call".
+       All three re-do CONFIG_HEAP + MallocInit first, matching level 7, which returns rc=0. */
+    if (lvl >= 10 && lvl <= 12) {
+      qrc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap,
+                           (int)sizeof(sqlite_heap), 64);
+      if (qrc == SQLITE_OK) qrc = sqlite3MallocInit();
+      if (qrc == SQLITE_OK) {
+        if (lvl == 10) {
+          /* READ ONLY -- cannot wedge on a call, so this always returns a number.
+             1 = xInit already non-null, 0 = null (the expected fresh state). */
+          qrc = (sqlite3GlobalConfig.pcache2.xInit != 0) ? 1 : 0;
+        } else if (lvl == 11) {
+          /* Materialise + copy the 13-function-pointer aggregate. NO indirect call. */
+          sqlite3PCacheSetDefault();
+          qrc = 2;
+        } else {
+          /* Same, then READ BACK the installed pointer without calling it:
+             3 = the copy landed and xInit is non-null, 4 = it did not. */
+          sqlite3PCacheSetDefault();
+          qrc = (sqlite3GlobalConfig.pcache2.xInit != 0) ? 3 : 4;
+        }
+      }
+    }
     if (lvl >= 6 && lvl <= 9) {
       qrc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap,
                            (int)sizeof(sqlite_heap), 64);

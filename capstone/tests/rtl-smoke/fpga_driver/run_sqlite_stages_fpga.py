@@ -268,7 +268,21 @@ def main():
                 # silent failure in the summary and invalidate every verdict behind it.
                 obs = int(m_rv.group(1)) if m_rv else None
                 returned = m_rv is not None
-            results.append((label, wedged, obs, returned))
+            # INFRASTRUCTURE vs DOMAIN wedge. `SQ: A/dom-ok` is printed by the host the
+            # instant create_dom returns (sqlite_host.c), so its ABSENCE means the domain was
+            # never created and NOTHING in it ran. `SPLB`/`SPLA` are monitor spin tags: 0xE006
+            # is split_out_cap's unimplemented exact-fit case (sbi_capstone.c, guarded by
+            # CAPSTONE_SPLIT_EXACT_FIT which is commented out), an M-mode `while(1)` that the
+            # monitor's own comment records as wedging runs 5-7 in 4 of 4 boots and as the
+            # source of "a large share of this campaign's random wedges".
+            #
+            # Without this distinction the summary below blames whichever domain happened to
+            # occupy that slot. It did exactly that on 2026-08-06 and produced a confident,
+            # entirely false localization of a SQLite function that never executed.
+            created = "SQ: A/dom-ok" in text
+            montag  = re.search(r"(SPL[AB]|ILLX):([0-9A-Fa-f]{8})", text)
+            results.append((label, wedged, obs, returned, created,
+                            montag.group(0) if montag else None))
             if wedged:
                 # INSTRUMENT THE WEDGE HERE, IN THIS SESSION.
                 #
@@ -401,7 +415,7 @@ def main():
 
         print("\n=== STAGED BISECTION ===", flush=True)
         first_bad = None
-        for dom, wedged, obs, returned in results:
+        for dom, wedged, obs, returned, created, montag in results:
             d = decode(obs)
             if wedged:
                 verdict = "WEDGED (no return)"
@@ -412,6 +426,9 @@ def main():
             else:
                 verdict = f"no marker (obs={obs})"
             name = STAGE_NAMES.get(decode(obs)[0] if d else -1, "")
+            if wedged and (not created or montag):
+                verdict = ("INFRASTRUCTURE WEDGE (domain never created)" if not created
+                           else f"INFRASTRUCTURE WEDGE (monitor tag {montag})")
             print(f"  {dom:44} {verdict}{('   -- ' + name) if name else ''}", flush=True)
             # A NON-ZERO rc IS NOT A FAILURE. Only a WEDGE is.
             #
@@ -427,7 +444,7 @@ def main():
             # what a given stage should return. So it reports what came back and flags only
             # what it can judge on its own -- a domain that never returned.
             if first_bad is None and wedged:
-                first_bad = (dom, wedged, d)
+                first_bad = (dom, wedged, d, created, montag)
 
         if first_bad is None:
             # Deliberately does NOT name a stage. An earlier version said "the failure is
@@ -440,13 +457,28 @@ def main():
             # which is the wrong-but-confident output this project keeps being bitten by.
             got = ", ".join(
                 f"{pathlib.Path(d).stem}=rc{decode(o)[1]}" if decode(o) else
-                f"{pathlib.Path(d).stem}=?" for d, _, o, _ in results)
+                f"{pathlib.Path(d).stem}=?" for d, _, o, _, _, _ in results)
             print(f"\nEvery domain returned ({got}). No domain wedged; whether those values "
                   f"are CORRECT is the caller's judgement, not this runner's.", flush=True)
         else:
-            dom, wedged, d = first_bad
-            if wedged:
-                print(f"\nFIRST FAILURE: {dom} did not return. Everything below that stage "
+            dom, wedged, d, created, montag = first_bad
+            if wedged and (not created or montag):
+                why = []
+                if not created:
+                    why.append("no `SQ: A/dom-ok` -- create_dom never returned, so the domain "
+                               "was never created and NOTHING in it executed")
+                if montag:
+                    why.append(f"monitor spin tag {montag} -- the wedge is in M-mode, in the "
+                               f"MONITOR, before/outside the domain")
+                print(f"\nINFRASTRUCTURE WEDGE at {dom} -- THIS RUN CARRIES NO VERDICT "
+                      f"ABOUT {dom}.\n  " + "\n  ".join(why) +
+                      f"\n  Do NOT attribute this to the code under test. This spin is "
+                      f"ordering/pool-state dependent: re-run with the sequence PERMUTED and "
+                      f"a known-good domain in the same slot before concluding anything.",
+                      flush=True)
+            elif wedged:
+                print(f"\nFIRST FAILURE: {dom} did not return, and it WAS created and entered "
+                      f"(`SQ: A/dom-ok` present, no monitor tag). Everything below that stage "
                       f"works on silicon; the fault is inside that step.", flush=True)
             else:
                 print(f"\nFIRST FAILURE: {dom} returned a nonzero SQLite rc {d[1]} at stage "
