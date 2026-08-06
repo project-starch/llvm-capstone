@@ -47,7 +47,7 @@ def _hash_name(path: pathlib.Path) -> str:
 IMG_NAME = os.environ.get("FPGA_FW_NAME") or _hash_name(IMG)
 
 
-def assert_firmware_embeds_current_initramfs(fw: pathlib.Path) -> None:
+def assert_firmware_embeds_current_initramfs(fw: pathlib.Path, locals_=None) -> None:
     """Refuse to flash a firmware that carries a STALE initramfs.
 
     Measured 2026-07-30, and it silently invalidated a run: `make build A=opensbi-rebuild`
@@ -91,8 +91,14 @@ def assert_firmware_embeds_current_initramfs(fw: pathlib.Path) -> None:
         if len(cpio) > 100_000:      # skip small incidental gzip-looking members
             break
 
+    # WHICH local files to verify. Defaulting to the canonical sqlite_silicon.dom is wrong for
+    # any run whose domains are named something else: on 2026-08-06 a staged split (qr18/qr19/
+    # qr16n) was blocked as "STALE FIRMWARE" because a LEFTOVER sqlite_silicon.dom from an
+    # older build sat at the default path and was, correctly, not in the initramfs. The gate
+    # was right about its question and wrong about its subject. Callers that know what they
+    # are running pass it in; the default is unchanged for callers that do not.
     missing = []
-    for local in (LOCAL_HOST, LOCAL_DOM):
+    for local in (locals_ if locals_ is not None else (LOCAL_HOST, LOCAL_DOM)):
         if not local.is_file():
             continue
         if cpio.find(local.read_bytes()) < 0:

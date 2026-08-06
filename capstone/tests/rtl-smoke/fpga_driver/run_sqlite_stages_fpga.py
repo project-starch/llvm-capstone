@@ -93,7 +93,22 @@ def decode(obs):
 def main():
     if not URL:
         raise SystemExit("FPGA_URL not set")
-    assert_firmware_embeds_current_initramfs(IMG)
+    # Verify the firmware against the domains THIS run will execute, not against the
+    # canonical sqlite_silicon.dom -- a staged run's domains are named qr18/qr19/... and a
+    # leftover file at the default path made the gate reject a perfectly fresh image.
+    # The staged copy in overlay/test-domains is the right reference: finding its exact
+    # bytes inside the decompressed initramfs proves "what I staged is what got packed".
+    _repo = pathlib.Path(__file__).resolve().parents[4]
+    _overlay = pathlib.Path(os.environ.get("SQLITE_STAGE_OVERLAY") or
+                            _repo / "capstone/caplifive-system/sw/buildroot"
+                                    "/overlay/test-domains")
+    _want = []
+    for spec in DOMS:
+        p = spec.split("|", 1)[-1].rsplit(":", 1)[0] if "|" in spec else spec.rsplit(":", 1)[0]
+        cand = _overlay / pathlib.Path(p).name
+        if cand.is_file():
+            _want.append(cand)
+    assert_firmware_embeds_current_initramfs(IMG, _want or None)
 
     console = FpgaConsole(URL, logger=lambda m: print(f"[fpga] {m}", file=sys.stderr))
     console.connect()
