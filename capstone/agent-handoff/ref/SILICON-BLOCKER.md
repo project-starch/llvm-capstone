@@ -1,5 +1,58 @@
 # The silicon blocker — everything known
 
+## 2026-08-06 — ROOT CAUSE LOCATION: `sqlite3PcacheInitialize()` hangs on silicon.
+
+One boot, control green, all five images sharing globals base `0x150000` and 176 carves:
+
+| test | what it adds | result |
+|---|---|---|
+| `k800` | control | `retval=4` |
+| `qr1` | `sqlite3_config(SQLITE_CONFIG_HEAP)` | **rc=0** |
+| `qr6` | `+ sqlite3MutexInit()` | **rc=0** |
+| `qr7` | `+ sqlite3MallocInit()` (memsys5Init) | **rc=0** |
+| `qr8` | `+ sqlite3PcacheInitialize()` | **WEDGED** |
+
+**`sqlite3MallocInit()` SUCCEEDS.** memsys5Init builds the allocator zone headers inside the
+256 KB heap and returns rc=0, so the large structured write-and-link pass over the heap is fine
+on silicon. The very next step, `sqlite3PcacheInitialize()`, hangs.
+
+### This CONTRADICTS the previous localization -- and the previous one was the unreliable one
+
+`sqlite_capstone_domain.c:312-318` records a 2026-07-31 board result: "stages 7/8/9 all returned
+rc=0 ... stage 10 wedges", i.e. the wedge was attributed to `sqlite3RegisterBuiltinFunctions()`,
+and stages 11-13 exist solely to hunt a minimal reproducer inside it. **That is now refuted for
+the stage-9 half:** the equivalent of stage 9 (`MallocInit` + `PcacheInitialize`) WEDGES here,
+where the old run reported rc=0.
+
+Which to believe: the old result came from the staged dispatch, whose builds have since been
+shown to be unreliable in exactly this way -- and note that a staged build TODAY dies in
+region-share #1 before running anything, while the unstaged one enters. The new result comes
+from images that differ only in code, share a globals base and carve count, and ran behind a
+passing control in the same boot. **Prefer the new one, and treat stages 11-13's premise
+(the reproducer lives inside RegisterBuiltinFunctions) as unverified.**
+
+### What `sqlite3PcacheInitialize()` does, i.e. the surface now implicated
+
+It calls `sqlite3GlobalConfig.pcache2.xInit(pArg)` -- for the default page cache, `pcache1Init`,
+which initialises the **`pcache1` global structure** (`sqlite3GlobalConfig.pcache2` is itself a
+global), zeroes it, and depending on build config may take a mutex and pre-allocate a page
+buffer. So the implicated pattern is: **a call through a function pointer held in a global, into
+code that initialises another global structure** -- distinct from memsys5Init, which writes a
+plain array-like heap and works.
+
+That function-pointer-through-a-global shape is worth attention on this ABI: an indirect call
+target loaded from a capability-table global is exactly where a wrong or untagged capability
+would produce an unrecoverable jump rather than a wrong value.
+
+### Next split, one boot, same technique
+
+Call `pcache1Init` directly vs `sqlite3PcacheInitialize`'s wrapper, and separately just READ
+`sqlite3GlobalConfig.pcache2.xInit` and return it as the marker without calling it. That
+separates "the function pointer is wrong" from "the callee hangs" -- and reading a pointer
+cannot wedge, so it always returns a number.
+
+---
+
 ## 2026-08-06 (night, final) — LOCALIZED: `sqlite3_initialize()` is where SQLite hangs.
 
 One boot, control green, workload ladder ascending:

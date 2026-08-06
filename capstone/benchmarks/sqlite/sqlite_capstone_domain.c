@@ -3730,19 +3730,47 @@ void domain_main(unsigned *res, unsigned func) {
     unsigned lvl = (unsigned)(CAPSTONE_SQLITE_QUICKRET);
     sqlite3 *qdb = 0;
     int qrc = SQLITE_OK;
-    if (lvl >= 1)
+    if (lvl >= 1 && lvl <= 5)
       qrc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap,
                            (int)sizeof(sqlite_heap), 64);
-    if (lvl >= 2 && qrc == SQLITE_OK)
+    if (lvl >= 2 && lvl <= 5 && qrc == SQLITE_OK)
       qrc = sqlite3_initialize();
-    if (lvl >= 3 && qrc == SQLITE_OK)
+    if (lvl >= 3 && lvl <= 5 && qrc == SQLITE_OK)
       qrc = sqlite3_open(":memory:", &qdb);
-    if (lvl >= 4 && qrc == SQLITE_OK)
+    if (lvl >= 4 && lvl <= 5 && qrc == SQLITE_OK)
       qrc = sqlite3_exec(qdb,
           "CREATE TABLE items(name TEXT NOT NULL, value INTEGER NOT NULL);", 0, 0, 0);
-    if (lvl >= 5 && qrc == SQLITE_OK)
+    if (lvl >= 5 && lvl <= 5 && qrc == SQLITE_OK)
       qrc = sqlite3_exec(qdb,
           "INSERT INTO items VALUES('alpha',11),('beta',22),('gamma',33);", 0, 0, 0);
+    /* LEVELS 6-9 split sqlite3_initialize() at ITS OWN internal boundaries, mirroring
+       run_sqlite_staged()'s stages 7-10 but reachable WITHOUT the staged dispatch (which adds
+       globals, shifts the globals base 64 KB, and produces an image that dies in region-share
+       #1). Level 2 wedges and level 1 returns rc=0, so the fault is inside initialize(); these
+       four say which step. Each re-does CONFIG_HEAP first because memsys5 is the allocator the
+       later steps depend on -- same reason the staged version does.
+       Callable because this file is #included into the amalgamation TU, so the SQLITE_PRIVATE
+       symbols are in scope. */
+    if (lvl >= 6 && lvl <= 9) {
+      qrc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap,
+                           (int)sizeof(sqlite_heap), 64);
+      if (qrc == SQLITE_OK) {
+        if (lvl == 6) {
+          qrc = sqlite3MutexInit();          /* no-op at THREADSAFE=0; proves the call path */
+        } else if (lvl == 7) {
+          qrc = sqlite3MallocInit();         /* memsys5Init: zone headers built IN the heap  */
+        } else if (lvl == 8) {
+          qrc = sqlite3MallocInit();
+          if (qrc == SQLITE_OK) qrc = sqlite3PcacheInitialize();
+        } else {
+          qrc = sqlite3MallocInit();
+          if (qrc == SQLITE_OK) {
+            sqlite3RegisterBuiltinFunctions();  /* writes the global function hash table */
+            qrc = SQLITE_OK;
+          }
+        }
+      }
+    }
     *res = 0x9E330000u | ((lvl & 0xffu) << 8) | ((unsigned)qrc & 0xffu);
     return;
   }
