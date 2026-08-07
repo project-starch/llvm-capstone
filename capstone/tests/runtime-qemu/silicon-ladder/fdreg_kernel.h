@@ -84,6 +84,15 @@
 #ifndef FDREG_LEAVES
 #define FDREG_LEAVES 0
 #endif
+/* FDREG_OUTER -- the outer trip count, so the EXPECTED value can be varied.
+   The first three leaf-count rungs all returned 906 against an expected 576. Three different
+   images agreeing exactly is as consistent with a BROKEN PROBE returning a constant as with a
+   real miscount, and those two must be separated before anything is claimed. Changing the
+   outer count changes the expected answer: if the board still says 906, the probe is reporting
+   something unrelated to the loop. */
+#ifndef FDREG_OUTER
+#define FDREG_OUTER 64
+#endif
 #define FDREG_DRAW_STR2(x) #x
 #define FDREG_DRAW_STR(x) FDREG_DRAW_STR2(x)
 
@@ -319,6 +328,28 @@ static unsigned fdreg_compute(void) {
   __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
 #endif
 
+#if FDREG_STAGE == 9
+  /* STAGE 9 -- IS THE INITIALISATION ITSELF LOST?
+     Boot 41 swept the outer trip count and the wrong answer tracked the expected one with a
+     CONSTANT offset:
+         outer 64 -> expected 576, board 906    (+330)
+         outer 32 -> expected 288, board 618    (+330)
+         outer 16 -> expected 144, board 474    (+330)
+     A fixed surplus independent of the trip count is not an iteration miscount at all: the
+     loop counts correctly and the accumulator STARTS at 330 rather than 0. That is a stale
+     stack slot, and it is directly testable without any loop.
+     This declares the accumulator exactly as stage 7 does and returns it IMMEDIATELY.
+         0   -> the initialisation lands; the surplus comes from somewhere else
+         330 -> `unsigned qc = 0` did not take effect and the slot holds prior data
+     Everything else -- the leaves, the guard, the frame -- is kept identical so the slot
+     lands at the same offset. */
+  {
+    unsigned qc = 0;
+    FDREG_PAD_SUM()
+    if (s == 0xFFFFFFFFu) return 0;
+    return qc;
+  }
+#endif
 #if FDREG_STAGE == 7
   /* STAGE 7 -- the OFF-SQLITE reproduction of the four-way conjunction.
    *
@@ -348,7 +379,7 @@ static unsigned fdreg_compute(void) {
        PAD=0 it is 0, and neither is 0xFFFFFFFF. */
     FDREG_PAD_SUM()
     if (s == 0xFFFFFFFFu) return 0;
-    for (p = 0; p < 64; p++)
+    for (p = 0; p < (FDREG_OUTER); p++)
       for (k = 0; k < FDREG_N; k++) {
         const char *volatile z = fdreg_defs[k].zName;   /* cap field, inner resetting counter */
         (void)z;
