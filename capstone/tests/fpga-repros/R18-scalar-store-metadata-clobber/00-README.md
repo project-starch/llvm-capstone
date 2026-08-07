@@ -11,10 +11,66 @@ byte-identical binary computes the correct answer under QEMU and the wrong one o
 variable is hit depends only on where the compiler placed it. If a *loop-control* variable lands in
 the affected position the loop runs **extra iterations** instead of producing a wrong value.
 
+## THE TRIGGER (2026-08-08) — read this first
+
+A plain `sw` whose **data register was produced by `movc rd, zero`** corrupts a *different* scalar in
+the same 16-byte D-cache row. Nothing else about the store matters.
+
+Four arms, one boot each, identical victim and row-mate addresses, identical store counts, same
+region, a passing `k800` control and the `c8` anchor in every boot:
+
+| arm | the row-mate's per-outer-pass reset store | outer loop | victim |
+|---|---|---|---|
+| `gz0` | `movc a0, zero; sw a0, 0x8(a1)` | short | **9 — DAMAGED** |
+| `gzn` | `movc a0, zero; sw a0, 0x8(a1)` + 2 nops | padded to match a clean arm | **9 — DAMAGED** |
+| `gzl` | `ldc; lw; sw` — stores the **value zero**, from a load | padded | 576 — clean |
+| `gzs` | `lui; addi; sw` — stores a nonzero | padded | 576 — clean |
+
+Correct is 576 in every arm. What this excludes, by measurement rather than by argument:
+
+* **the stored VALUE** — `gzl` stores zero and is clean;
+* **the store COUNT** — identical across all four;
+* **the outer-loop instruction count** — `gzn` is padded to a clean arm's length and still fails;
+* **region** — the victim here is a GLOBAL; the same effect appears on the stack (`c8`);
+* **the victim's address, cache set and bank-row** — unchanged across the gap arms (`s0-0x34`);
+* **the capability store's distance and row-adjacency** — `rmC` fails with it two rows away;
+* **the compiler** — the emitted victim RMW is a plain `lw`/`addiw`/`sw` on a fixed offset.
+
+### The path to the misclassification is traced; the CORRUPTION path is NOT
+
+`movc` is a capstone-FLU op, so `commit_stage.sv:279` writes `result_metadata` into the cap-metadata
+regfile under the **integer** GPR write-enable (`issue_read_operands.sv:1663-1665`, `.we_i(we_pack)`,
+not `cap_we_pack`); `:1140` takes `cap_data.cap_metadata_b` **ungated by opcode**; it flows through
+`load_store_unit.sv:1013` -> `store_unit.sv:345` -> `store_buffer.sv:173` -> `wt_dcache_mem.sv:138`,
+`st_wr_cap = |wr_user_i`. So an ordinary `sw` is classified as a capability store **by value**.
+`compress_cap` of a null capability is `0x08000000` (`ariane_pkg.sv:754-772`).
+
+**What that misclassification then does to a neighbouring scalar, we could not determine, and the
+obvious answer is wrong.** If bank 1 received `wr_user_i` (`wt_dcache_mem.sv:158`) the constant
+`0x08000000` would be somewhere in memory. Raw, unmasked readbacks say it is not:
+
+| probe | reads | raw value |
+|---|---|---|
+| `craw` | the stack victim at `c8`'s geometry | `0x00000237` — a clean count |
+| `graw` | the global victim | `0x00000009` — a clean count |
+| `gztr` | the row-mate itself | `0x00000009` — a clean count |
+
+The victim is written with **zero** and counts up from there. No metadata lands anywhere. This also
+refutes a write-buffer 8-byte-merge candidate, whose prediction was `twin = 0x08000009`.
+
+**Three mechanisms have been proposed and all three are refuted:** a writeback-forwarding validity
+gate (the RTL has the same expression in both ternary arms, so the fix was a no-op), a
+"bank 0 at the same byte lanes" rule (its own control came back damaged), and the dual-bank write
+above. **We are not proposing a fourth.** The ask is for the corruption path, from someone who can
+run the RTL.
+
+Build flags per arm are recorded in the staged `.qemu-pass` markers; all four are
+`FDREG_STAGE=37, GVICT=3, GTWIN=2`, differing only as the table above describes.
+
 ## What is established
 
-* **Reproducible and deterministic.** Four frozen, checksummed images below. `c8` returned
-  67699255 on **seven** separate boots (cycles 44067–44098).
+* **Reproducible and deterministic.** Fifteen frozen, checksummed artifacts in `src/`. `c8` returned
+  67699255 on **fourteen** consecutive boots (cycles 44013–44111).
 
   *Correction (2026-08-07).* An earlier revision said the failing arm and its control "differ only
   in where the `-O0` allocator placed the accumulator". That was wrong — they also differ in entry
@@ -46,7 +102,7 @@ the affected position the loop runs **extra iterations** instead of producing a 
 | ruled out | how |
 |---|---|
 | an over-wide capability store | a witness immediately above the store reads back bit-exact after 576 stores; `extract_transfer_size` pins STC at 8 bytes/one beat |
-| store misclassification via the write-user sideband (`st_wr_cap = \|wr_user_i` → dual-bank write) | directed test `scalar-store-cap-operand.S`: a plain `sw` whose data register **provably** holds a real capability (CAPPRINT: Type 1, Perm 7, bounds set) is **not** misclassified and does **not** dual-bank write — **PASS** |
+| ~~store misclassification via the write-user sideband~~ **SCOPE CORRECTED 2026-08-08, see below** | directed test `scalar-store-cap-operand.S`: a plain `sw` whose data register holds a **real, valid** capability (CAPPRINT: Type 1, Perm 7, bounds set) is **not** misclassified — **PASS**. That result stands, but it does **not** cover a data register produced by `movc rd, zero`, which is what the trigger above actually requires. |
 | any single-address anchor for the victim | fitted against all builds; best 13/19 |
 | distance from the capability store | same value reproduced at 3× the distance, different row, different frame size |
 
@@ -54,12 +110,24 @@ We also do **not** recommend gating the WB-port metadata forward on validity: `i
 already has `cap_result.result_metadata` in **both** arms of its ternary, so that change would be a
 **no-op**. We nearly sent that as a fix and withdrew it.
 
-## The one lead we have not tested
+## The outer-pass lead — TESTED 2026-08-08, and it was right
 
 All three measured reset points — **9, 72, 558** — are multiples of the inner trip count (9), i.e.
-they land exactly on **outer-pass boundaries** (p ≈ 1/729 under a uniform-over-iterations null). That
-points at something happening **once per outer pass** rather than once per iteration. Stage 28
-(`FDREG_INNER`) decouples the inner trip count so this is falsifiable; built, not yet run.
+they land on **outer-pass boundaries**, pointing at something happening once per outer pass rather
+than once per iteration. That is now confirmed and localised: the once-per-outer-pass event is the
+row-mate's **reset store**, and the trigger table at the top of this file is the controlled test of
+it. The lead was correct; what was wrong was every mechanism proposed to explain it.
+
+## An unresolved tension the RTL owner should know about
+
+`st_wr_cap = |wr_user_i` (`wt_dcache_mem.sv:138`) classifies by the *value* of the metadata bits, so
+a **real** capability in a store's data register should be misclassified just as a null one is. But
+the directed test `scalar-store-cap-operand.S` puts a real, valid capability there and **passes**,
+while `movc rd, zero` (metadata `0x08000000`) **fails** on the board. Both observations are solid and
+we cannot reconcile them. Possibilities we could not distinguish from outside the RTL: the directed
+test never gets the metadata onto `wr_user_i` (it runs bare-metal, not in a domain after `capenter`),
+or the two differ in some path we have not found. This is a concrete question for whoever can run the
+RTL, and it may be the fastest way in.
 
 ## Why we cannot take it further from here
 
