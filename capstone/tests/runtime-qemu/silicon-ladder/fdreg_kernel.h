@@ -342,7 +342,33 @@ static unsigned fdreg_compute(void) {
          0   -> the initialisation lands; the surplus comes from somewhere else
          330 -> `unsigned qc = 0` did not take effect and the slot holds prior data
      Everything else -- the leaves, the guard, the frame -- is kept identical so the slot
-     lands at the same offset. */
+     lands at the same offset.
+
+     THE CANDIDATE, from static analysis. `unsigned qc = 0` does NOT compile to a store of the
+     zero register at -O0. It compiles to a CAPABILITY MOVE from x0, and that result is what
+     gets stored:
+
+         3049c: 5b 15 00 14   movc a0, zero
+         304a0: 23 a0 a5 00   sw   a0, 0x0(a1)
+
+     Counted across these rungs: `movc rd, zero` appears 2-4 times per fdreg_compute and
+     `sw/sd zero` appears ZERO times. So every zero-initialisation here goes through MOVC from
+     x0, and if that instruction yields a non-zero value the accumulator starts at it while
+     every later increment stays correct -- precisely a constant offset independent of the
+     trip count, which is what boot 41 measured.
+
+     NOT YET A MECHANISM: the same `a0` is stored to a second slot four instructions later, and
+     if that were the outer counter the loop could not run at all -- yet it runs its full
+     576/288/144. Either that slot is re-initialised in the loop preamble (likely at -O0, not
+     verified) or the two stores do not share the faulty value. Read that out of the
+     disassembly before believing this.
+
+     NOTE this is the opposite half of C-14 from the one that was fixed: C-14 is MOVC
+     destroying its SOURCE, this would be MOVC producing the wrong DESTINATION from x0. An
+     earlier audit cleared `movc rd, zero` on the source side only -- ariane_regfile_ff.sv
+     forces mem[0] to 0 every cycle so the destructive write cannot take -- which says nothing
+     about what rd receives. And the C-14 fix is provably INERT at -O0, which is what these
+     rungs and the entire SQLite domain build at. */
   {
     unsigned qc = 0;
     FDREG_PAD_SUM()
