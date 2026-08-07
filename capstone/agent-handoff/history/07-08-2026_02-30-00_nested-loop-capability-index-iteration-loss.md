@@ -895,3 +895,42 @@ iteration, different clobber value.
   (`issue_read_operands.sv:690`, and the rs1/rs3 siblings above and below it).
 * And/or classify capability stores by OPCODE rather than by `|wr_user_i` (`wt_dcache_mem.sv:138`).
 * Either is an RTL change requiring a bitstream reflash -- the project lead's call.
+
+## UPDATE 2026-08-07 (simulation, condition PROVEN created): the store-misclassification family is DEAD
+
+The audit's first recommendation was a directed test that actually CREATES the condition, rather
+than one that hopes for it. `verif/tests/custom/capstone/scalar-store-cap-operand.S` does exactly
+that: the stored register is written by a capstone FLU op (`CINCOFFSET`), so its metadata shadow
+holds a real capability, and it is then stored with a PLAIN `sw` into a bank-1 slot with witnesses
+in the other three slots of the row.
+
+**`CAPPRINT` proves the condition existed** — the console shows
+`Reg[14]: Cursor: 0000000080003000 | Metadata-> Revnode_id: 2 | Type: 1 | Perm: 7 | Start/End set`.
+A negative result is worthless without that; five earlier simulation rounds were clean precisely
+because they never created the trigger (they stored `addi` results, and `ex_stage.sv:1081` zeroes
+the FLU writeback for non-capstone ops).
+
+**Result: PASS.** The target slot received the stored value, the dual-bank sibling at the same byte
+lanes was untouched, and both other witnesses kept their sentinels.
+
+**So a plain `sw` carrying real capability metadata is NOT misclassified and does NOT dual-bank
+write.** The whole family — the retracted chain and its variants — is closed. `issue_read_operands`,
+`st_wr_cap = |wr_user_i` and the `bank_wdata[1]` mux are not producing this.
+
+### This also downgrades the one thing that looked reportable on its own
+
+`st_wr_cap = |wr_user_i` classifying by value, plus `compress_cap(null) = 0x08000000` rather than
+zero, remains a true statement about the code. But a directed test that puts a real (non-zero)
+capability metadata word behind a plain scalar store shows **no consequence at all**. Either the
+routing is gated somewhere the code reading missed, or the misclassification has no observable
+effect. **Do not hand it to the hardware owner as a defect** — it is a code-reading concern that
+the one test able to confirm it does not confirm.
+
+### Where that leaves R-18
+
+A reproducible, deterministic silicon defect with a **necessary condition** (victim in the upper 8
+bytes of its 16-byte row, 9/9) and **no mechanism**. Every mechanism proposed so far is refuted.
+The remaining untested lead is the outer-pass alignment: all three measured reset points (9, 72,
+558) are multiples of the inner trip count, which points at something happening once per outer pass
+rather than per iteration. Stage 28 (`FDREG_INNER`) decouples the inner trip count so that is
+falsifiable; it is built but not yet run on the board.

@@ -172,6 +172,9 @@
 #define FDREG_WITSEL 0
 #endif
 /* FDREG_WITPAD -- moves stage 13's witnesses onto the damage window. See stage 13. */
+#ifndef FDREG_INNER
+#define FDREG_INNER FDREG_N
+#endif
 #ifndef FDREG_SENTINEL
 #define FDREG_SENTINEL 1000000u
 #endif
@@ -481,6 +484,44 @@ static unsigned fdreg_compute(void) {
   __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
 #endif
 
+#if FDREG_STAGE == 28
+  /* STAGE 28 -- DOES THE DEFICIT TRACK THE INNER TRIP COUNT? The outer-pass lead.
+   *
+   * All three measured reset points -- 9, 72, 558 -- are multiples of 9, the inner trip count,
+   * i.e. they land exactly on OUTER-PASS BOUNDARIES. Under a uniform-over-iterations null that is
+   * p ~ 1/729. A per-iteration event has no reason to align that way; something that happens ONCE
+   * PER OUTER PASS does. The obvious candidate is the `k = 0` re-initialisation store, which at the
+   * failing geometry sits at 0x14 (bank 0, lanes 4-7) whose dual-bank sibling is exactly 0x1c --
+   * the victim.
+   *
+   * This decouples the inner trip count from the array size so the prediction is falsifiable:
+   *
+   *     FDREG_INNER=9  (default)  correct = 64*9  = 576, deficits should be multiples of 9
+   *     FDREG_INNER=12            correct = 64*12 = 768, deficits should be multiples of 12
+   *     FDREG_INNER=6             correct = 64*6  = 384, deficits should be multiples of 6
+   *
+   * If the deficit tracks FDREG_INNER, the culprit is the per-outer-pass store and NOT the victim's
+   * own per-iteration store -- which would also finally distinguish c8 from gp16. If the deficit
+   * stays a multiple of 9 regardless, the alignment was a coincidence of three samples.
+   *
+   * The index is taken modulo FDREG_N so the array access stays in range for any inner count.
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+    int p, k;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < (FDREG_INNER); k++) {
+        const char *volatile z = fdreg_defs[k % FDREG_N].zName;
+        (void)z;
+        qc++;
+      }
+    return qc;
+  }
+#endif
 #if FDREG_STAGE == 27
   /* STAGE 27 -- LOST INCREMENTS, or RESET TO ZERO? A sentinel start settles it.
    *
