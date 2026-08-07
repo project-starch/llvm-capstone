@@ -2374,12 +2374,60 @@ built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are
 > **What actually discriminates, on present evidence: the row-mate's STORE PATTERN, not its
 > position.** `rmB` and `gnt` place the row-mate at the SAME offset (+8, same bank as the victim);
 > `rmB`'s `p` is only incremented once per outer pass and is CLEAN, `gnt`'s is re-zeroed at the top
-> of every outer pass and is DAMAGED. The implicated store is the `movc rd, zero; sw rd` pair — and
-> `compress_cap` of a null capability is `0x08000000`, the constant already observed in `0x08000237`.
+> of every outer pass and is DAMAGED.
 >
-> Still NOT separated: "is re-zeroed" versus "is stored 9x more often". `rmB` vs `gnt` also crosses
-> region, though region is now independently excluded. The next arm should hold the store count fixed
-> and vary only whether the row-mate's store writes zero.
+> **2026-08-08 (later still) — THE TRIGGER IS ESTABLISHED; THE MECHANISM IS NOT.**
+>
+> Four arms, identical victim/row-mate addresses, identical store counts, same region, in-boot
+> `k800` control and `c8` anchor in every boot:
+>
+> | arm | row-mate's per-pass reset store | outer-loop length | victim |
+> |---|---|---|---|
+> | `gz0` | `movc a0, zero; sw` | short | **9 — damaged** |
+> | `gzn` | `movc a0, zero; sw` + 2 nops | **padded to match** | **9 — damaged** |
+> | `gzl` | `ldc; lw; sw` — stores the VALUE ZERO from a load | padded | 576 — clean |
+> | `gzs` | `lui; addi; sw` — nonzero | padded | 576 — clean |
+>
+> **The trigger is the capability METADATA on the store's data register.** Not the stored value
+> (`gzl` stores zero and is clean), and not the outer-loop instruction count (`gzn` is padded to a
+> clean arm's length and is still damaged — this was a real confound, caught by audit, and it is now
+> excluded). The producing instruction is `movc rd, zero`, whose `compress_cap` of a null capability
+> is `0x08000000`.
+>
+> **The RTL path for the trigger is traced and holds:** `movc` is a capstone-FLU op →
+> `commit_stage.sv:279` writes `result_metadata` into the cap-metadata regfile under the INTEGER GPR
+> write-enable (`issue_read_operands.sv:1663-1665`, `.we_i(we_pack)`) → `:1140`
+> `cap_data.cap_metadata_b` is taken UNGATED by opcode → `load_store_unit.sv:1013` → `store_unit.sv:345`
+> → `store_buffer.sv:173` → `wt_dcache_mem.sv:138` `st_wr_cap = |wr_user_i`. An ordinary `sw` is
+> therefore classified as a capability store by VALUE.
+>
+> **But the recorded dual-bank chain is REFUTED as the corruption path, by direct measurement.**
+> If bank 1 received `wr_user_i` (`wt_dcache_mem.sv:158`) the constant `0x08000000` would appear in
+> memory. Raw, unmasked readbacks say it does not, anywhere:
+>
+> | probe | reads | raw value |
+> |---|---|---|
+> | `craw` | stack victim, `c8` geometry | `0x00000237` — clean count |
+> | `graw` | global victim | `0x00000009` — clean count |
+> | `gztr` | the row-mate (twin) itself | `0x00000009` — clean count |
+>
+> The victim is written with **zero** and counts up; no metadata value lands in the victim, and none
+> lands in the twin. That also refutes the write-buffer 8-byte-merge candidate, whose specific
+> prediction was `twin = 0x08000009`.
+>
+> **Instrument correction:** every earlier R-18 number masked the victim to 16 bits, so "lost N
+> increments" and "overwritten with metadata, then counted up" were indistinguishable in all of them.
+> The raw reads above settle it in favour of the former. `0x08000237` from the older `gz12` build is
+> a separate observation and is not reproduced by any arm here.
+>
+> **Also corrected:** retraction item 3 above reads the `bar1` datum as refuting a metadata
+> mechanism. That reading is withdrawn — the `lw` between `bar1`'s `movc` and its `sw` scrubs the
+> destination's shadow (a non-FLU writeback carries `cap_result = '0`, `scoreboard.sv:246`), so
+> `bar1` never produced a tainted store and could not have tested this. The same false premise was
+> in `fdreg_kernel.h` and is fixed there.
+>
+> **Status: a minimal, reproducible, controlled TRIGGER with no established corruption path.** Do not
+> send a defect report naming a mechanism.
 >
 > **Two corrections to the record made in the same session.** (1) An earlier reading of this
 > experiment claimed the arms' absolute addresses moved with the frame; they do not — `s0` is the

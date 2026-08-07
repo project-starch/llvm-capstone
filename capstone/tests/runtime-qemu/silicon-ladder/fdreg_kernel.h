@@ -221,6 +221,21 @@
 #ifndef FDREG_GAPP
 #define FDREG_GAPP 0
 #endif
+#ifndef FDREG_OUTERNOP
+#define FDREG_OUTERNOP 0
+#endif
+#ifndef FDREG_RAWTWIN
+#define FDREG_RAWTWIN 0
+#endif
+#ifndef FDREG_RAWVICT
+#define FDREG_RAWVICT 0
+#endif
+#ifndef FDREG_RESETSRC
+#define FDREG_RESETSRC 0
+#endif
+#ifndef FDREG_RESETVAL
+#define FDREG_RESETVAL 0
+#endif
 #ifndef FDREG_GTWIN
 #define FDREG_GTWIN 1
 #endif
@@ -599,11 +614,43 @@ static unsigned fdreg_compute(void) {
    */
   {
     static volatile unsigned gc[16] __attribute__((aligned(16)));
+#if (FDREG_RESETSRC) == 1
+    static volatile unsigned fdreg_resetsrc = (FDREG_RESETVAL);
+#endif
     int p, k;
     gc[(FDREG_GVICT)] = 0;
     gc[(FDREG_GTWIN)] = 0;
     for (p = 0; p < (FDREG_OUTER); p++) {
-      gc[(FDREG_GTWIN)] = 0;                          /* mirrors `k = 0` at the top of each pass */
+      /* FDREG_RESETVAL isolates the stored VALUE from the store COUNT. At -O0 `x = 0` emits
+         `movc rd, zero` -- a register whose capability shadow is compress_cap(NULL) = 0x08000000 --
+         while `x = <nonzero>` emits lui/addi, which ex_stage.sv:1081 forwards with ZERO metadata.
+         Same address, same number of stores, same loop: only the metadata on the store's data
+         register differs. Clean at a non-zero reset => the VALUE/metadata is the trigger; damaged
+         => it is the store count and the 0x08000000 story is dead. */
+#if (FDREG_OUTERNOP) > 0
+      /* Instruction-count padding for the outer loop, with the reset store left EXACTLY as gz0's
+         `movc a0, zero; sw a0`. Both arms that came back CLEAN (gzs +2 insns/pass, gzl +3) also
+         LENGTHENED the outer loop, so "the data register's metadata" and "the outer loop got
+         longer" are perfectly confounded across gz0/gnt/gzs/gzl -- a timing/pipeline-window
+         mechanism fits all four points with no metadata at all. This knob breaks that: same
+         movc-sourced reset, matched loop length.
+           still damaged -> the loop-length alternative is dead, metadata survives
+           now clean     -> gzs/gzl were cured by loop length and the metadata claim is REFUTED */
+      __asm__ volatile("nop\n\tnop" ::: "memory");
+#endif
+#if (FDREG_RESETSRC) == 1
+      /* RESETSRC=1 breaks the value/metadata confound. gz0 (reset 0 via `movc`) and gzs (reset
+         nonzero via lui/addi) differ in BOTH the stored value and the data register's capability
+         metadata, so that pair cannot say which one is the trigger. Here the stored VALUE is
+         whatever RESETVAL is -- including 0 -- but it arrives through a LOAD, so the data register
+         is not `movc rd, zero` and carries no null-capability shadow.
+           RESETVAL=0, RESETSRC=1 clean   -> the METADATA is the trigger, not the value zero
+           RESETVAL=0, RESETSRC=1 damaged -> storing the VALUE zero suffices; metadata is irrelevant
+                                             and the 0x08000000 story is dead */
+      gc[(FDREG_GTWIN)] = fdreg_resetsrc;
+#else
+      gc[(FDREG_GTWIN)] = (FDREG_RESETVAL);         /* mirrors `k = 0` at the top of each pass */
+#endif
       for (k = 0; k < FDREG_N; k++) {
         const char *volatile z = fdreg_defs[k].zName; /* the capability store, unchanged */
         (void)z;
@@ -611,7 +658,25 @@ static unsigned fdreg_compute(void) {
         gc[(FDREG_GVICT)]++;                          /* the victim     -- bank 1 */
       }
     }
+#if (FDREG_RAWTWIN) == 1
+    /* The twin in FULL. The packed return masks it to 4 bits, which makes 0x08000009 and
+       0x00000009 identical -- discarding the one datum that would be a DIRECT positive
+       observation of compress_cap(NULL) landing in memory, rather than a differential. */
+    return gc[(FDREG_GTWIN)];
+#endif
+#if (FDREG_RAWVICT) == 1
+    /* RAW: return the victim's FULL 32 bits, unmasked.
+       The packed return below masks the victim to 16 bits -- the SAME instrument hole this
+       investigation already criticised in stage 32, reintroduced here. It matters concretely:
+       an earlier build returned 0x08000237 = 0x08000000 + 567, and 0x08000000 is compress_cap
+       of a NULL capability. Under the mask that reads as a clean "567, lost 9 increments" when
+       the slot may in fact be holding CAPABILITY METADATA plus a count. Until a raw read is
+       taken, "the victim lost N increments" and "the victim was overwritten with metadata and
+       then counted up" are indistinguishable in every number this stage has produced. */
+    return gc[(FDREG_GVICT)];
+#else
     return ((gc[(FDREG_GTWIN)] & 0xFu) << 16) | (gc[(FDREG_GVICT)] & 0xFFFFu);
+#endif
   }
 #endif
 #if FDREG_STAGE == 36
@@ -1296,6 +1361,12 @@ static unsigned fdreg_compute(void) {
         (void)z;
         qc++;
       }
+#if (FDREG_RAWVICT) == 1
+    /* RAW: qc unmasked. Every number this stage has ever produced masked qc to 16 bits, so a slot
+       holding 0x08000237 (= compress_cap(NULL) 0x08000000 + 567) is indistinguishable from a clean
+       567. c8's entire "lost exactly 9 increments" reading rests on the masked value. */
+    return qc;
+#endif
     return ((unsigned)(p & 0xFFF) << 20) | ((unsigned)(k & 0xF) << 16) | (qc & 0xFFFFu);
   }
 #endif
@@ -1370,8 +1441,19 @@ static unsigned fdreg_compute(void) {
    *
    * Our own inner loop contains the taint sequence exactly:
    *     ldc  a0, 0x0(a0)     <- a0 receives a CAPABILITY (the volatile read-back of z)
-   *     lw   a0, 0x0(a1)     <- a0 becomes the counter; `lw` is not a capstone op, so
-   *                             a0's shadow metadata is never cleared
+   *     lw   a0, 0x0(a1)     <- a0 becomes the counter
+   *
+   * *** THE PREMISE BELOW IS FALSE -- corrected 2026-08-08 by an RTL audit, keep the correction
+   * with it so it is not re-derived. *** This used to read "`lw` is not a capstone op, so a0's
+   * shadow metadata is never cleared". It IS cleared: the cap-metadata regfile is written under
+   * the INTEGER GPR write-enable (`issue_read_operands.sv:1663-1665`, `.we_i(we_pack)` not
+   * `cap_we_pack`), and a non-FLU writeback carries `cap_result = '0` (`scoreboard.sv:246`), so
+   * `commit_stage.sv:279` writes a zero shadow. Every `lw` scrubs its destination's shadow.
+   * That is also why the `bar1` barrier arm returned 567 identical to its nop control and was
+   * mis-read as refuting a metadata mechanism: the `lw` between the `movc` and the `sw` had
+   * already scrubbed the taint, so bar1 never produced a tainted store at all. The construct that
+   * DOES produce one is `movc rd, zero` feeding a `sw` directly, with nothing in between --
+   * measured 2026-08-08 (gz0/gzn damaged, gzl/gzs clean)
    *     sw   a0, 0x0(a1)     <- carries the stale metadata -> st_wr_cap fires
    *
    * The value `ldc` loads is DISCARDED ((void)z), so a0 is free to clobber immediately

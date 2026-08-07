@@ -290,3 +290,71 @@ to a non-zero sentinel each outer pass instead of to 0.
 **Measurement note:** the `cycles / 76.58 = iterations` conversion is calibrated for the `c8` loop
 body. `gtw`/`gnt` add a global RMW per iteration, so their cycle counts (52659 / 54857) must not be
 converted with that constant; no iteration count is claimed for them.
+
+---
+
+# 2026-08-08 (final) — the TRIGGER is established; the MECHANISM is refuted
+
+## The four-arm control
+
+Identical victim and row-mate addresses, identical store counts, same region, `k800` control and
+`c8` anchor in every boot (`c8` = 67699255 in all of them, fourteen consecutive):
+
+| arm | row-mate's per-pass reset | outer loop | victim |
+|---|---|---|---|
+| `gz0` | `movc a0, zero; sw` | short | **9 — damaged** |
+| `gzn` | `movc a0, zero; sw` + 2 nops | **padded to a clean arm's length** | **9 — damaged** |
+| `gzl` | `ldc; lw; sw` — stores the VALUE ZERO, from a load | padded | 576 — clean |
+| `gzs` | `lui; addi; sw` — nonzero | padded | 576 — clean |
+
+**The trigger is the capability metadata on the store's data register.** Three alternatives are
+excluded by measurement, not by argument:
+
+* **the stored value** — `gzl` stores zero and is clean;
+* **the store count** — identical across all four;
+* **the outer-loop instruction count** — this was a REAL confound (every clean arm had also
+  lengthened the loop; it was caught by audit, not by me), and `gzn` kills it: padded to match and
+  still damaged.
+
+## The mechanism is NOT the dual-bank write
+
+The chain recorded earlier — `st_wr_cap = |wr_user_i` (`wt_dcache_mem.sv:138`) → both banks written
+(`:230-238`) → bank 1 receives `wr_user_i` (`:158`) — predicts that `0x08000000` appears in memory.
+Raw unmasked readbacks say it does not, anywhere:
+
+| probe | reads | raw |
+|---|---|---|
+| `craw` | stack victim at `c8`'s geometry | `0x00000237` |
+| `graw` | global victim | `0x00000009` |
+| `gztr` | the row-mate itself | `0x00000009` |
+
+The victim is written with **zero** and counts up. No metadata lands in the victim, and none lands
+in the twin — which also refutes the write-buffer 8-byte-merge candidate, whose prediction was
+`twin = 0x08000009`.
+
+The trigger's RTL path is nonetheless traced and holds: `movc` is a capstone-FLU op →
+`commit_stage.sv:279` → cap-metadata regfile written under the INTEGER GPR write-enable
+(`issue_read_operands.sv:1663-1665`) → `:1140` `cap_metadata_b` ungated by opcode →
+`load_store_unit.sv:1013` → `store_unit.sv:345` → `store_buffer.sv:173` → `st_wr_cap`. So an
+ordinary `sw` really is classified as a capability store by value. What that misclassification then
+does to a neighbouring scalar is unknown.
+
+## Instrument correction, and a false premise removed
+
+Every earlier R-18 number masked the victim to 16 bits, so "lost N increments" and "overwritten
+with metadata, then counted up" were indistinguishable in all of them — including the `c8` anchor
+and the sentinel result. The raw reads settle it in favour of lost increments. `0x08000237` from
+the older `gz12` build is a separate observation, not reproduced by any arm here.
+
+The `bar1` datum does NOT refute a metadata mechanism, contrary to what `ISSUES.md` and
+`fdreg_kernel.h` both said. The `lw` between `bar1`'s `movc` and its `sw` scrubs the destination's
+shadow (non-FLU writeback carries `cap_result = '0'`, `scoreboard.sv:246`), so `bar1` never produced
+a tainted store. Both texts are corrected.
+
+## Where this leaves the handover
+
+A minimal, reproducible, four-way-controlled TRIGGER with **no established corruption path**. That
+is a good thing to hand over and a bad thing to attach a mechanism to — the mechanism has now been
+wrong three times (the WB-forwarding chain, the bank-0-same-lanes rule, the dual-bank write). The
+report should state the trigger, the excluded alternatives, and the refuted mechanisms, and ask the
+RTL owner for the path.
