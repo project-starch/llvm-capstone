@@ -201,12 +201,30 @@ fi
 # on ONE probe that never entered -- SHA5 last, no SHA6 -- producing zero information about any
 # code under test. The very next boot staged three redraws of one probe in a single image and
 # got 3 of 3 returns. This gate refuses the eighth single-probe load.
+#
+# 2026-08-07: this gate was INERT and had been for its whole life. The test was `b'SHA6:' in d`
+# over the WHOLE transcript, but the same skill mandates a known-good control as rung 1 of every
+# boot, and that control always emits SHA6. So every file scored "clean" no matter how many of its
+# probes stalled, `_recent_stalls` never left 0, and the block below was unreachable in practice --
+# including across the five stage-34 stalls it was written to catch. Same class of defect as a
+# `grep -c "A\|B"` that cannot say which matched: the check was real, its scope was wrong.
+#
+# Scope it to the LAST rung of each transcript instead. That is the position an unknown occupies
+# under the ordering rule, so it is the one whose stall carries information.
 _recent_stalls=0
-for _t in $(ls -t /tmp/capstone/boot*-raw.txt /tmp/capstone/boot*.txt /tmp/capstone/*-run.txt 2>/dev/null | head -3); do
+for _t in $(ls -t /tmp/capstone/boot*-raw.txt /tmp/capstone/boot*.txt /tmp/capstone/*-run.txt /tmp/capstone/baked-rungs.txt 2>/dev/null | head -3); do
   python3 - "$_t" <<'PYEOF' || _recent_stalls=$(( _recent_stalls + 1 ))
 import sys, re
 d = open(sys.argv[1], 'rb').read()
-sys.exit(0 if (b'SHA6:' in d or b'ENT1' in d) else 1)
+# Split on the per-rung banner the drivers emit ("===== <rung> (pos N) ====="), and examine
+# only the final block. Split on that banner ALONE: the transcripts also carry
+# "### RUNG n/N <rung> ###" lines, and including those over-splits so the last block is the
+# trailing "END rc=" fragment, which never contains SHA6 -- that scored a fully successful
+# 4-rung boot as a stall. Verified both ways against gvfix-run.txt (all four returned -> clean)
+# and prov/prov2/prov3-run.txt (probe stalled -> caught).
+blocks = re.split(rb'^={3,}\s*\S+.*$', d, flags=re.M)
+tail = blocks[-1] if len(blocks) > 1 else d
+sys.exit(0 if (b'SHA6:' in tail or b'ENT1' in tail) else 1)
 PYEOF
 done
 if (( _recent_stalls >= 3 )); then
@@ -249,6 +267,35 @@ if [[ -n "$RUNGS" ]]; then
     [[ -f "$ORACLES/$r.oracle" ]] || bad "$r has no oracle in $ORACLES"
     shas+="$(sha256sum "$OVERLAY/$r.dom" | cut -d' ' -f1)\n"
   done
+  # C14 INITRAMFS-MEMBERSHIP GATE. Being in overlay/ is NOT being in the image.
+  #
+  # buildroot does not track overlay/ -> cpio, so a .dom copied in AFTER the last
+  # `A=linux-rebuild` is simply absent from the initramfs the board boots. What makes this
+  # worth a hard gate rather than a note is how the runner then reports it: a missing file
+  # makes `lpc` exit non-zero, `DN_$rc` still matches DN_\d, so wedged=False and got=None,
+  # and run_baked_rungs_fpga.py:136-141 prints "NO SHA6 -- ENTRY STALL (R-16) ... REDRAW".
+  # The operator is told to redraw an image that was never on the board. Five stalls on
+  # 2026-08-07 were investigated as R-16 with this possibility never checked, and at the
+  # time this gate was written gvf0.dom and gvf6.dom were both in overlay/ and both absent
+  # from a rootfs.cpio built eight minutes earlier.
+  #
+  # The cpio is uncompressed, so a plain byte-substring test is exact and needs no tooling.
+  CPIO=${CPIO:-$(dirname "$OVERLAY")/../build/images/rootfs.cpio}
+  if [[ -f "$CPIO" ]]; then
+    for r in $RUNGS; do
+      [[ -f "$OVERLAY/$r.dom" ]] || continue
+      if ! python3 - "$CPIO" "$OVERLAY/$r.dom" <<'PY'
+import sys
+cpio=open(sys.argv[1],'rb').read()
+sys.exit(0 if open(sys.argv[2],'rb').read() in cpio else 1)
+PY
+      then
+        bad "$r.dom is staged in $OVERLAY but its bytes are NOT in $(basename "$CPIO") -- it will not exist on the board, and the runner will misreport that as an R-16 entry stall. Rebuild: make build LINUX_PAYLOAD=1 A=linux-rebuild, THEN A=opensbi-rebuild."
+      fi
+    done
+  else
+    say "warn" "rootfs.cpio not found at $CPIO -- cannot verify the staged .dom files are actually in the initramfs"
+  fi
   # C13 QEMU-PASS GATE. A rung must have a RECORDED QEMU pass before it costs a boot.
   # 2026-08-07: a build was staged and run while its QEMU oracle line said NO RESULT -- the line was
   # printed and not acted on. Whether or not that build was sound, nothing should reach the board

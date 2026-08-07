@@ -16,11 +16,28 @@ HOST="$SCRIPT_DIR/${BASE}_host.c"
 
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/silicon-ladder}
 mkdir -p "$OUT_DIR"
-DOM="$OUT_DIR/${BASE}.dom"
+# RUNG_NAME names the artifacts when one <base> is built at many parameterisations
+# (fdreg is built at a dozen FDREG_* settings per session). Without it every arm
+# overwrites $OUT_DIR/<base>.dom and the marker written below vouches for whichever
+# build ran last -- the stale-artifact failure this gate exists to prevent.
+RUNG_NAME=${RUNG_NAME:-$BASE}
+DOM="$OUT_DIR/${RUNG_NAME}.dom"
 
-cc -O0 -o "$OUT_DIR/${BASE}_host" "$HOST"
-EXPECT_DEC=$("$OUT_DIR/${BASE}_host")
-echo "oracle: $BASE = $EXPECT_DEC"
+# HOST_EXTRA_CFLAGS defaults to DOMAIN_EXTRA_CFLAGS so a parameterised rung's NATIVE
+# ORACLE is computed at the same parameterisation as the domain.
+#
+# It was previously a bare `cc -O0`, which is a silent wrong-oracle bug for any rung
+# whose kernel is selected by -D: fdreg_host.c and fdreg_app.c include the same
+# fdreg_kernel.h, so the domain built at -DFDREG_STAGE=32 was being compared against a
+# host binary built at the header's DEFAULT stage 1. The comparison then either fails
+# for the wrong reason or -- worse -- passes because two unrelated stages happen to
+# return the same number. Split as a separate variable because DOMAIN_EXTRA_CFLAGS may
+# legitimately carry target-only flags that the host `cc` would reject.
+HOST_EXTRA_CFLAGS=${HOST_EXTRA_CFLAGS:-${DOMAIN_EXTRA_CFLAGS:-}}
+# shellcheck disable=SC2086
+cc -O0 $HOST_EXTRA_CFLAGS -o "$OUT_DIR/${RUNG_NAME}_host" "$HOST"
+EXPECT_DEC=$("$OUT_DIR/${RUNG_NAME}_host")
+echo "oracle: $RUNG_NAME = $EXPECT_DEC   (host flags: ${HOST_EXTRA_CFLAGS:-none})"
 
 bash "$SCRIPT_DIR/build-ladder-domain.sh" "$APP" "$DOM"
 

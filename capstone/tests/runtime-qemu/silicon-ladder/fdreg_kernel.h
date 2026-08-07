@@ -557,67 +557,6 @@ static unsigned fdreg_compute(void) {
     return qc_out;
   }
 #endif
-#if FDREG_STAGE == 31
-  /* STAGE 31 -- IS THE MONITOR-CARVED STACK INVOLVED? Same hand-written asm, frame in a GLOBAL.
-   *
-   * Every failing image so far came out of our own LLVM fork, and the effect tracks where the -O0
-   * allocator placed a scalar. That makes the COMPILER an untested variable: we have never run a
-   * domain whose loop was written by hand. Until that is excluded, "silicon defect" is not a claim
-   * we can make -- the fault could be our codegen emitting something the hardware legitimately
-   * treats differently.
-   *
-   * This writes the whole loop in asm against a 16-byte-ALIGNED local array used as the frame, so
-   * the RELATIVE geometry is ours, not the allocator's:
-   *
-   *     f+0x00   the 16-byte capability store target (row-aligned)
-   *     f+0x14   k   -- bank 0, lanes 4-7
-   *     f+0x1c   qc  -- bank 1, lanes 4-7   <-- the victim position in the c8 geometry
-   *
-   * FDREG_ASMVICTIM selects which offset qc uses, so the same hand-written body can be run at a
-   * damaging and a non-damaging position:
-   *     0x1c  the c8 victim slot (upper half)   -> expect the defect if it is not the compiler
-   *     0x24  lower half of the next row        -> expect correct
-   *
-   * Returns qc. Oracle 576 either way; a shortfall is the finding.
-   */
-  {
-    /* THE ONLY DIFFERENCE FROM STAGE 30: the frame lives in a GLOBAL, i.e. in the domain's data
-       region, NOT on the monitor-carved stack. If the effect follows the scalars here, the stack's
-       provenance and the monitor's carve are excluded as the cause. */
-    static volatile unsigned char f[0x60] __attribute__((aligned(16)));
-    unsigned qc_out = 0;
-    unsigned i;
-    for (i = 0; i < sizeof(f); i++) f[i] = 0;
-    __asm__ volatile(
-        /* a0 = capability over the frame array */
-        "movc    a0, %1\n\t"
-        /* zero the two counters: qc at ASMVICTIM, k at 0x14 */
-        "sw      zero, %3(a0)\n\t"
-        "sw      zero, 0x14(a0)\n\t"
-        "li      t2, %4\n\t"            /* outer count */
-        "1:\n\t"
-        "sw      zero, 0x14(a0)\n\t"    /* k = 0 at the top of every outer pass */
-        "li      t3, 9\n\t"             /* inner count */
-        "2:\n\t"
-        "stc     a0, 0x0(a0)\n\t"       /* 16-byte capability store at f+0 */
-        "ldc     a1, 0x0(a0)\n\t"       /* the volatile read-back */
-        "lw      t0, %3(a0)\n\t"        /* qc RMW */
-        "addiw   t0, t0, 1\n\t"
-        "sw      t0, %3(a0)\n\t"
-        "lw      t1, 0x14(a0)\n\t"      /* k RMW */
-        "addiw   t1, t1, 1\n\t"
-        "sw      t1, 0x14(a0)\n\t"
-        "addi    t3, t3, -1\n\t"
-        "bnez    t3, 2b\n\t"
-        "addi    t2, t2, -1\n\t"
-        "bnez    t2, 1b\n\t"
-        "lw      %0, %3(a0)\n\t"
-        : "=r"(qc_out)
-        : "r"(&f[0]), "r"(0), "i"(FDREG_ASMVICTIM), "i"(FDREG_OUTER)
-        : "a0", "a1", "t0", "t1", "t2", "t3", "memory");
-    return qc_out;
-  }
-#endif
 #if FDREG_STAGE == 34
   /* STAGE 34 -- IS IT THE REGION, OR THE ADDRESS CAPABILITY'S PROVENANCE?
    *
@@ -753,7 +692,36 @@ static unsigned fdreg_compute(void) {
   }
 #endif
 #if FDREG_STAGE == 30
-  /* STAGE 30 -- IS THE COMPILER INVOLVED AT ALL? Hand-written assembly, same geometry.
+  /* STAGE 30 -- RETIRED 2026-08-07, DO NOT USE. It never ran, and it could not have worked.
+   *
+   * THREE separate defects, recorded because each one was mis-attributed at the time:
+   *
+   * 1. IT DOES NOT COMPILE. `f` is declared only inside the stage-31 block's own scope, so the
+   *    input operand `"r"(&f[0])` below is an undeclared identifier:
+   *        fdreg_kernel.h: error: use of undeclared identifier 'f'
+   *    The trail recorded this stage's failure as "no result under QEMU -- the `stc` of a linear
+   *    capability consumes it", i.e. an ABI property. That attribution is WITHDRAWN: nothing about
+   *    linearity was ever demonstrated here, a leftover operand from the copy-paste of stage 31 was.
+   *
+   * 2. IT CANNOT TEST WHAT IT CLAIMS TO. c8's victim RMW is `ldc a0, 0x0(a0)` -> `lw a0` -> `sw a0`
+   *    through the SAME register; this body uses `ldc a1` -> `lw t0` -> `sw t0`. Every mechanism
+   *    proposed for R-18 is about stale capability metadata on the store's DATA register, and this
+   *    stage never creates that condition. It also has no globals at all, so it lacks c8's two
+   *    per-iteration `ldc`s (0x90(gp) and 0x70(a0)) -- the build gate says so outright:
+   *        FAIL: no gp[i] global access found
+   *    That is the same "varies five things at once" confound the header already condemns, at 11.
+   *
+   * 3. `cincoffsetimm sp, sp, -0x40` has no matching `+0x40`, while the comment claims the block
+   *    "reserves and restores its own space". The epilogue is `cincoffsetimm sp, sp, 0x50` and does
+   *    not recompute sp from s0, so on return sp is 0x40 low.
+   *
+   * THE QUESTION IT WAS BUILT FOR IS ALREADY ANSWERED, and without a board run. Disassembling c8
+   * shows the emitted victim RMW is a plain `lw` / `addiw` / `sw` on a fixed stack offset off a
+   * capability derived by `cincoffsetimm` from s0. There is no codegen bug that turns that into
+   * 567; reading the artifact is a STRONGER test than running hand asm, because the artifact is
+   * what actually executes. The compiler is excluded by inspection. Kept only as a record.
+   *
+   * ---- original rationale, retained for context ----
    *
    * Every failing image so far came out of our own LLVM fork, and the effect tracks where the -O0
    * allocator placed a scalar. That makes the COMPILER an untested variable: we have never run a

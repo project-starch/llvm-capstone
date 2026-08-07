@@ -13,8 +13,25 @@ the affected position the loop runs **extra iterations** instead of producing a 
 
 ## What is established
 
-* **Reproducible and deterministic.** Four frozen, checksummed images below; the failing arm and its
-  control differ only in where the `-O0` allocator placed the accumulator.
+* **Reproducible and deterministic.** Four frozen, checksummed images below. `c8` returned
+  67699255 on **seven** separate boots (cycles 44067–44098).
+
+  *Correction (2026-08-07).* An earlier revision said the failing arm and its control "differ only
+  in where the `-O0` allocator placed the accumulator". That was wrong — they also differ in entry
+  VA, read straight off the artifacts:
+
+  | image | entry VA | result |
+  |---|---|---|
+  | `c8`  | `0xf0000` | 567 — damaged |
+  | `c0`  | `0x30000` | correct |
+  | `sn8` | `0x30000` | 567 — damaged |
+  | `sn0` | `0xf0000` | correct |
+
+  Taken pair-by-pair that is a confound. Taken together it is the opposite: the VAs are **crossed**
+  between the two pairs, so each VA hosts one damaged and one correct image, and base VA is
+  *excluded* as the cause while `FDREG_SHIFT` — the accumulator's row offset — tracks the damage
+  across both. The corrected claim is stronger than the one it replaces, but it has to be stated
+  this way rather than by asserting a single variable that was not in fact held.
 * **Necessary condition:** the victim is always in the **upper 8 bytes of its 16-byte cache row**
   (row offset 8 or 12, never 0 or 4) — 9 of 9 builds where the victim was measured directly.
   **It is necessary, not sufficient:** roughly 10 *undamaged* upper-half scalars appear across the
@@ -106,6 +123,33 @@ where the `-O0` allocator places the accumulator; rebuilding can move it and cur
 `run.sh` verifies the checksums before doing anything. To inspect a layout:
 
     python3 capstone/tests/runtime-qemu/silicon-ladder/extract-frame-layout.py src/c8.dom src/c0.dom
+
+### Rebuilding the frozen images from source
+
+Verified 2026-08-07: this reproduces `c8.dom` **byte-for-byte** (`sha256` starts `9ecd8c6f9eb2b23d`).
+
+    source capstone/tests/capstone-test-env.sh
+    cd capstone/tests/runtime-qemu/silicon-ladder
+    DOMAIN_GLUE=interp DOMAIN_BASE_VA=0xf0000 \
+      DOMAIN_EXTRA_CFLAGS="-DFDREG_STAGE=19 -DFDREG_SHIFT=8 -DFDREG_GAP=0" \
+      bash build-ladder-domain.sh fdreg_fpga_app.c /tmp/c8.dom
+
+Per-image parameters: `c8` = SHIFT 8 @ `0xf0000`; `c0` = SHIFT 0 @ `0x30000`; `sn8` = SHIFT 8
+sentinel @ `0x30000`; `sn0` = SHIFT 0 sentinel @ `0xf0000`.
+
+Three things about this recipe are worth stating because each one cost a rebuild:
+
+* **`DOMAIN_GLUE=interp` is load-bearing.** Without it the build takes the generated-prologue path,
+  which emits `lla fdreg_defs` for the large-RO copy of the 1296-byte `fdreg_defs` array. That
+  symbol is `static`, so it has local binding and the link fails with
+  `ld.lld: error: undefined symbol: fdreg_defs`. The generator's guard only rejects `.L` symbols,
+  not local-binding ones — a real latent bug in `gen-gp-captable-glue.py`, filed here rather than
+  worked around silently.
+* **The base VAs above are the ones in the artifacts.** An earlier write-up of this recipe gave
+  `0x30000` for `c8` and `0x60000` for `c0`; neither matches, and following it does not reproduce
+  the frozen images.
+* **`src/fdreg_kernel.h` is now the header the images were built from.** It previously carried no
+  stages 30+, so `gvf0`/`gvf6` — checksummed into this package — could not be rebuilt from it.
 
 ## Supporting evidence, from the full trail
 

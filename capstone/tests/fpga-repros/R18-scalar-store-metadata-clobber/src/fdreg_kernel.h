@@ -172,6 +172,18 @@
 #define FDREG_WITSEL 0
 #endif
 /* FDREG_WITPAD -- moves stage 13's witnesses onto the damage window. See stage 13. */
+#ifndef FDREG_PVICT
+#define FDREG_PVICT 3
+#endif
+#ifndef FDREG_GVICT
+#define FDREG_GVICT 3
+#endif
+#ifndef FDREG_ASMVICTIM
+#define FDREG_ASMVICTIM 0x1c
+#endif
+#ifndef FDREG_INNER
+#define FDREG_INNER FDREG_N
+#endif
 #ifndef FDREG_SENTINEL
 #define FDREG_SENTINEL 1000000u
 #endif
@@ -320,6 +332,9 @@ static FdregDef fdreg_defs[FDREG_N] = {
 
 /* The global bucket table InsertBuiltinFuncs links into (sqlite3BuiltinFunctions.a[]). */
 static FdregDef *fdreg_buckets[FDREG_HASHN];
+
+/* stage 33: the capability store target, in the DATA region rather than on the stack */
+static const char *volatile fdreg_gz;
 
 static unsigned fdreg_len30(const char *z) {
   unsigned n = 0;
@@ -481,6 +496,328 @@ static unsigned fdreg_compute(void) {
   __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
 #endif
 
+#if FDREG_STAGE == 31
+  /* STAGE 31 -- IS THE MONITOR-CARVED STACK INVOLVED? Same hand-written asm, frame in a GLOBAL.
+   *
+   * Every failing image so far came out of our own LLVM fork, and the effect tracks where the -O0
+   * allocator placed a scalar. That makes the COMPILER an untested variable: we have never run a
+   * domain whose loop was written by hand. Until that is excluded, "silicon defect" is not a claim
+   * we can make -- the fault could be our codegen emitting something the hardware legitimately
+   * treats differently.
+   *
+   * This writes the whole loop in asm against a 16-byte-ALIGNED local array used as the frame, so
+   * the RELATIVE geometry is ours, not the allocator's:
+   *
+   *     f+0x00   the 16-byte capability store target (row-aligned)
+   *     f+0x14   k   -- bank 0, lanes 4-7
+   *     f+0x1c   qc  -- bank 1, lanes 4-7   <-- the victim position in the c8 geometry
+   *
+   * FDREG_ASMVICTIM selects which offset qc uses, so the same hand-written body can be run at a
+   * damaging and a non-damaging position:
+   *     0x1c  the c8 victim slot (upper half)   -> expect the defect if it is not the compiler
+   *     0x24  lower half of the next row        -> expect correct
+   *
+   * Returns qc. Oracle 576 either way; a shortfall is the finding.
+   */
+  {
+    /* THE ONLY DIFFERENCE FROM STAGE 30: the frame lives in a GLOBAL, i.e. in the domain's data
+       region, NOT on the monitor-carved stack. If the effect follows the scalars here, the stack's
+       provenance and the monitor's carve are excluded as the cause. */
+    static volatile unsigned char f[0x60] __attribute__((aligned(16)));
+    unsigned qc_out = 0;
+    unsigned i;
+    for (i = 0; i < sizeof(f); i++) f[i] = 0;
+    __asm__ volatile(
+        /* a0 = capability over the frame array */
+        "movc    a0, %1\n\t"
+        /* zero the two counters: qc at ASMVICTIM, k at 0x14 */
+        "sw      zero, %3(a0)\n\t"
+        "sw      zero, 0x14(a0)\n\t"
+        "li      t2, %4\n\t"            /* outer count */
+        "1:\n\t"
+        "sw      zero, 0x14(a0)\n\t"    /* k = 0 at the top of every outer pass */
+        "li      t3, 9\n\t"             /* inner count */
+        "2:\n\t"
+        "stc     a0, 0x0(a0)\n\t"       /* 16-byte capability store at f+0 */
+        "ldc     a1, 0x0(a0)\n\t"       /* the volatile read-back */
+        "lw      t0, %3(a0)\n\t"        /* qc RMW */
+        "addiw   t0, t0, 1\n\t"
+        "sw      t0, %3(a0)\n\t"
+        "lw      t1, 0x14(a0)\n\t"      /* k RMW */
+        "addiw   t1, t1, 1\n\t"
+        "sw      t1, 0x14(a0)\n\t"
+        "addi    t3, t3, -1\n\t"
+        "bnez    t3, 2b\n\t"
+        "addi    t2, t2, -1\n\t"
+        "bnez    t2, 1b\n\t"
+        "lw      %0, %3(a0)\n\t"
+        : "=r"(qc_out)
+        : "r"(&f[0]), "r"(0), "i"(FDREG_ASMVICTIM), "i"(FDREG_OUTER)
+        : "a0", "a1", "t0", "t1", "t2", "t3", "memory");
+    return qc_out;
+  }
+#endif
+#if FDREG_STAGE == 34
+  /* STAGE 34 -- IS IT THE REGION, OR THE ADDRESS CAPABILITY'S PROVENANCE?
+   *
+   * Boot 65 moved the counters to a global and cured the defect; boot 66 showed the capability
+   * store's target is irrelevant. But "moved to a global" changed TWO things at once: the region,
+   * and how the counter's address capability is obtained --
+   *
+   *     failing: address = cincoffsetimm(s0, imm)   -- from a REGISTER-RESIDENT capability
+   *     passing: address = ldc gp[i], then offset   -- from a capability LOADED FROM MEMORY
+   *
+   * That is the same coupled-variable trap that produced four refuted "laws" earlier, so it must be
+   * separated before "the stack" is treated as the cause.
+   *
+   * This keeps the counters ON THE STACK and changes ONLY the provenance: a `volatile` pointer
+   * local holds their address, so at -O0 every access must `ldc` the capability back out of memory
+   * before the `lw`/`sw` -- exactly the passing arm's pattern, in the failing arm's region.
+   *
+   *     still fails -> provenance is irrelevant; the REGION is the variable and "must be on the
+   *                    stack" stands
+   *     now clean   -> the region was never the variable; it is how the address capability is
+   *                    obtained, and boot 65's reading has to be withdrawn
+   *
+   * FDREG_PVICT picks which slot of the on-stack array the accumulator uses, so the victim row
+   * offset can be set explicitly rather than left to the allocator.
+   */
+  {
+    /* SHRUNK 2026-08-07: this stage ENTRY-STALLED on three successive draws (SHA5, no SHA6),
+       costing two boots with no verdict. Its frame was 0x80 against 0x50 for every stage that
+       enters reliably, and R-16 correlates with image/layout rather than with logic, so the remedy
+       is to make it look like the stages that work -- not to keep redrawing. cnt[8] -> cnt[4] and
+       the init loop is unrolled away. */
+    volatile unsigned cnt[4] __attribute__((aligned(16)));
+    volatile unsigned *volatile pc = &cnt[(FDREG_PVICT)];   /* address parked IN MEMORY */
+    int p, k;
+    cnt[0] = 0; cnt[1] = 0; cnt[2] = 0; cnt[3] = 0;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;   /* the capability store, unchanged */
+        (void)z;
+        (*pc)++;                                        /* ldc pc -> lw -> addi -> sw */
+      }
+    return cnt[(FDREG_PVICT)];
+  }
+#endif
+#if FDREG_STAGE == 33
+  /* STAGE 33 -- IS THE TRIGGER "SAME CAPABILITY FOR BOTH"? Counters stay on the stack; only the
+   * capability STORE TARGET moves to a global.
+   *
+   * Boot 65 showed that moving the counters off the monitor-carved stack cures the defect. But that
+   * build also changed the counters' ACCESS PATH (through gp instead of s0), so two things moved at
+   * once. The hypothesis it suggests:
+   *
+   *     in the failing build the SAME frame capability (s0) derives BOTH the 16-byte `stc` target
+   *     AND the scalar counter addresses; in the passing build the counters went through `gp`, a
+   *     DIFFERENT capability.
+   *
+   * This tests that directly and in the other direction. The counters stay exactly where they were
+   * -- stack locals reached via s0 -- and only the capability store's target becomes a global,
+   * reached via gp.
+   *
+   *     still fails -> the store's provenance is irrelevant; stack counters plus ANY nearby
+   *                    capability store suffice, and the "same capability" idea is dead
+   *     now clean   -> the defect needs the store target and the counters to derive from the SAME
+   *                    capability. That is an ABI/monitor property, not a hardware one, and it
+   *                    would explain boot 65 without invoking the stack at all
+   *
+   * Everything else is held: same compiler, same -O0, same two per-iteration ldc's, same trip
+   * counts, counters at the same frame offsets (set FDREG_SHIFT so qc lands at row offset 12).
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+    int p, k;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        fdreg_gz = fdreg_defs[k].zName;   /* the capability STORE now targets a GLOBAL, via gp */
+        (void)fdreg_gz;
+        qc++;
+      }
+    return qc;
+  }
+#endif
+#if FDREG_STAGE == 32
+  /* STAGE 32 -- CONTROLLED: stage 19's loop VERBATIM, scalars moved to a GLOBAL. One variable.
+   *
+   * A previous attempt (stages 30/31) put a HAND-WRITTEN loop with globals against the
+   * compiler-generated stack loop and found the hand-written one clean. That proved nothing: the
+   * two differed in at least FIVE ways -- hand asm vs codegen, global vs stack, half the cycle
+   * count, the stored capability's provenance, and the complete absence of the two per-iteration
+   * `ldc`s (one through gp, one out of the struct). Exactly the multi-variable confound that
+   * killed four geometric laws in this investigation.
+   *
+   * This changes ONE thing from the failing c8 build: the three counters live in a GLOBAL instead
+   * of on the monitor-carved stack. Same compiler, same -O0, same loop source, same capability
+   * store, same two ldc's, same trip counts.
+   *
+   *     still fails -> the monitor-carved STACK is excluded; the fault follows the counters
+   *     now clean  -> the stack (or its capability's provenance) is load-bearing, and the defect
+   *                   is plausibly OURS rather than the hardware's
+   *
+   * FDREG_GVICT selects the accumulator's offset inside the global block so the victim geometry
+   * can be set explicitly rather than left to the allocator.
+   */
+  /* *** BOOT 65 USING THIS STAGE IS RETRACTED. *** As originally written this block had NO
+   * FDREG_SHIFT pad, so it could not be placed at the failing geometry and shipped at the SHIFT=0
+   * layout -- stack slots 0x1c/0x20/0x24, byte-identical to c0/rs0/bs16/nr16, all of which the
+   * dataset already lists as UNDAMAGED. gv3 was predicted correct before any global was involved,
+   * so it never tested the global at all. Fifth confound of the same class.
+   * It also returned only the GLOBAL accumulator while qc/p/k stayed on the stack unobserved.
+   * Both are fixed here: the pad is added, and the packed return reports the STACK accumulator and
+   * the GLOBAL one together so the comparison is actually made. */
+  {
+    static volatile unsigned gcnt[16] __attribute__((aligned(16)));
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+    int p, k;
+    gcnt[(FDREG_GVICT)] = 0;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;   /* the two ldc's, kept */
+        (void)z;
+        gcnt[(FDREG_GVICT)]++;                          /* accumulator, now in a GLOBAL */
+        qc++;
+      }
+    /* bits 31..16 = STACK accumulator, bits 15..0 = GLOBAL accumulator. Correct = 0x02400240. */
+    return ((qc & 0xFFFFu) << 16) | (gcnt[(FDREG_GVICT)] & 0xFFFFu);
+  }
+#endif
+#if FDREG_STAGE == 30
+  /* STAGE 30 -- RETIRED 2026-08-07, DO NOT USE. It never ran, and it could not have worked.
+   *
+   * THREE separate defects, recorded because each one was mis-attributed at the time:
+   *
+   * 1. IT DOES NOT COMPILE. `f` is declared only inside the stage-31 block's own scope, so the
+   *    input operand `"r"(&f[0])` below is an undeclared identifier:
+   *        fdreg_kernel.h: error: use of undeclared identifier 'f'
+   *    The trail recorded this stage's failure as "no result under QEMU -- the `stc` of a linear
+   *    capability consumes it", i.e. an ABI property. That attribution is WITHDRAWN: nothing about
+   *    linearity was ever demonstrated here, a leftover operand from the copy-paste of stage 31 was.
+   *
+   * 2. IT CANNOT TEST WHAT IT CLAIMS TO. c8's victim RMW is `ldc a0, 0x0(a0)` -> `lw a0` -> `sw a0`
+   *    through the SAME register; this body uses `ldc a1` -> `lw t0` -> `sw t0`. Every mechanism
+   *    proposed for R-18 is about stale capability metadata on the store's DATA register, and this
+   *    stage never creates that condition. It also has no globals at all, so it lacks c8's two
+   *    per-iteration `ldc`s (0x90(gp) and 0x70(a0)) -- the build gate says so outright:
+   *        FAIL: no gp[i] global access found
+   *    That is the same "varies five things at once" confound the header already condemns, at 11.
+   *
+   * 3. `cincoffsetimm sp, sp, -0x40` has no matching `+0x40`, while the comment claims the block
+   *    "reserves and restores its own space". The epilogue is `cincoffsetimm sp, sp, 0x50` and does
+   *    not recompute sp from s0, so on return sp is 0x40 low.
+   *
+   * THE QUESTION IT WAS BUILT FOR IS ALREADY ANSWERED, and without a board run. Disassembling c8
+   * shows the emitted victim RMW is a plain `lw` / `addiw` / `sw` on a fixed stack offset off a
+   * capability derived by `cincoffsetimm` from s0. There is no codegen bug that turns that into
+   * 567; reading the artifact is a STRONGER test than running hand asm, because the artifact is
+   * what actually executes. The compiler is excluded by inspection. Kept only as a record.
+   *
+   * ---- original rationale, retained for context ----
+   *
+   * Every failing image so far came out of our own LLVM fork, and the effect tracks where the -O0
+   * allocator placed a scalar. That makes the COMPILER an untested variable: we have never run a
+   * domain whose loop was written by hand. Until that is excluded, "silicon defect" is not a claim
+   * we can make -- the fault could be our codegen emitting something the hardware legitimately
+   * treats differently.
+   *
+   * This writes the whole loop in asm against a 16-byte-ALIGNED local array used as the frame, so
+   * the RELATIVE geometry is ours, not the allocator's:
+   *
+   *     f+0x00   the 16-byte capability store target (row-aligned)
+   *     f+0x14   k   -- bank 0, lanes 4-7
+   *     f+0x1c   qc  -- bank 1, lanes 4-7   <-- the victim position in the c8 geometry
+   *
+   * FDREG_ASMVICTIM selects which offset qc uses, so the same hand-written body can be run at a
+   * damaging and a non-damaging position:
+   *     0x1c  the c8 victim slot (upper half)   -> expect the defect if it is not the compiler
+   *     0x24  lower half of the next row        -> expect correct
+   *
+   * Returns qc. Oracle 576 either way; a shortfall is the finding.
+   */
+  {
+    unsigned qc_out = 0;
+    /* The frame capability is derived from sp INSIDE the asm. Passing &local through an "r"
+       constraint puts the address in a plain integer register and DROPS the capability, so the
+       first `stc` through it faults -- that is why the earlier version of this stage produced no
+       result under QEMU. sp is 16-byte aligned by ABI, so sp-0x40 is row-aligned and the offsets
+       below are exact. The block reserves and restores its own space. */
+    __asm__ volatile(
+        "cincoffsetimm sp, sp, -0x40\n\t"
+        "movc    a0, sp\n\t"
+        /* zero the two counters: qc at ASMVICTIM, k at 0x14 */
+        "sw      zero, %3(a0)\n\t"
+        "sw      zero, 0x14(a0)\n\t"
+        "li      t2, %4\n\t"            /* outer count */
+        "1:\n\t"
+        "sw      zero, 0x14(a0)\n\t"    /* k = 0 at the top of every outer pass */
+        "li      t3, 9\n\t"             /* inner count */
+        "2:\n\t"
+        "stc     a0, 0x0(a0)\n\t"       /* 16-byte capability store at f+0 */
+        "ldc     a1, 0x0(a0)\n\t"       /* the volatile read-back */
+        "lw      t0, %3(a0)\n\t"        /* qc RMW */
+        "addiw   t0, t0, 1\n\t"
+        "sw      t0, %3(a0)\n\t"
+        "lw      t1, 0x14(a0)\n\t"      /* k RMW */
+        "addiw   t1, t1, 1\n\t"
+        "sw      t1, 0x14(a0)\n\t"
+        "addi    t3, t3, -1\n\t"
+        "bnez    t3, 2b\n\t"
+        "addi    t2, t2, -1\n\t"
+        "bnez    t2, 1b\n\t"
+        "lw      %0, %3(a0)\n\t"
+        : "=r"(qc_out)
+        : "r"(&f[0]), "r"(0), "i"(FDREG_ASMVICTIM), "i"(FDREG_OUTER)
+        : "a0", "a1", "t0", "t1", "t2", "t3", "memory");
+    return qc_out;
+  }
+#endif
+#if FDREG_STAGE == 28
+  /* STAGE 28 -- DOES THE DEFICIT TRACK THE INNER TRIP COUNT? The outer-pass lead.
+   *
+   * All three measured reset points -- 9, 72, 558 -- are multiples of 9, the inner trip count,
+   * i.e. they land exactly on OUTER-PASS BOUNDARIES. Under a uniform-over-iterations null that is
+   * p ~ 1/729. A per-iteration event has no reason to align that way; something that happens ONCE
+   * PER OUTER PASS does. The obvious candidate is the `k = 0` re-initialisation store, which at the
+   * failing geometry sits at 0x14 (bank 0, lanes 4-7) whose dual-bank sibling is exactly 0x1c --
+   * the victim.
+   *
+   * This decouples the inner trip count from the array size so the prediction is falsifiable:
+   *
+   *     FDREG_INNER=9  (default)  correct = 64*9  = 576, deficits should be multiples of 9
+   *     FDREG_INNER=12            correct = 64*12 = 768, deficits should be multiples of 12
+   *     FDREG_INNER=6             correct = 64*6  = 384, deficits should be multiples of 6
+   *
+   * If the deficit tracks FDREG_INNER, the culprit is the per-outer-pass store and NOT the victim's
+   * own per-iteration store -- which would also finally distinguish c8 from gp16. If the deficit
+   * stays a multiple of 9 regardless, the alignment was a coincidence of three samples.
+   *
+   * The index is taken modulo FDREG_N so the array access stays in range for any inner count.
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+    int p, k;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < (FDREG_INNER); k++) {
+        const char *volatile z = fdreg_defs[k % FDREG_N].zName;
+        (void)z;
+        qc++;
+      }
+    return qc;
+  }
+#endif
 #if FDREG_STAGE == 27
   /* STAGE 27 -- LOST INCREMENTS, or RESET TO ZERO? A sentinel start settles it.
    *
@@ -907,8 +1244,16 @@ static unsigned fdreg_compute(void) {
    *     sw   a0, 0x0(a1)     <- carries the stale metadata -> st_wr_cap fires
    *
    * The value `ldc` loads is DISCARDED ((void)z), so a0 is free to clobber immediately
-   * after it. `movc rd, zero` is a capstone op, so it sets cap_result.valid and writes ZERO
-   * into the shadow -- clearing the taint before the counter's store.
+   * after it.
+   *
+   * *** THE PREMISE BELOW IS FACTUALLY WRONG -- corrected 2026-08-07. ***
+   * It said: "`movc rd, zero` is a capstone op, so it sets cap_result.valid and writes ZERO into
+   * the shadow." It does NOT write zero. compress_cap of a NULL capability is 0x08000000, not 0
+   * (ariane_pkg.sv:753-834; the cursorless bit is bit 27). So this barrier writes 0x08000000 into
+   * the shadow of a0 and a1 -- the very registers the -O0 RMW uses. Under the metadata-clobber
+   * model this arm should therefore have pinned the accumulator near zero on EVERY iteration; it
+   * returned 567, bit-identical to the nop control. That made bar1/bar2 a REFUTING datum for that
+   * model, and it was recorded as inconclusive. Do not re-run this as a "clearing" barrier.
    *
    * FDREG_BARRIER=1 emits the clearing barrier; =2 emits the SAME NUMBER OF BYTES of nops.
    * The nop arm is the control and it is what makes this attributable: both builds have
