@@ -249,6 +249,20 @@ if [[ -n "$RUNGS" ]]; then
     [[ -f "$ORACLES/$r.oracle" ]] || bad "$r has no oracle in $ORACLES"
     shas+="$(sha256sum "$OVERLAY/$r.dom" | cut -d' ' -f1)\n"
   done
+  # C13 QEMU-PASS GATE. A rung must have a RECORDED QEMU pass before it costs a boot.
+  # 2026-08-07: a build was staged and run while its QEMU oracle line said NO RESULT -- the line was
+  # printed and not acted on. Whether or not that build was sound, nothing should reach the board
+  # unverified. `.qemu-pass` is written by the verify step next to the oracle; its absence blocks.
+  # A stale pass is worse than none, so the marker must be NEWER than the .dom it vouches for.
+  for r in $RUNGS; do
+    [[ -f "$OVERLAY/$r.dom" ]] || continue
+    if [[ ! -f "$ORACLES/$r.qemu-pass" ]]; then
+      bad "$r has no recorded QEMU pass ($ORACLES/$r.qemu-pass) -- verify under QEMU before spending a boot"
+    elif [[ "$OVERLAY/$r.dom" -nt "$ORACLES/$r.qemu-pass" ]]; then
+      bad "$r.dom is NEWER than its QEMU pass marker -- the artifact changed after it was verified"
+    fi
+  done
+
   u=$(printf "$shas" | sort -u | grep -c .); t=$(printf "$shas" | grep -c .)
   [[ "$u" -eq "$t" ]] && ok "$t staged images, all distinct" \
                       || bad "only $u distinct images among $t -- identical images cannot give different results"

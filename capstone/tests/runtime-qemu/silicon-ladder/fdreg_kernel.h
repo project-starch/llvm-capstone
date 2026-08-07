@@ -644,11 +644,15 @@ static unsigned fdreg_compute(void) {
    * offset can be set explicitly rather than left to the allocator.
    */
   {
-    volatile unsigned cnt[8] __attribute__((aligned(16)));
+    /* SHRUNK 2026-08-07: this stage ENTRY-STALLED on three successive draws (SHA5, no SHA6),
+       costing two boots with no verdict. Its frame was 0x80 against 0x50 for every stage that
+       enters reliably, and R-16 correlates with image/layout rather than with logic, so the remedy
+       is to make it look like the stages that work -- not to keep redrawing. cnt[8] -> cnt[4] and
+       the init loop is unrolled away. */
+    volatile unsigned cnt[4] __attribute__((aligned(16)));
     volatile unsigned *volatile pc = &cnt[(FDREG_PVICT)];   /* address parked IN MEMORY */
     int p, k;
-    unsigned i;
-    for (i = 0; i < 8; i++) cnt[i] = 0;
+    cnt[0] = 0; cnt[1] = 0; cnt[2] = 0; cnt[3] = 0;
     for (p = 0; p < (FDREG_OUTER); p++)
       for (k = 0; k < FDREG_N; k++) {
         const char *volatile z = fdreg_defs[k].zName;   /* the capability store, unchanged */
