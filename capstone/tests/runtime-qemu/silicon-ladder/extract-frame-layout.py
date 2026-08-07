@@ -31,12 +31,21 @@ def layout(path, fn=None):
     return {"frame": fr, "store": store, "rmw": sorted(set(rmw)), "bounds": bounds}
 
 if __name__ == "__main__":
-    S = "/tmp/claude-1005/-home-alexey-dev-llvm-capstone/fea3eec8-e31e-459d-82aa-366f35932b14/scratchpad/wit"
+    # Takes real paths so this is usable outside the machine it was written on.
+    # Optional CAPSTONE_DOM_DIR lets bare names be resolved against a directory of .dom files.
+    if len(sys.argv) < 2:
+        print("usage: extract-frame-layout.py <domain.dom> [...]   "
+              "(or bare names with CAPSTONE_DOM_DIR set)", file=sys.stderr)
+        raise SystemExit(2)
+    D = os.environ.get("CAPSTONE_DOM_DIR", ".")
     out = {}
     for n in sys.argv[1:]:
-        for cand in (f"{S}/{n}.dom", f"{S}/overlay-backup/{n}.dom"):
+        for cand in (n, f"{n}.dom", os.path.join(D, n), os.path.join(D, f"{n}.dom")):
             if os.path.exists(cand):
                 r = layout(cand)
-                if r: out[n] = r
+                if r:
+                    out[os.path.basename(cand)] = r
                 break
-    print(json.dumps(out, indent=0))
+        else:
+            print(f"not found: {n}", file=sys.stderr)
+    print(json.dumps(out, indent=1))
