@@ -321,3 +321,51 @@ refuted regfile-shadow-sourced metadata, not WB-forwarded metadata.)
 A mechanism must now explain: two scalar RMW slots exactly 8 bytes apart, a 16-byte capability
 store in the same loop, memory otherwise verifiably correct, corruption that survives a row
 boundary, no reproduction bare-metal in simulation at either RTL revision, and nothing in QEMU.
+
+## UPDATE 2026-08-07 (cycle-count analysis): IT IS TWO DIFFERENT FAULTS, AT OUTER-PASS GRANULARITY
+
+The harness has recorded an mcycle delta bracketing the compute on every rung since the ladder
+existed (`ladder_perf_domain.h`), it is printed on every RESULT line, and it had never once been
+used as a discriminator. It settles what the returned value alone could not.
+
+At 76.58 cycles/iteration, taken from the known-correct 576-iteration run:
+
+| rung | retval | cycles | implied iterations | delta | outer passes |
+|---|---|---|---|---|---|
+| gp16 | 576 | 44109 | 576.0 | 0 | 0 |
+| gp32 | 576 | 44114 | 576.1 | 0 | 0 |
+| gp0 | **567** | 44045 | **575.2** | -9 | **-1** |
+| bar2 | **567** | 44004 | 574.6 | -9 | -1 |
+| wp0 | **909** | **69568** | **908.5** | +333 | **+37** |
+
+(bar1 also returns 567 at 46323 cycles; it carries two extra barrier instructions per iteration,
+so its cycles/iteration is higher. Not a discrepancy.)
+
+**The 909 cell and the 567 cell are NOT two severities of one fault.**
+
+* **909 genuinely executed 909 iterations.** 69568/44109 = 1.5772 against 909/576 = 1.5781 -- a
+  0.06% match. The loop lost control of its trip count and really did run the extra passes.
+* **567 executed the FULL 576 iterations** in the same cycles as a correct run, and still returned
+  567. Nine increments were LOST without a single iteration being lost.
+
+**Every deviation is an exact multiple of the inner trip count, 9.** 576-567 = 9 = exactly ONE
+outer pass of accumulator increments vanished. 909-576 = 333 = 37*9 = exactly 37 EXTRA outer
+passes ran. So the fault operates at OUTER-PASS granularity, not per-iteration.
+
+### What that does to the framing
+
+At -O0 the three counters are packed 4 bytes apart: k, p = k+4, qc = k+8. The victim differs by
+cell -- in the 567 cell the ACCUMULATOR loses one outer pass, in the 909 cell the OUTER counter is
+disturbed so extra passes run. The four-cell "law" table therefore conflates two distinct failure
+modes under one number, and "the counter gets a wrong value" is too coarse a description to
+mechanise.
+
+It also explains boot 53: moving qc to k+24 cured the 567 cell because qc was the victim there,
+while p stayed at k+4 throughout.
+
+### Consequence for the next experiments
+
+Any probe that returns only qc is reading one of two faults without knowing which. Rungs must
+report the INNER and OUTER counters separately, and the cycle count must be read on every arm --
+it is free, already collected, and it is the only instrument so far that distinguishes "lost an
+iteration" from "lost an increment".
