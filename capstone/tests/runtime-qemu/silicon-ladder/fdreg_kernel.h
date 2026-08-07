@@ -172,6 +172,9 @@
 #define FDREG_WITSEL 0
 #endif
 /* FDREG_WITPAD -- moves stage 13's witnesses onto the damage window. See stage 13. */
+#ifndef FDREG_GAP
+#define FDREG_GAP 0
+#endif
 #ifndef FDREG_BARRIER
 #define FDREG_BARRIER 0
 #endif
@@ -422,6 +425,60 @@ static unsigned fdreg_compute(void) {
   __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
 #endif
 
+#if FDREG_STAGE == 18
+  /* STAGE 18 -- BREAK THE qc == k+8 INVARIANT. This is the confound in our own law.
+   *
+   * The bank-geometry model says the returned value is a function of the inner counter k's
+   * address bits [3:2]. It predicts 7 of 7 builds. But in EVERY build ever measured,
+   * qc == k + 8 exactly: the accumulator is the inner counter's 8-byte BANK SIBLING, because
+   * clang always allocates them four bytes apart with p in between. So two very different
+   * statements are entangled and no measurement has ever separated them:
+   *
+   *     (A) the answer depends on k's own position in the cache row, or
+   *     (B) the answer depends on qc being k's bank sibling -- i.e. on the RELATIONSHIP
+   *
+   * Under (B) the "law" is not about k at all; it is about a 16-byte row that happens to
+   * contain both counters, and every entry in the table is a different way of arranging that
+   * one pair.
+   *
+   * FDREG_GAP inserts dead bytes BETWEEN qc and the counters, which moves qc away from k
+   * without moving k relative to the capability store. It MUST be a multiple of 16, or k's own
+   * bits [3:2] move too and the arms stop being comparable -- that is the whole point of the
+   * knob and the reason it is not simply "add a local".
+   *
+   * Built at the SHIFT=8 geometry, which returns a wrong 567 on silicon, so a cure is visible:
+   *
+   *     GAP=0   -> 567   the established value; positive control that the fault is live today
+   *     GAP=16  -> 567   qc moved out of k's bank and the answer did not change
+   *                      => the law is about k ALONE, hypothesis (A), and the sibling
+   *                         relationship was a coincidence of clang's allocator
+   *     GAP=16  -> 576   moving qc out of k's bank CURED it
+   *                      => hypothesis (B): the defect needs BOTH slots in one row, and every
+   *                         previous reading of the table has to be redone
+   *
+   * Either answer is worth a boot: one promotes the law from correlation to something about k,
+   * the other demolishes it. All arms RETURN a number, so none can wedge the boot.
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+#if (FDREG_GAP) > 0
+    volatile unsigned char fdreg_gap[FDREG_GAP];
+    fdreg_gap[0] = 0;
+#endif
+    int p, k;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;   /* cap field, inner resetting counter */
+        (void)z;
+        qc++;
+      }
+    return qc;
+  }
+#endif
 #if FDREG_STAGE == 16
   /* STAGE 16 -- THE SHADOW-CLEARING BARRIER: a direct test of the misclassified-store
    * mechanism, and if it works, a compiler workaround.

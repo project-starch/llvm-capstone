@@ -264,3 +264,60 @@ test into a real domain context is the next step, and it costs no board time.
   re-running so a failed compile cannot masquerade as a result; check the log timestamp.
 * `.S` files go through cpp, so a bare `MACRO(...)` form inside a COMMENT expands and breaks the
   assembly. That is what made the compile fail.
+
+## UPDATE 2026-08-07 (boot 53): THE 8-BYTE SEPARATION IS A NECESSARY CONDITION
+
+The bits[3:2] law had a confound nobody had tested: in EVERY build ever measured, `qc == k + 8`
+exactly, because clang always allocates the accumulator and the inner counter four bytes apart
+with `p` in between. So "the answer depends on k's bits[3:2]" and "the answer depends on qc being
+8 bytes from k" were indistinguishable.
+
+Stage 18 (`FDREG_GAP`) inserts dead bytes BETWEEN qc and the counters. The gap must be a multiple
+of 16 or k's own bits[3:2] move too. Built at the SHIFT=8 geometry, k held byte-identical at
+sp+0x14 (bank 0, off 4) in all three arms, verified in the artifacts:
+
+| rung | k | qc | qc-k | board |
+|---|---|---|---|---|
+| gp0 | sp+0x14 | sp+0x1c | **+8** | **567 WRONG** |
+| gp16 | sp+0x14 | sp+0x2c | +24 | **576 CORRECT** |
+| gp32 | sp+0x14 | sp+0x3c | +40 | **576 CORRECT** |
+
+Control k800 green, all four arms returned.
+
+**With k's geometry held EXACTLY fixed, moving qc out of the k+8 slot CURES the fault.**
+
+### What this does to the law
+
+As a GENERAL law, `value = f(k bits[3:2])` is REFUTED: it predicts 567 for gp16 and gp32, which
+both have k at (bank 0, off 4), and they return 576.
+
+As a CONDITIONAL law given `qc - k == 8`, it still holds across all seven original builds, and the
+two new data points fit it exactly (gp0 bank0/off4 -> 567, matching shift8; wp0 bank1/off0 -> 909,
+matching shift4).
+
+So the correct statement is a CONJUNCTION:
+ 1. NECESSARY: the two read-modify-written counters are exactly 8 bytes apart. Break it and the
+    fault vanishes regardless of k's position.
+ 2. GIVEN that, k's bits[3:2] select WHICH wrong value appears -- and one cell, (bank 1, off 4)
+    = shift0, is benign.
+
+### NOT the same 16-byte row -- cross-check against wp0
+
+wp0 has k@sp+0x28 (row 0x20, bank 1) and qc@sp+0x30 (row 0x30, bank 0): `qc - k == 8` but the two
+slots are in DIFFERENT 16-byte rows, and it still returns a wrong 909. So the necessary condition
+is the 8-BYTE SEPARATION ITSELF, not co-residence in one cache row.
+
+That cross-check also **weakens the dual-bank store-misclassification candidate**, which an earlier
+note had promoted after boot 52. A misclassified store's dual-bank write is confined to its own
+16-byte row (`bank_idx = '{default: wr_idx_i}`, wt_dcache_mem.sv:201), so it cannot reach a sibling
+across a row boundary, and it therefore does not explain wp0. Do not record it as the root cause.
+(The barrier result of boot 52 is also weaker than it looked: `movc a0,zero / movc a1,zero` clears
+the REGISTER-FILE shadow only, while issue_read_operands.sv:690-693 takes `rs2_cap_metadata` from
+`wb[k].cap_data.result_metadata` ungated by validity -- a path the barrier cannot reach. So boot 52
+refuted regfile-shadow-sourced metadata, not WB-forwarded metadata.)
+
+### Where that leaves the mechanism
+
+A mechanism must now explain: two scalar RMW slots exactly 8 bytes apart, a 16-byte capability
+store in the same loop, memory otherwise verifiably correct, corruption that survives a row
+boundary, no reproduction bare-metal in simulation at either RTL revision, and nothing in QEMU.
