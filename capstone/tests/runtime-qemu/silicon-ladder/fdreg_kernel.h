@@ -172,6 +172,9 @@
 #define FDREG_WITSEL 0
 #endif
 /* FDREG_WITPAD -- moves stage 13's witnesses onto the damage window. See stage 13. */
+#ifndef FDREG_SENTINEL
+#define FDREG_SENTINEL 1000000u
+#endif
 #ifndef FDREG_NORESET
 #define FDREG_NORESET 0
 #endif
@@ -478,6 +481,52 @@ static unsigned fdreg_compute(void) {
   __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
 #endif
 
+#if FDREG_STAGE == 27
+  /* STAGE 27 -- LOST INCREMENTS, or RESET TO ZERO? A sentinel start settles it.
+   *
+   * Every probe so far reported a counter short by an exact number of increments and called it
+   * "dropped stores". There is a second reading that fits the numbers better and has an RTL path:
+   *
+   *   bank_be is the SAME byte-enable applied to BOTH banks, and bank_wdata[1] receives wr_user_i
+   *   instead of wr_data_i when st_wr_cap fires (wt_dcache_mem.sv:156-158, :225-238). So a store
+   *   whose address lies in BANK 1 has its OWN slot written with wr_user_i at those byte lanes --
+   *   the real data never lands. That is exactly why the victim is ALWAYS in the upper half of its
+   *   16-byte row (9/9 builds): bank 1 is the only bank that can receive something other than the
+   *   store's own data. If wr_user_i is zero at those lanes, the counter is RESET TO ZERO rather
+   *   than corrupted, which is why victims hold plausible counts instead of garbage.
+   *
+   * Read against the measurements, a single reset explains each one exactly:
+   *     qc=567 = 576-9    -> reset once at iteration 9
+   *     qc=504 = 576-72   -> reset at iteration 72
+   *     d=18   (of 576)   -> reset at iteration 558, then 18 more increments
+   *     p reset           -> the OUTER loop restarts -> EXTRA passes (+9, +333)
+   *     0x8000237         -> 567 with bit 27 set: the same, with one metadata bit not zero
+   *
+   * THE TEST: start the accumulator at a large sentinel instead of 0.
+   *     final == SENTINEL + 576  -> increments were merely LOST; the reset story is wrong
+   *     final <  576             -> the slot was RESET TO ZERO and counted up from there, and the
+   *                                 value names the iteration at which the last reset happened
+   * These two cannot be confused, which no previous probe could manage.
+   *
+   * Packing must not truncate the sentinel, so this returns qc RAW and puts the loop counters in
+   * a separate build. Oracle = SENTINEL + 576, computed programmatically.
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = (FDREG_SENTINEL);
+    int p, k;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;
+        (void)z;
+        qc++;
+      }
+    return qc;
+  }
+#endif
 #if FDREG_STAGE == 26
   /* STAGE 26 -- IS k SPECIAL AT ALL, OR IS THE POISONED SLOT JUST ALONE IN ITS ROW?
    *

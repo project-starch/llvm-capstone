@@ -782,3 +782,54 @@ against unity. Treat "one fault" as a hypothesis under test, not a premise.
 
 Before any further board time on geometry: run `fit-victim-rules.py`. If a proposed rule already
 fails on the existing 19 builds, it does not need a boot to refute it.
+
+## UPDATE 2026-08-07 (boot 62): **THE SLOT IS RESET TO ZERO.** Not "lost stores". Mechanism found.
+
+Every probe until now reported a counter short by an exact number of increments and read that as
+dropped stores. Stage 27 starts the accumulator at a SENTINEL of 1,000,000 instead of 0, which makes
+the two readings impossible to confuse.
+
+| rung | started at | returned | cycles | reading |
+|---|---|---|---|---|
+| sn0 (control, shift0) | 1,000,000 | **1000576** | 44040 | correct |
+| **sn8** (qc at 0x1c) | **1,000,000** | **567** | 44012 | **SLOT ZEROED, then counted 567** |
+| sn4 (p victim, shift4) | 1,000,000 | 1000906 | 68612 | sentinel intact, +330 extra iterations |
+
+**sn8 started at one million and returned 567.** Lost increments would give 1000567. The slot was
+RESET TO ZERO and counted up from there. 576 - 567 = 9 = exactly the inner trip count, so it was a
+single reset at an outer-pass boundary.
+
+### Every earlier measurement is reinterpreted
+
+* qc=567 -> reset at iteration 9. qc=504 -> reset at 72. d=18 -> reset at 558.
+* p as victim -> the OUTER counter is zeroed, so the outer loop RESTARTS and runs EXTRA passes:
+  +9, +330, +333. sn4 confirms it directly -- qc keeps its sentinel AND gains 330 iterations.
+* 0x8000237 = the same reset with one metadata bit not zero.
+
+The "two different faults" reading (dropped stores vs extra passes) collapses: it is ONE fault --
+a slot zeroed -- whose visible signature depends only on whether the zeroed slot gates a loop.
+
+### Why it is always the UPPER half of the row -- the invariant now has a cause
+
+`bank_wdata[k][j] = ... (((st_wr_cap) && (k==1)) ? wr_user_i : wr_data_i)` (wt_dcache_mem.sv:156-158)
+and `bank_be` applies the SAME byte-enable to both banks. So a store whose address lies in BANK 1 has
+its own slot written with `wr_user_i` at those byte lanes -- the store data never lands. Bank 1 is the
+ONLY bank that can receive something other than the store's data, which is precisely why the victim is
+always at row offset 8 or 12 and never 0 or 4 (9/9 builds). Where those metadata bytes are ZERO the
+slot is zeroed rather than corrupted -- which is why victims hold plausible counts, the very
+observation that caused this mechanism to be refuted twice.
+
+### Why the earlier refutations were wrong
+
+* "Victims hold plausible counts, so it is not metadata substitution" -- wrong: substituting ZERO
+  metadata bytes produces a plausible count.
+* "The movc barrier does not cure it" -- that barrier clears the REGISTER-FILE shadow only, while
+  issue_read_operands.sv:690-693 sources rs2_cap_metadata from wb[k].cap_data.result_metadata
+  UNGATED BY VALIDITY. The barrier could not reach the path that supplies the bus.
+
+### Still to close
+
+st_wr_cap = |wr_user_i (wt_dcache_mem.sv:138) classifies by VALUE not opcode, so the remaining
+question is what puts non-zero metadata on the bus for an ordinary `sw` while the bytes at the
+store's own lanes are zero. Confirm against the WB-forwarding path, and confirm the reset value is
+zero rather than low-order metadata by sweeping the sentinel.
