@@ -690,3 +690,45 @@ as the selector.** The selector must be BYTE-GRANULAR: be_gen (ariane_pkg.sv:104
 addr[2:0]), the per-byte overlay rd_data_o[8*k+:8] = wbuffer_be[k] ? ... (wt_dcache_mem.sv:311-317),
 or the wbuffer per-byte valid/dirty/txblock bookkeeping and bdirty_off / toSize64(bdirty)
 (wt_dcache_wbuffer.sv:253-295, :397, :427).
+
+## UPDATE 2026-08-07 (boot 61): THE +0x1c ANCHOR IS REFUTED. No single-address rule fits.
+
+Stage 26 adds a FOURTH read-modify-written scalar `d`, incremented immediately before qc so the two
+must stay equal, which lets the 16-byte row be populated independently of which counter sits at the
+supposed poisoned slot.
+
+| arm | layout | slot 0x1c holds | measured |
+|---|---|---|---|
+| ka0 | d@0x18, k@**0x1c**, p@0x20, qc@0x24 | k | **d=18** (lost 558 of 576), qc=576 correct |
+| kb12 | d@**0x1c**, k@0x20, p@0x24, qc@0x28 | d | d=576 **correct**, **qc=567** (lost 9) |
+| kc20 | - | - | NO RESULT (wedged), no verdict |
+
+**In ka0 the victim is at 0x18; in kb12 the victim is at 0x28 and the 0x1c slot is UNDAMAGED.**
+The capability-store + 0x1c anchor (boots 57/58) is refuted, and with it the row-occupancy rule
+built on top of it.
+
+Fitted against all 14 triple-reported builds, no single anchor works:
+    sp+0x1c   8/14
+    s0-0x38   7/14
+    s0-0x34   7/14
+
+### Two NEW facts that are not in dispute
+
+* **A far more severe signature exists.** d lost 558 of 576 stores (97%). Everything previously
+  measured was <= 72 lost. Same loop, adjacent statements (`d++; qc++;`), and qc was EXACT.
+* **The fault is extremely selective between adjacent slots.** In ka0, d@0x18 is destroyed while
+  qc@0x24 is perfect, in the same iterations. In kb12 the reverse: d@0x1c perfect, qc@0x28 short.
+
+### Why no fourth rule is proposed here
+
+Three geometric rules have been proposed and refuted today -- k bits[3:2], the 8-byte separation,
+and the +0x1c anchor with its row-occupancy refinement -- each fitted to the builds available at the
+time and each broken by the next build. ka0/kb12 are also the ONLY builds with four RMW scalars, so
+they differ structurally from the other twelve and the temptation to fit them together is exactly
+the trap. The loss rates differ by 60x (97% vs 1.6%), which is itself evidence they may not be one
+phenomenon.
+
+**The next analysis must fit ALL builds simultaneously rather than pattern-match the newest pair,
+and should treat "one fault" as a hypothesis rather than an assumption.** The dataset is now 21
+builds with layout and outcome recorded; that is enough to test candidate rules offline, without
+spending boots.

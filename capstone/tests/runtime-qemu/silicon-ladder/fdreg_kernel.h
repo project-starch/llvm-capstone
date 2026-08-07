@@ -478,6 +478,50 @@ static unsigned fdreg_compute(void) {
   __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
 #endif
 
+#if FDREG_STAGE == 26
+  /* STAGE 26 -- IS k SPECIAL AT ALL, OR IS THE POISONED SLOT JUST ALONE IN ITS ROW?
+   *
+   * "k is immune" is confounded: -O0 packs k lowest with p=k+4 and qc=k+8, so k@0x1c can ONLY
+   * occur when p and qc land at 0x20/0x24 -- i.e. only when the row 0x10..0x1f holds nothing
+   * else. Every build where k sits at the poisoned slot also has that slot ALONE in its row.
+   * The row-occupancy rule fits 19/20 builds against the k-rule's 17/19.
+   *
+   * This adds ONE extra hot scalar `d`, incremented next to qc so the two must stay equal.
+   * Declared last, it lands LOWEST, which lets the row be populated independently of which
+   * counter sits at +0x1c. d - qc names the victim without needing the cycle divisor.
+   *
+   *   FDREG_SHIFT=8  -> d@0x18, k@0x1c, p@0x20, qc@0x24: k AT the poisoned slot, sharing its row
+   *                    with a hot neighbour. This is the shift0 geometry plus one scalar.
+   *                      correct        -> k really is intrinsically immune, row rule dead
+   *                      d == qc, both high, cycles up -> k damaged: the row rule is right and
+   *                                        k's immunity dissolves
+   *                      d < 576, qc ok -> the victim is d@0x18, so the +0x1c anchor is wrong
+   *   FDREG_SHIFT=4  -> d@0x1c ALONE in its row (k@0x20, p@0x24, qc@0x28): a NON-k hot scalar at
+   *                    the poisoned slot with an empty row. The mirror test.
+   *                      correct  -> row-occupancy confirmed from the other side
+   *                      d < 576  -> the slot is poisoned regardless of occupancy; k IS special
+   *
+   * Packing: p<<24 | d<<12 | qc. Oracle computed programmatically, never by hand -- a
+   * hand-computed packed oracle already flagged a correct board result as WRONG once.
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+    int p, k;
+    unsigned d = 0;                 /* declared LAST -> lands LOWEST */
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;
+        (void)z;
+        d++;
+        qc++;
+      }
+    return ((unsigned)(p & 0xFF) << 24) | ((d & 0xFFFu) << 12) | (qc & 0xFFFu);
+  }
+#endif
 #if FDREG_STAGE == 25
   /* STAGE 25 -- WHY IS k SPARED? Two remaining candidates, one knob each.
    *
