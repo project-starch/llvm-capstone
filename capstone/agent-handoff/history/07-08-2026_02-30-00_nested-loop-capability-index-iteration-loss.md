@@ -833,3 +833,65 @@ st_wr_cap = |wr_user_i (wt_dcache_mem.sv:138) classifies by VALUE not opcode, so
 question is what puts non-zero metadata on the bus for an ordinary `sw` while the bytes at the
 store's own lanes are zero. Confirm against the WB-forwarding path, and confirm the reset value is
 zero rather than low-order metadata by sweeping the sentinel.
+
+## ROOT CAUSE (2026-08-07) -- a plain scalar store in the UPPER bank of a cache row is overwritten with capability metadata
+
+Every link verified at the primary source.
+
+1. **`core/issue_read_operands.sv:690`** -- `rs2_cap_metadata` is forwarded from the WRITEBACK PORT
+   with **no validity gate**:
+   `assign rs2_cap_metadata[i][k] = ((issue_instr_i[i].rs2 == fwd_i.sbe[fwd_i.wb[k].trans_id].rd) ?
+    fwd_i.wb[k].cap_data.result_metadata : ...)`
+   The scoreboard-port version ~25 lines later DOES check `fwd_i.sbe[k].cap_result.valid`. This one
+   does not. So an ordinary `sw` can pick up stale capability metadata from a resident WB slot.
+2. **`core/cache_subsystem/wt_dcache_mem.sv:138`** -- `assign st_wr_cap = |wr_user_i;`
+   A store is classified as a CAPABILITY STORE BY VALUE, NOT BY OPCODE. Non-zero stale metadata on
+   the sideband is sufficient to misclassify a plain scalar store.
+3. **`wt_dcache_mem.sv:230-238`** -- a classified store sets `bank_req = '1; bank_we = '1`, writing
+   BOTH banks of the 16-byte row rather than only the bank its address selects.
+4. **`wt_dcache_mem.sv:156-158`** --
+   `bank_wdata[k][j] = ... (((st_wr_cap) && (k==1)) ? wr_user_i : wr_data_i);`
+   **Bank 1 (the upper 8 bytes of the row) is the ONLY bank that can receive anything other than the
+   store's own data.**
+
+**NET: a plain scalar store whose address lies in the UPPER 8 bytes of a 16-byte cache row has its
+own slot overwritten with capability metadata instead of its data. Where those metadata bytes are
+zero at the store's byte lanes, the scalar is silently ZEROED.**
+
+### It accounts for every measurement, quantitatively
+
+Each victim decomposes exactly as `clobber_value + (576 - reset_iteration)`:
+
+| build | final | clobber value | reset iteration |
+|---|---|---|---|
+| shift8 / gp0 / c8 / dp0 / sn8 | 567 | 0 | 9 |
+| rs4 | 504 | 0 | 72 |
+| ka0 (d) | 18 | 0 | 558 |
+| **shift12** | **0x08000237** | **0x08000000** | 9 |
+
+shift12 is the clincher: `0x08000237 = 0x08000000 + 567` -- clobbered with a value carrying **bit
+27**, i.e. literal capability-metadata bits, then counted up 567 times. Same family, same reset
+iteration, different clobber value.
+
+* The 9/9 upper-half invariant: bank 1 is structurally the only bank that can receive non-store data.
+* Reset-to-zero rather than lost stores: proven by the sentinel (sn8 started at 1,000,000, returned 567).
+* p as victim -> zeroing the OUTER counter restarts the loop -> extra passes (+9, +330, +333).
+* QEMU clean: no metadata sideband exists there to misclassify.
+* Bare-metal simulation silent: the directed tests never produced stale WB-forwarded metadata on a
+  scalar store's rs2.
+
+### Why this mechanism was refuted TWICE and both refutations were wrong
+
+* **"The movc barrier does not cure it"** (boot 52) -- that barrier clears the REGISTER-FILE shadow.
+  The metadata reaching the bus comes from the ungated WB forward at issue_read_operands.sv:690,
+  which the barrier cannot touch. The test could not reach the path it was aimed at.
+* **"Victims hold plausible counts, not garbage"** -- substituting ZERO metadata bytes produces
+  exactly a plausible count. The one build where the metadata bytes were non-zero (shift12) DID
+  produce a garbage-looking value, and it decomposes exactly.
+
+### Fix directions (not yet implemented)
+
+* Gate the WB-port forward on validity, matching the scoreboard-port version
+  (`issue_read_operands.sv:690`, and the rs1/rs3 siblings above and below it).
+* And/or classify capability stores by OPCODE rather than by `|wr_user_i` (`wt_dcache_mem.sv:138`).
+* Either is an RTL change requiring a bitstream reflash -- the project lead's call.
