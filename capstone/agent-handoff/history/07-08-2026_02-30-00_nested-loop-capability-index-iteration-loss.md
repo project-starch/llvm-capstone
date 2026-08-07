@@ -732,3 +732,53 @@ phenomenon.
 and should treat "one fault" as a hypothesis rather than an assumption.** The dataset is now 21
 builds with layout and outcome recorded; that is enough to test candidate rules offline, without
 spending boots.
+
+## UPDATE 2026-08-07 (OFFLINE analysis): fit rules against ALL builds, not the newest pair
+
+Four geometric rules were proposed and refuted in one day, each fitted by eye to whichever builds
+existed at the time and each broken by the next boot. Every one of them could have been killed for
+free: 19 builds with recorded layout and outcome are on disk, and testing a candidate rule against
+all of them takes milliseconds. A boot takes 6-12 minutes and yields ONE point.
+
+Two scripts now do this, and they read the LAYOUT OUT OF THE ELF rather than from notes:
+  `extract-frame-layout.py`  -- frame size, store offset, RMW slots, loop-bound constants per build
+  `fit-victim-rules.py`      -- scores candidate anchors and structural predicates over the set
+
+### Result: no single-address anchor fits
+
+    store+0x1c  13/19     s0-0x34   9/19     lowest_rmw   1/19
+    sp+0x1c     13/19     s0-0x38   9/19     highest_rmw  6/19
+    store+0x18   5/19                        2nd_rmw      5/19
+
+### THE ONE INVARIANT WITH NO EXCEPTIONS (9/9 known victims)
+
+**Every victim sits in the UPPER 8-byte half of its 16-byte row** -- row offset 8 or 12, never 0 or
+4:
+
+| builds | victim | row offset |
+|---|---|---|
+| c4, c8, rs4, rs8, t12, t0b, dp0 | 0x1c | 12 |
+| ka0 | 0x18 | 8 |
+| kb12 | 0x28 | 8 |
+
+This is a real constraint, not an artifact of where slots land: the UNDAMAGED builds also have
+upper-half RMW slots (c0/rs0/bs16/nr16 at 0x1c; t16/gp16 at 0x18 and 0x2c; gp32 at 0x18 and 0x3c).
+The upper half is the bank that receives METADATA in the dual-bank write path, and it is consistent
+with the separately established fact that the fault discriminates WITHIN a dword.
+
+### Best structural rule, and its exceptions
+
+"damaged iff two RMW scalars share the upper half of one 16-byte row" fits 17/19; it fails on kb12
+and sep12. Not proposed as the rule -- recorded so it is not re-derived.
+
+### This is consistent with SEVERAL faults
+
+The row-offset-12 group (7 builds, deltas -9/-72/+9/+330/+333) and the row-offset-8 group (2 builds,
+deltas -558/-9) separate cleanly, and the offset-8 group appears ONLY in the two builds carrying a
+fourth RMW scalar. A 60x spread in loss rate (1.6% to 97%) across one "rule" is itself evidence
+against unity. Treat "one fault" as a hypothesis under test, not a premise.
+
+### Method note
+
+Before any further board time on geometry: run `fit-victim-rules.py`. If a proposed rule already
+fails on the existing 19 builds, it does not need a boot to refute it.
