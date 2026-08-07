@@ -60,6 +60,15 @@ TIMEOUT = float(os.environ.get("BAKED_TIMEOUT") or 120)
 # go quiet for longer than this between markers.
 IDLE_S = float(os.environ.get("BAKED_IDLE_S", "25"))
 ART = pathlib.Path(os.environ.get("LADDER_FPGA_DIR") or "/tmp/capstone/ladder-fpga")
+# THE COMPLETE UART STREAM. Ported from run_sqlite_stages_fpga.py, which explains why the
+# per-test windows alone are unsafe: `uart_since(mark)` CLOSES ON TIMEOUT while bytes are still
+# arriving, so a wedged rung's capture can end mid-line. The staged runner grew a raw capture
+# for that reason; this one never did, and the consequence was concrete -- boots 31 through 43
+# have no full console capture at all, and those are exactly the boots whose SHA5-vs-SHA6
+# classification decided whether seven probes had entered. That classification survived only
+# because the driver's stderr happened to be redirected to a scratch file. Luck, not design.
+RAW_OUT = os.environ.get("BAKED_RAW_OUT") or (
+    (os.environ.get("BAKED_OUT") or "/tmp/capstone/baked-rungs.txt").rsplit(".", 1)[0] + "-raw.txt")
 OUT = os.environ.get("BAKED_OUT") or "/tmp/capstone/baked-rungs.txt"
 # Resident-bitstream guard. Reflashed 2026-08-04 to caplifive_fixed_forward.bit, which
 # carries the operand-forwarding fix (capstone-ariane 7aac52f93). Overridable so the next
@@ -119,9 +128,21 @@ def main():
             transcript.append(f"===== {r} (pos {pos}) =====\n{text}\n")
             m = re.search(r"RESULT\s+" + re.escape(r) + r"\s+retval=(\d+)", text)
             got = int(m.group(1)) if m else None
+            # ENTERED vs merely CREATED. A ladder rung that entered emits SHA6; absence means it
+            # died in the first region share and NOTHING of the code under test ran. Printing
+            # "NO RESULT (wedged)" for both is what let seven consecutive entry stalls read as
+            # seven negative results about the code -- see the staged runner, which was fixed
+            # for the same confusion on the SQLite path.
+            entered = "SHA6:" in text
             results.append((r, pos, got, oracles[r]))
-            log(f"  {r}: retval={got} oracle={oracles[r]} "
-                f"{'OK' if got == oracles[r] else 'MISMATCH/NO-RESULT'}")
+            if got is None and not entered:
+                log(f"  {r}: NO SHA6 -- ENTRY STALL (R-16), the domain never ran. This slot "
+                    f"carries NO VERDICT about the code. R-16 is per-image: REDRAW (vary "
+                    f"FDREG_DRAW/QR_DRAW, sha256sum the set), do not retry this binary.")
+            else:
+                log(f"  {r}: retval={got} oracle={oracles[r]} "
+                    f"{'OK' if got == oracles[r] else 'MISMATCH/NO-RESULT'}"
+                    f"{'' if entered else ' [no SHA6 -- did not enter]'}")
             if wedged:
                 # A WEDGED DOMAIN TAKES THE CORE. Everything after this point is collateral,
                 # not a result, and must not be scored -- this runner used to continue and emit
@@ -143,6 +164,18 @@ def main():
         # GUARDED: this used to be bare, and it runs BEFORE the summary print. A failure here
         # (missing /tmp/capstone, full disk) raised inside the finally and threw away results
         # that had already been captured.
+        try:
+            # The FULL console stream, written first and separately: it is the only capture that
+            # survives a window closing on timeout, and it is what the SHA6 entry check must be
+            # read from. Written in the finally so a wedge, a timeout or a crash still leaves it.
+            raw = getattr(console, "uart_all", None)
+            raw = raw() if callable(raw) else getattr(console, "uart_buf", "")
+            if raw:
+                pathlib.Path(RAW_OUT).write_text(raw if isinstance(raw, str) else raw.decode("utf-8", "replace"))
+                print(f"full console stream -> {RAW_OUT}", flush=True)
+        except Exception as exc:
+            print(f"raw capture failed ({type(exc).__name__}) -- windows still written",
+                  file=sys.stderr, flush=True)
         try:
             pathlib.Path(OUT).write_text("".join(transcript))
         except Exception as exc:

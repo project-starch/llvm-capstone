@@ -74,10 +74,102 @@ sys.exit(0 if d.count(bytes.fromhex('d00dfeed'))==1 else 1)" \
   fi
 fi
 
-# C7 ----------------------------------------------------------------------------------------
+# Domain count, hoisted: C11 and C12 both reference it and run before C7 computes it.
 n=0
 [[ -n "$RUNGS" ]] && n=$(wc -w <<<"$RUNGS")
 [[ -n "$DOMS"  ]] && n=$(awk -F, '{print NF}' <<<"$DOMS")
+
+# C9 -- OVERLAY CLEANLINESS. -----------------------------------------------------------------
+# The overlay grew to 111 files / 35 MB over one session because every probe was staged and
+# none retired. Measured cost: 30.6 minutes of pure JTAG upload across 39 boots, at a rock-solid
+# 128.2 KiB/s, plus one boot lost outright to HTTP 413 -- and that rejection came from being
+# 689,160 bytes over, i.e. less than ONE stale SQLite domain. Retiring 99 files cut the firmware
+# by exactly 10 MiB = 80 s off every boot.
+OVERLAY_KEEP_ALWAYS="sbi.dom sbi.smode smode.dom smode.smode thread.dom fib.dom lpc sqlite_host.user k800.dom q31.dom"
+if [[ -d "$OVERLAY" ]]; then
+  _wanted=" $OVERLAY_KEEP_ALWAYS "
+  # BAKED_RUNGS names rungs WITHOUT the .dom suffix ("lf0"), while SQLITE_STAGE_DOMS gives full
+  # paths ("/test-domains/q31.dom", optionally "host args|path:selector"). Accept both spellings
+  # or the gate flags the very domains the run needs -- which it did on the first dry run.
+  for _d in ${RUNGS} $(tr ',' ' ' <<<"$DOMS"); do
+    _b="$(basename "${_d##*|}" | cut -d: -f1)"
+    _wanted+="$_b ${_b%.dom}.dom "
+  done
+  # Cost is proportional to SIZE, so the gate is too: at 128 KiB/s a stray 13 KB rung costs a
+  # tenth of a second and a stray 1.5 MB SQLite domain costs twelve. BLOCK only on the big ones;
+  # mention the small ones without stopping the run. The 30.6 minutes lost this session were
+  # essentially all in 21 multi-megabyte domains.
+  _stale=(); _small=0
+  while IFS= read -r _f; do
+    [[ -n "$_f" ]] || continue
+    [[ "$_wanted" == *" $_f "* ]] && continue
+    if (( $(stat -c%s "$OVERLAY/$_f" 2>/dev/null || echo 0) > 262144 )); then
+      _stale+=("$_f")
+    else
+      _small=$(( _small + 1 ))
+    fi
+  done < <(ls -1 "$OVERLAY" 2>/dev/null)
+  (( _small > 0 )) && say "warn" "$_small small unused file(s) in the overlay (<256 KB each -- negligible upload, not blocking)"
+  if (( ${#_stale[@]} > 0 )); then
+    bad "overlay has ${#_stale[@]} file(s) this run does not use -- every one is uploaded over JTAG at 128 KiB/s on EVERY boot. Retire them by EXPLICIT NAME (never a glob; a prefix glob once deleted the package-installed sbi.dom):
+    mkdir -p /tmp/capstone/overlay-attic && cd $OVERLAY && mv -t /tmp/capstone/overlay-attic ${_stale[*]}
+  then re-run BOTH: make build LINUX_PAYLOAD=1 A=linux-rebuild ... && ... A=opensbi-rebuild ...
+  (the linux-rebuild is NOT optional -- omitting it leaves the firmware byte-identical and the
+   prune silently does nothing)"
+  else
+    ok "overlay clean (${#_wanted} expected files, no strays)"
+  fi
+fi
+
+# C10 -- FIRMWARE BUDGET, not just the hard limit. --------------------------------------------
+# C8 blocks at the console's 33,554,432 rejection threshold. That is too late to be useful: a
+# clean overlay with four 20 KB rungs is ~17.5 MB, so anything past 20 MB means stale domains
+# are riding along. There is a SECOND, quieter ceiling too -- run_ladder_perf_fpga.py gives
+# `monitor load_image` a fixed 300 s, and at 128.2 KiB/s a 32 MiB image needs 256 s of that.
+# One boot already spent 245 s of the 300 with no warning.
+if [[ -n "$FW" && -f "$FW" ]]; then
+  _b=$(stat -c%s "$FW"); _upl=$(( _b / 131293 ))
+  if (( _b > 20000000 )); then
+    bad "firmware $(( _b / 1048576 )) MB exceeds the 20 MB working budget -- the overlay is dirty. A clean one is ~17.5 MB; only a retained multi-megabyte domain gets it past 20."
+  else
+    ok "firmware $(( _b / 1048576 )) MB within the 20 MB working budget (~${_upl}s upload)"
+  fi
+  if (( _upl > 240 )); then
+    bad "estimated JTAG upload ${_upl}s against load_image's fixed 300s budget -- under 60s of margin, and a timeout there costs the whole boot"
+  fi
+fi
+
+# C11 -- ENTRY-STALL STREAK. ------------------------------------------------------------------
+# R-16 is PER-IMAGE and deterministic per binary, so retrying a stalling image is futile; the
+# skill says REDRAW. Seven consecutive boots (32-38) each spent a full firmware build and boot
+# on ONE probe that never entered -- SHA5 last, no SHA6 -- producing zero information about any
+# code under test. The very next boot staged three redraws of one probe in a single image and
+# got 3 of 3 returns. This gate refuses the eighth single-probe load.
+_recent_stalls=0
+for _t in $(ls -t /tmp/capstone/boot*-raw.txt /tmp/capstone/boot*.txt 2>/dev/null | head -3); do
+  python3 - "$_t" <<'PYEOF' || _recent_stalls=$(( _recent_stalls + 1 ))
+import sys, re
+d = open(sys.argv[1], 'rb').read()
+sys.exit(0 if (b'SHA6:' in d or b'ENT1' in d) else 1)
+PYEOF
+done
+if (( _recent_stalls >= 3 )); then
+  n_probes=$(( n > 0 ? n - 1 : 0 ))
+  if (( n_probes < 3 )); then
+    bad "the last 3 runs all ended without SHA6/ENT1 (entry stalls, no verdict) and this load carries only $n_probes probe(s). R-16 is per-image: RETRYING IS FUTILE. Stage >=3 REDRAWS of the same probe (vary QR_DRAW / FDREG_DRAW, sha256sum them, abort if any two match) in ONE image instead."
+  else
+    ok "recent entry stalls, but this load carries $n_probes probes -- redraw shape"
+  fi
+fi
+
+# C12 -- UNUSED SLOTS. ------------------------------------------------------------------------
+# The gate below caps the load at 4. Fifteen loads this session requested only 3, and an empty
+# slot is free information: a 13 KB rung adds ~0 upload and ~4 s of run time.
+if (( n > 0 && n < 4 )); then
+  say "warn" "$n domains requested of a 4-slot budget -- $(( 4 - n )) slot(s) left empty. A returning rung there is nearly free (set PREFLIGHT_ALLOW_SHORT=1 to silence)."
+fi
+
+# C7 ----------------------------------------------------------------------------------------
 if [[ "$n" -gt 4 ]]; then
   bad "$n domains requested; the monitor's middle exact-fit case spins at ~the 5th create_dom, so slots 5+ carry NO verdict (set PREFLIGHT_ALLOW_SLOTS=1 to override deliberately)"
   [[ "${PREFLIGHT_ALLOW_SLOTS:-0}" == "1" ]] && { FAIL=0; say "warn" "slot budget overridden on purpose"; }

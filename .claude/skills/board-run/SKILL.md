@@ -139,7 +139,7 @@ position 4 of a 6-program boot, and positions 5 and 6 were recorded as failures.
 one-per-boot, position 5 **passed**.
 
 **Always run a known-good control FIRST in every boot.** It separates "this image failed"
-from "board/firmware/boot failed" — and the control itself fails roughly 1 in 5, so a boot
+from "board/firmware/boot failed" — and the control has its own failure rate, so a boot
 whose control fails is **VOID**, carrying no verdict about anything.
 
 If using `run_ladder_perf_fpga.py` with `LADDER_ONE_BOOT=1`, rungs must be linked at
@@ -287,9 +287,17 @@ exactly the instrument a wedge investigation wants, which is precisely the trap.
 for the GDB tab: an orphaned session wedges every later run and only `gdb_stop()` clears it.
 
 **Do NOT scan a raw UART transcript with `grep` — use `python3` byte search.** `grep` here is
-`ugrep`, and on a transcript containing control bytes it printed *nothing at all* for a string
-that a byte-level search found 8 times. A silent zero reads exactly like "absent", which is the
-worst possible failure mode for a verdict. Same family as the `awk strtonum` returning 0 and the
+`ugrep`, and on a transcript containing control bytes it prints **nothing at all** — not `0`,
+no output whatsoever — and exits 1, for a string a byte search finds repeatedly. Reproduced on
+this session's own data:
+
+```
+$ python3 -c "d=open('/tmp/capstone/boot30-raw.txt','rb').read(); print(d.count(b'SQ: obs='))"
+4
+$ grep -c "SQ: obs=" /tmp/capstone/boot30-raw.txt     # prints NOTHING, exit 1
+```
+
+An empty output is worse than a silent zero: it reads as "absent" *and* as a failed command. Same family as the `awk strtonum` returning 0 and the
 hex-constant-emitted-in-decimal incidents.
 
 ```python
