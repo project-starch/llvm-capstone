@@ -106,6 +106,9 @@
 #ifndef FDREG_SHIFT
 #define FDREG_SHIFT 0
 #endif
+#ifndef FDREG_PEEK
+#define FDREG_PEEK 0
+#endif
 /* FDREG_OUTER -- the outer trip count, so the EXPECTED value can be varied.
    The first three leaf-count rungs all returned 906 against an expected 576. Three different
    images agreeing exactly is as consistent with a BROKEN PROBE returning a constant as with a
@@ -350,6 +353,71 @@ static unsigned fdreg_compute(void) {
   __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
 #endif
 
+#if FDREG_STAGE == 12
+  /* STAGE 12 -- PEEK at the counter's neighbours WITHOUT adding storage.
+     Stages 10/11 laid a sentinel array beside the counters and the fault VANISHED: the
+     shift-8 build, which returns 567 without the array, returned a correct 576 with it. Of
+     course it did -- 32 bytes of witnesses re-shift the frame, and the frame offset IS the
+     variable. Any instrument that adds a local destroys the thing it is measuring.
+     This adds NO storage. It takes the address of the accumulator, which at -O0 is already in
+     memory, and reads a neighbouring word after the loop. FDREG_PEEK selects which word,
+     relative to &qc, so a sweep maps what surrounds the slot:
+        return value = that word, raw
+     An address-like result (the 0x8000000 range is domain memory) would name a store; a small
+     integer would mean one of our own values is landing in the wrong slot. */
+  {
+    unsigned qc = 0;
+    int p, k;
+    volatile unsigned *base = &qc;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;
+        (void)z;
+        qc++;
+      }
+    return base[(FDREG_PEEK)];
+  }
+#endif
+#if FDREG_STAGE == 10 || FDREG_STAGE == 11
+  /* STAGES 10 and 11 -- IDENTIFY the corrupting value instead of inferring it.
+     Boot 46 moved the loop counters within the frame and got four different wrong answers from
+     source QEMU computes as 576 every time: shift 0 -> 576, +4 -> 909, +8 -> 567, +12 ->
+     134218295 = 0x8000237, which is +8's 567 with BIT 27 set. So a stack slot is being
+     corrupted and the corruption depends on the slot's offset. What is NOT known is which
+     value lands there.
+     These two lay a sentinel-filled witness array beside the counters, run the nest unchanged,
+     and read the array back:
+        stage 10 -> 1000*(number of words corrupted) + (index of the first), so 0 means the
+                    witnesses survived and the damage is confined to the counters themselves
+        stage 11 -> the raw 32-bit VALUE of the first corrupted word
+     If that value is address-like (the 0x8000000 range is domain memory) it names a store; if
+     it is a small integer it is one of our own counters landing in the wrong slot. Split into
+     two probes because the marker is one word and the value needs all 32 bits. */
+  {
+    volatile unsigned w[8];
+    unsigned qc = 0, nbad = 0, first = 0, firstv = 0;
+    int p, k;
+    for (i = 0; i < 8; i++) w[i] = 0xA5A5A5A5u;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;
+        (void)z;
+        qc++;
+      }
+    for (i = 0; i < 8; i++)
+      if (w[i] != 0xA5A5A5A5u) {
+        if (nbad == 0) { first = i; firstv = w[i]; }
+        nbad++;
+      }
+#if FDREG_STAGE == 10
+    if (nbad == 0) return qc;              /* witnesses clean -> report the loop result */
+    return 1000u * nbad + first;
+#else
+    (void)qc; (void)nbad;
+    return firstv;                          /* the raw corrupting value */
+#endif
+  }
+#endif
 #if FDREG_STAGE == 9
   /* STAGE 9 -- IS THE INITIALISATION ITSELF LOST?
      Boot 41 swept the outer trip count and the wrong answer tracked the expected one with a
