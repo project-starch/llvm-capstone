@@ -934,3 +934,53 @@ The remaining untested lead is the outer-pass alignment: all three measured rese
 558) are multiples of the inner trip count, which points at something happening once per outer pass
 rather than per iteration. Stage 28 (`FDREG_INNER`) decouples the inner trip count so that is
 falsifiable; it is built but not yet run on the board.
+
+## UPDATE 2026-08-07 (boot 65): MOVING THE COUNTERS OFF THE STACK CURES IT — this is NOT cleanly an RTL defect
+
+Prompted by a challenge to the premise: is this even a hardware problem? Three suspects in our own
+stack had never been tested — the compiler, the monitor/glue, and the domain setup. Only the
+measurement harness had been excluded.
+
+**Boot 65, controlled: stage 32 changes ONE thing from the failing c8** — the three counters live in
+a GLOBAL instead of on the monitor-carved stack. Same compiler, same -O0, same loop source, same
+16-byte capability store, both per-iteration `ldc`s retained (verified in the artifact: `stc` at
+0x3051c, `ldc 0xa0(gp)`, `ldc 0x70(a0)`).
+
+| rung | counters | retval | cycles |
+|---|---|---|---|
+| gv3 | **global**, victim row offset 12 | **576 correct** | 52825 |
+| gv1 | **global**, row offset 4 | 576 correct | 52839 |
+| c8 | **stack** (original) | **qc=567 WRONG** | 44098 |
+
+**The defect vanishes when the counters are not on the monitor-carved stack.** It is therefore NOT
+a property of the row geometry alone, and "silicon defect" is not a claim we can make.
+
+### Consequence: do not send this to the hardware owner
+
+The reproducer stands as a reproducer. The attribution does not. A defect that disappears when our
+own software relocates the variables is at least as likely to be in our monitor's stack carve, the
+stack capability's type/bounds/provenance, or the ABI, as in the RTL.
+
+### The sharper hypothesis this suggests
+
+In the failing build the SAME frame capability (s0, derived from sp) is used to derive BOTH the
+16-byte `stc` target and the scalar counter addresses. In gv3 the counters are reached through `gp`
+-- a DIFFERENT capability -- while the `stc` still goes through s0. So the trigger may be
+**"capability store and scalar accesses derived from the same capability"**, which is an ABI/monitor
+property rather than a hardware one. Untested, and the obvious next experiment.
+
+### Caveats on this result, stated rather than buried
+
+* gv3 is not a perfect one-variable change: moving to a global also changes the ACCESS PATH
+  (`ldc gp[0]` + offset instead of `cincoffsetimm s0` + offset), and it is ~20% slower per
+  iteration. Location and access path are coupled and cannot be separated by this build.
+* An earlier attempt (stages 30/31, hand-written asm with globals) came back clean and proved
+  nothing: it varied five things at once — hand asm vs codegen, global vs stack, half the cycle
+  count, the stored capability's provenance, and the complete absence of both `ldc`s. Recorded so it
+  is not mistaken for evidence.
+* The compiler is STILL not excluded. Isolating it needs hand-written asm reproducing c8's exact
+  sequence ON THE STACK, and that will not run: storing the stack capability into the stack appears
+  illegal under this ABI (`stc` of a linear/uninit capability consumes it), so stage 30 produces no
+  result under QEMU.
+* Running the loop OUTSIDE a domain on the board is not reachable with the current runner, which
+  drives `.dom` files through the monitor.
