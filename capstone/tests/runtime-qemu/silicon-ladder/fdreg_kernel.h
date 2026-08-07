@@ -907,8 +907,16 @@ static unsigned fdreg_compute(void) {
    *     sw   a0, 0x0(a1)     <- carries the stale metadata -> st_wr_cap fires
    *
    * The value `ldc` loads is DISCARDED ((void)z), so a0 is free to clobber immediately
-   * after it. `movc rd, zero` is a capstone op, so it sets cap_result.valid and writes ZERO
-   * into the shadow -- clearing the taint before the counter's store.
+   * after it.
+   *
+   * *** THE PREMISE BELOW IS FACTUALLY WRONG -- corrected 2026-08-07. ***
+   * It said: "`movc rd, zero` is a capstone op, so it sets cap_result.valid and writes ZERO into
+   * the shadow." It does NOT write zero. compress_cap of a NULL capability is 0x08000000, not 0
+   * (ariane_pkg.sv:753-834; the cursorless bit is bit 27). So this barrier writes 0x08000000 into
+   * the shadow of a0 and a1 -- the very registers the -O0 RMW uses. Under the metadata-clobber
+   * model this arm should therefore have pinned the accumulator near zero on EVERY iteration; it
+   * returned 567, bit-identical to the nop control. That made bar1/bar2 a REFUTING datum for that
+   * model, and it was recorded as inconclusive. Do not re-run this as a "clearing" barrier.
    *
    * FDREG_BARRIER=1 emits the clearing barrier; =2 emits the SAME NUMBER OF BYTES of nops.
    * The nop arm is the control and it is what makes this attributable: both builds have

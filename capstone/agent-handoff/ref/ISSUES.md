@@ -2328,7 +2328,38 @@ bisect inside 223–381.
 **Repro:** `CAPSTONE_SQLITE_STAGE=30..34` — **NOT YET RUN SUCCESSFULLY.** Its first attempt
 built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are now fixed.
 
-### R-18 — a plain scalar store in the UPPER half of a 16-byte cache row is overwritten with capability metadata `ROOT-CAUSED IN RTL 2026-08-07 — FIX NEEDS A REFLASH`
+### R-18 — a scalar in the UPPER half of a 16-byte cache row is silently ZEROED `OPEN — NOT ROOT-CAUSED. Causal chain RETRACTED 2026-08-07 by audit.`
+
+> **RETRACTION 2026-08-07 (same day, before handover).** A causal chain was recorded here and in a
+> defect report, and an adversarial audit refuted it. **The report was NOT sent.** What was wrong:
+>
+> 1. **The claimed asymmetry between the two forwarding ports does not exist.** The scoreboard-port
+>    "validity gate" (`issue_read_operands.sv:765`) has `cap_result.result_metadata` in BOTH arms of
+>    its ternary — it does not sanitise to zero. The proposed fix ("gate the WB forward on validity,
+>    matching the scoreboard version") **would have changed nothing.**
+> 2. **There is no demonstrated source of stale metadata on an ordinary store.**
+>    `ex_stage.sv:1081` is `capstone_flu_result_o = capstone_flu_valid_i ? '{...} : '0`, so an
+>    ordinary `addi` forwards ZERO metadata on both ports. `wr_user_i != 0` on a scalar store has
+>    never been measured anywhere — board, simulation or waveform.
+> 3. **Our own barrier experiment refutes it.** `movc rd, zero` does NOT write zero into the shadow;
+>    `compress_cap` of a null capability is **`0x08000000`** (`ariane_pkg.sv:753-834`). So under the
+>    claimed mechanism the `bar1` arm should have pinned the accumulator near zero on every
+>    iteration. It returned 567, bit-identical to its `nop` control. That was a refuting datum and
+>    it was read as inconclusive.
+> 4. **Matched builds kill the geometry as a cause.** `c8` (qc@0x1c) loses 9 while `gp16`/`gp32`/
+>    `t16` (qc@0x2c, 0x3c) are exact — same bank, same byte lanes, same instruction. Roughly 10
+>    undamaged upper-half slots against 9 damaged ones. The upper-half rule is a NECESSARY
+>    CONDITION, not an explanation.
+> 5. **The `clobber + (576 - reset)` table is an arithmetic identity, not a fit** — two free
+>    parameters per observation, so any value decomposes. It also omits the builds that do not fit
+>    (+11, +330 are not multiples of 9).
+>
+> **A better lead came out of the audit:** all three measured reset points — 9, 72, 558 — are
+> multiples of 9, i.e. they land exactly on OUTER-PASS BOUNDARIES (p ≈ 1/729 under a uniform null).
+> Something that happens once per outer pass fits far better than the victim's own store: the
+> `k = 0` re-initialisation, whose store at the shift8 geometry sits at `0x14` (bank 0, lanes 4-7)
+> and whose dual-bank splash target is exactly `0x1c`. That is a DIFFERENT mechanism and is untested.
+
 
 A plain `sw` whose address lies in the upper 8 bytes of a 16-byte D-cache row can have **its own
 slot written with capability metadata instead of its data**. Where those metadata bytes are zero at

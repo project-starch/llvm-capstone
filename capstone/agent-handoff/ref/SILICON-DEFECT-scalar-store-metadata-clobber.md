@@ -1,7 +1,31 @@
 # Silicon defect report: a plain scalar store in the upper half of a cache row is overwritten with capability metadata
 
-**Issue:** R-18 in `ISSUES.md`. **Status:** root cause identified in RTL, reproduced on silicon, not reproduced in simulation (see
-§7). **Audience:** the board/RTL owner. **Date:** 2026-08-07.
+**Issue:** R-18. **Status: DO NOT SEND. The causal chain below was RETRACTED on 2026-08-07 by an
+adversarial audit, hours after it was written and before handover.** The *observations* (§3) stand;
+the *mechanism* (§2) and the *fix* (§5) do not. See the retraction box immediately below, and R-18
+in `ISSUES.md`. **Date:** 2026-08-07.
+
+---
+
+> ## RETRACTED — read this before anything else
+>
+> * §2 link 1 is misread. The scoreboard-port "validity gate" (`issue_read_operands.sv:765`) has
+>   `cap_result.result_metadata` in **both** arms of its ternary; it does not sanitise to zero. The
+>   asymmetry the chain depends on does not exist, and **the §5 fix would have been a no-op.**
+> * No source of stale metadata on an ordinary store has ever been demonstrated.
+>   `ex_stage.sv:1081` zeroes the FLU writeback when the op is not a capstone op, so an ordinary
+>   `addi` forwards zero. `wr_user_i != 0` on a scalar store has never been measured.
+> * Our own `movc` barrier refutes it: `compress_cap(null) = 0x08000000`, not zero, so `bar1`
+>   should have pinned the accumulator near zero and instead matched its `nop` control exactly.
+> * `c8` fails while `gp16`/`gp32`/`t16` succeed at the **same bank and same byte lanes**, so the
+>   geometry cannot be the cause — it is a necessary condition.
+> * The §3 decomposition is an arithmetic identity (two free parameters per observation), not a fit.
+>
+> **What survives and is worth reporting on its own:** `st_wr_cap = |wr_user_i`
+> (`wt_dcache_mem.sv:138`) classifies capability stores **by value rather than opcode**, and the
+> compressed encoding of a **null** capability is `0x08000000`, not zero — so any store carrying
+> null-cap metadata is misclassified and dual-bank written. That is a clean, quotable structural
+> defect. It is *not* shown to be the cause of the 567.
 
 **Affected RTL:** `capstone-ariane`. Verified present at HEAD `458982093` and at `7aac52f93`, the
 commit the resident bitstream `caplifive_65536_nodes.bit` is built from. `git diff 7aac52f93..HEAD`
