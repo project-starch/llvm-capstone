@@ -92,8 +92,24 @@ make build LINUX_PAYLOAD=1 A=opensbi-rebuild CAPSTONE_CC_PATH="$(realpath ../../
 ```
 
 `A=linux-rebuild` **first**: buildroot does not track `overlay/` → cpio, so an OpenSBI-only
-relink silently ships the OLD initramfs. Prune stale big `.dom` files by **explicit name**
-(never a glob — a prefix glob once deleted the package-installed `sbi.dom`).
+relink silently ships the OLD initramfs.
+
+**Retire before you stage, every time — the image is DERIVED from the run, not accumulated:**
+
+```bash
+bash capstone/tests/stage-board-domains.sh --apply $BAKED_RUNGS   # dry-run without --apply
+```
+
+It makes overlay **and** the buildroot target dir hold exactly {controller} ∪ {package files} ∪
+{this run's rungs}, moving everything else to `/tmp/capstone/overlay-attic` — by explicit name,
+never a glob (a prefix glob once deleted the package-installed `sbi.dom`), and nothing is deleted
+because a `.dom` is cheap to keep and expensive to rebuild once its flags are forgotten.
+
+Why a script rather than "prune when it looks big": the overlay reached 111 files / 35 MB in one
+session, costing 30.6 min of JTAG across 39 boots plus a boot lost to HTTP 413. The gates added
+afterwards did not close it — measured against the next session's 26 files / 1.91 MB, C9 would
+have blocked on **nothing** (25 were under its per-file threshold, and the 1.5 MB one was on its
+exemption list). Accumulate-then-prune fails because the prune depends on someone noticing.
 
 Firmware identity is the **hash, never the size**: buildroot pads in 2 MiB steps, so two
 different images routinely have identical sizes.

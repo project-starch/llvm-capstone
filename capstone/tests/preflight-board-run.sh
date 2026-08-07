@@ -85,7 +85,18 @@ n=0
 # 128.2 KiB/s, plus one boot lost outright to HTTP 413 -- and that rejection came from being
 # 689,160 bytes over, i.e. less than ONE stale SQLite domain. Retiring 99 files cut the firmware
 # by exactly 10 MiB = 80 s off every boot.
-OVERLAY_KEEP_ALWAYS="sbi.dom sbi.smode smode.dom smode.smode thread.dom fib.dom lpc sqlite_host.user k800.dom q31.dom"
+# MEASURED AGAINST THE NEXT SESSION (2026-08-07), this gate as originally written would have
+# blocked on NOTHING. That session accumulated 26 files / 1.91 MB: 25 were under the 256 KB
+# threshold below and so only warned, and the 26th was q31.dom at 1.5 MB, which was on this
+# exemption list. The prune that actually happened was manual. Two consequences:
+#   * q31.dom and sqlite_host.user come OFF the permanent exemption -- they are experiment
+#     artifacts, not infrastructure, and a run that needs them names them in SQLITE_STAGE_DOMS,
+#     which is already folded into _wanted below;
+#   * small strays now have a CUMULATIVE budget (C9b) instead of an unbounded warning, because
+#     the ladder-rung workflow generates 13 KB files by the dozen and 25 of them is 2.7 s of
+#     JTAG on every boot forever.
+# Retire with: bash capstone/tests/stage-board-domains.sh --apply <rungs...>
+OVERLAY_KEEP_ALWAYS="sbi.dom sbi.smode smode.dom smode.smode thread.dom fib.dom lpc k800.dom"
 if [[ -d "$OVERLAY" ]]; then
   _wanted=" $OVERLAY_KEEP_ALWAYS "
   # BAKED_RUNGS names rungs WITHOUT the .dom suffix ("lf0"), while SQLITE_STAGE_DOMS gives full
@@ -99,7 +110,7 @@ if [[ -d "$OVERLAY" ]]; then
   # tenth of a second and a stray 1.5 MB SQLite domain costs twelve. BLOCK only on the big ones;
   # mention the small ones without stopping the run. The 30.6 minutes lost this session were
   # essentially all in 21 multi-megabyte domains.
-  _stale=(); _small=0
+  _stale=(); _small=0; _smallover=0
   while IFS= read -r _f; do
     [[ -n "$_f" ]] || continue
     [[ "$_wanted" == *" $_f "* ]] && continue
@@ -109,15 +120,60 @@ if [[ -d "$OVERLAY" ]]; then
       _small=$(( _small + 1 ))
     fi
   done < <(ls -1 "$OVERLAY" 2>/dev/null)
-  (( _small > 0 )) && say "warn" "$_small small unused file(s) in the overlay (<256 KB each -- negligible upload, not blocking)"
+  # C9b -- CUMULATIVE budget for the small ones. Individually negligible, collectively not: the
+  # ladder workflow emits 13 KB rungs by the dozen, and 25 of them measured 360 KB = 2.7 s of
+  # JTAG on EVERY boot, silently, forever. Per-file thresholds cannot see that; a total can.
+  if (( _small > 0 )); then
+    _smallb=0
+    while IFS= read -r _f; do
+      [[ -n "$_f" ]] || continue
+      [[ "$_wanted" == *" $_f "* ]] && continue
+      _sz=$(stat -c%s "$OVERLAY/$_f" 2>/dev/null || echo 0)
+      (( _sz <= 262144 )) && _smallb=$(( _smallb + _sz ))
+    done < <(ls -1 "$OVERLAY" 2>/dev/null)
+    if (( _smallb > 524288 )); then
+      _smallover=1
+      bad "$_small small unused file(s) total $_smallb B in the overlay -- past the 512 KB cumulative budget, ~$(( _smallb / 131072 ))s of JTAG on every boot. Retire: bash capstone/tests/stage-board-domains.sh --apply \$BAKED_RUNGS"
+    else
+      say "warn" "$_small small unused file(s) in the overlay ($_smallb B, under the 512 KB cumulative budget)"
+    fi
+  fi
   if (( ${#_stale[@]} > 0 )); then
     bad "overlay has ${#_stale[@]} file(s) this run does not use -- every one is uploaded over JTAG at 128 KiB/s on EVERY boot. Retire them by EXPLICIT NAME (never a glob; a prefix glob once deleted the package-installed sbi.dom):
     mkdir -p /tmp/capstone/overlay-attic && cd $OVERLAY && mv -t /tmp/capstone/overlay-attic ${_stale[*]}
   then re-run BOTH: make build LINUX_PAYLOAD=1 A=linux-rebuild ... && ... A=opensbi-rebuild ...
   (the linux-rebuild is NOT optional -- omitting it leaves the firmware byte-identical and the
    prune silently does nothing)"
-  else
+  elif (( _smallover == 0 )); then
     ok "overlay clean (${#_wanted} expected files, no strays)"
+  fi
+fi
+
+# C9c -- THE TARGET DIR, which is what actually gets packed. -----------------------------------
+# Until 2026-08-07 this gate looked ONLY at overlay/. But buildroot packs
+# build/target/test-domains into the cpio; overlay/ is merely copied into it. So a file retired
+# from the overlay but left in the target still ships on every boot while the gate reports
+# "overlay clean" -- a silent pass in exactly the situation the gate exists to catch. Checked
+# separately because the target legitimately holds package-installed files the overlay never has.
+TARGET_DIR=${STAGE_TARGET:-capstone/caplifive-system/sw/buildroot/build/target/test-domains}
+TARGET_KEEP="sbi.dom sbi.smode smode.dom smode.smode thread.dom fib.dom lpc"
+if [[ -d "$TARGET_DIR" && -n "$RUNGS$DOMS" ]]; then
+  _tw=" $TARGET_KEEP $OVERLAY_KEEP_ALWAYS "
+  for _d in ${RUNGS} $(tr ',' ' ' <<<"$DOMS"); do
+    _b="$(basename "${_d##*|}" | cut -d: -f1)"; _tw+="$_b ${_b%.dom}.dom "
+  done
+  _tstale=(); _tb=0
+  while IFS= read -r _f; do
+    [[ -n "$_f" ]] || continue
+    [[ "$_tw" == *" $_f "* ]] && continue
+    _tstale+=("$_f"); _tb=$(( _tb + $(stat -c%s "$TARGET_DIR/$_f" 2>/dev/null || echo 0) ))
+  done < <(ls -1 "$TARGET_DIR" 2>/dev/null)
+  if (( _tb > 524288 )); then
+    bad "buildroot TARGET dir carries ${#_tstale[@]} unused file(s) totalling $_tb B -- these ship even if the overlay is clean, because the cpio is packed from the target. Retire: bash capstone/tests/stage-board-domains.sh --apply \$BAKED_RUNGS"
+  elif (( ${#_tstale[@]} > 0 )); then
+    say "warn" "target dir has ${#_tstale[@]} unused file(s) ($_tb B, under budget): ${_tstale[*]}"
+  else
+    ok "buildroot target dir clean (packs exactly what this run needs)"
   fi
 fi
 
