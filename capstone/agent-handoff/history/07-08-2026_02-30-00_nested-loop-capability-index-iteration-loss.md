@@ -1023,3 +1023,51 @@ Not the region per se, but how the address capability is OBTAINED:
 That is the next thing to isolate: keep the counters on the stack but reach them through a
 capability that was loaded from memory (park the frame capability in a slot, `ldc` it back, use that
 for the RMW). If that is clean, the variable is the address capability's provenance, not the region.
+
+## RETRACTION 2026-08-07: "the damaged scalar must be on the domain STACK" — boot 65 tested nothing
+
+An adversarial audit refuted the boot-65 conclusion, and the refutation is confirmed here.
+
+**Stage 32 had NO `FDREG_SHIFT` pad** — the only recent stage without one. It was therefore
+structurally incapable of being placed at the failing geometry, and shipped at the SHIFT=0 layout:
+
+    gv3.dom   stack rmw = 0x1c / 0x20 / 0x24
+    c0.dom    stack rmw = 0x1c / 0x20 / 0x24    <- known UNDAMAGED
+    rs0.dom   stack rmw = 0x1c / 0x20 / 0x24    <- known UNDAMAGED
+    c8.dom    stack rmw = 0x14 / 0x18 / 0x1c    <- the failing geometry
+
+`fit-victim-rules.py` already lists that layout among the undamaged builds (c0, rs0, bs16, nr16).
+**gv3 was predicted correct by the existing dataset before any global was involved.** The "cure" was
+the layout, not the storage class.
+
+**This is the FIFTH confound of the same class** (after qc==k+8, k bits[3:2], "k is immune", and the
++0x1c anchor). And the trail's own method note — added hours earlier — says to run
+`fit-victim-rules.py` before spending board time on geometry. It takes milliseconds and reads the
+ELF. It was not run.
+
+**A second error in the same build:** the note said "the three counters live in a GLOBAL". False.
+`qc`, `p`, `k` never left the stack; only a FOURTH accumulator was global, and only that was
+returned — so whether the stack `qc` was damaged in gv3 is UNOBSERVED. That is exactly the
+single-number reporting failure diagnosed at boot 55.
+
+### What still stands from boot 66
+
+The gz arms (store target moved to a global, counters left on the stack at row offsets 12 and 8 →
+567 and 0x8000237) do kill the "capability store and scalar accesses derive from the same
+capability" hypothesis, and they show the damage needs neither the store and counters in one row nor
+in one region. But they have **no matched benign-geometry control**, the frame shrank 0x50→0x40 so
+every absolute address moved, and each arm is N=1. Downgrade from "irrelevant" to: *moving the store
+target to a global does not cure it at these two geometries.*
+
+### Stage 32 is fixed
+
+It now carries the standard `FDREG_SHIFT` pad and returns BOTH accumulators packed
+(`stack<<16 | global`, correct = 0x02400240), so the comparison is actually made. Built at SHIFT=8
+the stack slots are 0x14/0x18/0x1c — identical to c8 — with the global accumulator alongside.
+
+### Process items from the audit, worth keeping
+
+* Artifacts behind load-bearing claims were rotating out of the overlay into an attic and out of
+  `/tmp`. Copy them somewhere durable with hashes recorded next to the result line.
+* `fit-victim-rules.py` hard-codes a session-scoped scratchpad path and will silently report
+  `dataset: 0 builds` elsewhere. Fix before relying on it again.

@@ -1,7 +1,8 @@
 import json, subprocess, itertools, sys
 sys.path.insert(0,'/tmp/capstone')
 from extract_layout import layout
-S="/tmp/claude-1005/-home-alexey-dev-llvm-capstone/fea3eec8-e31e-459d-82aa-366f35932b14/scratchpad/wit"
+S=os.environ.get("CAPSTONE_DOM_DIR", ".")   # was a session-scoped scratchpad path;
+# it silently produced "dataset: 0 builds" anywhere else. Set CAPSTONE_DOM_DIR to a .dom directory.
 import os
 # build -> (victim_slot or None, delta, victim_known)
 OUT = {

@@ -172,6 +172,9 @@
 #define FDREG_WITSEL 0
 #endif
 /* FDREG_WITPAD -- moves stage 13's witnesses onto the damage window. See stage 13. */
+#ifndef FDREG_PVICT
+#define FDREG_PVICT 3
+#endif
 #ifndef FDREG_GVICT
 #define FDREG_GVICT 3
 #endif
@@ -615,6 +618,46 @@ static unsigned fdreg_compute(void) {
     return qc_out;
   }
 #endif
+#if FDREG_STAGE == 34
+  /* STAGE 34 -- IS IT THE REGION, OR THE ADDRESS CAPABILITY'S PROVENANCE?
+   *
+   * Boot 65 moved the counters to a global and cured the defect; boot 66 showed the capability
+   * store's target is irrelevant. But "moved to a global" changed TWO things at once: the region,
+   * and how the counter's address capability is obtained --
+   *
+   *     failing: address = cincoffsetimm(s0, imm)   -- from a REGISTER-RESIDENT capability
+   *     passing: address = ldc gp[i], then offset   -- from a capability LOADED FROM MEMORY
+   *
+   * That is the same coupled-variable trap that produced four refuted "laws" earlier, so it must be
+   * separated before "the stack" is treated as the cause.
+   *
+   * This keeps the counters ON THE STACK and changes ONLY the provenance: a `volatile` pointer
+   * local holds their address, so at -O0 every access must `ldc` the capability back out of memory
+   * before the `lw`/`sw` -- exactly the passing arm's pattern, in the failing arm's region.
+   *
+   *     still fails -> provenance is irrelevant; the REGION is the variable and "must be on the
+   *                    stack" stands
+   *     now clean   -> the region was never the variable; it is how the address capability is
+   *                    obtained, and boot 65's reading has to be withdrawn
+   *
+   * FDREG_PVICT picks which slot of the on-stack array the accumulator uses, so the victim row
+   * offset can be set explicitly rather than left to the allocator.
+   */
+  {
+    volatile unsigned cnt[8] __attribute__((aligned(16)));
+    volatile unsigned *volatile pc = &cnt[(FDREG_PVICT)];   /* address parked IN MEMORY */
+    int p, k;
+    unsigned i;
+    for (i = 0; i < 8; i++) cnt[i] = 0;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;   /* the capability store, unchanged */
+        (void)z;
+        (*pc)++;                                        /* ldc pc -> lw -> addi -> sw */
+      }
+    return cnt[(FDREG_PVICT)];
+  }
+#endif
 #if FDREG_STAGE == 33
   /* STAGE 33 -- IS THE TRIGGER "SAME CAPABILITY FOR BOTH"? Counters stay on the stack; only the
    * capability STORE TARGET moves to a global.
@@ -677,8 +720,20 @@ static unsigned fdreg_compute(void) {
    * FDREG_GVICT selects the accumulator's offset inside the global block so the victim geometry
    * can be set explicitly rather than left to the allocator.
    */
+  /* *** BOOT 65 USING THIS STAGE IS RETRACTED. *** As originally written this block had NO
+   * FDREG_SHIFT pad, so it could not be placed at the failing geometry and shipped at the SHIFT=0
+   * layout -- stack slots 0x1c/0x20/0x24, byte-identical to c0/rs0/bs16/nr16, all of which the
+   * dataset already lists as UNDAMAGED. gv3 was predicted correct before any global was involved,
+   * so it never tested the global at all. Fifth confound of the same class.
+   * It also returned only the GLOBAL accumulator while qc/p/k stayed on the stack unobserved.
+   * Both are fixed here: the pad is added, and the packed return reports the STACK accumulator and
+   * the GLOBAL one together so the comparison is actually made. */
   {
     static volatile unsigned gcnt[16] __attribute__((aligned(16)));
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
     unsigned qc = 0;
     int p, k;
     gcnt[(FDREG_GVICT)] = 0;
@@ -689,7 +744,8 @@ static unsigned fdreg_compute(void) {
         gcnt[(FDREG_GVICT)]++;                          /* accumulator, now in a GLOBAL */
         qc++;
       }
-    return gcnt[(FDREG_GVICT)];
+    /* bits 31..16 = STACK accumulator, bits 15..0 = GLOBAL accumulator. Correct = 0x02400240. */
+    return ((qc & 0xFFFFu) << 16) | (gcnt[(FDREG_GVICT)] & 0xFFFFu);
   }
 #endif
 #if FDREG_STAGE == 30
