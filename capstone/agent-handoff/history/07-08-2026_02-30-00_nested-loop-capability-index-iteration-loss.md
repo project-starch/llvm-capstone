@@ -457,3 +457,42 @@ same three slots hold different variables (k@0x14, qc@0x18, p@0x1c against stage
 p@0x18, qc@0x1c). If the damage follows the SLOT the victim changes with it; if it follows the
 VARIABLE the accumulator keeps losing stores wherever it lives. p == k+4 and "the accumulator is
 the upper slot" have been welded together in every build ever made.
+
+## UPDATE 2026-08-07 (boot 56, ROLE SWAP): THE DAMAGE FOLLOWS THE SLOT, NOT THE VARIABLE
+
+Stage 20 swaps the declaration order so the SAME three frame slots hold DIFFERENT variables, with
+k left exactly where it was. Control green, all arms returned, all report the packed triple.
+
+| build | k | slot sp+0x1c | high slot | retval | cycles | implied iters | victim |
+|---|---|---|---|---|---|---|---|
+| c0 | 0x1c | *k* | qc@0x24 | qc=576 correct | 44001 | 576 | none |
+| rs0 | 0x1c | *k* | p@0x24 | qc=576 correct | 43998 | 576 | none |
+| c4 | 0x18 | **p** | qc@0x20 | qc=909 | 69081 | ~904 | **p**, extra outer passes |
+| rs4 | 0x18 | **qc** | p@0x20 | **qc=504** | 44032 | 576 | **qc**, 72 stores lost |
+| c8 | 0x14 | **qc** | p@0x18 | qc=567 | 44074 | 576 | **qc**, 9 stores lost |
+| rs8 | 0x14 | **p** | qc@0x18 | **qc=585** | 44752 | 586 | **p**, one extra pass |
+
+**In all four failing arms the victim is whichever variable occupies sp+0x1c.** Swapping the
+declarations at a FIXED k flips the failure mode -- which is what "follows the slot" predicts and
+what "follows the variable" forbids:
+
+* **qc at 0x1c** -> stores silently dropped. 567 at the shift8 geometry, 504 (72 lost = 8 outer
+  passes) at shift4. Iteration count correct in both, confirmed by cycles.
+* **p at 0x1c** -> the outer loop runs extra passes. 909 (~904 iterations) at shift4, 585 (586
+  iterations) at shift8. qc faithfully counts the extra iterations in both.
+
+So the two "different faults" are ONE fault in one slot, and the signature is merely a consequence
+of which variable the compiler put there. That also explains every dead geometric law: they all
+indexed on k, and **k is the one slot that is never the victim**.
+
+### What does NOT fit yet -- do not overstate this
+
+* **k at sp+0x1c is CLEAN** (c0, rs0). The slot is not universally poisoned. The one structural
+  difference is that k is the only counter READ TWICE per iteration -- once for the loop compare
+  (`li a0,0x8; blt`) and once for the increment -- while qc and p are read once.
+* **sep20** (frame 0x60) has qc at the corresponding frame offset yet fails on p, so a purely
+  absolute-address rule does not cover it either.
+
+So "sp+0x1c is the victim" holds across these six builds and is NOT yet the whole rule. The next
+discriminator is whether the operative address is sp-relative, s0-relative, or something about the
+access pattern that spares a twice-read slot.
