@@ -425,6 +425,103 @@ static unsigned fdreg_compute(void) {
   __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
 #endif
 
+#if FDREG_STAGE == 20
+  /* STAGE 20 -- THE ROLE SWAP. Does the fault follow the SLOT or the VARIABLE?
+   *
+   * Every build in this investigation has had the -O0 allocator place the three counters in
+   * one fixed order: k lowest, p = k+4, qc = k+8. So "the slot at k+8" and "the accumulator"
+   * have never been separated, exactly as "k's bits[3:2]" and "qc is k's bank sibling" were
+   * never separated until stage 18. Two successive geometric laws died of that class of
+   * confound; this is the same confound one level down.
+   *
+   * Swapping the declaration order puts the SAME three slots under DIFFERENT variables:
+   *
+   *     stage 19 (and every earlier build)      stage 20
+   *     k  @ sp+0x14   inner index              k  @ sp+0x14   inner index
+   *     p  @ sp+0x18   outer counter            qc @ sp+0x18   accumulator
+   *     qc @ sp+0x1c   accumulator              p  @ sp+0x1c   outer counter
+   *
+   * k, the loop's own index, is left exactly where it was, so the geometry the old table
+   * indexes on is untouched. Only which variable occupies the upper two slots changes.
+   *
+   *     a 909-family answer (extra outer passes) -> the fault follows the SLOT: whatever
+   *         scalar sits in the upper slot is the victim, and it is now the OUTER counter, so
+   *         the signature flips from "lost 9" to "ran extra passes". That would unify the 567
+   *         and 909 cells as ONE fault with two victims and make the law purely geometric.
+   *     a 567-family answer (qc short by 9)      -> the fault follows the VARIABLE: the
+   *         accumulator loses 9 wherever it lives, and the slot geometry is not the operative
+   *         thing at all.
+   *     correct                                  -> neither alone; the defect needs the
+   *         accumulator specifically in the upper slot.
+   *
+   * Returns the packed triple as stage 19 (p<<20 | k<<16 | qc), so the answer names the victim
+   * instead of only reporting that a number was wrong -- and it must be read together with the
+   * cycle count, which independently separates "lost an increment" from "ran extra passes".
+   *
+   * VERIFY THE SLOT ASSIGNMENT IN THE ARTIFACT. clang is free to reorder; the bounded-by-8
+   * counter must be the low slot and the bounded-by-0x3f counter the high one. Adjusting
+   * FDREG_SHIFT until k lands where intended is expected, not a workaround.
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    int p;                    /* declared FIRST -> highest slot, was qc's */
+    unsigned qc = 0;          /* declared SECOND -> middle slot, was p's  */
+    int k;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;   /* cap field, inner resetting counter */
+        (void)z;
+        qc++;
+      }
+    return ((unsigned)(p & 0xFFF) << 20) | ((unsigned)(k & 0xF) << 16) | (qc & 0xFFFFu);
+  }
+#endif
+#if FDREG_STAGE == 19
+  /* STAGE 19 -- REPORT ALL THREE COUNTERS. The instrument fix.
+   *
+   * Every rung built for this defect has returned qc alone. The cycle counts then showed the
+   * four-cell table conflates TWO DIFFERENT FAULTS: the 567 family executes the full 576
+   * iterations and loses exactly one outer pass of accumulator increments, while the 909
+   * family genuinely executes ~333 extra iterations because the OUTER counter is disturbed.
+   * A probe returning qc cannot say which fault it saw, which is why two successive geometric
+   * "laws" both held until the next build and then died.
+   *
+   * At -O0 the frame packs k, p = k+4, qc = k+8, and every one of them is a candidate victim.
+   * This returns all three in one word, so a single arm says WHICH counter was damaged rather
+   * than only that the answer was wrong:
+   *
+   *     bits 31..20  p, the outer counter at exit   (expect FDREG_OUTER = 64)
+   *     bits 19..16  k, the inner index at exit     (expect FDREG_N = 9)
+   *     bits 15..0   qc, the accumulator            (expect 576)
+   *
+   * Correct is therefore 0x04090240. Read it with the CYCLE COUNT, which is free and printed
+   * on every RESULT line: cycles/76.58 gives the iterations actually executed, and that
+   * separates "lost an increment" from "ran extra passes" independently of the returned value.
+   *
+   * The loop body is byte-identical to stage 7; only the return expression differs, so the
+   * frame layout is unchanged and comparisons against the existing table stay valid. Verify
+   * that in the artifact -- an added local would move every slot and cure the fault, which is
+   * exactly how stages 10 and 11 destroyed what they were measuring.
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+    int p, k;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;   /* cap field, inner resetting counter */
+        (void)z;
+        qc++;
+      }
+    return ((unsigned)(p & 0xFFF) << 20) | ((unsigned)(k & 0xF) << 16) | (qc & 0xFFFFu);
+  }
+#endif
 #if FDREG_STAGE == 18
   /* STAGE 18 -- BREAK THE qc == k+8 INVARIANT. This is the confound in our own law.
    *

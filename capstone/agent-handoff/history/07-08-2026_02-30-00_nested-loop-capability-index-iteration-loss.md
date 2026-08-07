@@ -415,3 +415,45 @@ Stop sweeping geometry. The next probe must report the INNER and OUTER counters 
 the cycle count, because every rung so far has returned only qc and therefore reported one of two
 faults without saying which. Until a probe distinguishes them at the source, more geometry points
 will keep producing laws that hold until the next build.
+
+## UPDATE 2026-08-07 (boot 55): TWO VICTIMS IDENTIFIED. k is knocked BACKWARDS; qc LOSES stores.
+
+Stage 19 returns all three counters packed (p<<20 | k<<16 | qc) instead of qc alone. Control green.
+
+| rung | shift | p | k | qc | cycles | implied iters |
+|---|---|---|---|---|---|---|
+| c0 | 0 | 64 | 9 | **576 correct** | 44001 | 575 |
+| c4 | 4 | 64 | 9 | **909** | **69081** | **~904** |
+| c8 | 8 | 64 | 9 | **567** | 44074 | 576 |
+
+**p and k read NORMAL at exit in both failing cells -- and that is not the same as the loop being
+undamaged.** Both loops terminate on their own conditions (`k < 9`, `p < 64`), so an index that is
+transiently knocked backwards runs extra iterations and still exits at exactly k=9, p=64. The
+cycle count is what exposes it, and it is the only instrument here that can: c4 spent 69081 cycles
+against c0's 44001 for the same nominal work.
+
+### The two faults, with victims
+
+* **c4 (909-family): the victim is k, the INNER INDEX.** It is transiently corrupted mid-loop, the
+  inner loop executes ~904 iterations instead of 576, and qc faithfully counts them -- 909 against
+  the ~904 the cycles imply. The accumulator is innocent in this cell.
+* **c8 (567-family): the victim is qc, the ACCUMULATOR.** The cycle count confirms exactly 576
+  iterations executed; nine increments were simply lost. The loop index is innocent in this cell.
+
+So the same rung family produces two mechanically distinct failures -- a LOST STORE to one scalar,
+and a BACKWARDS CLOBBER of another -- and every previous probe returned a single number that
+averaged them. That is why two successive geometric "laws" each held until the next build: they
+were fitted across two populations.
+
+### Consequence
+
+A mechanism must now explain BOTH: a scalar whose stores are silently dropped (~1 in 64), and a
+scalar that is knocked to a smaller value mid-loop. Both while memory adjacent to the capability
+store is verifiably intact, both only inside a real domain, and neither reproducing bare-metal in
+simulation at either RTL revision.
+
+Stage 20 (built, slots verified) is the next discriminator: it swaps the DECLARATION order so the
+same three slots hold different variables (k@0x14, qc@0x18, p@0x1c against stage 19's k@0x14,
+p@0x18, qc@0x1c). If the damage follows the SLOT the victim changes with it; if it follows the
+VARIABLE the accumulator keeps losing stores wherever it lives. p == k+4 and "the accumulator is
+the upper slot" have been welded together in every build ever made.
