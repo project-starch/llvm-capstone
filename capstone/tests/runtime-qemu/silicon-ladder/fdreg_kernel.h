@@ -84,6 +84,28 @@
 #ifndef FDREG_LEAVES
 #define FDREG_LEAVES 0
 #endif
+/* FDREG_GUARD -- makes the `if (s == 0xFFFFFFFFu) return 0;` line optional.
+   It exists so the two halves of a comparison can come from ONE source revision. fdreg7
+   (576, correct) and lf0 (906, wrong) are both stage 7 at LEAVES=0 and they disagree, but
+   they differ in FIVE ways at once -- base VA, 60 vs 77 instructions in fdreg_compute, this
+   guard, frame slot offsets, image size -- because fdreg7 predates the guard and FDREG_OUTER.
+   Using it as a control was wrong. With this knob, guard-on and guard-off differ by the guard
+   and nothing else. */
+#ifndef FDREG_GUARD
+#define FDREG_GUARD 1
+#endif
+/* FDREG_SHIFT -- moves the loop counters within the frame, and nothing else.
+   The guard/no-guard pair (906 vs 576, base VA excluded by a 2x2) turned out NOT to differ by
+   the guard's instructions: adding the guard adds a local, which shifts EVERY frame slot by 4
+   bytes. The inner counter sits at s0-0x34 in the passing build and s0-0x38 in the failing one:
+       -0x34 = 52,  52 mod 16 = 4   PASSES
+       -0x38 = 56,  56 mod 16 = 8   FAILS
+   16 bytes is exactly a capability, so the counter's position WITHIN a 16-byte granule is a
+   candidate the guard was only a proxy for. This knob varies that position directly, with the
+   guard and everything else held constant -- a dummy local declared ahead of the counters. */
+#ifndef FDREG_SHIFT
+#define FDREG_SHIFT 0
+#endif
 /* FDREG_OUTER -- the outer trip count, so the EXPECTED value can be varied.
    The first three leaf-count rungs all returned 906 against an expected 576. Three different
    images agreeing exactly is as consistent with a BROKEN PROBE returning a constant as with a
@@ -405,6 +427,10 @@ static unsigned fdreg_compute(void) {
    * than a hang, so it stays bisectable.
    */
   {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
     unsigned qc = 0;
     int p, k;
     /* Reads the padding globals FIRST so FDREG_PAD=1 actually reaches the cap table. Without
@@ -413,7 +439,9 @@ static unsigned fdreg_compute(void) {
        one. The guard keeps `s` live without altering the result: with PAD=1 it is 160, with
        PAD=0 it is 0, and neither is 0xFFFFFFFF. */
     FDREG_PAD_SUM()
+#if (FDREG_GUARD)
     if (s == 0xFFFFFFFFu) return 0;
+#endif
     for (p = 0; p < (FDREG_OUTER); p++)
       for (k = 0; k < FDREG_N; k++) {
         const char *volatile z = fdreg_defs[k].zName;   /* cap field, inner resetting counter */
