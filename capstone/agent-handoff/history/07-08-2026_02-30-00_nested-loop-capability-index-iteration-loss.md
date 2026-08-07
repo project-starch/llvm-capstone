@@ -546,3 +546,44 @@ wrong -- dropped stores when the slot is written once per iteration, a backwards
 gates a loop -- while memory ADJACENT to the store is verifiably intact (witness reads back
 bit-exact), the final values read normal because both loops exit on their own conditions, and the
 whole thing is invisible bare-metal in simulation at either RTL revision.
+
+## UPDATE 2026-08-07 (boot 58): FRAME-RELATIVE, NOT ABSOLUTE -- and the first retraction was half right
+
+sp has been identical in every build (same domain, same entry, same call depth), so "the victim is
+at sp+0x1c" and "the victim is one fixed ABSOLUTE stack address" fit all prior data equally. Stage
+23 separates them by reaching the loop through extra noinline frames: an added frame shifts every
+absolute address while leaving all sp-relative offsets inside the body untouched. Verified in the
+artifacts -- all three arms have k@0x14, p@0x18, qc@0x1c and 0/1/2 real wrapper functions.
+
+| rung | wrapper frames | p | k | qc | cycles |
+|---|---|---|---|---|---|
+| dp0 | 0 | 64 | 9 | **567** | 44213 |
+| dp1 | 1 | 64 | 9 | **567** | 44400 |
+| dp2 | 2 | 64 | 9 | **567** | 44653 |
+
+**Bit-identical across all three depths. The fault follows the FRAME-RELATIVE offset, not an
+absolute address.** (Cycles rise slightly with depth -- the wrappers' own prologue/epilogue -- and
+the implied iteration count stays at 576 + that overhead, so the loop is intact and qc lost 9 in
+every arm.)
+
+Since the 16-byte capability store is at sp+0x00 in every build, the victim is equivalently **a
+fixed offset from the capability store: +0x1c from its base, i.e. 12 bytes above its 16-byte end.**
+Moving the store to separate those two readings is not possible with this frame shape -- an array
+big enough to move the store also swallows sp+0x1c (tried, stage 22, CAPSLOT knob retained).
+
+### This half-vindicates the first retraction
+
+The original table read "12 bytes above the store -> CORRECT" and that reading was retracted. It was
+wrong about WHAT, not about WHERE: that cell is shift0, where sp+0x1c happens to hold **k, the one
+variable that is immune**. An immune occupant was read as a clean address. The distance was real;
+the conclusion drawn from it was not.
+
+### The rule as it now stands
+
+**The slot at capability-store + 0x1c is corrupted, and whichever loop variable occupies it is the
+victim** -- qc there loses stores, p there lets the outer loop run extra passes, k there is spared,
+padding there is harmless. 17/19 builds fit; the two exceptions (shift12, wp0) are both builds whose
+victim was inferred rather than triple-reported and are re-testable.
+
+k's immunity is the sharpest remaining clue: it is the only counter READ TWICE per iteration (loop
+compare, then increment).

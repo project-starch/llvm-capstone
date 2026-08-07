@@ -172,6 +172,12 @@
 #define FDREG_WITSEL 0
 #endif
 /* FDREG_WITPAD -- moves stage 13's witnesses onto the damage window. See stage 13. */
+#ifndef FDREG_DEPTH
+#define FDREG_DEPTH 0
+#endif
+#ifndef FDREG_CAPSLOT
+#define FDREG_CAPSLOT 0
+#endif
 #ifndef FDREG_GAP
 #define FDREG_GAP 0
 #endif
@@ -419,12 +425,106 @@ static void fdreg_link_via_param_nonleaf(FdregDef *aDef, int nDef) {
   }
 }
 
+#if FDREG_STAGE == 23
+/* STAGE 23 -- CHANGE THE CALL DEPTH. Absolute address, or sp-relative offset?
+ *
+ * Boot 57 localised the victim to sp+0x1c. But sp itself has been IDENTICAL in every build --
+ * same domain, same entry, same call depth -- so "the poisoned slot is at sp+0x1c" and "the
+ * poisoned slot is at one fixed ABSOLUTE stack address" are the same statement in all existing
+ * data. Moving the store does not separate them (an array big enough to move the store also
+ * swallows sp+0x1c). Changing the CALL DEPTH does: an extra frame shifts every absolute address
+ * by that frame's size while leaving all sp-relative offsets inside fdreg_compute untouched.
+ *
+ *     same result as depth 0  -> the fault follows the sp-RELATIVE offset (frame-shaped)
+ *     different result        -> the fault follows an ABSOLUTE address (one poisoned location)
+ *
+ * noinline is load-bearing: if the wrapper is inlined there is no extra frame and the arm
+ * silently becomes depth 0. Check the disassembly for a real call, and check that the counters
+ * still sit at the same sp-relative offsets.
+ */
+__attribute__((noinline)) static unsigned fdreg_depth_body(void);
+__attribute__((noinline)) static unsigned fdreg_depth_w1(void){ return fdreg_depth_body(); }
+__attribute__((noinline)) static unsigned fdreg_depth_w2(void){ return fdreg_depth_w1(); }
+__attribute__((noinline)) static unsigned fdreg_depth_body(void){
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+    int p, k;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;
+        (void)z;
+        qc++;
+      }
+    return ((unsigned)(p & 0xFFF) << 20) | ((unsigned)(k & 0xF) << 16) | (qc & 0xFFFFu);
+  }
+}
+#endif
 static unsigned fdreg_compute(void) {
   unsigned i, s = 0;
 #if (FDREG_DRAW) > 0
   __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
 #endif
 
+#if FDREG_STAGE == 23
+  {
+#if (FDREG_DEPTH) >= 2
+    return fdreg_depth_w2();
+#elif (FDREG_DEPTH) == 1
+    return fdreg_depth_w1();
+#else
+    return fdreg_depth_body();
+#endif
+  }
+#endif
+#if FDREG_STAGE == 22
+  /* STAGE 22 -- MOVE THE CAPABILITY STORE OFF sp+0. The last confound in the localisation.
+   *
+   * Boot 57 localised the victim to sp+0x1c. But the 16-byte capability store has been at
+   * sp+0x00 in ALL NINETEEN builds, because `z` is the only capability local and -O0 puts the
+   * 16-byte-aligned object at the bottom of the frame. So "the victim is the absolute address
+   * sp+0x1c" and "the victim is 0x1c above the STORE" fit the existing data equally well, and
+   * they are completely different claims -- a poisoned stack address versus a store-relative
+   * effect at a fixed distance.
+   *
+   * FDREG_CAPPAD declares extra capability locals ahead of z. They are 16-byte aligned, so each
+   * one pushes z (and therefore the store) up by 16 bytes while the counters stay put:
+   *
+   *     CAPPAD=0   store at sp+0x00, victim slot sp+0x1c is store+0x1c   (both rules agree)
+   *     CAPPAD=1   store at sp+0x10, so store+0x1c = sp+0x2c != sp+0x1c  (rules DIVERGE)
+   *
+   * Build it with the counters arranged so that sp+0x1c holds qc and sp+0x2c holds p, then:
+   *     qc damaged -> the victim is the ABSOLUTE address sp+0x1c
+   *     p  damaged -> the victim is 0x1c above the STORE, wherever the store is
+   *     neither    -> the localisation is contingent on something else again
+   *
+   * The pads must be volatile and touched, or they are elided and the store does not move.
+   * VERIFY the store's offset in the artifact -- that is the whole point of the build.
+   */
+  {
+    /* Declaring extra capability LOCALS does not move the store: -O0 still puts the loop's own
+       `z` at the frame bottom. An ARRAY does -- storing to element FDREG_CAPSLOT puts the 16-byte
+       store at base + 16*FDREG_CAPSLOT while the array base stays at sp+0, so the counters do not
+       move and only the store's address changes. That is exactly the variable needed. */
+    const char *volatile zarr[(FDREG_CAPSLOT) + 1];
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+    int p, k;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        zarr[(FDREG_CAPSLOT)] = fdreg_defs[k].zName;   /* cap store, now at a chosen offset */
+        (void)zarr[(FDREG_CAPSLOT)];
+        qc++;
+      }
+    return ((unsigned)(p & 0xFFF) << 20) | ((unsigned)(k & 0xF) << 16) | (qc & 0xFFFFu);
+  }
+#endif
 #if FDREG_STAGE == 20
   /* STAGE 20 -- THE ROLE SWAP. Does the fault follow the SLOT or the VARIABLE?
    *
