@@ -81,6 +81,9 @@
 #ifndef FDREG_DRAW
 #define FDREG_DRAW 0
 #endif
+#ifndef FDREG_LEAVES
+#define FDREG_LEAVES 0
+#endif
 #define FDREG_DRAW_STR2(x) #x
 #define FDREG_DRAW_STR(x) FDREG_DRAW_STR2(x)
 
@@ -107,6 +110,43 @@ FDREG_P8(f) FDREG_P8(g) FDREG_P8(h) FDREG_P8(i) FDREG_P8(j)
 #define FDREG_PAD_SUM() do {} while (0);
 #else
 #define FDREG_PAD_SUM() do {} while (0);
+#endif
+
+/* FDREG_LEAVES -- the CAP-INIT LEAF COUNT axis.
+   fdreg7 has 17 .capstone_gp_initdesc entries; the SQLite domain that fails has ~176. That is
+   one of only three measured differences left between the rung (returns 576) and L31 (returns
+   567), now that gp index and struct layout are excluded.
+   Deliberately ONE global holding many capability leaves, rather than many globals: 160
+   separate globals is what the FDREG_PAD path does, and six such builds ENTRY-STALLED across
+   two padding implementations, two window sizes and five base VAs. A single array adds leaves
+   without adding cap-table slots, so it should not perturb entry the same way -- verify that
+   in the artifact rather than assuming it. */
+#if (FDREG_LEAVES) > 0
+/* Each literal must be DISTINCT or the compiler merges them and the leaf count barely moves:
+   a first attempt repeated one string eight times per group and produced 31 descriptor
+   entries instead of 170. Verified by reading .capstone_gp_initdesc out of the artifact. */
+#define FDREG_L8(b) FDREG_L1(b,0) FDREG_L1(b,1) FDREG_L1(b,2) FDREG_L1(b,3) \
+                    FDREG_L1(b,4) FDREG_L1(b,5) FDREG_L1(b,6) FDREG_L1(b,7)
+#define FDREG_L1(b,i) "leafpad_" #b "_" #i,
+/* FDREG_LEAVES is a COUNT of 8-leaf groups, so the axis can be swept rather than switched:
+   every rung built with ~170 cap-init entries has ENTRY-STALLED (six padded builds plus the
+   171-leaf one), while the 10-entry rung enters reliably. Sweeping locates the boundary, and
+   the largest value that still ENTERS is the most SQLite-like rung that can be measured. */
+static const char *fdreg_leaves[] __attribute__((used)) = {
+  FDREG_L8(0) FDREG_L8(1) FDREG_L8(2) FDREG_L8(3)
+#if (FDREG_LEAVES) >= 8
+  FDREG_L8(4) FDREG_L8(5) FDREG_L8(6) FDREG_L8(7)
+#endif
+#if (FDREG_LEAVES) >= 12
+  FDREG_L8(8) FDREG_L8(9) FDREG_L8(a) FDREG_L8(b)
+#endif
+#if (FDREG_LEAVES) >= 20
+  FDREG_L8(c) FDREG_L8(d) FDREG_L8(e) FDREG_L8(f)
+  FDREG_L8(g) FDREG_L8(h) FDREG_L8(i) FDREG_L8(j)
+#endif
+};
+#undef FDREG_L1
+#undef FDREG_L8
 #endif
 
 static int fdreg_f0(void) { return 3; }
