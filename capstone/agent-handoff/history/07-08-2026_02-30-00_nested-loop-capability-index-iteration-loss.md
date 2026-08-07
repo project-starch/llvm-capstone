@@ -496,3 +496,53 @@ indexed on k, and **k is the one slot that is never the victim**.
 So "sp+0x1c is the victim" holds across these six builds and is NOT yet the whole rule. The next
 discriminator is whether the operative address is sp-relative, s0-relative, or something about the
 access pattern that spares a twice-read slot.
+
+## UPDATE 2026-08-07 (boot 57): THE VICTIM IS A FIXED STACK ADDRESS -- sp+0x1c
+
+Boot 56 showed the damage follows the SLOT. Boot 57 asks whether that slot is sp-relative or
+s0-relative, using three frame-0x60 builds where the two rules point at DIFFERENT variables, with
+the triple report naming the victim instead of inferring it.
+
+| build | frame | k | p | qc | sp+0x1c holds | sp-rule | s0-rule | MEASURED |
+|---|---|---|---|---|---|---|---|---|
+| t16 | 0x60 | 0x14 | 0x18 | 0x2c | (gap) | correct | qc damaged | **576 correct** |
+| t12 | 0x60 | 0x18 | **0x1c** | 0x2c | **p** | p damaged | qc damaged | **qc=906, 900 iters -> p damaged** |
+| t0b | 0x60 | 0x18 | **0x1c** | 0x30 | **p** | p damaged | correct | **qc=909, 904 iters -> p damaged** |
+
+**sp-rule 3/3. s0-rule 0/3. The victim is a fixed offset from the STACK POINTER: sp+0x1c, i.e. 28
+bytes above the 16-byte capability store at sp+0x00.**
+
+### The rule, checked against every build in the investigation
+
+Whichever loop variable occupies sp+0x1c is the one damaged, and the signature follows from which
+variable it is:
+
+* **qc there** -> stores silently dropped: 567 (shift8, gp0, sep12, c8), 504 (rs4)
+* **p there** -> outer loop runs extra passes: 909 (shift4, c4, t0b), 906 (sep20, t12), 585 (rs8)
+* **k there** -> SPARED: shift0, c0, rs0 all correct. k is the only counter READ TWICE per
+  iteration (loop compare + increment).
+* **padding/nothing there** -> correct: gp16, gp32, t16
+
+**17 of 19 builds fit.** This is why every earlier geometric law died: they all indexed on k, which
+is the one variable that is never the victim, and they were fitted across builds where a different
+variable happened to occupy the poisoned slot.
+
+### The two mismatches, and why they are testable rather than fatal
+
+Both are builds where the victim was INFERRED, not measured with the triple report:
+
+* **shift12** -- never triple-reported. Its 0x8000237 was read as "567 with bit 27 set"; under the
+  new model that is a qc-damaged value with metadata-shaped bits, but sp+0x1c holds `s` there.
+* **wp0** -- stage 13, a structurally different loop body (witness init before the loop), victim
+  inferred from cycles alone, and sp+0x1c holds the witness pad.
+
+Re-running both geometries under stage 19 settles whether the rule is 19/19. Do that before
+treating either as a counter-example.
+
+### What a mechanism must now explain
+
+A fixed stack address 28 bytes above a 16-byte capability store, whose stored value is transiently
+wrong -- dropped stores when the slot is written once per iteration, a backwards clobber when it
+gates a loop -- while memory ADJACENT to the store is verifiably intact (witness reads back
+bit-exact), the final values read normal because both loops exit on their own conditions, and the
+whole thing is invisible bare-metal in simulation at either RTL revision.

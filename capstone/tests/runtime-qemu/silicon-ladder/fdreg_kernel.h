@@ -512,6 +512,15 @@ static unsigned fdreg_compute(void) {
     fdreg_shift_pad[0] = 0;
 #endif
     unsigned qc = 0;
+    /* FDREG_GAP here too, so the frame-size variants (gp16/sep20 geometries) can be re-measured
+       with the victim NAMED instead of inferred from a single number. Those two builds are what
+       make "the victim is at sp+0x1c" and "the victim is at s0-0x34" each fail on one build:
+       at frame 0x60 the two rules point at different slots, and only a triple report says which
+       one actually took the damage. */
+#if (FDREG_GAP) > 0
+    volatile unsigned char fdreg_gap19[FDREG_GAP];
+    fdreg_gap19[0] = 0;
+#endif
     int p, k;
     for (p = 0; p < (FDREG_OUTER); p++)
       for (k = 0; k < FDREG_N; k++) {
