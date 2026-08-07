@@ -644,3 +644,49 @@ oracles programmatically, never by hand.
 or20 is damaged (qc=587) but the ORDER variant's RMW-site detection found only two sites, so which
 variable sits at the poisoned slot is not established for it. Do not fold or20 into the slot rule
 until its layout is confirmed in the artifact.
+
+## UPDATE 2026-08-07 (analysis): "k IS IMMUNE" IS REFUTED -- it was a THIRD confound of the same class
+
+An independent analysis compiled the whole knob space and read the frames out of the generated code
+rather than trusting the recorded table. Verified against all 20 builds here:
+
+* **k is the LOWEST of the three counters in every build** (-O0 packs k, p=k+4, qc=k+8, and
+  FDREG_ORDER leaves the slot map byte-identical).
+* Therefore **k@0x1c can only ever occur when p and qc sit at 0x20/0x24** -- i.e. only when the
+  16-byte row 0x10..0x1f holds nothing else. All five such builds (shift0, c0, rs0, bs16, nr16)
+  are correct.
+
+So "k is immune" and "the poisoned slot is ALONE in its row" are perfectly confounded, and the
+second is the better rule:
+
+**THE SLOT AT CAPABILITY-STORE + 0x1c IS CORRUPTED IFF IT IS OCCUPIED AND SHARES ITS 16-BYTE ROW
+WITH AT LEAST ONE OTHER READ-MODIFY-WRITTEN SCALAR.** 19 of 20 builds fit (vs 17/19 for the k-rule).
+The sole mismatch is shift12, whose victim was never triple-reported.
+
+**This is the THIRD confound of this exact class** -- after qc==k+8 and k's bits[3:2]. Each time the
+-O0 allocator held another variable constant and the correlate was read as the cause. Boots 59 and
+60 were spent testing properties of k (read count, re-initialisation) that were never the variable.
+Before proposing any rule indexed on a variable's IDENTITY, check whether the allocator makes that
+identity a proxy for a layout property.
+
+### ALSO RETRACTED: "every deviation is an exact multiple of the inner trip count"
+
+False. or20 is +11 and sep20/t12 are +330; neither is divisible by 9. The multiples that do hold
+(-9, +333, +9, -72) are real but not universal, and no mechanism should be built on them.
+
+### or20 is a CONFIRMING build, not an anomaly
+
+FDREG_ORDER=1 at SHIFT=20 gives k@0x18, **p@0x1c**, qc@0x20. The poisoned slot held p, and qc=587
+(+11, extra outer passes) is exactly the p-family signature. It also means or20 tested NOTHING about
+k, because k was never at the poisoned slot. Open item closed.
+
+### The RTL search space is now genuinely small
+
+The fault discriminates WITHIN a single 8-byte dword: in c8, p@0x18 is undamaged (cycles confirm 576
+iterations) while qc@0x1c loses 9 stores -- the two halves of one dword. Every address comparator in
+the store/forward path is blind to bit [2] (store_buffer.sv:263,271,277 compare page_offset_i[11:3];
+the wbuffer tags at [..:XLEN_ALIGN_BYTES]). **That eliminates the whole address-tag forwarding class
+as the selector.** The selector must be BYTE-GRANULAR: be_gen (ariane_pkg.sv:1044-1057, keys on
+addr[2:0]), the per-byte overlay rd_data_o[8*k+:8] = wbuffer_be[k] ? ... (wt_dcache_mem.sv:311-317),
+or the wbuffer per-byte valid/dirty/txblock bookkeeping and bdirty_off / toSize64(bdirty)
+(wt_dcache_wbuffer.sv:253-295, :397, :427).
