@@ -116,3 +116,85 @@ them — the first shows in the memory image, the second does not.
 Reproduce: `DOMAIN_GLUE=interp DOMAIN_OPT_LEVEL=-O0 DOMAIN_EXTRA_CFLAGS="-DFDREG_STAGE=7
 -DFDREG_LEAVES=0 -DFDREG_GUARD=0 -DFDREG_SHIFT=8"` → 567 on silicon, 576 under QEMU. `SHIFT=0`
 is correct on both.
+
+## UPDATE 2026-08-07 (boot 51): THE PROXIMITY WINDOW IS RETRACTED. It is CACHE BANK GEOMETRY.
+
+The section immediately above is wrong and is retracted. Its reading — "severity scales with
+proximity and vanishes at 12 bytes, so the store damages memory beyond its 16-byte footprint" —
+was refuted by a probe designed to test something else.
+
+Stage 13 (`wp0`) fills the 12-byte hole that clang leaves immediately above the store with three
+passive witnesses, which pushes the counters to `sp+0x28` — 24 bytes above the store, in a
+DIFFERENT 16-byte row, in a 0x60 frame instead of 0x50. Under the proximity model that is deep
+in the clean regime and must return 576. It returned **909**: byte-identical to the SHIFT=4
+measurement taken 8 bytes from the store. Distance from the store is not the variable. The shift
+sweep only looked like a distance law because it held the row fixed while moving the offset
+inside it.
+
+What actually predicts the answer is the counter's position in the CACHE GEOMETRY — which 8-byte
+bank of its 16-byte row it occupies, and its offset within that bank. And in every build ever
+measured, **qc == k + 8**: the accumulator is invariably the inner counter's bank sibling.
+
+| k bank | k off | result | builds |
+|---|---|---|---|
+| 1 | 4 | **576 correct** | shift0 |
+| 1 | 0 | 909 | shift4, **wp0** (different row, different frame, same answer) |
+| 0 | 4 | 567 | shift8 |
+| 0 | 0 | 0x8000237 | shift12 (= 567 with bit 27 set, i.e. metadata bits) |
+
+All offsets recomputed from the artifacts, not from notes.
+
+### The RTL defect that matches the geometry — real, but NOT yet the root cause of this
+
+Every line verified against the primary source:
+
+- `commit_stage.sv:323-325` — `we_gpr_o[0] = 1'b1` unconditionally, but
+  `cap_we_o[0] = commit_instr_i[0].cap_result.valid`. An ordinary instruction overwrites the
+  integer register and leaves the shadow capability metadata STALE.
+- `scoreboard.sv:242-246`, `:320-324` — a plain load retires on `LOAD_WB`, whose `cap_data` and
+  `cap_result` are hard-wired `'0`. So a `lw` does NOT clear the shadow: the taint survives.
+- `wt_dcache_wbuffer.sv:602` — every store captures whatever metadata is on the bus.
+- `wt_dcache_mem.sv:138` — `st_wr_cap = |wr_user_i`: a store is classified as a capability store
+  BY VALUE, NOT BY OPCODE.
+- `wt_dcache_mem.sv:156-158`, `:225-238` — `k` is a genvar, so HW-bank 0 ALWAYS receives real
+  data and HW-bank 1 receives metadata INSTEAD of data when `st_wr_cap` fires. A misclassified
+  store whose own address lies in bank 1 therefore corrupts ITSELF.
+
+Our own inner loop contains the taint sequence verbatim: `ldc a0` (the volatile read-back of `z`)
+puts a capability in a0; the next `lw a0` makes it the counter without clearing the shadow; `sw
+a0` then carries stale metadata.
+
+**REFUTED as stated, and this is the second retraction of the day.** At SHIFT=0 the counter is at
+`sp+0x1c`, in bank 1. If its store were misclassified it would receive metadata every iteration
+and could not produce a clean count. Silicon measures a correct 576. So "the counter's own store
+is misclassified" is refuted for the one geometry checkable exactly. The structural RTL bug stands
+on its own — it is independently corroborated by this repo's own `verif/tests/custom/capstone/
+cincoffset-stale-metadata.S`, which targets the same stale-shadow root cause for a different
+symptom — but its application to THIS corruption is UNRESOLVED. Do not write it into ISSUES.md as
+the root cause.
+
+Also refuted: the over-wide-write idea sourced from `be_gen`. `extract_transfer_size`
+(`ariane_pkg.sv:1119-1126`) fixes STC at 8 bytes / one beat and the metadata rides a separate
+sideband, so there is no wider or multi-beat DATA write to blame.
+
+### Still open
+
+- `wp0` reported its witnesses intact, but that reading is NOT safe: the check loop is guarded by
+  `i`, and a corrupted `i` would skip it and report clean. The loop-free raw readout (`wv1`) was
+  collateral when `wr0` wedged. "The `stc` does not corrupt memory above it" is unconfirmed.
+- Stage 14 (`wr0`, witnesses read every iteration, never written) has no result yet — it wedged.
+- Stage 16 is the decisive test now: a `movc a0,zero / movc a1,zero` barrier that clears the
+  shadow, against a same-size `nop` barrier as the control. Both arms are identical
+  instruction-for-instruction and 13088 bytes, differing only in those two instructions and in
+  jump targets that follow from base VA; both are QEMU-green at 576; both sit at (bank 0,
+  offset 4), which measures 567 on silicon. Barrier cures and nop does not ⇒ mechanism confirmed
+  and a workaround exists. Both 567 ⇒ refuted. Both 576 ⇒ layout cured it, attributable to
+  nothing.
+
+### Process
+
+`ps8` — byte-identical to the working `sh8` modulo base VA — R-16 entry-stalled (no `SHA5`, no
+`SHA6`) and, placed second in the boot, took the two arms that mattered with it. Every freshly
+built image is an R-16 unknown regardless of whether its LOGIC is known; order by that, not by
+confidence in the code. Two firmware builds in a row came out byte-identical in SIZE (15369224)
+with different hashes.

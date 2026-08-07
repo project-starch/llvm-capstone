@@ -106,8 +106,7 @@
 
    RESULT, boots 45-49. In EVERY build the capability local `z` lands at s0-0x50 = sp+0 and is
    written by a 16-byte `stc a1, 0x0(a0)` on every inner iteration, 576 times, with the frame a
-   constant 0x50 bytes. Only the counters move, and the corruption tracks their DISTANCE from
-   that store:
+   constant 0x50 bytes. Only the counters move:
 
        shift  inner counter k       bytes ABOVE the stc's 16-byte end   board
          0    s0-0x34 = sp+0x1c              12                        576  CORRECT
@@ -115,25 +114,69 @@
          8    s0-0x3c = sp+0x14               4                        567  (-9)
         12    s0-0x40 = sp+0x10               0 (adjacent)             0x8000237
 
-   Severity scales with proximity and vanishes at 12 bytes. No counter ever OVERLAPS the store
-   -- even shift 12's sits one byte past its last -- so the store damages memory BEYOND its
-   nominal 16-byte footprint. At adjacency the corrupting value names itself: 567 with BIT 27
-   set, and a dump of the dead frame contains 0x08000001 (bit 27) inside a repeating
-   16-byte-period pattern of capability-shaped words. Capability metadata is reaching a scalar
-   slot.
+   *** THE PROXIMITY READING OF THIS TABLE IS RETRACTED (boot 51, 2026-08-07). ***
+
+   It said: "severity scales with proximity and vanishes at 12 bytes, so the store damages
+   memory BEYOND its nominal 16-byte footprint." That is REFUTED. Stage 13's wp0 puts the
+   counters 24 bytes above the store, in a DIFFERENT 16-byte row, with a different frame size
+   (0x60), and returns a byte-identical 909. Distance from the store is not the variable. The
+   sweep above only looked like a distance law because it held the row fixed while moving the
+   offset within it.
+
+   WHAT ACTUALLY PREDICTS THE ANSWER is the counter's position in the CACHE GEOMETRY -- which
+   8-byte bank of its 16-byte row it sits in, and its offset within that bank. And in every
+   build ever measured, qc == k + 8: the accumulator is invariably the inner counter's BANK
+   SIBLING.
+
+       k bank  k off   result        builds
+          1      4     576 CORRECT   shift0
+          1      0     909           shift4, wp0 (different row, different frame -- same answer)
+          0      4     567           shift8
+          0      0     0x8000237     shift12       (= 567 with bit 27 set, i.e. metadata bits)
+
+   That is the geometry of the D-cache write path, and it has a matching RTL mechanism, every
+   line verified against the primary source rather than inferred:
+
+       commit_stage.sv:323-325   we_gpr_o[0] = 1'b1 unconditionally, but
+                                 cap_we_o[0] = commit_instr_i[0].cap_result.valid
+                                 -> an ordinary instruction overwrites the integer register and
+                                    LEAVES THE SHADOW CAPABILITY METADATA STALE
+       wt_dcache_wbuffer.sv:602  every store captures whatever metadata is on the bus
+       wt_dcache_mem.sv:138      st_wr_cap = |wr_user_i -- a store is classified as a capability
+                                 store BY VALUE, NOT BY OPCODE
+       wt_dcache_mem.sv:225-238  a store so classified writes BOTH 8-byte banks of its 16-byte
+                                 row, bank 1 receiving the metadata (:156-158)
+
+   and our own inner loop contains the taint sequence exactly: `ldc a0` (the volatile read-back
+   of z) puts a capability in a0, the very next `lw a0` makes it the counter without clearing
+   the shadow, and `sw a0` then carries stale metadata. For k in bank 0 that deposits metadata
+   into k+8 == qc, the returned accumulator, which is shift8 and shift12. NOT YET EXPLAINED:
+   the two k-in-bank-1 rows, where the same reading predicts corruption of k itself and shift0
+   measures a clean 576. Do not write this up as the root cause until that is closed.
 
    This is also why every in-frame instrument destroyed the fault: a sentinel array added 32
-   bytes and a `&qc` pointer added 16, each pushing the counters past the 12-byte threshold
-   into the clean regime. The instrument was curing the patient.
+   bytes and a `&qc` pointer added 16, each moving the counters to a different bank/offset.
+   The instrument was curing the patient.
 
-   NOT pinned: `be_gen` (ariane_pkg.sv:1045) has a 2-bit size whose maximum is 8 bytes, so a
-   16-byte capability store is issued as a wider or multi-beat write downstream, and the
-   overrun is presumably there. The RTL line is not identified and should not be guessed. */
+   ALSO REFUTED (same boot): the over-wide-write idea sourced from `be_gen` (ariane_pkg.sv:1045).
+   `extract_transfer_size` (ariane_pkg.sv:1119-1126) fixes STC at 8 bytes/one beat and the
+   metadata rides a separate sideband, so there is no wider or multi-beat DATA write to blame. */
 #ifndef FDREG_SHIFT
 #define FDREG_SHIFT 0
 #endif
 #ifndef FDREG_PEEK
 #define FDREG_PEEK 0
+#endif
+/* FDREG_WITSEL -- selects what stage 13 returns. See stage 13. */
+#ifndef FDREG_WITSEL
+#define FDREG_WITSEL 0
+#endif
+/* FDREG_WITPAD -- moves stage 13's witnesses onto the damage window. See stage 13. */
+#ifndef FDREG_BARRIER
+#define FDREG_BARRIER 0
+#endif
+#ifndef FDREG_WITPAD
+#define FDREG_WITPAD 12
 #endif
 /* FDREG_OUTER -- the outer trip count, so the EXPECTED value can be varied.
    The first three leaf-count rungs all returned 906 against an expected 576. Three different
@@ -379,6 +422,195 @@ static unsigned fdreg_compute(void) {
   __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
 #endif
 
+#if FDREG_STAGE == 16
+  /* STAGE 16 -- THE SHADOW-CLEARING BARRIER: a direct test of the misclassified-store
+   * mechanism, and if it works, a compiler workaround.
+   *
+   * RTL chain, every line verified against the primary source:
+   *   commit_stage.sv:323-325   we_gpr_o[0] = 1'b1 unconditionally, but
+   *                             cap_we_o[0] = commit_instr_i[0].cap_result.valid
+   *                             -> an ordinary instruction overwrites the integer register
+   *                                and LEAVES THE SHADOW CAPABILITY METADATA STALE
+   *   wt_dcache_wbuffer.sv:602  every store captures whatever metadata is on the bus
+   *   wt_dcache_mem.sv:138      st_wr_cap = |wr_user_i  -- a store is classified as a
+   *                             capability store BY VALUE, NOT BY OPCODE
+   *   wt_dcache_mem.sv:225-238  a store so classified writes BOTH 8-byte banks of its
+   *                             16-byte row, bank 1 receiving the metadata (:156-158)
+   *
+   * Our own inner loop contains the taint sequence exactly:
+   *     ldc  a0, 0x0(a0)     <- a0 receives a CAPABILITY (the volatile read-back of z)
+   *     lw   a0, 0x0(a1)     <- a0 becomes the counter; `lw` is not a capstone op, so
+   *                             a0's shadow metadata is never cleared
+   *     sw   a0, 0x0(a1)     <- carries the stale metadata -> st_wr_cap fires
+   *
+   * The value `ldc` loads is DISCARDED ((void)z), so a0 is free to clobber immediately
+   * after it. `movc rd, zero` is a capstone op, so it sets cap_result.valid and writes ZERO
+   * into the shadow -- clearing the taint before the counter's store.
+   *
+   * FDREG_BARRIER=1 emits the clearing barrier; =2 emits the SAME NUMBER OF BYTES of nops.
+   * The nop arm is the control and it is what makes this attributable: both builds have
+   * identical size, identical frame and identical layout, and differ only in whether the
+   * shadow is cleared. Without it, "adding two instructions cured it" is unattributable --
+   * which is how the guard/no-guard pair misled this investigation once already.
+   *
+   *     barrier cures (576) and nop does not (567)  -> the stale-metadata misclassification
+   *                                                    is CONFIRMED, and this is a workaround
+   *     both 567                                    -> mechanism REFUTED for this defect
+   *     both 576                                    -> the barrier's LAYOUT cured it, not the
+   *                                                    clearing; attributable to nothing
+   *
+   * Built at SHIFT=8, i.e. the (bank 0, offset 4) geometry that measures 567 on silicon, so
+   * there is a known wrong value to cure.
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+    int p, k;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;   /* cap field, inner resetting counter */
+        (void)z;
+#if (FDREG_BARRIER) == 1
+        __asm__ volatile("movc a0, zero\n\tmovc a1, zero" ::: "a0", "a1");
+#elif (FDREG_BARRIER) == 2
+        __asm__ volatile("nop\n\tnop" ::: "a0", "a1");
+#endif
+        qc++;
+      }
+    return qc;
+  }
+#endif
+#if FDREG_STAGE == 14
+  /* STAGE 14 -- THE READ-ONLY WITNESS, the other half of stage 13.
+   *
+   * Stage 13 puts witnesses in the damage window and NEVER reads them during the loop, so it
+   * asks: is memory itself damaged? This one READS all three every inner iteration and never
+   * writes them, so it asks the complementary question: is a load in the store's shadow
+   * answered with the wrong data even though memory is fine? The counters could never
+   * separate these because a counter is read-modify-WRITTEN, so a mis-answered load is
+   * immediately written back and becomes indistinguishable from real corruption.
+   *
+   * Together the two stages are a complete truth table:
+   *
+   *     stage 13 (never read)   stage 14 (read, never written)   conclusion
+   *     ---------------------   ------------------------------   -------------------------
+   *     damaged                 either                           OVER-WIDE WRITE
+   *     intact                  wrong reads                      FALSE STORE-TO-LOAD FORWARD
+   *     intact                  correct reads                    neither -- needs the RMW
+   *
+   * No new local: the mismatch mask goes in `s`, which already has a frame slot and is
+   * already zeroed at function entry. Adding one would re-shift the frame and cure the
+   * patient, exactly as it did in stages 10 and 11. The three reads are placed immediately
+   * after the `stc`, the same position the counter's load occupies in stage 7.
+   *
+   * Returns 0xFEED000M with M the mismatch mask (bit i = wit[i] read wrong at least once),
+   * or the loop's 576 when every read was correct.
+   */
+  {
+    unsigned qc = 0;
+    int p, k;
+#if (FDREG_WITPAD) > 0
+    volatile unsigned char witpad[FDREG_WITPAD];
+    witpad[0] = 0;
+#endif
+    volatile unsigned wit[3];
+    wit[0] = 0xA5A50000u;
+    wit[1] = 0xA5A50001u;
+    wit[2] = 0xA5A50002u;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;   /* cap field, inner resetting counter */
+        (void)z;
+        if (wit[0] != 0xA5A50000u) s |= 1u;
+        if (wit[1] != 0xA5A50001u) s |= 2u;
+        if (wit[2] != 0xA5A50002u) s |= 4u;
+        qc++;
+      }
+    (void)i;
+    if (s) return 0xFEED0000u | s;
+    return qc;
+  }
+#endif
+#if FDREG_STAGE == 13
+  /* STAGE 13 -- THE PASSIVE WITNESS: is MEMORY corrupted, or is only a LOAD mis-answered?
+   *
+   * Two mechanisms survive the shift sweep and both predict every number in it:
+   *   (1) an OVER-WIDE WRITE -- the 16-byte `stc` physically writes past its footprint, so
+   *       the bytes above it are damaged whether or not anyone reads them;
+   *   (2) a FALSE STORE-TO-LOAD FORWARD -- memory is untouched, and only a load issued in
+   *       the store's shadow with a partially-matching address is answered with the store's
+   *       data. The counters are read-modify-written every iteration, so a bad forward is
+   *       written back and becomes indistinguishable from real corruption after the fact.
+   * The shift sweep cannot separate them because in it the damaged slot is ALSO the loaded
+   * slot. This stage separates them by putting something in the damage window that is never
+   * loaded while the store is in flight.
+   *
+   * Layout is why this is possible at zero cost. At SHIFT=0 the frame is (verified in the
+   * artifact, fdreg_compute at -O0, frame 0x50, s0 = sp+0x50):
+   *
+   *     sp+0x00..0x0f   z, the capability -- `stc a1, 0x0(a0)`, 576 times
+   *     sp+0x10..0x1b   DEAD SPACE, nothing allocated  <-- exactly the damage window
+   *     sp+0x1c         k, the inner counter (12 bytes above the store: the CLEAN boundary)
+   *     sp+0x20/24/28   p / qc / s
+   *
+   * That hole is why SHIFT=0 returns a correct 576: the overrun, if it exists, lands in
+   * unallocated bytes. `wit[3]` fills the hole and nothing else moves -- wit[1] lands at
+   * sp+0x14, the very slot that returns 567 when the counter sits there (SHIFT=8). So the
+   * counters stay at their clean offsets, the loop must still return 576, and the only new
+   * question is whether the witnesses survive.
+   *
+   *     qc == 576 and witnesses intact   -> memory is NOT corrupted -> (1) is REFUTED
+   *     witnesses damaged                -> the store writes beyond 16 bytes -> (1)
+   *
+   * No new named local beyond `wit` -- `i` and `s` already have slots and are reused for the
+   * check -- because any extra local re-shifts the frame and cures the patient, which is
+   * what killed stages 10 and 11. VERIFY in the disassembly that k is still at s0-0x34 and
+   * the frame is still 0x50 before believing any result from this stage.
+   *
+   * FDREG_WITSEL: 0 -> damage code (or qc when clean); 1/2/3 -> the RAW word of wit[0/1/2],
+   * so the corrupting value can be read out. All four builds declare identical locals, so
+   * they share one frame layout and differ only after the loop.
+   */
+  {
+    unsigned qc = 0;
+    int p, k;
+    /* At -O0 clang packs the scalars DOWNWARD from s0 and then drops the 16-byte-aligned
+       capability at the very bottom of the frame, so whatever is left over becomes a HOLE
+       immediately above the store -- which is precisely the damage window, and precisely why
+       an unpadded build is clean. A first attempt without this pad put wit at sp+0x1c, 12
+       bytes up, i.e. in the clean regime, measuring nothing. This consumes the hole so wit
+       drops onto sp+0x10/0x14/0x18: the three offsets the shift sweep proved corrupting.
+       Declared BETWEEN the counters and wit so only wit moves. Tune against the artifact --
+       the required size is a function of the frame's rounding, not a constant. */
+#if (FDREG_WITPAD) > 0
+    volatile unsigned char witpad[FDREG_WITPAD];
+    witpad[0] = 0;
+#endif
+    volatile unsigned wit[3];
+    wit[0] = 0xA5A50000u;
+    wit[1] = 0xA5A50001u;
+    wit[2] = 0xA5A50002u;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;   /* cap field, inner resetting counter */
+        (void)z;
+        qc++;
+      }
+#if (FDREG_WITSEL) == 0
+    s = 0;
+    for (i = 0; i < 3u; i++)
+      if (wit[i] != 0xA5A50000u + i) { s = 0xBAD00000u | (i << 16) | (qc & 0xFFFFu); break; }
+    if (s) return s;
+    return qc;                                   /* 576 = loop correct AND memory intact */
+#else
+    (void)qc; (void)i; (void)s;
+    return wit[(FDREG_WITSEL) - 1];              /* raw, to name the corrupting value */
+#endif
+  }
+#endif
 #if FDREG_STAGE == 12
   /* STAGE 12 -- PEEK at the counter's neighbours WITHOUT adding storage.
      Stages 10/11 laid a sentinel array beside the counters and the fault VANISHED: the
