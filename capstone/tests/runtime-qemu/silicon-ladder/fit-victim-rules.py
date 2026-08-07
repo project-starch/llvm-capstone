@@ -17,6 +17,10 @@ OUT = {
  "ka0":(0x18,-558,True), "kb12":(0x28,-9,True),
  "gp0":(0x1c,-9,False), "gp16":(None,0,False), "gp32":(None,0,False),
  "sep12":(0x1c,-9,False), "sep20":(0x1c,+330,False),
+ # 2026-08-08, the controlled row-mate pair (board-measured, in-boot c8 anchor):
+ "rg16":(None,0,True), "rg32":(None,0,True),
+ "rmB":(None,0,True),                  # k OUT of the victim row -> clean
+ "rmC":(0x2c,-9,True),                 # k back IN the victim row -> damaged
 }
 rows=[]
 for n,(vic,delta,known) in OUT.items():
@@ -27,6 +31,16 @@ for n,(vic,delta,known) in OUT.items():
     if not L: continue
     rows.append(dict(name=n, frame=L["frame"], store=L["store"], rmw=L["rmw"],
                      victim=vic, delta=delta, known=known, damaged=vic is not None))
+# FAIL LOUDLY on an empty dataset. Printing "dataset: 0 builds" and then a table of 0/0
+# scores reads exactly like "no rule fits", which is the opposite of "no data was loaded".
+# That cost a real detour on 2026-08-08: the tool was run from the repo, found nothing, and
+# its 0/0 output was briefly taken at face value. Same defect class as the preflight gates
+# that scored every transcript clean because their scope was wrong.
+if not rows:
+    sys.exit(f"fit-victim-rules: NO BUILDS LOADED from {S!r}.\n"
+             f"  Set CAPSTONE_DOM_DIR to a directory holding the corpus .dom files, e.g.\n"
+             f"    CAPSTONE_DOM_DIR=/tmp/capstone/overlay-attic python3 fit-victim-rules.py\n"
+             f"  Expected any of: {', '.join(sorted(OUT))}")
 print(f"dataset: {len(rows)} builds ({sum(r['damaged'] for r in rows)} damaged)\n")
 
 def rowof(a): return a & ~0xF

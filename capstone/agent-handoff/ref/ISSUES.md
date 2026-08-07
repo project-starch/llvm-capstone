@@ -2349,11 +2349,37 @@ built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are
 > That also refutes the competing reading — that what mattered was the store's row being adjacent to
 > the victim's row — since `rmC` has the store two rows away and is damaged anyway.
 >
-> **The geometry, sharply:** a victim in **bank 1 at byte lanes L** is zeroed when another RMW'd
-> scalar occupies **bank 0 at the same lanes L** in the same 16-byte row (an RMW slot at
-> `victim_offset − 8`). Over the corpus this is **SUFFICIENT, not necessary**: 7/7 clean builds carry
-> no such twin, 5/5 lost-increment builds carry one, but `rs4` (−72) and `ka0` (−558) are damaged
-> without it, and `c4`/`t12`/`t0b` belong to the separately documented extra-iteration fault.
+> **~~The geometry, sharply:~~ RETRACTED within hours, by the very next experiment.** A "bank 1 at
+> lanes L is zeroed by an RMW scalar in bank 0 at the same lanes L" refinement was recorded here on
+> the strength of a 5/5 + 7/7 corpus fit. The control built to test it **refuted it**, and this is
+> the seventh confound of the same class: a fit was mistaken for a mechanism.
+>
+> **2026-08-08 (later) — REGION IS EXCLUDED, and lane geometry is NOT the discriminator.**
+> Stage 37 puts the trigger in a GLOBAL: `gc[16]`, 16-byte aligned, victim `gc[3]` at row offset 12,
+> plus a second global scalar RMW'd in the same row. Board, control first, all four rungs entered:
+>
+> | arm | row-mate | victim | |
+> |---|---|---|---|
+> | `k800` | — | 4 | control OK |
+> | `c8` | k @+4 | **567** | anchor — 11th consecutive boot |
+> | `gnt` | `gc[2]` @+8 — bank 1, lanes 0-3 (*intended control*) | **9** | **damaged, severely** |
+> | `gtw` | `gc[1]` @+4 — bank 0, lanes 4-7 (the "twin") | **567** | damaged, `c8` signature |
+>
+> 1. **A GLOBAL victim loses increments exactly as a stack one does.** Region is excluded by direct
+>    measurement. The 2026-08-07 "must be on the domain stack" reading is dead twice over.
+> 2. **The same-lanes rule is refuted.** `gnt` carries the row-mate at offset 8 — same bank as the
+>    victim, wrong lanes — and is damaged *more* severely than the "twin" arm, its victim reset on
+>    every outer pass rather than once.
+>
+> **What actually discriminates, on present evidence: the row-mate's STORE PATTERN, not its
+> position.** `rmB` and `gnt` place the row-mate at the SAME offset (+8, same bank as the victim);
+> `rmB`'s `p` is only incremented once per outer pass and is CLEAN, `gnt`'s is re-zeroed at the top
+> of every outer pass and is DAMAGED. The implicated store is the `movc rd, zero; sw rd` pair — and
+> `compress_cap` of a null capability is `0x08000000`, the constant already observed in `0x08000237`.
+>
+> Still NOT separated: "is re-zeroed" versus "is stored 9x more often". `rmB` vs `gnt` also crosses
+> region, though region is now independently excluded. The next arm should hold the store count fixed
+> and vary only whether the row-mate's store writes zero.
 >
 > **Two corrections to the record made in the same session.** (1) An earlier reading of this
 > experiment claimed the arms' absolute addresses moved with the frame; they do not — `s0` is the

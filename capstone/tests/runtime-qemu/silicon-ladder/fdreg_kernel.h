@@ -221,6 +221,9 @@
 #ifndef FDREG_GAPP
 #define FDREG_GAPP 0
 #endif
+#ifndef FDREG_GTWIN
+#define FDREG_GTWIN 1
+#endif
 #ifndef FDREG_GAPT
 #define FDREG_GAPT 0
 #endif
@@ -564,6 +567,51 @@ static unsigned fdreg_compute(void) {
         : "r"(&f[0]), "r"(0), "i"(FDREG_ASMVICTIM), "i"(FDREG_OUTER)
         : "a0", "a1", "t0", "t1", "t2", "t3", "memory");
     return qc_out;
+  }
+#endif
+#if FDREG_STAGE == 37
+  /* STAGE 37 -- IS THE TRIGGER GEOMETRY A PROPERTY OF THE STACK, OR OF ANY 16-BYTE ROW?
+   *
+   * rmB/rmC established the trigger by a single-variable pair: a victim in bank 1 at byte lanes L
+   * is zeroed when another RMW'd scalar sits in bank 0 at the SAME lanes L of the same 16-byte row.
+   * Every arm that showed it was a STACK build, so region is still untested -- and the earlier
+   * "the damaged scalar must be on the domain stack" reading was withdrawn precisely because its
+   * global accumulator was the only RMW'd word in its row, i.e. it never carried the trigger.
+   *
+   * This builds the trigger in a GLOBAL. `gc` is 16-byte aligned, so gc[i] sits at row offset 4*i:
+   *
+   *     FDREG_GVICT=3  -> row offset 12  = bank 1, lanes 4-7   <- the victim
+   *     FDREG_GTWIN=1  -> row offset  4  = bank 0, lanes 4-7   <- the twin, same lanes
+   *     FDREG_GTWIN=2  -> row offset  8  = bank 1, lanes 0-3   <- CONTROL, not a twin
+   *
+   * The twin mirrors `k` exactly, because it is `k`'s store pattern that is implicated: re-zeroed
+   * at the top of every outer pass and incremented once per inner iteration. A twin that were only
+   * incremented would not reproduce the `k = 0` store at all.
+   *
+   *     GTWIN=1 damaged -> region is EXCLUDED; the rule is about the 16-byte row, wherever it lives
+   *     GTWIN=1 clean   -> region IS load-bearing after all, and the stack result does not
+   *                        generalise -- which would be a genuine surprise worth reporting
+   *     GTWIN=2 must be CLEAN either way; if it is not, the "same lanes" half of the rule is wrong
+   *
+   * Returns bits 19..16 = twin at exit (expect FDREG_N = 9), bits 15..0 = victim (expect 576).
+   * Correct = 0x00090240. The stack `qc` is deliberately NOT in the row under test here; the
+   * comparison is global-with-twin against global-without-twin, in one boot.
+   */
+  {
+    static volatile unsigned gc[16] __attribute__((aligned(16)));
+    int p, k;
+    gc[(FDREG_GVICT)] = 0;
+    gc[(FDREG_GTWIN)] = 0;
+    for (p = 0; p < (FDREG_OUTER); p++) {
+      gc[(FDREG_GTWIN)] = 0;                          /* mirrors `k = 0` at the top of each pass */
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName; /* the capability store, unchanged */
+        (void)z;
+        gc[(FDREG_GTWIN)]++;                          /* mirrors `k++`  -- bank 0 */
+        gc[(FDREG_GVICT)]++;                          /* the victim     -- bank 1 */
+      }
+    }
+    return ((gc[(FDREG_GTWIN)] & 0xFu) << 16) | (gc[(FDREG_GVICT)] & 0xFFFFu);
   }
 #endif
 #if FDREG_STAGE == 36

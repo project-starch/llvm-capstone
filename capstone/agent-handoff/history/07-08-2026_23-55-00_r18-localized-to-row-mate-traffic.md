@@ -55,9 +55,14 @@ What is held across the three fdreg arms:
 the eighth consecutive boot.
 
 **Conclusion: the defect requires another read-modify-written scalar in the victim's own 16-byte
-row. Region and provenance are not the variables.** This is consistent with the lead already
-recorded in `ISSUES.md` — the `k = 0` re-initialisation at `0x14`, bank 0 lanes 4-7, whose
-dual-bank splash target at the shift8 geometry is exactly `0x1c`.
+row.** This is consistent with the lead already recorded in `ISSUES.md` — the `k = 0`
+re-initialisation at `0x14`.
+
+> **Read this note in order; two of its claims are superseded by its own later sections.**
+> The sentence "region and provenance are not the variables" was attached here on the strength of a
+> stack-only boot and was NOT established by it — see the CORRECTION below. Region was excluded
+> later, by the stage-37 global arms in the final section. The "bank 0 at the same lanes" sharpening
+> recorded further down is **RETRACTED** by those same arms.
 
 ### CORRECTION 2026-08-08 — the confound named below was the WRONG one
 
@@ -235,3 +240,53 @@ through the *same* register and the hand-asm body used different ones. The quest
 disassembly instead — the emitted victim RMW is a plain `lw`/`addiw`/`sw` on a fixed stack offset,
 so **the compiler is excluded by inspection**, which is a stronger test than hand asm because the
 artifact is what actually executes.
+
+---
+
+# 2026-08-08 (later) — REGION EXCLUDED; the "same lanes" refinement RETRACTED
+
+Stage 37 builds the trigger in a GLOBAL (`gc[16]`, 16-byte aligned, victim `gc[3]` at row offset
+12, a second global scalar RMW'd in the same row). Verified in the artifact: `ldc a1, 0x0(gp)` then
+RMW at `0x4`/`0xc` (`gtw`) or `0x8`/`0xc` (`gnt`).
+
+| arm | row-mate | victim | |
+|---|---|---|---|
+| `k800` | — | 4 | control OK |
+| `c8` | `k` @+4 | **567** | anchor — 11th consecutive boot |
+| `gnt` | @+8, bank 1 lanes 0-3 — *intended control* | **9** | **damaged, severely** |
+| `gtw` | @+4, bank 0 lanes 4-7 — the "twin" | **567** | damaged, `c8` signature |
+
+**1. Region is excluded.** A global victim loses increments exactly as a stack one does. The
+2026-08-07 "the damaged scalar must be on the domain stack" conclusion is now dead by direct
+measurement as well as by re-analysis.
+
+**2. The same-lanes rule recorded earlier today is RETRACTED.** `gnt` was built to be the clean
+control and came back damaged, worse than the arm the rule predicted. A 5/5 + 7/7 corpus fit was
+mistaken for a mechanism — the seventh confound of that class here. The lesson is the one the trail
+already records: a fit with two free parameters per observation is an identity, not an explanation,
+and the way to tell is to build the control that the rule says must be clean.
+
+## What discriminates on present evidence
+
+| arm | region | row-mate position | row-mate store pattern | result |
+|---|---|---|---|---|
+| `rg16` | stack | none in victim's row | — | CLEAN 576 |
+| `rmB` | stack | @+8, bank 1 lanes 0-3 | incremented once per OUTER pass | **CLEAN 576** |
+| `gnt` | global | @+8, bank 1 lanes 0-3 | **zeroed** each outer pass + inc each inner | **DAMAGED 9** |
+| `rmC` | stack | @+4, bank 0 lanes 4-7 | zeroed each outer pass + inc each inner | DAMAGED 567 |
+| `gtw` | global | @+4, bank 0 lanes 4-7 | zeroed each outer pass + inc each inner | DAMAGED 567 |
+| `c8` | stack | @+4, bank 0 lanes 4-7 | zeroed each outer pass + inc each inner | DAMAGED 567 |
+
+`rmB` and `gnt` put the row-mate at the **same offset**, in the same bank as the victim, and differ
+only in its store pattern. One is clean and one is damaged. **Position is not the discriminator;
+the row-mate's store pattern is** — specifically the `movc rd, zero; sw rd` re-initialisation, and
+`compress_cap` of a null capability is `0x08000000`, the constant already seen in `0x08000237`.
+
+**Not separated yet:** "is re-zeroed" vs "is stored 9x more often". `rmB` vs `gnt` also crosses
+region, though region is independently excluded by `gtw`/`gnt` themselves. The next arm holds the
+row-mate's store COUNT fixed and varies only whether its store writes zero — e.g. a row-mate reset
+to a non-zero sentinel each outer pass instead of to 0.
+
+**Measurement note:** the `cycles / 76.58 = iterations` conversion is calibrated for the `c8` loop
+body. `gtw`/`gnt` add a global RMW per iteration, so their cycle counts (52659 / 54857) must not be
+converted with that constant; no iteration count is claimed for them.
