@@ -2388,7 +2388,7 @@ in the affected slot produces **extra iterations** rather than a wrong value.
 **NOT reproduced in Verilator** at either RTL revision — the directed tests never create the trigger
 (stale WB-forwarded metadata on a scalar store's rs2). Stated as the report's main gap.
 
-Report + reproduction: `ref/SILICON-DEFECT-scalar-store-metadata-clobber.md`.
+Report + reproduction: `history/07-08-2026_RETRACTED_scalar-store-metadata-mechanism.md`.
 Trail: `history/07-08-2026_02-30-00_nested-loop-capability-index-iteration-loss.md`.
 Fix: gate the WB forward on validity, and/or classify by opcode. Both need a bitstream reflash —
 the project lead's call.

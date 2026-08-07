@@ -1,3 +1,15 @@
+# RETRACTED — a mechanism for R-18 that did not survive
+
+**This document is kept only as the trail of a refuted hypothesis. It is NOT a defect report
+and must NOT be linked to anyone outside the project.** The reproducer that IS suitable for
+handover is `capstone/tests/fpga-repros/R18-scalar-store-metadata-clobber/`.
+
+Refuted by an adversarial audit and then independently by directed simulation
+(`scalar-store-cap-operand.S`, condition proven created via CAPPRINT, result PASS). See R-18
+in `ISSUES.md`.
+
+---
+
 # Silicon defect report: a plain scalar store in the upper half of a cache row is overwritten with capability metadata
 
 **Issue:** R-18. **Status: DO NOT SEND. The causal chain below was RETRACTED on 2026-08-07 by an

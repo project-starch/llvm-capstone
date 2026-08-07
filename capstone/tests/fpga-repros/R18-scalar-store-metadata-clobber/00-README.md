@@ -1,16 +1,58 @@
-# R-18 — a plain scalar store in the UPPER half of a 16-byte cache row is silently zeroed
+# R-18 — a scalar in the upper half of a 16-byte cache row is silently zeroed on silicon
 
-**Status: software-visible defect, reliably reproduced on silicon. NOT root-caused — the causal
-chain first recorded here was RETRACTED the same day by an adversarial audit. NOT reproduced in
-Verilator.**
+**Status: reproducible silicon defect. NO mechanism — every mechanism we proposed has been refuted,
+including by our own tests. This package is a REPRODUCER, not an explanation.**
 
-> **The four frozen images and their expected values are unaffected and remain valid** — they are
-> measurements. What was withdrawn is the *explanation*: see R-18 in `ISSUES.md`. In particular the
-> asserted `issue_read_operands.sv` asymmetry does not exist (both arms of the scoreboard-port
-> ternary return `result_metadata`), an ordinary `addi` forwards ZERO metadata
-> (`ex_stage.sv:1081`), and `c8` fails while `gp16`/`gp32`/`t16` succeed at the **same bank and
-> byte lanes** — so bank geometry is a necessary condition, not a cause. Do not hand the mechanism
-> to the hardware owner; the reproducer itself is still the right artifact to hand over.
+## The defect in one paragraph
+
+A `-O0` loop that mixes capability traffic with ordinary scalar locals can have one of those scalars
+**silently set to zero** part-way through — no trap, no tag violation, nothing in any log. The same
+byte-identical binary computes the correct answer under QEMU and the wrong one on the FPGA. Which
+variable is hit depends only on where the compiler placed it. If a *loop-control* variable lands in
+the affected position the loop runs **extra iterations** instead of producing a wrong value.
+
+## What is established
+
+* **Reproducible and deterministic.** Four frozen, checksummed images below; the failing arm and its
+  control differ only in where the `-O0` allocator placed the accumulator.
+* **Necessary condition:** the victim is always in the **upper 8 bytes of its 16-byte cache row**
+  (row offset 8 or 12, never 0 or 4) — 9 of 9 builds where the victim was measured directly.
+  **It is necessary, not sufficient:** roughly 10 *undamaged* upper-half scalars appear across the
+  same dataset, so this constrains the search rather than explaining anything.
+* **The slot is overwritten, not skipped.** With the accumulator initialised to a sentinel of
+  1,000,000 it returns **567**, not 1000567 — so the location is written and counted up from there.
+  *(Caveat: N=1. Worth repeating with several sentinel values.)*
+* **QEMU is correct** for every variant.
+
+## What we RULED OUT (so you need not spend time on these)
+
+| ruled out | how |
+|---|---|
+| an over-wide capability store | a witness immediately above the store reads back bit-exact after 576 stores; `extract_transfer_size` pins STC at 8 bytes/one beat |
+| store misclassification via the write-user sideband (`st_wr_cap = \|wr_user_i` → dual-bank write) | directed test `scalar-store-cap-operand.S`: a plain `sw` whose data register **provably** holds a real capability (CAPPRINT: Type 1, Perm 7, bounds set) is **not** misclassified and does **not** dual-bank write — **PASS** |
+| any single-address anchor for the victim | fitted against all builds; best 13/19 |
+| distance from the capability store | same value reproduced at 3× the distance, different row, different frame size |
+
+We also do **not** recommend gating the WB-port metadata forward on validity: `issue_read_operands.sv:765`
+already has `cap_result.result_metadata` in **both** arms of its ternary, so that change would be a
+**no-op**. We nearly sent that as a fix and withdrew it.
+
+## The one lead we have not tested
+
+All three measured reset points — **9, 72, 558** — are multiples of the inner trip count (9), i.e.
+they land exactly on **outer-pass boundaries** (p ≈ 1/729 under a uniform-over-iterations null). That
+points at something happening **once per outer pass** rather than once per iteration. Stage 28
+(`FDREG_INNER`) decouples the inner trip count so this is falsifiable; built, not yet run.
+
+## Why we cannot take it further from here
+
+The effect has never been reproduced in Verilator, across six directed tests at both RTL revisions.
+The failing code runs inside a capability domain after `capenter` on a monitor-carved stack, and we
+could not construct a bare-metal directed test that reproduces it. Narrowing further needs
+visibility we do not have from outside the RTL — the signal that would settle it is `st_wr_cap` and
+`bank_we` at the cycle the victim's dword retires.
+
+---
 
 ## Relationship to `RTL-store-user-metadata/` — read that first
 
@@ -34,24 +76,6 @@ This package was originally written claiming to CLOSE that open question via the
 claim is retracted** (see the box above): no path from a scalar store's `wr_user_i` to a non-zero
 value has been demonstrated anywhere. The open question above is still OPEN. What this package
 contributes is the **software-visible measurement**, not an explanation. The routing is prior work.
-
-## The `wt_dcache_mem.sv` structure — real, but NOT shown to cause the measurement
-
-| line | what it shows |
-|---|---|
-| `wt_dcache_mem.sv:138` | `assign st_wr_cap = \|wr_user_i;` — a store is classified as a capability store **by VALUE, not by opcode**. Combined with the ungated routing above, an ordinary `sw` carrying non-zero metadata is misclassified. |
-| `wt_dcache_mem.sv:230-238` | a classified store sets `bank_req = '1; bank_we = '1` — it writes **both** banks of the 16-byte row, not the one its address selects. |
-| `wt_dcache_mem.sv:156-158` | `bank_wdata[k][j] = … (((st_wr_cap) && (k==1)) ? wr_user_i : wr_data_i)` — **bank 1 (the upper 8 bytes) is the only bank that can receive `wr_user_i` instead of the store's data.** `bank_be` applies the same byte-enable to both banks, so for a store addressed into bank 1 the metadata lands on its **own** byte lanes. |
-
-**What is defensible from the above, on its own:** `st_wr_cap = |wr_user_i` classifies capability
-stores **by value rather than by opcode**, and the compressed encoding of a **null** capability is
-`0x08000000`, not zero (`ariane_pkg.sv:753-834`). So a store carrying null-cap metadata is
-misclassified and dual-bank written. That is a clean structural defect worth reporting by itself.
-
-**What is NOT established:** that this is what produces the 567. It requires `wr_user_i != 0` on an
-ordinary `sw`, which has never been measured; `ex_stage.sv:1081` zeroes the FLU writeback for
-non-capstone ops; and `c8` fails while `gp16`/`gp32`/`t16` succeed at the **same bank and byte
-lanes**, which this mechanism cannot distinguish.
 
 ## What the repro shows
 
@@ -141,5 +165,5 @@ That needs a reflash and is the project lead's call.
 4. Explain `c8` vs `gp16`. Until a condition is stated that is true in one and false in the other,
    there is a necessary condition and no cause.
 
-Full report: `capstone/agent-handoff/ref/SILICON-DEFECT-scalar-store-metadata-clobber.md`.
+Full report: `capstone/agent-handoff/history/07-08-2026_RETRACTED_scalar-store-metadata-mechanism.md`.
 Trail: `capstone/agent-handoff/history/07-08-2026_02-30-00_nested-loop-capability-index-iteration-loss.md`.
