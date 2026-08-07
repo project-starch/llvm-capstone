@@ -1071,3 +1071,48 @@ the stack slots are 0x14/0x18/0x1c — identical to c8 — with the global accum
   `/tmp`. Copy them somewhere durable with hashes recorded next to the result line.
 * `fit-victim-rules.py` hard-codes a session-scoped scratchpad path and will silently report
   `dataset: 0 builds` elsewhere. Fix before relying on it again.
+
+## UPDATE 2026-08-07 (boot 68): STACK vs GLOBAL, properly controlled — and it holds
+
+The retraction above stands: boot 65 tested nothing. This is the experiment it should have been.
+
+Stage 32, fixed — it now carries the standard `FDREG_SHIFT` pad and returns BOTH accumulators
+packed (`stack<<16 | global`). Built at SHIFT=8 the stack slots are **0x14/0x18/0x1c, byte-identical
+to the failing c8** (verified from the ELF, not the flags).
+
+| rung | stack accumulator | global accumulator | cycles |
+|---|---|---|---|
+| gvf0 (draw 0) | **567 WRONG** | **576 correct** | 52922 |
+| gvf6 (draw 6) | **567 WRONG** | **576 correct** | 52907 |
+| c8 (anchor) | 567 WRONG | — | 44080 |
+
+`0x02370240` = stack 567, global 576, in both draws.
+
+**In ONE execution, in the SAME loop body, at the SAME geometry: the accumulator on the domain stack
+loses exactly 9 increments while an accumulator in a global -- incremented on the same iterations --
+is exact.**
+
+### Why this is sound where boot 65 was not
+
+* **Geometry held.** Stack slots identical to c8's failing layout. Boot 65 sat at 0x1c/0x20/0x24,
+  the layout four measured builds already list as undamaged.
+* **Internal control.** Both accumulators are observed in the SAME run, so there is no cross-boot
+  or cross-image comparison to confound. Boot 65 returned only the global and left the stack
+  counters unobserved.
+* **N=2 with distinct images.** Two draws, hashes verified different, identical result.
+* **Anchor in-boot.** c8 returns 567 in the same boot, so the defect was live.
+
+### What is now established
+
+**The damaged scalar must be on the domain stack. A scalar in a global, incremented in the same
+loop at the same time, is undamaged.** The upper-half-of-the-row condition remains necessary but not
+sufficient -- gvf's global accumulator also sits at row offset 12 and is fine.
+
+### What this does NOT establish
+
+* Not a mechanism, and not an attribution. The stack and the globals differ in region AND in how the
+  address capability is obtained (`cincoffsetimm` off a register-resident capability vs `ldc gp[i]`
+  from memory). Separating those is what stage 34 was for, and it has now ENTRY-STALLED on three
+  successive draws, costing two boots with no verdict.
+* Both regions are carved from the same `dom_data` by the glue (`split(gp, sp, ...)`), so this is
+  not a cacheability difference.
