@@ -198,3 +198,69 @@ sideband, so there is no wider or multi-beat DATA write to blame.
 built image is an R-16 unknown regardless of whether its LOGIC is known; order by that, not by
 confidence in the code. Two firmware builds in a row came out byte-identical in SIZE (15369224)
 with different hashes.
+
+## UPDATE 2026-08-07 (boot 52 + simulation): TWO MORE MECHANISMS DEAD, and an instrument that works
+
+### Boot 52 -- both remaining board questions answered
+
+Control k800 green, all four arms returned.
+
+| rung | retval | meaning |
+|---|---|---|
+| `wv1` raw `wit[0]` | **0xA5A50000** | the witness is BIT-EXACT after 576 capability stores |
+| `bar1` movc barrier | 567 | shadow-clearing barrier does NOT cure |
+| `bar2` nop control | 567 | identical images bar two instructions |
+
+**OVER-WIDE WRITE: REFUTED.** `wv1` reads the witness back with a loop-free, unguarded load, so
+it closes the hole in `wp0`'s guarded check-loop reading. Memory immediately above the capability
+store is not damaged. Independently, `extract_transfer_size` (`ariane_pkg.sv:1119-1126`) pins STC
+at 8 bytes and one beat, and the metadata rides a separate sideband.
+
+**STALE-METADATA STORE MISCLASSIFICATION: REFUTED for this defect.** `bar1`/`bar2` are identical
+instruction-for-instruction and byte-identical in size (13088), differing only in
+`movc a0,zero / movc a1,zero` versus two `nop`s, both QEMU-green at 576, both at (bank 0, off 4).
+Clearing the shadow regfile changes nothing. The RTL bug is real and quotable; it is not this.
+
+The bank-geometry model now predicts 7 of 7 builds -- `bar1`/`bar2` at (bank 0, off 4) both
+returned the predicted 567.
+
+### What survives: the LOAD side
+
+Memory is correct and the load is answered wrong; the counter's read-modify-write then commits
+the wrong value. `(bank, offset-in-bank)` is exactly address bits **[3:2]**, which are the bits
+below the dword granularity at which both forwarding comparators match --
+`store_buffer.sv:263,271,277` compare `page_offset_i[11:3]`, and `wt_dcache_mem.sv:266` compares
+`wtag` against `(wbuffer_cmp_addr >> XLEN_ALIGN_BYTES)`.
+
+### RTL SIMULATION NOW WORKS -- the instrument this investigation never had
+
+Verilator model of the Capstone core, running directed tests in ~13 s against a built model, with
+the RVFI tracer recording every load's address and returned value and every store's address and
+data (`corev_apu/tb/rvfi_tracer.sv:108-118`). Needed: the Anvil compiler from
+`corank/cva6-anvil-build`, Verilator pinned to **5.008** (`cva6.py:1033` hard-gates the version;
+build it with `-j4`, higher OOM-kills `V3Ast.o`), 18 submodules, and stock
+`gcc-riscv64-unknown-elf` -- the capstone opcodes are raw `.insn` directives, so no custom
+toolchain. Do NOT iterate via `run_capstone_tests.sh`: it ends in `make clean`, deleting
+`work-ver/` and forcing a full re-verilation. Call `cva6.py` directly.
+
+`verif/tests/custom/capstone/stc-neighbour-load.S` (submodule) is the directed reduction.
+
+### The directed test does NOT reproduce -- clean negative, fully controlled
+
+    RTL HEAD  458982093   SUCCESS 6960 cycles, all four bits[3:2] cells 65 stores 0->64
+    board rev 7aac52f93   SUCCESS 6960 cycles, all four bits[3:2] cells 65 stores 0->64
+
+Identical to the cycle. The board's silicon is indistinguishable from HEAD here. This indicts the
+test's FIDELITY, not the hypothesis: the real loop runs inside a capability domain after
+`capenter`, on a monitor-carved stack, storing a capability loaded from the cap table. Raising the
+test into a real domain context is the next step, and it costs no board time.
+
+### Corrections made within the session
+
+* "UNINIT raises UNEXPECTED_CAP_TYPE at the board revision where HEAD accepts it" -- WRONG,
+  retracted. It happens identically at both; the comparison was a four-arm run against an
+  eight-arm one. The uninit construction itself is illegal bare-metal.
+* A run was read from a STALE log after the compile had failed. Delete the run artifacts before
+  re-running so a failed compile cannot masquerade as a result; check the log timestamp.
+* `.S` files go through cpp, so a bare `MACRO(...)` form inside a COMMENT expands and breaks the
+  assembly. That is what made the compile fail.
