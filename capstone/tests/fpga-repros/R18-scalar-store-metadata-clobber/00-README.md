@@ -1,7 +1,7 @@
 # R-18 — a scalar in the upper half of a 16-byte cache row is silently zeroed on silicon
 
-**Status: reproducible silicon defect. NO mechanism — every mechanism we proposed has been refuted,
-including by our own tests. This package is a REPRODUCER, not an explanation.**
+**Status: reproducible silicon defect, REPRODUCED IN RTL SIMULATION (~13 s), with a mechanism that
+now fits, and a compiler-side workaround validated in simulation. See `sim/`.**
 
 ## The defect in one paragraph
 
@@ -10,6 +10,55 @@ A `-O0` loop that mixes capability traffic with ordinary scalar locals can have 
 byte-identical binary computes the correct answer under QEMU and the wrong one on the FPGA. Which
 variable is hit depends only on where the compiler placed it. If a *loop-control* variable lands in
 the affected position the loop runs **extra iterations** instead of producing a wrong value.
+
+## REPRODUCED IN SIMULATION — start here, it costs 13 seconds
+
+`sim/scalar-store-movc-zero.S` reproduces the defect in Verilator, deterministically, in ~13 s.
+Six earlier directed tests had failed to, and this package used to name that as its main gap.
+
+Three tests, identical geometry and loop, differing ONLY in what produced the store's data
+register (all ~12810 cycles, none near the 2,000,000-cycle timeout):
+
+| `sim/` test | store's data register | verdict |
+|---|---|---|
+| `scalar-store-movc-zero.S` | `movc a4, x0` — null-capability shadow | **FAILED**, witness A zeroed |
+| `scalar-store-realcap-samegeom.S` | a real, valid capability | **FAILED**, witness A zeroed |
+| `scalar-store-addi-zero.S` | `addi a4, x0, 0` — zero shadow | **SUCCESS** |
+
+### The mechanism
+
+An ordinary `sw` at `+0x18` (bank 1, lanes 0-3) corrupts `+0x10` (bank 0, **the same byte lanes**).
+`sim/movc-zero-rvfi-trace.dasm` shows only TWO architectural accesses to `+0x10` in the whole run —
+the seed writing `0x0a0a0a0a`, and the readback returning `0x00000000`. Nothing wrote zero to it.
+
+1. `issue_read_operands.sv:1140` puts the data register's capability metadata on the store's
+   write-user sideband **ungated by opcode**;
+2. `wt_dcache_mem.sv:138` — `st_wr_cap = |wr_user_i` — classifies the store as a capability store
+   **by the VALUE of that sideband**;
+3. `:230-238` a so-classified store asserts **both** banks (`bank_req = '1; bank_we = '1`);
+4. `:152-158` the **same byte enable** is applied to both banks.
+
+So the store writes its data into its own slot *and* into the same byte lanes of the other bank.
+The splash carries the store's **DATA**, not the metadata — which is why no `0x08000000` is ever
+found in memory, and why every raw readback shows a clean count.
+
+**Rule:** a store at row offset R also writes row offset `R XOR 8`. It fits 6 of 7 board arms and,
+for the first time, explains the oldest observation here — the victim is in the UPPER half of its
+row in 9/9 measured builds — because a bank-0 store splashes into bank 1, and bank 1 IS the upper
+half. The one arm it does not fit (`gnt`) is discussed at the end.
+
+### The workaround, validated in simulation
+
+`addi a4, x0, 0` in place of `movc a4, x0` — byte-identical otherwise — **passes**. `movc rd, zero`
+writes `compress_cap(NULL)` = `0x08000000` into the register's capability shadow; an integer op
+writes a zero shadow, `st_wr_cap` is never asserted, and no dual-bank write occurs. Our `-O0`
+codegen materialises integer zero with `movc`, which is why the pattern is pervasive in every
+failing build.
+
+**Scope it honestly: this removes the COMMON case, not the class.** Any value reaching a store's
+data register from a capability-producing op still carries a non-zero shadow and still splashes. A
+complete fix is on the hardware side — classify by opcode rather than by the sideband's value, or
+gate the metadata onto the sideband by opcode at issue.
 
 ## THE TRIGGER (2026-08-08) — read this first
 
@@ -118,18 +167,32 @@ than once per iteration. That is now confirmed and localised: the once-per-outer
 row-mate's **reset store**, and the trigger table at the top of this file is the controlled test of
 it. The lead was correct; what was wrong was every mechanism proposed to explain it.
 
-## An unresolved tension the RTL owner should know about
+## The "null vs valid" tension — RESOLVED 2026-08-08, and it was our test's fault
 
-`st_wr_cap = |wr_user_i` (`wt_dcache_mem.sv:138`) classifies by the *value* of the metadata bits, so
-a **real** capability in a store's data register should be misclassified just as a null one is. But
-the directed test `scalar-store-cap-operand.S` puts a real, valid capability there and **passes**,
-while `movc rd, zero` (metadata `0x08000000`) **fails** on the board. Both observations are solid and
-we cannot reconcile them. Possibilities we could not distinguish from outside the RTL: the directed
-test never gets the metadata onto `wr_user_i` (it runs bare-metal, not in a domain after `capenter`),
-or the two differ in some path we have not found. This is a concrete question for whoever can run the
-RTL, and it may be the fastest way in.
+This section used to say we could not reconcile `scalar-store-cap-operand.S` passing with a real
+capability while `movc rd, zero` failed on the board, and called it the sharpest open question.
+It was not an asymmetry. That test stores at `+0x1c` and the new one at `+0x18`, so the two differ
+in **geometry** as well as in the operand. At identical geometry a real capability corrupts exactly
+as a null one does (`sim/scalar-store-realcap-samegeom.S`, FAILED, witness A zeroed).
 
-## Why we cannot take it further from here
+**The trigger is ANY non-zero capability metadata on an ordinary store's data register**, not the
+null form specifically. `movc rd, zero` is simply the pervasive source, because that is how `-O0`
+materialises an integer zero.
+
+## The one arm the rule does not fit
+
+`gnt` puts its row-mate at `+8` and its victim at `+12`, so the rule predicts the splash lands on
+`+0` and the victim should be clean. It was damaged. The candidate is that `gc`'s runtime alignment
+is not what the source requests: the interp entry glue **ignores the descriptor's `align` field**
+(it loads `+0x0` and `+0x10` at stride 24 and never `+0x8`) and carves every global at `sp.END`
+minus multiples of 16, so `gc`'s row offset is whatever `sp.END` happens to be mod 16. That is
+inference, not measurement. It is free to measure — return `&gc[0] & 0xF` in a spare nibble — and
+it does not affect the simulation result, which uses an explicitly aligned buffer.
+
+Also still unexplained by any rule here: `rs4` (−72) and `ka0` (−558). The `+333`/`+330` builds
+belong to the separately documented extra-iteration fault, not to this one.
+
+## Why we could not take it further before simulation
 
 The effect has never been reproduced in Verilator, across six directed tests at both RTL revisions.
 The failing code runs inside a capability domain after `capenter` on a monitor-carved stack, and we
