@@ -330,6 +330,9 @@ static FdregDef fdreg_defs[FDREG_N] = {
 /* The global bucket table InsertBuiltinFuncs links into (sqlite3BuiltinFunctions.a[]). */
 static FdregDef *fdreg_buckets[FDREG_HASHN];
 
+/* stage 33: the capability store target, in the DATA region rather than on the stack */
+static const char *volatile fdreg_gz;
+
 static unsigned fdreg_len30(const char *z) {
   unsigned n = 0;
   while (z[n]) n++;
@@ -610,6 +613,47 @@ static unsigned fdreg_compute(void) {
         : "r"(&f[0]), "r"(0), "i"(FDREG_ASMVICTIM), "i"(FDREG_OUTER)
         : "a0", "a1", "t0", "t1", "t2", "t3", "memory");
     return qc_out;
+  }
+#endif
+#if FDREG_STAGE == 33
+  /* STAGE 33 -- IS THE TRIGGER "SAME CAPABILITY FOR BOTH"? Counters stay on the stack; only the
+   * capability STORE TARGET moves to a global.
+   *
+   * Boot 65 showed that moving the counters off the monitor-carved stack cures the defect. But that
+   * build also changed the counters' ACCESS PATH (through gp instead of s0), so two things moved at
+   * once. The hypothesis it suggests:
+   *
+   *     in the failing build the SAME frame capability (s0) derives BOTH the 16-byte `stc` target
+   *     AND the scalar counter addresses; in the passing build the counters went through `gp`, a
+   *     DIFFERENT capability.
+   *
+   * This tests that directly and in the other direction. The counters stay exactly where they were
+   * -- stack locals reached via s0 -- and only the capability store's target becomes a global,
+   * reached via gp.
+   *
+   *     still fails -> the store's provenance is irrelevant; stack counters plus ANY nearby
+   *                    capability store suffice, and the "same capability" idea is dead
+   *     now clean   -> the defect needs the store target and the counters to derive from the SAME
+   *                    capability. That is an ABI/monitor property, not a hardware one, and it
+   *                    would explain boot 65 without invoking the stack at all
+   *
+   * Everything else is held: same compiler, same -O0, same two per-iteration ldc's, same trip
+   * counts, counters at the same frame offsets (set FDREG_SHIFT so qc lands at row offset 12).
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+    int p, k;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        fdreg_gz = fdreg_defs[k].zName;   /* the capability STORE now targets a GLOBAL, via gp */
+        (void)fdreg_gz;
+        qc++;
+      }
+    return qc;
   }
 #endif
 #if FDREG_STAGE == 32

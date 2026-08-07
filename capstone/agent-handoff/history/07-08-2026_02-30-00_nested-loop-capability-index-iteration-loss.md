@@ -984,3 +984,42 @@ property rather than a hardware one. Untested, and the obvious next experiment.
   result under QEMU.
 * Running the loop OUTSIDE a domain on the board is not reachable with the current runner, which
   drives `.dom` files through the monitor.
+
+## UPDATE 2026-08-07 (boot 66): the STORE's provenance is irrelevant; only where the COUNTERS live matters
+
+Stage 33 holds the counters exactly where they fail -- stack locals via s0, qc at row offset 12 --
+and moves ONLY the capability store's target to a global, reached via gp.
+
+| rung | counters | stc target | result |
+|---|---|---|---|
+| gz8 | **stack**, row offset 12 | **global** | **567 WRONG** |
+| gz12 | **stack**, row offset 8 | **global** | **0x8000237 WRONG** |
+| c8 | stack | stack | 567 WRONG (anchor) |
+| *(boot 65)* gv3 | **global** | stack | **576 correct** |
+
+**Moving the store target changes nothing. Moving the counters cures it.** The "capability store and
+scalar accesses derive from the same capability" hypothesis is REFUTED. gz12 also reproduces
+`0x8000237` exactly -- the same value shift12 gave -- with the store target in a different region
+entirely, which further decouples the clobber value from the store.
+
+**Established, controlled: the damaged scalar must be on the domain stack.**
+
+### The LINEAR-stack hypothesis is refuted too, before it cost a boot
+
+The glue's comment made it look like `sp` might be LINEAR, which would engage the LDC-of-linear
+CLEAR store (`load_unit.sv:447-460`) that takes priority over a real store with no arbitration
+(`store_unit.sv:399`, `:410-417`) -- a good fit for a dropped store. But `INTERP_SP_LINEAR` is
+DERIVED: it is 1 only when `INTERP_FAKE_COUNT` is defined AND `INTERP_DIAG_STAGE < 2`, and our
+builds pass neither. Verified in the artifact: `delin sp` is the FIRST instruction of the entry glue
+(c8.dom:f0004), so **sp and everything split from it are NONLIN**. That path is not engaged.
+
+### What actually differs between the failing and passing arms
+
+Not the region per se, but how the address capability is OBTAINED:
+
+* failing: counter address = `cincoffsetimm s0, imm` -- derived from a **register-resident** capability
+* passing: counter address = `ldc gp[i]` then offset -- derived from a capability **loaded from memory**
+
+That is the next thing to isolate: keep the counters on the stack but reach them through a
+capability that was loaded from memory (park the frame capability in a slot, `ldc` it back, use that
+for the RMW). If that is clean, the variable is the address capability's provenance, not the region.
