@@ -172,6 +172,12 @@
 #define FDREG_WITSEL 0
 #endif
 /* FDREG_WITPAD -- moves stage 13's witnesses onto the damage window. See stage 13. */
+#ifndef FDREG_NORESET
+#define FDREG_NORESET 0
+#endif
+#ifndef FDREG_ORDER
+#define FDREG_ORDER 0
+#endif
 #ifndef FDREG_REREAD
 #define FDREG_REREAD 0
 #endif
@@ -472,6 +478,64 @@ static unsigned fdreg_compute(void) {
   __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
 #endif
 
+#if FDREG_STAGE == 25
+  /* STAGE 25 -- WHY IS k SPARED? Two remaining candidates, one knob each.
+   *
+   * k is the only loop variable never damaged when it occupies the poisoned slot
+   * (capability-store + 0x1c). The read-count explanation is REFUTED (boot 59: giving qc a second
+   * read changes nothing). Two structural differences remain:
+   *
+   *   FDREG_NORESET=1 -- k is RE-INITIALISED to 0 at the top of every outer pass; qc and p are not.
+   *       This carries the index across outer passes so it becomes MONOTONE and loses exactly that
+   *       property. If k then becomes damaged at the poisoned slot, the re-initialisation is what
+   *       spares it.
+   *
+   *   FDREG_ORDER=1 -- qc's RMW is the FIRST scalar access after the capability store, k's is the
+   *       last. This swaps them. If the damage follows whichever now goes first, program-order
+   *       position is the variable. (Weak prior: p is damaged although its increment lives in the
+   *       OUTER tail, far from the capability store.)
+   *
+   * Packing: a monotone index no longer fits in 4 bits.
+   *     bits 31..24 p (expect 64) | bits 23..12 k | bits 11..0 qc (expect 576)
+   *     with reset   -> (64<<24)|(9<<12)|576   = 0x40009240
+   *     with NORESET -> (64<<24)|(576<<12)|576 = 0x40240240
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+    int p, k;
+#if (FDREG_NORESET)
+    k = 0;
+    for (p = 0; p < (FDREG_OUTER); p++) {
+      int kend = k + FDREG_N;
+      for (; k < kend; k++) {
+        const char *volatile z = fdreg_defs[k % FDREG_N].zName;
+        (void)z;
+        qc++;
+      }
+    }
+#elif (FDREG_ORDER)
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; ) {
+        const char *volatile z = fdreg_defs[k].zName;
+        (void)z;
+        k++;
+        qc++;
+      }
+#else
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;
+        (void)z;
+        qc++;
+      }
+#endif
+    return ((unsigned)(p & 0xFF) << 24) | ((unsigned)(k & 0xFFF) << 12) | (qc & 0xFFFu);
+  }
+#endif
 #if FDREG_STAGE == 24
   /* STAGE 24 -- IS THE SECOND READ THE CURE? Testing k's immunity directly.
    *

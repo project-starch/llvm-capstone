@@ -614,3 +614,33 @@ Remaining candidates for k's immunity, in the order they should be tested:
 
 Candidate 3 is the cheapest to test: give qc an equivalent re-initialisation that cannot change its
 value, and see whether it becomes immune.
+
+## UPDATE 2026-08-07 (boot 60): k's RE-INITIALISATION is NOT what spares it either
+
+Stage 25 carries the inner index across outer passes so it becomes MONOTONE, losing the
+re-initialisation and nothing else, with the index at the poisoned slot.
+
+| arm | k at 0x1c | k behaviour | measured | verdict |
+|---|---|---|---|---|
+| bs16 | yes | reset each outer pass | p=64 k=9 qc=576 | **correct** (control: k immune) |
+| nr16 | yes | **monotone, never reset** | p=64 k=576 qc=576 | **correct -- STILL IMMUNE** |
+| or20 | (order swapped) | - | p=64 k=9 qc=587 | damaged (+11) |
+
+**k stays immune when monotone. The re-initialisation hypothesis is REFUTED**, after the read-count
+one died in boot 59. Of the three structural differences originally listed, the survivor is that k
+is the BOUND-COMPARED variable: its value feeds a conditional branch every iteration, which neither
+qc nor p (in the inner body) does.
+
+### PROCESS: the oracle was wrong, not the board
+
+The runner reported nr16 as WRONG against oracle 1076630592. That oracle was MY arithmetic error --
+(64<<24)|(576<<12)|576 = 0x40240240 = 1076101696, which is exactly what the board returned. The arm
+PASSED. Decoding the returned value rather than trusting the pass/fail verdict is what caught it;
+without that this would have been recorded as a false positive on the decisive arm. Compute packed
+oracles programmatically, never by hand.
+
+### or20 needs its slot map verified before use
+
+or20 is damaged (qc=587) but the ORDER variant's RMW-site detection found only two sites, so which
+variable sits at the poisoned slot is not established for it. Do not fold or20 into the slot rule
+until its layout is confirmed in the artifact.
