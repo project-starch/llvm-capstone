@@ -1,6 +1,6 @@
 # Silicon defect report: a plain scalar store in the upper half of a cache row is overwritten with capability metadata
 
-**Status:** root cause identified in RTL, reproduced on silicon, not reproduced in simulation (see
+**Issue:** R-18 in `ISSUES.md`. **Status:** root cause identified in RTL, reproduced on silicon, not reproduced in simulation (see
 §7). **Audience:** the board/RTL owner. **Date:** 2026-08-07.
 
 **Affected RTL:** `capstone-ariane`. Verified present at HEAD `458982093` and at `7aac52f93`, the

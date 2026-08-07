@@ -2328,3 +2328,36 @@ bisect inside 223–381.
 **Repro:** `CAPSTONE_SQLITE_STAGE=30..34` — **NOT YET RUN SUCCESSFULLY.** Its first attempt
 built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are now fixed.
 
+### R-18 — a plain scalar store in the UPPER half of a 16-byte cache row is overwritten with capability metadata `ROOT-CAUSED IN RTL 2026-08-07 — FIX NEEDS A REFLASH`
+
+A plain `sw` whose address lies in the upper 8 bytes of a 16-byte D-cache row can have **its own
+slot written with capability metadata instead of its data**. Where those metadata bytes are zero at
+the store's byte lanes the variable is **silently ZEROED** — no trap, no tag violation, nothing in
+any log. Present at the resident bitstream's commit (`7aac52f93`) and at `capstone-ariane` HEAD;
+`git diff` touches none of the files involved.
+
+**Chain (each line quoted in the report):**
+`issue_read_operands.sv:690` forwards rs2 capability metadata from the **writeback port with no
+validity gate** (its scoreboard-port sibling checks `cap_result.valid`) → `wt_dcache_mem.sv:138`
+classifies a store as a capability store **by VALUE** (`st_wr_cap = |wr_user_i`), not by opcode →
+`:230-238` a classified store writes **both** banks of the row → `:156-158` **bank 1 is the only
+bank** that can receive `wr_user_i` instead of the store data.
+
+**Evidence.** Victim in the upper half in **9/9** directly-measured builds (undamaged builds also
+carry upper-half scalars, so it is a real constraint). A sentinel-initialised accumulator
+(1,000,000) returns **567**, proving overwrite rather than skipped stores. Every victim decomposes
+as `clobber + (576 − reset_iteration)`; one build returns `0x08000237 = 0x08000000 + 567`, i.e.
+clobbered with metadata **bit 27** set. Cycle counts independently confirm iteration counts. QEMU is
+correct throughout.
+
+**Software impact.** Any `-O0` code mixing capability traffic with ordinary scalar locals is
+exposed; which variable is hit depends only on where the allocator puts it. A loop-control variable
+in the affected slot produces **extra iterations** rather than a wrong value.
+
+**NOT reproduced in Verilator** at either RTL revision — the directed tests never create the trigger
+(stale WB-forwarded metadata on a scalar store's rs2). Stated as the report's main gap.
+
+Report + reproduction: `ref/SILICON-DEFECT-scalar-store-metadata-clobber.md`.
+Trail: `history/07-08-2026_02-30-00_nested-loop-capability-index-iteration-loss.md`.
+Fix: gate the WB forward on validity, and/or classify by opcode. Both need a bitstream reflash —
+the project lead's call.
