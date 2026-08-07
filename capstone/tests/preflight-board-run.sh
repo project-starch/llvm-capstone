@@ -202,7 +202,7 @@ fi
 # code under test. The very next boot staged three redraws of one probe in a single image and
 # got 3 of 3 returns. This gate refuses the eighth single-probe load.
 _recent_stalls=0
-for _t in $(ls -t /tmp/capstone/boot*-raw.txt /tmp/capstone/boot*.txt 2>/dev/null | head -3); do
+for _t in $(ls -t /tmp/capstone/boot*-raw.txt /tmp/capstone/boot*.txt /tmp/capstone/*-run.txt 2>/dev/null | head -3); do
   python3 - "$_t" <<'PYEOF' || _recent_stalls=$(( _recent_stalls + 1 ))
 import sys, re
 d = open(sys.argv[1], 'rb').read()
@@ -258,8 +258,17 @@ if [[ -n "$RUNGS" ]]; then
     [[ -f "$OVERLAY/$r.dom" ]] || continue
     if [[ ! -f "$ORACLES/$r.qemu-pass" ]]; then
       bad "$r has no recorded QEMU pass ($ORACLES/$r.qemu-pass) -- verify under QEMU before spending a boot"
-    elif [[ "$OVERLAY/$r.dom" -nt "$ORACLES/$r.qemu-pass" ]]; then
-      bad "$r.dom is NEWER than its QEMU pass marker -- the artifact changed after it was verified"
+    else
+      # An mtime comparison is not proof: the markers can be (and were) `touch`ed retroactively,
+      # zero-byte, minutes after the boot they supposedly vouched for. Bind the marker to the
+      # artifact's CONTENT instead -- it must record the sha256 of the exact .dom being staged.
+      _want=$(sha256sum "$OVERLAY/$r.dom" | cut -d" " -f1)
+      _have=$(grep -oE "[0-9a-f]{64}" "$ORACLES/$r.qemu-pass" 2>/dev/null | head -1)
+      if [[ -z "$_have" ]]; then
+        bad "$r.qemu-pass records no image hash -- an empty marker cannot distinguish verified from touched"
+      elif [[ "$_have" != "$_want" ]]; then
+        bad "$r.qemu-pass vouches for a DIFFERENT image (has ${_have:0:12}, staged ${_want:0:12})"
+      fi
     fi
   done
 

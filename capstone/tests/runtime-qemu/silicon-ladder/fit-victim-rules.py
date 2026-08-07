@@ -1,9 +1,13 @@
-import json, subprocess, itertools, sys
-sys.path.insert(0,'/tmp/capstone')
-from extract_layout import layout
+import json, subprocess, itertools, sys, os
+# resolve the sibling extractor by THIS file's location, not via /tmp
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+_spec = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'extract-frame-layout.py')
+import importlib.util as _ilu
+_m = _ilu.module_from_spec(_ilu.spec_from_file_location('extract_frame_layout', _spec))
+_ilu.spec_from_file_location('extract_frame_layout', _spec).loader.exec_module(_m)
+layout = _m.layout
 S=os.environ.get("CAPSTONE_DOM_DIR", ".")   # was a session-scoped scratchpad path;
 # it silently produced "dataset: 0 builds" anywhere else. Set CAPSTONE_DOM_DIR to a .dom directory.
-import os
 # build -> (victim_slot or None, delta, victim_known)
 OUT = {
  "c0":(None,0,True), "c4":(0x1c,+333,True), "c8":(0x1c,-9,True),

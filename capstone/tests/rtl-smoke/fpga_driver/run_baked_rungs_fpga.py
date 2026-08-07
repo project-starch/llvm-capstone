@@ -168,8 +168,14 @@ def main():
             # The FULL console stream, written first and separately: it is the only capture that
             # survives a window closing on timeout, and it is what the SHA6 entry check must be
             # read from. Written in the finally so a wedge, a timeout or a crash still leaves it.
-            raw = getattr(console, "uart_all", None)
-            raw = raw() if callable(raw) else getattr(console, "uart_buf", "")
+            # FpgaConsole exposes `uart_text` (fpga_console.py:472). It has never had `uart_all`
+            # or `uart_buf`, so this silently wrote nothing for 19 consecutive boots -- including
+            # every stage-34 entry stall, which is exactly what this capture exists to diagnose.
+            # getattr-with-default hid the error; name the attribute directly so a rename breaks
+            # loudly instead of quietly.
+            raw = getattr(console, "uart_text", "")
+            if callable(raw):
+                raw = raw()
             if raw:
                 pathlib.Path(RAW_OUT).write_text(raw if isinstance(raw, str) else raw.decode("utf-8", "replace"))
                 print(f"full console stream -> {RAW_OUT}", flush=True)
