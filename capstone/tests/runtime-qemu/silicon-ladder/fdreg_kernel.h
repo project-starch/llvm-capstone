@@ -344,6 +344,15 @@ static unsigned fdreg_compute(void) {
      Everything else -- the leaves, the guard, the frame -- is kept identical so the slot
      lands at the same offset.
 
+     RESULT, boot 44: init9 returns 0 -- the initialisation LANDS, so the candidate below is
+     REFUTED, in agreement with an RTL audit that independently refuted x0-forwarding (the
+     forward mux is closed for register 0 by `gpr_clobber_vld[0] = '0` in
+     issue_read_operands.sv:577, and the FPGA regfile read port hard-zeroes address 0 at
+     ariane_regfile_fpga.sv:164 with ZERO_REG_ZERO(1) on all four instantiations). The +330
+     enters AFTER initialisation: the loop returns 906 where 576 is correct, i.e. the inner
+     body runs ~330 times too many. Kept below because the reasoning is what the measurement
+     had to rule out.
+
      THE CANDIDATE, from static analysis. `unsigned qc = 0` does NOT compile to a store of the
      zero register at -O0. It compiles to a CAPABILITY MOVE from x0, and that result is what
      gets stored:
