@@ -587,3 +587,30 @@ victim was inferred rather than triple-reported and are re-testable.
 
 k's immunity is the sharpest remaining clue: it is the only counter READ TWICE per iteration (loop
 compare, then increment).
+
+## UPDATE 2026-08-07 (boot 59): the READ-COUNT explanation of k's immunity is REFUTED
+
+k is spared whenever it occupies the poisoned slot, and the one structural difference was that k is
+read TWICE per iteration (loop compare, then increment) while qc and p are read once. Stage 24 adds
+a second read of qc -- an always-false compare, so the value and the oracle are unchanged -- and
+places qc at the poisoned slot.
+
+| rung | qc position | qc reads/iter | qc | cycles |
+|---|---|---|---|---|
+| rr0 | 0x1c | 1 | **567** | 44081 |
+| rr1 | 0x1c | **2** | **567** | 48667 |
+| rr2 | p at 0x1c, qc reread | - | NO RESULT (entry stall, no verdict) |
+
+The extra reads are real -- 9 `lw` against 7, and the cycle count rises accordingly -- and qc loses
+exactly the same 9 stores. **k's immunity is NOT about the read count.**
+
+Remaining candidates for k's immunity, in the order they should be tested:
+1. **Program-order position.** qc's RMW is the FIRST scalar access after the capability store; k's
+   is the last in the body. But note rs8 damaged p, whose increment lives in the OUTER tail, far
+   from the capability store in program order -- so this is not obviously it either.
+2. **k is the loop's bound-compared variable**, so its value is consumed by control flow every
+   iteration rather than only accumulated.
+3. k is re-initialised (`k = 0`) at the top of every outer pass, which qc and p are not.
+
+Candidate 3 is the cheapest to test: give qc an equivalent re-initialisation that cannot change its
+value, and see whether it becomes immune.

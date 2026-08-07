@@ -172,6 +172,9 @@
 #define FDREG_WITSEL 0
 #endif
 /* FDREG_WITPAD -- moves stage 13's witnesses onto the damage window. See stage 13. */
+#ifndef FDREG_REREAD
+#define FDREG_REREAD 0
+#endif
 #ifndef FDREG_DEPTH
 #define FDREG_DEPTH 0
 #endif
@@ -469,6 +472,46 @@ static unsigned fdreg_compute(void) {
   __asm__ volatile(".rept " FDREG_DRAW_STR(FDREG_DRAW) "\n\tnop\n\t.endr" ::: "memory");
 #endif
 
+#if FDREG_STAGE == 24
+  /* STAGE 24 -- IS THE SECOND READ THE CURE? Testing k's immunity directly.
+   *
+   * The victim is the slot at capability-store + 0x1c, and whichever loop variable occupies it is
+   * damaged -- EXCEPT k, which is spared in every build where it lands there (shift0, c0, rs0).
+   * The one structural difference: k is read TWICE per iteration (once for the loop compare
+   * `li a0,0x8; blt`, once for the increment), while qc and p are read once.
+   *
+   * This adds a second read of qc, with nothing else changed, and puts qc at the poisoned slot:
+   *
+   *     qc becomes CORRECT -> the second read is the cure. That is both a workaround and a strong
+   *         mechanistic clue: the slot's value is RECOVERABLE, so the damage is not a lost store
+   *         but something a redundant access repairs or re-fetches.
+   *     qc stays 567       -> k's immunity is NOT about the read count, and the next candidate is
+   *         that k is the loop's own bound-compared variable, or that its store is the LAST in the
+   *         body rather than the first.
+   *
+   * FDREG_REREAD=1 emits the extra read. The comparison constant can never be true, so the value
+   * is unchanged and the oracle stays 576 -- only the access pattern differs. Verify in the
+   * artifact that an extra `lw` of qc's slot really appears, and that the frame did not move.
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+    int p, k;
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;
+        (void)z;
+#if (FDREG_REREAD)
+        if (qc == 0xFFFFFFFFu) return 0;   /* a second READ of qc, mirroring k's compare */
+#endif
+        qc++;
+      }
+    return ((unsigned)(p & 0xFFF) << 20) | ((unsigned)(k & 0xF) << 16) | (qc & 0xFFFFu);
+  }
+#endif
 #if FDREG_STAGE == 23
   {
 #if (FDREG_DEPTH) >= 2
