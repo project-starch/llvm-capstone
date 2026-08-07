@@ -218,6 +218,15 @@
    outer count changes the expected answer: if the board still says 906, the probe is reporting
    something unrelated to the loop. */
 #ifndef FDREG_OUTER
+#ifndef FDREG_GAPP
+#define FDREG_GAPP 0
+#endif
+#ifndef FDREG_GAPT
+#define FDREG_GAPT 0
+#endif
+#ifndef FDREG_GAPK
+#define FDREG_GAPK 0
+#endif
 #define FDREG_OUTER 64
 #endif
 #define FDREG_DRAW_STR2(x) #x
@@ -555,6 +564,80 @@ static unsigned fdreg_compute(void) {
         : "r"(&f[0]), "r"(0), "i"(FDREG_ASMVICTIM), "i"(FDREG_OUTER)
         : "a0", "a1", "t0", "t1", "t2", "t3", "memory");
     return qc_out;
+  }
+#endif
+#if FDREG_STAGE == 36
+  /* STAGE 36 -- WHICH ROW-MATE? And with the FRAME SIZE HELD CONSTANT.
+   *
+   * Boot 2026-08-07 (k800/c8/rg16/rg32) showed that moving BOTH row-mates out of the victim's
+   * 16-byte row cures the defect: c8 returned qc=567 while rg16 (gap 16) and rg32 (gap 32) both
+   * returned 576, at the same ~576 iterations by cycle count, with an instruction-for-instruction
+   * identical inner loop and the victim at the same s0-0x34 and the same row offset 12.
+   *
+   * Two things are still open, and this stage closes both at once.
+   *
+   * (a) FDREG_GAP moved `k` AND `p` together, so it cannot say which one matters. `k` is re-zeroed
+   *     at the top of every outer pass (`movc a0, zero; sw a0, ...`) -- ISSUES.md names exactly that
+   *     store, at 0x14, with a dual-bank splash target of 0x1c, as the leading untested lead. `p` is
+   *     merely incremented once per outer pass. These are very different mechanisms.
+   *
+   * (b) Every gap arm so far GREW THE FRAME (0x50 -> 0x60 -> 0x70), so "no longer shares a row"
+   *     was confounded with "moved to a different absolute address and cache set". Four geometric
+   *     laws in this investigation have already died to exactly that.
+   *
+   * The fix for (b) is to hold FDREG_GAPP + FDREG_GAPK CONSTANT and only change which side of the
+   * victim the padding sits on. Two arms with the SAME total padding therefore have the SAME frame
+   * size, the same number of prologue stores, and the same absolute victim address -- and differ
+   * only in how many RMW'd scalars remain in the victim's row:
+   *
+   *     GAPP=16 GAPK=0   qc | pad16 | p k        -> victim has ZERO row-mates
+   *     GAPP=0  GAPK=16  qc p | pad16 | k        -> victim has ONE row-mate, p
+   *     (c8, for reference, at its own frame)    -> victim has TWO row-mates, k and p
+   *
+   * Read it as:
+   *     both arms clean            -> `k`'s re-zeroing store is the trigger; confirms the
+   *                                   ISSUES.md lead and `p` is irrelevant
+   *     GAPP arm clean, GAPK wrong -> `p` alone in the row is enough; the k=0 lead is NOT the
+   *                                   mechanism, or not the only one
+   *     both wrong                 -> row membership is not the variable after all, and the
+   *                                   2026-08-07 result was about the frame growing. That would
+   *                                   retract it, which is why the arms are built this way.
+   *
+   * VERIFY THE ARTIFACT, never these comments: run extract-frame-layout.py and confirm the two arms
+   * report the SAME frame and that the rmw slots fall in the rows described above. The -O0 allocator
+   * has silently moved a slot and destroyed the measurement four times in this investigation.
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+#if (FDREG_GAPP) > 0
+    volatile unsigned char fdreg_gapp[FDREG_GAPP];   /* between qc and p */
+    fdreg_gapp[0] = 0;
+#endif
+    int p;
+#if (FDREG_GAPK) > 0
+    volatile unsigned char fdreg_gapk[FDREG_GAPK];   /* between p and k */
+    fdreg_gapk[0] = 0;
+#endif
+    int k;
+#if (FDREG_GAPT) > 0
+    /* TRAILING pad, BELOW k. Grows the frame WITHOUT separating any of qc/p/k, so an arm with
+       GAPT=16 is frame-matched to the GAPP=16 and GAPK=16 arms while keeping all three counters
+       in one row. That is the positive control the gap sweep was missing: without it, "shares a
+       row" stays confounded with "different frame, different absolute address, different set". */
+    volatile unsigned char fdreg_gapt[FDREG_GAPT];
+    fdreg_gapt[0] = 0;
+#endif
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;   /* the capability store, unchanged */
+        (void)z;
+        qc++;
+      }
+    return ((unsigned)(p & 0xFFF) << 20) | ((unsigned)(k & 0xF) << 16) | (qc & 0xFFFFu);
   }
 #endif
 #if FDREG_STAGE == 34

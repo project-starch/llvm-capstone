@@ -15,10 +15,25 @@
 > plainly, because the eliminated-axes list reads like progress and was not.
 >
 > **Why this package still exists:** it converts "does this bitstream have the forwarding
-> fix?" into one boot. A third bitstream, `caplifive_65536_nodes.bit` (larger revocation-node
-> pool), exists whose forwarding-fix status is **unconfirmed** — if it lacks the fix,
-> reflashing to it reintroduces R-16 *and* R-14, and this is how you find out before spending
-> a campaign on it.
+> fix?" into one boot — for a bitstream that has not been checked yet.
+>
+> **UPDATE 2026-08-07: `caplifive_65536_nodes.bit` DOES carry the fix.** This paragraph used to
+> say its status was "unconfirmed"; that has been stale since 2026-08-06.
+> `ref/SILICON-BLOCKER.md:347` records `k1200` — the R-14 acceptance rung, which fails on unfixed
+> silicon and returns 4 with the fix — returning **4 on both bitstreams**, across four boots with
+> byte-identical firmware and a passing control in each. `ref/known-good-controls.md:16` lists it
+> the same way.
+>
+> One hop remains between that and "R-16 is fixed on the resident silicon": `k1200` tests **R-14**,
+> and the claim that R-14 and R-16 are the same defect is an inference (see the header above), not
+> a measurement on this bitstream. The direct R-16 test is the `sb1`/`sb0`/`f10` set below, which
+> has never been run on 65536.
+>
+> **Why this matters more than a doc fix.** An entry stall on the resident bitstream is therefore
+> *probably not R-16*, so "redraw and retry" is probably the wrong response to it. On 2026-08-07
+> five stalls were treated as R-16 on the strength of the stale sentence above, and at least two of
+> them turned out to be a staged `.dom` that was never packed into the initramfs — now blocked by
+> gate C14 in `preflight-board-run.sh`. Check membership before blaming the silicon.
 
 ---
 
