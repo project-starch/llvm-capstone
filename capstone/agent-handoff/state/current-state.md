@@ -2,48 +2,71 @@
 
 Minimal snapshot. Read first in every session.
 
-## WHERE THE PROJECT ACTUALLY IS (2026-08-05) — read this before anything below
+## WHERE THE PROJECT ACTUALLY IS (2026-08-07) -- read this before anything below
 
-**Board bitstream is `caplifive_fixed_forward.bit`** (reflashed 2026-08-04, carries the
-operand-forwarding fix `capstone-ariane 7aac52f93`). Every board result recorded BEFORE
-2026-08-04 was measured on the old bitstream and must be re-checked before being relied on.
+**Bitstream: `caplifive_65536_nodes.bit`.** Board results before 2026-08-04 were measured on an
+older bitstream and must be re-checked before being relied on.
 
-**FIXED and verified on silicon**
-* **R-14** and **R-16** — both were the same operand-forwarding bug. `k1200` and `r14lp` now
-  return 4; the R-16 reproducer now enters. Packages archived / kept only as acceptance tests.
-* **Sporadic wrong `strlen`** — at `-O0` `strlen` re-loaded its string capability from a stack
-  slot every iteration and silicon sporadically returned 1. Stage 13 gave 15, then 26, then hung
-  across three boots of one source; QEMU always 36. With the string primitives at `-O1` silicon
-  returns 36. `SQLITE_SUPPORT_OPT_LEVEL` now defaults to `-O1`.
+**FIXED and silicon-proven since the last update**
+* **C-14, destructive `movc` of a live scalar.** The fix asks per SITE via ReachingDefAnalysis
+  over ALL reaching defs, not per function. `locfl3` returns its oracle 26 on silicon where the
+  pre-fix build wedged, control green in the same boot; lit 47/47; QEMU ladder clean. It also
+  clears `loc1`, `locfl8` and `matmult_int`. NOTE it is provably INERT at -O0 (matmult_int is
+  byte-identical with the fix on and off), so it does not cover anything in the SQLite domain,
+  which builds -O0.
+* `matmult_int` STAYS on the NOT-controls list -- see
+  `history/06-08-2026_21-10-00_matmult-int-is-not-cleared-by-the-c14-fix.md`.
 
-**OPEN, and these are the live ones**
-* **Stage 10 hangs — the SQLite blocker.** `sqlite3MallocInit()` +
-  `sqlite3RegisterBuiltinFunctions()`. Every current build, first position, fresh boot, controls
-  returning in the same boot. Stages 0, 9, 11-16, 18 return. Refuted as causes: the wrong
-  `strlen` (fixed, stage 10 still hangs) and a masked fault (hangs with a trap vector installed).
-* **R-17** — ANY perturbation of the SQLite image makes it hang. Nine perturbations, all hang;
-  only unmodified builds return; both correct under QEMU. Nine variables tested and excluded.
-  Reproducer: `capstone/tests/fpga-repros/S01-image-perturbation-hang/`.
-* **M-1** — domains run with `mtvec = 0`, so a fault vectors to pc=0 with the domain's PCC still
-  installed and loops forever: **a trap and a hang are the same observation**. Fix already exists
-  behind `INTERP_DOMAIN_MTVEC=1` in the glue (no monitor change). Handler reachability after a
-  real fault is unverified — check with `tagf`.
-* **C-17** — `Cannot select: i128 = CapstoneISD::SELECT_CC` blocks whole-image `-O1`.
+**TWO OPEN SILICON DIVERGENCES. Neither is root-caused. They are NOT the same fault.**
 
-**METHOD WARNINGS — these cost the most time on 2026-08-04/05 (seven retractions)**
-* **Any instrumentation of the SQLite image changes its behaviour.** Adding globals entry-stalls
-  it; DCE removing globals changes which code hangs; a clamp leaving `.capstone_gp_initdesc`
-  byte-identical still flipped an unrelated stage. Gate on the ARTIFACT, never on the flag.
-* `SQLITE_EXTRA_DEFS` does **not** reach the amalgamation — `DOMAIN_EXTRA_DEFS` does. The staged
-  dispatch sits behind `#ifdef CAPSTONE_SQLITE_STAGE`; without it every `dom:NNN` selector is
-  silently ignored and the full workload runs. Three sessions were lost to this.
-* **A returned value is not a pass** — check it against the expected number. Stages 13 and 16
-  were recorded as passing while returning wrong answers.
-* **Position matters**: a verdict needs a control that RETURNS in the same boot, and the shipped
-  freshness gate only checks the canonical `sqlite_silicon.dom`.
-* Keep typed console lines short — the UART RX FIFO silently truncates (`sh()` now caps at 120).
+**A -- the SQLite blocker, a HANG.** Wedges in sqlite3_initialize ->
+sqlite3RegisterBuiltinFunctions -> sqlite3AlterFunctions -> sqlite3InsertBuiltinFuncs.
+MINIMAL REPRO, layout-proof: `/tmp/capstone/sqlite-qr15` returns and `/tmp/capstone/sqlite-qr16`
+wedges, and the two images differ by exactly TWO BYTES -- one immediate at 0x332c4
+(`li a1,0xf` vs `li a1,0x10`). `lvl` is a runtime variable so both code paths are compiled into
+both images at identical addresses; layout is excluded by construction. Level 15 links a static
+FuncDef clone array with an inline loop; level 16 hands the SAME array to the real
+sqlite3InsertBuiltinFuncs, which is a SINGLE loop. Both created AND entered. NO off-SQLite
+reproducer. NO mechanism.
 
-Full trail: `ref/SILICON-BLOCKER.md` (top sections), `ref/ISSUES.md` (R-17, M-1, C-17).
+**B -- an iteration/value divergence, WRONG NUMBERS not a hang.** Deterministic, and it returns
+values, so it is bisectable where A is not.
+* INSIDE SQLite the trigger is a FOUR-WAY CONJUNCTION, with nine controls each removing exactly
+  one condition and each exactly correct against a MEASURED QEMU oracle: a NESTED loop, AND a
+  CAPABILITY access in the inner body, AND an index that is the INNER counter, AND that index
+  RESETTING each outer pass. L31 has all four: board 567 of 576 on SIX runs, QEMU 576.
+* B is NOT A. `sqlite3InsertBuiltinFuncs` is a single loop; level 39 is exactly that shape and
+  returns 576.
+* OFF-SQLITE, a 20 KB rung now diverges too (`lfa`/`lfb`/`lfc`, boot 39-41) -- but with a
+  DIFFERENT signature: a CONSTANT +330 that tracks the expected value (576->906, 288->618,
+  144->474). The loop counts correctly and the accumulator starts at 330 rather than 0, i.e. a
+  stale stack slot. Whether that is the same fault as L31's deficit of 9 is NOT established.
+* Full control table: `history/07-08-2026_02-30-00_nested-loop-capability-index-iteration-loss.md`
+
+**WHAT TO DO NEXT**
+1. Stage 9 (`init9.dom`, built) returns the accumulator IMMEDIATELY after `unsigned qc = 0`.
+   0 means the initialisation lands; 330 means it does not. This is the single most decisive
+   queued probe.
+2. `lf0.dom` (built) is the TRUE control for `lfa` -- stage 7 at LEAVES=0, same base VA, same
+   guard, same build path. fdreg7 is NOT that control: it differs in five ways at once.
+3. Sweep the global count down from 43 to find the smallest reproducing rung, then freeze it
+   into `capstone/tests/fpga-repros/`.
+4. Only a SIMULATION can answer what differs on a pass that skips its inner body. A 20 KB
+   reproducer makes that feasible for the first time; S01 has an open request for exactly this.
+
+**TRAPS THAT COST BOARD TIME THIS WEEK -- all now mechanised**
+* The staged runner hard-stopped on any WRONG value, because PROBE_SENTINELS can only list
+  CORRECT ones. Eight consecutive boots ran their control plus ONE probe. Fixed to match the
+  0x9E marker FAMILY (`82bb2f338fcd`).
+* The runner reported an R-16 ENTRY STALL as "created and entered". Entry is `SQ: G/enter`,
+  NOT `SQ: A/dom-ok` (`9860bd962c87`).
+* Firmware over 32 MB is rejected AFTER the board is locked and power-cycled; preflight now
+  gates on it.
+* `grep` here is ugrep and silently returns NOTHING on UART captures containing control bytes.
+  Scan them with python3.
+* A probe that adds capability-bearing globals moves the capability sections and entry-stalls;
+  reuse existing globals.
+* Rungs with ~170 cap-table entries entry-stall; 43-107 enter reliably.
 
 ## HOW PROGRAMS REACH THE BOARD CHANGED (2026-08-03) — UART TRANSFER IS RETIRED
 
