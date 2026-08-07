@@ -2,6 +2,39 @@
 
 Minimal snapshot. Read first in every session.
 
+## R-18 IS ROOT-CAUSED AND REPRODUCED IN SIMULATION (2026-08-08) -- newest first
+
+An ordinary `sw` whose DATA REGISTER carries capability metadata also writes its data into the
+**same byte lanes of the other bank** of its 16-byte row, silently overwriting an unrelated scalar
+8 bytes away. Reproduced in Verilator in ~13 s; the board is no longer needed to study it.
+
+    issue_read_operands.sv:1140   metadata onto the store's write-user sideband, UNGATED by opcode
+    wt_dcache_mem.sv:138          st_wr_cap = |wr_user_i -- classified by VALUE, not opcode
+    wt_dcache_mem.sv:230-238      such a store asserts BOTH banks
+    wt_dcache_mem.sv:152-158      the SAME byte enable is applied to both
+
+Rule: a store at row offset R also writes `R XOR 8`. Fits 6 of 7 board arms, and explains the
+oldest observation in the investigation -- the victim is in the UPPER half of its row in 9/9
+measured builds -- because a bank-0 store splashes into bank 1.
+
+**WORKAROUND, ours, validated in simulation and needing no bitstream:** emit `addi rd, x0, 0`
+instead of `movc rd, zero` for integer-zero materialisation. `movc rd, zero` writes
+`compress_cap(NULL)` = `0x08000000` into the register's capability shadow; an integer op leaves it
+zero, `st_wr_cap` is never asserted, and no dual-bank write happens. Our `-O0` codegen uses `movc`,
+which is why the trigger is pervasive. **This removes the COMMON case, not the class** -- any value
+reaching a store's data register from a capability-producing op still splashes.
+
+**NOT YET DONE, and the highest-value next step:** several documented "silicon miscompiles",
+`matmult_int` (R-1) above all, may be THIS bug. If so the workaround clears them too, which is a
+larger result than R-18 alone. One board boot tests it.
+
+Handover package (board images + `sim/` directed tests + RVFI trace + rebuild recipe):
+`capstone/tests/fpga-repros/R18-scalar-store-metadata-clobber/`. Message drafted for the board
+owner at `/tmp/capstone/boardowner-msg-R18.md` (uncommitted, by policy).
+
+Trail, including all eight retractions and what caused each:
+`history/07-08-2026_23-55-00_r18-localized-to-row-mate-traffic.md`.
+
 ## WHERE THE PROJECT ACTUALLY IS (2026-08-07) -- read this before anything below
 
 **Bitstream: `caplifive_65536_nodes.bit`.** Board results before 2026-08-04 were measured on an

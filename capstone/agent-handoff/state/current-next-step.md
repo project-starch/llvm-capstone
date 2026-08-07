@@ -1,3 +1,36 @@
+# Next step
+
+## 1. Land the R-18 workaround in the compiler (in-lane, no board)
+
+Emit an integer op instead of `movc rd, zero` when materialising integer zero, in the Capstone
+backend. Validated at RTL level by `scalar-store-addi-zero.S`, which passes where the byte-identical
+`scalar-store-movc-zero.S` fails. Gate it behind a flag, keep every measured rung byte-identical
+when off, and re-run the QEMU ladder plus lit before it goes on by default.
+
+## 2. Then test the big hypothesis: is R-1 the same bug?
+
+`matmult_int` is a documented silicon miscompile that survived the C-14 fix. If it is an instance of
+the R-18 dual-bank splash, the workaround clears it -- and probably clears the other unexplained
+silicon divergences too. That is a bigger result than R-18 alone and it costs ONE board boot:
+rebuild `matmult_int` with the workaround, run it against its oracle with a control first.
+
+## 3. Two free measurements that close the remaining holes
+
+* The domain globals' runtime alignment. The interp entry glue IGNORES the descriptor's `align`
+  field (loads `+0x0` and `+0x10` at stride 24, never `+0x8`) and carves at `sp.END` minus multiples
+  of 16, so a global's row offset is whatever `sp.END` is mod 16. This is the candidate explanation
+  for the one board arm (`gnt`) the splash rule does not fit. Return `&gc[0] & 0xF` in a spare
+  nibble of a retval.
+* `rs4` (-72) and `ka0` (-558) are damaged and unexplained by the splash rule. Re-examine their
+  layouts against it now that the rule is known.
+
+## 4. Outward-facing, needs the project lead
+
+`/tmp/capstone/boardowner-msg-R18.md` is drafted and NOT sent. The repro package is committed and
+pushed.
+
+---
+
 # Current recommended next step
 
 > **THE BLOCKER HAS A DEDICATED LIVING DOCUMENT:**
