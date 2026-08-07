@@ -26,6 +26,16 @@
 void xlang_arena_init(void *grant) { rof_init(grant); }
 void xlang_set_no_revoke(void) { rof_no_revoke = 1; }
 
+/* Memory instrumentation getters (this TU owns the all-static rof allocator, so the
+ * counters are only reachable here). carved = every byte ever handed out (rof never
+ * reclaims arena bytes, so this is the total footprint); peak_slots = high-water of
+ * concurrently-live allocations (freed slots are reused, so rof_nslots only grows to
+ * the max simultaneous live count -> the working-set proxy); live_* = state at call. */
+unsigned long xlang_mem_carved(void) { return rof_carved_total; }
+unsigned long xlang_mem_live_bytes(void) { return rof_live_bytes; }
+unsigned xlang_mem_live_count(void) { return rof_live_count; }
+unsigned xlang_mem_peak_slots(void) { return rof_nslots; }
+
 /* Delivery probe (domain XLANG_PROBE_DELIVERY): allocate, revoke, hand the stale
  * alias back. No arithmetic is performed on it, so the next operation is a plain
  * offset-0 load — the route that yields a clean cause-25 fault. */
@@ -41,3 +51,37 @@ void *xlang_probe_alloc_and_revoke(void) {
  * measuring nothing. */
 void *malloc(size_t n) { return rof_malloc((unsigned long)n); }
 void  free(void *p) { rof_free(p); }
+
+/* Tag-preserving realloc — REQUIRED for Lua (and any real engine that stores
+ * capabilities inside GC objects it later grows). This is the SOLE TU allowed to
+ * include the all-static rof allocator, so realloc lives here, next to malloc/free.
+ *
+ * rof never grows in place (each rof_malloc SPLITs a fresh node off the arena top),
+ * so realloc ALWAYS moves: carve a new block, copy, revoke the old one. The copy is
+ * rof_copy_caps (ldc/stc capability-word moves), NOT a byte loop — a byte loop
+ * strips the out-of-band tag off every capability the block holds, so a pointer Lua
+ * stored in a realloc'd stack/table would come back untagged and fault on the next
+ * deref. Lua's stack and table array-part are realloc'd and MOVED constantly and
+ * hold TValues that carry capabilities, so this is load-bearing, not latent.
+ *
+ * Both blocks are 16-byte aligned and 16-multiple sized (rof_roundup), so we copy
+ * min(rof_size(old), rof_size(new)) whole capability words: never a partial tail
+ * word (which rof_copy_caps would drop), never past either block's real bounds.
+ * rof_free(old) fires the REVOKE — that is what makes stale aliases stop working. */
+void *realloc(void *p, size_t size) {
+  if (size == 0) {
+    rof_free(p);
+    return (void *)0;
+  }
+  void *np = rof_malloc((unsigned long)size);
+  if (!np)
+    return (void *)0; /* arena depleted: caller (l_alloc) must see NULL, keep old */
+  if (p) {
+    unsigned long oldsz = rof_size(p);          /* 16-multiple */
+    unsigned long newsz = rof_size(np);         /* 16-multiple = roundup(size) */
+    unsigned long n = oldsz < newsz ? oldsz : newsz;
+    rof_copy_caps(np, p, n);                     /* TAG-PRESERVING (ldc/stc words) */
+    rof_free(p);                                 /* the REVOKE of the old node */
+  }
+  return np;
+}
