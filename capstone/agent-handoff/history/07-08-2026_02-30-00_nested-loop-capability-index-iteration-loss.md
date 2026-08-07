@@ -369,3 +369,49 @@ Any probe that returns only qc is reading one of two faults without knowing whic
 report the INNER and OUTER counters separately, and the cycle count must be read on every arm --
 it is free, already collected, and it is the only instrument so far that distinguishes "lost an
 iteration" from "lost an increment".
+
+## UPDATE 2026-08-07 (boot 54): RETRACT the 8-byte-separation condition. BOTH geometric laws are dead.
+
+Boot 54 swept the separation window. Control k800 green, all arms returned.
+
+| build | k | p | qc | sep(k,qc) | retval | cycles | fault type |
+|---|---|---|---|---|---|---|---|
+| gp0 | 0x14 | 0x18 | 0x1c | +8 | 567 | 44045 | accumulator, -1 pass |
+| sep12 | 0x10 | 0x14 | 0x1c | **+12** | **567** | | accumulator, -1 pass |
+| sep20 | 0x18 | 0x1c | 0x2c | **+20** | **906** | 68709 | outer, +36.7 passes |
+| gp16 | 0x14 | 0x18 | 0x2c | +24 | 576 | 44109 | none |
+| gp32 | 0x14 | 0x18 | 0x3c | +40 | 576 | 44114 | none |
+
+**RETRACTED: "the defect requires two RMW slots exactly 8 bytes apart" (commit 2a9ef7a255ac).**
+Separations of 12 and 20 also fail. And separation 8 is not sufficient either -- shift0 has
+sep(k,qc) = 8 and returns a correct 576. So the 8-byte separation is neither necessary nor
+sufficient, and boot 53's reading of gp16/gp32 as "breaking the separation cures it" confused
+"changed the separation" with "changed the layout".
+
+**ALSO STILL DEAD: value = f(k bits[3:2]).** It mispredicts gp16 and gp32 (k at bank 0 / off 4,
+predicted 567, measured 576).
+
+So neither geometric variable explains the set. Checked against all ten builds, no single one of
+{k address, p address, qc address, sep(k,qc), k bits[3:2], qc bits[3:2], same-16-byte-row} is a
+function of the outcome -- each has at least one pair of builds that share the variable's value and
+disagree on the result. Two overfits in one day, both to samples where the -O0 allocator was
+silently holding other slots constant.
+
+An independent analysis reached this before the boot did, by disassembling every shipped artifact
+rather than trusting the recorded table: builds with byte-identical frame geometry return DIFFERENT
+values (906 vs 909). sep20 vs shift4 is exactly that pair. A law that is not a function is not a
+law.
+
+### What still stands
+
+* The two-fault split from the cycle counts (previous section). sep20 confirms it independently:
+  68709 cycles = 897 implied iterations against a returned 906, i.e. the outer-disturbance fault,
+  and it is +36.7 outer passes -- the same family as wp0's +37.
+* Every deviation remains an exact multiple of the inner trip count 9.
+
+### What to do instead of another geometry sweep
+
+Stop sweeping geometry. The next probe must report the INNER and OUTER counters SEPARATELY plus
+the cycle count, because every rung so far has returned only qc and therefore reported one of two
+faults without saying which. Until a probe distinguishes them at the source, more geometry points
+will keep producing laws that hold until the next build.
