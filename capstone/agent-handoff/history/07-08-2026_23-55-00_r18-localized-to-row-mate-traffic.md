@@ -59,12 +59,54 @@ row. Region and provenance are not the variables.** This is consistent with the 
 recorded in `ISSUES.md` — the `k = 0` re-initialisation at `0x14`, bank 0 lanes 4-7, whose
 dual-bank splash target at the shift8 geometry is exactly `0x1c`.
 
-### The confound this result carries, stated plainly
+### CORRECTION 2026-08-08 — the confound named below was the WRONG one
 
-All three arms have **different frame sizes** (0x50 / 0x60 / 0x70), so every absolute address
-moved. "No longer shares a row" is therefore not yet separated from "moved to a different absolute
-address and cache set". Four geometric laws in this investigation have already died to exactly
-that, so the follow-up below is designed to remove it rather than to argue it away.
+This section originally said: *"All three arms have different frame sizes (0x50 / 0x60 / 0x70), so
+every absolute address moved."* **That is wrong, and an audit caught it.**
+
+`s0` is the CALLER's `sp` and is identical across all arms (every caller prologue is byte-identical).
+Measured off the artifacts, all four arms put the victim at **`s0-0x34`** — unchanged:
+
+| arm | frame | qc | p | k | `stc` target |
+|---|---|---|---|---|---|
+| `c8` | 0x50 | **s0−0x34** | s0−0x38 | s0−0x3c | s0−0x50 |
+| `rg16` | 0x60 | **s0−0x34** | s0−0x48 | s0−0x4c | s0−0x60 |
+| `rmB` | 0x60 | **s0−0x34** | s0−0x38 | s0−0x4c | s0−0x60 |
+| `rmC` | 0x60 | **s0−0x34** | s0−0x38 | s0−0x3c | s0−0x60 |
+
+The `sp`-relative table used earlier (`qc` at 0x1c → 0x2c → 0x3c) is an artifact of **`sp` moving**,
+not of the victim moving. The disassembly said so all along — `cincoffsetimm a1, s0, -0x34` appears
+in every arm, and it was quoted in this very note as evidence that the loop was unchanged, while
+the opposite conclusion was drawn two paragraphs later. The victim's absolute address, D-cache set
+and bank-row are therefore **excluded**, not confounded.
+
+**The real confound is the one that replaced it.** Growing the frame moved `k`, `p` AND the
+capability store together. `k` leaving the victim's row is inseparable, in `rg16`/`rg32`/`rmB`, from
+the store's row ceasing to be adjacent to the victim's row:
+
+| arm | store's row | victim's row | relation | result |
+|---|---|---|---|---|
+| `c8` | [s0−0x50, s0−0x40) | [s0−0x40, s0−0x30) | **adjacent** | 567 |
+| `rg16` | [s0−0x60, s0−0x50) | [s0−0x40, s0−0x30) | 2 rows | 576 |
+| `rmB` | [s0−0x60, s0−0x50) | [s0−0x40, s0−0x30) | 2 rows | 576 |
+
+Both readings fit every point measured so far. The prior "proximity to the capability store"
+retraction does **not** cover this: it rested on `wp0` at 24 bytes, which kills a 12-byte threshold
+and says nothing about 44 or 60 — and the corpus has a damaged victim at 40 bytes (`kb12`), so a
+window in (40, 44] survives untouched.
+
+Two further limits on what this boot showed:
+
+* **"Region and provenance are not the variables" is NOT established by it.** Every arm here is a
+  stack build; the boot contains no region contrast at all. Settling that needs a GLOBAL scalar
+  *with* RMW row-mates shown damaged, and no such build exists.
+* **Row occupancy is not SUFFICIENT.** In `c8` itself `p` sits at `s0-0x38` — upper half, offset 8,
+  two RMW row-mates — and is exact (`p=64` decodes out of 67699255). The rule cannot say which of
+  two upper-half row-mates gets hit.
+
+Also: `rg16` is **byte-identical to `t16`**, already boarded at boot 57 with the same result, and
+`rg32`'s layout matches `gp32` from boot 53/54. Those two arms re-measured known points; the new
+information in this session is `rmB` and `rmC`, not the gap sweep.
 
 ## The follow-up, with frame size HELD CONSTANT
 
@@ -118,8 +160,60 @@ without separating any of the three counters:
 | `rmC` | 96 | 0 | 0x2c | **k@+4** p@+8 qc@+12 | *(pending)* |
 
 Identical frame, identical store offset, identical absolute victim address, identical cache set.
-If `rmC` returns 567 the frame-size confound is dead and the necessary condition is established as
-"`k` is in the victim's row", with everything else held.
+
+### Result: `rmC` is DAMAGED (567) — and it kills the store-adjacency alternative
+
+| rung | qc | cycles | iters | |
+|---|---|---|---|---|
+| `k800` | — | 4799 | — | control OK |
+| `c8` | **567** | 44077 | 575.6 | anchor — 10th consecutive boot |
+| `rmB` | 576 | 44163 | 576.7 | `k` out of the row — clean |
+| `rmC` | **567** | 44087 | 575.7 | `k` back in the row — **damaged** |
+
+`rmB` and `rmC` differ in **one thing**:
+
+| | frame | qc | p | k | `stc` target |
+|---|---|---|---|---|---|
+| `rmB` | 0x60 | s0−0x34 | s0−0x38 | **s0−0x4c** | s0−0x60 |
+| `rmC` | 0x60 | s0−0x34 | s0−0x38 | **s0−0x3c** | s0−0x60 |
+
+Same frame, same victim address, same `p`, **same capability-store position two rows away in both**.
+`k` moves 16 bytes and the result flips 576 ↔ 567.
+
+That refutes the store-row-adjacency alternative outright: `rmC` has the store two rows from the
+victim, exactly as the clean arms do, and is damaged anyway. **The variable is `k`'s position.**
+
+## The geometry, stated precisely
+
+"Shares a row" is too loose — `rg16` has `p` at row offset 8 (upper half) sharing a row with `k`
+and `p` is exact. Evaluating the sharper predicate over the whole corpus (`fit-victim-rules.py`
+dataset plus this session's points):
+
+> **A victim in bank 1 at byte lanes L is zeroed when another read-modify-written scalar occupies
+> bank 0 at the SAME lanes L in the same 16-byte row** — i.e. an RMW slot at `victim_offset − 8`.
+
+| | fit |
+|---|---|
+| clean builds (`c0`, `rs0`, `t16`/`rg16`, `bs16`, `nr16`, `rmB`, `rg32`) | **7/7 — no false positives** |
+| lost-increment builds (`c8`, `rs8`, `dp0`, `kb12`, `rmC`) | **5/5** |
+| `rs4` (−72), `ka0` (−558) | **not explained** |
+| `c4`, `t12`, `t0b` (+333/+330/+333) | the separately documented **extra-iteration** fault, not this one |
+
+So the predicate is **SUFFICIENT and not necessary**: every build carrying the bank-0 twin is
+damaged and no clean build carries one, but two lost-increment builds are damaged without it. It
+is not the whole of R-18 and is not presented as such.
+
+This is exactly the mechanism `ISSUES.md` named as the leading untested lead — the `k = 0`
+re-initialisation at bank 0 lanes 4-7, splashing into bank 1 lanes 4-7. It is now tested, by a
+controlled single-variable pair rather than by a fit.
+
+### What is still NOT established
+
+* **Region and provenance remain untested.** Every arm in these three boots is a stack build; there
+  is no region contrast anywhere in them. Settling that needs a GLOBAL scalar carrying the bank-0
+  twin in its row, shown damaged. That build does not exist yet, and it is the obvious next one.
+* `rmB`/`rmC` are N=1 each; the pair is one controlled comparison, not a replication.
+* Two lost-increment builds (`rs4`, `ka0`) still have no explanation.
 
 ## Tooling repaired in the same session (commit `769a9a1cb9c7`)
 

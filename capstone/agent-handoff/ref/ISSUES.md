@@ -2328,7 +2328,43 @@ bisect inside 223–381.
 **Repro:** `CAPSTONE_SQLITE_STAGE=30..34` — **NOT YET RUN SUCCESSFULLY.** Its first attempt
 built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are now fixed.
 
-### R-18 — a scalar in the UPPER half of a 16-byte cache row is silently ZEROED `OPEN — NOT ROOT-CAUSED. Causal chain RETRACTED 2026-08-07 by audit.`
+### R-18 — a scalar in the UPPER half of a 16-byte cache row is silently ZEROED `OPEN — trigger geometry now ESTABLISHED by controlled experiment 2026-08-08; RTL mechanism still unconfirmed.`
+
+> **2026-08-08 — the "better lead" below is CONFIRMED, by a single-variable pair rather than a fit.**
+>
+> Three boots, each with a passing control first and every rung entering. `c8` returned 67699255 on
+> all three (ten consecutive boots overall).
+>
+> | arm | frame | qc | p | k | `stc` | result |
+> |---|---|---|---|---|---|---|
+> | `c8` | 0x50 | s0−0x34 | s0−0x38 | s0−0x3c | s0−0x50 | **567** |
+> | `rg16` | 0x60 | s0−0x34 | s0−0x48 | s0−0x4c | s0−0x60 | 576 |
+> | `rmB` | 0x60 | s0−0x34 | s0−0x38 | **s0−0x4c** | s0−0x60 | 576 |
+> | `rmC` | 0x60 | s0−0x34 | s0−0x38 | **s0−0x3c** | s0−0x60 | **567** |
+>
+> **`rmB` vs `rmC` is the result.** Same frame, same victim address, same `p`, and the capability
+> store two rows away in BOTH. `k` moves 16 bytes; the answer flips 576 ↔ 567. Cycle counts confirm
+> all arms ran the same ~576 iterations, so nothing was cured by doing less work.
+>
+> That also refutes the competing reading — that what mattered was the store's row being adjacent to
+> the victim's row — since `rmC` has the store two rows away and is damaged anyway.
+>
+> **The geometry, sharply:** a victim in **bank 1 at byte lanes L** is zeroed when another RMW'd
+> scalar occupies **bank 0 at the same lanes L** in the same 16-byte row (an RMW slot at
+> `victim_offset − 8`). Over the corpus this is **SUFFICIENT, not necessary**: 7/7 clean builds carry
+> no such twin, 5/5 lost-increment builds carry one, but `rs4` (−72) and `ka0` (−558) are damaged
+> without it, and `c4`/`t12`/`t0b` belong to the separately documented extra-iteration fault.
+>
+> **Two corrections to the record made in the same session.** (1) An earlier reading of this
+> experiment claimed the arms' absolute addresses moved with the frame; they do not — `s0` is the
+> caller's `sp` and the victim is at `s0-0x34` in every arm, so the victim's address, D-cache set and
+> bank-row are EXCLUDED, not confounded. (2) The 2026-08-07 "boot 68" conclusion that the damaged
+> scalar *must be on the domain stack* is the sixth confound of the same class: its global
+> accumulator `gcnt[3]` is the only RMW'd word in its row, so the row-occupancy rule predicts it
+> clean without invoking region at all. **Region and provenance are still untested** — every arm in
+> these boots is a stack build. The next build needed is a GLOBAL scalar carrying the bank-0 twin.
+>
+> Trail: `history/07-08-2026_23-55-00_r18-localized-to-row-mate-traffic.md`.
 
 > **RETRACTION 2026-08-07 (same day, before handover).** A causal chain was recorded here and in a
 > defect report, and an adversarial audit refuted it. **The report was NOT sent.** What was wrong:
