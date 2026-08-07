@@ -19,6 +19,65 @@ older bitstream and must be re-checked before being relied on.
 
 **TWO OPEN SILICON DIVERGENCES. Neither is root-caused. They are NOT the same fault.**
 
+> **UPDATED 2026-08-07 (boots 51-55 + RTL simulation). Divergence B has been re-characterised
+> from the ground up, and FIVE conclusions were RETRACTED in the process. Read
+> `history/07-08-2026_02-30-00_nested-loop-capability-index-iteration-loss.md` before acting on
+> anything about B written above or below this box.**
+>
+> **B is TWO faults with DIFFERENT victims, not one.** Stage 19 returns all three counters packed
+> (`p<<20 | k<<16 | qc`) instead of qc alone, which every earlier rung did:
+>
+> | rung | p | k | qc | cycles | implied iters |
+> |---|---|---|---|---|---|
+> | c0 shift0 | 64 | 9 | 576 correct | 44001 | 575 |
+> | c4 shift4 | 64 | 9 | **909** | **69081** | ~904 |
+> | c8 shift8 | 64 | 9 | **567** | 44074 | 576 |
+>
+> * **k, the inner index, is knocked BACKWARDS mid-loop** (c4). The inner loop runs ~904
+>   iterations instead of 576 and qc faithfully counts them. Both loops still exit at k=9, p=64
+>   because they terminate on their own conditions -- a transient corruption is invisible in the
+>   final values. ONLY THE CYCLE COUNT EXPOSES IT.
+> * **qc, the accumulator, LOSES STORES** (c8). Cycles confirm exactly 576 iterations ran and nine
+>   increments never landed.
+>
+> **THE CYCLE COUNT IS A FREE DISCRIMINATOR AND WAS UNUSED FOR THE WHOLE INVESTIGATION.** It is
+> printed on every RESULT line (`ladder_perf_domain.h`). cycles/76.58 = iterations actually
+> executed, which separates "lost an increment" from "ran extra passes" independently of the
+> returned value. Read it on every arm.
+>
+> **RETRACTED -- do not resurrect:**
+> 1. "A 16-byte capability store corrupts memory above its footprint, up to ~12 bytes"
+>    (`635d2d4ea894`). Refuted: wp0 reproduces the same value at 3x the distance, different row,
+>    different frame size.
+> 2. **OVER-WIDE CAPABILITY WRITE.** Refuted directly: a witness at sp+0x10 written before the
+>    loop and read back with a LOOP-FREE UNGUARDED load returns 0xA5A50000 BIT-EXACT after 576
+>    capability stores. Memory above the store is NOT damaged.
+> 3. **STALE-METADATA STORE MISCLASSIFICATION.** Refuted: a `movc a0,zero / movc a1,zero` barrier
+>    against a same-size `nop` control -- byte-identical images bar two instructions -- BOTH
+>    return 567. (The RTL bug is real: st_wr_cap = |wr_user_i, wt_dcache_mem.sv:138. It is not
+>    what bites here.)
+> 4. **`value = f(k bits[3:2])`.** Refuted: mispredicts gp16/gp32.
+> 5. **"The defect needs two RMW slots exactly 8 bytes apart"** (`2a9ef7a255ac`). Refuted:
+>    separations of 12 and 20 also fail, and shift0 has separation 8 and is CORRECT.
+>
+> Checked against all ten builds, NO single geometric variable is a function of the outcome. An
+> independent disassembly of every artifact found builds with BYTE-IDENTICAL frame geometry
+> returning DIFFERENT values (906 vs 909, correlating with FDREG_GUARD) -- there is a hidden
+> variable no geometric law contains.
+>
+> **RTL SIMULATION NOW WORKS** -- see the `rtl-sim` skill. Directed tests in ~13s with the RVFI
+> trace giving every load's address AND returned value. `stc-neighbour-load.S` and
+> `stc-counter-pair.S` (submodule, branch `capstone-bootstrap`) do NOT reproduce at either RTL
+> revision, across four rounds of added fidelity (pair 8 bytes apart, nested loop, resetting
+> index, faithful -O0 sequence with three capability loads). HEAD 458982093 and the board's
+> 7aac52f93 are indistinguishable on them, cycle-for-cycle. The untested difference is the DOMAIN
+> context: capenter, the monitor-carved stack, CPMP.
+>
+> **NEXT:** stage 20, the role swap -- the same three frame slots holding different variables, to
+> separate "damage follows the SLOT" from "damage follows the VARIABLE". `p == k+4` and "the
+> accumulator is the upper slot" have never been varied in any build.
+
+
 **A -- the SQLite blocker, a HANG.** Wedges in sqlite3_initialize ->
 sqlite3RegisterBuiltinFunctions -> sqlite3AlterFunctions -> sqlite3InsertBuiltinFuncs.
 MINIMAL REPRO, layout-proof: `/tmp/capstone/sqlite-qr15` returns and `/tmp/capstone/sqlite-qr16`
