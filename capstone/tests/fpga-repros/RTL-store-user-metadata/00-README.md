@@ -1,8 +1,16 @@
 # Every store routes capability metadata into the dcache write-user sideband
 
-**Status: code-level RTL observation, NOT a demonstrated software-visible defect.**
-The repro here tests the invariant most obviously at risk and finds the silicon **correct**.
+**Status: code-level RTL observation. The invariant tested here IS correct in silicon.**
 Committed as a regression test and as the evidence trail behind the observation.
+
+> **UPDATE 2026-08-07 — the "not a demonstrated software-visible defect" part is now OUT OF DATE.**
+> This package's open question was: *"could not trace a path from `data_wuser` into a plain `lw`'s
+> returned data … would need the `wt_dcache_mem.sv` fill/writeback merge path."* That path has been
+> found, on the **STORE** side rather than the load side, and the software-visible defect is
+> demonstrated on silicon: see **`../R18-scalar-store-metadata-clobber/`** and **R-18** in
+> ISSUES.md. The routing documented below is the first half of that chain; `wt_dcache_mem.sv:138`,
+> `:156-158` and `:230-238` are the second. The bit-27 = `bounds.cursorless` identification below
+> is what let the clobber value in one build be read as metadata rather than as a number.
 
 ## The RTL observation
 

@@ -13,7 +13,8 @@ reproducer is not an issue; a reproducer that only exists in `/tmp` is not much 
 | `R02-delin/` | **R-2** | `delin` in domain code wedges the board — `delin.s` vs `nop.s`, one instruction apart |
 | `R16-entry-stall/` | **R-16** | the domain never returns from its FIRST entry (`SHA5` stall, no `SQ: G/enter`). **Resolved** — kept as a one-boot bitstream acceptance test |
 | `S01-image-perturbation-hang/` | *(open, unexplained)* | a ~1.6 MB domain returns, but **any** perturbation of its image makes it hang — silently, and correctly under QEMU |
-| `RTL-store-user-metadata/` | *(observation)* | every store routes capability metadata into the dcache write-user sideband; **silicon behaves correctly** — negative result kept as a regression test |
+| `RTL-store-user-metadata/` | *(observation)* | every store routes capability metadata into the dcache write-user sideband; the invariant it tests is **correct** in silicon. Its open question — no traced path from `data_wuser` into software-visible data — is **closed by `R18-...` via the STORE side** |
+| `R18-scalar-store-metadata-clobber/` | **R-18** | a plain scalar store in the **upper half** of a 16-byte row is silently **zeroed** — its slot receives capability metadata instead of its data. Four frozen images; the sentinel arm starts at 1,000,000 and returns 567 |
 | `ARCHIVED/` | — | packages whose defect is **fixed in silicon**; see `ARCHIVED/README.md` |
 
 **Archived 2026-08-04:** both R-14 packages (`R14-frame-pad/`, `R14-strline-struct/`) moved to
