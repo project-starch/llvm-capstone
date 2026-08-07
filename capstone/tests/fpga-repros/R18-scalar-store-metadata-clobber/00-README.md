@@ -85,7 +85,7 @@ Correct is 576 in every arm. What this excludes, by measurement rather than by a
 * **the capability store's distance and row-adjacency** — `rmC` fails with it two rows away;
 * **the compiler** — the emitted victim RMW is a plain `lw`/`addiw`/`sw` on a fixed offset.
 
-### The path to the misclassification is traced; the CORRUPTION path is NOT
+### The full path, misclassification AND corruption
 
 `movc` is a capstone-FLU op, so `commit_stage.sv:279` writes `result_metadata` into the cap-metadata
 regfile under the **integer** GPR write-enable (`issue_read_operands.sv:1663-1665`, `.we_i(we_pack)`,
@@ -94,9 +94,11 @@ not `cap_we_pack`); `:1140` takes `cap_data.cap_metadata_b` **ungated by opcode*
 `st_wr_cap = |wr_user_i`. So an ordinary `sw` is classified as a capability store **by value**.
 `compress_cap` of a null capability is `0x08000000` (`ariane_pkg.sv:754-772`).
 
-**What that misclassification then does to a neighbouring scalar, we could not determine, and the
-obvious answer is wrong.** If bank 1 received `wr_user_i` (`wt_dcache_mem.sv:158`) the constant
-`0x08000000` would be somewhere in memory. Raw, unmasked readbacks say it is not:
+**What the misclassification then does** is the dual-bank write at `:230-238` with the same byte
+enable at `:152-158`, confirmed in simulation. One point deserves emphasis because it cost us a
+retraction: **the splash carries the store's DATA, not its metadata.** We spent a session looking
+for `0x08000000` in memory, not finding it, and concluding the dual-bank path was innocent. Raw,
+unmasked readbacks:
 
 | probe | reads | raw value |
 |---|---|---|
@@ -104,14 +106,17 @@ obvious answer is wrong.** If bank 1 received `wr_user_i` (`wt_dcache_mem.sv:158
 | `graw` | the global victim | `0x00000009` — a clean count |
 | `gztr` | the row-mate itself | `0x00000009` — a clean count |
 
-The victim is written with **zero** and counts up from there. No metadata lands anywhere. This also
-refutes a write-buffer 8-byte-merge candidate, whose prediction was `twin = 0x08000009`.
+No metadata anywhere. The victim is written with the store's data — zero, for a `movc`-zero store —
+and counts up from there. Those readbacks are consistent with the mechanism, not evidence against
+it, and reading them as the latter was our error. (It does still refute a write-buffer
+8-byte-merge candidate, whose prediction was `twin = 0x08000009`.)
 
-**Three mechanisms have been proposed and all three are refuted:** a writeback-forwarding validity
-gate (the RTL has the same expression in both ternary arms, so the fix was a no-op), a
-"bank 0 at the same byte lanes" rule (its own control came back damaged), and the dual-bank write
-above. **We are not proposing a fourth.** The ask is for the corruption path, from someone who can
-run the RTL.
+It also explains `sn8` below: an accumulator seeded to 1,000,000 returns 567 because the splash
+*overwrote* it with the store's data (0), after which it counted up normally.
+
+**Two earlier mechanisms remain refuted** and should not be revisited: a writeback-forwarding
+validity gate (the RTL has the same expression in both ternary arms, so the change is a no-op), and
+a "bank 0 at the same byte lanes only" rule (its own control came back damaged).
 
 Build flags per arm are recorded in the staged `.qemu-pass` markers; all four are
 `FDREG_STAGE=37, GVICT=3, GTWIN=2`, differing only as the table above describes.
@@ -151,7 +156,7 @@ Build flags per arm are recorded in the staged `.qemu-pass` markers; all four ar
 | ruled out | how |
 |---|---|
 | an over-wide capability store | a witness immediately above the store reads back bit-exact after 576 stores; `extract_transfer_size` pins STC at 8 bytes/one beat |
-| ~~store misclassification via the write-user sideband~~ **SCOPE CORRECTED 2026-08-08, see below** | directed test `scalar-store-cap-operand.S`: a plain `sw` whose data register holds a **real, valid** capability (CAPPRINT: Type 1, Perm 7, bounds set) is **not** misclassified — **PASS**. That result stands, but it does **not** cover a data register produced by `movc rd, zero`, which is what the trigger above actually requires. |
+| ~~store misclassification via the write-user sideband~~ — **THIS ROW IS WITHDRAWN. It is the mechanism.** | `scalar-store-cap-operand.S` passing was a GEOMETRIC artifact: it stores at `+0x1c`, and at that offset the splash lands on a slot it did not check. At identical geometry (`sim/scalar-store-realcap-samegeom.S`, store at `+0x18`) a real capability corrupts exactly as a null one does. Ruling the family out on that test was wrong. |
 | any single-address anchor for the victim | fitted against all builds; best 13/19 |
 | distance from the capability store | same value reproduced at 3× the distance, different row, different frame size |
 
@@ -192,13 +197,18 @@ it does not affect the simulation result, which uses an explicitly aligned buffe
 Also still unexplained by any rule here: `rs4` (−72) and `ka0` (−558). The `+333`/`+330` builds
 belong to the separately documented extra-iteration fault, not to this one.
 
-## Why we could not take it further before simulation
+## Why it took so long to reproduce in simulation
 
-The effect has never been reproduced in Verilator, across six directed tests at both RTL revisions.
-The failing code runs inside a capability domain after `capenter` on a monitor-carved stack, and we
-could not construct a bare-metal directed test that reproduces it. Narrowing further needs
-visibility we do not have from outside the RTL — the signal that would settle it is `st_wr_cap` and
-`bank_we` at the cycle the victim's dword retires.
+Six directed tests failed to reproduce this, and for a long time that was recorded here as the
+package's main gap, with the reasoning that the failing code runs inside a capability domain after
+`capenter` on a monitor-carved stack and could not be reduced to bare metal. **That reasoning was
+wrong.** It reduces to bare metal fine. What the six earlier tests lacked was not the domain
+context but a store whose *data register carried capability metadata* — every one of them stored a
+value produced by an integer op, so `wr_user_i` was zero and the trigger was never created. The one
+test that did put a capability there stored it at a geometry whose splash target it did not check.
+
+The lesson worth carrying: those six clean tests were read as evidence the hardware was innocent.
+They were evidence that the tests did not exercise the condition.
 
 ---
 
@@ -227,9 +237,13 @@ contributes is the **software-visible measurement**, not an explanation. The rou
 
 ## What the repro shows
 
-Four frozen images in `src/`, all instrumentation **mode 0** (`fdreg_fpga_app.c` sets
+**17 frozen images** in `src/`, all instrumentation **mode 0** (`fdreg_fpga_app.c` sets
 `LADDER_INSTR_MODE 0`) — mode 4 is a confirmed miscompute trigger and a previous `0x08000000`
 sighting was traced to it, so a defect repro must not carry it. Verified: zero `minstret` reads.
+Every one was QEMU-verified before it was ever boarded, and every board run carried a passing
+`k800` control first and the `c8` anchor second.
+
+**The original four** — the accumulator's row offset is the only variable:
 
 | image | accumulator lands | expected on silicon |
 |---|---|---|
@@ -237,6 +251,39 @@ sighting was traced to it, so a defect repro must not carry it. Verified: zero `
 | `c8.dom` | row offset 12 — **upper** half | `0x04090237` → qc=**567** |
 | `sn0.dom` | lower half, accumulator starts at 1,000,000 | `1000576` **correct** |
 | `sn8.dom` | upper half, accumulator starts at 1,000,000 | **567** |
+
+**The localization set** — which scalars share the victim's 16-byte row. `rmB` vs `rmC` is the
+single-variable pair: same frame, same victim address, same `p`, capability store two rows away in
+both; only `k`'s row membership differs:
+
+| image | `k` | victim row-mates | silicon |
+|---|---|---|---|
+| `rg16.dom` | out of the row | none | 576 **correct** |
+| `rg32.dom` | out of the row | none | 576 **correct** |
+| `rmB.dom` | out of the row | `p` only | 576 **correct** |
+| `rmC.dom` | **in the row** | `p` and `k` | qc=**567** |
+
+**The trigger set** — a GLOBAL victim, identical addresses and store counts, differing only in what
+produced the row-mate's reset store (this is the four-way control):
+
+| image | reset store | silicon |
+|---|---|---|
+| `gz0.dom` | `movc a0, zero; sw` | victim **9** — damaged |
+| `gzn.dom` | `movc a0, zero; sw` + 2 nops (loop length matched) | victim **9** — damaged |
+| `gzl.dom` | `ldc; lw; sw` — stores the VALUE ZERO from a load | 576 **correct** |
+| `gzs.dom` | `lui; addi; sw` — nonzero | 576 **correct** |
+
+**The raw-readback probes** — same builds, returning the slot unmasked, because every earlier
+number in this investigation masked to 16 bits and so could not tell "lost increments" from
+"overwritten with metadata":
+
+| image | reads | raw |
+|---|---|---|
+| `craw.dom` | stack victim at `c8` geometry | `0x00000237` |
+| `graw.dom` | global victim | `0x00000009` |
+| `gztr.dom` | the row-mate itself | `0x00000009` |
+
+`gvf0.dom` / `gvf6.dom` are retained from the superseded stack-vs-global experiment; see the trail.
 
 `sn8` is the decisive one. The accumulator is initialised to **1,000,000**; if increments were
 merely being lost it would return 1000567. It returns **567** — the slot was *overwritten* and
@@ -318,27 +365,50 @@ touches none of the files involved.
 
 ## Fix
 
-**No fix is proposed, because the cause is not established.** An earlier version of this file
-suggested gating the WB-port forward on validity "matching the scoreboard-port version" — that
-would have been a **no-op**: `issue_read_operands.sv:765` has `cap_result.result_metadata` in both
-arms of its ternary and does not sanitise to zero.
+**Hardware, the real fix.** Classify capability stores **by opcode** rather than by
+`|wr_user_i` (`wt_dcache_mem.sv:138`), and/or gate the metadata onto the write-user sideband by
+opcode at issue (`issue_read_operands.sv:1140`). Either breaks the chain at its root. Needs a
+reflash and is the project lead's call.
 
-The one change defensible on its own merits, independent of this measurement, is to classify
-capability stores **by opcode** rather than by `|wr_user_i` (`wt_dcache_mem.sv:138`) — because the
-null-capability encoding is `0x08000000`, so a value-based test misclassifies null-cap stores.
-That needs a reflash and is the project lead's call.
+**Software, available now and validated in simulation.** Emit an integer op instead of
+`movc rd, zero` when materialising an integer zero. `movc rd, zero` writes `compress_cap(NULL)` =
+`0x08000000` into the register's capability shadow; an integer op leaves it zero, so `st_wr_cap` is
+never asserted and no dual-bank write happens. `sim/scalar-store-addi-zero.S` is byte-identical to
+the failing `sim/scalar-store-movc-zero.S` except for that one instruction, and it **passes**. Our
+`-O0` codegen uses `movc`, which is why the trigger is pervasive in every failing build.
 
-## What would settle the actual cause — none of it needs the board
+**Scope the workaround honestly: it removes the COMMON case, not the class.** Any value that reaches
+a store's data register from a capability-producing op still carries a non-zero shadow and still
+splashes. It is a mitigation to ship while the hardware fix is decided, not a substitute for it.
 
-1. Directed Verilator test that creates the condition: a capstone-FLU op producing `aN`, then
-   `sw aN, 12(sp)` into a bank-1 slot; read `wr_user_i` off the RVFI trace. If it is zero, the
-   store-misclassification family is dead. ~13 s.
-2. The missing control: a passive witness at victim−8 **and** victim+8 in the `c8` geometry.
-   Self-clobber and dual-bank splash predict different slots; neither appearing kills the family.
-3. Repeat the sentinel — `sn8` is **N=1**, and it is the sole basis for "zeroed rather than lost".
-   Sweep `FDREG_SENTINEL` over ≥3 values; the answer must be sentinel-independent at 567.
-4. Explain `c8` vs `gp16`. Until a condition is stated that is true in one and false in the other,
-   there is a necessary condition and no cause.
+**Do NOT** gate the WB-port forward on validity "matching the scoreboard-port version" — an earlier
+version of this file suggested it and it is a **no-op**: `issue_read_operands.sv:765` has
+`cap_result.result_metadata` in both arms of its ternary and does not sanitise to zero.
 
-Full report: `capstone/agent-handoff/history/07-08-2026_RETRACTED_scalar-store-metadata-mechanism.md`.
-Trail: `capstone/agent-handoff/history/07-08-2026_02-30-00_nested-loop-capability-index-iteration-loss.md`.
+## What is still open — none of it needs the board
+
+Items 1 and 2 of the previous list are **done**: the directed Verilator test exists
+(`sim/scalar-store-movc-zero.S`) and the witnesses at victim±8 are built into it, which is how the
+splash target was identified. What remains:
+
+1. **One board arm does not fit the `R XOR 8` rule.** `gnt` places its row-mate at `+8` and its
+   victim at `+12`, so the splash should land on `+0` and the victim should be clean; it was
+   damaged. Suspected cause: the domain's globals are not 16-byte aligned at runtime, because the
+   interp entry glue **ignores the descriptor's `align` field** (it loads `+0x0` and `+0x10` at
+   stride 24 and never `+0x8`) and carves at `sp.END` minus multiples of 16. Free to measure —
+   return `&gc[0] & 0xF` in a spare nibble. Unmeasured, so treated as inference.
+2. **`rs4` (−72) and `ka0` (−558) are unexplained by this mechanism.** They may be a second fault.
+   The `+333`/`+330` builds are the separately documented extra-iteration fault, not this one.
+3. **The sentinel result is still N=1.** `sn8` returning 567 from a seed of 1,000,000 is now
+   *predicted* by the mechanism (the splash overwrites with the store's data, then it counts up),
+   which is corroboration rather than proof. A sweep over ≥3 sentinel values would settle it.
+4. **Does this explain the other silicon miscompiles?** `matmult_int` (R-1) survived the C-14 fix
+   and has no accepted cause. If it is an instance of this defect, the software workaround clears
+   it — a larger result than R-18 alone, and one board boot tests it.
+
+Trail, including all eight retractions and what caused each:
+`capstone/agent-handoff/history/07-08-2026_23-55-00_r18-localized-to-row-mate-traffic.md`.
+Earlier trail: `capstone/agent-handoff/history/07-08-2026_02-30-00_nested-loop-capability-index-iteration-loss.md`.
+A superseded mechanism report is retained at
+`capstone/agent-handoff/history/07-08-2026_RETRACTED_scalar-store-metadata-mechanism.md` — **do not
+link it**; it is kept only so its conclusions are not re-derived.
