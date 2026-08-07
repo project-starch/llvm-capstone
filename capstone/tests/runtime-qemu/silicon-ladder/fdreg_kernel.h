@@ -102,7 +102,33 @@
        -0x38 = 56,  56 mod 16 = 8   FAILS
    16 bytes is exactly a capability, so the counter's position WITHIN a 16-byte granule is a
    candidate the guard was only a proxy for. This knob varies that position directly, with the
-   guard and everything else held constant -- a dummy local declared ahead of the counters. */
+   guard and everything else held constant -- a dummy local declared ahead of the counters.
+
+   RESULT, boots 45-49. In EVERY build the capability local `z` lands at s0-0x50 = sp+0 and is
+   written by a 16-byte `stc a1, 0x0(a0)` on every inner iteration, 576 times, with the frame a
+   constant 0x50 bytes. Only the counters move, and the corruption tracks their DISTANCE from
+   that store:
+
+       shift  inner counter k       bytes ABOVE the stc's 16-byte end   board
+         0    s0-0x34 = sp+0x1c              12                        576  CORRECT
+         4    s0-0x38 = sp+0x18               8                        909  (+333)
+         8    s0-0x3c = sp+0x14               4                        567  (-9)
+        12    s0-0x40 = sp+0x10               0 (adjacent)             0x8000237
+
+   Severity scales with proximity and vanishes at 12 bytes. No counter ever OVERLAPS the store
+   -- even shift 12's sits one byte past its last -- so the store damages memory BEYOND its
+   nominal 16-byte footprint. At adjacency the corrupting value names itself: 567 with BIT 27
+   set, and a dump of the dead frame contains 0x08000001 (bit 27) inside a repeating
+   16-byte-period pattern of capability-shaped words. Capability metadata is reaching a scalar
+   slot.
+
+   This is also why every in-frame instrument destroyed the fault: a sentinel array added 32
+   bytes and a `&qc` pointer added 16, each pushing the counters past the 12-byte threshold
+   into the clean regime. The instrument was curing the patient.
+
+   NOT pinned: `be_gen` (ariane_pkg.sv:1045) has a 2-bit size whose maximum is 8 bytes, so a
+   16-byte capability store is issued as a wider or multi-beat write downstream, and the
+   overrun is presumably there. The RTL line is not identified and should not be guessed. */
 #ifndef FDREG_SHIFT
 #define FDREG_SHIFT 0
 #endif
