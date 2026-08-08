@@ -111,12 +111,27 @@ older bitstream and must be re-checked before being relied on.
 > accumulator is the upper slot" have never been varied in any build.
 
 
-**A -- THE SQLITE BLOCKER IS PAST THE GLUE (2026-08-08, board).** `INTERP_RETURN_PRECALL`
+> **CORRECTION 2026-08-08, hours after the entry below was written.** The paragraph that follows
+> presented the precall result as new and called it "the split the evidence could not previously
+> make". **It was already known.** Commit `cf2ab143aceb` is titled "The entry glue is not the SQLite
+> fault: it completes in four seconds", and `ref/SILICON-BLOCKER.md:246` records
+> `sq_pc.dom:0 -> obs=40465 = 0x9E11, returned in 4 s` — measured on 2026-08-06 **with `k800`
+> passing as a control in the same boot**, which today's rerun did not have. So a board boot was
+> spent reproducing a published result, and the failure was not checking `SILICON-BLOCKER.md`
+> before building. The reproduction stands as an independent N=2 and nothing more.
+>
+> What today did add, on the SQLite track: **R-18 is excluded as the entry blocker** (a build with
+> the workaround, hang-path trigger sites 6 -> 1, wedged identically), the **carve count is 179**
+> so R-12 pool exhaustion does not bind this build, and the **driver guard is fixed** — it had
+> hard-stopped on the 0x9E11 sentinel *twice*, once on 2026-08-06 (recorded there as "harness
+> artefact", never fixed) and again today.
+
+**A -- THE ENTRY GLUE IS NOT THE FAULT (2026-08-06; reproduced 2026-08-08).** `INTERP_RETURN_PRECALL`
 returns sentinel `0x9E11` from immediately before `domain_main`, after the carve loop and after
 `RUN_CAP_INIT`. On silicon it **RETURNED**: `SQ: obs=40465`, with `ENT2:00009E11` in the monitor
 entry trace and the full sequence `A/dom-ok`, both region shares (SHA6 x4), `G/enter`, `H/return`.
 So **the carve loop AND cap-init both complete on hardware; the fault is inside `domain_main` or in
-reaching it.** That is the split the evidence could not previously make.
+reaching it.** This was established on 2026-08-06; see the correction above.
 
 Two things eliminated the same day:
 * **R-12 (rev-node pool exhaustion) does NOT apply to this build.** The carve count read from the
