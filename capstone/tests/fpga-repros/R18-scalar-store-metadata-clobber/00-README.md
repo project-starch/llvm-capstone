@@ -17,39 +17,35 @@ the affected position the loop runs **extra iterations** instead of producing a 
 > `../R19-movc-zero-metadata-in-slot/`, together with two corrections to the mechanism described in
 > the report that went out. The reproducer, trigger and workaround here are unaffected by those.
 
-## WHAT WE ARE AND ARE NOT CLAIMING — read this first
+## Status, 2026-08-08
 
-**Measured on silicon, reproducible on demand, three boots, control green in each:** a stack slot in
-the **upper half** of a 16-byte D-cache row, which the program only ever writes `0` to, comes back
-holding **`0x08000000 + n`**. `0x08000000` is `compress_cap(NULL)` — a hardware encoding the program
-has no way to materialise. QEMU computes the correct value for the same binary.
+**This package is the ZEROING signature**: a scalar in the upper half of a 16-byte D-cache row is
+silently written with `0` and then counts up from there. Raw full-width readbacks confirm **no
+capability metadata lands in the victim** (`craw` reads `0x00000237`, `graw` and `gztr` likewise).
 
-| rung | build | returned |
-|---|---|---|
-| `k800` | control | 4 |
-| `fdp0` | accumulator initialised by `movc a0, zero; sw` | **`0x08000A31`** = `0x08000000` + 2609 |
-| `fdp0fix` | same, initialised by `addi a0, x0, 0` | **2609** clean |
-| `fdpraw` | returns the accumulator alone | `0x08000A31` — the victim is that slot |
-| `fdpO1` | `-O1`, accumulator in a **register** | **2609** clean |
+**It reproduces in Verilator, with a matched control**, in ~13 s each:
 
-So the trigger is a store whose data register carries a null-capability metadata shadow, and the
-immunity condition is the accumulator's storage class.
+| test | verdict |
+|---|---|
+| `sim/scalar-store-movc-zero.S` | **FAILS** — witness at `+0x10` zeroed |
+| `sim/scalar-store-realcap-samegeom.S` | **FAILS** — a *real, valid* capability triggers it too |
+| `sim/scalar-store-addi-zero.S` | **passes** — the matched control, one instruction different |
 
-**NOT established: the path through the cache.** A directed Verilator test at the same geometry,
-`sim/movc-zero-self-clobber.S`, comes back **SUCCESS in 1715 cycles** — the simulated RTL does not
-write metadata into the slot. We can read a plausible chain in the source
-(`issue_read_operands.sv:1140` puts the shadow on the store sideband ungated by opcode →
-`wt_dcache_mem.sv:138` classifies by value → `:158` bank 1 takes `wr_user_i`), and it fits every
-board observation including the upper-half rule, **but the simulation of that same source does not
-reproduce it, so we are not claiming it.**
+So the trigger is **any non-zero capability metadata on an ordinary store's data register**, not the
+null form specifically, and the dual-bank path is exercised in simulation rather than only inferred.
 
-Candidates for the divergence, none tested by us: the resident bitstream may not match this RTL
-revision; the board runs inside a capability domain after `capenter` on a monitor-carved stack while
-the directed test is bare metal; or the directed test lacks a co-factor — it has no capability
-traffic in the loop, no indirect calls, no cap-init.
+**What does NOT match between simulation and board:** which slot dies. At the geometry we built both
+ways, the simulation damages the slot **8 bytes** from the trigger and leaves the one 4 bytes away
+exact; the board does the opposite. That is unexplained and is the main open question here.
 
-**The ask:** trace where `0x08000000` enters that slot. We can hand you a binary that does it every
-time, and a one-instruction change that stops it.
+**A SECOND, DIFFERENT signature — the victim holding `compress_cap(NULL) + n` instead of being
+zeroed — is NOT this issue.** It is tracked as **R-19**, in `../R19-movc-zero-metadata-in-slot/`,
+and it does *not* reproduce in simulation. Please read that package separately; mixing the two is
+what this note exists to prevent.
+
+**Our side is worked around:** `-capstone-int-zero-for-zero-copy` emits an integer move for a copy
+from `x0`, so no capability shadow reaches the store. Silicon-confirmed. See
+`../../../agent-handoff/design/R18-workaround-movc-zero.md`.
 
 ## REPRODUCED IN SIMULATION — start here, it costs 13 seconds
 

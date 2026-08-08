@@ -88,10 +88,14 @@ The reproducer, the trigger and the workaround are unaffected by either.
       bash verify-and-stage-rung.sh fdreg
     # the one-instruction cure
     ... same, plus  -mllvm -capstone-int-zero-for-zero-copy  in DOMAIN_EXTRA_CFLAGS only
-    # the victim-identity discriminator
-    ... same, plus  -DFDREG_RAWSUM=1  in BOTH host and domain flags
-    # the storage-class control
-    ... same, plus  DOMAIN_OPT_LEVEL=-O1
+    # the victim-identity discriminator -- NOTE the different base VA
+    RUNG=fdpraw DOMAIN_BASE_VA=0x60000  ... -DFDREG_STAGE=4 -DFDREG_RAWSUM=1  (host AND domain)
+    # the -O1 arm -- NOTE the different base VA, and NO -DFDREG_PAD
+    RUNG=fdpO1  DOMAIN_BASE_VA=0xf0000 DOMAIN_OPT_LEVEL=-O1  ... -DFDREG_STAGE=4
+
+`fdpO1` is NOT a controlled variation of `fdp0`. It also has ZERO trigger sites in the whole image,
+a different link address and different `-D` flags, and `fdreg_compute` is inlined away. Treat its
+clean result as an observation, not as evidence that storage class is the immunity condition.
 
 `DOMAIN_OPT_LEVEL` is load-bearing and was the source of an apparent contradiction: a 2026-08-06
 board result recorded stage 4 as returning 2609, which was an `-O1` build whose accumulator lived in
