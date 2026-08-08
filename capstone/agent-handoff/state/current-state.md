@@ -29,7 +29,17 @@ that pass rules nothing out. A 13-second `-DTRIG_IN_LOOP=1` run would settle it 
 the trigger and fails in six whose victim lies 4 bytes away, and distance is invariant under base
 alignment. It still holds in simulation.
 
-**Bitstream:** all same-day board measurements were taken with `caplifive_65536_nodes.bit` resident.
+**Bitstream: `caplifive_65536_nodes.bit` is the REFERENCE SILICON.** Project lead's decision
+2026-08-08: no reflash. Every R-18/R-19 measurement, old and new, was taken on it. Whether either
+signature appears on `caplifive_fixed_forward.bit` is UNTESTED and is not going to be tested --
+do not re-open this, and do not describe any result as a cross-bitstream comparison.
+
+**Simulation, measured 2026-08-08 with a working positive control.** `movc-zero-self-clobber.S`
+fires its trigger ONCE and passes; at `-DTRIG_IN_LOOP=1` it fires 64 times and FAILS (tohost 3,
+1974 cyc) with witness A zeroed. So trigger count is the differentiator and a single-shot directed
+test proves nothing -- but the check IS now known to fire, and with it firing the store's own slot
+still read back CLEAN. R-18's splash reproduces in simulation; R-19's metadata-in-slot form does
+not, even at matched trigger count.
 
 **WORKAROUND, ours, CONFIRMED ON SILICON UNDER A CONTROLLED 2x2 (2026-08-08) and needing no
 bitstream:** emit `addi rd, x0, 0`. The old justification (c8 567 -> c8fix 576, "same geometry, one

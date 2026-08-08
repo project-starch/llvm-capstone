@@ -104,28 +104,33 @@ contrast is in one place:
 | `sim/scalar-store-addi-zero.S` | passes (12816 cyc) | matched control, one instruction different |
 | `sim/movc-zero-self-clobber.S` | **passes** (1715 cyc) | **inconclusive — see the warning below** |
 
-**WARNING — the passing test does not currently discriminate, and we are flagging that rather than
-resting on it.** `movc-zero-self-clobber.S` fires its trigger **once**; `scalar-store-movc-zero.S`
-fires **64 times**. Both store to the same address (`0x80003018`) at the same geometry, yet the
-R-18 splash that reliably appears in the second does **not** appear in the first — witness A reads
-back its seed `0x0a0a0a0a` intact. So the test fails to reproduce even the effect that is *known* to
-reproduce there, which means its pass cannot separate "this signature does not occur in simulation"
-from "this test creates no defect at all". It has no positive control, and the one available control
-demonstrably does not fire in it.
+**The negative result is now CONTROLLED — the test was run at a matched trigger count and the check
+is demonstrably able to fire.** This replaces an earlier note here which said the pass discriminated
+nothing; that was true of the default build alone and is no longer the state of the evidence.
 
-Do not read the fourth row as a negative result. The honest statement is that **the metadata-in-slot
-signature has not been reproduced in simulation, and no simulation test has yet been shown capable of
-reproducing it.**
+`movc-zero-self-clobber.S` fires its trigger **once** by default, where the reproducing R-18 test
+fires it **64 times**. Rebuilding it with `-DTRIG_IN_LOOP=1` raises the count to 64 (its `EXPECT`
+oracle moves with the knob: with the trigger inside the loop the accumulator is reset each
+iteration, so the clean value is 1, not `NITER`). Both configurations were run in Verilator:
 
-What IS established in simulation, via `scalar-store-movc-zero.S` and its matched control: a
-dual-bank splash. And **which slot dies still differs** — at the geometry built both ways, simulation
-damages the slot 8 bytes from the trigger while the board damages the one 4 bytes away.
+| configuration | triggers | verdict | |
+|---|---|---|---|
+| default | 1 | **SUCCESS**, 1715 cyc | no observable effect |
+| `-DTRIG_IN_LOOP=1` | 64 | **FAILED** (tohost 3), 1974 cyc | **the splash** — witness A `0x0a0a0a0a` → `0`, witness B → `1`, row-mate reset |
 
-**Cheapest experiment that settles this** (~13 s, no board): rebuild `movc-zero-self-clobber.S` with
-`-DTRIG_IN_LOOP=1`, which raises the trigger count to 64. Its oracle already moves with the knob
-(with the trigger in the loop the accumulator is reset each iteration, so the expected value is 1,
-not `NITER`). If the splash returns at 64 triggers, trigger count is the divergence and this row must
-be withdrawn entirely.
+The define was verified to have reached the build rather than assumed: the loop back-edge moves onto
+the `MOVC` address, the `EXPECT` arm switches from 64 to 1, `MOVC` retirements go 1 → 64 and
+accumulator stores 65 → 128 in the RVFI trace.
+
+**What this establishes.** Trigger count is the differentiator: a single-shot trigger produces
+nothing, so the default build's pass carries no information on its own. At 64 triggers the check
+**does** fire — which is the positive control this test previously lacked. And with it firing, the
+store's **own slot still read back the clean value `0x1`, with no `0x08000000` component**. So the
+metadata-in-slot signature does **not** reproduce in simulation even at a matched trigger count,
+while the R-18 splash does.
+
+That is a real negative result rather than an untested one. It does not explain the board, and the
+mechanism at `wt_dcache_mem.sv:156-158` remains a candidate that simulation has not confirmed.
 
 The readable chain is `issue_read_operands.sv:1140` → `load_store_unit.sv:1013` →
 `store_unit.sv:345` → `store_buffer.sv:173` (onto the dcache write-user sideband, ungated by opcode)

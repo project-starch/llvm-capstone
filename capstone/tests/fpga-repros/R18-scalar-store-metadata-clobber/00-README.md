@@ -484,6 +484,14 @@ Three things about this recipe are worth stating because each one cost a rebuild
 * A loop-**control** variable in the affected slot produces **extra iterations** instead of a wrong
   value, and cycle counts confirm the extra iterations really executed (69081 vs 44001).
 
+> **Trigger count matters, measured 2026-08-08.** `sim/movc-zero-self-clobber.S` fires its trigger
+> ONCE and passes; rebuilt with `-DTRIG_IN_LOOP=1` it fires 64 times and **FAILS (tohost 3, 1974
+> cyc)** with witness A zeroed — the same splash this package reports. So a single-shot trigger
+> produces no observable effect, and any directed test built at one trigger says nothing. The define
+> was verified to reach the build (loop back-edge moves onto the `MOVC`, `MOVC` retirements 1 → 64).
+> Notably, even at 64 triggers the store's own slot read back the CLEAN value — the metadata-in-slot
+> form (`../R19-movc-zero-metadata-in-slot/`) did not appear.
+
 ## What this package got wrong (audited 2026-08-08)
 
 Listed because a reader deserves to know which claims were repaired rather than discovering it.
