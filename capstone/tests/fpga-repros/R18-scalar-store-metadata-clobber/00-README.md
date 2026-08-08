@@ -213,15 +213,27 @@ reset — and comparing the rule's predicted splash target (`R XOR 8`) with the 
 | `ka0` | s0−0x34 | s0−0x3c | s0−0x38 | −558 | victim INFERRED — see below |
 | `kb12` | s0−0x40 | s0−0x48 | s0−0x38 | −9 | victim INFERRED — see below |
 
-**Two of the three mismatches are not evidence against anything.** `ka0` and `kb12` return a SINGLE
-masked number, so which slot was damaged was never measured — it was inferred, and the inference
-predates the rule. Re-measuring them is cheap and offline-buildable: rebuild at `FDREG_STAGE=19`
-(triple report) or with `FDREG_RAWVICT=1`, and the victim is named rather than guessed.
-
-**`rs4` is the one genuine counterexample.** It does triple-report, so its victim is measured, and
-the rule predicts a different slot. Its deficit of −72 is 8 × 9, i.e. eight outer passes rather than
-one, which does not look like a single splash event. It may be a second fault, and it should not be
-folded into this one.
+> **CORRECTION 2026-08-08, same day.** The paragraph that stood here said `ka0` and `kb12` return a
+> single masked number so their victims were "inferred". **That was wrong in both directions.** The
+> check behind it looked for stage-19's packing (`slliw 0x14` + `slli 0x10`) and false-negatived
+> stage-26's four-scalar packing (`slliw 0x18` + `slli 0x34`). Re-checked by counting the `or`
+> instructions in each build's compute function:
+>
+> | build | packing | victim |
+> |---|---|---|
+> | `c8`, `rs4`, `rs8` | 2 `or`, shifts 0x10/0x14 | **MEASURED** |
+> | `ka0`, `kb12` | 2 `or`, shifts 0x18/0x34 | **MEASURED** |
+> | `dp0` | 0 `or`, single value | **inferred** |
+>
+> So `ka0` and `kb12` are genuine counterexamples, and `dp0` — which the table above counted as a
+> match — is the one that is not evidence either way. **The rule's fit on the older corpus is
+> therefore weaker than stated above, not stronger.** An audit of the true fit across every build
+> with a measured victim is in progress; treat the row-by-row table above as provisional until it
+> lands, and treat the MECHANISM (which is confirmed in simulation, not fitted) as the solid part.
+>
+> Note also that predicting a build's victim from ONE `movc`-zero store is questionable methodology
+> in the first place: `c8` alone has seven trigger sites, so several splashes land in several
+> places, and "the" victim is not a well-posed question without enumerating all of them.
 
 The `+333`/`+330` builds belong to the separately documented extra-iteration fault, not to this one.
 
