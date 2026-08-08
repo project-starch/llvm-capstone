@@ -103,6 +103,39 @@ not widen its own permissions by editing this file. In particular the paper rule
 written: if the scope of a given go-ahead is unclear, ask, and asking there is not the
 friction this section is about.
 
+## A CLEAN result is not evidence until the check is known to fire
+
+**Before believing a zero, a pass, or a "not found", show the check can produce the opposite.**
+Run it against a case that must trip it. If you cannot make it fire, you have learned nothing about
+the subject and something about the instrument.
+
+This is the single most expensive mistake made on this project. On 2026-08-08 one session hit it
+**ten times**; four became published claims that had to be retracted:
+
+* `grep -c` returned 0 because grep here is **ugrep** and goes quiet on binary-ish output → "this
+  binary contains no `movc`" (it contained nine);
+* a check keyed to one function found nothing because the code under test lived in **another
+  function**, and one keyed to one packing shape missed a **different packing shape** → two builds
+  wrongly declared "never measured";
+* a preflight gate tested a marker over the **whole transcript** when the mandated control always
+  emits it → the gate could never fire, and had not, in its entire life;
+* a preflight run with `RUNGS=` instead of `BAKED_RUNGS=` printed **GO** having checked nothing;
+* an analysis tool with an unset input dir printed `dataset: 0 builds` and a table of `0/0` scores,
+  which reads exactly like "no rule fits" rather than "no data was loaded";
+* six directed RTL tests came back clean and were recorded as "the hardware is innocent" — none of
+  them ever created the triggering condition.
+
+Cheap habits that catch all of the above:
+
+* **Give every detector a positive control.** A gate that has never blocked anything is not a
+  passing gate, it is an unproven one. Negative-test it the day you write it.
+* **Prefer `python3` to `grep`** for anything that must be counted or must return zero meaningfully.
+* **Make "no data" an ERROR, not a zero.** A tool that finds nothing should exit non-zero and say
+  where it looked, never print an empty result that renders like a finding.
+* **`pgrep -f <pattern>` matches your own shell.** Match on a verified PID or a distinctive
+  substring that cannot appear in your own command line.
+* When a result is *surprisingly* clean, suspect the instrument before the subject.
+
 ## Debugging a blocker: BATCH VARIANTS, and make every run RETURN
 
 *(Execution mechanics — bake, boot, invoke, classify, release — live in the `board-run` skill,
