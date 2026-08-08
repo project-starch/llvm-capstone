@@ -199,8 +199,31 @@ minus multiples of 16, so `gc`'s row offset is whatever `sp.END` happens to be m
 inference, not measurement. It is free to measure — return `&gc[0] & 0xF` in a spare nibble — and
 it does not affect the simulation result, which uses an explicitly aligned buffer.
 
-Also still unexplained by any rule here: `rs4` (−72) and `ka0` (−558). The `+333`/`+330` builds
-belong to the separately documented extra-iteration fault, not to this one.
+### The older builds, re-examined against the rule (2026-08-08)
+
+Resolving the ACTUAL `movc`-zero store offset in each build — rather than assuming which counter is
+reset — and comparing the rule's predicted splash target (`R XOR 8`) with the recorded victim:
+
+| build | movc-zero store | predicted splash | recorded victim | delta | |
+|---|---|---|---|---|---|
+| `c8` | s0−0x3c | s0−0x34 | s0−0x34 | −9 | **match** |
+| `rs8` | s0−0x3c | s0−0x34 | s0−0x34 | +9 | **match** |
+| `dp0` | s0−0x3c | s0−0x34 | s0−0x34 | −9 | **match** |
+| `rs4` | s0−0x38 | s0−0x30 | s0−0x34 | −72 | **mismatch, and it is real** |
+| `ka0` | s0−0x34 | s0−0x3c | s0−0x38 | −558 | victim INFERRED — see below |
+| `kb12` | s0−0x40 | s0−0x48 | s0−0x38 | −9 | victim INFERRED — see below |
+
+**Two of the three mismatches are not evidence against anything.** `ka0` and `kb12` return a SINGLE
+masked number, so which slot was damaged was never measured — it was inferred, and the inference
+predates the rule. Re-measuring them is cheap and offline-buildable: rebuild at `FDREG_STAGE=19`
+(triple report) or with `FDREG_RAWVICT=1`, and the victim is named rather than guessed.
+
+**`rs4` is the one genuine counterexample.** It does triple-report, so its victim is measured, and
+the rule predicts a different slot. Its deficit of −72 is 8 × 9, i.e. eight outer passes rather than
+one, which does not look like a single splash event. It may be a second fault, and it should not be
+folded into this one.
+
+The `+333`/`+330` builds belong to the separately documented extra-iteration fault, not to this one.
 
 ## Why it took so long to reproduce in simulation
 
