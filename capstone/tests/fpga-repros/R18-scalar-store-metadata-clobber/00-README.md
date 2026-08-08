@@ -1,7 +1,13 @@
 # R-18 — a scalar in the upper half of a 16-byte cache row is silently zeroed on silicon
 
-**Status: reproducible silicon defect, REPRODUCED IN RTL SIMULATION (~13 s), with a mechanism that
-now fits, and a compiler-side workaround validated in simulation. See `sim/`.**
+**Status: reproducible silicon defect. REPRODUCES IN RTL SIMULATION in ~13 s with a matched control
+(see `sim/`). The cache path is exercised in simulation; what does NOT match is WHICH slot dies —
+simulation damages the slot 8 bytes from the trigger, the board damages the one 4 bytes away. A
+compiler-side workaround is silicon-confirmed.**
+
+**A second, different signature — the victim holding `compress_cap(NULL) + n` instead of being
+zeroed — is NOT this issue. It is `../R19-movc-zero-metadata-in-slot/`, and it does not reproduce in
+simulation.**
 
 ## The defect in one paragraph
 
