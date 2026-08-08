@@ -4,6 +4,9 @@
  * `reg head : logic[10]` initialised to 3, so 1021 allocatable ids, and on exhaustion
  * `set head := *head+10'd1` WRAPS to 0 and aliases new nodes onto the sentinel -- silently,
  * with no stall and no exception (the stall-on-full fix 91ea10837 postdates this bitstream).
+ * CORRECTION 2026-08-08: that premise is WRONG. The board runs caplifive_65536_nodes.bit, whose
+ * 65536-node pool arrives AT 91ea10837 -- so the fix does NOT postdate it. 1021-id wrap-around is
+ * not available as a hang mechanism on the resident silicon. See SILICON-BLOCKER.md.
  * REVOKE_NODE then walks `next` with no step bound, and it is a single shared process, so one
  * stuck walk blocks every later rev-node request. That is a silent hang whose trigger is the
  * NUMBER OF CAPABILITIES ALLOCATED -- one per carve, plus the workload's own.

@@ -1027,6 +1027,16 @@ the RTL allocates on `INIT`/`MREV`, and it is not established that a `split` per
 a node at all, so 1408 carves may be far fewer than 1408 allocations.
 
 **Standing RTL facts worth keeping** (from the sources, bitstream-accurate): the pool is
+> **CORRECTION 2026-08-08 — THIS PARAGRAPH'S PREMISE IS WRONG, and it was labelled
+> "bitstream-accurate".** It assumes the resident bitstream is `7aac52f93`. It is not: the board
+> runs `caplifive_65536_nodes.bit`, and at `7aac52f93` the pool is `reg head : logic[10]` (1021
+> ids). The 65536-node pool arrives with `reg head : logic[16]` at `91ea10837` — **the same commit
+> named below as "postdating this bitstream"**, which is self-contradictory. The resident silicon
+> therefore has **65536 ids AND the stall-on-full fix**, so silent wrap-around is NOT available as
+> a hang mechanism. The synthesis commit is UNRECORDED; treat it as UNKNOWN, bounded below by
+> `91ea10837`. The same wrong premise is copied into `rv600_kernel.h:6`, `rv1000_kernel.h:6` and
+> `rv1400_kernel.h:6`.
+
 `reg head : logic[10]` initialised to 3 → **1021 allocatable ids**; on exhaustion
 `set head := *head+10'd1` **wraps silently to 0** and aliases onto the sentinel — no stall, no
 exception (the stall-on-full fix `91ea10837` postdates this bitstream); `REVOKE_NODE` walks

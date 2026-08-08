@@ -39,6 +39,13 @@ A real structural difference had been found behind the SQLite blocker:
 | `sqlite_silicon.dom` (wedges) | 1522 insns | **254** | 96 |
 | `fdp0.dom` / fdreg model (runs clean) | 47 insns | **0** | 0 |
 
+**The "zero" is only true INSIDE cap-init.** Whole-image, `fdp0.dom` contains **18**
+`cincoffset` and 111 `cincoffsetimm`, and it *executes* them: `fdreg_len30`'s inner loop runs
+`cincoffsetimm a1, s0, -0x34; lwu a1, 0x0(a1); cincoffset a0, a0, a1` — a capability register
+redefined by an integer load and used as rs2 **one instruction later**, a tighter version of the
+shape claimed to be fatal, thousands of times per boot, on this bitstream, returning every time.
+"Immunity by absence" had no basis.
+
 Combined with `capstone_flu_unit.anvil:29-34` raising `UNEXPECTED_OPERAND` when rs2 carries
 capability metadata, and R-5's "illegal capability ops wedge rather than trap", this was a
 coherent story tying the blocker to the same ungated-metadata path as R-18/R-19
@@ -74,8 +81,22 @@ the concatenation at `cva6.py:1252-1253` has no separator.
 
 ## Still open on SQLite
 
-The wedge remains localised by the surviving clamp series (`n1` returns after
-`zName = aDef[i].zName`; `n2` does not return after `sqlite3Strlen30(zName)`). The two
+**CORRECTION to this note, same day.** The clamp series I cited here (`m1/m3/a0/a1/n1/n2`,
+"`n1` returns, `n2` does not") is **SUPERSEDED** — `SILICON-BLOCKER.md:1218` marks it as
+having run on a NON-STAGED image. Citing it here repeated a retracted result, which is
+exactly the failure this file exists to prevent. The **live** localization is at
+`SILICON-BLOCKER.md:3-22` (2026-08-06, control green, corrected classifier):
+`sqlite3_config`, `sqlite3MutexInit`, `sqlite3MallocInit`, `sqlite3PCacheSetDefault` and
+`sqlite3PcacheInitialize` all return distinct rc values, and **`sqlite3RegisterBuiltinFunctions()`
+WEDGES**. Seven distinct values were delivered out of the domain, all of them AFTER cap-init.
+
+**That also relocates the hypothesis this note refutes.** `__capstone_cap_init` is measured to
+COMPLETE on this bitstream — `/tmp/capstone/mtv/sqpc.log` shows the `0x9E11`
+`INTERP_RETURN_PRECALL` sentinel, which the glue emits *after* `RUN_CAP_INIT` and immediately
+before `call domain_main`, with the control green in the same boot. So cap-init was never the
+wedging phase and the 254-cincoffset argument was aimed at the wrong part of the program.
+
+The two
 walkers compile to near-identical code — same prologue, same `*144` indexing, same
 `ldc a1, 0x70(a0)`, same `auipc/addi/jalr` call sequence, same `auipc` count. Two further
 hypotheses died the same day: "SQLite uses `auipc` where fdreg does not" (both use two) and

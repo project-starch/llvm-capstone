@@ -131,8 +131,11 @@ older bitstream and must be re-checked before being relied on.
 > trace giving every load's address AND returned value. `stc-neighbour-load.S` and
 > `stc-counter-pair.S` (submodule, branch `capstone-bootstrap`) do NOT reproduce at either RTL
 > revision, across four rounds of added fidelity (pair 8 bytes apart, nested loop, resetting
-> index, faithful -O0 sequence with three capability loads). HEAD 458982093 and the board's
-> 7aac52f93 are indistinguishable on them, cycle-for-cycle. The untested difference is the DOMAIN
+> index, faithful -O0 sequence with three capability loads). HEAD 458982093 and `7aac52f93` are
+> indistinguishable on them, cycle-for-cycle. **(Corrected 2026-08-08: `7aac52f93` is NOT "the
+> board's" revision. The resident bitstream is `caplifive_65536_nodes.bit`, and at `7aac52f93`
+> the pool is `reg head : logic[10]` = 1021 nodes; the 65536-node pool arrives at `91ea10837`.
+> The synthesis commit is UNRECORDED, bounded below by `91ea10837`.)** The untested difference is the DOMAIN
 > context: capenter, the monitor-carved stack, CPMP.
 >
 > **NEXT:** stage 20, the role swap -- the same three frame slots holding different variables, to

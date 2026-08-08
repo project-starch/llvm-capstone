@@ -555,8 +555,18 @@ Listed because a reader deserves to know which claims were repaired rather than 
 
 ## Bitstream
 
-Measured on `caplifive_65536_nodes.bit`. The chain is present at `capstone-ariane` HEAD
-`458982093` and at `7aac52f93` (the commit this bitstream is built from); `git diff` between them
+Measured on `caplifive_65536_nodes.bit`.
+
+**Correction, 2026-08-08: this README previously named `7aac52f93` as "the commit this bitstream is
+built from". That is provably wrong.** At `7aac52f93` the revocation-node pool is
+`reg head : logic[10]` (1021 nodes); the 65536-node pool arrives with `reg head : logic[16]` at
+`91ea10837`. A bitstream named `65536_nodes` therefore cannot be built from `7aac52f93`. The exact
+synthesis commit is **not recorded anywhere in this repo** and should be treated as UNKNOWN, bounded
+below by `91ea10837`. One consequence matters for anyone reading the mechanism section: the
+`CINCOFFSET` operand-type check is *commented out* at `7aac52f93` but **active** from `f30240656`
+onward, so it is active on the resident silicon.
+
+The chain is present at `capstone-ariane` HEAD `458982093` and at `7aac52f93`; `git diff` between them
 touches **eight** non-`verif/` files, and this README's earlier claim that it "touches none of the
 files involved" was **false**. Verified list: `calculate_memory.py`, `capstone_dyn_unit.anvil`,
 `capstone_flu_unit.anvil` (this one **un-comments an operand-type exception check on `CINCOFFSET`**,
