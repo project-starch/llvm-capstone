@@ -94,6 +94,14 @@ The workaround is **obsolete the moment the hardware classifies stores by opcode
    run `capstone/tests/fpga-repros/R18-scalar-store-metadata-clobber/run.sh trigger`. With the
    hardware fixed, `c8` must return **576**, not 567. If `c8` still returns 567 the fix is not in
    that bitstream and the workaround must stay.
+
+   **BOTH signatures must clear, not just this one.** This flag is the workaround for **R-19** as
+   well (`capstone/tests/fpga-repros/R19-movc-zero-metadata-in-slot/`), whose signature is the
+   store's own slot returning `compress_cap(NULL) + n` rather than being zeroed. A bitstream could
+   fix the zeroing form and leave the metadata-in-slot form live, and this gate as originally
+   written would not have noticed — it would have deleted the workaround with R-19 still biting.
+   So the acceptance set is `c8` → **576** *and* `fdp0` → **2609** (not `0x08000A31`). Both arms
+   are staged; run them in one boot.
 2. Delete the `cl::opt` `CapstoneIntZeroForZeroCopy` and the `SrcReg == Capstone::X0` block in
    `copyPhysReg`. Both are contiguous and commented with `R-18`.
 3. Rebuild and confirm every measured rung is byte-identical to its flag-OFF build — since the flag

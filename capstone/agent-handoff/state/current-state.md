@@ -2,22 +2,41 @@
 
 Minimal snapshot. Read first in every session.
 
-## R-18 IS ROOT-CAUSED AND REPRODUCED IN SIMULATION (2026-08-08) -- newest first
+## TWO SEPARATE SIGNATURES, R-18 AND R-19 -- both handed over, both worked around (2026-08-08)
 
-An ordinary `sw` whose DATA REGISTER carries capability metadata also writes its data into the
-**same byte lanes of the other bank** of its 16-byte row, silently overwriting an unrelated scalar
-8 bytes away. Reproduced in Verilator in ~13 s; the board is no longer needed to study it.
+**Do not merge them.** R-18 is the ZEROING form: the victim is written with 0 and counts up, and
+raw readbacks show NO metadata anywhere. R-19 is the METADATA-IN-SLOT form: the store's own slot
+returns `compress_cap(NULL) + n`, e.g. `0x08000A31` = `0x08000000` + 2609. They share a trigger
+class and ONE workaround clears both. Whether they are one defect or two is **UNKNOWN** and neither
+package asserts it. Packages: `capstone/tests/fpga-repros/R18-scalar-store-metadata-clobber/` and
+`.../R19-movc-zero-metadata-in-slot/`; each is a self-contained link handed out on its own.
+
+**What simulation shows, stated at the strength the evidence supports.** A dual-bank splash is
+DEMONSTRATED in Verilator with a one-instruction matched control -- but the slot it damages is not
+the slot the board damages (sim: 8 bytes away and in the LOWER half of the row; board: 4 bytes away,
+UPPER half). Treat it as a real mechanism demonstrated, NOT as the board symptom reproduced. R-19's
+form does not reproduce in simulation at all, and the test that "passes" there fires its trigger
+ONCE where the reproducing test fires it 64 times and fails to reproduce even the R-18 splash -- so
+that pass rules nothing out. A 13-second `-DTRIG_IN_LOOP=1` run would settle it and has not been done.
 
     issue_read_operands.sv:1140   metadata onto the store's write-user sideband, UNGATED by opcode
     wt_dcache_mem.sv:138          st_wr_cap = |wr_user_i -- classified by VALUE, not opcode
-    wt_dcache_mem.sv:230-238      such a store asserts BOTH banks
-    wt_dcache_mem.sv:152-158      the SAME byte enable is applied to both
+    wt_dcache_mem.sv:234-237      such a store asserts BOTH banks
+    wt_dcache_mem.sv:153-155      the same byte enable to both banks
+    wt_dcache_mem.sv:156-158      bank 1 takes wr_user_i, bank 0 takes wr_data_i  <- NOT confirmed
 
-Rule: a store at row offset R also writes `R XOR 8`. Fits 6 of 7 board arms, and explains the
-oldest observation in the investigation -- the victim is in the UPPER half of its row in 9/9
-measured builds -- because a bank-0 store splashes into bank 1.
+`R XOR 8` is **WITHDRAWN** as a board rule: it holds in ten builds whose victim lies 8 bytes from
+the trigger and fails in six whose victim lies 4 bytes away, and distance is invariant under base
+alignment. It still holds in simulation.
 
-**WORKAROUND, ours, CONFIRMED ON SILICON (c8 567 -> c8fix 576, same geometry, one instruction) and needing no bitstream:** emit `addi rd, x0, 0`
+**Bitstream:** all same-day board measurements were taken with `caplifive_65536_nodes.bit` resident.
+
+**WORKAROUND, ours, CONFIRMED ON SILICON UNDER A CONTROLLED 2x2 (2026-08-08) and needing no
+bitstream:** emit `addi rd, x0, 0`. The old justification (c8 567 -> c8fix 576, "same geometry, one
+instruction") was CONFOUNDED -- those two are linked 0xc0000 apart on a layout-sensitive defect.
+A 7-arm boot crossed the workaround against the link address and settled it: damaged at 0xf0000 and
+0x70000 both return 67699255; cured at 0x30000 and 0x50000 both return 67699264; R-19's fdd/fdw at
+0xb0000/0x90000 give 0x08000A31 vs 2609. Effect tracks the INSTRUCTION, not the layout.
 instead of `movc rd, zero` for integer-zero materialisation. `movc rd, zero` writes
 `compress_cap(NULL)` = `0x08000000` into the register's capability shadow; an integer op leaves it
 zero, `st_wr_cap` is never asserted, and no dual-bank write happens. Our `-O0` codegen uses `movc`,
