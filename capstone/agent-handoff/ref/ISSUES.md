@@ -3,10 +3,76 @@
 Single index of everything currently broken, with a pointer to a reproducer for each.
 **Update this file whenever an issue is found, characterised, worked around or closed.**
 
-Convention: **R-n** = RTL/hardware, **C-n** = our compiler/toolchain, **I-n** = infrastructure.
+Convention: **R-n** = RTL/hardware, **C-n** = our compiler/toolchain, **I-n** = infrastructure,
+**S-n** = **unattributed** — reproducible, but origin NOT yet established (may be RTL, compiler or
+software). An S-n is promoted to R-n/C-n only when the origin is demonstrated, never on suspicion.
 Status: `OPEN` · `CHARACTERISED` (mechanism known, unfixed) · `WORKED AROUND` · `FIXED` · `CLOSED`.
 
-Last updated 2026-08-02.
+Last updated 2026-08-09.
+
+---
+
+## S-02 — SQLite wedges inside `sqlite3_initialize()` in a pure-capability domain · `OPEN`
+
+**The project's headline blocker.** SQLite must RUN on the FPGA; it has never produced a row there.
+
+**Status 2026-08-09: LOCALIZED to `sqlite3_initialize()`, origin unattributed.** Two boots on
+`caplifive_65536_r18_fix.bit`, control green in both:
+
+| build | returns after | result |
+|---|---|---|
+| `rn1` (`RUNSTOP=1`) | `sqlite3_config(SQLITE_CONFIG_HEAP)` | **RETURNED `rc=0` in 4 s** |
+| `rn2` (`RUNSTOP=2`) | `sqlite3_initialize()` | **WEDGED**, entered, no return in 240 s |
+
+Both images are byte-size and cap-init identical to a build that entered 2/2 (`stc=558`,
+1551336 bytes), differing only by one inserted early return — so size, layout and cap-init load are
+held constant. `rn1` returning is the positive control.
+
+**Why S and not R:** it is NOT established as a hardware defect. It survives on silicon that has
+R-18/R-19 fixed, but nothing yet rules out our compiler or our software. Do not hand it to the
+hardware side as an RTL issue, and do not open an `fpga-repros/` package for it, until the origin
+is demonstrated.
+
+### Ruled out, each measured on FIXED silicon with a valid control
+
+* **R-18 / R-19** — the full domain still wedges on the fixed bitstream (it enters cleanly first).
+* **The builtin-function array** — `BUILTIN_LIMIT=0` (loop body never executes) still wedges.
+* **The whole interior of `sqlite3RegisterBuiltinFunctions`** — `rs0`, an early return at its FIRST
+  instruction, still wedges. **This REFUTES the 2026-08-06 localization** recorded further down
+  this file; that probe was reading a downstream symptom.
+* Earlier and on the old bitstream: `auipc` asymmetry, PCC/code-window overrun, stale-metadata
+  leakage through integer ops, malformed cap-init descriptors, and cap-init itself (it completes —
+  the `0x9E11` precall sentinel is emitted after `RUN_CAP_INIT`).
+
+### Confirmed, still true on fixed silicon
+
+* **2026-07-31 "stage 2 wedges (after `sqlite3_initialize`)"** — reproduced, now on repaired hardware.
+
+### Vehicle note, hard-won
+
+Heavyweight `CAPSTONE_SQLITE_STAGE` builds **do not ENTER** on this bitstream (0/4). Lightweight
+early-return builds enter 4/4. Use `RUNSTOP` / `INITSTOP` / `REGBUILTIN_STOP`, never the staged
+block. Two explanations for the staged stall were raised and **refuted**: layout (a REDRAW at
+`CAPSTONE_TEXT_PAD=4096` still stalled) and the `holder[580]` default (fixing it cut cap-init
+1257→608 `stc`; still stalled). The holder fix is kept — 580 unused capability leaves per staged
+build is a real defect — but it is not the cause. **That stall is itself unexplained and may deserve
+its own S-number if it blocks anything else.**
+
+### Next cut
+
+`INITSTOP=n` early-returns from `sqlite3_initialize()` after sub-step n: 1 `MutexInit`,
+2 `MallocInit`, 3 `RegisterBuiltinFunctions` (ordering control — already exonerated),
+4 `PcacheInitialize`, 5 `OsInit`, 6 `MemdbInit`.
+
+### Driver caveat
+
+On a RUNSTOP/INITSTOP build the runner hard-stops with "produced no `SQ: obs=` marker … the domain
+almost certainly was not staged". That message is **WRONG** for these builds — the early return
+skips the code that emits `obs=`. `rn1` demonstrably ran and returned `rc=0`. Read the marker chain
+(`G/enter` → `H/return`) and the `TEST … rc=` line instead.
+
+**Trail:** `capstone/agent-handoff/history/09-08-2026_00-30-00_r18-r19-fixed-sqlite-still-wedges.md`,
+`ref/SILICON-BLOCKER.md`.
 
 ---
 

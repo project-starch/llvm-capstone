@@ -363,6 +363,53 @@ cp -f "$VFS_DIR/../sqlite-vfs-skeleton/capstone_sqlite_os.c" "$OBJ_DIR/capstone_
 cp -f "${DOMAIN_SRC:-$SCRIPT_DIR/sqlite_capstone_domain.c}" "$OBJ_DIR/sqlite_capstone_domain.c"
 cp -f "$SCRIPT_DIR/sqlite_silicon_amalgam.c" "$OBJ_DIR/amalgam.c"
 
+# INITSTOP=<n> -- DIAGNOSTIC ONLY. Early-return from sqlite3_initialize() after sub-step n,
+# to bisect S-02 (the wedge is inside initialize(); measured 2026-08-09 by rn1 RETURN /
+# rn2 WEDGE, both on caplifive_65536_r18_fix.bit with a green control).
+#
+#   1 = after sqlite3MutexInit()
+#   2 = after sqlite3MallocInit()
+#   3 = after sqlite3RegisterBuiltinFunctions()   (already EXONERATED by rs0 -- ordering control)
+#   4 = after sqlite3PcacheInitialize()
+#   5 = after sqlite3OsInit()
+#   6 = after sqlite3MemdbInit()
+#
+# Lightweight on purpose: one early return, nothing else. Heavyweight staged builds do NOT
+# ENTER on this bitstream (0/4) while early-return builds enter 4/4.
+if [[ -n "${INITSTOP:-}" ]]; then
+  echo "== DIAGNOSTIC: clamping sqlite3_initialize() after sub-step $INITSTOP"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$INITSTOP" <<'PYINIT'
+import sys,re
+path,n=sys.argv[1],int(sys.argv[2])
+s=open(path).read()
+m=re.search(r'int sqlite3_initialize\(void\)\s*\{', s)
+if not m: print("INITSTOP: sqlite3_initialize not found",file=sys.stderr); sys.exit(1)
+start=m.end()
+anchors={1:'rc = sqlite3MutexInit();',
+         2:'rc = sqlite3MallocInit();',
+         3:'sqlite3RegisterBuiltinFunctions();',
+         4:'rc = sqlite3PcacheInitialize();',
+         5:'rc = sqlite3OsInit();',
+         6:'rc = sqlite3MemdbInit();'}
+t=anchors.get(n)
+if not t: print("INITSTOP: no anchor for %d"%n,file=sys.stderr); sys.exit(1)
+i=s.find(t, start)
+if i<0: print("INITSTOP: anchor %r not found"%t,file=sys.stderr); sys.exit(1)
+after=i+len(t)
+ins='\n  { volatile int capstone_initstop = 0x7B0%X; if(capstone_initstop) return 0; }\n' % n
+s=s[:after]+ins+s[after:]
+open(path,'w').write(s)
+print("INITSTOP: early return inserted after sub-step %d (%s)" % (n,t))
+PYINIT
+  _m=$(printf '0x7B0%X' "$INITSTOP")
+  _n=$(grep -c -F "capstone_initstop = $_m" "$OBJ_DIR/sqlite3-capstone.c" || true)
+  _r=$(grep -c -F "if(capstone_initstop) return 0;" "$OBJ_DIR/sqlite3-capstone.c" || true)
+  echo "== initstop gate: marker $_m x$_n ; return x$_r"
+  if [[ "$_n" -ne 1 || "$_r" -ne 1 ]]; then
+    echo "INITSTOP did NOT apply (marker=$_n return=$_r). Refusing to build." >&2; exit 1
+  fi
+fi
+
 # RUNSTOP=<n> -- DIAGNOSTIC ONLY. Clamp run_sqlite() to return after step n.
 #
 # WHY THIS AND NOT CAPSTONE_SQLITE_STAGE. The staged block drags in probe arrays and,
