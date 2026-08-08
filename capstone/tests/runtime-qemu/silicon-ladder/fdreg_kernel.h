@@ -227,6 +227,9 @@
 #ifndef FDREG_RAWTWIN
 #define FDREG_RAWTWIN 0
 #endif
+#ifndef FDREG_RAWSUM
+#define FDREG_RAWSUM 0
+#endif
 #ifndef FDREG_RAWVICT
 #define FDREG_RAWVICT 0
 #endif
@@ -1863,6 +1866,17 @@ static unsigned fdreg_compute(void) {
   }
 #endif
 
+#if (FDREG_RAWSUM) == 1
+  /* DISCRIMINATOR: return the accumulator ALONE, without `+ fdreg_gate - 1`.
+     fdp0/fdp1 returned 0x08000000 + 2609 on silicon, and that value is ambiguous: it fits BOTH
+     "the stack accumulator `s` was initialised to compress_cap(NULL) by its `movc rd, zero`
+     store and counted up correctly" AND "the GLOBAL fdreg_gate holds 0x08000001". The two
+     cannot be told apart while the return sums them.
+       returns 0x08000A31 -> the victim is `s`, the stack slot at row offset 8
+       returns 2609       -> the victim is fdreg_gate, a global */
+  return s;
+#else
   return s + fdreg_gate - 1u;
+#endif
 }
 #endif

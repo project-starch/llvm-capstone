@@ -2328,7 +2328,57 @@ bisect inside 223–381.
 **Repro:** `CAPSTONE_SQLITE_STAGE=30..34` — **NOT YET RUN SUCCESSFULLY.** Its first attempt
 built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are now fixed.
 
-### R-18 — a scalar in the UPPER half of a 16-byte cache row is silently ZEROED `OPEN — trigger geometry now ESTABLISHED by controlled experiment 2026-08-08; RTL mechanism still unconfirmed.`
+### R-18 — ROOT CAUSE: a `movc rd, zero`-sourced store writes CAPABILITY METADATA into a bank-1 slot
+
+> **ROOT CAUSE, 2026-08-08. Established by single-instruction A/B on silicon, control green in every
+> boot, the damaged arm reproduced on THREE boots.**
+>
+> **A store whose data register was produced by `movc rd, zero`, targeting the UPPER half of a
+> 16-byte D-cache row, writes the capability METADATA into that slot instead of the store data.**
+>
+> | rung | accumulator initialiser / build | returned |
+> |---|---|---|
+> | `k800` | — | 4, control OK |
+> | `fdp0` | `movc a0, zero; sw` | **`0x08000A31` = `0x08000000` + 2609** (3 boots) |
+> | `fdp0fix` | `addi a0, x0, 0; sw` (workaround) | **2609** — clean |
+> | `fdpraw` | returns the accumulator ALONE | `0x08000A31` — **the victim is the stack slot** |
+> | `fdpO1` | `-O1`, accumulator in a REGISTER | **2609** — clean |
+>
+> **The chain, every link measured or quoted:**
+> 1. `movc rd, zero` puts `compress_cap(NULL)` = `0x08000000` in rd's metadata shadow
+>    (`ariane_pkg.sv:754-772`).
+> 2. The shadow rides onto every store's write-user sideband, **ungated by opcode**
+>    (`issue_read_operands.sv:1140`).
+> 3. `st_wr_cap = |wr_user_i` — the dcache classifies a store as a capability store **by VALUE**
+>    (`wt_dcache_mem.sv:138`).
+> 4. `bank_wdata[k][j] = ((st_wr_cap && k==1) ? wr_user_i : wr_data_i)` — **bank 1 receives the
+>    metadata instead of the data** (`:158`).
+>
+> The accumulator sits at row offset 8 (bank 1), so it is initialised to `0x08000000` rather than
+> `0` and then counts up correctly, giving metadata + the right answer.
+>
+> **THIS EXPLAINS THE OLDEST OBSERVATION IN THE INVESTIGATION.** The victim is in the UPPER half of
+> its row in 9/9 measured builds because bank 1 IS the upper half and `k==1` is the only branch that
+> substitutes `wr_user_i`. That regularity stood unexplained for the whole investigation; it now
+> falls out of the mechanism rather than being fitted to it. It also accounts for `gz12`'s
+> `0x08000237` = `0x08000000 + 567`.
+>
+> **Storage class is the immunity condition.** `-O1` keeps the accumulator in a register and is
+> clean; `-O0` spills it to a bank-1 slot and is damaged. This RECONCILES the 2026-08-06 record
+> ("fdreg stage 4 RETURNS 2609 on silicon"), which was an optimized, leaf-callee build with a
+> register accumulator — not a contradiction, a different binary.
+>
+> **Fix:** hardware, classify stores by opcode rather than by `|wr_user_i`, or gate the metadata
+> onto the sideband by opcode at issue. **Workaround, already in-tree and silicon-confirmed:**
+> `-capstone-int-zero-for-zero-copy` emits an integer move for a copy from x0, so no
+> null-capability shadow reaches the store. See `design/R18-workaround-movc-zero.md`.
+>
+> **Still open:** whether this self-clobber and the neighbour-splash seen in RTL simulation
+> (`sim/scalar-store-movc-zero.S`, which zeroes a slot 8 bytes away) are one effect or two. The
+> simulation damages the distance-8 slot and spares the distance-4 slot; the board does the
+> opposite. Also unexplained: `rs4` (-72) and `ka0` (-558).
+
+### R-18 (original entry) — a scalar in the UPPER half of a 16-byte cache row is silently ZEROED `OPEN — trigger geometry now ESTABLISHED by controlled experiment 2026-08-08; RTL mechanism still unconfirmed.`
 
 > **2026-08-08 — the "better lead" below is CONFIRMED, by a single-variable pair rather than a fit.**
 >
