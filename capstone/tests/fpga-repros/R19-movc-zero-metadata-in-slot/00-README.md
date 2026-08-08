@@ -53,6 +53,28 @@ is **untested**.
 | `fdpraw.dom` | returns the accumulator alone, no second term | `0x08000A31` — **the victim is that slot** |
 | `fdpO1.dom` | `-O1`, accumulator kept in a **register** | **2609** — clean |
 
+### Why the value is `0x08000000 + n` and not a bare `0x08000000`
+
+Worth stating because it looks like an objection to the obvious mechanism and turns out to be the
+opposite. The candidate mechanism (`wt_dcache_mem.sv:156-158`) is a pure **select** —
+`(((st_wr_cap)&&(k==1)) ? wr_user_i : wr_data_i)` — so it deposits a *constant*, and a constant
+cannot explain a value that tracks the loop count.
+
+It does not have to. The trigger fires **once**, at the accumulator's initialisation
+(`movc a0, zero; sw`), and everything after it is ordinary integer `lw`/`addiw`/`sw`. So the slot
+starts at `0x08000000` instead of `0`, and the program then accumulates on top of it:
+
+    corrupted init   0x08000000  +  2609 accumulated  =  0x08000A31  = 134220337   <- observed
+    clean init                0  +  2609 accumulated  =        2609               <- fdp0fix
+
+Both arms are exact, with no free parameter. A pure select is therefore fully consistent with the
+observation, and the arithmetic is a check the hypothesis could have failed and did not.
+
+**What this does NOT establish** is that the mux is where the corruption comes from. That still rests
+on the value's provenance — `0x08000000` is a hardware encoding and the immediate appears nowhere in
+the image — and the path has been *read*, never traced. Simulation does not reproduce this signature
+(see above), so treat the mechanism as consistent-and-unrefuted, not confirmed.
+
 `0x08000000` is the compressed encoding of a null capability — the cursorless-bounds branch at
 `ariane_pkg.sv:754-772`, reached from `compress_cap` at `:813`. It is a hardware encoding; the
 immediate `0x8000` appears nowhere in the image. The slot is initialised with an integer `0` and then
