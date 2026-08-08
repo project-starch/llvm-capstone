@@ -1,7 +1,8 @@
 # R-19 — a `movc rd, zero`-sourced store leaves `compress_cap(NULL)` in its OWN bank-1 slot
 
 **Status: this signature is established on silicon and reproducible on demand. It does NOT reproduce
-in Verilator — unlike R-18's splash form, which does. NOT yet shared with the board owner.**
+in Verilator — unlike R-18's splash form, which does, and which ships here too so the contrast is in
+one place. A compiler-side workaround is silicon-confirmed.**
 
 ## Why this is not R-18
 
