@@ -2432,8 +2432,17 @@ built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are
 > **same byte lanes of the other bank** of its 16-byte row. Reproduced in Verilator in ~13 s
 > (`scalar-store-movc-zero.S`); the RVFI trace shows only two architectural accesses to the
 > corrupted slot in the whole run — the seed, and the readback returning zero.
-> Rule: a store at row offset R also writes `R XOR 8`. It fits 6 of 7 board arms and explains the
-> 9/9 upper-half observation, because a bank-0 store splashes into bank 1.
+> **The `R XOR 8` rule is WITHDRAWN (audited same day).** It is just "the victim is 8 bytes from the
+> trigger"; the corpus splits into distance-8 builds where it holds (10) and distance-4 builds where
+> it fails (`rs4`, `ka0`, `gnt`, `gz0`, `gzn`, `graw`), and distance is invariant under alignment so
+> no carve-alignment argument rescues it. What survives are NECESSARY conditions only: the damaged
+> scalar is in the trigger store's own 16-byte row, in bank 1, at offset 8 or 12. Which of two
+> bank-1 candidates is hit is not predicted.
+>
+> **And the simulation does not reproduce the board's symptom.** At `gz0`'s geometry the sim leaves
+> the distance-4 slot exact (576) and zeroes the distance-8 slot; the board damages the distance-4
+> slot (`graw` = 9 raw). The sim shows a real dual-bank splash but not, so far, the board's. One
+> boot with a witness at `gc+0x0` settles whether there are two effects or two different faults.
 >
 > **Workaround, silicon-confirmed.** `c8` and `c8fix` are the same source at the same frame
 > geometry (frame 80, rmw [20,24,28], accumulator still at the damaged row offset 12), differing by

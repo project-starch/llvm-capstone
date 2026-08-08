@@ -63,5 +63,8 @@ if __name__ == '__main__':
         h = scan(dom, objdump, triple)
         name = dom.split('/')[-1]
         print("%-22s trigger sites: %d" % (name, len(h)))
-        for fn,addr,mnem,rest,src,producer in h[:6]:
+        # print ALL sites, not a slice: this printed h[:6] while reporting len(h), so a
+        # build with 7 sites was reported as 7 and listed as 6 -- truncated evidence in a
+        # script whose output goes into reports.
+        for fn,addr,mnem,rest,src,producer in h:
             print("    %-18s %s: %-4s %-24s  <- %s written by `%s`" % (fn,addr,mnem,rest,src,producer))

@@ -42,10 +42,46 @@ So the store writes its data into its own slot *and* into the same byte lanes of
 The splash carries the store's **DATA**, not the metadata — which is why no `0x08000000` is ever
 found in memory, and why every raw readback shows a clean count.
 
-**Rule:** a store at row offset R also writes row offset `R XOR 8`. It fits 6 of 7 board arms and,
-for the first time, explains the oldest observation here — the victim is in the UPPER half of its
-row in 9/9 measured builds — because a bank-0 store splashes into bank 1, and bank 1 IS the upper
-half. The one arm it does not fit (`gnt`) is discussed at the end.
+> **The `R XOR 8` rule that stood here is WITHDRAWN (2026-08-08, audited).** It is arithmetically
+> just "the victim is 8 bytes from the trigger store", and the corpus splits cleanly into
+> distance-8 builds where it holds (10) and distance-4 builds where it fails (`rs4`, `ka0`, `gnt`,
+> `gz0`, `gzn`, `graw`). **Distance is invariant under base alignment**, so the alignment doubt
+> once offered to excuse `gnt` cannot rescue it. Collapsing replicas, it is 2 of 4 distinct
+> trigger→victim geometries, and its apparent lack of false positives is vacuous: in every clean
+> build the predicted target is an unallocated slot or an unobserved pad, so the rule was never at
+> risk of being contradicted there.
+>
+> Two arithmetic errors of mine are also withdrawn with it: the predicted targets printed for
+> `kb12` and `rs4` were computed by subtracting 8 unconditionally instead of XORing bit 3, which
+> flips direction when the trigger sits at row offset 0. Corrected, **`kb12` is a match**. And
+> `dp0`, which a later note demoted to "inferred", is measured and is a match — its packing lives
+> in `fdreg_depth_body`, not in the `fdreg_compute` wrapper the check was run against.
+>
+> **What survives are two necessary conditions, not a predictor:** the damaged scalar is in the
+> trigger store's own 16-byte row (16/16), and it is in bank 1 of that row, at offset 8 or 12
+> (16/16). Which of two bank-1 candidates gets hit is **not predicted** — silicon supports that
+> discrimination in exactly two builds.
+
+### THE SIMULATION DOES NOT REPRODUCE THE BOARD'S SYMPTOM — read this before citing it
+
+`sim/scalar-store-movc-zero.S` is built at exactly `gz0`'s geometry: a `movc`-sourced `sw` at row
+offset 8, a victim at row offset 12 (distance 4), witnesses at row offsets 0 and 4. The two
+disagree about which slot dies:
+
+| | slot at distance 4 (row+12) | slot at distance 8 (row+0) |
+|---|---|---|
+| **simulation** | `0x240` = 576 — **exact** | `0x00000000` — **zeroed** |
+| **board** (`graw`, raw, full width) | `0x00000009` — **damaged** | never measured |
+
+So the simulation exhibits a real dual-bank splash — the RVFI trace shows only two architectural
+accesses to the zeroed slot — but it damages the slot the board leaves alone and spares the slot
+the board destroys. **The simulation confirms a mechanism; it has not been shown to be the board's
+mechanism.** Do not cite it as such.
+
+**The cheapest experiment that settles it** costs one boot and one extra return field: add a
+witness at `gc+0x0` (distance 8) to the `gz0` domain and read it back raw. If the board zeroes
+`gc+0x0` *and* damages `gc+0xc`, there are two effects and everything above describes only one. If
+`gc+0x0` is intact, the simulation and the board are different faults.
 
 ### The workaround, validated in simulation AND on silicon
 
