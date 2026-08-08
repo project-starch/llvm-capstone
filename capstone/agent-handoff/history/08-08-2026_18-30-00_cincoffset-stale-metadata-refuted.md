@@ -111,7 +111,26 @@ RTL remote returns 403), which is why this note exists here.
 
 ---
 
-## LEAD, 2026-08-08 (NOT confirmed): our patch removed `static` from the array
+## LEAD, 2026-08-08 — **REFUTED THE SAME DAY.** Read the refutation box first
+
+> ### REFUTED. There is no template copy.
+> Disassembling the FULL function by address range (`0x29ba4..0x29fb0`, 259 instructions — a
+> symbol-boundary scrape gave only 38 and was wrong) shows **no byte-wise copy loop**:
+> `ld=1, sd=1, lw=6, sw=13`, against `ldc=25, stc=3`. LLVM gave the array global storage and
+> **elided the per-call re-initialisation**, so the missing `static` has no effect on the
+> emitted code and cannot be destroying capability tags.
+>
+> The observation below — that our patch deleted `static` where upstream has it — is TRUE and
+> worth knowing. The mechanism inferred from it is FALSE. This is the fifth lead of the day to
+> die between "coherent story" and "check the artifact", after auipc asymmetry, PCC-window
+> overrun, stale metadata leakage, and malformed cap-init descriptors.
+>
+> **What survives and is still worth acting on:** the function makes **15 calls**, eleven of
+> them to the same target at a regular 0x44 stride. That is a natural clamp bisection — return
+> a distinct marker after call N — and it needs no new hypothesis, which is precisely its
+> advantage over everything above.
+
+## (original lead, retained for the record) our patch removed `static` from the array
 
 Found while looking for what differs between the fdreg model that runs and the SQLite image
 that wedges. Recorded as a lead, not a root cause — the copy behaviour below is **inferred
