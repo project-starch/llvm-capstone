@@ -2328,10 +2328,11 @@ bisect inside 223–381.
 **Repro:** `CAPSTONE_SQLITE_STAGE=30..34` — **NOT YET RUN SUCCESSFULLY.** Its first attempt
 built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are now fixed.
 
-### R-18 — ROOT CAUSE: a `movc rd, zero`-sourced store writes CAPABILITY METADATA into a bank-1 slot
+### R-18 — TRIGGER established on silicon; MECHANISM NOT confirmed (simulation is clean)
 
-> **ROOT CAUSE, 2026-08-08. Established by single-instruction A/B on silicon, control green in every
-> boot, the damaged arm reproduced on THREE boots.**
+> **TRIGGER established 2026-08-08 by single-instruction A/B on silicon, control green in every
+> boot, damaged arm reproduced on THREE boots at two base VAs. THE MECHANISM BELOW IS NOT
+> CONFIRMED -- see the retraction box at the end of this entry.**
 >
 > **A store whose data register was produced by `movc rd, zero`, targeting the UPPER half of a
 > 16-byte D-cache row, writes the capability METADATA into that slot instead of the store data.**
@@ -2372,6 +2373,35 @@ built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are
 > onto the sideband by opcode at issue. **Workaround, already in-tree and silicon-confirmed:**
 > `-capstone-int-zero-for-zero-copy` emits an integer move for a copy from x0, so no
 > null-capability shadow reaches the store. See `design/R18-workaround-movc-zero.md`.
+>
+> **RETRACTION, same day, hours later. The RTL chain above is NOT CONFIRMED and must not be handed
+> over as the mechanism.** A directed Verilator test built at the SAME geometry --
+> `verif/tests/custom/capstone/movc-zero-self-clobber.S`: a bank-1 slot at row offset 8 initialised
+> by a `movc rd, zero`-sourced store, incremented 64 times with ordinary `lw/addiw/sw`, an RMW
+> row-mate keeping the row active, witnesses either side -- comes back **SUCCESS, tohost 0, in 1715
+> cycles**. The simulated RTL does NOT write metadata into the slot.
+>
+> So the four-step chain (`movc` shadow -> ungated sideband -> `st_wr_cap` by value -> bank 1 takes
+> `wr_user_i`) is READ out of the source and is consistent with the board, but the simulation of
+> that same source does not do it. What is actually established:
+>
+> * **MEASURED, board:** a slot the program only ever writes `0` to comes back holding
+>   `0x08000000 + n`. `0x08000000` is `compress_cap(NULL)`, a HARDWARE encoding the program has no
+>   way to materialise. QEMU computes the correct value for the same binary. `-O1` (register
+>   accumulator) is clean, `-O0` (memory) is damaged. Changing one instruction that alters only the
+>   metadata shadow, not the value, fixes it.
+> * **NOT ESTABLISHED:** that `wt_dcache_mem.sv:158` is the path. Candidate explanations for the
+>   sim/board divergence, none tested: the resident bitstream may not match this RTL revision; the
+>   board runs inside a capability domain after `capenter` on a monitor-carved stack while the
+>   directed test is bare metal; or the sim test lacks a co-factor the rung has -- it has no
+>   capability traffic in the loop, no indirect calls and no cap-init, and R-18's own necessary
+>   conditions include capability traffic in the loop body.
+>
+> **The honest hand-over statement is therefore: on silicon, a `movc rd, zero`-sourced store into
+> the upper half of a 16-byte row leaves a hardware-only capability encoding in that slot; we can
+> reproduce it on demand, we can suppress it with a one-instruction codegen change, and we CANNOT
+> reproduce it in simulation, so the path through the cache is a question for the RTL owner and not
+> a claim of ours.**
 >
 > **Still open:** whether this self-clobber and the neighbour-splash seen in RTL simulation
 > (`sim/scalar-store-movc-zero.S`, which zeroes a slot 8 bytes away) are one effect or two. The

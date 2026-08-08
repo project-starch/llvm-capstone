@@ -11,6 +11,40 @@ byte-identical binary computes the correct answer under QEMU and the wrong one o
 variable is hit depends only on where the compiler placed it. If a *loop-control* variable lands in
 the affected position the loop runs **extra iterations** instead of producing a wrong value.
 
+## WHAT WE ARE AND ARE NOT CLAIMING — read this first
+
+**Measured on silicon, reproducible on demand, three boots, control green in each:** a stack slot in
+the **upper half** of a 16-byte D-cache row, which the program only ever writes `0` to, comes back
+holding **`0x08000000 + n`**. `0x08000000` is `compress_cap(NULL)` — a hardware encoding the program
+has no way to materialise. QEMU computes the correct value for the same binary.
+
+| rung | build | returned |
+|---|---|---|
+| `k800` | control | 4 |
+| `fdp0` | accumulator initialised by `movc a0, zero; sw` | **`0x08000A31`** = `0x08000000` + 2609 |
+| `fdp0fix` | same, initialised by `addi a0, x0, 0` | **2609** clean |
+| `fdpraw` | returns the accumulator alone | `0x08000A31` — the victim is that slot |
+| `fdpO1` | `-O1`, accumulator in a **register** | **2609** clean |
+
+So the trigger is a store whose data register carries a null-capability metadata shadow, and the
+immunity condition is the accumulator's storage class.
+
+**NOT established: the path through the cache.** A directed Verilator test at the same geometry,
+`sim/movc-zero-self-clobber.S`, comes back **SUCCESS in 1715 cycles** — the simulated RTL does not
+write metadata into the slot. We can read a plausible chain in the source
+(`issue_read_operands.sv:1140` puts the shadow on the store sideband ungated by opcode →
+`wt_dcache_mem.sv:138` classifies by value → `:158` bank 1 takes `wr_user_i`), and it fits every
+board observation including the upper-half rule, **but the simulation of that same source does not
+reproduce it, so we are not claiming it.**
+
+Candidates for the divergence, none tested by us: the resident bitstream may not match this RTL
+revision; the board runs inside a capability domain after `capenter` on a monitor-carved stack while
+the directed test is bare metal; or the directed test lacks a co-factor — it has no capability
+traffic in the loop, no indirect calls, no cap-init.
+
+**The ask:** trace where `0x08000000` enters that slot. We can hand you a binary that does it every
+time, and a one-instruction change that stops it.
+
 ## REPRODUCED IN SIMULATION — start here, it costs 13 seconds
 
 `sim/scalar-store-movc-zero.S` reproduces the defect in Verilator, deterministically, in ~13 s.
