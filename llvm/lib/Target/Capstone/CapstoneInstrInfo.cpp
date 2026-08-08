@@ -85,8 +85,26 @@ static cl::opt<bool> PreferWholeRegisterMove(
 // fix is on the hardware side (classify by opcode, or gate the metadata onto the
 // sideband by opcode at issue).
 //
-// DEFAULT OFF until the QEMU suites and lit have run with it on, and until a board run
-// confirms it. Every measured rung must stay byte-identical while it is off.
+// VALIDATION 2026-08-08, flag OFF: byte-identical on 4/4 rungs checked (c8 reproduces the
+// frozen 9ecd8c6f... exactly), QEMU ladder 6/6, lit 47/47. Flag ON: QEMU ladder 6/6, and on
+// matmult_int it is a pure local substitution -- 9 sites, 27 differing bytes, file size
+// unchanged, no relocation or layout shift.
+//
+// TWO REASONS IT STAYS DEFAULT OFF.
+//
+// 1. It is keyed on SrcReg == X0, NOT on whether the copy is semantically an integer zero or
+//    a null CAPABILITY. `llvm/test/CodeGen/Capstone/select-cap.ll` (select_cap_null) and
+//    `calling-conv.ll` (test_call_vararg) materialise genuine `ptr addrspace(200)` nulls that
+//    lower to `movc rd, zero` today and become `li rd, 0` under the flag. The argument that
+//    this is harmless -- X0 is hardwired and can never carry a tag, so both are untagged zero
+//    -- is PLAUSIBLE BUT UNVERIFIED HERE: `0x08000000` is compress_cap(NULL), a canonical null
+//    encoding, whereas an integer op leaves the shadow at 0, and nothing in this session
+//    checked what a later `stc` of such a register writes to memory in each case. Verify that
+//    before promoting the flag, on the ISA semantics, not by argument from X0.
+// 2. Those two lit tests FileCheck the literal `movc` mnemonic and would flip to FAIL if the
+//    flag were forced on globally. They need flag-on RUN lines, or updated CHECKs, first.
+//
+// Every measured rung must stay byte-identical while it is off.
 static cl::opt<bool> CapstoneIntZeroForZeroCopy(
     "capstone-int-zero-for-zero-copy", cl::Hidden, cl::init(false),
     cl::desc("Materialise a copy from x0 with an integer ALU move instead of `movc rd, x0`, "

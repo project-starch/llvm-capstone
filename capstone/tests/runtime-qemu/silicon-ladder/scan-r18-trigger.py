@@ -11,6 +11,13 @@ family 4 each. Both DOCUMENTED silicon miscompiles -- matmult_int (R-1) and beeb
 -- have ZERO, which is why R-18 does not explain them and why the "the workaround will fix
 R-1" hypothesis was dropped without spending a board boot on it.
 
+READ THE ZERO CORRECTLY, because it was first read wrongly. matmult_int has NINE
+`movc rd, zero` instructions; an early claim that it "contains no movc at all" came from a
+`grep -c` that silently returned 0 -- the ugrep trap this project documents elsewhere. The
+zero here does NOT mean "no capability ops". It means none of those shadowed registers is
+ever used as the DATA OPERAND OF A STORE, which is what the trigger requires, and that was
+re-verified by an independent hand-written check before the R-1 hypothesis was dropped.
+
 LIMITS, so a zero is not over-read: this is a per-function linear last-writer scan with NO
 control-flow analysis, so a capability-written register that reaches a store along a branch
 edge is missed. A non-zero count is solid; a zero means "no straight-line site", not "safe".: an ordinary integer store whose DATA register was
