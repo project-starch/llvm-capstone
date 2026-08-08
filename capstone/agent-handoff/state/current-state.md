@@ -120,6 +120,35 @@ older bitstream and must be re-checked before being relied on.
 > spent reproducing a published result, and the failure was not checking `SILICON-BLOCKER.md`
 > before building. The reproduction stands as an independent N=2 and nothing more.
 >
+> **AND THE BRACKET ITSELF WAS INVALID.** `sqlite_silicon.dom:0` has NO staged dispatch --
+> `CAPSTONE_SQLITE_STAGE` is undefined in every current build, so the `0x5A6E` marker is absent and
+> selector `:0` is **inert**. Verified byte-wise across `sq-base`, `sq-precall`, `sq-postcall` and
+> the staged `sqlite-silicon` copy: `0x5A6E` count 0 in all of them. So `:0` ran the FULL DATABASE,
+> and "entry+return only wedges" was never a fact. This is recorded verbatim at
+> `ref/SILICON-BLOCKER.md:197-206`, and `build-sqlite-silicon.sh:269-284` carries a preflight gate
+> added "after this exact mistake cost several board sessions". It cost another one.
+>
+> **The bracket was closed anyway, long ago.** `sq_qr` returns `obs=0x9E33` in 4 s -- "ENTERS, RUNS
+> C, WRITES `res`, RETURNS" (`SILICON-BLOCKER.md:162-177`). The call transfer, `domain_main` body,
+> `res` write, return and glue unwind all work. An `INTERP_RETURN_POSTCALL` probe was built before
+> this was known; it is redundant and was not run.
+>
+> **THE ACTUAL FRONTIER**, three localizations further in:
+> `sqlite3_initialize` -> `sqlite3PcacheInitialize` -> `sqlite3RegisterBuiltinFunctions` -> the
+> **qr15/qr16 pair**. Levels 15/18/19/20/23 RETURN, 16/21/22 WEDGE. Level 20 inlines the exact
+> `sqlite3InsertBuiltinFuncs` body and RETURNS; level 16 calls the real function and WEDGES. So the
+> union write, the branch, the real global and the search are all cleared. 21/22/23 are explicitly
+> UNATTRIBUTED (three changes at once, images shifted 372-480 B); "an argument capability wedges" is
+> REFUTED by fdreg stage 4. **The pair that carries weight is 15 vs 16: two bytes at 0x242C6-7,
+> identical file sizes and section offsets, `lvl` runtime so both paths compile into both images at
+> the same addresses.**
+>
+> **A LIVE LINK TO R-18, measured 2026-08-08:** `sqlite3InsertBuiltinFuncs` contains **2** R-18
+> trigger sites in the baseline -- a `movc`-from-zero at `0x13ca30` and an **`ldc`-sourced store at
+> `0x13ca98`**. The codegen workaround removes the first and CANNOT reach the second. So R-18 is
+> half-excluded there, not excluded: the survivor is exactly the class the flag does not cover, and
+> it sits in the one function the whole bisection points at.
+>
 > What today did add, on the SQLite track: **R-18 is excluded as the entry blocker** (a build with
 > the workaround, hang-path trigger sites 6 -> 1, wedged identically), the **carve count is 179**
 > so R-12 pool exhaustion does not bind this build, and the **driver guard is fixed** — it had
