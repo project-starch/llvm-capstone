@@ -72,3 +72,46 @@ entry — the control entered and RETURNED on share 1, then died on share 2. Tra
 board**: with `lpc|k800` the same control returns `obs=4, rc=0`.
 
 Exonerated: image size, the 2 MiB padding step, staging a 1.5 MB domain, R-16, and the board.
+
+---
+
+## 5. The call-index bisection: `sqlite3RegisterBuiltinFunctions`' INTERIOR is exonerated
+
+Six variants `rs0..rs5`, each returning early after sub-step N, gate-verified marker+early-return
+in the exact file compiled, all six hashes distinct. One boot, ascending, control green
+(`k800 obs=4`).
+
+**`rs0` — early return at the FIRST instruction of the function — WEDGED**, created and entered.
+
+### What this does and does not establish
+
+**Does:** the wedge survives making `sqlite3RegisterBuiltinFunctions()` a complete no-op. Nothing
+inside that function — not `AlterFunctions`, not the fixup loop, not `WindowFunctions`,
+`DateTimeFunctions`, `JsonFunctions`, nor `InsertBuiltinFuncs` — is required to reproduce it.
+
+**Does NOT:** localise anything further. **Design flaw in this experiment, stated so it is not
+repeated:** the clamp truncates only that one function; `sqlite3_initialize()` then continues and
+the domain runs the whole workload. `rs1..rs5` were therefore never going to bisect anything —
+only `rs0` carried information, and only of the exonerating kind. A bisection must clamp the
+TOP-LEVEL flow, not a leaf function, or every variant runs the same tail.
+
+### This CONTRADICTS the standing localization
+
+`SILICON-BLOCKER.md:3-22` (2026-08-06) records the wedge as appearing when
+`sqlite3RegisterBuiltinFunctions()` is added to a cumulative staged probe, with every earlier
+step returning a distinct rc. Tonight the same function skipped entirely still wedges.
+
+Both cannot describe one fault. Either that localization is wrong, or there are **two independent
+wedge sites** and the staged probe stopped at the earlier one. Do not treat `RegisterBuiltinFunctions`
+as "the" location until this is resolved.
+
+### Correct next axis
+
+Clamp the DOMAIN's top-level flow, not a leaf: `DOMAIN_EXTRA_DEFS=-DCAPSTONE_SQLITE_STAGE=N`,
+which returns from `domain_main` after step N. **This mechanism previously produced a VOID
+bisection because the staged block was not compiled in** — `build-sqlite-silicon.sh:571-576`
+already checks for the `capstone_probe_string` literal in the artifact, and that check must be
+confirmed to FIRE before any verdict is read. Stage the set, one boot, ascending.
+
+`rs1..rs5` are built and staged but carry no information by construction — do not spend boots on
+them.
