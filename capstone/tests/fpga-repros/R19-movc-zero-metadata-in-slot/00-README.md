@@ -1,7 +1,7 @@
 # R-19 — a `movc rd, zero`-sourced store leaves `compress_cap(NULL)` in its OWN bank-1 slot
 
-**Status: trigger established on silicon and reproducible on demand. MECHANISM NOT CONFIRMED — a
-directed Verilator test at the same geometry PASSES. NOT yet reported to the board owner.**
+**Status: this signature is established on silicon and reproducible on demand. It does NOT reproduce
+in Verilator — unlike R-18's splash form, which does. NOT yet shared with the board owner.**
 
 ## Why this is not R-18
 
@@ -18,7 +18,8 @@ R-19 is a **different observable**: the victim comes back holding `compress_cap(
 | example value | 567 of an expected 576 | `0x08000A31` = `0x08000000` + 2609 |
 | metadata in the slot | **no** — raw readback is clean | **yes** |
 
-They share a trigger class (a store whose data register carries a null-capability metadata shadow)
+They share a trigger class (a store whose data register carries **capability metadata** — simulation
+shows a real, valid capability triggers R-18's form too, so it is not specific to the null form)
 and the **same workaround clears both**. Whether they are one defect with two manifestations or two
 defects is **unknown**, and this package does not assert either. They are tracked apart because the
 R-18 report already sent describes the zeroing form, and folding this into it would misinform the
@@ -26,7 +27,9 @@ reader.
 
 ## What is measured
 
-`k800` control green in every boot; the damaged arm reproduced on **three** boots at two entry VAs.
+`k800` control green in every boot. `fdp0` reproduced in **three consecutive boots**, one image linked
+at `0x30000`; two sibling builds linked at `0x60000` (`fdp1`, `fdpraw`) show the same value, so it is
+not tied to one load address.
 
 | image | build | returned |
 |---|---|---|
@@ -35,27 +38,44 @@ reader.
 | `fdpraw.dom` | returns the accumulator alone, no second term | `0x08000A31` — **the victim is that slot** |
 | `fdpO1.dom` | `-O1`, accumulator kept in a **register** | **2609** — clean |
 
-`0x08000000` is `compress_cap` of a null capability (`ariane_pkg.sv:754-772`) — a hardware encoding
-the program has no way to materialise; it only ever writes `0` to that slot. QEMU computes 2609 for
-the same binary.
+`0x08000000` is the compressed encoding of a null capability — the cursorless-bounds branch at
+`ariane_pkg.sv:754-772`, reached from `compress_cap` at `:813`. It is a hardware encoding; the
+immediate `0x8000` appears nowhere in the image. The slot is initialised with an integer `0` and then
+accumulated into, so the expected final value is 2609.
 
-* **Trigger:** a store whose data register carries a null-capability metadata shadow.
-* **Immunity condition:** the accumulator's **storage class**. Register-resident (`-O1`) is clean;
-  memory-resident at row offset 8 (bank 1, `-O0`) is damaged.
+QEMU computes 2609 for the **same source at the same flags** — not a byte-identical comparison: the
+`_fpga` image writes 24 B into our QEMU harness's 8-byte shared region and faults, so the QEMU run
+uses the `_app` variant of the same build.
+
+* **Trigger:** a store whose data register carries capability metadata.
+* **An observation, NOT an established condition:** the one `-O1` build is clean, but it is not a
+  controlled variation — see the rebuild note. We are not claiming storage class.
+* The row offset is **derived, not measured**: the accumulator is at `s0-0x28`, which is row offset 8
+  only if `s0` is 16-byte aligned on the monitor-carved domain stack. That is unmeasured.
 * `fdpraw` matters because the original return was `s + fdreg_gate - 1`, and `fdreg_gate == 0x08000001`
   fitted the same number. Returning `s` alone rules the global out.
 
 ## What is NOT established
 
-**The path through the cache.** `sim/movc-zero-self-clobber.S` builds the same geometry bare-metal —
-bank-1 slot at row offset 8, `movc`-zero initialiser, 64 increments, an RMW row-mate keeping the row
-active, witnesses either side, raw readback — and returns **SUCCESS in 1715 cycles**. The simulated
-RTL does not write metadata into the slot.
+**This signature, and which slot the board picks.** All four simulation tests ship here so the
+contrast is in one place:
 
-A chain is readable in the source and fits every board observation:
-`issue_read_operands.sv:1140` puts the metadata on the store's write-user sideband ungated by
-opcode → `wt_dcache_mem.sv:138` classifies by value (`st_wr_cap = |wr_user_i`) → `:158` gives bank 1
-`wr_user_i` instead of `wr_data_i`. **It is not reproduced, so it is not claimed.**
+| test | verdict | what it shows |
+|---|---|---|
+| `sim/scalar-store-movc-zero.S` | **FAILS** (tohost 3, 12822 cyc) | a neighbour 8 bytes away is zeroed |
+| `sim/scalar-store-realcap-samegeom.S` | **FAILS** (tohost 3, 12807 cyc) | a *real, valid* capability triggers it too |
+| `sim/scalar-store-addi-zero.S` | passes (12816 cyc) | matched control, one instruction different |
+| `sim/movc-zero-self-clobber.S` | **passes** (1715 cyc) | **this** signature does NOT reproduce |
+
+So the cache path IS exercised in simulation — the dual-bank splash reproduces with a matched
+control. Two things do not: the **metadata-in-slot** signature this issue is about, and **which slot
+dies** — at the geometry built both ways, simulation damages the slot 8 bytes from the trigger while
+the board damages the one 4 bytes away.
+
+The readable chain is `issue_read_operands.sv:1140` → `load_store_unit.sv:1013` →
+`store_unit.sv:345` → `store_buffer.sv:173` (onto the dcache write-user sideband, ungated by opcode)
+→ `wt_dcache_mem.sv:138` (`st_wr_cap = |wr_user_i`, classified by value) → `:234-237` (both banks
+asserted) → `:158` (bank 1 takes `wr_user_i`). **Confirmed for the splash; not for this signature.**
 
 Untested candidates for the divergence: the resident bitstream may not match this RTL revision; the
 board runs inside a capability domain after `capenter` on a monitor-carved stack while the directed
@@ -69,13 +89,15 @@ The passing test is shipped **deliberately**. Six earlier clean directed tests w
 
 Both were found after that report went out, and both are about the *mechanism*, not the reproducer:
 
-1. **The `R XOR 8` splash rule is withdrawn.** It is arithmetically "the victim is 8 bytes from the
-   trigger". The corpus splits into distance-8 builds where it holds (10) and distance-4 builds
-   where it fails (`rs4`, `ka0`, `gnt`, `gz0`, `gzn`, `graw`); distance is invariant under base
-   alignment, so no alignment argument rescues it.
-2. **The dual-bank chain is not confirmed**, per the Verilator result above.
+1. **`R XOR 8` is sharpened, not withdrawn.** The R-18 package already scoped it to *simulation*,
+   where it holds. On the **board** it holds in ten builds whose victim lies 8 bytes from the trigger
+   and fails in six (`rs4`, `ka0`, `gnt`, `gz0`, `gzn`, `graw`) whose victim lies 4 bytes away.
+   Distance is invariant under base alignment, so it is not an alignment artefact. `rs4.dom` and
+   `ka0.dom` are **not** shipped in either package, so that corpus is not checkable from here.
+2. **The trigger class is wider than the null form** — `scalar-store-realcap-samegeom` shows a real
+   capability triggers the splash in simulation.
 
-The reproducer, the trigger and the workaround are unaffected by either.
+Neither affects the reproducer, the trigger or the workaround.
 
 ## Rebuilding
 
