@@ -648,6 +648,20 @@ static unsigned fdreg_compute(void) {
            RESETVAL=0, RESETSRC=1 damaged -> storing the VALUE zero suffices; metadata is irrelevant
                                              and the 0x08000000 story is dead */
       gc[(FDREG_GTWIN)] = fdreg_resetsrc;
+#elif (FDREG_RESETSRC) == 2
+      /* RESETSRC=2 -- the SURVIVING R-18 CLASS, minimised out of SQLite.
+         The codegen workaround rewrites `movc rd, zero` and cannot touch a store whose data
+         register came from a CAPABILITY LOAD. Exactly one such site survives the workaround in
+         sqlite3InsertBuiltinFuncs -- `sw a0, 0x0(a2)` at 0x33e9c with a0 written by `ldc` -- and
+         that function is where the whole SQLite bisection converges (qr15 returns, qr16 calls it
+         and wedges). This reproduces that shape in a 13 KB ladder rung instead of a 1.5 MB image:
+         load a capability, store its low word as a plain scalar into the row-mate slot.
+           damaged -> the R-18 class extends to ldc-sourced stores, the workaround is
+                      insufficient by construction, and this is a minimal off-SQLite repro of the
+                      one trigger left in SQLite's hang path
+           clean   -> only movc-sourced metadata triggers it; the surviving SQLite site is
+                      harmless and R-18 is fully excluded from the SQLite blocker */
+      gc[(FDREG_GTWIN)] = (unsigned)(unsigned long)fdreg_defs[k & 7].zName;
 #else
       gc[(FDREG_GTWIN)] = (FDREG_RESETVAL);         /* mirrors `k = 0` at the top of each pass */
 #endif
