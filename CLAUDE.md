@@ -97,6 +97,24 @@ Unchanged and absolute: `precommit-scan.sh` runs before every push, and **never 
 lack write access — push the submodule first, then the parent, so the parent never references
 commits that do not exist remotely.
 
+## Silicon-defect handovers: one link per issue, and the folder IS the report
+
+A suspected RTL/silicon defect is handed to the hardware side as a **single link to one
+folder**, with no accompanying message body. Whatever
+`capstone/tests/fpga-repros/<ID>-<slug>/` contains at the moment it is opened is the entire
+report — detail that is not in the README does not reach anyone. So:
+
+- **One issue per folder.** Never two signatures in one, even when they share a trigger or a
+  workaround. On 2026-08-08 two signatures had to be split *after* the first link was already
+  out, and for part of that day the live page showed the other issue's evidence.
+- **Each README self-contained**, naming its sibling issues in the first paragraph, so a reader
+  arriving with the wrong symptom is redirected immediately.
+- **No status lines that go stale silently** — "not yet shared", "to be confirmed next week".
+  Nothing prompts a re-read, so they simply become false.
+- **A sent folder is live production.** Audit before editing, never leave it half-rewritten, and
+  treat any edit as publicly visible the moment it is pushed.
+- **Drafting a message body is usually wasted work.** Put that content in the README.
+
 ## A checkpoint is not a decision point
 
 **When the next step is known and inside the current goal, take it and report afterwards.**

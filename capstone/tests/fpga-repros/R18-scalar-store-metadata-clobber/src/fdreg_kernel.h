@@ -218,6 +218,36 @@
    outer count changes the expected answer: if the board still says 906, the probe is reporting
    something unrelated to the loop. */
 #ifndef FDREG_OUTER
+#ifndef FDREG_GAPP
+#define FDREG_GAPP 0
+#endif
+#ifndef FDREG_OUTERNOP
+#define FDREG_OUTERNOP 0
+#endif
+#ifndef FDREG_RAWTWIN
+#define FDREG_RAWTWIN 0
+#endif
+#ifndef FDREG_RAWSUM
+#define FDREG_RAWSUM 0
+#endif
+#ifndef FDREG_RAWVICT
+#define FDREG_RAWVICT 0
+#endif
+#ifndef FDREG_RESETSRC
+#define FDREG_RESETSRC 0
+#endif
+#ifndef FDREG_RESETVAL
+#define FDREG_RESETVAL 0
+#endif
+#ifndef FDREG_GTWIN
+#define FDREG_GTWIN 1
+#endif
+#ifndef FDREG_GAPT
+#define FDREG_GAPT 0
+#endif
+#ifndef FDREG_GAPK
+#define FDREG_GAPK 0
+#endif
 #define FDREG_OUTER 64
 #endif
 #define FDREG_DRAW_STR2(x) #x
@@ -555,6 +585,189 @@ static unsigned fdreg_compute(void) {
         : "r"(&f[0]), "r"(0), "i"(FDREG_ASMVICTIM), "i"(FDREG_OUTER)
         : "a0", "a1", "t0", "t1", "t2", "t3", "memory");
     return qc_out;
+  }
+#endif
+#if FDREG_STAGE == 37
+  /* STAGE 37 -- IS THE TRIGGER GEOMETRY A PROPERTY OF THE STACK, OR OF ANY 16-BYTE ROW?
+   *
+   * rmB/rmC established the trigger by a single-variable pair: a victim in bank 1 at byte lanes L
+   * is zeroed when another RMW'd scalar sits in bank 0 at the SAME lanes L of the same 16-byte row.
+   * Every arm that showed it was a STACK build, so region is still untested -- and the earlier
+   * "the damaged scalar must be on the domain stack" reading was withdrawn precisely because its
+   * global accumulator was the only RMW'd word in its row, i.e. it never carried the trigger.
+   *
+   * This builds the trigger in a GLOBAL. `gc` is 16-byte aligned, so gc[i] sits at row offset 4*i:
+   *
+   *     FDREG_GVICT=3  -> row offset 12  = bank 1, lanes 4-7   <- the victim
+   *     FDREG_GTWIN=1  -> row offset  4  = bank 0, lanes 4-7   <- the twin, same lanes
+   *     FDREG_GTWIN=2  -> row offset  8  = bank 1, lanes 0-3   <- CONTROL, not a twin
+   *
+   * The twin mirrors `k` exactly, because it is `k`'s store pattern that is implicated: re-zeroed
+   * at the top of every outer pass and incremented once per inner iteration. A twin that were only
+   * incremented would not reproduce the `k = 0` store at all.
+   *
+   *     GTWIN=1 damaged -> region is EXCLUDED; the rule is about the 16-byte row, wherever it lives
+   *     GTWIN=1 clean   -> region IS load-bearing after all, and the stack result does not
+   *                        generalise -- which would be a genuine surprise worth reporting
+   *     GTWIN=2 must be CLEAN either way; if it is not, the "same lanes" half of the rule is wrong
+   *
+   * Returns bits 19..16 = twin at exit (expect FDREG_N = 9), bits 15..0 = victim (expect 576).
+   * Correct = 0x00090240. The stack `qc` is deliberately NOT in the row under test here; the
+   * comparison is global-with-twin against global-without-twin, in one boot.
+   */
+  {
+    static volatile unsigned gc[16] __attribute__((aligned(16)));
+#if (FDREG_RESETSRC) == 1
+    static volatile unsigned fdreg_resetsrc = (FDREG_RESETVAL);
+#endif
+    int p, k;
+    gc[(FDREG_GVICT)] = 0;
+    gc[(FDREG_GTWIN)] = 0;
+    for (p = 0; p < (FDREG_OUTER); p++) {
+      /* FDREG_RESETVAL isolates the stored VALUE from the store COUNT. At -O0 `x = 0` emits
+         `movc rd, zero` -- a register whose capability shadow is compress_cap(NULL) = 0x08000000 --
+         while `x = <nonzero>` emits lui/addi, which ex_stage.sv:1081 forwards with ZERO metadata.
+         Same address, same number of stores, same loop: only the metadata on the store's data
+         register differs. Clean at a non-zero reset => the VALUE/metadata is the trigger; damaged
+         => it is the store count and the 0x08000000 story is dead. */
+#if (FDREG_OUTERNOP) > 0
+      /* Instruction-count padding for the outer loop, with the reset store left EXACTLY as gz0's
+         `movc a0, zero; sw a0`. Both arms that came back CLEAN (gzs +2 insns/pass, gzl +3) also
+         LENGTHENED the outer loop, so "the data register's metadata" and "the outer loop got
+         longer" are perfectly confounded across gz0/gnt/gzs/gzl -- a timing/pipeline-window
+         mechanism fits all four points with no metadata at all. This knob breaks that: same
+         movc-sourced reset, matched loop length.
+           still damaged -> the loop-length alternative is dead, metadata survives
+           now clean     -> gzs/gzl were cured by loop length and the metadata claim is REFUTED */
+      __asm__ volatile("nop\n\tnop" ::: "memory");
+#endif
+#if (FDREG_RESETSRC) == 1
+      /* RESETSRC=1 breaks the value/metadata confound. gz0 (reset 0 via `movc`) and gzs (reset
+         nonzero via lui/addi) differ in BOTH the stored value and the data register's capability
+         metadata, so that pair cannot say which one is the trigger. Here the stored VALUE is
+         whatever RESETVAL is -- including 0 -- but it arrives through a LOAD, so the data register
+         is not `movc rd, zero` and carries no null-capability shadow.
+           RESETVAL=0, RESETSRC=1 clean   -> the METADATA is the trigger, not the value zero
+           RESETVAL=0, RESETSRC=1 damaged -> storing the VALUE zero suffices; metadata is irrelevant
+                                             and the 0x08000000 story is dead */
+      gc[(FDREG_GTWIN)] = fdreg_resetsrc;
+#elif (FDREG_RESETSRC) == 2
+      /* RESETSRC=2 -- the SURVIVING R-18 CLASS, minimised out of SQLite.
+         The codegen workaround rewrites `movc rd, zero` and cannot touch a store whose data
+         register came from a CAPABILITY LOAD. Exactly one such site survives the workaround in
+         sqlite3InsertBuiltinFuncs -- `sw a0, 0x0(a2)` at 0x33e9c with a0 written by `ldc` -- and
+         that function is where the whole SQLite bisection converges (qr15 returns, qr16 calls it
+         and wedges). This reproduces that shape in a 13 KB ladder rung instead of a 1.5 MB image:
+         load a capability, store its low word as a plain scalar into the row-mate slot.
+           damaged -> the R-18 class extends to ldc-sourced stores, the workaround is
+                      insufficient by construction, and this is a minimal off-SQLite repro of the
+                      one trigger left in SQLite's hang path
+           clean   -> only movc-sourced metadata triggers it; the surviving SQLite site is
+                      harmless and R-18 is fully excluded from the SQLite blocker */
+      gc[(FDREG_GTWIN)] = (unsigned)(unsigned long)fdreg_defs[k & 7].zName;
+#else
+      gc[(FDREG_GTWIN)] = (FDREG_RESETVAL);         /* mirrors `k = 0` at the top of each pass */
+#endif
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName; /* the capability store, unchanged */
+        (void)z;
+        gc[(FDREG_GTWIN)]++;                          /* mirrors `k++`  -- bank 0 */
+        gc[(FDREG_GVICT)]++;                          /* the victim     -- bank 1 */
+      }
+    }
+#if (FDREG_RAWTWIN) == 1
+    /* The twin in FULL. The packed return masks it to 4 bits, which makes 0x08000009 and
+       0x00000009 identical -- discarding the one datum that would be a DIRECT positive
+       observation of compress_cap(NULL) landing in memory, rather than a differential. */
+    return gc[(FDREG_GTWIN)];
+#endif
+#if (FDREG_RAWVICT) == 1
+    /* RAW: return the victim's FULL 32 bits, unmasked.
+       The packed return below masks the victim to 16 bits -- the SAME instrument hole this
+       investigation already criticised in stage 32, reintroduced here. It matters concretely:
+       an earlier build returned 0x08000237 = 0x08000000 + 567, and 0x08000000 is compress_cap
+       of a NULL capability. Under the mask that reads as a clean "567, lost 9 increments" when
+       the slot may in fact be holding CAPABILITY METADATA plus a count. Until a raw read is
+       taken, "the victim lost N increments" and "the victim was overwritten with metadata and
+       then counted up" are indistinguishable in every number this stage has produced. */
+    return gc[(FDREG_GVICT)];
+#else
+    return ((gc[(FDREG_GTWIN)] & 0xFu) << 16) | (gc[(FDREG_GVICT)] & 0xFFFFu);
+#endif
+  }
+#endif
+#if FDREG_STAGE == 36
+  /* STAGE 36 -- WHICH ROW-MATE? And with the FRAME SIZE HELD CONSTANT.
+   *
+   * Boot 2026-08-07 (k800/c8/rg16/rg32) showed that moving BOTH row-mates out of the victim's
+   * 16-byte row cures the defect: c8 returned qc=567 while rg16 (gap 16) and rg32 (gap 32) both
+   * returned 576, at the same ~576 iterations by cycle count, with an instruction-for-instruction
+   * identical inner loop and the victim at the same s0-0x34 and the same row offset 12.
+   *
+   * Two things are still open, and this stage closes both at once.
+   *
+   * (a) FDREG_GAP moved `k` AND `p` together, so it cannot say which one matters. `k` is re-zeroed
+   *     at the top of every outer pass (`movc a0, zero; sw a0, ...`) -- ISSUES.md names exactly that
+   *     store, at 0x14, with a dual-bank splash target of 0x1c, as the leading untested lead. `p` is
+   *     merely incremented once per outer pass. These are very different mechanisms.
+   *
+   * (b) Every gap arm so far GREW THE FRAME (0x50 -> 0x60 -> 0x70), so "no longer shares a row"
+   *     was confounded with "moved to a different absolute address and cache set". Four geometric
+   *     laws in this investigation have already died to exactly that.
+   *
+   * The fix for (b) is to hold FDREG_GAPP + FDREG_GAPK CONSTANT and only change which side of the
+   * victim the padding sits on. Two arms with the SAME total padding therefore have the SAME frame
+   * size, the same number of prologue stores, and the same absolute victim address -- and differ
+   * only in how many RMW'd scalars remain in the victim's row:
+   *
+   *     GAPP=16 GAPK=0   qc | pad16 | p k        -> victim has ZERO row-mates
+   *     GAPP=0  GAPK=16  qc p | pad16 | k        -> victim has ONE row-mate, p
+   *     (c8, for reference, at its own frame)    -> victim has TWO row-mates, k and p
+   *
+   * Read it as:
+   *     both arms clean            -> `k`'s re-zeroing store is the trigger; confirms the
+   *                                   ISSUES.md lead and `p` is irrelevant
+   *     GAPP arm clean, GAPK wrong -> `p` alone in the row is enough; the k=0 lead is NOT the
+   *                                   mechanism, or not the only one
+   *     both wrong                 -> row membership is not the variable after all, and the
+   *                                   2026-08-07 result was about the frame growing. That would
+   *                                   retract it, which is why the arms are built this way.
+   *
+   * VERIFY THE ARTIFACT, never these comments: run extract-frame-layout.py and confirm the two arms
+   * report the SAME frame and that the rmw slots fall in the rows described above. The -O0 allocator
+   * has silently moved a slot and destroyed the measurement four times in this investigation.
+   */
+  {
+#if (FDREG_SHIFT) > 0
+    volatile unsigned char fdreg_shift_pad[FDREG_SHIFT];
+    fdreg_shift_pad[0] = 0;
+#endif
+    unsigned qc = 0;
+#if (FDREG_GAPP) > 0
+    volatile unsigned char fdreg_gapp[FDREG_GAPP];   /* between qc and p */
+    fdreg_gapp[0] = 0;
+#endif
+    int p;
+#if (FDREG_GAPK) > 0
+    volatile unsigned char fdreg_gapk[FDREG_GAPK];   /* between p and k */
+    fdreg_gapk[0] = 0;
+#endif
+    int k;
+#if (FDREG_GAPT) > 0
+    /* TRAILING pad, BELOW k. Grows the frame WITHOUT separating any of qc/p/k, so an arm with
+       GAPT=16 is frame-matched to the GAPP=16 and GAPK=16 arms while keeping all three counters
+       in one row. That is the positive control the gap sweep was missing: without it, "shares a
+       row" stays confounded with "different frame, different absolute address, different set". */
+    volatile unsigned char fdreg_gapt[FDREG_GAPT];
+    fdreg_gapt[0] = 0;
+#endif
+    for (p = 0; p < (FDREG_OUTER); p++)
+      for (k = 0; k < FDREG_N; k++) {
+        const char *volatile z = fdreg_defs[k].zName;   /* the capability store, unchanged */
+        (void)z;
+        qc++;
+      }
+    return ((unsigned)(p & 0xFFF) << 20) | ((unsigned)(k & 0xF) << 16) | (qc & 0xFFFFu);
   }
 #endif
 #if FDREG_STAGE == 34
@@ -1165,6 +1378,12 @@ static unsigned fdreg_compute(void) {
         (void)z;
         qc++;
       }
+#if (FDREG_RAWVICT) == 1
+    /* RAW: qc unmasked. Every number this stage has ever produced masked qc to 16 bits, so a slot
+       holding 0x08000237 (= compress_cap(NULL) 0x08000000 + 567) is indistinguishable from a clean
+       567. c8's entire "lost exactly 9 increments" reading rests on the masked value. */
+    return qc;
+#endif
     return ((unsigned)(p & 0xFFF) << 20) | ((unsigned)(k & 0xF) << 16) | (qc & 0xFFFFu);
   }
 #endif
@@ -1239,8 +1458,19 @@ static unsigned fdreg_compute(void) {
    *
    * Our own inner loop contains the taint sequence exactly:
    *     ldc  a0, 0x0(a0)     <- a0 receives a CAPABILITY (the volatile read-back of z)
-   *     lw   a0, 0x0(a1)     <- a0 becomes the counter; `lw` is not a capstone op, so
-   *                             a0's shadow metadata is never cleared
+   *     lw   a0, 0x0(a1)     <- a0 becomes the counter
+   *
+   * *** THE PREMISE BELOW IS FALSE -- corrected 2026-08-08 by an RTL audit, keep the correction
+   * with it so it is not re-derived. *** This used to read "`lw` is not a capstone op, so a0's
+   * shadow metadata is never cleared". It IS cleared: the cap-metadata regfile is written under
+   * the INTEGER GPR write-enable (`issue_read_operands.sv:1663-1665`, `.we_i(we_pack)` not
+   * `cap_we_pack`), and a non-FLU writeback carries `cap_result = '0` (`scoreboard.sv:246`), so
+   * `commit_stage.sv:279` writes a zero shadow. Every `lw` scrubs its destination's shadow.
+   * That is also why the `bar1` barrier arm returned 567 identical to its nop control and was
+   * mis-read as refuting a metadata mechanism: the `lw` between the `movc` and the `sw` had
+   * already scrubbed the taint, so bar1 never produced a tainted store at all. The construct that
+   * DOES produce one is `movc rd, zero` feeding a `sw` directly, with nothing in between --
+   * measured 2026-08-08 (gz0/gzn damaged, gzl/gzs clean)
    *     sw   a0, 0x0(a1)     <- carries the stale metadata -> st_wr_cap fires
    *
    * The value `ldc` loads is DISCARDED ((void)z), so a0 is free to clobber immediately
@@ -1636,6 +1866,17 @@ static unsigned fdreg_compute(void) {
   }
 #endif
 
+#if (FDREG_RAWSUM) == 1
+  /* DISCRIMINATOR: return the accumulator ALONE, without `+ fdreg_gate - 1`.
+     fdp0/fdp1 returned 0x08000000 + 2609 on silicon, and that value is ambiguous: it fits BOTH
+     "the stack accumulator `s` was initialised to compress_cap(NULL) by its `movc rd, zero`
+     store and counted up correctly" AND "the GLOBAL fdreg_gate holds 0x08000001". The two
+     cannot be told apart while the return sums them.
+       returns 0x08000A31 -> the victim is `s`, the stack slot at row offset 8
+       returns 2609       -> the victim is fdreg_gate, a global */
+  return s;
+#else
   return s + fdreg_gate - 1u;
+#endif
 }
 #endif

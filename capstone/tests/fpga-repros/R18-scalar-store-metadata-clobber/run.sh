@@ -85,7 +85,11 @@ case "$MODE" in
    The full four-way control adds gzn (movc + nops, damaged) and gzl (stores the VALUE
    zero from a load, clean); the 4-slot budget takes them one boot at a time.
 EOF
-    for r in gz0 gzs; do echo 590400 > "$LADDER_FPGA_DIR/$r.oracle"; done
+    # gzs's row-mate ends at 3, not 9, so its correct return is (3<<16)|576 = 197184.
+    # This line used to write 590400 for gzs too, which marked a CORRECTLY behaving
+    # control arm as FAIL -- the control of the four-way control was broken.
+    echo 590400 > "$LADDER_FPGA_DIR/gz0.oracle"
+    echo 197184 > "$LADDER_FPGA_DIR/gzs.oracle"
     echo 67699264 > "$LADDER_FPGA_DIR/c8.oracle"
     ;;
   geom)

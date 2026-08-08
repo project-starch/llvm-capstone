@@ -21,7 +21,8 @@ R-19 is a **different observable**: the victim comes back holding `compress_cap(
 
 They share a trigger class (a store whose data register carries **capability metadata** — simulation
 shows a real, valid capability triggers R-18's form too, so it is not specific to the null form)
-and the **same workaround clears both**. Whether they are one defect with two manifestations or two
+and the **same workaround clears both** (see `../R18-scalar-store-metadata-clobber/` for that
+issue's own package). Whether they are one defect with two manifestations or two
 defects is **unknown**, and this package does not assert either. They are tracked apart because the
 R-18 report already sent describes the zeroing form, and folding this into it would misinform the
 reader.
@@ -29,8 +30,21 @@ reader.
 ## What is measured
 
 `k800` control green in every boot. `fdp0` reproduced in **three consecutive boots**, one image linked
-at `0x30000`; two sibling builds linked at `0x60000` (`fdp1`, `fdpraw`) show the same value, so it is
-not tied to one load address.
+at `0x30000`; a sibling build `fdpraw` linked at `0x60000` shows the same value, so it is not tied to
+one load address. (A further sibling `fdp1`, also at `0x60000`, shows the same value but is **not
+shipped here**, so treat it as uncheckable from this folder.)
+
+**Confirmed again 2026-08-08 at two FRESH LINK ADDRESSES.** A 7-arm single boot reproduced the
+signature away from the addresses in the table above: `fdd` (damaged, `0xb0000`) returned
+`134220337` = `0x08000A31`, and `fdw` (workaround, `0x90000`) returned the correct `2609`. Control
+`k800` green, all seven arms entered and returned. So neither the defect nor the cure is tied to a
+particular load address.
+
+**Bitstream, stated precisely because an earlier draft of this paragraph got it wrong.** All board
+measurements in this package — the four arms above and this confirmation — were taken with
+`caplifive_65536_nodes.bit` resident. A draft claimed this run was a *second* bitstream; it was not,
+and that claim is **withdrawn**. Whether the signature also appears on `caplifive_fixed_forward.bit`
+is **untested**.
 
 | image | build | returned |
 |---|---|---|
@@ -66,12 +80,30 @@ contrast is in one place:
 | `sim/scalar-store-movc-zero.S` | **FAILS** (tohost 3, 12822 cyc) | a neighbour 8 bytes away is zeroed |
 | `sim/scalar-store-realcap-samegeom.S` | **FAILS** (tohost 3, 12807 cyc) | a *real, valid* capability triggers it too |
 | `sim/scalar-store-addi-zero.S` | passes (12816 cyc) | matched control, one instruction different |
-| `sim/movc-zero-self-clobber.S` | **passes** (1715 cyc) | **this** signature does NOT reproduce |
+| `sim/movc-zero-self-clobber.S` | **passes** (1715 cyc) | **inconclusive — see the warning below** |
 
-So the cache path IS exercised in simulation — the dual-bank splash reproduces with a matched
-control. Two things do not: the **metadata-in-slot** signature this issue is about, and **which slot
-dies** — at the geometry built both ways, simulation damages the slot 8 bytes from the trigger while
-the board damages the one 4 bytes away.
+**WARNING — the passing test does not currently discriminate, and we are flagging that rather than
+resting on it.** `movc-zero-self-clobber.S` fires its trigger **once**; `scalar-store-movc-zero.S`
+fires **64 times**. Both store to the same address (`0x80003018`) at the same geometry, yet the
+R-18 splash that reliably appears in the second does **not** appear in the first — witness A reads
+back its seed `0x0a0a0a0a` intact. So the test fails to reproduce even the effect that is *known* to
+reproduce there, which means its pass cannot separate "this signature does not occur in simulation"
+from "this test creates no defect at all". It has no positive control, and the one available control
+demonstrably does not fire in it.
+
+Do not read the fourth row as a negative result. The honest statement is that **the metadata-in-slot
+signature has not been reproduced in simulation, and no simulation test has yet been shown capable of
+reproducing it.**
+
+What IS established in simulation, via `scalar-store-movc-zero.S` and its matched control: a
+dual-bank splash. And **which slot dies still differs** — at the geometry built both ways, simulation
+damages the slot 8 bytes from the trigger while the board damages the one 4 bytes away.
+
+**Cheapest experiment that settles this** (~13 s, no board): rebuild `movc-zero-self-clobber.S` with
+`-DTRIG_IN_LOOP=1`, which raises the trigger count to 64. Its oracle already moves with the knob
+(with the trigger in the loop the accumulator is reset each iteration, so the expected value is 1,
+not `NITER`). If the splash returns at 64 triggers, trigger count is the divergence and this row must
+be withdrawn entirely.
 
 The readable chain is `issue_read_operands.sv:1140` → `load_store_unit.sv:1013` →
 `store_unit.sv:345` → `store_buffer.sv:173` (onto the dcache write-user sideband, ungated by opcode)
@@ -90,11 +122,12 @@ The passing test is shipped **deliberately**. Six earlier clean directed tests w
 
 Both were found after that report went out, and both are about the *mechanism*, not the reproducer:
 
-1. **`R XOR 8` is sharpened, not withdrawn.** The R-18 package already scoped it to *simulation*,
-   where it holds. On the **board** it holds in ten builds whose victim lies 8 bytes from the trigger
-   and fails in six (`rs4`, `ka0`, `gnt`, `gz0`, `gzn`, `graw`) whose victim lies 4 bytes away.
-   Distance is invariant under base alignment, so it is not an alignment artefact. `rs4.dom` and
-   `ka0.dom` are **not** shipped in either package, so that corpus is not checkable from here.
+1. **`R XOR 8` is WITHDRAWN as a board rule.** It holds in ten builds whose victim lies 8 bytes from
+   the trigger and fails in six (`rs4`, `ka0`, `gnt`, `gz0`, `gzn`, `graw`) whose victim lies 4 bytes
+   away. Distance is invariant under base alignment, so it is not an alignment artefact. `rs4.dom`
+   and `ka0.dom` are **not** shipped in either package, so that corpus is not checkable from here.
+   (An earlier version of this line called the rule "sharpened, not withdrawn"; the R-18 package and
+   the issue registry both say withdrawn, and they are right.)
 2. **The trigger class is wider than the null form** — `scalar-store-realcap-samegeom` shows a real
    capability triggers the splash in simulation.
 
@@ -116,8 +149,11 @@ Neither affects the reproducer, the trigger or the workaround.
     # the -O1 arm -- NOTE the different base VA, and NO -DFDREG_PAD
     RUNG=fdpO1  DOMAIN_BASE_VA=0xf0000 DOMAIN_OPT_LEVEL=-O1  ... -DFDREG_STAGE=4
 
-`fdpO1` is NOT a controlled variation of `fdp0`. It also has ZERO trigger sites in the whole image,
-a different link address and different `-D` flags, and `fdreg_compute` is inlined away. Treat its
+`fdpO1` is NOT a controlled variation of `fdp0`. It has a different link address, different `-D`
+flags, and `fdreg_compute` is inlined away. (**Correction, 2026-08-08:** this paragraph previously
+claimed `fdpO1` "has ZERO trigger sites in the whole image". That was **false** — it has **seven**
+`movc rd, zero` sites, the same count as the damaged arm `fdp0`. The image with zero is `fdp0fix`,
+the workaround build. The paragraph's conclusion is unaffected; one of its four reasons was wrong.) Treat its
 clean result as an observation, not as evidence that storage class is the immunity condition.
 
 `DOMAIN_OPT_LEVEL` is load-bearing and was the source of an apparent contradiction: a 2026-08-06

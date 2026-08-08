@@ -1,9 +1,15 @@
 # R-18 — a scalar in the upper half of a 16-byte cache row is silently zeroed on silicon
 
-**Status: reproducible silicon defect. REPRODUCES IN RTL SIMULATION in ~13 s with a matched control
-(see `sim/`). The cache path is exercised in simulation; what does NOT match is WHICH slot dies —
-simulation damages the slot 8 bytes from the trigger, the board damages the one 4 bytes away. A
-compiler-side workaround is silicon-confirmed.**
+**Status: reproducible silicon defect. A dual-bank write splash is DEMONSTRATED in RTL simulation in
+~13 s with a one-instruction matched control (see `sim/`) — but the slot it damages is NOT the slot
+the board damages. Read that as a demonstration of a real hardware mechanism, not as a reproduction
+of the board symptom.** Simulation damages the slot 8 bytes from the trigger; the board damages the
+one 4 bytes away. Worse, in simulation the casualty sits in the **lower** half of the row, while this
+package's own necessary condition (below) is that the victim is in the **upper** half, 9 of 9 builds.
+A compiler-side workaround is silicon-confirmed (flag **default OFF**).
+
+**Audited 2026-08-08 and corrected; the corrections are listed in "What this package got wrong",
+below.** Anything not listed there should be treated as measured, not inferred.
 
 **A second, different signature — the victim holding `compress_cap(NULL) + n` instead of being
 zeroed — is NOT this issue. It is `../R19-movc-zero-metadata-in-slot/`, and it does not reproduce in
@@ -78,11 +84,21 @@ the seed writing `0x0a0a0a0a`, and the readback returning `0x00000000`. Nothing 
 2. `wt_dcache_mem.sv:138` — `st_wr_cap = |wr_user_i` — classifies the store as a capability store
    **by the VALUE of that sideband**;
 3. `:230-238` a so-classified store asserts **both** banks (`bank_req = '1; bank_we = '1`);
-4. `:152-158` the **same byte enable** is applied to both banks.
+4. `:153-155` the **same byte enable** is applied to both banks (`bank_be`);
+5. `:156-158` `bank_wdata` then routes **`wr_user_i` into bank 1** and `wr_data_i` into bank 0
+   (`(((st_wr_cap)&&(k==1)) ? wr_user_i : wr_data_i)`).
 
-So the store writes its data into its own slot *and* into the same byte lanes of the other bank.
-The splash carries the store's **DATA**, not the metadata — which is why no `0x08000000` is ever
-found in memory, and why every raw readback shows a clean count.
+**An earlier version of this section cited `:152-158` as "the same byte enable to both banks" and
+concluded that the splash carries the store's DATA and therefore that `0x08000000` is never found in
+memory. That conclusion is WITHDRAWN.** The cited range spans two different `assign`s: the byte
+enable at `:153-155` and the data mux at `:156-158`, and the second one says bank 1 receives the
+metadata. `0x08000000` **is** found in memory on silicon — that is the whole of the sibling issue
+`../R19-movc-zero-metadata-in-slot/`.
+
+What remains true and is what this package measures: in **R-18's arms**, every raw readback is a
+clean count with no metadata component (`craw` = `0x00000237`). Whether one mechanism produces both
+signatures depending only on which bank the store targets is **UNRESOLVED and under review**; do not
+cite either reading as settled.
 
 > **The `R XOR 8` rule that stood here is WITHDRAWN (2026-08-08, audited).** It is arithmetically
 > just "the victim is 8 bytes from the trigger store", and the corpus splits cleanly into
@@ -206,7 +222,7 @@ Build flags per arm are recorded in the staged `.qemu-pass` markers; all four ar
 
 ## What is established
 
-* **Reproducible and deterministic.** Fifteen frozen, checksummed artifacts in `src/`. `c8` returned
+* **Reproducible and deterministic.** 18 frozen, checksummed artifacts in `src/`. `c8` returned
   67699255 on **fourteen** consecutive boots (cycles 44013–44111).
 
   *Correction (2026-08-07).* An earlier revision said the failing arm and its control "differ only
@@ -349,13 +365,15 @@ and it left one thing explicitly open:
 > UNRESOLVED and would need the `wt_dcache_mem.sv` fill/writeback merge path.
 
 This package was originally written claiming to CLOSE that open question via the store side. **That
-claim is retracted** (see the box above): no path from a scalar store's `wr_user_i` to a non-zero
-value has been demonstrated anywhere. The open question above is still OPEN. What this package
+claim is retracted** (see the box above): this package does not demonstrate a path from a scalar
+store's `wr_user_i` to a non-zero value. The sibling issue `../R19-movc-zero-metadata-in-slot/`
+**does** exhibit exactly that on silicon (a slot returning `0x08000000 + n`), so the question is no
+longer open in general — but it is not closed *by this package*. What this package
 contributes is the **software-visible measurement**, not an explanation. The routing is prior work.
 
 ## What the repro shows
 
-**17 frozen images** in `src/`, all instrumentation **mode 0** (`fdreg_fpga_app.c` sets
+**18 frozen images** in `src/`, all instrumentation **mode 0** (`fdreg_fpga_app.c` sets
 `LADDER_INSTR_MODE 0`) — mode 4 is a confirmed miscompute trigger and a previous `0x08000000`
 sighting was traced to it, so a defect repro must not carry it. Verified: zero `minstret` reads.
 Every one was QEMU-verified before it was ever boarded, and every board run carried a passing
@@ -444,15 +462,18 @@ Three things about this recipe are worth stating because each one cost a rebuild
 * **The base VAs above are the ones in the artifacts.** An earlier write-up of this recipe gave
   `0x30000` for `c8` and `0x60000` for `c0`; neither matches, and following it does not reproduce
   the frozen images.
-* **`src/fdreg_kernel.h` is now the header the images were built from.** It previously carried no
-  stages 30+, so `gvf0`/`gvf6` — checksummed into this package — could not be rebuilt from it.
+* **`src/fdreg_kernel.h` is the live header** (synced 2026-08-08 from
+  `capstone/tests/runtime-qemu/silicon-ladder/fdreg_kernel.h`, and byte-identical to the copy in the
+  R-19 package). An earlier snapshot shipped here lacked stages 36/37 and the `FDREG_GTWIN` knob, so
+  the four `gz*` trigger-control images — which this README tells you to read first — could not be
+  rebuilt from it at all.
 
 ## Supporting evidence, from the full trail
 
 * The victim is in the **upper half of its row in 9 of 9** builds where it was measured directly
   (row offset 8 or 12, never 0 or 4). Undamaged builds also carry upper-half scalars, so this is a
   real constraint rather than an artifact of where slots land.
-* One build returns **`0x08000237 = 0x08000000 + 567`**, and `0x08000000` is exactly
+* **MOVED TO R-19.** One build returns **`0x08000237 = 0x08000000 + 567`**, and `0x08000000` is exactly
   `compress_cap` of a **null capability** — so that value is metadata-shaped, not a number.
   *(A `clobber + (576 − reset)` decomposition of every victim was also recorded; it is an
   arithmetic identity with two free parameters per observation and has no predictive content.
@@ -463,14 +484,63 @@ Three things about this recipe are worth stating because each one cost a rebuild
 * A loop-**control** variable in the affected slot produces **extra iterations** instead of a wrong
   value, and cycle counts confirm the extra iterations really executed (69081 vs 44001).
 
+## What this package got wrong (audited 2026-08-08)
+
+Listed because a reader deserves to know which claims were repaired rather than discovering it.
+
+1. **The header over-claimed.** It said the defect "REPRODUCES IN RTL SIMULATION". What simulation
+   demonstrates is a dual-bank splash at the board's geometry with a matched control; the slot it
+   damages is not the slot the board damages, and in simulation the casualty is in the **lower** half
+   of the row while this package's own necessary condition says **upper**, 9 of 9. Corrected.
+2. **"No `0x08000000` is ever found in memory" was false**, and the RTL citation behind it merged two
+   different `assign`s. Corrected in the mechanism section.
+3. **The four-way trigger control `gz0/gzn/gzl/gzs` is confounded with base VA.** Both damaged arms
+   (`gz0`, `gzn`) are linked at `0x30000`; both clean arms (`gzl`, `gzs`) at `0x60000`. The VAs are
+   **not crossed**, so this set cannot exclude link address — even though this README performs
+   exactly that correction for `c0/c8/sn0/sn8` elsewhere. Rebuilding the four with crossed VAs is one
+   boot and is not yet done.
+4. **`sim/scalar-store-realcap-samegeom.S` is not the one-instruction matched control** it and this
+   README call it: it adds a `CAPPRINT` inside the outer loop, reorders the checks and drops the
+   row-mate check. Only `sim/scalar-store-addi-zero.S` is a genuine one-instruction control. Its
+   exit code establishes that a witness was modified, **not** which one, and no trace is shipped —
+   so "a real capability triggers it too" is supported in direction but not in detail.
+5. **`c8` vs `c8fix` were not link-address-matched** (`0xf0000` vs `0x30000`) while being described
+   as differing by one instruction. **Now settled on silicon** — see the box below.
+6. **The shipped `run.sh` wrote the wrong oracle for `gzs`** (590400 instead of 197184), which would
+   mark a correctly-behaving arm as FAIL. Fixed.
+7. **The image count was stated as both "Fifteen" and "17"**; it is 18.
+8. **`src/fdreg_kernel.h` was a stale snapshot** that could not rebuild this package's own headline
+   `gz*` arms. Now the live header.
+
+> ### The workaround, re-verified on silicon under a controlled design (2026-08-08)
+>
+> A single 7-arm boot crossing the workaround against the link address, which the original
+> `c8`/`c8fix` pair did not do. All seven arms entered and returned; control `k800` green.
+>
+> **Bitstream:** `caplifive_65536_nodes.bit` was resident. An earlier draft of this box claimed the
+> run was a *second* bitstream versus the rest of the package; that was **wrong and is withdrawn** —
+> the same bitstream was resident for the other same-day measurements. Which bitstream the older
+> `c8` boot series ran on is not established from anything shipped here.
+>
+> | arm | link addr | `movc rd,zero` sites | retval | |
+> |---|---|---|---|---|
+> | `c8` | `0xf0000` | 2 | 67699255 | damaged (567 of 576) |
+> | `c8d` | `0x70000` | 2 | **67699255** | damaged — identical at a different address |
+> | `c8fix` | `0x30000` | 0 | 67699264 | cured |
+> | `c8w` | `0x50000` | 0 | **67699264** | cured — at a different address |
+>
+> Damage and cure each reproduce byte-identically at two link addresses, so **the effect tracks the
+> instruction, not the layout**, and the confound in item 5 is eliminated.
+
 ## What this is not
 
-* **Not reproduced in Verilator.** `verif/tests/custom/capstone/stc-neighbour-load.S` and
-  `stc-counter-pair.S` pass at both RTL revisions, cycle-for-cycle identical, across five rounds of
-  added fidelity. They are bare-metal M-mode and we could not construct a directed test that
-  produces stale WB-forwarded metadata on a scalar store's `rs2`. **The clean simulation means the
-  trigger was never created — it neither confirms nor refutes the chain.** This is the single
-  biggest gap.
+* **~~Not reproduced in Verilator.~~ SUPERSEDED 2026-08-08 — it now IS.** This bullet is kept
+  because it is instructive, not because it still holds. Six earlier directed tests
+  (`stc-neighbour-load.S`, `stc-counter-pair.S` and others) passed at both RTL revisions,
+  cycle-for-cycle identical, across five rounds of added fidelity — and that was read as evidence
+  about the hardware when it was only evidence that **the tests never created the trigger**. The
+  tests in `sim/` do create it, and two of them fail. The gap that remains is narrower and is stated
+  in the header: simulation and the board disagree about **which slot** dies.
 * **Not a stable rate.** One clobber in 576 iterations in most builds, 558 in one. No account of
   why; it is the strongest argument that more than one thing may be involved.
 * **Not the mode-4 harness artifact.** All images here are mode 0, verified.
@@ -479,7 +549,15 @@ Three things about this recipe are worth stating because each one cost a rebuild
 
 Measured on `caplifive_65536_nodes.bit`. The chain is present at `capstone-ariane` HEAD
 `458982093` and at `7aac52f93` (the commit this bitstream is built from); `git diff` between them
-touches none of the files involved.
+touches **eight** non-`verif/` files, and this README's earlier claim that it "touches none of the
+files involved" was **false**. Verified list: `calculate_memory.py`, `capstone_dyn_unit.anvil`,
+`capstone_flu_unit.anvil` (this one **un-comments an operand-type exception check on `CINCOFFSET`**,
+the exact op `sim/scalar-store-realcap-samegeom.S` uses), `capstone_rev_node.anvil`,
+`capstone_unit.anvilh`, `cva6.sv`, `ex_stage.sv`, and `core/include/ariane_pkg.sv` — which this
+README cites twice as part of the chain. **What does NOT change between the two revisions is
+`wt_dcache_mem.sv`**, which carries the dual-bank logic itself, so the store path under discussion is
+identical; but the simulation and the board are not running the same RTL and this package should not
+have said they were.
 
 ## Fix
 
