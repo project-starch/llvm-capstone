@@ -108,3 +108,58 @@ which is the SQLite heap. A malformed descriptor is not the answer either.
 
 The submodule commit carrying the test result is `57243ede4`; it **cannot be pushed** (the
 RTL remote returns 403), which is why this note exists here.
+
+---
+
+## LEAD, 2026-08-08 (NOT confirmed): our patch removed `static` from the array
+
+Found while looking for what differs between the fdreg model that runs and the SQLite image
+that wedges. Recorded as a lead, not a root cause — the copy behaviour below is **inferred
+from the language semantics and has not been observed in the disassembly or on hardware.**
+
+    upstream sqlite3.c :  static FuncDef aBuiltinFunc[] = {
+    our sqlite3-capstone.c (:137228) :   FuncDef capstoneBuiltinFunc[] = {
+
+`static` is gone, and it is gone inside `sqlite3RegisterBuiltinFunctions()` — the function the
+**live** localization (`SILICON-BLOCKER.md:3-22`) says wedges, with every earlier step of
+`sqlite3_initialize()` returning a distinct rc.
+
+**Why this could matter.** A non-`static` local array with an initializer is re-initialised on
+every call. LLVM gave the storage a global home — `sqlite3RegisterBuiltinFunctions.aBuiltinFunc`,
+**9216 bytes** (64 × 144) in `.data` at `0x15d010`, confirmed in the symbol table — but the
+semantics still require the initialiser to be re-applied per call, i.e. a template copy. The
+elements are `FuncDef`, whose `zName` and function-pointer fields are **capabilities** in a
+pure-capability domain. A byte-wise copy destroys capability tags; the walker then does
+`ldc a1, 0x70(a0)` on an untagged word.
+
+This is also the open item recorded elsewhere as "initialized-global template copy on silicon".
+
+**Why fdreg does not reproduce it:** `fdreg_defs` IS `static` (`fdreg_kernel.h:351`), so there is
+no per-call re-initialisation, and fdreg returns.
+
+### The minimal out-of-SQLite reproducer this implies
+
+Take the existing 13 KB fdreg rung and **remove `static` from `fdreg_defs`** — one keyword, no
+other change. Everything else (struct layout, string contents, the `zName` read, the
+`fdreg_len30` call) already matches SQLite. If the non-static build wedges where the static
+build returns, that is the repro, and the blocker is a **software** defect in our patch rather
+than silicon.
+
+Cheap and staged, in this order:
+1. QEMU first — free, and it may already diverge.
+2. Verilator, if a directed shape can be built (~13 s).
+3. One board boot, batched: `static` and non-`static` at distinct link addresses, control first,
+   both expected to RETURN so the run yields data either way.
+
+**What is NOT established:** that a template copy is actually emitted; that it is byte-wise; that
+tags are lost. All three are checkable in the disassembly of
+`sqlite3RegisterBuiltinFunctions` before spending any board time. Note the symbol is 1036 bytes
+but a naive disassembly extraction yielded only 38 instructions, so read the full range by
+address rather than trusting a symbol-boundary scrape.
+
+**Provenance settled meanwhile:** the resident bitstream comes from the RTL branch
+`fpga-testing` (project lead, 2026-08-08). Both candidate heads there — local `458982093` and
+`origin/458982093`'s successor `e1b3db6ba` — carry `reg head : logic[16]` (65536 nodes) and an
+ACTIVE `CINCOFFSET` rs2 check, so the corrections above hold regardless of which was synthesised.
+`fpga-testing-old-anvil` (`8d10c1e8f`) is the `logic[10]` + commented-check revision that the
+stale `7aac52f93` assumption came from.
