@@ -115,3 +115,44 @@ confirmed to FIRE before any verdict is read. Stage the set, one boot, ascending
 
 `rs1..rs5` are built and staged but carry no information by construction — do not spend boots on
 them.
+
+---
+
+## 6. The staged ladder is blocked: STAGED builds do not ENTER, unstaged ones do
+
+Two boots, control green (`k800 obs=4`) in both. `st0` and `st1` were **created but never entered**
+(no `SQ: G/enter`, markers stop at SHA5) — infrastructure wedges carrying **no verdict** about the
+code. The runs stopped at the first failure, so stages 2/4/5/6 never executed.
+
+### The pattern is systematic, not per-image noise
+
+|  | carves | gp entries | image bytes | entered? |
+|---|---|---|---|---|
+| `st0`/`st1`/`st2` (`CAPSTONE_SQLITE_STAGE=N`) | **181** | **554** | **1633128** | **NO — 2/2 stalled** |
+| `bl0`/`bl64` (unstaged) | 179 | 548 | 1551336 | yes — 2/2 entered |
+
+The staged block adds a `holder[]` array of string pointers (`sqlite_capstone_domain.c:567-568`),
+each needing a capability: +2 carves, +6 gp-table entries, **+81792 bytes**. R-16 entry stalls are
+documented as layout-sensitive and per-image, and ~80 KB is a large layout change.
+
+**This is why the whole staged mechanism has been so hard to use** — and it is a plausible partial
+explanation for the earlier VOID stage-selector series too, independent of the `#ifdef` problem
+already documented.
+
+### Instrument status: GOOD, for once
+
+The staged block's `capstone_probe_string` literal is present in all six staged artifacts and
+**absent** in the unstaged build — checked at binary level with a working negative control. So a
+stage verdict, when one is finally obtained, will be trustworthy. That check is the one whose
+absence voided the 2026-08-04 series.
+
+### Next: REDRAW, not retry
+
+R-16 is per-image; retrying the same binary is futile. `CAPSTONE_TEXT_PAD=N` inserts dead,
+never-called code at the top of `.text`, changing layout while leaving the code under test
+byte-identical — the documented REDRAW mechanism. Building stages 1 and 2 at pad 0 and 4096, four
+images, one boot, `sha256sum` the set and abort if any two match.
+
+If a padded staged build enters, the ladder finally runs and the July "stage 2 wedges" attribution
+gets re-tested on fixed silicon. If all four stall, the staged mechanism cannot be used on this
+bitstream at all and the bisection needs a different vehicle entirely.
