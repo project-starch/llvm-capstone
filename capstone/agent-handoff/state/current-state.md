@@ -111,7 +111,25 @@ older bitstream and must be re-checked before being relied on.
 > accumulator is the upper slot" have never been varied in any build.
 
 
-**A -- the SQLite blocker, a HANG.** Wedges in sqlite3_initialize ->
+**A -- THE SQLITE BLOCKER IS PAST THE GLUE (2026-08-08, board).** `INTERP_RETURN_PRECALL`
+returns sentinel `0x9E11` from immediately before `domain_main`, after the carve loop and after
+`RUN_CAP_INIT`. On silicon it **RETURNED**: `SQ: obs=40465`, with `ENT2:00009E11` in the monitor
+entry trace and the full sequence `A/dom-ok`, both region shares (SHA6 x4), `G/enter`, `H/return`.
+So **the carve loop AND cap-init both complete on hardware; the fault is inside `domain_main` or in
+reaching it.** That is the split the evidence could not previously make.
+
+Two things eliminated the same day:
+* **R-12 (rev-node pool exhaustion) does NOT apply to this build.** The carve count read from the
+  `.capstone_gp_initdesc` header is **179**, not the 1059 the plan assumes; string merging collapsed
+  it. The plan's Step 1 (trim `SQLITE_OMIT_*` under 1000) is aimed at a dead constraint.
+* **R-18 is not the entry blocker.** A build with the `movc`-zero workaround (hang-path trigger
+  sites 6 -> 1, `movc`-from-zero 2333 -> 18) wedged identically at stage 0.
+
+Note the driver hard-stopped on this run claiming the domain "was not staged" -- a FALSE ALARM, its
+guard only knew staged `0x5A6E` markers. Fixed. The `.dom` was verified byte-present in
+`rootfs.cpio` before the boot and the UART shows the domain plainly ran.
+
+**A (historical) -- the SQLite blocker, a HANG.** Wedges in sqlite3_initialize ->
 sqlite3RegisterBuiltinFunctions -> sqlite3AlterFunctions -> sqlite3InsertBuiltinFuncs.
 MINIMAL REPRO, layout-proof: `/tmp/capstone/sqlite-qr15` returns and `/tmp/capstone/sqlite-qr16`
 wedges, and the two images differ by exactly TWO BYTES -- one immediate at 0x332c4

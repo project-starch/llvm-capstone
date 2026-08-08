@@ -70,6 +70,33 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
   When permission *is* given: never `git push` the paper submodule (Overleaf owns the remote),
   and leave the parent's submodule pointer unbumped.
 
+## Push at stable points — do not sit on results
+
+Committing protects work from a lost session; **pushing** protects it from a lost machine, and it
+is how another lane or the project lead sees a result at all. Work that exists only locally is work
+nobody can act on. (It also surfaces access problems early: on 2026-08-08 the RTL submodule turned
+out to have no write access, discovered only because a push was attempted.)
+
+**Push without asking at a stable point.** A stable point is any of:
+
+- a bug **root-caused, fixed, or explicitly ruled out**, with its evidence recorded;
+- a **retraction** landed — a wrong claim already pushed must never be left standing while the
+  correction sits locally;
+- a **workaround or gate validated**, or a tool repaired and negative-tested;
+- after **merging a peer lane's or a collaborator's work**, so both sides share one base;
+- **before** anything long or risky — a bitstream reflash, a large rebuild, an overnight run — so a
+  crash costs nothing.
+
+**Do not push** a mid-investigation state whose claims you already doubt, a codegen change that has
+not passed lit and the QEMU suites, or anything that would strand another lane on a broken base.
+Uncertainty in a *conclusion* is fine and should be pushed with the uncertainty written down;
+uncertainty about whether the tree *builds* is not.
+
+Unchanged and absolute: `precommit-scan.sh` runs before every push, and **never push
+`capstone/paper`** (Overleaf owns that remote). Submodules push separately from the parent and may
+lack write access — push the submodule first, then the parent, so the parent never references
+commits that do not exist remotely.
+
 ## A checkpoint is not a decision point
 
 **When the next step is known and inside the current goal, take it and report afterwards.**
@@ -316,8 +343,8 @@ the entry-stall-vs-wedge rule the drivers and the `board-run` skill both encode.
 true of the device-tree memory map, a kernel-module `copy_from_user` fix, and the buildroot
 target ordering. Commit submodule work on a branch (`capstone-bootstrap`, or a task branch),
 message it like any other change, and run `precommit-scan.sh` over it — the name rules apply to
-submodule commits exactly as they do here. Pushing stays a separate decision: those remotes are
-shared, so ask before pushing.
+submodule commits exactly as they do here. For **when** to push, see "Push at stable points" above;
+it supersedes the older "always ask before pushing" rule that used to sit here.
 
 - **Delegate** (notify the user when it's substantial):
   - broad read-only code/file search → built-in **Explore**

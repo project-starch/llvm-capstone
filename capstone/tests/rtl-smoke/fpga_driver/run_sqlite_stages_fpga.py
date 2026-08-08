@@ -271,13 +271,29 @@ def main():
             else:
                 bad = m_rv is None
                 got = "no RESULT retval= marker"
+            # INTERP_RETURN_PRECALL returns 0x9E11 from the glue, immediately before
+            # domain_main. That is a DELIBERATE, meaningful result -- "the carve loop and
+            # cap-init both completed" -- but it is not a staged 0x5A6E marker, so the guard
+            # below used to call it "almost certainly was not staged" and hard-stop. On
+            # 2026-08-08 it did exactly that to a valid run whose .dom had been verified
+            # byte-present in rootfs.cpio before the boot, and whose UART showed the full
+            # entry sequence (A/dom-ok, both shares, G/enter, ENT2:00009E11, H/return).
+            # Recognise the sentinel instead of misreporting it as a staging failure.
+            PRECALL_SENTINEL = 0x9E11
+            if not wedged and bad and m_obs is not None and int(m_obs.group(1)) == PRECALL_SENTINEL:
+                log(f"  {dom}: obs=0x9E11 -- INTERP_RETURN_PRECALL sentinel. The entry glue "
+                    f"COMPLETED (carve loop AND cap-init); the fault is inside domain_main "
+                    f"or in reaching it. This is a result, not a staging failure.")
+                bad = False
             if not wedged and bad:
                 raise SystemExit(
                     f"HARD STOP: {dom} produced {got}, not a staged marker.\n"
                     f"The domain almost certainly was not staged (a failed build stages "
                     f"nothing, and the host then exits 1, which matches the success regex).\n"
                     f"Verify the .dom exists in the overlay AND in the firmware before "
-                    f"trusting any result from this session.")
+                    f"trusting any result from this session.\n"
+                    f"(If you are running an INTERP_RETURN_PRECALL build, obs=40465 is the "
+                    f"0x9E11 sentinel and is handled above -- this message means something else.)")
 
             m_rc = re.search(r"DN_(\d+)", text)
             if m_rc and int(m_rc.group(1)) == 127:
