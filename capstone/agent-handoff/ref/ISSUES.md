@@ -2426,8 +2426,38 @@ built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are
 > `bar1` never produced a tainted store and could not have tested this. The same false premise was
 > in `fdreg_kernel.h` and is fixed there.
 >
-> **Status: a minimal, reproducible, controlled TRIGGER with no established corruption path.** Do not
-> send a defect report naming a mechanism.
+> **2026-08-08 (final) — MECHANISM CONFIRMED IN SIMULATION, WORKAROUND CONFIRMED ON SILICON.**
+>
+> An ordinary `sw` whose data register carries capability metadata also writes its data into the
+> **same byte lanes of the other bank** of its 16-byte row. Reproduced in Verilator in ~13 s
+> (`scalar-store-movc-zero.S`); the RVFI trace shows only two architectural accesses to the
+> corrupted slot in the whole run — the seed, and the readback returning zero.
+> Rule: a store at row offset R also writes `R XOR 8`. It fits 6 of 7 board arms and explains the
+> 9/9 upper-half observation, because a bank-0 store splashes into bank 1.
+>
+> **Workaround, silicon-confirmed.** `c8` and `c8fix` are the same source at the same frame
+> geometry (frame 80, rmw [20,24,28], accumulator still at the damaged row offset 12), differing by
+> ONE instruction — `movc a0, zero` vs `addi a0, x0, 0`:
+>
+> | rung | qc | cycles | |
+> |---|---|---|---|
+> | `k800` | — | 4743 | control OK |
+> | `c8` | **567** | 44116 | damaged, 15th consecutive boot |
+> | `c8fix` | **576** | 44075 | **cured** |
+>
+> Behind `-capstone-int-zero-for-zero-copy`, **default OFF**: flag-off is byte-identical on 4/4
+> rungs, QEMU ladder 6/6 both ways, lit 47/47. Two blockers before any default-on, both recorded at
+> the flag declaration: it also converts genuine null-CAPABILITY materialisations, whose ISA
+> semantics under `stc` are unverified; and two lit tests FileCheck the literal `movc`.
+>
+> **It removes the common case, not the class.** `scan-r18-trigger.py` measures this: `c8` has 7
+> trigger sites, `c8fix` has 2 — the loop`s four `movc rd, zero` gone, two register-to-register
+> `movc` in `domain_main` remaining.
+>
+> **R-18 does NOT explain the documented silicon miscompiles.** `matmult_int` (R-1) and
+> `beebs_recursion` both have ZERO trigger sites. (`matmult_int` does contain nine `movc rd, zero`
+> — an earlier claim that it had none came from a `grep -c` that silently returned 0 — but none of
+> them feeds a store, which is what the trigger requires.)
 >
 > **Two corrections to the record made in the same session.** (1) An earlier reading of this
 > experiment claimed the arms' absolute addresses moved with the frame; they do not — `s0` is the

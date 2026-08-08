@@ -47,13 +47,18 @@ for the first time, explains the oldest observation here — the victim is in th
 row in 9/9 measured builds — because a bank-0 store splashes into bank 1, and bank 1 IS the upper
 half. The one arm it does not fit (`gnt`) is discussed at the end.
 
-### The workaround, validated in simulation
+### The workaround, validated in simulation AND on silicon
 
 `addi a4, x0, 0` in place of `movc a4, x0` — byte-identical otherwise — **passes**. `movc rd, zero`
 writes `compress_cap(NULL)` = `0x08000000` into the register's capability shadow; an integer op
 writes a zero shadow, `st_wr_cap` is never asserted, and no dual-bank write occurs. Our `-O0`
 codegen materialises integer zero with `movc`, which is why the pattern is pervasive in every
 failing build.
+
+**Silicon confirmation.** `c8` (movc) and `c8fix` (addi) are the same source at the same frame
+geometry — frame 80, rmw `[20,24,28]`, accumulator still at the damaged row offset 12 — differing by
+one instruction. One boot, control first: `k800` 4 OK, `c8` qc=**567** (its 15th consecutive boot at
+that value), `c8fix` qc=**576**. Cycles 44116 vs 44075, so it is not cured by doing less work.
 
 **Scope it honestly: this removes the COMMON case, not the class.** Any value reaching a store's
 data register from a capability-producing op still carries a non-zero shadow and still splashes. A

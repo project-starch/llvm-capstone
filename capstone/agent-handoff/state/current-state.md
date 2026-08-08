@@ -17,7 +17,7 @@ Rule: a store at row offset R also writes `R XOR 8`. Fits 6 of 7 board arms, and
 oldest observation in the investigation -- the victim is in the UPPER half of its row in 9/9
 measured builds -- because a bank-0 store splashes into bank 1.
 
-**WORKAROUND, ours, validated in simulation and needing no bitstream:** emit `addi rd, x0, 0`
+**WORKAROUND, ours, CONFIRMED ON SILICON (c8 567 -> c8fix 576, same geometry, one instruction) and needing no bitstream:** emit `addi rd, x0, 0`
 instead of `movc rd, zero` for integer-zero materialisation. `movc rd, zero` writes
 `compress_cap(NULL)` = `0x08000000` into the register's capability shadow; an integer op leaves it
 zero, `st_wr_cap` is never asserted, and no dual-bank write happens. Our `-O0` codegen uses `movc`,
