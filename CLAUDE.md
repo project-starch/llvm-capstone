@@ -103,6 +103,39 @@ not widen its own permissions by editing this file. In particular the paper rule
 written: if the scope of a given go-ahead is unclear, ask, and asking there is not the
 friction this section is about.
 
+## Capture the lesson when it is cheap — do not wait to be asked
+
+Process improvements have so far been written only when the project lead asked for them, which
+means they land long after the cost. The rule below this one was worth writing after the *third*
+instrument error in a session; it got written after the tenth.
+
+**Triggers. When any of these fires, stop and ask whether the lesson generalises:**
+
+- a **RETRACTION** — you already have to surface it, so ask in the same breath what would have
+  caught it;
+- the **same class of mistake twice** in one session — recurrence is what separates a pattern from
+  an accident;
+- a **gate, check or tool found to have been silently not working** — that class repeats, and the
+  next instance is already being written somewhere;
+- a **wasted boot, wasted session, or a result that had to be thrown away**.
+
+**Then, before writing anything, check whether it is already covered** — CLAUDE.md, the skills, the
+handoff docs. Most of the time it is, and the right action is to do nothing, or to sharpen one
+existing sentence. Only write a new rule if it is genuinely absent *and* it would have prevented
+the loss.
+
+**Guardrails, because the failure mode here is noise:**
+
+- **One rule at a time**, in the smallest scope that works.
+- **Pick the right home.** A procedure for a recurring task → a skill. A habit that applies
+  everywhere → this file. A fact about one investigation → `agent-handoff/`, not here.
+- **Prefer sharpening an existing rule** to adding a new one. This file earns its keep by being
+  read; every addition taxes that.
+- **Never touch "Hard constraints", and never widen your own permissions.** Those are the project
+  lead's. Propose, do not enact.
+- **Say what you considered and rejected**, so the lead can see the alternatives were weighed
+  rather than a rule being reflexively appended.
+
 ## A CLEAN result is not evidence until the check is known to fire
 
 **Before believing a zero, a pass, or a "not found", show the check can produce the opposite.**
