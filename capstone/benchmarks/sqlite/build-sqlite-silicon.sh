@@ -140,8 +140,22 @@ if [[ -n "${BUILTIN_LIMIT:-}" ]]; then
     -e "s/capstoneI<ArraySize(aBuiltinFunc)/capstoneI<(int)($BUILTIN_LIMIT)/" \
     -e "s/sqlite3InsertBuiltinFuncs(aBuiltinFunc, ArraySize(aBuiltinFunc))/sqlite3InsertBuiltinFuncs(aBuiltinFunc, (int)($BUILTIN_LIMIT))/" \
     "$OBJ_DIR/sqlite3-capstone.c"
-  grep -c "$BUILTIN_LIMIT" "$OBJ_DIR/sqlite3-capstone.c" >/dev/null || {
-    echo "BUILTIN_LIMIT clamp did not apply -- the amalgamation patch shape changed" >&2; exit 1; }
+  # GATE. The old check here was `grep -c "$BUILTIN_LIMIT" <9.5 MB C file>`, which searches for
+  # the NUMBER AS A SUBSTRING and therefore matched thousands of unrelated hits for N=0/1/8.
+  # It could never fail, and a build whose clamp silently did not apply would be measured as
+  # though it had -- which is how a whole bisection series became VOID once already. This
+  # version asserts the exact post-sed loop bound exists, and negative-tests itself by also
+  # asserting the UNCLAMPED form is gone.
+  _want="capstoneI<(int)($BUILTIN_LIMIT)"
+  _n_clamped=$(grep -c -F "$_want" "$OBJ_DIR/sqlite3-capstone.c" || true)
+  _n_orig=$(grep -c -F "capstoneI<ArraySize(capstoneBuiltinFunc)" "$OBJ_DIR/sqlite3-capstone.c" || true)
+  echo "== clamp gate: '$_want' x$_n_clamped ; unclamped form x$_n_orig"
+  if [[ "$_n_clamped" -lt 1 || "$_n_orig" -ne 0 ]]; then
+    echo "BUILTIN_LIMIT clamp did NOT apply (clamped=$_n_clamped unclamped-remaining=$_n_orig)." >&2
+    echo "The amalgamation patch shape changed. Refusing to build a domain that would be" >&2
+    echo "measured as clamped while running the full array." >&2
+    exit 1
+  fi
 fi
 # CAPSTONE_TEXT_PAD=N -- insert N bytes of dead, never-called code at the TOP of the
 # amalgamation and change NOTHING else. No early return, no control-flow change: this shifts
