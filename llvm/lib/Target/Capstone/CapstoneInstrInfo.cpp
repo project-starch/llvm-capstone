@@ -67,6 +67,31 @@ static cl::opt<bool> PreferWholeRegisterMove(
 // capability, so using it to copy a register whose value is still needed destroys
 // that value on silicon. On by default because leaving it off miscompiles ordinary
 // loops; the flag exists so the old behaviour can be restored for a bisect.
+// R-18: `movc rd, x0` writes compress_cap(NULL) = 0x08000000 into rd's capability
+// metadata shadow. wt_dcache_mem.sv:138 then classifies ANY ordinary store out of that
+// register as a capability store (`st_wr_cap = |wr_user_i`, by VALUE not by opcode),
+// :230-238 makes it write BOTH banks, and :152-158 applies the same byte enable to both
+// -- so the store also lands in the same byte lanes of the other bank, silently
+// overwriting an unrelated scalar 8 bytes away.
+//
+// A copy FROM THE ZERO REGISTER is materialising an integer zero, not moving a
+// capability, so an integer ALU move is both correct and free of the shadow. Validated
+// in RTL simulation: capstone-ariane verif/tests/custom/capstone/scalar-store-addi-zero.S
+// is byte-identical to scalar-store-movc-zero.S except for this one instruction and it
+// PASSES where the movc form corrupts a witness.
+//
+// This removes the COMMON case, not the class: any value reaching a store's data
+// register from a capability-producing op still carries a non-zero shadow. The complete
+// fix is on the hardware side (classify by opcode, or gate the metadata onto the
+// sideband by opcode at issue).
+//
+// DEFAULT OFF until the QEMU suites and lit have run with it on, and until a board run
+// confirms it. Every measured rung must stay byte-identical while it is off.
+static cl::opt<bool> CapstoneIntZeroForZeroCopy(
+    "capstone-int-zero-for-zero-copy", cl::Hidden, cl::init(false),
+    cl::desc("Materialise a copy from x0 with an integer ALU move instead of `movc rd, x0`, "
+             "so the destination carries no null-capability metadata shadow (R-18)."));
+
 static cl::opt<bool> CapstoneScalarCopyForLiveSrc(
     // DEFAULT-ON since 2026-08-06. Confirmed on silicon, one boot, control green, fixed and
     // unfixed builds of the same source side by side: locfl3 (fix off) WEDGES, locfl3fix (fix
@@ -568,6 +593,16 @@ void CapstoneInstrInfo::copyPhysReg(MachineBasicBlock &MBB,
     // scalars flowing through the i128 carrier; it would drop metadata for a
     // capability, so if a capability copy ever reaches here with a live source
     // the QEMU suites (which track tags) will fail loudly rather than silently.
+    // R-18. See CapstoneIntZeroForZeroCopy above. x0 is hardwired zero, so `movc`'s
+    // destructive-source semantics are irrelevant here and this is not a capability move
+    // in any case -- it is how -O0 materialises an integer zero.
+    if (SrcReg == Capstone::X0 && CapstoneIntZeroForZeroCopy) {
+      BuildMI(MBB, MBBI, DL, get(Capstone::ADDI), DstReg)
+          .addReg(Capstone::X0)
+          .addImm(0);
+      return;
+    }
+
     if (!KillSrc && CapstoneScalarCopyForLiveSrc) {
       BuildMI(MBB, MBBI, DL, get(Capstone::PseudoSCALAR_COPY_I128), DstReg)
           .addReg(SrcReg, getRenamableRegState(RenamableSrc));
