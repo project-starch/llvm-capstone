@@ -143,6 +143,26 @@ older bitstream and must be re-checked before being relied on.
 > identical file sizes and section offsets, `lvl` runtime so both paths compile into both images at
 > the same addresses.**
 >
+> **R-18 IS EXCLUDED FROM THE SQLITE BLOCKER (2026-08-08, board, control green).** The link recorded
+> below is CLOSED, in the direction that rules R-18 out. A minimal 13 KB off-SQLite repro isolated
+> the one trigger class that survives the codegen workaround inside `sqlite3InsertBuiltinFuncs` -- a
+> store whose data register came from `ldc` rather than `movc`:
+>
+> | arm | trigger in the loop | victim |
+> |---|---|---|
+> | `k800` | -- | 4, control OK |
+> | `gz0ref` | `movc`-from-zero | **9** of 576 -- DAMAGED |
+> | `gldcfix` | **`ldc`-sourced only** (workaround on) | **576** -- CLEAN |
+>
+> `ldc`-sourced stores do NOT trigger R-18. Re-scored against that, the SQLite hang path holds
+> **five** measured-triggering sites, ALL `movc`-from-zero, and the workaround removes all five --
+> yet the wedge persists unchanged. **R-18 cannot be SQLite's blocker.**
+>
+> It also corrects the exposure figures: `sqlite_silicon.dom` has 4948 raw sites but only **2333**
+> of the measured triggering class; 985 are `ldc`-sourced and harmless, and the remaining ~1630
+> (`movc` register-to-register, `cincoffset*`) are UNTESTED. The earlier "5494 sites, 44% removed"
+> framing over-stated exposure by counting every capability producer as a trigger.
+>
 > **A LIVE LINK TO R-18, measured 2026-08-08:** `sqlite3InsertBuiltinFuncs` contains **2** R-18
 > trigger sites in the baseline -- a `movc`-from-zero at `0x13ca30` and an **`ldc`-sourced store at
 > `0x13ca98`**. The codegen workaround removes the first and CANNOT reach the second. So R-18 is

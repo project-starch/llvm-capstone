@@ -30,6 +30,17 @@ under the integer write-enable), and a non-FLU writeback carries cap_result='0'
 leaves it non-zero. That makes this a simple last-writer question per register."""
 import re, subprocess, sys
 
+# WHICH PRODUCERS ACTUALLY TRIGGER -- measured on silicon, not assumed.
+#   movc rd, zero  TRIGGERS  (gz0ref, board 2026-08-08: victim 9 of 576)
+#   ldc            CLEAN     (gldcfix, same boot and geometry, workaround on so the ldc-sourced
+#                             store was the ONLY trigger left in the loop: victim 576, exact)
+#   everything else UNTESTED -- not "confirmed dangerous".
+# The set below is deliberately WIDE so nothing is missed, but that makes the RAW TOTAL over-state
+# exposure: on sqlite_silicon.dom it reports 4948 sites, of which only 2333 are of the measured
+# triggering class and 985 are ldc-sourced and now known harmless. READ THE PER-PRODUCER
+# BREAKDOWN, never the total.
+MEASURED_TRIGGERS = {'movc-from-zero'}
+MEASURED_CLEAN    = {'ldc'}
 CAP_OPS = {'movc','cincoffset','cincoffsetimm','scc','ldc','lcc','split','splitlo',
            'delin','capcreate','seal','unseal','shrink','shrinkto','tighten','mrev',
            'revoke','drop','init','sccsr','ccsrrw'}
