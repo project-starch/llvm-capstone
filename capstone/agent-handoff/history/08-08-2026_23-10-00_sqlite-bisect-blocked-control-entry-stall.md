@@ -1,3 +1,55 @@
+# SQLite bisection blocked by an OPERATOR ERROR — ROOT-CAUSED, 2026-08-08
+
+> ## ROOT CAUSE: the control was launched under the WRONG HOST. Not the board, not the image size.
+>
+> `run_sqlite_stages_fpga.py` accepts `host|selector:dom`; with no `host|` prefix it falls through
+> to `HOST` (`:36` = `/test-domains/sqlite_host.user`). `k800` is a **ladder** rung and requires
+> `lpc`. All four VOID boots ran `sqlite_host.user k800.dom`.
+>
+>     lpc k800 /test-domains/k800.dom          RETURNED 321 / 321
+>     sqlite_host.user /test-domains/k800.dom  RETURNED   0 / 5
+>
+> **Mechanism.** `sqlite_host.c:116,118,136,140` does **two** `create_region` / two
+> `shared_region_annotated`; `ladder_perf_ctl.c:367,373` does **one**, and its header says "shares
+> it once — that share IS the domain entry". Every share is an entry
+> (`sbi_capstone.c:1104-1107` brackets it with SHA5/SHA6). The markers show the domain **entered
+> and returned** on share 1, then died on share 2:
+>
+>     SQ: E/share1 ... SHA5 SHA6 ECSZ     <- entered AND returned
+>     SQ: F/share2 ... SHA5 <silence>     <- second entry, never returned
+>     per run, all four: A/dom-ok=1 E/share1=1 F/share2=1 G/enter=0 SHA5=2 SHA6=1
+>
+> `k800.dom` has an unguarded `__test_reentry` that byte-identically re-runs `_start`'s cap-table
+> builder (the interp glue guards its rebuild with a `built_flag`; the generic glue does not), and
+> the image contains **no `mtvec`**, so a domain-side fault becomes a whole-core wedge. Trap byte
+> `0x9a` = **mcause 26 = INVALID_CAPABILITY** (`ex_stage.sv:469`, `riscv_pkg.sv:350`) — a
+> capability fault, NOT an R-16 forwarding stall. Bit-identical across three firmware images.
+>
+> **The driver's "R-16 entry stall / no SQ: G/enter" label is therefore WRONG here**, and it is
+> what I trusted for four boots.
+>
+> ### The fix is one token
+>
+>     SQLITE_STAGE_DOMS="/test-domains/lpc|k800:/test-domains/k800.dom,/test-domains/bl0.dom"
+>
+> ### RETRACTION OF A RETRACTION — mine
+>
+> I proposed "wrong control for this driver", then **withdrew** it citing `sqpc.log`'s
+> `### TEST 1/4 END k800:/test-domains/k800.dom rc=0 ###` as proof k800 works under this driver.
+> It does — launched with **`lpc`** via the `host|` prefix. Same driver, different HOST. I checked
+> the driver name and not the host, and discarded the correct answer. The lesson is narrow and
+> worth keeping: when a domain fails to run, identify the **host binary** that launched it, not
+> the driver script.
+>
+> ### What this un-blames
+>
+> Image size, the 2 MiB padding step, staging a 1.5 MB domain, R-16, and the board are all
+> **exonerated**. The 17:39-vs-later correlation was coincidence: every later boot happened to
+> use the sqlite driver, and every one of those defaulted the control to the wrong host.
+
+
+## (original note, superseded above)
+
 # SQLite bisection BLOCKED: the control entry-stalls whenever a SQLite-sized domain is staged
 
 **No SQLite verdict was obtained. Four boots, four VOID.** Recorded so the next session does
