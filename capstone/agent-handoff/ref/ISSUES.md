@@ -2328,87 +2328,66 @@ bisect inside 223–381.
 **Repro:** `CAPSTONE_SQLITE_STAGE=30..34` — **NOT YET RUN SUCCESSFULLY.** Its first attempt
 built nothing (i128 `SELECT_CC`) and the harness reported a false pass; both are now fixed.
 
-### R-18 — TRIGGER established on silicon; MECHANISM NOT confirmed (simulation is clean)
+### R-19 — a `movc rd, zero`-sourced store leaves `compress_cap(NULL)` IN its own bank-1 slot `OPEN — trigger established on silicon; MECHANISM NOT confirmed (simulation is clean); NOT yet reported`
 
-> **TRIGGER established 2026-08-08 by single-instruction A/B on silicon, control green in every
-> boot, damaged arm reproduced on THREE boots at two base VAs. THE MECHANISM BELOW IS NOT
-> CONFIRMED -- see the retraction box at the end of this entry.**
->
-> **A store whose data register was produced by `movc rd, zero`, targeting the UPPER half of a
-> 16-byte D-cache row, writes the capability METADATA into that slot instead of the store data.**
->
-> | rung | accumulator initialiser / build | returned |
-> |---|---|---|
-> | `k800` | — | 4, control OK |
-> | `fdp0` | `movc a0, zero; sw` | **`0x08000A31` = `0x08000000` + 2609** (3 boots) |
-> | `fdp0fix` | `addi a0, x0, 0; sw` (workaround) | **2609** — clean |
-> | `fdpraw` | returns the accumulator ALONE | `0x08000A31` — **the victim is the stack slot** |
-> | `fdpO1` | `-O1`, accumulator in a REGISTER | **2609** — clean |
->
-> **The chain, every link measured or quoted:**
-> 1. `movc rd, zero` puts `compress_cap(NULL)` = `0x08000000` in rd's metadata shadow
->    (`ariane_pkg.sv:754-772`).
-> 2. The shadow rides onto every store's write-user sideband, **ungated by opcode**
->    (`issue_read_operands.sv:1140`).
-> 3. `st_wr_cap = |wr_user_i` — the dcache classifies a store as a capability store **by VALUE**
->    (`wt_dcache_mem.sv:138`).
-> 4. `bank_wdata[k][j] = ((st_wr_cap && k==1) ? wr_user_i : wr_data_i)` — **bank 1 receives the
->    metadata instead of the data** (`:158`).
->
-> The accumulator sits at row offset 8 (bank 1), so it is initialised to `0x08000000` rather than
-> `0` and then counts up correctly, giving metadata + the right answer.
->
-> **THIS EXPLAINS THE OLDEST OBSERVATION IN THE INVESTIGATION.** The victim is in the UPPER half of
-> its row in 9/9 measured builds because bank 1 IS the upper half and `k==1` is the only branch that
-> substitutes `wr_user_i`. That regularity stood unexplained for the whole investigation; it now
-> falls out of the mechanism rather than being fitted to it. It also accounts for `gz12`'s
-> `0x08000237` = `0x08000000 + 567`.
->
-> **Storage class is the immunity condition.** `-O1` keeps the accumulator in a register and is
-> clean; `-O0` spills it to a bank-1 slot and is damaged. This RECONCILES the 2026-08-06 record
-> ("fdreg stage 4 RETURNS 2609 on silicon"), which was an optimized, leaf-callee build with a
-> register accumulator — not a contradiction, a different binary.
->
-> **Fix:** hardware, classify stores by opcode rather than by `|wr_user_i`, or gate the metadata
-> onto the sideband by opcode at issue. **Workaround, already in-tree and silicon-confirmed:**
-> `-capstone-int-zero-for-zero-copy` emits an integer move for a copy from x0, so no
-> null-capability shadow reaches the store. See `design/R18-workaround-movc-zero.md`.
->
-> **RETRACTION, same day, hours later. The RTL chain above is NOT CONFIRMED and must not be handed
-> over as the mechanism.** A directed Verilator test built at the SAME geometry --
-> `verif/tests/custom/capstone/movc-zero-self-clobber.S`: a bank-1 slot at row offset 8 initialised
-> by a `movc rd, zero`-sourced store, incremented 64 times with ordinary `lw/addiw/sw`, an RMW
-> row-mate keeping the row active, witnesses either side -- comes back **SUCCESS, tohost 0, in 1715
-> cycles**. The simulated RTL does NOT write metadata into the slot.
->
-> So the four-step chain (`movc` shadow -> ungated sideband -> `st_wr_cap` by value -> bank 1 takes
-> `wr_user_i`) is READ out of the source and is consistent with the board, but the simulation of
-> that same source does not do it. What is actually established:
->
-> * **MEASURED, board:** a slot the program only ever writes `0` to comes back holding
->   `0x08000000 + n`. `0x08000000` is `compress_cap(NULL)`, a HARDWARE encoding the program has no
->   way to materialise. QEMU computes the correct value for the same binary. `-O1` (register
->   accumulator) is clean, `-O0` (memory) is damaged. Changing one instruction that alters only the
->   metadata shadow, not the value, fixes it.
-> * **NOT ESTABLISHED:** that `wt_dcache_mem.sv:158` is the path. Candidate explanations for the
->   sim/board divergence, none tested: the resident bitstream may not match this RTL revision; the
->   board runs inside a capability domain after `capenter` on a monitor-carved stack while the
->   directed test is bare metal; or the sim test lacks a co-factor the rung has -- it has no
->   capability traffic in the loop, no indirect calls and no cap-init, and R-18's own necessary
->   conditions include capability traffic in the loop body.
->
-> **The honest hand-over statement is therefore: on silicon, a `movc rd, zero`-sourced store into
-> the upper half of a 16-byte row leaves a hardware-only capability encoding in that slot; we can
-> reproduce it on demand, we can suppress it with a one-instruction codegen change, and we CANNOT
-> reproduce it in simulation, so the path through the cache is a question for the RTL owner and not
-> a claim of ours.**
->
-> **Still open:** whether this self-clobber and the neighbour-splash seen in RTL simulation
-> (`sim/scalar-store-movc-zero.S`, which zeroes a slot 8 bytes away) are one effect or two. The
-> simulation damages the distance-8 slot and spares the distance-4 slot; the board does the
-> opposite. Also unexplained: `rs4` (-72) and `ka0` (-558).
+**Separate from R-18 on purpose.** R-18, already reported, is the **zeroing** form: the victim is
+written with `0` and counts up, and raw full-width readbacks (`craw` = `0x00000237`, `graw`, `gztr`)
+show **no metadata anywhere**. R-19 is a **different observable**: the victim comes back holding
+`compress_cap(NULL) + n`. Same trigger class and the same workaround clears both, but the signatures
+differ, so they are tracked apart — the R-18 report already sent describes the zeroing form, and
+folding this into it would misinform the owner.
 
-### R-18 (original entry) — a scalar in the UPPER half of a 16-byte cache row is silently ZEROED `OPEN — trigger geometry now ESTABLISHED by controlled experiment 2026-08-08; RTL mechanism still unconfirmed.`
+**Measured on silicon**, `k800` control green in every boot, damaged arm reproduced on **three**
+boots at two entry VAs:
+
+| rung | build | returned |
+|---|---|---|
+| `fdp0` | accumulator initialised by `movc a0, zero; sw`, `-O0` | **`0x08000A31`** = `0x08000000` + 2609 |
+| `fdp0fix` | same, initialised by `addi a0, x0, 0` | **2609** clean |
+| `fdpraw` | returns the accumulator alone (no second term) | `0x08000A31` — the victim IS that slot |
+| `fdpO1` | `-O1`, accumulator kept in a **register** | **2609** clean |
+
+`0x08000000` is `compress_cap` of a null capability (`ariane_pkg.sv:754-772`) — a HARDWARE encoding
+the program cannot materialise; it only ever writes `0` there. QEMU computes 2609 for the same
+binary. So the **trigger** is a store whose data register carries a null-capability metadata shadow,
+and the **immunity condition** is the accumulator's storage class: register-resident is clean,
+memory-resident at row offset 8 is damaged.
+
+**MECHANISM NOT CONFIRMED.** A directed Verilator test at the same geometry —
+`fpga-repros/R19-movc-zero-metadata-in-slot/sim/movc-zero-self-clobber.S`, bank-1 slot at row offset
+8, `movc`-zero initialiser, 64 increments, RMW row-mate, witnesses either side — returns **SUCCESS
+in 1715 cycles**. The simulated RTL does not write metadata into the slot. The chain readable in the
+source (`issue_read_operands.sv:1140` → `wt_dcache_mem.sv:138` → `:158`) fits every board
+observation but is **not** reproduced, so it is not claimed. Untested candidates for the divergence:
+the resident bitstream may not match this RTL revision; the board runs inside a capability domain
+after `capenter` while the test is bare metal; or the test lacks a co-factor (no capability traffic
+in the loop, no indirect calls, no cap-init).
+
+**TWO CORRECTIONS TO WHAT WAS ALREADY SENT FOR R-18**, both found after the report went out:
+
+1. The **`R XOR 8` splash rule is withdrawn.** It is arithmetically "the victim is 8 bytes from the
+   trigger"; the corpus splits into distance-8 builds where it holds and distance-4 builds where it
+   fails (`rs4`, `ka0`, `gnt`, `gz0`, `gzn`, `graw`), and distance is invariant under alignment.
+2. The **dual-bank chain is not confirmed** — see the Verilator result above.
+
+The reproducer, the trigger and the workaround are all unaffected by both.
+
+Repro: `capstone/tests/fpga-repros/R19-movc-zero-metadata-in-slot/`.
+Workaround (shared with R-18): `design/R18-workaround-movc-zero.md`.
+
+### R-18 — a scalar in the UPPER half of a 16-byte cache row is silently ZEROED `OPEN — REPORTED to the board owner; our compiler workaround is landed and silicon-confirmed`
+
+> **STATUS 2026-08-08.** This issue has been **REPORTED to the board owner**, and our side is
+> **worked around**: `-capstone-int-zero-for-zero-copy` (see `design/R18-workaround-movc-zero.md`),
+> silicon-confirmed — `c8` 567 -> `c8fix` 576, one instruction apart, control green.
+> **R-18 is also EXCLUDED as the SQLite blocker** (2026-08-08, board): the SQLite hang path's five
+> triggering sites are all removed by the workaround and the wedge persists unchanged.
+>
+> **Do not re-open this entry to record mechanism work.** A second, DIFFERENT signature found on
+> 2026-08-08 — the victim holding `compress_cap(NULL) + n` rather than being zeroed — is tracked
+> separately as **R-19**, because the report already sent describes the zeroing form and mixing the
+> two would misinform the owner. Two corrections to what was sent are noted in R-19.
+
 
 > **2026-08-08 — the "better lead" below is CONFIRMED, by a single-variable pair rather than a fit.**
 >

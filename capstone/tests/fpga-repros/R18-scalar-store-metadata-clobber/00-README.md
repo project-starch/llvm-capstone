@@ -11,6 +11,12 @@ byte-identical binary computes the correct answer under QEMU and the wrong one o
 variable is hit depends only on where the compiler placed it. If a *loop-control* variable lands in
 the affected position the loop runs **extra iterations** instead of producing a wrong value.
 
+> **THIS ISSUE HAS BEEN REPORTED and our side is worked around.** Do not re-open it to record
+> mechanism work. A second, DIFFERENT signature found 2026-08-08 — the victim holding
+> `compress_cap(NULL) + n` rather than being zeroed — is tracked separately as **R-19**, in
+> `../R19-movc-zero-metadata-in-slot/`, together with two corrections to the mechanism described in
+> the report that went out. The reproducer, trigger and workaround here are unaffected by those.
+
 ## WHAT WE ARE AND ARE NOT CLAIMING — read this first
 
 **Measured on silicon, reproducible on demand, three boots, control green in each:** a stack slot in
