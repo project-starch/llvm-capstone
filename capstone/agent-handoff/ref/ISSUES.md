@@ -58,11 +58,46 @@ block. Two explanations for the staged stall were raised and **refuted**: layout
 build is a real defect — but it is not the cause. **That stall is itself unexplained and may deserve
 its own S-number if it blocks anything else.**
 
+### BISECTED 2026-08-09 to the FIRST ~193 INSTRUCTIONS of `sqlite3_initialize()`
+
+Four boots, control green (`k800`, 2 s) in every one, all on `caplifive_65536_r18_fix.bit`:
+
+| build | returns after | result |
+|---|---|---|
+| `rn1` | `sqlite3_config(SQLITE_CONFIG_HEAP)` — before `initialize()` | **RETURNED `rc=0`** |
+| `in1` | `sqlite3MutexInit()` | **WEDGED** |
+| `in2` | `sqlite3MallocInit()` | **WEDGED** |
+| `in4` | `sqlite3PcacheInitialize()` | **WEDGED** |
+| `rn2` | `sqlite3_initialize()` | **WEDGED** |
+
+Monotone: the earliest clamp inside `initialize()` already wedges, so **the fault is at or before
+`sqlite3MutexInit()` completes.** Everything from `MallocInit` onward is downstream of an
+already-wedged program and carries no information about itself.
+
+**The region, from the disassembly of the `in1` artifact** (`sqlite3_initialize` @ `0x297e4`,
+counted up to the INITSTOP marker): **193 instructions, 7 calls (`jalr`), 19 `ldc`, 4 `stc`,
+8 `movc`.** Source-wise it contains only: the `SQLITE_OMIT_WSD` block, a read of
+`sqlite3GlobalConfig.isInit`, and `sqlite3MutexInit()` — which is **inlined** (no symbol) and whose
+body copies **six function pointers** from `sqlite3NoopMutex()`'s static struct into
+`sqlite3GlobalConfig.mutex`. In a pure-capability domain those are capability loads/stores between
+two globals.
+
+**`sqlite3GlobalConfig` itself is NOT the problem** — `rn1` writes it via `sqlite3_config(HEAP)`
+and returns cleanly.
+
+### The old rc-value table in this file is UNRELIABLE
+
+The 2026-08-06 probe reported `MutexInit` rc=0, `MallocInit` rc=0, `PcacheInitialize` rc=0 with only
+`RegisterBuiltinFunctions` wedging. On fixed silicon `rs0` refuted the last of those and `in1`/`in2`/
+`in4` contradict the first three. That probe was run on broken silicon through the staged selector
+whose defects are documented above. **Do not use its numbers.**
+
 ### Next cut
 
-`INITSTOP=n` early-returns from `sqlite3_initialize()` after sub-step n: 1 `MutexInit`,
-2 `MallocInit`, 3 `RegisterBuiltinFunctions` (ordering control — already exonerated),
-4 `PcacheInitialize`, 5 `OsInit`, 6 `MemdbInit`.
+Sub-clamp inside the 193-instruction region, same lightweight early-return mechanism: before the
+mutex-methods copy, between individual `pTo->xMutex* = pFrom->xMutex*` assignments, and after. Six
+capability copies between two globals is a shape small enough to reproduce in the 13 KB fdreg model,
+which would move this off the 1.5 MB image entirely.
 
 ### Driver caveat
 
