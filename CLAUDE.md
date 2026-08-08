@@ -131,8 +131,11 @@ the loss.
   everywhere → this file. A fact about one investigation → `agent-handoff/`, not here.
 - **Prefer sharpening an existing rule** to adding a new one. This file earns its keep by being
   read; every addition taxes that.
-- **Never touch "Hard constraints", and never widen your own permissions.** Those are the project
-  lead's. Propose, do not enact.
+- **ASK BEFORE EDITING THIS FILE. Always, including additions invited by this very section.**
+  Propose the exact wording and wait for confirmation. This applies to EVERY change to
+  CLAUDE.md, not only to "Hard constraints": the file is the project lead's, and an agent that
+  edits it silently is choosing what every future agent reads. Hard constraints and your own
+  permissions are never yours to change at all.
 - **Say what you considered and rejected**, so the lead can see the alternatives were weighed
   rather than a rule being reflexively appended.
 
