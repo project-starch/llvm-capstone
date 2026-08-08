@@ -156,3 +156,60 @@ images, one boot, `sha256sum` the set and abort if any two match.
 If a padded staged build enters, the ladder finally runs and the July "stage 2 wedges" attribution
 gets re-tested on fixed silicon. If all four stall, the staged mechanism cannot be used on this
 bitstream at all and the bisection needs a different vehicle entirely.
+
+---
+
+## 7. LOCALIZED on fixed silicon: the wedge is inside `sqlite3_initialize()`, and NOT in
+## `sqlite3RegisterBuiltinFunctions`
+
+Two boots, control green in both, on `caplifive_65536_r18_fix.bit`.
+
+| build | returns after | result |
+|---|---|---|
+| `rn1` (`RUNSTOP=1`) | `sqlite3_config(SQLITE_CONFIG_HEAP)` | **RETURNED `rc=0` in 4 s** |
+| `rn2` (`RUNSTOP=2`) | `sqlite3_initialize()` | **WEDGED** — entered, no return in 240 s |
+
+Full marker chain on `rn1`: `A/dom-ok → B → C → D → E/share1 → F/share2 → G/enter → H/return`.
+
+### Why this is trustworthy where the previous six attempts were not
+
+* Both images are **byte-size and cap-init identical to a build that entered 2/2** (`stc=558`,
+  1551336 bytes) — differing only by one inserted early return. Size, layout and cap-init load are
+  held constant, which kills the three confounds chased earlier.
+* The clamp is gate-verified in the compiled file: marker `0x7A0N` x1 AND early-return x1, refusing
+  to build otherwise.
+* `rn1` returning IS the positive control — it proves the vehicle enters, runs, and returns.
+
+### It reconciles the two contradictory localizations
+
+* **2026-07-31 "stage 2 wedges (after `sqlite3_initialize`)" — CONFIRMED**, and now on fixed
+  silicon rather than broken.
+* **2026-08-06 "`sqlite3RegisterBuiltinFunctions()` wedges" — REFUTED.** `rs0` showed the wedge
+  survives making that function a complete no-op. The wedge is elsewhere inside `initialize()`;
+  the 08-06 probe was reading a downstream symptom.
+
+### The vehicle problem, solved
+
+Heavyweight `CAPSTONE_SQLITE_STAGE` builds do **not enter**: 0/4 (`st0`, `st1`, `s1-p4096`, `fx1`).
+Lightweight early-return builds enter: `rs0`, `rs1`, `rn1`, `rn2` all entered. Use `RUNSTOP` /
+`REGBUILTIN_STOP`, never the staged block, until that is understood.
+
+**Two explanations for the staged stall were raised and REFUTED:** layout (a REDRAW at
+`CAPSTONE_TEXT_PAD=4096` still stalled) and the `holder[580]` default (fixing it cut cap-init from
+1257 to 608 stc and `fx1` still stalled). The holder fix is kept — 580 unused capability leaves in
+every staged build is a real defect — but it is **not** the cause.
+
+### Next cut, no new mechanism needed
+
+`sqlite3_initialize()` internally does mutex init, malloc init (memsys5 over the 256 KB heap),
+pcache init, and the builtin registration that is now exonerated. Add `RUNSTOP`-style early returns
+*inside* `initialize()`'s callees in the same lightweight style. The prior staged ladder already
+proposed exactly this split as stages 4/5/6 — but those must be rebuilt on the RUNSTOP mechanism,
+not the staged block.
+
+### Driver caveat for whoever reads these logs
+
+The runner hard-stops with "produced no `SQ: obs=` marker … the domain almost certainly was not
+staged". On a RUNSTOP build that message is **wrong** — the early return skips the code that emits
+`obs=`. `rn1` demonstrably ran and returned `rc=0`. Read the marker chain and the `TEST … rc=` line,
+not the driver's verdict.

@@ -157,6 +157,65 @@ if [[ -n "${BUILTIN_LIMIT:-}" ]]; then
     exit 1
   fi
 fi
+# REGBUILTIN_STOP=<n> -- DIAGNOSTIC ONLY. Clamp sqlite3RegisterBuiltinFunctions() to
+# return after the n-th sub-step, so a wedge inside it bisects by CALL INDEX.
+#
+# WHY THIS EXISTS. BUILTIN_LIMIT only empties the arg-fixup loop and the
+# InsertBuiltinFuncs count. Four other registration calls still run, so a wedge at
+# BUILTIN_LIMIT=0 (measured 2026-08-09) says nothing about which call is at fault.
+#
+#   0 = return at entry            (nothing runs -- must RETURN or the fault is upstream)
+#   1 = after sqlite3AlterFunctions()
+#   2 = after the arg-fixup loop
+#   3 = after sqlite3WindowFunctions()
+#   4 = after sqlite3RegisterDateTimeFunctions()
+#   5 = after sqlite3RegisterJsonFunctions()
+#   6 = after sqlite3InsertBuiltinFuncs()   (== unclamped)
+if [[ -n "${REGBUILTIN_STOP:-}" ]]; then
+  echo "== DIAGNOSTIC: clamping sqlite3RegisterBuiltinFunctions to stop after step $REGBUILTIN_STOP"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$REGBUILTIN_STOP" <<'PYSTOP'
+import sys,re
+path,n = sys.argv[1], int(sys.argv[2])
+s=open(path).read()
+m=re.search(r'void sqlite3RegisterBuiltinFunctions\(void\)\s*\{', s)
+if not m: print("REGBUILTIN_STOP: function not found",file=sys.stderr); sys.exit(1)
+# marker so the artifact can be PROVEN to carry the clamp
+mark='  volatile int capstone_regstop_mark = 0x5C0%X;\n' % n
+body_start=m.end()
+# anchors, in order; each gets a return AFTER it when n <= index
+anchors=[(0,None),
+         (1,'sqlite3AlterFunctions();'),
+         (2,'  }\n  sqlite3WindowFunctions();'),
+         (3,'sqlite3WindowFunctions();'),
+         (4,'sqlite3RegisterDateTimeFunctions();'),
+         (5,'sqlite3RegisterJsonFunctions();')]
+ins=0
+if n==0:
+    s = s[:body_start] + '\n' + mark + '  if(capstone_regstop_mark) return;\n' + s[body_start:]
+    ins=1
+else:
+    tgt=[a for i,a in anchors if i==n and a]
+    if not tgt: print("REGBUILTIN_STOP: no anchor for n=%d"%n,file=sys.stderr); sys.exit(1)
+    t=tgt[0]
+    idx=s.find(t, body_start)
+    if idx<0: print("REGBUILTIN_STOP: anchor %r not found"%t,file=sys.stderr); sys.exit(1)
+    after=idx+len(t)
+    s = s[:after] + '\n' + mark + '  if(capstone_regstop_mark) return;\n' + s[after:]
+    ins=1
+open(path,'w').write(s)
+print("REGBUILTIN_STOP: inserted %d early-return(s) for step %d" % (ins,n))
+PYSTOP
+  # GATE, with BOTH directions checked against the file that is actually compiled.
+  _mark=$(printf '0x5C0%X' "$REGBUILTIN_STOP")
+  _nmark=$(grep -c -F "capstone_regstop_mark = $_mark" "$OBJ_DIR/sqlite3-capstone.c" || true)
+  _nret=$(grep -c -F "if(capstone_regstop_mark) return;" "$OBJ_DIR/sqlite3-capstone.c" || true)
+  echo "== regstop gate: marker $_mark x$_nmark ; early-return x$_nret"
+  if [[ "$_nmark" -ne 1 || "$_nret" -ne 1 ]]; then
+    echo "REGBUILTIN_STOP did NOT apply cleanly (marker=$_nmark return=$_nret). Refusing to build." >&2
+    exit 1
+  fi
+fi
+
 # CAPSTONE_TEXT_PAD=N -- insert N bytes of dead, never-called code at the TOP of the
 # amalgamation and change NOTHING else. No early return, no control-flow change: this shifts
 # every following function by N bytes and is the null-shift control the audit asked for.
@@ -303,6 +362,52 @@ cp -f "$VFS_DIR/../sqlite-vfs-skeleton/capstone_sqlite_os.c" "$OBJ_DIR/capstone_
   || cp -f "$ADAPTED/capstone_sqlite_os.c" "$OBJ_DIR/capstone_sqlite_os.c"
 cp -f "${DOMAIN_SRC:-$SCRIPT_DIR/sqlite_capstone_domain.c}" "$OBJ_DIR/sqlite_capstone_domain.c"
 cp -f "$SCRIPT_DIR/sqlite_silicon_amalgam.c" "$OBJ_DIR/amalgam.c"
+
+# RUNSTOP=<n> -- DIAGNOSTIC ONLY. Clamp run_sqlite() to return after step n.
+#
+# WHY THIS AND NOT CAPSTONE_SQLITE_STAGE. The staged block drags in probe arrays and,
+# measured 2026-08-09, EVERY staged build fails to ENTER on this bitstream (4/4: st0, st1,
+# s1-p4096, fx1) while unstaged builds enter 2/2. Removing the 580-element holder default
+# cut __capstone_cap_init from 1257 to 608 stc and did NOT fix entry, so the holder was a
+# real defect but not the cause. This knob inserts ONLY an early return -- the same
+# lightweight mechanism as REGBUILTIN_STOP, whose images DID enter (rs0/rs1 entered and
+# wedged, i.e. they ran).
+#
+#   1 = after sqlite3_config(SQLITE_CONFIG_HEAP)
+#   2 = after sqlite3_initialize()
+#   3 = after sqlite3_open(":memory:")
+#   4 = after CREATE TABLE
+if [[ -n "${RUNSTOP:-}" ]]; then
+  echo "== DIAGNOSTIC: clamping run_sqlite() to return after step $RUNSTOP"
+  python3 - "$OBJ_DIR/sqlite_capstone_domain.c" "$RUNSTOP" <<'PYRUN'
+import sys,re
+path,n=sys.argv[1],int(sys.argv[2])
+s=open(path).read()
+m=re.search(r'static int run_sqlite\(void\)\s*\{', s)
+if not m: print("RUNSTOP: run_sqlite not found",file=sys.stderr); sys.exit(1)
+anchors={1:'return fail("config-heap", rc, 0);',
+         2:'return fail("initialize", rc, 0);',
+         3:'return fail("open", rc, db);',
+         4:'return fail("create", rc, db);'}
+t=anchors.get(n)
+if not t: print("RUNSTOP: no anchor for %d"%n,file=sys.stderr); sys.exit(1)
+i=s.find(t, m.end())
+if i<0: print("RUNSTOP: anchor %r not found"%t,file=sys.stderr); sys.exit(1)
+after=i+len(t)
+ins='\n  { volatile int capstone_runstop = 0x7A0%X; if(capstone_runstop) return 0x7A0%X; }\n' % (n,n)
+s=s[:after]+ins+s[after:]
+open(path,'w').write(s)
+print("RUNSTOP: early return inserted after step %d"%n)
+PYRUN
+  _m=$(printf '0x7A0%X' "$RUNSTOP")
+  _n=$(grep -c -F "capstone_runstop = $_m" "$OBJ_DIR/sqlite_capstone_domain.c" || true)
+  _r=$(grep -c -F "if(capstone_runstop) return $_m;" "$OBJ_DIR/sqlite_capstone_domain.c" || true)
+  echo "== runstop gate: marker $_m x$_n ; return x$_r"
+  if [[ "$_n" -ne 1 || "$_r" -ne 1 ]]; then
+    echo "RUNSTOP did NOT apply (marker=$_n return=$_r). Refusing to build." >&2; exit 1
+  fi
+fi
+
 # CAPSTONE_DOMAIN_VAR=1 -- append a dead integer GLOBAL (not a function) to the domain file.
 #
 # Separates two hypotheses that the function-pad conflates. A `used` static FUNCTION added five

@@ -549,7 +549,16 @@ static int run_sqlite_staged(int stage) {
      These are synthetic: one global array of N capability leaves, initialised by cap-init,
      then read back. No SQLite involved. Sizes bracket the working 2160 and the failing 9216.
      Returns how many entries survived, capped at 255. */
-#define CAPSTONE_HOLDER_N(st) ((st) == 30 ? 40u : (st) == 31 ? 100u : \
+/* The trailing 580u is stage 34's size, NOT a safe default. Because `holder` is `static`,
+   it is allocated and CAP-INITIALISED at compile time in EVERY staged build regardless of the
+   runtime `if (stage >= 30 && stage <= 34)` -- so stages 0..6, which never touch the probe,
+   were each carrying 580 extra capability leaves. Measured 2026-08-09: __capstone_cap_init
+   went 558 -> 1257 stc (+699), and all 3 staged builds tried on the board were CREATED but
+   never ENTERED, while 2/2 unstaged builds entered fine. A REDRAW at a different text pad did
+   not help, which is what ruled out layout randomness. Stages outside the probe range now get
+   a 1-element holder. */
+#define CAPSTONE_HOLDER_N(st) (((st) < 30 || (st) > 34) ? 1u : \
+                               (st) == 30 ? 40u : (st) == 31 ? 100u : \
                                (st) == 32 ? 160u : (st) == 33 ? 300u : 580u)
   if (stage >= 30 && stage <= 34) {
     /* Each element points into a distinct place so the leaves are not all identical; the
