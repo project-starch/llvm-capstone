@@ -142,6 +142,74 @@ Split out of S-02 on 2026-08-09 once S-02's Site A was fixed and **the full work
 wedged**. Formerly "S-02 Site B". Given its own ID because it is a demonstrably separate defect,
 not the same one by another path.
 
+### (RETRACTED 2026-08-10) "a branch resolves on the stale operand of the immediately preceding instruction"
+
+Proposed as the S-03 root cause and **refuted by an auditor before it was recorded anywhere else**.
+It is written down because the refutation is reusable, and because the arms behind it are sound
+and still constrain the answer.
+
+The claim was: `beqz a0` at `0x13cb6c`, sitting directly after `ld a0,0x0(a0)`, reads the
+pre-load value, so `if (pOther)` runs with `pOther == NULL` and the deref at `0x13cb7c` wedges.
+
+**Why it is dead — two independent refutations, both from code on the executed path:**
+
+* `strlen` at `0x14bdb4` contains `lbu a2,0x0(a2)` immediately followed by `bnez a2` — the same
+  self-referential-load-into-zero-test-branch shape. Its stale operand is a string pointer, always
+  nonzero, so under the claim `strlen` never terminates. Every RETURNING arm calls it.
+* `sqlite3FunctionSearch` at `0x144b10` contains the **identical** `ld a0,0x0(a0)` + `beqz a0`
+  construct, and `0x144b74` (reached only by that branch being TAKEN) is the only code that writes
+  a NULL return. So the claim needs that branch to resolve *correctly* while asserting a
+  byte-identical construct 0x2b0 bytes away does not. The claim contradicts its own premise.
+
+Scale, for calibration: the image has **13495** sites where a branch immediately follows the
+instruction producing its operand, 7490 of them loads. A defect of that generality could not boot.
+
+**Lesson.** The model was built to fit 17 arms and fitted all of them. Fitting every observation
+is not evidence when no observation could have contradicted the model — none of the arms was
+outside `sqlite3InsertBuiltinFuncs`, so none could see `strlen`. The refutation came from looking
+for the claim's consequences **elsewhere in the same binary**, which cost one read and no board
+time. Do that before a mechanism claim, not after.
+
+### What survives, and what it constrains
+
+Still supported, each stated with its replication count:
+
+* `pOther` **is NULL** and the `beqz` at `0x13cb6c` **does not take the branch**, so the
+  `if (pOther)` block executes. (`gap` RETURN ×2, `gapN` WEDGE ×1, `n0` WEDGE ×1, `y1`/`y2` differ.)
+* Execution stops **at or after** `ldc a3,0x20(a0)` at `0x13cb7c` and **before** `0x13cb80`:
+  `y1` truncates before it and RETURNS (×5 boots), `y2` truncates after it and WEDGES (×1).
+  The pair differs by exactly that one instruction, with identical downstream state.
+* The distinguishing feature of this site versus the two exonerated ones is that its `ld` is
+  preceded by an `stc` **to the same address** two instructions earlier (`0x13cb64`). That is a
+  same-address capability-store-then-scalar-load condition — the R-18/R-19 dual-bank family — not
+  a branch-operand hazard. `sqlite3Strlen30` at `0x16b18` has the identical `stc`/`ld`/branch
+  triple but cannot discriminate (stale and correct both give "taken").
+
+**Not yet established, and load-bearing:**
+
+* **The comparator has never been run on this bitstream.** `base.dom` (md5 `ab5aae8b…`) was staged
+  and, through eight boots, never executed. The only base-image wedge on record is from
+  2026-08-08 on `caplifive_65536_nodes.bit`, and its trap signature differs from every arm wedge
+  here (mcause 24 vs 25, commit pc `0x87c` vs `0x2`). Until `base` wedges on
+  `caplifive_65536_r18_fix.bit`, every "differs from base" statement is unanchored.
+* Every WEDGE verdict is **N=1** and is always the last arm of its boot, because the runner stops
+  at the first non-return. Returning arms replicate; wedging arms have never been repeated.
+* The `p27a`/`s48`/`s32`/`s31`/`s28` arms constrain the loaded value but are **non-discriminating**
+  between the competing models — both predict RETURN when the value is 0. The most-replicated arm
+  in the set is the one that tests the least.
+
+### Minimal standalone repro — BUILT, NOT YET MEASURED
+
+`capstone/tests/runtime-qemu/silicon-ladder/sbr_kernel.h`. Three matched pairs, each arm setting
+its own bit of a returned bitmask so nothing can hang and one run reports every arm:
+store→load→branch (the SQLite shape), ALU→branch, and load→branch with no preceding store; each
+paired with a control differing by exactly one inserted `nop`. An odd (control) bit set means the
+instrument is broken, not the silicon.
+
+Status: two draws (`sbr`, `sbr4`) both **entry-stalled (R-16)** and carry no verdict. `sbr12` and
+`sbr28` are staged and unrun. The repro uses a scalar `sd`; the SQLite site uses `stc`, so an
+`stc` variant is needed before it can speak to the surviving narrowed claim.
+
 **Evidence it is independent:**
 
 | build | what it does | result |

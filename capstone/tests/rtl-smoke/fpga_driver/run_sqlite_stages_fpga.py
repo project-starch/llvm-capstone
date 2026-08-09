@@ -102,10 +102,20 @@ def main():
     _overlay = pathlib.Path(os.environ.get("SQLITE_STAGE_OVERLAY") or
                             _repo / "capstone/caplifive-system/sw/buildroot"
                                     "/overlay/test-domains")
+    # A spec is "path", "path:selector", or -- under a ladder HOST override -- "rung:path",
+    # where the .dom is the RIGHT half. Splitting unconditionally on the last ':' and keeping
+    # the left half yields the rung NAME for every ladder entry, no such file exists in the
+    # overlay, `_want` comes out EMPTY, and the freshness gate silently falls back to its
+    # default (the canonical sqlite_silicon.dom). On 2026-08-10 that blocked a ladder-only
+    # boot as "STALE FIRMWARE" over a leftover file the run did not reference -- the gate
+    # being right about its question and wrong about its subject, which is precisely the
+    # failure its own docstring records. Pick whichever side is actually a staged artifact.
     _want = []
     for spec in DOMS:
-        p = spec.split("|", 1)[-1].rsplit(":", 1)[0] if "|" in spec else spec.rsplit(":", 1)[0]
-        cand = _overlay / pathlib.Path(p).name
+        tail = spec.split("|", 1)[-1]
+        halves = tail.rsplit(":", 1)
+        cands = [h for h in halves if (_overlay / pathlib.Path(h).name).is_file()] or [halves[0]]
+        cand = _overlay / pathlib.Path(cands[-1]).name
         if cand.is_file():
             _want.append(cand)
     assert_firmware_embeds_current_initramfs(IMG, _want or None)
