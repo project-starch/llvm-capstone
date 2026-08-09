@@ -120,11 +120,22 @@ static unsigned long hcp_uint(char *pay, unsigned long off, unsigned long max,
 }
 
 int ee_printf(const char *fmt, ...) {
+  /* Same hazard as S-02 in sqlite_capstone_domain.c's output_text(), proven on silicon
+     2026-08-09: on the gp-captable ABI these capabilities are reached through the
+     cap-table and arrive NONLIN, and DELIN on a non-linear capability raises
+     UNEXPECTED_CAP_TYPE on the RTL -- which WEDGES rather than traps. QEMU's
+     helper_csdelin returns early, hiding it entirely under emulation.
+     UNTESTED HERE: this file has not been re-run on the board since the guard was added.
+     It is the same construct on the same ABI, but that is an inference, not a measurement. */
+#ifndef CAPSTONE_GP_CAPTABLE_ABI
   CAPSTONE_DELIN(fmt);
+#endif
   if (!hc_metadata || !hc_payload)
     return 0;
   char *pay = (char *)hc_payload;
+#ifndef CAPSTONE_GP_CAPTABLE_ABI
   CAPSTONE_DELIN(pay);
+#endif
   unsigned long off = hc_metadata->length;
   unsigned long max = HC_REGION_SIZE;
 
