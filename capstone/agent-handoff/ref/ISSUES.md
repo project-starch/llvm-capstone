@@ -82,7 +82,39 @@ Control green in both. Therefore:
 of them returned non-zero (or fell through) into `fail()`. Only `rn1` (returns), `rn2` (wedges) and
 `n8` (returns) are clean.
 
-### Site A — `fail()`, the smaller and more tractable target
+### Site A — ROOT CAUSE FOUND (2026-08-09): the UNGUARDED `CAPSTONE_DELIN(payload)` in `output_text()`
+
+    FS1  return at fail() entry, before any output_text   RETURNED (4 s)
+    FS2  return after output_text("SQLITE ERROR stage=")  WEDGED
+
+Control green in both. So the FIRST `output_text()` call wedges.
+
+`output_text()` contains **two** `delin`s. Only one is guarded:
+
+    #ifndef CAPSTONE_GP_CAPTABLE_ABI
+      CAPSTONE_DELIN(text);      <- guarded, compiled OUT on the silicon ABI
+    #endif
+      ...
+      CAPSTONE_DELIN(payload);   <- UNGUARDED, always compiled in
+
+The compiled artifact confirms it: `output_text @ 0x13addc`, 71 instructions, **`delin` x1** — the
+`payload` one, since the `text` one is compiled out.
+
+**Mechanism, quoted from the guard's own comment** (which was written for `text` and applies
+identically to `payload`): *"the RTL's DELIN accepts CAP_TYPE_LINEAR only and raises
+UNEXPECTED_CAP_TYPE otherwise; our QEMU helper_csdelin returns early instead, which is why this
+never showed up under emulation."* Illegal capability ops wedge rather than trap on this silicon
+(R-5). **This is why SQLite is green under QEMU and dead on hardware.**
+
+**NOT YET CONFIRMED — the one experiment that closes it:** rebuild with `CAPSTONE_DELIN(payload)`
+removed (or guarded the same way) and re-run `FS2`. If it returns, Site A is proven and fixed in the
+same stroke. That build is trivial; do it first.
+
+**Origin: OURS, not the hardware.** If confirmed this is a `C-n`, not an `R-n` — domain code
+delin'ing a capability that is already non-linear. The guard for `text` was added when C-13 hit the
+identical hazard in the entry glue; `payload` was missed.
+
+### Site A background — `fail()`, how it was reached
 
     static int fail(const char *stage, int rc, sqlite3 *db) {
       output_text("SQLITE ERROR stage="); output_text(stage); ...
