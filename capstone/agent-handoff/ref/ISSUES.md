@@ -367,60 +367,82 @@ prediction. It is still a hypothesis about RTL that has not been confirmed IN th
 `scoreboard.sv`, for a load with WAIT_PAGE_OFFSET-extended latency, is the place to look, and
 `alu.sv`'s comparator has still never been read.
 
-### (2026-08-10) ROOT CAUSE CANDIDATE — `issue_read_operands.sv:568` drops x10's clobber claim
+### (2026-08-10) ROOT CAUSE — STC rs1-cursor misforward, enabled by the x10 clobber drop
 
-PENDING AUDIT at time of writing. Three independent lines of evidence converge.
+Audited. The first draft of this entry named `issue_read_operands.sv:568` alone and gave a wrong
+reason; both are corrected below. Two RTL sites are involved, and it matters which does what.
 
-**The RTL**, at `e1b3db6ba` (the revision `caplifive_65536_r18_fix.bit` was built from):
+**The WRONG VALUE comes from the rs1-cursor forwarding path.** `check_fwd_rs1`
+(`ariane_pkg.sv:929-935`) includes **STC**, and `issue_read_operands.sv:674-677` reads:
 
 ```
-566  gpr_clobber_vld[fwd_i.sbe[i].rs1][i] =
-567      ((check_cap_op(fwd_i.sbe[i].op)) && (fwd_i.sbe[i].op != ariane_pkg::CAPENTER)) && fwd_i.still_issued[i];
-568  gpr_clobber_vld[5'd10][i] = fwd_i.sbe[i].op == ariane_pkg::CAPENTER && fwd_i.still_issued[i];
-569  gpr_clobber_vld[fwd_i.sbe[i].rd][i] = fwd_i.still_issued[i] && !(...is_rd_fpr...);
+assign rs1_data[i][k] = (issue_instr_i[i].rs1 == fwd_i.sbe[...].rd) ? fwd_i.wb[k].data
+    : ((check_fwd_rs1(fwd_i.sbe[...].op)) && (issue_instr_i[i].rs1 == fwd_i.sbe[...].rs1))
+    ? fwd_i.wb[k].cap_data.rs1_cursor : fwd_i.wb[k].data;
 ```
 
-Line 566-567 marks an in-flight capability op's `rs1` as clobbered -- correct, because a cap op
-can write back its rs1 cursor -- and `check_cap_op` includes **STC** and **LDC**
-(`ariane_pkg.sv:902-912`). Line 568 then **unconditionally overwrites** that entry **for x10
-only**, keeping the claim solely for `CAPENTER`. It is an `=` where the intent needed `|=`. Line
-569 restores only `rd`, and a store has no `rd`, so x10's claim is never restored.
+A reader whose `rs1` matches an IN-FLIGHT STC's `rs1` is served that STC's **`rs1_cursor`**. For
+`stc a1,0(a0)` the cursor is `a0` = `s0-0x50` -- which is EXACTLY the value arm `V1` measured.
+This path exists because a capability op may write back its rs1 cursor; it is correct for
+`cincoffset`-style ops and wrong here, where the reader wants the LOAD's data.
 
-Net: an in-flight `stc a1,0(a0)` silently loses its clobber claim on `a0`, for register x10 and
-no other register. A subsequent reader of x10 is then served a stale value.
+**Line 568 is the ENABLER, not the value source.**
 
-**The board evidence:**
+```
+566  gpr_clobber_vld[fwd_i.sbe[i].rs1][i] = (check_cap_op(op) && op != CAPENTER) && still_issued[i];
+568  gpr_clobber_vld[5'd10][i] = (op == ariane_pkg::CAPENTER) && still_issued[i];   // OVERWRITES
+```
 
-| arm | what it establishes |
-|---|---|
-| `V1` = `sub a3,a0,s0 ; addi a3,a3,0x50 ; beqz a3` -> RETURN | the value read for `a0` is EXACTLY `s0-0x50`, i.e. **the STC's own rs1 cursor** -- measured, not inferred |
-| `V0` (same with a nop first, `bnez`) -> RETURN | positive control: the probe chain works and can produce both answers |
-| `R13` = the identical triple rewritten on `a3` -> RETURN | the defect is **register-specific to x10** |
-| `base`/`Z` on `a0` -> WEDGE | the same shape on x10 fails |
+Line 566 marks an in-flight cap op's `rs1` as clobbered so a reader STALLS. Line 568
+unconditionally overwrites that entry **for x10 alone**. So for x10 the reader does not stall, it
+issues alongside the in-flight STC, and the mux above hands it the cursor. For every other
+register the stall stands and the reader gets the correct value -- which is precisely why `R13`
+(the identical triple rewritten on `a3`) RETURNS.
 
-The measured poisoned value IS the operand whose in-flight claim line 568 drops. That is the
-convergence: an empirical register-specificity result, an empirical value measurement, and an RTL
-line hard-coding that exact register.
+Line 568 has had this form since `4891d379a` (2026-04-24), long predating the R-18 fix.
 
-**Everything now falls out, including the two arms nothing previously explained:**
+**CORRECTION to the first draft:** it claimed "a store has no rd, so line 569 never restores
+x10's claim". That is FALSE -- `decoder.sv:1308-1314` decodes STC with **`rd = rs2`** (commit
+`0f609b89a`, deliberate). The conclusion survives only because `stc a1,0(a0)` has rd = `a1` = x11,
+which is not x10; it would NOT hold for `stc a0,0(a0)`.
 
-* `adj` (a nop between the STC and the LD) RETURNS -- the STC has left the scoreboard before the
-  consumer reads x10, so the dropped claim no longer matters.
-* The standalone rung is CLEAN because its tied-register arm was written on **x6/t1**, not x10.
-  The earlier "store-buffer pressure / context-dependence" explanation is WITHDRAWN; it was never
-  about context, it was about the register number.
-* `q4` WEDGE vs `q6` RETURN, `p27b`/`p27c` WEDGE vs `p27a` RETURN, and the flat s-ladder are all
-  the same thing: a consumer that lands its result in a register other than x10 keeps the stale
-  value, while one that writes x10 has it corrected by the load's own writeback.
+**Evidence, with replication:**
 
-**Why it is not visible everywhere else:** at essentially every other tied
-`stc rX,i(a0) / ld a0,i(a0) / consumer` site, the stale value (a stack address) and the correct
-value (a live pointer) are BOTH non-zero, so no branch changes direction. The defect only bites
-where the loaded pointer is genuinely NULL. `0x13cb68` is the first such site SQLite reaches.
+| arm | establishes | N |
+|---|---|---|
+| `V1` `sub a3,a0,s0; addi a3,a3,0x50; beqz a3` -> RETURN | the value read for `a0` is exactly `s0-0x50`, the STC's rs1 cursor | 2 |
+| `R13` identical triple on `a3` -> RETURN | register-specific to x10 | 2 |
+| `Z` (base + 1 byte) -> WEDGE after `SQ: G/enter` | in-domain positive control, IN THE SAME BOOT as V1/R13 | 2 |
+| `V0` -> RETURN | probe chain can produce both answers | 1 |
 
-**Mitigations, both board-demonstrated at this site:** avoid x10 for the tied register (`R13`), or
-separate the STC from the LD (`adj`). Either is a backend scheduling/regalloc constraint. Neither
-is yet implemented or validated on the full workload.
+The 04:54 boot was run specifically because an audit noted the earlier V1/R13 boot contained no
+in-domain wedge (its last arm, `R1`, stalled host-side at `SQ: B/mkregion1` and never entered).
+That objection is now answered: `Z` entered and wedged in the same boot V1 and R13 returned.
+
+**A nondeterminism claim against this finding was REFUTED.** An audit reported `n0` returning in
+`w-004127` and wedging in `w-003137` at the same position, concluding the board flips. `w-004127`
+is the PHANTOM boot: that block contains `Failed to open the file.`, no `Ok, good file.`, and no
+`Loadable size` -- the domain was never loaded, and the host entered an unrelated domain and
+returned. `n0` has exactly ONE valid observation (WEDGE, `Loadable size = 1377560`). This is the
+trap the loader guard now catches; the guard landed at `275592fdf03d`, after that boot.
+
+**Why 736 identical sites do not all fail:** at essentially all of them the stale value (a stack
+address) and the correct value (a live pointer) are BOTH non-zero, so no branch changes direction
+and the corruption is invisible. It bites only where the loaded pointer is genuinely NULL.
+`0x13cb68` is the first such site SQLite reaches. Note this is silent DATA CORRUPTION, not a
+branch defect -- the victim is any consumer of x10, and a branch is merely where it became visible.
+
+**Mitigations, both board-demonstrated at this site:** avoid x10 as the tied register (`R13`), or
+separate the STC from the LD (`adj`). Either is a backend regalloc/scheduling constraint.
+
+**Still unproven, and required before this goes to the hardware side:**
+* No directed RTL simulation. The harness exists (`verif/tests/custom/capstone/`), and the
+  decisive test is the matched pair plus a patched-RTL arm, with the a0 arm required to FAIL
+  before the patch or the test proves nothing.
+* The mapping from `caplifive_65536_r18_fix.bit` to revision `e1b3db6ba` is an INFERENCE. The
+  driver enforces the resident bitstream's NAME; nothing records which RTL revision built it.
+* Which of the two sites to fix is not settled by any board arm -- the simulation is what
+  separates "patch line 568" from "narrow `check_fwd_rs1` for STC".
 
 ### STILL UNEXPLAINED — do not hand this to the hardware side yet
 
