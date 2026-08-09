@@ -127,6 +127,15 @@ inside the 13 KB fdreg model, which would take Site A off the 1.5 MB image entir
 literal and the `stage` argument, and after — to separate "writing to the shared region" from
 "dereferencing a string-literal capability" from "dereferencing a *passed* string capability".
 
+### Site A — FIXED AND CONFIRMED, but SQLite still does not run (2026-08-09)
+
+Full unclamped SQLite, rebuilt with the guard, `output_text` verified `delin x0` in the
+artifact: **still WEDGED**, control green (2 s). So Site A was real and is fixed, and **Site B
+is a genuinely independent second defect** — not the same one reached by another path.
+
+That is the honest state: the root cause of Site A is proven (`FS2` wedged / `fx2b` returned,
+one variable), and it did not unblock the benchmark.
+
 ### Site B — the body of `sqlite3_initialize`
 
 Still open. `rn2` is the only clean arm implicating it. Re-cut with clamps that return **zero**
