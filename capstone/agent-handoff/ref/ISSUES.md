@@ -154,6 +154,36 @@ not the same one by another path.
 `rn2` is the load-bearing arm: it never enters `fail()`, so it cannot be measuring S-02.
 Control green in every one of these boots.
 
+**BISECTED 2026-08-09 to `sqlite3RegisterBuiltinFunctions()`.** Four arms, each returning ZERO
+from `initialize` and paired with a `RUNSTOP=2` direct return so no arm enters `fail()` (S-02) or
+runs on into `sqlite3_open`. Control green in every boot:
+
+| arm | `initialize` runs through | result |
+|---|---|---|
+| `sb1` | `sqlite3MutexInit()` | **RETURNED 4 s** |
+| `sb2` | `+ sqlite3MallocInit()` | **RETURNED 4 s** |
+| `sb3` | `+ sqlite3RegisterBuiltinFunctions()` | **WEDGED** |
+| `sb4` | `+ sqlite3PcacheInitialize()` | **WEDGED** |
+
+`sb2` returns and `sb3` wedges, so the fault is **`sqlite3RegisterBuiltinFunctions()`** or the few
+statements between it and `MallocInit`.
+
+**This VINDICATES the 2026-08-06 localization**, which named the same function and which I
+wrongly withdrew earlier today. The withdrawal rested on `rs0` — an arm that clamped INSIDE that
+void function and let `run_sqlite` carry on to `sqlite3_open`, so it wedged downstream and proved
+nothing. Same invalid-clamp flaw as the rest of that family. The 08-06 entry stands.
+
+**Cleared by measurement, each a mechanism that looked convincing:** `sqlite3MutexInit`'s six
+function-pointer copies between globals (`sb1`), and `sqlite3MallocInit`'s bulk write across the
+256 KB heap capability (`sb2`). Neither is the fault.
+
+**Next cut:** inside `sqlite3RegisterBuiltinFunctions`, using the SAME discipline — clamp returns
+zero, paired with `RUNSTOP=2`. Note `BUILTIN_LIMIT=0` (loop emptied) was measured earlier and still
+wedged, but that arm ALSO lacked the `RUNSTOP` pair and is void; re-run it properly before
+concluding the loop is innocent. The function's other calls — `sqlite3AlterFunctions`,
+`WindowFunctions`, `RegisterDateTimeFunctions`, `RegisterJsonFunctions`, `InsertBuiltinFuncs` — are
+each a candidate.
+
 **Bounded to:** the body of `sqlite3_initialize()`. The call into it and its prologue are
 PROVEN INNOCENT by `n8` (gutted `initialize`, direct return, returned in 4 s).
 
