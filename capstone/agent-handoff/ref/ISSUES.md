@@ -231,7 +231,49 @@ ENTRY-STALLED (six padded builds plus the 171-leaf one)". At 173 entries, on the
 two independent builds enter and return correctly. That claim was made on the pre-fix bitstream and
 must not be carried forward; the comment should be corrected.
 
-### S-03: ONE-BYTE REPRO PAIR, and a BINARY-PATCH method that needs no rebuilds (2026-08-09)
+### S-03 BISECTED TO ~11 INSTRUCTIONS (2026-08-09), candidate named
+
+Truncation ladder by binary patch (4-byte `j` to the real epilogue at `0x13cc68`), control green
+in every boot, zero rebuilds:
+
+| arm | truncates at | result |
+|---|---|---|
+| `t1` | `0x13cad8` before the `zName` `ldc` | **RETURNED** |
+| `t3` | `0x13cb5c` after `sqlite3FunctionSearch` returns | **RETURNED** |
+| `t7` | `0x13cbe8` before the `movc`-zero store | **WEDGED** |
+| `t4` | `0x13cbf0` after the `pNext` store | **WEDGED** |
+
+**The wedge is inside `0x13cb5c`..`0x13cbe8`.** With one entry the table is empty, so `pOther` is
+NULL and the executed path is:
+
+    13cb5c  movc          a1, a0
+    13cb60  cincoffsetimm a0, s0, -0x50
+    13cb64  stc           a1, 0x0(a0)     <- capability store to the stack slot
+    13cb68  ld            a0, 0x0(a0)     <- INTEGER load of THE SAME ADDRESS
+    13cb6c  beqz          a0, 0x13cbc8    <- taken
+    13cbc8  cincoffsetimm a0, s0, -0x30
+    13cbcc  ldc           a1, 0x0(a0)
+    13cbd0  cincoffsetimm a3, s0, -0x38
+    13cbd4  lw            a2, 0x0(a3)
+    13cbd8..e0  index math (*144)
+    13cbe4  cincoffset    a2, a1, a2
+
+**CANDIDATE, not yet confirmed: the `stc` at `13cb64` immediately followed by the `ld` at
+`13cb68` of the same address** — spill a capability, then read back its low 64 bits as an integer
+to test `pOther` for NULL. That is the R-18/R-19 dual-bank shape (a capability store writes
+metadata into bank 1; an integer load of the same address reads a bank that the store also
+touched). The `r18_fix` bitstream gates metadata onto the sideband by OPCODE, permitting it for
+`stc` — which is exactly this instruction. So the fix would NOT cover this pair.
+
+**The arm that confirms or kills it:** `t8`, truncating at `0x13cb64` (before the `stc`). It is
+built and staged; its run hit an outer timeout and must be re-run. `t8` RETURNS => the `stc`/`ld`
+pair is the wedge. `t8` WEDGES => the wedge is the `movc a1,a0` / `cincoffsetimm` before it, which
+would be stranger and worth its own arm.
+
+**Also unconfirmed:** whether `movc a1, zero` + `stc` at `13cbe8`/`13cbec` contributes — `t7`
+wedges before reaching it, so it is untested, not innocent.
+
+### (superseded) S-03: ONE-BYTE REPRO PAIR, and a BINARY-PATCH method that needs no rebuilds (2026-08-09)
 
 Every attempt to model this in the 13 KB rung returns clean, so the image was **shrunk by
 patching instead of rebuilt**: copy the WEDGING image and edit bytes, leaving all 1.5 MB of
