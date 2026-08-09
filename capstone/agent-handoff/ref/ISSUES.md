@@ -154,7 +154,37 @@ not the same one by another path.
 `rn2` is the load-bearing arm: it never enters `fail()`, so it cannot be measuring S-02.
 Control green in every one of these boots.
 
-**BISECTED 2026-08-09 to `sqlite3RegisterBuiltinFunctions()`.** Four arms, each returning ZERO
+### LOCALIZED 2026-08-09 to `sqlite3AlterFunctions()` — ONE CALL
+
+| arm | | result |
+|---|---|---|
+| `sb2` | `initialize` through `MallocInit` | **RETURNED** |
+| `rb0` | `RegisterBuiltinFunctions` entered, body SKIPPED | **RETURNED** |
+| `rb1` | + `sqlite3AlterFunctions()` | **WEDGED** |
+| `sb3` | full `RegisterBuiltinFunctions` | **WEDGED** |
+
+Control green in every boot. `rb0` returns and `rb1` wedges, so **S-03 is `sqlite3AlterFunctions()`**,
+the first call inside the function.
+
+**Why this is the best possible landing point.** `sqlite3AlterFunctions()` is a single
+`sqlite3InsertBuiltinFuncs(aAlterTableFuncs, 9)` — a walk over a **9-entry** `FuncDef` array,
+reading each `zName` and calling a `Strlen30`-shaped helper on it. **That is exactly the construct
+the 13 KB `fdreg` rung models** (`FDREG_N = 9`, same struct field order, same string contents,
+same `zName` read + length call) — and fdreg **RUNS CLEAN on this board**.
+
+So the minimal repro is not a new build: it is the DIFFERENCE between fdreg (returns) and
+`sqlite3AlterFunctions` (wedges), on a construct small enough to iterate in seconds instead of a
+1.5 MB rebuild plus a boot.
+
+**Next:** diff the two at the artifact level — cap-init treatment of the array and its strings, the
+`ldc` sequence for `zName`, storage class and section of `aAlterTableFuncs` vs `fdreg_defs`, and the
+gp-captable index each is reached through. The variable that differs is the root cause.
+
+**Marker caveat for this ladder:** `rb0` reported `H/return x0` while the driver reported
+"returned in 4 s". The driver line is derived from the shell exit protocol and is authoritative;
+the marker counter is unreliable on the RUNSTOP return path. Read the driver line.
+
+**(superseded) BISECTED to `sqlite3RegisterBuiltinFunctions()`.** Four arms, each returning ZERO
 from `initialize` and paired with a `RUNSTOP=2` direct return so no arm enters `fail()` (S-02) or
 runs on into `sqlite3_open`. Control green in every boot:
 
