@@ -435,6 +435,29 @@ branch defect -- the victim is any consumer of x10, and a branch is merely where
 **Mitigations, both board-demonstrated at this site:** avoid x10 as the tied register (`R13`), or
 separate the STC from the LD (`adj`). Either is a backend regalloc/scheduling constraint.
 
+**REPRODUCED STANDALONE (2026-08-10), and register-specific.** `sbx_kernel.h` runs the S-03
+sequence twice in one 13 KB rung -- tied on `a0` and tied on `t1` -- so a single run shows the
+defect and its register-specificity. Three independent draws, identical: `retval = 0xD0000003`.
+
+| bit | arm | result |
+|---|---|---|
+| 0 | `a0` tied, branch adjacent | **SET -- defect reproduced** |
+| 1 | `a0` tied, one nop before the branch | **SET -- the control also fired** |
+| 2 | `t1` tied, branch adjacent | clear |
+| 3 | `t1` tied, one nop before the branch | clear |
+
+The a0/t1 asymmetry confirms `R13` entirely off the SQLite image: identical sequence, identical
+slot, only the register differs, and only x10 fails. It also retires the last trace of the
+"context-dependence" story -- there is no SQLite context here at all.
+
+**But bit 1 is a CONTROL and it fired**, so by the probe's own stated rule this run supports the
+asymmetry and NOTHING MORE. One nop does not close the window in `sbx`, whereas it does at the
+SQLite site (`gap`, `adj`). The likely cause is a real difference, not a bug: `sbx` materialises
+its address with `movc a0, %1`, an EXTRA in-flight capability op with rd = a0 that the SQLite site
+does not have, which plausibly widens the window. Resolve this before the folder is shared --
+either drop the extra `movc` (pass the address already in a0) or widen the separation and find
+where it does close.
+
 **Still unproven, and required before this goes to the hardware side:**
 * No directed RTL simulation. The harness exists (`verif/tests/custom/capstone/`), and the
   decisive test is the matched pair plus a patched-RTL arm, with the a0 arm required to FAIL
