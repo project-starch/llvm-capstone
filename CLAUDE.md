@@ -74,8 +74,8 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
 
 Committing protects work from a lost session; **pushing** protects it from a lost machine, and it
 is how another lane or the project lead sees a result at all. Work that exists only locally is work
-nobody can act on. (It also surfaces access problems early: on 2026-08-08 the RTL submodule turned
-out to have no write access, discovered only because a push was attempted.)
+nobody can act on. (It also surfaces access problems early — a submodule with no write access is
+discovered only by attempting a push.)
 
 **Push without asking at a stable point.** A stable point is any of:
 
@@ -105,8 +105,8 @@ folder**, with no accompanying message body. Whatever
 report — detail that is not in the README does not reach anyone. So:
 
 - **One issue per folder.** Never two signatures in one, even when they share a trigger or a
-  workaround. On 2026-08-08 two signatures had to be split *after* the first link was already
-  out, and for part of that day the live page showed the other issue's evidence.
+  workaround. Two signatures have had to be split *after* a link was already out, leaving the
+  live page showing the other issue's evidence.
 - **Each README self-contained**, naming its sibling issues in the first paragraph, so a reader
   arriving with the wrong symptom is redirected immediately.
 - **No status lines that go stale silently** — "not yet shared", "to be confirmed next week".
@@ -190,21 +190,17 @@ the loss.
 Run it against a case that must trip it. If you cannot make it fire, you have learned nothing about
 the subject and something about the instrument.
 
-This is the single most expensive mistake made on this project. On 2026-08-08 one session hit it
-**ten times**; four became published claims that had to be retracted:
+This is the single most expensive class of mistake on this project, and it recurs. The shapes it
+takes, each of which has produced a published claim that had to be retracted:
 
-* `grep -c` returned 0 because grep here is **ugrep** and goes quiet on binary-ish output → "this
-  binary contains no `movc`" (it contained nine);
-* a check keyed to one function found nothing because the code under test lived in **another
-  function**, and one keyed to one packing shape missed a **different packing shape** → two builds
-  wrongly declared "never measured";
-* a preflight gate tested a marker over the **whole transcript** when the mandated control always
-  emits it → the gate could never fire, and had not, in its entire life;
-* a preflight run with `RUNGS=` instead of `BAKED_RUNGS=` printed **GO** having checked nothing;
-* an analysis tool with an unset input dir printed `dataset: 0 builds` and a table of `0/0` scores,
-  which reads exactly like "no rule fits" rather than "no data was loaded";
-* six directed RTL tests came back clean and were recorded as "the hardware is innocent" — none of
-  them ever created the triggering condition.
+* a **counter that goes quiet on binary-ish input** and returns 0, read as "absent";
+* a check **keyed to one function, shape or packing** that silently misses another;
+* a **gate whose condition the mandated control always satisfies**, so it can never fire;
+* a run **parameterised by the wrong variable name**, printing a pass having checked nothing;
+* a tool that renders **"no data" as a zero result**, which reads like a finding;
+* **directed tests that come back clean without ever creating the triggering condition.**
+
+The incident log these were drawn from is in `agent-handoff/`; it is evidence, not rules.
 
 Cheap habits that catch all of the above:
 
@@ -268,6 +264,21 @@ whatever follows the first.
 
 Never send a single-domain load unless it is the final confirmation run of something already
 bisected.
+
+**6. A variant must stop the FLOW, not a leaf — and verify that in source before spending a run.**
+An early return the caller reads as success, or one placed in a leaf while the program continues
+regardless, stops nothing: the run proceeds and fails somewhere downstream. The ladder still
+produces a clean, monotone, entirely void result. Artifact checks cannot catch this — the image is
+correct, the gate fires, the marker is present. The only check that catches it is reading the
+**caller** and answering *what does the program do after my variant fires?* Confirm that in the
+compiled source, not in the intent.
+
+**7. Pair every FAILING arm with a PASSING arm that differs by exactly ONE thing.** A monotone
+ladder looks conclusive and is also exactly what you see when every arm reports the same upstream
+failure. A single matched pair localises more reliably than a long ladder, because the difference
+between the two arms *is* the variable. When arms differ in more than one respect — link address,
+return value, path taken on the way out — the ladder measures whichever difference you did not
+intend.
 
 Corollary for instrumentation: prefer a diagnostic that **converts a hang into a wrong
 answer** (a clamp, an early return, a bounded loop) over one that only observes the hang.
