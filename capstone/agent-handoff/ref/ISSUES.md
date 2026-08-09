@@ -176,7 +176,31 @@ So the minimal repro is not a new build: it is the DIFFERENCE between fdreg (ret
 `sqlite3AlterFunctions` (wedges), on a construct small enough to iterate in seconds instead of a
 1.5 MB rebuild plus a boot.
 
-**Next:** diff the two at the artifact level — cap-init treatment of the array and its strings, the
+### THE MATCHED-PAIR DIFF, 2026-08-09 — everything matches except CAP-INIT POSITION
+
+| | symbol | size | section | cap-init record | of total carves |
+|---|---|---|---|---|---|
+| fdreg (**RETURNS**) | `fdreg_defs` | 1296 | 4 | `(1296, align 16, src 0x210)` | **#11** of 12 |
+| SQLite (**WEDGES**) | `sqlite3AlterFunctions.aAlterTableFuncs` | 1296 | 4 | `(1296, align 16, src 0xf460)` | **#155** of 179 |
+
+Identical size (9 x 144), identical section, identical LOCAL OBJECT binding, identical cap-init
+record SHAPE. The arrays are the same construct carved the same way. **The only difference found is
+WHERE each sits in the cap-init sequence** — 11th of 12 versus 155th of 179.
+
+**This is not a new idea — the domain source already anticipates it.** `sqlite_capstone_domain.c`
+carries probe stages built to test exactly *"the Nth cap-init'd array is broken while the first is
+fine"*, with a recorded observation that one stage's `lit[1]` never terminates while a later one
+walks fine and returns. Those probes were written because earlier staged arms each declared their
+OWN local array and so read a different cap-init'd object — the same confound, spotted then and
+never settled.
+
+**Cheapest experiment, and it needs no board:** pad the fdreg rung with dummy cap-init'd objects to
+push `fdreg_defs` from carve #11 to a high index, changing NOTHING else. If it then wedges, the
+cause is cap-init position/index and the repro is a 13 KB rung that iterates in seconds. If it still
+returns, position is exonerated and the next variable is the gp-captable index each array is reached
+through.
+
+**Superseded next step:** diff the two at the artifact level — cap-init treatment of the array and its strings, the
 `ldc` sequence for `zName`, storage class and section of `aAlterTableFuncs` vs `fdreg_defs`, and the
 gp-captable index each is reached through. The variable that differs is the root cause.
 
