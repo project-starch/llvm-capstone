@@ -231,7 +231,54 @@ ENTRY-STALLED (six padded builds plus the 171-leaf one)". At 173 entries, on the
 two independent builds enter and return correctly. That claim was made on the pre-fix bitstream and
 must not be carried forward; the comment should be corrected.
 
-### S-03 BISECTED TO ~11 INSTRUCTIONS (2026-08-09), candidate named
+### CANDIDATE STRUCK (2026-08-09 audit). Do NOT send to the hardware side.
+
+**The `stc`/`ld` candidate is REFUTED.** The identical five-instruction sequence —
+`movc; cincoffsetimm; stc rX,0(rB); ld rY,0(rB); branch` — also appears in `sqlite3Strlen30`
+at `0x16b10..0x16b20`, and `sqlite3Strlen30` **executes to completion on the `t3` arm, which
+RETURNS**. Same shape in `sqlite3FunctionSearch` at `0x144b04`, also executed on `t3`. A static
+scan finds **738** adjacent `stc`/integer-load pairs on the same base register in this image — it
+is ordinary `-O0` codegen for `p = f(); if (p)`.
+
+**The RTL half was a category error.** `store_unit.sv` @ `e1b3db6ba` permits metadata for `STC`
+because a capability store *must* write metadata; that is the fix working, not a gap. R-18 was a
+**scalar** store forwarding stale metadata from its data register's shadow. And for a store and a
+load at the SAME address, `wt_dcache_mem.sv:261` selects bank 0 by address bit and returns exactly
+the word the `stc` wrote — by design, not a hazard.
+
+### THE INTERVAL IS NOT ESTABLISHED — the branch direction was never measured
+
+`13cb6c: beqz a0, 0x13cbc8`. If `pOther != NULL` the `13cb74..13cbc4` block runs and ends
+`13cbc4: j 0x13cc50`, **skipping both `t7`'s patch at `0x13cbe8` and `t4`'s at `0x13cbf0`**. In
+that case those two arms are behaviourally identical to the unpatched image and carry **zero**
+bisection information. This is the leaf-clamp family again in a new form: not "the clamp did not
+stop the flow" but "**the patched instruction may never execute**".
+
+`pOther == NULL` is likely (`sqlite3BuiltinFunctions` is in `.bss`, `AlterFunctions` registers
+first) but **likely is not measured**. Two zero-rebuild patches settle it and must come out
+opposite: `j 0x13cc68` at **`0x13cb70`** (fall-through) and at **`0x13cbc8`** (branch target).
+
+**Count corrected:** the executed set between `t3` and `t7` is **13** instructions, not 11 — the
+listing collapsed `13cbd8..e0` (three instructions) into one "index math" line. `0x13cbcc`'s `ldc`
+is already exonerated by `t1`, so the honest residue is **12**.
+
+**Control citation corrected:** the `p3` row was wrong — **`p3.dom` never ran** (`pp.log` executed
+2 of 4 planned tests). The real control is **`ar2`**, which is byte-identical to `p3.dom`
+(md5 `ab5aae8b…`) and did wedge with `SQ: A/dom-ok` and `SQ: G/enter` present.
+
+**What the audit confirmed sound:** all four patches are exactly 4 bytes and decode to
+`j 0x13cc68`; `0x13cc68` is the function's own `bge` exit and `sp` is written only in the prologue
+and epilogue, so truncation is safe from any cut point; the control was genuinely green in all four
+boots (verified by distinct fresh cycle counts — each raw log also contains the PREVIOUS boot's
+`RESULT k800`, so a naive `grep | head -1` reads the wrong one).
+
+**Never run, though built and already in the current firmware:** `t2`, `t5`, `t6`. If a LATE cut
+returns, "truncation is intrinsically fatal" dies and the interval narrows from the far end.
+
+**Next load, one boot, zero rebuilds, `t8` LAST:** `0x13cbc8` oracle, `0x13cb70` oracle, `t5`,
+`t2`, `t3` repeat (N=2 on a RETURN arm), `t8`.
+
+### (struck) S-03 BISECTED TO ~11 INSTRUCTIONS (2026-08-09), candidate named
 
 Truncation ladder by binary patch (4-byte `j` to the real epilogue at `0x13cc68`), control green
 in every boot, zero rebuilds:
