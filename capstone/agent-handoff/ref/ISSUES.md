@@ -231,7 +231,54 @@ ENTRY-STALLED (six padded builds plus the 171-leaf one)". At 173 entries, on the
 two independent builds enter and return correctly. That claim was made on the pre-fix bitstream and
 must not be carried forward; the comment should be corrected.
 
-### RETRACTED WITHIN THE HOUR: "narrowed to the call itself" was the LEAF-CLAMP ERROR AGAIN
+### S-03 NARROWED TO ONE LOOP ITERATION (2026-08-09)
+
+Both arms carry `REGBUILTIN_STOP=1 RUNSTOP=2`, so the domain stops right after `AlterFunctions`;
+verified in the compiled source before booting. Control green in both boots.
+
+| arm | `sqlite3InsertBuiltinFuncs(aAlterTableFuncs, N)` | result |
+|---|---|---|
+| `ar1` | **N = 0** — call skipped entirely | **RETURNED 4 s** |
+| `ar2` | **N = 1** — one entry registered | **WEDGED** |
+
+**A single iteration wedges.** That iteration is, in full:
+
+    const char *zName = aDef[i].zName;
+    int nName = sqlite3Strlen30(zName);
+    int h     = SQLITE_FUNC_HASH(zName[0], nName);
+    pOther    = sqlite3FunctionSearch(h, zName);        // empty table on the first entry -> NULL
+    aDef[i].pNext   = 0;
+    aDef[i].u.pHash = sqlite3BuiltinFunctions.a[h];     // read a global STRUCT member
+    sqlite3BuiltinFunctions.a[h] = &aDef[i];            // write it
+
+`ar1` also proves the **call and prologue of `AlterFunctions` are innocent** — it enters, declares
+the static array, and returns.
+
+**The untested difference against fdreg, per the audit:** fdreg links into a **plain static array**
+through `pNext`; SQLite links into a **global struct member** (`sqlite3BuiltinFunctions.a[h]`)
+through the **union field** `u.pHash`. Neither the struct indirection nor the union field has been
+modelled. That is the next cut, and it is expressible in fdreg.
+
+### AUDIT CORRECTIONS (2026-08-09), applied
+
+* **"At least two wedge sites" — STRUCK.** Circular: `al0` still CALLS `AlterFunctions`, so its
+  wedge is fully explained by the single site. It adds no fact beyond `rb1`.
+* **Cap-init count:** the supported claim is "**≤173 carves is harmless**", not "count does not
+  cause the wedge". 179 was never built. `lw20`/`lw28` are the same count at two VAs, not two counts.
+* **The `fdreg_kernel.h` "~170 entry-stalls" note is NOT refuted** — that note describes the
+  `FDREG_PAD` global shape; the sweep used `FDREG_LEAVES` string literals. Same axis, different shape.
+* **Cap-init POSITION is already swept** — the pad literals precede `fdreg_defs`, which moved to
+  index **#172 of 173**, past SQLite's #155. The "place `fdreg_defs` late" step is done; delete it.
+* **`FDREG_SEARCH` exoneration is narrower than stated:** it walks in a separate loop after all
+  links (never reading back a capability stored earlier in the SAME loop), compares one byte instead
+  of calling `sqlite3StrICmp`, and follows `pNext` not `u.pHash`.
+* **`sqlite3AlterFunctions` may not be special.** It and `sqlite3WindowFunctions` are
+  instruction-for-instruction identical, differing only in gp slot (155 vs 156) and count (9 vs 15).
+  So S-03 may be "the first registration that runs", not this function. **Do not** spend board time
+  comparing the callee prologue against peers — already disconfirmed offline.
+* **Every arm is N=1**, one domain per boot. Batch and repeat.
+
+### (retracted) RETRACTED WITHIN THE HOUR: "narrowed to the call itself" was the LEAF-CLAMP ERROR AGAIN
 
 `al0` clamps INSIDE `sqlite3AlterFunctions`. When it returns, `RegisterBuiltinFunctions`
 **carries on** into the fixup loop, `WindowFunctions`, `RegisterDateTimeFunctions`,
