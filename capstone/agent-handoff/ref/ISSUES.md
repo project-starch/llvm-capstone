@@ -231,7 +231,35 @@ ENTRY-STALLED (six padded builds plus the 171-leaf one)". At 173 entries, on the
 two independent builds enter and return correctly. That claim was made on the pre-fix bitstream and
 must not be carried forward; the comment should be corrected.
 
-### S-03 NARROWED TO THE CALL ITSELF (2026-08-09)
+### RETRACTED WITHIN THE HOUR: "narrowed to the call itself" was the LEAF-CLAMP ERROR AGAIN
+
+`al0` clamps INSIDE `sqlite3AlterFunctions`. When it returns, `RegisterBuiltinFunctions`
+**carries on** into the fixup loop, `WindowFunctions`, `RegisterDateTimeFunctions`,
+`RegisterJsonFunctions` and `InsertBuiltinFuncs`. So `al0` wedging shows only that **something in
+the REST of `RegisterBuiltinFunctions` wedges** — it carries no information about the call into
+`AlterFunctions`. Third occurrence of the same mistake in this investigation; the rule added to
+CLAUDE.md ("a variant must stop the FLOW, not a leaf") exists precisely for it and I still walked
+into it by clamping a leaf without pairing it with an outer stop.
+
+**What actually stands, unaffected:**
+
+| arm | | result |
+|---|---|---|
+| `rb0` | `RegisterBuiltinFunctions` entered, body skipped | **RETURNED** |
+| `rb1` | only `AlterFunctions` runs, then RETURN from `RegisterBuiltinFunctions` | **WEDGED** |
+
+`rb1` stops the flow (it is `REGBUILTIN_STOP=1` paired with `RUNSTOP=2`), so **S-03 is
+`sqlite3AlterFunctions()`** remains correct.
+
+**And `al0` adds one real fact:** with `AlterFunctions` neutered, the remainder of
+`RegisterBuiltinFunctions` ALSO wedges. So there are at least **two wedge sites inside that one
+function**, which is why single-point clamps kept giving contradictory-looking results.
+
+**The arm that was needed:** `ALTERSTOP=0` paired with `REGBUILTIN_STOP=1`, so the domain returns
+immediately after the neutered `AlterFunctions`. That isolates the call from everything after it.
+Build it before drawing any further conclusion.
+
+### (retracted) S-03 NARROWED TO THE CALL ITSELF (2026-08-09)
 
 | arm | | result |
 |---|---|---|
