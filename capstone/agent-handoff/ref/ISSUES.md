@@ -58,6 +58,48 @@ block. Two explanations for the staged stall were raised and **refuted**: layout
 build is a real defect — but it is not the cause. **That stall is itself unexplained and may deserve
 its own S-number if it blocks anything else.**
 
+### 2026-08-09 SPLIT INTO TWO SITES. The call + prologue are PROVEN INNOCENT.
+
+The decisive pair. Identical gutted `sqlite3_initialize` (body replaced by a bare return); the
+ONLY difference is what `run_sqlite` does next:
+
+| build | gutted `initialize` returns | `run_sqlite` then | result |
+|---|---|---|---|
+| `nk` | non-zero | takes `return fail("initialize", rc, 0);` | **WEDGED** |
+| `n8` | zero | falls through to a direct `return` | **RETURNED, 4 s** |
+
+Control green in both. Therefore:
+
+1. **The call into `sqlite3_initialize` and its prologue WORK.** `n8` executes
+   `auipc`/`addi`/`jalr` → `sqlite3_initialize` → prologue → return, and comes back. The
+   "eight instruction" localization recorded earlier is **withdrawn** — those instructions are fine.
+2. **`fail()` WEDGES.** It is the only thing on `nk`'s path that `n8` does not execute.
+3. **`sqlite3_initialize`'s BODY also wedges, independently** — `rn2` runs the full body and
+   returns DIRECTLY (no `fail()`), and wedges. So there are **two separate wedge sites**, and any
+   arm that reaches `fail()` measures site 2, not site 1.
+
+**This retracts `nz0`, `nk`, `F0`, `in1`, `in2`, `in4`** as evidence about `initialize`: every one
+of them returned non-zero (or fell through) into `fail()`. Only `rn1` (returns), `rn2` (wedges) and
+`n8` (returns) are clean.
+
+### Site A — `fail()`, the smaller and more tractable target
+
+    static int fail(const char *stage, int rc, sqlite3 *db) {
+      output_text("SQLITE ERROR stage="); output_text(stage); ...
+
+`stage` is a **string literal** — a capability — and `output_text` writes into the shared payload
+region. That is a tiny operation, and unlike the rest of SQLite it is small enough to rebuild
+inside the 13 KB fdreg model, which would take Site A off the 1.5 MB image entirely.
+
+**Next cut for Site A:** clamp inside `fail()` — before the first `output_text`, between the
+literal and the `stage` argument, and after — to separate "writing to the shared region" from
+"dereferencing a string-literal capability" from "dereferencing a *passed* string capability".
+
+### Site B — the body of `sqlite3_initialize`
+
+Still open. `rn2` is the only clean arm implicating it. Re-cut with clamps that return **zero**
+and pair each with a `RUNSTOP` direct return, so no arm ever enters `fail()`.
+
 ### RETRACTED: the first INITSTOP ladder was INVALID (my error)
 
 `F0`, `in1`, `in2`, `in4` all returned **0 = `SQLITE_OK`** from the clamp, so `run_sqlite` treated

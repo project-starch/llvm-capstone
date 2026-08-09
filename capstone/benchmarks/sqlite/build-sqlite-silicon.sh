@@ -385,7 +385,9 @@ s=open(path).read()
 m=re.search(r'int sqlite3_initialize\(void\)\s*\{', s)
 if not m: print("INITSTOP: sqlite3_initialize not found",file=sys.stderr); sys.exit(1)
 start=m.end()
-anchors={0:'__ENTRY__',
+anchors={8:'__NAKED0__',
+         9:'__NAKED__',
+         0:'__ENTRY__',
          7:'__BEFORE_MUTEXINIT__',
          1:'rc = sqlite3MutexInit();',
          2:'rc = sqlite3MallocInit();',
@@ -395,6 +397,24 @@ anchors={0:'__ENTRY__',
          6:'rc = sqlite3MemdbInit();'}
 t=anchors.get(n)
 if not t: print("INITSTOP: no anchor for %d"%n,file=sys.stderr); sys.exit(1)
+if t in ('__NAKED__','__NAKED0__'):
+    ZERO = (t=='__NAKED0__')   # NAKED0 returns 0 so run_sqlite does NOT take the fail() path
+    # Replace the ENTIRE body with a bare return. At -O0 the frame covers every local
+    # declared anywhere in the function, so an early return at the top (INITSTOP=0) still
+    # emits the full prologue including the `stc s0` capability spill. Deleting the body
+    # shrinks the frame to the minimum and removes that spill -- which is what separates
+    # "the CALL wedges" from "the PROLOGUE wedges".
+    depth=1; j=start
+    while j<len(s) and depth>0:
+        if s[j]=='{': depth+=1
+        elif s[j]=='}': depth-=1
+        j+=1
+    body_end=j-1
+    _ret = '0' if ZERO else 'capstone_initstop'
+    s = s[:start] + ('\n  volatile int capstone_initstop = 0x7B0%X;\n  return %s;\n' % (n,_ret)) + s[body_end:]
+    open(path,'w').write(s)
+    print("INITSTOP: sqlite3_initialize body REPLACED with a bare return (naked)")
+    raise SystemExit
 if t=='__ENTRY__':
     after=start                      # immediately after the opening brace: nothing runs
 elif t=='__BEFORE_MUTEXINIT__':
@@ -417,7 +437,11 @@ print("INITSTOP: early return inserted after sub-step %d (%s)" % (n,t))
 PYINIT
   _m=$(printf '0x7B0%X' "$INITSTOP")
   _n=$(grep -c -F "capstone_initstop = $_m" "$OBJ_DIR/sqlite3-capstone.c" || true)
-  _r=$(grep -c -F "if(capstone_initstop) return capstone_initstop;" "$OBJ_DIR/sqlite3-capstone.c" || true)
+  # Three clamp shapes exist: the `if(...) return capstone_initstop;` inline form, the naked
+  # form (`return capstone_initstop;`), and the naked-zero form (`return 0;`). Checking for a
+  # bare "return 0;" globally would match thousands of unrelated lines, so instead require the
+  # line IMMEDIATELY AFTER the marker declaration to be a return -- unique by construction.
+  _r=$(grep -A1 -F "capstone_initstop = $_m" "$OBJ_DIR/sqlite3-capstone.c" | grep -c -E "return (capstone_initstop|0);" || true)
   echo "== initstop gate: marker $_m x$_n ; return x$_r"
   if [[ "$_n" -ne 1 || "$_r" -ne 1 ]]; then
     echo "INITSTOP did NOT apply (marker=$_n return=$_r). Refusing to build." >&2; exit 1
