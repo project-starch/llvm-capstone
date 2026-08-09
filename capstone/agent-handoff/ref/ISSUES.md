@@ -198,7 +198,53 @@ Still supported, each stated with its replication count:
   between the competing models — both predict RETURN when the value is 0. The most-replicated arm
   in the set is the one that tests the least.
 
-### Minimal standalone repro — BUILT, NOT YET MEASURED
+### (2026-08-10) THE CONDITION, from three one-variable pairs on the same base image
+
+Every arm below is a byte patch of `sqlite_silicon.dom` (md5 `ab5aae8b…`); control green in
+every boot; `base` now reproduced as WEDGE on `caplifive_65536_r18_fix.bit`, so the comparator
+is finally anchored.
+
+| pair | the ONE thing that differs | result |
+|---|---|---|
+| `Z` vs `base` | branch **target** (`0x13cc68` vs `0x13cbc8`) — **one byte**, at `0x13cb6f` | both WEDGE |
+| `Z` vs `gap`  | a `nop` between the **`ld` and the branch** | WEDGE → RETURN |
+| `Z` vs `adj`  | a `nop` between the **`stc` and the `ld`**  | WEDGE → RETURN |
+
+`Z` vs `base` kills a confound that had been present in EVERY earlier arm: all of them retargeted
+the branch to the epilogue while `base` targeted the else-block, so branch position and branch
+target were changing together. They are now separated, and the target is irrelevant.
+
+**Condition as currently supported:** `stc rX,0(rA)` immediately followed by `ld rB,0(rA)`
+immediately followed by a conditional branch on `rB`. The branch resolves as though `rB` were
+nonzero when it is zero. Breaking EITHER adjacency fixes it.
+
+This is consistent with every site that demonstrably works: `strlen` (`0x14bdb4`) has no store
+before its load; `sqlite3FunctionSearch` (`0x144b04`) stores to a DIFFERENT address three
+instructions before its load; `sqlite3Strlen30` (`0x16b18`) does satisfy the condition but cannot
+show it, because stale and correct give the same branch direction there.
+
+**Consequence at the S-03 site:** `pOther` is NULL, the `beqz` at `0x13cb6c` does not take, the
+`if (pOther)` block runs, and `ldc a3,0x20(a0)` at `0x13cb7c` dereferences a NULL capability —
+which wedges rather than traps (R-5). QEMU has no such hazard, which is the divergence that let
+SQLite run green under emulation since the benchmark began.
+
+### STILL UNEXPLAINED — do not hand this to the hardware side yet
+
+* **The isolated repro does NOT reproduce it.** `sbb` builds the sequence in a 13 KB rung, on a
+  stack slot, including a tied-register arm (`movc t0,zero; stc t0,0(t1); ld t1,0(t1); beqz t1`)
+  that is instruction-for-instruction the S-03 shape. Ten arms, three draws: `retval 0xC0000000`,
+  every bit clear, controls clean. The value probe `sbr` likewise returns `0xA0000000` — the `ld`
+  after a same-address `stc` reads back 0 correctly. So the three-instruction sequence alone is
+  NOT sufficient; the real context supplies something the rung does not, and that something is
+  not yet identified.
+* **`p27a` vs `p27b` remain contradictory** under the condition above. Both put an ALU op between
+  the `ld` and the branch, so both should be immune; `p27a` (result into `a0`) RETURNED twice and
+  `p27b` (into `a3`, verified to hold 23 from `li a3,0x17` at `0x13cb34`) WEDGED. No model yet
+  covers both.
+* Every WEDGE is still N=1 per arm; returning arms replicate, wedging arms cannot (the runner
+  stops at the first non-return).
+
+### Minimal standalone repro — BUILT, MEASURED, DOES NOT REPRODUCE
 
 `capstone/tests/runtime-qemu/silicon-ladder/sbr_kernel.h`. Three matched pairs, each arm setting
 its own bit of a returned bitmask so nothing can hang and one run reports every arm:
@@ -206,9 +252,11 @@ store→load→branch (the SQLite shape), ALU→branch, and load→branch with n
 paired with a control differing by exactly one inserted `nop`. An odd (control) bit set means the
 instrument is broken, not the silicon.
 
-Status: two draws (`sbr`, `sbr4`) both **entry-stalled (R-16)** and carry no verdict. `sbr12` and
-`sbr28` are staged and unrun. The repro uses a scalar `sd`; the SQLite site uses `stc`, so an
-`stc` variant is needed before it can speak to the surviving narrowed claim.
+`sbr_kernel.h` returns the loaded value (no branch); `sbb_kernel.h` is ten arms -- three
+store-shape pairs plus a tied-register pair -- each contributing one bit, each paired with a
+`nop`-separated control. Both are clean on silicon across three draws. Keep them: they are the
+positive controls that make any future claim about this sequence falsifiable, and they are what
+proves the defect is context-dependent rather than sequence-intrinsic.
 
 **Evidence it is independent:**
 

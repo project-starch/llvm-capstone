@@ -1,56 +1,48 @@
 #ifndef SBR_H
 #define SBR_H
-/* sbr = Stale Branch operand Repro.
+/* sbr = Store-then-load Byte-Return probe.
  *
- * Minimal standalone repro for the S-03 root cause: a conditional branch whose source
- * register is written by the IMMEDIATELY PRECEDING instruction appears to resolve on the
- * STALE (pre-write) operand value on the FPGA. Found in sqlite3InsertBuiltinFuncs, where
+ * Minimal standalone probe for the S-03 site. In sqlite3InsertBuiltinFuncs the machine does
  *
- *      stc  a1, 0x0(a0)      ; spill pOther (NULL) to a stack slot
- *      ld   a0, 0x0(a0)      ; read it back as an integer -> 0
+ *      stc  a1, 0x0(a0)      ; capability store of pOther (NULL) to a stack slot
+ *      ld   a0, 0x0(a0)      ; read the SAME address back as a plain 64-bit integer
  *      beqz a0, <else>       ; NOT taken on silicon, so `if (pOther)` runs with pOther NULL
  *
- * sent a NULL pointer down the non-NULL path and wedged on the deref.
+ * and the subsequent deref of the NULL pOther wedges. Board arms established that pOther IS
+ * NULL and that the branch does not take; they did NOT establish why.
  *
- * WHY THIS SHAPE. In SQLite the failure is a WEDGE: one bit per session, and it takes the
- * core with it. Here every arm produces a WRONG NUMBER instead -- each sets its own bit in a
- * returned bitmask -- so a single run reports all six arms and nothing can hang.
+ * STOP INFERRING, MEASURE. Every previous arm inferred the loaded value from whether a branch
+ * was taken, which needs a model of the branch to interpret -- and the model that fit all
+ * seventeen arms was refuted by `strlen`, which has the same branch-after-producer shape and
+ * plainly works. So this probe contains NO BRANCH on the value under test: it performs the
+ * store/load pair and RETURNS THE LOADED BITS. One number, no model required.
  *
- * Every arm seeds its destination register NON-ZERO, then makes it architecturally ZERO,
- * then branches on zero. Correct hardware takes the branch and contributes 0. Hardware that
- * reads the pre-write operand sees the seed, does not take the branch, and sets the bit.
+ * Reading the result. retval = 0xA0000000 | sd_flag<<28 | (stc_loaded & 0x0FFFFFFF):
  *
- * The arms are three matched PAIRS. Within each pair the only difference is one inserted
- * `nop`, so the difference between the pair IS the variable:
+ *   0xA0000000  both paths read back 0. The load is FINE; the defect is elsewhere and the
+ *               branch becomes the suspect again.
+ *   0xA8000000  the SCALAR store/load path is broken too (sd then ld did not read 0).
+ *               Instrument or a far broader defect -- believe nothing else in the run.
+ *   0xA8000000-ish with low bits set, e.g. 0xA0000000|0x08000000 -> 0xA8000000 collision:
+ *               see below; bit 27 of the payload is what matters and is reported separately
+ *               by the 0x0FFFFFFF mask, so a payload of 0x08000000 shows as 0xA8000000 ONLY
+ *               if sd_flag is clear -- disambiguate with the sd_flag bit at 28.
+ *   any nonzero payload  the `ld` after a same-address `stc` returns the WRONG BITS. A payload
+ *               of 0x08000000 specifically is the compressed metadata word of a NULL
+ *               capability (bit 27 = `cursorless`), i.e. the load returned the metadata half
+ *               instead of the cursor half -- the dual-bank D-cache path, R-18/R-19 family.
  *
- *   bit 0 / 1   store to the slot, load it back, branch      <- the exact SQLite shape
- *   bit 2 / 3   ALU producer, no memory at all               <- is a load needed?
- *   bit 4 / 5   load with NO preceding store to that address <- is the store needed?
- *
- * Reading the result:
- *   any ODD bit (1,3,5) SET  -> the INSTRUMENT is broken, not the silicon. With a nop
- *                               between producer and branch there is no hazard to observe,
- *                               so a control arm must read the true value. Believe nothing
- *                               else in the run.
- *   0 set, 4 clear           -> the preceding store is REQUIRED: store-to-load forwarding,
- *                               not a branch-operand hazard.
- *   0 and 4 both set         -> the store is irrelevant; the branch operand is the defect.
- *   2 set                    -> not even a load is needed; any producer triggers it.
- *   nothing set              -> hazard NOT reproduced in isolation; it needs something the
- *                               SQLite context supplies that this rung does not.
- *
- * The BASE constant matters: a bare 0 is indistinguishable from "the rung was not compiled
- * in" and from "the harness reported nothing", both of which have produced false CLEAN
- * verdicts on this project. A nonzero base proves the code ran.
+ * The 0xA magic in the top nibble is deliberate: a bare 0 is indistinguishable from "the rung
+ * was not compiled in" and from "the harness reported nothing", both of which have produced
+ * false CLEAN verdicts on this project.
  */
 
-#define SBR_BASE 0xB0000u
+#define SBR_MAGIC 0xA0000000u
 
 /* R-16 REDRAW KNOB. The SHA5 entry stall is per-image and deterministic, so retrying a
- * stalling binary is futile -- a fresh DRAW is needed instead. SBR_PAD emits that many bytes
- * of never-executed nops ahead of the code, which shifts the image layout while leaving
- * sbr_compute byte-identical. Verify that identity before trusting a draw: compare the
- * function's bytes across draws, and abort if any two whole images hash the same. */
+ * stalling binary is futile -- a fresh DRAW is needed. SBR_PAD emits that many never-executed
+ * nops ahead of the code, shifting image layout while leaving sbr_compute byte-identical.
+ * Verify that identity across draws before trusting any of them. */
 #ifndef SBR_PAD
 #define SBR_PAD 0
 #endif
@@ -60,88 +52,31 @@
 __asm__(".pushsection .text\n\t.rept " SBR_STR(SBR_PAD) "\n\tnop\n\t.endr\n\t.popsection");
 #endif
 
-static volatile unsigned long sbr_slot = 1; /* seeded NON-zero: arm 0's store is what makes
-                                             * it zero, so a skipped store cannot masquerade
-                                             * as a passing arm. */
+static volatile unsigned long sbr_slot[4] = { 1, 1, 1, 1 };  /* seeded NON-zero, so a store
+                                                              * that never happened cannot
+                                                              * masquerade as a clean read */
 
 static unsigned sbr_compute(void)
 {
-  unsigned long p = (unsigned long)&sbr_slot;
-  unsigned long a0, a1, a2, a3, a4, a5;
+  unsigned long v_stc, v_sd;
 
-  /* PAIR A -- the exact SQLite shape: store, load it back, branch immediately. */
+  /* ARM 1 -- THE SQLITE SHAPE. Capability store of NULL, then a plain integer load of the
+   * SAME address. No branch: the loaded bits are the result. */
   __asm__ volatile(
-      "li   %0, -1\n\t"          /* seed the branch register non-zero */
-      "sd   zero, 0(%1)\n\t"     /* slot := 0 */
-      "ld   %0, 0(%1)\n\t"       /* architecturally 0 */
-      "beqz %0, 1f\n\t"          /* correct: taken */
-      "li   %0, 1\n\t"           /* not taken => the branch saw the stale seed */
-      "j    2f\n"
-      "1:\tli %0, 0\n"
-      "2:"
-      : "=&r"(a0) : "r"(p) : "memory");
+      "movc t0, zero\n\t"        /* t0 = NULL capability            */
+      "stc  t0, 0(%1)\n\t"       /* capability store to the slot    */
+      "ld   %0, 0(%1)\n\t"       /* scalar load of the same address */
+      : "=r"(v_stc) : "r"(&sbr_slot[0]) : "t0", "memory");
 
-  __asm__ volatile(              /* CONTROL for A: one nop, nothing else changed */
-      "li   %0, -1\n\t"
+  /* ARM 2 -- CONTROL. Identical except the store is a plain scalar `sd`. If this reads back
+   * nonzero the instrument is broken, not the silicon. */
+  __asm__ volatile(
       "sd   zero, 0(%1)\n\t"
       "ld   %0, 0(%1)\n\t"
-      "nop\n\t"
-      "beqz %0, 1f\n\t"
-      "li   %0, 1\n\t"
-      "j    2f\n"
-      "1:\tli %0, 0\n"
-      "2:"
-      : "=&r"(a1) : "r"(p) : "memory");
+      : "=r"(v_sd) : "r"(&sbr_slot[2]) : "memory");
 
-  /* PAIR B -- ALU producer, no memory operand anywhere. */
-  __asm__ volatile(
-      "li   %0, -1\n\t"
-      "addi %0, zero, 0\n\t"
-      "beqz %0, 1f\n\t"
-      "li   %0, 1\n\t"
-      "j    2f\n"
-      "1:\tli %0, 0\n"
-      "2:"
-      : "=&r"(a2) : : );
-
-  __asm__ volatile(              /* CONTROL for B */
-      "li   %0, -1\n\t"
-      "addi %0, zero, 0\n\t"
-      "nop\n\t"
-      "beqz %0, 1f\n\t"
-      "li   %0, 1\n\t"
-      "j    2f\n"
-      "1:\tli %0, 0\n"
-      "2:"
-      : "=&r"(a3) : : );
-
-  /* PAIR C -- load and branch, but NO store to that address in this arm. The slot is
-   * already 0 here because pair A stored 0 to it, so the load still reads 0; what differs
-   * from pair A is only that no store immediately precedes the load. */
-  __asm__ volatile(
-      "li   %0, -1\n\t"
-      "ld   %0, 0(%1)\n\t"
-      "beqz %0, 1f\n\t"
-      "li   %0, 1\n\t"
-      "j    2f\n"
-      "1:\tli %0, 0\n"
-      "2:"
-      : "=&r"(a4) : "r"(p) : "memory");
-
-  __asm__ volatile(              /* CONTROL for C */
-      "li   %0, -1\n\t"
-      "ld   %0, 0(%1)\n\t"
-      "nop\n\t"
-      "beqz %0, 1f\n\t"
-      "li   %0, 1\n\t"
-      "j    2f\n"
-      "1:\tli %0, 0\n"
-      "2:"
-      : "=&r"(a5) : "r"(p) : "memory");
-
-  return SBR_BASE
-       | ((unsigned)a0 << 0) | ((unsigned)a1 << 1)
-       | ((unsigned)a2 << 2) | ((unsigned)a3 << 3)
-       | ((unsigned)a4 << 4) | ((unsigned)a5 << 5);
+  return SBR_MAGIC
+       | ((v_sd != 0) ? 0x10000000u : 0u)
+       | ((unsigned)v_stc & 0x0FFFFFFFu);
 }
 #endif
