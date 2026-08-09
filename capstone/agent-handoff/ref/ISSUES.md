@@ -367,6 +367,61 @@ prediction. It is still a hypothesis about RTL that has not been confirmed IN th
 `scoreboard.sv`, for a load with WAIT_PAGE_OFFSET-extended latency, is the place to look, and
 `alu.sv`'s comparator has still never been read.
 
+### (2026-08-10) ROOT CAUSE CANDIDATE — `issue_read_operands.sv:568` drops x10's clobber claim
+
+PENDING AUDIT at time of writing. Three independent lines of evidence converge.
+
+**The RTL**, at `e1b3db6ba` (the revision `caplifive_65536_r18_fix.bit` was built from):
+
+```
+566  gpr_clobber_vld[fwd_i.sbe[i].rs1][i] =
+567      ((check_cap_op(fwd_i.sbe[i].op)) && (fwd_i.sbe[i].op != ariane_pkg::CAPENTER)) && fwd_i.still_issued[i];
+568  gpr_clobber_vld[5'd10][i] = fwd_i.sbe[i].op == ariane_pkg::CAPENTER && fwd_i.still_issued[i];
+569  gpr_clobber_vld[fwd_i.sbe[i].rd][i] = fwd_i.still_issued[i] && !(...is_rd_fpr...);
+```
+
+Line 566-567 marks an in-flight capability op's `rs1` as clobbered -- correct, because a cap op
+can write back its rs1 cursor -- and `check_cap_op` includes **STC** and **LDC**
+(`ariane_pkg.sv:902-912`). Line 568 then **unconditionally overwrites** that entry **for x10
+only**, keeping the claim solely for `CAPENTER`. It is an `=` where the intent needed `|=`. Line
+569 restores only `rd`, and a store has no `rd`, so x10's claim is never restored.
+
+Net: an in-flight `stc a1,0(a0)` silently loses its clobber claim on `a0`, for register x10 and
+no other register. A subsequent reader of x10 is then served a stale value.
+
+**The board evidence:**
+
+| arm | what it establishes |
+|---|---|
+| `V1` = `sub a3,a0,s0 ; addi a3,a3,0x50 ; beqz a3` -> RETURN | the value read for `a0` is EXACTLY `s0-0x50`, i.e. **the STC's own rs1 cursor** -- measured, not inferred |
+| `V0` (same with a nop first, `bnez`) -> RETURN | positive control: the probe chain works and can produce both answers |
+| `R13` = the identical triple rewritten on `a3` -> RETURN | the defect is **register-specific to x10** |
+| `base`/`Z` on `a0` -> WEDGE | the same shape on x10 fails |
+
+The measured poisoned value IS the operand whose in-flight claim line 568 drops. That is the
+convergence: an empirical register-specificity result, an empirical value measurement, and an RTL
+line hard-coding that exact register.
+
+**Everything now falls out, including the two arms nothing previously explained:**
+
+* `adj` (a nop between the STC and the LD) RETURNS -- the STC has left the scoreboard before the
+  consumer reads x10, so the dropped claim no longer matters.
+* The standalone rung is CLEAN because its tied-register arm was written on **x6/t1**, not x10.
+  The earlier "store-buffer pressure / context-dependence" explanation is WITHDRAWN; it was never
+  about context, it was about the register number.
+* `q4` WEDGE vs `q6` RETURN, `p27b`/`p27c` WEDGE vs `p27a` RETURN, and the flat s-ladder are all
+  the same thing: a consumer that lands its result in a register other than x10 keeps the stale
+  value, while one that writes x10 has it corrected by the load's own writeback.
+
+**Why it is not visible everywhere else:** at essentially every other tied
+`stc rX,i(a0) / ld a0,i(a0) / consumer` site, the stale value (a stack address) and the correct
+value (a live pointer) are BOTH non-zero, so no branch changes direction. The defect only bites
+where the loaded pointer is genuinely NULL. `0x13cb68` is the first such site SQLite reaches.
+
+**Mitigations, both board-demonstrated at this site:** avoid x10 for the tied register (`R13`), or
+separate the STC from the LD (`adj`). Either is a backend scheduling/regalloc constraint. Neither
+is yet implemented or validated on the full workload.
+
 ### STILL UNEXPLAINED — do not hand this to the hardware side yet
 
 * **The isolated repro does NOT reproduce it.** `sbb` builds the sequence in a 13 KB rung, on a
