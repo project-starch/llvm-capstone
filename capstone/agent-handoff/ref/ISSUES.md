@@ -231,7 +231,32 @@ ENTRY-STALLED (six padded builds plus the 171-leaf one)". At 173 entries, on the
 two independent builds enter and return correctly. That claim was made on the pre-fix bitstream and
 must not be carried forward; the comment should be corrected.
 
-### THE REMAINING BEHAVIOURAL GAP, isolated 2026-08-09
+### S-03 NARROWED TO THE CALL ITSELF (2026-08-09)
+
+| arm | | result |
+|---|---|---|
+| `rb0` | `RegisterBuiltinFunctions` entered, body skipped (so `AlterFunctions` never called) | **RETURNED** |
+| `al0` | `AlterFunctions` CALLED, but its `InsertBuiltinFuncs` call skipped — body does nothing but declare a static array and return | **WEDGED** |
+| `rb1` | `+ AlterFunctions` in full | **WEDGED** |
+
+**Calling `sqlite3AlterFunctions()` wedges even when the function does nothing.** So the fault is
+in the call/entry, NOT in the body, NOT in `sqlite3InsertBuiltinFuncs`, and NOT in the array's
+cap-init — `rb0` proves the array is still cap-init'd fine when the call is simply not made.
+
+**Everything the fdreg model can reproduce is exonerated.** Matched and measured clean: construct,
+array size, section, symbol binding, cap-init record shape, cap-init entry count (173 vs 179), the
+link-into-bucket store, and the chain walk with a `zName` dereference (`FDREG_SEARCH`). None
+reproduce it.
+
+**Next, and it is a small set:** the call sequence into `sqlite3AlterFunctions` — its `auipc`/`jalr`
+target and distance, whether the callee's prologue differs from the many calls that DO work in the
+same image, and whether the function's `.text` placement (it is one of the few functions whose only
+content is a large static array) puts the call across some boundary. Disassemble the call site and
+the callee prologue and compare against a working call in the same image, exactly as was done for
+`sqlite3_initialize` — where that comparison exonerated the call and pointed elsewhere. Here the
+evidence points the other way.
+
+### (superseded) THE REMAINING BEHAVIOURAL GAP, isolated 2026-08-09
 
 `sqlite3InsertBuiltinFuncs` vs fdreg's `fdreg_link_via_param`, side by side:
 
