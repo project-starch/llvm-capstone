@@ -348,10 +348,24 @@ register, i.e. whether the late writeback erases the corruption.
 so the load is never stalled and there is no late writeback. The store-buffer-pressure arms (K-N in
 `sbb_kernel.h`) are the direct test and have entry-stalled (R-16) on two draws.
 
-**PROSPECTIVE TEST, not yet run** -- `mv a3,a0 ; beqz a0` (consume `a0` into `a3`, but branch on
-`a0`). The model says `a3` keeps W while `a0` is restored to 0, so this must RETURN, whereas `q4`
-(`mv a3,a0 ; nop ; beqz a3`) WEDGED. Same producer, same dependence, opposite verdict, decided
-purely by which register the branch reads. If it wedges, the model is dead.
+**PROSPECTIVE TEST -- RUN, AND IT PASSED (2026-08-10).** `q5` = `mv a3,a0 ; beqz a0` and
+`q6` = `mv a3,a0 ; nop ; beqz a0` both RETURNED, as the model required. Against `q4`:
+
+| arm | code | branch reads | verdict |
+|---|---|---|---|
+| `q4` | `mv a3,a0 ; nop ; beqz a3` | `a3` | **WEDGE** |
+| `q6` | `mv a3,a0 ; nop ; beqz a0` | `a0` | **RETURN** |
+
+Same producer, same dependence on the stalled load, same branch address. The ONLY difference is
+which register the branch reads, and it flips the verdict. That is the model's central claim --
+corruption survives in any register EXCEPT the load's own destination, which the late writeback
+restores -- and it was predicted before the run, not fitted after it.
+
+The model now accounts for all ~20 arms with one mechanism and has one successful prospective
+prediction. It is still a hypothesis about RTL that has not been confirmed IN the RTL: the
+`fwd_i.wb[k]` / `fwd_i.sbe[k]` forwarding-tier boundary in `issue_read_operands.sv` and
+`scoreboard.sv`, for a load with WAIT_PAGE_OFFSET-extended latency, is the place to look, and
+`alu.sv`'s comparator has still never been read.
 
 ### STILL UNEXPLAINED — do not hand this to the hardware side yet
 
