@@ -285,6 +285,47 @@ def main():
                     f"COMPLETED (carve loop AND cap-init); the fault is inside domain_main "
                     f"or in reaching it. This is a result, not a staging failure.")
                 bad = False
+            # A MISSING .dom IS DETECTED DIRECTLY, FROM THE LOADER'S OWN ERROR STRING.
+            #
+            # libcapstone.c:89,284 print exactly "Failed to open the file." when the domain
+            # path does not exist. This is the ONLY reliable staging check, and it must be
+            # tested BEFORE any marker-based reasoning, because the host does NOT stop there:
+            # it goes on to create a domain, share both regions, enter and return, emitting a
+            # complete and entirely convincing SQ: A/dom-ok .. G/enter .. H/return sequence
+            # for a domain that was never loaded. A boot on 2026-08-10 reported four arms as
+            # RETURNED on that basis when none of the four files existed in the initramfs.
+            if not wedged and "Failed to open the file." in text:
+                raise SystemExit(
+                    f"HARD STOP: {dom} -- the loader printed 'Failed to open the file.'\n"
+                    f"The domain is NOT in the initramfs. Every marker after that line "
+                    f"(including SQ: G/enter and SQ: H/return) belongs to a domain that was "
+                    f"never loaded, so any verdict from this arm is a PHANTOM.\n"
+                    f"Re-stage the .dom into BOTH overlay/test-domains and "
+                    f"build/target/test-domains, rebuild linux-rebuild THEN opensbi-rebuild, "
+                    f"and verify the bytes are present in build/images/rootfs.cpio.")
+
+            # A TRUNCATION ARM RETURNS WITHOUT EVER REACHING THE `obs=` EMIT.
+            #
+            # The guard's real job is "the shell came back but nothing ran". With the
+            # missing-file case now caught above by the loader's own error string,
+            # `SQ: G/enter` followed by `SQ: H/return` means the host entered a domain that
+            # really was loaded and it came back.
+            #
+            # That shape is a byte-patched bisection arm: a 4-byte `j <epilogue>` planted
+            # mid-function makes the domain return early, skipping the code that emits
+            # `SQ: obs=`. Without this the guard aborts the whole boot at the first such
+            # arm and discards every domain behind it -- which it did, killing a wide
+            # 8-arm batch after arm 2 and costing a full boot.
+            #
+            # Staleness is a DIFFERENT failure and is covered elsewhere, by
+            # assert_firmware_embeds_current_initramfs(), which checks the bytes actually
+            # packed into the initramfs. This branch is not a substitute for it.
+            if (not wedged and bad and m_obs is None
+                    and "SQ: G/enter" in text and "SQ: H/return" in text):
+                log(f"  {dom}: no obs= marker, but SQ: G/enter AND SQ: H/return are both "
+                    f"present -- the domain ENTERED and RETURNED. Expected for a truncation "
+                    f"arm that exits before the emit. This is a RETURN, not a staging failure.")
+                bad = False
             if not wedged and bad:
                 raise SystemExit(
                     f"HARD STOP: {dom} produced {got}, not a staged marker.\n"
