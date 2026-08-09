@@ -212,7 +212,35 @@ whereas SQLite **ENTERS and then wedges**. Those are different failure signature
 strong lead and not yet the same defect. Either the count causes two distinct failures at different
 thresholds, or the padded rungs hit a second problem. Do not merge them without evidence.
 
-### CAP-INIT SWEEP MEASURED 2026-08-09 — 109 carves is HARMLESS
+### CAP-INIT COUNT IS EXONERATED (2026-08-09), and the "~170 entry-stalls" claim is REFUTED
+
+Full sweep, ladder driver with oracles so a miscompute would be visible, control green in both boots:
+
+| carves | rung | verdict |
+|---|---|---|
+| 12 | unpadded | OK |
+| 45 / 77 / 109 | `lv4` / `lv8` / `lv12` | **OK, 2609** |
+| **173** | `lw20` **and** `lw28` (same count, different link addresses) | **OK, 2609** |
+| 179 | SQLite `sqlite3AlterFunctions` | **WEDGES** |
+
+**173 carves — six below SQLite's 179 — runs clean, twice, at two link addresses.** So cap-init
+entry count does not cause the wedge, the entry stall, or a miscompute at any point on this axis.
+
+**This REFUTES the note in `fdreg_kernel.h`** that "every rung built with ~170 cap-init entries has
+ENTRY-STALLED (six padded builds plus the 171-leaf one)". At 173 entries, on the current bitstream,
+two independent builds enter and return correctly. That claim was made on the pre-fix bitstream and
+must not be carried forward; the comment should be corrected.
+
+**What this leaves for S-03.** fdreg and `sqlite3AlterFunctions` now match on: construct (9-entry
+`FuncDef` walk, `zName` read, length call), array size (1296 B), section, symbol binding, cap-init
+record shape, AND cap-init entry count. The wedge is caused by something else. Remaining
+un-eliminated differences, in order of cheapness to test: the gp-captable INDEX each array is
+reached through; the string literals' storage (merged `.rodata` vs per-entry); the function
+pointers in `INTERNAL_FUNCTION` entries (fdreg's `xFunc` are local statics, SQLite's are real
+functions elsewhere in a 1.5 MB image); and what `sqlite3InsertBuiltinFuncs` does that
+`fdreg_link_via_param` does not — notably the hash insert into `sqlite3BuiltinFunctions`.
+
+### (superseded) CAP-INIT SWEEP MEASURED 2026-08-09 — 109 carves is HARMLESS
 
 Ladder driver with oracles (so a miscompute would be visible, not just a wedge), control green:
 
