@@ -37,6 +37,18 @@
  *   bit 7  H  stc ; ld rA,0(rA) ; nop ; beqz rA  <- control for G
  *   bit 8  I  ld rA,0(rA) ; beqz rA              <- tied register, no adjacent store
  *   bit 9  J  ld rA,0(rA) ; nop ; beqz rA        <- control for I
+ *   bit 10 K  STORE-BUFFER PRESSURE, then stc ; ld rA,0(rA) ; beqz rA
+ *   bit 11 L  control for K
+ *   bit 12 M  STORE-BUFFER PRESSURE, then sd ; ld ; beqz
+ *   bit 13 N  control for M
+ *
+ * K-N exist because arms A-J are all CLEAN on silicon while the identical sequence in SQLite
+ * wedges, so the defect is context-dependent. The RTL gives a candidate context: a load whose
+ * page offset [11:3] matches ANY pending store stalls in WAIT_PAGE_OFFSET until that store
+ * drains (load_unit.sv:354-389, store_buffer.sv:257-280), so the load's completion latency --
+ * and therefore which forwarding tier a dependent instruction can observe -- depends on how
+ * busy the store buffer is. A tiny cold rung drains instantly; SQLite does not. K-N put real
+ * pressure in the buffer first.
  *
  * Arms A-F all read CLEAN on silicon (retval 0xC0000000, three draws), so the condition is
  * NOT "a branch after a load after a same-address store" on its own. G-J add the one
@@ -102,7 +114,7 @@ static volatile unsigned sbb_tag = 0;
 static unsigned sbb_compute(void)
 {
   volatile unsigned long slot[8];
-  unsigned long a, b, c, d, e, f, g, h, i, j;
+  unsigned long a, b, c, d, e, f, g, h, i, j, k, l, m, n;
 
   slot[0] = 1; slot[2] = 1; slot[4] = 1;   /* seeded NON-zero: a store that never happened
                                             * cannot masquerade as a clean read */
@@ -123,12 +135,28 @@ static unsigned sbb_compute(void)
   SBB_TIED(i, &slot[6], "nop",                            "");
   SBB_TIED(j, &slot[6], "nop",                            "nop\n\t");
 
+  /* Fill the store buffer with traffic to OTHER addresses, then run the sequence. The stores
+   * are to distinct 8-byte words so they occupy separate entries rather than coalescing. */
+#define SBB_PRESSURE                                          \
+  "sd zero, 0x40(%1)\n\tsd zero, 0x48(%1)\n\t"               \
+  "sd zero, 0x50(%1)\n\tsd zero, 0x58(%1)\n\t"               \
+  "sd zero, 0x60(%1)\n\tsd zero, 0x68(%1)\n\t"               \
+  "sd zero, 0x70(%1)\n\tsd zero, 0x78(%1)\n\t"
+  slot[6] = 1;
+  SBB_TIED(k, &slot[6], SBB_PRESSURE "movc t0, zero\n\tstc t0, 0(t1)", "");
+  SBB_TIED(l, &slot[6], SBB_PRESSURE "movc t0, zero\n\tstc t0, 0(t1)", "nop\n\t");
+  slot[6] = 1;
+  SBB_TIED(m, &slot[6], SBB_PRESSURE "sd zero, 0(t1)",                   "");
+  SBB_TIED(n, &slot[6], SBB_PRESSURE "sd zero, 0(t1)",                   "nop\n\t");
+
   return SBB_MAGIC
-       | (sbb_tag & 0xFC00u)
+       | (sbb_tag & 0xC000u)
        | ((unsigned)a << 0) | ((unsigned)b << 1)
        | ((unsigned)c << 2) | ((unsigned)d << 3)
        | ((unsigned)e << 4) | ((unsigned)f << 5)
        | ((unsigned)g << 6) | ((unsigned)h << 7)
-       | ((unsigned)i << 8) | ((unsigned)j << 9);
+       | ((unsigned)i << 8) | ((unsigned)j << 9)
+       | ((unsigned)k <<10) | ((unsigned)l <<11)
+       | ((unsigned)m <<12) | ((unsigned)n <<13);
 }
 #endif

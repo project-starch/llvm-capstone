@@ -228,6 +228,61 @@ show it, because stale and correct give the same branch direction there.
 which wedges rather than traps (R-5). QEMU has no such hazard, which is the divergence that let
 SQLite run green under emulation since the benchmark began.
 
+### (2026-08-10, later) POSITION CONFOUND CLEARED; the split is REAL, not noise
+
+An audit argued the whole table was confounded: no SQLite arm had ever wedged at boot position
+<= 3, and the RETURN arms had only ever run at position 3 while the WEDGE arms had only ever run
+at position 4. That was true of the data as it stood, and it would have voided every pair. It is
+now tested directly and does NOT hold:
+
+| arm | positions run | verdict |
+|---|---|---|
+| `Z`    | **2**, 4 | WEDGE both |
+| `gap`  | 3, **4** | RETURN both |
+| `p27a` | **2**, 3 | RETURN both |
+| `p27b` | **3**, 4 | WEDGE both |
+
+Each arm now reproduces at a position it had never run at, in both directions. Wedging is not a
+late-slot artifact and returning is not an early-slot artifact. The audit's stronger reading --
+that the 4/3 split across behaviourally similar arms is noise -- is refuted by the same table.
+
+`p27a` is however NON-DISCRIMINATING and must stop being cited as support: its shift result
+(`0<<37`) and its stale value (the load result, 0) are BOTH zero, so it returns under either
+model. `p27b` is the informative member of the pair -- its stale `a3` holds 23, from
+`li a3,0x17` at `0x13cb34`.
+
+### Two mechanisms killed by one-byte arms
+
+* **`pv`** -- `base` with `movc a1,a0` changed to `movc a1,zero` (one byte). Stores a
+  zero-register null instead of the call's return value; architecturally identical. **WEDGED.**
+  The stored capability's PROVENANCE is not the variable. This kills the leading explanation for
+  why the standalone rung is clean.
+* **`lwarm`** -- `ldc a3,0x20(a0)` at `0x13cb7c` changed to `lw a3,0x20(a0)`. **WEDGED.** The
+  fault is not the capability check on the `ldc`; a plain integer load of the same address dies
+  too, i.e. the ADDRESS is bad. Consistent with `pOther` being NULL, and it removes
+  "capability-load defect" as an alternative.
+
+### RTL, read at the revision the bitstream actually came from
+
+An earlier oracle read the working tree and reported the R-18 gate ABSENT. That was the wrong
+revision: the tree is one commit behind `origin/fpga-testing`, and the missing commit
+`e1b3db6ba69b` "Fixed incorrect metadata in STC" IS the gate. Read at `e1b3db6ba`:
+
+* `store_unit.sv` gates `result_metadata_o` / `st_user_n` on
+  `(lsu_ctrl.operation inside {STC} || sel_dom_switch)`, so R-18 is fixed on this silicon and
+  the `stc` in our sequence is a legitimate capability store either way.
+* No path found where a scalar load's data comes from the metadata bank: `wt_dcache_mem.sv`
+  drives `rd_data_o` exclusively from `.data` and `rd_user_o` exclusively from `.user`.
+* A load whose page offset `[11:3]` matches ANY pending store STALLS in `WAIT_PAGE_OFFSET`
+  until that store drains (`load_unit.sv:354-389`, `store_buffer.sv:257-280`) -- opcode-agnostic,
+  and it blocks the load from issuing rather than forwarding to it.
+* LEAD, unproven: `wt_dcache_mem.sv:206` forces `bank_collision` true for every read port
+  whenever `st_wr_cap` is live, NOT address-gated, so a capability store's array commit can be
+  deferred arbitrarily by read traffic. That is a plausible source of context-dependence.
+* UNRESOLVED: the `beqz` comparator itself lives in `alu.sv` and was not read; the
+  `fwd_i.wb[k]` / `fwd_i.sbe[k]` forwarding-tier boundary for a load with unusual completion
+  latency is not closed out.
+
 ### STILL UNEXPLAINED — do not hand this to the hardware side yet
 
 * **The isolated repro does NOT reproduce it.** `sbb` builds the sequence in a 13 KB rung, on a
@@ -237,10 +292,14 @@ SQLite run green under emulation since the benchmark began.
   after a same-address `stc` reads back 0 correctly. So the three-instruction sequence alone is
   NOT sufficient; the real context supplies something the rung does not, and that something is
   not yet identified.
-* **`p27a` vs `p27b` remain contradictory** under the condition above. Both put an ALU op between
-  the `ld` and the branch, so both should be immune; `p27a` (result into `a0`) RETURNED twice and
-  `p27b` (into `a3`, verified to hold 23 from `li a3,0x17` at `0x13cb34`) WEDGED. No model yet
-  covers both.
+* **No single model covers `adj` and `p27b` together.** `adj` (branch adjacent to the load, but a
+  nop between the store and the load) RETURNS, which says an adjacent branch reads correctly once
+  the load is not store-stalled. `p27b` (an ALU op between the load and the branch) WEDGES, which
+  says the branch read a stale operand even with an instruction in between. Every model tried so
+  far explains one and breaks on the other. Both are reproduced at two positions, so neither can
+  be dismissed.
+* **The store-buffer-pressure arms (K-N) have never been measured.** They are built and staged
+  and are the direct test of the RTL context lead; two draws entry-stalled (R-16).
 * Every WEDGE is still N=1 per arm; returning arms replicate, wedging arms cannot (the runner
   stops at the first non-return).
 
