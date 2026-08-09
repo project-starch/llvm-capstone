@@ -363,6 +363,45 @@ cp -f "$VFS_DIR/../sqlite-vfs-skeleton/capstone_sqlite_os.c" "$OBJ_DIR/capstone_
 cp -f "${DOMAIN_SRC:-$SCRIPT_DIR/sqlite_capstone_domain.c}" "$OBJ_DIR/sqlite_capstone_domain.c"
 cp -f "$SCRIPT_DIR/sqlite_silicon_amalgam.c" "$OBJ_DIR/amalgam.c"
 
+# FAILSTOP=<n> -- DIAGNOSTIC ONLY. Clamp inside fail(), which WEDGES (S-02 Site A,
+# measured 2026-08-09: nk takes the fail() path and wedges, n8 skips it and returns in 4 s
+# with an otherwise identical image).
+#
+#   1 = return at fail() entry, before ANY output_text  -> isolates the call/prologue of fail
+#   2 = after output_text("SQLITE ERROR stage=")        -> a STRING LITERAL capability
+#   3 = after output_text(stage)                        -> a PASSED string capability
+#
+# Pair with INITSTOP=9 so the fail() path is actually taken.
+if [[ -n "${FAILSTOP:-}" ]]; then
+  echo "== DIAGNOSTIC: clamping fail() after sub-step $FAILSTOP"
+  python3 - "$OBJ_DIR/sqlite_capstone_domain.c" "$FAILSTOP" <<'PYFAIL'
+import sys,re
+path,n=sys.argv[1],int(sys.argv[2])
+s=open(path).read()
+m=re.search(r'static int fail\(const char \*stage, int rc, sqlite3 \*db\) \{', s)
+if not m: print("FAILSTOP: fail() not found",file=sys.stderr); sys.exit(1)
+start=m.end()
+if n==1:
+    after=start
+else:
+    tgt={2:'output_text("SQLITE ERROR stage=");', 3:'output_text(stage);'}[n]
+    i=s.find(tgt, start)
+    if i<0: print("FAILSTOP: anchor %r not found"%tgt,file=sys.stderr); sys.exit(1)
+    after=i+len(tgt)
+ins='\n  { volatile int capstone_failstop = 0x7C0%X; if(capstone_failstop) return capstone_failstop; }\n' % n
+s=s[:after]+ins+s[after:]
+open(path,'w').write(s)
+print("FAILSTOP: early return inserted at sub-step %d"%n)
+PYFAIL
+  _m=$(printf '0x7C0%X' "$FAILSTOP")
+  _n=$(grep -c -F "capstone_failstop = $_m" "$OBJ_DIR/sqlite_capstone_domain.c" || true)
+  _r=$(grep -A1 -F "capstone_failstop = $_m" "$OBJ_DIR/sqlite_capstone_domain.c" | grep -c -F "return capstone_failstop;" || true)
+  echo "== failstop gate: marker $_m x$_n ; return x$_r"
+  if [[ "$_n" -ne 1 || "$_r" -ne 1 ]]; then
+    echo "FAILSTOP did NOT apply (marker=$_n return=$_r). Refusing to build." >&2; exit 1
+  fi
+fi
+
 # INITSTOP=<n> -- DIAGNOSTIC ONLY. Early-return from sqlite3_initialize() after sub-step n,
 # to bisect S-02 (the wedge is inside initialize(); measured 2026-08-09 by rn1 RETURN /
 # rn2 WEDGE, both on caplifive_65536_r18_fix.bit with a green control).

@@ -48,9 +48,21 @@ static inline unsigned long rd_icount(void) {
 static void output_text(const char *text) {
   if (!hostcall_metadata || !hostcall_payload)
     return;
+  /* Both delins guarded for the same reason as sqlite_capstone_domain.c: on the
+     gp-captable ABI these capabilities are reached through the cap-table and arrive
+     NONLIN, and DELIN on a non-linear capability raises UNEXPECTED_CAP_TYPE on the RTL,
+     which WEDGES rather than traps (R-5). QEMU's helper_csdelin returns early, hiding it.
+     This is the S-02 root cause, proven on silicon 2026-08-09: with the guard the same
+     arm returned in 4 s where it had wedged. UNTESTED IN THIS FILE -- this domain has not
+     been re-run on the board since the guard was added; it is the same construct and the
+     same ABI, but say so rather than imply it was measured here. */
+#ifndef CAPSTONE_GP_CAPTABLE_ABI
   CAPSTONE_DELIN(text);
+#endif
   char *payload = (char *)hostcall_payload;
+#ifndef CAPSTONE_GP_CAPTABLE_ABI
   CAPSTONE_DELIN(payload);
+#endif
   unsigned long offset = hostcall_metadata->length;
   while (*text && offset + 1 < SQLITE_HC_REGION_SIZE)
     payload[offset++] = *text++;

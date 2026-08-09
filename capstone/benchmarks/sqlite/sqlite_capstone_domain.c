@@ -45,10 +45,25 @@ static void output_text(const char *text) {
   CAPSTONE_DELIN(text);
 #endif
   char *payload = (char *)hostcall_payload;
-  /* This one stays in every build. `payload` is the HOST capability loaded fresh out of
-     its global each call, not a cap-table storage cap -- it is still linear here, and the
-     copy on the line above would consume it without the delin. */
+  /* WAS "this one stays in every build", on the reasoning that `payload` is the HOST
+     capability loaded fresh out of its global each call, "not a cap-table storage cap --
+     it is still linear here". That reasoning is WRONG on the gp-captable ABI, and it cost
+     S-02: under -capstone-gp-captable `hostcall_payload` IS reached through the cap-table,
+     so it arrives NONLIN exactly like `text`, and DELIN on a non-linear capability raises
+     UNEXPECTED_CAP_TYPE on the RTL -- which wedges rather than traps (R-5). QEMU's
+     helper_csdelin returns early, which is why SQLite ran green under emulation and died
+     on silicon.
+     MEASURED 2026-08-09 on caplifive_65536_r18_fix.bit, control green in both boots:
+       FS1 (return at fail() entry, before any output_text)  RETURNED in 4 s
+       FS2 (return after the first output_text)              WEDGED
+     and the artifact showed output_text @ 0x13addc carrying delin x1 -- this one, since
+     the `text` delin above is compiled out on this ABI.
+     Guarded identically to `text`. Where the capability really is linear (the QEMU
+     pure-cap row domains) the delin is still emitted and still needed; where it is already
+     non-linear, dropping it is a semantic no-op. Same root cause as C-13. */
+#ifndef CAPSTONE_GP_CAPTABLE_ABI
   CAPSTONE_DELIN(payload);
+#endif
   unsigned long offset = hostcall_metadata->length;
   while (*text && offset + 1 < SQLITE_HC_REGION_SIZE)
     payload[offset++] = *text++;
