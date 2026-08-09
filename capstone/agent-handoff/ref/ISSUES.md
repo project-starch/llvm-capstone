@@ -136,7 +136,35 @@ is a genuinely independent second defect** — not the same one reached by anoth
 That is the honest state: the root cause of Site A is proven (`FS2` wedged / `fx2b` returned,
 one variable), and it did not unblock the benchmark.
 
-### Site B — the body of `sqlite3_initialize`
+## S-03 — SQLite wedges inside `sqlite3_initialize()`, INDEPENDENT of S-02 · `OPEN`
+
+Split out of S-02 on 2026-08-09 once S-02's Site A was fixed and **the full workload still
+wedged**. Formerly "S-02 Site B". Given its own ID because it is a demonstrably separate defect,
+not the same one by another path.
+
+**Evidence it is independent:**
+
+| build | what it does | result |
+|---|---|---|
+| `fx2b` | S-02 fixed, clamp after first `output_text` | **RETURNED 4 s** — S-02 fix confirmed |
+| `sqfull` | S-02 fixed, FULL unclamped workload | **WEDGED** |
+| `rn2` | full `initialize`, returns DIRECTLY (no `fail()`) | **WEDGED** |
+| `rn1` | returns before the `initialize` call | **RETURNED** |
+
+`rn2` is the load-bearing arm: it never enters `fail()`, so it cannot be measuring S-02.
+Control green in every one of these boots.
+
+**Bounded to:** the body of `sqlite3_initialize()`. The call into it and its prologue are
+PROVEN INNOCENT by `n8` (gutted `initialize`, direct return, returned in 4 s).
+
+**Method that must be used** — this is what the earlier ladders got wrong: clamp with
+`INITSTOP=<n> INITSTOP_ZERO=1 RUNSTOP=2`. The zero return keeps `run_sqlite` off the `fail()`
+path (which is S-02), and the `RUNSTOP=2` clamp makes the DOMAIN return rather than continuing
+into `sqlite3_open`. Any arm that returns non-zero measures S-02 instead, and any arm that
+returns `SQLITE_OK` without a `RUNSTOP` pair runs the whole workload and wedges downstream.
+Six arms were voided by exactly those two mistakes.
+
+### (former Site B notes) the body of `sqlite3_initialize`
 
 Still open. `rn2` is the only clean arm implicating it. Re-cut with clamps that return **zero**
 and pair each with a `RUNSTOP` direct return, so no arm ever enters `fail()`.

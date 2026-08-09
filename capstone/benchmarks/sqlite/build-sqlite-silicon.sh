@@ -469,7 +469,13 @@ else:
 # initialize() at all. That flaw invalidated the F0/in1/in2/in4 results of 2026-08-09,
 # exactly as it earlier invalidated rs1..rs5. A non-zero rc trips run_sqlite's own
 # `if (rc != SQLITE_OK) return fail("initialize", rc, 0);` so the DOMAIN returns.
-ins='\n  { volatile int capstone_initstop = 0x7B0%X; if(capstone_initstop) return capstone_initstop; }\n' % n
+# INITSTOP_ZERO=1 makes the clamp return 0 instead of the marker. Pair it with RUNSTOP=2 so
+# run_sqlite returns DIRECTLY after the call: initialize then runs only up to sub-step n, and
+# NO arm enters fail(). Without this, every non-zero return routes through fail(), which is
+# S-02 Site A and would be measured instead of Site B.
+_iz = __import__('os').environ.get('INITSTOP_ZERO','')
+_rv = '0' if _iz else 'capstone_initstop'
+ins='\n  { volatile int capstone_initstop = 0x7B0%X; if(capstone_initstop) return %s; }\n' % (n,_rv)
 s=s[:after]+ins+s[after:]
 open(path,'w').write(s)
 print("INITSTOP: early return inserted after sub-step %d (%s)" % (n,t))
