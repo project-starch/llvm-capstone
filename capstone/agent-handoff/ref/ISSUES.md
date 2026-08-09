@@ -231,6 +231,32 @@ ENTRY-STALLED (six padded builds plus the 171-leaf one)". At 173 entries, on the
 two independent builds enter and return correctly. That claim was made on the pre-fix bitstream and
 must not be carried forward; the comment should be corrected.
 
+### `t8` MEASURED (2026-08-09): the wedge is at or after the `stc` at `0x13cb64`
+
+| arm | cut at | result |
+|---|---|---|
+| `t3` | `0x13cb5c` | RETURNED |
+| **`t8`** | **`0x13cb64` — immediately BEFORE `stc a1,0x0(a0)`** | **RETURNED** |
+| `t7` | `0x13cbe8` | WEDGED |
+| `t4` | `0x13cbf0` | WEDGED |
+
+Control green in each. So `13cb5c movc` and `13cb60 cincoffsetimm` are safe, and the wedge lies
+at or after `13cb64 stc a1,0x0(a0)` — about nine instructions, whichever branch path they take.
+
+**This does NOT revive the struck candidate.** The audit's counter-example stands: the identical
+`stc`/`ld`/branch shape executes inside `sqlite3Strlen30` on the `t3` arm and RETURNS, and there
+are 738 such adjacent pairs in this image. `t8` narrows the interval; it does not implicate the
+shape.
+
+**Still unmeasured, and load-bearing:** the branch direction at `13cb6c`. Two 4-byte oracles are
+built and staged — `oa` (`0x13cbc8`, the taken target) and `ob` (`0x13cb70`, the fall-through) —
+and they MUST come out opposite. If they agree, the path model is wrong and `t7`/`t4` are void.
+Both are in the current firmware; `oa` was attempted twice and the board dropped both times.
+
+**Board status:** intermittent. It ran `t8` cleanly, then every subsequent run returned ~2 KB of
+console with no stage lines and no error. A power cycle by the project lead restored it once.
+Runs after that have not completed.
+
 ### CANDIDATE STRUCK (2026-08-09 audit). Do NOT send to the hardware side.
 
 **The `stc`/`ld` candidate is REFUTED.** The identical five-instruction sequence —
