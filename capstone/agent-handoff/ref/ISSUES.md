@@ -303,6 +303,56 @@ NULL. Independently, and without relying on `.bss` being zeroed: `t8` truncates 
 have dereferenced it (`p->zName`, `sqlite3StrICmp`) and wedged inside `functionSearch`. It did
 not. **`pOther` is NULL.**
 
+### (2026-08-10) LEADING HYPOTHESIS: the store-stalled load WRITES BACK LATE
+
+Stated as a hypothesis, not a conclusion. It is the first model that predicts EVERY arm, but it
+was built after seeing them, so it needs a prospective test (below) before it is believed.
+
+**Mechanism.** `ld a0,0x0(a0)` at `0x13cb68` is stalled because its address matches the pending
+`stc` at `0x13cb64` (`load_unit.sv:354-389` holds it in WAIT_PAGE_OFFSET until the store drains).
+The instruction immediately after it reads `a0` as a WRONG value W -- nonzero, and constrained by
+the s-ladder to W < 2^28 -- and latches whatever it computes into its own destination. The load
+then writes back LATE, clobbering `a0` with the correct 0 AFTER that consumer has already run.
+
+So there are two distinguishable effects, and which one you see depends on where the result lands:
+* a consumer writing to a register OTHER than `a0` keeps the corrupted value;
+* a consumer writing to `a0` has its result overwritten by the late writeback, and looks correct.
+
+**Every arm, predicted:**
+
+| arm | first consumer of `a0` | prediction | observed |
+|---|---|---|---|
+| `base`,`Z` | the branch itself reads W != 0 | not taken -> if-block -> wedge | WEDGE |
+| `N`   | `bnez a0` reads W != 0 | taken -> return | RETURN |
+| `gap`,`gap2` | nothing consumes `a0`; branch runs later, sees the late 0 | taken -> return | RETURN |
+| `gapN` | branch sees the late 0 | `bnez` NOT taken -> if-block -> wedge | WEDGE |
+| `adj` | nop before the `ld`, so the load is never stalled | correct -> return | RETURN |
+| `p27a` | `slli a0,a0,37` -> a0 = W<<37, then LATE WRITEBACK clobbers a0 with 0 | taken -> return | RETURN |
+| `p27b` | `slli a3,a0,37` -> a3 = W<<37 != 0, a3 not clobbered | not taken -> wedge | WEDGE |
+| `p27c` | same into a4 | wedge | WEDGE |
+| `n0`   | `mv a0,a0` -> a0 = W, then clobbered to 0 | `bnez` not taken -> if-block -> wedge | WEDGE |
+| `q1`   | `li a3,0` does not read a0 at all | taken -> return | RETURN |
+| `q4`   | `mv a3,a0` -> a3 = W != 0, not clobbered | not taken -> wedge | WEDGE |
+| `s48/s32/s31/s28` | `srli a0,a0,K` -> a0 clobbered by the late 0, for EVERY K | taken -> return | ALL RETURN |
+
+The s-ladder is the strongest single check: under this model it is flat for every K *because the
+late writeback erases the shift*, which is exactly the "monotone ladder that measured nothing"
+shape CLAUDE.md warns about -- and it is why that ladder's apparent bound on `a0` was never a
+measurement of `a0` at all.
+
+`p27a` is what previously looked contradictory and is now the model's sharpest consequence: it and
+`p27b` compute the identical value and differ ONLY in whether the destination is the load's own
+register, i.e. whether the late writeback erases the corruption.
+
+**Why the standalone rung stays clean:** with no other traffic the store buffer drains immediately,
+so the load is never stalled and there is no late writeback. The store-buffer-pressure arms (K-N in
+`sbb_kernel.h`) are the direct test and have entry-stalled (R-16) on two draws.
+
+**PROSPECTIVE TEST, not yet run** -- `mv a3,a0 ; beqz a0` (consume `a0` into `a3`, but branch on
+`a0`). The model says `a3` keeps W while `a0` is restored to 0, so this must RETURN, whereas `q4`
+(`mv a3,a0 ; nop ; beqz a3`) WEDGED. Same producer, same dependence, opposite verdict, decided
+purely by which register the branch reads. If it wedges, the model is dead.
+
 ### STILL UNEXPLAINED — do not hand this to the hardware side yet
 
 * **The isolated repro does NOT reproduce it.** `sbb` builds the sequence in a 13 KB rung, on a
