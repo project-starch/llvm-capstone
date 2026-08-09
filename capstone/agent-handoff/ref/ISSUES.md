@@ -283,6 +283,26 @@ revision: the tree is one commit behind `origin/fpga-testing`, and the missing c
   `fwd_i.wb[k]` / `fwd_i.sbe[k]` forwarding-tier boundary for a load with unusual completion
   latency is not closed out.
 
+### pOther IS NULL — settled from the artifact, no board time
+
+An audit raised that `aBuiltinFunc` contains 14 DUPLICATED names (`like` x4, `min`, `max`,
+`substr`, `trim`, ...), so entering the `if (pOther)` block with a non-NULL `pOther` would be
+NORMAL SQLite behaviour and the NULL story unnecessary. That is true of the full table and does
+NOT apply to this build. From the compiled image:
+
+* `sqlite3RegisterBuiltinFunctions` calls `sqlite3AlterFunctions` at `0x29bc0`
+  (auipc/addi resolve to `0x13c968`), then immediately hits the build clamp -- a compiled-in
+  `0x5C01`, tested non-zero at `0x29bd8` -- and jumps to `0x29fc4`, which is its own epilogue
+  (`ld ra / ldc s0 / cincoffsetimm sp / ret`). **No other registrator executes.**
+* `sqlite3AlterFunctions` calls `sqlite3InsertBuiltinFuncs` at `0x13c9ac` (resolves to
+  `0x13ca6c`) with **`li a1, 0x1`** at `0x13c9a8`, i.e. nDef = 1, and returns.
+
+One insertion into a zero table: duplicates are impossible, so `sqlite3FunctionSearch` returns
+NULL. Independently, and without relying on `.bss` being zeroed: `t8` truncates AFTER
+`functionSearch` has returned and RETURNS. Had the bucket held garbage, the search loop would
+have dereferenced it (`p->zName`, `sqlite3StrICmp`) and wedged inside `functionSearch`. It did
+not. **`pOther` is NULL.**
+
 ### STILL UNEXPLAINED — do not hand this to the hardware side yet
 
 * **The isolated repro does NOT reproduce it.** `sbb` builds the sequence in a 13 KB rung, on a
