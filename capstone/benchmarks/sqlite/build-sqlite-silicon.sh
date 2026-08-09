@@ -385,7 +385,9 @@ s=open(path).read()
 m=re.search(r'int sqlite3_initialize\(void\)\s*\{', s)
 if not m: print("INITSTOP: sqlite3_initialize not found",file=sys.stderr); sys.exit(1)
 start=m.end()
-anchors={1:'rc = sqlite3MutexInit();',
+anchors={0:'__ENTRY__',
+         7:'__BEFORE_MUTEXINIT__',
+         1:'rc = sqlite3MutexInit();',
          2:'rc = sqlite3MallocInit();',
          3:'sqlite3RegisterBuiltinFunctions();',
          4:'rc = sqlite3PcacheInitialize();',
@@ -393,17 +395,29 @@ anchors={1:'rc = sqlite3MutexInit();',
          6:'rc = sqlite3MemdbInit();'}
 t=anchors.get(n)
 if not t: print("INITSTOP: no anchor for %d"%n,file=sys.stderr); sys.exit(1)
-i=s.find(t, start)
-if i<0: print("INITSTOP: anchor %r not found"%t,file=sys.stderr); sys.exit(1)
-after=i+len(t)
-ins='\n  { volatile int capstone_initstop = 0x7B0%X; if(capstone_initstop) return 0; }\n' % n
+if t=='__ENTRY__':
+    after=start                      # immediately after the opening brace: nothing runs
+elif t=='__BEFORE_MUTEXINIT__':
+    i=s.find('rc = sqlite3MutexInit();', start)
+    if i<0: print("INITSTOP: MutexInit call not found",file=sys.stderr); sys.exit(1)
+    after=i                          # BEFORE the call, so MutexInit never executes
+else:
+    i=s.find(t, start)
+    if i<0: print("INITSTOP: anchor %r not found"%t,file=sys.stderr); sys.exit(1)
+    after=i+len(t)
+# MUST return NON-ZERO. Returning 0 (= SQLITE_OK) makes run_sqlite carry on to
+# sqlite3_open/exec, so the domain wedges DOWNSTREAM and the arm says nothing about
+# initialize() at all. That flaw invalidated the F0/in1/in2/in4 results of 2026-08-09,
+# exactly as it earlier invalidated rs1..rs5. A non-zero rc trips run_sqlite's own
+# `if (rc != SQLITE_OK) return fail("initialize", rc, 0);` so the DOMAIN returns.
+ins='\n  { volatile int capstone_initstop = 0x7B0%X; if(capstone_initstop) return capstone_initstop; }\n' % n
 s=s[:after]+ins+s[after:]
 open(path,'w').write(s)
 print("INITSTOP: early return inserted after sub-step %d (%s)" % (n,t))
 PYINIT
   _m=$(printf '0x7B0%X' "$INITSTOP")
   _n=$(grep -c -F "capstone_initstop = $_m" "$OBJ_DIR/sqlite3-capstone.c" || true)
-  _r=$(grep -c -F "if(capstone_initstop) return 0;" "$OBJ_DIR/sqlite3-capstone.c" || true)
+  _r=$(grep -c -F "if(capstone_initstop) return capstone_initstop;" "$OBJ_DIR/sqlite3-capstone.c" || true)
   echo "== initstop gate: marker $_m x$_n ; return x$_r"
   if [[ "$_n" -ne 1 || "$_r" -ne 1 ]]; then
     echo "INITSTOP did NOT apply (marker=$_n return=$_r). Refusing to build." >&2; exit 1

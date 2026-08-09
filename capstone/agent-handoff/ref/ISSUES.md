@@ -58,7 +58,48 @@ block. Two explanations for the staged stall were raised and **refuted**: layout
 build is a real defect — but it is not the cause. **That stall is itself unexplained and may deserve
 its own S-number if it blocks anything else.**
 
-### BISECTED 2026-08-09 to the FIRST ~193 INSTRUCTIONS of `sqlite3_initialize()`
+### RETRACTED: the first INITSTOP ladder was INVALID (my error)
+
+`F0`, `in1`, `in2`, `in4` all returned **0 = `SQLITE_OK`** from the clamp, so `run_sqlite` treated
+the neutered `initialize()` as success and **carried on into `sqlite3_open`/`exec`** — every one of
+those arms wedged DOWNSTREAM and says nothing about `initialize()`. Same defect that voided
+`rs1..rs5`: **clamping a leaf function instead of the flow.** Fixed by returning the marker
+(non-zero) so `run_sqlite:3596` `if (rc != SQLITE_OK) return fail("initialize", rc, 0)` fires.
+
+### BISECTED 2026-08-09 to EIGHT INSTRUCTIONS: the call into `sqlite3_initialize()` + its prologue
+
+Valid arms only — each clamps so the DOMAIN returns, verified in source and by
+`run_sqlite`'s own rc check:
+
+| build | returns | result |
+|---|---|---|
+| `rn1` | from `run_sqlite`, just BEFORE `rc = sqlite3_initialize();` | **RETURNED `rc=0`** |
+| `nz0` | from `initialize()` at its FIRST statement, non-zero rc | **WEDGED** |
+| `rn2` | from `run_sqlite`, after `initialize()` | **WEDGED** |
+
+Control green in all three. The gap between `rn1` returning and `nz0` wedging is exactly:
+
+    333a8: auipc a0, 0xffff6      \
+    333ac: addi  a0, a0, 0x43c     |  the call (target resolves to 0x297e4 = sqlite3_initialize)
+    333b0: jalr  a0               /
+    297e4: cincoffsetimm sp, sp, -0x40   \
+    297e8: sd  ra, 0x30(sp)               |
+    297ec: stc s0, 0x20(sp)               |  prologue
+    297f0: movc s0, sp                    |
+    297f4: cincoffsetimm s0, s0, 0x40    /
+    297f8: <the nz0 marker -- never reached>
+
+**Ruled out within that window:** stack overflow. `sqlite3_initialize`'s frame is **0x40 = 64
+bytes**, SMALLER than `sqlite3_config`'s 0x2e0 = 736 bytes, and `sqlite3_config` is called from the
+same function via the same `auipc`+`jalr` shape (`0x33350`, target `0x2a504`) and RETURNS.
+
+**Open:** why this call/prologue and not the structurally identical one to `sqlite3_config` eight
+instructions earlier. Candidates not yet separated: the `jalr` target itself, the `stc s0` capability
+spill, or something about `0x297e4` specifically (cap-table index, page, PCC-relative distance).
+
+**Cheapest next cut:** put the clamp BETWEEN the call and the prologue — i.e. a naked
+`sqlite3_initialize` stub that returns immediately with no frame at all. If the stub returns, the
+call is fine and the prologue is at fault; if it wedges, the call is.
 
 Four boots, control green (`k800`, 2 s) in every one, all on `caplifive_65536_r18_fix.bit`:
 
