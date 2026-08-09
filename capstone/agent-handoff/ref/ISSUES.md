@@ -212,7 +212,32 @@ whereas SQLite **ENTERS and then wedges**. Those are different failure signature
 strong lead and not yet the same defect. Either the count causes two distinct failures at different
 thresholds, or the padded rungs hit a second problem. Do not merge them without evidence.
 
-**Cheapest experiment, needs no board:** sweep `FDREG_LEAVES` to find the largest value that still
+### CAP-INIT SWEEP MEASURED 2026-08-09 — 109 carves is HARMLESS
+
+Ladder driver with oracles (so a miscompute would be visible, not just a wedge), control green:
+
+| carves | rung | verdict |
+|---|---|---|
+| 12 | unpadded | OK |
+| **45** | `lv4` | **OK, 2609** |
+| **77** | `lv8` | **OK, 2609** |
+| **109** | `lv12` | **OK, 2609** |
+| 179 | SQLite | **WEDGES** |
+
+Cap-init entry count alone is **not sufficient** to cause any failure up to 109 — not a wedge, not
+an entry stall, not a miscompute. **The boundary is between 109 and 179**, and the earlier claim
+that "~170 entries entry-stalls" is neither confirmed nor refuted by this: 109 is below it.
+
+Oracles for the swept arms were derived natively and validated by reproducing the published
+`fdp0` oracle (2609) before use.
+
+**Next:** extend the sweep to 130/150/170. `FDREG_LEAVES=20` FAILED to build — `.text` ran into
+`.capstone_gp_initdesc` — so higher points need `DOMAIN_WINDOW=32k`. If a swept rung ENTERS AND
+WEDGES, that is SQLite's signature in 13 KB and S-03 has its minimal repro. If they all return and
+only SQLite wedges, cap-init count is exonerated and the remaining difference is what
+`sqlite3AlterFunctions` does that `fdreg` does not.
+
+**Superseded:** sweep `FDREG_LEAVES` to find the largest value that still
 ENTERS, then place `fdreg_defs` late in that build's cap-init order. If the rung then ENTERS and
 WEDGES — matching SQLite's signature rather than the entry stall — the cause is cap-init
 position/count and the repro is a 13 KB rung iterating in seconds.
