@@ -194,7 +194,30 @@ walks fine and returns. Those probes were written because earlier staged arms ea
 OWN local array and so read a different cap-init'd object — the same confound, spotted then and
 never settled.
 
-**Cheapest experiment, and it needs no board:** pad the fdreg rung with dummy cap-init'd objects to
+### THE MECHANISM ALREADY HAS A KNOB, AND A PRIOR RESULT
+
+`fdreg_kernel.h`'s `FDREG_LEAVES` pads cap-init entries for exactly this axis, and its own comment
+records the result of sweeping it:
+
+> *every rung built with ~170 cap-init entries has ENTRY-STALLED (six padded builds plus the
+> 171-leaf one), while the 10-entry rung enters reliably*
+
+**That is the same variable this bisection arrived at independently.** fdreg carries 12 carves and
+returns; SQLite carries 179 and fails. A prior session had already found that ~170 cap-init entries
+break a rung, and had already written the sweep knob to locate the boundary — the sweep was never
+finished.
+
+**Caveat that must not be lost:** the padded rungs **ENTRY-STALLED** (created, never entered),
+whereas SQLite **ENTERS and then wedges**. Those are different failure signatures, so this is a
+strong lead and not yet the same defect. Either the count causes two distinct failures at different
+thresholds, or the padded rungs hit a second problem. Do not merge them without evidence.
+
+**Cheapest experiment, needs no board:** sweep `FDREG_LEAVES` to find the largest value that still
+ENTERS, then place `fdreg_defs` late in that build's cap-init order. If the rung then ENTERS and
+WEDGES — matching SQLite's signature rather than the entry stall — the cause is cap-init
+position/count and the repro is a 13 KB rung iterating in seconds.
+
+**Superseded:** pad the fdreg rung with dummy cap-init'd objects to
 push `fdreg_defs` from carve #11 to a high index, changing NOTHING else. If it then wedges, the
 cause is cap-init position/index and the repro is a 13 KB rung that iterates in seconds. If it still
 returns, position is exonerated and the next variable is the gp-captable index each array is reached
