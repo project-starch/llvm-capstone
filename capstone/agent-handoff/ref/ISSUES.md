@@ -231,7 +231,38 @@ ENTRY-STALLED (six padded builds plus the 171-leaf one)". At 173 entries, on the
 two independent builds enter and return correctly. That claim was made on the pre-fix bitstream and
 must not be carried forward; the comment should be corrected.
 
-### S-03 NARROWED TO ONE LOOP ITERATION (2026-08-09)
+### S-03: ONE-BYTE REPRO PAIR, and a BINARY-PATCH method that needs no rebuilds (2026-08-09)
+
+Every attempt to model this in the 13 KB rung returns clean, so the image was **shrunk by
+patching instead of rebuilt**: copy the WEDGING image and edit bytes, leaving all 1.5 MB of
+context byte-identical. `.text` VA `0x10000` at file offset `0x1000`, single LOAD, so
+**file_off = VA - 0xF000**. Baking is `cp -f` (no checksum, no relink), so a patched image
+stages exactly like a built one.
+
+| arm | delta from the wedging image | result |
+|---|---|---|
+| `p0` | call block nop'd (22 bytes) | **RETURNED** — proves the patch+bake pipeline is sound |
+| **`p2`** | **`li a1,0x1` -> `li a1,0x0` at VA `0x13c9a8` — ONE BYTE** | **RETURNED** |
+| `p3` | none | WEDGES |
+
+**A one-byte edit turns the wedge off.** `p2` still executes the gp materialisation
+(`lui`/`addi`/`cincoffset a0,gp,a0`/`ldc a0,0x0(a0)` — slot 155, `aAlterTableFuncs`), still
+CALLS `sqlite3InsertBuiltinFuncs`, still runs its prologue, `bge a0,a1` and epilogue. The sole
+difference is that the loop body executes **zero** times instead of **once**.
+
+**Therefore ruled out by construction:** the call, the callee prologue/epilogue, the array's
+cap-init, and the gp-captable materialisation of the array pointer. The wedge is **one pass
+through the loop body**.
+
+**This is the reproducer to work from** — not small in bytes, but one byte from a passing twin,
+and it costs ZERO rebuilds per arm. Next is a truncation ladder inside the body at
+single-instruction resolution (each arm a `j` to the real epilogue at VA `0x13cc68`, never a bare
+`ret` — the frame is 0x80): before `ldc a1,0x70(a0)` (the `zName` capability load), after
+`Strlen30`, after `sqlite3FunctionSearch`, after `aDef[i].pNext = 0`, after the `u.pHash` write,
+after the bucket write. Note `13cbfc: ldc a1,0x190(gp)` is slot 25 = `sqlite3BuiltinFunctions` —
+the global-struct read this entry names as the untested cut. Six arms fit in one boot.
+
+### (superseded) S-03 NARROWED TO ONE LOOP ITERATION (2026-08-09)
 
 Both arms carry `REGBUILTIN_STOP=1 RUNSTOP=2`, so the domain stops right after `AlterFunctions`;
 verified in the compiled source before booting. Control green in both boots.
