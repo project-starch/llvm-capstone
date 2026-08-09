@@ -231,6 +231,33 @@ ENTRY-STALLED (six padded builds plus the 171-leaf one)". At 173 entries, on the
 two independent builds enter and return correctly. That claim was made on the pre-fix bitstream and
 must not be carried forward; the comment should be corrected.
 
+### THE REMAINING BEHAVIOURAL GAP, isolated 2026-08-09
+
+`sqlite3InsertBuiltinFuncs` vs fdreg's `fdreg_link_via_param`, side by side:
+
+    SQLite:  pOther = sqlite3FunctionSearch(h, zName);   <-- WALKS the global chain, strcmp per entry
+             if (pOther) { aDef[i].pNext = pOther->pNext; pOther->pNext = &aDef[i]; }
+             else { aDef[i].u.pHash = sqlite3BuiltinFunctions.a[h];      <-- read a GLOBAL struct
+                    sqlite3BuiltinFunctions.a[h] = &aDef[i]; }          <-- store &elem INTO a global
+
+    fdreg:   fdreg_defs[i].pNext = fdreg_buckets[h];
+             fdreg_buckets[h] = &fdreg_defs[i];                          <-- link only, NO search
+
+Both store a pointer-to-array-element into a bucket array, so that shape is already exercised and
+clean. **The untested difference is the SEARCH:** SQLite walks the existing chain and `strcmp`s
+each `zName` BEFORE inserting — dereferencing capabilities it just stored on a previous iteration —
+while fdreg never reads back what it linked.
+
+That is a read-after-write over capabilities stored into a global, across loop iterations, and it
+is the only substantive behavioural difference left after construct, size, section, binding,
+cap-init record shape and cap-init entry count were all matched or measured.
+
+**Next experiment, no board needed to build:** add a stage to the fdreg rung that walks its bucket
+chain and `strcmp`s each `zName` after linking — i.e. give it the search step. If the rung then
+wedges, S-03 is reproduced in 13 KB and the cause is the chain walk over stored capabilities. If it
+still returns, the residue is the global STRUCT access (`sqlite3BuiltinFunctions.a[h]`) versus a
+plain static array, which is one further stage.
+
 **What this leaves for S-03.** fdreg and `sqlite3AlterFunctions` now match on: construct (9-entry
 `FuncDef` walk, `zName` read, length call), array size (1296 B), section, symbol binding, cap-init
 record shape, AND cap-init entry count. The wedge is caused by something else. Remaining
