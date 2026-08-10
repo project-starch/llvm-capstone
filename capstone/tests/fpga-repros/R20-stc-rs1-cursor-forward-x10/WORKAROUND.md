@@ -33,6 +33,13 @@ timing window (board arm `R13`, sim arm B — both clean).
 
 ## The commit to revert
 
+**`30c275b5d781`** — "R-20 workaround: keep a0/x10 out of the capability store's base register"
+(full sha `30c275b5d781fe14e479919c110671beac85669a`, on branch `capstone-bootstrap`).
+
+```bash
+git revert 30c275b5d781
+```
+
 Single commit. Four files in `llvm/lib/Target/Capstone/`, plus eight lit tests:
 
 | file | change |
@@ -62,7 +69,7 @@ keep it permissive.
 ## How to revert
 
 ```bash
-git revert <this commit>            # or: git grep -n "R-20 WORKAROUND"  and remove each block
+git revert 30c275b5d781                  # or: git grep -n "R-20 WORKAROUND"  and remove each block
 cd llvm/cmake-build-debug && ninja -j90 llc clang lld     # never -j112
 ```
 

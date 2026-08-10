@@ -1,5 +1,21 @@
 # Next step
 
+## STANDING TODO — REVERT THE R-20 COMPILER WORKAROUND WHEN THE RTL FIX SHIPS
+
+Commit **`30c275b5d781`** makes our LLVM keep a0/x10 out of a capability store's base register, to
+dodge silicon issue R-20. It is a WORKAROUND, not a fix, and it must come out.
+
+* **Revert with:** `git revert 30c275b5d781` then `ninja -j90 llc clang lld` in `llvm/cmake-build-debug`.
+* **Full instructions:** `capstone/tests/fpga-repros/R20-stc-rs1-cursor-forward-x10/WORKAROUND.md`.
+* **Revert once BOTH hold:** a bitstream containing the RTL fix (`capstone-ariane` branch
+  `r20-fix`, `2efb3604f`) is flashed and confirmed resident, AND `./run.sh sim` in that package
+  passes on the revision the bitstream was built from.
+* **Do not revert just because the fix is merged** — it has been validated in simulation only and
+  has never been in a bitstream.
+* Four lit tests are `XFAIL`ed by the workaround and will XPASS on revert; lit reports that as a
+  failure, which is the signal to delete their `XFAIL` blocks.
+
+
 ## 1. Land the R-18 workaround in the compiler (in-lane, no board)
 
 Emit an integer op instead of `movc rd, zero` when materialising integer zero, in the Capstone

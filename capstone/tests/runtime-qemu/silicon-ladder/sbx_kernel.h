@@ -24,17 +24,25 @@
  * Every arm returns a bit; nothing can hang. A bit is SET when the branch was NOT taken, i.e. it
  * saw a nonzero value -- which is WRONG, because the slot was just stored with a NULL capability.
  *
- *   bit 0  a0 tied, branch adjacent          <- EXPECTED TO REPRODUCE (set)
- *   bit 1  a0 tied, one nop before the branch   <- control
- *   bit 2  t1 tied, branch adjacent          <- expected clear (this is what sbb measured)
- *   bit 3  t1 tied, one nop before the branch   <- control
+ *   bit 0  a0 tied, 0 nops before the branch
+ *   bit 1  a0 tied, 1 nop
+ *   bit 2  a0 tied, 2 nops
+ *   bit 3  a0 tied, 4 nops       -- the separation sweep: where does the window close?
+ *   bit 4  t1 tied, 0 nops       <- NEGATIVE CONTROL: same sequence, different register
+ *   bit 5  a0, plain `sd` store instead of `stc`, 0 nops  <- is a CAPABILITY store required?
+ *   bit 6  a0, no store at all, 0 nops                    <- is the store required at all?
  *
  * retval = 0xD0000000 | bits.
- *   0xD0000001  the defect, reproduced in 13 KB, and confined to x10. This is the artifact to
- *               hand to the hardware side.
- *   0xD0000000  NOT reproduced -- the register is not the whole story after all.
- *   0xD0000005  both registers affected -- not x10-specific; contradicts the R13 board arm.
- *   any EVEN-indexed control bit (1 or 3) set -> the instrument is broken, not the silicon.
+ * INSTRUMENT VALIDATION is bits 4 and 6, NOT the nop arms. If bit 4 (same sequence on t1) or
+ * bit 6 (no store) is SET, the probe cannot tell a good case from a bad one and the whole run is
+ * void. The nop arms are a MEASUREMENT, not a control: how much separation closes the window is
+ * one of the things being measured, and a nonzero answer there is a result, not a fault.
+ *
+ *   bit 0 set, bit 4 clear   the defect, reproduced in 13 KB and confined to x10.
+ *   bits 0-3 all set         one, two and four nops all fail to close the window here.
+ *   bit 5 set                a plain scalar store is enough -- NOT capability-specific.
+ *   bit 5 clear, bit 0 set   a CAPABILITY store is required.
+ *   bit 4 or 6 set           INSTRUMENT VOID -- believe nothing in this run.
  *
  * The 0xD magic distinguishes a real 0 result from "rung not compiled in" / "harness reported
  * nothing", both of which have produced false CLEAN verdicts on this project.
@@ -68,24 +76,56 @@ __asm__(".pushsection .text\n\t.rept " SBX_STR(SBX_PAD) "\n\tnop\n\t.endr\n\t.po
                    "2:\tmv %0, " REG                      \
                    : "=r"(r) : "r"(slot) : REG, "t0", "memory")
 
+/* Same shape, but a PLAIN SCALAR store -- does the trigger need a capability store? */
+#define SBX_SD(r, slot, REG, sep)                         \
+  __asm__ volatile("movc " REG ", %1\n\t"                 \
+                   "sd   zero, 0(" REG ")\n\t"            \
+                   "ld   " REG ", 0(" REG ")\n\t"         \
+                   sep                                    \
+                   "beqz " REG ", 1f\n\t"                 \
+                   "li   " REG ", 1\n\t"                  \
+                   "j    2f\n"                             \
+                   "1:\tli " REG ", 0\n"                   \
+                   "2:\tmv %0, " REG                       \
+                   : "=r"(r) : "r"(slot) : REG, "t0", "memory")
+
+/* Same shape with NO adjacent store -- negative control; must read the true 0. */
+#define SBX_NOST(r, slot, REG, sep)                       \
+  __asm__ volatile("movc " REG ", %1\n\t"                 \
+                   "ld   " REG ", 0(" REG ")\n\t"         \
+                   sep                                    \
+                   "beqz " REG ", 1f\n\t"                 \
+                   "li   " REG ", 1\n\t"                  \
+                   "j    2f\n"                             \
+                   "1:\tli " REG ", 0\n"                   \
+                   "2:\tmv %0, " REG                       \
+                   : "=r"(r) : "r"(slot) : REG, "t0", "memory")
+
 /* the rung builder requires at least one gp[i] global access */
 static volatile unsigned sbx_tag = 0;
 
 static unsigned sbx_compute(void)
 {
-  volatile unsigned long slot[4];
-  unsigned long a, b, c, d;
+  volatile unsigned long slot[8];
+  unsigned long a, b, c, d, e, f, g;
 
-  slot[0] = 1; slot[2] = 1;   /* seeded NON-zero: a store that never happened cannot look clean */
+  slot[0] = 1; slot[2] = 1; slot[4] = 1;  /* seeded NON-zero: a store that never happened
+                                           * cannot masquerade as a clean read */
 
   SBX_ARM(a, &slot[0], "a0", "");
   SBX_ARM(b, &slot[0], "a0", "nop\n\t");
-  SBX_ARM(c, &slot[2], "t1", "");
-  SBX_ARM(d, &slot[2], "t1", "nop\n\t");
+  SBX_ARM(c, &slot[0], "a0", "nop\n\tnop\n\t");
+  SBX_ARM(d, &slot[0], "a0", "nop\n\tnop\n\tnop\n\tnop\n\t");
+  SBX_ARM(e, &slot[2], "t1", "");                       /* negative control: other register */
+  SBX_SD (f, &slot[4], "a0", "");                       /* scalar store instead of stc */
+  /* zero slot[6] in a SEPARATE block so no store is adjacent inside the measured one */
+  __asm__ volatile("sd zero, 0(%0)" :: "r"(&slot[6]) : "memory");
+  SBX_NOST(g, &slot[6], "a0", "");                      /* negative control: no store at all */
 
   return SBX_MAGIC
-       | (sbx_tag & 0xFFF0u)
-       | ((unsigned)a << 0) | ((unsigned)b << 1)
-       | ((unsigned)c << 2) | ((unsigned)d << 3);
+       | (sbx_tag & 0xFF80u)
+       | ((unsigned)a << 0) | ((unsigned)b << 1) | ((unsigned)c << 2)
+       | ((unsigned)d << 3) | ((unsigned)e << 4) | ((unsigned)f << 5)
+       | ((unsigned)g << 6);
 }
 #endif

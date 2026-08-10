@@ -81,6 +81,12 @@
 #ifndef FDREG_DRAW
 #define FDREG_DRAW 0
 #endif
+#ifndef FDREG_GSTRUCT
+#define FDREG_GSTRUCT 0
+#endif
+#ifndef FDREG_SEARCH
+#define FDREG_SEARCH 0
+#endif
 #ifndef FDREG_LEAVES
 #define FDREG_LEAVES 0
 #endif
@@ -362,6 +368,14 @@ static FdregDef fdreg_defs[FDREG_N] = {
 
 /* The global bucket table InsertBuiltinFuncs links into (sqlite3BuiltinFunctions.a[]). */
 static FdregDef *fdreg_buckets[FDREG_HASHN];
+#if FDREG_GSTRUCT
+/* FDREG_GSTRUCT -- models the ONE untested difference against sqlite3InsertBuiltinFuncs:
+   SQLite links into a GLOBAL STRUCT MEMBER (sqlite3BuiltinFunctions.a[h]) through the UNION
+   field u.pHash, whereas this rung links into a plain static array through pNext. Both the
+   struct indirection and the union field are modelled here. */
+struct FdregHash { FdregDef *a[FDREG_HASHN]; };
+static struct FdregHash fdreg_gbuckets;
+#endif
 
 /* stage 33: the capability store target, in the DATA region rather than on the stack */
 static const char *volatile fdreg_gz;
@@ -1849,7 +1863,17 @@ static unsigned fdreg_compute(void) {
   for (i = 0; i < FDREG_HASHN; i++) {
     FdregDef *p = fdreg_buckets[i];
     unsigned guard = 0;
-    while (p && guard < 64u) { s += 17u; p = p->pNext; guard++; }
+    while (p && guard < 64u) {
+      s += 17u;
+#if FDREG_SEARCH
+      /* FDREG_SEARCH -- the ONLY behavioural difference left between this rung and
+         sqlite3InsertBuiltinFuncs, which calls sqlite3FunctionSearch() before each insert:
+         it DEREFERENCES the zName capability of an entry reached through a chain pointer
+         that a previous loop iteration stored. This walk otherwise follows pNext without
+         ever touching a linked entry's zName. */
+      { const char *zc = p->zName; if (zc && zc[0] == 'q') s += 1u; }
+#endif
+      p = p->pNext; guard++; }
   }
 #endif
 
