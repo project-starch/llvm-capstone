@@ -137,6 +137,70 @@ establish".
 
 Line 568 dates from `4891d379a` (2026-04-24) and is unrelated to the R-18 fix.
 
+## THE FIX — one character, validated in simulation
+
+`capstone-ariane` branch **`r20-fix`** (`2efb3604f`, based on `e1b3db6ba`) changes
+`core/issue_read_operands.sv:568` from `=` to `|=`:
+
+```systemverilog
+-  gpr_clobber_vld[5'd10][i]  = fwd_i.sbe[i].op == ariane_pkg::CAPENTER && fwd_i.still_issued[i];
++  gpr_clobber_vld[5'd10][i] |= fwd_i.sbe[i].op == ariane_pkg::CAPENTER && fwd_i.still_issued[i];
+```
+
+| | A `a0` adj | B `a3` (ctl) | C 1 nop | D 2 nops | E 4 nops (ctl) |
+|---|---|---|---|---|---|
+| `e1b3db6ba` unpatched | **WRONG** | ok | **WRONG** | **WRONG** | ok |
+| with the fix | ok | ok | ok | ok | ok |
+
+Same 558 cycles, so it costs no time. `capenter`, `stc`, `capldc`, `cap-overwrite` and
+`cincoffset` all pass on the patched tree. (`break-load-store-forwarding` fails to compile on
+the patched AND unpatched trees alike — pre-existing.)
+
+The blast radius is provable from the two statements: for `op == CAPENTER` the line above yields
+false because of its own `op != CAPENTER` term, so `[10][i]` is 0 and `0 |= x == x` — CAPENTER is
+bit-identical. For `op != CAPENTER` this line's RHS is false, so `=` forced 0 while `|=` leaves
+the rs1 claim standing, which differs only when `rs1 == x10`. The change can only ever ADD a
+clobber bit, which makes a reader stall — the conservative direction.
+
+## WORKAROUNDS while the RTL is unfixed — and one that does NOT work
+
+**Do not use nop padding.** It is the obvious workaround and it is unsafe. The board cured the
+defect with ONE nop; simulation needs FOUR, measured on both sides of the load:
+
+| separation | board | simulation |
+|---|---|---|
+| 1 nop between `stc` and `ld` | cured (`adj`) | **still defective** |
+| 2 nops between `stc` and `ld` | not tested | **still defective** |
+| 4 nops between `stc` and `ld` | not tested | cured |
+| 1 nop between `ld` and consumer | cured (`gap`) | **still defective** |
+| 4 nops between `ld` and consumer | not tested | cured |
+
+The window is context-dependent, so any fixed nop count is a workaround that appears to work in
+one setting and silently fails in another. That is worse than no workaround.
+
+**The only cure that holds on both board and simulation, and is not a timing window, is to keep
+x10 out of the capability store's base register** — board arm `R13` and sim arm B, both clean.
+Two routes, neither yet implemented:
+
+1. **Restrict the STC address operand's register class.** `CapstoneInstrInfo.td:2402-2403` has
+   `(ins GPR:$rs2, GPRMem:$rs1, ...)` where `GPRMem = MemOperand<GPR>` is shared by every load
+   and store, so this needs a new register class excluding X10 plus a new `MemOperand` used only
+   by `STC`. Deterministic, but it is a codegen change and needs a full LLVM rebuild plus lit and
+   the QEMU suites before it can be trusted.
+2. **Build at `-O1`, which removes the spill pattern entirely.** `build-sqlite-silicon.sh`
+   already defaults the string primitives to `-O1` for an unrelated real defect, and its own
+   comment records that at `-O1` "the pointer stays in a register and the loop contains no
+   ldc/stc at all". It is currently blocked by a separate compiler bug: `cond ? capA : capB`
+   reaches ISel as an i128 `CapstoneISD::SELECT_CC`, and `Select_GPRCAP_Using_CC_GPR` is emitted
+   only under `!is64Bit()`, so capstone64 aborts with "Cannot select"
+   (`CapstoneInstrInfo.td:1741-1747`). Fixing that unblocks this route and removes the pattern
+   wholesale rather than register by register.
+
+Scale of the exposure, for whoever picks this up: the current SQLite silicon image contains
+**3657** capability stores based on `a0`, **2186** of which are immediately followed by a reader
+of `a0` — the vulnerable shape. Almost all are invisible because the stale value and the correct
+value are both non-zero there.
+
 ## What this package does NOT establish
 
 * **Which of the two RTL sites to change.** The simulation shows the consumer receiving the

@@ -110,6 +110,38 @@ nop
 nop
 addi s6, a0, 0          # 4 nops
 
+
+# ------------------------------- WORKAROUND ARMS: separation between the STC and the LD
+# The board cured it with one nop HERE (arm `adj`). The arms above only varied the gap between
+# the LD and its consumer, so this side has never been measured in simulation.
+MKCAP(s7)
+MOVC(a0, s7)
+MOVC(a1, x0)
+STC(a0, a1, 0)
+nop
+ld   a0, 0(a0)
+addi s8, a0, 0          # W1: 1 nop between STC and LD
+
+MKCAP(s9)
+MOVC(a0, s9)
+MOVC(a1, x0)
+STC(a0, a1, 0)
+nop
+nop
+ld   a0, 0(a0)
+addi s10, a0, 0         # W2: 2 nops between STC and LD
+
+MKCAP(s11)
+MOVC(a0, s11)
+MOVC(a1, x0)
+STC(a0, a1, 0)
+nop
+nop
+nop
+nop
+ld   a0, 0(a0)
+addi s11, a0, 0         # W3: 4 nops between STC and LD
+
 RVTEST_PASS
 
   .data

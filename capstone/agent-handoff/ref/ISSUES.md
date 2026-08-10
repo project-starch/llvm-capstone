@@ -3420,7 +3420,7 @@ The reproducer, the trigger and the workaround are all unaffected by both.
 Repro: `capstone/tests/fpga-repros/R19-movc-zero-metadata-in-slot/`.
 Workaround (shared with R-18): `design/R18-workaround-movc-zero.md`.
 
-### R-20 — after `stc`, a load into **x10** is read by the NEXT instruction as the store's base address `OPEN — reproduced standalone; package ready at capstone/tests/fpga-repros/R20-stc-rs1-cursor-forward-x10/`
+### R-20 — after `stc`, a load into **x10** is read by the NEXT instruction as the store's base address `ROOT-CAUSED; one-character RTL fix on capstone-ariane branch r20-fix, validated in simulation. NOT yet in a bitstream, and NO software workaround is landed.`
 
 `stc rX,0(a0)` immediately followed by `ld a0,0(a0)` immediately followed by any consumer of `a0`
 gives that consumer **the address the store used**, not the value the load fetched. Memory is
@@ -3447,8 +3447,27 @@ looks like `|=`), and `issue_read_operands.sv:674-677` with `check_fwd_rs1` (whi
 serves a reader whose `rs1` matches an in-flight STC's `rs1` with that STC's `rs1_cursor`. Which
 of the two to change is NOT decided by anything measured so far.
 
-Workarounds, both board-demonstrated at the S-03 site, neither implemented in the backend: keep
-x10 out of the tied `stc`/`ld` pair, or separate the store from the load.
+**Fix:** `capstone-ariane` branch `r20-fix` (`2efb3604f`, on `e1b3db6ba`) changes
+`issue_read_operands.sv:568` from `=` to `|=` so the CAPENTER x10 special case ADDS to the
+clobber set instead of replacing the generic rs1 claim. Every arm of the directed test goes
+correct, in the same 558 cycles; capenter/stc/capldc/cap-overwrite/cincoffset all still pass.
+Needs pushing (`git -C capstone/capstone-ariane push -u origin r20-fix`) and a bitstream.
+
+**WORKAROUND STATUS: none landed, and nop padding is NOT one.** Measured both ways: the board
+cured it with ONE nop, simulation needs FOUR, on both sides of the load. The window is
+context-dependent, so a fixed nop count is a workaround that works in one setting and silently
+fails in another -- worse than none. The only cure that holds on board AND simulation, and is not
+a timing window, is keeping x10 out of the capability store's base register (`R13`, sim arm B).
+Two routes, neither implemented, both needing an LLVM rebuild and revalidation:
+(a) give `STC`'s address operand a register class excluding X10 -- `CapstoneInstrInfo.td:2402`
+uses `GPRMem`, which every load and store shares, so it needs a new class plus a new MemOperand;
+(b) fix the i128 `SELECT_CC` gap (`CapstoneInstrInfo.td:1741-1747`) so the amalgamation can build
+at `-O1`, which removes the spill pattern wholesale -- the build script already documents that
+`-O1` eliminates it and already uses `-O1` for the string primitives.
+
+Exposure in the current SQLite silicon image: 3657 capability stores based on `a0`, of which
+**2186** are immediately followed by a reader of `a0`. Almost all are invisible because the stale
+and correct values are both non-zero there; it bites only where the loaded pointer is NULL.
 
 ### R-18 — a scalar in the UPPER half of a 16-byte cache row is silently ZEROED `OPEN — REPORTED to the board owner; our compiler workaround is landed and silicon-confirmed`
 
