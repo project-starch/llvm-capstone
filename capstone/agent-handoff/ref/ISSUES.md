@@ -168,10 +168,31 @@ this is debuggable normally.
 (`sqlite3_config(SQLITE_CONFIG_HEAP)`, see `build-sqlite-silicon.sh:533`), or something other than
 raw heap size returns NOMEM.
 
-**First checks, none needing the board:** whether the `SQLITE_CONFIG_HEAP` call actually succeeds
-and with what pointer/length; and whether the same build returns `rc=7` under QEMU
-(`run-sqlite-silicon.sh`) -- if it does, this is a pure software config bug and the board is not
-needed at all.
+**What is already ruled out (2026-08-10):**
+
+* **Not a software config bug.** The same build PASSES under QEMU --
+  `run-sqlite-silicon.sh` prints `__CAPSTONE_SQLITE_SILICON_PASSED__`, all five markers. So this
+  is a board-only divergence, and the board IS needed.
+* **Not the heap size.** 256 KiB -> 448 KiB gives a byte-identical `rc=7`.
+* **Not a missing allocator.** memsys5 is compiled in and linked (`memsys5Init`, `memsys5Malloc`,
+  `memsys5Link`, ... all present in the image), so `SQLITE_CONFIG_HEAP` is honoured rather than
+  silently ignored.
+* **Not unwritable heap memory.** The staged bounds probes (stages 4/5 in
+  `sqlite_capstone_domain.c`) returned rc=0 on silicon on 2026-07-31: the full 256 KiB is
+  writable, endpoints included.
+* **Not an early-stage failure.** `run_sqlite` checks each rc in turn, so both
+  `sqlite3_config(SQLITE_CONFIG_HEAP, ...)` and `sqlite3_initialize()` returned `SQLITE_OK`;
+  only `sqlite3_open(":memory:")` fails.
+
+So: memsys5 is installed, its arena is writable, initialisation succeeds, and the first real
+allocation fails. That is the shape to attack.
+
+**Next step, one boot.** `sqlite_capstone_domain.c` already has a staged-return ladder
+(`stage <= 0/1/2`, then open). Add a stage that runs config + initialize and then reports
+`sqlite3_malloc(64)` and `sqlite3_malloc(4096)` as a bitmask plus `sqlite3_memory_used()`, so the
+run says whether the allocator has ANY memory rather than only that open failed. Note stages 4/5
+were measured with the PRE-workaround compiler; anything re-used from that era should be re-run,
+not assumed.
 
 
 
