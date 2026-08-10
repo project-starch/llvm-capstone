@@ -1,5 +1,5 @@
-#ifndef S06AGG_H
-#define S06AGG_H
+#ifndef S06FIX_H
+#define S06FIX_H
 /* S-06, second exposure: the COMPILER emits capability-grained copies of PLAIN DATA for an
  * ordinary struct assignment, entirely outside memcpy.
  *
@@ -30,7 +30,7 @@
  * The volatile reads stop the compiler proving dst == src and folding the check away.
  */
 
-#ifdef S06AGG_WITH_FIXED_MEMCPY
+#ifdef S06FIX_WITH_FIXED_MEMCPY
 /* A self-contained memcpy carrying the S-06 chunk fix, so this rung can be built with
  * -mllvm -capstone-lower-memops-via-libcall and still link. The ladder links no libc.
  *
@@ -67,31 +67,31 @@ __attribute__((used)) void *memcpy(void *dst, const void *src, s06size_t n) {
 }
 #endif
 
-struct s06agg_s { void *p; unsigned long x; unsigned long y; };
+struct s06fix_s { void *p; unsigned long x; unsigned long y; };
 
-__attribute__((aligned(16))) static struct s06agg_s s06agg_src;
-__attribute__((aligned(16))) static struct s06agg_s s06agg_dst;
-__attribute__((aligned(16))) static unsigned long   s06agg_target[4];
+__attribute__((aligned(16))) static struct s06fix_s s06fix_src;
+__attribute__((aligned(16))) static struct s06fix_s s06fix_dst;
+__attribute__((aligned(16))) static unsigned long   s06fix_target[4];
 
-#define S06AGG_X 0x1111222233334444UL
-#define S06AGG_Y 0x5555666677778888UL
+#define S06FIX_X 0x1111222233334444UL
+#define S06FIX_Y 0x5555666677778888UL
 
-static unsigned s06agg_compute(void)
+static unsigned s06fix_compute(void)
 {
   volatile unsigned long *v;
   unsigned r = 0;
 
-  s06agg_target[0] = 0xABCDEFUL;
-  s06agg_src.p = (void *)s06agg_target;      /* chunk 0: a real capability */
-  s06agg_src.x = S06AGG_X;                   /* chunk 1 low  half */
-  s06agg_src.y = S06AGG_Y;                   /* chunk 1 high half */
+  s06fix_target[0] = 0xABCDEFUL;
+  s06fix_src.p = (void *)s06fix_target;      /* chunk 0: a real capability */
+  s06fix_src.x = S06FIX_X;                   /* chunk 1 low  half */
+  s06fix_src.y = S06FIX_Y;                   /* chunk 1 high half */
 
-  s06agg_dst = s06agg_src;                   /* THE CONSTRUCT: aggregate assignment */
+  s06fix_dst = s06fix_src;                   /* THE CONSTRUCT: aggregate assignment */
 
-  v = (volatile unsigned long *)&s06agg_dst.x;
-  if (*v != S06AGG_X) r |= 1u;
-  v = (volatile unsigned long *)&s06agg_dst.y;
-  if (*v != S06AGG_Y) r |= 2u;
+  v = (volatile unsigned long *)&s06fix_dst.x;
+  if (*v != S06FIX_X) r |= 1u;
+  v = (volatile unsigned long *)&s06fix_dst.y;
+  if (*v != S06FIX_Y) r |= 2u;
   return 64u + r;
 }
 #endif

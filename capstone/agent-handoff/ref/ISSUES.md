@@ -507,6 +507,66 @@ taken under QEMU has therefore been blind to this divergence. The `memcpy` heade
 `beebs_freestanding_string.c` already names it as "gap 4" and treats it as closed — that is true
 of QEMU only.
 
+### ENV — the QEMU smoke and authority suites are currently BROKEN, unrelated to any codegen change `OPEN`
+
+Noted 2026-08-11 while validating C-18. `run-smoke.sh` and `run-authority-suite.sh` crash QEMU on
+every domain load with
+`helper_cssplit: Assertion 'mid > rs1_v->val.cap.bounds.base && mid < rs1_v->val.cap.bounds.end'`
+(some hit `csshrink` instead). It is NOT a codegen regression:
+
+* `write_42.c` -- a domain with no `memcpy`, no `memmove` and no struct copies -- crashes identically;
+* a compiler rebuilt with the codegen changes stashed crashes identically;
+* the last nightly (`/tmp/capstone/nightly-20260728_161101/console.log`) recorded `smoke -> PASS`,
+  `authority -> PASS`, so the environment worked ~2 weeks ago.
+
+Most likely a source/binary mismatch: `capstone/capstone-qemu` carries an uncommitted WIP diff to
+`target/riscv/op_helper.c` dated ~Aug 5 while the built `qemu-system-riscv64` is dated Jul 31.
+NOT root-caused. Consequence for now: the QEMU runtime suites cannot gate a change, so codegen
+work is gated on lit plus the SQLite silicon gate (which uses a different domain path and DOES
+pass). Rebuild QEMU before trusting a smoke/authority result.
+
+### C-18 — compiler-generated `memcpy`/`memmove` libcalls STRIP their pointer arguments `FIXED 2026-08-11`
+
+Found while trying to route S-06's copies through the library. Independent of S-06, and it
+affects the DEFAULT build, not only the workaround flag.
+
+`SelectionDAG::getMemcpy`/`getMemmove` built the libcall's pointer arguments as
+`PointerType::getUnqual(ctx)` — **address space 0**. On this target pointers are capabilities in
+AS 200, so an AS-0 pointer argument is lowered as a plain 64-bit integer and the call site
+materialises it with `mv a0, a0` (`addi rd, rs, 0`), which **strips the capability**. The callee
+then faults on its first `cincoffset` with `rs1_v->tag` false.
+
+It is reachable without any flag: a 16-byte-aligned copy larger than 512 bytes exceeds the
+inline capability path's 32-chunk limit and falls through to a libcall. e.g.
+`struct big { void *p; unsigned long a[127]; }` — `*d = *s` emits a `memcpy` call.
+
+**Fix:** type the arguments in the operands' own address space
+(`DstPtrInfo.getAddrSpace()` / `SrcPtrInfo.getAddrSpace()`). The values already had the right
+address space; only the `Type` describing them was wrong. For targets with a single flat address
+space nothing changes.
+
+**Verified by a matched pair on the DEFAULT flags** (no workaround flag involved), same source,
+same command, only the compiler differing -- baseline built by stashing the fix and relinking:
+
+| build | before the `memcpy` call |
+|---|---|
+| baseline | `mv a0, a0` / `mv a1, a1` -- **2 strips** |
+| fixed | `a0`/`a1` reach the call untouched -- **0 strips** |
+
+**Blast radius is bounded by construction, not by testing:** `PointerType::getUnqual(C)` is
+*defined as* `PointerType::get(C, 0)` (`DerivedTypes.h:729-731`), so for any target whose memcpy
+operands live in address space 0 the constructed type is IDENTICAL and nothing can change. Only
+non-AS-0 operands differ, and for those the old typing was already wrong. This matters because
+the change is in generic SelectionDAG code and this build has only X86;RISCV;Capstone, so
+AMDGPU and friends could not be tested here.
+
+**Validation:** Capstone lit 47/47; X86 CodeGen 5246/5251 with the 5 `emutls` failures proven
+PRE-EXISTING by a stash-rebuild-rerun baseline (none of them reference memcpy); RISCV 2256/2257,
+same `emutls` family; Generic CodeGen 0 failures. The QEMU smoke/authority suites could not
+contribute a verdict -- they are currently broken in this environment for unrelated reasons (a
+domain containing no memcpy at all hits the same `helper_cssplit` assertion, and the baseline
+compiler crashes identically); see the note below.
+
 ### SECOND EXPOSURE, measured 2026-08-11: the COMPILER emits the vulnerable pattern too
 
 The memcpy workaround covers only copies that go through our memcpy. It does not cover the
@@ -535,6 +595,34 @@ returns 64.
 necessary but NOT sufficient. It is also a live suspect for the `INVALID_CAPABILITY` fault inside
 `CREATE TABLE`: silently zeroing a pointer-adjacent word throughout SQLite is exactly how a
 capability ends up invalid.
+
+**ATTEMPT 1, and why it FAILED — recorded so it is not retried blind.** The obvious compiler-side
+fix is to stop expanding these copies inline so they call the library memcpy, which already
+carries the validated sequence: one implementation of the workaround rather than two. Flag
+`-capstone-lower-memops-via-libcall` does that (`findOptimalMemOpLowering` returns false).
+
+Two things were learned:
+
+* It could NOT be done via `MaxStoresPerMemcpy`. The capability-aligned branch of
+  `CapstoneTargetLowering::findOptimalMemOpLowering` returns early **without consulting `Limit`**,
+  so zeroing those limits leaves the emitted code byte-identical. Measured, not assumed.
+* It surfaced **C-18** (above), a real latent bug in the libcall argument types, now fixed.
+
+**It still does not work**, and the flag is committed default-OFF and marked as such. With it on,
+SQLite faults under QEMU at `helper_cscincoffset: Assertion rs1_v->tag failed` immediately after
+domain entry. Ruled out by measurement: not self-recursion and not a missing symbol (the support
+object built with the flag has zero `mem*` relocations inside memcpy/memmove/memset/strcpy and no
+undefined symbols), and not C-18, which is fixed and verified gone at the instruction level.
+
+**Hypothesis, NOT established:** a compiler-generated libcall resolves its target through `gp`
+(`auipc; cincoffset a3, gp, a2; cjalr`), and on the gp-captable ABI `gp` is not a live capability
+during early domain startup, so any `mem*` libcall emitted before the glue installs `gp` faults
+exactly this way. If that is right, "route every copy through a libcall" is structurally wrong for
+this ABI rather than merely buggy.
+
+**Remaining path:** emit the fix INLINE via `EmitTargetCodeForMemcpy` (the hook already exists for
+memset in `CapstoneSelectionDAGInfo.cpp`), which introduces no call and therefore no `gp`
+dependency. Acceptance test is the pair of rungs: `s06copy` 16 -> 32 and `s06agg` 66 -> 64.
 
 **Fixable in OUR compiler, without the RTL change.** The backend uses `ldc`/`stc` for chunks it
 does not know to be capabilities. It can instead emit two 64-bit `ld`/`sd` for a chunk that cannot

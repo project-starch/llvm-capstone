@@ -9145,9 +9145,17 @@ SDValue SelectionDAG::getMemcpy(
 
   // Emit a library call.
   TargetLowering::ArgListTy Args;
-  Type *PtrTy = PointerType::getUnqual(*getContext());
-  Args.emplace_back(Dst, PtrTy);
-  Args.emplace_back(Src, PtrTy);
+  // Type the pointer arguments in the address space the operands actually live in, not in
+  // address space 0. On a target whose pointers are capabilities in a distinct address space
+  // (Capstone: AS 200, 128-bit), an AS-0 pointer type lowers the argument as a plain 64-bit
+  // integer, so the call site materialises it with `mv` (addi rd, rs, 0) and STRIPS the
+  // capability. memcpy then receives untagged pointers and faults on its first cincoffset.
+  // `Dst`/`Src` already have the correct address space; only the Type used to describe them
+  // was wrong. For targets with a single flat address space this is unchanged.
+  Type *DstPtrTy = PointerType::get(*getContext(), DstPtrInfo.getAddrSpace());
+  Type *SrcPtrTy = PointerType::get(*getContext(), SrcPtrInfo.getAddrSpace());
+  Args.emplace_back(Dst, DstPtrTy);
+  Args.emplace_back(Src, SrcPtrTy);
   Args.emplace_back(Size, getDataLayout().getIntPtrType(*getContext()));
   // FIXME: pass in SDLoc
   TargetLowering::CallLoweringInfo CLI(*this);
@@ -9249,9 +9257,17 @@ SDValue SelectionDAG::getMemmove(SDValue Chain, const SDLoc &dl, SDValue Dst,
 
   // Emit a library call.
   TargetLowering::ArgListTy Args;
-  Type *PtrTy = PointerType::getUnqual(*getContext());
-  Args.emplace_back(Dst, PtrTy);
-  Args.emplace_back(Src, PtrTy);
+  // Type the pointer arguments in the address space the operands actually live in, not in
+  // address space 0. On a target whose pointers are capabilities in a distinct address space
+  // (Capstone: AS 200, 128-bit), an AS-0 pointer type lowers the argument as a plain 64-bit
+  // integer, so the call site materialises it with `mv` (addi rd, rs, 0) and STRIPS the
+  // capability. memcpy then receives untagged pointers and faults on its first cincoffset.
+  // `Dst`/`Src` already have the correct address space; only the Type used to describe them
+  // was wrong. For targets with a single flat address space this is unchanged.
+  Type *DstPtrTy = PointerType::get(*getContext(), DstPtrInfo.getAddrSpace());
+  Type *SrcPtrTy = PointerType::get(*getContext(), SrcPtrInfo.getAddrSpace());
+  Args.emplace_back(Dst, DstPtrTy);
+  Args.emplace_back(Src, SrcPtrTy);
   Args.emplace_back(Size, getDataLayout().getIntPtrType(*getContext()));
   // FIXME:  pass in SDLoc
   TargetLowering::CallLoweringInfo CLI(*this);

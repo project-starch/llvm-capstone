@@ -73,6 +73,56 @@ static cl::opt<bool>
                               "VWADD_W) with splat constants"),
                      cl::init(false));
 
+// S-06 WORKAROUND. On the CVA6 silicon an `ldc`/`stc` round trip of PLAIN, untagged data keeps
+// only its LOW 64 bits: the D-cache force-zeroes the metadata half when the line's shadow
+// capability tag is clear, and the store is then gated on metadata CONTENT rather than opcode,
+// so it never writes the high half back. See ISSUES.md S-06 and
+// capstone/tests/fpga-repros/S06-untagged-ldc-stc-high-half/.
+//
+// WHY THIS REACHES BEYOND memcpy. An aggregate assignment becomes an `llvm.memcpy` whose
+// alignment, not whose type, decides the copy width, so ANY 16-byte-aligned struct copy is
+// expanded inline into capability-grained `ldc`/`stc` pairs -- including the chunks that hold no
+// pointer at all. For `struct { void *p; unsigned long x, y; }` a pointer is 16 bytes here, so
+// x and y share one chunk and `y` is silently zeroed. Board-measured with a standalone rung that
+// calls no memcpy whatsoever: retval 66 where 64 is correct, twice, control green.
+//
+// So a library-level fix in memcpy is necessary but NOT sufficient, and the type information
+// that would let us pick a safe width per chunk is already gone by the time the intrinsic is
+// expanded -- `llvm.memcpy` is type-erased apart from tbaa.struct.
+//
+// What this flag does: stop expanding memcpy/memmove/memset inline, so they become libcalls to
+// our own implementations, which carry the validated fix (plain-store both halves, then
+// `ldc`/`stc` on top -- correct for plain data AND for real capabilities, because the store
+// writes both banks only when the metadata is non-zero). One implementation of the workaround
+// rather than two.
+//
+// It must be paired with BEEBS_LDC_HIGH_HALF_FIXUP in the library, or the calls land on a
+// memcpy that still has the defect.
+//
+// STATUS: DOES NOT WORK YET -- do not enable it expecting a working domain. With the flag on,
+// SQLite faults under QEMU at `helper_cscincoffset: Assertion rs1_v->tag failed`, i.e. a
+// cincoffset on an UNTAGGED register, immediately after domain entry. Ruled out by measurement:
+// it is not self-recursion or a missing symbol (the support object built with the flag has zero
+// mem* relocations inside memcpy/memmove/memset/strcpy and no undefined symbols), and it is not
+// the argument-stripping bug described below, which is fixed and verified gone at the
+// instruction level.
+//
+// HYPOTHESIS, NOT ESTABLISHED: a compiler-generated libcall resolves its target through `gp`
+// (`auipc a2, ...; cincoffset a3, gp, a2; cjalr ra, 0(a3)`), and on the gp-captable ABI `gp` is
+// not a live capability during early domain startup -- so any mem* libcall emitted before the
+// glue installs gp would fault exactly this way. That would make "route every copy through a
+// libcall" structurally wrong for this ABI rather than merely buggy, and the remaining option is
+// to emit the fix INLINE via EmitTargetCodeForMemcpy, which introduces no call at all. Confirm
+// before acting on it.
+//
+// Default OFF: besides the above, it costs a call per struct assignment and changes the emitted
+// geometry that the published BEEBS numbers were measured with.
+static cl::opt<bool> CapstoneMemOpsViaLibcall(
+    DEBUG_TYPE "-memops-via-libcall", cl::Hidden,
+    cl::desc("S-06 workaround: never expand memcpy/memmove/memset inline, so they call the "
+             "library implementations, which carry the untagged-ldc/stc high-half fix"),
+    cl::init(false));
+
 static cl::opt<unsigned> NumRepeatedDivisors(
     DEBUG_TYPE "-fp-repeated-divisors", cl::Hidden,
     cl::desc("Set the minimum number of repetitions of a divisor to allow "
@@ -1750,6 +1800,7 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
 
   MaxLoadsPerMemcmpOptSize = Subtarget.getMaxLoadsPerMemcmp(/*OptSize=*/true);
   MaxLoadsPerMemcmp = Subtarget.getMaxLoadsPerMemcmp(/*OptSize=*/false);
+
 }
 
 EVT CapstoneTargetLowering::getSetCCResultType(const DataLayout &DL,
@@ -25832,8 +25883,27 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
     LLVMContext &Context, std::vector<EVT> &MemOps, unsigned Limit,
     const MemOp &Op, unsigned DstAS, unsigned SrcAS,
     const AttributeList &FuncAttributes) const {
+  // S-06 workaround. Returning false means "cannot lower inline", which makes the caller emit a
+  // libcall -- so every memcpy/memmove/memset lands on the library implementation, which carries
+  // the untagged-ldc/stc high-half fix. See the flag's definition near the top of this file.
+  //
+  // It has to be HERE rather than via MaxStoresPerMemcpy: the capability-aligned case below
+  // returns early WITHOUT consulting `Limit`, so zeroing that limit changes nothing at all. That
+  // was measured, not assumed -- the first attempt set the limits and the emitted code was
+  // byte-identical.
+  if (CapstoneMemOpsViaLibcall)
+    return false;
+
   // Capability-aligned copies (16-byte aligned on both ends) may carry in-place
   // tagged capabilities, so copy them as i128 (ldc/stc) units to preserve tags.
+  //
+  // NOTE (S-06): preserving tags is why this path exists, and on the CVA6 silicon it is also
+  // what destroys PLAIN data -- an `ldc`/`stc` round trip of an untagged 16-byte chunk keeps
+  // only its low 8 bytes. A 16-byte-aligned struct copy gets capability-grained units for
+  // EVERY chunk, including those holding no pointer, so `struct { void *p; unsigned long x, y; }`
+  // silently loses `y`. That is the same "upper 8 bytes dropped" symptom the misaligned case
+  // below already works around, but from the hardware rather than from legalization, so it
+  // cannot be fixed by choosing a different unit here without also losing tags.
   if (Op.isMemcpy() && Op.size() != 0 && (Op.size() % 16) == 0 &&
       Op.isAligned(Align(16))) {
     unsigned NumChunks = Op.size() / 16;
