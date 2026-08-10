@@ -192,7 +192,23 @@ capability from a stack slot every iteration and on silicon sporadically returns
 silicon defect for another, and the new `rc=21` at `sqlite3_step` may BE that defect resurfacing.
 Treat `-O1`-vs-`-O0` as two different broken configurations, not as a fix.
 
-## S-05 — SQLite returns SQLITE_MISUSE (21) from `sqlite3_step` · `OPEN`
+## S-05 — SQLite fails building the schema · `OPEN -- moved on twice; now SQLITE_CORRUPT at CREATE`
+
+Reached only with the S-04 memcpy workaround (`SQLITE_SUPPORT_OPT_LEVEL=-O0`). The symptom moved
+when the R-20 bitstream landed, which is itself evidence the two were entangled:
+
+| bitstream | failure |
+|---|---|
+| `caplifive_65536_r18_fix.bit` | `stage=step rc=21` (SQLITE_MISUSE) |
+| `caplifive_r20.bit` | **`stage=create rc=11`** (SQLITE_CORRUPT, "malformed database schema") |
+
+SQLite now configures, initialises, OPENS the database, prepares and steps statements, and fails
+while creating a table. A corrupt schema on a `:memory:` database created moments earlier means
+schema text is read back wrong -- the same shape as S-04, and a live suspect for the documented
+`-O0` `strlen` defect that this very workaround reintroduces.
+
+**First task:** stop running with two known defects at once. Use `-O1` support objects plus a
+byte-loop `memcpy` ONLY.
 
 Reached only with the S-04 workaround applied. `sqlite3_open` succeeds, statements prepare, and
 `sqlite3_step` returns 21 with an empty message. First thing to establish: whether this is the
@@ -2703,7 +2719,22 @@ The reproducer, the trigger and the workaround are all unaffected by both.
 Repro: `capstone/tests/fpga-repros/R19-movc-zero-metadata-in-slot/`.
 Workaround (shared with R-18): `design/R18-workaround-movc-zero.md`.
 
-### R-20 — after `stc`, a load into **x10** is read by the NEXT instruction as the store's base address `ROOT-CAUSED; one-character RTL fix on capstone-ariane branch r20-fix, validated in simulation. NOT yet in a bitstream, and NO software workaround is landed.`
+### R-20 — after `stc`, a load into **x10** is read by the NEXT instruction as the store's base address `FIXED IN SILICON, verified 2026-08-10 on caplifive_r20.bit`
+
+**VERIFIED ON HARDWARE.** The one-character RTL fix (`issue_read_operands.sv:568`, `=` -> `|=`,
+`capstone-ariane` branch `r20-fix`) is in `caplifive_r20.bit` and clears the defect:
+
+| test | before | on caplifive_r20.bit |
+|---|---|---|
+| `sbx8` -- the 13 KB rung repro | `0xD0000001` | **`0xD0000000`** |
+| `Z.dom` -- the SQLite-level site | WEDGE | **RETURNED** |
+
+Both instrument-validation arms of the rung stayed clean and the k800 control was green in the
+same boot, so the run carries a verdict.
+
+**The compiler workaround (`30c275b5d781`) is now removable** -- see the R-20 package's
+`WORKAROUND.md` and the standing TODO in `state/current-next-step.md`. Both conditions it names
+are met. Reverting still needs an LLVM rebuild plus lit and the ladder before it is called done.
 
 `stc rX,0(a0)` immediately followed by `ld a0,0(a0)` immediately followed by any consumer of `a0`
 gives that consumer **the address the store used**, not the value the load fetched. Memory is
