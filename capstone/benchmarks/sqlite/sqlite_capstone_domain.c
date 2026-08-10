@@ -332,6 +332,160 @@ static int run_sqlite_staged(int stage) {
      Callable because sqlite_capstone_domain.c is #included into the amalgamation TU, so
      SQLITE_PRIVATE functions are in scope. Each stage re-does the CONFIG_HEAP call first
      because memsys5 is the allocator these steps depend on. */
+  if (stage == 11) {
+    /* S-04: config + initialize both return SQLITE_OK on silicon, yet sqlite3_open() returns
+       SQLITE_NOMEM. That says the allocator is installed but hands out nothing -- so ask it
+       directly rather than inferring from open()'s rc. The same build PASSES under QEMU, so
+       the question is specifically what memsys5 sees on hardware.
+
+       The staged marker carries only 8 bits (0x5A6E_ssrr), so pack:
+         bit 0     sqlite3_malloc(64)    returned NULL
+         bit 1     sqlite3_malloc(4096)  returned NULL
+         bit 2     sqlite3_malloc(65536) returned NULL
+         bit 3     sqlite3_memory_used() still 0 after those calls
+         bits 4-7  sqlite3_memory_used() in 16 KiB units, saturating at 15
+       0x00 means every allocation worked and was accounted for; 0x0F means nothing
+       allocates at all. */
+    void *a64, *a4k, *a64k;
+    sqlite3_int64 used;
+    unsigned r = 0;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK)
+      return rc;
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK)
+      return rc;
+    a64  = sqlite3_malloc(64);
+    a4k  = sqlite3_malloc(4096);
+    a64k = sqlite3_malloc(65536);
+    used = sqlite3_memory_used();
+    if (a64  == 0) r |= 1u;
+    if (a4k  == 0) r |= 2u;
+    if (a64k == 0) r |= 4u;
+    if (used == 0) r |= 8u;
+    r |= (unsigned)((used >> 14) > 15 ? 15 : (used >> 14)) << 4;
+    return (int)r;
+  }
+  if (stage == 12) {
+    /* S-04 narrowing. Stage 11 showed malloc(64/4096/65536) all SUCCEED on silicon, so the
+       NOMEM from sqlite3_open is not raw allocation failure. Distinguish "the sqlite3 handle
+       itself could not be allocated" from "the handle allocated and something later set the
+       OOM flag": openDatabase returns a NULL db only in the former case.
+         bit 0     rc != SQLITE_OK
+         bit 1     db == NULL   -> the very first allocation in openDatabase failed
+         bit 2     sqlite3_malloc(120000) failed  (the default lookaside is 1200*100)
+         bits 4-7  rc & 0xF     -> 7 = SQLITE_NOMEM */
+    sqlite3 *db12 = 0;
+    void *big;
+    unsigned r = 0;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK)
+      return rc;
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK)
+      return rc;
+    big = sqlite3_malloc(120000);
+    if (big == 0) r |= 4u;
+    else sqlite3_free(big);
+    rc = sqlite3_open(":memory:", &db12);
+    if (rc != SQLITE_OK) r |= 1u;
+    if (db12 == 0)       r |= 2u;
+    r |= (unsigned)(rc & 0xF) << 4;
+    return (int)r;
+  }
+  if (stage == 13) {
+    /* S-04, final narrowing. Stage 12: sqlite3_malloc(120000) SUCCEEDS while sqlite3_open
+       returns NOMEM with db == NULL -- i.e. openDatabase's own
+       sqlite3MallocZero(sizeof(sqlite3)) failed. A ~700-byte allocation failing while a
+       120 KB one succeeds is the contradiction. Call BOTH allocators at exactly that size.
+       sqlite3MallocZero is SQLITE_PRIVATE but in scope: this file is #included into the
+       amalgamation TU.
+         bit 0     sqlite3_malloc(sizeof(sqlite3))      == NULL
+         bit 1     sqlite3MallocZero(sizeof(sqlite3))   == NULL
+         bit 2     sqlite3_malloc(700)                  == NULL   (size-only control)
+         bit 3     the memset inside MallocZero did not stick (first/last byte non-zero)
+         bits 4-7  sizeof(sqlite3) in 128-byte units, saturating at 15 */
+    void *p1, *p2, *p3;
+    unsigned r = 0;
+    unsigned long n = (unsigned long)sizeof(sqlite3);
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK)
+      return rc;
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK)
+      return rc;
+    p1 = sqlite3_malloc((int)n);
+    if (p1 == 0) r |= 1u; else sqlite3_free(p1);
+    p3 = sqlite3_malloc(700);
+    if (p3 == 0) r |= 4u; else sqlite3_free(p3);
+    p2 = sqlite3MallocZero((u64)n);
+    if (p2 == 0) {
+      r |= 2u;
+    } else {
+      volatile unsigned char *q = (volatile unsigned char *)p2;
+      if (q[0] != 0 || q[n - 1] != 0) r |= 8u;
+      sqlite3_free(p2);
+    }
+    r |= (unsigned)((n >> 7) > 15 ? 15 : (n >> 7)) << 4;
+    return (int)r;
+  }
+  if (stage == 14) {
+    /* S-04, the decisive one. Stage 13 showed every allocation openDatabase needs SUCCEEDS
+       when called directly, so openDatabase is failing BEFORE it allocates. Its only early
+       return is its own sqlite3_initialize() (SQLITE_OMIT_AUTOINIT is NOT defined in this
+       build), and `*ppDb = 0` is set just above it -- which yields exactly the observed
+       db == NULL with rc = 7.
+
+       A second sqlite3_initialize() should short-circuit on sqlite3GlobalConfig.isInit. If
+       that global write does not persist on silicon, the second call redoes everything and
+       can fail. So: call it twice and also read isInit back.
+         bit 0     first  sqlite3_initialize() != SQLITE_OK
+         bit 1     second sqlite3_initialize() != SQLITE_OK
+         bit 2     sqlite3GlobalConfig.isInit == 0 after the FIRST call
+         bit 3     sqlite3GlobalConfig.isInit == 0 after the SECOND call
+         bits 4-7  the second call's rc & 0xF */
+    int rc1, rc2;
+    unsigned r = 0;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK)
+      return rc;
+    rc1 = sqlite3_initialize();
+    if (rc1 != SQLITE_OK) r |= 1u;
+    if (sqlite3GlobalConfig.isInit == 0) r |= 4u;
+    rc2 = sqlite3_initialize();
+    if (rc2 != SQLITE_OK) r |= 2u;
+    if (sqlite3GlobalConfig.isInit == 0) r |= 8u;
+    r |= (unsigned)(rc2 & 0xF) << 4;
+    return (int)r;
+  }
+  if (stage == 15) {
+    /* S-04. Everything openDatabase needs allocates fine when called directly (stage 13), and
+       its internal sqlite3_initialize() succeeds twice with isInit persisting (stage 14), so
+       the NOMEM arises somewhere INSIDE openDatabase. Note db == NULL does NOT localise it:
+       opendb_out does `if( (rc&0xff)==SQLITE_NOMEM ){ sqlite3_close(db); db = 0; }`, so the
+       handle is nulled for a NOMEM raised anywhere.
+
+       The one allocation openDatabase makes that nothing above tested in its real form is the
+       per-connection LOOKASIDE buffer (default 1200 x 100). Disable it and retry: this is both
+       a discriminator and, if it works, a usable workaround.
+         bits 0-3  rc from sqlite3_open with lookaside DISABLED
+         bit 4     db == NULL
+         bit 5     the SQLITE_CONFIG_LOOKASIDE call itself failed */
+    sqlite3 *db15 = 0;
+    unsigned r = 0;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK)
+      return rc;
+    rc = sqlite3_config(SQLITE_CONFIG_LOOKASIDE, 0, 0);
+    if (rc != SQLITE_OK) r |= 32u;
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK)
+      return rc;
+    rc = sqlite3_open(":memory:", &db15);
+    r |= (unsigned)(rc & 0xF);
+    if (db15 == 0) r |= 16u;
+    return (int)r;
+  }
   if (stage >= 7 && stage <= 10) {
     rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
     if (rc != SQLITE_OK)
