@@ -547,7 +547,20 @@ return for a wedge.
 ### What the hardware side needs
 
 The RTL needs the QEMU behaviour: preserve the raw upper 64 bits of a `tag == 0` line across an
-`ldc`/`stc` round trip. Repro is `untagged-ldc-stc-128.S`, 499 cycles, with its own control.
+`ldc`/`stc` round trip.
+
+**Handover package: `capstone/tests/fpga-repros/S06-untagged-ldc-stc-high-half/`** — self-contained,
+and the folder is the report.
+
+* `./run.sh sim` — RTL simulation, 499 cycles, no board. Carries a plain `sd`/`ld` control over the
+  same buffer and the same capability, and FAILS LOUDLY if that control is wrong, so a run that
+  proves nothing says so. This is the acceptance test for a fix: it passes when the high half reads
+  `0xfedcba9876543210` instead of zero.
+* `./run.sh rung` — a 10 KB standalone domain on the board. Returns **32** when every byte survives
+  and **16** under the defect; measured 16 three times in one boot with the control `k800` green.
+* `./run.sh verify` — checksums, plus a check that the shipped `.dom` still CONTAINS the copy under
+  test. That check is keyed to `ldc rX, A(rB)` -> `stc rX, C(rB)` with `A != C`; a looser "is there
+  an ldc near an stc" version answered YES for `k800`, which contains no copy at all.
 
 ## RTL / FPGA
 
