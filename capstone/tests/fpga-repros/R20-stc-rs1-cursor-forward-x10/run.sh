@@ -3,6 +3,7 @@
 # address instead of the loaded value. Only on x10/a0; only with a capability store; only when
 # both adjacencies hold.
 #
+#   ./run.sh sim                         RTL simulation, ~14 s             NO BOARD  <- start here
 #   ./run.sh verify                      check frozen artifacts            NO BOARD
 #   ./run.sh arms <base sqlite_silicon.dom>   regenerate the SQLite arms   NO BOARD
 #   ./run.sh rung                        the 13 KB reproducer on the board
@@ -23,6 +24,11 @@ verify() {
 }
 
 case "$MODE" in
+sim)
+  verify
+  exec bash "$D/sim/run-sim.sh"
+  ;;
+
 verify)
   verify
   echo

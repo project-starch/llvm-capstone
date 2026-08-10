@@ -21,6 +21,47 @@ the stale value and the correct value are usually both non-zero, it is normally 
 changes behaviour only where the loaded value is genuinely **zero**, which is exactly the
 `if (pointer)` idiom after a function returns NULL.
 
+## It reproduces in RTL SIMULATION — ~14 s, no board, no SQLite
+
+`./run.sh sim`. `sim/r20-stc-ld-x10.S` runs the shape five times and the RVFI trace prints the
+value every instruction wrote, so the LOAD's own retired value and its CONSUMER's operand are
+both visible side by side — which no board instrument can give.
+
+**Genuine completion in 558 cycles, no exceptions.** Every load retires with the CORRECT value:
+
+```
+ld a0, 0(a0)  -> x10 = 0x0000000000000000      <- all five loads return 0, correctly
+```
+
+and then the very next instruction reads something else:
+
+| arm | consumer reads | |
+|---|---|---|
+| A  `a0`, adjacent | `0x80003000` | **DEFECT — the store's base address** |
+| B  `a3`, adjacent | `0` | correct — **CONTROL: only the register differs** |
+| C  `a0`, 1 nop | `0x80003000` | defect |
+| D  `a0`, 2 nops | `0x80003000` | defect |
+| E  `a0`, 4 nops | `0` | correct — **CONTROL** |
+
+This is the load-bearing observation: **memory is right, the load is right, and only the
+consumer's operand is wrong.** It places the fault in operand delivery, not in the store, the
+cache, or the load.
+
+Arms B and E are the instrument validation — the same probe on cases that must read 0, and both
+do. `.option norvc` is set so the encodings are 4-byte, as on the board.
+
+**The simulated tree and the bitstream's revision are identical in the relevant logic.**
+`git diff e1b3db6ba HEAD -- core/issue_read_operands.sv core/include/ariane_pkg.sv
+core/scoreboard.sv core/decoder.sv` is EMPTY; the only `.sv` differences between them are
+`wt_dcache_mem.sv` and `store_unit.sv`, which are the R-18 fix and sit in the store *data* path.
+
+**One quantitative difference from the board, stated plainly:** in simulation the window closes
+between 2 and 4 nops, on the board it closed at 1 nop (`gap`). The qualitative result — defect on
+x10, clean on another register, cured by enough separation — matches. The likely causes are the
+known fidelity gaps: bare M-mode versus a real capability domain, a register-resident capability
+versus one reached through the cap table, and cache warmth. Do not read the sim threshold as the
+silicon threshold.
+
 ## Reproducer — 13 KB, one boot, no SQLite
 
 `src/sbx_kernel.h` runs the same seven-instruction shape seven times and returns a bitmask, so one
@@ -77,8 +118,10 @@ other 735 are invisible because the stale and correct values are both non-zero t
 
 ## Suggested places to look in the RTL
 
-Read at `capstone-ariane` `e1b3db6ba`. **This is our inference from board behaviour, not something
-we have observed in simulation** — see "What this package does NOT establish".
+Read at `capstone-ariane` `e1b3db6ba`. The simulation establishes the SYMPTOM in the pipeline —
+the consumer receives the store's base address while the load retires correctly — but it does not
+by itself isolate WHICH of the two sites below produces it. See "What this package does NOT
+establish".
 
 * `core/issue_read_operands.sv:566-567` marks an in-flight capability op's `rs1` as clobbered, so a
   reader of that register stalls. `check_cap_op` (`core/include/ariane_pkg.sv:902-912`) includes
@@ -96,9 +139,12 @@ Line 568 dates from `4891d379a` (2026-04-24) and is unrelated to the R-18 fix.
 
 ## What this package does NOT establish
 
-* **No RTL simulation.** Every result here is from the board. The mechanism above is inferred from
-  reading the RTL plus the register-specificity result; nobody has watched it happen in the
-  pipeline. Which of the two sites to change is therefore **not** determined by anything here.
+* **Which of the two RTL sites to change.** The simulation shows the consumer receiving the
+  store's base address while the load retires correctly, which is consistent with the
+  `check_fwd_rs1(STC)` cursor path being the value source and line 568 being the enabler — but
+  nothing here isolates one from the other. That needs a patched-RTL run: change one site, re-run
+  `./run.sh sim`, and require arm A to have been WRONG before the patch or the test proved
+  nothing.
 * **The bitstream-to-revision mapping is an inference.** The runner enforces the resident
   bitstream's *name* (`caplifive_65536_r18_fix.bit`); nothing on our side records which RTL
   revision built it. `e1b3db6ba` is our best match by name and date.
@@ -122,6 +168,9 @@ src/sbx_kernel.h        the probe: seven arms, returns a bitmask, cannot hang
 src/sbx_fpga_app.c      rung wrapper
 src/sbx_host.c          native oracle: correct hardware returns 0xD0000000
 src/sbx{8,20,36}.dom    frozen images, three draws
+sim/r20-stc-ld-x10.S    the directed RTL test -- five arms, two of them controls
+sim/run-sim.sh          builds, runs and parses it; refuses a timeout or an exception
+sim/r20-rvfi-trace.log  the RVFI trace from the run quoted above
 board/make-arms.py      regenerates the SQLite arms as byte patches of one base image
 board/ARM-SHA256SUMS    sha256 of the base image and of every arm actually run
 SHA256SUMS              covers everything committed here
@@ -135,6 +184,7 @@ run byte-for-byte (verify with `board/ARM-SHA256SUMS`).
 ## Running it
 
 ```bash
+./run.sh sim        # RTL simulation, ~14 s                                (no board)  <- start here
 ./run.sh verify     # check every frozen artifact against SHA256SUMS       (no board)
 ./run.sh arms <base sqlite_silicon.dom>   # regenerate + verify the SQLite arms (no board)
 ./run.sh rung       # the 13 KB reproducer on the board: expect retval 0xD0000001
