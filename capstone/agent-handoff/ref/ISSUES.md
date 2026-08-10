@@ -208,7 +208,39 @@ fix is the RTL change (`capstone-ariane` branch `r20-fix`) in a bitstream, not m
 work. **This is a hypothesis, not a finding**: nothing yet ties the S-04 NOMEM to a specific one
 of those sites.
 
-**Next step.** Bisect openDatabase itself, the same way S-03 was bisected. The domain is
+**LOCALIZED 2026-08-10 -- step 5, `createCollation(BINARY, UTF16BE)`, via a hash lookup that
+disagrees with itself.** Stage 160 re-walks openDatabase step by step on its own handle, checking
+`db->mallocFailed` and `db->errCode` after each. Result `0x15`: first tripping step **5**,
+`mallocFailed` SET, `errCode` clean, and the step's own rc NOT NOMEM.
+
+`createCollation` -> `sqlite3FindCollSeq(create=1)` -> `findCollSeqEntry` (132474-132504):
+
+```c
+pColl = sqlite3HashFind(&db->aCollSeq, zName);          /* 132480 */
+if( 0==pColl && create ){
+   pColl = sqlite3DbMallocZero(...);                    /* succeeded */
+   pDel = sqlite3HashInsert(&db->aCollSeq, ..., pColl); /* 132494 */
+   assert( pDel==0 || pDel==pColl );                    /* COMPILED OUT under NDEBUG */
+   if( pDel!=0 ){ sqlite3OomFault(db); ... }            /* 132502 -> mallocFailed = 1 */
+}
+```
+
+Step 4 inserted `"BINARY"` (UTF8). Step 5 asks for the SAME key. Reaching `sqlite3OomFault` here
+requires `sqlite3HashFind` to report the key ABSENT while `sqlite3HashInsert` finds it PRESENT --
+**the two disagree about the same key in the same table**, with no allocator involved. That is a
+read returning a stale value, and SQLite silently converts it into a phantom `SQLITE_NOMEM`
+because the assert covering exactly that case is compiled out.
+
+**This is R-20's signature, and it fits the measured MOVC residue** (~1051 sites the `stc`-only
+workaround does not cover). It is NOT proof: nothing yet ties the failing hash walk to a specific
+instruction.
+
+**PREDICTIVE TEST, recorded before the run.** On a bitstream carrying the RTL fix, with NO
+compiler change: stage 160 should return `0x00` and `sqlite3_open` should succeed. If it still
+returns `0x15`, S-04 is a separate defect and the hash walk needs its own investigation. One boot
+decides it.
+
+**Next step (only if the bitstream does NOT clear it).** Bisect openDatabase itself, the same way S-03 was bisected. The domain is
 `#include`d into the amalgamation TU, so its internals are callable: add a stage that walks
 openDatabase's sequence (handle alloc -> `setupLookaside` -> `sqlite3ParseUri` ->
 `createCollation` x3 -> `sqlite3RegisterPerConnectionBuiltinFunctions` -> `sqlite3BtreeOpen`) and

@@ -432,8 +432,9 @@ static int run_sqlite_staged(int stage) {
   if (stage == 14) {
     /* S-04, the decisive one. Stage 13 showed every allocation openDatabase needs SUCCEEDS
        when called directly, so openDatabase is failing BEFORE it allocates. Its only early
-       return is its own sqlite3_initialize() (SQLITE_OMIT_AUTOINIT is NOT defined in this
-       build), and `*ppDb = 0` is set just above it -- which yields exactly the observed
+       return is its own sqlite3_initialize() (WRONG -- SQLITE_OMIT_AUTOINIT=1 IS defined,
+       build-sqlite-capstone.sh:167, so openDatabase does NOT call initialize at all; this
+       stage's premise was invalid, though its measurement stands), and `*ppDb = 0` is set just above it -- which yields exactly the observed
        db == NULL with rc = 7.
 
        A second sqlite3_initialize() should short-circuit on sqlite3GlobalConfig.isInit. If
@@ -486,6 +487,126 @@ static int run_sqlite_staged(int stage) {
     if (db15 == 0) r |= 16u;
     return (int)r;
   }
+#if CAPSTONE_SQLITE_STAGE == 160
+  if (stage == 160) {
+    /* S-04: WHICH STEP of openDatabase raises the OOM flag?
+       Established on silicon: malloc succeeds at 64/700/4096/65536/120000;
+       sqlite3MallocZero(sizeof(sqlite3)) succeeds and its memset sticks; disabling
+       lookaside changes nothing. And db == NULL localises nothing, because opendb_out
+       does `if( (rc&0xff)==SQLITE_NOMEM ){ sqlite3_close(db); db = 0; }` for a NOMEM
+       raised ANYWHERE. So re-walk openDatabase on our OWN handle and read
+       db->mallocFailed and db->errCode after EACH step.
+         low nibble = first step that tripped (0 = none)
+         0x10 mallocFailed   0x20 errCode==NOMEM   0x40 errCode other   0x80 rc was NOMEM
+         0xEr / 0xDr = the CONFIG_HEAP / initialize preamble itself failed
+       0x00 is NOT a pass: it means the sequence is clean on our handle while the real
+       sqlite3_open still fails, i.e. the difference is in the compiled FORM of
+       openDatabase, not in the sequence -- a different finding, needing an A/B on
+       codegen rather than a further split. */
+    sqlite3 *d;
+    unsigned int oflags = (unsigned int)(SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE);
+    char *zOpen160 = 0, *zErr160 = 0;
+    unsigned f160;
+    int i160;
+
+#define S160_F(dd)                                                            \
+    ( ((dd)->mallocFailed ? 0x10u : 0u)                                       \
+    | ((((dd)->errCode & 0xff) == SQLITE_NOMEM) ? 0x20u : 0u)                 \
+    | ((((dd)->errCode != 0) &&                                               \
+        (((dd)->errCode & 0xff) != SQLITE_NOMEM)) ? 0x40u : 0u) )
+#define S160_CHECK(idx)                                                       \
+    do { f160 = S160_F(d); if (f160) return (int)(f160 | (unsigned)(idx)); } while (0)
+
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK) return (int)(0xE0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK) return (int)(0xD0u | (unsigned)(rc & 0xF));
+
+    d = sqlite3MallocZero((u64)sizeof(sqlite3));      /* step 1 */
+    if (d == 0) return (int)0x81u;
+
+    d->errMask = 0xff;                                /* step 2 */
+    d->nDb = 2;
+    d->eOpenState = SQLITE_STATE_BUSY;
+    d->aDb = d->aDbStatic;
+    d->lookaside.bDisable = 1;
+    d->lookaside.sz = 0;
+    d->nFpDigit = 17;
+    memcpy(d->aLimit, aHardLimit, sizeof(d->aLimit));
+    d->aLimit[SQLITE_LIMIT_WORKER_THREADS] = SQLITE_DEFAULT_WORKER_THREADS;
+    d->autoCommit = 1;
+    d->nextAutovac = -1;
+    d->szMmap = sqlite3GlobalConfig.szMmap;
+    d->nextPagesize = 0;
+    d->init.azInit = sqlite3StdType;
+    d->flags |= SQLITE_ShortColNames | SQLITE_EnableTrigger | SQLITE_EnableView
+              | SQLITE_CacheSpill | SQLITE_AttachCreate | SQLITE_AttachWrite
+              | SQLITE_Comments | SQLITE_TrustedSchema | SQLITE_AutoIndex;
+    S160_CHECK(2);   /* no error channel here: a hit means a STRAY STORE */
+
+    sqlite3HashInit(&d->aCollSeq);                    /* step 3 */
+    sqlite3HashInit(&d->aModule);
+    S160_CHECK(3);
+
+    (void)createCollation(d, sqlite3StrBINARY, SQLITE_UTF8,    0, binCollFunc, 0);
+    S160_CHECK(4);
+    (void)createCollation(d, sqlite3StrBINARY, SQLITE_UTF16BE, 0, binCollFunc, 0);
+    S160_CHECK(5);
+    (void)createCollation(d, sqlite3StrBINARY, SQLITE_UTF16LE, 0, binCollFunc, 0);
+    S160_CHECK(6);
+    (void)createCollation(d, "NOCASE", SQLITE_UTF8, 0, nocaseCollatingFunc, 0);
+    S160_CHECK(7);
+    (void)createCollation(d, "RTRIM",  SQLITE_UTF8, 0, rtrimCollFunc, 0);
+    S160_CHECK(8);
+
+    d->openFlags = oflags;                            /* step 9 */
+    rc = sqlite3ParseUri(0, ":memory:", &oflags, &d->pVfs, &zOpen160, &zErr160);
+    if (rc != SQLITE_OK) {
+      if (rc == SQLITE_NOMEM) sqlite3OomFault(d);
+      sqlite3_free(zErr160);
+      f160 = S160_F(d) | ((rc == SQLITE_NOMEM) ? 0x80u : 0u);
+      return (int)((f160 ? f160 : 0x40u) | 9u);
+    }
+    d->openFlags = oflags;
+    S160_CHECK(9);
+
+    rc = sqlite3BtreeOpen(d->pVfs, zOpen160, d, &d->aDb[0].pBt, 0,   /* step 10 */
+                          (int)(oflags | SQLITE_OPEN_MAIN_DB));
+    if (rc != SQLITE_OK) {
+      sqlite3Error(d, rc);
+      f160 = S160_F(d) | (((rc & 0xff) == SQLITE_NOMEM) ? 0x80u : 0u);
+      return (int)((f160 ? f160 : 0x40u) | 10u);
+    }
+    S160_CHECK(10);
+
+    d->aDb[0].pSchema = sqlite3SchemaGet(d, d->aDb[0].pBt);          /* step 11 */
+    if (!d->mallocFailed && d->aDb[0].pSchema != 0)
+      sqlite3SetTextEncoding(d, SCHEMA_ENC(d));
+    S160_CHECK(11);
+
+    d->aDb[1].pSchema = sqlite3SchemaGet(d, 0);                      /* step 12 */
+    d->aDb[0].zDbSName = "main";
+    d->aDb[1].zDbSName = "temp";
+    d->eOpenState = SQLITE_STATE_OPEN;
+    S160_CHECK(12);
+
+    sqlite3Error(d, SQLITE_OK);                                      /* step 13 */
+    sqlite3RegisterPerConnectionBuiltinFunctions(d);
+    S160_CHECK(13);
+
+    rc = SQLITE_OK;                                                  /* step 14 */
+    for (i160 = 0; rc == SQLITE_OK && i160 < ArraySize(sqlite3BuiltinExtensions); i160++)
+      rc = sqlite3BuiltinExtensions[i160](d);
+    if (rc) sqlite3Error(d, rc);
+    S160_CHECK(14);
+
+    if ((sqlite3_errcode(d) & 0xff) == SQLITE_NOMEM) return (int)0x20u;
+    return 0;
+#undef S160_CHECK
+#undef S160_F
+  }
+#endif /* CAPSTONE_SQLITE_STAGE == 160 */
+
   if (stage >= 7 && stage <= 10) {
     rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
     if (rc != SQLITE_OK)
