@@ -756,7 +756,35 @@ SUPPORT_OPT=${SQLITE_SUPPORT_OPT_LEVEL:--O1}
 # spills the destination capability at entry and reloads it with `ldc` before each `sb` -- the
 # structure the working -O0 build has. Set SQLITE_MEMCPY_OPTNONE=0 to turn it off for an A/B.
 _memcpy_optnone=${SQLITE_MEMCPY_OPTNONE:-1}
+# BEEBS_STRING_WRITERS_OPTNONE and BEEBS_LDC_HIGH_HALF_FIXUP address two DIFFERENT measured
+# defects in the same primitive, which is why both are on. Board stage 167, one boot, control
+# green, decoding memmove's two arms:
+#
+#   writers at -O1     0x19   bit 0 SET (7-byte memmove lost)  bit 3 SET (32-byte lost)
+#   writers optnone    0x78   bit 0 clear                      bit 3 STILL SET
+#
+# So optnone fixes the small-copy path (the S-04 family) and does nothing for the block path,
+# because that one is the untagged ldc/stc high-half loss -- a separate defect, reproduced in
+# RTL simulation, fixed by the compare-and-repair sequence. Target with both on: stage 167
+# reads 0x70 and stage 169 reads 0x40 (all 32 bytes survive).
+_writers_optnone=${SQLITE_WRITERS_OPTNONE:-1}
+# BEEBS_LDC_HIGH_HALF_FIXUP is DEFAULT OFF, and that is a measured decision, not caution.
+# It is correct at the PRIMITIVE level on silicon -- with it on, stage 169 reads 0x40 (all 32
+# bytes of a block copy survive, dst32 byte-identical to src32) and stage 167 reads 0x70 (every
+# writer clean) -- but it WEDGES the full SQLite workload. Isolated in one boot, control green
+# (k800 = 4), three builds differing by one knob each:
+#
+#   qC  memcpy optnone only        RETURNS, stage=create rc=11
+#   qB  + writers optnone          RETURNS, stage=create rc=11   (so writers optnone is neutral)
+#   qA  + ldc high-half fixup      WEDGES
+#
+# So the fixup alone is what destabilises the workload, and why is NOT yet established. Turning
+# it on trades a diagnosable error return for a wedge, which is strictly worse to work with.
+# Leave it off until that is understood or the silicon is fixed.
+_ldc_fixup=${SQLITE_LDC_HIGH_HALF_FIXUP:-0}
 SUPPORT_DEFS=(-DBEEBS_STRING_LINEAR_SAFE=1 -DBEEBS_MEMCPY_OPTNONE=$_memcpy_optnone \
+              -DBEEBS_STRING_WRITERS_OPTNONE=$_writers_optnone \
+              -DBEEBS_LDC_HIGH_HALF_FIXUP=$_ldc_fixup \
               ${BEEBS_STRING_EXTRA_DEFS:-})
 for pair in "libc:$ADAPTED/capstone_sqlite_libc.c" "beebs_string:$BEEBS_STRING"; do
   "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" \

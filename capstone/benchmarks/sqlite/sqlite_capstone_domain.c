@@ -825,6 +825,156 @@ static int run_sqlite_staged(int stage) {
     r |= (unsigned)(changed > 15 ? 15 : changed) << 4;
     return (int)r;
   }
+  if (stage == 167) {
+    /* S-05: are the OTHER writing string primitives affected the same way memcpy was?
+       S-04 was a store that did not commit, in a primitive compiled at -O1 whose destination
+       capability came in as an argument and was used straight out of a0. memcpy is now built
+       with optnone and clears; memmove, memset and strcpy have the SAME shape and are still
+       at -O1. That matters here because the CREATE path writes btree pages through exactly
+       those, so if any of them loses small aligned writes it is a candidate for the
+       SQLITE_CORRUPT.
+       Same allocation shape as stage 164 -- sqlite3DbMallocZero blocks, 16-byte aligned --
+       so a nonzero result here is directly comparable to 164's.
+         bit 0  a 7-byte memmove does not read back
+         bit 1  a 7-byte memset does not read back
+         bit 2  a 7-char strcpy does not read back
+         bit 3  a 32-byte memmove does not read back  (exercises the capability block loop)
+         bits 4-7  how many of the 7 memmove bytes are correct (0..7)
+       0x70 means all four writers stick and the memmove copied all 7 -- i.e. clean, and the
+       same encoding stage 164 uses for clean, deliberately so the two read alike. */
+    sqlite3 *d;
+    unsigned char *a, *b;
+    char *cs;
+    unsigned r = 0, i, n = 0;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK) return (int)(0xE0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK) return (int)(0xD0u | (unsigned)(rc & 0xF));
+    d = sqlite3MallocZero((u64)sizeof(sqlite3));
+    if (d == 0) return (int)0x81u;
+    d->errMask = 0xff; d->nDb = 2; d->aDb = d->aDbStatic;
+    d->lookaside.bDisable = 1; d->lookaside.sz = 0;
+
+    a = (unsigned char *)sqlite3DbMallocZero(d, 128);
+    if (a == 0) return (int)0x82u;
+    b = (unsigned char *)sqlite3DbMallocZero(d, 128);
+    if (b == 0) return (int)0x83u;
+
+    /* 7-byte memmove between two distinct blocks, both 16-byte aligned */
+    memcpy(b, sqlite3StrBINARY, 7);                  /* memcpy is known good now */
+    memmove(a, b, 7);
+    for (i = 0; i < 7; i++) if (a[i] == (unsigned char)sqlite3StrBINARY[i]) n++;
+    if (n != 7) r |= 1u;
+    r |= (n & 0xFu) << 4;
+
+    /* 7-byte memset */
+    memset(a + 16, 0x5A, 7);
+    for (i = 0; i < 7; i++) if (a[16 + i] != 0x5A) { r |= 2u; break; }
+
+    /* 7-char strcpy (writes 7 chars + NUL) */
+    cs = (char *)(a + 32);
+    strcpy(cs, "BINARY");
+    for (i = 0; i < 7; i++) if (cs[i] != sqlite3StrBINARY[i]) { r |= 4u; break; }
+
+    /* 32-byte memmove -- long enough to run the 16-byte capability block loop twice */
+    for (i = 0; i < 32; i++) b[64 + i] = (unsigned char)(0xC0 + i);
+    memmove(a + 64, b + 64, 32);
+    for (i = 0; i < 32; i++) if (a[64 + i] != (unsigned char)(0xC0 + i)) { r |= 8u; break; }
+    return (int)r;
+  }
+  if (stage == 168) {
+    /* S-05: read the FULL error text from the failing CREATE.
+       The normal run reports `stage=create rc=11 message=malforme` -- truncated, because
+       output_text appends into the bounded hostcall region and by the time the error is
+       emitted the region is nearly full. That matters: SQLite's message for this case is
+       "malformed database schema (%s)" plus an optional " - %s" detail, and BOTH the object
+       name and the detail are exactly what distinguishes the possible causes (a schema row
+       whose text does not begin with CREATE, versus one that fails to re-parse). So do the
+       minimum -- open, one CREATE -- and emit the message FIRST, while the region is empty.
+       Returns the low byte of rc, so the marker still carries a verdict if the text is lost. */
+    sqlite3 *db = 0;
+    char *errmsg = 0;
+    int crc;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK) return (int)(0xE0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK) return (int)(0xD0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_open(":memory:", &db);
+    if (rc != SQLITE_OK || db == 0) {
+      output_text("E168 open rc=");
+      output_uint((unsigned)rc);
+      output_text("\n");
+      return (int)(0xC0u | (unsigned)(rc & 0xF));
+    }
+    crc = sqlite3_exec(db, "CREATE TABLE t(a INTEGER, b TEXT)", 0, 0, &errmsg);
+    output_text("E168 create rc=");
+    output_uint((unsigned)crc);
+    output_text(" errmsg=[");
+    output_text(errmsg ? errmsg : "(null)");
+    output_text("] errmsg2=[");
+    output_text(sqlite3_errmsg(db));
+    output_text("] ecode=");
+    output_uint((unsigned)sqlite3_extended_errcode(db));
+    output_text("\n");
+    if (errmsg) sqlite3_free(errmsg);
+    return (int)((unsigned)crc & 0xFFu);
+  }
+  if (stage == 169) {
+    /* S-05: does a 16-byte ldc/stc block copy preserve all 128 bits of PLAIN data on silicon?
+       Hypothesis, from two independent observations that both land on exactly 8 bytes:
+         - the CREATE error text arrives as "malforme" -- the first 8 bytes of "malformed
+           database schema (items)" -- with byte 8 apparently NUL, and it stays 8 bytes even
+           when emitted into an empty region, so it is not output truncation;
+         - stage 167 bit 3: a 32-byte memmove does not read back, while the 7-byte one does.
+       Both are explained if `stc` of an UNTAGGED capability-sized word writes only the low
+       64 bits, leaving the high half zero. memcpy's block loop copies via `void *` precisely
+       to preserve tags, so every 16-byte chunk of plain data goes through that path. The
+       source comment on memcpy already flags this as "gap 4", fixed in QEMU
+       (fix/untagged-ldc-stc-128bit-preservation) -- which is exactly the kind of divergence
+       QEMU would hide.
+       This does NOT return a verdict byte; it PRINTS the bytes, because the shape of the
+       damage is the finding and 8 bits cannot carry it. Expected if the hypothesis holds:
+       bytes 0-7 correct, 8-15 zero, 16-23 correct, 24-31 zero. */
+    sqlite3 *d;
+    unsigned char *src, *dst;
+    unsigned i, bad = 0;
+    static const char hexd[] = "0123456789abcdef";
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK) return (int)(0xE0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK) return (int)(0xD0u | (unsigned)(rc & 0xF));
+    d = sqlite3MallocZero((u64)sizeof(sqlite3));
+    if (d == 0) return (int)0x81u;
+    d->errMask = 0xff; d->nDb = 2; d->aDb = d->aDbStatic;
+    d->lookaside.bDisable = 1; d->lookaside.sz = 0;
+    src = (unsigned char *)sqlite3DbMallocZero(d, 128);
+    if (src == 0) return (int)0x82u;
+    dst = (unsigned char *)sqlite3DbMallocZero(d, 128);
+    if (dst == 0) return (int)0x83u;
+
+    for (i = 0; i < 32; i++) src[i] = (unsigned char)(0xC0u + i);
+    memcpy(dst, src, 32);                       /* runs the 16-byte block loop twice */
+
+    output_text("E169 align dst=");
+    output_uint((unsigned)(((unsigned long)dst) & 15u));
+    output_text(" src=");
+    output_uint((unsigned)(((unsigned long)src) & 15u));
+    output_text(" src32=[");
+    for (i = 0; i < 32; i++) {
+      char two[3];
+      two[0] = hexd[(src[i] >> 4) & 0xF]; two[1] = hexd[src[i] & 0xF]; two[2] = '\0';
+      output_text(two);
+    }
+    output_text("] dst32=[");
+    for (i = 0; i < 32; i++) {
+      char two[3];
+      two[0] = hexd[(dst[i] >> 4) & 0xF]; two[1] = hexd[dst[i] & 0xF]; two[2] = '\0';
+      output_text(two);
+    }
+    output_text("]\n");
+    for (i = 0; i < 32; i++) if (dst[i] != (unsigned char)(0xC0u + i)) bad++;
+    return (int)(0x40u | (bad & 0x3Fu));        /* 0x40 = all 32 bytes survived */
+  }
   if (stage >= 7 && stage <= 10) {
     rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
     if (rc != SQLITE_OK)

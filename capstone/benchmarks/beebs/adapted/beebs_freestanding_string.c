@@ -47,10 +47,14 @@ typedef __SIZE_TYPE__ bsize_t;
  * capability register holds the destination base (-O1 uses the incoming argument a0
  * directly, -O0 round-trips it through a stack slot).
  *
- * Applies to memcpy ONLY, on purpose. memmove has the identical aligned-copy structure and
- * may well share the defect, but nothing has measured it, and keeping one variable per
- * experiment is what makes the next board result readable. If memmove is later implicated,
- * add the same attribute to it -- the macro is already the right shape.
+ * CONFIRMED ON SILICON 2026-08-10 by a matched pair in one boot, control green (k800 = 4):
+ * two images differing in memcpy and NOTHING else (compared per symbol, raw encodings) gave
+ * stage 164 = 0x74 with -O1 memcpy and 0x70 with this attribute -- one bit apart, and it is
+ * exactly the "memcpy does not stick" bit. The failing arm doubles as the positive control,
+ * so the clean result is a real negative rather than a dead test.
+ *
+ * Applies to memcpy ONLY. The other writers have their own knob
+ * (BEEBS_STRING_WRITERS_OPTNONE, below) so the two stay independently measurable.
  *
  * Default OFF. Enabled only by build-sqlite-silicon.sh, exactly like
  * BEEBS_STRING_LINEAR_SAFE, so the silicon-ladder rungs keep the geometry their published
@@ -60,6 +64,97 @@ typedef __SIZE_TYPE__ bsize_t;
 #define BEEBS_MEMCPY_ATTR __attribute__((optnone, noinline))
 #else
 #define BEEBS_MEMCPY_ATTR
+#endif
+
+/*
+ * BEEBS_STRING_WRITERS_OPTNONE -- the same treatment for the OTHER primitives that WRITE
+ * memory: memmove, memset and strcpy. Separate knob from BEEBS_MEMCPY_OPTNONE on purpose, so
+ * the two can be measured independently rather than moving four functions at once.
+ *
+ * The rationale is a rule, not a list: S-04 was a STORE that did not commit, in a primitive
+ * compiled at -O1 whose destination capability arrived as an argument and was used straight
+ * out of a0. memmove, memset and strcpy have exactly that shape. strlen and strcmp do NOT --
+ * they only read, and they must stay at -O1 because the -O0 form of strlen is itself a
+ * documented silicon defect. So the split is WRITERS at -O0, READERS at -O1.
+ *
+ * Whether the other writers are actually affected is measured by stage 167 in
+ * sqlite_capstone_domain.c; do not enable this on the theory alone.
+ */
+#if defined(BEEBS_STRING_WRITERS_OPTNONE) && BEEBS_STRING_WRITERS_OPTNONE
+#define BEEBS_WRITER_ATTR __attribute__((optnone, noinline))
+#else
+#define BEEBS_WRITER_ATTR
+#endif
+
+typedef unsigned long long bu64_t;      /* exactly one half of a 128-bit capability word */
+
+/*
+ * BEEBS_LDC_HIGH_HALF_FIXUP -- work around a silicon defect in which an `ldc`/`stc` round
+ * trip of PLAIN UNTAGGED data preserves only the LOW 64 bits and returns ZERO in the high 64.
+ *
+ * MEASURED, on caplifive_r20.bit and then reproduced in RTL simulation. Copying 32 bytes of
+ * ordinary data with the aligned loop below, both pointers 16-byte aligned:
+ *
+ *   src32 = c0c1c2c3c4c5c6c7 c8c9cacbcccdcecf d0d1d2d3d4d5d6d7 d8d9dadbdcdddedf
+ *   dst32 = c0c1c2c3c4c5c6c7 0000000000000000 d0d1d2d3d4d5d6d7 0000000000000000
+ *
+ * The simulation (capstone-ariane verif/tests/custom/capstone/untagged-ldc-stc-128.S) reads
+ * the two halves straight out of the RVFI trace and carries a plain sd/ld control in the same
+ * run: the control survives exactly, so the buffer and the capability are sound and the loss
+ * belongs to ldc/stc. QEMU carries an explicit fix for this
+ * (fix/untagged-ldc-stc-128bit-preservation), which is why it never showed up under QEMU.
+ *
+ * WHY THE OBVIOUS FIX DOES NOT WORK. The aligned path cannot simply be dropped: it exists so
+ * that copying a struct containing pointers preserves capability TAGS, and a byte loop that
+ * strips them makes SQLite dereference untagged pointers and wedges the core. Nor can the
+ * code ask whether a chunk is a capability: `LCC` with a NOT_CAP operand raises
+ * UNEXPECTED_OPERAND before it examines the requested field, so `cap_get_tag` faults on
+ * exactly the plain data it would be used to detect.
+ *
+ * THE SEQUENCE USED HERE writes both halves with PLAIN stores first, then lays the
+ * capability-grained copy on top, and has NO data-dependent branch:
+ *
+ *   plain-store every 64-bit word of the chunk     both halves land correctly, tag cleared
+ *   *(void **)d = *(void *const *)s;               then ldc/stc on top
+ *
+ * It is correct for both kinds of chunk because of HOW THE CACHE GATES THE STORE
+ * (wt_dcache_mem.sv: `st_wr_cap = |wr_user_i`, and when that is 0 only the bank matching the
+ * store's own offset is written):
+ *   - source IS a capability -> its metadata is non-zero -> the stc writes BOTH banks, so it
+ *     overwrites the plain stores and restores the tag;
+ *   - source is PLAIN data   -> the ldc delivers zero metadata -> the stc degrades to a
+ *     single-bank store that never touches the high half, so the plain store SURVIVES.
+ *
+ * AN EARLIER SHAPE WAS WRONG AND IS RECORDED SO IT IS NOT RETRIED. It copied with ldc/stc
+ * and then compared the high halves of source and destination, repairing only on a
+ * difference. That looks safe and passes a directed test, but for a genuine capability the
+ * destination's stored metadata word need not be bit-identical to the source's -- the
+ * metadata packs reg_id among other fields -- and any such difference makes the comparison
+ * say "differ", run the repair store, and CLEAR A LIVE TAG. On the board it turned a full
+ * SQLite run from an error return into a wedge. Any workaround with a data-dependent store
+ * into the high half has this failure mode; this one has no such branch.
+ *
+ * Validated on both kinds of chunk in untagged-ldc-stc-fixup.S arm E: plain data keeps both
+ * halves, and a capability copied this way is still usable as a base afterwards.
+ *
+ * The word loop is written in terms of sizeof(void *) rather than a hardcoded 2 so the
+ * native self-test, where pointers are 8 bytes, copies one word and does not overrun.
+ *
+ * Default OFF so the silicon-ladder rungs keep the geometry their published numbers were
+ * taken with; build-sqlite-silicon.sh turns it on. Remove when the silicon is fixed.
+ */
+#if defined(BEEBS_LDC_HIGH_HALF_FIXUP) && BEEBS_LDC_HIGH_HALF_FIXUP
+#define BEEBS_CHUNK_COPY(D, S)                                                  \
+  do {                                                                          \
+    unsigned char *bcd_ = (D);                                                  \
+    const unsigned char *bcs_ = (S);                                            \
+    bsize_t bck_;                                                               \
+    for (bck_ = 0; bck_ < sizeof(void *) / sizeof(bu64_t); bck_++)              \
+      ((bu64_t *)(void *)bcd_)[bck_] = ((const bu64_t *)(const void *)bcs_)[bck_]; \
+    *(void **)bcd_ = *(void *const *)bcs_;   /* on top: restores a tag if any */ \
+  } while (0)
+#else
+#define BEEBS_CHUNK_COPY(D, S) ((void)(*(void **)(D) = *(void *const *)(S)))
 #endif
 
 /*
@@ -96,7 +191,7 @@ BEEBS_MEMCPY_ATTR void *memcpy(void *dst, const void *src, bsize_t n) {
     for (; i < head; i++)
       d[i] = s[i];
     for (; i + ps <= n; i += ps)
-      *(void **)(d + i) = *(void *const *)(s + i);
+      BEEBS_CHUNK_COPY(d + i, s + i);
   }
 #else
   /* BEEBS_MEMCPY_BYTES_ONLY: skip the aligned capability-copy path entirely and use the byte
@@ -118,7 +213,7 @@ BEEBS_MEMCPY_ATTR void *memcpy(void *dst, const void *src, bsize_t n) {
   return dst;
 }
 
-void *memmove(void *dst, const void *src, bsize_t n) {
+BEEBS_WRITER_ATTR void *memmove(void *dst, const void *src, bsize_t n) {
   unsigned char *d = (unsigned char *)dst;
   const unsigned char *s = (const unsigned char *)src;
   const bsize_t ps = sizeof(void *);
@@ -137,7 +232,7 @@ void *memmove(void *dst, const void *src, bsize_t n) {
       for (; i < head; i++)
         d[i] = s[i];
       for (; i + ps <= n; i += ps)
-        *(void **)(d + i) = *(void *const *)(s + i);
+        BEEBS_CHUNK_COPY(d + i, s + i);
     }
     for (; i < n; i++)
       d[i] = s[i];
@@ -151,7 +246,7 @@ void *memmove(void *dst, const void *src, bsize_t n) {
   return dst;
 }
 
-void *memset(void *dst, int c, bsize_t n) {
+BEEBS_WRITER_ATTR void *memset(void *dst, int c, bsize_t n) {
   unsigned char *d = (unsigned char *)dst;
   for (bsize_t i = 0; i < n; i++)
     d[i] = (unsigned char)c;
@@ -267,7 +362,7 @@ int strcmp(const char *a, const char *b) {
   return (int)(unsigned char)a[i] - (int)(unsigned char)b[i];
 }
 
-char *strcpy(char *dst, const char *src) {
+BEEBS_WRITER_ATTR char *strcpy(char *dst, const char *src) {
   bsize_t i = 0;
   while ((dst[i] = src[i]) != '\0')
     i++;
@@ -282,7 +377,7 @@ int strcmp(const char *a, const char *b) {
   return (int)(unsigned char)*a - (int)(unsigned char)*b;
 }
 
-char *strcpy(char *dst, const char *src) {
+BEEBS_WRITER_ATTR char *strcpy(char *dst, const char *src) {
   char *d = dst;
   while ((*d++ = *src++))
     ;

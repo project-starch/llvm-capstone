@@ -238,6 +238,23 @@ Treat `-O1`-vs-`-O0` as two different broken configurations, not as a fix.
 
 ## S-05 — SQLite fails building the schema · `OPEN -- SQLITE_CORRUPT at CREATE, now measured with NO other known defect in play`
 
+### 2026-08-10 — ROOT CAUSE: untagged `ldc`/`stc` loses the high 64 bits (new issue S-06)
+
+S-05 is a consequence of **S-06** below: a 16-byte `ldc`/`stc` block copy of PLAIN data keeps
+only the low 8 bytes. SQLite's schema text is copied through exactly that loop, so half of every
+16-byte chunk is destroyed, which is why the schema will not re-parse. The error message is the
+tell and it was in plain sight: `malforme` is the first **8** bytes of "malformed database schema
+(items)", with byte 8 gone so the string ends there. It stayed 8 bytes even when emitted into an
+empty output region, so it was never output truncation.
+
+It also explains why a SHORT `CREATE TABLE t(a INTEGER, b TEXT)` **succeeds** on silicon
+(stage 168 = rc 0, reproduced twice) while the workload's longer
+`CREATE TABLE items(name TEXT NOT NULL, value INTEGER NOT NULL);` fails: the damage is
+length-dependent.
+
+**Status: S-05 needs the S-06 silicon fix.** The software workaround is correct at the primitive
+level and still wedges the workload — see S-06.
+
 ### 2026-08-10 — the `-O0` strlen theory is REFUTED, and this is now a clean single-defect measurement
 
 This section previously named the `-O0` `strlen` defect as the live suspect, on the grounds that
@@ -441,6 +458,96 @@ that row.
 
 Diagnostic stages 11-15 are committed in `sqlite_capstone_domain.c` and selected at run time
 (`SQLITE_STAGE_DOMS=".../s8.dom:15"`), so none of this has to be rebuilt from scratch.
+
+## S-06 — an untagged 128-bit `ldc`/`stc` round trip loses the HIGH 64 bits · `OPEN — SILICON DEFECT, root-caused in RTL, needs a hardware fix`
+
+**This is the blocker behind S-05, and it affects every capability-grained copy of plain data.**
+
+A 16-byte `ldc`/`stc` pair — the aligned middle loop of `memcpy`/`memmove`, which exists so that
+copying a struct containing pointers preserves capability TAGS — keeps only the LOW 8 bytes of a
+plain-data chunk. Measured on `caplifive_r20.bit`, both pointers 16-byte aligned, inside a
+capability domain (stage 169, control `k800` = 4 in the same boot):
+
+    src32 = c0c1c2c3c4c5c6c7 c8c9cacbcccdcecf d0d1d2d3d4d5d6d7 d8d9dadbdcdddedf
+    dst32 = c0c1c2c3c4c5c6c7 0000000000000000 d0d1d2d3d4d5d6d7 0000000000000000
+
+**Reproduced in RTL simulation in 499 cycles**, which removes the board from the loop entirely:
+`capstone-ariane verif/tests/custom/capstone/untagged-ldc-stc-128.S`. The test reads the two
+halves straight out of the RVFI trace and carries a plain `sd`/`ld` control in the SAME run:
+
+| register | measures | value |
+|---|---|---|
+| `t3` | `ldc`/`stc` round trip, LOW | `0123456789abcdef` |
+| `t4` | `ldc`/`stc` round trip, **HIGH** | **`0000000000000000`** |
+| `t5` | control, plain `sd`/`ld` LOW | `0123456789abcdef` |
+| `t6` | control, plain `sd`/`ld` HIGH | `fedcba9876543210` |
+
+The control is what makes it attributable: same buffer, same bounds, same capability, written and
+read with `sd`/`ld` only, survives exactly. So the loss belongs to `ldc`/`stc`.
+
+### Mechanism, from the RTL sources (not from the instruction semantics)
+
+It is NOT in `capstone_dyn_unit.anvil` — LDC/STC there operate on an already-decoded `fat_cap_t`
+and contain no bit-level logic. It is in the D-cache, and BOTH sides contribute in sequence:
+
+* **The load discards the bytes.** `core/cache_subsystem/wt_dcache_mem.sv:310` —
+  `ruser = cap_tag_hit ? ruser_cl[rd_hit_idx] : '0;`. Bank 1's SRAM still physically holds the
+  real bytes; they are MUXed to a literal `'0` whenever the line's 1-bit shadow capability tag
+  (`cap_tag_q`, `:134`) is clear. Any plain `sd` to either half clears that tag for the line
+  (`:418-423`), so a buffer filled by ordinary stores always reads back with a zeroed high half.
+* **The store then never writes the high half at all.** `:140` — `st_wr_cap = |wr_user_i`, i.e.
+  gated on metadata CONTENT, not on the opcode. With the metadata now zero, `:227-240` requests
+  only the bank matching the store's own offset, so `dst+8..15` is left at its prior content
+  (zero for a fresh buffer, STALE otherwise) — never written by that `stc`.
+
+**QEMU cannot see this.** It carries an explicit `scalar_hi` shadow field for exactly this case
+(`capstone-qemu target/riscv/cap.h:79-94`, `op_helper.c:1148-1188`), added so untagged `ldc`/`stc`
+is bit-exact over the full 128 bits. There is **no RTL counterpart**. Every SQLite result ever
+taken under QEMU has therefore been blind to this divergence. The `memcpy` header comment in
+`beebs_freestanding_string.c` already names it as "gap 4" and treats it as closed — that is true
+of QEMU only.
+
+### Why software cannot simply work around it
+
+* The aligned path cannot be dropped: it is the only one that preserves tags, and a byte-wise
+  copy makes SQLite dereference untagged pointers and wedges the core (recorded under S-04).
+* Code cannot ask whether a chunk is a capability. `LCC` with a `NOT_CAP` operand raises
+  `UNEXPECTED_OPERAND` **before** it examines the requested field
+  (`capstone_dyn_unit.anvil`, `func LCC`, the `cap_type==NOT_CAP` branch), so
+  `__builtin_capstone_cap_get_tag` faults on exactly the plain data it would be used to detect,
+  and a capability fault inside a domain wedges rather than traps.
+
+### The workaround that was tried: primitive-correct, workload-fatal
+
+`BEEBS_LDC_HIGH_HALF_FIXUP` writes both 64-bit halves with plain stores and then lays the
+`ldc`/`stc` on top. It is branchless and exploits the mechanism above: for a capability the
+metadata is non-zero so the `stc` writes both banks and restores the tag; for plain data the
+`stc` degrades to a single-bank store that never touches the high half, so the plain store
+survives. Validated on both kinds of chunk in simulation (`untagged-ldc-stc-fixup.S` arm E) and
+**on silicon at the primitive level**: stage 169 = `0x40` with `dst32` byte-identical to `src32`,
+stage 167 = `0x70`.
+
+**It nevertheless WEDGES the full SQLite workload**, isolated in one boot with the control green:
+
+| build | knobs | full run |
+|---|---|---|
+| `qC` | memcpy optnone only | RETURNS, `stage=create rc=11` |
+| `qB` | + writers optnone | RETURNS, `stage=create rc=11` (neutral) |
+| `qA` | + ldc high-half fixup | **WEDGES** |
+
+Why it wedges at workload scale is **NOT established** — do not record a cause. An earlier shape
+(copy, then compare the high halves and repair on a difference) is separately REFUTED and must
+not be retried: for a genuine capability the destination's stored metadata word need not be
+bit-identical to the source's, so the comparison can say "differ", run the repair store, and
+CLEAR A LIVE TAG.
+
+Knob default **OFF** (`build-sqlite-silicon.sh`), deliberately: it trades a diagnosable error
+return for a wedge.
+
+### What the hardware side needs
+
+The RTL needs the QEMU behaviour: preserve the raw upper 64 bits of a `tag == 0` line across an
+`ldc`/`stc` round trip. Repro is `untagged-ldc-stc-128.S`, 499 cycles, with its own control.
 
 ## RTL / FPGA
 
