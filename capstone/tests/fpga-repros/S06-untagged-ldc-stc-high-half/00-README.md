@@ -81,6 +81,32 @@ src32 = c0c1c2c3c4c5c6c7 c8c9cacbcccdcecf d0d1d2d3d4d5d6d7 d8d9dadbdcdddedf
 dst32 = c0c1c2c3c4c5c6c7 0000000000000000 d0d1d2d3d4d5d6d7 0000000000000000
 ```
 
+## It is NOT only memcpy — the compiler emits the same pattern
+
+`./run.sh rung` also builds `src/s06agg.dom`, a second 10 KB rung that contains **no memcpy at
+all**. It performs one ordinary struct assignment:
+
+```c
+struct { void *p; unsigned long x; unsigned long y; };   /* p is 16 bytes, so x,y are at 16..31 */
+*d = *s;
+```
+
+which the compiler lowers to two capability-grained copies — `ldc/stc 0x0` for the pointer (a real
+capability, therefore safe) and `ldc/stc 0x10` for `x` **and** `y` together, sixteen bytes of
+ordinary data. Return value is the verdict:
+
+| retval | meaning |
+|---|---|
+| **64** | both fields survived — no defect |
+| **66** | `y` gone, `x` intact — S-06 via the compiler's aggregate copy |
+
+Measured **66 twice** on `caplifive_r20.bit`, control `k800` = 4 in the same boot; QEMU returns
+64. `66` rather than merely "wrong" is the signature: the defect keeps the LOW half of each
+16-byte chunk, and `x` is the low half.
+
+This matters for scoping a fix: a library-level workaround in `memcpy` cannot reach ordinary
+struct assignment, so the exposure is not confined to code that calls `memcpy`.
+
 ## Where it is in the RTL
 
 The instruction semantics are not where it lives: `LDC`/`STC` in
@@ -161,6 +187,8 @@ reads `0xfedcba9876543210` instead of zero, and it independently checks its own 
 | `sim/rvfi-trace-128.log` | frozen RVFI trace of the 499-cycle run above |
 | `sim/rvfi-trace-fixup.log` | frozen RVFI trace of the workaround run |
 | `src/s06copy.dom` | the 10 KB board reproducer, frozen and checksummed |
+| `src/s06agg.dom` | second reproducer: an ordinary struct assignment, **no memcpy involved** |
+| `src/s06agg_kernel.h` | its source, and why 66 is the predicted value rather than just "wrong" |
 | `src/s06copy_kernel.h` | its source — the copy under test and why each line is as it is |
 | `src/s06copy_{app,fpga_app,host}.c` | QEMU-side app, board-side app, native oracle (32) |
 | `SHA256SUMS` | `./run.sh verify` |

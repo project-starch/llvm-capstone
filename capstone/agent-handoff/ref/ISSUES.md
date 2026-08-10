@@ -507,7 +507,42 @@ taken under QEMU has therefore been blind to this divergence. The `memcpy` heade
 `beebs_freestanding_string.c` already names it as "gap 4" and treats it as closed — that is true
 of QEMU only.
 
-### Why software cannot simply work around it
+### SECOND EXPOSURE, measured 2026-08-11: the COMPILER emits the vulnerable pattern too
+
+The memcpy workaround covers only copies that go through our memcpy. It does not cover the
+compiler's own aggregate-copy lowering, and that is the larger exposure.
+
+For `struct { void *p; unsigned long x; unsigned long y; }` a pointer is 16 bytes here, so `p`
+occupies bytes 0..15 and `x`,`y` occupy 16..31. A plain `*d = *s` lowers to TWO capability-grained
+copies:
+
+```
+ldc a2, 0x10(a1)     <- bytes 16..31 = x AND y, sixteen bytes of ORDINARY DATA
+stc a2, 0x10(a0)
+ldc a1, 0x0(a1)      <- the pointer: a real capability, therefore safe
+stc a1, 0x0(a0)
+```
+
+Under S-06 the second word (`y`) is silently zeroed on every such assignment. Confirmed at both
+`-O0` and `-O1`, with no `memcpy` reference in the object at all.
+
+**Board-measured with a standalone rung** (`s06agg`, oracle 64, control `k800` = 4 in the same
+boot): **retval 66, twice**, i.e. `y` gone and `x` intact. 66 rather than merely "wrong" is the
+signature -- the defect keeps the LOW half of each 16-byte chunk and `x` is the low half. QEMU
+returns 64.
+
+**Consequence.** No library-level workaround can reach this, so `BEEBS_LDC_HIGH_HALF_FIXUP` is
+necessary but NOT sufficient. It is also a live suspect for the `INVALID_CAPABILITY` fault inside
+`CREATE TABLE`: silently zeroing a pointer-adjacent word throughout SQLite is exactly how a
+capability ends up invalid.
+
+**Fixable in OUR compiler, without the RTL change.** The backend uses `ldc`/`stc` for chunks it
+does not know to be capabilities. It can instead emit two 64-bit `ld`/`sd` for a chunk that cannot
+contain one, or apply the same pre-write sequence the library workaround uses (plain-store both
+halves, then `ldc`/`stc` on top), which is correct for both kinds of chunk. That covers what the
+library fixup cannot, and it is a codegen change rather than a datapath change.
+
+### Why software cannot simply work around it AT THE LIBRARY LEVEL
 
 * The aligned path cannot be dropped: it is the only one that preserves tags, and a byte-wise
   copy makes SQLite dereference untagged pointers and wedges the core (recorded under S-04).

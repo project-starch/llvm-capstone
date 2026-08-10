@@ -59,12 +59,34 @@ for i, l in enumerate(ins):
             break
     if ev:
         break
-print('  ldc/stc block copy present in s06copy_compute:', 'YES' if ev else 'NO')
-if ev:
-    print('   ', ev)
-else:
+print('  s06copy_compute  ldc/stc block copy :', ('YES  ' + ev) if ev else 'NO')
+if not ev:
     print('  the rung would return 32 while testing NOTHING -- do not run it')
-raise SystemExit(0 if ev else 1)
+
+# s06agg must contain the AGGREGATE copy: an ldc/stc pair at a NON-ZERO offset, which is the
+# plain-data tail of the struct. Offset 0 is the pointer chunk and is safe, so a check that
+# accepted any ldc/stc would pass on a build whose data copy had been optimised away.
+out2 = subprocess.run([od, '-d', '--triple=capstone64-unknown-elf',
+                       '--disassemble-symbols=s06agg_compute',
+                       dom.replace('s06copy.dom', 's06agg.dom')],
+                      capture_output=True, text=True).stdout
+ins2 = [l.split('\t', 1)[-1].strip() for l in out2.split('\n') if '\t' in l]
+ev2 = None
+for i, l in enumerate(ins2):
+    m = LDC.match(l)
+    if not m or int(m.group(2), 0) == 0:
+        continue
+    for x in ins2[i+1:i+4]:
+        n = STC.match(x)
+        if n and n.group(1) == m.group(1) and int(n.group(2), 0) != 0:
+            ev2 = f'{l}  ->  {x}'
+            break
+    if ev2:
+        break
+print('  s06agg_compute   aggregate copy     :', ('YES  ' + ev2) if ev2 else 'NO')
+if not ev2:
+    print('  the struct copy was not emitted capability-grained -- this rung proves nothing')
+raise SystemExit(0 if (ev and ev2) else 1)
 PY
   ;;
 
@@ -74,14 +96,16 @@ rung)
   : "${FPGA_FW:?set FPGA_FW to the fw_payload.bin that has this .dom baked in}"
   export FPGA_BITSTREAM=${FPGA_BITSTREAM:-caplifive_r20.bit}
   echo "== the .dom must be baked into the initramfs; stage it first if this is a fresh tree:"
-  echo "     bash capstone/tests/stage-board-domains.sh --apply k800 s06copy.dom lpc"
+  echo "     bash capstone/tests/stage-board-domains.sh --apply k800 s06copy.dom s06agg.dom lpc"
   echo "   then rebuild: linux-rebuild, then opensbi-rebuild TWICE."
   echo
-  echo "== control k800 runs FIRST (oracle 4); s06copy runs 3x (32 = clean, 16 = S-06)"
+  echo "== control k800 runs FIRST (oracle 4), then both reproducers:"
+  echo "     s06copy  32 = clean, 16 = S-06 through memcpy's aligned loop"
+  echo "     s06agg   64 = clean, 66 = S-06 through the compiler's struct assignment (no memcpy)"
   export SQLITE_STAGE_DOMS="/test-domains/lpc|k800:/test-domains/k800.dom,\
 /test-domains/lpc|s06copy:/test-domains/s06copy.dom,\
-/test-domains/lpc|s06copy:/test-domains/s06copy.dom,\
-/test-domains/lpc|s06copy:/test-domains/s06copy.dom"
+/test-domains/lpc|s06agg:/test-domains/s06agg.dom,\
+/test-domains/lpc|s06agg:/test-domains/s06agg.dom"
   bash capstone/tests/preflight-board-run.sh || { echo "preflight BLOCKED -- not spending a boot"; exit 1; }
   cd capstone/tests/rtl-smoke && exec python3 -m fpga_driver.run_sqlite_stages_fpga
   ;;
