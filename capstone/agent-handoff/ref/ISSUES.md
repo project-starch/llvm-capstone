@@ -3420,6 +3420,36 @@ The reproducer, the trigger and the workaround are all unaffected by both.
 Repro: `capstone/tests/fpga-repros/R19-movc-zero-metadata-in-slot/`.
 Workaround (shared with R-18): `design/R18-workaround-movc-zero.md`.
 
+### R-20 — after `stc`, a load into **x10** is read by the NEXT instruction as the store's base address `OPEN — reproduced standalone; package ready at capstone/tests/fpga-repros/R20-stc-rs1-cursor-forward-x10/`
+
+`stc rX,0(a0)` immediately followed by `ld a0,0(a0)` immediately followed by any consumer of `a0`
+gives that consumer **the address the store used**, not the value the load fetched. Memory is
+correct; a consumer one instruction later is correct; the same sequence on any other register is
+correct. Silent — no trap, nothing in any log — and correct under QEMU.
+
+Normally invisible, because the stale value and the correct value are both non-zero at
+essentially every site. It changes behaviour only where the loaded value is genuinely **zero**,
+i.e. the `if (pointer)` idiom right after a call returns NULL. There are **736** instances of the
+exact shape on x10 in the SQLite silicon image; one of them is the S-03 blocker.
+
+**This is the root cause of S-03.** See the S-03 entry above for the investigation trail and for
+the several models that were refuted along the way.
+
+Reproduced standalone in a 13 KB rung, three draws, `retval = 0xD0000001` — no SQLite required.
+Necessary conditions, each from a one-variable pair: register is x10 (`R13` on `a3` is clean);
+store is a **capability** store (`sd` is clean); both adjacencies hold (one `nop` either side
+cures it); the branch target is irrelevant (`Z` differs from base by one byte). The poisoned value
+is **measured**: `V1` returns iff the value read was exactly the store's base address.
+
+Suggested RTL sites, INFERRED from board behaviour and not yet confirmed in simulation:
+`issue_read_operands.sv:568` overwrites x10's clobber entry unconditionally (`=` where the intent
+looks like `|=`), and `issue_read_operands.sv:674-677` with `check_fwd_rs1` (which includes `STC`)
+serves a reader whose `rs1` matches an in-flight STC's `rs1` with that STC's `rs1_cursor`. Which
+of the two to change is NOT decided by anything measured so far.
+
+Workarounds, both board-demonstrated at the S-03 site, neither implemented in the backend: keep
+x10 out of the tied `stc`/`ld` pair, or separate the store from the load.
+
 ### R-18 — a scalar in the UPPER half of a 16-byte cache row is silently ZEROED `OPEN — REPORTED to the board owner; our compiler workaround is landed and silicon-confirmed`
 
 > **STATUS 2026-08-08.** This issue has been **REPORTED to the board owner**, and our side is
