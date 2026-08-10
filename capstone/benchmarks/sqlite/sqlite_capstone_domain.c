@@ -720,6 +720,111 @@ static int run_sqlite_staged(int stage) {
     if (zeros == 7) r |= 0x80u;
     return (int)r;
   }
+  if (stage == 164) {
+    /* S-04: is it memcpy, or the destination pointer? Stage 163 showed the key stored by
+       findCollSeqEntry is entirely zero while the SOURCE is intact. Replicate its allocation
+       and try three different ways of writing the same 7 bytes into the same kind of block.
+         bit 0  pc[0].zName does not read back as &pc[3]   -> the DESTINATION POINTER is wrong
+         bit 1  an explicit byte LOOP does not stick        -> memory, not memcpy
+         bit 2  memcpy does not stick                       -> reproduces stage 163
+         bit 3  a single direct store q[0]=0x42 does not read back
+         bits 4-7  how many of the 7 bytes the byte LOOP got right (0..7)
+       memcpy failing while the loop succeeds implicates memcpy; both failing implicates the
+       memory or the capability the destination is reached through. */
+    sqlite3 *d;
+    CollSeq *pc, *pd;
+    char *q;
+    unsigned r = 0, i, n = 0;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK) return (int)(0xE0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK) return (int)(0xD0u | (unsigned)(rc & 0xF));
+    d = sqlite3MallocZero((u64)sizeof(sqlite3));
+    if (d == 0) return (int)0x81u;
+    d->errMask = 0xff; d->nDb = 2; d->aDb = d->aDbStatic;
+    d->lookaside.bDisable = 1; d->lookaside.sz = 0;
+
+    /* --- exactly findCollSeqEntry's allocation and memcpy (132484-132493) --- */
+    pc = (CollSeq *)sqlite3DbMallocZero(d, 3*sizeof(CollSeq) + 7);
+    if (pc == 0) return (int)0x82u;
+    pc[0].zName = (char *)&pc[3];
+    if ((const void *)pc[0].zName != (const void *)&pc[3]) r |= 1u;
+    memcpy(pc[0].zName, sqlite3StrBINARY, 7);
+    if (memcmp(pc[0].zName, sqlite3StrBINARY, 7) != 0) r |= 4u;
+
+    /* --- the same bytes, written by an explicit loop into a fresh block --- */
+    pd = (CollSeq *)sqlite3DbMallocZero(d, 3*sizeof(CollSeq) + 7);
+    if (pd == 0) return (int)0x83u;
+    q = (char *)&pd[3];
+    for (i = 0; i < 7; i++) q[i] = sqlite3StrBINARY[i];
+    for (i = 0; i < 7; i++) if (q[i] == sqlite3StrBINARY[i]) n++;
+    if (n != 7) r |= 2u;
+    r |= (n & 0xFu) << 4;
+
+    /* --- one single store, read straight back --- */
+    q[0] = 0x42;
+    if (q[0] != 0x42) r |= 8u;
+    return (int)r;
+  }
+  if (stage == 165) {
+    /* S-04: memcpy loses a 7-byte copy that an explicit byte loop performs correctly to the
+       SAME address (stage 164). memcpy branches on (dest & 15) == (src & 15) and has three
+       paths, so report the two alignments -- that says which path this case takes, and the
+       board's heap sits at a different address from QEMU's, which is a candidate for why
+       QEMU passes.
+         bits 0-3  dest & 15   (dest = &pc[3], the destination findCollSeqEntry uses)
+         bits 4-7  src  & 15   (src  = sqlite3StrBINARY) */
+    sqlite3 *d;
+    CollSeq *pc;
+    unsigned long dv, sv;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK) return (int)(0xE0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK) return (int)(0xD0u | (unsigned)(rc & 0xF));
+    d = sqlite3MallocZero((u64)sizeof(sqlite3));
+    if (d == 0) return (int)0x81u;
+    d->errMask = 0xff; d->nDb = 2; d->aDb = d->aDbStatic;
+    d->lookaside.bDisable = 1; d->lookaside.sz = 0;
+    pc = (CollSeq *)sqlite3DbMallocZero(d, 3*sizeof(CollSeq) + 7);
+    if (pc == 0) return (int)0x82u;
+    __asm__ volatile("mv %0, %1" : "=r"(dv) : "r"((char *)&pc[3]));
+    __asm__ volatile("mv %0, %1" : "=r"(sv) : "r"(sqlite3StrBINARY));
+    return (int)(((unsigned)(dv & 0xF)) | (((unsigned)(sv & 0xF)) << 4));
+  }
+  if (stage == 166) {
+    /* S-04: does memcpy(n=7) wrongly take its SIXTEEN-BYTE capability block path?
+       Both alignments are 0 (stage 165), so memcpy skips the head loop; n=7 < 16 should then
+       skip the block loop too and copy 7 bytes in the tail byte loop. If instead the block
+       loop runs, it does `ldc a5,0(src); stc a5,0(dest)` -- copying a plain string AS A
+       CAPABILITY -- which would explain a destination that ends up all zero.
+       Poison bytes 7..15 of the destination and see whether memcpy disturbs them.
+         bit 0  bytes 0..6 are NOT the copied key      (the corruption itself)
+         bit 1  ANY of the poisoned bytes 7..15 changed -> the 16-byte path RAN
+         bit 2  byte 0 of the destination is zero
+         bits 4-7  how many of the 9 poison bytes changed, saturating at 15 */
+    sqlite3 *d;
+    unsigned char *buf;
+    unsigned r = 0, i, changed = 0;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK) return (int)(0xE0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK) return (int)(0xD0u | (unsigned)(rc & 0xF));
+    d = sqlite3MallocZero((u64)sizeof(sqlite3));
+    if (d == 0) return (int)0x81u;
+    d->errMask = 0xff; d->nDb = 2; d->aDb = d->aDbStatic;
+    d->lookaside.bDisable = 1; d->lookaside.sz = 0;
+    /* a 16-byte-aligned block with room past the 7 bytes, so overrun is observable */
+    buf = (unsigned char *)sqlite3DbMallocZero(d, 64);
+    if (buf == 0) return (int)0x82u;
+    for (i = 7; i < 16; i++) buf[i] = 0xA5;          /* poison */
+    memcpy(buf, sqlite3StrBINARY, 7);
+    if (memcmp(buf, sqlite3StrBINARY, 7) != 0) r |= 1u;
+    for (i = 7; i < 16; i++) if (buf[i] != 0xA5) changed++;
+    if (changed) r |= 2u;
+    if (buf[0] == 0) r |= 4u;
+    r |= (unsigned)(changed > 15 ? 15 : changed) << 4;
+    return (int)r;
+  }
   if (stage >= 7 && stage <= 10) {
     rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
     if (rc != SQLITE_OK)

@@ -156,7 +156,51 @@ That is a DIFFERENT blocker, tracked as **S-04** below. Everything under S-03 fr
 the investigation trail that led to R-20, kept because several of its models were refuted and
 re-deriving them would waste board time.
 
-## S-04 — SQLite returns SQLITE_NOMEM from `sqlite3_open` on silicon · `OPEN`
+## S-04 — SQLite returns SQLITE_NOMEM from `sqlite3_open` on silicon · `ROOT-CAUSED: the -O1 memcpy loses small aligned copies. Cleared by SQLITE_SUPPORT_OPT_LEVEL=-O0; SQLite now reaches sqlite3_step.`
+
+**The cause is `memcpy`, not the allocator.** A 7-byte `memcpy` into freshly zeroed memory leaves
+the destination ALL ZERO, so `findCollSeqEntry`'s key copy never lands, `sqlite3HashFind` cannot
+match, the create path runs twice, `sqlite3HashInsert` reports the key present, and
+`sqlite3OomFault` fires (132502). The `assert(pDel==0 || pDel==pColl)` that would have caught it
+is compiled out under NDEBUG, which is why real data loss surfaced as `SQLITE_NOMEM`.
+
+Narrowed by staged board runs, each one variable:
+
+| stage | result | establishes |
+|---|---|---|
+| 160 | `0x15` | first failing step is 5, `createCollation(BINARY, UTF16BE)` |
+| 161 | `0x11` | `HashFind` misses although the table holds 1 element; SOURCE string intact |
+| 162 | `0x5b` | hash AND compare mismatch, `strHash` deterministic, stored COPY differs |
+| 163 | `0xbf` | the stored key is ENTIRELY ZERO |
+| 164 | `0x74` | destination pointer CORRECT; an explicit byte LOOP writes all 7 bytes; **`memcpy` does not** |
+| 165 | `0x00` | both `dest & 15` and `src & 15` are 0 -- the aligned path |
+| 166 | `0x05` | poison bytes 7..15 UNTOUCHED -- memcpy stays in bounds; its stores simply do not stick |
+
+Stage 166 also **refuted** the intermediate theory that memcpy wrongly took its 16-byte
+`ldc`/`stc` capability block path: it does not overrun.
+
+**Workaround, one env var, no code change:** `SQLITE_SUPPORT_OPT_LEVEL=-O0`. The support objects
+(the string primitives, `build-sqlite-silicon.sh:739`) default to `-O1`; at `-O0` memcpy becomes
+142 instructions instead of 49 and the copy sticks. With it, the full unclamped SQLite on silicon
+progresses from `stage=open rc=7` to **`stage=step rc=21`** -- it now configures, initialises,
+OPENS the database and prepares statements.
+
+**THIS WORKAROUND HAS A KNOWN COST -- do not adopt it silently.** `build-sqlite-silicon.sh:710-733`
+records that the support objects were moved TO `-O1` because at `-O0` `strlen` re-loads its string
+capability from a stack slot every iteration and on silicon sporadically returns the wrong length
+(stage 13 returned 15, then 26, then hung, where QEMU returns 36 every time). So `-O0` trades one
+silicon defect for another, and the new `rc=21` at `sqlite3_step` may BE that defect resurfacing.
+Treat `-O1`-vs-`-O0` as two different broken configurations, not as a fix.
+
+## S-05 — SQLite returns SQLITE_MISUSE (21) from `sqlite3_step` · `OPEN`
+
+Reached only with the S-04 workaround applied. `sqlite3_open` succeeds, statements prepare, and
+`sqlite3_step` returns 21 with an empty message. First thing to establish: whether this is the
+documented `-O0` `strlen` defect (see the S-04 cost note above) rather than a new one -- i.e.
+re-run with `-O1` support objects plus a byte-loop memcpy ONLY, so neither known defect is in
+play at once.
+
+
 
 The blocker S-03 was hiding. The domain enters, initialises, reaches `sqlite3_open` and gets
 `rc=7` (`SQLITE_NOMEM`). No wedge, no trap -- a clean error return, so the core is healthy and
