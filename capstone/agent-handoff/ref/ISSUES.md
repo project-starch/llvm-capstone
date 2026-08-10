@@ -136,7 +136,44 @@ is a genuinely independent second defect** — not the same one reached by anoth
 That is the honest state: the root cause of Site A is proven (`FS2` wedged / `fx2b` returned,
 one variable), and it did not unblock the benchmark.
 
-## S-03 — SQLite wedges inside `sqlite3_initialize()`, INDEPENDENT of S-02 · `OPEN`
+## S-03 — SQLite wedges inside `sqlite3_initialize()` · `RESOLVED 2026-08-10 -- root cause R-20; cleared on silicon by the R-20 compiler workaround`
+
+**S-03 is gone from the board.** Root cause is **R-20** (a capability store loses its x10 clobber
+claim, so a later reader of x10 gets the store's base address instead of the loaded value). With
+the R-20 compiler workaround applied (commit `30c275b5d781`, keeps a0/x10 out of a capability
+store's base register), the full unclamped SQLite domain now runs the complete marker sequence
+`A/dom -> B/mkregion1 -> C/mkregion2 -> D/mapped -> E/share1 -> F/share2 -> G/enter -> H/return`
+and RETURNS, where every previous build wedged the core. Measured 2026-08-10, control k800 green
+in the same boot.
+
+It no longer wedges; it reports a clean SQLite error instead:
+
+```
+SQLITE ERROR stage=open rc=7            (rc=7 = SQLITE_NOMEM)
+```
+
+That is a DIFFERENT blocker, tracked as **S-04** below. Everything under S-03 from here down is
+the investigation trail that led to R-20, kept because several of its models were refuted and
+re-deriving them would waste board time.
+
+## S-04 — SQLite returns SQLITE_NOMEM from `sqlite3_open` on silicon · `OPEN`
+
+The blocker S-03 was hiding. The domain enters, initialises, reaches `sqlite3_open` and gets
+`rc=7` (`SQLITE_NOMEM`). No wedge, no trap -- a clean error return, so the core is healthy and
+this is debuggable normally.
+
+**Not simply the heap size.** `SQLITE_HEAP_SIZE` was raised from the 256 KiB default to 448 KiB
+(`domdata-budget.py`: storage 524032, stack still 124304, "fits") and the result is byte-identical:
+`rc=7` at the same stage. So either the heap is not being applied
+(`sqlite3_config(SQLITE_CONFIG_HEAP)`, see `build-sqlite-silicon.sh:533`), or something other than
+raw heap size returns NOMEM.
+
+**First checks, none needing the board:** whether the `SQLITE_CONFIG_HEAP` call actually succeeds
+and with what pointer/length; and whether the same build returns `rc=7` under QEMU
+(`run-sqlite-silicon.sh`) -- if it does, this is a pure software config bug and the board is not
+needed at all.
+
+
 
 Split out of S-02 on 2026-08-09 once S-02's Site A was fixed and **the full workload still
 wedged**. Formerly "S-02 Site B". Given its own ID because it is a demonstrably separate defect,
