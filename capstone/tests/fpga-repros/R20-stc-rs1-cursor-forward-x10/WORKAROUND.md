@@ -1,4 +1,11 @@
-# R-20 compiler workaround — TEMPORARY. Revert this when the RTL fix ships.
+# R-20 compiler workaround — REVERTED 2026-08-10. Kept as the record of what was done.
+
+> **STATUS: no longer applied.** `caplifive_r20.bit` carries the RTL fix, this package's own repro
+> passes on it (`sbx8`: `0xD0000001` -> `0xD0000000`), and the SQLite-level site `Z.dom` returns
+> where it used to wedge. Both conditions below were met, so commit `30c275b5d781` was reverted and
+> `llvm/` is byte-identical to its pre-workaround state (`git diff 30c275b5d781^ -- llvm/` is
+> empty). Nothing here needs doing again; it is kept so the reasoning, the measurements and the
+> rejected alternatives are not lost.
 
 This file exists so the workaround can be removed cleanly, by someone who was not here when it
 was added. It is the whole record: what was changed, why, how to check it is still needed, and

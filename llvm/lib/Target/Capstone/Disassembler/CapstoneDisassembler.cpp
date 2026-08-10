@@ -221,18 +221,6 @@ static DecodeStatus DecodeGPRNoX0RegisterClass(MCInst &Inst, uint32_t RegNo,
   return DecodeGPRRegisterClass(Inst, RegNo, Address, Decoder);
 }
 
-// R-20 WORKAROUND (temporary; revert with the RTL fix -- see the R-20 package's
-// WORKAROUND.md). STC's base operand uses GPRNoX10 so the allocator cannot pick a0/x10.
-static DecodeStatus DecodeGPRNoX10RegisterClass(MCInst &Inst, uint32_t RegNo,
-                                                uint64_t Address,
-                                                const MCDisassembler *Decoder) {
-  // Deliberately does NOT reject x10. The class exists to steer the ALLOCATOR away from a0;
-  // an `stc` with base a0 is still a perfectly legal encoding that the hardware executes, and
-  // every already-built image is full of them. Failing the decode here made llvm-objdump print
-  // those as `unknown`, which silently broke a static scan of existing binaries.
-  return DecodeGPRRegisterClass(Inst, RegNo, Address, Decoder);
-}
-
 static DecodeStatus DecodeGPRNoX2RegisterClass(MCInst &Inst, uint64_t RegNo,
                                                uint32_t Address,
                                                const MCDisassembler *Decoder) {

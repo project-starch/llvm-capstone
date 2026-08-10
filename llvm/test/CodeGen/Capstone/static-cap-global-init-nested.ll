@@ -27,10 +27,10 @@ define void @f1() addrspace(200) { ret void }
 ; CHECK-LABEL: __capstone_cap_init:
 ; CHECK: cincoffset {{a[0-9]+}}, gp, {{a[0-9]+}}
 ; CHECK: delin
-; CHECK-DAG: stc {{a[0-9]+}}, 0({{[a-z][a-z0-9]*}})
-; CHECK-DAG: stc {{a[0-9]+}}, 16({{[a-z][a-z0-9]*}})
-; CHECK-DAG: stc {{a[0-9]+}}, 32({{[a-z][a-z0-9]*}})
-; CHECK-DAG: stc {{a[0-9]+}}, 48({{[a-z][a-z0-9]*}})
+; CHECK-DAG: stc {{a[0-9]+}}, 0(a0)
+; CHECK-DAG: stc {{a[0-9]+}}, 16(a0)
+; CHECK-DAG: stc {{a[0-9]+}}, 32(a0)
+; CHECK-DAG: stc {{a[0-9]+}}, 48(a0)
 ; CHECK: cjalr zero, 0(ra)
 
 ; Registered via the PC-relative .capstone_cap_init table entry.

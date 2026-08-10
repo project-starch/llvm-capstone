@@ -1,11 +1,4 @@
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs < %s | FileCheck %s
-; R-20 WORKAROUND (temporary). This test's hand-written CHECK chain is pinned to the
-; pre-workaround register allocation: STC's base operand may no longer be a0, so the
-; captured-register chain no longer lines up. The generated code is correct.
-; See capstone/tests/fpga-repros/R20-stc-rs1-cursor-forward-x10/WORKAROUND.md.
-; When the workaround is reverted this test will XPASS, which lit reports as a failure --
-; that is the signal to DELETE these five lines.
-; XFAIL: *
 
 @g_val = addrspace(200) global i64 123, align 8
 @g_ptr = addrspace(200) global ptr addrspace(200) null, align 16

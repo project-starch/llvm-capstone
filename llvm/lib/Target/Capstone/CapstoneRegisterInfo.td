@@ -263,17 +263,6 @@ def GPRX5 : GPRRegisterClass<(add X5)> {
   let DiagnosticString = "register must be t0 (x5)";
 }
 
-// R-20 WORKAROUND (temporary; revert when the RTL fix lands -- see
-// capstone/tests/fpga-repros/R20-stc-rs1-cursor-forward-x10/WORKAROUND.md).
-// A capability store whose BASE register is x10 loses its x10 clobber claim in
-// issue_read_operands.sv:568, so a later reader of x10 is served the store's rs1_cursor
-// instead of the value an intervening load fetched. Keeping x10 out of the base operand
-// makes the pattern unconstructible.
-def GPRNoX10 : GPRRegisterClass<(sub GPR, X10)> {
-  let DiagnosticType = "InvalidRegClassGPRNoX10";
-  let DiagnosticString = "register must not be a0 (x10) -- R-20 workaround";
-}
-
 def GPRNoX0 : GPRRegisterClass<(sub GPR, X0)> {
   let DiagnosticType = "InvalidRegClassGPRNoX0";
   let DiagnosticString = "register must be a GPR excluding zero (x0)";
