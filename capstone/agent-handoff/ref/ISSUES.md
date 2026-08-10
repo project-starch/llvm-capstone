@@ -208,8 +208,40 @@ fix is the RTL change (`capstone-ariane` branch `r20-fix`) in a bitstream, not m
 work. **This is a hypothesis, not a finding**: nothing yet ties the S-04 NOMEM to a specific one
 of those sites.
 
-**LOCALIZED 2026-08-10 -- step 5, `createCollation(BINARY, UTF16BE)`, via a hash lookup that
-disagrees with itself.** Stage 160 re-walks openDatabase step by step on its own handle, checking
+**ROOT CAUSE 2026-08-10: a 7-byte `memcpy` into freshly allocated memory leaves the destination
+ALL ZERO.** Not a hash bug, not an allocator bug, not a phantom -- real data corruption that
+SQLite converts into `SQLITE_NOMEM`. Four staged board runs, each a strict narrowing:
+
+| stage | result | what it establishes |
+|---|---|---|
+| 160 | `0x15` | first tripping step is **5**, `createCollation(BINARY, UTF16BE)`; `mallocFailed` set, `errCode` clean, step rc not NOMEM |
+| 161 | `0x11` | `sqlite3HashFind("BINARY")` returns 0 although the table holds 1 element; the SOURCE string is intact (`strlen`=6, `[0]=='B'`) |
+| 162 | `0x5b` | hash mismatch AND compare mismatch, `strHash` deterministic across two calls, and **the stored key COPY differs byte-wise** |
+| 163 | `0xbf` | **the stored key is ENTIRELY ZERO** -- all six letters differ, the NUL "matches" only because zero equals zero |
+
+The chain: `findCollSeqEntry` (132484-132494) does `sqlite3DbMallocZero(...)` -- which zeroes the
+block -- then `memcpy(pColl[0].zName, zName, nName)`. On silicon the destination is still all
+zeros afterwards, so `sqlite3HashFind` legitimately cannot match the key, `findCollSeqEntry` takes
+the create path a second time, `sqlite3HashInsert` finds the key present and returns non-zero, and
+`sqlite3OomFault` fires (132502). SQLite's `assert(pDel==0 || pDel==pColl)` that would have caught
+this is compiled out under NDEBUG, which is why it surfaced as NOMEM.
+
+**Source is exonerated, destination or the copy is not.** Stage 161 read `sqlite3StrBINARY`
+correctly. So either `pColl[0].zName = (char*)&pColl[3]` computes a wrong destination, or the
+small `memcpy` writes are lost.
+
+**This is the R-18 SHAPE -- a store silently zeroed -- on a bitstream whose name claims R-18 is
+fixed.** Do not assume it is R-18; assume nothing. But it is the first thing to check.
+
+**Next step, one boot.** Replace the `memcpy` with an explicit byte loop in a stage and re-read
+the key: if the loop's bytes stick, `memcpy` is implicated; if they also vanish, the destination
+pointer is wrong. Then check `pColl[0].zName == (char*)&pColl[3]` directly.
+
+**Prediction for the new bitstream (recorded before the run):** S-04 is NOT the `stc` shape, so
+the R-20 fix alone should NOT clear it. If S-04 disappears on the new bitstream anyway, that says
+the two are related after all and this entry needs revisiting.
+
+**(superseded) Earlier localisation -- step 5 via a hash lookup that disagrees with itself.** Stage 160 re-walks openDatabase step by step on its own handle, checking
 `db->mallocFailed` and `db->errCode` after each. Result `0x15`: first tripping step **5**,
 `mallocFailed` SET, `errCode` clean, and the step's own rc NOT NOMEM.
 

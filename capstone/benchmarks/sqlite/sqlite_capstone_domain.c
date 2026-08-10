@@ -607,6 +607,119 @@ static int run_sqlite_staged(int stage) {
   }
 #endif /* CAPSTONE_SQLITE_STAGE == 160 */
 
+  if (stage == 161) {
+    /* S-04, after stage 160 localised the fault to step 5, createCollation(BINARY, UTF16BE),
+       with mallocFailed set and no allocation having failed.
+       sqlite3HashInsert (38908-38937) returns non-zero in EXACTLY two cases:
+         (1) elem->data non-zero -- the key WAS found -> returns old_data  (!= pColl)
+         (2) sqlite3Malloc(sizeof(HashElem)) failed    -> returns data     (== pColl)
+       findCollSeqEntry calls sqlite3OomFault for either, and the assert that would have
+       separated them is compiled out under NDEBUG. Separate them here, and check the key
+       string itself, since sqlite3StrBINARY is a GLOBAL reached through the gp cap-table.
+         bit 0  sqlite3HashFind("BINARY") returns 0 AFTER the UTF8 collation was inserted
+         bit 1  the collation hash is empty (count == 0)
+         bit 2  sqlite3Strlen30(sqlite3StrBINARY) != 6
+         bit 3  sqlite3StrBINARY[0] != 'B'
+         bits 4-7  hash element count, saturating at 15 */
+    sqlite3 *d;
+    const void *found;
+    unsigned r = 0;
+    int n161;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK) return (int)(0xE0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK) return (int)(0xD0u | (unsigned)(rc & 0xF));
+    d = sqlite3MallocZero((u64)sizeof(sqlite3));
+    if (d == 0) return (int)0x81u;
+    d->errMask = 0xff;
+    d->nDb = 2;
+    d->aDb = d->aDbStatic;
+    d->lookaside.bDisable = 1;
+    d->lookaside.sz = 0;
+    sqlite3HashInit(&d->aCollSeq);
+    sqlite3HashInit(&d->aModule);
+    /* exactly step 4: the FIRST insert of "BINARY" */
+    (void)createCollation(d, sqlite3StrBINARY, SQLITE_UTF8, 0, binCollFunc, 0);
+    /* now ask the table for the same key, which is what step 5 does first */
+    found = sqlite3HashFind(&d->aCollSeq, sqlite3StrBINARY);
+    if (found == 0) r |= 1u;
+    n161 = (int)sqliteHashCount(&d->aCollSeq);
+    if (n161 == 0) r |= 2u;
+    if (sqlite3Strlen30(sqlite3StrBINARY) != 6) r |= 4u;
+    if (sqlite3StrBINARY[0] != 0x42) r |= 8u;      /* 'B' */
+    r |= (unsigned)(n161 > 15 ? 15 : n161) << 4;
+    return (int)r;
+  }
+  if (stage == 162) {
+    /* S-04 final split. Stage 161: after inserting "BINARY", the collation hash holds 1
+       element, the key string is intact (len 6, first byte 'B'), and sqlite3HashFind STILL
+       returns 0. findElementWithHash (38840-38847) matches only if BOTH hold:
+           h == elem->h   AND   sqlite3StrICmp(elem->pKey, pKey) == 0
+       Both walk a string byte by byte, which is where this platform has a documented -O0
+       silicon defect. Split them.
+         bit 0  strHash(sqlite3StrBINARY) != elem->h          (hash mismatch)
+         bit 1  sqlite3StrICmp(elem->pKey, sqlite3StrBINARY) != 0  (compare mismatch)
+         bit 2  two consecutive strHash() calls disagree      (nondeterministic)
+         bit 3  memcmp(elem->pKey, sqlite3StrBINARY, 7) != 0  (the stored COPY is wrong)
+         bits 4-7  low nibble of (strHash ^ elem->h) */
+    sqlite3 *d;
+    HashElem *e162;
+    unsigned h1, h2, r = 0;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK) return (int)(0xE0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK) return (int)(0xD0u | (unsigned)(rc & 0xF));
+    d = sqlite3MallocZero((u64)sizeof(sqlite3));
+    if (d == 0) return (int)0x81u;
+    d->errMask = 0xff; d->nDb = 2; d->aDb = d->aDbStatic;
+    d->lookaside.bDisable = 1; d->lookaside.sz = 0;
+    sqlite3HashInit(&d->aCollSeq);
+    sqlite3HashInit(&d->aModule);
+    (void)createCollation(d, sqlite3StrBINARY, SQLITE_UTF8, 0, binCollFunc, 0);
+    e162 = sqliteHashFirst(&d->aCollSeq);
+    if (e162 == 0) return (int)0xC0u;
+    h1 = strHash(sqlite3StrBINARY);
+    h2 = strHash(sqlite3StrBINARY);
+    if (h1 != e162->h) r |= 1u;
+    if (sqlite3StrICmp(e162->pKey, sqlite3StrBINARY) != 0) r |= 2u;
+    if (h1 != h2) r |= 4u;
+    if (memcmp(e162->pKey, sqlite3StrBINARY, 7) != 0) r |= 8u;
+    r |= (unsigned)((h1 ^ e162->h) & 0xFu) << 4;
+    return (int)r;
+  }
+  if (stage == 163) {
+    /* S-04 root cause pinpoint. Stage 162 showed the key COPY stored in the collation hash
+       differs byte-wise from "BINARY", while strHash is deterministic -- so the hash is fine
+       and the DATA is wrong: memcpy(pColl[0].zName, zName, nName) at 132493 produced the
+       wrong bytes. Report WHICH bytes, so the corruption has a shape.
+         bits 0-6  byte i of the stored key differs from "BINARY\0"  (i = 0..6)
+         bit  7    the stored key is entirely zero */
+    sqlite3 *d;
+    HashElem *e163;
+    const unsigned char *k;
+    static const unsigned char want[7] = { 0x42,0x49,0x4E,0x41,0x52,0x59,0x00 }; /* BINARY\0 */
+    unsigned r = 0, zeros = 0, i;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK) return (int)(0xE0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK) return (int)(0xD0u | (unsigned)(rc & 0xF));
+    d = sqlite3MallocZero((u64)sizeof(sqlite3));
+    if (d == 0) return (int)0x81u;
+    d->errMask = 0xff; d->nDb = 2; d->aDb = d->aDbStatic;
+    d->lookaside.bDisable = 1; d->lookaside.sz = 0;
+    sqlite3HashInit(&d->aCollSeq);
+    sqlite3HashInit(&d->aModule);
+    (void)createCollation(d, sqlite3StrBINARY, SQLITE_UTF8, 0, binCollFunc, 0);
+    e163 = sqliteHashFirst(&d->aCollSeq);
+    if (e163 == 0) return (int)0xC0u;
+    k = (const unsigned char *)e163->pKey;
+    for (i = 0; i < 7; i++) {
+      if (k[i] != want[i]) r |= (1u << i);
+      if (k[i] == 0) zeros++;
+    }
+    if (zeros == 7) r |= 0x80u;
+    return (int)r;
+  }
   if (stage >= 7 && stage <= 10) {
     rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
     if (rc != SQLITE_OK)
