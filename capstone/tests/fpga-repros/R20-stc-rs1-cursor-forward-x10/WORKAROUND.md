@@ -133,15 +133,32 @@ unpatched build as 1998 rather than 2751. If you re-measure, use the scan named 
 
 ## What this does NOT cover
 
-R-20's underlying condition is broader than `stc`. `check_cap_op`
-(`ariane_pkg.sv:902-912`) also includes `LDC`, `MOVC`, `CINCOFFSET` and others, so in principle
-any capability op with `rs1 == x10` and `rd != x10`, followed by a write to x10 and then a read
-of x10, could lose the same clobber claim. Only the `stc` shape has been observed failing, on
-the board and in simulation, and only that shape is blocked here. If a new wedge appears with
-this workaround in place, widen the scan before assuming the workaround is at fault:
+**This workaround is PARTIAL, and the residual is measured, not hypothetical.**
 
-```
-any capstone op with rs1 == x10 and rd != x10
-  → an instruction writing x10
-  → a reader of x10
-```
+`issue_read_operands.sv:568` drops x10's clobber claim for ANY non-CAPENTER capability op with
+`rs1 == x10` and `rd != x10` -- not just `stc`. The wrong VALUE is then supplied by the
+rs1-cursor forwarding mux, gated by `check_fwd_rs1` (`ariane_pkg.sv:929-935`) =
+**{SPLIT, MOVC, CJALR, CCSRRW, STC}**. `LDC` and `CINCOFFSET` are NOT in that set, so they can
+lose the stall without corrupting a value; `MOVC` very much is.
+
+Measured on the SQLite domain with `sim/scan-fwd.py`, counting only ops in that set, for the
+shape `<op with rs1 == x10, rd != x10> -> an instruction writing x10 -> a reader of x10`:
+
+| adjacency window | before the workaround | with the workaround |
+|---|---|---|
+| 1 (immediately adjacent) | 4481  (MOVC 2914, STC 1567) | **1051 — all MOVC** |
+| 4 | 6006  (MOVC 3778, STC 2228) | 2396 — all MOVC |
+
+So every `stc` site is gone and **~1051 `MOVC` sites remain**.
+
+**And they cannot be fixed the same way.** `movc a1, a0` is the ABI copy of a function's return
+value; a0 IS the return register, so no register allocation can stop `MOVC` reading x10 -- moving
+it elsewhere first would need another `MOVC` that reads x10. Closing this would need a different
+constraint (e.g. forbidding x10 as a DESTINATION shortly after a capability op that read it),
+which is more invasive and is not attempted here.
+
+**Consequence:** treat this workaround as "removes the `stc` shape", not "removes R-20". If a new
+silicon symptom appears with it in place, run `sim/scan-fwd.py` before assuming the workaround is
+at fault -- an unexplained NOMEM from `sqlite3_open` (issue S-04) is currently a live suspect for
+exactly this residue. `sim/scan-r20-wide.py` reports the broader `check_cap_op` shape as well,
+which is the upper bound rather than the value-corrupting subset.

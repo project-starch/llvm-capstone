@@ -191,6 +191,23 @@ autoinit succeeds, and lookaside is not involved -- yet it returns NOMEM. So som
 openDatabase calls `sqlite3OomFault(db)` (or returns NOMEM) WITHOUT a real allocation failure.
 That is the shape to attack, and it is a different animal from "out of memory".
 
+**LIVE SUSPECT: S-04 may be R-20 again, through `MOVC`.** The compiler workaround only keeps
+x10 out of an `stc` BASE. But `issue_read_operands.sv:568` drops x10's claim for any
+non-CAPENTER capability op with `rs1 == x10` and `rd != x10`, and the wrong value comes from the
+rs1-cursor mux gated by `check_fwd_rs1` = {SPLIT, MOVC, CJALR, CCSRRW, STC}. Measured with
+`fpga-repros/R20-.../sim/scan-fwd.py` on the workaround build, at the tightest adjacency window:
+
+| window | before | with workaround |
+|---|---|---|
+| 1 | 4481 (MOVC 2914, STC 1567) | **1051 — all MOVC** |
+| 4 | 6006 | 2396 — all MOVC |
+
+So ~1051 `MOVC`-shaped sites survive, and `movc a1, a0` is the ABI return-value copy, which no
+register allocation can remove -- a0 IS the return register. If S-04 is one of these, the real
+fix is the RTL change (`capstone-ariane` branch `r20-fix`) in a bitstream, not more compiler
+work. **This is a hypothesis, not a finding**: nothing yet ties the S-04 NOMEM to a specific one
+of those sites.
+
 **Next step.** Bisect openDatabase itself, the same way S-03 was bisected. The domain is
 `#include`d into the amalgamation TU, so its internals are callable: add a stage that walks
 openDatabase's sequence (handle alloc -> `setupLookaside` -> `sqlite3ParseUri` ->
