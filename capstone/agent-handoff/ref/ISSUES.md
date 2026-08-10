@@ -517,7 +517,60 @@ of QEMU only.
   `__builtin_capstone_cap_get_tag` faults on exactly the plain data it would be used to detect,
   and a capability fault inside a domain wedges rather than traps.
 
-### The workaround that was tried: primitive-correct, workload-fatal
+### 2026-08-11 — the workaround is VINDICATED; the wedge is a DIFFERENT defect, now localised
+
+The "primitive-correct, workload-fatal" reading below is **superseded**. Four things were
+measured, control `k800` green in every boot:
+
+**1. It is not S-01 image sensitivity.** A REDRAW control — the baseline plus one dead,
+never-called function, which is exactly the perturbation S-01 was characterised with — **RETURNS**
+(`stage=create rc=11`, same as the unperturbed baseline), while the fixup build wedges in the same
+boot. So the wedge is attributable to the change, not to rebuilding the image. (Side finding: an
+inert perturbation does NOT hang on `caplifive_r20.bit`, where S-01 was characterised on the older
+`caplifive_fixed_forward.bit`.)
+
+**2. The fixup does NOT lose capability tags.** Stage 170/171 copy a chunk holding a REAL
+capability alongside a plain chunk in one `memcpy`:
+
+| arm | stage 170 (bytes) | stage 171 (dereference the copied pointer) |
+|---|---|---|
+| fixup OFF | `0x31` — plain half WRONG (S-06) | `0x51` — tag survived |
+| fixup ON | `0x30` — **both halves correct** | `0x51` — **tag survived** |
+
+So it repairs the data and preserves tags. The "it must be clearing a tag" theory is REFUTED.
+
+**3. The fault is named.** The wedge is a capability exception, `mcause 25 = INVALID_CAPABILITY`
+(`capstone_unit.anvilh:289-296`), raised by `LDC`/`STC` when the **base** capability's revocation
+node reports invalid (`capstone_dyn_unit.anvil:332-338` and `:400-405`,
+`get_node_query_validity(rs1_v.metadata.revnode_id)`). It is NOT R-12: the same wedge dump reads
+`rev_node_head = 0x25d` (605) with `overflow = 0`, nowhere near exhaustion. `commit pc` is the
+`0x2` junk sentinel, as usual, so the pc says nothing.
+
+**4. It wedges INSIDE `CREATE TABLE`.** RUNSTOP ladder on the fixup build, ascending, every arm
+designed to return:
+
+| clamp | result |
+|---|---|
+| after `sqlite3_initialize()` | RETURNS |
+| after `sqlite3_open(":memory:")` | RETURNS |
+| after `CREATE TABLE` | **WEDGES**, and prints no `SQLITE ERROR` — it faults rather than failing |
+
+**Conclusion.** The workaround is not breaking the workload. Without it the schema text is half
+destroyed, so SQLite bails out early with `SQLITE_CORRUPT`; with it the text is correct, the
+schema re-parses, and execution continues deeper into the CREATE path than it has ever reached on
+silicon — where it takes `INVALID_CAPABILITY`. The blocker has moved from silent data corruption
+to a specific, named, localised capability-validity fault.
+
+**Knob still defaults OFF**, for a narrower reason than before: a build that returns an error is
+more diagnosable than one that wedges. Turn it ON to work the CREATE-path fault, which is the
+next thing to bisect and needs correct data to be reachable at all.
+
+**CAUTION on single verdicts.** Stage 170 with the fixup **wedged at boot position 2 and returned
+at position 4** on the same image. Position-dependent nondeterminism is live in these builds, so
+no single-position verdict on a full-workload domain is safe; the ladder above was read only where
+arms returned consistently.
+
+### SUPERSEDED (2026-08-11) — the workaround that was tried: primitive-correct, workload-fatal
 
 `BEEBS_LDC_HIGH_HALF_FIXUP` writes both 64-bit halves with plain stores and then lays the
 `ldc`/`stc` on top. It is branchless and exploits the mechanism above: for a capability the

@@ -778,9 +778,14 @@ _writers_optnone=${SQLITE_WRITERS_OPTNONE:-1}
 #   qB  + writers optnone          RETURNS, stage=create rc=11   (so writers optnone is neutral)
 #   qA  + ldc high-half fixup      WEDGES
 #
-# So the fixup alone is what destabilises the workload, and why is NOT yet established. Turning
-# it on trades a diagnosable error return for a wedge, which is strictly worse to work with.
-# Leave it off until that is understood or the silicon is fixed.
+# RESOLVED 2026-08-11: the fixup is NOT what destabilises the workload. It repairs the schema
+# text, so SQLite stops bailing out early on a corrupt schema and runs deeper into CREATE TABLE
+# than it ever has on silicon, where it takes mcause 25 INVALID_CAPABILITY. Measured: a REDRAW
+# control (baseline + one dead function) RETURNS, so it is not image sensitivity; stages 170/171
+# show tags survive the fixup; and a RUNSTOP ladder returns after initialize and after open and
+# wedges only after CREATE. Default stays OFF only because an error return is easier to work
+# with than a wedge -- turn it ON to chase the CREATE-path fault, which needs correct data to be
+# reachable at all. See ISSUES.md S-06.
 _ldc_fixup=${SQLITE_LDC_HIGH_HALF_FIXUP:-0}
 SUPPORT_DEFS=(-DBEEBS_STRING_LINEAR_SAFE=1 -DBEEBS_MEMCPY_OPTNONE=$_memcpy_optnone \
               -DBEEBS_STRING_WRITERS_OPTNONE=$_writers_optnone \

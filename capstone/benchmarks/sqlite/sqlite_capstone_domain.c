@@ -83,6 +83,24 @@ static void output_uint(unsigned value) {
   }
 }
 
+#ifdef CAPSTONE_REDRAW_PAD
+/* REDRAW control for S-01 ("a ~1.6 MB domain returns, but ANY perturbation of its image makes
+ * it hang"). A dead, never-called function that changes the IMAGE and nothing else -- the same
+ * perturbation S-01 was characterised with, so a build carrying it is a fresh draw of an
+ * otherwise byte-for-byte equivalent program.
+ *
+ * It exists so that "build X wedges" can be separated from "build X's CHANGE wedges". Without a
+ * redraw arm, any wedge in a rebuilt domain is unattributable: S-01 says an inert perturbation
+ * is enough on its own. `used` keeps --gc-sections from deleting it, which would make the
+ * control silently identical to the baseline and the comparison void.
+ *
+ * Vary the value to get another draw. Never enable it in a measured build. */
+__attribute__((used, noinline)) static int capstone_redraw_pad(void) {
+  volatile int x = (int)(CAPSTONE_REDRAW_PAD);
+  return x;
+}
+#endif
+
 static int fail(const char *stage, int rc, sqlite3 *db) {
   output_text("SQLITE ERROR stage=");
   output_text(stage);
@@ -974,6 +992,60 @@ static int run_sqlite_staged(int stage) {
     output_text("]\n");
     for (i = 0; i < 32; i++) if (dst[i] != (unsigned char)(0xC0u + i)) bad++;
     return (int)(0x40u | (bad & 0x3Fu));        /* 0x40 = all 32 bytes survived */
+  }
+  if (stage == 170 || stage == 171) {
+    /* Does the chunk copy preserve a CAPABILITY, not just plain data?
+       Every S-06 probe so far (164/167/169) copies only plain bytes, so none of them can see
+       the one thing BEEBS_LDC_HIGH_HALF_FIXUP changes for a chunk that holds a pointer: it
+       plain-stores over the destination BEFORE the stc, and a plain store clears the line's
+       capability tag. If the stc does not put the tag back, SQLite later dereferences an
+       untagged pointer and the core wedges -- which is exactly what the full workload does
+       with the fixup enabled while every primitive probe stays clean.
+       Two stages on purpose, because the interesting failure CANNOT return:
+         170  copy, then COMPARE BYTES only. Always returns, so it is safe to run first.
+              A tag lives out of band, so matching bytes do NOT prove the tag survived --
+              170 is here to show the DATA is right, and to separate "bytes wrong" from
+              "tag wrong" if 171 dies.
+         171  copy, then USE the copied pointer. Retiring a value proves the tag survived;
+              a lost tag wedges instead of returning, so this one runs LAST in any boot.
+       Layout: chunk 0 of the source holds a real capability, chunk 1 holds plain data, so a
+       single 32-byte memcpy exercises both kinds in one call, as SQLite's struct copies do. */
+    sqlite3 *d;
+    unsigned char *src, *dst;
+    int *target;
+    unsigned i, r = 0;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK) return (int)(0xE0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK) return (int)(0xD0u | (unsigned)(rc & 0xF));
+    d = sqlite3MallocZero((u64)sizeof(sqlite3));
+    if (d == 0) return (int)0x81u;
+    d->errMask = 0xff; d->nDb = 2; d->aDb = d->aDbStatic;
+    d->lookaside.bDisable = 1; d->lookaside.sz = 0;
+    src = (unsigned char *)sqlite3DbMallocZero(d, 128);
+    if (src == 0) return (int)0x82u;
+    dst = (unsigned char *)sqlite3DbMallocZero(d, 128);
+    if (dst == 0) return (int)0x83u;
+    target = (int *)sqlite3DbMallocZero(d, 64);
+    if (target == 0) return (int)0x84u;
+    target[0] = 0x1234;
+
+    *(void **)src = (void *)target;                 /* chunk 0: a REAL capability */
+    for (i = 16u; i < 32u; i++)
+      src[i] = (unsigned char)(0xC0u + i);          /* chunk 1: plain data */
+
+    memcpy(dst, src, 32);                           /* both chunks in one call */
+
+    if (stage == 170) {
+      for (i = 16u; i < 32u; i++)
+        if (dst[i] != (unsigned char)(0xC0u + i)) { r |= 1u; break; }   /* plain half wrong */
+      for (i = 0; i < 16u; i++)
+        if (dst[i] != src[i]) { r |= 2u; break; }                       /* pointer BYTES wrong */
+      return (int)(0x30u | r);                      /* 0x30 = both byte-identical */
+    }
+    /* stage 171 -- the load through dst is an ldc; using it as a base needs a live tag. */
+    { int *p = *(int **)dst; r = (unsigned)(p[0] == 0x1234 ? 1u : 0u); }
+    return (int)(0x50u | (r & 1u));                 /* 0x51 = tag survived and value correct */
   }
   if (stage >= 7 && stage <= 10) {
     rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
