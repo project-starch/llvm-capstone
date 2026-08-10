@@ -46,6 +46,7 @@ void *memcpy(void *dst, const void *src, bsize_t n) {
   bsize_t sa = ((bsize_t)s) & (ps - 1u);
   /* Only when src and dst share alignment can the middle be copied as whole
      capabilities; otherwise fall through to the byte loop for everything. */
+#ifndef BEEBS_MEMCPY_BYTES_ONLY
   if (da == sa) {
     bsize_t head = da ? (ps - da) : 0u;
     if (head > n)
@@ -55,6 +56,21 @@ void *memcpy(void *dst, const void *src, bsize_t n) {
     for (; i + ps <= n; i += ps)
       *(void **)(d + i) = *(void *const *)(s + i);
   }
+#else
+  /* BEEBS_MEMCPY_BYTES_ONLY: skip the aligned capability-copy path entirely and use the byte
+     loop below for everything. Default OFF; this is a diagnostic/workaround knob, not a fix.
+     Reason (issue S-04, measured on silicon 2026-08-10, and STILL PRESENT on caplifive_r20.bit
+     so it is NOT R-20): a 7-byte memcpy with dst and src both 16-byte aligned leaves the
+     destination completely unchanged -- no bytes copied, and nothing past the range disturbed,
+     which is the signature of the copy loop being SKIPPED rather than going wrong. An explicit
+     byte loop written at the call site copies the same 7 bytes to the same address correctly.
+     The consequence in SQLite is severe and silent: findCollSeqEntry's key copy never lands, so
+     the collation hash cannot find its own entry and SQLite reports SQLITE_NOMEM from
+     sqlite3_open with nothing having failed to allocate.
+     (void)da; (void)sa; keeps the alignment locals used so -Wunused stays quiet. */
+  (void)da;
+  (void)sa;
+#endif
   for (; i < n; i++)
     d[i] = s[i];
   return dst;

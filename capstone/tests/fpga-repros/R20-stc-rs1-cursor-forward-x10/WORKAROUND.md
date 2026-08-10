@@ -80,20 +80,28 @@ that one carries code; the rest are documentation and diagnostics that merely de
 
 | commit | contains | on revert |
 |---|---|---|
-| `30c275b5d781` | **THE CODE** — 4 files in `llvm/lib/Target/Capstone/` + 8 lit tests | **revert it** |
+| `30c275b5d781` | **THE CODE** — 4 files in `llvm/lib/Target/Capstone/` + 8 lit tests | reverted by `cdbb92360e2b` |
 | `77c7eeef8cff` | this file's commit-hash pin + the standing TODO in `state/current-next-step.md` | delete the TODO; leave this file as history |
 | `13c84d28bb8f` | ISSUES.md: S-03 closed, S-04 opened | keep — a real result, independent of the workaround |
 | `8ed12710c631`, `29621b095bb3` | ISSUES.md: S-04 ruled-out list | keep |
 | `87280248da7f` | measured MOVC residual + `sim/scan-fwd.py`, `sim/scan-r20-wide.py` | keep the scanners; they stay useful |
 
-**Verify that claim yourself before reverting** — if anything else has since touched compiler
-code, this table is stale:
+**THIS BLOCK IS NOW HISTORICAL.** The revert has happened (`cdbb92360e2b`), so the command below
+returns TWO commits -- the workaround and its revert -- and that is the expected, correct state:
 
 ```bash
-git log --oneline 30c275b5d781^..HEAD -- llvm/     # must list ONLY 30c275b5d781
+git log --oneline 30c275b5d781^..HEAD -- llvm/
+#   cdbb92360e2b  Revert the R-20 compiler workaround ...
+#   30c275b5d781  R-20 workaround: keep a0/x10 out of ...
 ```
 
-If it lists more, revert those too, newest first.
+Do NOT follow the old instruction to "revert anything else it lists" -- taken literally today that
+would revert the revert. The check that matters now is that `git diff 30c275b5d781^ HEAD -- llvm/`
+is EMPTY, which it is.
+
+Also note: a bare `grep -r` in this project's shell is a ugrep wrapper with `--ignore-files -I`,
+so it honours `.gitignore` and skips binaries -- it CANNOT see the build tree. Any "no traces
+remain" check must use `command grep`.
 
 ## How to revert
 
@@ -105,7 +113,7 @@ cd llvm/cmake-build-debug && ninja -j90 llc clang lld     # never -j112
 Then rebuild anything compiled with it -- at minimum
 `capstone/benchmarks/sqlite/build-sqlite-silicon.sh` -- and re-run the ladder and QEMU suites.
 
-**The four XFAILed lit tests are self-cancelling.** `aggregate-copy.ll`,
+**The four XFAILed lit tests were self-cancelling, and that has already happened.** `aggregate-copy.ll`,
 `aggregate-memcpy-align.ll`, `globals.ll` and `mem-intrinsics.ll` have hand-written CHECK chains
 pinned to the pre-workaround allocation. Once the workaround is reverted they will XPASS, which
 lit reports as a failure -- that is the signal to delete the `XFAIL` block from each. The other

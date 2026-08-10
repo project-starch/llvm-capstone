@@ -207,8 +207,25 @@ while creating a table. A corrupt schema on a `:memory:` database created moment
 schema text is read back wrong -- the same shape as S-04, and a live suspect for the documented
 `-O0` `strlen` defect that this very workaround reintroduces.
 
-**First task:** stop running with two known defects at once. Use `-O1` support objects plus a
-byte-loop `memcpy` ONLY.
+**First task attempted, and it FAILED for an instructive reason.** The plan was `-O1` support
+objects plus a byte-loop `memcpy`, so neither known defect would be in play. A build knob
+`BEEBS_MEMCPY_BYTES_ONLY` was added (default OFF) to skip memcpy's aligned capability-copy path.
+The result on `caplifive_r20.bit` is WORSE: the domain ENTERS and WEDGES (mcause 25, commit pc
+the `0x2` junk sentinel), where the `-O1` build merely returned an error.
+
+The reason is structural, not a bug in the knob: `memcpy`'s middle loop copies via `void *`, and
+`sizeof(void *)` is **16** on this target -- one capability. That path exists precisely so that
+copying a struct containing pointers PRESERVES CAPABILITY TAGS. A byte loop cannot: it strips
+every tag, so SQLite ends up dereferencing untagged pointers and the core dies. **A byte-wise
+memcpy is not a valid workaround on a capability machine and never can be.** The knob is kept,
+default OFF, documented with this result so nobody re-derives it.
+
+So S-04 cannot be worked around in `memcpy`'s copy strategy. The remaining options are: fix the
+silicon defect that makes the 7-byte copy vanish; or find why the compiled `-O1` byte tail-loop
+is skipped, which is a codegen question and may be fixable in the compiler.
+
+**Still true:** running with `-O0` support objects means the documented `-O0` `strlen` defect is
+in play at the same time, so `stage=create rc=11` is measured under two known defects, not one.
 
 Reached only with the S-04 workaround applied. `sqlite3_open` succeeds, statements prepare, and
 `sqlite3_step` returns 21 with an empty message. First thing to establish: whether this is the
@@ -2732,9 +2749,11 @@ Workaround (shared with R-18): `design/R18-workaround-movc-zero.md`.
 Both instrument-validation arms of the rung stayed clean and the k800 control was green in the
 same boot, so the run carries a verdict.
 
-**The compiler workaround (`30c275b5d781`) is now removable** -- see the R-20 package's
-`WORKAROUND.md` and the standing TODO in `state/current-next-step.md`. Both conditions it names
-are met. Reverting still needs an LLVM rebuild plus lit and the ladder before it is called done.
+**The compiler workaround (`30c275b5d781`) WAS REVERTED** by `cdbb92360e2b`; `llvm/` is
+byte-identical to its pre-workaround state and validation passed (lit 47/47 with 0 XFAIL, silicon
+ladder 6/6 oracle-matched). The standing TODO that used to track it is discharged and removed.
+The R-20 package's `WORKAROUND.md` is kept as the record of what was done and what was rejected,
+not as a description of the current build.
 
 `stc rX,0(a0)` immediately followed by `ld a0,0(a0)` immediately followed by any consumer of `a0`
 gives that consumer **the address the store used**, not the value the load fetched. Memory is
