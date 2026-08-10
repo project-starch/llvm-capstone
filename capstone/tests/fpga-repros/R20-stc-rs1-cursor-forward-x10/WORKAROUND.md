@@ -66,6 +66,28 @@ full of them. An earlier draft failed the decode, which made `llvm-objdump` prin
 `unknown` and silently broke a static scan of existing binaries. If you touch that function,
 keep it permissive.
 
+## Every commit involved, and what to do with each
+
+Audited with `git log 30c275b5d781^..HEAD -- llvm/`, which returns **exactly one commit**. Only
+that one carries code; the rest are documentation and diagnostics that merely describe it.
+
+| commit | contains | on revert |
+|---|---|---|
+| `30c275b5d781` | **THE CODE** — 4 files in `llvm/lib/Target/Capstone/` + 8 lit tests | **revert it** |
+| `77c7eeef8cff` | this file's commit-hash pin + the standing TODO in `state/current-next-step.md` | delete the TODO; leave this file as history |
+| `13c84d28bb8f` | ISSUES.md: S-03 closed, S-04 opened | keep — a real result, independent of the workaround |
+| `8ed12710c631`, `29621b095bb3` | ISSUES.md: S-04 ruled-out list | keep |
+| `87280248da7f` | measured MOVC residual + `sim/scan-fwd.py`, `sim/scan-r20-wide.py` | keep the scanners; they stay useful |
+
+**Verify that claim yourself before reverting** — if anything else has since touched compiler
+code, this table is stale:
+
+```bash
+git log --oneline 30c275b5d781^..HEAD -- llvm/     # must list ONLY 30c275b5d781
+```
+
+If it lists more, revert those too, newest first.
+
 ## How to revert
 
 ```bash

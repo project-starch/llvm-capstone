@@ -6,6 +6,9 @@ Commit **`30c275b5d781`** makes our LLVM keep a0/x10 out of a capability store's
 dodge silicon issue R-20. It is a WORKAROUND, not a fix, and it must come out.
 
 * **Revert with:** `git revert 30c275b5d781` then `ninja -j90 llc clang lld` in `llvm/cmake-build-debug`.
+* **Only that one commit carries code.** Confirm with
+  `git log --oneline 30c275b5d781^..HEAD -- llvm/` -- it must list ONLY that commit. The other
+  R-20 commits are documentation; WORKAROUND.md has a table saying what to do with each.
 * **Full instructions:** `capstone/tests/fpga-repros/R20-stc-rs1-cursor-forward-x10/WORKAROUND.md`.
 * **Revert once BOTH hold:** a bitstream containing the RTL fix (`capstone-ariane` branch
   `r20-fix`, `2efb3604f`) is flashed and confirmed resident, AND `./run.sh sim` in that package
