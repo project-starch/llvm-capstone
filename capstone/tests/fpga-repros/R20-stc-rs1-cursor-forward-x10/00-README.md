@@ -162,17 +162,24 @@ bit-identical. For `op != CAPENTER` this line's RHS is false, so `=` forced 0 wh
 the rs1 claim standing, which differs only when `rs1 == x10`. The change can only ever ADD a
 clobber bit, which makes a reader stall — the conservative direction.
 
-## A COMPILER WORKAROUND IS CURRENTLY APPLIED — see `WORKAROUND.md`
+## FIXED IN SILICON — and the compiler workaround has been REVERTED
 
-Our LLVM currently prevents the register allocator from ever choosing **a0/x10** as the base
-register of a capability store, so the trigger shape cannot be emitted. It does **not** fix the
-silicon defect; it only stops our compiler constructing the pattern. Measured on the SQLite
-domain by raw-encoding scan: the vulnerable shape drops from **1998 to 0**.
+**`caplifive_r20.bit` carries the RTL fix and clears this defect on hardware**, verified
+2026-08-10 with the control green in the same boot:
 
-`WORKAROUND.md` in this folder is the revert instructions — what changed, how to check it is
-still needed, and how to take it out. Every added block is tagged `R-20 WORKAROUND`, so
-`git grep -n "R-20 WORKAROUND"` finds them all. **Revert it once a bitstream carrying the RTL
-fix is resident and `./run.sh sim` passes on that revision.**
+| test | before | on `caplifive_r20.bit` |
+|---|---|---|
+| `sbx8` — the 13 KB rung in `src/` | `0xD0000001` | **`0xD0000000`** |
+| `Z.dom` — the SQLite-level site | WEDGE | **RETURNED** |
+
+The compiler workaround that used to be needed has been **reverted** (commit `30c275b5d781`,
+reverted by `cdbb92360e2b`); `llvm/` is byte-identical to its pre-workaround state.
+`WORKAROUND.md` is kept as the record of what was done and what was rejected — it is **not** a
+description of the current build.
+
+Everything below documents the defect as it behaved before the fix. It is kept because the
+reproducer is still the acceptance test for any future bitstream, and because the rejected
+alternatives (notably: nop padding is UNSAFE) are worth not rediscovering.
 
 ## WORKAROUNDS while the RTL is unfixed — and one that does NOT work
 
