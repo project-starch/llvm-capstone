@@ -29,7 +29,7 @@ target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S
 ; CHECK: cincoffset {{a[0-9]+}}, gp, {{a[0-9]+}}
 ; CHECK: delin
 ; CHECK: cincoffsetimm {{a[0-9]+}}, {{a[0-9]+}}, 209
-; CHECK: stc {{a[0-9]+}}, 0(a0)
+; CHECK: stc {{a[0-9]+}}, 0({{[a-z][a-z0-9]*}})
 ; CHECK: cjalr zero, 0(ra)
 
 ; Registered via the PC-relative .capstone_cap_init table entry.

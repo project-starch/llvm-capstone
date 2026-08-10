@@ -593,6 +593,15 @@ bool CapstoneRegisterInfo::eliminateFrameIndex(MachineBasicBlock::iterator II,
     Register DestReg;
     if (MI.getOpcode() == Capstone::ADDI)
       DestReg = MI.getOperand(0).getReg();
+    else if (MI.getOpcode() == Capstone::STC && FIOperandNum == 1)
+      // R-20 WORKAROUND (temporary; revert with the RTL fix -- see
+      // capstone/tests/fpga-repros/R20-stc-rs1-cursor-forward-x10/WORKAROUND.md).
+      // Frame-index elimination runs AFTER register allocation, so the GPRMemNoX10
+      // constraint on STC's base operand does not reach it: a large stack offset was
+      // materialised into a fresh GPR that the scavenger was free to make a0, which
+      // reconstructs the very shape the register class exists to prevent
+      // (`lui a0; cincoffset a0, s0, a0; stc ..., off(a0)`). Honour the constraint here too.
+      DestReg = MRI.createVirtualRegister(&Capstone::GPRNoX10RegClass);
     else
       DestReg = MRI.createVirtualRegister(&Capstone::GPRRegClass);
     adjustReg(*II->getParent(), II, DL, DestReg, FrameReg, Offset,

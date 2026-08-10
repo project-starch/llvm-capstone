@@ -251,6 +251,10 @@ def GPRMemZeroOffset : MemOperand<GPR> {
 
 def GPRMem : MemOperand<GPR>;
 
+// R-20 WORKAROUND (temporary; revert with the RTL fix -- see the R-20 package's WORKAROUND.md).
+// Used ONLY by STC, so every other load and store keeps the unrestricted GPRMem.
+def GPRMemNoX10 : MemOperand<GPRNoX10>;
+
 def SPMem : MemOperand<SP>;
 
 def GPRCMem : MemOperand<GPRC>;
@@ -2400,7 +2404,7 @@ def LDC : RVInstI<0b011, OPC_CAP_OP, (outs GPR:$rd),
 // STC: Capability Store 128-bit
 let hasSideEffects = 0, mayLoad = 0, mayStore = 1 in
 def STC : RVInstS<0b100, OPC_CAP_OP, (outs),
-                  (ins GPR:$rs2, GPRMem:$rs1, simm12_i64_op:$imm12),
+                  (ins GPR:$rs2, GPRMemNoX10:$rs1, simm12_i64_op:$imm12),  // R-20 workaround: was GPRMem
                   "stc", "$rs2, ${imm12}(${rs1})">;
 
 // "When we see a load/store of type i128 -> use CLC/CSC instruction"

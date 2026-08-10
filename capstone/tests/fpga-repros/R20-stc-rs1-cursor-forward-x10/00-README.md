@@ -162,6 +162,18 @@ bit-identical. For `op != CAPENTER` this line's RHS is false, so `=` forced 0 wh
 the rs1 claim standing, which differs only when `rs1 == x10`. The change can only ever ADD a
 clobber bit, which makes a reader stall — the conservative direction.
 
+## A COMPILER WORKAROUND IS CURRENTLY APPLIED — see `WORKAROUND.md`
+
+Our LLVM currently prevents the register allocator from ever choosing **a0/x10** as the base
+register of a capability store, so the trigger shape cannot be emitted. It does **not** fix the
+silicon defect; it only stops our compiler constructing the pattern. Measured on the SQLite
+domain by raw-encoding scan: the vulnerable shape drops from **1998 to 0**.
+
+`WORKAROUND.md` in this folder is the revert instructions — what changed, how to check it is
+still needed, and how to take it out. Every added block is tagged `R-20 WORKAROUND`, so
+`git grep -n "R-20 WORKAROUND"` finds them all. **Revert it once a bitstream carrying the RTL
+fix is resident and `./run.sh sim` passes on that revision.**
+
 ## WORKAROUNDS while the RTL is unfixed — and one that does NOT work
 
 **Do not use nop padding.** It is the obvious workaround and it is unsafe. The board cured the

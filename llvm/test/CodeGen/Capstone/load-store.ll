@@ -1,7 +1,7 @@
 ; RUN: llc < %s -mtriple=capstone64 | FileCheck %s
 
 ; CHECK-LABEL: store_cap:
-; CHECK: stc a1, 0(a0)
+; CHECK: stc a1, 0({{[a-z][a-z0-9]*}})
 ; CHECK: cjalr zero, 0(ra)
 define void @store_cap(ptr addrspace(200) %ptr, ptr addrspace(200) %val) {
 entry:
