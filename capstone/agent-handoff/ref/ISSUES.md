@@ -156,7 +156,51 @@ That is a DIFFERENT blocker, tracked as **S-04** below. Everything under S-03 fr
 the investigation trail that led to R-20, kept because several of its models were refuted and
 re-deriving them would waste board time.
 
-## S-04 — SQLite returns SQLITE_NOMEM from `sqlite3_open` on silicon · `ROOT-CAUSED: the -O1 memcpy loses small aligned copies. Cleared by SQLITE_SUPPORT_OPT_LEVEL=-O0; SQLite now reaches sqlite3_step.`
+## S-04 — SQLite returns SQLITE_NOMEM from `sqlite3_open` on silicon · `WORKED AROUND 2026-08-10 with NO second defect in play: memcpy alone at -O0 via BEEBS_MEMCPY_OPTNONE. Board-confirmed by a matched pair. Underlying silicon defect still OPEN.`
+
+### RESOLUTION 2026-08-10 — per-FUNCTION opt scoping, confirmed by a matched pair on silicon
+
+The two string primitives SQLite depends on are broken at OPPOSITE optimisation levels, and they
+live in the same file, so one file-wide `-O` flag forced a choice between them:
+
+| | memcpy | strlen |
+|---|---|---|
+| `-O0` | works | **WRONG on silicon** (re-loads the string cap with `ldc` every iteration; returned 15, then 26, then hung, vs 36 on QEMU) |
+| `-O1` | **WRONG on silicon** (S-04) | works (zero `ldc` in the loop) |
+
+`SQLITE_SUPPORT_OPT_LEVEL=-O0` was therefore a trade, not a fix, and every result taken under it
+was taken under a second known defect. `BEEBS_MEMCPY_OPTNONE=1` (default on, set by
+`build-sqlite-silicon.sh`) applies `__attribute__((optnone))` to **memcpy only**, so the build has
+NEITHER defect for the first time.
+
+**Verified on the artifact, not assumed.** In the linked domain, `strlen`/`strcmp`/`strcpy`/
+`memset`/`memmove` are byte-identical to the plain `-O1` build; only `memcpy` changes, to the form
+that spills the destination capability at entry and reloads it with `ldc` before each `sb`.
+
+**Board evidence — a matched pair in ONE boot, control green (`k800` = 4):**
+
+| arm | build | stage 164 | bit 2 (`memcpy does not stick`) |
+|---|---|---|---|
+| `sm0.dom:164` | `-O1` memcpy | `0x74` | **SET** |
+| `sm.dom:164` | `optnone` memcpy | `0x70` | **CLEAR** |
+
+The two images differ in **memcpy and nothing else** (per-symbol encoding comparison). One bit
+apart, and it is exactly the memcpy bit. The failing arm is also the positive control: it proves
+the probe can report failure, so the `0x70` is a real negative and not a dead test. `0x70`
+reproduced across two separate boots. `sm.dom:163` went `0xbf` -> `0x00` (the stored key is no
+longer zero) and `sm.dom:160` went `0x15` -> `0x00` (no step of `openDatabase` trips).
+
+**This is a WORKAROUND, not a fix — the -O1 code is CORRECT.** Disassembly of the linked domain
+(`memcpy` at `0x14ca1c`) shows that for the failing case (n=7, dst and src both 16-byte aligned)
+the `-O1` form branches over the head loop (`beqz a5`), does not enter the capability loop
+(`bgeu a2, a4` with a4=16 > n=7), and issues seven `sb` stores from the tail loop at `+0x9c`. The
+stores are ISSUED and do not stick. **So "the `-O1` byte tail-loop is skipped" is REFUTED** — that
+was recorded here as the remaining codegen avenue and it was based on a false premise. The only
+difference between the working and failing forms is which capability register holds the
+destination base: `-O1` uses the incoming argument `a0` directly, the working form reloads it from
+a stack slot. The underlying silicon defect is untouched and still needs reporting.
+
+
 
 **The cause is `memcpy`, not the allocator.** A 7-byte `memcpy` into freshly zeroed memory leaves
 the destination ALL ZERO, so `findCollSeqEntry`'s key copy never lands, `sqlite3HashFind` cannot
@@ -192,10 +236,37 @@ capability from a stack slot every iteration and on silicon sporadically returns
 silicon defect for another, and the new `rc=21` at `sqlite3_step` may BE that defect resurfacing.
 Treat `-O1`-vs-`-O0` as two different broken configurations, not as a fix.
 
-## S-05 — SQLite fails building the schema · `OPEN -- moved on twice; now SQLITE_CORRUPT at CREATE`
+## S-05 — SQLite fails building the schema · `OPEN -- SQLITE_CORRUPT at CREATE, now measured with NO other known defect in play`
 
-Reached only with the S-04 memcpy workaround (`SQLITE_SUPPORT_OPT_LEVEL=-O0`). The symptom moved
-when the R-20 bitstream landed, which is itself evidence the two were entangled:
+### 2026-08-10 — the `-O0` strlen theory is REFUTED, and this is now a clean single-defect measurement
+
+This section previously named the `-O0` `strlen` defect as the live suspect, on the grounds that
+the S-04 workaround reintroduced it. **That is refuted.** With `BEEBS_MEMCPY_OPTNONE=1` the build
+carries the correct `-O1` `strlen` (zero `ldc` in its loop, verified in the linked domain) AND a
+working `memcpy` (S-04 board-cleared, `0x74` -> `0x70`), and the full run on `caplifive_r20.bit`
+still ends at:
+
+    SQ: G/enter ... SQ: H/return
+    SQLITE ERROR stage=create rc=11 message=malforme
+
+Identical symptom, so it was never the `strlen` form. Control green in the same boot (`k800` = 4);
+the domain ENTERS and RETURNS, so this is a real result and not an entry stall.
+
+**What this run establishes positively — SQLite gets further on silicon than ever before:**
+`sqlite3_config` -> `sqlite3_initialize` -> `sqlite3_open(:memory:)` **succeeds** -> statements
+prepare -> `sqlite3_step` runs -> failure only at CREATE TABLE, reading back a schema written
+moments earlier on an in-memory database.
+
+**Next, and no longer confounded:** the remaining wrong-data shape is "something written is read
+back wrong", the same family as S-04 but on a different path. Since S-04 turned out to be a store
+that does not commit rather than anything about SQLite, the first question is whether the schema
+write is another non-committing store — bisect the CREATE path the way stages 160-166 bisected
+`openDatabase`, reading the written bytes straight back.
+
+### Earlier history (symptom moved twice)
+
+Originally reached only with the S-04 memcpy workaround (`SQLITE_SUPPORT_OPT_LEVEL=-O0`). The
+symptom moved when the R-20 bitstream landed, which is itself evidence the two were entangled:
 
 | bitstream | failure |
 |---|---|

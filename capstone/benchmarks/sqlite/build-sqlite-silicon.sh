@@ -493,6 +493,33 @@ PYINIT
   fi
 fi
 
+# ALTERSTOP=<n> -- DIAGNOSTIC ONLY. S-03 is sqlite3AlterFunctions(); this clamps how many of
+# its NINE aAlterTableFuncs entries are actually registered.
+#   0 = return before calling sqlite3InsertBuiltinFuncs at all
+#   1..9 = call it with that many entries
+# Pair with RUNSTOP=2 so the domain returns instead of running on into sqlite3_open.
+if [[ -n "${ALTERSTOP:-}" ]]; then
+  echo "== DIAGNOSTIC: sqlite3AlterFunctions clamped to $ALTERSTOP entries"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$ALTERSTOP" <<'PYALT'
+import sys,re
+path,n=sys.argv[1],int(sys.argv[2])
+s=open(path).read()
+t='sqlite3InsertBuiltinFuncs(aAlterTableFuncs, ArraySize(aAlterTableFuncs));'
+i=s.find(t)
+if i<0: print("ALTERSTOP: call site not found",file=sys.stderr); sys.exit(1)
+if n==0:
+    rep='{ volatile int capstone_alterstop = 0x7D00; if(capstone_alterstop) return; }\n  /* skipped */'
+else:
+    rep='{ volatile int capstone_alterstop = 0x7D0%X; (void)capstone_alterstop; }\n  sqlite3InsertBuiltinFuncs(aAlterTableFuncs, %d);' % (n,n)
+s=s[:i]+rep+s[i+len(t):]
+open(path,'w').write(s); print("ALTERSTOP: applied n=%d"%n)
+PYALT
+  _m=$(printf '0x7D0%X' "$ALTERSTOP")
+  _n=$(grep -c -F "capstone_alterstop = $_m" "$OBJ_DIR/sqlite3-capstone.c" || true)
+  echo "== alterstop gate: marker $_m x$_n"
+  [[ "$_n" -eq 1 ]] || { echo "ALTERSTOP did NOT apply" >&2; exit 1; }
+fi
+
 # RUNSTOP=<n> -- DIAGNOSTIC ONLY. Clamp run_sqlite() to return after step n.
 #
 # WHY THIS AND NOT CAPSTONE_SQLITE_STAGE. The staged block drags in probe arrays and,
@@ -716,7 +743,21 @@ SUPPORT_OPT=${SQLITE_SUPPORT_OPT_LEVEL:--O1}
 # forms freeze on the board at the instruction that advances the pointer. See the header
 # comment on strlen in beebs_freestanding_string.c for the RTL citations. Set only here --
 # the ladder rungs keep the walking form so their published geometry is unchanged.
-SUPPORT_DEFS=(-DBEEBS_STRING_LINEAR_SAFE=1 ${BEEBS_STRING_EXTRA_DEFS:-})
+# BEEBS_MEMCPY_OPTNONE: compile memcpy, and ONLY memcpy, at -O0 while everything else in that
+# file stays at $SUPPORT_OPT. This is what lets the build avoid BOTH known string defects at
+# once. Before it, the two were coupled through one file-wide flag: -O1 gives a correct strlen
+# and a memcpy whose small aligned copies vanish on silicon (S-04), -O0 gives a working memcpy
+# and a strlen that sporadically returns the wrong length. SQLITE_SUPPORT_OPT_LEVEL=-O0 was
+# therefore a trade, not a fix, and every measurement taken under it was taken under a second
+# known defect -- which is the leading suspect for the SQLITE_CORRUPT at CREATE (S-05).
+#
+# Verified on the artifact, not assumed: with this define at -O1, strlen/strcmp/strcpy/memset/
+# memmove are BYTE-IDENTICAL to the plain -O1 build, and memcpy alone changes to the form that
+# spills the destination capability at entry and reloads it with `ldc` before each `sb` -- the
+# structure the working -O0 build has. Set SQLITE_MEMCPY_OPTNONE=0 to turn it off for an A/B.
+_memcpy_optnone=${SQLITE_MEMCPY_OPTNONE:-1}
+SUPPORT_DEFS=(-DBEEBS_STRING_LINEAR_SAFE=1 -DBEEBS_MEMCPY_OPTNONE=$_memcpy_optnone \
+              ${BEEBS_STRING_EXTRA_DEFS:-})
 for pair in "libc:$ADAPTED/capstone_sqlite_libc.c" "beebs_string:$BEEBS_STRING"; do
   "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" \
     "${SUPPORT_DEFS[@]}" "$SUPPORT_OPT" \

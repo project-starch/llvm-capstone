@@ -21,6 +21,48 @@
 typedef __SIZE_TYPE__ bsize_t;
 
 /*
+ * BEEBS_MEMCPY_OPTNONE -- compile memcpy, and only memcpy, at -O0 while the rest of this
+ * file keeps the optimisation level the build gives it.
+ *
+ * WHY THIS EXISTS. The two string primitives SQLite depends on are broken at OPPOSITE
+ * optimisation levels on silicon, and until now they shared one file-wide `-O` flag, so
+ * every SQLite build ran with one defect or the other (issues S-04 and the `-O0` strlen
+ * defect):
+ *
+ *   -O0 memcpy  works                 -O0 strlen  WRONG on silicon: it re-loads the string
+ *   -O1 memcpy  WRONG on silicon      capability with `ldc` from a stack slot every
+ *               (S-04, below)         iteration and sporadically returns 1 (stage 13
+ *                                     returned 15, then 26, then hung, vs 36 on QEMU)
+ *
+ * `SQLITE_SUPPORT_OPT_LEVEL=-O0` cured S-04 by reintroducing the strlen defect. Scoping the
+ * level to the one function that needs it is what lets a build have NEITHER.
+ *
+ * This is a WORKAROUND for a silicon defect, not a fix, and it is deliberately not a code
+ * change: the -O1 code is CORRECT. Verified by disassembling the linked domain
+ * (`memcpy` at 0x14ca1c) -- for the failing case (n=7, dst and src both 16-byte aligned)
+ * the -O1 form branches over the head loop (`beqz a5`), does not enter the capability loop
+ * (`bgeu a2, a4` with a4=16 > n=7), and issues seven `sb` stores from the tail loop. The
+ * stores are ISSUED and do not stick. So the earlier theory that "-O1 skips the byte tail
+ * loop" is REFUTED; what differs between the working and failing forms is only which
+ * capability register holds the destination base (-O1 uses the incoming argument a0
+ * directly, -O0 round-trips it through a stack slot).
+ *
+ * Applies to memcpy ONLY, on purpose. memmove has the identical aligned-copy structure and
+ * may well share the defect, but nothing has measured it, and keeping one variable per
+ * experiment is what makes the next board result readable. If memmove is later implicated,
+ * add the same attribute to it -- the macro is already the right shape.
+ *
+ * Default OFF. Enabled only by build-sqlite-silicon.sh, exactly like
+ * BEEBS_STRING_LINEAR_SAFE, so the silicon-ladder rungs keep the geometry their published
+ * numbers were taken with. Remove when the silicon defect behind S-04 is fixed.
+ */
+#if defined(BEEBS_MEMCPY_OPTNONE) && BEEBS_MEMCPY_OPTNONE
+#define BEEBS_MEMCPY_ATTR __attribute__((optnone, noinline))
+#else
+#define BEEBS_MEMCPY_ATTR
+#endif
+
+/*
  * Capability-preserving memcpy/memmove.
  *
  * A byte loop copies address bits but drops the out-of-band tag of any stored
@@ -37,7 +79,7 @@ typedef __SIZE_TYPE__ bsize_t;
  * capability, which is exactly the tag granularity.
  */
 
-void *memcpy(void *dst, const void *src, bsize_t n) {
+BEEBS_MEMCPY_ATTR void *memcpy(void *dst, const void *src, bsize_t n) {
   unsigned char *d = (unsigned char *)dst;
   const unsigned char *s = (const unsigned char *)src;
   const bsize_t ps = sizeof(void *);

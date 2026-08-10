@@ -46,9 +46,14 @@ if [[ -f "$FW" ]]; then
     *fixed_forward*) [[ "$have_1021" -ge 1 && "$have_64k" -eq 0 ]] \
         && ok "DTS matches $BITSTREAM (0x3c3c0000)" \
         || bad "DTS/bitstream MISMATCH: fixed_forward needs 0x3c3c0000 (found 1021=$have_1021 64k=$have_64k)" ;;
-    *65536*)         [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
+    # caplifive_r20.bit is branch r20-fix, which is based on the 65536-node lineage: its
+    # capstone_rev_node.anvil uses a 16-bit head with REVNODE_SENTINEL = 65535, so it takes
+    # the SAME DTS as 65536_nodes. Listed explicitly because the name matches neither
+    # pattern, so this check fell through to the "unknown bitstream" warn and silently
+    # verified nothing for every run on the resident silicon.
+    *65536*|*_r20*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
         && ok "DTS matches $BITSTREAM (0x3c2d2000)" \
-        || bad "DTS/bitstream MISMATCH: 65536_nodes needs 0x3c2d2000 (found 1021=$have_1021 64k=$have_64k)" ;;
+        || bad "DTS/bitstream MISMATCH: $BITSTREAM needs 0x3c2d2000 (found 1021=$have_1021 64k=$have_64k)" ;;
     *) say "warn" "unknown bitstream $BITSTREAM -- DTS pairing unchecked" ;;
   esac
   python3 -c "
