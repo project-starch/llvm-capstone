@@ -231,14 +231,22 @@ requires `sqlite3HashFind` to report the key ABSENT while `sqlite3HashInsert` fi
 read returning a stale value, and SQLite silently converts it into a phantom `SQLITE_NOMEM`
 because the assert covering exactly that case is compiled out.
 
-**This is R-20's signature, and it fits the measured MOVC residue** (~1051 sites the `stc`-only
-workaround does not cover). It is NOT proof: nothing yet ties the failing hash walk to a specific
+**RETRACTED 2026-08-10: the MOVC route is NOT the explanation.** This was recorded as "R-20 again
+through the ~1051 MOVC sites the workaround leaves". RTL simulation refutes it with a matched
+pair: the identical structure corrupts with `stc` and does NOT corrupt with `movc`, on the
+UNPATCHED RTL where the `stc` arms fail, positive control firing in the same run. Of the
+value-corrupting set only `stc` and `cjalr` are long-latency, and the SQLite domain contains no
+`cjalr`, `split` or `ccsrrw` sites of this shape -- so the workaround is probably complete and
+this NOMEM is probably NOT R-20.
+
+The hash-lookup disagreement is still real and still unexplained; it just should not be assumed
+to be R-20. It is NOT proof of anything: nothing ties the failing hash walk to a specific
 instruction.
 
 **PREDICTIVE TEST, recorded before the run.** On a bitstream carrying the RTL fix, with NO
-compiler change: stage 160 should return `0x00` and `sqlite3_open` should succeed. If it still
-returns `0x15`, S-04 is a separate defect and the hash walk needs its own investigation. One boot
-decides it.
+compiler change: stage 160 returns `0x00` and `sqlite3_open` succeeds IF S-04 is R-20. Given the
+MOVC retraction above, the honest expectation is now the opposite -- **S-04 probably survives the
+new bitstream**. Either result is informative and the prediction is recorded before the run.
 
 **Next step (only if the bitstream does NOT clear it).** Bisect openDatabase itself, the same way S-03 was bisected. The domain is
 `#include`d into the amalgamation TU, so its internals are callable: add a stage that walks

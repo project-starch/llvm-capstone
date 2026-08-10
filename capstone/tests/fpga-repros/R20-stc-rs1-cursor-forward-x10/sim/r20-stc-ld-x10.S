@@ -67,6 +67,8 @@ _start:
 MKCAP(a5)
 MKCAP(a6)
 MKCAP(a7)
+MKCAP(s5)
+MKCAP(s6)
 
 # ---------------------------------------------------------------- ARM A: x10/a0, adjacent
 MOVC(a0, a5)
@@ -110,37 +112,28 @@ nop
 nop
 addi s6, a0, 0          # 4 nops
 
+# ------------------------------------------------- MOVC shape: does it corrupt too?
+# The compiler workaround only keeps x10 out of an `stc` BASE. But issue_read_operands.sv:568
+# drops x10's clobber claim for ANY non-CAPENTER capability op with rs1 == x10 and rd != x10,
+# and the wrong value comes from the rs1-cursor mux gated by check_fwd_rs1, which includes MOVC.
+# If MOVC corrupts too, ~1051 sites survive the workaround in the SQLite domain -- and S-04's
+# phantom SQLITE_NOMEM (a hash lookup disagreeing with itself) is very likely one of them.
+#
+#   shape: <cap op with rs1 == a0, rd != a0>  ->  an instruction writing a0  ->  a reader of a0
 
-# ------------------------------- WORKAROUND ARMS: separation between the STC and the LD
-# The board cured it with one nop HERE (arm `adj`). The arms above only varied the gap between
-# the LD and its consumer, so this side has never been measured in simulation.
-MKCAP(s7)
-MOVC(a0, s7)
-MOVC(a1, x0)
-STC(a0, a1, 0)
-nop
-ld   a0, 0(a0)
-addi s8, a0, 0          # W1: 1 nop between STC and LD
+# ---- ARM M: MOVC with rs1 = a0, rd = t2
+MOVC(a0, s5)            # a0 = a capability over the buffer
+sd   zero, 0(a0)        # slot := 0   (plain store, NOT a capability op)
+MOVC(t2, a0)            # THE VULNERABLE OP: rs1 = a0, rd = t2
+ld   a0, 0(a0)          # writes a0 with the loaded 0
+addi s7, a0, 0          # CONSUMER -- correct answer is 0
 
-MKCAP(s9)
-MOVC(a0, s9)
-MOVC(a1, x0)
-STC(a0, a1, 0)
-nop
-nop
-ld   a0, 0(a0)
-addi s10, a0, 0         # W2: 2 nops between STC and LD
-
-MKCAP(s11)
-MOVC(a0, s11)
-MOVC(a1, x0)
-STC(a0, a1, 0)
-nop
-nop
-nop
-nop
-ld   a0, 0(a0)
-addi s11, a0, 0         # W3: 4 nops between STC and LD
+# ---- ARM N: the identical shape on t1 -- CONTROL, must read 0
+MOVC(t1, s6)
+sd   zero, 0(t1)
+MOVC(t2, t1)
+ld   t1, 0(t1)
+addi s8, t1, 0
 
 RVTEST_PASS
 

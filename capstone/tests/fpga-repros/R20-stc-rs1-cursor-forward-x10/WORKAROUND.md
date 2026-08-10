@@ -173,11 +173,26 @@ shape `<op with rs1 == x10, rd != x10> -> an instruction writing x10 -> a reader
 
 So every `stc` site is gone and **~1051 `MOVC` sites remain**.
 
-**And they cannot be fixed the same way.** `movc a1, a0` is the ABI copy of a function's return
-value; a0 IS the return register, so no register allocation can stop `MOVC` reading x10 -- moving
-it elsewhere first would need another `MOVC` that reads x10. Closing this would need a different
-constraint (e.g. forbidding x10 as a DESTINATION shortly after a capability op that read it),
-which is more invasive and is not attempted here.
+**BUT THE MOVC RESIDUE IS DEMONSTRABLY HARMLESS.** Measured in RTL simulation with a matched
+pair (`sim/r20-stc-ld-x10.S`, arms A and M): the identical structure -- a capability op with
+`rs1 == a0` and `rd != a0`, then an instruction writing a0, then a reader of a0 -- **CORRUPTS
+with `stc` and does NOT corrupt with `movc`**, on the UNPATCHED RTL where the `stc` arms fail.
+The positive control fires in the same run, so this is a real negative, not a dead test.
+
+| arm | unpatched RTL | patched |
+|---|---|---|
+| A `stc` rs1=a0, adjacent | **DEFECT** | correct |
+| M `movc` rs1=a0, same structure | **correct** | correct |
+
+Likely reason, offered as a hypothesis rather than a finding: `stc` executes in the
+dynamic-latency unit (`capstone_dyn_unit`) and stays in flight for many cycles -- it blocks on a
+revocation-node query -- while `movc` is a 1-cycle fixed-latency op (`capstone_flu_unit`) that
+retires before a dependent reader can issue alongside it. If that is right, only the LONG-LATENCY
+members of `check_fwd_rs1` matter, which are `stc` and `cjalr`; the scan finds **no** `cjalr`,
+`split` or `ccsrrw` sites in the SQLite domain at all.
+
+So the `stc`-only workaround may well be COMPLETE in practice. Do not read the raw MOVC count as
+outstanding exposure.
 
 **Consequence:** treat this workaround as "removes the `stc` shape", not "removes R-20". If a new
 silicon symptom appears with it in place, run `sim/scan-fwd.py` before assuming the workaround is
