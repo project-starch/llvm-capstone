@@ -3744,3 +3744,40 @@ i.e. the clear is *incomplete*. That is consistent with S-06's mechanism -- the 
 offset is written. Whether the granule's tag also goes clear (which would make the residue
 harmless) was **not measured** and must be before anyone concludes either way.
 
+### UNRESOLVED — two open questions from the same audit, recorded as questions and NOT as findings
+
+Neither is asserted. Both need a directed test before they are anything.
+
+**U-1: atomics are excluded from the shadow-tag update, a candidate capability-forgery path.**
+`wt_axi_adapter.sv:143-145` gates the tag write on `dcache_data.rtype inside {DCACHE_LOAD_REQ,
+DCACHE_STORE_REQ}`; `DCACHE_ATOMIC_REQ` (issued at `wt_dcache_missunit.sv:553`) is **absent**, so an
+AMO writes DRAM without writing the shadow-tag byte, and self-invalidates the L1 line. `RVA` is
+enabled in the active config. That composes to: `stc` a real capability to `X`; `amoswap.d` an
+arbitrary value to `X+8`; `ldc` from `X` refills with the tag still set and the attacker's word
+promoted to `ruser` (`wt_dcache_mem.sv:304`) -- a capability with chosen `cap_type`, `perm`,
+`bounds` and `revnode_id`, which would be materially worse than S-06. **Unestablished:** whether the
+AMO write lands at `X+8` through the FPGA interconnect; whether the `ldc` genuinely misses and
+refills rather than being satisfied from the write buffer; and whether the result survives
+`get_node_query_validity` (`capstone_dyn_unit.anvil:333`). Any one of the three kills it. The test
+needs four arms in one image, and the arm that matters most is the positive control -- `stc` then
+`ldc` with no interference, which **must** show a tag, or a clean probe arm proves only that the
+instrument is dead.
+
+**U-2: `CJALR`'s `rs1`/`rd` handling.** `capstone_flu_unit.anvil:223-232`: the `rs1 == rd` branch
+writes `cnull` to both slots; the `rs1 != rd` branch passes `rs1` through **uncleared** and still
+puts `cnull` in `rd`. `ctrl-flow-insn.adoc:37-39` requires `x[rd] <- pc` always and `cnull ->
+x[rs1]` when `rs1 != rd`. Where (or whether) the pc capability reaches `x[rd]` for `CJALR` was not
+traced, so this is not a defect claim. Separate signature -- **must not** be folded into R-21.
+
+**Not a defect, recorded so it is not re-raised.** The two shadow-tag write paths (`wt_dcache_mem.sv`
+`:419` store, `:412` refill) were suspected of using divergent predicates, with `wr_cl_user_i[7:0]`
+read as the low byte of `bounds`. **REFUTED.** On the refill path those eight bits are a shadow-tag
+byte of `0x00`/`0x01`: `wt_axi_adapter.sv:441-442` zeroes the word and writes one byte of
+`tag_wr_value_q = is_cap_req = |dcache_data.user` (`:196`, `:402`), and `:731-734` reads exactly
+that byte back. The AXI USER sideband carries nothing (`:204`). The two gates are the same
+predicate over different encodings. This also withdraws the eviction hypothesis that S-06's
+`FIX-PROPOSAL.md` once offered for the SQLite wedge.
+
+**Cosmetic, non-security:** `ariane.core:48`, `Bender.yml:114` and `src_files.yml:50` all name
+`core/capstone_dyn_unit.sv`, which does not exist; the file that reaches the build arrives via
+`core/Flist.cva6:138` -> `core/anvil.Flist`.
