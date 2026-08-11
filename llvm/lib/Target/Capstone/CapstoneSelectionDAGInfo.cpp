@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "CapstoneSelectionDAGInfo.h"
+#include "CapstoneISelLowering.h"
 #include "CapstoneSubtarget.h"
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/Support/CommandLine.h"
@@ -239,6 +240,22 @@ SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy(
   // enabled above -O0, the ordering must be enforced properly -- e.g. by making the capability
   // store volatile too, or by emitting a pseudo that cannot be split -- and re-verified on the
   // emitted code, not assumed.
+  // Capability-preserving pointer arithmetic. The generic offset helper builds an ISD::ADD,
+  // which selects to an INTEGER `addi` whenever it is materialised instead of folded into the
+  // addressing mode -- and `addi` STRIPS the capability, so the access on that address then
+  // faults with UNEXPECTED_OPERAND. Not theoretical: it is the bug this hook shipped with, seen
+  // in sqlite3Parser as
+  //     addi a5, s0, -0xd8   ;   sd a4, 0x0(a5)      <- base is no longer a capability
+  // while the neighbouring store, whose offset happened to fold into the immediate, was fine --
+  // which is why it only showed up at SQLite scale and never on a small rung.
+  // CapstoneISD::CIncOffset is the node that means "advance a capability's cursor".
+  auto capOffset = [&](SDValue Ptr, uint64_t Off) -> SDValue {
+    if (Off == 0)
+      return Ptr;
+    return DAG.getNode(CapstoneISD::CIncOffset, dl, Ptr.getValueType(), Ptr,
+                       DAG.getConstant(Off, dl, MVT::i64));
+  };
+
   for (uint64_t Chunk = 0; Chunk != NumChunks; ++Chunk) {
     uint64_t Base = Chunk * 16;
 
@@ -252,21 +269,21 @@ SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy(
       uint64_t Off = Base + Half * 8;
       SDValue Ld = DAG.getLoad(
           MVT::i64, dl, Chain,
-          DAG.getMemBasePlusOffset(Src, TypeSize::getFixed(Off), dl),
+          capOffset(Src, Off),
           SrcPtrInfo.getWithOffset(Off), Align(8));
       Chain = DAG.getStore(
           Ld.getValue(1), dl, Ld,
-          DAG.getMemBasePlusOffset(Dst, TypeSize::getFixed(Off), dl),
+          capOffset(Dst, Off),
           DstPtrInfo.getWithOffset(Off), Align(8), MachineMemOperand::MOVolatile);
     }
 
     SDValue LdCap = DAG.getLoad(
         MVT::i128, dl, Chain,
-        DAG.getMemBasePlusOffset(Src, TypeSize::getFixed(Base), dl),
+        capOffset(Src, Base),
         SrcPtrInfo.getWithOffset(Base), Align(16));
     Chain = DAG.getStore(
         LdCap.getValue(1), dl, LdCap,
-        DAG.getMemBasePlusOffset(Dst, TypeSize::getFixed(Base), dl),
+        capOffset(Dst, Base),
         DstPtrInfo.getWithOffset(Base), Align(16));
   }
 

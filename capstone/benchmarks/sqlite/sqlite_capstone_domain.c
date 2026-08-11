@@ -4318,6 +4318,29 @@ static const char *const capstone_pad[CAPINIT_PAD] = { [0 ... CAPINIT_PAD - 1] =
 static int run_sqlite(void) {
   sqlite3 *db = 0;
   sqlite3_stmt *statement = 0;
+#ifdef CAPSTONE_PRINT_LOAD_BASE
+  /* Print the RUNTIME address of a known global symbol, so a fault pc reported by QEMU or the
+   * monitor can be mapped back to an image offset and named in the disassembly.
+   *
+   * Without this a fault pc is unusable: the domain is loaded at a base the image does not
+   * record, `SQ: self=` is an ENCODED capability rather than an address, and the only other
+   * bound available is "somewhere inside 1.4 MB of .text". With it, one run gives
+   *     image_VA(fault) = fault_pc - (printed - VA_of_symbol_from_readelf)
+   * and the faulting instruction can be read straight out of llvm-objdump.
+   *
+   * Casting the function pointer to an integer yields the capability's cursor, i.e. the plain
+   * address. Printed as two 32-bit halves because output_uint is 32-bit and the address is not.
+   * Diagnostic only, and it perturbs the image, so the base must be read from the SAME build
+   * whose fault pc is being mapped. */
+  {
+    unsigned long a_ = (unsigned long)(void *)&sqlite3_initialize;
+    output_text("LOADBASE sqlite3_initialize=");
+    output_uint((unsigned)(a_ >> 32));
+    output_text(":");
+    output_uint((unsigned)(a_ & 0xFFFFFFFFu));
+    output_text("\n");
+  }
+#endif
   int rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap,
                           (int)sizeof(sqlite_heap), 64);
   if (rc != SQLITE_OK)

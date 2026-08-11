@@ -678,7 +678,45 @@ to leave it alone -- that shape is the library's job and stays at 16.
   vanished entirely and the output was byte-identical to the unfixed build. A build that looked
   fixed and was not.
 
-**OPEN: it does not work on the full SQLite build. LOCALISED, not root-caused.**
+**FIXED 2026-08-11. The cause was mine: integer pointer arithmetic stripping the capability.**
+
+The hook computed each chunk address with the generic offset helper, which builds an `ISD::ADD`.
+That selects to an INTEGER `addi` whenever it is materialised instead of folded into the
+addressing mode -- and `addi` strips the capability, so the access on that address faults with
+`UNEXPECTED_OPERAND`. Mapped to the exact instruction in `sqlite3Parser`:
+
+```
+ldc  a3, -0x110(s0)      <- source pointer, a capability
+ld   a4, 0x0(a3)         <- plain half 0
+sd   a4, -0xe0(s0)       <- offset folded into the immediate: base s0, FINE
+ld   a4, 0x8(a3)         <- plain half 1
+addi a5, s0, -0xd8       <- materialised instead: INTEGER add, capability STRIPPED
+sd   a4, 0x0(a5)         <- fault: rs1 = x15 = a5, imm = 0
+```
+
+Note the neighbouring store was fine because its offset happened to fold. That is why it never
+appeared on a small rung and only at SQLite scale: it needs an address that does not fold.
+
+Fix: use `CapstoneISD::CIncOffset` -- the node that means "advance a capability's cursor" -- for
+every address the hook computes. **The full SQLite QEMU gate now PASSES with the fixup on**, on
+the amalgamation alone and with library+compiler fixups on all objects, and Capstone lit is 47/47.
+
+**How the pc was mapped**, since this is reusable: add `CAPSTONE_PRINT_LOAD_BASE=1`, which makes
+the domain print the RUNTIME address of `sqlite3_initialize`. `base = printed - VA_from_readelf`,
+then `image_VA(fault) = fault_pc - base`. The base measured **0x1015f0000 and was identical across
+two different builds**, so it is stable and can be taken from a build that RETURNS -- which is
+necessary, because `output_text` buffers into the shared region and the host flushes it only
+after the domain returns, so a FAULTING domain prints nothing.
+
+### Still blocked on silicon, and it is NOT this fix
+
+With the fixup on, SQLite passes the entire QEMU gate but **wedges on silicon** with
+`mcause 25 = INVALID_CAPABILITY`, `rev_node_head = 0xf9`, `overflow = 0` (pool healthy) -- the
+SAME fault the library fixup produced, in the same place. Both fixups repair the data, so SQLite
+runs deeper into `CREATE TABLE` than it ever has and meets a silicon-side capability-validity
+fault that QEMU does not reproduce. That is now the single remaining blocker.
+
+### Superseded localisation notes (kept: they cost real time and the exclusions still hold)
 
 Narrowed 2026-08-11, all under QEMU:
 
