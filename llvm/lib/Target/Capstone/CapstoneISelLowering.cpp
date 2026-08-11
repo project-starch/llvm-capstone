@@ -123,6 +123,9 @@ static cl::opt<bool> CapstoneMemOpsViaLibcall(
              "library implementations, which carry the untagged-ldc/stc high-half fix"),
     cl::init(false));
 
+// Defined in CapstoneSelectionDAGInfo.cpp, where the emission lives.
+extern cl::opt<bool> CapstoneMemcpyHighHalfFixup;
+
 static cl::opt<unsigned> NumRepeatedDivisors(
     DEBUG_TYPE "-fp-repeated-divisors", cl::Hidden,
     cl::desc("Set the minimum number of repetitions of a divisor to allow "
@@ -25883,6 +25886,18 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
     LLVMContext &Context, std::vector<EVT> &MemOps, unsigned Limit,
     const MemOp &Op, unsigned DstAS, unsigned SrcAS,
     const AttributeList &FuncAttributes) const {
+  // S-06 workaround, codegen side. Decline the capability-grained shape so that
+  // SelectionDAG::getMemcpy falls through to CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy,
+  // which emits the same chunks with the high-half fix applied.
+  //
+  // This handshake is required, and it is easy to get wrong: getMemcpy tries the INLINE
+  // expansion FIRST and only calls the target hook if that fails, so a hook alone is dead code.
+  // The condition here must match the hook's exactly, or a copy declined here and rejected
+  // there would fall through to a libcall -- which is broken on this ABI.
+  if (CapstoneMemcpyHighHalfFixup && Op.isMemcpy() && Op.size() != 0 &&
+      (Op.size() % 16) == 0 && Op.isAligned(Align(16)) && (Op.size() / 16) <= 32)
+    return false;
+
   // S-06 workaround. Returning false means "cannot lower inline", which makes the caller emit a
   // libcall -- so every memcpy/memmove/memset lands on the library implementation, which carries
   // the untagged-ldc/stc high-half fix. See the flag's definition near the top of this file.

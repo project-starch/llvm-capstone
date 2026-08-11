@@ -620,9 +620,47 @@ during early domain startup, so any `mem*` libcall emitted before the glue insta
 exactly this way. If that is right, "route every copy through a libcall" is structurally wrong for
 this ABI rather than merely buggy.
 
-**Remaining path:** emit the fix INLINE via `EmitTargetCodeForMemcpy` (the hook already exists for
-memset in `CapstoneSelectionDAGInfo.cpp`), which introduces no call and therefore no `gp`
-dependency. Acceptance test is the pair of rungs: `s06copy` 16 -> 32 and `s06agg` 66 -> 64.
+**ATTEMPT 2 — inline expansion. WORKS for the target construct, board-validated; NOT yet usable
+on the full SQLite build.** `-capstone-memcpy-high-half-fixup` (default OFF) implements
+`CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy`, emitting per 16-byte chunk: plain-store BOTH
+64-bit halves, then the `ldc`/`stc` on top -- the sequence validated in RTL simulation.
+
+**Board acceptance PASSED**, matched pair in one boot, same source, differing only by the flag,
+control `k800` = 4:
+
+| rung | build | retval |
+|---|---|---|
+| `s06agg` | unfixed | **66** (the defect; also the positive control that the probe still fires) |
+| `s06aggf` | with the flag | **64**, twice |
+
+Correction to an earlier note: `s06copy` is NOT part of this acceptance test. It writes its
+capability copy explicitly in C rather than as an aggregate assignment, so the compiler is right
+to leave it alone -- that shape is the library's job and stays at 16.
+
+**Two implementation traps, both measured, both worth keeping:**
+
+* **The hook alone is dead code.** `SelectionDAG::getMemcpy` tries the INLINE expansion FIRST and
+  only calls `EmitTargetCodeForMemcpy` if that fails. So `findOptimalMemOpLowering` must DECLINE
+  exactly the same shape the hook accepts; the two conditions have to match, or a copy declined in
+  one place and rejected in the other falls through to a libcall, which is broken on this ABI.
+* **The pre-write stores must be VOLATILE.** Without that they are dead by the compiler's own
+  model -- it believes the `stc` writes all 16 bytes of the chunk -- so DSE deletes them and
+  silently regenerates the unfixed sequence. Measured: for a copy into a stack slot the pre-writes
+  vanished entirely and the output was byte-identical to the unfixed build. A build that looked
+  fixed and was not.
+
+**OPEN: it does not work on the full SQLite build.** With the flag on, the domain enters and takes
+a capability fault under QEMU (so this is not silicon):
+
+    [CAPSTONE] Cap mem access requires capability: pc = 101681134, rs1 = x15, imm = 0
+    [CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x101681160, tval = 0x0
+
+Cause 24 is `UNEXPECTED_OPERAND` -- a capability memory access whose base register is not a
+capability. Established: it is the compiler flag ALONE (identical fault with the library fixup
+both on and off), the pc is deterministic across runs, and `badaddr` VARIES run to run while the
+pc does not, so the faulting site is data-dependent rather than a fixed bad pointer. NOT
+localised -- mapping the runtime pc back to the image needs the domain load base, which was not
+captured. Do not guess a cause; that is the next thing to measure.
 
 **Fixable in OUR compiler, without the RTL change.** The backend uses `ldc`/`stc` for chunks it
 does not know to be capabilities. It can instead emit two 64-bit `ld`/`sd` for a chunk that cannot

@@ -9,11 +9,43 @@
 #include "CapstoneSelectionDAGInfo.h"
 #include "CapstoneSubtarget.h"
 #include "llvm/CodeGen/SelectionDAG.h"
+#include "llvm/Support/CommandLine.h"
 
 #define GET_SDNODE_DESC
 #include "CapstoneGenSDNodeInfo.inc"
 
 using namespace llvm;
+
+// S-06 WORKAROUND, codegen side. On the CVA6 silicon an `ldc`/`stc` round trip of PLAIN,
+// untagged data keeps only its LOW 64 bits (see ISSUES.md S-06 and
+// capstone/tests/fpga-repros/S06-untagged-ldc-stc-high-half/). A 16-byte-aligned copy is
+// expanded into capability-grained `ldc`/`stc` pairs for EVERY chunk -- including chunks that
+// hold no pointer -- so `struct { void *p; unsigned long x, y; }` silently loses `y`. Measured
+// on the board with a rung that calls no memcpy at all: 66 where 64 is correct.
+//
+// The library-level fix in memcpy cannot reach this, because the compiler emits these copies
+// directly for aggregate assignment. Routing them to a libcall instead was tried and does not
+// work on this ABI (see -capstone-lower-memops-via-libcall in CapstoneISelLowering.cpp), so the
+// sequence is emitted INLINE here, which introduces no call.
+//
+// Per 16-byte chunk: plain-store BOTH 64-bit halves first, then lay the `ldc`/`stc` on top.
+// Branchless, and correct for both kinds of chunk because of how the cache gates the store
+// (`st_wr_cap = |wr_user_i`):
+//   - the chunk IS a capability -> its metadata is non-zero, so the `stc` writes both banks and
+//     restores the tag, overwriting the plain stores;
+//   - the chunk is PLAIN data   -> the `ldc` yields zero metadata, so the `stc` degrades to a
+//     single-bank store that never touches the high half, and the plain store survives.
+// Validated on both kinds of chunk in RTL simulation (capstone-ariane
+// verif/tests/custom/capstone/untagged-ldc-stc-fixup.S arm E) and on silicon at the primitive
+// level.
+//
+// Default OFF: it triples the store traffic of every aligned aggregate copy and changes the
+// emitted geometry that the published BEEBS numbers were measured with.
+cl::opt<bool> CapstoneMemcpyHighHalfFixup(
+    "capstone-memcpy-high-half-fixup", cl::Hidden,
+    cl::desc("S-06 workaround: expand 16-byte-aligned memcpy as plain-store-both-halves then "
+             "ldc/stc, so an untagged chunk keeps its high 64 bits"),
+    cl::init(false));
 
 CapstoneSelectionDAGInfo::CapstoneSelectionDAGInfo()
     : SelectionDAGGenTargetInfo(CapstoneGenSDNodeInfo) {}
@@ -154,4 +186,70 @@ SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemset(
   }
 
   return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, OutChains);
+}
+
+SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy(
+    SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
+    SDValue Size, Align Alignment, bool isVolatile, bool AlwaysInline,
+    MachinePointerInfo DstPtrInfo, MachinePointerInfo SrcPtrInfo) const {
+  if (!CapstoneMemcpyHighHalfFixup)
+    return SDValue();
+
+  // A volatile copy must not have its stores multiplied; leave it to the generic path.
+  if (isVolatile)
+    return SDValue();
+
+  ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size);
+  if (!ConstantSize)
+    return SDValue();
+  uint64_t Bytes = ConstantSize->getZExtValue();
+
+  // Only the capability-grained shape needs fixing: that is the ONLY one lowered to ldc/stc
+  // (CapstoneTargetLowering::findOptimalMemOpLowering). Anything else already copies with
+  // scalar units and cannot lose a high half, so hand it back to the generic expansion rather
+  // than growing code for no reason.
+  if (Bytes == 0 || (Bytes % 16) != 0 || Alignment < Align(16))
+    return SDValue();
+
+  // Match the chunk budget the inline capability path uses; above it the generic path emits a
+  // libcall, which lands on the library memcpy and its own copy of this fix.
+  uint64_t NumChunks = Bytes / 16;
+  if (NumChunks > 32)
+    return SDValue();
+
+  // Strictly serial chain. The `ldc`/`stc` for a chunk MUST be ordered after that chunk's two
+  // plain stores -- the whole construction depends on the capability store landing last -- and
+  // a serial chain is the cheapest way to say so that no later scheduling pass can undo.
+  for (uint64_t Chunk = 0; Chunk != NumChunks; ++Chunk) {
+    uint64_t Base = Chunk * 16;
+
+    // The two plain stores MUST be marked volatile. Without it they are DEAD by the compiler's
+    // own model -- it believes the `stc` below writes all 16 bytes of the same chunk, so DSE
+    // deletes them and silently regenerates the very sequence this is working around. Measured:
+    // for a copy into a stack slot the pre-writes vanished entirely and the output was
+    // byte-identical to the unfixed build. On this silicon the `stc` does NOT write the high
+    // half of an untagged chunk, which is exactly the fact the optimiser cannot know.
+    for (unsigned Half = 0; Half != 2; ++Half) {
+      uint64_t Off = Base + Half * 8;
+      SDValue Ld = DAG.getLoad(
+          MVT::i64, dl, Chain,
+          DAG.getMemBasePlusOffset(Src, TypeSize::getFixed(Off), dl),
+          SrcPtrInfo.getWithOffset(Off), Align(8));
+      Chain = DAG.getStore(
+          Ld.getValue(1), dl, Ld,
+          DAG.getMemBasePlusOffset(Dst, TypeSize::getFixed(Off), dl),
+          DstPtrInfo.getWithOffset(Off), Align(8), MachineMemOperand::MOVolatile);
+    }
+
+    SDValue LdCap = DAG.getLoad(
+        MVT::i128, dl, Chain,
+        DAG.getMemBasePlusOffset(Src, TypeSize::getFixed(Base), dl),
+        SrcPtrInfo.getWithOffset(Base), Align(16));
+    Chain = DAG.getStore(
+        LdCap.getValue(1), dl, LdCap,
+        DAG.getMemBasePlusOffset(Dst, TypeSize::getFixed(Base), dl),
+        DstPtrInfo.getWithOffset(Base), Align(16));
+  }
+
+  return Chain;
 }
