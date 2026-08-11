@@ -701,9 +701,15 @@ echo "== compiling the single silicon TU (this is the first time SQLite sees the
 # diagnostic build can be produced without editing this script -- e.g.
 #   DOMAIN_EXTRA_DEFS=-DCAPSTONE_SQLITE_STAGE=2
 # for the staged-return bisection. Empty by default, so the normal build is unaffected.
+# AMALGAM_EXTRA_MLLVM / SUPPORT_EXTRA_MLLVM apply -mllvm flags to ONE object instead of all of
+# them. EXTRA_MLLVM goes into SILICON and therefore reaches the amalgamation AND both support
+# objects at once, which makes a codegen flag that misbehaves impossible to localise: the whole
+# domain either works or does not. These let a bisect answer "which object" in one QEMU run each.
+read -r -a _amalgam_mllvm <<< "${AMALGAM_EXTRA_MLLVM:-}"
+read -r -a _support_mllvm <<< "${SUPPORT_EXTRA_MLLVM:-}"
 read -r -a _domain_defs <<< "${DOMAIN_EXTRA_DEFS:-}"
 "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$OPT" \
-  -DSQLITE_HEAP_SIZE=$HEAP "${_domain_defs[@]}" \
+  -DSQLITE_HEAP_SIZE=$HEAP "${_domain_defs[@]}" "${_amalgam_mllvm[@]}" \
   -c "$OBJ_DIR/amalgam.c" -o "$OBJ_DIR/amalgam.o"
 
 echo "== compiling the no-globals support objects separately (they cannot collide)"
@@ -793,7 +799,7 @@ SUPPORT_DEFS=(-DBEEBS_STRING_LINEAR_SAFE=1 -DBEEBS_MEMCPY_OPTNONE=$_memcpy_optno
               ${BEEBS_STRING_EXTRA_DEFS:-})
 for pair in "libc:$ADAPTED/capstone_sqlite_libc.c" "beebs_string:$BEEBS_STRING"; do
   "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" \
-    "${SUPPORT_DEFS[@]}" "$SUPPORT_OPT" \
+    "${SUPPORT_DEFS[@]}" "$SUPPORT_OPT" "${_support_mllvm[@]}" \
     -c "${pair#*:}" -o "$OBJ_DIR/${pair%%:*}.o"
 done
 BUILTIN_OBJS=()

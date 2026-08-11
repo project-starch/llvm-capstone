@@ -678,7 +678,40 @@ to leave it alone -- that shape is the library's job and stays at 16.
   vanished entirely and the output was byte-identical to the unfixed build. A build that looked
   fixed and was not.
 
-**OPEN: it does not work on the full SQLite build.** With the flag on, the domain enters and takes
+**OPEN: it does not work on the full SQLite build. LOCALISED, not root-caused.**
+
+Narrowed 2026-08-11, all under QEMU:
+
+* **It is a MISCOMPILE, not "SQLite getting further".** QEMU has no S-06 -- it preserves all 128
+  bits -- so this flag should be semantically a no-op there. The baseline passes the whole QEMU
+  gate including CREATE; with the flag it faults. That distinguishes it from the library fixup,
+  whose silicon wedge really was "the data is now correct so execution goes deeper".
+* **It is in the AMALGAMATION, not the support objects.** With the flag on the support objects
+  only (`SUPPORT_EXTRA_MLLVM`) the full gate PASSES; on the amalgamation only
+  (`AMALGAM_EXTRA_MLLVM`) it faults. Per-object `-mllvm` scoping was added to
+  `build-sqlite-silicon.sh` for exactly this bisection -- `EXTRA_MLLVM` reaches all three objects
+  at once, which makes a misbehaving codegen flag impossible to localise.
+* **It is inside `CREATE TABLE`.** RUNSTOP ladder with the flag: after `sqlite3_config` RETURNS,
+  after `sqlite3_initialize` RETURNS, after `sqlite3_open` RETURNS, after `CREATE TABLE` FAULTS.
+* **One chunk is enough.** Restricting the fixup to 16-byte copies
+  (`-capstone-memcpy-high-half-fixup-max-bytes=16`) still fails, so the defect is in the basic
+  single-chunk emission and not in multi-chunk handling.
+* **Two manifestations, same family:** `cause = 24 UNEXPECTED_OPERAND` (a capability access whose
+  base is not a capability) at 512 bytes, and `helper_cscincoffset: Assertion rs1_v->tag failed`
+  at 16 bytes. Both are "a capability operation received an untagged operand".
+
+**Excluded by measurement, so do not re-derive:** `sqlite3_config` (it is one of only 44 functions
+genuinely re-codegen'd by the flag, and it grew 436 -> 604 instructions, which made it the obvious
+suspect -- but RUNSTOP=1 returns cleanly). `__capstone_cap_init` (its diff is *only* `auipc`/`addi`
+immediates, i.e. relocation drift from code moving; identical 1522-instruction count). A `-O0`
+spill/reload theory, in which the plain accesses cause the base to be reloaded with an integer
+`ld` that the capability access then reuses -- at `-O0` the base is in fact reloaded with `ldc`.
+Eight capability accesses on an integer-defined base found by a static scan of the amalgamation --
+they are PRE-EXISTING, present with and without the flag.
+
+**No cause is recorded.** The next step is to map the runtime pc back to the image, which needs
+the domain load base; `SQ: self=` is an encoded capability, not a usable address, so that needs a
+deliberate probe. With the flag on, the domain enters and takes
 a capability fault under QEMU (so this is not silicon):
 
     [CAPSTONE] Cap mem access requires capability: pc = 101681134, rs1 = x15, imm = 0

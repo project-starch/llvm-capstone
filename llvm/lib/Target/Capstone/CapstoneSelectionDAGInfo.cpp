@@ -41,6 +41,15 @@ using namespace llvm;
 //
 // Default OFF: it triples the store traffic of every aligned aggregate copy and changes the
 // emitted geometry that the published BEEBS numbers were measured with.
+// Bisection knob: only apply the fixup to copies of at most this many bytes. Exists because the
+// flag works on a small rung and faults inside SQLite's CREATE TABLE, and narrowing by size is
+// the cheapest way to find which copies are responsible without mapping a runtime pc back to
+// the image.
+static cl::opt<unsigned> CapstoneMemcpyHighHalfFixupMaxBytes(
+    "capstone-memcpy-high-half-fixup-max-bytes", cl::Hidden,
+    cl::desc("S-06 workaround: only fix copies of at most N bytes (bisection aid)"),
+    cl::init(512));
+
 cl::opt<bool> CapstoneMemcpyHighHalfFixup(
     "capstone-memcpy-high-half-fixup", cl::Hidden,
     cl::desc("S-06 workaround: expand 16-byte-aligned memcpy as plain-store-both-halves then "
@@ -215,6 +224,8 @@ SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy(
   // libcall, which lands on the library memcpy and its own copy of this fix.
   uint64_t NumChunks = Bytes / 16;
   if (NumChunks > 32)
+    return SDValue();
+  if (Bytes > CapstoneMemcpyHighHalfFixupMaxBytes)
     return SDValue();
 
   // Strictly serial chain. The `ldc`/`stc` for a chunk MUST be ordered after that chunk's two
