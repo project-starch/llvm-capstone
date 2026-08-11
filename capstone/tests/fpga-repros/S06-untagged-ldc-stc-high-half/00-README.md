@@ -107,6 +107,35 @@ Measured **66 twice** on `caplifive_r20.bit`, control `k800` = 4 in the same boo
 This matters for scoping a fix: a library-level workaround in `memcpy` cannot reach ordinary
 struct assignment, so the exposure is not confined to code that calls `memcpy`.
 
+## A SECOND signature: when the source's high half is ZERO, the copy writes NOTHING
+
+Everything above describes the destination's high half coming back **zero**. There is a second,
+distinct outcome that is easy to miss and is arguably worse, because the wrong value looks valid.
+
+Both cache width signals are gated on the metadata **content** (`|user`), not on the opcode. So a
+16-byte chunk whose high 8 bytes happen to be **exactly zero** produces `st_wr_cap = 0` for a
+reason that has nothing to do with tags — and the `stc` degrades to a single-bank store that
+**never writes the destination's high half at all**. The destination keeps whatever it already
+held.
+
+Measured in RTL simulation, 585 cycles, no exceptions, with a plain `sd`/`ld` control passing in
+the same run (`capstone-ariane verif/tests/custom/capstone/s06-mechanism-probe.S`, arm C). The
+destination's high half is poisoned with a recognisable value first, so "stale" cannot be confused
+with "correctly zero":
+
+| | source | destination before | destination after |
+|---|---|---|---|
+| low 8 bytes | `0123456789abcdef` | `deadbeefcafef00d` | `0123456789abcdef` — written |
+| **high 8 bytes** | **`0000000000000000`** | `deadbeefcafef00d` | **`deadbeefcafef00d` — NOT written** |
+
+Why this matters more than the zero case: losing data to zeros is at least detectable. Silently
+retaining the **previous occupant's** bytes is not, and it is reachable from an ordinary struct
+copy where one field happens to be zero — one of the commonest shapes in real code. A buffer reused
+across two records can carry the first record's data into the second.
+
+Any fix must therefore make the write width depend on the **opcode**, not on the data. A fix that
+only stops the high half being zeroed on load will still leave this case broken.
+
 ## Where it is in the RTL
 
 The instruction semantics are not where it lives: `LDC`/`STC` in

@@ -463,6 +463,32 @@ Diagnostic stages 11-15 are committed in `sqlite_capstone_domain.c` and selected
 
 **This is the blocker behind S-05, and it affects every capability-grained copy of plain data.**
 
+> **UPDATE 2026-08-11 — a SECOND signature, and the baseline is now measured rather than inferred.**
+> Both cache write-width signals are gated on metadata **content** (`|user`), not on the opcode, so
+> a chunk whose high 8 bytes are **exactly zero** makes `st_wr_cap = 0` for a reason unrelated to
+> tags: the `stc` degrades to a single-bank store and **never writes the destination's high half at
+> all**, leaving whatever was already there. Measured in RTL simulation, 585 cycles, 0 exceptions,
+> plain `sd`/`ld` control passing in the same run
+> (`capstone-ariane verif/tests/custom/capstone/s06-mechanism-probe.S` @ `38962294d`, arm C): a
+> destination poisoned with `deadbeefcafef00d` in its high half kept **`deadbeefcafef00d`** after a
+> copy whose source high half was zero. Poisoning first is what makes this readable — a
+> zero-over-zero test cannot distinguish "copied" from "not written".
+>
+> This is arguably worse than the documented signature: losing data to zeros is detectable, whereas
+> silently retaining a **previous occupant's** bytes is not, and it is reachable from an ordinary
+> struct copy where one field is zero. **Consequence for any fix: the write width must become
+> OPCODE-derived. A fix that only stops the load zeroing the high half leaves this case broken.**
+>
+> Same run also measured the **baseline on `fpga-testing-dev-s06`** (arm B: low half survives, high
+> half `0`), which until now rested on the two D-cache gates being source-identical to
+> `capstone-bootstrap` — the original repro had never been run on that lineage.
+>
+> And arm D settled what `cap_type` ordinary compiled data pointers carry:
+> LINEAR → `delin` → **NONLIN** → `cincoffset` → **NONLIN**. Since `ldc` clears its source only for
+> *non*-NONLIN types, **the clear never fires for ordinary code** — so a copy instruction's tagged
+> path is a pure copy (correct: NONLIN is freely copyable), and the capability-loss/atomicity risk
+> that dominated the fix design does not arise for the real use case.
+
 A 16-byte `ldc`/`stc` pair — the aligned middle loop of `memcpy`/`memmove`, which exists so that
 copying a struct containing pointers preserves capability TAGS — keeps only the LOW 8 bytes of a
 plain-data chunk. Measured on `caplifive_r20.bit`, both pointers 16-byte aligned, inside a

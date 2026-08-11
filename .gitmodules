@@ -22,3 +22,6 @@
 [submodule "capstone/caplifive-system"]
 	path = capstone/caplifive-system
 	url = https://github.com/project-starch/caplifive-system.git
+[submodule "capstone/capstone-academic-spec"]
+	path = capstone/capstone-academic-spec
+	url = https://github.com/project-starch/capstone-academic-spec.git
