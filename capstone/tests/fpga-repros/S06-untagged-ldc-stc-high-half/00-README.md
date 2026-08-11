@@ -113,15 +113,17 @@ The instruction semantics are not where it lives: `LDC`/`STC` in
 `core/anvil_build/capstone_dyn_unit.anvil` operate on an already-decoded `fat_cap_t` and contain
 no bit-level logic. It is the D-cache, and **both sides contribute, in sequence**:
 
-* **The load discards the bytes.** `core/cache_subsystem/wt_dcache_mem.sv:310` —
+* **The load discards the bytes.** `core/cache_subsystem/wt_dcache_mem.sv:308` —
   `ruser = cap_tag_hit ? ruser_cl[rd_hit_idx] : '0;`. Bank 1's SRAM still physically holds the
   real bytes; they are MUXed to a literal `'0` whenever the line's 1-bit shadow capability tag
-  (`cap_tag_q`, `:134`) is clear. Any plain store to either half clears that tag for the line
-  (`:418-423`), so a buffer filled by ordinary stores always reads back with a zeroed high half.
-* **The store then never writes the high half at all.** `:140` — `st_wr_cap = |wr_user_i`, i.e.
-  gated on metadata **content**, not on the opcode. With the metadata now zero, `:227-240`
-  requests only the bank matching the store's own offset, so `dst+8..15` is left at its prior
-  content — zero for a fresh buffer, **stale** otherwise — and is never written by that `stc`.
+  (`cap_tag_q`, `:135`) is clear. Any plain store to either half clears that tag for the line
+  (`:419`, `cap_tag_q[wr_idx_i][j] <= st_wr_cap`), so a buffer filled by ordinary stores always
+  reads back with a zeroed high half.
+* **The store then never writes the high half at all.** `:138` — `st_wr_cap = |wr_user_i`, i.e.
+  gated on metadata **content**, not on the opcode. With the metadata now zero, `:228`
+  (`if(!(st_wr_cap))`) requests only the bank matching the store's own offset, so `dst+8..15` is
+  left at its prior content — zero for a fresh buffer, **stale** otherwise — and is never written
+  by that `stc`.
 
 So the load's force-to-zero *creates* the all-zero metadata that then *causes* the store's
 bank-skip. This is not a case of "the store is fine and the load reconstructs", or the reverse.
@@ -172,12 +174,15 @@ clear a live tag.
 
 ## What a fix needs to do
 
-**A concrete proposal is in [`FIX-PROPOSAL.md`](FIX-PROPOSAL.md)**, with two options: a
-tag-preserving 16-byte memory-to-memory copy instruction, which needs no change to how a
-capability is represented and is the smaller of the two; and adding a tag bit to the register
-representation, which is the general fix and what QEMU already does. It also records, with board
-evidence, why no software workaround is safe -- including the one that is correct in simulation
-and on an isolated rung and still destabilises a real workload.
+**A concrete proposal is in [`FIX-PROPOSAL.md`](FIX-PROPOSAL.md)**, with two options: adding a tag
+bit to the register representation, which is the general fix and what QEMU already does; and a
+narrow 16-byte copy instruction restricted to **untagged** lines, which needs no change to how a
+capability is represented and is the smaller of the two. An earlier draft of that second option
+copied lines *with* their tags; it was withdrawn during a security review because it would have
+duplicated linear capabilities, and the reasoning is kept in the document so the same idea is not
+re-proposed. `FIX-PROPOSAL.md` also records, with board evidence, why no software workaround is
+safe -- including the one that is correct in simulation and on an isolated rung and still
+destabilises a real workload.
 
 
 
