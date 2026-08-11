@@ -461,6 +461,35 @@ Diagnostic stages 11-15 are committed in `sqlite_capstone_domain.c` and selected
 
 ## S-06 — an untagged 128-bit `ldc`/`stc` round trip loses the HIGH 64 bits · `OPEN — SILICON DEFECT, root-caused in RTL, needs a hardware fix`
 
+> **SILICON CONFIRMATION 2026-08-12 on `caplifive_s06.bit`: the LCC-query repair WORKS on
+> hardware.** The RTL enabler (`capstone-ariane` `fpga-testing-dev-s06`, one line making LCC's
+> type query total) is now flashed, and rung `s06lcc` returned **171** with control `k800` = 4 in
+> the same boot. The verdict is digit-encoded so each half is independently meaningful:
+>
+> | digit | question | expected | got |
+> |---|---|---|---|
+> | hundreds | type query on a REAL NONLIN capability | 1 | **1** |
+> | tens | type query on PLAIN untagged data | 7 | **7** |
+> | units | the 16-byte copy came back intact | 1 | **1** |
+>
+> The capability arm is not decoration: a query answering 7 unconditionally would pass a
+> plain-data-only test. And the run doubles as a bitstream identity check — on `caplifive_r20.bit`
+> the plain-data query RAISES, and a capability fault inside a domain wedges rather than traps, so
+> an old bitstream produces NO RETURN rather than a wrong number.
+>
+> **So S-06 is repairable in software, demonstrated end-to-end on silicon**: read both halves
+> plainly first, ask the type, then write the destination once. QEMU verified the same rung 4/4
+> before the boot (first invocation failed on a build race, then 4 consecutive passes).
+>
+> **WHAT THIS DOES NOT SHOW, and the distinction matters.** The rung copies 32 bytes on a hot
+> line. It does NOT show the repair survives at SQLite scale, and it does not touch the separate
+> wedge: in the same boot, `sqA` (baseline) still returned `rc=11` and `sqB` (arm E) still WEDGED
+> with mcause 25, exactly as on the old bitstream — expected, since this bitstream changes only
+> LCC. Whether the query-based repair avoids that wedge is UNTESTED and cannot be assumed: every
+> construction that repairs the data has so far wedged, and the experiment that would separate
+> "the store pattern is toxic" from "correct data reaches a second fault" (see the rung design
+> below) has still not been run.
+
 **This is the blocker behind S-05, and it affects every capability-grained copy of plain data.**
 
 > **UPDATE 2026-08-11 — a SECOND signature, and the baseline is now measured rather than inferred.**
