@@ -780,30 +780,53 @@ reaches the shadow-tag region directly.
 shape — passes in RTL simulation, passes on a hot 10 KB rung, fails only at SQLite scale — but no
 mechanism is currently proposed.
 
-**LOCALISED 2026-08-11 on `caplifive_r20.bit`: the wedge is caused by the PLAIN STORES, not by
-the source reads.** Matched pair in ONE boot, control `k800` green, baseline reproducing exactly:
+**~~LOCALISED 2026-08-11: the wedge is caused by the PLAIN STORES~~ — RETRACTED 2026-08-11, the
+experiment was CONFOUNDED.** The claim was that `ld, ld, ldc` is exonerated and the
+plain-store-then-`stc` destination pattern is the trigger. It does not follow from the data.
 
-| arm | per-chunk sequence | result |
-|---|---|---|
-| `sqA` baseline | `ldc, stc` | returns, `SQLITE ERROR stage=create rc=11` |
-| **`sqD`** | **`ld, ld, ldc, stc`** | **RETURNS**, `rc=11` — identical to baseline |
-| **`sqB`** arm E | **`ld, ld, ldc, sd, sd, stc`** | **WEDGES**, mcause 25 INVALID_CAPABILITY |
+| arm | per-chunk sequence | destination written by | DATA | result |
+|---|---|---|---|---|
+| `sqA` baseline | `ldc, stc` | `stc` only | **WRONG** (S-06) | returns, `rc=11` |
+| `sqD` | `ld, ld, ldc, stc` | **`stc` only** | **WRONG** (S-06) | returns, `rc=11` |
+| `sqB` arm E | `ld, ld, ldc, sd, sd, stc` | plain stores + `stc` | **CORRECT** | **WEDGES**, mcause 25 |
 
-`sqD` and `sqB` carry byte-identical SOURCE traffic — verified at disassembly level, 396 vs 399
-`ld,ld→ldc` against 59 in the baseline — and differ only in the two plain stores. Three domains
-entered (`SQ: G/enter` x3), two returned. So `ld, ld, ldc` is **exonerated**; the trigger is the
-plain-store-then-`stc`-on-top destination pattern.
+**Why it is confounded.** `sqD` drops the plain stores, so its destination is written *only* by the
+`stc` — which under S-06 loses the high half. Verified at disassembly level: `sqD` has **zero**
+`ldc→sd,sd`. So `sqD` is the baseline plus dead volatile loads and produces **the same corrupt
+data**. The variable separating the two returning arms from the wedging one is therefore not the
+store pattern; it is **whether the copy is correct**. `sqB` is the only arm whose data is right, and
+the only one that wedges.
 
-**Consequence for fix design:** a fix whose source sequence is `ld, ld, ldc` does NOT inherit the
-wedge. A fix that writes the destination ONCE — an `stc` *or* two plain stores, never both — avoids
-the trigger structurally rather than by luck.
+**The alternative explanation was already in this file** — see the note below at "Both fixups repair
+the data, so SQLite runs deeper into `CREATE TABLE` than it ever has and meets a silicon-side
+capability-validity fault". Three independent constructions have now wedged (the library fixup, the
+compare-and-repair copy `aa600e1f3`, and arm E) and **all three repair the data**. That explanation
+survives the experiment; the store-pattern one does not.
 
-**A RETRACTED arm, recorded so its result is not re-cited.** The first attempt used
-`ld, ld, ldc, sd, sd` with **no `stc`** (`-capstone-memcpy-fixup-no-stc`). It wedged with mcause 25,
-which looked like "source-side confirmed" and is **CONFOUNDED**: dropping the `stc` means a copied
-pointer never receives its tag, so a later dereference faults with exactly mcause 25 for reasons
-unrelated to the source sequence. That arm differs from arm E in TWO respects and therefore measures
-whichever one you did not intend. Taken at face value it would have killed a viable design.
+**Two further defects in the experiment, both verified:**
+
+* **`sqA` was not a clean control.** The `-capstone-memcpy-high-half-fixup` flag silently converts a
+  16-byte-aligned `memmove` into a **libcall** (confirmed by running `llc`: 4 `ldc`/`stc` with the
+  flag off, a `memmove` libcall with it on), because `MemOp` carries no memcpy/memmove discriminator
+  and `EmitTargetCodeForMemmove` is not overridden. So the flag-off and flag-on arms differ by more
+  than the copy sequence.
+* **N = 1 per arm**, on a machine whose non-determinism this project's own rules require bisections
+  to control for. Determinism was never demonstrated.
+
+**The same mistake, twice, in different disguises.** An earlier arm (`-capstone-memcpy-fixup-no-stc`,
+`ld, ld, ldc, sd, sd` with no `stc`) also wedged and also looked like "source-side confirmed"; it was
+confounded because dropping the `stc` destroys copied capabilities. `sqD` was built to fix that and
+introduced the mirror-image confound. Both times, *source traffic* was held constant while *data
+correctness* was allowed to float. Any future arm must state which variables it holds fixed.
+
+**What would actually discriminate:** hold data correctness CONSTANT and vary only the store pattern
+— e.g. a build writing the destination once via `sd, sd` for every chunk with no `stc` at all, on a
+workload whose copied buffers contain no capabilities. Correct data, single write, no `stc`. If that
+wedges, the store pattern is exonerated and the deeper-fault explanation stands. N ≥ 3 per arm.
+
+**Consequence for fix design, and it is the opposite of what was recorded:** a repair that produces
+CORRECT data sits on the same side of the line as every construction that has wedged. That includes
+the LCC-query design. It should not be built until this is resolved.
 
 **Consequence.** There is no software workaround for S-06 that is safe on this silicon:
 
