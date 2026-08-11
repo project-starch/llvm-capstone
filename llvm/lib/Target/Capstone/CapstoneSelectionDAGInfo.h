@@ -17,6 +17,14 @@
 
 namespace llvm {
 
+// Single source of truth for whether the S-06 capability-memcpy fixup applies. MUST be used by
+// BOTH CapstoneTargetLowering::findOptimalMemOpLowering (to decline the generic inline expansion)
+// and CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy (to perform it). If the two ever disagree,
+// getMemcpy silently falls through to a libcall. Defined in CapstoneSelectionDAGInfo.cpp.
+bool capstoneShouldExpandCapMemcpyInline(uint64_t Bytes, bool Is16ByteAligned,
+                                         bool IsVolatile);
+
+
 namespace CapstoneISD {
 // CapstoneISD Node TSFlags
 enum : llvm::SDNodeTSFlags {

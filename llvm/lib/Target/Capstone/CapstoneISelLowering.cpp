@@ -25894,8 +25894,13 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
   // expansion FIRST and only calls the target hook if that fails, so a hook alone is dead code.
   // The condition here must match the hook's exactly, or a copy declined here and rejected
   // there would fall through to a libcall -- which is broken on this ABI.
-  if (CapstoneMemcpyHighHalfFixup && Op.isMemcpy() && Op.size() != 0 &&
-      (Op.size() % 16) == 0 && Op.isAligned(Align(16)) && (Op.size() / 16) <= 32)
+  // Decline the generic inline expansion so EmitTargetCodeForMemcpy is consulted. The condition
+  // MUST be the hook's own -- see capstoneShouldExpandCapMemcpyInline, which documents the three
+  // ways these two sites had already drifted apart and the silent libcalls that produced.
+  // `!Op.allowOverlap()` is the volatile discriminator (TargetLowering.h:143).
+  if (Op.isMemcpy() &&
+      capstoneShouldExpandCapMemcpyInline(Op.size(), Op.isAligned(Align(16)),
+                                          /*IsVolatile=*/!Op.allowOverlap()))
     return false;
 
   // S-06 workaround. Returning false means "cannot lower inline", which makes the caller emit a

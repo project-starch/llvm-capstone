@@ -93,12 +93,20 @@ static cl::opt<bool> CapstoneMemcpyFixupNoStc(
 // nothing to do with the source sequence. That arm differs from the fixup in TWO respects and
 // therefore measures whichever one you did not intend.
 //
-// This arm differs from the RETURNING baseline by exactly one thing -- the two added plain loads
-// -- while keeping the destination semantically correct:
+// RESULT, AND ITS RETRACTION. This arm RETURNED on the board while the full fixup WEDGED, and
+// that was recorded as "the plain stores are the trigger, the source reads are exonerated".
+// THAT CONCLUSION IS WITHDRAWN -- this arm is confounded too, in the mirror image of the one
+// above. Dropping the plain stores leaves the destination written ONLY by the `stc`, which under
+// S-06 loses the high half, so this build produces the SAME CORRUPT DATA as the unfixed baseline.
+// It is the baseline plus dead volatile loads. The variable that separates it from the full
+// fixup is therefore not the store pattern but whether the copy is CORRECT -- and "repairing the
+// data makes SQLite run deeper and meet a different silicon fault" is an explanation this
+// project had already recorded, consistent with all three constructions that have wedged.
 //
-//   wedges  -> the `ld, ld, ldc` source sequence is sufficient, cleanly, and every fix that
-//              reads the source that way is dead, including the LCC-query design
-//   returns -> the plain STORES are implicated, not the reads, and the query design survives
+// Both diagnostic arms held SOURCE TRAFFIC constant and let DATA CORRECTNESS float. Any future
+// arm must state which variables it holds fixed, and needs N >= 3 -- the board table was N = 1.
+//
+// Neither flag currently supports a conclusion about where the wedge comes from.
 static cl::opt<bool> CapstoneMemcpyFixupNoPlainStores(
     "capstone-memcpy-fixup-no-plain-stores", cl::Hidden,
     cl::desc("DIAGNOSTIC ONLY: omit the two plain stores from the S-06 fixup, keeping the source "
@@ -246,36 +254,63 @@ SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemset(
   return DAG.getNode(ISD::TokenFactor, dl, MVT::Other, OutChains);
 }
 
+// THE SINGLE SOURCE OF TRUTH for "does the fixup apply to this copy?".
+//
+// This exists because the predicate lives in TWO places that must agree exactly: the decline in
+// CapstoneTargetLowering::findOptimalMemOpLowering (which stops the generic inline expansion so
+// this hook is consulted at all) and the hook itself. When they disagree, `getMemcpy` finds that
+// nobody will expand the copy and falls through to a LIBCALL -- silently, with no diagnostic.
+//
+// They HAD diverged, in three ways, all measured with the tree's own `llc` rather than reasoned
+// about:
+//   * volatile      -- checked here, not at the decline. A volatile 16-aligned copy became a libcall.
+//   * max-bytes     -- checked here, not at the decline. This one also invalidated a recorded
+//                      bisection result: restricting the fixup to 16 bytes was read as "one chunk
+//                      is enough to reproduce", when it had actually converted every LARGER
+//                      16-aligned copy to a libcall.
+//   * memmove       -- `MemOp` carries no memcpy/memmove discriminator (`isMemcpy()` is just
+//                      `!IsMemset`), so the decline fires for memmove too, and there was no
+//                      EmitTargetCodeForMemmove override to catch it. See that override below.
+//
+// Keep every condition that is expressible from BOTH call sites in here. `isVolatile` is
+// available at the decline as `!Op.allowOverlap()` (TargetLowering.h:143 sets
+// `AllowOverlap = !IsVolatile`), so it belongs here rather than in the caller.
+// NB: takes the ALIGNMENT CHECK RESULT, not an Align. MemOp::getDstAlign() carries
+// `assert(!DstAlignCanChange)` and fires whenever the destination is a fresh alloca whose
+// alignment may still be raised -- a common shape -- so the decline site must use
+// MemOp::isAligned(), which handles that case, and pass the answer in.
+bool llvm::capstoneShouldExpandCapMemcpyInline(uint64_t Bytes, bool Is16ByteAligned,
+                                               bool IsVolatile) {
+  if (!CapstoneMemcpyHighHalfFixup)
+    return false;
+  // A volatile copy must not have its stores multiplied.
+  if (IsVolatile)
+    return false;
+  // Only the capability-grained shape needs fixing: that is the ONLY one lowered to ldc/stc.
+  // Anything else already copies with scalar units and cannot lose a high half.
+  if (Bytes == 0 || (Bytes % 16) != 0 || !Is16ByteAligned)
+    return false;
+  // Match the chunk budget the inline capability path uses.
+  if ((Bytes / 16) > 32)
+    return false;
+  if (Bytes > CapstoneMemcpyHighHalfFixupMaxBytes)
+    return false;
+  return true;
+}
+
 SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy(
     SelectionDAG &DAG, const SDLoc &dl, SDValue Chain, SDValue Dst, SDValue Src,
     SDValue Size, Align Alignment, bool isVolatile, bool AlwaysInline,
     MachinePointerInfo DstPtrInfo, MachinePointerInfo SrcPtrInfo) const {
-  if (!CapstoneMemcpyHighHalfFixup)
-    return SDValue();
-
-  // A volatile copy must not have its stores multiplied; leave it to the generic path.
-  if (isVolatile)
-    return SDValue();
-
   ConstantSDNode *ConstantSize = dyn_cast<ConstantSDNode>(Size);
   if (!ConstantSize)
     return SDValue();
   uint64_t Bytes = ConstantSize->getZExtValue();
 
-  // Only the capability-grained shape needs fixing: that is the ONLY one lowered to ldc/stc
-  // (CapstoneTargetLowering::findOptimalMemOpLowering). Anything else already copies with
-  // scalar units and cannot lose a high half, so hand it back to the generic expansion rather
-  // than growing code for no reason.
-  if (Bytes == 0 || (Bytes % 16) != 0 || Alignment < Align(16))
+  if (!capstoneShouldExpandCapMemcpyInline(Bytes, Alignment >= Align(16), isVolatile))
     return SDValue();
 
-  // Match the chunk budget the inline capability path uses; above it the generic path emits a
-  // libcall, which lands on the library memcpy and its own copy of this fix.
   uint64_t NumChunks = Bytes / 16;
-  if (NumChunks > 32)
-    return SDValue();
-  if (Bytes > CapstoneMemcpyHighHalfFixupMaxBytes)
-    return SDValue();
 
   // Strictly serial chain. The `ldc`/`stc` for a chunk MUST be ordered after that chunk's two
   // plain stores -- the whole construction depends on the capability store landing last.
