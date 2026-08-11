@@ -3707,3 +3707,40 @@ rule-B sites across the corpus. QEMU also omits this clear
 in-tree model currently distinguishes conformant from non-conformant behaviour** and a fix should
 land in both or note the divergence.
 
+### R-23 — `ldc` never checks WRITE permission, so a READ-ONLY capability can move a linear capability out of memory `OPEN — SPEC VIOLATION; NOT yet reported`
+
+`capstone-spec/parts/mem-access-insn.adoc:44-46` requires `Insufficient capability permissions (27)`
+when the loaded value is not a scalar or a non-linear capability and `2 <=p x[rs1].perms` does not
+hold. `capstone_dyn_unit.anvil:314` implements the **read** check (`perm & 4`) only; there is no
+second arm anywhere in `func LDC` (`:293-353`).
+
+**What was disabled is a DIFFERENT check, and the distinction matters.** The commented-out block at
+`capstone_unit.anvilh:571-585` references only `rd`, the loaded value; `cap_msg.cap_rs1.metadata.perm`
+appears nowhere in it and there is no `2 <=p perms` conjunct. It would have faulted **every** `ldc`
+of a linear capability -- the central Capstone operation -- so its `FIXME: overly restrictive` is
+accurate. The correct framing is therefore: *the spec-required write-permission check has never
+been implemented; what was disabled was a broken unconditional one.* Enabling that block verbatim
+would not fix this and would break linear loads.
+
+**Why it is authority amplification, not data loss.** `TIGHTEN` (`cap-man-insn.adoc:320-351`,
+`capstone_flu_unit.anvil:326`) makes `perms = 4` (read-only) reachable from ordinary domain code.
+Given a read-only `c` over a region holding a linear `L`:
+
+1. `ldc rd, 0(c)` succeeds -- the holder of a **read-only** capability obtains `L` with `L`'s full
+   authority, and the true owner loses it;
+2. the RTL then writes `cnull` over that slot (`load_unit.sv:452` -> `store_unit.sv:399`, which
+   injects straight into the store buffer and bypasses `check_store_data` entirely) -- **a write
+   through a capability with no write permission.**
+
+So read-only sharing does not confer read-only semantics: a reader can destroy 16 bytes per `ldc`
+anywhere it can read, and can move linear authority out of a region it was only permitted to read.
+
+**Related observation from the R-21 run, recorded because it is not yet explained.** In
+`linear-clear-audit.S` arm 3 the `ldc` linear-clear **does fire** -- the slot's low 8 bytes read
+back `0x0`, while the NONLIN control arm 4 is unchanged at `0x0000000080001000`, so the clear is
+conditional and not unconditional. But the slot's **high 8 bytes survive** (`0x0000000b98044000`),
+i.e. the clear is *incomplete*. That is consistent with S-06's mechanism -- the clear store sets
+`user = '0` (`store_unit.sv:414`), so `st_wr_cap = |wr_user_i` is 0 and only the bank matching the
+offset is written. Whether the granule's tag also goes clear (which would make the residue
+harmless) was **not measured** and must be before anyone concludes either way.
+
