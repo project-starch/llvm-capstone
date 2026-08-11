@@ -25898,7 +25898,22 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
   // MUST be the hook's own -- see capstoneShouldExpandCapMemcpyInline, which documents the three
   // ways these two sites had already drifted apart and the silent libcalls that produced.
   // `!Op.allowOverlap()` is the volatile discriminator (TargetLowering.h:143).
-  if (Op.isMemcpy() &&
+  // `isFixedDstAlign()` is LOAD-BEARING, not belt-and-braces. `MemOp::isDstAligned` returns TRUE
+  // unconditionally when `DstAlignCanChange` (TargetLowering.h:188-190), i.e. for a fresh alloca
+  // whose alignment the expander may still raise -- while the hook receives
+  // `min(DstAlign, SrcAlign)` straight from the IR. So for an `align 8` alloca destination with a
+  // 16-aligned source, the decline saw "aligned" and declined while the hook saw 8 and refused,
+  // and NOBODY expanded the copy. Measured consequences, both reproduced with this llc:
+  //   * plain memcpy      -> silent LIBCALL, on an ABI where a compiler-generated mem* libcall
+  //                          resolves through gp and is suspected structurally broken
+  //   * memcpy.inline     -> SILENT MISCOMPILE. getMemcpy retries with AlwaysInline, that also
+  //                          returns null, and the null SDValue destroys the DAG root: the copy,
+  //                          the following stores, the stack teardown AND THE RETURN all vanish
+  //                          and execution falls off the end of the function. Exit code 0, no
+  //                          diagnostic.
+  // Requiring a FIXED destination alignment makes the two sites agree, because then
+  // `isDstAligned` is a real test of `DstAlign` rather than a free pass.
+  if (Op.isMemcpy() && Op.isFixedDstAlign() &&
       capstoneShouldExpandCapMemcpyInline(Op.size(), Op.isAligned(Align(16)),
                                           /*IsVolatile=*/!Op.allowOverlap()))
     return false;
