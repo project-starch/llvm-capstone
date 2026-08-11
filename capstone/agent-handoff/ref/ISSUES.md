@@ -3601,3 +3601,80 @@ Report + reproduction: `history/07-08-2026_RETRACTED_scalar-store-metadata-mecha
 Trail: `history/07-08-2026_02-30-00_nested-loop-capability-index-iteration-loss.md`.
 Fix: gate the WB forward on validity, and/or classify by opcode. Both need a bitstream reflash —
 the project lead's call.
+---
+
+### R-21 — `cincoffset`/`scc`/`tighten`/`shrinkto` do not consume their LINEAR source, and `init` DUPLICATES it `OPEN — SPEC VIOLATION, confirmed in RTL simulation 2026-08-11; NOT yet reported`
+
+**A linear capability can be copied.** `capstone-spec/parts/intro.adoc:58-61` states the invariant
+normatively -- "instructions can only **move, but not copy**, linear capabilities between
+general-purpose registers" -- and the spec defines each instruction below as `MOVC rd, rs1` plus an
+edit, where `MOVC` writes `cnull` to a non-NONLIN source (`cap-man-insn.adoc:36-38`). `MOVC` does
+this (`capstone_flu_unit.anvil:20-24`). These do not:
+
+| insn | anvil site | `rs1` slot of `create_result_pack` | |
+|---|---|---|---|
+| `CINCOFFSET` | `capstone_flu_unit.anvil:41` | `rs1` unmodified | not cleared |
+| `CINCOFFSETIMM` | `capstone_flu_unit.anvil:60` | `rs1` unmodified | not cleared |
+| `SCC` | `capstone_flu_unit.anvil:81` | `rs1` unmodified | not cleared |
+| `SHRINKTO` | `capstone_flu_unit.anvil:205` | `rs1` unmodified | not cleared |
+| `TIGHTEN` | `capstone_dyn_unit.anvil:220` | `rs1` unmodified | not cleared |
+| **`INIT`** | **`capstone_flu_unit.anvil:112`** | **`create_result_pack(...,rd,rd)`** | **duplicates** |
+| `MOVC` / `SEAL` / `SHRINK` / `SPLIT` | | | conformant |
+
+`INIT` is the severe one: with `rd != rs1` it writes the **newly created LINEAR capability** into
+`x[rs1]`, where the spec mandates `cnull`. That is outright duplication rather than a missing
+clear. `create_result_pack(id, ex, rs1, rd)` maps arg 3 to `cap_rs1` and arg 4 to `cap_result`
+(`capstone_unit.anvilh:348-362`); nothing downstream rewrites it (`ex_stage.sv:1083` ->
+`cva6.sv:1370` -> `scoreboard.sv:242` -> `commit_stage.sv:278` is pass-through apart from the
+CCSRRW gate at `commit_stage.sv:385`).
+
+**Repro, ~12 s, no board:** `verif/tests/custom/capstone/linear-clear-audit.S` in `capstone-ariane`,
+registered in `testlist_capstone.yaml`. Run per the `rtl-sim` skill. Result on
+`capstone-bootstrap` @ `aef2baa79`, **541 cycles, 0 exceptions** (not the 2000013 timeout):
+
+| arm | what it does | result | |
+|---|---|---|---|
+| 0 | `MOVC`, LINEAR source -- **instrument control** | `Reg[15]: 0000000000000000` | source CLEARED |
+| 1 | `CINCOFFSET`, NONLIN source -- **conformance control** | `Reg[17]: ... Type : 2` | source SURVIVED, correct |
+| 2 | `CINCOFFSET`, LINEAR source -- **the probe** | `Reg[19]: ... Type : 1` | **source SURVIVED = DUPLICATION** |
+
+Arms 0 and 1 are what make arm 2 readable: arm 0 proves `CAPPRINT` can see a cleared source at all,
+and arm 1 proves the core does not clear unconditionally. Arms 1 and 2 differ in exactly one thing,
+the source type, so that difference is the variable. **No pre-existing test covered this** --
+`cincoffset.S:22` sets its source to `CAP_TYPE_NONLIN` first, so it is the negative case only.
+QEMU is no reference either: `trans_csldc`/`trans_csstc` write no `cnull` at all.
+
+**Impact.** One 1-cycle instruction, no exception, yields a second capability with the same
+`revnode_id`. That defeats **exclusive access**, the first of the architecture's goals. Revocation
+is NOT defeated -- there is no refcount and aliases share a `revnode_id`, so one `revoke`
+invalidates every copy -- so do not offer revocation as a mitigation, and do not claim it breaks.
+
+**Do NOT simply fix this in RTL.** Our own code depends on the non-conformant behaviour.
+`tests/scan-linear-clear-exposure.py` scans built artifacts for sites a conformant clear would
+change; over the 76-image `.dom` corpus it finds **292 hits in only four distinct shapes**, all in
+the domain entry glue and repeated across 31 images:
+
+```
+BREAK   rule-A  x70  cincoffset s2, gp, zero    (gp minted LINEAR by split; read again at stc gp, 0x10(s1))
+BREAK   rule-A  x70  cincoffset t6, t2, zero    (t2 minted LINEAR by split; read again at stc t2, 0x0(s2))
+SURFACE rule-B  x70  stc gp, 0x10(s1)
+SURFACE rule-B  x70  stc t2, 0x0(s2)
+```
+
+LLVM does not model the clear -- `CapstoneInstrInfo.td:2413` takes `CIncOffset`'s `rs1` as a pure
+use -- so a conformant `CINCOFFSET` would null `gp` in the entry glue of essentially every domain
+we build. A real fix needs paired compiler work and is its own project.
+
+**Two implementation gotchas for whoever does fix it.** `check_fwd_rs1` (`ariane_pkg.sv:929-935`)
+lists only `{SPLIT,MOVC,CJALR,CCSRRW,STC}`; a clear added without a matching entry is forwarded
+around and is architecturally invisible (`SEAL` is already in that state). And `MOVC`'s
+`data.rs1 == data.rd` guard must be kept, or `cincoffsetimm sp, sp, -96` would null `sp`.
+
+**Counter-evidence, recorded rather than buried.** The spec never states explicitly that a named
+instruction inside a numbered step executes with its side effects; the reading rests on the spec
+using "Write `x[rs1]` to `x[rd]`" (SPLIT `:309-315`, MREV `:541-542`) exactly where the source must
+survive and `MOVC rd, rs1` where it must be consumed, and on `CALL` (`ctrl-flow-insn.adoc:121`)
+being absurd otherwise. Upstream `capstone-qemu` implements the clear for this family
+(`op_helper.c`, commit `b23d516401`, 2023) -- **except `helper_csshrinkto` (`:833-847`), which does
+not**, so the reference model is itself inconsistent on one instruction.
+
