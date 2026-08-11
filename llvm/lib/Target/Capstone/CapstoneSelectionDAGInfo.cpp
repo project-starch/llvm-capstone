@@ -57,6 +57,54 @@ cl::opt<bool> CapstoneMemcpyHighHalfFixup(
              "ldc/stc, so an untagged chunk keeps its high 64 bits"),
     cl::init(false));
 
+// DIAGNOSTIC ONLY -- NEVER SHIP A BUILD WITH THIS ON.
+//
+// Drops the trailing capability store from the fixup sequence, leaving `ld, ld, ldc, sd, sd`.
+// That does NOT preserve tags, so any real capability copied by this memcpy is destroyed and the
+// domain will misbehave in ways unrelated to what is being measured. It exists for exactly one
+// experiment.
+//
+// WHY. The fixup above is correct in RTL simulation and on an isolated silicon rung, yet wedges
+// SQLite with mcause 25 INVALID_CAPABILITY, and that failure is UNEXPLAINED -- its only
+// hypothesis was refuted on 2026-08-11. Nothing localises it to the reads or the writes. This
+// build keeps the fixup's SOURCE traffic byte-identical and removes only the `stc`, so a matched
+// pair against the unmodified fixup differs in exactly one thing:
+//
+//   wedges  -> the cause is source-side (`ld, ld, ldc`), and every proposed fix that reads the
+//              source that way inherits it -- including the LCC-query design under consideration
+//   returns -> the cause is destination-side, and that design is on the right side of the line
+//
+// It answers the question without knowing the mechanism, which is why it is worth a board slot.
+static cl::opt<bool> CapstoneMemcpyFixupNoStc(
+    "capstone-memcpy-fixup-no-stc", cl::Hidden,
+    cl::desc("DIAGNOSTIC ONLY, breaks capability copies: omit the trailing stc from the S-06 "
+             "fixup, to localise the SQLite wedge to the source or destination side"),
+    cl::init(false));
+
+// DIAGNOSTIC ONLY, but unlike -no-stc this one is INTERPRETABLE.
+//
+// Drops the two plain stores, leaving `ld, ld, ldc, stc`. Source traffic stays byte-identical to
+// the full fixup, and -- crucially -- the capability store REMAINS, so capabilities are still
+// copied correctly and the domain is not sabotaged in a second, independent way.
+//
+// WHY THIS EXISTS. The -no-stc variant above wedged on silicon with mcause 25, and that result
+// is CONFOUNDED and must not be cited as localisation: removing the stc means a copied pointer
+// never gets its tag, so a later dereference faults with exactly mcause 25 for reasons that have
+// nothing to do with the source sequence. That arm differs from the fixup in TWO respects and
+// therefore measures whichever one you did not intend.
+//
+// This arm differs from the RETURNING baseline by exactly one thing -- the two added plain loads
+// -- while keeping the destination semantically correct:
+//
+//   wedges  -> the `ld, ld, ldc` source sequence is sufficient, cleanly, and every fix that
+//              reads the source that way is dead, including the LCC-query design
+//   returns -> the plain STORES are implicated, not the reads, and the query design survives
+static cl::opt<bool> CapstoneMemcpyFixupNoPlainStores(
+    "capstone-memcpy-fixup-no-plain-stores", cl::Hidden,
+    cl::desc("DIAGNOSTIC ONLY: omit the two plain stores from the S-06 fixup, keeping the source "
+             "reads and the stc, to localise the SQLite wedge without breaking capability copies"),
+    cl::init(false));
+
 CapstoneSelectionDAGInfo::CapstoneSelectionDAGInfo()
     : SelectionDAGGenTargetInfo(CapstoneGenSDNodeInfo) {}
 
@@ -286,26 +334,47 @@ SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy(
   // and silently regenerates the unfixed sequence. Measured: for a copy into a stack slot the
   // pre-writes vanished entirely and the output was byte-identical to the unfixed build.
     // --- read the whole chunk first ---
+    // Under -capstone-memcpy-fixup-no-plain-stores these two loads lose their only users, so
+    // DCE would delete them and the image would carry plain `ldc, stc` -- i.e. the BASELINE,
+    // silently measuring nothing. Same trap as the capability load below under -no-stc.
+    auto SrcFlags = CapstoneMemcpyFixupNoPlainStores ? MachineMemOperand::MOVolatile
+                                                     : MachineMemOperand::MONone;
     SDValue Lo = DAG.getLoad(MVT::i64, dl, Chain, capOffset(Src, Base),
-                             SrcPtrInfo.getWithOffset(Base), Align(8));
+                             SrcPtrInfo.getWithOffset(Base), Align(8), SrcFlags);
     Chain = Lo.getValue(1);
     SDValue Hi = DAG.getLoad(MVT::i64, dl, Chain, capOffset(Src, Base + 8),
-                             SrcPtrInfo.getWithOffset(Base + 8), Align(8));
+                             SrcPtrInfo.getWithOffset(Base + 8), Align(8), SrcFlags);
     Chain = Hi.getValue(1);
+    // Under -capstone-memcpy-fixup-no-stc this load has NO USERS, so plain DCE deletes it and
+    // the resulting image would carry `ld, ld, sd, sd` -- measuring a sequence with no `ldc` in
+    // it at all, and answering a question nobody asked. Marking it volatile keeps it. This is
+    // the same failure mode the two plain stores already guard against below, and the reason
+    // every arm of this experiment is disassembled before it is baked.
     SDValue Cap = DAG.getLoad(MVT::i128, dl, Chain, capOffset(Src, Base),
-                              SrcPtrInfo.getWithOffset(Base), Align(16));
+                              SrcPtrInfo.getWithOffset(Base), Align(16),
+                              CapstoneMemcpyFixupNoStc
+                                  ? MachineMemOperand::MOVolatile
+                                  : MachineMemOperand::MONone);
     Chain = Cap.getValue(1);
 
     // --- then write it ---
-    Chain = DAG.getStore(Chain, dl, Lo, capOffset(Dst, Base),
-                         DstPtrInfo.getWithOffset(Base), Align(8),
-                         MachineMemOperand::MOVolatile);
-    Chain = DAG.getStore(Chain, dl, Hi, capOffset(Dst, Base + 8),
-                         DstPtrInfo.getWithOffset(Base + 8), Align(8),
-                         MachineMemOperand::MOVolatile);
+    if (!CapstoneMemcpyFixupNoPlainStores) {
+      Chain = DAG.getStore(Chain, dl, Lo, capOffset(Dst, Base),
+                           DstPtrInfo.getWithOffset(Base), Align(8),
+                           MachineMemOperand::MOVolatile);
+      Chain = DAG.getStore(Chain, dl, Hi, capOffset(Dst, Base + 8),
+                           DstPtrInfo.getWithOffset(Base + 8), Align(8),
+                           MachineMemOperand::MOVolatile);
+    }
     // Last, so a real capability's tag is restored over the plain stores.
-    Chain = DAG.getStore(Chain, dl, Cap, capOffset(Dst, Base),
-                         DstPtrInfo.getWithOffset(Base), Align(16));
+    //
+    // Skipped only under -capstone-memcpy-fixup-no-stc, which is a localisation experiment and
+    // not a build anyone should run for real: without this store a copied capability keeps no
+    // tag. The `ldc` above is deliberately still emitted even though its value is now unused,
+    // because the whole point is to hold the SOURCE traffic byte-identical to the real fixup.
+    if (!CapstoneMemcpyFixupNoStc)
+      Chain = DAG.getStore(Chain, dl, Cap, capOffset(Dst, Base),
+                           DstPtrInfo.getWithOffset(Base), Align(16));
   }
 
   return Chain;

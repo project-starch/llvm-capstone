@@ -780,13 +780,30 @@ reaches the shadow-tag region directly.
 shape — passes in RTL simulation, passes on a hot 10 KB rung, fails only at SQLite scale — but no
 mechanism is currently proposed.
 
-**The experiment that would localise it, and it is one extra `.dom` in a batch:** build a variant
-doing `ld, ld, ldc, sd, sd` — arm E's **source** traffic with arm E's **destination** traffic but
-**no `stc` at all** — and stage it in one boot beside unmodified arm E and the fixup-off control,
-all running the same `CREATE TABLE`. If it wedges, the cause is source-side; if it returns, it is
-destination-side. That is a matched pair differing in one thing, and it answers the question
-without knowing the mechanism. It matters beyond arm E: any future fix whose source-side sequence
-is `ld, ld, ldc` inherits the wedge if the cause is source-side.
+**LOCALISED 2026-08-11 on `caplifive_r20.bit`: the wedge is caused by the PLAIN STORES, not by
+the source reads.** Matched pair in ONE boot, control `k800` green, baseline reproducing exactly:
+
+| arm | per-chunk sequence | result |
+|---|---|---|
+| `sqA` baseline | `ldc, stc` | returns, `SQLITE ERROR stage=create rc=11` |
+| **`sqD`** | **`ld, ld, ldc, stc`** | **RETURNS**, `rc=11` — identical to baseline |
+| **`sqB`** arm E | **`ld, ld, ldc, sd, sd, stc`** | **WEDGES**, mcause 25 INVALID_CAPABILITY |
+
+`sqD` and `sqB` carry byte-identical SOURCE traffic — verified at disassembly level, 396 vs 399
+`ld,ld→ldc` against 59 in the baseline — and differ only in the two plain stores. Three domains
+entered (`SQ: G/enter` x3), two returned. So `ld, ld, ldc` is **exonerated**; the trigger is the
+plain-store-then-`stc`-on-top destination pattern.
+
+**Consequence for fix design:** a fix whose source sequence is `ld, ld, ldc` does NOT inherit the
+wedge. A fix that writes the destination ONCE — an `stc` *or* two plain stores, never both — avoids
+the trigger structurally rather than by luck.
+
+**A RETRACTED arm, recorded so its result is not re-cited.** The first attempt used
+`ld, ld, ldc, sd, sd` with **no `stc`** (`-capstone-memcpy-fixup-no-stc`). It wedged with mcause 25,
+which looked like "source-side confirmed" and is **CONFOUNDED**: dropping the `stc` means a copied
+pointer never receives its tag, so a later dereference faults with exactly mcause 25 for reasons
+unrelated to the source sequence. That arm differs from arm E in TWO respects and therefore measures
+whichever one you did not intend. Taken at face value it would have killed a viable design.
 
 **Consequence.** There is no software workaround for S-06 that is safe on this silicon:
 
