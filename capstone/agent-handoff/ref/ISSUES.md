@@ -752,8 +752,27 @@ fixups, both running stage 168 (open + a SHORT create):
 | fixups OFF | RETURNS `rc=11`, twice |
 | fixups ON | **WEDGES** |
 
-So the fixup itself causes the wedge; this is not merely "SQLite runs deeper once the data is
-correct".
+~~So the fixup itself causes the wedge; this is not merely "SQLite runs deeper once the data is
+correct".~~ **THAT INFERENCE IS WITHDRAWN 2026-08-11 — this pair is confounded like the others.**
+At stage 168 the fixups-OFF build's `CREATE` **fails** (`rc=11`) while the fixups-ON build repairs
+the data so the same `CREATE` **succeeds**, and therefore executes strictly more code. Depth and
+data-correctness are coupled by construction: *any* SQLite arm that repairs the data also goes
+further, so no SQLite pair can separate "the store pattern is toxic" from "correct data reaches a
+second fault". A shorter stage does not break the coupling, it only shortens both sides of it.
+
+**The experiment that WOULD separate them drops SQLite entirely.** Run the fixup's exact store
+pattern (`ld, ld, ldc, sd, sd, stc`) in a ladder rung over a working set large enough to force
+eviction (the D-cache is 32 KB, so >= 64 KB), with real capabilities interspersed among plain
+data, returning a checksum — against a control rung doing the baseline `ldc, stc` over the same
+data. There is no data-dependent control flow, so the store pattern is the only variable.
+
+* rung wedges, control returns -> the store pattern is intrinsically toxic at scale, and every fix
+  using it is dead, including the current workaround
+* both return -> the store pattern is exonerated at scale, and SQLite's wedge is a second fault
+  that only becomes reachable once the data is correct
+
+NOT YET RUN. Until it is, **no claim about the cause of the arm-E wedge is supported**, including
+the one struck here and the one struck earlier in this section.
 
 **Two candidate causes tried and REFUTED:**
 
