@@ -172,6 +172,15 @@ clear a live tag.
 
 ## What a fix needs to do
 
+**A concrete proposal is in [`FIX-PROPOSAL.md`](FIX-PROPOSAL.md)**, with two options: a
+tag-preserving 16-byte memory-to-memory copy instruction, which needs no change to how a
+capability is represented and is the smaller of the two; and adding a tag bit to the register
+representation, which is the general fix and what QEMU already does. It also records, with board
+evidence, why no software workaround is safe -- including the one that is correct in simulation
+and on an isolated rung and still destabilises a real workload.
+
+
+
 Preserve the raw upper 64 bits of a `tag == 0` line across an `ldc`/`stc` round trip — the
 behaviour QEMU already implements. `./run.sh sim` is the acceptance test: it passes when `t4`
 reads `0xfedcba9876543210` instead of zero, and it independently checks its own control first.
@@ -181,6 +190,7 @@ reads `0xfedcba9876543210` instead of zero, and it independently checks its own 
 
 | path | what it is |
 |---|---|
+| `FIX-PROPOSAL.md` | proposed RTL fixes, and why software cannot work around this |
 | `run.sh` | `sim` (~14 s, no board) · `rung` (board) · `verify` (checksums) |
 | `sim/untagged-ldc-stc-128.S` | the directed test: round trip + plain `sd`/`ld` control |
 | `sim/untagged-ldc-stc-fixup.S` | the workaround experiments, incl. the refuted compare-and-repair shape |

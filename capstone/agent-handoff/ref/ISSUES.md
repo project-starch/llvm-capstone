@@ -760,7 +760,21 @@ because nothing has yet measured a tag surviving an eviction.
   that is correct on paper and in simulation -- destabilises the workload.
 
 **S-06 therefore needs the RTL fix**, and the handover package
-(`capstone/tests/fpga-repros/S06-untagged-ldc-stc-high-half/`) is the deliverable. Both fixups
+(`capstone/tests/fpga-repros/S06-untagged-ldc-stc-high-half/`) is the deliverable. It now
+carries **`FIX-PROPOSAL.md`** with two costed options:
+
+* **Option B, recommended first:** a tag-preserving 16-byte memory-to-memory copy instruction.
+  The value never enters a register, so `cap_pack_t`, the register file, forwarding, the
+  scoreboard and `capstone_dom_switcher` are all untouched. It is exactly what software needs,
+  because every failure here is a COPY. Compiler side is a one-line change: the aggregate-copy
+  lowering already exists and would emit the new instruction instead of the `ldc`/`stc` pair.
+* **Option A, the general fix:** add a tag bit to `cap_pack_t`, deliver bank 1 ungated, make
+  `st_wr_cap` opcode-gated, widen the user lanes. The work is not in those four mechanical
+  steps but in auditing every site that infers "is a capability" from `cap_type != NOT_CAP`,
+  and in the domain switcher's saved-context format.
+
+Acceptance for either is already in the folder and needs no SQLite: `./run.sh sim` (499 cycles,
+self-controlled) and `./run.sh rung` (`s06copy` 16 -> 32, `s06agg` 66 -> 64). Both fixups
 stay DEFAULT OFF: they turn a diagnosable error return into a wedge.
 
 ### Earlier note (superseded by the above): still blocked on silicon, and it is NOT this fix
