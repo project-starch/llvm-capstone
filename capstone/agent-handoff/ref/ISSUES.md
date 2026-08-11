@@ -3678,3 +3678,32 @@ being absurd otherwise. Upstream `capstone-qemu` implements the clear for this f
 (`op_helper.c`, commit `b23d516401`, 2023) -- **except `helper_csshrinkto` (`:833-847`), which does
 not**, so the reference model is itself inconsistent on one instruction.
 
+### R-22 — `stc` does not write `cnull` to its register source `OPEN — SPEC VIOLATION; NOT yet reported`
+
+`capstone-spec/parts/mem-access-insn.adoc:105`: "If `x[rs2]` is a capability and `x[rs2].type` is
+not `1` (non-linear), write `cnull` to `x[rs2]`." The RTL does not.
+
+The decoder aliases `STC`'s `rd` field to `rs2` (`decoder.sv:1308-1314`), which looks like it could
+be the clear -- **it is not.** `capstone_dyn_unit.anvil:419` (normal path) and `:410` (uninitialised
+path) both build `create_result_pack(..., rs1_v, rs2_v)`, and `rs2_v` is the **unmodified** stored
+capability. It cannot be `cnull`, because the same field is the store data handed to
+`cap_store_ri.req` on the next line. So the `rd`-aliased writeback is a self-write of the same
+value. The store-syncer return path preserves it (`capstone_unit.anvilh:587-591`).
+
+Note for anyone re-deriving this: `commit_stage.sv:278` drives the second capability write port
+from `commit_instr_i[0].rs1`, i.e. it targets **`rs1`, not `rs2`** -- and for `STC` that port is
+load-bearing, delivering the uninitialised-capability cursor advance (`dyn_unit.anvil:409-411`).
+The accurate statement is "no port targets `rs2`, and the `rd`-aliased port carries the unchanged
+value", not "no port other than `rd`".
+
+**Positive control that the intent is the opposite:** the *memory*-side counterpart of the same
+rule (`LDC`, `mem-access-insn.adoc:54-55`) **is** implemented, over exactly the non-NONLIN type set
+(`load_unit.sv:447-453`). One half of the rule is in, the mirror half is missing.
+
+**Same caveat as R-21: do not fix this alone.** `CapstoneInstrInfo.td:2402` declares
+`STC ... (outs)` -- empty -- so LLVM believes `rs2` survives an `stc`. The exposure scan finds 140
+rule-B sites across the corpus. QEMU also omits this clear
+(`trans_capstone.c.inc:172-193` -> `op_helper.c:1192-1199` touch only the memory map), so **no
+in-tree model currently distinguishes conformant from non-conformant behaviour** and a fix should
+land in both or note the divergence.
+
