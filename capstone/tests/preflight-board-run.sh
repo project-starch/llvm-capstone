@@ -29,10 +29,27 @@ ok()  { say "ok" "$1"; }
 FW=${FPGA_FW:-}
 BITSTREAM=${FPGA_BITSTREAM:-}
 RUNGS=${BAKED_RUNGS:-}
+
 DOMS=${SQLITE_STAGE_DOMS:-}
 OVERLAY=${PREFLIGHT_OVERLAY:-capstone/caplifive-system/sw/buildroot/overlay/test-domains}
 ORACLES=${PREFLIGHT_ORACLES:-/tmp/capstone/ladder-fpga}
 CONTROLS=capstone/agent-handoff/ref/known-good-controls.md
+# A run names its rungs EITHER in BAKED_RUNGS or in the ladder-host form inside
+# SQLITE_STAGE_DOMS ("/test-domains/lpc|k800:/test-domains/k800.dom"). Only the first was read,
+# so for every boot that used the second, RUNGS was empty and the per-rung gates below --
+# control-has-a-record (C4), oracle present (C3), qemu-pass hash (C13), initramfs membership
+# (C14) -- were skipped in silence while preflight still printed GO. That is the failure mode
+# CLAUDE.md names outright: "a run parameterised by the wrong variable name, printing a pass
+# having checked nothing." Derive the names from both spellings.
+if [[ -z "$RUNGS" && "$DOMS" == *"|"* ]]; then
+  _derived=""
+  for _e in $(tr ',' ' ' <<<"$DOMS"); do
+    [[ "$_e" == *"|"* ]] || continue          # "path" / "path:selector" are not ladder rungs
+    _r=${_e#*|}; _r=${_r%%:*}                  # "host|RUNG:path" -> RUNG
+    [[ -n "$_r" && "$_r" != /* ]] && _derived+="$_r "
+  done
+  [[ -n "$_derived" ]] && RUNGS=$_derived
+fi
 
 echo "=== preflight-board-run ==="
 
@@ -324,9 +341,23 @@ PY
     fi
   done
 
+  # Count DISTINCT RUNG NAMES, not slots. Repeating one rung in a boot is a documented and
+  # valuable practice here -- results on this board have flipped between runs, so a probe is
+  # meant to be run more than once per boot -- and scoring repeats as "identical images" turns
+  # a deliberate determinism check into a BLOCK. What this gate is actually for is catching
+  # images that were supposed to DIFFER and came out byte-identical because the flags never
+  # reached the compile, so it must compare one hash per distinct name.
+  _names=$(printf "%s\n" $RUNGS | sort -u | grep -c .)
   u=$(printf "$shas" | sort -u | grep -c .); t=$(printf "$shas" | grep -c .)
-  [[ "$u" -eq "$t" ]] && ok "$t staged images, all distinct" \
-                      || bad "only $u distinct images among $t -- identical images cannot give different results"
+  if [[ "$u" -eq "$_names" ]]; then
+    if [[ "$t" -ne "$_names" ]]; then
+      ok "$_names distinct images over $t slots (repeats are intentional)"
+    else
+      ok "$t staged images, all distinct"
+    fi
+  else
+    bad "only $u distinct images among $_names distinct rungs -- images that should differ are byte-identical, so the flags did not reach the compile"
+  fi
 fi
 
 # C1 ----------------------------------------------------------------------------------------

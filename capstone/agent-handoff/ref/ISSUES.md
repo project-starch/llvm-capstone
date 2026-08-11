@@ -633,6 +633,35 @@ control `k800` = 4:
 | `s06agg` | unfixed | **66** (the defect; also the positive control that the probe still fires) |
 | `s06aggf` | with the flag | **64**, twice |
 
+**AUDITED, and the claim SURVIVED.** An adversarial audit attacked four gaps and could not break
+it. Two corroborations worth keeping because they are independent of the retval:
+
+* **`minstret` witnesses which path each domain took.** Counting retired instructions along the
+  claimed paths from the disassembly gives 71 (unfixed, y wrong) vs 74 (fixed, both ok), delta 3;
+  measured delta is exactly 3 (140 vs 143). Had the fixed arm reached 64 by any route where the
+  y-check did not run, the count could not land there.
+* **The replay hazard was real and was avoided.** The capture contains one boot but FOUR stale
+  RESULT lines replayed from a previous one, including a `s06agg retval=66` that is not from this
+  run. A whole-file grep would have read three 66s, two of them stale.
+
+**Reproducibility and slot order, settled by an INVERTED-ORDER boot** (control, fixed, unfixed,
+fixed): 64, 66, 64 -- the fixed build returns 64 whether it runs before or after the unfixed one,
+and the unfixed returns 66 even when it follows a fixed run. 4 observations of 64 across 2 boots.
+
+**What this evidence does NOT support** (do not let these ride downstream):
+
+* **The mechanism.** This pair cannot distinguish "`stc` does not write the high half" from "`ldc`
+  does not read it" -- both predict 66 -> 64. The store-side mechanism rests on the RTL simulation
+  (`untagged-ldc-stc-fixup.S` arm E), so cite that, not this rung.
+* **Any shape other than the one tested.** The hook declines `size % 16 != 0`, alignment < 16, and
+  more than 32 chunks. Unaligned and odd-sized aggregates are neither fixed nor tested.
+* **Anything above `-O0`.** The board build is `-O0`, where no MI scheduling runs. At `-O2` the
+  scheduler DOES reorder the sequence; the required per-chunk order survived there only by the
+  direction of the moves, not because a serial chain is unbreakable. The source comment that
+  claimed otherwise has been corrected. The rung cannot currently be built above `-O0` at all --
+  clang hits a pre-existing backend limit ("Cannot materialize arbitrary >64-bit constants as
+  capabilities"), which reproduces with the flag removed.
+
 Correction to an earlier note: `s06copy` is NOT part of this acceptance test. It writes its
 capability copy explicitly in C rather than as an aggregate assignment, so the compiler is right
 to leave it alone -- that shape is the library's job and stays at 16.

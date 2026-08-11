@@ -218,8 +218,16 @@ SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy(
     return SDValue();
 
   // Strictly serial chain. The `ldc`/`stc` for a chunk MUST be ordered after that chunk's two
-  // plain stores -- the whole construction depends on the capability store landing last -- and
-  // a serial chain is the cheapest way to say so that no later scheduling pass can undo.
+  // plain stores -- the whole construction depends on the capability store landing last.
+  //
+  // A serial chain expresses that intent, but DO NOT read it as a guarantee: at -O2 the machine
+  // scheduler demonstrably DOES reorder these, hoisting all the plain stores together and
+  // sinking the `stc`s to the end. The required per-chunk order survived there only because the
+  // moves happened to go in that direction. The board result was taken at -O0, where no MI
+  // scheduling runs, so it says nothing about higher optimisation levels. If this is ever
+  // enabled above -O0, the ordering must be enforced properly -- e.g. by making the capability
+  // store volatile too, or by emitting a pseudo that cannot be split -- and re-verified on the
+  // emitted code, not assumed.
   for (uint64_t Chunk = 0; Chunk != NumChunks; ++Chunk) {
     uint64_t Base = Chunk * 16;
 
