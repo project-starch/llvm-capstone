@@ -800,8 +800,34 @@ data. There is no data-dependent control flow, so the store pattern is the only 
 * both return -> the store pattern is exonerated at scale, and SQLite's wedge is a second fault
   that only becomes reachable once the data is correct
 
-NOT YET RUN. Until it is, **no claim about the cause of the arm-E wedge is supported**, including
-the one struck here and the one struck earlier in this section.
+**RUN 2026-08-12 on `caplifive_s06.bit`. RESULT: the store pattern is EXONERATED at scale.**
+
+| rung | per-chunk pattern | result |
+|---|---|---|
+| `s06sbase` | `ldc, stc` | **2048** (all chunks correct), 804k cycles |
+| `s06sfix` | `ld, ld, ldc, sd, sd, stc` | **2048**, ~1.01M cycles, **4 boots out of 4** |
+
+64 KB working set (the D-cache is 32 KB, so a single pass evicts everything it touched),
+capabilities interspersed one per 256 bytes, 2048 chunks, control `k800` = 4 in both boots. The two
+arms are a genuine matched pair: read from the emitted assembly, the fix loop is
+`ld; ld; ldc; sd; sd; stc` and the base loop is `ldc; stc`, differing in exactly the four plain
+accesses. Both QEMU-verified at 2048 before the boots.
+
+**So the fixup's store pattern does not wedge, and SQLite's wedge is NOT caused by it.** That is the
+first unconfounded result in this line, and it settles a question three previous experiments could
+not touch. Consequences:
+
+* The **`ld, ld, ldc, sd, sd, stc` sequence is safe at scale** — the shipped workaround's store
+  pattern is not the problem, and neither is the LCC-query design's.
+* The surviving explanation is the one this file already carried: **repairing the data lets SQLite
+  run deeper and meet a second, distinct fault.** Fixing S-06 in the compiler will therefore NOT
+  make SQLite pass; it will move the failure.
+* **The second fault is now the blocker, not S-06.** Lead worth pursuing first: the wedge is
+  `mcause 25 INVALID_CAPABILITY`, which comes from `get_node_query_validity` failing on the address
+  capability (`capstone_dyn_unit.anvil:337`, `:404`). Running deeper allocates more revocation
+  nodes, and the rev-node pool is a fixed-size BUMP allocator with no reclamation. Observed
+  `rev_node_head` at the wedges: 0x25e, 0x1a2, 0xf9 — growing, with the overflow bit CLEAR in each,
+  so simple pool exhaustion is not yet demonstrated and should be checked rather than assumed.
 
 **Two candidate causes tried and REFUTED:**
 
