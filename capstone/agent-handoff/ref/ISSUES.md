@@ -708,7 +708,62 @@ two different builds**, so it is stable and can be taken from a build that RETUR
 necessary, because `output_text` buffers into the shared region and the host flushes it only
 after the domain returns, so a FAULTING domain prints nothing.
 
-### Still blocked on silicon, and it is NOT this fix
+### The software workaround is NOT VIABLE on this silicon. S-06 needs the RTL fix.
+
+This is the conclusion of the whole codegen line of work, and it is a change of position: earlier
+notes said the fixup was "not yet usable" as if it were a bug to be found. It is not.
+
+**State of the fixup:** correct under QEMU (the full SQLite gate passes with library + compiler
+fixups on all objects), correct on the isolated rung on silicon (66 -> 64, four observations
+across two boots, both slot orders), and it WEDGES SQLite on silicon with
+`mcause 25 = INVALID_CAPABILITY`.
+
+**Matched pair, one boot, control `k800` = 4** -- two staged builds differing only by the ldc
+fixups, both running stage 168 (open + a SHORT create):
+
+| build | result |
+|---|---|
+| fixups OFF | RETURNS `rc=11`, twice |
+| fixups ON | **WEDGES** |
+
+So the fixup itself causes the wedge; this is not merely "SQLite runs deeper once the data is
+correct".
+
+**Two candidate causes tried and REFUTED:**
+
+* *Integer pointer arithmetic* -- real, found and fixed (`CIncOffset`), and it is what made the
+  QEMU gate pass. It was not the silicon wedge.
+* *Self-copy tag loss* -- the sequence wrote the destination before reading the source, so an
+  exact self-copy (`*d = *s` with `d == s`, which clang lowers to a memcpy) would clear the tag of
+  the line the `ldc` then reads. Reordered to read-everything-then-write-everything; **the wedge
+  persists**, so this was not it either.
+
+**LEADING HYPOTHESIS, NOT ESTABLISHED -- do not act on it as fact.** The fixup writes each
+16-byte line THREE times (plain, plain, capability), tripling store traffic and therefore cache
+pressure. The RTL keeps ONE shadow tag bit per line, updated on every write
+(`cap_tag_q[wr_idx_i][j] <= st_wr_cap`), and the cacheline-refill path gates that tag with
+`|wr_cl_user_i[7:0]` while the single-word path gates it with `cap_tag_hit` -- two different
+conditions that were flagged as NOT VERIFIED CONSISTENT when the mechanism was first read out of
+the sources. If a line whose tag was set by an `stc` loses it across an eviction and refill, a
+later `ldc` sees untagged data and the revocation-validity query fails, which is exactly
+`INVALID_CAPABILITY`.
+
+That shape fits every observation: it passes in RTL SIMULATION (arm E, no eviction pressure), it
+passes on a 10 KB rung (one line, hot), and it fails only at SQLite scale. It is a hypothesis
+because nothing has yet measured a tag surviving an eviction.
+
+**Consequence.** There is no software workaround for S-06 that is safe on this silicon:
+
+* dropping the capability path strips tags and wedges;
+* the compiler cannot ask whether a chunk is a capability (`LCC` faults on `NOT_CAP`);
+* and writing a line as plain data first and restoring the tag with `stc` -- the only construction
+  that is correct on paper and in simulation -- destabilises the workload.
+
+**S-06 therefore needs the RTL fix**, and the handover package
+(`capstone/tests/fpga-repros/S06-untagged-ldc-stc-high-half/`) is the deliverable. Both fixups
+stay DEFAULT OFF: they turn a diagnosable error return into a wedge.
+
+### Earlier note (superseded by the above): still blocked on silicon, and it is NOT this fix
 
 With the fixup on, SQLite passes the entire QEMU gate but **wedges on silicon** with
 `mcause 25 = INVALID_CAPABILITY`, `rev_node_head = 0xf9`, `overflow = 0` (pool healthy) -- the

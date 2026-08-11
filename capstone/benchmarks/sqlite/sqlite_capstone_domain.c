@@ -993,6 +993,47 @@ static int run_sqlite_staged(int stage) {
     for (i = 0; i < 32; i++) if (dst[i] != (unsigned char)(0xC0u + i)) bad++;
     return (int)(0x40u | (bad & 0x3Fu));        /* 0x40 = all 32 bytes survived */
   }
+  if (stage >= 172 && stage <= 174) {
+    /* S-05 successor: with the data corruption repaired, silicon wedges INSIDE CREATE TABLE with
+       mcause 25 INVALID_CAPABILITY while QEMU passes the whole workload. `commit pc` on the board
+       is the 0x2 junk sentinel, so the pc cannot be mapped the way it was under QEMU -- this
+       bisects by WHAT IS EXECUTED instead, and every stage RETURNS a code.
+       Stage 168 already covers open + a SHORT create, which previously succeeded on silicon.
+         172  open + the WORKLOAD's own (longer) CREATE
+         173  172 + the workload's INSERT
+         174  173 + the workload's SELECT, stepped to completion
+       Return: 0xA0 | (rc & 0xF) at the first failing step, or 0xB0 when the stage completes, so a
+       clean run is distinguishable from rc=0 at a step that never ran. */
+    sqlite3 *db = 0;
+    int crc;
+    rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+    if (rc != SQLITE_OK) return (int)(0xE0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_initialize();
+    if (rc != SQLITE_OK) return (int)(0xD0u | (unsigned)(rc & 0xF));
+    rc = sqlite3_open(":memory:", &db);
+    if (rc != SQLITE_OK || db == 0) return (int)(0xC0u | (unsigned)(rc & 0xF));
+
+    crc = sqlite3_exec(db,
+        "CREATE TABLE items(name TEXT NOT NULL, value INTEGER NOT NULL);", 0, 0, 0);
+    if (crc != SQLITE_OK) return (int)(0xA0u | (unsigned)(crc & 0xFu));
+    if (stage == 172) return (int)0xB0u;
+
+    crc = sqlite3_exec(db,
+        "INSERT INTO items VALUES('alpha',11),('beta',22),('gamma',33);", 0, 0, 0);
+    if (crc != SQLITE_OK) return (int)(0xA0u | (unsigned)(crc & 0xFu));
+    if (stage == 173) return (int)0xB1u;
+
+    {
+      sqlite3_stmt *st = 0;
+      unsigned rows = 0;
+      crc = sqlite3_prepare_v2(db, "SELECT name,value FROM items;", -1, &st, 0);
+      if (crc != SQLITE_OK) return (int)(0xA0u | (unsigned)(crc & 0xFu));
+      while (sqlite3_step(st) == SQLITE_ROW)
+        rows++;
+      sqlite3_finalize(st);
+      return (int)(0xB2u | ((rows & 3u) << 2));   /* 0xBA = the expected 3 rows */
+    }
+  }
   if (stage == 170 || stage == 171) {
     /* Does the chunk copy preserve a CAPABILITY, not just plain data?
        Every S-06 probe so far (164/167/169) copies only plain bytes, so none of them can see

@@ -259,32 +259,44 @@ SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy(
   for (uint64_t Chunk = 0; Chunk != NumChunks; ++Chunk) {
     uint64_t Base = Chunk * 16;
 
-    // The two plain stores MUST be marked volatile. Without it they are DEAD by the compiler's
-    // own model -- it believes the `stc` below writes all 16 bytes of the same chunk, so DSE
-    // deletes them and silently regenerates the very sequence this is working around. Measured:
-    // for a copy into a stack slot the pre-writes vanished entirely and the output was
-    // byte-identical to the unfixed build. On this silicon the `stc` does NOT write the high
-    // half of an untagged chunk, which is exactly the fact the optimiser cannot know.
-    for (unsigned Half = 0; Half != 2; ++Half) {
-      uint64_t Off = Base + Half * 8;
-      SDValue Ld = DAG.getLoad(
-          MVT::i64, dl, Chain,
-          capOffset(Src, Off),
-          SrcPtrInfo.getWithOffset(Off), Align(8));
-      Chain = DAG.getStore(
-          Ld.getValue(1), dl, Ld,
-          capOffset(Dst, Off),
-          DstPtrInfo.getWithOffset(Off), Align(8), MachineMemOperand::MOVolatile);
-    }
+    // ORDER: read EVERYTHING from the source before writing ANYTHING to the destination.
+  //
+  // This is not a scheduling preference, it is correctness. A plain store CLEARS the target
+  // line's capability tag. If the destination and source are the same 16 bytes -- an exact
+  // self-copy, which `*d = *s` with `d == s` is, and which clang lowers to a memcpy -- then
+  // pre-storing the halves first clears the tag of the line the `ldc` is about to read. The
+  // `ldc` then sees untagged data, so the `stc` writes it back untagged and a LIVE CAPABILITY
+  // IS DESTROYED. Measured: with the stores first, a domain that returned an error instead
+  // wedged on silicon with mcause 25 INVALID_CAPABILITY, matched pair in one boot.
+  //
+  // Reading first also makes the sequence safe for any overlap inside a chunk, which the
+  // original single ldc/stc had for free and a split sequence does not.
+  //
+  // The two plain stores MUST still be marked volatile: without it they are dead by the
+  // compiler's own model -- it believes the `stc` writes all 16 bytes -- so DSE deletes them
+  // and silently regenerates the unfixed sequence. Measured: for a copy into a stack slot the
+  // pre-writes vanished entirely and the output was byte-identical to the unfixed build.
+    // --- read the whole chunk first ---
+    SDValue Lo = DAG.getLoad(MVT::i64, dl, Chain, capOffset(Src, Base),
+                             SrcPtrInfo.getWithOffset(Base), Align(8));
+    Chain = Lo.getValue(1);
+    SDValue Hi = DAG.getLoad(MVT::i64, dl, Chain, capOffset(Src, Base + 8),
+                             SrcPtrInfo.getWithOffset(Base + 8), Align(8));
+    Chain = Hi.getValue(1);
+    SDValue Cap = DAG.getLoad(MVT::i128, dl, Chain, capOffset(Src, Base),
+                              SrcPtrInfo.getWithOffset(Base), Align(16));
+    Chain = Cap.getValue(1);
 
-    SDValue LdCap = DAG.getLoad(
-        MVT::i128, dl, Chain,
-        capOffset(Src, Base),
-        SrcPtrInfo.getWithOffset(Base), Align(16));
-    Chain = DAG.getStore(
-        LdCap.getValue(1), dl, LdCap,
-        capOffset(Dst, Base),
-        DstPtrInfo.getWithOffset(Base), Align(16));
+    // --- then write it ---
+    Chain = DAG.getStore(Chain, dl, Lo, capOffset(Dst, Base),
+                         DstPtrInfo.getWithOffset(Base), Align(8),
+                         MachineMemOperand::MOVolatile);
+    Chain = DAG.getStore(Chain, dl, Hi, capOffset(Dst, Base + 8),
+                         DstPtrInfo.getWithOffset(Base + 8), Align(8),
+                         MachineMemOperand::MOVolatile);
+    // Last, so a real capability's tag is restored over the plain stores.
+    Chain = DAG.getStore(Chain, dl, Cap, capOffset(Dst, Base),
+                         DstPtrInfo.getWithOffset(Base), Align(16));
   }
 
   return Chain;
