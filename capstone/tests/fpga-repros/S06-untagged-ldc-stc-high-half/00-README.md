@@ -119,9 +119,10 @@ reason that has nothing to do with tags — and the `stc` degrades to a single-b
 held.
 
 Measured in RTL simulation, 585 cycles, no exceptions, with a plain `sd`/`ld` control passing in
-the same run (`capstone-ariane verif/tests/custom/capstone/s06-mechanism-probe.S`, arm C). The
-destination's high half is poisoned with a recognisable value first, so "stale" cannot be confused
-with "correctly zero":
+the same run. **The test and its trace are in this folder** — `sim/s06-mechanism-probe.S` (arm C)
+and `sim/rvfi-trace-zero-high-half.log`, which carries the cycle count and the four load results
+so the table below can be checked rather than taken on trust. The destination's high half is
+poisoned with a recognisable value first, so "stale" cannot be confused with "correctly zero":
 
 | | source | destination before | destination after |
 |---|---|---|---|

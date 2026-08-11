@@ -764,19 +764,29 @@ correct".
   the line the `ldc` then reads. Reordered to read-everything-then-write-everything; **the wedge
   persists**, so this was not it either.
 
-**LEADING HYPOTHESIS, NOT ESTABLISHED -- do not act on it as fact.** The fixup writes each
-16-byte line THREE times (plain, plain, capability), tripling store traffic and therefore cache
-pressure. The RTL keeps ONE shadow tag bit per line, updated on every write
-(`cap_tag_q[wr_idx_i][j] <= st_wr_cap`), and the cacheline-refill path gates that tag with
-`|wr_cl_user_i[7:0]` while the single-word path gates it with `cap_tag_hit` -- two different
-conditions that were flagged as NOT VERIFIED CONSISTENT when the mechanism was first read out of
-the sources. If a line whose tag was set by an `stc` loses it across an eviction and refill, a
-later `ldc` sees untagged data and the revocation-validity query fails, which is exactly
-`INVALID_CAPABILITY`.
+**~~LEADING HYPOTHESIS~~ — REFUTED 2026-08-11. Struck, and recorded so it is not re-proposed.**
+The hypothesis was that the fixup's tripled store traffic causes a line whose tag was set by an
+`stc` to lose it across an eviction and refill, because the refill path gates on
+`|wr_cl_user_i[7:0]` while the single-word path gates on `cap_tag_hit` — "two different
+conditions". **They are not two different conditions.** On the refill path those eight bits are
+not capability metadata at all: `wt_axi_adapter.sv:441-442` zeroes the word and writes a single
+byte of `tag_wr_value_q = is_cap_req = |dcache_data.user` (`:196`, `:402`), and `:731-734` reads
+exactly that byte back, so the value is `0x00`/`0x01`. The AXI USER sideband carries nothing
+(`:204`, `axi_wr_user[0] = '0`). The two gates are the **same predicate over different
+encodings**, and the cache is write-through with no dirty writeback, so a tag written by an `stc`
+reaches the shadow-tag region directly.
 
-That shape fits every observation: it passes in RTL SIMULATION (arm E, no eviction pressure), it
-passes on a 10 KB rung (one line, hot), and it fails only at SQLite scale. It is a hypothesis
-because nothing has yet measured a tag surviving an eviction.
+**The arm-E wedge is therefore UNEXPLAINED, not hypothesised.** It still fits the observation
+shape — passes in RTL simulation, passes on a hot 10 KB rung, fails only at SQLite scale — but no
+mechanism is currently proposed.
+
+**The experiment that would localise it, and it is one extra `.dom` in a batch:** build a variant
+doing `ld, ld, ldc, sd, sd` — arm E's **source** traffic with arm E's **destination** traffic but
+**no `stc` at all** — and stage it in one boot beside unmodified arm E and the fixup-off control,
+all running the same `CREATE TABLE`. If it wedges, the cause is source-side; if it returns, it is
+destination-side. That is a matched pair differing in one thing, and it answers the question
+without knowing the mechanism. It matters beyond arm E: any future fix whose source-side sequence
+is `ld, ld, ldc` inherits the wedge if the cause is source-side.
 
 **Consequence.** There is no software workaround for S-06 that is safe on this silicon:
 

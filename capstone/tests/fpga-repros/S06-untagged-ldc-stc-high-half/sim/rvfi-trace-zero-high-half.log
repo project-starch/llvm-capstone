@@ -1,0 +1,13 @@
+/workdir/verif/sim/out_2026-08-11/directed_tests/s06-mechanism-probe.o *** SUCCESS *** (tohost = 0) after 585 cycles
+[Cycle        546] Reg[24]: Cursor: 0000000080001000 | Metadata-> Revnode_id :          2 | Type : 1| Perm : 7 | Start : 0000000080001000 | End : 0000000080001200 | async = 0 | reg =  0 
+[Cycle        558] Reg[24]: Cursor: 0000000080001000 | Metadata-> Revnode_id :          2 | Type : 2| Perm : 7 | Start : 0000000080001000 | End : 0000000080001200 | async = 0 | reg =  0 
+[Cycle        561] Reg[25]: Cursor: 0000000080001040 | Metadata-> Revnode_id :          2 | Type : 2| Perm : 7 | Start : 0000000080001000 | End : 0000000080001200 | async = 0 | reg =  0 
+*** [rvfi_tracer] INFO: Simulation terminated after        573 cycles!
+
+# --- the four load results (x18/x19 arm A control, x20/x21 arm B, x22/x23 arm C) ---
+3 0x0000000080000070 (0x0005b903) x18 0x0123456789abcdef mem 0x0000000080001000
+3 0x0000000080000074 (0x0085b983) x19 0xfedcba9876543210 mem 0x0000000080001008
+3 0x0000000080000088 (0x0605ba03) x20 0x0123456789abcdef mem 0x0000000080001060
+3 0x000000008000008c (0x0685ba83) x21 0x0000000000000000 mem 0x0000000080001068
+3 0x00000000800000c8 (0x0a05bb03) x22 0x0123456789abcdef mem 0x00000000800010a0
+3 0x00000000800000cc (0x0a85bb83) x23 0xdeadbeefcafef00d mem 0x00000000800010a8

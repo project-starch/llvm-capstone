@@ -269,6 +269,15 @@ SDValue CapstoneSelectionDAGInfo::EmitTargetCodeForMemcpy(
   // IS DESTROYED. Measured: with the stores first, a domain that returned an error instead
   // wedged on silicon with mcause 25 INVALID_CAPABILITY, matched pair in one boot.
   //
+  // DO NOT READ THE ABOVE AS "AND THAT FIXED THE WEDGE". It did not. This ordering is
+  // necessary for self-copy correctness, and it is not sufficient: with the reads first, the
+  // workaround STILL wedges SQLite with the same mcause 25. That failure is UNEXPLAINED --
+  // its only hypothesis (a tag/eviction divergence between the D-cache's two `ruser` gates)
+  // was refuted on 2026-08-11, because the refill gate's eight bits are a shadow-tag byte and
+  // not capability metadata, so the two gates are the same predicate over different
+  // encodings. See agent-handoff/ref/ISSUES.md under S-06. The workaround is therefore NOT
+  // enabled anywhere, and this flag defaults off.
+  //
   // Reading first also makes the sequence safe for any overlap inside a chunk, which the
   // original single ldc/stc had for free and a split sequence does not.
   //
