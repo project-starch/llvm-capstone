@@ -822,9 +822,81 @@ not touch. Consequences:
 * The surviving explanation is the one this file already carried: **repairing the data lets SQLite
   run deeper and meet a second, distinct fault.** Fixing S-06 in the compiler will therefore NOT
   make SQLite pass; it will move the failure.
-* **The second fault is now the blocker, not S-06.** Lead worth pursuing first: the wedge is
+* **The second fault is now the blocker, not S-06.** ~~Lead worth pursuing first: the wedge is
   `mcause 25 INVALID_CAPABILITY`, which comes from `get_node_query_validity` failing on the address
-  capability (`capstone_dyn_unit.anvil:337`, `:404`).
+  capability (`capstone_dyn_unit.anvil:337`, `:404`).~~ **RETRACTED — see the entry immediately
+  below. `mcause 25` is not `INVALID_CAPABILITY`, and that lead is excluded by the number itself.**
+
+**RETRACTION 2026-08-12: `mcause 25` HAS BEEN MISNAMED THROUGHOUT THIS FILE. It is
+`UNEXPECTED_OPERAND`, not `INVALID_CAPABILITY`.** The observed *value* is sound — the monitor's
+`handle_exception` `default:` arm does `csrr a5, mcause; csrr a6, mepc; 1: j 1b`
+(`sbi_capstone.c:748-752`), so the trap was delivered normally and 25 was read out of `a5`. Only the
+*name* attached to it is wrong, and it sent three consecutive investigations after the wrong
+subsystem.
+
+The encoders, three independent sources that agree:
+
+* `ex_stage.sv:469` (FLU) and `cva6.sv:1360` (DYN) both compute
+  `cause = 64'd24 + exception_code`, with `7/8/9` special-cased to `LD_ADDR_MISALIGNED`,
+  `ST_ADDR_MISALIGNED`, `ILLEGAL_INSTR`.
+* The `ex_code` enum (`capstone_unit.anvilh:290-300`) is
+  `NO_EXCEPTION, UNEXPECTED_OPERAND, INVALID_CAPABILITY, UNEXPECTED_CAP_TYPE,
+  INSUFFICIENT_PERMISSION, OUT_OF_BOUNDS, ILLEGAL_OPERAND_VALUE, LOAD_ADDRESS_MISALIGNED,
+  STORE_ADDRESS_MISALIGNED, ILLEGAL_INSTRUCTION` — ordinals 0..9. Positions 7, 8, 9 are exactly the
+  three the encoders special-case, which pins the ordinals independently of any comment.
+* `riscv_pkg.sv:349-353`: `DEBUG_REQUEST = 24`, `UNEXPECTED_OPERAND_TYPE = 25`,
+  `INVALID_CAPABLITY = 26`, `UNEXPECTED_CAPABLITY_TYPE = 27`.
+
+So `UNEXPECTED_OPERAND` (code 1) → **25**, and `INVALID_CAPABILITY` (code 2) → **26**.
+
+**Where the error came from:** the inline comments in the enum itself read
+`UNEXPECTED_OPERAND, // 24` and `INVALID_CAPABILITY, // 25`. They are off by one, and this file
+cited them (`capstone_unit.anvilh:289-296`) as the authority. A comment was trusted over the
+encoder.
+
+**What this immediately excludes.** `capstone_dyn_unit.anvil:337` (LDC) and `:404` (STC) — the
+revocation-validity check on the address capability — raise `INVALID_CAPABILITY`, which encodes to
+**26**. They cannot produce the observed 25. The named lead is dead *arithmetically*, before any
+experiment. This also explains why three rev-node hypotheses in a row failed: they were all
+`INVALID_CAPABILITY` theories chasing an `UNEXPECTED_OPERAND` fault.
+
+**What is now in scope.** `UNEXPECTED_OPERAND` is raised at 11 sites in the DYN unit and 11 in the
+FLU unit, and the guard is almost always the same shape: an operand's `cap_type` is `NOT_CAP` where
+a capability was required, or is a capability where a plain integer was required. The two that
+matter for a memcpy-heavy workload:
+
+| site | condition |
+|---|---|
+| `capstone_dyn_unit.anvil:306` `LDC` | `rs1.metadata.cap_type == NOT_CAP` — **the base register is not a capability** |
+| `capstone_dyn_unit.anvil:370` `STC` | `rs1.metadata.cap_type == NOT_CAP` — same, for the store |
+
+i.e. the failure is "the address operand stopped being a capability", not "its revocation node says
+invalid". Those are different subsystems with different fixes.
+
+**One ambiguity remains, and it must be settled before the name is trusted again.**
+`commit_stage.sv:205-228` — the PC-capability check — uses a **different base, 23**, and its own
+comments say so (`64'd25; // INVALID_CAPABILITY (23 + 2)`). So that block emits 25 for
+`INVALID_CAPABILITY` on the *fetch* capability, colliding with the execute path's 25. That block is
+inconsistent with `riscv_pkg.sv` and with both other encoders and looks like an off-by-one bug in
+its own right. Until it is resolved, an observed 25 has two readings:
+
+* **(A)** `UNEXPECTED_OPERAND` from FLU or DYN — an operand is the wrong shape. Base 24.
+* **(B)** `INVALID_CAPABILITY` on the PC capability from `commit_stage.sv` — `pc_revnode_valid_d`
+  is false. Base 23.
+
+**The discriminator is `mepc`, which the monitor already captures in `a6` at the wedge.** Under (A)
+`mepc` points at a capstone instruction with an operand that can be inspected; under (B) it points
+at whatever was committing, and the fault is not tied to any operand. Reading `a6` at the next wedge
+settles it with no new experiment. That is the next step, and it costs one boot that was going to
+happen anyway.
+
+**Not yet established, and NOT to be written up as a mechanism until measured:** a plausible chain
+for (A) is that the fixup's plain-store-then-`stc` leaves a destination granule untagged while stale
+metadata survives in bank 1 (the same single-bank behaviour S-06 is made of, and the same effect
+just measured in `linear-clear-audit`), so a later `ldc` of that granule yields `NOT_CAP` and using
+it as a base raises `UNEXPECTED_OPERAND`. This is a hypothesis with a mechanism, not a finding.
+Against it: `s06sfix` copied 2048 capability-bearing chunks at 64 KB scale without wedging — though
+it never DEREFERENCED a copied capability, so it does not test this.
 
 **POOL EXHAUSTION IS REFUTED**, cheaply: `REVNODE_HEAD_BITS = 16` (`capstone_unit.anvilh:498-515`),
 so the pool holds 65536 nodes with 65535 reserved as the "full" sentinel. The `rev_node_head`
@@ -853,8 +925,15 @@ own investigation — a corrupted depth would affect revocation-tree walks — b
 mcause-25 mechanism.
 
 **ELIMINATED so far for the second fault:** pool exhaustion (pool is 65536, observed heads ~250-600);
-the fixup's store pattern (`s06sfix` returns 2048 at 64 KB scale); and rev-node tag loss zeroing
-`valid` (this entry). The fault remains UNEXPLAINED.
+the fixup's store pattern (`s06sfix` returns 2048 at 64 KB scale); rev-node tag loss zeroing `valid`
+(this entry); and — added 2026-08-12 — **the entire revocation-validity family, excluded
+arithmetically**: those sites raise `INVALID_CAPABILITY`, which encodes to `mcause 26`, while the
+wedge shows 25. The fault remains UNEXPLAINED, but the search has moved from "the revocation node
+says invalid" to "the operand is the wrong shape". See the retraction entry above.
+
+Worth noting for anyone reading the eliminations as a run of bad luck: the first three all targeted
+`INVALID_CAPABILITY`, so a single naming error accounts for all of them at once. The measurements
+themselves were sound and their exclusions still hold.
 
 ~~Original lead text, kept for the region facts it establishes:~~ `capstone_rev_node.anvil:36-42` (`get_rev_node`) issues `mem_ch.read_req` and
 returns `data.valid`; `ex_stage.sv:1030` reconstructs the node from
@@ -3934,6 +4013,39 @@ i.e. the clear is *incomplete*. That is consistent with S-06's mechanism -- the 
 `user = '0` (`store_unit.sv:414`), so `st_wr_cap = |wr_user_i` is 0 and only the bank matching the
 offset is written. Whether the granule's tag also goes clear (which would make the residue
 harmless) was **not measured** and must be before anyone concludes either way.
+
+### R-24 — two exception encoders disagree by one, so a single `mcause` value has two names `OPEN — NOT yet reported; needs a decision before it is fixed`
+
+Capability exceptions reach `mcause` through two different encoders using two different bases:
+
+| encoder | base | covers |
+|---|---|---|
+| `ex_stage.sv:469` (FLU), `cva6.sv:1360` (DYN) | **24** | every capability op's exception |
+| `commit_stage.sv:205-228` (PC-capability check) | **23** | the fetch capability only |
+
+`riscv_pkg.sv:349-353` agrees with base 24 (`UNEXPECTED_OPERAND_TYPE = 25`, `INVALID_CAPABLITY = 26`,
+`UNEXPECTED_CAPABLITY_TYPE = 27`), so `commit_stage.sv` is the one out of step, and its own comments
+state the base explicitly (`64'd25; // INVALID_CAPABILITY (23 + 2)`), so this is not a
+misreading — it is written that way.
+
+**Consequence:** every capability `mcause` in the overlap is ambiguous. 25 is `UNEXPECTED_OPERAND`
+from the execute path and `INVALID_CAPABILITY` from the fetch path; 26 is `INVALID_CAPABILITY` from
+one and `UNEXPECTED_CAP_TYPE` from the other; and so on through 28.
+
+**This is not theoretical — it has already cost.** The SQLite blocker's `mcause 25` was named
+`INVALID_CAPABILITY` and three investigations were spent on the revocation subsystem before the
+arithmetic was checked. See the retraction entry under S-06.
+
+**NOT fixed here, deliberately.** Changing either base changes the `mcause` values software
+actually receives, so it needs a decision rather than a patch: the monitor, any handler, and the
+directed tests that check `mcause` (e.g. `cincoffset-stale-metadata.S`, which expects 25 for
+`UNEXPECTED_OPERAND` and would be correct under base 24) all have to move together. The
+off-by-one *comments* in the `ex_code` enum that caused the misnaming ARE fixed
+(`capstone_unit.anvilh`, comment-only).
+
+Verified against `capstone-spec`: **NOT YET.** The spec's exception numbering has not been checked
+against either encoder, so which base is *correct* — as opposed to which is in the majority — is
+still open. Do that before proposing a fix.
 
 ### UNRESOLVED — two open questions from the same audit, recorded as questions and NOT as findings
 
