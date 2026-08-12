@@ -913,8 +913,49 @@ test:
 
      There is no `mret` here on purpose. mret would need mstatus.mpp = M, which only a real
      trap sets; the monitor's dom_seal[3] has MPP=0, so a synthetic mret would drop the domain
-     to U-mode. domreturn is the exit this glue already uses and it needs no mode change. */
+     to U-mode. domreturn is the exit this glue already uses and it needs no mode change.
+
+     IT NOW ALSO SAYS WHY, because "returns" alone is not a result. Measured 2026-08-12: with
+     this handler installed, a SQLite domain RETURNED in 6 s having written neither its result
+     word nor a single byte of the payload region -- so it faulted somewhere, and nothing on
+     the board could say where. The handler had converted every fault into an indistinguishable
+     silent return, which is a strictly worse instrument than the wedge it replaced: a wedge at
+     least pinned the core for a debugger. mcause and mepc were sitting in CSRs and simply were
+     not reported.
+
+     `res` is only 32 bits wide -- the monitor passes `&res` of a local `unsigned`
+     (sbi_capstone.c call_domain) -- so the two values are packed into one word:
+
+         bits 31..28  0xF          marker: this run TRAPPED, the value is not a result
+         bits 27..22  mcause & 0x3F
+         bits 21..0   (mepc - _start) >> 2, the faulting instruction as an image offset
+
+     A word that does not begin with 0xF is an ordinary result and this path never ran. The
+     offset is relative to `_start` rather than absolute because the loader places the image at
+     a base that moves with the initramfs, and an absolute mepc has twice been mis-mapped by
+     hand; `_start` is in the image, so the subtraction happens where the base is known.
+
+     THIS TRADES SOME FAULT-PROOFING FOR INFORMATION, deliberately. The two-instruction version
+     touched no memory and so could not fault again; this one reads the frame and writes through
+     the region capability. If the fault was itself caused by a bad sp or a bad region cap, the
+     handler re-faults and the core wedges -- which is exactly what happened before this gate
+     existed, so the downside is bounded by the status quo. Everything up to the store is
+     register-only, so a nested fault can only come from the final two instructions. */
   ccsrrw(sp, cscratch, x0)
+  csrr  t0, mcause
+  csrr  t1, mepc
+  lla   t2, _start
+  sub   t1, t1, t2
+  srli  t1, t1, 2
+  li    t3, 0x3FFFFF
+  and   t1, t1, t3
+  andi  t0, t0, 0x3F
+  slli  t0, t0, 22
+  or    t0, t0, t1
+  li    t3, 0xF0000000
+  or    t0, t0, t3
+  ldc(a0, sp, 80)                    /* the shared region cap saved at entry */
+  sw    t0, 0(a0)
   j .Ldomain_returned
 #endif
 
