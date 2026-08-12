@@ -83,6 +83,73 @@ static void output_uint(unsigned value) {
   }
 }
 
+#ifdef CAPSTONE_OOB_PROBE
+/* NON-PERTURBING reporter for the vdbeMemClearExternAndSetNull OUT_OF_BOUNDS fault (mcause 29
+ * on `ldc a1, 0x0(a0)`, where a0 is the incoming Mem *p).
+ *
+ * WHY THIS SHAPE. The first probe DETECTED the bad capability and RETURNED early, skipping the
+ * aggregate finalize. That changed control flow, the run diverged from a real one, and the
+ * domain then faulted at a DIFFERENT Mem dereference one function further on -- so the numbers
+ * never came out and the second fault was not attributable to anything. This version changes no
+ * control flow whatsoever: it records, and then lets the original code fault exactly as it
+ * would have.
+ *
+ * That only yields anything because the entry glue can now install an in-domain trap vector
+ * (INTERP_DOMAIN_MTVEC), which turns the fault into an ordinary domreturn. The host then prints
+ * the payload region, as it always does on return. Both halves are required: without the trap
+ * handler the core wedges and the payload is unreadable, which is why the trapctl rung must
+ * pass IN THE SAME BOOT before any of this is believed.
+ *
+ * TWO RECORDS, not one. `last_*` is overwritten on every call, so after a fault elsewhere it
+ * describes an innocent call. `bad_*` is STICKY -- set once, on the first p that fails the
+ * hardware's own bounds predicate -- so an early bad pointer cannot be scrolled away by the
+ * hundreds of healthy calls that follow. Reading only one of the two has an obvious failure
+ * mode in each direction.
+ *
+ * The type query goes FIRST and guards the rest: selectors 2/3/4 RAISE on a non-capability
+ * (capstone_dyn_unit.anvil, func LCC -- only selector 1 was made total), so querying bounds
+ * unconditionally would make the probe itself fault on exactly the input that matters most. */
+unsigned long capstone_oob_calls;
+unsigned long capstone_oob_bad_seen;
+unsigned long capstone_oob_last_ty, capstone_oob_last_cur;
+unsigned long capstone_oob_last_st, capstone_oob_last_en;
+unsigned long capstone_oob_bad_ty, capstone_oob_bad_cur;
+unsigned long capstone_oob_bad_st, capstone_oob_bad_en;
+unsigned long capstone_oob_bad_n;
+
+static void output_hex64(unsigned long v) {
+  static const char hexd[] = "0123456789abcdef";
+  char buf[2];
+  int i;
+  buf[1] = '\0';
+  for (i = 60; i >= 0; i -= 4) {
+    buf[0] = hexd[(v >> i) & 0xfUL];
+    output_text(buf);
+  }
+}
+
+/* Called from the patched vdbeMemClearExternAndSetNull (build-sqlite-silicon.sh injects the
+   call site). Rewrites the payload from offset 0 every time rather than appending: this runs
+   on every Mem release and appending would overflow the 4 KiB region long before the fault. */
+void capstone_oob_report(void) {
+  if (!hostcall_metadata || !hostcall_payload)
+    return;
+  hostcall_metadata->length = 0;
+  output_text("OOBP calls=");   output_hex64(capstone_oob_calls);
+  output_text(" badseen=");     output_hex64(capstone_oob_bad_seen);
+  output_text("\n LAST ty=");   output_hex64(capstone_oob_last_ty);
+  output_text(" cur=");         output_hex64(capstone_oob_last_cur);
+  output_text(" st=");          output_hex64(capstone_oob_last_st);
+  output_text(" en=");          output_hex64(capstone_oob_last_en);
+  output_text("\n BAD  n=");    output_hex64(capstone_oob_bad_n);
+  output_text(" ty=");          output_hex64(capstone_oob_bad_ty);
+  output_text(" cur=");         output_hex64(capstone_oob_bad_cur);
+  output_text(" st=");          output_hex64(capstone_oob_bad_st);
+  output_text(" en=");          output_hex64(capstone_oob_bad_en);
+  output_text("\n");
+}
+#endif /* CAPSTONE_OOB_PROBE */
+
 #ifdef CAPSTONE_REDRAW_PAD
 /* REDRAW control for S-01 ("a ~1.6 MB domain returns, but ANY perturbation of its image makes
  * it hang"). A dead, never-called function that changes the IMAGE and nothing else -- the same

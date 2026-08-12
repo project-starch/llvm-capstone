@@ -688,51 +688,84 @@ SILICON_TRIM=(
 #   B  the address is WRONG -- p is wild, the flags read junk that happened to have bit 15 set,
 #      and the ldc is simply the first bounds-checked use.
 #
-# The probe reads p's cursor/start/end with LCC selectors 2/3/4 BEFORE the faulting load, and if
-# the capability would fault it records a compact verdict and RETURNS instead. That turns a wedge
-# -- which yields one bit per boot -- into a value the host prints, which is the project's standing
-# preference for any diagnostic.
+# The probe reads p's type with LCC selector 1 and, when p really is a capability, its
+# cursor/start/end with selectors 2/3/4, records them, and then FALLS THROUGH so the original
+# code faults exactly as it would have.
 #
-# DEFAULT OFF. It changes control flow (skips an aggregate finalize), so it is a DIAGNOSTIC build
-# only and must never be used for a timing or correctness number.
+# IT CHANGES NO CONTROL FLOW, and that is the whole design. Version 1 detected the bad capability
+# and RETURNED early, skipping the aggregate finalize; the run diverged from a real one, the
+# domain faulted at a DIFFERENT Mem dereference one function further on, the numbers never came
+# out, and the second fault was attributable to nothing. A diagnostic that perturbs the thing it
+# measures answers a question nobody asked.
+#
+# Reporting only works because the entry glue can install an in-domain trap vector
+# (INTERP_DOMAIN_MTVEC), which converts the fault into an ordinary domreturn; sqlite_host.c then
+# writes the payload region to stdout as it does on any return. BOTH halves are required, so a
+# build using this MUST be run in a boot where the trapctl rung passes -- otherwise "no output"
+# means either "the trap handler does not work" or "SQLite wedged elsewhere", and those are not
+# the same finding. See tests/runtime-qemu/silicon-ladder/trapctl_kernel.h.
+#
+# The type query goes FIRST and guards the other three. Only selector 1 was made total by the
+# S-06 enabler; selectors 2/3/4 still RAISE on a non-capability, so querying bounds
+# unconditionally would make the probe fault on precisely the input that matters most.
+#
+# DEFAULT OFF: it is a DIAGNOSTIC build and must never carry a timing or correctness number.
 if [[ "${CAPSTONE_OOB_PROBE:-0}" == "1" ]]; then
   python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYOOB'
-import sys, re
+import sys
 p = sys.argv[1]
 s = open(p).read()
 FN = "static SQLITE_NOINLINE void vdbeMemClearExternAndSetNull(Mem *p){"
 if FN not in s:
     sys.exit("OOB_PROBE: vdbeMemClearExternAndSetNull not found -- patch shape changed")
 probe = FN + """
-  /* CAPSTONE OOB PROBE -- see build-sqlite-silicon.sh. Diagnostic only. */
+  /* CAPSTONE OOB PROBE (non-perturbing) -- see build-sqlite-silicon.sh. Diagnostic only.
+     Records and falls through; the fault below is left to happen exactly as it would. */
   {
-    unsigned long cs_cur_, cs_st_, cs_en_;
-    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x2" : "=r"(cs_cur_) : "r"(p));
-    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x3" : "=r"(cs_st_)  : "r"(p));
-    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x4" : "=r"(cs_en_)  : "r"(p));
-    if (cs_cur_ < cs_st_ || cs_cur_ > cs_en_ - 16UL) {
-      capstone_oob_hits++;
-      if (capstone_oob_hits == 1) {
-        capstone_oob_cur = cs_cur_;
-        capstone_oob_start = cs_st_;
-        capstone_oob_end = cs_en_;
-      }
-      return;   /* skip the faulting path so the domain RETURNS and can be read */
+    unsigned long cs_ty_, cs_cur_ = 0, cs_st_ = 0, cs_en_ = 0;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(cs_ty_) : "r"(p));
+    if (cs_ty_ != 7UL) {
+      __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x2" : "=r"(cs_cur_) : "r"(p));
+      __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x3" : "=r"(cs_st_)  : "r"(p));
+      __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x4" : "=r"(cs_en_)  : "r"(p));
     }
+    capstone_oob_calls++;
+    capstone_oob_last_ty = cs_ty_;   capstone_oob_last_cur = cs_cur_;
+    capstone_oob_last_st = cs_st_;   capstone_oob_last_en  = cs_en_;
+    /* Sticky: the FIRST p that fails the hardware's own LDC predicate. Without this, hundreds
+       of healthy calls after the interesting one would scroll it away. */
+    if (cs_ty_ != 7UL && (cs_cur_ < cs_st_ || cs_cur_ > cs_en_ - 16UL)) {
+      capstone_oob_bad_seen++;
+      if (capstone_oob_bad_seen == 1UL) {
+        capstone_oob_bad_n   = capstone_oob_calls;
+        capstone_oob_bad_ty  = cs_ty_;   capstone_oob_bad_cur = cs_cur_;
+        capstone_oob_bad_st  = cs_st_;   capstone_oob_bad_en  = cs_en_;
+      }
+    }
+    capstone_oob_report();
   }
 """
 s = s.replace(FN, probe, 1)
-# the globals, declared before first use
-decl = ("unsigned long capstone_oob_hits = 0;\n"
-        "unsigned long capstone_oob_cur = 0;\n"
-        "unsigned long capstone_oob_start = 0;\n"
-        "unsigned long capstone_oob_end = 0;\n")
+# Declarations before first use. The definitions and capstone_oob_report() live in
+# sqlite_capstone_domain.c, which the amalgam includes AFTER this file -- legal in one TU,
+# and it keeps the reporter next to output_text() rather than injected as a second patch.
+decl = ("extern unsigned long capstone_oob_calls, capstone_oob_bad_seen, capstone_oob_bad_n;\n"
+        "extern unsigned long capstone_oob_last_ty, capstone_oob_last_cur;\n"
+        "extern unsigned long capstone_oob_last_st, capstone_oob_last_en;\n"
+        "extern unsigned long capstone_oob_bad_ty, capstone_oob_bad_cur;\n"
+        "extern unsigned long capstone_oob_bad_st, capstone_oob_bad_en;\n"
+        "void capstone_oob_report(void);\n")
 i = s.find(FN)
 j = s.rfind("\n", 0, i)
 s = s[:j+1] + decl + s[j+1:]
 open(p, "w").write(s)
-print("   OOB probe injected into vdbeMemClearExternAndSetNull")
+print("   OOB probe injected into vdbeMemClearExternAndSetNull (non-perturbing)")
 PYOOB
+  # Turns on the reporter half in sqlite_capstone_domain.c. Set here rather than left to the
+  # caller so the two halves cannot be enabled independently: an injected call site with no
+  # definition is a link error, and a definition with no call site is dead code that silently
+  # reports nothing. Assigned BEFORE _domain_defs is read, a few dozen lines below.
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_OOB_PROBE=1"
 fi
 
 SILICON=(-mllvm -capstone-merge-string-constants=true
