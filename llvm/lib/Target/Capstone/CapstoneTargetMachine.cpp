@@ -461,6 +461,14 @@ void CapstonePassConfig::addIRPasses() {
   addPass(createCapstoneMergeStrConstantsPass());
   addPass(createCapstoneCapGlobalInitPass());
 
+  // S-06 workaround. Sited in the UNGATED region deliberately: the silicon
+  // SQLite domain is built at -O0, and the opt-level-gated block below would
+  // skip it there -- i.e. exactly where the defect was measured. It must also
+  // run before ISel, because once findOptimalMemOpLowering has chosen i128
+  // units the copy is already bare ldc/stc and the guard can no longer be
+  // expressed. Default off; see the flag in CapstoneCapGranuleCopy.cpp.
+  addPass(createCapstoneCapGranuleCopyPass());
+
   if (getOptLevel() != CodeGenOptLevel::None) {
     if (EnableLoopDataPrefetch)
       addPass(createLoopDataPrefetchPass());

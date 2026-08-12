@@ -1,4 +1,5 @@
-/* Native oracle: both fields must survive an aggregate assignment, so 64. Silicon with S-06
- * returns 66 -- the high half of the plain 16-byte chunk (y) is lost. */
+/* Native oracle for the s06agg rung. A correct machine copies both granules intact, so both
+   bits are set and the answer is 3. This is what the compiler fix must make the board return. */
 #include <stdio.h>
-int main(void){printf("64\n");return 0;}
+#include "s06agg_kernel.h"
+int main(void) { printf("%u\n", s06agg_compute()); return 0; }
