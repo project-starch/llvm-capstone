@@ -4038,6 +4038,51 @@ With `ex_code` ordinals `NO_EXCEPTION = 0, UNEXPECTED_OPERAND = 1, ...`, the spe
 * `riscv_pkg.sv:349-353` encodes the same +1 error (`UNEXPECTED_OPERAND_TYPE = 25` where the spec
   says 24), so it corroborates the RTL's behaviour, not the spec.
 
+**THE WEDGE HAS NOW BEEN REPRODUCED AND IT REPORTS `mcause 25` ON THE WEDGE ITSELF (2026-08-12).**
+One boot, control green, three domains in ascending order:
+
+| domain | result |
+|---|---|
+| `k800` control | `retval=4` in 2 s — **boot VALID** |
+| `sqfixoff` (library fixup OFF) | entered, **RETURNED** `SQLITE ERROR stage=create rc=11 message=malformed` |
+| `sqwedge` (`SQLITE_LDC_HIGH_HALF_FIXUP=1`) | `SQ: G/enter`, **NO RETURN in 300 s — WEDGED** |
+
+Debug-mux readout taken at the wedge, before releasing the board:
+
+* `sw=255 TRAP LOG {seen, mcause[6:0]} = 0x99` → `seen=1`, **`mcause = 0b0011001 = 25`**.
+* `sw=224` → `privM=1`, `flush=1`, `flu_ready=1`, `dyn_ready=1`, `lsu_ready=1`, `ex_commit.valid=1`.
+* `sw=249/250` → `rev_node_head = 0x1a1 = 417`, `overflow = 0`. **Fourth independent confirmation
+  that pool exhaustion is not the mechanism** (417 of 65536).
+* `sw=230-237` → `commit pc = 0x2`, the usual junk sentinel. Says nothing.
+
+Read with the measured decoding above, `mcause 25` from the execute path is `UNEXPECTED_OPERAND`.
+**It is still not discriminated from `commit_stage`'s PC-capability check**, which is
+spec-conformant base 23 and emits 25 for `INVALID_CAPABILITY`; `privM=1` means that check's gate is
+satisfiable. Both readings remain live.
+
+**A PLAN PREMISE OF MINE WAS WRONG, and it is the reason this run did not settle it.** I recorded
+that the monitor would print `mcause`/`mepc`/`mtval` at the next wedge because the `EXCX` reporting
+is committed and compiled into the firmware (verified by disassembling the ELF). **It did not fire:
+zero `EXCX`, `MCAU`, `MEPC`, `MTVL` in the whole run.** A capability fault inside a capability domain
+**wedges rather than trapping to `mtvec`**, so it never reaches `handle_exception` and the monitor
+can never report it. The monitor's reporting covers traps that reach the monitor; this one does not.
+Do not plan around it again.
+
+**THE DECISIVE DATUM EXISTS IN HARDWARE AND IS NOT READABLE.** `cva6.sv:1083` latches
+`recent_nontrivial_mepc_log_q <= pc_commit` in the same block that latches the mcause this run read
+out — so the faulting PC *is* captured. It is never selected by the debug mux (declared at `:980`,
+cleared at `:1005`/`:1026`, written at `:1083`, read nowhere). Exposing it is a few mux arms next to
+the existing trap-log arm, and it needs a **bitstream reflash**, which is ask-first. Until then the
+two readings of 25 cannot be separated and the faulting instruction cannot be named.
+
+**Also settled this run, as a clean negative:** the COMPILER-side fixup
+(`-capstone-memcpy-high-half-fixup`) is **neutral for SQLite**. A matched pair in the preceding boot
+— 220 fixup sequences versus 1, verified by disassembly, control green — returned the *identical*
+`stage=create rc=11 malformed` on both arms. The S-06 damage that reaches SQLite is in the LIBRARY
+`memcpy`'s `BEEBS_CHUNK_COPY` (`SQLITE_LDC_HIGH_HALF_FIXUP`), which never consults the compiler's
+memcpy hook. Only the library knob produces the wedge, exactly as `build-sqlite-silicon.sh:777-795`
+already documented.
+
 **BOTH CODES NOW MEASURED DIRECTLY, in one matched pair.** `excode-base-audit.S` traps each
 exception on purpose and asserts the delivered `mcause`:
 
