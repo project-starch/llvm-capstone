@@ -4086,6 +4086,41 @@ With `ex_code` ordinals `NO_EXCEPTION = 0, UNEXPECTED_OPERAND = 1, ...`, the spe
 * `riscv_pkg.sv:349-353` encodes the same +1 error (`UNEXPECTED_OPERAND_TYPE = 25` where the spec
   says 24), so it corroborates the RTL's behaviour, not the spec.
 
+**FIRST BOOT ON `caplifive_12august.bit` (2026-08-12) — THE WEDGE NOW REPORTS ITS OWN `mepc`.**
+Control green throughout; the debug-mux change works.
+
+| domain | result |
+|---|---|
+| `k800` | `retval=4` — **boot VALID** |
+| `s06lcc` | **`retval=171`** — the S-06 enabler survived synthesis. Also the bitstream-identity check: on RTL without it the plain-data query wedges |
+| `sqfixoff` | entered and RETURNED |
+| `sqwedge` | `SQ: G/enter`, **no return in 300 s — WEDGED** |
+
+Debug mux at the wedge:
+
+* `TRAP LOG = 0x99` → `seen=1`, **`mcause = 25`** — reproduced on the new RTL.
+* **`trap mepc = 0x00000000828897FC`** (switches 196..203). **This is the first time the wedge has
+  said WHERE.** The live `commit pc` still reads `0x2` junk, exactly as predicted.
+* `rev_node_head = 425`, `overflow = 0` — pool healthy. Fifth independent confirmation.
+* `privM = 1`.
+
+**A CHANGE IN THE ENTER-PATH MARKERS, worth its own look.** This run printed `ENT0:3` and `ENT1:3`
+and **no `ENT2`**, where an earlier returning run printed all three. `ENT0/ENT1/ENT2` bracket the
+domain switch (`capstone-sbi` `e7b8998`), so the wedge is at or before the end of the switch, not
+deep inside SQLite. That is a different picture from "SQLite runs deeper and meets a second fault"
+and it should be checked before the old framing is reused. NOT yet confirmed — one observation.
+
+**THE MEPC CANNOT YET BE MAPPED TO AN INSTRUCTION, and the missing piece is small.** The monitor
+never prints the domain's load base, so there is no way to convert `0x828897FC` into an offset in
+`sqwedge.dom`. The only addresses in the whole transcript are the shared regions (`0x81D1_7000`..
+`0x81D5_F000`), `0x8220_0000` and `0x8344_9156`; the domain base is not among them. **Printing
+`base_addr` in `create_domain` is a one-line firmware change and needs no bitstream** — do that
+before the next board session and the address becomes an instruction.
+
+Until then `mcause 25` remains two-way (R-24): `UNEXPECTED_OPERAND` from the execute path, or
+`INVALID_CAPABILITY` on the PC capability from `commit_stage`. The `mepc` is the discriminator and
+is now readable; it just needs the base to be interpretable.
+
 **THE WEDGE HAS NOW BEEN REPRODUCED AND IT REPORTS `mcause 25` ON THE WEDGE ITSELF (2026-08-12).**
 One boot, control green, three domains in ascending order:
 
