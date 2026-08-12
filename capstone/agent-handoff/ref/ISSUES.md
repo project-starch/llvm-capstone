@@ -824,10 +824,51 @@ not touch. Consequences:
   make SQLite pass; it will move the failure.
 * **The second fault is now the blocker, not S-06.** Lead worth pursuing first: the wedge is
   `mcause 25 INVALID_CAPABILITY`, which comes from `get_node_query_validity` failing on the address
-  capability (`capstone_dyn_unit.anvil:337`, `:404`). Running deeper allocates more revocation
-  nodes, and the rev-node pool is a fixed-size BUMP allocator with no reclamation. Observed
-  `rev_node_head` at the wedges: 0x25e, 0x1a2, 0xf9 — growing, with the overflow bit CLEAR in each,
-  so simple pool exhaustion is not yet demonstrated and should be checked rather than assumed.
+  capability (`capstone_dyn_unit.anvil:337`, `:404`).
+
+**POOL EXHAUSTION IS REFUTED**, cheaply: `REVNODE_HEAD_BITS = 16` (`capstone_unit.anvilh:498-515`),
+so the pool holds 65536 nodes with 65535 reserved as the "full" sentinel. The `rev_node_head`
+observed at the wedges — 0x25e (606), 0x1a2 (418), 0xf9 (249) — is two orders of magnitude below
+that, which is exactly why the overflow bit was clear in every dump. The pool is nowhere near full,
+and it is not the mechanism.
+
+**~~THE LIVE LEAD: rev-node tag loss zeroes `valid`~~ — REFUTED 2026-08-12 by rung `s06rev`, and
+the reason is a field-layout fact worth keeping.** The hypothesis was that revocation nodes, being
+cacheable but never shadow-tagged, come back untagged after an evict+refill, so `ruser` is
+force-zeroed and the node reads `valid = 0`. **`valid` does not come from `ruser`.** `rev_node_t` is
+`depth[32], prev[30], next[30], valid[1], linear[1]` = 94 bits
+(`capstone_unit.anvilh:521-525`), assembled as `{data_ruser[29:0], data_rdata[63:0]}`
+(`ex_stage.sv:1030`). So `ruser` carries the top 30 bits — part of **`depth`** — and `valid` sits at
+bit 1, inside `data_rdata`. Zeroing `ruser` cannot clear `valid`.
+
+Measured: rung `s06rev` round-trips a capability, streams 64 KB (twice the 32 KB D-cache) to evict
+everything, then round-trips it again. It **returns 11** — both arms survived — with control `k800`
+= 4 in the same boot. QEMU-verified at 11 beforehand.
+
+Note what this does NOT clear: the region facts are real and unchanged — the pool at
+`[0xBFF0_0000, 0xC000_0000)` IS cacheable (`config_pkg:142-144`) and IS excluded from the
+shadow-tag write (`wt_axi_adapter.sv:139-145`, deliberately, per the assert at `:987-992`). An
+evicted rev-node line therefore still loses its top 30 bits, i.e. part of `depth`. That is worth its
+own investigation — a corrupted depth would affect revocation-tree walks — but it is not the
+mcause-25 mechanism.
+
+**ELIMINATED so far for the second fault:** pool exhaustion (pool is 65536, observed heads ~250-600);
+the fixup's store pattern (`s06sfix` returns 2048 at 64 KB scale); and rev-node tag loss zeroing
+`valid` (this entry). The fault remains UNEXPLAINED.
+
+~~Original lead text, kept for the region facts it establishes:~~ `capstone_rev_node.anvil:36-42` (`get_rev_node`) issues `mem_ch.read_req` and
+returns `data.valid`; `ex_stage.sv:1030` reconstructs the node from
+`{rev_mem_rd_res_i.data_ruser[29:0], data_rdata}`. So the `valid` bit arrives via `ruser` — the
+same channel `wt_dcache_mem.sv` force-zeroes when a line's shadow tag is clear. If a rev-node line
+ever reads back untagged, `valid` reads 0 and the next `ldc`/`stc` through that capability raises
+exactly `mcause 25`, which is the observed wedge.
+
+Whether that can happen turns on one question: is the rev-node region covered by the shadow-tag
+write? `wt_axi_adapter.sv:139-145` gates `needs_tag` on `in_data_region`, i.e. `paddr` within
+`[MEMORY_BASE, DATA_MEM_TOP)`, while the nodes live at `CAP_REVNODE_MEM_BASE = 0xBFF0_0000`
+(`ariane_pkg.sv:590`). **UNRESOLVED, and the next thing to settle.** It also fits the observed
+shape: it needs cache pressure to evict a rev-node line, which is why it appears only at scale and
+only once a fix adds store traffic.
 
 **Two candidate causes tried and REFUTED:**
 
