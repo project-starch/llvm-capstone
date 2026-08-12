@@ -48,7 +48,7 @@ normal mid-work, and must be resolved before pushing the parent.
 | path | purpose | branch (local) | pushed? |
 |---|---|---|---|
 | `capstone/capstone-ariane` | **the RTL.** CVA6 + Capstone, Anvil sources, directed tests | `fpga-testing-dev` | **NO — unpushed, no upstream** |
-| `capstone/capstone-qemu` | the emulator; functional oracle for the board | `s06-lcc-total-query` | yes, in sync |
+| `capstone/capstone-qemu` | the emulator; functional oracle for the board | `capstone-bootstrap` | yes — pushed `62bf0f1d61` |
 | `capstone/capstone-c` | Capstone C runtime / cap-table reference | detached `8cda52c` | n/a |
 | `capstone/caplifive-system` | board bring-up: buildroot, OpenSBI, device tree | `capstone-bootstrap` | local ahead of gitlink |
 | `capstone/capstone-academic-spec` | **the spec we cite.** Exception codes, instruction semantics | `caplifive-s06` | branch local; tracks `origin/caplifive-release` |
@@ -101,9 +101,9 @@ are all ancestors of it.
 
 | branch | status | notes |
 |---|---|---|
-| `fpga-testing-dev` | **ACTIVE — the collection point** | unpushed. Parent gitlink points here |
-| `fpga-testing-dev-linear` | candidate: same content, 5 linear commits | see "History decision" below |
-| `backup/…` / `fpga-testing-dev` @ `467bdb970` | the 13-commit merged history | keep until the linear version is pushed |
+| `fpga-testing-dev` | **ACTIVE — the collection point** | 5 linear commits since 2026-08-12. Unpushed. Parent gitlink points here |
+| `fpga-testing-dev-linear` | **ADOPTED** — same ref as `fpga-testing-dev` | see "History decision" below |
+| `fpga-testing-dev-merged-backup` @ `467bdb970` | the old 13-commit merged history | keep until the linear version is pushed and clone-verified |
 | `origin/fpga-testing` | upstream base | not ours; do not rewrite |
 | `origin/fpga-testing-dev-s06` | **superseded** — folded into `fpga-testing-dev` | the source `caplifive_s06.bit` was synthesised from (`c767626a8`) |
 | `origin/capstone-bootstrap` | **superseded** — folded into `fpga-testing-dev` | local copy is 4 ahead, all contained |
@@ -123,16 +123,13 @@ Board drivers default to expecting `caplifive_fixed_forward.bit`; override with
 
 ---
 
-## History decision for capstone-ariane (open)
+## History decision for capstone-ariane — DECIDED AND APPLIED 2026-08-12
 
-`fpga-testing-dev` currently has **13 commits and 2 merges** since `origin/fpga-testing`, and the
-S-06 enabler appears **twice** with the same subject line (`f89aad25c` local, `c767626a8`
-published — not identical: the local one also carries `s06-lcc-scoping.S` and the improved
-`s06-lcc-total-query.S`). That is the history that "looks weird".
-
-`fpga-testing-dev-linear` is a prepared alternative: **5 thematic commits, 0 merges**, and its tree
-is **byte-identical** to `fpga-testing-dev` (verified with `git diff --quiet`). All five commit
-messages pass `precommit-scan.sh`.
+`fpga-testing-dev` is now **5 thematic commits, 0 merges** since `origin/fpga-testing`. It was
+13 commits with 2 merges, and the S-06 enabler appeared **twice** under the same subject
+(`f89aad25c` local, `c767626a8` published — not duplicates: the local one also carried
+`s06-lcc-scoping.S` and the improved `s06-lcc-total-query.S`). That is what "looked weird", and it
+is gone.
 
 ```
 9b2ce30cd  verif: R-20 does not reproduce, the linear clear is incomplete, and mcause is pinned
@@ -140,24 +137,28 @@ e33efdf67  verif: S-06 reproduced in simulation, and the repair sequence
 efffa7c47  verif: the store-misclassification family, and its refutation
 8e6600a1b  RTL: fix an off-by-one in the ex_code mcause comments
 55b7f88bc  RTL: S-06 enabler -- make LCC's type query total
+f623c48a1  Fix R-20: keep the CAPENTER x10 clobber additive   <- pre-existing base
 ```
 
-**Recommendation: adopt the linear version.** `fpga-testing-dev` has never been pushed, so
-rewriting it costs nothing externally. The one real consequence is that `origin/fpga-testing-dev-s06`
-and `origin/capstone-bootstrap` stop being ancestors — acceptable because both are superseded and
-their content is fully contained, but it means **the bitstream provenance link becomes a
-documented fact rather than a git ancestry fact**, which is why it is written down above.
+**Why this was safe.** The rewrite was content-neutral, verified by TREE HASH, not by eyeball:
+both shapes resolve to tree `d71c357bc0db7f103dcfb207d705a68bed03bd64`. Nothing was lost, because
+nothing *could* be lost — the trees are the same object. And `fpga-testing-dev` had never been
+pushed, so no published history was rewritten.
 
-To adopt:
+**What it cost, stated plainly.** `origin/fpga-testing-dev-s06`, `origin/capstone-bootstrap` and
+`origin/r20-fix` are **no longer ancestors**. Their content is still fully present (same tree), but
+containment is no longer a git-provable property. Two consequences to remember:
 
-```bash
-cd capstone/capstone-ariane
-git branch -f backup/fpga-testing-dev-merged-13 fpga-testing-dev   # keep the old shape
-git branch -f fpga-testing-dev fpga-testing-dev-linear
-git checkout fpga-testing-dev
-git push origin fpga-testing-dev
-cd ../.. && git add capstone/capstone-ariane && git commit   # bump the gitlink
-```
+* **Bitstream provenance is now a documented fact, not an ancestry fact.** `caplifive_s06.bit` was
+  synthesised from `c767626a8`; the RTL on `fpga-testing-dev` differs from it by exactly one
+  comment-only change to `capstone_unit.anvilh`. See "Bitstream provenance" above. If that diff
+  ever grows beyond comments, board results taken on this bitstream are void.
+* **Do not merge those branches into `fpga-testing-dev` later.** They would replay content that is
+  already there. They are superseded anchors, not inputs.
+
+**Reversible.** The 13-commit shape is kept at `fpga-testing-dev-merged-backup` (`467bdb970`), and
+`fpga-testing-dev-linear` still points at the adopted tip. Delete neither until the branch has been
+pushed and a fresh clone has been verified.
 
 Do **not** delete `origin/fpga-testing-dev-s06` or `origin/capstone-bootstrap` — leave them as
 historical anchors.
@@ -169,9 +170,15 @@ historical anchors.
 * **`capstone-ariane/fpga-testing-dev` is unpushed.** Until it is, the parent's gitlink points at a
   commit that exists on no remote, and a fresh clone plus `git submodule update` **fails**. This
   has already happened once. It needs a push by someone with write access.
-* Several gitlinks are behind their local HEADs (`capstone-qemu`, `caplifive-system`,
-  `capstone-academic-spec`, `paper`). Normal mid-work; resolve before pushing the parent, and never
-  bump `paper`.
+* Several gitlinks are behind their local HEADs (`caplifive-system`, `capstone-academic-spec`,
+  `paper`). Normal mid-work; resolve before pushing the parent, and never bump `paper`.
+* **`capstone-qemu` is RESOLVED (2026-08-12).** The parent's gitlink used to point at
+  `2b87bc9d2b38`, which sits on `origin/capstone-qemu` — **a different lineage from our work**, and
+  it did **not** contain the S-06 LCC mirror. `s06-lcc-total-query` was a clean fast-forward ahead
+  of `capstone-bootstrap` (two commits: the pre-existing gp-fabrication work, then the mirror), so
+  `capstone-bootstrap` was fast-forwarded onto it and pushed as `62bf0f1d61`. The gitlink now points
+  there. `capstone-bootstrap` is the branch to use for this submodule; `s06-lcc-total-query` is
+  superseded and needs no further merge.
 
 ---
 
