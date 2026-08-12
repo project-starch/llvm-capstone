@@ -62,7 +62,9 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/IntrinsicInst.h"
+#include "llvm/IR/Module.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicsCapstone.h"
 #include "llvm/InitializePasses.h"
@@ -115,6 +117,13 @@ public:
 
 private:
   bool expand(MemCpyInst *MC);
+  bool expandAggregateStore(StoreInst *SI);
+  /// Emits the guarded per-granule copy of \p Bytes from \p Src to \p Dst at \p B.
+  /// Shared by the memcpy and the aggregate load/store paths so the two cannot drift
+  /// apart -- the DAG version of this workaround had exactly that bug, where a decline
+  /// site and its hook disagreed and copies fell through to a silent libcall.
+  void emitGuardedCopy(IRBuilder<> &B, Value *Dst, Value *Src, uint64_t Bytes,
+                       Type *CapTy);
 };
 
 } // end anonymous namespace
@@ -138,12 +147,27 @@ static bool isGuardableCopy(MemCpyInst *MC, uint64_t &Bytes) {
   if (Bytes > MaxGuardedCopyBytes)
     return false;
 
-  // Both ends must really be 16-byte aligned, or the backend would not have
-  // used capability-grained units either. getDestAlign()/getSourceAlign() are
-  // MaybeAlign; an absent alignment is not an assertion of alignment.
-  MaybeAlign DstA = MC->getDestAlign();
-  MaybeAlign SrcA = MC->getSourceAlign();
-  if (!DstA || !SrcA || *DstA < Align(16) || *SrcA < Align(16))
+  // ALIGNMENT MUST BE TESTED THE WAY THE BACKEND TESTS IT, or the two drift apart.
+  // findOptimalMemOpLowering picks capability-grained i128 units via MemOp::isAligned,
+  // which returns TRUE UNCONDITIONALLY when the destination is a fresh alloca whose
+  // alignment the expander may still raise. Requiring a DECLARED `align 16` on the
+  // intrinsic is therefore stricter: a memcpy carrying `align 8` into an alloca still
+  // gets ldc/stc from the backend, but this pass declined it and the copy stayed BARE.
+  // Measured on the SQLite domain: 6 copy runs / 32 granule stores survived the guard
+  // for exactly this reason. The same decline-vs-hook mismatch is already documented in
+  // CapstoneSelectionDAGInfo.cpp as having produced silent libcalls and a silent
+  // miscompile, so it is a known way for this area to go wrong.
+  //
+  // getPointerAlignment() asks what the OBJECT is actually aligned to (allocas and
+  // globals answer honestly), and the declared alignment is folded in where present.
+  const DataLayout &DL = MC->getModule()->getDataLayout();
+  Align DstA = MC->getRawDest()->getPointerAlignment(DL);
+  Align SrcA = MC->getRawSource()->getPointerAlignment(DL);
+  if (MaybeAlign D = MC->getDestAlign())
+    DstA = std::max(DstA, *D);
+  if (MaybeAlign S = MC->getSourceAlign())
+    SrcA = std::max(SrcA, *S);
+  if (DstA < Align(16) || SrcA < Align(16))
     return false;
 
   return true;
@@ -170,13 +194,37 @@ bool CapstoneCapGranuleCopy::expand(MemCpyInst *MC) {
   Type *CapTy = Src->getType();
   if (!CapTy->isPointerTy() || CapTy != Dst->getType())
     return false;
+  // AS200 ONLY. An AS0 pointer is 64-bit but 128-bit ALIGNED under this datalayout
+  // (p:64:128), so an `align 16` AS0 memcpy passes every other gate here -- and then
+  // the guard is VACUOUS while claiming to protect: the "capability store" lowers to a
+  // redundant 8-byte sd, and the LCC type query is issued on a plain integer register,
+  // which raises on silicon predating the S-06 enabler.
+  if (CapTy->getPointerAddressSpace() != 200)
+    return false;
 
   Function *GetType = Intrinsic::getOrInsertDeclaration(
       M, Intrinsic::capstone_cap_get_type, {CapTy});
 
   IRBuilder<> B(MC);
-  const uint64_t GranuleCount = Bytes / 16;
+  emitGuardedCopy(B, Dst, Src, Bytes, CapTy);
 
+  MC->eraseFromParent();
+  ++NumExpanded;
+  return true;
+}
+
+
+void CapstoneCapGranuleCopy::emitGuardedCopy(IRBuilder<> &B, Value *Dst,
+                                             Value *Src, uint64_t Bytes,
+                                             Type *CapTy) {
+  LLVMContext &Ctx = B.getContext();
+  Module *M = B.GetInsertBlock()->getModule();
+  Type *I8 = Type::getInt8Ty(Ctx);
+  Type *I64 = Type::getInt64Ty(Ctx);
+  Function *GetType = Intrinsic::getOrInsertDeclaration(
+      M, Intrinsic::capstone_cap_get_type, {CapTy});
+
+  const uint64_t GranuleCount = Bytes / 16;
   for (uint64_t G = 0; G != GranuleCount; ++G) {
     const uint64_t Off = G * 16;
 
@@ -185,31 +233,104 @@ bool CapstoneCapGranuleCopy::expand(MemCpyInst *MC) {
     Value *DstLo = B.CreateConstInBoundsGEP1_64(I8, Dst, Off);
     Value *DstHi = B.CreateConstInBoundsGEP1_64(I8, Dst, Off + 8);
 
-    // --- every read of the source happens before any write to the destination
+    // ORDER IS LOAD-BEARING, and the obvious arrangement is a MISCOMPILE on this
+    // target. `stc` WRITES cnull BACK INTO rs2 for the LINEAR/UNINIT/SEALED family --
+    // move semantics, capstone_dyn_unit.anvil:458-461 -- and LLVM does not know it,
+    // because STC is declared with an empty (outs) list (CapstoneInstrInfo.td:2402).
+    //
+    // So if the capability is live ACROSS the branch, RegAllocFast at -O0 spills it
+    // with `stc`, and that spill CLEARS the register the guard then queries:
+    //     ldc a0, 0(a0) / stc a0, 80(sp) Folded Spill / lcc a0, a0, 1  -> 7
+    // The guard concludes "plain data", skips the capability store, and the
+    // destination keeps only the plain halves -- UNTAGGED. `ldc` has already cleared
+    // the source for that same type family, so the capability is destroyed at both
+    // ends, and the fault surfaces much later in a function this pass never touched.
+    //
+    // The arrangement below keeps the CAPABILITY's live range inside ONE block --
+    // ldc, query, store, no branch between them -- so it can never be spilled. Only
+    // `lo`/`hi` cross the branch, and they are INTEGERS: their spills use sd/ld,
+    // which clear nothing.
+    //
+    // Both halves are loaded BEFORE the capability store, not inside the repair
+    // block, because for an exact self-copy (d == s, which `*d = *s` lowers to) the
+    // `stc` can corrupt the source's high half before the repair would have read it.
     Value *Lo = B.CreateAlignedLoad(I64, SrcLo, Align(8), "cgc.lo");
     Value *Hi = B.CreateAlignedLoad(I64, SrcHi, Align(8), "cgc.hi");
     Value *Cap = B.CreateAlignedLoad(CapTy, SrcLo, Align(16), "cgc.cap");
 
-    // --- then the plain writes, which lay down BOTH halves correctly
-    B.CreateAlignedStore(Lo, DstLo, Align(8), /*isVolatile=*/true);
-    B.CreateAlignedStore(Hi, DstHi, Align(8), /*isVolatile=*/true);
-
-    // --- ask, and store the capability only if there is one
     Value *Ty = B.CreateCall(GetType, {Cap}, "cgc.ty");
-    Value *IsCap = B.CreateICmpNE(Ty, ConstantInt::get(I64, 7), "cgc.iscap");
+    Value *IsPlain = B.CreateICmpEQ(Ty, ConstantInt::get(I64, 7), "cgc.isplain");
+
+    // Unconditional: correct for a real capability, and harmless for plain data
+    // because the repair below overwrites both halves.
+    B.CreateAlignedStore(Cap, DstLo, Align(16));
 
     Instruction *ThenTerm =
-        SplitBlockAndInsertIfThen(IsCap, &*B.GetInsertPoint(),
+        SplitBlockAndInsertIfThen(IsPlain, &*B.GetInsertPoint(),
                                   /*Unreachable=*/false);
     IRBuilder<> TB(ThenTerm);
-    TB.CreateAlignedStore(Cap, DstLo, Align(16));
+    // Volatile so DSE cannot delete them: by the compiler's own model the `stc`
+    // above already wrote all 16 bytes.
+    TB.CreateAlignedStore(Lo, DstLo, Align(8), /*isVolatile=*/true);
+    TB.CreateAlignedStore(Hi, DstHi, Align(8), /*isVolatile=*/true);
 
-    // Continue emitting the remaining granules in the join block.
     B.SetInsertPoint(ThenTerm->getSuccessor(0)->getFirstNonPHIIt());
     ++NumGranules;
   }
+}
 
-  MC->eraseFromParent();
+/// An aggregate `store T (load T)` NEVER BECOMES AN llvm.memcpy, and the backend
+/// lowers it straight to ldc/stc units -- so a pass keyed on MemCpyInst alone has a
+/// blind spot with exactly the same defect in it. Measured on the SQLite domain:
+/// covering only memcpy left 6 copy runs / 32 granule stores still bare, in
+/// sqlite3_config, renderLogMsg, sqlite3_sleep and sqlite3Select.
+bool CapstoneCapGranuleCopy::expandAggregateStore(StoreInst *SI) {
+  auto *LI = dyn_cast<LoadInst>(SI->getValueOperand());
+  if (!LI || SI->isVolatile() || LI->isVolatile())
+    return false;
+  // Same block only. The emitted sequence re-reads the SOURCE at the store's
+  // location, so the source pointer must be available there; requiring one block
+  // makes that trivially true instead of needing a dominance proof.
+  if (LI->getParent() != SI->getParent())
+    return false;
+
+  Type *T = SI->getValueOperand()->getType();
+  if (T != LI->getType() || !T->isSized())
+    return false;
+  // AGGREGATES ONLY. A plain `store ptr (load ptr)` is also 16 bytes and 16-byte
+  // aligned, but it is a pure CAPABILITY MOVE -- it can never carry plain data, so
+  // it needs no guard, and expanding it is both pointless and harmful. Measured:
+  // without this test the SQLite domain went from 6 bare copy runs to 31, because
+  // every pointer assignment in the program got rewritten into a three-block
+  // sequence. Only a struct or array can mix a capability with plain halves, which
+  // is the only case the guard exists for.
+  if (!T->isAggregateType())
+    return false;
+  const DataLayout &DL = SI->getModule()->getDataLayout();
+  uint64_t Bytes = DL.getTypeStoreSize(T).getFixedValue();
+  if (Bytes == 0 || (Bytes % 16) != 0 || Bytes > MaxGuardedCopyBytes)
+    return false;
+  if (SI->getAlign() < Align(16) || LI->getAlign() < Align(16))
+    return false;
+
+  Value *Dst = SI->getPointerOperand();
+  Value *Src = LI->getPointerOperand();
+  Type *CapTy = Src->getType();
+  if (!CapTy->isPointerTy() || CapTy != Dst->getType())
+    return false;
+  // AS200 ONLY. An AS0 pointer is 64-bit but 128-bit ALIGNED under this datalayout
+  // (p:64:128), so an `align 16` AS0 memcpy passes every other gate here -- and then
+  // the guard is VACUOUS while claiming to protect: the "capability store" lowers to a
+  // redundant 8-byte sd, and the LCC type query is issued on a plain integer register,
+  // which raises on silicon predating the S-06 enabler.
+  if (CapTy->getPointerAddressSpace() != 200)
+    return false;
+
+  IRBuilder<> B(SI);
+  emitGuardedCopy(B, Dst, Src, Bytes, CapTy);
+  SI->eraseFromParent();
+  if (LI->use_empty())
+    LI->eraseFromParent();
   ++NumExpanded;
   return true;
 }
@@ -226,15 +347,21 @@ bool CapstoneCapGranuleCopy::runOnFunction(Function &F) {
     return false;
 
   // Collect first: expand() splits blocks, which invalidates iteration.
-  SmallVector<MemCpyInst *, 8> Worklist;
+  SmallVector<MemCpyInst *, 8> Copies;
+  SmallVector<StoreInst *, 8> AggStores;
   for (BasicBlock &BB : F)
-    for (Instruction &I : BB)
+    for (Instruction &I : BB) {
       if (auto *MC = dyn_cast<MemCpyInst>(&I))
-        Worklist.push_back(MC);
+        Copies.push_back(MC);
+      else if (auto *SI = dyn_cast<StoreInst>(&I))
+        AggStores.push_back(SI);
+    }
 
   bool Changed = false;
-  for (MemCpyInst *MC : Worklist)
+  for (MemCpyInst *MC : Copies)
     Changed |= expand(MC);
+  for (StoreInst *SI : AggStores)
+    Changed |= expandAggregateStore(SI);
   return Changed;
 }
 
