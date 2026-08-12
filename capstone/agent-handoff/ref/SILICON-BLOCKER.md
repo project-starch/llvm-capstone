@@ -3148,11 +3148,25 @@ before each domain, so this is attributable to `n144:144`. Identical in both wed
 > mapping is `UNEXPECTED_OPERAND 25, INVALID_CAPABILITY 26, UNEXPECTED_CAP_TYPE 27,
 > INSUFFICIENT_PERMISSION 28, OUT_OF_BOUNDS 29, ILLEGAL_OPERAND_VALUE 30`.
 >
-> **The observed value was `mcause = 28`, so the fault is `INSUFFICIENT_PERMISSION`, NOT
-> `OUT_OF_BOUNDS`.** Every inference below that rests on "out of bounds" — a bad address, a
-> too-small carve, a cursor past `end` — is chasing the wrong fault. A permission fault means the
-> capability's `perm` bits do not authorise the access, which is a different investigation
-> entirely.
+> **The observed value was `mcause = 28`, and 28 IS AMBIGUOUS ON THIS CORE — it does NOT settle the
+> fault.** An earlier pass through this file replaced `OUT_OF_BOUNDS` with `INSUFFICIENT_PERMISSION`
+> as though the execute-path encoder were the only one. It is not. There are TWO encoders using two
+> bases (issue **R-24**):
+>
+> | encoder | base | 28 means |
+> |---|---|---|
+> | `ex_stage.sv:469` (FLU), `cva6.sv:1360` (DYN) | 24 | `INSUFFICIENT_PERMISSION` |
+> | `commit_stage.sv:205-228` (PC-capability check) | 23 | **`OUT_OF_BOUNDS`** — `commit_stage.sv:223` says so in as many words: `64'd28; // OUT_OF_BOUNDS (23 + 5)` |
+>
+> So the ORIGINAL `OUT_OF_BOUNDS` reading is live again, and is the natural one if the fault came
+> from the fetch path — a domain whose pc left its code bounds. The permission reading is live if it
+> came from the execute path. **Neither is established.** Do not spend a session on either until the
+> encoder is identified.
+>
+> The discriminator is the same one R-24 names for `mcause 25`: the LATCHED trap `mepc`, readable on
+> the new bitstream at switches 196..203. Under the fetch-path reading it lands outside the domain's
+> code bounds; under the execute-path reading it lands on a capability instruction whose operand can
+> be inspected.
 >
 > The same off-by-one misnamed the SQLite `mcause 25` wedge as `INVALID_CAPABILITY` when it is
 > `UNEXPECTED_OPERAND`, and three consecutive investigations were spent on the revocation
@@ -3164,9 +3178,12 @@ before each domain, so this is attributable to `n144:144`. Identical in both wed
 UNEXPECTED_OPERAND 24, INVALID_CAPABILITY 25, UNEXPECTED_CAP_TYPE 26,
 INSUFFICIENT_PERMISSION 27, **OUT_OF_BOUNDS 28**, ILLEGAL_OPERAND_VALUE 29. So:~~
 
-~~**The domain takes an OUT_OF_BOUNDS capability fault, traps to M-mode, and the M-mode side
-wedges.**~~ **The domain takes an INSUFFICIENT_PERMISSION capability fault, traps to M-mode, and the
-M-mode side wedges.** It is not a silent hang in the store path — a real exception is raised and taken.
+**The domain takes a capability fault, traps to M-mode, and the M-mode side wedges.** It is not a
+silent hang in the store path — a real exception is raised and taken. **Which** fault is UNRESOLVED:
+`mcause 28` is `OUT_OF_BOUNDS` from the PC-capability check or `INSUFFICIENT_PERMISSION` from the
+execute path, per the table above. The refutations below rest on "a real exception was taken", which
+holds either way; the inferences that rest on a bad ADDRESS specifically are only valid under the
+`OUT_OF_BOUNDS` reading and are marked where they occur.
 
 REFUTED by this reading, all three previously plausible:
 

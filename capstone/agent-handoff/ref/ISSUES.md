@@ -4187,9 +4187,29 @@ Capability exceptions reach `mcause` through two different encoders using two di
 state the base explicitly (`64'd25; // INVALID_CAPABILITY (23 + 2)`), so this is not a
 misreading — it is written that way.
 
-**Consequence:** every capability `mcause` in the overlap is ambiguous. 25 is `UNEXPECTED_OPERAND`
-from the execute path and `INVALID_CAPABILITY` from the fetch path; 26 is `INVALID_CAPABILITY` from
-one and `UNEXPECTED_CAP_TYPE` from the other; and so on through 28.
+**Consequence: EVERY capability `mcause` in the overlap has two readings.** Write it out, because
+this table has now produced TWO published misdiagnoses and guessing from one encoder is exactly how:
+
+| `mcause` | execute path (base 24) | PC-capability check (base 23) |
+|---|---|---|
+| 25 | `UNEXPECTED_OPERAND` | `INVALID_CAPABILITY` |
+| 26 | `INVALID_CAPABILITY` | `UNEXPECTED_CAP_TYPE` |
+| 27 | `UNEXPECTED_CAP_TYPE` | `INSUFFICIENT_PERMISSION` |
+| 28 | `INSUFFICIENT_PERMISSION` | `OUT_OF_BOUNDS` |
+| 29 | `OUT_OF_BOUNDS` | — |
+| 30 | `ILLEGAL_OPERAND_VALUE` | — |
+
+**Both misdiagnoses came from assuming one encoder.** The SQLite wedge's `mcause 25` was named
+`INVALID_CAPABILITY` off the stale enum comment (three investigations lost). Then a tidy-up pass
+corrected `SILICON-BLOCKER.md`'s `mcause 28` from `OUT_OF_BOUNDS` to `INSUFFICIENT_PERMISSION` —
+applying the execute-path encoder as if it were the only one, when `commit_stage.sv:223` emits 28
+for `OUT_OF_BOUNDS` in as many words. **The original reading was live all along.** That correction
+has itself been corrected; the entry there now says UNRESOLVED.
+
+**The rule: a capability `mcause` names a fault only once you know WHICH ENCODER produced it.** The
+discriminator for both is the latched trap `mepc` (switches 196..203 on the new bitstream) — under
+the fetch-path reading it lands outside the domain's code bounds, under the execute-path reading it
+lands on a capability instruction whose operand can be inspected.
 
 **This is not theoretical — it has already cost.** The SQLite blocker's `mcause 25` was named
 `INVALID_CAPABILITY` and three investigations were spent on the revocation subsystem before the
