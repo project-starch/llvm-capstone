@@ -107,6 +107,7 @@ are all ancestors of it.
 | `origin/fpga-testing` | upstream base | not ours; do not rewrite |
 | `origin/fpga-testing-dev-s06` | **superseded** — folded into `fpga-testing-dev` | the source `caplifive_s06.bit` was synthesised from (`c767626a8`) |
 | `origin/capstone-bootstrap` | **superseded** — folded into `fpga-testing-dev` | local copy is 4 ahead, all contained |
+| `origin/fpga-testing-fix` | **INTEGRATED 2026-08-12** — now an ancestor of `fpga-testing-dev` | the collaborator's LDC write-permission check (closes R-23) and linear-source clearing. Eight tests had to be adapted; see below |
 | `origin/r20-fix` | **redundant** | identical patch-id to the R-20 fix already on `fpga-testing-dev` (`f623c48a1`). Contributes nothing |
 | `fpga-testing` | tracks `origin/fpga-testing` | |
 
@@ -162,6 +163,44 @@ pushed and a fresh clone has been verified.
 
 Do **not** delete `origin/fpga-testing-dev-s06` or `origin/capstone-bootstrap` — leave them as
 historical anchors.
+
+---
+
+## Integrating fpga-testing-fix — what it changed and what it broke
+
+Two real RTL fixes, both spec-checked before being taken:
+
+* **LDC now requires WRITE permission before clearing the source.** Closes **R-23**, which this
+  repo carried as an open SPEC VIOLATION. `check_load_data` raises `INSUFFICIENT_PERMISSION`;
+  `load_unit.sv` gates the clear on `rs1_perm_write` as a second barrier. The shape matters:
+  skipping the clear WITHOUT trapping would be worse than the bug, since memory keeps its copy
+  and the register gains one. Permission encoding verified rather than assumed — `R=4, W=2, X=1`,
+  so bit 1 is write, matching the spec's `2 <=p x[rs1].perms` (`mem-access-insn.adoc:46`).
+* **Linear sources are consumed.** `STC` clears `rs2`; `CINCOFFSET`/`CINCOFFSETIMM`/`SCC` clear
+  `rs1` when it is linear and `rd != rs1`. Previously the source register kept its copy, so
+  storing or deriving from a linear capability DUPLICATED it.
+
+**Eight tests had to be adapted, and the two failure modes are worth knowing because both will
+recur.**
+
+1. **Five incoming tests** used the LCC **type** query as a "was this cleared" detector, requiring
+   it to TRAP on `NOT_CAP`. The S-06 enabler makes that query TOTAL. Only the cleared-detector
+   probes move to the **validity** query (`x0`); probes that READ A TYPE VALUE keep `x1`, because
+   `x0` returns validity, not type. A blanket swap was tried first and just moved the failure.
+2. **Three of ours** built a `CAP_TYPE_LIN` base authority and derived from it repeatedly, so the
+   linearity fix nulled it on first use and they HUNG. Now `CAP_TYPE_NONLIN`, which is what a
+   repeatedly-derived-from authority should be.
+
+**Read cycle counts, not the verdict word.** Those three hangs printed
+`*** SUCCESS *** (tohost = 0) after 2000013 cycles`, and 2000013 IS the `+time_out` value — a hang
+wearing a pass. Any summary grepping for `SUCCESS` calls that merge green. The integration is
+accepted because all 19 tests with a known-good reference run in EXACTLY the cycle count they run
+in on the branch where they were authored; a pass alone would not show a test had not been
+silently neutered.
+
+**Not yet on silicon.** The linearity change alters behaviour beneath every board result taken so
+far, and the domain entry glue derives `gp` from `sp` via `scc` — the exact construct that now
+consumes its source. Nothing here is validated on hardware until a bitstream carries it.
 
 ---
 
