@@ -4104,11 +4104,26 @@ Debug mux at the wedge:
 * `rev_node_head = 425`, `overflow = 0` — pool healthy. Fifth independent confirmation.
 * `privM = 1`.
 
-**A CHANGE IN THE ENTER-PATH MARKERS, worth its own look.** This run printed `ENT0:3` and `ENT1:3`
-and **no `ENT2`**, where an earlier returning run printed all three. `ENT0/ENT1/ENT2` bracket the
-domain switch (`capstone-sbi` `e7b8998`), so the wedge is at or before the end of the switch, not
-deep inside SQLite. That is a different picture from "SQLite runs deeper and meets a second fault"
-and it should be checked before the old framing is reused. NOT yet confirmed — one observation.
+**THE ENTER-PATH MARKERS SAY NOTHING NEW — I misread them, retracted the same day.** I flagged that
+this run printed `ENT0`/`ENT1` and no `ENT2` (where `sqfixoff` printed all three in the same boot)
+as evidence the wedge sits at or before the end of the domain switch rather than inside SQLite.
+**Wrong.** `ENT2` is emitted AFTER `__domcallsaves` returns (`sbi_capstone.c:911-913`), so a domain
+that never returns can never print it. The monitor's own comment states the decode:
+
+```
+ENT0 then silence -> died in this function before the switch
+ENT1 then silence -> control genuinely left M-mode; the domain owns the wedge
+ENT2             -> the domain returned; value is its result
+```
+
+`ENT0 + ENT1 + silence` is therefore the EXPECTED signature of a wedging domain, and what it does
+tell us is the useful half: **control genuinely left M-mode and the DOMAIN owns the wedge** — the
+monitor's setup path is exonerated. That is consistent with everything already recorded, and the
+"SQLite runs deeper" framing is untouched by it.
+
+Worth stating because the trap generalises: a marker that is only reached on the SUCCESS path
+carries no information when the failure path is silent. Reading its absence as a location is the
+same error as reading a timeout as a pass.
 
 **THE MEPC CANNOT YET BE MAPPED TO AN INSTRUCTION, and the missing piece is small.** The monitor
 never prints the domain's load base, so there is no way to convert `0x828897FC` into an offset in
