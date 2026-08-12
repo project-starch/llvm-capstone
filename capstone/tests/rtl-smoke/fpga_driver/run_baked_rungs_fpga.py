@@ -28,7 +28,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from fpga_driver import config as C                                    # noqa: E402
-from fpga_driver.fpga_console import FpgaConsole                       # noqa: E402
+from fpga_driver.fpga_console import FpgaConsole, ActionTimeout        # noqa: E402
 from fpga_driver.safe_cleanup import (release_board, hard_exit,        # noqa: E402
                                       install_release_on_signal)
 from fpga_driver.run_sqlite_baked_fpga import _hash_name  # noqa: E402
@@ -109,7 +109,24 @@ def main():
                 f"(None means flash_state was unreadable within nvbit()'s poll -- treat as "
                 f"unknown silicon, never as a pass.)")
         console.upload_boot_image(IMG_NAME, str(IMG))
-        cold_boot(console, C.GDB_PROMPT, IMG_NAME)
+        # Boot is ONE RETRYABLE UNIT. Measured 2026-08-13 across 15 board runs: 2 failed in
+        # cold_boot BEFORE a single byte of the image moved, with abstractcs busy stuck at 1 --
+        # the hart intermittently fails to enter debug mode on `reset halt`. Both were
+        # recoverable by retry, and run_ladder_perf_fpga.py has carried exactly this loop since
+        # 26-07 for the same reason; this call site simply never got it, so a transient
+        # infrastructure failure aborted the whole session and cost a boot.
+        #
+        # It is NOT image size: the failures transferred ZERO bytes, and 12 successful loads of
+        # the same firmware took 131.99-133.25 s against a 300 s budget. cold_boot is idempotent
+        # and self-cleaning (its own `finally: gdb_stop()`), so a retry costs a reload.
+        for _boot_attempt in range(1, 4):
+            try:
+                cold_boot(console, C.GDB_PROMPT, IMG_NAME)
+                break
+            except (ActionTimeout, RuntimeError) as _e:
+                log(f"  cold_boot failed ({_e}); retry {_boot_attempt}/3")
+                if _boot_attempt == 3:
+                    raise
         log(f"booted; running {len(RUNGS)} baked rungs from the shell")
 
         for pos, r in enumerate(RUNGS, 1):
