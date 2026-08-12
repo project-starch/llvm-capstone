@@ -10,7 +10,7 @@ the paper. Goal + guardrails below; no step-by-step, no per-task sign-off — de
 git switch capstone-bootstrap-b && git merge origin/capstone-bootstrap
 source capstone/tests/capstone-test-env.sh
 ```
-Read, in order: `CLAUDE.md`, `DELEGATION.md`, then **`plans/A-lane-handoff-briefing.md`** (the map),
+Read, in order: `CLAUDE.md`, `history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md` (archived), then **`plans/A-lane-handoff-briefing.md`** (the map),
 then this doc. The briefing indexes everything; this doc is the *current* strategy on top of it.
 
 ## 1. What the board owner's two answers give us (READ THIS — it reshapes the plan)

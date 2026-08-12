@@ -771,7 +771,7 @@ notes said the fixup was "not yet usable" as if it were a bug to be found. It is
 **State of the fixup:** correct under QEMU (the full SQLite gate passes with library + compiler
 fixups on all objects), correct on the isolated rung on silicon (66 -> 64, four observations
 across two boots, both slot orders), and it WEDGES SQLite on silicon with
-`mcause 25 = INVALID_CAPABILITY`.
+`mcause 25`. *(the NAME here is retracted: `mcause 25` is `UNEXPECTED_OPERAND`, not `INVALID_CAPABILITY` — measured, see R-24. The VALUE 25 stands.)*
 
 **Matched pair, one boot, control `k800` = 4** -- two staged builds differing only by the ldc
 fixups, both running stage 168 (open + a SHORT create):
@@ -1050,7 +1050,7 @@ stay DEFAULT OFF: they turn a diagnosable error return into a wedge.
 ### Earlier note (superseded by the above): still blocked on silicon, and it is NOT this fix
 
 With the fixup on, SQLite passes the entire QEMU gate but **wedges on silicon** with
-`mcause 25 = INVALID_CAPABILITY`, `rev_node_head = 0xf9`, `overflow = 0` (pool healthy) -- the
+`mcause 25`, *(the NAME here is retracted: `mcause 25` is `UNEXPECTED_OPERAND`, not `INVALID_CAPABILITY` — measured, see R-24. The VALUE 25 stands.)* `rev_node_head = 0xf9`, `overflow = 0` (pool healthy) -- the
 SAME fault the library fixup produced, in the same place. Both fixups repair the data, so SQLite
 runs deeper into `CREATE TABLE` than it ever has and meets a silicon-side capability-validity
 fault that QEMU does not reproduce. That is now the single remaining blocker.
@@ -1139,7 +1139,10 @@ capability alongside a plain chunk in one `memcpy`:
 
 So it repairs the data and preserves tags. The "it must be clearing a tag" theory is REFUTED.
 
-**3. The fault is named.** The wedge is a capability exception, `mcause 25 = INVALID_CAPABILITY`
+**3. The fault is named.** ~~The wedge is a capability exception, `mcause 25 = INVALID_CAPABILITY`~~
+**RETRACTED — the value 25 is right, the name is not. 25 is `UNEXPECTED_OPERAND`; `INVALID_CAPABILITY`
+encodes to 26, so the revocation-node site below CANNOT be the source. See R-24.** The original text
+follows for the record: the wedge is a capability exception, `mcause 25`
 (`capstone_unit.anvilh:289-296`), raised by `LDC`/`STC` when the **base** capability's revocation
 node reports invalid (`capstone_dyn_unit.anvil:332-338` and `:400-405`,
 `get_node_query_validity(rs1_v.metadata.revnode_id)`). It is NOT R-12: the same wedge dump reads

@@ -7,7 +7,7 @@ cold-start context you'd otherwise pay to rediscover, not a leash.
 **First, adopt this repo's operating rules as your own.** Read the **repo-root
 `CLAUDE.md`** (committed project instructions — your Claude Code session auto-loads
 it from the root of your own checkout; same file the A lane works under) and
-**`capstone/agent-handoff/DELEGATION.md`**, and treat their hard constraints — plus
+**`capstone/agent-handoff/history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`**, and treat their hard constraints — plus
 the "Permanent repository rules" restated at the bottom — as binding. This includes
 the **context / compaction discipline** (manage context deliberately; recommend
 `/compact` only at a safe checkpoint and with a short keep-vs-compress brief; never
@@ -79,7 +79,7 @@ rung files — `<base>_kernel.h`, `<base>_app.c`, `<base>_host.c`, and a
   `-O0`, and lean on the oracle-match assertion to catch any miscompile).
 
 ## Permanent repository rules — adopt these as your own (non-negotiable)
-Full standing rules (canonical: `CLAUDE.md` + `DELEGATION.md`). Treat them exactly as
+Full standing rules (canonical: `CLAUDE.md` + `history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md` (archived)). Treat them exactly as
 the A lane does:
 1. **Never mention any real person by name — anywhere.** PI / supervisor / board
    owner / collaborator → neutral roles, in every committed/shared file, commit, doc,

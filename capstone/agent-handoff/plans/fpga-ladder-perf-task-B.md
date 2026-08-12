@@ -7,7 +7,7 @@ deliverable, and (c) the FPGA mechanics (how to run, how to run *faster*, and th
 path).
 
 **First, adopt this repo's operating rules as your own.** Read the repo-root `CLAUDE.md` and
-`capstone/agent-handoff/DELEGATION.md` (hard constraints + the permanent rules restated at the
+`capstone/agent-handoff/history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md` (hard constraints + the permanent rules restated at the
 bottom of this doc), then `source capstone/tests/capstone-test-env.sh` and read
 `state/current-state.md`. **Note the board rule** (permanent): the FPGA is open to either lane,
 but **serialized** — never two board sessions at once.

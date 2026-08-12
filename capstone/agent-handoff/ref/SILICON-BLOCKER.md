@@ -3140,12 +3140,33 @@ before each domain, so this is attributable to `n144:144`. Identical in both wed
     sw=249/250  rev_node_head             602    overflow=0
     sw=251-254  rev_node_serving_idx      0
 
-`ex_code` (`capstone_unit.anvilh:289`) numbers the capability faults 24..29 —
-UNEXPECTED_OPERAND 24, INVALID_CAPABILITY 25, UNEXPECTED_CAP_TYPE 26,
-INSUFFICIENT_PERMISSION 27, **OUT_OF_BOUNDS 28**, ILLEGAL_OPERAND_VALUE 29. So:
+> **CORRECTED 2026-08-12 — THIS FAULT WAS MISNAMED, BY ONE.** The numbering below was taken from
+> the inline comments in `ex_code` (`capstone_unit.anvilh:289`), and **those comments were off by
+> one**. They have since been fixed. The encoders — `ex_stage.sv:469` (FLU) and `cva6.sv:1360`
+> (DYN) — compute `mcause = 24 + exception_code`, and `excode-base-audit.S` MEASURES the result on
+> this silicon: `UNEXPECTED_OPERAND` arrives as **25**, `INVALID_CAPABILITY` as **26**. So the real
+> mapping is `UNEXPECTED_OPERAND 25, INVALID_CAPABILITY 26, UNEXPECTED_CAP_TYPE 27,
+> INSUFFICIENT_PERMISSION 28, OUT_OF_BOUNDS 29, ILLEGAL_OPERAND_VALUE 30`.
+>
+> **The observed value was `mcause = 28`, so the fault is `INSUFFICIENT_PERMISSION`, NOT
+> `OUT_OF_BOUNDS`.** Every inference below that rests on "out of bounds" — a bad address, a
+> too-small carve, a cursor past `end` — is chasing the wrong fault. A permission fault means the
+> capability's `perm` bits do not authorise the access, which is a different investigation
+> entirely.
+>
+> The same off-by-one misnamed the SQLite `mcause 25` wedge as `INVALID_CAPABILITY` when it is
+> `UNEXPECTED_OPERAND`, and three consecutive investigations were spent on the revocation
+> subsystem before the arithmetic was checked. See `ISSUES.md` under S-06 and R-24. This is the
+> second conclusion the same comment produced; assume there are others and check any capability
+> `mcause` in this file against the table above before acting on it.
 
-**The domain takes an OUT_OF_BOUNDS capability fault, traps to M-mode, and the M-mode side
-wedges.** It is not a silent hang in the store path — a real exception is raised and taken.
+~~`ex_code` (`capstone_unit.anvilh:289`) numbers the capability faults 24..29 —
+UNEXPECTED_OPERAND 24, INVALID_CAPABILITY 25, UNEXPECTED_CAP_TYPE 26,
+INSUFFICIENT_PERMISSION 27, **OUT_OF_BOUNDS 28**, ILLEGAL_OPERAND_VALUE 29. So:~~
+
+~~**The domain takes an OUT_OF_BOUNDS capability fault, traps to M-mode, and the M-mode side
+wedges.**~~ **The domain takes an INSUFFICIENT_PERMISSION capability fault, traps to M-mode, and the
+M-mode side wedges.** It is not a silent hang in the store path — a real exception is raised and taken.
 
 REFUTED by this reading, all three previously plausible:
 

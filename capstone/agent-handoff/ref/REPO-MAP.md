@@ -47,7 +47,7 @@ normal mid-work, and must be resolved before pushing the parent.
 
 | path | purpose | branch (local) | pushed? |
 |---|---|---|---|
-| `capstone/capstone-ariane` | **the RTL.** CVA6 + Capstone, Anvil sources, directed tests | `fpga-testing-dev` | **NO — unpushed, no upstream** |
+| `capstone/capstone-ariane` | **the RTL.** CVA6 + Capstone, Anvil sources, directed tests | `fpga-testing-dev` | yes — `7e4dc440f`, gitlink in sync |
 | `capstone/capstone-qemu` | the emulator; functional oracle for the board | `capstone-bootstrap` | yes — pushed `62bf0f1d61` |
 | `capstone/capstone-c` | Capstone C runtime / cap-table reference | detached `8cda52c` | n/a |
 | `capstone/caplifive-system` | board bring-up: buildroot, OpenSBI, device tree | `capstone-bootstrap` | local ahead of gitlink |
@@ -204,11 +204,52 @@ consumes its source. Nothing here is validated on hardware until a bitstream car
 
 ---
 
+## Gitlink audit — 2026-08-12
+
+Every submodule checked three ways: does the parent's gitlink equal the local HEAD, is the gitlink
+reachable on a remote, is the local HEAD reachable on a remote. A gitlink that is not on a remote
+breaks `git submodule update` for everyone; that has already happened once on `capstone-ariane`.
+
+| submodule | branch | gitlink == HEAD | both on a remote |
+|---|---|---|---|
+| `capstone-ariane` | `fpga-testing-dev` | yes `7e4dc440f` | yes |
+| `capstone-qemu` | `capstone-bootstrap` | yes `62bf0f1d6` | yes |
+| `caplifive-buildroot` | `capstone-bootstrap` | yes | yes |
+| `capstone-c` | detached `8cda52c6` | yes | yes |
+| `capstone-spec` | `caplifive` | yes | yes |
+| `capstone-academic-spec` | `caplifive-s06` | **was stale — BUMPED** to `fa9600fa` | yes (`origin/caplifive-release`) |
+| `caplifive-system` | `capstone-bootstrap` | **DIFFERS — left alone deliberately** | **no, see below** |
+| `paper` | `main` | **DIFFERS — left alone deliberately** | yes |
+
+**Two divergences are INTENTIONAL. Do not "fix" either.**
+
+* **`paper`** — never bump its gitlink and never push it; Overleaf owns that remote. The divergence
+  is the correct steady state, not drift.
+* **`caplifive-system`** — local HEAD `6c5c740` ("traced monitor") is on **NO remote**, and the
+  gitlink `50e9ca8d` predates it. Bumping the gitlink now would point the parent at a commit nobody
+  can fetch, which is exactly the bug just fixed on `capstone-ariane`. **The fix is to push first,
+  then bump — in that order.** The chain is four levels deep and two of them are unpushed:
+
+  | level | branch | on a remote? |
+  |---|---|---|
+  | `caplifive-system` | `capstone-bootstrap` | **NO** |
+  | `sw/buildroot` | `capstone-bootstrap-dts-65536` | yes |
+  | `…/components/opensbi` | `capstone-bootstrap` | yes (`origin/genesys-testing`) |
+  | `…/capstone-sbi` | `capstone-bootstrap` | **NO** |
+
+  Push bottom-up: `capstone-sbi` → `caplifive-system`. Note `caplifive-system` has TWO remotes,
+  `origin` (upstream) and `fork` (`caplifive-system-dev`); the current gitlink lives on `fork/master`,
+  so the fork is the one in use.
+
+  **Consequence while this stands:** a fresh clone cannot reproduce the firmware the board runs,
+  because the monitor that emits the `EXCX`/`MCAU`/`MEPC` trap report is only in the unpushed chain.
+
+---
+
 ## Outstanding
 
-* **`capstone-ariane/fpga-testing-dev` is unpushed.** Until it is, the parent's gitlink points at a
-  commit that exists on no remote, and a fresh clone plus `git submodule update` **fails**. This
-  has already happened once. It needs a push by someone with write access.
+* ~~`capstone-ariane/fpga-testing-dev` is unpushed.~~ **RESOLVED 2026-08-12** — pushed, gitlink in
+  sync at `7e4dc440f`, and `origin/fpga-testing-fix` is an ancestor of it.
 * Several gitlinks are behind their local HEADs (`caplifive-system`, `capstone-academic-spec`,
   `paper`). Normal mid-work; resolve before pushing the parent, and never bump `paper`.
 * **`capstone-qemu` is RESOLVED (2026-08-12).** The parent's gitlink used to point at

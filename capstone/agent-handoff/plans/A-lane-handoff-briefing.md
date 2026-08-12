@@ -90,7 +90,7 @@ is not acceptable for the claim). Security story is settled; the **separating ax
   `Co-Authored-By`; bug-fix/audit notes → `history/` (dated), not `design/`.
 
 ## 8. Canonical pointers
-- Rules: `CLAUDE.md`, `DELEGATION.md`. State: `state/current-state.md`, `current-next-step.md`.
+- Rules: `CLAUDE.md`, `history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md` (archived). State: `state/current-state.md`, `current-next-step.md`.
 - FPGA: `ref/HOW-TO-LAUNCH-ON-FPGA.md`, `ref/gp-free-silicon-smoke-runbook.md`,
   `fpga_driver/PROTOCOL.md`.
 - Tasks: `plans/fpga-ladder-perf-task-B.md`, `plans/monitor-regen-audit-task-B.md`,

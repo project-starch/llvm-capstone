@@ -7,7 +7,7 @@ context you'd otherwise pay a cold-start tax to rediscover, not a leash.
 **First, adopt this repo's operating rules as your own.** Read the **repo-root
 `CLAUDE.md`** (the committed project instructions — your Claude Code session
 auto-loads it; it's the same file the A lane works under, present at the root of
-your own checkout) and **`capstone/agent-handoff/DELEGATION.md`**, and treat their
+your own checkout) and **`capstone/agent-handoff/history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md`**, and treat their
 hard constraints — plus the "Permanent repository rules" restated at the bottom of
 this doc — as binding for everything you do here. This includes the **context /
 compaction discipline** (manage context deliberately; recommend `/compact` only at a
@@ -61,7 +61,7 @@ amalgamation path is the recommended one because it stays in your lane entirely.
 
 ## Permanent repository rules — adopt these as your own (non-negotiable)
 These are the full standing rules for anyone working in this repo (canonical:
-`CLAUDE.md` + `DELEGATION.md`). Treat them exactly as the A lane does:
+`CLAUDE.md` + `history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md` (archived)). Treat them exactly as the A lane does:
 1. **Never mention any real person by name — anywhere.** PI / supervisor / board
    owner / collaborator → neutral roles, in every committed/shared file, commit,
    doc, or report. Permanent and absolute. (Upstream `lldb/`, `llvm/` files are not

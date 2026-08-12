@@ -158,6 +158,6 @@ tables. Scope/prototype it on a `static`-table rung before wiring SQLite.
 SQLite Stage 3/4 on the ladder, then batched silicon board runs (both in-lane).
 
 ## Constraints
-All permanent repo rules (`CLAUDE.md` / `DELEGATION.md`). Commit only when asked; no
+All permanent repo rules (`CLAUDE.md` / `history/29-07-2026_ARCHIVED_DELEGATION-lane-a-b.md` (archived)). Commit only when asked; no
 submodule-source commits; no real-person names; bug-fix/root-cause notes →
 `history/` dated. A-lane branch `capstone-bootstrap`.
