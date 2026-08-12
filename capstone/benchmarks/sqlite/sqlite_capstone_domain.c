@@ -83,6 +83,21 @@ static void output_uint(unsigned value) {
   }
 }
 
+#if defined(CAPSTONE_OOB_PROBE) || defined(CAPSTONE_ARG_PROBE)
+/* Shared by both probes. Lived inside the OOB block until the ARG probe needed it too; a
+   reporter that cannot print is a reporter that silently reports nothing. */
+static void output_hex64(unsigned long v) {
+  static const char hexd[] = "0123456789abcdef";
+  char buf[2];
+  int i;
+  buf[1] = '\0';
+  for (i = 60; i >= 0; i -= 4) {
+    buf[0] = hexd[(v >> i) & 0xfUL];
+    output_text(buf);
+  }
+}
+#endif
+
 #ifdef CAPSTONE_OOB_PROBE
 /* NON-PERTURBING reporter for the vdbeMemClearExternAndSetNull OUT_OF_BOUNDS fault (mcause 29
  * on `ldc a1, 0x0(a0)`, where a0 is the incoming Mem *p).
@@ -121,16 +136,6 @@ unsigned long capstone_oob_bad_n;
    lives at that address; both are measured rather than inferred from an assumed region layout. */
 unsigned long capstone_oob_ra, capstone_oob_spcur, capstone_oob_spst, capstone_oob_spen;
 
-static void output_hex64(unsigned long v) {
-  static const char hexd[] = "0123456789abcdef";
-  char buf[2];
-  int i;
-  buf[1] = '\0';
-  for (i = 60; i >= 0; i -= 4) {
-    buf[0] = hexd[(v >> i) & 0xfUL];
-    output_text(buf);
-  }
-}
 
 /* Called from the patched vdbeMemClearExternAndSetNull (build-sqlite-silicon.sh injects the
    call site). Rewrites the payload from offset 0 every time rather than appending: this runs
@@ -157,6 +162,29 @@ void capstone_oob_report(void) {
   output_text("\n");
 }
 #endif /* CAPSTONE_OOB_PROBE */
+
+#ifdef CAPSTONE_ARG_PROBE
+/* Reporter for CAPSTONE_ARG_PROBE (see build-sqlite-silicon.sh). Records the TYPE of a
+   function's first two pointer arguments on its FIRST call, plus the caller's return address.
+   A type of 7 means NOT_CAP -- the argument arrived as plain data.
+
+   Sticky on the first call rather than the last: the interesting call is the one that
+   establishes the value, and later healthy calls would otherwise scroll it away. Rewrites the
+   payload from offset 0 each time rather than appending, because this runs on every call and
+   appending would overflow the 4 KiB region. */
+unsigned long capstone_arg_calls, capstone_arg_ty1, capstone_arg_ty2, capstone_arg_ra;
+
+void capstone_arg_report(void) {
+  if (!hostcall_metadata || !hostcall_payload)
+    return;
+  hostcall_metadata->length = 0;
+  output_text("ARGP calls="); output_hex64(capstone_arg_calls);
+  output_text(" ty1=");       output_hex64(capstone_arg_ty1);
+  output_text(" ty2=");       output_hex64(capstone_arg_ty2);
+  output_text(" ra=");        output_hex64(capstone_arg_ra);
+  output_text("\n");
+}
+#endif /* CAPSTONE_ARG_PROBE */
 
 #ifdef CAPSTONE_REDRAW_PAD
 /* REDRAW control for S-01 ("a ~1.6 MB domain returns, but ANY perturbation of its image makes

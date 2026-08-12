@@ -783,6 +783,58 @@ PYOOB
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_OOB_PROBE=1"
 fi
 
+# CAPSTONE_ARG_PROBE=<fn> -- report the TYPE of a function's two pointer arguments, and its
+# caller, on the first call. Non-perturbing: it records and falls through.
+#
+# WHY. With the codegen guard enabled SQLite stops faulting at vdbeMemClearExternAndSetNull and
+# instead faults in sqlite3_strnicmp at `cincoffsetimm a0, a0, 1` on a pointer reloaded from a
+# stack slot -- mcause 25, an UNTAGGED pointer. That function is BYTE-IDENTICAL in the guarded
+# and unguarded builds, so the guard did not produce it; the pointer arrives that way or loses
+# its tag in the spill. Those are different bugs and static reading cannot separate them: the
+# earlier `lbu` dereferences in the same function do NOT fault, because plain integer accesses
+# are unchecked in our domains, so `cincoffsetimm` is merely the first tag-REQUIRING use and
+# says nothing about when the tag went.
+#
+# The probe queries the type of both incoming pointers BEFORE anything else runs. A type of 7
+# on entry means the caller handed over plain data; anything else means the tag was alive at the
+# boundary and the spill/reload lost it.
+if [[ -n "${CAPSTONE_ARG_PROBE:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$CAPSTONE_ARG_PROBE" <<'PYARG'
+import sys, re
+path, fn = sys.argv[1], sys.argv[2]
+s = open(path).read()
+m = re.search(r'^[^\n]*\b' + re.escape(fn) + r'\s*\(([^)]*)\)\s*\{', s, re.M)
+if not m:
+    sys.exit(f"ARG_PROBE: {fn} definition not found -- patch shape changed")
+args = [a.strip().split()[-1].lstrip('*') for a in m.group(1).split(',') if a.strip()]
+if len(args) < 2:
+    sys.exit(f"ARG_PROBE: {fn} has fewer than two arguments: {args}")
+probe = m.group(0) + """
+  /* CAPSTONE ARG PROBE -- records and falls through; changes no control flow. */
+  {
+    unsigned long ap_t1_, ap_t2_, ap_ra_;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(ap_t1_) : "r"(""" + args[0] + """));
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(ap_t2_) : "r"(""" + args[1] + """));
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, x1, x2" : "=r"(ap_ra_));
+    if (capstone_arg_calls == 0UL) {
+      capstone_arg_ty1 = ap_t1_; capstone_arg_ty2 = ap_t2_; capstone_arg_ra = ap_ra_;
+    }
+    capstone_arg_calls++;
+    capstone_arg_report();
+  }
+"""
+s = s.replace(m.group(0), probe, 1)
+decl = ("extern unsigned long capstone_arg_calls, capstone_arg_ty1, capstone_arg_ty2;\n"
+        "extern unsigned long capstone_arg_ra;\n"
+        "void capstone_arg_report(void);\n")
+i = s.find(probe); j = s.rfind("\n", 0, i)
+s = s[:j+1] + decl + s[j+1:]
+open(path, "w").write(s)
+print(f"   ARG probe injected into {fn} (args: {args[0]}, {args[1]})")
+PYARG
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_ARG_PROBE=1"
+fi
+
 SILICON=(-mllvm -capstone-merge-string-constants=true
          -mllvm -capstone-gp-captable
          -mllvm -capstone-shrink-stack=false
