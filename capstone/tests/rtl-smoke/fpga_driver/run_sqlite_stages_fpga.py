@@ -406,6 +406,7 @@ def main():
                 # been misread twice (0x84 and 0x89 both were).
                 log("WEDGED -- reading the debug mux now, before releasing the board")
                 pc_bytes = {}
+                mepc_bytes = {}
                 try:
                     for sw, label, kind in ((255, "TRAP LOG {seen,mcause[6:0]}", "trap"),
                                             (224, "{excommit,ldsync,stsync,lsu_rdy,dyn_rdy,"
@@ -464,7 +465,23 @@ def main():
                                             (234, "commit pc[39:32]", "pc"),
                                             (235, "commit pc[47:40]", "pc"),
                                             (236, "commit pc[55:48]", "pc"),
-                                            (237, "commit pc[63:56]", "pc")):
+                                            (237, "commit pc[63:56]", "pc"),
+                                            # LATCHED trap mepc, bank 3'b110 (sw = 192 + reg_sel).
+                                            # This is the one that survives a wedge: the LIVE
+                                            # `commit pc` bytes above read 0x2 once the core has
+                                            # stopped committing, whereas these are latched at the
+                                            # trap in the same block as the mcause. Added to the
+                                            # RTL 2026-08-12; on an older bitstream these read
+                                            # 0x00 and the assembled value is reported as absent
+                                            # rather than as address 0.
+                                            (196, "trap mepc[7:0]   (LATCHED)", "mepc"),
+                                            (197, "trap mepc[15:8]  (LATCHED)", "mepc"),
+                                            (198, "trap mepc[23:16] (LATCHED)", "mepc"),
+                                            (199, "trap mepc[31:24] (LATCHED)", "mepc"),
+                                            (200, "trap mepc[39:32] (LATCHED)", "mepc"),
+                                            (201, "trap mepc[47:40] (LATCHED)", "mepc"),
+                                            (202, "trap mepc[55:48] (LATCHED)", "mepc"),
+                                            (203, "trap mepc[63:56] (LATCHED)", "mepc")):
                         for bit in range(8):
                             console.set_switch(bit, bool(sw & (1 << bit)))
                         time.sleep(1.2)
@@ -486,6 +503,8 @@ def main():
                                   flush=True)
                         if kind == "pc":
                             pc_bytes[sw - 230] = v
+                        if kind == "mepc":
+                            mepc_bytes[sw - 196] = v
                     for bit in range(8):
                         console.set_switch(bit, False)
 
@@ -505,6 +524,29 @@ def main():
                         missing = [i for i in range(8) if pc_bytes.get(i) is None]
                         print(f"  [wedge] commit pc UNREAD (missing bytes {missing}) -- "
                               f"reporting nothing rather than a partial address", flush=True)
+
+                    # The LATCHED trap mepc. Same all-or-nothing rule as the pc above: a partial
+                    # read reconstructs a plausible wrong address, and a wrong address sends the
+                    # next session bisecting the wrong function.
+                    if len(mepc_bytes) == 8 and all(b is not None for b in mepc_bytes.values()):
+                        mepc = sum(mepc_bytes[i] << (8 * i) for i in range(8))
+                        if mepc == 0xca11ab1ebadcab1e:
+                            print("  [wedge] trap mepc = AXI ERROR-SLAVE PATTERN -- NO DATA",
+                                  flush=True)
+                        elif mepc == 0:
+                            # Zero is what an older bitstream returns for an unimplemented mux
+                            # slot, and it is also the reset value. Either way it is NOT evidence
+                            # of a trap at address 0 -- say so instead of printing 0x0.
+                            print("  [wedge] trap mepc = 0 -- either no trap was latched or this "
+                                  "bitstream predates the mepc debug bank. NOT an address.",
+                                  flush=True)
+                        else:
+                            print(f"  [wedge] trap mepc = 0x{mepc:016x}   <-- LATCHED at the "
+                                  f"trap; map onto the domain disassembly to name the faulting "
+                                  f"instruction", flush=True)
+                    else:
+                        missing = [i for i in range(8) if mepc_bytes.get(i) is None]
+                        print(f"  [wedge] trap mepc UNREAD (missing bytes {missing})", flush=True)
                     # DO NOT CALL console.trace_dump() HERE, OR ANYWHERE ON A WEDGED CORE.
                     # Measured 2026-08-05: the trace dump HANGS THE BOARD HARD -- `trace_result`
                     # never arrives, the 60 s wait expires, and the board is left in a state that

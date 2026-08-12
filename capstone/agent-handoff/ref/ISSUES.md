@@ -3977,7 +3977,52 @@ rule-B sites across the corpus. QEMU also omits this clear
 in-tree model currently distinguishes conformant from non-conformant behaviour** and a fix should
 land in both or note the divergence.
 
-### R-23 — `ldc` never checks WRITE permission, so a READ-ONLY capability can move a linear capability out of memory `OPEN — SPEC VIOLATION; NOT yet reported`
+### R-23 — `ldc` never checks WRITE permission, so a READ-ONLY capability can move a linear capability out of memory `FIXED IN RTL 2026-08-12 (fpga-testing-fix, merged); QEMU CANNOT VERIFY IT`
+
+**Fixed on `fpga-testing-dev`.** `check_load_data` (`capstone_unit.anvilh`) raises
+`INSUFFICIENT_PERMISSION` when the loaded value is linear-family and `rs1` lacks write permission,
+and `load_unit.sv` gates the clear itself on `rs1_perm_write` as a redundant second barrier.
+Directed test `ldc-perm-check.S` covers it and passes.
+
+The *shape* is what matters here and it is right: skipping the clear **without** trapping would be
+worse than the original bug — memory keeps its copy and the register gains one, duplicating a linear
+capability. Permission encoding verified rather than assumed: `asm_insn.h` gives `R=4, W=2, X=1`, so
+bit 1 is write; the Anvil test `(perm & 3'd2) != 3'd2` and `load_unit`'s `perm[1]` are the same bit,
+matching the spec's `2 <=p x[rs1].perms` (`mem-access-insn.adoc:46`).
+
+**NOT verifiable under QEMU, and that is a bigger gap than it sounds** — see the parity table below.
+
+### RTL vs QEMU: which oracle is authoritative for what `RECORDED 2026-08-12`
+
+Checked helper by helper after the `fpga-testing-fix` merge, because the board workflow gates on a
+QEMU pass and a silent divergence there sends a boot after the wrong thing.
+
+| behaviour | RTL (`fpga-testing-dev`) | QEMU (`capstone-bootstrap`) |
+|---|---|---|
+| `SCC`/`CINCOFFSET`/`CINCOFFSETIMM` clear a linear `rs1` when `rd != rs1` | **YES** — LINEAR only | **YES** — every non-`NONLIN` type. **QEMU is STRICTER** |
+| `MOVC`/`DROP`/`TIGHTEN`/`INIT`/`SEAL`/`CCSRRW`/`RETURN` consume a linear source | yes | yes (10 helpers) |
+| **`STC` clears a linear `rs2`** | **YES (new)** | **NO — absent** |
+| **`LDC` clears the source memory location for linear-family** | yes (pre-existing) | **NO — never implemented** |
+| **`LDC` requires WRITE permission for that clear (R-23)** | **YES (new)** | **N/A** — no clear exists to gate |
+
+Two consequences worth holding onto:
+
+* **QEMU is not an oracle for linearity-on-load.** It has never cleared the source memory location on
+  `LDC`, so a domain that moves a linear capability out of memory behaves differently on the two.
+  This is **pre-existing and independent of the merge**; the merge only made it visible by adding the
+  permission gate around a clear QEMU does not perform. `_helper_access_with_cap` still carries the
+  comment *"TODO: bounds check only for now"* — it checks tag, revocation, UNINIT-on-load, alignment
+  and bounds, and **no permission at all**.
+* **The derivation helpers are in parity, and QEMU is the stricter of the two.** The RTL clears only
+  `CAP_TYPE_LINEAR`; QEMU clears everything except `NONLIN`, so `REVOKE` and `SEALEDRET` sources are
+  consumed under QEMU and survive on silicon. Narrow, but it is a real difference and it favours
+  QEMU.
+
+**Do NOT bolt an R-23-style permission check onto QEMU on its own.** The write it would authorize
+does not happen there, so the check would be inert and would give false confidence that the two
+agree. The honest order is: implement `LDC` linear-clear in QEMU first, then gate it. That changes
+what QEMU considers legal and would move results for every QEMU-gated test, so it needs its own
+decision and its own corpus run — it is not a mirror commit.
 
 `capstone-spec/parts/mem-access-insn.adoc:44-46` requires `Insufficient capability permissions (27)`
 when the loaded value is not a scalar or a non-linear capability and `2 <=p x[rs1].perms` does not

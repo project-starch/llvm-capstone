@@ -1,5 +1,45 @@
 # Next step
 
+## 0-PRE. A NEW BITSTREAM IS IN SYNTHESIS — read this before the first boot on it
+
+Synthesis was started 2026-08-12 from `capstone-ariane` `fpga-testing-dev` = `7e4dc440f` (pushed).
+That RTL is **not** what any existing board result was taken on.
+
+**Every board measurement on file is now BASELINE-INVALID.** That includes the `mcause 25` wedge, the
+`s06sfix`/`s06sbase` scale runs, the `s06rev` refutation, the `s06lcc` silicon confirmation, and every
+`k800` control number. They were taken on `caplifive_s06.bit`, whose RTL differs from this one by:
+the LDC write-permission check (R-23), linear-source clearing on `STC`/`SCC`/`CINCOFFSET`/
+`CINCOFFSETIMM`, and the trap-mepc debug bank. Do not compare a number from the new bitstream against
+an old one without saying which bitstream each came from.
+
+**What the new bitstream buys.** Switches **196..203** now return the LATCHED trap `mepc`
+(`recent_nontrivial_mepc_log_q`), which survives a wedge — the live `commit pc` bytes read `0x2` junk
+because the core has stopped committing by the time the switches are read, and the monitor's own
+EXCX/MCAU/MEPC report never runs because a capability fault inside a domain wedges instead of
+trapping to `mtvec`. `run_sqlite_stages_fpga.py` already reads and assembles them, all-or-nothing,
+and reports an all-zero result as "no trap latched, or a bitstream predating this bank" rather than
+as address 0 — so an old bitstream cannot be misread as a finding.
+
+**First boot on the new bitstream, in this order:**
+
+1. `k800` — control. If it fails the boot is VOID and says nothing about anything else.
+2. **`s06lcc`** — re-confirms the S-06 enabler survived synthesis (expect `171`). This is also the
+   bitstream-identity check: on RTL without the enabler the plain-data query wedges.
+3. `sqfixoff` — expect `stage=create rc=11 malformed`. Confirms the boot reaches SQLite at all.
+4. `sqwedge` — expected to wedge, LAST. **Then read switches 196..203.**
+
+`FPGA_BITSTREAM` must be set to the new bitstream's name or the driver hard-stops; it defaults to
+`caplifive_fixed_forward.bit` and the runs so far overrode it to `caplifive_s06.bit`.
+
+**A domain-behaviour risk that simulation cannot settle.** The linearity fix consumes a linear source
+on derivation. Our monitor and glue are safe *by construction* — every `scc`/`cincoffset` site is
+`rd == rs1`, which the RTL exempts, and `start-gp-captable-interp.S:45` already documented that
+`cincoffset rd, rs1, rs2` with `rd != rs1` consumes a linear `rs1`. So the software already assumed
+these semantics and the RTL has caught up. That was checked in source, not measured on hardware; if
+domains that used to enter now stall, this is the first thing to re-examine.
+
+---
+
 ## 0. THE SQLITE BLOCKER HAS BEEN CHASING THE WRONG EXCEPTION — 2026-08-12
 
 `mcause 25` is **`UNEXPECTED_OPERAND`**, not `INVALID_CAPABILITY`. The observed value is sound; the
@@ -20,25 +60,31 @@ Two encoders disagree by one: `ex_stage.sv:469`/`cva6.sv:1360` use base 24, `com
 uses base 23. So an observed 25 has two readings — `UNEXPECTED_OPERAND` from the execute path, or
 `INVALID_CAPABILITY` on the PC capability from the fetch path.
 
-**The discriminator is `mepc`, which the monitor already captures in `a6` at every wedge.** Under the
-first reading it points at a capstone instruction whose operand can be inspected; under the second it
-does not. Read `a6` alongside `a5` at the next wedge — no rebuild, no new rung.
+**SUPERSEDED — the monitor route does NOT work.** This said to read `a6` at the next wedge. It was
+tried on 2026-08-12 and the monitor never ran: a capability fault inside a capability domain WEDGES
+instead of trapping to `mtvec`, so `handle_exception` is never entered and `a5`/`a6` are never
+loaded. Zero `EXCX`/`MCAU`/`MEPC`/`MTVL` across the whole run.
+
+**The working discriminator is the debug mux, switches 196..203**, which return the LATCHED trap
+`mepc` and require the new bitstream (see section 0-PRE). Under the `UNEXPECTED_OPERAND` reading the
+`mepc` lands on a capstone instruction in the domain disassembly whose operand can be inspected;
+under the PC-capability reading it does not.
 
 Also check the spec's exception numbering to decide which base is *correct*, not merely which is in
 the majority. Until that is done, do not "fix" either encoder: changing a base changes the `mcause`
 values software receives, and the monitor, the handlers and the directed tests that assert `mcause`
 all have to move together.
 
-### 0b. Make the monitor REPORT instead of spinning — one firmware rebuild, no bitstream
+### 0b. DONE, AND IT DOES NOT HELP — the monitor already reports, and never gets the chance
 
-`handle_exception`'s `default:` arm is
-`csrr a5, mcause; csrr a6, mepc; 1: j 1b` (`sbi_capstone.c:748-752`). It parks the hart silently, so
-every wedge today yields one number read back over the debug interface — and this project has twice
-seen that path return AXI error-slave junk.
+This proposed making `handle_exception` print `mcause`/`mepc`/`mtval` instead of spinning. **It was
+already implemented** (site `EXCX`, with a UART flush), is committed in the nested `capstone-sbi`
+submodule, and is compiled into the current firmware — verified by disassembling the built ELF with a
+positive control, after a naive byte-grep returned a false zero for every tag including that control.
 
-Print `mcause`, `mepc` and `mtval` before parking. This is the highest-leverage change available:
-it converts every future wedge from one bit into a full diagnosis, it costs one firmware rebuild,
-and it is reversible. Do it before spending another board session on the blocker.
+**It still never fires**, for the reason in 0a: the fault wedges rather than trapping, so the monitor
+is not entered. The monitor can only report traps that reach it. Do not plan around it again — this
+cost one board session's worth of expectation.
 
 ### 0c. Then one batched boot, 4 domains, ordered so a wedge costs nothing
 
@@ -54,7 +100,8 @@ ascending order, at most ONE expected-to-wedge domain LAST.
    zero metadata writes only the bank its offset selects and clears the tag, so the granule reloads
    as `NOT_CAP` — and `LDC:306`/`STC:370` raise `UNEXPECTED_OPERAND` on exactly that.
    *This is a hypothesis with a mechanism, NOT a finding. It must not be written up as one.*
-4. The SQLite stage, last, expected to wedge — and now diagnosable because of 0b.
+4. The SQLite stage, last, expected to wedge — diagnosable via the debug mux (196..203), NOT via
+   the monitor. Already reproduced once: `mcause 25`, `privM=1`, `rev_node_head=417`, overflow clear.
 
 ### 0d. Only then, the compiler side
 
