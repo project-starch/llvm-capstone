@@ -674,6 +674,67 @@ SILICON_TRIM=(
 # carves, ~215 allocations total. Enabled HERE rather than by default so the silicon-ladder
 # rungs keep their measured geometry -- tab:spatialcost's BEEBS numbers were deliberately
 # taken with merging off and must not silently change.
+# CAPSTONE_OOB_PROBE=1 -- convert the vdbeMemClearExternAndSetNull OUT_OF_BOUNDS wedge into a
+# RETURN, and report what the offending capability's bounds actually were.
+#
+# The domain wedges at vdbeMemClearExternAndSetNull+0x3c on `ldc a1, 0x0(a0)` with mcause 29
+# (OUT_OF_BOUNDS). a0 is the incoming `Mem *p`, spilled by the -O0 prologue and reloaded with NO
+# intervening call, so the bad capability was handed in by the caller. The LDC rule
+# (capstone_dyn_unit.anvil:317-348) is: fault iff cursor < start || cursor > end - 16.
+#
+# Two readings remain and static analysis cannot separate them:
+#   A  the address is right and the BOUNDS are wrong -- p is a real Mem whose capability metadata
+#      is bad. MEM_Agg is genuine; the workload does use COUNT/SUM/MAX/GROUP BY.
+#   B  the address is WRONG -- p is wild, the flags read junk that happened to have bit 15 set,
+#      and the ldc is simply the first bounds-checked use.
+#
+# The probe reads p's cursor/start/end with LCC selectors 2/3/4 BEFORE the faulting load, and if
+# the capability would fault it records a compact verdict and RETURNS instead. That turns a wedge
+# -- which yields one bit per boot -- into a value the host prints, which is the project's standing
+# preference for any diagnostic.
+#
+# DEFAULT OFF. It changes control flow (skips an aggregate finalize), so it is a DIAGNOSTIC build
+# only and must never be used for a timing or correctness number.
+if [[ "${CAPSTONE_OOB_PROBE:-0}" == "1" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYOOB'
+import sys, re
+p = sys.argv[1]
+s = open(p).read()
+FN = "static SQLITE_NOINLINE void vdbeMemClearExternAndSetNull(Mem *p){"
+if FN not in s:
+    sys.exit("OOB_PROBE: vdbeMemClearExternAndSetNull not found -- patch shape changed")
+probe = FN + """
+  /* CAPSTONE OOB PROBE -- see build-sqlite-silicon.sh. Diagnostic only. */
+  {
+    unsigned long cs_cur_, cs_st_, cs_en_;
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x2" : "=r"(cs_cur_) : "r"(p));
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x3" : "=r"(cs_st_)  : "r"(p));
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x4" : "=r"(cs_en_)  : "r"(p));
+    if (cs_cur_ < cs_st_ || cs_cur_ > cs_en_ - 16UL) {
+      capstone_oob_hits++;
+      if (capstone_oob_hits == 1) {
+        capstone_oob_cur = cs_cur_;
+        capstone_oob_start = cs_st_;
+        capstone_oob_end = cs_en_;
+      }
+      return;   /* skip the faulting path so the domain RETURNS and can be read */
+    }
+  }
+"""
+s = s.replace(FN, probe, 1)
+# the globals, declared before first use
+decl = ("unsigned long capstone_oob_hits = 0;\n"
+        "unsigned long capstone_oob_cur = 0;\n"
+        "unsigned long capstone_oob_start = 0;\n"
+        "unsigned long capstone_oob_end = 0;\n")
+i = s.find(FN)
+j = s.rfind("\n", 0, i)
+s = s[:j+1] + decl + s[j+1:]
+open(p, "w").write(s)
+print("   OOB probe injected into vdbeMemClearExternAndSetNull")
+PYOOB
+fi
+
 SILICON=(-mllvm -capstone-merge-string-constants=true
          -mllvm -capstone-gp-captable
          -mllvm -capstone-shrink-stack=false

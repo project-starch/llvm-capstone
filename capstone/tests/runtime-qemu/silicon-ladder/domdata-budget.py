@@ -84,7 +84,12 @@ def main():
     code_len = hi - lo
     code_size = (((code_len - 1) >> 4) + 1) << 4      # monitor rounds up to 16
 
-    dom_tot = code_len + MODULE_HEADROOM              # capstone.c:83
+    # Headroom SCALES with the image since 2026-08-12 (module/capstone.c:83):
+    #   dom_headroom = max(code_len, DOMAIN_DATA_SIZE)
+    # Images below 64 KiB are unchanged; larger ones double. Keep this in step with the
+    # module or this predictor silently reports the wrong order and the wrong verdict --
+    # which it did, reporting "DOES NOT FIT" for a build the module now gives 4 MiB.
+    dom_tot = code_len + max(code_len, MODULE_HEADROOM)   # capstone.c:83
     pages = (dom_tot - 1) // PAGE + 1
     order = 0 if pages == 1 else (pages - 1).bit_length()
     tot_size = (1 << order) * PAGE

@@ -144,14 +144,50 @@ typedef unsigned long long bu64_t;      /* exactly one half of a 128-bit capabil
  * taken with; build-sqlite-silicon.sh turns it on. Remove when the silicon is fixed.
  */
 #if defined(BEEBS_LDC_HIGH_HALF_FIXUP) && BEEBS_LDC_HIGH_HALF_FIXUP
+/* The capability store is now CONDITIONAL on the source granule actually holding a capability.
+ *
+ * The previous version laid both halves down plainly and then put `ldc`/`stc` on top
+ * unconditionally, on the theory that for plain data the loaded value is NOT_CAP, its metadata
+ * reads 0, `st_wr_cap = |wr_user_i` is 0, and the `stc` writes only the bank its offset selects --
+ * leaving the correct high half in place. That is true ONLY when the granule's high 8 bytes are
+ * zero.
+ *
+ * When the high half is NONZERO the metadata is nonzero, `st_wr_cap` is 1
+ * (wt_dcache_mem.sv:140), and bank 1 is written with `wr_user_i` (:160) -- which is not the
+ * original high half but the result of decompress-then-recompress. decompress_cap_metadata takes
+ * the CURSOR as an input (ariane_pkg.sv:718-746) and decompress_bounds reconstructs from it
+ * (:661-665), so that round trip is not the identity for arbitrary (low, high) pairs. Measured
+ * 2026-08-12 in RTL simulation (s06-lowhalf-zero.S, matched pair, confirmed by swapping which
+ * granule carries the zero): a granule whose LOW half is ZERO loses its HIGH half.
+ *
+ * That is what corrupted SQLite. sqlite3NestedParse saves PARSE_TAIL through this copy; nVtabLock
+ * sits at tail offset 40 -- the high half of a granule whose low half is zero in a fresh Parse --
+ * so it came back nonzero, sqlite3FinishCoding then entered a loop that must never run for a
+ * non-virtual table, and indexing the legitimately-NULL apVtabLock raised UNEXPECTED_OPERAND.
+ *
+ * The fix is to ask, rather than to assume. The S-06 enabler makes LCC's TYPE query TOTAL: it
+ * answers 7 for a non-capability instead of raising, so the copy can test the loaded granule and
+ * skip the `stc` entirely when it is plain data. The two plain stores have already written both
+ * halves correctly, so skipping is not merely safe -- it is the whole point. When the granule IS a
+ * capability the `stc` runs exactly as before and the tag is preserved.
+ *
+ * Requires the S-06 enabler in RTL. Without it the query RAISES on plain data; keep this behind
+ * BEEBS_LDC_HIGH_HALF_FIXUP so a build for older silicon is unaffected. */
+#define BEEBS_LCC_TYPE(out_, cap_) \
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(out_) : "r"(cap_))
 #define BEEBS_CHUNK_COPY(D, S)                                                  \
   do {                                                                          \
     unsigned char *bcd_ = (D);                                                  \
     const unsigned char *bcs_ = (S);                                            \
     bsize_t bck_;                                                               \
+    void *bcv_;                                                                 \
+    unsigned long bct_;                                                         \
     for (bck_ = 0; bck_ < sizeof(void *) / sizeof(bu64_t); bck_++)              \
       ((bu64_t *)(void *)bcd_)[bck_] = ((const bu64_t *)(const void *)bcs_)[bck_]; \
-    *(void **)bcd_ = *(void *const *)bcs_;   /* on top: restores a tag if any */ \
+    bcv_ = *(void *const *)bcs_;                                                \
+    BEEBS_LCC_TYPE(bct_, bcv_);                                                 \
+    if (bct_ != 7ul)                                                            \
+      *(void **)bcd_ = bcv_;   /* a real capability: store it, tag and all */   \
   } while (0)
 #else
 #define BEEBS_CHUNK_COPY(D, S) ((void)(*(void **)(D) = *(void *const *)(S)))
