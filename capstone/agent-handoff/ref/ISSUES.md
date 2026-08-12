@@ -4014,7 +4014,73 @@ i.e. the clear is *incomplete*. That is consistent with S-06's mechanism -- the 
 offset is written. Whether the granule's tag also goes clear (which would make the residue
 harmless) was **not measured** and must be before anyone concludes either way.
 
-### R-24 — two exception encoders disagree by one, so a single `mcause` value has two names `OPEN — NOT yet reported; needs a decision before it is fixed`
+### R-24 — the FLU/DYN exception encoder is +1 off the spec, so every capability `mcause` from the execute path is wrong `OPEN — SPEC VIOLATION, direction now determinate; NOT yet reported`
+
+**RESOLVED 2026-08-12 against `capstone-spec`, and the answer is the opposite of the first guess
+recorded below.** `capstone-academic-spec/parts/int-except.adoc:19-27` gives the authoritative table:
+
+| Exception | spec code |
+|---|---|
+| Unexpected operand type | **24** |
+| Invalid capability | **25** |
+| Unexpected capability type | 26 |
+| Insufficient capability permissions | 27 |
+| Capability out of bound | 28 |
+| Illegal operand value | 29 |
+| Insufficient system resources | 30 |
+
+With `ex_code` ordinals `NO_EXCEPTION = 0, UNEXPECTED_OPERAND = 1, ...`, the spec's numbering is
+**base 23**. Therefore:
+
+* `commit_stage.sv:205-228` (base 23) is **SPEC-CONFORMANT**.
+* `ex_stage.sv:469` (FLU) and `cva6.sv:1360` (DYN) use **base 24** and are **+1 on every capability
+  exception the execute path raises** — which is nearly all of them.
+* `riscv_pkg.sv:349-353` encodes the same +1 error (`UNEXPECTED_OPERAND_TYPE = 25` where the spec
+  says 24), so it corroborates the RTL's behaviour, not the spec.
+
+**BOTH CODES NOW MEASURED DIRECTLY, in one matched pair.** `excode-base-audit.S` traps each
+exception on purpose and asserts the delivered `mcause`:
+
+| arm | how it is provoked | delivered `mcause` |
+|---|---|---|
+| U | `CINCOFFSET` with a still-tagged capability as `rs2` (`capstone_flu_unit.anvil:30` raises `UNEXPECTED_OPERAND` and nothing else for that condition) | **25** |
+| I | `LDC` through a capability whose revocation node has been revoked — `capstone_dyn_unit.anvil:337`, **the exact site the SQLite wedge was blamed on** | **26** |
+
+It PASSES, with a control inside arm I confirming the same `LDC` does *not* fault before the
+`REVOKE`, and with each arm asserting `trap_count == 1` so an arm that silently failed to fault
+cannot pass on a stale count. The RTL's own `$display` corroborates independently: the log contains
+exactly one `Exception: UNEXPECTED_OPERAND` and exactly one `Exception: INVALID_CAPABILITY`.
+Negative-tested — changing arm I's expectation from 26 to 25 makes it FAIL at `fail_i_cause`.
+
+**So the retraction is settled empirically, not by reading encoders:** the revocation-validity check
+delivers 26, and the board wedge showed 25. It cannot be that site.
+
+**MEASURED, not inferred.** `cincoffset-stale-metadata.S` builds a genuinely tagged `CAP_TYPE_LIN`
+capability and feeds it to `CINCOFFSET` as `rs2`. `capstone_flu_unit.anvil:30` raises
+`UNEXPECTED_OPERAND` and nothing else for that condition. The test's trap handler records `mcause`
+and the self-check asserts **both** `trap_count == 1` (so the trap provably happened, and a vacuous
+pass is impossible) **and** `observed_cause == 25`, failing to `selfcheck_fail` otherwise. It
+**PASSES** on this RTL. So on silicon `UNEXPECTED_OPERAND` really does deliver `mcause 25`, where
+the spec says it should deliver 24.
+
+This also closes the one link in the retraction's evidence chain that was unverified — whether the
+Anvil compiler assigns enum ordinals in declaration order from 0. It no longer matters: the
+end-to-end behaviour is measured directly.
+
+**Consequence for the SQLite blocker.** The retraction under S-06 stands and is now empirically
+backed: an `INVALID_CAPABILITY` from `LDC`/`STC` (`capstone_dyn_unit.anvil:337`, `:404`) leaves the
+execute path as **26**, and the wedge showed 25. The two live readings of an observed 25 are
+unchanged — `UNEXPECTED_OPERAND` from the execute path, or `INVALID_CAPABILITY` from the
+spec-conformant fetch-path check — and `mepc` still discriminates them.
+
+**Do NOT fix by changing the base yet.** The RTL is wrong, but so are `riscv_pkg.sv`, the monitor's
+expectations, and at least one directed test (`cincoffset-stale-metadata.S` asserts 25 and would
+start failing). They have to move together, and the change alters every `mcause` software receives.
+This needs the board owner, not a patch.
+
+<details><summary>Superseded first analysis, kept because it was acted on</summary>
+
+### two exception encoders disagree by one, so a single `mcause` value has two names
 
 Capability exceptions reach `mcause` through two different encoders using two different bases:
 
@@ -4046,6 +4112,11 @@ off-by-one *comments* in the `ex_code` enum that caused the misnaming ARE fixed
 Verified against `capstone-spec`: **NOT YET.** The spec's exception numbering has not been checked
 against either encoder, so which base is *correct* — as opposed to which is in the majority — is
 still open. Do that before proposing a fix.
+
+*(That check has since been done — see the top of this entry. The answer inverted the expectation:
+the majority encoder is the non-conformant one.)*
+
+</details>
 
 ### UNRESOLVED — two open questions from the same audit, recorded as questions and NOT as findings
 
