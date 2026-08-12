@@ -116,6 +116,10 @@ unsigned long capstone_oob_last_st, capstone_oob_last_en;
 unsigned long capstone_oob_bad_ty, capstone_oob_bad_cur;
 unsigned long capstone_oob_bad_st, capstone_oob_bad_en;
 unsigned long capstone_oob_bad_n;
+/* Who handed the capability over, and where the stack actually is. The first run showed p is
+   the HEAP capability with a cursor past its end, so the open questions are the caller and what
+   lives at that address; both are measured rather than inferred from an assumed region layout. */
+unsigned long capstone_oob_ra, capstone_oob_spcur, capstone_oob_spst, capstone_oob_spen;
 
 static void output_hex64(unsigned long v) {
   static const char hexd[] = "0123456789abcdef";
@@ -146,6 +150,10 @@ void capstone_oob_report(void) {
   output_text(" cur=");         output_hex64(capstone_oob_bad_cur);
   output_text(" st=");          output_hex64(capstone_oob_bad_st);
   output_text(" en=");          output_hex64(capstone_oob_bad_en);
+  output_text("\n WHO  ra=");   output_hex64(capstone_oob_ra);
+  output_text(" spcur=");        output_hex64(capstone_oob_spcur);
+  output_text(" spst=");         output_hex64(capstone_oob_spst);
+  output_text(" spen=");         output_hex64(capstone_oob_spen);
   output_text("\n");
 }
 #endif /* CAPSTONE_OOB_PROBE */

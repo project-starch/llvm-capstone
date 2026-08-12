@@ -729,6 +729,19 @@ probe = FN + """
       __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x3" : "=r"(cs_st_)  : "r"(p));
       __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x4" : "=r"(cs_en_)  : "r"(p));
     }
+    /* WHO handed us this capability, and WHAT REGION its cursor points into.
+       The first run established that p is the HEAP capability (bounds exactly the 1 MiB heap)
+       with a cursor 54336 bytes past its end -- so the bounds are right and the cursor is wrong,
+       and the next question is who computed it and what lives at that address. Both are read
+       here rather than inferred: `ra` still holds the caller's return address (nothing has been
+       called yet at this point, and the -O0 prologue has not reused it), and sp's bounds ARE the
+       stack region, so "is that address in the stack" stops being arithmetic on assumed layout.
+       rs1 is written as the literal register number -- x1 is ra, x2 is sp -- because these are
+       .insn forms, not named operands. */
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, x1, x2" : "=r"(capstone_oob_ra));
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, x2, x3" : "=r"(capstone_oob_spst));
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, x2, x4" : "=r"(capstone_oob_spen));
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, x2, x2" : "=r"(capstone_oob_spcur));
     capstone_oob_calls++;
     capstone_oob_last_ty = cs_ty_;   capstone_oob_last_cur = cs_cur_;
     capstone_oob_last_st = cs_st_;   capstone_oob_last_en  = cs_en_;
@@ -754,6 +767,8 @@ decl = ("extern unsigned long capstone_oob_calls, capstone_oob_bad_seen, capston
         "extern unsigned long capstone_oob_last_st, capstone_oob_last_en;\n"
         "extern unsigned long capstone_oob_bad_ty, capstone_oob_bad_cur;\n"
         "extern unsigned long capstone_oob_bad_st, capstone_oob_bad_en;\n"
+        "extern unsigned long capstone_oob_ra, capstone_oob_spcur;\n"
+        "extern unsigned long capstone_oob_spst, capstone_oob_spen;\n"
         "void capstone_oob_report(void);\n")
 i = s.find(FN)
 j = s.rfind("\n", 0, i)
