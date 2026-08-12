@@ -1,5 +1,68 @@
 # Next step
 
+## 0. THE SQLITE BLOCKER HAS BEEN CHASING THE WRONG EXCEPTION — 2026-08-12
+
+`mcause 25` is **`UNEXPECTED_OPERAND`**, not `INVALID_CAPABILITY`. The observed value is sound; the
+name attached to it was wrong, and it sent three consecutive investigations after the revocation
+subsystem. Full evidence in `ref/ISSUES.md` under S-06 and R-24. The consequence is that the
+recorded lead — `get_node_query_validity` at `capstone_dyn_unit.anvil:337`/`:404` — is excluded
+*arithmetically*: those sites raise `INVALID_CAPABILITY`, which encodes to 26.
+
+What is now in scope: an operand whose `cap_type` is `NOT_CAP` where a capability was required.
+For a memcpy-heavy workload that means `LDC:306` and `STC:370`, both "the base register is not a
+capability".
+
+Take these in order. The first two cost no board time at all.
+
+### 0a. Settle R-24 — free, no new experiment
+
+Two encoders disagree by one: `ex_stage.sv:469`/`cva6.sv:1360` use base 24, `commit_stage.sv:205-228`
+uses base 23. So an observed 25 has two readings — `UNEXPECTED_OPERAND` from the execute path, or
+`INVALID_CAPABILITY` on the PC capability from the fetch path.
+
+**The discriminator is `mepc`, which the monitor already captures in `a6` at every wedge.** Under the
+first reading it points at a capstone instruction whose operand can be inspected; under the second it
+does not. Read `a6` alongside `a5` at the next wedge — no rebuild, no new rung.
+
+Also check the spec's exception numbering to decide which base is *correct*, not merely which is in
+the majority. Until that is done, do not "fix" either encoder: changing a base changes the `mcause`
+values software receives, and the monitor, the handlers and the directed tests that assert `mcause`
+all have to move together.
+
+### 0b. Make the monitor REPORT instead of spinning — one firmware rebuild, no bitstream
+
+`handle_exception`'s `default:` arm is
+`csrr a5, mcause; csrr a6, mepc; 1: j 1b` (`sbi_capstone.c:748-752`). It parks the hart silently, so
+every wedge today yields one number read back over the debug interface — and this project has twice
+seen that path return AXI error-slave junk.
+
+Print `mcause`, `mepc` and `mtval` before parking. This is the highest-leverage change available:
+it converts every future wedge from one bit into a full diagnosis, it costs one firmware rebuild,
+and it is reversible. Do it before spending another board session on the blocker.
+
+### 0c. Then one batched boot, 4 domains, ordered so a wedge costs nothing
+
+Everything after the first wedge in a boot is lost, so: control first, expected-to-return next in
+ascending order, at most ONE expected-to-wedge domain LAST.
+
+1. `k800` — known-good control. If it fails the boot is VOID.
+2. **The gap `s06sfix` left.** It copied 2048 capability-bearing chunks and never DEREFERENCED one.
+   Copy capabilities with the fixup's pattern, then *use* each copied capability as a base. If the
+   chain below is real this returns a wrong count rather than hanging.
+3. **The suspected chain, directly.** Plain-store over a granule that previously held a capability,
+   then `ldc` it and use it as a base. This is the shape the fixup creates: a capability store with
+   zero metadata writes only the bank its offset selects and clears the tag, so the granule reloads
+   as `NOT_CAP` — and `LDC:306`/`STC:370` raise `UNEXPECTED_OPERAND` on exactly that.
+   *This is a hypothesis with a mechanism, NOT a finding. It must not be written up as one.*
+4. The SQLite stage, last, expected to wedge — and now diagnosable because of 0b.
+
+### 0d. Only then, the compiler side
+
+If the chain in 3 holds, the fix is in how the copy re-establishes the destination's tag, not in the
+revocation subsystem, and it is a compiler/library change rather than an RTL one.
+
+## Carried over, still valid, lower priority than section 0
+
 ## 1. Land the R-18 workaround in the compiler (in-lane, no board)
 
 Emit an integer op instead of `movc rd, zero` when materialising integer zero, in the Capstone
