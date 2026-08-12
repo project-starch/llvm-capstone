@@ -31,6 +31,33 @@ as address 0 — so an old bitstream cannot be misread as a finding.
 `FPGA_BITSTREAM` must be set to the new bitstream's name or the driver hard-stops; it defaults to
 `caplifive_fixed_forward.bit` and the runs so far overrode it to `caplifive_s06.bit`.
 
+**NO COMPILER CHANGES ARE REQUIRED — but not for the reason first proposed.** An investigation
+concluded that "the only backend `SCC` is `rd == rs1`, which the RTL exempts". That is WRONG: there
+are three backend `SCC` sites, and two of them are `rd != rs1` —
+`CapstoneExpandPseudoInsts.cpp:331-333` emits `SCC DstReg, X3(gp), SrcReg` on the **gp-captable
+global-access path**, and `CapstoneISelDAGToDAG.cpp:1661` builds `SCC` into a fresh vreg. Only
+`CapstoneFrameLowering.cpp:1184` is `rd == rs1`.
+
+So the safety of compiled code rests on a RUNTIME PRECONDITION, not a structural property: **`gp` and
+`sp` are DELINEARIZED before codegen derives from them.** Verified in every glue path —
+`start-gpfree-captable.S:52`, `start-gpfree-cscratch.S:45-46`, and the generated default at
+`gen-gp-captable-glue.py:176/207/290`. `delin` makes them `NONLIN`, and the new clear fires only for
+`CAP_TYPE_LINEAR`, so the global-access `SCC` never consumes `gp`.
+
+That distinction matters for anyone changing the glue: **remove or reorder a `delin` and compiled
+global access starts nulling `gp` on its first use.** It is no longer merely an optimisation detail.
+`MOVC` — which codegen uses for every register copy with `rd != rs1` — was NOT touched by the merge
+(the FLU diff covers exactly `CINCOFFSET`, `CINCOFFSETIMM`, `SCC`), so ordinary copies are unaffected.
+
+Spill/reload (`STC`/`LDC` at `CapstoneInstrInfo.cpp:768,858`) handles NONLIN values on a
+write-permitted stack, so neither the new `rs2` clear nor R-23 applies.
+
+**A pre-existing hazard, unchanged by this merge but worth knowing before reading board results:**
+the invariant needs `delin(sp)` to run EXACTLY ONCE. RTL `DELIN` accepts `CAP_TYPE_LINEAR` only and
+raises `UNEXPECTED_CAP_TYPE` on a second call, while our patched QEMU `helper_csdelin` returns early
+and hides it (issue C-13). A double-delin therefore passes under QEMU and raises on silicon — as
+`mcause 27`, not 25, so it is NOT the SQLite wedge, but it is another place QEMU is not the oracle.
+
 **A domain-behaviour risk that simulation cannot settle.** The linearity fix consumes a linear source
 on derivation. Our monitor and glue are safe *by construction* — every `scc`/`cincoffset` site is
 `rd == rs1`, which the RTL exempts, and `start-gp-captable-interp.S:45` already documented that
