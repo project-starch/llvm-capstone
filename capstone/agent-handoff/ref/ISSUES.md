@@ -4086,6 +4086,50 @@ With `ex_code` ordinals `NO_EXCEPTION = 0, UNEXPECTED_OPERAND = 1, ...`, the spe
 * `riscv_pkg.sv:349-353` encodes the same +1 error (`UNEXPECTED_OPERAND_TYPE = 25` where the spec
   says 24), so it corroborates the RTL's behaviour, not the spec.
 
+**THE SQLITE DOMAIN IS MEMORY-STARVED, AND THE GOVERNING CONSTANT IS NAMED (2026-08-12).**
+Two boots, control green in both, differing only in the heap/stack split inside the SAME 2 MiB
+allocation:
+
+| build | heap | stack | wedge site |
+|---|---|---|---|
+| `sqwedge` | 256 KiB | 320 KiB | `sqlite3FinishCoding+0x464`, `cincoffset a1, a1, a2` |
+| `sqheap512` | 512 KiB | **57 KiB** | `sqlite3WalkExprNN+0x30`, `ldc a2, 0x10(a0)` |
+
+Both are `mcause 25` `UNEXPECTED_OPERAND`, and **both are the same shape**: a pointer that should be
+a capability is `NOT_CAP` — i.e. NULL — and the capability operation on it faults. In the second,
+`a0` is `pWalker`, loaded by `ldc a0, 0x0(a0)` **from a stack slot at `s0-0x40`**, and
+`sqlite3WalkExprNN` is **directly recursive** (and mutually recursive via `sqlite3WalkExprList` /
+`sqlite3WalkSelect`). A 57 KiB stack under a recursive expression walker is textbook exhaustion, and
+a corrupted stack slot is exactly what it produces.
+
+**So the 512 KiB experiment traded a heap shortage for a stack shortage** — which is what the build's
+own budget predicted (stack 320 KiB → 57 KiB) and why it was flagged as confounded before it ran.
+The useful part is that the failure MOVED: the domain is short of memory overall, not misallocating
+within a fixed budget.
+
+**THE CONSTANT.** `module/capstone.c:24` sets `MODULE_HEADROOM = 4096 * 16` = 64 KiB, and
+`capstone.c:83-85` computes `dom_tot = pow2pages(code_len + MODULE_HEADROOM)`. SQLite's `code_len`
+is ~1.38 MB, so `dom_tot` ≈ 1.45 MB and rounds to **2 MiB (order 9)** — which must then hold code,
+globals blob, cap table, heap AND stack. Raising `MODULE_HEADROOM` to ~1 MiB pushes the total past
+2 MiB and rounds to **4 MiB (order 10)**, leaving roughly 2.6 MB of `dom_data` — enough for a 1 MiB
+heap and a ~1.5 MB stack simultaneously, instead of trading one against the other.
+
+That is a **kernel-module change** and needs the module plus the rootfs rebuilt. It is the first
+change in this investigation that is plausibly sufficient rather than diagnostic.
+
+**WHAT IS STILL NOT ESTABLISHED.** The `sqlite3FinishCoding` NULL at the 256 KiB configuration has
+NOT been shown to be an allocation failure — that remains the leading hypothesis, not a finding.
+Both observed failures are consistent with memory starvation, but only the second has a mechanism
+tied to evidence (recursion + a stack-slot load + a 57 KiB stack). If the 4 MiB build still wedges,
+memory is excluded and the NULL has another source.
+
+**ARCHITECTURAL NOTE, worth keeping regardless of the outcome.** On ordinary hardware `base[index]`
+with `base == NULL` computes an address and faults only at the dereference — often never reached,
+because a branch catches the NULL first. On Capstone the ADDRESS COMPUTATION faults: `cincoffset`
+and `ldc` reject a non-capability `rs1` outright. So a NULL that ordinary hardware tolerates becomes
+a hard fault one instruction earlier, and any C that relies on forming (but not using) a pointer
+from NULL will fault here and nowhere else.
+
 **THE SQLITE WEDGE IS LOCALISED TO ONE INSTRUCTION (2026-08-12).** After the debug-mux change made
 the latched trap `mepc` readable, two boots gave `0x828897FC` and `0x81E897FC` — **identical low
 bits**, both offset **`0x897FC`** from a 2 MiB-aligned base, matching the domain's order-9 (2 MiB)
@@ -4118,14 +4162,52 @@ exception in the log) so a quiet probe means "cleared", not "the check never fir
 arm that must not trap. This does not contradict `cincoffset-stale-metadata.S`, which refuted the
 same leakage for `lui`+`addi`; a load is a different writeback path and had never been asked.
 
-**SO THE FAULT IS THE OTHER DISJUNCT: `rs1` — `a1` — IS `NOT_CAP`.** And `a1` is whatever
-`ldc a1, 0x280(a1)` returned. The question is now narrow and concrete: **why does the granule at
-`+0x280` come back untagged?** That is an S-06-family question about the library fixup preserving
-tags, not a revocation question and not a codegen question.
+**SO THE FAULT IS THE OTHER DISJUNCT: `rs1` — `a1` — IS `NOT_CAP`**, i.e. whatever
+`ldc a1, 0x280(a1)` returned is not a capability.
 
-**Next experiment**, and note what it must avoid: an earlier note records "stages 170/171 show tags
-survive the fixup", which was measured on a rung, not on this structure. The probe must target the
-granule this instruction actually loads.
+**AND THE FIXUP IS NOT WHAT UNTAGGED IT — refuted by directed test.** `fixup-tag-survival.S`
+replays `BEEBS_CHUNK_COPY`'s exact per-granule sequence (two plain 64-bit stores, then `ldc`/`stc`
+on top) over a granule holding a REAL capability, reloads the destination and asks its type with
+the total query. It **PASSES**: the tag survives. Two controls make the pass meaningful — a
+never-copied capability must report NONLIN (so a "1" is not vacuous), and a plain `ldc`/`stc` copy
+must also preserve, so a failure would be attributable to the harness rather than the fixup. This
+supersedes nothing: the earlier "stages 170/171 show tags survive" note was measured on a rung, and
+this measures the sequence itself.
+
+**WHAT THE INSTRUCTION STREAM ACTUALLY SAYS.** Read the whole chain, not just the faulting
+instruction:
+
+```
+ldc         a1, 0x280(a1)   base = ptr->field_0x280
+cincoffsetimm a2, s0, -0x58
+lw          a2, 0x0(a2)     index
+slli        a2, a2, 0x4     index * 16  == index * sizeof(void *) ON THIS TARGET
+cincoffset  a1, a1, a2      &base[index]   <- FAULTS
+ldc         a1, 0x0(a1)     base[index]
+jalr        a2              ... and calls it
+```
+
+That is **an indexed load from an ARRAY OF POINTERS, followed by an indirect call**. A `NOT_CAP`
+base is exactly what a **NULL `base`** looks like.
+
+**THIS MAY NOT BE A DEFECT AT ALL — it may be an ARCHITECTURAL DIFFERENCE.** On an ordinary
+machine `base[index]` with `base == NULL` computes an address and faults only when the LOAD
+dereferences it, and plenty of C never reaches that because a preceding branch catches the NULL. On
+Capstone the ADDRESS COMPUTATION ITSELF faults: `cincoffset` rejects a non-capability `rs1`
+outright. So a NULL pointer that ordinary hardware tolerates until dereference becomes a hard fault
+one instruction earlier.
+
+**Leading hypothesis, NOT yet established: an allocation failure.** The domain's SQLite heap is
+**256 KiB** (`build-sqlite-silicon.sh:42-44`, which records that 1 MiB "does not fit"). If a
+`CREATE TABLE` allocation fails, SQLite sets `mallocFailed` and leaves pointers NULL, and the code
+above then indexes off one. That also fits the fixup dependence: with the fixup OFF the schema text
+is corrupt and SQLite bails early with `rc=11`, never reaching this path; with it ON the data is
+correct, execution proceeds, and the allocation is actually attempted. It is consistent with the
+project's own documented "S-04 phantom `SQLITE_NOMEM`".
+
+**Test in progress:** rebuild with a 512 KiB heap and re-run. If the wedge moves or clears, the
+allocation path is implicated. If it wedges at the identical offset, memory pressure is excluded
+and the NULL has another source.
 
 **FIRST BOOT ON `caplifive_12august.bit` (2026-08-12) — THE WEDGE NOW REPORTS ITS OWN `mepc`.**
 Control green throughout; the debug-mux change works.
