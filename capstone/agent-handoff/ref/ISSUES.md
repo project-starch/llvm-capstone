@@ -4086,6 +4086,47 @@ With `ex_code` ordinals `NO_EXCEPTION = 0, UNEXPECTED_OPERAND = 1, ...`, the spe
 * `riscv_pkg.sv:349-353` encodes the same +1 error (`UNEXPECTED_OPERAND_TYPE = 25` where the spec
   says 24), so it corroborates the RTL's behaviour, not the spec.
 
+**THE SQLITE WEDGE IS LOCALISED TO ONE INSTRUCTION (2026-08-12).** After the debug-mux change made
+the latched trap `mepc` readable, two boots gave `0x828897FC` and `0x81E897FC` — **identical low
+bits**, both offset **`0x897FC`** from a 2 MiB-aligned base, matching the domain's order-9 (2 MiB)
+allocation. The fault is at a fixed image offset, deterministic across boots and load addresses.
+
+**Mapping, and a correction.** The first attempt used the FILE offset and named the wrong
+instruction. `libcapstone.c:174-187` lays the image out by **virtual address relative to
+`loadable_start`**, not by file offset: `memcpy(image_base + (p_vaddr - loadable_start), ...)`. The
+domain has one `PT_LOAD` at `p_vaddr = 0x10000`, so `VA = offset + 0x10000` = **`0x997FC`**.
+
+That is **`sqlite3FinishCoding + 0x464`**:
+
+```
+997ec:  ldc            a1, 0x280(a1)     a1 <- a capability loaded from memory
+997f0:  cincoffsetimm  a2, s0, -0x58     a2 becomes a capability
+997f4:  lw             a2, 0x0(a2)       a2 overwritten with a plain integer
+997f8:  slli           a2, a2, 0x4
+997fc:  cincoffset     a1, a1, a2        <- FAULTS, mcause 25 = UNEXPECTED_OPERAND
+```
+
+`capstone_flu_unit.anvil:30` raises `UNEXPECTED_OPERAND` when
+`rs1.cap_type == NOT_CAP || rs2.cap_type != NOT_CAP` — the base stopped being a capability, OR the
+offset still looks like one.
+
+**THE OFFSET DISJUNCT IS REFUTED, by directed test.** `cincoffset-lw-stale.S` reproduces the exact
+shape — build a capability in `a2`, overwrite it with `lw` through itself, apply the same `slli`,
+use it as `rs2`. It **PASSES**: `lw` DOES clear the capability metadata. The test carries a positive
+control (a live capability used directly as `rs2`, which MUST trap 25 — it does, and it is the only
+exception in the log) so a quiet probe means "cleared", not "the check never fired", and a control
+arm that must not trap. This does not contradict `cincoffset-stale-metadata.S`, which refuted the
+same leakage for `lui`+`addi`; a load is a different writeback path and had never been asked.
+
+**SO THE FAULT IS THE OTHER DISJUNCT: `rs1` — `a1` — IS `NOT_CAP`.** And `a1` is whatever
+`ldc a1, 0x280(a1)` returned. The question is now narrow and concrete: **why does the granule at
+`+0x280` come back untagged?** That is an S-06-family question about the library fixup preserving
+tags, not a revocation question and not a codegen question.
+
+**Next experiment**, and note what it must avoid: an earlier note records "stages 170/171 show tags
+survive the fixup", which was measured on a rung, not on this structure. The probe must target the
+granule this instruction actually loads.
+
 **FIRST BOOT ON `caplifive_12august.bit` (2026-08-12) — THE WEDGE NOW REPORTS ITS OWN `mepc`.**
 Control green throughout; the debug-mux change works.
 
