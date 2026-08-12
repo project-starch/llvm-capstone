@@ -17,6 +17,53 @@ query results on the FPGA. The prior best was a wild `Mem*` inside `CREATE TABLE
 
 Not a pass: `row name=alpha value=11` is MISSING, and the run ends in a trap.
 
+## UPDATE, same session: the FULL result set
+
+A second build (`sqfree`, identical except for an argument probe) returned **all three rows**:
+
+```
+row name=alpha value=11
+row name=beta  value=22
+row name=gamma value=33
+SQ: obs=4131427634
+```
+
+So SQLite now executes CREATE TABLE, the INSERTs and the SELECT on silicon and hands back the
+complete expected result set. It still traps afterwards, at the same place --
+`sqlite3DbMallocRawNN+0xf8`, mcause 25 -- so the queries complete and something in the
+allocator/teardown path then faults.
+
+**The row output is NOT yet stable and this must not be reported as a pass.** Two builds that
+differ only by a probe returned two rows and three rows respectively. Either the probe perturbs
+the run (image sensitivity, S-01) or there is genuine run-to-run variation; N=1 per build cannot
+tell them apart. Re-run each build several times before any number from here is quoted.
+
+### Where the untagged pointer is, precisely
+
+At the fault site:
+
+```
+354a8: ldc a0, 0x2a0(a0)   ; db->lookaside.pFree
+354b4: mv  a0, a0          ; addi rd,rs,0 -- RAISES on a live capability, and did NOT fault
+354c8: ldc a2, 0x0(a1)     ; faults, mcause 25
+```
+
+`mv` not faulting proves the field is **already untagged in the struct**; the spill/reload
+between is innocent. That rules out the spill hypothesis for this site with no board time.
+
+Eliminated as the writer: `setupLookaside` (zero tag-stripping pointer arithmetic) and
+`openDatabase` (its three `addi`->`stc` pairs are PC-relative FUNCTION addresses consumed by
+`jalr`, which is how this ABI does direct calls -- `cjalr=0` in these builds).
+
+Remaining candidates are the lookaside FREE paths, `sqlite3DbFreeNN` / `sqlite3DbNNFreeNN`,
+which push the freed pointer onto the list head -- so a pointer that arrives at free already
+untagged would untag the list. An ARG probe on `sqlite3DbNNFreeNN` was built and run, but
+produced NO output: either the function is not reached before the rows are emitted, or the
+report was overwritten. The probe rewrites the payload from offset 0 and the row output appends
+after it, so a report that ran would still be visible -- it did not run. Next step is to probe a
+function that is definitely on the path, or to make the reporter append to a reserved region
+instead of sharing the payload with the workload's own output.
+
 ## What got it here
 
 Three defects, in the order they were removed:
