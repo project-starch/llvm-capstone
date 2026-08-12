@@ -152,18 +152,36 @@ typedef unsigned long long bu64_t;      /* exactly one half of a 128-bit capabil
  * leaving the correct high half in place. That is true ONLY when the granule's high 8 bytes are
  * zero.
  *
- * When the high half is NONZERO the metadata is nonzero, `st_wr_cap` is 1
- * (wt_dcache_mem.sv:140), and bank 1 is written with `wr_user_i` (:160) -- which is not the
- * original high half but the result of decompress-then-recompress. decompress_cap_metadata takes
- * the CURSOR as an input (ariane_pkg.sv:718-746) and decompress_bounds reconstructs from it
- * (:661-665), so that round trip is not the identity for arbitrary (low, high) pairs. Measured
- * 2026-08-12 in RTL simulation (s06-lowhalf-zero.S, matched pair, confirmed by swapping which
- * granule carries the zero): a granule whose LOW half is ZERO loses its HIGH half.
+ * IT IS NOT HARMLESS, and the reason is NOT the one first recorded here. That account said the
+ * memory high half reaches the register and makes the metadata nonzero; an adversarial audit
+ * REFUTED it on 2026-08-12. `ldc` of an untagged granule gets ruser = 0 (wt_dcache_mem.sv:300-311,
+ * a plain `sd` having cleared cap_tag_q at :419-422), so the high half is discarded at the cache
+ * boundary and is never an input to anything.
+ *
+ * What actually happens is a re-encoding of that ZERO metadata against the CURSOR. The pipeline
+ * stores compress_cap(decompress_cap(lo, 0)) into the metadata shadow (ex_stage.sv:791, :1098),
+ * and compress_bounds switches to its "cursorless" scheme when bounds.start == cursor
+ * (ariane_pkg.sv:753-772) -- manufacturing a NONZERO metadata out of an all-zero input.
+ * decompress_bounds(0, cursor) returns start == cursor exactly when the cursor's low 14 bits are
+ * zero. So `st_wr_cap` goes to 1, both banks are written, and bank 1 receives that manufactured
+ * value (0x08000000 for lo == 0), destroying the high half the plain `sd` had just put down.
+ *
+ * THE TRIGGER IS `lo % 0x4000 == 0`, NOT `lo == 0`. Measured in RTL simulation, both arms,
+ * TESTNUM 5 (s06-lowhalf-zero.S and s06-lowhalf-zero-swap.S): a granule with lo = 0x4000 --
+ * nonzero -- is destroyed exactly as the lo = 0 one is, while a lo = 0x12345678 control survives.
+ * The swap arm places the zero at a different POSITION and fails identically, so the failure
+ * follows the value. An earlier version of this comment said "a granule whose LOW half is ZERO",
+ * which is too narrow: any 0x4000-aligned low half is affected, and aligned sizes, page counts and
+ * aligned offsets are common in real structs.
  *
  * That is what corrupted SQLite. sqlite3NestedParse saves PARSE_TAIL through this copy; nVtabLock
  * sits at tail offset 40 -- the high half of a granule whose low half is zero in a fresh Parse --
  * so it came back nonzero, sqlite3FinishCoding then entered a loop that must never run for a
  * non-virtual table, and indexing the legitimately-NULL apVtabLock raised UNEXPECTED_OPERAND.
+ *
+ * None of this changes what the fix must do: the guard below never issues the `stc` for plain
+ * data at ANY cursor value, so it is correct under the corrected mechanism and the wider trigger
+ * alike. Only the explanation needed correcting.
  *
  * The fix is to ask, rather than to assume. The S-06 enabler makes LCC's TYPE query TOTAL: it
  * answers 7 for a non-capability instead of raising, so the copy can test the loaded granule and
