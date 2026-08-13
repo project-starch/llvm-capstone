@@ -104,6 +104,6 @@ is a property of executing `OP_Column`, not of any particular image.
 Determine what inside `OP_Column` faults. It is one opcode, so the same clamp technique applies at finer
 grain — or ask the RTL what access `OP_Column` makes that nothing before it does. `OP_Column`
 walks a serialised record header, and the natural next question is whether the fault is in the
-header walk, the payload fetch, or the `Mem` it materialises. Run
-the REDRAW of the C6/C7 pair first; it is one boot and it is the only thing standing between this
-result and a root cause claim.
+header walk, the payload fetch, or the `Mem` it materialises. The REDRAW that was the last
+procedural step before treating this as the localisation is done (see the section above), so
+nothing is blocking that question.
