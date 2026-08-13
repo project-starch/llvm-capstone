@@ -93,13 +93,13 @@ static void output_uint(unsigned value) {
    ladder measured the wrong statement entirely. The domain arms it immediately before the step
    under test, so the count is that statement's opcodes and nobody else's. */
 unsigned long capstone_vdbe_ops, capstone_vdbe_lastop, capstone_vdbe_armed;
-unsigned long capstone_memgrow_seen;
+unsigned long capstone_memgrow_seen, capstone_amem_seen;
 
 
 
 #if defined(CAPSTONE_OOB_PROBE) || defined(CAPSTONE_ARG_PROBE) || \
     defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE) || \
-    defined(CAPSTONE_MEMGROW_PROBE)
+    defined(CAPSTONE_MEMGROW_PROBE) || defined(CAPSTONE_AMEM_PROBE)
 /* Shared by both probes. Lived inside the OOB block until the ARG probe needed it too; a
    reporter that cannot print is a reporter that silently reports nothing. */
 static void output_hex64(unsigned long v) {
@@ -222,7 +222,7 @@ void capstone_arg_report(void) {
 #endif /* CAPSTONE_ARG_PROBE */
 
 #if defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE) || \
-    defined(CAPSTONE_MEMGROW_PROBE)
+    defined(CAPSTONE_MEMGROW_PROBE) || defined(CAPSTONE_AMEM_PROBE)
 /* Reports the lookaside small-free head WITHOUT DEREFERENCING IT, and then falls back to the
    general allocator so the run continues instead of wedging.
    
@@ -395,6 +395,25 @@ static void output_heapinfo(unsigned long a) {
   } else {
     output_text(" OUT");
   }
+}
+
+/* The VDBE register array's capability, reported before a single opcode has run.
+ *
+ * `pDest` in OP_Column is `&aMem[pOp->p3]`, so whatever bounds `aMem` carries are the bounds every
+ * Mem dereference inherits. If aMem spans the heap, an OUT_OF_BOUNDS on `&aMem[i] + 0x30` cannot
+ * come from the array capability and must come from the INDEX -- which would make a corrupt
+ * pOp->p3 the subject. If aMem is short, the array capability is the subject. The two readings
+ * lead to completely different places, and one line of measurement separates them.
+ *
+ * nMem and nCursor are printed alongside because they bound the legal index range: an element
+ * capability derived with i > nMem is out of bounds by construction and says so immediately. */
+void capstone_amem_report(const void *amem, unsigned long nmem, unsigned long ncursor) {
+  if (!capstone_out_reserve(200UL))
+    return;
+  output_text("AMEM nMem=");  output_hexv(nmem);
+  output_text(" nCur=");      output_hexv(ncursor);
+  output_text(" aMem:");      output_heapinfo(output_capinfo(amem));
+  output_text("\n");
 }
 
 /* Describe the Mem capability that sqlite3VdbeMemGrow is about to dereference.

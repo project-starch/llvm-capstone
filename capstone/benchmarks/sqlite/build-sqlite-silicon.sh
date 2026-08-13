@@ -1120,6 +1120,45 @@ PYDBWHO
   fi
 fi
 
+# CAPSTONE_AMEM_PROBE=1 -- report the VDBE register array's capability, from a point that RETURNS.
+#
+# The Mem dereferences that fault are `&aMem[i]` elements, and the bounds that matter are the ones
+# `aMem` carries. Every attempt to measure them AT the fault has failed for the same structural
+# reason: the fault wedges the core, the host never returns, and the payload dies with it. The two
+# escapes tried are recorded so nobody repeats them -- returning SQLITE_NOMEM sends OP_Column into
+# an error path that dereferences another Mem and wedges there, and returning SQLITE_OK leaves an
+# ungrown Mem whose pointer arithmetic aborts on an untagged operand.
+#
+# So measure it EARLY instead. This reports at the top of sqlite3VdbeExec, before a single opcode
+# has run, and is paired with CAPSTONE_VDBE_CLAMP=6 -- an arm already MEASURED to return on
+# silicon. Report-only: no control flow changes, so the arm behaves exactly as the clamp arm that
+# is known to work.
+if [[ "${CAPSTONE_AMEM_PROBE:-0}" == "1" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYAMEM'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+NEEDLE = "  Mem *aMem = p->aMem;       /* Copy of p->aMem */\n"
+if NEEDLE not in s:
+    sys.exit("AMEM_PROBE: sqlite3VdbeExec aMem anchor not found -- patch shape changed")
+probe = NEEDLE + """  if( capstone_vdbe_armed && !capstone_amem_seen ){
+    capstone_amem_seen = 1;
+    capstone_amem_report((const void*)aMem, (unsigned long)p->nMem, (unsigned long)p->nCursor);
+  }
+"""
+s = s.replace(NEEDLE, probe, 1)
+ANCHOR = "#define SQLITE_CORE 1\n"
+if ANCHOR not in s:
+    sys.exit("AMEM_PROBE: amalgamation prologue anchor not found")
+s = s.replace(ANCHOR, ANCHOR +
+              "extern unsigned long capstone_vdbe_armed, capstone_amem_seen;\n"
+              "void capstone_amem_report(const void *, unsigned long, unsigned long);\n", 1)
+open(path, "w").write(s)
+print("   AMEM probe injected into sqlite3VdbeExec")
+PYAMEM
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_AMEM_PROBE=1"
+fi
+
 # CAPSTONE_MEMGROW_PROBE=1 -- MEASURE the capability that faults, instead of inferring it.
 #
 # The latched trap state says what happened without saying why: mcause 29 = OUT_OF_BOUNDS,
@@ -1148,7 +1187,13 @@ probe = OPEN + """
   if( capstone_vdbe_armed && !capstone_memgrow_seen ){
     capstone_memgrow_seen = 1;
     capstone_memgrow_report((const void*)pMem, (unsigned long)n, (unsigned long)bPreserve);
-    return 7;   /* SQLITE_NOMEM -- stops the flow so the domain RETURNS and the report is flushed */
+    /* RETURNS SQLITE_NOMEM, which is the semantically honest answer and the only one that keeps
+       SQLite's invariants. Returning OK instead -- to skip the faulting `ldc` and escape via the
+       VDBE clamp -- was tried and is NOT SAFE: OP_Column carries on with an ungrown Mem and does
+       pointer arithmetic on a pointer that was never allocated, which aborted QEMU outright at
+       `helper_cscincoffset: Assertion rs1_v->tag failed`. The NOMEM path's own wedge is a real
+       result (see the history note); it is not worth trading for a corrupted run. */
+    return 7;
   }
 """
 s = s.replace(OPEN, probe, 1)
@@ -1156,7 +1201,7 @@ ANCHOR = "#define SQLITE_CORE 1\n"
 if ANCHOR not in s:
     sys.exit("MEMGROW_PROBE: amalgamation prologue anchor not found")
 s = s.replace(ANCHOR, ANCHOR +
-              "extern unsigned long capstone_vdbe_armed, capstone_memgrow_seen;\n"
+              "extern unsigned long capstone_vdbe_armed, capstone_memgrow_seen, capstone_vdbe_ops;\n"
               "void capstone_memgrow_report(const void *, unsigned long, unsigned long);\n", 1)
 open(path, "w").write(s)
 print("   MEMGROW probe injected into sqlite3VdbeMemGrow")
