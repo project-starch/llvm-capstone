@@ -240,6 +240,39 @@ void capstone_look_report(unsigned long buf, unsigned long mid,
   output_text(" n=");       output_hex64(end);   /* param reused: the requested size */
   output_text("\n");
 }
+
+/* The live extent of the sqlite3 connection, published after open so the ALLOCATOR can refuse
+   to hand out anything overlapping it. Zero until set, so the sentinel is inert before then. */
+unsigned long capstone_db_lo, capstone_db_hi, capstone_ovl_hits;
+
+void capstone_ovl_report(unsigned long addr, unsigned long sz, unsigned long tag) {
+  if (!hostcall_metadata || !hostcall_payload) return;
+  if (capstone_ovl_hits > 4UL) return;
+  capstone_ovl_hits++;
+  output_text("OVERLAP tag="); output_hex64(tag);
+  output_text(" addr=");       output_hex64(addr);
+  output_text(" sz=");         output_hex64(sz);
+  output_text(" dblo=");       output_hex64(capstone_db_lo);
+  output_text("\n");
+}
+
+/* Dump the smashed window as PLAIN integer loads -- never as capabilities, so a corrupt granule
+   cannot fault the instrument. Converts the byte-map reconstruction from inference into direct
+   observation: if these words spell the UPDATE statement, the model is confirmed and the exact
+   base is measured rather than derived. */
+void capstone_dump_window(const void *base, unsigned long phase) {
+  /* TAKES A CAPABILITY, NOT AN INTEGER. The first version took `unsigned long` and cast it back
+     to a pointer; under purecap an int->pointer cast yields an UNTAGGED value, so the very first
+     dereference raised UNEXPECTED_OPERAND and the helper faulted inside itself -- it printed an
+     empty line and trapped at capstone_dump_window+0x100. The caller must therefore derive the
+     address from a real capability (db) with pointer arithmetic, never rebuild it from a scalar. */
+  const volatile unsigned long *w = (const volatile unsigned long *)base;
+  int i;
+  if (!hostcall_metadata || !hostcall_payload) return;
+  output_text("DUMP phase="); output_hex64(phase); output_text(":");
+  for (i = 0; i < 12; i++) { output_text(" "); output_hex64(w[i]); }
+  output_text("\n");
+}
 #endif /* CAPSTONE_PROBE_LOOKASIDE */
 
 #ifdef CAPSTONE_REDRAW_PAD
@@ -327,6 +360,12 @@ static int query_scalar_eq(sqlite3 *db, const char *sql, long want,
 #define LOOK_CANARY(phase)                                                     \
   do {                                                                         \
     unsigned long v_ = (unsigned long)(void *)db->lookaside.pSmallFree;        \
+    /* Dump UNCONDITIONALLY. The window was all zeros at entry and the canary   \
+       never fired, so watching only pSmallFree missed the smash entirely --    \
+       the corruption lands elsewhere in the window first, or pSmallFree is     \
+       rewritten to 0 afterwards. Dumping every phase shows the window          \
+       evolving instead of reporting a single field that happens to look sane. */ \
+    capstone_dump_window((const void *)((const char *)db + 0x200), (phase));   \
     if (v_ != 0UL) {                                                           \
       output_text("CANARY phase=");  output_hex64((unsigned long)(phase));     \
       output_text(" pSmallFree=");   output_hex64(v_);                         \
@@ -349,6 +388,7 @@ static int run_sqlite_extended(sqlite3 *db) {
   output_text("REALDB db=");  output_hex64((unsigned long)(void *)db);  output_text("\n");
 #endif
   LOOK_CANARY(0);
+  capstone_dump_window((const void *)((const char *)db + 0x200), 0x100UL);   /* unconditional baseline */
   if ((rc = exec_ok(db, "BEGIN;", "ext-begin")) != SQLITE_OK)
     return rc;
   LOOK_CANARY(1);
@@ -361,6 +401,7 @@ static int run_sqlite_extended(sqlite3 *db) {
                     "ext-create-index")) != SQLITE_OK)
     return rc;
   LOOK_CANARY(3);
+  /* phases 4+ cover the prepared INSERTs and the UPDATE/DELETE that follow */
 
   /* Bound prepared INSERTs: int id, text label, real amount. */
   {
@@ -4658,6 +4699,12 @@ static int run_sqlite(void) {
     output_text("\n CTRL m100="); output_hex64((unsigned long)(c100 ? sqlite3_msize(c100) : 0));
     output_text(" m1296=");       output_hex64((unsigned long)(c1296 ? sqlite3_msize(c1296) : 0));
     output_text("  (expect 80 and 800)\n");
+    capstone_db_lo = (unsigned long)(void *)db;
+    capstone_db_hi = capstone_db_lo + (unsigned long)sqlite3_msize((void *)db);
+    /* POSITIVE CONTROL: the sentinel must fire on a fabricated address inside db. If it does
+       not, a clean run afterwards proves nothing about the allocator. */
+    capstone_ovl_report(capstone_db_lo + 0x200UL, 0x100UL, 0xC0FFEEUL);
+    capstone_ovl_hits = 0UL;
     sqlite3_free(c100);
     sqlite3_free(c1296);
   }

@@ -874,6 +874,35 @@ s = s[:j+1] + decl + s[j+1:]
 open(path, "w").write(s)
 print("   LOOKASIDE probe injected into the pSmallFree pop")
 PYLOOK
+  # THE ALLOCATOR SENTINEL. memsys5 must never return a block overlapping the live sqlite3
+  # connection; db is measured at 2048 bytes and correctly aligned, so db+0x200 is INTERIOR to it.
+  # Refusing such a block returns OOM, which SQLite handles gracefully -- so this both localises
+  # the bug and prevents the smash, instead of merely observing it.
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYOVL'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+NEEDLE = "  return (void*)&mem5.zPool[i*mem5.szAtom];"
+if NEEDLE not in s:
+    sys.exit("PROBE_LOOKASIDE: memsys5 return site not found -- patch shape changed")
+guard = """  {
+    unsigned long a_ = (unsigned long)(void *)&mem5.zPool[i*mem5.szAtom];
+    unsigned long n_ = (unsigned long)(mem5.szAtom << iLogsize);
+    if (capstone_db_lo && a_ < capstone_db_hi && a_ + n_ > capstone_db_lo) {
+      capstone_ovl_report(a_, n_, 1UL);
+      return 0;            /* OOM -- SQLite handles it; the smash never happens */
+    }
+  }
+""" + NEEDLE
+s = s.replace(NEEDLE, guard, 1)
+decl = ("extern unsigned long capstone_db_lo, capstone_db_hi, capstone_ovl_hits;\n"
+        "void capstone_ovl_report(unsigned long, unsigned long, unsigned long);\n"
+        "void capstone_dump_window(const void *, unsigned long);\n")
+i = s.find(guard); j = s.rfind("\n", 0, i)
+s = s[:j+1] + decl + s[j+1:]
+open(path, "w").write(s)
+print("   ALLOCATOR OVERLAP sentinel injected into memsys5MallocUnsafe")
+PYOVL
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_PROBE_LOOKASIDE=1"
 fi
 
