@@ -228,16 +228,188 @@ void capstone_arg_report(void) {
    instrument that never fired -- the healthy pops are the positive control. */
 unsigned long capstone_look_pops;
 
-void capstone_look_report(unsigned long buf, unsigned long mid,
-                          unsigned long end, unsigned long n) {
+/* THE PAYLOAD REGION IS 4 KiB AND output_text() TRUNCATES SILENTLY.
+ *
+ * output_text stops at SQLITE_HC_REGION_SIZE (sqlite_hostcall.h:17 == 4096) and says nothing,
+ * so a report that runs out of room looks exactly like a report that had nothing to say. That
+ * is the "no data renders as a result" failure. Every reporter below reserves its worst-case
+ * length first and emits a single TRUNC marker instead of a half line.
+ *
+ * Measured 2026-08-13 on the sqd2 log: the whole domain emitted 1266 bytes, so nothing was
+ * truncated in that run -- but the budget grows with every phase added, and the marker is what
+ * makes the next overflow visible rather than silent. */
+static unsigned long capstone_trunc_hits;
+static int capstone_out_reserve(unsigned long need) {
+  unsigned long len;
   if (!hostcall_metadata || !hostcall_payload)
-    return;
-  if (n > 3UL)
+    return 0;
+  len = hostcall_metadata->length;
+  if (len + need + 16UL < SQLITE_HC_REGION_SIZE)
+    return 1;
+  if (!capstone_trunc_hits) {
+    capstone_trunc_hits = 1UL;
+    output_text("TRUNC\n");
+  }
+  return 0;
+}
+
+/* Compact hex: no leading zeros. output_hex64 costs 16 characters per value, which is most of
+   the 4 KiB budget once several capabilities are described per phase. */
+static void output_hexv(unsigned long v) {
+  static const char hexd[] = "0123456789abcdef";
+  char buf[2];
+  int i, started = 0;
+  buf[1] = '\0';
+  for (i = 60; i >= 0; i -= 4) {
+    unsigned d = (unsigned)((v >> i) & 0xfUL);
+    if (!started && d == 0U && i != 0)
+      continue;
+    started = 1;
+    buf[0] = hexd[d];
+    output_text(buf);
+  }
+}
+
+/* LCC queries. The SELECTOR RIDES THE rs2 ENCODING FIELD, not the value of register rs2 --
+   confirmed in capstone-ariane/verif/tests/custom/capstone/s06-lcc-total-query.S:34 and in
+   core/anvil_build/capstone_dyn_unit.anvil:206-214, where the dispatch is `match zimm`. So
+   `x1/x2/x3/x4` here name selectors 1/2/3/4 and no general-purpose register is read. */
+/* A single TOTAL type query. Safe on any operand: RTL answers 7 for NOT_CAP
+   (capstone_dyn_unit.anvil:195 excludes selector 1 from the UNEXPECTED_OPERAND path) and QEMU
+   short-circuits to 7 as well (capstone-qemu target/riscv/op_helper.c:714). */
+static unsigned long cap_q_type(const void *p) {
+  unsigned long v = 0;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(v) : "r"(p));
+  return v;
+}
+
+/* Describe the capability a probe actually reads through, so "which address did I read" is
+ * MEASURED rather than assumed.
+ *
+ * ALL FOUR QUERIES LIVE IN ONE ASM BLOCK, AND THAT IS NOT A MICRO-OPTIMISATION.
+ * The first version called four small helpers, one per selector. It ABORTED QEMU on the very
+ * first probe:
+ *     qemu-system-riscv64: target/riscv/op_helper.c:719: helper_cslcc: Assertion `rs1_v->tag'
+ *     failed.
+ * with the guard `if (type <= 3)` in place and correct. The only way to reach that assert past
+ * that guard is for the operand to be a capability at the TYPE query and untagged at the CURSOR
+ * query -- i.e. the pointer did not survive being spilled and re-loaded between two calls, which
+ * at -O0 is what passing it four times means. So the four-helper shape measured its own argument
+ * handling, not the pointer.
+ *
+ * Here the operand is materialised ONCE, into the single `"r"(p)` input, and all four selectors
+ * read that register with no store, no reload and no call in between.
+ *
+ * THE GUARD IS INSIDE THE ASM for the same reason. Selector 1 is the only TOTAL one:
+ * capstone_dyn_unit.anvil:195 raises UNEXPECTED_OPERAND for any other selector on a NOT_CAP
+ * operand, capstone_unit.anvilh:469-473 raises UNEXPECTED_CAP_TYPE for 2/4/5 on sealed types,
+ * and QEMU asserts outright. An instrument that issued 2/3/4 unconditionally would die on
+ * exactly the inputs it exists to describe. Branching in C would put a spill between the test
+ * and the use and reintroduce the bug above; branching in asm keeps both on one register value.
+ * The three bounds read -1 when the guard declines, which is distinguishable from any real
+ * cursor/base/end.
+ *
+ * Type numbering, identical on both after the -1 the RTL applies:
+ *   0 LIN  1 NONLIN  2 REVOKE  3 UNINIT  4 SEALED  5 SEALEDRET  6 EXIT(RTL)  7 NOT_CAP
+ *
+ * `t2` is a SECOND type query issued after the block, deliberately through whatever reload the
+ * compiler chooses. It is free, it can never fault, and it is the positive control for the bug
+ * described above: t2 != t means a capability did not survive a round trip, and any bounds
+ * printed by a probe that passes pointers around would have been describing nothing. */
+static unsigned long output_capinfo(const void *p) {
+  unsigned long t = 0, c = 0, b = 0, e = 0, t2;
+  __asm__ volatile(
+      ".insn r 0x5b, 0x1, 0x4, %0, %4, x1\n\t"
+      "li   %1, -1\n\t"
+      "li   %2, -1\n\t"
+      "li   %3, -1\n\t"
+      "li   t0, 3\n\t"
+      "bltu t0, %0, 1f\n\t"
+      ".insn r 0x5b, 0x1, 0x4, %1, %4, x2\n\t"
+      ".insn r 0x5b, 0x1, 0x4, %2, %4, x3\n\t"
+      ".insn r 0x5b, 0x1, 0x4, %3, %4, x4\n\t"
+      "1:\n\t"
+      : "=&r"(t), "=&r"(c), "=&r"(b), "=&r"(e)
+      : "r"(p)
+      : "t0");
+  t2 = cap_q_type(p);
+  output_text(" t="); output_hexv(t);
+  if (t2 != t) { output_text("/t2="); output_hexv(t2); }
+  output_text(" c="); output_hexv(c);
+  output_text(" b="); output_hexv(b);
+  output_text(" e="); output_hexv(e);
+  return c;   /* the MEASURED address, or -1 when the operand was not a queryable capability */
+}
+
+/* Where in sqlite_heap an address falls, and what memsys5 thinks the block there is.
+ *
+ * memsys5Size only indexes mem5.aCtrl[(p - zPool)/szAtom]; it never dereferences the object,
+ * so it is safe for ANY in-pool address -- but it is nonsense for an out-of-pool one, hence
+ * the guard. szAtom is 64 here (SQLITE_CONFIG_HEAP mnReq=64, memsys5Init:29918) and memsys5 is
+ * a buddy allocator, so a block of size 2^k bytes starts at an offset that is a multiple of
+ * 2^k. That makes the printed offset a CHECK on the printed size, not just a locator. */
+/* TAKES AN ADDRESS, NOT A POINTER, and rebuilds the pointer by INDEXING sqlite_heap.
+ *
+ * Both halves of that are hazards this cost a QEMU run to learn. The first version took a
+ * `const void *` and cast it to an integer -- but a pointer-to-integer cast can lower to
+ * `lcc rd, rs, 0x2`, which raises UNEXPECTED_OPERAND on the RTL for a NOT_CAP operand
+ * (capstone_dyn_unit.anvil:195) and ABORTS QEMU outright (op_helper.c:719). A probe whose whole
+ * job is to describe a suspect pointer must never cast one. The address now comes from
+ * output_capinfo, which obtains it through the guarded selector-2 query or reports -1.
+ *
+ * The second version then did `sqlite3_msize((void *)(unsigned long)a)` -- an INTEGER-TO-POINTER
+ * cast, which is untagged, and msize's own `(u8*)p - mem5.zPool` promptly casts it back. That is
+ * the identical trap the earlier capstone_dump_window hit, re-entered from the other direction.
+ * `&sqlite_heap[off]` instead derives a properly tagged capability at the same address from a
+ * capability the domain legitimately holds, so msize's arithmetic is on live capabilities.
+ *
+ * memsys5Size only indexes mem5.aCtrl[(p - zPool)/szAtom]; it never dereferences the object, so
+ * it is safe for any in-pool address. szAtom is 64 here (SQLITE_CONFIG_HEAP mnReq=64,
+ * memsys5Init) and memsys5 is a buddy allocator, so a block of 2^k bytes starts at an offset
+ * that is a multiple of 2^k -- which makes the printed offset a CHECK on the printed size. */
+static void output_heapinfo(unsigned long a) {
+  unsigned long lo = (unsigned long)(void *)sqlite_heap;
+  output_text(" hoff=");
+  if (a >= lo && a < lo + (unsigned long)sizeof(sqlite_heap)) {
+    unsigned long off = a - lo;
+    output_hexv(off);
+    output_text(" blk=");
+    output_hexv((unsigned long)sqlite3_msize((void *)&sqlite_heap[off]));
+  } else {
+    output_text(" OUT");
+  }
+}
+
+/* The connection returned by sqlite3_open, recorded the instant it exists so that any later
+   `db` can be compared against it rather than against a remembered number.
+   AN ADDRESS, NOT A CAPABILITY: it is read inside the allocator probe, which runs during
+   sqlite3_open itself -- before this is set -- and casting a null (untagged) capability to an
+   integer there is the same lcc-on-NOT_CAP hazard as above. */
+unsigned long capstone_real_db;
+
+/* The lookaside pop, reported and never dereferenced.
+ *
+ * MEASURED 2026-08-13 (boot25/boot26, /test-domains/sqdump.dom): this fired with
+ *   buf=2045524548572027 ("' WHERE ", little-endian)  db=827e8a60
+ * while run_sqlite_extended's own connection printed REALDB db=827ec860. THE TWO DIFFER, so
+ * the allocator is not reading the connection this workload opened. 827e8a60 is 0xf4200 into
+ * the pool, and 0xf4200 is a multiple of 0x200 but not of 0x400, so under memsys5's buddy
+ * alignment it CANNOT be the start of a block bigger than 512 bytes -- smaller than
+ * sizeof(sqlite3). The old reading (a wild write into the connection at db+0x200) was anchored
+ * to the wrong base. This version measures the capability instead of inferring it. */
+void capstone_look_report2(unsigned long buf, const void *dbp, unsigned long fld,
+                           unsigned long n, unsigned long sz, unsigned long pops) {
+  if (pops > 3UL)
     return;                     /* first few only: bounded output, keeps the region intact */
-  output_text("LOOK n=");   output_hex64(n);
+  if (!capstone_out_reserve(300UL))
+    return;
+  output_text("LOOK p=");   output_hexv(pops);
   output_text(" buf=");     output_hex64(buf);
-  output_text(" db=");      output_hex64(mid);   /* param reused: the db pointer */
-  output_text(" n=");       output_hex64(end);   /* param reused: the requested size */
+  output_text(" n=");       output_hexv(n);
+  output_text(" sz=");      output_hexv(sz);
+  output_text(" fld=");     output_hexv(fld);
+  output_text(" real=");    output_hexv(capstone_real_db);
+  output_text(" db:");      output_heapinfo(output_capinfo(dbp));
   output_text("\n");
 }
 
@@ -260,17 +432,33 @@ void capstone_ovl_report(unsigned long addr, unsigned long sz, unsigned long tag
    cannot fault the instrument. Converts the byte-map reconstruction from inference into direct
    observation: if these words spell the UPDATE statement, the model is confirmed and the exact
    base is measured rather than derived. */
-void capstone_dump_window(const void *base, unsigned long phase) {
+void capstone_dump_window(const void *base, unsigned long off, unsigned long nwords,
+                          unsigned long phase, unsigned long tag) {
   /* TAKES A CAPABILITY, NOT AN INTEGER. The first version took `unsigned long` and cast it back
      to a pointer; under purecap an int->pointer cast yields an UNTAGGED value, so the very first
      dereference raised UNEXPECTED_OPERAND and the helper faulted inside itself -- it printed an
      empty line and trapped at capstone_dump_window+0x100. The caller must therefore derive the
-     address from a real capability (db) with pointer arithmetic, never rebuild it from a scalar. */
-  const volatile unsigned long *w = (const volatile unsigned long *)base;
-  int i;
-  if (!hostcall_metadata || !hostcall_payload) return;
-  output_text("DUMP phase="); output_hex64(phase); output_text(":");
-  for (i = 0; i < 12; i++) { output_text(" "); output_hex64(w[i]); }
+     address from a real capability (db) with pointer arithmetic, never rebuild it from a scalar.
+
+     SELF-VERIFYING. It prints the LCC type/cursor/base/end of the capability it is about to read
+     through, so a window of zeros can be told apart from a window read at the wrong address --
+     which is exactly the ambiguity that made the earlier all-zero dumps uninterpretable. The
+     caller is expected to issue tag 0 at offset 0 as a POSITIVE CONTROL: the head of a live
+     sqlite3 connection is never all zeros, so if tag 0 comes back zero the instrument, not the
+     subject, is what the run measured. */
+  const volatile unsigned long *w;
+  const char *p;
+  unsigned long i;
+  if (nwords > 16UL) nwords = 16UL;
+  if (!capstone_out_reserve(160UL + 17UL * nwords)) return;
+  p = (const char *)base + off;
+  w = (const volatile unsigned long *)(const void *)p;
+  output_text("DUMP p="); output_hexv(phase);
+  output_text(" g=");     output_hexv(tag);
+  output_text(" o=");     output_hexv(off);
+  output_capinfo((const void *)p);
+  output_text(":");
+  for (i = 0; i < nwords; i++) { output_text(" "); output_hex64(w[i]); }
   output_text("\n");
 }
 #endif /* CAPSTONE_PROBE_LOOKASIDE */
@@ -357,25 +545,67 @@ static int query_scalar_eq(sqlite3 *db, const char *sql, long want,
  * The check is placed BEFORE the first statement as well, so a report at phase 0 would mean the
  * corruption predates the extended workload entirely -- without that arm a clean phase 1 could
  * not be distinguished from "it was already broken on entry". */
+/* Dump UNCONDITIONALLY, in two windows.
+ *
+ *   tag 0, offset 0      THE POSITIVE CONTROL. The head of a live sqlite3 connection holds
+ *                        pVfs, pVdbe, pDfltColl and friends and is never all zeros. Without it,
+ *                        the all-zero windows measured on 2026-08-13 were unfalsifiable: they
+ *                        are equally consistent with "nothing was written here" and with "the
+ *                        dump read somewhere else entirely". If tag 0 reads zero, discard the
+ *                        run -- the instrument is what failed.
+ *   tag 1, offset 0x200  THE SUBJECT, kept only so the earlier measurement stays comparable.
+ *                        The base 0x200 was DERIVED from a byte reconstruction anchored to a db
+ *                        that boot26 has since shown is not this connection, so it is no longer
+ *                        expected to be the right place to look.
+ *
+ * The canary no longer RETURNS when pSmallFree is non-zero. It fired never, and an early return
+ * on a field this workload's own connection keeps at 0 only removes phases from the ladder. */
 #define LOOK_CANARY(phase)                                                     \
   do {                                                                         \
     unsigned long v_ = (unsigned long)(void *)db->lookaside.pSmallFree;        \
-    /* Dump UNCONDITIONALLY. The window was all zeros at entry and the canary   \
-       never fired, so watching only pSmallFree missed the smash entirely --    \
-       the corruption lands elsewhere in the window first, or pSmallFree is     \
-       rewritten to 0 afterwards. Dumping every phase shows the window          \
-       evolving instead of reporting a single field that happens to look sane. */ \
-    capstone_dump_window((const void *)((const char *)db + 0x200), (phase));   \
+    capstone_dump_window((const void *)db, 0UL,     4UL, (phase), 0UL);        \
+    capstone_dump_window((const void *)db, 0x200UL, 8UL, (phase), 1UL);        \
     if (v_ != 0UL) {                                                           \
-      output_text("CANARY phase=");  output_hex64((unsigned long)(phase));     \
-      output_text(" pSmallFree=");   output_hex64(v_);                         \
-      output_text("\n");                                                       \
-      return SQLITE_OK;   /* stop here: the writer is this phase or earlier */ \
+      if (capstone_out_reserve(48UL)) {                                        \
+        output_text("CANARY p=");      output_hexv((unsigned long)(phase));    \
+        output_text(" pSmallFree=");   output_hex64(v_);                       \
+        output_text("\n");                                                     \
+      }                                                                        \
     }                                                                          \
   } while (0)
+
+/* CAPSTONE_EXT_STOP=<n> -- return SQLITE_OK from run_sqlite_extended immediately after phase n.
+ *
+ * The point is a variant that RETURNS. run_sqlite_extended's caller treats SQLITE_OK as success
+ * and goes on to sqlite3_close(db) and the PASSED marker (sqlite_capstone_domain.c, run_sqlite:
+ * `rc = run_sqlite_extended(db); if (rc != SQLITE_OK) return rc; rc = sqlite3_close(db); ...`),
+ * so a stopped build produces a full clean return path rather than merely skipping work -- and
+ * the EXTSTOP marker is what keeps it from being mistaken for a real pass.
+ *
+ * Preprocessor rather than `if (CAPSTONE_EXT_STOP <= n)` so the default build emits no code at
+ * all for it and the measured path stays byte-identical. */
 #else
 #define LOOK_CANARY(phase) do { } while (0)
 #endif
+
+/* DEFINED OUTSIDE THE PROBE BLOCK, DELIBERATELY.
+ *
+ * These first lived inside `#ifdef CAPSTONE_PROBE_LOOKASIDE`, and that was a defect with teeth:
+ * in an ordinary build CAPSTONE_EXT_STOP is then undefined, `#if (CAPSTONE_EXT_STOP) <= 0`
+ * evaluates the undefined identifier as 0, `0 <= 0` is TRUE, and the CANONICAL domain -- the one
+ * whose numbers go in the paper -- would have returned SQLITE_OK before executing a single
+ * statement of the extended workload. It would not even have failed loudly; EXT_STOP was also
+ * undefined there, so it failed at compile time, but a differently-shaped mistake of the same
+ * kind would have produced a silently empty PASS. The ladder's knob must be defined wherever its
+ * `#if` is read. */
+#ifndef CAPSTONE_EXT_STOP
+#define CAPSTONE_EXT_STOP 999
+#endif
+#define EXT_STOP(n)                                                            \
+  do {                                                                         \
+    output_text("EXTSTOP=" #n "\n");                                           \
+    return SQLITE_OK;                                                          \
+  } while (0)
 
 static int run_sqlite_extended(sqlite3 *db) {
   int rc;
@@ -388,20 +618,39 @@ static int run_sqlite_extended(sqlite3 *db) {
   output_text("REALDB db=");  output_hex64((unsigned long)(void *)db);  output_text("\n");
 #endif
   LOOK_CANARY(0);
-  capstone_dump_window((const void *)((const char *)db + 0x200), 0x100UL);   /* unconditional baseline */
+#if (CAPSTONE_EXT_STOP) <= 0
+  EXT_STOP(0);
+#endif
   if ((rc = exec_ok(db, "BEGIN;", "ext-begin")) != SQLITE_OK)
     return rc;
   LOOK_CANARY(1);
+#if (CAPSTONE_EXT_STOP) <= 1
+  EXT_STOP(1);
+#endif
   if ((rc = exec_ok(db,
           "CREATE TABLE nums(id INTEGER PRIMARY KEY, label TEXT, amount REAL);",
           "ext-create-nums")) != SQLITE_OK)
     return rc;
   LOOK_CANARY(2);
+#if (CAPSTONE_EXT_STOP) <= 2
+  EXT_STOP(2);
+#endif
+#if !defined(CAPSTONE_EXT_SKIP_INDEX)
   if ((rc = exec_ok(db, "CREATE INDEX idx_amount ON nums(amount);",
                     "ext-create-index")) != SQLITE_OK)
     return rc;
+#else
+  /* THE MATCHED CONTROL for phase 2 -> 3. Same statement machinery reached through the same
+     exec_ok/prepare/step path, with the one thing under test -- building an index btree --
+     removed. A ladder that merely stops before CREATE INDEX cannot distinguish "CREATE INDEX
+     kills it" from "the fourth statement, whatever it is, kills it"; this arm can. */
+  if ((rc = exec_ok(db, "SELECT count(*) FROM nums;", "ext-index-control")) != SQLITE_OK)
+    return rc;
+#endif
   LOOK_CANARY(3);
-  /* phases 4+ cover the prepared INSERTs and the UPDATE/DELETE that follow */
+#if (CAPSTONE_EXT_STOP) <= 3
+  EXT_STOP(3);
+#endif
 
   /* Bound prepared INSERTs: int id, text label, real amount. */
   {
@@ -431,16 +680,32 @@ static int run_sqlite_extended(sqlite3 *db) {
     }
     sqlite3_finalize(ins);
   }
+  LOOK_CANARY(4);
+#if (CAPSTONE_EXT_STOP) <= 4
+  EXT_STOP(4);
+#endif
 
   /* Mutations. */
   if ((rc = exec_ok(db, "UPDATE nums SET amount = amount * 2 WHERE id = 2;",
                     "ext-update")) != SQLITE_OK)
     return rc;
+  LOOK_CANARY(5);
+#if (CAPSTONE_EXT_STOP) <= 5
+  EXT_STOP(5);
+#endif
   if ((rc = exec_ok(db, "DELETE FROM nums WHERE id = 4;", "ext-delete")) !=
       SQLITE_OK)
     return rc;
+  LOOK_CANARY(6);
+#if (CAPSTONE_EXT_STOP) <= 6
+  EXT_STOP(6);
+#endif
   if ((rc = exec_ok(db, "COMMIT;", "ext-commit")) != SQLITE_OK)
     return rc;
+  LOOK_CANARY(7);
+#if (CAPSTONE_EXT_STOP) <= 7
+  EXT_STOP(7);
+#endif
 
   /* Aggregates over the remaining rows: id 1,2,3 with amounts 10,40,30.
    * count=3, sum=80, max=40, min=10. */
@@ -4693,7 +4958,13 @@ static int run_sqlite(void) {
   {
     void *c100 = sqlite3_malloc(100);
     void *c1296 = sqlite3_malloc(1296);
+    /* Record the real connection the instant it exists, so the allocator probe can compare
+       against a value it did not have to remember. boot25/boot26 showed the allocator's `db`
+       and this one DIFFER; without this global that comparison had to be done by eye across
+       two lines of a log. */
+    capstone_real_db = (unsigned long)(void *)db;   /* db is tagged here, so the cast is safe */
     output_text("DBBLK db=");     output_hex64((unsigned long)(void *)db);
+    output_text(" dbcap:");       output_heapinfo(output_capinfo((const void *)db));
     output_text(" msize=");       output_hex64((unsigned long)sqlite3_msize((void *)db));
     output_text(" heap=");        output_hex64((unsigned long)(void *)sqlite_heap);
     output_text("\n CTRL m100="); output_hex64((unsigned long)(c100 ? sqlite3_msize(c100) : 0));

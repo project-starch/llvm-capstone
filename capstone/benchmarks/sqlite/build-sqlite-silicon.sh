@@ -858,17 +858,25 @@ NEEDLE = "    if( (pBuf = db->lookaside.pSmallFree)!=0 ){"
 if NEEDLE not in s:
     sys.exit("PROBE_LOOKASIDE: pSmallFree pop not found -- patch shape changed")
 probe = NEEDLE + """
-      /* CAPSTONE LOOKASIDE PROBE -- report, never dereference, then use the general allocator. */
-      capstone_look_report((unsigned long)(void *)pBuf,
-                           (unsigned long)(void *)db,          /* WHICH struct are we reading? */
-                           (unsigned long)n,                   /* reachable only when n == 0 */
-                           capstone_look_pops);
+      /* CAPSTONE LOOKASIDE PROBE -- report, never dereference, then use the general allocator.
+         `db` is passed AS A CAPABILITY, not as an integer, because the reporter measures its
+         LCC type/cursor/base/end: boot25/boot26 showed this `db` is not the connection the
+         workload opened, and only the bounds say whether it is a wrong OBJECT or a shifted
+         CURSOR on the right one. The address of the field being popped is computed HERE,
+         where struct sqlite3 is complete, so the probe never has to assume an offset. */
+      capstone_look_report2((unsigned long)(void *)pBuf,
+                            (const void *)db,
+                            (unsigned long)(void *)&db->lookaside.pSmallFree,
+                            (unsigned long)n,
+                            (unsigned long)db->lookaside.sz,
+                            capstone_look_pops);
       capstone_look_pops++;
       return dbMallocRawFinish(db, n);
 """
 s = s.replace(NEEDLE, probe, 1)
 decl = ("extern unsigned long capstone_look_pops;\n"
-        "void capstone_look_report(unsigned long, unsigned long, unsigned long, unsigned long);\n")
+        "void capstone_look_report2(unsigned long, const void *, unsigned long,\n"
+        "                           unsigned long, unsigned long, unsigned long);\n")
 i = s.find(probe); j = s.rfind("\n", 0, i)
 s = s[:j+1] + decl + s[j+1:]
 open(path, "w").write(s)
@@ -897,7 +905,8 @@ guard = """  {
 s = s.replace(NEEDLE, guard, 1)
 decl = ("extern unsigned long capstone_db_lo, capstone_db_hi, capstone_ovl_hits;\n"
         "void capstone_ovl_report(unsigned long, unsigned long, unsigned long);\n"
-        "void capstone_dump_window(const void *, unsigned long);\n")
+        "void capstone_dump_window(const void *, unsigned long, unsigned long,\n"
+        "                          unsigned long, unsigned long);\n")
 i = s.find(guard); j = s.rfind("\n", 0, i)
 s = s[:j+1] + decl + s[j+1:]
 open(path, "w").write(s)
