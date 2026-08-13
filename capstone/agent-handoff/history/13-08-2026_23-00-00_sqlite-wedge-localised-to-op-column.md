@@ -60,13 +60,28 @@ Four board sessions before this, the state of knowledge was "SQLite fails somewh
 thing in this workload to walk a packed row and produce a pointer into it. The measurement is the
 matched pair; this paragraph is a lead for the next step, not a finding.
 
-## The caveat that has not been closed
+## The image-perturbation caveat — RAISED, THEN CLOSED
 
-`C6` and `C7` are different binaries, differing in one compiled-in constant, and this project has
-a documented image-perturbation family (S-01) in which an unrelated image change moves a failure.
-The monotone C6/C7/C8 sequence and the green control argue against that reading, but the thing
-that would close it — a REDRAW of the pair, both arms rebuilt with a harmless constant varied and
-`sha256sum`-checked distinct — has **not** been run.
+`C6` and `C7` are different binaries differing in one compiled-in constant, and this project has a
+documented image-perturbation family (S-01) in which an unrelated image change moves a failure. So
+the pair was REDRAWN: both arms rebuilt with `CAPSTONE_REDRAW_PAD=7717`, which changes the image
+and nothing the test executes. Four images, all `sha256sum`-distinct:
+
+```
+C6 7ca45416b50be6   C7 ee08b4865a6b1c      (first draw)
+R6 6ecb519eec052d   R7 63d82cee4d5109      (second draw)
+```
+
+Second boot, control green again:
+
+```
+L2  control    RETURNED
+R6  clamp 6    RETURNED, opcode 96
+R7  clamp 7    WEDGED
+```
+
+Identical to the first draw. Two independent draws, two green controls, same verdict — the result
+is a property of executing `OP_Column`, not of any particular image.
 
 ## Instruments added, with their positive controls
 
@@ -86,7 +101,9 @@ that would close it — a REDRAW of the pair, both arms rebuilt with a harmless 
 
 ## Next step
 
-Determine what inside `OP_Column` faults. It is one opcode, so the same clamp technique applies at
-finer grain — or read the RTL for the access `OP_Column` makes that nothing before it does. Run
+Determine what inside `OP_Column` faults. It is one opcode, so the same clamp technique applies at finer
+grain — or ask the RTL what access `OP_Column` makes that nothing before it does. `OP_Column`
+walks a serialised record header, and the natural next question is whether the fault is in the
+header walk, the payload fetch, or the `Mem` it materialises. Run
 the REDRAW of the C6/C7 pair first; it is one boot and it is the only thing standing between this
 result and a root cause claim.
