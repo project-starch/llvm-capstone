@@ -1197,6 +1197,20 @@ probe = OPEN + """
   }
 """
 s = s.replace(OPEN, probe, 1)
+
+# AND SHORT-CIRCUIT THE ERROR PATH, which is the half that was missing.
+# Returning SQLITE_NOMEM is semantically honest but sends OP_Column to abort_due_to_error, and
+# that path dereferences ANOTHER Mem: measured, the wedge simply moved to
+# vdbeMemClearExternAndSetNull and took the report with it. Cutting the label short returns
+# through vdbe_return like the clamp does, touching no further Mem, so the report survives to the
+# host. Only fires for the probe's own escape (memgrow_seen), so ordinary error handling in every
+# other build and every earlier statement is untouched.
+LBL = "abort_due_to_error:\n"
+if LBL not in s:
+    sys.exit("MEMGROW_PROBE: abort_due_to_error label not found -- patch shape changed")
+s = s.replace(LBL, LBL + """  if( capstone_memgrow_seen ){ rc = SQLITE_DONE; goto vdbe_return; }
+""", 1)
+
 ANCHOR = "#define SQLITE_CORE 1\n"
 if ANCHOR not in s:
     sys.exit("MEMGROW_PROBE: amalgamation prologue anchor not found")
