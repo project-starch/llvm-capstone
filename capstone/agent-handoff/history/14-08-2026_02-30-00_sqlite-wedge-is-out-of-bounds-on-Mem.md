@@ -105,6 +105,56 @@ that does not touch another `Mem` — most plausibly by reporting at the top of 
 (before any opcode runs) on the register array `aMem` and the specific `&aMem[i]` involved, with
 `CAPSTONE_VDBE_CLAMP=6`, which is already known to return.
 
+## RESOLVED: the capability was never corrupt -- the BYTECODE OPERAND was
+
+A probe inside `OP_Column`, reporting `pDest` at the last point before any `Mem` is dereferenced
+and leaving through `goto vdbe_return` (the clamp's escape, measured to return on silicon), got the
+measurement three earlier instruments could not:
+
+```
+silicon:  PDEST p3=6a7 p2=0 cap: t=1 c=8301d360 b=82fbe200 e=82ffe400 hoff=OUT
+QEMU:     PDEST p3=1   p2=0 cap: t=1 c=101feeac0 b=101fbe3a0 e=101ffe3a0
+```
+
+`pOp->p3` is the VDBE instruction's destination-register operand. It is 1. On silicon it reads
+**1703**. `&aMem[1703]` is 1703 x 112 bytes past `aMem`, at `0x8301d360` -- outside the heap
+(`end 0x82ffe400`), which is what `hoff=OUT` says.
+
+**So the capability machinery was right all along.** The hardware raised OUT_OF_BOUNDS on a pointer
+that genuinely was out of bounds. Everything above about damaged bounds, cursor re-encoding and
+spill/reload is superseded: the bounds were fine, the tag was fine, and the two benign RTL
+explanations (the reserved 16-byte tail, a SEALEDRET window) are moot because the cursor is
+0x1e000 past the end and the type is 1. `s06bnds` returning 65535 fits -- nothing was ever wrong
+with spill/reload.
+
+It also explains the older loose ends: boot27's `db` arriving as a valid capability pointing at the
+wrong object is what a wrong register index produces, as is the auditor's note that the scalar
+`szMalloc` read returned inconsistent values across builds.
+
+**The cause is unguarded compiler-emitted 16-byte granule copies -- S-06 -- corrupting the VdbeOp
+array.** Matched pair, one boot, control returning:
+
+| arm | | `p3` | pointer |
+|---|---|---|---|
+| `PD` guard off | | `0x6a3` (1699) | `hoff=OUT` |
+| `PDG` guard on | | **1** | `hoff=30720`, QEMU's value |
+
+`p3` also differs between boots with the guard off (`0x6a7`, `0x6a3`) -- garbage, not a fixed
+constant.
+
+## STILL OPEN: the guard fixes the operand, it does not make SQLite run
+
+`FIXON` -- schema fixup on, `-capstone-guard-cap-granule-copies` on, no probes, no ladder -- enters,
+emits garbage to the UART and wedges. A build that repairs the one measured corruption is not yet a
+build that runs. Whether what remains is the same defect at a site the guard does not cover, or
+something that was simply unreachable before, is not established.
+
+**Latch limitation, first observed here.** That wedge's latched trap state reads mcause 9 at
+`0xffffffff800072cc` -- a KERNEL virtual address. Cause 9 passes the latch's `cause not in {0,2}`
+filter, so kernel activity after the domain died overwrote it. The argument for trusting the
+earlier cause-29 readings was exactly that kernel traps would have overwritten them; this run shows
+the overwrite happening. A kernel VA in that field means NO information about the domain fault.
+
 ## Next step
 
 Measure the bounds, do not infer them: report `aMem` and `&aMem[p3]` at `sqlite3VdbeExec` entry
