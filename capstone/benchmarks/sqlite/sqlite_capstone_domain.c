@@ -141,9 +141,25 @@ unsigned long capstone_oob_ra, capstone_oob_spcur, capstone_oob_spst, capstone_o
    call site). Rewrites the payload from offset 0 every time rather than appending: this runs
    on every Mem release and appending would overflow the 4 KiB region long before the fault. */
 void capstone_oob_report(void) {
-  if (!hostcall_metadata || !hostcall_payload)
+  /* APPEND ONCE, and never reset `length`.
+   *
+   * This used to do `hostcall_metadata->length = 0` and rewrite from offset 0 on every call, so
+   * that the LAST call won. That silently destroyed the result: the workload writes its own
+   * output through the same payload region, so a probe report was either overwritten by the rows
+   * that followed it or overwrote them. A run on 2026-08-13 came back with the three rows and NO
+   * probe line at all, and the probe had in fact fired -- there was simply no way to tell that
+   * from "the probe never ran", which is the worst possible property in an instrument.
+   *
+   * One-shot append fixes both directions: the report survives whatever the workload prints
+   * afterwards, and it cannot overflow the 4 KiB region no matter how many times the probed
+   * function is called. The FIRST offending call is the interesting one anyway -- the records
+   * below are already sticky on it. */
+  static int reported_;
+  if (reported_ || !hostcall_metadata || !hostcall_payload)
     return;
-  hostcall_metadata->length = 0;
+  if (capstone_oob_bad_seen == 0UL)
+    return;                       /* nothing to say yet; wait for the first bad capability */
+  reported_ = 1;
   output_text("OOBP calls=");   output_hex64(capstone_oob_calls);
   output_text(" badseen=");     output_hex64(capstone_oob_bad_seen);
   output_text("\n LAST ty=");   output_hex64(capstone_oob_last_ty);
@@ -175,9 +191,12 @@ void capstone_oob_report(void) {
 unsigned long capstone_arg_calls, capstone_arg_ty1, capstone_arg_ty2, capstone_arg_ra;
 
 void capstone_arg_report(void) {
-  if (!hostcall_metadata || !hostcall_payload)
+  /* APPEND ONCE -- see capstone_oob_report for why resetting `length` destroyed the result.
+     The records are sticky on the first call, so reporting on the first call loses nothing. */
+  static int reported_;
+  if (reported_ || !hostcall_metadata || !hostcall_payload)
     return;
-  hostcall_metadata->length = 0;
+  reported_ = 1;
   output_text("ARGP calls="); output_hex64(capstone_arg_calls);
   output_text(" ty1=");       output_hex64(capstone_arg_ty1);
   output_text(" ty2=");       output_hex64(capstone_arg_ty2);
@@ -4489,6 +4508,31 @@ static int run_sqlite(void) {
                           (int)sizeof(sqlite_heap), 64);
   if (rc != SQLITE_OK)
     return fail("config-heap", rc, 0);
+
+#ifdef CAPSTONE_SQLITE_NO_LOOKASIDE
+  /* Disable the per-connection LOOKASIDE allocator.
+   *
+   * WHY, and what it is and is not. Measured 2026-08-13: with the S-06 workarounds in place
+   * SQLite executes CREATE TABLE, the INSERTs and the SELECT on silicon and returns all three
+   * rows -- then traps inside the EXTENDED workload at sqlite3DbMallocRawNN+0xf8, mcause 25,
+   * on `db->lookaside.pFree`, which is ALREADY UNTAGGED IN THE STRUCT (proven because the
+   * following `mv a0, a0` -- addi rd,rs,0, which raises on a live capability -- did not fault).
+   *
+   * Lookaside is an OPTIONAL fast path: SQLite falls back to the general allocator, which the
+   * workload already exercises heavily and which has not faulted. So turning it off is a
+   * legitimate configuration, not a workaround that hides a defect -- but it does NOT fix the
+   * untagging, it only stops that particular list from being walked. If the run then completes,
+   * the corruption is confined to the lookaside free list; if it faults elsewhere, the untagging
+   * is broader and the lookaside pointer was just the first victim. Either outcome is
+   * informative, which is why this is a knob and not a default.
+   *
+   * Deliberately NOT enabled by default: a measured SQLite number must come from the stock
+   * configuration, and silently disabling an allocator would make every later timing figure
+   * incomparable with the QEMU and host baselines. */
+  rc = sqlite3_config(SQLITE_CONFIG_LOOKASIDE, 0, 0);
+  if (rc != SQLITE_OK)
+    return fail("config-lookaside", rc, 0);
+#endif
 
   rc = sqlite3_initialize();
   if (rc != SQLITE_OK)
