@@ -142,6 +142,37 @@ array.** Matched pair, one boot, control returning:
 `p3` also differs between boots with the guard off (`0x6a7`, `0x6a3`) -- garbage, not a fixed
 constant.
 
+## WITH THE GUARD ON: the basic workload PASSES on silicon
+
+Ladder arms, guard on, one boot, control returning:
+
+| arm | | result |
+|---|---|---|
+| `G6` after the row loop | | **returned `rc=3`, printed alpha/beta/gamma** |
+| `G7` after finalize | | returned `rc=0`, three rows |
+| `L2` control | | returned |
+| `G9` full workload | | WEDGED (entered) |
+
+CREATE, INSERT, the SELECT, all three rows and finalize now work end to end on hardware. The
+residual failure is in `run_sqlite_extended`, past everything the ladder covers.
+
+## The residual failure is a DIFFERENT defect
+
+`G9`'s latched trap state: `sw=255 = 0x99` -> **mcause 25 = UNEXPECTED_OPERAND**, not 29, at
+
+```
+sqlite3DbMallocRawNN+0xd8   ldc a0, 0x2a0(a0)
+```
+
+`0x2a0` is exactly the `db->lookaside.pSmallFree` offset measured on boot27 (`fld - c = 0x2a0`).
+mcause 25 means the operand is NOT_CAP -- an untagged value where a capability belongs. That is the
+original lookaside fault the whole investigation started from, and it is **not** the out-of-bounds
+defect this note is about: different cause, different mechanism, different fix.
+
+So the guard resolves the OOB/corrupt-operand defect completely, and what remains is the separate
+question of how `pSmallFree` comes to hold plain data -- boot27 measured it holding the ASCII
+`' WHERE '`. A wild write or a granule copy at a site the guard does not cover are both live.
+
 ## STILL OPEN: the guard fixes the operand, it does not make SQLite run
 
 `FIXON` -- schema fixup on, `-capstone-guard-cap-granule-copies` on, no probes, no ladder -- enters,
