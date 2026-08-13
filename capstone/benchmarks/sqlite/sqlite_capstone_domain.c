@@ -4515,8 +4515,19 @@ static int run_sqlite(void) {
    * WHY, and what it is and is not. Measured 2026-08-13: with the S-06 workarounds in place
    * SQLite executes CREATE TABLE, the INSERTs and the SELECT on silicon and returns all three
    * rows -- then traps inside the EXTENDED workload at sqlite3DbMallocRawNN+0xf8, mcause 25,
-   * on `db->lookaside.pFree`, which is ALREADY UNTAGGED IN THE STRUCT (proven because the
-   * following `mv a0, a0` -- addi rd,rs,0, which raises on a live capability -- did not fault).
+   * on `db->lookaside.pSmallFree` (NOT pFree: +0xf8 is the pSmallFree pop; pFree's equivalent
+   * ldc is at +0x1b0). The preceding `li a0, 0x80` is the `n <= LOOKASIDE_SMALL` two-size test,
+   * not a lookaside.sz check. The pointer is ALREADY UNTAGGED IN THE STRUCT, proven because the
+   * following `mv a0, a0` -- addi rd,rs,0, which raises on a live capability -- did not fault.
+   *
+   * AND THE COMPILER IS NOT AT FAULT. An exhaustive scan of the whole disassembly found every
+   * writer of every lookaside list to be capability-clean: cincoffset/cincoffsetimm for all
+   * address arithmetic, stc for every pointer store, no integer arithmetic on a pointer and no
+   * plain sd anywhere near these fields. Decisively, `stc` traps on an untagged BASE, so an
+   * untagged pointer arriving at sqlite3DbFreeNN would have trapped at `pBuf->pNext = pSmallFree`
+   * one instruction BEFORE the store to pSmallFree -- it did not. The tag survived the stc and
+   * was gone at the ldc, so the loss is on the MEMORY side and belongs to the tag/metadata-bank
+   * write path (the R-18/R-19 family), not to codegen.
    *
    * Lookaside is an OPTIONAL fast path: SQLite falls back to the general allocator, which the
    * workload already exercises heavily and which has not faulted. So turning it off is a
