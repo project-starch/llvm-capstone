@@ -93,9 +93,13 @@ static void output_uint(unsigned value) {
    ladder measured the wrong statement entirely. The domain arms it immediately before the step
    under test, so the count is that statement's opcodes and nobody else's. */
 unsigned long capstone_vdbe_ops, capstone_vdbe_lastop, capstone_vdbe_armed;
+unsigned long capstone_memgrow_seen;
+
+
 
 #if defined(CAPSTONE_OOB_PROBE) || defined(CAPSTONE_ARG_PROBE) || \
-    defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE)
+    defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE) || \
+    defined(CAPSTONE_MEMGROW_PROBE)
 /* Shared by both probes. Lived inside the OOB block until the ARG probe needed it too; a
    reporter that cannot print is a reporter that silently reports nothing. */
 static void output_hex64(unsigned long v) {
@@ -217,7 +221,8 @@ void capstone_arg_report(void) {
 }
 #endif /* CAPSTONE_ARG_PROBE */
 
-#if defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE)
+#if defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE) || \
+    defined(CAPSTONE_MEMGROW_PROBE)
 /* Reports the lookaside small-free head WITHOUT DEREFERENCING IT, and then falls back to the
    general allocator so the run continues instead of wedging.
    
@@ -390,6 +395,26 @@ static void output_heapinfo(unsigned long a) {
   } else {
     output_text(" OUT");
   }
+}
+
+/* Describe the Mem capability that sqlite3VdbeMemGrow is about to dereference.
+ *
+ * The board says mcause 29 -- OUT_OF_BOUNDS -- at `ldc 0x30(pMem)`, and 0x30 is offsetof(Mem,db).
+ * So the capability does not span its own db field. Everything past that is inference until the
+ * bounds are printed, which is what this does. MEMCELLSIZE is offsetof(Mem,db) too, i.e. exactly
+ * 0x30, so `end - base == 0x30` would say the Mem pointer carries SHALLOW-COPY bounds; any other
+ * value says something else entirely, and the difference is the whole diagnosis.
+ *
+ * Prints the type first and only queries bounds when the type allows it -- selector 2/3/4 raise
+ * on a NOT_CAP or sealed operand, and an instrument that faults on the input it exists to
+ * describe reports nothing at all. output_capinfo already carries that guard in one asm block. */
+void capstone_memgrow_report(const void *pmem, unsigned long n, unsigned long bpreserve) {
+  if (!capstone_out_reserve(200UL))
+    return;
+  output_text("MEMGROW n=");  output_hexv(n);
+  output_text(" pres=");      output_hexv(bpreserve);
+  output_text(" pMem:");      output_heapinfo(output_capinfo(pmem));
+  output_text("\n");
 }
 
 /* The connection returned by sqlite3_open, recorded the instant it exists so that any later

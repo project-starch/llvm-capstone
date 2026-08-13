@@ -1120,6 +1120,50 @@ PYDBWHO
   fi
 fi
 
+# CAPSTONE_MEMGROW_PROBE=1 -- MEASURE the capability that faults, instead of inferring it.
+#
+# The latched trap state says what happened without saying why: mcause 29 = OUT_OF_BOUNDS,
+# identical on all four wedged arms, at an `ldc` of offset 0x30 inside sqlite3VdbeMemGrow.
+# Offset 0x30 in struct Mem is `sqlite3 *db`. An OUT_OF_BOUNDS there means the Mem capability
+# being dereferenced does not span its own `db` field -- so the question is what its bounds
+# actually are, and that is measurable rather than arguable.
+#
+# It REPORTS AND THEN RETURNS AN ERROR, which is the only shape that works here: the run wedges
+# a few instructions later, a wedge takes the core, and the host never writes the payload out.
+# Returning SQLITE_NOMEM propagates out of OP_Column through abort_due_to_error, sqlite3_step
+# returns an error, the row loop exits and the ladder's stage 66 returns -- so the report reaches
+# the host by the front door.
+#
+# ARMED by the same flag the VDBE clamp uses, so it fires on the first sqlite3VdbeMemGrow of the
+# SELECT's step and not on the hundreds of calls during CREATE and INSERT that work fine.
+if [[ "${CAPSTONE_MEMGROW_PROBE:-0}" == "1" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYMG'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+OPEN = "SQLITE_PRIVATE SQLITE_NOINLINE int sqlite3VdbeMemGrow(Mem *pMem, int n, int bPreserve){"
+if OPEN not in s:
+    sys.exit("MEMGROW_PROBE: sqlite3VdbeMemGrow signature not found -- patch shape changed")
+probe = OPEN + """
+  if( capstone_vdbe_armed && !capstone_memgrow_seen ){
+    capstone_memgrow_seen = 1;
+    capstone_memgrow_report((const void*)pMem, (unsigned long)n, (unsigned long)bPreserve);
+    return 7;   /* SQLITE_NOMEM -- stops the flow so the domain RETURNS and the report is flushed */
+  }
+"""
+s = s.replace(OPEN, probe, 1)
+ANCHOR = "#define SQLITE_CORE 1\n"
+if ANCHOR not in s:
+    sys.exit("MEMGROW_PROBE: amalgamation prologue anchor not found")
+s = s.replace(ANCHOR, ANCHOR +
+              "extern unsigned long capstone_vdbe_armed, capstone_memgrow_seen;\n"
+              "void capstone_memgrow_report(const void *, unsigned long, unsigned long);\n", 1)
+open(path, "w").write(s)
+print("   MEMGROW probe injected into sqlite3VdbeMemGrow")
+PYMG
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_MEMGROW_PROBE=1"
+fi
+
 # CAPSTONE_VDBE_CLAMP=<n> -- stop sqlite3VdbeExec after n opcodes and return cleanly, recording
 # which opcode was about to run.
 #
