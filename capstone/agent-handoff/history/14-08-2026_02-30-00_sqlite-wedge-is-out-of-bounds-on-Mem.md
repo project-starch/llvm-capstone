@@ -33,37 +33,56 @@ these images, so the order is 10 and the base is **4 MiB-aligned**
 segment's VA is `0x10000`, so `VA = (mepc & 0x3FFFFF) + 0x10000` recovers the image address
 exactly. (An earlier, weaker assumption of 1 MiB alignment gives the same answers and is implied.)
 
-| arm | VA | function | instruction |
-|---|---|---|---|
-| `C7` | `0x5256c` | `sqlite3VdbeMemGrow+0x188` | `ldc a0, 0x30(a0)` |
-| `R7` | `0x525a4` | `sqlite3VdbeMemGrow+0x188` | `ldc a0, 0x30(a0)` |
-| `S61` | `0x524ac` | `sqlite3VdbeMemGrow+0x164` | `ldc a0, 0x30(a1)` |
-| `MG` | `0x53064` | `vdbeMemClearExternAndSetNull+0x3c` | `ldc a1, 0x0(a0)` |
+| arm | VA | function | instruction | source construct |
+|---|---|---|---|---|
+| `C7` | `0x5256c` | `sqlite3VdbeMemGrow+0x188` | `ldc a0, 0x30(a0)` | `sqlite3DbMallocRaw(pMem->db, n)` — the `szMalloc <= 0` branch |
+| `R7` | `0x525a4` | `sqlite3VdbeMemGrow+0x188` | `ldc a0, 0x30(a0)` | same |
+| `S61` | `0x524ac` | `sqlite3VdbeMemGrow+0x164` | `ldc a0, 0x30(a1)` | `sqlite3DbFreeNN(pMem->db, pMem->zMalloc)` — the **opposite** branch |
+| `C8` | `0x5937c` | `sqlite3VdbeExec+0x527c` | `ldc a0, 0x50(a1)` | `pDest->z = pDest->zMalloc` — inlined in OP_Column, **not in VdbeMemGrow at all** |
+| `MG` | `0x53064` | `vdbeMemClearExternAndSetNull+0x3c` | `ldc a1, 0x0(a0)` | second-level load off a reloaded `Mem*` |
 
-`C7`/`R7` agreeing is weak — `R7` is `C7` shifted by a uniform `0x38` (the REDRAW pad), so the two
-are not independent. `S61` and `MG` are separately compiled binaries with different layouts, and
-they land in `Mem`-handling code too.
+`C7`/`R7` are the same site; that pair is a REDRAW control that passed, not a duplicate.
 
-Offset `0x30` in `struct sqlite3_value` (`Mem`) is `sqlite3 *db`, with 16-byte capability pointers:
-`u` 0x00(16), `z` 0x10(16), `n` 0x20, `flags` 0x24, `enc` 0x26, `eSubtype` 0x27, pad, **`db` 0x30**.
-`MEMCELLSIZE` is `offsetof(Mem,db)` — the same 0x30.
+## RETRACTION: this is NOT "the `pMem->db` load"
 
-## What it means
+An adversarial audit refuted the field-specific reading, and the refuting datum was **in my own
+evidence list**: `C8`'s mepc, which I failed to decode (its disassembly step errored and I never
+returned to it) and then silently dropped from the table. `C8` faults in `sqlite3VdbeExec`, on
+`pDest->zMalloc` at offset 0x50 — a different field, a different function, not `db` at all. `S61`
+likewise faults on the *opposite* branch of `VdbeMemGrow` from `C7`. Writing this up as "the wedge
+is the `pMem->db` load" would have sent the next session chasing a field-specific cause that one of
+the five samples already contradicts.
 
-**Capabilities pointing at `Mem` structures are out of bounds on silicon.** Not untagged — the tag
-was never the issue — and not a permission fault: bounds.
+**What survives, and it is not field-specific:** every fault is an `ldc` — a CAPABILITY-typed load
+— of a capability field out of a `Mem`/`pDest` object during `OP_Column`'s dynamic extent, at
+whatever offset that build happens to reach first (0x30 `db`, 0x50 `zMalloc`, 0x0 off a reload).
+Meanwhile the *scalar* `lw 0x40` (`szMalloc`) in the same objects never faults — and returns
+inconsistent values across builds differing only by a clamp constant or a dead pad, which is why
+different arms take different branches. Plain integer loads are documented as unchecked in our
+domains, so a scalar read succeeding proves nothing about the object.
 
-The `MG` arm is the informative one. It carried a probe at the top of `sqlite3VdbeMemGrow` that
-reports `pMem`'s bounds and returns `SQLITE_NOMEM` to stop the flow. It fired — the wedge MOVED, to
-`vdbeMemClearExternAndSetNull` on the error path — and wedged there with the same mcause on a
-**different** `Mem` dereference, this one at **offset 0**. An OOB at offset 0 means the cursor is
-outside `[base, end)` altogether, not merely that the object is short.
+That points at **the `pDest` capability's bounds**, not at any field. It is a hypothesis about the
+cause; the measurement is the five faults and their common shape.
 
-So this is not one broken instruction. It is a class: multiple, independent `Mem` dereferences
-fault, and `OP_Column` is simply the first place on this workload where one is reached. That is
-consistent with the project's pre-existing OOB probe note — "p is the HEAP capability with a cursor
-past its end" — and with the `db` measured on boot27 as a valid capability pointing at the wrong
-object 0x3e00 away.
+## Caveats the audit put on the record
+
+* **N=1 per wedged variant.** No wedging configuration was run twice. The replication here is
+  CROSS-VARIANT — four boots, four distinct binaries, one cause. The clean arm (`C6`) *did*
+  reproduce identically across two boots. Given this project's history of a PASS→FAIL flip voiding
+  a bisection, one re-run of `C7` in a later batch is cheap insurance and has not been done.
+* **mepc proves where the last capability exception was, not that the core stopped there.**
+  Supporting the identification: the latch keeps the latest trap with `cause ∉ {0,2}` and is
+  cleared only by reset, Linux runs between tests and every syscall/page-fault would overwrite it
+  with a *virtual* pc — so a surviving `cause 29` at a bare-physical `0x83xxxxxx` postdates all
+  inter-test kernel activity. And `sw=224 = 0x9f` shows `ex_commit.valid=1, privM=1` sampled
+  minutes after the hang. The surviving alternative — trapped here, resumed, wedged later without
+  trapping — is unlikely but not excluded.
+* **The mepc→VA recovery is SIZE-DEPENDENT, not a general trick.** It works because SQLite forces
+  an order-10 (4 MiB) allocation. A small domain gets a low order and less than 1 MiB of alignment,
+  and masking would then be unfounded.
+* **Artifact identity** for `C7`/`R7`/`S61` rests on the driver's in-session gate (overlay bytes
+  are inside the flashed initramfs) plus size coherence; their overlay copies have since been
+  overwritten. `C8` is verified end to end against its bake directory.
 
 ## It does not reproduce under QEMU
 
