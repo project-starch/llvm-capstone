@@ -83,7 +83,8 @@ static void output_uint(unsigned value) {
   }
 }
 
-#if defined(CAPSTONE_OOB_PROBE) || defined(CAPSTONE_ARG_PROBE) || defined(CAPSTONE_PROBE_LOOKASIDE)
+#if defined(CAPSTONE_OOB_PROBE) || defined(CAPSTONE_ARG_PROBE) || \
+    defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE)
 /* Shared by both probes. Lived inside the OOB block until the ARG probe needed it too; a
    reporter that cannot print is a reporter that silently reports nothing. */
 static void output_hex64(unsigned long v) {
@@ -205,7 +206,7 @@ void capstone_arg_report(void) {
 }
 #endif /* CAPSTONE_ARG_PROBE */
 
-#ifdef CAPSTONE_PROBE_LOOKASIDE
+#if defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE)
 /* Reports the lookaside small-free head WITHOUT DEREFERENCING IT, and then falls back to the
    general allocator so the run continues instead of wedging.
    
@@ -461,7 +462,124 @@ void capstone_dump_window(const void *base, unsigned long off, unsigned long nwo
   for (i = 0; i < nwords; i++) { output_text(" "); output_hex64(w[i]); }
   output_text("\n");
 }
-#endif /* CAPSTONE_PROBE_LOOKASIDE */
+/* ------------------------------------------------------------------------------------------
+ * DBWHO -- WHICH CALLER hands sqlite3DbMallocRawNN a `db` that is not the connection?
+ *
+ * Boot27 measured the allocator running with `db` at a cursor 0x3e00 away from the connection
+ * sqlite3_open returned, inside a SIXTY-FOUR BYTE heap block holding SQL text. That is a
+ * complete description of the symptom and says nothing about its origin: `db` is an argument,
+ * so the object that is wrong was chosen by whoever called. Every earlier probe watched the
+ * callee. This one watches the boundary.
+ *
+ * THE POSITIVE CONTROL IS `ok`, AND IT IS THE POINT OF THE INSTRUMENT.
+ * A mismatch counter that has never matched anything is indistinguishable from a comparison
+ * against a stale or mis-read baseline -- and `capstone_real_db` is exactly the kind of
+ * remembered scalar that has already produced two retractions here. `ok` counts the calls whose
+ * `db` DID equal the connection. A report reading `ok=0` therefore refutes itself: it means the
+ * baseline never matched anything and the "mismatch" is the instrument's, not the program's.
+ * Only `ok` large with a single late `bad` supports the reading that one caller is wrong.
+ *
+ * `ctlra` is the second control. It is the return address captured on call #1, which happens
+ * during sqlite3_open long before anything is suspect, so a plausible `ctlra` proves the ra read
+ * works at all -- a zero or garbage `ra` on the bad call would otherwise be read as evidence.
+ *
+ * The breadcrumb ring answers the hop the ra alone cannot. Nearly every call site reaches the
+ * allocator through a wrapper (sqlite3DbMallocRaw / DbMallocZero / DbRealloc / DbStrNDup), so
+ * the immediate ra names the wrapper and stops there. Each instrumented wrapper pushes its own
+ * (id, ra) on entry, so the entry just before the bad call carries the caller one level up.
+ * Ids are assigned by build-sqlite-silicon.sh in the order the functions are listed. */
+unsigned long capstone_dbwho_calls;    /* every call to sqlite3DbMallocRawNN */
+unsigned long capstone_dbwho_ok;       /* ... of which db WAS the connection: POSITIVE CONTROL */
+unsigned long capstone_dbwho_bad;      /* call index of the first mismatch; 0 = none seen */
+unsigned long capstone_dbwho_ctl_ra;   /* ra of call #1, captured before anything is suspect */
+unsigned long capstone_dbwho_badn;     /* how many calls were wrong, not just the first */
+/* (db type << 4) | ra type, from the most recent call. 7 is NOT_CAP, so `rat=77` means neither
+   operand was a capability at all and every cursor printed alongside it is a zero from the
+   guard rather than an address -- the one reading that would otherwise look like a measurement. */
+unsigned long capstone_dbwho_rat;
+unsigned long capstone_dbwho_tr_id[8], capstone_dbwho_tr_ra[8], capstone_dbwho_tp;
+
+/* A properly tagged capability at a heap ADDRESS, derived by indexing sqlite_heap.
+ *
+ * The only legitimate way to turn a remembered scalar back into a usable pointer here. An
+ * integer-to-pointer cast yields an UNTAGGED value that faults on first dereference -- that trap
+ * has been walked into twice already, once inside the window dumper and once inside msize -- so
+ * the address is used as an INDEX into a capability the domain legitimately holds instead.
+ * Returns 0 for anything outside the pool, so a caller can tell "not derivable" from a pointer.
+ * Used by the DBFIX arm to substitute the connection for the object the caller got wrong. */
+void *capstone_heap_ptr(unsigned long a) {
+  unsigned long lo = (unsigned long)(void *)sqlite_heap;   /* tagged here, so the cast is safe */
+  if (a < lo || a >= lo + (unsigned long)sizeof(sqlite_heap))
+    return 0;
+  return (void *)&sqlite_heap[a - lo];
+}
+
+/* Called on entry to each instrumented wrapper. Records only; never dereferences, never
+   allocates, and cannot fault -- an lcc type/cursor query on ra, which is always a live code
+   capability inside a running function. */
+void capstone_dbwho_push(unsigned long id, unsigned long ra) {
+  capstone_dbwho_tr_id[capstone_dbwho_tp & 7UL] = id;
+  capstone_dbwho_tr_ra[capstone_dbwho_tp & 7UL] = ra;
+  capstone_dbwho_tp++;
+}
+
+void capstone_dbwho_report(const void *dbp, unsigned long n, unsigned long ra) {
+  unsigned long i, k;
+  if (!capstone_out_reserve(560UL))
+    return;
+  output_text("DBWHO call="); output_hexv(capstone_dbwho_calls);
+  output_text(" ok=");        output_hexv(capstone_dbwho_ok);
+  output_text(" n=");         output_hexv(n);
+  output_text(" ra=");        output_hexv(ra);
+  output_text(" rat=");       output_hexv(capstone_dbwho_rat);
+  output_text(" ctlra=");     output_hexv(capstone_dbwho_ctl_ra);
+  output_text(" real=");      output_hexv(capstone_real_db);
+  output_text(" db:");        output_heapinfo(output_capinfo(dbp));
+  output_text("\n TR");
+  /* Oldest first, so the entry nearest the fault is printed last, next to the ra above. */
+  for (i = 0; i < 8UL; i++) {
+    k = (capstone_dbwho_tp + i) & 7UL;
+    if (capstone_dbwho_tr_ra[k] == 0UL)
+      continue;                      /* ring not yet full -- an unwritten slot is not a caller */
+    output_text(" ");   output_hexv(capstone_dbwho_tr_id[k]);
+    output_text(":");   output_hexv(capstone_dbwho_tr_ra[k]);
+  }
+  output_text("\n");
+  /* What the mistaken object actually holds. Plain integer loads through the very capability the
+     allocator was handed, so a corrupt granule cannot fault the instrument, and 64 bytes is the
+     whole block memsys5 reports. If these words spell SQL text the object is a string; if they
+     hold heap-looking addresses it is a struct, and the two lead to different culprits. */
+  capstone_dump_window(dbp, 0UL, 8UL, 0UL, 0xdbUL);
+}
+
+/* Printed once at the end of a run that SURVIVES, which on QEMU is every run. This is where the
+   positive control is actually read: a QEMU pass must show `calls` in the thousands, `ok` equal
+   to it, and `bad=0`. If `ok` came back 0 on a passing run the comparison is broken and no board
+   report from the same build could be believed -- so this line is the gate that has to be green
+   before the build is worth a boot. On the board the run traps inside the workload and never
+   reaches here; the bad-call report above is self-contained for that reason. */
+/* NO FUNCTION-LOCAL `static` GUARD, and no silent decline.
+   The first version had `static int done_; if (done_ || !capstone_out_reserve(...)) return;` and
+   printed NOTHING on a QEMU run that reached the line immediately after it -- with no TRUNC
+   marker either, so the two possible causes were indistinguishable and the instrument reported a
+   blank where a positive control should have been. There is exactly one call site, so the guard
+   bought nothing and cost the ability to tell "already reported" from "no room" from "never
+   called". The reserve failure now says so out loud. */
+void capstone_dbwho_summary(void) {
+  if (!capstone_out_reserve(140UL)) {
+    output_text("DBWHO nores\n");
+    return;
+  }
+  output_text("DBWHO sum calls="); output_hexv(capstone_dbwho_calls);
+  output_text(" ok=");             output_hexv(capstone_dbwho_ok);
+  output_text(" bad=");            output_hexv(capstone_dbwho_bad);
+  output_text(" badn=");           output_hexv(capstone_dbwho_badn);
+  output_text(" rat=");            output_hexv(capstone_dbwho_rat);
+  output_text(" ctlra=");          output_hexv(capstone_dbwho_ctl_ra);
+  output_text(" real=");           output_hexv(capstone_real_db);
+  output_text("\n");
+}
+#endif /* CAPSTONE_PROBE_LOOKASIDE || CAPSTONE_DBWHO_PROBE */
 
 #ifdef CAPSTONE_REDRAW_PAD
 /* REDRAW control for S-01 ("a ~1.6 MB domain returns, but ANY perturbation of its image makes
@@ -771,6 +889,9 @@ static int run_sqlite_extended(sqlite3 *db) {
                             5, "ext-strfunc")) != SQLITE_OK) /* "THREE" -> 5 */
     return rc;
 
+#ifdef CAPSTONE_DBWHO_PROBE
+  capstone_dbwho_summary();   /* the positive control, read on every QEMU pass -- see its comment */
+#endif
   output_text("__CAPSTONE_SQLITE_EXTENDED_PASSED__\n");
   return SQLITE_OK;
 }
@@ -4936,6 +5057,33 @@ static int run_sqlite(void) {
   if (rc != SQLITE_OK)
     return fail("open", rc, db);
 
+/* THE BASELINE IS PUBLISHED HERE, AND IT MUST NOT BE OWNED BY ONE PROBE'S #ifdef.
+ *
+ * `capstone_real_db` used to be assigned only inside the CAPSTONE_PROBE_LOOKASIDE block below.
+ * A DBWHO-only build therefore compared every `db` against zero, and the comparison is gated on
+ * `real != 0`, so it silently did nothing: 924 calls, ok=0, bad=0 -- a report that reads exactly
+ * like "the allocator was never called with a wrong db" and in fact means "no comparison was
+ * ever made". It was caught by the `ok` counter and by nothing else, which is the whole argument
+ * for carrying a positive control in the instrument rather than in the head of whoever reads it.
+ * This is the same defect shape as CAPSTONE_EXT_STOP being defined inside one probe's #ifdef
+ * while tested outside it: a knob whose value depends on an unrelated build flag. */
+#if defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE)
+  capstone_real_db = (unsigned long)(void *)db;   /* db is tagged here, so the cast is safe */
+#endif
+#ifdef CAPSTONE_DBFIX_PROBE
+  /* POSITIVE CONTROL FOR THE REPAIR ARM, which is otherwise DEAD CODE on QEMU -- `bad` is 0
+     there, so the substitution never runs and a passing QEMU build says nothing about whether
+     it would substitute the right thing. This exercises the same derivation on the same input
+     and prints what it produced: the cursor must equal `real` above. If it does not, every
+     board result from this arm is describing a substitution of the wrong object. */
+  {
+    void *t_ = capstone_heap_ptr(capstone_real_db);
+    output_text("DBFIX selftest real="); output_hexv(capstone_real_db);
+    output_text(" derived=");
+    if (t_) output_capinfo(t_); else output_text(" NULL");
+    output_text("\n");
+  }
+#endif
 #ifdef CAPSTONE_PROBE_LOOKASIDE
   /* IS `db` UNDER-ALLOCATED? This is the one measurement that decides the whole question.
    *

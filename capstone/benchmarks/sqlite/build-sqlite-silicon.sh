@@ -915,6 +915,215 @@ PYOVL
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_PROBE_LOOKASIDE=1"
 fi
 
+# CAPSTONE_DBWHO_PROBE=1 -- WHICH CALLER hands sqlite3DbMallocRawNN a `db` that is not the
+# connection? Records and falls through: no control flow changes, so the run fails exactly where
+# it failed without the probe.
+#
+# WHY THIS AND NOT ANOTHER CALLEE-SIDE PROBE. Boot27 measured `db` arriving with a cursor 0x3e00
+# from the connection, inside a 64-byte block of SQL text, WITH A VALID TAG and with bounds
+# spanning the whole heap -- so neither the tag nor the hardware's bounds check can see anything
+# wrong, and every property of the callee is consistent. The wrong object was chosen by the
+# caller, which is the one thing no probe inside the allocator has looked at.
+#
+# AND IT DOES NOT REPRODUCE UNDER QEMU. The same lookaside probe, same build path, run under QEMU
+# with no stage limit: the report never fires and the extended workload passes. That is a zero, so
+# it is only evidence because the identical instrument DID fire on the board -- and because the
+# two agree on the mechanism: `pSmallFree` is legitimately null under QEMU, and reads nonzero on
+# the board only because it is being read out of a string block. The instrument is the same; the
+# subject differs. So the board is the only oracle here and the probe has to be self-contained.
+#
+# Two levels, because one is not enough: almost every call site reaches the allocator through a
+# wrapper, so the immediate return address names the wrapper and stops. Each wrapper below pushes
+# its own (id, ra) into a ring on entry, and the ring entry immediately preceding the bad call
+# carries the caller one level up. Ids are the 1-based position in DBWHO_WRAPPERS.
+if [[ "${CAPSTONE_DBWHO_PROBE:-0}" == "1" ]]; then
+  DBWHO_WRAPPERS=${DBWHO_WRAPPERS:-auto}
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" "$DBWHO_WRAPPERS" <<'PYDBWHO'
+import sys, re
+path, wrappers = sys.argv[1], sys.argv[2].split(',')
+s = open(path).read()
+
+# ONE SCAN, AND IT CARRIES LINE NUMBERS.
+#
+# Every function is located once by brace matching, and each injection then addresses its
+# definition by INDEX rather than by re-searching for its text. Two things forced this:
+#
+#  * sqlite3SelectDup is defined TWICE, the real one and a SQLITE_OMIT_SELECT stub under #else.
+#    A name-based search cannot tell them apart, and treating "more than one match" as an error
+#    -- which the first version did -- simply failed the build. Selecting by body content picks
+#    the compiled one for free, because the body is what the auto list is derived from.
+#  * `}else if( sqlite3StrAccumEnlarge(pAccum, szBufNeeded)<szBufNeeded ){` matched an earlier,
+#    looser pattern: `[^;{]*\)` runs greedily past the inner close-paren to the one before the
+#    brace, so a CALL was mistaken for a definition. Requiring column zero excludes call sites,
+#    since definitions in the amalgamation always start there.
+#
+# DBWHO_WRAPPERS=auto selects every function that calls the allocator DIRECTLY. An earlier
+# guessed list -- attributing each call to the nearest preceding function header -- produced 45
+# names including sqlite3DbMallocZero, which does not call sqlite3DbMallocRawNN at all; the real
+# count is 21. Wrong in that direction is the expensive kind: the breadcrumb ring then stays
+# silent for the caller that mattered, and the silence reads as "not that path".
+HOP2 = ["sqlite3DbMallocZero", "sqlite3DbStrDup", "sqlite3VdbeMemGrow", "sqlite3StrAccumEnlarge"]
+lines = s.split("\n")
+dpat = re.compile(r'^[A-Za-z_][^\n;=]*?\b(\w+)\s*\([^;{]*\)\s*\{\s*$')
+defs = []
+for i, l in enumerate(lines):
+    m = dpat.match(l)
+    if not m:
+        continue
+    depth, j = 0, i
+    while j < len(lines):
+        depth += lines[j].count("{") - lines[j].count("}")
+        if depth <= 0 and j > i:
+            break
+        j += 1
+    defs.append((i, m.group(1), "\n".join(lines[i+1:j])))
+if not defs:
+    sys.exit("DBWHO: no function definitions parsed -- the scan, not the amalgamation, is wrong")
+
+CALLS = re.compile(r'\bsqlite3DbMallocRawNN\s*\(')
+if wrappers == ["auto"]:
+    targets = [(i, n) for i, n, b in defs if CALLS.search(b)]
+    if not targets:
+        sys.exit("DBWHO: auto found NO direct callers -- the scan is wrong, not the amalgamation")
+    have = {n for _, n in targets}
+    extra = [f for f in HOP2 if f not in have]
+else:
+    targets, extra = [], list(wrappers)
+for f in extra:
+    cand = [(i, n) for i, n, b in defs if n == f]
+    if not cand:
+        sys.exit("DBWHO: %s is not defined in the amalgamation" % f)
+    targets.append(cand[0])          # first definition; the #else stub always follows the real one
+
+targets.sort()
+ids = {i: k for k, (i, _) in enumerate(targets, start=1)}
+print("   DBWHO callers: " + " ".join("%d=%s" % (ids[i], n) for i, n in targets))
+# Descending, so an injection never invalidates the index of one not yet done.
+for i, n in sorted(targets, reverse=True):
+    lines[i] += ("\n  { unsigned long dw_rt_, dw_ra_;          /* breadcrumb: who called us */\n"
+                 "    CAPSTONE_DBWHO_QRA(dw_rt_, dw_ra_);\n"
+                 "    capstone_dbwho_push(%dUL, dw_ra_); }" % ids[i])
+s = "\n".join(lines)
+
+DECL = ("extern unsigned long capstone_dbwho_calls, capstone_dbwho_ok, capstone_dbwho_bad;\n"
+        "extern unsigned long capstone_dbwho_badn, capstone_dbwho_rat;\n"
+        "extern unsigned long capstone_dbwho_ctl_ra, capstone_real_db;\n"
+        "void capstone_dbwho_push(unsigned long, unsigned long);\n"
+        "void capstone_dbwho_report(const void *, unsigned long, unsigned long);\n"
+        "void *capstone_heap_ptr(unsigned long);\n"
+        # THE TYPE GUARD LIVES INSIDE THE ASM, and the cursor query is never issued unguarded.
+        #
+        # Selector 1 is total on both sides (RTL by the change we landed; QEMU by the matching
+        # imm==1 case in helper_cslcc). SELECTOR 2 IS NOT: on an untagged operand the RTL raises
+        # UNEXPECTED_OPERAND and QEMU trips `assert(rs1_v->tag)`, which ABORTS THE EMULATOR --
+        # not a guest fault, an abort, so a probe that gets this wrong takes the whole run with
+        # it. The first version of this probe did exactly that and died at SQ: G/enter.
+        #
+        # Guarding in C is not enough, and that is the subtle half. At -O0 the pointer is spilled
+        # between the test and the use, so the operand the cursor query sees is a RELOAD of the
+        # one the type query approved -- and a value that does not survive the round trip passes
+        # the guard and faults anyway. output_capinfo() carries the same construction and the
+        # same comment for the same reason. One asm block, one materialisation, no reload.
+        #
+        # THE RETURN ADDRESS IS A SCALAR, NOT A CAPABILITY, and that was measured, not assumed.
+        # A first cut queried ra's cursor with selector 2 and got 0 out of the guard on every
+        # call; printing ra's TYPE alongside it gave 7 -- NOT_CAP. So `lcc` can never read a
+        # return address here, and any ra a probe reports through selector 2 is the guard's zero.
+        # x1 holding a plain integer means it can simply be MOVED, which is the first arm below;
+        # the capability arm is kept because nothing guarantees that stays true.
+        "#define CAPSTONE_DBWHO_QP(t_, c_, p_)                        \\\n"
+        "  __asm__ volatile(\".insn r 0x5b, 0x1, 0x4, %0, %2, x1\\n\\t\"   \\\n"
+        "                   \"li   %1, 0\\n\\t\"                          \\\n"
+        "                   \"li   t0, 3\\n\\t\"                          \\\n"
+        "                   \"bltu t0, %0, 1f\\n\\t\"                     \\\n"
+        "                   \".insn r 0x5b, 0x1, 0x4, %1, %2, x2\\n\\t\"   \\\n"
+        "                   \"1:\\n\\t\"                                  \\\n"
+        "                   : \"=&r\"(t_), \"=&r\"(c_) : \"r\"(p_) : \"t0\")\n"
+        "#define CAPSTONE_DBWHO_QRA(t_, c_)                           \\\n"
+        "  __asm__ volatile(\".insn r 0x5b, 0x1, 0x4, %0, x1, x1\\n\\t\"   \\\n"
+        "                   \"li   %1, 0\\n\\t\"                          \\\n"
+        "                   \"li   t0, 7\\n\\t\"                          \\\n"
+        "                   \"bne  t0, %0, 2f\\n\\t\"                     \\\n"
+        "                   \"mv   %1, x1\\n\\t\"                         \\\n"
+        "                   \"j    3f\\n\\t\"                             \\\n"
+        "                   \"2:\\n\\t\"                                  \\\n"
+        "                   \"li   t0, 3\\n\\t\"                          \\\n"
+        "                   \"bltu t0, %0, 3f\\n\\t\"                     \\\n"
+        "                   \".insn r 0x5b, 0x1, 0x4, %1, x1, x2\\n\\t\"   \\\n"
+        "                   \"3:\\n\\t\"                                  \\\n"
+        "                   : \"=&r\"(t_), \"=&r\"(c_) :: \"t0\")\n")
+
+# --- the boundary probe, at the top of the allocator ------------------------------------------
+# The type query (selector 1) goes first and GUARDS the cursor query (selector 2): selector 2
+# RAISES on a NOT_CAP operand, so an unguarded read would make the probe fault on precisely the
+# input that would matter most -- a `db` that arrived untagged.
+OPEN = "SQLITE_PRIVATE void *sqlite3DbMallocRawNN(sqlite3 *db, u64 n){"
+if OPEN not in s:
+    sys.exit("DBWHO: sqlite3DbMallocRawNN signature not found -- patch shape changed")
+probe = OPEN + """
+  {  /* CAPSTONE DBWHO PROBE -- records and falls through */
+    unsigned long dw_t_, dw_c_, dw_rt_, dw_ra_;
+    CAPSTONE_DBWHO_QP(dw_t_, dw_c_, db);
+    CAPSTONE_DBWHO_QRA(dw_rt_, dw_ra_);
+    capstone_dbwho_calls++;
+    capstone_dbwho_rat = (dw_t_ << 4) | dw_rt_;   /* db type and ra type, both on the last call */
+    if (capstone_dbwho_calls == 1UL) capstone_dbwho_ctl_ra = dw_ra_;
+    if (capstone_real_db != 0UL) {
+      if (dw_c_ == capstone_real_db) {
+        capstone_dbwho_ok++;
+      } else {
+        if (capstone_dbwho_bad == 0UL) {
+          capstone_dbwho_bad = capstone_dbwho_calls;
+          capstone_dbwho_report((const void *)db, (unsigned long)n, dw_ra_);
+        }
+        capstone_dbwho_badn++;
+#ifdef CAPSTONE_DBFIX_PROBE
+        /* THE MATCHED ARM. This workload holds exactly one connection, so a `db` that is not it
+           cannot be a second one -- substituting is semantically a no-op for every call that was
+           already correct, and the counters above say how many were not. If the extended workload
+           then completes, the defect is confined to the delivery of THIS argument; if it fails
+           somewhere else instead, the wrong `db` was a symptom and something upstream is wrong
+           too. Either outcome is worth more than the observation alone. */
+        { void *dw_fix_ = capstone_heap_ptr(capstone_real_db);
+          if (dw_fix_) db = (sqlite3 *)dw_fix_; }
+#endif
+      }
+    }
+  }
+"""
+s = s.replace(OPEN, probe, 1)
+
+# The declarations go at the TOP, not next to the allocator. The other probes in this script get
+# away with declaring immediately above the function they patch because that function is their
+# only injection site; this one instruments eight wrappers, two of which sit ABOVE
+# sqlite3DbMallocRawNN in the amalgamation, so a local declaration left them calling an
+# undeclared function -- a hard error under C99, which is the only reason it was not a silent
+# implicit-int declaration instead. Anchored after SQLITE_CORE, which precedes all SQLite code.
+ANCHOR = "#define SQLITE_CORE 1\n"
+if ANCHOR not in s:
+    sys.exit("DBWHO: amalgamation prologue anchor not found -- patch shape changed")
+s = s.replace(ANCHOR, ANCHOR + DECL, 1)
+open(path, "w").write(s)
+print("   DBWHO probe injected into sqlite3DbMallocRawNN + %d callers" % len(targets))
+PYDBWHO
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_DBWHO_PROBE=1"
+  # CAPSTONE_DBFIX_PROBE=1 turns the observation into a matched arm: substitute the connection
+  # for the object the caller got wrong, and see whether the workload then completes.
+  #
+  # This define was missing at first while the `#ifdef CAPSTONE_DBFIX_PROBE` it gates was already
+  # in the injected code, so a "DBFIX" build compiled to the SAME BYTES as the plain DBWHO build
+  # -- identical sha256 -- and its QEMU run looked like a clean pass of the fix arm. A matched
+  # pair whose two halves are the same binary measures nothing at all. bake-sqlite-doms.sh now
+  # refuses two byte-identical variants for this reason.
+  if [[ "${CAPSTONE_DBFIX_PROBE:-0}" == "1" ]]; then
+    DOMAIN_EXTRA_DEFS="$DOMAIN_EXTRA_DEFS -DCAPSTONE_DBFIX_PROBE=1"
+  fi
+elif [[ "${CAPSTONE_DBFIX_PROBE:-0}" == "1" ]]; then
+  echo "ERROR: CAPSTONE_DBFIX_PROBE=1 needs CAPSTONE_DBWHO_PROBE=1 -- the repair arm is part of"\
+       "that probe, and on its own it would silently do nothing." >&2
+  exit 1
+fi
+
 SILICON=(-mllvm -capstone-merge-string-constants=true
          -mllvm -capstone-gp-captable
          -mllvm -capstone-shrink-stack=false
