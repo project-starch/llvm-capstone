@@ -93,13 +93,14 @@ static void output_uint(unsigned value) {
    ladder measured the wrong statement entirely. The domain arms it immediately before the step
    under test, so the count is that statement's opcodes and nobody else's. */
 unsigned long capstone_vdbe_ops, capstone_vdbe_lastop, capstone_vdbe_armed;
-unsigned long capstone_memgrow_seen, capstone_amem_seen;
+unsigned long capstone_memgrow_seen, capstone_amem_seen, capstone_pdest_seen;
 
 
 
 #if defined(CAPSTONE_OOB_PROBE) || defined(CAPSTONE_ARG_PROBE) || \
     defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE) || \
-    defined(CAPSTONE_MEMGROW_PROBE) || defined(CAPSTONE_AMEM_PROBE)
+    defined(CAPSTONE_MEMGROW_PROBE) || defined(CAPSTONE_AMEM_PROBE) || \
+    defined(CAPSTONE_PDEST_PROBE)
 /* Shared by both probes. Lived inside the OOB block until the ARG probe needed it too; a
    reporter that cannot print is a reporter that silently reports nothing. */
 static void output_hex64(unsigned long v) {
@@ -222,7 +223,8 @@ void capstone_arg_report(void) {
 #endif /* CAPSTONE_ARG_PROBE */
 
 #if defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE) || \
-    defined(CAPSTONE_MEMGROW_PROBE) || defined(CAPSTONE_AMEM_PROBE)
+    defined(CAPSTONE_MEMGROW_PROBE) || defined(CAPSTONE_AMEM_PROBE) || \
+    defined(CAPSTONE_PDEST_PROBE)
 /* Reports the lookaside small-free head WITHOUT DEREFERENCING IT, and then falls back to the
    general allocator so the run continues instead of wedging.
    
@@ -407,6 +409,23 @@ static void output_heapinfo(unsigned long a) {
  *
  * nMem and nCursor are printed alongside because they bound the legal index range: an element
  * capability derived with i > nMem is out of bounds by construction and says so immediately. */
+/* pDest, the Mem OP_Column writes into -- the capability whose dereference faults.
+ *
+ * Reported with its TYPE and full bounds because two BENIGN explanations for mcause 29 are still
+ * open, both quoted from the RTL: LDC's predicate is `cursor + imm > end - 16`, so a valid
+ * capability whose cursor sits in the reserved 16-byte tail faults at offset 0 legitimately; and a
+ * SEALEDRET operand is checked against start+48..start+1008 instead of its own bounds. `t` kills
+ * the second; `e - c` kills the first. A correctly derived &aMem[i] was measured ~63 KB from its
+ * end, so anything like that leaves corruption as the only reading. */
+void capstone_pdest_report(const void *pdest, unsigned long p3, unsigned long p2) {
+  if (!capstone_out_reserve(200UL))
+    return;
+  output_text("PDEST p3=");  output_hexv(p3);
+  output_text(" p2=");       output_hexv(p2);
+  output_text(" cap:");      output_heapinfo(output_capinfo(pdest));
+  output_text("\n");
+}
+
 void capstone_amem_report(const void *amem, unsigned long nmem, unsigned long ncursor) {
   if (!capstone_out_reserve(200UL))
     return;

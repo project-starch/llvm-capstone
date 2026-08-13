@@ -1120,6 +1120,64 @@ PYDBWHO
   fi
 fi
 
+# CAPSTONE_PDEST_PROBE=1 -- read the capability OP_Column is about to use, and escape the way the
+# clamp does.
+#
+# This is the measurement three earlier instruments failed to get. Reporting at the fault is
+# impossible (the wedge takes the core and the payload with it), and every escape from inside
+# sqlite3VdbeMemGrow has failed: SQLITE_NOMEM wedges in the error path, SQLITE_OK wedges on
+# untagged arithmetic, and short-circuiting abort_due_to_error misses the path entirely. So report
+# from inside OP_Column at the LAST point before any Mem is dereferenced, and leave through
+# `goto vdbe_return` -- the exact escape CAPSTONE_VDBE_CLAMP uses, which is MEASURED to return on
+# silicon.
+#
+# WHAT IT DECIDES. The RTL's LDC bounds predicate is `cursor + imm > end - 16` and it reserves the
+# last 16 bytes of every capability, so a perfectly valid capability whose cursor sits in that tail
+# raises OUT_OF_BOUNDS at offset 0 WITHOUT anything being corrupt. A SEALEDRET-typed operand is
+# checked against a different window (start+48 .. start+1008) and can fault benignly too. Both are
+# alive as explanations until pDest's type, cursor, base and end are on the table. A correctly
+# derived &aMem[i] sits ~63 KB from its end -- measured -- so if the reported capability shows the
+# same, the benign readings are dead and corruption is the only one left.
+if [[ "${CAPSTONE_PDEST_PROBE:-0}" == "1" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYPD'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+# The main-path assignment, not the nullRow one: take the LAST occurrence inside OP_Column, which
+# is the one on the ordinary column-extraction path.
+# SCOPED TO OP_Column'S BODY. `pDest = &aMem[pOp->p3];` also appears in other opcodes, and a
+# whole-file rfind picked one of those -- in a function where OP_Column's locals are not even in
+# scope, so the build failed on an undeclared identifier. Loud, but only by luck.
+NEEDLE = "  pDest = &aMem[pOp->p3];\n"
+cs = s.find("case OP_Column: {")
+if cs < 0:
+    sys.exit("PDEST_PROBE: OP_Column case not found -- patch shape changed")
+ce = s.find("\ncase OP_", cs + 10)
+if ce < 0:
+    sys.exit("PDEST_PROBE: end of OP_Column not found")
+i = s.rfind(NEEDLE, cs, ce)
+if i < 0:
+    sys.exit("PDEST_PROBE: no pDest assignment inside OP_Column -- patch shape changed")
+probe = NEEDLE + """  if( capstone_vdbe_armed && !capstone_pdest_seen ){
+    capstone_pdest_seen = 1;
+    capstone_pdest_report((const void*)pDest, (unsigned long)pOp->p3, (unsigned long)pOp->p2);
+    rc = SQLITE_DONE;
+    goto vdbe_return;      /* the clamp's escape -- measured to return on silicon */
+  }
+"""
+s = s[:i] + probe + s[i+len(NEEDLE):]
+ANCHOR = "#define SQLITE_CORE 1\n"
+if ANCHOR not in s:
+    sys.exit("PDEST_PROBE: amalgamation prologue anchor not found")
+s = s.replace(ANCHOR, ANCHOR +
+              "extern unsigned long capstone_vdbe_armed, capstone_pdest_seen;\n"
+              "void capstone_pdest_report(const void *, unsigned long, unsigned long);\n", 1)
+open(path, "w").write(s)
+print("   PDEST probe injected into OP_Column")
+PYPD
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_PDEST_PROBE=1"
+fi
+
 # CAPSTONE_AMEM_PROBE=1 -- report the VDBE register array's capability, from a point that RETURNS.
 #
 # The Mem dereferences that fault are `&aMem[i]` elements, and the bounds that matter are the ones
