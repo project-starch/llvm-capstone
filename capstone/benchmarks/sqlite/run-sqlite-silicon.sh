@@ -39,7 +39,7 @@ cp -f "$CAPSTONE_TMP_ROOT/sqlite-build/sqlite_host.user"     "$SHARE/"
 
 python3 "$ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --share-dir "$SHARE" \
-  --log-file "$CAPSTONE_TMP_ROOT/sqlite-silicon.log" \
+  --log-file "${SQLITE_LOG_FILE:-$OUT_DIR/sqlite-silicon.log}" \
   --timeout-multiplier 6 \
   --guest-command \
     'cp /mnt/host/sqlite_host.user /tmp/h.user && chmod 0755 /tmp/h.user && /tmp/h.user /mnt/host/sqlite_silicon.dom' \

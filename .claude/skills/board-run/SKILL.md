@@ -105,6 +105,27 @@ It makes overlay **and** the buildroot target dir hold exactly {controller} ∪ 
 never a glob (a prefix glob once deleted the package-installed `sbi.dom`), and nothing is deleted
 because a `.dom` is cheap to keep and expensive to rebuild once its flags are forgotten.
 
+**This applies to EVERY staging path, including a purpose-built bake script.** The rule is easy
+to skip precisely because skipping it is invisible: each bake works, and the image just grows.
+On 2026-08-13 a SQLite bake script staged its variants directly and never retired the previous
+set, so fourteen ~1.5 MB domains accumulated across one afternoon — **23 MB of domains of which
+four were live**, and the initramfs went 21.7 MB → 27.9 MB. Nothing failed; every boot after that
+just paid for it on the JTAG upload, and the growth is fastest exactly when boots are most
+frequent. A bake helper that does its own staging must retire its own previous set — from a
+**manifest of what it staged**, so it can only ever remove what it can prove it created — or call
+the script above. `bake-sqlite-doms.sh` now does the former and prints the image size delta.
+
+Check the size when a boot feels slow, and treat growth as a bug rather than as weather:
+
+```bash
+ls -la capstone/caplifive-system/sw/buildroot/build/images/rootfs.cpio
+du -sh capstone/caplifive-system/sw/buildroot/overlay/test-domains
+```
+
+(Image size is **not** a known cause of the R-16 entry stall — that was measured and ruled out:
+zero bytes transferred, 12 loads inside a 300 s budget, pruning every domain saved 0.47 %. Shrink
+the image to keep boots cheap, not as a remedy for a stall.)
+
 Why a script rather than "prune when it looks big": the overlay reached 111 files / 35 MB in one
 session, costing 30.6 min of JTAG across 39 boots plus a boot lost to HTTP 413. The gates added
 afterwards did not close it — measured against the next session's 26 files / 1.91 MB, C9 would

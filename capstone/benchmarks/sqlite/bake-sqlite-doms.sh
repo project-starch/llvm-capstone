@@ -38,6 +38,21 @@ CPIO="$BR/build/images/rootfs.cpio"
 [[ $# -gt 0 ]] || { echo "usage: $0 <name>:<VAR=VAL>[,...] ..." >&2; exit 2; }
 [[ -d "$OVERLAY" && -d "$TARGET" ]] || { echo "ERROR: overlay/target missing under $BR" >&2; exit 1; }
 
+# THE IMAGE IS PRUNED EVERY BAKE, from a manifest of what THIS script staged last time.
+#
+# Nothing removed the previous set, so every bake added ~1.5 MB per variant and kept the last
+# one: fourteen SQLite domains, 23 MB of them, of which four were live. That is pure cost on the
+# JTAG upload of every subsequent boot, and it grows monotonically over a debugging session --
+# exactly when boots are most frequent.
+#
+# BY EXPLICIT NAME, FROM A MANIFEST, NEVER A GLOB. A prefix glob once deleted the
+# package-installed sbi.dom, so the rule here is that this script removes only what it can prove
+# it created. Domains it never staged -- k800, the s06agg set, lpc, sqlite_host.user -- are
+# invisible to it. BAKE_KEEP="a,b" spares names from the previous set that are still wanted.
+MANIFEST="$BR/.sqlite-bake-manifest"
+_img_size() { stat -c%s "$BR/build/images/rootfs.cpio" 2>/dev/null || echo 0; }
+SIZE_BEFORE=$(_img_size)
+
 declare -a NAMES=() WANT=()
 
 for spec in "$@"; do
@@ -72,6 +87,24 @@ if dup:
     sys.exit("ERROR: two or more variants are byte-identical (%s) -- a flag did not take effect"
              % ", ".join(d[:12] for d in dup))
 PYDUP
+
+> "$MANIFEST.new"
+printf '%s\n' "${NAMES[@]}" >> "$MANIFEST.new"
+if [[ -f "$MANIFEST" ]]; then
+  echo "== pruning domains this script staged previously and no longer needs"
+  IFS=',' read -r -a _keep <<< "${BAKE_KEEP:-}"
+  while read -r old; do
+    [[ -n "$old" ]] || continue
+    for n in "${NAMES[@]}" "${_keep[@]}"; do [[ "$old" == "$n" ]] && continue 2; done
+    for d in "$OVERLAY" "$TARGET"; do
+      if [[ -f "$d/$old.dom" ]]; then
+        rm -f "$d/$old.dom"
+        echo "   removed $old.dom ($(basename "$d"))"
+      fi
+    done
+  done < "$MANIFEST"
+fi
+mv -f "$MANIFEST.new" "$MANIFEST"
 
 echo "== rebuilding the initramfs, THEN the firmware (order matters -- see header)"
 make -C "$BR" build LINUX_PAYLOAD=1 A=linux-rebuild \
@@ -122,4 +155,12 @@ if not found:
 sys.exit(1 if bad else 0)
 PYVERIFY
 
+SIZE_AFTER=$(_img_size)
+python3 - "$SIZE_BEFORE" "$SIZE_AFTER" <<'PYSIZE'
+import sys
+b, a = int(sys.argv[1]), int(sys.argv[2])
+d = a - b
+print("== initramfs %.1f MB -> %.1f MB (%+.1f MB)" % (b/1e6, a/1e6, d/1e6)
+      if b else "== initramfs %.1f MB" % (a/1e6))
+PYSIZE
 echo "== baked: ${NAMES[*]}"

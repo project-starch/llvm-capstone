@@ -5199,11 +5199,24 @@ static int run_sqlite(void) {
       "INSERT INTO items VALUES"
       "('alpha',11),('beta',22),('gamma',33);",
       0, 0, 0);
+#ifdef CAPSTONE_CREATE_LADDER
+  /* Stage 4. MEASURED 2026-08-13, one boot, first attempt, every lower arm returning:
+     stages 1/2/3 (prepare, step, finalize of CREATE TABLE) all RETURN on silicon and stage 4 --
+     which ran the whole statement and carried on -- WEDGED. So CREATE TABLE completes in full
+     and the fault is in what follows it. The ladder continues here rather than stopping at the
+     statement it was named for. */
+  if ((CAPSTONE_CREATE_LADDER) <= 4)
+    return 0x5A6E0400 | (rc & 0xff);
+#endif
   if (rc != SQLITE_OK)
     return fail("insert", rc, db);
 
   rc = sqlite3_prepare_v2(
       db, "SELECT name,value FROM items;", -1, &statement, 0);
+#ifdef CAPSTONE_CREATE_LADDER
+  if ((CAPSTONE_CREATE_LADDER) <= 5)
+    return 0x5A6E0500 | (rc & 0xff);
+#endif
   if (rc != SQLITE_OK)
     return fail("prepare", rc, db);
 
@@ -5231,10 +5244,20 @@ static int run_sqlite(void) {
     ++row;
   }
 
+#ifdef CAPSTONE_CREATE_LADDER
+  /* Stage 6 carries the ROW COUNT in the low byte, not an rc: the step loop is the one arm whose
+     interesting output is how far it got, and `rc` here is only ever DONE or an error. */
+  if ((CAPSTONE_CREATE_LADDER) <= 6)
+    return 0x5A6E0600 | (int)(row & 0xffu);
+#endif
   if (rc != SQLITE_DONE || row != 3)
     return fail("step", rc, db);
   rc = sqlite3_finalize(statement);
   statement = 0;
+#ifdef CAPSTONE_CREATE_LADDER
+  if ((CAPSTONE_CREATE_LADDER) <= 7)
+    return 0x5A6E0700 | (rc & 0xff);
+#endif
   if (rc != SQLITE_OK)
     return fail("finalize", rc, db);
 
@@ -6192,6 +6215,26 @@ void domain_main(unsigned *res, unsigned func) {
   *res = 0x9E33u;
   return;
 #endif
-  (void)run_sqlite();
-  *res = SQLITE_HC_RET_DONE;
+#ifdef CAPSTONE_DBWHO_PROBE
+  /* THE POSITIVE CONTROL HAS TO BE ON THE PATH THAT ACTUALLY RUNS.
+     It used to be called only at the end of a fully successful run_sqlite_extended(), so every
+     board arm -- which bails out long before that -- returned with NO evidence that the
+     comparison had executed even once. "DBWHO never fired" was then read as "no wrong db",
+     when what the board actually showed was silence from an instrument whose own control was
+     unreachable. Called here it runs however run_sqlite() exited, short of a wedge. */
+  capstone_dbwho_summary();
+#endif
+  {
+    /* A STAGED MARKER MUST REACH THE HOST. This was `(void)run_sqlite(); *res = DONE;`, which
+       threw the return value away one frame above the ladder that had just built it: the marker
+       was correctly formed and correctly returned, then overwritten by the constant. Every
+       ladder stage therefore produced byte-identical output and the SQLite rc at each stage was
+       lost -- the arms still separated RETURN from WEDGE, which is what localised the fault, but
+       one bit was all that survived out of a design meant to carry the rc too.
+       Only a 0x5A6E-tagged value is passed through, so `fail()`'s small rc values and the normal
+       success path keep returning DONE exactly as before. */
+    unsigned long rv_ = (unsigned long)(unsigned)run_sqlite();
+    *res = ((rv_ & 0xFFFF0000UL) == 0x5A6E0000UL) ? (unsigned)rv_
+                                                  : (unsigned)SQLITE_HC_RET_DONE;
+  }
 }
