@@ -835,6 +835,48 @@ PYARG
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_ARG_PROBE=1"
 fi
 
+# CAPSTONE_PROBE_LOOKASIDE=1 -- report the lookaside small-free head WITHOUT dereferencing it,
+# then fall back to the general allocator so the run CONTINUES rather than wedging.
+#
+# The board faults at sqlite3DbMallocRawNN+0xf8 on `pBuf->pNext`, where pBuf came out of
+# db->lookaside.pSmallFree already untagged. The compiler is exonerated: every writer of that
+# list is capability-clean, and `stc` traps on an untagged BASE, so an untagged pointer reaching
+# the free path would have trapped one instruction earlier than it does. The value was tagged
+# when stored and untagged when read back -- so the question is WHICH value came back, and that
+# is answered by printing it, not by dereferencing it.
+#
+# Falling through to dbMallocRawFinish is semantically fine: lookaside is an optional fast path
+# and the general allocator is already exercised heavily by this workload. So this build both
+# reports the value AND has a chance of completing the extended workload -- unlike the two
+# earlier lookaside-disable attempts, which never changed the executed path at all.
+if [[ "${CAPSTONE_PROBE_LOOKASIDE:-0}" == "1" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYLOOK'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+NEEDLE = "    if( (pBuf = db->lookaside.pSmallFree)!=0 ){"
+if NEEDLE not in s:
+    sys.exit("PROBE_LOOKASIDE: pSmallFree pop not found -- patch shape changed")
+probe = NEEDLE + """
+      /* CAPSTONE LOOKASIDE PROBE -- report, never dereference, then use the general allocator. */
+      capstone_look_report((unsigned long)(void *)pBuf,
+                           (unsigned long)(void *)db,          /* WHICH struct are we reading? */
+                           (unsigned long)n,                   /* reachable only when n == 0 */
+                           capstone_look_pops);
+      capstone_look_pops++;
+      return dbMallocRawFinish(db, n);
+"""
+s = s.replace(NEEDLE, probe, 1)
+decl = ("extern unsigned long capstone_look_pops;\n"
+        "void capstone_look_report(unsigned long, unsigned long, unsigned long, unsigned long);\n")
+i = s.find(probe); j = s.rfind("\n", 0, i)
+s = s[:j+1] + decl + s[j+1:]
+open(path, "w").write(s)
+print("   LOOKASIDE probe injected into the pSmallFree pop")
+PYLOOK
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_PROBE_LOOKASIDE=1"
+fi
+
 SILICON=(-mllvm -capstone-merge-string-constants=true
          -mllvm -capstone-gp-captable
          -mllvm -capstone-shrink-stack=false

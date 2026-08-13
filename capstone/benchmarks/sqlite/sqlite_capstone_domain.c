@@ -83,7 +83,7 @@ static void output_uint(unsigned value) {
   }
 }
 
-#if defined(CAPSTONE_OOB_PROBE) || defined(CAPSTONE_ARG_PROBE)
+#if defined(CAPSTONE_OOB_PROBE) || defined(CAPSTONE_ARG_PROBE) || defined(CAPSTONE_PROBE_LOOKASIDE)
 /* Shared by both probes. Lived inside the OOB block until the ARG probe needed it too; a
    reporter that cannot print is a reporter that silently reports nothing. */
 static void output_hex64(unsigned long v) {
@@ -205,6 +205,43 @@ void capstone_arg_report(void) {
 }
 #endif /* CAPSTONE_ARG_PROBE */
 
+#ifdef CAPSTONE_PROBE_LOOKASIDE
+/* Reports the lookaside small-free head WITHOUT DEREFERENCING IT, and then falls back to the
+   general allocator so the run continues instead of wedging.
+   
+   The board faults at sqlite3DbMallocRawNN+0xf8 on `pBuf->pNext` where pBuf came out of
+   db->lookaside.pSmallFree already untagged. Every writer of that list is capability-clean, and
+   `stc` traps on an untagged BASE -- so an untagged pointer reaching the free path would have
+   trapped one instruction EARLIER than it does. The value was therefore tagged when stored and
+   untagged when read back, which makes this a memory-side question: WHICH value came back?
+
+   Three outcomes, distinguishable from the printed numbers alone:
+     pBuf inside [pMiddle,pEnd) and 16-byte aligned -> a real live slot whose tag was lost in
+        memory while its data bits survived; that is the tag/metadata bank path (R-18/R-19), and
+        the next step is rtl-sim, not the compiler.
+     pBuf near 0x08000000 -> the R-19 signature: the list TERMINATOR, the one value in these
+        lists written `movc rd,zero; stc` and the only one tested for zero rather than
+        dereferenced, came back non-zero and SQLite is walking off the end of a correct list.
+     anything else -> neither, and the number itself says what.
+
+   Reports the first few pops, not just the failing one, so a clean-looking report cannot be an
+   instrument that never fired -- the healthy pops are the positive control. */
+unsigned long capstone_look_pops;
+
+void capstone_look_report(unsigned long buf, unsigned long mid,
+                          unsigned long end, unsigned long n) {
+  if (!hostcall_metadata || !hostcall_payload)
+    return;
+  if (n > 3UL)
+    return;                     /* first few only: bounded output, keeps the region intact */
+  output_text("LOOK n=");   output_hex64(n);
+  output_text(" buf=");     output_hex64(buf);
+  output_text(" db=");      output_hex64(mid);   /* param reused: the db pointer */
+  output_text(" n=");       output_hex64(end);   /* param reused: the requested size */
+  output_text("\n");
+}
+#endif /* CAPSTONE_PROBE_LOOKASIDE */
+
 #ifdef CAPSTONE_REDRAW_PAD
 /* REDRAW control for S-01 ("a ~1.6 MB domain returns, but ANY perturbation of its image makes
  * it hang"). A dead, never-called function that changes the IMAGE and nothing else -- the same
@@ -272,18 +309,58 @@ static int query_scalar_eq(sqlite3 *db, const char *sql, long want,
  * bound prepared inserts, UPDATE/DELETE, aggregates + the sorter, ORDER BY, a
  * JOIN, GROUP BY, and string functions (sqlite3UpperToLower). Each step is
  * validated; the first failure returns non-zero and the PASSED marker is skipped. */
+#ifdef CAPSTONE_PROBE_LOOKASIDE
+/* CANARY: which statement clobbers db->lookaside.pSmallFree?
+ *
+ * The board showed that field holding "' WHERE " -- eight printable ASCII bytes, the tail of a
+ * quoted SQL literal followed by WHERE. It is not a pointer at all, so the earlier tag-loss
+ * reading is retired: something writes STRING DATA over the connection struct, and the allocator
+ * is merely the first reader to dereference it.
+ *
+ * pSmallFree is 0 whenever lookaside is unconfigured (pMiddle and pEnd both read 0 on the board,
+ * confirming it was never set up), so ANY non-zero value here is corruption and the first phase
+ * that sees one is the writer's phase. Reported, never dereferenced, so the run continues.
+ *
+ * The check is placed BEFORE the first statement as well, so a report at phase 0 would mean the
+ * corruption predates the extended workload entirely -- without that arm a clean phase 1 could
+ * not be distinguished from "it was already broken on entry". */
+#define LOOK_CANARY(phase)                                                     \
+  do {                                                                         \
+    unsigned long v_ = (unsigned long)(void *)db->lookaside.pSmallFree;        \
+    if (v_ != 0UL) {                                                           \
+      output_text("CANARY phase=");  output_hex64((unsigned long)(phase));     \
+      output_text(" pSmallFree=");   output_hex64(v_);                         \
+      output_text("\n");                                                       \
+      return SQLITE_OK;   /* stop here: the writer is this phase or earlier */ \
+    }                                                                          \
+  } while (0)
+#else
+#define LOOK_CANARY(phase) do { } while (0)
+#endif
+
 static int run_sqlite_extended(sqlite3 *db) {
   int rc;
 
+#ifdef CAPSTONE_PROBE_LOOKASIDE
+  /* Print the REAL connection pointer, so the allocator's `db` can be compared against it.
+     The canary below never fires while the allocator's probe reports a clobbered field -- both
+     read db->lookaside.pSmallFree, so they must be reading DIFFERENT structs, and this is the
+     value that decides it. */
+  output_text("REALDB db=");  output_hex64((unsigned long)(void *)db);  output_text("\n");
+#endif
+  LOOK_CANARY(0);
   if ((rc = exec_ok(db, "BEGIN;", "ext-begin")) != SQLITE_OK)
     return rc;
+  LOOK_CANARY(1);
   if ((rc = exec_ok(db,
           "CREATE TABLE nums(id INTEGER PRIMARY KEY, label TEXT, amount REAL);",
           "ext-create-nums")) != SQLITE_OK)
     return rc;
+  LOOK_CANARY(2);
   if ((rc = exec_ok(db, "CREATE INDEX idx_amount ON nums(amount);",
                     "ext-create-index")) != SQLITE_OK)
     return rc;
+  LOOK_CANARY(3);
 
   /* Bound prepared INSERTs: int id, text label, real amount. */
   {
@@ -4552,6 +4629,39 @@ static int run_sqlite(void) {
   rc = sqlite3_open(":memory:", &db);
   if (rc != SQLITE_OK)
     return fail("open", rc, db);
+
+#ifdef CAPSTONE_PROBE_LOOKASIDE
+  /* IS `db` UNDER-ALLOCATED? This is the one measurement that decides the whole question.
+   *
+   * The corrupting bytes reconstruct to SQLite's own generated
+   *   UPDATE %Q.sqlite_master SET ... sql=%Q" WHERE rowid=#%d"
+   * for CREATE TABLE nums: the fragment "' WHERE " sits at index 160 of that 176-char string,
+   * and it was observed at db+0x2a0 (=672). 672-160 = 512, so the string buffer's base is
+   * db+0x200 -- INSIDE the connection struct. sizeof(sqlite3) is 0x510, which should occupy a
+   * 2048-byte memsys5 block, and db+0x200 would then be interior and never handed out.
+   *
+   * So either the block really is 2048 and the allocator re-issued part of it, or the block is
+   * SMALLER than sizeof(sqlite3) and db+0x200 is a legitimately free neighbour -- in which case
+   * the write is correct and a SIZE was wrong upstream, which is the S-06-residue shape.
+   *
+   * sqlite3_msize only reads memsys5's aCtrl; it does not dereference the object.
+   *
+   * THE CONTROLS ARE NOT OPTIONAL. A 100-byte and a 1296-byte allocation must report 0x80 and
+   * 0x800. If the 1296 control also reports something small, the instrument is broken and a
+   * surprising msize(db) means nothing. */
+  {
+    void *c100 = sqlite3_malloc(100);
+    void *c1296 = sqlite3_malloc(1296);
+    output_text("DBBLK db=");     output_hex64((unsigned long)(void *)db);
+    output_text(" msize=");       output_hex64((unsigned long)sqlite3_msize((void *)db));
+    output_text(" heap=");        output_hex64((unsigned long)(void *)sqlite_heap);
+    output_text("\n CTRL m100="); output_hex64((unsigned long)(c100 ? sqlite3_msize(c100) : 0));
+    output_text(" m1296=");       output_hex64((unsigned long)(c1296 ? sqlite3_msize(c1296) : 0));
+    output_text("  (expect 80 and 800)\n");
+    sqlite3_free(c100);
+    sqlite3_free(c1296);
+  }
+#endif
 
 #ifdef CAPSTONE_SQLITE_NO_LOOKASIDE
   /* THE PER-CONNECTION SWITCH, which is the one that actually matters.
