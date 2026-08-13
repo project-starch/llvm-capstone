@@ -5223,15 +5223,60 @@ static int run_sqlite(void) {
   static const int expected_values[] = {11, 22, 33};
   unsigned row = 0;
   while ((rc = sqlite3_step(statement)) == SQLITE_ROW) {
-    const unsigned char *name = sqlite3_column_text(statement, 0);
-    int value = sqlite3_column_int(statement, 1);
+    const unsigned char *name;
+    int value;
     const char *expected_name = 0;
+#ifdef CAPSTONE_CREATE_LADDER
+    /* SUB-STAGES INSIDE THE ROW LOOP, localising what stage 6 could only bracket.
+     *
+     * Measured 2026-08-13, one boot, control returning: stage 4 (after the INSERT) returned
+     * rc=0 and stage 5 (after prepare of the SELECT) returned rc=0, and stage 6 -- which runs
+     * this loop -- WEDGED. So the fault is between the first sqlite3_step and the end of the
+     * loop body, and these split that interval at each call in it.
+     *
+     * EXACT-MATCH, not `<=`, deliberately. The `<=` chain outside is a monotone ladder over
+     * whole statements; these numbers sit above it, so every earlier `<= n` test is false for
+     * them and the arm reaches this loop unmodified. Mixing an exact-match probe into a `<=`
+     * ladder is safe in that direction and only in that direction.
+     *
+     * 61 is the arm that matters most: it returns having done nothing but STEP, so if it
+     * returns, sqlite3_step itself is exonerated and the fault is in reading the row; if it
+     * wedges, the query executed inside step is where to look and the column accessors are
+     * innocent. Everything after it differs from it by exactly one call. */
+    if ((CAPSTONE_CREATE_LADDER) == 61)
+      return 0x5A6E3D00 | (int)(row & 0xffu);       /* stepped a row, touched nothing */
+#endif
+    name = sqlite3_column_text(statement, 0);
+#ifdef CAPSTONE_CREATE_LADDER
+    if ((CAPSTONE_CREATE_LADDER) == 62)
+      return 0x5A6E3E00 | (int)(name ? 1u : 0u);    /* + column_text; low byte = non-null */
+#endif
+    value = sqlite3_column_int(statement, 1);
+#ifdef CAPSTONE_CREATE_LADDER
+    if ((CAPSTONE_CREATE_LADDER) == 63)
+      return 0x5A6E3F00 | (value & 0xff);           /* + column_int; low byte = the value */
+#endif
     if (row == 0)
       expected_name = "alpha";
     else if (row == 1)
       expected_name = "beta";
     else if (row == 2)
       expected_name = "gamma";
+#ifdef CAPSTONE_CREATE_LADDER
+    /* 64 isolates sqlite3_stricmp, which is the one call in this loop with independent reason to
+       be suspect: an earlier session localised a fault to `cincoffsetimm` on a reloaded, untagged
+       pointer inside the strnicmp family. It differs from 63 by that call and nothing else. */
+    if ((CAPSTONE_CREATE_LADDER) == 64) {
+      int sc_ = (name && expected_name)
+                    ? sqlite3_stricmp((const char *)name, expected_name)
+                    : -1;
+      return 0x5A6E4000 | (sc_ & 0xff);
+    }
+    /* 65 is the matched PASSING arm for 64: identical path with the stricmp NOT called. If 64
+       wedges and 65 returns, the difference between the two arms is that one call. */
+    if ((CAPSTONE_CREATE_LADDER) == 65)
+      return 0x5A6E4100 | (int)(row & 0xffu);
+#endif
     if (row >= 3 || !name ||
         sqlite3_stricmp((const char *)name, expected_name) != 0 ||
         value != expected_values[row])
