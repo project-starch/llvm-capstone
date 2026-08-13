@@ -173,6 +173,35 @@ So the guard resolves the OOB/corrupt-operand defect completely, and what remain
 question of how `pSmallFree` comes to hold plain data -- boot27 measured it holding the ASCII
 `' WHERE '`. A wild write or a granule copy at a site the guard does not cover are both live.
 
+## The residual failure, bisected: extended phase 2->3, inside our own memcpy
+
+`CAPSTONE_EXT_STOP` ladder, guard on, one boot:
+
+| arm | | result |
+|---|---|---|
+| `E1` | | returned |
+| `E3` | | WEDGED (entered) |
+
+So it is extended phase 2 or 3 -- `CREATE INDEX idx_amount` (or its matched `ext-index-control`
+arm). E3's latched trap: mcause **25 UNEXPECTED_OPERAND** at
+
+```
+memcpy+0x2a8:
+   ldc          a2, 0x0(a2)      ; reload the pointer from a stack slot at s0-0x60
+   cincoffset   a1, a2, a1       <== raises: a2 is NOT_CAP
+   sb           a0, 0x0(a1)
+```
+
+An untagged pointer reloaded from a stack slot inside our `memcpy`'s byte loop. That is the exact
+shape `s06spill` was built to test -- and `s06spill` returns 0xFFFF, all sixteen tags surviving.
+So a bare spill/reload preserves the tag while this one does not, and whatever distinguishes them
+is the remaining question. `s06bnds` adds that bounds survive too, so neither simple round-trip
+property is at fault.
+
+Note this is the SECOND distinct defect on this path, not a variant of the first: mcause 25 (lost
+tag) here versus mcause 29 (out of bounds, from a corrupt operand index) for the one the granule
+guard fixes.
+
 ## STILL OPEN: the guard fixes the operand, it does not make SQLite run
 
 `FIXON` -- schema fixup on, `-capstone-guard-cap-granule-copies` on, no probes, no ladder -- enters,
