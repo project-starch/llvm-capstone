@@ -4542,6 +4542,22 @@ static int run_sqlite(void) {
   if (rc != SQLITE_OK)
     return fail("open", rc, db);
 
+#ifdef CAPSTONE_SQLITE_NO_LOOKASIDE
+  /* THE PER-CONNECTION SWITCH, which is the one that actually matters.
+   *
+   * sqlite3_config(SQLITE_CONFIG_LOOKASIDE) above only sets the GLOBAL DEFAULT for connections
+   * opened later; openDatabase then installs its own per-connection buffer regardless. Measured
+   * 2026-08-13: with only the global call, the board faulted at the IDENTICAL instruction
+   * (sqlite3DbMallocRawNN+0xf8 in both builds, the image having merely shifted), and the
+   * preceding `li a0, 0x80; bltu` -- the lookaside slot-size check with sz = 128 -- proves the
+   * allocator was still live. The global call succeeded and changed nothing that mattered.
+   *
+   * sqlite3_db_config(SQLITE_DBCONFIG_LOOKASIDE, 0, 0, 0) is what disables it for THIS db. */
+  rc = sqlite3_db_config(db, SQLITE_DBCONFIG_LOOKASIDE, (void *)0, 0, 0);
+  if (rc != SQLITE_OK)
+    return fail("dbconfig-lookaside", rc, db);
+#endif
+
   rc = sqlite3_exec(db,
       "CREATE TABLE items(name TEXT NOT NULL, value INTEGER NOT NULL);",
       0, 0, 0);
