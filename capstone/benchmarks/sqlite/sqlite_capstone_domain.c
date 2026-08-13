@@ -83,6 +83,17 @@ static void output_uint(unsigned value) {
   }
 }
 
+/* Written by the CAPSTONE_VDBE_CLAMP patch inside sqlite3VdbeExec (build-sqlite-silicon.sh).
+   `lastop` is the opcode that was ABOUT to run when the clamp fired, so an arm that RETURNS
+   names the instruction it declined to execute. Defined unconditionally: the clamp lives in the
+   amalgamation, and a global that exists only under the same knob is the defect shape that made
+   capstone_real_db read zero for a whole boot.
+   ARMED PER STATEMENT, and that is not a refinement -- the counter is cumulative across every
+   sqlite3VdbeExec in the run, so an unarmed clamp of 4 stopped CREATE TABLE itself and the
+   ladder measured the wrong statement entirely. The domain arms it immediately before the step
+   under test, so the count is that statement's opcodes and nobody else's. */
+unsigned long capstone_vdbe_ops, capstone_vdbe_lastop, capstone_vdbe_armed;
+
 #if defined(CAPSTONE_OOB_PROBE) || defined(CAPSTONE_ARG_PROBE) || \
     defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE)
 /* Shared by both probes. Lived inside the OOB block until the ARG probe needed it too; a
@@ -498,6 +509,7 @@ unsigned long capstone_dbwho_badn;     /* how many calls were wrong, not just th
    guard rather than an address -- the one reading that would otherwise look like a measurement. */
 unsigned long capstone_dbwho_rat;
 unsigned long capstone_dbwho_tr_id[8], capstone_dbwho_tr_ra[8], capstone_dbwho_tp;
+
 
 /* A properly tagged capability at a heap ADDRESS, derived by indexing sqlite_heap.
  *
@@ -5219,6 +5231,12 @@ static int run_sqlite(void) {
 #endif
   if (rc != SQLITE_OK)
     return fail("prepare", rc, db);
+#ifdef CAPSTONE_CREATE_LADDER
+  if ((CAPSTONE_CREATE_LADDER) == 66) {
+    capstone_vdbe_ops = 0;
+    capstone_vdbe_armed = 1;   /* count THIS statement's opcodes only -- see the globals above */
+  }
+#endif
 
   static const int expected_values[] = {11, 22, 33};
   unsigned row = 0;
@@ -5290,6 +5308,11 @@ static int run_sqlite(void) {
   }
 
 #ifdef CAPSTONE_CREATE_LADDER
+  /* Stage 66 reports the VDBE clamp: how many opcodes ran and which one was next. With
+     CAPSTONE_VDBE_CLAMP set, the step above returns DONE instead of ROW, so the loop exits
+     without entering its body and this is reached on the same path stage 61 wedges on. */
+  if ((CAPSTONE_CREATE_LADDER) == 66)
+    return 0x5A6E4200 | (int)(capstone_vdbe_lastop & 0xffu);
   /* Stage 6 carries the ROW COUNT in the low byte, not an rc: the step loop is the one arm whose
      interesting output is how far it got, and `rc` here is only ever DONE or an error. */
   if ((CAPSTONE_CREATE_LADDER) <= 6)

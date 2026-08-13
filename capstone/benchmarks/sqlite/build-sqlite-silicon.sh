@@ -1120,6 +1120,50 @@ PYDBWHO
   fi
 fi
 
+# CAPSTONE_VDBE_CLAMP=<n> -- stop sqlite3VdbeExec after n opcodes and return cleanly, recording
+# which opcode was about to run.
+#
+# WHY IT HAS TO GO INSIDE THE VDBE. The ladder localised the wedge to a single call: on silicon
+# with the schema fixup on, CREATE TABLE completes, the INSERT succeeds (rc=0), prepare of the
+# SELECT succeeds (rc=0), and the arm that does nothing but sqlite3_step() and return -- no
+# column access, no comparison -- WEDGES.  There is no smaller C-level step left to take; the
+# next boundary is inside the bytecode interpreter.
+#
+# A CLAMP RATHER THAN A COUNTER, for the reason that governs every instrument on this path: a
+# wedge takes the core, so the host never returns and any value recorded in the shared region
+# dies with it.  Only a build that RETURNS can report anything.  Clamping converts the hang into
+# a clean SQLITE_DONE, and the arm that stops one opcode short of the fault RETURNS while naming
+# the opcode it declined to run -- which is the answer, not a bracket around it.
+#
+# Ladder on n, ascending, all arms returning until one does not.
+if [[ -n "${CAPSTONE_VDBE_CLAMP:-}" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYVDBE'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+NEEDLE = "    assert( pOp>=aOp && pOp<&aOp[p->nOp]);\n    nVmStep++;\n"
+if NEEDLE not in s:
+    sys.exit("VDBE_CLAMP: main-loop anchor not found -- patch shape changed")
+# `pOp->opcode` is read BEFORE the clamp fires, so the reported opcode is the one that was ABOUT
+# to execute -- the suspect -- not the last one that succeeded.
+clamp = NEEDLE + """
+    if( capstone_vdbe_armed && ++capstone_vdbe_ops >= (unsigned long)(CAPSTONE_VDBE_CLAMP) ){
+      capstone_vdbe_lastop = (unsigned long)pOp->opcode;
+      rc = SQLITE_DONE;
+      goto vdbe_return;
+    }
+"""
+s = s.replace(NEEDLE, clamp, 1)
+ANCHOR = "#define SQLITE_CORE 1\n"
+if ANCHOR not in s:
+    sys.exit("VDBE_CLAMP: amalgamation prologue anchor not found")
+s = s.replace(ANCHOR, ANCHOR + "extern unsigned long capstone_vdbe_ops, capstone_vdbe_lastop, capstone_vdbe_armed;\n", 1)
+open(path, "w").write(s)
+print("   VDBE clamp injected into sqlite3VdbeExec")
+PYVDBE
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_VDBE_CLAMP=${CAPSTONE_VDBE_CLAMP}"
+fi
+
 # CAPSTONE_CREATE_LADDER=<n> -- split CREATE TABLE into prepare/step/finalize and RETURN a
 # 0x5A6E_ssrr marker after stage n. Only meaningful with SQLITE_LDC_HIGH_HALF_FIXUP=1, which is
 # the configuration that wedges: a wedge takes the core, so every in-domain probe is silent on
