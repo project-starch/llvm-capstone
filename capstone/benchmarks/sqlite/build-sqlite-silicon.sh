@@ -1118,7 +1118,19 @@ PYDBWHO
   if [[ "${CAPSTONE_DBFIX_PROBE:-0}" == "1" ]]; then
     DOMAIN_EXTRA_DEFS="$DOMAIN_EXTRA_DEFS -DCAPSTONE_DBFIX_PROBE=1"
   fi
-elif [[ "${CAPSTONE_DBFIX_PROBE:-0}" == "1" ]]; then
+fi
+
+# CAPSTONE_CREATE_LADDER=<n> -- split CREATE TABLE into prepare/step/finalize and RETURN a
+# 0x5A6E_ssrr marker after stage n. Only meaningful with SQLITE_LDC_HIGH_HALF_FIXUP=1, which is
+# the configuration that wedges: a wedge takes the core, so every in-domain probe is silent on
+# the one path that matters. Stages ascend, so the whole ladder goes into ONE boot and the first
+# arm that fails to return is the bisection point. n >= 4 runs the whole statement and falls
+# through to the rest of the workload.
+if [[ -n "${CAPSTONE_CREATE_LADDER:-}" ]]; then
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_CREATE_LADDER=${CAPSTONE_CREATE_LADDER}"
+fi
+
+if [[ "${CAPSTONE_DBWHO_PROBE:-0}" != "1" && "${CAPSTONE_DBFIX_PROBE:-0}" == "1" ]]; then
   echo "ERROR: CAPSTONE_DBFIX_PROBE=1 needs CAPSTONE_DBWHO_PROBE=1 -- the repair arm is part of"\
        "that probe, and on its own it would silently do nothing." >&2
   exit 1

@@ -5145,11 +5145,55 @@ static int run_sqlite(void) {
     return fail("dbconfig-lookaside", rc, db);
 #endif
 
+#ifdef CAPSTONE_CREATE_LADDER
+  /* THE CREATE LADDER -- because with SQLITE_LDC_HIGH_HALF_FIXUP=1 the domain WEDGES here, and a
+   * wedge takes the core, so the host never returns and never writes the payload out. Every
+   * in-domain instrument is therefore silent on exactly the path that matters: DBWHO's report,
+   * the LOOK line, the dumps, all of it dies with the run. Measured 2026-08-13, control green in
+   * both boots: fixup ON + lookaside fallback + DBWHO wedged, and fixup ON + DBWHO + the
+   * connection substitution wedged too, each producing `SQ: G/enter` and nothing after.
+   *
+   * So stop observing the wedge and split the statement instead. sqlite3_exec is
+   * prepare -> step -> finalize; running them separately and RETURNING A MARKER after a chosen
+   * one turns "somewhere inside CREATE" into three arms of which the first to go silent IS the
+   * bisection point. Ascending stages, so they can all be staged into one boot in order.
+   *
+   * The marker is the staged-bisection encoding the host already decodes: 0x5A6E_ssrr, ss the
+   * stage reached and rr the SQLite rc there. A stage that RETURNS is a result; the first that
+   * does not is the answer.
+   *
+   * This replaces the exec rather than sitting beside it, so the path under test is the one that
+   * runs -- an early return placed in a leaf while the program carries on regardless stops
+   * nothing, and produces a clean monotone ladder that measures nothing. */
+  {
+    sqlite3_stmt *cst = 0;
+    int crc;
+    crc = sqlite3_prepare_v2(
+        db, "CREATE TABLE items(name TEXT NOT NULL, value INTEGER NOT NULL);", -1, &cst, 0);
+    if ((CAPSTONE_CREATE_LADDER) <= 1)
+      return 0x5A6E0100 | (crc & 0xff);
+    if (crc != SQLITE_OK)
+      return fail("create-prepare", crc, db);
+    crc = sqlite3_step(cst);
+    if ((CAPSTONE_CREATE_LADDER) <= 2)
+      return 0x5A6E0200 | (crc & 0xff);
+    if (crc != SQLITE_DONE)
+      return fail("create-step", crc, db);
+    crc = sqlite3_finalize(cst);
+    cst = 0;
+    if ((CAPSTONE_CREATE_LADDER) <= 3)
+      return 0x5A6E0300 | (crc & 0xff);
+    if (crc != SQLITE_OK)
+      return fail("create-finalize", crc, db);
+    rc = SQLITE_OK;
+  }
+#else
   rc = sqlite3_exec(db,
       "CREATE TABLE items(name TEXT NOT NULL, value INTEGER NOT NULL);",
       0, 0, 0);
   if (rc != SQLITE_OK)
     return fail("create", rc, db);
+#endif
 
   rc = sqlite3_exec(db,
       "INSERT INTO items VALUES"
