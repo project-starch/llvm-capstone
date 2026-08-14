@@ -624,10 +624,21 @@ under QEMU and the offset demonstrably reaches the monitor on silicon.
 above only as history.** SQLite executes in a pure-capability domain on the FPGA and returns
 correct results.
 
-Bitstream `caplifive_12august.bit`. Binary `G6.dom` (sha256 `f93a9188a9a4433c…`), built with the
-S-06 workarounds on (`-capstone-guard-cap-granule-copies` and the library-memcpy fixup — see
-`ref/S06-WORKAROUNDS-TO-REVERT.md`), **not rebuilt between boots**, verified present in the
-initramfs by hashing the cpio members.
+Bitstream `caplifive_12august.bit`. Binary `G6.dom` (sha256 `f93a9188a9a4433c…`), **not rebuilt
+between boots**, verified present in the initramfs by hashing the cpio members.
+
+**Both S-06 workarounds are ON, confirmed from the binary rather than from a build log** (the log
+did not survive a `/tmp` reset, and the manifest records names, not flags):
+
+* `BEEBS_LDC_HIGH_HALF_FIXUP` — `memcpy` contains the fixup's source shape verbatim: the plain
+  two-half copy loop (`sd zero` init, `bltu a1, a0` against 1, `slli 3` index, plain `sd`), then
+  `ldc` of the granule, `lcc … 0x1`, compare against literal `7`, and a conditional `stc`. That is
+  `BEEBS_CHUNK_COPY`'s guarded arm and nothing else produces it.
+* `-capstone-guard-cap-granule-copies` — 511 `lcc` instructions in the image, of which exactly 1 is
+  in `memcpy` (the fixup's). The other 510 are the compiler pass.
+
+See `ref/S06-WORKAROUNDS-TO-REVERT.md`; the revert acceptance gates depend on which of these was
+live, which is why it is established here from the artifact.
 
 **Basic workload** = CREATE TABLE / three INSERTs / SELECT returning all three rows / finalize.
 When it completes it returns `obs=0x5A6E0603` and prints `alpha 11`, `beta 22`, `gamma 33` — the
