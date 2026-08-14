@@ -100,7 +100,7 @@ unsigned long capstone_memgrow_seen, capstone_amem_seen, capstone_pdest_seen;
 #if defined(CAPSTONE_OOB_PROBE) || defined(CAPSTONE_ARG_PROBE) || \
     defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE) || \
     defined(CAPSTONE_MEMGROW_PROBE) || defined(CAPSTONE_AMEM_PROBE) || \
-    defined(CAPSTONE_PDEST_PROBE)
+    defined(CAPSTONE_PDEST_PROBE) || defined(BEEBS_MEMCPY_TAGCHECK)
 /* Shared by both probes. Lived inside the OOB block until the ARG probe needed it too; a
    reporter that cannot print is a reporter that silently reports nothing. */
 static void output_hex64(unsigned long v) {
@@ -224,7 +224,7 @@ void capstone_arg_report(void) {
 
 #if defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE) || \
     defined(CAPSTONE_MEMGROW_PROBE) || defined(CAPSTONE_AMEM_PROBE) || \
-    defined(CAPSTONE_PDEST_PROBE)
+    defined(CAPSTONE_PDEST_PROBE) || defined(BEEBS_MEMCPY_TAGCHECK)
 /* Reports the lookaside small-free head WITHOUT DEREFERENCING IT, and then falls back to the
    general allocator so the run continues instead of wedging.
    
@@ -425,6 +425,44 @@ void capstone_pdest_report(const void *pdest, unsigned long p3, unsigned long p2
   output_text(" cap:");      output_heapinfo(output_capinfo(pdest));
   output_text("\n");
 }
+
+#if defined(BEEBS_MEMCPY_TAGCHECK) && BEEBS_MEMCPY_TAGCHECK
+/* The counters live HERE, not in beebs_freestanding_string.c: that file is one of the
+   "no-globals support objects", and putting them there produced a domain that faulted under QEMU
+   on a wild scalar load. memcpy calls across into this TU instead, which is safe. */
+unsigned long beebs_mcp_entry_ty, beebs_mcp_fail_off, beebs_mcp_fail_n,
+              beebs_mcp_fail_al, beebs_mcp_hits;
+
+/* Called BY memcpy on the first untagged destination it sees. Sticky on the first hit -- the
+   interesting call is the one that establishes the condition, and later ones would scroll it. */
+void capstone_mcp_note(unsigned long entry_ty, unsigned long off,
+                       unsigned long n, unsigned long al) {
+  if (beebs_mcp_hits == 0UL) {
+    beebs_mcp_entry_ty = entry_ty;
+    beebs_mcp_fail_off = off;
+    beebs_mcp_fail_n = n;
+    beebs_mcp_fail_al = al;
+  }
+  beebs_mcp_hits++;
+}
+
+/* What memcpy's own tag check recorded. Read from a point that RETURNS -- the fault it replaces
+   wedges, and a wedge means the host never writes the payload out.
+   `ety` is the field that decides where to look next: 7 means the destination was ALREADY
+   untagged when memcpy was called, so the caller is the subject and nothing inside memcpy is;
+   anything else means the loop lost it, and `off` says on which byte. `hits`=0 means the check
+   never tripped, which is a different statement from "no fault" and must not be read as one. */
+void capstone_mcp_report(void) {
+  if (!capstone_out_reserve(200UL))
+    return;
+  output_text("MCP hits=");  output_hexv(beebs_mcp_hits);
+  output_text(" ety=");      output_hexv(beebs_mcp_entry_ty);
+  output_text(" off=");      output_hexv(beebs_mcp_fail_off);
+  output_text(" n=");        output_hexv(beebs_mcp_fail_n);
+  output_text(" al=");       output_hexv(beebs_mcp_fail_al);
+  output_text("\n");
+}
+#endif
 
 void capstone_amem_report(const void *amem, unsigned long nmem, unsigned long ncursor) {
   if (!capstone_out_reserve(200UL))
@@ -794,8 +832,15 @@ static int query_scalar_eq(sqlite3 *db, const char *sql, long want,
 #ifndef CAPSTONE_EXT_STOP
 #define CAPSTONE_EXT_STOP 999
 #endif
+#if defined(BEEBS_MEMCPY_TAGCHECK) && BEEBS_MEMCPY_TAGCHECK
+void capstone_mcp_report(void);
+#define EXT_STOP_MCP() capstone_mcp_report()
+#else
+#define EXT_STOP_MCP() do { } while (0)
+#endif
 #define EXT_STOP(n)                                                            \
   do {                                                                         \
+    EXT_STOP_MCP();                                                            \
     output_text("EXTSTOP=" #n "\n");                                           \
     return SQLITE_OK;                                                          \
   } while (0)

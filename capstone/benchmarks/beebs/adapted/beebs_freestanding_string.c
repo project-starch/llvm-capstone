@@ -228,6 +228,41 @@ typedef unsigned long long bu64_t;      /* exactly one half of a 128-bit capabil
  * capability, which is exactly the tag granularity.
  */
 
+#if defined(BEEBS_MEMCPY_TAGCHECK) && BEEBS_MEMCPY_TAGCHECK
+
+/* BEEBS_MEMCPY_TAGCHECK -- is memcpy HANDED an untagged destination, or does it lose the tag
+ * mid-loop?
+ *
+ * Measured on silicon 2026-08-14: mcause 25 UNEXPECTED_OPERAND at memcpy+0x2a8, on
+ * `cincoffset a1, a2, a1` where a2 had just been reloaded by `ldc a2, 0x0(a2)` from the
+ * destination pointer's stack slot -- untagged. Three ladder rungs refuted every simple
+ * explanation (a spilled capability keeps its tag, keeps its bounds, and survives byte stores
+ * made through it, 16/16 each on this hardware), so the difference is here, in this function.
+ *
+ * The FIRST thing to establish is which side of the call boundary it is on, which is what the
+ * entry type answers: NOT_CAP (7) on ENTRY means the caller handed over a bad pointer and memcpy
+ * is innocent; anything else means the loop lost it, and the offset says where.
+ *
+ * IT ALSO CONVERTS THE WEDGE INTO A WRONG ANSWER, by stopping the copy and returning. A wedge
+ * takes the core and the host never writes the payload out, which is why every observe-only probe
+ * on this path reported nothing. An incomplete copy makes SQLite compute a wrong result; that is
+ * the intended trade.
+ *
+ * NO GLOBALS LIVE HERE. This file is one of the "no-globals support objects" the build compiles
+ * separately, and the first version of this instrument put six counters in it. That produced a
+ * domain that faulted under QEMU on a wild scalar load -- adding globals to an object the
+ * gp-captable ABI does not generate a cap table for is not a diagnostic, it is a second bug. The
+ * counters live in the domain TU; this side only CALLS across, which is safe.
+ *
+ * The type query is TOTAL (selector 1), so it can be issued on a NOT_CAP without faulting -- an
+ * instrument that raised on exactly the input it exists to describe would report nothing. */
+extern void capstone_mcp_note(unsigned long entry_ty, unsigned long off,
+                              unsigned long n, unsigned long al);
+
+#define BEEBS_MCP_TYPE(out_, cap_) \
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(out_) : "r"(cap_))
+#endif
+
 BEEBS_MEMCPY_ATTR void *memcpy(void *dst, const void *src, bsize_t n) {
   unsigned char *d = (unsigned char *)dst;
   const unsigned char *s = (const unsigned char *)src;
@@ -235,6 +270,26 @@ BEEBS_MEMCPY_ATTR void *memcpy(void *dst, const void *src, bsize_t n) {
   bsize_t i = 0;
   bsize_t da = ((bsize_t)d) & (ps - 1u);
   bsize_t sa = ((bsize_t)s) & (ps - 1u);
+#if defined(BEEBS_MEMCPY_TAGCHECK) && BEEBS_MEMCPY_TAGCHECK
+  unsigned long mcp_ety_;
+  BEEBS_MCP_TYPE(mcp_ety_, d);
+#if defined(BEEBS_MCP_SELFTEST) && BEEBS_MCP_SELFTEST
+  /* POSITIVE CONTROL, end to end: query a value that is NOT a capability and push the result
+     through the same note/report path. `hits=0` on a board run is otherwise indistinguishable
+     from "the query cannot report 7" or "the reporter was compiled out", both of which have
+     happened on this probe already. Requires hits>=1 and ety=7 to appear. */
+  { unsigned long mcp_junk_ = 0x5A5Aul, mcp_tj_;
+    BEEBS_MCP_TYPE(mcp_tj_, mcp_junk_);
+    capstone_mcp_note(mcp_tj_, 0xABul, (unsigned long)n, 0xCDul); }
+#endif
+  if (mcp_ety_ == 7ul) {
+    /* Untagged ALREADY -- the caller is the subject, not this loop. Record and bail before the
+       first dereference, which would fault and take the report with it. */
+    capstone_mcp_note(mcp_ety_, 0ul, (unsigned long)n,
+                      (((unsigned long)da) << 4) | (unsigned long)sa);
+    return dst;
+  }
+#endif
   /* Only when src and dst share alignment can the middle be copied as whole
      capabilities; otherwise fall through to the byte loop for everything. */
 #ifndef BEEBS_MEMCPY_BYTES_ONLY
@@ -262,8 +317,23 @@ BEEBS_MEMCPY_ATTR void *memcpy(void *dst, const void *src, bsize_t n) {
   (void)da;
   (void)sa;
 #endif
-  for (; i < n; i++)
+  for (; i < n; i++) {
+#if defined(BEEBS_MEMCPY_TAGCHECK) && BEEBS_MEMCPY_TAGCHECK
+    /* Checked EVERY iteration, not once: the fault is a reload from the stack slot inside this
+       loop, so a single check before the loop would pass and prove nothing about the iteration
+       that dies. */
+    {
+      unsigned long mcp_ty_;
+      BEEBS_MCP_TYPE(mcp_ty_, d);
+      if (mcp_ty_ == 7ul) {
+        capstone_mcp_note(mcp_ety_, (unsigned long)i, (unsigned long)n,
+                          (((unsigned long)da) << 4) | (unsigned long)sa);
+        return dst;   /* stop before the faulting use -- a wrong answer beats a wedge */
+      }
+    }
+#endif
     d[i] = s[i];
+  }
   return dst;
 }
 

@@ -1374,6 +1374,29 @@ echo "== compiling the single silicon TU (this is the first time SQLite sees the
 # domain either works or does not. These let a bisect answer "which object" in one QEMU run each.
 read -r -a _amalgam_mllvm <<< "${AMALGAM_EXTRA_MLLVM:-}"
 read -r -a _support_mllvm <<< "${SUPPORT_EXTRA_MLLVM:-}"
+# CAPSTONE_MCP_TAGCHECK=1 -- instrument the REAL memcpy (the one the domain links) to ask whether
+# it is HANDED an untagged destination or loses the tag mid-loop, and to convert the resulting
+# wedge into a wrong answer so the recording reaches the host.
+#
+# The define has to reach BOTH objects: beebs_freestanding_string.c, which holds memcpy and the
+# counters, and the amalgamation TU, which holds the reporter and the EXT_STOP call site. Setting
+# it on only one produced a link error the first time a probe was split this way, which is the
+# good version of that mistake -- the silent version is a reporter compiled out while its caller
+# still thinks it ran.
+#
+# IT MUST SIT ABOVE `read -r -a _domain_defs`. Placed after it, the append to DOMAIN_EXTRA_DEFS
+# reached BEEBS_STRING_EXTRA_DEFS (read later) but not the amalgamation TU (read earlier), so
+# memcpy was instrumented, the counters were populated, and the reporter that prints them was
+# compiled out -- a build that runs the experiment and cannot say what happened. Caught only
+# because the MCP line was missing from an otherwise clean QEMU run.
+if [[ "${CAPSTONE_MCP_TAGCHECK:-0}" == "1" ]]; then
+  BEEBS_STRING_EXTRA_DEFS="${BEEBS_STRING_EXTRA_DEFS:-} -DBEEBS_MEMCPY_TAGCHECK=1"
+  if [[ "${CAPSTONE_MCP_SELFTEST:-0}" == "1" ]]; then
+    BEEBS_STRING_EXTRA_DEFS="$BEEBS_STRING_EXTRA_DEFS -DBEEBS_MCP_SELFTEST=1"
+  fi
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DBEEBS_MEMCPY_TAGCHECK=1"
+fi
+
 read -r -a _domain_defs <<< "${DOMAIN_EXTRA_DEFS:-}"
 "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$OPT" \
   -DSQLITE_HEAP_SIZE=$HEAP "${_domain_defs[@]}" "${_amalgam_mllvm[@]}" \
