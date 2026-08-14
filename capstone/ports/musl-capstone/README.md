@@ -25,7 +25,8 @@ __CAPSTONE_HOSTCALL_HOST_DONE__ status=0 serviced=4
 | `libc-capstone.a` | links; `write(1,…)` leaves only `__capstone_hostcall` undefined |
 | resumable hostcall from a pure-cap domain | works — `yield-probe/` |
 | musl `write()` end to end | works — `musl-hello/` |
-| syscalls implemented | `write` (stdout/stderr), `exit`, `exit_group`; all else `-ENOSYS` |
+| syscalls implemented | `openat`, `read`, `write`, `close`, `fsync`, `fdatasync`, `ftruncate`, `exit`, `exit_group`; all else `-ENOSYS`, reported by number |
+| **real file I/O** | **works** — `file-probe/`, open/write/fsync/close/open/read/close with the bytes compared |
 | **reference Lua 5.4** | **runs** — `lua-probe/`, 22 core TUs against musl, `t[20] == 400` |
 
 `lua-probe/` replaces the 1008 lines of hand-written libc that
