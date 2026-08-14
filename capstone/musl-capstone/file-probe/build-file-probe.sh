@@ -64,11 +64,8 @@ mkdir -p "$OBJ_DIR"
   -ffreestanding -O0 -c "$RUNTIME_DIR/start-musl.S" -o "$OBJ_DIR/start-musl.o"
 
 "$CLANG" "${MUSL_CFLAGS[@]}" -c "$RUNTIME_DIR/hostcall.c" -o "$OBJ_DIR/hostcall.o"
-# musl_gaps.c supplies open() and fsync(), whose musl sources do not compile.
-# It needs src/internal on the include path for syscall_arch.h, which ordinary
-# application code must NOT have -- so it is compiled with its own flags.
-"$CLANG" "${MUSL_CFLAGS[@]}" -I"$MUSL_SRC_DIR/arch/capstone64" \
-  -c "$RUNTIME_DIR/musl_gaps.c" -o "$OBJ_DIR/musl_gaps.o"
+# There is no gap file any more: open() and fsync() come from musl itself, once
+# the C-21 frontend fix let src/fcntl/open.c and src/unistd/fsync.c compile.
 # ONE arm. A matched pair differing only in image size (5536 vs 6176, i.e.
 # dom_data 1120 vs 480) was run and BOTH arms faulted identically, so dom_data
 # size is refuted as the variable and the second arm buys nothing.
@@ -84,8 +81,7 @@ BEEBS_STRING_SRC="$REPO_ROOT/capstone/benchmarks/beebs/adapted/beebs_freestandin
 "$CLANG" "${MUSL_CFLAGS[@]}" -c "$BEEBS_STRING_SRC" -o "$OBJ_DIR/beebs_string.o"
 
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
-  "$OBJ_DIR/start-musl.o" "$OBJ_DIR/hostcall.o" "$OBJ_DIR/musl_gaps.o" \
-  "$OBJ_DIR/file_probe.o" \
+  "$OBJ_DIR/start-musl.o" "$OBJ_DIR/hostcall.o" "$OBJ_DIR/file_probe.o" \
   "$OBJ_DIR/beebs_string.o" "$ARCHIVE"
 image=$("$CAPSTONE_LLVM_READOBJ" --program-headers "$OUT_DOM" \
          | awk '/MemSize/ {print $2; exit}')

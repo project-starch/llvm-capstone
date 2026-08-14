@@ -70,16 +70,6 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         # caller then executing its own default case and returning -ENOSYS.
         # build-sqlite-capstone.sh already carries this flag, undocumented.
         "-fno-optimize-sibling-calls",
-        # ALSO LOAD-BEARING, and it was missing until 2026-08-15. A jump table is
-        # .rodata reached through `scc gp`, which under the gp-captable ABI lands
-        # outside gp's bounds and faults -- the same mechanism as C-4a's constant
-        # pools, where ISSUES.md already records -fno-jump-tables as mandatory.
-        # Every application build here carries it (build-file-probe.sh,
-        # build-lua-probe.sh); the ARCHIVE did not, so 15 members shipped with
-        # absolute-addressed switch tables, vfscanf and strftime among them. They
-        # compile and archive cleanly and fault only when called, which is why a
-        # survey counting compiles could never have caught it.
-        "-fno-jump-tables",
         "-D_XOPEN_SOURCE=700",
         f"-I{musl}/arch/capstone64",
         f"-I{musl}/arch/generic",
@@ -134,18 +124,9 @@ def main() -> int:
                         help="also keep the object files, so an archive can be "
                              "built from whatever compiles. The flags and the "
                              "file set then have exactly one definition, here.")
-    parser.add_argument("--print-flags", action="store_true",
-                        help="print the compile flags, one per line, and exit. "
-                             "For the sources that are OURS rather than musl's "
-                             "(libc-ext/): they must be built exactly as the "
-                             "archive is, and two copies of this list would "
-                             "drift.")
     args = parser.parse_args()
 
     musl = pathlib.Path(args.musl_dir).resolve()
-    if args.print_flags:
-        print("\n".join(compile_flags(musl)))
-        return 0
     clang = os.environ.get("CAPSTONE_CLANG")
     if not clang or not pathlib.Path(clang).exists():
         print(f"ERROR: CAPSTONE_CLANG not set or missing: {clang!r}", file=sys.stderr)
