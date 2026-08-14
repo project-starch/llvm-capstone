@@ -379,8 +379,12 @@ def main():
             # first probe boot was thrown away here after its control arm had already proved the
             # instrument works -- the guard was right that it was not a STAGED marker and wrong
             # that it was not a marker.
-            if not wedged and bad and decode_probe(m_obs) is not None:
-                a, b, c = decode_probe(m_obs)
+            # int(...), NOT the re.Match. m_obs is the match object; the int lives in group(1),
+            # exactly as line 313 and line 330 already do it. Passing the match here raised
+            # TypeError inside decode_probe and killed a boot at the first probe arm.
+            _probe = decode_probe(int(m_obs.group(1))) if m_obs is not None else None
+            if not wedged and bad and _probe is not None:
+                a, b, c = _probe
                 log(f"  {dom}: S-07 probe report -- rs1_untagged={a} rs2_tagged={b} "
                     f"retry_persistent={c}")
                 bad = False
