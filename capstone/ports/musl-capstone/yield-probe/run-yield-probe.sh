@@ -54,14 +54,22 @@ OUT_DIR="$OUT_DIR" OUT_DOM="$SHARE_DIR/yield_probe.dom" \
 # the buildroot image. Not ours to fix, but cheap to survive: a boot is ~3
 # minutes now, so retry rather than lose the run.
 run_smoke() {
-  local attempt
+  local attempt status
   for attempt in 1 2 3; do
-    if "$@"; then
+    # `set +e` around the call, and read $? from the call itself. NOT from after
+    # an `if`: an `if` with a false condition and no `else` returns ZERO, so the
+    # obvious `if "$@"; then return 0; fi; status=$?` reads 0 on failure and
+    # reports success. That version shipped briefly and made a FAILED yield-probe
+    # run print "completed".
+    set +e
+    "$@"
+    status=$?
+    set -e
+    if [[ $status -eq 0 ]]; then
       return 0
     fi
-    local status=$?
     if [[ $status -ne 75 ]]; then
-      return $status
+      return "$status"
     fi
     echo "run: infra flake on attempt $attempt (exit 75), retrying" >&2
   done
@@ -74,8 +82,12 @@ run_smoke() {
 # stalled boot used to burn sixteen minutes before anyone noticed. 300 s is
 # comfortably above a healthy boot and turns a flake into a five-minute loss.
 # Retries then bound the worst case at ~15 minutes instead of ~48.
-CAPSTONE_QEMU_LOGIN_TIMEOUT=${CAPSTONE_QEMU_LOGIN_TIMEOUT:-300} \
-run_smoke python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
+# EXPLICIT CHECK, not `set -e`. Measured: a non-zero return from this
+# function does NOT abort the script under `set -euo pipefail`, so the
+# previous version printed "completed" after a FAILED run. A wrapper that
+# hides failures is worse than no wrapper.
+if ! CAPSTONE_QEMU_LOGIN_TIMEOUT=${CAPSTONE_QEMU_LOGIN_TIMEOUT:-300} \
+   run_smoke python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --qemu-extra-arg=-append --qemu-extra-arg="root=/dev/vda ro loglevel=1" \
   --share-dir "$SHARE_DIR" \
   --log-file "$LOG_FILE" \
@@ -86,5 +98,9 @@ run_smoke python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-sm
   --success-marker 'yield-probe: round 1 before yield' \
   --success-marker 'yield-probe: round 2 AFTER RESUME, stack intact' \
   --success-marker '__CAPSTONE_YIELD_PROBE_PASSED__'
+then
+  echo "run-yield-probe.sh FAILED" >&2
+  exit 1
+fi
 
 echo "run-yield-probe.sh completed. Full serial log: $LOG_FILE"
