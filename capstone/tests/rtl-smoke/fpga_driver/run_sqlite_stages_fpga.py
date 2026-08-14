@@ -138,7 +138,14 @@ def main():
         cand = _overlay / pathlib.Path(cands[-1]).name
         if cand.is_file():
             _want.append(cand)
-    assert_firmware_embeds_current_initramfs(IMG, _want or None)
+    if os.environ.get("FPGA_IMG_NAME"):
+        # The staleness guard compares the LOCAL firmware against the LOCAL domains. When booting
+        # a stored server-side image neither side of that comparison is what will run, so the check
+        # would be answering a question nobody asked. Skipped, and said out loud.
+        print("[stages] FPGA_IMG_NAME set: skipping the local firmware/initramfs staleness check "
+              "-- the image that boots is the stored one, not the local build.", file=sys.stderr)
+    else:
+        assert_firmware_embeds_current_initramfs(IMG, _want or None)
 
     console = FpgaConsole(URL, logger=lambda m: print(f"[fpga] {m}", file=sys.stderr))
     console.connect()
@@ -150,7 +157,31 @@ def main():
         rb = nvbit(console)
         if rb != BITSTREAM:
             raise SystemExit(f"HARD STOP: resident bitstream is {rb!r}, expected {BITSTREAM!r}")
-        console.upload_boot_image(IMG_NAME, str(IMG))
+        # BOOT AN IMAGE ALREADY ON THE SERVER, without uploading and without a local copy.
+        #
+        # The console stores boot images under a CONTENT-HASH name (sha256[:12]), so a name can
+        # only ever carry the bytes it was uploaded with -- it cannot be overwritten with
+        # different content. That makes the store an archive of every firmware ever run, and the
+        # only way back to an exact past image once the local build tree has moved on: the build
+        # is NOT reproducible (BR2_REPRODUCIBLE is off, so the cpio carries per-file mtimes, and
+        # the kernel embeds an incrementing .version plus a build timestamp), so a byte-identical
+        # rebuild of a past firmware is not achievable.
+        #
+        # This exists because a sporadic silicon defect stopped reproducing and the question
+        # "does it still happen on the exact image where it did?" is otherwise unanswerable.
+        #
+        # Set FPGA_IMG_NAME to a stored name to use it. The local-artifact checks are skipped
+        # because there is no local artifact to check -- which is stated loudly rather than
+        # silently, since it means the usual staleness guard is NOT protecting this run.
+        _img_override = os.environ.get("FPGA_IMG_NAME")
+        if _img_override:
+            log(f"!! BOOTING STORED IMAGE {_img_override!r} FROM THE CONSOLE -- no upload, and "
+                f"no local artifact to verify it against.")
+            log("!! The initramfs-embeds-current-domains check does NOT apply to this run.")
+            _img_name = _img_override
+        else:
+            console.upload_boot_image(IMG_NAME, str(IMG))
+            _img_name = IMG_NAME
         # Boot is ONE RETRYABLE UNIT. Measured 2026-08-13 across 15 board runs: 2 failed in
         # cold_boot BEFORE a single byte of the image moved, with abstractcs busy stuck at 1 --
         # the hart intermittently fails to enter debug mode on `reset halt`. Both were
@@ -163,7 +194,7 @@ def main():
         # and self-cleaning (its own `finally: gdb_stop()`), so a retry costs a reload.
         for _boot_attempt in range(1, 4):
             try:
-                cold_boot(console, C.GDB_PROMPT, IMG_NAME)
+                cold_boot(console, C.GDB_PROMPT, _img_name)
                 break
             except (ActionTimeout, RuntimeError) as _e:
                 log(f"  cold_boot failed ({_e}); retry {_boot_attempt}/3")

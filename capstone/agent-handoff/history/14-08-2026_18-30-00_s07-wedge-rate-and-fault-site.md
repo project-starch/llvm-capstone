@@ -290,3 +290,56 @@ extrapolations from real data, made without the control that would have tested t
 the refuting experiment was cheap and available: reading one anvil function, and rebuilding one
 image. **The rule that would have caught both: before writing down a cause, name the observation
 that would distinguish it from the obvious alternative, and go and make that observation.**
+
+## Booting the EXACT firmware from the reproducing window — the firmware is excluded (2026-08-15)
+
+The rebuild is not reproducible (`BR2_REPRODUCIBLE` is off, so the cpio carries per-file mtimes;
+the kernel embeds an incrementing `.version` and a build timestamp), so a byte-identical rebuild of
+a past firmware is unachievable. **But the console stores boot images under a content-hash name and
+loading does not require uploading**, so the exact image is still bootable:
+
+```
+FPGA_IMG_NAME=fw_93aa9a2426bc.bin   # skips the upload and the local staleness check
+```
+
+added to `run_sqlite_stages_fpga.py`. A name is a sha256 prefix and cannot be overwritten with
+different bytes, so loading it is loading those bytes.
+
+**Result: 4 genuine `G6` executions on the exact firmware, 0 wedges.**
+
+| G6, unmodified binary | wedges / genuine | Fisher vs the window |
+|---|---|---|
+| reproducing window (`fw_93aa`, 08-14) | 3 / 12 | — |
+| **same EXACT firmware, 08-15** | **0 / 4** | 0.53 |
+| rebuilt content-identical (`fw_0f07`) | 0 / 8 | 0.24 |
+| patched-era boots, other images | 0 / 6 | 0.52 |
+| all `G6` since the window | 0 / 18 | **0.054** |
+
+### What this establishes and what it does not
+
+**Excluded: the firmware.** The relink hypothesis — that rebuilding shifted code and therefore
+pipeline occupancy or physical placement — predicted that restoring the exact image would restore
+the defect. It did not. Same bytes, no wedge. That was the strongest remaining mechanical
+explanation and it is now dead.
+
+**Not established: that the defect is gone.** 0/4 on the exact image is Fisher p = 0.53 — nothing.
+Even pooling every post-window `G6` execution gives 0/18 at p = 0.054, which is suggestive and no
+more. The instruments are known good (an auditor confirmed the runner cannot reclassify a wedge,
+and the wedge path fired in every recent boot).
+
+**What is left**, having excluded firmware, domain binary (byte-identical throughout), image
+composition (restored, no effect) and the instruments:
+
+1. **Burstiness** — all three wedges fall in a single 17:27-18:40 window, and one boot *inside* that
+   window was itself 0-in-4. A constant lower rate with clustering fits both windows at p ~ 0.07.
+   This is now the leading explanation by elimination, and it would mean the 23% headline was always
+   an overestimate drawn from a lucky hour.
+2. **Board state** — something about the machine that differs between one evening and the next.
+   Untestable from here except by repetition over time.
+
+### Consequence for the folder
+
+The rate table must not be read as "23%, stable". The defect reproduced in one window and has not
+since, across 18 executions spanning the exact firmware, a content-identical rebuild, and three
+other images. Anyone attempting reproduction should expect to need many boots, and should not
+conclude from a quiet session that the defect is absent.
