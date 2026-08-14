@@ -5,6 +5,23 @@
 Bitstream `caplifive_12august.bit`. All measurements below are on that bitstream; a reflash
 invalidates them.
 
+> ## START HERE IF YOU OWN THE RTL
+>
+> * **`rtl/MECHANISMS-AND-PATCH-PROPOSAL.md`** — the three candidate mechanisms with quoted
+>   evidence, everything we ruled out so you do not re-derive it, one concrete patch proposal, and
+>   the single board-free experiment we would run first.
+> * **`board/G6P-DISCRIMINATOR.md`** — a 4-byte binary patch, built and verified, that separates
+>   "the capability lost its tag" from "the offset gained one". Never produced a verdict; waiting
+>   for reproduction.
+> * **`board/fault-sites.md`** — the raw latched trap state and decoded fault sites.
+>
+> **BEFORE YOU PLAN ANYTHING, READ THE REPRODUCTION STATUS.** This defect reproduced at roughly
+> 3 wedges in 12 executions during a single window on 2026-08-14 and **has not reproduced since**,
+> across 18 further executions of the byte-identical binary — including a boot of the byte-identical
+> *firmware*, recovered from the console's content-addressed image store. Do not design an
+> experiment that assumes it fires on demand. The leading explanation, by elimination, is that the
+> fault is **bursty** and the 23% figure came from a lucky hour.
+
 **This is NOT S-06, and merging the two would be a mistake.** S-06 is *plain, untagged* data losing
 its high 64 bits on an `ldc`/`stc` round trip — it corrupts data and raises nothing. S-07 is a
 *genuine capability* coming back from memory with **no tag**, so the next instruction that requires
@@ -288,10 +305,21 @@ database engine.
 
 ## Files
 
-* `board/` — the latched trap state and the decoded fault sites for each instance.
+* `rtl/MECHANISMS-AND-PATCH-PROPOSAL.md` — **the handover document.** Ranked candidate mechanisms
+  with quoted `file:line` evidence, a corrected account of the transaction-ID question (the ID is
+  NOT under-width — that framing is withdrawn, and the real concern is tracker depth), a concrete
+  proposed change with an acceptance criterion that must FAIL before the fix, and a table of what is
+  already ruled out.
+* `board/G6P-DISCRIMINATOR.md` — the 4-byte patch that separates the two readings of mcause 25,
+  with its stopping rule and the reason a recompiled probe cannot be used instead.
+* `board/fault-sites.md` — the latched trap state and the decoded fault sites for each instance.
 * `src/` — the four exclusion rungs (`s06spill`, `s06bnds`, `s06wr`, `s06pld`), each self-checking
   with a `*_SELFTEST` build that must return 0.
 * `run.sh` — rebuilds and stages the exclusion rungs and prints what each should return.
+
+**What we are asking for.** Not agreement — a check. Two of the three mechanisms we could not settle
+from the sources, and each has an experiment that kills it. The one we would run first is board-free
+and is named at the end of the mechanisms document.
 
 Full investigation trail:
 `agent-handoff/history/14-08-2026_02-30-00_sqlite-wedge-is-out-of-bounds-on-Mem.md`.
