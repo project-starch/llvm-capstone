@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""Compile every musl .c file with the Capstone pure-cap clang and tally the result.
+
+This is the runnable check for the port: it says how many of musl's sources the
+compiler accepts, and it FAILS if that number regresses.
+
+Three properties it deliberately has, because a survey that cannot fail is not
+evidence (CLAUDE.md, "A CLEAN result is not evidence until the check is known to
+fire"):
+
+  * "no data" is an ERROR, not a zero. An unprepared tree, a missing clang or an
+    empty file list exits non-zero and says where it looked.
+  * POSITIVE CONTROLS. One file that must compile and one that must not. If
+    either flips, the harness reports ERROR rather than a number, because a
+    flipped control means the flags or the tree are not what we think.
+  * Foreign-architecture sources are excluded explicitly and the count of what
+    was dropped is printed, so the denominator is never quietly inflated.
+
+Usage:  survey-musl-capstone.py <musl-src-dir> [--expect-ok N] [--jobs N]
+"""
+
+import argparse
+import collections
+import concurrent.futures
+import os
+import pathlib
+import re
+import subprocess
+import sys
+
+# Pinned baseline: the OK count this port is known to reach. Raise it when a
+# patch improves things (that is the point), never lower it to make a run pass.
+BASELINE_OK = 1270
+
+# A file that MUST compile, and a file that MUST NOT, with the reason it fails.
+# strlen.c fails on `(uintptr_t)s % ALIGN`; when the word-at-a-time string
+# routines get replaced this control has to be retired deliberately.
+CONTROL_MUST_PASS = "src/stdlib/abs.c"
+CONTROL_MUST_FAIL = "src/string/strlen.c"
+
+FOREIGN_ARCH_KEEP = {"riscv64", "capstone64", "generic"}
+
+
+def compile_flags(musl: pathlib.Path) -> list[str]:
+    return [
+        "-target", "capstone64-unknown-elf",
+        "-Xclang", "-target-feature", "-Xclang", "+m",
+        # The A extension: musl's riscv64 atomics are lr.d/sc.d. Without this
+        # 35 files fail on "instruction requires the following: 'Zalrsc'",
+        # which is a missing flag, not a porting problem.
+        "-Xclang", "-target-feature", "-Xclang", "+a",
+        "-std=c99", "-nostdinc", "-ffreestanding", "-fno-builtin",
+        "-D_XOPEN_SOURCE=700",
+        f"-I{musl}/arch/capstone64",
+        f"-I{musl}/arch/generic",
+        f"-I{musl}/obj/src/internal",
+        f"-I{musl}/src/include",
+        f"-I{musl}/src/internal",
+        f"-I{musl}/obj/include",
+        f"-I{musl}/include",
+        "-O1", "-w",
+    ]
+
+
+def bucket(message: str) -> str:
+    # An LLVM assertion labels itself; use its text rather than a rule per case.
+    # The assertion sits ~190 chars into the line (after the source path), which
+    # is why the captured line must not be truncated before bucketing.
+    assertion = re.search(r"Assertion `(.+?)' failed", message)
+    if assertion:
+        return "backend assert: " + assertion.group(1)[:80]
+    if "materialize arbitrary" in message:
+        return "backend: cannot materialize >64-bit constant (pointer via integer)"
+    if "Cannot select" in message:
+        return "backend: Cannot select (i128 integer op on a capability)"
+    if "long_double_incorrectly" in message:
+        return "long double: compiler and bits/float.h disagree"
+    if "array is too large" in message:
+        return "static assert: sizeof(void*) assumption (mallocng)"
+    if "Unable to legalize non-vector shift" in message:
+        return "backend: i128 shift (long double)"
+    if "Too many bits for" in message:
+        return "backend: APInt >64 bits (long double / capability constant)"
+    if "exit code 134" in message:
+        return "backend: crash, assertion text not captured"
+    stripped = re.sub(r"^.*?error: ", "", message)
+    return "other: " + stripped[:70]
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("musl_dir")
+    parser.add_argument("--expect-ok", type=int, default=BASELINE_OK)
+    parser.add_argument("--jobs", type=int, default=min(16, (os.cpu_count() or 4)))
+    parser.add_argument("--list-failures", action="store_true")
+    args = parser.parse_args()
+
+    musl = pathlib.Path(args.musl_dir).resolve()
+    clang = os.environ.get("CAPSTONE_CLANG")
+    if not clang or not pathlib.Path(clang).exists():
+        print(f"ERROR: CAPSTONE_CLANG not set or missing: {clang!r}", file=sys.stderr)
+        return 2
+    for needed in ("arch/capstone64/syscall_arch.h", "obj/include/bits/alltypes.h"):
+        if not (musl / needed).is_file():
+            print(f"ERROR: tree not prepared, missing {musl / needed}\n"
+                  f"       run prepare-musl-capstone.sh first", file=sys.stderr)
+            return 2
+
+    foreign = set(os.listdir(musl / "arch")) - FOREIGN_ARCH_KEEP
+    every = sorted((musl / "src").rglob("*.c"))
+    if not every:
+        print(f"ERROR: no .c files found under {musl / 'src'}", file=sys.stderr)
+        return 2
+    files = [f for f in every
+             if not (set(f.relative_to(musl).parts) & foreign)]
+    dropped = len(every) - len(files)
+    if not files:
+        print(f"ERROR: every source was filtered out as foreign-arch", file=sys.stderr)
+        return 2
+
+    flags = compile_flags(musl)
+
+    def compile_one(path: pathlib.Path) -> tuple[str, bool, str]:
+        rel = str(path.relative_to(musl))
+        done = subprocess.run([clang, *flags, "-c", str(path), "-o", "/dev/null"],
+                              capture_output=True, text=True)
+        if done.returncode == 0:
+            return rel, True, ""
+        # An LLVM assertion failure prints "Assertion `...' failed." and only
+        # then a generic "error: ... exit code 134". Matching on "error:" alone
+        # buckets every backend crash as "unknown", which is how 62 files ended
+        # up in one meaningless pile on the first run. Prefer the specific line.
+        lines = done.stdout.splitlines() + done.stderr.splitlines()
+        first = next((l for l in lines
+                      if "error in backend:" in l or "Assertion" in l
+                      or "UNREACHABLE" in l), None)
+        if first is None:
+            first = next((l for l in lines if "error:" in l), "<no error line>")
+        return rel, False, first[:400]
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        results = list(pool.map(compile_one, files))
+
+    ok = [r for r in results if r[1]]
+    bad = [r for r in results if not r[1]]
+    by_path = {r[0]: r[1] for r in results}
+
+    print(f"musl tree      {musl}")
+    print(f"compiler       {clang}")
+    print(f"surveyed       {len(files)} files ({dropped} foreign-arch sources excluded)")
+    print(f"compiled       {len(ok)}")
+    print(f"failed         {len(bad)}   ({100 * len(ok) / len(files):.1f}% ok)")
+
+    print("\nfailures by cause:")
+    for cause, count in collections.Counter(bucket(r[2]) for r in bad).most_common():
+        print(f"  {count:5d}  {cause}")
+    print("\nfailures by directory:")
+    for where, count in collections.Counter(
+            str(pathlib.PurePath(r[0]).parent) for r in bad).most_common(15):
+        print(f"  {count:5d}  {where}")
+    if args.list_failures:
+        print("\nfailing files:")
+        for r in sorted(bad):
+            print(f"  {r[0]}\n      {r[2]}")
+
+    status = 0
+    for control, must_pass in ((CONTROL_MUST_PASS, True), (CONTROL_MUST_FAIL, False)):
+        got = by_path.get(control)
+        if got is None:
+            print(f"\nERROR: control {control} was not surveyed at all", file=sys.stderr)
+            status = 2
+        elif got is not must_pass:
+            print(f"\nERROR: control {control} expected "
+                  f"{'PASS' if must_pass else 'FAIL'} but got "
+                  f"{'PASS' if got else 'FAIL'}.\n"
+                  f"       The harness is not measuring what it claims. If this is an "
+                  f"intended improvement, retire the control deliberately.",
+                  file=sys.stderr)
+            status = 2
+    if status:
+        return status
+
+    if len(ok) < args.expect_ok:
+        print(f"\nREGRESSION: {len(ok)} compiled, baseline is {args.expect_ok}",
+              file=sys.stderr)
+        return 1
+    if len(ok) > args.expect_ok:
+        print(f"\nIMPROVED: {len(ok)} compiled, baseline is {args.expect_ok}. "
+              f"Raise BASELINE_OK.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
