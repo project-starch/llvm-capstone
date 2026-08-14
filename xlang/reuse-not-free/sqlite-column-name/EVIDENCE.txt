@@ -1,0 +1,14 @@
+before step: name0 ptr=0x52e00000bea8 "alpha"   name1 ptr=0x52e00000a8a8 "beta"
+schema change on conn B: rc=0
+step rc=100
+after step: name0 ptr=0x52e00000aa28 "alpha"  (different address)
+stale pointer 0x52e00000bea8 now reads "��"  -> CONTENT CHANGED
+=== lookaside OFF ===
+=================================================================
+==284969==ERROR: AddressSanitizer: heap-use-after-free on address 0x504000002298 at pc 0x7229baec6ec1 bp 0x7fff3b90f030 sp 0x7fff3b90e7d8
+READ of size 6 at 0x504000002298 thread T0
+    #0 0x7229baec6ec0 in strcmp ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors.inc:471
+    #1 0x62e18bfa27bc in main <repo>/xlang/reuse-not-free/sqlite-column-name/colname_nolk.c:37
+    #2 0x7229baa2a1c9 in __libc_start_call_main ../sysdeps/nptl/libc_start_call_main.h:58
+    #3 0x7229baa2a28a in __libc_start_main_impl ../csu/libc-start.c:360
+    #4 0x62e18bfa22c4 in _start (/tmp/c2+0x12c4) (BuildId: a72cbc05fd1699cae4c1448854863051026cd972)

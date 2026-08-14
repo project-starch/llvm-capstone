@@ -1,0 +1,24 @@
+### ARM A (control: strdup/free/read) — ASan MUST fire
+=================================================================
+==284817==ERROR: AddressSanitizer: heap-use-after-free on address 0x503000000040 at pc 0x5fcf6cd3f3e7 bp 0x7fff60b6cb20 sp 0x7fff60b6cb10
+READ of size 1 at 0x503000000040 thread T0
+    #0 0x5fcf6cd3f3e6 in arm_control <repo>/xlang/reuse-not-free/sqlite-column-text/sqlite_asan.c:18
+
+### ARM B (subject: column_text across step) — ASan silent?
+sqlite: borrowed ptr=0x52e00000b828 content=AAAA
+sqlite: after step, same ptr 0x52e00000b828 reads BBBB
+sqlite version: 3.45.1
+
+=== EXP 1: SELECT v FROM t  (column_text pointer across steps) ===
+row 0: ptr=0x5dd91bb3d988  content="AAAA..."  
+row 1: ptr=0x5dd91bb3d988  content="BBBB..."  SAME ADDRESS AS PREVIOUS ROW
+row 2: ptr=0x5dd91bb3d988  content="CCCC..."  SAME ADDRESS AS PREVIOUS ROW
+row 3: ptr=0x5dd91bb3d988  content="DDDD..."  SAME ADDRESS AS PREVIOUS ROW
+
+=== EXP 2: borrow across a step (the class-A pattern) ===
+borrowed ptr = 0x5dd91bb3c608, content at borrow time = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+after next sqlite3_step(): SAME pointer 0x5dd91bb3c608 now reads "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+verdict: DATA IDENTITY CHANGED IN PLACE (reuse-not-free)
+
+=== EXP 3: blob column (no NUL-termination copy) ===
+sqlite3 version: 3.45.1
