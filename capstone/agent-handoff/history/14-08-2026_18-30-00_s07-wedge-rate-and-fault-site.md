@@ -71,13 +71,41 @@ capability. Provenance may modulate the rate; it cannot be the cause. This is wr
 because it is the rung somebody will otherwise build next, and four such rungs have already come
 back 65535.
 
+## Boot 2 — four consecutive passes, then an entry stall
+
+| # | domain | verdict |
+|---|---|---|
+| 1 | `L2.dom` | RETURNED — **boot VALID** |
+| 2–5 | `G6.dom` ×4 | `obs=0x5A6E0603` each, byte-identical |
+| 6 | `G6.dom` | **ENTRY STALL** (R-16) — no `SQ: G/enter`; NO VERDICT, excluded |
+
+The latched state is the useful confirmation here, because "did not return" looks the same for a
+wedge and an entry stall and the driver reads the debug mux for both:
+
+```
+sw=255  = 0x89  -> seen, mcause 9 = ECALL-from-S-mode
+mepc            = 0xffffffff800072cc  (a KERNEL VA)
+```
+
+That is not a domain fault, it is ordinary kernel activity latched before the domain would have
+run — exactly what an entry stall must look like, and exactly what the driver's own comment warns
+will be misread as "the domain took a capability fault". Classification on `SQ: G/enter` and the
+latched state agree, independently.
+
 ## Running total
 
-Six prior genuine executions (5 pass, 1 wedge, plus one entry stall excluded) and boot 1's two
-(1 pass, 1 wedge): **8 genuine executions, 2 wedges**. The README's "roughly 5 of 6 succeed" is
-already stale and will be restated once boots 2 and 3 land. Boots 2 and 3 are pure repetitions —
-deliberately not a new rung, since the rate is what the claim depends on and one data point is
-not a reason to abandon the design mid-experiment.
+| source | genuine | passed | wedged | entry stalls (excluded) |
+|---|---|---|---|---|
+| prior record | 6 | 5 | 1 | 1 |
+| boot 1 | 2 | 1 | 1 | 0 |
+| boot 2 | 4 | 4 | 0 | 1 |
+| **total so far** | **12** | **10** | **2** | **2** |
+
+So p(wedge) per execution is **2/12 ≈ 17%**, and the README's "roughly 5 of 6 succeed" happens to
+survive contact with four times the data. Boot 3 pending.
+
+Boots 2 and 3 were deliberately pure repetitions rather than a new rung: the rate is what the
+claim depends on, and one boot is not a reason to abandon a design mid-experiment.
 
 ## An instrument note worth keeping
 
