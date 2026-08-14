@@ -248,3 +248,41 @@ The in-domain instrument (`BEEBS_MEMCPY_TAGCHECK`) is built, positive-controlled
 Two readings remain open and unseparated: the faulting call is not on the instrumented path (the
 chunk loop rather than the byte tail), or the destination is tagged at the check and untagged at
 the use. The second is the stronger claim and has no evidence yet.
+
+
+## The residual defect: five shapes refuted, and what disassembly rules out
+
+Chasing the mcause-25 `memcpy` fault (extended phase 2->3, `ldc` reload of the destination pointer
+comes back NOT_CAP). Every arm below is a silicon measurement with a positive control that fires:
+
+| test | question | silicon |
+|---|---|---|
+| `s06spill` | does a spilled capability come back TAGGED? | 65535 |
+| `s06bnds` | ...with its BOUNDS intact? | 65535 |
+| `s06wr` | ...surviving byte stores written THROUGH it? | 65535 |
+| `s06pld` | ...surviving a scalar load of its own granule? | 65535 |
+| `EVICT` (in-domain) | ...surviving a full 256 KiB cache eviction? | ty0=1 ty1=1, cursor unchanged |
+
+**Disassembly rules out two more.** Listing every instruction in `memcpy` that touches the faulting
+slot gives `stc`, one plain `ld`, and three `ldc` — **zero plain stores**. So it is not correct
+tag-clearing on a partial overwrite, and it is not the write-buffer `.user` clobber
+(`wt_dcache_wbuffer.sv:602`), which needs a coalescing plain STORE to the same word.
+
+So every simple property of the round trip is sound on this hardware, and the trigger is something
+none of these has.
+
+**Untested axis worth trying next: capability TYPE.** Every rung above spills a pointer to a static
+array, which is NONLIN. Capstone has LINEAR capabilities, `stc` writes cnull back into rs2 for
+LINEAR/UNINIT/SEALED, and this very file already carries a `BEEBS_STRING_LINEAR_SAFE` knob — so
+linearity has bitten these primitives before. A LINEAR destination is a shape none of the five
+covers.
+
+Also open, from the RTL side: R-20 was a register-specific forwarding bug (x10) that has since been
+fixed; the fault here is on `a2`, and nobody has audited `issue_read_operands.sv` for an analogue on
+another register.
+
+**Harness limits found while doing this**, both recorded so they are not rediscovered: a ladder rung
+cannot test the real `memcpy` (`build-ladder-domain.sh` compiles one C file and does not link
+`beebs_freestanding_string.c`), and a rung cannot hold a buffer big enough to force eviction (8 KiB
+fails to link, `.text` overlapping `.capstone_gp_initdesc`) — which is why the eviction test lives
+in the SQLite domain.
