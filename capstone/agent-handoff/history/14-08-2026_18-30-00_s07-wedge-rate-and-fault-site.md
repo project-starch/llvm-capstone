@@ -145,3 +145,48 @@ From boot 2 onward the console's connect-time replay contains a **previous boot 
 `TEST n/9` shape**. Anchoring a regex in the driver log therefore fuses the replayed boot with
 the live one and silently double-counts. Boot 1 survived this only because its replay was the
 older 6-test boot. Classify from `PROBE_SCOPED_OUT` — that file exists for exactly this reason.
+
+## The operand probe perturbs the workload — measured, not suspected (2026-08-14, later)
+
+`cincoffset`'s guard has two arms (`capstone_flu_unit.anvil:29-31`: raise if rs1 is NOT_CAP **or**
+rs2 is not-NOT_CAP), so every wedge measured so far is ambiguous between "the capability lost its
+tag" and "the offset gained one". To settle it, `output_text` was instrumented to query the type of
+both operands per iteration and, on a lost tag, reload through the same stack slot and query again.
+
+**The instrument works.** Its control arm (`PS.dom`, `-DCAPSTONE_OPERAND_PROBE_SELFTEST`) returned
+`0x5B400000` on two separate boots — the LCC field-1 query reports NOT_CAP on this silicon, the
+counters accumulate, and the value survives the return path.
+
+**The instrumented build does not reach the code under test.** One boot, control-validated,
+alternating arms:
+
+| arm | rows | SQLite | result |
+|---|---|---|---|
+| `L2` | — | — | returned — boot VALID |
+| `P1` (probe) | 0 | `ERR create rc=11` | returned |
+| `G6` (no probe) | **3** | clean | `obs=0x5A6E0603` |
+| `P1` (probe) | 0 | `ERR create rc=11` | returned |
+| `G6` (no probe) | **3** | clean | `obs=0x5A6E0603` |
+| `P1` (probe) | 0 | — | entry stall |
+
+`G6` succeeds twice in the boot where `P1` fails twice, so this is neither the board nor a toolchain
+drift: **the ~85 instructions the probe adds to `output_text` are the whole difference**, and they
+turn a working CREATE into `rc=11` (SQLITE_CORRUPT, malformed schema). Excluded without a boot: the
+granule guard is present (512 `lcc` in `P1` against 511 in `G6`) and the R-14 workaround is
+default-on.
+
+### Why this matters beyond a failed experiment
+
+1. **It is evidence about the defect.** The failure is **layout-sensitive**, not workload-sensitive:
+   the same source, same flags, same guard, same board, differing only by instructions added to one
+   function, fails at a completely different and much earlier point. That is the S-01
+   image-perturbation class, and it means an S-07 mechanism proposal must explain sensitivity to
+   image layout.
+2. **It sets the protocol for every future in-frame instrument here.** An instrumented arm must be
+   run **against its uninstrumented twin in the same boot**. Had `P1` been run alone — as the first
+   probe boot did — `create rc=11` would have looked like a discovery about SQLite rather than an
+   artifact of measuring it. The matched pair cost one boot and converted a false lead into a fact.
+
+**Still open:** whether the untagged operand is rs1 or rs2. The instrument is proven; what is needed
+is a way to ask that does not move the image — a strictly smaller probe, or a binary patch of the
+`G6` bytes rather than a recompile.
