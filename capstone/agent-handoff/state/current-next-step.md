@@ -36,6 +36,26 @@ controls, and the obvious fifth — that monitor-granted cross-domain capabiliti
 kind — is already refuted by the lookaside instance, an ordinary heap capability. The folder poses
 the type/provenance question to the hardware side; build a rung when they name the shape.
 
+### BLOCKED ON REPO ACCESS — the QEMU monitor fix cannot be published
+
+The gp-carve fix that un-reds the core tier lives three submodules deep, and the two inner
+repos reject this account's push:
+
+```
+project-starch/capstone-sbi.git      403  (commit 1a926b0, the actual fix)
+project-starch/capstone-opensbi.git  403  (commit d241d75, the gitlink bump)
+```
+
+`caplifive-buildroot` DID push (`1e0be51`) and its recorded `components/opensbi` gitlink
+`d241d75` therefore **does not exist on that remote**. Anyone running `git submodule update
+--recursive` against it will fail on that gitlink. The parent repo was pushed with docs only and
+its submodule pointers deliberately NOT bumped, so the parent itself still references only
+commits that exist.
+
+**Needed from the project lead:** write access to `capstone-sbi` and `capstone-opensbi`, or forks
+to push to instead. Until then the fix is validated but unpublished, and the buildroot gitlink is
+dangling.
+
 ---
 
 ## 0-PRE. HISTORICAL (2026-08-12) — written while the current bitstream was in synthesis
