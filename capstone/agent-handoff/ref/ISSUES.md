@@ -12,6 +12,88 @@ Last updated 2026-08-14.
 
 ---
 
+## C-23 — the address of an UNDEFINED WEAK symbol is not null · `CHARACTERISED 2026-08-14, worked around by not using the idiom`
+
+**The C idiom that does not work here:**
+
+```c
+extern void f(void) __attribute__((weak));
+if (f) f();          /* on this target: the branch is taken and f() is CALLED */
+```
+
+**Emitted for an undefined `__stdio_exit`, from `file_probe.dom`:**
+
+```
+   10c5c: auipc a1, 0xfffef        <- pc-relative, so NOT zero
+   10c60: addi  a1, a1, 0x3a4
+   10c64: cincoffset a2, gp, a1
+   10c74: beqz  a2, 0x10c80        <- never taken
+   10c7c: cjalr ra, 0(a0)          <- calls a symbol that does not exist
+```
+
+The symbol really is undefined in the image (`llvm-nm` shows `w __stdio_exit`, weak with no
+address), so the null test is the only thing standing between the program and the call, and it
+does not fire. Elsewhere a linker relaxes an undefined-weak `auipc`/`addi` pair to materialise 0;
+here the pair survives and the pc-relative value is whatever it is.
+
+**How it presented**, which is the part worth remembering: `file-probe` printed
+`__CAPSTONE_FILE_PROBE_PASSED__` and *then* took a capability fault (`cause = 2, pc =
+0x101590000`). Everything the probe tested had already succeeded; the fault was in the runtime's
+exit path, added the same day. A marker-based verdict that stops reading at PASSED would have
+called that run green.
+
+**Workaround:** do not test a weak function pointer. `runtime/hostcall.c` now calls
+`__stdio_exit()` unconditionally and relies on musl's own weak *definition* (a no-op in
+`src/exit/exit.c`, overridden by the real one in `__stdio_exit.o` when a FILE is used) — a weak
+DEFINITION behaves correctly; it is the undefined-weak ADDRESS that does not.
+
+**Not investigated:** whether this is lld's relaxation or the backend's pc-relative lowering, and
+whether an undefined weak *data* symbol behaves the same way. Both are worth knowing before anyone
+relies on the idiom again.
+
+---
+
+## C-22 — at `-O1` an integer is selected as a `cincoffsetimm` BASE · `WORKED AROUND 2026-08-14 by building vfprintf at -O0`
+
+**Symptom:** `qemu-system-riscv64: op_helper.c:626: helper_cscincoffsetimm: Assertion 'rs1_v->tag'
+failed.` The domain dies; on silicon this would be a capability fault.
+
+**Where it comes from.** musl's `fmt_u` (the `*--s = '0' + y%10` digit loop) inlined into
+`fmt_fp`, over the local `char ebuf0[3*sizeof(int)], *ebuf=&ebuf0[12]`. The optimiser splits the
+pointer into a capability base and an integer index; the index is i128 — the same width as a
+capability on this target — and its decrement is then selected as capability arithmetic:
+
+```
+2582:  li             a1, 12          <- the index, an INTEGER
+2584: .LBB1_325:
+2589:  cincoffsetimm  a1, a1, -1      <- capability arithmetic on it
+2598:  cincoffset     a5, a1, s7      <- and the capability ends up in the OFFSET position
+2599:  sb             a4, 0(a5)
+```
+
+`a1` has exactly two reaching definitions — `li a1, 12` in the preheader and the
+`cincoffsetimm` on the back edge — so no path brings a tagged capability into it. That much is
+settled by the listing. **Which pass introduces the split is NOT established**, and the entry
+claims nothing about it.
+
+**Counts, from `libc-ext/scan-cap-base.py` over musl's vfprintf:** `-O0` **0** sites, `-O1` **6**,
+`-O2` **3**. Hence the workaround: `build-musl-capstone.sh` builds the generated vfprintf at `-O0`
+and the scanner runs as a build gate (with its own self-test, so a zero means something).
+
+**Localised by, and reproducible with:** `musl-capstone/printf-probe`, which reaches
+`%d %u %x %o %c %s` and faults on the first `%08.3f`.
+
+**Reduction attempts FAILED.** The obvious two-line digit loop, and the same loop over a local
+buffer with a constant end offset, both compile clean at `-O0/-O1/-O2`. Whatever the trigger is,
+it needs more of `fmt_fp` than that, so there is no small test case yet and the lit suite cannot
+lock this down.
+
+**Related and already handled elsewhere:** the backend does canonicalise `cap + int` so the
+capability lands in `rs1` — `llvm/test/CodeGen/Capstone/cap-cincoffset-base.ll`,
+`isCapstoneCapabilityValue`. This is a gap in that classifier, not its absence.
+
+---
+
 ## C-21 — casting a NEGATIVE integer constant to a capability crashed clang's constant evaluator · `FIXED 2026-08-14`
 
 **One line reproduces it**, at `-O0`, `-target capstone64-unknown-elf`:
