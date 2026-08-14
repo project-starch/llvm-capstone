@@ -54,9 +54,16 @@ of which share a caller.
 > reloaded capability lost its tag" and "the integer offset gained one" are indistinguishable in the
 > data we have.
 >
-> **Instance 3 is unambiguous** and anchors the thesis: it faults *at* the `ldc`, whose guard is
-> rs1-only (`capstone_dyn_unit.anvil:327-330`). So at least one genuine "a register that should hold
-> a capability is NOT_CAP" event is established — by one instance, not three.
+> **TWO observations are unambiguous** and together anchor the thesis:
+>
+> 1. instance 3, which faults *at* the `ldc` — its guard is rs1-only
+>    (`capstone_dyn_unit.anvil:327-330`);
+> 2. `sqlite3_strnicmp+0x134`, faulting at `cincoffsetimm a0, a0, 1` — the **immediate** form, whose
+>    guard also has no rs2 arm (`capstone_flu_unit.anvil:57-61`). Recorded in
+>    `src/s06spill_kernel.h:9-16`.
+>
+> So "a register that should hold a capability is NOT_CAP" **is established**. What remains open is
+> whether the two `cincoffset` instances are the same mechanism or a second, rs2-side one.
 >
 > Sentences below reading `<== mcause 25: aN is NOT_CAP` for instances 1 and 2 are therefore an
 > INTERPRETATION that was stated as a measurement. The discriminating query is cheap and is in
@@ -104,11 +111,11 @@ all three controls passing.
 
 | source | genuine executions | passed | **wedged** | entry stalls (excluded) |
 |---|---|---|---|---|
-| earlier record (its one wedge was at `output_text+0xdc`, the same instruction) — **one of these 6 is not present in any surviving transcript; a recount from raw logs gives 5, i.e. 12 genuine overall rather than 13** | 6 | 5 | 1 | 1 |
+| earlier record (its one wedge was at `output_text+0xdc`, the same instruction) | 5 | 4 | 1 | 1 |
 | boot 1 | 2 | 1 | 1 | 0 |
 | boot 2 | 4 | 4 | 0 | 1 |
 | boot 3 | 1 | 0 | 1 | 0 |
-| **total** | **13** | **10** | **3** | **2** |
+| **total** | **12** | **9** | **3** | **2** |
 
 **The "entry stalls" column is MISLABELLED and it is not R-16.** Those arms stop far earlier, at
 `SQ: id=5` with `RGNO:0000E00C` / `RGNN:00000020` — deterministic **monitor region-pool exhaustion**
@@ -117,7 +124,7 @@ both measurement windows, so the exclusion is symmetric and cannot bias the comp
 mean **every boot is structurally capped at about 4 genuine `G6` executions**, which is the real
 reason accumulating samples is slow.
 
-**p(wedge) ≈ 3/13 ≈ 23% per execution.** An R-16 entry stall is excluded from both numerator and
+**p(wedge) = 3/12 = 25% per execution.** An R-16 entry stall is excluded from both numerator and
 denominator — an image that never entered says nothing about the code in it, so counting one as a
 failure would be wrong. Each boot stops at its first failure, so these are censored run-lengths,
 not 8+8+8 independent trials.
@@ -162,10 +169,11 @@ wedge does not establish a deterministic trigger.
 >   instrumented one failed twice.
 > * **THE DEFECT MAY HAVE STOPPED REPRODUCING — but this is NOT established, and an earlier version
 >   of this note overstated it.** Since the rate was measured, `G6.dom` (byte-identical throughout)
->   has wedged 0 times in 14 further genuine executions. On the **like-for-like** comparison — the
->   same initramfs that is the only configuration ever observed to wedge — it is **0 in 8**, which
->   is **Fisher exact p = 0.26: no evidence of a change at all**. Across all images it is 0 in 14,
->   p = 0.098, still not significant.
+>   has wedged **0 times in 18 further genuine executions** (4 of them on the byte-identical
+>   *firmware*, recovered from the console's content-addressed image store). On the
+>   **like-for-like** comparison — the same initramfs, the only configuration ever observed to
+>   wedge — it is **0 in 8**: Fisher exact **p = 0.24, no evidence of a change at all**. Pooling all
+>   18 gives p = 0.054, suggestive and no more.
 >
 >   The previously published "0 in 25, p = 0.0015, Fisher 0.034" is **WITHDRAWN**. It pooled in 11
 >   executions of a *patched* binary built specifically under a hypothesis that predicts it will not
@@ -298,7 +306,7 @@ comes back TAGGED, memory was never wrong and the fault is in register delivery.
 ## Impact
 
 The **basic** workload — CREATE / INSERT / SELECT returning all three rows / finalize — runs to
-completion on silicon roughly **77%** of the time, and wedges at `output_text+0xdc` the rest. The
+completion on silicon **75%** of the time (9 of 12), and wedges at `output_text+0xdc` the rest. The
 **full** workload wedges at instance 3. So SQLite does execute on this hardware; what it does not
 do is execute reliably, and the failure is in the domain's own output writer rather than in the
 database engine.
@@ -316,6 +324,28 @@ database engine.
 * `src/` — the four exclusion rungs (`s06spill`, `s06bnds`, `s06wr`, `s06pld`), each self-checking
   with a `*_SELFTEST` build that must return 0.
 * `run.sh` — rebuilds and stages the exclusion rungs and prints what each should return.
+
+**Not in this folder, and how to get it.** The domain binaries the board measurements were taken on
+(`G6.dom`, sha256 `f93a9188a9a4433c…`, and the patched `G6P.dom`, `8f77d68dbb780dfb…`) are **not
+shipped here** — they are ~1.6 MB SQLite domains. Ask and we will send them, or the disassembly
+window around the faulting instruction. The harness that produced every run, and the definitions of
+"genuine execution", "wedge" and "entry stall" as used above, is
+`capstone/tests/rtl-smoke/fpga_driver/run_sqlite_stages_fpga.py`. `src/s06pld_kernel.h` ends with
+"See s06evict" — that rung is not in this folder either; ask if you want it.
+
+**A DIFFERENT SIGNATURE ALSO EXISTS, and if that is what brought you here, this is the wrong
+folder.** `src/s06bnds_kernel.h:12-21` records five wedges from the same board on the same day with
+**mcause 29 (OUT_OF_BOUNDS)**, at `vdbeMemClearExternAndSetNull+0x3c` — there the reloaded value is
+**TAGGED** and it is the bounds that are wrong. That is a separate phenomenon from S-07's mcause 25
+and is not analysed here.
+
+**On the exclusion rungs' positive controls.** The `0xFFFF` results are from silicon; the controls
+that prove the query can report NOT_CAP were exercised **under QEMU**, and on a different build —
+`run.sh` notes the board runs the `_fpga_app.c` variant, which is not the same bytes as the `_app.c`
+variant QEMU runs (24-byte result region instead of 8). The one control that *was* demonstrated on
+silicon is the operand probe's, which returned `0x5B400000` on two separate boots
+(`board/G6P-DISCRIMINATOR.md`). Treat the rung controls as strong-but-simulated rather than proven
+on hardware.
 
 **What we are asking for.** Not agreement — a check. Two of the three mechanisms we could not settle
 from the sources, and each has an experiment that kills it. The one we would run first is board-free
