@@ -1,7 +1,7 @@
 # FPGA reproducer packages
 
 Self-contained reproducers for the RTL/FPGA issues in
-`capstone/agent-handoff/ref/ISSUES.md`. One directory per issue, named `R<nn>-<slug>`.
+`capstone/agent-handoff/ref/ISSUES.md`. One directory per issue, named `R<nn>-<slug>` (RTL-level) or `S<nn>-<slug>` (observed on silicon, cause not yet localised to a specific RTL site).
 
 These used to live in `/tmp/capstone/*.tar.gz`, which meant every one of them was lost on
 reboot and none could be reviewed, diffed or bisected. ISSUES.md says an issue without a
@@ -18,6 +18,7 @@ reproducer is not an issue; a reproducer that only exists in `/tmp` is not much 
 | `R19-movc-zero-metadata-in-slot/` | **R-19** | the **metadata-in-slot** signature — the store's own slot comes back holding `compress_cap(NULL) + n`, e.g. `0x08000A31` = `0x08000000` + 2609, where the program only ever wrote an integer. Does **not** reproduce in RTL simulation. Shares a trigger class and a workaround with R-18; whether they are one defect or two is **unknown** |
 | `R20-stc-rs1-cursor-forward-x10/` | **R-20** | after `stc rX,0(a0)`, a `ld a0,0(a0)` is read by the **next instruction** as the store's BASE ADDRESS, not the loaded value. Only on **x10/a0** (the same shape on `t1` is clean), only with a **capability** store (`sd` is clean), and only while both adjacencies hold — one `nop` either side cures it. Corrupts no memory. Reproduced standalone in a **13 KB** rung; the poisoned value is measured, not inferred |
 | `S06-untagged-ldc-stc-high-half/` | **S-06** | a 16-byte `ldc`/`stc` round trip over **plain, untagged** data keeps only its **low 8 bytes** — each chunk loses its high half. That pair is the only copy that preserves capability **tags**, so it is what every pointer-bearing struct is copied with, and half of every such buffer is silently destroyed. Corrupts **memory**, unlike R-20. Root cause read out of the D-cache (`wt_dcache_mem.sv:310` force-zeroes bank 1 when the shadow tag is clear; `:140` then gates the store on metadata *content* so it never writes the high half). Reproduces in **RTL simulation in 499 cycles with its own control**, and standalone on the board in a **10 KB** rung that returns 16 where 32 is correct. QEMU has an explicit `scalar_hi` field for this case and cannot show it |
+| `S07-capability-untagged-on-reload/` | *(open, not root-caused)* | a **genuine capability** read back from memory comes back **UNTAGGED**, so the next `cincoffset`/dereference raises **mcause 25**. Three instances in three unrelated functions — a `memcpy` stack slot, the shared-region payload capability in `output_text`, and SQLite's lookaside pointer — so it is not specific to any caller or primitive. **SPORADIC**: the same binary passes 5 of 6 genuine executions and wedges once. **NOT S-06** (that is plain data losing its high half, and raises nothing); do not merge them. Four rungs with firing controls exclude the simple round-trip properties, and disassembly excludes a partial overwrite and the write-buffer `.user` clobber |
 | `ARCHIVED/` | — | packages whose defect is **fixed in silicon**; see `ARCHIVED/README.md` |
 
 **Archived 2026-08-04:** both R-14 packages (`R14-frame-pad/`, `R14-strline-struct/`) moved to
