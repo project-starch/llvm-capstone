@@ -85,6 +85,18 @@ One thing this does NOT show, because the overstatement is close by: the low 22 
 `mepc` values are identical, so every cache set index is the same in both. A **set-dependent**
 mechanism is not excluded by this data.
 
+**"Isn't that just the hottest loop?"** — the first fair objection, and no. `output_text` writes
+the domain's output one byte per iteration, so it looks like a hot loop, but per execution it
+writes only ~278 characters (3 result rows plus 15 `SQ:` markers) — on the order of 2 000
+instructions, against a basic SQLite workload of at least a hundred thousand. That is under ~2% of
+the run. Three independent wedges all landing inside a ≲2% region is p ≈ 10⁻⁵ under a uniform
+fault; the concentration is real, not a sampling artifact of instruction frequency.
+
+The same objection, answered the other way: if the trigger were something time-based rather than
+site-based — an interrupt landing between the `ldc` and its consumer, say, with the domain context
+save/restore losing a tag — the wedges would scatter across the workload in proportion to execution
+time. They do not.
+
 Any experiment on this defect needs repetition: a single passing boot proves nothing, and a single
 wedge does not establish a deterministic trigger.
 
