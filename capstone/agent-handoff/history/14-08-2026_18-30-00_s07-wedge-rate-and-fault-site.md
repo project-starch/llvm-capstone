@@ -190,3 +190,50 @@ default-on.
 **Still open:** whether the untagged operand is rs1 or rs2. The instrument is proven; what is needed
 is a way to ask that does not move the image — a strictly smaller probe, or a binary patch of the
 `G6` bytes rather than a recompile.
+
+## The binary patch: layout preserved, experiment still void — because the CONTROL stopped wedging
+
+The recompiled probe perturbed the image, so the next attempt changed **4 bytes** of `G6.dom`
+in place: `cincoffset a1, a1, a2` -> `cincoffsetimm a1, a1, 0` at VA `0x1516a8`. File size
+identical, every other byte untouched. `CINCOFFSETIMM`'s guard (`capstone_flu_unit.anvil:57-61`)
+checks `rs1 == NOT_CAP` and has **no rs2 arm**, so the patched arm can still fault on the reloaded
+capability but can no longer fault on the offset. A single wedge would have confirmed rs1 outright.
+
+Guards before spending a boot: refused to patch unless the four bytes were exactly `db 95 c5 18`;
+derived the replacement encoding from two real instructions in the same binary rather than
+hand-assembling; disassembled to confirm `cincoffsetimm a1, a1, 0x0`; confirmed in the anvil that
+the replacement can still fault; asserted `G6` and `G6P` differ inside the initramfs.
+
+Four control-validated boots, arms alternating so both counts come from identical conditions:
+
+| arm | genuine executions | wedged |
+|---|---|---|
+| `G6P` (rs2 arm removed) | 11 | **0** |
+| `G6` (unmodified control) | 6 | **0** |
+
+**The control stopped wedging as well, so the comparison is void.** `G6.dom` used to wedge 3 times
+in 13 genuine executions; it now wedges 0 in 6, and the two arms together are 0 in 17 where ~4 were
+expected. P(0 in 17 | the 23% rate still held) = 0.77^17 = **0.012**; Fisher exact two-sided on
+before-vs-after = **0.070**. The patch cannot be credited for any of it.
+
+### What actually changed, and why it matters more than the experiment
+
+`G6.dom` is byte-identical across both measurements — verified by hash in the cpio. What changed is
+the **initramfs**, which gained three ~1.6 MB domains (`P1`, `PS`, `G6P`) between the two. That
+moves the physical placement of everything the kernel subsequently allocates.
+
+So this is the second independent demonstration in one session that S-07 is sensitive to something
+outside the domain binary:
+
+1. adding ~85 instructions to `output_text` turned a working CREATE into `rc=11`;
+2. adding unrelated domains to the image suppressed the wedge entirely across 17 executions.
+
+**Consequences that must be written into the handover folder:** the ~23% rate is a property of a
+whole image, not of `G6.dom`, and anyone trying to reproduce S-07 from the domain alone may see
+nothing. It also promotes **physical placement** (cache set index, DRAM row, bank) from "not
+excluded" to the leading structural suspect, which fits the earlier observation that the two
+recorded wedge `mepc` values shared their low 22 bits and therefore every set index.
+
+**Still unanswered: rs1 or rs2.** The patch is correct and ready; it needs an image in which the
+control demonstrably still wedges. The cheapest route is to restore the exact initramfs the 3/13
+measurement was taken on, add ONLY `G6P`, and re-run the alternating pair.
