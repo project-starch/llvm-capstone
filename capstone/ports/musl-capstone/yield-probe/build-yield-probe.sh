@@ -70,7 +70,8 @@ else
   -ffreestanding -O0 -c "$START_SRC" -o "$OBJ_DIR/start-musl.o"
 
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
-  -ffreestanding -fno-builtin -fno-jump-tables -ffunction-sections -fdata-sections \
+  -ffreestanding -fno-builtin -fno-jump-tables -fno-optimize-sibling-calls \
+  -ffunction-sections -fdata-sections \
   -O1 -c "$SCRIPT_DIR/yield_probe_domain.c" -o "$OBJ_DIR/yield_probe_domain.o"
 
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \

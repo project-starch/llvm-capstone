@@ -77,6 +77,21 @@ test:
   sd a0, 64(sp)
   stc(a1, sp, 80)
 
+  /* THREAD POINTER. musl reaches errno as `tp - 0x124`
+     (__errno_location: `mv a0, tp; addi a0, a0, -0x124`), so an unset tp makes
+     the first failing syscall fault in __syscall_ret instead of returning -1.
+     Measured that exact way: helper_cscincoffset on an untagged base, with the
+     real error hidden behind it.
+     A domain has no threads, so tp does not need a real TLS image -- it needs to
+     be a capability with enough room below it for errno_val. The block is
+     1024 bytes and tp points at its middle, which covers the 0x124 reach with
+     margin. gp covers the whole image, so deriving from gp is in bounds. */
+  .Lpcrel_tls:
+  auipc t0, %pcrel_hi(__capstone_tls)
+  addi t0, t0, %pcrel_lo(.Lpcrel_tls)
+  addi t0, t0, 512
+  cincoffset tp, gp, t0
+
   /* Stash the sealed-return capability where the yield can find it.
      `ra` holds it on EVERY entry, which is why the shared glue can do
      `stc(ra, sp, 48)` here and still work across SQLite's three entries. The
@@ -228,6 +243,7 @@ __capstone_yield:
   stc(s9, sp, 176)
   stc(s10, sp, 192)
   stc(s11, sp, 208)
+  stc(tp, sp, 224)
 
   .Lpcrel_domret_load:
   auipc t3, %pcrel_hi(__capstone_dom_ret)
@@ -263,6 +279,7 @@ __capstone_yield:
   ldc(s9, sp, 176)
   ldc(s10, sp, 192)
   ldc(s11, sp, 208)
+  ldc(tp, sp, 224)
   cincoffsetimm(sp, sp, 256)
   ret
 
@@ -279,3 +296,11 @@ __capstone_gct_start:
   .global __capstone_dom_ret
 __capstone_dom_ret:
   .zero 16
+
+/* Backing store for the thread pointer. Not a TLS image: just addressable,
+   writable space so musl's errno has somewhere to live in a domain that has no
+   threads. */
+  .align 4
+  .global __capstone_tls
+__capstone_tls:
+  .zero 1024

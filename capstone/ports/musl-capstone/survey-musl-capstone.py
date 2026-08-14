@@ -30,23 +30,21 @@ import sys
 
 # Pinned baseline: the OK count this port is known to reach. Raise it when a
 # patch improves things (that is the point), never lower it to make a run pass.
-BASELINE_OK = 1270
+#
+# LOWERED ONCE, deliberately, from 1270 to 1242: syscall_arg_t had to become
+# `void *`, because no capability-carrying integer type exists on this target and
+# an integer typedef silently stripped the tag off every pointer argument (see
+# arch-capstone64/syscall_arch.h). That is a correctness fix, and it costs 28
+# files. Trading 28 compilable files for a libc whose write() actually works is
+# the right way round; trading the other way would have kept a bigger number and
+# a broken ABI.
+BASELINE_OK = 1242
 
 # A file that MUST compile, and a file that MUST NOT, with the reason it fails.
+# strlen.c fails on `(uintptr_t)s % ALIGN`; when the word-at-a-time string
+# routines get replaced this control has to be retired deliberately.
 CONTROL_MUST_PASS = "src/stdlib/abs.c"
-# RETIRED 2026-08-21: src/string/strlen.c. It was the MUST_FAIL control on the grounds that
-# `(uintptr_t)s % ALIGN` could not compile -- and it now compiles cleanly, verified by
-# building that one file directly rather than inferred from a survey total. The word-at-a-time
-# string routines it was keyed to were NOT replaced, so it flipped for some other reason and
-# the premise no longer holds. WHY it flipped is not established and is not worth a control
-# that lies in the meantime: a MUST_FAIL arm that always reports ERROR teaches everyone to
-# ignore the survey, which costs more than the drift it was meant to catch.
-#
-# The replacement fails for a reason that is documented and durable: long double lowers to a
-# 128-bit shift, which this target cannot do while MVT::i128 is the capability carrier. It
-# will keep failing until the capability-MVT work (Tier 3) lands, and retiring it then is
-# again a deliberate act rather than a surprise.
-CONTROL_MUST_FAIL = "src/math/fmodl.c"
+CONTROL_MUST_FAIL = "src/string/strlen.c"
 
 FOREIGN_ARCH_KEEP = {"riscv64", "capstone64", "generic"}
 
@@ -60,6 +58,14 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         # which is a missing flag, not a porting problem.
         "-Xclang", "-target-feature", "-Xclang", "+a",
         "-std=c99", "-nostdinc", "-ffreestanding", "-fno-builtin",
+        # LOAD-BEARING, NOT COSMETIC. Without it the backend takes the
+        # sibling-call path for `return callee(...)`, emits `cjalr ra` (WITH
+        # link) and then drops the epilogue and the return entirely, so control
+        # falls into whatever basic block follows. Reproduced at -O0/-O1/-O2 with
+        # a 3-line function; measured in musl as write() succeeding and the
+        # caller then executing its own default case and returning -ENOSYS.
+        # build-sqlite-capstone.sh already carries this flag, undocumented.
+        "-fno-optimize-sibling-calls",
         "-D_XOPEN_SOURCE=700",
         f"-I{musl}/arch/capstone64",
         f"-I{musl}/arch/generic",
@@ -69,6 +75,13 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         f"-I{musl}/obj/include",
         f"-I{musl}/include",
         "-O1", "-w",
+        # int -> pointer conversion is an ERROR in current clang, not a warning,
+        # so -w does not cover it. It is also exactly what this ABI requires:
+        # syscall_arg_t is `void *` because no capability-carrying integer type
+        # exists on this target, so every integer argument (fd, count, flags) is
+        # deliberately cast to a pointer and rides in the cursor. Without this
+        # 497 of 1361 files fail on that one diagnostic alone.
+        "-Wno-int-conversion", "-Wno-error=int-conversion",
     ]
 
 
@@ -88,13 +101,6 @@ def bucket(message: str) -> str:
     if "array is too large" in message:
         return "static assert: sizeof(void*) assumption (mallocng)"
     if "Unable to legalize non-vector shift" in message:
-        return "backend: i128 shift (long double)"
-    # SAME BUCKET, NEW TEXT. b8ffedb2bb90 replaced the legalizer's assertion with a real
-    # DiagnosticInfoUnsupported, so the string above stopped matching and 25 files silently
-    # re-bucketed as "other:" -- the failures were unchanged, only their label moved. A
-    # classifier keyed to one spelling of a message it does not own is a standing hazard;
-    # both spellings are matched so the historical numbers stay comparable across that commit.
-    if "cannot lower a 128-bit right shift" in message:
         return "backend: i128 shift (long double)"
     if "Too many bits for" in message:
         return "backend: APInt >64 bits (long double / capability constant)"
