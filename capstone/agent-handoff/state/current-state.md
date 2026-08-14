@@ -2,6 +2,25 @@
 
 Minimal snapshot. Read first in every session.
 
+## SQLITE RUNS ON SILICON — ~77% of executions complete (2026-08-14)
+
+The headline changed today. SQLite's basic workload — CREATE, three INSERTs, a SELECT returning all
+three rows, finalize — runs in a pure-capability domain on the FPGA and returns the correct rows,
+in **10 of 13 genuine executions**. Measured over three boots (control + eight repetitions each, all
+controls passing), not inferred from a lucky run.
+
+The other 3 are **S-07** and all three landed at the **same instruction**, `output_text+0xdc`, from
+two different physical placements: a capability read back from memory arrives untagged, mcause 25.
+The site is fixed per image; only whether it fires is sporadic. Reproducer package, ready to hand
+over as a single link: `tests/fpga-repros/S07-capability-untagged-on-reload/`.
+
+The **extended** workload still wedges (`sqlite3DbMallocRawNN`, same defect). `output_text` is our
+own harness, not SQLite. No timing number is admissible from these runs — the S-06 workarounds,
+both confirmed ON in the measured binary, add ~33 KB of `.text` and a branch per granule.
+
+Numbers: `ref/fpga-silicon-measurements-for-paper.md` §4e (which supersedes §4c, "the domain does
+not complete"). Trail: `history/14-08-2026_18-30-00_s07-wedge-rate-and-fault-site.md`.
+
 ## TWO SEPARATE SIGNATURES, R-18 AND R-19 -- both handed over, both worked around (2026-08-08)
 
 **Do not merge them.** R-18 is the ZEROING form: the victim is written with 0 and counts up, and

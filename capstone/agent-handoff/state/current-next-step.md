@@ -1,6 +1,49 @@
 # Next step
 
-## 0-PRE. A NEW BITSTREAM IS IN SYNTHESIS — read this before the first boot on it
+## 0. WHERE THINGS STAND — 2026-08-14, read this first
+
+**SQLite RUNS ON SILICON.** The basic workload (CREATE / three INSERTs / SELECT returning all three
+rows / finalize) completes in a pure-capability domain on the FPGA and returns the correct rows,
+**10 times in 13 genuine executions (~77%)**. Measured deliberately over three boots, each a control
+plus eight repetitions of the same unrebuilt binary; all three controls passed. Numbers and method:
+`ref/fpga-silicon-measurements-for-paper.md` §4e, trail in
+`history/14-08-2026_18-30-00_s07-wedge-rate-and-fault-site.md`.
+
+**The remaining 23% is ONE silicon defect at ONE instruction.** All three wedges landed at
+`output_text+0xdc` (domain VA `0x1516a8`), mcause 25, from two different physical placements of the
+domain. That is **S-07**: a capability read back from memory arrives untagged. Reproducer package,
+which is the whole report and the single thing to link to the hardware side:
+`tests/fpga-repros/S07-capability-untagged-on-reload/`. It is ready to send.
+
+`output_text` is our own domain harness (`sqlite_boundary_cost_domain.c:48`), not SQLite — the
+failure is in the code that writes result rows out through the shared region, not in the database
+engine. The **extended** workload still does not complete; it wedges in `sqlite3DbMallocRawNN`,
+same defect.
+
+**What is NOT established.** No timing number may be taken from these runs: the S-06 workarounds
+add ~33 KB of `.text` and a branch per granule, so any figure measures the workaround. Both
+workarounds are confirmed ON in the measured binary, established from the artifact itself (§4e).
+And whether "completes ~77% of the time, one identified defect" or "does not yet run reliably" is
+the framing for the paper is the project lead's call, not a lane's.
+
+**Immediate candidates**, in no forced order: hand S-07 to the hardware side (the send is the
+project lead's — one link, no message body); task #9, the QEMU LDC linear-clear gap; the QEMU core
+suites, 10/14 red and parked with an unconfirmed hypothesis in `ISSUES.md`. S-06 itself is with a
+parallel lane.
+
+**Do NOT build another S-07 rung on a hunch.** Four exclusion rungs have returned 65535 with firing
+controls, and the obvious fifth — that monitor-granted cross-domain capabilities are the fragile
+kind — is already refuted by the lookaside instance, an ordinary heap capability. The folder poses
+the type/provenance question to the hardware side; build a rung when they name the shape.
+
+---
+
+## 0-PRE. HISTORICAL (2026-08-12) — written while the current bitstream was in synthesis
+
+Kept for the reasoning, not as instructions. The bitstream described here, `caplifive_12august.bit`,
+has been resident since 2026-08-12 and the first-boot sequence below was carried out long ago. The
+`FPGA_BITSTREAM` note at the end is also stale: the drivers now default to the resident bitstream,
+so no override is needed.
 
 Synthesis was started 2026-08-12 from `capstone-ariane` `fpga-testing-dev` = `7e4dc440f` (pushed).
 That RTL is **not** what any existing board result was taken on.
