@@ -16,9 +16,36 @@ for one should not be assumed to touch the other. Sibling issues: `S06-untagged-
 
 ## The signature
 
-A capability is stored to memory, read back with `ldc`, and the reloaded value is NOT_CAP. The next
-`cincoffset` (or dereference) raises mcause 25. Three instances, in three unrelated functions, none
-of which share a caller:
+A capability is stored to memory, read back with `ldc`, and the value that comes back is NOT_CAP —
+the next capability consumer raises mcause 25. Three instances, in three unrelated functions, none
+of which share a caller.
+
+> ### CORRECTION, 2026-08-14 — read before instances 1 and 2
+>
+> **For instances 1 and 2 the measurement does not establish which operand was wrong.** Both fault at
+> a `cincoffset`, and that guard has TWO arms:
+>
+> ```
+> core/anvil_build/capstone_flu_unit.anvil:29-31
+> func CINCOFFSET(data){
+>     if((data.cap_rs1.metadata.cap_type==cap_type_t::NOT_CAP)||(data.cap_rs2.metadata.cap_type!=cap_type_t::NOT_CAP)){
+>         call raise_exception(data.trans_id,ex_code::UNEXPECTED_OPERAND)
+> ```
+>
+> mcause 25 is raised if **rs1 is NOT_CAP _or_ if rs2 is anything other than NOT_CAP**. In both
+> instances rs2 is an integer produced by a plain `ld` one to four instructions earlier. So "the
+> reloaded capability lost its tag" and "the integer offset gained one" are indistinguishable in the
+> data we have.
+>
+> **Instance 3 is unambiguous** and anchors the thesis: it faults *at* the `ldc`, whose guard is
+> rs1-only (`capstone_dyn_unit.anvil:327-330`). So at least one genuine "a register that should hold
+> a capability is NOT_CAP" event is established — by one instance, not three.
+>
+> Sentences below reading `<== mcause 25: aN is NOT_CAP` for instances 1 and 2 are therefore an
+> INTERPRETATION that was stated as a measurement. The discriminating query is cheap and is in
+> "What would settle it".
+
+
 
 **1. In our `memcpy`'s byte tail loop** — the most precisely characterised instance:
 
@@ -60,7 +87,7 @@ all three controls passing.
 
 | source | genuine executions | passed | **wedged** | entry stalls (excluded) |
 |---|---|---|---|---|
-| earlier record | 6 | 5 | 1 | 1 |
+| earlier record (its one wedge was at `output_text+0xdc`, the same instruction — recorded in `agent-handoff/history/14-08-2026_18-30-00_s07-wedge-rate-and-fault-site.md`) | 6 | 5 | 1 | 1 |
 | boot 1 | 2 | 1 | 1 | 0 |
 | boot 2 | 4 | 4 | 0 | 1 |
 | boot 3 | 1 | 0 | 1 | 0 |
@@ -127,11 +154,18 @@ Plus, in the SQLite domain (which owns a 256 KiB heap a rung cannot): a capabili
 a walk touching **every line of that heap** comes back with type and cursor unchanged — so a plain
 evict-and-refill does not lose the tag either.
 
-**Ruled out from disassembly, without a boot**: every instruction in `memcpy` touching the faulting
-granule is `stc`, one plain `ld`, and three `ldc` — **zero plain stores**. So this is neither
-correct tag-clearing on a partial overwrite, nor the write-buffer `.user` clobber
-(`wt_dcache_wbuffer.sv:602` writes `.user` unconditionally whole-word while `.data` is byte-gated),
-which requires a coalescing plain STORE to the same word.
+**Ruled out from disassembly, without a boot — but the argument differs PER INSTANCE, and the folder
+previously gave only the instance-1 form:**
+
+* **Instance 1 (`memcpy`)**: every instruction touching the faulting granule is `stc`, one plain `ld`
+  and three `ldc` — **zero plain stores**. Neither correct tag-clearing on a partial overwrite, nor
+  the write-buffer `.user` clobber (`wt_dcache_wbuffer.sv:602` writes `.user` unconditionally
+  whole-word while `.data` is byte-gated), which needs a coalescing plain STORE to the same word.
+* **Instance 2 (`output_text`, the thrice-measured site)**: this loop DOES execute a plain
+  `sd a3, 0x0(a4)` on every iteration, so the "zero plain stores" argument does not apply here at all.
+  The exclusion still holds, for a different reason: the write-buffer hit compares the full 64-bit
+  word address (`wt_dcache_mem.sv:276`, `wt_dcache_wbuffer.sv:444`), and the scalar at `s0-0x48` is a
+  different word *and* a different 16-byte granule from the capability at `s0-0x40`.
 
 **Ruled out previously — please do not re-run these** (recorded in `agent-handoff/ref/ISSUES.md`):
 
@@ -154,11 +188,18 @@ full-precision bounds side-table for tagged loads (`cap_mem_map.h`). Its silence
 
 ## Two questions for the hardware side
 
-1. **An R-20 analogue on another register.** R-20 was an issue-stage forwarding bug specific to
-   **x10**, found in simulation and since fixed (`f623c48a1`, an ancestor of the current HEAD, so it
-   should be in this bitstream). Instance 1 above faults on **`a2`**, instance 2 on **`a1`**. Has
-   `issue_read_operands.sv` been audited for the same class on other registers? R-20's own README
-   states it did not isolate which of two RTL sites was responsible, only that changing one cured it.
+1. **An R-20 analogue on another register — WE HAVE NOW LARGELY ANSWERED THIS OURSELVES; it is here
+   so you do not re-derive it.** `f623c48a1` is an ancestor of every candidate synthesis tree and was
+   never reverted. R-20's signature is incompatible with S-07 anyway: it was x10-specific, silent, and
+   trapped nothing. The entire hand-written core contains exactly three register-literal special
+   cases, all CAPENTER/x10-x11 (`issue_read_operands.sv:573`, `scoreboard.sv:236-238`,
+   `decoder.sv:1287`) — none names x11 as an operand and none names x12 at all, while our instances
+   fault on `a1`(x11) and `a2`(x12). We no longer think this is the mechanism.
+
+   Two workload facts that close whole branches, measured by disassembling the domain (327 860
+   instructions): it contains **zero** `amo*`/`lr.*`/`sc.*` and **zero** hardware `mul`/`div`/`rem`
+   (soft routines instead). Any hypothesis resting on the atomic path or the multiplier is dead
+   without a boot.
 2. **Capability TYPE.** Every rung above spills a pointer to a static array — **NONLIN**. `stc`
    writes cnull back into rs2 for LINEAR/UNINIT/SEALED (`capstone_dyn_unit.anvil:458-461`), and
    `beebs_freestanding_string.c` already carries a `BEEBS_STRING_LINEAR_SAFE` knob because linearity
@@ -168,10 +209,29 @@ full-precision bounds side-table for tagged loads (`cap_mem_map.h`). Its silence
 
 ## What would settle it
 
-An RTL simulation of the instance-1 sequence — `stc` to a stack slot, a plain `ld` of its low half,
-then `ldc` of the same slot — with the shadow tag `cap_tag_q` and the AXI tag byte instrumented, for
-both a NONLIN and a LINEAR source. Note it is sporadic on the board, so a single clean simulation
-does not exonerate the path; the interesting output is whether the tag can *ever* be dropped there.
+**Two experiments, and the first one alone is not enough.**
+
+1. *The memory path.* An RTL simulation of the instance-1 sequence — `stc` to a stack slot, a plain
+   `ld` of its low half, then `ldc` of the same slot — with the shadow tag `cap_tag_q` and the AXI tag
+   byte instrumented, for both a NONLIN and a LINEAR source.
+
+2. *The register-delivery path — please do not skip this one.* An `ldc`'s metadata reaches the
+   register file only via the CAP_WB port (`cva6.sv:1379-1380`, `:1401-1408`). If a response is
+   bypassed to LOAD_WB instead, that port carries no capability (`scoreboard.sv:320-324` ties
+   `wb[1..3].cap_data` to `'0`) and the scoreboard erases the entry's `cap_result`
+   (`scoreboard.sv:242-246`); commit then writes metadata `'0` (`commit_stage.sv:279`) into the
+   metadata regfile under the **plain GPR** write enable (`issue_read_operands.sv:1578`
+   `we_pack[i] = we_gpr_i[i]`). That produces a NOT_CAP register with a correct cursor, having never
+   touched memory. Instrument the CAP_WB/LOAD_WB routing of the `ldc`'s `trans_id`
+   (`ex_stage.sv:933`).
+
+**A clean result from experiment 1 excludes nothing about experiment 2's path** — and it would read as
+exoneration, which is why both are listed. It is sporadic on the board, so one clean simulation does
+not exonerate either path; the question is whether it can *ever* happen.
+
+**We are also running a board experiment that discriminates these directly**: query the type of BOTH
+`cincoffset` operands at the failing site, and on a lost tag re-`ldc` the same address. If the retry
+comes back TAGGED, memory was never wrong and the fault is in register delivery.
 
 ## Impact
 
