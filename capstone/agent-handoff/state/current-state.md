@@ -2,6 +2,30 @@
 
 Minimal snapshot. Read first in every session.
 
+## S-06 FIXED IN RTL — sim-validated, awaiting synthesis (2026-08-14)
+
+The untagged-`ldc`/`stc` high-half loss (S-06) is fixed in the RTL, not worked around. Branch
+`fpga-testing-dev-s06fix` on `capstone-ariane` (seven phases P1–P6 + one audit follow-up, HEAD
+`774de8a6f`). A real 1-bit capability tag rides beside every compressed-metadata lane (64→65,
+dom-switch 128→129); untagged `ldc`/`stc` is now a verbatim 128-bit copy with the tag cleared,
+and tag-setting is opcode/tag-driven, never inferred from `|metadata|` — this also closes the D7
+live-forgery hazard. Verilator-validated against a pinned 73-test baseline: semantics-neutral
+phases bit-identical; the S-06 family flips to assert the fix (`untagged-ldc-stc-128` passes,
+`s06-lowhalf-zero{,-swap}` FAIL→SUCCESS); two security directed tests pass with firing controls.
+Two adversarial audits + a QEMU-differential confirm the contract holds and could not break the
+scope. Trail: `history/14-08-2026_18-30-00_s06-rtl-fix-p0-p6.md`; handoff:
+`tests/fpga-repros/S06-untagged-ldc-stc-high-half/` (00-README STATUS block).
+
+**BLOCKED on two external steps, in order:** (1) `git push` of the branch is 403 — the stored
+`GITHUB_TOKEN` is invalid (`gh auth status`); the six RTL commits are LOCAL-ONLY. (2) hardware
+synthesis + flash (board owner). After flash: acceptance boot, then SQLite with
+`SQLITE_LDC_HIGH_HALF_FIXUP=0` and no `-capstone-guard-cap-granule-copies`.
+
+**Bears on S-07** (below): S-07 is "a capability read back from memory arrives untagged" — the
+same tag-through-memory path S-06's fix rebuilds. The fix MAY subsume S-07 on silicon; not
+asserted, to be checked on the flashed bitstream. One residual NOT closed: AMO tag resurrection
+(I4), documented with a repro, tracked as a separate follow-up.
+
 ## SQLITE RUNS ON SILICON — ~77% of executions complete (2026-08-14)
 
 The headline changed today. SQLite's basic workload — CREATE, three INSERTs, a SELECT returning all

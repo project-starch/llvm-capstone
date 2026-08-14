@@ -1,5 +1,20 @@
 # S-06 — an untagged 128-bit `ldc`/`stc` round trip loses the HIGH 64 bits
 
+> **STATUS 2026-08-14 — FIXED IN RTL (Option A), sim-validated, awaiting synthesis.**
+> The general fix (`FIX-PROPOSAL.md` Option A) is implemented on branch
+> `fpga-testing-dev-s06fix` of `capstone-ariane` (seven phases P1–P6, HEAD 774de8a6f). A real
+> 1-bit capability tag now rides beside every compressed-metadata lane; untagged `ldc`/`stc` is
+> a verbatim 128-bit copy with the tag cleared, and tag-setting is opcode/tag-driven (never
+> inferred from data content), which also closes the D7 forgery hazard. Validated in Verilator:
+> the S-06 family flips from documenting the defect to asserting the fix
+> (`untagged-ldc-stc-128` passes; `s06-lowhalf-zero{,-swap}` FAIL→SUCCESS), every
+> semantics-neutral phase is bit-identical to baseline, and two adversarial audits plus a
+> QEMU-differential confirm the contract. **Next step is hardware synthesis + flash** (not ours).
+> One documented residual is OUT of scope of this package: an AMO landing on a capability
+> granule can resurrect its tag (invariant I4) — see the P6 history note and
+> `verif/tests/custom/capstone/s06sec-amo-no-resurrect.S`. The `sim/` evidence below is the
+> pre-fix defect demonstration and is retained as the reproduction of the original bug.
+
 **Wrong symptom? Read this paragraph first.** This package is the **plain-data-loses-its-high-half**
 signature: a 16-byte `ldc`/`stc` pair over memory that does **not** hold a capability keeps only
 the low 8 bytes of every chunk. Sibling packages describe different signatures and are not this
