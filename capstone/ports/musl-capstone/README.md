@@ -26,9 +26,20 @@ __CAPSTONE_HOSTCALL_HOST_DONE__ status=0 serviced=4
 | resumable hostcall from a pure-cap domain | works — `yield-probe/` |
 | musl `write()` end to end | works — `musl-hello/` |
 | syscalls implemented | `write` (stdout/stderr), `exit`, `exit_group`; all else `-ENOSYS` |
+| **reference Lua 5.4** | **runs** — `lua-probe/`, 22 core TUs against musl, `t[20] == 400` |
+
+`lua-probe/` replaces the 1008 lines of hand-written libc that
+`xlang/lua-cdp/capstone-lua/` carries. Three functions are stubbed and say so out
+loud (`fopen`, `vfprintf`, `strtod`), because the musl files that define them do
+not compile — all three are blocked by **`long double`**, which is unusable on
+this target in compiler-rt as well as musl: every 128-bit builtin
+(`comparetf2`, `addtf3`, `multf3`, `divtf3`, `extenddftf2`, `floatsitf`,
+`trunctfdf2`, …) fails with the same backend assertions, because i128 is both a
+capability and a `long double`.
 
 Trail: `agent-handoff/history/14-08-2026_18-45-00_musl-write-runs-in-a-pure-cap-domain.md`,
-and `ISSUES.md` C-19 for the compiler bug found on the way.
+`…_21-30-00_reference-lua-runs-on-musl-in-a-domain.md`, and `ISSUES.md` C-19 for
+the compiler bug found on the way.
 
 musl is **not vendored**. `fetch-musl.sh` downloads the official 1.2.5 archive
 and verifies its SHA-256; the upstream tree stays immutable under
