@@ -956,8 +956,15 @@ validity queries that `s06rev` does. `s06rev` is the stronger measurement and al
 the EVICT arm should not be cited as independent evidence about the rev-node path.
 
 **Still untested:** capability TYPE. Every rung above spills a pointer to a static array, i.e.
-NONLIN, while `stc` writes cnull into rs2 for LINEAR/UNINIT/SEALED. Handoff for the RTL side, with
-the R-20-analogue question, is in `ref/RTL-QUESTION-mcause25-tag-loss.md`. See the retraction entry above.
+NONLIN, while `stc` writes cnull into rs2 for LINEAR/UNINIT/SEALED. This defect is now **S-07** and its reproducer package is
+`capstone/tests/fpga-repros/S07-capability-untagged-on-reload/`, which is the single place it is
+written up — including the R-20-analogue and LINEAR/UNINIT questions for the hardware side.
+
+**Separate, still open, and NOT the mcause-25 mechanism:** the rev-node pool at
+`[0xBFF0_0000, 0xC000_0000)` is cacheable (`config_pkg:142-144`) but excluded from the shadow-tag
+write (`wt_axi_adapter.sv:139-145`, deliberately, per the assert at `:987-992`). An evicted rev-node
+line therefore loses its top 30 bits — part of **`depth`**. A corrupted depth would affect
+revocation-tree walks. Worth its own investigation; it is not this fault. See the retraction entry above.
 
 Worth noting for anyone reading the eliminations as a run of bad luck: the first three all targeted
 `INVALID_CAPABILITY`, so a single naming error accounts for all of them at once. The measurements

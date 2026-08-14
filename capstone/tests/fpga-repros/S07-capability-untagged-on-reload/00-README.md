@@ -88,10 +88,16 @@ correct tag-clearing on a partial overwrite, nor the write-buffer `.user` clobbe
 (`wt_dcache_wbuffer.sv:602` writes `.user` unconditionally whole-word while `.data` is byte-gated),
 which requires a coalescing plain STORE to the same word.
 
-**Ruled out previously** (see `agent-handoff/ref/ISSUES.md`): rev-node pool exhaustion; rev-node tag
-loss zeroing `valid` (rung `s06rev`, returns 11 — `valid` lives in `data_rdata`, not `ruser`); and
-the entire revocation-validity family **arithmetically**, since those sites raise
-`INVALID_CAPABILITY` = mcause **26** while this is **25**.
+**Ruled out previously — please do not re-run these** (recorded in `agent-handoff/ref/ISSUES.md`):
+
+* **Rev-node pool exhaustion** — the pool holds 65536; the heads observed at wedges were ~250-600.
+* **Rev-node tag loss zeroing `valid`** — refuted by rung `s06rev` (returns 11, both arms, control
+  green). `valid` sits in `data_rdata`, not in `ruser`, so zeroing `ruser` cannot clear it. That
+  rung also covers evict-and-refill of a capability round-tripped through memory **with** the
+  validity queries `ldc`/`stc` perform.
+* **The entire revocation-validity family, arithmetically** — those sites raise
+  `INVALID_CAPABILITY` = mcause **26**, and this is **25**.
+* **The S-06 fixup's store pattern** — `s06sfix` returns 2048 at 64 KB scale.
 
 ## Not reproducible under QEMU, structurally
 
@@ -133,4 +139,7 @@ returning all three rows / finalize) completes, mostly; the full workload wedges
 
 Full investigation trail:
 `agent-handoff/history/14-08-2026_02-30-00_sqlite-wedge-is-out-of-bounds-on-Mem.md`.
-Handoff question: `agent-handoff/ref/RTL-QUESTION-mcause25-tag-loss.md`.
+
+**This folder is the whole report.** An earlier draft of the same material lived in
+`agent-handoff/ref/RTL-QUESTION-mcause25-tag-loss.md`; it was deleted rather than kept in sync,
+because two documents for one issue is precisely how a live page ends up contradicting itself.
