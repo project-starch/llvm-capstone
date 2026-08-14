@@ -431,13 +431,14 @@ void capstone_pdest_report(const void *pdest, unsigned long p3, unsigned long p2
    "no-globals support objects", and putting them there produced a domain that faulted under QEMU
    on a wild scalar load. memcpy calls across into this TU instead, which is safe. */
 unsigned long beebs_mcp_entry_ty, beebs_mcp_fail_off, beebs_mcp_fail_n,
-              beebs_mcp_fail_al, beebs_mcp_hits;
+              beebs_mcp_fail_al, beebs_mcp_hits, beebs_mcp_where;
 
 /* Called BY memcpy on the first untagged destination it sees. Sticky on the first hit -- the
    interesting call is the one that establishes the condition, and later ones would scroll it. */
-void capstone_mcp_note(unsigned long entry_ty, unsigned long off,
+void capstone_mcp_note(unsigned long where, unsigned long entry_ty, unsigned long off,
                        unsigned long n, unsigned long al) {
   if (beebs_mcp_hits == 0UL) {
+    beebs_mcp_where = where;
     beebs_mcp_entry_ty = entry_ty;
     beebs_mcp_fail_off = off;
     beebs_mcp_fail_n = n;
@@ -456,6 +457,7 @@ void capstone_mcp_report(void) {
   if (!capstone_out_reserve(200UL))
     return;
   output_text("MCP hits=");  output_hexv(beebs_mcp_hits);
+  output_text(" w=");        output_hexv(beebs_mcp_where);
   output_text(" ety=");      output_hexv(beebs_mcp_entry_ty);
   output_text(" off=");      output_hexv(beebs_mcp_fail_off);
   output_text(" n=");        output_hexv(beebs_mcp_fail_n);

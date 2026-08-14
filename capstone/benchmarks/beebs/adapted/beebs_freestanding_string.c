@@ -256,7 +256,14 @@ typedef unsigned long long bu64_t;      /* exactly one half of a 128-bit capabil
  *
  * The type query is TOTAL (selector 1), so it can be issued on a NOT_CAP without faulting -- an
  * instrument that raised on exactly the input it exists to describe would report nothing. */
-extern void capstone_mcp_note(unsigned long entry_ty, unsigned long off,
+/* `where` says which construct lost it, which is the whole point of adding the chunk loop:
+   1 = untagged ALREADY on entry (the caller is the subject, memcpy is innocent)
+   2 = the capability-grained CHUNK loop
+   3 = the BYTE TAIL loop -- the construct the board fault sits in
+   0xAB = the self-test's injected sentinel.
+   Without it a hit in the byte loop and a hit in the chunk loop are indistinguishable, and those
+   two point at completely different code. */
+extern void capstone_mcp_note(unsigned long where, unsigned long entry_ty, unsigned long off,
                               unsigned long n, unsigned long al);
 
 #define BEEBS_MCP_TYPE(out_, cap_) \
@@ -280,12 +287,12 @@ BEEBS_MEMCPY_ATTR void *memcpy(void *dst, const void *src, bsize_t n) {
      happened on this probe already. Requires hits>=1 and ety=7 to appear. */
   { unsigned long mcp_junk_ = 0x5A5Aul, mcp_tj_;
     BEEBS_MCP_TYPE(mcp_tj_, mcp_junk_);
-    capstone_mcp_note(mcp_tj_, 0xABul, (unsigned long)n, 0xCDul); }
+    capstone_mcp_note(0xABul, mcp_tj_, 0xABul, (unsigned long)n, 0xCDul); }
 #endif
   if (mcp_ety_ == 7ul) {
     /* Untagged ALREADY -- the caller is the subject, not this loop. Record and bail before the
        first dereference, which would fault and take the report with it. */
-    capstone_mcp_note(mcp_ety_, 0ul, (unsigned long)n,
+    capstone_mcp_note(1ul, mcp_ety_, 0ul, (unsigned long)n,
                       (((unsigned long)da) << 4) | (unsigned long)sa);
     return dst;
   }
@@ -299,8 +306,24 @@ BEEBS_MEMCPY_ATTR void *memcpy(void *dst, const void *src, bsize_t n) {
       head = n;
     for (; i < head; i++)
       d[i] = s[i];
-    for (; i + ps <= n; i += ps)
+    for (; i + ps <= n; i += ps) {
+#if defined(BEEBS_MEMCPY_TAGCHECK) && BEEBS_MEMCPY_TAGCHECK
+      /* The CHUNK loop, checked separately from the byte tail. The board fault is in the tail,
+         but a tail check that never fires while the run still wedges leaves two readings open --
+         "the faulting call is the chunk loop" and "the tag dies between the check and the use" --
+         and only this arm separates them. */
+      {
+        unsigned long mcp_ct_;
+        BEEBS_MCP_TYPE(mcp_ct_, d + i);
+        if (mcp_ct_ == 7ul) {
+          capstone_mcp_note(2ul, mcp_ety_, (unsigned long)i, (unsigned long)n,
+                            (((unsigned long)da) << 4) | (unsigned long)sa);
+          return dst;
+        }
+      }
+#endif
       BEEBS_CHUNK_COPY(d + i, s + i);
+    }
   }
 #else
   /* BEEBS_MEMCPY_BYTES_ONLY: skip the aligned capability-copy path entirely and use the byte
@@ -326,7 +349,7 @@ BEEBS_MEMCPY_ATTR void *memcpy(void *dst, const void *src, bsize_t n) {
       unsigned long mcp_ty_;
       BEEBS_MCP_TYPE(mcp_ty_, d);
       if (mcp_ty_ == 7ul) {
-        capstone_mcp_note(mcp_ety_, (unsigned long)i, (unsigned long)n,
+        capstone_mcp_note(3ul, mcp_ety_, (unsigned long)i, (unsigned long)n,
                           (((unsigned long)da) << 4) | (unsigned long)sa);
         return dst;   /* stop before the faulting use -- a wrong answer beats a wedge */
       }
