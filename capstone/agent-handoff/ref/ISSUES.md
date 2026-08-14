@@ -4514,6 +4514,19 @@ written before any of the above and reasoned from the WRONG ONE OF THE TWO MONIT
 The firmware is built from `components/opensbi/`. Checking which source the artifact was built from
 would have cost a minute.
 
+**THE SAME DEFECT IS PRESENT, DORMANT, IN THE SILICON MONITOR — deliberately NOT fixed here.**
+`caplifive-system/.../capstone-sbi/sbi_capstone.c:659` has the identical
+`unsigned gpoff = GPFREE_GLOBALS_OFFSET;` fallback and `:882` the identical unconditional
+`__split(dom_code, base_addr + gpoff)`. It does not bite today because every domain currently run
+on the board is a gp-captable build that declares its globals offset, so `gpoff` is genuinely
+supplied. It WOULD bite the moment a board rung is linked without globals — and note that the
+existing `__pad` convention ("keep the image above 0x1000 so the monitor SPLIT is non-degenerate")
+is a workaround for exactly this defect, not an independent requirement.
+
+Not fixed in the same change because it means rebuilding board firmware, which invalidates the
+bitstream/firmware pairing every current silicon measurement was taken against. It should be fixed
+deliberately, with a re-baseline, not as a side effect of a QEMU repair.
+
 ---
 
 ### Superseded record (2026-08-14, pre-root-cause)
