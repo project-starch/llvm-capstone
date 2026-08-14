@@ -12,7 +12,7 @@ Last updated 2026-08-14.
 
 ---
 
-## C-21 — casting a NEGATIVE integer constant to a capability crashes the backend · `CHARACTERISED 2026-08-14, cheap workaround, likely a small backend fix`
+## C-21 — casting a NEGATIVE integer constant to a capability crashed clang's constant evaluator · `FIXED 2026-08-14`
 
 **One line reproduces it**, at `-O0`, `-target capstone64-unknown-elf`:
 
@@ -49,15 +49,28 @@ cause.
 indicator, not an apportionment: the 119 have not been split between C-20 and
 C-21, and some files may hit both.
 
-**Workaround, three lines, in use:** route the constant through a runtime value.
+**FIXED 2026-08-14** in `clang/lib/AST/ExprConstant.cpp`, `CK_IntegralToPointer`:
+clamp the extension width to 64 bits, which is what `getZExtValue()` requires.
 
 ```c
-volatile long at_fdcwd = AT_FDCWD;
-__capstone_hostcall(SYS_openat, (syscall_arg_t)at_fdcwd, ...);
+unsigned Size = std::min<unsigned>(Info.Ctx.getTypeSize(E->getType()), 64);
 ```
 
-`musl-capstone/runtime/musl_gaps.c` does this to supply `open()`, and file I/O
-from a domain works end to end with it (`musl-capstone/file-probe/`).
+A clamp rather than "use the address width" on purpose: every upstream target
+has pointers of at most 64 bits, so the branch is unreachable for them and their
+behaviour is *provably* unchanged. Substituting `uintptr_t`'s width would not be
+-- targets exist with a 32-bit pointer in one address space and a 64-bit
+`uintptr_t`, and there the extension width would silently move.
+
+**Validated.** `(void *)-100` compiles; Capstone lit 54/54; upstream
+`clang/test/SemaCXX` + `clang/test/Sema` 2411 passed, 0 failures. The musl port
+went from **1242 to 1280** of 1361 files (91.3 % -> 94.0 %), **38 recovered**,
+and the `getActiveBits() <= 64` bucket fell from 51 to 9. `src/fcntl/open.c`,
+`src/stdio/fopen.c`, `src/stat/fstatat.c`, `src/unistd/lchown.c` and
+`src/stat/mkdir.c` all compile again, and `musl-capstone/runtime/musl_gaps.c` --
+which existed only to work around this -- has been **deleted**: file I/O from a
+domain now runs through musl's own `open()` and `fsync()`
+(`musl-capstone/file-probe/`, re-run green after the fix).
 
 **The fix belongs in the backend** and looks small: the constant path needs to
 stop assuming the materialised value fits in 64 bits. Unlike C-20 this is not a

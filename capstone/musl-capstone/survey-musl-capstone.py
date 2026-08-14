@@ -38,7 +38,11 @@ import sys
 # files. Trading 28 compilable files for a libc whose write() actually works is
 # the right way round; trading the other way would have kept a bigger number and
 # a broken ABI.
-BASELINE_OK = 1242
+#
+# RAISED to 1280 when the C-21 frontend fix landed (a negative integer constant
+# cast to a capability crashed clang's constant evaluator). 38 files came back,
+# including open.c, fopen.c and the *at() family.
+BASELINE_OK = 1280
 
 # A file that MUST compile, and a file that MUST NOT, with the reason it fails.
 # strlen.c fails on `(uintptr_t)s % ALIGN`; when the word-at-a-time string
