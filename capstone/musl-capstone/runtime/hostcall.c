@@ -60,8 +60,8 @@ static int hc_round(unsigned long opcode, unsigned long offset,
 
 /* Exported, not static: a domain needs a way to print through the path that is
    already known to work, so that a ladder can localise a failure in the musl
-   wrapper chain above it. Without this, "musl write() faulted" and "our hostcall
-   faulted" look identical -- silence. */
+   wrapper chain above it. Without this, "musl write() faulted" and "our
+   hostcall faulted" look identical -- silence. */
 long __capstone_hc_write(long fd, const char *buf, unsigned long count) {
   unsigned long done = 0;
 
@@ -95,10 +95,10 @@ long __capstone_hc_write(long fd, const char *buf, unsigned long count) {
 
 /* REPORT WITHOUT FORMATTING. Two previous versions of this built a string in a
    local buffer and each introduced its own defect -- a 32-byte buffer overrun
-   that the capability bounds caught on the exact byte, then a degenerate SHRINK.
-   A diagnostic that can itself be the fault is worse than none, so the value now
-   travels as a NUMBER in the shared metadata and the host does the printing.
-   The domain formats nothing. */
+   that the capability bounds caught on the exact byte, then a degenerate
+   SHRINK. A diagnostic that can itself be the fault is worse than none, so the
+   value now travels as a NUMBER in the shared metadata and the host does the
+   printing. The domain formats nothing. */
 #define HC_UNSUP_SYSCALL 0xE0UL
 #define HC_UNSUP_BAD_FD 0xE1UL
 #define HC_TRACE_ENTRY 0xE2UL
