@@ -304,6 +304,19 @@ BEEBS_MEMCPY_ATTR void *memcpy(void *dst, const void *src, bsize_t n) {
     bsize_t head = da ? (ps - da) : 0u;
     if (head > n)
       head = n;
+#if defined(BEEBS_MEMCPY_TAGCHECK) && BEEBS_MEMCPY_TAGCHECK
+  /* Same check, same escape, in memcpy's HEAD loop. Extended here because a fault in a SIBLING primitive is
+     indistinguishable from "the check never fired" if only memcpy carries it, and that ambiguity
+     cost a board slot. `where` codes 4-7 name which one. */
+  {
+    unsigned long mcp_t_;
+    BEEBS_MCP_TYPE(mcp_t_, d);
+    if (mcp_t_ == 7ul) {
+      capstone_mcp_note(8ul, mcp_t_, 0ul, (unsigned long)n, 0ul);
+      return dst;
+    }
+  }
+#endif
     for (; i < head; i++)
       d[i] = s[i];
     for (; i + ps <= n; i += ps) {
@@ -362,6 +375,19 @@ BEEBS_MEMCPY_ATTR void *memcpy(void *dst, const void *src, bsize_t n) {
 
 BEEBS_WRITER_ATTR void *memmove(void *dst, const void *src, bsize_t n) {
   unsigned char *d = (unsigned char *)dst;
+#if defined(BEEBS_MEMCPY_TAGCHECK) && BEEBS_MEMCPY_TAGCHECK
+  /* Same check, same escape, in memmove. Extended here because a fault in a SIBLING primitive is
+     indistinguishable from "the check never fired" if only memcpy carries it, and that ambiguity
+     cost a board slot. `where` codes 4-7 name which one. */
+  {
+    unsigned long mcp_t_;
+    BEEBS_MCP_TYPE(mcp_t_, dst);
+    if (mcp_t_ == 7ul) {
+      capstone_mcp_note(4ul, mcp_t_, 0ul, (unsigned long)n, 0ul);
+      return dst;
+    }
+  }
+#endif
   const unsigned char *s = (const unsigned char *)src;
   const bsize_t ps = sizeof(void *);
   if (d == s || n == 0)
@@ -395,6 +421,19 @@ BEEBS_WRITER_ATTR void *memmove(void *dst, const void *src, bsize_t n) {
 
 BEEBS_WRITER_ATTR void *memset(void *dst, int c, bsize_t n) {
   unsigned char *d = (unsigned char *)dst;
+#if defined(BEEBS_MEMCPY_TAGCHECK) && BEEBS_MEMCPY_TAGCHECK
+  /* Same check, same escape, in memset. Extended here because a fault in a SIBLING primitive is
+     indistinguishable from "the check never fired" if only memcpy carries it, and that ambiguity
+     cost a board slot. `where` codes 4-7 name which one. */
+  {
+    unsigned long mcp_t_;
+    BEEBS_MCP_TYPE(mcp_t_, dst);
+    if (mcp_t_ == 7ul) {
+      capstone_mcp_note(5ul, mcp_t_, 0ul, (unsigned long)n, 0ul);
+      return dst;
+    }
+  }
+#endif
   for (bsize_t i = 0; i < n; i++)
     d[i] = (unsigned char)c;
   return dst;
