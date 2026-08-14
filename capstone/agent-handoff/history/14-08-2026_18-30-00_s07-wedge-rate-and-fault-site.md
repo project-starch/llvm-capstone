@@ -237,3 +237,56 @@ recorded wedge `mepc` values shared their low 22 bits and therefore every set in
 **Still unanswered: rs1 or rs2.** The patch is correct and ready; it needs an image in which the
 control demonstrably still wedges. The cheapest route is to restore the exact initramfs the 3/13
 measurement was taken on, add ONLY `G6P`, and re-run the alternating pair.
+
+## RETRACTION: image composition was NOT the suppressor — the defect simply stopped reproducing
+
+The section above attributed the disappearance of the wedge to three unrelated ~1.6 MB domains
+having been added to the initramfs, and drew from that a promotion of **physical placement** to the
+leading structural suspect. **Both are retracted.**
+
+The restoration test: remove those three domains by explicit name, rebuild. Result — cpio
+**byte-size identical** to the reproducing configuration (15214080), all 14 original domains
+byte-identical by hash. Two boots, both controls passing, `G6.dom` ×8 genuine executions:
+
+| | wedges / genuine |
+|---|---|
+| the reproducing window (2026-08-14) | 3 / 13 |
+| restored image | **0 / 8** |
+| `G6.dom` since the window, all boots | **0 / 14** |
+| every arm since, including the patched variant | **0 / 25** |
+
+P(0 in 25 | the 23% rate still held) = 0.0015. Fisher exact two-sided against the window = 0.034.
+
+Restoring the image did not bring the wedge back, so image composition cannot be the explanation,
+and the placement inference rested entirely on it.
+
+### What is actually established now
+
+* The defect **reproduced** in a window on 2026-08-14 at roughly 23%, three wedges all at
+  `output_text+0xdc`. That data stands; it was control-validated and the decode was checked.
+* The defect is **not reproducing now** on the same binary and an equivalent image, and **the cause
+  of the change is unidentified**.
+* Therefore the rs1-vs-rs2 question cannot currently be answered by any board experiment, because
+  there is no failing control to compare against. The 4-byte patch is correct and ready and should
+  be kept; it is simply unrunnable until something wedges again.
+
+### Candidates for the change, none tested
+
+* the several **firmware rebuilds** between the two windows — the monitor's source is unchanged, but
+  the payload was relinked and its hash differs;
+* a **board-state or thermal** effect after a long session of continuous use;
+* **clustering** — three wedges arriving close together would make 3/13 a much less stable estimate
+  than it appeared, in which case nothing changed and the rate was always lower.
+
+The third would be the least interesting and is the one to rule out first, by simply running the
+unmodified binary repeatedly over a longer period before drawing any further conclusion.
+
+### The process lesson, which is the durable part
+
+Two inferences were published today from this investigation and both had to be retracted: that
+mcause 25 identified rs1 (it does not — the guard has two arms), and that image composition
+suppressed the wedge (it does not — restoring the image changed nothing). Both were single-step
+extrapolations from real data, made without the control that would have tested them. In each case
+the refuting experiment was cheap and available: reading one anvil function, and rebuilding one
+image. **The rule that would have caught both: before writing down a cause, name the observation
+that would distinguish it from the obvious alternative, and go and make that observation.**

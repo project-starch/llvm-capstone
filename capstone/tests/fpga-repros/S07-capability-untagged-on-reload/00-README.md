@@ -136,15 +136,26 @@ wedge does not establish a deterministic trigger.
 >   `rc=11` (malformed schema) — a completely different and much earlier failure. Verified as a
 >   matched pair in ONE boot: the uninstrumented binary printed its three rows twice while the
 >   instrumented one failed twice.
-> * Adding three unrelated ~1.6 MB domains to the **initramfs** — leaving `G6.dom` byte-identical,
->   confirmed by hashing the cpio member — **suppressed the wedge entirely**: 0 wedges in 17 genuine
->   executions where ~4 were expected. P(0 in 17 | the 23% rate) = 0.77^17 = 0.012; Fisher exact
->   two-sided against the earlier 3/13 = 0.070.
+> * **THE DEFECT HAS STOPPED REPRODUCING ALTOGETHER, and we do not know why.** After the rate was
+>   measured at 3/13, `G6.dom` — byte-identical throughout, verified by hashing the cpio member —
+>   has wedged **0 times in 14 further genuine executions**, across boots with passing controls.
+>   Counting every arm run since (including a patched variant) it is **0 in 25**.
+>   P(0 in 25 | the 23% rate still held) = 0.0015; Fisher exact two-sided against the 3/13
+>   window = 0.034.
 >
-> So the 23% figure above is the rate **for one specific image**, and reproduction requires the
-> whole initramfs, not just the domain. This also promotes **physical placement** (cache set index,
-> DRAM row, bank) from "not excluded" to the leading structural suspect — consistent with the two
-> recorded wedge `mepc` values sharing their low 22 bits, and therefore every set index.
+> An earlier version of this note attributed the suppression to three unrelated domains having
+> been added to the initramfs. **That is RETRACTED.** Removing them again and rebuilding to a
+> byte-size-identical cpio, with all 14 original domains byte-identical, did NOT bring the wedge
+> back: 0 in 8 on the restored image. Image composition is therefore not the explanation, and
+> physical placement is NOT promoted by this evidence — the earlier paragraph claiming so was
+> written before the restoration test and was wrong.
+>
+> **What this means for reproduction.** The 23% figure is what was measured in one window on
+> 2026-08-14. The defect is not reproducing now, on the same binary and an equivalent image, and
+> the cause of the change is unidentified. Do not treat 23% as a rate you can rely on seeing.
+> Candidates not yet separated: the several firmware rebuilds in between (content-identical monitor,
+> relinked), some board-state or thermal effect after a long session, or genuine clustering that
+> makes 3/13 a less stable estimate than it looked.
 
 ## What has been EXCLUDED, with positive controls that fire
 
