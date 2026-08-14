@@ -43,11 +43,12 @@ MUSL_CFLAGS=(
   # `return callee(...)` -- call with link, then no epilogue and no return.
   -fno-optimize-sibling-calls
   -D_XOPEN_SOURCE=700
+  # APPLICATION include path. src/include and src/internal are musl's OWN build
+  # headers and must NOT be here: they define `weak` and `hidden` as MACROS,
+  # which collide with ordinary identifiers. Harmless for this program, fatal for
+  # Lua (a field named `weak` broke 18 of 22 files), so it is wrong here too.
   -I"$MUSL_SRC_DIR/arch/capstone64"
   -I"$MUSL_SRC_DIR/arch/generic"
-  -I"$MUSL_SRC_DIR/obj/src/internal"
-  -I"$MUSL_SRC_DIR/src/include"
-  -I"$MUSL_SRC_DIR/src/internal"
   -I"$MUSL_SRC_DIR/obj/include"
   -I"$MUSL_SRC_DIR/include"
   -ffunction-sections -fdata-sections -fno-jump-tables
