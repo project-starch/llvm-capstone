@@ -93,6 +93,10 @@ def main() -> int:
     parser.add_argument("--expect-ok", type=int, default=BASELINE_OK)
     parser.add_argument("--jobs", type=int, default=min(16, (os.cpu_count() or 4)))
     parser.add_argument("--list-failures", action="store_true")
+    parser.add_argument("--objects", metavar="DIR",
+                        help="also keep the object files, so an archive can be "
+                             "built from whatever compiles. The flags and the "
+                             "file set then have exactly one definition, here.")
     args = parser.parse_args()
 
     musl = pathlib.Path(args.musl_dir).resolve()
@@ -120,9 +124,17 @@ def main() -> int:
 
     flags = compile_flags(musl)
 
+    objdir = pathlib.Path(args.objects).resolve() if args.objects else None
+
     def compile_one(path: pathlib.Path) -> tuple[str, bool, str]:
         rel = str(path.relative_to(musl))
-        done = subprocess.run([clang, *flags, "-c", str(path), "-o", "/dev/null"],
+        if objdir is None:
+            out = "/dev/null"
+        else:
+            obj = objdir / (rel[:-2].replace("/", "_") + ".o")
+            obj.parent.mkdir(parents=True, exist_ok=True)
+            out = str(obj)
+        done = subprocess.run([clang, *flags, "-c", str(path), "-o", out],
                               capture_output=True, text=True)
         if done.returncode == 0:
             return rel, True, ""

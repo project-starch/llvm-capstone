@@ -8,9 +8,18 @@ stubs, and the next workload would need its own.
 
 ## Status
 
-**Survey stage.** The compiler accepts 93.3 % of musl's sources. Nothing is
-linked yet and there is no hostcall transport yet, so nothing runs. The runnable
-check is the survey; see *Run* below.
+The compiler accepts **93.3 %** of musl's sources, `libc-capstone.a` links, and
+the domain boundary a syscall needs is **proven working under QEMU**:
+
+- `write(1, ...)` linked against the partial archive leaves `__capstone_hostcall`
+  as the **only** undefined symbol, so the 91 files that do not compile are not
+  on the path of POSIX I/O.
+- `yield-probe/` shows a pure-capability domain making a blocking hostcall and
+  resuming with its C frame intact (`__CAPSTONE_YIELD_PROBE_PASSED__`). See
+  `agent-handoff/history/14-08-2026_16-30-00_pure-cap-domain-resumable-hostcall-works.md`.
+
+Not done: musl's own `write()` has not yet been run through that yield.
+`runtime/hostcall.c` is written but unexercised.
 
 musl is **not vendored**. `fetch-musl.sh` downloads the official 1.2.5 archive
 and verifies its SHA-256; the upstream tree stays immutable under
@@ -76,9 +85,11 @@ size`. The 39 long-double files are counted as **unresolved**, not fixed.
 | 9 | `src/string` | word-at-a-time routines: `(uintptr_t)s % ALIGN` | Replace, as SQLite already does with `beebs_freestanding_string.c`. |
 | 33 | `thread` (8), `locale` (7), `network` (5), `aio`, `mman`, `regex`, `signal` (2 each), `exit`, `ldso`, `stdio`, `stdlib`, `multibyte` (1 each) | mixed, mostly the same pointer-as-integer family | Stub to `ENOSYS` for the first milestone; threads and `fork` are out of scope. |
 
-Not in the survey because it only compiles `.c` files: `src/thread/__syscall_cp.c`
-needs a `__syscall_cp_asm` for this target, and a single-threaded port can
-forward it to `__syscall`. That is the next patch.
+`__syscall_cp` needs **no patch**, contrary to an earlier plan here: musl
+weak-aliases `__syscall_cp_c` to a `sccp` that calls `__syscall` directly
+(`src/thread/__syscall_cp.c`), and the strong definition lives in
+`pthread_cancel.c`. As long as that object is not linked, the alias wins and
+cancellation points route through our hostcall like any other syscall.
 
 ## Run
 
