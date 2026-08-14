@@ -4479,7 +4479,44 @@ predicate over different encodings. This also withdraws the eviction hypothesis 
 
 ---
 
-## QEMU CORE SUITES ARE RED (found 2026-08-14) — masked by a stale build directory
+## QEMU CORE SUITES WERE RED (2026-08-14) — ROOT-CAUSED AND FIXED: an unconditional gp carve
+
+**RESOLVED 2026-08-14.** Fix: `capstone-sbi` `1a926b0` (carve gp only for images that declare a
+globals region) + `caplifive-buildroot` `b098a39` (the build dependency that was hiding it).
+Verified: smoke returns 42, coremark validates its CRC.
+
+**The cause was NOT the compiler**, and not the S-06 guard, and not a stale LLVM build directory.
+The monitor's `create_domain` split every domain's code capability at `base + gpoff`
+unconditionally, and `gpoff` fell back to `GPFREE_GLOBALS_OFFSET` (0x1000) whenever the image did
+not declare a globals boundary. Domains linked with `my_first_domain/link.ld` — about 78 build
+scripts, i.e. the whole core tier — have no globals at 0x1000, so all of them were carved wrongly,
+in two shapes that look nothing alike:
+
+| image size | symptom |
+|---|---|
+| `< 0x1000` | the SPLIT is itself out of range; QEMU asserts in `helper_cssplit` and aborts before the domain exists. Measured on the 416-byte `write_42` domain: parent `[base, base+0x1a0)`, `mid = base+0x1000`. |
+| `>= 0x1000` | the split succeeds and silently TRUNCATES the code cap to 4096 bytes; the entry glue's first access past it faults. Measured on coremark (27084-byte image): `bounds = [base, base+0x1000)`, access at `base+0x6278`, cause 5. |
+
+One cause, both symptoms, whole tier.
+
+**Why it took so long, and the two things that actually cost the time.** First, the `.c.S`
+intermediate the monitor is compiled through did not depend on the monitor source
+(`sbi_capstone_dom.c` is a one-line `#include`), so the first fix was applied, rebuilt, re-tested,
+and produced a byte-identical failure at the identical pc — the firmware kept its exact previous
+size, which is the clearest possible evidence that nothing was rebuilt. Second, `helper_cssplit`
+aborted with no operands and no pc, so the failing split could not be attributed; adding
+`mid`/parent-bounds/pc to it named `create_domain` in a single run. Both are fixed
+(`caplifive-buildroot` `b098a39`, `capstone-qemu` `f462a68b80`).
+
+**The superseded hypothesis, kept because it was wrong in an instructive way.** What follows was
+written before any of the above and reasoned from the WRONG ONE OF THE TWO MONITOR COPIES: the
+`package/capstone-sbi-domain/` copy has no gp carve at all, so its `create_domain` looked innocent.
+The firmware is built from `components/opensbi/`. Checking which source the artifact was built from
+would have cost a minute.
+
+---
+
+### Superseded record (2026-08-14, pre-root-cause)
 
 **Not caused by the S-06 granule guard.** That flag is `cl::init(false)` and is referenced by
 exactly one build script (`benchmarks/sqlite/build-sqlite-silicon.sh`); no suite below passes it,
