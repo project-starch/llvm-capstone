@@ -929,7 +929,35 @@ the fixup's store pattern (`s06sfix` returns 2048 at 64 KB scale); rev-node tag 
 (this entry); and — added 2026-08-12 — **the entire revocation-validity family, excluded
 arithmetically**: those sites raise `INVALID_CAPABILITY`, which encodes to `mcause 26`, while the
 wedge shows 25. The fault remains UNEXPLAINED, but the search has moved from "the revocation node
-says invalid" to "the operand is the wrong shape". See the retraction entry above.
+says invalid" to "the operand is the wrong shape".
+
+**ADDED 2026-08-14 — the fault site is now exact, and six more mechanisms are excluded.**
+
+The wedge is `mcause 25` at `memcpy+0x2a8`, on `cincoffset a1, a2, a1` where `a2` was reloaded by
+`ldc a2, 0x0(a2)` from the stack slot at `s0-0x60` and is NOT_CAP. Two facts pin it down:
+
+* **Not statement-specific.** The workload bisect put it in extended phase 2→3 (`CREATE INDEX`), but
+  the matched control `CAPSTONE_EXT_SKIP_INDEX`, which substitutes `SELECT count(*)` through the same
+  machinery, wedges at the **identical instruction**. The index build is exonerated.
+* **Nothing writes the granule.** Every instruction in `memcpy` touching `s0-0x60` is `stc`, one
+  plain `ld`, and three `ldc` — **zero plain stores**. So it is not correct tag-clearing on a partial
+  overwrite, and it is not the write-buffer `.user` clobber (`wt_dcache_wbuffer.sv:602` writes
+  `.user` unconditionally whole-word while `.data` is byte-gated), which needs a coalescing plain
+  STORE to the same word.
+
+Four ladder rungs, each with a positive control shown to fire, exclude the simple round-trip
+properties on silicon: `s06spill` 65535 (a spilled capability comes back TAGGED), `s06bnds` 65535
+(BOUNDS intact), `s06wr` 65535 (survives byte stores written THROUGH it), `s06pld` 65535 (survives a
+scalar load of its own granule).
+
+An in-domain `EVICT` probe also showed a capability's type and cursor unchanged across a 256 KiB
+heap walk — but note it queries with **LCC only**, so it does NOT perform the memory round trip with
+validity queries that `s06rev` does. `s06rev` is the stronger measurement and already covers this;
+the EVICT arm should not be cited as independent evidence about the rev-node path.
+
+**Still untested:** capability TYPE. Every rung above spills a pointer to a static array, i.e.
+NONLIN, while `stc` writes cnull into rs2 for LINEAR/UNINIT/SEALED. Handoff for the RTL side, with
+the R-20-analogue question, is in `ref/RTL-QUESTION-mcause25-tag-loss.md`. See the retraction entry above.
 
 Worth noting for anyone reading the eliminations as a run of bad luck: the first three all targeted
 `INVALID_CAPABILITY`, so a single naming error accounts for all of them at once. The measurements
@@ -4441,3 +4469,43 @@ predicate over different encodings. This also withdraws the eviction hypothesis 
 **Cosmetic, non-security:** `ariane.core:48`, `Bender.yml:114` and `src_files.yml:50` all name
 `core/capstone_dyn_unit.sv`, which does not exist; the file that reaches the build arrives via
 `core/Flist.cva6:138` -> `core/anvil.Flist`.
+
+---
+
+## QEMU CORE SUITES ARE RED (found 2026-08-14) — masked by a stale build directory
+
+**Not caused by the S-06 granule guard.** That flag is `cl::init(false)` and is referenced by
+exactly one build script (`benchmarks/sqlite/build-sqlite-silicon.sh`); no suite below passes it,
+and `grep -rl guard-cap-granule` over the suite scripts returns nothing. The SQLite silicon domain
+passes under QEMU with the guard both ON and OFF (hashes `c08aeaa614ac61e4` vs `f1214600d0dac351`,
+`.text` differing by ~34 KB, both reaching `__CAPSTONE_SQLITE_EXTENDED_PASSED__` and
+`__CAPSTONE_SQLITE_MEMORY_PASSED__`).
+
+**How it surfaced.** `llvm/cmake-build-debug` was STALE relative to committed sources; rebuilding
+`llc`/`clang` brought it up to date and the suites went red. There are no uncommitted LLVM changes,
+so this is committed work whose effect was hidden by an out-of-date build directory. Anyone
+trusting a green suite run from before 2026-08-14 15:05 should re-run it.
+
+**State (core tier, `run-nightly.sh --skip-build`, incomplete):** `revoke-matrix` PASS; `lit` PASS
+(48/48). FAIL: `authority`, `smoke`, `coremark`, `rv8`, `beebs`, `revoke-on-free`, `borrow-cost`,
+`tree-cost-O2`, `static-cap-globals`, `intra-domain-mrev`. NOT RUN: `hier-revoke` (was still
+running), `shared-region`, `linear-uninit-corpus`, and the whole `--extended` tier.
+Logs: `/tmp/capstone/nightly-20260814_150736/`.
+
+**Measured signature** (`smoke.log`): the domain reports `Segment size = 1a0` — a **416-byte**
+loadable image — and QEMU then aborts in
+`helper_cssplit: Assertion 'mid > rs1_v->val.cap.bounds.base && mid < rs1_v->val.cap.bounds.end'`.
+So a SPLIT is being taken at a `mid` outside the code capability's bounds.
+
+**HYPOTHESIS, not yet confirmed:** the monitor's `create_domain` splits the code capability at a
+FIXED offset, and an image shorter than that offset puts `mid` past `end`. This project has already
+recorded the countermeasure — "`__pad` keeps image > 0x1000 so the monitor SPLIT is non-degenerate"
+— which implies the fixed offset is `0x1000` and that tiny domains rely on padding to clear it. A
+committed compiler change altering code size for very small domains would then unmask exactly this.
+**I did not locate the monitor's split site to confirm the offset**, so treat the mechanism as
+unverified; the 416-byte image and the assertion text are the measurements.
+
+**Cheapest next step:** confirm the monitor's split offset, then check whether the failing domains
+lost padding or fell under it. If so this is a latent fragility (fixed split offset vs. variable
+image size), not a miscompile, and the fix belongs in the padding or the monitor rather than in the
+compiler.

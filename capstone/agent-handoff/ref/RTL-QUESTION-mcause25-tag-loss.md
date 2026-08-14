@@ -84,6 +84,25 @@ So the trigger is not the index build and not that SQL statement; it is `memcpy`
 whatever state the workload is in by then. A ladder that merely stopped before CREATE INDEX would
 have concluded the opposite, which is why the control exists.
 
+## Already eliminated — please do not re-run these
+
+From `ref/ISSUES.md` (dates as recorded there), so this handoff does not send anyone over old
+ground:
+
+* **Pool exhaustion** — the rev-node pool holds 65536; observed heads at the wedges were ~250-600.
+* **Rev-node tag loss zeroing `valid`** — refuted by rung `s06rev` (returns 11, both arms, control
+  green): `valid` sits in `data_rdata`, not in `ruser`, so zeroing `ruser` cannot clear it.
+  `s06rev` also covers evict-and-refill of a capability round-tripped through memory WITH the
+  validity queries that `ldc`/`stc` perform.
+* **The entire revocation-validity family, arithmetically** — those sites raise
+  `INVALID_CAPABILITY` = mcause **26**, and the wedge is **25**.
+* **The fixup's store pattern** — `s06sfix` returns 2048 at 64 KB scale.
+
+One region fact from that work is still open and unrelated to us: the rev-node pool at
+`[0xBFF0_0000, 0xC000_0000)` is cacheable but excluded from the shadow-tag write, so an evicted
+rev-node line loses its top 30 bits, i.e. part of `depth`. That is not the mcause-25 mechanism, but
+a corrupted depth would affect revocation-tree walks and may deserve its own look.
+
 ## The question
 
 **What else, in the RTL, can cause a tagged capability in memory to be reloaded untagged, given that
