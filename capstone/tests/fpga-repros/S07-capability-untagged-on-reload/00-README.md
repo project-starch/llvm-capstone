@@ -68,15 +68,26 @@ establish a deterministic trigger.
 
 ## What has been EXCLUDED, with positive controls that fire
 
-Four ladder rungs, on this silicon, each returning `0xFFFF` (all sixteen slots intact) and each
-shown able to report failure when fed a deliberately wrong operand:
+Four ladder rungs, on this silicon, each returning `0xFFFF` — all sixteen slots intact:
 
-| rung | question |
-|---|---|
-| `s06spill` | does a spilled capability come back TAGGED? |
-| `s06bnds` | ...with its BOUNDS intact? |
-| `s06wr` | ...surviving byte stores written THROUGH it? |
-| `s06pld` | ...surviving a scalar load of its own granule? |
+| rung | question | selftest build | gives |
+|---|---|---|---|
+| `s06spill` | does a spilled capability come back TAGGED? | `-DS06SPILL_SELFTEST` | 0 |
+| `s06bnds` | ...with its BOUNDS intact? | `-DS06BNDS_SELFTEST` | 0 |
+| `s06wr` | ...surviving byte stores written THROUGH it? | `-DS06WR_SELFTEST` | 0 |
+| `s06pld` | ...surviving a scalar load of its own granule? | `-DS06PLD_SELFTEST` | 0 |
+
+**Every rung carries a positive control and every one has been shown to fire**, because `0xFFFF`
+from a query that cannot return anything else is not a measurement. The selftest build feeds the
+same LCC query a value that is not a capability and requires the mask to collapse to 0; all four
+do. The controls are exercised under QEMU, whose LCC field-1 is total with the same encoding
+(`capstone-qemu/target/riscv/op_helper.c:713-716` returns 7 for an untagged operand), and the
+control sits behind an `#ifdef` so the clean build is byte-identical to the one measured on
+silicon.
+
+`s06spill`'s control was added on 2026-08-14, after its silicon run — it had shipped without one
+while the three rungs written after it all had one. Its 65535 stands (same bytes), but until that
+date it was an unproven instrument, and this table said otherwise.
 
 Plus, in the SQLite domain (which owns a 256 KiB heap a rung cannot): a capability held live across
 a walk touching **every line of that heap** comes back with type and cursor unchanged — so a plain

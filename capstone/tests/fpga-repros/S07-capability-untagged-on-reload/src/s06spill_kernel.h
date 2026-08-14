@@ -82,6 +82,21 @@ static unsigned s06spill_compute(void)
   S06SPILL_CHECK(8);  S06SPILL_CHECK(9);  S06SPILL_CHECK(10); S06SPILL_CHECK(11);
   S06SPILL_CHECK(12); S06SPILL_CHECK(13); S06SPILL_CHECK(14); S06SPILL_CHECK(15);
 
+#ifdef S06SPILL_SELFTEST
+  /* POSITIVE CONTROL, added 2026-08-14. This rung shipped without one while the three rungs
+     built after it (s06bnds, s06wr, s06pld) all carry the same six lines -- and 65535 from a
+     query that cannot return anything else is not a measurement, it is an unproven instrument.
+     Query a value that is NOT a capability and require the mask to collapse to 0.
+
+     The control is behind an #ifdef, so the clean build is byte-identical to the one already
+     run on silicon; adding this does not invalidate that 65535. */
+  {
+    unsigned long junk_ = 0x5A5Aul, tj_;
+    S06SPILL_LCC_TYPE(tj_, junk_);
+    if (tj_ == 7UL) r = 0u;
+  }
+#endif
+
   return r;
 }
 #endif /* S06SPILL_KERNEL_H */
