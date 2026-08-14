@@ -1397,6 +1397,14 @@ if [[ "${CAPSTONE_MCP_TAGCHECK:-0}" == "1" ]]; then
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DBEEBS_MEMCPY_TAGCHECK=1"
 fi
 
+# CAPSTONE_EVICT_PROBE=1 -- does a capability survive a spill/reload across a CACHE EVICTION?
+# The last axis the ladder rungs cannot reach: they touch sixteen adjacent slots in a tight loop,
+# which never leave the cache. Set ABOVE the _domain_defs read, like every other domain knob --
+# below it the define reaches nothing and the probe is silently compiled out.
+if [[ "${CAPSTONE_EVICT_PROBE:-0}" == "1" ]]; then
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_EVICT_PROBE=1"
+fi
+
 read -r -a _domain_defs <<< "${DOMAIN_EXTRA_DEFS:-}"
 "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$OPT" \
   -DSQLITE_HEAP_SIZE=$HEAP "${_domain_defs[@]}" "${_amalgam_mllvm[@]}" \

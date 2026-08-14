@@ -100,7 +100,8 @@ unsigned long capstone_memgrow_seen, capstone_amem_seen, capstone_pdest_seen;
 #if defined(CAPSTONE_OOB_PROBE) || defined(CAPSTONE_ARG_PROBE) || \
     defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE) || \
     defined(CAPSTONE_MEMGROW_PROBE) || defined(CAPSTONE_AMEM_PROBE) || \
-    defined(CAPSTONE_PDEST_PROBE) || defined(BEEBS_MEMCPY_TAGCHECK)
+    defined(CAPSTONE_PDEST_PROBE) || defined(BEEBS_MEMCPY_TAGCHECK) || \
+    defined(CAPSTONE_EVICT_PROBE)
 /* Shared by both probes. Lived inside the OOB block until the ARG probe needed it too; a
    reporter that cannot print is a reporter that silently reports nothing. */
 static void output_hex64(unsigned long v) {
@@ -224,7 +225,8 @@ void capstone_arg_report(void) {
 
 #if defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE) || \
     defined(CAPSTONE_MEMGROW_PROBE) || defined(CAPSTONE_AMEM_PROBE) || \
-    defined(CAPSTONE_PDEST_PROBE) || defined(BEEBS_MEMCPY_TAGCHECK)
+    defined(CAPSTONE_PDEST_PROBE) || defined(BEEBS_MEMCPY_TAGCHECK) || \
+    defined(CAPSTONE_EVICT_PROBE)
 /* Reports the lookaside small-free head WITHOUT DEREFERENCING IT, and then falls back to the
    general allocator so the run continues instead of wedging.
    
@@ -462,6 +464,59 @@ void capstone_mcp_report(void) {
   output_text(" off=");      output_hexv(beebs_mcp_fail_off);
   output_text(" n=");        output_hexv(beebs_mcp_fail_n);
   output_text(" al=");       output_hexv(beebs_mcp_fail_al);
+  output_text("\n");
+}
+#endif
+
+#ifdef CAPSTONE_EVICT_PROBE
+/* Does a capability survive a spill/reload across a CACHE EVICTION?
+ *
+ * The last axis the ladder rungs cannot reach. Four of them refute every simple construct in
+ * memcpy's inner loop on silicon -- the tag survives a spill/reload, the bounds survive, byte
+ * stores written through the pointer are harmless, and a scalar load of the granule is harmless --
+ * each with a positive control that fires. What they all share is that sixteen adjacent slots
+ * touched in a tight loop NEVER LEAVE THE CACHE. memcpy inside SQLite runs over large buffers
+ * under real pressure, where the line holding a spilled pointer can be evicted and refilled
+ * between the store and the reload.
+ *
+ * That path is also the one RTL area an oracle left open: the AXI-level tag memory
+ * (wt_axi_adapter.sv) keeps one byte per 16B granule and reloads it on refill through a 4-state
+ * FSM, which the oracle read but did not simulate, in a file whose recent history is a run of
+ * hazard fixes.
+ *
+ * It lives here rather than in a ladder rung because the eviction needs a large buffer and the
+ * ladder cannot link one -- a rung with an 8 KiB static array fails to link, .text overlapping
+ * .capstone_gp_initdesc. This domain already owns a 256 KiB heap.
+ *
+ * WALKING THE HEAP IS THE INSTRUMENT, so it must not be optimised away: the reads are volatile
+ * and accumulate into a sink the caller consumes. One touch every 16 bytes covers every line. */
+void capstone_evict_probe(void) {
+  volatile unsigned long sink = 0;
+  void *p = (void *)sqlite_heap;
+  unsigned long ty0 = 0, ty1 = 0, c0 = 0, c1 = 0, i;
+
+  __asm__ volatile("" ::: "memory");
+  ty0 = cap_q_type(p);
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x2" : "=r"(c0) : "r"(p));
+
+  /* Evict: touch every line of the 256 KiB heap. p stays live across this, so at -O0 it is
+     spilled before the loop and reloaded after -- the exact round trip under test, but now with
+     the whole cache turned over in between. */
+  for (i = 0; i < (unsigned long)sizeof(sqlite_heap); i += 16UL)
+    sink += ((volatile unsigned char *)sqlite_heap)[i];
+  __asm__ volatile("" ::: "memory");
+
+  ty1 = cap_q_type(p);
+  if (ty1 <= 3UL)
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x2" : "=r"(c1) : "r"(p));
+
+  if (!capstone_out_reserve(200UL))
+    return;
+  output_text("EVICT ty0=");  output_hexv(ty0);
+  output_text(" ty1=");       output_hexv(ty1);
+  output_text(" c0=");        output_hexv(c0);
+  output_text(" c1=");        output_hexv(c1);
+  output_text(" sink=");      output_hexv((unsigned long)sink);
   output_text("\n");
 }
 #endif
@@ -849,6 +904,9 @@ void capstone_mcp_report(void);
 
 static int run_sqlite_extended(sqlite3 *db) {
   int rc;
+#ifdef CAPSTONE_EVICT_PROBE
+  capstone_evict_probe();   /* runs before any extended statement, so EXT_STOP=1 reports it */
+#endif
 
 #ifdef CAPSTONE_PROBE_LOOKASIDE
   /* Print the REAL connection pointer, so the allocator's `db` can be compared against it.
