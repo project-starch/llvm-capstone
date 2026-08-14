@@ -17,8 +17,11 @@ Two adversarial audits + a QEMU-differential confirm the contract holds and coul
 scope. Trail: `history/14-08-2026_18-30-00_s06-rtl-fix-p0-p6.md`; handoff:
 `tests/fpga-repros/S06-untagged-ldc-stc-high-half/` (00-README STATUS block).
 
-**BLOCKED on two external steps, in order:** (1) `git push` of the branch is 403 — the stored
-`GITHUB_TOKEN` is invalid (`gh auth status`); the six RTL commits are LOCAL-ONLY. (2) hardware
+**BLOCKED on two external steps, in order:** (1) `git push` of the branch is 403 — refined
+diagnosis: the stored credential pushes `llvm-capstone` fine but lacks WRITE access to
+`project-starch/capstone-ariane` specifically (per-repo permission, not a dead token). Fix =
+grant that account write on capstone-ariane, or supply a token that has it. The squashed RTL
+commit is LOCAL-ONLY until then. (2) hardware
 synthesis + flash (board owner). After flash: acceptance boot, then SQLite with
 `SQLITE_LDC_HIGH_HALF_FIXUP=0` and no `-capstone-guard-cap-granule-copies`.
 
