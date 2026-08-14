@@ -98,6 +98,9 @@ which requires a coalescing plain STORE to the same word.
 * **The entire revocation-validity family, arithmetically** — those sites raise
   `INVALID_CAPABILITY` = mcause **26**, and this is **25**.
 * **The S-06 fixup's store pattern** — `s06sfix` returns 2048 at 64 KB scale.
+* **That it is specific to the `CREATE INDEX` statement** — refuted with a matched control that
+  substitutes `SELECT count(*)` and wedges at the *identical* instruction. Table in
+  `board/fault-sites.md`.
 
 ## Not reproducible under QEMU, structurally
 

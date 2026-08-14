@@ -19,6 +19,31 @@ Instance 1 was reproduced at the identical instruction across two DIFFERENT SQL 
 (`CREATE INDEX`, and a `SELECT count(*)` substituted for it via the `CAPSTONE_EXT_SKIP_INDEX`
 control), so it is not statement-specific.
 
+The workload bisect put the fault in extended phase 2->3, whose statement is `CREATE INDEX
+idx_amount ON nums(amount)` -- the obvious suspect, since building an index btree is the heaviest
+thing there. **Refuted.** `CAPSTONE_EXT_SKIP_INDEX` replaces that statement with
+`SELECT count(*) FROM nums`, reaching it through the same exec_ok/prepare/step machinery. One boot,
+control returning:
+
+| arm | phase 3 statement | result |
+|---|---|---|
+| `E2` | stops before it | RETURNED |
+| `E3S` | `SELECT count(*)` instead of CREATE INDEX | **WEDGED** |
+| `E3N` | `CREATE INDEX` | wedges (measured separately) |
+
+`E3S`'s latched trap is mcause 25 at `memcpy+0x2a8` -- **the identical instruction** as the
+CREATE INDEX arm:
+
+```
+    cincoffsetimm a2, s0, -0x60
+    ldc           a2, 0x0(a2)
+    cincoffset    a1, a2, a1     <== mcause 25
+```
+
+So the trigger is not the index build and not that SQL statement; it is `memcpy` being reached in
+whatever state the workload is in by then. A ladder that merely stopped before CREATE INDEX would
+have concluded the opposite, which is why the control exists.
+
 ## A caveat on the latch
 
 `mepc` proves where the last capability exception was, not that the core stopped there. Supporting
