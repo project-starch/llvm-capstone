@@ -12,6 +12,65 @@ Last updated 2026-08-14.
 
 ---
 
+## C-20 — `long double` is unusable on `capstone64`: every 128-bit float builtin fails to compile · `CHARACTERISED 2026-08-14, no fix, avoidable`
+
+**`long double` is binary128 on this target, and so is a capability.** The backend
+conflates the two, so nothing that touches a 128-bit float compiles — not in musl, and not
+in our own compiler-rt.
+
+**Measured.** Every 128-bit builtin, `-O0`, `-target capstone64-unknown-elf`:
+
+```
+comparetf2.c   addtf3.c   subtf3.c   multf3.c   divtf3.c
+extenddftf2.c  extendsftf2.c  floatsitf.c  floatunsitf.c
+trunctfdf2.c   trunctfsf2.c                       -- ALL FAIL
+```
+
+with four distinct signatures, all the same cause:
+
+```
+Assertion `getActiveBits() <= 64 && "Too many bits for uint64_t"' failed.
+Assertion `getSignificantBits() <= 64 && "Too many bits for int64_t"' failed.
+Assertion `VT.isVector() && "Unable to legalize non-vector shift"' failed.
+error in backend: Capstone PureCap: Cannot materialize arbitrary >64-bit constants
+```
+
+musl shows the same family from the other side: **39 of its files** (31 `src/math/*l.c`,
+8 `src/complex/*l.c`) fail identically. This is 39 of the 119 files that do not compile in
+the musl port — the single largest group.
+
+**Why it bites programs that never mention `long double`.** musl's `strtod` converts
+through `long double` (`src/internal/floatscan.c`), so *any* string-to-float conversion
+pulls the whole family in. Linking reference Lua against musl produced **15 undefined
+symbols** from that one path — `__addtf3`, `__multf3`, `__getf2`, `fabsl`, `copysignl`,
+`fmodl` and the rest — none of which can be supplied, because their sources do not
+compile. `printf` of a float is the same story via `vfprintf`, which is likewise absent.
+
+**Two non-fixes, both tried:**
+
+- `-mlong-double-64` is **rejected by the target**: `unsupported option '-mlong-double-64'
+  for target 'capstone64-unknown-unknown-elf'`.
+- Setting `LDBL_MANT_DIG` to 53 in musl's `bits/float.h` compiles 39 more files and is
+  **unsound** — the compiler still has `long double` at 128 bits. musl catches the lie
+  itself: `src/stdio/vfprintf.c` fails with
+  `'compiler_defines_long_double_incorrectly' declared as an array with a negative size`.
+
+**Avoidance, which is what `musl-capstone/lua-probe/` does.** Supply your own `strtod`
+so `floatscan.o` is never pulled, and do not format floats. That removed all 15 symbols at
+once. It is avoidance, not a fix: the stubs are loud on purpose, because a silent partial
+`strtod` would let a program compute a wrong number and still report success.
+
+**The fix belongs in the backend** — either support `-mlong-double-64` for this target, or
+separate integer-i128 from capability-i128 so 128-bit float lowering can proceed. Until
+then, treat `long double`, `strtod`, `strtof`, `strtold` and float formatting as
+unavailable in a domain.
+
+**Reproducer:** any of the files above, one `clang -c` each.
+Trail: `history/14-08-2026_21-30-00_reference-lua-runs-on-musl-in-a-domain.md`.
+
+
+---
+
 ## C-19 — a call in RETURN POSITION loses its epilogue and its return · `WORKED AROUND 2026-08-14 with -fno-optimize-sibling-calls`
 
 **`return callee(...)` is compiled to a call WITH LINK followed by nothing.** No epilogue, no
