@@ -12,6 +12,64 @@ Last updated 2026-08-14.
 
 ---
 
+## C-21 — casting a NEGATIVE integer constant to a capability crashes the backend · `CHARACTERISED 2026-08-14, cheap workaround, likely a small backend fix`
+
+**One line reproduces it**, at `-O0`, `-target capstone64-unknown-elf`:
+
+```c
+void *f(void) { return (void *)-100; }
+```
+
+```
+Assertion `getActiveBits() <= 64 && "Too many bits for uint64_t"' failed.
+```
+
+**It is specifically a negative CONSTANT.** Measured, same flags, same file:
+
+| expression | result |
+|---|---|
+| `(void *)1` | **OK** |
+| `(void *)-100` | **FAILS** |
+| `(void *)(long)-100` | **FAILS** |
+| `(void *)(long)x` for a runtime `x` | **OK** |
+| passing `(void *)-100` as an argument | **FAILS** |
+
+Sign-extending a negative constant to i128 sets every high bit, and the backend
+then reads it with `getZExtValue()`, which asserts.
+
+**Why it matters more than a one-liner suggests: `AT_FDCWD` is `-100`.** musl
+marshals syscall arguments with `__scc(X)`, which under this port is a cast to
+`void *` (see C-20's neighbour, `musl-capstone/arch-capstone64/syscall_arch.h`),
+so **every `*at()` wrapper performs exactly this cast**. That is why
+`src/fcntl/open.c` and `src/stdio/fopen.c` do not compile, and it is not the
+long-double family they were first attributed to — same assertion text, different
+cause.
+
+**19 of the 119 musl files that fail to compile name `AT_FDCWD`.** That is an
+indicator, not an apportionment: the 119 have not been split between C-20 and
+C-21, and some files may hit both.
+
+**Workaround, three lines, in use:** route the constant through a runtime value.
+
+```c
+volatile long at_fdcwd = AT_FDCWD;
+__capstone_hostcall(SYS_openat, (syscall_arg_t)at_fdcwd, ...);
+```
+
+`musl-capstone/runtime/musl_gaps.c` does this to supply `open()`, and file I/O
+from a domain works end to end with it (`musl-capstone/file-probe/`).
+
+**The fix belongs in the backend** and looks small: the constant path needs to
+stop assuming the materialised value fits in 64 bits. Unlike C-20 this is not a
+representation conflict — the cursor value genuinely fits, it is the
+sign-extension to capability width that is being read back wrongly.
+
+**Reproducer:** the one-liner above.
+Trail: `history/14-08-2026_23-00-00_file-io-from-a-domain-through-musl.md`.
+
+
+---
+
 ## C-20 — `long double` is unusable on `capstone64`: every 128-bit float builtin fails to compile · `CHARACTERISED 2026-08-14, no fix, avoidable`
 
 **`long double` is binary128 on this target, and so is a capability.** The backend

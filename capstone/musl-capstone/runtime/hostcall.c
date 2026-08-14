@@ -109,6 +109,123 @@ static void hc_unsupported(unsigned long kind, unsigned long value) {
   (void)hc_round(kind, value, 0);
 }
 
+
+/* ---------------------------------------------------------------- file ops
+ *
+ * HostCall v0 already defines and services FILE_OPEN/READ/WRITE/CLOSE/SYNC/
+ * TRUNCATE (agent-handoff/design/syscalls-and-hostcall-abi.md), so this is a
+ * translation and not a new protocol.
+ *
+ * TWO IMPEDANCE MISMATCHES, both handled here rather than papered over:
+ *
+ * 1. HostCall v0 read/write take an EXPLICIT file offset; POSIX read/write use
+ *    the descriptor's implicit position. The position therefore lives here, one
+ *    per open handle, advanced on every transfer. lseek moves it.
+ * 2. The host hands back a handle TOKEN starting at 1, and fds 1 and 2 are
+ *    already stdout and stderr on the WRITE_STDOUT path. A token is exposed to
+ *    the program as `token + 2`, so tokens 1..8 become fds 3..10 and cannot
+ *    collide with the two we already answer.
+ */
+#define HC_FD_BASE 3
+#define HC_MAX_HANDLES 8
+
+static long hc_offset[HC_MAX_HANDLES];   /* implicit position, per handle */
+
+static int hc_token_of(long fd) {
+  long token = fd - HC_FD_BASE + 1;
+  if (token < 1 || token > HC_MAX_HANDLES)
+    return 0;
+  return (int)token;
+}
+
+/* Payload layout helpers: the request header is a run of u64s at offset 0 and
+   the variable part follows at a fixed offset the header pins down. */
+static void hc_put_u64(unsigned long index, unsigned long long value) {
+  volatile unsigned long long *slots = (volatile unsigned long long *)hc_payload;
+  slots[index] = value;
+}
+
+static long hc_open(const char *path, long flags, long mode) {
+  unsigned long n = 0;
+  if (!hc_payload)
+    return -EIO;
+  while (path[n])
+    n++;
+  if (HC_FILE_OPEN_REQ_V0_PATH_OFFSET + n + 1 > HOSTCALL_STDOUT_PROBE_REGION_SIZE)
+    return -ENAMETOOLONG;
+
+  hc_put_u64(0, (unsigned long long)flags);
+  hc_put_u64(1, (unsigned long long)mode);
+  for (unsigned long i = 0; i < n; i++)
+    hc_payload[HC_FILE_OPEN_REQ_V0_PATH_OFFSET + i] = path[i];
+
+  if (hc_round(HC_V0_OP_FILE_OPEN, HC_FILE_OPEN_REQ_V0_PATH_OFFSET, n) != 0)
+    return -EIO;
+  if (hc_metadata->error != 0)
+    return -(long)hc_metadata->error;
+
+  long token = (long)hc_metadata->result;
+  if (token < 1 || token > HC_MAX_HANDLES)
+    return -EMFILE;
+  hc_offset[token - 1] = 0;
+  return token + HC_FD_BASE - 1;
+}
+
+/* Shared by read and write: both use the same 32-byte header and a data area,
+   and differ only in which direction the bytes move. */
+static long hc_transfer(unsigned long opcode, long fd, char *buf,
+                        unsigned long count, int writing) {
+  int token = hc_token_of(fd);
+  if (!token)
+    return -EBADF;
+  if (!hc_payload)
+    return -EIO;
+
+  unsigned long room = HOSTCALL_STDOUT_PROBE_REGION_SIZE - HC_FILE_READ_REQ_V0_DATA_OFFSET;
+  if (count > room)
+    count = room;               /* a short transfer is a legal POSIX result */
+
+  hc_put_u64(0, (unsigned long long)token);
+  hc_put_u64(1, (unsigned long long)hc_offset[token - 1]);
+  hc_put_u64(2, 0);
+  hc_put_u64(3, 0);
+  if (writing)
+    for (unsigned long i = 0; i < count; i++)
+      hc_payload[HC_FILE_WRITE_REQ_V0_DATA_OFFSET + i] = buf[i];
+
+  if (hc_round(opcode, HC_FILE_READ_REQ_V0_DATA_OFFSET, count) != 0)
+    return -EIO;
+  if (hc_metadata->error != 0)
+    return -(long)hc_metadata->error;
+
+  long moved = (long)hc_metadata->result;
+  if (moved < 0)
+    return -EIO;
+  if (!writing)
+    for (long i = 0; i < moved; i++)
+      buf[i] = hc_payload[HC_FILE_READ_REQ_V0_DATA_OFFSET + i];
+  hc_offset[token - 1] += moved;
+  return moved;
+}
+
+/* One shape for the three requests that carry only a handle and one number. */
+static long hc_handle_op(unsigned long opcode, long fd, unsigned long long arg) {
+  int token = hc_token_of(fd);
+  if (!token)
+    return -EBADF;
+  if (!hc_payload)
+    return -EIO;
+  hc_put_u64(0, (unsigned long long)token);
+  hc_put_u64(1, arg);
+  hc_put_u64(2, 0);
+  hc_put_u64(3, 0);
+  if (hc_round(opcode, 0, 0) != 0)
+    return -EIO;
+  if (hc_metadata->error != 0)
+    return -(long)hc_metadata->error;
+  return (long)hc_metadata->result;
+}
+
 long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
                          syscall_arg_t c, syscall_arg_t d, syscall_arg_t e,
                          syscall_arg_t f) {
@@ -121,11 +238,32 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
   (void)f;
   switch (n) {
   case SYS_write:
-    if ((long)a != 1 && (long)a != 2) {
-      hc_unsupported(HC_UNSUP_BAD_FD, (unsigned long)a);
-      return -EBADF;
-    }
-    return __capstone_hc_write((long)a, (const char *)b, (unsigned long)c);
+    if ((long)a == 1 || (long)a == 2)
+      return __capstone_hc_write((long)a, (const char *)b, (unsigned long)c);
+    return hc_transfer(HC_V0_OP_FILE_WRITE, (long)a, (char *)b, (unsigned long)c, 1);
+
+  case SYS_read:
+    return hc_transfer(HC_V0_OP_FILE_READ, (long)a, (char *)b, (unsigned long)c, 0);
+
+  /* openat is the syscall; open() is a libc wrapper, and musl's does not
+     compile for this target (see runtime/musl_gaps.c). dirfd is ignored: a
+     domain has no working directory, so every path is what the host resolves. */
+  case SYS_openat:
+    return hc_open((const char *)b, (long)c, (long)d);
+
+  case SYS_close: {
+    int token = hc_token_of((long)a);
+    if (!token)
+      return (long)a == 1 || (long)a == 2 ? 0 : -EBADF;
+    return hc_handle_op(HC_V0_OP_FILE_CLOSE, (long)a, 0);
+  }
+
+  case SYS_fsync:
+  case SYS_fdatasync:
+    return hc_handle_op(HC_V0_OP_FILE_SYNC, (long)a, 0);
+
+  case SYS_ftruncate:
+    return hc_handle_op(HC_V0_OP_FILE_TRUNCATE, (long)a, (unsigned long long)(long)b);
 
   /* Reported as unsupported rather than faked. musl copes: exit_group falling
      through to the domain return is exactly what a domain does anyway. */
