@@ -87,11 +87,18 @@ all three controls passing.
 
 | source | genuine executions | passed | **wedged** | entry stalls (excluded) |
 |---|---|---|---|---|
-| earlier record (its one wedge was at `output_text+0xdc`, the same instruction — recorded in `agent-handoff/history/14-08-2026_18-30-00_s07-wedge-rate-and-fault-site.md`) | 6 | 5 | 1 | 1 |
+| earlier record (its one wedge was at `output_text+0xdc`, the same instruction) — **one of these 6 is not present in any surviving transcript; a recount from raw logs gives 5, i.e. 12 genuine overall rather than 13** | 6 | 5 | 1 | 1 |
 | boot 1 | 2 | 1 | 1 | 0 |
 | boot 2 | 4 | 4 | 0 | 1 |
 | boot 3 | 1 | 0 | 1 | 0 |
 | **total** | **13** | **10** | **3** | **2** |
+
+**The "entry stalls" column is MISLABELLED and it is not R-16.** Those arms stop far earlier, at
+`SQ: id=5` with `RGNO:0000E00C` / `RGNN:00000020` — deterministic **monitor region-pool exhaustion**
+(32 regions) during setup, before the domain is entered. The signature is identical in every boot in
+both measurement windows, so the exclusion is symmetric and cannot bias the comparison — but it does
+mean **every boot is structurally capped at about 4 genuine `G6` executions**, which is the real
+reason accumulating samples is slow.
 
 **p(wedge) ≈ 3/13 ≈ 23% per execution.** An R-16 entry stall is excluded from both numerator and
 denominator — an image that never entered says nothing about the code in it, so counting one as a
@@ -136,12 +143,20 @@ wedge does not establish a deterministic trigger.
 >   `rc=11` (malformed schema) — a completely different and much earlier failure. Verified as a
 >   matched pair in ONE boot: the uninstrumented binary printed its three rows twice while the
 >   instrumented one failed twice.
-> * **THE DEFECT HAS STOPPED REPRODUCING ALTOGETHER, and we do not know why.** After the rate was
->   measured at 3/13, `G6.dom` — byte-identical throughout, verified by hashing the cpio member —
->   has wedged **0 times in 14 further genuine executions**, across boots with passing controls.
->   Counting every arm run since (including a patched variant) it is **0 in 25**.
->   P(0 in 25 | the 23% rate still held) = 0.0015; Fisher exact two-sided against the 3/13
->   window = 0.034.
+> * **THE DEFECT MAY HAVE STOPPED REPRODUCING — but this is NOT established, and an earlier version
+>   of this note overstated it.** Since the rate was measured, `G6.dom` (byte-identical throughout)
+>   has wedged 0 times in 14 further genuine executions. On the **like-for-like** comparison — the
+>   same initramfs that is the only configuration ever observed to wedge — it is **0 in 8**, which
+>   is **Fisher exact p = 0.26: no evidence of a change at all**. Across all images it is 0 in 14,
+>   p = 0.098, still not significant.
+>
+>   The previously published "0 in 25, p = 0.0015, Fisher 0.034" is **WITHDRAWN**. It pooled in 11
+>   executions of a *patched* binary built specifically under a hypothesis that predicts it will not
+>   wedge; those arms are predicted not to wedge by both live explanations, so they cannot
+>   discriminate between them, and pooling them to reach significance was circular.
+>
+>   A live alternative that the data does not exclude: **burstiness**. All three wedges fall inside
+>   a single 17:27-18:40 window, and one boot *inside* that window was itself 0-in-4.
 >
 > An earlier version of this note attributed the suppression to three unrelated domains having
 > been added to the initramfs. **That is RETRACTED.** Removing them again and rebuilding to a
