@@ -8,7 +8,57 @@ Convention: **R-n** = RTL/hardware, **C-n** = our compiler/toolchain, **I-n** = 
 software). An S-n is promoted to R-n/C-n only when the origin is demonstrated, never on suspicion.
 Status: `OPEN` · `CHARACTERISED` (mechanism known, unfixed) · `WORKED AROUND` · `FIXED` · `CLOSED`.
 
-Last updated 2026-08-09.
+Last updated 2026-08-14.
+
+---
+
+## C-19 — a call in RETURN POSITION loses its epilogue and its return · `WORKED AROUND 2026-08-14 with -fno-optimize-sibling-calls`
+
+**`return callee(...)` is compiled to a call WITH LINK followed by nothing.** No epilogue, no
+return: control falls through into whatever basic block the linker placed next. Callee-saved
+registers stashed by the prologue are never restored, and `ra` still points at the fall-through
+instruction, so the eventual `cjalr zero, 0(ra)` jumps to itself.
+
+**Minimal reproducer** (no musl, no Capstone runtime, reproduces at `-O0`, `-O1` and `-O2`):
+
+```c
+long callee(long a);
+long c_only(long x) { return callee(x); }
+```
+
+emits
+
+```
+  cincoffsetimm sp, sp, -0x20
+  stc  ra, 0x10(sp)
+  stc  s0, 0x0(sp)
+  ...
+  cjalr ra, 0x0(a1)     <-- call WITH link
+                        <-- and that is the end of the function
+```
+
+With `-fno-optimize-sibling-calls` the same source emits the call followed by
+`ldc ra` / `ldc s0` / `cincoffsetimm sp` — a correct epilogue. So the defect is on the
+sibling-call path: the backend decides to tail-call, then emits a linking call and drops the
+return.
+
+**How it presented**, before the shape was known: musl's `write()` inside a domain performed its
+write correctly and the caller then executed its own `default:` case and returned `-ENOSYS`,
+because `return __capstone_hc_write(...)` fell through into the next case. The wrong answer was
+delivered with no fault and no diagnostic; a host-side trace of every hostcall entry showed the
+same syscall number arriving twice, once handled and once refused, which is what localised it.
+
+**Scope, and why this is worth a registry entry rather than a note.** `build-sqlite-capstone.sh`
+already carries `-fno-optimize-sibling-calls` in `COMMON_FLAGS`, undocumented, so the workaround
+predates this analysis and its reason was not written down anywhere. **Any domain built without
+that flag is potentially miscompiled**, and it takes only one `return f(...)` to trigger. The
+freestanding benchmark builds and any new probe are exposed unless they carry it.
+
+**Not fixed**, only worked around. The backend fix belongs in the Capstone sibling-call lowering.
+
+**Reproducer:** `capstone/musl-capstone/` builds carry the flag with a comment pointing here;
+the three-line case above is the smallest form.
+
 
 ---
 

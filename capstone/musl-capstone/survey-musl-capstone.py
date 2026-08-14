@@ -30,7 +30,15 @@ import sys
 
 # Pinned baseline: the OK count this port is known to reach. Raise it when a
 # patch improves things (that is the point), never lower it to make a run pass.
-BASELINE_OK = 1270
+#
+# LOWERED ONCE, deliberately, from 1270 to 1242: syscall_arg_t had to become
+# `void *`, because no capability-carrying integer type exists on this target and
+# an integer typedef silently stripped the tag off every pointer argument (see
+# arch-capstone64/syscall_arch.h). That is a correctness fix, and it costs 28
+# files. Trading 28 compilable files for a libc whose write() actually works is
+# the right way round; trading the other way would have kept a bigger number and
+# a broken ABI.
+BASELINE_OK = 1242
 
 # A file that MUST compile, and a file that MUST NOT, with the reason it fails.
 # strlen.c fails on `(uintptr_t)s % ALIGN`; when the word-at-a-time string
@@ -50,6 +58,14 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         # which is a missing flag, not a porting problem.
         "-Xclang", "-target-feature", "-Xclang", "+a",
         "-std=c99", "-nostdinc", "-ffreestanding", "-fno-builtin",
+        # LOAD-BEARING, NOT COSMETIC. Without it the backend takes the
+        # sibling-call path for `return callee(...)`, emits `cjalr ra` (WITH
+        # link) and then drops the epilogue and the return entirely, so control
+        # falls into whatever basic block follows. Reproduced at -O0/-O1/-O2 with
+        # a 3-line function; measured in musl as write() succeeding and the
+        # caller then executing its own default case and returning -ENOSYS.
+        # build-sqlite-capstone.sh already carries this flag, undocumented.
+        "-fno-optimize-sibling-calls",
         "-D_XOPEN_SOURCE=700",
         f"-I{musl}/arch/capstone64",
         f"-I{musl}/arch/generic",
@@ -59,6 +75,13 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         f"-I{musl}/obj/include",
         f"-I{musl}/include",
         "-O1", "-w",
+        # int -> pointer conversion is an ERROR in current clang, not a warning,
+        # so -w does not cover it. It is also exactly what this ABI requires:
+        # syscall_arg_t is `void *` because no capability-carrying integer type
+        # exists on this target, so every integer argument (fd, count, flags) is
+        # deliberately cast to a pointer and rides in the cursor. Without this
+        # 497 of 1361 files fail on that one diagnostic alone.
+        "-Wno-int-conversion", "-Wno-error=int-conversion",
     ]
 
 

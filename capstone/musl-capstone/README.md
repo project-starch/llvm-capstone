@@ -8,18 +8,27 @@ stubs, and the next workload would need its own.
 
 ## Status
 
-The compiler accepts **93.3 %** of musl's sources, `libc-capstone.a` links, and
-the domain boundary a syscall needs is **proven working under QEMU**:
+**A POSIX program runs.** `musl-hello/` is `#include <unistd.h>` plus two
+`write()` calls, compiled against musl, running in a pure-capability domain,
+with its I/O serviced by the host across the capability boundary:
 
-- `write(1, ...)` linked against the partial archive leaves `__capstone_hostcall`
-  as the **only** undefined symbol, so the 91 files that do not compile are not
-  on the path of POSIX I/O.
-- `yield-probe/` shows a pure-capability domain making a blocking hostcall and
-  resuming with its C frame intact (`__CAPSTONE_YIELD_PROBE_PASSED__`). See
-  `agent-handoff/history/14-08-2026_16-30-00_pure-cap-domain-resumable-hostcall-works.md`.
+```
+musl-hello: write #1 through musl in a domain
+S2: musl write() RETURNED
+musl-hello: write #2, so write() RETURNED
+__CAPSTONE_HOSTCALL_HOST_DONE__ status=0 serviced=4
+```
 
-Not done: musl's own `write()` has not yet been run through that yield.
-`runtime/hostcall.c` is written but unexercised.
+| | |
+|---|---|
+| musl sources the compiler accepts | **1242 / 1361 (91.3 %)** |
+| `libc-capstone.a` | links; `write(1,…)` leaves only `__capstone_hostcall` undefined |
+| resumable hostcall from a pure-cap domain | works — `yield-probe/` |
+| musl `write()` end to end | works — `musl-hello/` |
+| syscalls implemented | `write` (stdout/stderr), `exit`, `exit_group`; all else `-ENOSYS` |
+
+Trail: `agent-handoff/history/14-08-2026_18-45-00_musl-write-runs-in-a-pure-cap-domain.md`,
+and `ISSUES.md` C-19 for the compiler bug found on the way.
 
 musl is **not vendored**. `fetch-musl.sh` downloads the official 1.2.5 archive
 and verifies its SHA-256; the upstream tree stays immutable under
@@ -32,26 +41,35 @@ entire delta.
 `arch-capstone64/syscall_arch.h` replaces musl's riscv64 arch layer. Two
 deviations, both forced by the capability ABI:
 
-**1. `syscall_arg_t` is capability-width, not `long`.** Upstream marshals every
+**1. `syscall_arg_t` is `void *`, not an integer.** Upstream marshals every
 syscall argument through `((long)(X))` (`src/internal/syscall.h:22`). Under
-pure-cap a pointer *is* a capability, so that cast destroys it and the backend
-then refuses to rebuild one from an integer:
+pure-cap a pointer *is* a capability, and casting through ANY integer emits `mv`
+and strips the tag. Measured on this target:
 
 ```
-fatal error: error in backend: Capstone PureCap: Cannot materialize arbitrary
->64-bit constants as capabilities; capabilities are unforgeable
+sizeof(void *)            == 16
+sizeof(__UINTPTR_TYPE__)  ==  8      <- a plain integer
+__uintcap_t / __intcap_t  do not exist
 ```
 
-musl anticipates the override: its definition is guarded by `#ifndef __scc`.
-Defining `__scc` here suppresses both the macro and the `typedef long
-syscall_arg_t`, and pointers reach the boundary intact. **This one change fixes
-27 files** (`fopen`, `fstatat`, `mkdir`, `lchown`, `sem_timedwait`, ...).
+so there is no capability-carrying integer type; the only type that carries a
+capability is a pointer. A pointer-to-pointer cast emits nothing at all.
+Integer arguments (fd, count, flags) become untagged capabilities whose cursor
+holds the value, which needs `-Wno-int-conversion`: int→pointer is an *error* in
+current clang rather than a warning, and this ABI requires it.
+
+musl anticipates the override — its definition is guarded by `#ifndef __scc`.
+
+A first version used `__UINTPTR_TYPE__`, on the CHERI-shaped assumption that
+uintptr_t is capability-width. It is not, and the result was musl's `write`
+emitting `mv a2, a1` for the buffer while using `movc` for everything else: the
+tag was stripped and the domain faulted in `helper_cscincoffset`.
 
 **2. No `ecall`.** A domain cannot trap to Linux: its caller is a user process,
 not a kernel, and the trap vector belongs to the monitor. The boundary is a call
-to `__capstone_hostcall()`, which is declared here and not yet implemented.
-Keeping it an extern call is what lets the whole libc compile before any
-transport exists.
+to `__capstone_hostcall()`, implemented in `runtime/hostcall.c`, which
+translates Linux syscall numbers into HostCall v0 opcodes. Keeping it an extern
+call is what let the whole libc compile before any transport existed.
 
 ## Measured, 2026-08-14
 
@@ -65,7 +83,14 @@ musl's own build would not compile them for this target either.
 |---|---:|---:|---|
 | A `arch/riscv64` unchanged, `+m` only | 1208 / 1361 | 88.8 % | 35 files fail on `lr.d`/`sc.d` |
 | B A + `-target-feature +a` | 1243 / 1361 | 91.3 % | those 35 were a missing flag, not a port problem |
-| C B + `arch/capstone64` (`syscall_arg_t`) | **1270 / 1361** | **93.3 %** | **+27** |
+| C B + `arch/capstone64`, `syscall_arg_t` as an integer | 1270 / 1361 | 93.3 % | +27 |
+| D C with `syscall_arg_t` as `void *` (**correct**) | **1242 / 1361** | **91.3 %** | **-28** |
+
+Arm D is the shipped one. It is a *smaller* number than arm C on purpose: arm C
+compiles more files and strips the tag off every pointer argument, so its libc
+does not work. Trading 28 compilable files for a `write()` that works is the
+right way round, and `BASELINE_OK` was lowered to 1242 with that reason recorded
+in the survey.
 
 A fourth arm was run and **rejected as unsound**: setting
 `LDBL_MANT_DIG` to 53 in `bits/float.h` reaches 96.1 %, but only by telling musl
@@ -76,14 +101,14 @@ size`. The 39 long-double files are counted as **unresolved**, not fixed.
 
 ## What is left
 
-91 files, grouped by what has to be done. Counts are by directory and sum to 91.
+119 files, grouped by what has to be done. Counts are by directory and sum to 119.
 
 | files | where | dominant cause | shape of the fix |
 |---:|---|---|---|
 | 39 | `src/math` (31), `src/complex` (8) | **`long double` is 128-bit and so is a capability**, so it dies in i128 shift legalisation and in APInt | Backend: support `-mlong-double-64` for this target, or separate integer-i128 from capability-i128. The only genuinely new item on this list. |
 | 10 | `src/malloc` (3), `mallocng` (6), `oldmalloc` (1) | static asserts over `sizeof(void*)`, violated by 16-byte pointers | Replace with an arena, as memsys5 does for SQLite today. |
 | 9 | `src/string` | word-at-a-time routines: `(uintptr_t)s % ALIGN` | Replace, as SQLite already does with `beebs_freestanding_string.c`. |
-| 33 | `thread` (8), `locale` (7), `network` (5), `aio`, `mman`, `regex`, `signal` (2 each), `exit`, `ldso`, `stdio`, `stdlib`, `multibyte` (1 each) | mixed, mostly the same pointer-as-integer family | Stub to `ENOSYS` for the first milestone; threads and `fork` are out of scope. |
+| 61 | `unistd` (9), `thread`, `locale`, `network`, `stdio`, `stat`, `mman`, `regex`, `signal`, `aio`, … | mixed, mostly the same 128-bit-value family | Stub to `ENOSYS` for the first milestone; threads and `fork` are out of scope. The `void *` ABI moved ~28 files into this group, which is the cost recorded above. |
 
 `__syscall_cp` needs **no patch**, contrary to an earlier plan here: musl
 weak-aliases `__syscall_cp_c` to a `sccp` that calls `__syscall` directly
