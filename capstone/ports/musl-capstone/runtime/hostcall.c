@@ -20,6 +20,7 @@
  */
 #include <errno.h>
 #include <sys/syscall.h>
+#include <sys/uio.h>
 
 /* Not <sys/syscall.h>'s job: syscall_arg_t and the __capstone_hostcall
    prototype both live in our arch layer. Including it here means the definition
@@ -35,6 +36,7 @@
 
 extern void __capstone_yield(void);
 extern int capstone_main(void);
+extern void __stdio_exit(void);
 
 static volatile struct hostcall_v0 *hc_metadata;
 static volatile char *hc_payload;
@@ -226,6 +228,15 @@ static long hc_handle_op(unsigned long opcode, long fd, unsigned long long arg) 
   return (long)hc_metadata->result;
 }
 
+/* One place where "which fd is this" is decided, because write() and writev()
+   must agree: 1 and 2 are the host's stdout/stderr and have their own opcode,
+   everything else is a FILE_* handle token. */
+static long hc_write_fd(long fd, const void *buf, unsigned long count) {
+  if (fd == 1 || fd == 2)
+    return __capstone_hc_write(fd, (const char *)buf, count);
+  return hc_transfer(HC_V0_OP_FILE_WRITE, fd, (char *)buf, count, 1);
+}
+
 long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
                          syscall_arg_t c, syscall_arg_t d, syscall_arg_t e,
                          syscall_arg_t f) {
@@ -238,9 +249,30 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
   (void)f;
   switch (n) {
   case SYS_write:
-    if ((long)a == 1 || (long)a == 2)
-      return __capstone_hc_write((long)a, (const char *)b, (unsigned long)c);
-    return hc_transfer(HC_V0_OP_FILE_WRITE, (long)a, (char *)b, (unsigned long)c, 1);
+    return hc_write_fd((long)a, (const char *)b, (unsigned long)c);
+
+  /* THE SYSCALL MUSL'S STDIO ACTUALLY USES. __stdio_write builds a two-element
+     iovec -- the buffer already accumulated plus the new bytes -- and issues one
+     writev; there is no path through plain write(). So without this case every
+     printf, puts and fwrite in the libc reaches -ENOSYS while write() works
+     perfectly, which reads like "stdio is broken" rather than "one syscall is
+     missing". Serviced by looping over the vector, because HostCall v0 moves one
+     contiguous run of bytes per round. */
+  case SYS_writev: {
+    const struct iovec *iov = (const struct iovec *)b;
+    long total = 0;
+    for (int i = 0; i < (int)(long)c; i++) {
+      if (iov[i].iov_len == 0)
+        continue;
+      long done = hc_write_fd((long)a, iov[i].iov_base, iov[i].iov_len);
+      if (done < 0)
+        return total ? total : done;
+      total += done;
+      if ((unsigned long)done < iov[i].iov_len)
+        break; /* short write: a legal result, and the caller retries */
+    }
+    return total;
+  }
 
   case SYS_read:
     return hc_transfer(HC_V0_OP_FILE_READ, (long)a, (char *)b, (unsigned long)c, 0);
@@ -291,6 +323,37 @@ void domain_main(unsigned *res, unsigned func) {
   }
 
   int status = capstone_main();
+
+  /* FLUSH STDIO, BECAUSE NOTHING ELSE WILL. musl flushes from exit(), and a
+     domain cannot call exit(): _Exit loops on SYS_exit forever, and our SYS_exit
+     merely returns, because a domain leaves by returning from domain_main rather
+     than by a syscall. Without this, stdout's 1 KiB buffer is discarded and a
+     program that printf'd its whole result prints nothing -- the most
+     misleading possible failure, since a wedge looks identical.
+
+     CALLED UNCONDITIONALLY, and the first attempt did it the other way, which
+     is worth recording because the mistake is not visible in the C. It was
+     `extern void __stdio_exit(void) __attribute__((weak)); if (__stdio_exit)
+     __stdio_exit();` -- the standard trick, so that a domain which never
+     touches stdio does not pull the machinery. On this target the guard does
+     not work: the address of an UNDEFINED weak symbol is materialised
+     pc-relatively and is therefore NOT null, so the branch is taken and the
+     domain calls it. Measured, in file_probe.dom:
+
+         auipc a1, 0xfffef       <- not zero
+         addi  a1, a1, 0x3a4
+         cincoffset a2, gp, a1
+         beqz  a2, ...           <- never taken
+         cjalr ra, 0(a0)         <- calls the symbol that does not exist
+
+     which faulted immediately after the probe's own PASSED marker, i.e. after
+     everything the probe tested had already worked.
+
+     Unconditional is also cheap and correct: musl weak-aliases __stdio_exit to
+     a no-op in exit.c, and the real one in __stdio_exit.o overrides it when a
+     FILE is actually used, pulled by the reference __towrite.c carries for
+     exactly this purpose. */
+  __stdio_exit();
 
   if (hc_metadata) {
     hc_metadata->opcode = HC_V0_OP_NONE;
