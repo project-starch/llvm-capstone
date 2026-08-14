@@ -1,42 +1,31 @@
 #!/usr/bin/env bash
-# Boot Capstone QEMU once and run the resumable-yield probe.
+# Boot Capstone QEMU once and run the musl-hello domain.
 #
-# The success markers are ALL THREE of message 1, message 2 and the pass line.
-# Message 2 alone is what separates a resume from a restart, so a run that only
-# prints message 1 repeatedly must not be read as a pass.
+# Same two rules as yield-probe/run-yield-probe.sh, both learned the expensive
+# way: the boot control shares ONE guest command with the program (every
+# --success-marker is checked against every --guest-command), and the timeout
+# multiplier defaults to 8 because boot-to-login on this host straddles the
+# 480 s that a multiplier of 4 allows.
+#
+# Both writes are required markers. The first proves only that the outward path
+# works; the second can only be reached by RETURNING from the first write, so it
+# is the one that shows a syscall completed rather than merely fired.
 set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 
-OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/musl-capstone-yield-probe}
+OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/musl-capstone-hello}
 SHARE_DIR=${SHARE_DIR:-$OUT_DIR/share}
-LOG_FILE=${LOG_FILE:-$CAPSTONE_TMP_ROOT/capstone-musl-yield-probe.log}
+LOG_FILE=${LOG_FILE:-$CAPSTONE_TMP_ROOT/capstone-musl-hello.log}
 
 mkdir -p "$OUT_DIR" "$SHARE_DIR"
-rm -f "$SHARE_DIR/yield_probe.dom" "$SHARE_DIR/yield_probe.user"
+rm -f "$SHARE_DIR"/musl_hello*.dom "$SHARE_DIR/musl_hello.user"
 
-OUT_DIR="$OUT_DIR" OUT_DOM="$SHARE_DIR/yield_probe.dom" \
-  OUT_HOST="$SHARE_DIR/yield_probe.user" \
-  bash "$SCRIPT_DIR/build-yield-probe.sh"
+OUT_DIR="$OUT_DIR" OUT_DOM="$SHARE_DIR/musl_hello.dom" \
+  OUT_HOST="$SHARE_DIR/musl_hello.user" \
+  bash "$SCRIPT_DIR/build-musl-hello.sh"
 
-# TIMEOUT_MULTIPLIER defaults to 8, not the 4 this started with, because the
-# login timeout is 120 * multiplier and boot-to-login on this host measured
-# either side of 8 minutes: at multiplier 4 two of three runs came back
-# `__CAPSTONE_INFRA_FLAKE__ phase=boot-login` and one succeeded. That is boot
-# latency under TCG, not a domain failure -- but a flake indistinguishable from
-# a stall costs a whole run to diagnose, so buy the margin.
-#
-# The boot control and the probe are ONE guest command, not two.
-# run-domain-smoke.py checks EVERY --success-marker against EVERY
-# --guest-command, so passing them as two commands makes the first one fail for
-# missing the second one's markers -- and it then never runs the probe at all.
-# Measured that way once; the control is only useful if it shares the command.
-#
-# It is still a control: a boot that never reaches a shell prints neither
-# marker, so its absence voids the probe result rather than looking like a
-# probe failure. That distinction is worth keeping while the QEMU core suites
-# are RED (ISSUES.md).
 # QUIET THE KERNEL CONSOLE. Measured 2026-08-14: this image prints "remote fence
 # extension is not available in SBI v1.0" 842 times during boot -- 61% of all
 # console traffic -- and under TCG with an emulated 8250 the console is the
@@ -81,10 +70,12 @@ run_smoke python3 "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-sm
   --log-file "$LOG_FILE" \
   --timeout-multiplier "${TIMEOUT_MULTIPLIER:-8}" \
   --guest-command \
-    'echo __CAPSTONE_QEMU_BOOT_CONTROL_OK__; cp /mnt/host/yield_probe.user /tmp/yield_probe.user && chmod 0755 /tmp/yield_probe.user && /tmp/yield_probe.user /mnt/host/yield_probe.dom' \
+    'echo __CAPSTONE_QEMU_BOOT_CONTROL_OK__; cp /mnt/host/musl_hello.user /tmp/h && chmod 0755 /tmp/h && /tmp/h /mnt/host/musl_hello.dom' \
   --success-marker '__CAPSTONE_QEMU_BOOT_CONTROL_OK__' \
-  --success-marker 'yield-probe: round 1 before yield' \
-  --success-marker 'yield-probe: round 2 AFTER RESUME, stack intact' \
-  --success-marker '__CAPSTONE_YIELD_PROBE_PASSED__'
+  --success-marker 'S1: hostcall.c direct write ok' \
+  --success-marker 'S2: musl write() RETURNED' \
+  --success-marker 'musl-hello: write #1 through musl in a domain' \
+  --success-marker 'musl-hello: write #2, so write() RETURNED' \
+  --success-marker '__CAPSTONE_HOSTCALL_HOST_DONE__ status=0'
 
-echo "run-yield-probe.sh completed. Full serial log: $LOG_FILE"
+echo "run-musl-hello.sh completed. Full serial log: $LOG_FILE"

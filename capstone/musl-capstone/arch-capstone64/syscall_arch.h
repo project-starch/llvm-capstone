@@ -38,7 +38,34 @@
 #define __SYSCALL_LL_E(x) (x)
 #define __SYSCALL_LL_O(x) (x)
 
-typedef __UINTPTR_TYPE__ syscall_arg_t;
+/* `void *`, NOT an integer type -- and this is the one decision in the file that
+ * has to be right.
+ *
+ * The first version used __UINTPTR_TYPE__, on the assumption that it was
+ * capability-width the way uintptr_t is under CHERI. It is not. MEASURED on this
+ * target:
+ *
+ *   sizeof(void *)             == 16
+ *   sizeof(__UINTPTR_TYPE__)   ==  8      <-- a plain integer
+ *   __uintcap_t / __intcap_t   do not exist
+ *
+ * So there is NO capability-carrying integer type here; the only type that
+ * carries a capability is a pointer. Casting through any integer emits `mv` and
+ * strips the tag, which is exactly the defect this header exists to avoid --
+ * reintroduced one level down. The symptom was musl's write() compiling to
+ *
+ *   movc a3, a2      # count, capability move
+ *   mv   a2, a1      # buf, INTEGER move -- tag gone
+ *
+ * and the domain then faulting in helper_cscincoffset when the untagged buffer
+ * was indexed.
+ *
+ * A pointer-to-pointer cast, by contrast, emits nothing at all: the capability
+ * passes through untouched. Integer arguments (fd, count, flags) become
+ * untagged capabilities whose cursor holds the value, which is all they need to
+ * be -- __capstone_hostcall reads them back with (long).
+ */
+typedef void *syscall_arg_t;
 #define __scc(X) ((syscall_arg_t)(X))
 
 long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,

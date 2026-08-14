@@ -21,6 +21,12 @@
 #include <errno.h>
 #include <sys/syscall.h>
 
+/* Not <sys/syscall.h>'s job: syscall_arg_t and the __capstone_hostcall
+   prototype both live in our arch layer. Including it here means the definition
+   below is checked against the declaration musl actually calls through, rather
+   than merely resembling it. */
+#include "syscall_arch.h"
+
 #include "../../tests/runtime-qemu/hostcall-stdout-probe/hostcall_stdout_probe.h"
 
 /* shared_region_annotated() enters the domain with func == 1 and the region
@@ -52,7 +58,11 @@ static int hc_round(unsigned long opcode, unsigned long offset,
   return hc_metadata->phase == HC_V0_PHASE_RESP ? 0 : -1;
 }
 
-static long hc_write(long fd, const char *buf, unsigned long count) {
+/* Exported, not static: a domain needs a way to print through the path that is
+   already known to work, so that a ladder can localise a failure in the musl
+   wrapper chain above it. Without this, "musl write() faulted" and "our hostcall
+   faulted" look identical -- silence. */
+long __capstone_hc_write(long fd, const char *buf, unsigned long count) {
   unsigned long done = 0;
 
   /* Only stdout/stderr exist as an opcode today. Everything else needs
@@ -83,15 +93,39 @@ static long hc_write(long fd, const char *buf, unsigned long count) {
   return (long)done;
 }
 
+/* REPORT WITHOUT FORMATTING. Two previous versions of this built a string in a
+   local buffer and each introduced its own defect -- a 32-byte buffer overrun
+   that the capability bounds caught on the exact byte, then a degenerate SHRINK.
+   A diagnostic that can itself be the fault is worse than none, so the value now
+   travels as a NUMBER in the shared metadata and the host does the printing.
+   The domain formats nothing. */
+#define HC_UNSUP_SYSCALL 0xE0UL
+#define HC_UNSUP_BAD_FD 0xE1UL
+#define HC_TRACE_ENTRY 0xE2UL
+
+static void hc_unsupported(unsigned long kind, unsigned long value) {
+  /* `offset` carries the value: it is meaningless for an opcode the host does
+     not implement, and the host prints it with the complaint. */
+  (void)hc_round(kind, value, 0);
+}
+
 long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
                          syscall_arg_t c, syscall_arg_t d, syscall_arg_t e,
                          syscall_arg_t f) {
+  /* The per-entry trace that localised the sibling-call miscompile lived here.
+     Removed once it had done its job: it doubles the number of hostcall rounds,
+     and the thing it was watching for is now prevented at compile time by
+     -fno-optimize-sibling-calls rather than observed at run time. */
   (void)d;
   (void)e;
   (void)f;
   switch (n) {
   case SYS_write:
-    return hc_write((long)a, (const char *)b, (unsigned long)c);
+    if ((long)a != 1 && (long)a != 2) {
+      hc_unsupported(HC_UNSUP_BAD_FD, (unsigned long)a);
+      return -EBADF;
+    }
+    return __capstone_hc_write((long)a, (const char *)b, (unsigned long)c);
 
   /* Reported as unsupported rather than faked. musl copes: exit_group falling
      through to the domain return is exactly what a domain does anyway. */
@@ -100,6 +134,7 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
     return 0;
 
   default:
+    hc_unsupported(HC_UNSUP_SYSCALL, (unsigned long)n);
     return -ENOSYS;
   }
 }
