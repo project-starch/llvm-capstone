@@ -618,6 +618,55 @@ distinguishable; (2) climb the window with a trivial rung at 256 KiB and 1 MiB; 
 re-run SQLite. Nothing here suggests the ABI work is wrong — every piece of it is green
 under QEMU and the offset demonstrably reaches the monitor on silicon.
 
+## 4e. SQLite RUNS ON THE BOARD — the basic workload completes, ~77% of the time (2026-08-14)
+
+**This supersedes §4c's "the domain does not complete", which was written 2026-07-29 and is kept
+above only as history.** SQLite executes in a pure-capability domain on the FPGA and returns
+correct results.
+
+Bitstream `caplifive_12august.bit`. Binary `G6.dom` (sha256 `f93a9188a9a4433c…`), built with the
+S-06 workarounds on (`-capstone-guard-cap-granule-copies` and the library-memcpy fixup — see
+`ref/S06-WORKAROUNDS-TO-REVERT.md`), **not rebuilt between boots**, verified present in the
+initramfs by hashing the cpio members.
+
+**Basic workload** = CREATE TABLE / three INSERTs / SELECT returning all three rows / finalize.
+When it completes it returns `obs=0x5A6E0603` and prints `alpha 11`, `beta 22`, `gamma 33` — the
+correct rows, byte-identical across every passing run.
+
+| | genuine executions | completed | wedged |
+|---|---|---|---|
+| measured 2026-08-14, three boots + prior record | 13 | 10 | 3 |
+
+**Completion rate ≈ 10/13 ≈ 77%.** Method: each boot ran a control domain followed by eight
+repetitions of the same binary; all three controls passed, so no boot is void. Two R-16 entry
+stalls are excluded from both numerator and denominator, an image that never entered being no
+evidence about the code in it. Each boot stops at its first failure, so these are censored
+run-lengths rather than 24 independent trials.
+
+**The failures are one silicon defect, S-07, at one instruction.** All three wedges landed at
+`output_text+0xdc` with mcause 25 (UNEXPECTED_OPERAND — a capability read back from memory arrives
+untagged), from two different physical placements of the domain. `output_text` is our own domain
+harness (`sqlite_boundary_cost_domain.c:48`), not SQLite: the fault is in the code that writes
+result rows out through the shared region, not in the database engine.
+
+**The full (extended) workload does not complete** — it wedges in `sqlite3DbMallocRawNN`, also
+S-07, also mcause 25.
+
+### What may and may not be claimed from this
+
+- **May**: SQLite runs in a Capstone pure-capability domain on real silicon and produces correct
+  results; the remaining failures are an identified hardware defect with a reproducer package
+  (`tests/fpga-repros/S07-capability-untagged-on-reload/`), not an unknown.
+- **May NOT**: that SQLite runs *reliably* on this silicon, or any timing number taken from these
+  runs — cycle counts were not the object of this measurement and the S-06 workarounds add
+  +33660 bytes of `.text` plus a branch per granule, so any performance figure from this binary
+  measures the workaround as much as the workload.
+- **Framing is the project lead's call.** The honest statements are "the basic workload completes,
+  with p(failure) ≈ 23% per run, from one identified silicon defect" and "SQLite does not yet run
+  reliably on silicon". Both are true; which belongs in the paper is not a lane's decision.
+
+Full trail: `history/14-08-2026_18-30-00_s07-wedge-rate-and-fault-site.md`.
+
 ## 5. What is NOT established — read before citing anything above
 
 - **PARTLY SUPERSEDED 2026-07-28 — read the correction first.** What follows was written when

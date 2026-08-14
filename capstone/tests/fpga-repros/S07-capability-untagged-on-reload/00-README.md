@@ -53,18 +53,40 @@ or data structure.
 
 ## It is SPORADIC, and that is part of the signature
 
-The same binary (`G6.dom`, sha256 `f93a9188a9a4433c`, kept across boots and **not** rebuilt) both
-passes and wedges:
+The same binary (`G6.dom`, sha256 `f93a9188a9a4433c`, kept across boots and **not** rebuilt —
+verified by hashing the initramfs cpio members, not the staging directory) both passes and wedges.
+Measured deliberately, 2026-08-14: a control domain then eight repetitions per boot, three boots,
+all three controls passing.
 
-| boot | outcome |
-|---|---|
-| earlier | returned `rc=3`, three rows |
-| later | **WEDGED** in `output_text+0xdc` (instance 2 above) |
-| later still | returned `rc=3` ×4 consecutively, byte-identical `obs=0x5A6E0603`; a 5th attempt hit an R-16 **entry stall**, which carries no verdict |
+| source | genuine executions | passed | **wedged** | entry stalls (excluded) |
+|---|---|---|---|---|
+| earlier record | 6 | 5 | 1 | 1 |
+| boot 1 | 2 | 1 | 1 | 0 |
+| boot 2 | 4 | 4 | 0 | 1 |
+| boot 3 | 1 | 0 | 1 | 0 |
+| **total** | **13** | **10** | **3** | **2** |
 
-So roughly **5 of 6 genuine executions succeed** and one wedges mid-run. Any experiment on this
-defect needs repetition; a single passing boot proves nothing, and a single wedge does not
-establish a deterministic trigger.
+**p(wedge) ≈ 3/13 ≈ 23% per execution.** An R-16 entry stall is excluded from both numerator and
+denominator — an image that never entered says nothing about the code in it, so counting one as a
+failure would be wrong. Each boot stops at its first failure, so these are censored run-lengths,
+not 8+8+8 independent trials.
+
+**ALL THREE WEDGES ARE AT THE SAME INSTRUCTION**, `output_text+0xdc`. Not most of them — all,
+across three boots. Boot 1 latched `mepc = 0x839416a8` and boot 3 `mepc = 0x835416a8`: different
+4 MiB physical placements (two independent `__get_free_pages` allocations), both decoding to
+domain VA `0x1516a8`.
+
+So for a given image **the site is fixed and only the firing is sporadic**. This is the single most
+useful thing in this folder: it names one `ldc`/`cincoffset` pair to look at rather than a class of
+construct. The three instances listed above came from three different builds, which is consistent —
+the site moves with the image, not between runs of one image.
+
+One thing this does NOT show, because the overstatement is close by: the low 22 bits of the two
+`mepc` values are identical, so every cache set index is the same in both. A **set-dependent**
+mechanism is not excluded by this data.
+
+Any experiment on this defect needs repetition: a single passing boot proves nothing, and a single
+wedge does not establish a deterministic trigger.
 
 ## What has been EXCLUDED, with positive controls that fire
 
@@ -141,8 +163,11 @@ does not exonerate the path; the interesting output is whether the tag can *ever
 
 ## Impact
 
-SQLite does not run to completion on silicon. The basic workload (CREATE / INSERT / SELECT
-returning all three rows / finalize) completes, mostly; the full workload wedges at instance 3.
+The **basic** workload — CREATE / INSERT / SELECT returning all three rows / finalize — runs to
+completion on silicon roughly **77%** of the time, and wedges at `output_text+0xdc` the rest. The
+**full** workload wedges at instance 3. So SQLite does execute on this hardware; what it does not
+do is execute reliably, and the failure is in the domain's own output writer rather than in the
+database engine.
 
 ## Files
 

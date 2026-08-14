@@ -92,17 +92,49 @@ run — exactly what an entry stall must look like, and exactly what the driver'
 will be misread as "the domain took a capability fault". Classification on `SQ: G/enter` and the
 latched state agree, independently.
 
-## Running total
+## Boot 3 — wedged on the first rep, at the same instruction, from a different physical address
+
+| # | domain | verdict |
+|---|---|---|
+| 1 | `L2.dom` | RETURNED — **boot VALID** |
+| 2 | `G6.dom` | **WEDGED** — entered, never returned |
+
+```
+sw=255 = 0x99  -> seen, mcause 25 (UNEXPECTED_OPERAND)
+mepc           = 0x00000000835416a8
+```
+
+Boot 1 latched `0x839416a8`; boot 3 latched `0x835416a8`. The 4 MiB bases differ — `0x83800000`
+against `0x83400000`, two independent `__get_free_pages` allocations — and **both decode to domain
+VA `0x1516a8`**, `output_text+0xdc`.
+
+Stated precisely, because the tempting overstatement is close by: this shows the site is a property
+of the **image offset**, not of where the kernel happened to place the domain at 4 MiB granularity.
+It does **not** exclude a cache-set-dependent mechanism — the low 22 bits of the two addresses are
+identical, so every set index is the same in both. Anyone reaching for "the physical address is
+irrelevant" from this data is reaching too far.
+
+## Final result
 
 | source | genuine | passed | wedged | entry stalls (excluded) |
 |---|---|---|---|---|
 | prior record | 6 | 5 | 1 | 1 |
 | boot 1 | 2 | 1 | 1 | 0 |
 | boot 2 | 4 | 4 | 0 | 1 |
-| **total so far** | **12** | **10** | **2** | **2** |
+| boot 3 | 1 | 0 | 1 | 0 |
+| **total** | **13** | **10** | **3** | **2** |
 
-So p(wedge) per execution is **2/12 ≈ 17%**, and the README's "roughly 5 of 6 succeed" happens to
-survive contact with four times the data. Boot 3 pending.
+**p(wedge) ≈ 3/13 ≈ 23% per execution of the basic workload.** All three boots had passing
+controls, so none is void. The two entry stalls are excluded from both numerator and denominator;
+counting them as failures would give 3/15 and would be wrong, since an image that never entered
+says nothing about the code in it.
+
+**Every one of the three wedges is at `output_text+0xdc`.** Not "mostly", not "two of three" —
+all of them, across three separate boots and two distinct physical placements.
+
+The earlier estimate of "roughly 5 of 6 succeed" (≈17%) was made on six samples; at 13 it is 23%.
+Same order, and the qualitative claim — the basic workload usually completes and sometimes does
+not — is unchanged.
 
 Boots 2 and 3 were deliberately pure repetitions rather than a new rung: the rate is what the
 claim depends on, and one boot is not a reason to abandon a design mid-experiment.
