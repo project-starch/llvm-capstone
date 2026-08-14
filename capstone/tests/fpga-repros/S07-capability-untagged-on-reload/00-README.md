@@ -127,6 +127,25 @@ time. They do not.
 Any experiment on this defect needs repetition: a single passing boot proves nothing, and a single
 wedge does not establish a deterministic trigger.
 
+> ### THE RATE IS A PROPERTY OF THE WHOLE IMAGE, NOT OF `G6.dom` — added 2026-08-14
+>
+> **If you build only this domain and run it, you may see nothing at all.** Two independent
+> measurements the same day show the defect responds to things outside the domain binary:
+>
+> * Adding ~85 instructions to `output_text` (an in-place probe) turned a working `CREATE` into
+>   `rc=11` (malformed schema) — a completely different and much earlier failure. Verified as a
+>   matched pair in ONE boot: the uninstrumented binary printed its three rows twice while the
+>   instrumented one failed twice.
+> * Adding three unrelated ~1.6 MB domains to the **initramfs** — leaving `G6.dom` byte-identical,
+>   confirmed by hashing the cpio member — **suppressed the wedge entirely**: 0 wedges in 17 genuine
+>   executions where ~4 were expected. P(0 in 17 | the 23% rate) = 0.77^17 = 0.012; Fisher exact
+>   two-sided against the earlier 3/13 = 0.070.
+>
+> So the 23% figure above is the rate **for one specific image**, and reproduction requires the
+> whole initramfs, not just the domain. This also promotes **physical placement** (cache set index,
+> DRAM row, bank) from "not excluded" to the leading structural suspect — consistent with the two
+> recorded wedge `mepc` values sharing their low 22 bits, and therefore every set index.
+
 ## What has been EXCLUDED, with positive controls that fire
 
 Four ladder rungs, on this silicon, each returning `0xFFFF` — all sixteen slots intact:
