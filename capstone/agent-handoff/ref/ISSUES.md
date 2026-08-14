@@ -4514,6 +4514,25 @@ written before any of the above and reasoned from the WRONG ONE OF THE TWO MONIT
 The firmware is built from `components/opensbi/`. Checking which source the artifact was built from
 would have cost a minute.
 
+**VALIDATION AFTER THE FIX (2026-08-14, all on QEMU):**
+
+| suite | before | after |
+|---|---|---|
+| `smoke` | CSSPLIT assert | PASS (`retval = 42`) |
+| `coremark` | cap fault, PCC truncated | PASS (CRC validated) |
+| `authority`, `revoke-on-free`, `borrow-cost`, `intra-domain-mrev` | FAIL | PASS |
+| `revoke-matrix`, `hier-revoke`, `shared-region`, `linear-uninit-corpus` | PASS / not run | PASS |
+| `tree-cost-O2`, `rv8` | FAIL / not run | PASS |
+| `beebs` | FAIL | **52/52** — one test (`prime`) failed with `<no serial output captured>`, zero capability faults, and PASSED on a clean retry, so it was an infra flake |
+| `static-cap-globals` | FAIL | still exits 1 — see below, it is an INVERTED probe and this is not a regression |
+
+`static-cap-globals` expects its static-const arm to FAIL as a known limitation. All four of its
+domains are under `0x1000`, so before the fix every arm aborted in the split and the probe could
+never have reported its intended verdict at all. Now all four run and the static arm returns
+`305397871` instead of faulting. The probe only checks fault-vs-no-fault, so "succeeded" may be
+masking a wrong value; it needs a correct expected value before its expectation is touched.
+**Deliberately left alone rather than flipped.**
+
 **THE SAME DEFECT IS PRESENT, DORMANT, IN THE SILICON MONITOR — deliberately NOT fixed here.**
 `caplifive-system/.../capstone-sbi/sbi_capstone.c:659` has the identical
 `unsigned gpoff = GPFREE_GLOBALS_OFFSET;` fallback and `:882` the identical unconditional
