@@ -23,6 +23,34 @@ static unsigned shared_region_count;
 #define CAPSTONE_DELIN(value)                                                \
   __asm__ volatile(".insn r 0x5b, 0x1, 0x3, %0, x0, x0" : "+r"(value))
 
+#ifdef CAPSTONE_OPERAND_PROBE
+/* LCC field 1 is the TOTAL type query: NOT_CAP reads back as 7 and does NOT raise, so a lost
+   tag is REPORTED instead of wedging the core. Board-proven on this bitstream (s06lcc = 171). */
+#define S07_LCC_TYPE(out_, cap_) \
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(out_) : "r"(cap_))
+static unsigned s07_rs1_untagged, s07_rs2_tagged, s07_retry_persistent;
+#ifdef CAPSTONE_OPERAND_PROBE_SELFTEST
+/* POSITIVE CONTROL. Every 1024th iteration is not enough on its own; this one proves the query
+   can say 7 at all, on this silicon, in this binary. Without it a clean 0x5A000000 is a check
+   never shown to fire. */
+static void s07_selftest(void) {
+  unsigned long junk_ = 0x5A5Aul, t_;
+  S07_LCC_TYPE(t_, junk_);
+  if (t_ == 7UL) s07_rs1_untagged += 0x40u;
+}
+#endif
+static unsigned s07_probe_result(void) {
+#ifdef CAPSTONE_OPERAND_PROBE_SELFTEST
+  s07_selftest();
+#endif
+  /* 0x5B......  a DISTINCT sentinel from the ladder's 0x5A6E...., so a probe report and a
+     staged marker can never be mistaken for each other. */
+  return 0x5B000000u | ((s07_rs1_untagged & 0xFFu) << 16)
+                     | ((s07_rs2_tagged & 0xFFu) << 8)
+                     | (s07_retry_persistent & 0xFFu);
+}
+#endif
+
 static void output_text(const char *text) {
   if (!hostcall_metadata || !hostcall_payload)
     return;
@@ -65,8 +93,37 @@ static void output_text(const char *text) {
   CAPSTONE_DELIN(payload);
 #endif
   unsigned long offset = hostcall_metadata->length;
+#ifdef CAPSTONE_OPERAND_PROBE
+  /* S-07 OPERAND DISCRIMINATION -- this loop is where all three measured wedges landed.
+     The wedge is `cincoffset a1, a1, a2`, and that guard has TWO arms:
+     capstone_flu_unit.anvil:29-31 raises UNEXPECTED_OPERAND if rs1 is NOT_CAP *or* if rs2 is
+     anything other than NOT_CAP. So the wedge alone cannot say whether the capability lost its
+     tag or the integer offset gained one. Ask BOTH, per iteration, with the TOTAL type query
+     (LCC field 1), which reports rather than faulting:
+         payload -> expect 1 (NONLIN)      offset -> expect 7 (NOT_CAP)
+     On a payload anomaly, reload it through its own stack slot and ask again: a TAGGED retry
+     means memory was never wrong and the fault is in register delivery. */
+  while (*text && offset + 1 < SQLITE_HC_REGION_SIZE) {
+    unsigned long t_cap_, t_off_;
+    __asm__ volatile("" ::: "memory");
+    S07_LCC_TYPE(t_cap_, payload);
+    S07_LCC_TYPE(t_off_, offset);
+    if (t_cap_ == 7UL) {
+      unsigned long t_retry_;
+      char *volatile *slot_ = &payload;
+      char *again_ = *slot_;
+      S07_LCC_TYPE(t_retry_, again_);
+      if (s07_rs1_untagged < 0xFFu) s07_rs1_untagged++;
+      if (t_retry_ == 7UL && s07_retry_persistent < 0xFFu) s07_retry_persistent++;
+    }
+    if (t_off_ != 7UL && s07_rs2_tagged < 0xFFu) s07_rs2_tagged++;
+    __asm__ volatile("" ::: "memory");
+    payload[offset++] = *text++;
+  }
+#else
   while (*text && offset + 1 < SQLITE_HC_REGION_SIZE)
     payload[offset++] = *text++;
+#endif
   hostcall_metadata->length = offset;
 }
 
@@ -6470,6 +6527,16 @@ void domain_main(unsigned *res, unsigned func) {
        Only a 0x5A6E-tagged value is passed through, so `fail()`'s small rc values and the normal
        success path keep returning DONE exactly as before. */
     unsigned long rv_ = (unsigned long)(unsigned)run_sqlite();
+#ifdef CAPSTONE_OPERAND_PROBE
+    /* If the probe SAW anything, report it -- that observation is the whole point of the run and
+       outranks the staged marker. If it saw nothing, fall through to the normal marker so the
+       arm is still a valid pass/fail. Returning DONE unconditionally here would throw the
+       measurement away one frame up, which is a mistake already made once on this path. */
+    {
+      unsigned pr_ = s07_probe_result();
+      if ((pr_ & 0x00FFFFFFu) != 0u) { *res = pr_; return; }
+    }
+#endif
     *res = ((rv_ & 0xFFFF0000UL) == 0x5A6E0000UL) ? (unsigned)rv_
                                                   : (unsigned)SQLITE_HC_RET_DONE;
   }

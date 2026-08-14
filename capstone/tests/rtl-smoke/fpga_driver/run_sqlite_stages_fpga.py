@@ -90,6 +90,26 @@ def decode(obs):
     return (obs >> 8) & 0xff, obs & 0xff
 
 
+def decode_probe(obs):
+    """0x5B_aa_bb_cc -> the S-07 operand-discrimination counters, or None.
+
+    A SECOND sentinel exists because the probe reports an OBSERVATION, not a stage, and the
+    two must never be confused: 0x5A6E_ssrr is "the ladder reached stage ss with rc rr",
+    0x5B_aabbcc is "output_text saw aa untagged reloads, bb tagged offsets, cc persistent
+    retries". Without this the runner HARD STOPs on a perfectly good measurement -- which it
+    did on the first probe boot, discarding the run after the control arm had already proved
+    the instrument works.
+
+      aa  rs1_untagged      the reloaded capability read back NOT_CAP
+      bb  rs2_tagged        the integer offset read back as something other than NOT_CAP
+      cc  retry_persistent  re-ldc from the same slot was ALSO untagged  => memory
+                            (cc == 0 with aa > 0 => the retry was tagged => register delivery)
+    """
+    if obs is None or (obs >> 24) != 0x5B:
+        return None
+    return (obs >> 16) & 0xff, (obs >> 8) & 0xff, obs & 0xff
+
+
 def main():
     if not URL:
         raise SystemExit("FPGA_URL not set")
@@ -353,6 +373,17 @@ def main():
                     f"present -- the domain ENTERED and RETURNED. Expected for a truncation "
                     f"arm that exits before the emit. This is a RETURN, not a staging failure.")
                 bad = False
+            # A PROBE REPORT IS A RESULT, NOT A STAGING FAILURE. 0x5B_aabbcc is the S-07
+            # operand-discrimination counter; it is deliberately a different sentinel from the
+            # ladder's 0x5A6E_ssrr because it reports an observation rather than a stage. The
+            # first probe boot was thrown away here after its control arm had already proved the
+            # instrument works -- the guard was right that it was not a STAGED marker and wrong
+            # that it was not a marker.
+            if not wedged and bad and decode_probe(m_obs) is not None:
+                a, b, c = decode_probe(m_obs)
+                log(f"  {dom}: S-07 probe report -- rs1_untagged={a} rs2_tagged={b} "
+                    f"retry_persistent={c}")
+                bad = False
             if not wedged and bad:
                 raise SystemExit(
                     f"HARD STOP: {dom} produced {got}, not a staged marker.\n"
@@ -588,6 +619,14 @@ def main():
                 verdict = "WEDGED (no return)"
             elif d:
                 verdict = f"returned stage={d[0]} rc={d[1]}"
+            elif decode_probe(obs):
+                a, b, c = decode_probe(obs)
+                verdict = (f"S-07 PROBE: rs1_untagged={a} rs2_tagged={b} retry_persistent={c}"
+                           + ("  [SELFTEST control fired]" if a == 0x40 and b == 0 and c == 0 else "")
+                           + ("  => TAG LOST IN MEMORY" if a and c else "")
+                           + ("  => REGISTER DELIVERY (retry was tagged)" if a and not c else "")
+                           + ("  => rs2 GAINED A TAG; the untagged-capability reading is wrong here"
+                              if b else ""))
             elif returned:
                 verdict = f"returned, obs={obs} (not a staged marker)"
             else:

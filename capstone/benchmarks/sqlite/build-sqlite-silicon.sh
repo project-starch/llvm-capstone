@@ -1425,6 +1425,15 @@ if [[ "${CAPSTONE_EVICT_PROBE:-0}" == "1" ]]; then
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_EVICT_PROBE=1"
 fi
 
+# S-07 operand discrimination. cincoffset raises mcause 25 for rs1 NOT_CAP *or* rs2 not-NOT_CAP
+# (capstone_flu_unit.anvil:29-31), so the wedge alone cannot say which operand was wrong. With this
+# on, output_text asks both per iteration with the TOTAL type query and retries a lost tag from its
+# own stack slot, then returns a packed 0x5A...... count instead of wedging.
+# ABOVE the _domain_defs read, like every other domain knob -- appended after it, the define
+# reaches nothing and the probe silently is not in the binary.
+if [[ "${SQLITE_OPERAND_PROBE:-0}" == "1" ]]; then
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_OPERAND_PROBE"
+fi
 read -r -a _domain_defs <<< "${DOMAIN_EXTRA_DEFS:-}"
 "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$OPT" \
   -DSQLITE_HEAP_SIZE=$HEAP "${_domain_defs[@]}" "${_amalgam_mllvm[@]}" \
