@@ -221,3 +221,30 @@ Measure the bounds, do not infer them: report `aMem` and `&aMem[p3]` at `sqlite3
 under a clamp that is known to return. Then the question is where a `Mem` capability with a cursor
 outside its bounds is manufactured — candidates are the register-array indexing, and the interaction
 with `-capstone-shrink-*` being off while the heap capability is the one carried around.
+
+
+## Step 1 (characterise the residual defect) -- where it got to
+
+Three ladder rungs, each with a firing positive control, refuted every simple explanation on
+silicon:
+
+| rung | question | silicon |
+|---|---|---|
+| `s06spill` | does a spilled capability come back TAGGED? | 65535 |
+| `s06bnds` | ...with its BOUNDS intact? | 65535 |
+| `s06wr` | ...surviving byte stores written THROUGH it? | 65535 |
+
+**The capability round-trip machinery is sound on this hardware.** That is the load-bearing
+conclusion for the S-06 decision: S-06 is plain data losing its high half on an untagged line, and
+this defect is a lost tag on a genuine capability, so an S-06 RTL fix should not be expected to
+clear it.
+
+A fourth rung calling the REAL memcpy was written and deleted: `build-ladder-domain.sh` compiles
+exactly one C file, so a rung never links `beebs_freestanding_string.c` and its `memcpy` is a
+different primitive from the one SQLite calls.
+
+The in-domain instrument (`BEEBS_MEMCPY_TAGCHECK`) is built, positive-controlled end to end, and
+**did not stop the wedge**; its arm's latch was overwritten by kernel activity, so no location.
+Two readings remain open and unseparated: the faulting call is not on the instrumented path (the
+chunk loop rather than the byte tail), or the destination is tagged at the check and untagged at
+the use. The second is the stronger claim and has no evidence yet.
