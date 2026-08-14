@@ -103,6 +103,36 @@ One region fact from that work is still open and unrelated to us: the rev-node p
 rev-node line loses its top 30 bits, i.e. part of `depth`. That is not the mcause-25 mechanism, but
 a corrupted depth would affect revocation-tree walks and may deserve its own look.
 
+## IT IS NOT memcpy-SPECIFIC, and it is NOT DETERMINISTIC (measured 2026-08-14, later)
+
+Two boots after the above was written, both facts changed the shape of this report:
+
+**A PASS -> FAIL FLIP on the SAME BINARY.** Arm `G6` (basic workload, stop after the row loop)
+returned `rc=3` with all three rows in one boot and **WEDGED** in another. Same file, verified by
+hash `f93a9188a9a4433c` in both (kept via BAKE_KEEP, not rebuilt). So the basic workload passing is
+NOT reproducible, and any claim resting on a single passing boot -- including one I made -- is
+unsafe.
+
+**A THIRD capability, in a completely different place.** `G6`'s flip wedged in the domain's own
+output writer, nothing to do with SQLite:
+
+```
+output_text+0xdc:
+    ld          a2, 0x0(a4)      ; the payload length
+    sd          a3, 0x0(a4)
+    cincoffset  a1, a1, a2       <== mcause 25 -- a1, the SHARED-REGION PAYLOAD capability, is NOT_CAP
+    sb          a0, 0x0(a1)
+```
+
+So three distinct capabilities have now been observed coming back untagged, in three unrelated
+functions: a `memcpy` stack slot, the shared-region payload capability in `output_text`, and the
+lookaside pointer in `sqlite3DbMallocRawNN+0xd8` (`ldc a0, 0x2a0(a0)`, which is where a full run
+wedges). The common factor is *a capability read back from memory*, not any particular caller.
+
+**Please read the whole report in that light**: the memcpy disassembly below is still the most
+precisely characterised instance, but framing this as a memcpy bug would be wrong, and a fix
+validated only against memcpy would not close it.
+
 ## The question
 
 **What else, in the RTL, can cause a tagged capability in memory to be reloaded untagged, given that
