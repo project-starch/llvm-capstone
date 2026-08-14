@@ -2,7 +2,9 @@
 
 > **STATUS 2026-08-14 — FIXED IN RTL (Option A), sim-validated, awaiting synthesis.**
 > The general fix (`FIX-PROPOSAL.md` Option A) is implemented on branch
-> `fpga-testing-dev-s06fix` of `capstone-ariane` (seven phases P1–P6, HEAD 774de8a6f). A real
+> `fpga-testing-dev-s06fix` of `capstone-ariane` — delivered as ONE squashed commit
+> (`25035c4c0`; the phased P1–P6 history with per-phase gate evidence is archived locally on
+> branch `s06fix-phases-archive`, byte-identical tree). A real
 > 1-bit capability tag now rides beside every compressed-metadata lane; untagged `ldc`/`stc` is
 > a verbatim 128-bit copy with the tag cleared, and tag-setting is opcode/tag-driven (never
 > inferred from data content), which also closes the D7 forgery hazard. Validated in Verilator:

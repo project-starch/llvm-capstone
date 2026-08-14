@@ -5,8 +5,9 @@ Minimal snapshot. Read first in every session.
 ## S-06 FIXED IN RTL — sim-validated, awaiting synthesis (2026-08-14)
 
 The untagged-`ldc`/`stc` high-half loss (S-06) is fixed in the RTL, not worked around. Branch
-`fpga-testing-dev-s06fix` on `capstone-ariane` (seven phases P1–P6 + one audit follow-up, HEAD
-`774de8a6f`). A real 1-bit capability tag rides beside every compressed-metadata lane (64→65,
+`fpga-testing-dev-s06fix` on `capstone-ariane`, delivered as ONE squashed commit `25035c4c0`
+(the phased P1–P6 history with per-phase gate evidence is archived locally on branch
+`s06fix-phases-archive`; the squashed tree is byte-identical to the phased HEAD). A real 1-bit capability tag rides beside every compressed-metadata lane (64→65,
 dom-switch 128→129); untagged `ldc`/`stc` is now a verbatim 128-bit copy with the tag cleared,
 and tag-setting is opcode/tag-driven, never inferred from `|metadata|` — this also closes the D7
 live-forgery hazard. Verilator-validated against a pinned 73-test baseline: semantics-neutral
