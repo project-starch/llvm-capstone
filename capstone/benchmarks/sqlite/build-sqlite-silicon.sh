@@ -1354,6 +1354,26 @@ SILICON=(-mllvm -capstone-merge-string-constants=true
          -DCAPSTONE_GP_CAPTABLE_ABI=1)
 # EXTRA_MLLVM lets a bisect turn one backend pass off without editing this script, e.g.
 #   EXTRA_MLLVM="-mllvm -capstone-fix-destructive-copies=false"
+# THE S-06 AGGREGATE-COPY GUARD IS ON BY DEFAULT FOR THIS BUILD.
+#
+# Measured 2026-08-14, matched pair in one boot with the control returning: without it, the VDBE
+# instruction operand pOp->p3 reads 1699 where it should read 1, so `&aMem[p3]` lands outside the
+# heap and the hardware correctly raises OUT_OF_BOUNDS; with it, p3 reads 1 and the basic workload
+# -- CREATE, INSERT, the SELECT with all three rows, finalize -- passes on silicon for the first
+# time. The corruption is unguarded compiler-emitted 16-byte granule copies landing in the VdbeOp
+# array, which is S-06 reaching the program through the compiler rather than through memcpy.
+#
+# ON HERE AND NOT GLOBALLY, deliberately. The pass emits `lcc` field 1, and that query is only
+# TOTAL on enabler silicon; on an older bitstream it RAISES on plain data, so a target-wide default
+# would break every build that does not run on this hardware. This script targets the current
+# bitstream, so the knob belongs here.
+#
+# SQLITE_GRANULE_GUARD=0 turns it off for an A/B. It is a WORKAROUND, not a fix: it costs +33660
+# bytes of .text and a branch per granule, and both are in the primitive every timing number is
+# measured on. See ref/S06-WORKAROUNDS-TO-REVERT.md for what to remove when silicon is fixed.
+if [[ "${SQLITE_GRANULE_GUARD:-1}" == "1" ]]; then
+  EXTRA_MLLVM="${EXTRA_MLLVM:-} -mllvm -capstone-guard-cap-granule-copies"
+fi
 read -r -a _extra_mllvm <<< "${EXTRA_MLLVM:-} ${SQLITE_DIAG:-}"
 SILICON+=("${_extra_mllvm[@]}")
 
