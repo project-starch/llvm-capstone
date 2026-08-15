@@ -17,6 +17,10 @@
  * REPORTING GOES THROUGH SAY, the raw hostcall, not through Ruby. If the VM is
  * broken, a probe that reports through it says nothing at all.
  */
+#ifndef MRUBY_PROBE_STAGE
+#define MRUBY_PROBE_STAGE 0
+#endif
+
 #include <mruby.h>
 #include <mruby/irep.h>
 #include <mruby/value.h>
@@ -159,8 +163,231 @@ static void say_mem(const char *stage) {
 void mrb_init_mrbgems(mrb_state *mrb) { (void)mrb; }
 void mrb_final_mrbgems(mrb_state *mrb) { (void)mrb; }
 
+/* STAGED ARMS, one per hypothesis, each RETURNING a marker instead of running
+ * to the failure. This is the shape CLAUDE.md prescribes for a wedge, and the
+ * reason it is here is that the previous nine boots each tested one hypothesis
+ * serially -- exactly what that section was written to prevent.
+ *
+ * mrb_open_allocf decomposes as: allocate the state, then
+ * mrb_core_init_protect(init_gc_and_core), then the gems (our stub).
+ * init_gc_and_core is mrb_gc_init, then a context allocation, then
+ * mrb_init_core. The stages below replicate that split, so a wedge lands
+ * between two markers rather than inside one opaque call.
+ *
+ * Ordering for the batch: 1, 2, 3, then the full run LAST. A wedge ends the
+ * boot, so everything expected to return goes first and at most one arm is
+ * expected not to. */
+#if MRUBY_PROBE_STAGE > 0
+void mrb_gc_init(mrb_state *, mrb_gc *);
+void mrb_init_core(mrb_state *);
+#if MRUBY_PROBE_STAGE >= 7
+#include "ladder_ireps.c"
+#endif
+#if MRUBY_PROBE_STAGE >= 6
+/* The real headers, not hand-written prototypes. The first attempt declared
+   mrb_top_run's last parameter as `unsigned int` where mruby has `mrb_int`, and
+   the build failed with "conflicting types" -- after the run script had already
+   been launched, so the boot executed the previous image and the log looked
+   like a stage-5 result. Declaring by hand what a header already declares is
+   how an arm silently becomes a different arm. */
+#include <mruby/dump.h>
+#include <mruby/proc.h>
+#endif
+#if MRUBY_PROBE_STAGE >= 4
+void mrb_init_symtbl(mrb_state *);     void mrb_init_class(mrb_state *);
+void mrb_init_object(mrb_state *);     void mrb_init_kernel(mrb_state *);
+void mrb_init_comparable(mrb_state *); void mrb_init_enumerable(mrb_state *);
+void mrb_init_symbol(mrb_state *);     void mrb_init_string(mrb_state *);
+void mrb_init_exception(mrb_state *);  void mrb_init_proc(mrb_state *);
+void mrb_init_array(mrb_state *);      void mrb_init_hash(mrb_state *);
+void mrb_init_numeric(mrb_state *);    void mrb_init_range(mrb_state *);
+void mrb_init_gc(mrb_state *);         void mrb_init_version(mrb_state *);
+void mrb_init_mrblib(mrb_state *);
+#endif
+
+static int run_stage(void) {
+  char b[80];
+  int n;
+
+  mrb_state *mrb = (mrb_state *)probe_allocf(0, 0, sizeof(mrb_state), 0);
+  if (!mrb) {
+    SAY("MRUBY STAGE FAIL: no memory for mrb_state\n");
+    return 1;
+  }
+  for (size_t i = 0; i < sizeof(mrb_state); i++)
+    ((char *)mrb)[i] = 0;
+  mrb->allocf_ud = 0;
+  mrb->allocf = probe_allocf;
+  mrb->atexit_stack_len = 0;
+  SAY("MRUBY STAGE 1: mrb_state allocated and zeroed\n");
+  if (MRUBY_PROBE_STAGE == 1)
+    goto done;
+
+  mrb_gc_init(mrb, &mrb->gc);
+  SAY("MRUBY STAGE 2: mrb_gc_init returned\n");
+  if (MRUBY_PROBE_STAGE == 2)
+    goto done;
+
+  mrb->c = (struct mrb_context *)probe_allocf(mrb, 0, sizeof(struct mrb_context), 0);
+  if (!mrb->c) {
+    SAY("MRUBY STAGE FAIL: no memory for mrb_context\n");
+    return 1;
+  }
+  for (size_t i = 0; i < sizeof(struct mrb_context); i++)
+    ((char *)mrb->c)[i] = 0;
+  mrb->root_c = mrb->c;
+  SAY("MRUBY STAGE 2b: context allocated\n");
+
+#if MRUBY_PROBE_STAGE >= 4
+  /* STAGE 4: mrb_init_core's own sequence, inlined with a marker after each
+   * call. Not seventeen arms -- one arm with seventeen markers. The fault kills
+   * QEMU, but SAY is a synchronous hostcall, so everything printed before it
+   * survives and the LAST marker names the init function. Copied verbatim from
+   * src/init.c, including the mrb_gc_arena_restore after each, because the
+   * point is to reproduce that function and not an approximation of it. */
+#define INIT_STEP(fn)                                                          \
+  do {                                                                         \
+    fn(mrb);                                                                   \
+    mrb_gc_arena_restore(mrb, 0);                                              \
+    SAY("MRUBY INIT: " #fn " returned\n");                                     \
+  } while (0)
+
+  INIT_STEP(mrb_init_symtbl);
+  INIT_STEP(mrb_init_class);
+  INIT_STEP(mrb_init_object);
+  INIT_STEP(mrb_init_kernel);
+  INIT_STEP(mrb_init_comparable);
+  INIT_STEP(mrb_init_enumerable);
+  INIT_STEP(mrb_init_symbol);
+  INIT_STEP(mrb_init_string);
+  INIT_STEP(mrb_init_exception);
+  INIT_STEP(mrb_init_proc);
+  INIT_STEP(mrb_init_array);
+  INIT_STEP(mrb_init_hash);
+  INIT_STEP(mrb_init_numeric);
+  INIT_STEP(mrb_init_range);
+  INIT_STEP(mrb_init_gc);
+  INIT_STEP(mrb_init_version);
+#if MRUBY_PROBE_STAGE >= 5
+  /* STAGE 5 SKIPS mrb_init_mrblib and runs OUR irep instead.
+   *
+   * Stage 4 measured that sixteen of seventeen init functions return and the
+   * seventeenth faults, so mruby's whole C object system works here and what
+   * fails is loading the Ruby-level standard library -- mrb_load_irep over
+   * mrblib's bytecode. This arm is the matched pair: same VM, same loader, a
+   * DIFFERENT irep, namely the four-line chunk from probe.rb.
+   *
+   * Returning 400 means the VM executes Ruby bytecode in a domain and the
+   * defect is specific to mrblib's irep (its size, or a construct in it).
+   * Faulting the same way means the loader or the VM is broken for any irep and
+   * mrblib is innocent. Either answer is worth a boot; neither is guessable. */
+  SAY("MRUBY STAGE 5: skipping mrb_init_mrblib on purpose\n");
+#if MRUBY_PROBE_STAGE >= 6
+  /* STAGE 6 SPLITS mrb_load_irep into its two halves.
+   *
+   * Stage 5 established that the fault is not about mrblib: the same
+   * helper_cslcc assertion fires on our own four-line irep. mrb_load_irep is
+   * mrb_read_irep, which turns the binary into an mrb_irep and an RProc, then
+   * mrb_top_run, which executes it. Those are very different suspects -- a
+   * binary-format reader walking a const array in .rodata, versus the VM's
+   * dispatch loop -- and one marker between them separates them. */
+#if MRUBY_PROBE_STAGE >= 7
+  /* THE BYTECODE LADDER. mrb_read_irep and mrb_proc_new both return, so the
+   * fault is inside mrb_top_run. Six chunks, each one construct larger than the
+   * last, run in ascending order with a marker after each. The last marker names
+   * the Ruby construct whose bytecode the VM cannot execute here -- which is a
+   * far smaller search than "somewhere in vm.c". */
+  {
+    static const struct {
+      const char *name;
+      const unsigned char *irep;
+      long want;
+    } rungs[] = {
+      {"1 nil",          ladder_1_nil,         -1},
+      {"2 integer",      ladder_2_int,          1},
+      {"3 add",          ladder_3_add,          3},
+      {"4 empty array",  ladder_4_emptyarray,   0},
+      {"5 array store",  ladder_5_arrayset,     7},
+      {"6 while loop",   ladder_6_whileloop,  210},
+    };
+    for (unsigned r = 0; r < sizeof(rungs) / sizeof(rungs[0]); r++) {
+      char rb[96];
+      int rn = snprintf(rb, sizeof rb, "MRUBY RUNG %s: about to run\n", rungs[r].name);
+      if (rn > 0)
+        __capstone_hc_write(1, rb, (unsigned long)rn);
+
+      mrb_value rv = mrb_load_irep(mrb, rungs[r].irep);
+      long got = mrb_integer_p(rv) ? (long)mrb_integer(rv) : -1;
+      rn = snprintf(rb, sizeof rb, "MRUBY RUNG %s: returned %ld (want %ld)%s\n",
+                    rungs[r].name, got, rungs[r].want,
+                    mrb->exc ? " EXCEPTION" : "");
+      if (rn > 0)
+        __capstone_hc_write(1, rb, (unsigned long)rn);
+      mrb->exc = 0;
+    }
+    SAY("MRUBY STAGE 7: every rung returned\n");
+    goto done;
+  }
+#endif
+  {
+    struct RProc *proc;
+    mrb_irep *irep = mrb_read_irep(mrb, probe_irep);
+    SAY("MRUBY STAGE 6: mrb_read_irep returned\n");
+    if (!irep) {
+      SAY("MRUBY STAGE 6: ... but it returned NULL\n");
+      goto done;
+    }
+    proc = mrb_proc_new(mrb, irep);
+    SAY("MRUBY STAGE 6: mrb_proc_new returned\n");
+    if (!proc) {
+      SAY("MRUBY STAGE 6: ... but it returned NULL\n");
+      goto done;
+    }
+    proc->c = NULL;
+    mrb_value v6 = mrb_top_run(mrb, proc, mrb_top_self(mrb), 0);
+    SAY("MRUBY STAGE 6: mrb_top_run returned\n");
+    if (mrb_integer_p(v6) && mrb_integer(v6) == 400)
+      SAY("MRUBY STAGE 6: t[19] == 400\n");
+    else
+      SAY("MRUBY STAGE 6: ran but did not produce 400\n");
+  }
+#else
+  {
+    mrb_value v5 = mrb_load_irep(mrb, probe_irep);
+    if (mrb->exc) {
+      SAY("MRUBY STAGE 5: exception while running our own irep\n");
+    } else if (mrb_integer_p(v5) && mrb_integer(v5) == 400) {
+      SAY("MRUBY STAGE 5: our irep ran, t[19] == 400\n");
+    } else {
+      SAY("MRUBY STAGE 5: our irep ran but did not produce 400\n");
+    }
+  }
+#endif
+#else
+  INIT_STEP(mrb_init_mrblib);
+#endif
+  SAY("MRUBY STAGE 4: every mrb_init_* returned\n");
+#else
+  mrb_init_core(mrb);
+  SAY("MRUBY STAGE 3: mrb_init_core returned\n");
+#endif
+
+done:
+  n = snprintf(b, sizeof b, "MRUBY STAGE %d DONE: allocs=%lu peak=%lu\n",
+               MRUBY_PROBE_STAGE, mem_calls, mem_peak);
+  if (n > 0)
+    __capstone_hc_write(1, b, (unsigned long)n);
+  SAY("__CAPSTONE_MRUBY_STAGE_PASSED__\n");
+  return 0;
+}
+#endif
+
 int capstone_main(void) {
   SAY("MRUBY S1: entered\n");
+
+#if MRUBY_PROBE_STAGE > 0
+  return run_stage();
+#endif
 
   /* REPORT THE RUNTIME BASE, so a fault pc can be turned into a symbol.
    * The domain is linked at 0x10000 but loaded wherever the guest's mmap put

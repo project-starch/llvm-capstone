@@ -12,6 +12,58 @@ Last updated 2026-08-15.
 
 ---
 
+## C-25 — a POINTER DIFFERENCE required both operands to be tagged · `FIXED 2026-08-15`
+
+**Three lines reproduce it**, and the two shapes disagreed with each other:
+
+```c
+long addr(void *p)          { return (long)(uintptr_t)p; }   /* -> mv  a0, a0    */
+long diff(char *a, char *b) { return a - b; }                /* -> lcc a1, a1, 2 */
+                                                             /*    lcc a0, a0, 2 */
+```
+
+Same IR node (`ptrtoint` -> `TRUNCATE i128 -> i64`), two lowerings. Only one of them
+requires a tag.
+
+**Why that is wrong, from the spec rather than from taste.**
+`capstone-spec/parts/cap-man-insn.adoc:164-168` gives LCC exactly one exception condition:
+*"Unexpected operand type (24) - x[rs1] is not a capability"*, with no `imm` qualifier. And the
+opening paragraph of `parts/existing-insn.adoc` says an ordinary RISC-V instruction reading a
+capability register uses its `cursor`. So the address is obtainable **without** a tag, and
+`lcc` was the wrong instrument for a pointer difference.
+
+**What it broke.** `NULL - NULL`, which is ordinary C and 0 on every real implementation.
+mruby's VM entry does it:
+
+```c
+struct mrb_context *c = mrb->c;
+ptrdiff_t cioff = c->ci - c->cibase;   /* vm.c:1120, both null on the first call */
+if (!c->stbase) stack_init(mrb);       /* they are initialised HERE */
+```
+
+so `mrb_top_run` faulted before a single Ruby instruction executed. Any C program with the same
+shape would have hit it.
+
+**Fix:** `CapstoneISelLowering.cpp` `lowerSUB`, capability-minus-capability branch, now narrows
+both operands with `ISD::TRUNCATE` (selects to `PseudoTRUNC_CAP` = `addi rd, rs, 0`) instead of
+`cap_get_cursor`. Capability-minus-integer is untouched and still uses `cincoffset` -- that one
+produces a capability and must keep its tag.
+
+**Deliberate difference from lcc, for a case C cannot reach:** on a SEALED capability the integer
+path reads `base` where `lcc(2)` reads `cursor`. A pointer difference over sealed capabilities is
+not a meaningful C operation.
+
+**Tests:** new `cap-ptrdiff-untagged.ll`, four cases including a guard that capability-minus-integer
+still emits `cincoffset`. `ptr-arith.ll` and `ptr-diff-signed.ll` had pinned `lcc` incidentally --
+their stated subjects are "not a full-width i128 subtraction" and "signed scaling uses srai", both
+unchanged -- and were updated with the reason recorded in each. Capstone lit **49/49**.
+
+**Found by** the mruby bring-up, and only after `helper_cslcc` was changed to raise the
+architectural exception instead of `assert()`-ing: while it aborted QEMU the monitor never
+reported a pc, and the fault could not be localised past "somewhere in mrb_top_run".
+
+---
+
 ## C-24 — `__builtin_ctz` crashes the backend, because CTTZ expands to a TABLE · `CHARACTERISED 2026-08-15, not fixed`
 
 **One line reproduces it**, at `-O0`, `-target capstone64-unknown-elf -mattr=+m`:
