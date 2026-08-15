@@ -1,5 +1,38 @@
 # S-07 — a capability read back from memory comes back UNTAGGED, sporadically
 
+> ## S-07 SURVIVES THE S-06 FIX — measured 2026-08-15 on `caplifive_s06fixs08fix.bit`
+>
+> The full extended SQLite workload, built with **no software workarounds at all** (no granule
+> guard, no library memcpy fixup, no instrumentation), wedged on its **first** execution in a
+> control-validated boot. `sw=255 = 0x99` → seen, **mcause 25**.
+>
+> **The new instance is RS1-UNAMBIGUOUS and is the cleanest evidence in this folder.** `mepc`
+> `0x8342a83c` decodes to domain VA `0x3a83c` = `sqlite3OsRead+0x4c` — a fourth function, unrelated
+> to the earlier three:
+>
+> ```
+>   3a834:  ldc  a0, 0x0(a0)
+>   3a838:  ldc  a4, 0x0(a0)      ; a4 is loaded BY AN ldc
+>   3a83c:  ldc  a4, 0x20(a4)     ; <== mcause 25: a4 is NOT_CAP
+> ```
+>
+> The fault is **at an `ldc`**, whose guard is rs1-only (`capstone_dyn_unit.anvil:327-330`). There is
+> no two-armed `cincoffset` here to explain it away: **a capability produced by an `ldc` arrived
+> untagged**, and the immediately dependent `ldc` raised on it. A-family is confirmed; the rs2
+> reading cannot account for this site.
+>
+> **It also matches the A-1 mechanism's prediction.** Two capability loads are in flight
+> back-to-back and the second *depends on the first* — precisely the shape that displaces a
+> one-deep outstanding-request tracker (see `rtl/MECHANISMS-AND-PATCH-PROPOSAL.md`, A-1). We are not
+> claiming that as proof; we are pointing out that the site is the construct A-1 predicts, and that
+> it is now reproducible on the first try rather than 1-in-4.
+>
+> **There is a failing control again.** The `G6P` discriminator has been waiting since 2026-08-14 for
+> exactly this. Note the rs1/rs2 question it was built to settle is now largely answered by this
+> instance; its remaining value is confirming whether the `cincoffset` sites share this cause.
+>
+> Everything below predates the S-06 fix and the reflash, and its rate table is baseline-invalid.
+
 **Status: OPEN. Silicon defect, not root-caused. Software workarounds do not address it.**
 
 Bitstream `caplifive_12august.bit`. All measurements below are on that bitstream; a reflash
