@@ -2,6 +2,48 @@
 
 **Status: OPEN, BLOCKING all board work. Reported 2026-08-15, immediately after the reflash.**
 
+## MEASURED 2026-08-15: a U-MODE ECALL IS NOT BEING DELEGATED
+
+The trap dump now captures `mstatus`, and it settles the question:
+
+```
+EXCX:0000E002   the monitor took a trap it does not handle
+MCAU:00000008   ECALL from U-mode
+MTVL:00000073   the ecall encoding
+MSTA:00004022   MPP = 0  -> U-MODE
+MEPC:AB88EC88   therefore a USER VIRTUAL address
+```
+
+**A userspace `ecall` is reaching M-mode's unhandled handler instead of being delegated to S-mode.**
+That is why nothing runs: every syscall the test program makes dies. It is not a capability fault,
+and `MEPC` names nothing in the firmware — symbolising it there (which we did twice, wrongly) is
+meaningless.
+
+### Leading hypothesis, with the evidence chain — NOT confirmed
+
+**`medeleg` is restored by the DOM-SWITCHER, and this bitstream changed the dom-switcher's data
+lane.**
+
+* `core/csr_regfile.sv:1915` — `7'd5: medeleg_d = dom_switch_reg_req_i.data[63:0];` and `:411` reads
+  it back. Delegation state is part of the domain-switch context.
+* The S-06 fix (P5b) widened that lane: `core/include/ariane_pkg.sv` now has
+  `logic [128:0] data;   // S-06 fix (P5b): {tag, metadata, cursor}` — previously 128 bits — and the
+  Anvil dom-switcher was rebuilt to match.
+* The failure lands **immediately after the first annotated share returns**, i.e. exactly when the
+  dom-switcher has run and restored context.
+
+If the producer and consumer disagree by one bit about where the tag sits in that lane, `data[63:0]`
+is no longer the scalar and `medeleg` is restored with shifted bits — delegation for cause 8 would
+be lost, which is precisely what is measured. **We have not verified the Anvil-side packing**, so
+this is a hypothesis with a mechanism, not a root cause. The S-06 plan's own risk note flagged this
+area: *"the dom-switcher anvilh must widen and Anvil be rebuilt — it moves metadata through internal
+registers a side tag can't bypass."*
+
+**Cheapest check on your side:** read `medeleg` before and after a domain switch in simulation, or
+assert that a dom-switch restore round-trips `medeleg` unchanged.
+
+---
+
 **This may not be a bitstream defect.** The bitstream is demonstrably the variable, but that does not
 distinguish two readings, and the second is at least as likely:
 
