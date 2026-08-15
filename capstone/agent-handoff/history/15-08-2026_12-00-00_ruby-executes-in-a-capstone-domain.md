@@ -336,7 +336,29 @@ linear growth the interpreter gets 52 of 151 levels and dies with `SystemStackEr
 carry the same option, so the comparison between them is sound; a claim about "mruby as shipped"
 is not.
 
-## FIVE ROWS MEASURED, and each faults where the corpus says it should
+## SIX ROWS MEASURED, and each faults where the corpus says it should
+
+| row | our fault site | corpus's documented site | control | revoke |
+|---|---|---|---|---|
+| 4 | `mrb_vm_exec + 0x3d9c` | `mrb_vm_exec` | 302, completed | fault |
+| 5 | `hash_new_from_values + 0x13c` | `hash_new_from_values` | 604, completed | fault |
+| 8 | `hash_values_at + 0x1c0` | `hash_values_at` | 604, completed | fault |
+| 10 | `mrb_vm_exec + 0x198e0` | `mrb_vm_exec`, vm.c:2822 | 302, completed | fault |
+| 12 | **`io_get_open_fptr + 0x80`** | `File#initialize_copy` dangling `DATA_PTR` | completed | fault |
+| 13 | `hash_slice + 0x180` | `hash_slice` | 1208, completed | fault |
+
+**Row 12 is the first from outside the VM/hash family** and the first needing a GEM: its trigger
+opens a real file (`File.new("/dev/null")` through HostCall v0), frees the `mrb_io` behind the
+object, and then closes it. Both non-revoking arms complete with a Ruby `closed stream.` -- the
+freed struct reads as closed rather than faulting, which is the MISS -- and they report identical
+allocation counts (2950 calls, 554,829 bytes), so the two rof arms differ only in the one call to
+`xlang_set_no_revoke()`. The revoke arm faults in the function the trigger's own comment names.
+
+**Recorded here because it was mis-stated once:** row 12 was reported as "not a measured row" on
+the strength of its libc arm alone, before the revoke arm had reported. The libc arm completing
+is half of the result, not the result.
+
+### The older five-row table
 
 | row | CVE / issue | our fault site | corpus's documented site | control | revoke |
 |---|---|---|---|---|---|
