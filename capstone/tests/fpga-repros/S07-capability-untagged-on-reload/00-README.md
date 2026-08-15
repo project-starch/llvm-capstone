@@ -1,5 +1,28 @@
 # S-07 — a capability read back from memory comes back UNTAGGED, sporadically
 
+> ## THE FOUR EXCLUSIONS RE-VERIFIED ON THE CURRENT BITSTREAM, 2026-08-15
+>
+> Every `0xFFFF` in this folder was measured two bitstreams ago and was therefore
+> baseline-invalid. All four have now been re-run on `caplifive_s06fixs08fix.bit`, in
+> control-validated boots (`k800` = 4):
+>
+> | rung | asks | current silicon |
+> |---|---|---|
+> | `s06bnds` | do BOUNDS survive a spill/reload? | **65535** |
+> | `s06wr` | does it survive byte stores written THROUGH it? | **65535** |
+> | `s06pld` | does it survive a scalar load of its own granule? | **65535** |
+> | `s06spill` ×3 redraws | does a spilled capability come back TAGGED? | **65535, 65535, 65535** |
+>
+> `s06spill` first hit an R-16 entry stall and carried no verdict; it was REDRAWN three times
+> (a padding knob varying image size while leaving the tested loop byte-identical, all three
+> hashes distinct) and all three draws pass. That is 48 spill/reload round trips, every one
+> tagged.
+>
+> **So the bare `stc` → `ldc` stack round trip is SOUND on this silicon**, and the sequence
+> localized below is necessary but **not sufficient**. Something the SQLite site supplies is a
+> required ingredient — the candidates being its surrounding capability traffic, its cache
+> footprint, and the hostcall/domain-boundary path that no rung crosses.
+>
 > ## BOARD ANSWER TO YOUR QUESTION, 2026-08-15 — the tag dies on a STACK SPILL/RELOAD
 >
 > You asked for the datum that separates the syncer-mismatch path from the shadow-tag refill path.

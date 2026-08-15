@@ -47,6 +47,15 @@
  * wedge answers it for at most one.
  */
 
+/* REDRAW PADDING. R-16 (entry stall) is per-image, not per-binary: retrying the same bytes is
+   futile, and the documented remedy is to rebuild with a harmless constant varied so the code
+   under test stays byte-identical while the image moves. S06SPILL_REDRAW=<n> emits n unused
+   words; it is referenced by a volatile read that is never reached, so the tested loop is
+   untouched. sha256sum every draw and abort if two match. */
+#ifdef S06SPILL_REDRAW
+__attribute__((used, aligned(16))) static volatile unsigned long s06spill_pad[S06SPILL_REDRAW];
+#endif
+
 __attribute__((aligned(16))) static unsigned long s06spill_target[2];
 
 #define S06SPILL_LCC_TYPE(out, cap) \
