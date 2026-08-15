@@ -37,6 +37,9 @@
 extern void __capstone_yield(void);
 extern int capstone_main(void);
 extern void __stdio_exit(void);
+#ifdef CAPSTONE_DOMAIN_ARENA
+extern void xlang_arena_init(void *grant);
+#endif
 
 static volatile struct hostcall_v0 *hc_metadata;
 static volatile char *hc_payload;
@@ -318,6 +321,20 @@ void domain_main(unsigned *res, unsigned func) {
       hc_metadata = (volatile struct hostcall_v0 *)res;
     else if (hc_shared_region_count == 1)
       hc_payload = (volatile char *)res;
+#ifdef CAPSTONE_DOMAIN_ARENA
+    /* A THIRD region: the LINEAR arena grant, handed to the revoking allocator.
+     *
+     * Behind a macro, and called unconditionally within it, rather than through
+     * a weak symbol: on this target the address of an undefined weak symbol is
+     * NOT null (ISSUES.md C-23), so `if (xlang_arena_init)` would call into
+     * nothing. A build-time switch says the same thing and cannot misfire.
+     *
+     * Only programs that link xlang/common/revoke_arena_domain.c define this;
+     * for everyone else the domain still receives two regions and this is not
+     * compiled at all. */
+    else if (hc_shared_region_count == 2)
+      xlang_arena_init((void *)res);
+#endif
     ++hc_shared_region_count;
     return;
   }

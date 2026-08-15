@@ -106,8 +106,32 @@ OBJS+=("$OBJ_DIR/start-musl.o")
   -ffreestanding -O0 -c "$SETJMP_SRC" -o "$OBJ_DIR/setjmp.o"
 OBJS+=("$OBJ_DIR/setjmp.o")
 
-"$CLANG" "${MRUBY_FLAGS[@]}" -c "$RUNTIME_DIR/hostcall.c" -o "$OBJ_DIR/hostcall.o"
+# MRUBY_PROBE_REVOKE=1 swaps the libc allocator for the REVOKING one: every
+# allocation is an independently revocable SPLIT off a host-granted linear
+# arena, and free() revokes it. That is the configuration a security number may
+# be measured on; libc-ext/malloc.c is not, and says so itself.
+#
+# revoke_arena_domain.c defines malloc/free/realloc, and our objects precede the
+# archive on the link line, so libc-ext/malloc.c is simply never pulled. The
+# host program needs the same macro: it has to create and transfer a third
+# region, and share order is capture order.
+ARENA_FLAGS=()
+HOST_FLAGS=()
+if [[ ${MRUBY_PROBE_REVOKE:-0} == 1 ]]; then
+  ARENA_FLAGS=(-DCAPSTONE_DOMAIN_ARENA)
+  HOST_FLAGS=(-DCAPSTONE_DOMAIN_ARENA)
+fi
+
+"$CLANG" "${MRUBY_FLAGS[@]}" "${ARENA_FLAGS[@]}" -c "$RUNTIME_DIR/hostcall.c" \
+         -o "$OBJ_DIR/hostcall.o"
 OBJS+=("$OBJ_DIR/hostcall.o")
+
+if [[ ${MRUBY_PROBE_REVOKE:-0} == 1 ]]; then
+  "$CLANG" "${MRUBY_FLAGS[@]}" "${ARENA_FLAGS[@]}" \
+    -I"$REPO_ROOT/capstone/benchmarks/sqlite" \
+    -c "$REPO_ROOT/xlang/common/revoke_arena_domain.c" -o "$OBJ_DIR/revoke_arena.o"
+  OBJS+=("$OBJ_DIR/revoke_arena.o")
+fi
 
 # -U__GNUC__ for hash.c ONLY: ib_capa_to_bit calls __builtin_ctz, which crashes
 # the backend (ISSUES.md C-24). Undefining __GNUC__ selects mruby's own de
@@ -127,6 +151,7 @@ done
 # from "does the parser run". Answering both in one image would leave a failure
 # ambiguous between them.
 PROBE_EXTRA=()
+[[ ${MRUBY_PROBE_REVOKE:-0} == 1 ]] && PROBE_EXTRA+=(-DMRUBY_PROBE_REVOKE)
 # MRUBY_PROBE_BUMP=1 swaps the probe's allocator for an O(1) bump arena. See the
 # comment in mruby_probe.c: it is the matched arm for a wedge, differing from the
 # libc allocator in exactly one property.
@@ -159,5 +184,5 @@ image=$("$CAPSTONE_LLVM_READOBJ" --program-headers "$OUT_DOM" \
 tot=4096; while (( tot < image + 1536 )); do tot=$(( tot * 2 )); done
 printf 'built %s (image %s, dom_data %s)\n' "$OUT_DOM" "$image" "$(( tot - image - 1536 ))"
 
-"$GUEST_CC" -O2 -o "$OUT_HOST" "$RUNTIME_DIR/hostcall_host.c" "$LIBCAPSTONE_C"
+"$GUEST_CC" -O2 "${HOST_FLAGS[@]}" -o "$OUT_HOST" "$RUNTIME_DIR/hostcall_host.c" "$LIBCAPSTONE_C"
 printf 'built %s\n' "$OUT_HOST"

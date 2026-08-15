@@ -149,6 +149,29 @@ static void *probe_allocf(mrb_state *mrb, void *ptr, size_t size, void *ud) {
 
 /* Printed through snprintf, which this libc now has. Not through mruby: the
    point is to report even when mruby is the thing that is broken. */
+#ifdef MRUBY_PROBE_REVOKE
+/* The revoking allocator owns its own counters; ours only see what mruby asked
+   for. carved is every byte ever handed out (the arena never reclaims), and
+   peak_slots is the high-water of CONCURRENTLY live allocations -- the number
+   that actually sizes ROF_MAX_SLOTS, which our call count cannot give. */
+extern unsigned long xlang_mem_carved(void);
+extern unsigned long xlang_mem_live_bytes(void);
+extern unsigned xlang_mem_live_count(void);
+extern unsigned xlang_mem_peak_slots(void);
+
+static void say_arena(const char *stage) {
+  char b[144];
+  int n = snprintf(b, sizeof b,
+                   "MRUBY ARENA %s: carved=%lu live_bytes=%lu live=%u peak_slots=%u\n",
+                   stage, xlang_mem_carved(), xlang_mem_live_bytes(),
+                   xlang_mem_live_count(), xlang_mem_peak_slots());
+  if (n > 0)
+    __capstone_hc_write(1, b, (unsigned long)n);
+}
+#else
+#define say_arena(stage) ((void)0)
+#endif
+
 static void say_mem(const char *stage) {
   char b[128];
   int n = snprintf(b, sizeof b,
@@ -508,6 +531,7 @@ int capstone_main(void) {
   }
   SAY("MRUBY S2: mrb_open ok\n");
   say_mem("after-open");
+  say_arena("after-open");
 
   mrb_value v = mrb_load_irep(mrb, probe_irep);
   if (mrb->exc) {
@@ -554,6 +578,7 @@ int capstone_main(void) {
   mrb_close(mrb);
   SAY("MRUBY S5: state closed\n");
   say_mem("at-exit");
+  say_arena("at-exit");
 
   SAY("__CAPSTONE_MRUBY_PROBE_PASSED__\n");
   return 0;
