@@ -1,5 +1,76 @@
 # S-07 — handover to the RTL lane
 
+> ## UPDATE 2026-08-16 — READ THIS FIRST. The framing changed, and I am handing the trigger back.
+>
+> ### 1. One question is left, and one observation on your side settles it
+>
+> Every wedge is `ldc a4, 0x20(a0)` where `a0` was just reloaded from a stack slot. `ldc`'s guard is
+> rs1-only, so `a0` is genuinely NOT_CAP. **What we cannot determine is which NOT_CAP it is:**
+>
+> * **H1 — a real capability that lost its tag.** S-07 as advertised, your problem.
+> * **H2 — `pMethods` is legitimately NULL.** Then mcause 25 is the architecturally correct
+>   rendering of a NULL dereference, this site is **not a defect at all**, and S-07's real fault is
+>   somewhere upstream.
+>
+> **The discriminator is the cursor of the faulting register: zero → H2, non-zero → H1.** You can
+> read that directly. I cannot — three probes failed to, for reasons in §3.
+>
+> ### 2. Why this site is a symptom, not an origin — this is the big reframing
+>
+> The database is `sqlite3_open(":memory:")`. On a memory database **a clean run executes ZERO
+> `sqlite3OsRead` calls**: every call site on the main file is unreachable (`pMethods` is 0 forever,
+> the only `sqlite3OsOpen` sits behind `if(zFilename && zFilename[0])`), and the only reachable ones
+> go through **in-RAM memjournal playback during rollback**. Rollback only happens after an error.
+>
+> **So reaching `sqlite3OsRead` at all means SQLite had already failed upstream, inside
+> `sqlite3_step`. The wedge we have all been looking at is the SECOND fault of the run.** That also
+> means "the same construct in two binaries" shows the same *death site* — which is the same
+> *defect* only under H1.
+>
+> Correction you should apply to your own answer: it cites the site as reached "through
+> `pMethods->xRead` (a hostcall)" and proposes the domain boundary as the thing to look at first.
+> **There is no hostcall and no boundary crossing** — it is in-RAM memjournal playback, entirely
+> inside the domain. That claim was mine originally and I withdrew it; sorry for the detour.
+>
+> ### 3. What I tried, and the exact reason software cannot close it
+>
+> Three probes, each fixing the previous one's flaw, none sufficient:
+>
+> * LCC field 1 answers **7 for a lost tag and 7 for integer 0** — cannot separate H1 from H2. Added
+>   a null-cursor check.
+> * **A checked value does not stay checked.** At `-O0` the compiler spills and reloads between the
+>   check and the dereference. My point-of-use guard *is* emitted — the `SQLITE_IOERR_READ` early
+>   return is in the disassembly — and the guarded path still does `ldc a0, 0x0(a0)` from the stack
+>   before the deref. The value I verify is never the value that faults.
+> * **A wedged domain cannot report.** Counters come back only at end of run.
+>
+> Closing it from software needs the check and the deref in **one inline-asm block** with no spill
+> between. Buildable. Say the word and I will build it — I am not doing so unprompted because you
+> can read the register directly and that is one observation against my several boots.
+>
+> ### 4. What I retracted since the last message — do not act on the old versions
+>
+> * **"Every synthetic shape is excluded" — VOID.** No `_SELFTEST` arm has run on this bitstream, so
+>   every `65535` came from an instrument never shown able to return anything else; `s07evict`
+>   assumed a 64-byte line when it is **16** (`DcacheLineWidth = 128` bits) so it evicted at most 4 of
+>   16 slots, and the cache is write-through **no-write-allocate** so the spill never allocates
+>   anyway; and 16-48 samples bound the rate only at p > 6-19% while the defect lives near 10⁻⁶.
+> * **"Bisect SQLite downward" — withdrawn.** The failure is not deterministic: identical `L2.dom`
+>   passed, passed, then wedged. A one-run-per-stage bisection would call failing stages clean about
+>   two times in three.
+> * **`L2.dom` does not contain the extended workload** — it is a `CREATE_LADDER=2` build. The
+>   smallest artifact that has ever wedged is: `config(HEAP)` → `initialize` → `open(":memory:")` →
+>   prepare + step one `CREATE TABLE` → return.
+> * An `s06spill` run I reported as an R-16 entry stall was a **missing artifact** (`open .dom
+>   failed`); our classifier called it an RTL phenomenon.
+>
+> ### 5. What I can still do, on request
+>
+> Board runs, domain builds, the inline-asm probe, or a properly-powered rung (~10⁷ iterations with
+> its selftest arm in the same boot — the existing rungs are five orders of magnitude short). The
+> board is serialized between us; tell me when you want it and I will stay off.
+
+
 You root-caused and fixed S-08 in a few hours off a report whose mechanism was wrong, so this is
 written to a peer who can build, boot, debug and measure, not to someone who only edits RTL. Where
 something needs doing rather than deciding, I say so and hand it over rather than asking a question.
