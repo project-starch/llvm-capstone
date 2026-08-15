@@ -213,3 +213,125 @@ everything above this line passed.
 which is the rule, but they SHARED a property that neither of them isolated: both used the
 revoking allocator. A matched pair can only separate the variable it varies; it says nothing
 about anything both arms have in common. The third arm cost one build and settled it.
+
+## Row 10 now RUNS, and the trigger fully arms
+
+With C-29 fixed, `xlang/repro/10/trigger.rb` runs verbatim to completion in every allocator arm.
+The readout that says so is `$arr.size`, asked in Ruby after the fact so the corpus's file stays
+untouched: the trigger pushes two objects per recursion level, and
+
+```
+ROW: $arr.size = 302        libc allocator -- all 151 levels, the recursion completed
+ROW: trigger COMPLETED without a capability fault
+```
+
+**A clean completion here is the CORRECT result for that arm, not a null one**, and the corpus
+says so itself in `xlang/repro/10/run.sh`:
+
+> `=== Running under RISC-V QEMU (observed: exit 0) ===`
+> Without ASan the stale OP_RANGE write lands inside the old, still-mapped stack allocation.
+
+So the libc arm reproduces the corpus's own documented RISC-V behaviour: mechanism armed, stale
+write performed, nothing catches it. That is a MISS in the corpus's sense.
+
+**The stale write is present in OUR generated code**, which was checked rather than assumed.
+`regs` is a macro (`#define regs (mrb->c->ci->stack)`, vm.c:1241), so the C question is whether
+the compiler takes the destination address before or after the call in
+
+```c
+regs[a] = mrb_range_new(mrb, regs[a], regs[a+1], FALSE);   /* vm.c:2822 */
+```
+
+In our -O0 build of the real vm.c it takes it BEFORE and spills it across the call:
+
+```
+cincoffset a3, a0, a3     # &regs[a], from the pre-call stack
+stc        a3, -704(a5)   # saved across the call
+cjalr      ra, 0(a5)      # mrb_range_new -> <=> -> recurse(150) -> stack_extend
+ldc        a2, -704(a0)   # the STALE pointer back
+```
+
+A ten-line program in the same shape says the same thing for host clang at -O0, -O1 and -O2, so
+the optimisation level is not the variable. `r_check` -> `mrb_cmp` -> `mrb_funcall_id(<=>)`
+confirms the re-entrant callback is reached for two non-numeric operands.
+
+## On the REVOKING arena the workload does not fit, and "COMPLETED" was hiding it
+
+The same trigger, same everything, on the revoke-on-free arena:
+
+```
+ROW: the trigger raised a Ruby exception: <no message>
+ROW: $arr.size = 104                     <- 52 of 151 levels
+MRUBY ARENA after-row: carved=4122752    <- of 4194304
+```
+
+`stack_extend_alloc` gets NULL from `mrb_realloc_simple` and raises `mrb->stack_err`, the
+preallocated `SystemStackError`, which carries no message -- so it prints as `<no message>`, and
+before the `$arr.size` readout existed it printed as **nothing at all**. Every earlier run of
+this arm reported `ROW: trigger COMPLETED without a capability fault` having executed a third of
+the workload. **A completion marker that cannot tell "finished" from "gave up" is not a result**,
+and this one had already been read as one.
+
+It also explains why the revoke arm did not fault: the exception is raised INSIDE `<=>`, so
+`mrb_range_new` never returns, so the stale write at vm.c:2822 is never executed. There was
+nothing for revocation to catch.
+
+## Why recycling the arena would not have helped this workload
+
+The obvious fix is to make `rof_free` keep the handle REVOKE hands back -- the spec's revocation
+section confirms the type transitions, so the block is recoverable. It would not help here, and
+the reason is architectural rather than a matter of effort:
+
+**`SPLIT` has no inverse.** It is in the instruction list (`insn-list.adoc:31`); there is no
+join, merge, coalesce or combine anywhere in the specification. An allocator that makes each
+allocation independently revocable by SPLITting it off a linear arena therefore carves that arena
+irreversibly: dead blocks can be handed out again, but two adjacent dead blocks can never become
+one. `revoke_on_free_alloc.h` says as much about itself ("the arena only ever shrinks from the
+top ... NEVER coalescing").
+
+mruby grows its VM stack MONOTONICALLY, so every freed stack is smaller than the next request and
+a non-coalescing free list matches none of them. Recycling is still worth building for workloads
+that free and reallocate similar sizes -- SQLite and the shims do -- but it is not the fix for
+this one.
+
+What does bound the churn is the growth policy. mruby's default is LINEAR
+(`MRB_STACK_EXTEND_DOUBLING` is the non-default branch, vm.c:165), with the comment that linear
+"saves memory on small devices" -- true of the live set, and exactly backwards for an allocator
+that cannot reclaim, where the cumulative carve is the sum of every stack ever allocated and
+linear growth makes that sum quadratic. It is an upstream option, so turning it on is a build
+configuration rather than a patch, but it is NOT the stock configuration and must be reported
+wherever a number taken with it appears.
+
+Measured, and it is the whole difference: **carve 4,122,752 linear -> 1,556,800 doubling**, same
+workload.
+
+## ROW 10 IS MEASURED: control MISS, revoke-on-free BLOCKED
+
+With doubling making the workload fit, all three arms in one boot,
+`musl-capstone/mruby-probe/run-row10-arms.sh`:
+
+| arm | $arr.size | outcome | verdict |
+|---|---|---|---|
+| libc allocator | 302 | completed | MISS |
+| rof, revocation **OFF** | 302 | completed, carved 1,556,800 | **MISS** |
+| rof, revoke-on-free | — | `capability fault: cause = 24` | **BLOCKED** |
+
+**The control is what makes this a measurement.** It is the same build, the same workload and the
+same allocator, differing from the revoke arm in one call to `xlang_set_no_revoke()`. It runs all
+151 recursion levels and returns, so `mrb_range_new` returned, so the stale write at vm.c:2822
+was executed and nothing stopped it. That is the corpus's MISS, and it agrees with what
+`xlang/repro/10/run.sh` records for plain RISC-V.
+
+**The fault is at the CVE's own instruction, and it reproduces.** Two independent builds in two
+boots both fault at domain vaddr `0xc2284` = `mrb_vm_exec + 0x198e0`, which the assembly puts
+immediately at the return from the `mrb_range_new` call in `OP_RANGE_INC` (`.Lpcrel_hi466`, the
+call site's own label). The reported pc is accurate to about one instruction: the printf-probe
+byte-copy control, where the faulting instruction is known by construction, reports the `ldc` of
+the copied pointer with the `lw` that dereferences it one slot later.
+
+**The caveat that must travel with this number.** `MRB_STACK_EXTEND_DOUBLING` is NOT mruby's
+default. It is needed because the revoking arena cannot hold the stock configuration's churn, and
+that is itself a result about the allocator rather than a detail of the harness: at 4 MiB and
+linear growth the interpreter gets 52 of 151 levels and dies with `SystemStackError`. Both arms
+carry the same option, so the comparison between them is sound; a claim about "mruby as shipped"
+is not.

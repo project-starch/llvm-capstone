@@ -197,6 +197,14 @@ the base of a 512-byte structure, which reads more like an index going negative 
 check. 4 MiB works; the threshold between them has not been bisected and the structure has not
 been identified, so this is an OBSERVATION and nothing more.
 
+**16 MiB is also broken, and it fails DIFFERENTLY: it WEDGES, silently.** Measured 2026-08-15.
+The arm printed its `===ARM_===` banner and then nothing at all — not even the host servicer's
+`hc-host: dom created`, which every working arm prints before the domain starts. So the hang is
+at region creation, ahead of any domain code, and it produces no fault line to classify. That
+makes a large-region arm the single most expensive thing to put early in a batch: it takes the
+core and every arm after it, which is exactly what happened here, costing four staged arms and a
+boot. **An arm using a large region belongs LAST, or in its own boot.**
+
 **Why it matters.** It is the fourth ceiling found in one day while trying to run one corpus row,
 and together they bound what can be measured:
 

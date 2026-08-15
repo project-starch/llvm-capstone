@@ -575,7 +575,8 @@ static int run_row(mrb_state *mrb) {
    * not answer that, and on 2026-08-15 three arms reported it identically while
    * none of them had armed the bug. Row 10's trigger pushes TWO objects into
    * $arr per recursion level, so $arr.size == 2 * depth is a direct readout of
-   * how deep it got: 300 means the full 150, anything less means it stopped.
+   * how deep it got. `recurse(150)` runs at depths 150 down to 0, so a complete
+   * run is 151 levels and $arr.size == 302; less means it stopped early.
    * Asked in Ruby, after the fact, so the corpus's trigger file stays verbatim.
    *
    * A NEGATIVE result here is a real answer and must not read as an error: -1
@@ -585,7 +586,7 @@ static int run_row(mrb_state *mrb) {
     SAY("ROW: could not read $arr.size back\n");
     mrb->exc = 0;
   } else if (mrb_fixnum_p(depth)) {
-    n = snprintf(b, sizeof b, "ROW: $arr.size = %ld (300 = the full 150 levels)\n",
+    n = snprintf(b, sizeof b, "ROW: $arr.size = %ld (302 = all 151 levels ran)\n",
                  (long)mrb_fixnum(depth));
     if (n > 0)
       __capstone_hc_write(1, b, (unsigned long)n);

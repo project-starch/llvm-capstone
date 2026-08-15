@@ -176,13 +176,64 @@ they were understood:**
 
 **Next, in this lane:**
 
-1. **The revoke arena under mruby.** This is the one the shims cannot answer: does
-   revoke-on-free hold up under a real VM's allocation behaviour? The number to design against
-   is now measured — 755 allocations, 179 KB peak — against today's 64 KiB arena and
-   `ROF_MAX_SLOTS=64`. Needs the host-granted linear capability plumbed to the libc allocator,
-   which `libc-ext/malloc.c` names as its own upgrade path.
-2. `fstat` and `lseek`, which together are what stdio needs, and what the `mruby-io` corpus rows
-   need after that.
+**C-29, found and fixed later the same day, is the one to read first.** Our `memcpy`,
+`memmove` and `realloc` copied byte at a time, which STRIPS THE CAPABILITY TAG off every
+pointer they move. mruby grows its VM stack with `memcpy`, so after any growth every object
+pointer on the stack was untagged and the interpreter died in `mrb_class`. It was separated
+from the allocator by being identical under three of them, and it invalidated a conclusion
+already written down — see the retraction in the history note. Fixed in `libc-ext/cap-copy.c`;
+the regression check is printf-probe **S4**, whose positive control (`-DPRINTF_PROBE_BYTE_COPY`)
+is measured to fault.
+
+**The arena IS the blocker for the revoking arms, and now there is a number for it.** Row 10's
+trigger recurses 151 levels and pushes two objects per level, so `$arr.size == 302` is a direct
+readout of how far it got:
+
+| arm | $arr.size | carved | outcome |
+|---|---|---|---|
+| libc allocator (coalesces, reuses) | **302** | — | the full run |
+| rof, revocation OFF, 4 MiB | **104** | 4,122,752 of 4,194,304 | `SystemStackError`, 52 levels |
+
+`stack_extend_alloc` gets NULL from `mrb_realloc_simple` and raises `mrb->stack_err`, which has
+no message — so it prints as `<no message>` and, without this readout, as nothing at all. **Every
+earlier rof run reported "trigger COMPLETED" while having run a third of the workload.** A
+completion marker that cannot distinguish "finished" from "gave up" is not a result.
+
+mruby's stack growth is LINEAR by default (`MRB_STACK_EXTEND_DOUBLING` is the non-default branch,
+vm.c:165), which makes the cumulative carve quadratic in the number of extensions — the mruby
+default optimises the live set on the assumption that the allocator reclaims.
+`MRUBY_PROBE_STACK_DOUBLING=1` turns on the upstream option and the carve drops from 4,122,752 to
+**1,556,800**, which fits.
+
+**RECYCLING WOULD NOT HAVE FIXED THIS, and the reason is architectural.** `SPLIT` has no inverse:
+it is in `insn-list.adoc:31` and there is no join, merge, coalesce or combine anywhere in the
+specification. An allocator that makes each allocation independently revocable by SPLITting it
+off a linear arena carves that arena irreversibly — dead blocks can be handed out again, but two
+adjacent dead blocks can never become one. mruby's stack grows monotonically, so every freed
+stack is smaller than the next request and a non-coalescing free list matches none of them.
+Recycling is still worth building for workloads that free and reallocate SIMILAR sizes (SQLite,
+the shims); it is not the fix for this one.
+
+## ROW 10 IS MEASURED — the first corpus row on the real interpreter
+
+| arm | $arr.size | outcome | verdict |
+|---|---|---|---|
+| libc allocator | 302 | completed | MISS |
+| rof, revocation **OFF** | 302 | completed | **MISS** |
+| rof, revoke-on-free | — | `capability fault: cause = 24` | **BLOCKED** |
+
+Same build, same workload, one call to `xlang_set_no_revoke()` between the last two. The fault is
+at domain vaddr `0xc2284` = `mrb_vm_exec + 0x198e0`, the return from `mrb_range_new` in
+`OP_RANGE_INC` — CVE-2022-1106's own instruction — and it reproduces across two independent
+builds and boots. Harness: `musl-capstone/mruby-probe/run-row10-arms.sh`, trail in the history note.
+
+**Carry the caveat:** taken with `MRB_STACK_EXTEND_DOUBLING`, which is not mruby's default. Both
+arms carry it so the comparison is sound, but a claim about "mruby as shipped" is not.
+
+1. ~~**The revoke arena under mruby.**~~ DONE. `xlang/common/revoke_arena_domain.c` is wired in
+   under `MRUBY_PROBE_REVOKE=1`, the host grants a third region, and the whole of mruby runs on
+   it: 755 allocations, 179 KB peak for the plain probe; 4.07 MB carved / 364 KB live for row 10.
+2. ~~`fstat` and `lseek`~~ DONE, and C-27 (errno) fell out of the first deliberate syscall failure.
 3. The corpus pins **nine** mruby versions spanning 2017-2026 and our configuration is
    validated on **one**.
 4. **C-22 is still open** and still blocks `-O1` for mruby: 3 TUs fail to compile and
