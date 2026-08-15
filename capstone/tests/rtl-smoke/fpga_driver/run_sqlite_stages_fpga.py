@@ -471,7 +471,20 @@ def main():
             # wedges" and nearly retracted a sound bisection. The board-run skill has always
             # keyed on `SQ: G/enter`; the runner did not.
             entered = "SQ: G/enter" in text
-            montag  = re.search(r"(SPL[AB]|ILLX):([0-9A-Fa-f]{8})", text)
+            # EXCX AND THE OTHER MONITOR SPIN TAGS BELONG HERE. This regex decides whether a
+            # non-returning arm is reported as "the domain wedged" or "the MONITOR wedged", and it
+            # listed only two tags. EXCX:0000E002 -- the unconditional `default:` arm of the
+            # monitor's handle_exception, i.e. "took a trap it does not handle at all" -- was not
+            # among them, so the clearest possible M-mode monitor wedge was classified as a domain
+            # entry stall and the run was declared to carry no verdict. It carried the most
+            # important verdict we had; see fpga-repros/S08-*.
+            #
+            # RGNO is included on the same reasoning and it RECLASSIFIES OLD RUNS, deliberately: the
+            # arms this project has been recording as "R-16 entry stalls" at SQ: id=5 are actually
+            # deterministic monitor region-pool exhaustion (RGNO:0000E00C, RGNN:00000020 = 32
+            # regions). They are still excluded from wedge counts -- but as a known monitor limit,
+            # not as an unexplained per-image stall.
+            montag  = re.search(r"(SPL[AB]|ILLX|EXCX|RCPX|WCPX|SHAX|RGNO|DPIC|DPIX|DRET):([0-9A-Fa-f]{8})", text)
             results.append((label, wedged, obs, returned, created, entered,
                             montag.group(0) if montag else None))
             if wedged:
