@@ -90,6 +90,21 @@ def decode(obs):
     return (obs >> 8) & 0xff, obs & 0xff
 
 
+def decode_s07_retry(obs):
+    """0x5C_ss_pp_rr -> (saw_untagged, retry_still_untagged, retry_recovered), or None.
+
+    The discriminator the RTL lane asked for after refuting the syncer-displacement cause:
+      rr > 0  the retry from the SAME address came back TAGGED -> memory was never wrong,
+              so the fault is in REGISTER DELIVERY (the LOAD_WB-erases-the-capability path
+              they confirmed in simulation);
+      pp > 0  the retry was ALSO untagged -> memory genuinely lost the tag, which is the
+              shadow-tag refill path (A-2), so far unprobed.
+    """
+    if obs is None or (obs >> 24) != 0x5C:
+        return None
+    return (obs >> 16) & 0xff, (obs >> 8) & 0xff, obs & 0xff
+
+
 def decode_probe(obs):
     """0x5B_aa_bb_cc -> the S-07 operand-discrimination counters, or None.
 
@@ -413,6 +428,14 @@ def main():
             # int(...), NOT the re.Match. m_obs is the match object; the int lives in group(1),
             # exactly as line 313 and line 330 already do it. Passing the match here raised
             # TypeError inside decode_probe and killed a boot at the first probe arm.
+            _retry = decode_s07_retry(int(m_obs.group(1))) if m_obs is not None else None
+            if not wedged and bad and _retry is not None:
+                a, b, c = _retry
+                log(f"  {dom}: S-07 RETRY PROBE -- untagged={a} still-untagged-on-retry={b} "
+                    f"recovered-on-retry={c}"
+                    + ("  => MEMORY LOST THE TAG (A-2 refill path)" if b else "")
+                    + ("  => MEMORY WAS FINE: register delivery" if c and not b else ""))
+                bad = False
             _probe = decode_probe(int(m_obs.group(1))) if m_obs is not None else None
             if not wedged and bad and _probe is not None:
                 a, b, c = _probe

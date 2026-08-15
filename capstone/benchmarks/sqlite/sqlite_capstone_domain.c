@@ -23,6 +23,20 @@ static unsigned shared_region_count;
 #define CAPSTONE_DELIN(value)                                                \
   __asm__ volatile(".insn r 0x5b, 0x1, 0x3, %0, x0, x0" : "+r"(value))
 
+#ifdef CAPSTONE_S07_RETRY_REPORT
+/* Counters live in the patched amalgamation (see build-sqlite-silicon.sh, SQLITE_S07_RETRY_PROBE).
+   0x5C_ss_pp_rr, a third sentinel distinct from the ladder's 0x5A6E and the operand probe's 0x5B:
+     ss  times sqlite3OsRead saw an UNTAGGED pMethods
+     pp  of those, the retry from the SAME address was ALSO untagged  -> memory lost the tag (A-2)
+     rr  of those, the retry came back TAGGED                          -> register delivery */
+extern unsigned capstone_s07_seen, capstone_s07_persist, capstone_s07_recover;
+static unsigned s07_retry_result(void) {
+  return 0x5C000000u | ((capstone_s07_seen & 0xFFu) << 16)
+                     | ((capstone_s07_persist & 0xFFu) << 8)
+                     | (capstone_s07_recover & 0xFFu);
+}
+#endif
+
 #ifdef CAPSTONE_OPERAND_PROBE
 /* LCC field 1 is the TOTAL type query: NOT_CAP reads back as 7 and does NOT raise, so a lost
    tag is REPORTED instead of wedging the core. Board-proven on this bitstream (s06lcc = 171). */
@@ -6527,6 +6541,12 @@ void domain_main(unsigned *res, unsigned func) {
        Only a 0x5A6E-tagged value is passed through, so `fail()`'s small rc values and the normal
        success path keep returning DONE exactly as before. */
     unsigned long rv_ = (unsigned long)(unsigned)run_sqlite();
+#ifdef CAPSTONE_S07_RETRY_REPORT
+    {
+      unsigned rr_ = s07_retry_result();
+      if ((rr_ & 0x00FFFFFFu) != 0u) { *res = rr_; return; }
+    }
+#endif
 #ifdef CAPSTONE_OPERAND_PROBE
     /* If the probe SAW anything, report it -- that observation is the whole point of the run and
        outranks the staged marker. If it saw nothing, fall through to the normal marker so the

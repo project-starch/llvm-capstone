@@ -1,5 +1,35 @@
 # S-07 — a capability read back from memory comes back UNTAGGED, sporadically
 
+> ## BOARD ANSWER TO YOUR QUESTION, 2026-08-15 — the tag dies on a STACK SPILL/RELOAD
+>
+> You asked for the datum that separates the syncer-mismatch path from the shadow-tag refill path.
+> The debug mux cannot show a writeback port without a reflash, so we instrumented the failing site
+> instead: query `pMethods` with LCC (total) and, if untagged, re-load the same address.
+>
+> **The probe never fired — and where it wedged is the answer.** Control-validated boot (`L2`
+> returned), one RT arm returned, the next wedged at `sqlite3OsRead+0x144`:
+>
+> ```
+>   3a9b8:  ldc a0, 0x0(a0)     ; the probe loads pMethods -- LCC query PASSES, counters stay 0
+>   3a9c0:  stc a0, 0x0(a1)     ; the compiler SPILLS it to a stack slot
+>   3a9cc:  ldc a0, 0x0(a1)     ; reloads from that same stack slot
+>   3a9d0:  ldc a4, 0x20(a0)    ; <== mcause 25: a0 is NOT_CAP
+> ```
+>
+> So the capability was **verified TAGGED by an LCC query**, then `stc`-ed to a stack slot and
+> `ldc`-ed back **three instructions later**, and the reload is NOT_CAP. The vtable memory it
+> originally came from was never in question — the probe passed on it.
+>
+> **This is a `stc` → `ldc` round trip through a stack slot, with a source proven tagged at the
+> moment of the store.** That is a far smaller sequence than anything previously offered, it needs
+> no SQLite, and it should be directly simulable.
+>
+> **Two honest caveats.** (1) It is still not every execution — one RT arm returned before this one
+> wedged. (2) `s06spill` tests exactly this shape and returned `0xFFFF` — but on the PREVIOUS
+> bitstream, so that exclusion is baseline-invalid and this shape is now **un-excluded**, not
+> contradicted. Re-running `s06spill` on the current bitstream is the obvious cheap next step and we
+> will do it.
+>
 > ## RTL-LANE ANSWER, 2026-08-15: `rtl/ANSWER-FROM-THE-RTL-LANE.md`
 >
 > Sim/RTL side has replied. Confirmed: an LDC bypassed to LOAD_WB erases the capability

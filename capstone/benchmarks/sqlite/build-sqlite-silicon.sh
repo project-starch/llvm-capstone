@@ -106,6 +106,56 @@ cp -f "$PATCHED"                          "$OBJ_DIR/sqlite3-capstone.c"
 # SAME forwarding defect, i.e. the R-14 workaround was creating R-16. Both are fixed together,
 # and both return together if the board is reflashed to a bitstream lacking the fix -- see
 # capstone/tests/fpga-repros/R16-entry-stall/ and .../ARCHIVED/R14-frame-pad/.
+# S-07 RETRY PROBE (SQLITE_S07_RETRY_PROBE=1). Answers the ONE board question the RTL lane asked
+# for after refuting the syncer-displacement cause: when the ldc chain in sqlite3OsRead yields an
+# untagged pMethods, IS THE TAG STILL IN MEMORY?
+#
+#   retry TAGGED   -> memory was never wrong; the fault is in register delivery, i.e. the
+#                     LOAD_WB-erases-the-capability consequence they CONFIRMED in sim.
+#   retry UNTAGGED -> memory genuinely lost the tag; that is the shadow-tag refill path (A-2),
+#                     which nobody has probed yet.
+#
+# It goes here rather than in a rung because both of our synthetic rungs were void -- neither ever
+# created the condition -- while this site wedges reliably on two different binaries. The query is
+# LCC field 1, which is TOTAL, so a lost tag is REPORTED instead of faulting.
+if [[ "${SQLITE_S07_RETRY_PROBE:-0}" == "1" ]]; then
+  echo "== S-07 RETRY PROBE: instrumenting sqlite3OsRead's vtable load"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text()
+old = ("SQLITE_PRIVATE int sqlite3OsRead(sqlite3_file *id, void *pBuf, int amt, i64 offset){\n"
+       "  DO_OS_MALLOC_TEST(id);\n"
+       "  return id->pMethods->xRead(id, pBuf, amt, offset);\n}")
+new = ("unsigned capstone_s07_seen = 0;\n"
+       "unsigned capstone_s07_persist = 0;\n"
+       "unsigned capstone_s07_recover = 0;\n"
+       "SQLITE_PRIVATE int sqlite3OsRead(sqlite3_file *id, void *pBuf, int amt, i64 offset){\n"
+       "  DO_OS_MALLOC_TEST(id);\n"
+       "  {\n"
+       "    const sqlite3_io_methods *volatile *s07slot =\n"
+       "        (const sqlite3_io_methods *volatile *)&id->pMethods;\n"
+       "    const sqlite3_io_methods *s07m = *s07slot;\n"
+       "    unsigned long s07t;\n"
+       "    __asm__ volatile(\".insn r 0x5b, 0x1, 0x4, %0, %1, x1\" : \"=r\"(s07t) : \"r\"(s07m));\n"
+       "    if (s07t == 7UL) {\n"
+       "      const sqlite3_io_methods *s07r;\n"
+       "      unsigned long s07t2;\n"
+       "      if (capstone_s07_seen < 0xFFu) capstone_s07_seen++;\n"
+       "      s07r = *s07slot;   /* RETRY the identical address */\n"
+       "      __asm__ volatile(\".insn r 0x5b, 0x1, 0x4, %0, %1, x1\" : \"=r\"(s07t2) : \"r\"(s07r));\n"
+       "      if (s07t2 == 7UL) { if (capstone_s07_persist < 0xFFu) capstone_s07_persist++; }\n"
+       "      else              { if (capstone_s07_recover < 0xFFu) capstone_s07_recover++; }\n"
+       "      s07m = s07r;\n"
+       "    }\n"
+       "    return s07m->xRead(id, pBuf, amt, offset);\n"
+       "  }\n}")
+if old not in s:
+    sys.exit("S07 RETRY PROBE: sqlite3OsRead does not have the expected shape")
+p.write_text(s.replace(old, new, 1))
+print("   instrumented sqlite3OsRead with a tag-retry probe")
+PY
+fi
+
 if [[ "${SQLITE_STATIC_BUILTINS:-1}" == "1" ]]; then
   echo "== R-14 WORKAROUND: restoring aBuiltinFunc to a compile-time-initialised static"
   python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PY'
