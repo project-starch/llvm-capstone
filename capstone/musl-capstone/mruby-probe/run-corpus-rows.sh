@@ -154,6 +154,12 @@ if [[ -n ${MODULE_KO:-} ]]; then
   cp "$MODULE_KO" "$SHARE/capstone.ko"
   echo "staging module $(stat -c%s "$MODULE_KO") bytes from $MODULE_KO"
   CMDS+=(--guest-command 'rmmod capstone && insmod /mnt/host/capstone.ko && echo __MODULE_RELOADED__')
+  # The boot script runs `dmesg -n 1`, so ONLY KERN_EMERG reaches the console and
+  # everything the module says about a domain it is creating is invisible. When a
+  # module is being tested, open the console back up -- otherwise a kernel-side
+  # failure looks exactly like a wedge, which is how I-4's first attempt was
+  # mis-attributed.
+  CMDS+=(--guest-command 'dmesg -n 8; echo __DMESG_OPEN__')
 fi
 for tag in "${TAGS[@]}"; do
   # Copied to /tmp before running: read straight off the 9p share the loader

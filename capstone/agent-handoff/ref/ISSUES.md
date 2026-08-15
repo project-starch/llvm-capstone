@@ -221,12 +221,28 @@ trigger) and present as `cause = 7` at a page-aligned address in all three alloc
 which read exactly like "every configuration blocks this row's over-read" and would have been
 recorded as a security result if the pc had not been mapped.
 
-**THE OBVIOUS FIX DOES NOT WORK, measured.** Raising the order until the remainder reaches a
-512 KiB floor makes the allocation succeed -- the added `pr_emerg` confirms it is not an
-allocation failure -- but the domain then WEDGES: the loader reports "Ok, good file / Found 1
-segments" and nothing further runs. So a 4 MB region reached by raising the order behaves
-differently from a 4 MB region reached because the image is that big, which the libc arms have
-been using all along. Not understood; the change is reverted rather than left in the tree.
+**THE OBVIOUS FIX DOES NOT WORK, and the controls are in.** Raising the order until the remainder
+reaches a 512 KiB floor makes the domain fail to run at all: the userspace loader reports "Ok,
+good file / Found 1 segments" and then nothing. Established by matched pair --
+
+| module | same reload path, same arm | outcome |
+|---|---|---|
+| unchanged | `__MODULE_RELOADED__` | domain runs, faults at `codegen` as before |
+| with the floor | `__MODULE_RELOADED__` | loader stops, nothing runs |
+
+so the change is implicated and the reload mechanism is not. **The mechanism is still unknown**,
+and two instruments failed to narrow it:
+
+* a `pr_emerg` placed BEFORE `__get_free_pages` never appeared, which should mean the ioctl was
+  never reached -- but the failure point in the loader VARIED between runs, so "never reached" is
+  not safe to conclude;
+* `dmesg -n 8` before the arm produced NO kernel output at all, not even the module's existing
+  `pr_info` lines, so the console is not carrying kernel messages regardless of the runtime
+  loglevel (the guest is booted with `loglevel=1` on the command line). The `__DMESG_OPEN__`
+  marker proves the command ran and proves nothing about its effect.
+
+Getting further needs a kernel console that actually carries printk, which is a boot-parameter
+question, not a domain question. The module change is reverted rather than left in the tree.
 
 The `pr_alert` -> `pr_emerg` half is worth keeping separately: the driver runs `dmesg -n 1`, so
 only `KERN_EMERG` reaches the console and an allocation failure was previously invisible -- no
