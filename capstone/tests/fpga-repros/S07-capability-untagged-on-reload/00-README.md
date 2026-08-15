@@ -1,5 +1,18 @@
 # S-07 — a capability read back from memory comes back UNTAGGED, sporadically
 
+> ### CORRECTION 2026-08-15 — the "domain boundary / hostcall VFS" claim is WITHDRAWN
+>
+> We wrote that `sqlite3OsRead` reaches a hostcall-based VFS and therefore crosses the domain
+> boundary, and offered that as the ingredient the rungs lack. **That is wrong.** The database is
+> opened with `sqlite3_open(":memory:")` — SQLite's in-memory backend, entirely inside the domain.
+> There is no file I/O and no boundary crossing on that path at all.
+>
+> So the distinguishing ingredient is **unknown**, not "the boundary". What remains different
+> between the failing site and the passing rungs: a much larger working set and cache footprint, a
+> capability chain rooted in heap-allocated structures rather than a static array, and far more
+> capability traffic overall. Cache/working-set pressure is the leading remaining candidate and is
+> the next thing we will test.
+
 > ## THE FOUR EXCLUSIONS RE-VERIFIED ON THE CURRENT BITSTREAM, 2026-08-15
 >
 > Every `0xFFFF` in this folder was measured two bitstreams ago and was therefore

@@ -69,11 +69,29 @@ You can do all of this yourself, which is why I'm handing over tasks rather than
    nothing between them, **disassembly-verified before spending a boot**. Ours were not, twice. If
    you'd rather I build it, say so and I will; I'm offering it to you because you have the simulator
    to check the condition exists before it ever reaches silicon.
-3. **The lead I'd chase first, and cannot chase from here.** The faulting site dispatches through
-   `id->pMethods->xRead`, and our VFS is hostcall-based — **that path crosses the domain boundary**,
-   and the rungs cross nothing. Your S-08 bug lived in the dom-switcher's context save/restore, and
-   this fault lands on a capability loaded just after that boundary is crossed. That may be
-   coincidence. It is the most specific difference we have between what wedges and what doesn't.
+3. **What separates what wedges from what doesn't — still open, and we no longer have a candidate
+   we believe.** We have re-verified all four exclusion rungs on the CURRENT bitstream (bounds,
+   stores-through, scalar-load, and spill/reload across three redraws): all still `65535`. So the
+   `stc` → `ldc` stack round trip the board localized is **necessary but not sufficient**. What is
+   left that differs: a much larger working set and cache footprint, a capability chain rooted in
+   heap structures rather than a static array, and far more capability traffic. We are testing
+   cache/working-set pressure next.
+
+   *(An earlier version of this item claimed the faulting path crosses the domain boundary via a
+   hostcall VFS. It does not — the database is `:memory:`. Withdrawn; see the box below.)*
+
+> ### CORRECTION 2026-08-15 — the "domain boundary / hostcall VFS" claim is WITHDRAWN
+>
+> We wrote that `sqlite3OsRead` reaches a hostcall-based VFS and therefore crosses the domain
+> boundary, and offered that as the ingredient the rungs lack. **That is wrong.** The database is
+> opened with `sqlite3_open(":memory:")` — SQLite's in-memory backend, entirely inside the domain.
+> There is no file I/O and no boundary crossing on that path at all.
+>
+> So the distinguishing ingredient is **unknown**, not "the boundary". What remains different
+> between the failing site and the passing rungs: a much larger working set and cache footprint, a
+> capability chain rooted in heap-allocated structures rather than a static array, and far more
+> capability traffic overall. Cache/working-set pressure is the leading remaining candidate and is
+> the next thing we will test.
 
 ## 5. Division of labour I'd suggest
 
