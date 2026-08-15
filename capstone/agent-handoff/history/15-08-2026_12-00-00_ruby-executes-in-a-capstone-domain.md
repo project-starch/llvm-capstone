@@ -1,0 +1,121 @@
+# Ruby executes in a pure-capability Capstone domain, 2026-08-15
+
+**Result, QEMU, verified.** Reference mruby, unmodified except for one line, running
+precompiled Ruby bytecode in a `capstone64-unknown-elf` domain. Six constructs of
+increasing complexity, each checked against its expected value in one boot:
+
+```
+MRUBY RUNG 1 nil:          returned -1 (want -1)
+MRUBY RUNG 2 integer:      returned 1 (want 1)
+MRUBY RUNG 3 add:          returned 3 (want 3)        method dispatch on Integer
+MRUBY RUNG 4 empty array:  returned 0 (want 0)        object allocation
+MRUBY RUNG 5 array store:  returned 7 (want 7)        array store and load
+MRUBY RUNG 6 while loop:   returned 210 (want 210)    jumps, counter, arithmetic
+MRUBY STAGE 7 DONE: allocs=275 peak=161953
+```
+
+Harness: `capstone/musl-capstone/mruby-probe/run-mruby-stages.sh`.
+
+**What still does not work:** loading mrblib, mruby's Ruby-level standard library. That is
+C-26, diagnosed to a ten-line reproducer (see below). So the VM runs Ruby; the standard
+library does not load yet.
+
+## What it took
+
+Four config macros, all upstream-supported, and **one** source line.
+
+| macro | why |
+|---|---|
+| `MRB_NO_BOXING` | `boxing_word.h` packs an `mrb_value` into one 64-bit word by tagging the pointer; its static assert fails outright at 16-byte pointers. **Ours** -- the CHERI port did not need it. |
+| `MRB_NO_DIRECT_THREADING` | the VM's computed-goto dispatch is a second absolute-addressed jump table, the same mechanism Lua needed `LUA_USE_JUMPTABLE=0` for |
+| `POOL_ALIGNMENT=16` | from the CHERI port: the parser pool hands out 8-aligned cells holding capabilities |
+| `MRB_USE_METHOD_T_STRUCT` | from the CHERI port: the method table otherwise stores a tagged pointer |
+
+The one line is in the parser, `parse.y:504`: `nint(pass?NODE_CALL:NODE_SCALL)` folds to
+`27 ^ (pass != 0)` and, because the result is cast to `node *`, the xor lands at i128.
+Routing it through an `enum node_type` first keeps the fold at integer width.
+`mruby-probe/patch-parser.py` applies that into the build directory and fails loudly if it
+ever stops matching; the mruby tree stays byte-identical.
+
+**The parser compiles but has not been run.** The bytecode route is what the result above
+uses, and it is the smaller image.
+
+## Five defects, four fixed, all ours
+
+| | |
+|---|---|
+| `jmp_buf` 208 bytes and 8-byte aligned, where `capstone_setjmp.S` writes 224 and needs 16 | fixed |
+| the libc archive built without `-fno-jump-tables`, 15 members with switch tables | fixed |
+| `.bss` inside the loaded segment: 262 KB of zeros copied over 9p | fixed |
+| **C-25** pointer difference required tagged operands, so `NULL - NULL` faulted | fixed |
+| **C-26** `va_arg` of a by-reference struct loads the reference with `ld` | open |
+
+Plus QEMU: `helper_cslcc` asserted on an untagged operand, killing the machine, so the monitor
+never reported cause/pc. It now raises Unexpected operand type (24) per the spec. Without that
+change C-25 could not have been localised past "somewhere in mrb_top_run".
+
+## Two system properties nobody had written down
+
+**Domain images are capped near 4 MB**, not by hardware and not by the monitor -- which asks
+only for 16-byte alignment -- but by the module: `__get_free_pages(GFP_HIGHUSER,
+dom_pages_log2)` is a buddy allocation, and `MAX_ORDER` cuts in at order 10. A 6 MB heap made
+it order 11 and the allocation failed silently: `pr_alert` into a ring buffer the driver had
+already muted with `dmesg -n 1`, and `dom_id` left unset, so the run looked like it simply did
+nothing.
+
+**9p demand paging cannot load a large domain.** The guest loader mmaps the `.dom` and memcpys
+out of it, so read straight from the share every 4 KiB page is an RPC under TCG with
+`cache=none`. A 1.35 MB image did not finish in 900 s, nor in 1800 s. Copied to `/tmp` first
+and loaded from there: **under one second**. Every domain run should copy first; the run
+scripts here now do, and stamp T0/T1/T2 so the phases stay separable.
+
+## How it was localised, because the method mattered more than any guess
+
+Every one of the following was refuted by a measurement after being the most plausible
+explanation at the time: the image is too big, the heap is too small, our first-fit allocator
+is quadratic, mrblib's bytecode is too large. The eventual causes were in none of those places.
+
+The chain that worked, each arm differing from the last in one thing:
+
+1. `cp` to local storage vs. loading over 9p -- refuted image size, and fixed the load.
+2. 256 KiB vs 768 KiB heap -- identical fault pc, refuted heap exhaustion.
+3. First-fit vs an O(1) bump arena -- identical wedge, exonerated our allocator.
+4. Staged arms returning markers: `mrb_state`, `mrb_gc_init`, then sixteen of seventeen
+   `mrb_init_*` all return. mruby's **whole C object system works here.**
+5. Our own four-line irep instead of mrblib's -- same fault, exonerating mrblib.
+6. `mrb_read_irep` and `mrb_proc_new` return, `mrb_top_run` faults: the VM, not the loader.
+7. The bytecode ladder above, once C-25 was fixed.
+8. `mrb_funcall_id` argc=0 returns, argc=1 faults; then the same shape in ten lines without
+   mruby at all.
+
+**Nine boots were spent before step 4, one hypothesis at a time.** That is exactly what
+CLAUDE.md's "BATCH VARIANTS, and make every run RETURN" section exists to prevent, and it was
+written after the same mistake cost six board sessions. After switching to batched arms, one
+boot did what four had.
+
+## Three instrument failures, all mine, all worth the space
+
+**A harness that hid build errors.** `run-mruby-stages.sh` sent build output to `/dev/null` and
+left the previous `.dom` in the share directory, so a failed build ran the STALE image and
+reported as if it were the new arm -- three times. Fixed with three checks: remove the `.dom`
+first, do not hide the build log, and verify the file exists afterwards. The third is not
+redundant: a build can exit 0 and produce nothing.
+
+**A circular base derivation.** A fault pc was mapped to an instruction by assuming which
+instruction faulted and deriving the load address from that. The staged arms now report their
+own load address.
+
+**Two wrong drafts of the QEMU change**, both caught before building: raising 25 from memory
+instead of 24 from the spec -- the mislabelling ISSUES.md blames for three misdirected
+investigations -- and carving out `imm == 0` to answer "is this valid?" with 0, which would
+have moved QEMU away from the specification to make one program work.
+
+## What this changes for the corpus
+
+`xlang/RESULTS.md` gives as the first reason for measuring through shims that purecap mruby
+took four changes and only one of nine pinned versions is proven. That reason is unchanged.
+What has changed is that the **libc obstacle is gone** and mruby is now a build rather than a
+port on our column too. Upgrading the twelve Ruby rows from shim to real interpreter still
+needs: C-26 fixed (for mrblib), the nine pinned versions ported, `fstat`/`lseek` for the gem
+rows, and the revoke arena scaled from 64 KiB and 64 slots to a real VM's allocation
+behaviour. The last of those is the one the shims cannot answer at all.

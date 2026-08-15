@@ -12,6 +12,65 @@ Last updated 2026-08-15.
 
 ---
 
+## C-26 — `va_arg` of a struct passed BY REFERENCE loads the reference with `ld` · `OPEN 2026-08-15`
+
+**Ten lines reproduce it, and the matched pair is inside them:**
+
+```c
+struct val { union { long i; double f; void *p; } u; int tt; };   /* 32 bytes */
+
+static long va_sum(struct val self, int mid, int argc, ...) {
+  struct val argv[16];
+  va_list ap;
+  va_start(ap, argc);
+  for (int i = 0; i < argc; i++)
+    argv[i] = va_arg(ap, struct val);      /* argc=0 returns; argc=1 FAULTS */
+  ...
+}
+```
+
+Measured in a domain: `argc = 0` returns the right answer, `argc = 1` takes a capability
+fault, `cause = 24`. The only difference is whether the loop body runs.
+
+**The emitted sequence, at `va_sum+0x10c`:**
+
+```
+ldc           a0, 0x0(a3)     ; ap
+cincoffsetimm a2, a0, 0x10    ; ap += 16
+stc           a2, 0x0(a3)
+ld            a0, 0x0(a0)     ; <-- 8-byte load of what is a POINTER
+ldc           a2, 0x0(a0)     ; <-- dereference through it: cause 24
+addi          a0, a0, 0x10    ; <-- and integer arithmetic on it
+```
+
+A struct larger than 2*XLEN is passed in varargs **by reference**. On this target that
+reference is a 128-bit capability, but the va_arg lowering fetches it with an XLen-sized `ld`
+and then advances it with `addi`. The tag is gone before the first dereference, so **any
+variadic function receiving a struct larger than 16 bytes faults.**
+
+**Why it did not show up earlier.** The va_arg check recorded on 2026-08-14 covered `int`,
+`long`, `void *` and `double` -- all register-sized, none passed by reference. Structs were
+never tested.
+
+**Found via** mruby: `mrb_funcall_id(mrb, self, mid, argc, ...)` reads `va_arg(ap, mrb_value)`,
+and `mrb_value` is 32 bytes under `MRB_NO_BOXING`. The in-domain matched pair was
+`mrb_funcall_id` with argc 0 (returns) against argc 1 (faults), before the reproducer was cut
+down to the ten lines above.
+
+**Blocks:** loading mrblib, so mruby runs bytecode but has no Ruby-level standard library. The VM
+itself is fine -- six Ruby constructs execute correctly (see the history note).
+
+**Not fixed.** The lowering to change is the by-reference vararg case, which must use `ldc` and
+`cincoffsetimm` rather than `ld` and `addi`.
+
+**A caveat about reading fault addresses, learned here.** The monitor's reported `pc` pointed at
+`cincoffsetimm a0, s0, -0x24c`, whose `rs1` is the frame pointer and is demonstrably tagged four
+instructions earlier. The real fault is later in the same basic block. Treat the reported pc as
+locating a BLOCK, not an instruction, until someone establishes otherwise -- and note that the
+C-23 diagnosis was reached with the same assumption, where it happened not to matter.
+
+---
+
 ## C-25 — a POINTER DIFFERENCE required both operands to be tagged · `FIXED 2026-08-15`
 
 **Three lines reproduce it**, and the two shapes disagreed with each other:
