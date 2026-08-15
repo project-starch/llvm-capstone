@@ -1,6 +1,14 @@
 # S-08 — on `caplifive_s06fullfix.bit` the monitor takes an UNHANDLED TRAP just after a domain's first share returns
 
-**Status: OPEN, BLOCKING all board work. Reported 2026-08-15, immediately after the reflash.**
+**Status: ROOT-CAUSED AND FIXED IN RTL, 2026-08-15 — awaiting re-synthesis.** The S-06
+author's answer is **`rtl/ANSWER-FROM-THE-S06-AUTHOR.md`**: an S-06 P4 width bug made every
+dom-switch context store 16 bytes wide, so each scalar CSR save clobbered the NEXT 8-byte
+slot before the exchange read it — medeleg restored 0, delegation died. Mechanism reproduced
+in simulation with a positive-controlled directed test (medeleg zeroed pre-fix, sentinel
+intact post-fix); fix + test are commit `9fd5507be` on `fpga-testing-dev-s06fix`. No monitor
+change needed. Re-synthesize from that commit. (Original report below, kept as measured.)
+
+**Previously: OPEN, BLOCKING all board work. Reported 2026-08-15, immediately after the reflash.**
 
 ## MEASURED 2026-08-15: a U-MODE ECALL IS NOT BEING DELEGATED
 

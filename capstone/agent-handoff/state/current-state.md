@@ -2,6 +2,24 @@
 
 Minimal snapshot. Read first in every session.
 
+## S-08 ROOT-CAUSED: an S-06 P4 width bug; FIXED, needs re-synthesis (2026-08-15)
+
+The `caplifive_s06fullfix.bit` regression (S-08: userspace ecall undelegated, monitor takes
+the trap) was a bug in the S-06 fix itself — NOT the reporters' lane-packing hypothesis
+(packing verified aligned from the generated switcher). P4 made every dom-switch context
+store an unconditional 16-byte granule write; the scalar CSR context rows are 8-byte-stride
+slots, so each save clobbered the NEXT slot with zeros before the sequential exchange read
+it — medeleg restored 0, delegation died. Reproduced in sim with a positive-controlled
+killing test (a real sealed-context CALL whose callee checks the restored CSRs: medeleg
+zeroed pre-fix, sentinel intact post-fix; CAPENTER provably does not drive the switcher,
+which is why no green test could ever see this). Fix: dom-switch width honors the
+switcher's per-row metadata_en. Commit `9fd5507be` on `fpga-testing-dev-s06fix` (one on top
+of squashed `25035c4c0`), sweep evidence `verif/sim/s06-s09fix.txt` (call-hot and
+revocation RESTORED to baseline signatures). Answer to the reporting lane:
+`tests/fpga-repros/S08-.../rtl/ANSWER-FROM-THE-S06-AUTHOR.md`. **Next: the project lead
+pushes the branch; the board owner re-synthesizes from `9fd5507be`.** The S-06 acceptance
+rungs remain untested on silicon either way.
+
 ## S-06 FIXED IN RTL — sim-validated, awaiting synthesis (2026-08-14)
 
 The untagged-`ldc`/`stc` high-half loss (S-06) is fixed in the RTL, not worked around. Branch
