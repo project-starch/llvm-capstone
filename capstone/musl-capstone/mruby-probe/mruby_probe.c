@@ -502,6 +502,50 @@ done:
 }
 #endif
 
+#ifdef MRUBY_PROBE_ROW
+/* AN ACTUAL CORPUS ROW, on the real interpreter, with the corpus's own trigger.
+ *
+ * xlang/repro/<n>/trigger.rb is embedded VERBATIM by embed-ruby.py -- the whole
+ * value of this is that the input is the corpus's file and not a paraphrase.
+ *
+ * Row 10 (CVE-2022-1106, OP_RANGE_INC) is the one that can run without porting
+ * anything new: its pinned mruby commit is the tree this port was validated
+ * against. Its trigger is pure Ruby, so it needs no C harness at all -- the
+ * parser and the VM are the whole vehicle.
+ *
+ * Matched arms are the same two the corpus uses, selected by
+ * MRUBY_PROBE_CDP_CONTROL: revocation off (expect the stale write to land) and
+ * revocation on (expect a fault). The control is load-bearing: without it, a
+ * fault could mean the trigger never armed. */
+#include "row_trigger.c"
+extern void xlang_set_no_revoke(void);
+
+static int run_row(mrb_state *mrb) {
+  char b[96];
+  int n = snprintf(b, sizeof b, "ROW %d: running the corpus trigger verbatim\n",
+                   MRUBY_PROBE_ROW);
+  if (n > 0)
+    __capstone_hc_write(1, b, (unsigned long)n);
+
+#ifdef MRUBY_PROBE_CDP_CONTROL
+  xlang_set_no_revoke();
+  SAY("ROW ARM: control (revocation DISABLED)\n");
+#else
+  SAY("ROW ARM: revoke-on-free (the shipped configuration)\n");
+#endif
+
+  mrb_load_string(mrb, row_trigger);
+  if (mrb->exc) {
+    SAY("ROW: the trigger raised a Ruby exception\n");
+    mrb->exc = 0;
+  }
+  SAY("ROW: trigger COMPLETED without a capability fault\n");
+  say_arena("after-row");
+  SAY("__CAPSTONE_MRUBY_ROW_DONE__\n");
+  return 0;
+}
+#endif
+
 #ifdef MRUBY_PROBE_CDP
 /* THE CROSS-DOMAIN POINTER BUG, ON THE REAL INTERPRETER.
  *
@@ -632,6 +676,11 @@ int capstone_main(void) {
   }
   SAY("MRUBY S4: t[19] == 400\n");
 
+#ifdef MRUBY_PROBE_ROW
+  run_row(mrb);
+  mrb_close(mrb);
+  return 0;
+#endif
 #ifdef MRUBY_PROBE_CDP
   run_cdp(mrb);
   mrb_close(mrb);

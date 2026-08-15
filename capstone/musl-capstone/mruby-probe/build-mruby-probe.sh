@@ -156,6 +156,14 @@ PROBE_EXTRA=()
 # interpreter; MRUBY_PROBE_CDP_CONTROL=1 is its matched arm with revocation off.
 [[ ${MRUBY_PROBE_CDP:-0} == 1 ]] && PROBE_EXTRA+=(-DMRUBY_PROBE_CDP)
 [[ ${MRUBY_PROBE_CDP_CONTROL:-0} == 1 ]] && PROBE_EXTRA+=(-DMRUBY_PROBE_CDP_CONTROL)
+# MRUBY_PROBE_ROW=<n> runs xlang corpus row <n>'s OWN trigger.rb, embedded
+# verbatim. Only rows whose pinned mruby version matches MRUBY_SRC are
+# meaningful; row 10's pinned commit is the tree this port was validated on.
+if [[ -n ${MRUBY_PROBE_ROW:-} ]]; then
+  ROW_RB="$REPO_ROOT/xlang/repro/${MRUBY_PROBE_ROW}/trigger.rb"
+  python3 "$SCRIPT_DIR/embed-ruby.py" "$ROW_RB" "$OBJ_DIR/row_trigger.c" row_trigger
+  PROBE_EXTRA+=(-DMRUBY_PROBE_ROW="${MRUBY_PROBE_ROW}")
+fi
 # MRUBY_PROBE_BUMP=1 swaps the probe's allocator for an O(1) bump arena. See the
 # comment in mruby_probe.c: it is the matched arm for a wedge, differing from the
 # libc allocator in exactly one property.
