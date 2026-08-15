@@ -199,6 +199,41 @@ work list.
 
 ---
 
+## I-4 — a domain's STACK is the rounding slack of a power-of-two allocation · `CHARACTERISED 2026-08-15, fix ATTEMPTED AND REVERTED`
+
+**Nobody chose how much stack a domain gets.** The module allocates
+`code_len + DOMAIN_DATA_SIZE` rounded up to a power-of-two page count, and the monitor lays the
+region out as `[code][DOMAIN_DATA_SIZE, the monitor's own sealed region][the rest]`. "The rest"
+is the domain's stack and `.bss`, and it is purely how far the image happens to sit below the
+next power of two. `DOMAIN_DATA_SIZE` is 64 KiB and belongs to the MONITOR, not to the domain.
+
+Measured, corpus rows on the revoking allocator:
+
+| image (MemSiz) | tot_size | stack + .bss |
+|---|---|---|
+| 1.74 MB | 2 MB | 292 KB |
+| 1.90 MB | 2 MB | **130 KB** |
+| 3.47 MB | 4 MB | 658 KB |
+
+**A slightly larger program silently gets a smaller stack.** That is how corpus row 11 came to
+overflow inside mruby's recursive code generator (`codegen`, a 2 KB frame per level, 109-line
+trigger) and present as `cause = 7` at a page-aligned address in all three allocator arms --
+which read exactly like "every configuration blocks this row's over-read" and would have been
+recorded as a security result if the pc had not been mapped.
+
+**THE OBVIOUS FIX DOES NOT WORK, measured.** Raising the order until the remainder reaches a
+512 KiB floor makes the allocation succeed -- the added `pr_emerg` confirms it is not an
+allocation failure -- but the domain then WEDGES: the loader reports "Ok, good file / Found 1
+segments" and nothing further runs. So a 4 MB region reached by raising the order behaves
+differently from a 4 MB region reached because the image is that big, which the libc arms have
+been using all along. Not understood; the change is reverted rather than left in the tree.
+
+The `pr_alert` -> `pr_emerg` half is worth keeping separately: the driver runs `dmesg -n 1`, so
+only `KERN_EMERG` reaches the console and an allocation failure was previously invisible -- no
+fault, no message, no exit code, indistinguishable from a wedge.
+
+---
+
 ## I-3 — QEMU ASSERTS where the spec says RAISE, so a program defect kills the emulator · `TWO INSTANCES FIXED 2026-08-15, four remain`
 
 **An abort is the worst possible way to report a capability fault**, because the monitor never

@@ -142,6 +142,19 @@ for ROW in $ROWS; do
 done
 
 CMDS=(--guest-command 'echo __CAPSTONE_QEMU_BOOT_CONTROL_OK__')
+
+# MODULE_KO stages a freshly built capstone.ko and swaps it in, so a module
+# change can be tested without rebuilding the buildroot image and rebooting the
+# whole guest. The boot script has already insmod'ed the baked one, hence the
+# rmmod. MODULE_RELOADED is the positive control: without it the run silently
+# used the OLD module, which is the difference between measuring the change and
+# measuring nothing.
+if [[ -n ${MODULE_KO:-} ]]; then
+  [[ -f $MODULE_KO ]] || { echo "no such module: $MODULE_KO" >&2; exit 2; }
+  cp "$MODULE_KO" "$SHARE/capstone.ko"
+  echo "staging module $(stat -c%s "$MODULE_KO") bytes from $MODULE_KO"
+  CMDS+=(--guest-command 'rmmod capstone && insmod /mnt/host/capstone.ko && echo __MODULE_RELOADED__')
+fi
 for tag in "${TAGS[@]}"; do
   # Copied to /tmp before running: read straight off the 9p share the loader
   # demand-pages a 2 MB image and it never finishes. Removed again afterwards --
