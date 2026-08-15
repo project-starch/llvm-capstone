@@ -27,9 +27,52 @@
 > claiming that as proof; we are pointing out that the site is the construct A-1 predicts, and that
 > it is now reproducible on the first try rather than 1-in-4.
 >
-> **There is a failing control again.** The `G6P` discriminator has been waiting since 2026-08-14 for
-> exactly this. Note the rs1/rs2 question it was built to settle is now largely answered by this
-> instance; its remaining value is confirming whether the `cincoffset` sites share this cause.
+> ### THE SAME SOURCE CONSTRUCT, IN TWO INDEPENDENT BINARIES
+>
+> `L2.dom` (sha `fd0445cf…`) and `XF.dom` (sha `f1214600…`) are different builds at different
+> addresses. Both wedge at **`sqlite3OsRead+0x4c`**, on the byte-identical triple:
+>
+> ```
+> L2   3a2f0: ldc a0,0x0(a0)   3a2f4: ldc a4,0x0(a0)   3a2f8: ldc a4,0x20(a4)   <== mcause 25
+> XF   3a834: ldc a0,0x0(a0)   3a838: ldc a4,0x0(a0)   3a83c: ldc a4,0x20(a4)   <== mcause 25
+> ```
+>
+> So this is **the construct, not the image layout** — the failure follows the source, not the
+> address. `L2` is the truncation arm that returned on **14 of 14** boots on the previous bitstream
+> and had never wedged; on this one it wedges. S-07 is markedly MORE frequent after the S-06 fix.
+>
+> ### TWO MINIMAL REPRODUCERS TRIED, BOTH RETURN 0 — please do not re-run these
+>
+> | rung | what it does | silicon |
+> |---|---|---|
+> | `s07chase` | 20 000 hops of `ldc` → **dependent** `ldc`, no query between, burst of 8 | **0** |
+> | `s07indep` | 8 **independent** capability loads back to back, no address dependencies | **0** |
+>
+> Both have firing positive controls (selftest arm returns 256 under QEMU) and both ran in
+> control-validated boots (`k800` = 4).
+>
+> **The first one was also structurally incapable of testing A-1, and that is worth knowing.** A
+> *dependent* `ldc` cannot issue while its predecessor is outstanding — it needs that result as its
+> base address — so a pointer chase can never put two capability loads in flight at once. `s07indep`
+> was written to fix exactly that. It also returns 0.
+>
+> **Consequence for A-1:** if displacement required two capability loads in flight, `s07indep`
+> should have hit it in a tight loop. It did not. And note the faulting SQLite triple is itself a
+> *dependent* pair, so whatever overlaps it must come from elsewhere. A-1 is not refuted — its
+> window may need traffic a rung cannot create — but it no longer explains the evidence on its own.
+>
+> ### WHAT THE FAULTING SITE HAS THAT THE RUNGS DO NOT
+>
+> `sqlite3OsRead` dispatches through `id->pMethods->xRead`, and our VFS is implemented by
+> **HOSTCALLS — the domain boundary is crossed** on that path. The rungs cross nothing. Other
+> differences: a 256 KiB heap and a warm cache versus a 64-entry ring, and a vtable capability
+> loaded from the heap versus a static array.
+>
+> **The domain-boundary crossing is the one we would look at first**, and it is not idle
+> speculation: the S-08 bug fixed the same day lived in the dom-switcher's context save/restore, and
+> this fault lands on a capability loaded on a path that has just crossed that boundary.
+>
+> **There is a failing control again**, reliably, which every discriminator has been blocked on.
 >
 > Everything below predates the S-06 fix and the reflash, and its rate table is baseline-invalid.
 
