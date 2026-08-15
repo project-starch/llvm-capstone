@@ -66,20 +66,6 @@ let TargetPrefix = "capstone" in {
   def int_capstone_cap_get_tag : Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty],
                                            [IntrNoMem]>;
 
-  // i64 get_type(capability) -- LCC field 1.
-  //
-  // TOTAL on S-06-enabler silicon: it answers 7 for a NON-capability instead of raising, which
-  // is what lets generated code ask "does this granule hold a capability?" and branch on the
-  // answer. That question is the whole basis of the S-06 repair -- an untagged 16-byte ldc/stc
-  // round trip loses the high half whenever the cursor is 0x4000-aligned, so a copy must choose
-  // between a capability-grained store and plain stores, and until this query existed software
-  // had no way to choose. Field 1 was the only LCC field with no intrinsic.
-  //
-  // NOT IntrNoMem-safe on OLDER silicon, where the query RAISES on plain data. Emitting it is
-  // gated on the same flag as the copy expansion that uses it.
-  def int_capstone_cap_get_type : Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty],
-                                            [IntrNoMem]>;
-
   // i64 get_base(i128 capability)
   def int_capstone_cap_get_base : Intrinsic<[llvm_i64_ty], [llvm_anyptr_ty],
                                             [IntrNoMem]>;

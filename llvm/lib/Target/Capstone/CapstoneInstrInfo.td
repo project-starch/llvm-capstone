@@ -2434,7 +2434,6 @@ def LCC : RVInstRI<0b0000100, 0b001, OPC_CAP_OP,
 // get_tag, get_type, get_cursor, get_base, get_end, get_perm
 // Field 1 answers cap_type-1, so a NON-capability reads 7 (NOT_CAP(0)-1 wraps in 3 bits).
 def : Pat<(int_capstone_cap_get_tag GPR:$src),    (LCC GPR:$src, 0)>;
-def : Pat<(int_capstone_cap_get_type GPR:$src),   (LCC GPR:$src, 1)>;
 def : Pat<(int_capstone_cap_get_cursor GPR:$src), (LCC GPR:$src, 2)>;
 def : Pat<(int_capstone_cap_get_base GPR:$src),   (LCC GPR:$src, 3)>;
 def : Pat<(int_capstone_cap_get_end GPR:$src),    (LCC GPR:$src, 4)>;

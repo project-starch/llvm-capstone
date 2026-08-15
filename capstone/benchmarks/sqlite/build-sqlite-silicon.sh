@@ -1371,9 +1371,6 @@ SILICON=(-mllvm -capstone-merge-string-constants=true
 # SQLITE_GRANULE_GUARD=0 turns it off for an A/B. It is a WORKAROUND, not a fix: it costs +33660
 # bytes of .text and a branch per granule, and both are in the primitive every timing number is
 # measured on. See ref/S06-WORKAROUNDS-TO-REVERT.md for what to remove when silicon is fixed.
-if [[ "${SQLITE_GRANULE_GUARD:-1}" == "1" ]]; then
-  EXTRA_MLLVM="${EXTRA_MLLVM:-} -mllvm -capstone-guard-cap-granule-copies"
-fi
 read -r -a _extra_mllvm <<< "${EXTRA_MLLVM:-} ${SQLITE_DIAG:-}"
 SILICON+=("${_extra_mllvm[@]}")
 
@@ -1519,10 +1516,8 @@ _writers_optnone=${SQLITE_WRITERS_OPTNONE:-1}
 # wedges only after CREATE. Default stays OFF only because an error return is easier to work
 # with than a wedge -- turn it ON to chase the CREATE-path fault, which needs correct data to be
 # reachable at all. See ISSUES.md S-06.
-_ldc_fixup=${SQLITE_LDC_HIGH_HALF_FIXUP:-0}
 SUPPORT_DEFS=(-DBEEBS_STRING_LINEAR_SAFE=1 -DBEEBS_MEMCPY_OPTNONE=$_memcpy_optnone \
               -DBEEBS_STRING_WRITERS_OPTNONE=$_writers_optnone \
-              -DBEEBS_LDC_HIGH_HALF_FIXUP=$_ldc_fixup \
               ${BEEBS_STRING_EXTRA_DEFS:-})
 for pair in "libc:$ADAPTED/capstone_sqlite_libc.c" "beebs_string:$BEEBS_STRING"; do
   "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" \

@@ -104,8 +104,6 @@ void initializeCapstonePushPopOptPass(PassRegistry &);
 FunctionPass *createCapstoneLoadStoreOptPass();
 void initializeCapstoneLoadStoreOptPass(PassRegistry &);
 
-FunctionPass *createCapstoneCapGranuleCopyPass();
-void initializeCapstoneCapGranuleCopyPass(PassRegistry &);
 
 FunctionPass *createCapstoneZacasABIFixPass();
 void initializeCapstoneZacasABIFixPass(PassRegistry &);

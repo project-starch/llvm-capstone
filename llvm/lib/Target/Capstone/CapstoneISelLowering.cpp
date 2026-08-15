@@ -96,8 +96,11 @@ static cl::opt<bool>
 // writes both banks only when the metadata is non-zero). One implementation of the workaround
 // rather than two.
 //
-// It must be paired with BEEBS_LDC_HIGH_HALF_FIXUP in the library, or the calls land on a
-// memcpy that still has the defect.
+// It had to be paired with BEEBS_LDC_HIGH_HALF_FIXUP in the library. THAT LIBRARY ARM NO LONGER
+// EXISTS: S-06 was fixed in silicon on 2026-08-15 (s06agg 5 -> 15 on caplifive_s06fixs08fix.bit)
+// and the workaround was reverted. Since this flag never worked anyway (see STATUS below), that
+// is not a regression -- but anyone reviving it must reconstruct the library side too, or revisit
+// whether it is needed at all now the hardware is correct.
 //
 // STATUS: DOES NOT WORK YET -- do not enable it expecting a working domain. With the flag on,
 // SQLite faults under QEMU at `helper_cscincoffset: Assertion rs1_v->tag failed`, i.e. a
