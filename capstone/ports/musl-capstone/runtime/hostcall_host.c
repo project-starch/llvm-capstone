@@ -137,6 +137,32 @@ static int service_file_op(struct hostcall_v0 *metadata, char *payload,
       result = 0;
     break;
 
+  case HC_V0_OP_FILE_STAT_BASIC:
+    /* The opcode and its response layout have existed since the file service was
+       written; nothing translated onto them until stdio needed a size. Only
+       file_size and mode are filled -- the two reserved words stay zero rather
+       than being quietly repurposed, because a domain that later wants mtime
+       should get a protocol change and not a surprise. */
+    fd = hostcall_lookup_handle_fd(handles,
+                                   HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, req[0]);
+    if (fd < 0) {
+      err = errno;
+    } else {
+      struct stat st;
+      if (fstat(fd, &st)) {
+        err = errno;
+      } else {
+        struct hc_file_stat_basic_resp_v0 *resp =
+            (struct hc_file_stat_basic_resp_v0 *)payload;
+        resp->file_size = (hostcall_u64_t)st.st_size;
+        resp->mode = (hostcall_u64_t)st.st_mode;
+        resp->reserved0 = 0;
+        resp->reserved1 = 0;
+        result = HC_FILE_STAT_BASIC_RESP_V0_SIZE;
+      }
+    }
+    break;
+
   case HC_V0_OP_FILE_TRUNCATE:
     fd = hostcall_lookup_handle_fd(handles,
                                    HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES, req[0]);

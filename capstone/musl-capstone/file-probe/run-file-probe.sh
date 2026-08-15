@@ -87,6 +87,9 @@ if ! CAPSTONE_QEMU_LOGIN_TIMEOUT=${CAPSTONE_QEMU_LOGIN_TIMEOUT:-300} \
   --success-marker 'FILE S3: wrote payload' \
   --success-marker 'FILE S5: reopened for read' \
   --success-marker 'FILE S6: read back and compared equal' \
+  --success-marker 'FILE S7: fstat size matches what was written' \
+  --success-marker 'FILE S8: SEEK_END positioned correctly and the bytes match' \
+  --success-marker 'FILE S9: SEEK_SET/CUR arithmetic, and a negative seek refused' \
   --success-marker '__CAPSTONE_FILE_PROBE_PASSED__' \
   --success-marker '__CAPSTONE_HOSTCALL_HOST_DONE__ status=0'
 then

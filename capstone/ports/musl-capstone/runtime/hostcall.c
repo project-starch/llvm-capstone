@@ -20,7 +20,9 @@
  */
 #include <errno.h>
 #include <sys/syscall.h>
+#include <sys/stat.h>
 #include <sys/uio.h>
+#include <unistd.h>
 
 /* Not <sys/syscall.h>'s job: syscall_arg_t and the __capstone_hostcall
    prototype both live in our arch layer. Including it here means the definition
@@ -240,6 +242,33 @@ static long hc_write_fd(long fd, const void *buf, unsigned long count) {
   return hc_transfer(HC_V0_OP_FILE_WRITE, fd, (char *)buf, count, 1);
 }
 
+/* The mode from the last successful stat. A second field would need a second
+   round trip or a wider return; the two callers here (fstat, and lseek's
+   SEEK_END) both issue the stat immediately before reading it. */
+static unsigned long hc_stat_mode;
+
+/* Returns the file size, or a negative errno. */
+static long hc_stat_size(long fd) {
+  int token = hc_token_of(fd);
+  if (!token)
+    return -EBADF;
+  if (!hc_payload)
+    return -EIO;
+  hc_put_u64(0, (unsigned long long)token);
+  hc_put_u64(1, 0);
+  hc_put_u64(2, 0);
+  hc_put_u64(3, 0);
+  if (hc_round(HC_V0_OP_FILE_STAT_BASIC, 0, 0) != 0)
+    return -EIO;
+  if (hc_metadata->error != 0)
+    return -(long)hc_metadata->error;
+
+  const volatile unsigned long long *resp =
+      (const volatile unsigned long long *)hc_payload;
+  hc_stat_mode = (unsigned long)resp[1];
+  return (long)resp[0];
+}
+
 long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
                          syscall_arg_t c, syscall_arg_t d, syscall_arg_t e,
                          syscall_arg_t f) {
@@ -299,6 +328,54 @@ long __capstone_hostcall(long n, syscall_arg_t a, syscall_arg_t b,
 
   case SYS_ftruncate:
     return hc_handle_op(HC_V0_OP_FILE_TRUNCATE, (long)a, (unsigned long long)(long)b);
+
+  /* fstat and lseek, which together are what a stdio implementation needs.
+     FILE_STAT_BASIC has existed as an opcode since the file service was written;
+     this is the first thing to translate onto it. */
+  case SYS_fstat: {
+    long size = hc_stat_size((long)a);
+    if (size < 0)
+      return size;
+    struct stat *st = (struct stat *)b;
+    for (unsigned long i = 0; i < sizeof(*st); i++)
+      ((char *)st)[i] = 0;
+    st->st_size = size;
+    st->st_mode = (mode_t)hc_stat_mode;
+    st->st_blksize = 4096;
+    st->st_blocks = (size + 511) / 512;
+    st->st_nlink = 1;
+    return 0;
+  }
+
+  /* lseek needs NO opcode: HostCall v0 read/write take an explicit offset, so
+     the position is ours (hc_offset, one per handle) and seeking is arithmetic.
+     Only SEEK_END has to ask the host, for the size. A negative resulting
+     position is EINVAL, and seeking PAST the end is legal -- a later write
+     extends the file, which is what a sparse write is. */
+  case SYS_lseek: {
+    int token = hc_token_of((long)a);
+    if (!token)
+      return ((long)a == 1 || (long)a == 2) ? -ESPIPE : -EBADF;
+    long off = (long)b;
+    long base;
+    switch ((int)(long)c) {
+    case SEEK_SET: base = 0; break;
+    case SEEK_CUR: base = hc_offset[token - 1]; break;
+    case SEEK_END: {
+      long size = hc_stat_size((long)a);
+      if (size < 0)
+        return size;
+      base = size;
+      break;
+    }
+    default:
+      return -EINVAL;
+    }
+    if (off < 0 && base < -off)
+      return -EINVAL;
+    hc_offset[token - 1] = base + off;
+    return hc_offset[token - 1];
+  }
 
   /* Reported as unsupported rather than faked. musl copes: exit_group falling
      through to the domain return is exactly what a domain does anyway. */

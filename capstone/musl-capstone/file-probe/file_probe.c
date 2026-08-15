@@ -14,6 +14,7 @@
  * that fails if any of those is true.
  */
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -82,6 +83,65 @@ int capstone_main(void) {
   }
 
   SAY("FILE S6: read back and compared equal\n");
+
+  /* fstat and lseek. Checked by VALUE, not by return code: a size that is merely
+     non-negative, or a seek that merely returns the offset it was given, would
+     pass while reading the wrong bytes. So the size is compared against what was
+     written, and the seek is proved by reading from the middle of the file and
+     comparing against the middle of the payload. */
+  fd = open(PROBE_PATH, O_RDONLY, 0);
+  if (fd < 0) {
+    SAY("FILE FAIL: open for stat/seek\n");
+    return 9;
+  }
+
+  struct stat st;
+  if (fstat(fd, &st) != 0) {
+    SAY("FILE FAIL: fstat\n");
+    close(fd);
+    return 10;
+  }
+  if (st.st_size != (off_t)(sizeof(PAYLOAD) - 1)) {
+    SAY("FILE FAIL: fstat reported the wrong size\n");
+    close(fd);
+    return 11;
+  }
+  SAY("FILE S7: fstat size matches what was written\n");
+
+  /* SEEK_END with a negative offset lands SEEK_BACK bytes from the end; the
+     bytes there must be the payload's tail. */
+#define SEEK_BACK 8
+  if (lseek(fd, -(off_t)SEEK_BACK, SEEK_END) != (off_t)(sizeof(PAYLOAD) - 1 - SEEK_BACK)) {
+    SAY("FILE FAIL: lseek SEEK_END returned the wrong position\n");
+    close(fd);
+    return 12;
+  }
+  char tail[SEEK_BACK];
+  if (read(fd, tail, SEEK_BACK) != SEEK_BACK) {
+    SAY("FILE FAIL: short read after seek\n");
+    close(fd);
+    return 13;
+  }
+  if (memcmp(tail, PAYLOAD + sizeof(PAYLOAD) - 1 - SEEK_BACK, SEEK_BACK) != 0) {
+    SAY("FILE FAIL: bytes after SEEK_END differ\n");
+    close(fd);
+    return 14;
+  }
+  SAY("FILE S8: SEEK_END positioned correctly and the bytes match\n");
+
+  if (lseek(fd, 5, SEEK_SET) != 5 || lseek(fd, 3, SEEK_CUR) != 8) {
+    SAY("FILE FAIL: SEEK_SET/SEEK_CUR arithmetic\n");
+    close(fd);
+    return 15;
+  }
+  if (lseek(fd, -100, SEEK_SET) != -1) {
+    SAY("FILE FAIL: a negative position was accepted\n");
+    close(fd);
+    return 16;
+  }
+  SAY("FILE S9: SEEK_SET/CUR arithmetic, and a negative seek refused\n");
+  close(fd);
+
   SAY("__CAPSTONE_FILE_PROBE_PASSED__\n");
   return 0;
 }
