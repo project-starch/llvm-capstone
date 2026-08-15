@@ -13,6 +13,45 @@
 > capability traffic overall. Cache/working-set pressure is the leading remaining candidate and is
 > the next thing we will test.
 
+> ## THE PATTERN, MEASURED THREE TIMES IN THREE INDEPENDENT BUILDS (2026-08-16)
+>
+> Every instrumented build wedges at the same shape, and it is the sharpest description we have:
+>
+> | build | sha | fault VA | site |
+> |---|---|---|---|
+> | `XF` (uninstrumented, full workload) | `f1214600` | `0x3a83c` | `sqlite3OsRead+0x4c` |
+> | `RT` (retry probe) | `debe064a` | `0x3a9d0` | `sqlite3OsRead+0x144` |
+> | `RN` (retry + null discriminator) | `9dc935cf` | `0x3aa74` | `sqlite3OsRead+0x180` |
+>
+> In all three the emitted code is the same triple: a capability is loaded, **spilled to a stack
+> slot**, **reloaded**, and the immediately dependent `ldc` through it raises mcause 25. `ldc`'s
+> guard is rs1-only, so the reloaded value is genuinely NOT_CAP.
+>
+> ### What our instrumentation CANNOT settle, and why — please do not assume we just did not try
+>
+> The open question is whether that reloaded value is **(H1)** a real capability that lost its tag,
+> or **(H2)** a legitimately NULL `pMethods`, in which case mcause 25 is the architecturally correct
+> rendering of a NULL dereference and this site is not a silicon defect at all.
+>
+> We built three successive probes to answer it and none can:
+>
+> * LCC field 1 answers **7 for a lost tag and 7 for integer 0**, so the type query alone cannot
+>   distinguish them. We added a null-cursor check for that.
+> * A checked value does not stay checked. At `-O0` the compiler **spills and reloads between the
+>   check and the dereference** — visible in the emitted code: our point-of-use guard is present
+>   (the `SQLITE_IOERR_READ` early return is emitted) but the guarded path still does
+>   `ldc a0, 0x0(a0)` from the stack again before the deref. So the value we verify is never the
+>   value that faults.
+> * A wedged domain **cannot report**. Our counters are returned at the end of the run, and there is
+>   no live channel out of a domain that has already taken the fault.
+>
+> Closing this from the software side needs the check and the dereference in **one inline-asm block**
+> with no spill between them. That is buildable; we are flagging it rather than doing it because the
+> RTL side can read the faulting register directly and would settle H1-vs-H2 in one observation.
+>
+> **This is also why the "same construct in two binaries" result must be read carefully.** It shows
+> the same *death site*, which is only the same *defect* under H1.
+>
 > ## RETRACTED 2026-08-16: the rung exclusions below are VOID on this bitstream
 >
 > We wrote that every synthetic shape is excluded and that the reproducer is therefore SQLite. **All

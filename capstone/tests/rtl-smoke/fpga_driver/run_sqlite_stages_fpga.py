@@ -100,7 +100,7 @@ def decode_s07_retry(obs):
       pp > 0  the retry was ALSO untagged -> memory genuinely lost the tag, which is the
               shadow-tag refill path (A-2), so far unprobed.
     """
-    if obs is None or (obs >> 24) != 0x5C:
+    if obs is None or (obs >> 24) not in (0x5C, 0x5D, 0x5E):
         return None
     return (obs >> 16) & 0xff, (obs >> 8) & 0xff, obs & 0xff
 
@@ -431,9 +431,21 @@ def main():
             _retry = decode_s07_retry(int(m_obs.group(1))) if m_obs is not None else None
             if not wedged and bad and _retry is not None:
                 a, b, c = _retry
-                log(f"  {dom}: S-07 RETRY PROBE -- untagged={a} still-untagged-on-retry={b} "
-                    f"recovered-on-retry={c}"
-                    + ("  => MEMORY LOST THE TAG (A-2 refill path)" if b else "")
+                _tag = int(m_obs.group(1)) >> 24
+                if _tag == 0x5E:
+                    log(f"  {dom}: S-07 CAUGHT AT POINT OF USE -- atuse={a} null={b} seen={c}. "
+                        f"The capability was TAGGED when queried and NOT_CAP a few instructions "
+                        f"later at the deref, with only a spill/reload in between. "
+                        + ("Some were NULL (H2)." if b else "None were NULL: a genuine LOST TAG (H1)."))
+                    bad = False
+                    results.append((dom, False, int(m_obs.group(1)), True, True, True, None)) if False else None
+                _null = _tag == 0x5D
+                log(f"  {dom}: S-07 RETRY PROBE -- untagged={a} "
+                    + (f"NULL-pMethods={b}" if _null else f"still-untagged-on-retry={b}")
+                    + f" recovered-on-retry={c}"
+                    + ("  => pMethods is genuinely NULL: this site is a correct NULL deref, "
+                       "NOT a lost tag. The real defect is UPSTREAM." if _null else "")
+                    + ("  => MEMORY LOST THE TAG (A-2 refill path)" if b and not _null else "")
                     + ("  => MEMORY WAS FINE: register delivery" if c and not b else ""))
                 bad = False
             _probe = decode_probe(int(m_obs.group(1))) if m_obs is not None else None

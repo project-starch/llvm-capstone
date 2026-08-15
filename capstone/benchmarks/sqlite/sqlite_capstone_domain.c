@@ -29,10 +29,20 @@ static unsigned shared_region_count;
      ss  times sqlite3OsRead saw an UNTAGGED pMethods
      pp  of those, the retry from the SAME address was ALSO untagged  -> memory lost the tag (A-2)
      rr  of those, the retry came back TAGGED                          -> register delivery */
-extern unsigned capstone_s07_seen, capstone_s07_persist, capstone_s07_recover;
+extern unsigned capstone_s07_seen, capstone_s07_persist, capstone_s07_recover,
+                capstone_s07_null, capstone_s07_atuse;
 static unsigned s07_retry_result(void) {
-  return 0x5C000000u | ((capstone_s07_seen & 0xFFu) << 16)
-                     | ((capstone_s07_persist & 0xFFu) << 8)
+  /* Sentinel 0x5D when ANY untagged pMethods was also NULL -- that is the H2 answer and it means
+     this site is a correct NULL deref, not a lost tag. 0x5C otherwise. */
+  /* atuse is the one that matters: it means the value was tagged when checked and NOT_CAP three
+     instructions later, at the point of use, having only been spilled and reloaded in between. */
+  if (capstone_s07_atuse)
+    return 0x5E000000u | ((capstone_s07_atuse & 0xFFu) << 16)
+                       | ((capstone_s07_null & 0xFFu) << 8)
+                       | (capstone_s07_seen & 0xFFu);
+  return (capstone_s07_null ? 0x5D000000u : 0x5C000000u)
+                     | ((capstone_s07_seen & 0xFFu) << 16)
+                     | ((capstone_s07_null ? capstone_s07_null : capstone_s07_persist) & 0xFFu) << 8
                      | (capstone_s07_recover & 0xFFu);
 }
 #endif
