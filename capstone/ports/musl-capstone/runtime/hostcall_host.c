@@ -43,7 +43,19 @@
    It is host memory, not part of the domain image, so it does not count against
    the ~4 MB image ceiling.
 
-   RAISED to 4 MiB from 512 KiB: corpus row 10's trigger recurses 150 deep while
+   BACK AT 4 MiB, and 32 MiB was TRIED and does not work: the monitor faults
+   while mapping a region that large (cause 5 at pc 0x8001b76a, 8 bytes below the
+   base of a 512-byte structure -- an OpenSBI-side limit, not root-caused, see
+   ISSUES.md I-2). So the arena cannot simply be grown until a workload fits.
+
+   At 4 MiB row 10's trigger runs out at allocation 640: it recurses 150 deep and mruby extends the VM stack on the way
+   down, each extension allocating a LARGER buffer that the arena can never take
+   back. The memory a non-reclaiming allocator needs for that is quadratic in the
+   depth, not linear in the live set. This is the allocator's own documented
+   generality limit (revoke_on_free_alloc.h) meeting a workload built to trigger
+   exactly that reallocation -- not a defect.
+
+   Originally raised to 4 MiB from 512 KiB: corpus row 10's trigger recurses 150 deep while
    allocating a string and an array per frame, and with no reclamation 512 KiB
    ran out -- which showed up as the CONTROL arm faulting, i.e. as an instrument
    failure rather than a result. Sizing an arena that never reclaims is about
