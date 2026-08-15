@@ -22,11 +22,23 @@
 # separates "revocation caught it" from "exact bounds caught it". A two-arm
 # design cannot, because both of its arms share the bounds.
 #
-# ORDER: every arm expected to RETURN first, the expected-to-fault arm last.
-# (A fault does not end the boot here -- only a wedge does -- but an arm that
-# might wedge, such as anything using a LARGE host region, must go last or in
-# its own boot. ISSUES.md I-2: a 16 MiB arena arm printed nothing at all and
-# took four staged arms with it.)
+# ONE ROW PER BOOT, and the faulting arm LAST. A real limit, not caution: when a
+# domain takes a capability fault the servicer does not return -- it waits on a
+# domain that will never answer -- so the guest never gets its prompt back and
+# the DRIVER abandons the whole boot. A fault therefore ends a run exactly like a
+# wedge. Measured 2026-08-15: a twelve-arm batch across four rows produced ONE.
+#
+# ROWS still accepts several rows and stages them correctly, which is useful for
+# building a set in advance, but only the arms up to the first fault will run.
+#
+# A reaper around the servicer would lift this. `timeout` is the obvious one and
+# busybox here is built WITHOUT it (CONFIG_TIMEOUT is not set), which was found
+# the expensive way: the wrapper became "timeout: not found", every arm returned
+# instantly having run nothing, and the batch read as if it had completed. Shell
+# job control would work; not worth the fragility until batching pays.
+#
+# A WEDGE is unreapable in any case, so an arm that might wedge -- anything using
+# a LARGE host region, ISSUES.md I-2 -- must go last or in its own boot.
 #
 # STACK_DOUBLING=1 (default) sets mruby's upstream MRB_STACK_EXTEND_DOUBLING.
 # It is NOT mruby's default and must be reported with any number taken under it.
@@ -49,6 +61,37 @@ LOG=${LOG_FILE:-$CAPSTONE_TMP_ROOT/rows-arms.log}
 # session reads exactly like a result, complete with an older probe's arm
 # labels, and was tailed for two minutes here before a timestamp gave it away.
 rm -rf "$SHARE"; mkdir -p "$SHARE"; rm -f "$LOG"
+
+# Gems a row's TRIGGER needs, beyond core mruby. Without them the trigger raises
+# NoMethodError before reaching its offending access -- a run where every arm
+# reports identically and none of them means anything. Row 14 spent a boot on
+# exactly that ("undefined method '%' for \"%d\"", from mruby-sprintf).
+# Overridable with GEMS=..., empty for rows that need none.
+# Extra defines a row's own build_config.rb sets, which are part of the corpus's
+# REFERENCE configuration and not our choice. Row 14 is the only one: its ASan
+# build defines MRB_GC_STRESS, which runs a full collection on every allocation
+# and is what makes its GC use-after-free deterministic ("aborts on 10/10 runs,
+# no fuzzing or heap grooming needed"). Without it the trigger completes in both
+# rof arms and says nothing -- which is exactly what it did here until the
+# corpus's build_config was read rather than assumed.
+row_defines() {
+  case $1 in
+    14) echo "MRB_GC_STRESS" ;;
+    *)  echo "" ;;
+  esac
+}
+
+row_gems() {
+  case $1 in
+    14|15) echo "sprintf" ;;
+    8|13)  echo "hash-ext" ;;
+    9)     echo "eval print" ;;
+    11)    echo "print" ;;
+    6)     echo "print" ;;
+    12)    echo "io print" ;;
+    *)     echo "" ;;
+  esac
+}
 
 arm_env() {
   case $1 in
@@ -76,7 +119,11 @@ for ROW in $ROWS; do
     # one session executed a STALE image because a build failed quietly and the
     # old .dom was still in the share directory, reporting as if it were new.
     rm -f "$SHARE/$tag.dom"
+    gems=${GEMS-$(row_gems "$ROW")}
+    defs=${DEFINES-$(row_defines "$ROW")}
     if ! env $extra MRUBY_SRC="$row_src" MRUBY_WITH_PARSER=1 MRUBY_PROBE_ROW="$ROW" \
+           ${gems:+MRUBY_PROBE_GEMS="$gems"} \
+           ${defs:+PROBE_EXTRA_DEFINES="$defs"} \
            ${STACK_DOUBLING:+MRUBY_PROBE_STACK_DOUBLING=$STACK_DOUBLING} \
            OUT_DIR="$CAPSTONE_TMP_ROOT/$tag" \
            OUT_DOM="$SHARE/$tag.dom" OUT_HOST="$SHARE/$tag.user" \
