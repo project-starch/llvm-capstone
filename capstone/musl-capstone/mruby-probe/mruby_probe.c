@@ -24,6 +24,12 @@
 #include <mruby.h>
 #include <mruby/irep.h>
 #include <mruby/value.h>
+#ifdef MRUBY_PROBE_CDP
+#include <mruby/class.h>
+#include <mruby/compile.h>
+#include <mruby/proc.h>
+#include <mruby/variable.h>
+#endif
 
 #include "probe_irep.c"
 
@@ -496,6 +502,79 @@ done:
 }
 #endif
 
+#ifdef MRUBY_PROBE_CDP
+/* THE CROSS-DOMAIN POINTER BUG, ON THE REAL INTERPRETER.
+ *
+ * Six of the twelve Ruby rows in xlang/ are the SAME mechanism, and its own
+ * RESULTS.md says so: a raw interior pointer into the VM stack, cached across a
+ * re-entrant Ruby callback that reallocates that stack. The corpus measures it
+ * through distilled C shims against a mock allocator, because until today there
+ * was no interpreter to measure it on.
+ *
+ * This is that mechanism written against mruby itself, on the revoking arena:
+ *
+ *   1. a C method caches mrb->c->ci->stack, an interior pointer;
+ *   2. it calls back into RUBY, which recurses until the VM stack is extended
+ *      -- mruby reallocates it and frees the old buffer, which under
+ *      revoke-on-free REVOKES every capability into it;
+ *   3. it dereferences the cached pointer.
+ *
+ * MATCHED PAIR, mirroring the corpus's two configs exactly:
+ *   control  xlang_set_no_revoke() -- the arena still allocates and frees, but
+ *            free does not revoke. The stale read should SUCCEED (MISS).
+ *   revoke   the shipped configuration. The stale read should FAULT (BLOCKED).
+ * Anything else is a result about the instrument, not the mechanism: if the
+ * control also faults, the stack never moved and the probe proves nothing. */
+extern void xlang_set_no_revoke(void);
+
+static mrb_value cdp_stale(mrb_state *mrb, mrb_value self) {
+  mrb_value *cached = mrb->c->ci->stack;
+  SAY("CDP 1: cached an interior pointer into the VM stack\n");
+
+  mrb_funcall(mrb, self, "deepen", 0);
+  if (mrb->exc) {
+    SAY("CDP FAIL: the Ruby callback raised\n");
+    mrb->exc = 0;
+    return mrb_nil_value();
+  }
+  SAY("CDP 2: callback returned; the VM stack has been extended\n");
+
+  /* THE OFFENDING ACCESS. Reached only if the capability survived. */
+  mrb_value stale = cached[0];
+  SAY("CDP 3: stale read COMPLETED -- not blocked\n");
+  return stale;
+}
+
+/* Recurse deep enough that mruby must extend the VM stack. 200 frames is well
+   past the initial allocation and cheap under TCG. */
+#define CDP_RUBY                                                               \
+  "def deepen(n = 0)\n"                                                        \
+  "  return n if n > 200\n"                                                    \
+  "  deepen(n + 1)\n"                                                          \
+  "end\n"                                                                      \
+  "stale\n"
+
+static int run_cdp(mrb_state *mrb) {
+#ifdef MRUBY_PROBE_CDP_CONTROL
+  /* The control arm: same allocations, same frees, revocation disabled. */
+  xlang_set_no_revoke();
+  SAY("CDP ARM: control (revocation DISABLED)\n");
+#else
+  SAY("CDP ARM: revoke-on-free (the shipped configuration)\n");
+#endif
+
+  mrb_define_method(mrb, mrb->object_class, "stale", cdp_stale, MRB_ARGS_NONE());
+  mrb_load_string(mrb, CDP_RUBY);
+  if (mrb->exc) {
+    SAY("CDP: an exception reached the top level\n");
+    mrb->exc = 0;
+  }
+  say_arena("after-cdp");
+  SAY("__CAPSTONE_MRUBY_CDP_DONE__\n");
+  return 0;
+}
+#endif
+
 int capstone_main(void) {
   SAY("MRUBY S1: entered\n");
 
@@ -552,6 +631,12 @@ int capstone_main(void) {
     return 4;
   }
   SAY("MRUBY S4: t[19] == 400\n");
+
+#ifdef MRUBY_PROBE_CDP
+  run_cdp(mrb);
+  mrb_close(mrb);
+  return 0;
+#endif
 
 #ifdef MRUBY_PROBE_PARSER
   /* THE SAME CHUNK, AS RUBY SOURCE. Same text as probe.rb, so bytecode and
