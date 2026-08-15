@@ -1,6 +1,22 @@
 # S-08 — on `caplifive_s06fullfix.bit` the monitor takes an UNHANDLED TRAP just after a domain's first share returns
 
-**Status: ROOT-CAUSED AND FIXED IN RTL, 2026-08-15 — awaiting re-synthesis.** The S-06
+**Status: RESOLVED — FIXED IN RTL AND VERIFIED ON SILICON, 2026-08-15.**
+
+Verified by the reporting lane on `caplifive_s06fixs08fix.bit`, one control-validated boot
+(`k800` retval=4 = oracle): domains run again and `EXCX:0000E002` count is **0**, against 4 of 4
+boots on the broken bitstream. The S-06 acceptance gate became readable for the first time in the
+same boot and **passes** — `s06agg` 15 (was 5), `s06aggcap` 15 (was 7), `s06aggwide` 255 (was 237),
+with no software workaround in those builds.
+
+**Our hypothesis was refuted, and the record should say so:** we suspected Anvil/SV disagreement
+about the tag position in the widened dom-switch lane. The generated switcher's bit offsets are
+provably aligned. We had the right lane and the wrong reason; it was filed as a hypothesis with a
+named killing check rather than a root cause, and that check is what reproduced the real bug in
+simulation.
+
+Original RTL-side status follows.
+
+**Status when answered: ROOT-CAUSED AND FIXED IN RTL, 2026-08-15 — awaiting re-synthesis.** The S-06
 author's answer is **`rtl/ANSWER-FROM-THE-S06-AUTHOR.md`**: an S-06 P4 width bug made every
 dom-switch context store 16 bytes wide, so each scalar CSR save clobbered the NEXT 8-byte
 slot before the exchange read it — medeleg restored 0, delegation died. Mechanism reproduced
