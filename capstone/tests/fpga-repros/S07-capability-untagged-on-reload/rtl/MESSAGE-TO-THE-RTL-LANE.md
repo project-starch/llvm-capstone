@@ -101,7 +101,31 @@ instrumentation and board runs on request.** If you want a specific domain built
 instruction sequence, a particular workload, a bisect — ask and I'll bake and boot it. The board is
 serialized between us, so tell me before you take it and I'll stay off.
 
-## 6. What I'm doing next unless you'd rather I didn't
+## 6. UPDATE — every synthetic shape is excluded; the reproducer is still SQLite
+
+Since writing the above I ran five more rung experiments on the current bitstream, all
+control-validated, while the SQLite domain wedges reliably on the same silicon:
+
+* `s06spill` re-run across **three redraws** (the first hit an R-16 entry stall and carried no
+  verdict): **65535** each — 48 spill/reload round trips, every one tagged;
+* `s06bnds`, `s06wr`, `s06pld`: **65535** — so the whole exclusion table is now re-verified on the
+  silicon that actually fails, rather than inherited from a dead bitstream;
+* **`s07evict`: 65535.** This is the important one. The board localized the fault to a spill and a
+  reload, `s06spill` said that shape alone is sound, so the obvious missing ingredient was cache
+  pressure. `s07evict` adds exactly that — a 48 KiB walk between store and reload — and the walk
+  was **verified in the disassembly to sit in that window** before the boot was spent, which is the
+  check whose absence made the two earlier rungs void. Still clean.
+
+**No construct we can build in isolation reproduces S-07.** We are stopping rung construction: five
+shapes excluded plus two void attempts is enough to say the approach is not converging.
+
+**What we think is worth doing instead**, offered rather than assumed: bisect the SQLite workload
+*downward* — cut the failing domain back until it stops wedging — rather than building synthetic
+shapes upward. Every reduction step is a measurement on the one artifact that does fail. We can run
+that here; it is board work and it is ours under the split. Say if you would rather we did something
+else with the board time.
+
+## 7. What I'm doing next unless you'd rather I didn't
 
 * Rebuilding the reproducer properly in inline asm, with the emitted burst verified by disassembly
   before any boot.

@@ -13,6 +13,36 @@
 > capability traffic overall. Cache/working-set pressure is the leading remaining candidate and is
 > the next thing we will test.
 
+> ## EVERY SYNTHETIC SHAPE IS NOW EXCLUDED ON THE CURRENT BITSTREAM — the reproducer is SQLite
+>
+> Seven rung experiments on `caplifive_s06fixs08fix.bit`, all control-validated (`k800` = 4), while
+> the SQLite domain wedges reliably on the same silicon:
+>
+> | rung | the shape it adds | result |
+> |---|---|---|
+> | `s06spill` ×3 redraws | spill a capability, reload it | **65535** |
+> | `s06bnds` | ...are the BOUNDS intact? | **65535** |
+> | `s06wr` | ...surviving byte stores written THROUGH it | **65535** |
+> | `s06pld` | ...surviving a scalar load of its granule | **65535** |
+> | `s07evict` | ...**plus a 48 KiB walk to EVICT it before reload** | **65535** |
+> | `s07chase` | dependent `ldc` chain | 0 — and **VOID**, see below |
+> | `s07indep` | independent `ldc` burst | 0 — and **VOID**, see below |
+>
+> `s07evict` is the one that matters most, because the board had localized the fault to a spill and
+> reload and the obvious missing ingredient was cache pressure. It adds exactly that variable and
+> nothing else, and the eviction walk was **verified in the disassembly** to sit between the store
+> and the reload before the boot was spent. It still returns 65535.
+>
+> **So no construct we can build in isolation reproduces S-07.** The smallest thing that does is
+> still SQLite. We are stopping rung construction here: five shapes excluded and two void attempts
+> is enough to say the approach is not converging, and continuing would be stubbornness rather than
+> method.
+>
+> **What we would do next, and would rather hand over than guess at:** bisect the SQLite workload
+> downward — reduce the failing domain until it stops wedging — instead of building synthetic
+> shapes upward. That attacks the one artifact that *does* fail, and every reduction step is a
+> measurement rather than a hypothesis.
+>
 > ## THE FOUR EXCLUSIONS RE-VERIFIED ON THE CURRENT BITSTREAM, 2026-08-15
 >
 > Every `0xFFFF` in this folder was measured two bitstreams ago and was therefore
