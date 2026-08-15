@@ -424,7 +424,23 @@ Address CodeGen::EmitVAArgInstr(CodeGenFunction &CGF, Address VAListAddr,
     CharUnits TyAlignForABI = TyInfo.Align;
 
     llvm::Type *ElementTy = CGF.ConvertTypeForMem(Ty);
-    llvm::Type *BaseTy = llvm::PointerType::getUnqual(CGF.getLLVMContext());
+    // The indirect vararg pointer must live in the target's pointer address
+    // space, not in address space 0.
+    //
+    // getUnqual() hardcodes AS 0, which is right for every target whose
+    // pointers live there and wrong for one whose do not. On capstone64 a
+    // pointer is a 128-bit capability in AS 200 (the datalayout's A200), so the
+    // reference to a by-reference vararg was fetched with an 8-byte `ld` and
+    // then dereferenced: the tag was gone and the load faulted. Any variadic
+    // function taking a struct larger than 2*XLEN hit it -- for mruby, that is
+    // mrb_funcall_id reading va_arg(ap, mrb_value). ISSUES.md C-26.
+    //
+    // emitVoidPtrVAArg, the other half of this file's vararg support, already
+    // makes exactly this choice for exactly this case; the two are now
+    // consistent. For every target with an alloca address space of 0 -- which
+    // is all of them upstream -- this is the same type as before.
+    unsigned AllocaAS = CGF.CGM.getDataLayout().getAllocaAddrSpace();
+    llvm::Type *BaseTy = llvm::PointerType::get(CGF.getLLVMContext(), AllocaAS);
     llvm::Value *Addr =
         CGF.Builder.CreateVAArg(VAListAddr.emitRawPointer(CGF), BaseTy);
     return Address(Addr, ElementTy, TyAlignForABI);
