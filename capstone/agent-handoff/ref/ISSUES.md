@@ -12,6 +12,47 @@ Last updated 2026-08-15.
 
 ---
 
+## C-27 — musl's TLS round-trips the thread pointer through `uintptr_t`, so ERRNO faulted · `WORKED AROUND 2026-08-15`
+
+**Every error path in the libc was broken, and no passing run could have shown it.**
+
+musl reaches `errno` through the thread pointer, and its riscv64 arch layer moves that pointer
+through an integer (`arch/riscv64/pthread_arch.h`):
+
+```c
+static inline uintptr_t __get_tp(void) { uintptr_t tp; __asm__("mv %0, tp" : "=r"(tp)); return tp; }
+#define __pthread_self() ((pthread_t)(__get_tp() - sizeof(struct __pthread)))
+```
+
+`uintptr_t` is 8 bytes here and a pointer is a 128-bit capability, so the cast back FORGES one
+from an integer. It is untagged, and `->errno_val` then faults:
+
+```
+[CAPSTONE] Cap mem access requires capability: pc = 101561c30, rs1 = x10, imm = 0
+```
+
+**Our tp setup is not the problem** and was already correct: `start-musl.S` points tp into the
+middle of a 1024-byte block derived from `gp`, with room below it for `errno_val`. No setup
+survives the round trip.
+
+**Why it surfaced only on 2026-08-15.** errno is written only when a syscall FAILS, and until
+then every syscall in every probe here had succeeded. It appeared on the first deliberate
+failure -- `lseek` to a negative position, added the same hour. A libc whose error path has
+never been exercised is a libc whose error path is untested, and this one had been green for
+two days.
+
+**Workaround:** `libc-ext/errno.c` defines `__errno_location` over a single static int, correct
+for a single-threaded domain (the same assumption `locks.c` records). `build-musl-capstone.sh`
+now DELETES musl's `src/errno/__errno_location.o` from the archive rather than leaving two
+definitions -- the archive check caught exactly that, and which one a program got would
+otherwise have depended on archive order.
+
+**Not fixed generally.** Anything else in musl that round-trips a pointer through `uintptr_t`
+has the same defect and has simply not been reached yet. `grep -rn "uintptr_t" musl/src` is the
+work list.
+
+---
+
 ## I-1 — QEMU can track capability tags across at most 2 MiB, with a LINEAR lookup · `CHARACTERISED 2026-08-15, not fixed`
 
 ```
