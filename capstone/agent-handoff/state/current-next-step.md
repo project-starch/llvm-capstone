@@ -227,9 +227,19 @@ at domain vaddr `0xc2284` = `mrb_vm_exec + 0x198e0`, the return from `mrb_range_
 `OP_RANGE_INC` — CVE-2022-1106's own instruction — and it reproduces across two independent
 builds and boots. Harness: `musl-capstone/mruby-probe/run-row10-arms.sh`, trail in the history note.
 
-**ROW 4 (CVE-2022-1071) measures the same way**, at a different opcode: the fault is at
-`mrb_vm_exec + 0x3d9c`, the return from the `const_missing` callback, against row 10's
-`+0x198e0` in `OP_RANGE_INC`. Control 302 and completed, revoke arm faults.
+**ROWS 4 AND 5 measure the same way**, and each faults at the site the corpus documents:
+
+| row | fault site | corpus says | control | revoke |
+|---|---|---|---|---|
+| 10 | `mrb_vm_exec + 0x198e0` (`OP_RANGE_INC`) | `mrb_vm_exec`, vm.c:2822 | 302 | fault |
+| 4 | `mrb_vm_exec + 0x3d9c` (`const_missing` return) | `mrb_vm_exec` | 302 | fault |
+| 5 | `hash_new_from_values + 0x13c` | `hash_new_from_values` | 604 | fault |
+
+Row 5's libc arm reports 302 where its control reports 604 -- the callback fires per hash-key
+comparison and that depends on addresses, so a different allocator plausibly compares a different
+number of times. Hypothesis, not verified. It does not touch the verdict: the load-bearing pair
+is control against revoke, which share the allocator and whose arena statistics are identical to
+the byte across two boots.
 
 **Porting a row to another pinned tree is ONE line**, `MRB_STR_EMBED_LEN_BIT 5 -> 6`, which
 `build-mruby-probe.sh` now shadows into the build directory (the corpus trees stay

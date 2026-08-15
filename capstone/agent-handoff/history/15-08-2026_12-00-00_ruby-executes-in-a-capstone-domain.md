@@ -336,14 +336,30 @@ linear growth the interpreter gets 52 of 151 levels and dies with `SystemStackEr
 carry the same option, so the comparison between them is sound; a claim about "mruby as shipped"
 is not.
 
-## ROW 4 as well, at a different opcode
+## THREE ROWS MEASURED, and each faults where the corpus says it should
 
-| row | CVE | fault site | control | revoke |
-|---|---|---|---|---|
-| 10 | CVE-2022-1106 | `mrb_vm_exec + 0x198e0`, return from `mrb_range_new` in `OP_RANGE_INC` | 302, completed | fault |
-| 4 | CVE-2022-1071 | `mrb_vm_exec + 0x3d9c`, return from the `const_missing` callback | 302, completed | fault |
+| row | CVE / issue | fault site | corpus's documented site | control | revoke |
+|---|---|---|---|---|---|
+| 10 | CVE-2022-1106 | `mrb_vm_exec + 0x198e0`, return from `mrb_range_new` in `OP_RANGE_INC` | `mrb_vm_exec`, vm.c:2822 | 302, completed | fault |
+| 4 | CVE-2022-1071 | `mrb_vm_exec + 0x3d9c`, return from the `const_missing` callback | `mrb_vm_exec` | 302, completed | fault |
+| 5 | CVE-2022-1934 | **`hash_new_from_values + 0x13c`** | `hash_new_from_values` | 604, completed | fault |
 
-Different offsets, so different opcode handlers, not the same site twice. Row 4's trigger is
+Row 5 lands in a different FUNCTION, not merely a different offset in the VM loop, and it is the
+function `target.md` names. That the localisation independently reproduces the corpus's own crash
+site in three cases is worth more than any single fault.
+
+**Row 5's arms do not all run the trigger the same number of times**, and that is stated rather
+than smoothed over: the libc arm reports `$arr.size = 302` and the control 604, so the recursion
+fired once in one and twice in the other. The trigger passes three `Bad` objects as hash keys and
+the callback fires per key comparison, which depends on hash-bucket collisions, which depend on
+object identity and therefore on ADDRESSES -- so a different allocator plausibly produces a
+different number of comparisons. That explanation is a hypothesis and has not been verified.
+**It does not affect the verdict**, because the load-bearing pair is control against revoke, and
+those two share the allocator and therefore the addresses: their arena statistics are identical
+to the byte (carved 1,645,152, live 959, peak 968) across two separate boots. The libc arm is a
+reference, not the matched control.
+
+Row 4's trigger is
 worth reading: `M.const_missing` runs `recurse(150)` and returns 42, so the constant lookup is
 what re-enters the VM, and the interpreter then writes the 42 through the stale `regs`. **No Ruby
 exception is raised** -- `const_missing` is the handler -- which is why the probe naming
