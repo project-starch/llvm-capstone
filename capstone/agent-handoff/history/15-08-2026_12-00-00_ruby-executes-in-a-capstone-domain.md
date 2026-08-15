@@ -335,3 +335,42 @@ that is itself a result about the allocator rather than a detail of the harness:
 linear growth the interpreter gets 52 of 151 levels and dies with `SystemStackError`. Both arms
 carry the same option, so the comparison between them is sound; a claim about "mruby as shipped"
 is not.
+
+## ROW 4 as well, at a different opcode
+
+| row | CVE | fault site | control | revoke |
+|---|---|---|---|---|
+| 10 | CVE-2022-1106 | `mrb_vm_exec + 0x198e0`, return from `mrb_range_new` in `OP_RANGE_INC` | 302, completed | fault |
+| 4 | CVE-2022-1071 | `mrb_vm_exec + 0x3d9c`, return from the `const_missing` callback | 302, completed | fault |
+
+Different offsets, so different opcode handlers, not the same site twice. Row 4's trigger is
+worth reading: `M.const_missing` runs `recurse(150)` and returns 42, so the constant lookup is
+what re-enters the VM, and the interpreter then writes the 42 through the stale `regs`. **No Ruby
+exception is raised** -- `const_missing` is the handler -- which is why the probe naming
+exceptions matters: silence there is the correct outcome for this row and a red flag for row 5.
+
+## Porting a row to another pinned tree is ONE line
+
+`mruby-purecap` differs from its own pinned upstream commit by exactly one line in one file:
+
+```c
+#define MRB_STR_EMBED_LEN_BIT 6    /* was 5 */
+```
+
+mruby keeps a short string inside the object header with the length in a bitfield;
+`RSTRING_EMBED_LEN_MAX` derives from `sizeof(void*)`, so at 16-byte capabilities it is 59 and no
+longer fits five bits. `src/string.c` has a static assert for exactly this. **Building against
+the ported tree hid the requirement completely** -- row 4 is what found it, by failing with
+"pointer size too big for embedded string".
+
+`build-mruby-probe.sh` now SHADOWS the header into the build directory rather than editing the
+corpus tree, which must stay byte-identical (same reason `patch-parser.py` writes into the build
+directory). The whole `include/mruby` directory is copied, not just `string.h`, because mruby's
+headers include each other by bare name and a lone shadowed header finds no siblings. `-D` cannot
+do this job: the header defines the macro unconditionally.
+
+Six of the nine pinned trees carry `MRB_STR_EMBED_LEN_BIT 5` and need the shadow; the five older
+ones have no such macro. The presym prerequisite is now conditional on the tree having
+`include/mruby/presym.h` at all -- mruby gained presym in 3.0 and most pinned trees predate it,
+so demanding the generated table rejected buildable trees for lacking something they have no
+concept of.

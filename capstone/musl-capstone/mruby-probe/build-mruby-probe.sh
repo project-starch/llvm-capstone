@@ -29,10 +29,21 @@ ARCHIVE=${ARCHIVE:-$CAPSTONE_TMP_ROOT/musl-capstone-build/libc-capstone.a}
 MUSL_SRC_DIR=${MUSL_SRC_DIR:-$CAPSTONE_TMP_ROOT/musl-src/musl-1.2.5}
 MRUBY_SRC=${MRUBY_SRC:-$HOME/cheri/mruby-purecap}
 
-for needed in "$ARCHIVE" "$MUSL_SRC_DIR/arch/capstone64/syscall_arch.h" "$SETJMP_SRC" \
-              "$MRUBY_SRC/src/vm.c" "$MRUBY_SRC/build/host/mrblib/mrblib.c" \
-              "$MRUBY_SRC/build/host/include/mruby/presym/id.h" \
-              "$MRUBY_SRC/build/host/bin/mrbc"; do
+NEEDED=("$ARCHIVE" "$MUSL_SRC_DIR/arch/capstone64/syscall_arch.h" "$SETJMP_SRC"
+        "$MRUBY_SRC/src/vm.c" "$MRUBY_SRC/build/host/mrblib/mrblib.c"
+        "$MRUBY_SRC/build/host/bin/mrbc")
+
+# The generated symbol tables are required ONLY BY TREES THAT HAVE PRESYM, which
+# mruby gained in 3.0. The corpus pins nine versions spanning 2017-2026 and most
+# of them predate it, so demanding the table unconditionally rejected a perfectly
+# buildable tree with "missing prerequisite" -- a prerequisite it has no concept
+# of. Keyed on the tree's own header rather than on a version number, because the
+# version is not what the compile actually depends on. A tree that DOES need the
+# table and lacks it still fails, loudly, on the missing include.
+[[ -f "$MRUBY_SRC/include/mruby/presym.h" ]] && \
+  NEEDED+=("$MRUBY_SRC/build/host/include/mruby/presym/id.h")
+
+for needed in "${NEEDED[@]}"; do
   [[ -e "$needed" ]] || { echo "missing prerequisite: $needed" >&2; exit 2; }
 done
 
@@ -79,6 +90,8 @@ MRUBY_FLAGS=(
   # NOT work -- math.h redefines the same names later. The header explains why
   # a forced include does.
   -include "$SCRIPT_DIR/../libc-ext/capstone-math-double.h"
+  # FIRST, so the shadowed copy of string.h below wins over the tree's.
+  -I"$OBJ_DIR/hdr"
   -I"$MRUBY_SRC/include" -I"$MRUBY_SRC/build/host/include"
   -I"$MUSL_SRC_DIR/arch/capstone64" -I"$MUSL_SRC_DIR/arch/generic"
   -I"$MUSL_SRC_DIR/obj/include" -I"$MUSL_SRC_DIR/include"
@@ -87,6 +100,46 @@ MRUBY_FLAGS=(
 )
 
 rm -rf "$OBJ_DIR"; mkdir -p "$OBJ_DIR"
+
+# MRB_STR_EMBED_LEN_BIT 5 -> 6, SHADOWED rather than edited in place.
+#
+# mruby stores a short string inside its object header and keeps the length in a
+# bitfield. `RSTRING_EMBED_LEN_MAX` is derived from sizeof(void*), so at 16-byte
+# capabilities it is 59 and no longer fits five bits -- src/string.c has a static
+# assert for exactly this and the build stops with "pointer size too big for
+# embedded string". Six bits fit.
+#
+# It is the SECOND source change the port needs, alongside the parse.y line, and
+# it is easy to miss because `mruby-purecap` already carries it: that tree
+# differs from its pinned upstream commit by this one line and nothing else, so
+# building against it hides the requirement entirely. Row 4 found it.
+#
+# Shadowed, not patched into the corpus tree, because `xlang/repro/<n>/mruby` is
+# the corpus's pinned artefact and must stay byte-identical -- same reason
+# patch-parser.py writes into the build directory. -D cannot do this job: the
+# header defines the macro unconditionally and would simply override it.
+mkdir -p "$OBJ_DIR/hdr"
+STRING_H="$MRUBY_SRC/include/mruby/string.h"
+if [[ -f $STRING_H ]] && grep -q "define MRB_STR_EMBED_LEN_BIT" "$STRING_H"; then
+  cur=$(awk '/define MRB_STR_EMBED_LEN_BIT/{print $3; exit}' "$STRING_H")
+  case "$cur" in
+    # The WHOLE header directory is copied, not just string.h: mruby's headers
+    # include each other by bare name (`#include "common.h"`), which resolves
+    # relative to the INCLUDING file, so a lone shadowed string.h sits in a
+    # directory with no siblings and fails to find them.
+    5) cp -r "$MRUBY_SRC/include/mruby" "$OBJ_DIR/hdr/mruby"
+       sed -i 's/^\(#define MRB_STR_EMBED_LEN_BIT\) 5$/\1 6/' "$OBJ_DIR/hdr/mruby/string.h"
+       grep -q "define MRB_STR_EMBED_LEN_BIT 6" "$OBJ_DIR/hdr/mruby/string.h" || {
+         echo "string.h shadow produced no change; the #define moved" >&2; exit 2; }
+       echo "shadowed string.h: MRB_STR_EMBED_LEN_BIT 5 -> 6" ;;
+    6) ;;  # already widened, e.g. the mruby-purecap tree
+    *) echo "MRB_STR_EMBED_LEN_BIT is '$cur', neither 5 nor 6 -- the embedded" >&2
+       echo "string layout has changed and this needs re-deriving" >&2; exit 2 ;;
+  esac
+fi
+# Trees older than the bitfield scheme have no such macro and need no shadow;
+# if they turn out to have their own limit it will fail loudly at its own assert.
+
 OBJS=()
 
 # The Ruby chunk, compiled to bytecode BY THE HOST mrbc and emitted as a C

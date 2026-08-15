@@ -227,6 +227,21 @@ at domain vaddr `0xc2284` = `mrb_vm_exec + 0x198e0`, the return from `mrb_range_
 `OP_RANGE_INC` — CVE-2022-1106's own instruction — and it reproduces across two independent
 builds and boots. Harness: `musl-capstone/mruby-probe/run-row10-arms.sh`, trail in the history note.
 
+**ROW 4 (CVE-2022-1071) measures the same way**, at a different opcode: the fault is at
+`mrb_vm_exec + 0x3d9c`, the return from the `const_missing` callback, against row 10's
+`+0x198e0` in `OP_RANGE_INC`. Control 302 and completed, revoke arm faults.
+
+**Porting a row to another pinned tree is ONE line**, `MRB_STR_EMBED_LEN_BIT 5 -> 6`, which
+`build-mruby-probe.sh` now shadows into the build directory (the corpus trees stay
+byte-identical). Six of the nine pinned trees need it. Run any row with
+
+    MRUBY_SRC=xlang/repro/<n>/mruby ROW=<n> bash run-row10-arms.sh
+
+after one `rake` in that tree to produce `build/host`. Rows still blocked: the five pre-3.0
+trees hit **C-20** in `src/fmt_fp.c`, which uses `long double` and crashes the compiler with an
+APInt assertion rather than a diagnostic; the same narrowing `gen-vfprintf-double.py` does for
+musl is what they need.
+
 **Carry the caveat:** taken with `MRB_STACK_EXTEND_DOUBLING`, which is not mruby's default. Both
 arms carry it so the comparison is sound, but a claim about "mruby as shipped" is not.
 

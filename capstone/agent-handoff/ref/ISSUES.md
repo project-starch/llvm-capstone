@@ -182,6 +182,37 @@ work list.
 
 ---
 
+## I-3 — QEMU ASSERTS where the spec says RAISE, so a program defect kills the emulator · `TWO INSTANCES FIXED 2026-08-15, four remain`
+
+**An abort is the worst possible way to report a capability fault**, because the monitor never
+runs: no `cause`, no `pc`, no `badaddr`, and a defect in the program under test is
+indistinguishable from a defect in the emulator. Both instances so far were found by a program
+doing exactly what it was supposed to do.
+
+| helper | found by | spec conditions |
+|---|---|---|
+| `helper_cslcc` | mruby bring-up; the fault was localizable only to "somewhere in `mrb_top_run`" | 24 |
+| `helper_cscincoffset` / `...offsetimm` | corpus row 5's revoke arm offsetting a REVOKED pointer, which is the arm working | 24, 26 |
+
+```
+qemu-system-riscv64: target/riscv/op_helper.c:626:
+    helper_cscincoffsetimm: Assertion `rs1_v->tag' failed.
+```
+
+Both now raise the architectural exception. The codes are read out of
+`capstone-spec/parts/cap-man-insn.adoc` per instruction, never carried across from a sibling:
+CINCOFFSET and CINCOFFSETIMM list *Unexpected operand type (24)* for a non-capability `rs1` and
+*Unexpected capability type (26)* for `type` 3 (uninitialised) or 4 (sealed). The `gp`
+materialisation stays ahead of the check so a legitimate privileged use is not turned into a
+fault.
+
+**FOUR SIBLING `assert(rs1_v->tag)` REMAIN** in `op_helper.c` (around lines 733, 794, 834, 873)
+and are deliberately untouched: each needs its own condition read out of the spec. Assuming they
+all raise 24 is precisely the mistake that cost three investigations when 25 was mislabelled.
+Expect to meet them one at a time, each as a dead emulator rather than a fault line.
+
+---
+
 ## I-2 — the monitor faults when a shared region is large · `OBSERVED 2026-08-15, not root-caused`
 
 Sharing a **32 MiB** region makes OpenSBI fault while mapping it, before the domain runs:
@@ -574,6 +605,20 @@ Trail: `history/14-08-2026_23-00-00_file-io-from-a-domain-through-musl.md`.
 **`long double` is binary128 on this target, and so is a capability.** The backend
 conflates the two, so nothing that touches a 128-bit float compiles — not in musl, and not
 in our own compiler-rt.
+
+**It can also CRASH the compiler outright, not merely fail to link** (measured 2026-08-15 on
+mruby 491d68bb, corpus row 14, `src/fmt_fp.c`, which uses `long double` five times):
+
+```
+clang: llvm/include/llvm/ADT/APInt.h:1565: int64_t llvm::APInt::getSExtValue() const:
+       Assertion `getSignificantBits() <= 64 && "Too many bits for int64_t"' failed.
+```
+
+An assertion, not a diagnostic, so there is no source location in the message and the file is
+only identifiable from the driver's `-c` argument. Upstream mruby dropped `long double` from
+`fmt_fp.c` by 2022 (bf5bbf0a has none), which is why this surfaced only when reaching for an
+older pinned tree. The existing narrowing transform (`libc-ext/gen-vfprintf-double.py`, written
+for musl's `vfprintf`) is the same substitution these files need.
 
 **Measured.** Every 128-bit builtin, `-O0`, `-target capstone64-unknown-elf`:
 
