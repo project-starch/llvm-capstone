@@ -36,6 +36,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "cap-copy.h"
+
 /* 256 KiB, the size the Lua probe ran on. Deliberately modest: the heap is .bss,
  * and the domain loader rounds the whole image up to a power of two, so a
  * generous default would silently double a domain that never needed it.
@@ -143,14 +145,14 @@ void *realloc(void *p, size_t n) {
   void *fresh = malloc(n);
   if (!fresh)
     return 0; /* the original stays valid, as realloc requires */
-  /* Copied by hand rather than with memcpy: the 9 word-at-a-time src/string
-   * files do not compile for this target ((uintptr_t)s % ALIGN), so memcpy is
-   * absent from the archive and calling it here would make the libc's allocator
-   * depend on each program supplying one. memset below IS in the archive. */
-  const char *from = p;
-  char *to = fresh;
-  for (size_t i = 0; i < b->size; i++)
-    to[i] = from[i];
+  /* The internal helper, NOT memcpy: a program that brings its own memcpy (the
+   * BEEBS freestanding string file does) would displace the archive's and
+   * silently put a byte-at-a-time version back under realloc, where it strips
+   * the tag off every capability in the block -- a pointer the program stored in
+   * a grown structure would come back untagged and fault on the next use. The
+   * hand-written byte loop that used to sit here was that same defect outright.
+   * cap-copy.h has the mechanism. */
+  __capstone_cap_copy_fwd(fresh, p, b->size);
   free(p);
   return fresh;
 }

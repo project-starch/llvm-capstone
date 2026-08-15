@@ -199,6 +199,92 @@ static void check_allocator(void) {
   free(z);
 }
 
+/* A CAPABILITY SURVIVES memcpy AND realloc, which byte-at-a-time copies break.
+ *
+ * What is copied is a struct holding a POINTER, because that is how this shows
+ * up in real software: mruby's VM stack, an object header, any node a program
+ * reallocs. A byte loop delivers all the right bytes with the TAG CLEARED, and
+ * nothing complains until the pointer is dereferenced -- so the check has to
+ * dereference it. That is also why there is no assert on the tag itself: `lcc`
+ * raises Unexpected operand type (24) on a clear tag per the spec, so querying
+ * the tag is not a way to ask the question without faulting either. A broken
+ * copy therefore shows up here as a capability fault, not as a wrong number.
+ *
+ * PROVING THE CHECK CAN FAIL. Built with -DPRINTF_PROBE_BYTE_COPY the memcpy
+ * below becomes an explicit byte loop -- exactly what memcpy used to be -- and
+ * the domain dies on the dereference. That arm is not run routinely; it was run
+ * once, and its fault is the evidence that a passing S4 is not vacuous.
+ *
+ * The blocks come from malloc rather than the stack so the optimiser cannot
+ * forward the struct in registers and skip the copy entirely, which would make
+ * this pass without ever exercising memcpy.
+ */
+static int copy_target = 0x5eed;
+
+static void check_cap_copy(void) {
+  struct node {
+    int *p;
+    long stamp;
+  };
+
+  struct node *src = malloc(sizeof *src);
+  struct node *dst = malloc(sizeof *dst);
+  if (!src || !dst) {
+    failures++;
+    SAY("PRINTF FAIL: malloc returned null in the copy check\n");
+    return;
+  }
+  src->p = &copy_target;
+  src->stamp = 99;
+
+  TRACE("before the capability-bearing memcpy");
+#ifdef PRINTF_PROBE_BYTE_COPY
+  {
+    unsigned char *d = (unsigned char *)dst;
+    const unsigned char *s = (const unsigned char *)src;
+    for (size_t i = 0; i < sizeof *src; i++)
+      d[i] = s[i];
+  }
+#else
+  memcpy(dst, src, sizeof *src);
+#endif
+  TRACE("dereferencing the copied pointer");
+  if (*dst->p != 0x5eed || dst->stamp != 99) {
+    failures++;
+    SAY("PRINTF FAIL: memcpy did not carry the pointer\n");
+  }
+
+  /* realloc's own copy path, which had the same defect independently. `pin`
+     stops the block growing in place, so the move is forced. */
+  struct node *grow = malloc(sizeof *grow);
+  void *pin = malloc(64);
+  if (!grow || !pin) {
+    failures++;
+    SAY("PRINTF FAIL: malloc returned null before realloc\n");
+    return;
+  }
+  grow->p = &copy_target;
+  grow->stamp = 7;
+
+  TRACE("before realloc of a capability-bearing block");
+  grow = realloc(grow, 4096);
+  if (!grow) {
+    failures++;
+    SAY("PRINTF FAIL: realloc returned null\n");
+    return;
+  }
+  TRACE("dereferencing the realloc'd pointer");
+  if (*grow->p != 0x5eed || grow->stamp != 7) {
+    failures++;
+    SAY("PRINTF FAIL: realloc did not carry the pointer\n");
+  }
+
+  free(pin);
+  free(grow);
+  free(src);
+  free(dst);
+}
+
 int capstone_main(void) {
   SAY("PRINTF S1: entered\n");
 
@@ -207,6 +293,9 @@ int capstone_main(void) {
 
   check_allocator();
   SAY("PRINTF S3: allocator checked\n");
+
+  check_cap_copy();
+  SAY("PRINTF S4: capability survived memcpy and realloc\n");
 
   /* The stdout path, which snprintf does NOT cover: FILE buffering,
      __stdout_write, and SYS_writev. Nothing in the domain can verify this

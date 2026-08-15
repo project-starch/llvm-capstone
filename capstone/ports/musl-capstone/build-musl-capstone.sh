@@ -115,10 +115,28 @@ HEAP_FLAGS=()
 [[ -n "${CAPSTONE_LIBC_HEAP_BYTES:-}" ]] && \
   HEAP_FLAGS=(-DCAPSTONE_LIBC_HEAP_BYTES="$CAPSTONE_LIBC_HEAP_BYTES")
 
+# cap-copy.c AT -O0, for a different reason than vfprintf and a worse one.
+#
+# It has to decide whether two addresses are congruent mod 16, because a
+# capability tag only exists at a 16-byte-aligned address. The frontend compiles
+# `(uintptr_t)p & 15` correctly at 64 bits; at -O1 InstCombine re-widens it to
+# the POINTER's width and leaves `i128 = and %x, 15`, which instruction selection
+# cannot match, so the compiler dies outright. Four spellings were tried and all
+# four crash, including clang's own __builtin_is_aligned -- it is the fold, not
+# the source. ISSUES.md C-28; the fix belongs in the backend, alongside the C-25
+# lowering for i128 sub.
+#
+# Only this file drops. memcpy.c, memmove.c and malloc.c call into it and stay at
+# -O1, which is why the copy lives in its own translation unit at all.
 for src in "$SCRIPT_DIR"/libc-ext/*.c; do
   name=$(basename "$src" .c)
-  "${CAPSTONE_CLANG:?}" "${EXT_FLAGS[@]}" "${HEAP_FLAGS[@]}" -S "$src" -o "$GEN_DIR/ext_$name.s"
-  "${CAPSTONE_CLANG:?}" "${EXT_FLAGS[@]}" "${HEAP_FLAGS[@]}" -c "$src" -o "$OBJ_DIR/ext_$name.o"
+  if [[ $name == cap-copy ]]; then
+    flags=("${EXT_FLAGS_O0[@]}")
+  else
+    flags=("${EXT_FLAGS[@]}")
+  fi
+  "${CAPSTONE_CLANG:?}" "${flags[@]}" "${HEAP_FLAGS[@]}" -S "$src" -o "$GEN_DIR/ext_$name.s"
+  "${CAPSTONE_CLANG:?}" "${flags[@]}" "${HEAP_FLAGS[@]}" -c "$src" -o "$OBJ_DIR/ext_$name.o"
 done
 
 # Self-test FIRST: a scanner that cannot flag its own synthetic case would pass
@@ -174,7 +192,8 @@ rm -f "$ARCHIVE"
 # absolute-addressed switch tables because -fno-jump-tables was missing.
 nm_out=$("$CAPSTONE_LLVM_BIN/llvm-nm" --print-armap "$ARCHIVE")
 status=0
-for sym in malloc free realloc calloc vfprintf memcpy strlen __lock __adddf3 __errno_location; do
+for sym in malloc free realloc calloc vfprintf memcpy strlen __lock __adddf3 \
+           __errno_location __capstone_cap_copy_fwd; do
   n=$(printf '%s\n' "$nm_out" | grep -cE "^${sym} in ")
   if [[ "$n" != 1 ]]; then
     echo "CHECK FAILED: $sym is defined by $n archive members, expected 1" >&2
