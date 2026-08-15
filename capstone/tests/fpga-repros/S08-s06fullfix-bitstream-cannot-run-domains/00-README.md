@@ -57,6 +57,11 @@ distinguish two readings, and the second is at least as likely:
 
 Please read (2) before assuming (1). We cannot tell them apart from the board side.
 
+> **IF YOU WROTE THE S-06 RTL FIX, READ `rtl/REPORT-FOR-THE-S06-AUTHOR.md` FIRST.** It is the full
+> handover: what we measured, the dom-switcher lane we think is implicated, what would refute us,
+> and the two claims we already retracted so you do not act on stale versions. Your fix is
+> **untested, not failing** — the acceptance gate has never been readable on this bitstream.
+
 Sibling issues, if one of those is your symptom: `S07-capability-untagged-on-reload/`,
 `S06-untagged-ldc-stc-high-half/`, `S01-image-perturbation-hang/`.
 
