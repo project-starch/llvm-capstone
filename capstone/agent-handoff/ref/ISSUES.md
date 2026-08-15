@@ -53,6 +53,37 @@ work list.
 
 ---
 
+## I-2 — the monitor faults when a shared region is large · `OBSERVED 2026-08-15, not root-caused`
+
+Sharing a **32 MiB** region makes OpenSBI fault while mapping it, before the domain runs:
+
+```
+[CAPSTONE] Cap mem access OOB: pc = 8001b76a, rs1 = x13, cursor = 8004f808,
+           imm = 0, addr = 8004f808, size = 8, bounds = (8004f810, 8004fa10)
+[CAPSTONE] domain halted by capability fault: cause = 5, pc = 0x8001b76a
+```
+
+`pc` is in the monitor (0x8000_0000 upward), not in the domain. The access is 8 bytes **below**
+the base of a 512-byte structure, which reads more like an index going negative than like a size
+check. 4 MiB works; the threshold between them has not been bisected and the structure has not
+been identified, so this is an OBSERVATION and nothing more.
+
+**Why it matters.** It is the fourth ceiling found in one day while trying to run one corpus row,
+and together they bound what can be measured:
+
+| ceiling | where | value |
+|---|---|---|
+| domain image | kernel module, `__get_free_pages` | ~4 MiB |
+| capability tag map | QEMU (**I-1**, fixed: it grows now) | was 2 MiB |
+| arena must hold every byte ever allocated | the revoking allocator, by design | workload-dependent |
+| shared region size | the monitor (**this**) | somewhere under 32 MiB |
+
+None of them is a property of Capstone the architecture. All four are properties of the
+apparatus, and the corpus shims -- a 64 KiB arena and a handful of allocations -- sit far enough
+below every one of them that none had ever been seen.
+
+---
+
 ## I-1 — QEMU can track capability tags across at most 2 MiB, with a LINEAR lookup · `CHARACTERISED 2026-08-15, not fixed`
 
 ```
