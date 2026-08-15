@@ -64,6 +64,15 @@ MRUBY_FLAGS=(
   -D_XOPEN_SOURCE=700
   -DMRB_NO_BOXING -DMRB_NO_DIRECT_THREADING -DMRB_NO_STDIO
   -DPOOL_ALIGNMENT=16 -DMRB_USE_METHOD_T_STRUCT
+  # MRUBY_PROBE_STACK_DOUBLING=1 adds -DMRB_STACK_EXTEND_DOUBLING, an upstream
+  # mruby option. It is DIAGNOSTIC and must not be on for a published number:
+  # mruby's default is LINEAR stack growth, chosen because it "saves memory on
+  # small devices" -- true of the live set, and exactly wrong for an allocator
+  # that never reclaims, where the cumulative carve is the sum of every stack
+  # size ever allocated and linear growth makes that sum quadratic. Turning it
+  # on separates "the arena is too small for this workload" from "the workload
+  # stops for some other reason".
+  ${MRUBY_PROBE_STACK_DOUBLING:+-DMRB_STACK_EXTEND_DOUBLING}
   # musl's <math.h> classify macros end in a long-double arm that -O0 does not
   # fold away, so numeric.c and fmt_fp.c pull __signbitl, __fpclassifyl and
   # __extenddftf2, none of which exist (C-20). A -D on this command line does
@@ -120,6 +129,16 @@ HOST_FLAGS=()
 if [[ ${MRUBY_PROBE_REVOKE:-0} == 1 ]]; then
   ARENA_FLAGS=(-DCAPSTONE_DOMAIN_ARENA)
   HOST_FLAGS=(-DCAPSTONE_DOMAIN_ARENA)
+fi
+
+# MRUBY_PROBE_ARENA_MB makes the arena size a VARIABLE rather than a constant to
+# be edited by hand. It is the thing most likely to be the reason a workload
+# stops early, because the revoking allocator never coalesces: the arena has to
+# hold the whole CUMULATIVE carve, not the live set. Only meaningful with
+# MRUBY_PROBE_REVOKE=1; the host and the domain must agree, and they do because
+# both read this one variable.
+if [[ -n ${MRUBY_PROBE_ARENA_MB:-} ]]; then
+  HOST_FLAGS+=(-DHC_HOST_ARENA_SIZE="(${MRUBY_PROBE_ARENA_MB}UL * 1024 * 1024)")
 fi
 
 "$CLANG" "${MRUBY_FLAGS[@]}" "${ARENA_FLAGS[@]}" -c "$RUNTIME_DIR/hostcall.c" \

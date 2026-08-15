@@ -12,6 +12,135 @@ Last updated 2026-08-15.
 
 ---
 
+## C-29 — our libc's `memcpy`, `memmove` and `realloc` STRIPPED CAPABILITY TAGS · `FIXED 2026-08-15`
+
+**Silent data corruption, and the only symptom was a fault somewhere else entirely.**
+
+`libc-ext/memcpy.c` copied byte at a time, and so did the hand-written loop inside
+`libc-ext/malloc.c`'s `realloc`. A capability is 16 bytes plus a TAG held beside the memory;
+sixteen byte moves deliver every byte correctly with the tag CLEARED. Nothing faults at the
+copy. The pointer arrives looking right and faults on the first dereference, arbitrarily far
+away, as a bare `cause = 24` in a function that did nothing wrong.
+
+**How it presented.** mruby grows its VM stack by memcpying the old stack into a larger
+allocation (`stack_copy`, `src/vm.c`). Every object pointer on the stack lost its tag, so the
+interpreter faulted in `mrb_class + 0x254` on the next method call, and in `mrb_gc_mark + 0x50`
+on the next collection. Small chunks never extend the stack, which is why the whole bytecode
+ladder and `mrb_load_string` passed for two days.
+
+**How it was told apart from the allocator**, which is the part worth keeping: the fault was
+IDENTICAL under three allocators — revoke-on-free, the same with revocation disabled, and the
+plain libc one. An allocator-shaped symptom that does not move when the allocator changes is
+not an allocator problem. Before that arm was run, the leading hypothesis was that the revoking
+allocator's exact per-allocation bounds made the CONTROL arm unusable; that hypothesis was
+wrong and is retracted.
+
+**Ironically the lesson was already written down** in `benchmarks/sqlite/revoke_on_free_alloc.h`,
+whose `rof_copy_caps` carries the comment "a byte loop would strip the tag off any capability
+the block holds". The libc never got it.
+
+**Fixed:** `libc-ext/cap-copy.c` copies capability-wide (`*(void **)`, which dispatches on the
+memory tag, so scalars still move as scalars) whenever source and destination are congruent
+mod 16, and byte-wise otherwise — when they are not congruent no copy of any shape could
+preserve a tag. `memcpy`, `memmove` and `realloc` all route through it. It is a separate
+archive member with internal names on purpose: a program that brings its own `memcpy` (the
+BEEBS freestanding string file does) would otherwise put the byte version back under `realloc`.
+
+**Regression check:** `printf-probe` stage S4 copies a struct holding a pointer and then
+DEREFERENCES it, through both `memcpy` and `realloc`. Its positive control is
+`-DPRINTF_PROBE_BYTE_COPY`, which makes the same function use a byte loop and must fault.
+There is no assert on the tag itself because `lcc` raises Unexpected operand type on a clear
+tag, so querying a tag is not a way to ask the question without faulting.
+
+**Still byte at a time, correctly:** the string functions in `libc-ext/string.c`
+(`memccpy`, `__stpcpy`, `__stpncpy`, `strlcpy`). A NUL-terminated string cannot contain a
+capability, so those are unaffected.
+
+---
+
+## C-28 — InstCombine re-widens a POINTER ALIGNMENT TEST to i128, which ISel cannot select · `WORKED AROUND 2026-08-15`
+
+**Any C code that asks whether a pointer is 16-byte aligned crashes the compiler at -O1.**
+
+```c
+if (((uintptr_t)d & 15u) == ((uintptr_t)s & 15u)) { ... }
+```
+
+`uintptr_t` is 64-bit on this target and the **frontend gets it right** — at `-O0` the IR reads
+`ptrtoint ptr addrspace(200) %d to i64`, `and i64`, `icmp eq i64`. At `-O1` InstCombine
+canonicalises the pair and re-widens it to the POINTER's own width:
+
+```llvm
+%0 = ptrtoint ptr addrspace(200) %dest to i128
+%1 = ptrtoint ptr addrspace(200) %src  to i128
+%3 = and i128 %2, 15
+```
+
+and the backend dies outright:
+
+```
+fatal error: error in backend: Cannot select: t9: i128 = and t7, Constant:i128<15>
+```
+
+**Four spellings were tried and all four crash**, which is what makes this a backend gap rather
+than an expression problem: xor of the two addresses; each address masked separately; aligning
+one pointer and testing only the other against zero; and clang's own `__builtin_is_aligned`.
+The same expression **compiles cleanly in a one-line function** (`mv` + `andi`), so it is the
+fold and not the cast.
+
+**This is the real reason musl's nine word-at-a-time `src/string` files "do not compile for this
+target".** The note in `libc-ext/malloc.c` blamed the source line `(uintptr_t)s % ALIGN`; that
+is where it appears, not why it fails. Every one of those files opens with an alignment test.
+
+**Why it mattered.** Without an alignment test there is no way to write a **tag-preserving
+memcpy**, and a byte-at-a-time memcpy silently strips the tag off every capability it moves.
+That defect is what made mruby fault in `mrb_class` after any VM stack growth — see
+`history/15-08-2026_12-00-00_ruby-executes-in-a-capstone-domain.md`.
+
+**Workaround:** `libc-ext/cap-copy.c` is built at `-O0`, alone; `memcpy.c`, `memmove.c` and
+`malloc.c` call into it and stay at `-O1`. That is why the copy has its own translation unit.
+`build-musl-capstone.sh` enforces the level and the comment there explains it.
+
+**Attributed to one pass, in isolation, not inferred from -O0 vs -O1.** `opt -passes=mem2reg`
+leaves the IR at i64; adding `instcombine` alone produces the i128 form above. Two-line
+reproducer:
+
+```c
+typedef __UINTPTR_TYPE__ uptr;
+int f(void *a, const void *b) { return ((uptr)a & 15u) == ((uptr)b & 15u); }
+```
+
+**The mechanism**, `InstCombineCasts.cpp`, `visitPtrToInt`:
+
+```c
+unsigned PtrSize = DL.getPointerSizeInBits(AS);          // 128 for AS200
+if (TySize != PtrSize) {                                  // 64 != 128
+  Type *IntPtrTy = SrcTy->getWithNewType(DL.getIntPtrType(CI.getContext(), AS));
+  Value *P = Builder.CreatePtrToInt(SrcOp, IntPtrTy);     // -> i128
+  return CastInst::CreateIntegerCast(P, Ty, /*isSigned=*/false);
+}
+```
+
+Every `ptrtoint` to anything narrower than the pointer is rewritten to pointer width plus a
+`trunc`, and later folds then sink the `and`/`xor` into the wide side and drop the trunc. It is
+unconditional, which is why no spelling escapes it.
+
+**A tempting root cause that is REFUTED.** Our DataLayout declares `p200:128:128:128` with no
+fourth field, so the INDEX size defaults to the pointer size; CHERI's LLVM writes
+`p200:128:128:128:64`. Editing that field into the `.ll` by hand and re-running
+`opt -passes=mem2reg,instcombine` changes NOTHING — the widening is identical. The code above
+reads `getPointerSizeInBits` and `getIntPtrType`, neither of which consults the index size. So
+a DataLayout-only fix does not work; it would take that field AND `visitPtrToInt` switching to
+the index width, which is what the field is for.
+
+**Two candidate fixes, neither made yet**, both shared-compiler changes needing lit and the
+QEMU suites: (a) the pair above, which is the root cause and would also let musl's own
+word-at-a-time string files compile; (b) making i128 `and`/`or`/`xor` selectable the way C-25
+did for i128 `sub`, which is a band-aid but a narrow one. The `-O0` file bought the correctness
+immediately and neither is urgent.
+
+---
+
 ## C-27 — musl's TLS round-trips the thread pointer through `uintptr_t`, so ERRNO faulted · `WORKED AROUND 2026-08-15`
 
 **Every error path in the libc was broken, and no passing run could have shown it.**

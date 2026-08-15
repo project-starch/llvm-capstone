@@ -3,9 +3,11 @@
  * this libc pass benchmarks/beebs/adapted/beebs_freestanding_string.c ahead of
  * the archive and define memcpy, memmove and strlen themselves; if those three
  * shared a member with memchr, the first stdio call would pull the member for
- * memchr and collide on the other three. See string.c for why these are byte at
- * a time. */
+ * memchr and collide on the other three. See string.c for why the STRING
+ * functions are byte at a time; this one must not be, and cap-copy.h says why. */
 #include <stddef.h>
+
+#include "cap-copy.h"
 
 void *memmove(void *dest, const void *src, size_t n) {
   unsigned char *d = dest;
@@ -15,12 +17,9 @@ void *memmove(void *dest, const void *src, size_t n) {
   /* Backwards when the regions overlap with dest above src; forwards otherwise.
      Compared as pointers, not as integers: the integer cast is the thing this
      file exists to avoid. */
-  if (d < s || d >= s + n) {
-    for (size_t i = 0; i < n; i++)
-      d[i] = s[i];
-  } else {
-    for (size_t i = n; i > 0; i--)
-      d[i - 1] = s[i - 1];
-  }
+  if (d < s || d >= s + n)
+    __capstone_cap_copy_fwd(dest, src, n);
+  else
+    __capstone_cap_copy_bwd(dest, src, n);
   return dest;
 }

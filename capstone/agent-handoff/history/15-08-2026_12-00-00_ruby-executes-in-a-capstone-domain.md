@@ -191,15 +191,25 @@ the same symbol the very first 512 KiB attempt hit. So:
 * the depth is not the variable;
 * and the control arm is not clean, which invalidates any verdict from the revoke arm.
 
-**A hypothesis, marked as one.** `xlang_set_no_revoke()` turns off revocation only. The
-allocator still SPLITs per allocation, so every block keeps exact bounds. The control is
-therefore "exact bounds, no revocation", not "ordinary malloc, no revocation" -- and a benign
-one-element over-read that a normal allocator absorbs becomes a fault. That would explain a
-fault inside `GC.start`'s mark phase while the ordinary mruby run, including `mrb_close`'s full
-sweep, passes. It is NOT established: the faulting access has not been identified.
+**A hypothesis, marked as one, and then REFUTED -- the paragraph that stood here is withdrawn.**
+It read that `xlang_set_no_revoke()` turns off revocation only, so the control still SPLITs per
+allocation and keeps exact bounds; that the control was therefore "exact bounds, no revocation"
+rather than "ordinary malloc, no revocation"; and it concluded that the two configurations the
+corpus compares "are not separable with this allocator on this workload". **That conclusion was
+wrong and is retracted.**
 
-**What that means for the corpus.** A true control for revocation needs bounds no tighter than a
-normal allocator's, which the current rof cannot provide -- its per-allocation SPLIT is what
-makes each allocation revocable in the first place. So the two configurations the corpus
-compares are not separable with this allocator on this workload, and rows 4, 5, 8, 10, 13 and 15
-stay blocked for a reason that is now specific rather than "the arena is too small".
+What refuted it was a THIRD arm with neither property -- row 10's trigger against the plain libc
+allocator, no per-allocation bounds and no revocation at all. It faults too, at `mrb_class +
+0x254`. A symptom that does not move across three allocators is not about the allocator.
+
+**The actual cause was in our libc**, and it is now ISSUES.md **C-29**: `memcpy` copied byte at
+a time, and a byte loop strips the TAG off every capability it moves. mruby grows its VM stack
+by memcpying the old stack into a larger allocation (`stack_copy`, `src/vm.c`), so after any
+growth every object pointer on the stack was untagged -- hence `mrb_class` on the next method
+call and `mrb_gc_mark` on the next collection. Small chunks never grow the stack, which is why
+everything above this line passed.
+
+**The design error worth keeping.** The two arms differed from each other in exactly one thing,
+which is the rule, but they SHARED a property that neither of them isolated: both used the
+revoking allocator. A matched pair can only separate the variable it varies; it says nothing
+about anything both arms have in common. The third arm cost one build and settled it.

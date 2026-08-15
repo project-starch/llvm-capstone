@@ -535,11 +535,23 @@ static int run_row(mrb_state *mrb) {
   if (n > 0)
     __capstone_hc_write(1, b, (unsigned long)n);
 
-#ifdef MRUBY_PROBE_CDP_CONTROL
+  /* THREE arms, not two, and the label must say which one -- a mislabelled arm
+     is how a run gets attributed to the wrong mechanism.
+       revoke   rof, SPLIT per allocation: exact bounds AND revocation
+       norevoke rof with the REVOKE suppressed: exact bounds, no revocation
+       libc     libc-ext/malloc.c: neither. Ordinary malloc semantics, the same
+                thing the corpus shims ran against and the same thing x86 gives.
+     The third exists because the second is NOT a clean control: it still bounds
+     every allocation exactly, so a benign over-read that ordinary malloc absorbs
+     faults there. Whether that is what makes the control arm die inside
+     GC.start is exactly what this arm decides. */
+#if !defined(MRUBY_PROBE_REVOKE)
+  SAY("ROW ARM: libc allocator (no bounds per allocation, no revocation)\n");
+#elif defined(MRUBY_PROBE_CDP_CONTROL)
   xlang_set_no_revoke();
-  SAY("ROW ARM: control (revocation DISABLED)\n");
+  SAY("ROW ARM: rof with revocation DISABLED (exact bounds remain)\n");
 #else
-  SAY("ROW ARM: revoke-on-free (the shipped configuration)\n");
+  SAY("ROW ARM: rof, revoke-on-free (the shipped configuration)\n");
 #endif
 
   mrb_load_string(mrb, row_trigger);
@@ -559,6 +571,26 @@ static int run_row(mrb_state *mrb) {
     SAY("\n");
     mrb->exc = 0;
   }
+  /* DID THE TRIGGER ACTUALLY RUN TO THE END? "Completed without a fault" does
+   * not answer that, and on 2026-08-15 three arms reported it identically while
+   * none of them had armed the bug. Row 10's trigger pushes TWO objects into
+   * $arr per recursion level, so $arr.size == 2 * depth is a direct readout of
+   * how deep it got: 300 means the full 150, anything less means it stopped.
+   * Asked in Ruby, after the fact, so the corpus's trigger file stays verbatim.
+   *
+   * A NEGATIVE result here is a real answer and must not read as an error: -1
+   * means $arr never existed, which is a different failure from a short run. */
+  mrb_value depth = mrb_load_string(mrb, "$arr ? $arr.size : -1");
+  if (mrb->exc) {
+    SAY("ROW: could not read $arr.size back\n");
+    mrb->exc = 0;
+  } else if (mrb_fixnum_p(depth)) {
+    n = snprintf(b, sizeof b, "ROW: $arr.size = %ld (300 = the full 150 levels)\n",
+                 (long)mrb_fixnum(depth));
+    if (n > 0)
+      __capstone_hc_write(1, b, (unsigned long)n);
+  }
+
   SAY("ROW: trigger COMPLETED without a capability fault\n");
   say_arena("after-row");
   SAY("__CAPSTONE_MRUBY_ROW_DONE__\n");
