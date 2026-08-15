@@ -152,6 +152,10 @@ done
 # ambiguous between them.
 PROBE_EXTRA=()
 [[ ${MRUBY_PROBE_REVOKE:-0} == 1 ]] && PROBE_EXTRA+=(-DMRUBY_PROBE_REVOKE)
+# MRUBY_PROBE_CDP=1 runs the corpus's largest mechanism class on the real
+# interpreter; MRUBY_PROBE_CDP_CONTROL=1 is its matched arm with revocation off.
+[[ ${MRUBY_PROBE_CDP:-0} == 1 ]] && PROBE_EXTRA+=(-DMRUBY_PROBE_CDP)
+[[ ${MRUBY_PROBE_CDP_CONTROL:-0} == 1 ]] && PROBE_EXTRA+=(-DMRUBY_PROBE_CDP_CONTROL)
 # MRUBY_PROBE_BUMP=1 swaps the probe's allocator for an O(1) bump arena. See the
 # comment in mruby_probe.c: it is the matched arm for a wedge, differing from the
 # libc allocator in exactly one property.
