@@ -165,13 +165,32 @@ extern unsigned long xlang_mem_carved(void);
 extern unsigned long xlang_mem_live_bytes(void);
 extern unsigned xlang_mem_live_count(void);
 extern unsigned xlang_mem_peak_slots(void);
+/* What the allocator actually FREED. mruby frees GC pages, not objects, so a
+   use-after-free inside a page never reaches revocation -- see row 14. */
+extern unsigned long xlang_mem_free_calls(void);
+extern unsigned long xlang_mem_free_big(void);
+extern unsigned long xlang_mem_free_bytes(void);
 
 static void say_arena(const char *stage) {
-  char b[144];
+  char b[224];
   int n = snprintf(b, sizeof b,
-                   "MRUBY ARENA %s: carved=%lu live_bytes=%lu live=%u peak_slots=%u\n",
+                   /* TWO PRINTS, FEW ARGUMENTS EACH. One call with eight
+                      conversions produced a seventh value that could not be
+                      true (824 frees of which "404288" were large) and an
+                      eighth that was 0xFFFFFFFF. Whether the limit is the
+                      argument COUNT or the va_arg handling this target already
+                      has form for (C-26), the fix is the same and costs
+                      nothing: keep each formatted line short. */
+                   "MRUBY ARENA %s: carved=%lu live_bytes=%lu live=%lu peak_slots=%lu\n",
                    stage, xlang_mem_carved(), xlang_mem_live_bytes(),
-                   xlang_mem_live_count(), xlang_mem_peak_slots());
+                   (unsigned long)xlang_mem_live_count(),
+                   (unsigned long)xlang_mem_peak_slots());
+  if (n > 0)
+    __capstone_hc_write(1, b, (unsigned long)n);
+  n = snprintf(b, sizeof b,
+                   "MRUBY FREES %s: calls=%lu big=%lu bytes=%lu\n",
+                   stage, xlang_mem_free_calls(), xlang_mem_free_big(),
+                   xlang_mem_free_bytes());
   if (n > 0)
     __capstone_hc_write(1, b, (unsigned long)n);
 }
@@ -562,6 +581,7 @@ static int run_row(mrb_state *mrb) {
      allocations; one that raised on its first line does almost none. Print
      both sides so the difference is visible without another boot. */
   say_mem("before-row");
+  say_arena("before-row");
   mrb_load_string(mrb, row_trigger);
   say_mem("after-row");
   if (mrb->exc) {

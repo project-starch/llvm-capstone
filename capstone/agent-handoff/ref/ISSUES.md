@@ -12,6 +12,37 @@ Last updated 2026-08-15.
 
 ---
 
+## C-30 — `printf` with MANY conversions corrupts the last arguments · `OBSERVED 2026-08-16, not root-caused`
+
+**It produces wrong NUMBERS, silently**, which is worse than failing. Measured on one line with
+eight conversions (`%s` plus seven `%lu`), printed from a domain:
+
+```
+MRUBY ARENA ...: carved=739792 live_bytes=335504 live=1603 peak_slots=1807 \
+                 frees=824 big=404288 freed_bytes=4294967295
+```
+
+`big` counts frees of at least 1 KiB and cannot exceed `frees`; 404288 is the BYTE total, and
+`4294967295` is `0xFFFFFFFF`. Splitting the same values across two calls of four conversions
+each prints them correctly and consistently:
+
+```
+MRUBY ARENA ...: carved=739792 live_bytes=335504 live=1603 peak_slots=1807
+MRUBY FREES ...: calls=824 big=31 bytes=404288
+```
+
+**Whether the trigger is the argument COUNT or the `va_arg` handling is not established.** The
+first attempt also mixed `%u` and `%lu`; making every conversion `%lu` did NOT fix it, which
+rules out width mixing alone. This target already has form here -- C-26 was `va_arg` of a
+by-reference struct fetching the reference with an 8-byte `ld`.
+
+**Until it is root-caused: keep formatted lines short.** Four conversions are known good, eight
+are known bad, and the boundary is unmeasured. A long line does not fail, it lies -- the value
+that gave this away was one that could not be true, and a plausible wrong number would have gone
+straight into a result.
+
+---
+
 ## C-29 — our libc's `memcpy`, `memmove` and `realloc` STRIPPED CAPABILITY TAGS · `FIXED 2026-08-15`
 
 **Silent data corruption, and the only symptom was a fault somewhere else entirely.**
