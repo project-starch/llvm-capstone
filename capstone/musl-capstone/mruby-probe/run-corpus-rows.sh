@@ -174,7 +174,7 @@ done
 for attempt in 1 2 3; do
   CAPSTONE_QEMU_LOGIN_TIMEOUT=${CAPSTONE_QEMU_LOGIN_TIMEOUT:-300} python3 \
     "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
-    --qemu-extra-arg=-append --qemu-extra-arg="root=/dev/vda ro loglevel=1" \
+    --qemu-extra-arg=-append --qemu-extra-arg="${KERNEL_APPEND:-root=/dev/vda ro loglevel=1}" \
     --share-dir "$SHARE" --log-file "$LOG" \
     --timeout-multiplier "${TIMEOUT_MULTIPLIER:-16}" "${CMDS[@]}"
   status=$?

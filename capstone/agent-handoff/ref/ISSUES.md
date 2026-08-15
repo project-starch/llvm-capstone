@@ -237,9 +237,20 @@ and two instruments failed to narrow it:
   never reached -- but the failure point in the loader VARIED between runs, so "never reached" is
   not safe to conclude;
 * `dmesg -n 8` before the arm produced NO kernel output at all, not even the module's existing
-  `pr_info` lines, so the console is not carrying kernel messages regardless of the runtime
-  loglevel (the guest is booted with `loglevel=1` on the command line). The `__DMESG_OPEN__`
-  marker proves the command ran and proves nothing about its effect.
+  `pr_info` lines. The `__DMESG_OPEN__` marker proved the command RAN and proved nothing about
+  its effect. **That was the harness's own doing and is now FIXED**: the kernel command line
+  carried no `console=` at all, and this lane added `loglevel=1` on top of it. With
+  `console=ttyS0 loglevel=8 ignore_loglevel` the same boot yields 1104 timestamped kernel lines
+  including the module's own, and the control arm behaves identically, so the change does not
+  perturb a measurement. `KERNEL_APPEND` in `run-corpus-rows.sh` sets it.
+
+  **With the console open the answer is still not there.** No Oops, no BUG, and no `capstone:`
+  line from the module at all, while the servicer produces nothing whatever -- not even the
+  loader's first "Ok, good file". So it hangs before the create ioctl is reached. The module
+  registers through `miscdevice`, so a stale device node is not the explanation. Validating a
+  module change needs a real buildroot image rather than rmmod/insmod: the control shows the
+  reload path works for the SAME module, which is not evidence that it works for a different
+  one.
 
 Getting further needs a kernel console that actually carries printk, which is a boot-parameter
 question, not a domain question. The module change is reverted rather than left in the tree.
