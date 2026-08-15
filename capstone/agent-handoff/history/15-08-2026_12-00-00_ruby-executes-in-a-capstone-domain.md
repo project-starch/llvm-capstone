@@ -336,7 +336,26 @@ linear growth the interpreter gets 52 of 151 levels and dies with `SystemStackEr
 carry the same option, so the comparison between them is sound; a claim about "mruby as shipped"
 is not.
 
-## THREE ROWS MEASURED, and each faults where the corpus says it should
+## FIVE ROWS MEASURED, and each faults where the corpus says it should
+
+| row | CVE / issue | our fault site | corpus's documented site | control | revoke |
+|---|---|---|---|---|---|
+| 4 | CVE-2022-1071 | `mrb_vm_exec + 0x3d9c`, return from the `const_missing` callback | `mrb_vm_exec` | 302, completed | fault |
+| 5 | CVE-2022-1934 | `hash_new_from_values + 0x13c` | `hash_new_from_values` | 604, completed | fault |
+| 8 | mruby hash | `hash_values_at + 0x1c0` | `hash_values_at` | 604, completed | fault |
+| 10 | CVE-2022-1106 | `mrb_vm_exec + 0x198e0`, return from `mrb_range_new` in `OP_RANGE_INC` | `mrb_vm_exec`, vm.c:2822 | 302, completed | fault |
+| 13 | mruby hash | `hash_slice + 0x180` | `hash_slice` | 1208, completed | fault |
+
+**Five independent pinned trees, five different functions, and in every case the one the corpus
+names.** That the localisation reproduces the corpus's own crash site five times over is worth
+more than any single fault: it is the check that the port is running the defect the row is about
+rather than some other defect of ours.
+
+Rows 8 and 13 also carry the allocation readout added the same day, which shows the trigger doing
+real work rather than merely not raising: `requested` grows from 376 KB to 1.80 MB (row 8) and to
+2.07 MB (row 13) across the trigger, over roughly 700 allocations.
+
+### The older table, kept because the localisation method is the point
 
 | row | CVE / issue | fault site | corpus's documented site | control | revoke |
 |---|---|---|---|---|---|

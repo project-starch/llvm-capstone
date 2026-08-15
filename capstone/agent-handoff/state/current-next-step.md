@@ -214,15 +214,20 @@ stack is smaller than the next request and a non-coalescing free list matches no
 Recycling is still worth building for workloads that free and reallocate SIMILAR sizes (SQLite,
 the shims); it is not the fix for this one.
 
-## ROW 10 IS MEASURED — the first corpus row on the real interpreter
+## FIVE CORPUS ROWS MEASURED on the real interpreter
 
-| arm | $arr.size | outcome | verdict |
-|---|---|---|---|
-| libc allocator | 302 | completed | MISS |
-| rof, revocation **OFF** | 302 | completed | **MISS** |
-| rof, revoke-on-free | — | `capability fault: cause = 24` | **BLOCKED** |
+| row | our fault site | corpus says | control | revoke |
+|---|---|---|---|---|
+| 4 | `mrb_vm_exec + 0x3d9c` (`const_missing` return) | `mrb_vm_exec` | 302 | fault |
+| 5 | `hash_new_from_values + 0x13c` | `hash_new_from_values` | 604 | fault |
+| 8 | `hash_values_at + 0x1c0` | `hash_values_at` | 604 | fault |
+| 10 | `mrb_vm_exec + 0x198e0` (`OP_RANGE_INC`) | `mrb_vm_exec`, vm.c:2822 | 302 | fault |
+| 13 | `hash_slice + 0x180` | `hash_slice` | 1208 | fault |
 
-Same build, same workload, one call to `xlang_set_no_revoke()` between the last two. The fault is
+Five independent pinned trees, five different functions, each the one the corpus names.
+
+Taking row 10 as the worked example: same build, same workload, one call to
+`xlang_set_no_revoke()` between control and revoke. Its fault is
 at domain vaddr `0xc2284` = `mrb_vm_exec + 0x198e0`, the return from `mrb_range_new` in
 `OP_RANGE_INC` — CVE-2022-1106's own instruction — and it reproduces across two independent
 builds and boots. Harness: `musl-capstone/mruby-probe/run-corpus-rows.sh`, trail in the history note.

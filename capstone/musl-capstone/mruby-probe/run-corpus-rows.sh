@@ -71,8 +71,10 @@ row_gems() {
   case $1 in
     14|15) echo "sprintf" ;;
     8|13)  echo "hash-ext" ;;
-    9)     echo "eval" ;;
-    12)    echo "io" ;;
+    9)     echo "eval print" ;;
+    11)    echo "print" ;;
+    6)     echo "print" ;;
+    12)    echo "io print" ;;
     *)     echo "" ;;
   esac
 }
