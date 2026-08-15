@@ -114,7 +114,10 @@ def assert_firmware_embeds_current_initramfs(fw: pathlib.Path, locals_=None) -> 
         f"by decompressed content)")
 
 
-# Resident-bitstream guard. Reflashed 2026-08-12 to caplifive_12august.bit, which adds the
+# Resident-bitstream guard. Reflashed 2026-08-15 to caplifive_s06fullfix.bit, which carries
+# the S-06 RTL fix. EVERY silicon measurement taken before that reflash is BASELINE-INVALID,
+# including the SQLite completion rate and the whole S-07 rate table. Previously:
+# caplifive_12august.bit (2026-08-12), which added the
 # latched-mepc debug mux and the TOTAL LCC field-1 type query on top of the 2026-08-04
 # operand-forwarding fix (capstone-ariane 7aac52f93). Overridable so the next reflash needs
 # no code change mid-session -- the guard exists to stop a run from silently measuring the
@@ -125,7 +128,7 @@ def assert_firmware_embeds_current_initramfs(fw: pathlib.Path, locals_=None) -> 
 # FPGA_BITSTREAM by hand and one that forgot burned a launch on a HARD STOP. A default that
 # is always overridden trains people to override it, which is how a real mismatch gets waved
 # through.
-BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_12august.bit")
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s06fullfix.bit")
 TMP = pathlib.Path(os.environ.get("CAPSTONE_TMP_ROOT", "/tmp/capstone"))
 LOCAL_DOM = TMP / "sqlite-silicon" / "sqlite_silicon.dom"
 LOCAL_HOST = TMP / "sqlite-build" / "sqlite_host.user"

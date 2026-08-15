@@ -60,7 +60,10 @@ URL = _board_url()
 IMG = pathlib.Path(os.environ.get("FPGA_FW") or
                    os.path.expanduser("~/capstone-b-artifacts/fw_payload_fpga_up_gpfree.bin"))
 IMG_NAME = os.environ.get("FPGA_FW_NAME") or "fw_payload_fpga_up_gpfree.bin"
-# Resident-bitstream guard. Reflashed 2026-08-12 to caplifive_12august.bit, which adds the
+# Resident-bitstream guard. Reflashed 2026-08-15 to caplifive_s06fullfix.bit, which carries
+# the S-06 RTL fix. EVERY silicon measurement taken before that reflash is BASELINE-INVALID,
+# including the SQLite completion rate and the whole S-07 rate table. Previously:
+# caplifive_12august.bit (2026-08-12), which added the
 # latched-mepc debug mux and the TOTAL LCC field-1 type query on top of the 2026-08-04
 # operand-forwarding fix (capstone-ariane 7aac52f93). Overridable so the next reflash needs
 # no code change mid-session -- the guard exists to stop a run from silently measuring the
@@ -71,7 +74,7 @@ IMG_NAME = os.environ.get("FPGA_FW_NAME") or "fw_payload_fpga_up_gpfree.bin"
 # FPGA_BITSTREAM by hand and one that forgot burned a launch on a HARD STOP. A default that
 # is always overridden trains people to override it, which is how a real mismatch gets waved
 # through.
-BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_12august.bit")
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s06fullfix.bit")
 
 # Must match build-ladder-fpga.sh's OUT_DIR default ($CAPSTONE_TMP_ROOT/ladder-fpga),
 # else the runner reads a different dir than the build writes and can pick up stale
