@@ -1,3 +1,9 @@
+> **SUPERSEDED IN PART, 2026-08-15.** Everything in this file was measured on
+> `caplifive_12august.bit`, a bitstream that no longer exists. It does NOT contain the two
+> post-S-06-fix instances the README calls the cleanest evidence in the folder
+> (`sqlite3OsRead+0x4c`, in `L2.dom` and `XF.dom`, on `caplifive_s06fixs08fix.bit`) — see
+> `../00-README.md`. Kept for the decode method and the older sites, not as current status.
+
 # The three fault sites, as measured
 
 Bitstream `caplifive_12august.bit`. `mepc` is read from the latched trap state the bitstream exposes

@@ -1,3 +1,11 @@
+> **STATUS CHANGED, 2026-08-15.** This document says below that the patch "has never produced a
+> verdict, because the defect stopped reproducing". **That blocker is gone** — the defect
+> reproduces on `caplifive_s06fixs08fix.bit`. Two caveats before running it: the recipe below
+> uses `L2.dom` as the leading control, and `L2` is now itself a wedging arm, so a different
+> control is needed; and the rs1-vs-rs2 question this patch was built to settle is **largely
+> answered already** by the `ldc`-site instance (rs1-only guard), so its remaining value is
+> narrower — confirming whether the `cincoffset` sites share that cause.
+
 # The rs1-vs-rs2 discriminator: a 4-byte patch, built and waiting
 
 This separates the two things mcause 25 can mean at our faulting instruction. It is **built and

@@ -38,8 +38,9 @@
 > ```
 >
 > So this is **the construct, not the image layout** — the failure follows the source, not the
-> address. `L2` is the truncation arm that returned on **14 of 14** boots on the previous bitstream
-> and had never wedged; on this one it wedges. S-07 is markedly MORE frequent after the S-06 fix.
+> address. `L2` is the truncation arm that returned in every surviving pre-fix transcript we have
+> and had never wedged in any surviving transcript; on this one it wedges. We have **two** post-fix
+> wedges, so we do NOT claim a rate — only that a domain which never failed before now does.
 >
 > ### TWO MINIMAL REPRODUCERS TRIED, BOTH RETURN 0 — please do not re-run these
 >
@@ -78,8 +79,11 @@
 
 **Status: OPEN. Silicon defect, not root-caused. Software workarounds do not address it.**
 
-Bitstream `caplifive_12august.bit`. All measurements below are on that bitstream; a reflash
-invalidates them.
+**WHICH SILICON.** The current evidence (the `sqlite3OsRead+0x4c` instances, and both rung runs) is
+on **`caplifive_s06fixs08fix.bit`**, which carries your S-06 fix `25035c4c0` and the S-08 fix
+`9fd5507b` — **both in-tree**, so unlike the previous bitstream this one IS reconstructible. Older
+material below is on `caplifive_12august.bit` and is marked baseline-invalid; a reflash invalidates
+measurements, and there have been two.
 
 > ## START HERE IF YOU OWN THE RTL
 >
@@ -91,12 +95,14 @@ invalidates them.
 >   for reproduction.
 > * **`board/fault-sites.md`** — the raw latched trap state and decoded fault sites.
 >
-> **BEFORE YOU PLAN ANYTHING, READ THE REPRODUCTION STATUS.** This defect reproduced at roughly
-> 3 wedges in 12 executions during a single window on 2026-08-14 and **has not reproduced since**,
-> across 18 further executions of the byte-identical binary — including a boot of the byte-identical
-> *firmware*, recovered from the console's content-addressed image store. Do not design an
-> experiment that assumes it fires on demand. The leading explanation, by elimination, is that the
-> fault is **bursty** and the 23% figure came from a lucky hour.
+> **REPRODUCTION STATUS — CURRENT.** On the current bitstream `caplifive_s06fixs08fix.bit` (which
+> carries your S-06 fix `25035c4c0` and the S-08 fix `9fd5507b`, both in-tree) this defect
+> **reproduces**: the full SQLite workload wedged on its first execution, and a second boot wedged
+> its control domain. Two wedges, two different binaries, one construct.
+>
+> The paragraph that used to stand here said the opposite — "has not reproduced since … the 23%
+> figure came from a lucky hour". That was true of the PREVIOUS bitstream and is now withdrawn. Any
+> rate figure below the line marked *baseline-invalid* belongs to a bitstream that no longer exists.
 
 **This is NOT S-06, and merging the two would be a mistake.** S-06 is *plain, untagged* data losing
 its high 64 bits on an `ldc`/`stc` round trip — it corrupts data and raises nothing. S-07 is a

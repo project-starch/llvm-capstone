@@ -1,5 +1,19 @@
 #ifndef S07CHASE_KERNEL_H
 #define S07CHASE_KERNEL_H
+/* BUILD RECIPE -- without this the independent arm cannot be rebuilt by anyone but us:
+ *
+ *   RUNG=s07chase  bash tests/runtime-qemu/silicon-ladder/verify-and-stage-rung.sh s07chase
+ *   RUNG=s07indep  DOMAIN_EXTRA_CFLAGS=-DS07CHASE_INDEPENDENT \
+ *                  bash tests/runtime-qemu/silicon-ladder/verify-and-stage-rung.sh s07chase
+ *   selftest arms: add -DS07CHASE_SELFTEST (must return >= 0x100)
+ *
+ * BOTH ARMS ARE VOID AS TESTS OF A-1, and the reason is in this file's history rather than the
+ * hardware: at -O0 (build-ladder-domain.sh:73) every loaded capability is spilled immediately, so
+ * 18 of s07indep's 43 `ldc`s have their result consumed ONE instruction later. Neither arm ever
+ * puts two capability loads in flight. Their zeros are real measurements of nothing. Anyone
+ * rebuilding this must use inline asm and verify the emitted burst by disassembly BEFORE spending
+ * a boot.
+ */
 /* S-07 MINIMAL REPRODUCER ATTEMPT: back-to-back DEPENDENT capability loads.
  *
  * WHERE THIS SHAPE COMES FROM -- a measured fault, not a guess. On 2026-08-15, on the

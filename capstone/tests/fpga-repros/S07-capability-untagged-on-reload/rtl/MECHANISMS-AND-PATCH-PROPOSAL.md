@@ -63,33 +63,31 @@ So **A-family is established as real**; B-family remains possible as an *additio
 
 ## A-1. The capability load syncer tracks ONE outstanding request
 
-> **MEASURED AGAINST 2026-08-15, AND IT COUNTS AGAINST A-1 AS THE WHOLE STORY.** We built the rung
-> this mechanism predicts. `s07indep` issues **eight independent capability loads back to back**,
-> no address dependencies, so they genuinely can be in flight together. On silicon, in a
-> control-validated boot, with a firing positive control: **0**. If a one-deep tracker were
-> displaced by two overlapping capability loads, a tight loop of them should have hit it.
+> ### RETRACTED 2026-08-15: we said this was downgraded. It is NOT. It is UNMEASURED.
 >
-> Two further facts point the same way. The faulting SQLite triple is a **dependent** pair
-> (`ldc a4,0x0(a0)` then `ldc a4,0x20(a4)`), and a dependent load cannot issue while its predecessor
-> is outstanding — so that pair cannot displace anything by itself; whatever overlaps must come from
-> elsewhere. And our first rung (`s07chase`, a dependent pointer chase) was for the same reason
-> **structurally incapable of creating the condition at all** — its 0 says nothing about the
-> hardware, and is recorded so that particular zero is never cited as evidence.
+> We built two rungs to test A-1 and both returned 0, and we wrote that up as evidence against the
+> mechanism. **Both rungs are void.** Disassembling the binaries that actually ran shows neither ever
+> put two capability loads in flight:
 >
-> A-1 is **NOT refuted**: its window may need traffic a tight rung cannot create, and the bypass
-> chain below remains the cleanest route we know to a NOT_CAP register with a correct cursor. But it
-> no longer accounts for the evidence on its own, and we would rather say so than have you spend a
-> day on it believing otherwise.
+> * `s07chase` chases a **dependent** chain, and a dependent `ldc` cannot issue while its predecessor
+>   is outstanding — it needs that result as its base address. Structurally incapable.
+> * `s07indep` was written to fix that with eight **independent** loads. But it is built at `-O0`
+>   (`build-ladder-domain.sh:73`), so every loaded value is spilled immediately: **18 of its 43
+>   `ldc`s have their result consumed one instruction later**, 10 more at a distance of 2. The
+>   "back-to-back independent loads" exist only in the C source.
 >
-> **The ingredient the rungs lack, and the thing we would look at first now:** the faulting site
-> dispatches through `id->pMethods->xRead`, and our VFS is hostcall-based, so that path **crosses
-> the domain boundary**. The rungs cross nothing. The S-08 bug fixed the same day lived in the
-> dom-switcher's context save/restore, and this fault lands on a capability loaded just after that
-> boundary is crossed.
+> Both rungs had firing positive controls — but a control proves the **detector** works, not that the
+> **trigger** was ever created. That distinction is what we got wrong, twice in the same rung family.
+>
+> **So A-1 is neither confirmed nor weakened. No valid instrument has yet been pointed at it.** The
+> zeros stand as measurements; the interpretation we attached to them does not.
+>
+> **If you want to test it, do not reuse our rungs.** They need an inline-asm burst of independent
+> `ldc`s with nothing between them, disassembly-verified before a boot is spent. The board-free
+> assertion at the end of this document is unaffected and remains the cheapest route.
 
-**Status: WAS our leading candidate; DOWNGRADED 2026-08-15 by the measurement in the box above.
-Still worth checking — the bypass chain is real and is the cleanest route we know to a NOT_CAP
-register — but it does not explain the evidence on its own.**
+**Status: leading structural candidate, and UNMEASURED — see the retraction above. The bypass chain
+below is real and well-sourced; what we have never managed is a rung that creates the condition.**
 
 **A framing you may hear elsewhere, which we withdraw: the transaction ID is NOT under-width.**
 `core/anvil_build/capstone_dyn_unit.anvil:550-551`:
@@ -134,8 +132,9 @@ own repo and we should have looked.
 
 **The genuine open question, and a tension we cannot resolve:** can a response arrive in the window
 between the arming `send cap_load_ri.init` (`:326`) and the matcher, and can the LSU return
-out of order into it? **And if displacement were this easy, why is the fault only ~23% and
-site-fixed?** The dyn unit dispatches LDC without waiting (`:505-529`), `NrLoadBufEntries = 2`, and
+out of order into it? **And if displacement were this easy, why is the fault not far more common?** (The old
+"~23% and site-fixed" form of this question is withdrawn: that rate came from a bitstream that no
+longer exists, and the post-fix wedges are at a fourth function in two different binaries.) The dyn unit dispatches LDC without waiting (`:505-529`), `NrLoadBufEntries = 2`, and
 `waiting_for_load_syncer` is a debug-LED signal only (`core/cva6.sv:1126`,
 `core/ex_stage.sv:964`) — not backpressure. Back-to-back `ldc` is common in the very code that
 faults. **A-1 must explain the rarity and the site-fixedness, and we cannot make it do so.** We are
