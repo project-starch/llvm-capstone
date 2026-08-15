@@ -67,6 +67,20 @@ rm -rf "$SHARE"; mkdir -p "$SHARE"; rm -f "$LOG"
 # reports identically and none of them means anything. Row 14 spent a boot on
 # exactly that ("undefined method '%' for \"%d\"", from mruby-sprintf).
 # Overridable with GEMS=..., empty for rows that need none.
+# Extra defines a row's own build_config.rb sets, which are part of the corpus's
+# REFERENCE configuration and not our choice. Row 14 is the only one: its ASan
+# build defines MRB_GC_STRESS, which runs a full collection on every allocation
+# and is what makes its GC use-after-free deterministic ("aborts on 10/10 runs,
+# no fuzzing or heap grooming needed"). Without it the trigger completes in both
+# rof arms and says nothing -- which is exactly what it did here until the
+# corpus's build_config was read rather than assumed.
+row_defines() {
+  case $1 in
+    14) echo "MRB_GC_STRESS" ;;
+    *)  echo "" ;;
+  esac
+}
+
 row_gems() {
   case $1 in
     14|15) echo "sprintf" ;;
@@ -106,8 +120,10 @@ for ROW in $ROWS; do
     # old .dom was still in the share directory, reporting as if it were new.
     rm -f "$SHARE/$tag.dom"
     gems=${GEMS-$(row_gems "$ROW")}
+    defs=${DEFINES-$(row_defines "$ROW")}
     if ! env $extra MRUBY_SRC="$row_src" MRUBY_WITH_PARSER=1 MRUBY_PROBE_ROW="$ROW" \
            ${gems:+MRUBY_PROBE_GEMS="$gems"} \
+           ${defs:+PROBE_EXTRA_DEFINES="$defs"} \
            ${STACK_DOUBLING:+MRUBY_PROBE_STACK_DOUBLING=$STACK_DOUBLING} \
            OUT_DIR="$CAPSTONE_TMP_ROOT/$tag" \
            OUT_DOM="$SHARE/$tag.dom" OUT_HOST="$SHARE/$tag.user" \
@@ -126,6 +142,25 @@ for ROW in $ROWS; do
 done
 
 CMDS=(--guest-command 'echo __CAPSTONE_QEMU_BOOT_CONTROL_OK__')
+
+# MODULE_KO stages a freshly built capstone.ko and swaps it in, so a module
+# change can be tested without rebuilding the buildroot image and rebooting the
+# whole guest. The boot script has already insmod'ed the baked one, hence the
+# rmmod. MODULE_RELOADED is the positive control: without it the run silently
+# used the OLD module, which is the difference between measuring the change and
+# measuring nothing.
+if [[ -n ${MODULE_KO:-} ]]; then
+  [[ -f $MODULE_KO ]] || { echo "no such module: $MODULE_KO" >&2; exit 2; }
+  cp "$MODULE_KO" "$SHARE/capstone.ko"
+  echo "staging module $(stat -c%s "$MODULE_KO") bytes from $MODULE_KO"
+  CMDS+=(--guest-command 'rmmod capstone && insmod /mnt/host/capstone.ko && echo __MODULE_RELOADED__')
+  # The boot script runs `dmesg -n 1`, so ONLY KERN_EMERG reaches the console and
+  # everything the module says about a domain it is creating is invisible. When a
+  # module is being tested, open the console back up -- otherwise a kernel-side
+  # failure looks exactly like a wedge, which is how I-4's first attempt was
+  # mis-attributed.
+  CMDS+=(--guest-command 'dmesg -n 8; echo __DMESG_OPEN__')
+fi
 for tag in "${TAGS[@]}"; do
   # Copied to /tmp before running: read straight off the 9p share the loader
   # demand-pages a 2 MB image and it never finishes. Removed again afterwards --
@@ -139,7 +174,7 @@ done
 for attempt in 1 2 3; do
   CAPSTONE_QEMU_LOGIN_TIMEOUT=${CAPSTONE_QEMU_LOGIN_TIMEOUT:-300} python3 \
     "$CAPSTONE_REPO_ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
-    --qemu-extra-arg=-append --qemu-extra-arg="root=/dev/vda ro loglevel=1" \
+    --qemu-extra-arg=-append --qemu-extra-arg="${KERNEL_APPEND:-root=/dev/vda ro loglevel=1}" \
     --share-dir "$SHARE" --log-file "$LOG" \
     --timeout-multiplier "${TIMEOUT_MULTIPLIER:-16}" "${CMDS[@]}"
   status=$?
