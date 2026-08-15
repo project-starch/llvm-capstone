@@ -37,10 +37,17 @@ import pathlib
 import re
 import sys
 
-# (pattern, replacement, why). Each MUST match at least once: a rule that fires
-# zero times means upstream changed under us, and silently generating an
-# untransformed file would hand the compiler back the long double we are here to
-# remove. That is the positive control for this generator.
+# (pattern, replacement, why). For musl's own vfprintf.c each MUST match at least
+# once: a rule that fires zero times means upstream changed under us, and
+# silently generating an untransformed file would hand the compiler back the long
+# double we are here to remove. That is the positive control for this generator.
+#
+# With --source the file is not musl's and that per-rule check does not apply:
+# mruby's src/fmt_fp.c, the same algorithm with the same provenance, has no
+# `frexpl` at all. Only the first rule stays mandatory there, because a file with
+# no `long double` had no business being passed in. THE LEFTOVER CHECK BELOW IS
+# THE REAL GATE either way -- it is what guarantees nothing 128-bit survives, and
+# it does not care which file this is.
 SUBSTITUTIONS = [
     (r"long double", "double",
      "the formatted value itself, in pop_arg, fmt_fp and its rounding locals"),
@@ -67,23 +74,34 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("musl_dir")
     parser.add_argument("output")
+    parser.add_argument("--source", help="narrow this file instead of musl's "
+                                         "vfprintf.c (musl_dir is then unused)")
     args = parser.parse_args()
 
-    src = pathlib.Path(args.musl_dir) / "src" / "stdio" / "vfprintf.c"
-    if not src.is_file():
-        print(f"ERROR: no musl vfprintf at {src}", file=sys.stderr)
-        return 2
+    if args.source:
+        src = pathlib.Path(args.source)
+        if not src.is_file():
+            print(f"ERROR: no such source {src}", file=sys.stderr)
+            return 2
+    else:
+        src = pathlib.Path(args.musl_dir) / "src" / "stdio" / "vfprintf.c"
+        if not src.is_file():
+            print(f"ERROR: no musl vfprintf at {src}", file=sys.stderr)
+            return 2
 
     text = src.read_text()
     counts = []
-    for pattern, replacement, _why in SUBSTITUTIONS:
+    for i, (pattern, replacement, _why) in enumerate(SUBSTITUTIONS):
         text, n = re.subn(pattern, replacement, text)
-        if n == 0:
+        # Rule 0 is mandatory everywhere; the rest only for musl's own file.
+        if n == 0 and (i == 0 or not args.source):
+            where = ("this file" if args.source else
+                     "musl's vfprintf.c; re-read it before trusting this generator")
             print(f"ERROR: substitution {pattern!r} matched nothing in {src}.\n"
-                  f"       musl's vfprintf.c has changed; re-read it before "
-                  f"trusting this generator.", file=sys.stderr)
+                  f"       {where}.", file=sys.stderr)
             return 2
-        counts.append((pattern, n))
+        if n:
+            counts.append((pattern, n))
 
     leftover = re.findall(r"long double|\bfrexpl\b|\bLDBL_", text)
     if leftover:
