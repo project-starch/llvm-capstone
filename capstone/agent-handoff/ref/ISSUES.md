@@ -12,6 +12,38 @@ Last updated 2026-08-15.
 
 ---
 
+## I-1 — QEMU can track capability tags across at most 2 MiB, with a LINEAR lookup · `CHARACTERISED 2026-08-15, not fixed`
+
+```
+qemu-system-riscv64: target/riscv/cap_mem_map.c:55: add_entry:
+    Assertion `cm_map->n < CAP_MEM_MAP_ENTRY_N' failed.
+```
+
+**The arithmetic.** `cap_mem_map.h` fixes `CAP_MEM_MAP_ENTRY_N` at **512**, and each entry covers
+one 4096-byte page (`addr_get_entry_base` masks off the low 12 bits). So the emulator can hold
+tag state for **2 MiB** of capability-bearing memory, and `find_entry` walks the array
+**linearly** on the way to every capability memory access.
+
+**Not a constant to raise.** Each entry carries `capboundsfat_t bounds[256]`, so the table is
+already megabytes; quadrupling it quadruples the scan on the emulator's hottest path, under TCG.
+The fix is a different data structure, not a bigger array.
+
+**What hits it.** Running mruby with the revoking allocator over a 4 MiB arena: every allocation
+is its own SPLIT capability, so capability-bearing pages accumulate until the table overflows.
+Reached while trying to run xlang corpus row 10's own trigger, after a 512 KiB arena had been
+ruled out by exhausting instead (its control arm faulted in `mrb_gc_mark`).
+
+**Why nothing hit it before.** The corpus shims run against a 64 KiB arena -- 16 pages against a
+512-page table. A real interpreter is the first workload anywhere near it.
+
+**Consequence, stated plainly.** A real interpreter plus per-allocation revocation over a
+multi-megabyte heap is currently beyond what this emulator can run, for reasons that have
+nothing to do with the compiler, the monitor or mruby. Anything measured this way needs either a
+smaller arena (which then exhausts, since the allocator never reclaims) or an emulator change.
+Silicon is not subject to this at all.
+
+---
+
 ## C-26 — `va_arg` of a struct passed BY REFERENCE loads the reference with `ld` · `OPEN 2026-08-15`
 
 **Ten lines reproduce it, and the matched pair is inside them:**

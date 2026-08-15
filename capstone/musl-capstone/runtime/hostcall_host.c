@@ -41,9 +41,15 @@
    returns arena space -- it only shrinks from the top -- so the arena has to
    hold every byte ever allocated, not the peak. 512 KiB is that with headroom.
    It is host memory, not part of the domain image, so it does not count against
-   the ~4 MB image ceiling. */
+   the ~4 MB image ceiling.
+
+   RAISED to 4 MiB from 512 KiB: corpus row 10's trigger recurses 150 deep while
+   allocating a string and an array per frame, and with no reclamation 512 KiB
+   ran out -- which showed up as the CONTROL arm faulting, i.e. as an instrument
+   failure rather than a result. Sizing an arena that never reclaims is about
+   total churn, not peak liveness. */
 #ifndef HC_HOST_ARENA_SIZE
-#define HC_HOST_ARENA_SIZE (512UL * 1024)
+#define HC_HOST_ARENA_SIZE (4UL * 1024 * 1024)
 #endif
 
 

@@ -135,3 +135,43 @@ config is validated on one), `fstat`/`lseek` for the gem rows, and the revoke ar
 from 64 KiB and 64 slots to what a real VM does -- now a measured number, 755 allocations and
 179 KB. That last one is the question the shims cannot answer at all, and it is the one worth
 doing next.
+
+
+## The corpus mechanism runs; an actual corpus ROW does not, and the reason is the emulator
+
+Six of the twelve Ruby rows share one mechanism -- a cached interior pointer into the VM stack
+across a re-entrant Ruby callback that reallocates it. Written against mruby itself, on the
+revoking arena, it behaves exactly as the corpus predicts for that class:
+
+```
+control (xlang_set_no_revoke)   CDP 3: stale read COMPLETED -- not blocked      MISS
+revoke-on-free                  [CAPSTONE] capability fault: cause = 24         BLOCKED
+```
+
+The control is the load-bearing arm: it shows the stack really moved and the stale read was
+reachable, so the other arm's fault is about revocation rather than about a pointer that was
+never stale.
+
+**An actual row is a different thing and does not run yet.** Row 10 (CVE-2022-1106) was the
+candidate, because its pinned mruby commit is the tree this port was validated on and its
+trigger is pure Ruby, so `embed-ruby.py` can carry `xlang/repro/10/trigger.rb` into the domain
+verbatim. Two arena sizes, two different walls:
+
+* **512 KiB** -- the CONTROL arm faults in `mrb_gc_mark`. The trigger recurses 150 deep
+  allocating a string and an array per frame, and the revoking allocator never reclaims, so the
+  arena runs out and mruby walks into the result.
+* **4 MiB** -- the control gets much further (the allocation heartbeat reaches 576) and then
+  **QEMU** asserts in `cap_mem_map.c`: it can track capability tags across at most 2 MiB, in a
+  linearly-scanned array. That is **I-1**, and it is an emulator limit, not a defect in the
+  compiler, the monitor or mruby.
+
+So the row is blocked between two walls: an allocator that never reclaims needs a big arena, and
+the emulator cannot track a big arena. Silicon has neither limit.
+
+**A retraction on the way there.** "Identical pc and badaddr at eight times the arena, so
+exhaustion is refuted" was stated from a run that never happened -- the driver was invoked with
+a relative path from the wrong directory, `rc=2`, and the lines read back were the PREVIOUS
+run's. The identical addresses were not a finding; they were the proof that it was the same
+data. This is the second instance of the same shape in one session, the first being a stale
+`.dom` executed three times. Both are "output that looks like a result but came from an earlier
+state", and both were caught only by looking at a timestamp.
