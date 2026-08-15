@@ -85,6 +85,19 @@ OBJS=()
 "$MRUBY_SRC/build/host/bin/mrbc" -B probe_irep -o "$OBJ_DIR/probe_irep.c" \
                                  "$SCRIPT_DIR/probe.rb"
 
+# STAGE 7 needs a LADDER of ireps rather than one: the fault is inside
+# mrb_top_run, and an interpreter loop does not decompose by call structure. It
+# decomposes by BYTECODE, so each rung is a slightly larger Ruby chunk and the
+# last rung that returns names the construct. All six go into ONE image.
+if [[ ${MRUBY_PROBE_STAGE:-0} -ge 7 ]]; then
+  : > "$OBJ_DIR/ladder_ireps.c"
+  for rb in "$SCRIPT_DIR"/ladder/*.rb; do
+    sym="ladder_$(basename "$rb" .rb)"
+    "$MRUBY_SRC/build/host/bin/mrbc" -B "$sym" -o "$OBJ_DIR/$sym.c" "$rb"
+    cat "$OBJ_DIR/$sym.c" >> "$OBJ_DIR/ladder_ireps.c"
+  done
+fi
+
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 -c "$RUNTIME_DIR/start-musl.S" -o "$OBJ_DIR/start-musl.o"
 OBJS+=("$OBJ_DIR/start-musl.o")
@@ -118,6 +131,11 @@ PROBE_EXTRA=()
 # comment in mruby_probe.c: it is the matched arm for a wedge, differing from the
 # libc allocator in exactly one property.
 [[ ${MRUBY_PROBE_BUMP:-0} == 1 ]] && PROBE_EXTRA+=(-DMRUBY_PROBE_BUMP)
+# MRUBY_PROBE_STAGE=N builds one arm of the staged batch: 1 allocates the state,
+# 2 adds mrb_gc_init, 3 adds mrb_init_core, 0 (default) is the full run. Each arm
+# RETURNS a marker instead of running to the failure, so a wedge costs only the
+# arms after it. See run-mruby-stages.sh.
+[[ ${MRUBY_PROBE_STAGE:-0} != 0 ]] && PROBE_EXTRA+=(-DMRUBY_PROBE_STAGE="${MRUBY_PROBE_STAGE}")
 if [[ ${MRUBY_WITH_PARSER:-0} == 1 ]]; then
   PARSER_CORE="$MRUBY_SRC/mrbgems/mruby-compiler/core"
   python3 "$SCRIPT_DIR/patch-parser.py" "$PARSER_CORE/y.tab.c" \
