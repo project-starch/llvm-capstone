@@ -16,9 +16,22 @@ MRUBY STAGE 7 DONE: allocs=275 peak=161953
 
 Harness: `capstone/musl-capstone/mruby-probe/run-mruby-stages.sh`.
 
-**What still does not work:** loading mrblib, mruby's Ruby-level standard library. That is
-C-26, diagnosed to a ten-line reproducer (see below). So the VM runs Ruby; the standard
-library does not load yet.
+**COMPLETE, after C-26 was fixed the same day.** The full interpreter runs:
+
+```
+MRUBY S2: mrb_open ok                     <- mrblib loads, the whole Ruby-level stdlib
+MRUBY S3: irep executed
+MRUBY S4: t[19] == 400
+MRUBY S6: parsing Ruby source             <- mrb_load_string, the PARSER
+MRUBY S7: parsed source produced 400
+MRUBY S5: state closed                    <- GC teardown, no fault
+MRUBY MEM at-exit: requested=178750 peak=178750 calls=755 fails=0
+```
+
+So: bytecode AND source, standard library AND core, with a clean teardown. 755 allocations,
+179 KB peak, no allocation failure. The bytecode route is no longer a requirement -- it was
+proposed to get around a parser that would not compile, and it stays only as the cheaper
+image (1.91 MB against 2.46 MB).
 
 ## What it took
 
@@ -37,10 +50,11 @@ Routing it through an `enum node_type` first keeps the fold at integer width.
 `mruby-probe/patch-parser.py` applies that into the build directory and fails loudly if it
 ever stops matching; the mruby tree stays byte-identical.
 
-**The parser compiles but has not been run.** The bytecode route is what the result above
-uses, and it is the smaller image.
+**The parser RUNS** (S6/S7 above): `mrb_load_string` over the same four-line chunk, so
+bytecode and source differ in exactly one thing -- who turned the text into an irep. Both
+produce 400.
 
-## Five defects, four fixed, all ours
+## Six defects, all ours, all fixed
 
 | | |
 |---|---|
@@ -48,7 +62,7 @@ uses, and it is the smaller image.
 | the libc archive built without `-fno-jump-tables`, 15 members with switch tables | fixed |
 | `.bss` inside the loaded segment: 262 KB of zeros copied over 9p | fixed |
 | **C-25** pointer difference required tagged operands, so `NULL - NULL` faulted | fixed |
-| **C-26** `va_arg` of a by-reference struct loads the reference with `ld` | open |
+| **C-26** `va_arg` of a by-reference struct loads the reference with `ld` | fixed |
 
 Plus QEMU: `helper_cslcc` asserted on an untagged operand, killing the machine, so the monitor
 never reported cause/pc. It now raises Unexpected operand type (24) per the spec. Without that
@@ -115,7 +129,9 @@ have moved QEMU away from the specification to make one program work.
 `xlang/RESULTS.md` gives as the first reason for measuring through shims that purecap mruby
 took four changes and only one of nine pinned versions is proven. That reason is unchanged.
 What has changed is that the **libc obstacle is gone** and mruby is now a build rather than a
-port on our column too. Upgrading the twelve Ruby rows from shim to real interpreter still
-needs: C-26 fixed (for mrblib), the nine pinned versions ported, `fstat`/`lseek` for the gem
-rows, and the revoke arena scaled from 64 KiB and 64 slots to a real VM's allocation
-behaviour. The last of those is the one the shims cannot answer at all.
+port on our column too. Upgrading the twelve Ruby rows from shim to real interpreter no longer
+needs anything from the interpreter. What remains is: the nine pinned versions ported (our
+config is validated on one), `fstat`/`lseek` for the gem rows, and the revoke arena scaled
+from 64 KiB and 64 slots to what a real VM does -- now a measured number, 755 allocations and
+179 KB. That last one is the question the shims cannot answer at all, and it is the one worth
+doing next.

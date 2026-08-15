@@ -137,6 +137,62 @@ Kept for the reasoning, not as instructions. The bitstream described here, `capl
 has been resident since 2026-08-12 and the first-boot sequence below was carried out long ago. The
 `FPGA_BITSTREAM` note at the end is also stale: the drivers now default to the resident bitstream,
 so no override is needed.
+||||||| parent of 133b8ae2cfbe (Record that the parser runs, and put the lane's state where a session will read it)
+## 0-PRE. A NEW BITSTREAM IS IN SYNTHESIS — read this before the first boot on it
+
+## MUSL / INTERPRETER LANE — mruby runs completely, 2026-08-15
+
+**Reference mruby executes Ruby in a pure-capability domain**: mrblib loads, precompiled
+bytecode runs, `mrb_load_string` parses and evaluates SOURCE at runtime, and the GC tears
+everything down without a fault. 755 allocations, 179 KB peak.
+Trail: `history/15-08-2026_12-00-00_ruby-executes-in-a-capstone-domain.md`.
+Harnesses: `musl-capstone/mruby-probe/run-mruby-probe.sh` (full) and `run-mruby-stages.sh`
+(staged arms, for bisecting a fault).
+
+**Six defects were found and fixed getting there, all ours**, and three of them affect every
+domain, not just mruby:
+
+* **C-25** a pointer difference required tagged operands, so `NULL - NULL` faulted.
+* **C-26** `va_arg` of a by-reference struct fetched the reference with an 8-byte `ld`.
+* `jmp_buf` was 208 bytes and 8-byte aligned where `capstone_setjmp.S` writes 224 and needs 16
+  — the Lua probe had been silently overrunning it on every protected call.
+* the libc archive was built without `-fno-jump-tables` (ISSUES.md C-4a), 15 members affected.
+* `.bss` sat inside the loaded segment, so a domain shipped its whole static heap as zeros.
+* QEMU's `helper_cslcc` aborted the machine where the spec says raise; without fixing that,
+  no fault in this lane could be localised past a function name.
+
+**TWO SYSTEM PROPERTIES THAT ARE NOT WRITTEN DOWN ANYWHERE ELSE, and both cost a run before
+they were understood:**
+
+1. **A domain image is capped near 4 MB.** Not by hardware, and not by the monitor, which asks
+   only for 16-byte alignment: the module allocates the domain with
+   `__get_free_pages(GFP_HIGHUSER, dom_pages_log2)`, and `MAX_ORDER` cuts in at order 10. Over
+   that it fails SILENTLY — `pr_alert` into a ring buffer the driver has already muted with
+   `dmesg -n 1`, and `dom_id` left unset, so the run looks like it did nothing.
+2. **Never load a `.dom` straight off the 9p share.** The guest loader mmaps it and memcpys out
+   of it, so every 4 KiB page is an RPC under TCG with `cache=none`. A 1.35 MB image did not
+   finish in 1800 s. `cp` it to `/tmp` first and it loads in under a second. Every run script in
+   this lane now does that and stamps T0/T1/T2 so the phases stay separable.
+
+**Next, in this lane:**
+
+1. **The revoke arena under mruby.** This is the one the shims cannot answer: does
+   revoke-on-free hold up under a real VM's allocation behaviour? The number to design against
+   is now measured — 755 allocations, 179 KB peak — against today's 64 KiB arena and
+   `ROF_MAX_SLOTS=64`. Needs the host-granted linear capability plumbed to the libc allocator,
+   which `libc-ext/malloc.c` names as its own upgrade path.
+2. `fstat` and `lseek`, which together are what stdio needs, and what the `mruby-io` corpus rows
+   need after that.
+3. The corpus pins **nine** mruby versions spanning 2017-2026 and our configuration is
+   validated on **one**.
+4. **C-22 is still open** and still blocks `-O1` for mruby: 3 TUs fail to compile and
+   `libc-ext/scan-cap-base.py` finds 26 integer-as-capability-base sites in the rest. `-O0`
+   images are ~3.5x larger, which matters much less now that the load path is fixed.
+
+---
+
+
+## 0-PRE. A NEW BITSTREAM IS IN SYNTHESIS — read this before the first boot on it
 
 Synthesis was started 2026-08-12 from `capstone-ariane` `fpga-testing-dev` = `7e4dc440f` (pushed).
 That RTL is **not** what any existing board result was taken on.
