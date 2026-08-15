@@ -2,6 +2,28 @@
 
 Minimal snapshot. Read first in every session.
 
+## S-06/S-08 CONFIRMED ON SILICON; S-07 investigated (2026-08-15)
+
+Board lane reports S-06 and S-08 fixes VERIFIED on caplifive_s06fixs08fix.bit: s06agg 5->15,
+s06aggcap 7->15, s06aggwide 237->255, EXCX 0 (was 4/4), and SQLite completes through finalize
+with NO software workarounds — a first. S-07 survives.
+
+S-07 (a capability read back by LDC arrives NOT_CAP, mcause 25, at sqlite3OsRead+0x4c across
+two binaries) — sim/RTL investigation done, NO fix shipped (cause not sim-reachable):
+- CONFIRMED consequence: an LDC bypassed to LOAD_WB erases the capability (wb[2].cap_data
+  tied '0). New board-free invariant in scoreboard.sv, positive-controlled (fires on forced
+  bypass), silent across the full 77-test sweep. Commit a114313aa on fpga-testing-dev-s06fix.
+- REFUTED cause: the one-deep syncer tracker is never overwritten and CANNOT be — the dyn
+  unit serializes cap loads at issue (capstone_dyn_ready backpressure stalls the next cap
+  load's whole issue). Overlap and hit-under-miss both architecturally impossible in sim;
+  two directed tests (s07-ldc-overlap-displace) confirm. The reporting lane's proposed
+  8-entry-vector fix would be DEAD CODE.
+- Handed back per the proposed split (board owns the trigger). Remaining candidates: the
+  registered capstone_dyn_ready handshake under silicon timing; the shadow-tag DRAM refill
+  race (A-2, not yet probed); the hostcall/domain-boundary path. Board datum needed to
+  localize: the faulting LDC's writeback port / trans_id.
+  Answer: tests/fpga-repros/S07-capability-untagged-on-reload/rtl/ANSWER-FROM-THE-RTL-LANE.md
+
 ## S-08 ROOT-CAUSED: an S-06 P4 width bug; FIXED, needs re-synthesis (2026-08-15)
 
 The `caplifive_s06fullfix.bit` regression (S-08: userspace ecall undelegated, monitor takes

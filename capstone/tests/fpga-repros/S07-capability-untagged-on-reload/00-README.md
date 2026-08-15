@@ -1,5 +1,16 @@
 # S-07 — a capability read back from memory comes back UNTAGGED, sporadically
 
+> ## RTL-LANE ANSWER, 2026-08-15: `rtl/ANSWER-FROM-THE-RTL-LANE.md`
+>
+> Sim/RTL side has replied. Confirmed: an LDC bypassed to LOAD_WB erases the capability
+> (your A-1 consequence chain is right) — a positive-controlled board-free invariant now
+> guards it (scoreboard.sv, silent across the full 77-test sweep). REFUTED: the one-deep
+> tracker is never overwritten and cannot be — the dyn unit serializes cap loads at issue,
+> so overlap AND hit-under-miss are architecturally impossible in sim (two directed tests
+> confirm). **The proposed 8-entry-vector fix would be dead code.** No fix shipped: the
+> cause is not sim-reachable, so it is handed back per your split (board owns the trigger).
+> The one board datum that would localize it: the faulting LDC's writeback port / trans_id.
+
 > ## RTL LANE: START WITH `rtl/MESSAGE-TO-THE-RTL-LANE.md`
 >
 > That is the handover — what is solid, **what of ours you should not trust** (both our reproducer
