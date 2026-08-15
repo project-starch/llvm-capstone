@@ -408,7 +408,19 @@ ERROR: AddressSanitizer: heap-use-after-free ... READ of size 4
     #2 root_scan_phase     src/gc.c:874
 ```
 
-and the corpus's `build_config.rb` for this row defines **`MRB_GC_STRESS`**, a full collection on
+**Our port configuration does NOT disarm it, and that is now measured rather than assumed.**
+The corpus's own x86 ASan build was rebuilt carrying our macros -- `MRB_METHOD_T_STRUCT` and
+`POOL_ALIGNMENT=16` on top of its own `MRB_GC_STRESS` -- and it still reports the identical
+use-after-free at `mark_context_stack`, gc.c:556. So the four config macros are not the
+explanation, which removes the whole "our build is a different program" hypothesis class. The
+reference build was restored afterwards and re-checked to still reproduce.
+
+What is left is the ALLOCATOR and the GC's page dynamics: mruby carves objects out of heap PAGES
+and only calls `mrb_free` when a page falls entirely empty, so whether the revoking allocator
+ever sees a free at all depends on page occupancy, which differs with object layout. That is the
+thread to pull, and it is a GC-behaviour question rather than a capability one.
+
+The corpus's `build_config.rb` for this row defines **`MRB_GC_STRESS`**, a full collection on
 every allocation, which is what makes it deterministic. That define was missing from our build --
 found by reading the row's build_config rather than assuming our four macros were the whole
 configuration -- and adding it changes the run (3192 to 3227 allocations, and `gc.o` grows by 296
