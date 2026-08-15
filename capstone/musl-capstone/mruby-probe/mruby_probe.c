@@ -42,6 +42,7 @@
   "t[19]\n"
 #endif
 
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -148,6 +149,29 @@ static void *probe_allocf(mrb_state *mrb, void *ptr, size_t size, void *ud) {
 
 /* Printed through snprintf, which this libc now has. Not through mruby: the
    point is to report even when mruby is the thing that is broken. */
+#ifdef MRUBY_PROBE_REVOKE
+/* The revoking allocator owns its own counters; ours only see what mruby asked
+   for. carved is every byte ever handed out (the arena never reclaims), and
+   peak_slots is the high-water of CONCURRENTLY live allocations -- the number
+   that actually sizes ROF_MAX_SLOTS, which our call count cannot give. */
+extern unsigned long xlang_mem_carved(void);
+extern unsigned long xlang_mem_live_bytes(void);
+extern unsigned xlang_mem_live_count(void);
+extern unsigned xlang_mem_peak_slots(void);
+
+static void say_arena(const char *stage) {
+  char b[144];
+  int n = snprintf(b, sizeof b,
+                   "MRUBY ARENA %s: carved=%lu live_bytes=%lu live=%u peak_slots=%u\n",
+                   stage, xlang_mem_carved(), xlang_mem_live_bytes(),
+                   xlang_mem_live_count(), xlang_mem_peak_slots());
+  if (n > 0)
+    __capstone_hc_write(1, b, (unsigned long)n);
+}
+#else
+#define say_arena(stage) ((void)0)
+#endif
+
 static void say_mem(const char *stage) {
   char b[128];
   int n = snprintf(b, sizeof b,
@@ -205,9 +229,68 @@ void mrb_init_gc(mrb_state *);         void mrb_init_version(mrb_state *);
 void mrb_init_mrblib(mrb_state *);
 #endif
 
+/* STAGE 9: a variadic 32-byte struct WITHOUT mruby.
+ *
+ * mrb_funcall_id(argc=0) returns and mrb_funcall_id(argc=1) faults, so the
+ * vararg loop is the variable and va_arg of an mrb_value -- 32 bytes by value
+ * under MRB_NO_BOXING -- is the suspect. The shape is reproduced here with four
+ * named parameters, two of them structs by value, because that is what
+ * mrb_funcall_id has and it decides which registers hold varargs.
+ *
+ * If this faults, the reproducer is ten lines and mruby is out of the picture.
+ * If it returns, the shape alone is not enough and mruby's frame is. */
+#if MRUBY_PROBE_STAGE >= 9
+struct probe_val { union { long i; double f; void *p; } u; int tt; };
+
+static long va_sum(struct probe_val self, int mid, int argc, ...) {
+  struct probe_val argv[16];
+  va_list ap;
+  long sum = self.u.i + mid;
+  va_start(ap, argc);
+  for (int i = 0; i < argc; i++)
+    argv[i] = va_arg(ap, struct probe_val);
+  va_end(ap);
+  for (int i = 0; i < argc; i++)
+    sum += argv[i].u.i;
+  return sum;
+}
+#endif
+
+int capstone_main(void);   /* defined below; the base print needs its address */
+
 static int run_stage(void) {
   char b[80];
   int n;
+
+  /* THE LOAD ADDRESS, for every staged arm and not just the full run.
+   * Without it a fault pc can only be mapped by ASSUMING which instruction
+   * faulted and deriving the base from that -- which is circular, and I did it
+   * once before catching it. With it the mapping is arithmetic. */
+  n = snprintf(b, sizeof b, "MRUBY BASE: capstone_main=%lx\n",
+               (unsigned long)(uintptr_t)(void *)&capstone_main);
+  if (n > 0)
+    __capstone_hc_write(1, b, (unsigned long)n);
+
+#if MRUBY_PROBE_STAGE >= 9
+  {
+    struct probe_val s = {{7}, 3};
+    struct probe_val a = {{11}, 3};
+    SAY("MRUBY STAGE 9: variadic struct, argc=0\n");
+    long r0 = va_sum(s, 5, 0);
+    char b9[80];
+    int n9 = snprintf(b9, sizeof b9, "MRUBY STAGE 9: argc=0 gave %ld (want 12)\n", r0);
+    if (n9 > 0)
+      __capstone_hc_write(1, b9, (unsigned long)n9);
+
+    SAY("MRUBY STAGE 9: variadic struct, argc=1\n");
+    long r1 = va_sum(s, 5, 1, a);
+    n9 = snprintf(b9, sizeof b9, "MRUBY STAGE 9: argc=1 gave %ld (want 23)\n", r1);
+    if (n9 > 0)
+      __capstone_hc_write(1, b9, (unsigned long)n9);
+    SAY("__CAPSTONE_MRUBY_STAGE_PASSED__\n");
+    return 0;
+  }
+#endif
 
   mrb_state *mrb = (mrb_state *)probe_allocf(0, 0, sizeof(mrb_state), 0);
   if (!mrb) {
@@ -326,6 +409,37 @@ static int run_stage(void) {
       mrb->exc = 0;
     }
     SAY("MRUBY STAGE 7: every rung returned\n");
+#if MRUBY_PROBE_STAGE >= 8
+    /* STAGE 8: mrb_funcall_id DIRECTLY, without mrblib.
+     *
+     * The full run still faults after the C-25 fix, now in mrb_funcall_id+0x160
+     * with cause 24 -- an untagged operand where a capability was required, at
+     * `cincoffsetimm a0, s0, -0x258`, i.e. addressing its own `mrb_value
+     * argv[MRB_FUNCALL_ARGC_MAX]`. That function is VARIADIC and reads
+     * va_arg(ap, mrb_value), a 32-byte struct by value under MRB_NO_BOXING --
+     * a case the earlier va_arg check (int, long, void*, double) never covered.
+     *
+     * Calling it here with argc 0 and then 1 separates "the function is broken
+     * at all" from "the vararg loop is what breaks it", and does so without
+     * mrblib in the picture. A five-line reproducer beats a 226 KB one. */
+    SAY("MRUBY STAGE 8: mrb_funcall_id with argc=0\n");
+    {
+      mrb_value r0 = mrb_funcall_id(mrb, mrb_top_self(mrb),
+                                    mrb_intern_lit(mrb, "class"), 0);
+      (void)r0;
+      SAY("MRUBY STAGE 8: argc=0 returned\n");
+      mrb->exc = 0;
+    }
+    SAY("MRUBY STAGE 8: mrb_funcall_id with argc=1\n");
+    {
+      mrb_value r1 = mrb_funcall_id(mrb, mrb_top_self(mrb),
+                                    mrb_intern_lit(mrb, "=="), 1,
+                                    mrb_fixnum_value(1));
+      (void)r1;
+      SAY("MRUBY STAGE 8: argc=1 returned\n");
+      mrb->exc = 0;
+    }
+#endif
     goto done;
   }
 #endif
@@ -417,6 +531,7 @@ int capstone_main(void) {
   }
   SAY("MRUBY S2: mrb_open ok\n");
   say_mem("after-open");
+  say_arena("after-open");
 
   mrb_value v = mrb_load_irep(mrb, probe_irep);
   if (mrb->exc) {
@@ -463,6 +578,7 @@ int capstone_main(void) {
   mrb_close(mrb);
   SAY("MRUBY S5: state closed\n");
   say_mem("at-exit");
+  say_arena("at-exit");
 
   SAY("__CAPSTONE_MRUBY_PROBE_PASSED__\n");
   return 0;
