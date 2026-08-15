@@ -318,8 +318,22 @@ if [[ -n ${MRUBY_PROBE_GEMS:-} ]]; then
     echo '#include <mruby.h>'
   } > "$GEM_INIT"
   for gem in $MRUBY_PROBE_GEMS; do
+    # A gem can live outside the mruby tree. The corpus pins its own vulnerable
+    # copy of mruby-io next to the row (build_config.rb: `conf.gem
+    # File.expand_path('../mruby-io', __FILE__)`), which is the whole point --
+    # the row is about THAT version. MRUBY_PROBE_GEM_PATHS is a colon-separated
+    # list of extra directories to look in, searched after the mruby tree.
     GEM_DIR="$MRUBY_SRC/mrbgems/mruby-$gem"
-    [[ -d "$GEM_DIR/src" ]] || { echo "no such gem: mruby-$gem" >&2; exit 2; }
+    if [[ ! -d "$GEM_DIR/src" ]]; then
+      found=""
+      IFS=':' read -ra _gp <<< "${MRUBY_PROBE_GEM_PATHS:-}"
+      for cand in "${_gp[@]}"; do
+        [[ -n $cand && -d "$cand/mruby-$gem/src" ]] && { found="$cand/mruby-$gem"; break; }
+      done
+      [[ -n $found ]] || { echo "no such gem: mruby-$gem (looked in $MRUBY_SRC/mrbgems and ${MRUBY_PROBE_GEM_PATHS:-nothing})" >&2; exit 2; }
+      GEM_DIR="$found"
+      echo "gem mruby-$gem from $GEM_DIR"
+    fi
     sym="mrb_mruby_${gem//-/_}_gem_init"
     # A gem with a RUBY half needs that half compiled to bytecode and loaded
     # before its C init runs. rake already did exactly that: build/host/mrbgems/
@@ -339,7 +353,17 @@ if [[ -n ${MRUBY_PROBE_GEMS:-} ]]; then
     fi
     for gsrc in "$GEM_DIR"/src/*.c; do
       gbase=$(basename "$gsrc" .c)
-      "$CLANG" "${MRUBY_FLAGS[@]}" -I"$MRUBY_SRC/mrbgems/mruby-compiler/core" \
+      # A gem's own include/ comes first: mruby-io ships mruby/ext/io.h there,
+      # and nothing in the mruby tree provides it.
+      # -include sys/select.h, sys/time.h: mruby-io uses fd_set, FD_ZERO and
+      # struct timeval without including either, which compiles against glibc
+      # because <unistd.h> leaks them there and does not against musl, where they
+      # live only in their own headers. A portability gap in the gem, not a
+      # capability one -- and cheaper to shim here than to patch the corpus's
+      # pinned copy, which has to stay byte-identical.
+      "$CLANG" "${MRUBY_FLAGS[@]}" -I"$GEM_DIR/include" \
+               -include sys/select.h -include sys/time.h \
+               -I"$MRUBY_SRC/mrbgems/mruby-compiler/core" \
                -c "$gsrc" -o "$OBJ_DIR/gem_${gem//-/_}_$gbase.o"
       OBJS+=("$OBJ_DIR/gem_${gem//-/_}_$gbase.o")
     done
