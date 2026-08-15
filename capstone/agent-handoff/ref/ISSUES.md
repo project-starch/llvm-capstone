@@ -8,7 +8,59 @@ Convention: **R-n** = RTL/hardware, **C-n** = our compiler/toolchain, **I-n** = 
 software). An S-n is promoted to R-n/C-n only when the origin is demonstrated, never on suspicion.
 Status: `OPEN` · `CHARACTERISED` (mechanism known, unfixed) · `WORKED AROUND` · `FIXED` · `CLOSED`.
 
-Last updated 2026-08-14.
+Last updated 2026-08-15.
+
+---
+
+## C-24 — `__builtin_ctz` crashes the backend, because CTTZ expands to a TABLE · `CHARACTERISED 2026-08-15, not fixed`
+
+**One line reproduces it**, at `-O0`, `-target capstone64-unknown-elf -mattr=+m`:
+
+```c
+unsigned f(unsigned x) { return __builtin_ctz(x); }
+```
+
+```
+Assertion `(Res.getValueType() == Node->getValueType(0) || ...) &&
+           "Type mismatch for custom legalized operation"' failed.
+```
+
+**Which builtins, measured:**
+
+| builtin | 32-bit | 64-bit |
+|---|---|---|
+| `__builtin_ctz` / `ctzl` | **FAILS** | **FAILS** |
+| `__builtin_ffs` | **FAILS** | — |
+| `__builtin_clz` / `clzl` | OK | OK |
+| `__builtin_popcount` / `popcountl` | OK | OK |
+
+**Mechanism, from the legalizer's own trace** (`llc -debug-only=legalizedag`), which names
+the node it dies on:
+
+```
+Legalizing: t28: i64 = ConstantPool<[32 x i8] c"\00\01\1C\02\1D\0E\18\03..."> 0
+Trying custom legalization
+<assert>
+```
+
+Without Zbb, `CTTZ` is expanded by generic code into a **de Bruijn multiply indexing a 32-byte
+table**, and that table is a `ConstantPool` node of type **i64**. `lowerConstantPool`
+(`CapstoneISelLowering.cpp:10119`) returns `LGA:i128` **unconditionally** — a capability — so a
+custom lowering hands back a different type than the node it was asked to lower, and generic
+`LegalizeOp` asserts. `CTLZ` and `CTPOP` survive because their expansions are pure arithmetic with
+no table. The i128 path is fine and is not in question; it is the i64-typed pool that has no
+correct answer today.
+
+**Why it never showed up before:** nothing we compile had used `__builtin_ctz`. It was found by
+compiling mruby, whose hash table calls it (`src/hash.c`, `ib_capa_to_bit`).
+
+**Workaround in the meantime**, no source change: compile that one file with `-U__GNUC__`, which
+selects mruby's own de Bruijn fallback, written for compilers without the builtin. Verified.
+
+**A fix is NOT attempted here and the shape is not obvious.** Returning `LLA:<node type>` for the
+non-i128 case is type-correct, but it produces an integer address whose load must then add `gp`,
+and whether ISel has a pattern for that is unverified. Note the current i64 branch **always
+crashes**, so no working code can regress — whatever is done here is strictly an improvement.
 
 ---
 
