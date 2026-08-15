@@ -64,6 +64,7 @@ if ! CAPSTONE_QEMU_LOGIN_TIMEOUT=${CAPSTONE_QEMU_LOGIN_TIMEOUT:-300} \
   --success-marker '__CAPSTONE_QEMU_BOOT_CONTROL_OK__' \
   --success-marker 'PRINTF S2: snprintf cases checked' \
   --success-marker 'PRINTF S3: allocator checked' \
+  --success-marker 'PRINTF S4: capability survived memcpy and realloc' \
   --success-marker 'PRINTF STDOUT: 42 ok 1.50 <end>' \
   --success-marker '__CAPSTONE_PRINTF_PROBE_PASSED__' \
   --success-marker '__CAPSTONE_HOSTCALL_HOST_DONE__ status=0'
