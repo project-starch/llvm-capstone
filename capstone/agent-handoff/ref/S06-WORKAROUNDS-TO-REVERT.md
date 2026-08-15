@@ -95,6 +95,18 @@ shown to fire is not evidence.
 > condition this document set. **The decisive criterion ("`s06agg` returns 15 with no software
 > workaround") is met.** §1 may now be reverted; §2 must still NOT be.
 >
+> **SQLite gates PASSED too, same bitstream, control-validated boot (`L2` returned):**
+>
+> | arm | measured, BOTH workarounds OFF |
+> |---|---|
+> | `N6` (after the row loop) ×2 | `obs=0x5A6E0603` — rc=3, three rows |
+> | `N7` (after finalize) ×2 | `obs=0x5A6E0700` — **rc=0** |
+>
+> 12 result rows across 4 executions, zero wedges, no `MCAU`/`EXCX` of any kind. The guard's
+> absence was verified by size, not by trusting a flag: `.text` 0x13dd44 against 0x147658 with the
+> guard on, a ~39 KB delta matching the ~33.6 KB recorded below. **§3 is fully satisfied; the §1
+> deletions are authorised.**
+>
 > Note the bitstream also carries the S-08 fix (dom-switch stores honouring the switcher's per-row
 > `metadata_en`). The first `caplifive_s06fullfix.bit` could not run domains at all, so this is the
 > first bitstream on which the gate was ever readable.
