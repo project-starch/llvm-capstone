@@ -165,13 +165,32 @@ extern unsigned long xlang_mem_carved(void);
 extern unsigned long xlang_mem_live_bytes(void);
 extern unsigned xlang_mem_live_count(void);
 extern unsigned xlang_mem_peak_slots(void);
+/* What the allocator actually FREED. mruby frees GC pages, not objects, so a
+   use-after-free inside a page never reaches revocation -- see row 14. */
+extern unsigned long xlang_mem_free_calls(void);
+extern unsigned long xlang_mem_free_big(void);
+extern unsigned long xlang_mem_free_bytes(void);
 
 static void say_arena(const char *stage) {
-  char b[144];
+  char b[224];
   int n = snprintf(b, sizeof b,
-                   "MRUBY ARENA %s: carved=%lu live_bytes=%lu live=%u peak_slots=%u\n",
+                   /* TWO PRINTS, FEW ARGUMENTS EACH. One call with eight
+                      conversions produced a seventh value that could not be
+                      true (824 frees of which "404288" were large) and an
+                      eighth that was 0xFFFFFFFF. Whether the limit is the
+                      argument COUNT or the va_arg handling this target already
+                      has form for (C-26), the fix is the same and costs
+                      nothing: keep each formatted line short. */
+                   "MRUBY ARENA %s: carved=%lu live_bytes=%lu live=%lu peak_slots=%lu\n",
                    stage, xlang_mem_carved(), xlang_mem_live_bytes(),
-                   xlang_mem_live_count(), xlang_mem_peak_slots());
+                   (unsigned long)xlang_mem_live_count(),
+                   (unsigned long)xlang_mem_peak_slots());
+  if (n > 0)
+    __capstone_hc_write(1, b, (unsigned long)n);
+  n = snprintf(b, sizeof b,
+                   "MRUBY FREES %s: calls=%lu big=%lu bytes=%lu\n",
+                   stage, xlang_mem_free_calls(), xlang_mem_free_big(),
+                   xlang_mem_free_bytes());
   if (n > 0)
     __capstone_hc_write(1, b, (unsigned long)n);
 }
@@ -554,7 +573,17 @@ static int run_row(mrb_state *mrb) {
   SAY("ROW ARM: rof, revoke-on-free (the shipped configuration)\n");
 #endif
 
+  /* ALLOCATION COUNT ACROSS THE TRIGGER, and it is the only progress readout
+     that works for EVERY row. `$arr.size` below is specific to the six rows
+     built on the recurse(150) template; row 14 builds a local hash, whose name
+     is out of scope the moment mrb_load_string returns, so it reports -1 there
+     and that -1 means nothing. A trigger that ran does thousands of
+     allocations; one that raised on its first line does almost none. Print
+     both sides so the difference is visible without another boot. */
+  say_mem("before-row");
+  say_arena("before-row");
   mrb_load_string(mrb, row_trigger);
+  say_mem("after-row");
   if (mrb->exc) {
     /* NAME the exception. "raised a Ruby exception" is where two arms report
        identically and neither means anything -- it is the shape of a trigger
@@ -586,8 +615,15 @@ static int run_row(mrb_state *mrb) {
     SAY("ROW: could not read $arr.size back\n");
     mrb->exc = 0;
   } else if (mrb_fixnum_p(depth)) {
-    n = snprintf(b, sizeof b, "ROW: $arr.size = %ld (302 = all 151 levels ran)\n",
-                 (long)mrb_fixnum(depth));
+    long d = (long)mrb_fixnum(depth);
+    /* -1 is NOT a failure: it means the trigger has no $arr, which is true of
+       every row outside the recurse(150) family. Saying so keeps the number
+       from being read as "the recursion did not run". */
+    n = d < 0
+            ? snprintf(b, sizeof b,
+                       "ROW: no $arr in this trigger; see MRUBY MEM before/after-row\n")
+            : snprintf(b, sizeof b,
+                       "ROW: $arr.size = %ld (302 = all 151 levels ran)\n", d);
     if (n > 0)
       __capstone_hc_write(1, b, (unsigned long)n);
   }
