@@ -75,6 +75,15 @@ MRUBY_FLAGS=(
   -D_XOPEN_SOURCE=700
   -DMRB_NO_BOXING -DMRB_NO_DIRECT_THREADING -DMRB_NO_STDIO
   -DPOOL_ALIGNMENT=16 -DMRB_USE_METHOD_T_STRUCT
+  # BOTH SPELLINGS of the same switch. mruby renamed it: trees before 3.x call it
+  # MRB_METHOD_T_STRUCT, and there the DEFAULT stores the method as a tagged
+  # POINTER -- `(mrb_method_t)((((uintptr_t)(fn))<<2)|MRB_METHOD_FUNC_FL)`, an
+  # integer cast back to a pointer type, i.e. a forged capability. It faults in
+  # mrb_define_method_raw sixteen allocations into mrb_open. Passing only the
+  # newer name looked like "this tree has no such option" and cost a boot; the
+  # struct variant was in the tree all along, behind the other name. Defining a
+  # macro a tree does not have is harmless, so both go unconditionally.
+  -DMRB_METHOD_T_STRUCT
   # mrb_alignas RAISED TO AT LEAST 16, not overridden to it.
   #
   # mruby 3.4 annotates its static RProc objects `mrb_alignas(8)` so the low
