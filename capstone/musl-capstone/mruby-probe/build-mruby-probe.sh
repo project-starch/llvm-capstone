@@ -105,6 +105,9 @@ MRUBY_FLAGS=(
   # on separates "the arena is too small for this workload" from "the workload
   # stops for some other reason".
   ${MRUBY_PROBE_STACK_DOUBLING:+-DMRB_STACK_EXTEND_DOUBLING}
+  # PROBE_EXTRA_DEFINES carries the defines a row's OWN build_config.rb sets --
+  # the corpus's reference configuration, not ours. Space-separated names, no -D.
+  ${PROBE_EXTRA_DEFINES:+$(for d in $PROBE_EXTRA_DEFINES; do printf -- "-D%s " "$d"; done)}
   # musl's <math.h> classify macros end in a long-double arm that -O0 does not
   # fold away, so numeric.c and fmt_fp.c pull __signbitl, __fpclassifyl and
   # __extenddftf2, none of which exist (C-20). A -D on this command line does

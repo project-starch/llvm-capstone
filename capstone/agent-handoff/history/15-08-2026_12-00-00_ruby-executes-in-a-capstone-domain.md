@@ -355,6 +355,44 @@ Rows 8 and 13 also carry the allocation readout added the same day, which shows 
 real work rather than merely not raising: `requested` grows from 376 KB to 1.80 MB (row 8) and to
 2.07 MB (row 13) across the trigger, over roughly 700 allocations.
 
+### Three more rows ran, and two of them fault SOMEWHERE ELSE
+
+| row | outcome | where |
+|---|---|---|
+| 9 | revoke arm faults | `__capstone_cap_copy_fwd + 0x3c0` -- our own memcpy, not `mrb_gc_mark` |
+| 15 | revoke arm faults | `envadjust + 0x208` -- mruby's stack-adjust bookkeeping, not `mrb_str_format` |
+| 14 | NEITHER rof arm faults | both complete identically, 3227 allocations |
+
+**These are not counted as measured rows.** A fault proves revocation stopped something; it does
+not prove it stopped the defect the row is about, and in both cases the site is demonstrably not
+the one `target.md` names.
+
+**Row 15's site is a finding in its own right.** `envadjust` runs after every VM-stack
+reallocation and tests `oldbase <= st && st < oldbase+size`, where `oldbase` is the block
+`mrb_realloc` has just freed -- and freed means REVOKED. `oldbase+size` is a `cincoffset` on a
+revoked capability, which the specification makes an Unexpected-operand-type exception. So
+**revoke-on-free faults on pointer ARITHMETIC over freed memory, not only on dereferences**. That
+is strictly stronger than ASan, which reports only accesses, and it means revocation can preempt
+a row's own defect with an earlier, benign use. It is short-circuited behind `e &&
+MRB_ENV_STACK_SHARED_P(e)`, which is why it does not fire in every row.
+
+**Row 14 is unresolved, with the trigger PROVEN to arm elsewhere.** The corpus's own x86 ASan
+build reproduces it on demand:
+
+```
+ERROR: AddressSanitizer: heap-use-after-free ... READ of size 4
+    #0 mark_context_stack  src/gc.c:556
+    #1 mark_context        src/gc.c:573
+    #2 root_scan_phase     src/gc.c:874
+```
+
+and the corpus's `build_config.rb` for this row defines **`MRB_GC_STRESS`**, a full collection on
+every allocation, which is what makes it deterministic. That define was missing from our build --
+found by reading the row's build_config rather than assuming our four macros were the whole
+configuration -- and adding it changes the run (3192 to 3227 allocations, and `gc.o` grows by 296
+bytes) but still produces no fault in either rof arm. So the trigger arms on x86 and not here,
+and the reason is not yet known.
+
 ### The older table, kept because the localisation method is the point
 
 | row | CVE / issue | fault site | corpus's documented site | control | revoke |

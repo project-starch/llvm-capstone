@@ -67,6 +67,20 @@ rm -rf "$SHARE"; mkdir -p "$SHARE"; rm -f "$LOG"
 # reports identically and none of them means anything. Row 14 spent a boot on
 # exactly that ("undefined method '%' for \"%d\"", from mruby-sprintf).
 # Overridable with GEMS=..., empty for rows that need none.
+# Extra defines a row's own build_config.rb sets, which are part of the corpus's
+# REFERENCE configuration and not our choice. Row 14 is the only one: its ASan
+# build defines MRB_GC_STRESS, which runs a full collection on every allocation
+# and is what makes its GC use-after-free deterministic ("aborts on 10/10 runs,
+# no fuzzing or heap grooming needed"). Without it the trigger completes in both
+# rof arms and says nothing -- which is exactly what it did here until the
+# corpus's build_config was read rather than assumed.
+row_defines() {
+  case $1 in
+    14) echo "MRB_GC_STRESS" ;;
+    *)  echo "" ;;
+  esac
+}
+
 row_gems() {
   case $1 in
     14|15) echo "sprintf" ;;
@@ -106,8 +120,10 @@ for ROW in $ROWS; do
     # old .dom was still in the share directory, reporting as if it were new.
     rm -f "$SHARE/$tag.dom"
     gems=${GEMS-$(row_gems "$ROW")}
+    defs=${DEFINES-$(row_defines "$ROW")}
     if ! env $extra MRUBY_SRC="$row_src" MRUBY_WITH_PARSER=1 MRUBY_PROBE_ROW="$ROW" \
            ${gems:+MRUBY_PROBE_GEMS="$gems"} \
+           ${defs:+PROBE_EXTRA_DEFINES="$defs"} \
            ${STACK_DOUBLING:+MRUBY_PROBE_STACK_DOUBLING=$STACK_DOUBLING} \
            OUT_DIR="$CAPSTONE_TMP_ROOT/$tag" \
            OUT_DOM="$SHARE/$tag.dom" OUT_HOST="$SHARE/$tag.user" \
