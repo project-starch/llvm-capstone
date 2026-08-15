@@ -75,6 +75,18 @@ MRUBY_FLAGS=(
   -D_XOPEN_SOURCE=700
   -DMRB_NO_BOXING -DMRB_NO_DIRECT_THREADING -DMRB_NO_STDIO
   -DPOOL_ALIGNMENT=16 -DMRB_USE_METHOD_T_STRUCT
+  # mrb_alignas RAISED TO AT LEAST 16, not overridden to it.
+  #
+  # mruby 3.4 annotates its static RProc objects `mrb_alignas(8)` so the low
+  # three bits of the pointer stay free. A struct holding capabilities already
+  # needs 16, and asking for LESS than the natural alignment is an error:
+  #   "requested alignment is less than minimum alignment of 16 for type
+  #    'const struct RProc'"
+  # The intent is a floor, so a floor is what this expresses; a tree that ever
+  # asks for 32 keeps its 32. common.h defines the macro under `#ifndef`, so a
+  # command-line definition simply wins and no header shadow is needed. Only the
+  # two newest pinned trees use it, always with 8 (checked, not assumed).
+  "-Dmrb_alignas(n)=__attribute__((aligned(((n)<16)?16:(n))))"
   # MRUBY_PROBE_STACK_DOUBLING=1 adds -DMRB_STACK_EXTEND_DOUBLING, an upstream
   # mruby option. It is DIAGNOSTIC and must not be on for a published number:
   # mruby's default is LINEAR stack growth, chosen because it "saves memory on
@@ -101,13 +113,14 @@ MRUBY_FLAGS=(
 
 rm -rf "$OBJ_DIR"; mkdir -p "$OBJ_DIR"
 
-# MRB_STR_EMBED_LEN_BIT 5 -> 6, SHADOWED rather than edited in place.
+# The EMBEDDED-STRING length field, widened in a SHADOW of the headers.
 #
-# mruby stores a short string inside its object header and keeps the length in a
-# bitfield. `RSTRING_EMBED_LEN_MAX` is derived from sizeof(void*), so at 16-byte
-# capabilities it is 59 and no longer fits five bits -- src/string.c has a static
-# assert for exactly this and the build stops with "pointer size too big for
-# embedded string". Six bits fit.
+# mruby keeps a short string inside the object header with its length in a
+# bitfield of `flags`. The capacity derives from sizeof(void*) and so grows with
+# the pointer while the field does not; at 16-byte capabilities it no longer
+# fits and src/string.c stops the build with "pointer size too big for embedded
+# string". patch-embed-len.py has the derivation, both layout schemes, and the
+# reason for widening rather than capping the capacity.
 #
 # It is the SECOND source change the port needs, alongside the parse.y line, and
 # it is easy to miss because `mruby-purecap` already carries it: that tree
@@ -118,27 +131,21 @@ rm -rf "$OBJ_DIR"; mkdir -p "$OBJ_DIR"
 # the corpus's pinned artefact and must stay byte-identical -- same reason
 # patch-parser.py writes into the build directory. -D cannot do this job: the
 # header defines the macro unconditionally and would simply override it.
+#
+# The WHOLE header directory is copied, not just string.h: mruby's headers
+# include each other by bare name (`#include "common.h"`), which resolves
+# relative to the INCLUDING file, so a lone shadowed header sits in a directory
+# with no siblings and fails to find them.
 mkdir -p "$OBJ_DIR/hdr"
-STRING_H="$MRUBY_SRC/include/mruby/string.h"
-if [[ -f $STRING_H ]] && grep -q "define MRB_STR_EMBED_LEN_BIT" "$STRING_H"; then
-  cur=$(awk '/define MRB_STR_EMBED_LEN_BIT/{print $3; exit}' "$STRING_H")
-  case "$cur" in
-    # The WHOLE header directory is copied, not just string.h: mruby's headers
-    # include each other by bare name (`#include "common.h"`), which resolves
-    # relative to the INCLUDING file, so a lone shadowed string.h sits in a
-    # directory with no siblings and fails to find them.
-    5) cp -r "$MRUBY_SRC/include/mruby" "$OBJ_DIR/hdr/mruby"
-       sed -i 's/^\(#define MRB_STR_EMBED_LEN_BIT\) 5$/\1 6/' "$OBJ_DIR/hdr/mruby/string.h"
-       grep -q "define MRB_STR_EMBED_LEN_BIT 6" "$OBJ_DIR/hdr/mruby/string.h" || {
-         echo "string.h shadow produced no change; the #define moved" >&2; exit 2; }
-       echo "shadowed string.h: MRB_STR_EMBED_LEN_BIT 5 -> 6" ;;
-    6) ;;  # already widened, e.g. the mruby-purecap tree
-    *) echo "MRB_STR_EMBED_LEN_BIT is '$cur', neither 5 nor 6 -- the embedded" >&2
-       echo "string layout has changed and this needs re-deriving" >&2; exit 2 ;;
-  esac
+STRING_C_GEN=""
+if [[ -f "$MRUBY_SRC/include/mruby/string.h" ]]; then
+  cp -r "$MRUBY_SRC/include/mruby" "$OBJ_DIR/hdr/mruby"
+  embed_out=$(python3 "$SCRIPT_DIR/patch-embed-len.py" \
+                      "$MRUBY_SRC" "$OBJ_DIR/hdr/mruby/string.h" "$OBJ_DIR/gen") || exit 2
+  # Older trees also write the width out as a literal in a static assert, so
+  # they need src/string.c shadowed as well; the script says so on stdout.
+  [[ $embed_out == SHADOW_SRC=* ]] && STRING_C_GEN=${embed_out#SHADOW_SRC=}
 fi
-# Trees older than the bitfield scheme have no such macro and need no shadow;
-# if they turn out to have their own limit it will fail loudly at its own assert.
 
 OBJS=()
 
@@ -209,10 +216,62 @@ fi
 # the backend (ISSUES.md C-24). Undefining __GNUC__ selects mruby's own de
 # Bruijn fallback, written for compilers without the builtin. Per file, because
 # y.tab.c needs __GNUC__ for alloca -- not that this build compiles y.tab.c.
+# src/fmt_fp.c NARROWED to double where the tree still uses long double.
+#
+# `long double` is binary128 on this target and so is a capability, so it does
+# not merely fail to link (C-20) -- it CRASHES the compiler, with an APInt
+# assertion and therefore no source location:
+#
+#   clang: llvm/include/llvm/ADT/APInt.h:1565: getSExtValue():
+#          Assertion `getSignificantBits() <= 64' failed.
+#
+# Seven of the nine pinned corpus trees are affected and all seven only in this
+# one file; upstream mruby dropped long double from it by 2022.
+#
+# NARROWING IS SOUND HERE, and specifically: the only caller is `fmt_core`, which
+# passes `mrb_float` -- a double. The value is widened to long double for the
+# call and immediately narrowed back inside, so removing the parameter's width
+# removes a round trip rather than precision. The algorithm itself is musl's,
+# expanding the mantissa into uint32 limbs and doing base-1e9 long division, and
+# LDBL_MANT_DIG only sizes that limb array.
+#
+# Reusing libc-ext/gen-vfprintf-double.py rather than a second transform: it is
+# the same substitution on the same algorithm, and it FAILS LOUDLY if any
+# 128-bit reference survives.
+FMT_FP_SRC="$MRUBY_SRC/src/fmt_fp.c"
+FMT_FP_GEN=""
+if [[ -f $FMT_FP_SRC ]] && grep -q "long double" "$FMT_FP_SRC"; then
+  FMT_FP_GEN="$OBJ_DIR/gen/fmt_fp.c"
+  python3 "$SCRIPT_DIR/../libc-ext/gen-vfprintf-double.py" \
+          "$MUSL_SRC_DIR" "$FMT_FP_GEN" --source "$FMT_FP_SRC"
+fi
+
 for src in "$MRUBY_SRC"/src/*.c "$MRUBY_SRC/build/host/mrblib/mrblib.c"; do
   base=$(basename "$src" .c)
   extra=()
   [[ $base == hash ]] && extra=(-U__GNUC__)
+  # vm.c: DIRECT THREADING OFF on trees that have no macro for it.
+  #
+  # `MRB_NO_DIRECT_THREADING` only exists from mruby 3.x. Older trees turn
+  # computed-goto dispatch on unconditionally the moment a GNU-ish compiler
+  # builds them:
+  #     #if defined __GNUC__ || defined __clang__ || defined __INTEL_COMPILER
+  #     #define DIRECT_THREADED
+  #     #endif
+  # so our -DMRB_NO_DIRECT_THREADING is silently a no-op there and the VM ships
+  # a table of absolute label addresses -- ISSUES.md C-4a, the same mechanism
+  # -fno-jump-tables exists for, which does not reach `&&label` tables. The
+  # domain then jumps to a LINK-TIME address and dies with cause = 1 and
+  # pc == badaddr, before printing anything. Rows 9 and 14 both did.
+  #
+  # Undefining the compiler identity is the only lever the source offers, and it
+  # is the one this build already uses for hash.c. Applied ONLY where the macro
+  # is absent, so 3.x trees keep their supported switch.
+  if [[ $base == vm ]] && ! grep -q "MRB_NO_DIRECT_THREADING" "$MRUBY_SRC/src/vm.c"; then
+    extra=(-U__GNUC__ -U__clang__ -U__INTEL_COMPILER)
+  fi
+  [[ $base == fmt_fp && -n $FMT_FP_GEN ]] && src=$FMT_FP_GEN
+  [[ $base == string && -n $STRING_C_GEN ]] && src=$STRING_C_GEN
   "$CLANG" "${MRUBY_FLAGS[@]}" "${extra[@]}" -c "$src" -o "$OBJ_DIR/mrb_$base.o"
   OBJS+=("$OBJ_DIR/mrb_$base.o")
 done
@@ -237,10 +296,11 @@ PROBE_EXTRA=()
 # the gem the trigger raises NoMethodError before reaching its offending access
 # -- a run where both arms report identically and neither means anything.
 #
-# Gems with an mrblib half need mrbc and a generated loader; that is NOT built
-# here, so such a gem is refused loudly rather than half-linked.
+# Gems with an mrblib half get rake's generated loader (see below); a gem whose
+# tree has not been raked is refused loudly rather than half-linked.
 if [[ -n ${MRUBY_PROBE_GEMS:-} ]]; then
   GEM_INIT="$OBJ_DIR/gem_init.c"
+  GEM_SYMS=()
   {
     echo '/* GENERATED by build-mruby-probe.sh -- do not edit. */'
     echo '#include <mruby.h>'
@@ -248,11 +308,23 @@ if [[ -n ${MRUBY_PROBE_GEMS:-} ]]; then
   for gem in $MRUBY_PROBE_GEMS; do
     GEM_DIR="$MRUBY_SRC/mrbgems/mruby-$gem"
     [[ -d "$GEM_DIR/src" ]] || { echo "no such gem: mruby-$gem" >&2; exit 2; }
-    if compgen -G "$GEM_DIR/mrblib/*.rb" > /dev/null; then
-      echo "mruby-$gem has an mrblib half, which this build cannot generate" >&2
-      exit 2
-    fi
     sym="mrb_mruby_${gem//-/_}_gem_init"
+    # A gem with a RUBY half needs that half compiled to bytecode and loaded
+    # before its C init runs. rake already did exactly that: build/host/mrbgems/
+    # mruby-<gem>/gem_init.c holds the mrblib irep as a byte array plus a
+    # GENERATED_TMP_..._gem_init that loads it and then calls the C init. Using
+    # rake's file rather than regenerating it keeps one mrbc invocation and one
+    # loader in the world instead of two that can disagree.
+    if ls "$GEM_DIR"/mrblib/*.rb > /dev/null 2>&1; then
+      gen_init="$MRUBY_SRC/build/host/mrbgems/mruby-$gem/gem_init.c"
+      [[ -f $gen_init ]] || {
+        echo "mruby-$gem has an mrblib half but rake has not generated" >&2
+        echo "$gen_init -- run 'rake' in $MRUBY_SRC first" >&2; exit 2; }
+      "$CLANG" "${MRUBY_FLAGS[@]}" -c "$gen_init" \
+               -o "$OBJ_DIR/gem_${gem//-/_}_init_gen.o"
+      OBJS+=("$OBJ_DIR/gem_${gem//-/_}_init_gen.o")
+      sym="GENERATED_TMP_mrb_mruby_${gem//-/_}_gem_init"
+    fi
     for gsrc in "$GEM_DIR"/src/*.c; do
       gbase=$(basename "$gsrc" .c)
       "$CLANG" "${MRUBY_FLAGS[@]}" -I"$MRUBY_SRC/mrbgems/mruby-compiler/core" \
@@ -260,11 +332,12 @@ if [[ -n ${MRUBY_PROBE_GEMS:-} ]]; then
       OBJS+=("$OBJ_DIR/gem_${gem//-/_}_$gbase.o")
     done
     echo "void $sym(mrb_state *mrb);" >> "$GEM_INIT"
+    GEM_SYMS+=("$sym")
   done
   {
     echo 'void mrb_init_mrbgems(mrb_state *mrb) {'
-    for gem in $MRUBY_PROBE_GEMS; do
-      echo "  mrb_mruby_${gem//-/_}_gem_init(mrb);"
+    for s in "${GEM_SYMS[@]}"; do
+      echo "  $s(mrb);"
     done
     echo '}'
     echo 'void mrb_final_mrbgems(mrb_state *mrb) { (void)mrb; }'
@@ -289,13 +362,28 @@ fi
 # arms after it. See run-mruby-stages.sh.
 [[ ${MRUBY_PROBE_STAGE:-0} != 0 ]] && PROBE_EXTRA+=(-DMRUBY_PROBE_STAGE="${MRUBY_PROBE_STAGE}")
 if [[ ${MRUBY_WITH_PARSER:-0} == 1 ]]; then
-  PARSER_CORE="$MRUBY_SRC/mrbgems/mruby-compiler/core"
+  # y.tab.c is GENERATED from parse.y, and where rake leaves it moved: newer
+  # trees keep it beside the source, older ones only under build/host. Both are
+  # checked, source first, and a tree with neither fails loudly rather than
+  # silently building without a parser.
+  PARSER_SRC="$MRUBY_SRC/mrbgems/mruby-compiler/core"
+  PARSER_GEN="$MRUBY_SRC/build/host/mrbgems/mruby-compiler/core"
+  if [[ -f "$PARSER_SRC/y.tab.c" ]]; then
+    PARSER_CORE="$PARSER_SRC"
+  elif [[ -f "$PARSER_GEN/y.tab.c" ]]; then
+    PARSER_CORE="$PARSER_GEN"
+  else
+    echo "no y.tab.c in $PARSER_SRC or $PARSER_GEN; run rake in $MRUBY_SRC" >&2
+    exit 2
+  fi
   python3 "$SCRIPT_DIR/patch-parser.py" "$PARSER_CORE/y.tab.c" \
           "$OBJ_DIR/y.tab.fixed.c"
-  "$CLANG" "${MRUBY_FLAGS[@]}" -I"$PARSER_CORE" -c "$OBJ_DIR/y.tab.fixed.c" \
-           -o "$OBJ_DIR/mrb_parser.o"
-  "$CLANG" "${MRUBY_FLAGS[@]}" -I"$PARSER_CORE" -c "$PARSER_CORE/codegen.c" \
-           -o "$OBJ_DIR/mrb_codegen.o"
+  # codegen.c always lives with the SOURCE, even when y.tab.c does not, and both
+  # include headers from the source directory.
+  "$CLANG" "${MRUBY_FLAGS[@]}" -I"$PARSER_CORE" -I"$PARSER_SRC" \
+           -c "$OBJ_DIR/y.tab.fixed.c" -o "$OBJ_DIR/mrb_parser.o"
+  "$CLANG" "${MRUBY_FLAGS[@]}" -I"$PARSER_CORE" -I"$PARSER_SRC" \
+           -c "$PARSER_SRC/codegen.c" -o "$OBJ_DIR/mrb_codegen.o"
   OBJS+=("$OBJ_DIR/mrb_parser.o" "$OBJ_DIR/mrb_codegen.o")
   PROBE_EXTRA+=(-DMRUBY_PROBE_PARSER)   # += : the bump flag must survive
 fi
