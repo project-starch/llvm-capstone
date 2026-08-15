@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-# Row 10 (CVE-2022-1106) on the real interpreter: three allocator arms, ONE boot.
+# Corpus rows on the real interpreter: three allocator arms each, ONE boot.
+#
+#   ROWS="8 9 14" bash run-corpus-rows.sh
+#
+# Each row's mruby comes from its OWN pinned tree, xlang/repro/<n>/mruby, because
+# the corpus pins a different vulnerable commit per row and building row 8's
+# trigger against row 10's interpreter would measure the wrong program. The tree
+# needs one `rake` first, to produce build/host.
 #
 #   libc  libc-ext/malloc.c        no per-allocation bounds, no revocation
 #   ctl   rof + xlang_set_no_revoke  exact bounds, revocation OFF   <- THE CONTROL
@@ -32,11 +39,11 @@ set -uo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 
-ROW=${ROW:-10}
+ROWS=${ROWS:-${ROW:-10}}
 STACK_DOUBLING=${STACK_DOUBLING:-1}
 ARMS=${ARMS:-"libc ctl rev"}
-SHARE=${SHARE_DIR:-$CAPSTONE_TMP_ROOT/row$ROW-share}
-LOG=${LOG_FILE:-$CAPSTONE_TMP_ROOT/row$ROW-arms.log}
+SHARE=${SHARE_DIR:-$CAPSTONE_TMP_ROOT/rows-share}
+LOG=${LOG_FILE:-$CAPSTONE_TMP_ROOT/rows-arms.log}
 
 # The LOG goes too, not just the share dir: a leftover log from an earlier
 # session reads exactly like a result, complete with an older probe's arm
@@ -52,34 +59,48 @@ arm_env() {
   esac
 }
 
-echo "building row $ROW arms (doubling=$STACK_DOUBLING):"
-for a in $ARMS; do
-  extra=$(arm_env "$a") || exit 2
-  # The .dom is removed FIRST and the build log is NOT hidden: three runs in one
-  # session executed a STALE image because a build failed quietly and the old
-  # .dom was still in the share directory, reporting as if it were the new arm.
-  rm -f "$SHARE/$a.dom"
-  if ! env $extra MRUBY_WITH_PARSER=1 MRUBY_PROBE_ROW="$ROW" \
-         ${STACK_DOUBLING:+MRUBY_PROBE_STACK_DOUBLING=$STACK_DOUBLING} \
-         OUT_DIR="$CAPSTONE_TMP_ROOT/row$ROW-$a" \
-         OUT_DOM="$SHARE/$a.dom" OUT_HOST="$SHARE/$a.user" \
-         bash "$SCRIPT_DIR/build-mruby-probe.sh" \
-         > "$CAPSTONE_TMP_ROOT/row$ROW-build-$a.log" 2>&1; then
-    echo "BUILD FAILED for arm $a:" >&2
-    grep -E "error:|Assertion|Cannot select" \
-         "$CAPSTONE_TMP_ROOT/row$ROW-build-$a.log" | head -5 >&2
-    exit 2
-  fi
-  # Not redundant with the exit status: a build can exit 0 and produce nothing.
-  [[ -f "$SHARE/$a.dom" ]] || { echo "arm $a: exit 0 but no .dom" >&2; exit 2; }
-  printf '  %-5s %s bytes\n' "$a" "$(stat -c%s "$SHARE/$a.dom")"
+TAGS=()
+for ROW in $ROWS; do
+  # Each row against ITS OWN pinned tree. Overridable, but the default is the
+  # corpus's, because a row measured against another row's interpreter is a
+  # different program.
+  row_src=${MRUBY_SRC:-$CAPSTONE_REPO_ROOT/xlang/repro/$ROW/mruby}
+  [[ -f "$row_src/build/host/bin/mrbc" ]] || {
+    echo "row $ROW: no host build in $row_src -- run 'rake' there first" >&2
+    exit 2; }
+  echo "building row $ROW arms from $(basename "$(dirname "$row_src")")/mruby (doubling=$STACK_DOUBLING):"
+  for a in $ARMS; do
+    extra=$(arm_env "$a") || exit 2
+    tag="r${ROW}_$a"
+    # The .dom is removed FIRST and the build log is NOT hidden: three runs in
+    # one session executed a STALE image because a build failed quietly and the
+    # old .dom was still in the share directory, reporting as if it were new.
+    rm -f "$SHARE/$tag.dom"
+    if ! env $extra MRUBY_SRC="$row_src" MRUBY_WITH_PARSER=1 MRUBY_PROBE_ROW="$ROW" \
+           ${STACK_DOUBLING:+MRUBY_PROBE_STACK_DOUBLING=$STACK_DOUBLING} \
+           OUT_DIR="$CAPSTONE_TMP_ROOT/$tag" \
+           OUT_DOM="$SHARE/$tag.dom" OUT_HOST="$SHARE/$tag.user" \
+           bash "$SCRIPT_DIR/build-mruby-probe.sh" \
+           > "$CAPSTONE_TMP_ROOT/build-$tag.log" 2>&1; then
+      echo "BUILD FAILED for row $ROW arm $a:" >&2
+      grep -E "error:|Assertion|Cannot select|patch-embed-len|ERROR" \
+           "$CAPSTONE_TMP_ROOT/build-$tag.log" | head -5 >&2
+      exit 2
+    fi
+    # Not redundant with the exit status: a build can exit 0 and produce nothing.
+    [[ -f "$SHARE/$tag.dom" ]] || { echo "$tag: exit 0 but no .dom" >&2; exit 2; }
+    printf '  %-10s %s bytes\n' "$tag" "$(stat -c%s "$SHARE/$tag.dom")"
+    TAGS+=("$tag")
+  done
 done
 
 CMDS=(--guest-command 'echo __CAPSTONE_QEMU_BOOT_CONTROL_OK__')
-for a in $ARMS; do
+for tag in "${TAGS[@]}"; do
   # Copied to /tmp before running: read straight off the 9p share the loader
-  # demand-pages a 2 MB image and it never finishes.
-  CMDS+=(--guest-command "echo ===ARM_$a===; cp /mnt/host/$a.user /tmp/h_$a && chmod 0755 /tmp/h_$a; cp /mnt/host/$a.dom /tmp/d_$a && /tmp/h_$a /tmp/d_$a; echo ===END_$a===")
+  # demand-pages a 2 MB image and it never finishes. Removed again afterwards --
+  # a dozen domains at ~2 MB each would otherwise fill the guest's tmpfs, and
+  # THAT failure looks like a wedge.
+  CMDS+=(--guest-command "echo ===ARM_$tag===; cp /mnt/host/$tag.user /tmp/h && chmod 0755 /tmp/h; cp /mnt/host/$tag.dom /tmp/d && /tmp/h /tmp/d; rm -f /tmp/d /tmp/h; echo ===END_$tag===")
 done
 
 # NO --success-marker: the expected outcome is that one arm FAULTS, so any

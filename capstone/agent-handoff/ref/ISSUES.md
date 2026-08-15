@@ -133,11 +133,28 @@ reads `getPointerSizeInBits` and `getIntPtrType`, neither of which consults the 
 a DataLayout-only fix does not work; it would take that field AND `visitPtrToInt` switching to
 the index width, which is what the field is for.
 
+**SECOND INSTANCE, and this one is in third-party code, 2026-08-15.** Corpus row 6's pinned
+mruby (3.4.0-1476, `cda2567c`) does not compile at all:
+
+```
+fatal error: error in backend: Cannot select: t88: i128 = xor t92, Constant:i128<-1>
+In function: find_visibility_scope        (src/class.c)
+```
+
+A bitwise NOT on a pointer-derived value, at capability width. There is no `-O0` escape here
+the way there was for our own copy routine: the file is mruby's and the whole tree fails with
+it. **Rows 6 and 7-old-sortbang are the only two corpus rows blocked by this**, and they are
+also the only two that are not memory-safety rows (row 6 is "REPRODUCED but NOT as a
+use-after-free" -- bytecode corruption in the pattern-matching optimiser; 7-old-sortbang is
+"NOT REPRODUCED, the row as specified does not appear to exist"). The other eight Ruby rows
+build. That is why the backend fix has not been forced yet, not because it would not pay.
+
 **Two candidate fixes, neither made yet**, both shared-compiler changes needing lit and the
 QEMU suites: (a) the pair above, which is the root cause and would also let musl's own
 word-at-a-time string files compile; (b) making i128 `and`/`or`/`xor` selectable the way C-25
-did for i128 `sub`, which is a band-aid but a narrow one. The `-O0` file bought the correctness
-immediately and neither is urgent.
+did for i128 `sub`, which is a band-aid but a narrow one. Note that (b) needs care about
+GENUINE 128-bit integer arithmetic: truncating to XLen is right for a pointer-derived value and
+silently wrong for an `unsigned __int128`, which is a hazard C-25 already introduced for `sub`.
 
 ---
 

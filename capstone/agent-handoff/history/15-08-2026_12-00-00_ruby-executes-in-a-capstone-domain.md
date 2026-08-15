@@ -308,7 +308,7 @@ workload.
 ## ROW 10 IS MEASURED: control MISS, revoke-on-free BLOCKED
 
 With doubling making the workload fit, all three arms in one boot,
-`musl-capstone/mruby-probe/run-row10-arms.sh`:
+`musl-capstone/mruby-probe/run-corpus-rows.sh`:
 
 | arm | $arr.size | outcome | verdict |
 |---|---|---|---|

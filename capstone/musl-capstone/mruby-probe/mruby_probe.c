@@ -411,7 +411,7 @@ static int run_stage(void) {
         __capstone_hc_write(1, rb, (unsigned long)rn);
 
       mrb_value rv = mrb_load_irep(mrb, rungs[r].irep);
-      long got = mrb_integer_p(rv) ? (long)mrb_integer(rv) : -1;
+      long got = mrb_fixnum_p(rv) ? (long)mrb_fixnum(rv) : -1;
       rn = snprintf(rb, sizeof rb, "MRUBY RUNG %s: returned %ld (want %ld)%s\n",
                     rungs[r].name, got, rungs[r].want,
                     mrb->exc ? " EXCEPTION" : "");
@@ -471,7 +471,7 @@ static int run_stage(void) {
     proc->c = NULL;
     mrb_value v6 = mrb_top_run(mrb, proc, mrb_top_self(mrb), 0);
     SAY("MRUBY STAGE 6: mrb_top_run returned\n");
-    if (mrb_integer_p(v6) && mrb_integer(v6) == 400)
+    if (mrb_fixnum_p(v6) && mrb_fixnum(v6) == 400)
       SAY("MRUBY STAGE 6: t[19] == 400\n");
     else
       SAY("MRUBY STAGE 6: ran but did not produce 400\n");
@@ -481,7 +481,7 @@ static int run_stage(void) {
     mrb_value v5 = mrb_load_irep(mrb, probe_irep);
     if (mrb->exc) {
       SAY("MRUBY STAGE 5: exception while running our own irep\n");
-    } else if (mrb_integer_p(v5) && mrb_integer(v5) == 400) {
+    } else if (mrb_fixnum_p(v5) && mrb_fixnum(v5) == 400) {
       SAY("MRUBY STAGE 5: our irep ran, t[19] == 400\n");
     } else {
       SAY("MRUBY STAGE 5: our irep ran but did not produce 400\n");
@@ -717,12 +717,16 @@ int capstone_main(void) {
   }
   SAY("MRUBY S3: irep executed\n");
 
-  if (!mrb_integer_p(v)) {
+  /* mrb_fixnum_p / mrb_fixnum, NOT the mrb_integer_* spelling: the corpus
+     pins nine mruby versions spanning 2017-2026 and the newer names do not
+     exist before 3.0, while the older ones are kept as aliases throughout.
+     Modernising these breaks every pre-3.0 row. */
+  if (!mrb_fixnum_p(v)) {
     SAY("MRUBY FAIL: result is not an Integer\n");
     mrb_close(mrb);
     return 3;
   }
-  if (mrb_integer(v) != 400) {
+  if (mrb_fixnum(v) != 400) {
     SAY("MRUBY FAIL: t[19] is not 400\n");
     mrb_close(mrb);
     return 4;
@@ -752,7 +756,7 @@ int capstone_main(void) {
     mrb_close(mrb);
     return 5;
   }
-  if (!mrb_integer_p(w) || mrb_integer(w) != 400) {
+  if (!mrb_fixnum_p(w) || mrb_fixnum(w) != 400) {
     SAY("MRUBY FAIL: parsed source did not produce 400\n");
     mrb_close(mrb);
     return 6;
