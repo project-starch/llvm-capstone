@@ -63,6 +63,30 @@ So **A-family is established as real**; B-family remains possible as an *additio
 
 ## A-1. The capability load syncer tracks ONE outstanding request
 
+> **MEASURED AGAINST 2026-08-15, AND IT COUNTS AGAINST A-1 AS THE WHOLE STORY.** We built the rung
+> this mechanism predicts. `s07indep` issues **eight independent capability loads back to back**,
+> no address dependencies, so they genuinely can be in flight together. On silicon, in a
+> control-validated boot, with a firing positive control: **0**. If a one-deep tracker were
+> displaced by two overlapping capability loads, a tight loop of them should have hit it.
+>
+> Two further facts point the same way. The faulting SQLite triple is a **dependent** pair
+> (`ldc a4,0x0(a0)` then `ldc a4,0x20(a4)`), and a dependent load cannot issue while its predecessor
+> is outstanding — so that pair cannot displace anything by itself; whatever overlaps must come from
+> elsewhere. And our first rung (`s07chase`, a dependent pointer chase) was for the same reason
+> **structurally incapable of creating the condition at all** — its 0 says nothing about the
+> hardware, and is recorded so that particular zero is never cited as evidence.
+>
+> A-1 is **NOT refuted**: its window may need traffic a tight rung cannot create, and the bypass
+> chain below remains the cleanest route we know to a NOT_CAP register with a correct cursor. But it
+> no longer accounts for the evidence on its own, and we would rather say so than have you spend a
+> day on it believing otherwise.
+>
+> **The ingredient the rungs lack, and the thing we would look at first now:** the faulting site
+> dispatches through `id->pMethods->xRead`, and our VFS is hostcall-based, so that path **crosses
+> the domain boundary**. The rungs cross nothing. The S-08 bug fixed the same day lived in the
+> dom-switcher's context save/restore, and this fault lands on a capability loaded just after that
+> boundary is crossed.
+
 **Status: our leading structural candidate. NOT confirmed. One open question, stated honestly below.**
 
 **A framing you may hear elsewhere, which we withdraw: the transaction ID is NOT under-width.**
