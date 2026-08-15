@@ -70,7 +70,10 @@ ART = pathlib.Path(os.environ.get("LADDER_FPGA_DIR") or "/tmp/capstone/ladder-fp
 RAW_OUT = os.environ.get("BAKED_RAW_OUT") or (
     (os.environ.get("BAKED_OUT") or "/tmp/capstone/baked-rungs.txt").rsplit(".", 1)[0] + "-raw.txt")
 OUT = os.environ.get("BAKED_OUT") or "/tmp/capstone/baked-rungs.txt"
-# Resident-bitstream guard. Reflashed 2026-08-15 to caplifive_s06fullfix.bit, which carries
+# Resident-bitstream guard. Reflashed 2026-08-15 to caplifive_s06fixs08fix.bit, which carries
+# the S-06 RTL fix PLUS the S-08 fix (dom-switch stores honour the switcher's per-row
+# metadata_en, so an 8-byte scalar CSR row is no longer clobbered by a 16-byte granule
+# write -- that clobber zeroed medeleg and killed ecall delegation). Previously carried
 # the S-06 RTL fix. EVERY silicon measurement taken before that reflash is BASELINE-INVALID,
 # including the SQLite completion rate and the whole S-07 rate table. Previously:
 # caplifive_12august.bit (2026-08-12), which added the
@@ -84,7 +87,7 @@ OUT = os.environ.get("BAKED_OUT") or "/tmp/capstone/baked-rungs.txt"
 # FPGA_BITSTREAM by hand and one that forgot burned a launch on a HARD STOP. A default that
 # is always overridden trains people to override it, which is how a real mismatch gets waved
 # through.
-BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s06fullfix.bit")
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s06fixs08fix.bit")
 
 
 def log(m):

@@ -81,6 +81,24 @@ Run these **before** deleting anything, on the fixed bitstream, and require the 
 Each rung already carries a positive control; a clean result from a rung whose control has not been
 shown to fire is not evidence.
 
+> ## GATE PASSED ON SILICON — 2026-08-15, bitstream `caplifive_s06fixs08fix.bit`
+>
+> One control-validated boot (`k800` = 4):
+>
+> | rung | broken silicon | **measured now** |
+> |---|---|---|
+> | `s06agg` | 5 | **15** |
+> | `s06aggcap` | 7 | **15** |
+> | `s06aggwide` | 237 | **255** |
+>
+> These are the UNFIXED rungs — no software workaround in the build — which is exactly the
+> condition this document set. **The decisive criterion ("`s06agg` returns 15 with no software
+> workaround") is met.** §1 may now be reverted; §2 must still NOT be.
+>
+> Note the bitstream also carries the S-08 fix (dom-switch stores honouring the switcher's per-row
+> `metadata_en`). The first `caplifive_s06fullfix.bit` could not run domains at all, so this is the
+> first bitstream on which the gate was ever readable.
+
 | test | today (broken silicon) | required after the fix |
 |---|---|---|
 | `s06agg` | 5 | **15** |

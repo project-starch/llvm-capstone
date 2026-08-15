@@ -39,7 +39,10 @@ ART = pathlib.Path(os.environ.get("BASE_BARE_DIR") or
                                 "ladder-base-bare"))
 IMG = ART / "fw_payload_base_bare.bin"
 IMG_NAME = "fw_payload_base_bare.bin"
-# Resident-bitstream guard. Reflashed 2026-08-15 to caplifive_s06fullfix.bit, which carries
+# Resident-bitstream guard. Reflashed 2026-08-15 to caplifive_s06fixs08fix.bit, which carries
+# the S-06 RTL fix PLUS the S-08 fix (dom-switch stores honour the switcher's per-row
+# metadata_en, so an 8-byte scalar CSR row is no longer clobbered by a 16-byte granule
+# write -- that clobber zeroed medeleg and killed ecall delegation). Previously carried
 # the S-06 RTL fix. EVERY silicon measurement taken before that reflash is BASELINE-INVALID,
 # including the SQLite completion rate and the whole S-07 rate table. Previously:
 # caplifive_12august.bit (2026-08-12), which added the
@@ -53,7 +56,7 @@ IMG_NAME = "fw_payload_base_bare.bin"
 # FPGA_BITSTREAM by hand and one that forgot burned a launch on a HARD STOP. A default that
 # is always overridden trains people to override it, which is how a real mismatch gets waved
 # through.
-BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s06fullfix.bit")
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s06fixs08fix.bit")
 CAPTURE = "/tmp/capstone/board-run-base-bare.uart.txt"
 
 
