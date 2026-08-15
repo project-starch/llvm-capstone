@@ -13,7 +13,37 @@
 > capability traffic overall. Cache/working-set pressure is the leading remaining candidate and is
 > the next thing we will test.
 
-> ## EVERY SYNTHETIC SHAPE IS NOW EXCLUDED ON THE CURRENT BITSTREAM — the reproducer is SQLite
+> ## RETRACTED 2026-08-16: the rung exclusions below are VOID on this bitstream
+>
+> We wrote that every synthetic shape is excluded and that the reproducer is therefore SQLite. **All
+> of it is withdrawn**, on three independent grounds, each verified against the sources:
+>
+> 1. **No positive control has ever fired on this bitstream.** Every rung ran exactly once and not a
+>    single `*_SELFTEST` arm was run since the reflash. So every `65535` here is a number from an
+>    instrument never shown able to return anything else — the precise failure these rungs' own
+>    headers warn about.
+> 2. **`s07evict` did not evict.** The L1 line is **16 bytes**
+>    (`capstone_cv64a6_imafdc_sv39_config_pkg.sv:50`, `DcacheLineWidth = 128` bits), not the 64 the
+>    rung assumed, so its 64-byte stride touched one line in four — 64 of 256 sets — while the 16
+>    spill slots sit in 16 *consecutive* sets. At most 4 of 16 checks were genuine eviction tests.
+>    And the cache is **write-through with no write-allocate**
+>    (`wt_dcache_wbuffer.sv:43-44`), so an `stc` spill never allocates the line in the first place.
+> 3. **The rungs have no statistical power.** 16-48 samples bound the per-operation failure rate only
+>    at p > 6-19% (rule of three). SQLite wedges at roughly 1-in-3 per execution over ~10⁶ capability
+>    operations, i.e. a per-operation rate near 10⁻⁶. "The shape is sound" overstates by about five
+>    orders of magnitude. The honest statement is **these rungs cannot see a defect at the rate this
+>    one occurs.**
+>
+> Also corrected: the `s06spill` run recorded as an R-16 entry stall was nothing of the kind — the
+> UART says `ladder-perf: open .dom failed`; the domain was never staged, and our classifier called
+> a missing artifact an RTL entry stall.
+>
+> **And the SQLite failure is NOT deterministic on this bitstream**: the identical `L2.dom` passed at
+> 17:45, passed at 18:15, and wedged at 18:26. Any bisection at one run per stage would call a
+> failing stage clean about two times in three. The downward-bisection plan is withdrawn with the
+> rest.
+>
+> ## (WITHDRAWN) EVERY SYNTHETIC SHAPE IS NOW EXCLUDED ON THE CURRENT BITSTREAM
 >
 > Seven rung experiments on `caplifive_s06fixs08fix.bit`, all control-validated (`k800` = 4), while
 > the SQLite domain wedges reliably on the same silicon:
