@@ -87,7 +87,9 @@ So **A-family is established as real**; B-family remains possible as an *additio
 > dom-switcher's context save/restore, and this fault lands on a capability loaded just after that
 > boundary is crossed.
 
-**Status: our leading structural candidate. NOT confirmed. One open question, stated honestly below.**
+**Status: WAS our leading candidate; DOWNGRADED 2026-08-15 by the measurement in the box above.
+Still worth checking — the bypass chain is real and is the cleanest route we know to a NOT_CAP
+register — but it does not explain the evidence on its own.**
 
 **A framing you may hear elsewhere, which we withdraw: the transaction ID is NOT under-width.**
 `core/anvil_build/capstone_dyn_unit.anvil:550-551`:
