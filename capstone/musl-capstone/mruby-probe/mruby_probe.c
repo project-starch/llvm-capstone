@@ -554,7 +554,16 @@ static int run_row(mrb_state *mrb) {
   SAY("ROW ARM: rof, revoke-on-free (the shipped configuration)\n");
 #endif
 
+  /* ALLOCATION COUNT ACROSS THE TRIGGER, and it is the only progress readout
+     that works for EVERY row. `$arr.size` below is specific to the six rows
+     built on the recurse(150) template; row 14 builds a local hash, whose name
+     is out of scope the moment mrb_load_string returns, so it reports -1 there
+     and that -1 means nothing. A trigger that ran does thousands of
+     allocations; one that raised on its first line does almost none. Print
+     both sides so the difference is visible without another boot. */
+  say_mem("before-row");
   mrb_load_string(mrb, row_trigger);
+  say_mem("after-row");
   if (mrb->exc) {
     /* NAME the exception. "raised a Ruby exception" is where two arms report
        identically and neither means anything -- it is the shape of a trigger
@@ -586,8 +595,15 @@ static int run_row(mrb_state *mrb) {
     SAY("ROW: could not read $arr.size back\n");
     mrb->exc = 0;
   } else if (mrb_fixnum_p(depth)) {
-    n = snprintf(b, sizeof b, "ROW: $arr.size = %ld (302 = all 151 levels ran)\n",
-                 (long)mrb_fixnum(depth));
+    long d = (long)mrb_fixnum(depth);
+    /* -1 is NOT a failure: it means the trigger has no $arr, which is true of
+       every row outside the recurse(150) family. Saying so keeps the number
+       from being read as "the recursion did not run". */
+    n = d < 0
+            ? snprintf(b, sizeof b,
+                       "ROW: no $arr in this trigger; see MRUBY MEM before/after-row\n")
+            : snprintf(b, sizeof b,
+                       "ROW: $arr.size = %ld (302 = all 151 levels ran)\n", d);
     if (n > 0)
       __capstone_hc_write(1, b, (unsigned long)n);
   }
