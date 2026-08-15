@@ -1,5 +1,13 @@
 # S-07 — a capability read back from memory comes back UNTAGGED, sporadically
 
+> ## RTL LANE: START WITH `rtl/MESSAGE-TO-THE-RTL-LANE.md`
+>
+> That is the handover — what is solid, **what of ours you should not trust** (both our reproducer
+> rungs are void and A-1 is unmeasured, not downgraded), the three things we'd ask you to take, and
+> a proposed split of work. Your S-06 and S-08 fixes are both **confirmed on silicon**; S-07
+> survives and is easier to hit than before.
+
+
 > ## S-07 SURVIVES THE S-06 FIX — measured 2026-08-15 on `caplifive_s06fixs08fix.bit`
 >
 > The full extended SQLite workload, built with **no software workarounds at all** (no granule
