@@ -32,6 +32,20 @@
 #define HC_HOST_MAX_ROUNDS 256
 #define HC_HOST_REGION_SIZE HOSTCALL_STDOUT_PROBE_REGION_SIZE
 
+/* REV_TRANSFERRED is not in hostcall_stdout_probe.h, which stops at REV_SHARED
+   (0x2). Defined here rather than added to that shared header, exactly as
+   xlang_shim_host.c does, because only an arena grant needs it. */
+#define HC_HOST_ANNOTATION_REV_TRANSFERRED 0x3UL
+
+/* mruby carves 178,750 bytes over a full run and the revoking allocator NEVER
+   returns arena space -- it only shrinks from the top -- so the arena has to
+   hold every byte ever allocated, not the peak. 512 KiB is that with headroom.
+   It is host memory, not part of the domain image, so it does not count against
+   the ~4 MB image ceiling. */
+#ifndef HC_HOST_ARENA_SIZE
+#define HC_HOST_ARENA_SIZE (512UL * 1024)
+#endif
+
 
 static struct hostcall_file_service_handle_slot
     handles[HOSTCALL_FILE_SERVICE_PROBE_MAX_HANDLES];
@@ -160,6 +174,18 @@ int main(int argc, char **argv) {
 
   region_id_t metadata_region = create_region(HC_HOST_REGION_SIZE);
   region_id_t payload_region = create_region(HC_HOST_REGION_SIZE);
+#ifdef CAPSTONE_DOMAIN_ARENA
+  /* A THIRD region: the linear arena the domain's allocator carves from.
+   *
+   * Shared REV_TRANSFERRED, not REV_SHARED, because the domain must be able to
+   * MREV sub-capabilities of it -- that is the whole point of revoke-on-free,
+   * and a borrowed or shared grant cannot do it. Same arrangement as
+   * xlang/capstone/xlang_shim_host.c, which is where the pattern comes from.
+   *
+   * NOT memset here, and never read back: it is the domain's memory once
+   * transferred. */
+  region_id_t arena_region = create_region(HC_HOST_ARENA_SIZE);
+#endif
   struct hostcall_v0 *metadata =
       (struct hostcall_v0 *)map_region(metadata_region, HC_HOST_REGION_SIZE);
   char *payload = (char *)map_region(payload_region, HC_HOST_REGION_SIZE);
@@ -179,6 +205,13 @@ int main(int argc, char **argv) {
   shared_region_annotated(domain, payload_region,
                           HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT,
                           HOSTCALL_STDOUT_PROBE_ANNOTATION_REV_SHARED);
+#ifdef CAPSTONE_DOMAIN_ARENA
+  /* Share order IS capture order: the domain counts the entries it is given, so
+     the arena must be third and stay third. */
+  shared_region_annotated(domain, arena_region,
+                          HOSTCALL_STDOUT_PROBE_ANNOTATION_PERM_INOUT,
+                          HC_HOST_ANNOTATION_REV_TRANSFERRED);
+#endif
 
   /* PHASE MARKERS. A capability fault inside the monitor aborts QEMU outright,
      so the console shows an assertion and nothing about WHERE. libcapstone's
