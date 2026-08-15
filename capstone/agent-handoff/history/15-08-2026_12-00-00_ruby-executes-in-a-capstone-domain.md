@@ -175,3 +175,31 @@ run's. The identical addresses were not a finding; they were the proof that it w
 data. This is the second instance of the same shape in one session, the first being a stale
 `.dom` executed three times. Both are "output that looks like a result but came from an earlier
 state", and both were caught only by looking at a timestamp.
+
+## Reducing the trigger's depth does NOT unblock row 10, and that is now measured
+
+The six "template" rows all call `recurse(150)`, which a non-reclaiming allocator cannot
+afford. The obvious move was to find the smallest depth that still arms the bug, with the
+matched pair as its own validation: revoke faults + control completes at the same depth would
+mean the stale access happened and revocation stopped it.
+
+`MRUBY_PROBE_ROW_DEPTH` builds that ladder. **It did not work, and the reason is not the
+depth.** At depth 3 the CONTROL arm -- revocation DISABLED -- faults in `mrb_gc_mark + 0x50`,
+the same symbol the very first 512 KiB attempt hit. So:
+
+* arena exhaustion is not the only blocker (depth 3 exhausts nothing);
+* the depth is not the variable;
+* and the control arm is not clean, which invalidates any verdict from the revoke arm.
+
+**A hypothesis, marked as one.** `xlang_set_no_revoke()` turns off revocation only. The
+allocator still SPLITs per allocation, so every block keeps exact bounds. The control is
+therefore "exact bounds, no revocation", not "ordinary malloc, no revocation" -- and a benign
+one-element over-read that a normal allocator absorbs becomes a fault. That would explain a
+fault inside `GC.start`'s mark phase while the ordinary mruby run, including `mrb_close`'s full
+sweep, passes. It is NOT established: the faulting access has not been identified.
+
+**What that means for the corpus.** A true control for revocation needs bounds no tighter than a
+normal allocator's, which the current rof cannot provide -- its per-allocation SPLIT is what
+makes each allocation revocable in the first place. So the two configurations the corpus
+compares are not separable with this allocator on this workload, and rows 4, 5, 8, 10, 13 and 15
+stay blocked for a reason that is now specific rather than "the arena is too small".
