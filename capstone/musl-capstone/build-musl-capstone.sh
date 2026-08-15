@@ -86,10 +86,25 @@ for f in "${EXT_FLAGS[@]}"; do [[ $f == -O1 ]] && f=-O0; EXT_FLAGS_O0+=("$f"); d
 "${CAPSTONE_CLANG:?}" "${EXT_FLAGS_O0[@]}" -c "$GEN_DIR/vfprintf_double.c" \
                       -o "$OBJ_DIR/ext_vfprintf.o"
 
+# The heap size is fixed when the LIBC is built, not when a program is, because
+# the allocator carves from a static array. 256 KiB is the default and suits a
+# probe; an interpreter wants more (mruby's state plus mrblib's ireps do not fit
+# in it). Raising it costs every domain that references malloc, so it is an
+# explicit knob rather than a generous default:
+#
+#   CAPSTONE_LIBC_HEAP_BYTES=$((4*1024*1024)) bash build-musl-capstone.sh
+#
+# The per-program override this really wants is a weak heap symbol a program can
+# replace, which needs a size symbol beside it; not built until something needs
+# two different sizes in one tree.
+HEAP_FLAGS=()
+[[ -n "${CAPSTONE_LIBC_HEAP_BYTES:-}" ]] && \
+  HEAP_FLAGS=(-DCAPSTONE_LIBC_HEAP_BYTES="$CAPSTONE_LIBC_HEAP_BYTES")
+
 for src in "$SCRIPT_DIR"/libc-ext/*.c; do
   name=$(basename "$src" .c)
-  "${CAPSTONE_CLANG:?}" "${EXT_FLAGS[@]}" -S "$src" -o "$GEN_DIR/ext_$name.s"
-  "${CAPSTONE_CLANG:?}" "${EXT_FLAGS[@]}" -c "$src" -o "$OBJ_DIR/ext_$name.o"
+  "${CAPSTONE_CLANG:?}" "${EXT_FLAGS[@]}" "${HEAP_FLAGS[@]}" -S "$src" -o "$GEN_DIR/ext_$name.s"
+  "${CAPSTONE_CLANG:?}" "${EXT_FLAGS[@]}" "${HEAP_FLAGS[@]}" -c "$src" -o "$OBJ_DIR/ext_$name.o"
 done
 
 # Self-test FIRST: a scanner that cannot flag its own synthetic case would pass

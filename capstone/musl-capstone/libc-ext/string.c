@@ -44,7 +44,21 @@ void *memccpy(void *restrict dest, const void *restrict src, int c, size_t n) {
   return 0;
 }
 
-char *stpcpy(char *restrict d, const char *restrict s) {
+/* THE DOUBLE-UNDERSCORE NAMES ARE THE REAL ONES, as they are in musl: stpcpy.c
+ * defines __stpcpy and weak-aliases stpcpy to it, and musl's OWN callers use
+ * the internal name -- strcpy.c calls __stpcpy, strchr.c calls __strchrnul,
+ * strncpy.c calls __stpncpy. Defining only the public names linked fine until
+ * something pulled strcpy from the archive, and then failed with `undefined
+ * hidden symbol: __stpcpy`.
+ *
+ * EXACTLY THREE of the nine are like this, and they were checked as a set
+ * rather than one at a time -- the first fix covered stpcpy and strchrnul, and
+ * strncpy then failed the same way one build later:
+ *
+ *     grep weak_alias musl/src/string/{the nine}.c
+ *     stpcpy, stpncpy, strchrnul   <- internal names
+ *     the other six                <- plain names */
+char *__stpcpy(char *restrict d, const char *restrict s) {
   size_t i = 0;
   for (; s[i]; i++)
     d[i] = s[i];
@@ -52,7 +66,7 @@ char *stpcpy(char *restrict d, const char *restrict s) {
   return d + i; /* the NUL, not one past it */
 }
 
-char *stpncpy(char *restrict d, const char *restrict s, size_t n) {
+char *__stpncpy(char *restrict d, const char *restrict s, size_t n) {
   size_t i = 0;
   for (; i < n && s[i]; i++)
     d[i] = s[i];
@@ -62,7 +76,7 @@ char *stpncpy(char *restrict d, const char *restrict s, size_t n) {
   return end;
 }
 
-char *strchrnul(const char *s, int c) {
+char *__strchrnul(const char *s, int c) {
   char want = (char)c;
   size_t i = 0;
   for (; s[i] && s[i] != want; i++)
@@ -82,3 +96,9 @@ size_t strlcpy(char *d, const char *s, size_t n) {
   }
   return len; /* the length it WANTED, so truncation is detectable */
 }
+
+/* The public names, weak-aliased onto the internal ones exactly as musl does,
+   so a program calling stpcpy and musl calling __stpcpy get one definition. */
+extern __typeof(__stpcpy) stpcpy __attribute__((weak, alias("__stpcpy")));
+extern __typeof(__stpncpy) stpncpy __attribute__((weak, alias("__stpncpy")));
+extern __typeof(__strchrnul) strchrnul __attribute__((weak, alias("__strchrnul")));
