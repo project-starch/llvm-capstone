@@ -52,6 +52,20 @@ for orphan in src_malloc_free.o src_malloc_realloc.o src_malloc_lite_malloc.o; d
   rm -f "$OBJ_DIR/$orphan"
 done
 
+# musl's __errno_location is REPLACED, not orphaned: it compiles and would work
+# on a machine where the thread pointer survives a round trip through uintptr_t.
+# On this one it does not (see libc-ext/errno.c), so ours must be the only
+# definition -- otherwise which one a program gets depends on archive order, and
+# a program that got musl's would fault on its first failing syscall.
+for shadowed in src_errno___errno_location.o; do
+  [[ -e "$OBJ_DIR/$shadowed" ]] || {
+    echo "expected musl member $shadowed not produced; libc-ext/errno.c may now" >&2
+    echo "be shadowing nothing, or musl has moved it" >&2
+    exit 2
+  }
+  rm -f "$OBJ_DIR/$shadowed"
+done
+
 # Our own sources, built with the SURVEY's flags. --print-flags rather than a
 # second copy of the list: the archive's members and these must agree on the
 # target, the ABI and -fno-jump-tables, and two lists drift.
@@ -160,7 +174,7 @@ rm -f "$ARCHIVE"
 # absolute-addressed switch tables because -fno-jump-tables was missing.
 nm_out=$("$CAPSTONE_LLVM_BIN/llvm-nm" --print-armap "$ARCHIVE")
 status=0
-for sym in malloc free realloc calloc vfprintf memcpy strlen __lock __adddf3; do
+for sym in malloc free realloc calloc vfprintf memcpy strlen __lock __adddf3 __errno_location; do
   n=$(printf '%s\n' "$nm_out" | grep -cE "^${sym} in ")
   if [[ "$n" != 1 ]]; then
     echo "CHECK FAILED: $sym is defined by $n archive members, expected 1" >&2
