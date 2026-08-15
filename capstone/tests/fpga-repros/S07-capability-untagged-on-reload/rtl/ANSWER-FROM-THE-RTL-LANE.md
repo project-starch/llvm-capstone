@@ -1,86 +1,94 @@
-# S-07 — answer from the RTL/sim lane
+# S-07 — answer from the RTL/sim lane (v2, supersedes the first)
 
-**Written 2026-08-15. Short version: I confirmed what the bypass DOES, refuted HOW the
-reporting lane thought it was triggered, and could not make it trigger in RTL simulation.
-Taking your split: I own sim/RTL, you own board. Below is what's solid, what's refuted,
-and the one thing I need from the board to close it.**
+**Written after your 2026-08-16 reframing. Three things: I built the instrument that settles
+H1 vs H2 from the board dump you already print; I corrected a premise you were relying on
+(I cannot read the faulting register in sim — see below); and a source check predicts the
+answer is H1 before the board runs. The v1 answer is superseded, chiefly because it repeated
+the domain-boundary lead you have since withdrawn.**
 
-## Confirmed: the bypass erases the capability (your A-1 consequence chain is right)
+## 1. The instrument: MTVL now IS the H1/H2 discriminator
 
-I added the board-free assertion you asked for (#1) in `core/scoreboard.sv` (sim-only): no
-LDC may retire through LOAD_WB, and no STC through STORE_WB. It is **positive-controlled** —
-forcing the load syncer's matcher `req_set` to 0 (one line in the generated
-`capstone_dyn_unit.anvil.sv`) makes it fire on the first LDC:
+You said "you can read that register directly. I cannot." The honest correction: **neither
+can I in simulation** — S-07 does not reproduce in sim at all (§3), so there is no faulting
+register to read. So I built the next best thing, an RTL change that makes the board answer
+it through the trap dump the monitor already emits.
 
-```
-scoreboard.sv: S-07/A-1: LDC (trans_id 5) retired via LOAD_WB — capability erased
-```
+On a capability `UNEXPECTED_OPERAND` (cause 25), `mtval` now carries the **rs1 CURSOR of the
+faulting operand**, latched at ingestion (the result pack nulls `cap_rs1` on the exception
+paths — `abort_accumulation_load`/`raise_exception` carry no operand — so it must be captured
+where the op enters, not read from the result). Both units are covered: DYN (the `ldc` site)
+via a single ingestion latch that the dyn unit's serialization makes sufficient, and FLU
+(the `cincoffsetimm` site at `sqlite3_strnicmp+0x134`) combinationally.
 
-So your bypass-chain reasoning is exactly right: if a cap load's response is routed to
-`normal_res` → LOAD_WB, `wb[2].cap_data` is tied to '0, the scoreboard erases the
-capability result, and the LDC retires with a correct cursor and NOT_CAP metadata → the
-next consumer raises mcause 25. That is the S-07 symptom, mechanism-for-mechanism.
+So on the next wedge, **read `MTVL` from the dump you already print**:
 
-## Refuted: the ONE-DEEP TRACKER is not overwritten, and cannot be — do not build the 8-entry fix
+* `MTVL = 0` → the faulting operand was a NULL/integer → **H2**: a legitimate null dereference,
+  `sqlite3OsRead+0x4c` is not a silicon defect, and S-07's real fault is upstream in
+  `sqlite3_step`.
+* `MTVL = a nonzero (heap-range) cursor` → **H1**: a real capability that lost its tag → S-07.
 
-Your leading candidate (A-1: a second LDC's `init` overwrites the tracker while the first is
-outstanding) **cannot happen on this RTL**, and neither can the hit-under-miss variant. The
-dyn unit is strictly sequential: its main loop (`capstone_dyn_unit.anvil:508-528`) does
-`recv ep.req >> call LDC(msg)`, and `LDC` blocks in `recv cap_load_ri.res` until the load
-returns. While it is blocked it does not reassert `_ep_rtr`, so `capstone_dyn_ready`
-(`ex_stage.sv:874-876`) is low → `fus_busy[i].capstone_dyn` is set
-(`issue_read_operands.sv:426-427`) → `fu_busy` stalls the NEXT cap load's ENTIRE issue,
-LSU side included (`issue_read_operands.sv:531`). So a second cap load never issues while
-the first is outstanding; the one-deep tracker is never consulted with a foreign id.
+This **supersedes your ask #2** (a powered 10⁷ rung). You do not need a reproducer: SQLite
+already wedges ~1-in-3 per execution, so on the instrumented bitstream the failing workload
+*is* the probe — one boot, one `MTVL` read.
 
-Two directed tests (in the testlist, `s07-ldc-overlap-displace.S`) try to force the mismatch
-and both PASS: two independent cold LDCs (both-miss), and LDC-A cold / LDC-B pre-warmed by a
-plain load (hit-under-miss). Neither displaces. These are true negatives, not void: the
-disassembly is verified (ask #2 — they are inline `.insn`), and the eviction is sized to the
-real geometry (32 KiB / 8-way / 16 B lines, 64 KiB sweep at 16 B stride).
+Validation (in the testlist, `s07diag-ftval.S`): four matched arms feed rs1 = a plain integer
+to an `ldc` (DYN) and a `cincoffsetimm` (FLU), nonzero and zero; the trap handler asserts
+`mtval` equals the operand for the nonzero arms and 0 for the zero arms. An instrument that
+could not separate those IS the H1/H2 failure mode, so the zero arms are the load-bearing
+controls. Full sweep otherwise bit-identical (fault-path-only diagnostic state). It is on
+`fpga-testing-dev-s06fix` (commit `45bd5a3ee`); **please fold it into the next synthesis** — reflash
+is yours and ask-first, and this is cheap to carry.
 
-**So: the *consequence* (bypass → erased cap) is real; the *cause* you proposed (tracker
-overwrite / two-in-flight) is refuted. The 8-entry-vector fix would be dead code — the
-serialization already guarantees one outstanding cap load.** What remains is: what makes an
-LDC's response reach the syncer with the wrong arm *despite* the serialization?
+## 2. Source check predicts H1 before the board runs
 
-## What that leaves open (and why it needs the board)
+Your reframing is right that on `:memory:` a clean run makes zero `sqlite3OsRead` calls, and
+I can sharpen it into a prediction. In the amalgamation (`3530300`), the main-file read
+`readDbPage` opens with `assert( !MEMDB )` and `assert( isOpen(pPager->fd) )` — the main-fd
+`OsRead` is **unreachable** on an in-memory DB. The only reachable `OsRead` is the memjournal
+one, and its `pMethods` is `&MemJournalMethods`, a **static const** (`sqlite3JournalOpen`
+sets it unconditionally). A static-const vtable pointer is never NULL — so H2 (a legitimate
+NULL `pMethods`) requires a path the source asserts cannot be reached on `:memory:`.
 
-Verilator is cycle-accurate, so if the RTL logic itself produced the mismatch, my directed
-tests would have shown it. They don't. That points the remaining candidates at things sim
-does not exercise the same way as your workload:
+**Prediction: `MTVL` will be nonzero → H1.** If it comes back zero, that is the more
+interesting result — it means the operand reaching the `ldc` is not the vtable pointer the
+source implies, and the corruption is one level up. Either way the instrument answers it in
+one boot; I am stating the prediction so its result confirms or refutes rather than being
+rationalized after the fact.
 
-1. **The registered ready handshake.** `capstone_dyn_ready_q` is a REGISTERED signal
-   (`ex_stage.sv:877-884`); the backpressure that serializes cap loads is one cycle delayed.
-   If a specific issue/response alignment slips a cap load into that one-cycle window, the
-   mismatch-bypass fires. This is exactly the class that can behave differently under
-   silicon routing/timing than in a functional sim. I could not hit it with hand-built
-   sequences; your workload's real instruction stream might.
-2. **The shadow-tag DRAM refill (your A-2).** My evict-then-reload of a stored cap comes
-   back tagged (both in `s07-ldc-overlap-displace` and the existing `cap-tag-cache` Test 3),
-   so the functional refill is fine — but the tag-write-vs-eviction race is not exercised by
-   either. The `cap-tag-cache.S:97-98` quiescing NOPs hide it; a variant with them removed
-   is the next sim probe and I have not run it.
-3. **The domain-boundary crossing**, which you flagged and I agree is first: the faulting
-   site is reached through `pMethods->xRead` (a hostcall), and the S-08 bug fixed the same
-   day lived in the dom-switcher's context save/restore. A cap loaded on a path that just
-   crossed that boundary is the one my rungs cannot model.
+## 3. Correcting the premise: S-07 does not reproduce in RTL simulation
 
-## What I need from the board to close it
+This matters because your handover assumed I could read the register in sim. I cannot, and
+here is why, because it also refutes the mechanism the folder still leads with:
 
-The one thing that would let me localize on the RTL side: **on a wedge, the latched
-writeback-port / trans_id of the faulting LDC.** If you can capture (even via the existing
-latched-trap-state mux) whether the faulting LDC retired via LOAD_WB vs CAP_WB, that
-directly says whether this is the syncer mismatch (my confirmed consequence) or the
-shadow-tag refill (a different subsystem). The scoreboard detector I added is the sim-side
-of exactly that check; a board-side equivalent on the faulting instruction would join the
-two halves.
+The one-deep syncer tracker is **never consulted with a foreign id**. The dyn unit is
+strictly sequential (`capstone_dyn_unit.anvil`: `recv ep.req >> call LDC`, and `LDC` blocks
+in `recv cap_load_ri.res`); while it is blocked it deasserts `_ep_rtr`, so
+`capstone_dyn_ready` is low → `fus_busy.capstone_dyn` → the NEXT cap load's entire issue
+stalls, LSU side included. So a second cap load never issues while the first is outstanding —
+overwrite AND hit-under-miss are both architecturally impossible. Two directed tests
+(`s07-ldc-overlap-displace.S`, both-miss and hit-under-miss) confirm it; both pass. **Your
+A-1 overwrite framing and the 8-entry-vector fix are refuted — the fix would be dead code.**
 
-## Split, as you proposed
+What IS confirmed: a positive-controlled scoreboard invariant (forcing the bypass makes it
+fire; silent across the full 77-test sweep) shows that IF a cap load's response ever reaches
+the scalar bypass → LOAD_WB, the capability is erased (`wb[2].cap_data` tied '0) → NOT_CAP →
+mcause 25. That is your consequence chain, exactly. But in a cycle-accurate sim the
+serialization never lets it happen, so the trigger is not RTL-logical — it points at
+silicon-timing on the registered `capstone_dyn_ready` handshake, or (your A-2) the shadow-tag
+DRAM refill under cache pressure, neither of which a functional sim exercises like your
+workload. That is why the board, and this instrument, are the way in.
 
-I take sim + RTL: the detector stays in as a permanent invariant, and if you can point me at
-a board datum distinguishing (1) from (2) I will build the matching directed test and, if it
-reproduces, the fix — chosen against the trace, not in advance (the S-08 fix and the S-06
-AMO rider both taught that a fix picked ahead of the trace wedges the core). You take the
-board and tell me when you want a specific domain built. Nothing here weakens the S-06 or
-S-08 fixes.
+## 4. What I retract from my own v1
+
+* v1 said to look at the domain-boundary/hostcall path first. **Withdrawn** — you corrected
+  that it is `:memory:` memjournal playback with no boundary crossing, and you are right.
+* v1 implied I could read the faulting register in sim. **Withdrawn** — see §3.
+
+## 5. Split, unchanged
+
+I own sim + RTL: the instrument, the invariant, and — once `MTVL` says H1 vs H2 — the RTL
+fix, chosen against the board evidence rather than ahead of it (the S-08 fix and the S-06 AMO
+rider both taught that picking a fix before the trace wedges the core). You own the board:
+fold the instrument into the next synth, boot the failing workload once, read `MTVL`. If it is
+H1, tell me the cursor and I will localize the tag-loss path; if H2, we both stop looking at
+`sqlite3OsRead` and I help you instrument `sqlite3_step`. Nothing here touches S-06 or S-08.

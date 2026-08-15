@@ -165,16 +165,19 @@
 > contradicted. Re-running `s06spill` on the current bitstream is the obvious cheap next step and we
 > will do it.
 >
-> ## RTL-LANE ANSWER, 2026-08-15: `rtl/ANSWER-FROM-THE-RTL-LANE.md`
+> ## RTL-LANE ANSWER v2, 2026-08-16: `rtl/ANSWER-FROM-THE-RTL-LANE.md`
 >
-> Sim/RTL side has replied. Confirmed: an LDC bypassed to LOAD_WB erases the capability
-> (your A-1 consequence chain is right) — a positive-controlled board-free invariant now
-> guards it (scoreboard.sv, silent across the full 77-test sweep). REFUTED: the one-deep
-> tracker is never overwritten and cannot be — the dyn unit serializes cap loads at issue,
-> so overlap AND hit-under-miss are architecturally impossible in sim (two directed tests
-> confirm). **The proposed 8-entry-vector fix would be dead code.** No fix shipped: the
-> cause is not sim-reachable, so it is handed back per your split (board owns the trigger).
-> The one board datum that would localize it: the faulting LDC's writeback port / trans_id.
+> Answers your 2026-08-16 reframing. **An RTL instrument now makes MTVL the H1/H2
+> discriminator** (commit 45bd5a3ee): on cause 25, mtval carries the faulting operand's rs1
+> CURSOR — 0 => H2 (legitimate NULL, not a defect, hunt upstream in sqlite3_step); nonzero
+> => H1 (real tag loss). Validated four ways (nonzero/zero x DYN/FLU). This supersedes the
+> powered-rung ask: boot the failing workload once and read MTVL from the dump you already
+> print. **Source pre-check predicts H1**: readDbPage asserts !MEMDB, so the only reachable
+> OsRead on :memory: is the memjournal path whose pMethods is a static const (never NULL).
+> Also: S-07 does NOT reproduce in sim (dyn unit serializes cap loads — A-1 overwrite and
+> hit-under-miss both impossible; the 8-entry-vector fix would be dead code), so nobody can
+> read the faulting register in sim; the instrument is the substitute. Please fold it into
+> the next synthesis (reflash stays yours, ask-first).
 
 > ## RTL LANE: START WITH `rtl/MESSAGE-TO-THE-RTL-LANE.md`
 >

@@ -8,8 +8,15 @@ Board lane reports S-06 and S-08 fixes VERIFIED on caplifive_s06fixs08fix.bit: s
 s06aggcap 7->15, s06aggwide 237->255, EXCX 0 (was 4/4), and SQLite completes through finalize
 with NO software workarounds — a first. S-07 survives.
 
-S-07 (a capability read back by LDC arrives NOT_CAP, mcause 25, at sqlite3OsRead+0x4c across
-two binaries) — sim/RTL investigation done, NO fix shipped (cause not sim-reachable):
+S-07 (a capability read back by LDC arrives NOT_CAP, mcause 25) — sim/RTL done; an mtval
+DIAGNOSTIC INSTRUMENT shipped (no fix — cause not sim-reachable). NEW (2026-08-16): the board
+lane reframed the wedge site as likely the SECOND fault (on :memory:, sqlite3OsRead is only
+reached after an upstream sqlite3_step failure; readDbPage asserts !MEMDB), open question H1
+(real tag loss) vs H2 (legitimate NULL pMethods). Instrument (commit 45bd5a3ee): on cause 25,
+mtval carries the faulting operand's rs1 cursor, so the monitor's MTVL dump discriminates
+H1 (nonzero) from H2 (zero) — one boot of the failing workload, no reproducer needed.
+Validated 4 ways; source pre-check predicts H1 (memjournal pMethods is static-const non-null).
+Fold into next synth. Earlier findings:
 - CONFIRMED consequence: an LDC bypassed to LOAD_WB erases the capability (wb[2].cap_data
   tied '0). New board-free invariant in scoreboard.sv, positive-controlled (fires on forced
   bypass), silent across the full 77-test sweep. Commit a114313aa on fpga-testing-dev-s06fix.
