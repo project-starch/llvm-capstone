@@ -1,8 +1,7 @@
 # MicroPython as a freestanding Capstone domain — the compilation plan
 
-**Status:** 2026-08-16. **MicroPython enters, runs cap-init, and reaches the interpreter.** The
-domain now returns its marker; the full build faults inside `mp_parse`, which is exactly where the
-independent static analysis said it would. Details in "The blocker was the domain allocation" below.
+**Status:** 2026-08-16. **MicroPython lexes, parses and compiles `print(1+1)`.** The fault has moved
+out of the parser and into `mp_setup_code_state_helper`, i.e. into calling the compiled function. Details in "The blocker was the domain allocation" below.
 
 **Status (earlier that day):** 2026-08-16. **The MicroPython core AND a Capstone port compile as one translation unit.** Stages 0 and 1 are
 done, and closing the last five took four more backend items plus one source patch, recorded below
@@ -724,6 +723,49 @@ On this target `uintptr_t` is 8 bytes and a pointer is 16, so every parse-tree l
 untagged address, and the first dereference faults. **That is now the next thing to fix, and it is a
 source change with a known shape:** make `mp_parse_node_t` capability-width, as `mp_obj_t` already
 is under REPR_A.
+
+### The parse-node fix works: the fault moved from the parser to the function call
+
+Two source patches, `0004` and `0005`, both in `benchmarks/micropython/patches/`.
+
+`py/parse.h` declared `typedef uintptr_t mp_parse_node_t; // must be pointer size`. On this target
+`uintptr_t` is 8 bytes and a pointer is 16, so every link in the parse tree was a truncated,
+untagged address. The type is now `void *`; the immediate cases (small int, identifier, string,
+token) are unchanged in the low bits, the macros that TEST those bits read them through
+`uintptr_t`, and the struct case became a plain pointer-to-pointer cast with no integer in the
+middle. **Twelve macro sites, and the entire core then produced exactly ONE error** -- which was
+itself the same bug: `make_node_const_object` stored an `mp_obj_t` as `(uintptr_t)obj` while
+`mp_parse_node_extract_const_object` read that slot straight back as an `mp_obj_t`. Patch `0005`
+stores it as a pointer. Neither patch changes any value on a target where a pointer is as wide as
+`uintptr_t`.
+
+**Result, measured:** the fault moved from `mp_parse + 0x6a0` to
+`mp_setup_code_state_helper + 0x338`. That function runs when a compiled bytecode function is
+CALLED, so the lexer, the parser and the compiler all now complete.
+
+### Where it stands now
+
+`cause = 24`, and the faulting instruction is `cincoffset a3, a3, a4` at VA `0x118e0`, with `a3`
+loaded by `ldc` from a local slot and `a4` an index scaled by 16. That is
+`py/bc.c:153`, `var_pos_kw_args = &code_state_state[n_state - 1 - n_pos_args - n_kwonly_args]`,
+and it faults because `code_state_state` -- i.e. `code_state->sp + 1` -- arrives untagged.
+
+`mp_code_state_t` declares `mp_obj_t *sp` properly, and `bc.c:324` sets it as
+`&code_state->state[0] - 1`, which is ordinary pointer arithmetic. So the untagged value comes from
+further up: either `code_state` itself, which is `alloca` for a small state and a GC allocation
+otherwise, or the store of `sp` into the struct. **Not yet localized.**
+
+### Stop chasing these one fault at a time
+
+This is the second site of the same family and the static analysis already lists the rest. The
+efficient move is to work that list rather than spend a boot per fault: it named `vm.c`'s
+`DECODE_PTR`, `bc.h`'s `MP_TAGPTR` exception blocks, `vm.c`'s `UNWIND_JUMP`, `binary.c`'s `'O'`/`'S'`
+typecodes and the stream ioctl, and classified each by whether it fires on the `print(1+1)` path.
+Fix the ones it marks as firing, then run once.
+
+The one measurement worth taking first, because it is cheap and bounds the work: count the
+`inttoptr`/`ptrtoint` pairs on AS200 that remain in the emitted IR after `0004` and `0005`, and
+compare against the 344 the study counted before them.
 
 ### What is now the shortest path to a running interpreter
 
