@@ -1,5 +1,14 @@
 # MicroPython as a freestanding Capstone domain — the compilation plan
 
+**Status: MicroPython RUNS. `print(1+1)` produces `2` in a pure-capability Capstone domain
+under QEMU, verified by reading the interpreter's own output back, not by an exit code.**
+
+    ctl.dom       retval=0x22bf3244        control, unchanged
+    out_full.dom  retval=0x00020a32        length 2, bytes '2' and '\n'
+
+Reproduce: `benchmarks/micropython/{fetch-micropython.sh,build-micropython-silicon.sh}`, then run
+`out_full.dom` with `--timeout-multiplier 12`.
+
 **Status:** 2026-08-16. **MicroPython lexes, parses and compiles `print(1+1)`.** The fault has moved
 out of the parser and into `mp_setup_code_state_helper`, i.e. into calling the compiled function. Details in "The blocker was the domain allocation" below.
 
@@ -766,6 +775,55 @@ Fix the ones it marks as firing, then run once.
 The one measurement worth taking first, because it is cheap and bounds the work: count the
 `inttoptr`/`ptrtoint` pairs on AS200 that remain in the emitted IR after `0004` and `0005`, and
 compare against the 344 the study counted before them.
+
+### IT RUNS -- 2026-08-16
+
+`print(1+1)` executes and prints `2`. The last two source fixes:
+
+**`bc.c`** -- `mp_call_function_0` passes `NULL` as `args` and `mp_setup_code_state_helper`
+computes `args + n_args` before consulting `n_kw`. `NULL + n` is undefined in C even for n = 0;
+ordinary targets fold it away, a capability target faults on the arithmetic itself. Patch `0006`.
+
+**`obj.c`** -- `types[(uintptr_t)o_in & 0xf]` written inline lets the widening of the index sink
+into the mask, so the AND happens at pointer width, and reading an operand that wide needs a
+cursor read, which raises on an untagged value. Every immediate object word here IS untagged.
+A named local materialises the mask at integer width first. Patch `0007`, and verified in the
+emitted code: the cursor-read instruction is present before and absent after.
+
+### Why the output was measured rather than inferred
+
+`rc = 0` from `do_str` proves only that nothing raised. `mp_hal_stdout_tx_strn` writes into the
+hostcall region, and the harness never shares one -- so it wrote nowhere and reported success.
+The domain now captures its own output and returns the length and first two bytes in the retval,
+predicted as `0x00020a32` before the run and matched exactly. Without that step the milestone
+would have rested on a status code from a function whose output path was disconnected.
+
+### The whole chain, for whoever picks this up
+
+Seven source patches, none larger than a few lines, all wertneutral where a pointer is as wide as
+`uintptr_t`:
+
+| patch | what it fixes |
+|---|---|
+| `0001` | `vm.c` indexed with an unsigned expression that only works by wrapping at pointer width |
+| `0002` | `gc.c` `PTR_FROM_BLOCK` rebuilt heap addresses through `uintptr_t` |
+| `0003` | `gc_init` aligned the heap end by masking the address |
+| `0004` | `parse.h` declared the parse node as `uintptr_t`; every tree link was truncated |
+| `0005` | `parse.c` stored a const object into a node through `uintptr_t` |
+| `0006` | `bc.c` did pointer arithmetic on a NULL `args` |
+| `0007` | `obj.c` let the type index widen into the mask |
+
+Plus two compiler commits (`67a7f605`, `aa469bf7`) and one environment fix: the kernel module's
+`DOMAIN_MIN_FREE` allocation headroom, restored into `package/` after a rebuild discarded it.
+
+### Not done
+
+* Reproducibility beyond the first run is being measured; a single QEMU run is not evidence here.
+* The board. Everything above is QEMU.
+* The conformance and performance work, which is a separate document.
+* `INTERP_CAPINIT_REDERIVE_BLOB` is dead code for a refuted cause and should be deleted.
+* The tail-padding knob in the build script is likewise unnecessary -- the padding refutation
+  stands, and `MPY_TAIL_PAD=0` is what every working build used.
 
 ### What is now the shortest path to a running interpreter
 
