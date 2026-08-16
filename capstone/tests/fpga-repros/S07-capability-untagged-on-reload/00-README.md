@@ -42,6 +42,63 @@
 > commit carrying the sticky bit** — on anything older switch 204 reads whatever that slot decoded
 > to before.
 >
+> ### 0a. FIRST MEASUREMENT: a wedge with the displacement byte at ZERO (boot 5, 2026-08-17)
+>
+> On `caplifive_s06s08fix_s07probe_a2ef8eb.bit`, a control-validated boot in which all four
+> domains entered:
+>
+> | domain | result | `sw=204` after |
+> |---|---|---|
+> | `S7T` control | RETURNED `0x57070703` | `0x00` |
+> | `XU` rep 1 | RETURNED, workload passed | `0x00` |
+> | `XU` rep 2 | RETURNED, workload passed | `0x00` |
+> | `XU` rep 3 | `SQ: G/enter`, then **WEDGED** | `0x00` |
+>
+> At the wedge: `sw=255 = 0x99` (seen, **mcause 25**), **`sw=204 = 0x00`**, latched
+> `mepc = 0x8442a83c` with `DBAS 0x84400000` → image VA `0x3a83c`, symbolised **in the `XU` binary
+> that ran** as `sqlite3OsRead+0x4c`:
+>
+> ```
+>   3a834: ldc a0, 0x0(a0)
+>   3a838: ldc a4, 0x0(a0)
+>   3a83c: ldc a4, 0x20(a4)   <== mcause 25
+> ```
+>
+> i.e. the canonical instance of the invariant, at the same site as the historical `XF`
+> reproducer (`XU` is byte-identical to it, `f1214600`).
+>
+> **Validity:** control passed; `SQ: G/enter` present so the domain genuinely executed rather than
+> entry-stalling; mcause 25 is in the capability range 24..39 so the latch is this domain's own and
+> not stale kernel traffic; `0x00` is in the legal encoding set so the integrity check correctly
+> stays silent; and the byte read `0x00` twice — post-domain and again at the wedge.
+>
+> **CLAIMED: on this wedge nothing was displaced onto a scalar writeback port, so case (a) is not
+> supported here. NOT CLAIMED: that case (b) is established** — see the stopping rule below and the
+> third case now on the table.
+>
+> ### 0a-bis. THERE IS A CASE (c), AND IT MAKES A RETRY PROBE ACTIVELY MISLEADING
+>
+> The fork was (a) syncer displacement vs (b) the load returning `tag=0`. Both assume the granule
+> **was tagged when it was stored**. The faulting site is a capability *spilled to a stack slot and
+> reloaded*, so there is a third possibility:
+>
+> **(c) the granule was never tagged.** Post-S-06 an `stc` writes `ctag` from the rs2 register tag,
+> so an untagged register produces an honestly untagged granule and the reload returning NOT_CAP is
+> **correct behaviour**. The fault would then be upstream of both memory and the syncer.
+>
+> The displacement detector cannot see (c) — and neither can a retry: re-issuing the load re-reads a
+> granule that is honestly untagged and stays untagged, which is **indistinguishable from (b)**. So
+> the obvious next probe, a compiler-emitted `ldc` retry, would have returned a confident (b)
+> verdict that was wrong. It is not being built for that reason (the pass exists at
+> `llvm/lib/Target/Capstone/CapstoneLdcRetry.cpp`, off by default, and stays off).
+>
+> **The discriminator that separates all three** is a store/load tag history keyed on address:
+> `(paddr, ctag)` of the most recent `stc`, and `(paddr, source)` of the first `ldc` whose response
+> tag is 0, with `source` distinguishing L1 hit / refill / write-buffer forward — the three legs of
+> `rd_ctag_o`. Then: stored `ctag=1` but loaded 0 → genuine (b), and `source` says where; stored
+> `ctag=0` → (c), and the hunt moves upstream; no matching `stc` → the granule came from a copy or
+> a context restore, itself informative. That needs a bitstream, so it is **ask-first** and batched.
+>
 > ### 0b. PRE-REGISTERED STOPPING RULE (written before the data, 2026-08-17)
 >
 > **There is no validated wedge rate for this bitstream.** The familiar "~1 in 3" comes from
