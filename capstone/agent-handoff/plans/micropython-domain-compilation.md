@@ -1,6 +1,10 @@
 # MicroPython as a freestanding Capstone domain — the compilation plan
 
-**Status:** 2026-08-16. **The MicroPython core AND a Capstone port compile as one translation unit.** Stages 0 and 1 are
+**Status:** 2026-08-16. **MicroPython enters, runs cap-init, and reaches the interpreter.** The
+domain now returns its marker; the full build faults inside `mp_parse`, which is exactly where the
+independent static analysis said it would. Details in "The blocker was the domain allocation" below.
+
+**Status (earlier that day):** 2026-08-16. **The MicroPython core AND a Capstone port compile as one translation unit.** Stages 0 and 1 are
 done, and closing the last five took four more backend items plus one source patch, recorded below
 as stage 1b. Stages 2-6 are PROPOSED, and stage 2 has changed character: it is no longer what stands
 between us and a build, it is what stands between a build and a *correct* one.
@@ -668,6 +672,58 @@ the control first.
 * `INTERP_CAPINIT_REDERIVE_BLOB` is left in the tree, **off**, byte-identity verified twice. It is a
   wrong fix for a refuted reason; it is kept because the next attempt will edit the same lines and
   the comment records what has already been excluded.
+
+### THE BLOCKER WAS THE DOMAIN ALLOCATION, and it was self-inflicted
+
+Everything above about cap-init was chasing a symptom. The cause:
+`package/modcapstone/module/capstone.c` sizes the domain's allocation as
+`code_len + DOMAIN_DATA_SIZE` and lets the buddy allocator round up. An image landing just under a
+power-of-two boundary therefore gets an allocation with almost nothing left for `dom_data` -- which
+is where the gp cap table, every global's carved storage and the domain stack live. The carve loop
+then runs off the end, which is why the corruption **scaled with the carve count and vanished at
+zero carves**.
+
+A local edit in `build/build/` fixed exactly this with a `DOMAIN_MIN_FREE (512 * 1024)` order bump.
+**The 2026-08-16 `A=modcapstone-rebuild` discarded it**, because buildroot rsyncs `package/` over
+`build/build/` and the edit had never been carried into `package/`. It is now in `package/`, with
+the reason in the comment, so a rebuild cannot drop it again.
+
+The regression was visible and was misread twice: SQLite went from "creates a domain, faults in the
+entry glue" to "never creates a domain", and that second state was reported here as "SQLite fails
+under QEMU". It does not. **The harness's 30-second per-domain timeout is what fails**: SQLite copies
+a 1.4 MB image under capability bookkeeping and needs longer. With `--timeout-multiplier 12` it
+returns `retval = 0x0`.
+
+### Results after the restore, all three in ONE boot
+
+| domain | id | result |
+|---|---|---|
+| `sqlite_silicon.dom` | 0 | **`retval = 0x0`** -- runs |
+| `mpy_s0.dom` (stage 0, cap-init ON) | 1 | **`retval = 0x4d5000a0`** -- the marker |
+| `mpy_full.dom` (`print(1+1)`) | 2 | fault, `cause = 24`, `pc = 0x101d28538` |
+
+`mpy_s0` is the ordinary build that used to jump to a wild address. It now enters, carves 232
+globals, runs `__capstone_cap_init` over 960 leaves, reaches `domain_main` and returns. **The
+cap-init blocker is gone**, and `INTERP_CAPINIT_REDERIVE_BLOB` is confirmed unnecessary -- it stays
+off, and its comment is now wrong about the cause; treat it as dead code to delete.
+
+### Where the full interpreter faults now
+
+`pc = 0x101d28538`, a sane in-domain address. `__get_free_pages` returns naturally-aligned blocks
+and this domain takes order 8 (`360760 + 65536 + 524288 = 950584` -> 233 pages -> 256 pages = 1 MiB),
+so the region base is 1 MiB-aligned. Of the candidate bases that put the pc inside a function, only
+`0x101d00000` satisfies that, giving VA `0x38538` = **`mp_parse + 0x6a0`**.
+
+*Inferred from the allocation's alignment, not measured directly.* To pin it, publish the runtime
+address of a known symbol from a same-sized image in the same boot position.
+
+If it holds, it is a clean independent confirmation of the static analysis, which named
+`py/parse.h:50` -- `typedef uintptr_t mp_parse_node_t; // must be pointer size` -- and predicted
+`mp_parse`'s `MP_PARSE_NODE_IS_STRUCT_KIND` check as "very likely the FIRST fault of the whole run".
+On this target `uintptr_t` is 8 bytes and a pointer is 16, so every parse-tree link is a truncated,
+untagged address, and the first dereference faults. **That is now the next thing to fix, and it is a
+source change with a known shape:** make `mp_parse_node_t` capability-width, as `mp_obj_t` already
+is under REPR_A.
 
 ### What is now the shortest path to a running interpreter
 
