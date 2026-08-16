@@ -29,7 +29,7 @@ static unsigned hc_share_count;
    print(1+1) worked is an rc of 0, which is exactly the kind of clean result this project has
    learned not to trust: the hostcall region is only wired up when the host shares it, and when
    it does not, tx_strn writes nowhere and still reports success. */
-#define MPY_CAP_MAX 64
+#define MPY_CAP_MAX 192
 static char mpy_cap_buf[MPY_CAP_MAX];
 static unsigned mpy_cap_len;
 
@@ -301,6 +301,50 @@ void domain_main(unsigned *res, unsigned func) {
        without the output path; the default runs the real thing. */
 #if MPY_STAGE == 8
     int rc = do_str("1+1", MP_PARSE_FILE_INPUT);
+#elif defined(MPY_PROG)
+    /* One Python construct per variant, so a hang names the construct instead of the program.
+       Ordered by how much of the runtime each needs; build them all and run them in ONE boot,
+       ascending, because a hang takes the rest of the boot with it. */
+    static const char *const progs[] = {
+        /*0*/ "print(2+3)\n",
+        /*1*/ "x = [1,2,3]\nprint(len(x))\n",
+        /*2*/ "def f():\n    return 7\nprint(f())\n",
+        /*3*/ "s = 0\nfor i in range(10):\n    s += i\nprint(s)\n",
+        /*4*/ "print('ab' * 3)\n",
+        /*5*/ "try:\n    1//0\nexcept ZeroDivisionError:\n    print(9)\n",
+        /*6*/ "d = {}\nd[1] = 2\nprint(d[1])\n",
+        /*7*/ "import gc\ngc.collect()\nprint(8)\n",
+        /*8*/ /* Force the collector to run by ALLOCATION PRESSURE rather than by calling it:
+                 2000 short-lived lists against a 96 KiB heap cannot fit without a collection,
+                 so this exercises gc_mark/gc_sweep on the real path. An explicit gc.collect()
+                 needs the gc module, which ROM_LEVEL_MINIMUM does not enable. */
+              "n = 0\nfor i in range(2000):\n    x = [i, i+1, i+2]\n    n += x[2]\nprint(n)\n",
+    };
+    int rc = do_str(progs[MPY_PROG], MP_PARSE_FILE_INPUT);
+#elif defined(MPY_HARD_PROGRAM)
+    /* A program that is not a single expression: a defined function called in a loop, a list
+       comprehension, string multiplication, an exception raised and caught, and an explicit
+       collection. The collection matters most -- print(1+1) allocates too little to ever run
+       the GC, so the two gc.c patches in this tree are unproven at runtime without it. */
+    int rc = do_str(
+        "def f(n):\n"
+        "    s = 0\n"
+        "    for i in range(n):\n"
+        "        s += i\n"
+        "    return s\n"
+        "a = [i*i for i in range(50)]\n"
+        "b = 'x' * 100\n"
+        "try:\n"
+        "    1//0\n"
+        "except ZeroDivisionError:\n"
+        "    c = 7\n"
+        "import gc\n"
+        "gc.collect()\n"
+        "d = {}\n"
+        "for i in range(20):\n"
+        "    d[i] = str(i)\n"
+        "print(f(100), len(a), len(b), c, len(d), d[19], a[7])\n",
+        MP_PARSE_FILE_INPUT);
 #else
     int rc = do_str("print(1+1)", MP_PARSE_FILE_INPUT);
 #endif
@@ -308,9 +352,16 @@ void domain_main(unsigned *res, unsigned func) {
 #ifdef MPY_RETURN_OUTPUT
     /* Return the captured bytes instead of a status: byte 0 in bits 0-7, byte 1 in 8-15, and
        the length in bits 16-23. For print(1+1) that is '2' (0x32), '\n' (0x0a), length 2. */
-    *res = ((unsigned)mpy_cap_len << 16)
-         | ((unsigned)(unsigned char)(mpy_cap_len > 1 ? mpy_cap_buf[1] : 0) << 8)
-         | ((unsigned)(unsigned char)(mpy_cap_len > 0 ? mpy_cap_buf[0] : 0));
+    {
+        /* length in bits 16-31, a 16-bit sum over every captured byte below it. The sum covers
+           the WHOLE output, so a run that prints the right number of wrong characters still
+           fails -- length alone would not catch that. */
+        unsigned sum = 0;
+        for (unsigned i = 0; i < mpy_cap_len; ++i) {
+            sum = (sum + (unsigned char)mpy_cap_buf[i] * (i + 1)) & 0xffff;
+        }
+        *res = ((unsigned)mpy_cap_len << 16) | sum;
+    }
     (void)rc;
 #else
     *res = 0x4D500000u | (unsigned)rc;
