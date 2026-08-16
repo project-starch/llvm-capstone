@@ -1,6 +1,127 @@
 # S-07 — handover to the RTL lane
 
-> ## UPDATE 2026-08-16 — READ THIS FIRST. The framing changed, and I am handing the trigger back.
+> ## UPDATE 2026-08-16 (LATER, after four boots on `caplifive_s07diag.bit`) — READ THIS FIRST
+>
+> This supersedes the block below it, which was written before your diagnostic bitstream was
+> flashed. Where the two disagree, this one wins; the older block is kept for its history.
+>
+> ### 1. THE ASK: `mtval` is written and unreadable. Put `tval` in the LATCH.
+>
+> Your instrument is correct — and the dump you told us to read it from never runs. A capability
+> fault inside a capability domain **wedges at exception commit** instead of trapping to `mtvec`,
+> so the monitor's `EXCX/MCAU/MEPC/MTVL` block is never reached. Your own RTL states it at
+> `core/cva6.sv:1228-1231`. Matched pair, same capture code, same board:
+>
+> | latched cause | `EXCX` | `MCAU` | `MTVL` | other live monitor markers |
+> |---|---|---|---|---|
+> | mcause **8** (3 runs) | 1 | `00000008` | 1 | 3 |
+> | mcause **25** (6 runs) | **0** | — | **0** | 6–18 |
+>
+> The mcause-8 rows are the fired positive control: that path works and does print `MTVL`. The
+> mcause-25 rows still emit 6–18 monitor markers, so the console was live — the handler simply
+> never runs. Wedge state agrees: `excommit=1`, `flush=1`, `privM=1`. The debug latch cannot
+> supply it either — `cva6.sv:994-996` / `:1097-1099` carry `trap_seen`/`mcause`/`mepc` and **no
+> tval**.
+>
+> **Please latch `tval` in the same `always_ff` block that already captures mcause and mepc, and
+> expose its 8 bytes on the free slots of debug bank `3'b110`.** The mechanism is already proven:
+> that latch captured mcause=25 *and* mepc at these very wedges, so a `tval` sibling register
+> latches identically. It composes with your `capstone_dyn_ftval` routing, which already delivers
+> the cursor to `tval`. This covers every site at once and needs no reproducer.
+>
+> ### 2. Your "the failing workload IS the probe" reasoning is measured-false
+>
+> Four boots; **no wedging run has ever reported anything**, and the reason is structural:
+>
+> | build | site instrumented | wedged at |
+> |---|---|---|
+> | `S7C` | `sqlite3OsRead` | `pagerFreeMapHdrs+0x4c` |
+> | `S7P` | `pagerFreeMapHdrs` | `sqlite3OsRead+0x4c` |
+> | `S7B` | BOTH | `sqlite3BackupRestart+0x5c` |
+>
+> Each build dies at whichever vulnerable site the previous one covered, so a software probe can
+> never be the thing that fires. And a wedge discards the retval *and* everything `output_text`
+> buffered — the host reads that buffer only when the domain RETURNS. A wedging run has no
+> reporting channel at all. That is the argument for the latch.
+>
+> ### 3. THE INVARIANT — one instruction shape, three unrelated functions
+>
+> Three wedges, three builds, three functions, three addresses, byte-for-byte the same shape:
+> **two ADJACENT `ldc`s where the second's rs1 is the first's rd.**
+>
+> ```
+> sqlite3OsRead+0x4c   (S7P)      pagerFreeMapHdrs+0x4c (S7C)     sqlite3BackupRestart+0x5c (S7B)
+>   3a8d0: ldc a0, 0x0(a0)          43368: ldc a1, 0x0(a0)          40bc0: ldc a0, 0x0(a1)
+>   3a8d4: ldc a4, 0x0(a0)
+>   3a8d8: ldc a4, 0x20(a4)  <==    4336c: ldc a1, 0x40(a1) <==     40bc4: ldc a0, 0x70(a0) <==
+> ```
+>
+> In every case the value **produced by the immediately preceding `ldc`** arrived NOT_CAP. This is
+> the back-to-back dependent capability-load pair. You refuted A-1 overwrite and hit-under-miss on
+> the grounds that the dyn unit serialises cap loads at issue — that refutation is about the
+> *tracker*; it does not by itself cover "the second load's rs1 operand is consumed as NOT_CAP",
+> which is the LOAD_WB erasure consequence you CONFIRMED. Worth re-examining with this shape in
+> hand.
+>
+> ### 4. H1/H2: H2 refuted at one site, H1 NOT established anywhere
+>
+> At `pagerFreeMapHdrs+0x4c`, H2 dies by control flow: the loop condition two instructions earlier
+> reads the SAME stack slot with a plain integer `ld` and branches away if zero, with `a0`
+> rederived from `s0` and no intervening store — so reaching the fault proves the cursor was
+> non-zero.
+>
+> But **H1 is not established, and we are not claiming it.** In that build the field can hold no
+> legitimate capability: `SQLITE_MAX_MMAP_SIZE` is 0 (`sqlite3-capstone.c:16156`; the `__OpenBSD__`
+> arm at `:16137` is dead — do not cite it), and `pagerAcquireMapPage`, the only setter of
+> `PGHDR_MMAP`, is **absent from the binary**. The writer at `:63849` *is* compiled in and callable,
+> gated only by that flag bit, so the accurate phrase is **"no reachable writer under intact
+> data"**. A non-zero cursor in such a slot means **the memory held wrong data** — not the same as
+> a lost tag, which leaves the payload intact and clears only the tag. Surviving readings:
+>
+> 1. the field held untagged garbage on entry (zeroing failure / heap corruption);
+> 2. a corrupted `flags` bit let `pagerReleaseMapPage` really run — the only reading under which
+>    the S-07 tag-loss story is right;
+> 3. the `ld` itself returned a wrong non-zero over a true zero, making the `ldc` a *correct* null
+>    deref and the defect an integer-load-path one — note this is the same class as the `ldc`
+>    delivery failure at the other two sites, so it is not an exotic alternative;
+> 4. a wild-but-tagged `pPager` reading unrelated memory at `+0xf0`.
+>
+> Latched `tval` discriminates (1)/(2)/(4) directly.
+>
+> ### 5. Solid
+>
+> * selftest control returned its exact PASS value `0x57070703` on **every** boot — the `ld`-based
+>   instrument is proven on this bitstream, zero-reads included;
+> * `sqlite3OsRead` is **never called in a clean run** (`calls=0`, full extended workload passing):
+>   reachable only after an upstream error, so it was always the SECOND fault;
+> * clean reps are NOT evidence of suppression — at the observed rate 3 clean is p≈0.30.
+>
+> ### 6. Operational, since you can drive the board
+>
+> * `split_out_cap`'s unimplemented exact-fit case caps a boot at **~4 domains**; the 5th spins at
+>   `SPLB` with no `SQ: A/dom-ok`. The monitor's own comment records this once "manufactured a
+>   confident, entirely false localization of a SQLite function that never executed".
+>   Discriminator: `SQ: G/enter` present, plus the latch cause.
+> * `XU.dom` (`f1214600`) is byte-identical to the historical `XF` reproducer.
+> * `run_sqlite_stages_fpga.py` now attempts a GDB `mtval` read at every wedge, accepted **only**
+>   if gdb's own mcause/mepc match the latched pair. Stopgap, not a substitute for the latch.
+>
+> ### 7. Retractions that stand — please do not let us re-assert them
+>
+> 1. `cincoffset` has a two-armed guard; only `ldc` sites and `sqlite3_strnicmp+0x134` are
+>    rs1-unambiguous.
+> 2. Image composition did not suppress the defect.
+> 3. The hostcall/domain-boundary claim is false (`:memory:`, no crossing).
+> 4. "Every synthetic shape excluded" is void (no `_SELFTEST` ran on that bitstream; `s07evict`
+>    assumed a 64 B line where `DcacheLineWidth` = 128 **bits** = 16 B, write-through
+>    no-write-allocate; rungs bounded p at only 6–19%).
+> 5. NEW — **"the site wanders" is withdrawn.** Of 8 mcause-25 wedges, 6 have a recoverable image
+>    VA and five of those six are `sqlite3OsRead+0x4c` in five *different builds*. Earlier wording
+>    (ours and an auditor's) compared raw `mepc` across builds and misread link addresses as
+>    wandering.
+> 6. NEW — **"a real capability arrived NOT_CAP" was never established.** See §4.
+
+> ## UPDATE 2026-08-16 (EARLIER, pre-diagnostic-bitstream) — superseded by the block above
 >
 > ### 1. One question is left, and one observation on your side settles it
 >

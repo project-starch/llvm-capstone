@@ -1,5 +1,91 @@
 # S-07 — a capability read back from memory comes back UNTAGGED, sporadically
 
+> ## UPDATE 2026-08-16 — four boots on `caplifive_s07diag.bit`. READ THIS FIRST.
+>
+> Sibling issues, so a reader who arrived with the wrong symptom is redirected now: S-06
+> (untagged 128-bit `ldc`/`stc` high half) and S-08 (dom-switch CSR clobber) are both FIXED in
+> silicon and verified; their folders are resolved. This folder is the one open silicon issue.
+>
+> ### 1. The invariant: ONE instruction shape, three unrelated functions
+>
+> Three wedges, three different builds, three different source functions, three different
+> addresses — and byte-for-byte the same shape. **Two ADJACENT `ldc` instructions where the
+> second's rs1 is the first's rd:**
+>
+> ```
+> sqlite3OsRead+0x4c   (S7P)      pagerFreeMapHdrs+0x4c (S7C)     sqlite3BackupRestart+0x5c (S7B)
+>   3a8d0: ldc a0, 0x0(a0)          43368: ldc a1, 0x0(a0)          40bc0: ldc a0, 0x0(a1)
+>   3a8d4: ldc a4, 0x0(a0)                                          
+>   3a8d8: ldc a4, 0x20(a4)  <==    4336c: ldc a1, 0x40(a1) <==     40bc4: ldc a0, 0x70(a0) <==
+> ```
+>
+> `ldc`'s guard is rs1-only (`capstone_dyn_unit.anvil:327-330`), so in every case the value
+> **produced by the preceding `ldc`** arrived NOT_CAP. This is the back-to-back dependent
+> capability-load pair, and it is a far sharper statement than any site name.
+>
+> ### 2. "The site wanders" is WITHDRAWN — it was an artefact of comparing builds
+>
+> Of 8 mcause-25 wedges, 6 have a recoverable image VA. **Five of those six are
+> `sqlite3OsRead+0x4c` in five DIFFERENT builds** — different link addresses for the same source
+> site (`0x3a2f8`, `0x3a83c`, `0x3a8d8`, `0x3a9d0`, `0x3aa74`). Earlier wording (ours, and an
+> auditor's) compared raw `mepc` values across builds and read that as wandering. It is not.
+>
+> ### 3. Instrumenting a site does not fix it — it MOVES the death
+>
+> | build | site instrumented | wedged at |
+> |---|---|---|
+> | `S7C` | `sqlite3OsRead` | `pagerFreeMapHdrs+0x4c` |
+> | `S7P` | `pagerFreeMapHdrs` | `sqlite3OsRead+0x4c` |
+> | `S7B` | BOTH | `sqlite3BackupRestart+0x5c` |
+>
+> Each build dies at whichever vulnerable `ldc` pair the previous one had covered. **A software
+> probe can therefore never be the thing that fires** — the uncovered site always kills the run
+> first. Combined with the fact that a wedge discards the retval AND everything `output_text`
+> buffered (the host only reads that buffer when the domain RETURNS), a wedging run has no
+> reporting channel at all.
+>
+> ### 4. `mtval` is written and UNREADABLE on this path
+>
+> The RTL lane's diagnostic puts the faulting rs1 cursor in `mtval`, to be read from the monitor's
+> trap dump. That dump never runs: a capability fault inside a domain wedges at exception commit
+> instead of trapping to `mtvec` — `capstone-ariane core/cva6.sv:1228-1231` says so in as many
+> words. Measured, matched pair, same capture code and board:
+>
+> | latched cause | `EXCX` | `MCAU` | `MTVL` | other live monitor markers |
+> |---|---|---|---|---|
+> | mcause **8** (3 runs) | 1 | `00000008` | 1 | 3 |
+> | mcause **25** (6 runs) | **0** | — | **0** | 6–18 |
+>
+> The mcause-8 rows are the fired positive control. The debug latch carries no `tval` either
+> (`cva6.sv:994-996`, `:1097-1099`). **The ask is in `rtl/MESSAGE-TO-THE-RTL-LANE.md` §1.**
+>
+> ### 5. H1/H2 — the fork was incomplete, and H1 is NOT established
+>
+> At `pagerFreeMapHdrs+0x4c`, **H2 is refuted by control flow**: the loop condition two
+> instructions earlier reads the SAME stack slot with a plain integer `ld` and branches away if
+> zero, with `a0` rederived from `s0` and no intervening store, so reaching the fault proves the
+> cursor was non-zero. But in that build the field can hold no legitimate capability
+> (`SQLITE_MAX_MMAP_SIZE` is 0 at `sqlite3-capstone.c:16156`; `pagerAcquireMapPage`, the only
+> setter of `PGHDR_MMAP`, is ABSENT from the binary — the writer at `:63849` IS compiled in and
+> callable, gated only by that flag, so the accurate phrase is **"no reachable writer under intact
+> data"**). A non-zero cursor in such a slot means **the memory held wrong data**, which is not the
+> same as a lost tag. **"A real capability arrived NOT_CAP" is NOT claimed.**
+>
+> ### 6. What is solid
+>
+> * the selftest control returned its exact PASS value `0x57070703` on **every** boot, so the
+>   `ld`-based instrument is proven on this bitstream, zero-reads included;
+> * `sqlite3OsRead` is **never called in a clean run** (`calls=0`, full extended workload passing),
+>   so it is reachable only after an upstream error and was always the SECOND fault;
+> * clean reps are NOT evidence of suppression — at the observed rate, 3 clean is p≈0.30.
+>
+> ### 7. Operational
+>
+> `split_out_cap`'s unimplemented exact-fit case caps a boot at **~4 domains**; the 5th spins at
+> `SPLB` with no `SQ: A/dom-ok`, and the monitor's own comment records that this once
+> "manufactured a confident, entirely false localization of a SQLite function that never
+> executed". Discriminator: `SQ: G/enter` present, plus the latch cause.
+
 > ### CORRECTION 2026-08-15 — the "domain boundary / hostcall VFS" claim is WITHDRAWN
 >
 > We wrote that `sqlite3OsRead` reaches a hostcall-based VFS and therefore crosses the domain
@@ -10,8 +96,13 @@
 > So the distinguishing ingredient is **unknown**, not "the boundary". What remains different
 > between the failing site and the passing rungs: a much larger working set and cache footprint, a
 > capability chain rooted in heap-allocated structures rather than a static array, and far more
-> capability traffic overall. Cache/working-set pressure is the leading remaining candidate and is
-> the next thing we will test.
+> capability traffic overall. Cache/working-set pressure was the leading remaining candidate.
+>
+> **Since tested and NOT supported as the distinguishing ingredient** (see the 2026-08-16 update at
+> the top): the `s07evict` rung that was to test it is void — it assumed a 64-byte cache line where
+> `DcacheLineWidth` is 128 **bits** = 16 B, and the cache is write-through no-write-allocate, so it
+> walked at most 4 of 16 slots per set and its spills never allocated. The sharper description that
+> replaced this line of enquiry is the adjacent-dependent-`ldc` invariant.
 
 > ## THE PATTERN, MEASURED THREE TIMES IN THREE INDEPENDENT BUILDS (2026-08-16)
 >
