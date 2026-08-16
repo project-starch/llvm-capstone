@@ -2,6 +2,22 @@
 
 Minimal snapshot. Read first in every session.
 
+## 2026-08-16 — CURRENT. Anything below dated earlier predates two RTL fixes and a reflash.
+
+* **Bitstream: `caplifive_s07diag.bit`** (S-06 fix `25035c4c0` + S-08 fix `9fd5507b` + the mtval
+  diagnostic `45bd5a3ee`). Every silicon number taken before it is baseline-invalid. All five
+  driver `FPGA_BITSTREAM` defaults are repointed.
+* **S-06: FIXED in silicon and verified.** All §1 software workarounds reverted; lit green and
+  14/15 QEMU suites, the 15th being the known inverted `static-cap-globals` probe.
+* **S-08: FIXED by the RTL lane and verified on silicon.**
+* **S-07: the ONE open silicon issue.** SQLite's full extended workload completes with no software
+  workarounds in roughly two runs out of three; the remainder wedge at mcause 25. Deliverable and
+  the ask: `tests/fpga-repros/S07-capability-untagged-on-reload/`. Committed, **not pushed — the
+  project lead pushes, and it reaches the RTL lane only then.**
+* The invariant, the "no software probe can fire" result, and the "mtval unreadable by every
+  channel" measurement are in `state/current-next-step.md` §0 — read that before planning any
+  S-07 work.
+
 ## S-06/S-08 CONFIRMED ON SILICON; S-07 investigated (2026-08-15)
 
 Board lane reports S-06 and S-08 fixes VERIFIED on caplifive_s06fixs08fix.bit: s06agg 5->15,

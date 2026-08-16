@@ -1,6 +1,41 @@
 # Next step
 
-## 0. WHERE THINGS STAND — 2026-08-14, read this first
+## 0. CURRENT — 2026-08-16. Everything below this block predates two RTL fixes and a reflash.
+
+**The next step is not ours: it is with the RTL lane, and it is one register.**
+
+Bitstream is `caplifive_s07diag.bit`. S-06 and S-08 are FIXED in silicon and verified; their
+folders are resolved. S-07 is the one open silicon issue, and the handover is written and
+committed at `tests/fpga-repros/S07-capability-untagged-on-reload/` (entry `00-README.md`, ask in
+`rtl/MESSAGE-TO-THE-RTL-LANE.md` §1). **It reaches the RTL lane only when pushed, and the project
+lead pushes.**
+
+What five boots on this bitstream established:
+
+* **The invariant.** Four wedges, four unrelated functions, four builds, one shape: **two adjacent
+  `ldc`s where the second's rs1 is the first's rd.** Purest instance,
+  `whereLoopOutputAdjust+0x200`: `ldc a0,0x0(a0)` / `ldc a0,0x0(a0)` (faults) / `ldc a0,0x0(a0)`.
+* **No software probe can ever fire.** Covering a site moves the wedge to the next uncovered one
+  (`sqlite3OsRead` → `pagerFreeMapHdrs` → `sqlite3BackupRestart` → `whereLoopOutputAdjust`), and a
+  wedge discards the retval *and* everything `output_text` buffered (the host reads that buffer
+  only on domain RETURN).
+* **`mtval` is unreadable by every channel.** The monitor dump never runs (a capability fault in a
+  domain wedges at exception commit — `capstone-ariane core/cva6.sv:1228-1231`); the debug mux
+  carries no `tval`; and GDB on the halted core returns `mcause=2 mepc=2 mtval=0` against a latched
+  `mcause=25 mepc=0x84105888`, i.e. the CSRs are clobbered by a nested trap first. So the ask is:
+  **latch `tval` in the same `always_ff` block that already captures mcause/mepc, and expose it on
+  debug bank `3'b110`.**
+
+**Not established, do not re-assert:** "a real capability arrived NOT_CAP" (H1) — never shown; and
+"the site wanders" — withdrawn, that was link addresses differing across builds.
+
+**Operational:** `split_out_cap`'s exact-fit case caps a boot at ~4 domains; the 5th spins at
+`SPLB` with no `SQ: A/dom-ok`. Reading a wedged core over GDB leaves the session open and it must
+be stopped explicitly, or every later run times out before `load_image`.
+
+---
+
+## 0-OLD. WHERE THINGS STOOD — 2026-08-14 (SUPERSEDED by the block above)
 
 **SQLite RUNS ON SILICON.** The basic workload (CREATE / three INSERTs / SELECT returning all three
 rows / finalize) completes in a pure-capability domain on the FPGA and returns the correct rows,
