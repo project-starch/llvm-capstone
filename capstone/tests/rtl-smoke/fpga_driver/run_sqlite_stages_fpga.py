@@ -105,6 +105,38 @@ def decode_s07_retry(obs):
     return (obs >> 16) & 0xff, (obs >> 8) & 0xff, obs & 0xff
 
 
+def decode_s07_cursor(obs):
+    """The S-07 H1/H2 verdict read from the pMethods MEMORY SLOT. Returns (verdict, detail).
+
+    Why the slot and not `mtval`: the RTL lane's mtval diagnostic reports the faulting rs1
+    cursor, but a capability fault inside a domain WEDGES at exception commit instead of
+    trapping to mtvec (capstone-ariane core/cva6.sv:1228-1231), so the monitor's dump never
+    runs and mtval is unreadable on this path. Reading the slot is also strictly stronger:
+    if the LOAD_WB path erases the capability in the register -- the consequence the RTL lane
+    CONFIRMED in sim -- then the register cursor is 0 under H1 too, and mtval would read H2.
+    """
+    if obs is None:
+        return None
+    tag = obs >> 24
+    if tag == 0x51:
+        return ("H1", f"cursor[23:0]=0x{obs & 0xFFFFFF:06x} NON-ZERO -- a real capability "
+                      f"arrived NOT_CAP; S-07 is a silicon defect")
+    if tag == 0x52:
+        return ("H2", f"cursor ZERO (metadata[23:0]=0x{obs & 0xFFFFFF:06x}) -- pMethods really "
+                      f"was NULL; this site is a correct null deref, hunt upstream")
+    if tag == 0x53:
+        return ("no-hit", f"reached sqlite3OsRead {(obs >> 8) & 0xFFFF} time(s), "
+                          f"{obs & 0xFF} untagged -- the site never went bad in this run")
+    if tag == 0x57:
+        ok = obs == 0x57070703
+        return ("selftest " + ("PASS" if ok else "FAIL"),
+                f"type(nonzero plant)={(obs >> 16) & 0xFF} (expect 7), "
+                f"type(zero plant)={(obs >> 8) & 0xFF} (expect 7), "
+                f"ld-match flags=0b{obs & 0xFF:02b} (expect 0b11)"
+                + ("" if ok else "  <== INSTRUMENT UNPROVEN: any 0x51/0x52 verdict is void"))
+    return None
+
+
 def decode_probe(obs):
     """0x5B_aa_bb_cc -> the S-07 operand-discrimination counters, or None.
 
@@ -448,6 +480,11 @@ def main():
                     + ("  => MEMORY LOST THE TAG (A-2 refill path)" if b and not _null else "")
                     + ("  => MEMORY WAS FINE: register delivery" if c and not b else ""))
                 bad = False
+            _cur = decode_s07_cursor(int(m_obs.group(1))) if m_obs is not None else None
+            if not wedged and bad and _cur is not None:
+                _v, _d = _cur
+                log(f"  {dom}: S-07 CURSOR PROBE -- {_v}: {_d}")
+                bad = False
             _probe = decode_probe(int(m_obs.group(1))) if m_obs is not None else None
             if not wedged and bad and _probe is not None:
                 a, b, c = _probe
@@ -702,6 +739,9 @@ def main():
                 verdict = "WEDGED (no return)"
             elif d:
                 verdict = f"returned stage={d[0]} rc={d[1]}"
+            elif decode_s07_cursor(obs):
+                _v, _d = decode_s07_cursor(obs)
+                verdict = f"S-07 CURSOR PROBE -- {_v}: {_d}"
             elif decode_probe(obs):
                 a, b, c = decode_probe(obs)
                 verdict = (f"S-07 PROBE: rs1_untagged={a} rs2_tagged={b} retry_persistent={c}"

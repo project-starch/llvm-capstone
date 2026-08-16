@@ -87,7 +87,7 @@ OUT = os.environ.get("BAKED_OUT") or "/tmp/capstone/baked-rungs.txt"
 # FPGA_BITSTREAM by hand and one that forgot burned a launch on a HARD STOP. A default that
 # is always overridden trains people to override it, which is how a real mismatch gets waved
 # through.
-BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s06fixs08fix.bit")
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s07diag.bit")
 
 
 def log(m):

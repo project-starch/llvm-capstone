@@ -75,6 +75,62 @@ static unsigned s07_probe_result(void) {
 }
 #endif
 
+#ifdef CAPSTONE_S07_CURSOR_REPORT
+/* S-07 H1/H2, settled from software. Counters + raw slot halves live in the patched amalgamation
+   (build-sqlite-silicon.sh, SQLITE_S07_CURSOR_PROBE).
+   Sentinels, all distinct from the ladder's 0x5A6E, the operand probe's 0x5B and the retry
+   probe's 0x5C/0x5D/0x5E:
+     0x51_cccccc  FIRED, cursor NON-ZERO -> H1: a real capability arrived NOT_CAP. cccccc = cur[23:0]
+     0x52_mmmmmm  FIRED, cursor ZERO     -> H2: pMethods really was NULL; this site is a correct
+                  null deref and not a silicon defect. mmmmmm = metadata[23:0], expected 0.
+     0x53_ccchh   ran, never saw an untagged pMethods. ccc = calls, hh = hits (0). NOT a null
+                  result -- it separates "reached the site N times, all clean" from "never
+                  reached", which a bare 0 could not. */
+extern unsigned capstone_s07c_calls, capstone_s07c_hits, capstone_s07c_fired;
+extern unsigned long capstone_s07c_cur, capstone_s07c_meta;
+static unsigned s07c_result(void) {
+  if (!capstone_s07c_fired)
+    return 0x53000000u | ((capstone_s07c_calls & 0xFFFFu) << 8)
+                       | (capstone_s07c_hits & 0xFFu);
+  if (capstone_s07c_cur != 0UL)
+    return 0x51000000u | (unsigned)(capstone_s07c_cur & 0xFFFFFFUL);
+  return 0x52000000u | (unsigned)(capstone_s07c_meta & 0xFFFFFFUL);
+}
+#endif
+
+#ifdef CAPSTONE_S07_CURSOR_SELFTEST
+/* POSITIVE CONTROL FOR THE CURSOR PROBE, and the zero arm is the load-bearing half: an
+   instrument that cannot tell "the slot holds 0" from "the instrument produced nothing" IS the
+   H1/H2 failure mode. Both arms plant a KNOWN raw integer into a 16-byte slot with `sd` (which
+   clears the granule tag), load it the way sqlite3OsRead does, and re-read it with `ld`.
+   Fabricated storage, never a live sqlite3_file.
+     0x57_aa_bb_ff  aa = type seen for the non-zero plant (expect 7 = NOT_CAP)
+                    bb = type seen for the zero plant     (expect 7)
+                    ff bit1 = `ld` returned the non-zero plant EXACTLY
+                       bit0 = `ld` returned 0 for the zero plant
+   PASS is exactly 0x57070703. Anything else means the probe's reading of the real site is
+   uninterpretable, whatever it said. */
+static unsigned long s07c_fake[4] __attribute__((aligned(16)));
+static unsigned s07c_selftest_arm(unsigned long plant) {
+  void *slot = (void *)s07c_fake;
+  unsigned long lo, ty;
+  const void *m;
+  __asm__ volatile("sd %0, 0(%1)" :: "r"(plant), "r"(slot) : "memory");
+  __asm__ volatile("sd x0, 8(%0)" :: "r"(slot) : "memory");
+  m = *(const void *const *)slot;                 /* ldc -- exactly the real site's load */
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(ty) : "r"(m));
+  __asm__ volatile("ld %0, 0(%1)" : "=r"(lo) : "r"(slot));
+  return (unsigned)(((ty & 0xFFUL) << 8) | (lo == plant ? 1UL : 0UL));
+}
+static unsigned s07c_selftest_result(void) {
+  unsigned a = s07c_selftest_arm(0xC0FFEE00ABCDEF01UL);
+  unsigned b = s07c_selftest_arm(0UL);
+  return 0x57000000u | ((a >> 8) & 0xFFu) << 16
+                     | ((b >> 8) & 0xFFu) << 8
+                     | (((a & 1u) ? 2u : 0u) | ((b & 1u) ? 1u : 0u));
+}
+#endif
+
 static void output_text(const char *text) {
   if (!hostcall_metadata || !hostcall_payload)
     return;
@@ -6550,7 +6606,19 @@ void domain_main(unsigned *res, unsigned func) {
        one bit was all that survived out of a design meant to carry the rc too.
        Only a 0x5A6E-tagged value is passed through, so `fail()`'s small rc values and the normal
        success path keep returning DONE exactly as before. */
+#ifdef CAPSTONE_S07_CURSOR_SELFTEST
+    /* Runs INSTEAD of the workload: this arm exists to prove the instrument, and it must be an
+       expected-to-RETURN arm so it can be ordered before the one that may wedge. */
+    *res = s07c_selftest_result();
+    return;
+#endif
     unsigned long rv_ = (unsigned long)(unsigned)run_sqlite();
+#ifdef CAPSTONE_S07_CURSOR_REPORT
+    /* Reported UNCONDITIONALLY, including the no-hit case: whether the site was reached and how
+       often is part of the measurement, and a fall-through to the staged marker would erase it. */
+    *res = s07c_result();
+    return;
+#endif
 #ifdef CAPSTONE_S07_RETRY_REPORT
     {
       unsigned rr_ = s07_retry_result();

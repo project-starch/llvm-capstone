@@ -178,6 +178,76 @@ print("   instrumented sqlite3OsRead with a tag-retry probe")
 PY
 fi
 
+# S-07 CURSOR PROBE (SQLITE_S07_CURSOR_PROBE=1). Settles H1 vs H2 from SOFTWARE, on the current
+# bitstream, with no reflash.
+#
+# The RTL lane's diagnostic puts the faulting rs1 cursor in `mtval`, to be read from the monitor's
+# trap dump. That dump NEVER RUNS on this path: a capability fault inside a capability domain
+# wedges the core at exception commit instead of trapping to mtvec -- our own RTL says so at
+# capstone-ariane core/cva6.sv:1228-1231, and six mcause-25 transcripts carry the debug latch at
+# 0x99 with no EXCX/MCAU/MTVL line at all, while mcause-8 wedges in the same capture DO print one.
+# So mtval is written and unreadable.
+#
+# This reads the MEMORY SLOT instead, which is strictly stronger than reading the register:
+#   H2 (pMethods legitimately NULL)  => the slot holds 0            => cursor 0
+#   H1 (a real capability lost its tag, in memory OR in flight OR
+#       erased in the register by the LOAD_WB path)                 => cursor NON-ZERO
+# mtval cannot make that distinction under the RTL lane's own confirmed consequence chain: if
+# LOAD_WB erases the capability, the register cursor is 0 under H1 too.
+#
+# `ld` is used rather than `ldc` deliberately -- a plain integer load carries no tag requirement,
+# so it reports the raw bits whatever the tag says, and cannot itself fault.
+if [[ "${SQLITE_S07_CURSOR_PROBE:-0}" == "1" ]]; then
+  if [[ "${SQLITE_S07_RETRY_PROBE:-0}" == "1" ]]; then
+    echo "ERROR: SQLITE_S07_CURSOR_PROBE and SQLITE_S07_RETRY_PROBE both patch sqlite3OsRead" >&2
+    exit 1
+  fi
+  echo "== S-07 CURSOR PROBE: reading the pMethods slot raw at sqlite3OsRead"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text()
+old = ("SQLITE_PRIVATE int sqlite3OsRead(sqlite3_file *id, void *pBuf, int amt, i64 offset){\n"
+       "  DO_OS_MALLOC_TEST(id);\n"
+       "  return id->pMethods->xRead(id, pBuf, amt, offset);\n}")
+new = ("unsigned capstone_s07c_calls = 0;\n"
+       "unsigned capstone_s07c_hits = 0;\n"
+       "unsigned capstone_s07c_fired = 0;\n"
+       "unsigned long capstone_s07c_cur = 0;\n"
+       "unsigned long capstone_s07c_meta = 0;\n"
+       "SQLITE_PRIVATE int sqlite3OsRead(sqlite3_file *id, void *pBuf, int amt, i64 offset){\n"
+       "  DO_OS_MALLOC_TEST(id);\n"
+       "  {\n"
+       "    /* ONE load of pMethods -- the same `ldc a4,0x0(a0)` that the uninstrumented build\n"
+       "       faults on one instruction later. It cannot itself fault: ldc's guard is rs1-only\n"
+       "       and rs1 here is `id`, which is live. */\n"
+       "    const sqlite3_io_methods *s07m = id->pMethods;\n"
+       "    unsigned long s07t;\n"
+       "    if (capstone_s07c_calls < 0xFFu) capstone_s07c_calls++;\n"
+       "    __asm__ volatile(\".insn r 0x5b, 0x1, 0x4, %0, %1, x1\" : \"=r\"(s07t) : \"r\"(s07m));\n"
+       "    if (s07t == 7UL) {\n"
+       "      if (capstone_s07c_hits < 0xFFu) capstone_s07c_hits++;\n"
+       "      if (!capstone_s07c_fired) {\n"
+       "        /* THE DISCRIMINATOR. Read both 64-bit halves of the slot as plain integers.\n"
+       "           cursor == 0 AND metadata == 0 is the only reading consistent with H2. */\n"
+       "        unsigned long s07lo, s07hi;\n"
+       "        void *s07slot = (void *)&id->pMethods;\n"
+       "        __asm__ volatile(\"ld %0, 0(%1)\" : \"=r\"(s07lo) : \"r\"(s07slot));\n"
+       "        __asm__ volatile(\"ld %0, 8(%1)\" : \"=r\"(s07hi) : \"r\"(s07slot));\n"
+       "        capstone_s07c_cur = s07lo;\n"
+       "        capstone_s07c_meta = s07hi;\n"
+       "        capstone_s07c_fired = 1;\n"
+       "      }\n"
+       "      return SQLITE_IOERR_READ;   /* do NOT dereference: report instead of wedging */\n"
+       "    }\n"
+       "    return s07m->xRead(id, pBuf, amt, offset);\n"
+       "  }\n}")
+if old not in s:
+    sys.exit("S07 CURSOR PROBE: sqlite3OsRead does not have the expected shape")
+p.write_text(s.replace(old, new, 1))
+print("   instrumented sqlite3OsRead with a raw-slot cursor probe")
+PY
+fi
+
 if [[ "${SQLITE_STATIC_BUILTINS:-1}" == "1" ]]; then
   echo "== R-14 WORKAROUND: restoring aBuiltinFunc to a compile-time-initialised static"
   python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PY'
@@ -1502,6 +1572,15 @@ fi
 # reaches nothing and the probe silently is not in the binary.
 if [[ "${SQLITE_OPERAND_PROBE:-0}" == "1" ]]; then
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_OPERAND_PROBE"
+fi
+# S-07 cursor probe reporting. Same placement rule as above: ABOVE the _domain_defs read, or the
+# define reaches nothing and the report is silently absent from the binary while the run still
+# looks valid.
+if [[ "${SQLITE_S07_CURSOR_PROBE:-0}" == "1" ]]; then
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_S07_CURSOR_REPORT"
+fi
+if [[ "${SQLITE_S07_CURSOR_SELFTEST:-0}" == "1" ]]; then
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_S07_CURSOR_SELFTEST"
 fi
 read -r -a _domain_defs <<< "${DOMAIN_EXTRA_DEFS:-}"
 "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$OPT" \

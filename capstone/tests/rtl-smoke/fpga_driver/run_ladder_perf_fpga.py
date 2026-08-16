@@ -77,7 +77,7 @@ IMG_NAME = os.environ.get("FPGA_FW_NAME") or "fw_payload_fpga_up_gpfree.bin"
 # FPGA_BITSTREAM by hand and one that forgot burned a launch on a HARD STOP. A default that
 # is always overridden trains people to override it, which is how a real mismatch gets waved
 # through.
-BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s06fixs08fix.bit")
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s07diag.bit")
 
 # Must match build-ladder-fpga.sh's OUT_DIR default ($CAPSTONE_TMP_ROOT/ladder-fpga),
 # else the runner reads a different dir than the build writes and can pick up stale
