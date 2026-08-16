@@ -92,3 +92,78 @@ rider both taught that picking a fix before the trace wedges the core). You own 
 fold the instrument into the next synth, boot the failing workload once, read `MTVL`. If it is
 H1, tell me the cursor and I will localize the tag-loss path; if H2, we both stop looking at
 `sqlite3OsRead` and I help you instrument `sqlite3_step`. Nothing here touches S-06 or S-08.
+
+
+---
+
+# ADDENDUM 2026-08-17 — the tag-history probe (batch 2), and what the first probe answered
+
+## What the sticky displacement bit answered
+
+Boot 5 caught a genuine wedge — mcause 25 at `sqlite3OsRead+0x4c`, control passed, domain
+confirmed entered, trap latch confirmed as the domain's own — and **switch 204 read 0x00**.
+So on that wedge nothing was displaced onto a scalar writeback port: **case (a) is not
+supported**. Per the rule agreed before the data, that is "not case (a) on this run", not
+"case (b) established"; a second wedge is wanted. The same byte also read 0x00 across three
+complete extended workloads on a clean boot, which rules out displacement as a routine
+background event.
+
+## The gap that made a retry probe unsafe: case (c)
+
+The faulting site spills a capability to a stack slot and reloads it. Cases (a) and (b) both
+assume the granule in memory was tagged and the tag went missing. It need not have been:
+post-S-06 an `stc` writes its tag from the rs2 register tag, so an untagged register produces
+an honestly untagged granule and the reload returning NOT_CAP is **correct**, with the fault
+upstream of both memory and the syncer. A retry probe cannot see this — it re-reads a granule
+that is honestly untagged and stays untagged, which is indistinguishable from case (b) — so a
+retry would have produced a confident wrong verdict.
+
+## The probe that separates all three
+
+Verdict byte at **switch 208** (UART-safe, readable mid-run):
+
+| bit | meaning |
+|---|---|
+| 7 | `ldc0_valid` — an LDC came back untagged and was recorded (one-shot) |
+| 6:5 | `ldc0_src` — 0 = L1 hit, 1 = miss refill (tag memory), 2 = write-buffer forward |
+| 4 | `stc_valid` — a capability-granule store was recorded |
+| 3 | `stc_ctag` — the tag that store WROTE |
+| 2 | `gran_match` — both records are the same 16-byte granule (computed in hardware) |
+| 1 | `stc_clobbered` — a plain store later overwrote that granule |
+| 0 | 0 |
+
+Decode, in order:
+
+1. `clobbered = 1` → **no verdict**: a plain store legitimately cleared the tag.
+2. `match = 1, stc_ctag = 1, clobbered = 0` → the tag was written and read back 0: **genuine
+   loss**, and `ldc0_src` says where (hit = cache-side, refill = memory/tag path, wbuffer =
+   forwarding).
+3. `match = 1, stc_ctag = 0` → **case (c)**: stored untagged; the reload is correct and the
+   fault is upstream.
+4. `match = 0` → the untagged load's granule was not the last recorded capability store.
+5. `ldc0_valid = 0` → no untagged capability load was seen at all.
+
+Also in the batch: **switch 212** mirrors the trap summary at a UART-safe aperture (bank 7
+reg 31 is only reachable at 255, which hijacks the console); the faulting operand (`tval`) is
+latched with mcause/mepc so it survives the wedge; and the two granule addresses are exposed.
+Everything except 208 and 212 is a wedge-only read — post-run odd apertures are safe because
+`debug_led_o` is the LED pin, not the console TX.
+
+## Two bugs this probe had, caught in simulation
+
+Recorded because both would have produced a confident wrong answer on silicon:
+
+* the store record latched **paddr = 0** on every store (captured at request time; the
+  physical address arrives from the MMU a cycle later). Now latched when the entry is pushed.
+* a granule stored tagged, then legitimately cleared by a plain store, then reloaded
+  untagged would have read as **"hardware tag loss"**. `cap-tag-cache` performs exactly that
+  sequence, which is how it surfaced. Hence the `clobbered` bit.
+
+## Why the mtval instrument is not the readout
+
+A capability fault inside a domain **wedges rather than trapping to mtvec** (`core/cva6.sv`,
+the debug-mux comment), so the monitor's EXCX/MCAU/MTVL block never runs; the board lane
+measured this over four boots (3 mcause-8 wedges print it, 6 mcause-25 wedges print none) and
+GDB does not rescue it either, since a nested trap clobbers the CSRs first. The mtval work
+stays — it is the readout in simulation and for non-domain faults — but on this path the
+debug-mux bits are what survive.
