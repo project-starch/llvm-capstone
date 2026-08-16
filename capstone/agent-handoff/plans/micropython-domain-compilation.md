@@ -73,17 +73,55 @@ representation problem is not a frontend problem.
 |---:|---|---|---|
 | 7 | `MCStreamer::emitIntValue` assert ``1 <= Size && Size <= 8`` via `emitGlobalConstantStruct` | module-level global emission (no function) | **backend**: cannot emit a 16-byte integer in static data |
 | 2 | `APInt::getSExtValue()` assert in `CapstoneDAGToDAGISel::tryShrinkShlLogicImm`, `CapstoneISelDAGToDAG.cpp:697` | `gc_init`, `mp_pairheap_delete` | **backend**: missing width guard |
-| 2 | `Cannot select: i128 = and` / `i128 = xor` | `mp_obj_get_type`, `bound_meth_unary_op` | **backend**: i128 bitwise lowering |
+| 2 | `Cannot select: i128 = and` / `i128 = xor` | `mp_obj_get_type`, `bound_meth_unary_op` | **source** (see the correction below) |
 | 3 | `Cannot materialize arbitrary >64-bit constants as capabilities`; `CIncOffset displacement must fit in signed 64-bits` | `list_pop`, `str_finder`, `mp_execute_bytecode` | **source**: the object representation |
 
 Failing files: `gc modbuiltins modsys obj objboundmeth objdict objgenerator objint objlist
 objmodule objstr objtuple pairheap vm`.
 
-**11 of the 14 are toolchain gaps; 3 are the object-representation question.** That inverts the
-original scoping, which assumed the representation was the whole job. The seven-file group is the
-clearest example: `mp_rom_obj_t` is a union, so `MP_ROM_INT(x)` in a const table asks the AsmPrinter
-to emit a pointer-sized *integer* in static data, and the Capstone streamer only handles up to 8
-bytes. SQLite never triggers this because it has no integer-in-pointer-slot unions.
+**9 of the 14 are toolchain gaps; 5 are the object-representation question.** The seven-file group
+is the clearest toolchain case: `mp_rom_obj_t` is a union, so `MP_ROM_INT(x)` in a const table asks
+the AsmPrinter to emit a pointer-sized *integer* in static data, and the streamer only handles up to
+8 bytes. SQLite never triggers this because it has no integer-in-pointer-slot unions.
+
+### Correction, same day: the i128 `and`/`xor` group is NOT a backend gap
+
+It was filed as one first. Reading the bail path refutes that. `lowerScalarI128Logical`
+(`CapstoneISelLowering.cpp:8297`) lowers an i128 logical op by narrowing both operands to XLen and
+re-extending, and it returns `SDValue()` when an operand is **not** an extension of a 64-bit value.
+Here the operands are real capabilities, so it bails, and the bail is correct in the same sense the
+mixed-extend bail documented ten lines below it is correct: masking a capability's address bits and
+handing back an untagged result is exactly the C-16 failure mode, where a truncated pointer lost its
+tag and was then used as a base. Teaching the backend to do it silently would buy two files and
+reintroduce a bug class this project has already paid for.
+
+Where those i128 values come from, read out of the IR rather than guessed:
+
+```
+py/obj.h:102   #define MP_OBJ_NEW_IMMEDIATE_OBJ(val) ((mp_obj_t)(((val) << 3) | 6))
+obj.ll:334     %cmp = icmp eq ptr addrspace(200) %0, inttoptr (i128 14 to ptr addrspace(200))
+```
+
+so a comparison against `mp_const_none` and friends materialises an integer constant **as a
+capability**, and the DAG then folds a run of such comparisons into `(x & 15) == …`. Same root as
+the three "loud" files: the object word is being *constructed* from an integer.
+
+### The direction that already works, and it is the more common one
+
+`(mp_int_t)(o) & 7`, i.e. **reading** a tag, compiles today: clang emits `ptrtoint ptr
+addrspace(200) to i64` followed by an ordinary 64-bit `and` (`obj.ll:91`, `obj.ll:111`). Only the
+**construction** direction (integer to object word) fails. That materially narrows stage 2: the
+representation work is about how non-pointer objects are built, not about every tag test in the
+interpreter.
+
+### Refuted the same day: pinning `mp_int_t` to 64 bit is not a shortcut
+
+The obvious cheap fix is upstream's own `MP_INT_TYPE_INT64`, which makes `mp_int_t`/`mp_uint_t`
+`int64_t`/`uint64_t` instead of pointer-width, with no patch at all. Re-ran the whole census with
+`-DMP_INT_TYPE=1`: **identical result, 119 pass, the same 14 files fail with the same signatures.**
+The i128 values come from `mp_obj_t` being a pointer type, not from `mp_int_t`, so this changes
+nothing on its own. Worth doing anyway as part of stage 2, but it buys zero files by itself and
+should not be presented as progress.
 
 ### A trap found while measuring
 
@@ -104,20 +142,23 @@ an assertions-enabled clang, and treat any domain built with a NoAsserts clang a
 - Per-file, not a domain build. A real domain is one TU, which changes cap-table numbering and can
   surface failures this census cannot.
 
-## Stage 1 — close the three backend gaps
+## Stage 1 — close the two backend gaps
 
-Unblocks 11 of the 14 files and touches the shared compiler, so it carries the heavier gate.
+Unblocks 9 of the 14 files. Both are changes to our LLVM fork, so this carries the heavier gate.
 
-- **1a. 16-byte integers in static data.** `emitGlobalConstantImpl` reaches
-  `CapstoneELFStreamer::emitValueImpl` with size 16. Emit as two 8-byte halves in the right order.
-- **1b. Width guard in `tryShrinkShlLogicImm`** (`CapstoneISelDAGToDAG.cpp:697`): check
-  `getSignificantBits() <= 64` before `getSExtValue()`. The same class of bug was already fixed once
-  in `SelectionDAGAddressAnalysis` (see the three codegen fixes of 2026-07-27); this is the second
-  instance, which suggests a sweep for other unguarded `getSExtValue()` calls in the target is worth
-  one grep.
-- **1c. i128 `and`/`xor` lowering.** A previous fix covered the constant-mask path and left the
-  general one; the census hits both a constant (`and t4, Constant:i128<15>`) and a register form
-  (`xor t7, t11`). This is the open-ended item of the three.
+- **1a. 16-byte integers in static data (7 files).** `emitGlobalConstantImpl`
+  (`llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp:4260`) already has a Capstone-specific carve-out for
+  `Size > 8`: when the expression is **relocatable** (a capability pointer) it emits the symbol in
+  the low word and zeroes the high word. The case that aborts is the neighbouring one, an
+  **absolute** value, which falls through to `emitValue(ME, 16)` and trips
+  `MCStreamer::emitIntValue`'s `1 <= Size && Size <= 8`. Extend the same block: emit the low 8 bytes
+  and zero-extend, in data-layout order. Shared LLVM file, but a block that is already Capstone's
+  and is guarded by `Size > 8`, which other targets do not reach through this path.
+- **1b. Width guard in `tryShrinkShlLogicImm` (2 files).** `CapstoneISelDAGToDAG.cpp:697` calls
+  `getSExtValue()` on a constant that can be 128 bits. Check `getSignificantBits() <= 64` first.
+  Capstone-only file, one condition. The same class was already fixed once in
+  `SelectionDAGAddressAnalysis` (three codegen fixes, 2026-07-27), so this is the second instance and
+  a grep for other unguarded `getSExtValue()` calls in the target is worth doing in the same pass.
 
 Each fix ships with:
 
@@ -127,12 +168,14 @@ Each fix ships with:
   after; a backend change that moves unrelated codegen invalidates every measurement on file.
 - the standard regression gate: lit, BEEBS, RV8, authority, SQLite QEMU rows.
 
-**Gate:** 130 of 133 files compile; regression suites unchanged; reference `.dom` hashes identical.
+**Gate:** 128 of 133 files compile; regression suites unchanged; reference `.dom` hashes identical.
 
-## Stage 2 — REPR_CAP: decide the representation, then fix the three loud sites
+## Stage 2 — REPR_CAP: decide the representation, then fix the five loud sites
 
-The three remaining failures are the compiler refusing to treat an object word as an integer. The
-fix is a fifth object representation beside upstream's REPR_A..D.
+The five remaining failures (`obj`, `objboundmeth`, `objlist`, `objstr`, `vm`) are all the compiler
+refusing to build an object word out of an integer. The fix is a fifth object representation beside
+upstream's REPR_A..D. Note what is NOT in that list: reading a tag already works, so the scope is the
+constructors.
 
 **Proposed shape, to be validated in code and not in prose:**
 
@@ -217,8 +260,7 @@ result, and this project has spent board sessions on images that were correct an
 
 | Stage | Estimate | Confidence |
 |---|---|---|
-| 1a, 1b | 1-2 days together | high, both are contained |
-| 1c | 2-5 days | low, previous fix covered only part of the space |
+| 1a, 1b | 1-2 days together | high, both are contained and both have a named site |
 | 2 | 1-2 weeks | medium, the design is cheap and the fallout is not |
 | 3 | 2-3 days | medium |
 | 4 | 3-5 days | medium, NLR under linear capabilities is the unknown |
