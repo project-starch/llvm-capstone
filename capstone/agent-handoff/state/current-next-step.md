@@ -1,6 +1,44 @@
 # Next step
 
-## 0. CURRENT — 2026-08-16. Everything below this block predates two RTL fixes and a reflash.
+## 0. CURRENT — 2026-08-17. S-07 case (a) is REFUTED on hardware; next step needs a reflash.
+
+**Bitstream: `caplifive_s06s08fix_s07probe_a2ef8eb.bit`** (adds the S-07 displacement sticky bit on
+debug-mux switch 204; every number from before it is baseline-invalid).
+
+**THE RESULT.** Two independent wedges, both `sw=204 = 0x00`:
+
+| boot | rep | DBAS | mepc | VA | site |
+|---|---|---|---|---|---|
+| 5 | 3/3 | `0x84400000` | `0x8442a83c` | `0x3a83c` | `sqlite3OsRead+0x4c` |
+| 8 | 2/3 | `0x84000000` | `0x8402a83c` | `0x3a83c` | `sqlite3OsRead+0x4c` |
+
+Different placements, different rep indices, same instruction — `ldc a4, 0x20(a4)` with rs1 from
+the immediately preceding `ldc`. Both control-validated, `SQ: G/enter` present, mcause 25.
+**Nothing was displaced onto a scalar writeback port**, so the syncer/LOAD_WB path is not the
+mechanism. Tally: 15 reps, 5 boots, 2 wedges.
+
+**WHAT REMAINS:** (b) the load genuinely returned `tag=0`, or (c) the granule was never tagged
+because the `stc` that spilled it stored an untagged register — in which case the reload is
+*correct* and the fault is upstream. **A retry probe cannot separate (b) from (c)** and would give
+a confident wrong answer; the compiler pass that would have done it stays off by default.
+
+**BOUNDING CAVEAT:** the sticky has never been seen to SET on silicon (its positive control was in
+simulation), so "no displacement" and "the detector does not work in this bitstream" are not yet
+fully separated. The RTL lane has since built a **selftest at switch 220** that drives the same
+sticky and counter, one-shot per reset, with verdict-byte bit[0] marking a synthetic set — which
+closes exactly this.
+
+**NEXT STEP IS NOT OURS: it needs ONE reflash, and that is the project lead's call (ask-first).**
+Batch, in the order to check on the boot: (1) selftest at 220 — prove the instrument fires before
+believing any zero; (2) tag-history probe at 208 — the discriminator that separates (b) from (c),
+with a CLOBBERED bit so a legitimately-cleared granule is not misread as tag loss; (3) `tval`
+latched beside mcause/mepc; (4) even-aperture trap-summary mirror at 212. All in one commit —
+going twice is the expensive mistake.
+
+**Board work is paused deliberately**, not blocked: a third wedge would not move the conclusion
+while the instrument caveat is the binding limit.
+
+## 0-OLD. 2026-08-16 — superseded by the block above.
 
 **The next step is not ours: it is with the RTL lane, and it is one register.**
 
