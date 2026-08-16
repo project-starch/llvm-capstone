@@ -570,6 +570,45 @@ def main():
             montag  = re.search(r"(SPL[AB]|ILLX|EXCX|RCPX|WCPX|SHAX|RGNO|DPIC|DPIX|DRET):([0-9A-Fa-f]{8})", text)
             results.append((label, wedged, obs, returned, created, entered,
                             montag.group(0) if montag else None))
+
+            # S-07 DISPLACEMENT STICKY BIT, READ AFTER EVERY DOMAIN.
+            #
+            # THE BIT IS BOOT-CUMULATIVE: it is cleared only by reset, so the byte read at a
+            # wedge covers everything since power-on -- the k800 control, every earlier domain
+            # in the boot, and the monitor's own capability traffic. A non-zero byte at the
+            # wedge is therefore NOT by itself attributable to the domain that wedged, and
+            # reading it only once would produce exactly the kind of confident mis-attribution
+            # this campaign keeps paying for.
+            #
+            # So sample it after EVERY domain. The COUNT DELTA across a domain is the
+            # attributable number; the seen-bits alone are not on a multi-domain boot.
+            #
+            # Pre-registered readings, so neither can be rationalised afterwards:
+            #   baseline (after the control) NON-ZERO -> displacement happens during ordinary
+            #     operation, before the workload under test. That is a bigger finding than S-07
+            #     and changes what we chase, so it is reported even when zero.
+            #   baseline zero, delta non-zero over the wedging domain -> the producing load's
+            #     response was displaced onto a scalar writeback port: the value was intact in
+            #     memory (case a). The count says one-off or routine.
+            try:
+                for bit in range(8):
+                    console.set_switch(bit, bool(204 & (1 << bit)))
+                time.sleep(1.2)
+                _st = console.latest(C.LISTEN.get("led_state", "led_state"))
+                _bits = _st.get("states") if isinstance(_st, dict) else None
+                _v = sum((1 << i) for i, b in enumerate(_bits) if b) if _bits else None
+                _line = (f"  [s07] after {label}: sw=204 displacement "
+                         f"{'UNREAD' if _v is None else f'0x{_v:02x} {_v:08b}'}"
+                         f"{'' if _v is None else f'  seen={{stc:{(_v>>7)&1},ldc:{(_v>>6)&1}}} count={_v & 0x3F}'}")
+                print(_line, flush=True)
+                transcript.append(_line + "\n")
+            except Exception as exc:
+                # Never let the extra read cost the run: the domain verdict above is already
+                # recorded, and a failed sample is reported rather than swallowed.
+                _line = f"  [s07] after {label}: sw=204 read FAILED ({type(exc).__name__})"
+                print(_line, flush=True)
+                transcript.append(_line + "\n")
+
             if wedged:
                 # INSTRUMENT THE WEDGE HERE, IN THIS SESSION.
                 #
