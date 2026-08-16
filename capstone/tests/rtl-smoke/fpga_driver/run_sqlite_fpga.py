@@ -70,7 +70,7 @@ HOST = pathlib.Path(os.environ.get("SQLITE_HOST", TMP / "sqlite-build" / "sqlite
 # FPGA_BITSTREAM by hand and one that forgot burned a launch on a HARD STOP. A default that
 # is always overridden trains people to override it, which is how a real mismatch gets waved
 # through.
-BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s07diag.bit")
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s06s08fix_s07probe_a2ef8eb.bit")
 
 
 def log(m): print(f"[sqlite] {m}", file=sys.stderr, flush=True)
