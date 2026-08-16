@@ -1,7 +1,15 @@
+**Status 2026-08-16, latest: MicroPython's OWN test suite runs, 40 tests in one boot,
+21 pass / 19 fail / 0 ABSENT.** Zero absent is the load-bearing number: the domain returned from
+every single test, so nothing faulted or wedged across 40 diverse Python programs. See
+"Running the upstream suite" at the end of this file for where to pick the work up.
+
 **Status: MicroPython runs ordinary Python.** Verified against a checksum over the interpreter's
 actual output, computed before each run: `print`/arithmetic, lists and `len`, `def` with a call,
 `for` over `range`, string multiplication, `try`/`except`, and dicts all produce exactly the
-expected bytes. Garbage collection under allocation pressure is the last construct being measured.
+expected bytes. **Garbage collection under allocation pressure now joins them**: `h8.dom` returned
+`0x0008059e`, i.e. 2000 short-lived lists against a 96 KiB heap forced real collections and the sum
+came out at exactly `2003000`. That is the runtime proof for the three `gc.c` patches, and for the
+conservative root scan, which no compile could have given.
 
 **Priority is COMPATIBILITY, not security** (project lead, 2026-08-16). There is deliberately no
 intra-heap protection yet, and that is measured rather than assumed: the whole image contains
@@ -977,3 +985,100 @@ result, and this project has spent board sessions on images that were correct an
 
 Board runs. Conformance and performance methodology. The allocator study's later arms (per-object
 `shrink` at `gc_alloc`, revoke on GC sweep). Any change to the paper.
+
+## Running the upstream suite — WHERE TO PICK THIS UP (2026-08-16)
+
+Everything in this section is committed at `c4d3acd300dd` except the one uncommitted file named
+at the end. Read this first if you are resuming.
+
+### What exists and works
+
+The domain used to run ONE program baked into it, so every test cost a full QEMU boot. MicroPython
+ships 576 tests in `tests/basics/` alone; at ~3 min a boot that is not a suite. The replacement
+needed no new transport, because two pieces were already there:
+
+- the loader takes a repeat count — `capstone-test.user <dom> <times>` calls `call_dom()` in a
+  loop and prints each retval (`userspace/capstone-test.c:37-40`);
+- the entry glue's reentry path skips the table build and `__capstone_cap_init`
+  (`start-gp-captable-interp.S:296-310`, where SQLite already depends on it), so a global survives
+  a `domreturn`.
+
+So a `static unsigned mpy_test_idx` is the whole mechanism: each call runs the next test.
+
+| Piece | Path |
+|---|---|
+| test table generator | `benchmarks/micropython/tools/gen-test-table.py` |
+| scorer | `benchmarks/micropython/tools/score-run.py` |
+| build knob | `MPY_TESTS=<n>|all` (without it the build is byte-unchanged) |
+| runner block | `port/mpy_domain.c`, under `#ifdef MPY_TEST_RUNNER` |
+| run script | `/tmp/capstone/run-mpytest.sh` (outside the repo; recreate from the commit message) |
+
+Reproduce:
+
+```bash
+export CAPSTONE_REPO_ROOT=/home/diego/llvm-capstone   # see "traps" below
+source capstone/tests/capstone-test-env.sh
+cd capstone/benchmarks/micropython
+MPY_TESTS=40 DOM_NAME=mpytest bash build-micropython-silicon.sh
+bash /tmp/capstone/run-mpytest.sh
+```
+
+### The result, and how to read it
+
+    21 pass, 19 fail, 0 absent, of 40 tests
+    Called dom (41-th time) retval = 4294967295
+
+`ABSENT` and `FAIL` are deliberately distinct. FAIL means the interpreter ran and computed the
+wrong thing; ABSENT means it never came back, so a fault ended the boot there — which makes
+bisection free, since the first absent test IS the fault site. **Zero absent across 40 tests.**
+
+Call 41 returning `0xFFFFFFFF` is the positive control for the table having genuinely been walked:
+without it, a domain returning one constant 41 times would read as a clean sweep.
+
+The 19 failures collapse onto exactly FOUR distinct output hashes — one shared by all six
+`async_*` tests, one by all `*_intbig`, one by six `builtin_*` tests. That is the signature of
+features absent at `ROM_LEVEL_MINIMUM`, the same class as `import gc`, and not of anything
+capability-related. They were left standing rather than skipped, because a skipped test and a
+failing one carry different information.
+
+### The next step, and the wall it hits
+
+The obvious next move is to raise the feature level so those 19 stop being about configuration.
+`port/mpconfigport.h` has been opened for that — `MICROPY_CONFIG_ROM_LEVEL`,
+`MICROPY_LONGINT_IMPL` and `MICROPY_ERROR_REPORTING` are now `#ifndef`-guarded so
+`DOMAIN_EXTRA_DEFS` can set them. **That file is the one uncommitted change.**
+
+Three variants were built and **all three failed to compile**:
+
+    CORE_FEATURES                       20 errors
+    CORE_FEATURES + LONGINT_MPZ         20 errors
+    EXTRA_FEATURES + LONGINT_MPZ        py/compile.c:2366: undeclared identifier 'MP_QSTR_OrderedDict'
+
+The cause is not the feature level itself. `build-micropython-silicon.sh` generates the qstr /
+module headers by mirroring the port into the MicroPython tree and running **its** Makefile with a
+stock host compiler — and `DOMAIN_EXTRA_DEFS` is **not passed to that step**. So the qstr pool is
+always the MINIMAL one while the domain is compiled at the higher level, and every qstr the higher
+level introduces is undeclared.
+
+This is the same hazard the script's own comment already warns about ("a mismatched string pool is
+an error that compiles"); here it is an error that does not compile, which is the better failure.
+
+**The fix is one line-ish:** pass the same `-D` flags into the header-generation `make` (via
+`CFLAGS_EXTRA`), so the generated pool matches the level being built. Do that before anything else,
+then rebuild the three variants and run them in ONE boot with the MINIMAL image as the control —
+per the batching rule, controls first, ascending, since a wedge ends the boot.
+
+Expect `EXTRA_FEATURES + LONGINT_MPZ` to be the interesting one for this branch: `mpz` is a second
+allocator layered on the GC and is the closest thing in MicroPython to the nested-allocator
+question the branch is named for.
+
+### Traps that cost time here
+
+- **`capstone-test-env.sh` resolved `CAPSTONE_REPO_ROOT` to `/home`** in this shell, so
+  `CAPSTONE_CLANG` pointed at a clang that does not exist. Set `CAPSTONE_REPO_ROOT` explicitly
+  before sourcing. Not investigated further; it may be a profile leak rather than a script bug.
+- **`DOM_NAME` does not appear in the build script's final "Built ..." line**, which always says
+  `micropython.dom`. The file written is correct; the message is not. Check the file, not the echo.
+- `score-run.py` was negative-tested before any result was believed — it reports FAIL on a word
+  wrong by one bit, ABSENT on a missing call, and exits non-zero with a message rather than
+  printing an empty `0/0` on a log with no loader output.
