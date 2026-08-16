@@ -48,6 +48,31 @@ PER_DOM = float(os.environ.get("SQLITE_STAGE_TIMEOUT") or 90)
 # UART byte resets this clock, so a slow-but-live workload is unaffected; only silence trips
 # it. Raise SQLITE_IDLE_S if a stage can legitimately go quiet for longer between SQ: markers.
 IDLE_S = float(os.environ.get("SQLITE_IDLE_S") or 30)
+# Which domains get the trap-log clear (switch 191) before they run.
+#
+#   all    (default, and the historical behaviour) -- clear before every domain
+#   first  -- clear once, before the first domain only
+#   none   -- never clear
+#
+# WHY IT IS WORTH TURNING OFF FOR THE DOMAIN YOU EXPECT TO WEDGE. 191 is also a
+# BLIND WINDOW: the logging always_ff is `if (clear) <clear> else <record>`, so
+# while the switches sit there no displacement is recorded, and a missed
+# displacement looks exactly like case (b) ("memory did it"). Skipping the clear
+# for the run under test gives that run a ZERO blind window, which is what turns
+# an all-zero S-07 byte from "maybe we just didn't see it" into a real negative.
+#
+# What you give up is small and recoverable: the clear exists so a STALE latch
+# cannot be read as this domain's trap. But the trap latch is LAST-WRITER-WINS --
+# recent_nontrivial_{mcause,mepc} are overwritten on every non-trivial trap -- so
+# the wedge's own mcause-25 still lands on top of whatever a previous domain left.
+# The only lost distinction is "this domain trapped" vs "a previous domain trapped
+# and this one wedged without latching one", and the per-domain trap-summary
+# sample below closes that: if the post-run latch is identical to the pre-run
+# value, the trap fields are stale and carry no verdict. The displacement sticky
+# is unaffected either way -- 191 does not clear it.
+TRAPLOG_CLEAR = (os.environ.get("SQLITE_TRAPLOG_CLEAR") or "all").strip().lower()
+if TRAPLOG_CLEAR not in ("all", "first", "none"):
+    raise SystemExit(f"SQLITE_TRAPLOG_CLEAR must be all|first|none, got {TRAPLOG_CLEAR!r}")
 OUT = os.environ.get("PROBE_SCOPED_OUT") or "/tmp/capstone/sqlite-stages.txt"
 # Decimal `obs` values that are legitimate results even though they are not staged 0x5A6E
 # markers -- i.e. sentinels a glue probe returns from a chosen bisection point.
@@ -209,6 +234,10 @@ def main():
     console.connect()
     install_resilient_emit(console)
     results, transcript = [], []
+    # Trap-log summary standing before the CURRENT domain ran, so a latch that never changed can
+    # be reported as stale instead of being read as this domain's trap. A one-element list rather
+    # than a plain name because it is written from inside the per-domain loop.
+    s07_prev_trap = [None]
     try:
         console.lock()
         install_release_on_signal(console)
@@ -318,14 +347,21 @@ def main():
             #     immediately after the wedge reads and never reaches another clear.
             # The S-07 displacement sticky is NOT in the clear list, so that evidence survives a
             # log clear; only the trap latch is affected.
-            try:
-                for bit in range(8):
-                    console.set_switch(bit, bool(191 & (1 << bit)))
-                time.sleep(1.0)
-                for bit in range(8):
-                    console.set_switch(bit, False)
-            except Exception as exc:  # never let instrumentation abort the run
-                log(f"trap-log clear failed ({type(exc).__name__}) -- wedge reads will be stale")
+            _do_clear = (TRAPLOG_CLEAR == "all"
+                         or (TRAPLOG_CLEAR == "first" and dom_idx == 1))
+            if not _do_clear:
+                log(f"trap-log clear SKIPPED for {label} (SQLITE_TRAPLOG_CLEAR={TRAPLOG_CLEAR}) "
+                    f"-- zero blind window for this domain; trap fields are last-writer-wins, "
+                    f"so compare against the pre-run latch below before trusting them")
+            else:
+                try:
+                    for bit in range(8):
+                        console.set_switch(bit, bool(191 & (1 << bit)))
+                    time.sleep(1.0)
+                    for bit in range(8):
+                        console.set_switch(bit, False)
+                except Exception as exc:  # never let instrumentation abort the run
+                    log(f"trap-log clear failed ({type(exc).__name__}) -- wedge reads will be stale")
 
             mark = console.uart_mark()
             wedged = False
@@ -606,12 +642,31 @@ def main():
             #     response was displaced onto a scalar writeback port: the value was intact in
             #     memory (case a). The count says one-off or routine.
             try:
-                for bit in range(8):
-                    console.set_switch(bit, bool(204 & (1 << bit)))
-                time.sleep(1.2)
-                _st = console.latest(C.LISTEN.get("led_state", "led_state"))
-                _bits = _st.get("states") if isinstance(_st, dict) else None
-                _v = sum((1 << i) for i, b in enumerate(_bits) if b) if _bits else None
+                def _read_sw(_sw):
+                    for bit in range(8):
+                        console.set_switch(bit, bool(_sw & (1 << bit)))
+                    time.sleep(1.2)
+                    _s = console.latest(C.LISTEN.get("led_state", "led_state"))
+                    _b = _s.get("states") if isinstance(_s, dict) else None
+                    return sum((1 << i) for i, b in enumerate(_b) if b) if _b else None
+
+                _v = _read_sw(204)
+                # The trap-log summary {seen, mcause[6:0]} alongside it. With the clear skipped
+                # the trap fields are last-writer-wins, so the ONLY way to tell "this domain
+                # trapped" from "a previous domain's trap is still latched" is to compare against
+                # the value standing before this domain ran. Sampling it per domain is what makes
+                # that comparison possible at all; without it a stale latch reads as a result.
+                _t = _read_sw(255)
+                _prev = s07_prev_trap[0]
+                s07_prev_trap[0] = _t
+                _stale = (_t is not None and _prev is not None and _t == _prev and not _do_clear)
+                _tline = (f"  [s07] after {label}: sw=255 trap-log "
+                          f"{'UNREAD' if _t is None else f'0x{_t:02x} seen={(_t>>7)&1} mcause={_t & 0x7F}'}"
+                          + ("  <== UNCHANGED since before this domain: treat the trap fields as "
+                             "STALE, they carry no verdict about this domain (the displacement "
+                             "byte is unaffected)" if _stale else ""))
+                print(_tline, flush=True)
+                transcript.append(_tline + "\n")
                 if _v is None:
                     _line = f"  [s07] after {label}: sw=204 displacement UNREAD"
                 else:
