@@ -152,7 +152,10 @@ static char *s07p_hex64(char *o, unsigned long v) {
 }
 static char *s07p_lit(char *o, const char *s) { while (*s) *o++ = *s++; return o; }
 static void s07p_emit(void) {
-  char buf[192], *o = buf;
+  /* 320, not 192: the combined arm appends four more 16-digit fields and the worst case is ~234
+     bytes. Sized with margin because overflowing this buffer would corrupt the very stack frame
+     the probe exists to report on. */
+  char buf[320], *o = buf;
   o = s07p_lit(o, "S07P field=");  o = s07p_hex64(o, capstone_s07p_fhi);
   *o++ = ':';                      o = s07p_hex64(o, capstone_s07p_flo);
   o = s07p_lit(o, " stack=");      o = s07p_hex64(o, capstone_s07p_shi);
@@ -160,6 +163,15 @@ static void s07p_emit(void) {
   o = s07p_lit(o, " ty=");         *o++ = "0123456789abcdef"[capstone_s07p_fty & 0xF];
   o = s07p_lit(o, " calls=");      o = s07p_hex64(o, capstone_s07p_calls);
   o = s07p_lit(o, " bad=");        *o++ = capstone_s07p_bad ? '1' : '0';
+#ifdef CAPSTONE_S07_CURSOR_REPORT
+  /* Combined arm: the OTHER site's counters go out too, so a run that wedged at neither still
+     says whether sqlite3OsRead was reached at all -- which is the fact that reframed this whole
+     investigation and must not be lost just because the pager site was clean. */
+  o = s07p_lit(o, " osread_calls="); o = s07p_hex64(o, capstone_s07c_calls);
+  o = s07p_lit(o, " osread_hits=");  o = s07p_hex64(o, capstone_s07c_hits);
+  o = s07p_lit(o, " osread_cur=");   o = s07p_hex64(o, capstone_s07c_cur);
+  o = s07p_lit(o, " osread_meta=");  o = s07p_hex64(o, capstone_s07c_meta);
+#endif
   *o++ = '\n'; *o = '\0';
   output_text(buf);
 }
@@ -6656,15 +6668,28 @@ void domain_main(unsigned *res, unsigned func) {
     return;
 #endif
     unsigned long rv_ = (unsigned long)(unsigned)run_sqlite();
-#ifdef CAPSTONE_S07_CURSOR_REPORT
-    /* Reported UNCONDITIONALLY, including the no-hit case: whether the site was reached and how
-       often is part of the measurement, and a fall-through to the staged marker would erase it. */
-    *res = s07c_result();
-    return;
-#endif
+#if defined(CAPSTONE_S07_CURSOR_REPORT) || defined(CAPSTONE_S07_PAGER_REPORT)
+    /* Reported UNCONDITIONALLY, including the nothing-fired case: whether a site was reached and
+       how often is part of the measurement, and falling through to the staged marker erases it.
+       When BOTH probes are compiled in -- the combined arm, which exists because instrumenting
+       one site simply moves the wedge to the other -- a site that actually went bad outranks a
+       clean count, and the pager site is asked first only because it latches. */
+    {
+      unsigned r_ = 0u;
 #ifdef CAPSTONE_S07_PAGER_REPORT
-    *res = s07p_result();
-    return;
+      if (capstone_s07p_bad) r_ = s07p_result();
+#endif
+#ifdef CAPSTONE_S07_CURSOR_REPORT
+      if (!r_ && capstone_s07c_fired) r_ = s07c_result();
+#endif
+#if defined(CAPSTONE_S07_PAGER_REPORT)
+      if (!r_) r_ = s07p_result();
+#else
+      if (!r_) r_ = s07c_result();
+#endif
+      *res = r_;
+      return;
+    }
 #endif
 #ifdef CAPSTONE_S07_RETRY_REPORT
     {
