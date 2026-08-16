@@ -554,6 +554,65 @@ code; all four would have produced a confident wrong measurement.
    Workaround: pass the control positionally and the rest as `--guest-command`, copying the images
    into the 9p share by hand. Worth fixing in the harness.
 
+### The blob is INTACT, so the earlier localization needs correcting
+
+Two hypotheses were tested and both are REFUTED. Recorded because each looked convincing.
+
+**"The copy is truncated at the end."** The cap-init entry is the last word of the copied template
+(blob offset 0x8130 + 8 = tmpl_len 0x8138, zero margin), so 256 bytes of tail padding were added to
+a temp copy of the linker script, moving the entry 264 bytes from the end. **The domain faults
+identically.** Refuted.
+
+**"Something overwrites the blob."** A probe reads the entry out of the live blob, computing the
+offset at RUNTIME from the same two linker symbols the glue uses so it is layout-correct in any
+image. Both halves were read in one boot:
+
+| | image | live blob |
+|---|---|---|
+| high | `0xffffffff` | `0xffffffff` |
+| low | `0xfffeb048` | `0xfffeb048` |
+
+**Exact match.** The blob content is intact and correctly delivered. Refuted.
+
+### What that leaves, and it is sharper than before
+
+The same eight bytes read through a pointer derived from `sp.base` inside `domain_main` are
+CORRECT, and read through the glue's `s1` are garbage. So it is the capability, not the data.
+`s1` is established at `start-gp-captable-interp.S:270-272` — `cincoffset(s1, sp, x0)` then
+`scc(s1, s1, sp.base)` — **before** `BUILD_GP_CAPTABLE` splits `sp`. The corruption scales with the
+carve count and is absent at `INTERP_BUILD_LIMIT=0`, where the computed target is exact.
+
+### Two fix attempts, both wrong, both mine
+
+A gated `INTERP_CAPINIT_REDERIVE_BLOB` re-derives the blob view from the current `sp` instead of
+trusting the pre-carve `s1`. Byte-identity when off was verified both times (a freshly built image
+is bit-identical to the previous one), which is mandatory because that file builds every ladder rung
+and the SQLite domain.
+
+* **Attempt 1** placed the derivation INSIDE the per-entry loop and used `t2`, which is live there.
+  Fault `cause = 5` before publishing anything.
+* **Attempt 2** moved it outside the loop, replacing the `cincoffset(a6, s1, t6)` at setup, using
+  `t0`. Still `cause = 5`.
+
+So the model "sp.base inside RUN_CAP_INIT is the blob base" is wrong, even though "sp.base inside
+`domain_main` is the blob base" is measured to be right. Those two `sp`s differ in a way not yet
+understood, and that difference is now the whole question.
+
+**Do not attempt a third fix without measuring it first.** The measurement is one build: publish
+`sp.base` and `sp.end` from inside `RUN_CAP_INIT` (the glue already has `INTERP_PEEK_MODE` 1/2/3 for
+exactly this on a different code path) and compare against the same two values read in
+`domain_main`. If they differ, that is the answer; if they agree, the fault is in `scc`/`cincoffset`
+on that path and not in the base at all.
+
+### A fifth instrument failure, same family as the other four
+
+The build loop used `set -- $n` over a list of `"name flags"` strings; the shell did not split them,
+so `DOM_NAME` contained a space and two of the three images were never written under the names the
+run then asked for. Both builds reported `rc=0`. The run loaded whatever was in the share from a
+previous round and reported `Failed to open the file.` for two arms while the third produced the
+only real datum. **Check that the artifact exists and is fresh, not that the builder exited zero** —
+this is now the fifth distinct instance in one session.
+
 ### What is now the shortest path to a running interpreter
 
 1. ~~Settle the interp question, apply the fix, negative-test it.~~ **DONE. The interp glue works:
