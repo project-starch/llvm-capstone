@@ -1,6 +1,6 @@
 # MicroPython as a freestanding Capstone domain — the compilation plan
 
-**Status:** 2026-08-16. **The MicroPython core compiles: 133 of 133 files.** Stages 0 and 1 are
+**Status:** 2026-08-16. **The MicroPython core AND a Capstone port compile as one translation unit.** Stages 0 and 1 are
 done, and closing the last five took four more backend items plus one source patch, recorded below
 as stage 1b. Stages 2-6 are PROPOSED, and stage 2 has changed character: it is no longer what stands
 between us and a build, it is what stands between a build and a *correct* one.
@@ -264,6 +264,126 @@ without `-nostdlibinc`. SQLite is mostly insulated (`SQLITE_OS_OTHER` includes v
 `-include capstone_sqlite_libc.h` gets there first, so this is a latent hazard rather than a known
 defect. It is not changed here: touching the flag set of the builds every board measurement rests on
 is its own change, with its own gate.
+
+## Stage 1c — the whole port compiles, and what the study found. 2026-08-16.
+
+A six-way study (five investigations returned; the sixth and the verification pass died on an
+account limit) plus verification of every load-bearing claim against the primary source. What
+follows is only what was re-checked in this session, not what the study asserted.
+
+### The port exists and compiles as ONE translation unit
+
+`benchmarks/micropython/port/` — `mpconfigport.h`, `mphalport.h`, `qstrdefsport.h`, `mpy_domain.c`.
+The whole core plus the port, compiled as one TU with the silicon flags:
+
+| | |
+|---|---:|
+| `.text` at `-O0` | 321 KiB (328,912 B) |
+| carves in `.capstone_gp_initdesc` | **232** |
+| `__capstone_cap_init` | 11,900 B |
+| `.bss` | 97 KiB (the 96 KiB GC heap) |
+| undefined symbols | **11** |
+
+The eleven are `__gpfree_globals_base`, `setjmp`/`longjmp`, and the eight mem/str functions. All
+eleven have a supplier already in the tree. `MICROPY_NLR_SETJMP=1` means the capability setjmp
+built in stage 1b IS MicroPython's exception mechanism, so no `nlrcapstone.c` is needed and
+`py/nlr.h` is not touched.
+
+### The generated glue cannot build this domain, and the reason is not size
+
+`gen-gp-captable-glue.py` **aborts** on global 230: `.L.L__capstone_merged_strs.0`, 4080 B of
+initialized data, `.L`-private so not copy-eligible, overflowing the 12-bit store offset.
+
+That blob is the product of `-capstone-merge-string-constants=true`, so the obvious move is to drop
+the flag. Measured, both ways:
+
+| | carves | `.text` | generator |
+|---|---:|---:|---|
+| merging ON | **232** | 321 KiB | ABORTS at global 230 |
+| merging OFF | **633** | 343 KiB | succeeds, 8,315 lines of glue |
+
+So merging is what keeps the carve count near SQLite's proven 179; without it 633 carves is far
+outside anything this project has run. **`-capstone-merge-string-constants=true` stays on, and the
+generated glue is therefore not an option.**
+
+`build-sqlite-silicon.sh:1550` uses `start-gp-captable-interp.S` — the descriptor-driven glue is
+what the one large domain that works already uses, and its `.text` is O(1) in the carve count.
+
+### But `DOMAIN_GLUE=interp` faults in this checkout, for known-good rungs too
+
+Measured: `beebs_prime` with `DOMAIN_GLUE=interp` faults immediately (`cause = 7`, an out-of-bounds
+capability access in the entry path); the same rung with the default generated glue returns its
+oracle. So this is not about MicroPython.
+
+The study's diagnosis is that nothing in this checkout copies the globals template into `dom_data`,
+because `caplifive-buildroot` is pinned at `6912474`, one commit before `8c7b973 "modcapstone:
+deliver the gp-captable init descriptor into dom_data"` on branch `xlang-gp-captable-delivery`.
+
+Verified here: the pin and the branch are as described, `8c7b973` is the direct child of the pinned
+commit, it touches only three files (+54/-1), and its diff adds the `memcpy` of the globals template
+plus a `pr_info("gp-captable: copied ...")`. Verified further: the **staged** `capstone.ko` and
+`capstone-test.user` are from 2026-07-29 and contain neither string, so they predate it.
+
+**NOT verified, and it is the load-bearing part:** that this is the whole reason interp faults. The
+discriminating experiment is a SQLite QEMU run, since SQLite uses interp and is reported to work —
+if it passes today, the missing delivery cannot be the explanation and something else is going on.
+That run has not been made. Do it before bumping the submodule.
+
+### Two runtime tag losses in the GC, both patched and both proven in the emitted code
+
+These are stage 2's problem showing up early, and they are the reason a compiling interpreter is
+not a working one.
+
+`patches/0002` — `PTR_FROM_BLOCK` (`py/gc.c:96`) reconstructs a heap address as
+`block * BYTES_PER_BLOCK + (uintptr_t)pool_start`, an integer round trip, and all six uses
+dereference the result. `gc_alloc` already computes the same address the tag-preserving way at
+`py/gc.c:1007`, so the patch makes the macro agree with the function it is supposed to reproduce.
+Proven: one integer `add` becomes one `cincoffset`, and the function it changes is
+**`gc_mark_subtree`** — the site that walks the object graph, i.e. the first collection would have
+faulted.
+
+`patches/0003` — `gc_init`'s align-down (`py/gc.c:239`) masks the address. Subtracting the
+misalignment instead keeps it a pointer, **but only with a `volatile`**: without one the optimizer
+folds `p - (p & (N-1))` straight back into `p & ~(N-1)`. Proven: `andi ..., -32` disappears from
+`gc_init` and a `cincoffset` appears.
+
+### The idiom study, done here because that agent hit the limit
+
+Six spellings compiled and read at `-O0` and `-O1`:
+
+| idiom | -O0 | -O1 |
+|---|---|---|
+| `block * N + (uintptr_t)p` | untagged (`slli` only) | untagged |
+| `p + block * N` | **tag kept** (`cincoffset`) | **tag kept** |
+| `(uintptr_t)p & ~M` | untagged (`lcc`+`andi`) | untagged |
+| `p - (p & M)` | untagged (folded back) | untagged |
+| `p - asm_launder(p & M)` | tag kept | **MISCOMPILES** |
+| `p - volatile(p & M)` | **tag kept** | **tag kept** |
+
+The asm-laundered row is the one to know about: at `-O1` it emits `lcc a1, a1, 2` on a register
+that came from `andi`, i.e. it reads the cursor of a non-capability, which QEMU's `helper_cslcc`
+raises `UNEXPECTED_OPERAND` on. Checked whether this is a regression from stage 1b: it is **not**.
+`lowerSUB`'s cursor path predates those commits (`git show 5bfcbd91ba72` has the same two
+`getCapstoneCapabilityCursor` calls); stage 1b added only a sixth call site elsewhere. It is a
+pre-existing hazard for any integer offset that `isCapstoneIntegerOffset` does not recognise, and
+it argues for the `volatile` spelling rather than the asm one regardless.
+
+### An instrument defect, of the class this project keeps paying for
+
+`benchmarks/sqlite/check-capinit-slots.py:36-37` locates the descriptor by splitting the `readelf`
+line and taking field 5. That is the file offset only while the section index is a single digit:
+`line.replace("]", " ")` turns `[ 2]` into two tokens but `[12]` into one, shifting every field by
+one, so the script would read the section SIZE as an offset. SQLite's descriptor happens to be
+section 2, which is why it has never misbehaved. Verified by reading the line it parses. Fix it and
+negative-test it before its OK is trusted on any other image.
+
+### What is now the shortest path to a running interpreter
+
+1. Settle the interp question with a SQLite QEMU run (free, no new code).
+2. Link with the globals offset sized to `.text`, copying `build-sqlite-silicon.sh:1539-1586`.
+3. Provide `setjmp`/`longjmp` from `nlrjmp_kernel.h` and the eight mem/str functions from
+   `beebs_freestanding_string.c`.
+4. Run `print(1+1)`.
 
 ## Stage 2 — REPR_CAP: decide the representation, then fix the five loud sites
 
