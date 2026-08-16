@@ -784,6 +784,18 @@ def main():
                         except Exception as exc:
                             print(f"  [wedge] gdb mtval read failed ({type(exc).__name__}) -- "
                                   f"continuing to release the board", flush=True)
+                        finally:
+                            # MANDATORY. release_board() does NOT stop gdb (safe_cleanup.py:75-86
+                            # does switches/power/unlock only), and an orphaned server-side GDB
+                            # session survives a power cycle: every later run then times out
+                            # before load_image, and only gdb_stop() clears it. Leaving this out
+                            # would let one wedge poison every subsequent board session.
+                            try:
+                                console.gdb_stop()
+                            except Exception as exc2:
+                                print(f"  [wedge] gdb_stop FAILED ({type(exc2).__name__}) -- the "
+                                      f"session may be orphaned; if the next run times out before "
+                                      f"load_image, clear it with --stop", flush=True)
                     # DO NOT CALL console.trace_dump() HERE, OR ANYWHERE ON A WEDGED CORE.
                     # Measured 2026-08-05: the trace dump HANGS THE BOARD HARD -- `trace_result`
                     # never arrives, the 60 s wait expires, and the board is left in a state that

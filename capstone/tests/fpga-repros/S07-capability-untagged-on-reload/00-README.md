@@ -19,6 +19,15 @@
 >   3a8d8: ldc a4, 0x20(a4)  <==    4336c: ldc a1, 0x40(a1) <==     40bc4: ldc a0, 0x70(a0) <==
 > ```
 >
+> A **fourth** site, `whereLoopOutputAdjust+0x200` (`S7B`, boot 5), is the purest instance — three
+> consecutive identical loads, a bare pointer chase through one register, no arithmetic between:
+>
+> ```
+>   115884: ldc a0, 0x0(a0)
+>   115888: ldc a0, 0x0(a0)   <== mcause 25
+>   11588c: ldc a0, 0x0(a0)
+> ```
+>
 > `ldc`'s guard is rs1-only (`capstone_dyn_unit.anvil:327-330`), so in every case the value
 > **produced by the preceding `ldc`** arrived NOT_CAP. This is the back-to-back dependent
 > capability-load pair, and it is a far sharper statement than any site name.
@@ -57,7 +66,14 @@
 > | mcause **25** (6 runs) | **0** | — | **0** | 6–18 |
 >
 > The mcause-8 rows are the fired positive control. The debug latch carries no `tval` either
-> (`cva6.sv:994-996`, `:1097-1099`). **The ask is in `rtl/MESSAGE-TO-THE-RTL-LANE.md` §1.**
+> (`cva6.sv:994-996`, `:1097-1099`).
+>
+> **Nor can GDB read it — measured, not assumed.** Halting the wedged core against a latched
+> `mcause=25, mepc=0x84105888` returns `mcause=2 mepc=2 mtval=0`: the CSRs are already destroyed by
+> a nested trap. `mtval=0` taken at face value reads as "the operand was NULL", i.e. a confident
+> H2 verdict that is simply wrong — our reader discards it because gdb's mcause/mepc do not match
+> the latch. **So the latch is the ONLY remaining channel.**
+> **The ask is in `rtl/MESSAGE-TO-THE-RTL-LANE.md` §1.**
 >
 > ### 5. H1/H2 — the fork was incomplete, and H1 is NOT established
 >

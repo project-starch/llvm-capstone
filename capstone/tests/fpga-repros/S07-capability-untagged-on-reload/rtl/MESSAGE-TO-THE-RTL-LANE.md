@@ -23,6 +23,22 @@
 > supply it either — `cva6.sv:994-996` / `:1097-1099` carry `trap_seen`/`mcause`/`mepc` and **no
 > tval**.
 >
+> **And GDB cannot read it either — measured 2026-08-16, not assumed.** We halted the wedged core
+> and read the CSRs directly. Against a latched `mcause=25, mepc=0x84105888`, GDB returned:
+>
+> ```
+> mcause=2   mepc=2   mtval=0
+> ```
+>
+> i.e. the architectural CSRs have already been destroyed by a **nested trap** (illegal
+> instruction, at address 2) by the time anything can read them. `mtval` reads 0 — and note how
+> dangerous that is: taken at face value it says "the operand was NULL", which is the H2 verdict,
+> confidently and completely wrong. Our reader only accepts `mtval` when GDB's own `mcause`/`mepc`
+> match the latched pair, so it discarded the value instead of reporting it.
+>
+> **So the latch is not the preferred channel — it is the ONLY remaining one.** The dump never
+> runs, the CSRs are clobbered before they can be read, and the mux carries no tval.
+>
 > **Please latch `tval` in the same `always_ff` block that already captures mcause and mepc, and
 > expose its 8 bytes on the free slots of debug bank `3'b110`.** The mechanism is already proven:
 > that latch captured mcause=25 *and* mepc at these very wedges, so a `tval` sibling register
@@ -55,6 +71,18 @@
 >   3a8d4: ldc a4, 0x0(a0)
 >   3a8d8: ldc a4, 0x20(a4)  <==    4336c: ldc a1, 0x40(a1) <==     40bc4: ldc a0, 0x70(a0) <==
 > ```
+>
+> **A FOURTH site, and the purest instance of it** — `whereLoopOutputAdjust+0x200` (`S7B`, boot 5),
+> three consecutive identical loads, a bare pointer chase through one register:
+>
+> ```
+>   115884: ldc a0, 0x0(a0)
+>   115888: ldc a0, 0x0(a0)   <== mcause 25
+>   11588c: ldc a0, 0x0(a0)
+> ```
+>
+> Same register, same offset, no arithmetic, nothing else in between. If you want one line to
+> build a directed test from, this is it.
 >
 > In every case the value **produced by the immediately preceding `ldc`** arrived NOT_CAP. This is
 > the back-to-back dependent capability-load pair. You refuted A-1 overwrite and hit-under-miss on
@@ -103,8 +131,14 @@
 >   confident, entirely false localization of a SQLite function that never executed".
 >   Discriminator: `SQ: G/enter` present, plus the latch cause.
 > * `XU.dom` (`f1214600`) is byte-identical to the historical `XF` reproducer.
-> * `run_sqlite_stages_fpga.py` now attempts a GDB `mtval` read at every wedge, accepted **only**
->   if gdb's own mcause/mepc match the latched pair. Stopgap, not a substitute for the latch.
+> * `run_sqlite_stages_fpga.py` reads `mtval`/`mepc`/`mcause` over GDB at every wedge and accepts
+>   the value **only** if gdb's own mcause/mepc match the latched pair. It has now run, and it
+>   **discards every time** (§1): the CSRs are clobbered by a nested trap first. Kept as a
+>   permanent guard rather than a probe — if a future bitstream makes the CSRs survive, it will
+>   start reporting on its own, and until then it refuses to hand back a plausible wrong operand.
+> * Reading the wedged core over GDB leaves the server-side session open; it must be stopped
+>   explicitly (`release_board` does switches/power/unlock only). An orphaned session survives a
+>   power cycle and makes every later run time out before `load_image`.
 >
 > ### 7. Retractions that stand — please do not let us re-assert them
 >
