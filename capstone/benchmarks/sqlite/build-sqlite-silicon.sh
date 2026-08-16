@@ -248,6 +248,66 @@ print("   instrumented sqlite3OsRead with a raw-slot cursor probe")
 PY
 fi
 
+# S-07 PAGER PROBE (SQLITE_S07_PAGER_PROBE=1). Measures the operand at the site that ACTUALLY
+# wedges the current build: pagerFreeMapHdrs+0x4c, `ldc a1,0x40(a1)` = `pNext = p->pDirty`.
+#
+# Reaching that instruction already proves the cursor was non-zero -- the loop condition two
+# instructions earlier reads the SAME stack slot with a plain integer `ld` and branches away on
+# zero -- so a NULL deref is excluded there by control flow. What is NOT known is WHERE the
+# non-zero came from, and this reads both candidates without dereferencing either:
+#
+#   the Pager FIELD  (&pPager->pMmapFreelist)  non-zero => the value was already wrong on entry
+#   the STACK COPY   (&p, after the assignment) non-zero while the field is zero
+#                                              => the stc/ldc stack round trip corrupted it
+#
+# Both halves of each are read, because a zero cursor with non-zero metadata is a different state
+# from all-zero and costs one instruction to tell apart.
+if [[ "${SQLITE_S07_PAGER_PROBE:-0}" == "1" ]]; then
+  echo "== S-07 PAGER PROBE: reading the pMmapFreelist head raw at pagerFreeMapHdrs"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text()
+old = ("static void pagerFreeMapHdrs(Pager *pPager){\n"
+       "  PgHdr *p;\n"
+       "  PgHdr *pNext;\n"
+       "  for(p=pPager->pMmapFreelist; p; p=pNext){\n")
+new = ("unsigned long capstone_s07p_flo = 0, capstone_s07p_fhi = 0;\n"
+       "unsigned long capstone_s07p_slo = 0, capstone_s07p_shi = 0;\n"
+       "unsigned capstone_s07p_fty = 0, capstone_s07p_calls = 0, capstone_s07p_bad = 0;\n"
+       "static void pagerFreeMapHdrs(Pager *pPager){\n"
+       "  PgHdr *p;\n"
+       "  PgHdr *pNext;\n"
+       "  {\n"
+       "    void *s07fslot = (void *)&pPager->pMmapFreelist;\n"
+       "    void *s07sslot = (void *)&p;\n"
+       "    unsigned long s07a, s07b, s07c, s07d, s07t;\n"
+       "    if (capstone_s07p_calls < 0xFFFFu) capstone_s07p_calls++;\n"
+       "    __asm__ volatile(\"ld %0, 0(%1)\" : \"=r\"(s07a) : \"r\"(s07fslot));\n"
+       "    __asm__ volatile(\"ld %0, 8(%1)\" : \"=r\"(s07b) : \"r\"(s07fslot));\n"
+       "    p = pPager->pMmapFreelist;   /* the ldc under test */\n"
+       "    __asm__ volatile(\"ld %0, 0(%1)\" : \"=r\"(s07c) : \"r\"(s07sslot));\n"
+       "    __asm__ volatile(\"ld %0, 8(%1)\" : \"=r\"(s07d) : \"r\"(s07sslot));\n"
+       "    __asm__ volatile(\".insn r 0x5b, 0x1, 0x4, %0, %1, x1\" : \"=r\"(s07t) : \"r\"(p));\n"
+       "    if (s07a != 0UL || s07c != 0UL) {\n"
+       "      /* LATCH THE FIRST BAD ONE ONLY -- a later healthy call must not overwrite it. */\n"
+       "      if (!capstone_s07p_bad) {\n"
+       "        capstone_s07p_flo = s07a; capstone_s07p_fhi = s07b;\n"
+       "        capstone_s07p_slo = s07c; capstone_s07p_shi = s07d;\n"
+       "        capstone_s07p_fty = (unsigned)s07t; capstone_s07p_bad = 1;\n"
+       "      }\n"
+       "      return;   /* do NOT enter the loop: report instead of wedging */\n"
+       "    }\n"
+       "    /* Both halves zero: the loop below cannot execute anyway, so falling through is\n"
+       "       semantically identical to the uninstrumented build. */\n"
+       "  }\n"
+       "  for(p=pPager->pMmapFreelist; p; p=pNext){\n")
+if old not in s:
+    sys.exit("S07 PAGER PROBE: pagerFreeMapHdrs does not have the expected shape")
+p.write_text(s.replace(old, new, 1))
+print("   instrumented pagerFreeMapHdrs with a raw-slot probe")
+PY
+fi
+
 if [[ "${SQLITE_STATIC_BUILTINS:-1}" == "1" ]]; then
   echo "== R-14 WORKAROUND: restoring aBuiltinFunc to a compile-time-initialised static"
   python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PY'
@@ -1581,6 +1641,9 @@ if [[ "${SQLITE_S07_CURSOR_PROBE:-0}" == "1" ]]; then
 fi
 if [[ "${SQLITE_S07_CURSOR_SELFTEST:-0}" == "1" ]]; then
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_S07_CURSOR_SELFTEST"
+fi
+if [[ "${SQLITE_S07_PAGER_PROBE:-0}" == "1" ]]; then
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_S07_PAGER_REPORT"
 fi
 read -r -a _domain_defs <<< "${DOMAIN_EXTRA_DEFS:-}"
 "$CAPSTONE_CLANG" "${COMMON[@]}" "${SILICON[@]}" $SQLITE_DEFINES "${SILICON_TRIM[@]}" "$OPT" \

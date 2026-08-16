@@ -131,6 +131,49 @@ static unsigned s07c_selftest_result(void) {
 }
 #endif
 
+#ifdef CAPSTONE_S07_PAGER_REPORT
+/* Counters live in the patched amalgamation (build-sqlite-silicon.sh, SQLITE_S07_PAGER_PROBE).
+     0x54_llllll  the Pager FIELD was non-zero on entry -> the value was already wrong here;
+                  llllll = field cursor[23:0]
+     0x55_llllll  the field was ZERO but the STACK COPY of p came back non-zero -> the stc/ldc
+                  round trip is where it changed; llllll = stack cursor[23:0]
+     0x56_00cccc  pagerFreeMapHdrs ran cccc time(s) and every read was all-zero, i.e. the site
+                  behaved exactly as the source requires
+   The retval is only 24 bits wide, so the FULL 64-bit halves go out through output_text as
+   well -- that channel is known live in this build (the workload's own rows print through it). */
+extern unsigned long capstone_s07p_flo, capstone_s07p_fhi,
+                     capstone_s07p_slo, capstone_s07p_shi;
+extern unsigned capstone_s07p_fty, capstone_s07p_calls, capstone_s07p_bad;
+static void output_text(const char *text);
+static char *s07p_hex64(char *o, unsigned long v) {
+  int i;
+  for (i = 60; i >= 0; i -= 4) *o++ = "0123456789abcdef"[(v >> i) & 0xFUL];
+  return o;
+}
+static char *s07p_lit(char *o, const char *s) { while (*s) *o++ = *s++; return o; }
+static void s07p_emit(void) {
+  char buf[192], *o = buf;
+  o = s07p_lit(o, "S07P field=");  o = s07p_hex64(o, capstone_s07p_fhi);
+  *o++ = ':';                      o = s07p_hex64(o, capstone_s07p_flo);
+  o = s07p_lit(o, " stack=");      o = s07p_hex64(o, capstone_s07p_shi);
+  *o++ = ':';                      o = s07p_hex64(o, capstone_s07p_slo);
+  o = s07p_lit(o, " ty=");         *o++ = "0123456789abcdef"[capstone_s07p_fty & 0xF];
+  o = s07p_lit(o, " calls=");      o = s07p_hex64(o, capstone_s07p_calls);
+  o = s07p_lit(o, " bad=");        *o++ = capstone_s07p_bad ? '1' : '0';
+  *o++ = '\n'; *o = '\0';
+  output_text(buf);
+}
+static unsigned s07p_result(void) {
+  s07p_emit();
+  if (capstone_s07p_bad) {
+    if (capstone_s07p_flo != 0UL)
+      return 0x54000000u | (unsigned)(capstone_s07p_flo & 0xFFFFFFUL);
+    return 0x55000000u | (unsigned)(capstone_s07p_slo & 0xFFFFFFUL);
+  }
+  return 0x56000000u | (capstone_s07p_calls & 0xFFFFu);
+}
+#endif
+
 static void output_text(const char *text) {
   if (!hostcall_metadata || !hostcall_payload)
     return;
@@ -6617,6 +6660,10 @@ void domain_main(unsigned *res, unsigned func) {
     /* Reported UNCONDITIONALLY, including the no-hit case: whether the site was reached and how
        often is part of the measurement, and a fall-through to the staged marker would erase it. */
     *res = s07c_result();
+    return;
+#endif
+#ifdef CAPSTONE_S07_PAGER_REPORT
+    *res = s07p_result();
     return;
 #endif
 #ifdef CAPSTONE_S07_RETRY_REPORT

@@ -127,6 +127,17 @@ def decode_s07_cursor(obs):
     if tag == 0x53:
         return ("no-hit", f"reached sqlite3OsRead {(obs >> 8) & 0xFFFF} time(s), "
                           f"{obs & 0xFF} untagged -- the site never went bad in this run")
+    if tag == 0x54:
+        return ("PAGER-FIELD", f"pPager->pMmapFreelist was ALREADY non-zero on entry "
+                               f"(cursor[23:0]=0x{obs & 0xFFFFFF:06x}) -- the value was wrong "
+                               f"before pagerFreeMapHdrs touched it; look upstream")
+    if tag == 0x55:
+        return ("PAGER-SPILL", f"the field read ZERO but the stack copy of p came back non-zero "
+                               f"(cursor[23:0]=0x{obs & 0xFFFFFF:06x}) -- the stc/ldc stack round "
+                               f"trip is where it changed")
+    if tag == 0x56:
+        return ("pager-clean", f"pagerFreeMapHdrs ran {obs & 0xFFFF} time(s), every read all-zero "
+                               f"-- the site behaved as the source requires")
     if tag == 0x57:
         ok = obs == 0x57070703
         return ("selftest " + ("PASS" if ok else "FAIL"),
