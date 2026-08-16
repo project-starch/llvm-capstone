@@ -1,7 +1,11 @@
 # MicroPython as a freestanding Capstone domain — the compilation plan
 
-**Status:** Stages 0 and 1 are DONE (2026-08-16); the census and the two backend fixes are below.
-Stages 2-6 are PROPOSED. The core now compiles **126 of 133 files**, up from 119.
+**Status:** 2026-08-16. **The MicroPython core compiles: 133 of 133 files.** Stages 0 and 1 are
+done, and closing the last five took four more backend items plus one source patch, recorded below
+as stage 1b. Stages 2-6 are PROPOSED, and stage 2 has changed character: it is no longer what stands
+between us and a build, it is what stands between a build and a *correct* one.
+
+Reproduce: `benchmarks/micropython/{fetch-micropython.sh,census-capstone.sh}`.
 
 **Scope:** getting the interpreter to *compile and link* as a `.dom`. Conformance and performance
 methodology is a separate document. Nothing here touches the board, the paper, or the RTL.
@@ -196,9 +200,78 @@ Worth carrying forward: without assertions `getSExtValue()` returns the low 64 b
 this whole class was a **miscompile** in a release compiler and merely a crash in ours. The two
 files it hit here, `gc.c` and `pairheap.c`, now fail with a readable `Cannot select` instead.
 
+## Stage 1b — the last five, 2026-08-16 (commit `aa469bf76dd5`)
+
+Four backend items and one source patch. Everything here has a test that was run against the
+pre-fix binaries and failed there.
+
+- **Zero-extended 64-bit constants.** `MP_OBJ_NEW_SMALL_INT(-1)` arrives as
+  `inttoptr (i128 0xFFFFFFFFFFFFFFFF)`, because C widens the cast to the pointer's index type. The
+  i128 constant path took only the sign-extended spelling, while `inttoptr i64 -1` already compiled
+  to `li a0, -1`. Both name one register value; bits above the low 64 stay refused, which is the
+  part that would fabricate metadata.
+- **`collectStaticCapReducedObject`** guarded the holder but not the target it points at, and a
+  table entry pointing at an `extern` object is a declaration.
+- **The `AND` case of `Select`** is XLen peepholes reading the mask as `uint64`; it now leaves i128
+  alone, the same guard `tryShrinkShlLogicImm` already carries.
+- **Bitwise arithmetic on a capability, lowered rather than refused.** `gc_init` aligning a pointer
+  down, `pairheap` stealing a low bit, `bound_meth_unary_op` hashing two pointers. The address is
+  read with the same `lcc rd, rs, 2` a pointer difference uses, the operation happens at XLen, and
+  the result is **untagged** — which is what the C asked for, since a value built out of `uintptr_t`
+  bits cannot carry a tag here.
+- **`vm.c`, in the source**, because this one the compiler must not paper over:
+  `-MP_OBJ_ITER_BUF_NSLOTS + 1` is a sizeof-derived, therefore unsigned, index that is correct only
+  because it wraps at pointer width. Where a pointer is wider than `size_t` the scaled displacement
+  leaves the address space — the C-16 signature exactly.
+
+### Two attempts that failed, recorded because they cost the time
+
+**Declaring `i128 -> i64` truncation free** stops DAGCombiner widening the arithmetic, and also
+silently reroutes pointer subtraction away from the `lcc` sequence `ptr-arith.ll` pins on purpose.
+Whether the integer view of a capability register *is* its cursor is true in the QEMU model by union
+aliasing (`cap.h`: `capboundsfat_t` leads with `cursor`) and unverified on the RTL. Reverted.
+
+**Rewriting the align-down in the source** as `p - (p & (N-1))`, to keep it in the pointer domain and
+preserve the tag, does not survive: DAGCombiner folds it straight back into `p & ~(N-1)`. Measured,
+not assumed — the census is identical with and without that patch. This is why the case is lowered
+rather than diagnosed.
+
+### The correction this forces to what stage 2 says below
+
+An earlier revision of this plan argued that making these compile "moves the failure from build time
+to run time, which is the wrong direction". That was wrong twice over. The compiler is not hiding
+anything: it now implements what the C says, and `(void *)(uintptr_t)x` is untagged on any capability
+machine. And the crash it replaced was not a canary but an accident — the identical idiom at 64-bit
+width has always compiled silently, so which files failed depended on whether DAGCombiner happened
+to widen them. An inconsistent alarm is worse than none. Finding these sites is a systematic job and
+it is stage 3.
+
+### AND THE CENSUS WAS MEASURING THE WRONG THING for four rounds
+
+Clang searches `/usr/include` even for a bare-metal triple, so every `#include <string.h>` in the
+first four rounds resolved to the **host glibc header** and `adapted/include/` was never read.
+Caught by deleting `adapted/string.h` and watching nothing change. With `-nostdlibinc` the shims
+became load-bearing, one header (`alloca.h`) was missing, and the result is 133 of 133 for real. The
+harness is now negative-tested in both directions: without `string.h` it reports 7 of 133, without
+`assert.h` 13 of 133.
+
+The earlier failure counts survive this — they were about MicroPython's own code and the backend,
+neither of which the libc headers touch — but "compiles freestanding" did not mean what it said
+until now.
+
+**The same gap exists in `build-sqlite-silicon.sh` and the ladder builds**, which set `-ffreestanding`
+without `-nostdlibinc`. SQLite is mostly insulated (`SQLITE_OS_OTHER` includes very little) and
+`-include capstone_sqlite_libc.h` gets there first, so this is a latent hazard rather than a known
+defect. It is not changed here: touching the flag set of the builds every board measurement rests on
+is its own change, with its own gate.
+
 ## Stage 2 — REPR_CAP: decide the representation, then fix the five loud sites
 
-The seven remaining failures after stage 1 are all the compiler refusing to treat a capability as an
+**Nothing here blocks the build any more.** This stage is now entirely about whether the built
+interpreter is *correct*, and it should be read that way: every site below compiles today and
+produces an untagged value where MicroPython expects a usable object reference.
+
+The seven sites that stage 1 was chasing are the compiler refusing to treat a capability as an
 integer. The fix is a fifth object representation beside upstream's REPR_A..D. Note what is NOT in
 that list: reading a tag already works, so the scope is construction and pointer-bit arithmetic.
 
@@ -210,14 +283,12 @@ that list: reading a tag already works, so the scope is construction and pointer
 | `gc` | `gc_init` | `(uintptr_t)p & ~31`, an ordinary align-down |
 | `pairheap` | `mp_pairheap_delete` | `(uintptr_t)p & ~1`, `pairheap.c:36` steals a pointer's low bit as a flag |
 
-The last two are worth separating out, because they look like a toolchain problem and are not. The C
-is ordinary and portable, and it reaches the backend as an i128 `and` only because DAGCombiner sinks
-the `zext` into the `and`, turning "mask an address, widen it back" into "mask a capability". Undoing
-that combine would make both files compile. It would also be a trap: what the C asks for is a pointer
-built out of `uintptr_t` bits, which on this machine is an untagged capability, so `gc_init` and
-`NEXT_GET_RIGHTMOST_PARENT` would compile and then fault on first use. **Making them compile moves
-the failure from build time to run time, which is the wrong direction.** The backend refusing is
-doing its job, and the two files belong in this stage with the rest.
+The last two look like a toolchain problem and are half of one: the C is ordinary and portable, and
+it reaches the backend as an i128 `and` only because DAGCombiner sinks the `zext` into it. Stage 1b
+lowered that case rather than refusing it, so both compile now — and both still produce an untagged
+value, which is what `(void *)(uintptr_t)x` means here. `gc_init` and `NEXT_GET_RIGHTMOST_PARENT`
+will fault on first dereference until the source stops round-tripping pointers through integers.
+That is this stage's work, and it is the same work as the object word.
 
 Also worth knowing before designing REPR_CAP: `pairheap.c:34-36` shows the low-bit tagging idiom is
 **not confined to `mp_obj_t`**. Any subsystem may steal a pointer bit, so the representation work
