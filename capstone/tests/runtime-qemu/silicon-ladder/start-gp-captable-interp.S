@@ -167,7 +167,24 @@
      untagged. sp and gp are safe because the ABI keeps them intact. */
   cincoffsetimm(sp, sp, -48)
   stc(s1, sp, 0)                     /* park the blob cap across the calls            */
+#ifdef INTERP_CAPINIT_REDERIVE_BLOB
+  /* Derive the blob view from the CURRENT sp rather than from the s1 established before
+     BUILD_GP_CAPTABLE ran.
+     WHY (measured 2026-08-16 on a 232-carve MicroPython domain): the table entry read through
+     the pre-carve s1 comes back garbage, while the SAME 8 bytes read through a pointer derived
+     from sp.base inside domain_main -- after the carve loop -- match the image exactly
+     (0xfffffffffffeb048, both halves independently). So the blob CONTENT is intact and it is
+     the older capability that no longer addresses it. Consistent with the carve count: at
+     INTERP_BUILD_LIMIT=0 the computed target is exact and it degrades as the count rises.
+     sp's BASE is dom_data.base whether or not it has been split, so forcing the cursor there
+     reproduces what s1 was supposed to be. Four instructions, once, outside the loop. */
+  cincoffset(a6, sp, x0)
+  lcc(t0, sp, 3)                     /* t0 = sp.base = dom_data.base = blob base       */
+  scc(a6, a6, t0)
+  cincoffset(a6, a6, t6)
+#else
   cincoffset(a6, s1, t6)
+#endif
   stc(a6, sp, 16)                    /* park the entry pointer too                    */
   mv    a7, t3                       /* a7 = runtime IMAGE address of the entry       */
   /* ...and park a7 too. a7 is CALLER-saved and the initializer is ordinary C that uses it

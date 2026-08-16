@@ -102,6 +102,55 @@ void domain_main(unsigned *res, unsigned func) {
                                   so it does NOT prove the carve loop or the blob copy worked */
 #endif
 
+#if MPY_STAGE == 13
+    /* Read the cap-init table entry out of the BLOB, the way the glue does, and publish it.
+       The offset is computed at RUNTIME from the same two linker symbols the glue uses, so
+       this is layout-correct for whatever image it is built into -- a fixed offset would
+       measure a different word in every build, which is how the first attempt went wrong.
+       Taking the DIFFERENCE of two link-time addresses is arithmetic, not a load, so it is
+       legal here even though neither symbol is reachable as data. */
+    {
+        extern char __capstone_cap_init_start[];
+        extern char __gpfree_globals_base[];
+        unsigned long blob_off =
+            (unsigned long)((const char *)__capstone_cap_init_start
+                            - (const char *)__gpfree_globals_base);
+        unsigned long base;
+        __asm volatile(".insn r 0x5b, 0x1, 0x4, %0, sp, x3" : "=r"(base));
+        {
+            volatile unsigned long anchor = 0;
+            const unsigned char *here = (const unsigned char *)&anchor;
+            const unsigned long *p =
+                (const unsigned long *)(here - ((unsigned long)&anchor - base) + blob_off);
+            /* The entry is a signed 8-byte delta; publish the HIGH half, because the low half
+               was already shown to survive and the high half is where the corruption is. */
+            *res = (unsigned)((*p) >> 32);
+            return;
+        }
+    }
+#endif
+
+#if MPY_STAGE == 14
+    /* Same read, publishing the LOW half, so one boot covers both halves of the word. */
+    {
+        extern char __capstone_cap_init_start[];
+        extern char __gpfree_globals_base[];
+        unsigned long blob_off =
+            (unsigned long)((const char *)__capstone_cap_init_start
+                            - (const char *)__gpfree_globals_base);
+        unsigned long base;
+        __asm volatile(".insn r 0x5b, 0x1, 0x4, %0, sp, x3" : "=r"(base));
+        {
+            volatile unsigned long anchor = 0;
+            const unsigned char *here = (const unsigned char *)&anchor;
+            const unsigned long *p =
+                (const unsigned long *)(here - ((unsigned long)&anchor - base) + blob_off);
+            *res = (unsigned)(*p);
+            return;
+        }
+    }
+#endif
+
 #if MPY_STAGE == 12
     /* Read the blob DIRECTLY and publish what the glue would read as the cap-init delta.
        sp.BASE is dom_data.base, which IS blob offset 0 (the glue writes its "built" flag
