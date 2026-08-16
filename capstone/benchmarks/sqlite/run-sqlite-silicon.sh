@@ -35,7 +35,15 @@ DOM="$OUT_DIR/sqlite_silicon.dom"
 [[ -f "$DOM" ]] || { echo "ERROR: $DOM does not exist -- the build produced nothing" >&2; exit 1; }
 cp -f "$DOM" "$SHARE/"
 echo "== running $DOM  ($(sha256sum "$DOM" | cut -c1-16))"
-cp -f "$CAPSTONE_TMP_ROOT/sqlite-build/sqlite_host.user"     "$SHARE/"
+# THE HOST FROM THE SAME OUT_DIR TOO -- the comment above applies to it verbatim.
+# build-sqlite-host.sh honours OUT_DIR and had just written the matching host there, while this
+# line read a FIXED path, so an OUT_DIR run staged a host built for a different domain. That is
+# the exact failure the block above documents for the .dom, left unfixed one line lower, and it
+# is not cosmetic: the host links libcapstone, which packs the GLOBALS OFFSET into entry_offset.
+# An instrumented build has a different globals offset (measured: 0x380000 vs 0x140000), so a
+# mismatched host makes the monitor use the wrong offset -- either the loud blob-does-not-fit
+# error (0xB10B) or, worse, a plausible run of the wrong thing.
+cp -f "$OUT_DIR/sqlite_host.user"     "$SHARE/"
 
 python3 "$ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --share-dir "$SHARE" \

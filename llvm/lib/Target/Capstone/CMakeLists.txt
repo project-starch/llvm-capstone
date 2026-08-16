@@ -53,6 +53,7 @@ add_llvm_target(CapstoneCodeGen
   CapstoneISelLowering.cpp
   CapstoneLandingPadSetup.cpp
   CapstoneLateBranchOpt.cpp
+  CapstoneLdcRetry.cpp
   CapstoneLoadStoreOptimizer.cpp
   CapstoneMachineFunctionInfo.cpp
   CapstoneMakeCompressible.cpp

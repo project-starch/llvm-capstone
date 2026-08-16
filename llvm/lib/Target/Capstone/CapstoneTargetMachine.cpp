@@ -125,6 +125,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstoneOptWInstrsPass(*PR);
   initializeCapstoneFoldMemOffsetPass(*PR);
   initializeCapstonePreRAExpandPseudoPass(*PR);
+  initializeCapstoneLdcRetryPass(*PR);
   initializeCapstoneExpandPseudoPass(*PR);
   initializeCapstoneVectorPeepholePass(*PR);
   initializeCapstoneVLOptimizerPass(*PR);
@@ -631,6 +632,11 @@ void CapstonePassConfig::addPreRegAlloc() {
   addPass(createCapstoneInsertReadWriteCSRPass());
   addPass(createCapstoneInsertWriteVXRMPass());
   addPass(createCapstoneLandingPadSetupPass());
+
+  // S-07 instrument, off by default. Sited in the UNGATED region deliberately:
+  // the silicon SQLite domain is built at -O0, and the opt-level-gated block
+  // above would skip it there -- i.e. exactly where the defect was measured.
+  addPass(createCapstoneLdcRetryPass());
 
   if (TM->getOptLevel() != CodeGenOptLevel::None && EnableMachinePipeliner)
     addPass(&MachinePipelinerID);

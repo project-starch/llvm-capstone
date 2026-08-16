@@ -48,6 +48,9 @@ void initializeCapstoneIndirectBranchTrackingPass(PassRegistry &);
 FunctionPass *createCapstoneLandingPadSetupPass();
 void initializeCapstoneLandingPadSetupPass(PassRegistry &);
 
+FunctionPass *createCapstoneLdcRetryPass();
+void initializeCapstoneLdcRetryPass(PassRegistry &);
+
 FunctionPass *createCapstoneISelDag(CapstoneTargetMachine &TM,
                                  CodeGenOptLevel OptLevel);
 
