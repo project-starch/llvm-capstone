@@ -6,6 +6,42 @@
 > (untagged 128-bit `ldc`/`stc` high half) and S-08 (dom-switch CSR clobber) are both FIXED in
 > silicon and verified; their folders are resolved. This folder is the one open silicon issue.
 >
+> ### 0. STATUS AND WHAT THE NEXT BOOT DOES
+>
+> **The discriminator now exists in hardware.** The RTL lane synthesized the scoreboard's
+> displacement condition as a **sticky bit on the debug mux** — bank `3'b110` reg `5'b01100`, i.e.
+> switch **204**, byte `{stc_seen, ldc_seen, ldc_count[5:0]}` with the count saturating at 63,
+> cleared only by reset so it survives the wedge. They positive-controlled it by forcing the syncer
+> to bypass. It needs no reproducer, no `mtval` and no working trap dump.
+>
+> **Read rule.** Non-zero → a capability op's response was displaced onto a scalar writeback port,
+> which zeroes `cap_result` at writeback: **the value was still intact in memory** (case a).
+> All-zero → nothing was displaced, so the NOT_CAP came from memory/tag state (case b).
+>
+> **Three things that make a naive read wrong**, all handled in
+> `tests/rtl-smoke/fpga_driver/run_sqlite_stages_fpga.py`:
+> 1. **It is boot-cumulative.** Cleared only by reset, so the byte at a wedge covers the control,
+>    every earlier domain, and the monitor's own traffic. The driver samples after *every* domain;
+>    the **count delta** is the attributable number, the seen-bits alone are not.
+> 2. **Switch 191 is a blind window.** The logging `always_ff` is `if (clear) … else <record>`, so
+>    while the switches sit at the trap-log clear nothing is recorded — and a missed displacement
+>    looks exactly like case (b). `SQLITE_TRAPLOG_CLEAR=first` gives the runs under test a zero
+>    blind window; the trap latch is last-writer-wins, so a wedge still latches its own mcause-25,
+>    and a latch unchanged since before the domain is reported STALE.
+> 3. **The encoding is closed, so the readout is self-checking.** Legal bytes are `0x00`, `0x80`,
+>    and `ldc_seen` with count ≥ 1 (`0x41-0x7F`, `0xC1-0xFF`). Anything else — including `0x40` and
+>    `0xC0` — is an instrument fault, not a finding. This matters because a mis-aimed read returns
+>    the mux default `0x00`, which is *also* the legal quiescent value, so a wrongly-pointed probe
+>    is otherwise indistinguishable from a clean case-(b) verdict.
+>
+> **Asymmetry to hold to.** A non-zero delta is self-supporting. An all-zero byte means "not case
+> (a) on this run", **not** "case (b) established" — get a second wedge first.
+>
+> **Boot recipe:** `SQLITE_TRAPLOG_CLEAR=first`, control first, then the uninstrumented full
+> workload repeated until it wedges, four domains maximum. **Requires the bitstream built from the
+> commit carrying the sticky bit** — on anything older switch 204 reads whatever that slot decoded
+> to before.
+>
 > ### 1. The invariant: ONE instruction shape, three unrelated functions
 >
 > Three wedges, three different builds, three different source functions, three different
