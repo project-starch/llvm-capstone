@@ -29,6 +29,11 @@ SHIM="$SCRIPT_DIR/adapted/include"
 # known-good control first -- a wedge takes the rest of the boot with it, so the first stage
 # that fails to return IS the bisection point.
 MPY_STAGE=${MPY_STAGE:-}
+# MPY_TESTS=<n>|all builds the TEST RUNNER instead of a single baked-in program: the domain holds
+# a table of MicroPython's own tests and runs the next one on each call, so the loader's existing
+# `capstone-test.user <dom> <times>` runs n tests in ONE boot. One boot per test does not scale --
+# basics/ alone is 576 files.
+MPY_TESTS=${MPY_TESTS:-}
 DOM_NAME=${DOM_NAME:-micropython}
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/micropython-silicon}
 OBJ_DIR=${OBJ_DIR:-$OUT_DIR/obj}
@@ -68,6 +73,7 @@ SILICON=(-mllvm -capstone-gp-captable
          -mllvm -capstone-merge-string-constants=true
          -DCAPSTONE_GP_CAPTABLE_ABI=1
          ${MPY_STAGE:+-DMPY_STAGE=$MPY_STAGE}
+         ${MPY_TESTS:+-DMPY_TEST_RUNNER}
          # Extra -D flags for one build, word-split on purpose. Without this a
          # parameterised probe silently builds the DEFAULT value for every arm and the whole
          # sweep measures one thing N times -- caught here by hashing the images, not by the
@@ -84,7 +90,13 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         # data. MicroPython's bytecode dispatch is exactly that shape.
         -fno-jump-tables
         -std=c99 -O0 -w
-        -I"$SHIM" -I"$MPY_PORT_DIR" -I"$MPY_SRC_DIR" -I"$GEN_DIR")
+        -I"$SHIM" -I"$MPY_PORT_DIR" -I"$MPY_SRC_DIR" -I"$GEN_DIR" -I"$OBJ_DIR")
+
+if [[ -n $MPY_TESTS ]]; then
+  echo "== generating the test table"
+  python3 "$SCRIPT_DIR/tools/gen-test-table.py" "$MPY_SRC_DIR/tests/basics" \
+      "$OBJ_DIR/mpy_tests.h" ${MPY_TESTS:+--limit ${MPY_TESTS/all/0}}
+fi
 
 echo "== amalgamating py/ + the port into one translation unit"
 AMALGAM="$OBJ_DIR/mpy_all.c"

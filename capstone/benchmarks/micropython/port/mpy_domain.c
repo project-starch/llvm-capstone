@@ -32,11 +32,26 @@ static unsigned hc_share_count;
 #define MPY_CAP_MAX 192
 static char mpy_cap_buf[MPY_CAP_MAX];
 static unsigned mpy_cap_len;
+#ifdef MPY_TEST_RUNNER
+static unsigned mpy_out_hash;
+static unsigned mpy_out_len;
+#endif
 
 mp_uint_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
     for (size_t i = 0; i < len && mpy_cap_len < MPY_CAP_MAX; ++i) {
         mpy_cap_buf[mpy_cap_len++] = str[i];
     }
+#ifdef MPY_TEST_RUNNER
+    /* Hash EVERY byte, not only the ones that fit in mpy_cap_buf. Scoring a test on a truncated
+       prefix would turn "output too long for the capture buffer" into a silent wrong verdict,
+       and MicroPython's own tests routinely print more than 192 bytes. FNV-1a costs the same as
+       the position-weighted sum it replaces and mixes far better.
+       Placed before the hostcall block below, which consumes `len` and `str`. */
+    for (size_t i = 0; i < len; ++i) {
+        mpy_out_hash = (mpy_out_hash ^ (unsigned char)str[i]) * 16777619u;
+    }
+    mpy_out_len += len;
+#endif
     if (!hc_meta || !hc_payload) return len;
     char *payload = (char *)hc_payload;
     unsigned long off = hc_meta->length;
@@ -100,6 +115,57 @@ static size_t cap_stack_headroom(void) {
 #endif
 #define MPY_MARK(n) do { *res = 0x4D500000u | (unsigned)(n); return; } while (0)
 
+#ifdef MPY_TEST_RUNNER
+/* One image, many tests. The loader (`capstone-test.user <dom> <times>`) calls a domain
+   repeatedly and prints each call's retval, and the entry glue's reentry path deliberately does
+   NOT rebuild the cap table or re-run the initialisers, so a global survives between calls.
+   That turns N tests into N domain switches inside ONE boot instead of N boots.
+ *
+ * Two properties fall out of the loader's own output rather than needing a harness:
+ *   - the bisection is free. A fault kills the rest of the boot, so the output simply stops --
+ *     and "Called dom (7-th time)" absent names test 7 without halving anything.
+ *   - each test's verdict is its own retval, so a wrong ANSWER is distinguishable from a fault.
+ *
+ * The tests are generated into mpy_tests.h by tools/gen-test-table.py from MicroPython's own
+ * tests/ directory, together with the expected output each one must produce.
+ */
+#include "mpy_tests.h"
+
+static unsigned mpy_test_idx;
+
+static void mpy_run_one_test(unsigned *res) {
+    if (mpy_test_idx >= MPY_TEST_COUNT) {
+        *res = 0xFFFFFFFFu;              /* past the end: the driver asked for too many calls */
+        return;
+    }
+    unsigned idx = mpy_test_idx++;
+    mpy_cap_len = 0;
+    mpy_out_len = 0;
+    mpy_out_hash = 2166136261u;         /* FNV-1a offset basis */
+    /* Full reset per test, in the same order a fresh boot uses, so test N cannot pass because
+       test N-1 left something behind. gc_init is included deliberately: after mp_deinit nothing
+       reachable lives in the heap, so re-initialising it is safe and it is the only thing that
+       makes an OOM in test N attributable to test N. sp is re-recorded because the stack limit
+       must be measured from THIS call's frame, not the first call's. */
+    mp_cstack_init_with_sp_here(cap_stack_headroom());
+    gc_init(mpy_heap, mpy_heap + sizeof(mpy_heap));
+    mp_init();
+    int rc = do_str(mpy_tests[idx], MP_PARSE_FILE_INPUT);
+    mp_deinit();
+    /* 32 bits back to the loader, which prints them as an unsigned long:
+         31     raised an uncaught exception -- informational, since the traceback text goes
+                through tx_strn and is therefore already inside the hash
+         20-30  test index, so a result stays attributable if the driver's call count slips
+         16-19  low nibble of the output length, a cheap sanity aid when a hash mismatches
+         0-15   FNV-1a over the whole output
+       tools/gen-test-table.py::expected_retval builds the same word from the expected output. */
+    *res = ((rc ? 1u : 0u) << 31)
+         | ((idx & 0x7ff) << 20)
+         | ((mpy_out_len & 0xf) << 16)
+         | (mpy_out_hash & 0xffffu);
+}
+#endif
+
 void domain_main(unsigned *res, unsigned func) {
     if (func == MPY_DPI_REGION_SHARE) {
         if (hc_share_count == 0) hc_meta = (volatile struct mpy_hostcall_v0 *)res;
@@ -108,6 +174,11 @@ void domain_main(unsigned *res, unsigned func) {
         return;
     }
     if (hc_meta) hc_meta->length = 0;
+
+#ifdef MPY_TEST_RUNNER
+    mpy_run_one_test(res);              /* each call runs the next test in the table */
+    return;
+#endif
 
 #if MPY_STAGE == 0
     MPY_MARK(0xA0);            /* entered, nothing else -- NOTE it touches no global at all,
