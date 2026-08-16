@@ -303,6 +303,21 @@ def main():
             # cva6.sv:984: debug_byte_sel=3'b101 with debug_reg_sel=5'b11111, i.e.
             # switches = 0b10111111 = 191, clears the log. probe_wedge_regs.py:131-139 already
             # did this; the batch runner did not, which is what made the reading unattributable.
+            #
+            # 191 IS ALSO A BLIND WINDOW, and the bias runs the wrong way. The logging always_ff
+            # is `if (dom_switch_log_clear) <clear> else <record>`, so while the switches sit at
+            # 191 the record branch does not run and ANY displacement in that window is lost --
+            # and a lost displacement looks exactly like case (b), "memory did it". Two rules
+            # follow and both are respected here:
+            #   * never park at 191. The window below is bounded by one sleep and is over before
+            #     the domain starts, so the domain's own traffic is fully recorded; only monitor
+            #     and kernel traffic during the clear can go unseen, which cannot manufacture a
+            #     false case (a).
+            #   * never hit 191 after a wedge whose latch has not been read yet -- it would wipe
+            #     recent_nontrivial_mcause/mepc/seen. Safe today because the loop breaks
+            #     immediately after the wedge reads and never reaches another clear.
+            # The S-07 displacement sticky is NOT in the clear list, so that evidence survives a
+            # log clear; only the trap latch is affected.
             try:
                 for bit in range(8):
                     console.set_switch(bit, bool(191 & (1 << bit)))
@@ -602,18 +617,32 @@ def main():
                 else:
                     _stc, _ldc, _cnt = (_v >> 7) & 1, (_v >> 6) & 1, _v & 0x3F
                     # FREE INTEGRITY CHECK ON THE READOUT PATH, not a finding about the core.
-                    # The counter only increments inside the same branch that sets ldc_seen, so
-                    # a non-zero count with ldc_seen clear is STRUCTURALLY IMPOSSIBLE for the
-                    # design to produce. If it appears, the READOUT is wrong -- wrong switch, a
+                    #
+                    # seen and count move in the SAME branch, count saturates at 63 rather than
+                    # wrapping, and nothing clears count except reset. So the encoding is closed
+                    # and only three shapes are reachable:
+                    #     0x00                 quiescent
+                    #     0x80                 stc only -- legal, the STC arm does not touch the
+                    #                          LDC counter
+                    #     ldc_seen=1 & cnt>=1  0x41-0x7F and 0xC1-0xFF
+                    # Everything else is impossible for the design to produce, INCLUDING 0x40 and
+                    # 0xC0: the first displacement sets seen and increments in one go, so
+                    # ldc_seen with a zero count cannot occur.
+                    #
+                    # Anything outside the legal set means the READOUT is wrong -- wrong switch, a
                     # garbled byte, or a sampling race -- and the value must not be reported as
-                    # evidence of anything. (stc_seen with count 0 IS legal: the STC arm does
-                    # not touch the LDC counter.)
-                    _fault = _cnt > 0 and _ldc == 0
+                    # evidence of anything. This matters because the silent failure is
+                    # indistinguishable from a result: a mis-aimed read returns the mux default
+                    # 0x00, which is ALSO the legal quiescent value, so a wrongly-pointed probe
+                    # looks exactly like a clean "memory did it" verdict. A count with no
+                    # seen-bit is the only pattern that betrays it.
+                    _fault = not (_v == 0x00 or _v == 0x80 or (_ldc == 1 and _cnt >= 1))
                     _line = (f"  [s07] after {label}: sw=204 displacement "
                              f"0x{_v:02x} {_v:08b}  seen={{stc:{_stc},ldc:{_ldc}}} count={_cnt}"
                              + ("  <== INSTRUMENT FAULT: count>0 with ldc_seen clear cannot be "
-                                "produced by the design; the readout is wrong, NOT the core. "
-                                "Do not treat this byte as data." if _fault else ""))
+                                "produced by the design (legal: 0x00, 0x80, or ldc_seen with "
+                                "count>=1); the readout is wrong, NOT the core. Do not treat "
+                                "this byte as data." if _fault else ""))
                 print(_line, flush=True)
                 transcript.append(_line + "\n")
             except Exception as exc:
