@@ -42,6 +42,38 @@
 > commit carrying the sticky bit** — on anything older switch 204 reads whatever that slot decoded
 > to before.
 >
+> ### 0. RESULT: TWO WEDGES, BOTH WITH THE DISPLACEMENT BYTE AT ZERO
+>
+> | boot | rep | DBAS | latched mepc | image VA | site | `sw=204` |
+> |---|---|---|---|---|---|---|
+> | 5 | 3 of 3 | `0x84400000` | `0x8442a83c` | `0x3a83c` | `sqlite3OsRead+0x4c` | **`0x00`** |
+> | 8 | 2 of 3 | `0x84000000` | `0x8402a83c` | `0x3a83c` | `sqlite3OsRead+0x4c` | **`0x00`** |
+>
+> Independent boots, different domain placements, different rep indices, same instruction:
+> `ldc a4, 0x20(a4)` whose rs1 came from the immediately preceding `ldc` — the invariant. Both
+> control-validated, both with `SQ: G/enter` (so genuinely executed), both mcause 25 (in the
+> capability range 24..39, so the latch is the domain's own).
+>
+> **CONCLUSION: on both wedges nothing was displaced onto a scalar writeback port.** The
+> syncer/LOAD_WB path — the leading candidate on both the board and RTL sides — **is not the
+> mechanism**. That leaves (b) the load genuinely returned `tag=0`, and (c) the granule was never
+> tagged.
+>
+> #### The caveat that bounds this, and it is not small
+>
+> **The sticky bit has never been observed to SET on silicon.** Its positive control was done in
+> *simulation* (the syncer matcher forced to bypass makes it set; the 79-test sweep leaves it
+> silent). On hardware it has only ever read `0x00`. By this project's own hardest rule — *a CLEAN
+> result is not evidence until the check is known to fire* — a silicon-side demonstration that the
+> bit **can** set is still missing, and until then "no displacement" and "the detector does not
+> work in this bitstream" are not fully separated.
+>
+> What makes this weaker than the usual version of that error: the detector is not a bespoke
+> counter but a direct read of a condition the sweep exercises, and it is validated in the same RTL
+> that was synthesized. What would close it: a debug-triggered synthetic displacement, so the bit
+> can be made to set on demand on hardware. That is one line of RTL and belongs in the same
+> reflash batch as the tag-history probe.
+>
 > ### 0a. FIRST MEASUREMENT: a wedge with the displacement byte at ZERO (boot 5, 2026-08-17)
 >
 > On `caplifive_s06s08fix_s07probe_a2ef8eb.bit`, a control-validated boot in which all four
