@@ -726,6 +726,64 @@ def main():
                     else:
                         missing = [i for i in range(8) if mepc_bytes.get(i) is None]
                         print(f"  [wedge] trap mepc UNREAD (missing bytes {missing})", flush=True)
+
+                    # THE ARCHITECTURAL mtval, VIA GDB -- the only channel that reports the
+                    # faulting OPERAND at ANY site.
+                    #
+                    # caplifive_s07diag.bit puts the faulting rs1 cursor in mtval, but a
+                    # capability fault inside a domain WEDGES at exception commit instead of
+                    # trapping to mtvec (capstone-ariane core/cva6.sv:1228-1231), so the
+                    # monitor's EXCX/MCAU/MEPC/MTVL dump never runs -- measured, six mcause-25
+                    # transcripts with no dump while mcause-8 wedges in the same capture print
+                    # one. The debug mux carries no tval either. Halting the core and reading
+                    # the CSR is what is left.
+                    #
+                    # IT IS ONLY BELIEVED IF IT AGREES WITH THE LATCH. The core is wedged, the
+                    # debug register path has twice returned AXI error-slave junk, and a nested
+                    # trap would overwrite the CSRs with a second, unrelated trap. So mtval is
+                    # accepted only when gdb's own mepc/mcause match the latched pair -- that is
+                    # a real positive control, not a formality: it fails loudly rather than
+                    # handing back a plausible wrong operand.
+                    if os.environ.get("WEDGE_GDB_MTVAL", "1") == "1":
+                        _latched = (sum(mepc_bytes[i] << (8 * i) for i in range(8))
+                                    if len(mepc_bytes) == 8
+                                    and all(b is not None for b in mepc_bytes.values())
+                                    else None)
+                        try:
+                            console.gdb_start()
+                            console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
+                            _csr = {}
+                            for _e in ("$mcause", "$mepc", "$mtval"):
+                                _s = len(console.gdb_text)
+                                console._emit("gdb_input", text=f"p/x {_e}\n")
+                                try:
+                                    _m = console.wait_gdb(r"\$\d+ = 0x[0-9a-fA-F]+",
+                                                          timeout=25.0, search_from=_s)
+                                    _csr[_e] = int(_m.group(0).split("=")[1].strip(), 16)
+                                except Exception:
+                                    _csr[_e] = None
+                            print(f"  [wedge] gdb CSRs: mcause={_csr['$mcause']} "
+                                  f"mepc={_csr['$mepc']} mtval={_csr['$mtval']}", flush=True)
+                            _junk = (0xca11ab1ebadcab1e, None)
+                            if _csr["$mtval"] in _junk:
+                                print("  [wedge] mtval NOT READ (junk/unreadable) -- no operand",
+                                      flush=True)
+                            elif _csr["$mcause"] != 25 or _csr["$mepc"] != _latched:
+                                print(f"  [wedge] mtval DISCARDED: gdb mcause/mepc "
+                                      f"({_csr['$mcause']}/{_csr['$mepc']}) do not match the "
+                                      f"latched trap (25/{_latched}). The CSRs were clobbered by "
+                                      f"a later trap, so mtval belongs to a DIFFERENT fault.",
+                                      flush=True)
+                            else:
+                                print(f"  [wedge] FAULTING OPERAND CURSOR = "
+                                      f"0x{_csr['$mtval']:016x}  "
+                                      + ("(ZERO -> the operand really was NULL/integer)"
+                                         if _csr["$mtval"] == 0 else
+                                         "(NON-ZERO -> a non-null value arrived NOT_CAP)"),
+                                      flush=True)
+                        except Exception as exc:
+                            print(f"  [wedge] gdb mtval read failed ({type(exc).__name__}) -- "
+                                  f"continuing to release the board", flush=True)
                     # DO NOT CALL console.trace_dump() HERE, OR ANYWHERE ON A WEDGED CORE.
                     # Measured 2026-08-05: the trace dump HANGS THE BOARD HARD -- `trace_result`
                     # never arrives, the 60 s wait expires, and the board is left in a state that
