@@ -480,6 +480,80 @@ fresh clone needs the branch checked out by hand until the push access exists:
 functional and may matter for MicroPython's larger image, but it is a separate decision from this
 one and was not bundled into it.
 
+### ROOT CAUSE, localized 2026-08-16: the entry glue destroys the cap-init table entry
+
+`micropython.dom` builds, links, enters, carves and runs `domain_main` — and jumps to a wild
+address before any MicroPython code executes. Bisected with the glue's own knobs, all arms in one
+boot with a control:
+
+| arm | result |
+|---|---|
+| control `beebs_prime` | PASS |
+| cap-init SKIPPED (`INTERP_SKIP_CAPINIT=1`) | **PASS**, marker `0xA0` |
+| `.bss` global written and read back | **PASS**, marker `0xB0` |
+| initialized global read | **PASS**, marker `0xB1` |
+| normal build | FAULT, `cause = 1`, PC outside the domain entirely |
+
+So everything the glue does EXCEPT cap-init is sound: the descriptor, the carve loop and the blob
+copy all work, proven by a domain that reads both a `.bss` and an initialized global.
+
+`INTERP_PEEK_CAPINIT_TARGET` publishes the address the glue computed instead of jumping to it. Swept
+against the carve count, with the expected value derived from each image's own symbol table:
+
+| carves built | computed target | expected | error |
+|---:|---|---|---|
+| 0 | `0x1016432c0` | `0x1016432c0` | **none** |
+| 100 | `0x1017432c0` | `0x1016432c0` | +0x100000 |
+| 200 | `0x1016c32c0` | `0x1016432c0` | +0x80000 |
+| 232 (all) | `0x622078626e85ada5` | `0x1016432b0` | garbage |
+
+**The low bits are always right and only the high bits are wrong**, by an amount that tracks the
+carve count. The table entry is a signed 8-byte delta whose high half is `0xFFFFFFFF`; the glue
+reads it from the blob, and that half is being progressively clobbered while the carve loop runs.
+With zero carves it is intact and the jump is correct.
+
+### Why this image and not SQLite
+
+Measured on every image involved: `.capstone_cap_init` sits at blob offset `0x8130`, is 8 bytes
+long, and `tmpl_len` is `0x8138`. **The entry is the last word of the copied template, with zero
+bytes of margin.** SQLite's is at blob offset `0x12700`, which the glue's own comment describes as
+"well inside the 78768-byte copied region". Anything that writes at or past the end of the blob
+destroys MicroPython's entry and leaves SQLite's untouched.
+
+### Why no existing test catches it
+
+`ctl.dom` — the ladder rung used as the control throughout — has a `.capstone_cap_init` section of
+size **0**. An empty table means `RUN_CAP_INIT` takes its `bgeu t3, t4, 78f` early exit and never
+reads the blob at all. It is a valid control for boot, entry and the carve loop, and structurally
+blind to this defect. No ladder rung has capability-valued globals; the glue's own header says so
+("no ladder rung has such a global, so nothing caught it") about a different bug in the same code.
+
+### What is NOT established
+
+That the carve loop is the writer. What is measured is that the corruption scales with the carve
+count and is absent at zero. The obvious candidate is the storage carve or an initializer copy
+overrunning by a few bytes at the top of the template, but no probe has yet read the blob's tail
+after the loop and before cap-init. That probe is one build: read the blob at
+`__capstone_cap_init_start - __gpfree_globals_base`, computed at RUNTIME from the linker symbols so
+it is layout-correct, and compare against the image. Do that before writing a fix.
+
+### Four instrument failures in one session, all caught by checking the artifact
+
+Recorded because the pattern is the point, not the individual slips. None was caught by an exit
+code; all four would have produced a confident wrong measurement.
+
+1. **The census read the host's glibc headers.** `-ffreestanding` does not stop clang searching
+   `/usr/include`; `-nostdlibinc` does. Four rounds of "it compiles freestanding" did not.
+2. **`build-micropython-silicon.sh` printed `Built .../micropython.dom` for every stage.** The
+   files were correct; the message was not. Nine images were confirmed distinct by SHA-256.
+3. **`DOMAIN_EXTRA_DEFS` was not plumbed through**, so three probes at three different offsets
+   built byte-identical images, all exiting 0. Caught by hashing before spending a boot.
+4. **`run-domain-smoke.py` fails every domain after the first**: `DEFAULT_DOMAIN_SUCCESS_MARKERS`
+   requires the literal `"Created domain ID = 0"`, and only the first domain in a boot gets ID 0.
+   Batched runs therefore stopped after two domains and the stops were read as domain failures.
+   Workaround: pass the control positionally and the rest as `--guest-command`, copying the images
+   into the 9p share by hand. Worth fixing in the harness.
+
 ### What is now the shortest path to a running interpreter
 
 1. ~~Settle the interp question, apply the fix, negative-test it.~~ **DONE. The interp glue works:
