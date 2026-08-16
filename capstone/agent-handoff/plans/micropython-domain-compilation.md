@@ -613,6 +613,62 @@ previous round and reported `Failed to open the file.` for two arms while the th
 only real datum. **Check that the artifact exists and is fresh, not that the builder exited zero** —
 this is now the fifth distinct instance in one session.
 
+### The measurement: `sp` is the SAME region on both sides. Third hypothesis refuted.
+
+Designed after the first attempt produced numbers that could not be compared: each `.dom` creates
+its OWN domain with its own region, so absolute addresses from four separate probes are
+meaningless. The corrected probe publishes both values from **one** domain instance -- the glue's
+peek returns via `j 78f` and execution continues into `domain_main`, so one image can report the
+glue's `sp` and the domain's `sp`.
+
+| | glue (`RUN_CAP_INIT`) | `domain_main` | difference |
+|---|---|---|---|
+| `sp.BASE` | `0x1015d8720` | `0x…15d8720` | **0** |
+| `sp.END` | `0x101678240` | `0x…1678240` | **0** |
+
+Identical. So "the two `sp`s differ" is refuted, and with it the reason both fix attempts were
+written. Everything now measured:
+
+* the blob content at the table offset is **correct** (both halves, matched against the image);
+* `sp.BASE`/`sp.END` are **identical** in the glue and in `domain_main`;
+* a pointer derived from `sp.BASE` **in `domain_main`** reads the entry correctly;
+* the glue's read via the pre-carve `s1` returns garbage;
+* the same derivation **inside `RUN_CAP_INIT`** faults with `cause = 5`.
+
+The last two lines cannot both be explained by anything checked so far. The derivation is four
+instructions (`cincoffset` from `sp`, `lcc` the base, `scc` the cursor to it, `cincoffset` by the
+table's blob offset) and is byte-for-byte the arithmetic the working probe performs in C.
+
+### Do NOT guess a fourth time — batch the remaining hypotheses
+
+Three single-hypothesis attempts have each cost a boot and each been refuted. The project's own rule
+for this situation is to build every open question into one load rather than testing them serially.
+The open questions, each a one-line variant of the same read:
+
+1. Is `t6` still live at the insertion point, or clobbered between `sub t6, t3, t5` and the use?
+   Publish `t6` itself.
+2. Does `scc` on a capability whose cursor is below its base behave as assumed? Publish `a6`'s
+   cursor after each of the four instructions.
+3. Is the fault the READ or the DERIVATION? Derive, publish, and do NOT load.
+4. Does reading through `sp` itself (cursor moved with `cincoffsetimm`, no `scc`) work where the
+   `scc` form does not?
+5. Does the pre-carve `s1` still have correct BOUNDS, i.e. is the garbage a wrong address or a
+   wrong tag? Publish `s1`'s base and end alongside `sp`'s.
+
+All five are `csdebugprint` one-liners in the same `#ifdef`, all return, and they fit one boot with
+the control first.
+
+### Notes for whoever runs that
+
+* `csdebugprint` (funct7 0x43) **works from the glue and takes QEMU down when issued from C** in
+  `domain_main`. Use it on the glue side only; the domain side has the retval path.
+* The domain-side probe must compute its blob offset at RUNTIME from
+  `__capstone_cap_init_start - __gpfree_globals_base`. A fixed offset measures a different word in
+  every image, which is what made the first blob read look like a zero.
+* `INTERP_CAPINIT_REDERIVE_BLOB` is left in the tree, **off**, byte-identity verified twice. It is a
+  wrong fix for a refuted reason; it is kept because the next attempt will edit the same lines and
+  the comment records what has already been excluded.
+
 ### What is now the shortest path to a running interpreter
 
 1. ~~Settle the interp question, apply the fix, negative-test it.~~ **DONE. The interp glue works:

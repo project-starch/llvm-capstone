@@ -102,6 +102,25 @@ void domain_main(unsigned *res, unsigned func) {
                                   so it does NOT prove the carve loop or the blob copy worked */
 #endif
 
+#if MPY_STAGE == 15
+    /* Publish sp.BASE and sp.END from domain_main with the SAME instruction the glue's
+       diagnostic uses, so the two sets of numbers are directly comparable. */
+    {
+        unsigned long b, e;
+        __asm volatile(".insn r 0x5b, 0x1, 0x4, %0, sp, x3" : "=r"(b));
+        __asm volatile(".insn r 0x5b, 0x1, 0x4, %0, sp, x4" : "=r"(e));
+        /* Return the value rather than printing it: csdebugprint (funct7 0x43) issued from C
+           took QEMU down, while the retval path is proven. MPY_SP_FIELD picks which one, so
+           one boot covers both. The low 32 bits are enough -- the domain sits at 0x1016xxxxx
+           and only the offset within it is in question. */
+#ifndef MPY_SP_FIELD
+#define MPY_SP_FIELD 3
+#endif
+        *res = (unsigned)((MPY_SP_FIELD == 3) ? b : e);
+        return;
+    }
+#endif
+
 #if MPY_STAGE == 13
     /* Read the cap-init table entry out of the BLOB, the way the glue does, and publish it.
        The offset is computed at RUNTIME from the same two linker symbols the glue uses, so
