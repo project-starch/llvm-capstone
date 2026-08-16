@@ -1,6 +1,7 @@
 # MicroPython as a freestanding Capstone domain — the compilation plan
 
-**Status:** Stage 0 is DONE (2026-08-16) and its numbers are below. Stages 1-6 are PROPOSED, none started.
+**Status:** Stages 0 and 1 are DONE (2026-08-16); the census and the two backend fixes are below.
+Stages 2-6 are PROPOSED. The core now compiles **126 of 133 files**, up from 119.
 
 **Scope:** getting the interpreter to *compile and link* as a `.dom`. Conformance and performance
 methodology is a separate document. Nothing here touches the board, the paper, or the RTL.
@@ -170,12 +171,57 @@ Each fix ships with:
 
 **Gate:** 128 of 133 files compile; regression suites unchanged; reference `.dom` hashes identical.
 
+### Stage 1 outcome, 2026-08-16: DONE, and 1b was five times bigger than it looked
+
+Commit `67a7f60599df`. **126 of 133 files compile**, up from 119.
+
+1a landed as described. 1b did not: guarding `tryShrinkShlLogicImm` only moved the crash into a
+TableGen-generated predicate, because **45 immediate predicates in this target read constants with
+`getSExtValue()`** and every one of them is written in terms of `int64_t` while i128 is legal here.
+Patching them one at a time would have been 45 diffs and a re-audit on every upstream merge, so the
+guard went where those predicates are generated: `CodeGenDAGPatterns.cpp` now emits a width check
+ahead of both forms that convert a constant to int64, the `ImmLeaf` prologue and the
+arbitrary-predicate form whose class is `ConstantSDNode`. The APInt form is left alone on purpose,
+because taking an APInt is how a predicate declares that it handles arbitrary widths; the single
+Capstone predicate that takes an APInt and then calls `getSExtValue()` on it (`TrailingOnesMask`) is
+guarded in place.
+
+Gates run, not assumed: Capstone lit 50/50; RISCV + TableGen 2629 tests; X86 5269 tests; only the
+six known `emutls`/`tls-android` failures, and `emutls.ll` was re-run against a stashed rebuild to
+confirm it fails identically **without** these changes rather than trusting the documented history.
+Byte-identity: every Capstone lit input compiles to a bit-identical object before and after, the
+only difference being the new test that previously produced no output at all.
+
+Worth carrying forward: without assertions `getSExtValue()` returns the low 64 bits silently, so
+this whole class was a **miscompile** in a release compiler and merely a crash in ours. The two
+files it hit here, `gc.c` and `pairheap.c`, now fail with a readable `Cannot select` instead.
+
 ## Stage 2 — REPR_CAP: decide the representation, then fix the five loud sites
 
-The five remaining failures (`obj`, `objboundmeth`, `objlist`, `objstr`, `vm`) are all the compiler
-refusing to build an object word out of an integer. The fix is a fifth object representation beside
-upstream's REPR_A..D. Note what is NOT in that list: reading a tag already works, so the scope is the
-constructors.
+The seven remaining failures after stage 1 are all the compiler refusing to treat a capability as an
+integer. The fix is a fifth object representation beside upstream's REPR_A..D. Note what is NOT in
+that list: reading a tag already works, so the scope is construction and pointer-bit arithmetic.
+
+| file | site | what the source does |
+|---|---|---|
+| `objlist`, `objstr`, `vm` | `list_pop`, `str_finder`, `mp_execute_bytecode` | build an object word out of an integer constant or offset |
+| `obj` | `mp_obj_get_type` | compares against immediate objects, which ARE integer constants cast to pointers; the DAG folds the run of comparisons into `(x & 15) == N` |
+| `objboundmeth` | `bound_meth_unary_op` | `xor` of two object words |
+| `gc` | `gc_init` | `(uintptr_t)p & ~31`, an ordinary align-down |
+| `pairheap` | `mp_pairheap_delete` | `(uintptr_t)p & ~1`, `pairheap.c:36` steals a pointer's low bit as a flag |
+
+The last two are worth separating out, because they look like a toolchain problem and are not. The C
+is ordinary and portable, and it reaches the backend as an i128 `and` only because DAGCombiner sinks
+the `zext` into the `and`, turning "mask an address, widen it back" into "mask a capability". Undoing
+that combine would make both files compile. It would also be a trap: what the C asks for is a pointer
+built out of `uintptr_t` bits, which on this machine is an untagged capability, so `gc_init` and
+`NEXT_GET_RIGHTMOST_PARENT` would compile and then fault on first use. **Making them compile moves
+the failure from build time to run time, which is the wrong direction.** The backend refusing is
+doing its job, and the two files belong in this stage with the rest.
+
+Also worth knowing before designing REPR_CAP: `pairheap.c:34-36` shows the low-bit tagging idiom is
+**not confined to `mp_obj_t`**. Any subsystem may steal a pointer bit, so the representation work
+needs a way to find those rather than a list of the ones in `obj.h`. That is what stage 3 is for.
 
 **Proposed shape, to be validated in code and not in prose:**
 
