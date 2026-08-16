@@ -24,8 +24,20 @@ static volatile struct mpy_hostcall_v0 *hc_meta;
 static volatile char *hc_payload;
 static unsigned hc_share_count;
 
+/* Capture what the interpreter prints, so a run can be checked against the EXPECTED OUTPUT and
+   not merely against "returned without raising". Without this the only evidence that
+   print(1+1) worked is an rc of 0, which is exactly the kind of clean result this project has
+   learned not to trust: the hostcall region is only wired up when the host shares it, and when
+   it does not, tx_strn writes nowhere and still reports success. */
+#define MPY_CAP_MAX 64
+static char mpy_cap_buf[MPY_CAP_MAX];
+static unsigned mpy_cap_len;
+
 mp_uint_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
-    if (!hc_meta || !hc_payload) return 0;
+    for (size_t i = 0; i < len && mpy_cap_len < MPY_CAP_MAX; ++i) {
+        mpy_cap_buf[mpy_cap_len++] = str[i];
+    }
+    if (!hc_meta || !hc_payload) return len;
     char *payload = (char *)hc_payload;
     unsigned long off = hc_meta->length;
     while (len-- && off + 1 < MPY_HC_REGION_SIZE) payload[off++] = *str++;
@@ -293,5 +305,14 @@ void domain_main(unsigned *res, unsigned func) {
     int rc = do_str("print(1+1)", MP_PARSE_FILE_INPUT);
 #endif
     mp_deinit();
+#ifdef MPY_RETURN_OUTPUT
+    /* Return the captured bytes instead of a status: byte 0 in bits 0-7, byte 1 in 8-15, and
+       the length in bits 16-23. For print(1+1) that is '2' (0x32), '\n' (0x0a), length 2. */
+    *res = ((unsigned)mpy_cap_len << 16)
+         | ((unsigned)(unsigned char)(mpy_cap_len > 1 ? mpy_cap_buf[1] : 0) << 8)
+         | ((unsigned)(unsigned char)(mpy_cap_len > 0 ? mpy_cap_buf[0] : 0));
+    (void)rc;
+#else
     *res = 0x4D500000u | (unsigned)rc;
+#endif
 }

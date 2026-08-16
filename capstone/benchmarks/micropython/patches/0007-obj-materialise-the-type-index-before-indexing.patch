@@ -1,0 +1,34 @@
+Compute the immediate-type index into a local before indexing.
+
+mp_obj_get_type ends with `types[(uintptr_t)o_in & 0xf]`. Written inline, the widening of that
+4-bit index to the array subscript's pointer-width index type sinks into the mask, so the AND is
+performed at POINTER width -- and reading the address of an operand that wide needs a
+cursor-read instruction, which raises on an untagged value. Every immediate object word reaching
+this line is untagged by construction (a small int, a qstr, None, a bool), so it faults on the
+first call. Verified in the emitted code: the instruction is present before this change and
+absent after it.
+
+A named local forces the mask to be computed and materialised at integer width first. On a
+target with a single pointer width this is the same code.
+diff --git a/py/obj.c b/py/obj.c
+index 252e7372f..6dcf58304 100644
+--- a/py/obj.c
++++ b/py/obj.c
+@@ -66,7 +66,16 @@ const mp_obj_type_t *MICROPY_WRAP_MP_OBJ_GET_TYPE(mp_obj_get_type)(mp_const_obj_
+             NULL, &mp_type_int, &mp_type_str, &mp_type_int,
+             NULL, &mp_type_int, &mp_type_bool, &mp_type_int,
+         };
+-        return types[(uintptr_t)o_in & 0xf];
++        /* The index goes through an explicit size_t local rather than being written inline.
++           Inline, the widening of the 4-bit index to the GEP's pointer-width index type sinks
++           into the mask, so the AND is performed at CAPABILITY width -- and reading the address
++           of an operand that width needs `lcc`, which raises on an untagged value. Every
++           immediate object word here is untagged by construction, so that faults on the first
++           call. A local forces the mask to be computed and materialised at integer width
++           first. No behaviour change anywhere; on a target with one pointer width it is the
++           same code. */
++        size_t type_idx = (size_t)((uintptr_t)o_in & 0xf);
++        return types[type_idx];
+     }
+ 
+     #elif MICROPY_OBJ_IMMEDIATE_OBJS && MICROPY_OBJ_REPR == MICROPY_OBJ_REPR_C
