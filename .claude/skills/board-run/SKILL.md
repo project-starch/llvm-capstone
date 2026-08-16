@@ -162,6 +162,35 @@ exactly that and produced a session's worth of false "will not boot" / "cyclic b
 console replays ~548 KB of the previous boot on connect, so grepping the whole log matches
 stale markers.
 
+### Switch values are not just a mux selector — the low three bits steal the console
+
+Setting the virtual switches to read a debug register also drives three control bits, so a
+**switch value is UART-safe only when `(value & 0b11) == 0`**:
+
+| bit | effect |
+|---|---|
+| `sw[0]` | hands the **console TX pin** to the tracer (`uart_debug_takeover = sw[0] \| …`, and `uart_debug_tx_o = switches_i[0] ? tracer_uart_tx : uart_debug_tx`). Shell output is not lost — it is never transmitted. |
+| `sw[1]` | **arms a one-shot trace dump** over that same pin. Edge-triggered, streams the whole buffer, and **outlives the switch value that armed it**. |
+| `sw[2]` | tracer ring-buffer mode. Harmless. |
+
+Cost of learning this the hard way: **one boot read as a kernel hang** (switches left at 255 —
+odd — so the next domain's shell line was never echoed; the core was fine), and two more killed
+pre-emptively. A domain that goes quiet because its TX pin was taken is **indistinguishable from
+one that wedged**.
+
+Rules that follow:
+
+* **Never HOLD an odd value while a domain runs**, and park back at 0 after any read. Most useful
+  apertures are odd — `191` (the trap-log clear), `197/199/201/203`, `225`, `249`, `255` — while
+  `196`, `200`, `204`, `224` are safe.
+* **The trap summary (`255`) has no safe aperture.** It exists only at bank `3'b111` reg
+  `5'b11111`; `254` is a different field. Do not sample it mid-run.
+* **Beware the armed dump.** `191` sets `sw[1]`, so every trap-log clear arms a dump. Holding any
+  odd value later reconnects the tracer **mid-stream** and injects binary into the console.
+* **Post-run odd reads are safe by construction**: `debug_led_o` goes to the LEDs, a different pin
+  from the console TX, so an odd aperture cannot corrupt the reading itself — it can only steal
+  console output happening at the same time.
+
 ## 3. THE ORDERING RULE — this is what makes a verdict valid
 
 **The drivers do not reboot between programs, and a wedged program takes the core.**
