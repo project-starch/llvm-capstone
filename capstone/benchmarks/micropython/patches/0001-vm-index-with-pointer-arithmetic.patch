@@ -1,0 +1,13 @@
+diff --git a/py/vm.c b/py/vm.c
+index ed0ddd693..59176d236 100644
+--- a/py/vm.c
++++ b/py/vm.c
+@@ -792,7 +792,7 @@ unwind_jump:;
+                     if (*(sp - MP_OBJ_ITER_BUF_NSLOTS + 1) == MP_OBJ_NULL) {
+                         obj = *(sp - MP_OBJ_ITER_BUF_NSLOTS + 2);
+                     } else {
+-                        obj = MP_OBJ_FROM_PTR(&sp[-MP_OBJ_ITER_BUF_NSLOTS + 1]);
++                        obj = MP_OBJ_FROM_PTR(sp - MP_OBJ_ITER_BUF_NSLOTS + 1);
+                     }
+                     mp_obj_t value = mp_iternext_allow_raise(obj);
+                     if (value == MP_OBJ_STOP_ITERATION) {
