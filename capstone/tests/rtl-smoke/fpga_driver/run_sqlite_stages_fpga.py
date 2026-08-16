@@ -234,10 +234,6 @@ def main():
     console.connect()
     install_resilient_emit(console)
     results, transcript = [], []
-    # Trap-log summary standing before the CURRENT domain ran, so a latch that never changed can
-    # be reported as stale instead of being read as this domain's trap. A one-element list rather
-    # than a plain name because it is written from inside the per-domain loop.
-    s07_prev_trap = [None]
     try:
         console.lock()
         install_release_on_signal(console)
@@ -678,19 +674,27 @@ def main():
                 # trapped" from "a previous domain's trap is still latched" is to compare against
                 # the value standing before this domain ran. Sampling it per domain is what makes
                 # that comparison possible at all; without it a stale latch reads as a result.
-                # 255 is UART-hostile (see above), so it is read ONCE, after the control, and
-                # never again between the domains under test. That single read is enough: it
-                # establishes the latch value standing before any test domain ran, which is all
-                # the staleness comparison at the wedge needs.
-                if dom_idx == 1:
-                    _t = _read_sw(255)
-                    s07_prev_trap[0] = _t
-                    _tline = (f"  [s07] after {label}: sw=255 trap-log "
-                              f"{'UNREAD' if _t is None else f'0x{_t:02x} seen={(_t>>7)&1} mcause={_t & 0x7F}'}"
-                              f"  (pre-test baseline; not sampled again until the wedge, because "
-                              f"255 hijacks the console TX)")
-                    print(_tline, flush=True)
-                    transcript.append(_tline + "\n")
+                # THE TRAP SUMMARY IS NOT SAMPLED MID-RUN AT ALL, and it cannot be made safe.
+                #
+                # It lives only at reg 5'b11111 in bank 3'b111 (cva6.sv:1229), so its switch
+                # value is 0b111_11111 = 255 -- inherently ODD, hence always a console hijack.
+                # There is no even aperture: 254 is reg 5'b11110, which is
+                # rev_node_serving_idx[31:24] (cva6.sv:1228), a different field entirely.
+                #
+                # Worse than a momentary hijack: the trap-log clear at 191 ARMS a one-shot trace
+                # dump (sw[1]), and that dump is edge-triggered and streams the whole buffer, so
+                # it outlives the switch value that armed it. Holding any odd value later
+                # reconnects the tracer to the console MID-STREAM and injects binary trace bytes
+                # into it. With the clear running before the control, a 255 read after the
+                # control is exactly that pattern -- it would spray garbage into the console
+                # immediately before the domains under test.
+                #
+                # Dropped rather than worked around, because it is a nicety and the measurement
+                # does not need it: the displacement byte does not depend on the trap latch, and
+                # a genuine capability fault is self-evident at the wedge anyway (mcause 25 at a
+                # DOMAIN VA, versus the kernel VAs and ordinary causes a stale latch shows). The
+                # wedge readout still reports the trap summary, where the run is already over and
+                # an injected burst costs nothing.
                 # Park the switches back at 0 between domains, which is where every earlier
                 # version of this runner left them. Sampling leaves them at the last value read,
                 # so without this the next domain runs with the mux parked somewhere it never
@@ -868,10 +872,22 @@ def main():
                         # pre-test baseline means no non-trivial trap was latched since, and the
                         # trap fields carry no verdict about the domain that just wedged. The
                         # displacement byte is unaffected either way.
-                        if (sw == 255 and v is not None and s07_prev_trap[0] is not None
-                                and v == s07_prev_trap[0] and TRAPLOG_CLEAR != "all"):
-                            line += ("   <== UNCHANGED since the pre-test baseline: trap fields "
-                                     "are STALE and say nothing about this domain")
+                        if sw == 255 and v is not None and TRAPLOG_CLEAR != "all":
+                            # No pre-test baseline is taken any more (reading 255 mid-run injects
+                            # trace bytes into the console -- see the sampling block). So
+                            # staleness is judged on the value itself: capability causes are
+                            # built as 24 + exception_code[3:0] (cva6.sv, the CAP_WB cause
+                            # build), i.e. 24..39 -- which covers UNEXPECTED_OPERAND_TYPE 25,
+                            # INVALID_CAPABLITY 26 and CAPABLITY_OUT_OF_BOUND 29
+                            # (riscv_pkg.sv:349-353). Anything outside that is ordinary kernel
+                            # traffic latched since the last clear and says nothing about this
+                            # domain. The range is NOT 24..28: that would dismiss a genuine
+                            # mcause-29 as if it were kernel noise.
+                            _c = v & 0x7F
+                            if not (24 <= _c <= 39):
+                                line += (f"   <== cause {_c} is not a capability fault (24..39); "
+                                         f"with the clear skipped this is ordinary traffic "
+                                         f"latched earlier and says NOTHING about this domain")
                         print(line, flush=True)
                         # Persist it. These readings were previously stdout-only, so the mcause
                         # and ready-bit values quoted in write-ups could not be checked against
