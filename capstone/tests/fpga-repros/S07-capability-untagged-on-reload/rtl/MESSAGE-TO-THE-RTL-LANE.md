@@ -40,6 +40,30 @@
 > what makes this one easy to misread; a comment at `:431` saying so would save the next reader the
 > trip.
 >
+> ### The shape itself now HAS been simulated — and it passes
+>
+> A scan of all 86 directed tests for two consecutive `LDC`s with `prev.rd == cur.rs1` returned
+> **zero hits**: the shape that fails on silicon had never been run in simulation. (The nearest,
+> `s07-ldc-overlap-displace.S:105-106`, uses two *independent* adjacent LDCs — the syncer-overlap
+> framing, a different mechanism.)
+>
+> `verif/tests/custom/capstone/s07-ldc-chain-forward.S` now runs it: an eight-link ring of
+> capabilities, each in its own 16-byte granule, walked by a dependent `ldc` chain — 64 hops hot,
+> then 8 rounds each preceded by a full 64 KiB @ 16 B cache sweep so every load misses.
+>
+> **PASS**, at 276 242 cycles against a 2 000 000 timeout (so a real completion, not a timeout
+> reported as success). Verified from the RVFI trace that it did the work rather than passing
+> vacuously: 80 `ldc` retirements (64 hot + 16 cold), 8 `stc` link writes, 32 768 eviction loads,
+> and exactly **one** `UNEXPECTED_OPERAND` — the deliberate control (`LCC` on a plain integer),
+> which proves the detector was live.
+>
+> This does **not** exonerate the shape on silicon, and we are not claiming it does: a directed test
+> runs bare-metal in M-mode, while the failures occur inside a capability domain entered from the
+> OpenSBI monitor, reaching globals through a cap table on a monitor-carved stack — and `CAPENTER`
+> in this corpus only enables capmode, it does not drive the dom switcher. What it does establish is
+> that the dependent chain is sound at simulation timing including under full eviction, so whatever
+> S-07 is, it is not inherent to the instruction sequence.
+>
 > ### WHAT SURVIVES — and the one bit that would settle it
 >
 > Because the dependent `ldc` cannot issue until its producer **commits**, its rs1 comes from
