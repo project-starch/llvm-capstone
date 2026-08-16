@@ -597,9 +597,23 @@ def main():
                 _st = console.latest(C.LISTEN.get("led_state", "led_state"))
                 _bits = _st.get("states") if isinstance(_st, dict) else None
                 _v = sum((1 << i) for i, b in enumerate(_bits) if b) if _bits else None
-                _line = (f"  [s07] after {label}: sw=204 displacement "
-                         f"{'UNREAD' if _v is None else f'0x{_v:02x} {_v:08b}'}"
-                         f"{'' if _v is None else f'  seen={{stc:{(_v>>7)&1},ldc:{(_v>>6)&1}}} count={_v & 0x3F}'}")
+                if _v is None:
+                    _line = f"  [s07] after {label}: sw=204 displacement UNREAD"
+                else:
+                    _stc, _ldc, _cnt = (_v >> 7) & 1, (_v >> 6) & 1, _v & 0x3F
+                    # FREE INTEGRITY CHECK ON THE READOUT PATH, not a finding about the core.
+                    # The counter only increments inside the same branch that sets ldc_seen, so
+                    # a non-zero count with ldc_seen clear is STRUCTURALLY IMPOSSIBLE for the
+                    # design to produce. If it appears, the READOUT is wrong -- wrong switch, a
+                    # garbled byte, or a sampling race -- and the value must not be reported as
+                    # evidence of anything. (stc_seen with count 0 IS legal: the STC arm does
+                    # not touch the LDC counter.)
+                    _fault = _cnt > 0 and _ldc == 0
+                    _line = (f"  [s07] after {label}: sw=204 displacement "
+                             f"0x{_v:02x} {_v:08b}  seen={{stc:{_stc},ldc:{_ldc}}} count={_cnt}"
+                             + ("  <== INSTRUMENT FAULT: count>0 with ldc_seen clear cannot be "
+                                "produced by the design; the readout is wrong, NOT the core. "
+                                "Do not treat this byte as data." if _fault else ""))
                 print(_line, flush=True)
                 transcript.append(_line + "\n")
             except Exception as exc:
