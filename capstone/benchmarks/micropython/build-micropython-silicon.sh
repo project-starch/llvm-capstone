@@ -122,35 +122,6 @@ echo "== compiling (this is the whole interpreter in one go)"
 link() {  # $1 = globals offset literal, $2 = output
   local lds="$OBJ_DIR/link.ld"
   sed "s/0x10000 + 0x1000/0x10000 + $1/" "$GPFREE/link-gpfree.ld" > "$lds"
-  # TAIL PADDING after .capstone_cap_init, with real content so it lands in the PT_LOAD.
-  #
-  # Measured 2026-08-16: this domain's cap-init table entry is the LAST WORD of the copied
-  # globals template (blob offset 0x8130, size 8, tmpl_len 0x8138 -- zero margin), and its high
-  # half is destroyed while the entry glue runs, by an amount that scales with the carve count
-  # and vanishes at zero carves. SQLite is unaffected because its entry sits at blob offset
-  # 0x12700, far from the end.
-  #
-  # The padding is applied to a TEMP COPY of link-gpfree.ld, never to the shared script: every
-  # ladder rung and the SQLite domain link through that file, and this project has a documented
-  # layout sensitivity where a few bytes flip a passing rung.
-  #
-  # ponytail: this is a WORKAROUND, not a fix -- it moves the victim rather than stopping the
-  # writer. Ceiling: MPY_TAIL_PAD bytes; a writer that overruns further eats through it silently.
-  # Upgrade path: identify the writer (the storage carve or an initializer copy is the candidate)
-  # and bound it. Set MPY_TAIL_PAD=0 for the A/B that shows the padding is what makes it run.
-  if [[ "${MPY_TAIL_PAD:-256}" != "0" ]]; then
-    python3 - "$lds" "${MPY_TAIL_PAD:-256}" <<'PYEOF'
-import sys
-path, nbytes = sys.argv[1], int(sys.argv[2])
-src = open(path).read()
-anchor = "  /* End of the LOADED globals template"
-pad = ("  .capstone_tail_pad : ALIGN(16) {\n"
-       + "".join("    QUAD(0xC0FFEEC0FFEE%04X)\n" % i for i in range(nbytes // 8))
-       + "  } :domain\n\n")
-assert anchor in src, "linker script changed: tail-pad anchor not found"
-open(path, "w").write(src.replace(anchor, pad + anchor, 1))
-PYEOF
-  fi
   "$CLANG" -target capstone64-unknown-elf -ffreestanding \
     ${INTERP_EXTRA_CFLAGS:-} \
     -c "$LADDER/start-gp-captable-interp.S" -o "$OBJ_DIR/start.o"
