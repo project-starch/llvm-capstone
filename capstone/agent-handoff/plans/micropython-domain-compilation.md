@@ -1,4 +1,23 @@
-# MicroPython as a freestanding Capstone domain — the compilation plan
+**Status: MicroPython runs ordinary Python.** Verified against a checksum over the interpreter's
+actual output, computed before each run: `print`/arithmetic, lists and `len`, `def` with a call,
+`for` over `range`, string multiplication, `try`/`except`, and dicts all produce exactly the
+expected bytes. Garbage collection under allocation pressure is the last construct being measured.
+
+**Priority is COMPATIBILITY, not security** (project lead, 2026-08-16). There is deliberately no
+intra-heap protection yet, and that is measured rather than assumed: the whole image contains
+**zero** `shrink` and **zero** `split` instructions, so `gc_alloc` derives every object pointer from
+the single 96 KiB `mpy_heap` carve with `cincoffset`, which moves a cursor and does not narrow
+bounds. Every Python object therefore carries the bounds of the entire heap.
+
+What DOES hold today is the domain boundary: the heap carve is bounded to its 96 KiB, so the
+interpreter cannot reach the code image, the cap table or any other region by construction. The
+capability itself survives the whole chain -- carve, `gc_pool_start`, `pool_start + block*32`, the
+returned pointer -- which is precisely why every `gc.c` site that routed it through `uintptr_t` had
+to be fixed.
+
+Intra-heap safety would be a `shrink` per `gc_alloc` to the object's real size, plus a decision
+about what the sweep does with derived capabilities. That is the nested-allocator question this
+branch is named for, and it comes AFTER the interpreter runs a real program.
 
 **Status: MicroPython RUNS. `print(1+1)` produces `2` in a pure-capability Capstone domain
 under QEMU, verified by reading the interpreter's own output back, not by an exit code.**
