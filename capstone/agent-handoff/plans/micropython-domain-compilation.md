@@ -377,9 +377,70 @@ one, so the script would read the section SIZE as an offset. SQLite's descriptor
 section 2, which is why it has never misbehaved. Verified by reading the line it parses. Fix it and
 negative-test it before its OK is trusted on any other image.
 
+### Stage 1 of that path, EXECUTED 2026-08-16: interp is genuinely blocked, and the fix is in-tree
+
+The experiment was "run SQLite under QEMU, since it uses the interp glue and is reported to work".
+Prediction made before the run, from the artifact rather than the source: it must FAIL, because the
+firmware QEMU boots (`caplifive-buildroot/build/images/fw_jump.elf`, 2026-07-29) contains none of
+the strings `gpoff`, `gp-captable` or `capstone_gp_initdesc`, and the source it was built from has
+zero occurrences of `gpoff`.
+
+**It failed, with the same signature as `beebs_prime`:**
+
+```
+beebs_prime  Cap mem access OOB: pc=1015a0250 rs1=x2 cursor=1015a1600 imm=48 size=16 bounds=(1015a1660, 1015c0000)
+sqlite       Cap mem access OOB: pc=101600250 rs1=x2 cursor=101750b50 imm=48 size=16 bounds=(101750bb0, 101800000)
+```
+
+Same instruction offset (`...250`), same register (`x2` = sp), same displacement and width, and in
+both cases **sp's cursor sits below its own bounds base** — 0x60 in the SQLite case. One cause, both
+domains. So this is not about MicroPython and not about SQLite; the interp glue does not work in
+this checkout at all.
+
+**SQLite does not currently run under QEMU here.** That is not new: `ISSUES.md:4482` records the
+QEMU core tier going red on 2026-08-14 with a monitor `create_domain` diagnosis, fixed by
+`capstone-sbi 1a926b0` + `caplifive-buildroot b098a39` — and `current-next-step.md:39-57` records
+that those commits could not be pushed (403 on two inner repos). **Neither commit exists in this
+checkout**, and the nested `capstone-sbi` here is `2f772bb`, which has zero `gpoff`. So this tree
+predates the gp-carve work entirely rather than carrying its bug.
+
+**The fix that IS available here is one in-tree commit**, `caplifive-buildroot 8c7b973` on branch
+`xlang-gp-captable-delivery`, the direct child of the pinned `6912474`, +54/-1 over three files. Read
+in full: it does the copy in the **kernel module**, not the monitor —
+
+```c
+if (m_args.gp_offset > 0 && m_args.gp_offset < m_args.code_len) {
+    unsigned long code_size   = (((m_args.code_len - 1) >> 4) + 1) << 4;
+    unsigned long dom_data_off = code_size + MONITOR_SEAL_SIZE;   /* 16 * 96 */
+    memcpy((void*)(dom_vaddr + dom_data_off), (void*)(dom_vaddr + m_args.gp_offset), tmpl_len);
+}
+```
+
+— replicating the monitor's own carve arithmetic instead of changing it, guarded on a new
+`gp_offset` ioctl field so every existing domain is untouched. **No monitor change and no vendor
+patch is required**, which corrects what was written here before the run.
+
+Two consequences worth carrying:
+
+* **There is no PCC code-window limit in this checkout.** `sbi_capstone.c:301` splits at
+  `base + code_size`, so PCC covers the whole image. The 4 KiB truncation that `ISSUES.md:4482`
+  describes is a property of the gp-carve monitor, which is not here. MicroPython's 321 KiB of
+  `.text` is therefore not a link-time problem at all.
+* Applying `8c7b973` means rebuilding `capstone.ko`, `capstone-test.user` and the rootfs. The
+  staged copies are from 2026-07-29. Before rebuilding, note that
+  `build/build/modcapstone-1.0/module/capstone.c` carries local edits absent from `package/`, and
+  buildroot rsyncs `package/` over it.
+
+**Negative-test the delivery on the day it lands**, and do it with `beebs_prime` under
+`DOMAIN_GLUE=interp`: it fails today and must pass after, with the generated-glue build of the same
+rung as the control. A delivery that silently does nothing looks exactly like one that works, right
+up until the descriptor is read.
+
 ### What is now the shortest path to a running interpreter
 
-1. Settle the interp question with a SQLite QEMU run (free, no new code).
+1. ~~Settle the interp question with a SQLite QEMU run.~~ **DONE, see above: interp is blocked
+   for every domain, and `caplifive-buildroot 8c7b973` is the in-tree fix.** Apply it, rebuild the
+   module + userspace + rootfs, and negative-test with `beebs_prime` under `DOMAIN_GLUE=interp`.
 2. Link with the globals offset sized to `.text`, copying `build-sqlite-silicon.sh:1539-1586`.
 3. Provide `setjmp`/`longjmp` from `nlrjmp_kernel.h` and the eight mem/str functions from
    `beebs_freestanding_string.c`.
