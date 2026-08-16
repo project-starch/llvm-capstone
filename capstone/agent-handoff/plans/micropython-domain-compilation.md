@@ -436,11 +436,55 @@ Two consequences worth carrying:
 rung as the control. A delivery that silently does nothing looks exactly like one that works, right
 up until the descriptor is read.
 
+### The fix is APPLIED and VERIFIED, 2026-08-16
+
+`caplifive-buildroot` checked out on `xlang-gp-captable-delivery` (`8c7b973`), then
+`make build A=modcapstone-rebuild`. The rebuild was checked on the ARTIFACTS, not the source, since
+this project has had a "fix" leave the firmware byte-identical: `capstone.ko` (14:35) now carries
+the `gp-captable` string, `capstone-test.user` carries `gp_offset`, `rootfs.ext2` carries both.
+
+Then the negative test, control first:
+
+| arm | before the rebuild | after |
+|---|---|---|
+| `beebs_prime`, `DOMAIN_GLUE=generated` (control) | PASS, retval 582955588 | **PASS, retval 582955588** |
+| `beebs_prime`, `DOMAIN_GLUE=interp` | FAULT, cause 7 | **PASS, retval 582955588** |
+
+The control is what makes the second row mean something: the rootfs was rebuilt between the two
+measurements, and an unchanged control says the rebuild did not break or bless anything by itself.
+
+**Direct evidence that the delivery actually fired**, rather than the run merely passing:
+
+```
+Loadable size = 4280, gp_offset = 1000
+```
+
+That line is the new `libcapstone`, which locates `.capstone_gp_initdesc` **by section name** and
+reports its image offset. A non-zero `gp_offset` is exactly the condition the module's copy is
+guarded on. The module's own `pr_info` is not on the console because it is a kernel-log message; the
+userspace line is the one that reaches the transcript, and it is sufficient.
+
+**The parent's submodule pointer is deliberately NOT bumped.** `git push` of
+`xlang-gp-captable-delivery` returns 403, the same access blocker `current-next-step.md:39-57`
+records for `capstone-sbi` and `capstone-opensbi`. Bumping the gitlink to a commit that does not
+exist remotely is precisely the failure that file describes as already having stranded
+`caplifive-buildroot`'s `components/opensbi` pointer. So the parent still records `6912474`, and a
+fresh clone needs the branch checked out by hand until the push access exists:
+
+    cd capstone/caplifive-buildroot && git checkout xlang-gp-captable-delivery
+    make build CAPSTONE_CC_PATH="$(realpath ../capstone-c)" A=modcapstone-rebuild
+
+**Local edits that the rebuild discarded**, saved as a diff before it ran: a
+`DOMAIN_MIN_FREE (512 KB)` order bump in `build/build/modcapstone-1.0/module/capstone.c` plus
+`pr_emerg` tracing, neither of them in `package/`. The tracing is noise. The order bump is
+functional and may matter for MicroPython's larger image, but it is a separate decision from this
+one and was not bundled into it.
+
 ### What is now the shortest path to a running interpreter
 
-1. ~~Settle the interp question with a SQLite QEMU run.~~ **DONE, see above: interp is blocked
-   for every domain, and `caplifive-buildroot 8c7b973` is the in-tree fix.** Apply it, rebuild the
-   module + userspace + rootfs, and negative-test with `beebs_prime` under `DOMAIN_GLUE=interp`.
+1. ~~Settle the interp question, apply the fix, negative-test it.~~ **DONE. The interp glue works:
+   `beebs_prime` under `DOMAIN_GLUE=interp` went FAULT to PASS across the rebuild with an unchanged
+   control.**
 2. Link with the globals offset sized to `.text`, copying `build-sqlite-silicon.sh:1539-1586`.
 3. Provide `setjmp`/`longjmp` from `nlrjmp_kernel.h` and the eight mem/str functions from
    `beebs_freestanding_string.c`.
