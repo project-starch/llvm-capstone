@@ -1,5 +1,65 @@
 # S-07 — handover to the RTL lane
 
+> ## UPDATE 2026-08-16 (LATEST) — a sharper ask: ONE STICKY BIT, not `tval`
+>
+> Since the block below was written we chased two candidate mechanisms in your RTL and **refuted
+> both**, by reading the source rather than by testing. The refutations narrow S-07 to a clean
+> two-way choice that one flop on the debug mux would settle. Read this before §1 below; the `tval`
+> ask there is now secondary.
+>
+> ### REFUTED 1 — operand forwarding (LOAD_WB outranking CAP_WB)
+>
+> The premise is true and worth knowing: `issue_read_operands.sv` selects a capability operand's
+> cursor *and* metadata from the **same** writeback port, via two `rr_arb_tree`s sharing one request
+> vector with `ExtPrio(1'b1)`/`rr_i('0)` — static priority, index 0 highest
+> (`core/cvfpu/src/common_cells/src/rr_arb_tree.sv:54-57`). With `LOAD_WB=2` and `CAP_WB=4`,
+> **CAP_WB is the lowest-priority port of all five**, and ports 1/2/3 all have `cap_data` tied to
+> `'0` (`scoreboard.sv:319-323`). So a grant on any of them yields a correct cursor with NOT_CAP
+> metadata — our exact signature.
+>
+> **It is nonetheless unreachable for a dependent pair.** `stall_waw_rs1`
+> (`issue_read_operands.sv:1434-1436`, cleared only when `rd_clobber_gpr[rs1] == NONE`, and
+> `:1453-1455` exempts only non-capstone ops) blocks a capability op from issuing while its rs1 is
+> the destination of an in-flight instruction, and `rd_clobber_gpr` is driven by `still_issued`
+> (`:576-578`), which holds until **commit**, not writeback. So the second `ldc` of a dependent pair
+> cannot issue until the first has committed, and the writeback arbiter is never consulted for it.
+>
+> ### REFUTED 2 — the D-cache refill "tag inference"
+>
+> `wt_dcache_mem.sv:431` writes `cap_tag_q <= wr_vld_bits_i[j] & (|wr_cl_user_i[7:0])`, which reads
+> exactly like the `|user|` heuristic the same file calls defect D3/D7 at `:144-147` — and which the
+> S-06 fix replaced on the *store* path at `:441` with the genuine `wr_ctag_i`. It looks like the
+> fix was left half-done.
+>
+> **It is not.** On the refill the dcache actually sees, `user` carries **the tag byte from the
+> separate tag memory**, not capability metadata: `wt_axi_adapter.sv:812-822` waits for the tag
+> R-beat, and on it sets `tag_rtrn_rd_en=1` (which zeroes the user shift register and writes the
+> single tag byte into it, `:743-747`), explicitly sets `dcache_rtrn_rd_en=0` — *"do NOT shift into
+> data register"* — and only **then** raises `dcache_rtrn_vld_d`. So `|wr_cl_user_i[7:0]` is a
+> correct tag reconstruction. The same expression means different things on the two paths, which is
+> what makes this one easy to misread; a comment at `:431` saying so would save the next reader the
+> trip.
+>
+> ### WHAT SURVIVES — and the one bit that would settle it
+>
+> Because the dependent `ldc` cannot issue until its producer **commits**, its rs1 comes from
+> committed state. So when it sees NOT_CAP, **the first `ldc` retired NOT_CAP**. Only two ways:
+>
+> | | mechanism | tag in memory afterwards |
+> |---|---|---|
+> | **(a)** | the load syncer bypassed the response to `normal_res` → LOAD_WB, and `scoreboard.sv:246` zeroes `cap_result` at writeback | **intact** — the value was fine in memory |
+> | **(b)** | the load genuinely returned `tag=0` from the cache / tag-memory path | **gone** |
+>
+> You already have the detector for (a): the sim-only `$error` at `core/scoreboard.sv:326-347`. It
+> is `` `ifndef SYNTHESIS ``, so it is **absent from the bitstream** — which is exactly why four
+> boots could not tell (a) from (b).
+>
+> **THE ASK, revised: make that assertion's condition a STICKY BIT on the debug mux** — one flop,
+> set on `wt_valid_i[2] && mem_q[trans_id_i[2]].issued && sbe.op == LDC`, cleared only by reset,
+> read alongside the trap latch. It needs no reproducer, no `mtval`, and no working trap dump, and
+> it discriminates (a) from (b) directly on the next wedge. Latching `tval` (§1 below) remains
+> useful but is secondary: it tells us the cursor was non-zero, which we can already infer.
+
 > ## UPDATE 2026-08-16 (LATER, after four boots on `caplifive_s07diag.bit`) — READ THIS FIRST
 >
 > This supersedes the block below it, which was written before your diagnostic bitstream was

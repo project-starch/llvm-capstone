@@ -95,6 +95,32 @@
 >   so it is reachable only after an upstream error and was always the SECOND fault;
 > * clean reps are NOT evidence of suppression — at the observed rate, 3 clean is p≈0.30.
 >
+> ### 6b. TWO MORE MECHANISMS REFUTED (2026-08-16, by source inspection)
+>
+> Both were chased to the point of writing a test, and both died on reading the RTL. Recorded so
+> nobody re-derives them:
+>
+> * **Operand forwarding (LOAD_WB outranking CAP_WB).** The priority premise is real — CAP_WB is the
+>   lowest-priority of the five writeback ports and ports 1/2/3 tie `cap_data` to `'0`, so a grant
+>   there gives a correct cursor with NOT_CAP metadata. But `stall_waw_rs1`
+>   (`issue_read_operands.sv:1434-1436`, `:1453-1455`, `:576-578`) stops a capability op issuing
+>   while its rs1 is an in-flight destination, and that holds until **commit** — so a dependent
+>   `ldc` pair never consults the writeback arbiter.
+> * **The D-cache refill "tag inference".** `wt_dcache_mem.sv:431` looks like the `|user|` heuristic
+>   the same file calls defect D3/D7 at `:144-147`, left behind when the S-06 fix replaced it on the
+>   store path at `:441`. It is not: on the refill the dcache sees, `user` carries the **tag byte**
+>   from the tag memory, not metadata (`wt_axi_adapter.sv:812-822` + `:743-747` — the tag R-beat
+>   zeroes the user register, writes the tag byte, does *not* shift data, and only then signals the
+>   return).
+>
+> **What survives.** Because the dependent `ldc` cannot issue until its producer commits, a NOT_CAP
+> rs1 means the *first* `ldc` retired NOT_CAP — either (a) the syncer bypassed it to LOAD_WB, where
+> `scoreboard.sv:246` zeroes `cap_result` (memory would still be fine), or (b) the load genuinely
+> returned `tag=0`. The detector for (a) already exists as a sim-only `$error`
+> (`scoreboard.sv:326-347`) and is absent from the bitstream, which is exactly why four boots could
+> not separate them. The ask is now **one sticky bit on the debug mux** carrying that condition —
+> see `rtl/MESSAGE-TO-THE-RTL-LANE.md`.
+>
 > ### 7. Operational
 >
 > `split_out_cap`'s unimplemented exact-fit case caps a boot at **~4 domains**; the 5th spins at
