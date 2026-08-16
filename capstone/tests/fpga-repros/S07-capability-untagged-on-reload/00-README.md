@@ -42,6 +42,32 @@
 > commit carrying the sticky bit** — on anything older switch 204 reads whatever that slot decoded
 > to before.
 >
+> ### 0b. PRE-REGISTERED STOPPING RULE (written before the data, 2026-08-17)
+>
+> **There is no validated wedge rate for this bitstream.** The familiar "~1 in 3" comes from
+> `caplifive_s06fixs08fix`, and a reflash invalidates prior silicon numbers — that rule exists
+> precisely because rates are what shift. So `(2/3)³ ≈ 0.30` for a clean 3-rep boot is arithmetic
+> against a **stale prior**, useful as a rough guide and nothing more.
+>
+> **Why the rate can move even though the sticky commit changes no behaviour.** That statement is
+> true of RTL *semantics* — the detector is read-only, no backpressure, no path into any existing
+> decision — but not of the *implementation*: it adds registers and a mux leg, so place-and-route
+> differs, and this would be a different bitstream even if the RTL were byte-identical. If S-07 is
+> timing-marginal, resynthesis can move the window **either way**. A lower rate here is therefore
+> not evidence the defect is gone, and a higher rate is not evidence anything broke.
+>
+> **The threshold, fixed in advance: at THREE consecutive clean boots, stop hunting and report a
+> possible rate change rather than continuing.** Against the stale prior that is ≈0.026, which is
+> not decisive — the point is not the p-value but that beyond it "run another boot" stops being
+> cheap and the alternative explanations become worth more than another repetition. An instrumented
+> bitstream that no longer reproduces at all is a real outcome for a timing-marginal defect, and
+> the answer to it is a different attack, not more grinding.
+>
+> **Boundary that must stay attached to a `0x00` reading.** The counter only moves for an LDC/STC
+> displaced onto LOAD_WB/STORE_WB. A persistent zero is equally consistent with "no displacement
+> happens" and with "the mechanism is case (b), which this detector cannot see by design". It rules
+> out *routine* displacement; it does not rule *in* case (b).
+>
 > ### 1. The invariant: ONE instruction shape, three unrelated functions
 >
 > Three wedges, three different builds, three different source functions, three different
