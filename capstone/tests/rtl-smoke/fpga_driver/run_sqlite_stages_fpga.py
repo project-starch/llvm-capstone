@@ -650,23 +650,56 @@ def main():
                     _b = _s.get("states") if isinstance(_s, dict) else None
                     return sum((1 << i) for i, b in enumerate(_b) if b) if _b else None
 
+                # UART-HOSTILE SWITCH VALUES -- the low three switch bits are NOT mux selectors.
+                #
+                #   sw[0]  ariane_xilinx.sv  `uart_debug_takeover = sw[0] | uart_debug_active`
+                #          and cva6.sv:913   `uart_debug_tx_o = switches_i[0] ? tracer_uart_tx
+                #                             : uart_debug_tx`
+                #          -- takes the CONSOLE TX PIN away from the APB UART and gives it to the
+                #             tracer. The shell's output is not lost, it is not transmitted.
+                #   sw[1]  cva6.sv:941 `dump_enable_i(switches_i[1])` -- arms a ONE-SHOT binary
+                #          dump of the trace buffer over that same pin.
+                #   sw[2]  cva6.sv:942 `overwrite_i(switches_i[2])` -- tracer ring-buffer mode,
+                #          harmless to the console.
+                #
+                # So a value is UART-safe only if (v & 0b11) == 0. 204 (0xCC) is safe. 255 is
+                # NOT: it sets all three, hijacking the console AND arming a dump. A boot was
+                # lost to exactly this -- the switches were left at 255, the next domain's shell
+                # line was never echoed, and it read as a wedge when the core was fine.
+                #
+                # A domain that goes quiet because its TX pin was taken is indistinguishable from
+                # one that wedged, so the trap summary is sampled ONCE, after the control, purely
+                # to give the staleness comparison a pre-test baseline -- never between the
+                # domains under test.
+                assert (204 & 0b11) == 0, "switch 204 must be UART-safe"
                 _v = _read_sw(204)
                 # The trap-log summary {seen, mcause[6:0]} alongside it. With the clear skipped
                 # the trap fields are last-writer-wins, so the ONLY way to tell "this domain
                 # trapped" from "a previous domain's trap is still latched" is to compare against
                 # the value standing before this domain ran. Sampling it per domain is what makes
                 # that comparison possible at all; without it a stale latch reads as a result.
-                _t = _read_sw(255)
-                _prev = s07_prev_trap[0]
-                s07_prev_trap[0] = _t
-                _stale = (_t is not None and _prev is not None and _t == _prev and not _do_clear)
-                _tline = (f"  [s07] after {label}: sw=255 trap-log "
-                          f"{'UNREAD' if _t is None else f'0x{_t:02x} seen={(_t>>7)&1} mcause={_t & 0x7F}'}"
-                          + ("  <== UNCHANGED since before this domain: treat the trap fields as "
-                             "STALE, they carry no verdict about this domain (the displacement "
-                             "byte is unaffected)" if _stale else ""))
-                print(_tline, flush=True)
-                transcript.append(_tline + "\n")
+                # 255 is UART-hostile (see above), so it is read ONCE, after the control, and
+                # never again between the domains under test. That single read is enough: it
+                # establishes the latch value standing before any test domain ran, which is all
+                # the staleness comparison at the wedge needs.
+                if dom_idx == 1:
+                    _t = _read_sw(255)
+                    s07_prev_trap[0] = _t
+                    _tline = (f"  [s07] after {label}: sw=255 trap-log "
+                              f"{'UNREAD' if _t is None else f'0x{_t:02x} seen={(_t>>7)&1} mcause={_t & 0x7F}'}"
+                              f"  (pre-test baseline; not sampled again until the wedge, because "
+                              f"255 hijacks the console TX)")
+                    print(_tline, flush=True)
+                    transcript.append(_tline + "\n")
+                # Park the switches back at 0 between domains, which is where every earlier
+                # version of this runner left them. Sampling leaves them at the last value read,
+                # so without this the next domain runs with the mux parked somewhere it never
+                # used to be. Only 191 is known to have a side effect (the log clear) and 0 is
+                # not it -- but a boot hung between domains once with the switches parked at
+                # 255, and restoring the prior resting state removes that as a variable instead
+                # of leaving it to be argued about later.
+                for bit in range(8):
+                    console.set_switch(bit, False)
                 if _v is None:
                     _line = f"  [s07] after {label}: sw=204 displacement UNREAD"
                 else:
@@ -830,6 +863,15 @@ def main():
                         v = sum((1 << i) for i, b in enumerate(bits) if b) if bits else None
                         line = (f"  [wedge] sw={sw:3} {label:52} "
                                 f"{'UNREAD' if v is None else f'0x{v:02x} {v:08b}'}")
+                        # STALENESS, decided here rather than per-domain: with the clear skipped
+                        # the trap latch is last-writer-wins, so a value identical to the
+                        # pre-test baseline means no non-trivial trap was latched since, and the
+                        # trap fields carry no verdict about the domain that just wedged. The
+                        # displacement byte is unaffected either way.
+                        if (sw == 255 and v is not None and s07_prev_trap[0] is not None
+                                and v == s07_prev_trap[0] and TRAPLOG_CLEAR != "all"):
+                            line += ("   <== UNCHANGED since the pre-test baseline: trap fields "
+                                     "are STALE and say nothing about this domain")
                         print(line, flush=True)
                         # Persist it. These readings were previously stdout-only, so the mcause
                         # and ready-bit values quoted in write-ups could not be checked against
