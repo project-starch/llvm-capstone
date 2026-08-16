@@ -1,7 +1,13 @@
 #include <stdint.h>
 
 // Start from "nothing optional is enabled" and add back only what the domain needs.
+// Overridable via DOMAIN_EXTRA_DEFS so several feature levels can be built and run in ONE boot:
+// the level decides which builtins exist at all, and a test that fails for want of a builtin says
+// nothing about capabilities. Three knobs are guarded, not just the level, because raising the
+// level alone leaves long integers and error text where MINIMAL put them.
+#ifndef MICROPY_CONFIG_ROM_LEVEL
 #define MICROPY_CONFIG_ROM_LEVEL (MICROPY_CONFIG_ROM_LEVEL_MINIMUM)
+#endif
 
 #define MICROPY_ENABLE_COMPILER           (1)
 #define MICROPY_ENABLE_GC                 (1)
@@ -9,7 +15,9 @@
 #define MICROPY_OBJ_REPR                  (MICROPY_OBJ_REPR_A)
 #define MP_INT_TYPE                       (MP_INT_TYPE_INT64)
 #define MP_SSIZE_MAX                      (0x7fffffffffffffffLL)
+#ifndef MICROPY_LONGINT_IMPL
 #define MICROPY_LONGINT_IMPL              (MICROPY_LONGINT_IMPL_NONE)
+#endif
 #define MICROPY_FLOAT_IMPL                (MICROPY_FLOAT_IMPL_NONE)
 
 #define MICROPY_PERSISTENT_CODE_LOAD      (0)
@@ -37,7 +45,11 @@
 #define MICROPY_STACK_CHECK               (1)
 #define MICROPY_STACK_CHECK_MARGIN        (4096)
 
+// TERSE shortens exception text, so a test scored against an upstream .exp file fails on the
+// MESSAGE while the behaviour is right -- assign_expr_syntaxerror.py is exactly that.
+#ifndef MICROPY_ERROR_REPORTING
 #define MICROPY_ERROR_REPORTING           (MICROPY_ERROR_REPORTING_TERSE)
+#endif
 
 #define MICROPY_ALLOC_PARSE_CHUNK_INIT    (16)
 
