@@ -615,6 +615,30 @@ def main():
                                             # answer a VALID query; a huge/garbage id means we
                                             # queried an unmappable node and the RTL hung
                                             # instead of erroring.
+                                            # S-07 DISPLACEMENT STICKY BIT (RTL lane, 2026-08-16).
+                                            # Bank 3'b110 reg 5'b01100, i.e. switch 192+12 = 204,
+                                            # the same base the LATCHED mepc bytes below use
+                                            # (196 == reg 4). Byte is
+                                            # {stc_seen, ldc_seen, ldc_count[5:0]}, count
+                                            # saturating at 63, cleared only by reset -- so it
+                                            # survives the wedge exactly like the trap latch.
+                                            #
+                                            # THIS IS THE S-07 DISCRIMINATOR, and it is the only
+                                            # channel that reports at every site: mtval is
+                                            # written but unreadable here (the monitor's trap
+                                            # dump never runs on a capability fault inside a
+                                            # domain, and GDB reads CSRs already clobbered by a
+                                            # nested trap).
+                                            #   non-zero -> a capability op's response was
+                                            #     displaced onto a scalar writeback port, which
+                                            #     zeroes cap_result at writeback: the value was
+                                            #     still INTACT IN MEMORY (case a).
+                                            #   all-zero -> nothing was displaced, so the
+                                            #     NOT_CAP came from memory/tag state (case b).
+                                            # Report the RAW byte; the reading above is an
+                                            # interpretation and belongs in the write-up, not in
+                                            # the transcript.
+                                            (204, "S-07 displacement {stc,ldc,count[5:0]}", "raw"),
                                             (251, "rev_node_serving_idx[7:0]", "raw"),
                                             (252, "rev_node_serving_idx[15:8]", "raw"),
                                             (253, "rev_node_serving_idx[23:16]", "raw"),
