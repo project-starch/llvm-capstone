@@ -130,6 +130,97 @@ def decode_s07_retry(obs):
     return (obs >> 16) & 0xff, (obs >> 8) & 0xff, obs & 0xff
 
 
+def assemble_mepc(mepc_bytes, probe_gen2):
+    """Assemble the latched mepc, correctly for BOTH probe generations.
+
+    THIS IS THE SILENT-GARBAGE HAZARD ON THIS DRIVER. Up to and including the s07tag2
+    bitstream, switches 196..203 were mepc[7:0]..mepc[63:56] and an eight-byte assembly was
+    right. In the next generation, 201/202/203 are RECLAIMED for stc_pc[23:0], so the same
+    eight-byte assembly silently produces a plausible wrong address -- no error, no missing
+    byte, just a number that names the wrong instruction. Every localisation this campaign has
+    made rests on that number.
+
+    The reclaim is information-lossless: this is an sv39 core, so mepc[63:39] is pure sign
+    extension of bit 38, and mepc[39:0] (switches 196..200) covers every VA the core can
+    generate. So generation 2 assembles five bytes and sign-extends from bit 38.
+
+    Returns (value, note) or (None, reason).
+    """
+    need = 5 if probe_gen2 else 8
+    have = [mepc_bytes.get(i) for i in range(need)]
+    if any(b is None for b in have):
+        missing = [i for i in range(need) if mepc_bytes.get(i) is None]
+        return None, f"UNREAD (missing bytes {missing})"
+    raw = sum(b << (8 * i) for i, b in enumerate(have))
+    if not probe_gen2:
+        return raw, "8-byte assembly (probe gen 1)"
+    # sign-extend from bit 38
+    val = raw & ((1 << 40) - 1)
+    if val & (1 << 38):
+        val |= ~((1 << 39) - 1) & ((1 << 64) - 1)
+    return val, "5-byte assembly + sign-extension from bit 38 (probe gen 2; 201-203 are stc_pc)"
+
+
+def decode_probe_generation(census_byte):
+    """True if this bitstream carries the gen-2 probe, from the 216 census sentinel.
+
+    Bit 7 of switch 216 is a hardwired 1 in gen 2. The mux default arm returns 0x00, so
+    bit7==0 means "this bitstream does not have the census" rather than "the count is zero" --
+    the same trick as the impossible src==3 and the impossible 204 encodings. Getting this
+    backwards mis-assembles mepc, so it is a discriminator and not a convenience.
+    """
+    return census_byte is not None and ((census_byte >> 7) & 1) == 1
+
+
+def decode_s07_census(v):
+    """216 = {1'b1 sentinel, ldc0_valid, untagged_ldc_cnt[5:0]}."""
+    if v is None:
+        return None
+    if not ((v >> 7) & 1):
+        return ("NOT PRESENT", f"0x{v:02x}: sentinel bit7 is clear, so this bitstream has no "
+                f"untagged-LDC census. NOT a zero count.")
+    cnt = v & 0x3F
+    return ("census", f"untagged-LDC responses = {cnt}{' (saturated)' if cnt == 63 else ''}, "
+            f"ldc0_valid={(v >> 6) & 1}. NOTE: bits[5:0] survive a selftest fire; bit 6 does "
+            f"not, because the control sets it.")
+
+
+def decode_s07_correlate(b193, b194):
+    """193/194: does the recorded producer feed the faulting consumer?
+
+    193 = {1'b1, rd_rs1_match, fault_rs1_valid, ldc_rd[4:0]}
+    194 = {1'b1, 2'b0,         fault_rs1[4:0]}
+
+    THIS MUST BE READ BEFORE 208. rd_rs1_match is computed in hardware as
+    (rd of the last committed LDC == rs1 of the faulting instruction), which is the four-wedge
+    invariant checked on silicon instead of assumed. It exists because a ROLLING record is not
+    self-validating either: untagged LDC responses are routine (measured -- boot software
+    produces them from miss refills), and any unrelated one completing between producer and
+    consumer overwrites the record. A clobbered rolling record is indistinguishable from a
+    correct one, which is the same failure the one-shot had, one level up.
+
+      match=1 -> 208 is licensed: the record IS the load that fed the faulting instruction
+      match=0 -> 208 carries NO verdict, and 194 says which register the consumer wanted
+    """
+    if b193 is None or b194 is None:
+        return None
+    if not ((b193 >> 7) & 1) or not ((b194 >> 7) & 1):
+        return ("NOT PRESENT", "sentinel bit7 clear on 193/194: this bitstream predates the "
+                "producer/consumer correlation. On it, 193 is store_buf_commit_cnt and 194 is "
+                "store_state -- do NOT read them as correlation.")
+    match = (b193 >> 6) & 1
+    rs1_valid = (b193 >> 5) & 1
+    ldc_rd = b193 & 0x1F
+    fault_rs1 = b194 & 0x1F
+    detail = (f"ldc_rd=x{ldc_rd} fault_rs1=x{fault_rs1} rs1_valid={rs1_valid}")
+    if match:
+        return ("LICENSED (match=1)", detail + " -- the recorded load feeds the faulting "
+                "instruction, so 208 is about the right load.")
+    return ("NO VERDICT (match=0)", detail + " -- the recorded load does NOT feed the faulting "
+            "instruction, so 208 says nothing about this wedge. The consumer wanted "
+            f"x{fault_rs1}; the record is for x{ldc_rd}.")
+
+
 def decode_s07_verdict(v):
     """Decode the S-07 tag-history verdict byte (switch 208) -> (verdict, detail, fault).
 
@@ -371,6 +462,62 @@ def main():
                 if _boot_attempt == 3:
                     raise
         log(f"booted once; running {len(DOMS)} staged domains in sequence")
+
+        # PRE-RUN BASELINE: is the one-shot LDC record already spent before ANY domain runs?
+        #
+        # Measured 2026-08-18: the record was already latched after the control on the very
+        # first boot, with a byte that never changed again all boot. That says the boot carries
+        # no S-07 verdict, but NOT who spent it. This read separates the two:
+        #   ldc0_valid=1 HERE  -> spent by Linux/OpenSBI/the entry glue before any domain, so
+        #                         no arrangement of domains can rescue it and the record needs
+        #                         to be clearable in RTL;
+        #   ldc0_valid=0 HERE  -> spent by the control domain, so running the workload FIRST
+        #                         (accepting a weaker boot-validity argument) would still get a
+        #                         usable record.
+        # Nothing but reset clears it -- the 191 trap-log clear touches no s07_* register -- so
+        # this is the only point in the boot where the answer is visible.
+        # Which probe generation is in this bitstream? Decided ONCE, here, because it changes
+        # how mepc is assembled: gen 2 reclaims switches 201-203 for stc_pc, so an eight-byte
+        # mepc assembly would silently produce a plausible wrong address. Everything this
+        # campaign has localised rests on that number, so the discriminator is read before any
+        # of it.
+        _probe_gen2 = False
+        try:
+            def _rd(_v):
+                for _b in range(8):
+                    console.set_switch(_b, bool(_v & (1 << _b)))
+                time.sleep(1.2)
+                _s = console.latest(C.LISTEN.get("led_state", "led_state"))
+                _b_ = _s.get("states") if isinstance(_s, dict) else None
+                return sum((1 << i) for i, b in enumerate(_b_) if b) if _b_ else None
+
+            _cen = _rd(216)
+            _probe_gen2 = decode_probe_generation(_cen)
+            _cd = decode_s07_census(_cen)
+            _cl = (f"  [s07] probe generation: {'2 (rolling records, census, correlation)' if _probe_gen2 else '1 (one-shot records)'}"
+                   f"   sw=216 = " + ("UNREAD" if _cen is None else f"0x{_cen:02x}")
+                   + (f"  {_cd[0]}: {_cd[1]}" if _cd else ""))
+            print(_cl, flush=True)
+            transcript.append(_cl + "\n")
+
+            _v0 = _rd(208)
+            for _b in range(8):
+                console.set_switch(_b, False)
+            _d0 = decode_s07_verdict(_v0)
+            _l0 = ("  [s07] PRE-RUN baseline: sw=208 "
+                   + ("UNREAD" if _v0 is None else f"0x{_v0:02x} {_v0:08b}")
+                   + (f"  {_d0[0]}: {_d0[1]}" if _d0 else ""))
+            print(_l0, flush=True)
+            transcript.append(_l0 + "\n")
+            if _v0 is not None and ((_v0 >> 7) & 1):
+                _l1 = ("  [s07] SPENT BEFORE ANY DOMAIN RAN -- the LDC one-shot was latched by "
+                       "boot-time software (Linux/OpenSBI/glue), not by the workload. No "
+                       "ordering of domains can rescue it; the record must become clearable in "
+                       "RTL. Everything 208 reports this boot is about that earlier load.")
+                print(_l1, flush=True)
+                transcript.append(_l1 + "\n")
+        except Exception as exc:
+            log(f"pre-run 208 baseline failed ({type(exc).__name__})")
 
         for dom_idx, dom_spec in enumerate(DOMS, 1):
             # "path" or "path:selector". The optional selector is passed to the host as its
@@ -1049,8 +1196,9 @@ def main():
                     # The LATCHED trap mepc. Same all-or-nothing rule as the pc above: a partial
                     # read reconstructs a plausible wrong address, and a wrong address sends the
                     # next session bisecting the wrong function.
-                    if len(mepc_bytes) == 8 and all(b is not None for b in mepc_bytes.values()):
-                        mepc = sum(mepc_bytes[i] << (8 * i) for i in range(8))
+                    mepc, _mnote = assemble_mepc(mepc_bytes, _probe_gen2)
+                    if mepc is not None:
+                        print(f"  [wedge] mepc assembly: {_mnote}", flush=True)
                         if mepc == 0xca11ab1ebadcab1e:
                             print("  [wedge] trap mepc = AXI ERROR-SLAVE PATTERN -- NO DATA",
                                   flush=True)
@@ -1066,8 +1214,7 @@ def main():
                                   f"trap; map onto the domain disassembly to name the faulting "
                                   f"instruction", flush=True)
                     else:
-                        missing = [i for i in range(8) if mepc_bytes.get(i) is None]
-                        print(f"  [wedge] trap mepc UNREAD (missing bytes {missing})", flush=True)
+                        print(f"  [wedge] trap mepc {_mnote}", flush=True)
 
                     # THE ARCHITECTURAL mtval, VIA GDB -- the only channel that reports the
                     # faulting OPERAND at ANY site.
@@ -1087,10 +1234,10 @@ def main():
                     # a real positive control, not a formality: it fails loudly rather than
                     # handing back a plausible wrong operand.
                     if os.environ.get("WEDGE_GDB_MTVAL", "1") == "1":
-                        _latched = (sum(mepc_bytes[i] << (8 * i) for i in range(8))
-                                    if len(mepc_bytes) == 8
-                                    and all(b is not None for b in mepc_bytes.values())
-                                    else None)
+                        # Same generation-aware assembly as above -- an 8-byte assembly on a
+                        # gen-2 bitstream would compare gdb's mepc against a garbage latch and
+                        # discard a perfectly good reading (or, worse, accept a wrong one).
+                        _latched, _ = assemble_mepc(mepc_bytes, _probe_gen2)
                         try:
                             console.gdb_start()
                             console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
