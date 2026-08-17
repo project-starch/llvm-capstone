@@ -84,6 +84,47 @@ Ancestry is decided by `git merge-base --is-ancestor <fix> <pin>` on a full
 clone, never by comparing dates, and `gen-fix-status.py` refuses to emit
 anything if its own positive and negative controls do not both behave.
 
+## What is actually expressible in our domain
+
+"Builds on the pin" is necessary, not sufficient. The Capstone port is configured
+with `MICROPY_VFS=0`, no threads, no sockets, `MICROPY_PY_SYS_STDFILES=0` and a
+minimum ROM level, so several of the eleven pin-buildable rows describe triggers
+the domain cannot even express: `MPY-T17` and `MPY-T22` need threads, `MPY-T27`
+and `MPY-T30` need an ESP32 port with networking, `MPY-T16` needs a port shutdown
+path that is not ours, and `MPY-T10` needs a filesystem for its `readinto()`
+vehicle. What survives that filter is `MPY-T09`, `MPY-T11`, `MPY-T12` and
+`MPY-T13`, of which the first three need no modules beyond `gc`.
+
+## Measured on stock, at the pin
+
+`repros/` holds the reproductions and `repros/run-on-stock.sh` runs them against a
+stock host build of the pinned commit, which takes seconds and needs neither the
+domain nor the board. Three rows have been run:
+
+| row | issue | stock behaviour at `2e3304a` |
+|---|---|---|
+| `MPY-T11` | 17941 | SIGSEGV |
+| `MPY-T12` | 18619 | SIGSEGV |
+| `MPY-T09` | 18168 | **no crash** |
+
+`MPY-T09` not crashing is the most useful result in the table so far, and it is
+the reason `stock_behaviour` exists as a column. The reporter's script runs to
+completion, but the defect is fully present: after resizing a bytearray that has
+an active `memoryview`, the view is left addressing an orphaned buffer, reads
+recycled heap content, and remains writable, while the bytearray it came from is
+untouched by writes through it. `repros/stale-view-proof.py` measures exactly
+that and `run-on-stock.sh` treats it as a positive control, failing loudly if it
+ever reports the resize happening in place.
+
+So `MPY-T09` is a use-after-free **write** that ordinary hardware performs in
+silence. That makes it a better specimen than either of the two that segfault,
+because a crash is the platform already doing the job we are asking Capstone to
+do, whereas here there is nothing to see until the capability check exists.
+
+The general lesson for the other rows: **upstream still having the issue open is
+a proxy, and this is a case where the proxy was wrong about reproducibility.**
+Run it on the host before spending a domain build on it.
+
 ## The one column to be careful with
 
 `capstone_hypothesis` currently reads `trapped` for twenty rows, `unclear` for

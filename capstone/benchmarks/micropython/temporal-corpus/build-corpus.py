@@ -112,7 +112,7 @@ ROWS = [
 HEADER = ["id", "source", "ref", "url", "title", "state", "first_seen",
           "fix_commit", "fix_date", "present_at_pin", "repro_base",
           "class", "cwe", "component", "scope", "trigger",
-          "capstone_hypothesis", "repro_status", "notes"]
+          "capstone_hypothesis", "repro_status", "stock_behaviour", "notes"]
 
 # Which MicroPython source actually has to be built to see each defect. Computed
 # by gen-fix-status against a full clone (git merge-base --is-ancestor), never
@@ -120,6 +120,17 @@ HEADER = ["id", "source", "ref", "url", "title", "state", "first_seen",
 # a closed issue with no identifiable fix commit is not evidence of anything.
 FIX = json.load(open(os.path.join(S, "fix-status.json")))
 PIN = FIX["pin"][:12]
+
+# Measured, not predicted. Produced by repros/run-on-stock.sh against a stock
+# host build of the pinned commit. `stock_behaviour` is the column that matters
+# for this project: a defect that corrupts silently on ordinary hardware is a
+# better Capstone specimen than one that already crashes, because the crash is
+# the platform doing our job for us.
+MEASURED = {
+    "#18168": ("confirmed", "silent-corruption"),
+    "#17941": ("confirmed", "crash-sigsegv"),
+    "#18619": ("confirmed", "crash-sigsegv"),
+}
 
 out = []
 missing = []
@@ -152,9 +163,10 @@ for rid, ref, cls, cwe, comp, scope, trig, hyp, notes in ROWS:
     base = f.get("repro_base", "unknown")
     if base == "pin":
         base = PIN
+    repro, stock = MEASURED.get(ref, ("none", "not-run"))
     out.append([rid, src, ref, url, title, state, date,
                 fix_commit, fix_date, present, base,
-                cls, cwe, comp, scope, trig, hyp, "none", notes])
+                cls, cwe, comp, scope, trig, hyp, repro, stock, notes])
 
 if missing:
     print("FEHLT, nicht verifiziert:", missing, file=sys.stderr)
@@ -167,5 +179,5 @@ with open(OUT, "w", newline="\n") as f:
 
 print(f"{len(out)} Zeilen geschrieben nach {OUT}")
 from collections import Counter
-for col, name in ((11, "class"), (14, "scope"), (16, "capstone_hypothesis"), (9, "present_at_pin")):
+for col, name in ((11, "class"), (14, "scope"), (16, "capstone_hypothesis"), (9, "present_at_pin"), (18, "stock_behaviour")):
     print(f"  {name:22s}", dict(Counter(r[col] for r in out)))
