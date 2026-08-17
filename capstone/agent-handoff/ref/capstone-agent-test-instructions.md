@@ -328,8 +328,11 @@ marks exactly that next test, and resumes at its successor. `tools/merge-suite-r
 global indices and produces the consolidated/non-pass TSV files. Read
 `plans/micropython-domain-compilation.md` for the exact build variables, partition, expected counts,
 and guest-helper compile command before re-running this long gate. Current verified totals are
-`576 PASS / 339 FAIL / 0 FAULT / 0 HANG / 2 UNSCORED` for the 917 standard files and
-`603 PASS / 500 FAIL / 0 FAULT / 0 HANG / 14 UNSCORED` across all 1,117 direct files.
+`587 PASS / 328 FAIL / 0 FAULT / 0 HANG / 2 UNSCORED` for the 917 standard files and
+`614 PASS / 489 FAIL / 0 FAULT / 0 HANG / 14 UNSCORED` across all 1,117 direct files. Use
+`--capture-output` for the canonical census: regex `.exp` tests require captured output, of which
+the runner stores up to 4095 bytes under `actual-output/`, and are deliberately UNSCORED without a
+complete captured value.
 
 ### Full BEEBS regression sweep
 

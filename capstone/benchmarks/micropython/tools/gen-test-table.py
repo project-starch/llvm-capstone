@@ -17,6 +17,7 @@ exclusion list is emitted alongside the table so a coverage number can never be 
 covered the whole suite.
 """
 import argparse
+import base64
 import pathlib
 import subprocess
 import sys
@@ -31,11 +32,31 @@ UNSUPPORTED = [
     ("native emitter", ("@micropython.native", "@micropython.viper", "@micropython.asm")),
 ]
 
+# MicroPython's runner treats these .exp files as line-oriented regex templates rather than
+# literal output. Preserve the template in the expected table so the resumable runner can apply
+# the same normalization when exact output capture is enabled.
+REGEX_OUTPUT = {
+    "micropython/meminfo.py",
+    "basics/bytes_compare3.py",
+    "basics/builtin_help.py",
+    "basics/weakref_callback_exception.py",
+    "misc/sys_settrace_cov.py",
+    "net_inet/tls_text_errors.py",
+    "ports/unix/extra_coverage.py",
+    "thread/thread_exc2.py",
+    "ports/esp32/partition_ota.py",
+}
+
 
 def expectation(test: pathlib.Path, python: str, timeout: float):
     exp = test.with_suffix(test.suffix + ".exp")
     if exp.exists():
-        return exp.read_bytes(), "exp-file"
+        data = exp.read_bytes()
+        test_key = f"{test.parent.name}/{test.name}"
+        if test_key in REGEX_OUTPUT:
+            encoded = base64.b64encode(data).decode("ascii")
+            return None, f"regex-exp:{encoded}"
+        return data, "exp-file"
     try:
         out = subprocess.run([python, "-BS", str(test)], capture_output=True, timeout=timeout)
     except (subprocess.TimeoutExpired, OSError) as exc:

@@ -6,20 +6,86 @@ when the domain faults or hangs, exactly that next test is recorded and the foll
 one index later.  Logs and the final TSV stay under the requested output directory.
 """
 import argparse
+import base64
 import pathlib
 import re
 import subprocess
 import sys
 
 LINE = re.compile(rb"Called dom \((\d+)-th time\) retval = (\d+)")
+OUTPUT_LINE = re.compile(rb"^MPYOUT (\d+) (\d+) ([0-9a-f]*)$", re.MULTILINE)
+OUTPUT_CAPTURE_LIMIT = 4095
 
 
 def read_expected(path):
     rows = []
     for line in pathlib.Path(path).read_text().splitlines():
         idx, name, length, word, how = line.split("\t")
-        rows.append((int(idx), name, None if word == "-" else int(word, 16), how))
+        pattern = None
+        if how.startswith("regex-exp:"):
+            pattern = base64.b64decode(how.removeprefix("regex-exp:"))
+            how = "regex-exp"
+        rows.append((int(idx), name, None if word == "-" else int(word, 16), how, pattern))
     return rows
+
+
+def convert_regex_escapes(line):
+    """Match MicroPython's test runner conversion for regex .exp lines."""
+    converted = []
+    escape = False
+    for char in line.decode("utf-8"):
+        if escape:
+            escape = False
+            converted.append(char)
+        elif char == "\\":
+            escape = True
+        elif char in "()[]{}.*+^$":
+            converted.append("\\" + char)
+        else:
+            converted.append(char)
+    if converted and converted[-1] == "\n":
+        converted[-1] = "\r*\n"
+    return "".join(converted).encode()
+
+
+def regex_output_matches(actual, expected):
+    """Apply MicroPython's line regex and ######## wildcard normalization."""
+    expected_lines = []
+    for line in expected.splitlines(keepends=True):
+        if line == b"########\n":
+            expected_lines.append((line, None))
+        else:
+            expected_lines.append((line, re.compile(convert_regex_escapes(line))))
+
+    actual_lines = [line + b"\n" for line in actual.split(b"\n")]
+    if actual.endswith(b"\n"):
+        actual_lines.pop()
+
+    actual_idx = 0
+    for expected_idx, (line, pattern) in enumerate(expected_lines):
+        if line == b"########\n":
+            if expected_idx + 1 >= len(expected_lines):
+                del actual_lines[actual_idx:]
+                actual_lines.insert(actual_idx, line)
+                actual_idx += 1
+                continue
+            next_pattern = expected_lines[expected_idx + 1][1]
+            skip = 0
+            while (actual_idx + skip < len(actual_lines)
+                   and not next_pattern.match(actual_lines[actual_idx + skip])):
+                skip += 1
+            if actual_idx + skip >= len(actual_lines):
+                return False
+            del actual_lines[actual_idx:actual_idx + skip]
+            actual_lines.insert(actual_idx, b"########\n")
+        else:
+            if actual_idx >= len(actual_lines):
+                return False
+            if pattern.match(actual_lines[actual_idx]):
+                actual_lines[actual_idx] = line
+        actual_idx += 1
+
+    return b"".join(actual_lines) == expected
 
 
 def main():
@@ -33,6 +99,8 @@ def main():
     ap.add_argument("--index-base", type=int, default=0,
                     help="add this value to indices in progress output and results.tsv")
     ap.add_argument("--max-infra-retries", type=int, default=3)
+    ap.add_argument("--capture-output", action="store_true",
+                    help="save up to 4095 output bytes for each returned test")
     args = ap.parse_args()
 
     repo = pathlib.Path(__file__).resolve().parents[4]
@@ -48,6 +116,8 @@ def main():
         sys.exit("domain and guest runner must share one --share-dir")
 
     got = {}
+    captured = {}
+    capture_truncated = set()
     stopped = {}
     start = args.start
     round_no = 0
@@ -60,6 +130,8 @@ def main():
         guest_command = (
             f"/mnt/host/{guest_runner.name} /mnt/host/{domain.name} {start} {remaining}"
         )
+        if args.capture_output:
+            guest_command += " --dump-output"
         cmd = [
             sys.executable, str(smoke),
             "--share-dir", str(domain.parent),
@@ -77,6 +149,16 @@ def main():
         for label, word in returned:
             if label <= count:
                 got[label - 1] = word & 0xFFFFFFFF
+        for match in OUTPUT_LINE.finditer(data):
+            idx = int(match.group(1))
+            declared_len = int(match.group(2))
+            output = bytes.fromhex(match.group(3).decode())
+            if len(output) != declared_len:
+                sys.exit(f"captured output length mismatch for test {idx}; see {log}")
+            if idx < count:
+                captured[idx] = output
+                if declared_len >= OUTPUT_CAPTURE_LIMIT:
+                    capture_truncated.add(idx)
         if any(label == sentinel_label for label, _ in returned):
             start = count
             break
@@ -104,7 +186,7 @@ def main():
 
     rows = []
     counts = {"PASS": 0, "FAIL": 0, "FAULT": 0, "HANG": 0, "UNSCORED": 0}
-    for idx, name, want, how in expected:
+    for idx, name, want, how, pattern in expected:
         if idx in stopped:
             status = stopped[idx]
             got_word = None
@@ -112,6 +194,14 @@ def main():
             got_word = got.get(idx)
             if got_word is None:
                 status = "HANG"
+            elif pattern is not None:
+                actual = captured.get(idx)
+                if actual is None or idx in capture_truncated:
+                    status = "UNSCORED"
+                elif regex_output_matches(actual, pattern):
+                    status = "PASS"
+                else:
+                    status = "FAIL"
             elif want is None:
                 status = "UNSCORED"
             elif (got_word & 0x7FFFFFFF) == want:
@@ -129,6 +219,15 @@ def main():
             want_text = "-" if want is None else f"0x{want:08x}"
             f.write(f"{idx + args.index_base}\t{name}\t{status}\t{got_text}\t"
                     f"{want_text}\t{how}\n")
+
+    if args.capture_output:
+        output_dir = out_dir / "actual-output"
+        output_dir.mkdir(exist_ok=True)
+        for idx, output in captured.items():
+            safe_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", expected[idx][1])
+            output_path = output_dir / f"{idx + args.index_base:04d}-{safe_name}.actual"
+            output_path.write_bytes(output)
+        print(f"OUTPUTS {output_dir}")
 
     print("COMPLETE " + " ".join(f"{k}={v}" for k, v in counts.items()))
     print(f"REPORT {report}")

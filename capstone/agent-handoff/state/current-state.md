@@ -15,7 +15,7 @@ Minimal snapshot. Read first in every session.
   the ask: `tests/fpga-repros/S07-capability-untagged-on-reload/`. Committed, **not pushed — the
   project lead pushes, and it reaches the RTL lane only then.**
 * **MicroPython QEMU census complete for direct single-interpreter files.** EXTRA+MPZ executed all
-  917 direct tests in upstream's default base directories: `576 PASS / 339 FAIL / 0 FAULT /
+  917 direct tests in upstream's default base directories: `587 PASS / 328 FAIL / 0 FAULT /
   0 HANG / 2 UNSCORED`. A second run attempted all 200 direct optional files from `cmdline`,
   `float`, `import`, `io`, `thread`, and `unicode`: `27 PASS / 161 FAIL / 0 FAULT / 0 HANG /
   12 UNSCORED`. Patch 0012 gives stream ioctl a port-configurable carrier; the Capstone port uses
@@ -27,11 +27,14 @@ Minimal snapshot. Read first in every session.
   `items=NULL`; generic `items + 0` paths are then capability-valid. The next full rerun changed
   exactly the four bytearray faults to PASS. Patch 0015 handles MPZ zero before forming
   `dig + len`, changing exactly the final three big-integer faults to PASS. The current full total
-  is `603 PASS / 500 FAIL / 0 FAULT / 14 UNSCORED`.
-  Of the 500 ordinary FAIL results, 481 returned with the harness's uncaught-exception bit set;
-  they cluster in disabled or unavailable feature families. Only 19 are output mismatches without
-  an uncaught exception, eight of them in the 917-file standard set. All 14 UNSCORED files also
-  returned; only their host-Python oracle generation failed.
+  is `614 PASS / 489 FAIL / 0 FAULT / 14 UNSCORED`. Patch 0016 lets an explicit
+  `sys.print_exception` stream work without global sys stdfiles. The EXTRA profile now consistently
+  enables detailed errors, warnings, emergency exceptions and memory statistics. Exact output
+  capture plus upstream-compatible regex `.exp` scoring changes eleven standard tests from FAIL to
+  PASS. All remaining 328 standard FAILs returned with an uncaught exception; there are no normal
+  output mismatches left in the standard set. Across all direct files, 478 of 489 FAILs are
+  exception returns and the other 11 are optional cmdline/float output mismatches. All 14 UNSCORED
+  files also returned; only their host-Python oracle generation failed.
   The resumable chunk runner gets past domain-fatal faults without changing tests.
   The 529 other Python files are fixtures, runner utilities, benchmark/differential inputs, or
   require multi-instance, network, hardware, port, or architecture-specific harnesses; they are

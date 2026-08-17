@@ -13,6 +13,21 @@
 #define MICROPY_ENABLE_GC                 (1)
 #define MICROPY_USE_INTERNAL_ERRNO         (1)
 
+// The EXTRA census exercises warnings and exceptions while the heap is locked. Keep the minimum
+// profile small, but make the selected feature level internally consistent with those tests.
+#ifndef MICROPY_WARNINGS
+#define MICROPY_WARNINGS                   (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
+#endif
+#ifndef MICROPY_ENABLE_EMERGENCY_EXCEPTION_BUF
+#define MICROPY_ENABLE_EMERGENCY_EXCEPTION_BUF (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
+#endif
+#ifndef MICROPY_MEM_STATS
+#define MICROPY_MEM_STATS                   (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
+#endif
+#ifndef MICROPY_MALLOC_USES_ALLOCATED_SIZE
+#define MICROPY_MALLOC_USES_ALLOCATED_SIZE  (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
+#endif
+
 #define MICROPY_OBJ_REPR                  (MICROPY_OBJ_REPR_A)
 #define MP_INT_TYPE                       (MP_INT_TYPE_INT64)
 #define MP_SSIZE_MAX                      (0x7fffffffffffffffLL)
@@ -53,10 +68,10 @@
 #define MICROPY_STACK_CHECK               (1)
 #define MICROPY_STACK_CHECK_MARGIN        (4096)
 
-// TERSE shortens exception text, so a test scored against an upstream .exp file fails on the
-// MESSAGE while the behaviour is right -- assign_expr_syntaxerror.py is exactly that.
+// Detailed text is part of the EXTRA test contract; retain TERSE for the minimum profile.
 #ifndef MICROPY_ERROR_REPORTING
-#define MICROPY_ERROR_REPORTING           (MICROPY_ERROR_REPORTING_TERSE)
+#define MICROPY_ERROR_REPORTING           (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES \
+    ? MICROPY_ERROR_REPORTING_DETAILED : MICROPY_ERROR_REPORTING_TERSE)
 #endif
 
 #define MICROPY_ALLOC_PARSE_CHUNK_INIT    (16)
