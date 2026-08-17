@@ -2,7 +2,7 @@
 Source: CVE-2024-8947, https://nvd.nist.gov/vuln/detail/CVE-2024-8947  
 Upstream state: patched, first seen 2024-09-17
 
-**BLOCKED on a parent build. Already fixed in the pinned source.**
+**MEASURED at the fix commit's parent. Fixed in the pinned source.**
 
 ## The defect
 

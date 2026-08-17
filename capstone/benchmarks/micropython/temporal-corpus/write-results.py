@@ -172,6 +172,34 @@ new worktree first; mbedtls and berkeley-db are not shared between worktrees and
 their absence shows up as a confusing fatal error about missing headers.
 """,
 
+"MPY-T15_readblocks-grows-buffer": """MPY-T15 / upstream 17848, with MPY-T14 / 19060 closed as its duplicate
+
+  stock at the pin                    : fixed, raises ValueError
+  stock at the fix's PARENT 4e6dc0b569: accepted, runs to completion, exit 0
+  Capstone domain                     : not run
+
+THE DEFECT CONDITION IS PRESENT AT THE PARENT, AND IT IS SILENT THERE.
+
+repro.py is the reporter's script verbatim. Its readblocks callback assigns
+bytearray(1 + SEC_SIZE) into a buffer of SEC_SIZE, which enlarges the buffer the
+caller handed it and reallocates under a pointer the caller still holds.
+
+  parent: the assignment is accepted, readblocks returns, vfs.VfsFat(bdev)
+          completes, exit 0, nothing on stderr
+  pin:    ValueError: lhs and rhs should be compatible, at the assignment
+
+So the fix is a size check at the boundary, and the parent build is what still
+lets the enlargement through.
+
+WHAT WAS NOT REPRODUCED. The issue is titled "crash", and no crash was observed.
+An extended attempt that also calls vfs.mount() gets an ordinary OSError, because
+the sparse device has no valid filesystem, and still exits 0. The row therefore
+says silent-no-effect rather than crash-sigsegv. The reporter presumably reached
+a crash through more filesystem activity than the published script performs;
+recording it as a crash on that assumption would be recording their title rather
+than a measurement.
+""",
+
 "MPY-T25_stringio-subclass-print": """MPY-T25 / upstream 10402
 
   stock MicroPython at pin 2e3304a : SIGSEGV

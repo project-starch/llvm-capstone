@@ -20,20 +20,20 @@ CASES = os.path.join(S, "cases")
 # which has MICROPY_VFS=0, no threads, no sockets and no port hardware.
 PLAN = {
     "MPY-T01": ("modselect-poll-uaf", "parent-build", "fixed at the pin; needs the fix commit's parent"),
-    "MPY-T02": ("objarray-bytes-self-copy-uaf", "parent-build", "fixed at the pin; NVD states the trigger, a bytes object resized and copied into itself"),
+    "MPY-T02": ("objarray-bytes-self-copy-uaf", "parent-measured", "fixed at the pin; NVD states the trigger, a bytes object resized and copied into itself"),
     "MPY-T03": ("import-all-memory-corruption", "parent-build", "fixed at the pin"),
     "MPY-T04": ("modselect-line151-uaf", "parent-build", "fixed at the pin; same defect as MPY-T01"),
-    "MPY-T05": ("objarray-line509-uaf", "parent-build", "fixed at the pin; same defect as MPY-T02"),
+    "MPY-T05": ("objarray-line509-uaf", "parent-measured", "fixed at the pin; same defect as MPY-T02"),
     "MPY-T06": ("btree-reuse-after-close", "parent-build", "fixed at the pin; also needs the btree module, which this domain does not build"),
     "MPY-T07": ("lexer-source-name-uaf", "parent-build", "resolved 2026-08-17: the issue thread names the fix, 1a2c511e5d08, and it is an ancestor of the pin"),
-    "MPY-T08": ("stdio-close-then-use", "parent-build", "fixed at the pin; also needs stdio streams, and MICROPY_PY_SYS_STDFILES is 0 here"),
+    "MPY-T08": ("stdio-close-then-use", "parent-measured", "fixed at the pin; also needs stdio streams, and MICROPY_PY_SYS_STDFILES is 0 here"),
     "MPY-T09": ("bytearray-resize-stale-view", "yes", "measured"),
     "MPY-T10": ("array-resize-stale-view", "yes", "measured, with the file vehicle replaced by a direct write"),
     "MPY-T11": ("sort-mutates-under-gc", "yes", "measured"),
     "MPY-T12": ("dict-eq-reentrant-clear", "yes", "measured"),
     "MPY-T13": ("write-callback-grows-buffer", "yes", "measured"),
-    "MPY-T14": ("readblocks-grows-buffer-dup", "parent-build", "fixed at the pin; duplicate of MPY-T15"),
-    "MPY-T15": ("readblocks-grows-buffer", "parent-build", "fixed at the pin; needs a block device, which this domain has no VFS for"),
+    "MPY-T14": ("readblocks-grows-buffer-dup", "parent-measured", "fixed at the pin; duplicate of MPY-T15"),
+    "MPY-T15": ("readblocks-grows-buffer", "parent-measured", "fixed at the pin; needs a block device, which this domain has no VFS for"),
     "MPY-T16": ("deinit-after-gc-sweep-all", "no", "needs a port shutdown hook; this domain's teardown is not the one with the defect"),
     "MPY-T17": ("finaliser-exception-deadlock", "no", "needs MICROPY_PY_THREAD, which is off here"),
     "MPY-T18": ("gc-collect-frees-live-binding", "no", "closed NOT_PLANNED upstream and redirected to the LVGL binding project; not a MicroPython defect"),
@@ -55,6 +55,7 @@ STATUS_LINE = {
     "yes": "MEASURED in the domain.",
     "no": "NOT REPRODUCIBLE HERE. The trigger cannot be expressed in this domain.",
     "parent-build": "BLOCKED on a parent build. Already fixed in the pinned source.",
+    "parent-measured": "MEASURED at the fix commit's parent. Fixed in the pinned source.",
     "unknown": "BLOCKED. Upstream status unresolved, see below.",
     "c-level": "BLOCKED on a C-level harness. No Python trigger exists.",
 }
@@ -109,7 +110,7 @@ def render(r, slug, runnable, why):
                    "follow `../../README.md`; the driver is `tools/run-resumable-suite.py`\n"
                    "and it must be run with `--capture-output`, because a test that dies on a\n"
                    "missing builtin still returns a retval and reads exactly like an untrapped one.\n")
-    elif runnable == "parent-build":
+    elif runnable in ("parent-build", "parent-measured"):
         out.append(f"The defect is fixed in the pinned source, so building the pin measures nothing.\n"
                    f"Build `{r['repro_base']}` instead, the fix commit's parent:\n\n")
         out.append("```bash\n"
@@ -128,7 +129,8 @@ def render(r, slug, runnable, why):
 
 def render_status(rows):
     """One table, generated, so it cannot drift from the case directories."""
-    buckets = {"yes": [], "parent-build": [], "no": [], "unknown": [], "c-level": []}
+    buckets = {"yes": [], "parent-measured": [], "parent-build": [], "no": [],
+               "unknown": [], "c-level": []}
     for r in rows:
         buckets[PLAN[r["id"]][1]].append(r)
     out = ["# Case status\n",
@@ -139,7 +141,11 @@ def render_status(rows):
          "These ran. Both columns are measurements, not predictions. MPY-T28 was run on "
          "stock only, and came back negative, which is why its domain column is empty: "
          "there was nothing left to take into the domain."),
-        ("parent-build", "Blocked: already fixed in the pinned source",
+        ("parent-measured", "Measured at the fix commit's parent",
+         "Already fixed in the pinned source, so these were measured on the last commit "
+         "that still carries the defect. Built with gcc-12 per "
+         "`evidence/parent-build-attempt-2026-08-17.txt`."),
+        ("parent-build", "Blocked: already fixed, parent not yet built",
          "Measuring these needs the fix commit's parent. Attempted and currently "
          "blocked by toolchain age, not by our patches: see "
          "`evidence/parent-build-attempt-2026-08-17.txt`."),
