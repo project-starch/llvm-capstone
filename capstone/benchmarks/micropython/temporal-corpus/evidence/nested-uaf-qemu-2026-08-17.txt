@@ -1,0 +1,23 @@
+Nested-allocator use-after-free on Capstone, measured under QEMU on 2026-08-17.
+Rungs: capstone/tests/runtime-qemu/silicon-ladder/nestalloc_{app,host}.c + nestoob_{app,host}.c
+Both arms share nestalloc_kernel.h and differ in ONE constant, NEST_STALE_OFFSET.
+
+== ARM A: stale write at offset 0, INSIDE the region ==
+oracle: nestalloc = 170   (host flags: none)
+__CAPSTONE_LADDER_NESTALLOC_PASSED__ (retval = 170)
+
+  The domain returns the same value a NATIVE build returns. The use-after-free
+  write completed. Capstone trapped nothing.
+
+== ARM B: same code, stale write at offset 1088, PAST the region ==
+[CAPSTONE] Cap mem access OOB: pc = 101600280, rs1 = x12, cursor = 101700010, imm = 0, addr = 101700010, size = 1, bounds = (1016ffbd0, 1016fffd0)
+[CAPSTONE] domain halted by capability fault: cause = 7, pc = 0x101600280, tval = 0x277fdd270, badaddr = 0x277fdd270
+
+  bounds = [0x1016ffbd0, 0x1016fffd0) is 0x400 = 1024 bytes = the WHOLE region.
+  cursor - base = 0x440 = 1088 = NEST_HEAP_BYTES + NEST_BLOCK, the offset set.
+
+== What the pair establishes ==
+  The capability checking is live in this exact build: arm B halts the domain.
+  Arm A is untrapped not because checking is off, but because the region is ONE
+  object and every sub-allocation inherits its bounds. The fault message states
+  the bounds outright, so this is read off the machine rather than argued.
