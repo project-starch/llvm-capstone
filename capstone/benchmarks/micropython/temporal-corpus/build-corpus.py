@@ -147,6 +147,11 @@ MEASURED = {
     # Python-visible value.
     "CVE-2024-8947": ("confirmed", "silent-no-effect", "not-run"),
     "#13283":        ("confirmed", "silent-no-effect", "not-run"),
+    # Measured at the parent of 365913953a4e (3b954698fa, 2023-11-09): closing
+    # sys.stdout kills the interpreter with SIGSEGV before a single stderr write
+    # gets out. At the pin the same script raises ValueError instead, so the fix
+    # is present and the parent build is what shows the defect.
+    "#12670":        ("confirmed", "crash-sigsegv",   "not-run"),
     # #19075: the trigger IS created in the domain -- a diagnostic confirms
     # json.dump hands write() a bytearray there too, so `buf += buf` mutates in
     # place and reallocates under the caller. The domain then does not fault

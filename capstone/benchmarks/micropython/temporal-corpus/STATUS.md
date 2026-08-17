@@ -30,7 +30,7 @@ Measuring these needs the fix commit's parent. Attempted and currently blocked b
 | `MPY-T05` | #13283 | silent-no-effect | not-run |
 | `MPY-T06` | #12543 | not-run | not-run |
 | `MPY-T07` | #4128 | not-run | not-run |
-| `MPY-T08` | #12670 | not-run | not-run |
+| `MPY-T08` | #12670 | crash-sigsegv | not-run |
 | `MPY-T14` | #19060 | not-run | not-run |
 | `MPY-T15` | #17848 | not-run | not-run |
 | `MPY-T19` | #5226 | not-run | not-run |
