@@ -1,0 +1,46 @@
+What a parent build actually costs. Attempted for MPY-T02/MPY-T05, 2026-08-17.
+
+Eleven corpus rows are already fixed in the pinned source, so measuring them means
+building the fix commit's parent. The corpus README said this "costs one
+environment variable" plus a patch-application risk. That was optimistic, and this
+file replaces the guess with what happened.
+
+TARGET: ce491ab0d1, the parent of 4bed614e707c, dated 2024-04-22. Host unix port,
+built with AddressSanitizer, no Capstone involvement at all. So none of what
+follows is about our toolchain or our port.
+
+OBSTACLE 1: the 2024 tree does not compile with GCC 15.
+  py/emitinlinethumb.c and others fail on
+  -Werror=unterminated-string-initialization, a diagnostic newer than the tree.
+  Worked around with -Wno-error=unterminated-string-initialization. This is a
+  build accommodation and does not touch the code under test.
+
+OBSTACLE 2: mpy-cross crashes while freezing the standard manifest.
+  "error compiling asyncio/__init__.py: FATAL: uncaught NLR". The 2024 mpy-cross
+  built by a 2026 compiler does not survive its own frozen modules. Setting
+  FROZEN_MANIFEST= does not help: the configuration still references
+  mp_qstr_frozen_const_pool and mp_frozen_names, so the link fails instead.
+
+OBSTACLE 3: the minimal variant builds but is unusable.
+  VARIANT=minimal links cleanly with ASan, reports the right version
+  (v1.23.0-preview.329.gce491ab0d1), and then segfaults on
+  bytearray(b"A" * 64), which is a plain allocation and not the defect under
+  test. A build that cannot allocate a bytearray cannot measure a bytearray bug.
+
+CONCLUSION. The parent build was abandoned, and the eleven rows that need one stay
+blocked. The blocker is NOT the Capstone portability patches, which is what the
+README predicted; it is that a two-year-old MicroPython does not build usefully
+with a current toolchain. Anyone retrying this should plan for a period-correct
+compiler, probably in a container, rather than for patch conflicts.
+
+WHAT WAS SALVAGED. The exercise produced the ASan measurement in
+asan-blindness-2026-08-17.txt, which makes the same point far more cheaply than
+the parent build would have: a use-after-free inside one sub-allocated region is
+invisible to AddressSanitizer, in the same toolchain where ASan catches an
+ordinary malloc use-after-free. That is corroborated by the upstream author of the
+MPY-T02 fix, who recorded that the bug "exists but has no impact" in default
+configurations and that reproducing it needed "valgrind with GC-aware extensions".
+
+So for this defect family the honest statement is stronger than a crash would have
+been: no standard tool sees it, on any platform, and Capstone as it stands does
+not either.
