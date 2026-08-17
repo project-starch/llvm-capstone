@@ -1,0 +1,524 @@
+{
+ "data": {
+  "repository": {
+   "i10402": {
+    "closedAt": null,
+    "createdAt": "2023-01-03T18:40:58Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 10402,
+    "state": "OPEN",
+    "title": "printing to io.StringIO subclass leads to seg fault",
+    "url": "https://github.com/micropython/micropython/issues/10402"
+   },
+   "i11146": {
+    "closedAt": null,
+    "createdAt": "2023-03-28T16:51:20Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "enhancement"
+      },
+      {
+       "name": "extmod"
+      }
+     ]
+    },
+    "number": 11146,
+    "state": "OPEN",
+    "title": "reset zlib.DecompIO state",
+    "url": "https://github.com/micropython/micropython/issues/11146"
+   },
+   "i11698": {
+    "closedAt": null,
+    "createdAt": "2023-06-04T11:31:59Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "port-esp32"
+      },
+      {
+       "name": "needs-info"
+      }
+     ]
+    },
+    "number": 11698,
+    "state": "OPEN",
+    "title": "gc.collect() does not work properly",
+    "url": "https://github.com/micropython/micropython/issues/11698"
+   },
+   "i11781": {
+    "closedAt": "2024-02-14T23:19:15Z",
+    "createdAt": "2023-06-14T20:32:28Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 11781,
+    "state": "CLOSED",
+    "title": "ports/embed: segfault in mp_compile()",
+    "url": "https://github.com/micropython/micropython/issues/11781"
+   },
+   "i12543": {
+    "closedAt": "2024-07-22T01:06:44Z",
+    "createdAt": "2023-09-28T09:50:02Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 12543,
+    "state": "CLOSED",
+    "title": "heap-use-after-free when reusing a closed btree object",
+    "url": "https://github.com/micropython/micropython/issues/12543"
+   },
+   "i12587": {
+    "closedAt": "2026-03-29T16:57:17Z",
+    "createdAt": "2023-10-04T12:54:11Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "extmod"
+      }
+     ]
+    },
+    "number": 12587,
+    "state": "CLOSED",
+    "title": "Global buffer overflow during umount",
+    "url": "https://github.com/micropython/micropython/issues/12587"
+   },
+   "i12638": {
+    "closedAt": "2023-11-06T03:14:43Z",
+    "createdAt": "2023-10-09T17:38:21Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "port-esp32"
+      }
+     ]
+    },
+    "number": 12638,
+    "state": "CLOSED",
+    "title": "Sporadic GuruMeditation, presumed related to TCP/IP LWIP",
+    "url": "https://github.com/micropython/micropython/issues/12638"
+   },
+   "i12670": {
+    "closedAt": "2023-11-09T04:30:24Z",
+    "createdAt": "2023-10-12T07:43:29Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 12670,
+    "state": "CLOSED",
+    "title": "Trivial crash when attempting to close stdin/stdout",
+    "url": "https://github.com/micropython/micropython/issues/12670"
+   },
+   "i12887": {
+    "closedAt": "2023-12-21T00:19:13Z",
+    "createdAt": "2023-11-05T09:58:40Z",
+    "labels": {
+     "nodes": []
+    },
+    "number": 12887,
+    "state": "CLOSED",
+    "title": "Use After Free at modselect.c:151",
+    "url": "https://github.com/micropython/micropython/issues/12887"
+   },
+   "i13006": {
+    "closedAt": "2024-07-23T02:32:29Z",
+    "createdAt": "2023-11-17T09:50:10Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "extmod"
+      }
+     ]
+    },
+    "number": 13006,
+    "state": "CLOSED",
+    "title": "heap-buffer-overflow: incorrect length choice on memcpy at vfs unmount",
+    "url": "https://github.com/micropython/micropython/issues/13006"
+   },
+   "i13283": {
+    "closedAt": "2024-04-22T02:12:13Z",
+    "createdAt": "2023-12-27T16:49:55Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 13283,
+    "state": "CLOSED",
+    "title": "use after free found at micropython/py/objarray.c:509 [micropython@a5bdd39127] ",
+    "url": "https://github.com/micropython/micropython/issues/13283"
+   },
+   "i14339": {
+    "closedAt": null,
+    "createdAt": "2024-04-20T12:18:17Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "port-rp2"
+      }
+     ]
+    },
+    "number": 14339,
+    "state": "OPEN",
+    "title": "[RP2] machine.soft_reset() hangs when i2s is not deinitialized",
+    "url": "https://github.com/micropython/micropython/issues/14339"
+   },
+   "i17442": {
+    "closedAt": null,
+    "createdAt": "2025-06-06T02:03:15Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 17442,
+    "state": "OPEN",
+    "title": "multi-thread file access causing system crash",
+    "url": "https://github.com/micropython/micropython/issues/17442"
+   },
+   "i17848": {
+    "closedAt": "2026-05-08T14:40:30Z",
+    "createdAt": "2025-08-06T13:33:56Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 17848,
+    "state": "CLOSED",
+    "title": "vfs_blockdev: crash when readblocks inappropriately enlarges buf via slice assignment",
+    "url": "https://github.com/micropython/micropython/issues/17848"
+   },
+   "i17941": {
+    "closedAt": null,
+    "createdAt": "2025-08-17T12:18:51Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 17941,
+    "state": "OPEN",
+    "title": "Segmentation fault in array sorting with GC interaction",
+    "url": "https://github.com/micropython/micropython/issues/17941"
+   },
+   "i18168": {
+    "closedAt": null,
+    "createdAt": "2025-09-29T21:58:19Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 18168,
+    "state": "OPEN",
+    "title": "Resizing bytearray with active memoryviews corrupts state and segfaults",
+    "url": "https://github.com/micropython/micropython/issues/18168"
+   },
+   "i18171": {
+    "closedAt": null,
+    "createdAt": "2025-09-29T22:22:50Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 18171,
+    "state": "OPEN",
+    "title": "`array('I')`: resizing with active memoryview leaves stale view; `readinto()` corrupts heap and segfaults during file close",
+    "url": "https://github.com/micropython/micropython/issues/18171"
+   },
+   "i18619": {
+    "closedAt": null,
+    "createdAt": "2025-12-30T05:11:23Z",
+    "labels": {
+     "nodes": []
+    },
+    "number": 18619,
+    "state": "OPEN",
+    "title": "Null pointer dereference in dict equality after re-entrant `__bool__` clears RHS map",
+    "url": "https://github.com/micropython/micropython/issues/18619"
+   },
+   "i18645": {
+    "closedAt": "2026-01-06T13:47:30Z",
+    "createdAt": "2026-01-06T03:05:28Z",
+    "labels": {
+     "nodes": []
+    },
+    "number": 18645,
+    "state": "CLOSED",
+    "title": "Segmentation Fault (NULL Pointer Dereference) in mp_native_relocate",
+    "url": "https://github.com/micropython/micropython/issues/18645"
+   },
+   "i19060": {
+    "closedAt": "2026-04-08T15:14:26Z",
+    "createdAt": "2026-04-08T15:08:14Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 19060,
+    "state": "CLOSED",
+    "title": "crash with inappropriate readblocks implementation",
+    "url": "https://github.com/micropython/micropython/issues/19060"
+   },
+   "i19075": {
+    "closedAt": null,
+    "createdAt": "2026-04-09T14:13:52Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 19075,
+    "state": "OPEN",
+    "title": "modio: crash when write inappropriately enlarges buf via slice assignment",
+    "url": "https://github.com/micropython/micropython/issues/19075"
+   },
+   "i19116": {
+    "closedAt": null,
+    "createdAt": "2026-04-16T16:59:31Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "port-unix"
+      }
+     ]
+    },
+    "number": 19116,
+    "state": "OPEN",
+    "title": "suspicious: MP_PLAT_FREE_EXEC appears unreachable",
+    "url": "https://github.com/micropython/micropython/issues/19116"
+   },
+   "i19413": {
+    "closedAt": "2026-07-04T00:43:38Z",
+    "createdAt": "2026-07-03T06:13:42Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 19413,
+    "state": "CLOSED",
+    "title": "Crash in LVGL lv_draw_dispatch_layer() after gc.collect(), layer->draw_task_head corrupt",
+    "url": "https://github.com/micropython/micropython/issues/19413"
+   },
+   "i322": {
+    "closedAt": "2014-03-06T00:03:28Z",
+    "createdAt": "2014-02-25T22:56:37Z",
+    "labels": {
+     "nodes": []
+    },
+    "number": 322,
+    "state": "CLOSED",
+    "title": "gc_realloc returns NULL after a few calls",
+    "url": "https://github.com/micropython/micropython/issues/322"
+   },
+   "i3627": {
+    "closedAt": null,
+    "createdAt": "2018-02-21T19:13:14Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      }
+     ]
+    },
+    "number": 3627,
+    "state": "OPEN",
+    "title": "raising exception in __del__ finaliser results in deadlock with multithread enabled",
+    "url": "https://github.com/micropython/micropython/issues/3627"
+   },
+   "i4128": {
+    "closedAt": "2018-09-14T03:37:12Z",
+    "createdAt": "2018-09-12T17:18:04Z",
+    "labels": {
+     "nodes": []
+    },
+    "number": 4128,
+    "state": "CLOSED",
+    "title": "bug: lex->source_name used after lex is freed",
+    "url": "https://github.com/micropython/micropython/issues/4128"
+   },
+   "i4705": {
+    "closedAt": "2019-05-07T01:22:49Z",
+    "createdAt": "2019-04-19T20:35:48Z",
+    "labels": {
+     "nodes": []
+    },
+    "number": 4705,
+    "state": "CLOSED",
+    "title": "The assert in gc_free(...) and gc_realloc(...) will fail",
+    "url": "https://github.com/micropython/micropython/issues/4705"
+   },
+   "i5226": {
+    "closedAt": "2019-10-22T03:32:45Z",
+    "createdAt": "2019-10-18T03:09:41Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "extmod"
+      }
+     ]
+    },
+    "number": 5226,
+    "state": "CLOSED",
+    "title": "BLE: crash after running gc.collect()",
+    "url": "https://github.com/micropython/micropython/issues/5226"
+   },
+   "i5272": {
+    "closedAt": null,
+    "createdAt": "2019-10-28T21:29:14Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "port-esp32"
+      }
+     ]
+    },
+    "number": 5272,
+    "state": "OPEN",
+    "title": "usock: if connect() fails, socket is considered open -> not cleaned up",
+    "url": "https://github.com/micropython/micropython/issues/5272"
+   },
+   "i5487": {
+    "closedAt": null,
+    "createdAt": "2020-01-03T07:45:06Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "port-esp32"
+      },
+      {
+       "name": "proposed-close"
+      }
+     ]
+    },
+    "number": 5487,
+    "state": "OPEN",
+    "title": "MICROPY_PORT_DEINIT_FUNC called after gc_sweep_all",
+    "url": "https://github.com/micropython/micropython/issues/5487"
+   },
+   "i5650": {
+    "closedAt": null,
+    "createdAt": "2020-02-15T20:32:23Z",
+    "labels": {
+     "nodes": []
+    },
+    "number": 5650,
+    "state": "OPEN",
+    "title": "mem_info reports impossible values",
+    "url": "https://github.com/micropython/micropython/issues/5650"
+   },
+   "i5907": {
+    "closedAt": null,
+    "createdAt": "2020-04-11T16:21:19Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "port-esp32"
+      }
+     ]
+    },
+    "number": 5907,
+    "state": "OPEN",
+    "title": "esp32: viper tests fail after a while",
+    "url": "https://github.com/micropython/micropython/issues/5907"
+   },
+   "i6988": {
+    "closedAt": "2021-03-11T01:17:08Z",
+    "createdAt": "2021-03-04T10:07:50Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "port-esp32"
+      }
+     ]
+    },
+    "number": 6988,
+    "state": "CLOSED",
+    "title": "esp32: gc.collect() causes panic",
+    "url": "https://github.com/micropython/micropython/issues/6988"
+   },
+   "i8550": {
+    "closedAt": "2022-04-15T10:53:32Z",
+    "createdAt": "2022-04-14T18:27:16Z",
+    "labels": {
+     "nodes": [
+      {
+       "name": "port-rp2"
+      }
+     ]
+    },
+    "number": 8550,
+    "state": "CLOSED",
+    "title": "rp2: Script using _thread crashes without explicit GC call",
+    "url": "https://github.com/micropython/micropython/issues/8550"
+   }
+  }
+ }
+}

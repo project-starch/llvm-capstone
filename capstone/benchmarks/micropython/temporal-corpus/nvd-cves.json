@@ -1,0 +1,168 @@
+{
+ "vulnerabilities": [
+  {
+   "cve": {
+    "descriptions": [
+     {
+      "lang": "en",
+      "value": "A vulnerability, which was classified as critical, has been found in MicroPython 1.21.0/1.22.0-preview. Affected by this issue is the function poll_set_add_fd of the file extmod/modselect.c. The manipulation leads to use after free. The exploit has been disclosed to the public and may be used. The patch is identified as 8b24aa36ba978eafc6114b6798b47b7bfecdca26. It is recommended to apply a patch to fix this issue. VDB-249158 is the identifier assigned to this vulnerability."
+     }
+    ],
+    "id": "CVE-2023-7152",
+    "published": "2023-12-29T05:15:09.473",
+    "weaknesses": [
+     {
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-416"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "cve": {
+    "descriptions": [
+     {
+      "lang": "en",
+      "value": "A vulnerability was found in MicroPython up to 1.21.0. It has been classified as critical. Affected is the function slice_indices of the file objslice.c. The manipulation leads to heap-based buffer overflow. It is possible to launch the attack remotely. The exploit has been disclosed to the public and may be used. Upgrading to version 1.22.0 is able to address this issue. It is recommended to upgrade the affected component. The identifier of this vulnerability is VDB-249180."
+     }
+    ],
+    "id": "CVE-2023-7158",
+    "published": "2023-12-29T07:15:11.060",
+    "weaknesses": [
+     {
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-122"
+       }
+      ]
+     },
+     {
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-787"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "cve": {
+    "descriptions": [
+     {
+      "lang": "en",
+      "value": "A vulnerability was found in MicroPython 1.23.0. It has been classified as critical. Affected is the function mp_vfs_umount of the file extmod/vfs.c of the component VFS Unmount Handler. The manipulation leads to heap-based buffer overflow. It is possible to launch the attack remotely. The exploit has been disclosed to the public and may be used. The name of the patch is 29943546343c92334e8518695a11fc0e2ceea68b. It is recommended to apply a patch to fix this issue. In the VFS unmount process, the comparison between the mounted path string and the unmount requested string is based solely on the length of the unmount string, which can lead to a heap buffer overflow read."
+     }
+    ],
+    "id": "CVE-2024-8946",
+    "published": "2024-09-17T19:15:29.220",
+    "weaknesses": [
+     {
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-122"
+       }
+      ]
+     },
+     {
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-787"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "cve": {
+    "descriptions": [
+     {
+      "lang": "en",
+      "value": "A vulnerability was found in MicroPython 1.22.2. It has been declared as critical. Affected by this vulnerability is an unknown functionality of the file py/objarray.c. The manipulation leads to use after free. The attack can be launched remotely. The complexity of an attack is rather high. The exploitation appears to be difficult. Upgrading to version 1.23.0 is able to address this issue. The identifier of the patch is 4bed614e707c0644c06e117f848fa12605c711cd. It is recommended to upgrade the affected component. In micropython objarray component, when a bytes object is resized and copied into itself, it may reference memory that has already been freed."
+     }
+    ],
+    "id": "CVE-2024-8947",
+    "published": "2024-09-17T19:15:29.483",
+    "weaknesses": [
+     {
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-416"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "cve": {
+    "descriptions": [
+     {
+      "lang": "en",
+      "value": "A vulnerability was found in MicroPython 1.23.0. It has been rated as critical. Affected by this issue is the function mpz_as_bytes of the file py/objint.c. The manipulation leads to heap-based buffer overflow. The attack may be launched remotely. The exploit has been disclosed to the public and may be used. The patch is identified as 908ab1ceca15ee6fd0ef82ca4cba770a3ec41894. It is recommended to apply a patch to fix this issue. In micropython objint component, converting zero from int to bytes leads to heap buffer-overflow-write at mpz_as_bytes."
+     }
+    ],
+    "id": "CVE-2024-8948",
+    "published": "2024-09-17T19:15:29.747",
+    "weaknesses": [
+     {
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-122"
+       }
+      ]
+     },
+     {
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-787"
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "cve": {
+    "descriptions": [
+     {
+      "lang": "en",
+      "value": "A flaw has been found in micropython up to 1.27.0. This vulnerability affects the function mp_import_all of the file py/runtime.c. This manipulation causes memory corruption. The attack needs to be launched locally. The exploit has been published and may be used. Patch name: 570744d06c5ba9dba59b4c3f432ca4f0abd396b6. It is suggested to install a patch to address this issue."
+     }
+    ],
+    "id": "CVE-2026-1998",
+    "published": "2026-02-06T07:16:12.553",
+    "weaknesses": [
+     {
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-119"
+       }
+      ]
+     },
+     {
+      "description": [
+       {
+        "lang": "en",
+        "value": "CWE-787"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ ]
+}
