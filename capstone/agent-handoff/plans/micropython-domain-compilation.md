@@ -1,8 +1,8 @@
 **Status 2026-08-17, latest: the direct single-interpreter census is complete under QEMU.** All
 917 files in MicroPython's default base directories were attempted with EXTRA+MPZ and resumable
-chunks: `587 PASS / 328 FAIL / 0 FAULT / 0 HANG / 2 UNSCORED`. All 200 direct optional files from
-`cmdline`, `float`, `import`, `io`, `thread`, and `unicode` were also attempted: `27 PASS / 161 FAIL /
-0 FAULT / 0 HANG / 12 UNSCORED`. No test was changed to obtain these numbers. See "Full resumable
+chunks: `587 PASS / 97 FAIL / 0 FAULT / 0 HANG / 233 UNSCORED`. All 200 direct optional files from
+`cmdline`, `float`, `import`, `io`, `thread`, and `unicode` were also attempted: `27 PASS / 151 FAIL /
+0 FAULT / 0 HANG / 22 UNSCORED`. No test was changed to obtain these numbers. See "Full resumable
 census" at the end for scope, artifacts, and the verified absence of hard faults.
 
 **Status: MicroPython runs ordinary Python.** Verified against a checksum over the interpreter's
@@ -1097,13 +1097,14 @@ runner programs, helper modules, benchmark inputs, and platform-specific materia
 single-interpreter discovery model yields 917 direct files in `basics`, `micropython`, `misc`,
 `extmod`, and `stress`. This run deliberately added the 200 direct optional files in `cmdline`,
 `float`, `import`, `io`, `thread`, and `unicode`, even though this port disables several of those
-features, so a disabled feature remains a visible FAIL instead of being filtered out.
+features, so a disabled feature remains a visible FAIL or target skip instead of being filtered
+out.
 
 | scope | files | pass | fail | fault | hang | unscored |
 |---|---:|---:|---:|---:|---:|---:|
-| upstream default base directories | 917 | 587 | 328 | 0 | 0 | 2 |
-| optional direct directories | 200 | 27 | 161 | 0 | 0 | 12 |
-| all direct single-interpreter files attempted | 1,117 | 614 | 489 | 0 | 0 | 14 |
+| upstream default base directories | 917 | 587 | 97 | 0 | 0 | 233 |
+| optional direct directories | 200 | 27 | 151 | 0 | 0 | 22 |
+| all direct single-interpreter files attempted | 1,117 | 614 | 248 | 0 | 0 | 255 |
 
 There are no remaining capability-fatal cases in the 1,117 direct files.
 
@@ -1156,24 +1157,35 @@ A complete capture-enabled rerun changed exactly eleven statuses from FAIL to PA
 `opt_level_lineno.py`, and `misc/print_exception.py`. No status regressed, and all images retained
 positive stack reserve.
 
-The remaining FAIL total does not represent 489 unexplained Capstone failures. The result word's
-bit 31 records whether the interpreter printed an uncaught exception. Of 489 FAILs, 478 have that
+MicroPython tests conventionally report an unavailable target feature with `print("SKIP")`
+followed by `raise SystemExit`. The embedded port prints the uncaught `SystemExit` traceback, so
+the old hash-only scoring counted these deliberate skips as FAIL. The capture-enabled runner now
+recognises that exact output shape and marks it `UNSCORED (target skip)`. A complete rerun changed
+exactly 241 statuses from FAIL to UNSCORED. One further target skip, `extmod/select_ipoll.py`, was
+already UNSCORED because host-oracle generation failed, so 242 rows now carry the target-skip
+reason. No PASS changed and no fault or hang appeared. Keep this in the runner: an attempted
+`SystemExit` special case inside the port made the full sequence fault in
+`micropython/heap_lock.py`, even though that test passed in isolation; the exact low-level cause
+was not established because reverting the port change removed the regression.
+
+The remaining FAIL total does not represent 248 unexplained Capstone failures. The result word's
+bit 31 records whether the interpreter printed an uncaught exception. Of 248 FAILs, 237 have that
 bit set and only 11 returned normally but produced a different output:
 
 | directory | uncaught exception | output mismatch | total FAIL |
 |---|---:|---:|---:|
-| `basics` | 41 | 0 | 41 |
-| `extmod` | 204 | 0 | 204 |
-| `micropython` | 69 | 0 | 69 |
-| `misc` | 10 | 0 | 10 |
-| `stress` | 4 | 0 | 4 |
-| `cmdline` | 17 | 10 | 27 |
-| `float` | 68 | 1 | 69 |
-| `import` | 24 | 0 | 24 |
-| `io` | 7 | 0 | 7 |
+| `basics` | 15 | 0 | 15 |
+| `extmod` | 21 | 0 | 21 |
+| `micropython` | 57 | 0 | 57 |
+| `misc` | 1 | 0 | 1 |
+| `stress` | 3 | 0 | 3 |
+| `cmdline` | 15 | 10 | 25 |
+| `float` | 65 | 1 | 66 |
+| `import` | 22 | 0 | 22 |
+| `io` | 5 | 0 | 5 |
 | `thread` | 33 | 0 | 33 |
-| `unicode` | 1 | 0 | 1 |
-| **total** | **478** | **11** | **489** |
+| `unicode` | 0 | 0 | 0 |
+| **total** | **237** | **11** | **248** |
 
 This distribution matches the deliberately small port profile: it has no float implementation,
 external import or VFS, and disables several sys/stdio/uctypes facilities; native/Viper, threads,
@@ -1183,11 +1195,11 @@ exception bit. The 11 non-exception mismatches are ten optional `cmdline` tests 
 `float/array_construct.py`; the embedded-source runner cannot reproduce command-line/REPL
 invocation semantics, and the port intentionally has no float implementation.
 
-The 14 UNSCORED files also returned a domain result. They are unscored only because host Python
-exited non-zero while generating an oracle: `extmod/select_ipoll.py`,
-`micropython/native_marshal.py`, nine `io/file*.py` cases, and three `unicode/file*.py` cases. They
-need the relevant MicroPython API or filesystem fixture/harness before a PASS/FAIL verdict is
-meaningful.
+All 255 UNSCORED files also returned a domain result. Of these, 242 explicitly selected the target-
+skip path. The other 13 are unscored because host Python exited non-zero while generating an
+oracle: `micropython/native_marshal.py`, nine `io/file*.py` cases, and three `unicode/file*.py`
+cases. They need the relevant MicroPython API or filesystem fixture/harness before a PASS/FAIL
+verdict is meaningful.
 
 Why chunks are required: a monolithic 917-test image links and its static budget reports that it
 fits, but its very first normal call faults during domain initialization (`cause=1`, `pc/tval/
@@ -1236,9 +1248,10 @@ Invoke `run-resumable-suite.py` with the matching `.dom`, `.expected`, output di
 naturally contains 117 files. The optional 200-file build uses `MPY_TEST_BASE_DIR=cmdline` and
 `MPY_TEST_DIRS='float import io thread unicode'`.
 
-The current generated reports are under `/tmp/capstone/micropython-standard-fixes-merged/`:
-`standard-917-results.tsv`, `standard-917-nonpass.tsv`, `all-single-1117-results.tsv`, and
-`all-single-1117-nonpass.tsv`. They are scratch artifacts by policy, not files to commit.
+The current generated reports are under `/tmp/capstone/micropython-target-skip-final-merged/`:
+`standard-single-917-results.tsv`, `standard-single-917-nonpass.tsv`,
+`all-single-1117-results.tsv`, and `all-single-1117-nonpass.tsv`. They are scratch artifacts by
+policy, not files to commit.
 
 The other 529 Python files are not ordinary direct interpreter cases: 50 fixtures/runner/helper
 files, 130 internal/performance/feature inputs, 85 multi-instance cases, 25 network-harness cases,

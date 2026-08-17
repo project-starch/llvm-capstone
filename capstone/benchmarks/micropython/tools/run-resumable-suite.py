@@ -88,6 +88,13 @@ def regex_output_matches(actual, expected):
     return b"".join(actual_lines) == expected
 
 
+def is_target_skip(output):
+    """Recognise MicroPython's print("SKIP"); raise SystemExit convention."""
+    return (output is not None
+            and output.startswith(b"SKIP\nTraceback (most recent call last):\n")
+            and output.rstrip().endswith(b"SystemExit:"))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--domain", required=True)
@@ -187,6 +194,7 @@ def main():
     rows = []
     counts = {"PASS": 0, "FAIL": 0, "FAULT": 0, "HANG": 0, "UNSCORED": 0}
     for idx, name, want, how, pattern in expected:
+        row_how = how
         if idx in stopped:
             status = stopped[idx]
             got_word = None
@@ -194,6 +202,9 @@ def main():
             got_word = got.get(idx)
             if got_word is None:
                 status = "HANG"
+            elif got_word & 0x80000000 and is_target_skip(captured.get(idx)):
+                status = "UNSCORED"
+                row_how = "target skip"
             elif pattern is not None:
                 actual = captured.get(idx)
                 if actual is None or idx in capture_truncated:
@@ -209,7 +220,7 @@ def main():
             else:
                 status = "FAIL"
         counts[status] += 1
-        rows.append((idx, name, status, got_word, want, how))
+        rows.append((idx, name, status, got_word, want, row_how))
 
     report = out_dir / "results.tsv"
     with report.open("w") as f:
