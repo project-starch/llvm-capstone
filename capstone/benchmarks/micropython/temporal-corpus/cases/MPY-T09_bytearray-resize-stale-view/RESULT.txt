@@ -1,0 +1,25 @@
+MPY-T09 / upstream 18168
+
+  stock MicroPython at pin 2e3304a : returns, prints "T09 1 1"
+  Capstone domain under QEMU       : returns, prints "T09 1 1", retval 0x0018e966
+
+UNTRAPPED, AND THE CORRUPTION IS VERIFIED.
+
+The retval encodes an FNV-1a of the output. 0x0018e966 was computed from the
+stock output BEFORE the domain run, so the match is a prediction that held, not
+a number read afterwards and declared to agree.
+
+"T09 1 1" decodes as: the memoryview diverged from the bytearray, so it addresses
+storage the bytearray no longer owns, AND the write through it did not reach the
+bytearray. proof-dangling.py measures the same thing directly and reports the
+view reading recycled heap content (0xf0) where the bytearray reads 'A'.
+
+So a use-after-free WRITE executed inside a pure-capability domain and corrupted
+storage, exactly as it does on hardware with no capability support at all. This
+is the sharpest row in the corpus: silent on stock, silent on Capstone, and
+visible only once the collector is made capability-aware.
+
+How to read the domain column. A quiet return is only meaningful because the same
+image also faults on other tests and returns the expected value for the sanity
+test, so capability checking is live and the interpreter runs. See
+../../evidence/domain-round2-2026-08-17.txt.

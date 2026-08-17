@@ -26,6 +26,20 @@ where that driver is missing. The corpus therefore has two separate columns: wha
 an unmodified runtime gets today, which is nothing, and what a
 capability-aware collector could get, which is the open research question.
 
+## One directory per case
+
+`cases/<ID>_<slug>/` holds each case on its own: a README rendered from the CSV,
+the reproduction script where one can run here, and RESULT.txt where it has been
+measured. `STATUS.md` is the generated index. Both come from `gen-cases.py`, and
+`gen-cases.py --check` fails if a README has drifted from the CSV or if a case
+marked runnable is missing its script or its result.
+
+Six cases are measured. The other twenty-four are blocked, each with the specific
+reason in its own directory rather than a shared shrug: eleven need a parent build
+that a current toolchain cannot produce, five need threads, sockets or port
+hardware this domain does not have, six are unresolved upstream, and two have only
+a C-level reproduction.
+
 ## What counts, and what does not
 
 In scope: use-after-free, double free, dangling views and buffers, premature
