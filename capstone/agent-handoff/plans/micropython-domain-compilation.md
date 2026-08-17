@@ -1384,6 +1384,94 @@ the refactor and comparing SHA-256 of the `.dom`, which is unchanged.
 Build and run exactly as the earlier section documents, adding `MPY_FLOAT_CORE=1` (and
 `MPY_FLOAT_MATH=1` for the math profile) to each of the five builds.
 
+### The self-contained extmod modules, and the two things they exposed (2026-08-17)
+
+The 204 `extmod` UNSCORED results were not 204 problems. Attributing each skip to the import that
+raised it produced a short list, and the largest reachable entries had one cause: the module's C
+source was never compiled in. `MICROPY_PY_RE`, `MICROPY_PY_JSON` and the rest already default to 1
+at EXTRA level; the amalgam globbed `py/*.c` and stopped there.
+
+Nine modules are now carried -- `binascii`, `deflate`, `framebuf`, `hashlib`, `heapq`, `json`,
+`random`, `re`, `uctypes` -- chosen because each is pure computation: no clock, no filesystem, no
+device. Each `#include`s what it needs from `lib/` at its own foot (`re1.5`, `uzlib`,
+`crypto-algorithms`), so naming the module file is the whole dependency. `time` was deliberately
+left out: the domain has no clock, and a stubbed one makes `time.time()` confidently wrong.
+
+Three mechanics were needed. `MP_REGISTER_MODULE` reaches `genhdr/moduledefs.h` only through the
+qstr pass, so a module compiled but not *scanned* links cleanly and is simply absent at runtime --
+`port/Makefile` lists them in `SRC_QSTR` and `build-micropython-silicon.sh` parses that same list,
+so the two cannot disagree. `modbinascii.c` defines its own `bytes_fromhex_obj` beside
+`py/objstr.c`'s, renamed the way the libm units are. And patch 0020: `extmod/moddeflate.c` still
+declared its stream ioctl with `uintptr_t`, which patch 0012 had already replaced throughout `py/`
+because `uintptr_t` keeps only the address of a 128-bit capability.
+
+Also enabled, needing no new source: `MICROPY_PY_IO_BUFFEREDWRITER` and `MICROPY_PY_SYS_EXIT`.
+`MICROPY_PY_WEAKREF` was tried and withdrawn -- with `MICROPY_ENABLE_FINALISER` off, upstream's
+`gc_sweep_run_finalisers` does not compile, taking `BLOCKS_PER_FTB` and the declaration of `block`
+from the finaliser branch. Enabling both is a GC change and the GC is where this port's capability
+fixes already live.
+
+| | all 1117 |
+|---|---|
+| float + math (previous section) | 697 PASS / 148 FAIL / 272 UNSCORED |
+| plus the extmod modules | **754 PASS** / 151 FAIL / 16 FAULT / 196 UNSCORED |
+
+77 statuses moved: 58 UNSCORED->PASS, 3 UNSCORED->FAIL, 15 UNSCORED->FAULT, 1 PASS->FAULT. `re`,
+`json`, `framebuf`, `binascii`, `hashlib`, `random` and `heapq` pass outright. The three new
+ordinary failures are heap-bound rather than capability-bound: `class_setname_hazard_rand.py` and
+`deflate_decompress.py` both die on `MemoryError` against the fixed 96 KiB heap, which is now the
+binding constraint for several tests and is the obvious next lever.
+
+#### A domain image can link, report "fits", and fault on every single call
+
+The extmod sources add ~74 KB of `.text`, which pushed the 200-test extmod chunk from a 2 MiB
+domain allocation to a 4 MiB one. **Every** call into that image raised a capability fault: 200
+tests, 200 reboots, no results, after `domdata-budget.py` had printed `VERDICT: fits`.
+
+The confound was that the chunk had also gained nine modules, so the first three faults were all
+`asyncio` tests and looked like an import defect. One 40-test build over exactly those tests, with
+exactly those modules, landing at 2 MiB, returned 15 PASS and zero faults -- modules exonerated,
+image size implicated. A 4 MiB chunk elsewhere in the same run *did* work, so this is an allocation
+edge and not a hard ceiling. The standard set is therefore **six chunks** (200/200/200/100/100/200),
+not four; `build-micropython-silicon.sh` warns when an image lands above 2 MiB, and a census driver
+should refuse to spend a run on one.
+
+#### `struct`'s pointer typecodes, and why uctypes cannot be turned off either
+
+`basics/struct_micropython.py` went PASS -> FAULT. It had passed only because half of it sits
+behind `try: import uctypes`. With `uctypes` present it runs
+
+    o = uctypes.addressof('abc'); s = struct.pack("<S", o); o2 = struct.unpack("<S", s)
+
+and `py/binary.c` implements `'O'`/`'S'` as `val = (mp_uint_t)val_in` in and a cast back to a
+pointer out. A 64-bit integer cannot carry a 128-bit capability, so the value returns untagged and
+dereferencing it faults. Upstream already calls the family `MICROPY_PY_STRUCT_UNSAFE_TYPECODES`.
+Disabling them was considered and rejected on evidence: `basics/array_micropython.py` passes
+*because* of those typecodes, so it would trade one fault for one lost pass.
+
+The same is true of `uctypes` wholesale: 15 of its 16 tests fault and the 16th fails, and the one
+that passes (`basics/memoryview_slice_size.py`) does so by never dereferencing what it builds. The
+obvious response is to leave the module out, which is how this port already treats threads, native
+emitters and filesystems -- upstream's skip convention then reports it honestly instead of the
+domain dying.
+
+**That was tried and it does not boot.** Three `uctypes`-off images -- 200 tests at globals offset
+`0xa0000`, the same 200 at `0xb0000`, and 100 tests at `0xb0000` -- each hung on their FIRST domain
+call, at `basics/0prelim.py`. Every `uctypes`-on build of the same chunks ran clean, and re-running
+a known-good `.dom` confirmed the harness was healthy at the time. One flag, three layouts, and the
+only code removed is a module nothing else calls.
+
+Two hypotheses were raised and both are refuted, so do not re-propose them without new evidence:
+the globals region overlapping `.text` (readelf puts `.text` at `0x10000..0xaf52c` and the globals
+at `0xb0000`, no overlap), and insufficient slack before the globals (forcing a spare 64 KiB gave
+68,308 bytes of slack and the image hung identically). This is the image-perturbation hazard the
+handoff records for silicon at `fpga-repros/S01-image-perturbation-hang`, now reproducible **under
+QEMU** where it costs minutes rather than a board session -- which is worth more than the 16 faults
+it currently forces. `py/parse.c:663`, where `MICROPY_PY_UCTYPES` adds an entry to the
+const-folding module table, is a place to start and not a conclusion.
+
+`uctypes` therefore ships ON, and its 16 crashes are recorded rather than configured away.
+
 ### Traps that cost time here
 
 - **`capstone-test-env.sh` resolved `CAPSTONE_REPO_ROOT` to `/home`** in this shell, so

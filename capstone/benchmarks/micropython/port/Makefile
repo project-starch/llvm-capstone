@@ -26,6 +26,23 @@ LIBS =
 # main.c only exists so mkrules.mk has a source to scan for qstrs alongside the core.
 SRC_C = main.c
 
+# The extmod modules this port carries. They must be scanned here, not merely compiled by
+# build-micropython-silicon.sh: MP_REGISTER_MODULE only reaches genhdr/moduledefs.h through the
+# qstr pass, so a module compiled but not scanned links fine and is simply absent at runtime.
+# build-micropython-silicon.sh parses this exact list, so edit it here and nowhere else.
+EXTMOD_SRC_C = \
+	extmod/modbinascii.c \
+	extmod/moddeflate.c \
+	extmod/modframebuf.c \
+	extmod/modhashlib.c \
+	extmod/modheapq.c \
+	extmod/modjson.c \
+	extmod/modrandom.c \
+	extmod/modre.c \
+	extmod/moductypes.c \
+
+SRC_QSTR += $(addprefix $(TOP)/, $(EXTMOD_SRC_C))
+
 OBJ += $(PY_CORE_O)
 OBJ += $(addprefix $(BUILD)/, $(SRC_C:.c=.o))
 

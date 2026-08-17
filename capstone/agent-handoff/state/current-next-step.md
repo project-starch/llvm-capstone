@@ -70,19 +70,33 @@ generation failed. Heap probes at 128, 192, and 256 KiB were not adopted: they m
 allocation-heavy tests pass but suppress the valid `viper_large_jump.py` size skip and expose the
 disabled-Viper failure instead.
 
-**The no-float family is closed (2026-08-17).** `MPY_FLOAT_CORE=1` gives the port double-precision
-floats and `MPY_FLOAT_MATH=1` adds `math`, `cmath` and complex, both from MicroPython's own
-`lib/libm_dbl`. The all-1117 census is now **697 PASS / 148 FAIL / 272 UNSCORED** (standard 917:
-602 / 63 / 252), from 625 / 237 / 255 with no float at all. `float/` is 68 PASS, 0 FAIL, 1 UNSCORED.
-One defect accounted for 24 of those tests: MicroPython's APPROX float format *and* parse both
-scale by `pow(5, n)` (`py/parsenum.c:275`), so the BEEBS soft-float `pow` — `exp(y*log(x))`, whose
-relative error on `pow(5,16)` is -1.3014e-12 — made `repr(1.0)` print `0.9999999999986986`, the
-same 1.3e-12 digit for digit.
+**The float and extmod families are closed (2026-08-17).** `MPY_FLOAT_CORE=1` gives the port
+double-precision floats, `MPY_FLOAT_MATH=1` adds `math`, `cmath` and complex from MicroPython's own
+`lib/libm_dbl`, and nine self-contained extmod modules are now compiled in. The all-1117 census is
+**754 PASS / 151 FAIL / 16 FAULT / 196 UNSCORED**, from 625 / 237 / 255 at the start of the day.
+`float/` is 69 PASS and nothing else. Two defects accounted for most of it. Float: MicroPython's
+APPROX format *and* parse both scale by `pow(5, n)` (`py/parsenum.c:275`), so the BEEBS soft-float
+`pow` — `exp(y*log(x))`, relative error -1.3014e-12 on `pow(5,16)` — made `repr(1.0)` print
+`0.9999999999986986`, the same 1.3e-12 digit for digit. Extmod: the modules' C sources were simply
+never in the amalgam, and `MP_REGISTER_MODULE` only reaches `moduledefs.h` through the qstr pass.
 
-What remains is genuinely absent features, not arithmetic: 51 native/Viper (needs a Capstone native
-emitter), 33 `thread`, 25 `cmdline`/REPL and 22 filesystem `import` cases the embedded single-source
-runner cannot express, 5 `io` file cases, and 2 needing `unittest`. Do not change tests or re-run
-the old 422-test stop. Details are in `plans/micropython-domain-compilation.md`.
+**Two live threads came out of that, both cheap and both QEMU-only:**
+
+* **An image can link, print `VERDICT: fits`, and then fault on every call.** A chunk that grew
+  past a 2 MiB domain allocation did exactly that — 200 tests, 200 reboots. The same tests and
+  modules in a smaller image ran clean, so it is the allocation edge, not the content. The standard
+  set is six chunks now, and the build warns above 2 MiB.
+* **`MICROPY_PY_UCTYPES=0` does not boot.** Its 16 tests all fault when it is on (integer↔pointer
+  round-trips, architecturally impossible), so it should be left out — but three uctypes-off images
+  at three different layouts each hung on their first domain call, with uctypes-on controls clean.
+  That is the S01 image-perturbation hazard reproduced **under QEMU**, minutes per experiment
+  instead of a board session. Overlap and slack are both refuted; `py/parse.c:663` is a starting
+  point. This is the most valuable open thread here.
+
+What otherwise remains is genuinely absent features: 51 native/Viper, 33 `thread`, 25 `cmdline`,
+22 filesystem `import`, 5 `io`. The 96 KiB heap is now the binding constraint for the handful of
+ordinary failures left. Do not change tests or re-run the old 422-test stop. Details are in
+`plans/micropython-domain-compilation.md`.
 
 Bitstream is `caplifive_s07diag.bit`. S-06 and S-08 are FIXED in silicon and verified; their
 folders are resolved. S-07 is the one open silicon issue, and the handover is written and

@@ -89,7 +89,20 @@ declare -A LIBM_STATICS=(
   [exp]='P1 P2 P3 P4 P5 invln2' [expm1]='invln2 ln2_hi ln2_lo'
   [log]='Lg1 Lg2 Lg3 Lg4 Lg5 Lg6 Lg7 ln2_hi ln2_lo'
   [log1p]='Lg1 Lg2 Lg3 Lg4 Lg5 Lg6 Lg7 ln2_hi ln2_lo'
-  [pow]='P1 P2 P3 P4 P5 tiny' [sqrt]='tiny')
+  [pow]='P1 P2 P3 P4 P5 tiny' [sqrt]='tiny'
+  # __expo2's k against the sha256 round-constant table modhashlib.c pulls in.
+  [__expo2]='k')
+
+# Same problem, same fix, for the extmod units: modbinascii defines its own bytes_fromhex_obj
+# next to py/objstr.c's.
+declare -A EXTMOD_STATICS=([modbinascii]='bytes_fromhex_obj')
+
+# Single source of truth for the extmod modules this port carries; port/Makefile reads it from
+# here (EXTMOD_SRC_C) so header generation and the amalgam can never disagree about which
+# MP_REGISTER_MODULE entries exist.
+EXTMOD_UNITS=$(sed -n 's#^[[:space:]]\{1,\}extmod/\([a-z0-9_]\{1,\}\)\.c.*#\1#p' \
+               "$PORT/Makefile" | tr '\n' ' ')
+[[ -n ${EXTMOD_UNITS// /} ]] || { echo "no EXTMOD_SRC_C found in $PORT/Makefile" >&2; exit 1; }
 
 CLANG=${CAPSTONE_CLANG}
 LD_LLD=${CAPSTONE_LD_LLD}
@@ -182,6 +195,18 @@ AMALGAM="$OBJ_DIR/mpy_all.c"
       echo '#undef realloc_ext'
     fi
   done
+  # The self-contained extmod modules: pure computation, no clock, no filesystem, no device. Each
+  # is wrapped in its own `#if MICROPY_PY_<NAME>` and so compiles to nothing below EXTRA level, and
+  # each #includes whatever it needs from lib/ (re1.5, uzlib, crypto-algorithms) at its own foot,
+  # so listing the module file is the whole dependency. Deliberately absent: time (the domain has
+  # no clock, and a stub one would make time.time() confidently wrong), and everything backed by a
+  # filesystem, socket, or peripheral. Keep this list in step with EXTMOD_SRC_C in port/Makefile,
+  # which is what puts their MP_REGISTER_MODULE into genhdr/moduledefs.h.
+  for m in $EXTMOD_UNITS; do
+    for n in ${EXTMOD_STATICS[$m]:-}; do echo "#define $n mpyext_${m}_$n"; done
+    echo "#include \"$MPY_SRC_DIR/extmod/$m.c\""
+    for n in ${EXTMOD_STATICS[$m]:-}; do echo "#undef $n"; done
+  done
   if [[ -n ${MPY_FLOAT_CORE:-} ]]; then
     # MicroPython's OWN libm, not an approximation of it. Its APPROX float formatting and parsing
     # both scale by pow(5, n) (py/parsenum.c:275), so pow's accuracy IS repr's accuracy: with the
@@ -253,6 +278,9 @@ for l in sys.stdin:
 else: print(0)')
 : "${TEXT:=0}"
 [[ "$TEXT" -gt 0 ]] || { echo "could not measure .text from pass 1" >&2; exit 1; }
+# Slack between .text and the globals region was suspected when a build landed 2,772 bytes under
+# the boundary and hung; forcing a whole spare 64 KiB (TEXT + 0x1FFFF) was tried and the image hung
+# just the same, so the rounding is left alone. Do not re-propose it without a new measurement.
 GOFF=$(( ((TEXT + 0xFFFF) / 0x10000) * 0x10000 ))
 [[ $GOFF -lt 65536 ]] && GOFF=65536
 printf "   .text = %d bytes -> globals offset 0x%x\n" "$TEXT" "$GOFF"
@@ -273,5 +301,15 @@ NHDR=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$OUT_DIR/$DOM_NAME.dom" | grep -c 
 echo "   .capstone_gp_table sections: $NHDR (must be 1)"
 [[ "$NHDR" == "1" ]] || { echo "FAIL: expected exactly one gp-table header, got $NHDR" >&2; exit 1; }
 
-python3 "$LADDER/domdata-budget.py" "$OUT_DIR/$DOM_NAME.dom" || true
+BUDGET=$(python3 "$LADDER/domdata-budget.py" "$OUT_DIR/$DOM_NAME.dom" 2>&1 || true)
+echo "$BUDGET"
+# "VERDICT: fits" is a STATIC budget check and does not predict whether the image runs. An image
+# that lands in a >2 MiB domain allocation has twice been one that links, reports "fits", and then
+# faults on EVERY normal call -- 200 tests, 200 reboots, no results. Not fatal (a 4 MiB chunk has
+# also run clean), so this warns rather than stops; a runner that would spend an hour on the image
+# should refuse it instead.
+if grep -qE 'order=1[0-9]' <<<"$BUDGET"; then
+  echo "   WARNING: domain allocation is larger than 2 MiB -- images this size have faulted on" >&2
+  echo "            every call despite VERDICT: fits. Prefer smaller test chunks." >&2
+fi
 echo "Built $OUT_DIR/$DOM_NAME.dom"
