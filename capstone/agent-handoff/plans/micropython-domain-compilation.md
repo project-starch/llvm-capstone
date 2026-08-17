@@ -1,6 +1,6 @@
 **Status 2026-08-17, latest: the direct single-interpreter census is complete under QEMU.** All
 917 files in MicroPython's default base directories were attempted with EXTRA+MPZ and resumable
-chunks: `576 PASS / 339 FAIL / 0 FAULT / 0 HANG / 2 UNSCORED`. All 200 direct optional files from
+chunks: `587 PASS / 328 FAIL / 0 FAULT / 0 HANG / 2 UNSCORED`. All 200 direct optional files from
 `cmdline`, `float`, `import`, `io`, `thread`, and `unicode` were also attempted: `27 PASS / 161 FAIL /
 0 FAULT / 0 HANG / 12 UNSCORED`. No test was changed to obtain these numbers. See "Full resumable
 census" at the end for scope, artifacts, and the verified absence of hard faults.
@@ -1101,9 +1101,9 @@ features, so a disabled feature remains a visible FAIL instead of being filtered
 
 | scope | files | pass | fail | fault | hang | unscored |
 |---|---:|---:|---:|---:|---:|---:|
-| upstream default base directories | 917 | 576 | 339 | 0 | 0 | 2 |
+| upstream default base directories | 917 | 587 | 328 | 0 | 0 | 2 |
 | optional direct directories | 200 | 27 | 161 | 0 | 0 | 12 |
-| all direct single-interpreter files attempted | 1,117 | 603 | 500 | 0 | 0 | 14 |
+| all direct single-interpreter files attempted | 1,117 | 614 | 489 | 0 | 0 | 14 |
 
 There are no remaining capability-fatal cases in the 1,117 direct files.
 
@@ -1135,16 +1135,37 @@ non-capability NULL base. All three remaining faults stopped at that exact instr
 FAULT to PASS; every other status and result word was unchanged. The direct-file census now has no
 capability fault and no hang.
 
-The remaining FAIL total does not represent 500 unexplained Capstone failures. The result word's
-bit 31 records whether the interpreter printed an uncaught exception. Of 500 FAILs, 481 have that
-bit set and 19 returned normally but produced a different output hash:
+Patch 0016 decouples the optional stream argument of `sys.print_exception` from global sys
+stdin/stdout/stderr objects. The Capstone port deliberately omits those global objects but provides
+`StringIO`, so an explicit stream is valid and now receives the traceback. At EXTRA level the port
+also enables detailed error reporting, warnings, the dynamic emergency-exception buffer, memory
+statistics and allocated-size tracking. These are the feature contracts exercised by the selected
+upstream tests; the minimum profile remains terse and small.
+
+The resumable guest and runner can now share a second output page with `--capture-output`, transport
+up to 4095 output bytes per test as hex, and save the captured prefix under `actual-output/`.
+`gen-test-table.py` preserves MicroPython's regex `.exp` templates in the expectation table, and
+the runner applies upstream's line-regex and `########` wildcard normalization. A regex template
+without output capture, or whose output fills the capture page, is UNSCORED rather than falsely
+compared as a literal hash or against a truncated value.
+
+A complete capture-enabled rerun changed exactly eleven statuses from FAIL to PASS:
+`builtin_help.py`, `bytes_compare3.py`, `exception_chain.py`, `emg_exc.py`,
+`heapalloc_bytesio2.py`, `heapalloc_exc_compressed.py`,
+`heapalloc_exc_compressed_emg_exc.py`, `heapalloc_traceback.py`, `meminfo.py`,
+`opt_level_lineno.py`, and `misc/print_exception.py`. No status regressed, and all images retained
+positive stack reserve.
+
+The remaining FAIL total does not represent 489 unexplained Capstone failures. The result word's
+bit 31 records whether the interpreter printed an uncaught exception. Of 489 FAILs, 478 have that
+bit set and only 11 returned normally but produced a different output:
 
 | directory | uncaught exception | output mismatch | total FAIL |
 |---|---:|---:|---:|
-| `basics` | 41 | 3 | 44 |
+| `basics` | 41 | 0 | 41 |
 | `extmod` | 204 | 0 | 204 |
-| `micropython` | 71 | 5 | 76 |
-| `misc` | 11 | 0 | 11 |
+| `micropython` | 69 | 0 | 69 |
+| `misc` | 10 | 0 | 10 |
 | `stress` | 4 | 0 | 4 |
 | `cmdline` | 17 | 10 | 27 |
 | `float` | 68 | 1 | 69 |
@@ -1152,18 +1173,15 @@ bit set and 19 returned normally but produced a different output hash:
 | `io` | 7 | 0 | 7 |
 | `thread` | 33 | 0 | 33 |
 | `unicode` | 1 | 0 | 1 |
-| **total** | **481** | **19** | **500** |
+| **total** | **478** | **11** | **489** |
 
 This distribution matches the deliberately small port profile: it has no float implementation,
 external import or VFS, and disables several sys/stdio/uctypes facilities; native/Viper, threads,
 network/TLS, machine, filesystem and many optional extmod paths are unavailable in this domain.
-Those families dominate the exception results. The 19 non-exception mismatches are three `basics`
-tests (`builtin_help`, `bytes_compare3`, `exception_chain`), five `micropython` tests (`emg_exc`,
-`heapalloc_exc_compressed`, `heapalloc_traceback`, `meminfo`, `opt_level_lineno`), ten `cmdline`
-tests, and `float/array_construct.py`. The upstream runner itself treats some of these as
-target-dependent, and the embedded-source runner cannot reproduce command-line/REPL invocation
-semantics. Raw output, rather than another hash-only run, is the next useful diagnostic for the
-eight standard-set mismatches.
+Those families dominate the exception results. Every remaining standard FAIL has the uncaught-
+exception bit. The 11 non-exception mismatches are ten optional `cmdline` tests and
+`float/array_construct.py`; the embedded-source runner cannot reproduce command-line/REPL
+invocation semantics, and the port intentionally has no float implementation.
 
 The 14 UNSCORED files also returned a domain result. They are unscored only because host Python
 exited non-zero while generating an oracle: `extmod/select_ipoll.py`,
@@ -1175,16 +1193,17 @@ Why chunks are required: a monolithic 917-test image links and its static budget
 fits, but its very first normal call faults during domain initialization (`cause=1`, `pc/tval/
 badaddr=0x866`) before any test result. A 400-file image for global indices 400..799 falls on a
 different 2 MiB allocation edge and reports `STACK=-79424`, so it is also invalid. The verified
-partition is 0..399, 400..599, 600..799, and 800..916; their reported stack reserves are 589312,
-780224, 511216, and 1021408 bytes respectively.
+partition is 0..399, 400..599, 600..799, and 800..916; their reported stack reserves are 582784,
+773664, 504688, and 1014928 bytes respectively.
 
 The machinery is in-tree:
 
 - `gen-test-table.py`: multiple directories, no-filter mode, missing-oracle records, and candidate
   offset/limit for chunks;
 - `mpy-resume-guest.c` plus the opt-in `MPYSTART` control block in `mpy_domain.c`: choose the first
-  local test index before normal calls begin;
-- `run-resumable-suite.py`: reboot after a fatal fault or timeout and resume at the successor;
+  local test index before normal calls begin and optionally export exact output bytes;
+- `run-resumable-suite.py`: reboot after a fatal fault or timeout, resume at the successor, and
+  score captured regex `.exp` output;
 - `merge-suite-results.py`: validate global indices and produce combined/non-pass TSV files.
 
 Build the Linux guest helper once:
@@ -1212,12 +1231,12 @@ OBJ_DIR=/tmp/capstone/micropython-silicon/obj-mpy-standard-$NAME \
 bash capstone/benchmarks/micropython/build-micropython-silicon.sh
 ```
 
-Invoke `run-resumable-suite.py` with the matching `.dom`, `.expected`, output directory, and
-`--index-base` equal to `OFF`. The final partition requests 200 but naturally contains 117 files.
-The optional 200-file build uses `MPY_TEST_BASE_DIR=cmdline` and
+Invoke `run-resumable-suite.py` with the matching `.dom`, `.expected`, output directory,
+`--index-base` equal to `OFF`, and `--capture-output`. The final partition requests 200 but
+naturally contains 117 files. The optional 200-file build uses `MPY_TEST_BASE_DIR=cmdline` and
 `MPY_TEST_DIRS='float import io thread unicode'`.
 
-The current generated reports are under `/tmp/capstone/micropython-intbig-merged/`:
+The current generated reports are under `/tmp/capstone/micropython-standard-fixes-merged/`:
 `standard-917-results.tsv`, `standard-917-nonpass.tsv`, `all-single-1117-results.tsv`, and
 `all-single-1117-nonpass.tsv`. They are scratch artifacts by policy, not files to commit.
 
