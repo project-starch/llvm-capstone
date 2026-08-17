@@ -4259,17 +4259,44 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
 
   if (Size > 8) {
     MCValue MV;
-    if (ME->evaluateAsRelocatable(MV, nullptr) && !MV.isAbsolute()) {
-      // Some targets, including Capstone with addrspace(200) capability
-      // pointers, lower symbolic constants wider than 64 bits to a single
-      // relocatable address expression. MC streamers only accept relocatable
-      // emitValue sizes up to 8 bytes, so materialize the symbol in the low
-      // word and zero-extend the remaining bytes in data layout order.
+    if (ME->evaluateAsRelocatable(MV, nullptr)) {
+      if (!MV.isAbsolute()) {
+        // Some targets, including Capstone with addrspace(200) capability
+        // pointers, lower symbolic constants wider than 64 bits to a single
+        // relocatable address expression. MC streamers only accept relocatable
+        // emitValue sizes up to 8 bytes, so materialize the symbol in the low
+        // word and zero-extend the remaining bytes in data layout order.
+        if (DL.isBigEndian()) {
+          AP.OutStreamer->emitZeros(Size - 8);
+          AP.OutStreamer->emitValue(ME, 8);
+        } else {
+          AP.OutStreamer->emitValue(ME, 8);
+          AP.OutStreamer->emitZeros(Size - 8);
+        }
+        return;
+      }
+
+      // The same width mismatch with no symbol in it: a plain integer sitting
+      // in a slot wider than 64 bits, which on Capstone is an untagged value
+      // in a capability-sized field. It reaches here as a ConstantExpr rather
+      // than a ConstantInt -- an inttoptr to addrspace(200) -- so the
+      // emitGlobalConstantLargeInt path above does not catch it, and
+      // MCStreamer::emitIntValue asserts on any size over 8. The case that
+      // found this is MicroPython's MP_ROM_INT, an integer stored in a union
+      // whose other member is an object pointer.
+      //
+      // Zero-extend, do not sign-extend: lowerConstant built this MCExpr from
+      // ConstantInt::getZExtValue(), so the int64 here is a zero-extended bit
+      // pattern and not a signed value. A constant in [2^63, 2^64) arrives as a
+      // negative int64 while its true high half is zero, and sign-extending it
+      // would fabricate an all-ones high word. Anything that genuinely needs
+      // more than 64 bits cannot reach this point at all: getZExtValue()
+      // asserts on it first.
       if (DL.isBigEndian()) {
         AP.OutStreamer->emitZeros(Size - 8);
-        AP.OutStreamer->emitValue(ME, 8);
+        AP.OutStreamer->emitIntValue(MV.getConstant(), 8);
       } else {
-        AP.OutStreamer->emitValue(ME, 8);
+        AP.OutStreamer->emitIntValue(MV.getConstant(), 8);
         AP.OutStreamer->emitZeros(Size - 8);
       }
       return;

@@ -1392,14 +1392,28 @@ std::string TreePredicateFn::getCodeToRunOnSDNode() const {
           getOrigPatFragRecord()->getRecord()->getLoc(),
           "ScalarMemoryVT cannot be used with ImmLeaf or its subclasses");
 
+    std::string Guard;
     std::string Result = ("    " + getImmType() + " Imm = ").str();
     if (immCodeUsesAPFloat())
       Result += "cast<ConstantFPSDNode>(Op.getNode())->getValueAPF();\n";
     else if (immCodeUsesAPInt())
       Result += "Op->getAsAPIntVal();\n";
-    else
+    else {
+      // A target can make an integer type wider than 64 bits legal -- Capstone's
+      // i128 is the carrier for a 128-bit capability -- and a constant of that
+      // type then reaches immediate predicates that are, without exception,
+      // written in terms of int64_t. getSExtValue() asserts on such a constant
+      // in a build with assertions and silently returns its low 64 bits in one
+      // without, which turns "this pattern does not match" into a wrong
+      // immediate. A constant that has no int64 form is not what an
+      // int64-shaped predicate matches, so say so rather than truncating it.
+      // For every target whose integer types stop at 64 bits the guard is
+      // always true and costs one predictable branch.
+      Guard = "    if (!Op->getAsAPIntVal().isSignedIntN(64))\n"
+              "      return false;\n";
       Result += "cast<ConstantSDNode>(Op.getNode())->getSExtValue();\n";
-    return Result + ImmCode;
+    }
+    return Guard + Result + ImmCode;
   }
 
   // Handle arbitrary node predicates.
@@ -1428,12 +1442,25 @@ std::string TreePredicateFn::getCodeToRunOnSDNode() const {
   }
 
   std::string Result;
+  std::string Guard;
   if (ClassName == "SDNode")
     Result = "    SDNode *N = Op.getNode();\n";
-  else
+  else {
     Result = "    auto *N = cast<" + ClassName.str() + ">(Op.getNode());\n";
+    // Same reasoning as the ImmLeaf prologue above: a predicate written against
+    // a ConstantSDNode reads it with getSExtValue()/getZExtValue(), which have
+    // no answer for a constant wider than 64 significant bits. Such a constant
+    // exists only where a target makes a wider integer type legal (Capstone's
+    // i128 capability carrier), and it never fits the instruction field these
+    // predicates are asking about, so not matching is the right answer. A
+    // predicate that genuinely wants arbitrary widths takes an APInt, and that
+    // form is deliberately left unguarded.
+    if (ClassName == "ConstantSDNode")
+      Guard = "    if (!Op->getAsAPIntVal().isSignedIntN(64))\n"
+              "      return false;\n";
+  }
 
-  return (Twine(Result) + "    (void)N;\n" + getPredCode()).str();
+  return (Twine(Guard) + Result + "    (void)N;\n" + getPredCode()).str();
 }
 
 //===----------------------------------------------------------------------===//

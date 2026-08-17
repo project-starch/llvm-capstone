@@ -694,6 +694,17 @@ bool CapstoneDAGToDAGISel::tryShrinkShlLogicImm(SDNode *Node) {
   if (!Cst)
     return false;
 
+  // On Capstone this node can be i128, because a capability-width value carries
+  // a 64-bit mask that was zero-extended into it: `(uintptr_t)p & ~31` leaves
+  // 0xFFFFFFFFFFFFFFE0 as a POSITIVE 128-bit constant, i.e. 65 significant
+  // bits. getSExtValue() then asserts in a build with assertions and silently
+  // returns the low 64 bits in one without, which is a wrong immediate rather
+  // than a crash. The transform below only ever produces XLen-wide
+  // ANDI/ORI/XORI, so a constant that does not fit an int64 is simply not a
+  // case this can handle.
+  if (Cst->getAPIntValue().getSignificantBits() > 64)
+    return false;
+
   int64_t Val = Cst->getSExtValue();
 
   // Check if immediate can already use ANDI/ORI/XORI.
