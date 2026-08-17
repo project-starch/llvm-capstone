@@ -45,9 +45,10 @@ while the instrument caveat is the binding limit.
 The independent MicroPython QEMU lane completed its direct-file census on 2026-08-17. It does not
 change the S-07 silicon priority: 917 standard-base and 200 optional single-interpreter files were
 attempted with resumable chunks. Patch 0012 fixed the three stream-seek faults by keeping ioctl
-pointer arguments capability-wide; a full rerun now has 12 capability faults. The next MicroPython
-follow-up should trace the five `mp_map_lookup` cases as one shared tag-loss cluster, not repair the
-tests individually or re-run the old 422-test stop. Details are in
+pointer arguments capability-wide. Patch 0013 fixed all five `mp_map_lookup` faults: an empty
+ordered map computed `NULL + 0`, rather than losing a valid capability tag. The full rerun now has
+seven capability faults. The next MicroPython follow-up should trace the four bytearray cases as
+one cluster, not repair the tests individually or re-run the old 422-test stop. Details are in
 `plans/micropython-domain-compilation.md`.
 
 Bitstream is `caplifive_s07diag.bit`. S-06 and S-08 are FIXED in silicon and verified; their

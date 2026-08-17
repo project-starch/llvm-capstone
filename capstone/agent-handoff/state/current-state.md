@@ -15,12 +15,15 @@ Minimal snapshot. Read first in every session.
   the ask: `tests/fpga-repros/S07-capability-untagged-on-reload/`. Committed, **not pushed — the
   project lead pushes, and it reaches the RTL lane only then.**
 * **MicroPython QEMU census complete for direct single-interpreter files.** EXTRA+MPZ executed all
-  917 direct tests in upstream's default base directories: `565 PASS / 338 FAIL / 12 FAULT /
+  917 direct tests in upstream's default base directories: `569 PASS / 339 FAIL / 7 FAULT /
   0 HANG / 2 UNSCORED`. A second run attempted all 200 direct optional files from `cmdline`,
   `float`, `import`, `io`, `thread`, and `unicode`: `27 PASS / 161 FAIL / 0 FAULT / 0 HANG /
   12 UNSCORED`. Patch 0012 gives stream ioctl a port-configurable carrier; the Capstone port uses
   `void *`, preserving seek capabilities and changing exactly `io_bytesio_ext.py`,
-  `io_stringio1.py`, and `io_stringio_base.py` from FAULT to PASS across a full 1,117-file rerun.
+  `io_stringio1.py`, and `io_stringio_base.py` from FAULT to PASS. Patch 0013 avoids undefined
+  NULL-table pointer arithmetic in an empty ordered map: four tests change from FAULT to PASS and
+  `builtin_help.py` reaches its ordinary semantic mismatch. A full 1,117-file rerun changed exactly
+  those five map cases and now totals `596 PASS / 500 FAIL / 7 FAULT / 14 UNSCORED`.
   The resumable chunk runner gets past domain-fatal faults without changing tests.
   The 529 other Python files are fixtures, runner utilities, benchmark/differential inputs, or
   require multi-instance, network, hardware, port, or architecture-specific harnesses; they are

@@ -1,6 +1,6 @@
 **Status 2026-08-17, latest: the direct single-interpreter census is complete under QEMU.** All
 917 files in MicroPython's default base directories were attempted with EXTRA+MPZ and resumable
-chunks: `565 PASS / 338 FAIL / 12 FAULT / 0 HANG / 2 UNSCORED`. All 200 direct optional files from
+chunks: `569 PASS / 339 FAIL / 7 FAULT / 0 HANG / 2 UNSCORED`. All 200 direct optional files from
 `cmdline`, `float`, `import`, `io`, `thread`, and `unicode` were also attempted: `27 PASS / 161 FAIL /
 0 FAULT / 0 HANG / 12 UNSCORED`. No test was changed to obtain these numbers. See "Full resumable
 census" at the end for scope, artifacts, and the exact hard-fault list.
@@ -1101,23 +1101,28 @@ features, so a disabled feature remains a visible FAIL instead of being filtered
 
 | scope | files | pass | fail | fault | hang | unscored |
 |---|---:|---:|---:|---:|---:|---:|
-| upstream default base directories | 917 | 565 | 338 | 12 | 0 | 2 |
+| upstream default base directories | 917 | 569 | 339 | 7 | 0 | 2 |
 | optional direct directories | 200 | 27 | 161 | 0 | 0 | 12 |
-| all direct single-interpreter files attempted | 1,117 | 592 | 499 | 12 | 0 | 14 |
+| all direct single-interpreter files attempted | 1,117 | 596 | 500 | 7 | 0 | 14 |
 
-The 12 remaining capability-fatal cases are:
+The seven remaining capability-fatal cases are:
 
-`basics/builtin_help.py`, `basics/bytearray_add.py`,
-`basics/bytearray_byte_operations.py`, `basics/bytearray_decode.py`,
-`basics/bytearray_slice_assign.py`, `basics/class_ordereddict.py`,
-`basics/int_big_mod.py`, `basics/int_big_pow.py`, `basics/int_big_zeroone.py`,
-`basics/ordereddict1.py`, `basics/ordereddict_eq.py`, and `basics/slice_optimise.py`.
+`basics/bytearray_add.py`, `basics/bytearray_byte_operations.py`,
+`basics/bytearray_decode.py`, `basics/bytearray_slice_assign.py`,
+`basics/int_big_mod.py`, `basics/int_big_pow.py`, and `basics/int_big_zeroone.py`.
 
 Patch 0012 makes the stream ioctl carrier port-configurable and selects `void *` in the Capstone
 port. This keeps `mp_stream_seek_t *` in the capability calling convention instead of truncating it
 through the 64-bit uintptr_t ABI. A complete rerun changed exactly `io_bytesio_ext.py`,
 `io_stringio1.py`, and `io_stringio_base.py` from FAULT to PASS; every other standard test retained
 the same status and payload, and the optional suite retained the same statuses and domain outputs.
+
+Patch 0013 skips the ordered-map search before it forms pointers when `used == 0`. New ordered
+maps have a legitimate NULL table, and the old `&table[0]` / `&table[used]` loop setup lowered to
+`cincoffset NULL, 0`, which Capstone correctly rejects because NULL is not a capability. This was
+undefined pointer arithmetic, not tag loss. A complete 1,117-file rerun changed exactly five
+statuses: `class_ordereddict.py`, `ordereddict1.py`, `ordereddict_eq.py`, and `slice_optimise.py`
+changed from FAULT to PASS; `builtin_help.py` changed from FAULT to its pre-existing ordinary FAIL.
 
 Why chunks are required: a monolithic 917-test image links and its static budget reports that it
 fits, but its very first normal call faults during domain initialization (`cause=1`, `pc/tval/
@@ -1165,7 +1170,7 @@ Invoke `run-resumable-suite.py` with the matching `.dom`, `.expected`, output di
 The optional 200-file build uses `MPY_TEST_BASE_DIR=cmdline` and
 `MPY_TEST_DIRS='float import io thread unicode'`.
 
-The current generated reports are under `/tmp/capstone/micropython-ioctl-merged/`:
+The current generated reports are under `/tmp/capstone/micropython-mapfix-merged/`:
 `standard-917-results.tsv`, `standard-917-nonpass.tsv`, `all-single-1117-results.tsv`, and
 `all-single-1117-nonpass.tsv`. They are scratch artifacts by policy, not files to commit.
 
