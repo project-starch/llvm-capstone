@@ -89,9 +89,12 @@ def regex_output_matches(actual, expected):
 
 
 def is_target_skip(output):
-    """Recognise MicroPython's print("SKIP"); raise SystemExit convention."""
+    """Recognise MicroPython's target-skip conventions."""
     return (output is not None
-            and output.startswith(b"SKIP\nTraceback (most recent call last):\n")
+            and output.startswith((
+                b"SKIP\nTraceback (most recent call last):\n",
+                b"SKIP-TOO-LARGE\nTraceback (most recent call last):\n",
+            ))
             and output.rstrip().endswith(b"SystemExit:"))
 
 

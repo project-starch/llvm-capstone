@@ -60,11 +60,16 @@ Patch 0017 then made `print(..., file=stream)` independent of global sys stdfile
 profile enabled `sys.path`, `sys.argv`, and `sys.modules`. Five standard tests became PASS. The
 then-current 93 standard FAILs were all exception returns. EXTRA now also enables upstream
 template strings, and Patch 0018 resolves built-in subpackages in the reduced no-filesystem
-importer. Six T-string tests become PASS without a status regression. The current 87 standard
-FAILs comprise 86 exception returns and one ordinary output mismatch. Across all direct files,
-225 of 238 FAILs are exception returns and the remaining 13 are output mismatches. The 254
-UNSCORED results comprise 241 target skips and 13 tests whose host-oracle generation failed. If
-MicroPython work continues, the next coherent large families are the 51 disabled Native/Viper
+importer. Six T-string tests become PASS without a status regression. The then-current 87 standard
+FAILs comprised 86 exception returns and one ordinary output mismatch. The runner now also
+recognises upstream's `SKIP-TOO-LARGE` form, changing exactly `viper_large_jump.py` from FAIL to
+UNSCORED. The current 86 standard FAILs comprise 85 exception returns and one output mismatch.
+Across all direct files, 224 of 237 FAILs are exception returns and the remaining 13 are output
+mismatches. The 255 UNSCORED results comprise 242 target skips and 13 tests whose host-oracle
+generation failed. Heap probes at 128, 192, and 256 KiB were not adopted: they make two or three
+allocation-heavy tests pass but suppress the valid `viper_large_jump.py` size skip and expose the
+disabled-Viper failure instead. If MicroPython work continues, the next coherent large families
+are the 51 disabled Native/Viper
 tests or 26 tests blocked by the no-float profile; do not change tests or re-run the old 422-test
 stop. Details are in `plans/micropython-domain-compilation.md`.
 
