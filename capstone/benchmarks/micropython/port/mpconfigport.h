@@ -59,15 +59,42 @@
 #define MICROPY_PY_BUILTINS_INPUT         (0)
 #define MICROPY_PY_BUILTINS_EXECFILE      (0)
 #define MICROPY_PY_SYS_STDFILES           (0)
-#define MICROPY_PY_UCTYPES                (0)
+// uctypes is architecturally impossible here, measured rather than assumed: 15 of its 16 tests
+// take a capability fault and the 16th fails. Its contract is uctypes.addressof() -> int and
+// back, and a 64-bit integer cannot carry a 128-bit capability, so every reconstructed pointer
+// arrives untagged. Enabling it also turns basics/struct_micropython.py from PASS into a fault,
+// because that test's second half is guarded by `import uctypes`.
+//
+// It is nevertheless left ON, because turning it OFF does not boot. Three uctypes-off images --
+// 200 tests at globals offset 0xa0000, the same 200 at 0xb0000, and 100 tests at 0xb0000 -- each
+// hung on their FIRST domain call, while every uctypes-on image of the same chunks ran clean and
+// a re-run of a known-good .dom confirmed the harness was healthy. One flag, three layouts, and
+// the only code removed is a module nothing else calls. That is the image-perturbation hazard the
+// handoff records for silicon (fpga-repros/S01-image-perturbation-hang), reproduced under QEMU
+// where it costs minutes instead of a board session; the mechanism is NOT established, and
+// py/parse.c:663 -- where MICROPY_PY_UCTYPES adds an entry to the const-folding module table --
+// is a place to start, not a conclusion.
+#ifndef MICROPY_PY_UCTYPES
+#define MICROPY_PY_UCTYPES                (1)
+#endif
 #define MICROPY_KBD_EXCEPTION             (0)
 #define MICROPY_ENABLE_SCHEDULER          (0)
 #define MICROPY_ENABLE_FINALISER          (0)
 #define MICROPY_GC_SPLIT_HEAP             (0)
 #define MICROPY_ENABLE_PYSTACK            (0)
 
+// Two features whose upstream default is above EXTRA, but which need nothing this domain lacks --
+// no clock, no filesystem, no device. sys.exit only raises SystemExit, which the test runner
+// already handles as the target-skip convention.
+//
+// MICROPY_PY_WEAKREF is NOT among them: it needs a second GC side table, and with
+// MICROPY_ENABLE_FINALISER off upstream's gc_sweep_run_finalisers does not even compile (it takes
+// BLOCKS_PER_FTB and the declaration of `block` from the finaliser branch). Enabling both is a GC
+// change, and the GC is where this port's capability fixes already live.
+#define MICROPY_PY_IO_BUFFEREDWRITER      (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
+
 #define MICROPY_PY_SYS_MODULES            (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
-#define MICROPY_PY_SYS_EXIT               (0)
+#define MICROPY_PY_SYS_EXIT               (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
 #define MICROPY_PY_SYS_PATH               (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
 #define MICROPY_PY_SYS_ARGV               (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
 
