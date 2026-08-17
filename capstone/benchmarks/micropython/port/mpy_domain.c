@@ -11,9 +11,17 @@
 
 /* ---- the GC heap. One global; under -capstone-gp-captable its storage is CARVED
    from dom_data at entry, so it is charged against the domain's stack budget.
-   32-byte aligned and a multiple of 32 so gc_init's align-down is a no-op. */
+   32-byte aligned and a multiple of 32 so gc_init's align-down is a no-op.
+
+   384 KiB is the knee, measured on chunk 800_916 which holds both the heap-bound failures and
+   the one test a bigger heap costs. 96K -> 41 PASS, 192K -> 43, 384K -> 46, 512K -> 46 with not
+   one status different from 384K, so past this point the only thing growing is the heap's bite
+   out of the C stack (STACK reserve 678,832 -> 383,920 -> 252,848). The cost is
+   micropython/viper_large_jump.py going UNSCORED -> FAIL: on a small heap it hits MemoryError
+   and prints upstream's SKIP-TOO-LARGE, on a large one it gets as far as the deliberately
+   disabled Viper decorator. Both statements are true; five real passes are worth the swap. */
 #ifndef MPY_HEAP_SIZE
-#define MPY_HEAP_SIZE (96U * 1024U)
+#define MPY_HEAP_SIZE (384U * 1024U)
 #endif
 static unsigned char mpy_heap[MPY_HEAP_SIZE] __attribute__((aligned(32)));
 

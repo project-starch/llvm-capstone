@@ -1472,6 +1472,51 @@ const-folding module table, is a place to start and not a conclusion.
 
 `uctypes` therefore ships ON, and its 16 crashes are recorded rather than configured away.
 
+### The heap: 96 KiB was the binding constraint, 384 KiB is the knee (2026-08-17)
+
+Once the extmod modules were in, the ordinary failures left were nearly all one thing. Searching
+the captured output for `MemoryError` — rather than guessing — found ten failing tests that
+mention it, plus nine *passing* ones that expect it and therefore had to be watched for
+regressions.
+
+The sweep ran on chunk 800_916, chosen because it holds four of the ten heap-bound failures **and**
+`micropython/viper_large_jump.py`, the one test a bigger heap is known to cost. One chunk, both
+sides of the trade:
+
+| heap | PASS / FAIL / UNSCORED on chunk 800_916 | STACK reserve |
+|---|---|---|
+| 96 KiB | 41 / 56 / 20 | 678,832 |
+| 192 KiB | 43 / 55 / 19 | 580,528 |
+| 384 KiB | 46 / 53 / 18 | 383,920 |
+| 512 KiB | 46 / 53 / 18 — **not one status different** | 252,848 |
+
+512 KiB changing nothing is what makes 384 KiB a knee rather than a guess: past it the only thing
+still growing is the heap's bite out of the C stack, which the same tests depend on. The heap lives
+in `.bss`, so it never moves the allocation order — it trades directly against STACK.
+
+Full census, all 1117 files: **754 -> 764 PASS**, 151 -> 143 FAIL, 16 FAULT unchanged. Twelve
+statuses moved, ten of them gains:
+
+* eight FAIL -> PASS: `class_setname_hazard_rand`, `string_tstring_basic1`, `string_tstring_parser1`,
+  `deflate_decompress`, `heapalloc_fail_tstring`, `memstats`, `stress/dict_copy`,
+  `stress/recursive_iternext`;
+* two UNSCORED -> PASS: `re_stack_overflow2`, `stress/bytecode_limit`;
+* `extmod/vfs_rom` FAIL -> UNSCORED, which is honest — it now reaches its own skip guard instead of
+  dying on `MemoryError` first;
+* `micropython/viper_large_jump` UNSCORED -> FAIL, the predicted cost. On a small heap it raises
+  `MemoryError` and prints upstream's `SKIP-TOO-LARGE`; on a large one it gets as far as the
+  deliberately disabled Viper decorator. Both statements are true, so this is a change of which
+  true thing gets reported, not a regression.
+
+`stress/` is now 13 PASS and nothing else.
+
+**One practical cost worth knowing before running a census:** GC-heavy tests get much slower,
+because a 4x heap is a 4x sweep. `basics/memoryview_gc.py` went from seconds to roughly six
+minutes under QEMU. It still passes, and nothing else in that chunk changed, but a chunk that used
+to take five minutes can now take fifteen. That is close enough to `run-domain-smoke.py`'s 600 s
+per-guest-command timeout (`30 * --timeout-multiplier`) to be worth watching; a chunk that trips it
+is recorded as a HANG at whatever test was running, not as the slow test it actually is.
+
 ### Traps that cost time here
 
 - **`capstone-test-env.sh` resolved `CAPSTONE_REPO_ROOT` to `/home`** in this shell, so
