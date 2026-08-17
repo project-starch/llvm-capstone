@@ -19,10 +19,10 @@ CASES = os.path.join(S, "cases")
 # runnable_here is the honest gate: can this defect be triggered in OUR domain,
 # which has MICROPY_VFS=0, no threads, no sockets and no port hardware.
 PLAN = {
-    "MPY-T01": ("modselect-poll-uaf", "parent-build", "fixed at the pin; needs the fix commit's parent"),
+    "MPY-T01": ("modselect-poll-uaf", "parent-measured", "fixed at the pin; needs the fix commit's parent"),
     "MPY-T02": ("objarray-bytes-self-copy-uaf", "parent-measured", "fixed at the pin; NVD states the trigger, a bytes object resized and copied into itself"),
-    "MPY-T03": ("import-all-memory-corruption", "parent-build", "fixed at the pin"),
-    "MPY-T04": ("modselect-line151-uaf", "parent-build", "fixed at the pin; same defect as MPY-T01"),
+    "MPY-T03": ("import-all-memory-corruption", "parent-measured", "fixed at the pin"),
+    "MPY-T04": ("modselect-line151-uaf", "parent-measured", "fixed at the pin; same defect as MPY-T01"),
     "MPY-T05": ("objarray-line509-uaf", "parent-measured", "fixed at the pin; same defect as MPY-T02"),
     "MPY-T06": ("btree-reuse-after-close", "parent-build", "fixed at the pin; also needs the btree module, which this domain does not build"),
     "MPY-T07": ("lexer-source-name-uaf", "parent-build", "resolved 2026-08-17: the issue thread names the fix, 1a2c511e5d08, and it is an ancestor of the pin"),

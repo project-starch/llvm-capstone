@@ -2,7 +2,7 @@
 Source: CVE-2026-1998, https://nvd.nist.gov/vuln/detail/CVE-2026-1998  
 Upstream state: patched, first seen 2026-02-06
 
-**BLOCKED on a parent build. Already fixed in the pinned source.**
+**MEASURED at the fix commit's parent. Fixed in the pinned source.**
 
 ## The defect
 
@@ -29,7 +29,10 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. Fixed at the pin.
+- stock MicroPython at the pin: **crash-sigsegv**
+- Capstone domain under QEMU: **not-run**
+
+See `RESULT.txt` in this directory.
 
 ## Reproducing
 

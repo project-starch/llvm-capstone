@@ -200,6 +200,65 @@ recording it as a crash on that assumption would be recording their title rather
 than a measurement.
 """,
 
+"MPY-T03_import-all-memory-corruption": """MPY-T03 / CVE-2026-1998
+
+  stock at the pin                    : fixed, prints "T03 survived", exit 0
+  stock at the fix's PARENT c9f747cccf: SIGSEGV, exit 139
+  Capstone domain                     : not run
+
+REPRODUCED AT THE PARENT. The fix commit explains the trigger outright:
+mp_import_all() assumed its argument was exactly a native module instance, so
+anything else crashes it, "eg a user class via a custom __import__
+implementation or by writing to sys.modules".
+
+repro.py takes the sys.modules route, which is three lines of ordinary Python:
+
+  sys.modules["fakemod"] = NotAModule()
+  from fakemod import *
+
+At the parent this segfaults with nothing on stdout or stderr. At the pin it
+completes normally, because mp_import_all now goes through mp_load_method_maybe
+and __dict__/__all__ instead of reaching straight into a module's globals map.
+
+NOTE ON THE CLASS. NVD records this as CWE-119/787, not CWE-416, and that is
+right: it is a type confusion reached through the import machinery rather than a
+use-after-free. It sits in this corpus because it is a lifetime-adjacent defect
+on collector-managed memory, and it is one of the few rows where the defect is
+loud on stock.
+""",
+
+"MPY-T01_modselect-poll-uaf": """MPY-T01 / CVE-2023-7152, and MPY-T04 / issue 12887 is the same defect
+
+  stock at the pin                    : registers 16, polls 16 ready, exit 0
+  stock at the fix's PARENT e9bcd49b3e: registers 16, polls 16 ready, exit 0
+  Capstone domain                     : not run
+
+THE DEFECT IS REAL AND THE MEASUREMENT IS SILENT. Both builds produce identical,
+correct output, so nothing here distinguishes them.
+
+WHAT THE DEFECT IS. The CVE names modselect.c:151, which at the pre-fix commit is
+the m_renew that grows poll_set->pollfds. Line 230 is what makes that dangerous:
+
+  poll_obj->pollfd = poll_set_add_fd(poll_set, fd);
+
+every registered object stores a RAW POINTER into that array, so a later growth
+invalidates every pointer stored before it. repro.py registers 16 descriptors
+against POLL_SET_ALLOC_INCREMENT of 4, which drives the growth path three times
+over, and the earlier objects then hold pointers into the previous allocation.
+
+WHY IT STAYS QUIET, AND WHY THAT IS THE POINT. m_renew runs on MicroPython's own
+GC heap. The old block is not returned to any allocator the machine knows about;
+it stays inside the one region gc_init was handed. So the stale pointers keep
+reading plausible data and every poll still answers correctly. This is the same
+mechanism as ../../evidence/asan-blindness-2026-08-17.txt, observed on a
+published CVE rather than on a model.
+
+NOT CLAIMED: that the array actually moved on this run, or that any specific read
+went through a stale pointer. Neither was instrumented. What is claimed is that
+the documented growth path was driven well past its threshold and produced no
+observable difference between a vulnerable build and a fixed one.
+""",
+
 "MPY-T25_stringio-subclass-print": """MPY-T25 / upstream 10402
 
   stock MicroPython at pin 2e3304a : SIGSEGV
