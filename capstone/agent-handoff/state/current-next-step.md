@@ -58,12 +58,15 @@ FAILs as UNSCORED without changing a test or the port. At that stage, all 97 sta
 uncaught-exception returns; there are no ordinary output mismatches left in the standard set.
 Patch 0017 then made `print(..., file=stream)` independent of global sys stdfiles, and the EXTRA
 profile enabled `sys.path`, `sys.argv`, and `sys.modules`. Five standard tests became PASS. The
-current 93 standard FAILs are all exception returns. Across all direct files, 232 of 244 FAILs are
-exception returns and the remaining 12 are optional cmdline/float/io mismatches. The 254 UNSCORED
-results comprise 241 target skips and 13 tests whose host-oracle generation failed. If MicroPython
-work continues, select one coherent
-missing feature family rather than changing tests; do not re-run the old 422-test stop. Details are
-in `plans/micropython-domain-compilation.md`.
+then-current 93 standard FAILs were all exception returns. EXTRA now also enables upstream
+template strings, and Patch 0018 resolves built-in subpackages in the reduced no-filesystem
+importer. Six T-string tests become PASS without a status regression. The current 87 standard
+FAILs comprise 86 exception returns and one ordinary output mismatch. Across all direct files,
+225 of 238 FAILs are exception returns and the remaining 13 are output mismatches. The 254
+UNSCORED results comprise 241 target skips and 13 tests whose host-oracle generation failed. If
+MicroPython work continues, the next coherent large families are the 51 disabled Native/Viper
+tests or 26 tests blocked by the no-float profile; do not change tests or re-run the old 422-test
+stop. Details are in `plans/micropython-domain-compilation.md`.
 
 Bitstream is `caplifive_s07diag.bit`. S-06 and S-08 are FIXED in silicon and verified; their
 folders are resolved. S-07 is the one open silicon issue, and the handover is written and
