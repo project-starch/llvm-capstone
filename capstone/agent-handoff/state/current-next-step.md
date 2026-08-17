@@ -104,16 +104,21 @@ census chunk can approach the runner's 600 s per-command timeout.
 
   **This glue is shared by every gp-captable domain**, so SQLite and BEEBS were equally exposed;
   the symptom is a silent hang before `domain_main`, with no fault, that moves whenever anything
-  about the image moves. Whether it explains `fpga-repros/S01-image-perturbation-hang` is OPEN and
-  deliberately not claimed — S01's README reports its `dp0.dom` correct under QEMU while this bug
-  reproduces under QEMU. The static check (does the last `a7` write in that image's
-  `__capstone_cap_init` land below `__capstone_cap_init_end`?) needs the S01 `.dom` files rebuilt,
-  which the folder does not ship.
+  about the image moves. It does **NOT** explain `fpga-repros/S01-image-perturbation-hang`, and
+  that was checked rather than assumed: both S01 images were rebuilt with the pre-fix glue and the
+  cursor replayed over their descriptors. In each, the initializer's last `a7` write is a
+  blob-derived capability, and the monitor places the blob above the image
+  (`sbi_capstone.c:302`), so `bltu` is false and the loop exits correctly. **S01 stays open and
+  unexplained.**
 
-What otherwise remains is genuinely absent features: 51 native/Viper, 33 `thread`, 25 `cmdline`,
-22 filesystem `import`, 5 `io`. The 96 KiB heap is now the binding constraint for the handful of
-ordinary failures left. Do not change tests or re-run the old 422-test stop. Details are in
-`plans/micropython-domain-compilation.md`.
+Of the 353 tests not passing, essentially all are absent features rather than defects: 189 target
+skips (asyncio 32, time 16, os/vfs 12, machine 11, socket/ssl/cryptolib 23, ...), 54 native/Viper,
+33 `thread`, 27 `cmdline`, 24 filesystem `import`, 16 `uctypes` (architectural), 3 needing
+micropython-lib's `unittest`. That leaves **7** ordinary failures: 2 t-string cases, and 5 `io`
+tests wanting a filesystem, `sys.stdin` or `os`. The largest reachable family left is `asyncio`
+(32), which needs frozen Python modules plus a clock; `time` (16) needs a clock the domain does not
+have, and stubbing one would make `time.time()` confidently wrong. Do not change tests or re-run
+the old 422-test stop. Details are in `plans/micropython-domain-compilation.md`.
 
 Bitstream is `caplifive_s07diag.bit`. S-06 and S-08 are FIXED in silicon and verified; their
 folders are resolved. S-07 is the one open silicon issue, and the handover is written and
