@@ -2,7 +2,7 @@
 Source: #4128, https://github.com/micropython/micropython/issues/4128  
 Upstream state: closed, first seen 2018-09-12
 
-**BLOCKED. Upstream status unresolved, see below.**
+**BLOCKED on a parent build. Already fixed in the pinned source.**
 
 ## The defect
 
@@ -29,8 +29,21 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. No fix commit names the issue and no python trigger is published.
+Not run. Resolved 2026-08-17: the issue thread names the fix, 1a2c511e5d08, and it is an ancestor of the pin.
 
 ## Reproducing
 
-Not reproducible with the current setup: no fix commit names the issue and no Python trigger is published.
+The defect is fixed in the pinned source, so building the pin measures nothing.
+Build `1a2c511e5d08^` instead, the fix commit's parent:
+
+```bash
+MPY_COMMIT=1a2c511e5d08^ bash ../../../fetch-micropython.sh
+```
+
+**This was attempted and it does not currently work**, and the blocker is not
+the one originally predicted. A two-year-old MicroPython does not build
+usefully with a current toolchain: GCC 15 rejects the tree, `mpy-cross`
+crashes freezing its own manifest, and the minimal variant segfaults on a
+plain `bytearray`. Full account, with the exact errors, in
+`../../evidence/parent-build-attempt-2026-08-17.txt`. Retrying this needs a
+period-correct compiler, most likely in a container.

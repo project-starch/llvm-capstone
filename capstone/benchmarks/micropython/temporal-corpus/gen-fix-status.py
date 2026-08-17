@@ -26,6 +26,11 @@ KNOWN_FIX = {
     "#19060": "64f0394d80ca",   # same defect as #17848, closed as duplicate
     "#11781": "d2a3cd7ac428",
     "#5226": "f34e16dbc664",
+    # Resolved on 2026-08-17 from the issue threads rather than from commit
+    # messages: neither fix names its issue, but the closing comments name the
+    # commit, and both are ancestors of the pin.
+    "#4128": "1a2c511e5d0841a25c5e86f41dbfc50d94a18b50",
+    "#4705": "34a7d7ebebc93bf9c4f166b0b523ceab844c7d91",
 }
 
 # Issues upstream still has open. Open means the defect is expected present at

@@ -2,7 +2,7 @@
 Source: #19413, https://github.com/micropython/micropython/issues/19413  
 Upstream state: closed, first seen 2026-07-03
 
-**BLOCKED. Upstream status unresolved, see below.**
+**NOT REPRODUCIBLE HERE. The trigger cannot be expressed in this domain.**
 
 ## The defect
 
@@ -29,8 +29,8 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. Needs the lvgl c binding; not part of this port.
+Not run. Closed not_planned upstream and redirected to the lvgl binding project; not a micropython defect.
 
 ## Reproducing
 
-Not reproducible with the current setup: needs the LVGL C binding; not part of this port.
+Not reproducible with the current setup: closed NOT_PLANNED upstream and redirected to the LVGL binding project; not a MicroPython defect.
