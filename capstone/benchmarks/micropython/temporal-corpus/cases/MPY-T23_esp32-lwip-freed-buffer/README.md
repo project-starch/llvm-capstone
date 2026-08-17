@@ -19,8 +19,8 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. Closed upstream as unreproducible; needs the esp32 network stack.
+Not run. The thread resolves into an esp-idf version question, not a micropython fix; needs the esp32 network stack.
 
 ## Reproducing
 
-Not reproducible with the current setup: closed upstream as unreproducible; needs the ESP32 network stack.
+Not reproducible with the current setup: the thread resolves into an ESP-IDF version question, not a MicroPython fix; needs the ESP32 network stack.

@@ -2,7 +2,7 @@
 Source: #322, https://github.com/micropython/micropython/issues/322  
 Upstream state: closed, first seen 2014-02-25
 
-**BLOCKED on a C-level harness. No Python trigger exists.**
+**MEASURED in the domain.**
 
 ## The defect
 
@@ -29,8 +29,21 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. The published repro calls gc_alloc/gc_realloc from c; no python trigger exists.
+- stock MicroPython at the pin: **not-reproducible**
+- Capstone domain under QEMU: **not-run**
+
+See `RESULT.txt` in this directory.
 
 ## Reproducing
 
-Not reproducible with the current setup: the published repro calls gc_alloc/gc_realloc from C; no Python trigger exists.
+`repro.py` is the script. On stock:
+
+```bash
+MPY=/tmp/capstone/mpy-stock-pin/ports/unix/build-standard/micropython
+$MPY repro.py
+```
+
+In the domain, copy it into the test directory the image is built from and
+follow `../../README.md`; the driver is `tools/run-resumable-suite.py`
+and it must be run with `--capture-output`, because a test that dies on a
+missing builtin still returns a retval and reads exactly like an untrapped one.

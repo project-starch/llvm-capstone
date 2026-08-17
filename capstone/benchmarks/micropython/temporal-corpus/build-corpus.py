@@ -134,6 +134,11 @@ MEASURED = {
     "#17941": ("confirmed", "crash-sigsegv",     "fault-cause24"),
     "#18619": ("confirmed", "crash-sigsegv",     "fault-cause24"),
     "#10402": ("confirmed", "crash-sigsegv",     "fault-cause24"),
+    # Measured and does NOT reproduce. Upstream closed 322 COMPLETED with the
+    # reporter confirming the retest passed, and at the pin growth fails only
+    # once the required CONTIGUOUS block exceeds free memory, which is correct
+    # behaviour for a non-compacting allocator rather than the reported defect.
+    "#322":   ("built",     "not-reproducible",  "not-run"),
     # #19075: the trigger IS created in the domain -- a diagnostic confirms
     # json.dump hands write() a bytearray there too, so `buf += buf` mutates in
     # place and reallocates under the caller. The domain then does not fault

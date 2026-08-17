@@ -19,8 +19,8 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. Needs the rp2 port and threads.
+Not run. Closed upstream as no-longer-reproducible rather than fixed, and it needs the rp2 port and threads.
 
 ## Reproducing
 
-Not reproducible with the current setup: needs the rp2 port and threads.
+Not reproducible with the current setup: closed upstream as no-longer-reproducible rather than fixed, and it needs the rp2 port and threads.

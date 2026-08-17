@@ -114,6 +114,20 @@
    "repro_base": "pin",
    "why": "open upstream at time of survey; reproduce on the pinned tree directly"
   },
+  "#4128": {
+   "fix_commit": "1a2c511e5d08",
+   "fix_date": "2018-09-14",
+   "present_at_pin": "no",
+   "repro_base": "1a2c511e5d08^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
+  "#4705": {
+   "fix_commit": "34a7d7ebebc9",
+   "fix_date": "2019-05-01",
+   "present_at_pin": "no",
+   "repro_base": "34a7d7ebebc9^",
+   "why": "fix is an ancestor of the pin, so build the fix's parent to reproduce"
+  },
   "#5226": {
    "fix_commit": "f34e16dbc664",
    "fix_date": "2019-10-22",
