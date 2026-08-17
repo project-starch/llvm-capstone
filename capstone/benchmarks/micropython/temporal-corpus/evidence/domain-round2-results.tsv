@@ -1,0 +1,8 @@
+index	name	status	got	want	oracle
+0	00_sanity.py	PASS	0x00077724	0x00077724	host python
+1	01_t09_stale_view.py	UNSCORED	0x0018e966	-	host python exits non-zero
+2	02_t10_array_stale_view.py	UNSCORED	0x00289ce0	-	host python exits non-zero
+3	03_t12_dict_reentrant.py	FAULT	-	0x003d0044	host python
+4	04_t11_sort_gc.py	FAULT	-	0x004d58b5	host python
+5	05_t13_modio_write.py	PASS	0x005da053	0x005da053	host python
+6	06_t25_stringio_print.py	FAULT	-	-	host python exits non-zero

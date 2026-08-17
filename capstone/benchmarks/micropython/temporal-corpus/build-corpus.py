@@ -130,8 +130,17 @@ PIN = FIX["pin"][:12]
 MEASURED = {
     #        repro_status  stock_behaviour      domain_behaviour
     "#18168": ("confirmed", "silent-corruption", "untrapped-identical"),
+    "#18171": ("confirmed", "silent-corruption", "untrapped-identical"),
     "#17941": ("confirmed", "crash-sigsegv",     "fault-cause24"),
     "#18619": ("confirmed", "crash-sigsegv",     "fault-cause24"),
+    "#10402": ("confirmed", "crash-sigsegv",     "fault-cause24"),
+    # #19075: the trigger IS created in the domain -- a diagnostic confirms
+    # json.dump hands write() a bytearray there too, so `buf += buf` mutates in
+    # place and reallocates under the caller. The domain then does not fault
+    # where stock segfaults. Recorded as untrapped-no-crash rather than
+    # untrapped-identical because, unlike #18168 and #18171, corruption was
+    # NOT verified here: survival is all that was measured.
+    "#19075": ("confirmed", "crash-sigsegv",     "untrapped-no-crash"),
 }
 
 out = []
