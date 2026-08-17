@@ -119,13 +119,32 @@ no fault, before `domain_main`, that moves when anything about the image moves.
 
 That is the shape of `tests/fpga-repros/S01-image-perturbation-hang` ("nine structurally
 different perturbations of `uc` were built; every one hangs, and only unmodified builds return").
-**It is NOT claimed to be S01**: S01's README reports `dp0.dom` as *correct under QEMU*, whereas
-this bug reproduces under QEMU, so they are probably different. The S01 folder ships sources and
-hashes but no built `.dom`, so the cheap static check -- does the last `a7` write in that image's
-`__capstone_cap_init` land below `__capstone_cap_init_end`? -- needs those images rebuilt first.
-Worth 30 seconds whenever someone next has them. The frozen copies under
-`fpga-repros/S01-.../src/` and `R16-entry-stall/src/` still carry the pre-fix loop by design;
-R16 is resolved by a bitstream A/B and is unaffected.
+
+**S01 CHECKED, 2026-08-17: it is NOT this bug.** Both images were rebuilt with the PRE-FIX glue
+(`git checkout HEAD~1 -- start-gp-captable-interp.S`, verified `-32` frame and no `a7` park, glue
+restored afterwards) and the cursor was replayed over their descriptors. The pair really is a
+pair -- different SHA-256 -- but they are identical in the respect that matters: each has one
+cap-init entry, and in each the last `a7` write is `cincoffset a7, a0, a7` where `a0` came from
+`ldc a0, 0x0(a0)`, a cap-table load. That makes the final `a7` a **blob**-derived capability, and
+the monitor puts the blob above the image (`sbi_capstone.c:302`,
+`dom_data = __split(dom_seal, base_addr + code_size + DOMAIN_DATA_SIZE)`), while
+`__capstone_cap_init_end` is an image address. So `bltu a7, t4` is false, the loop exits after its
+one correct iteration, and neither `uc` nor `dp0` could over-run. This is the same mechanism that
+made the MicroPython `UCTYPES=1` arm survive.
+
+The verdict rests on the monitor's layout rather than on a runtime observation of these two
+images, because the SQLite QEMU gate currently fails at `create_dom` before the domain is entered
+(pre-existing, see below) so they cannot be traced. It agrees with the independent argument that
+S01 is board-only while this bug reproduces under QEMU.
+
+The frozen copies under `fpga-repros/S01-.../src/` and `R16-entry-stall/src/` still carry the
+pre-fix loop by design; R16 is resolved by a bitstream A/B and is unaffected.
+
+The replay tool is worth keeping if this ever needs redoing: for each table entry, resolve the
+target, take the last instruction in it that writes `a7` (destination position only), and compare
+`value + 8` against `__capstone_cap_init_end`. Positive-controlled on the MicroPython pair -- it
+predicts OVER-RUN for the image that hung and returns UNDETERMINED, not a false clear, for the one
+that passed.
 
 ## Method notes
 
