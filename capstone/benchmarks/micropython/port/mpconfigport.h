@@ -58,10 +58,10 @@
 #define MICROPY_GC_SPLIT_HEAP             (0)
 #define MICROPY_ENABLE_PYSTACK            (0)
 
-#define MICROPY_PY_SYS_MODULES            (0)
+#define MICROPY_PY_SYS_MODULES            (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
 #define MICROPY_PY_SYS_EXIT               (0)
-#define MICROPY_PY_SYS_PATH               (0)
-#define MICROPY_PY_SYS_ARGV               (0)
+#define MICROPY_PY_SYS_PATH               (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
+#define MICROPY_PY_SYS_ARGV               (MICROPY_CONFIG_ROM_LEVEL_AT_LEAST_EXTRA_FEATURES)
 
 #define MICROPY_NLR_SETJMP                (1)
 

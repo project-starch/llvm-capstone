@@ -15,8 +15,8 @@ Minimal snapshot. Read first in every session.
   the ask: `tests/fpga-repros/S07-capability-untagged-on-reload/`. Committed, **not pushed — the
   project lead pushes, and it reaches the RTL lane only then.**
 * **MicroPython QEMU census complete for direct single-interpreter files.** EXTRA+MPZ executed all
-  917 direct tests in upstream's default base directories: `587 PASS / 97 FAIL / 0 FAULT /
-  0 HANG / 233 UNSCORED`. A second run attempted all 200 direct optional files from `cmdline`,
+  917 direct tests in upstream's default base directories: `592 PASS / 93 FAIL / 0 FAULT /
+  0 HANG / 232 UNSCORED`. A second run attempted all 200 direct optional files from `cmdline`,
   `float`, `import`, `io`, `thread`, and `unicode`: `27 PASS / 151 FAIL / 0 FAULT / 0 HANG /
   22 UNSCORED`. Patch 0012 gives stream ioctl a port-configurable carrier; the Capstone port uses
   `void *`, preserving seek capabilities and changing exactly `io_bytesio_ext.py`,
@@ -27,17 +27,20 @@ Minimal snapshot. Read first in every session.
   `items=NULL`; generic `items + 0` paths are then capability-valid. The next full rerun changed
   exactly the four bytearray faults to PASS. Patch 0015 handles MPZ zero before forming
   `dig + len`, changing exactly the final three big-integer faults to PASS. The current full total
-  is `614 PASS / 248 FAIL / 0 FAULT / 255 UNSCORED`. Patch 0016 lets an explicit
+  is `619 PASS / 244 FAIL / 0 FAULT / 254 UNSCORED`. Patch 0016 lets an explicit
   `sys.print_exception` stream work without global sys stdfiles. The EXTRA profile now consistently
   enables detailed errors, warnings, emergency exceptions and memory statistics. Exact output
   capture plus upstream-compatible regex `.exp` scoring changes eleven standard tests from FAIL to
   PASS. The runner now recognises MicroPython's `print("SKIP"); raise SystemExit` target-skip
   convention from captured output. This changes 241 FAIL statuses to UNSCORED; one previously
-  unscored case is also relabelled, for 242 target skips total. All remaining 97 standard FAILs
-  returned with an uncaught exception; there are no normal output mismatches left in the standard
-  set. Across all direct files, 237 of 248 FAILs are exception returns and the other 11 are
-  optional cmdline/float output mismatches. Of 255 UNSCORED files, 242 are explicit target skips
-  and 13 returned but lack a host-Python oracle.
+  unscored case is also relabelled, for 242 target skips at that stage. Patch 0017 allows an
+  explicit `print(..., file=stream)` without global sys stdfiles; the EXTRA profile also enables
+  `sys.path`, `sys.argv`, and `sys.modules`. Exactly five standard cases then become PASS, including
+  one former target skip. All remaining 93 standard FAILs returned with an uncaught exception;
+  there are no normal output mismatches left in the standard set. Across all direct files, 232 of
+  244 FAILs are exception returns and the other 12 are optional cmdline/float/io output mismatches.
+  Of 254 UNSCORED files, 241 are explicit target skips and 13 returned but lack a host-Python
+  oracle.
   The resumable chunk runner gets past domain-fatal faults without changing tests.
   The 529 other Python files are fixtures, runner utilities, benchmark/differential inputs, or
   require multi-instance, network, hardware, port, or architecture-specific harnesses; they are
