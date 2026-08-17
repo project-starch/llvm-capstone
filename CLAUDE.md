@@ -213,6 +213,24 @@ Cheap habits that catch all of the above:
   substring that cannot appear in your own command line.
 * When a result is *surprisingly* clean, suspect the instrument before the subject.
 
+## Simulation green is not synthesis clean
+
+Before RTL is handed to synthesis, to another lane, or called ready:
+
+- **`bash verif/sim/rtl-lint-gate.sh` must PASS.** It gates latches, multi-driven signals,
+  comb-order violations and non-blocking assignments in combinational blocks against a
+  committed baseline. A script, not a subagent — a gate must be deterministic.
+- **Run `claim-auditor` over the diff**, asking specifically what could break synthesis:
+  inferred latches, combinational loops, undriven struct fields, positional struct literals
+  whose field count changed. The auditor is judgment; the script is the gate.
+- **A hash handed to another lane carries its lint numbers.** Without them it is not ready,
+  and the receiving lane should refuse it.
+
+The simulation suite is a **functional** gate and says nothing about synthesizability: the
+build suppresses exactly these warnings, and a non-blocking assignment in a combinational
+block settles within the timestep and simulates like the register you meant. A green,
+bit-identical regression is fully consistent with RTL that is pathological to synthesize.
+
 ## Debugging a blocker: BATCH VARIANTS, and make every run RETURN
 
 *(Execution mechanics — bake, boot, invoke, classify, release — live in the `board-run` skill,
