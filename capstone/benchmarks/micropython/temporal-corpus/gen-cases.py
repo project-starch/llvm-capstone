@@ -115,13 +115,12 @@ def render(r, slug, runnable, why):
         out.append("```bash\n"
                    f"MPY_COMMIT={r['repro_base']} bash ../../../fetch-micropython.sh\n"
                    "```\n\n")
-        out.append("**This was attempted and it does not currently work**, and the blocker is not\n"
-                   "the one originally predicted. A two-year-old MicroPython does not build\n"
-                   "usefully with a current toolchain: GCC 15 rejects the tree, `mpy-cross`\n"
-                   "crashes freezing its own manifest, and the minimal variant segfaults on a\n"
-                   "plain `bytearray`. Full account, with the exact errors, in\n"
-                   "`../../evidence/parent-build-attempt-2026-08-17.txt`. Retrying this needs a\n"
-                   "period-correct compiler, most likely in a container.\n")
+        out.append("**This works.** Use gcc-12, a compiler contemporary with the commit; the\n"
+                   "default gcc 15 rejects the tree. Full recipe, and the two non-obvious\n"
+                   "flags it needs, in `../../evidence/parent-build-attempt-2026-08-17.txt`.\n"
+                   "Do NOT add AddressSanitizer: it breaks the MicroPython unix port outright,\n"
+                   "and the question it would have answered is already settled in\n"
+                   "`../../evidence/asan-blindness-2026-08-17.txt`.\n")
     else:
         out.append(f"Not reproducible with the current setup: {why}.\n")
     return "".join(out)

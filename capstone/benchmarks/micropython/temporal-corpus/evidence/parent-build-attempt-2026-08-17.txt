@@ -1,46 +1,67 @@
-What a parent build actually costs. Attempted for MPY-T02/MPY-T05, 2026-08-17.
+How to build a parent commit, and what it took to find out. 2026-08-17.
 
-Eleven corpus rows are already fixed in the pinned source, so measuring them means
-building the fix commit's parent. The corpus README said this "costs one
-environment variable" plus a patch-application risk. That was optimistic, and this
-file replaces the guess with what happened.
+CORRECTION. An earlier version of this file concluded that parent builds were
+blocked by toolchain age and should be retried "in a container with a
+period-correct compiler". That conclusion was wrong, or rather it was right about
+the cause and needlessly pessimistic about the cost: gcc-12 is already installed
+on this machine, and with it the build simply works. The recipe is below.
 
-TARGET: ce491ab0d1, the parent of 4bed614e707c, dated 2024-04-22. Host unix port,
-built with AddressSanitizer, no Capstone involvement at all. So none of what
-follows is about our toolchain or our port.
+TARGET USED: ce491ab0d1, the parent of 4bed614e707c, which fixes MPY-T02
+(CVE-2024-8947) and MPY-T05 (issue 13283). Dated 2024-04-22. Host unix port, no
+Capstone involvement.
 
-OBSTACLE 1: the 2024 tree does not compile with GCC 15.
-  py/emitinlinethumb.c and others fail on
-  -Werror=unterminated-string-initialization, a diagnostic newer than the tree.
-  Worked around with -Wno-error=unterminated-string-initialization. This is a
-  build accommodation and does not touch the code under test.
+WHAT WORKS
 
-OBSTACLE 2: mpy-cross crashes while freezing the standard manifest.
-  "error compiling asyncio/__init__.py: FATAL: uncaught NLR". The 2024 mpy-cross
-  built by a 2026 compiler does not survive its own frozen modules. Setting
-  FROZEN_MANIFEST= does not help: the configuration still references
-  mp_qstr_frozen_const_pool and mp_frozen_names, so the link fails instead.
+    git -C $CAPSTONE_TMP_ROOT/micropython worktree add /tmp/capstone/mpy-<name> <commit>
+    cd /tmp/capstone/mpy-<name>
+    make -C mpy-cross -j16 CC=gcc-12
+    make -C ports/unix  -j16 CC=gcc-12 MICROPY_MPYCROSS_DEPENDENCY=
+    ./ports/unix/build-standard/micropython <script>
 
-OBSTACLE 3: the minimal variant builds but is unusable.
-  VARIANT=minimal links cleanly with ASan, reports the right version
-  (v1.23.0-preview.329.gce491ab0d1), and then segfaults on
-  bytearray(b"A" * 64), which is a plain allocation and not the defect under
-  test. A build that cannot allocate a bytearray cannot measure a bytearray bug.
+Two details matter and neither is obvious:
 
-CONCLUSION. The parent build was abandoned, and the eleven rows that need one stay
-blocked. The blocker is NOT the Capstone portability patches, which is what the
-README predicted; it is that a two-year-old MicroPython does not build usefully
-with a current toolchain. Anyone retrying this should plan for a period-correct
-compiler, probably in a container, rather than for patch conflicts.
+  CC=gcc-12. The default gcc 15 rejects the tree on
+  -Werror=unterminated-string-initialization, a diagnostic newer than the source,
+  and -Wno-error only gets as far as mpy-cross crashing with "uncaught NLR" while
+  freezing its own asyncio manifest. gcc-12 has neither problem. Use a compiler
+  contemporary with the commit.
 
-WHAT WAS SALVAGED. The exercise produced the ASan measurement in
-asan-blindness-2026-08-17.txt, which makes the same point far more cheaply than
-the parent build would have: a use-after-free inside one sub-allocated region is
-invisible to AddressSanitizer, in the same toolchain where ASan catches an
-ordinary malloc use-after-free. That is corroborated by the upstream author of the
-MPY-T02 fix, who recorded that the bug "exists but has no impact" in default
-configurations and that reproducing it needed "valgrind with GC-aware extensions".
+  MICROPY_MPYCROSS_DEPENDENCY= stops the port sub-make from relinking mpy-cross
+  with whatever flags the port was given, which is what broke the link when
+  sanitizer flags were in play.
 
-So for this defect family the honest statement is stronger than a crash would have
-been: no standard tool sees it, on any platform, and Capstone as it stands does
-not either.
+WHAT DOES NOT WORK, AND IS NOT WORTH RETRYING
+
+  AddressSanitizer plus the MicroPython unix port. Every combination tried ends
+  in "FATAL: uncaught NLR" on any input at all, including
+  `import sys; print(sys.version)`. -DMICROPY_NLR_SETJMP=1 does not help, with or
+  without -Wno-error=clobbered. The same binary built without -fsanitize=address
+  runs correctly, so the fault is the sanitizer against this runtime, not the
+  build or the commit.
+
+  This cost several rebuilds because the control was run late. Build the plain
+  binary FIRST and confirm it runs, then add instrumentation; otherwise a broken
+  interpreter is indistinguishable from a broken build.
+
+  It also did not matter. The ASan question, is a sanitizer blind to a
+  nested-allocator use-after-free, was answered far more cheaply by a
+  twenty-line C model in asan-blindness-2026-08-17.txt, which shows ASan
+  reporting an ordinary malloc use-after-free and staying silent on the identical
+  defect performed inside one sub-allocated region.
+
+RESULT AT THE PARENT
+
+    extend  len 128 head b'AA'
+    slice   len 128 head b'BB'
+    exit 0
+
+Both cases named in the fix commit, extending a bytearray from itself and
+assigning to a slice from itself, run to completion at the pre-fix commit with no
+crash, no diagnostic and no visible difference. That is the reproduction, and it
+matches what the fix's author recorded: in default configurations the bug "exists
+but has no impact", and it took "valgrind with GC-aware extensions" to see it.
+
+So the corpus records this as executed-and-silent rather than as corruption. The
+dangling pointer is internal to array_extend and never surfaces in a Python-
+visible value, which is precisely why a nested allocator makes this class of
+defect so hard to see: not merely unreported, but unobservable from the language.
