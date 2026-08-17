@@ -328,8 +328,8 @@ marks exactly that next test, and resumes at its successor. `tools/merge-suite-r
 global indices and produces the consolidated/non-pass TSV files. Read
 `plans/micropython-domain-compilation.md` for the exact build variables, partition, expected counts,
 and guest-helper compile command before re-running this long gate. Current verified totals are
-`569 PASS / 339 FAIL / 7 FAULT / 0 HANG / 2 UNSCORED` for the 917 standard files and
-`596 PASS / 500 FAIL / 7 FAULT / 0 HANG / 14 UNSCORED` across all 1,117 direct files.
+`573 PASS / 339 FAIL / 3 FAULT / 0 HANG / 2 UNSCORED` for the 917 standard files and
+`600 PASS / 500 FAIL / 3 FAULT / 0 HANG / 14 UNSCORED` across all 1,117 direct files.
 
 ### Full BEEBS regression sweep
 
