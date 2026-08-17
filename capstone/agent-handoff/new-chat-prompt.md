@@ -101,6 +101,11 @@ The following is already verified:
    aggregate gates, with individual wrappers kept for focused diagnosis. BEEBS
    is serial by default and supports opt-in isolated parallel runs with
    `RUN_ALL_BEEBS_JOBS=N`.
+10. The MicroPython EXTRA+MPZ domain has a resumable QEMU suite path. All 917 direct files in the
+    upstream default base directories were executed (`565 PASS / 338 FAIL / 12 FAULT /
+    2 UNSCORED`), plus all 200 direct optional single-interpreter files. The exact workflow and
+    the distinction from the remaining harness-specific Python files are in
+    `$CAPSTONE_HANDOFF_DIR/plans/micropython-domain-compilation.md`.
 
 ## Very important distinction
 

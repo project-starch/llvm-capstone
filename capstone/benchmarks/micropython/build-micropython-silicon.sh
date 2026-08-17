@@ -34,6 +34,12 @@ MPY_STAGE=${MPY_STAGE:-}
 # `capstone-test.user <dom> <times>` runs n tests in ONE boot. One boot per test does not scale --
 # basics/ alone is 576 files.
 MPY_TESTS=${MPY_TESTS:-}
+# Zero-based offset into the sorted candidate list. This permits a suite that is too large for
+# one domain image to be covered by several independently runnable chunks.
+MPY_TEST_OFFSET=${MPY_TEST_OFFSET:-0}
+# Additional direct children of tests/, space-separated. The default remains basics-only.
+MPY_TEST_BASE_DIR=${MPY_TEST_BASE_DIR:-basics}
+MPY_TEST_DIRS=${MPY_TEST_DIRS:-}
 DOM_NAME=${DOM_NAME:-micropython}
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/micropython-silicon}
 OBJ_DIR=${OBJ_DIR:-$OUT_DIR/obj}
@@ -52,7 +58,8 @@ MPY_PORT_DIR="$MPY_SRC_DIR/ports/capstone"
 echo "== generating this port's headers (stock toolchain, host only)"
 rm -rf "$MPY_PORT_DIR"
 cp -r "$PORT" "$MPY_PORT_DIR"
-make -C "$MPY_PORT_DIR" -j"${HDR_JOBS:-8}" >"$OBJ_DIR/genhdr.log" 2>&1 || {
+make -C "$MPY_PORT_DIR" -j"${HDR_JOBS:-8}" \
+    CFLAGS_EXTRA="${DOMAIN_EXTRA_DEFS:-}" >"$OBJ_DIR/genhdr.log" 2>&1 || {
   echo "header generation failed; see $OBJ_DIR/genhdr.log" >&2; tail -5 "$OBJ_DIR/genhdr.log" >&2; exit 1; }
 GEN_DIR="$MPY_PORT_DIR/build"
 [[ -f $GEN_DIR/genhdr/qstrdefs.generated.h ]] || {
@@ -94,8 +101,20 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
 
 if [[ -n $MPY_TESTS ]]; then
   echo "== generating the test table"
-  python3 "$SCRIPT_DIR/tools/gen-test-table.py" "$MPY_SRC_DIR/tests/basics" \
-      "$OBJ_DIR/mpy_tests.h" ${MPY_TESTS:+--limit ${MPY_TESTS/all/0}}
+  TEST_GEN_EXTRA=()
+  for test_dir in $MPY_TEST_DIRS; do
+    TEST_GEN_EXTRA+=(--add-tests-dir "$MPY_SRC_DIR/tests/$test_dir")
+  done
+  if [[ -n ${MPY_TEST_INCLUDE_UNSUPPORTED:-} ]]; then
+    TEST_GEN_EXTRA+=(--include-unsupported)
+  fi
+  if [[ -n ${MPY_TEST_EXPECT_TIMEOUT:-} ]]; then
+    TEST_GEN_EXTRA+=(--expect-timeout "$MPY_TEST_EXPECT_TIMEOUT")
+  fi
+  python3 "$SCRIPT_DIR/tools/gen-test-table.py" "$MPY_SRC_DIR/tests/$MPY_TEST_BASE_DIR" \
+      "$OBJ_DIR/mpy_tests.h" ${MPY_TESTS:+--limit ${MPY_TESTS/all/0}} \
+      --offset "$MPY_TEST_OFFSET" \
+      "${TEST_GEN_EXTRA[@]}"
 fi
 
 echo "== amalgamating py/ + the port into one translation unit"
@@ -104,7 +123,18 @@ AMALGAM="$OBJ_DIR/mpy_all.c"
   # <stdarg.h> first: without it py/objexcept.c re-declares mp_obj_new_exception_msg_vlist with a
   # different va_list than the header saw, which is the single fix the amalgamation needs.
   echo '#include <stdarg.h>'
-  for f in "$MPY_SRC_DIR"/py/*.c; do echo "#include \"$f\""; done
+  for f in "$MPY_SRC_DIR"/py/*.c; do
+    echo "#include \"$f\""
+    if [[ $f == */malloc.c ]]; then
+      # malloc.c redirects these names only for its own module. A normal multi-TU build drops the
+      # macros at EOF; the amalgamation must reproduce that boundary explicitly.
+      echo '#undef malloc'
+      echo '#undef malloc_with_finaliser'
+      echo '#undef free'
+      echo '#undef realloc'
+      echo '#undef realloc_ext'
+    fi
+  done
   echo "#include \"$MPY_PORT_DIR/mpy_domain.c\""
 } > "$AMALGAM"
 
@@ -173,4 +203,4 @@ echo "   .capstone_gp_table sections: $NHDR (must be 1)"
 [[ "$NHDR" == "1" ]] || { echo "FAIL: expected exactly one gp-table header, got $NHDR" >&2; exit 1; }
 
 python3 "$LADDER/domdata-budget.py" "$OUT_DIR/$DOM_NAME.dom" || true
-echo "Built $OUT_DIR/micropython.dom"
+echo "Built $OUT_DIR/$DOM_NAME.dom"

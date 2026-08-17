@@ -1,0 +1,147 @@
+Preserve pointer arguments passed through the stream ioctl protocol.
+
+MicroPython's stream ioctl slot multiplexes integers and pointers through a uintptr_t argument.
+On Capstone uintptr_t is 64 bits while pointers are 128-bit capabilities. mp_stream_seek converts
+&seek_s to uintptr_t before the indirect call, so the caller passes it with scalar mv/sd/ld and
+stringio_ioctl reconstructs an untagged address. Dereferencing it raises capability cause 24.
+
+Make the carrier type port-configurable while keeping uintptr_t as the default. Conversion macros
+name the integer and pointer edges explicitly. The Capstone port selects void *, so genuine pointer
+arguments use the capability ABI while numeric requests travel as untagged carrier values and are
+converted back before arithmetic.
+
+Measured on the pinned EXTRA+MPZ domain: io_bytesio_ext.py, io_stringio1.py and
+io_stringio_base.py change from FAULT to PASS; adjacent io_bytesio_ext2.py remains PASS and
+io_iobase.py retains its pre-existing ordinary output mismatch. Emitted code passes seek_s with
+ldc/stc instead of mv/sd/ld.
+
+diff --git i/py/modio.c w/py/modio.c
+index fdee48437..50ab8de36 100644
+--- i/py/modio.c
++++ w/py/modio.c
+@@ -81,11 +81,11 @@ static mp_uint_t iobase_write(mp_obj_t obj, const void *buf, mp_uint_t size, int
+     return iobase_read_write(obj, (void *)buf, size, errcode, MP_QSTR_write);
+ }
+
+-static mp_uint_t iobase_ioctl(mp_obj_t obj, mp_uint_t request, uintptr_t arg, int *errcode) {
++static mp_uint_t iobase_ioctl(mp_obj_t obj, mp_uint_t request, mp_stream_ioctl_arg_t arg, int *errcode) {
+     mp_obj_t dest[4];
+     mp_load_method(obj, MP_QSTR_ioctl, dest);
+     dest[2] = mp_obj_new_int_from_uint(request);
+-    dest[3] = mp_obj_new_int_from_uint(arg);
++    dest[3] = mp_obj_new_int_from_uint(MP_STREAM_IOCTL_ARG_TO_UINT(arg));
+     mp_int_t ret = mp_obj_get_int(mp_call_method_n_kw(2, 0, dest));
+     if (ret >= 0) {
+         return ret;
+diff --git i/py/objringio.c w/py/objringio.c
+index 0025b26be..1ee143dd0 100644
+--- i/py/objringio.c
++++ w/py/objringio.c
+@@ -71,15 +71,16 @@ static mp_uint_t micropython_ringio_write(mp_obj_t self_in, const void *buf_in,
+     return size;
+ }
+
+-static mp_uint_t micropython_ringio_ioctl(mp_obj_t self_in, mp_uint_t request, uintptr_t arg, int *errcode) {
++static mp_uint_t micropython_ringio_ioctl(mp_obj_t self_in, mp_uint_t request, mp_stream_ioctl_arg_t arg, int *errcode) {
+     micropython_ringio_obj_t *self = MP_OBJ_TO_PTR(self_in);
++    uintptr_t arg_uint = MP_STREAM_IOCTL_ARG_TO_UINT(arg);
+     switch (request) {
+         case MP_STREAM_POLL: {
+             mp_uint_t ret = 0;
+-            if ((arg & MP_STREAM_POLL_RD) && ringbuf_avail(&self->ringbuffer) > 0) {
++            if ((arg_uint & MP_STREAM_POLL_RD) && ringbuf_avail(&self->ringbuffer) > 0) {
+                 ret |= MP_STREAM_POLL_RD;
+             }
+-            if ((arg & MP_STREAM_POLL_WR) && ringbuf_free(&self->ringbuffer) > 0) {
++            if ((arg_uint & MP_STREAM_POLL_WR) && ringbuf_free(&self->ringbuffer) > 0) {
+                 ret |= MP_STREAM_POLL_WR;
+             }
+             return ret;
+diff --git i/py/objstringio.c w/py/objstringio.c
+index a4dc8cfc9..3530afddd 100644
+--- i/py/objstringio.c
++++ w/py/objstringio.c
+@@ -109,12 +109,12 @@ static mp_uint_t stringio_write(mp_obj_t o_in, const void *buf, mp_uint_t size,
+     return size;
+ }
+
+-static mp_uint_t stringio_ioctl(mp_obj_t o_in, mp_uint_t request, uintptr_t arg, int *errcode) {
++static mp_uint_t stringio_ioctl(mp_obj_t o_in, mp_uint_t request, mp_stream_ioctl_arg_t arg, int *errcode) {
+     (void)errcode;
+     mp_obj_stringio_t *o = MP_OBJ_TO_PTR(o_in);
+     switch (request) {
+         case MP_STREAM_SEEK: {
+-            struct mp_stream_seek_t *s = (struct mp_stream_seek_t *)arg;
++            struct mp_stream_seek_t *s = MP_STREAM_IOCTL_ARG_TO_PTR(struct mp_stream_seek_t *, arg);
+             mp_uint_t ref = 0;
+             switch (s->whence) {
+                 case MP_SEEK_CUR:
+diff --git i/py/stream.c w/py/stream.c
+index 4d71964e7..d547fa9bc 100644
+--- i/py/stream.c
++++ w/py/stream.c
+@@ -87,7 +87,7 @@ mp_off_t mp_stream_seek(mp_obj_t stream, mp_off_t offset, int whence, int *errco
+     seek_s.offset = offset;
+     seek_s.whence = whence;
+     const mp_stream_p_t *stream_p = mp_get_stream(stream);
+-    mp_uint_t res = stream_p->ioctl(MP_OBJ_FROM_PTR(stream), MP_STREAM_SEEK, (mp_uint_t)(uintptr_t)&seek_s, errcode);
++    mp_uint_t res = stream_p->ioctl(MP_OBJ_FROM_PTR(stream), MP_STREAM_SEEK, MP_STREAM_IOCTL_ARG_FROM_PTR(&seek_s), errcode);
+     if (res == MP_STREAM_ERROR) {
+         return (mp_off_t)-1;
+     }
+@@ -113,7 +113,7 @@ static MP_NORETURN void mp_stream_raise_error(mp_obj_t stream, int error) {
+     const mp_stream_p_t *stream_p = mp_get_stream(stream);
+     if (stream_p->ioctl != NULL) {
+         int err;
+-        stream_p->ioctl(stream, MP_STREAM_RAISE_ERROR, error, &err);
++        stream_p->ioctl(stream, MP_STREAM_RAISE_ERROR, MP_STREAM_IOCTL_ARG_FROM_UINT(error), &err);
+     }
+     #endif
+     mp_raise_OSError(error);
+@@ -503,12 +503,12 @@ MP_DEFINE_CONST_FUN_OBJ_1(mp_stream_flush_obj, stream_flush);
+
+ static mp_obj_t stream_ioctl(size_t n_args, const mp_obj_t *args) {
+     mp_buffer_info_t bufinfo;
+-    uintptr_t val = 0;
++    mp_stream_ioctl_arg_t val = MP_STREAM_IOCTL_ARG_FROM_UINT(0);
+     if (n_args > 2) {
+         if (mp_get_buffer(args[2], &bufinfo, MP_BUFFER_WRITE)) {
+-            val = (uintptr_t)bufinfo.buf;
++            val = MP_STREAM_IOCTL_ARG_FROM_PTR(bufinfo.buf);
+         } else {
+-            val = mp_obj_get_int_truncated(args[2]);
++            val = MP_STREAM_IOCTL_ARG_FROM_UINT(mp_obj_get_int_truncated(args[2]));
+         }
+     }
+
+diff --git i/py/stream.h w/py/stream.h
+index df5e6d0cd..c9691c2f3 100644
+--- i/py/stream.h
++++ w/py/stream.h
+@@ -65,6 +65,18 @@ struct mp_stream_seek_t {
+     int whence;
+ };
+
++// Stream ioctl requests use the third argument for either an integer or a pointer, with the
++// request code discriminating between them. Ports whose pointers carry data that uintptr_t
++// cannot retain may override the carrier type with a pointer type.
++#ifndef MICROPY_STREAM_IOCTL_ARG_TYPE
++#define MICROPY_STREAM_IOCTL_ARG_TYPE uintptr_t
++#endif
++typedef MICROPY_STREAM_IOCTL_ARG_TYPE mp_stream_ioctl_arg_t;
++#define MP_STREAM_IOCTL_ARG_FROM_UINT(arg) ((mp_stream_ioctl_arg_t)(uintptr_t)(arg))
++#define MP_STREAM_IOCTL_ARG_TO_UINT(arg) ((uintptr_t)(arg))
++#define MP_STREAM_IOCTL_ARG_FROM_PTR(arg) ((mp_stream_ioctl_arg_t)(arg))
++#define MP_STREAM_IOCTL_ARG_TO_PTR(type, arg) ((type)(arg))
++
+ // seek ioctl "whence" values
+ #define MP_SEEK_SET (0)
+ #define MP_SEEK_CUR (1)
+@@ -80,6 +92,6 @@ typedef struct _mp_stream_p_t {
+     // ioctl returns without raising, an OSError with the errcode will raised.
+     mp_uint_t (*read)(mp_obj_t obj, void *buf, mp_uint_t size, int *errcode);
+     mp_uint_t (*write)(mp_obj_t obj, const void *buf, mp_uint_t size, int *errcode);
+-    mp_uint_t (*ioctl)(mp_obj_t obj, mp_uint_t request, uintptr_t arg, int *errcode);
++    mp_uint_t (*ioctl)(mp_obj_t obj, mp_uint_t request, mp_stream_ioctl_arg_t arg, int *errcode);
+     mp_uint_t is_text : 1; // default is bytes, set this for text stream
+ } mp_stream_p_t;

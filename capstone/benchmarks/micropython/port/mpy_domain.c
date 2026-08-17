@@ -5,6 +5,7 @@
 #include "py/runtime.h"
 #include "py/gc.h"
 #include "py/cstack.h"
+#include "py/mperrno.h"
 #include "py/mphal.h"
 #include "py/stackctrl.h"
 
@@ -18,6 +19,7 @@ static unsigned char mpy_heap[MPY_HEAP_SIZE] __attribute__((aligned(32)));
 
 /* ---- output: the hostcall shared region, same shape as benchmarks/sqlite */
 #define MPY_DPI_REGION_SHARE 1U
+#define MPY_TEST_START_MAGIC 0x4d50595354415254ULL /* "MPYSTART" */
 struct mpy_hostcall_v0 { unsigned long long phase, opcode, offset, length; long long result, error; };
 #define MPY_HC_REGION_SIZE 4096UL
 static volatile struct mpy_hostcall_v0 *hc_meta;
@@ -61,6 +63,28 @@ mp_uint_t mp_hal_stdout_tx_strn(const char *str, size_t len) {
 }
 
 /* ---- what py/ demands and the port must supply ---- */
+#if !MICROPY_VFS && MICROPY_ENABLE_EXTERNAL_IMPORT
+mp_lexer_t *mp_lexer_new_from_file(qstr filename) {
+    (void)filename;
+    mp_raise_OSError(MP_ENOENT);
+}
+
+mp_import_stat_t mp_import_stat(const char *path) {
+    (void)path;
+    return MP_IMPORT_STAT_NO_EXIST;
+}
+#endif
+
+#if !MICROPY_VFS && MICROPY_PY_IO
+mp_obj_t mp_builtin_open(size_t n_args, const mp_obj_t *args, mp_map_t *kwargs) {
+    (void)n_args;
+    (void)args;
+    (void)kwargs;
+    mp_raise_OSError(MP_ENOENT);
+}
+MP_DEFINE_CONST_FUN_OBJ_KW(mp_builtin_open_obj, 1, mp_builtin_open);
+#endif
+
 void nlr_jump_fail(void *val) {
     (void)val;
     mp_hal_stdout_tx_strn("\nNLRFAIL\n", 9);
@@ -168,7 +192,16 @@ static void mpy_run_one_test(unsigned *res) {
 
 void domain_main(unsigned *res, unsigned func) {
     if (func == MPY_DPI_REGION_SHARE) {
-        if (hc_share_count == 0) hc_meta = (volatile struct mpy_hostcall_v0 *)res;
+        if (hc_share_count == 0) {
+            hc_meta = (volatile struct mpy_hostcall_v0 *)res;
+            #ifdef MPY_TEST_RUNNER
+            /* A resumable suite runner puts the requested global test index in offset. This is
+               deliberately opt-in by magic, so ordinary hostcall metadata keeps its meaning. */
+            if (hc_meta->phase == MPY_TEST_START_MAGIC && hc_meta->offset <= MPY_TEST_COUNT) {
+                mpy_test_idx = (unsigned)hc_meta->offset;
+            }
+            #endif
+        }
         else if (hc_share_count == 1) hc_payload = (volatile char *)res;
         ++hc_share_count;
         return;
