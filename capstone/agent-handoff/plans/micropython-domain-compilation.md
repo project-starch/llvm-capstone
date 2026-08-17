@@ -1,9 +1,9 @@
 **Status 2026-08-17, latest: the direct single-interpreter census is complete under QEMU.** All
 917 files in MicroPython's default base directories were attempted with EXTRA+MPZ and resumable
-chunks: `573 PASS / 339 FAIL / 3 FAULT / 0 HANG / 2 UNSCORED`. All 200 direct optional files from
+chunks: `576 PASS / 339 FAIL / 0 FAULT / 0 HANG / 2 UNSCORED`. All 200 direct optional files from
 `cmdline`, `float`, `import`, `io`, `thread`, and `unicode` were also attempted: `27 PASS / 161 FAIL /
 0 FAULT / 0 HANG / 12 UNSCORED`. No test was changed to obtain these numbers. See "Full resumable
-census" at the end for scope, artifacts, and the exact hard-fault list.
+census" at the end for scope, artifacts, and the verified absence of hard faults.
 
 **Status: MicroPython runs ordinary Python.** Verified against a checksum over the interpreter's
 actual output, computed before each run: `print`/arithmetic, lists and `len`, `def` with a call,
@@ -1101,13 +1101,11 @@ features, so a disabled feature remains a visible FAIL instead of being filtered
 
 | scope | files | pass | fail | fault | hang | unscored |
 |---|---:|---:|---:|---:|---:|---:|
-| upstream default base directories | 917 | 573 | 339 | 3 | 0 | 2 |
+| upstream default base directories | 917 | 576 | 339 | 0 | 0 | 2 |
 | optional direct directories | 200 | 27 | 161 | 0 | 0 | 12 |
-| all direct single-interpreter files attempted | 1,117 | 600 | 500 | 3 | 0 | 14 |
+| all direct single-interpreter files attempted | 1,117 | 603 | 500 | 0 | 0 | 14 |
 
-The three remaining capability-fatal cases are:
-
-`basics/int_big_mod.py`, `basics/int_big_pow.py`, and `basics/int_big_zeroone.py`.
+There are no remaining capability-fatal cases in the 1,117 direct files.
 
 Patch 0012 makes the stream ioctl carrier port-configurable and selects `void *` in the Capstone
 port. This keeps `mp_stream_seek_t *` in the capability calling convention instead of truncating it
@@ -1129,6 +1127,13 @@ lowered to `cincoffset` with a non-capability NULL base. This was another instan
 NULL pointer arithmetic, not tag loss. A complete 1,117-file rerun changed exactly
 `bytearray_add.py`, `bytearray_byte_operations.py`, `bytearray_decode.py`, and
 `bytearray_slice_assign.py` from FAULT to PASS; every other status and result word was unchanged.
+
+Patch 0015 handles MPZ zero before `mpz_as_int_checked` forms its digit end pointer. MPZ zero is
+represented by `len=0` and `dig=NULL`; the old `dig + len` therefore lowered to `cincoffset` on a
+non-capability NULL base. All three remaining faults stopped at that exact instruction. A complete
+1,117-file rerun changed exactly `int_big_mod.py`, `int_big_pow.py`, and `int_big_zeroone.py` from
+FAULT to PASS; every other status and result word was unchanged. The direct-file census now has no
+capability fault and no hang.
 
 Why chunks are required: a monolithic 917-test image links and its static budget reports that it
 fits, but its very first normal call faults during domain initialization (`cause=1`, `pc/tval/
@@ -1176,7 +1181,7 @@ Invoke `run-resumable-suite.py` with the matching `.dom`, `.expected`, output di
 The optional 200-file build uses `MPY_TEST_BASE_DIR=cmdline` and
 `MPY_TEST_DIRS='float import io thread unicode'`.
 
-The current generated reports are under `/tmp/capstone/micropython-bytearray-merged/`:
+The current generated reports are under `/tmp/capstone/micropython-intbig-merged/`:
 `standard-917-results.tsv`, `standard-917-nonpass.tsv`, `all-single-1117-results.tsv`, and
 `all-single-1117-nonpass.tsv`. They are scratch artifacts by policy, not files to commit.
 
