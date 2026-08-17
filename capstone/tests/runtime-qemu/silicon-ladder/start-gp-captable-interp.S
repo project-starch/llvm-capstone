@@ -231,11 +231,11 @@
   lcc(t0, sp, 3)                     /* sp.BASE                                         */
 #endif
   .insn r 0x5b, 0x1, 0x43, x0, t0, x0
-  /* Unwind exactly as the normal path does: restore the parked blob cap and give sp its 32
+  /* Unwind exactly as the normal path does: restore the parked blob cap and give sp its 48
      bytes back. Jumping straight to 78f would leave sp low for the rest of the domain and the
      next thing to run would fault for an unrelated reason. */
   ldc(s1, sp, 0)
-  cincoffsetimm(sp, sp, 32)
+  cincoffsetimm(sp, sp, 48)
   j     78f
 #endif
 #ifdef INTERP_PEEK_CAPINIT_TARGET
