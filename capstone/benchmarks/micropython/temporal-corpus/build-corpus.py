@@ -169,6 +169,9 @@ MEASURED = {
     # this is silent rather than a crash.
     "CVE-2023-7152": ("confirmed", "silent-no-effect", "not-run"),
     "#12887":        ("confirmed", "silent-no-effect", "not-run"),
+    # Measured at the parent of 6db91dfefb1a (8159dcc276, 2024-07-20): SIGSEGV on
+    # reading a btree after close(). The pin raises ValueError instead.
+    "#12543":        ("confirmed", "crash-sigsegv",   "not-run"),
     # #19075: the trigger IS created in the domain -- a diagnostic confirms
     # json.dump hands write() a bytearray there too, so `buf += buf` mutates in
     # place and reallocates under the caller. The domain then does not fault

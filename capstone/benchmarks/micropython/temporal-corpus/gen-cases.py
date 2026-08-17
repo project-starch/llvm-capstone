@@ -24,7 +24,7 @@ PLAN = {
     "MPY-T03": ("import-all-memory-corruption", "parent-measured", "fixed at the pin"),
     "MPY-T04": ("modselect-line151-uaf", "parent-measured", "fixed at the pin; same defect as MPY-T01"),
     "MPY-T05": ("objarray-line509-uaf", "parent-measured", "fixed at the pin; same defect as MPY-T02"),
-    "MPY-T06": ("btree-reuse-after-close", "parent-build", "fixed at the pin; also needs the btree module, which this domain does not build"),
+    "MPY-T06": ("btree-reuse-after-close", "parent-measured", "fixed at the pin; also needs the btree module, which this domain does not build"),
     "MPY-T07": ("lexer-source-name-uaf", "parent-build", "resolved 2026-08-17: the issue thread names the fix, 1a2c511e5d08, and it is an ancestor of the pin"),
     "MPY-T08": ("stdio-close-then-use", "parent-measured", "fixed at the pin; also needs stdio streams, and MICROPY_PY_SYS_STDFILES is 0 here"),
     "MPY-T09": ("bytearray-resize-stale-view", "yes", "measured"),
