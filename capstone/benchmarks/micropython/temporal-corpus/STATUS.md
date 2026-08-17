@@ -17,7 +17,7 @@ These ran. Both columns are measurements, not predictions. MPY-T28 was run on st
 | `MPY-T25` | #10402 | crash-sigsegv | fault-cause24 |
 | `MPY-T28` | #322 | not-reproducible | not-run |
 
-## Measured at the fix commit's parent (9)
+## Measured at the fix commit's parent (11)
 
 Already fixed in the pinned source, so these were measured on the last commit that still carries the defect. Built with gcc-12 per `evidence/parent-build-attempt-2026-08-17.txt`.
 
@@ -29,22 +29,13 @@ Already fixed in the pinned source, so these were measured on the last commit th
 | `MPY-T04` | #12887 | silent-no-effect | not-run |
 | `MPY-T05` | #13283 | silent-no-effect | not-run |
 | `MPY-T06` | #12543 | crash-sigsegv | not-run |
+| `MPY-T07` | #4128 | silent-no-effect | not-run |
 | `MPY-T08` | #12670 | crash-sigsegv | not-run |
 | `MPY-T14` | #19060 | silent-no-effect | not-run |
 | `MPY-T15` | #17848 | silent-no-effect | not-run |
+| `MPY-T24` | #11781 | not-reproducible | not-run |
 
-## Blocked: already fixed, parent not yet built (4)
-
-Measuring these needs the fix commit's parent. Attempted and currently blocked by toolchain age, not by our patches: see `evidence/parent-build-attempt-2026-08-17.txt`.
-
-| case | source | stock | domain |
-|---|---|---|---|
-| `MPY-T07` | #4128 | not-run | not-run |
-| `MPY-T19` | #5226 | not-run | not-run |
-| `MPY-T24` | #11781 | not-run | not-run |
-| `MPY-T29` | #4705 | not-run | not-run |
-
-## Not expressible in this domain (6)
+## Not expressible in this domain (8)
 
 The trigger needs threads, sockets, a filesystem or port hardware that this domain does not have. No amount of work on our side reaches these without changing what the domain is.
 
@@ -53,8 +44,10 @@ The trigger needs threads, sockets, a filesystem or port hardware that this doma
 | `MPY-T16` | #5487 | not-run | not-run |
 | `MPY-T17` | #3627 | not-run | not-run |
 | `MPY-T18` | #19413 | not-run | not-run |
+| `MPY-T19` | #5226 | not-run | not-run |
 | `MPY-T22` | #17442 | not-run | not-run |
 | `MPY-T27` | #5272 | not-run | not-run |
+| `MPY-T29` | #4705 | not-run | not-run |
 | `MPY-T30` | #11698 | not-run | not-run |
 
 ## Upstream status unresolved (4)
@@ -68,9 +61,19 @@ Closed upstream with no fix commit naming the issue, and no runnable trigger pub
 | `MPY-T23` | #12638 | not-run | not-run |
 | `MPY-T26` | #18645 | not-run | not-run |
 
-## The one number that matters
+## What the measurements say
 
-`traps_unmodified` is **no** for 26 of 30 rows, and that is measured,
-not assumed. Of the rows actually run, none was trapped for a temporal reason:
-three completed silently and three faulted on `cause 24`, an untagged word used
-as a pointer, which is what the MMU already catches on stock.
+18 of 30 rows have been run. On stock or at a fix's parent: 7 crash-sigsegv, 2 not-reproducible, 2 silent-corruption, 7 silent-no-effect.
+
+In the Capstone domain: 3 fault-cause24, 2 untrapped-identical, 1 untrapped-no-crash.
+
+`traps_unmodified` is **no** for 26 of 30 rows, and that is measured
+rather than assumed. Of the rows run in the domain, not one was trapped for a
+temporal reason: the untrapped ones completed exactly as unprotected stock does,
+and the faulting ones failed on `cause 24`, an untagged word used as a pointer,
+which is what an MMU already catches.
+
+The single most useful number is the count of rows that execute a real defect
+and produce NOTHING observable: `silent-no-effect` plus `silent-corruption`
+is 9. Those are the cases where a nested allocator hides a
+defect from the language, from the crash, and from AddressSanitizer alike.

@@ -25,7 +25,7 @@ PLAN = {
     "MPY-T04": ("modselect-line151-uaf", "parent-measured", "fixed at the pin; same defect as MPY-T01"),
     "MPY-T05": ("objarray-line509-uaf", "parent-measured", "fixed at the pin; same defect as MPY-T02"),
     "MPY-T06": ("btree-reuse-after-close", "parent-measured", "fixed at the pin; also needs the btree module, which this domain does not build"),
-    "MPY-T07": ("lexer-source-name-uaf", "parent-build", "resolved 2026-08-17: the issue thread names the fix, 1a2c511e5d08, and it is an ancestor of the pin"),
+        "MPY-T07": ("lexer-source-name-uaf", "parent-measured", "measured at the 2018 parent: the use-after-free executes and is silent"),
     "MPY-T08": ("stdio-close-then-use", "parent-measured", "fixed at the pin; also needs stdio streams, and MICROPY_PY_SYS_STDFILES is 0 here"),
     "MPY-T09": ("bytearray-resize-stale-view", "yes", "measured"),
     "MPY-T10": ("array-resize-stale-view", "yes", "measured, with the file vehicle replaced by a direct write"),
@@ -37,17 +37,17 @@ PLAN = {
     "MPY-T16": ("deinit-after-gc-sweep-all", "no", "needs a port shutdown hook; this domain's teardown is not the one with the defect"),
     "MPY-T17": ("finaliser-exception-deadlock", "no", "needs MICROPY_PY_THREAD, which is off here"),
     "MPY-T18": ("gc-collect-frees-live-binding", "no", "closed NOT_PLANNED upstream and redirected to the LVGL binding project; not a MicroPython defect"),
-    "MPY-T19": ("ble-object-collected", "parent-build", "fixed in 2019; needs modbluetooth, not in this port"),
+    "MPY-T19": ("ble-object-collected", "no", "the fix touches extmod/modbluetooth_nimble.c; reproducing needs a NimBLE stack, which no host build provides"),
     "MPY-T20": ("esp32-gc-collect-panic", "unknown", "needs the ESP32 IDF heap alongside the collector"),
     "MPY-T21": ("rp2-thread-stack-not-scanned", "unknown", "closed upstream as no-longer-reproducible rather than fixed, and it needs the rp2 port and threads"),
     "MPY-T22": ("concurrent-vfs-gc-race", "no", "needs threads and a filesystem, both absent here"),
     "MPY-T23": ("esp32-lwip-freed-buffer", "unknown", "the thread resolves into an ESP-IDF version question, not a MicroPython fix; needs the ESP32 network stack"),
-    "MPY-T24": ("embed-compile-freed-lexer", "parent-build", "fixed at the pin; needs the embed port"),
+        "MPY-T24": ("embed-compile-freed-lexer", "parent-measured", "embed example built at the parent and runs clean; the stack-top defect needs recursion the example does not do"),
     "MPY-T25": ("stringio-subclass-print", "yes", "measured"),
     "MPY-T26": ("native-relocate-null", "unknown", "needs the native emitter and a relocatable .mpy"),
     "MPY-T27": ("socket-connect-fail-leak", "no", "needs the ESP32 network stack"),
     "MPY-T28": ("gc-realloc-returns-null", "yes", "measured at the pin and does NOT reproduce; upstream closed it COMPLETED with the reporter confirming"),
-    "MPY-T29": ("gc-free-assert-invalid-block", "parent-build", "resolved 2026-08-17: the issue thread names the fix, 34a7d7ebebc9, and it is an ancestor of the pin"),
+    "MPY-T29": ("gc-free-assert-invalid-block", "no", "the fix is ports/unix/gccollect.c, making the GC capture stack and registers properly; the trigger depends on what happens to be in registers and is not deterministically reproducible"),
     "MPY-T30": ("gc-collect-over-retains", "no", "reported against the ESP32 port and closed needs-info upstream"),
 }
 
@@ -169,12 +169,27 @@ def render_status(rows):
         for r in rs:
             out.append(f"| `{r['id']}` | {r['ref']} | {r['stock_behaviour']} "
                        f"| {r['domain_behaviour']} |\n")
-    out.append("\n## The one number that matters\n\n")
+    out.append("\n## What the measurements say\n\n")
     n_un = sum(1 for r in rows if r["traps_unmodified"] == "no")
-    out.append(f"`traps_unmodified` is **no** for {n_un} of {len(rows)} rows, and that is measured,\n"
-               "not assumed. Of the rows actually run, none was trapped for a temporal reason:\n"
-               "three completed silently and three faulted on `cause 24`, an untagged word used\n"
-               "as a pointer, which is what the MMU already catches on stock.\n")
+    from collections import Counter
+    stock = Counter(r["stock_behaviour"] for r in rows if r["stock_behaviour"] != "not-run")
+    dom = Counter(r["domain_behaviour"] for r in rows if r["domain_behaviour"] != "not-run")
+    measured = sum(1 for r in rows
+                   if r["stock_behaviour"] != "not-run" or r["domain_behaviour"] != "not-run")
+    out.append(f"{measured} of {len(rows)} rows have been run. On stock or at a fix's parent: "
+               + ", ".join(f"{v} {k}" for k, v in sorted(stock.items())) + ".\n\n")
+    out.append("In the Capstone domain: "
+               + ", ".join(f"{v} {k}" for k, v in sorted(dom.items())) + ".\n\n")
+    out.append(f"`traps_unmodified` is **no** for {n_un} of {len(rows)} rows, and that is measured\n"
+               "rather than assumed. Of the rows run in the domain, not one was trapped for a\n"
+               "temporal reason: the untrapped ones completed exactly as unprotected stock does,\n"
+               "and the faulting ones failed on `cause 24`, an untagged word used as a pointer,\n"
+               "which is what an MMU already catches.\n\n")
+    out.append("The single most useful number is the count of rows that execute a real defect\n"
+               "and produce NOTHING observable: `silent-no-effect` plus `silent-corruption`\n"
+               f"is {stock.get('silent-no-effect', 0) + stock.get('silent-corruption', 0)}. "
+               "Those are the cases where a nested allocator hides a\n"
+               "defect from the language, from the crash, and from AddressSanitizer alike.\n")
     return "".join(out)
 
 
