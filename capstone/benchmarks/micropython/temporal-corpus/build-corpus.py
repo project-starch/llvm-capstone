@@ -113,7 +113,7 @@ ROWS = [
 HEADER = ["id", "source", "ref", "url", "title", "state", "first_seen",
           "fix_commit", "fix_date", "present_at_pin", "repro_base",
           "class", "cwe", "component", "scope", "trigger",
-          "traps_unmodified", "traps_if_gc_cap_aware", "repro_status", "stock_behaviour", "notes"]
+          "traps_unmodified", "traps_if_gc_cap_aware", "repro_status", "stock_behaviour", "domain_behaviour", "notes"]
 
 # Which MicroPython source actually has to be built to see each defect. Computed
 # by gen-fix-status against a full clone (git merge-base --is-ancestor), never
@@ -128,9 +128,10 @@ PIN = FIX["pin"][:12]
 # better Capstone specimen than one that already crashes, because the crash is
 # the platform doing our job for us.
 MEASURED = {
-    "#18168": ("confirmed", "silent-corruption"),
-    "#17941": ("confirmed", "crash-sigsegv"),
-    "#18619": ("confirmed", "crash-sigsegv"),
+    #        repro_status  stock_behaviour      domain_behaviour
+    "#18168": ("confirmed", "silent-corruption", "untrapped-identical"),
+    "#17941": ("confirmed", "crash-sigsegv",     "fault-cause24"),
+    "#18619": ("confirmed", "crash-sigsegv",     "fault-cause24"),
 }
 
 out = []
@@ -164,7 +165,7 @@ for rid, ref, cls, cwe, comp, scope, trig, hyp, notes in ROWS:
     base = f.get("repro_base", "unknown")
     if base == "pin":
         base = PIN
-    repro, stock = MEASURED.get(ref, ("none", "not-run"))
+    repro, stock, dom = MEASURED.get(ref, ("none", "not-run", "not-run"))
     # What an UNMODIFIED MicroPython gets from Capstone, which is the honest
     # baseline and is almost always nothing. mpy_domain.c carves the heap as one
     # 384 KiB static array and gc_init hands that single object to the collector,
@@ -175,7 +176,7 @@ for rid, ref, cls, cwe, comp, scope, trig, hyp, notes in ROWS:
     unmod = "unclear" if scope == "port-heap" else "no"
     out.append([rid, src, ref, url, title, state, date,
                 fix_commit, fix_date, present, base,
-                cls, cwe, comp, scope, trig, unmod, hyp, repro, stock, notes])
+                cls, cwe, comp, scope, trig, unmod, hyp, repro, stock, dom, notes])
 
 if missing:
     print("FEHLT, nicht verifiziert:", missing, file=sys.stderr)
@@ -188,5 +189,5 @@ with open(OUT, "w", newline="\n") as f:
 
 print(f"{len(out)} Zeilen geschrieben nach {OUT}")
 from collections import Counter
-for col, name in ((11, "class"), (14, "scope"), (16, "traps_unmodified"), (17, "traps_if_gc_cap_aware"), (9, "present_at_pin"), (19, "stock_behaviour")):
+for col, name in ((11, "class"), (14, "scope"), (16, "traps_unmodified"), (17, "traps_if_gc_cap_aware"), (9, "present_at_pin"), (19, "stock_behaviour"), (20, "domain_behaviour")):
     print(f"  {name:22s}", dict(Counter(r[col] for r in out)))
