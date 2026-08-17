@@ -47,6 +47,9 @@ reported both.
 | `id` | stable local identifier, `MPY-T01` to `MPY-T30` |
 | `source`, `ref`, `url` | where the case comes from, and the link |
 | `title`, `state`, `first_seen` | copied verbatim from the source API |
+| `fix_commit`, `fix_date` | the upstream commit that fixed it, where one is established |
+| `present_at_pin` | is the defect in the source we actually build: `yes`, `no`, `unknown` |
+| `repro_base` | which MicroPython commit to build to see it |
 | `class` | defect shape: `uaf`, `dangling-view`, `dangling-buffer`, `premature-free`, `lifetime-order`, `reentrancy`, `race-uaf`, `alloc-invariant` |
 | `cwe` | CWE where the source assigns one, otherwise the closest fit |
 | `component` | file or function, from the report |
@@ -55,6 +58,31 @@ reported both.
 | `capstone_hypothesis` | **a prediction, not a measurement** |
 | `repro_status` | `none` for all thirty right now |
 | `notes` | provenance and cross-references |
+
+## Which source to build, per case
+
+`fetch-micropython.sh` pins MicroPython at `2e3304a128b3`, dated **2026-08-16**.
+That pin is only days old, so almost everything upstream has ever fixed is
+already fixed in the tree we compile. Knowing a bug exists is therefore not the
+same as being able to run it, and the corpus says which of the three situations
+each row is in:
+
+- **`present_at_pin=yes`, 11 rows.** Open upstream, so building the pinned tree
+  is enough. These are the cases to start with.
+- **`present_at_pin=no`, 11 rows.** Already fixed in our tree. To see the defect
+  you must build `repro_base`, the fix commit's parent, which is the last commit
+  that still has the bug. `fetch-micropython.sh` takes `MPY_COMMIT`, so this
+  costs one environment variable, but note the Capstone portability patches in
+  `../patches/` are written against the pin and will not all apply to a
+  2019 or 2023 tree.
+- **`present_at_pin=unknown`, 8 rows.** Closed upstream with no fix commit that
+  names the issue. This is a negative search result and is recorded as such: no
+  commit message references the issue, which is not the same as the bug being
+  unfixed. Each needs a look at the source before it can be scheduled.
+
+Ancestry is decided by `git merge-base --is-ancestor <fix> <pin>` on a full
+clone, never by comparing dates, and `gen-fix-status.py` refuses to emit
+anything if its own positive and negative controls do not both behave.
 
 ## The one column to be careful with
 
@@ -74,6 +102,11 @@ moves off `none`.
 ## Next step
 
 Nothing in this folder has been reproduced yet. The obvious first targets are
-issues 18168 and 18171: both are open, both are pure Python triggers needing no
-port hardware, and 18171 turns a stale view into a heap-corrupting write, which
-is the sharpest primitive in the table.
+`MPY-T09` and `MPY-T10`, issues 18168 and 18171: both are open, both build on
+the pin with no version archaeology, both are pure Python triggers needing no
+port hardware, and 18171 turns a stale memoryview into a heap-corrupting write,
+which is the sharpest primitive in the table.
+
+`MPY-T02` is the best of the already-fixed rows to attempt second, because NVD
+states its trigger outright, a bytes object resized and copied into itself, and
+it comes with both a public repro (issue 13283) and an official patch.

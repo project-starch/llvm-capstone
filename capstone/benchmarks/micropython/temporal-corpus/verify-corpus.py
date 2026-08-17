@@ -19,6 +19,7 @@ VALID_CLASS = {"uaf", "double-free", "dangling-view", "dangling-buffer", "dangli
 VALID_SCOPE = {"gc-core", "gc-managed", "port-heap"}
 VALID_HYP = {"trapped", "not-trapped", "unclear"}
 VALID_REPRO = {"none", "planned", "built", "confirmed"}
+VALID_PRESENT = {"yes", "no", "unknown"}
 
 
 def load_sources():
@@ -50,6 +51,16 @@ def check(rows, issues, nvd):
             errs.append(f"{rid}: unknown hypothesis {r['capstone_hypothesis']!r}")
         if r["repro_status"] not in VALID_REPRO:
             errs.append(f"{rid}: unknown repro_status {r['repro_status']!r}")
+        if r["present_at_pin"] not in VALID_PRESENT:
+            errs.append(f"{rid}: unknown present_at_pin {r['present_at_pin']!r}")
+        # a row that claims a reproduction base must say which source to build,
+        # and a row with no established fix must not pretend it has one
+        if r["present_at_pin"] == "no" and not r["repro_base"].endswith("^"):
+            errs.append(f"{rid}: fixed at pin but repro_base is not a parent build")
+        if r["present_at_pin"] == "unknown" and r["repro_base"] != "unknown":
+            errs.append(f"{rid}: status unknown but repro_base claims {r['repro_base']!r}")
+        if r["fix_commit"] and r["present_at_pin"] == "unknown":
+            errs.append(f"{rid}: has a fix commit but status is unknown")
         for col in ("title", "component", "trigger"):
             if not r[col].strip():
                 errs.append(f"{rid}: empty {col}")

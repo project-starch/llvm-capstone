@@ -109,8 +109,17 @@ ROWS = [
      "not-trapped", "Open, needs-info. Over-retention, the dual of premature free."),
 ]
 
-HEADER = ["id", "source", "ref", "url", "title", "state", "first_seen", "class", "cwe",
-          "component", "scope", "trigger", "capstone_hypothesis", "repro_status", "notes"]
+HEADER = ["id", "source", "ref", "url", "title", "state", "first_seen",
+          "fix_commit", "fix_date", "present_at_pin", "repro_base",
+          "class", "cwe", "component", "scope", "trigger",
+          "capstone_hypothesis", "repro_status", "notes"]
+
+# Which MicroPython source actually has to be built to see each defect. Computed
+# by gen-fix-status against a full clone (git merge-base --is-ancestor), never
+# inferred from dates. Rows absent from this file stay "unknown" on purpose:
+# a closed issue with no identifiable fix commit is not evidence of anything.
+FIX = json.load(open(os.path.join(S, "fix-status.json")))
+PIN = FIX["pin"][:12]
 
 out = []
 missing = []
@@ -136,7 +145,16 @@ for rid, ref, cls, cwe, comp, scope, trig, hyp, notes in ROWS:
         date = v["createdAt"][:10]
         url = v["url"]
         src = "issue"
-    out.append([rid, src, ref, url, title, state, date, cls, cwe, comp, scope, trig, hyp, "none", notes])
+    f = FIX["rows"].get(ref, {})
+    fix_commit = f.get("fix_commit", "")
+    fix_date = f.get("fix_date", "")
+    present = f.get("present_at_pin", "unknown")
+    base = f.get("repro_base", "unknown")
+    if base == "pin":
+        base = PIN
+    out.append([rid, src, ref, url, title, state, date,
+                fix_commit, fix_date, present, base,
+                cls, cwe, comp, scope, trig, hyp, "none", notes])
 
 if missing:
     print("FEHLT, nicht verifiziert:", missing, file=sys.stderr)
@@ -149,5 +167,5 @@ with open(OUT, "w", newline="\n") as f:
 
 print(f"{len(out)} Zeilen geschrieben nach {OUT}")
 from collections import Counter
-for col, name in ((7, "class"), (10, "scope"), (12, "capstone_hypothesis"), (5, "state")):
+for col, name in ((11, "class"), (14, "scope"), (16, "capstone_hypothesis"), (9, "present_at_pin")):
     print(f"  {name:22s}", dict(Counter(r[col] for r in out)))
