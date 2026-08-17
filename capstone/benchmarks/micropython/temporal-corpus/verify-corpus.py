@@ -19,7 +19,8 @@ VALID_CLASS = {"uaf", "double-free", "dangling-view", "dangling-buffer", "dangli
 VALID_SCOPE = {"gc-core", "gc-managed", "port-heap"}
 VALID_HYP = {"trapped", "not-trapped", "unclear"}
 VALID_UNMOD = {"no", "yes", "unclear"}
-VALID_STOCK = {"not-run", "silent-corruption", "crash-sigsegv", "not-reproducible"}
+VALID_STOCK = {"not-run", "silent-corruption", "crash-sigsegv", "not-reproducible",
+               "silent-no-effect"}
 VALID_DOMAIN = {"not-run", "untrapped-identical", "untrapped-no-crash", "fault-cause24"}
 VALID_REPRO = {"none", "planned", "built", "confirmed"}
 VALID_PRESENT = {"yes", "no", "unknown"}

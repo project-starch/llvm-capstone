@@ -40,10 +40,9 @@ Build `570744d06c5b^` instead, the fix commit's parent:
 MPY_COMMIT=570744d06c5b^ bash ../../../fetch-micropython.sh
 ```
 
-**This was attempted and it does not currently work**, and the blocker is not
-the one originally predicted. A two-year-old MicroPython does not build
-usefully with a current toolchain: GCC 15 rejects the tree, `mpy-cross`
-crashes freezing its own manifest, and the minimal variant segfaults on a
-plain `bytearray`. Full account, with the exact errors, in
-`../../evidence/parent-build-attempt-2026-08-17.txt`. Retrying this needs a
-period-correct compiler, most likely in a container.
+**This works.** Use gcc-12, a compiler contemporary with the commit; the
+default gcc 15 rejects the tree. Full recipe, and the two non-obvious
+flags it needs, in `../../evidence/parent-build-attempt-2026-08-17.txt`.
+Do NOT add AddressSanitizer: it breaks the MicroPython unix port outright,
+and the question it would have answered is already settled in
+`../../evidence/asan-blindness-2026-08-17.txt`.

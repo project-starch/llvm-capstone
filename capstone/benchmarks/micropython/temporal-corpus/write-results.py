@@ -110,6 +110,38 @@ heap rather than on an unmapped page, but that is a hypothesis and this file is
 not going to record it as a finding.
 """,
 
+"MPY-T02_objarray-bytes-self-copy-uaf": """MPY-T02 / CVE-2024-8947, and MPY-T05 / upstream 13283 are the same defect
+
+  stock MicroPython at the pin        : fixed, nothing to measure
+  stock at the fix's PARENT ce491ab0d1: runs to completion, no crash, no diagnostic
+  Capstone domain                     : not run
+
+MEASURED AT THE PARENT, AND THE DEFECT IS SILENT.
+
+    extend  len 128 head b'AA'
+    slice   len 128 head b'BB'
+    exit 0
+
+Both cases the fix commit names, extending a bytearray from itself and assigning
+to a slice from itself, execute at the pre-fix commit and produce no visible
+difference whatsoever. This is not a failed reproduction. It is what this defect
+does: m_renew moves the buffer and array_extend keeps using the argument's cached
+pointer, but that pointer never surfaces in a Python-visible value.
+
+The fix's author recorded the same thing: in default configurations the bug
+"exists but has no impact", and reproducing it required "running the unix port
+under valgrind with GC-aware extensions".
+
+So a published CVE against this runtime is invisible to the language, invisible
+to a crash, and, per ../../evidence/asan-blindness-2026-08-17.txt, invisible to
+AddressSanitizer as well. That is the nested-allocator problem stated by a case
+rather than by an argument.
+
+BUILDING THE PARENT: use gcc-12, not the default gcc 15, and do not add
+AddressSanitizer. Recipe and reasons in
+../../evidence/parent-build-attempt-2026-08-17.txt.
+""",
+
 "MPY-T25_stringio-subclass-print": """MPY-T25 / upstream 10402
 
   stock MicroPython at pin 2e3304a : SIGSEGV

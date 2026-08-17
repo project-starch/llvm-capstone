@@ -139,6 +139,14 @@ MEASURED = {
     # once the required CONTIGUOUS block exceeds free memory, which is correct
     # behaviour for a non-compacting allocator rather than the reported defect.
     "#322":   ("built",     "not-reproducible",  "not-run"),
+    # Measured at the fix commit's PARENT (ce491ab0d1) with gcc-12, not at the pin.
+    # Both cases named in the fix run to completion with no crash and no visible
+    # difference, which matches the fix author's own note that the bug "exists but
+    # has no impact" in default configurations. Silent, and not merely unreported:
+    # the dangling pointer is internal to array_extend and never reaches a
+    # Python-visible value.
+    "CVE-2024-8947": ("confirmed", "silent-no-effect", "not-run"),
+    "#13283":        ("confirmed", "silent-no-effect", "not-run"),
     # #19075: the trigger IS created in the domain -- a diagnostic confirms
     # json.dump hands write() a bytearray there too, so `buf += buf` mutates in
     # place and reallocates under the caller. The domain then does not fault

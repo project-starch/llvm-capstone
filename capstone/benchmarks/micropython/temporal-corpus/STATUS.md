@@ -24,10 +24,10 @@ Measuring these needs the fix commit's parent. Attempted and currently blocked b
 | case | source | stock | domain |
 |---|---|---|---|
 | `MPY-T01` | CVE-2023-7152 | not-run | not-run |
-| `MPY-T02` | CVE-2024-8947 | not-run | not-run |
+| `MPY-T02` | CVE-2024-8947 | silent-no-effect | not-run |
 | `MPY-T03` | CVE-2026-1998 | not-run | not-run |
 | `MPY-T04` | #12887 | not-run | not-run |
-| `MPY-T05` | #13283 | not-run | not-run |
+| `MPY-T05` | #13283 | silent-no-effect | not-run |
 | `MPY-T06` | #12543 | not-run | not-run |
 | `MPY-T07` | #4128 | not-run | not-run |
 | `MPY-T08` | #12670 | not-run | not-run |
