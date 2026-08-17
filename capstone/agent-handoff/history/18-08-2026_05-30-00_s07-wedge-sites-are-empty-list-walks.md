@@ -119,8 +119,16 @@ A third rival the residue story does not exclude: **a use-after-free / double-cl
 `sqlite3PagerClose`, `sqlite3BackupRestart` from `pager_reset` — both close/error paths. One freed
 `Pager` puts allocator metadata into *both* never-written fields with no silicon defect at all.
 Weakened by rep-to-rep variance (identical domain state sometimes passes), which a deterministic
-single-threaded UAF should not produce. **Cheap discriminator: run the OsRead-stub build under
-QEMU** — not yet done.
+single-threaded UAF should not produce.
+
+The suggested discriminator — run the OsRead-stub build under QEMU — was run and **passes**
+(`/tmp/capstone/osstub-qemu.log`). **This is NOT yet evidence, and must not be cited as refuting
+the UAF rival.** Nothing in the run shows `sqlite3OsRead` was ever called: the stub keeps a
+`capstone_osread_calls` counter but the domain has no hook that reports it on the passing path,
+and the host prints only the PASS marker when the domain returns normally. A stub that never
+fires produces exactly this transcript. To make the run mean anything, the counter has to reach
+the pass path — otherwise it is a directed test that came back clean without creating the
+triggering condition.
 
 Discriminator for H-mem vs H-load, one boot, batched, built to RETURN rather than wedge: plain-`ld`
 each suspect field and early-return a site-coded sentinel on nonzero — at `PagerOpen` right after
