@@ -47,10 +47,12 @@ change the S-07 silicon priority: 917 standard-base and 200 optional single-inte
 attempted with resumable chunks. Patch 0012 fixed the three stream-seek faults by keeping ioctl
 pointer arguments capability-wide. Patch 0013 fixed all five `mp_map_lookup` faults: an empty
 ordered map computed `NULL + 0`, rather than losing a valid capability tag. The full rerun now has
-three capability faults. Patch 0014 fixed the four bytearray cases as one cluster: empty arrays had
-`items=NULL`, while generic paths formed `items + 0`. The next MicroPython follow-up should trace
-`int_big_mod.py`, `int_big_pow.py`, and `int_big_zeroone.py` as one cluster, not repair the tests
-individually or re-run the old 422-test stop. Details are in
+no capability faults. Patch 0014 fixed the four bytearray cases as one cluster: empty arrays had
+`items=NULL`, while generic paths formed `items + 0`. Patch 0015 fixed the final three big-integer
+cases at their common `mpz_as_int_checked` site: MPZ zero had `dig=NULL` and `len=0`, while the
+conversion formed `dig + len`. Any next MicroPython follow-up should classify the 500 ordinary
+FAIL and 14 UNSCORED cases by missing feature or harness requirement, not repair tests individually
+or re-run the old 422-test stop. Details are in
 `plans/micropython-domain-compilation.md`.
 
 Bitstream is `caplifive_s07diag.bit`. S-06 and S-08 are FIXED in silicon and verified; their

@@ -15,7 +15,7 @@ Minimal snapshot. Read first in every session.
   the ask: `tests/fpga-repros/S07-capability-untagged-on-reload/`. Committed, **not pushed — the
   project lead pushes, and it reaches the RTL lane only then.**
 * **MicroPython QEMU census complete for direct single-interpreter files.** EXTRA+MPZ executed all
-  917 direct tests in upstream's default base directories: `573 PASS / 339 FAIL / 3 FAULT /
+  917 direct tests in upstream's default base directories: `576 PASS / 339 FAIL / 0 FAULT /
   0 HANG / 2 UNSCORED`. A second run attempted all 200 direct optional files from `cmdline`,
   `float`, `import`, `io`, `thread`, and `unicode`: `27 PASS / 161 FAIL / 0 FAULT / 0 HANG /
   12 UNSCORED`. Patch 0012 gives stream ioctl a port-configurable carrier; the Capstone port uses
@@ -25,8 +25,9 @@ Minimal snapshot. Read first in every session.
   `builtin_help.py` reaches its ordinary semantic mismatch. A full 1,117-file rerun changed exactly
   those five map cases. Patch 0014 gives an empty array one real spare element instead of leaving
   `items=NULL`; generic `items + 0` paths are then capability-valid. The next full rerun changed
-  exactly the four bytearray faults to PASS and now totals `600 PASS / 500 FAIL / 3 FAULT /
-  14 UNSCORED`.
+  exactly the four bytearray faults to PASS. Patch 0015 handles MPZ zero before forming
+  `dig + len`, changing exactly the final three big-integer faults to PASS. The current full total
+  is `603 PASS / 500 FAIL / 0 FAULT / 14 UNSCORED`.
   The resumable chunk runner gets past domain-fatal faults without changing tests.
   The 529 other Python files are fixtures, runner utilities, benchmark/differential inputs, or
   require multi-instance, network, hardware, port, or architecture-specific harnesses; they are
