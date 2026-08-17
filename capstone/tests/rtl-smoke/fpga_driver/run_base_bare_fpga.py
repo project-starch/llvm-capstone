@@ -56,7 +56,7 @@ IMG_NAME = "fw_payload_base_bare.bin"
 # FPGA_BITSTREAM by hand and one that forgot burned a launch on a HARD STOP. A default that
 # is always overridden trains people to override it, which is how a real mismatch gets waved
 # through.
-BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s06s08fix_s07probe_a2ef8eb.bit")
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s06s08fix_s07tag2_618f4ce.bit")
 CAPTURE = "/tmp/capstone/board-run-base-bare.uart.txt"
 
 

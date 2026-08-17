@@ -130,6 +130,81 @@ def decode_s07_retry(obs):
     return (obs >> 16) & 0xff, (obs >> 8) & 0xff, obs & 0xff
 
 
+def decode_s07_verdict(v):
+    """Decode the S-07 tag-history verdict byte (switch 208) -> (verdict, detail, fault).
+
+    Layout, verified against capstone-ariane 618f4ce36 core/cva6.sv (bank 3'b110 block opens
+    at :1277, this leg at reg 5'b10000), MSB first:
+
+        [7]   ldc0_valid      an LDC came back untagged and was recorded (one-shot)
+        [6:5] ldc0_src        0 = L1 hit, 1 = miss refill (tag memory), 2 = write-buffer fwd
+        [4]   stc_valid       a capability-granule store was recorded
+        [3]   stc_ctag        the tag that store WROTE
+        [2]   gran_match      both records refer to the SAME 16-byte granule (computed in HW)
+        [1]   stc_clobbered   a PLAIN store later overwrote that granule, so its tag was
+                              legitimately cleared and an untagged reload is CORRECT
+        [0]   selftest_seen   the sticky was set synthetically, not by a real displacement
+
+    The order of the tests below is the order the RTL lane specified and it matters:
+    `clobbered` outranks everything, because a granule whose tag was legitimately cleared by a
+    plain store would otherwise read as "stored tagged, came back untagged" -- a confident
+    false "hardware tag loss". That bit exists because the sim corpus does exactly that
+    sequence in cap-tag-cache, which is how it was found.
+    """
+    if v is None:
+        return None
+    ldc_valid = (v >> 7) & 1
+    src       = (v >> 5) & 0b11
+    stc_valid = (v >> 4) & 1
+    stc_ctag  = (v >> 3) & 1
+    match     = (v >> 2) & 1
+    clobbered = (v >> 1) & 1
+    selftest  = v & 1
+
+    # Integrity: fields that are meaningless unless their valid bit is set, and a gran_match
+    # that cannot be true without both records. A violation means the READOUT is wrong -- not
+    # a finding about the core -- exactly as for the 204 encoding.
+    fault = []
+    if match and not (ldc_valid and stc_valid):
+        fault.append("gran_match set without both records")
+    if src and not ldc_valid:
+        fault.append("ldc0_src set without ldc0_valid")
+    if (stc_ctag or clobbered) and not stc_valid:
+        fault.append("stc_ctag/clobbered set without stc_valid")
+    if src == 3:
+        fault.append("ldc0_src == 3 is not a defined source")
+
+    srcname = {0: "L1 hit", 1: "miss refill (tag memory)", 2: "write-buffer forward",
+               3: "UNDEFINED"}[src]
+    bits = (f"ldc0_valid={ldc_valid} src={src} ({srcname}) stc_valid={stc_valid} "
+            f"stc_ctag={stc_ctag} gran_match={match} clobbered={clobbered} "
+            f"selftest_seen={selftest}")
+
+    if fault:
+        return ("INSTRUMENT FAULT", bits + "  <== " + "; ".join(fault)
+                + ". The readout is wrong, NOT the core.", True)
+    if selftest:
+        return ("synthetic", bits + "  (sticky was set by the SELFTEST, not by a real "
+                "displacement -- this byte carries no verdict about the workload)", False)
+    if clobbered:
+        return ("NO VERDICT (clobbered)", bits + "  -- a plain store later overwrote that "
+                "granule, so its tag was legitimately cleared and an untagged reload is "
+                "CORRECT. Says nothing about tag loss.", False)
+    if match and stc_ctag:
+        return ("(b) GENUINE TAG LOSS", bits + f"  -- the store WROTE tag=1 and the load read "
+                f"0 on the same granule; source says where: {srcname}.", False)
+    if match and not stc_ctag:
+        return ("(c) STORED UNTAGGED", bits + "  -- the granule was stored with tag=0, so the "
+                "reload returning NOT_CAP is CORRECT and the fault is UPSTREAM of both memory "
+                "and the syncer.", False)
+    if ldc_valid and not match:
+        return ("unmatched", bits + "  -- the untagged load's granule is not the last recorded "
+                "capability store; compare the granule addresses.", False)
+    if not ldc_valid:
+        return ("no untagged load seen", bits, False)
+    return ("unclassified", bits, False)
+
+
 def decode_s07_cursor(obs):
     """The S-07 H1/H2 verdict read from the pMethods MEMORY SLOT. Returns (verdict, detail).
 
@@ -668,7 +743,20 @@ def main():
                 # to give the staleness comparison a pre-test baseline -- never between the
                 # domains under test.
                 assert (204 & 0b11) == 0, "switch 204 must be UART-safe"
+                assert (208 & 0b11) == 0, "switch 208 must be UART-safe"
                 _v = _read_sw(204)
+
+                # The tag-history verdict byte. 208 is even, so it is safe to sample between
+                # domains alongside 204; it is the byte that separates (b) a genuine tag loss
+                # from (c) a granule that was stored untagged, which no software probe can do.
+                _w = _read_sw(208)
+                _d = decode_s07_verdict(_w)
+                _wline = (f"  [s07] after {label}: sw=208 verdict "
+                          + ("UNREAD" if _w is None else f"0x{_w:02x} {_w:08b}"))
+                if _d is not None:
+                    _wline += f"  {_d[0]}: {_d[1]}"
+                print(_wline, flush=True)
+                transcript.append(_wline + "\n")
                 # The trap-log summary {seen, mcause[6:0]} alongside it. With the clear skipped
                 # the trap fields are last-writer-wins, so the ONLY way to tell "this domain
                 # trapped" from "a previous domain's trap is still latched" is to compare against
