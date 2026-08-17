@@ -2,7 +2,7 @@
 Source: #4705, https://github.com/micropython/micropython/issues/4705  
 Upstream state: closed, first seen 2019-04-19
 
-**BLOCKED on a parent build. Already fixed in the pinned source.**
+**NOT REPRODUCIBLE HERE. The trigger cannot be expressed in this domain.**
 
 ## The defect
 
@@ -29,20 +29,8 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. Resolved 2026-08-17: the issue thread names the fix, 34a7d7ebebc9, and it is an ancestor of the pin.
+Not run. The fix is ports/unix/gccollect.c, making the gc capture stack and registers properly; the trigger depends on what happens to be in registers and is not deterministically reproducible.
 
 ## Reproducing
 
-The defect is fixed in the pinned source, so building the pin measures nothing.
-Build `34a7d7ebebc9^` instead, the fix commit's parent:
-
-```bash
-MPY_COMMIT=34a7d7ebebc9^ bash ../../../fetch-micropython.sh
-```
-
-**This works.** Use gcc-12, a compiler contemporary with the commit; the
-default gcc 15 rejects the tree. Full recipe, and the two non-obvious
-flags it needs, in `../../evidence/parent-build-attempt-2026-08-17.txt`.
-Do NOT add AddressSanitizer: it breaks the MicroPython unix port outright,
-and the question it would have answered is already settled in
-`../../evidence/asan-blindness-2026-08-17.txt`.
+Not reproducible with the current setup: the fix is ports/unix/gccollect.c, making the GC capture stack and registers properly; the trigger depends on what happens to be in registers and is not deterministically reproducible.

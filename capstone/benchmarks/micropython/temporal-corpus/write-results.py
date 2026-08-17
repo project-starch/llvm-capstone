@@ -286,6 +286,69 @@ all. The difference is not the bug, it is which allocator owns the storage, and
 that is the corpus thesis stated by two rows side by side.
 """,
 
+"MPY-T07_lexer-source-name-uaf": """MPY-T07 / upstream 4128
+
+  stock at the pin                    : fixed
+  stock at the fix's PARENT (2018 tree): "Hello world of easy embedding!", exit 0
+  Capstone domain                     : not run
+
+THE USE-AFTER-FREE IS UNAMBIGUOUS, AND IT IS COMPLETELY SILENT.
+
+There is no guesswork about the defect here. The fix, 1a2c511e5d08, is three
+lines of examples/embedding/hello-embed.c:
+
+    mp_lexer_t *lex = mp_lexer_new_from_str_len(0, str, strlen(str), false);
+    mp_parse_tree_t pt = mp_parse(lex, MP_PARSE_FILE_INPUT);      // frees lex
+    mp_obj_t module_fun = mp_compile(&pt, lex->source_name, ...); // reads lex
+
+mp_parse consumes and frees the lexer, and the next line dereferences it. The fix
+simply hoists the qstr into a local before the parse.
+
+Built at the parent and run: it prints its greeting and exits 0. The freed lexer
+still holds a plausible source_name because it was freed to MicroPython's own
+collector, not to the system, so nothing notices.
+
+WHY THIS ROW IS WORTH MORE THAN ITS SIZE. It is a genuine use-after-free in
+MicroPython's OFFICIAL embedding example, the code a host application is invited
+to copy. It reads exactly like working software. Compare MPY-T06, where a
+use-after-free on berkeley-db state, which is malloc'd outside the GC heap,
+segfaults immediately.
+
+REPRODUCING THE 2018 TREE: CC=gcc-12, PYTHON=python3 because the tree predates
+the python/python3 split, and CFLAGS_EXTRA=-Wno-error=missing-attributes.
+""",
+
+"MPY-T24_embed-compile-freed-lexer": """MPY-T24 / upstream 11781
+
+  stock at the fix's PARENT be8d660fc2: builds, runs to completion, exit 0
+  Capstone domain                     : not run
+
+MEASURED, AND THE ANSWER IS NEGATIVE FOR THIS REPRODUCTION.
+
+The embed port's own example was generated and built at the pre-fix commit and
+produces its expected output:
+
+  hello world! [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]eol
+  iter 00000000 ...
+
+No segfault. The fix, d2a3cd7ac428, is titled "embed: Improve stack top
+estimation" and changes examples/embedding/main.c together with
+ports/embed/port/embed_util.c, so the defect is a miscalculated stack limit: deep
+enough recursion inside the embedded interpreter overruns without being caught.
+The shipped example does not recurse, so it never approaches the limit.
+
+Reproducing it properly would mean writing a deeply recursive embedded script,
+which is beyond the published reproduction and would be a trigger of our own
+invention. Recorded as not-reproducible with this reproduction rather than
+extended until it broke.
+
+REPRODUCING THE BUILD: the embed tree must be generated first, which the
+README documents and the Makefile does not do for you:
+
+  make -f micropython_embed.mk PYTHON=python3 CC=gcc-12
+  make PYTHON=python3 CC=gcc-12
+""",
+
 "MPY-T25_stringio-subclass-print": """MPY-T25 / upstream 10402
 
   stock MicroPython at pin 2e3304a : SIGSEGV

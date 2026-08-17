@@ -172,6 +172,15 @@ MEASURED = {
     # Measured at the parent of 6db91dfefb1a (8159dcc276, 2024-07-20): SIGSEGV on
     # reading a btree after close(). The pin raises ValueError instead.
     "#12543":        ("confirmed", "crash-sigsegv",   "not-run"),
+    # Measured at the parent of 1a2c511e5d08 (2018 tree): the embedding example
+    # prints "Hello world of easy embedding!" and exits 0. The use-after-free
+    # executes and is silent.
+    "#4128":         ("confirmed", "silent-no-effect", "not-run"),
+    # Measured at the parent of d2a3cd7ac428 (be8d660fc2, 2024-02-15): the embed
+    # example builds and runs to completion, exit 0. The defect is a stack-top
+    # misestimate and the shipped example does not recurse deeply enough to hit
+    # it, so this is a measured negative rather than a reproduction.
+    "#11781":        ("built",     "not-reproducible", "not-run"),
     # #19075: the trigger IS created in the domain -- a diagnostic confirms
     # json.dump hands write() a bytearray there too, so `buf += buf` mutates in
     # place and reallocates under the caller. The domain then does not fault

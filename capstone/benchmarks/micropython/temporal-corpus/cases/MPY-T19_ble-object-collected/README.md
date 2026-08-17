@@ -2,7 +2,7 @@
 Source: #5226, https://github.com/micropython/micropython/issues/5226  
 Upstream state: closed, first seen 2019-10-18
 
-**BLOCKED on a parent build. Already fixed in the pinned source.**
+**NOT REPRODUCIBLE HERE. The trigger cannot be expressed in this domain.**
 
 ## The defect
 
@@ -29,20 +29,8 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. Fixed in 2019; needs modbluetooth, not in this port.
+Not run. The fix touches extmod/modbluetooth_nimble.c; reproducing needs a nimble stack, which no host build provides.
 
 ## Reproducing
 
-The defect is fixed in the pinned source, so building the pin measures nothing.
-Build `f34e16dbc664^` instead, the fix commit's parent:
-
-```bash
-MPY_COMMIT=f34e16dbc664^ bash ../../../fetch-micropython.sh
-```
-
-**This works.** Use gcc-12, a compiler contemporary with the commit; the
-default gcc 15 rejects the tree. Full recipe, and the two non-obvious
-flags it needs, in `../../evidence/parent-build-attempt-2026-08-17.txt`.
-Do NOT add AddressSanitizer: it breaks the MicroPython unix port outright,
-and the question it would have answered is already settled in
-`../../evidence/asan-blindness-2026-08-17.txt`.
+Not reproducible with the current setup: the fix touches extmod/modbluetooth_nimble.c; reproducing needs a NimBLE stack, which no host build provides.
