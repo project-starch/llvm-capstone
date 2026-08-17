@@ -13,9 +13,12 @@ typedef double double_t;
 #define signbit(x) __builtin_signbit(x)
 
 double acos(double);
+double acosh(double);
 double asin(double);
+double asinh(double);
 double atan(double);
 double atan2(double, double);
+double atanh(double);
 double ceil(double);
 double copysign(double, double);
 double cos(double);

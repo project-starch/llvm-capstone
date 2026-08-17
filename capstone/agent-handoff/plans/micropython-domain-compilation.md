@@ -1344,17 +1344,45 @@ Enabling float earlier also moved 34 FAILs to UNSCORED, which is honest rather t
 float implementation present those tests reach their own `import math` / `import asyncio` guard and
 take upstream's target-skip path, where before they died on a float literal.
 
-All nine float tests still failing return the same uncaught exception, `SyntaxError: complex values
-not supported` — `MICROPY_PY_BUILTINS_COMPLEX=0`, a disabled feature, not a numeric defect. The
-next coherent family is therefore `math`/`cmath`/complex together: ~26 tests (9 FAIL + 17 UNSCORED
-skips), all of which need the trig half of `lib/libm_dbl`. That set compiles as one TU once 31
-colliding file statics are renamed per unit (`acos`/`asin`, `exp`/`pow`, `log`/`log1p`,
-`atan2`/`tgamma`, and the `toint` group); `__fpclassify.c` must be left out, as it needs `FP_*`
-macros the shim does not define. Its cost is ~93 KB of `.text` at `-O0`, against a 445,808-byte
-stack reserve in the tightest chunk (`000_399`), so chunk fit is the thing to check first.
+All nine float tests still failing then returned the same uncaught exception, `SyntaxError: complex
+values not supported` — `MICROPY_PY_BUILTINS_COMPLEX=0`, a disabled feature rather than a numeric
+defect. That named the next family exactly, and it is now done too.
 
-Build and run exactly as the previous section documents, with `MPY_FLOAT_CORE=1` added to each of
-the five builds.
+### `math`, `cmath` and complex: 27 more, on the same libm (2026-08-17)
+
+`MPY_FLOAT_MATH=1` is a second, opt-in knob on top of `MPY_FLOAT_CORE`. It turns on
+`MICROPY_PY_MATH`, `MICROPY_PY_CMATH`, `MICROPY_PY_BUILTINS_COMPLEX` and
+`MICROPY_PY_MATH_CONSTANTS`, and links the rest of `lib/libm_dbl`. Two gaps the shim had to close:
+`MP_NEED_LOG2`, which is upstream's own switch for a libm without `log2` (`modmath.c:89` then
+supplies it as `log(x)/ln2`), and declarations for `acosh`/`asinh`/`atanh`.
+
+The whole directory amalgamates once 31 colliding file statics are renamed per unit — `acos`/`asin`
+share thirteen, `exp`/`pow` six, `log`/`log1p` nine, `atan2`/`tgamma` one, and five units share
+`toint`. The rename table in `build-micropython-silicon.sh` is not hand-derived: it is clang's own
+list, from the redefinition errors it reports for the directory under `-ferror-limit=0`, so a
+MicroPython bump that adds a collision fails loudly at compile time. `__fpclassify.c` is excluded
+(it needs `FP_*` macros the freestanding shim does not define, and nothing calls it), as is the
+ARM-only `thumb_vfp_sqrt.c`.
+
+Cost and result, measured, five chunks again:
+
+| | standard 917 | all 1117 |
+|---|---|---|
+| float core only | 600 / 64 / 253 | 670 / 158 / 289 |
+| with `math`/`cmath`/complex | **602 / 63 / 252** | **697 / 148 / 272** |
+
+27 changes, every one to PASS, no regression: the nine complex failures, sixteen `math`/`cmath`
+skips, plus `micropython/const_math.py` and `misc/rge_sm.py`. `float/` is now 68 PASS, 0 FAIL and
+1 UNSCORED. `math_fun.py` (3,529 bytes of sin/cos/tan/log/exp/atan2 results), `math_fun_special.py`
+(erf, gamma, lgamma) and `complex1.py` were checked byte-for-byte against CPython, not by result
+word. `.text` grows 523,060 → 589,648 bytes; the tightest chunk (`000_399`) keeps a 355,840-byte
+stack reserve, down from 445,808, and all five chunks report `VERDICT: fits`.
+
+Because the knob is opt-in, the float-core profile is unaffected — verified by rebuilding it after
+the refactor and comparing SHA-256 of the `.dom`, which is unchanged.
+
+Build and run exactly as the earlier section documents, adding `MPY_FLOAT_CORE=1` (and
+`MPY_FLOAT_MATH=1` for the math profile) to each of the five builds.
 
 ### Traps that cost time here
 

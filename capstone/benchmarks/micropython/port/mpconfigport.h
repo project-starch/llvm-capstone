@@ -44,6 +44,8 @@
 #ifndef MICROPY_FLOAT_IMPL
 #define MICROPY_FLOAT_IMPL                (MICROPY_FLOAT_IMPL_NONE)
 #endif
+// MicroPython's lib/libm_dbl has no log2; this is the switch that makes modmath.c supply its own.
+#define MP_NEED_LOG2                      (1)
 
 #define MICROPY_PERSISTENT_CODE_LOAD      (0)
 #define MICROPY_MODULE_FROZEN_MPY         (0)

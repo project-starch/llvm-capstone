@@ -47,16 +47,49 @@ OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/micropython-silicon}
 OBJ_DIR=${OBJ_DIR:-$OUT_DIR/obj}
 mkdir -p "$OUT_DIR" "$OBJ_DIR"
 
+# MPY_FLOAT_CORE=1 gives the interpreter float OBJECTS: literals, arithmetic, repr, struct.
+# MPY_FLOAT_MATH=1 adds the math and cmath modules and complex on top, which is a much bigger
+# libm (see LIBM_UNITS below) and only worth linking when those modules are actually wanted.
 FLOAT_DEFS=()
+LIBM_UNITS=''
 if [[ -n ${MPY_FLOAT_CORE:-} ]]; then
   FLOAT_DEFS=(-DMICROPY_FLOAT_IMPL=2
               -DMICROPY_FLOAT_FORMAT_IMPL=1
-              -DMICROPY_PY_BUILTINS_COMPLEX=0
-              -DMICROPY_PY_MATH=0
-              -DMICROPY_PY_CMATH=0
-              -DMICROPY_PY_MATH_CONSTANTS=0
               -DMPY_CSTACK_MAX=393216)
+  # No exp/log here: only math, cmath and objcomplex call them, and all three are off without
+  # MPY_FLOAT_MATH. pow.c is self-contained (fdlibm), needing only sqrt, scalbn and fabs.
+  LIBM_UNITS='fmod copysign rint nearbyint scalbn pow floor sqrt'
+  if [[ -n ${MPY_FLOAT_MATH:-} ]]; then
+    FLOAT_DEFS+=(-DMICROPY_PY_BUILTINS_COMPLEX=1
+                 -DMICROPY_PY_MATH=1
+                 -DMICROPY_PY_CMATH=1
+                 -DMICROPY_PY_MATH_CONSTANTS=1)
+    # Everything libm_dbl ships, minus the ARM-only sqrt and __fpclassify.c -- the latter needs
+    # FP_NAN and friends, which the freestanding <math.h> shim does not define and nothing calls.
+    LIBM_UNITS=$(cd "$MPY_SRC_DIR/lib/libm_dbl" && ls ./*.c |
+                 sed 's#^\./##; s#\.c$##' | grep -vx 'thumb_vfp_sqrt\|__fpclassify' | tr '\n' ' ')
+  else
+    FLOAT_DEFS+=(-DMICROPY_PY_BUILTINS_COMPLEX=0
+                 -DMICROPY_PY_MATH=0
+                 -DMICROPY_PY_CMATH=0
+                 -DMICROPY_PY_MATH_CONSTANTS=0)
+  fi
 fi
+
+# Upstream compiles each libm unit separately; amalgamated into this port's single translation
+# unit their fdlibm polynomial constants collide by name. Rename every colliding file static per
+# unit, so the include order does not matter. The list is clang's own, from the redefinition
+# errors it reports for the whole directory under -ferror-limit=0; a MicroPython bump that adds a
+# collision therefore fails loudly at compile time rather than silently picking one copy.
+declare -A LIBM_STATICS=(
+  [__rem_pio2]='toint' [ceil]='toint' [floor]='toint' [rint]='toint' [round]='toint'
+  [acos]='R pS0 pS1 pS2 pS3 pS4 pS5 pio2_hi pio2_lo qS1 qS2 qS3 qS4'
+  [asin]='R pS0 pS1 pS2 pS3 pS4 pS5 pio2_hi pio2_lo qS1 qS2 qS3 qS4'
+  [atan2]='pi' [tgamma]='pi'
+  [exp]='P1 P2 P3 P4 P5 invln2' [expm1]='invln2 ln2_hi ln2_lo'
+  [log]='Lg1 Lg2 Lg3 Lg4 Lg5 Lg6 Lg7 ln2_hi ln2_lo'
+  [log1p]='Lg1 Lg2 Lg3 Lg4 Lg5 Lg6 Lg7 ln2_hi ln2_lo'
+  [pow]='P1 P2 P3 P4 P5 tiny' [sqrt]='tiny')
 
 CLANG=${CAPSTONE_CLANG}
 LD_LLD=${CAPSTONE_LD_LLD}
@@ -154,17 +187,10 @@ AMALGAM="$OBJ_DIR/mpy_all.c"
     # both scale by pow(5, n) (py/parsenum.c:275), so pow's accuracy IS repr's accuracy: with the
     # BEEBS exp(y*log(x)) pow, whose relative error on pow(5,16) is -1.3e-12, repr(1.0) printed
     # 0.9999999999986986 -- the same 1.3e-12 -- and 24 float tests failed on their last digits.
-    # exp.c/log.c are left out: only math, cmath and complex call them and all three are off here.
-    # That is also what keeps their P1..P5 from colliding with pow.c's inside the one TU.
-    for m in fmod copysign rint nearbyint scalbn pow; do
-      echo "#include \"$MPY_SRC_DIR/lib/libm_dbl/$m.c\""
-    done
-    # Upstream compiles each of these separately, so two pairs share a file-static name that only
-    # collides once amalgamated: floor/rint on `toint`, sqrt/pow on `tiny`. Rename the later one.
-    for m in floor:toint sqrt:tiny; do
-      echo "#define ${m#*:} mpy_${m%%:*}_${m#*:}"
-      echo "#include \"$MPY_SRC_DIR/lib/libm_dbl/${m%%:*}.c\""
-      echo "#undef ${m#*:}"
+    for u in $LIBM_UNITS; do
+      for n in ${LIBM_STATICS[$u]:-}; do echo "#define $n mpylibm_${u}_$n"; done
+      echo "#include \"$MPY_SRC_DIR/lib/libm_dbl/$u.c\""
+      for n in ${LIBM_STATICS[$u]:-}; do echo "#undef $n"; done
     done
     echo "#include \"$MPY_PORT_DIR/capstone_math_extra.c\""
   fi
