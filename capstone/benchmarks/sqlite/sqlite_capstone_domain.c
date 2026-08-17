@@ -5695,6 +5695,30 @@ static int run_sqlite(void) {
   if (rc != SQLITE_OK)
     return rc;
 
+#ifdef CAPSTONE_SKIP_CLOSE
+  /* MATCHED-PAIR ARM: identical workload, TEARDOWN OMITTED.
+   *
+   * Both S-07 wedge sites live in the close path -- pagerFreeMapHdrs is called from
+   * sqlite3PagerClose, and sqlite3OsRead is reachable on a :memory: database only via
+   * memjournal playback, which is what close performs. Neither is reachable from the
+   * workload proper: a clean run makes ZERO OsRead calls (measured, calls=0), and
+   * run_sqlite returns on an extended-workload error WITHOUT closing, so the wedge is
+   * not downstream of a failure either.
+   *
+   * That makes close the single suspect, and this arm is how it gets tested rather than
+   * argued: same binary lineage, same workload, same everything, differing in exactly one
+   * thing -- whether sqlite3_close runs. Compare wedge rates against the closing build.
+   *
+   * READ IT ASYMMETRICALLY, because the rate is ~20% and nondeterministic:
+   *   this arm WEDGES even once  -> teardown is NOT the trigger, hypothesis dead, and that
+   *                                 is decisive on a single observation
+   *   this arm stays clean       -> suggestive only, and never proof; N clean runs at 20%
+   *                                 is (0.8)^N, so it takes a lot of reps to mean much
+   * Leaking the connection is deliberate and harmless: the domain is torn down wholesale
+   * when it returns. */
+  output_text("__CAPSTONE_SQLITE_SKIPPED_CLOSE__\n");
+  return 0;
+#endif
   rc = sqlite3_close(db);
   db = 0;
   if (rc != SQLITE_OK)

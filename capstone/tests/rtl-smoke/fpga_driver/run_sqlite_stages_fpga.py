@@ -314,6 +314,18 @@ def decode_s07_verdict(v):
         return ("(c) STORED UNTAGGED", bits + "  -- the granule was stored with tag=0, so the "
                 "reload returning NOT_CAP is CORRECT and the fault is UPSTREAM of both memory "
                 "and the syncer.", False)
+    # NOTE FOR THE stc_pc APERTURE, because misreading it kills a CORRECT hypothesis.
+    #
+    # stc_pc is only a test of "which code filled this granule" when gran_match == 1. The store
+    # record ROLLS, so with match == 0 it holds merely the most recent capability store before
+    # the freeze -- not the store that filled the faulting granule. A workload PC there is then
+    # FULLY CONSISTENT with a teardown-triggered wedge: if the close path performs no capability
+    # stores after entry, the last STC is legitimately from the workload while the fault is
+    # entirely in teardown. Read 193 -> gran_match -> only then treat stc_pc as evidence.
+    #
+    # Also: stc_pc latches at COMMIT of the STC while the granule record latches at store-buffer
+    # PUSH. Same instruction in the ordinary case, but different events -- if they ever disagree,
+    # the PADDR is authoritative, because gran_match is computed from it.
     if ldc_valid and not match:
         # match=0 IS WEAK, and the asymmetry is why: the STC record is the LAST capability
         # store and ROLLS on every one, while the LDC record is the FIRST untagged load and is
