@@ -1,6 +1,6 @@
 **Status 2026-08-17, latest: the direct single-interpreter census is complete under QEMU.** All
 917 files in MicroPython's default base directories were attempted with EXTRA+MPZ and resumable
-chunks: `598 PASS / 87 FAIL / 0 FAULT / 0 HANG / 232 UNSCORED`. All 200 direct optional files from
+chunks: `598 PASS / 86 FAIL / 0 FAULT / 0 HANG / 233 UNSCORED`. All 200 direct optional files from
 `cmdline`, `float`, `import`, `io`, `thread`, and `unicode` were also attempted: `27 PASS / 151 FAIL /
 0 FAULT / 0 HANG / 22 UNSCORED`. No test was changed to obtain these numbers. See "Full resumable
 census" at the end for scope, artifacts, and the verified absence of hard faults.
@@ -1102,9 +1102,9 @@ out.
 
 | scope | files | pass | fail | fault | hang | unscored |
 |---|---:|---:|---:|---:|---:|---:|
-| upstream default base directories | 917 | 598 | 87 | 0 | 0 | 232 |
+| upstream default base directories | 917 | 598 | 86 | 0 | 0 | 233 |
 | optional direct directories | 200 | 27 | 151 | 0 | 0 | 22 |
-| all direct single-interpreter files attempted | 1,117 | 625 | 238 | 0 | 0 | 254 |
+| all direct single-interpreter files attempted | 1,117 | 625 | 237 | 0 | 0 | 255 |
 
 There are no remaining capability-fatal cases in the 1,117 direct files.
 
@@ -1192,15 +1192,24 @@ output also changes in the six remaining T-string failures, `builtin_help.py`, a
 those eight retain their prior statuses. Four of the remaining T-string cases now stop at the
 separate no-float boundary and two exhaust the fixed heap.
 
-The remaining FAIL total does not represent 238 unexplained Capstone failures. The result word's
-bit 31 records whether the interpreter printed an uncaught exception. Of 238 FAILs, 225 have that
+Upstream also uses `print("SKIP-TOO-LARGE"); raise SystemExit` for a test that does not fit a
+target. The resumable runner now accepts that exact traceback shape as a target skip, just as
+upstream's own runner accepts both `SKIP` and `SKIP-TOO-LARGE`. A complete 1,117-file re-score
+changes exactly `micropython/viper_large_jump.py` from FAIL to UNSCORED; all other statuses remain
+identical. Heap probes at 128, 192, and 256 KiB were deliberately not adopted. They make two or
+three allocation-heavy tests pass, but every probed increase lets `viper_large_jump.py` proceed
+past its valid size guard and fail at the separately disabled Viper decorator. The verified port
+therefore retains its 96 KiB heap.
+
+The remaining FAIL total does not represent 237 unexplained Capstone failures. The result word's
+bit 31 records whether the interpreter printed an uncaught exception. Of 237 FAILs, 224 have that
 bit set and only 13 returned normally but produced a different output:
 
 | directory | uncaught exception | output mismatch | total FAIL |
 |---|---:|---:|---:|
 | `basics` | 6 | 1 | 7 |
 | `extmod` | 21 | 0 | 21 |
-| `micropython` | 56 | 0 | 56 |
+| `micropython` | 55 | 0 | 55 |
 | `misc` | 1 | 0 | 1 |
 | `stress` | 2 | 0 | 2 |
 | `cmdline` | 15 | 10 | 25 |
@@ -1209,18 +1218,18 @@ bit set and only 13 returned normally but produced a different output:
 | `io` | 4 | 1 | 5 |
 | `thread` | 33 | 0 | 33 |
 | `unicode` | 0 | 0 | 0 |
-| **total** | **225** | **13** | **238** |
+| **total** | **224** | **13** | **237** |
 
 This distribution matches the deliberately small port profile: it has no float implementation,
 external import or VFS, and disables global sys stdfiles and uctypes; native/Viper, threads,
 network/TLS, machine, filesystem and many optional extmod paths are unavailable in this domain.
-Those families dominate the exception results. Of 87 remaining standard FAILs, 86 have the
+Those families dominate the exception results. Of 86 remaining standard FAILs, 85 have the
 uncaught-exception bit; `basics/string_tstring_parser1.py` catches its heap exhaustion and prints a
 different result. The other 12 non-exception mismatches are ten optional `cmdline` tests,
 `float/array_construct.py`, and `io/argv.py`; the embedded-source runner cannot reproduce command-
 line/REPL invocation semantics, and the port intentionally has no float implementation.
 
-All 254 UNSCORED files also returned a domain result. Of these, 241 explicitly selected the target-
+All 255 UNSCORED files also returned a domain result. Of these, 242 explicitly selected the target-
 skip path. The other 13 are unscored because host Python exited non-zero while generating an
 oracle: `micropython/native_marshal.py`, nine `io/file*.py` cases, and three `unicode/file*.py`
 cases. They need the relevant MicroPython API or filesystem fixture/harness before a PASS/FAIL
@@ -1273,7 +1282,7 @@ Invoke `run-resumable-suite.py` with the matching `.dom`, `.expected`, output di
 naturally contains 117 files. The optional 200-file build uses `MPY_TEST_BASE_DIR=cmdline` and
 `MPY_TEST_DIRS='float import io thread unicode'`.
 
-The current generated reports are under `/tmp/capstone/micropython-tstring-import-full-merged/`:
+The current generated reports are under `/tmp/capstone/micropython-skip-too-large-merged/`:
 `standard-single-917-results.tsv`, `standard-single-917-nonpass.tsv`,
 `all-single-1117-results.tsv`, and `all-single-1117-nonpass.tsv`. They are scratch artifacts by
 policy, not files to commit.

@@ -15,8 +15,8 @@ Minimal snapshot. Read first in every session.
   the ask: `tests/fpga-repros/S07-capability-untagged-on-reload/`. Committed, **not pushed — the
   project lead pushes, and it reaches the RTL lane only then.**
 * **MicroPython QEMU census complete for direct single-interpreter files.** EXTRA+MPZ executed all
-  917 direct tests in upstream's default base directories: `598 PASS / 87 FAIL / 0 FAULT /
-  0 HANG / 232 UNSCORED`. A second run attempted all 200 direct optional files from `cmdline`,
+  917 direct tests in upstream's default base directories: `598 PASS / 86 FAIL / 0 FAULT /
+  0 HANG / 233 UNSCORED`. A second run attempted all 200 direct optional files from `cmdline`,
   `float`, `import`, `io`, `thread`, and `unicode`: `27 PASS / 151 FAIL / 0 FAULT / 0 HANG /
   22 UNSCORED`. Patch 0012 gives stream ioctl a port-configurable carrier; the Capstone port uses
   `void *`, preserving seek capabilities and changing exactly `io_bytesio_ext.py`,
@@ -27,7 +27,7 @@ Minimal snapshot. Read first in every session.
   `items=NULL`; generic `items + 0` paths are then capability-valid. The next full rerun changed
   exactly the four bytearray faults to PASS. Patch 0015 handles MPZ zero before forming
   `dig + len`, changing exactly the final three big-integer faults to PASS. The current full total
-  is `625 PASS / 238 FAIL / 0 FAULT / 254 UNSCORED`. Patch 0016 lets an explicit
+  is `625 PASS / 237 FAIL / 0 FAULT / 255 UNSCORED`. Patch 0016 lets an explicit
   `sys.print_exception` stream work without global sys stdfiles. The EXTRA profile now consistently
   enables detailed errors, warnings, emergency exceptions and memory statistics. Exact output
   capture plus upstream-compatible regex `.exp` scoring changes eleven standard tests from FAIL to
@@ -38,10 +38,12 @@ Minimal snapshot. Read first in every session.
   `sys.path`, `sys.argv`, and `sys.modules`. Exactly five standard cases then become PASS, including
   one former target skip. The EXTRA profile now also enables template strings, while Patch 0018
   lets the reduced no-filesystem importer resolve built-in subpackages such as
-  `string.templatelib`. Six more standard cases become PASS. Of the remaining 87 standard FAILs,
-  86 are exception returns and one is an output mismatch. Across all direct files, 225 of 238
+  `string.templatelib`. Six more standard cases become PASS. The runner also recognises upstream's
+  `SKIP-TOO-LARGE` plus `SystemExit` form; exactly `micropython/viper_large_jump.py` changes from
+  FAIL to target-skip. Of the remaining 86 standard FAILs, 85 are exception returns and one is an
+  output mismatch. Across all direct files, 224 of 237
   FAILs are exception returns and the other 13 are output mismatches.
-  Of 254 UNSCORED files, 241 are explicit target skips and 13 returned but lack a host-Python
+  Of 255 UNSCORED files, 242 are explicit target skips and 13 returned but lack a host-Python
   oracle.
   The resumable chunk runner gets past domain-fatal faults without changing tests.
   The 529 other Python files are fixtures, runner utilities, benchmark/differential inputs, or
