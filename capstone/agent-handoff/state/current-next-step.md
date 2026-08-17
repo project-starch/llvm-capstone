@@ -73,12 +73,18 @@ disabled-Viper failure instead.
 **The float and extmod families are closed (2026-08-17).** `MPY_FLOAT_CORE=1` gives the port
 double-precision floats, `MPY_FLOAT_MATH=1` adds `math`, `cmath` and complex from MicroPython's own
 `lib/libm_dbl`, and nine self-contained extmod modules are now compiled in. The all-1117 census is
-**754 PASS / 151 FAIL / 16 FAULT / 196 UNSCORED**, from 625 / 237 / 255 at the start of the day.
+**764 PASS / 143 FAIL / 16 FAULT / 194 UNSCORED**, from 625 / 237 / 255 at the start of the day.
 `float/` is 69 PASS and nothing else. Two defects accounted for most of it. Float: MicroPython's
 APPROX format *and* parse both scale by `pow(5, n)` (`py/parsenum.c:275`), so the BEEBS soft-float
 `pow` — `exp(y*log(x))`, relative error -1.3014e-12 on `pow(5,16)` — made `repr(1.0)` print
 `0.9999999999986986`, the same 1.3e-12 digit for digit. Extmod: the modules' C sources were simply
 never in the amalgam, and `MP_REGISTER_MODULE` only reaches `moduledefs.h` through the qstr pass.
+The GC heap then went 96 KiB -> **384 KiB**, which is a measured knee and not a guess: 512 KiB
+produced not one status different while costing another 131 KB of C stack. That is ten more passes
+(`stress/` is now 13 for 13) against one honest reclassification, `viper_large_jump.py`, which
+stops reporting "too large for this target" and starts reporting the disabled Viper emitter.
+Note that GC-heavy tests got much slower — `basics/memoryview_gc.py` takes ~6 minutes now — so a
+census chunk can approach the runner's 600 s per-command timeout.
 
 **Two live threads came out of that, both cheap and both QEMU-only:**
 
