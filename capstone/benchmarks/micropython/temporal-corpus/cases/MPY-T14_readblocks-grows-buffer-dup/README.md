@@ -2,7 +2,7 @@
 Source: #19060, https://github.com/micropython/micropython/issues/19060  
 Upstream state: closed, first seen 2026-04-08
 
-**BLOCKED on a parent build. Already fixed in the pinned source.**
+**MEASURED at the fix commit's parent. Fixed in the pinned source.**
 
 ## The defect
 
@@ -29,7 +29,10 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. Fixed at the pin; duplicate of mpy-t15.
+- stock MicroPython at the pin: **silent-no-effect**
+- Capstone domain under QEMU: **not-run**
+
+See `RESULT.txt` in this directory.
 
 ## Reproducing
 

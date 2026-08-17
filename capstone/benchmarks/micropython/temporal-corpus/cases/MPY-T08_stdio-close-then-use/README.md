@@ -2,7 +2,7 @@
 Source: #12670, https://github.com/micropython/micropython/issues/12670  
 Upstream state: closed, first seen 2023-10-12
 
-**BLOCKED on a parent build. Already fixed in the pinned source.**
+**MEASURED at the fix commit's parent. Fixed in the pinned source.**
 
 ## The defect
 

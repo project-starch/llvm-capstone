@@ -152,6 +152,13 @@ MEASURED = {
     # gets out. At the pin the same script raises ValueError instead, so the fix
     # is present and the parent build is what shows the defect.
     "#12670":        ("confirmed", "crash-sigsegv",   "not-run"),
+    # Measured at the parent of 64f0394d80ca (4e6dc0b569, 2026-05-09). The defect
+    # condition IS present there: the readblocks callback's oversized
+    # `buf[:] = bytearray(1 + SEC_SIZE)` is accepted, where the pin raises
+    # ValueError. It does not crash in the published reproduction, so this is
+    # recorded as silent rather than as the crash the issue title claims.
+    "#17848":        ("confirmed", "silent-no-effect", "not-run"),
+    "#19060":        ("confirmed", "silent-no-effect", "not-run"),
     # #19075: the trigger IS created in the domain -- a diagnostic confirms
     # json.dump hands write() a bytearray there too, so `buf += buf` mutates in
     # place and reallocates under the caller. The domain then does not fault
