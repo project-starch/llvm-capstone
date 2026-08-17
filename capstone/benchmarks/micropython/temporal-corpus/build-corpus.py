@@ -159,6 +159,16 @@ MEASURED = {
     # recorded as silent rather than as the crash the issue title claims.
     "#17848":        ("confirmed", "silent-no-effect", "not-run"),
     "#19060":        ("confirmed", "silent-no-effect", "not-run"),
+    # Measured at the parent of 570744d06c5b (c9f747cccf, 2026-02-04): SIGSEGV.
+    # mp_import_all assumed its argument was a native module; a non-module
+    # injected through sys.modules takes it down. The pin prints "T03 survived".
+    "CVE-2026-1998": ("confirmed", "crash-sigsegv",   "not-run"),
+    # Measured at the parent of 8b24aa36ba97 (e9bcd49b3e, 2023-12-20). The growth
+    # path is exercised, 16 registrations against an increment of 4, and BOTH
+    # builds produce identical correct output. Staleness was not observed, so
+    # this is silent rather than a crash.
+    "CVE-2023-7152": ("confirmed", "silent-no-effect", "not-run"),
+    "#12887":        ("confirmed", "silent-no-effect", "not-run"),
     # #19075: the trigger IS created in the domain -- a diagnostic confirms
     # json.dump hands write() a bytearray there too, so `buf += buf` mutates in
     # place and reallocates under the caller. The domain then does not fault

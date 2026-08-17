@@ -2,7 +2,7 @@
 Source: CVE-2023-7152, https://nvd.nist.gov/vuln/detail/CVE-2023-7152  
 Upstream state: patched, first seen 2023-12-29
 
-**BLOCKED on a parent build. Already fixed in the pinned source.**
+**MEASURED at the fix commit's parent. Fixed in the pinned source.**
 
 ## The defect
 
@@ -29,7 +29,10 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. Fixed at the pin; needs the fix commit's parent.
+- stock MicroPython at the pin: **silent-no-effect**
+- Capstone domain under QEMU: **not-run**
+
+See `RESULT.txt` in this directory.
 
 ## Reproducing
 
