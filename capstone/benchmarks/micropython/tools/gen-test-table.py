@@ -32,12 +32,12 @@ UNSUPPORTED = [
 ]
 
 
-def expectation(test: pathlib.Path, python: str):
+def expectation(test: pathlib.Path, python: str, timeout: float):
     exp = test.with_suffix(test.suffix + ".exp")
     if exp.exists():
         return exp.read_bytes(), "exp-file"
     try:
-        out = subprocess.run([python, "-BS", str(test)], capture_output=True, timeout=20)
+        out = subprocess.run([python, "-BS", str(test)], capture_output=True, timeout=timeout)
     except (subprocess.TimeoutExpired, OSError) as exc:
         return None, f"host run failed: {exc}"
     if out.returncode != 0:
@@ -70,31 +70,47 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("tests_dir")
     ap.add_argument("out_header")
+    ap.add_argument("--add-tests-dir", action="append", default=[],
+                    help="additional non-recursive test directory (repeatable)")
     ap.add_argument("--python", default="python3")
     ap.add_argument("--limit", type=int, default=0, help="0 = no limit")
+    ap.add_argument("--offset", type=int, default=0,
+                    help="skip this many sorted candidates before applying --limit")
     ap.add_argument("--max-bytes", type=int, default=1500, help="skip tests larger than this")
+    ap.add_argument("--expect-timeout", type=float, default=20,
+                    help="seconds allowed for the host-Python oracle")
+    ap.add_argument("--include-unsupported", action="store_true",
+                    help="execute every candidate; retain tests without an output oracle")
     args = ap.parse_args()
 
-    tests_dir = pathlib.Path(args.tests_dir)
-    candidates = sorted(tests_dir.glob("*.py"))
+    tests_dirs = [pathlib.Path(args.tests_dir), *(pathlib.Path(p) for p in args.add_tests_dir)]
+    multiple_dirs = len(tests_dirs) > 1
+    candidates = sorted(
+        ((f"{d.name}/{t.name}" if multiple_dirs else t.name), t)
+        for d in tests_dirs
+        for t in d.glob("*.py")
+    )
     if not candidates:
-        sys.exit(f"no tests under {tests_dir}")
+        sys.exit(f"no tests under {', '.join(str(d) for d in tests_dirs)}")
+    if args.offset < 0:
+        sys.exit("--offset must be non-negative")
+    candidates = candidates[args.offset:]
 
     kept, skipped = [], []
-    for t in candidates:
+    for label, t in candidates:
         src = t.read_text(encoding="utf8", errors="replace")
-        if len(src) > args.max_bytes:
-            skipped.append((t.name, f"larger than {args.max_bytes} B"))
+        if not args.include_unsupported and len(src) > args.max_bytes:
+            skipped.append((label, f"larger than {args.max_bytes} B"))
             continue
         why = next((name for name, pats in UNSUPPORTED if any(p in src for p in pats)), None)
-        if why:
-            skipped.append((t.name, f"needs {why}"))
+        if why and not args.include_unsupported:
+            skipped.append((label, f"needs {why}"))
             continue
-        exp, how = expectation(t, args.python)
-        if exp is None:
-            skipped.append((t.name, how))
+        exp, how = expectation(t, args.python, args.expect_timeout)
+        if exp is None and not args.include_unsupported:
+            skipped.append((label, how))
             continue
-        kept.append((t.name, src, exp, how))
+        kept.append((label, src, exp, how))
         if args.limit and len(kept) >= args.limit:
             break
 
@@ -114,7 +130,10 @@ def main():
     side = pathlib.Path(args.out_header).with_suffix(".expected")
     with open(side, "w") as f:
         for i, (name, _src, exp, how) in enumerate(kept):
-            f.write(f"{i}\t{name}\t{len(exp)}\t{expected_retval(i, exp):#010x}\t{how}\n")
+            if exp is None:
+                f.write(f"{i}\t{name}\t-\t-\t{how}\n")
+            else:
+                f.write(f"{i}\t{name}\t{len(exp)}\t{expected_retval(i, exp):#010x}\t{how}\n")
     print(f"{len(kept)} tests -> {args.out_header}; expectations -> {side}; {len(skipped)} skipped")
 
 

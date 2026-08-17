@@ -17,7 +17,10 @@ include $(TOP)/py/py.mk
 
 INC += -I. -I$(TOP) -I$(BUILD)
 LD = $(CC)
-CFLAGS += $(INC) -std=c99 $(COPT) -O0
+# Keep header generation under the same feature defines as the domain compilation. In
+# particular, qstr/module discovery is configuration-dependent, so a minimal header pool cannot
+# be reused by a CORE_FEATURES or EXTRA_FEATURES image.
+CFLAGS += $(INC) -std=c99 $(COPT) -O0 $(CFLAGS_EXTRA)
 LIBS =
 
 # main.c only exists so mkrules.mk has a source to scan for qstrs alongside the core.

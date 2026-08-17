@@ -42,6 +42,14 @@ while the instrument caveat is the binding limit.
 
 **The next step is not ours: it is with the RTL lane, and it is one register.**
 
+The independent MicroPython QEMU lane completed its direct-file census on 2026-08-17. It does not
+change the S-07 silicon priority: 917 standard-base and 200 optional single-interpreter files were
+attempted with resumable chunks. Patch 0012 fixed the three stream-seek faults by keeping ioctl
+pointer arguments capability-wide; a full rerun now has 12 capability faults. The next MicroPython
+follow-up should trace the five `mp_map_lookup` cases as one shared tag-loss cluster, not repair the
+tests individually or re-run the old 422-test stop. Details are in
+`plans/micropython-domain-compilation.md`.
+
 Bitstream is `caplifive_s07diag.bit`. S-06 and S-08 are FIXED in silicon and verified; their
 folders are resolved. S-07 is the one open silicon issue, and the handover is written and
 committed at `tests/fpga-repros/S07-capability-untagged-on-reload/` (entry `00-README.md`, ask in

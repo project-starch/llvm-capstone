@@ -1,7 +1,9 @@
-**Status 2026-08-16, latest: MicroPython's OWN test suite runs, 40 tests in one boot,
-21 pass / 19 fail / 0 ABSENT.** Zero absent is the load-bearing number: the domain returned from
-every single test, so nothing faulted or wedged across 40 diverse Python programs. See
-"Running the upstream suite" at the end of this file for where to pick the work up.
+**Status 2026-08-17, latest: the direct single-interpreter census is complete under QEMU.** All
+917 files in MicroPython's default base directories were attempted with EXTRA+MPZ and resumable
+chunks: `565 PASS / 338 FAIL / 12 FAULT / 0 HANG / 2 UNSCORED`. All 200 direct optional files from
+`cmdline`, `float`, `import`, `io`, `thread`, and `unicode` were also attempted: `27 PASS / 161 FAIL /
+0 FAULT / 0 HANG / 12 UNSCORED`. No test was changed to obtain these numbers. See "Full resumable
+census" at the end for scope, artifacts, and the exact hard-fault list.
 
 **Status: MicroPython runs ordinary Python.** Verified against a checksum over the interpreter's
 actual output, computed before each run: `print`/arithmetic, lists and `len`, `def` with a call,
@@ -1041,44 +1043,144 @@ features absent at `ROM_LEVEL_MINIMUM`, the same class as `import gc`, and not o
 capability-related. They were left standing rather than skipped, because a skipped test and a
 failing one carry different information.
 
-### The next step, and the wall it hits
+### Feature-level wall resolved; four-variant result (2026-08-16)
 
-The obvious next move is to raise the feature level so those 19 stop being about configuration.
-`port/mpconfigport.h` has been opened for that — `MICROPY_CONFIG_ROM_LEVEL`,
-`MICROPY_LONGINT_IMPL` and `MICROPY_ERROR_REPORTING` are now `#ifndef`-guarded so
-`DOMAIN_EXTRA_DEFS` can set them. **That file is the one uncommitted change.**
+`DOMAIN_EXTRA_DEFS` now reaches header generation through `CFLAGS_EXTRA`, so qstr/module discovery
+and domain compilation use the same configuration. The port also supplies the no-filesystem
+providers that CORE/EXTRA enable and explicitly disables unsupported stdio/uctypes entry points.
+The amalgamation now undefines `malloc.c`'s private redirection macros at the source-file boundary;
+without that, later included C files accidentally inherit macros that a normal multi-TU build drops
+at EOF.
 
-Three variants were built and **all three failed to compile**:
+All variants build with `MPY_TESTS=40` and fit their domain allocations:
 
-    CORE_FEATURES                       20 errors
-    CORE_FEATURES + LONGINT_MPZ         20 errors
-    EXTRA_FEATURES + LONGINT_MPZ        py/compile.c:2366: undeclared identifier 'MP_QSTR_OrderedDict'
+| variant | defines beyond the port default | pass | fail | absent |
+|---|---|---:|---:|---:|
+| MINIMAL | none | 21 | 19 | 0 |
+| CORE | `MICROPY_CONFIG_ROM_LEVEL=10` | 32 | 8 | 0 |
+| CORE+MPZ | CORE plus `MICROPY_LONGINT_IMPL=2` | 37 | 3 | 0 |
+| EXTRA+MPZ | `MICROPY_CONFIG_ROM_LEVEL=30`, MPZ | 40 | 0 | 0 |
 
-The cause is not the feature level itself. `build-micropython-silicon.sh` generates the qstr /
-module headers by mirroring the port into the MicroPython tree and running **its** Makefile with a
-stock host compiler — and `DOMAIN_EXTRA_DEFS` is **not passed to that step**. So the qstr pool is
-always the MINIMAL one while the domain is compiled at the higher level, and every qstr the higher
-level introduces is undeclared.
+Every image also returned the 41st `0xFFFFFFFF` sentinel. Run them control-first in one boot and
+pass `-icount shift=0` through `run-domain-smoke.py`; without icount, boots on this host sometimes
+stall before login and confound infrastructure with domain behaviour.
 
-This is the same hazard the script's own comment already warns about ("a mismatched string pool is
-an error that compiles"); here it is an error that does not compile, which is the better failure.
+Two independent capability faults appeared only after compilation was unblocked:
 
-**The fix is one line-ish:** pass the same `-D` flags into the header-generation `make` (via
-`CFLAGS_EXTRA`), so the generated pool matches the level being built. Do that before anything else,
-then rebuild the three variants and run them in ONE boot with the MINIMAL image as the control —
-per the batching rule, controls first, ascending, since a wedge ends the boot.
+1. CORE's generated `__capstone_cap_init` was one 20,776-byte straight-line block. SelectionDAG
+   pressure spilled live capability values with scalar `sd`, reloaded them with `ldc`, and then
+   used an untagged base. `CapstoneCapGlobalInit` now starts a new IR block every 32 stores. The
+   CORE initializer is 17,836 bytes with no scalar capability spills, and
+   `static-cap-global-init-large.ll` guards the large case.
+2. `MP_BC_UNWIND_JUMP` stored its destination bytecode pointer as
+   `ip -> uintptr_t -> mp_obj_t`. That preserved the address but discarded the capability tag;
+   `async_with_break.py` later popped an untagged `ip`. Patch 0011 uses `MP_OBJ_FROM_PTR(ip + slab)`
+   and preserves the pointer capability. The previous CORE stop at test 11 is gone.
 
-Expect `EXTRA_FEATURES + LONGINT_MPZ` to be the interesting one for this branch: `mpz` is a second
-allocator layered on the GC and is the closest thing in MicroPython to the nested-allocator
-question the branch is named for.
+The earlier `returns_twice` hypothesis for the custom setjmp was refuted: adding the attribute made
+the generated `.text` byte-identical, so it was removed. Clang already recognizes `setjmp`.
+
+### Historical frontier: the filtered basics set
+
+`MPY_TESTS=all` now builds all four variants; the generator embeds 422 runnable tests (154 others
+are skipped) and even EXTRA+MPZ fits. A first clean EXTRA+MPZ run returned through tests 0..68:
+`68 pass / 1 fail`, then faulted at test 69, `bytearray_add.py`; the one earlier semantic failure is
+`builtin_range_binop.py` at index 55. Tests 69..421 are absent because the fault ends the domain.
+
+This stop is superseded by the resumable census below. Preserve the 40-test four-variant matrix as
+the compact regression gate, but do not treat tests after the old stop as absent anymore.
+
+### Full resumable census (2026-08-17)
+
+The pinned tree contains 1,646 `*.py` files, but that is not a test count: it includes fixtures,
+runner programs, helper modules, benchmark inputs, and platform-specific material. The upstream
+single-interpreter discovery model yields 917 direct files in `basics`, `micropython`, `misc`,
+`extmod`, and `stress`. This run deliberately added the 200 direct optional files in `cmdline`,
+`float`, `import`, `io`, `thread`, and `unicode`, even though this port disables several of those
+features, so a disabled feature remains a visible FAIL instead of being filtered out.
+
+| scope | files | pass | fail | fault | hang | unscored |
+|---|---:|---:|---:|---:|---:|---:|
+| upstream default base directories | 917 | 565 | 338 | 12 | 0 | 2 |
+| optional direct directories | 200 | 27 | 161 | 0 | 0 | 12 |
+| all direct single-interpreter files attempted | 1,117 | 592 | 499 | 12 | 0 | 14 |
+
+The 12 remaining capability-fatal cases are:
+
+`basics/builtin_help.py`, `basics/bytearray_add.py`,
+`basics/bytearray_byte_operations.py`, `basics/bytearray_decode.py`,
+`basics/bytearray_slice_assign.py`, `basics/class_ordereddict.py`,
+`basics/int_big_mod.py`, `basics/int_big_pow.py`, `basics/int_big_zeroone.py`,
+`basics/ordereddict1.py`, `basics/ordereddict_eq.py`, and `basics/slice_optimise.py`.
+
+Patch 0012 makes the stream ioctl carrier port-configurable and selects `void *` in the Capstone
+port. This keeps `mp_stream_seek_t *` in the capability calling convention instead of truncating it
+through the 64-bit uintptr_t ABI. A complete rerun changed exactly `io_bytesio_ext.py`,
+`io_stringio1.py`, and `io_stringio_base.py` from FAULT to PASS; every other standard test retained
+the same status and payload, and the optional suite retained the same statuses and domain outputs.
+
+Why chunks are required: a monolithic 917-test image links and its static budget reports that it
+fits, but its very first normal call faults during domain initialization (`cause=1`, `pc/tval/
+badaddr=0x866`) before any test result. A 400-file image for global indices 400..799 falls on a
+different 2 MiB allocation edge and reports `STACK=-79424`, so it is also invalid. The verified
+partition is 0..399, 400..599, 600..799, and 800..916; their reported stack reserves are 589312,
+780224, 511216, and 1021408 bytes respectively.
+
+The machinery is in-tree:
+
+- `gen-test-table.py`: multiple directories, no-filter mode, missing-oracle records, and candidate
+  offset/limit for chunks;
+- `mpy-resume-guest.c` plus the opt-in `MPYSTART` control block in `mpy_domain.c`: choose the first
+  local test index before normal calls begin;
+- `run-resumable-suite.py`: reboot after a fatal fault or timeout and resume at the successor;
+- `merge-suite-results.py`: validate global indices and produce combined/non-pass TSV files.
+
+Build the Linux guest helper once:
+
+```bash
+export CAPSTONE_REPO_ROOT=/home/diego/llvm-capstone
+source capstone/tests/capstone-test-env.sh
+capstone/caplifive-buildroot/build/host/bin/riscv64-buildroot-linux-gnu-gcc \
+  -Icapstone/caplifive-buildroot/package/modcapstone/userspace \
+  capstone/benchmarks/micropython/tools/mpy-resume-guest.c \
+  capstone/caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.c \
+  -o /tmp/capstone/micropython-silicon/mpy-resume.user
+```
+
+For each standard partition, set `COUNT/OFF/NAME` to `400/0/000_399`,
+`200/400/400_599`, `200/600/600_799`, then `200/800/800_916`, and run:
+
+```bash
+MPY_TESTS=$COUNT MPY_TEST_OFFSET=$OFF \
+MPY_TEST_DIRS='micropython misc extmod stress' \
+MPY_TEST_INCLUDE_UNSUPPORTED=1 MPY_TEST_EXPECT_TIMEOUT=2 \
+DOMAIN_EXTRA_DEFS='-DMICROPY_CONFIG_ROM_LEVEL=30 -DMICROPY_LONGINT_IMPL=2' \
+DOM_NAME=mpy_standard_$NAME \
+OBJ_DIR=/tmp/capstone/micropython-silicon/obj-mpy-standard-$NAME \
+bash capstone/benchmarks/micropython/build-micropython-silicon.sh
+```
+
+Invoke `run-resumable-suite.py` with the matching `.dom`, `.expected`, output directory, and
+`--index-base` equal to `OFF`. The final partition requests 200 but naturally contains 117 files.
+The optional 200-file build uses `MPY_TEST_BASE_DIR=cmdline` and
+`MPY_TEST_DIRS='float import io thread unicode'`.
+
+The current generated reports are under `/tmp/capstone/micropython-ioctl-merged/`:
+`standard-917-results.tsv`, `standard-917-nonpass.tsv`, `all-single-1117-results.tsv`, and
+`all-single-1117-nonpass.tsv`. They are scratch artifacts by policy, not files to commit.
+
+The other 529 Python files are not ordinary direct interpreter cases: 50 fixtures/runner/helper
+files, 130 internal/performance/feature inputs, 85 multi-instance cases, 25 network-harness cases,
+111 platform/hardware/target-wiring/JNI cases, 42 architecture-specific inline-assembler cases,
+and 86 `cpydiff` documentation inputs. They require their own upstream harnesses and capabilities
+that this domain port does not expose; embedding them as independent source strings would produce
+misleading verdicts.
 
 ### Traps that cost time here
 
 - **`capstone-test-env.sh` resolved `CAPSTONE_REPO_ROOT` to `/home`** in this shell, so
   `CAPSTONE_CLANG` pointed at a clang that does not exist. Set `CAPSTONE_REPO_ROOT` explicitly
   before sourcing. Not investigated further; it may be a profile leak rather than a script bug.
-- **`DOM_NAME` does not appear in the build script's final "Built ..." line**, which always says
-  `micropython.dom`. The file written is correct; the message is not. Check the file, not the echo.
 - `score-run.py` was negative-tested before any result was believed — it reports FAIL on a word
   wrong by one bit, ABSENT on a missing call, and exits non-zero with a message rather than
   printing an empty `0/0` on a log with no loader output.

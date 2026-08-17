@@ -320,6 +320,17 @@ instead of the old per-domain assembly entry.
 Run when touching anything in `capstone/benchmarks/coremark/` or backend codegen
 (instruction selection, frame lowering — see `plans/backend-compiler-fixes.md`).
 
+### MicroPython resumable suite
+
+The current full result is built from four standard-base EXTRA+MPZ chunks (400, 200, 200, 117)
+and one 200-file optional chunk. `tools/run-resumable-suite.py` reboots after a domain-fatal fault,
+marks exactly that next test, and resumes at its successor. `tools/merge-suite-results.py` validates
+global indices and produces the consolidated/non-pass TSV files. Read
+`plans/micropython-domain-compilation.md` for the exact build variables, partition, expected counts,
+and guest-helper compile command before re-running this long gate. Current verified totals are
+`565 PASS / 338 FAIL / 12 FAULT / 0 HANG / 2 UNSCORED` for the 917 standard files and
+`592 PASS / 499 FAIL / 12 FAULT / 0 HANG / 14 UNSCORED` across all 1,117 direct files.
+
 ### Full BEEBS regression sweep
 
 ```bash

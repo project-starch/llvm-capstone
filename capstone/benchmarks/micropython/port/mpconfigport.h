@@ -11,10 +11,14 @@
 
 #define MICROPY_ENABLE_COMPILER           (1)
 #define MICROPY_ENABLE_GC                 (1)
+#define MICROPY_USE_INTERNAL_ERRNO         (1)
 
 #define MICROPY_OBJ_REPR                  (MICROPY_OBJ_REPR_A)
 #define MP_INT_TYPE                       (MP_INT_TYPE_INT64)
 #define MP_SSIZE_MAX                      (0x7fffffffffffffffLL)
+// Stream ioctl multiplexes integer and pointer arguments. uintptr_t retains only the address
+// on Capstone, so use a capability-wide carrier and convert numeric requests at their edges.
+#define MICROPY_STREAM_IOCTL_ARG_TYPE     void *
 #ifndef MICROPY_LONGINT_IMPL
 #define MICROPY_LONGINT_IMPL              (MICROPY_LONGINT_IMPL_NONE)
 #endif
@@ -29,6 +33,10 @@
 #define MICROPY_READER_VFS                (0)
 #define MICROPY_VFS                       (0)
 #define MICROPY_HELPER_REPL               (0)
+#define MICROPY_PY_BUILTINS_INPUT         (0)
+#define MICROPY_PY_BUILTINS_EXECFILE      (0)
+#define MICROPY_PY_SYS_STDFILES           (0)
+#define MICROPY_PY_UCTYPES                (0)
 #define MICROPY_KBD_EXCEPTION             (0)
 #define MICROPY_ENABLE_SCHEDULER          (0)
 #define MICROPY_ENABLE_FINALISER          (0)

@@ -2,7 +2,7 @@
 
 Minimal snapshot. Read first in every session.
 
-## 2026-08-16 — CURRENT. Anything below dated earlier predates two RTL fixes and a reflash.
+## 2026-08-17 — CURRENT. Anything below dated earlier predates two RTL fixes and a reflash.
 
 * **Bitstream: `caplifive_s07diag.bit`** (S-06 fix `25035c4c0` + S-08 fix `9fd5507b` + the mtval
   diagnostic `45bd5a3ee`). Every silicon number taken before it is baseline-invalid. All five
@@ -14,6 +14,17 @@ Minimal snapshot. Read first in every session.
   workarounds in roughly two runs out of three; the remainder wedge at mcause 25. Deliverable and
   the ask: `tests/fpga-repros/S07-capability-untagged-on-reload/`. Committed, **not pushed — the
   project lead pushes, and it reaches the RTL lane only then.**
+* **MicroPython QEMU census complete for direct single-interpreter files.** EXTRA+MPZ executed all
+  917 direct tests in upstream's default base directories: `565 PASS / 338 FAIL / 12 FAULT /
+  0 HANG / 2 UNSCORED`. A second run attempted all 200 direct optional files from `cmdline`,
+  `float`, `import`, `io`, `thread`, and `unicode`: `27 PASS / 161 FAIL / 0 FAULT / 0 HANG /
+  12 UNSCORED`. Patch 0012 gives stream ioctl a port-configurable carrier; the Capstone port uses
+  `void *`, preserving seek capabilities and changing exactly `io_bytesio_ext.py`,
+  `io_stringio1.py`, and `io_stringio_base.py` from FAULT to PASS across a full 1,117-file rerun.
+  The resumable chunk runner gets past domain-fatal faults without changing tests.
+  The 529 other Python files are fixtures, runner utilities, benchmark/differential inputs, or
+  require multi-instance, network, hardware, port, or architecture-specific harnesses; they are
+  not ordinary one-source interpreter cases. See `plans/micropython-domain-compilation.md`.
 * The invariant, the "no software probe can fire" result, and the "mtval unreadable by every
   channel" measurement are in `state/current-next-step.md` §0 — read that before planning any
   S-07 work.
