@@ -85,7 +85,7 @@ agent-handoff/
 - validated CoreMark profile-run on Capstone PureCap ("Correct operation validated.")
   using compiled C `domain_main` rather than `coremark_domain_entry.S`
 - MicroPython EXTRA+MPZ executes all 917 direct tests in the upstream default base directories
-  under QEMU via resumable chunks (`587 PASS / 97 FAIL / 0 FAULT / 233 UNSCORED`); all 200 direct
+  under QEMU via resumable chunks (`592 PASS / 93 FAIL / 0 FAULT / 232 UNSCORED`); all 200 direct
   optional single-interpreter files were also attempted, for 1,117 executed files total
 - 78 validated BEEBS benchmarks on the split host/domain runtime path; the
   newest are `matmult-float` and `whetstone` (added `atan` to the shared libm),

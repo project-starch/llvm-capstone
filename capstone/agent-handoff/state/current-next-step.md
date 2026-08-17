@@ -54,11 +54,14 @@ conversion formed `dig + len`. The remaining results are classified and cluster 
 feature families. That classification led to Patch 0016, a consistent EXTRA profile, and
 exact/regex output scoring. Eleven standard tests changed from FAIL to PASS. Captured-output
 recognition of MicroPython's explicit `SKIP` plus `SystemExit` convention then reclassified 241
-FAILs as UNSCORED without changing a test or the port. The current 97 standard FAILs are all
+FAILs as UNSCORED without changing a test or the port. At that stage, all 97 standard FAILs were
 uncaught-exception returns; there are no ordinary output mismatches left in the standard set.
-Across all direct files, 237 of 248 FAILs are exception returns and the remaining 11 are optional
-cmdline/float mismatches. The 255 UNSCORED results comprise 242 target skips and 13 tests whose
-host-oracle generation failed. If MicroPython work continues, select one coherent
+Patch 0017 then made `print(..., file=stream)` independent of global sys stdfiles, and the EXTRA
+profile enabled `sys.path`, `sys.argv`, and `sys.modules`. Five standard tests became PASS. The
+current 93 standard FAILs are all exception returns. Across all direct files, 232 of 244 FAILs are
+exception returns and the remaining 12 are optional cmdline/float/io mismatches. The 254 UNSCORED
+results comprise 241 target skips and 13 tests whose host-oracle generation failed. If MicroPython
+work continues, select one coherent
 missing feature family rather than changing tests; do not re-run the old 422-test stop. Details are
 in `plans/micropython-domain-compilation.md`.
 
