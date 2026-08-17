@@ -248,6 +248,47 @@ print("   instrumented sqlite3OsRead with a raw-slot cursor probe")
 PY
 fi
 
+# OSREAD STUB (SQLITE_OSREAD_STUB=1). Converts the wedge into a REPORTED upstream error.
+#
+# WHAT THE MATCHED PAIR ESTABLISHED. Skipping sqlite3_close did NOT stop the wedge (XC wedged
+# at sqlite3OsRead+0x4c with the SKIPPED_CLOSE marker never printed), so the fault is not in
+# teardown -- it happens during the workload. And on a :memory: database sqlite3OsRead is
+# reachable only through memjournal playback, i.e. a ROLLBACK. A clean run makes ZERO OsRead
+# calls; a wedging run reaches it. So a wedging run has already hit an error that triggered a
+# rollback, and we have never seen what that error was.
+#
+# WHY fail() CANNOT TELL US. The rollback happens INSIDE sqlite3_exec, during statement
+# cleanup. The wedge therefore occurs before sqlite3_exec returns, so the caller's
+# `if (rc != SQLITE_OK) return fail(stage, rc, db)` is never reached and nothing is reported.
+#
+# THE STUB. Return SQLITE_IOERR_READ immediately, without touching id->pMethods at all -- so
+# the faulting `ldc a4, 0x20(a4)` is never executed. The rollback then fails with an I/O error
+# instead of wedging, SQLite propagates it, and fail() finally runs and names the STAGE that
+# was executing when the trouble started. Clean runs are unaffected because they never call it.
+#
+# This does not fix anything and is not meant to: it trades a wedge for a diagnosable error,
+# which is the whole point.
+if [[ "${SQLITE_OSREAD_STUB:-0}" == "1" ]]; then
+  echo "== OSREAD STUB: sqlite3OsRead returns SQLITE_IOERR_READ without dereferencing pMethods"
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PY'
+import sys, pathlib
+p = pathlib.Path(sys.argv[1]); s = p.read_text()
+old = ("SQLITE_PRIVATE int sqlite3OsRead(sqlite3_file *id, void *pBuf, int amt, i64 offset){\n"
+       "  DO_OS_MALLOC_TEST(id);\n"
+       "  return id->pMethods->xRead(id, pBuf, amt, offset);\n}")
+new = ("unsigned capstone_osread_calls = 0;\n"
+       "SQLITE_PRIVATE int sqlite3OsRead(sqlite3_file *id, void *pBuf, int amt, i64 offset){\n"
+       "  /* Never dereference pMethods: that is the faulting ldc. Report instead of wedging. */\n"
+       "  (void)id; (void)pBuf; (void)amt; (void)offset;\n"
+       "  if (capstone_osread_calls < 0xFFFFu) capstone_osread_calls++;\n"
+       "  return SQLITE_IOERR_READ;\n}")
+if old not in s:
+    sys.exit("OSREAD STUB: sqlite3OsRead does not have the expected shape")
+p.write_text(s.replace(old, new, 1))
+print("   stubbed sqlite3OsRead")
+PY
+fi
+
 # S-07 PAGER PROBE (SQLITE_S07_PAGER_PROBE=1). Measures the operand at the site that ACTUALLY
 # wedges the current build: pagerFreeMapHdrs+0x4c, `ldc a1,0x40(a1)` = `pNext = p->pDirty`.
 #
@@ -1614,6 +1655,19 @@ if [[ "${CAPSTONE_MCP_TAGCHECK:-0}" == "1" ]]; then
     BEEBS_STRING_EXTRA_DEFS="$BEEBS_STRING_EXTRA_DEFS -DBEEBS_MCP_SELFTEST=1"
   fi
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DBEEBS_MEMCPY_TAGCHECK=1"
+fi
+
+# CAPSTONE_POISON_ARENA=1 -- fill the memsys5 arena with 0xA5 before SQLITE_CONFIG_HEAP, so that
+# QEMU sees the hostile initial memory contents the board has. A field with no writer reading
+# nonzero is invisible under emulation purely because fresh memory there is already zero. Set
+# ABOVE the _domain_defs read, like every other domain knob -- below it the define reaches
+# nothing and the probe is silently compiled out.
+if [[ "${CAPSTONE_POISON_ARENA:-0}" == "1" ]]; then
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_POISON_ARENA=1"
+  # NEGATIVE CONTROL for the witness gate: fills the wrong byte so the gate MUST trip.
+  if [[ "${CAPSTONE_POISON_NEGTEST:-0}" == "1" ]]; then
+    DOMAIN_EXTRA_DEFS="$DOMAIN_EXTRA_DEFS -DCAPSTONE_POISON_NEGTEST=1"
+  fi
 fi
 
 # CAPSTONE_EVICT_PROBE=1 -- does a capability survive a spill/reload across a CACHE EVICTION?

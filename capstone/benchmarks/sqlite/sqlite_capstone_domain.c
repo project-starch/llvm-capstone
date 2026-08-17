@@ -16,6 +16,11 @@
 #endif
 
 static unsigned char sqlite_heap[SQLITE_HEAP_SIZE] __attribute__((aligned(16)));
+#ifdef CAPSTONE_POISON_ARENA
+/* Read back from the far end of the arena after poisoning; see domain_main. Non-static so it
+   cannot be optimised away, and reported before the workload so a wedge cannot swallow it. */
+unsigned capstone_poison_witness;
+#endif
 static volatile struct sqlite_hostcall_v0 *hostcall_metadata;
 static volatile char *hostcall_payload;
 static unsigned shared_region_count;
@@ -5871,6 +5876,50 @@ void domain_main(unsigned *res, unsigned func) {
     ++shared_region_count;
     return;
   }
+
+#ifdef CAPSTONE_POISON_ARENA
+  /* DIRTY-DRAM EMULATION -- makes a silicon-only failure mode observable under QEMU.
+   *
+   * WHY. Several S-07 wedges land in loop bodies walking lists whose head field has NO writer
+   * anywhere in this build (Pager.pBackup: the backup API is omitted; Pager.pMmapFreelist:
+   * unreachable at SQLITE_MAX_MMAP_SIZE=0). Such a field can only be nonzero if something read
+   * memory it never initialised. QEMU cannot show that, because its fresh memory is already
+   * zero -- so the omission is INVISIBLE there, not absent. Poisoning the arena before
+   * SQLITE_CONFIG_HEAP gives emulation the same hostile initial contents the board has.
+   *
+   * A byte loop, deliberately, not memset: memset is itself under suspicion in this
+   * investigation and must not be in the instrument.
+   *
+   * POSITIVE CONTROL, and the reason the witness is not optional. A clean poisoned run is
+   * worthless unless the poison provably reached the allocator, so the last arena byte is read
+   * back and reported. memsys5 writes only its own headers, so this byte stays 0xA5 in a
+   * correct run. Witness != 0xA5 => the instrument, not the subject, is what was measured. */
+  if (func != CAPSTONE_DPI_REGION_SHARE) {
+    unsigned long i;
+    /* CAPSTONE_POISON_NEGTEST fills the WRONG value on purpose, so the witness gate below must
+       trip and the run must come back 0xBADA5000. A gate that has never blocked anything is an
+       unproven gate; this is how it gets negative-tested without editing the check itself. */
+#ifdef CAPSTONE_POISON_NEGTEST
+    const unsigned char fill = 0x5Au;
+#else
+    const unsigned char fill = 0xA5u;
+#endif
+    for (i = 0; i < (unsigned long)sizeof(sqlite_heap); i++)
+      sqlite_heap[i] = fill;
+    capstone_poison_witness = (unsigned)sqlite_heap[sizeof(sqlite_heap) - 1u];
+    /* THE WITNESS IS FOLDED INTO THE RESULT, not printed. This harness surfaces no domain text
+       under QEMU (the run log carries no SQ: lines at all), so a printed witness would be
+       invisible and the run would look armed whether or not it was -- a clean result from an
+       unproven instrument, which is the most expensive mistake available here. Failing the run
+       instead makes "not armed" impossible to confuse with "poison survived".
+       That the poison reaches every allocation needs no separate control: memsys5 carves its
+       blocks out of sqlite_heap itself, so the arena IS the backing store under test. */
+    if (capstone_poison_witness != 0xA5u) {
+      if (res) *res = 0xBADA5000u;
+      return;
+    }
+  }
+#endif
 
 #ifdef CAPSTONE_DIAG_FUNC
   /* Report the entry argument on the NON-share path instead of running the database.
