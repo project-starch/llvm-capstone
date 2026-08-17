@@ -41,7 +41,9 @@
 #ifndef MICROPY_LONGINT_IMPL
 #define MICROPY_LONGINT_IMPL              (MICROPY_LONGINT_IMPL_NONE)
 #endif
+#ifndef MICROPY_FLOAT_IMPL
 #define MICROPY_FLOAT_IMPL                (MICROPY_FLOAT_IMPL_NONE)
+#endif
 
 #define MICROPY_PERSISTENT_CODE_LOAD      (0)
 #define MICROPY_MODULE_FROZEN_MPY         (0)
@@ -70,7 +72,9 @@
 #define MICROPY_NLR_SETJMP                (1)
 
 #define MICROPY_STACK_CHECK               (1)
+#ifndef MICROPY_STACK_CHECK_MARGIN
 #define MICROPY_STACK_CHECK_MARGIN        (4096)
+#endif
 
 // Detailed text is part of the EXTRA test contract; retain TERSE for the minimum profile.
 #ifndef MICROPY_ERROR_REPORTING
