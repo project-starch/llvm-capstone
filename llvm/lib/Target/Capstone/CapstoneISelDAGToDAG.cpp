@@ -394,12 +394,28 @@ static SDValue selectImm(SelectionDAG *CurDAG, const SDLoc &DL, const MVT VT,
   return selectImmSeq(CurDAG, DL, VT, Seq);
 }
 
-static int64_t getSignedI128ValueOrFatal(const ConstantSDNode *ConstNode,
-                                         StringRef Context) {
+// The i128 carrier holds a 64-bit numeric value, and it arrives in two
+// spellings that name the same register contents. A signed quantity comes
+// sign-extended, as `inttoptr i128 -1`. The SAME value written through C as a
+// cast of a negative or unsigned integer to a capability-width pointer comes
+// ZERO-extended instead, as `inttoptr i128 18446744073709551615`, because the
+// front end widens to the pointer's index type. `li a0, -1` produces exactly
+// one register value for both, and `inttoptr i64 -1` already compiles to it, so
+// accepting only the sign-extended spelling was an inconsistency rather than a
+// safety property. MicroPython's MP_OBJ_NEW_SMALL_INT(-1) is the case that
+// exposed it.
+//
+// What stays refused is a constant with bits ABOVE the low 64: that would
+// fabricate capability metadata rather than an address, and the boundary case
+// (2^64 exactly) is pinned in cap-constants-invalid.ll.
+static int64_t getI128NumericValueOrFatal(const ConstantSDNode *ConstNode,
+                                          StringRef Context) {
   const APInt &Val = ConstNode->getAPIntValue();
-  if (!Val.isSignedIntN(64))
+  if (Val.getBitWidth() <= 64)
+    return Val.getSExtValue();
+  if (!Val.isIntN(64) && !Val.isSignedIntN(64))
     report_fatal_error(Twine("Capstone PureCap: ") + Context);
-  return Val.getSExtValue();
+  return Val.trunc(64).getSExtValue();
 }
 
 void CapstoneDAGToDAGISel::addVectorLoadStoreOperands(
@@ -1272,8 +1288,8 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
 
   if (BasePtr.getOpcode() == CapstoneISD::CIncOffset) {
     if (auto *C = dyn_cast<ConstantSDNode>(BasePtr.getOperand(1))) {
-      BaseOffset = getSignedI128ValueOrFatal(
-          C, "Folded load/store displacement must fit in signed 64-bits");
+      BaseOffset = getI128NumericValueOrFatal(
+          C, "Folded load/store displacement must fit in 64 bits");
       BasePtr = BasePtr.getOperand(0);
     }
   }
@@ -1310,8 +1326,8 @@ bool CapstoneDAGToDAGISel::selectLDC_STC(SDNode *Node) {
     if (!handleOffset(BaseOffset))
       return false;
   } else if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
-    int64_t OffsetVal = getSignedI128ValueOrFatal(
-        C, "Folded load/store displacement must fit in signed 64-bits");
+    int64_t OffsetVal = getI128NumericValueOrFatal(
+        C, "Folded load/store displacement must fit in 64 bits");
     int64_t TotalOffset;
     if (AddOverflow(OffsetVal, BaseOffset, TotalOffset))
       report_fatal_error(
@@ -1442,8 +1458,8 @@ void CapstoneDAGToDAGISel::selectCIncOffset(SDNode *Node) {
 
   // 1. Attempt to use the instruction with immediate (CIncOffsetImm)
   if (auto *C = dyn_cast<ConstantSDNode>(Offset)) {
-    int64_t ImmVal = getSignedI128ValueOrFatal(
-        C, "CIncOffset displacement must fit in signed 64-bits");
+    int64_t ImmVal = getI128NumericValueOrFatal(
+        C, "CIncOffset displacement must fit in 64 bits");
     // Check if it fits in 12 bits
     if (isInt<12>(ImmVal)) {
       // Create TargetConstant of type i64 (critical for simm12_i64_op!)
@@ -2078,7 +2094,7 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
       // In PureCap mode, non-zero i128 constants are only valid when they
       // semantically represent a signed 64-bit numeric address/offset value.
       // Arbitrary 128-bit capability forging is forbidden.
-      int64_t Imm = getSignedI128ValueOrFatal(
+      int64_t Imm = getI128NumericValueOrFatal(
           ConstNode,
           "Cannot materialize arbitrary >64-bit constants as capabilities; "
           "capabilities are unforgeable");
@@ -2432,6 +2448,16 @@ void CapstoneDAGToDAGISel::Select(SDNode *Node) {
   case ISD::AND: {
     auto *N1C = dyn_cast<ConstantSDNode>(Node->getOperand(1));
     SDValue N0 = Node->getOperand(0);
+
+    // Everything below is an XLen-shaped integer peephole -- ANDI, ZEXT_W,
+    // SLLI/SRLI pairs -- reading the mask as a uint64. A capability-width node
+    // has no business here: its constant can carry more than 64 significant
+    // bits, and asking for a uint64 asserts with assertions on and truncates
+    // silently without. Same class as the guard in tryShrinkShlLogicImm, and
+    // reached from MicroPython's gc_init and mp_pairheap_delete once their
+    // masks were rewritten as pointer arithmetic.
+    if (VT == MVT::i128)
+      break;
 
     if (N1C) {
       bool LeftShift = N0.getOpcode() == ISD::SHL;
@@ -4243,8 +4269,8 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
   // directly into the load/store simm12 field.
   if (Addr.getOpcode() == CapstoneISD::CIncOffset) {
     if (auto *C = dyn_cast<ConstantSDNode>(Addr.getOperand(1))) {
-      int64_t CVal = getSignedI128ValueOrFatal(
-          C, "Address displacement must fit in signed 64-bits");
+      int64_t CVal = getI128NumericValueOrFatal(
+          C, "Address displacement must fit in 64 bits");
       if (isInt<12>(CVal)) {
         Base = Addr.getOperand(0);
         if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))

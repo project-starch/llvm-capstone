@@ -272,6 +272,13 @@ bool collectStaticCapReducedObject(const GlobalVariable &GV,
       Slot.TargetFlags = StaticCapTargetFlagRelocatedSymbol;
       Slot.TargetSymbol = TargetFn;
     } else if (TargetGV) {
+      // The TARGET can be a declaration: a table entry pointing at an `extern`
+      // object. The holder is guarded above, this one was not, and a
+      // declaration has no initializer to ask for. Only a byte-array target is
+      // reducible anyway, so one whose contents are not visible here simply is
+      // not reducible.
+      if (!TargetGV->hasInitializer())
+        return false;
       const auto *Init = TargetGV->getInitializer();
       const auto *CDS = dyn_cast_or_null<ConstantDataSequential>(Init);
       if (!CDS || CDS->getElementType() != Type::getInt8Ty(GV.getContext()))
