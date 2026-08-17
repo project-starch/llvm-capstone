@@ -161,15 +161,25 @@ def assemble_mepc(mepc_bytes, probe_gen2):
     return val, "5-byte assembly + sign-extension from bit 38 (probe gen 2; 201-203 are stc_pc)"
 
 
-def decode_probe_generation(census_byte):
-    """True if this bitstream carries the gen-2 probe, from the 216 census sentinel.
+def decode_probe_generation(b193):
+    """True if this bitstream carries the gen-2 probe. KEYED ON SWITCH 193, NOT 216.
 
-    Bit 7 of switch 216 is a hardwired 1 in gen 2. The mux default arm returns 0x00, so
-    bit7==0 means "this bitstream does not have the census" rather than "the count is zero" --
-    the same trick as the impossible src==3 and the impossible 204 encodings. Getting this
-    backwards mis-assembles mepc, so it is a discriminator and not a convenience.
+    NOT 216, and the reason is the whole point. Bit 7 of 216 is a hardwired 1 in gen 2, so
+    bit7==0 there soundly means "no census in this bitstream". The CONVERSE does not hold, and
+    the converse is what a discriminator relies on: on the CURRENT bitstream reg 24 is not a
+    default arm, it is tval[47:40] -- and for ANY sv39 upper-half address, which includes every
+    kernel VA, that byte reads 0xFF. Decoded on the new map 0xFF is
+    {sentinel=1, ldc0_valid=1, cnt=63}: "untagged LDCs are saturated routine traffic", read off
+    a bitstream with no census at all, with the sentinel looking genuine.
+
+    Switch 193 is sound in BOTH directions: on the current bitstream reg 1 is
+    {5'b0, store_buf_commit_cnt}, so bit 7 is hard ZERO by construction rather than merely
+    usually zero. 194 ({6'b0, store_state}) has the same property.
+
+    Getting this backwards mis-assembles mepc and manufactures a census, so it is decided once,
+    first, off the byte whose old encoding cannot forge the sentinel.
     """
-    return census_byte is not None and ((census_byte >> 7) & 1) == 1
+    return b193 is not None and ((b193 >> 7) & 1) == 1
 
 
 def decode_s07_census(v):
@@ -214,8 +224,12 @@ def decode_s07_correlate(b193, b194):
     fault_rs1 = b194 & 0x1F
     detail = (f"ldc_rd=x{ldc_rd} fault_rs1=x{fault_rs1} rs1_valid={rs1_valid}")
     if match:
-        return ("LICENSED (match=1)", detail + " -- the recorded load feeds the faulting "
-                "instruction, so 208 is about the right load.")
+        # match=1 CORROBORATES, it does not prove: this is a 5-bit register-number equality, so
+        # two unrelated instructions coincide 1 time in 32. Quote it as support, never as proof.
+        return ("LICENSED (match=1, corroborates)", detail + " -- the recorded load feeds the "
+                "faulting instruction, so 208 is about the right load. NOTE: a 5-bit equality, "
+                "so unrelated instructions coincide ~1 in 32; this corroborates rather than "
+                "proves.")
     return ("NO VERDICT (match=0)", detail + " -- the recorded load does NOT feed the faulting "
             "instruction, so 208 says nothing about this wedge. The consumer wanted "
             f"x{fault_rs1}; the record is for x{ldc_rd}.")
@@ -277,9 +291,18 @@ def decode_s07_verdict(v):
     if fault:
         return ("INSTRUMENT FAULT", bits + "  <== " + "; ".join(fault)
                 + ". The readout is wrong, NOT the core.", True)
+    # selftest_seen is NOT a synthetic-record marker, and treating it as one DISCARDS REAL
+    # EVIDENCE. It is sticky-until-reset and means "the control ran at some point in this boot".
+    # Once the records roll, the next real untagged LDC overwrites the synthetic pattern while
+    # this bit still reads 1 -- so a genuine finding after a fire would be thrown away as the
+    # control. The authoritative test is the PADDR SENTINEL (0x5A at 205/206, 0x5A5A5A at
+    # 219/222/223), which travels with the record itself; this bit only says a fire happened.
     if selftest:
-        return ("synthetic", bits + "  (sticky was set by the SELFTEST, not by a real "
-                "displacement -- this byte carries no verdict about the workload)", False)
+        return ("control has fired (records may still be REAL)",
+                bits + "  -- selftest_seen is sticky-until-reset and says only that the control "
+                "ran at some point, NOT that this record is synthetic. Check the paddr sentinel "
+                "(0x5A at 205/206) to decide: sentinel present => synthetic, absent => this is "
+                "a real record that overwrote the injected one.", False)
     if clobbered:
         return ("NO VERDICT (clobbered)", bits + "  -- a plain store later overwrote that "
                 "granule, so its tag was legitimately cleared and an untagged reload is "
@@ -491,14 +514,28 @@ def main():
                 _b_ = _s.get("states") if isinstance(_s, dict) else None
                 return sum((1 << i) for i, b in enumerate(_b_) if b) if _b_ else None
 
-            _cen = _rd(216)
-            _probe_gen2 = decode_probe_generation(_cen)
-            _cd = decode_s07_census(_cen)
-            _cl = (f"  [s07] probe generation: {'2 (rolling records, census, correlation)' if _probe_gen2 else '1 (one-shot records)'}"
-                   f"   sw=216 = " + ("UNREAD" if _cen is None else f"0x{_cen:02x}")
-                   + (f"  {_cd[0]}: {_cd[1]}" if _cd else ""))
+            # Generation FIRST, off 193 -- see decode_probe_generation for why not 216.
+            _g193 = _rd(193)
+            _probe_gen2 = decode_probe_generation(_g193)
+            _cl = (f"  [s07] probe generation: "
+                   f"{'2 (rolling records, census, correlation)' if _probe_gen2 else '1 (one-shot records)'}"
+                   f"   sw=193 = " + ("UNREAD" if _g193 is None else f"0x{_g193:02x}")
+                   + "  (193 is the discriminator: on gen 1 it is {5'b0,store_buf_commit_cnt}, "
+                     "so bit7 is hard zero and cannot forge the sentinel -- unlike 216, whose "
+                     "gen-1 value tval[47:40] reads 0xFF for any upper-half address and would "
+                     "decode as a saturated census)")
             print(_cl, flush=True)
             transcript.append(_cl + "\n")
+
+            # The census is only READ once the generation is settled, and only then decoded.
+            if _probe_gen2:
+                _cen = _rd(216)
+                _cd = decode_s07_census(_cen)
+                _cl2 = ("  [s07] census: sw=216 = "
+                        + ("UNREAD" if _cen is None else f"0x{_cen:02x}")
+                        + (f"  {_cd[0]}: {_cd[1]}" if _cd else ""))
+                print(_cl2, flush=True)
+                transcript.append(_cl2 + "\n")
 
             _v0 = _rd(208)
             for _b in range(8):
