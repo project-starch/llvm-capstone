@@ -68,10 +68,21 @@ Across all direct files, 224 of 237 FAILs are exception returns and the remainin
 mismatches. The 255 UNSCORED results comprise 242 target skips and 13 tests whose host-oracle
 generation failed. Heap probes at 128, 192, and 256 KiB were not adopted: they make two or three
 allocation-heavy tests pass but suppress the valid `viper_large_jump.py` size skip and expose the
-disabled-Viper failure instead. If MicroPython work continues, the next coherent large families
-are the 51 disabled Native/Viper
-tests or 26 tests blocked by the no-float profile; do not change tests or re-run the old 422-test
-stop. Details are in `plans/micropython-domain-compilation.md`.
+disabled-Viper failure instead.
+
+**The no-float family is closed (2026-08-17).** `MPY_FLOAT_CORE=1` gives the port double-precision
+floats and `MPY_FLOAT_MATH=1` adds `math`, `cmath` and complex, both from MicroPython's own
+`lib/libm_dbl`. The all-1117 census is now **697 PASS / 148 FAIL / 272 UNSCORED** (standard 917:
+602 / 63 / 252), from 625 / 237 / 255 with no float at all. `float/` is 68 PASS, 0 FAIL, 1 UNSCORED.
+One defect accounted for 24 of those tests: MicroPython's APPROX float format *and* parse both
+scale by `pow(5, n)` (`py/parsenum.c:275`), so the BEEBS soft-float `pow` — `exp(y*log(x))`, whose
+relative error on `pow(5,16)` is -1.3014e-12 — made `repr(1.0)` print `0.9999999999986986`, the
+same 1.3e-12 digit for digit.
+
+What remains is genuinely absent features, not arithmetic: 51 native/Viper (needs a Capstone native
+emitter), 33 `thread`, 25 `cmdline`/REPL and 22 filesystem `import` cases the embedded single-source
+runner cannot express, 5 `io` file cases, and 2 needing `unittest`. Do not change tests or re-run
+the old 422-test stop. Details are in `plans/micropython-domain-compilation.md`.
 
 Bitstream is `caplifive_s07diag.bit`. S-06 and S-08 are FIXED in silicon and verified; their
 folders are resolved. S-07 is the one open silicon issue, and the handover is written and
