@@ -21,6 +21,8 @@ MPY_SRC_DIR=${MPY_SRC_DIR:-$CAPSTONE_TMP_ROOT/micropython}
 LADDER="$REPO_ROOT/capstone/tests/runtime-qemu/silicon-ladder"
 GPFREE="$REPO_ROOT/capstone/tests/runtime-qemu/gp-free-domain"
 BEEBS_STRING="$REPO_ROOT/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c"
+BEEBS_SOFTFLOAT="$REPO_ROOT/capstone/benchmarks/beebs/build-beebs-softfloat-common.sh"
+COMPILER_RT="$REPO_ROOT/compiler-rt/lib/builtins"
 PORT="$SCRIPT_DIR/port"
 SHIM="$SCRIPT_DIR/adapted/include"
 
@@ -45,6 +47,17 @@ OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/micropython-silicon}
 OBJ_DIR=${OBJ_DIR:-$OUT_DIR/obj}
 mkdir -p "$OUT_DIR" "$OBJ_DIR"
 
+FLOAT_DEFS=()
+if [[ -n ${MPY_FLOAT_CORE:-} ]]; then
+  FLOAT_DEFS=(-DMICROPY_FLOAT_IMPL=2
+              -DMICROPY_FLOAT_FORMAT_IMPL=1
+              -DMICROPY_PY_BUILTINS_COMPLEX=0
+              -DMICROPY_PY_MATH=0
+              -DMICROPY_PY_CMATH=0
+              -DMICROPY_PY_MATH_CONSTANTS=0
+              -DMPY_CSTACK_MAX=393216)
+fi
+
 CLANG=${CAPSTONE_CLANG}
 LD_LLD=${CAPSTONE_LD_LLD}
 
@@ -59,7 +72,7 @@ echo "== generating this port's headers (stock toolchain, host only)"
 rm -rf "$MPY_PORT_DIR"
 cp -r "$PORT" "$MPY_PORT_DIR"
 make -C "$MPY_PORT_DIR" -j"${HDR_JOBS:-8}" \
-    CFLAGS_EXTRA="${DOMAIN_EXTRA_DEFS:-}" >"$OBJ_DIR/genhdr.log" 2>&1 || {
+    CFLAGS_EXTRA="${DOMAIN_EXTRA_DEFS:-} ${FLOAT_DEFS[*]}" >"$OBJ_DIR/genhdr.log" 2>&1 || {
   echo "header generation failed; see $OBJ_DIR/genhdr.log" >&2; tail -5 "$OBJ_DIR/genhdr.log" >&2; exit 1; }
 GEN_DIR="$MPY_PORT_DIR/build"
 [[ -f $GEN_DIR/genhdr/qstrdefs.generated.h ]] || {
@@ -85,7 +98,8 @@ SILICON=(-mllvm -capstone-gp-captable
          # parameterised probe silently builds the DEFAULT value for every arm and the whole
          # sweep measures one thing N times -- caught here by hashing the images, not by the
          # exit code, which was 0 for all of them.
-         ${DOMAIN_EXTRA_DEFS:-})
+         ${DOMAIN_EXTRA_DEFS:-}
+         "${FLOAT_DEFS[@]}")
 COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         -ffreestanding
         # -nostdlibinc, or clang searches /usr/include even for a bare-metal triple and
@@ -135,6 +149,25 @@ AMALGAM="$OBJ_DIR/mpy_all.c"
       echo '#undef realloc_ext'
     fi
   done
+  if [[ -n ${MPY_FLOAT_CORE:-} ]]; then
+    # MicroPython's OWN libm, not an approximation of it. Its APPROX float formatting and parsing
+    # both scale by pow(5, n) (py/parsenum.c:275), so pow's accuracy IS repr's accuracy: with the
+    # BEEBS exp(y*log(x)) pow, whose relative error on pow(5,16) is -1.3e-12, repr(1.0) printed
+    # 0.9999999999986986 -- the same 1.3e-12 -- and 24 float tests failed on their last digits.
+    # exp.c/log.c are left out: only math, cmath and complex call them and all three are off here.
+    # That is also what keeps their P1..P5 from colliding with pow.c's inside the one TU.
+    for m in fmod copysign rint nearbyint scalbn pow; do
+      echo "#include \"$MPY_SRC_DIR/lib/libm_dbl/$m.c\""
+    done
+    # Upstream compiles each of these separately, so two pairs share a file-static name that only
+    # collides once amalgamated: floor/rint on `toint`, sqrt/pow on `tiny`. Rename the later one.
+    for m in floor:toint sqrt:tiny; do
+      echo "#define ${m#*:} mpy_${m%%:*}_${m#*:}"
+      echo "#include \"$MPY_SRC_DIR/lib/libm_dbl/${m%%:*}.c\""
+      echo "#undef ${m#*:}"
+    done
+    echo "#include \"$MPY_PORT_DIR/capstone_math_extra.c\""
+  fi
   echo "#include \"$MPY_PORT_DIR/mpy_domain.c\""
 } > "$AMALGAM"
 
@@ -158,6 +191,18 @@ echo "== compiling (this is the whole interpreter in one go)"
 "$CLANG" "${COMMON[@]}" "${SILICON[@]}" \
   -c "$MPY_PORT_DIR/capstone_str_extra.c" -o "$OBJ_DIR/str_extra.o"
 
+FLOAT_OBJS=()
+if [[ -n ${MPY_FLOAT_CORE:-} ]]; then
+  COMMON_FLAGS=("${COMMON[@]}" "${SILICON[@]}" -D__SOFTFP__)
+  source "$BEEBS_SOFTFLOAT"
+  FLOAT_OBJS+=("${softfloat_objs[@]}")
+  for builtin in extendhfsf2 truncsfhf2; do
+    "$CLANG" "${COMMON_FLAGS[@]}" -I"$COMPILER_RT" \
+      -c "$COMPILER_RT/$builtin.c" -o "$OBJ_DIR/softfloat-$builtin.o"
+    FLOAT_OBJS+=("$OBJ_DIR/softfloat-$builtin.o")
+  done
+fi
+
 "$CLANG" -target capstone64-unknown-elf -ffreestanding \
   -c "$LADDER/../gct-section-end.S" -o "$OBJ_DIR/gct.o"
 
@@ -169,7 +214,7 @@ link() {  # $1 = globals offset literal, $2 = output
     -c "$LADDER/start-gp-captable-interp.S" -o "$OBJ_DIR/start.o"
   "$LD_LLD" -T "$lds" -o "$2" \
     "$OBJ_DIR/start.o" "$OBJ_DIR/mpy.o" "$OBJ_DIR/beebs_string.o" \
-    "$OBJ_DIR/setjmp.o" "$OBJ_DIR/str_extra.o" "$OBJ_DIR/gct.o"
+    "$OBJ_DIR/setjmp.o" "$OBJ_DIR/str_extra.o" "${FLOAT_OBJS[@]}" "$OBJ_DIR/gct.o"
 }
 
 echo "== pass 1: link at a provisional 8 MiB offset, only to measure .text"

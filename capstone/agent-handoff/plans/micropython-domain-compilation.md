@@ -1294,6 +1294,68 @@ and 86 `cpydiff` documentation inputs. They require their own upstream harnesses
 that this domain port does not expose; embedding them as independent source strings would produce
 misleading verdicts.
 
+### Double-precision floats, and the one defect that cost 24 tests (2026-08-17)
+
+`MPY_FLOAT_CORE=1` builds the port with `MICROPY_FLOAT_IMPL_DOUBLE` and
+`MICROPY_FLOAT_FORMAT_IMPL_APPROX`. Complex, `math` and `cmath` stay off, so the profile gains
+float *objects* only. What that needed: the compiler-rt soft-float builtins (already shared with
+BEEBS via `build-beebs-softfloat-common.sh`), a real `<math.h>` in `adapted/include`, `fabs` and
+`nan` in `port/capstone_math_extra.c`, patch 0019 to drop the `e`/`pi` singletons that only the
+disabled module tables reference, and `MPY_CSTACK_MAX` so the C-stack limit does not follow a
+carve that grew with the image.
+
+**The libm choice is not a detail — it decides `repr`.** The first build linked BEEBS's soft-float
+libm, whose `pow` is `exp(y * log(x))`. Every float test then failed on its *last digits*:
+`repr(1.0)` printed `0.9999999999986986`, `repr(0.12)` printed `0.11999999975505282`, and
+`1e-37 == 1e-37` compared False after a round trip. That is one defect, not an accuracy tax.
+MicroPython's APPROX conversion scales by a power of five and nothing else —
+`res.f *= MICROPY_FLOAT_C_FUN(pow)(5, dec_exp)`, `py/parsenum.c:275` — and that single call sits on
+both the format path (`py/formatfloat.c:464`) and the parse path (`py/parsenum.c:378`). So `pow`'s
+relative error *is* `repr`'s relative error, digit for digit:
+
+    BEEBS pow(5,16)            152587890624.80142     relative error -1.3014e-12
+    predicted repr mantissa    10**16 * (1 - 1.3014e-12)  =  9999999999986986
+    observed  repr(1.0)        0.9999999999986986
+
+The fix is to stop approximating a libm that is already in the tree. MicroPython ships
+`lib/libm_dbl` (musl/fdlibm); the port already took `fmod`, `copysign`, `rint` and `nearbyint`
+from it, and it also has `pow`, `floor`, `scalbn` and `sqrt`. Two mechanical points, because this
+port is one translation unit and upstream is not:
+
+- `exp.c`/`log.c` stay out. Only `math`, `cmath` and `objcomplex` call them, all off here — and
+  leaving them out is also what keeps their `P1..P5` from colliding with `pow.c`'s.
+- `floor.c`/`rint.c` share a file-static `toint`, and `sqrt.c`/`pow.c` share a `tiny`. Amalgamated
+  that is a redefinition, so the later include of each pair renames its own copy.
+
+Three measured states, same five chunks, same oracle, `--capture-output` throughout:
+
+| | standard 917 | all 1117 |
+|---|---|---|
+| no float (previous section) | 598 / 86 / 233 | 625 / 237 / 255 |
+| float, BEEBS `pow` | 598 / 66 / 253 | 644 / 184 / 289 |
+| float, `lib/libm_dbl` `pow` | **600 / 64 / 253** | **670 / 158 / 289** |
+
+*(PASS / FAIL / UNSCORED.)* The libm swap alone is 26 FAIL→PASS with **no** status regression:
+24 `float/` tests — every float failure that was an output mismatch rather than an exception —
+plus `basics/string_tstring_format1.py` and `micropython/const_float.py`. `float/float1.py` and
+`float/float_parse.py` were re-checked byte-for-byte against CPython, not just by result word.
+
+Enabling float earlier also moved 34 FAILs to UNSCORED, which is honest rather than a loss: with a
+float implementation present those tests reach their own `import math` / `import asyncio` guard and
+take upstream's target-skip path, where before they died on a float literal.
+
+All nine float tests still failing return the same uncaught exception, `SyntaxError: complex values
+not supported` — `MICROPY_PY_BUILTINS_COMPLEX=0`, a disabled feature, not a numeric defect. The
+next coherent family is therefore `math`/`cmath`/complex together: ~26 tests (9 FAIL + 17 UNSCORED
+skips), all of which need the trig half of `lib/libm_dbl`. That set compiles as one TU once 31
+colliding file statics are renamed per unit (`acos`/`asin`, `exp`/`pow`, `log`/`log1p`,
+`atan2`/`tgamma`, and the `toint` group); `__fpclassify.c` must be left out, as it needs `FP_*`
+macros the shim does not define. Its cost is ~93 KB of `.text` at `-O0`, against a 445,808-byte
+stack reserve in the tightest chunk (`000_399`), so chunk fit is the thing to check first.
+
+Build and run exactly as the previous section documents, with `MPY_FLOAT_CORE=1` added to each of
+the five builds.
+
 ### Traps that cost time here
 
 - **`capstone-test-env.sh` resolved `CAPSTONE_REPO_ROOT` to `/home`** in this shell, so

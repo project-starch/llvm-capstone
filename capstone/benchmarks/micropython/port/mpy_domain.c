@@ -125,6 +125,16 @@ static size_t cap_stack_headroom(void) {
     return (size_t)(cur - base);
 }
 
+static size_t mpy_cstack_size(void) {
+    size_t size = cap_stack_headroom();
+#ifdef MPY_CSTACK_MAX
+    if (size > MPY_CSTACK_MAX) {
+        size = MPY_CSTACK_MAX;
+    }
+#endif
+    return size;
+}
+
 /* MPY_STAGE bisects startup. Each stage RETURNS a marker instead of running on, so a stage that
    does not return is the bisection point -- the rule this project learned the expensive way:
    a wedged domain emits nothing, so a run that only ever fails tells you one bit per boot.
@@ -171,7 +181,7 @@ static void mpy_run_one_test(unsigned *res) {
        reachable lives in the heap, so re-initialising it is safe and it is the only thing that
        makes an OOM in test N attributable to test N. sp is re-recorded because the stack limit
        must be measured from THIS call's frame, not the first call's. */
-    mp_cstack_init_with_sp_here(cap_stack_headroom());
+    mp_cstack_init_with_sp_here(mpy_cstack_size());
     gc_init(mpy_heap, mpy_heap + sizeof(mpy_heap));
     mp_init();
     int rc = do_str(mpy_tests[idx], MP_PARSE_FILE_INPUT);
@@ -338,7 +348,7 @@ void domain_main(unsigned *res, unsigned func) {
     }
 #endif
 
-    mp_cstack_init_with_sp_here(cap_stack_headroom());
+    mp_cstack_init_with_sp_here(mpy_cstack_size());
 #if MPY_STAGE == 1
     MPY_MARK(0xA1);            /* the stack limit is set */
 #endif
