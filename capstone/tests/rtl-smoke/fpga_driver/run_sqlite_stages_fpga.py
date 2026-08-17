@@ -174,8 +174,11 @@ def decode_s07_verdict(v):
     if src == 3:
         fault.append("ldc0_src == 3 is not a defined source")
 
-    srcname = {0: "L1 hit", 1: "miss refill (tag memory)", 2: "write-buffer forward",
-               3: "UNDEFINED"}[src]
+    # src==0 means the tag came off the L1 DATA ARRAY on this response, which INCLUDES a miss
+    # that was refilled and then read from the array. It does NOT mean the line was already
+    # resident before this instruction: genuine-hit vs replayed-after-refill is not in this bit.
+    srcname = {0: "tag from L1 array (incl. replay after refill)",
+               1: "miss refill (tag memory)", 2: "write-buffer forward", 3: "UNDEFINED"}[src]
     bits = (f"ldc0_valid={ldc_valid} src={src} ({srcname}) stc_valid={stc_valid} "
             f"stc_ctag={stc_ctag} gran_match={match} clobbered={clobbered} "
             f"selftest_seen={selftest}")
@@ -198,8 +201,17 @@ def decode_s07_verdict(v):
                 "reload returning NOT_CAP is CORRECT and the fault is UPSTREAM of both memory "
                 "and the syncer.", False)
     if ldc_valid and not match:
-        return ("unmatched", bits + "  -- the untagged load's granule is not the last recorded "
-                "capability store; compare the granule addresses.", False)
+        # match=0 IS WEAK, and the asymmetry is why: the STC record is the LAST capability
+        # store and ROLLS on every one, while the LDC record is the FIRST untagged load and is
+        # one-shot. So this compares the first untagged load against whatever store happened to
+        # be most recent. match=1 is strong; match=0 is equally consistent with "the store
+        # record simply rolled past that granule", which is the common case if any capability
+        # store followed. Do NOT report it as "the granule was not the recorded store".
+        return ("unmatched (WEAK)", bits + "  -- the records do not refer to the same granule, "
+                "but the STC record rolls on every capability store while the LDC record is "
+                "one-shot, so this is equally consistent with the store record having rolled "
+                "past. Carries far less weight than a match; compare the granule addresses.",
+                False)
     if not ldc_valid:
         return ("no untagged load seen", bits, False)
     return ("unclassified", bits, False)
@@ -757,6 +769,29 @@ def main():
                     _wline += f"  {_d[0]}: {_d[1]}"
                 print(_wline, flush=True)
                 transcript.append(_wline + "\n")
+
+                # IS THE ONE-SHOT ALREADY SPENT? This is the control that decides whether the
+                # later wedge readout means anything, and it costs one read.
+                #
+                # The LDC record captures the FIRST response returning tag=0 SINCE RESET -- not
+                # the first that faults, and not scoped to a domain. Post-S-06 an untagged LDC
+                # is architecturally legal and does not fault; it only faults when the result is
+                # later USED as a capability. So any earlier benign untagged load anywhere in
+                # the boot -- monitor, entry glue, the control domain, a 128-bit granule copy
+                # over scalar data -- latches the record, and the faulting load then never gets
+                # recorded. The failure is SILENT: ldc0_valid=1 with a paddr that is not the
+                # faulting address and gran_match=0, which is indistinguishable from a genuine
+                # unmatched result.
+                #
+                # Nothing clears it but reset -- the 191 trap-log clear does not touch any s07_*
+                # register -- so a spent probe stays spent for the whole boot.
+                if _w is not None and dom_idx == 1 and ((_w >> 7) & 1):
+                    _sline = ("  [s07] PROBE ALREADY SPENT after the control: ldc0_valid is set "
+                              "before any test domain ran, so the LDC record belongs to an "
+                              "earlier benign untagged load and CANNOT be the faulting one. "
+                              "Any later wedge verdict from 208 carries NO weight this boot.")
+                    print(_sline, flush=True)
+                    transcript.append(_sline + "\n")
                 # The trap-log summary {seen, mcause[6:0]} alongside it. With the clear skipped
                 # the trap fields are last-writer-wins, so the ONLY way to tell "this domain
                 # trapped" from "a previous domain's trap is still latched" is to compare against
@@ -1115,6 +1150,73 @@ def main():
                 log("STOPPING: a wedged domain takes the core with it, so nothing after "
                     "this point would be meaningful")
                 break
+
+        # ---------------------------------------------------------------------------------
+        # SELFTEST: prove the displacement detector can fire, on THIS silicon, THIS boot.
+        #
+        # Runs last, after every domain and after any wedge readout, and that ordering is
+        # deliberate: the trigger sets switch 204's pair (ldc_seen and the count) as well as
+        # bit 0 of 208, so firing it earlier would contaminate the very byte being measured.
+        # It does NOT touch the 208 verdict fields (ldc0_*, stc_*, gran_match), so those stay
+        # trustworthy either way.
+        #
+        # SAFE AFTER A WEDGE: the trigger is combinational off the switch value and the capture
+        # sits in an always_ff whose only enables are clock, reset and the trap-log clear --
+        # nothing in the fetch/issue/commit/memory path. A wedged core still has a running
+        # clock, so this validates a wedging boot exactly as well as a clean one. Only a reset
+        # voids it.
+        #
+        # THE TRAP: switch 220 is BOTH trigger and readback -- reading it arms it. There is no
+        # way to ask "is it armed yet" without arming it, so 204 read BEFORE the trigger is the
+        # only usable baseline.
+        #
+        # Without this, every 0x00 is an argued negative: "no displacement happened" and "the
+        # detector does not work in this bitstream" are otherwise indistinguishable.
+        try:
+            def _sw(_v):
+                for _b in range(8):
+                    console.set_switch(_b, bool(_v & (1 << _b)))
+                time.sleep(1.2)
+                _s = console.latest(C.LISTEN.get("led_state", "led_state"))
+                _bits = _s.get("states") if isinstance(_s, dict) else None
+                return sum((1 << i) for i, b in enumerate(_bits) if b) if _bits else None
+
+            _pre = _sw(204)                      # baseline BEFORE arming
+            _flag = _sw(220)                     # selecting 220 IS the trigger
+            _post = _sw(204)
+            _verd = _sw(208)
+            for _b in range(8):                  # park somewhere even and harmless
+                console.set_switch(_b, False)
+
+            _ok_flag = _flag == 0x01
+            _ok_move = (_pre is not None and _post is not None
+                        and ((_post >> 6) & 1) == 1
+                        and (_post & 0x3F) == min(63, (_pre & 0x3F) + 1))
+            _ok_mark = _verd is not None and (_verd & 1) == 1
+            for _t in (f"  [s07] SELFTEST pre-204  = "
+                       + ("UNREAD" if _pre is None else f"0x{_pre:02x}"),
+                       f"  [s07] SELFTEST 220 flag = "
+                       + ("UNREAD" if _flag is None else f"0x{_flag:02x}")
+                       + ("  (expect 0x01)" if not _ok_flag else "  OK"),
+                       f"  [s07] SELFTEST post-204 = "
+                       + ("UNREAD" if _post is None else f"0x{_post:02x}")
+                       + ("  OK: ldc_seen set and count moved by exactly 1" if _ok_move
+                          else "  <== DID NOT MOVE AS EXPECTED"),
+                       f"  [s07] SELFTEST 208 bit0 = "
+                       + ("UNREAD" if _verd is None else f"0x{_verd:02x}")
+                       + ("  OK: set marked SYNTHETIC" if _ok_mark else "  <== NOT MARKED"),
+                       ("  [s07] SELFTEST PASS -- the detector fires on this silicon, so every "
+                        "0x00 read this boot is a CONTROLLED negative"
+                        if (_ok_flag and _ok_move and _ok_mark) else
+                        "  [s07] SELFTEST FAIL -- the detector was NOT shown to fire, so every "
+                        "0x00 read this boot is an ARGUED negative and carries no verdict")):
+                print(_t, flush=True)
+                transcript.append(_t + "\n")
+        except Exception as exc:
+            _t = (f"  [s07] SELFTEST could not be run ({type(exc).__name__}) -- treat this "
+                  f"boot's zeros as argued, not controlled")
+            print(_t, flush=True)
+            transcript.append(_t + "\n")
 
         pathlib.Path(OUT).write_text("".join(transcript))
         log(f"per-domain UART -> {OUT}")
