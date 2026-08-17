@@ -6,8 +6,25 @@ Thirty cases in `temporal-allocator-corpus.csv`.
 
 MicroPython is interesting here precisely because it does not use the system
 allocator. It carves one heap at startup and manages it itself, so every case
-below is a lifetime bug on memory the collector believes it owns. That is the
-configuration a capability machine is supposed to change.
+below is a lifetime bug on memory the collector believes it owns.
+
+**And that is why Capstone catches none of them.** This is the point of the
+corpus, not a disappointment in it. `mpy_domain.c` declares the heap as a single
+384 KiB static array and hands that one object to `gc_init`, so every block the
+collector sub-allocates inherits a capability spanning the whole heap.
+`evidence/heap-bounds-model.s` is the compiled proof: the bounds are set once, to
+the entire object (`lui a3, 96`, so 96 << 12 = 393216 bytes), and `cincoffset`
+then just moves a cursor inside them. A write through a stale pointer is a bare
+`sb` that the hardware has no grounds to reject. `gc_free` compounds it by being
+pure bookkeeping in a software bitmap: it never reaches the hardware, so nothing
+is ever revoked and a dangling pointer stays indistinguishable from a live one.
+
+Capstone does have the mechanism that would catch these, and the cross-language
+work in `agent-handoff` shows revocation catching heap use-after-free where the
+C library's `malloc`/`free` drives it. A nested allocator is exactly the case
+where that driver is missing. The corpus therefore has two separate columns: what
+an unmodified runtime gets today, which is nothing, and what a
+capability-aware collector could get, which is the open research question.
 
 ## What counts, and what does not
 
@@ -55,8 +72,10 @@ reported both.
 | `component` | file or function, from the report |
 | `scope` | `gc-core` (inside the collector), `gc-managed` (on collector memory), `port-heap` (port allocator interaction) |
 | `trigger` | one line on what has to happen for it to fire |
-| `capstone_hypothesis` | **a prediction, not a measurement** |
-| `repro_status` | `none` for all thirty right now |
+| `traps_unmodified` | what Capstone gives an unmodified runtime today: `no` inside the collector's heap, measured |
+| `traps_if_gc_cap_aware` | what a capability-aware `gc_alloc`/`gc_free` could give: **a prediction** |
+| `repro_status` | `confirmed` for three rows, `none` for the rest |
+| `stock_behaviour` | measured on a stock host build: `crash-sigsegv`, `silent-corruption`, `not-run` |
 | `notes` | provenance and cross-references |
 
 ## Which source to build, per case
@@ -125,20 +144,28 @@ The general lesson for the other rows: **upstream still having the issue open is
 a proxy, and this is a case where the proxy was wrong about reproducibility.**
 Run it on the host before spending a domain build on it.
 
-## The one column to be careful with
+## The two hypothesis columns
 
-`capstone_hypothesis` currently reads `trapped` for twenty rows, `unclear` for
-six and `not-trapped` for four. None of that has been run on hardware or in
-simulation. It is a reading of each report, and reading a bug report is exactly
-the step that has produced wrong conclusions on this project before. The four
-`not-trapped` entries are the honest ones and the most useful: a deadlock in a
-finaliser, a data race, a leak, and over-retention are not spatial or temporal
-reach violations, so a capability machine has no reason to catch them, and a
-corpus where every row conveniently confirms the thesis would not be worth
-having.
+`traps_unmodified` is not a guess. It reads `no` for all 26 `gc-core` and
+`gc-managed` rows because the heap is one capability and `gc_free` never talks to
+the hardware, which is measured in `evidence/`. It reads `unclear` for the four
+`port-heap` rows only because those involve a second allocator whose behaviour
+has not been examined. `verify-corpus.py` enforces the rule: a row inside the
+collector's own heap that claims to trap unmodified is rejected as a mistake.
 
-Treat the column as a work list. It becomes evidence only when `repro_status`
-moves off `none`.
+`traps_if_gc_cap_aware` is the prediction, and it is worth exactly as much as any
+unrun prediction. It asks what happens if `gc_alloc` narrows a capability per
+block and `gc_free` drives revocation. It reads `trapped` for 20 rows, `unclear`
+for 6 and `not-trapped` for 4. Nothing behind it has been built or run.
+
+The four `not-trapped` entries are the honest ones and the most useful: a
+finaliser deadlock, a data race, a leak and over-retention are not reach
+violations, so no amount of capability discipline addresses them, and a corpus
+where every row confirmed the thesis would not be worth having.
+
+The distinction that makes a row valuable is therefore not "does it crash" but
+"is it invisible today and visible under an instrumented collector". By that
+measure `MPY-T09` is the strongest row in the table.
 
 ## Next step
 

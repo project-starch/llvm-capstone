@@ -3,8 +3,9 @@
 
 Title, state, date and URL are COPIED from verified API responses (GitHub GraphQL
 and the NVD REST API), never typed by hand. Only the classification columns are
-authored here, and `capstone_hypothesis` is explicitly a prediction, not a
-measurement.
+authored here. `traps_unmodified` follows from a measurement (see
+evidence/heap-bounds-model.s); `traps_if_gc_cap_aware` is a prediction about a
+runtime that does not exist yet.
 """
 import csv, json, sys, os
 
@@ -112,7 +113,7 @@ ROWS = [
 HEADER = ["id", "source", "ref", "url", "title", "state", "first_seen",
           "fix_commit", "fix_date", "present_at_pin", "repro_base",
           "class", "cwe", "component", "scope", "trigger",
-          "capstone_hypothesis", "repro_status", "stock_behaviour", "notes"]
+          "traps_unmodified", "traps_if_gc_cap_aware", "repro_status", "stock_behaviour", "notes"]
 
 # Which MicroPython source actually has to be built to see each defect. Computed
 # by gen-fix-status against a full clone (git merge-base --is-ancestor), never
@@ -164,9 +165,17 @@ for rid, ref, cls, cwe, comp, scope, trig, hyp, notes in ROWS:
     if base == "pin":
         base = PIN
     repro, stock = MEASURED.get(ref, ("none", "not-run"))
+    # What an UNMODIFIED MicroPython gets from Capstone, which is the honest
+    # baseline and is almost always nothing. mpy_domain.c carves the heap as one
+    # 384 KiB static array and gc_init hands that single object to the collector,
+    # so every block it sub-allocates inherits a capability spanning the whole
+    # heap (measured: evidence/heap-bounds-model.s). gc_free is bookkeeping in a
+    # software bitmap and never reaches the hardware, so nothing is revoked and a
+    # stale pointer stays indistinguishable from a live one.
+    unmod = "unclear" if scope == "port-heap" else "no"
     out.append([rid, src, ref, url, title, state, date,
                 fix_commit, fix_date, present, base,
-                cls, cwe, comp, scope, trig, hyp, repro, stock, notes])
+                cls, cwe, comp, scope, trig, unmod, hyp, repro, stock, notes])
 
 if missing:
     print("FEHLT, nicht verifiziert:", missing, file=sys.stderr)
@@ -179,5 +188,5 @@ with open(OUT, "w", newline="\n") as f:
 
 print(f"{len(out)} Zeilen geschrieben nach {OUT}")
 from collections import Counter
-for col, name in ((11, "class"), (14, "scope"), (16, "capstone_hypothesis"), (9, "present_at_pin"), (18, "stock_behaviour")):
+for col, name in ((11, "class"), (14, "scope"), (16, "traps_unmodified"), (17, "traps_if_gc_cap_aware"), (9, "present_at_pin"), (19, "stock_behaviour")):
     print(f"  {name:22s}", dict(Counter(r[col] for r in out)))

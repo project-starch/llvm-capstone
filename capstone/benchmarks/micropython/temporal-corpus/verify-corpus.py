@@ -18,6 +18,7 @@ VALID_CLASS = {"uaf", "double-free", "dangling-view", "dangling-buffer", "dangli
                "alloc-invariant", "memory-corruption"}
 VALID_SCOPE = {"gc-core", "gc-managed", "port-heap"}
 VALID_HYP = {"trapped", "not-trapped", "unclear"}
+VALID_UNMOD = {"no", "yes", "unclear"}
 VALID_REPRO = {"none", "planned", "built", "confirmed"}
 VALID_PRESENT = {"yes", "no", "unknown"}
 
@@ -47,8 +48,15 @@ def check(rows, issues, nvd):
             errs.append(f"{rid}: unknown class {r['class']!r}")
         if r["scope"] not in VALID_SCOPE:
             errs.append(f"{rid}: unknown scope {r['scope']!r}")
-        if r["capstone_hypothesis"] not in VALID_HYP:
-            errs.append(f"{rid}: unknown hypothesis {r['capstone_hypothesis']!r}")
+        if r["traps_if_gc_cap_aware"] not in VALID_HYP:
+            errs.append(f"{rid}: unknown traps_if_gc_cap_aware {r['traps_if_gc_cap_aware']!r}")
+        if r["traps_unmodified"] not in VALID_UNMOD:
+            errs.append(f"{rid}: unknown traps_unmodified {r['traps_unmodified']!r}")
+        # The measured baseline: anything inside MicroPython's own heap gets no
+        # temporal protection from an unmodified runtime. A row claiming
+        # otherwise contradicts evidence/heap-bounds-model.s and is a mistake.
+        if r["scope"] in ("gc-core", "gc-managed") and r["traps_unmodified"] != "no":
+            errs.append(f"{rid}: scope {r['scope']} cannot trap unmodified")
         if r["repro_status"] not in VALID_REPRO:
             errs.append(f"{rid}: unknown repro_status {r['repro_status']!r}")
         if r["present_at_pin"] not in VALID_PRESENT:
