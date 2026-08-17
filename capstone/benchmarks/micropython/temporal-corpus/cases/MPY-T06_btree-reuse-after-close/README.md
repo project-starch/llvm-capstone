@@ -2,7 +2,7 @@
 Source: #12543, https://github.com/micropython/micropython/issues/12543  
 Upstream state: closed, first seen 2023-09-28
 
-**BLOCKED on a parent build. Already fixed in the pinned source.**
+**MEASURED at the fix commit's parent. Fixed in the pinned source.**
 
 ## The defect
 
@@ -29,7 +29,10 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. Fixed at the pin; also needs the btree module, which this domain does not build.
+- stock MicroPython at the pin: **crash-sigsegv**
+- Capstone domain under QEMU: **not-run**
+
+See `RESULT.txt` in this directory.
 
 ## Reproducing
 

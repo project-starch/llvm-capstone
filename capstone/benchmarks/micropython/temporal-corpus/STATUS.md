@@ -17,7 +17,7 @@ These ran. Both columns are measurements, not predictions. MPY-T28 was run on st
 | `MPY-T25` | #10402 | crash-sigsegv | fault-cause24 |
 | `MPY-T28` | #322 | not-reproducible | not-run |
 
-## Measured at the fix commit's parent (8)
+## Measured at the fix commit's parent (9)
 
 Already fixed in the pinned source, so these were measured on the last commit that still carries the defect. Built with gcc-12 per `evidence/parent-build-attempt-2026-08-17.txt`.
 
@@ -28,17 +28,17 @@ Already fixed in the pinned source, so these were measured on the last commit th
 | `MPY-T03` | CVE-2026-1998 | crash-sigsegv | not-run |
 | `MPY-T04` | #12887 | silent-no-effect | not-run |
 | `MPY-T05` | #13283 | silent-no-effect | not-run |
+| `MPY-T06` | #12543 | crash-sigsegv | not-run |
 | `MPY-T08` | #12670 | crash-sigsegv | not-run |
 | `MPY-T14` | #19060 | silent-no-effect | not-run |
 | `MPY-T15` | #17848 | silent-no-effect | not-run |
 
-## Blocked: already fixed, parent not yet built (5)
+## Blocked: already fixed, parent not yet built (4)
 
 Measuring these needs the fix commit's parent. Attempted and currently blocked by toolchain age, not by our patches: see `evidence/parent-build-attempt-2026-08-17.txt`.
 
 | case | source | stock | domain |
 |---|---|---|---|
-| `MPY-T06` | #12543 | not-run | not-run |
 | `MPY-T07` | #4128 | not-run | not-run |
 | `MPY-T19` | #5226 | not-run | not-run |
 | `MPY-T24` | #11781 | not-run | not-run |

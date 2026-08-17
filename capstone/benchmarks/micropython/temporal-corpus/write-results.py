@@ -259,6 +259,33 @@ the documented growth path was driven well past its threshold and produced no
 observable difference between a vulnerable build and a fixed one.
 """,
 
+"MPY-T06_btree-reuse-after-close": """MPY-T06 / upstream 12543
+
+  stock at the pin                    : raises ValueError, exit 0
+  stock at the fix's PARENT 8159dcc276: SIGSEGV, exit 139
+  Capstone domain                     : not run
+
+REPRODUCED AT THE PARENT, AND IT IS LOUD. A clean matched pair: one script, two
+builds, and the only difference is the fix.
+
+  parent: "T06 closed" reaches stderr, then the read after close segfaults
+  pin:    "T06 closed", "T06 EXC ValueError", "T06 survived"
+
+The original report reproduces this under ASan with clang. That was not needed
+and would not have worked here anyway, since AddressSanitizer breaks the
+MicroPython unix port outright (see
+../../evidence/parent-build-attempt-2026-08-17.txt). A plain build and a
+comparison against the fixed pin is enough when the defect crashes.
+
+WHY THIS ONE CRASHES WHERE OTHERS IN THIS CORPUS DO NOT. close() releases the
+berkeley-db state, which lives OUTSIDE MicroPython's GC heap: it is a real
+malloc/free pair in the bundled library. So the freed memory genuinely leaves the
+allocator's ownership and the reuse hits unmapped or reused pages. Compare
+MPY-T01, where the same shape of defect on GC-managed memory produces nothing at
+all. The difference is not the bug, it is which allocator owns the storage, and
+that is the corpus thesis stated by two rows side by side.
+""",
+
 "MPY-T25_stringio-subclass-print": """MPY-T25 / upstream 10402
 
   stock MicroPython at pin 2e3304a : SIGSEGV
