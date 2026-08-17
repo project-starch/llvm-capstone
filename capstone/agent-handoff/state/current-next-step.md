@@ -50,8 +50,11 @@ ordered map computed `NULL + 0`, rather than losing a valid capability tag. The 
 no capability faults. Patch 0014 fixed the four bytearray cases as one cluster: empty arrays had
 `items=NULL`, while generic paths formed `items + 0`. Patch 0015 fixed the final three big-integer
 cases at their common `mpz_as_int_checked` site: MPZ zero had `dig=NULL` and `len=0`, while the
-conversion formed `dig + len`. Any next MicroPython follow-up should classify the 500 ordinary
-FAIL and 14 UNSCORED cases by missing feature or harness requirement, not repair tests individually
+conversion formed `dig + len`. The remaining results are classified: 481 of 500 FAILs returned
+with the uncaught-exception bit and cluster in disabled feature families; only 19 are output
+mismatches without an uncaught exception, eight in the standard set. All 14 UNSCORED tests returned
+but lack a host oracle. If MicroPython work continues, add an opt-in raw-output diagnostic for
+those eight standard mismatches before changing interpreter code; do not repair tests individually
 or re-run the old 422-test stop. Details are in
 `plans/micropython-domain-compilation.md`.
 

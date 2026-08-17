@@ -28,6 +28,10 @@ Minimal snapshot. Read first in every session.
   exactly the four bytearray faults to PASS. Patch 0015 handles MPZ zero before forming
   `dig + len`, changing exactly the final three big-integer faults to PASS. The current full total
   is `603 PASS / 500 FAIL / 0 FAULT / 14 UNSCORED`.
+  Of the 500 ordinary FAIL results, 481 returned with the harness's uncaught-exception bit set;
+  they cluster in disabled or unavailable feature families. Only 19 are output mismatches without
+  an uncaught exception, eight of them in the 917-file standard set. All 14 UNSCORED files also
+  returned; only their host-Python oracle generation failed.
   The resumable chunk runner gets past domain-fatal faults without changing tests.
   The 529 other Python files are fixtures, runner utilities, benchmark/differential inputs, or
   require multi-instance, network, hardware, port, or architecture-specific harnesses; they are

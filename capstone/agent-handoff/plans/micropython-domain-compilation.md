@@ -1135,6 +1135,42 @@ non-capability NULL base. All three remaining faults stopped at that exact instr
 FAULT to PASS; every other status and result word was unchanged. The direct-file census now has no
 capability fault and no hang.
 
+The remaining FAIL total does not represent 500 unexplained Capstone failures. The result word's
+bit 31 records whether the interpreter printed an uncaught exception. Of 500 FAILs, 481 have that
+bit set and 19 returned normally but produced a different output hash:
+
+| directory | uncaught exception | output mismatch | total FAIL |
+|---|---:|---:|---:|
+| `basics` | 41 | 3 | 44 |
+| `extmod` | 204 | 0 | 204 |
+| `micropython` | 71 | 5 | 76 |
+| `misc` | 11 | 0 | 11 |
+| `stress` | 4 | 0 | 4 |
+| `cmdline` | 17 | 10 | 27 |
+| `float` | 68 | 1 | 69 |
+| `import` | 24 | 0 | 24 |
+| `io` | 7 | 0 | 7 |
+| `thread` | 33 | 0 | 33 |
+| `unicode` | 1 | 0 | 1 |
+| **total** | **481** | **19** | **500** |
+
+This distribution matches the deliberately small port profile: it has no float implementation,
+external import or VFS, and disables several sys/stdio/uctypes facilities; native/Viper, threads,
+network/TLS, machine, filesystem and many optional extmod paths are unavailable in this domain.
+Those families dominate the exception results. The 19 non-exception mismatches are three `basics`
+tests (`builtin_help`, `bytes_compare3`, `exception_chain`), five `micropython` tests (`emg_exc`,
+`heapalloc_exc_compressed`, `heapalloc_traceback`, `meminfo`, `opt_level_lineno`), ten `cmdline`
+tests, and `float/array_construct.py`. The upstream runner itself treats some of these as
+target-dependent, and the embedded-source runner cannot reproduce command-line/REPL invocation
+semantics. Raw output, rather than another hash-only run, is the next useful diagnostic for the
+eight standard-set mismatches.
+
+The 14 UNSCORED files also returned a domain result. They are unscored only because host Python
+exited non-zero while generating an oracle: `extmod/select_ipoll.py`,
+`micropython/native_marshal.py`, nine `io/file*.py` cases, and three `unicode/file*.py` cases. They
+need the relevant MicroPython API or filesystem fixture/harness before a PASS/FAIL verdict is
+meaningful.
+
 Why chunks are required: a monolithic 917-test image links and its static budget reports that it
 fits, but its very first normal call faults during domain initialization (`cause=1`, `pc/tval/
 badaddr=0x866`) before any test result. A 400-file image for global indices 400..799 falls on a
