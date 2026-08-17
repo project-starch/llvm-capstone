@@ -1,6 +1,6 @@
 **Status 2026-08-17, latest: the direct single-interpreter census is complete under QEMU.** All
 917 files in MicroPython's default base directories were attempted with EXTRA+MPZ and resumable
-chunks: `569 PASS / 339 FAIL / 7 FAULT / 0 HANG / 2 UNSCORED`. All 200 direct optional files from
+chunks: `573 PASS / 339 FAIL / 3 FAULT / 0 HANG / 2 UNSCORED`. All 200 direct optional files from
 `cmdline`, `float`, `import`, `io`, `thread`, and `unicode` were also attempted: `27 PASS / 161 FAIL /
 0 FAULT / 0 HANG / 12 UNSCORED`. No test was changed to obtain these numbers. See "Full resumable
 census" at the end for scope, artifacts, and the exact hard-fault list.
@@ -1101,14 +1101,12 @@ features, so a disabled feature remains a visible FAIL instead of being filtered
 
 | scope | files | pass | fail | fault | hang | unscored |
 |---|---:|---:|---:|---:|---:|---:|
-| upstream default base directories | 917 | 569 | 339 | 7 | 0 | 2 |
+| upstream default base directories | 917 | 573 | 339 | 3 | 0 | 2 |
 | optional direct directories | 200 | 27 | 161 | 0 | 0 | 12 |
-| all direct single-interpreter files attempted | 1,117 | 596 | 500 | 7 | 0 | 14 |
+| all direct single-interpreter files attempted | 1,117 | 600 | 500 | 3 | 0 | 14 |
 
-The seven remaining capability-fatal cases are:
+The three remaining capability-fatal cases are:
 
-`basics/bytearray_add.py`, `basics/bytearray_byte_operations.py`,
-`basics/bytearray_decode.py`, `basics/bytearray_slice_assign.py`,
 `basics/int_big_mod.py`, `basics/int_big_pow.py`, and `basics/int_big_zeroone.py`.
 
 Patch 0012 makes the stream ioctl carrier port-configurable and selects `void *` in the Capstone
@@ -1123,6 +1121,14 @@ maps have a legitimate NULL table, and the old `&table[0]` / `&table[used]` loop
 undefined pointer arithmetic, not tag loss. A complete 1,117-file rerun changed exactly five
 statuses: `class_ordereddict.py`, `ordereddict1.py`, `ordereddict_eq.py`, and `slice_optimise.py`
 changed from FAULT to PASS; `builtin_help.py` changed from FAULT to its pre-existing ordinary FAIL.
+
+Patch 0014 makes an empty `bytearray` or `array.array` allocate one real spare element and records
+that reserve in the existing `free` count. Previously `array_new(typecode, 0)` left `items=NULL`,
+but generic array, buffer, quoted-string, and Unicode paths formed `items + 0`; on Capstone that
+lowered to `cincoffset` with a non-capability NULL base. This was another instance of undefined
+NULL pointer arithmetic, not tag loss. A complete 1,117-file rerun changed exactly
+`bytearray_add.py`, `bytearray_byte_operations.py`, `bytearray_decode.py`, and
+`bytearray_slice_assign.py` from FAULT to PASS; every other status and result word was unchanged.
 
 Why chunks are required: a monolithic 917-test image links and its static budget reports that it
 fits, but its very first normal call faults during domain initialization (`cause=1`, `pc/tval/
@@ -1170,7 +1176,7 @@ Invoke `run-resumable-suite.py` with the matching `.dom`, `.expected`, output di
 The optional 200-file build uses `MPY_TEST_BASE_DIR=cmdline` and
 `MPY_TEST_DIRS='float import io thread unicode'`.
 
-The current generated reports are under `/tmp/capstone/micropython-mapfix-merged/`:
+The current generated reports are under `/tmp/capstone/micropython-bytearray-merged/`:
 `standard-917-results.tsv`, `standard-917-nonpass.tsv`, `all-single-1117-results.tsv`, and
 `all-single-1117-nonpass.tsv`. They are scratch artifacts by policy, not files to commit.
 
