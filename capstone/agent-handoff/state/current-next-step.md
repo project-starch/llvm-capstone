@@ -92,12 +92,23 @@ census chunk can approach the runner's 600 s per-command timeout.
   past a 2 MiB domain allocation did exactly that — 200 tests, 200 reboots. The same tests and
   modules in a smaller image ran clean, so it is the allocation edge, not the content. The standard
   set is six chunks now, and the build warns above 2 MiB.
-* **`MICROPY_PY_UCTYPES=0` does not boot.** Its 16 tests all fault when it is on (integer↔pointer
-  round-trips, architecturally impossible), so it should be left out — but three uctypes-off images
-  at three different layouts each hung on their first domain call, with uctypes-on controls clean.
-  That is the S01 image-perturbation hazard reproduced **under QEMU**, minutes per experiment
-  instead of a board session. Overlap and slack are both refuted; `py/parse.c:663` is a starting
-  point. This is the most valuable open thread here.
+* **`MICROPY_PY_UCTYPES=0` did not boot — ROOT-CAUSED AND FIXED 2026-08-17, and it was not a
+  MicroPython bug at all.** The shared domain-entry glue
+  (`tests/runtime-qemu/silicon-ladder/start-gp-captable-interp.S`, macro `RUN_CAP_INIT`) kept its
+  `.capstone_cap_init` table cursor in **`a7` across the `jalr`** to each initializer. `a7` is
+  caller-saved and the initializer is compiled C that writes it 36 times, so the loop's
+  termination test compared a garbage cursor against the end marker and ran an extra iteration
+  into a garbage target. Fixed by parking `a7` in the frame exactly as the `a6` cursor already
+  was. Full trail, evidence and method notes:
+  `history/17-08-2026_18-50-00_capinit-loop-cursor-clobbered-across-call.md`.
+
+  **This glue is shared by every gp-captable domain**, so SQLite and BEEBS were equally exposed;
+  the symptom is a silent hang before `domain_main`, with no fault, that moves whenever anything
+  about the image moves. Whether it explains `fpga-repros/S01-image-perturbation-hang` is OPEN and
+  deliberately not claimed — S01's README reports its `dp0.dom` correct under QEMU while this bug
+  reproduces under QEMU. The static check (does the last `a7` write in that image's
+  `__capstone_cap_init` land below `__capstone_cap_init_end`?) needs the S01 `.dom` files rebuilt,
+  which the folder does not ship.
 
 What otherwise remains is genuinely absent features: 51 native/Viper, 33 `thread`, 25 `cmdline`,
 22 filesystem `import`, 5 `io`. The 96 KiB heap is now the binding constraint for the handful of
