@@ -142,6 +142,36 @@ AddressSanitizer. Recipe and reasons in
 ../../evidence/parent-build-attempt-2026-08-17.txt.
 """,
 
+"MPY-T08_stdio-close-then-use": """MPY-T08 / upstream 12670
+
+  stock at the pin                    : fixed, raises ValueError
+  stock at the fix's PARENT 3b954698fa: SIGSEGV, exit 139
+  Capstone domain                     : not run
+
+REPRODUCED AT THE PARENT. The trigger is two lines, sys.stdout.close(), and at
+the pre-fix commit it takes the interpreter down before even the first
+sys.stderr.write escapes: stdout empty, stderr empty, exit 139.
+
+The comparison against the pin is what makes that readable. The same script on
+the pinned build prints
+
+  T08 survived close
+  T08 EXC <class 'ValueError'>
+
+so the fix made the standard streams non-closable and the later write raises
+rather than faulting. Two builds, one script, one difference.
+
+A NOTE ON THE FIRST ATTEMPT. The verdict was originally printed with print(),
+which writes to the stdout the test has just closed, so the run produced no
+output on either build and looked identical. Routing the verdict to stderr is
+what separated them. A test whose observable travels through the thing under
+test cannot distinguish anything.
+
+BUILDING THE PARENT: CC=gcc-12, and run `make -C ports/unix submodules` in the
+new worktree first; mbedtls and berkeley-db are not shared between worktrees and
+their absence shows up as a confusing fatal error about missing headers.
+""",
+
 "MPY-T25_stringio-subclass-print": """MPY-T25 / upstream 10402
 
   stock MicroPython at pin 2e3304a : SIGSEGV

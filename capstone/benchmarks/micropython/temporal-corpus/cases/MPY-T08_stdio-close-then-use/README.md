@@ -29,7 +29,10 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. Fixed at the pin; also needs stdio streams, and micropy_py_sys_stdfiles is 0 here.
+- stock MicroPython at the pin: **crash-sigsegv**
+- Capstone domain under QEMU: **not-run**
+
+See `RESULT.txt` in this directory.
 
 ## Reproducing
 
