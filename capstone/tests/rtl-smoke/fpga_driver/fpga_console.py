@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Pattern, Tuple, Union
@@ -152,7 +153,51 @@ class FpgaConsole:
         self._install_handlers()
 
     # -- connection ---------------------------------------------------------
+    def _acquire_board_lock(self) -> None:
+        """Take the exclusive board lock, or refuse to connect.
+
+        THE BOARD IS ONE PHYSICAL RESOURCE AND SERIALIZATION WAS ONLY HALF-ENFORCED.
+        `run-board-ladder.sh` has taken a non-blocking flock on this path for a long time,
+        with a comment saying serialization "was previously a rule I was supposed to
+        remember; now it is enforced". But the Python drivers -- which is what agents and
+        subagents actually invoke -- never touched it, so two `run_sqlite_stages_fpga`
+        processes ran on the board simultaneously on 2026-08-18 (ages 440 s and 288 s).
+        Both runs were discarded: concurrent power-cycles, JTAG loads and switch writes
+        interleave, so neither transcript describes what its own domains did.
+
+        Enforcing it HERE rather than in each driver means every path that opens a console
+        is covered, including any new one -- a rule in a wrapper script protects only the
+        callers who remember the wrapper.
+
+        NON-BLOCKING on purpose: a second session fails immediately and names the holder,
+        rather than queueing invisibly behind a run that may itself be stuck. The lock is
+        released when the process exits (the fd closes), so a crashed runner does not wedge
+        the next one."""
+        import fcntl  # local: only board sessions need it
+
+        path = os.environ.get("BOARD_LOCK") or "/tmp/capstone/.board.lock"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        # Kept on the instance so the fd -- and therefore the lock -- lives as long as the
+        # console does. A local would be garbage-collected and silently release it.
+        self._board_lock_fd = open(path, "a+")
+        try:
+            fcntl.flock(self._board_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            self._board_lock_fd.seek(0)
+            holder = self._board_lock_fd.read().strip() or "(unknown)"
+            self._board_lock_fd.close()
+            raise RuntimeError(
+                f"another board session holds {path}\n"
+                f"       holder: {holder}\n"
+                f"       Wait for it, or stop it with SIGTERM (never -9: that orphans the\n"
+                f"       server-side GDB session and every later run then times out).")
+        self._board_lock_fd.seek(0)
+        self._board_lock_fd.truncate()
+        self._board_lock_fd.write(f"pid={os.getpid()} argv={' '.join(sys.argv)}\n")
+        self._board_lock_fd.flush()
+
     def connect(self, timeout: float = 20.0) -> None:
+        self._acquire_board_lock()
         auth = None
         if C.CONNECT.auth_key and self.token:
             auth = {C.CONNECT.auth_key: self.token}
