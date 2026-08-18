@@ -1167,14 +1167,26 @@ def main():
                     # actually means "clean". Walking to aperture 0 and back ORs in a transient,
                     # and ~21 ms later the extra bits decay off leaving the target's true value,
                     # which IS a change and so is emitted.
-                    if _force_emit:
-                        time.sleep(LED_SETTLE_S)
-                        set_switch_value(console, 0)
-                        time.sleep(0.05)
-                        set_switch_value(console, _sw)
-
                     def _sample():
+                        # THE FORCED TRANSITION MUST HAPPEN AFTER THE MARK, NOT BEFORE IT.
+                        #
+                        # A first version walked 0 -> target ONCE, up here, before either sample
+                        # took its mark. The event it generated therefore arrived while nobody was
+                        # listening, both samples then waited for a SECOND event that never came,
+                        # and the read returned VOID (allow_cached=False) or silently fell back to
+                        # a stale cached payload (allow_cached=True). Boot 9b showed both halves at
+                        # once: all four granule apertures VOID, and a 208 "reading" beside them
+                        # that was really console.latest(). Thirteen led_state events were in
+                        # flight at that moment -- the path was working perfectly and the sampler
+                        # was looking away.
+                        #
+                        # Each sample now forces its own emit: park at 0, mark, walk back, wait.
+                        if _force_emit:
+                            set_switch_value(console, 0)
+                            time.sleep(0.05)
                         _mark = console.now()
+                        if _force_emit:
+                            set_switch_value(console, _sw)
                         try:
                             _s = console.wait_event(
                                 C.LISTEN.get("led_state", "led_state"),
@@ -1264,12 +1276,12 @@ def main():
 
                 assert (204 & 0b11) == 0, "switch 204 must be UART-safe"
                 assert (208 & 0b11) == 0, "switch 208 must be UART-safe"
-                _v = _read_sw(204, _force_emit=_halt_reads)
+                _v = _read_sw(204, allow_cached=not _halt_reads, _force_emit=_halt_reads)
 
                 # The tag-history verdict byte. 208 is even, so it is safe to sample between
                 # domains alongside 204; it is the byte that separates (b) a genuine tag loss
                 # from (c) a granule that was stored untagged, which no software probe can do.
-                _w = _read_sw(208, _force_emit=_halt_reads)
+                _w = _read_sw(208, allow_cached=not _halt_reads, _force_emit=_halt_reads)
                 _d = decode_s07_verdict(_w)
 
                 _wline = (f"  [s07] after {label}: sw=208 verdict "
@@ -1398,8 +1410,8 @@ def main():
             # only inside `recv ep.rev_req`, so it is "which node is being revoked" and reads 0
             # for a workload that never revokes. It is a different quantity, not a broken one.
             try:
-                _hl = _read_sw(249, _force_emit=_halt_reads)
-                _hh = _read_sw(250, _force_emit=_halt_reads)
+                _hl = _read_sw(249, allow_cached=not _halt_reads, _force_emit=_halt_reads)
+                _hh = _read_sw(250, allow_cached=not _halt_reads, _force_emit=_halt_reads)
                 if _hl is None or _hh is None:
                     _line = (f"  [s07] after {label}: rev-node head VOID "
                              f"(lo={_hl} hi={_hh}) -- no consumption datum for this rep")
