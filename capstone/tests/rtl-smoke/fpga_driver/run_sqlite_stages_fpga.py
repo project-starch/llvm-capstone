@@ -1309,7 +1309,20 @@ def main():
                                             # garbage, which separates "RTL drops a valid
                                             # query" from "we queried an unmappable id".
                                             (249, "rev_node_head[7:0]", "raw"),
-                                            (250, "{overflow,0,head[9:8]}", "raw"),
+                                            # NOT {overflow,0,head[9:8]}. That label was stale and
+                                            # cost the WRONG HEAD TWICE, both times 4x too small.
+                                            # cva6.sv:1260/1264 on this build:
+                                            #   249 = rev_node_head_ex[7:0]
+                                            #   250 = rev_node_head_ex[15:8]
+                                            # so the head is a full 16 bits, read 8+8. Boot 4's
+                                            # 249=0x6d/250=0x05 is head=0x056D=1389, not 365. The
+                                            # bit previously read as `overflow` is head[15], which
+                                            # is 0 only because the head is small -- it agreed with
+                                            # the truth for the wrong reason. rev_node_overflow_ex
+                                            # is NOT on the mux at all (cva6.sv:1262 records that
+                                            # decision), so there is no overflow reading, only an
+                                            # inferred one.
+                                            (250, "rev_node_head[15:8]", "raw"),
                                             # serving_idx is 32 bits across 11011..11110
                                             # (cva6.sv:1186-1189). Reading only the low byte
                                             # cannot tell a legitimate node id from garbage,
@@ -1346,6 +1359,14 @@ def main():
                                             (252, "rev_node_serving_idx[15:8]", "raw"),
                                             (253, "rev_node_serving_idx[23:16]", "raw"),
                                             (254, "rev_node_serving_idx[31:24]", "raw"),
+                                            # serving_idx IS NOT AN ALLOCATION COUNTER, so do not
+                                            # read consumption from it. capstone_rev_node.anvil:150-153
+                                            # assigns it in exactly one place, inside
+                                            # `recv ep.rev_req`: it holds WHICH NODE IS CURRENTLY
+                                            # BEING REVOKED. 0x00000000 is the EXPECTED value for a
+                                            # workload that performs no revocations -- it is neither
+                                            # stuck nor mis-wired, it is a different quantity.
+                                            # Use the HEAD (249/250) to measure pool consumption.
                                             # COMMITTED pc, bytes 0..7 (reg_sel 0b00110..0b01101
                                             # == switches 230..237, probe_wedge_regs.py:30,64).
                                             # This runner never read it, which is why five board
