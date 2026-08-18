@@ -306,6 +306,57 @@ static void mpy_t29_hidden_root(unsigned *res) {
 }
 #endif
 
+#ifdef MPY_SPATIAL_OVERFLOW
+/* THE SPATIAL COUNTERPART TO MPY-T29, on the real allocator rather than a model.
+   Not a corpus row: the corpus is 30 temporal defects and one spatial one, and
+   this is a direct measurement of the mechanism underneath both.
+
+   No lifetime component anywhere. Two GC blocks, both live for the whole run,
+   nothing freed and no collection. The write simply walks off the end of the
+   first block into the second. If the hardware saw one object per gc_alloc it
+   would trap; if bounds are inherited from the one heap array, it cannot.
+
+   The distance is measured at RUN TIME rather than assumed. MICROPY_BYTES_PER_GC_BLOCK
+   is 32, so two 64-byte allocations should be 64 bytes apart, but a hardcoded 64
+   would silently turn into an in-bounds write to a's own tail if that ever changed,
+   and the run would look identical. Reported in the retval so the arm cannot pass
+   while measuring the wrong thing.
+
+   uintptr_t and not pointer subtraction: `b - a` lowers to lcc on this target,
+   which is wrong on anything untagged, and the port already patches py/gc.c for
+   exactly this reason. The values here are tagged, but the idiom should match.
+
+   MPY_SPATIAL_OVERFLOW selects the arm, and it is the ONLY difference between them:
+     1 -> off = dist, one past a's end and into b, still inside the heap: expect UNTRAPPED
+     2 -> off = past the heap array itself:                               expect TRAPPED
+   Arm 2 is the positive control. Without it, a quiet arm 1 and a domain that never
+   started look the same. */
+static void mpy_spatial_overflow(unsigned *res) {
+    byte *a = m_new(byte, 64);
+    byte *b = m_new(byte, 64);
+
+    a[0] = 0x11;
+    b[0] = 0x22;
+
+    size_t dist = (size_t)((uintptr_t)b - (uintptr_t)a);
+
+#if MPY_SPATIAL_OVERFLOW == 2
+    volatile size_t off = sizeof(mpy_heap) + 64u;   /* past the whole heap: must fault */
+#else
+    volatile size_t off = dist;                     /* out of a, into b */
+#endif
+    a[off] = 0xAA;                                  /* THE OVERFLOW */
+
+    /* low nibble 1 = b was overwritten through a, so one sub-allocated block wrote
+       into another and nothing objected.
+       2 = b intact, the write landed elsewhere and the arm measured nothing.
+       3 = something else. The middle 16 bits carry dist, so a wrong block layout
+       is visible in the result instead of hiding behind a green rung. */
+    unsigned tag = b[0] == 0xAA ? 1u : (b[0] == 0x22 ? 2u : 3u);
+    *res = 0x5A000000u | ((unsigned)(dist & 0xFFFFu) << 8) | tag;
+}
+#endif
+
 void domain_main(unsigned *res, unsigned func) {
 #ifdef MPY_T07_LEXER_UAF
     (void)func;
@@ -329,6 +380,14 @@ void domain_main(unsigned *res, unsigned func) {
     gc_init(mpy_heap, mpy_heap + sizeof(mpy_heap));
     mp_init();
     mpy_t29_hidden_root(res);
+    return;
+#endif
+#ifdef MPY_SPATIAL_OVERFLOW
+    (void)func;
+    mp_cstack_init_with_sp_here(mpy_cstack_size());
+    gc_init(mpy_heap, mpy_heap + sizeof(mpy_heap));
+    mp_init();
+    mpy_spatial_overflow(res);
     return;
 #endif
     if (func == MPY_DPI_REGION_SHARE) {
