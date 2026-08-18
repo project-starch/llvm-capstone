@@ -945,3 +945,65 @@ data-dependent bug explains that combination cleanly.
 **Status stays neither-confirmed-nor-killed** until the auditor reports and a directed RTL
 simulation — `plain store to G+8; stc to G; ldc G` — either reproduces tag loss or does not. That
 test is board-free and decides the mechanism independently of whether SQLite triggers it.
+
+# ROOT CAUSE CONFIRMED ON SILICON: the write buffer reorders same-granule stores
+
+Five directed arms, one boot, on `caplifive_s07debug_18august.bit`. 16384 slots per arm.
+
+| arm | sequence | lost | expected | reading |
+|---|---|---|---|---|
+| wb0 | `stc G` only | **0** | 0 | control clean |
+| wb4 | plain `G+16`; `stc G` | **0** | 0 | effect is GRANULE-SCOPED |
+| wb3 | plain `G+8`; 64 stores; `stc G` | **0** | 0 | **buffer drained -> no loss** |
+| wb2 | `stc G`; plain `G+8` | 15193 (92.7%) | 16384 | detector fires |
+| **wb1** | **plain `G+8`; `stc G`** | **1107 (6.76%)** | **0** | **REORDER** |
+
+**Arm 1 loses 1107 tags where program order says none should be lost.** The `stc` writes the
+capability to the granule's low word *after* the plain store to its high word, so in program
+order the tag is set last and must survive. It does not.
+
+## Arm 1 vs arm 3 is the decisive pair
+
+Identical stores, identical granule, identical addresses. The **only** difference is ~64
+unrelated stores between them, which drain the write buffer. **1107 versus 0.** That isolates
+buffer co-residency as the variable, which is exactly the hypothesised mechanism and nothing
+else. Arm 3's cycle count corroborates that the drain loop really ran: 45,263,573 cycles against
+~4,000,000 for the other arms.
+
+## The positive control became a second, independent confirmation
+
+wb2 was expected to lose all 16384 — the plain store legitimately clears the tag. It lost 15193.
+**The 1191 survivors are the same reorder running the other way:** the plain store draining
+*before* the `stc`, leaving a tag SET on scalar data. So the defect is bidirectional — **tag loss
+AND tag forgery** — and the two rates agree:
+
+    arm 1  tag lost      1107 / 16384 = 6.76%
+    arm 2  tag forged    1191 / 16384 = 7.27%
+
+Tag forgery is the more serious direction: it fabricates a valid capability over attacker-chosen
+scalar data, which is a soundness hole in the capability model rather than an availability bug.
+
+## QEMU is the control that cannot exhibit it
+
+Arms 0/1/3/4 all returned `0xB0000000` — zero loss — under emulation, where a capability store is
+one atomic 16-byte-plus-tag operation with no write buffer, no per-word entries and no drain
+arbiter. The silicon/emulator difference IS the mechanism, measured against an oracle that
+structurally cannot reproduce it. No amount of QEMU testing could ever have found this.
+
+## It explains everything that did not previously fit
+
+* **Deterministic site under a nondeterministic trigger.** Drain order is fixed by the instruction
+  stream; buffer occupancy depends on what ran before. Same address every time, fires sometimes.
+* **`src` never discriminated.** Both legs deliver the same corrupted value, so it cannot.
+* **~7% per opportunity** against a 30%-per-rep SQLite wedge rate — consistent with several
+  opportunities per run.
+* **The SQLite trigger**: `sqlite3JournalOpen` does `memset(p, 0, sizeof(MemJournal))` and twelve
+  lines later `pJfd->pMethods = ...`; `pMethods` is the first member, so the memset's plain stores
+  and the capability `stc` land in the same granule. `sqlite3OsRead+0x48` then reloads it untagged
+  and `+0x4c` faults with mcause 25.
+
+## Status
+
+**The mechanism is confirmed on hardware.** What remains open is the RTL fix and the provenance
+question (whether the `ctag`/`cap_tag_q` path predates the S-06 work), both with the RTL lane, and
+one reproducibility boot for this result.
