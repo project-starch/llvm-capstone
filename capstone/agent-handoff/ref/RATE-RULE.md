@@ -736,3 +736,24 @@ Everything computed above assumes the address is inside the wedging domain's reg
 further board time answers it** — the same low 20 bits appear whether the address is a
 domain-relative offset or a fixed absolute address elsewhere, because every observed `DBAS` is
 4 MiB-aligned and contributes zeros to that field.
+
+## QUALIFICATION: determinism does not prove the recorded load is the FAULTING load
+
+The granule record **rolls**, and untagged LDC responses are **routine** — both measured today. So
+an untagged load unrelated to the fault can overwrite the record between the producing store and
+the trap, and **a clobbered record is indistinguishable from a correct one**.
+
+Five bit-identical samples across four `DBAS` values prove the recorded event is *deterministic*.
+They do **not** prove it is the *faulting* event. "The last untagged LDC before the trap is always
+the same routine one" fits the data exactly as well as "the recorded load is the one that
+faulted", and nothing collected so far separates them.
+
+This is a real qualification on the strongest result of the campaign and it was raised by the RTL
+lane, not found here. It does not weaken the *adjacency* observation — two records one granule
+apart, reproducibly — but it does mean the site has not been shown to be the fault site.
+
+**What would settle it: the producer/consumer correlation bit** — `rd` of the last committed LDC
+compared in hardware against `rs1` of the faulting instruction. It is the only reader that says
+the recorded address belongs to the fault. It is now the highest-value item in the batch, above
+the address bits that motivated the batch in the first place: an unqualified address, however
+reproducible, cannot carry a root-cause claim.
