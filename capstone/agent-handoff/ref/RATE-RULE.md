@@ -514,3 +514,39 @@ So the ON arm silently loses every wedge diagnostic.
 **Consequence: run `EARLY_HALT_CONTROL=0` for any boot whose wedge is worth reading**, which is
 all of them now that the granule addresses work. The early control's own value is already banked
 (the `0x90` vs `0x9c` subset proof) and does not need re-running.
+
+### The mapping is AMBIGUOUS, and the tidy answer is the wrong one
+
+Resolving the granules to symbols gives, on the naive mapping:
+
+    VA 0xbedb0  (last cap STC)   inside sqlite3VdbeCreate  (start 0xbed38, size 0x170, +0x78)
+    VA 0xbedc0  (untagged LDC)   +0x88 into the same function
+
+**That is almost certainly wrong, and it is being written down as wrong rather than as a
+result.** A capability *store* into a function body is not a sensible operation. What the tidy
+symbol actually demonstrates is how easily an ambiguous number lands somewhere plausible.
+
+`[19:4]` is 16 bits — **a 1 MB window** — and the domain spans more than 1 MB, so every reading
+has one candidate per alias. The loader maps `DBAS` to VA `0x10000`
+(`libcapstone.c:138`, `entry_offset = e_entry - p_vaddr`, both `0x10000`), giving:
+
+| alias | untagged LDC | last cap STC | region |
+|---|---|---|---|
+| 0 | `0x0bedc0` | `0x0bedb0` | `.text` — **CODE**, implausible |
+| 1 | `0x1bedc0` | `0x1bedb0` | past the image end (`0x1605a8`) — bss/heap |
+| 2 | `0x2bedc0` | `0x2bedb0` | bss/heap |
+
+Alias 1 or 2 — the region SQLite actually allocates from — is the plausible reading, and a
+capability stored to one heap granule with the neighbouring one reloading untagged is a coherent
+mechanism. Alias 0 is not, despite being the one that resolves to a named function.
+
+**The upper address bits are not exposed on this bitstream**, so this cannot be resolved by
+reading harder. It is the one thing in this investigation that genuinely needs new RTL — and it is
+a strict extension of an aperture set that already exists, not a new instrument. The RTL lane's
+caveat when handing over the aperture list said exactly this ("a granule within a 1 MB window, not
+a full address; do not report it as a physical address"), and it was nearly ignored one step
+later.
+
+**Do not cite `sqlite3VdbeCreate` in connection with S-07.** It is an artifact of a 1 MB
+ambiguity resolved in the wrong direction, and it is exactly the shape — a confident, legal,
+plausible answer — that this page has now recorded five times in one day.
