@@ -698,3 +698,41 @@ another domain's region, or anywhere else in DRAM. The observed shared regions d
 (`221`/`222` for `paddr[27:20]`, `219`/`223` for `[35:28]`) answer it outright. That is a
 well-founded need now rather than a speculative one, and it remains **the project lead's call**,
 unrequested.
+
+## Campaign totals, 2026-08-18, `caplifive_s07debug_18august.bit`
+
+| | k | n | rate |
+|---|---|---|---|
+| `XU` | 16 | 53 | 30% |
+| `S7T` | 0 | 23 | 0% |
+
+`S7T`'s zero is **not** evidence about the workload — it returns before `run_sqlite()` is ever
+called (see the retraction above). It is a boot control and nothing more.
+
+**Granule samples: 5, every one bit-identical** (`0xaedc0` / `0xaedb0`), across **four distinct
+`DBAS`** values — `0x85400000`, `0x80800000`, `0x84C00000`, and `0x85400000` again on a different
+boot.
+
+### The halt-control A/B does NOT reproduce the era effect
+
+| arm | k | n | rate |
+|---|---|---|---|
+| ON | 3 | 5 | 60% |
+| OFF | 5 | 13 | 38% |
+
+Fisher one-sided **p = 0.38**, smallest arm 5 against the pre-declared target of 16 — so this is
+underpowered and settles nothing on its own. But it is worth recording that the matched design is
+**not** showing the era split's 55% vs 15%. The most likely reading is that the era difference was
+driven by the confounds named when it was raised — the interleaved ladder arriving at the same
+time, and boots 11-13 issuing per-domain halts that timed out — rather than by the halt control.
+
+That is the outcome the pre-declaration was written for: had the analysis been chosen after the
+data, the era split alone would have been reported as an instrument-perturbs-subject effect.
+
+### What the site question now needs, and it is one bit of information
+
+Everything computed above assumes the address is inside the wedging domain's region. The mux gives
+`paddr[19:4]`; the upper bits decide whether the site is domain memory at all. **No amount of
+further board time answers it** — the same low 20 bits appear whether the address is a
+domain-relative offset or a fixed absolute address elsewhere, because every observed `DBAS` is
+4 MiB-aligned and contributes zeros to that field.
