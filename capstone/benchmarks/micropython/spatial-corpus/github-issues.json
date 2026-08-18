@@ -494,6 +494,28 @@
       }
      ]
     }
+   },
+   "i18617": {
+    "number": 18617,
+    "title": "Buffer overflow in `bytearray` constructor via trusted `__len__` with long iterator",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/18617",
+    "createdAt": "2025-12-30T05:09:45Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": []
+    }
+   },
+   "i18620": {
+    "number": 18620,
+    "title": "Integer overflow in `array` constructor via `len*itemsize` multiplication",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/18620",
+    "createdAt": "2025-12-30T05:13:18Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": []
+    }
    }
   }
  }
