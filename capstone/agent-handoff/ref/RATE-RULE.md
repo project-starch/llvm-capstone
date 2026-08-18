@@ -458,3 +458,59 @@ readout path and not about the wedge rate — but it may not run beside a rate m
 
 Boots 1-7 and 8-14 can be pooled again, and the era difference is attributed to the interleaved
 ladder or to chance, both of which are testable the same way.
+
+## FIRST LOCALISATION: the two granules are EXACTLY ADJACENT, and reproducibly so
+
+Boots 15 and 17, independent, different wedging-domain `DBAS`, **bit-identical addresses**:
+
+    untagged-LDC granule  0xaedc0
+    last-cap-STC granule  0xaedb0
+    delta                 -16 bytes = exactly ONE granule
+
+Read halted, at the wedge, through the granule apertures that were in the bitstream all along
+(205/206/207/209). These are the first trustworthy non-zero mux readings of the campaign.
+
+### Why the addresses are meaningful rather than arbitrary
+
+Both wedging domains had 4 MB-aligned `DBAS` (`0x85400000`, `0x80800000`), so bits `[19:0]` of
+`DBAS` are zero and the exposed `[19:4]` **is an offset within the domain**, not a physical
+address that varies per boot. That is why two boots at different physical bases produced the same
+number, and it is what makes the value mappable at all.
+
+### What it does and does not say
+
+* **`gran_match = 0` is CORRECT here** — the records are one granule apart, not the same granule.
+  So these wedges carry **no tag-loss claim** from the correlation bit, and any earlier reading
+  that showed `gran_match = 1` is further evidence of contamination rather than of a match.
+* **Adjacency is the finding.** Two independently rolling records landing exactly 16 bytes apart,
+  identically, on two separate boots, is not what independent rollers produce by chance. The
+  shape it suggests — a capability stored at one granule and a load coming back untagged from the
+  neighbouring one — is a concrete, testable mechanism, and the first this campaign has had.
+* **n = 2.** Two samples. Both from `EARLY_HALT_CONTROL=0` boots (see below for why only those).
+
+### The mapping is NOT yet done, deliberately
+
+`0xaedc0` falls inside `.text`'s VA range (`0x10000` .. `0x14eb28`) *if* the loader places the
+segment at `DBAS + VA`; it falls elsewhere if it places it at `DBAS + (VA - 0x10000)`. **Which one
+is right depends on the loader's placement rule, and that has not been checked.** Guessing it is
+exactly the class of error that cost four separate corrections today, so the number is recorded
+raw and the mapping is the next step, from the loader source rather than from inference.
+
+## The early halt control BREAKS the wedge readout entirely
+
+Separate from the rate question, and unambiguous:
+
+| boot | arm | `[wedge] gdb CSRs` lines | granule addresses |
+|---|---|---|---|
+| 14 | ON | **0** | none |
+| 16 | ON | **0** | none |
+| 15 | OFF | present | **0xaedc0 / 0xaedb0** |
+| 17 | OFF | present | **0xaedc0 / 0xaedb0** |
+
+The early control leaves its gdb session open, and the wedge block's own `gdb_start()` then
+fails, taking the *entire* wedge instrumentation with it — CSRs, trap latch, granule addresses.
+So the ON arm silently loses every wedge diagnostic.
+
+**Consequence: run `EARLY_HALT_CONTROL=0` for any boot whose wedge is worth reading**, which is
+all of them now that the granule addresses work. The early control's own value is already banked
+(the `0x90` vs `0x9c` subset proof) and does not need re-running.
