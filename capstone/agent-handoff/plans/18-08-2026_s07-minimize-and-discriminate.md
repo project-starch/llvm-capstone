@@ -271,39 +271,48 @@ Until it holds, the channel is not a channel.
 Sequencing unchanged: **the six-domain boot goes first and independently** — it needs none of
 this.
 
-## Addendum 2: the store-drain caveat is answered — verified against the RTL, with one nuance
+## Addendum 2: the store-drain caveat is answered — verified against the RTL
 
 The remaining hardware risk was that a recorder store still sitting in the write buffer when the
-core wedges never reaches DRAM — failing as a **silent zero**. Answered by the RTL lane; every
-quote re-checked here against the source rather than accepted.
+core wedges never reaches DRAM — failing as a **silent zero**. It is answered. Every claim below
+was re-checked against the source here rather than accepted from the report, and the evidence is
+ordered with the *measured* fact first.
 
-* **The drain is autonomous.** `wt_dcache_wbuffer.sv:269` —
-  `assign miss_req_o = (|dirty) && free_tx_slots;`. The write request is a pure function of the
-  buffer's own dirty state and TX-slot availability: no commit signal, no pipeline liveness, no
-  core involvement. Bytes already in the buffer are pushed regardless of what the core is doing.
-* **Nothing discards dirty bytes.** Every flush port on the wbuffer's internal FIFOs is tied off —
-  `wt_dcache_wbuffer.sv:320` `.flush_i (1'b0)`, and `:370`, `:486`, `:504` all `.flush_i('0)`.
-* **A trap does not reach the write buffer.** `controller.sv:130-133` sets `flush_dcache` only
-  under `CVA6Cfg.DcacheFlushOnFence` — fence-driven, with the adjacent comment noting it is not
-  even needed for a write-through cache. Exceptions do not drive it.
-* **The clock survives a wedge — our own data, not an argument.** In the `OB` boot the selftest,
-  a counter increment in an `always_ff`, fired *after* the wedge: `obcombo1.txt:1525-1529`,
-  `post-204 = 0x41  OK: ldc_seen set and count moved by exactly 1`. Sticky flops on `clk_i` read
-  sensibly post-wedge on every wedging run.
+1. **The clock is alive across a real wedge — measured on the failing runs, not read off source.**
+   In the `OB` boot the selftest, a counter increment in an `always_ff`, fired *after* the wedge:
+   `obcombo1.txt:1525-1529`, `post-204 = 0x41  OK: ldc_seen set and count moved by exactly 1`.
+   This is the only item established on the actual failure, and it is the precondition for the
+   rest.
+2. **The drain is autonomous.** `wt_dcache_wbuffer.sv:269` —
+   `assign miss_req_o = (|dirty) && free_tx_slots;`. A pure function of the buffer's own dirty
+   state and TX-slot availability: no commit signal, no pipeline liveness, no core involvement.
+3. **Every wbuffer flush port is tied off** — `wt_dcache_wbuffer.sv:320` `.flush_i (1'b0)`, and
+   `:370`, `:486`, `:504` all `.flush_i('0)`.
+4. **No flush path exists at all in this build.** `controller.sv:130-133` asserts `flush_dcache`
+   only under `CVA6Cfg.DcacheFlushOnFence`, and that is **false in our config**:
+   `capstone_cv64a6_imafdc_sv39_config_pkg.sv:52` `localparam CVA6ConfigDcacheFlushOnFence =
+   1'b0`. So the dcache flush is never asserted — not by a trap, and not by a fence either. The
+   reason is sound: the cache is write-through, so a fence has nothing to write back. The write
+   buffer cannot be emptied by anything the core does; only its own drain empties it.
 
-**Nuance worth recording, because it is the kind of thing that gets cited later as if it were a
-guarantee:** the `flushed cache implies flushed wbuffer` assertion (`wt_dcache.sv:425-428`) sits
-inside `//pragma translate_off` **and** `` `ifndef VERILATOR ``, so it is simulation-only *and* our
-Verilator flow does not even compile it. It has never been exercised here. It documents design
-intent; it is not evidence that the hardware drains. The conclusion does not need it — the three
-facts above carry it.
+**Explicitly NOT part of this chain:** the `flushed cache implies flushed wbuffer` assertion at
+`wt_dcache.sv:425-428`. It sits inside `//pragma translate_off` **and** `` `ifndef VERILATOR ``,
+so our flow does not compile it and it has **never executed once** in this project. A check that
+has never run reads exactly like a check that passes — the same shape as the lint gate that could
+not fire. It is recorded here only so nobody cites it later; it is not evidence of behaviour.
 
 **What remains is a program property, not a hardware unknown:** stores enter the write buffer at
 COMMIT, so anything still speculative in the store unit when the core dies is lost. The recorder's
-store must therefore be placed **well ahead of the faulting site** — not in the same basic block,
-and ideally with the eviction loop between them, which guarantees many intervening commits. A
-specific placement can be confirmed in ~15 s of directed sim on the RTL side, where the RVFI trace
-shows exactly when a store retires relative to an exception.
+store must be placed **well ahead of the faulting site** — with the eviction walk between them,
+which interposes 8+ committed loads and makes "still speculative at the fault" impossible rather
+than merely unlikely. A concrete placement can be confirmed from the RVFI trace in ~15 s of
+directed sim on the RTL side, once a real probe exists.
+
+**Geometry re-verified in the config we actually build.** The stride figures above were first read
+from `cv64a6_imafdc_sv39_config_pkg.sv`, a *sibling* of our target — the same wrong-file mistake
+made earlier today with the amalgamation. Re-checked in
+`capstone_cv64a6_imafdc_sv39_config_pkg.sv:48-50`: `32768 / 8 / 128`, identical, so the 4096-byte
+conflict stride stands.
 
 ## A standalone lesson from this exchange: a code comment is a claim
 
