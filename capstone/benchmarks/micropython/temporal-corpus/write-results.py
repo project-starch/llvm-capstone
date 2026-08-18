@@ -140,6 +140,31 @@ rather than by an argument.
 BUILDING THE PARENT: use gcc-12, not the default gcc 15, and do not add
 AddressSanitizer. Recipe and reasons in
 ../../evidence/parent-build-attempt-2026-08-17.txt.
+
+== MEASURED IN THE CAPSTONE DOMAIN, 2026-08-18 ==
+
+  sanity   0x00077724  "SANE 2"        expected, so the interpreter runs
+  T02      0x001b89ac  "T02 128 -1"    matches the value precomputed for
+                                       "extend succeeded, slice assign absent"
+
+b.extend(b) executed inside a pure-capability domain at the pre-fix commit and did
+NOT fault. This is the first CVE in this corpus measured in the domain rather than
+only on the host.
+
+The -1 is by design, not a failure: this profile is CORE_FEATURES, where
+MICROPY_PY_ARRAY_SLICE_ASSIGN is off, so the fix's second case is unreachable and
+the repro reports -1 for it instead of taking the whole test down with it. The
+row's status against the oracle reads FAIL for exactly that reason, and the
+oracle is the pin, not a statement about the defect.
+
+Recorded as untrapped-no-crash, not untrapped-identical: the output is not
+byte-identical to the host because of that profile difference, and the dangling
+pointer here is internal to array_extend, so no corruption was demonstrated.
+
+Getting the 2024 tree to build as a domain took three separate accommodations,
+all written up in ../../backport-2024/README.md: one portability patch
+hand-applied, the mp_int_t typedefs supplied because they later moved into core,
+and a py/cstack.h shim because that header did not exist yet.
 """,
 
 "MPY-T08_stdio-close-then-use": """MPY-T08 / upstream 12670

@@ -24,10 +24,10 @@ Already fixed in the pinned source, so these were measured on the last commit th
 | case | source | stock | domain |
 |---|---|---|---|
 | `MPY-T01` | CVE-2023-7152 | silent-no-effect | not-run |
-| `MPY-T02` | CVE-2024-8947 | silent-no-effect | not-run |
+| `MPY-T02` | CVE-2024-8947 | silent-no-effect | untrapped-no-crash |
 | `MPY-T03` | CVE-2026-1998 | crash-sigsegv | not-run |
 | `MPY-T04` | #12887 | silent-no-effect | not-run |
-| `MPY-T05` | #13283 | silent-no-effect | not-run |
+| `MPY-T05` | #13283 | silent-no-effect | untrapped-no-crash |
 | `MPY-T06` | #12543 | crash-sigsegv | not-run |
 | `MPY-T07` | #4128 | silent-no-effect | not-run |
 | `MPY-T08` | #12670 | crash-sigsegv | not-run |
@@ -65,7 +65,7 @@ Closed upstream with no fix commit naming the issue, and no runnable trigger pub
 
 18 of 30 rows have been run. On stock or at a fix's parent: 7 crash-sigsegv, 2 not-reproducible, 2 silent-corruption, 7 silent-no-effect.
 
-In the Capstone domain: 3 fault-cause24, 2 untrapped-identical, 1 untrapped-no-crash.
+In the Capstone domain: 3 fault-cause24, 2 untrapped-identical, 3 untrapped-no-crash.
 
 `traps_unmodified` is **no** for 26 of 30 rows, and that is measured
 rather than assumed. Of the rows run in the domain, not one was trapped for a

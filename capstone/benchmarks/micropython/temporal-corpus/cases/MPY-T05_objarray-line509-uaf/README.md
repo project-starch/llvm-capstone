@@ -30,7 +30,7 @@ collector that does not exist yet. Not evidence.
 ## Measured
 
 - stock MicroPython at the pin: **silent-no-effect**
-- Capstone domain under QEMU: **not-run**
+- Capstone domain under QEMU: **untrapped-no-crash**
 
 See `RESULT.txt` in this directory.
 
