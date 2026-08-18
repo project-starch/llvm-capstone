@@ -117,6 +117,16 @@ This was deliberately NOT implemented here: a default-off flag *should* be codeg
 the revert, and "should be equivalent" is the assumption that produced this report. Whoever fixes
 it should verify against both silicon and the module the change was merged for.
 
+## The entire codegen delta came from this one file
+
+Measured after the revert, and it corrects an earlier assumption of mine. I expected that
+reverting one of the merge's eight files would leave default codegen changed, because the other
+seven were still in. It does not: rebuilt with only this file reverted, the uninstrumented SQLite
+domain `XU` comes back as `f1214600d0dac351` — **byte-identical to the historical pre-merge
+artifact**. So for this workload the whole codegen change attributed to the merge came from
+`CapstoneCapGlobalInit.cpp`, the other seven files are codegen-neutral, and silicon numbers taken
+before and after the merge ARE comparable once this file is reverted.
+
 ## State of the branch
 
 `CapstoneCapGlobalInit.cpp` is **reverted to its pre-merge content** on `capstone-bootstrap`, in
