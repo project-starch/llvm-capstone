@@ -1,0 +1,47 @@
+MPY-S32 / upstream 18617  and  MPY-S33 / upstream 18620
+
+  01_s32_bounded_overrun.py     RETURNS, "S32b 1 -1"
+  02_s33_array_len_overflow.py  FAULT, cause 24, tval 0x0
+  03_s32_bytearray_short_len.py FAULT, cause 24, tval 0x0
+
+BOTH TRAPPED -- AND NOT FOR A BOUNDS REASON. cause 24 is "Cap mem access requires
+capability", the TAG check: a word that is not a capability was used as a pointer.
+It is the same code MPY-T11, MPY-T12 and MPY-T25 produce, and MPY-T25 is not even a
+temporal defect. So neither of these rows belongs in untrapped-cma-objects, and
+neither is evidence that the hardware saw the overflow.
+
+BOTH ARE OPEN UPSTREAM, so they are present at the pin and needed no parent build.
+Verified on the host at pin 2e3304a before either was built for the domain: SIGSEGV,
+rc 139, for both.
+
+MPY-S33 IS A NULL DEREFERENCE, and the report says so before we measured it:
+typecode_size * len wraps to zero, "array_new allocates a NULL/too-small buffer but
+still records the large logical length", and the fill dereferences it. tval = 0x0 is
+consistent. A NULL is not a capability, hence cause 24. Note it triggers here at all
+only because 1<<61 is below MP_SMALL_INT_MAX -- its sibling MPY-S02 needs an integer
+this port cannot represent and is unreachable for exactly that reason.
+
+MPY-S32 NEEDED A SECOND ARM, because the first could not answer the question it
+raised. The report claims the overflow itself goes through and the crash comes
+LATER, from a neighbouring object it corrupted. A single faulting run cannot
+distinguish "the write was stopped" from "the write went through and something
+downstream died". So the bounded arm overruns by 47 bytes instead of 999 -- one
+constant changed, everything else identical:
+
+    48 items  -> returns, "S32b 1 -1"
+  1000 items  -> fault, cause 24
+
+The bounded overrun is UNTRAPPED. The write past a one-byte allocation completed and
+the program ran on. Only the large overrun dies, and it dies downstream. That is the
+report's account confirmed, and it is the finding: the out-of-bounds write is
+invisible to the hardware for the usual reason -- it stays inside the one heap
+capability -- and what eventually faults is the consequence, not the defect.
+
+WHAT IS NOT CLAIMED. The victim bytearray planted before the overrun was untouched
+(hit = -1), so no specific object is shown to have been corrupted. The victim was
+allocated BEFORE the overflowing buffer and the overrun runs forward, away from it;
+that is a flaw in the arm's placement, not evidence of protection. Strength here is
+therefore MPY-S05's, not MPY-S01's.
+
+CONTROL. 00_sanity.py PASSED in the same image, retval 0x00077724. Ordering: the arm
+expected to return ran FIRST, the two expected to fault after it.

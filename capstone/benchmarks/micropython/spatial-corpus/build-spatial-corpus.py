@@ -124,6 +124,16 @@ ROWS = [
   "yes", "body: 'if m_new_obj_var_maybe fails, it does not raise an exception, but it tries to allocate dozen kilobytes' by alloca; reporter names MICROPY_ENABLE_PYSTACK=0, which is this port's setting",
   "masked-by-port-guard",
   "OPEN upstream, so present at the pin and needing no parent build. MEASURED, two arms in one boot: the alloca fallback DOES run with the heap exhausted and is untrapped, and recursion to accumulate allocas stops at depth 8 with a RuntimeError from MicroPython's own mp_cstack_check (MICROPY_STACK_CHECK, 4096-byte margin against MPY_CSTACK_MAX=393216). So a SOFTWARE guard at 393 KB stops the descent while the stack capability's bound sits near 800 KB, and this row cannot demonstrate a hardware stack trap however it is arranged. Recorded as a conclusion, not an open attempt."),
+ ("MPY-S32", 18617, "heap-overflow", "CWE-787", "py/objarray.c:array_construct,array_extend_impl", "gc-heap",
+  "a class whose __len__ reports 1 but whose __iter__ yields 1000 items: the constructor sizes the buffer from __len__ and the fill does not re-check it",
+  "yes", "body: 'array_construct trusts a user __len__ result to size a bytearray, then array_extend_impl iterates the object without enforcing that bound' -- and the reporter names the observed consequence, an adjacent generator object overwritten",
+  "measured",
+  "OPEN upstream, so present at the pin and needing no parent build. Verified on the host at pin 2e3304a: SIGSEGV, rc 139, six lines of Python and no module beyond the builtins."),
+ ("MPY-S33", 18620, "heap-overflow", "CWE-787,CWE-190", "py/objarray.c:array_construct,py/objarray.c:array_new", "gc-heap",
+  "__len__ returns 1<<61 so typecode_size * len wraps to zero: array_new allocates nothing while the logical length stays huge, and the fill writes through it",
+  "yes", "body: 'multiplies the length by the typecode size without overflow checks. With a huge __len__, the multiplication wraps to zero so array_new allocates a NULL/too-small buffer but still records the large logical length'",
+  "measured",
+  "OPEN upstream, present at the pin. Verified on the host: SIGSEGV, rc 139. 1<<61 is below MP_SMALL_INT_MAX so it triggers under MICROPY_LONGINT_IMPL_NONE, which this port uses -- the sibling MPY-S02 fails exactly that test."),
  ("MPY-S22", 3090, "bounds-arithmetic", "CWE-125", "py/sequence.c", "gc-heap",
   "negative-step slice indices computed with an inclusive stop", "uncertain",
   "the PR fixes the index arithmetic; neither it nor the thread states that an out-of-bounds ACCESS occurred",
@@ -188,6 +198,16 @@ MEASURED = {
     # with MicroPython's own stack check, which is why this row is closed rather than
     # retried: the port guards the C stack at 393 KB and the hardware bound is near 800 KB.
     19129: ("measured", "not-run", "untrapped-no-crash"),
+    # 2026-08-18, three arms in one boot, both rows OPEN at the pin so no parent build.
+    # Both fault with cause 24, the TAG check -- a word that is not a capability used as
+    # a pointer -- which is what MPY-T11/T12/T25 produce and says nothing about bounds.
+    # 18620 is a NULL dereference and its report predicts exactly that; tval = 0x0.
+    # 18617 needed a second arm to be interpretable: a BOUNDED 47-byte overrun RETURNS
+    # ("S32b 1 -1"), so the out-of-bounds write itself is untrapped and the fault in the
+    # 1000-item arm is downstream of it. Recorded as fault-cause24 because that is what
+    # the upstream reproduction does; the nuance is in the case RESULT.
+    18617: ("measured", "crash-sigsegv", "fault-cause24"),
+    18620: ("measured", "crash-sigsegv", "fault-cause24"),
 }
 
 def main():
