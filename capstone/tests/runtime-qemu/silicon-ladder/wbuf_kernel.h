@@ -65,6 +65,9 @@
 #ifndef WBUF_ARM
 #define WBUF_ARM 0
 #endif
+#ifndef WBUF_FIELDS
+#define WBUF_FIELDS 0           /* 1 = also verify start/end/perm/cursor on surviving caps */
+#endif
 
 #define WBUF_OK    0xB0000000u
 #define WBUF_FAULT 0xEE000000u
@@ -83,11 +86,57 @@ static unsigned long wbuf_type(const void *p) {
   return v;
 }
 
+/* FIELD QUERIES, FOR VALIDATING A FIX RATHER THAN DETECTING THE DEFECT.
+ *
+ * The plain store lands on the granule's HIGH word -- the METADATA half -- so start, end and
+ * perm are AT RISK and the cursor (low word) is NOT. The cursor is queried anyway as a NEGATIVE
+ * CONTROL: it should survive every arm, and if it ever does not, the corruption is not the
+ * mechanism described above.
+ *
+ * WHY THIS EXISTS. The obvious fix -- propagate the youngest store's tag to a co-resident
+ * same-granule entry so drain order stops mattering -- leaves the older plain entry writing its
+ * stale scalar over the metadata half. With ctag=1 that yields a capability with a VALID TAG
+ * over CORRUPTED METADATA: tag loss converted into tag forgery. A tag-only test reports that as
+ * a total success. This turns two outcome buckets into three:
+ *
+ *     NOT_CAP                       -> LOST                  (the S-07 direction)
+ *     capability, fields match      -> INTACT
+ *     capability, any field wrong   -> CORRUPTED-BUT-TAGGED  (what a naive fix produces)
+ *
+ * ORDERING IS NOT OPTIONAL. Selector 1 is TOTAL and answers 7 for NOT_CAP WITHOUT raising
+ * (capstone_dyn_unit.anvil:195 -- the NOT_CAP guard excludes zimm != 1). EVERY OTHER SELECTOR
+ * RAISES on a NOT_CAP operand. So the type must be checked FIRST and the field queries reached
+ * only when the value is still a capability; otherwise a tag-loss arm traps on the bounds query
+ * and the trap masks the measurement.
+ *
+ * The reference values are CAPTURED FROM A LIVE CAPABILITY at startup rather than assumed, so
+ * the comparison does not depend on knowing what the cap table hands out. They are non-zero for
+ * a real global, which matters because the memset case makes ZERO the most likely corrupt
+ * value -- a field whose correct value were zero could not detect a zero overwrite. */
+#define WBUF_SEL(name, zimm)                                                    \
+  static unsigned long name(const void *p) {                                    \
+    unsigned long v = 0;                                                        \
+    __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x" #zimm                  \
+                     : "=r"(v) : "r"(p));                                       \
+    return v;                                                                   \
+  }
+WBUF_SEL(wbuf_cursor, 2)   /* NOT at risk -- negative control */
+WBUF_SEL(wbuf_start,  3)   /* at risk */
+WBUF_SEL(wbuf_end,    4)   /* at risk */
+WBUF_SEL(wbuf_perm,   5)   /* at risk */
+
 static unsigned wbuf_compute(void)
 {
-  unsigned long lost = 0;
+  unsigned long lost = 0, corrupt = 0;
   unsigned i, r, k;
   void *base = (void *)&wbuf_anchor;
+#if WBUF_FIELDS
+  /* Captured from a live capability, not assumed. */
+  const unsigned long ref_start  = wbuf_start(base);
+  const unsigned long ref_end    = wbuf_end(base);
+  const unsigned long ref_perm   = wbuf_perm(base);
+  const unsigned long ref_cursor = wbuf_cursor(base);
+#endif
 
   for (r = 0; r < WBUF_REPS; r++) {
     for (i = 0; i < WBUF_N; i++) {
@@ -119,10 +168,25 @@ static unsigned wbuf_compute(void)
 
     for (i = 0; i < WBUF_N; i++) {
       void *p = wbuf_slots[i];         /* ldc */
-      if (wbuf_type(p) == 7ul) lost++; /* 7 == NOT_CAP */
+      if (wbuf_type(p) == 7ul) {       /* 7 == NOT_CAP. MUST be tested before any other */
+        lost++;                        /* selector, which would RAISE on this value.    */
+        continue;
+      }
+#if WBUF_FIELDS
+      if (wbuf_start(p)  != ref_start ||
+          wbuf_end(p)    != ref_end   ||
+          wbuf_perm(p)   != ref_perm  ||
+          wbuf_cursor(p) != ref_cursor)
+        corrupt++;                     /* tagged, but the metadata is not the original */
+#endif
     }
   }
 
-  return WBUF_OK | (unsigned)(lost & 0x00FFFFFFul);
+  /* Two 12-bit counters. WBUF_N * WBUF_REPS must stay <= 4095 per counter for this to be
+     lossless; both saturate rather than wrap, so a saturated read is visibly at the limit
+     instead of silently aliasing to a small number. */
+  if (lost    > 0xFFFul) lost    = 0xFFFul;
+  if (corrupt > 0xFFFul) corrupt = 0xFFFul;
+  return WBUF_OK | (unsigned)(corrupt << 12) | (unsigned)lost;
 }
 #endif
