@@ -1120,7 +1120,7 @@ def main():
             #     response was displaced onto a scalar writeback port: the value was intact in
             #     memory (case a). The count says one-off or routine.
             try:
-                def _read_sw(_sw, allow_cached=True):
+                def _read_sw(_sw, allow_cached=True, _force_emit=False):
                     """Read one debug-mux aperture, defending against the LED PULSE STRETCHER.
 
                     THE LEDS ARE NOT A SNAPSHOT. `ariane_xilinx.sv:956-979` holds each LED bit
@@ -1153,6 +1153,18 @@ def main():
                     Disagreement returns None (VOID). A contaminated aperture must never be
                     handed back as a value."""
                     set_switch_value(console, _sw)
+
+                    # FORCE THE SETTLED VALUE TO BE EMITTED when reading a halted core. The board
+                    # pushes led_state ON CHANGE, and a halted core's mux input is static, so the
+                    # value settles and nothing is emitted -- which reads as "unreadable" when it
+                    # actually means "clean". Walking to aperture 0 and back ORs in a transient,
+                    # and ~21 ms later the extra bits decay off leaving the target's true value,
+                    # which IS a change and so is emitted.
+                    if _force_emit:
+                        time.sleep(LED_SETTLE_S)
+                        set_switch_value(console, 0)
+                        time.sleep(0.05)
+                        set_switch_value(console, _sw)
 
                     def _sample():
                         _mark = console.now()
@@ -1219,13 +1231,39 @@ def main():
                 # domains under test.
                 assert (204 & 0b11) == 0, "switch 204 must be UART-safe"
                 assert (208 & 0b11) == 0, "switch 208 must be UART-safe"
-                _v = _read_sw(204)
+                _v = _read_sw(204, _force_emit=_halt_reads)
 
                 # The tag-history verdict byte. 208 is even, so it is safe to sample between
                 # domains alongside 204; it is the byte that separates (b) a genuine tag loss
                 # from (c) a granule that was stored untagged, which no software probe can do.
-                _w = _read_sw(208)
+                _w = _read_sw(208, _force_emit=_halt_reads)
                 _d = decode_s07_verdict(_w)
+                # READ THE MUX WITH THE HART HALTED. Validated on boot 8, and it changes what
+                # every non-zero reading is worth.
+                #
+                # Running reads are the bitwise OR of every aperture the switch walk transits
+                # (the pulse stretcher holds each bit 2^20 cycles). Halted, the mux INPUT goes
+                # static while the stretcher keeps counting down on the free-running MMCM clock,
+                # so contamination DECAYS OFF and the read is clean.
+                #
+                # The measurement that settled it, same boot, same aperture:
+                #   running 208 = 0x9c -> decoded as "(b) GENUINE TAG LOSS"
+                #   halted  208 = 0x90 -> stc_ctag AND gran_match both CLEAR
+                # 0x90 is a strict subset of 0x9c, and the two bits present only in the running
+                # read are precisely the two that made it look like tag loss. The boot-time S-07
+                # signature was pulse-stretcher contamination, and it read bit-identically across
+                # boots because the switch walk is deterministic and so is its contamination.
+                _halt_reads = os.environ.get("HALT_MUX_READS", "1") == "1"
+                if _halt_reads:
+                    try:
+                        console.gdb_start()
+                        console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
+                    except Exception as _exc:
+                        print(f"  [s07] halt before mux read FAILED ({type(_exc).__name__}) -- "
+                              f"readings below are RUNNING reads and every non-zero one is void",
+                              flush=True)
+                        _halt_reads = False
+
                 _wline = (f"  [s07] after {label}: sw=208 verdict "
                           + ("UNREAD" if _w is None else f"0x{_w:02x} {_w:08b}"))
                 if _d is not None:
@@ -1352,8 +1390,8 @@ def main():
             # only inside `recv ep.rev_req`, so it is "which node is being revoked" and reads 0
             # for a workload that never revokes. It is a different quantity, not a broken one.
             try:
-                _hl = _read_sw(249)
-                _hh = _read_sw(250)
+                _hl = _read_sw(249, _force_emit=_halt_reads)
+                _hh = _read_sw(250, _force_emit=_halt_reads)
                 if _hl is None or _hh is None:
                     _line = (f"  [s07] after {label}: rev-node head VOID "
                              f"(lo={_hl} hi={_hh}) -- no consumption datum for this rep")
@@ -1381,6 +1419,20 @@ def main():
                 _line = f"  [s07] after {label}: rev-node head read FAILED ({type(exc).__name__})"
                 print(_line, flush=True)
                 transcript.append(_line + "\n")
+
+            # RESUME. Every read above was taken halted; the core must be running again before
+            # the next domain is launched, and gdb must be released or later runs time out
+            # before load_image (an orphaned server-side session survives a power cycle).
+            if _halt_reads:
+                try:
+                    console.gdb_cmd("continue", C.GDB_PROMPT, timeout=15.0)
+                except Exception as _exc:
+                    print(f"  [s07] RESUME FAILED ({type(_exc).__name__}) -- the core may still "
+                          f"be halted; everything after this point is suspect", flush=True)
+                try:
+                    console.gdb_stop()
+                except Exception:
+                    pass
 
             if wedged:
                 # INSTRUMENT THE WEDGE HERE, IN THIS SESSION.

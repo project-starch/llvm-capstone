@@ -286,3 +286,47 @@ should produce. `S7T` was never a candidate for it.
 enough that nobody re-read what it compiles to. The name asserted a relationship the code does not
 have, and the reasoning was done on the name -- including by me, twice today, while I was in the
 middle of correcting two other instrument-label errors of exactly the same shape.
+
+## THE HALTED READ WORKS, AND IT REFUTES THE 0x9c CASE
+
+Boot 8, early halt control on a healthy core, before any domain ran:
+
+    running 208 (pre-run baseline)  0x9c  10011100
+    halted  208 (same boot)         0x90  10010000
+
+| field | running | halted |
+|---|---|---|
+| ldc0_valid | 1 | 1 |
+| src | 0 | 0 |
+| stc_valid | 1 | 1 |
+| **stc_ctag** | **1** | **0** |
+| **gran_match** | **1** | **0** |
+| clobbered | 0 | 0 |
+
+`0x90 & 0x9c == 0x90` — the halted read is a **strict subset**, exactly as the stretcher predicts
+(contamination can only add bits). And the two bits present *only* in the running read are
+precisely `stc_ctag` and `gran_match` — **the two that made it decode as "(b) GENUINE TAG LOSS"**.
+
+### Two conclusions, both load-bearing
+
+**1. The halted read WORKS, and it is now the protocol.** The claim that halted reads were
+structurally impossible is withdrawn: it rested on a `latest()` fallback (since removed) and on
+n=1 in a total-wedge state. The mechanism is the RTL lane's: `clk` is the free-running MMCM output
+(`ariane_xilinx.sv:1209`) and the stretcher counts down on it (`:961`) regardless of the hart, so
+with the mux input static every undriven bit decays in ~21 ms while the driven bits reload.
+Halting is the one configuration where contamination *clears*. The driver now halts around every
+per-domain mux read (`HALT_MUX_READS`, default on) and forces the settled value to be emitted by
+walking to aperture 0 and back, since the board pushes `led_state` on change only.
+
+**2. The boot-time "S-07 signature" is REFUTED.** The reproducible pre-run `0x9c` — filed as a
+candidate cheap repro, an untagged LDC on the same granule as the most recent tagged STC — was
+pulse-stretcher contamination. Caveat 5 in the spec was right and is the reason this was filed as
+a case to test rather than reported as a finding: **bit-identical across boots did not clear it,
+because the switch walk is deterministic and so is the contamination it produces.**
+
+### Corollary: every running non-zero mux reading ever taken is void
+
+Not merely suspect — void, and now demonstrably so. That includes the `rev-node head = 65535`
+readings taken running in boot 8 (all-ones is the saturated case) and the `0xfe`/`0xbe`
+displacement bytes. Zeros still stand, running or halted, because contamination cannot manufacture
+a zero. Re-take anything non-zero that mattered, halted.
