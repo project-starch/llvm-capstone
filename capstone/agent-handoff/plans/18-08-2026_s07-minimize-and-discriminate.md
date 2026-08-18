@@ -39,18 +39,73 @@ Reading with a plain 64-bit load is the point: it is the *same* instruction the 
 guard uses (`ld a0, 0x0(a0)`), so it observes exactly what the guard observed, and it cannot
 itself raise mcause 25.
 
-## The discriminator: read the same address 8 times
+## The discriminator: read the same address 8 times, EACH FROM MEMORY
 
-This is the piece every previous probe lacked.
+**Revised 2026-08-18 after the RTL lane refuted the first version.** The original design took 8
+consecutive plain loads of one address and read agreement as "the value is in memory". That is
+unsound, and it fails in the row most likely to be hit:
 
-| what 8 consecutive plain `ld`s of one address show | reading |
+> the first load may miss and refill; loads 2-8 then **HIT IN L1** and never reach memory. One bad
+> value installed in the line and read back seven times is perfectly self-consistent — so the
+> cache makes **H-load look exactly like H-mem**, which is the single confusion this probe exists
+> to prevent.
+
+Sharper still: the untagged response actually measured came back `src=1`, **MISS REFILL** — the
+refill path is the suspect, and the naive design exercised the L1-**hit** path in seven samples
+out of eight.
+
+**Fix: force every sample to miss.** Geometry verified from primary source, not memory —
+`cv64a6_imafdc_sv39_config_pkg.sv:42-44`: `DcacheByteSize 32768`, `DcacheSetAssoc 8`,
+`DcacheLineWidth 128` bits.
+
+| quantity | value |
 |---|---|
-| all 8 identical and **nonzero** | the value is **in memory** → H-mem |
-| the 8 **disagree** | the load path is returning inconsistent data → **H-load**, directly demonstrated |
-| all 8 **zero** | memory is clean at this phase; the fault is later, or is a one-shot bad load |
+| line | 16 B |
+| way size | 32768 / 8 = **4096 B** |
+| sets | 4096 / 16 = 256 |
+| **conflict stride** | **4096 B** |
 
-Each sample also records the capability type via `lcc` field 1 (returns 7 for NOT_CAP without
-raising), so we learn whether the granule is tagged as well as what it holds.
+Index bits are `[11:4]`, entirely inside the 4 KiB page offset, so a *virtual* stride of 4096
+selects the same set with no aliasing question. Between samples, touch **≥ 8** addresses at
+4096-byte stride (8-way set) to evict the line under test.
+
+**And the eviction gets its own positive control, because an under-filled eviction loop has
+already silently tested nothing on this project.** Eviction is unobservable by construction — it
+looks like a successful probe either way — so it is timed with `mcycle`: a post-evict load must be
+measurably slower than a known-cached load. If the ratio is not clearly above threshold, the
+domain returns `0x5107_EE00` and **every sample that boot is discarded**.
+
+| 8 samples, each forced to miss | reading |
+|---|---|
+| all 8 identical and **nonzero** | the value is **in DRAM** → H-mem |
+| the 8 **disagree** | the load path returns inconsistent data → **H-load**, demonstrated |
+| all 8 **zero** | memory is clean at this phase |
+
+Without the eviction fix, agreement must be reported as *"consistent, cache-masked, NO VERDICT"* —
+never as H-mem. `V=2` was always sound: a cache serving one line cannot manufacture disagreement.
+
+### Two more controls, both for silent-failure modes
+
+* **Confirm the 8 loads survive into the artifact, before spending the boot.** A
+  repeat-the-load-N-times ladder on this project was once CSE'd into ONE `ldc` regardless of N,
+  and memory barriers did not stop it; the whole set tested nothing and reported with total
+  confidence. `volatile` should hold where a barrier did not, but "should" is what that set
+  relied on. One `llvm-objdump` and count the loads per sample site.
+* **`V=2` needs its own positive control, and the selftest does not provide one.** Writing a
+  nonzero pattern and reading it back proves the probe can report `V=1`. It proves nothing about
+  the comparator, and `V=2` is the outcome that would end the ambiguity. If the comparison is
+  subtly wrong — compares `sample[0]` to itself, wrong index, compares after overwriting —
+  disagreement can *never* be reported and the boot returns a confident `V=1` having tested
+  nothing. So: run the identical comparator over a seeded array with one element deliberately
+  different and require `V=2` before any real sample is taken.
+
+### One assumption now verified rather than assumed
+
+`lcc` selector 1 on a NOT_CAP is total and will not raise: `capstone_dyn_unit.anvil:195` raises
+only when `cap_type == NOT_CAP && zimm != 1`, and the result path computes `cap_type - 3'd1`, so
+NOT_CAP(0) wraps to `3'b111` = 7. The second guard that could have caught it on the way past,
+`check_LCC_invalid_multiplexing` (`capstone_unit.anvilh:469`), fires only for selectors 2, 4, 5
+and 7. (Checked by the RTL lane.)
 
 ## The boot: six domains, ordered so every wedge point is itself an answer
 
@@ -131,3 +186,39 @@ the old decision table would have mis-scored "still wedges" as a verdict.
 
 One boot, about 5 minutes of board time, plus one firmware rebuild covering all six domains.
 No reflash, no RTL change, no dependency on the pending synthesis.
+
+## The black-box recorder — accepted as an idea, NOT taken as a domain slot
+
+The RTL lane's strongest counter-proposal: my constraint is right for *software* and may be wrong
+for the *system*. Nothing executes after the wedge, so retval, `output_text` and any host-read
+region are dead — but **a store that COMMITTED before the wedge is already in DRAM, and DRAM is
+not cleared by a core reset.** A recorder at a fixed physical address, written as the probe goes
+and read by a domain on the *next* boot, would not need the core to survive. If it works, the
+constraint that shapes this whole plan dissolves and probes can sit **at the faulting `ldc`
+itself**, turning every wedge into data rather than one bit. That is a much bigger prize than this
+boot.
+
+**It is not, however, a spare domain slot, and slot 6 stays `XU`.** Two obstacles:
+
+1. **A domain cannot reach an arbitrary physical address.** Domains run on carved capabilities and
+   cannot fabricate one, so someone has to mint a capability covering the recorder — the monitor
+   at carve time, or the kernel module through the existing `REGION_SHARE` path. The RTL lane's
+   three preconditions (reserve via the DT memory node, survive the JTAG load, retain across
+   reset) are all real, but they are not sufficient: capability delivery is a fourth.
+2. **The cheap shortcut — reuse the existing shared region and look for the pattern next boot — is
+   DEAD, and this is the load-bearing new fact.** Every region allocation in
+   `modcapstone/module/capstone.c` (lines 113, 142, 190) passes **`__GFP_ZERO`**. Linux zeroes the
+   page on allocation, so the pattern is guaranteed absent next boot whether or not DRAM retained
+   it. That experiment cannot produce a positive, and its negative would be uninformative — a test
+   that cannot fire.
+
+**Cheapest version that can actually answer it**, proposed rather than started because it touches
+shared firmware: do the retention test **in the monitor**, in M-mode, before Linux exists. A few
+lines in `sbi_capstone.c` that at boot read a magic from a fixed high physical address, print it,
+then write a fresh pattern. One firmware rebuild, no DT change, no module change, no capability
+plumbing, and it is its own positive control — write, reset, read back. If the pattern survives,
+retention and JTAG-clobber are both answered at once and the recorder becomes worth building
+properly (DT reservation + monitor-minted capability). If it does not survive, the idea is dead
+for one rebuild and no board time beyond a normal boot.
+
+Sequencing: this is **independent** of the six-domain boot and should not delay it.
