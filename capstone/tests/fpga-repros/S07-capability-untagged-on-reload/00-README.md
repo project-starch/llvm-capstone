@@ -60,6 +60,57 @@
 > QEMU cannot reproduce either direction: its capability store is one atomic 16-byte-plus-tag
 > operation with no write buffer, no per-word entries and no drain arbiter.
 >
+> ### MECHANISM CORRECTED 2026-08-19 — it is not tag ordering, and that matters for the fix
+>
+> The description above ("the loser's tag wins") is a **symptom**. The root is that
+> **`is_cap` entries span TWO words but are tracked and merged as ONE**:
+>
+>     wt_dcache_mem.sv:241-250
+>       if (!(st_wr_cap)) begin
+>         bank_req |= dcache_cl_bin2oh(wr_off_i[...]);   // ONE word
+>         bank_we  =  dcache_cl_bin2oh(wr_off_i[...]);
+>       end else begin
+>         bank_req = '1;                                  // BOTH words
+>         bank_we  = '1;
+>       end
+>
+> A capability entry writes **both** words of the granule; a plain entry writes one. They overlap
+> on the high word — the **metadata** half. But the write buffer's hit/merge compare is on the
+> **word** address (`wt_dcache_wbuffer.sv:444`), so it cannot see that a cap entry at `G+0`
+> already covers `G+8`. Two entries end up writing the same physical word in arbitrary order.
+> The tag disagreement is a consequence of that, not the disease.
+>
+> **THE OBVIOUS FIX IS WRONG, AND WRONG IN THE DANGEROUS DIRECTION.** Propagating the youngest
+> store's tag to any co-resident same-granule entry — so drain order stops mattering — leaves the
+> older plain entry still writing its stale scalar over the **metadata** half. Giving it `ctag=1`
+> as well would produce a capability with a **valid tag over corrupted metadata**, converting the
+> loss case into a forge case. It would have turned an availability bug into a soundness bug, and
+> **the directed test would have gone green, because it only checks the tag.**
+>
+> **That is a limitation of the test in this folder and it is stated rather than discovered
+> later:** `wbuf_kernel.h` verifies the TAG via `lcc` field 1 and does **not** verify the
+> capability's bounds, permissions or cursor. It can distinguish tagged from untagged. It cannot
+> distinguish a correct capability from a tagged one with corrupted metadata. Any candidate fix
+> must be validated against metadata integrity, not against this test alone.
+>
+> **Two real options, neither built yet:**
+>
+> * **(A) make the merge granule-aware for capability entries** — a plain store to `G+8` merges
+>   INTO a resident cap entry at `G+0`, its bytes routed to that entry's metadata half, `ctag`
+>   last-writer-wins. One entry, one writeback, order-independent. Correct and complete, but real
+>   surgery on the merge path.
+> * **(B) forbid co-residency** — refuse to allocate an entry that conflicts at GRANULE level with
+>   a resident entry when either side is `is_cap`, stalling until it drains. Small and obviously
+>   correct, but it adds a term to `rdy`, which feeds the grant path, and that cone is on the
+>   standing `UNOPTFLAT` list where synthesis has twice gone pathological.
+>
+> **The `wb3` arm is the evidence that (B) works:** 64 unrelated stores between the pair gave 0
+> losses out of 16384 — co-residency broken by drain rather than by design.
+>
+> Choosing between them trades correctness completeness against synthesis risk in a cone that has
+> already cost two blowups, and the forgery arm proves this subsystem can produce soundness
+> failures. That is a design decision for the project lead, not a late-session patch.
+>
 > **Status:** mechanism identified from the RTL, confirmed on silicon by directed test. The fix is
 > open. Everything below this box is the investigation that preceded the root cause and is kept
 > for its exclusions, which remain valid.
