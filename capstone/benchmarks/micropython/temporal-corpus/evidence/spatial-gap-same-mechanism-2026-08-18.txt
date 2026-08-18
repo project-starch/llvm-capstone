@@ -1,0 +1,63 @@
+The nested-allocator gap is not specifically TEMPORAL. Measured 2026-08-18.
+
+THE QUESTION. The corpus is 30 rows of lifetime defects and exactly ONE spatial
+one, MPY-T03 / CVE-2026-1998 (CWE-119, CWE-787), which the temporal audit
+excluded. So the corpus says nothing about spatial safety. It was put to this
+session that it should not need to: if a sub-allocated block INHERITS the bounds
+of the region the allocator was handed, then an overflow from one block into the
+next is invisible for the same reason a use-after-free is.
+
+That is now measured rather than argued.
+
+THE PAIR. capstone/tests/runtime-qemu/silicon-ladder/nestspat_{app,host}.c, one
+file per role, both arms selected by NEST_SPATIAL_OFFSET on the command line so
+they differ in exactly one constant. nest_spatial_run() in nestalloc_kernel.h has
+NO lifetime component at all -- two blocks, both alive for the whole run, nothing
+freed, nest_free never called. It is a plain buffer overflow:
+
+    a = nest_alloc(64);  b = nest_alloc(64);     /* both live */
+    a[0] = 0x11;  b[0] = 0x22;
+    a[NEST_SPATIAL_OFFSET] = 0xAA;               /* walks out of a */
+    return b[0];
+
+ARM A, offset 64, one past a's end and into b:
+
+    oracle: nestspat_in = 170   (host flags: -DNEST_SPATIAL_OFFSET=64)
+    __CAPSTONE_LADDER_NESTSPAT_PASSED__ (retval = 170)
+
+170 is 0xAA. The domain returned exactly what a NATIVE build of the same source
+returns, and the native build has no capability hardware at all. The write left
+one live object and landed in another live object, and nothing objected.
+
+ARM B, offset 1088, past the region itself. The positive control:
+
+    [CAPSTONE] Cap mem access OOB: pc = 101600258, rs1 = x12,
+               cursor = 101700020, imm = 0, addr = 101700020, size = 1,
+               bounds = (1016ffbe0, 1016fffe0)
+    [CAPSTONE] domain halted by capability fault: cause = 7
+
+bounds is 0x400, exactly 1024 bytes, exactly the whole region. The faulting cursor
+is 0x440 past base, exactly the offset the arm sets. So checking is live in this
+build, and arm A's silence is a measurement rather than a dead domain.
+
+WHAT IT MEANS. The two arms bracket the boundary the hardware can actually see,
+and it is the REGION, not the block. Sub-object bounds would be needed to tell a
+and b apart, and a nested allocator carves its blocks in software where no
+bounds-setting instruction is ever emitted -- gc_alloc returns an offset, not a
+narrowed capability.
+
+So the finding recorded for the temporal pair generalises: it is not that Capstone
+lacks temporal protection for nested allocators specifically. It is that the
+hardware's notion of "object" is the region the allocator was given, and
+everything the allocator does inside that region -- allocating, freeing, reusing,
+running off the end of one block into the next -- happens below the granularity
+the hardware can observe. Temporal and spatial blindness are one mechanism, not
+two.
+
+CONSEQUENCE FOR THE CORPUS. It stays a temporal corpus; this is a separate result
+and is filed as one. But the conclusion drawn from those 16 cases should be
+stated at the width the evidence supports, which is wider than "temporal".
+
+WHAT THIS DOES NOT SHOW. That an instrumented allocator would catch either kind.
+gc_alloc narrowing per block would give the hardware something to check, and
+neither this pair nor the temporal one says whether that is affordable.

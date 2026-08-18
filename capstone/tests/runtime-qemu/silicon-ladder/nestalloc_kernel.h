@@ -72,4 +72,50 @@ static unsigned nest_run(void) {
     return (unsigned)b[0];
 }
 
+
+/* ---------------------------------------------------------------------------
+ * THE SPATIAL HALF OF THE SAME QUESTION.
+ *
+ * nest_run above is a lifetime defect. This one has NO lifetime component at all:
+ * both blocks are alive the whole time and nothing is freed. It is a plain buffer
+ * overflow out of one sub-allocated block into the next.
+ *
+ * The prediction is that Capstone does not catch it either, and for the SAME
+ * reason: bounds are set once over the whole nest_heap object, so a and b are not
+ * two objects to the hardware, they are two offsets into one. Sub-object bounds
+ * would be needed to tell them apart, and a nested allocator carves its blocks in
+ * software where no bounds-setting instruction is ever emitted.
+ *
+ * If that prediction holds, the nested-allocator gap is not specifically a
+ * temporal one. It is that the hardware's notion of "object" is the region the
+ * allocator was given, and everything the allocator does inside it is invisible.
+ *
+ * Parameterised by NEST_SPATIAL_OFFSET, and the two arms differ in that ONE
+ * constant, exactly as the temporal pair does:
+ *   NEST_BLOCK               -> one past a's end, still inside the region: expect UNTRAPPED
+ *   NEST_HEAP_BYTES + BLOCK  -> past the region itself:                    expect TRAPPED
+ * The second arm is the positive control. Without it, "no fault" and "the domain
+ * never ran" look the same.
+ */
+#ifndef NEST_SPATIAL_OFFSET
+#define NEST_SPATIAL_OFFSET NEST_BLOCK
+#endif
+
+static unsigned nest_spatial_run(void) {
+    unsigned char *a = nest_alloc(NEST_BLOCK);
+    unsigned char *b = nest_alloc(NEST_BLOCK);   /* BOTH live; nest_free is never called */
+
+    a[0] = 0x11;
+    b[0] = 0x22;
+
+    /* The overflow. volatile so -O0 cannot fold a and b into one base and reason
+       the access away, the same guard the temporal arm uses. */
+    volatile unsigned long off = NEST_SPATIAL_OFFSET;
+    a[off] = 0xAA;
+
+    /* 0xAA (170) means the write walked out of a and into b with nothing objecting.
+       0x22 (34) would mean it landed somewhere else and b is intact. */
+    return (unsigned)b[0];
+}
+
 #endif /* NESTALLOC_KERNEL_H */
