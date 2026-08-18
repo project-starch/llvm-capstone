@@ -236,3 +236,53 @@ which is worth more than either analysis alone.
 **If `S7T` wedges even once with mcause 25 at a comparable position, the discriminator is dead on
 the spot.** A single event in the control arm refutes rather than estimates, and no power
 calculation is required or relevant. Check for that before running any test.
+
+## RETRACTION: `S7T` vs `XU` cannot localise anything, at any n
+
+**Retracting the claim, made earlier on this page and in a report, that a clean `S7T` at n~20
+would make `S7T` vs `XU` "a genuine matched pair worth diffing" and that "the diff is the
+localisation".** It is not a matched pair and the diff localises nothing. Source, not inference --
+`benchmarks/sqlite/sqlite_capstone_domain.c:6737-6743`:
+
+    #ifdef CAPSTONE_S07_CURSOR_SELFTEST
+        /* Runs INSTEAD of the workload: this arm exists to prove the instrument, and it must be
+           an expected-to-RETURN arm so it can be ordered before the one that may wedge. */
+        *res = s07c_selftest_result();
+        return;
+    #endif
+        unsigned long rv_ = (unsigned long)(unsigned)run_sqlite();
+
+`S7T` is built with `SQLITE_S07_CURSOR_SELFTEST=1` and **returns before `run_sqlite()` is ever
+called.** It plants two known integers into a 16-byte slot, reads them back, and returns. It does
+not execute the workload at all.
+
+So "the control passed and the arm wedged" is not an underpowered comparison -- that was the
+previous diagnosis and it was too generous. It is a comparison between a program that runs SQLite
+and a program that does not. A clean `S7T` is the expected result of not running the code under
+test, at any n, and no number of reps converts it into evidence about the workload.
+
+**The power calculation above was computing the power of a comparison that cannot localise
+regardless of the answer.** The arithmetic is still correct and the pre-declaration still stands
+for what it does measure; it simply measures less than was claimed for it.
+
+### What the comparison IS still good for, and it is not nothing
+
+* **Validating the boot.** That is what a control is for, and `S7T` does it: it proves the board
+  booted, the firmware loaded, the domain was created and entered, and the instrument fires. Every
+  past boot keeps that much.
+* **One genuinely informative outcome remains.** If `S7T` ever wedges with mcause 25, then a
+  domain that never runs the workload has wedged -- which points at the monitor, the entry path or
+  the carve, NOT at SQLite. That would be a large finding, and it is why the interleaved boots are
+  worth finishing rather than aborting.
+
+### What an actual matched pair requires
+
+Two builds that **both run the workload** and differ in exactly one thing -- a single fixup or
+codegen knob toggled (`build-sqlite-silicon.sh` carries several, e.g.
+`SQLITE_LDC_HIGH_HALF_FIXUP`). That is the pair whose diff localises, and it is what the next bake
+should produce. `S7T` was never a candidate for it.
+
+**How this got missed:** `S7T` has been called "the control" in every transcript and doc for long
+enough that nobody re-read what it compiles to. The name asserted a relationship the code does not
+have, and the reasoning was done on the name -- including by me, twice today, while I was in the
+middle of correcting two other instrument-label errors of exactly the same shape.
