@@ -50,12 +50,15 @@
 > "eviction and bulk reload are not the mechanism", which remains true, and **not** as evidence
 > against tag loss.
 >
-> ### The defect is BIDIRECTIONAL — see the sibling issue
+> ### The defect is BIDIRECTIONAL — see the sibling issue (severity since corrected)
 >
-> The same reorder also runs the other way, leaving a **valid tag over scalar data** at 7.27%.
-> That is a **soundness** hole rather than an availability one and has its own folder:
-> **`S09-write-buffer-tag-forgery/`**. It is arguably more serious than this issue, because a
-> forged tag produces no trap and no indication.
+> The same reorder also runs the other way. **It does NOT produce a tag over scalar data** — that
+> was the first reading and it is retracted. Measured with field checking, the
+> CORRUPTED-BUT-TAGGED bucket is **empty** (0 of 3840 in both directions): when the capability
+> entry drains last it writes BOTH words of the granule, so the capability survives INTACT and the
+> program's **plain store is silently dropped** instead. That is an integrity bug, not a
+> capability-model soundness hole. Folder: **`S09-write-buffer-tag-forgery/`** (name retained so
+> existing links resolve; its README leads with the correction).
 >
 > QEMU cannot reproduce either direction: its capability store is one atomic 16-byte-plus-tag
 > operation with no write buffer, no per-word entries and no drain arbiter.

@@ -1,4 +1,59 @@
-# S-09 — the write buffer FORGES capability tags over scalar data
+# S-09 — the write buffer drops one of two stores to the same granule
+
+> # SEVERITY CORRECTED 2026-08-19 — MEASURED. THIS IS NOT TAG FORGERY OVER SCALAR DATA.
+>
+> **Retracting this folder's original claim** that the defect "fabricates a usable capability over
+> bytes the program wrote as scalars". It does not. That was inferred from a tag-only measurement
+> and is **refuted by direct measurement** of the capability's fields.
+>
+> The `wbuf` kernel was extended to check `start`/`end`/`perm` (the at-risk metadata half) and
+> `cursor` (a negative control) on every capability that survives, giving three buckets:
+> LOST / INTACT / **CORRUPTED-BUT-TAGGED**. Measured on silicon, 3840 slots per arm:
+>
+> | arm | LOST | survivors | **CORRUPTED-BUT-TAGGED** |
+> |---|---|---|---|
+> | `wf1` plain `G+8`; `stc G` | 233 (6.07%) | 3607 | **0** |
+> | `wf2` `stc G`; plain `G+8` | 3458 (90.05%) | 382 | **0** |
+>
+> **The corrupted-but-tagged bucket is EMPTY in both directions.** The 382 survivors in `wf2`
+> carry the ORIGINAL capability's `start`, `end`, `perm` and `cursor` — not the plain store's
+> scalar.
+>
+> ### What is actually happening, and it follows from the mechanism
+>
+> A capability entry writes **both** words of the granule (`wt_dcache_mem.sv:241-250`,
+> `bank_req = '1`). So when the capability entry drains last it overwrites the whole granule,
+> metadata included. The result is the **intact original capability** — and the plain store that
+> was supposed to land on `G+8` is **silently dropped**.
+>
+> So the two consequences of the reorder are:
+>
+> 1. **plain entry drains last** -> the tag is cleared, the capability is destroyed, the program
+>    faults on first use. This is **S-07** (availability).
+> 2. **capability entry drains last** -> the capability survives intact and **the program's scalar
+>    store never takes effect** (silent data loss).
+>
+> **Neither direction produces a capability over attacker-chosen data.** The soundness framing in
+> the original text below is wrong and is retracted.
+>
+> ### This is still a real defect, and it is still worth its own folder
+>
+> A silently dropped store is a correctness bug in its own right: the program wrote a value, no
+> fault was raised, and the value is not there. Any C code that writes a scalar field adjacent to
+> a capability field in the same 16-byte granule can lose that write, at ~7% per opportunity. It
+> is simply an integrity bug rather than a capability-model soundness hole.
+>
+> **A limitation of the current test, stated rather than left to be discovered:** it verifies the
+> capability's fields but does **not** read back the scalar written to `G+8`. The dropped-store
+> consequence above is inferred from the mechanism and from the empty corruption bucket, not
+> measured directly. An arm that reads `G+8` back and compares it would measure it, and has not
+> been built.
+>
+> **The fix-validation value of the extended test is unchanged**, and is the reason it exists: a
+> candidate fix that propagates the youngest tag WOULD populate the corrupted-but-tagged bucket,
+> and the bucket now reads 0 on unfixed hardware — so it is a working detector with a
+> demonstrated negative, ready to catch exactly that mistake.
+
 
 **A capability store and a plain store to the same 16-byte granule are reordered, so a plain
 store's data can end up carrying a VALID CAPABILITY TAG.** Measured on silicon at **7.27% per
