@@ -90,3 +90,80 @@ separate a geometric from a mild mixture, and the ladder is capped near 6-7 reps
 censors exactly the tail where the two models differ most. But the direction is now consistent
 enough that the follow-on work should assume **per-run** -- hunt the faulting site, not the
 environment -- rather than spend boots on power-cycle dwell or thermal variation.
+
+## THE CONTROL HAS NO n EITHER — and that is the next thing to fix
+
+Tallied across every boot on this bitstream:
+
+| domain | k | n | note |
+|---|---|---|---|
+| `XU` (the arm under test) | 4 | 20 | p̂ = 0.20 per rep |
+| `S7T` (the CONTROL) | 0 | **6** | one rep per boot, six boots |
+
+**`S7T` is not established as immune, and the pair it forms with `XU` is not supported.** Under
+the null that `S7T` behaves exactly like `XU`, P(0 wedges in 6) = 0.80^6 = **0.26**. A quarter of
+the time we would see this even if the two domains were identical in every way that matters.
+
+This is the rule at the top of this document applied one level up, to the instrument rather than
+the subject. Every boot on record has run `S7T` **once**, as a control, and then read "the control
+passed, the arm wedged" as though it were a comparison. It is a comparison between n = 6 and
+n = 20, one of which has never had the chance to fail.
+
+**The next boots run `S7T` REPEATED**, to give it a real n:
+
+* 0 in ~20 reps puts P at 0.012 under the null. Only then is `S7T` vs `XU` a genuine matched pair
+  worth diffing, and the diff becomes the localisation.
+* A comparable rate means **`S7T` is not a control at all**, and every boot that read "control
+  passed, therefore the boot is good and the wedge belongs to the arm" was reading nothing. That
+  would be the more consequential result of the two.
+
+**No separate control domain in those boots, deliberately.** The control exists to separate "this
+image failed" from "the board or firmware failed", and `SQ: G/enter` already makes exactly that
+distinction per rep — a domain that entered and wedged is a result, one that never entered is
+excluded from both k and n by `s07-rate.py`. Adding a small control domain would instead perturb
+the carve geometry that the `SPLB` exact-fit ceiling is sensitive to, trading a discrimination we
+already have for a new source of lost reps.
+
+## The rate is over a HOMOGENEOUS population — checked, not assumed
+
+A rate computed over a mixture of failure mechanisms is not a rate for either of them. There are
+at least two distinct ways to hang on this design: an S-07 capability fault (mcause 25), and a
+rev-node pool stall, which `capstone_rev_node.anvil:99-108` produces as a **blocked `recv` with no
+trap at all** — deliberately, so exhaustion is a visible stall rather than silent id reuse.
+
+Those are distinguishable on data already collected, from switch 255, `{seen, mcause[6:0]}`:
+
+| boot | outcome | sw=255 | seen | mcause |
+|---|---|---|---|---|
+| 1 | S07-WEDGE | 0x99 | 1 | **25** |
+| 2 | S07-WEDGE | 0x99 | 1 | **25** |
+| 5 | S07-WEDGE | 0x99 | 1 | **25** |
+| 6 | S07-WEDGE | 0x99 | 1 | **25** |
+| 3 | SPLB (infra) | 0x89 | 1 | 9 |
+| 4 | SPLB (infra) | 0x89 | 1 | 9 |
+
+**All four counted wedges trapped with mcause 25**, each corroborated by an independent latched
+trap at a different address. A no-trap stall cannot present as a trap, so **rev-node exhaustion is
+excluded as the mechanism for every wedge in the rate.** k=4/n=20 is a rate for one thing.
+
+### But the SPLB ceiling is a different animal, and it is not excluded
+
+The two boots with no capability trap are exactly the two that ended in `SPLB:0000E010` =
+`CAPSTONE_ERR_SPLIT_EXACT`. Cause 9 is an S-mode ecall — ordinary traffic latched earlier, saying
+nothing about the domain. Those stops are already excluded from k and n, and should stay excluded.
+
+The ceiling is worth understanding on its own account, because it censors every ladder at 6-7 reps
+— precisely the tail where a **rising** hazard (cumulative allocation across reps) separates from
+a **constant** one, and the only region the ladder never observes. `SPLB` is split-related and
+allocation-related and fires at a cumulative point, which fits a rising hazard.
+
+What does not fit: `SPLB` is the **monitor's own error code**, so the monitor is running and
+reporting rather than stalled, and the hardware SPLIT returned. Pool pressure short of exhaustion
+would reach the monitor as an exact-fit failure; exhaustion itself would not reach it at all. And
+boot 4's wedge readout gave `head = 365` (10 bits of 16, so treat with care — a truncated head has
+been misread as exhaustion here before) with `overflow = 0`, and `serving_idx = 0x00000000`, which
+is either not advancing or not wired as we read it.
+
+**Next, and it needs no RTL:** read the head and `serving_idx` before rep 1 and after *every* rep
+rather than only at a wedge. That gives consumption per rep directly, which answers whether the
+pool can reach exhaustion in 6-7 reps at all, and whether `SPLB` tracks allocation.
