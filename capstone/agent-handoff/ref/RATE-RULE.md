@@ -652,3 +652,49 @@ the *front* of `dom_data`.
 remaining question is unchanged and needs one number: **where the glue parks `sp`**. If `sp` is
 near the region top (`DBAS+0x400000`) the site is deep stack; if just above the image end it is
 ordinary stack depth. Those give opposite verdicts from the same address.
+
+### The cap table is excluded, and the stack reading is now the suspicious one
+
+The glue (`silicon-ladder/start-gp-captable-interp.S`, which `build-sqlite-silicon.sh:1818`
+confirms is the one XU links) places the cap table at the **top** of `dom_data` and grows the
+stack down beneath it:
+
+    :399   ld    s4, 8(s1)      /* count, s1 = blob over dom_data, cursor at base */
+    :403   lcc(t1, sp, 4)       /* t1 = sp.END = DBAS + tot_size */
+    :404   slli  t3, s4, 4      /* count*16 */
+    :406   split(gp, sp, t1)    /* gp = [t1,END) table ; sp = [base,t1) */
+
+`count = 185`, read from `.capstone_gp_initdesc+8` — **not** `.capstone_gp_table+8`, which was a
+first misreading. `dom_data`'s front is a copy of the initialised-globals bytes starting at
+`GPFREE_GLOBALS_OFFSET` (`sbi_capstone.c:773-775`), and that offset is `0x140000`, matching the
+host's printed `Globals offset = 0x140000` and `.capstone_gp_initdesc`'s VA `0x150000`.
+Cross-checked: `.capstone_gp_table+0` also reads 185.
+
+So the table is **2,960 bytes** and initial `sp` is at offset `0x3ff470`:
+
+| alias | site | verdict |
+|---|---|---|
+| k=3 | `0x3aedc0` | stack, **329,392 B (322 KiB)** below initial sp |
+| k=2 | `0x2aedc0` | stack, 1,346 KiB below |
+| k=1 | `0x1aedc0` | stack, 2,370 KiB below |
+
+**No candidate is in the cap table.** That closes the more interesting of the two branches.
+
+**And it puts us in the regime the RTL lane flagged as suspicious.** Even the shallowest candidate
+is 322 KiB down. That is a great deal of stack for this workload, so the honest reading is not
+"the site is deep stack" but **"the stack hypothesis is now doubtful"**.
+
+### The assumption that has been carried unexamined
+
+All of the above assumes the faulting address lies **inside the wedging domain's 4 MiB region**.
+That has never been established. The mux exposes `paddr[19:4]` and nothing more, so all that is
+actually known is *the low 20 bits are `0xaedc0`* — the address could be in the monitor, in
+another domain's region, or anywhere else in DRAM. The observed shared regions do not match
+(`BASE:82578000`, `8257B000`, `82511000`, `82514000` give low-20 `0x78000`, `0x7B000`, `0x11000`,
+`0x14000`), but that is four samples, not a proof.
+
+**This is what makes the upper address bits worth having.** Not to distinguish three stack depths
+— to answer whether the site is in the domain at all. The four apertures the RTL lane has built
+(`221`/`222` for `paddr[27:20]`, `219`/`223` for `[35:28]`) answer it outright. That is a
+well-founded need now rather than a speculative one, and it remains **the project lead's call**,
+unrequested.
