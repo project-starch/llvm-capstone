@@ -807,3 +807,49 @@ The wedge block printed `[wedge] trap mepc = 0x...` at every wedge and the drive
 said "map onto the domain disassembly to name the faulting instruction". Nobody subtracted `DBAS`.
 Attention went to the granule apertures because they were new, while the reader that already
 worked sat three lines above them in the same output.
+
+## CORRECTION: the untagged load is `+0x48`, not `+0x4c` — and the readers AGREE
+
+**Retracting the inference that the granule record and the trap mepc point at different events.**
+It rested on expecting a record for an access that never happens.
+
+`mcause 25` is **UNEXPECTED_OPERAND**, not INVALID_CAPABILITY — confirmed at the encoder,
+`core/anvil_build/capstone_unit.anvilh:303`, in a file that carries this warning at :294-296:
+
+    // showing mcause 25 was recorded as INVALID_CAPABILITY on the strength of this comment, and
+    // three [investigations chased the revocation subsystem] for what is an operand
+    // type error. 25 is UNEXPECTED_OPERAND. Trust the encoder, not this comment.
+
+So the chain reads:
+
+    3a838: ldc a4, 0x0(a0)     ; a4 = pMethods, read from [a0] = the sqlite3_file OBJECT
+                               ;   <-- THIS is the untagged load. It returns a4 with no tag.
+    3a83c: ldc a4, 0x20(a4)    ; faults: rs1 (a4) is NOT_CAP. Operand check fires BEFORE
+                               ;   any access, so pMethods+0x20 is NEVER READ.
+
+**`mepc` names where the trap was TAKEN (`+0x4c`); the defective load is the instruction that
+produced its operand (`+0x48`).** Those are different addresses and the distinction is the whole
+correction.
+
+My argument was that `pMethods+0x20` must lie in `.data`/`.rodata` and no alias of `0xaedc0` lands
+there, therefore the readers disagree. But no record of `pMethods+0x20` can exist under any
+hypothesis, because that access does not occur. The granule record should point at **`[a0]`, the
+file object** — and the earlier alias work placed `0xaedc0` outside the image and outside
+`sqlite_heap`, in monitor-carved `dom_data`, which is where a stack-resident `sqlite3_file` would
+be. The two records one granule apart (`0xaedb0` store, `0xaedc0` load) is an ordinary frame
+layout, not a contradiction.
+
+**So the two instruments are plausibly in agreement, and the granule result is not discredited.**
+
+**What survives from the qualification:** the general statement is still correct — the record
+*can* be clobbered, untagged loads *are* routine, and the correlation bit is still the right top
+item in the batch, because it decides this per-wedge instead of by argument. What is withdrawn is
+only the specific claim that *these* readings disagree.
+
+That distinction matters: "the record was clobbered" and "I compared it against the wrong
+instruction" have different consequences, and only the first would justify distrusting the granule
+data.
+
+**It also strengthens the `S7T` connection.** The selftest is documented as reading "the pMethods
+MEMORY SLOT" — that is `3a838`, the load now identified as the defective one, not the vtable
+dereference after it. The selftest models the right instruction.
