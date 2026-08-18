@@ -145,8 +145,14 @@ MEASURED = {
     # has no impact" in default configurations. Silent, and not merely unreported:
     # the dangling pointer is internal to array_extend and never reaches a
     # Python-visible value.
-    "CVE-2024-8947": ("confirmed", "silent-no-effect", "not-run"),
-    "#13283":        ("confirmed", "silent-no-effect", "not-run"),
+    # Domain-measured 2026-08-18 by backporting the port to the 2024 pre-fix tree
+    # (see backport-2024/). extend-from-self runs in a pure-capability domain and
+    # does not fault. untrapped-no-crash rather than untrapped-identical, because
+    # the profile lacks slice assignment so the output is not byte-identical to
+    # the host, and because the dangling pointer is internal and corruption was
+    # not demonstrated.
+    "CVE-2024-8947": ("confirmed", "silent-no-effect", "untrapped-no-crash"),
+    "#13283":        ("confirmed", "silent-no-effect", "untrapped-no-crash"),
     # Measured at the parent of 365913953a4e (3b954698fa, 2023-11-09): closing
     # sys.stdout kills the interpreter with SIGSEGV before a single stderr write
     # gets out. At the pin the same script raises ValueError instead, so the fix
