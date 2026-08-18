@@ -476,6 +476,24 @@
       }
      ]
     }
+   },
+   "i19129": {
+    "number": 19129,
+    "title": "fun_bc_call: unbounded alloca when heap allocation of VM state fails",
+    "state": "OPEN",
+    "url": "https://github.com/micropython/micropython/issues/19129",
+    "createdAt": "2026-04-20T13:15:04Z",
+    "closedAt": null,
+    "labels": {
+     "nodes": [
+      {
+       "name": "bug"
+      },
+      {
+       "name": "py-core"
+      }
+     ]
+    }
    }
   }
  }
