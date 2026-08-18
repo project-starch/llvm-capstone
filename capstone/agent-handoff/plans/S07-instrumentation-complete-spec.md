@@ -345,3 +345,48 @@ Each reader ships with a way to make it produce the *opposite* result, or it is 
 
 A reader with no positive control is an unproven reader, and this project has published
 retractions on exactly that.
+
+## The one generalisation worth inheriting from this investigation
+
+Four errors landed in a single day (2026-08-18), all of them about what an instrument *meant*
+rather than about the silicon:
+
+| # | the error | what it asserted | caught by |
+|---|---|---|---|
+| 1 | driver's one-shot vs rolling model | "the probe is spent, later readings carry no weight" | a **cross-revision diff** (`618f4ce36` vs `8c75d899b`) |
+| 2 | switch 250 labelled `{overflow,0,head[9:8]}` | head = 365 | reading the **mux source** — it is `head[15:8]` |
+| 3 | `S7T` called "the control" | "control passed, arm wedged" is a comparison | reading the **domain source** — it returns before `run_sqlite()` |
+| 4 | "the paddrs are not on the mux" | the spec's headline Tier-0 item | the **RTL lane's memory** of what gen-3's revert removed |
+
+**Every one of them decoded legally. None of them looked wrong.** `0x9c` decoded to a clean,
+complete verdict with a defined `src`. `head = 365` is a perfectly plausible allocator head. "The
+control passed" is what a control passing looks like. And a grep that returns no match looks
+exactly like a grep over code that does not contain the thing.
+
+**Not one was caught by looking harder at the reading itself.** Each was caught by something
+*outside* it: a closed encoding that made a value unrepresentable, a diff across revisions, a
+subset relation between two reads of the same aperture, a source read, another lane's memory.
+
+### The practical consequence
+
+**Spend effort on encodings that can be ILLEGAL, not on being careful.** Care does not scale and
+did not work here — errors 2, 3 and 4 were made *while actively correcting* errors of the same
+family. What worked, every time, was a representation in which the wrong answer is not a valid
+answer:
+
+* the displacement byte's closed encoding, which made `count>0 with ldc_seen clear` unrepresentable
+  and so self-reporting;
+* `src=3` being an undefined source, which flagged contamination that `src=0` concealed;
+* the subset relation `halted & running == halted`, which is a *property* that a bad read violates;
+* the backwards-delta guard on the rev-node head, which knows a bump allocator cannot count down.
+
+Tier 0.3's signature nibble is the cheapest instance of this principle and is the item in this
+document most worth building for its own sake.
+
+### And one specific tell, because it recurs
+
+**Truncated output read as absence.** A pipe through `head -N` makes the negative *cheaper to
+obtain* than the positive, so it fails in the direction of "nothing here" every single time. It
+produces the same artifact as a counter that goes quiet on binary input: a confident negative from
+an instrument that never looked. When a grep returns nothing and the conclusion matters, re-run it
+without the pipe.

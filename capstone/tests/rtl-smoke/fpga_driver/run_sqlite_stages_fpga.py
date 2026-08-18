@@ -1761,16 +1761,33 @@ def main():
                             # onto DBAS and a disassembly, NOT a physical address. Do not report
                             # it as one; the upper bits are genuinely not exposed.
                             #
-                            # ALL FOUR ARE UART-HOSTILE, which is survivable here only because
-                            # the core is halted and no domain output is in flight:
-                            #   205, 207, 209 have bit0 set -> console TX goes to the tracer
-                            #   206, 207      have bit1 set -> a one-shot trace dump is ARMED and
-                            #                                  WILL fire; that is expected, not a
-                            #                                  new fault
-                            # The switches are restored to 0 immediately afterwards.
+                            # UART ROUTING: TWO INDEPENDENT BITS, AND ONLY 207 DOES BOTH.
+                            #   cva6.sv:929  uart_debug_tx_o = switches_i[0] ? tracer_uart_tx : ...
+                            #   cva6.sv:971  .dump_enable_i (switches_i[1])
+                            # so sw0 ROUTES and sw1 ARMS:
+                            #   209 = 11010001  route=1 arm=0  -> steals TX, no dump
+                            #   205 = 11001101  route=1 arm=0  -> steals TX, no dump
+                            #   206 = 11001110  route=0 arm=1  -> ARMS, does not route
+                            #   207 = 11001111  route=1 arm=1  -> ARMS AND ROUTES: blob on console
+                            #
+                            # The dump is a ONE-SHOT THAT OUTLIVES THE SWITCH VALUE, so one armed
+                            # at 206 becomes visible the instant any later route=1 aperture is
+                            # selected -- 206 then 209 would route a dump armed a step earlier.
+                            #
+                            # READ ORDER 209, 205, 206, 207: the two harmless TX-stealing
+                            # apertures first, arm as late as possible, and 207 last so the blob
+                            # arrives only after BOTH addresses are already captured. Switches are
+                            # restored to 0 immediately after, which un-routes it.
+                            #
+                            # EXPECT ~4 KB OF BINARY ON THE UART when it fires: trace_buf is 256
+                            # entries x 128 bits (core/tracer.sv:71). It is expected output, not a
+                            # fault. Anything scanning the transcript past this point must use
+                            # python, NOT grep -- grep here is ugrep and goes SILENT on control
+                            # bytes, so it would match nothing and report that as "not found"
+                            # rather than as an error.
                             try:
                                 _pa = {}
-                                for _ap in (205, 206, 207, 209):
+                                for _ap in (209, 205, 206, 207):
                                     _pa[_ap] = _read_sw(_ap, allow_cached=False,
                                                         _force_emit=True)
                                 set_switch_value(console, 0)
