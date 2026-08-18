@@ -374,6 +374,66 @@ README documents and the Makefile does not do for you:
   make PYTHON=python3 CC=gcc-12
 """,
 
+
+
+"MPY-T07_lexer-source-name-uaf": """MPY-T07 / upstream 4128
+
+  stock at the fix's PARENT (2018) : "Hello world of easy embedding!", exit 0
+  Capstone domain under QEMU       : returns, retval 0x70000001, no fault
+
+UNTRAPPED. RECONSTRUCTION, NOT THE UPSTREAM PROGRAM.
+
+4128's defect is three lines of caller code, not interpreter code: mp_parse()
+consumes and frees the lexer, and hello-embed.c then read lex->source_name. The
+fix hoisted the qstr into a local.
+
+mp_parse still frees the lexer at our pin, so the same misuse is still available
+and this needed NO parent build. repro-domain-glue.c makes exactly that call
+sequence inside the domain, behind MPY_T07_LEXER_UAF.
+
+  0x70000001 decodes as: the read after the free completed, and the freed block
+  still returned its old source_name. Reaching the return means the hardware did
+  not object to reading a block the collector had released.
+
+WHAT IS AND IS NOT CLAIMED. Untrapped: yes. Corruption or a stale value: no. The
+low nibble would have been 2 had the read come back different, and it did not.
+
+This is a reconstruction: same API misuse against the same interpreter, but our
+glue rather than the upstream binary. It is labelled that way everywhere it is
+quoted, and the production path is byte-identical with the flag off, the whole
+change being 70 added lines and zero deletions.
+""",
+
+"MPY-T16_deinit-after-gc-sweep-all": """MPY-T16 / upstream 5487
+
+  Capstone domain under QEMU : returns, retval 0x16005a01, no fault
+
+UNTRAPPED. RECONSTRUCTION, NOT THE UPSTREAM PROGRAM.
+
+The reporter states the defect plainly: "when MICROPY_PORT_DEINIT_FUNC is called
+it's too late, gc ram was already deallocated", because the ESP32 port runs
+gc_sweep_all() before mp_deinit(). Our domain owns its own teardown, so there is
+no ESP32 program to run here. repro-domain-glue.c reconstructs the ORDERING:
+hold a raw C pointer to a GC block across gc_sweep_all(), then read and write
+through it, which is exactly what a deinit hook holding hardware state does.
+
+  0x16005a01 decodes as: the byte read back after the sweep was 0x5A, the value
+  written before it, and the low nibble 1 says it was unchanged. Reaching the
+  return at all means both the read AND the write through the freed pointer
+  completed without the hardware objecting.
+
+WHAT IS AND IS NOT CLAIMED. Untrapped: yes, measured. Corruption: no. The block
+still held its own old contents, so nothing demonstrates the storage had been
+reused, only that it had been freed and was still readable and writable. That is
+weaker than MPY-T09, where the divergence was measured directly.
+
+It is a reconstruction and the corpus says so wherever it is quoted: same
+allocator, same collector, same sweep, but our call sequence rather than the
+ESP32 port's. Kept behind MPY_T16_DEINIT_AFTER_SWEEP so the production glue is
+byte-identical when the flag is off; the diff is 70 added lines and no deletions
+across both this and MPY-T07.
+""",
+
 "MPY-T25_stringio-subclass-print": """MPY-T25 / upstream 10402
 
   stock MicroPython at pin 2e3304a : SIGSEGV
@@ -409,10 +469,13 @@ defects.
 def main():
     n = 0
     for d, text in RESULTS.items():
-        p = os.path.join(CASES, d, "RESULT.txt")
-        if not os.path.isdir(os.path.join(CASES, d)):
+        # a case may live in cases/ or, if the temporal audit excluded it, in
+        # excluded-cases/. Its measurement is still valid and still belongs to it.
+        base = CASES if os.path.isdir(os.path.join(CASES, d)) else os.path.join(S, "excluded-cases")
+        if not os.path.isdir(os.path.join(base, d)):
             print(f"missing case dir: {d}")
             return 1
+        p = os.path.join(base, d, "RESULT.txt")
         open(p, "w").write(text.rstrip() + "\n" + COMMON)
         n += 1
     print(f"wrote {n} RESULT.txt files")

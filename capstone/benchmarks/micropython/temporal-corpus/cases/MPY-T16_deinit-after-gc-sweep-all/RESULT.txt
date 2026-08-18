@@ -1,0 +1,33 @@
+MPY-T16 / upstream 5487
+
+  Capstone domain under QEMU : returns, retval 0x16005a01, no fault
+
+UNTRAPPED. RECONSTRUCTION, NOT THE UPSTREAM PROGRAM.
+
+The reporter states the defect plainly: "when MICROPY_PORT_DEINIT_FUNC is called
+it's too late, gc ram was already deallocated", because the ESP32 port runs
+gc_sweep_all() before mp_deinit(). Our domain owns its own teardown, so there is
+no ESP32 program to run here. repro-domain-glue.c reconstructs the ORDERING:
+hold a raw C pointer to a GC block across gc_sweep_all(), then read and write
+through it, which is exactly what a deinit hook holding hardware state does.
+
+  0x16005a01 decodes as: the byte read back after the sweep was 0x5A, the value
+  written before it, and the low nibble 1 says it was unchanged. Reaching the
+  return at all means both the read AND the write through the freed pointer
+  completed without the hardware objecting.
+
+WHAT IS AND IS NOT CLAIMED. Untrapped: yes, measured. Corruption: no. The block
+still held its own old contents, so nothing demonstrates the storage had been
+reused, only that it had been freed and was still readable and writable. That is
+weaker than MPY-T09, where the divergence was measured directly.
+
+It is a reconstruction and the corpus says so wherever it is quoted: same
+allocator, same collector, same sweep, but our call sequence rather than the
+ESP32 port's. Kept behind MPY_T16_DEINIT_AFTER_SWEEP so the production glue is
+byte-identical when the flag is off; the diff is 70 added lines and no deletions
+across both this and MPY-T07.
+
+How to read the domain column. A quiet return is only meaningful because the same
+image also faults on other tests and returns the expected value for the sanity
+test, so capability checking is live and the interpreter runs. See
+../../evidence/domain-round2-2026-08-17.txt.
