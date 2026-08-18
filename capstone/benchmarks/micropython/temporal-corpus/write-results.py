@@ -379,9 +379,29 @@ README documents and the Makefile does not do for you:
   stock MicroPython at pin 2e3304a : SIGSEGV
   Capstone domain under QEMU       : FAULT, cause 24, pc 0x10166007c
 
-FAULTED, BUT NOT FOR TEMPORAL SAFETY. Same class as MPY-T11 and MPY-T12, at a
-DIFFERENT pc, so these are distinct instructions failing the same check rather
-than one shared crash site.
+CLASSIFICATION RETRACTED, 2026-08-18. THIS IS NOT A TEMPORAL DEFECT.
+
+It was filed here as reentrancy / CWE-416 with the note "printing to a StringIO
+subclass re-enters and invalidates the target buffer". That sentence was invented
+rather than read. The issue says the opposite, and the reporter quotes the
+MicroPython documentation to say it:
+
+  "it's not possible to implement, or subclass, a stream class in pure Python"
+
+Nothing is freed and later used. A pure-Python subclass of io.StringIO leaves the
+C-level stream state uninitialised, and print() dereferences it. That is
+CWE-908, use of uninitialised resource, and it has no lifetime component at all.
+
+WHY IT IS KEPT. As a labelled counter-example, because it is instructive about
+the fault it produces. It halts with cause 24, an untagged word used as a
+pointer, which is the SAME code MPY-T11 and MPY-T12 produce. So cause 24 does not
+distinguish a temporal defect from an uninitialised one: it only says a word that
+was used as a pointer is not a capability. Reading cause 24 as evidence of
+temporal protection would have been wrong twice over here.
+
+WHAT THIS COSTS THE TALLY. Of the eight rows measured in the domain, seven are
+temporal and this one is not. Of the three that faulted, only two are temporal
+defects.
 """,
 }
 

@@ -90,9 +90,16 @@ ROWS = [
     ("MPY-T24", "#11781", "uaf", "CWE-416", "ports/embed, py/compile.c", "gc-managed",
      "mp_compile() on an embed port faults on a freed lexer or parse tree", "trapped",
      "Closed. Related to MPY-T07."),
-    ("MPY-T25", "#10402", "reentrancy", "CWE-416", "py/objstringio.c", "gc-managed",
-     "printing to a StringIO subclass re-enters and invalidates the target buffer",
-     "trapped", "Open. Buffer reallocated under an in-flight print."),
+    # RETRACTED CLASSIFICATION 2026-08-18. This was filed as reentrancy/CWE-416 with
+    # the note "re-enters and invalidates the target buffer". That was invented, not
+    # read: the issue says subclassing a stream in pure Python is unsupported, and
+    # the reporter quotes the docs saying so. Nothing is freed and then used. The
+    # C-level stream state is never initialised, and printing dereferences it. That
+    # is uninitialised state, not a lifetime defect, so it does not belong in a
+    # temporal corpus and is kept only as a labelled counter-example.
+    ("MPY-T25", "#10402", "uninitialised-state", "CWE-908", "py/objstringio.c", "gc-managed",
+     "a pure-Python subclass of io.StringIO leaves the C stream state uninitialised, and print dereferences it",
+     "not-trapped", "Open. NOT a temporal defect; retained as a counter-example, see RESULT.txt."),
     ("MPY-T26", "#18645", "dangling-pointer", "CWE-476", "py/nativeglue.c:mp_native_relocate", "gc-managed",
      "relocation walks a pointer table that is NULL or already freed", "unclear",
      "Closed. NULL deref rather than a stale-but-mapped read."),

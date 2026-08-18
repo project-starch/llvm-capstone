@@ -6,9 +6,9 @@ Upstream state: open, first seen 2023-01-03
 
 ## The defect
 
-printing to a StringIO subclass re-enters and invalidates the target buffer.
+a pure-Python subclass of io.StringIO leaves the C stream state uninitialised, and print dereferences it.
 
-Class `reentrancy`, CWE-416, in `py/objstringio.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
+Class `uninitialised-state`, CWE-908, in `py/objstringio.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 
 ## What Capstone does about it
@@ -24,7 +24,7 @@ this defect family too, in a toolchain where it catches an ordinary `malloc`
 use-after-free, because the runtime's frees never reach it either:
 `../../evidence/asan-blindness-2026-08-17.txt`.
 
-`traps_if_gc_cap_aware` = trapped, which is a prediction about a capability-aware
+`traps_if_gc_cap_aware` = not-trapped, which is a prediction about a capability-aware
 collector that does not exist yet. Not evidence.
 
 ## Measured
