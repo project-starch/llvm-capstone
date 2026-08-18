@@ -270,3 +270,46 @@ Until it holds, the channel is not a channel.
 
 Sequencing unchanged: **the six-domain boot goes first and independently** — it needs none of
 this.
+
+## Addendum 2: the store-drain caveat is answered — verified against the RTL, with one nuance
+
+The remaining hardware risk was that a recorder store still sitting in the write buffer when the
+core wedges never reaches DRAM — failing as a **silent zero**. Answered by the RTL lane; every
+quote re-checked here against the source rather than accepted.
+
+* **The drain is autonomous.** `wt_dcache_wbuffer.sv:269` —
+  `assign miss_req_o = (|dirty) && free_tx_slots;`. The write request is a pure function of the
+  buffer's own dirty state and TX-slot availability: no commit signal, no pipeline liveness, no
+  core involvement. Bytes already in the buffer are pushed regardless of what the core is doing.
+* **Nothing discards dirty bytes.** Every flush port on the wbuffer's internal FIFOs is tied off —
+  `wt_dcache_wbuffer.sv:320` `.flush_i (1'b0)`, and `:370`, `:486`, `:504` all `.flush_i('0)`.
+* **A trap does not reach the write buffer.** `controller.sv:130-133` sets `flush_dcache` only
+  under `CVA6Cfg.DcacheFlushOnFence` — fence-driven, with the adjacent comment noting it is not
+  even needed for a write-through cache. Exceptions do not drive it.
+* **The clock survives a wedge — our own data, not an argument.** In the `OB` boot the selftest,
+  a counter increment in an `always_ff`, fired *after* the wedge: `obcombo1.txt:1525-1529`,
+  `post-204 = 0x41  OK: ldc_seen set and count moved by exactly 1`. Sticky flops on `clk_i` read
+  sensibly post-wedge on every wedging run.
+
+**Nuance worth recording, because it is the kind of thing that gets cited later as if it were a
+guarantee:** the `flushed cache implies flushed wbuffer` assertion (`wt_dcache.sv:425-428`) sits
+inside `//pragma translate_off` **and** `` `ifndef VERILATOR ``, so it is simulation-only *and* our
+Verilator flow does not even compile it. It has never been exercised here. It documents design
+intent; it is not evidence that the hardware drains. The conclusion does not need it — the three
+facts above carry it.
+
+**What remains is a program property, not a hardware unknown:** stores enter the write buffer at
+COMMIT, so anything still speculative in the store unit when the core dies is lost. The recorder's
+store must therefore be placed **well ahead of the faulting site** — not in the same basic block,
+and ideally with the eviction loop between them, which guarantees many intervening commits. A
+specific placement can be confirmed in ~15 s of directed sim on the RTL side, where the RVFI trace
+shows exactly when a store retires relative to an exception.
+
+## A standalone lesson from this exchange: a code comment is a claim
+
+The entire boot procedure — a full 8-second power cycle on every run — rested on a comment saying
+OpenSBI "cannot re-run its one-time hart/DDR init". Half of that names a thing **that does not
+exist on this platform**, and the half that is real is stale `.data` cleared by the image reload
+the harness already performs. Nobody re-derived it because the sentence was plausible and
+load-bearing. Comments are claims; the ones holding up a procedure deserve the same treatment as a
+result.
