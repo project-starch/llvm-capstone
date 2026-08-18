@@ -41,6 +41,18 @@ EXTMOD_SRC_C = \
 	extmod/modre.c \
 	extmod/moductypes.c \
 
+# The filesystem stack. Only reached when MPY_VFS=1 puts MICROPY_VFS in the defines:
+# each file is wrapped in its own `#if MICROPY_VFS`, so listing them here costs
+# nothing in a default build and keeps header generation in step with the amalgam.
+EXTMOD_SRC_C += \
+	extmod/modvfs.c \
+	extmod/vfs.c \
+	extmod/vfs_blockdev.c \
+	extmod/vfs_fat.c \
+	extmod/vfs_fat_diskio.c \
+	extmod/vfs_fat_file.c \
+	extmod/vfs_reader.c \
+
 SRC_QSTR += $(addprefix $(TOP)/, $(EXTMOD_SRC_C))
 
 OBJ += $(PY_CORE_O)

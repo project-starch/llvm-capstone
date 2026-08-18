@@ -41,6 +41,18 @@ MPY_TESTS=${MPY_TESTS:-}
 MPY_TEST_OFFSET=${MPY_TEST_OFFSET:-0}
 # Additional direct children of tests/, space-separated. The default remains basics-only.
 MPY_TEST_BASE_DIR=${MPY_TEST_BASE_DIR:-basics}
+# MPY_VFS=1 adds the filesystem stack: extmod/vfs*.c (listed in port/Makefile, so header
+# generation and the amalgam cannot disagree) plus lib/oofatfs. Needed only by MPY-T14 and
+# MPY-T15, whose reproductions define their block device in PYTHON, so this needs no host
+# filesystem and no device -- the earlier note calling the block device a design question
+# was reading the issues rather than their PoCs.
+MPY_VFS=${MPY_VFS:-}
+# lib/ sources outside libm had no mechanism before this. Same shape as LIBM_UNITS: a name
+# list, an #include per unit into the amalgam.
+OOFATFS_UNITS=''
+if [[ -n $MPY_VFS ]]; then
+  OOFATFS_UNITS='ff ffunicode'
+fi
 MPY_TEST_DIRS=${MPY_TEST_DIRS:-}
 DOM_NAME=${DOM_NAME:-micropython}
 OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/micropython-silicon}
@@ -95,7 +107,12 @@ declare -A LIBM_STATICS=(
 
 # Same problem, same fix, for the extmod units: modbinascii defines its own bytes_fromhex_obj
 # next to py/objstr.c's.
-declare -A EXTMOD_STATICS=([modbinascii]='bytes_fromhex_obj')
+# WORD is not a static, it is a TYPEDEF, and it collides the same way: sha256.h says
+# `typedef unsigned int WORD` while lib/oofatfs/ff.h says `typedef uint16_t WORD`, and the
+# amalgamation puts both in one translation unit. Renaming sha256's copy over the span of
+# modhashlib.c is the same mechanism and keeps both modules, where dropping hashlib left a
+# dangling mp_module_hashlib in the module table that genhdr had already emitted.
+declare -A EXTMOD_STATICS=([modbinascii]='bytes_fromhex_obj' [modhashlib]='WORD')
 
 # Single source of truth for the extmod modules this port carries; port/Makefile reads it from
 # here (EXTMOD_SRC_C) so header generation and the amalgam can never disagree about which
@@ -103,7 +120,6 @@ declare -A EXTMOD_STATICS=([modbinascii]='bytes_fromhex_obj')
 EXTMOD_UNITS=$(sed -n 's#^[[:space:]]\{1,\}extmod/\([a-z0-9_]\{1,\}\)\.c.*#\1#p' \
                "$PORT/Makefile" | tr '\n' ' ')
 [[ -n ${EXTMOD_UNITS// /} ]] || { echo "no EXTMOD_SRC_C found in $PORT/Makefile" >&2; exit 1; }
-
 CLANG=${CAPSTONE_CLANG}
 LD_LLD=${CAPSTONE_LD_LLD}
 
@@ -118,7 +134,7 @@ echo "== generating this port's headers (stock toolchain, host only)"
 rm -rf "$MPY_PORT_DIR"
 cp -r "$PORT" "$MPY_PORT_DIR"
 make -C "$MPY_PORT_DIR" -j"${HDR_JOBS:-8}" \
-    CFLAGS_EXTRA="${DOMAIN_EXTRA_DEFS:-} ${FLOAT_DEFS[*]}" >"$OBJ_DIR/genhdr.log" 2>&1 || {
+    CFLAGS_EXTRA="${DOMAIN_EXTRA_DEFS:-} ${FLOAT_DEFS[*]} ${MPY_VFS:+-DMICROPY_VFS=1 -DFFCONF_H='\"ffconf.h\"' -I../../lib/oofatfs}" >"$OBJ_DIR/genhdr.log" 2>&1 || {
   echo "header generation failed; see $OBJ_DIR/genhdr.log" >&2; tail -5 "$OBJ_DIR/genhdr.log" >&2; exit 1; }
 GEN_DIR="$MPY_PORT_DIR/build"
 [[ -f $GEN_DIR/genhdr/qstrdefs.generated.h ]] || {
@@ -144,6 +160,7 @@ SILICON=(-mllvm -capstone-gp-captable
          # parameterised probe silently builds the DEFAULT value for every arm and the whole
          # sweep measures one thing N times -- caught here by hashing the images, not by the
          # exit code, which was 0 for all of them.
+         ${MPY_VFS:+-DMICROPY_VFS=1 -DFFCONF_H=\"ffconf.h\" -I$MPY_SRC_DIR/lib/oofatfs}
          ${DOMAIN_EXTRA_DEFS:-}
          "${FLOAT_DEFS[@]}")
 COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
@@ -219,6 +236,17 @@ AMALGAM="$OBJ_DIR/mpy_all.c"
     done
     echo "#include \"$MPY_PORT_DIR/capstone_math_extra.c\""
   fi
+  if [[ -n $MPY_VFS ]]; then
+    # vfs_fat.c's stat() converts FAT timestamps through this. It is shared/, not lib/, and
+    # it is the only file from there this port needs.
+    echo "#include \"$MPY_SRC_DIR/shared/timeutils/timeutils.c\""
+  fi
+  for u in $OOFATFS_UNITS; do
+    # FatFs is one translation unit per file with no statics that collide with py/, so
+    # unlike libm it needs no renaming. FFCONF_H and the include path are passed in the
+    # SILICON defines above, because ff.h resolves the config by macro.
+    echo "#include \"$MPY_SRC_DIR/lib/oofatfs/$u.c\""
+  done
   echo "#include \"$MPY_PORT_DIR/mpy_domain.c\""
 } > "$AMALGAM"
 

@@ -5,6 +5,9 @@
 #include "py/runtime.h"
 #include "py/gc.h"
 #include "py/cstack.h"
+#if MICROPY_VFS
+#include "lib/oofatfs/ff.h"   /* for DWORD and the get_fattime prototype's shape */
+#endif
 #include "py/mperrno.h"
 #include "py/mphal.h"
 #include "py/stackctrl.h"
@@ -354,6 +357,20 @@ static void mpy_spatial_overflow(unsigned *res) {
        is visible in the result instead of hiding behind a green rung. */
     unsigned tag = b[0] == 0xAA ? 1u : (b[0] == 0x22 ? 2u : 3u);
     *res = 0x5A000000u | ((unsigned)(dist & 0xFFFFu) << 8) | tag;
+}
+#endif
+
+#if MICROPY_VFS
+/* FatFs asks the port for a timestamp on every file it creates (ff.c:257,
+   GET_FATTIME). This domain has no clock -- there is deliberately no time module,
+   because a stubbed one would make time.time() confidently wrong -- so this returns
+   a FIXED date rather than an invented one.
+   2026-01-01 00:00:00 in FatFs's packed format: bits 31..25 year-1980, 24..21 month,
+   20..16 day, 15..11 hour, 10..5 minute, 4..0 second/2.
+   Every file in a domain image therefore carries the same mtime. That is visible and
+   constant, which is the point: a wrong-but-plausible clock would not be. */
+DWORD get_fattime(void) {
+    return ((DWORD)(2026 - 1980) << 25) | ((DWORD)1 << 21) | ((DWORD)1 << 16);
 }
 #endif
 
