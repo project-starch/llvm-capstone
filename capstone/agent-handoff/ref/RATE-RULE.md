@@ -757,3 +757,53 @@ compared in hardware against `rs1` of the faulting instruction. It is the only r
 the recorded address belongs to the fault. It is now the highest-value item in the batch, above
 the address bits that motivated the batch in the first place: an unqualified address, however
 reproducible, cannot carry a root-cause claim.
+
+# THE FAULTING INSTRUCTION IS NAMED: `sqlite3OsRead+0x4c`
+
+**And it was in the transcripts from boot 1.** The LATCHED TRAP MEPC (switches 196-203) is a full
+physical address, and the wedging domain's `DBAS` is printed beside it, so the offset is exact —
+**no aliasing, unlike the granule record.** Across every wedge on this bitstream:
+
+| offset from DBAS | count | distinct DBAS | VA (= offset + 0x10000) | symbol |
+|---|---|---|---|---|
+| `0x2a83c` | **11** | 7 | `0x3a83c` | **`sqlite3OsRead + 0x4c`** |
+| `0x138f6c` | 3 | 3 | `0x148f6c` | `output_text + 0xdc` |
+
+    000000000003a7f0 <sqlite3OsRead>:
+       3a814: cincoffsetimm a0, s0, -0x30    ; a0 = &stack slot
+       3a818: stc  a1, 0x0(a0)               ; STORE the sqlite3_file* capability to the stack
+       ...
+       3a834: ldc  a0, 0x0(a0)               ; RELOAD it
+       3a838: ldc  a4, 0x0(a0)               ; a4 = pMethods
+       3a83c: ldc  a4, 0x20(a4)              ; a4 = pMethods->xRead   <-- FAULTS
+       3a84c: jalr a4                        ; indirect call through it
+
+The faulting instruction is the load of **`pMethods->xRead`**, and the classic spill/reload shape
+sits four instructions above it: a capability `stc`-ed to a stack slot at `+0x28` and `ldc`-ed
+back at `+0x44`.
+
+**This is where the project already suspected the defect lived.** The `S7T` selftest was built to
+model exactly this — its comment says it plants a value and loads it "the way `sqlite3OsRead`
+does", and `decode_s07_cursor` is documented as "the S-07 H1/H2 verdict read from the pMethods
+MEMORY SLOT". An independent instrument has now put the trap there.
+
+## And it CONFIRMS the qualification rather than escaping it
+
+The granule record's address does not correspond to this instruction's operand. `pMethods` is a
+static vtable, so `pMethods+0x20` should be in `.data`/`.rodata` (`0x1511f0 .. 0x1605a0`), and no
+alias of the granule reading `0xaedc0` lands there.
+
+So the two readers **disagree**, which is exactly what the RTL lane predicted: the rolling granule
+record was overwritten by a routine untagged load between the producer and the trap. The
+qualification is now demonstrated rather than hypothesised, and it is the correlation bit in the
+pending batch that would have flagged it at the time.
+
+**Practical consequence: prefer the latched trap mepc to the granule record.** It is a full
+address, it needs no alias reasoning, and it has been correct and ignored for twenty-one boots.
+
+## How this was missed for a day
+
+The wedge block printed `[wedge] trap mepc = 0x...` at every wedge and the driver's own comment
+said "map onto the domain disassembly to name the faulting instruction". Nobody subtracted `DBAS`.
+Attention went to the granule apertures because they were new, while the reader that already
+worked sat three lines above them in the same output.
