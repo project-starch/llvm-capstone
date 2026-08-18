@@ -63,17 +63,18 @@ Closed upstream with no fix commit naming the issue, and no runnable trigger pub
 
 ## What the measurements say
 
-18 of 30 rows have been run. On stock or at a fix's parent: 7 crash-sigsegv, 2 not-reproducible, 2 silent-corruption, 7 silent-no-effect.
+**17 of 30 rows are genuinely temporal.** 10 are not and are kept as
+labelled counter-examples; 3 are uncertain. Every verdict carries its evidence in
+`temporal_evidence`, taken from the fix commit's own message where one exists. The class
+column was assigned from issue titles and the 2026-08-18 audit found a third of it wrong.
 
-In the Capstone domain: 3 fault-cause24, 2 untrapped-identical, 3 untrapped-no-crash.
+Run in the Capstone domain: 8 rows, of which 7 are temporal.
+Of those 7, 2 faulted and all of them with `cause 24`, an untagged word
+used as a pointer, which is what the MMU already catches on stock. **Not one was caught
+because an object was dead.**
 
-`traps_unmodified` is **no** for 26 of 30 rows, and that is measured
-rather than assumed. Of the rows run in the domain, not one was trapped for a
-temporal reason: the untrapped ones completed exactly as unprotected stock does,
-and the faulting ones failed on `cause 24`, an untagged word used as a pointer,
-which is what an MMU already catches.
+`cause 24` does not even distinguish the classes: MPY-T25 produces it too, and MPY-T25 is
+not a temporal defect at all.
 
-The single most useful number is the count of rows that execute a real defect
-and produce NOTHING observable: `silent-no-effect` plus `silent-corruption`
-is 9. Those are the cases where a nested allocator hides a
-defect from the language, from the crash, and from AddressSanitizer alike.
+Among the temporal rows that were run at all, 9 execute their defect and produce
+NOTHING observable. That is the number this corpus exists for.

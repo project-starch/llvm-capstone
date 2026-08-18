@@ -8,6 +8,10 @@ Upstream state: patched, first seen 2026-02-06
 
 import * over a module whose globals map is mutated during iteration.
 
+**NOT a temporal defect**, and kept only as a labelled counter-example:
+fix: 'Make import-all support non-modules'; type confusion, and NVD says CWE-119/787 not 416. It was classified from its title before the fix
+commit was read; the 2026-08-18 audit corrected it.
+
 Class `memory-corruption`, CWE-119,CWE-787, in `py/runtime.c:mp_import_all`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

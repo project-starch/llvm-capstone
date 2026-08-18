@@ -8,6 +8,10 @@ Upstream state: closed, first seen 2023-06-14
 
 mp_compile() on an embed port faults on a freed lexer or parse tree.
 
+**NOT a temporal defect**, and kept only as a labelled counter-example:
+fix: 'embed: Improve stack top estimation'; a stack overflow, no lifetime component. It was classified from its title before the fix
+commit was read; the 2026-08-18 audit corrected it.
+
 Class `uaf`, CWE-416, in `ports/embed, py/compile.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

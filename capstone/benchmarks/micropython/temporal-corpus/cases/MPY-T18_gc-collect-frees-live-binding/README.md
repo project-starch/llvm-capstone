@@ -8,6 +8,10 @@ Upstream state: closed, first seen 2026-07-03
 
 gc.collect() frees a structure the C binding still holds, draw_task_head corrupt.
 
+**NOT a temporal defect**, and kept only as a labelled counter-example:
+closed NOT_PLANNED and redirected to the LVGL binding project; not a MicroPython defect. It was classified from its title before the fix
+commit was read; the 2026-08-18 audit corrected it.
+
 Class `premature-free`, CWE-416, in `py/gc.c + LVGL binding`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

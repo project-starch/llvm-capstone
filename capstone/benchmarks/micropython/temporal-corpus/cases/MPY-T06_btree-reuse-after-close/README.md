@@ -8,6 +8,8 @@ Upstream state: closed, first seen 2023-09-28
 
 btree object used again after close() released its backing store.
 
+**Temporal: yes.** fix: 'Add checks for already-closed database'; reuse after close.
+
 Class `uaf`, CWE-416, in `extmod/modbtree.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

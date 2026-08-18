@@ -8,6 +8,10 @@ Upstream state: open, first seen 2019-10-28
 
 failed connect() leaves the socket considered open, never cleaned up.
 
+**NOT a temporal defect**, and kept only as a labelled counter-example:
+a socket is never cleaned up after a failed connect; a leak. It was classified from its title before the fix
+commit was read; the 2026-08-18 audit corrected it.
+
 Class `lifetime-order`, CWE-772, in `ports/esp32 usocket`. Scope `port-heap`, so a second allocator is involved.
 
 ## What Capstone does about it

@@ -8,6 +8,8 @@ Upstream state: closed, first seen 2019-04-19
 
 assertions in gc_free and gc_realloc fail on a pointer they consider invalid.
 
+**Temporal: yes.** fix: 'Make sure stack/regs get captured properly for GC'; missed roots free reachable memory.
+
 Class `alloc-invariant`, CWE-617, in `py/gc.c:gc_free,gc_realloc`. Scope `gc-core`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

@@ -8,6 +8,8 @@ Upstream state: open, first seen 2025-09-29
 
 bytearray resized while active memoryviews still point at the old buffer.
 
+**Temporal: yes.** measured: the memoryview addresses storage the bytearray no longer owns.
+
 Class `dangling-view`, CWE-416, in `py/objarray.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

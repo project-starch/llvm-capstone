@@ -8,6 +8,8 @@ Upstream state: open, first seen 2025-12-30
 
 re-entrant __bool__ clears the RHS map during dict equality, map pointer goes NULL.
 
+**Temporal: yes.** reporter: 'the lookup returns a slot pointer into the now-freed table'.
+
 Class `reentrancy`, CWE-476, in `py/objdict.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

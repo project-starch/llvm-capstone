@@ -8,6 +8,8 @@ Upstream state: closed, first seen 2021-03-04
 
 gc.collect() panics, collector state inconsistent with the IDF heap.
 
+**Temporal: uncertain.** an ESP32 collector panic with no fix commit and no mechanism recorded upstream.
+
 Class `premature-free`, CWE-416, in `ports/esp32 + py/gc.c`. Scope `port-heap`, so a second allocator is involved.
 
 ## What Capstone does about it

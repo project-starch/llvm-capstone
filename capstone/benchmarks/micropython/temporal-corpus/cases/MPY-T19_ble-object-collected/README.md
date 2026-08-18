@@ -8,6 +8,8 @@ Upstream state: closed, first seen 2019-10-18
 
 gc.collect() collects a BLE object still referenced only from C.
 
+**Temporal: yes.** fix: 'Persist reference to NimBLE service instances'; collected while C still held it.
+
 Class `premature-free`, CWE-416, in `extmod/modbluetooth.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

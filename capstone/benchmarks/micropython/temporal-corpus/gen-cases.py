@@ -69,6 +69,14 @@ def render(r, slug, runnable, why):
     out.append(f"Upstream state: {r['state']}, first seen {r['first_seen']}\n")
     out.append(f"\n**{STATUS_LINE[runnable]}**\n")
     out.append(f"\n## The defect\n\n{r['trigger']}.\n")
+    if r["is_temporal"] == "yes":
+        out.append(f"\n**Temporal: yes.** {r['temporal_evidence']}.\n")
+    elif r["is_temporal"] == "no":
+        out.append(f"\n**NOT a temporal defect**, and kept only as a labelled counter-example:\n"
+                   f"{r['temporal_evidence']}. It was classified from its title before the fix\n"
+                   f"commit was read; the 2026-08-18 audit corrected it.\n")
+    else:
+        out.append(f"\n**Temporal: uncertain.** {r['temporal_evidence']}.\n")
     out.append(f"\nClass `{r['class']}`, {r['cwe']}, in `{r['component']}`. ")
     out.append(f"Scope `{r['scope']}`")
     if r["scope"] in ("gc-core", "gc-managed"):
@@ -170,26 +178,27 @@ def render_status(rows):
             out.append(f"| `{r['id']}` | {r['ref']} | {r['stock_behaviour']} "
                        f"| {r['domain_behaviour']} |\n")
     out.append("\n## What the measurements say\n\n")
-    n_un = sum(1 for r in rows if r["traps_unmodified"] == "no")
     from collections import Counter
-    stock = Counter(r["stock_behaviour"] for r in rows if r["stock_behaviour"] != "not-run")
-    dom = Counter(r["domain_behaviour"] for r in rows if r["domain_behaviour"] != "not-run")
-    measured = sum(1 for r in rows
-                   if r["stock_behaviour"] != "not-run" or r["domain_behaviour"] != "not-run")
-    out.append(f"{measured} of {len(rows)} rows have been run. On stock or at a fix's parent: "
-               + ", ".join(f"{v} {k}" for k, v in sorted(stock.items())) + ".\n\n")
-    out.append("In the Capstone domain: "
-               + ", ".join(f"{v} {k}" for k, v in sorted(dom.items())) + ".\n\n")
-    out.append(f"`traps_unmodified` is **no** for {n_un} of {len(rows)} rows, and that is measured\n"
-               "rather than assumed. Of the rows run in the domain, not one was trapped for a\n"
-               "temporal reason: the untrapped ones completed exactly as unprotected stock does,\n"
-               "and the faulting ones failed on `cause 24`, an untagged word used as a pointer,\n"
-               "which is what an MMU already catches.\n\n")
-    out.append("The single most useful number is the count of rows that execute a real defect\n"
-               "and produce NOTHING observable: `silent-no-effect` plus `silent-corruption`\n"
-               f"is {stock.get('silent-no-effect', 0) + stock.get('silent-corruption', 0)}. "
-               "Those are the cases where a nested allocator hides a\n"
-               "defect from the language, from the crash, and from AddressSanitizer alike.\n")
+    temp = [r for r in rows if r["is_temporal"] == "yes"]
+    nt = [r for r in rows if r["is_temporal"] == "no"]
+    unc = [r for r in rows if r["is_temporal"] == "uncertain"]
+    out.append(f"**{len(temp)} of {len(rows)} rows are genuinely temporal.** {len(nt)} are not and are kept as\n"
+               f"labelled counter-examples; {len(unc)} are uncertain. Every verdict carries its evidence in\n"
+               "`temporal_evidence`, taken from the fix commit's own message where one exists. The class\n"
+               "column was assigned from issue titles and the 2026-08-18 audit found a third of it wrong.\n\n")
+    dom = [r for r in rows if r["domain_behaviour"] != "not-run"]
+    domt = [r for r in dom if r["is_temporal"] == "yes"]
+    faulted = [r for r in domt if r["domain_behaviour"].startswith("fault")]
+    out.append(f"Run in the Capstone domain: {len(dom)} rows, of which {len(domt)} are temporal.\n")
+    out.append(f"Of those {len(domt)}, {len(faulted)} faulted and all of them with `cause 24`, an untagged word\n"
+               "used as a pointer, which is what the MMU already catches on stock. **Not one was caught\n"
+               "because an object was dead.**\n\n")
+    out.append("`cause 24` does not even distinguish the classes: MPY-T25 produces it too, and MPY-T25 is\n"
+               "not a temporal defect at all.\n\n")
+    stock = Counter(r["stock_behaviour"] for r in temp if r["stock_behaviour"] != "not-run")
+    silent = stock.get("silent-no-effect", 0) + stock.get("silent-corruption", 0)
+    out.append(f"Among the temporal rows that were run at all, {silent} execute their defect and produce\n"
+               "NOTHING observable. That is the number this corpus exists for.\n")
     return "".join(out)
 
 

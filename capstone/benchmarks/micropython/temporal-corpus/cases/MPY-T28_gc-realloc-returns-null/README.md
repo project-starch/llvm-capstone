@@ -8,6 +8,10 @@ Upstream state: closed, first seen 2014-02-25
 
 gc_realloc returns NULL after a few calls, caller keeps using the old block.
 
+**NOT a temporal defect**, and kept only as a labelled counter-example:
+gc_realloc refusing an allocation is an allocation failure, and it was measured not to reproduce. It was classified from its title before the fix
+commit was read; the 2026-08-18 audit corrected it.
+
 Class `alloc-invariant`, CWE-476, in `py/gc.c:gc_realloc`. Scope `gc-core`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

@@ -8,6 +8,8 @@ Upstream state: patched, first seen 2024-09-17
 
 array/memoryview outlives the buffer it points into.
 
+**Temporal: yes.** fix: 'Fix use-after-free if extending a bytearray from itself'.
+
 Class `uaf`, CWE-416, in `py/objarray.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

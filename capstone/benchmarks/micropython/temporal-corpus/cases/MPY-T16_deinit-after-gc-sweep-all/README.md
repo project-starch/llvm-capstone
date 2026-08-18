@@ -8,6 +8,8 @@ Upstream state: open, first seen 2020-01-03
 
 port deinit hook runs after the sweep that already freed what it touches.
 
+**Temporal: yes.** port deinit runs after the sweep that already freed what it touches.
+
 Class `lifetime-order`, CWE-416, in `py/gc.c:gc_sweep_all`. Scope `gc-core`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

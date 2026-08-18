@@ -8,6 +8,8 @@ Upstream state: closed, first seen 2026-04-08
 
 readblocks implementation enlarges the buffer it was handed.
 
+**Temporal: yes.** duplicate of 17848.
+
 Class `dangling-buffer`, CWE-416, in `extmod/vfs_blockdev.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

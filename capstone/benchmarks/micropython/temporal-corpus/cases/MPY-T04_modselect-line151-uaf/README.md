@@ -8,6 +8,8 @@ Upstream state: closed, first seen 2023-11-05
 
 select object used after the registered stream was collected.
 
+**Temporal: yes.** same defect as CVE-2023-7152.
+
 Class `uaf`, CWE-416, in `extmod/modselect.c:151`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

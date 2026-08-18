@@ -8,6 +8,8 @@ Upstream state: closed, first seen 2023-12-27
 
 array resized while a view onto its old buffer is still live.
 
+**Temporal: yes.** same defect as CVE-2024-8947.
+
 Class `uaf`, CWE-416, in `py/objarray.c:509`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

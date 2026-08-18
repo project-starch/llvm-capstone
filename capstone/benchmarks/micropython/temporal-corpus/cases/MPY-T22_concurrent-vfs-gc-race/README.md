@@ -8,6 +8,8 @@ Upstream state: open, first seen 2025-06-06
 
 concurrent file access, allocator state mutated from two threads.
 
+**Temporal: uncertain.** a data race on allocator state; whether it manifests as a lifetime violation is not established.
+
 Class `race-uaf`, CWE-362, in `py/gc.c + vfs`. Scope `gc-core`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 
