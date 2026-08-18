@@ -1,0 +1,10 @@
+id,ref,class,cwe,component,scope,stock_behaviour,domain_behaviour,repro_dir
+"MPY-S05","#15271","heap-overflow","CWE-787","py/objarray.c","gc-heap","not-run","untrapped-no-crash","spatial-corpus/cases/MPY-S05_array-append-after-failed-grow"
+"MPY-T02","CVE-2024-8947","uaf","CWE-416","py/objarray.c","gc-managed","silent-no-effect","untrapped-no-crash","temporal-corpus/cases/MPY-T02_objarray-bytes-self-copy-uaf"
+"MPY-T05","#13283","uaf","CWE-416","py/objarray.c:509","gc-managed","silent-no-effect","untrapped-no-crash","temporal-corpus/cases/MPY-T05_objarray-line509-uaf"
+"MPY-T07","#4128","uaf","CWE-416","py/lexer.c,py/compile.c","gc-managed","silent-no-effect","untrapped-no-crash","temporal-corpus/cases/MPY-T07_lexer-source-name-uaf"
+"MPY-T09","#18168","dangling-view","CWE-416","py/objarray.c","gc-managed","silent-corruption","untrapped-identical","temporal-corpus/cases/MPY-T09_bytearray-resize-stale-view"
+"MPY-T10","#18171","dangling-view","CWE-416","py/objarray.c","gc-managed","silent-corruption","untrapped-identical","temporal-corpus/cases/MPY-T10_array-resize-stale-view"
+"MPY-T13","#19075","dangling-buffer","CWE-416","extmod/modio.c","gc-managed","crash-sigsegv","untrapped-no-crash","temporal-corpus/cases/MPY-T13_write-callback-grows-buffer"
+"MPY-T16","#5487","lifetime-order","CWE-416","py/gc.c:gc_sweep_all","gc-core","not-run","untrapped-no-crash","temporal-corpus/cases/MPY-T16_deinit-after-gc-sweep-all"
+"MPY-T29","#4705","alloc-invariant","CWE-617","py/gc.c:gc_free,gc_realloc","gc-core","not-run","untrapped-no-crash","temporal-corpus/cases/MPY-T29_gc-free-assert-invalid-block"
