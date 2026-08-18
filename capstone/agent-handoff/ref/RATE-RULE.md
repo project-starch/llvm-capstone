@@ -608,3 +608,47 @@ population, restarting the rate at n=0 to answer a question software can probabl
 The RTL exists if software fails: four apertures (221/222/219/223) carrying `paddr[27:20]` and
 `[35:28]` for both records, built and lint-clean, exposing `[35:4]` — a 64 GB window, no aliasing
 at any size we will run. **The reflash is the project lead's call and is not being requested.**
+
+### XU is a 4 MiB domain, not 2 MiB — the carve recomputed from primary source
+
+The monitor's carve is deterministic and needs no runtime input, so it can be evaluated offline.
+Doing so — rather than trusting a source comment that recorded someone's 2 MiB verification —
+changes the answer.
+
+From `modcapstone/module/capstone.c:107-111`:
+
+    dom_headroom = max(code_len, DOMAIN_DATA_SIZE) = code_len   (1377704 >> 1536)
+    dom_tot_size = code_len * 2 = 2755408 -> 673 pages -> log2 10
+    tot_size     = 1024 * 4096 = 4194304 = **4 MiB**
+
+**Independently confirmed by the board:** `DBAS` steps by `0x400000` between consecutive domains
+in every transcript — 4 MiB, not 2 MiB.
+
+Feeding that into `sbi_capstone.c:707-720`:
+
+| | 2 MiB (the quoted comment) | **XU, 4 MiB (computed)** |
+|---|---|---|
+| `repr_gran` | 1024 | **4096** |
+| `data_off` | 2048 | **4096** |
+| `dom_data.start` | `0x153C00` | **`0x152000`** |
+
+So the site's aliases, as offsets from `DBAS` within a 4 MiB region — and there are **four**, not
+three:
+
+| alias | offset | region |
+|---|---|---|
+| 0 | `0x0aedc0` | code `[0, 0x151000)` |
+| 1 | `0x1aedc0` | **dom_data** `[0x152000, 0x400000)` |
+| 2 | `0x2aedc0` | **dom_data** |
+| 3 | `0x3aedc0` | **dom_data** |
+
+**Three of four aliases are in `dom_data`, one is in code.** Alias 0 is already excluded on the
+semantic ground that a capability store into the code region is not a sensible operation, so the
+site is in `dom_data` — carved, mapped, owned by the domain, above everything the image placed.
+That is consistent with the stack hypothesis and excludes the globals copy the monitor writes to
+the *front* of `dom_data`.
+
+**It does not narrow to one address**, which the 2 MiB arithmetic would have appeared to do. The
+remaining question is unchanged and needs one number: **where the glue parks `sp`**. If `sp` is
+near the region top (`DBAS+0x400000`) the site is deep stack; if just above the image end it is
+ordinary stack depth. Those give opposite verdicts from the same address.
