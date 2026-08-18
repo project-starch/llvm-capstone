@@ -1,0 +1,11 @@
+8f497cded64c2cc9e92e3fcb2cdd2d9d310300877dc2386e78a441396834c6f4  ./00-README.md
+eb7b5ba0d42441f24770bc093df3bb6d921dd049125fe493c79735c4c540f3ac  ./evidence/boot-repro-v1-64packed-NEGATIVE.txt
+355e5cf1b9caf4b2d22f0239bd7597b613c22a6c75a7a2458cfd375ea2673bdd  ./evidence/boot-repro-v3-40padded-NEGATIVE.txt
+90e25e422835bd9d3bfe1512af31791c820b2b95f16e1708bc92ea32983a0031  ./evidence/cap_init-BAD-merged.txt
+5a2476c1c7671e18bdeebbe0c18070ace6e1e9c263513e61b63d74adb2fb0006  ./evidence/cap_init.diff
+49fbd7c43e1dc1b5937f7a409f77ef3f742f65d24ada304dbc8c3fc4a54cb00e  ./evidence/cap_init-GOOD-reverted.txt
+d3c82e50c810008ba9888f5b65da8720321d0912cab9181e108b73a1e805d011  ./evidence/cap_init-v3-BAD-merged.txt
+1781b5b18b663ceefb6b40f5455a8eeb7264bcca183ee3340834da027c1502f4  ./src/capinit_app.c
+58bcaa9c0df91862a50dd8015fb7c86fe314f98085a605d3d2bb198830635fce  ./src/capinit_fpga_app.c
+81a41c1568ec5492cc947e505d3599b81e60f1552708eec6ea336ce1f12adac8  ./src/capinit_host.c
+39343f2710ede50c8d08e03d70cbb7826ab1cad4618ced9d4818574f00e644ff  ./src/capinit_kernel.h

@@ -1,0 +1,33 @@
+--- compiler-repros/C19-capinit-block-split-oob/evidence/cap_init-GOOD-reverted.txt	2026-08-18 15:42:30.693966311 +0800
++++ compiler-repros/C19-capinit-block-split-oob/evidence/cap_init-BAD-merged.txt	2026-08-18 15:42:30.696966311 +0800
+@@ -1,6 +1,9 @@
+ 05f8 <__capstone_cap_init>:
++ 	cincoffsetimm	sp, sp, -0x20
+  	ldc	a1, 0x10(gp)
++ 	stc	a1, 0x0(sp)
+  	ldc	a0, 0x0(gp)
++ 	stc	a0, 0x10(sp)
+  	stc	a0, 0x0(a1)
+  	cincoffsetimm	a2, a0, 0x8
+  	stc	a2, 0x10(a1)
+@@ -62,9 +65,12 @@
+  	stc	a2, 0x1d0(a1)
+  	cincoffsetimm	a2, a0, 0xf0
+  	stc	a2, 0x1e0(a1)
+- 	cincoffsetimm	a2, a0, 0xf8
+- 	stc	a2, 0x1f0(a1)
++ 	cincoffsetimm	a0, a0, 0xf8
++ 	stc	a0, 0x1f0(a1)
++ 	j	0x3070c <__capstone_cap_init+0x114>
++ 	ldc	a0, 0x0(gp)
+  	cincoffsetimm	a2, a0, 0x100
++ 	ldc	a1, 0x10(gp)
+  	stc	a2, 0x200(a1)
+  	cincoffsetimm	a2, a0, 0x108
+  	stc	a2, 0x210(a1)
+@@ -128,4 +134,5 @@
+  	stc	a2, 0x3e0(a1)
+  	cincoffsetimm	a0, a0, 0x1f8
+  	stc	a0, 0x3f0(a1)
++ 	cincoffsetimm	sp, sp, 0x20
+  	ret

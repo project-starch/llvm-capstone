@@ -1,0 +1,191 @@
+00000000000306a4 <__capstone_cap_init>:
+   306a4: 5b 21 01 fe  	cincoffsetimm	sp, sp, -0x20
+   306a8: 13 05 10 00  	li	a0, 0x1
+   306ac: 13 15 b5 00  	slli	a0, a0, 0xb
+   306b0: db b5 01 01  	ldc	a1, 0x10(gp)
+   306b4: 5b 40 b1 00  	stc	a1, 0x0(sp)
+   306b8: 5b 96 a5 18  	cincoffset	a2, a1, a0
+   306bc: 5b b5 01 00  	ldc	a0, 0x0(gp)
+   306c0: 5b 48 a1 00  	stc	a0, 0x10(sp)
+   306c4: 5b 40 a6 00  	stc	a0, 0x0(a2)
+   306c8: 37 16 00 00  	lui	a2, 0x1
+   306cc: 13 06 06 01  	addi	a2, a2, 0x10
+   306d0: db 96 c5 18  	cincoffset	a3, a1, a2
+   306d4: 5b 26 85 00  	cincoffsetimm	a2, a0, 0x8
+   306d8: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   306dc: 37 26 00 00  	lui	a2, 0x2
+   306e0: 93 06 06 82  	addi	a3, a2, -0x7e0
+   306e4: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   306e8: db 26 05 01  	cincoffsetimm	a3, a0, 0x10
+   306ec: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   306f0: 13 06 06 03  	addi	a2, a2, 0x30
+   306f4: db 96 c5 18  	cincoffset	a3, a1, a2
+   306f8: 5b 26 85 01  	cincoffsetimm	a2, a0, 0x18
+   306fc: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   30700: 37 36 00 00  	lui	a2, 0x3
+   30704: 93 06 06 84  	addi	a3, a2, -0x7c0
+   30708: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   3070c: db 26 05 02  	cincoffsetimm	a3, a0, 0x20
+   30710: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   30714: 13 06 06 05  	addi	a2, a2, 0x50
+   30718: db 96 c5 18  	cincoffset	a3, a1, a2
+   3071c: 5b 26 85 02  	cincoffsetimm	a2, a0, 0x28
+   30720: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   30724: 37 46 00 00  	lui	a2, 0x4
+   30728: 93 06 06 86  	addi	a3, a2, -0x7a0
+   3072c: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   30730: db 26 05 03  	cincoffsetimm	a3, a0, 0x30
+   30734: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   30738: 13 06 06 07  	addi	a2, a2, 0x70
+   3073c: db 96 c5 18  	cincoffset	a3, a1, a2
+   30740: 5b 26 85 03  	cincoffsetimm	a2, a0, 0x38
+   30744: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   30748: 37 56 00 00  	lui	a2, 0x5
+   3074c: 93 06 06 88  	addi	a3, a2, -0x780
+   30750: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   30754: db 26 05 04  	cincoffsetimm	a3, a0, 0x40
+   30758: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   3075c: 13 06 06 09  	addi	a2, a2, 0x90
+   30760: db 96 c5 18  	cincoffset	a3, a1, a2
+   30764: 5b 26 85 04  	cincoffsetimm	a2, a0, 0x48
+   30768: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   3076c: 37 66 00 00  	lui	a2, 0x6
+   30770: 93 06 06 8a  	addi	a3, a2, -0x760
+   30774: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   30778: db 26 05 05  	cincoffsetimm	a3, a0, 0x50
+   3077c: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   30780: 13 06 06 0b  	addi	a2, a2, 0xb0
+   30784: db 96 c5 18  	cincoffset	a3, a1, a2
+   30788: 5b 26 85 05  	cincoffsetimm	a2, a0, 0x58
+   3078c: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   30790: 37 76 00 00  	lui	a2, 0x7
+   30794: 93 06 06 8c  	addi	a3, a2, -0x740
+   30798: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   3079c: db 26 05 06  	cincoffsetimm	a3, a0, 0x60
+   307a0: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   307a4: 13 06 06 0d  	addi	a2, a2, 0xd0
+   307a8: db 96 c5 18  	cincoffset	a3, a1, a2
+   307ac: 5b 26 85 06  	cincoffsetimm	a2, a0, 0x68
+   307b0: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   307b4: 37 86 00 00  	lui	a2, 0x8
+   307b8: 93 06 06 8e  	addi	a3, a2, -0x720
+   307bc: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   307c0: db 26 05 07  	cincoffsetimm	a3, a0, 0x70
+   307c4: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   307c8: 13 06 06 0f  	addi	a2, a2, 0xf0
+   307cc: db 96 c5 18  	cincoffset	a3, a1, a2
+   307d0: 5b 26 85 07  	cincoffsetimm	a2, a0, 0x78
+   307d4: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   307d8: 37 96 00 00  	lui	a2, 0x9
+   307dc: 93 06 06 90  	addi	a3, a2, -0x700
+   307e0: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   307e4: db 26 05 08  	cincoffsetimm	a3, a0, 0x80
+   307e8: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   307ec: 13 06 06 11  	addi	a2, a2, 0x110
+   307f0: db 96 c5 18  	cincoffset	a3, a1, a2
+   307f4: 5b 26 85 08  	cincoffsetimm	a2, a0, 0x88
+   307f8: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   307fc: 37 a6 00 00  	lui	a2, 0xa
+   30800: 93 06 06 92  	addi	a3, a2, -0x6e0
+   30804: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   30808: db 26 05 09  	cincoffsetimm	a3, a0, 0x90
+   3080c: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   30810: 13 06 06 13  	addi	a2, a2, 0x130
+   30814: db 96 c5 18  	cincoffset	a3, a1, a2
+   30818: 5b 26 85 09  	cincoffsetimm	a2, a0, 0x98
+   3081c: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   30820: 37 b6 00 00  	lui	a2, 0xb
+   30824: 93 06 06 94  	addi	a3, a2, -0x6c0
+   30828: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   3082c: db 26 05 0a  	cincoffsetimm	a3, a0, 0xa0
+   30830: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   30834: 13 06 06 15  	addi	a2, a2, 0x150
+   30838: db 96 c5 18  	cincoffset	a3, a1, a2
+   3083c: 5b 26 85 0a  	cincoffsetimm	a2, a0, 0xa8
+   30840: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   30844: 37 c6 00 00  	lui	a2, 0xc
+   30848: 93 06 06 96  	addi	a3, a2, -0x6a0
+   3084c: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   30850: db 26 05 0b  	cincoffsetimm	a3, a0, 0xb0
+   30854: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   30858: 13 06 06 17  	addi	a2, a2, 0x170
+   3085c: db 96 c5 18  	cincoffset	a3, a1, a2
+   30860: 5b 26 85 0b  	cincoffsetimm	a2, a0, 0xb8
+   30864: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   30868: 37 d6 00 00  	lui	a2, 0xd
+   3086c: 93 06 06 98  	addi	a3, a2, -0x680
+   30870: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   30874: db 26 05 0c  	cincoffsetimm	a3, a0, 0xc0
+   30878: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   3087c: 13 06 06 19  	addi	a2, a2, 0x190
+   30880: db 96 c5 18  	cincoffset	a3, a1, a2
+   30884: 5b 26 85 0c  	cincoffsetimm	a2, a0, 0xc8
+   30888: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   3088c: 37 e6 00 00  	lui	a2, 0xe
+   30890: 93 06 06 9a  	addi	a3, a2, -0x660
+   30894: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   30898: db 26 05 0d  	cincoffsetimm	a3, a0, 0xd0
+   3089c: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   308a0: 13 06 06 1b  	addi	a2, a2, 0x1b0
+   308a4: db 96 c5 18  	cincoffset	a3, a1, a2
+   308a8: 5b 26 85 0d  	cincoffsetimm	a2, a0, 0xd8
+   308ac: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   308b0: 37 f6 00 00  	lui	a2, 0xf
+   308b4: 93 06 06 9c  	addi	a3, a2, -0x640
+   308b8: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   308bc: db 26 05 0e  	cincoffsetimm	a3, a0, 0xe0
+   308c0: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   308c4: 13 06 06 1d  	addi	a2, a2, 0x1d0
+   308c8: db 96 c5 18  	cincoffset	a3, a1, a2
+   308cc: 5b 26 85 0e  	cincoffsetimm	a2, a0, 0xe8
+   308d0: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   308d4: 37 06 01 00  	lui	a2, 0x10
+   308d8: 93 06 06 9e  	addi	a3, a2, -0x620
+   308dc: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   308e0: db 26 05 0f  	cincoffsetimm	a3, a0, 0xf0
+   308e4: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   308e8: 13 06 06 1f  	addi	a2, a2, 0x1f0
+   308ec: db 95 c5 18  	cincoffset	a1, a1, a2
+   308f0: 5b 25 85 0f  	cincoffsetimm	a0, a0, 0xf8
+   308f4: 5b c0 a5 00  	stc	a0, 0x0(a1)
+   308f8: 6f 00 40 00  	j	0x308fc <__capstone_cap_init+0x258>
+   308fc: 37 16 01 00  	lui	a2, 0x11
+   30900: 13 05 06 a0  	addi	a0, a2, -0x600
+   30904: db b5 01 01  	ldc	a1, 0x10(gp)
+   30908: 5b 97 a5 18  	cincoffset	a4, a1, a0
+   3090c: 5b b5 01 00  	ldc	a0, 0x0(gp)
+   30910: db 26 05 10  	cincoffsetimm	a3, a0, 0x100
+   30914: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   30918: 13 06 06 21  	addi	a2, a2, 0x210
+   3091c: db 96 c5 18  	cincoffset	a3, a1, a2
+   30920: 5b 26 85 10  	cincoffsetimm	a2, a0, 0x108
+   30924: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   30928: 37 26 01 00  	lui	a2, 0x12
+   3092c: 93 06 06 a2  	addi	a3, a2, -0x5e0
+   30930: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   30934: db 26 05 11  	cincoffsetimm	a3, a0, 0x110
+   30938: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   3093c: 13 06 06 23  	addi	a2, a2, 0x230
+   30940: db 96 c5 18  	cincoffset	a3, a1, a2
+   30944: 5b 26 85 11  	cincoffsetimm	a2, a0, 0x118
+   30948: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   3094c: 37 36 01 00  	lui	a2, 0x13
+   30950: 93 06 06 a4  	addi	a3, a2, -0x5c0
+   30954: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   30958: db 26 05 12  	cincoffsetimm	a3, a0, 0x120
+   3095c: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   30960: 13 06 06 25  	addi	a2, a2, 0x250
+   30964: db 96 c5 18  	cincoffset	a3, a1, a2
+   30968: 5b 26 85 12  	cincoffsetimm	a2, a0, 0x128
+   3096c: 5b c0 c6 00  	stc	a2, 0x0(a3)
+   30970: 37 46 01 00  	lui	a2, 0x14
+   30974: 93 06 06 a6  	addi	a3, a2, -0x5a0
+   30978: 5b 97 d5 18  	cincoffset	a4, a1, a3
+   3097c: db 26 05 13  	cincoffsetimm	a3, a0, 0x130
+   30980: 5b 40 d7 00  	stc	a3, 0x0(a4)
+   30984: 13 06 06 27  	addi	a2, a2, 0x270
+   30988: db 95 c5 18  	cincoffset	a1, a1, a2
+   3098c: 5b 25 85 13  	cincoffsetimm	a0, a0, 0x138
+   30990: 5b c0 a5 00  	stc	a0, 0x0(a1)
+   30994: 5b 21 01 02  	cincoffsetimm	sp, sp, 0x20
+   30998: 67 80 00 00  	ret
