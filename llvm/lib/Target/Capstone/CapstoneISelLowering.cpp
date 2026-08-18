@@ -2217,6 +2217,16 @@ bool CapstoneTargetLowering::isTruncateFree(Type *SrcTy, Type *DstTy) const {
 }
 
 bool CapstoneTargetLowering::isTruncateFree(EVT SrcVT, EVT DstVT) const {
+  // NOT free: i128 -> i64 is reading a capability's cursor. It was briefly
+  // declared free here, because a plain `ptrtoint` does lower to a bare `mv`
+  // and that stops DAGCombiner widening `zext (and (trunc x), C)` into a
+  // bitwise operation on a capability. It also silently rerouted pointer
+  // subtraction away from the `lcc rd, rs, 2` sequence that ptr-arith.ll pins
+  // on purpose. Whether the integer view of a capability register IS its cursor
+  // is true in the QEMU model by union aliasing (cap.h: capboundsfat_t leads
+  // with `cursor`) and unverified on the RTL, which is not a basis for changing
+  // an ABI-relevant lowering. See the MicroPython plan, stage 2.
+
   // We consider i64->i32 free on RV64 since we have good selection of W
   // instructions that make promoting operations back to i64 free in many cases.
   if (SrcVT.isVector() || DstVT.isVector() || !SrcVT.isInteger() ||
@@ -2255,6 +2265,30 @@ bool CapstoneTargetLowering::isZExtFree(SDValue Val, EVT VT2) const {
   }
 
   return TargetLowering::isZExtFree(Val, VT2);
+}
+
+// i128 is the capability carrier here, not a wide integer class. A 64-bit
+// numeric value occupies the register's address half, the metadata half is not
+// data, and no instruction runs to widen one into the other -- `inttoptr i64`
+// already lowers to a bare `mv`.
+//
+// Declaring this correctly is not a cost refinement, it changes which nodes get
+// built at all. DAGCombiner reacts to an EXPENSIVE zext by hoisting it backwards
+// over the arithmetic feeding it, turning `zext (and x, C)` into
+// `and (zext x), zext C`. On this target that converts a 64-bit mask of an
+// ADDRESS into a bitwise operation on a CAPABILITY: a node with no instruction,
+// and one that should not be given an instruction, because masking a capability
+// and keeping the result is how a tag is lost without anyone noticing. The
+// narrow form is both selectable and the one the source actually wrote.
+//
+// Found via MicroPython, where four files failed to select for this single
+// reason: gc_init's align-down, pairheap's low-bit flag, mp_obj_get_type's tag
+// dispatch and bound_meth_unary_op's pointer hash. All four are ordinary,
+// portable C.
+bool CapstoneTargetLowering::isZExtFree(EVT SrcVT, EVT DstVT) const {
+  if (SrcVT == MVT::i64 && DstVT == MVT::i128)
+    return true;
+  return TargetLowering::isZExtFree(SrcVT, DstVT);
 }
 
 bool CapstoneTargetLowering::isSExtCheaperThanZExt(EVT SrcVT, EVT DstVT) const {
@@ -8359,6 +8393,52 @@ static SDValue lowerScalarI128Logical(SDValue Op, SelectionDAG &DAG,
   return DAG.getNode(ResultExtOpcode, DL, MVT::i128, Logical);
 }
 
+// A bitwise operation whose operand is a CAPABILITY rather than a widened
+// integer. It comes from C that went through uintptr_t and back:
+//
+//     p = (void *)((uintptr_t)p & ~(N - 1));   // align down
+//     p = (void *)((uintptr_t)p | 1);          // steal a low bit as a flag
+//     h = (mp_uint_t)a ^ (mp_uint_t)b;         // hash two pointers
+//
+// The narrow form is what the source wrote and what DAGCombiner keeps
+// rebuilding: rewriting the align-down as `p - (p & (N-1))` to keep it in the
+// pointer domain does not help, because the combiner folds that straight back
+// into `p & ~(N-1)`. So the target has to lower it.
+//
+// Read the address explicitly with getCapstoneCapabilityCursor (the `lcc rd,
+// rs, 2` that lowerSUB uses for a pointer difference, and that ptr-arith.ll
+// pins), do the operation at XLen, and hand back a ZERO-extended, UNTAGGED
+// value. Untagged is not a compromise, it is what the C asked for: a value
+// built out of uintptr_t bits cannot carry a tag on this machine, and any
+// source that then dereferences the result has a real porting bug that no
+// lowering can hide.
+//
+// Gated on at least one operand not being an integer offset, so genuine
+// arithmetic on a widened 64-bit value still takes the exact path above. It
+// shares one assumption with lowerSUB, deliberately and not silently: an i128
+// that is not recognisably an integer offset is treated as a capability, which
+// is wrong for true `unsigned __int128` logic. That type is already unsupported
+// here -- the path above bails on it -- so this changes no working case.
+static SDValue lowerScalarI128LogicalOnCapability(
+    SDValue Op, SelectionDAG &DAG, const CapstoneSubtarget &Subtarget) {
+  SDValue LHS = Op.getOperand(0);
+  SDValue RHS = Op.getOperand(1);
+  if (isCapstoneIntegerOffset(LHS) && isCapstoneIntegerOffset(RHS))
+    return SDValue();
+
+  SDLoc DL(Op);
+  MVT XLenVT = Subtarget.getXLenVT();
+  auto ToXLen = [&](SDValue V) {
+    return isCapstoneIntegerOffset(V)
+               ? DAG.getNode(ISD::TRUNCATE, DL, XLenVT, V)
+               : getCapstoneCapabilityCursor(V, DAG, DL, XLenVT);
+  };
+
+  SDValue Logical =
+      DAG.getNode(Op.getOpcode(), DL, XLenVT, ToXLen(LHS), ToXLen(RHS));
+  return DAG.getNode(ISD::ZERO_EXTEND, DL, MVT::i128, Logical);
+}
+
 static SDValue lowerScalarI128And(SDValue Op, SelectionDAG &DAG,
                                   const CapstoneSubtarget &Subtarget) {
   if (Op.getSimpleValueType() != MVT::i128)
@@ -9405,8 +9485,13 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
     [[fallthrough]];
   case ISD::OR:
   case ISD::XOR:
-    if (Op.getSimpleValueType() == MVT::i128)
-      return lowerScalarI128Logical(Op, DAG, Subtarget);
+    if (Op.getSimpleValueType() == MVT::i128) {
+      if (SDValue V = lowerScalarI128Logical(Op, DAG, Subtarget))
+        return V;
+      // Not a widened 64-bit value on both sides, so one of them is a
+      // capability. That has a lowering too; see the comment on the callee.
+      return lowerScalarI128LogicalOnCapability(Op, DAG, Subtarget);
+    }
     [[fallthrough]];
   case ISD::SDIV:
   case ISD::SREM:

@@ -1,5 +1,92 @@
 # S-07 — a capability read back from memory comes back UNTAGGED, sporadically
 
+> ## UPDATE 2026-08-18 — 2.1M capability reloads through DRAM on silicon, ZERO tags lost. READ THIS FIRST.
+>
+> Sibling issues, so a reader who arrived with the wrong symptom is redirected immediately: S-06
+> (untagged 128-bit `ldc`/`stc` high half) and S-08 (dom-switch CSR clobber) are both FIXED in
+> silicon and verified; their folders are resolved. This folder is the one open silicon issue.
+>
+> Bitstream `caplifive_s06s08fix_s07tag2_618f4ce.bit`. No RTL change was involved in anything below.
+>
+> ### A. NEW EXCLUSION, and it is the strongest one in this folder
+>
+> `tagsweep` is a **standalone rung, 10-39 KB, no SQLite**. It stores capabilities into memory,
+> reloads them, and asks each one's type with `lcc` field 1 — total, returns 7 for NOT_CAP
+> **without raising** — so tag loss is **COUNTED, never fatal**. The run always returns a number
+> instead of wedging and destroying its own reporting channel.
+>
+> | rung | footprint | checks | retval |
+> |---|---|---|---|
+> | `k800` | — | — | `4` — control PASS, **boot valid** |
+> | `ts1` | 128 B | 8 | `0xA5000000` |
+> | `tsml` | 8 KiB, cache-resident | 1 048 576 | `0xA5000000` |
+> | `tagsweep` | 64 KiB, exceeds the 32 KiB D-cache | 1 048 576 | `0xA5000000` |
+>
+> **Zero unseeded tag losses in 2 097 160 reloads.**
+>
+> **The instrument is PROVEN, which is the only reason that zero is evidence.** Each board arm
+> deliberately clobbers `SEED = 3` slots per rep with a scalar store, dropping their tags. The
+> domain returns `TAGSWEEP_OK | (lost - seeded_lost)` **only if** `seeded_lost == SEED * REPS`
+> exactly, and `0xEE000000` otherwise. So `0xA5000000` certifies the counter detected **6144**
+> deliberately-untagged granules in `tsml` and **768** in `tagsweep`, and found no others.
+>
+> **What it refutes.** The D-cache is write-through, no-write-allocate
+> (`capstone_cv64a6_imafdc_sv39_config_pkg.sv:48-50`), so a `stc` does not allocate: after the
+> store pass the slots are in DRAM and not cached, and every first reload is a genuine **miss
+> refill** — the path this folder's own measurement implicates (`src=1, MISS REFILL`). Over 2.1M of
+> them not one tag was lost. **S-07 is therefore not a generic property of storing a capability to
+> memory and reloading it**, at any rate above ~1 in 2.1M, and "the refill path erases tags" is
+> refuted at that rate.
+>
+> ### B. CORRECTION — `s07evict` was VOID, not negative, and the summary built on it was wrong
+>
+> This folder says every synthetic shape is excluded. That overstated the evidence. The one arm
+> that targeted the **memory** path, `s07evict`, is recorded as returning 0, but it assumed
+> **64-byte cache lines**; the real geometry is 128-bit (16-byte) lines, 4 KiB per way, 256 sets.
+> Its eviction never happened, so it tested nothing and must not be counted as an exclusion. The
+> `tagsweep` result above is what that arm was trying to be, with a control it did not have.
+>
+> ### C. RETRACTION — §5's "the memory held wrong data" claims more than the evidence
+>
+> §5 says a non-zero cursor in a should-be-NULL slot "means **the memory held wrong data**". It
+> does not. It means **the guard's load RETURNED non-zero**. Memory-holds-residue and
+> load-returned-wrong-data have identical observables at that site: if memory held a correct zero
+> and only the guard's load misread, the following `ldc` still yields an untagged value and the
+> next use still faults at the same `mepc`, with the same `sw=204 = 0x00` and the same clean QEMU.
+> The sentence is corrected in place below.
+>
+> ### D. THE §0 CAVEAT ON THE STICKY BIT IS NOW CLOSED
+>
+> §0 says the displacement sticky bit "has never been observed to SET on silicon", so a `0x00` read
+> could not be fully separated from a dead detector. **It has now been made to set on hardware.**
+> A boot on this bitstream reported `SELFTEST post-204 = 0x41  OK: ldc_seen set and count moved by
+> exactly 1`, then `SELFTEST PASS`. Every `sw=204 = 0x00` on that boot is therefore a **controlled**
+> negative, and displacement (case a) is excluded for those wedges with a proven instrument.
+>
+> ### E. WHERE THIS LEAVES THE DIAGNOSIS
+>
+> Still open, and narrowed rather than answered: **memory-holds-residue vs load-returns-wrong-data**
+> remains undecided. What A adds is that a bulk store→DRAM→reload sweep is **not sensitive enough**
+> to trigger it, so the mechanism depends on something the sweep does not reproduce. The most
+> useful constraint for whoever picks this up is already in this folder and is easy to miss: **for
+> a given image the fault site is FIXED**, and what varies run to run is only whether it fires. A
+> statistical sweep is the wrong shape for a defect that is structural per image; behavioural
+> minimization of the failing image is the right one.
+>
+> ### F. TWO HARNESS DEFECTS ON OUR SIDE, recorded because they cost three boots
+>
+> Neither is a silicon issue; they are here so a reader does not repeat them.
+> 1. **`DOMAIN_WINDOW` is unusable without a monitor rebuild.** The rung build will relocate a
+>    domain's globals, but the monitor hardcodes `GPFREE_GLOBALS_OFFSET 0x1000`; the two then
+>    disagree about where the blob starts and the domain hangs before it runs.
+> 2. **"NO SHA6 → ENTRY STALL" is a misdiagnosis for a SLOW domain.** `SHA6` prints only when a
+>    domain RETURNS, so one still running is indistinguishable from one that never entered — yet
+>    the rung driver asserts R-16 and advises not to retry the binary. Three boots went into
+>    rebuilds before a deliberately trivial arm (`ts1`, 8 checks) returned instantly and showed the
+>    domain had been entering and running correctly all along, just slower than estimated. **When a
+>    run yields no result, build one arm that must finish in microseconds before rebuilding
+>    anything.**
+
 > ## UPDATE 2026-08-16 — four boots on `caplifive_s07diag.bit`. READ THIS FIRST.
 >
 > Sibling issues, so a reader who arrived with the wrong symptom is redirected now: S-06
@@ -235,8 +322,9 @@
 > (`SQLITE_MAX_MMAP_SIZE` is 0 at `sqlite3-capstone.c:16156`; `pagerAcquireMapPage`, the only
 > setter of `PGHDR_MMAP`, is ABSENT from the binary — the writer at `:63849` IS compiled in and
 > callable, gated only by that flag, so the accurate phrase is **"no reachable writer under intact
-> data"**). A non-zero cursor in such a slot means **the memory held wrong data**, which is not the
-> same as a lost tag. **"A real capability arrived NOT_CAP" is NOT claimed.**
+> data"**). A non-zero cursor in such a slot means **the guard's load RETURNED non-zero**; whether
+> memory held non-zero is UNDETERMINED (corrected 2026-08-18, see block C at the top). Either
+> way it is not the same as a lost tag. **"A real capability arrived NOT_CAP" is NOT claimed.**
 >
 > ### 6. What is solid
 >

@@ -4,9 +4,9 @@
 ; RUN: not --crash llc -mtriple=capstone64 -verify-machineinstrs < %t/scalar-load.ll -o /dev/null 2>&1 | FileCheck %s --check-prefix=SCALAR-LOAD
 ; RUN: not --crash llc -mtriple=capstone64 -verify-machineinstrs < %t/cap-load.ll -o /dev/null 2>&1 | FileCheck %s --check-prefix=CAP-LOAD
 ; DIRECT: LLVM ERROR: Capstone PureCap: Cannot materialize arbitrary >64-bit constants as capabilities; capabilities are unforgeable
-; GEP: LLVM ERROR: Capstone PureCap: CIncOffset displacement must fit in signed 64-bits
-; SCALAR-LOAD: LLVM ERROR: Capstone PureCap: Address displacement must fit in signed 64-bits
-; CAP-LOAD: LLVM ERROR: Capstone PureCap: Folded load/store displacement must fit in signed 64-bits
+; GEP: LLVM ERROR: Capstone PureCap: CIncOffset displacement must fit in 64 bits
+; SCALAR-LOAD: LLVM ERROR: Capstone PureCap: Address displacement must fit in 64 bits
+; CAP-LOAD: LLVM ERROR: Capstone PureCap: Folded load/store displacement must fit in 64 bits
 ;--- direct.ll
 define ptr addrspace(200) @wide_const() {
 entry:

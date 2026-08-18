@@ -663,6 +663,14 @@ def LeadingOnesMask : ImmLeaf<XLenVT, [{
 }], TrailingZeros>;
 
 def TrailingOnesMask : IntImmLeaf<XLenVT, [{
+  // This is the APInt form of an immediate predicate, which TableGen leaves
+  // unguarded on purpose: taking an APInt is how a predicate declares that it
+  // handles arbitrary widths. This body does not -- both accessors below assert
+  // on a constant that does not fit 64 bits, and on Capstone a constant can be
+  // capability-width. Such a value is never a trailing-ones mask this pattern
+  // can build, so bail before asking for a value that does not exist.
+  if (Imm.getActiveBits() > 64 || Imm.getSignificantBits() > 64)
+    return false;
   return !isInt<12>(Imm.getSExtValue()) && isMask_64(Imm.getZExtValue());
 }], XLenSubTrailingOnes>;
 
