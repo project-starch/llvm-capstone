@@ -222,3 +222,51 @@ properly (DT reservation + monitor-minted capability). If it does not survive, t
 for one rebuild and no board time beyond a normal boot.
 
 Sequencing: this is **independent** of the six-domain boot and should not delay it.
+
+## Addendum: the recorder is blocked by neither DRAM nor DDR init — source read, no rebuild
+
+Two corrections land here, and both were established by reading source rather than by spending
+board time or a rebuild.
+
+**1. Cross-boot retention is impossible on the current flow, so the monitor retention test I
+proposed above would have been VOID.** `run_ladder_base_fpga.py:76-77` does
+`console.power(False); time.sleep(POWER_CYCLE_OFF); console.power(True)` with
+`POWER_CYCLE_OFF = 8.0` (`run_rtl_smoke.py:65`). The board is **unpowered for 8 seconds every
+boot**. DRAM holds charge for milliseconds unrefreshed, so a negative result would have meant only
+"the board was switched off" — not a fact about retention. That test could not fire. (Credit to
+the RTL lane for catching it before the rebuild.)
+
+**2. The stated reason for power-cycling is NOT supported by the firmware source.** The harness
+comment (`run_ladder_base_fpga.py:73-74`) says a warm `monitor reset halt` fails because "the
+fw_payload OpenSBI cannot re-run its one-time hart/DDR init". Checked:
+
+* **The DDR half does not exist.** `platform/fpga/ariane/platform.c:65-69` — `ariane_early_init`
+  is literally `/* For now nothing to do. */ return 0;`, and `ariane_final_init` only calls
+  `fdt_fixups` on cold boot. A grep for DDR/MIG/SDRAM across `platform/`, `firmware/` and
+  `sbi_init.c` returns nothing but unrelated address offsets. DDR is brought up by the
+  **bitstream's MIG at FPGA configuration time**, not by software, so there is no DDR init to
+  re-run.
+* **The hart half is real, but it is stale `.data`, not hardware state.** `fw_base.S:507-511`
+  defines `_relocate_lottery` and `_boot_status` as writable words initialised to 0, and
+  `fw_base.S:61-64` does `amoadd.w` on the lottery and branches to `_wait_relocate_copy_done` if
+  the prior value was non-zero. On a warm restart **without reloading the image**, the lottery is
+  already 1, so the boot hart waits forever for a relocation that will never happen — a dead boot
+  that looks exactly like the comment describes.
+
+**Consequence: a JTAG image reload rewrites `.data` and therefore clears the lottery.** So
+`monitor reset halt` **followed by a full image reload** should boot, with **no firmware change at
+all** — and the harness already does a reload after reset; it just also power-cycles first. The
+experiment is therefore free: on a boot we are running anyway, try reset + reload **without** the
+power cycle and see whether it comes up.
+
+If it does, the recorder becomes viable for free: the board is never unpowered so the DDR
+controller keeps refreshing, and the reload writes from `0x80000000` upward for the image length,
+leaving a recorder placed **high** in DRAM untouched.
+
+**Still unproven, and not to be trusted until it is:** that the recorder's store actually
+COMMITS before the wedge. A store sitting in the store buffer when the core dies never reaches
+DRAM, and the failure mode is a silent zero. The RTL lane is establishing that in simulation.
+Until it holds, the channel is not a channel.
+
+Sequencing unchanged: **the six-domain boot goes first and independently** — it needs none of
+this.
