@@ -1457,6 +1457,42 @@ def main():
                                     _csr[_e] = None
                             print(f"  [wedge] gdb CSRs: mcause={_csr['$mcause']} "
                                   f"mepc={_csr['$mepc']} mtval={_csr['$mtval']}", flush=True)
+
+                            # HALTED RE-READ OF THE MUX -- the control this instrument has
+                            # never had, and it costs nothing because the hart is ALREADY
+                            # halted here for the CSR reads above.
+                            #
+                            # `debug_led` has exactly one driver, the cva6 mux, but its inputs
+                            # include per-cycle signals (commit pc bytes, GPR/vaddr bytes). Each
+                            # LED bit is then held high for 2^20 cycles (~21 ms) by the pulse
+                            # stretcher in ariane_xilinx.sv:956-979. A WEDGED core is not idle --
+                            # it spins in M-mode, committing continuously -- so those inputs keep
+                            # toggling, the stretcher keeps reloading, and the byte saturates.
+                            # That is why a 0.5 s settle and a two-sample agreement check BOTH
+                            # passed while returning 0xfe: the contamination is persistent, not a
+                            # decaying tail, and two samples of a saturated value agree perfectly.
+                            #
+                            # Halting stops the commits, so if the mechanism is activity-driven
+                            # reload the halted read is clean and the running read is not. Same
+                            # aperture, same boot, one variable. If both are 0xfe the mechanism
+                            # is not activity and the readout path itself is broken.
+                            #
+                            # Reported side by side rather than replacing the earlier value: a
+                            # disagreement is the RESULT here, not an error to be smoothed over.
+                            try:
+                                for _ap in (204, 208):
+                                    _halted = _read_sw(_ap)
+                                    print(f"  [wedge] HALTED re-read sw={_ap}: "
+                                          + ("VOID (samples disagreed)" if _halted is None
+                                             else f"0x{_halted:02x} {_halted:08b}")
+                                          + "   <-- compare against the RUNNING read above; "
+                                            "clean here + saturated there = activity-driven "
+                                            "reload, both saturated = readout path",
+                                          flush=True)
+                            except Exception as _exc:
+                                print(f"  [wedge] halted mux re-read failed "
+                                      f"({type(_exc).__name__}) -- no verdict from it",
+                                      flush=True)
                             _junk = (0xca11ab1ebadcab1e, None)
                             if _csr["$mtval"] in _junk:
                                 print("  [wedge] mtval NOT READ (junk/unreadable) -- no operand",
