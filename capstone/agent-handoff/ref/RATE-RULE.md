@@ -372,3 +372,42 @@ check that fired correctly into a log nobody re-read.** `halt before mux read FA
 below are RUNNING reads and every non-zero one is void` printed above every affected reading, and
 the `0x7c` those reads returned was investigated as a hardware mystery for two boots. Reporting a
 failure is not the same as the failure being noticed.
+
+## SUSPECTED: the early halt control may be perturbing the rate it is measured beside
+
+Splitting every `XU` rep on this bitstream by whether the **early halt control** was present:
+
+| era | boots | k | n | p-hat |
+|---|---|---|---|---|
+| before | 1-7 | 4 | 27 | 0.148 |
+| after | 8-14 | 5 | 9 | **0.556** |
+
+Fisher exact, one-sided: **p = 0.026**. Reps-to-first-wedge tell the same story — `3, 2, >6, 1,
+6, >7` before, against `2, 1, 3, -, -, 1, 1` after.
+
+**This is a HYPOTHESIS GENERATED FROM THE DATA, NOT A TEST, and it must not be reported as one.**
+The comparison was chosen after seeing the numbers, which is precisely the selection the
+pre-declared analysis on this page exists to prevent. Holding the same standard here:
+
+* **The eras differ in more than one thing.** The early halt control arrived at boot 8, but so did
+  the interleaved `S7T`/`XU` ladder, and boots 11-13 additionally issued per-domain `monitor halt`
+  commands that timed out. "Early halt control" is confounded with at least two other changes.
+* **n = 9 in the post era**, most of it from boots that wedged on rep 1 and therefore contributed
+  a single rep each.
+* A post-hoc p of 0.026 across many possible splits of the data is worth roughly what it looks
+  like: a reason to test, not a result.
+
+### Why it matters enough to spend boots on
+
+If halting the core before the workload runs changes the wedge rate, then **the only working
+halted read contaminates the measurement it sits beside**, and the k/n on this page is pooled
+across two regimes. That would also mean every "instrument" conclusion today was drawn on a
+system the instrument was altering.
+
+### The proper test, running now
+
+**Identical ladder, one variable.** Boot 15 repeats boot 14's exact interleaved ladder with
+`EARLY_HALT_CONTROL=0`; subsequent boots alternate the flag. Nothing else changes — same domains,
+same order, same count. That is the matched pair the era comparison is not.
+
+Until it resolves, **do not pool boots 1-7 with 8-14**, and treat the headline k/n as provisional.
