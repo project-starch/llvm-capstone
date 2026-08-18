@@ -853,3 +853,47 @@ data.
 **It also strengthens the `S7T` connection.** The selftest is documented as reading "the pMethods
 MEMORY SLOT" — that is `3a838`, the load now identified as the defective one, not the vtable
 dereference after it. The selftest models the right instruction.
+
+## The write-buffer mechanism: the INLINE shape is excluded, the memset shape is NOT
+
+The RTL lane proposed a candidate mechanism (write buffer per 64-bit **word**, capability tag per
+16-byte **granule**, every entry writing the whole granule's tag on drain in round-robin rather
+than program order) and asked for one software check: does ordinary compiled code put a **plain
+store to `object+8`** before the **`stc` to `object+0`**?
+
+### Result 1 — the inline shape does not occur. Check proven to fire.
+
+Scanned all 333,511 disassembled lines of `XU.dom` for a plain `sd`/`sw`/`sh`/`sb` to `base+8`
+followed by an `stc` to `base+0`, requiring **same function**, **≤12 instructions apart**, and
+**the base register not redefined in between**:
+
+    STRICT: 0 hits
+
+A first, loose version of the same scan reported **416 hits** — all artifacts of matching on
+register *name* across up to 772 bytes of code, i.e. register reuse, not the same object. The
+strict result is the real one.
+
+**Positive control, because a zero is not evidence otherwise:** the same scanner run against a
+hand-built disassembly containing the exact pattern reports **1 hit**. The check fires.
+
+### Result 2 — the memset shape is NOT excluded, and my check for it was VOID
+
+`memset` is a call, not an inline store, and "zero-init then populate" is the classic shape. A
+scan for `stc` shortly after a `memset`/`memcpy` call also returned 0 — **but that zero means
+nothing.** Calls in this binary are **indirect**: they render as `jalr a4` / `jalr a1` through a
+capability register, and the only symbol-named `memset` references in the whole disassembly are
+`memset`'s own internal branches. There are no direct call sites to match, so the scan could not
+have fired regardless of the answer.
+
+Caught before reporting. Had it gone out, it would have read as "the memset shape is excluded
+too", which is the strongest possible version of the claim and entirely unsupported.
+
+### So the honest verdict
+
+**The mechanism is not confirmed and not killed.** What is established is narrower: *the compiler
+does not emit the inline high-half-then-capability pattern anywhere in this domain.* The
+`memset`-then-`stc` route remains open and is the one that matters most, since a struct cleared
+before its capability field is written is exactly how the condition would arise in ordinary C.
+
+Resolving it needs either the SQLite amalgamation source (not present in the tree at any path
+searched) or resolution of the indirect call targets in the disassembly. Neither needs board time.
