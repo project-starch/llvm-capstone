@@ -702,6 +702,68 @@ def main():
         except Exception as exc:
             log(f"pre-run 208 baseline failed ({type(exc).__name__})")
 
+        # EARLY HEALTHY-HALT CONTROL. The teardown copy of this almost never runs -- it skips
+        # after a wedge, and essentially every boot ends in either an S-07 wedge or an SPLB stop,
+        # so gating on "the boot finished clean" gates it off permanently. Here the core is
+        # GUARANTEED healthy: Linux is up, the shell has answered, and no domain has run.
+        #
+        # Weaker reference than the teardown copy (no selftest has fired yet, so there is no
+        # known-set bit to check against) but it has the one property that matters for the
+        # question being asked -- the halt is the only variable, and the core is definitely alive.
+        # The two are complementary: this one always runs, that one has the stronger reference.
+        if os.environ.get("EARLY_HALT_CONTROL", "1") == "1":
+            try:
+                def _fresh_read_early(_v):
+                    """Force the settled value to be EMITTED, then read it. See the teardown copy."""
+                    set_switch_value(console, _v)
+                    time.sleep(LED_SETTLE_S)
+                    set_switch_value(console, 0)
+                    time.sleep(0.05)
+                    _mark = console.now()
+                    set_switch_value(console, _v)
+                    try:
+                        console.wait_event(C.LISTEN.get("led_state", "led_state"),
+                                           timeout=LED_FRESH_TIMEOUT_S, since=_mark)
+                    except Exception:
+                        return None
+                    time.sleep(LED_SETTLE_S)
+                    _s = console.latest(C.LISTEN.get("led_state", "led_state"))
+                    _b = _s.get("states") if isinstance(_s, dict) else None
+                    return sum((1 << i) for i, b in enumerate(_b) if b) if _b else None
+
+                console.gdb_start()
+                try:
+                    console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
+                    _eh = {_a: _fresh_read_early(_a) for _a in (204, 208)}
+                    _ok = sum(1 for _x in _eh.values() if _x is not None)
+                    _d = "  ".join(f"sw={_a}:" + ("VOID" if _x is None else f"0x{_x:02x}")
+                                   for _a, _x in _eh.items())
+                    if _ok == 0:
+                        _t = ("  [s07] EARLY HALT CONTROL: no fresh event on either aperture with "
+                              "the core HEALTHY and halted -- " + _d + ".  The halt itself is what "
+                              "breaks the read; the wedge state is not the variable. A halted LED "
+                              "read is not available and the readout needs an RTL replacement.")
+                    else:
+                        _t = ("  [s07] EARLY HALT CONTROL: " + _d + ".  A halted read on a healthy "
+                              "core PRODUCED A VALUE, so halting does not break the readout. Every "
+                              "VOID seen at a wedge is then about the WEDGE state, not about "
+                              "halting -- and the halted read is worth taking at wedges too. "
+                              "Compare against the pre-run running baseline above: contamination "
+                              "only ADDS bits, so the halted value should be a SUBSET of it.")
+                    print(_t, flush=True)
+                    transcript.append(_t + "\n")
+                finally:
+                    try:
+                        console.gdb_cmd("continue", C.GDB_PROMPT, timeout=15.0)
+                    except Exception:
+                        pass
+                    console.gdb_stop()
+            except Exception as exc:
+                _t = (f"  [s07] early halt control failed ({type(exc).__name__}) -- no verdict, "
+                      f"and the run continues")
+                print(_t, flush=True)
+                transcript.append(_t + "\n")
+
         # One-element list so the per-domain block can rebind it without a nonlocal.
         _rev_head_prev = [None]
 
