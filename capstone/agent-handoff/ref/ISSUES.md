@@ -459,7 +459,35 @@ that row.
 Diagnostic stages 11-15 are committed in `sqlite_capstone_domain.c` and selected at run time
 (`SQLITE_STAGE_DOMS=".../s8.dom:15"`), so none of this has to be rebuilt from scratch.
 
-## S-06 — an untagged 128-bit `ldc`/`stc` round trip loses the HIGH 64 bits · `OPEN — SILICON DEFECT, root-caused in RTL, needs a hardware fix`
+## S-07 — a capability read back from memory comes back UNTAGGED · `OPEN — the one open silicon issue`
+
+Full evidence, refutations and reproduction: `tests/fpga-repros/S07-capability-untagged-on-reload/`.
+Symptom: `mcause 25`, the domain wedges after `SQ: G/enter`. Given a heading here 2026-08-18
+because this registry is the file agents are told to read before re-investigating anything, and
+S-07 previously appeared only as one inline mention.
+
+**Read the rate rule before adding evidence.** The wedge is NOT deterministic and NOT a property
+of the image: `XU` at hash `f1214600d0dac351` has both passed and wedged on the same bitstream,
+same physical placement, same position in the boot, eight minutes apart. Any "X wedges" claim
+based on a single run is meaningless here — report k of n.
+
+Measured on `caplifive_s06s08fix_s07tag2_618f4ce.bit`, 2026-08-18: **k=1 wedge in n=7** reps of
+`XU` across two boots (4 pass; then pass, pass, wedge).
+
+## S-08 — dom-switch CSR clobber · `FIXED in silicon and verified`
+
+Fixed by the RTL lane and verified on silicon (`state/current-state.md`, 2026-08-15). Added here
+2026-08-18: this registry previously had **zero** occurrences of S-08, so a reader checking it
+before re-investigating would have found nothing at all.
+
+## S-06 — an untagged 128-bit `ldc`/`stc` round trip loses the HIGH 64 bits · `FIXED in silicon and verified (2026-08-14), workarounds reverted`
+
+> **STATUS CORRECTED 2026-08-18.** This heading read `OPEN — SILICON DEFECT, root-caused in RTL,
+> needs a hardware fix` until today, four days after the fix landed and was verified on silicon
+> (`state/current-state.md`: "S-06: FIXED in silicon and verified. All §1 software workarounds
+> reverted"). An agent trusting this registry — which `agent-handoff/README.md` designates as the
+> thing to read before re-investigating anything — would have re-opened a closed defect. The
+> body below is the original investigation and is kept as the record of how it was found.
 
 > **SILICON CONFIRMATION 2026-08-12 on `caplifive_s06.bit`: the LCC-query repair WORKS on
 > hardware.** The RTL enabler (`capstone-ariane` `fpga-testing-dev-s06`, one line making LCC's
