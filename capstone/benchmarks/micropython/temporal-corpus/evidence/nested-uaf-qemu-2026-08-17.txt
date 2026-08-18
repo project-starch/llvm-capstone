@@ -21,3 +21,15 @@ __CAPSTONE_LADDER_NESTALLOC_PASSED__ (retval = 170)
   Arm A is untrapped not because checking is off, but because the region is ONE
   object and every sub-allocation inherits its bounds. The fault message states
   the bounds outright, so this is read off the machine rather than argued.
+
+HOW TO RE-RUN (added 2026-08-18; this file recorded the result but not the command,
+and neither did anything else -- found by auditing every measurement for a
+reproduction path):
+
+    source capstone/tests/capstone-test-env.sh
+    L=capstone/tests/runtime-qemu/silicon-ladder
+    bash $L/run-ladder-qemu.sh nestalloc     # arm A, offset 0,    expect PASSED retval 170
+    bash $L/run-ladder-qemu.sh nestoob       # arm B, past region, expect fault, bounds 0x400
+
+Run arm A first: a wedge takes the core with it. The full index of every
+measurement and its command is benchmarks/micropython/REPRODUCING.md.

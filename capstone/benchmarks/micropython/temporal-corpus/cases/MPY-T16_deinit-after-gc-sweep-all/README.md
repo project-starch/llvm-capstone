@@ -2,7 +2,7 @@
 Source: #5487, https://github.com/micropython/micropython/issues/5487  
 Upstream state: open, first seen 2020-01-03
 
-**NOT REPRODUCIBLE HERE. The trigger cannot be expressed in this domain.**
+**MEASURED in the domain.**
 
 ## The defect
 
@@ -38,4 +38,14 @@ See `RESULT.txt` in this directory.
 
 ## Reproducing
 
-Not reproducible with the current setup: needs a port shutdown hook; this domain's teardown is not the one with the defect.
+`repro.py` is the script. On stock:
+
+```bash
+MPY=/tmp/capstone/mpy-stock-pin/ports/unix/build-standard/micropython
+$MPY repro.py
+```
+
+In the domain, copy it into the test directory the image is built from and
+follow `../../README.md`; the driver is `tools/run-resumable-suite.py`
+and it must be run with `--capture-output`, because a test that dies on a
+missing builtin still returns a retval and reads exactly like an untrapped one.
