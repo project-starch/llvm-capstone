@@ -767,6 +767,25 @@ def main():
                 console.gdb_start()
                 try:
                     console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
+                    # THE PARK APERTURES' OWN VALUES, read first and with each other as park.
+                    # 0x7c has now appeared as a "reading" of four different apertures across
+                    # four boots -- 204, 208, 250 and the granule set -- which no hardware can
+                    # produce. The obvious candidate is that it is a PARK's own value bleeding
+                    # through, so measure the parks explicitly instead of guessing. If either
+                    # park reads 0x7c, that is the explanation and the park list is the fix.
+                    _parkvals = {0: settled_halted_read(console, C, 0, parks=(224,)),
+                                 224: settled_halted_read(console, C, 224, parks=(0,))}
+                    _pv = "  ".join(f"ap{_a}=" + ("VOID" if _v is None else f"0x{_v:02x}")
+                                    for _a, _v in _parkvals.items())
+                    _t0 = (f"  [s07] PARK APERTURE VALUES (halted): {_pv}"
+                           + ("   <== a park reading 0x7c EXPLAINS the 0x7c seen as other "
+                              "apertures' values: the walk never changed the byte, so the read "
+                              "returned the park." if 0x7c in _parkvals.values() else
+                              "   (neither park is 0x7c, so the recurring 0x7c is NOT a park "
+                              "collision and needs another explanation)"))
+                    print(_t0, flush=True)
+                    transcript.append(_t0 + "\n")
+
                     _eh = {_a: settled_halted_read(console, C, _a) for _a in (204, 208)}
                     _ok = sum(1 for _x in _eh.values() if _x is not None)
                     _d = "  ".join(f"sw={_a}:" + ("VOID" if _x is None else f"0x{_x:02x}")
