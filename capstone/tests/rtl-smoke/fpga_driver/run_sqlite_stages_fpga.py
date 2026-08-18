@@ -762,6 +762,8 @@ def main():
         # known-set bit to check against) but it has the one property that matters for the
         # question being asked -- the halt is the only variable, and the core is definitely alive.
         # The two are complementary: this one always runs, that one has the stronger reference.
+        _gdb_open = [False]   # one session for the whole run; see below
+
         if os.environ.get("EARLY_HALT_CONTROL", "1") == "1":
             try:
                 console.gdb_start()
@@ -809,7 +811,8 @@ def main():
                         console.gdb_cmd("continue", C.GDB_PROMPT, timeout=15.0)
                     except Exception:
                         pass
-                    console.gdb_stop()
+                    # session stays OPEN on purpose; see "ONE GDB SESSION FOR THE WHOLE RUN"
+                    _gdb_open[0] = True
             except Exception as exc:
                 _t = (f"  [s07] early halt control failed ({type(exc).__name__}) -- no verdict, "
                       f"and the run continues")
@@ -1171,6 +1174,20 @@ def main():
             #   baseline zero, delta non-zero over the wedging domain -> the producing load's
             #     response was displaced onto a scalar writeback port: the value was intact in
             #     memory (case a). The count says one-off or routine.
+            # ONE GDB SESSION FOR THE WHOLE RUN, not one per domain.
+            #
+            # The per-domain halt timed out (ActionTimeout) on EVERY domain of boots 11 and 12,
+            # which turned every per-domain "halted" read into a RUNNING read -- and the driver
+            # said so, on the line directly above each reading, while the 0x7c those reads
+            # returned was being treated as a mystery. The instrument reported its own failure
+            # correctly and the report was not read.
+            #
+            # The cause is session churn: the early halt control ends with gdb_stop(), and the
+            # per-domain gdb_start() immediately afterwards times out. The board-run skill already
+            # records that an orphaned server-side session makes every later action time out and
+            # that only gdb_stop() clears it -- the same fragility, reached by stopping and
+            # restarting rather than by killing. So: start once, halt/continue per read, and stop
+            # exactly once at teardown.
             # BOUND BEFORE THE try, NOT INSIDE IT. The resume block further down is at this
             # indentation and references it unconditionally, so a binding made inside the try is
             # missing on every exception path. Boot 9 was lost to exactly that shape once already
@@ -1328,7 +1345,9 @@ def main():
                 _halt_reads = os.environ.get("HALT_MUX_READS", "1") == "1"
                 if _halt_reads:
                     try:
-                        console.gdb_start()
+                        if not _gdb_open[0]:
+                            console.gdb_start()
+                            _gdb_open[0] = True
                         console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
                     except Exception as _exc:
                         print(f"  [s07] halt before mux read FAILED ({type(_exc).__name__}) -- "
@@ -1511,10 +1530,9 @@ def main():
                 except Exception as _exc:
                     print(f"  [s07] RESUME FAILED ({type(_exc).__name__}) -- the core may still "
                           f"be halted; everything after this point is suspect", flush=True)
-                try:
-                    console.gdb_stop()
-                except Exception:
-                    pass
+                # deliberately NO gdb_stop() here -- the session stays up for the next domain
+                # and is closed once at teardown. Stopping and restarting per domain is what made
+                # the halt time out.
 
             if wedged:
                 # INSTRUMENT THE WEDGE HERE, IN THIS SESSION.
