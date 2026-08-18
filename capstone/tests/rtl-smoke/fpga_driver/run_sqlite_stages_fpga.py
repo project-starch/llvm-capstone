@@ -103,6 +103,14 @@ OUT = os.environ.get("PROBE_SCOPED_OUT") or "/tmp/capstone/sqlite-stages.txt"
 # trigger is unrecoverable for that boot.
 DESTRUCTIVE_SWITCHES = frozenset({220})
 
+# LED PULSE-STRETCHER SETTLE. Each LED bit is held high for 2^20 core cycles (~21 ms at
+# 50 MHz) after it was last driven, so a reading taken sooner is an OR across apertures.
+# 0.5 s is ~24 windows -- generous on purpose, since the cost is seconds per sample and the
+# failure mode is a decoded verdict that looks entirely plausible.
+LED_SETTLE_S = float(os.environ.get("LED_SETTLE_S") or 0.5)
+# How long to wait for a FRESH led_state payload before falling back to the cached one.
+LED_FRESH_TIMEOUT_S = float(os.environ.get("LED_FRESH_TIMEOUT_S") or 5.0)
+
 
 def safe_switch_bit_order(cur, target, forbidden=DESTRUCTIVE_SWITCHES):
     """Return an order for the differing bits such that no INTERMEDIATE value is forbidden.
@@ -1017,14 +1025,64 @@ def main():
             #     memory (case a). The count says one-off or routine.
             try:
                 def _read_sw(_sw):
-                    # Routed through set_switch_value so the TRANSIT is chosen, not accidental.
-                    # The previous form set all 8 bits ascending, which walks 221 -> 220 -> 222
-                    # and fires the gen-3 selftest trigger in passing.
+                    """Read one debug-mux aperture, defending against the LED PULSE STRETCHER.
+
+                    THE LEDS ARE NOT A SNAPSHOT. `ariane_xilinx.sv:956-979` holds each LED bit
+                    HIGH for 2^20 cycles (~21 ms at 50 MHz) after the last cycle that bit was
+                    driven. So a naive read returns the bitwise OR of EVERY aperture displayed
+                    in the preceding window -- and the switch walk visits several on the way.
+
+                    That is exactly what produced the impossible readings on
+                    caplifive_s07debug_18august.bit: `src=3`, which is not a defined value at
+                    all (it is src=1 from one visited aperture ORed with src=2 from another),
+                    and `count=12 with ldc_seen clear`, which the closed encoding is designed to
+                    make unrepresentable. One of those same readings decoded cleanly as
+                    "genuine tag loss" -- the answer the whole investigation wants -- and would
+                    have been published without the encoding's self-check.
+
+                    The stretcher can only turn bits ON, never off: a bit reads 1 if it was high
+                    ANYWHERE in the window, and 0 only if it was high nowhere. So every 0x00
+                    reading ever taken remains trustworthy (contamination cannot manufacture a
+                    zero), and the non-zero readings are the suspect class.
+
+                    TWO defences, because a settle delay alone is not sufficient:
+
+                      1. Wait out the stretcher, several times over.
+                      2. Require TWO samples, a full window apart, to AGREE -- and take a FRESH
+                         `led_state` event for each. `console.latest()` returns the last payload
+                         RECEIVED, so with a cached read "sample twice and compare" compares one
+                         stale sample against itself and passes while proving nothing. That is
+                         the same shape as a check that cannot fire.
+
+                    Disagreement returns None (VOID). A contaminated aperture must never be
+                    handed back as a value."""
                     set_switch_value(console, _sw)
-                    time.sleep(1.2)
-                    _s = console.latest(C.LISTEN.get("led_state", "led_state"))
-                    _b = _s.get("states") if isinstance(_s, dict) else None
-                    return sum((1 << i) for i, b in enumerate(_b) if b) if _b else None
+
+                    def _sample():
+                        _mark = console.now()
+                        try:
+                            _s = console.wait_event(
+                                C.LISTEN.get("led_state", "led_state"),
+                                timeout=LED_FRESH_TIMEOUT_S, since=_mark)
+                        except Exception:
+                            # No change since the mark means the value already settled; the
+                            # cached payload IS that settled value.
+                            _s = console.latest(C.LISTEN.get("led_state", "led_state"))
+                        _b = _s.get("states") if isinstance(_s, dict) else None
+                        return sum((1 << i) for i, b in enumerate(_b) if b) if _b else None
+
+                    time.sleep(LED_SETTLE_S)
+                    _a = _sample()
+                    time.sleep(LED_SETTLE_S)
+                    _c = _sample()
+                    if _a != _c:
+                        _m = (f"  [s07] sw={_sw}: VOID -- two reads {LED_SETTLE_S}s apart "
+                              f"disagree ({_a} vs {_c}). LED pulse-stretcher contamination, "
+                              f"not data.")
+                        print(_m, flush=True)
+                        transcript.append(_m + "\n")
+                        return None
+                    return _a
 
                 # UART-HOSTILE SWITCH VALUES -- the low three switch bits are NOT mux selectors.
                 #
