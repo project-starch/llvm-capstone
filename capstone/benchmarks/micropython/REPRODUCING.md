@@ -1,9 +1,19 @@
 # How to re-run every measurement
 
-One index over both corpora and the model pairs, because the commands were
-previously spread across evidence files, case READMEs and commit messages, and
-three measurements had none written down anywhere. If a row is listed here it can
-be re-run from this file alone.
+**Every measured case has an executable `run.sh` in its own folder.** Run that; it
+builds, runs the control first, and prints a verdict comparing what it measured
+against what RESULT.txt records. A run whose control fails exits 75 with NO verdict
+rather than reporting a result, the same convention as `tests/fpga-repros/*/run.sh`.
+
+    capstone/benchmarks/micropython/<corpus>/cases/<ID>_*/run.sh
+    capstone/tests/runtime-qemu/silicon-ladder/run-nested-allocator-pairs.sh [temporal|spatial|global|all]
+
+The shared driver is `repro-lib.sh`; `repro-selftest.sh` negative-tests its verdict
+logic against a fixed results file and needs neither a build nor QEMU. Run it after
+touching the driver.
+
+The rest of this file is the manual form of the same thing, kept because it explains
+WHY each step is there.
 
 Set up first:
 
