@@ -45,6 +45,14 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
     committed file would itself break the rule. Keep that file populated; without it
     the script warns and runs only its name-independent heuristics.
 - No `Co-Authored-By:` lines in commits.
+- **Commit only your OWN paths: `git commit -o <paths> -F <msgfile>`.** `git add <files>` followed
+  by a bare `git commit` commits the ENTIRE index, so a concurrent session's staged work rides
+  along under your message. This happened twice on 2026-08-18 — an LLVM merge landed under a
+  commit message about the S-07 repro folder, and a 33-file archive set landed under one about a
+  rate-classifier script. Both times the content was correct and the message described something
+  else, which is what makes it expensive: the message is how anyone later reconstructs why a
+  change happened. `-o/--only` commits just the paths you name and leaves the rest staged. When
+  other lanes may be active, check `git show --stat` after committing.
 - Never commit debug/report files (`*_DEBUG_CHECKPOINT.md`, session notes).
 - Active plans live in `capstone/agent-handoff/plans/` (committed, portable across machines and agents).
 - Manager-facing summaries go under `/tmp/capstone/`, not into the repo.
