@@ -122,8 +122,8 @@ ROWS = [
  ("MPY-S31", 19129, "stack-overflow", "CWE-787", "py/objfun.c:fun_bc_call", "stack",
   "when m_new_obj_var_maybe fails for the VM state, fun_bc_call does not raise -- it falls back to alloca of the same size on the C stack",
   "yes", "body: 'if m_new_obj_var_maybe fails, it does not raise an exception, but it tries to allocate dozen kilobytes' by alloca; reporter names MICROPY_ENABLE_PYSTACK=0, which is this port's setting",
-  "ladder-ran-no-trigger",
-  "OPEN upstream, so present at the pin and needing no parent build, and it is the corpus's best chance at a measured `trapped` prediction. FIRST ATTEMPT DID NOT TRIGGER: an ascending ladder N=100..6400 ran to completion in the domain, with the MemoryError at N=6400 coming from BUILDING str(list(range(N))) rather than from the VM-state allocation, so the alloca fallback was never reached. The upstream route needs a heap large enough to build the source but too small for the VM state; this domain's 384 KiB fails the first condition. Next shape: build the source string BEFORE filling the heap with ballast, as MPY-S05 does."),
+  "masked-by-port-guard",
+  "OPEN upstream, so present at the pin and needing no parent build. MEASURED, two arms in one boot: the alloca fallback DOES run with the heap exhausted and is untrapped, and recursion to accumulate allocas stops at depth 8 with a RuntimeError from MicroPython's own mp_cstack_check (MICROPY_STACK_CHECK, 4096-byte margin against MPY_CSTACK_MAX=393216). So a SOFTWARE guard at 393 KB stops the descent while the stack capability's bound sits near 800 KB, and this row cannot demonstrate a hardware stack trap however it is arranged. Recorded as a conclusion, not an open attempt."),
  ("MPY-S22", 3090, "bounds-arithmetic", "CWE-125", "py/sequence.c", "gc-heap",
   "negative-step slice indices computed with an inclusive stop", "uncertain",
   "the PR fixes the index arithmetic; neither it nor the thread states that an out-of-bounds ACCESS occurred",
@@ -181,6 +181,13 @@ MEASURED = {
     # 4096-byte allocation, and nothing trapped them. Which live object they hit was not
     # established, hence untrapped-no-crash and not untrapped-identical.
     15271: ("measured", "not-run", "untrapped-no-crash"),
+    # 2026-08-18, two arms in one boot. Arm A reaches a Python-level TypeError with the
+    # heap exhausted, so the frame was built and the bytecode ran: the alloca fallback
+    # was taken and nothing trapped it. (The TypeError is a max() probe artefact and
+    # reproduces on the host -- checked, not assumed.) Arm B stops at recursion depth 8
+    # with MicroPython's own stack check, which is why this row is closed rather than
+    # retried: the port guards the C stack at 393 KB and the hardware bound is near 800 KB.
+    19129: ("measured", "not-run", "untrapped-no-crash"),
 }
 
 def main():
