@@ -117,10 +117,63 @@ ROWS = [
      "not-trapped", "Open, needs-info. Over-retention, the dual of premature free."),
 ]
 
+
+# ---------------------------------------------------------------------------
+# TEMPORAL AUDIT, 2026-08-18.
+#
+# The class column was assigned early, from issue TITLES, before most issue
+# bodies and almost no fix commits had been read. Asked to look carefully, and
+# the answer is that a third of the corpus is not a temporal defect at all.
+#
+# The authority used here is the FIX COMMIT's own message wherever one exists,
+# because it is the maintainer stating what was wrong, and the issue text
+# otherwise. Rows are NOT deleted: an honest counter-example is worth more than
+# a quietly dropped row, and several of them correct a reading of the results.
+#
+# ref -> (is_temporal, evidence)
+TEMPORAL = {
+    # --- genuinely temporal: a pointer outlives the storage it names ---
+    "CVE-2023-7152": ("yes", "fix: 'Handle growing the pollfds allocation correctly'; every registered object holds a raw pointer into the array m_renew moves"),
+    "#12887":        ("yes", "same defect as CVE-2023-7152"),
+    "CVE-2024-8947": ("yes", "fix: 'Fix use-after-free if extending a bytearray from itself'"),
+    "#13283":        ("yes", "same defect as CVE-2024-8947"),
+    "#12543":        ("yes", "fix: 'Add checks for already-closed database'; reuse after close"),
+    "#4128":         ("yes", "fix: 'Fix reference to freed memory, lexer src name'"),
+    "#18168":        ("yes", "measured: the memoryview addresses storage the bytearray no longer owns"),
+    "#18171":        ("yes", "same shape as 18168, on array"),
+    "#17941":        ("yes", "sort holds a pointer into the list while the comparison clears it"),
+    "#18619":        ("yes", "reporter: 'the lookup returns a slot pointer into the now-freed table'"),
+    "#19075":        ("yes", "callback enlarges the buffer its caller still points into"),
+    "#17848":        ("yes", "fix: 'Use memoryview when available', stopping the callback reallocating under the caller"),
+    "#19060":        ("yes", "duplicate of 17848"),
+    "#5487":         ("yes", "port deinit runs after the sweep that already freed what it touches"),
+    "#5226":         ("yes", "fix: 'Persist reference to NimBLE service instances'; collected while C still held it"),
+    "#8550":         ("yes", "thread stack is not a scanned root, so live objects are collected"),
+    "#4705":         ("yes", "fix: 'Make sure stack/regs get captured properly for GC'; missed roots free reachable memory"),
+
+    # --- NOT temporal: no storage is released and then used ---
+    "CVE-2026-1998": ("no",  "fix: 'Make import-all support non-modules'; type confusion, and NVD says CWE-119/787 not 416"),
+    "#12670":        ("no",  "fix: 'casts away the constness and assigns -1 to the object fd member'; writing a const ROM object"),
+    "#3627":         ("no",  "a deadlock between a finaliser exception and the GIL; liveness, not memory safety"),
+    "#19413":        ("no",  "closed NOT_PLANNED and redirected to the LVGL binding project; not a MicroPython defect"),
+    "#11781":        ("no",  "fix: 'embed: Improve stack top estimation'; a stack overflow, no lifetime component"),
+    "#10402":        ("no",  "subclassing a stream in pure Python is unsupported; the C stream state is never initialised"),
+    "#18645":        ("no",  "a malformed .mpy drives relocation off a NULL table; input validation"),
+    "#5272":         ("no",  "a socket is never cleaned up after a failed connect; a leak"),
+    "#322":          ("no",  "gc_realloc refusing an allocation is an allocation failure, and it was measured not to reproduce"),
+    "#11698":        ("no",  "gc.collect retaining more than expected is over-retention, the opposite of premature free"),
+
+    # --- uncertain: plausible but not established from a maintainer statement ---
+    "#17442":        ("uncertain", "a data race on allocator state; whether it manifests as a lifetime violation is not established"),
+    "#6988":         ("uncertain", "an ESP32 collector panic with no fix commit and no mechanism recorded upstream"),
+    "#12638":        ("uncertain", "suspected freed lwip buffer, but closed as unreproducible and the thread ends in an ESP-IDF version question"),
+}
+
 HEADER = ["id", "source", "ref", "url", "title", "state", "first_seen",
           "fix_commit", "fix_date", "present_at_pin", "repro_base",
           "class", "cwe", "component", "scope", "trigger",
-          "traps_unmodified", "traps_if_gc_cap_aware", "repro_status", "stock_behaviour", "domain_behaviour", "notes"]
+          "traps_unmodified", "traps_if_gc_cap_aware", "is_temporal", "temporal_evidence",
+          "repro_status", "stock_behaviour", "domain_behaviour", "notes"]
 
 # Which MicroPython source actually has to be built to see each defect. Computed
 # by gen-fix-status against a full clone (git merge-base --is-ancestor), never
@@ -234,6 +287,7 @@ for rid, ref, cls, cwe, comp, scope, trig, hyp, notes in ROWS:
     base = f.get("repro_base", "unknown")
     if base == "pin":
         base = PIN
+    is_temp, temp_ev = TEMPORAL[ref]
     repro, stock, dom = MEASURED.get(ref, ("none", "not-run", "not-run"))
     # What an UNMODIFIED MicroPython gets from Capstone, which is the honest
     # baseline and is almost always nothing. mpy_domain.c carves the heap as one
@@ -245,7 +299,7 @@ for rid, ref, cls, cwe, comp, scope, trig, hyp, notes in ROWS:
     unmod = "unclear" if scope == "port-heap" else "no"
     out.append([rid, src, ref, url, title, state, date,
                 fix_commit, fix_date, present, base,
-                cls, cwe, comp, scope, trig, unmod, hyp, repro, stock, dom, notes])
+                cls, cwe, comp, scope, trig, unmod, hyp, is_temp, temp_ev, repro, stock, dom, notes])
 
 if missing:
     print("FEHLT, nicht verifiziert:", missing, file=sys.stderr)
@@ -258,5 +312,5 @@ with open(OUT, "w", newline="\n") as f:
 
 print(f"{len(out)} Zeilen geschrieben nach {OUT}")
 from collections import Counter
-for col, name in ((11, "class"), (14, "scope"), (16, "traps_unmodified"), (17, "traps_if_gc_cap_aware"), (9, "present_at_pin"), (19, "stock_behaviour"), (20, "domain_behaviour")):
+for col, name in ((11, "class"), (14, "scope"), (16, "traps_unmodified"), (17, "traps_if_gc_cap_aware"), (9, "present_at_pin"), (21, "stock_behaviour"), (22, "domain_behaviour"), (18, "is_temporal")):
     print(f"  {name:22s}", dict(Counter(r[col] for r in out)))

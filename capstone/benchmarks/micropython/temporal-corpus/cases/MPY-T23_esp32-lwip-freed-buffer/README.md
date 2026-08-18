@@ -8,6 +8,8 @@ Upstream state: closed, first seen 2023-10-09
 
 sporadic fault, buffer freed by the network stack still referenced.
 
+**Temporal: uncertain.** suspected freed lwip buffer, but closed as unreproducible and the thread ends in an ESP-IDF version question.
+
 Class `premature-free`, CWE-416, in `ports/esp32 lwip glue`. Scope `port-heap`, so a second allocator is involved.
 
 ## What Capstone does about it

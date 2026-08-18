@@ -8,6 +8,10 @@ Upstream state: open, first seen 2018-02-21
 
 exception raised inside a __del__ finaliser deadlocks with threading on.
 
+**NOT a temporal defect**, and kept only as a labelled counter-example:
+a deadlock between a finaliser exception and the GIL; liveness, not memory safety. It was classified from its title before the fix
+commit was read; the 2026-08-18 audit corrected it.
+
 Class `lifetime-order`, CWE-667, in `py/gc.c,py/objtype.c`. Scope `gc-core`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

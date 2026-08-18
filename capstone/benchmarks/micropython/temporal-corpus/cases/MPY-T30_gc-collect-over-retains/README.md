@@ -8,6 +8,10 @@ Upstream state: open, first seen 2023-06-04
 
 gc.collect() does not reclaim what the caller expects, blocks stay marked live.
 
+**NOT a temporal defect**, and kept only as a labelled counter-example:
+gc.collect retaining more than expected is over-retention, the opposite of premature free. It was classified from its title before the fix
+commit was read; the 2026-08-18 audit corrected it.
+
 Class `alloc-invariant`, CWE-401, in `py/gc.c:gc_collect`. Scope `gc-core`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

@@ -8,6 +8,8 @@ Upstream state: closed, first seen 2025-08-06
 
 readblocks enlarges buf via slice assignment, caller keeps the old pointer.
 
+**Temporal: yes.** fix: 'Use memoryview when available', stopping the callback reallocating under the caller.
+
 Class `dangling-buffer`, CWE-416, in `extmod/vfs_blockdev.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

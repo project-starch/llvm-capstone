@@ -8,6 +8,8 @@ Upstream state: open, first seen 2025-09-29
 
 array('I') resized leaves a stale memoryview; readinto() then writes through it.
 
+**Temporal: yes.** same shape as 18168, on array.
+
 Class `dangling-view`, CWE-416, in `py/objarray.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

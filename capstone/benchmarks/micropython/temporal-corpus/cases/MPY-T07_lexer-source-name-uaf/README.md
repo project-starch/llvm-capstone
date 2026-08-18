@@ -8,6 +8,8 @@ Upstream state: closed, first seen 2018-09-12
 
 lex->source_name read after the lexer allocation was freed.
 
+**Temporal: yes.** fix: 'Fix reference to freed memory, lexer src name'.
+
 Class `uaf`, CWE-416, in `py/lexer.c,py/compile.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

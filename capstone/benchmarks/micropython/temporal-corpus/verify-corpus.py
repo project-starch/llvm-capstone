@@ -20,6 +20,7 @@ VALID_CLASS = {"uaf", "double-free", "dangling-view", "dangling-buffer", "dangli
 VALID_SCOPE = {"gc-core", "gc-managed", "port-heap"}
 VALID_HYP = {"trapped", "not-trapped", "unclear"}
 VALID_UNMOD = {"no", "yes", "unclear"}
+VALID_TEMPORAL = {"yes", "no", "uncertain"}
 VALID_STOCK = {"not-run", "silent-corruption", "crash-sigsegv", "not-reproducible",
                "silent-no-effect"}
 VALID_DOMAIN = {"not-run", "untrapped-identical", "untrapped-no-crash", "fault-cause24"}
@@ -63,6 +64,12 @@ def check(rows, issues, nvd):
             errs.append(f"{rid}: scope {r['scope']} cannot trap unmodified")
         if r["repro_status"] not in VALID_REPRO:
             errs.append(f"{rid}: unknown repro_status {r['repro_status']!r}")
+        if r["is_temporal"] not in VALID_TEMPORAL:
+            errs.append(f"{rid}: unknown is_temporal {r['is_temporal']!r}")
+        # every verdict must carry its evidence, so a row cannot be reclassified
+        # on a hunch the way the original class column was
+        if not r["temporal_evidence"].strip():
+            errs.append(f"{rid}: is_temporal with no evidence")
         if r["stock_behaviour"] not in VALID_STOCK:
             errs.append(f"{rid}: unknown stock_behaviour {r['stock_behaviour']!r}")
         if r["domain_behaviour"] not in VALID_DOMAIN:

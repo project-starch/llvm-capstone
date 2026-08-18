@@ -8,6 +8,8 @@ Upstream state: closed, first seen 2022-04-14
 
 thread stack memory collected because it is not a scanned root.
 
+**Temporal: yes.** thread stack is not a scanned root, so live objects are collected.
+
 Class `premature-free`, CWE-416, in `ports/rp2 + py/gc.c`. Scope `port-heap`, so a second allocator is involved.
 
 ## What Capstone does about it

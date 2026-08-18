@@ -8,6 +8,8 @@ Upstream state: open, first seen 2026-04-09
 
 write() where slice assignment enlarges buf, reallocating under the caller.
 
+**Temporal: yes.** callback enlarges the buffer its caller still points into.
+
 Class `dangling-buffer`, CWE-416, in `extmod/modio.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

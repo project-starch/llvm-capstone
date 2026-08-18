@@ -8,6 +8,10 @@ Upstream state: closed, first seen 2026-01-06
 
 relocation walks a pointer table that is NULL or already freed.
 
+**NOT a temporal defect**, and kept only as a labelled counter-example:
+a malformed .mpy drives relocation off a NULL table; input validation. It was classified from its title before the fix
+commit was read; the 2026-08-18 audit corrected it.
+
 Class `dangling-pointer`, CWE-476, in `py/nativeglue.c:mp_native_relocate`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

@@ -8,6 +8,8 @@ Upstream state: open, first seen 2025-08-17
 
 sort over an array while the collector runs, element buffer moved or freed.
 
+**Temporal: yes.** sort holds a pointer into the list while the comparison clears it.
+
 Class `premature-free`, CWE-416, in `py/objarray.c,py/gc.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

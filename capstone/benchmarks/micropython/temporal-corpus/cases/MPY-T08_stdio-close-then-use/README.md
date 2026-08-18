@@ -8,6 +8,10 @@ Upstream state: closed, first seen 2023-10-12
 
 close() on stdin/stdout then further use of the stream object.
 
+**NOT a temporal defect**, and kept only as a labelled counter-example:
+fix: 'casts away the constness and assigns -1 to the object fd member'; writing a const ROM object. It was classified from its title before the fix
+commit was read; the 2026-08-18 audit corrected it.
+
 Class `uaf`, CWE-416, in `extmod/vfs_posix_file.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

@@ -8,6 +8,8 @@ Upstream state: patched, first seen 2023-12-29
 
 poll object registers an fd, object freed, poll set still references it.
 
+**Temporal: yes.** fix: 'Handle growing the pollfds allocation correctly'; every registered object holds a raw pointer into the array m_renew moves.
+
 Class `uaf`, CWE-416, in `extmod/modselect.c:poll_set_add_fd`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 

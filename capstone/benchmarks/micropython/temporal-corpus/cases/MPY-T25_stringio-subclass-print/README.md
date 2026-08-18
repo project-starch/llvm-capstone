@@ -8,6 +8,10 @@ Upstream state: open, first seen 2023-01-03
 
 a pure-Python subclass of io.StringIO leaves the C stream state uninitialised, and print dereferences it.
 
+**NOT a temporal defect**, and kept only as a labelled counter-example:
+subclassing a stream in pure Python is unsupported; the C stream state is never initialised. It was classified from its title before the fix
+commit was read; the 2026-08-18 audit corrected it.
+
 Class `uninitialised-state`, CWE-908, in `py/objstringio.c`. Scope `gc-managed`, so it lives on memory MicroPython's own collector manages,
 inside the single region `gc_init` was handed.
 
