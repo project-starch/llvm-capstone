@@ -897,3 +897,51 @@ before its capability field is written is exactly how the condition would arise 
 
 Resolving it needs either the SQLite amalgamation source (not present in the tree at any path
 searched) or resolution of the indirect call targets in the disassembly. Neither needs board time.
+
+## The memset shape IS present, in the function that builds the faulting object
+
+Verified at primary source, in this build's own amalgamation copy
+(`/tmp/capstone/merge-verify2/obj/sqlite3-capstone.c`; the file is absent from the repo because
+it is a **build artifact** — `build-sqlite-silicon.sh:50` takes it from
+`$CAPSTONE_TMP_ROOT/sqlite-build/`, which is why an in-tree path search found nothing):
+
+    109864  struct MemJournal {
+    109865    const sqlite3_io_methods *pMethod;  /* Parent class. MUST BE FIRST */
+
+    1068    struct sqlite3_file {
+    1069      const struct sqlite3_io_methods *pMethods;
+    1070    };
+
+    110149  SQLITE_PRIVATE int sqlite3JournalOpen(
+    110164    memset(p, 0, sizeof(MemJournal));                                   <-- +16
+    110176    pJfd->pMethods = (const sqlite3_io_methods*)&MemJournalMethods;     <-- +28
+
+`pMethods` is the **first** member, so in a capability build it occupies `[p+0, p+16)` — **exactly
+one granule**. The `memset` zeroes the whole struct, including `[p+8, p+16)`, the **high word of
+that granule**, with plain stores. Twelve source lines later the capability is written to `p+0`
+with an `stc`.
+
+That is conditions (1) and (2) of the write-buffer mechanism, in the function that constructs the
+`MemJournal`/`sqlite3_file` whose `pMethods` is read by the load at `sqlite3OsRead+0x48` — the
+instruction the trap localisation identified as defective.
+
+### What this does and does not establish
+
+* **ESTABLISHED:** the source contains the trigger shape, in the right function, on the right
+  object, with the plain store and the capability store close together.
+* **NOT ESTABLISHED:** that the `memset`'s entry for `p+8` is still resident in the write buffer
+  when the `stc` lands, or that the arbiter drains them in the wrong order on failing runs. Both
+  are RTL/timing questions; neither follows from source.
+* **NOT ESTABLISHED:** the mechanism itself, which is still under adversarial audit.
+
+### It also explains the rate
+
+The mechanism is deterministic given the same instruction stream **and the same buffer
+occupancy** — and occupancy depends on everything that ran before. So the same site can fire on
+one rep and not the next **while never moving**: a **fixed site with a variable trigger**, which is
+what k=16/n=53 with a bit-identical address actually looks like. Neither a pure race nor a pure
+data-dependent bug explains that combination cleanly.
+
+**Status stays neither-confirmed-nor-killed** until the auditor reports and a directed RTL
+simulation — `plain store to G+8; stc to G; ldc G` — either reproduces tag loss or does not. That
+test is board-free and decides the mechanism independently of whether SQLite triggers it.
