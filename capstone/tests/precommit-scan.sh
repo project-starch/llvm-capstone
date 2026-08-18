@@ -50,6 +50,18 @@ if [[ -n "$RANGE" ]]; then
   git diff "$RANGE" -- . ":(exclude)$SELF"         >> "$TMP" 2>/dev/null
 else
   git diff --cached -- . ":(exclude)$SELF"         >> "$TMP" 2>/dev/null
+  # ALSO the unstaged and the UNTRACKED. Without these the scan is only as good as the
+  # user's staging discipline, and it silently was not: running it BEFORE `git add` scanned
+  # the commit message and nothing else, then printed CLEAN. A brand-new file -- exactly the
+  # kind that carries a fresh name or a pasted console URL -- appears in NO diff until it is
+  # staged, so the most dangerous content was the least likely to be seen. Caught 2026-08-18
+  # when a new plans/ document passed a scan that had never read a byte of it.
+  git diff -- . ":(exclude)$SELF"                  >> "$TMP" 2>/dev/null
+  while IFS= read -r -d '' f; do
+    [[ "$f" == "$SELF" ]] && continue
+    printf '=== untracked: %s ===\n' "$f" >> "$TMP"
+    cat -- "$f" >> "$TMP" 2>/dev/null
+  done < <(git ls-files --others --exclude-standard -z 2>/dev/null)
 fi
 if git diff --cached --name-only 2>/dev/null | grep -qxF "$SELF"; then
   echo "NOTE: $SELF is staged and was EXCLUDED from its own scan. Review it by eye."

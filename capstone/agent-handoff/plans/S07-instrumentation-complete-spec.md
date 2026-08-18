@@ -36,12 +36,24 @@ exactly as domain ordering is what makes a wide board batch safe.
 | verdict byte | switch 208 | packs valid/src/ctag/match/clobbered/selftest |
 | displacement byte | switch 204 | `{stc_seen, ldc_seen, count[5:0]}` |
 
-**Both records ROLL. Neither is a one-shot.** Neither capture condition carries a
-`!..._valid_q` guard, and the `load_unit` comment says so: *"capture EVERY LDC response that
-comes back untagged, so the record holds the most recent one and the wedge is what freezes it."*
-The Python driver asserted the opposite until 2026-08-18 and printed "PROBE ALREADY SPENT /
-carries NO weight", which caused a boot to dismiss its own usable readings. Fixed in
-`run_sqlite_stages_fpga.py` (`S07_RECORDS_ROLL`).
+**Both records ROLL in the flashed build — but the load record did NOT always, and the
+difference is exactly what this reflash bought.** Verified across revisions:
+
+    618f4ce36 and every earlier bitstream   load_unit.sv:766
+        if (ldc_result_back && !req_port_i.data_rtag && !s07_ldc0_valid_q)   <- ONE-SHOT
+    8c75d899b, the flashed build            load_unit.sv:774
+        if (ldc_result_back && !req_port_i.data_rtag)                        <- ROLLING
+    store_unit.sv:549, BOTH revisions       if (store_buffer_valid && st_is_cap_q)  <- always rolled
+
+So the Python driver's "PROBE ALREADY SPENT / carries NO weight" message was **correct for every
+earlier bitstream** and wrong only for this one. That distinction is load-bearing and must not be
+collapsed into "neither was ever a one-shot": *"the one-shot is spent by boot software before any
+domain runs"* was a real measurement, it is why the rolling change was made, and it is the
+justification for the reflash. The driver is now version-aware (`S07_RECORDS_ROLL`, default on)
+rather than corrected in one direction.
+
+An earlier commit message here (`235f5446554c`) framed this as the driver simply being wrong.
+It is pushed and is not being rewritten; this paragraph is the correction.
 
 ### The three things that actually limit us today
 
@@ -86,6 +98,16 @@ It is NOT yet a conclusion, for four reasons, and each one is answered by exposi
 4. **An untagged LDC during boot does not fault.** Post-S-06 it is legal until the result is
    used as a capability, so this pattern may be entirely benign boot behaviour rather than the
    defect.
+5. **0x9c is itself a running non-zero read, so it falls under the readout caveat below** — the
+   governing one, and the reason this is filed as a case to test rather than a finding. Caveats
+   1-4 are about what the records *mean*; this one is about whether the byte was read correctly at
+   all. It is in fact read through the weaker single-sample `_rd()` path in the generation block,
+   not through `_read_sw`'s two-sample check. **Bit-identical across boots does not clear it:** the
+   switch walk is deterministic, so deterministic OR-contamination reproduces bit-identically too.
+   The one thing 0x9c has going for it is that it **decodes legally** — `src=0` is a defined
+   encoding — unlike the `0xfe` readings whose `src=3` is not. A legal decode does not prove a
+   clean read; it is simply the only discriminator available until there is a readout path that
+   can carry a non-zero value.
 
 With the two addresses on the mux, 1 and 2 are testable in one board read and 3 and 4 become a
 question of mapping one number onto the monitor's memory map. Without them, this observation
@@ -113,18 +135,53 @@ apertures, most of them free.
   discarded by the driver automatically. This is the cheapest possible defence against the
   readout contamination described below, and it costs literally no logic.
 
-## Tier 1 — top-level `always_ff` only. Does not touch the LSU.
+## Tier 1 — needs ONE minimal LSU export first, then top-level `always_ff` only.
+
+### 1.0 — the UPDATE STROBE. Everything else in this tier depends on it.
+
+**A STICKY `valid` IS NOT AN EVENT.** `s07_ldc0_valid_q` is set at `load_unit.sv:775` and cleared
+only at reset (`:753`); `s07_stc_valid_q` likewise (`store_unit.sv:550`, reset `:515`). Once any
+untagged LDC has occurred since reset the bit is 1 forever, while the record underneath keeps
+rolling. An earlier draft of this document specified Tiers 1.1 and 1.2 as triggering on the
+"rising edge of `s07_ldc0_valid_o`" — which fires **once per boot**, at the first untagged LDC,
+which the 0x9c observation below shows is boot-time software. That would have reproduced the
+spent-one-shot failure inside the reader built to escape it, at the cost of a full synthesis.
+Caught by the RTL lane and independently in review before implementation.
+
+The fix is small and stays on the safe side of the module boundary — a one-cycle strobe driven by
+the capture condition that already exists:
+
+    assign s07_ldc0_upd_o = ldc_result_back && !req_port_i.data_rtag;   // load_unit
+    assign s07_stc_upd_o  = store_buffer_valid && st_is_cap_q;          // store_unit
+
+This is a new OUTPUT: added **fanout** of a signal that already exists, not added **fanin** to the
+cone. That is the same structural argument that makes the rest of Tier 1 safe, and it is the
+opposite of 2.2, which adds a term *into* the condition. It is nonetheless an LSU edit, so it is
+accounted for here as the floor of the risk ladder rather than hidden in the top-level tier.
+
+**General rule for whoever adds the next reader:** any Tier-1 reader keying off an exported
+`*_valid_o` is keying off something that fires once per reset. Key off a strobe.
+
+## Tier 1 — top-level `always_ff`, on top of 1.0. Does not touch the LSU.
 
 Everything here is fed from signals **already exported** out of `load_unit`/`store_unit`, so
 nothing is added to a load/store combinational cone. This is the same structural argument that
 made the surviving rolling record safe.
 
 * **1.1 — an ARMED SHADOW of both records.** A debug switch sets `arm_q`; on the rising edge of
-  `arm_q` the shadow clears, and thereafter the shadow latches the *first* exported record it
-  sees. This gives domain scoping — "the first untagged LDC after I armed" — **without** adding
+  `arm_q` the shadow clears, and thereafter the shadow latches the first record arriving on the
+  **1.0 strobe** (not on `valid`, which never moves).
+
+  **`arm_q` needs a 2-FF synchronizer and a dwell counter before it is edge-detected.** The
+  switches reach `cva6.sv` with no synchronizer at any level
+  (`ariane_xilinx.sv:800` -> `ariane.sv:133` -> `cva6.sv:475`), and the synchronizer + dwell built
+  for exactly this went out with gen 3. A rising-edge detector on an unsynchronized bouncing
+  mechanical contact fires repeatedly and can go metastable — here it would clear the shadow at an
+  arbitrary moment, i.e. silently lose the record it exists to hold. ~22 flops, entirely at the
+  top level, and not optional for any edge-triggered reader. This gives domain scoping — "the first untagged LDC after I armed" — **without** adding
   an arm term to the capture condition inside `load_unit` (see 2.2, which is the unsafe way to
   get the same thing). Rolling and armed-first are complementary and both are worth having.
-* **1.2 — commit PC latched on the rising edge of `s07_ldc0_valid_o` / `s07_stc_valid_o`.**
+* **1.2 — commit PC latched on the 1.0 STROBE** (not on `valid` — see 1.0).
   `commit_instr_id_commit[0].pc` is already on the mux at 230-237. Latching it when the record
   updates names the site to within pipeline skew, which is enough to identify a function and
   almost always an instruction. This is the *cheap* version of 2.1 and should be built first;
@@ -168,9 +225,31 @@ halted.** Both halves were tested on 2026-08-18 and both fail, by different mech
   reintroduced by a `latest()` fallback. Fixed: a halted read with no fresh event now returns
   VOID.
 
-So the "halt, settle, sample, resume" protocol does not exist and cannot be built. **The fix is a
-JTAG-readable debug register, not more LED apertures** — the debug path already works (it is how
-`mcause`/`mepc`/`mtval` are read at a wedge), and it is immune to both mechanisms above.
+**Do not over-read the halted half.** What boot 5 established for certain is that the
+*measurement* of the halted protocol was broken. The protocol itself has been tested exactly once,
+at n=1, in an `mcause=2 / mepc=2` total-wedge state — the state where the debug path has
+previously returned AXI error-slave junk (`0xca11ab1ebadcab1e`) — and through the `latest()`
+fallback that has since been removed. The mechanism story is also not airtight: the stretcher runs
+on the FPGA clock, which a hart halt does not stop, so "halted core, therefore frozen stretcher"
+does not obviously follow, and "no event" may simply be the board server emitting on change.
+
+**The positive control that settles it, and it is nearly free:** on any boot that ends *without* a
+wedge, halt at teardown and attempt a fresh-event read of a known aperture — nothing is left to
+perturb at that point. Fresh events while halted-but-healthy means the protocol works and the
+total-wedge state was the variable; no events means the structural claim is confirmed. This runs
+every boot instead of only on the boots that wedge. Now that `allow_cached=False` is in, both
+paths report VOID honestly rather than a cached number, so this costs a few seconds and no risk.
+
+**The JTAG-readable register is the right call either way**, because it is a strictly better
+instrument than the LED path even if the halted protocol turns out to work — the debug path
+already carries `mcause`/`mepc`/`mtval` at a wedge, and it is immune to both mechanisms above.
+
+**Not a CSR, though.** `csr_regfile` sits in the SCC ranked Tier-1 hazardous by the whole-RTL
+audit — the `ccsr_en` / `csr_rdata` / `commit_stage` cone whose two artifact edges are each one
+added term away from a real three-module loop. A read arm on `csr_rdata` puts new fanin exactly
+there. **A memory-mapped read-only register on the peripheral bus** is structurally isolated from
+both the LSU and CSR cones, cannot interact with anything on the `UNOPTFLAT` list, and GDB reads
+memory through the debug module the same way it reads CSRs. More plumbing, far less risk.
 
 This raises Tier 0's priority rather than lowering it: every Tier 0 reader is worth strictly more
 once it can be read at all, and 0.3's signature nibble stays worth building because it makes

@@ -1666,6 +1666,96 @@ def main():
             print(_t, flush=True)
             transcript.append(_t + "\n")
 
+        # ---------------------------------------------------------------------------------
+        # HEALTHY-HALT CONTROL: can the mux be read AT ALL while the hart is halted?
+        #
+        # Boot 5 tried to answer this at a wedge and could not: both apertures returned 0x7c,
+        # which turned out to be one CACHED value read twice (no led_state event arrived and the
+        # sampler fell back to console.latest()). That fallback is now scoped, but the underlying
+        # question was never answered -- and it was asked in the worst possible place: at an
+        # mcause=2/mepc=2 total wedge, the state where the debug path has previously returned
+        # AXI error-slave junk, at n=1.
+        #
+        # So ask it HERE instead, on a boot that did NOT wedge. Nothing is left to perturb at
+        # teardown, the core is healthy, and the only variable is the halt itself:
+        #
+        #   fresh events arrive -> the halted read WORKS, and the total-wedge state was the
+        #                          variable. "halt, settle, sample, resume" becomes a real
+        #                          protocol and the LED path is usable at a wedge after all.
+        #   no fresh events      -> halted reads are structurally impossible, confirming the
+        #                          claim that currently rests on a single contaminated sample.
+        #
+        # Either answer is worth having and this runs on EVERY clean boot rather than only on the
+        # boots that happen to wedge. Skipped after a wedge: the core is already dead and gdb has
+        # already been used on it, so the halt would not be the variable.
+        try:
+            if any(_r[1] for _r in results):
+                _t = ("  [s07] healthy-halt control SKIPPED -- this boot wedged, so a halt here "
+                      "is not a clean-core measurement")
+                print(_t, flush=True)
+                transcript.append(_t + "\n")
+            else:
+                def _fresh_read(_v):
+                    """Read an aperture requiring a GENUINELY fresh led_state event.
+
+                    No latest() fallback, deliberately: the whole question is whether an event
+                    arrives at all, so accepting a cached payload would answer it 'yes' by
+                    construction -- a check that cannot fire."""
+                    set_switch_value(console, _v)
+                    time.sleep(LED_SETTLE_S)
+                    _mark = console.now()
+                    try:
+                        _s = console.wait_event(C.LISTEN.get("led_state", "led_state"),
+                                                timeout=LED_FRESH_TIMEOUT_S, since=_mark)
+                    except Exception:
+                        return None
+                    _b = _s.get("states") if isinstance(_s, dict) else None
+                    return sum((1 << i) for i, b in enumerate(_b) if b) if _b else None
+
+                console.gdb_start()
+                try:
+                    console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
+                    _hits = {}
+                    for _ap in (204, 208, 224):
+                        _hits[_ap] = _fresh_read(_ap)
+                    _n_fresh = sum(1 for _v in _hits.values() if _v is not None)
+                    _detail = "  ".join(
+                        f"sw={_a}:" + ("VOID" if _v is None else f"0x{_v:02x}")
+                        for _a, _v in _hits.items())
+                    if _n_fresh == 0:
+                        _t = ("  [s07] HEALTHY-HALT CONTROL: no fresh led_state event on ANY of 3 "
+                              "apertures with the core halted and healthy -- " + _detail
+                              + ".  The halted read is structurally impossible, not a wedge "
+                                "artifact. 'halt, settle, sample, resume' cannot be built and the "
+                                "LED path needs an RTL replacement.")
+                    elif _n_fresh == len(_hits):
+                        _t = ("  [s07] HEALTHY-HALT CONTROL: fresh events on ALL 3 apertures while "
+                              "halted -- " + _detail
+                              + ".  The halted read WORKS on a healthy core, so boot 5's failure "
+                                "was the total-wedge state (or the removed cache fallback), NOT a "
+                                "structural limit. Re-test the halted A/B at the next wedge before "
+                                "concluding the LED path is unreadable.")
+                    else:
+                        _t = ("  [s07] HEALTHY-HALT CONTROL: MIXED -- " + _detail
+                              + f".  {_n_fresh} of {len(_hits)} apertures produced a fresh event "
+                                "while halted. Carries no verdict either way; most likely the "
+                                "apertures that went VOID happen to hold the value already "
+                                "displayed, so nothing changed and nothing was emitted. Vary the "
+                                "aperture set before reading anything into this.")
+                    print(_t, flush=True)
+                    transcript.append(_t + "\n")
+                finally:
+                    try:
+                        console.gdb_cmd("continue", C.GDB_PROMPT, timeout=15.0)
+                    except Exception:
+                        pass
+                    console.gdb_stop()
+        except Exception as exc:
+            _t = (f"  [s07] healthy-halt control failed ({type(exc).__name__}) -- no verdict "
+                  f"about whether the mux can be read while halted")
+            print(_t, flush=True)
+            transcript.append(_t + "\n")
+
         pathlib.Path(OUT).write_text("".join(transcript))
         log(f"per-domain UART -> {OUT}")
 
