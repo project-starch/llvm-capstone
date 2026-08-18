@@ -31,7 +31,7 @@ set -euo pipefail
 # (-O1/-O2 domain payloads need the CC_Capstone_FastCC capability-argument fix,
 # task-006 C1.)
 #
-# Requires the rootfs.ext2 write lock: announce in agent-handoff/COORDINATION.md
+# Requires the rootfs.ext2 write lock: the suites must be SERIALIZED (never two at once)
 # and confirm the other agent is not mid-run before invoking this.
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)

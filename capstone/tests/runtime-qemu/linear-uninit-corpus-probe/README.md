@@ -8,7 +8,7 @@ on RTL. With these, **all 17 in-scope rows are validated**
 bash ../run-linear-uninit-corpus-probe.sh      # 7 probes x -O0/-O1/-O2, one boot each
 ```
 
-Requires the `rootfs.ext2` write lock — announce it in `agent-handoff/COORDINATION.md`
+Requires the `rootfs.ext2` write lock — announce it in `CLAUDE.md (serialize QEMU suites)`
 before booting.
 
 ## What the rows are

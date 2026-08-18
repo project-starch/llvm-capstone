@@ -198,7 +198,7 @@ here.
 ## Running
 
 Needs the `rootfs.ext2` write lock (one guest boot at a time across agents);
-announce in `agent-handoff/COORDINATION.md` first.
+the suites must be SERIALIZED (never two at once) first.
 
 ```bash
 bash capstone/tests/runtime-qemu/run-intra-domain-mrev-revoke-probe.sh          # -O0 -O1 -O2

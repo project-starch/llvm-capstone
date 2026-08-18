@@ -13,7 +13,7 @@ set -euo pipefail
 # count, an honest overhead proxy, NOT cycle-accurate silicon timing (QEMU has
 # no pipeline/cache/cycle model).
 #
-# Requires the rootfs.ext2 write lock: announce in agent-handoff/COORDINATION.md
+# Requires the rootfs.ext2 write lock: the suites must be SERIALIZED (never two at once)
 # and confirm the other agent is not mid-run before invoking this. (The boot
 # uses -snapshot, but the lock convention still applies.)
 

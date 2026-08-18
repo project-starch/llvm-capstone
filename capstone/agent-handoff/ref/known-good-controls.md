@@ -1,5 +1,18 @@
 # Known-good controls
 
+> ## STALE — 2026-08-18. Do not rely on a row without re-verifying it.
+>
+> Every row below reads `last verified 2026-08-06`, against bitstreams that have since been
+> replaced at least three times (`caplifive_s06.bit`, `caplifive_s06fixs08fix.bit`,
+> `caplifive_s07diag.bit`, `caplifive_s06s08fix_s07tag2_618f4ce.bit`). This file's own rule —
+> "re-verify a row before relying on it after a bitstream change" — was not followed across any
+> of them.
+>
+> This matters because `preflight-board-run.sh` BLOCKS a run whose first rung is not listed here,
+> so the gate keeps passing on evidence that is three bitstreams out of date: a gate whose
+> condition is always satisfied. `k800` is the one row with current evidence — it returned 4 on
+> `caplifive_s06s08fix_s07tag2_618f4ce.bit` ten times in one boot on 2026-08-18.
+
 **A boot whose control fails carries no verdict about anything.** So "which rung is a valid
 control" has to be a looked-up FACT, not a judgement made while setting up a run.
 

@@ -13,7 +13,7 @@ set -euo pipefail
 # FUNCTIONAL-MODEL PROXY: rdcycle under -icount is a deterministic dynamic
 # instruction count, an honest overhead proxy, NOT cycle-accurate timing.
 #
-# Requires the rootfs.ext2 write lock: announce in agent-handoff/COORDINATION.md.
+# Requires the rootfs.ext2 write lock: the suites must be SERIALIZED (never two at once)
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"

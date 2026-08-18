@@ -17,7 +17,7 @@ set -euo pipefail
 # each probe gets its own boot. -O0 spills the child alias (cause 24, with
 # hier_no_close_ok as control); -O1/-O2 keep it in a register (cause 25).
 #
-# Requires the rootfs.ext2 write lock: announce in agent-handoff/COORDINATION.md.
+# Requires the rootfs.ext2 write lock: the suites must be SERIALIZED (never two at once)
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"

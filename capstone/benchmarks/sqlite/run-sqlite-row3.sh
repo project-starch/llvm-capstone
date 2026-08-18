@@ -22,7 +22,7 @@ set -euo pipefail
 # clears the tag -> cause 24; -O1/-O2 keep it in a register -> cause 25, which is
 # self-proving (tag intact, node revoked). -O1/-O2 need the C1 fastcc+cap-arg fix.
 #
-# Requires the rootfs.ext2 write lock: announce in agent-handoff/COORDINATION.md
+# Requires the rootfs.ext2 write lock: the suites must be SERIALIZED (never two at once)
 # and confirm the other agent is not mid-run before invoking this.
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)

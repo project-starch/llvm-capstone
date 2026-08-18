@@ -25,7 +25,7 @@ set -euo pipefail
 # self-proving. The domain TU opt level drives this; SQLite (the engine) is always
 # built -O0 (its amalgamation is not -O2-selectable on this backend).
 #
-# Requires the rootfs.ext2 write lock: announce in agent-handoff/COORDINATION.md.
+# Requires the rootfs.ext2 write lock: the suites must be SERIALIZED (never two at once)
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"

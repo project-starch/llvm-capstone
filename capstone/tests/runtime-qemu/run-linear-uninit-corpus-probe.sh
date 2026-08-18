@@ -32,7 +32,7 @@ set -euo pipefail
 #     spill/reload, so the fault is always cause 24. Cause 24 only says "no
 #     capability here", so linear_no_drop_ok is its control.
 #
-# Requires the rootfs.ext2 write lock: announce in agent-handoff/COORDINATION.md
+# Requires the rootfs.ext2 write lock: the suites must be SERIALIZED (never two at once)
 # and confirm the other agent is not mid-run before invoking this.
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)

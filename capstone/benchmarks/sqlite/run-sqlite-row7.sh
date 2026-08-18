@@ -27,7 +27,7 @@ set -euo pipefail
 #
 # Reuses the generic B2 host (sqlite_host_row3_b2.c): 3 regions (metadata,
 # payload, 4 MiB arena), prints payload.
-# Requires the rootfs.ext2 write lock: announce in agent-handoff/COORDINATION.md.
+# Requires the rootfs.ext2 write lock: the suites must be SERIALIZED (never two at once)
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"

@@ -24,6 +24,8 @@ Everything else should be loaded only when the task needs it.
 
 ## Who works where (lanes)
 
+UPDATED 2026-08-18: **there is no lane B.** The two-lane coordination set (`COORDINATION.md`, `MULTI-AGENT-WORKFLOW.md`, `AGENT-B-SETUP.md`, and lane B's own state files) is archived under `history/18-08-2026_ARCHIVED_*`. Anything below describing a second lane is historical.
+
 Work is split across two peer agent lanes plus, when needed, an external collaborator:
 
 - **Lane A** → commits to `capstone-bootstrap`. **Lane B** → commits to
@@ -105,6 +107,14 @@ See `state/current-state.md` for the canonical snapshot.
 
 Use these only when the task actually needs them:
 
+- **`ref/RATE-RULE.md` — why a single wedge is NOT a result on silicon, with the measured k/n.
+  Read before recording, citing or acting on any board outcome.** Rescued 2026-08-18 from deep
+  inside `SILICON-BLOCKER.md`, where it silently invalidated most of that document.
+- `ref/known-good-controls.md` — **currently STALE** (rows last verified three bitstreams ago) and
+  a preflight gate depends on it; re-verify a row before relying on it.
+- `ref/SILICON-BLOCKER.md` — **SUPERSEDED**, the 2026-08-01..06 investigation. The defect it
+  chased is S-06, fixed in silicon. Kept because its line numbers are cited from live repro
+  folders; do not renumber or trim it.
 - **`ref/ISSUES.md` — the open-issues registry (RTL/FPGA + compiler), each with a runnable repro. Read before re-investigating anything; update whenever an issue is found, characterised or closed.**
 - `ref/HOW-TO-MEASURE-OVERHEAD.md` — **how overhead is measured** (bare-metal baseline, gates, traps). Read before producing or citing a ratio.
 - `ref/testing-matrix.md` — compact map of test layers and entry points
