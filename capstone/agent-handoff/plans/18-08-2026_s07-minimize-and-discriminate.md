@@ -1,0 +1,133 @@
+# S-07 board plan: discriminate H-mem vs H-load, and shrink the repro
+
+Written 2026-08-18, for the **current** bitstream `caplifive_s06s08fix_s07tag2_618f4ce.bit`.
+Needs no reflash. One boot, six domains.
+
+## The two open questions
+
+1. **H-mem vs H-load.** Memory genuinely holds nonzero untagged residue, versus memory holds
+   correct zeros and the load path returned wrong data. These have *identical* observables in
+   every wedge so far — same mepc, same `sw=204 = 0x00`, same clean QEMU.
+2. **How small is the repro?** Today it is the entire SQLite workload in a ~1.5 MB domain.
+
+## The design constraint that decides everything
+
+**No software channel survives a wedge.** A wedge is an M-mode wedge that takes the whole core,
+so the retval dies, the `output_text` buffer dies (the host only reads it on return), and a shared
+region dies with the host. Only the hardware latches survive — `mepc` (196-203), the trap log
+(255), and the displacement counter (204).
+
+Therefore **every probe must complete and RETURN before any wedge can occur**, which rules out the
+obvious design. Probing inside `sqlite3BackupRestart` or `pagerFreeMapHdrs` looks right and is
+wrong twice over:
+
+* it violates the "stop the FLOW, not a leaf" rule — an early return there lands back in
+  `pager_reset`, which carries on;
+* and per `00-README.md` §3, instrumenting a site just **moves the death** to the next uncovered
+  one, which then destroys the report.
+
+**So all probing happens at TOP LEVEL, in `domain_main`.** This is possible because the Pager is
+reachable from a `sqlite3*` without touching SQLite internals — `sqlite3BtreePager` is linked
+(`ob.dis`), `struct Db.pBt` is visible (`sqlite3-capstone.c:18507`):
+
+```c
+Pager *pP = sqlite3BtreePager(db->aDb[0].pBt);
+unsigned long v = *(volatile unsigned long *)(void *)&pP->pBackup;   /* plain ld, never ldc */
+```
+
+Reading with a plain 64-bit load is the point: it is the *same* instruction the compiled NULL
+guard uses (`ld a0, 0x0(a0)`), so it observes exactly what the guard observed, and it cannot
+itself raise mcause 25.
+
+## The discriminator: read the same address 8 times
+
+This is the piece every previous probe lacked.
+
+| what 8 consecutive plain `ld`s of one address show | reading |
+|---|---|
+| all 8 identical and **nonzero** | the value is **in memory** → H-mem |
+| the 8 **disagree** | the load path is returning inconsistent data → **H-load**, directly demonstrated |
+| all 8 **zero** | memory is clean at this phase; the fault is later, or is a one-shot bad load |
+
+Each sample also records the capability type via `lcc` field 1 (returns 7 for NOT_CAP without
+raising), so we learn whether the granule is tagged as well as what it holds.
+
+## The boot: six domains, ordered so every wedge point is itself an answer
+
+Boots have run 9 domains, but `SILICON-BLOCKER.md:5130-5136` documents a **~6-run ceiling**
+independent of the exact-fit spin, so slot 6 is treated as expendable.
+
+| # | domain | what it does | expected |
+|---|---|---|---|
+| 1 | `S7T` | known-good control | **must pass, or the boot is VOID** |
+| 2 | `S7Q` | top-level phase probe (below) | RETURNS by construction |
+| 3 | `S7R` | same probe, reps x3, to catch a rare phase | RETURNS by construction |
+| 4 | `MRO` | minimal candidate A: open `:memory:`, close. Nothing else | may wedge |
+| 5 | `MRR` | minimal candidate B: open, one rolled-back transaction, close | may wedge |
+| 6 | `XU` | historical reproducer | expected to wedge; expendable |
+
+Ordering rationale: 1-3 cannot wedge, so they always yield data. 4 and 5 are ordered
+least-to-most likely to wedge, and **whichever first fails to return IS the minimisation
+result** — if `MRO` wedges the repro is "open and close a database", if `MRO` returns and `MRR`
+wedges it is "a rollback". Losing `XU` costs nothing; it is already a known reproducer.
+
+Only one domain in the boot is *expected* to wedge, and it is last, as the rule requires.
+
+## `S7Q` — the phase probe
+
+In `domain_main`, at three top-level points, sample `pPager->pBackup` and
+`pPager->pMmapFreelist` 8 times each:
+
+* **P1** immediately after `sqlite3_open`
+* **P2** after the workload statements
+* **P3** immediately before `sqlite3_close`
+
+On the first nonzero reading it **returns immediately** — flow stops at the top level by
+construction, nothing downstream can wedge and destroy the answer.
+
+Sentinel `0x5107_PSVT` (the `0x5107` space is unused; `0x9Exx`, `0x5A6E`, `0xDEAD`, `0xBADA5` are
+taken):
+
+```
+P = phase 1..3, or 0 = all three phases clean
+S = which field: 1 pBackup, 2 pMmapFreelist
+V = 0 all-8-agree-and-zero, 1 all-8-agree-nonzero, 2 THE 8 DISAGREE
+T = lcc type of the granule (7 = NOT_CAP)
+```
+
+## Pre-registered readings — written before the boot, not after
+
+* **`V=2` at any phase** — the 8 reads disagree. **H-load demonstrated directly**, no RTL probe
+  needed to establish it. This is the outcome that would end the ambiguity outright.
+* **`V=1` at P1** — the field is nonzero straight out of `sqlite3MallocZero`. A zeroing gap on a
+  path QEMU does not exercise; the repro shrinks to "open a database", and it is a software bug.
+* **`V=1` first at P2 or P3** — the field was born zero and became nonzero. A wild store, and the
+  interval is bisected to one phase.
+* **`P=0`, all clean** — the field is genuinely zero right up to the last instruction before
+  `sqlite3_close`. Combined with the wedge happening inside close, that localises the corruption
+  to close itself, or supports H-load. **This is a real result, not a null one** — but only
+  because the same probe reports `V=1`/`V=2` when they occur, which is what makes the zero
+  meaningful.
+* **`MRO` or `MRR` wedges** — the minimal repro is found and drops from ~1.5 MB of SQLite to a
+  few dozen lines.
+* **`S7T` fails** — boot VOID, nothing else in it carries a verdict.
+
+## Positive control — the probe must be shown to fire
+
+Per the CLEAN-result rule, a probe that has never produced a nonzero reading is unproven. `S7Q`
+is built with `S07Q_SELFTEST=1` writing a known nonzero pattern into a scratch granule and
+sampling *that* through the identical code path first. If the selftest does not report
+`V=1, T=7`, the domain returns a distinct `0x5107_FFFF` and **every zero it reports that boot is
+discarded**. This is the check that the S-07 tag-history probe lacked, which is why that probe
+produced nothing usable on two boots.
+
+## Explicitly dropped
+
+`CapstoneLdcRetry` Phase A. At these sites there is no valid capability to recover, so the retry
+re-reads NOT_CAP and the wedge proceeds under **both** hypotheses — it discriminates nothing, and
+the old decision table would have mis-scored "still wedges" as a verdict.
+
+## Cost
+
+One boot, about 5 minutes of board time, plus one firmware rebuild covering all six domains.
+No reflash, no RTL change, no dependency on the pending synthesis.
