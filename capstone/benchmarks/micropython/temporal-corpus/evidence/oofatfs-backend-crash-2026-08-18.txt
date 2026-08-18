@@ -1,0 +1,43 @@
+A pre-existing backend crash blocks VFS in the domain, and with it MPY-T14/MPY-T15.
+
+WHAT WAS BEING ATTEMPTED. MPY-T14 and MPY-T15 are the last of the four rows judged
+feasible, and the only one of the four that would have been an upstream
+reproduction rather than a reconstruction. Both need MICROPY_VFS, which needs
+lib/oofatfs, MicroPython's bundled FatFs.
+
+THE FEASIBILITY PROBE, run before touching the build system:
+
+  clang -target capstone64-unknown-elf -ffreestanding -nostdlibinc -std=c99 -O0 \
+        -DFFCONF_H=".../lib/oofatfs/ffconf.h" -c lib/oofatfs/ff.c
+
+  clang: llvm/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp:4395:
+    SelectionDAGLegalize::ExpandNode(SDNode *):
+    Assertion `VT.isVector() && "Unable to legalize non-vector shift"' failed.
+  4. Running pass 'Capstone DAG->DAG Pattern Instruction Selection'
+     on function '@f_mkfs'
+
+No preceding errors. This is ordinary, valid C, and the compiler asserts on it.
+
+NOT CAUSED BY capstone-codegen-cap-constants. Checked rather than assumed, using
+the same procedure as the emutls question: all nine changed files under llvm/lib
+and llvm/utils were reverted to origin/capstone-bootstrap, clang was rebuilt, and
+the crash reproduces IDENTICALLY, same assertion, same function. Pre-existing.
+
+WHAT IT IS. On capstone64 i128 is a legal type, because it carries a capability.
+A 128-bit shift therefore survives to SelectionDAG legalisation, where ExpandNode
+has no expansion for a non-vector shift of that width and asserts. It is the same
+family as the round-1 fix recorded in llvm/lib/Target/Capstone/i128-capability-fixes.md
+("i128 shift-by-≥XLen"), but a distinct gap: that one produced a wrong result,
+this one has no legalisation at all.
+
+CONSEQUENCE FOR THE CORPUS. MPY-T14 and MPY-T15 cannot be measured in the domain
+until that is fixed. The earlier reachability note called this row "a
+build-configuration job, not a porting one". That was wrong twice over: the build
+system also hardcodes the port directory and has no mechanism for lib/ sources
+outside libm, and underneath both of those sits a compiler that cannot compile
+FatFs at all.
+
+WHAT WAS SALVAGED. The probe cost about a minute and was run BEFORE modifying
+port/Makefile, the build script and mpconfigport.h, which would have been an hour
+of work ending at the same assertion. Probe the cheapest blocking dependency
+first.
