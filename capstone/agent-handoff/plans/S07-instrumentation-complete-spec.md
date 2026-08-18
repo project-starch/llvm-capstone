@@ -240,16 +240,52 @@ total-wedge state was the variable; no events means the structural claim is conf
 every boot instead of only on the boots that wedge. Now that `allow_cached=False` is in, both
 paths report VOID honestly rather than a cached number, so this costs a few seconds and no risk.
 
-**The JTAG-readable register is the right call either way**, because it is a strictly better
-instrument than the LED path even if the halted protocol turns out to work — the debug path
-already carries `mcause`/`mepc`/`mtval` at a wedge, and it is immune to both mechanisms above.
+### Test the halted LED read BEFORE spending any synthesis on a new readout
 
-**Not a CSR, though.** `csr_regfile` sits in the SCC ranked Tier-1 hazardous by the whole-RTL
-audit — the `ccsr_en` / `csr_rdata` / `commit_stage` cone whose two artifact edges are each one
-added term away from a real three-module loop. A read arm on `csr_rdata` puts new fanin exactly
-there. **A memory-mapped read-only register on the peripheral bus** is structurally isolated from
-both the LSU and CSR cones, cannot interact with anything on the `UNOPTFLAT` list, and GDB reads
-memory through the debug module the same way it reads CSRs. More plumbing, far less risk.
+The RTL says halting is the one configuration where the stretcher is *harmless*, and that
+inverts the conclusion. `clk` is the MMCM output (`ariane_xilinx.sv:1209`) and the stretcher
+counts down on it (`:961`) regardless of what the hart is doing — a halt does not stop it. Mean-
+while the mux **input** goes static: no commits, so the bank-111 `commit_instr_id_commit[0].pc`
+arms stop moving; no execution, so `debug_reg_byte` stops moving; the bank-110 `s07_*` registers
+were static anyway. **Static input plus a running down-counter is precisely the case the
+stretcher was designed for** — every bit not driven by the selected aperture decays to zero in
+~21 ms, and the driven bits keep reloading.
+
+So a halted read is not frozen; it is the only read whose contamination provably clears. "No
+`led_state` event" is then almost certainly just **emit-on-change**: the value stops moving
+because it has settled, so the server has nothing to push.
+
+**Implemented, and it costs zero RTL:** the halted reader now walks to aperture 0 and back, which
+ORs in a transient (an event), lets the extra bits decay past ~21 ms, and leaves the target's true
+value — a change, which is emitted. It then confirms an event genuinely arrived after the mark
+before consulting the cached payload, so this is not the stale-cache path in disguise. It also
+checks the reading against a **known expected value**: the teardown selftest leaves 204 bit 6
+(`ldc_seen`) set, and contamination can only add bits, so a halted read *missing* that bit is
+wrong rather than merely dirty.
+
+**If that works, S-07 may need no new readout path at all**, and Tier 0 becomes buildable
+immediately. Do not spend a synthesis run on a readout until this has been tried.
+
+### If a new readout IS needed: a read-only CSR, in the plain path
+
+**Revised from an earlier recommendation of a memory-mapped register, on checking the map.**
+Every peripheral window is occupied (`corev_apu/tb/ariane_soc_pkg.sv:57-66`: Debug, ROM, CLINT,
+PLIC, UART, Timer, SPI, Ethernet, GPIO, DRAM) and GPIO at `0x4000_0000` is a real Xilinx IP
+instance on the FPGA build (`ariane_peripherals_xilinx.sv:607`), not a stub to borrow. A
+memory-mapped register therefore means a **new AXI slave**: `NB_PERIPHERALS+1`, a new crossbar
+rule (`ariane_xilinx.sv:331-358`), a new address-map entry, and a new slave implementation.
+
+That is a great deal of new structure, and new structure is what has blown up twice. Isolation
+from the LSU and CSR cones buys nothing if the price is crossbar surgery. **A read-only CSR is
+the better trade:** one case arm plus an address decode, and GDB already reads CSRs at a wedge.
+
+**The constraint is not optional: put it in the plain `csr_rdata` read path, NOT in
+`ccsr_rdata`.** The `ccsr_rdata` mux (`csr_regfile.sv:2833`,
+`csr_rdata_o = ccsr_en ? ccsr_rdata : csr_rdata`) is the edge that forms the cross-module SCC;
+the plain path is not. The audit's two artifact edges close if `commit_ack_o` comes to depend on
+`cap_check`, or if `ccsr_rdata` comes to depend on anything other than a `*_q` — and a read arm
+returning a top-level `s07_*_q` register touches neither. Same one-line cost, materially
+different cone.
 
 This raises Tier 0's priority rather than lowering it: every Tier 0 reader is worth strictly more
 once it can be read at all, and 0.3's signature nibble stays worth building because it makes

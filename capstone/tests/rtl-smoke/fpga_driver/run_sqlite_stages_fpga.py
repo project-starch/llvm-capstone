@@ -1540,11 +1540,14 @@ def main():
                                     # event is VOID, never the last value seen while running.
                                     _halted = _read_sw(_ap, allow_cached=False)
                                     print(f"  [wedge] HALTED re-read sw={_ap}: "
-                                          + ("VOID -- no fresh led_state event while halted, so "
-                                             "there is NO halted reading to compare. A halted "
-                                             "core drives nothing and the stretcher freezes; "
-                                             "this is the expected outcome and it means the LED "
-                                             "path cannot be sampled at a wedge at all."
+                                          + ("VOID -- no fresh led_state event, so there is NO "
+                                             "halted reading to compare. Seen at every wedge so "
+                                             "far. Do NOT read this as 'the LED path cannot be "
+                                             "sampled while halted': every sample of it has been "
+                                             "taken in a total-wedge state, where the debug path "
+                                             "has previously returned junk. The HEALTHY-HALT "
+                                             "CONTROL at teardown is what separates 'halting "
+                                             "breaks the read' from 'this wedge breaks it'."
                                              if _halted is None
                                              else f"0x{_halted:02x} {_halted:08b}  (fresh event "
                                                   f"-- still suspect if it arrived during the "
@@ -1696,19 +1699,41 @@ def main():
                 transcript.append(_t + "\n")
             else:
                 def _fresh_read(_v):
-                    """Read an aperture requiring a GENUINELY fresh led_state event.
+                    """Read an aperture while halted, FORCING the settled value to be emitted.
 
-                    No latest() fallback, deliberately: the whole question is whether an event
-                    arrives at all, so accepting a cached payload would answer it 'yes' by
-                    construction -- a check that cannot fire."""
+                    The board pushes led_state ON CHANGE. A settled value therefore emits
+                    nothing, and "no event" was being read as "no reading" when it in fact means
+                    "the value has stopped moving" -- which, while halted, is the good case.
+
+                    Halting is the one configuration where the pulse stretcher is HARMLESS. `clk`
+                    is the MMCM output (ariane_xilinx.sv:1209) and the stretcher counts down on it
+                    (:961) regardless of what the hart is doing, while the mux INPUT goes static:
+                    no commits, so the pc arms stop moving; no execution, so debug_reg_byte stops
+                    moving; the s07 registers were static anyway. Static input plus a running
+                    down-counter is exactly what the stretcher was built for -- every bit not
+                    driven by the selected aperture decays in ~21 ms and the driven bits reload.
+                    So a halted read is not frozen, it is the only read whose contamination
+                    provably clears.
+
+                    To make it observable: walk away to aperture 0 and back. The walk ORs in
+                    aperture 0 (an event), and ~21 ms later the extra bits decay away, leaving the
+                    target's true value -- a CHANGE, which the server emits. Then confirm an event
+                    genuinely arrived after the mark before trusting latest(), so this is not the
+                    stale-cache path in disguise: latest() is only consulted once an event since
+                    the mark is proven, which makes it a value from THIS read."""
                     set_switch_value(console, _v)
                     time.sleep(LED_SETTLE_S)
+                    set_switch_value(console, 0)       # force a transition
+                    time.sleep(0.05)
                     _mark = console.now()
+                    set_switch_value(console, _v)      # ...and back
                     try:
-                        _s = console.wait_event(C.LISTEN.get("led_state", "led_state"),
-                                                timeout=LED_FRESH_TIMEOUT_S, since=_mark)
+                        console.wait_event(C.LISTEN.get("led_state", "led_state"),
+                                           timeout=LED_FRESH_TIMEOUT_S, since=_mark)
                     except Exception:
-                        return None
+                        return None                    # nothing emitted at all -> unreadable
+                    time.sleep(LED_SETTLE_S)           # >> the ~21 ms decay of the transit OR
+                    _s = console.latest(C.LISTEN.get("led_state", "led_state"))
                     _b = _s.get("states") if isinstance(_s, dict) else None
                     return sum((1 << i) for i, b in enumerate(_b) if b) if _b else None
 
@@ -1718,6 +1743,31 @@ def main():
                     _hits = {}
                     for _ap in (204, 208, 224):
                         _hits[_ap] = _fresh_read(_ap)
+                    # A KNOWN EXPECTED VALUE, not merely "an event arrived". The selftest ran
+                    # immediately above and, when it passes, leaves 204 bit 6 (ldc_seen) SET --
+                    # that is what "post-204 = 0x41" means. So the halted read of 204 has a
+                    # reference to be right or wrong about, which is the difference between a
+                    # positive control and a liveness check. Contamination can only ADD bits, so
+                    # a halted read MISSING bit 6 cannot be explained by the stretcher: it means
+                    # the halted value is wrong, not merely dirty.
+                    _ref = _hits.get(204)
+                    if _ref is None:
+                        _refmsg = ("  [s07] halted 204 vs selftest reference: NO READING, so the "
+                                   "reference proves nothing either way")
+                    elif (_ref >> 6) & 1:
+                        _refmsg = (f"  [s07] halted 204 vs selftest reference: PASS -- 0x{_ref:02x} "
+                                   f"has ldc_seen (bit 6) SET, which is what a passing selftest "
+                                   f"leaves behind. The halted read returned the RIGHT value, not "
+                                   f"just a value.")
+                    else:
+                        _refmsg = (f"  [s07] halted 204 vs selftest reference: FAIL -- 0x{_ref:02x} "
+                                   f"is MISSING ldc_seen (bit 6), which the selftest set moments "
+                                   f"ago. Contamination can only add bits, so this cannot be the "
+                                   f"stretcher: the halted read is returning a wrong value and no "
+                                   f"halted reading this boot can be trusted.")
+                    print(_refmsg, flush=True)
+                    transcript.append(_refmsg + "\n")
+
                     _n_fresh = sum(1 for _v in _hits.values() if _v is not None)
                     _detail = "  ".join(
                         f"sw={_a}:" + ("VOID" if _v is None else f"0x{_v:02x}")

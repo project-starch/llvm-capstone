@@ -72,11 +72,21 @@ entry-stall failure dies before it, and must never be counted as a defect.
 | 2 | 2 | 1 | 2 |
 | 4 | 6 | 0 | none — censored at 6 (`SPLB` stopped the boot) |
 | 5 | 1 | 1 | 1 |
+| 6 | 6 | 1 | 6 |
 
-**k = 3 of n = 12.** Boot 3 was VOID. `NO-ENTRY` and `SPLB` stops are excluded from both k and n
+**k = 4 of n = 18.** Boot 3 was VOID. `NO-ENTRY` and `SPLB` stops are excluded from both k and n
 by `tests/rtl-smoke/s07-rate.py`.
 
 The v4 question — per-BOOT state (bimodal) vs per-RUN randomness (geometric) — is **not yet
-decided**. Four boots giving 3, 2, >6 and 1 are consistent with either; a geometric at ~25% per rep
-puts P(no wedge in 6) at 0.18, so boot 4 remains unremarkable under the null. More boots are
-needed, and the spread so far (1 to >6) leans mildly toward per-run randomness.
+decided**. Five boots giving first-wedge positions **1, 2, 3, 6 and one censored at >6** now lean
+clearly toward **per-RUN randomness**. The MLE is p = 4/18 = 0.22 per rep, and a geometric at
+that p predicts first-wedge positions scattered across exactly this range with P(>6) = 0.22 --
+one censored boot in five is what it expects. A per-BOOT model predicts the opposite shape:
+clustering into boots that wedge almost immediately and boots that survive the full ladder. We
+see neither cluster; we see a spread.
+
+**Not yet conclusive, and the honest reason is n.** Five first-wedge observations cannot
+separate a geometric from a mild mixture, and the ladder is capped near 6-7 reps by SPLB, which
+censors exactly the tail where the two models differ most. But the direction is now consistent
+enough that the follow-on work should assume **per-run** -- hunt the faulting site, not the
+environment -- rather than spend boots on power-cycle dwell or thermal variation.
