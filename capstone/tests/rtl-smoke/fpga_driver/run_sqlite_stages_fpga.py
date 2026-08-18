@@ -18,6 +18,7 @@ Ordering is load-bearing: stages ascend, and the FIRST one that fails to return 
 bisection point. Everything after it is lost, because a wedged domain takes the core with
 it -- that is not a limitation to work around, it is the answer. Stop there and report.
 """
+import itertools
 import os
 import pathlib
 import re
@@ -74,6 +75,100 @@ TRAPLOG_CLEAR = (os.environ.get("SQLITE_TRAPLOG_CLEAR") or "all").strip().lower(
 if TRAPLOG_CLEAR not in ("all", "first", "none"):
     raise SystemExit(f"SQLITE_TRAPLOG_CLEAR must be all|first|none, got {TRAPLOG_CLEAR!r}")
 OUT = os.environ.get("PROBE_SCOPED_OUT") or "/tmp/capstone/sqlite-stages.txt"
+
+# ---------------------------------------------------------------------------------
+# DESTRUCTIVE SWITCH APERTURES -- why the driver must choose its own transit path.
+#
+# The debug mux is addressed by the 8 DIP switches, and a few apertures are not passive
+# reads: on the gen-3 probe, 220 is the SELFTEST TRIGGER, which injects a synthetic LDC
+# record. Landing on it -- even in passing -- destroys the record the boot exists to read.
+#
+# THE DWELL COUNTER DOES NOT PROTECT AGAINST THIS. ~21 ms of required stability defeats
+# contact BOUNCE, which is what it is for. It does not defeat a slow TRANSIT: a value that
+# is merely passed through is held for the same duration class as one deliberately applied,
+# so it fires identically. Time cannot fix it; only ORDER can.
+#
+# And this driver was doing exactly the destructive walk. `_read_sw` flipped bits in
+# ascending order, so 221 -> 222 cleared bit0 first:
+#
+#     221 = 0b11011101  ->  0b11011100 = 220  ->  0b11011110 = 222
+#
+# with each `set_switch` an HTTPS round trip, i.e. the intermediate is held for far longer
+# than the dwell. The safe walk for that pair is 221 -> 223 -> 222; 223 is ldc_pc[23:16],
+# a harmless read aperture.
+#
+# The rule is encoded here rather than written down for a human, because the driver is what
+# will still be doing this in a month. A transition with no safe ordering raises instead of
+# guessing -- there is no silent fallback, since the whole point is that landing on the
+# trigger is unrecoverable for that boot.
+DESTRUCTIVE_SWITCHES = frozenset({220})
+
+
+def safe_switch_bit_order(cur, target, forbidden=DESTRUCTIVE_SWITCHES):
+    """Return an order for the differing bits such that no INTERMEDIATE value is forbidden.
+
+    Endpoints are the caller's business; only values strictly between are checked."""
+    if target in forbidden:
+        raise ValueError(f"switch {target} is a destructive aperture and must not be read")
+    diff = [b for b in range(8) if ((cur ^ target) >> b) & 1]
+    if not diff:
+        return []
+    for order in itertools.permutations(diff):
+        v, ok = cur, True
+        for b in order[:-1]:              # the last flip lands on target, checked above
+            v ^= (1 << b)
+            if v in forbidden:
+                ok = False
+                break
+        if ok:
+            return list(order)
+    raise RuntimeError(
+        f"no safe switch path from {cur} to {target} avoiding {sorted(forbidden)}")
+
+
+# POSITIVE CONTROL, run at import. A path-chooser that has never rejected anything is not a
+# working path-chooser, so this asserts BOTH that the naive ascending order really does land
+# on the trigger (the bug this replaces) and that the chosen order does not.
+def _selftest_switch_path():
+    naive, v = [], 221
+    for b in range(8):
+        if ((221 ^ 222) >> b) & 1:
+            v ^= (1 << b)
+            naive.append(v)
+    assert 220 in naive, "expected the naive ascending walk 221->222 to pass through 220"
+    v, seen = 221, []
+    for b in safe_switch_bit_order(221, 222):
+        v ^= (1 << b)
+        seen.append(v)
+    assert 220 not in seen, f"safe walk still hit the trigger: {seen}"
+    assert seen[-1] == 222 and seen[0] == 223, f"expected 221->223->222, got {seen}"
+
+
+_selftest_switch_path()
+
+
+# The physical switch value the board is holding, as far as this process knows. None means
+# "unknown", which is the state at connect: the board keeps whatever the last run left.
+_SW_CURRENT = None
+
+
+def set_switch_value(console, target):
+    """Drive the switches to `target` without ever RESTING on a destructive aperture.
+
+    From an unknown state the value is first walked to 0 by clearing bit 7 FIRST. Every
+    forbidden aperture here has bit 7 set, so once bit 7 is low no subsequent intermediate
+    can equal one, whatever the unknown starting value was."""
+    global _SW_CURRENT
+    assert all((f >> 7) & 1 for f in DESTRUCTIVE_SWITCHES), (
+        "the bit-7-first argument below assumes every forbidden value has bit 7 set")
+    if _SW_CURRENT is None:
+        for bit in [7] + [b for b in range(8) if b != 7]:
+            console.set_switch(bit, False)
+        _SW_CURRENT = 0
+    for bit in safe_switch_bit_order(_SW_CURRENT, target):
+        _SW_CURRENT ^= (1 << bit)
+        console.set_switch(bit, bool(target & (1 << bit)))
+    _SW_CURRENT = target
 # Decimal `obs` values that are legitimate results even though they are not staged 0x5A6E
 # markers -- i.e. sentinels a glue probe returns from a chosen bisection point.
 #
@@ -922,8 +1017,10 @@ def main():
             #     memory (case a). The count says one-off or routine.
             try:
                 def _read_sw(_sw):
-                    for bit in range(8):
-                        console.set_switch(bit, bool(_sw & (1 << bit)))
+                    # Routed through set_switch_value so the TRANSIT is chosen, not accidental.
+                    # The previous form set all 8 bits ascending, which walks 221 -> 220 -> 222
+                    # and fires the gen-3 selftest trigger in passing.
+                    set_switch_value(console, _sw)
                     time.sleep(1.2)
                     _s = console.latest(C.LISTEN.get("led_state", "led_state"))
                     _b = _s.get("states") if isinstance(_s, dict) else None

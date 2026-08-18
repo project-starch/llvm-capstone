@@ -99,17 +99,36 @@ counter is positive-controlled at 39 clean / 40 with the loop injected.
 
 Two precisions worth keeping, both from the board lane:
 
-* The gate was **partially** proven, not unproven. Their negative test against the real
-  defect fired — MULTIDRIVEN 3->6, ALWCOMBORDER 0->1, COMBDLY 0->4, naming
-  `load_unit.sv:708`. Those classes are emitted *before* the abort. What the gate could not
-  have caught is a **pure** combinational loop with no NBA-in-comb. "Proven for three of four
-  counters" was the accurate claim.
+* **CORRECTED 2026-08-18 — "proven for three of four counters" was WRONG, in the
+  conservative direction, and both lanes endorsed it because it sounded suitably careful.**
+  With `-Wno-BLKANDNBLK` in place the repaired gate was run against the real defect
+  `39111e119` directly and returns
+  `LATCH 55 / MULTIDRIVEN 6 / ALWCOMBORDER 1 / COMBDLY 3 / UNOPTFLAT 40` -> **FAIL**, with
+  `UNOPTFLAT` naming `s07_ldc0_valid_q` as circular. So **all five** counters are proven
+  against the actual defect, not three: the repaired gate would have caught that commit
+  outright. The LATCH delta 52->55 is three signals = 1 + 2 + 56 = 59 bits, matching the
+  343 GB incident description. (Measurement by the RTL lane; this lane verified the
+  provenance argument below but has **not** re-run the `39111e119` lint itself.)
 * The truncated run emitted 3249 lint lines, the complete one 3358. The 109-line difference
   was a visible signature of the abort, present in every run, unnoticed by both lanes.
 
 New baseline: `LATCH 52 / MULTIDRIVEN 3 / ALWCOMBORDER 0 / COMBDLY 0 / UNOPTFLAT 39`.
-Measured independently at `618f4ce36` — the RTL of the bitstream on the board — by the board
-lane in an isolated worktree: identical. So that bitstream adds no combinational loops, and
+
+**RETRACTED as an independent check, 2026-08-18.** My "measured independently at `618f4ce36`,
+identical to the committed baseline" was **circular for the UNOPTFLAT counter**, and I verified
+that here rather than taking it on report: `git log --diff-filter=A` shows the REF file predates
+this work, but `git show 618f4ce36:verif/sim/rtl-lint.REF.txt` lists only **four** counters — no
+`UNOPTFLAT` line. The counter *and* its baseline value `39` were added together in the very
+commit under audit (`d65c67589`). So had the diff introduced a loop, the baseline would simply
+have absorbed it, and my re-measure inherited the flaw because I took the REF from that same
+commit. The missing control was supplied by the RTL lane: a shadow tree at the PARENT revision
+`618f4ce36` carrying HEAD's gate, which also yields 52/3/0/0/39, and a diff of full warning TEXT
+rather than counts, whose only parent-vs-HEAD difference is line numbers on one pre-existing
+`load_unit` warning. **With that control the conclusion stands** — the diff adds zero — but it
+stands on the shadow tree, not on my check. Lesson: a baseline committed in the same change it
+certifies is not a baseline.
+
+So that bitstream adds no combinational loops, and
 that is now measured rather than inferred.
 
 ---
