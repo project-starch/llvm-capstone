@@ -1055,7 +1055,7 @@ def main():
             #     response was displaced onto a scalar writeback port: the value was intact in
             #     memory (case a). The count says one-off or routine.
             try:
-                def _read_sw(_sw):
+                def _read_sw(_sw, allow_cached=True):
                     """Read one debug-mux aperture, defending against the LED PULSE STRETCHER.
 
                     THE LEDS ARE NOT A SNAPSHOT. `ariane_xilinx.sv:956-979` holds each LED bit
@@ -1096,8 +1096,24 @@ def main():
                                 C.LISTEN.get("led_state", "led_state"),
                                 timeout=LED_FRESH_TIMEOUT_S, since=_mark)
                         except Exception:
-                            # No change since the mark means the value already settled; the
-                            # cached payload IS that settled value.
+                            # No change since the mark USUALLY means the value already settled,
+                            # so the cached payload IS that settled value -- true while the core
+                            # is running and driving the LEDs.
+                            #
+                            # IT IS FALSE WHILE THE HART IS HALTED. A halted core drives nothing,
+                            # the stretcher decays to a frozen byte, and NO led_state event ever
+                            # arrives -- so both samples fall back to the same cached payload,
+                            # agree perfectly, and the VOID check passes having compared one
+                            # stale value against itself. That is precisely the failure this
+                            # docstring warns about, reintroduced by the fallback.
+                            #
+                            # Measured 2026-08-18, boot 5: the halted read of 204 saw exactly one
+                            # event (0x7c, emitted DURING the switch walk, so contaminated), and
+                            # the halted read of 208 saw NONE and returned that same 0x7c. Two
+                            # apertures with entirely different field layouts "reading" the same
+                            # byte is the signature of a cached value, not of data.
+                            if not allow_cached:
+                                return None
                             _s = console.latest(C.LISTEN.get("led_state", "led_state"))
                         _b = _s.get("states") if isinstance(_s, dict) else None
                         return sum((1 << i) for i, b in enumerate(_b) if b) if _b else None
@@ -1520,13 +1536,19 @@ def main():
                             # disagreement is the RESULT here, not an error to be smoothed over.
                             try:
                                 for _ap in (204, 208):
-                                    _halted = _read_sw(_ap)
+                                    # allow_cached=False: a halted read that produces no fresh
+                                    # event is VOID, never the last value seen while running.
+                                    _halted = _read_sw(_ap, allow_cached=False)
                                     print(f"  [wedge] HALTED re-read sw={_ap}: "
-                                          + ("VOID (samples disagreed)" if _halted is None
-                                             else f"0x{_halted:02x} {_halted:08b}")
-                                          + "   <-- compare against the RUNNING read above; "
-                                            "clean here + saturated there = activity-driven "
-                                            "reload, both saturated = readout path",
+                                          + ("VOID -- no fresh led_state event while halted, so "
+                                             "there is NO halted reading to compare. A halted "
+                                             "core drives nothing and the stretcher freezes; "
+                                             "this is the expected outcome and it means the LED "
+                                             "path cannot be sampled at a wedge at all."
+                                             if _halted is None
+                                             else f"0x{_halted:02x} {_halted:08b}  (fresh event "
+                                                  f"-- still suspect if it arrived during the "
+                                                  f"switch walk)"),
                                           flush=True)
                             except Exception as _exc:
                                 print(f"  [wedge] halted mux re-read failed "

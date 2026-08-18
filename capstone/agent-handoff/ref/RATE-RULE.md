@@ -71,10 +71,12 @@ entry-stall failure dies before it, and must never be counted as a defect.
 | 1 | 3 | 1 | 3 |
 | 2 | 2 | 1 | 2 |
 | 4 | 6 | 0 | none — censored at 6 (`SPLB` stopped the boot) |
+| 5 | 1 | 1 | 1 |
 
-**k = 2 of n = 11.** Boot 3 was VOID. `NO-ENTRY` and `SPLB` stops are excluded from both k and n
+**k = 3 of n = 12.** Boot 3 was VOID. `NO-ENTRY` and `SPLB` stops are excluded from both k and n
 by `tests/rtl-smoke/s07-rate.py`.
 
 The v4 question — per-BOOT state (bimodal) vs per-RUN randomness (geometric) — is **not yet
-decided**. Three boots giving 3, 2 and >6 are consistent with either; a geometric at ~18% per rep
-puts P(no wedge in 6) at 0.30, so boot 4 is unremarkable under the null. More boots are needed.
+decided**. Four boots giving 3, 2, >6 and 1 are consistent with either; a geometric at ~25% per rep
+puts P(no wedge in 6) at 0.18, so boot 4 remains unremarkable under the null. More boots are
+needed, and the spread so far (1 to >6) leans mildly toward per-run randomness.

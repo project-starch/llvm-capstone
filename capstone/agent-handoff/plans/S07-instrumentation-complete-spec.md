@@ -58,6 +58,39 @@ carries NO weight", which caused a boot to dismiss its own usable readings. Fixe
 Naming the site — *which instruction stored it, which instruction loaded it back* — is what none
 of the current readers can do, and it is the thing that would end this investigation.
 
+### The concrete case Tier 0.1 would settle immediately
+
+On BOTH boots taken on this bitstream (2026-08-18), the PRE-RUN baseline read
+`sw=208 = 0x9c`, bit-identical, before any test domain ran:
+
+    ldc0_valid=1  src=0 (L1 array)  stc_valid=1  stc_ctag=1  gran_match=1  clobbered=0
+
+That is the S-07 signature itself — an LDC returning untagged on the same granule as the most
+recent tagged STC, with no intervening plain store — occurring **reproducibly during boot**, in
+Linux/OpenSBI/the entry glue. If it is genuine it is a far cheaper repro than the SQLite wedge,
+which needs several boots to catch once.
+
+It is NOT yet a conclusion, for four reasons, and each one is answered by exposing the paddrs:
+
+1. **No correlation gate.** Both records roll independently, so a granule match can in principle
+   be a coincidence of two unrelated events. The addresses would show whether the granule is a
+   plausible shared object or an unrelated collision.
+2. **Back-to-back LDC skew.** `s07_ldc0_paddr_q` captures `cap_clear_addr_q`, which is written
+   for every LDC in `SEND_TAG_LDC` (`load_unit.sv:489`) — so it is the in-flight LDC's address,
+   not a stale clear-path address, which is the good news. But `load_unit.sv:542` accepts a new
+   LDC while the previous one is still sending its tag, so under overlap the captured address can
+   belong to the newer LDC.
+3. **`clobbered` does not see every writer.** It is set from `store_buffer_valid`, so a write
+   that reaches the granule by another path would not clear the flag, and a legitimately
+   invalidated tag would read as loss.
+4. **An untagged LDC during boot does not fault.** Post-S-06 it is legal until the result is
+   used as a capability, so this pattern may be entirely benign boot behaviour rather than the
+   defect.
+
+With the two addresses on the mux, 1 and 2 are testable in one board read and 3 and 4 become a
+question of mapping one number onto the monitor's memory map. Without them, this observation
+cannot be advanced at all.
+
 ## Tier 0 — pure mux decode. No new logic at all.
 
 Adding `case` arms to the existing `debug_led_o` mux in `cva6.sv`. No new registers, no new
@@ -115,22 +148,37 @@ made the surviving rolling record safe.
   Genuinely useful — it would let the whole detection chain be negative-tested end to end — but
   it modifies the data path, not just observation. Last, always.
 
-## Conditional, and possibly not needed at all
+## The readout path — NOT conditional any more. This one is required.
 
-**The readout path.** All non-zero 204/208 readings on this bitstream are currently VOID: the
-LED pulse stretcher (`corev_apu/fpga/src/ariane_xilinx.sv:956-979`) holds each bit high for 2^20
-cycles after it is last driven, so a reading is the bitwise OR of every aperture displayed in
-that window. Raising the settle 4x (0.5 s to 2.0 s) changed nothing, so this is persistent
-reload, not a decaying tail.
+**The LED mux cannot deliver a trustworthy non-zero reading on this bitstream, running or
+halted.** Both halves were tested on 2026-08-18 and both fail, by different mechanisms:
 
-**Do not design RTL for this yet.** It is being settled in software first: a mux re-read taken
-with the hart *halted* is compared against the same aperture read while running. If halted reads
-are clean, the fix is a driver protocol (halt, settle, sample, resume) and costs no RTL. Only if
-both are contaminated does the readout path itself need a change — and then the right change is
-a JTAG-readable debug register, not more LED apertures.
+* **Running:** the pulse stretcher (`corev_apu/fpga/src/ariane_xilinx.sv:956-979`) holds each bit
+  high for 2^20 cycles (~21 ms) after it is last driven, so a reading is the bitwise OR of every
+  aperture visited on the way — including the transit apertures of the switch walk. Raising the
+  settle 4x (0.5 s to 2.0 s) changed nothing, so this is persistent reload, not a decaying tail.
+  It produced `src=3`, an undefined encoding, and `count>0 with ldc_seen clear`, which the
+  encoding is designed to make unrepresentable.
+* **Halted:** a halted core drives nothing, so the stretcher freezes and **no `led_state` event
+  is emitted at all**. Boot 5 is the proof: the halted read of 204 saw exactly one event (`0x7c`,
+  emitted *during* the switch walk, hence contaminated) and the halted read of 208 saw none and
+  returned that same `0x7c`. Two apertures with entirely different field layouts cannot both hold
+  `0x7c`; it was one cached value read twice. The driver's two-sample agreement check passed
+  while comparing a stale value against itself — the exact failure its own docstring warns about,
+  reintroduced by a `latest()` fallback. Fixed: a halted read with no fresh event now returns
+  VOID.
 
-Tier 0.3's signature nibble is worth building regardless, because it makes contamination
-*detectable* rather than merely suspected.
+So the "halt, settle, sample, resume" protocol does not exist and cannot be built. **The fix is a
+JTAG-readable debug register, not more LED apertures** — the debug path already works (it is how
+`mcause`/`mepc`/`mtval` are read at a wedge), and it is immune to both mechanisms above.
+
+This raises Tier 0's priority rather than lowering it: every Tier 0 reader is worth strictly more
+once it can be read at all, and 0.3's signature nibble stays worth building because it makes
+contamination *detectable* rather than merely suspected.
+
+**What survives from the LED path:** zeros, and only while running. The stretcher can only turn
+bits ON, so a `0x00` read cannot be manufactured by contamination. Every `0x00` result on record
+still stands. Halted zeros do not, because a halted read has no fresh event behind it.
 
 ## Rules for the batch
 
