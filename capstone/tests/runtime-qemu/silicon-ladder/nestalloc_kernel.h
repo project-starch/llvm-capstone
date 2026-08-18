@@ -118,4 +118,54 @@ static unsigned nest_spatial_run(void) {
     return (unsigned)b[0];
 }
 
+
+/* ---------------------------------------------------------------------------
+ * THE THIRD SCOPE: two STATIC GLOBALS, not one heap region.
+ *
+ * The spatial corpus predicts `trapped` for its static-global rows, on the stated
+ * ground that -capstone-gp-captable carves each global separately, so unlike two
+ * sub-allocations of one heap array they really are two objects to the hardware.
+ * Six rows rest on that and NOT ONE of them is measured -- every one is blocked on
+ * a VFS, on .mpy loading, or on absent modules, and MPY-S31 has just shown the
+ * stack rows cannot test it either because the port guards its own C stack first.
+ *
+ * So test the prediction directly instead of waiting for an upstream defect. Same
+ * shape as nest_spatial_run, one variable changed: the two objects are file-scope
+ * globals rather than blocks carved out of nest_heap.
+ *
+ * The prediction is NOT safe. This build passes -capstone-shrink-globals=false
+ * (build-ladder-domain.sh:85), and the MicroPython build passes it too, so whether
+ * a global's bounds are its own or span something larger is exactly the open
+ * question. Either answer is a result:
+ *   TRAP        -> the corpus's static-global prediction is confirmed, and the
+ *                  gc-heap rows are untrapped for the reason claimed rather than
+ *                  because checking is off somewhere.
+ *   returns 170 -> the prediction is WRONG, globals share bounds too under this
+ *                  flag, and six corpus rows need rewriting.
+ *
+ * NEST_GLOBAL_OFFSET is the only difference between the arms:
+ *   0            -> writes glob_a[0], in bounds: expect UNTRAPPED, returns 34
+ *   NEST_BLOCK   -> one past glob_a's end and into glob_b: the question
+ */
+#ifndef NEST_GLOBAL_OFFSET
+#define NEST_GLOBAL_OFFSET 0u
+#endif
+
+static unsigned char nest_glob_a[NEST_BLOCK] __attribute__((aligned(32)));
+static unsigned char nest_glob_b[NEST_BLOCK] __attribute__((aligned(32)));
+
+static unsigned nest_global_run(void) {
+    nest_glob_a[0] = 0x11;
+    nest_glob_b[0] = 0x22;
+
+    /* volatile so -O0 cannot fold the two symbols into one base and reason the
+       access away, the same guard both other kernels use. */
+    volatile unsigned long off = NEST_GLOBAL_OFFSET;
+    nest_glob_a[off] = 0xAA;
+
+    /* 170 means the write left glob_a and landed in glob_b with nothing objecting.
+       34 means glob_b is intact, which for the offset-0 arm is the expected pass. */
+    return (unsigned)nest_glob_b[0];
+}
+
 #endif /* NESTALLOC_KERNEL_H */
