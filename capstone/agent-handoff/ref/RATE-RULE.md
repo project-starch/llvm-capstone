@@ -550,3 +550,30 @@ later.
 **Do not cite `sqlite3VdbeCreate` in connection with S-07.** It is an artifact of a 1 MB
 ambiguity resolved in the wrong direction, and it is exactly the shape — a confident, legal,
 plausible answer — that this page has now recorded five times in one day.
+
+### THE SITE IS DETERMINISTIC EVEN THOUGH THE WEDGE IS NOT
+
+Three independent boots, every one bit-identical:
+
+| boot | wedging domain DBAS | untagged LDC | last cap STC |
+|---|---|---|---|
+| 15 | `0x85400000` | `0xaedc0` | `0xaedb0` |
+| 17 | `0x80800000` | `0xaedc0` | `0xaedb0` |
+| 19 | `0x80800000` | `0xaedc0` | `0xaedb0` |
+
+**This is the strongest constraint the campaign has produced, and it is a new kind of one.**
+Everything measured so far said the wedge is *probabilistic* — k=9 of n=36, first-wedge position
+scattered from 1 to >7, the same image passing and failing minutes apart. The site is not. Same
+two granules, same adjacency, every time, across different physical bases.
+
+So the mechanism is **one specific location that intermittently loses its tag**, not a random
+granule somewhere in a 1.5 MB domain. That rules out a large family of explanations — anything
+that would spray across addresses (broad cache corruption, random bit flips, general refill
+erasure) — and it makes the defect a property of *what lives at that address*.
+
+It also makes the 1 MB ambiguity worth removing rather than worked around: with a deterministic
+site, one number identifies the object, and the object is the answer.
+
+**Caveat kept explicit:** boots 17 and 19 share a `DBAS`, so the independent-base evidence is
+boot 15 against the other two, not three ways. And all three are `EARLY_HALT_CONTROL=0` boots,
+because the ON arm loses the wedge block entirely.
