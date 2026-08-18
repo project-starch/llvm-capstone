@@ -75,14 +75,6 @@ static cl::opt<bool> CapstoneCapInitPrint(
 #define PASS_NAME "Capstone capability-global initialization"
 
 static constexpr unsigned CapAS = 200;
-// SelectionDAG is formed one basic block at a time. Keep the synthetic straight-line
-// initializer in modest blocks so a module with hundreds of pointer leaves does not
-// make all of their holder/target capabilities live in one enormous DAG. Capstone uses
-// the ordinary GPR register class for both scalars and capabilities, so a register-
-// allocator spill is an `sd` and drops the capability tag. The corresponding reload is
-// selected as `ldc`, yielding an untagged base at the next initializer store. Splitting
-// the IR block bounds that pressure without adding calls or changing store order.
-static constexpr unsigned CapInitStoresPerBlock = 32;
 
 namespace {
 
@@ -220,12 +212,6 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
   for (const StoreItem &It : Items) {
     if (CapstoneCapInitLimit && Emitted >= CapstoneCapInitLimit)
       break;
-    if (Emitted != 0 && Emitted % CapInitStoresPerBlock == 0) {
-      BasicBlock *Next = BasicBlock::Create(
-          Ctx, "cap.init." + Twine(Emitted / CapInitStoresPerBlock), InitFn);
-      B.CreateBr(Next);
-      B.SetInsertPoint(Next);
-    }
     // Companion to the limit: once a bisect names an index, this says WHICH global that
     // index is, without having to re-derive it from a disassembly or an IR dump.
     if (CapstoneCapInitPrint) {
