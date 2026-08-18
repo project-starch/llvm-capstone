@@ -40,7 +40,9 @@ def collect():
                                 d = f"{base}/{sub}/{name}"
                 r["_kind"], r["_dir"] = kind, d
                 out.append(r)
-    return sorted(out, key=lambda r: (r["_kind"], r["id"]))
+    # Sorted by REPORT DATE, not by id: the spread over time is one of the things
+    # this table is for, and an id sort hides it.
+    return sorted(out, key=lambda r: r["first_seen"])
 
 STRENGTH = {
     "untrapped-identical":  "corruption verified",
@@ -56,14 +58,29 @@ def render(rows):
     A(f"{len(rows)} measured rows. Every one is a real defect, executed in a")
     A("pure-capability domain on an UNMODIFIED MicroPython, and the hardware did not")
     A("object. This is the set the whole nested-allocator finding rests on.\n")
+    n_t = sum(1 for r in rows if r["_kind"] == "temporal")
+    n_s = len(rows) - n_t
+    A(f"**{n_t} temporal and {n_s} spatial.** They are grouped together because they share")
+    A("a CAUSE, not a class: every one of them is an access to an object the allocator")
+    A("carved in software. Calling all nine temporal would be wrong by one.\n")
     A("## The rows\n")
-    A("| case | upstream | class | component | stock | in the domain | reproduce |")
-    A("|---|---|---|---|---|---|---|")
+    A("| reported | case | upstream | kind | class | stock | in the domain | at the pin | reproduce |")
+    A("|---|---|---|---|---|---|---|---|---|")
     for r in rows:
         link = f"[`run.sh`](../{r['_dir']}/run.sh)" if r["_dir"] else "—"
-        A(f"| `{r['id']}` | {r['ref']} | {r['class']} | `{r['component']}` | "
-          f"{r['stock_behaviour']} | {STRENGTH.get(r['domain_behaviour'], r['domain_behaviour'])} | {link} |")
+        pin = {"yes": "**still present**", "no": "fixed upstream",
+               "unknown": "?"}.get(r.get("present_at_pin", ""), "?")
+        A(f"| {r['first_seen'][:10]} | `{r['id']}` | {r['ref']} | {r['_kind']} | {r['class']} | "
+          f"{r['stock_behaviour']} | {STRENGTH.get(r['domain_behaviour'], r['domain_behaviour'])} | "
+          f"{pin} | {link} |")
     A("")
+    years = sorted(r["first_seen"][:4] for r in rows)
+    still = [r["id"] for r in rows if r.get("present_at_pin") == "yes"]
+    A(f"**{years[0]} to {years[-1]}, one or two a year, no clustering.** This is not a")
+    A("historical artefact of one MicroPython era: the youngest is months old and the")
+    A(f"oldest is eight years. {len(still)} of them are STILL OPEN upstream and present in")
+    A(f"the pinned tree — {', '.join('`%s`' % i for i in still)} — so those needed no parent")
+    A("build at all. They run untrapped through a capability domain on current MicroPython.\n")
     A("`stock` is what an ordinary host MicroPython does with the same input.")
     A("Note how often it is `silent-no-effect`: most of these defects are invisible")
     A("without a sanitizer even before capability hardware is involved.\n")
@@ -94,6 +111,16 @@ def render(rows):
     A("region when software carves inside it, because no bounds-setting instruction is")
     A("emitted for a sub-allocation. Pairs:")
     A("`../../tests/runtime-qemu/silicon-ladder/run-nested-allocator-pairs.sh`\n")
+    A("## A caveat about dates, since this table invites the wrong reading\n")
+    A("Across BOTH corpora the report years spike hard in 2023: 25 of 61 rows, and 19")
+    A("of those between September and December. That is not a statement about")
+    A("MicroPython. Those rows are almost entirely issue numbers #12528 to #13283, a")
+    A("single fuzzing campaign by one external research group, later published as")
+    A("CMASan at IEEE S&P 2025 (see `../../../agent-handoff/ref/cmasan-sp25-and-our-corpora.md`).")
+    A("The year distribution of this corpus measures WHEN SOMEONE LOOKED, not when the")
+    A("code was worst — and the paper's own result is that ASan found none of the 19")
+    A("they reported. They were found only once somebody built a tool that sees inside")
+    A("a custom allocator.\n")
     A("## Running them\n")
     A("    ./run-all.sh          every row above, control first, verdict per row\n")
     A("Each `run.sh` rebuilds its image, runs its control, and compares what it")

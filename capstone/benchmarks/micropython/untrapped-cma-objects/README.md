@@ -7,19 +7,29 @@ Run `python3 gen-overview.py --check` to detect drift.
 pure-capability domain on an UNMODIFIED MicroPython, and the hardware did not
 object. This is the set the whole nested-allocator finding rests on.
 
+**8 temporal and 1 spatial.** They are grouped together because they share
+a CAUSE, not a class: every one of them is an access to an object the allocator
+carved in software. Calling all nine temporal would be wrong by one.
+
 ## The rows
 
-| case | upstream | class | component | stock | in the domain | reproduce |
-|---|---|---|---|---|---|---|
-| `MPY-S05` | #15271 | heap-overflow | `py/objarray.c` | not-run | no crash, corruption not shown | [`run.sh`](../spatial-corpus/cases/MPY-S05_array-append-after-failed-grow/run.sh) |
-| `MPY-T02` | CVE-2024-8947 | uaf | `py/objarray.c` | silent-no-effect | no crash, corruption not shown | [`run.sh`](../temporal-corpus/cases/MPY-T02_objarray-bytes-self-copy-uaf/run.sh) |
-| `MPY-T05` | #13283 | uaf | `py/objarray.c:509` | silent-no-effect | no crash, corruption not shown | [`run.sh`](../temporal-corpus/cases/MPY-T05_objarray-line509-uaf/run.sh) |
-| `MPY-T07` | #4128 | uaf | `py/lexer.c,py/compile.c` | silent-no-effect | no crash, corruption not shown | [`run.sh`](../temporal-corpus/cases/MPY-T07_lexer-source-name-uaf/run.sh) |
-| `MPY-T09` | #18168 | dangling-view | `py/objarray.c` | silent-corruption | corruption verified | [`run.sh`](../temporal-corpus/cases/MPY-T09_bytearray-resize-stale-view/run.sh) |
-| `MPY-T10` | #18171 | dangling-view | `py/objarray.c` | silent-corruption | corruption verified | [`run.sh`](../temporal-corpus/cases/MPY-T10_array-resize-stale-view/run.sh) |
-| `MPY-T13` | #19075 | dangling-buffer | `extmod/modio.c` | crash-sigsegv | no crash, corruption not shown | [`run.sh`](../temporal-corpus/cases/MPY-T13_write-callback-grows-buffer/run.sh) |
-| `MPY-T16` | #5487 | lifetime-order | `py/gc.c:gc_sweep_all` | not-run | no crash, corruption not shown | [`run.sh`](../temporal-corpus/cases/MPY-T16_deinit-after-gc-sweep-all/run.sh) |
-| `MPY-T29` | #4705 | alloc-invariant | `py/gc.c:gc_free,gc_realloc` | not-run | no crash, corruption not shown | [`run.sh`](../temporal-corpus/cases/MPY-T29_gc-free-assert-invalid-block/run.sh) |
+| reported | case | upstream | kind | class | stock | in the domain | at the pin | reproduce |
+|---|---|---|---|---|---|---|---|---|
+| 2018-09-12 | `MPY-T07` | #4128 | temporal | uaf | silent-no-effect | no crash, corruption not shown | fixed upstream | [`run.sh`](../temporal-corpus/cases/MPY-T07_lexer-source-name-uaf/run.sh) |
+| 2019-04-19 | `MPY-T29` | #4705 | temporal | alloc-invariant | not-run | no crash, corruption not shown | fixed upstream | [`run.sh`](../temporal-corpus/cases/MPY-T29_gc-free-assert-invalid-block/run.sh) |
+| 2020-01-03 | `MPY-T16` | #5487 | temporal | lifetime-order | not-run | no crash, corruption not shown | **still present** | [`run.sh`](../temporal-corpus/cases/MPY-T16_deinit-after-gc-sweep-all/run.sh) |
+| 2023-12-27 | `MPY-T05` | #13283 | temporal | uaf | silent-no-effect | no crash, corruption not shown | fixed upstream | [`run.sh`](../temporal-corpus/cases/MPY-T05_objarray-line509-uaf/run.sh) |
+| 2024-06-13 | `MPY-S05` | #15271 | spatial | heap-overflow | not-run | no crash, corruption not shown | fixed upstream | [`run.sh`](../spatial-corpus/cases/MPY-S05_array-append-after-failed-grow/run.sh) |
+| 2024-09-17 | `MPY-T02` | CVE-2024-8947 | temporal | uaf | silent-no-effect | no crash, corruption not shown | fixed upstream | [`run.sh`](../temporal-corpus/cases/MPY-T02_objarray-bytes-self-copy-uaf/run.sh) |
+| 2025-09-29 | `MPY-T09` | #18168 | temporal | dangling-view | silent-corruption | corruption verified | **still present** | [`run.sh`](../temporal-corpus/cases/MPY-T09_bytearray-resize-stale-view/run.sh) |
+| 2025-09-29 | `MPY-T10` | #18171 | temporal | dangling-view | silent-corruption | corruption verified | **still present** | [`run.sh`](../temporal-corpus/cases/MPY-T10_array-resize-stale-view/run.sh) |
+| 2026-04-09 | `MPY-T13` | #19075 | temporal | dangling-buffer | crash-sigsegv | no crash, corruption not shown | **still present** | [`run.sh`](../temporal-corpus/cases/MPY-T13_write-callback-grows-buffer/run.sh) |
+
+**2018 to 2026, one or two a year, no clustering.** This is not a
+historical artefact of one MicroPython era: the youngest is months old and the
+oldest is eight years. 4 of them are STILL OPEN upstream and present in
+the pinned tree — `MPY-T16`, `MPY-T09`, `MPY-T10`, `MPY-T13` — so those needed no parent
+build at all. They run untrapped through a capability domain on current MicroPython.
 
 `stock` is what an ordinary host MicroPython does with the same input.
 Note how often it is `silent-no-effect`: most of these defects are invisible
@@ -58,6 +68,18 @@ an object to the byte when it is told what the object is, and bounds the whole
 region when software carves inside it, because no bounds-setting instruction is
 emitted for a sub-allocation. Pairs:
 `../../tests/runtime-qemu/silicon-ladder/run-nested-allocator-pairs.sh`
+
+## A caveat about dates, since this table invites the wrong reading
+
+Across BOTH corpora the report years spike hard in 2023: 25 of 61 rows, and 19
+of those between September and December. That is not a statement about
+MicroPython. Those rows are almost entirely issue numbers #12528 to #13283, a
+single fuzzing campaign by one external research group, later published as
+CMASan at IEEE S&P 2025 (see `../../../agent-handoff/ref/cmasan-sp25-and-our-corpora.md`).
+The year distribution of this corpus measures WHEN SOMEONE LOOKED, not when the
+code was worst — and the paper's own result is that ASan found none of the 19
+they reported. They were found only once somebody built a tool that sees inside
+a custom allocator.
 
 ## Running them
 
