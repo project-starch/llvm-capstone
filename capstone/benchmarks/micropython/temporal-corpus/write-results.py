@@ -434,6 +434,66 @@ byte-identical when the flag is off; the diff is 70 added lines and no deletions
 across both this and MPY-T07.
 """,
 
+"MPY-T29_gc-free-assert-invalid-block": """MPY-T29 / upstream 4705
+
+  Capstone domain under QEMU : returns, retval 0x29007701, no fault
+
+UNTRAPPED, AND THE REUSE IS DEMONSTRATED. RECONSTRUCTION, NOT THE UPSTREAM PROGRAM.
+
+4705 is an assertion firing inside gc_free on a block the collector had already
+released. The fix is ports/unix/gccollect.c: make the collector capture the
+REGISTERS as well as the stack, so a pointer living only in a register stops
+being an invisible root. The upstream trigger is whatever happened to be in a
+register at collection time, which is not something a test can ask for.
+
+What IS reproducible is the SHAPE of the defect: a live block whose only
+reference is somewhere the collector does not scan. Our collector has the same
+gap by construction --
+
+  port/mpy_domain.c:102
+      void gc_collect(void) {
+          gc_collect_start();
+          gc_collect_root(sp_now, ((size_t)(top - (char *)sp_now)) / sizeof(void *));
+          gc_collect_end();
+      }
+
+stack only, no registers. So repro-domain-glue.c parks the sole reference in a
+FILE-SCOPE GLOBAL, calls gc_collect(), allocates again, and reads through the
+old pointer.
+
+  0x29007701 decodes as: the byte read back was 0x77, and the low nibble 1 says
+  0x77 is the value the FRESH allocation wrote. Not the 0x33 the block was given
+  before the collection. The block was freed while live, handed out again, and
+  the stale pointer read another object's data.
+
+WHY A GLOBAL AND NOT AN XOR'D OR OTHERWISE HIDDEN POINTER. The usual way to hide
+a pointer from a conservative collector is to obfuscate it arithmetically. That
+would be WRONG on this target and would have measured the wrong thing: i128 is
+the capability carrier, and XOR-ing a capability clears its tag, so the read back
+would fault as an untagged word (cause 24) for reasons having nothing to do with
+lifetime. It would look like a trap and be a tag-integrity result. A global keeps
+the capability intact and valid, and hides it only from the ROOT SCAN, which is
+exactly the upstream defect.
+
+WHAT IS AND IS NOT CLAIMED. Untrapped: measured. Reuse of the freed storage:
+measured, and this is the only reconstruction here where that is true -- MPY-T07
+and MPY-T16 both found the freed block still holding its own old contents, which
+shows only that it was readable. On that axis this case is as strong as MPY-T09
+and MPY-T10.
+
+It is still recorded as untrapped-no-crash rather than untrapped-identical: those
+two labels mark a byte-for-byte match against a STOCK run, and a reconstruction
+has no stock counterpart to match. Kept behind MPY_T29_HIDDEN_ROOT so the
+production glue is byte-identical when the flag is off.
+
+WHY CAPSTONE DOES NOT CATCH IT, WHICH IS THE POINT. gc_free never reaches the
+hardware. The block lives inside the one 384 KiB static array that gc_init hands
+the collector, so its capability spans the whole heap and stays valid across the
+free and across the reallocation. The stale pointer is, to the hardware, an
+in-bounds pointer into a live object -- which it is. See
+../../evidence/heap-bounds-model.s.
+""",
+
 "MPY-T25_stringio-subclass-print": """MPY-T25 / upstream 10402
 
   stock MicroPython at pin 2e3304a : SIGSEGV

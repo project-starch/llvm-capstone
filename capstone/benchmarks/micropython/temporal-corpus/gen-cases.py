@@ -32,8 +32,8 @@ PLAN = {
     "MPY-T11": ("sort-mutates-under-gc", "yes", "measured"),
     "MPY-T12": ("dict-eq-reentrant-clear", "yes", "measured"),
     "MPY-T13": ("write-callback-grows-buffer", "yes", "measured"),
-        "MPY-T14": ("readblocks-grows-buffer-dup", "parent-measured", "measured at the parent on the host; the domain is blocked by a pre-existing backend crash on oofatfs, see evidence/oofatfs-backend-crash-2026-08-18.txt"),
-        "MPY-T15": ("readblocks-grows-buffer", "parent-measured", "measured at the parent on the host; the domain needs MICROPY_VFS and lib/oofatfs, which the compiler cannot build, see evidence/oofatfs-backend-crash-2026-08-18.txt"),
+        "MPY-T14": ("readblocks-grows-buffer-dup", "parent-measured", "measured at the parent on the host; the domain needs MICROPY_VFS plus lib/oofatfs in the build, which is plumbing and not the compiler crash this once claimed, see evidence/oofatfs-backend-crash-2026-08-18.txt"),
+        "MPY-T15": ("readblocks-grows-buffer", "parent-measured", "measured at the parent on the host; the domain needs MICROPY_VFS and lib/oofatfs in the build; the compiler builds them fine with the build's own flags, see evidence/oofatfs-backend-crash-2026-08-18.txt"),
     "MPY-T16": ("deinit-after-gc-sweep-all", "no", "needs a port shutdown hook; this domain's teardown is not the one with the defect"),
     "MPY-T17": ("finaliser-exception-deadlock", "no", "needs MICROPY_PY_THREAD, which is off here"),
     "MPY-T18": ("gc-collect-frees-live-binding", "no", "closed NOT_PLANNED upstream and redirected to the LVGL binding project; not a MicroPython defect"),
@@ -47,7 +47,7 @@ PLAN = {
     "MPY-T26": ("native-relocate-null", "unknown", "needs the native emitter and a relocatable .mpy"),
     "MPY-T27": ("socket-connect-fail-leak", "no", "needs the ESP32 network stack"),
     "MPY-T28": ("gc-realloc-returns-null", "yes", "measured at the pin and does NOT reproduce; upstream closed it COMPLETED with the reporter confirming"),
-    "MPY-T29": ("gc-free-assert-invalid-block", "no", "the fix is ports/unix/gccollect.c, making the GC capture stack and registers properly; the trigger depends on what happens to be in registers and is not deterministically reproducible"),
+    "MPY-T29": ("gc-free-assert-invalid-block", "yes", "reconstructed, not the upstream program: the fix is ports/unix/gccollect.c making the collector capture registers as well as the stack, and our gc_collect scans the stack only, so a block reachable only from a global is collected while live"),
     "MPY-T30": ("gc-collect-over-retains", "no", "reported against the ESP32 port and closed needs-info upstream"),
 }
 
