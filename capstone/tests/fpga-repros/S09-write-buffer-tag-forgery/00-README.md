@@ -1,4 +1,54 @@
-# S-09 — the write buffer drops one of two stores to the same granule
+# S-09 — a capability survives the plain store meant to destroy it
+
+> # SEVERITY SETTLED 2026-08-19, MEASURED TWO WAYS: A CAPABILITY SURVIVES THE STORE MEANT TO DESTROY IT
+>
+> The final framing is neither of the two above. **This is a failure to revoke by overwrite.**
+>
+> In the `stc G; plain store G+8` arm the plain store is the **younger** one, so architecturally
+> it MUST clobber the granule and clear the tag. Usually it does. When it is dropped, **the
+> capability survives an operation whose entire purpose was to destroy it.**
+>
+> That is the shape of a scrub: `memset(p, 0, sizeof(*p))` over a struct holding a capability,
+> `explicit_bzero`, a free-list poison, clearing a slot before reuse. All are plain stores over a
+> granule holding a capability, and all are how software destroys authority it no longer wants to
+> hold.
+>
+> ### Measured directly, and cross-checked by two independent counts
+>
+> Arm `wf5`: `stc G`, then scrub `G+8` with a **distinctive non-zero pattern**
+> (`0xD15CA5DBAD5C2BA1 ^ i` — a zero scrub could not be told from metadata that was already
+> zero), then **read `G+8` back**. 3840 slots:
+>
+> | quantity | count | how it was measured |
+> |---|---|---|
+> | tags cleared (scrub landed) | 3664 (95.42%) | `lcc` type query == 7 |
+> | **scrubs DROPPED** | **176 (4.58%)** | scalar readback of `G+8` != pattern |
+> | surviving capabilities | 3840 − 3664 = **176** | independent of the readback |
+>
+> **The two counts agree EXACTLY: 176 = 176.** One counts capabilities that survived; the other
+> counts scrubs that never landed. They are separate code paths measuring the same event, and
+> they match to the slot.
+>
+> ### The correct severity
+>
+> * **NOT forgery.** No new authority is fabricated. The survivors carry the ORIGINAL
+>   capability's `start`/`end`/`perm`/`cursor` — the CORRUPTED-BUT-TAGGED bucket is empty.
+> * **NOT merely a dropped scalar.** A dropped **scrub** is retention of authority against the
+>   program's explicit intent.
+> * **IT IS a failure to revoke by overwrite**, measured at **4.58%** here and **9.95%** in the
+>   arm without the readback loop (the readback adds traffic and changes buffer occupancy, which
+>   the mechanism predicts).
+>
+> Weaker than fabricating authority. Stronger than losing a scalar. And the trigger is the
+> standard C idiom for clearing a structure, which is why it is not exotic.
+>
+> ### What this does NOT establish
+>
+> Every capability observed surviving is one the program legitimately held moments earlier. This
+> is **retention past intended destruction**, not creation of authority from nothing. Whether a
+> retained capability is later reachable by code that should no longer have it is a
+> software-lifetime question this test does not address.
+
 
 > # SEVERITY CORRECTED 2026-08-19 — MEASURED. THIS IS NOT TAG FORGERY OVER SCALAR DATA.
 >

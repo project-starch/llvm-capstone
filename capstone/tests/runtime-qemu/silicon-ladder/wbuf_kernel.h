@@ -65,6 +65,11 @@
 #ifndef WBUF_ARM
 #define WBUF_ARM 0
 #endif
+#ifndef WBUF_SCRUB
+/* Distinctive and non-zero on purpose: a zero scrub cannot be distinguished from metadata that
+   was already zero, and a zeroing memset is exactly the case of interest. */
+#define WBUF_SCRUB 0xD15CA5DBAD5C2BA1ul
+#endif
 #ifndef WBUF_FIELDS
 #define WBUF_FIELDS 0           /* 1 = also verify start/end/perm/cursor on surviving caps */
 #endif
@@ -161,10 +166,32 @@ static unsigned wbuf_compute(void)
 #elif WBUF_ARM == 4
       *nxt = 0xB8B8B8B8ul + i;         /* plain store to the NEXT granule */
       wbuf_slots[i] = base;            /* stc, LOW word of THIS granule */
+#elif WBUF_ARM == 5
+      /* THE SCRUB ARM. Same store order as arm 2 -- capability first, plain store second --
+         but the plain store now carries a DISTINCTIVE NON-ZERO pattern and is READ BACK.
+         Scrubbing with zeros would be ambiguous: a granule whose metadata is already zero
+         cannot be told from one where the store landed. */
+      wbuf_slots[i] = base;            /* stc: the capability the program then tries to destroy */
+      *hi = WBUF_SCRUB ^ (unsigned long)i;   /* the scrub -- YOUNGER, so it MUST clobber */
 #else
       wbuf_slots[i] = base;            /* arm 0: no plain store anywhere near */
 #endif
     }
+
+#if WBUF_ARM == 5
+    /* Did the scrub actually land? Read the granule's high word back as a scalar and compare
+       against the pattern that was written. A mismatch means the plain store was DROPPED and
+       the capability survived the operation intended to destroy it.
+
+       This is measured independently of the type query below, so the two counts are a
+       cross-check on each other: every dropped scrub should correspond to a surviving
+       capability, and the two numbers should agree. */
+    for (i = 0; i < WBUF_N; i++) {
+      volatile unsigned long *hi =
+          (volatile unsigned long *)((volatile char *)&wbuf_slots[i] + 8);
+      if (*hi != (WBUF_SCRUB ^ (unsigned long)i)) corrupt++;   /* scrub DROPPED */
+    }
+#endif
 
     for (i = 0; i < WBUF_N; i++) {
       void *p = wbuf_slots[i];         /* ldc */
@@ -172,7 +199,7 @@ static unsigned wbuf_compute(void)
         lost++;                        /* selector, which would RAISE on this value.    */
         continue;
       }
-#if WBUF_FIELDS
+#if WBUF_FIELDS && WBUF_ARM != 5
       if (wbuf_start(p)  != ref_start ||
           wbuf_end(p)    != ref_end   ||
           wbuf_perm(p)   != ref_perm  ||
