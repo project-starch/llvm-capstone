@@ -167,3 +167,72 @@ is either not advancing or not wired as we read it.
 **Next, and it needs no RTL:** read the head and `serving_idx` before rep 1 and after *every* rep
 rather than only at a wedge. That gives consumption per rep directly, which answers whether the
 pool can reach exhaustion in 6-7 reps at all, and whether `SPLB` tracks allocation.
+
+## PRE-DECLARED ANALYSIS for the S7T-vs-XU comparison
+
+**Written and committed BEFORE the first interleaved boot runs.** That is the entire point: with
+two defensible analyses pulling opposite ways, whichever is chosen after the data arrives will be
+the more favourable one, and nobody — including whoever chooses it — will be able to tell whether
+that was the reason. So the choice is made here, in advance.
+
+### The design
+
+`S7T` and `XU` **interleaved in the same boot**, alternating, with the **leading arm counterbalanced
+across boots**: boot 8 leads `S7T`, boot 9 leads `XU`, boot 10 leads `S7T`, boot 11 leads `XU`.
+
+Counterbalancing is not fussiness. Under strict alternation with a fixed leader, `S7T` occupies
+positions 1,3,5,7 (mean 4) and `XU` occupies 2,4,6,8 (mean 5), so the arms are compared at
+systematically different **depths** in the ladder — and depth is precisely the variable under
+investigation. If the hazard rises with position, `XU` looks worse by construction and the effect
+is confounded with the thing being measured. Four boots makes the balance exact; if only three are
+run, the residual imbalance is recorded, not ignored.
+
+Interleaving rather than dedicating boots to each arm removes the boot-to-boot confound, which is
+the one this project has repeatedly been bitten by — the same hash behaving differently across
+boots is what this whole exercise exists to characterise. A boot that dies early then costs both
+arms equally instead of biasing one.
+
+**Why the never-interleave warning does not apply here:** it is about heterogeneous SIZES
+perturbing the carve geometry `SPLB` is sensitive to. The case that produced it was a ~10 KB
+domain against a ~1.5 MB one. `S7T` (1548496 B) and `XU` (1551888 B) are **0.219% apart**. The
+warning stands in full for heterogeneous sizes, and applies again if anyone later interleaves a
+small probe domain with these.
+
+### PRIMARY — paired, valid, and underpowered
+
+Fisher's exact, one-sided, `S7T` against `XU` **within the interleaved boots only**. Computed, not
+asserted:
+
+| table | p |
+|---|---|
+| 0/12 vs 3/12 | 0.109 |
+| 0/12 vs 4/12 | 0.047 |
+| 0/20 vs 4/20 | 0.053 |
+| 0/26 vs 6/26 | 0.011 |
+
+So the realistic outcome at n=12 per arm — 0 against ~3 — **does not reach 0.05**, and n=20 per arm
+is borderline. **This is stated in advance so that a null result is read as low power rather than
+as evidence of no difference.** Target n≈20 per arm, which is 4 boots at ~5 reps per arm per boot.
+
+### SECONDARY — pooled against the historical rate, higher-powered and confounded
+
+`S7T`'s count against the already-collected `XU` rate p̂ = 0.22 as a known value:
+
+| | P(0 wedges) |
+|---|---|
+| n = 12 | 0.051 |
+| n = 20 | 0.007 |
+| n = 26 | 0.002 |
+
+Higher-powered, but it reintroduces exactly the boot-to-boot confound the pairing exists to
+remove. It is the **secondary** analysis and does not get promoted if the primary disappoints.
+
+**If the two agree, the conclusion is strong despite each being individually weak. If they
+disagree, that disagreement IS the finding** — it says boot-to-boot variation is real and large,
+which is worth more than either analysis alone.
+
+### The outcome that needs no statistics
+
+**If `S7T` wedges even once with mcause 25 at a comparable position, the discriminator is dead on
+the spot.** A single event in the control arm refutes rather than estimates, and no power
+calculation is required or relevant. Check for that before running any test.

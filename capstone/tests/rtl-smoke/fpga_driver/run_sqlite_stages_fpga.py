@@ -702,6 +702,9 @@ def main():
         except Exception as exc:
             log(f"pre-run 208 baseline failed ({type(exc).__name__})")
 
+        # One-element list so the per-domain block can rebind it without a nonlocal.
+        _rev_head_prev = [None]
+
         for dom_idx, dom_spec in enumerate(DOMS, 1):
             # "path" or "path:selector". The optional selector is passed to the host as its
             # second argument, which publishes it in the shared region so the DOMAIN picks the
@@ -1270,6 +1273,50 @@ def main():
                 # Never let the extra read cost the run: the domain verdict above is already
                 # recorded, and a failed sample is reported rather than swallowed.
                 _line = f"  [s07] after {label}: sw=204 read FAILED ({type(exc).__name__})"
+                print(_line, flush=True)
+                transcript.append(_line + "\n")
+
+            # REV-NODE POOL CONSUMPTION, per rep. Read HERE and not only at a wedge, because
+            # one sample at the end cannot give a RATE -- and the rate is the whole question:
+            # how many ids a rep costs, and therefore whether the pool can reach exhaustion
+            # inside the 6-8 reps a boot supports at all.
+            #
+            # 249/250 are rev_node_head_ex[7:0] and [15:8] (cva6.sv:1260/1264), a full 16-bit
+            # head read 8+8 -- NOT the {overflow,0,head[9:8]} the label used to claim, which
+            # read 4x small twice. There is no overflow bit on the mux (cva6.sv:1262); head[15]
+            # is the top of the head itself.
+            #
+            # Deliberately NOT serving_idx (251-254): capstone_rev_node.anvil:150-153 assigns it
+            # only inside `recv ep.rev_req`, so it is "which node is being revoked" and reads 0
+            # for a workload that never revokes. It is a different quantity, not a broken one.
+            try:
+                _hl = _read_sw(249)
+                _hh = _read_sw(250)
+                if _hl is None or _hh is None:
+                    _line = (f"  [s07] after {label}: rev-node head VOID "
+                             f"(lo={_hl} hi={_hh}) -- no consumption datum for this rep")
+                else:
+                    _head = (_hh << 8) | _hl
+                    _prev = _rev_head_prev[0]
+                    _rev_head_prev[0] = _head
+                    if _prev is None:
+                        _tail = "   (first sample -- no rate yet)"
+                    elif _head > _prev:
+                        _d = _head - _prev
+                        _tail = (f"   delta=+{_d} ids this rep; at this rate exhaustion of the "
+                                 f"65532-entry pool is {(65532 - _head) // _d} reps away")
+                    elif _head == _prev:
+                        _tail = "   delta=0 -- this rep consumed NO rev-node ids"
+                    else:
+                        _tail = (f"   delta={_head - _prev:+d} -- the head went BACKWARDS, which "
+                                 f"the monotonic bump allocator cannot do. Suspect the read, not "
+                                 f"the pool.")
+                    _line = (f"  [s07] after {label}: rev-node head = {_head} "
+                             f"(0x{_head:04x}){_tail}")
+                print(_line, flush=True)
+                transcript.append(_line + "\n")
+            except Exception as exc:
+                _line = f"  [s07] after {label}: rev-node head read FAILED ({type(exc).__name__})"
                 print(_line, flush=True)
                 transcript.append(_line + "\n")
 
