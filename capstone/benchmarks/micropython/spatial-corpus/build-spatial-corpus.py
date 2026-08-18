@@ -45,11 +45,11 @@ ROWS = [
  ("MPY-S02", 13041, "heap-overflow", "CWE-787", "py/objint.c:int_to_bytes", "gc-heap",
   "int.to_bytes(0, 'big'): the guard is `len < 0`, so length 0 passes and the write is unbounded",
   "yes", "body: 'the len is 0, thus it pass through if (len < 0)' plus a segfault against CPython's OverflowError",
-  "parent-build", "Pure py/, three lines of Python, no OS. The cheapest remaining spatial reproduction."),
+  "not-reproducible-in-config", "Fix reversal fails: py/binary.c's mp_binary_set_int now clamps val_sz to dest_sz, so a zero-length destination writes nothing even with the overflow check off. The 2023 defect needs the 2023 tree."),
  ("MPY-S03", 13007, "heap-overread", "CWE-125", "py/objslice.c:slice_indices", "gc-heap",
   "slice.indices(0.0): a float object is read as an integer, so the read runs 8 bytes past a 16-byte object",
   "yes", "body gives the object extent [0x7fffef005760,0x7fffef005770) and the access at +0x8 past it",
-  "parent-build", "Needs float objects, which this domain now has."),
+  "not-reproducible-in-config", "Fix reversal is pointless here: under MICROPY_LONGINT_IMPL_NONE mp_obj_int_get_checked is MP_OBJ_SMALL_INT_VALUE, a shift of the tagged word with no memory read, so the out-of-bounds read cannot occur at all."),
  ("MPY-S04", 13220, "heap-overread", "CWE-125", "lib/re1.5/compilecode.c:68", "gc-heap",
   "an unterminated character class: the `for (cnt = 0; *re != ']'; ...)` loop walks off the pattern",
   "yes", "body quotes the loop and marks the two unchecked advances",
@@ -57,7 +57,7 @@ ROWS = [
  ("MPY-S05", 15271, "heap-overflow", "CWE-787", "py/objarray.c", "gc-heap",
   "array.append after a grow that raised MemoryError: the free-slot count was incremented before the allocation",
   "yes", "PR body: 'the next attempt to grow the buffer will cause a buffer overflow'",
-  "parent-build", "Reachable without any module: fill the heap, catch MemoryError, append again."),
+  "measured", "Measured by REVERTING the fix on the pinned tree, which its one-hunk shape allows."),
  ("MPY-S06", 13005, "heap-overflow", "CWE-787", "py/moductypes.c", "gc-heap",
   "uctypes.struct laid over a bytearray shorter than the descriptor",
   "yes", "body walks the 1-byte bytearray into a descriptor that reads more",
@@ -168,6 +168,14 @@ MEASURED = {
     # WRONG guest runner, domain creation returned -1, and all three "faults" were the
     # monitor's, at pc 0x8001b10e with cause 5. Check `Created domain ID = 0`.
     19314: ("measured", "crash-sigsegv", "fault-cause7"),
+    # 2026-08-18, FIX REVERSAL on the pinned tree rather than a parent build: upstream
+    # 3d93fed0aab8 is one hunk with no second hardening elsewhere, so undoing it puts the
+    # defect back in an otherwise-current tree. See the case directory's revert-the-fix.patch.
+    # "S05 1 4104 -1": the MemoryError fired (so the precondition was CREATED, which four
+    # earlier shapes of this test never managed), eight appends then landed past the end of a
+    # 4096-byte allocation, and nothing trapped them. Which live object they hit was not
+    # established, hence untrapped-no-crash and not untrapped-identical.
+    15271: ("measured", "not-run", "untrapped-no-crash"),
 }
 
 def main():

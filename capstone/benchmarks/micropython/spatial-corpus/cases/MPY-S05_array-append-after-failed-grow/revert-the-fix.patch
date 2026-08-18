@@ -1,0 +1,26 @@
+Undo upstream 3d93fed0aab8 so the pre-fix defect of #15271 is present again.
+
+This is a FIX REVERSAL on the pinned tree, not a parent build, and the case files
+say so wherever they are quoted. It is the cleaner of the two for this row: only
+the defect differs from the pin, where a backport to 2024 would also drag in two
+years of unrelated change. It is only available because the fix is one hunk with no
+second hardening elsewhere -- MPY-S02 and MPY-S03 were checked for the same
+treatment and both failed it, see ../../STATUS.md.
+
+Pre-fix, self->free is set to 8 BEFORE the allocation that is supposed to justify
+it. If m_renew raises MemoryError the array is left claiming eight free slots it
+does not own, and the next append writes past the end of the buffer.
+
+--- w/py/objarray.c
++++ i/py/objarray.c
+@@ -392,9 +392,8 @@ static mp_obj_t array_append(mp_obj_t self_in, mp_obj_t arg) {
+     if (self->free == 0) {
+         size_t item_sz = mp_binary_get_size('@', self->typecode, NULL);
+         // TODO: alloc policy
+-        size_t add_cnt = 8;
+-        self->items = m_renew(byte, self->items, item_sz * self->len, item_sz * (self->len + add_cnt));
+-        self->free = add_cnt;
++        self->free = 8;
++        self->items = m_renew(byte, self->items, item_sz * self->len, item_sz * (self->len + self->free));
+         mp_seq_clear(self->items, self->len + 1, self->len + self->free, item_sz);
+     }

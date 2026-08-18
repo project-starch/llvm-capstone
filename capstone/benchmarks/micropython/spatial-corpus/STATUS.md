@@ -5,13 +5,14 @@ Generated numbers come from `spatial-allocator-corpus.csv`; run
 
 | | rows | certain | measured in the domain |
 |---|---|---|---|
-| spatial | 30 | 21 | 1 |
+| spatial | 30 | 21 | 2 |
 
 ## Measured
 
 | id | issue | stock | domain |
 |---|---|---|---|
 | `MPY-S01` | #19314 | SIGSEGV | **fault, cause 7** — bounds `0x60000` = the whole 384 KiB heap |
+| `MPY-S05` | #15271 | not run | **untrapped** — eight writes past a 4096-byte allocation completed |
 
 The first trapped defect in either corpus, and the bounds width is why it is not
 the good news it looks like: the write was stopped at the far edge of the REGION,
@@ -20,9 +21,25 @@ the way there. Detail in `cases/MPY-S01_sequence-repeat-size-overflow/RESULT.txt
 
 ## Why the rest are not measured, and what each would need
 
+`MPY-S05` was reached by REVERTING its fix on the pinned tree rather than building
+a parent. That is available only when a fix is one hunk with no second hardening
+elsewhere, and it was checked for `S02` and `S03` too. Both failed, and not for
+want of effort:
+
+- `S02` (#13041, zero-length `int.to_bytes`): `py/binary.c`'s `mp_binary_set_int`
+  now clamps `val_sz` to `dest_sz`, so a zero-length destination writes nothing
+  even with the overflow check reverted. The 2023 defect needs the 2023 tree.
+- `S03` (#13007, float read as int in `slice.indices`): under
+  `MICROPY_LONGINT_IMPL_NONE` `mp_obj_int_get_checked` is `MP_OBJ_SMALL_INT_VALUE`,
+  a shift of the tagged word with no memory read at all. The out-of-bounds read
+  cannot occur in this configuration however the source is arranged.
+
+Both were established by reading the source before spending a build.
+
 | reason | count | rows |
 |---|---|---|
-| parent build needed, otherwise reachable | 4 | `S02` `S03` `S04` `S05` |
+| parent build needed, otherwise reachable | 1 | `S04` |
+| not reproducible in this port's configuration | 2 | `S02` `S03` |
 | needs a VFS + block device | 5 | `S07` `S08` `S09` `S16` `S17` |
 | needs `.mpy` loading (`MICROPY_PERSISTENT_CODE_LOAD` is 0) | 4 | `S10` `S11` `S12` `S13` |
 | needs modules absent here (ssl, machine) | 2 | `S14` `S15` |
@@ -32,9 +49,8 @@ the way there. Detail in `cases/MPY-S01_sequence-repeat-size-overflow/RESULT.txt
 | not applicable to a 32-bit-`int` target | 1 | `S20` |
 | 2014 tree, parent build not worth the archaeology | 1 | `S21` |
 
-The four `parent-build` rows are the cheap ones and are all pure `py/` or a module
-this domain already carries: `S02` is three lines of Python, `S04` needs only the
-`re` module, `S05` needs no module at all.
+`S04` is the one cheap row left: it needs only the `re` module, which this domain
+already carries, and a parent build of the 2023 tree.
 
 ## The scope split, which is the point of this corpus
 
