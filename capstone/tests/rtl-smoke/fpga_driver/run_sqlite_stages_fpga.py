@@ -130,6 +130,57 @@ DESTRUCTIVE_SWITCHES = frozenset({220})
 # independently. Report it as correlated-by-granule, never as proven tag loss.
 S07_RECORDS_ROLL = (os.environ.get("S07_RECORDS_ROLL") or "1") == "1"
 
+def settled_halted_read(console, C, aperture, parks=(0, 224), settle=None, fresh_timeout=None):
+    """Read one debug-mux aperture with the hart HALTED, returning the SETTLED value or None.
+
+    ONE implementation, deliberately. Three separate bugs today came from two divergent copies
+    of this logic living in the same file -- the early halt control had it right while the
+    per-domain path had it wrong, twice, in different ways. A second copy is how that happens.
+
+    Three things all have to be true at once, and each was got wrong on its own before:
+
+    1. THE MARK COMES BEFORE THE TRANSITION. The board pushes led_state ON CHANGE, so a settled
+       value emits nothing and must be made to change. Forcing that change BEFORE taking the
+       mark means the event arrives while nobody is listening; both samples then time out and
+       the read reports VOID (or silently returns a cached payload, which is worse).
+
+    2. THE PARK APERTURE MUST DIFFER IN VALUE FROM THE TARGET. Parking at a fixed aperture
+       whose value happens to equal the target's produces NO CHANGE and therefore no event, so
+       the read reports VOID for a perfectly readable aperture. Boot 10: 204 and 250 returned
+       values while 208, 249 and all four granule apertures went VOID -- not a wedge effect, a
+       collision with the park value. Hence a LIST of parks, tried in turn.
+
+    3. THE FIRST EVENT IS THE TRANSIENT, NOT THE ANSWER. Immediately after the walk the byte is
+       the OR of the park and the target (the pulse stretcher). The first event therefore
+       carries contamination. Wait for it only to prove the path is LIVE, then let the extra
+       bits decay (~21 ms) and take the settled payload.
+
+    Returns None when no park produced an event, which then means genuinely unreadable rather
+    than "we were looking the wrong way".
+    """
+    _settle = LED_SETTLE_S if settle is None else settle
+    _to = LED_FRESH_TIMEOUT_S if fresh_timeout is None else fresh_timeout
+    _ev = C.LISTEN.get("led_state", "led_state")
+    for _park in parks:
+        if _park == aperture:
+            continue
+        set_switch_value(console, _park)
+        time.sleep(0.05)
+        _mark = console.now()                 # 1. mark FIRST
+        set_switch_value(console, aperture)   # ...then the transition
+        try:
+            console.wait_event(_ev, timeout=_to, since=_mark)
+        except Exception:
+            continue                          # 2. this park collided; try the next
+        time.sleep(_settle)                   # 3. let the transient decay
+        _s = console.latest(_ev)
+        _b = _s.get("states") if isinstance(_s, dict) else None
+        if _b:
+            return sum((1 << i) for i, b in enumerate(_b) if b)
+    return None
+
+
+
 LED_SETTLE_S = float(os.environ.get("LED_SETTLE_S") or 0.5)
 # How long to wait for a FRESH led_state payload before falling back to the cached one.
 LED_FRESH_TIMEOUT_S = float(os.environ.get("LED_FRESH_TIMEOUT_S") or 5.0)
@@ -713,28 +764,10 @@ def main():
         # The two are complementary: this one always runs, that one has the stronger reference.
         if os.environ.get("EARLY_HALT_CONTROL", "1") == "1":
             try:
-                def _fresh_read_early(_v):
-                    """Force the settled value to be EMITTED, then read it. See the teardown copy."""
-                    set_switch_value(console, _v)
-                    time.sleep(LED_SETTLE_S)
-                    set_switch_value(console, 0)
-                    time.sleep(0.05)
-                    _mark = console.now()
-                    set_switch_value(console, _v)
-                    try:
-                        console.wait_event(C.LISTEN.get("led_state", "led_state"),
-                                           timeout=LED_FRESH_TIMEOUT_S, since=_mark)
-                    except Exception:
-                        return None
-                    time.sleep(LED_SETTLE_S)
-                    _s = console.latest(C.LISTEN.get("led_state", "led_state"))
-                    _b = _s.get("states") if isinstance(_s, dict) else None
-                    return sum((1 << i) for i, b in enumerate(_b) if b) if _b else None
-
                 console.gdb_start()
                 try:
                     console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
-                    _eh = {_a: _fresh_read_early(_a) for _a in (204, 208)}
+                    _eh = {_a: settled_halted_read(console, C, _a) for _a in (204, 208)}
                     _ok = sum(1 for _x in _eh.values() if _x is not None)
                     _d = "  ".join(f"sw={_a}:" + ("VOID" if _x is None else f"0x{_x:02x}")
                                    for _a, _x in _eh.items())
@@ -1159,6 +1192,16 @@ def main():
 
                     Disagreement returns None (VOID). A contaminated aperture must never be
                     handed back as a value."""
+                    # HALTED READS GO THROUGH THE ONE CANONICAL IMPLEMENTATION, so that
+                    # this file has exactly one copy of the mark/park/settle logic. Three
+                    # bugs today came from two copies diverging: the early control had it
+                    # right while this path had it wrong, twice, in different ways.
+                    #
+                    # Everything below is for RUNNING reads, where the defence needed is
+                    # against stretcher contamination rather than against emit-on-change.
+                    if _force_emit:
+                        return settled_halted_read(console, C, _sw)
+
                     set_switch_value(console, _sw)
 
                     # FORCE THE SETTLED VALUE TO BE EMITTED when reading a halted core. The board
@@ -1808,8 +1851,7 @@ def main():
                             try:
                                 _pa = {}
                                 for _ap in (209, 205, 206, 207):
-                                    _pa[_ap] = _read_sw(_ap, allow_cached=False,
-                                                        _force_emit=True)
+                                    _pa[_ap] = settled_halted_read(console, C, _ap)
                                 set_switch_value(console, 0)
 
                                 def _mk(_lo, _hi):
@@ -1982,51 +2024,12 @@ def main():
                 print(_t, flush=True)
                 transcript.append(_t + "\n")
             else:
-                def _fresh_read(_v):
-                    """Read an aperture while halted, FORCING the settled value to be emitted.
-
-                    The board pushes led_state ON CHANGE. A settled value therefore emits
-                    nothing, and "no event" was being read as "no reading" when it in fact means
-                    "the value has stopped moving" -- which, while halted, is the good case.
-
-                    Halting is the one configuration where the pulse stretcher is HARMLESS. `clk`
-                    is the MMCM output (ariane_xilinx.sv:1209) and the stretcher counts down on it
-                    (:961) regardless of what the hart is doing, while the mux INPUT goes static:
-                    no commits, so the pc arms stop moving; no execution, so debug_reg_byte stops
-                    moving; the s07 registers were static anyway. Static input plus a running
-                    down-counter is exactly what the stretcher was built for -- every bit not
-                    driven by the selected aperture decays in ~21 ms and the driven bits reload.
-                    So a halted read is not frozen, it is the only read whose contamination
-                    provably clears.
-
-                    To make it observable: walk away to aperture 0 and back. The walk ORs in
-                    aperture 0 (an event), and ~21 ms later the extra bits decay away, leaving the
-                    target's true value -- a CHANGE, which the server emits. Then confirm an event
-                    genuinely arrived after the mark before trusting latest(), so this is not the
-                    stale-cache path in disguise: latest() is only consulted once an event since
-                    the mark is proven, which makes it a value from THIS read."""
-                    set_switch_value(console, _v)
-                    time.sleep(LED_SETTLE_S)
-                    set_switch_value(console, 0)       # force a transition
-                    time.sleep(0.05)
-                    _mark = console.now()
-                    set_switch_value(console, _v)      # ...and back
-                    try:
-                        console.wait_event(C.LISTEN.get("led_state", "led_state"),
-                                           timeout=LED_FRESH_TIMEOUT_S, since=_mark)
-                    except Exception:
-                        return None                    # nothing emitted at all -> unreadable
-                    time.sleep(LED_SETTLE_S)           # >> the ~21 ms decay of the transit OR
-                    _s = console.latest(C.LISTEN.get("led_state", "led_state"))
-                    _b = _s.get("states") if isinstance(_s, dict) else None
-                    return sum((1 << i) for i, b in enumerate(_b) if b) if _b else None
-
                 console.gdb_start()
                 try:
                     console.gdb_cmd("monitor halt", C.GDB_PROMPT, timeout=30.0)
                     _hits = {}
                     for _ap in (204, 208, 224):
-                        _hits[_ap] = _fresh_read(_ap)
+                        _hits[_ap] = settled_halted_read(console, C, _ap)
                     # A KNOWN EXPECTED VALUE, not merely "an event arrived". The selftest ran
                     # immediately above and, when it passes, leaves 204 bit 6 (ldc_seen) SET --
                     # that is what "post-204 = 0x41" means. So the halted read of 204 has a
