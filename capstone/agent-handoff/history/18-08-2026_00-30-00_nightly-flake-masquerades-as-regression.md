@@ -77,3 +77,50 @@ gates still stand on their own: Capstone lit 60/60 here, and 7952 tests across
 Capstone, RISCV, TableGen and X86 on 2026-08-17 with six pre-existing
 emutls/tls-android failures that were verified pre-existing by reverting the two
 shared-code hunks and rebuilding.
+
+---
+
+## SECOND INSTANCE, 2026-08-18, and it is a different suite
+
+Run `nightly-20260818_184537`, core tier, on `capstone-i128-mul-and-capinit-test`
+(the i128 widening-mul fix plus the C-19 test change, on `cb459e7fe2dc`).
+
+Same shape, different suite, which is what makes it a pattern rather than an
+accident. `linear-uninit-corpus`, the FAIL(1) of the first instance, PASSED here in
+952 s. The FAIL(1) this time is `intra-domain-mrev`, and it is again a boot flake:
+
+    FAIL  held_protected_value_lifecycle  (no fault line after 3 attempts)
+
+The discriminator that worked, and the one from the first instance did NOT: this
+suite's per-probe logs contain no `Created domain ID` line at all, so the marker
+used last time reports 0 for the passing probes too and separates nothing. What
+does separate them is SIZE.
+
+    held_protected_value_lifecycle    3,131 bytes   <- the failure
+    held_mem_alias_fault             73,683
+    held_ambient_miss                74,059
+    held_no_revoke_ok                74,216
+    held_unrelated_ok                74,221
+    held_revoke_fault                74,268
+    held_split_sibling_ok            74,306
+    held_arena_survives_revoke       74,308
+
+Its seven siblings all produce 73-74 KB. The failing probe produces 3 KB and stops
+just after MEDELEG. It never reached the point where it could fault, so "no fault
+line" is not a result about the compiler.
+
+The other five red suites -- authority, coremark, beebs, static-cap-globals,
+shared-region -- all exit 75 and all carry `__CAPSTONE_INFRA_FLAKE__`.
+
+So: NINE genuine passes, SIX boot flakes, and no failure attributable to anything
+under test. Overall FAIL, and the overall verdict is worthless again.
+
+Worth noting for the flake rate itself: `coremark` passed in 23 s in the first
+instance and here burned 488 s in retries before giving up. The boot flakiness is
+not stable between runs, so a suite's colour is not comparable across nightlies.
+
+WHAT THIS ADDS TO THE FIX LIST. The first instance proposed propagating the flake
+code so an exhausted retry budget exits 75 rather than 1. Still not done, and this
+run is the second time it cost a manual investigation. Add one thing to it: the
+per-probe check must not key on a marker only some suites emit. Log size against
+sibling probes worked here and needs nothing suite-specific.
