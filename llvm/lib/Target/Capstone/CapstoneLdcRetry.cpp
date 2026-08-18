@@ -86,6 +86,14 @@ static cl::opt<bool> RetryUntaggedLdc(
              "and re-issue the identical load if it came back NOT_CAP"),
     cl::init(false));
 
+static cl::opt<bool> DoubleLdc(
+    "capstone-double-ldc", cl::Hidden,
+    cl::desc("S-07 mitigation: emit every ldc TWICE and use the second result. "
+             "Same question as -capstone-retry-untagged-ldc (does re-reading "
+             "return a good value?) at a tenth of the code size, because it "
+             "needs no type query, no branch, no scratch register and no PHI"),
+    cl::init(false));
+
 namespace {
 
 class CapstoneLdcRetry : public MachineFunctionPass {
@@ -95,6 +103,12 @@ public:
   CapstoneLdcRetry() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override;
+
+private:
+  /// Unconditional-reload form; see -capstone-double-ldc.
+  bool instrumentDouble(MachineInstr &MI);
+
+public:
 
   StringRef getPassName() const override { return PASS_NAME; }
 
@@ -200,13 +214,69 @@ bool CapstoneLdcRetry::instrument(MachineInstr &MI) {
   return true;
 }
 
+/// Emit the load a second time and let every consumer read the SECOND result.
+///
+/// WHY THIS MODE EXISTS. The guarded form above costs ~43 bytes per site at -O0 --
+/// a type query, a compare, a branch, a duplicated load and a PHI whose merge gets
+/// spilled. Over SQLite's 54,844 `ldc` sites that is +2.25 MiB, which pushes the
+/// image past `code_len + max(code_len, DATA)` into an order-11 allocation that
+/// `__get_free_pages` cannot satisfy, so the domain fails to be created and the
+/// experiment never runs. Restricting instrumentation to loads whose result feeds
+/// another capability op does not save enough either: measured on the real
+/// artifact, that is 32% of sites and still lands in order-11.
+///
+/// This form answers the SAME question -- does re-reading the identical address
+/// return a good value? -- in one instruction, with no control flow, no scratch
+/// register and no PHI. If the defect is a transient bad load, the second read
+/// repairs it; if memory itself holds an untagged granule, both reads return it
+/// and the domain still wedges. That is the same discrimination the guarded form
+/// gives, so nothing is lost by taking the cheap one.
+///
+/// The second load deliberately carries NO memoperands. LLVM treats a load with
+/// no memoperand as touching unknown memory, which stops anything downstream from
+/// folding the pair back into a single access -- the failure mode that once turned
+/// a repeat-the-load-N-times ladder on this project into ONE load regardless of N,
+/// and reported with total confidence. The artifact is still disassembled and the
+/// loads counted before any board time; this only removes the obvious way to lose.
+bool CapstoneLdcRetry::instrumentDouble(MachineInstr &MI) {
+  MachineBasicBlock &MBB = *MI.getParent();
+  MachineFunction &MF = *MBB.getParent();
+  MachineRegisterInfo &MRI = MF.getRegInfo();
+  const CapstoneInstrInfo &TII =
+      *MF.getSubtarget<CapstoneSubtarget>().getInstrInfo();
+  const DebugLoc &DL = MI.getDebugLoc();
+
+  Register OrigDef = MI.getOperand(0).getReg();
+  if (OrigDef.isPhysical())
+    return false;
+  MachineOperand &Base = MI.getOperand(1);
+  if (!Base.isReg() || Base.getReg().isPhysical())
+    return false;
+
+  const TargetRegisterClass *RC = MRI.getRegClass(OrigDef);
+  Register NewDef = MRI.createVirtualRegister(RC);
+
+  // Point every existing consumer at the second load's result, then give the
+  // first load its own register back -- replaceRegWith rewrites the def too.
+  MRI.replaceRegWith(OrigDef, NewDef);
+  MI.getOperand(0).setReg(OrigDef);
+
+  // The base has to stay live across the first load for the second to use it.
+  Base.setIsKill(false);
+
+  BuildMI(MBB, std::next(MI.getIterator()), DL, TII.get(Capstone::LDC), NewDef)
+      .add(MI.getOperand(1))
+      .add(MI.getOperand(2));
+  return true;
+}
+
 bool CapstoneLdcRetry::runOnMachineFunction(MachineFunction &MF) {
   // Deliberately NOT skipFunction(MF). That honours `optnone`, which clang puts
   // on EVERY function at -O0 -- and the silicon SQLite domain is built at -O0,
   // so skipping there would disable this pass in exactly the configuration
   // where S-07 was measured. The same mistake was made once already by the
   // S-06 granule-copy workaround and had to be corrected.
-  if (!RetryUntaggedLdc)
+  if (!RetryUntaggedLdc && !DoubleLdc)
     return false;
 
   // Collect first: instrumenting splits blocks, which invalidates iteration.
@@ -220,7 +290,7 @@ bool CapstoneLdcRetry::runOnMachineFunction(MachineFunction &MF) {
 
   bool Changed = false;
   for (MachineInstr *MI : Loads)
-    Changed |= instrument(*MI);
+    Changed |= DoubleLdc ? instrumentDouble(*MI) : instrument(*MI);
 
   return Changed;
 }

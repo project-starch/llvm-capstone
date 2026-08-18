@@ -11,6 +11,9 @@
 ; RUN: llc -mtriple=capstone64 -verify-machineinstrs \
 ; RUN:     -capstone-retry-untagged-ldc=true < %s \
 ; RUN:   | FileCheck %s --check-prefix=ON
+; RUN: llc -mtriple=capstone64 -verify-machineinstrs \
+; RUN:     -capstone-double-ldc=true < %s \
+; RUN:   | FileCheck %s --check-prefix=DBL
 
 ; A dependent chain: the second load's address IS the first load's result. This
 ; is the shape all four silicon S-07 wedges share.
@@ -36,6 +39,20 @@ entry:
   %b = load ptr addrspace(200), ptr addrspace(200) %a, align 16
   ret ptr addrspace(200) %b
 }
+
+; DBL-LABEL: chase:
+; The cheap mitigation: the SAME address is loaded twice back to back and every
+; consumer reads the second result. No type query, no branch, no PHI -- which is
+; the whole point, since the guarded form above costs ~43 bytes per site and
+; pushes the SQLite image into an allocation order the kernel cannot satisfy.
+; The first access keeps no consumer (they all read the second), so its def lands
+; in `zero` -- it still ISSUES, which is the point, and it survives DCE only
+; because the inserted load carries no memoperands. Matched loosely so the test
+; asserts the doubling rather than the register allocator's choice.
+; DBL:      ldc     {{.*}}, 0([[DB:a[0-9]+]])
+; DBL-NEXT: ldc     [[D2:a[0-9]+]], 0([[DB]])
+; The pair must NOT collapse back into one load, and must not grow a guard.
+; DBL-NOT:  lcc
 
 ; A plain integer load must NOT be instrumented -- only ldc is.
 
