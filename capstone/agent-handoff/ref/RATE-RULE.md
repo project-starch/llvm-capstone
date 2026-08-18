@@ -411,3 +411,50 @@ system the instrument was altering.
 same order, same count. That is the matched pair the era comparison is not.
 
 Until it resolves, **do not pool boots 1-7 with 8-14**, and treat the headline k/n as provisional.
+
+## PRE-DECLARED: the halt-control A/B
+
+**Committed with n = 1 boot per arm on the board, before the rest is collected.** The era split
+that motivated this was chosen after seeing the data; this one is not, and the difference is the
+whole point.
+
+### Design
+
+**One variable.** Identical interleaved ladder every boot — same domains, same order, same count —
+alternating `EARLY_HALT_CONTROL=1` and `EARLY_HALT_CONTROL=0`. Nothing else may change while this
+runs. Boot 14 = ON, boot 15 = OFF, boot 16 = ON, and so on.
+
+### Analysis, fixed now
+
+Fisher's exact, one-sided, testing **ON worse than OFF**, on pooled `XU` reps per arm.
+
+Power, computed before collection, under the era split's own estimates (OFF 0.15, ON 0.55):
+
+| n per arm | expected table | p |
+|---|---|---|
+| 8 | 4/8 vs 1/8 | 0.141 |
+| 12 | 7/12 vs 2/12 | 0.045 |
+| 16 | 9/16 vs 2/16 | 0.012 |
+| 20 | 11/20 vs 3/20 | 0.009 |
+
+**Target n = 16 per arm.** n = 8 is underpowered and a null there means nothing; n = 12 is the
+threshold and only if the effect is as large as the era split suggested. Stated in advance so a
+null is read as low power rather than as absence of an effect — the same trap this page already
+recorded once today for the `S7T` comparison.
+
+### Standing data, not to be pooled with it
+
+Boot 14 (ON): k=1 n=1. Boot 15 (OFF): k=1 n=4, wedging at rep 4. Two boots decide nothing and are
+recorded only so the arms' running totals are auditable.
+
+### If the effect is real
+
+The early halt control is withdrawn from any boot whose rate is being measured, and the k/n on
+this page is re-derived from `EARLY_HALT_CONTROL=0` boots only. The halted read remains valid as
+an *instrument* — the `0x90` vs `0x9c` subset proof stands, since it is a statement about the
+readout path and not about the wedge rate — but it may not run beside a rate measurement.
+
+### If it is not
+
+Boots 1-7 and 8-14 can be pooled again, and the era difference is attributed to the interleaved
+ladder or to chance, both of which are testable the same way.
