@@ -1,5 +1,69 @@
 # S-07 — a capability read back from memory comes back UNTAGGED, sporadically
 
+> # ROOT CAUSE FOUND AND CONFIRMED ON SILICON — 2026-08-19. THIS SUPERSEDES EVERYTHING BELOW.
+>
+> **The write buffer reorders two stores to the same 16-byte granule, and the loser's tag wins.**
+>
+> The buffer hits at **64-bit word** granularity, so a granule's two halves occupy **separate
+> entries** — but each entry writes the **whole granule's single tag bit** on drain, and drain
+> order is `rr_arb_tree` rotation, **not program order**:
+>
+>     wt_dcache_wbuffer.sv:444   hit compare on wtag == {address_tag, address_index[11:3]}  -> 8-byte
+>     wt_dcache_wbuffer.sv:410   wr_idx_o  = wr_paddr[11:4]                                 -> 16-byte
+>     wt_dcache_wbuffer.sv:416   wr_ctag_o = wbuffer_q[rtrn_ptr].ctag
+>     wt_dcache_mem.sv:459       cap_tag_q[wr_idx_i][j] <= wr_ctag_i
+>
+> So an older plain store to `G+8` can drain **after** a younger `stc` to `G+0`, overwriting the
+> tag the `stc` set. The capability is then reloaded untagged and faults on first use.
+>
+> **Measured on silicon**, 16384 slots per arm, one boot (`wbuf_kernel.h`, this repo):
+>
+> | arm | sequence | lost | expected |
+> |---|---|---|---|
+> | wb0 | `stc G` only | **0** | 0 |
+> | wb4 | plain `G+16`; `stc G` | **0** | 0 — granule-scoped |
+> | wb3 | plain `G+8`; **64 stores**; `stc G` | **0** | 0 — buffer drained |
+> | wb1 | plain `G+8`; `stc G` | **1107 (6.76%)** | **0** — REORDER |
+>
+> **wb1 vs wb3 is the decisive pair**: identical stores, identical granule, differing only by
+> intervening traffic that drains the buffer. 1107 versus 0.
+>
+> ### The SQLite trigger, end to end
+>
+> `sqlite3JournalOpen` does `memset(p, 0, sizeof(MemJournal))` and, twelve source lines later,
+> `pJfd->pMethods = ...`. `pMethods` is the **first** member of `sqlite3_file`, so it occupies
+> `[p+0, p+16)` — one granule — and the memset's plain stores hit its high word. The reorder
+> clears the tag the `stc` set; `sqlite3OsRead+0x48` (`ldc a4, 0x0(a0)`) reloads `pMethods`
+> untagged; `+0x4c` (`ldc a4, 0x20(a4)`) then faults with **mcause 25 = UNEXPECTED_OPERAND**,
+> because its operand is NOT_CAP. Confirmed by the latched trap mepc at **11 wedges across 7
+> distinct `DBAS` values**, all at offset `0x2a83c`.
+>
+> ### WHY THE "2.1M RELOADS, ZERO LOST" RESULT BELOW MISSED IT — and it is not a wrong measurement
+>
+> `tagsweep` stores **every** slot and only **then** clobbers a few. By the time its clobber
+> issues, the `stc` entry has long since drained, so the two stores are **never in the buffer
+> simultaneously** and the triggering condition is never created. The 2,097,160 reloads are real
+> and the instrument was genuinely proven — it simply measured a different experiment.
+>
+> This is the failure mode the project rules name explicitly: *directed tests that come back clean
+> without ever creating the triggering condition.* The exclusion below should be read as
+> "eviction and bulk reload are not the mechanism", which remains true, and **not** as evidence
+> against tag loss.
+>
+> ### The defect is BIDIRECTIONAL — see the sibling issue
+>
+> The same reorder also runs the other way, leaving a **valid tag over scalar data** at 7.27%.
+> That is a **soundness** hole rather than an availability one and has its own folder:
+> **`S09-write-buffer-tag-forgery/`**. It is arguably more serious than this issue, because a
+> forged tag produces no trap and no indication.
+>
+> QEMU cannot reproduce either direction: its capability store is one atomic 16-byte-plus-tag
+> operation with no write buffer, no per-word entries and no drain arbiter.
+>
+> **Status:** mechanism identified from the RTL, confirmed on silicon by directed test. The fix is
+> open. Everything below this box is the investigation that preceded the root cause and is kept
+> for its exclusions, which remain valid.
+
 > ## UPDATE 2026-08-18 — 2.1M capability reloads through DRAM on silicon, ZERO tags lost. READ THIS FIRST.
 >
 > Sibling issues, so a reader who arrived with the wrong symptom is redirected immediately: S-06

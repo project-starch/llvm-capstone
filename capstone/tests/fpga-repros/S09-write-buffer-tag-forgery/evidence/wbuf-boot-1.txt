@@ -1,0 +1,151 @@
+===== wb0 (pos 1) =====
+
+# echo '### RUNG 1/5 wb0 ###'; /test-domains/lpc wb0 /test-domains/wb0.dom; rc=$
+?; echo "### RUNG 1 wb0 END rc=$rc ###"; echo D''N_$rc
+### RUNG 1/5 wb0 ###
+ladder-perf: A/pre-create-dom
+DBAS:825E0000
+DENT:00000000
+ladder-perf: wb0 domain ID = 0
+ECSA:00000000
+EXTC:12345678
+FNCC:00000009
+ARG1:0000000C
+ARG4:00000000
+SHA0:00000000
+RGID:0000000C
+APRM:00000001
+AREV:00000002
+SHA1:00000007
+SHA2:00000000
+BASE:82524000
+ALEN:00001000
+SHA3:00000002
+SHA4:00000001
+SHA5:00000000
+SHA6:00000000
+ECSZ:00000000
+ladder-perf: RESULT wb0 retval=2952790016 cycles=3697042 ran=53406
+### RUNG 1 wb0 END rc=0 ###
+DN_0
+# 
+===== wb2 (pos 2) =====
+echo '### RUNG 2/5 wb2 ###'; /test-domains/lpc wb2 /test-domains/wb2.dom; rc=$
+?; echo "### RUNG 2 wb2 END rc=$rc ###"; echo D''N_$rc
+### RUNG 2/5 wb2 ###
+ladder-perf: A/pre-create-dom
+DBAS:82600000
+DENT:00000000
+ladder-perf: wb2 domain ID = 1
+ECSA:00000001
+EXTC:12345678
+FNCC:00000009
+ARG1:0000000E
+ARG4:00000000
+SHA0:00000001
+RGID:0000000E
+APRM:00000001
+AREV:00000002
+SHA1:00000009
+SHA2:00000000
+BASE:82511000
+ALEN:00001000
+SHA3:00000002
+SHA4:00000001
+SHA5:00000001
+SHA6:00000001
+ECSZ:00000000
+ladder-perf: RESULT wb2 retval=2952805209 cycles=4098349 ran=53406
+### RUNG 2 wb2 END rc=0 ###
+DN_0
+# 
+===== wb4 (pos 3) =====
+echo '### RUNG 3/5 wb4 ###'; /test-domains/lpc wb4 /test-domains/wb4.dom; rc=$
+?; echo "### RUNG 3 wb4 END rc=$rc ###"; echo D''N_$rc
+### RUNG 3/5 wb4 ###
+ladder-perf: A/pre-create-dom
+DBAS:82620000
+DENT:00000000
+ladder-perf: wb4 domain ID = 2
+ECSA:00000002
+EXTC:12345678
+FNCC:00000009
+ARG1:00000010
+ARG4:00000000
+SHA0:00000002
+RGID:00000010
+APRM:00000001
+AREV:00000002
+SHA1:0000000A
+SHA2:00000000
+BASE:8250E000
+ALEN:00001000
+SHA3:00000002
+SHA4:00000001
+SHA5:00000002
+SHA6:00000002
+ECSZ:00000000
+ladder-perf: RESULT wb4 retval=2952790016 cycles=3992769 ran=53406
+### RUNG 3 wb4 END rc=0 ###
+DN_0
+
+===== wb3 (pos 4) =====
+# echo '### RUNG 4/5 wb3 ###'; /test-domains/lpc wb3 /test-domains/wb3.dom; rc=$
+?; echo "### RUNG 4 wb3 END rc=$rc ###"; echo D''N_$rc
+### RUNG 4/5 wb3 ###
+ladder-perf: A/pre-create-dom
+DBAS:82640000
+DENT:00000000
+ladder-perf: wb3 domain ID = 3
+ECSA:00000003
+EXTC:12345678
+FNCC:00000009
+ARG1:00000012
+ARG4:00000000
+SHA0:00000003
+RGID:00000012
+APRM:00000001
+AREV:00000002
+SHA1:0000000C
+SHA2:00000000
+BASE:82531000
+ALEN:00001000
+SHA3:00000002
+SHA4:00000001
+SHA5:00000003
+SHA6:00000003
+ECSZ:00000000
+ladder-perf: RESULT wb3 retval=2952790016 cycles=45263573 ran=53406
+### RUNG 4 wb3 END rc=0 ###
+DN_0
+
+===== wb1 (pos 5) =====
+# echo '### RUNG 5/5 wb1 ###'; /test-domains/lpc wb1 /test-domains/wb1.dom; rc=$
+?; echo "### RUNG 5 wb1 END rc=$rc ###"; echo D''N_$rc
+### RUNG 5/5 wb1 ###
+ladder-perf: A/pre-create-dom
+DBAS:82660000
+DENT:00000000
+ladder-perf: wb1 domain ID = 4
+ECSA:00000004
+EXTC:12345678
+FNCC:00000009
+ARG1:00000014
+ARG4:00000000
+SHA0:00000004
+RGID:00000014
+APRM:00000001
+AREV:00000002
+SHA1:0000000E
+SHA2:00000000
+BASE:82576000
+ALEN:00001000
+SHA3:00000002
+SHA4:00000001
+SHA5:00000004
+SHA6:00000004
+ECSZ:00000000
+ladder-perf: RESULT wb1 retval=2952791123 cycles=4009055 ran=53406
+### RUNG 5 wb1 END rc=0 ###
+DN_0
+

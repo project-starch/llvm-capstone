@@ -1,0 +1,128 @@
+#ifndef WBUF_H
+#define WBUF_H
+/* WBUF -- does a PLAIN STORE to a granule's HIGH word destroy the tag of a capability stored to
+ * the granule's LOW word AFTERWARDS?
+ *
+ * THE HYPOTHESIS UNDER TEST (RTL lane, 2026-08-18). The write buffer hits at 64-bit WORD
+ * granularity (wt_dcache_wbuffer.sv:444 compares wtag == {address_tag, address_index[11:3]}),
+ * so G+0 and G+8 occupy SEPARATE entries -- but every entry writes the whole 16-byte GRANULE's
+ * single tag bit on drain (:410 wr_idx_o = wr_paddr[11:4], :416 wr_ctag_o, and
+ * wt_dcache_mem.sv:459 cap_tag_q[wr_idx_i][j] <= wr_ctag_i). Drain is `rr_arb_tree` over
+ * `dirty` -- ROTATION order, not program order. So an older plain store to G+8 can land AFTER a
+ * younger stc to G, and the tag the stc set is overwritten with the plain store's zero.
+ *
+ * WHY THIS SHAPE AND NOT A LOOP. The two stores must be in the buffer SIMULTANEOUSLY, so they
+ * are issued back to back per slot. tagsweep stores every slot and only then clobbers a few,
+ * which is a different experiment: by the time the clobber issues, the stc entry is long gone.
+ * That is why tagsweep's seeded arm shows loss and says nothing about ordering.
+ *
+ * WHY IT CANNOT WEDGE. The reload is checked with lcc field 1, the TOTAL type query, which
+ * returns 7 for NOT_CAP WITHOUT raising (capstone_dyn_unit.anvil:195). A lost tag is COUNTED,
+ * never fatal, so every arm returns a number. Same idiom as tagsweep_type; deliberately not
+ * re-derived.
+ *
+ * THE ARMS, and the point is that ARM 2 MUST FAIL. A batch of negatives from an instrument
+ * that has never produced a positive is worth nothing, and this project has published exactly
+ * that mistake before.
+ *
+ *   WBUF_ARM 0  CONTROL, no plain store at all.  stc G; ldc G.        EXPECT loss == 0
+ *   WBUF_ARM 1  TEST.  plain store G+8; stc G; ldc G.                 program order says the
+ *                      tag survives, so ANY loss is a REORDER and confirms the mechanism
+ *   WBUF_ARM 2  POSITIVE CONTROL. stc G; plain store G+8; ldc G.      EXPECT loss == N.
+ *                      In program order the plain store legitimately clears the granule tag,
+ *                      so this is CORRECT architecture, not a defect -- it exists solely to
+ *                      prove the detector can report a loss at all.
+ *   WBUF_ARM 3  SPACED. plain store G+8; ~64 unrelated stores; stc G. EXPECT loss == 0 if the
+ *                      buffer has drained. Arm 1 losing while arm 3 does not IS the
+ *                      buffer-residency discriminator, and is the strongest single result
+ *                      this test can produce.
+ *   WBUF_ARM 4  NEIGHBOUR GRANULE. plain store to G+16 (the NEXT granule); stc G; ldc G.
+ *                      EXPECT loss == 0. Proves any effect is granule-scoped rather than
+ *                      "a nearby store hurts".
+ *
+ * READING IT. Arms 0/3/4 non-zero, or arm 2 zero, means the instrument is wrong and NOTHING
+ * else in the boot may be read. Only with arm 2 == N and arms 0/4 == 0 does arm 1 carry a
+ * verdict.
+ *
+ * QEMU. CORRECTED: only ARM 2 aborts under emulation, not arms 1-4. op_helper.c:719 asserts
+ * rs1_v->tag before any selector check, so a type query aborts only when a tag has ACTUALLY
+ * been lost -- and QEMU's capability store is one atomic 16-byte-plus-tag operation with no
+ * write buffer, no per-word entries and no drain arbiter, so the reordering under test cannot
+ * occur there. Arms 0/1/3/4 therefore run clean under QEMU and return 0.
+ *
+ * That makes QEMU the NO-REORDER BASELINE rather than a weaker copy of the board: if arm 1
+ * returns 0 under QEMU and non-zero on silicon, the difference IS the mechanism, measured
+ * against an oracle that structurally cannot exhibit it. Arm 2 stays board-only, the same
+ * divergence tagsweep records for its SEED arm.
+ */
+
+#ifndef WBUF_N
+#define WBUF_N 256u             /* slots; x16 B = 4 KiB, comfortably inside one way */
+#endif
+#ifndef WBUF_REPS
+#define WBUF_REPS 64u
+#endif
+#ifndef WBUF_ARM
+#define WBUF_ARM 0
+#endif
+
+#define WBUF_OK    0xB0000000u
+#define WBUF_FAULT 0xEE000000u
+
+/* volatile per element: both stores and the reload must survive to the artifact. A
+ * repeat-the-load-N-times ladder on this project was once CSE'd into ONE ldc regardless of N
+ * and reported with total confidence having tested nothing. The disassembly is checked before
+ * the boot as well -- belt and braces on purpose. */
+static void *volatile wbuf_slots[WBUF_N + 2];
+static unsigned wbuf_anchor;
+static unsigned long volatile wbuf_sink[64];
+
+static unsigned long wbuf_type(const void *p) {
+  unsigned long v = 0;
+  __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(v) : "r"(p));
+  return v;
+}
+
+static unsigned wbuf_compute(void)
+{
+  unsigned long lost = 0;
+  unsigned i, r, k;
+  void *base = (void *)&wbuf_anchor;
+
+  for (r = 0; r < WBUF_REPS; r++) {
+    for (i = 0; i < WBUF_N; i++) {
+      /* hi = the HIGH 8 bytes of slot i's own 16-byte granule */
+      volatile unsigned long *hi =
+          (volatile unsigned long *)((volatile char *)&wbuf_slots[i] + 8);
+      /* nxt = the LOW 8 bytes of the NEXT granule, for the neighbour arm */
+      volatile unsigned long *nxt =
+          (volatile unsigned long *)((volatile char *)&wbuf_slots[i] + 16);
+
+#if WBUF_ARM == 1
+      *hi = 0xB8B8B8B8ul + i;          /* plain store, HIGH word, BEFORE the stc */
+      wbuf_slots[i] = base;            /* stc, LOW word */
+#elif WBUF_ARM == 2
+      wbuf_slots[i] = base;            /* stc first ... */
+      *hi = 0xB8B8B8B8ul + i;          /* ... then the plain store clears the tag: MUST show */
+#elif WBUF_ARM == 3
+      *hi = 0xB8B8B8B8ul + i;          /* plain store, HIGH word */
+      for (k = 0; k < 64u; k++)        /* drain the buffer with unrelated traffic */
+        wbuf_sink[k] = (unsigned long)k + r;
+      wbuf_slots[i] = base;            /* stc, long after the plain store retired */
+#elif WBUF_ARM == 4
+      *nxt = 0xB8B8B8B8ul + i;         /* plain store to the NEXT granule */
+      wbuf_slots[i] = base;            /* stc, LOW word of THIS granule */
+#else
+      wbuf_slots[i] = base;            /* arm 0: no plain store anywhere near */
+#endif
+    }
+
+    for (i = 0; i < WBUF_N; i++) {
+      void *p = wbuf_slots[i];         /* ldc */
+      if (wbuf_type(p) == 7ul) lost++; /* 7 == NOT_CAP */
+    }
+  }
+
+  return WBUF_OK | (unsigned)(lost & 0x00FFFFFFul);
+}
+#endif
