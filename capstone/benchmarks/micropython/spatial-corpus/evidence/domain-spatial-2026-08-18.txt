@@ -1,0 +1,34 @@
+Spatial round 1, QEMU, 2026-08-18. One image, one boot per fault, resumable runner.
+Image: EXTRA feature level, MPY_FLOAT_CORE=1, pin 2e3304a. Scripts: ../cases/MPY-S01_*/.
+
+index  name                        status  bounds                        width
+-----  --------------------------  ------  ----------------------------  --------------------
+0      00_sanity.py                PASS    -                             retval 0x00077724 = host oracle
+1      01_s01_bytes_repeat.py      FAULT   (101790fe0, 1017f0fe0)        0x60000 = 384 KiB = MPY_HEAP_SIZE
+2      02_s01_list_repeat.py       FAULT   (101790fe0, 1017f0fe0)        0x60000 = 384 KiB = MPY_HEAP_SIZE
+3      03_s01_tuple_repeat.py      FAULT   (1017f96e0, 1017f9700)        0x20 = 32 B, ABOVE the heap
+
+All three faults are cause 7 (bounds), which is a code the temporal corpus never
+produced -- its faults were all cause 24, an untagged word used as a pointer.
+
+RAW FAULT LINES, as printed:
+  --- round-000-from-0000.log
+  Created domain ID = 0
+  [CAPSTONE] Cap mem access OOB: pc = 10168074c, rs1 = x11, cursor = 1017f0fe0, imm = 0, addr = 1017f0fe0, size = 1, bounds = (101790fe0, 1017f0fe0)
+  [CAPSTONE] domain halted by capability fault: cause = 7, pc = 0x10168074c, tval = 0x101478000, badaddr = 0x101478000
+  --- round-001-from-0002.log
+  Created domain ID = 0
+  [CAPSTONE] Cap mem access OOB: pc = 1016806ec, rs1 = x11, cursor = 1017f0fe0, imm = 0, addr = 1017f0fe0, size = 16, bounds = (101790fe0, 1017f0fe0)
+  [CAPSTONE] domain halted by capability fault: cause = 7, pc = 0x1016806ec, tval = 0x101498000, badaddr = 0x101498000
+  --- round-002-from-0003.log
+  Created domain ID = 0
+  [CAPSTONE] Cap mem access OOB: pc = 1016806ec, rs1 = x11, cursor = 1017f9700, imm = 0, addr = 1017f9700, size = 16, bounds = (1017f96e0, 1017f9700)
+  [CAPSTONE] domain halted by capability fault: cause = 7, pc = 0x1016806ec, tval = 0x101532000, badaddr = 0x101532000
+
+`Created domain ID = 0` in every round is the check that these are results at all.
+A first attempt at this run used capstone-test.user as the guest runner, which
+takes <dom> <times> [<second-elf>] and was handed the suite runner's <start>
+<count>; "5" was opened as a second ELF, creation returned -1 (printed as
+18446744073709551615), and all three arms produced identical faults at
+pc 0x8001b10e, cause 5, inside the MONITOR's own address range. That ladder was
+clean, monotone and completely void.
