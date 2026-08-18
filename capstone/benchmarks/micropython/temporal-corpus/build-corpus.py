@@ -148,7 +148,11 @@ TEMPORAL = {
     "#19060":        ("yes", "duplicate of 17848"),
     "#5487":         ("yes", "port deinit runs after the sweep that already freed what it touches"),
     "#5226":         ("yes", "fix: 'Persist reference to NimBLE service instances'; collected while C still held it"),
-    "#8550":         ("yes", "thread stack is not a scanned root, so live objects are collected"),
+    # DEMOTED 2026-08-18 on a second pass. The reporter writes only that the script
+    # "silently stopped running" without gc.collect() and diagnoses no mechanism;
+    # "the thread stack is not a scanned root" was this session's inference, not
+    # anyone's finding, and upstream closed it as no longer reproducible.
+    "#8550":         ("uncertain", "reporter records only a silent stop without gc.collect(); no mechanism established, closed as no longer reproducible"),
     "#4705":         ("yes", "fix: 'Make sure stack/regs get captured properly for GC'; missed roots free reachable memory"),
 
     # --- NOT temporal: no storage is released and then used ---

@@ -26,6 +26,25 @@ where that driver is missing. The corpus therefore has two separate columns: wha
 an unmodified runtime gets today, which is nothing, and what a
 capability-aware collector could get, which is the open research question.
 
+## Only the certain cases
+
+`cases/` holds the **16 rows whose temporal classification is certain**, each verdict
+backed by evidence in `temporal_evidence`, taken from the fix commit's own message
+wherever one exists.
+
+The other 14 are in `excluded-cases/` and listed with their reasons in
+`EXCLUDED.md`: 10 are not temporal defects at all and 4 are uncertain. They are kept
+rather than deleted because one of them corrects a reading of the results. `MPY-T25`
+halts with `cause 24`, exactly like the two temporal rows that fault, so `cause 24`
+does not distinguish a lifetime defect from an uninitialised one. Deleting it would
+have taken that correction with it.
+
+The `class` column was originally assigned from issue TITLES. The 2026-08-18 audit
+read the fix commits instead and found a third of it wrong, including two rows this
+session had already written up in detail. `verify-corpus.py` now rejects any row
+that carries a verdict without an evidence string, which is exactly what the old
+column was.
+
 ## One directory per case
 
 `cases/<ID>_<slug>/` holds each case on its own: a README rendered from the CSV,
