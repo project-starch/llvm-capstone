@@ -5,7 +5,7 @@ Generated numbers come from `spatial-allocator-corpus.csv`; run
 
 | | rows | certain | measured in the domain |
 |---|---|---|---|
-| spatial | 30 | 21 | 2 |
+| spatial | 31 | 22 | 3 |
 
 ## Measured
 
@@ -13,6 +13,7 @@ Generated numbers come from `spatial-allocator-corpus.csv`; run
 |---|---|---|---|
 | `MPY-S01` | #19314 | SIGSEGV | **fault, cause 7** — bounds `0x60000` = the whole 384 KiB heap |
 | `MPY-S05` | #15271 | not run | **untrapped** — eight writes past a 4096-byte allocation completed |
+| `MPY-S31` | #19129 | not run | **untrapped** — the alloca fallback runs; the port's own stack check ends the row |
 
 The first trapped defect in either corpus, and the bounds width is why it is not
 the good news it looks like: the write was stopped at the far edge of the REGION,
@@ -61,9 +62,14 @@ already carries, and a parent build of the 2023 tree.
 | `stack` | 1 | trapped | the domain stack carries its own capability |
 
 The last two are the corpus's built-in positive controls: if they came back
-untrapped, the instrument would be broken rather than the target. Neither is
-measured yet — every row in both is blocked on a VFS, `.mpy` loading, or a module
-this domain does not have.
+untrapped, the instrument would be broken rather than the target. **Neither has
+been demonstrated yet, and `MPY-S31` shows it is harder than it looked.** That row
+reaches the defect — the alloca fallback runs untrapped — but MicroPython's own
+`mp_cstack_check` ends recursion at depth 8, guarding the C stack at 393 KB while
+the stack capability's bound sits near 800 KB. The port stops the descent before
+the hardware can. Testing the `trapped` half therefore needs either a
+`static-global` row (all four still blocked on a VFS or absent modules) or a build
+with the port's stack guard relaxed, which changes the configuration under test.
 
 ## Not counted
 
