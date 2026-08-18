@@ -61,15 +61,27 @@ already carries, and a parent build of the 2023 tree.
 | `static-global` | 4 | trapped | `-capstone-gp-captable` carves each global separately |
 | `stack` | 1 | trapped | the domain stack carries its own capability |
 
-The last two are the corpus's built-in positive controls: if they came back
-untrapped, the instrument would be broken rather than the target. **Neither has
-been demonstrated yet, and `MPY-S31` shows it is harder than it looked.** That row
-reaches the defect — the alloca fallback runs untrapped — but MicroPython's own
-`mp_cstack_check` ends recursion at depth 8, guarding the C stack at 393 KB while
-the stack capability's bound sits near 800 KB. The port stops the descent before
-the hardware can. Testing the `trapped` half therefore needs either a
-`static-global` row (all four still blocked on a VFS or absent modules) or a build
-with the port's stack guard relaxed, which changes the configuration under test.
+The last two are the corpus's built-in positive controls, and the `static-global`
+half is now **DEMONSTRATED** — not by a corpus row, all four of which are still
+blocked on a VFS or on absent modules, but directly, by a matched pair in
+`tests/runtime-qemu/silicon-ladder/nestglob_*`:
+
+| scope | bounds width the hardware reported | outcome |
+|---|---|---|
+| `gc-heap`, MicroPython `m_new` | `0x60000` = 384 KiB = the whole heap | untrapped |
+| `gc-heap`, model bump allocator | `0x400` = 1 KiB = the whole region | untrapped |
+| `static-global`, linker-assigned | `0x40` = **64 B = the object itself** | **trapped** |
+
+Same source shape, same flags, same domain; the only variable is whether the two
+objects come from an allocator or from the linker. The prediction was not safe
+before this ran — the build passes `-capstone-shrink-globals=false` — and had the
+global arm come back untrapped, six rows here would have needed rewriting.
+
+The `stack` half is still undemonstrated and `MPY-S31` explains why it is harder
+than it looked: that row reaches its defect (the alloca fallback runs untrapped)
+but MicroPython's own `mp_cstack_check` ends recursion at depth 8, guarding the C
+stack at 393 KB while the stack capability's bound sits near 800 KB. The port stops
+the descent before the hardware can.
 
 ## Not counted
 

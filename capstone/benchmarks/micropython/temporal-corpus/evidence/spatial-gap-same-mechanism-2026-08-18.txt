@@ -107,3 +107,58 @@ Every one of the thousands of blocks gc_alloc hands out is the same capability a
 a different offset, so no arrangement of them can be out of bounds with respect to
 each other. Both arms ran from ONE boot, ordered so the arm expected to return
 came first and the arm expected to fault last.
+
+===========================================================================
+THE CONTROL THE OTHER TWO PAIRS NEEDED: a global overflow IS trapped.
+
+Both pairs above are untrapped, and a reader is entitled to ask whether that says
+anything about allocators or just that bounds checking is weak here. The two
+out-of-region control arms answer half of it -- checking is live -- but they trap at
+the REGION boundary, which is the same coarse bound the finding is about. What was
+missing was an object of ordinary linker-assigned scope, overflowed by exactly the
+same code shape.
+
+nestglob_{app,host}.c, third kernel in nestalloc_kernel.h. Identical to
+nest_spatial_run with ONE variable changed: the two 64-byte objects are file-scope
+globals rather than blocks carved from nest_heap. Nothing is freed, both are live.
+
+    nest_glob_a[NEST_GLOBAL_OFFSET] = 0xAA;  return nest_glob_b[0];
+
+ARM A, offset 0, in bounds:
+
+    oracle: nestglob_in = 34
+    __CAPSTONE_LADDER_NESTGLOB_PASSED__ (retval = 34)
+
+ARM B, offset 64, one past glob_a's end and into glob_b:
+
+    [CAPSTONE] Cap mem access OOB: cursor = 1016fffe0, size = 1,
+               bounds = (1016fffa0, 1016fffe0)
+    [CAPSTONE] domain halted by capability fault: cause = 7
+
+0x1016fffe0 - 0x1016fffa0 = 0x40 = 64 bytes = sizeof(nest_glob_a) EXACTLY.
+
+THE WHOLE THESIS IN THREE NUMBERS. Same source shape, same build flags, same
+domain, one variable changed each time -- where the two objects come from:
+
+    scope                          bounds width              outcome
+    gc-heap, MicroPython m_new     0x60000 = 384 KiB         untrapped
+    gc-heap, model bump allocator  0x400   =   1 KiB         untrapped
+    static-global, linker          0x40    =      64 B       TRAPPED
+
+The hardware is not weak and the checking is not off. It bounds an object to the
+byte when the LINKER tells it what the object is, and it bounds the whole region
+when an ALLOCATOR carves the object in software, because no bounds-setting
+instruction is emitted for a sub-allocation. The gap is exactly the allocator.
+
+THE PREDICTION WAS NOT SAFE, WHICH IS WHY THIS WAS WORTH RUNNING. This build passes
+-capstone-shrink-globals=false, and so does the MicroPython build, so whether a
+global carries its own bounds was an open question rather than a formality. Had arm
+B returned 170, six rows of the spatial corpus would have needed rewriting.
+
+It also supplies what that corpus could not get any other way. Its two `stack` rows
+and four `static-global` rows all predict `trapped` and none of them is measured:
+the static rows are blocked on a VFS or on absent modules, and MPY-S31 showed the
+stack rows cannot test it either, because MicroPython's own mp_cstack_check stops
+the descent at 393 KB while the stack capability's bound sits near 800 KB. This
+pair tests the prediction directly instead of waiting for an upstream defect to
+become reachable.
