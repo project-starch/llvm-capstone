@@ -15,7 +15,8 @@ CSV = os.path.join(S, "temporal-allocator-corpus.csv")
 
 VALID_CLASS = {"uaf", "double-free", "dangling-view", "dangling-buffer", "dangling-pointer",
                "premature-free", "lifetime-order", "reentrancy", "race-uaf",
-               "alloc-invariant", "memory-corruption"}
+               "alloc-invariant", "memory-corruption",
+               "uninitialised-state"}
 VALID_SCOPE = {"gc-core", "gc-managed", "port-heap"}
 VALID_HYP = {"trapped", "not-trapped", "unclear"}
 VALID_UNMOD = {"no", "yes", "unclear"}
