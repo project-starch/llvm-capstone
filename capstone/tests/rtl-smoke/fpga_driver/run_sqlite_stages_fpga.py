@@ -1342,7 +1342,32 @@ def main():
                 # read are precisely the two that made it look like tag loss. The boot-time S-07
                 # signature was pulse-stretcher contamination, and it read bit-identically across
                 # boots because the switch walk is deterministic and so is its contamination.
-                _halt_reads = os.environ.get("HALT_MUX_READS", "1") == "1"
+                # DEFAULT OFF, AND THIS IS A DIAGNOSIS RATHER THAN A RETREAT.
+                #
+                # The per-domain `monitor halt` cannot work as written, and boot 13 shows exactly
+                # why. The command is ECHOED and no prompt ever returns:
+                #
+                #   emit gdb_input <- {'text': 'monitor halt\n'}
+                #   gdb_output: {'data': 'monitor halt\r\n'}
+                #   [s07] halt before mux read FAILED (ActionTimeout)
+                #
+                # After `continue`, GDB IS NOT AT A PROMPT -- it is blocked until the target
+                # stops -- so a command sent there sits in its input buffer and gdb_cmd waits
+                # forever for a `(gdb)` that cannot come. It is not session churn (holding one
+                # session for the whole run changed nothing) and not the board.
+                #
+                # THE FIX, for whoever picks this up: interrupting a RUNNING target needs an
+                # INTERRUPT, not a command -- send \x03 and wait for the stop, then issue
+                # `monitor halt`/reads, then `continue`. That is a different mechanism from
+                # everything in this file today and deserves to be written and tested
+                # deliberately rather than guessed at.
+                #
+                # Meanwhile the timeout costs ~30 s per domain and every reading it produces is a
+                # RUNNING read that the closed encoding then correctly rejects, so leaving it on
+                # buys nothing and slows every boot. What still works and stays ON: the EARLY halt
+                # control (its halt is issued while gdb is at a prompt, which is the whole
+                # difference), the rate from UART markers, and the encoding checks.
+                _halt_reads = os.environ.get("HALT_MUX_READS", "0") == "1"
                 if _halt_reads:
                     try:
                         if not _gdb_open[0]:

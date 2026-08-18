@@ -330,3 +330,45 @@ Not merely suspect — void, and now demonstrably so. That includes the `rev-nod
 readings taken running in boot 8 (all-ones is the saturated case) and the `0xfe`/`0xbe`
 displacement bytes. Zeros still stand, running or halted, because contamination cannot manufacture
 a zero. Re-take anything non-zero that mattered, halted.
+
+## The per-domain halted read cannot work as written — diagnosis, not defeat
+
+`monitor halt` between domains times out on **every** domain. Boot 13, the decisive three lines:
+
+    emit gdb_input <- {'text': 'monitor halt\n'}
+    gdb_output: {'data': 'monitor halt\r\n'}
+    [s07] halt before mux read FAILED (ActionTimeout)
+
+The command is **echoed** and no prompt ever returns. After `continue`, **GDB is not at a
+prompt** — it is blocked until the target stops — so a command sent there sits in its input
+buffer and `gdb_cmd` waits forever for a `(gdb)` that cannot come.
+
+Ruled out along the way: session churn (holding one session for the whole run changed nothing),
+the wedge state, and the board.
+
+**The fix, for whoever picks this up:** interrupting a RUNNING target needs an **interrupt**, not
+a command — send `\x03`, wait for the stop, then issue `monitor halt` / the reads, then
+`continue`. That is a different mechanism from anything in the driver today and deserves to be
+written and negative-tested deliberately.
+
+**Why the EARLY control works and this does not**, which is the whole difference and was visible
+for four boots: the early control issues its halt while gdb is **at a prompt**, immediately after
+`gdb_start()`. Same helper, same apertures, same board.
+
+`HALT_MUX_READS` now defaults **off**. The timeout costs ~30 s per domain and every reading it
+produces is a running read that the closed encoding then correctly rejects, so leaving it on buys
+nothing and slows every boot.
+
+### What is known-good and stays
+
+* **the rate**, from UART markers — untouched by any of the mux trouble;
+* **the early halt control**, which is where the `0x90` vs `0x9c` subset proof came from;
+* **the closed-encoding rejection**, which caught every bad byte today without being asked.
+
+### And a failure mode worth naming separately
+
+The four instrument-label errors were checks that could not fire. This one is the opposite: **a
+check that fired correctly into a log nobody re-read.** `halt before mux read FAILED — readings
+below are RUNNING reads and every non-zero one is void` printed above every affected reading, and
+the `0x7c` those reads returned was investigated as a hardware mystery for two boots. Reporting a
+failure is not the same as the failure being noticed.
