@@ -577,3 +577,34 @@ site, one number identifies the object, and the object is the answer.
 **Caveat kept explicit:** boots 17 and 19 share a `DBAS`, so the independent-base evidence is
 boot 15 against the other two, not three ways. And all three are `EARLY_HALT_CONTROL=0` boots,
 because the ON arm loses the wedge block entirely.
+
+### Narrowing without hardware: the site is OUTSIDE the image and outside the heap
+
+`sqlite_heap` is a static `.bss` array — `0x160e90`, size `0x40000`, so VA `0x160e90 .. 0x1a0e90`
+(`llvm-nm -S` on `XU.dom`). Checking every 1 MB alias of the granule under both candidate
+mappings (`DBAS -> VA 0x10000` and `DBAS -> VA 0`):
+
+**No alias falls inside `sqlite_heap`, and none falls inside the loaded image** (`PT_LOAD` ends
+`0x1605a8`; the last allocated section, `.capstone_gp_table`, ends `0x1a20b0`).
+
+So the faulting granule is in neither the static image nor SQLite's own heap. What is left is
+**monitor-carved territory** — the domain stack, or a region mapped outside the image. A
+capability spilled to the stack and reloaded untagged is a coherent and classic shape for this
+defect, and it would explain a deterministic site under a nondeterministic trigger far more
+naturally than a heap object would.
+
+**That is a candidate, not a conclusion.** It rests on the alias enumeration and on the
+`DBAS`-to-VA mapping, and the stack has not been located. The addresses the domain already prints
+(`SQ: libc=`, `SQ: self=`) are host-process addresses (`0x3f...`, `0x2a...`) and do not help.
+
+### Resolving it costs a domain rebuild, not a reflash
+
+Have a **non-wedging** rep print its own image end, heap extent and stack pointer once — the site
+is deterministic, so the object is the same on a clean run as on a wedging one — and match the
+alias that falls inside a known region. One rebuild, no synthesis, no reflash, and **the rate
+campaign survives**: a new bitstream resets every sticky and would make k=9 of n=36 a different
+population, restarting the rate at n=0 to answer a question software can probably answer.
+
+The RTL exists if software fails: four apertures (221/222/219/223) carrying `paddr[27:20]` and
+`[35:28]` for both records, built and lint-clean, exposing `[35:4]` — a 64 GB window, no aliasing
+at any size we will run. **The reflash is the project lead's call and is not being requested.**
