@@ -44,9 +44,37 @@ physical placement, or the position in the boot. All four were tested and none c
 
 ## Practical consequence
 
-Reps are cheap: **10 identical rungs ran in one boot with 10 passes**, so the "~6-run ceiling"
-recorded elsewhere does not exist and never constrained anything. There is no excuse for an n of 1.
+Reps are cheap, but there ARE ceilings and the earlier "no ceiling" claim here was wrong.
+It came from 10 identical *rungs* passing in one boot — rungs consume ~1 region each, so that
+negative could not fire. Two real per-boot ceilings exist:
+
+* **the region table** — `CAPSTONE_MAX_REGION_N`, was 32, raised to 96 on 2026-08-18 and
+  demonstrated at 12 domains / `rgid` 58 with zero overflows;
+* **`SPLB:0000E010` = `CAPSTONE_ERR_SPLIT_EXACT`**, the `split_out_cap` exact-fit spin, still
+  unfixed. It is pool-state dependent, not a fixed count: with the same `S7T` + `XU` sequence it
+  stopped one boot after 2 `XU` reps and another after 6.
+
+So a boot yields roughly 6-12 reps, not unlimited ones, and a boot cut short by `SPLB` is
+**right-censored** — it carries "no wedge in N reps", never a verdict about rep N+1. There is
+still no excuse for an n of 1.
 
 Accumulate k/n opportunistically by appending reps to boots that are happening anyway, and
 classify failures before counting them — an S-07 wedge dies *after* `SQ: G/enter`; a resource or
 entry-stall failure dies before it, and must never be counted as a defect.
+
+## Running tally on `caplifive_s07debug_18august.bit` (`capstone-ariane` `6882b265f`)
+
+`XU`, hash `f1214600d0dac351`, one domain repeated after an `S7T` control, uniform geometry:
+
+| boot | reps | wedges | reps until first wedge |
+|---|---|---|---|
+| 1 | 3 | 1 | 3 |
+| 2 | 2 | 1 | 2 |
+| 4 | 6 | 0 | none — censored at 6 (`SPLB` stopped the boot) |
+
+**k = 2 of n = 11.** Boot 3 was VOID. `NO-ENTRY` and `SPLB` stops are excluded from both k and n
+by `tests/rtl-smoke/s07-rate.py`.
+
+The v4 question — per-BOOT state (bimodal) vs per-RUN randomness (geometric) — is **not yet
+decided**. Three boots giving 3, 2 and >6 are consistent with either; a geometric at ~18% per rep
+puts P(no wedge in 6) at 0.30, so boot 4 is unremarkable under the null. More boots are needed.

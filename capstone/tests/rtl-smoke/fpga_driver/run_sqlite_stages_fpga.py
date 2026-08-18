@@ -107,6 +107,29 @@ DESTRUCTIVE_SWITCHES = frozenset({220})
 # 50 MHz) after it was last driven, so a reading taken sooner is an OR across apertures.
 # 0.5 s is ~24 windows -- generous on purpose, since the cost is seconds per sample and the
 # failure mode is a decoded verdict that looks entirely plausible.
+# BOTH S-07 RECORDS ROLL. THEY ARE NOT ONE-SHOTS, AND THIS DRIVER USED TO SAY THEY WERE.
+#
+# Verified against the RTL that is actually flashed (capstone-ariane 6882b265f, a descendant of
+# 8c75d899b "Withdraw the gen-3 probe: keep only the rolling record"):
+#
+#   core/load_unit.sv:774   if (ldc_result_back && !req_port_i.data_rtag) begin ...
+#   core/store_unit.sv:549  if (store_buffer_valid && st_is_cap_q) begin ...
+#
+# Neither condition carries a `!..._valid_q` guard, and the load_unit comment says so in as many
+# words: "capture EVERY LDC response that comes back untagged, so the record holds the most
+# recent one and the wedge is what freezes it."
+#
+# The driver's "PROBE ALREADY SPENT / carries NO weight" messages were written for the one-shot
+# design and are FALSE here. They caused boot 4 (2026-08-18) to dismiss its own 208 readings.
+# ldc0_valid=1 means only "at least one untagged LDC has happened since reset", which is routine
+# -- boot software produces them from miss refills. It does NOT mean the probe is used up.
+#
+# What is TRUE, and is the real limit on this bitstream: gen 1 has no 193/194 register-level
+# correlation gate (193 is {5'b0,store_buf_commit_cnt}), so a granule match between the two
+# rolling records is SUGGESTIVE and UNLICENSED -- either record may have rolled onto that granule
+# independently. Report it as correlated-by-granule, never as proven tag loss.
+S07_RECORDS_ROLL = (os.environ.get("S07_RECORDS_ROLL") or "1") == "1"
+
 LED_SETTLE_S = float(os.environ.get("LED_SETTLE_S") or 0.5)
 # How long to wait for a FRESH led_state payload before falling back to the cached one.
 LED_FRESH_TIMEOUT_S = float(os.environ.get("LED_FRESH_TIMEOUT_S") or 5.0)
@@ -430,15 +453,16 @@ def decode_s07_verdict(v):
     # PUSH. Same instruction in the ordinary case, but different events -- if they ever disagree,
     # the PADDR is authoritative, because gran_match is computed from it.
     if ldc_valid and not match:
-        # match=0 IS WEAK, and the asymmetry is why: the STC record is the LAST capability
-        # store and ROLLS on every one, while the LDC record is the FIRST untagged load and is
-        # one-shot. So this compares the first untagged load against whatever store happened to
-        # be most recent. match=1 is strong; match=0 is equally consistent with "the store
-        # record simply rolled past that granule", which is the common case if any capability
-        # store followed. Do NOT report it as "the granule was not the recorded store".
+        # match=0 IS WEAK. The reason given here used to be an asymmetry -- rolling STC vs
+        # one-shot LDC -- and that was wrong: BOTH records roll (see S07_RECORDS_ROLL). The
+        # correct reason is symmetric and no weaker: this compares the most recent untagged load
+        # against the most recent capability store, and EITHER may have rolled past the granule
+        # of interest since the event under investigation. match=1 is the informative direction;
+        # match=0 is equally consistent with either record having moved on. Do NOT report it as
+        # "the granule was not the recorded store".
         return ("unmatched (WEAK)", bits + "  -- the records do not refer to the same granule, "
-                "but the STC record rolls on every capability store while the LDC record is "
-                "one-shot, so this is equally consistent with the store record having rolled "
+                "but BOTH records roll -- the STC on every capability store, the LDC on every "
+                "untagged response -- so this is equally consistent with either having rolled "
                 "past. Carries far less weight than a match; compare the granule addresses.",
                 False)
     if not ldc_valid:
@@ -662,10 +686,17 @@ def main():
             print(_l0, flush=True)
             transcript.append(_l0 + "\n")
             if _v0 is not None and ((_v0 >> 7) & 1):
-                _l1 = ("  [s07] SPENT BEFORE ANY DOMAIN RAN -- the LDC one-shot was latched by "
-                       "boot-time software (Linux/OpenSBI/glue), not by the workload. No "
-                       "ordering of domains can rescue it; the record must become clearable in "
-                       "RTL. Everything 208 reports this boot is about that earlier load.")
+                _l1 = (("  [s07] ROLLING RECORD, NOT SPENT: ldc0_valid=1 before any domain ran "
+                        "means boot software produced at least one untagged LDC, which is "
+                        "ROUTINE (miss refills over scalar data do it). On this bitstream the "
+                        "record OVERWRITES on every untagged response (load_unit.sv:774), so a "
+                        "later workload load will replace this one and 208 stays usable all "
+                        "boot. Read gran_match with clobbered=0, never ldc0_valid alone.")
+                       if S07_RECORDS_ROLL else
+                       ("  [s07] SPENT BEFORE ANY DOMAIN RAN -- the LDC one-shot was latched by "
+                        "boot-time software (Linux/OpenSBI/glue), not by the workload. No "
+                        "ordering of domains can rescue it; the record must become clearable in "
+                        "RTL. Everything 208 reports this boot is about that earlier load."))
                 print(_l1, flush=True)
                 transcript.append(_l1 + "\n")
         except Exception as exc:
@@ -1124,8 +1155,10 @@ def main():
                 # IS THE ONE-SHOT ALREADY SPENT? This is the control that decides whether the
                 # later wedge readout means anything, and it costs one read.
                 #
-                # The LDC record captures the FIRST response returning tag=0 SINCE RESET -- not
-                # the first that faults, and not scoped to a domain. Post-S-06 an untagged LDC
+                # CORRECTED 2026-08-18: the LDC record captures the MOST RECENT response
+                # returning tag=0, not the first since reset (load_unit.sv:774 has no
+                # !s07_ldc0_valid_q guard). The paragraph below described the withdrawn one-shot
+                # design and is kept only for the S07_RECORDS_ROLL=0 path. Post-S-06 an untagged LDC
                 # is architecturally legal and does not fault; it only faults when the result is
                 # later USED as a capability. So any earlier benign untagged load anywhere in
                 # the boot -- monitor, entry glue, the control domain, a 128-bit granule copy
@@ -1137,10 +1170,16 @@ def main():
                 # Nothing clears it but reset -- the 191 trap-log clear does not touch any s07_*
                 # register -- so a spent probe stays spent for the whole boot.
                 if _w is not None and dom_idx == 1 and ((_w >> 7) & 1):
-                    _sline = ("  [s07] PROBE ALREADY SPENT after the control: ldc0_valid is set "
-                              "before any test domain ran, so the LDC record belongs to an "
-                              "earlier benign untagged load and CANNOT be the faulting one. "
-                              "Any later wedge verdict from 208 carries NO weight this boot.")
+                    _sline = (("  [s07] ldc0_valid set after the control -- EXPECTED and harmless "
+                               "on a rolling record: it says an untagged LDC has happened, not "
+                               "that the probe is used up. Later domains overwrite it. The real "
+                               "limit on this bitstream is that gen 1 has no 193/194 correlation "
+                               "gate, so a granule match is SUGGESTIVE, not licensed.")
+                              if S07_RECORDS_ROLL else
+                              ("  [s07] PROBE ALREADY SPENT after the control: ldc0_valid is set "
+                               "before any test domain ran, so the LDC record belongs to an "
+                               "earlier benign untagged load and CANNOT be the faulting one. "
+                               "Any later wedge verdict from 208 carries NO weight this boot."))
                     print(_sline, flush=True)
                     transcript.append(_sline + "\n")
                 # The trap-log summary {seen, mcause[6:0]} alongside it. With the clear skipped
