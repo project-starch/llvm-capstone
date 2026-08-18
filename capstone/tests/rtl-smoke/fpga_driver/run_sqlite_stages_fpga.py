@@ -1119,6 +1119,13 @@ def main():
             #   baseline zero, delta non-zero over the wedging domain -> the producing load's
             #     response was displaced onto a scalar writeback port: the value was intact in
             #     memory (case a). The count says one-off or routine.
+            # BOUND BEFORE THE try, NOT INSIDE IT. The resume block further down is at this
+            # indentation and references it unconditionally, so a binding made inside the try is
+            # missing on every exception path. Boot 9 was lost to exactly that shape once already
+            # (the flag was defined after the first read that used it, UnboundLocalError, run dead
+            # after one rep); this is the same bug one level out, fixed before it could fire.
+            _halt_reads = False
+
             try:
                 def _read_sw(_sw, allow_cached=True, _force_emit=False):
                     """Read one debug-mux aperture, defending against the LED PULSE STRETCHER.
@@ -1229,15 +1236,6 @@ def main():
                 # one that wedged, so the trap summary is sampled ONCE, after the control, purely
                 # to give the staleness comparison a pre-test baseline -- never between the
                 # domains under test.
-                assert (204 & 0b11) == 0, "switch 204 must be UART-safe"
-                assert (208 & 0b11) == 0, "switch 208 must be UART-safe"
-                _v = _read_sw(204, _force_emit=_halt_reads)
-
-                # The tag-history verdict byte. 208 is even, so it is safe to sample between
-                # domains alongside 204; it is the byte that separates (b) a genuine tag loss
-                # from (c) a granule that was stored untagged, which no software probe can do.
-                _w = _read_sw(208, _force_emit=_halt_reads)
-                _d = decode_s07_verdict(_w)
                 # READ THE MUX WITH THE HART HALTED. Validated on boot 8, and it changes what
                 # every non-zero reading is worth.
                 #
@@ -1263,6 +1261,16 @@ def main():
                               f"readings below are RUNNING reads and every non-zero one is void",
                               flush=True)
                         _halt_reads = False
+
+                assert (204 & 0b11) == 0, "switch 204 must be UART-safe"
+                assert (208 & 0b11) == 0, "switch 208 must be UART-safe"
+                _v = _read_sw(204, _force_emit=_halt_reads)
+
+                # The tag-history verdict byte. 208 is even, so it is safe to sample between
+                # domains alongside 204; it is the byte that separates (b) a genuine tag loss
+                # from (c) a granule that was stored untagged, which no software probe can do.
+                _w = _read_sw(208, _force_emit=_halt_reads)
+                _d = decode_s07_verdict(_w)
 
                 _wline = (f"  [s07] after {label}: sw=208 verdict "
                           + ("UNREAD" if _w is None else f"0x{_w:02x} {_w:08b}"))
