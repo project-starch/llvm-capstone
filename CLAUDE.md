@@ -226,6 +226,23 @@ Before RTL is handed to synthesis, to another lane, or called ready:
 - **A hash handed to another lane carries its lint numbers.** Without them it is not ready,
   and the receiving lane should refuse it.
 
+**Lint and audit are NECESSARY, NOT SUFFICIENT. Only synthesis proves synthesizability.**
+Both passed — twice, with positive and negative controls — on a change that then drove
+`synth_design` past 100 GB. Verilator models none of what actually breaks: retiming (enabled
+in `run.tcl`), congestion, or Vivado's own loop analysis. So **a hash is ready when synthesis
+has RUN, not when the checks pass.** Do not hand one to another lane, and never spend a
+reflash or a board session on one, before that.
+
+**Never feed a new signal into a cone that already carries a combinational loop.** The
+standing `UNOPTFLAT` list names them. Adding a term to one of those conditions — above all a
+signal crossing a module boundary into it — is the highest-risk edit available, and every
+check we have is blind to it. If a change does that, it goes to synthesis before it goes
+anywhere else.
+
+**Keep an observation-only change a strict reduction where it can be**, and turn `RETIMING`
+off for debug bitstreams. An instrument rich enough to be interesting is rich enough to be
+unsynthesizable; the minimal version is the one that ships.
+
 The simulation suite is a **functional** gate and says nothing about synthesizability: the
 build suppresses exactly these warnings, and a non-blocking assignment in a combinational
 block settles within the timestep and simulates like the register you meant. A green,
