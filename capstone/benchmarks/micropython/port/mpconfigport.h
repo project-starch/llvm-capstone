@@ -53,8 +53,28 @@
 
 #define MICROPY_ENABLE_EXTERNAL_IMPORT    (0)
 #define MICROPY_READER_POSIX              (0)
+#ifndef MICROPY_READER_VFS
 #define MICROPY_READER_VFS                (0)
+#endif
+// MPY_VFS=1 turns on the filesystem stack, for MPY-T14/MPY-T15 only. Guarded so the
+// default image is byte-identical without it: the two rows need extmod/vfs*.c and
+// lib/oofatfs, which cost ~70 KB of image and would otherwise be carried by every
+// build that has no use for them.
+#ifndef MICROPY_VFS
 #define MICROPY_VFS                       (0)
+#endif
+#if MICROPY_VFS
+#define MICROPY_VFS_FAT                   (1)
+#define MICROPY_READER_VFS                (1)
+// Demanded by extmod/vfs_fat.c:32, not chosen: a FAT file object needs a finaliser
+// to close itself when collected. It adds a finaliser table to the heap, which is a
+// real change to the collector's layout -- which is why it stays behind MPY_VFS
+// rather than being turned on for every image.
+#define MICROPY_ENABLE_FINALISER          (1)
+// extmod/vfs_fat.c calls f_chdir and f_getcwd unconditionally, and ff.c only compiles
+// them when FF_FS_RPATH is set. 2 is what every MicroPython port with a filesystem uses.
+#define MICROPY_FATFS_RPATH               (2)
+#endif
 #define MICROPY_HELPER_REPL               (0)
 #define MICROPY_PY_BUILTINS_INPUT         (0)
 #define MICROPY_PY_BUILTINS_EXECFILE      (0)
@@ -79,7 +99,13 @@
 #endif
 #define MICROPY_KBD_EXCEPTION             (0)
 #define MICROPY_ENABLE_SCHEDULER          (0)
+// Set by the MPY_VFS block above when the filesystem stack is on, because
+// extmod/vfs_fat.c refuses to compile without it. Left OFF by default: it adds a
+// finaliser table to the heap, and the GC is where this port's capability fixes
+// already live. See the MICROPY_PY_WEAKREF note below for the other half of that.
+#ifndef MICROPY_ENABLE_FINALISER
 #define MICROPY_ENABLE_FINALISER          (0)
+#endif
 #define MICROPY_GC_SPLIT_HEAP             (0)
 #define MICROPY_ENABLE_PYSTACK            (0)
 
