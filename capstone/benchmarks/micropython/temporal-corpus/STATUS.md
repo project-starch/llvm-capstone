@@ -26,7 +26,7 @@ Already fixed in the pinned source, so these were measured on the last commit th
 | `MPY-T04` | #12887 | silent-no-effect | not-run |
 | `MPY-T05` | #13283 | silent-no-effect | untrapped-no-crash |
 | `MPY-T06` | #12543 | crash-sigsegv | not-run |
-| `MPY-T07` | #4128 | silent-no-effect | not-run |
+| `MPY-T07` | #4128 | silent-no-effect | untrapped-no-crash |
 | `MPY-T14` | #19060 | silent-no-effect | not-run |
 | `MPY-T15` | #17848 | silent-no-effect | not-run |
 
@@ -36,7 +36,7 @@ The trigger needs threads, sockets, a filesystem or port hardware that this doma
 
 | case | source | stock | domain |
 |---|---|---|---|
-| `MPY-T16` | #5487 | not-run | not-run |
+| `MPY-T16` | #5487 | not-run | untrapped-no-crash |
 | `MPY-T19` | #5226 | not-run | not-run |
 | `MPY-T29` | #4705 | not-run | not-run |
 
@@ -47,8 +47,8 @@ labelled counter-examples; 4 are uncertain. Every verdict carries its evidence i
 `temporal_evidence`, taken from the fix commit's own message where one exists. The class
 column was assigned from issue titles and the 2026-08-18 audit found a third of it wrong.
 
-Run in the Capstone domain: 8 rows, of which 7 are temporal.
-Of those 7, 2 faulted and all of them with `cause 24`, an untagged word
+Run in the Capstone domain: 10 rows, of which 9 are temporal.
+Of those 9, 2 faulted and all of them with `cause 24`, an untagged word
 used as a pointer, which is what the MMU already catches on stock. **Not one was caught
 because an object was dead.**
 

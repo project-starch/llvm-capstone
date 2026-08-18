@@ -31,7 +31,10 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. Needs a port shutdown hook; this domain's teardown is not the one with the defect.
+- stock MicroPython at the pin: **not-run**
+- Capstone domain under QEMU: **untrapped-no-crash**
+
+See `RESULT.txt` in this directory.
 
 ## Reproducing
 

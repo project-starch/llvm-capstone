@@ -245,7 +245,17 @@ MEASURED = {
     # Measured at the parent of 1a2c511e5d08 (2018 tree): the embedding example
     # prints "Hello world of easy embedding!" and exits 0. The use-after-free
     # executes and is silent.
-    "#4128":         ("confirmed", "silent-no-effect", "not-run"),
+    # Domain-measured 2026-08-18 as a RECONSTRUCTION in our own glue, behind
+    # MPY_T07_LEXER_UAF. mp_parse still frees the lexer at the pin, so the caller
+    # misuse 4128 fixed is still available and needed no parent build. retval
+    # 0x70000001: the read after the free completed, and the freed block still
+    # held its old value, so untrapped with staleness not demonstrated.
+    "#4128":         ("confirmed", "silent-no-effect", "untrapped-no-crash"),
+    # Domain-measured 2026-08-18 as a RECONSTRUCTION behind MPY_T16_DEINIT_AFTER_SWEEP:
+    # hold a raw pointer to a GC block across gc_sweep_all(), then read and write it,
+    # which is what the ESP32 port's deinit hook does. retval 0x16005a01: the read
+    # returned 0x5A and the write completed, so untrapped, staleness not demonstrated.
+    "#5487":         ("confirmed", "not-run",           "untrapped-no-crash"),
     # Measured at the parent of d2a3cd7ac428 (be8d660fc2, 2024-02-15): the embed
     # example builds and runs to completion, exit 0. The defect is a stack-top
     # misestimate and the shipped example does not recurse deeply enough to hit
