@@ -114,7 +114,33 @@ def main():
         elif mnem == "cincoffset" and ", gp," in ops:
             d, _gp, s = (x.strip() for x in ops.split(","))
             if s in imm and imm[s] >= 0:
-                regslot[d] = (imm[s] // 16, "A")
+                regslot[d] = (imm[s] // 16, "A", 0)
+            else:
+                regslot.pop(d, None)
+        elif mnem in ("cincoffset", "cincoffsetimm") and ops.count(",") == 2:
+            # A HOLDER OFFSET BY A REGISTER OR IMMEDIATE IS STILL THE HOLDER.
+            #
+            # This case was MISSING and it is the one that mattered. The compiler does not
+            # always fold the byte offset into the `stc` immediate: for large offsets it
+            # materialises the offset in a register (lui/addi) and does
+            # `cincoffset rd, <holder>, rN`, then stores at 0(rd). The old code matched only
+            # the `, gp,` form here, so `rd` kept a STALE entry or none, and the `stc` below
+            # took the `continue` path -- the store was silently NOT CHECKED.
+            #
+            # That is how this script returned "OK: every capability store fits" for a domain
+            # that faults with CAPABLITY_OUT_OF_BOUND inside __capstone_cap_init. A checker
+            # that skips the failing store reads exactly like a checker that passed it.
+            d, s, o = (x.strip() for x in ops.split(","))
+            base = regslot.get(s)
+            delta = imm.get(o) if not o.lstrip("-").startswith(("0x", "0", "1", "2", "3", "4",
+                                                               "5", "6", "7", "8", "9")) else None
+            if delta is None:
+                try:
+                    delta = int(o, 0)
+                except ValueError:
+                    delta = imm.get(o)
+            if base is not None and base[1] == "B" and delta is not None:
+                regslot[d] = (base[0], "B", base[2] + delta)
             else:
                 regslot.pop(d, None)
         elif mnem == "ldc":
@@ -123,9 +149,9 @@ def main():
                 continue
             d, off, base = m.group(1), int(m.group(2), 0), m.group(3)
             if base == "gp":
-                regslot[d] = (off // 16, "B")   # folded ldc rd, imm(gp): holder in hand
+                regslot[d] = (off // 16, "B", 0)  # folded ldc rd, imm(gp): holder in hand
             elif base in regslot and off == 0 and regslot[base][1] == "A":
-                regslot[d] = (regslot[base][0], "B")
+                regslot[d] = (regslot[base][0], "B", 0)
             else:
                 regslot.pop(d, None)            # level C or unknown: stop tracking
         elif mnem == "stc":
@@ -139,6 +165,7 @@ def main():
             slot = entry[0]
             if slot >= len(recs):
                 continue
+            off += entry[2]          # offset folded into a preceding cincoffset
             checked += 1
             size = recs[slot][0]
             if off + 16 > size:
