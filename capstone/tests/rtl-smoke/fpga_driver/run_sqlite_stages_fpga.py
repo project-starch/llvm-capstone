@@ -1739,6 +1739,71 @@ def main():
                                 print(f"  [wedge] halted mux re-read failed "
                                       f"({type(_exc).__name__}) -- no verdict from it",
                                       flush=True)
+                            # THE GRANULE ADDRESSES, READ HALTED, AT THE WEDGE.
+                            #
+                            # These were in the bitstream the whole time. cva6.sv (at the
+                            # SYNTHESIZED commit 8c75d899b) bank 3'b110:
+                            #   reg 5'b01101 -> sw 205  s07_ldc0_paddr[11:4]
+                            #   reg 5'b01110 -> sw 206  s07_ldc0_paddr[19:12]
+                            #   reg 5'b01111 -> sw 207  s07_stc_paddr[11:4]
+                            #   reg 5'b10001 -> sw 209  s07_stc_paddr[19:12]
+                            # The spec claimed they were "compressed to the single gran_match bit
+                            # before anyone sees them" and made exposing them the headline Tier-0
+                            # item. That was wrong, and the cause is worth naming: the grep that
+                            # established it was piped through `head -40`, which cut at line 1295
+                            # while the arms are at 1345-1348. TRUNCATED OUTPUT READ AS ABSENCE.
+                            #
+                            # This is the one moment worth having them: the records are frozen by
+                            # the wedge, the hart is already halted for the CSR reads above, so
+                            # the addresses belong to the load that faulted.
+                            #
+                            # [19:4] identifies a granule within a 1 MB window -- enough to map
+                            # onto DBAS and a disassembly, NOT a physical address. Do not report
+                            # it as one; the upper bits are genuinely not exposed.
+                            #
+                            # ALL FOUR ARE UART-HOSTILE, which is survivable here only because
+                            # the core is halted and no domain output is in flight:
+                            #   205, 207, 209 have bit0 set -> console TX goes to the tracer
+                            #   206, 207      have bit1 set -> a one-shot trace dump is ARMED and
+                            #                                  WILL fire; that is expected, not a
+                            #                                  new fault
+                            # The switches are restored to 0 immediately afterwards.
+                            try:
+                                _pa = {}
+                                for _ap in (205, 206, 207, 209):
+                                    _pa[_ap] = _read_sw(_ap, allow_cached=False,
+                                                        _force_emit=True)
+                                set_switch_value(console, 0)
+
+                                def _mk(_lo, _hi):
+                                    if _lo is None or _hi is None:
+                                        return None
+                                    return ((_hi << 8) | _lo) << 4      # [19:4] -> byte address
+
+                                _ldc_a = _mk(_pa[205], _pa[206])
+                                _stc_a = _mk(_pa[207], _pa[209])
+                                _fmt = lambda _x: "VOID" if _x is None else f"0x{_x:05x}"
+                                _msg = (f"  [wedge] GRANULE ADDRESSES (bits [19:4], 1 MB window, "
+                                        f"halted read): untagged-LDC={_fmt(_ldc_a)}  "
+                                        f"last-cap-STC={_fmt(_stc_a)}")
+                                if _ldc_a is not None and _stc_a is not None:
+                                    if _ldc_a == _stc_a:
+                                        _msg += ("   SAME GRANULE -- the load that came back "
+                                                 "untagged is on the granule the last capability "
+                                                 "store wrote. Map onto DBAS + disassembly.")
+                                    else:
+                                        _msg += (f"   DIFFERENT granules (delta="
+                                                 f"{_stc_a - _ldc_a:+d}) -- the two rolling "
+                                                 f"records do not refer to the same object, so "
+                                                 f"gran_match should be 0 and this wedge's 208 "
+                                                 f"verdict carries no tag-loss claim.")
+                                print(_msg, flush=True)
+                                transcript.append(_msg + "\n")
+                            except Exception as _exc:
+                                print(f"  [wedge] granule address read FAILED "
+                                      f"({type(_exc).__name__}) -- no addresses this wedge",
+                                      flush=True)
+
                             _junk = (0xca11ab1ebadcab1e, None)
                             if _csr["$mtval"] in _junk:
                                 print("  [wedge] mtval NOT READ (junk/unreadable) -- no operand",

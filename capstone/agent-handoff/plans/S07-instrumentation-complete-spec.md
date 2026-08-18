@@ -57,10 +57,10 @@ It is pushed and is not being rewritten; this paragraph is the correction.
 
 ### The three things that actually limit us today
 
-1. **Two 56-bit addresses are compressed to one bit before we ever see them.** `s07_ldc0_paddr`
-   and `s07_stc_paddr` exist at the `cva6.sv` top level and are *not* on the mux. We read
-   `gran_match` and nothing else, so a match cannot be mapped onto the domain's memory map and a
-   mismatch cannot be attributed.
+1. ~~**Two 56-bit addresses are compressed to one bit before we ever see them.**~~ **FALSE — see
+   0.1.** Bits `[19:4]` of both addresses are on the mux at switches 205/206/207/209 in the
+   flashed bitstream. `gran_match` is a convenience bit, not the only exposure. This limitation
+   was asserted for most of a day and was never true.
 2. **No register-level correlation gate.** Gen 1 has no 193/194 `rd_rs1_match`, so a granule
    match between two independently-rolling records is *suggestive, not licensed* — either record
    may have rolled onto that granule on its own.
@@ -122,10 +122,32 @@ synthesized, something unrelated is wrong.
 The selector is `switches_i[7:0]` (`debug_byte_sel = sw[7:5]`, `debug_reg_sel = sw[4:0]`), 256
 apertures, most of them free.
 
-* **0.1 — `s07_ldc0_paddr` byte-wise, and `s07_stc_paddr` byte-wise.** The single highest
-  value-per-risk item in this document: the data is already computed and already at the top
-  level. Turns "match" into an address that can be mapped onto `DBAS` and the domain's
-  disassembly, and turns "mismatch" into two addresses that can be compared.
+* **0.1 — ~~expose the paddrs~~ WITHDRAWN: THEY ARE ALREADY ON THE MUX, IN THE FLASHED
+  BITSTREAM.** At the synthesized commit `8c75d899b`, `cva6.sv` bank `3'b110`:
+
+      reg 5'b01101 -> switch 205    s07_ldc0_paddr[11:4]
+      reg 5'b01110 -> switch 206    s07_ldc0_paddr[19:12]
+      reg 5'b01111 -> switch 207    s07_stc_paddr[11:4]
+      reg 5'b10001 -> switch 209    s07_stc_paddr[19:12]
+
+  Added in the gen-2 batch and untouched by the gen-3 withdrawal, which removed the census, the
+  correlation, the PCs and the dwell counter but never these. **This document's headline item
+  cost zero synthesis and zero reflash. It costs four halted reads**, and they are wired into the
+  wedge block.
+
+  **How the error was made, because the shape recurs:** the grep that established "not on the mux"
+  was piped through `head -40`. It cut at line 1295; the arms are at 1345-1348. **Truncated output
+  read as absence** — the same family as a counter that goes quiet and returns 0, and the fourth
+  label-or-premise error in a single day, all four of which decoded legally.
+
+  Two caveats on reading them, neither about whether:
+
+  * **`[19:4]` is a granule within a 1 MB window, not a physical address.** Enough to map onto
+    `DBAS` and a disassembly, which is what it was wanted for. The upper bits are not exposed.
+  * **All four are UART-hostile.** 205/207/209 have bit 0 set (console TX goes to the tracer);
+    206/207 have bit 1 set, which **arms a one-shot trace dump that will fire** — expected, not a
+    new fault. Survivable only because they are taken with the hart halted and no domain output in
+    flight, and the switches are restored to 0 immediately after.
 * **0.2 — `s07_ldc0_src[1:0]` on its own aperture.** It currently rides in 208, where it has
   been read back as `3` (undefined encoding) on every non-zero sample. On its own aperture,
   with the other six bits driven to a fixed known pattern, a contaminated read is
