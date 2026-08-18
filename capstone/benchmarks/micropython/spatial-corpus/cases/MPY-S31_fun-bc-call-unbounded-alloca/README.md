@@ -17,6 +17,14 @@ an earlier shape built `str(list(range(N)))` at runtime and the MemoryError arri
 while building the source, so the call was never reached and the ladder ran to
 completion having tested nothing.
 
+Build and run (the common recipe and the guest-runner trap are in
+`../../../REPRODUCING.md`):
+
+    MPY_TESTS=all MPY_TEST_BASE_DIR=capstone-s31 MPY_TEST_INCLUDE_UNSUPPORTED=1 \
+    MPY_FLOAT_CORE=1 \
+    DOMAIN_EXTRA_DEFS="-DMICROPY_CONFIG_ROM_LEVEL=MICROPY_CONFIG_ROM_LEVEL_EXTRA_FEATURES" \
+    DOM_NAME=mpy_s31 bash ../../../build-micropython-silicon.sh
+
 See RESULT.txt. The short version: the fallback runs untrapped, and the port's own
 `mp_cstack_check` stops recursion at depth 8, well before the stack capability's
 bound — so this row cannot demonstrate a hardware stack trap and the corpus says so.

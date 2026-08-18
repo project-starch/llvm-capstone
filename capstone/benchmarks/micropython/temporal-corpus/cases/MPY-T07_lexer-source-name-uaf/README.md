@@ -2,7 +2,7 @@
 Source: #4128, https://github.com/micropython/micropython/issues/4128  
 Upstream state: closed, first seen 2018-09-12
 
-**MEASURED at the fix commit's parent. Fixed in the pinned source.**
+**MEASURED in the domain.**
 
 ## The defect
 
@@ -38,16 +38,14 @@ See `RESULT.txt` in this directory.
 
 ## Reproducing
 
-The defect is fixed in the pinned source, so building the pin measures nothing.
-Build `1a2c511e5d08^` instead, the fix commit's parent:
+`repro.py` is the script. On stock:
 
 ```bash
-MPY_COMMIT=1a2c511e5d08^ bash ../../../fetch-micropython.sh
+MPY=/tmp/capstone/mpy-stock-pin/ports/unix/build-standard/micropython
+$MPY repro.py
 ```
 
-**This works.** Use gcc-12, a compiler contemporary with the commit; the
-default gcc 15 rejects the tree. Full recipe, and the two non-obvious
-flags it needs, in `../../evidence/parent-build-attempt-2026-08-17.txt`.
-Do NOT add AddressSanitizer: it breaks the MicroPython unix port outright,
-and the question it would have answered is already settled in
-`../../evidence/asan-blindness-2026-08-17.txt`.
+In the domain, copy it into the test directory the image is built from and
+follow `../../README.md`; the driver is `tools/run-resumable-suite.py`
+and it must be run with `--capture-output`, because a test that dies on a
+missing builtin still returns a retval and reads exactly like an untrapped one.
