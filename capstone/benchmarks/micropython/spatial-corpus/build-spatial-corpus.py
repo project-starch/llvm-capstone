@@ -191,14 +191,20 @@ MEASURED = {
 }
 
 def main():
-    out = [["id","source","ref","url","title","state","first_seen","class","cwe","component",
+    out = [["id","source","ref","url","title","state","first_seen","present_at_pin",
+            "class","cwe","component",
             "scope","trigger","is_spatial","spatial_evidence","predicted_trap","reach",
             "repro_status","stock_behaviour","domain_behaviour","notes"]]
     for rid, ref, cls, cwe, comp, scope, trig, isp, ev, reach, notes in ROWS:
         iss = issues[ref]
         repro, stock, dom = MEASURED.get(ref, ("none", "not-run", "not-run"))
+        # Derived from the VERIFIED upstream state rather than maintained by hand: OPEN
+        # means the defect is in the pinned tree and needs no parent build, CLOSED or
+        # MERGED means it is fixed there and the measurement had to put it back. The
+        # temporal corpus uses the same rule.
+        pin = {"OPEN": "yes"}.get(iss["state"], "no")
         out.append([rid, "github", f"#{ref}", iss["url"], iss["title"], iss["state"],
-                    iss["createdAt"][:10], cls, cwe, comp, scope, trig, isp, ev,
+                    iss["createdAt"][:10], pin, cls, cwe, comp, scope, trig, isp, ev,
                     PREDICT[scope], reach, repro, stock, dom, notes])
     with open(OUT, "w", newline="") as f:
         csv.writer(f).writerows(out)
