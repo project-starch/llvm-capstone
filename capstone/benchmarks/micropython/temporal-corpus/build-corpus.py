@@ -256,6 +256,19 @@ MEASURED = {
     # which is what the ESP32 port's deinit hook does. retval 0x16005a01: the read
     # returned 0x5A and the write completed, so untrapped, staleness not demonstrated.
     "#5487":         ("confirmed", "not-run",           "untrapped-no-crash"),
+    # Domain-measured 2026-08-18 as a RECONSTRUCTION behind MPY_T29_HIDDEN_ROOT.
+    # 4705 fixed ports/unix/gccollect.c so the collector captures registers as well
+    # as the stack; the defect is a root the collector cannot see, so a live block
+    # is freed. Our gc_collect (port/mpy_domain.c) scans the C stack ONLY, so the
+    # same gap is present and a block reachable only from a global is collected.
+    # retval 0x29007701: the read through the stale pointer returned 0x77, the value
+    # a LATER allocation wrote there. This is the only reconstruction in the corpus
+    # where reuse of the freed storage was demonstrated rather than merely survived,
+    # which makes it as strong as #18168/#18171 on that axis. It is still recorded
+    # as untrapped-no-crash and not untrapped-identical, because those two are
+    # byte-identical to a STOCK run and this reconstruction has no stock counterpart
+    # to be identical to.
+    "#4705":         ("confirmed", "not-run",           "untrapped-no-crash"),
     # Measured at the parent of d2a3cd7ac428 (be8d660fc2, 2024-02-15): the embed
     # example builds and runs to completion, exit 0. The defect is a stack-top
     # misestimate and the shipped example does not recurse deeply enough to hit

@@ -2,7 +2,7 @@
 Source: #4705, https://github.com/micropython/micropython/issues/4705  
 Upstream state: closed, first seen 2019-04-19
 
-**NOT REPRODUCIBLE HERE. The trigger cannot be expressed in this domain.**
+**MEASURED in the domain.**
 
 ## The defect
 
@@ -31,8 +31,21 @@ collector that does not exist yet. Not evidence.
 
 ## Measured
 
-Not run. The fix is ports/unix/gccollect.c, making the gc capture stack and registers properly; the trigger depends on what happens to be in registers and is not deterministically reproducible.
+- stock MicroPython at the pin: **not-run**
+- Capstone domain under QEMU: **untrapped-no-crash**
+
+See `RESULT.txt` in this directory.
 
 ## Reproducing
 
-Not reproducible with the current setup: the fix is ports/unix/gccollect.c, making the GC capture stack and registers properly; the trigger depends on what happens to be in registers and is not deterministically reproducible.
+`repro.py` is the script. On stock:
+
+```bash
+MPY=/tmp/capstone/mpy-stock-pin/ports/unix/build-standard/micropython
+$MPY repro.py
+```
+
+In the domain, copy it into the test directory the image is built from and
+follow `../../README.md`; the driver is `tools/run-resumable-suite.py`
+and it must be run with `--capture-output`, because a test that dies on a
+missing builtin still returns a retval and reads exactly like an untrapped one.

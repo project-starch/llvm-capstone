@@ -1,34 +1,32 @@
 # What the last 7 need
 
-Nine of the sixteen certain temporal cases are measured in the domain. These seven
+Ten of the sixteen certain temporal cases are measured in the domain. These six
 are not, and they are blocked by three different things. Only ONE of the three is
 ours to fix.
 
-## 1. A compiler fix we own: `MPY-T14`, `MPY-T15`
+## 1. Build plumbing, not a compiler fix: `MPY-T14`, `MPY-T15`
 
-Blocked by a crash, not by effort. `MICROPY_VFS` needs `lib/oofatfs`, and the
-compiler cannot build it:
+CORRECTED 2026-08-18. This section previously said the compiler could not build
+`lib/oofatfs` and that a codegen fix was the blocker. That was wrong: the probe
+behind it omitted `-Xclang -target-feature -Xclang +m`, which the domain build
+always passes (`build-micropython-silicon.sh:149`). With the build's own flags
+`ff.c` compiles, 69400 bytes, and so does the rest of the stack -- `ffunicode.c`,
+`vfs.c`, `vfs_fat_diskio.c`, `vfs_fat_file.c`, `vfs_reader.c`, `vfs_blockdev.c`.
+`vfs_fat.c` stops at `#error "MICROPY_VFS_FAT requires MICROPY_VFS"`, which is a
+configuration switch. Full account in
+`evidence/oofatfs-backend-crash-2026-08-18.txt`.
 
-    Assertion `VT.isVector() && "Unable to legalize non-vector shift"' failed
-    in SelectionDAGLegalize::ExpandNode, on function '@f_mkfs'
+**Needed, all of it build work:** `MICROPY_VFS=1` and `MICROPY_VFS_FAT=1` in
+`port/mpconfigport.h`; `extmod/vfs*.c` plus `lib/oofatfs` into the amalgamation,
+which needs a mechanism for `lib/` sources beyond libm and a way past the
+hardcoded `PORT` in `build-micropython-silicon.sh`; and a block device for the
+domain to mount, which is where the actual design question sits.
 
-Minimised to two lines in `evidence/i128-shift-crash-repro.c`: a variable-count
-shift on `unsigned __int128` crashes, the same shift on `u64` does not. Verified
-pre-existing by reverting all nine changed `llvm/` files to
-`origin/capstone-bootstrap` and rebuilding: identical assertion, identical
-function.
-
-Same root cause as everything in `i128-capability-fixes.md`. On `capstone64` i128
-is legal because it carries a capability, so a genuine 128-bit shift is never
-expanded by the generic legaliser and never lowered by the target either. Round 1
-covered shift-by-XLen-or-more, which produced a wrong result; this form has no
-legalisation at all.
-
-**Needed:** a lowering or expansion for variable-count i128 shifts, in the same
-place as the existing i128 logical lowering. Then, separately, the VFS build work:
-`extmod/vfs*.c` plus `lib/oofatfs` into the amalgamation, which also needs a
-mechanism for `lib/` sources beyond libm and a way past the hardcoded `PORT` in
-`build-micropython-silicon.sh`.
+**Not needed:** the i128 shift work. A fix for it landed anyway
+(`CapstoneISelLowering.cpp`, `srl(mul(zext,zext), XLen)` -> `mulhu`/`mulh`, and a
+clean diagnostic instead of an assertion on the forms that cannot be lowered),
+but it changes no FatFs codegen: with `+m` the object is byte-identical with and
+without it.
 
 **Worth it because** these two would be genuine upstream reproductions, not
 reconstructions.
@@ -75,8 +73,8 @@ this one.
 
 | what | unlocks | kind of work |
 |---|---|---|
-| i128 variable-shift legalisation, then VFS build | `T14`, `T15` | compiler fix we own, then build plumbing |
-| hidden-root variant behind an `#ifdef` | `T29` | small, reconstruction |
+| VFS build plumbing: config, `lib/` sources, a block device | `T14`, `T15` | build work we own; NOT a compiler fix |
+| ~~hidden-root variant behind an `#ifdef`~~ | `T29` | DONE, measured 0x29007701 |
 | a domain with an OS | `T01`, `T04`, `T06`, `T19` | out of scope for this domain |
 
 Ceiling with the current domain: **12 of 16**, not 16.
