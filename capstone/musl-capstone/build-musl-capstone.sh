@@ -57,10 +57,36 @@ done
 # On this one it does not (see libc-ext/errno.c), so ours must be the only
 # definition -- otherwise which one a program gets depends on archive order, and
 # a program that got musl's would fault on its first failing syscall.
-for shadowed in src_errno___errno_location.o; do
+#
+# THE OTHERS ON THIS LIST ARRIVED FOR A DIFFERENT REASON, and the difference is
+# the point. Until C-21/C-25/C-26 landed on the shared compiler branch, musl's
+# own strlen, memcpy, calloc, vfprintf and __lock did not compile at all, so
+# libc-ext was the only definition and nothing collided. They compile now. They
+# are still wrong here, and each is wrong in its own way:
+#
+#   strlen    reads a whole size_t at a time, so it reads up to 7 bytes past the
+#             last one. Ordinarily harmless; against a capability whose bounds
+#             end at the string, it is a bounds fault. libc-ext is byte at a time.
+#   memcpy    moves bytes, and a capability's tag rides beside the memory rather
+#             than in it -- 16 byte moves deliver the right bytes with the tag
+#             CLEARED, and the pointer faults later somewhere innocent. See
+#             libc-ext/cap-copy.h; this one is not a preference.
+#   calloc    is the other half of libc-ext/malloc.c's arena. musl's calls a
+#             malloc that is not the one a domain has.
+#   vfprintf  is generated with the double path compiled at -O0, which is what
+#             keeps fmt_fp off the capability-arithmetic wall (see below).
+#   __lock    would take a real lock in a domain that has one thread, reading
+#             libc.need_locks to decide -- which is the >64-bit constant wall.
+#
+# So: NOT "these do not build", but "these build and must not be used". If one
+# of them stops being produced, that is a signal worth stopping for -- either
+# musl moved the file or a compiler change took it back out -- hence the check.
+for shadowed in src_errno___errno_location.o src_string_strlen.o \
+                src_string_memcpy.o src_malloc_calloc.o \
+                src_stdio_vfprintf.o src_thread___lock.o; do
   [[ -e "$OBJ_DIR/$shadowed" ]] || {
-    echo "expected musl member $shadowed not produced; libc-ext/errno.c may now" >&2
-    echo "be shadowing nothing, or musl has moved it" >&2
+    echo "expected musl member $shadowed not produced; the libc-ext file that" >&2
+    echo "shadows it may now be shadowing nothing, or musl has moved it" >&2
     exit 2
   }
   rm -f "$OBJ_DIR/$shadowed"

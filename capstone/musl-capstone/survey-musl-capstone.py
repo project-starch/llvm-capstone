@@ -42,13 +42,28 @@ import sys
 # RAISED to 1280 when the C-21 frontend fix landed (a negative integer constant
 # cast to a capability crashed clang's constant evaluator). 38 files came back,
 # including open.c, fopen.c and the *at() family.
-BASELINE_OK = 1280
+#
+# RAISED to 1321 once C-25 and C-26 moved onto the shared compiler branch. Both
+# had been sitting on this port branch alone, so anything built from a sibling
+# branch was measured against a compiler that did not have them. 41 more files.
+BASELINE_OK = 1321
 
 # A file that MUST compile, and a file that MUST NOT, with the reason it fails.
-# strlen.c fails on `(uintptr_t)s % ALIGN`; when the word-at-a-time string
-# routines get replaced this control has to be retired deliberately.
+#
+# strlen.c WAS the must-fail control and is retired here deliberately, which is
+# what the old comment asked for: it now compiles. Its blocker was `s - a`, a
+# pointer difference, not the `(uintptr_t)s % ALIGN` the comment blamed -- C-25
+# fixed exactly that. A control tied to a bug we intend to fix expires the day
+# the fix lands, so the replacement is tied to something we do NOT intend to fix.
+#
+# mallocng computes a table size from sizeof(void*) and underflows it to
+# SIZE_MAX on a 16-byte pointer (meta.h:20, "array is too large"). That is a
+# design assumption of mallocng, not a compiler defect, and this port uses a
+# different allocator -- so it will keep failing, which is the property a
+# negative control needs. All six mallocng files fail the same way; malloc.c is
+# the one named here.
 CONTROL_MUST_PASS = "src/stdlib/abs.c"
-CONTROL_MUST_FAIL = "src/string/strlen.c"
+CONTROL_MUST_FAIL = "src/malloc/mallocng/malloc.c"
 
 FOREIGN_ARCH_KEEP = {"riscv64", "capstone64", "generic"}
 
@@ -70,6 +85,16 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         # caller then executing its own default case and returning -ENOSYS.
         # build-sqlite-capstone.sh already carries this flag, undocumented.
         "-fno-optimize-sibling-calls",
+        # ALSO LOAD-BEARING, and it was missing until 2026-08-15. A jump table is
+        # .rodata reached through `scc gp`, which under the gp-captable ABI lands
+        # outside gp's bounds and faults -- the same mechanism as C-4a's constant
+        # pools, where ISSUES.md already records -fno-jump-tables as mandatory.
+        # Every application build here carries it (build-file-probe.sh,
+        # build-lua-probe.sh); the ARCHIVE did not, so 15 members shipped with
+        # absolute-addressed switch tables, vfscanf and strftime among them. They
+        # compile and archive cleanly and fault only when called, which is why a
+        # survey counting compiles could never have caught it.
+        "-fno-jump-tables",
         "-D_XOPEN_SOURCE=700",
         f"-I{musl}/arch/capstone64",
         f"-I{musl}/arch/generic",
@@ -124,9 +149,18 @@ def main() -> int:
                         help="also keep the object files, so an archive can be "
                              "built from whatever compiles. The flags and the "
                              "file set then have exactly one definition, here.")
+    parser.add_argument("--print-flags", action="store_true",
+                        help="print the compile flags, one per line, and exit. "
+                             "For the sources that are OURS rather than musl's "
+                             "(libc-ext/): they must be built exactly as the "
+                             "archive is, and two copies of this list would "
+                             "drift.")
     args = parser.parse_args()
 
     musl = pathlib.Path(args.musl_dir).resolve()
+    if args.print_flags:
+        print("\n".join(compile_flags(musl)))
+        return 0
     clang = os.environ.get("CAPSTONE_CLANG")
     if not clang or not pathlib.Path(clang).exists():
         print(f"ERROR: CAPSTONE_CLANG not set or missing: {clang!r}", file=sys.stderr)
