@@ -1161,7 +1161,14 @@ Read halted on `caplifive_s07fix.bit`, resident bitstream confirmed by `nvbit()`
 2. `wb1` = 0, from 1107, **requires option B**, which rules out `618f4ce36` — that tree contains
    no fix at all.
 
-**Therefore the bitstream is `f231b5af0`: option B present, instrument absent.**
+**Therefore the bitstream carries the STRIPPED TREE: option B present, S-07 instrument absent.**
+
+**Precision:** "`f231b5af0`" is slightly over-precise. The synthesizable RTL is **identical across
+`83a7d061f` (the strip) .. `f231b5af0`** — verified, the only design-tree change in that range is
+the *move* of `corev_apu/fpga/synth-guard.sh`, a wrapper script that is not part of the design,
+plus an added text file. Which of those commits was checked out at build time **cannot be
+determined from silicon**, because they differ only outside the design. The RTL claim does not
+depend on which.
 
 ### This CORRECTS the timeline assumption, and the attribution survives it
 
@@ -1179,3 +1186,26 @@ tree is wrong. The bitstream has **no** S-07 instrument, which also explains why
 in the 230-237 range reads as commit-PC bytes rather than as the batch's readers. Any future
 attempt to read the granule addresses or the correlation bit **on this bitstream** will fail, and
 should not be diagnosed as a broken instrument.
+
+## The two numbers that would close the record are NOT on this machine
+
+If this silicon is the stripped tree then a synthesis of that tree **ran and completed**, so two
+values recorded here as UNKNOWN now exist somewhere:
+
+1. **Peak synthesis memory.** The healthy reference is **4958 MB / 2h23m at `618f4ce36`**. The
+   stripped tree was prepared so that the delta against that reference is the fix and nothing
+   else, which makes a measured peak the direct answer to the question that started the whole
+   batching argument — whether the fix synthesises inside a sane envelope. A completed run is
+   already good evidence; a number is better.
+2. **Post-route WNS.** Still the one caveat standing over the S-07 result. Four clean 0/16384
+   results argue against a *gross* timing failure, but they exercise a thin slice and `RETIMING`
+   was left `true` deliberately. **WNS non-negative makes the S-07 validation unconditional;
+   negative means everything measured on this bitstream needs re-reading.**
+
+**Searched and not found here.** No `.bit`, no `synth-mem.log`, no Vivado log, no timing report
+under `/home`, `/tmp/capstone` or the repo. The one Vivado log present (`/tmp/capstone/vivado_diag.log`)
+is from a **different machine**, dated **2026-08-17** — i.e. *before* the fix — reached the
+synthesis phase only, carries **no** timing summary, and shows a max peak of **4988 MB**, which is
+in line with the 4958 MB healthy reference but says nothing about the fixed tree.
+
+Neither number needs the board. Both live wherever `caplifive_s07fix.bit` was built.
