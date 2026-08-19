@@ -8036,8 +8036,21 @@ SDValue CapstoneTargetLowering::lowerADD(SDValue Op, SelectionDAG &DAG) const {
     if (isCapstoneIntegerOffset(Base)) {
       BaseScalar = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Base); // form (a)
     } else if (Base.getOpcode() == ISD::SUB &&
-               isCapstoneCapabilityValue(Base.getOperand(0)) &&
-               isCapstoneCapabilityValue(Base.getOperand(1))) {
+               !isCapstoneIntegerOffset(Base.getOperand(0)) &&
+               !isCapstoneIntegerOffset(Base.getOperand(1))) {
+      // NOT isCapstoneCapabilityValue on both operands, which is what this used
+      // to ask. That predicate deliberately excludes CopyFromReg i128, so a
+      // difference whose operands are an incoming POINTER PARAMETER and a
+      // GlobalAddress -- neither "recognised" -- fell through to CIncOffset and
+      // faulted. JerryScript's allocator does exactly that:
+      //     (uint32_t) ((uint8_t *) p - heap.area)     // `area` at offsetof 8
+      // reassociates to (p - &heap) - 8, so the base is sub(CopyFromReg,
+      // GlobalAddress) and the -8 became cincoffsetimm on an untagged register.
+      //
+      // Ask instead what lowerSUB asks to decide the very same question one node
+      // earlier: neither operand an integer offset means this SUB is a pointer
+      // difference. Keeping the two in step is the point -- they were disagreeing
+      // about the same node.
       // form (b): a pointer difference -- (cursor(A) - cursor(B)), scalar.
       SDValue AC = getCapstoneCapabilityCursor(Base.getOperand(0), DAG, DL, XLenVT);
       SDValue BC = getCapstoneCapabilityCursor(Base.getOperand(1), DAG, DL, XLenVT);

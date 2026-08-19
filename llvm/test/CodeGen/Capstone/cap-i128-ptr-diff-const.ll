@@ -78,3 +78,33 @@ entry:
   %r = trunc i128 %div to i64
   ret i64 %r
 }
+
+; The same defect one predicate further out: a difference whose operands are an
+; incoming POINTER PARAMETER and a GlobalAddress. isCapstoneCapabilityValue
+; deliberately excludes CopyFromReg i128, so neither operand was "recognised" as a
+; capability and the constant adjustment fell through to cincoffset on an untagged
+; register again.
+;
+; This is JerryScript's jmem_heap_alloc:
+;     prev_p->next_offset = (uint32_t) ((uint8_t *) remaining_p - heap.area)
+; where `area` is a member at offset 8, so it reassociates to (p - &heap) - 8. The
+; domain faulted with cause 24 on its first allocation, before running any JS.
+%struct.free_t = type { i32, i32 }
+%struct.heap_t = type { %struct.free_t, [512 x i8] }
+@heap = dso_local addrspace(200) global %struct.heap_t zeroinitializer, align 4
+
+; CHECK-LABEL: ptr_diff_param_minus_member:
+; CHECK:      sub [[G:a[0-9]+]], {{a[0-9]+}}, {{a[0-9]+}}
+; CHECK-NEXT: addi [[G]], [[G]], -8
+; CHECK-NOT:  cincoffset
+define void @ptr_diff_param_minus_member(ptr addrspace(200) %prev_p,
+                                         ptr addrspace(200) %p) addrspace(200) {
+entry:
+  %lhs = ptrtoint ptr addrspace(200) %p to i128
+  %rhs = ptrtoint ptr addrspace(200) getelementptr inbounds (%struct.heap_t, ptr addrspace(200) @heap, i32 0, i32 1) to i128
+  %sub = sub i128 %lhs, %rhs
+  %conv = trunc i128 %sub to i32
+  %next = getelementptr inbounds %struct.free_t, ptr addrspace(200) %prev_p, i32 0, i32 1
+  store i32 %conv, ptr addrspace(200) %next, align 4
+  ret void
+}
