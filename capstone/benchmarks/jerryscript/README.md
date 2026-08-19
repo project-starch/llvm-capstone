@@ -47,22 +47,60 @@ transcendentals. `fabs`, `cbrt` and `log2` are implemented in
 `log2` splits off the exponent rather than dividing by ln2, because the obvious form
 returns 2.9999999999999996 for `Math.log2(8)`.
 
-### Two blockers, and they are coupled
+### Where this stands
 
-**1. The image is 2.15x too big.** `code_len` is 2,965,680 and the hard ceiling is
-1,376,256 bytes: `module/capstone.c` needs `code_len + 64K + 2*code_len` to fit one
-`__get_free_pages` allocation, and that caps at order 10 (4 MiB). Past it the
-allocation returns NULL and domain creation fails before anything runs.
-`domdata-budget.py` now says so; it used to report "fits" for exactly this image, and
-correcting it is on `capstone-domain-port-fixes`.
+**The size blocker is GONE (2026-08-19).** It was the binding one and it is resolved
+outside this directory. A domain region is one `__get_free_pages()` allocation covering
+`code_len + 64K + 2*code_len`, which capped at order 10 (4 MiB) and so capped `code_len`
+at 1,376,256 bytes -- this image is 2,965,680. The kernel now sets
+`CONFIG_ARCH_FORCE_MAX_ORDER=13`, giving a 16 MiB block and a ceiling of 5,570,560
+bytes. It needed two changes, because riscv did not carry the `ARCH_FORCE_MAX_ORDER`
+symbol at all and without it the config line is silently discarded by `olddefconfig`.
+Both live as vendor patches on `capstone-domain-port-fixes`
+(`tests/vendor-patches/*max-order*.patch`) rather than as a submodule pointer bump,
+because neither `caplifive-buildroot` nor its nested `components/linux` accepts a push
+from this account.
 
-**2. Lowering the optimisation level, the obvious lever, does not compile.** `-O1`,
-`-Os` and `-Oz` all stop at C-21: a select between two `__int128` constants cannot be
-selected. See `../../tests/compiler-repros/C21-i128-select-of-constants/`. The minimal
-reproducer fails at `-O0` too; JerryScript's `-O0` build simply does not generate that
-shape, and `ecma_op_object_find_own` does at `-Os`.
+**The domain is now created and ENTERED.** It runs until
 
-The other lever, switching features off, is blocked differently: `amalgam.py` walks the
+    [CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x10426939c,
+               tval = 0x0, badaddr = 0x277fe2be8
+
+which is a tag check, not an allocation failure -- the expected next problem. The
+prime suspects are `jmem_decompress_pointer` and `ecma_get_pointer_from_ecma_value`:
+both round-trip a capability through `uintptr_t`, which drops the tag, and 51 call
+sites sit behind those two functions.
+
+Note when running this by hand: the loader reads the 4 MB `.dom` over 9p and sits in
+`p9_virtio_zc_request` (state `D`) for well over a minute. That is not a hang, but it
+IS longer than `run-domain-smoke.py`'s default expect timeout -- use
+`--timeout-multiplier 20` or the run reports a failure that never happened.
+
+### Still open: the build does not compile below -O0
+
+Not a blocker for size any more, only for speed and for the instrumented-vs-ported
+comparison. It is also much narrower than it looked: of 89 `jerry-core` files that
+compile at `-O0`, exactly **two** fail at `-Os`, and each names a distinct gap.
+
+| file | error |
+|---|---|
+| `ecma/base/ecma-helpers-collection.c` | `Cannot select: i128 = xor t63, Constant:i128<-1>` |
+| `ecma/operations/ecma-big-uint.c` | `cannot lower a 128-bit right shift by >= XLen` |
+
+Both are the same root cause, filed as **C-23**: on PureCap `i128` is the capability
+carrier, so there is no register class for a plain 128-bit integer and every
+`lowerScalarI128*` helper truncates to XLen, computes, and re-extends. These two shapes
+cannot be spelled that way, so the backend refuses. The shapes that *do* compile are
+not thereby correct -- C-23's reproducer shows an `i128` assembled from two halves
+silently losing the high one. The reproducer folder is
+`tests/compiler-repros/C23-i128-high-half-silently-dropped/` on
+`capstone-domain-port-fixes`; this branch carries only C-19..C-21.
+
+On size, `-Os` would have been comfortable: measured over the 87 files that build at
+both levels, `.text` drops to 0.397 of `-O0`, which puts the whole image near
+1,177,755 bytes. That is now headroom rather than a requirement.
+
+Switching features off, the other lever, is blocked differently: `amalgam.py` walks the
 whole tree (`os.walk`) and does not filter by config, and 53 of the 200 files carry no
 `#if JERRY_*` guard of their own -- so `JERRY_BUILTIN_REGEXP=0` breaks the
 amalgamation rather than shrinking it. Upstream's CMake avoids this by selecting the

@@ -65,9 +65,12 @@ COMMON=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
         # indirect jump, and under gp-captable .rodata is not reachable as plain data.
         # JerryScript's opcode dispatch is exactly that shape.
         -fno-jump-tables
-        # JS_OPT: the domain image has a HARD ceiling of 1,376,256 bytes of code_len
+        # JS_OPT: the domain image has a ceiling of 5,570,560 bytes of code_len
         # (module/capstone.c needs code_len + 64K + 2*code_len to fit in one
-        # __get_free_pages allocation, capped at order 10). -O0 does not fit.
+        # __get_free_pages allocation, capped at MAX_ORDER - 1). That was 1,376,256
+        # until 2026-08-19, when the kernel gained CONFIG_ARCH_FORCE_MAX_ORDER=13;
+        # this image is 2,965,680 and did NOT fit before it. -O0 fits now, and it is
+        # the only level that compiles -- see C-23 in the README.
         -std=c99 ${JS_OPT:--O0} -w
         # C-20: __builtin_ctz crashes the backend. patches/0001 guards the one use.
         -DJERRY_NO_BUILTIN_CTZ=1
