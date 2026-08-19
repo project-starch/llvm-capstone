@@ -42,13 +42,28 @@ import sys
 # RAISED to 1280 when the C-21 frontend fix landed (a negative integer constant
 # cast to a capability crashed clang's constant evaluator). 38 files came back,
 # including open.c, fopen.c and the *at() family.
-BASELINE_OK = 1280
+#
+# RAISED to 1321 once C-25 and C-26 moved onto the shared compiler branch. Both
+# had been sitting on this port branch alone, so anything built from a sibling
+# branch was measured against a compiler that did not have them. 41 more files.
+BASELINE_OK = 1321
 
 # A file that MUST compile, and a file that MUST NOT, with the reason it fails.
-# strlen.c fails on `(uintptr_t)s % ALIGN`; when the word-at-a-time string
-# routines get replaced this control has to be retired deliberately.
+#
+# strlen.c WAS the must-fail control and is retired here deliberately, which is
+# what the old comment asked for: it now compiles. Its blocker was `s - a`, a
+# pointer difference, not the `(uintptr_t)s % ALIGN` the comment blamed -- C-25
+# fixed exactly that. A control tied to a bug we intend to fix expires the day
+# the fix lands, so the replacement is tied to something we do NOT intend to fix.
+#
+# mallocng computes a table size from sizeof(void*) and underflows it to
+# SIZE_MAX on a 16-byte pointer (meta.h:20, "array is too large"). That is a
+# design assumption of mallocng, not a compiler defect, and this port uses a
+# different allocator -- so it will keep failing, which is the property a
+# negative control needs. All six mallocng files fail the same way; malloc.c is
+# the one named here.
 CONTROL_MUST_PASS = "src/stdlib/abs.c"
-CONTROL_MUST_FAIL = "src/string/strlen.c"
+CONTROL_MUST_FAIL = "src/malloc/mallocng/malloc.c"
 
 FOREIGN_ARCH_KEEP = {"riscv64", "capstone64", "generic"}
 
