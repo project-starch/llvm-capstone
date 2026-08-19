@@ -21,9 +21,34 @@ The arithmetic mirrors, and must stay in step with:
 import sys, struct, subprocess, os, re
 
 PAGE = 4096
-# __get_free_pages(GFP_HIGHUSER, order) caps at MAX_ORDER - 1. This kernel's
-# include/linux/mmzone.h has MAX_ORDER 11, so the largest allocation is 1024 pages.
-MAX_ALLOC_ORDER = 10
+
+
+def _max_alloc_order():
+    """__get_free_pages(GFP_HIGHUSER, order) caps at MAX_ORDER - 1.
+
+    READ, do not hardcode. This was a literal 10 until 2026-08-19, when the kernel
+    gained CONFIG_ARCH_FORCE_MAX_ORDER=13 and the literal started reporting DOES NOT
+    FIT for images that load fine. A constant duplicating a config value goes stale
+    silently and the staleness looks exactly like a finding.
+    """
+    root = os.environ.get("CAPSTONE_BUILDROOT_DIR")
+    if root is None:
+        root = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "..", "..", "..", "caplifive-buildroot")
+    cfg = os.path.join(root, "configs", "kernel.config")
+    if not os.path.exists(cfg):
+        sys.exit(f"domdata-budget: cannot read {cfg}. Set CAPSTONE_BUILDROOT_DIR. "
+                 f"Refusing to guess the allocation ceiling.")
+    with open(cfg) as fh:
+        for line in fh:
+            m = re.match(r"^CONFIG_ARCH_FORCE_MAX_ORDER=(\d+)\s*$", line)
+            if m:
+                return int(m.group(1)) - 1
+    # Symbol absent means the kernel default applies, which is MAX_ORDER 11.
+    return 10
+
+
+MAX_ALLOC_ORDER = _max_alloc_order()
 
 
 def largest_code_len():
@@ -113,8 +138,8 @@ def main():
     #        while (1 << order) * PAGE < code_len + DOMAIN_DATA_SIZE + dom_min_free:
     #      so a 2.78 MB image needs order 12 where this reported 11.
     #   2. there is a CEILING and it was never checked. __get_free_pages caps at
-    #      MAX_ORDER - 1, which is 10 in this kernel (mmzone.h: MAX_ORDER 11,
-    #      MAX_ORDER_NR_PAGES = 1 << (MAX_ORDER - 1) = 1024 pages = 4 MiB). Past that
+    #      MAX_ORDER - 1, read from configs/kernel.config (CONFIG_ARCH_FORCE_MAX_ORDER,
+    #      absent = the kernel default 11). Past that
     #      the allocation returns NULL and domain creation fails -- which reads at the
     #      console as "Failed to allocate memory for domain", nothing to do with the
     #      carve arithmetic this script reports on.
