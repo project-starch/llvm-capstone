@@ -1,3 +1,30 @@
+; WHAT THIS TEST ACTUALLY COVERS -- CORRECTED 2026-08-19 after an adversarial audit.
+;
+; IT DOES NOT EXERCISE lowerScalarI128Shift's widening-multiply hook. Measured, not
+; argued: with breakpoints on the function entry, the guard and the MULH emit, this file
+; produces NO hits at all, and the pre-legalize DAG dump shows why --
+;
+;     Initial selection DAG:            t7: i128 = mul t5, t6
+;                                       t10: i128 = srl t7, Constant:i64<64>
+;     Optimized lowered selection DAG:  t15: i64 = mulhu t2, t4
+;
+; DAGCombiner::combineShiftToMULH (DAGCombiner.cpp:10717, from visitSRL:11326) consumes
+; the shape BEFORE legalisation. It has no requirement that the wide type be illegal --
+; only isOperationLegalOrCustom(MULHU, i64), which holds here. So the claim that "i128 is
+; legal, therefore that combine never runs" is FALSE, and these CHECKs pass with or
+; without the Capstone hook.
+;
+; `smulh` below settles it independently: it uses `ashr`, i.e. ISD::SRA, which the hook
+; cannot match under any circumstances, so its `mulh` provably comes from the combiner.
+;
+; THE TEST IS STILL WORTH KEEPING, as a LOCK ON THE COMBINER PATH: if combineShiftToMULH
+; ever stops firing for these shapes, they would fall through to legalisation and abort,
+; and this file catches that. It must simply not be read as coverage of the hook.
+;
+; The hook's own emit path has NO known reaching input and NO test coverage. See
+; cap-i128-widening-mul-const-signedness.ll, which DOES enter the function and exercises
+; the matcher's reject path.
+;
 ; The HIGH HALF of a widening multiply, which on this target arrives as a real
 ; 128-bit shift and used to crash the compiler.
 ;
