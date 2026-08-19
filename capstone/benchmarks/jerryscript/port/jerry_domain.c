@@ -18,8 +18,8 @@
  */
 #include <stdint.h>
 #include <string.h>
+/* The amalgamation bundles every public header into one, so this is the whole API. */
 #include "jerryscript.h"
-#include "jerryscript-port.h"
 
 /* ---- the embedder interface, minimal. Every one of these is required to link;
    the ones with no meaning in a domain say so rather than pretending. */
