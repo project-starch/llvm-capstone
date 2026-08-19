@@ -165,13 +165,36 @@
      left in a register. Keeping the blob in s1 across the call is what faulted on
      the first attempt: `Cap mem access OOB ... rs1 = x9`, s1 having come back
      untagged. sp and gp are safe because the ABI keeps them intact. */
-  cincoffsetimm(sp, sp, -32)
+  cincoffsetimm(sp, sp, -48)
   stc(s1, sp, 0)                     /* park the blob cap across the calls            */
   cincoffset(a6, s1, t6)
   stc(a6, sp, 16)                    /* park the entry pointer too                    */
   mv    a7, t3                       /* a7 = runtime IMAGE address of the entry       */
+  /* ...and park a7 too. a7 is CALLER-saved and the initializer is ordinary C that uses it
+     freely -- 36 instructions write a7 inside __capstone_cap_init in one MicroPython domain.
+     Incrementing it in place across the call therefore compares a GARBAGE cursor against the
+     end marker, so whether this loop stops after the right number of entries is decided by
+     whatever the generated initializer happened to leave in a7.
+
+     That is measured, not feared. In a domain built with MICROPY_PY_UCTYPES=0 the last
+     instruction in __capstone_cap_init that writes a7 is `auipc a7, 0xffff8; addi a7, a7,
+     -0x5e8` at 0xa4fd0, i.e. a7 = 0x9c9e8, which is exactly <mod_random_random>. The loop
+     added 8, compared 0x9c9f0 against __capstone_cap_init_end = 0xc3ae8, took the branch, read
+     8 bytes PAST the one-entry table and jalr'd to 0x9c9f0 -- and a QEMU trace shows the next
+     block executed is precisely 0x9c9f0. mod_random_random then allocates a float before
+     gc_init has run, m_malloc fails, the raise finds no NLR handler, and the domain spins
+     forever in nlr_jump_fail. domain_main never runs at all.
+
+     The same build with UCTYPES=1 survived only by luck: its last a7 write is `ldc a7, 0(a7)`,
+     a GCT capability pointing into the blob, which the monitor places above the image, so a7
+     came back greater than the end marker and the loop happened to exit.
+
+     a7 is an integer here (it comes from `mv a7, t3` where t3 is an lla), so a plain sd/ld is
+     safe -- there is no tag to drop. */
+  sd    a7, 32(sp)
 70:
   ldc(a6, sp, 16)
+  ld    a7, 32(sp)                   /* reload: the callee clobbers a7 (caller-saved)  */
 #ifdef INTERP_CAPINIT_IMAGE_TABLE
   /* DIAGNOSTIC: read the entry's delta from the IMAGE (a7) rather than from the monitor's
      copy of it in dom_data (a6). Both should hold the same bytes -- the table lives in the
@@ -193,6 +216,28 @@
   ld    t0, 0(a6)                    /* t0 = initfn - entry (link-time relative)      */
 #endif
   add   t0, a7, t0                   /* -> initfn runtime address                     */
+#ifdef INTERP_PEEK_SP_IN_CAPINIT
+  /* DIAGNOSTIC: publish sp.BASE (=1) or sp.END (=2) as seen from INSIDE RUN_CAP_INIT, so it can
+     be compared against the same two values read in domain_main. The question this answers:
+     a blob pointer derived from sp.base works in domain_main and does NOT work here, so either
+     the two sp's differ or the derivation is at fault, and nothing short of both numbers can
+     tell those apart. csdebugprint emits the full 64 bits; the retval path would truncate to 32.
+     QEMU-ONLY (funct7 0x43 is undecoded on the FPGA) -- never set this for a board build. */
+  /* The lcc macro pastes its third argument onto `x`, so the selector must be a bare literal;
+     an expression like `2 + N` assembles as `x2 + N` and fails with "unexpected token". */
+#if INTERP_PEEK_SP_IN_CAPINIT == 2
+  lcc(t0, sp, 4)                     /* sp.END                                          */
+#else
+  lcc(t0, sp, 3)                     /* sp.BASE                                         */
+#endif
+  .insn r 0x5b, 0x1, 0x43, x0, t0, x0
+  /* Unwind exactly as the normal path does: restore the parked blob cap and give sp its 48
+     bytes back. Jumping straight to 78f would leave sp low for the rest of the domain and the
+     next thing to run would fault for an unrelated reason. */
+  ldc(s1, sp, 0)
+  cincoffsetimm(sp, sp, 48)
+  j     78f
+#endif
 #ifdef INTERP_PEEK_CAPINIT_TARGET
   /* DIAGNOSTIC: publish the computed call target instead of calling it. The target is
      (image address of the table entry) + (delta read from the monitor's COPY of that entry
@@ -202,34 +247,38 @@
      reads at run time. The host prints this as `obs=`. Compare against
      pcc_base + (0x141b70 - 0x10000); anything else means the delta or the blob base is
      wrong, and the `jalr` is transferring control to an arbitrary function. */
-  /* 112, not 80: test: parks res at 80(sp), then RUN_CAP_INIT drops sp by 32 before this
-     loop, so the slot is 32 higher from in here. Reading 80(sp) lands on the parked RETURN
-     capability and faults. */
+  /* 128, not 80: test: parks res at 80(sp), then RUN_CAP_INIT drops sp by 48 before this
+     loop, so the slot is 48 higher from in here. Reading 80(sp) lands on the parked RETURN
+     capability and faults. This offset MUST track the frame size above it -- it was 112 while
+     the frame was 32, and an audit caught it still reading 112 after the frame grew to 48,
+     which would have made this diagnostic ldc an untagged integer and faulted on the sw. */
   /* csdebugprint is a QEMU-ONLY debug op (funct7 0x43 on opcode 0x5b); the FPGA decoder
      has nothing there. It prints the named register straight to the emulator console,
      which beats routing a value through the shared region -- the host only reports `obs`
      on its own failure paths and would never surface it. QEMU-only, so this knob must
      never be set for a board build. */
   .insn r 0x5b, 0x1, 0x43, x0, t0, x0
-  ldc(a2, sp, 112)                   /* a2 = res capability parked by test:            */
+  ldc(a2, sp, 128)                   /* a2 = res capability parked by test:            */
   sw    t0, 0(a2)
   /* Unwind exactly as the normal path does before leaving. Branching straight to 78f skips
-     BOTH the blob-cap restore and the `sp += 32`, leaving sp 32 bytes low for the rest of
+     BOTH the blob-cap restore and the `sp += 48`, leaving sp 48 bytes low for the rest of
      the domain -- which shows up as an unrelated fault in whatever runs next (strlen, in
      the first attempt). A diagnostic that changes the frame is measuring itself. */
   ldc(s1, sp, 0)
-  cincoffsetimm(sp, sp, 32)
+  cincoffsetimm(sp, sp, 48)
   j     78f
 #endif
   jalr  ra, 0(t0)                    /* plain call: gp-free ABI, within PCC           */
   ldc(a6, sp, 16)                    /* reload: the callee may have clobbered it      */
   cincoffsetimm(a6, a6, 8)
   stc(a6, sp, 16)
+  ld    a7, 32(sp)
   addi  a7, a7, 8
+  sd    a7, 32(sp)
   lla   t4, __capstone_cap_init_end
   bltu  a7, t4, 70b
   ldc(s1, sp, 0)                     /* restore the blob cap                          */
-  cincoffsetimm(sp, sp, 32)
+  cincoffsetimm(sp, sp, 48)
 78:
   /* Persist "built" ONLY here, once the table AND the initializers are done. Setting
      it inside BUILD would make the very first entry skip its own cap-init, since
@@ -810,8 +859,7 @@ test:
 #endif
   /* ROUTE A rationale (the install itself now happens BEFORE cap-init, above):
      the monitor never writes dom_seal[1] (sbi_capstone.c:760,782-784) and slot 1 IS
-     {ctvec,mtvec} (csr_regfile.sv:407 -- was cited as :399, which is
-     dom_switch_mstatus_set_o and unrelated; re-derived 2026-08-26), so a domain runs with mtvec=0: any fault vectors to
+     {ctvec,mtvec} (csr_regfile.sv:399), so a domain runs with mtvec=0: any fault vectors to
      pc=0, lands outside PCC and re-faults forever, silently. That is why a fault and a hung
      core are indistinguishable, and why every wedge so far has been unrepeatable (a wedge
      ends the board session).
