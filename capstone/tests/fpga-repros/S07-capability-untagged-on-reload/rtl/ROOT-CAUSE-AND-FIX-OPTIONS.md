@@ -203,12 +203,50 @@ specifically the interaction with the existing NI drain-and-block and with the `
 
 ## 6. Two adjacent defects that MUST NOT be folded into this one
 
-**I-b — store-to-load forwarding is word-granular too, and is measured nowhere.**
+**I-b — store-to-load forwarding is word-granular too. It is now MEASURED, and (B) does NOT
+make it unreachable.**
 `wt_dcache_mem.sv:280` compares at word granularity and `:344-345` selects *metadata* bytes using
 the *data* half's valid mask. So `stc G; sd G+8; ldc G` with both entries resident returns the
 pre-scrub capability with tag 1, and `stc G; ld G+8` reads stale memory. Exists today at
-`a3dbae618`. **(B) makes it unreachable; (C) leaves it entirely.** It deserves its own repro
-folder — one issue per folder is a hard rule here.
+`a3dbae618`.
+
+> **CORRECTION, 19-08-2026.** An earlier version of this paragraph said "**(B) makes it
+> unreachable**". That is REFUTED. (B) is an allocation-time check between two write-buffer
+> ENTRIES; the residual needs only **ONE** entry, so `gran_conflict` never fires — and a load
+> never consults it at all. The live sequence is *shorter* than the S-07 trigger, not longer:
+>
+> ```
+> stc  G, cap      capability drains to L1: cap_tag_q[G>>4] = 1
+> sd   x0, G+8     ONE plain entry at word 1, is_cap=0, ctag=0 -- still resident
+> ldc  rd, G       word-0 load: misses the word-1 entry, falls through to the STALE cap_tag_q
+> ```
+>
+> **Measured on the fixed RTL** by `s07-wbuf-forward-residual` and its matched control, which
+> differ by exactly one thing — a 300-iteration drain delay between the scrub and the readback:
+>
+> | arm | traps / 16 legs | meaning |
+> |---|---|---|
+> | entry still resident | **8** | 8 legs were handed a live, dereferenceable capability over memory they had just scrubbed |
+> | 300-iteration drain delay | **16** | every leg saw the tag correctly cleared |
+>
+> Note the **inverted polarity**: here a trap is the CORRECT behaviour and its absence is the
+> defect, so the positive control (an `LDC` through a plain integer) is mandatory and runs first.
+> Do not compare these counts with `s07-wbuf-tag-reorder`, where a trap *is* the defect.
+>
+> Scope it precisely. The word-**HIT** direction *is* genuinely improved by (B): with
+> co-residency forbidden, a hit forwards from the single entry and the S-06 P4 rules give the
+> right answer. The residual is the word-**MISS** case, and it is a **transient** window — it
+> closes when the entry drains — unlike the pre-fix *persistent* dropped scrub. That distinction
+> is why this is a residual and not a regression, and it does not disturb the S-09 dropped-scrub
+> claim, which is about the permanent drop.
+>
+> The 8/16 rate is **not** a probability: the trap handler itself drains the buffer between legs,
+> which is what produces the alternating pattern. The *existence* is the result; the rate is an
+> artifact of the measurement cadence.
+
+Correct wording going forward: **(B) makes the two-entry forwarding case unreachable and leaves
+the one-entry word-miss case live; (C) leaves both.** It deserves its own repro folder — one
+issue per folder is a hard rule here.
 
 **I-c — AMO over a capability granule (invariant I4).** `needs_tag` excludes atomics
 (`wt_axi_adapter.sv:141-152`), so an AMO leaves both the DRAM tag byte and `cap_tag_q` set. **None
