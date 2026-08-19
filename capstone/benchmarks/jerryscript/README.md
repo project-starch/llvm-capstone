@@ -47,27 +47,36 @@ transcendentals. `fabs`, `cbrt` and `log2` are implemented in
 `log2` splits off the exponent rather than dividing by ln2, because the obvious form
 returns 2.9999999999999996 for `Math.log2(8)`.
 
-### The next blocker, found by reading the budget rather than by a fault
+### Two blockers, and they are coupled
 
-    - cap table           48   (3 globals)
-    - storage            144
+**1. The image is 2.15x too big.** `code_len` is 2,965,680 and the hard ceiling is
+1,376,256 bytes: `module/capstone.c` needs `code_len + 64K + 2*code_len` to fit one
+`__get_free_pages` allocation, and that caps at order 10 (4 MiB). Past it the
+allocation returns NULL and domain creation fails before anything runs.
+`domdata-budget.py` now says so; it used to report "fits" for exactly this image, and
+correcting it is on `capstone-domain-port-fixes`.
 
-`jerry_global_heap` is 524,288 bytes in `.bss` and it is NOT among those three. Under
-`-capstone-gp-captable` a global that is not carved is not reachable as data, so the
-heap would fault on first use.
+**2. Lowering the optimisation level, the obvious lever, does not compile.** `-O1`,
+`-Os` and `-Oz` all stop at C-21: a select between two `__int128` constants cannot be
+selected. See `../../tests/compiler-repros/C21-i128-select-of-constants/`. The minimal
+reproducer fails at `-O0` too; JerryScript's `-O0` build simply does not generate that
+shape, and `ecma_op_object_find_own` does at `-Os`.
 
-The cause is the build shape, and it was confirmed with a control rather than
-inferred: a single translation unit declaring two globals emits a descriptor with
-`02000000` -- two carves. The descriptor is per translation unit, and this build
-compiles 200 separate objects, of which one survives the link. MicroPython does not
-hit this because it **amalgamates** `py/` and its port into one translation unit, and
-gets 232 carves.
+The other lever, switching features off, is blocked differently: `amalgam.py` walks the
+whole tree (`os.walk`) and does not filter by config, and 53 of the 200 files carry no
+`#if JERRY_*` guard of their own -- so `JERRY_BUILTIN_REGEXP=0` breaks the
+amalgamation rather than shrinking it. Upstream's CMake avoids this by selecting the
+file LIST from the config and running the amalgamator over that list. Driving CMake for
+the list, or patching guards into the ~53 unguarded files, are the two ways forward.
 
-So the next step is an amalgamation, the same shape as
-`../micropython/build-micropython-silicon.sh`. That also brings the collision problem
-that port has already solved twice -- two `lib/` headers defining the same typedef, or
-two modules defining the same static -- for which its `EXTMOD_STATICS` renaming
-mechanism is the precedent.
+### Superseded, and why it is worth recording
+
+The first version of this port hand-rolled an amalgamation and borrowed MicroPython's
+`lib/libm_dbl`, and implemented `nextafter`, `fabs`, `cbrt` and `log2` by hand, each
+validated against the host libm. All of that is gone: `tools/amalgam.py --jerry-core
+--jerry-math` is upstream's own amalgamator and ships upstream's own libm, which
+covers all four. The compile probe asks what a candidate NEEDS; it does not ask what
+the candidate already PROVIDES, and that is a different question worth asking first.
 
 ### Still not done beyond that
 
