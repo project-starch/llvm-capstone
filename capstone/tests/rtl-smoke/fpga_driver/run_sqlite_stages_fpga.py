@@ -29,6 +29,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 from fpga_driver import config as C
 from fpga_driver.fpga_console import FpgaConsole, ActionTimeout
 from fpga_driver.safe_cleanup import release_board, hard_exit, install_release_on_signal
+from fpga_driver.preflight import require_preflight
 from fpga_driver.run_ladder_perf_fpga import cold_boot, nvbit, install_resilient_emit
 from fpga_driver.run_sqlite_baked_fpga import (
     IMG, IMG_NAME, BITSTREAM, assert_firmware_embeds_current_initramfs)
@@ -585,6 +586,10 @@ def decode_probe(obs):
 
 
 def main():
+    # BEFORE the board is touched: a blocked run must cost no lock, no power cycle
+    # and no JTAG upload. The gate encodes C1-C14, every one a failure that already
+    # cost board time, and until 2026-08-19 nothing called it from here.
+    require_preflight()
     if not URL:
         raise SystemExit("FPGA_URL not set")
     # Verify the firmware against the domains THIS run will execute, not against the

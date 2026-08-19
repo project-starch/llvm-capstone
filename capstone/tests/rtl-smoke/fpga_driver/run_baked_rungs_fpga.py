@@ -31,6 +31,7 @@ from fpga_driver import config as C                                    # noqa: E
 from fpga_driver.fpga_console import FpgaConsole, ActionTimeout        # noqa: E402
 from fpga_driver.safe_cleanup import (release_board, hard_exit,        # noqa: E402
                                       install_release_on_signal)
+from fpga_driver.preflight import require_preflight                    # noqa: E402
 from fpga_driver.run_sqlite_baked_fpga import _hash_name  # noqa: E402
 from fpga_driver.run_ladder_perf_fpga import (cold_boot, nvbit,        # noqa: E402
                                               install_resilient_emit)
@@ -95,6 +96,10 @@ def log(m):
 
 
 def main():
+    # BEFORE the board is touched: a blocked run must cost no lock, no power cycle
+    # and no JTAG upload. The gate encodes C1-C14, every one a failure that already
+    # cost board time, and until 2026-08-19 nothing called it from here.
+    require_preflight()
     oracles = {}
     for r in RUNGS:
         p = ART / f"{r}.oracle"
