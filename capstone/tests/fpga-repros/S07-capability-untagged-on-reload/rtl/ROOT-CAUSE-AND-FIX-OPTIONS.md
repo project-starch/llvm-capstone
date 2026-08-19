@@ -90,7 +90,129 @@ later, into the granule whose load faults.
 
 ---
 
-## 3. The two fix options
+## 3. THE FINDING THAT GOVERNS EVERY FIX AND EVERY TEST
+
+**`ctag` is sampled TWICE, at different times.**
+
+    wt_dcache_wbuffer.sv:298-299   miss_wctag_o = wbuffer_dirty_mux.ctag   <- TX ISSUE  -> DRAM
+    wt_dcache_wbuffer.sv:415-416   wr_ctag_o    = wbuffer_q[rtrn_ptr].ctag <- TX RETURN -> L1
+
+So **any fix that mutates a resident entry after its transaction has issued writes one tag to L1
+and a different one to DRAM.** L1 wins every immediate readback; DRAM wins once the line is
+displaced. A fix can therefore look perfect and leave the capability resurrectable.
+
+**Consequence, and it is not optional: every acceptance test must include a forced-eviction
+reload leg** — touch `DCACHE_SET_ASSOC+1` other lines in the same set, then reload. The existing
+S-09 detector reads back immediately and would report a broken fix as working.
+
+The AXI bus is *not* the reorder source: data writes are pinned to ID 1 and tag writes to ID 0
+(`wt_axi_adapter.sv:214, 452`), and same-ID writes complete in order. The reorder is drain
+*selection* (`i_dirty_rr`), which is why the fix belongs in the write buffer.
+
+## 4. The fix options, after four independent audits
+
+### REJECTED — (A) granule-aware merge
+
+The entry's `valid`/`dirty`/`txblock` are 8-bit masks over ONE word and `.user` has **no byte
+tracking at all** (`wt_dcache.sv:70-83`). "Bytes 8-15 dirty" is inexpressible. Making it
+expressible means widening masks across five files, ~+224 flops, 200-400 lines.
+
+Worse, **as sketched it converts a visible failure into an invisible one.** A scrub merged into an
+entry whose TX has already issued sets no dirty bits (its bytes live in `.user`), so
+`bdirty = (|txblock) ? '0 : ...` never re-drains it; the return writes the merged value to L1 and
+`evict` then frees the entry. **L1 says the scrub landed; DRAM still holds the tagged capability.**
+The current detector would call that a success.
+
+### REJECTED — (C) allocation-time fixup
+
+Two independent kills. **Partial byte-enable:** `bank_wdata[1]` is written only by an `is_cap`
+entry (`wt_dcache_mem.sv:170-172`), so demoting the resident capability entry means a `sb G+9`
+leaves the other seven metadata bytes holding **pre-`stc`** content. **Wrong-address tag write:**
+invalidating an in-flight entry leaves `tx_stat_q[id].ptr` pointing at it; the entry can be
+reallocated to a different address, and the return then writes that new occupant's `ctag` —
+a tag write at an address the program never stored a capability to. `tx_valid1`
+(`wt_dcache_wbuffer.sv:693`) is the tell. C is also a strict superset of B's cost.
+
+### REJECTED — drain-side ordering (make a conflicting entry ineligible for arbitration)
+
+**There is no age state in the entry** (`wt_dcache.sv:70-83`) and the slot index is not a proxy for
+age — allocation is lowest-free-index (`:461-467`). Masking therefore fixes an *arbitrary* order:
+correct for one program and silently wrong for the other. It also removes the nondeterminism that
+made the bug findable. Naive symmetric masking deadlocks.
+
+### REJECTED — stalling in the store buffer
+
+Incomplete. Port 3 is a mux (`cva6.sv:2353-2354`) and the **rev-node write port bypasses the store
+buffer entirely** while asserting `data_is_cap` unconditionally (`ex_stage.sv:1142-1152`). A stall
+there cannot see those entries. This producer was missing from every earlier analysis.
+
+### RECOMMENDED — (B) forbid granule co-residency, accept-side
+
+Refuse to allocate an entry that conflicts at granule level with a resident entry when either side
+is `is_cap`. Place it beside `ni_conflict` inside `p_buffer` (`:530, 592-598`), not folded into
+`rdy`, so the `write_full` assertion keeps its meaning.
+
+    gran_eq[k]       = (wbuffer_q[k].wtag[52:1] == req_wtag[52:1]);   // 52 of 53 bits shared
+    gran_conflict[k] = valid[k] & gran_eq[k] & (wtag[0] != req_wtag[0])
+                                & (wbuffer_q[k].is_cap | req_port_i.data_is_cap);
+
+**Why it wins, on measurements rather than taste:**
+
+* **It is the only option with no post-issue mutation**, hence the only one immune to the L1/DRAM
+  split in section 3 above. Smallest illegal window — arguably zero: memory passes through exactly
+  the states a legal program produces.
+* **The cone concern was mine and it was wrong.** `rdy` has exactly one consumer (`:592`); its
+  entire transitive fan-in is registers; `wt_dcache_wbuffer` appears nowhere on the UNOPTFLAT list
+  (`wt_dcache_ctrl` is instantiated only for ports 0-2); and the ~100 `config_pkg.sv:413` timing
+  criticals cannot arrive through this path because its only `range_check` call site is `is_ni`,
+  and `NonIdemPotenceEn` is constant 0 in this config, so it folds away. Cost: **+1 logic level**,
+  sharing 52 of 53 bits with a comparator already on the path.
+* **It covers in-flight entries.** An entry stays `valid` while `txblock` is set (`byteStates`,
+  `:712`; `valid` clears only on evict when `dirty==0`, `:560-565`), so the conflict check sees
+  transactions still on the bus.
+* **It fixes a second, unmeasured defect for free** — see I-b below.
+* **Deadlock-free by construction:** drain, tag-check and evict are functions of `wbuffer_q` /
+  `tx_stat_q` / the return FIFO only. Nothing on those paths consults `rdy`, `data_gnt` or
+  `req_port_i`, so a stalled accept always resolves.
+* Failure direction is safe: the linear-source clear can only be *delayed*, never demoted or
+  dropped, and backpressure parks the LDC in `LDC_CLEAR_WAIT` without committing.
+
+**Real risk is liveness, not security**, and it needs a directed test rather than an argument —
+specifically the interaction with the existing NI drain-and-block and with the `hot1` /
+`write_full` assertions, which assume today's hit/allocate relationship.
+
+## 5. Acceptance criteria — tests that FAIL if the invariant breaks
+
+1. **Eviction leg, mandatory on every tag test.** `stc G`; force the TX to issue; `sd G+8` with a
+   distinctive non-zero pattern; evict by touching `SET_ASSOC+1` other lines in the same set;
+   reload; `lcc`. FAIL if it reports a capability type, or if `G+8` != pattern. Positive control:
+   this must FAIL on the unfixed design at >=4%, or the eviction leg is not evicting.
+2. **Three-bucket kernel with the eviction leg.** FAIL if CORRUPTED-BUT-TAGGED is non-zero. That
+   bucket has a demonstrated negative (0/3840 unfixed), so a non-zero reading means something.
+3. **Liveness stress, non-negotiable.** Alternating `stc G` / `sd G+8` at rate across >=256
+   granules, mixed with an NI-region store, an `ldc` of a LINEAR capability with a pending store,
+   and an AMO to the same line. FAIL on watchdog timeout or if `hot1`, `write_full`, `tx_valid1`
+   or `byteStates` fire. **Confirm assertions are actually enabled in the run first**, or this
+   criterion is vacuous.
+4. **Linearity.** `ldc` a LINEAR capability from `G`; `sd G+8`; evict; reload; `ldc G`. FAIL if the
+   second `ldc` yields a tagged capability (duplication) or if `G+8` reads back as pre-clear
+   metadata (clear partially dropped).
+
+## 6. Two adjacent defects that MUST NOT be folded into this one
+
+**I-b — store-to-load forwarding is word-granular too, and is measured nowhere.**
+`wt_dcache_mem.sv:280` compares at word granularity and `:344-345` selects *metadata* bytes using
+the *data* half's valid mask. So `stc G; sd G+8; ldc G` with both entries resident returns the
+pre-scrub capability with tag 1, and `stc G; ld G+8` reads stale memory. Exists today at
+`a3dbae618`. **(B) makes it unreachable; (C) leaves it entirely.** It deserves its own repro
+folder — one issue per folder is a hard rule here.
+
+**I-c — AMO over a capability granule (invariant I4).** `needs_tag` excludes atomics
+(`wt_axi_adapter.sv:141-152`), so an AMO leaves both the DRAM tag byte and `cap_tag_q` set. **None
+of A/B/C touches this.** Any post-fix "tags are correct now" claim must state that AMO is excluded,
+and the failure must be recorded *before* the fix so the fix is not blamed for it.
+
+## 7. The two fix options (superseded — retained for the reasoning)
 
 **Neither has been built.** This is a data-path change, not observation-only; it needs its
 security invariants argued rather than assumed, and the choice trades correctness completeness
