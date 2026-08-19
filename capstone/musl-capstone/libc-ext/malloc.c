@@ -61,6 +61,24 @@ struct block {
 static char heap[CAPSTONE_LIBC_HEAP_BYTES] __attribute__((aligned(ALIGN)));
 static struct block *head;
 
+/* HOW MUCH OF THE HEAP WAS EVER REACHED, so "is the heap big enough" is a
+ * measurement rather than a guess.
+ *
+ * The question came up sizing mruby's test suite: it needs more than 256 KiB and
+ * ran on 2 MiB, and the useful number -- what it actually needs -- was nowhere.
+ * Guessing costs a boot each time, and guessing high costs image size, which on
+ * this target competes with the code because the heap is .bss.
+ *
+ * The high-water mark is the far end of the furthest block ever handed out.
+ * First fit over an address-ordered list, so that is a good estimate of the
+ * smallest heap that would have served the same run -- not exact, because a
+ * smaller heap changes which block each request lands in, but it is the right
+ * order of magnitude and it costs two instructions per malloc. */
+static size_t heap_hwm;
+
+size_t __capstone_libc_heap_hwm(void) { return heap_hwm; }
+size_t __capstone_libc_heap_size(void) { return sizeof heap; }
+
 static size_t round_up(size_t n) { return (n + (ALIGN - 1)) & ~(size_t)(ALIGN - 1); }
 
 static void heap_init(void) {
@@ -99,6 +117,11 @@ void *malloc(size_t n) {
   for (struct block *b = head; b; b = b->next) {
     if (b->used || b->size < want)
       continue;
+    {
+      size_t end = (size_t)((char *)b - heap) + sizeof(struct block) + want;
+      if (end > heap_hwm)
+        heap_hwm = end;
+    }
     split(b, want);
     b->used = 1;
     return (void *)(b + 1);
@@ -118,6 +141,20 @@ void free(void *p) {
     b->size += sizeof(struct block) + b->next->size;
     b->next = b->next->next;
   }
+}
+
+/* musl's INTERNAL name for malloc, which is not the same symbol as malloc.
+ *
+ * src/time/__tz.c's do_tzset calls __libc_malloc directly rather than malloc,
+ * and in stock musl that name is defined by mallocng -- which does not compile
+ * for this target at all (its meta table underflows a size_t on a 16-byte
+ * pointer). So the moment anything pulls in timezone handling the link ends with
+ * "undefined hidden symbol: __libc_malloc". mruby-time is what found it.
+ *
+ * HIDDEN to match the declaration musl references it through; a default-
+ * visibility definition does not satisfy a hidden reference. */
+__attribute__((visibility("hidden"))) void *__libc_malloc(size_t n) {
+  return malloc(n);
 }
 
 void *realloc(void *p, size_t n) {

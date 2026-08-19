@@ -198,11 +198,37 @@ static void say_arena(const char *stage) {
 #define say_arena(stage) ((void)0)
 #endif
 
+/* The LIBC heap, which is a different thing from the counters above and the one
+   that actually sizes the image. The arena numbers only see what the OUTER mruby
+   state asked for; the test suite's sub-interpreters are opened with
+   mrb_default_allocf and go straight to libc malloc, so they are invisible there
+   and dominate the requirement. hwm is the far end of the furthest block ever
+   handed out (libc-ext/malloc.c). */
+extern unsigned long __capstone_libc_heap_hwm(void);
+extern unsigned long __capstone_libc_heap_size(void);
+
+/* TWO snprintf CALLS, NOT ONE, and that is not style.
+ *
+ * Folding the heap numbers into the line above made it seven varargs, and the
+ * SEVENTH came back as garbage that differed on every call -- 4329522383,
+ * 4329507597, ... for a value that is a compile-time constant. The hwm beside it
+ * was correct and monotone, so the values are fine and the argument POSITION is
+ * not. A capability is two register slots wide here, so a call that looks like
+ * six arguments is already past what the ABI passes in registers.
+ *
+ * Not chased further because splitting the line costs nothing and the numbers
+ * are then trustworthy. Left recorded rather than silently worked around: a
+ * vararg that returns a different wrong answer each call is worth knowing about
+ * before something depends on the sixth argument of a printf. */
 static void say_mem(const char *stage) {
-  char b[128];
+  char b[160];
   int n = snprintf(b, sizeof b,
                    "MRUBY MEM %s: requested=%lu peak=%lu calls=%lu fails=%lu\n",
                    stage, mem_live, mem_peak, mem_calls, mem_fails);
+  if (n > 0)
+    __capstone_hc_write(1, b, (unsigned long)n);
+  n = snprintf(b, sizeof b, "MRUBY LIBCHEAP %s: used=%lu of=%lu\n", stage,
+               __capstone_libc_heap_hwm(), __capstone_libc_heap_size());
   if (n > 0)
     __capstone_hc_write(1, b, (unsigned long)n);
 }
