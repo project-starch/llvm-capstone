@@ -1,5 +1,10 @@
 # S-07 Explained: How a Capability Sporadically Comes Back Untagged
 
+> **STATUS: root cause confirmed, and FIXED.** The fix is `5c5f4e3a7` — forbid granule
+> co-residency in the write buffer (section 9). This document explains the defect; the
+> engineering detail, the rejected alternatives and the acceptance criteria are in
+> `rtl/ROOT-CAUSE-AND-FIX-OPTIONS.md`.
+
 This document explains the S-07 defect intuitively, using diagrams and step-by-step examples. It focuses on the root cause confirmed in RTL and on silicon: the write buffer treats a capability entry as one word when detecting conflicts, even though it writes two words when drained.
 
 ## 1. Structure of One Granule
@@ -210,7 +215,23 @@ This is the observed S-07 failure. The next instruction that requires a capabili
 
 ### 4.2 Outcome B: The Capability Store Drains Last
 
-The write buffer can choose the opposite order:
+**This outcome needs the OPPOSITE program order.** Note the difference carefully — it is easy to
+conflate the two, and they are different failures:
+
+```text
+Program order for 4.1:   plain store G+8  →  stc G       (younger stc should win)
+Program order for 4.2:   stc G  →  plain store G+8       (younger plain store should win)
+```
+
+So here the program stores a capability and then deliberately overwrites part of it — a scrub:
+
+```text
+1. stc G
+2. plain store G+8
+```
+
+Logically the younger plain store should win, leaving no capability. The write buffer can drain
+in the wrong order instead:
 
 ```text
 Actual drain order:
@@ -230,7 +251,7 @@ After plain store G+8:
                          TAG = 0
 ```
 
-Then `stc` overwrites the entire granule:
+Then the older `stc` overwrites the entire granule, undoing it:
 
 ```text
 After stc G:
@@ -241,28 +262,27 @@ After stc G:
                          TAG = 1
 ```
 
-The capability remains intact, but the result of the older plain store disappears.
-
 ```text
 S-07 does not occur: the capability remains intact
-But: the plain store is silently lost
+But: the program's own store is silently lost
 ```
 
-This is an integrity failure rather than tag loss. The capability-store entry writes both words, so the final capability remains intact instead of becoming a tagged capability with corrupted metadata.
+**Why this matters more than it first appears.** Ask what that dropped store was *for*. A plain
+store over a granule holding a capability is how software DESTROYS authority it no longer wants
+to hold — `memset`, `explicit_bzero`, a free-list poison, clearing a slot before reuse. When it
+is dropped, **the capability survives the operation intended to destroy it.** That is a failure
+to revoke by overwrite: weaker than fabricating authority, stronger than losing a scalar.
+
+It does **not** forge a capability over attacker-chosen data. Because the capability entry writes
+*both* words, the granule it leaves behind is the original capability, not a tagged mixture — and
+that was measured, with the corrupted-but-tagged outcome empty in both directions.
 
 ---
 
 ## 5. The Entire Defect in One Diagram
 
 ```text
-PROGRAM ORDER
-───────────────────────────────────────────────►
-
- plain store G+8                   stc G
- older                             younger
- should be overwritten             should win
-       │                               │
-       ▼                               ▼
+THE COMMON CAUSE — true for either program order
 
 ┌───────────────────┐         ┌──────────────────────┐
 │ WBUF entry A      │         │ WBUF entry B         │
@@ -272,23 +292,35 @@ PROGRAM ORDER
 │ ctag = 0          │         │ ctag = 1             │
 └─────────┬─────────┘         └──────────┬───────────┘
           │                              │
-          └────────── NO MERGE ─────────┘
+          └────────── NO MERGE ──────────┘
               because G+8 != G+0
                        │
                        ▼
              round-robin drain does not
                 preserve program order
                        │
-              ┌────────┴────────┐
-              ▼                 ▼
+       ┌───────────────┴───────────────┐
+       ▼                               ▼
 
-         A drains last      B drains last
+ PROGRAM ORDER:  A then B        PROGRAM ORDER:  B then A
+ (scalar field, then the         (capability, then a scrub
+  capability written over it)     written over it)
+ B should win                    A should win
 
-         capability        capability intact,
-         destroyed         plain store lost
+       │                               │
+       ▼                               ▼
+ if A drains last:               if B drains last:
+       │                               │
+       ▼                               ▼
+ capability DESTROYED            capability SURVIVES
+ TAG = 0                         TAG = 1
+ S-07 fault                      the scrub is dropped:
+ (mcause 25 on first use)        authority outlives the
+                                 attempt to destroy it
 
-         TAG = 0           TAG = 1
-         S-07 fault        silent data loss
+ Note: A draining last is only wrong in the LEFT column, and B
+ draining last is only wrong in the RIGHT one. In each case the
+ failure is the OLDER entry landing after the younger one.
 ```
 
 ---
@@ -435,9 +467,13 @@ For that reason, changing only `ctag` is not a valid fix. The implementation mus
 
 ---
 
-## 9. Two Correct Fix Directions
+## 9. The Fix
 
-### 9.1 Option A: Granule-Aware Merge
+Two directions were considered. **Option B was implemented** (`5c5f4e3a7`); option A was
+rejected as infeasible. Both are described below, with the reasons, because the reasoning is
+what stops someone re-proposing the rejected one.
+
+### 9.1 Option A: Granule-Aware Merge — REJECTED
 
 ```text
 Before:
@@ -461,9 +497,20 @@ After:
 
 The write buffer must recognize that a capability entry at `G` also covers `G+8`. The overlapping stores are then merged into one entry, so the drain order can no longer change the result.
 
-This is the more complete solution, but it requires substantial changes to the merge path.
+This is the more complete solution in principle, and it is **not implementable here.** The entry
+carries per-byte `valid`/`dirty`/`txblock` masks for the *lower* word only, and the metadata half
+(`user`) has **no byte tracking at all**. "Bytes 8–15 are dirty" therefore cannot be represented,
+and bytes 8–11 would set the same mask bits as bytes 0–3. Making it representable means widening
+those masks and every consumer of them across five files — roughly +224 flops and several hundred
+lines.
 
-### 9.2 Option B: Forbid Co-Residency
+Worse, the sketch above would have turned a visible failure into an invisible one. A scrub merged
+into an entry whose transaction has already been issued sets no dirty bits, so the entry is never
+re-drained and is then freed: **L1 ends up correct while DRAM still holds the tagged capability**,
+and the capability reappears the moment that cache line is displaced. A test that reads back
+immediately would report the fix working.
+
+### 9.2 Option B: Forbid Co-Residency — IMPLEMENTED (`5c5f4e3a7`)
 
 ```text
 A capability entry for G is already in WBUF
@@ -483,9 +530,37 @@ A capability entry for G is already in WBUF
 
 The reverse must also apply. If a plain entry for `G+8` is already resident, a capability entry for `G` must not be allocated until the conflicting entry has drained.
 
-This approach is simpler to reason about and obviously prevents the overlap. However, it adds another condition to the `rdy` logic and may increase synthesis risk on an already problematic timing cone.
+**Why this one won.** It is about ten lines, adds no flops, and shares all but the low bit of a
+comparator already on that path. Crucially it **mutates nothing** — and that turned out to be the
+deciding property rather than a nicety, because `ctag` is sampled *twice*: once at transaction
+issue, which is what reaches DRAM, and again at transaction return, which is what reaches L1. Any
+fix that changes a resident entry after its transaction has issued makes those two disagree, with
+L1 winning every immediate readback and DRAM winning after eviction. Option B never touches a
+resident entry, so the question does not arise.
 
-Both are real fix directions. The final choice involves a tradeoff between implementation completeness and synthesis risk.
+The synthesis-risk worry about `rdy` was investigated and did not survive: `rdy` has exactly one
+consumer, its entire fan-in is registers, this module carries no combinational-loop warning, and
+the timing-loop criticals cannot arrive through this path because the non-idempotent decode they
+pass through is constant-folded away in this configuration. The measured cost is one extra level
+of logic.
+
+Same-word stores deliberately do **not** stall — they merge into the single existing entry, where
+the existing rules already give the correct answer. Only a *different word of the same granule*
+with a capability on one side stalls, which is rare in ordinary code.
+
+**Validation.**
+
+```text
+s07-wbuf-tag-reorder      4 faults → 1     (the 1 is the test's own positive control)
+s07-wbuf-tag-reorder-ctl  1       → 1     (matched control, unchanged)
+full 81-test sweep        differs in exactly ONE row: the reproduction above.
+                          All 80 others byte-identical — verdict, cycles,
+                          trace hash and fault count.
+s07-wbuf-liveness         18,488 cycles against a 400,000 timeout, 0 faults
+                          → every stall resolved; no deadlock
+```
+
+Liveness was the risk this fix introduces, so it is measured rather than argued.
 
 ---
 
@@ -494,3 +569,21 @@ Both are real fix directions. The final choice involves a tradeoff between imple
 > The write buffer treats a capability store as a one-word operation when checking for matching or conflicting entries, but the same entry writes two words when it drains. As a result, the buffer allows two entries that appear different by `wtag` but physically overlap. The round-robin arbiter can then drain them in either order, allowing an older store to overwrite the result of a younger store.
 
 The tag loss is the visible symptom. The deeper defect is that **the write buffer tracks and merges an `is_cap` entry as one word even though that entry spans two words**.
+
+---
+
+## 11. Two Things This Does Not Cover
+
+Neither is fixed by `5c5f4e3a7`, and neither should be credited to it.
+
+**Store-to-load forwarding is word-granular in the same way.** A load that hits the write buffer
+compares at word granularity and selects metadata bytes using the *lower* word's valid mask, so a
+capability load can be answered from a resident entry while a pending store to the other half is
+invisible to it. This exists independently of the drain-order defect. Forbidding co-residency
+makes it unreachable — two conflicting entries can no longer coexist — but it does not repair the
+comparison itself, and it deserves its own investigation rather than a paragraph here.
+
+**AMO over a capability granule is untouched.** Atomics bypass the write buffer entirely and are
+excluded from the tag path, so an AMO landing on a capability granule leaves the tag set. That is
+a separate, pre-existing residual (invariant I4). Any statement that "tags are correct now" must
+exclude it explicitly.
