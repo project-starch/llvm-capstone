@@ -749,13 +749,54 @@ Neither is fixed by `5c5f4e3a7`, and neither should be credited to it.
 
      this exists INDEPENDENTLY of the drain-order defect
 
-     status:   UNREACHABLE, not REPAIRED
-               ─────────────────────────
-               forbidding co-residency means two conflicting
-               entries can no longer coexist, so nothing reaches
-               the hazard — but the COMPARISON itself is unchanged.
-               Deserves its own investigation.
+     status:   PARTLY unreachable — the WORD-MISS case IS STILL LIVE
+               ─────────────────────────────────────────────────────
+               an earlier version of this box said "UNREACHABLE, not
+               REPAIRED". That was REFUTED on 19-08-2026 and MEASURED.
 ```
+
+The reasoning that failed: forbidding co-residency stops two conflicting *entries* coexisting,
+so the two-entry case is genuinely gone. But the residual needs only **ONE** entry — the stall
+is an allocation-time check, and **a load never consults it at all**:
+
+```text
+     stc  G, cap     capability drains to L1 → cap_tag_q[G>>4] = 1
+          │
+     sd   x0, G+8    ONE plain entry, word 1, ctag=0 — still resident
+          │          (no second entry, so nothing to conflict WITH)
+          │
+     ldc  rd, G      granule-aligned → always compares WORD 0
+          │
+          ▼
+     ┌──────────────────────────────────────────────────┐
+     │  misses the word-1 entry  →  wbuffer_be = 0      │
+     │  → falls through to the STALE cap_tag_q (= 1)    │
+     │  → returns a LIVE capability over memory the     │
+     │    program just scrubbed                         │
+     └──────────────────────────────────────────────────┘
+
+     MEASURED, matched pair, one variable (a drain delay):
+
+        entry still resident   ──►   8 traps / 16 legs
+        300-iteration delay    ──►  16 traps / 16 legs
+                                    ▲
+        POLARITY IS INVERTED here ──┘  a trap is CORRECT;
+        its ABSENCE is the defect. Do NOT compare these
+        counts against §9's — they read backwards.
+
+     severity, and why this is a residual and not a regression:
+
+        pre-fix dropped scrub   PERSISTENT  ─── capability survives forever
+        this window             TRANSIENT   ─── closes when the entry drains
+```
+
+The 8-of-16 is **not** a probability. The alternating pattern is *consistent with* the trap
+handler draining the buffer between legs, which would reset the phase each time — that
+explanation is a hypothesis, not a measurement. The **existence** is the result.
+
+Correct wording: **the fix makes the two-entry forwarding case unreachable and leaves the
+one-entry word-miss case live.** Tests `s07-wbuf-forward-residual` and its matched control
+(`capstone-ariane 6175ea654`). Still deserves its own repro folder.
 
 ```text
    ┌──────────────────────────────────────────────────────────────┐
