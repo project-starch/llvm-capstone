@@ -1,0 +1,42 @@
+Let the power-of-two multiply fast path be switched off, for C-20.
+
+ecma_integer_multiply turns a multiply by a power of two into a shift, and gets the
+shift distance from __builtin_ctz. That builtin crashes the Capstone backend:
+
+  LegalizeDAG.cpp:1352: "Type mismatch for custom legalized operation"
+  failing node: t11: i32 = cttz_zero_undef t10
+
+Minimal reproducer and the full account, including a hypothesis that looked right
+and was refuted by test, are in tests/compiler-repros/C20-cttz-i32-crashes-legalizer/.
+__builtin_clz and __builtin_popcount are unaffected; -mattr=+zbb avoids it but no
+build in this tree passes +zbb and whether the silicon implements it is not
+established.
+
+THIS IS A WORKAROUND FOR A COMPILER DEFECT, NOT A PORTABILITY FIX, and it is written
+so it can be deleted when C-20 is: the block is guarded by JERRY_NO_BUILTIN_CTZ
+rather than removed, so reversing this costs one -D.
+
+Why it is safe to switch off. The block is a pure optimisation. Three lines below it
+the function ends with the general form
+
+    return ecma_make_integer_value (left_integer * right_integer);
+
+which is what runs with the fast path disabled. Semantics are unchanged; a multiply
+by a power of two is computed as a multiply instead of a shift.
+
+Noted in passing and NOT relied on: the guarded path looks wrong upstream anyway.
+`(left & (left - 1)) == 0` is also true for left == 0, where __builtin_ctz(0) is
+undefined, and for INT32_MIN, where `right << 31` is not `right * INT32_MIN`. That is
+an upstream question, not ours, and this patch neither fixes nor depends on it.
+
+--- a/jerry-core/ecma/base/ecma-helpers-number.c	2026-08-19 12:46:37.862865431 +0800
++++ b/jerry-core/ecma/base/ecma-helpers-number.c	2026-08-19 12:46:37.890865430 +0800
+@@ -409,7 +409,7 @@
+ ecma_integer_multiply (ecma_integer_value_t left_integer, /**< left operand */
+                        ecma_integer_value_t right_integer) /**< right operand */
+ {
+-#if defined(__GNUC__) || defined(__clang__)
++#if (defined(__GNUC__) || defined(__clang__)) && !defined(JERRY_NO_BUILTIN_CTZ)
+   /* Check if either integer is power of 2 */
+   if (JERRY_UNLIKELY ((left_integer & (left_integer - 1)) == 0))
+   {
