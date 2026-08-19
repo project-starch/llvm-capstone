@@ -8256,14 +8256,91 @@ static SDValue normalizeScalarI128ShiftOperandToXLen(
   return SDValue();
 }
 
+// Recognise an operand of a widening multiply: a value extended from XLen, or a
+// constant small enough to be one. Returns the XLen-wide operand in Out.
+// IsSigned is set on the first extended operand seen and then required to match,
+// so a mixed zext/sext pair is rejected rather than guessed at.
+static bool matchI128WideningMulOperand(SDValue V, SelectionDAG &DAG, MVT XLenVT,
+                                        SDValue &Out, bool &IsSigned,
+                                        bool &SignednessKnown) {
+  if (V.getOpcode() == ISD::ZERO_EXTEND || V.getOpcode() == ISD::SIGN_EXTEND) {
+    if (V.getOperand(0).getValueType() != XLenVT)
+      return false;
+    bool ThisSigned = V.getOpcode() == ISD::SIGN_EXTEND;
+    if (SignednessKnown && ThisSigned != IsSigned)
+      return false;
+    IsSigned = ThisSigned;
+    SignednessKnown = true;
+    Out = V.getOperand(0);
+    return true;
+  }
+  if (auto *C = dyn_cast<ConstantSDNode>(V)) {
+    const APInt &Val = C->getAPIntValue();
+    unsigned XLen = XLenVT.getSizeInBits();
+    // The constant must mean the SAME number after truncation to XLen that it means
+    // as an i128, under the signedness this multiply is lowered with. Checking only
+    // isIntN was WRONG and miscompiled: 2^64-1 fits XLen unsigned and truncates to
+    // -1, so paired with a SIGN_EXTEND it produced mulh(a, -1) -- the high word of
+    // a * -1 -- for a multiply by a large POSITIVE number. For a = 1 that returns
+    // 0xFFFFFFFFFFFFFFFF where the answer is 0.
+    //   zext side: the i128 constant is its XLen truncation ZERO-extended
+    //   sext side: the i128 constant is its XLen truncation SIGN-extended
+    // A constant matched BEFORE any extend has fixed the signedness has to satisfy
+    // both, i.e. 0 <= Val < 2^(XLen-1). That is conservative and still covers every
+    // magic multiplier a divide-by-constant expansion produces.
+    // Regression test: cap-i128-widening-mul-const-signedness.ll
+    bool FitsUnsigned = Val.isIntN(XLen);
+    bool FitsSigned = Val.isSignedIntN(XLen);
+    if (!(SignednessKnown ? (IsSigned ? FitsSigned : FitsUnsigned)
+                          : (FitsSigned && FitsUnsigned)))
+      return false;
+    Out = DAG.getConstant(Val.trunc(XLen), SDLoc(V), XLenVT);
+    return true;
+  }
+  return false;
+}
+
 static SDValue lowerScalarI128Shift(SDValue Op, SelectionDAG &DAG,
                                     const CapstoneSubtarget &Subtarget) {
-  if (Op.getSimpleValueType() != MVT::i128 ||
-      !isa<ConstantSDNode>(Op.getOperand(1)))
+  if (Op.getSimpleValueType() != MVT::i128)
+    return SDValue();
+  // A non-constant amount is handled by neither the widening-multiply hook below
+  // (which needs a constant XLen) nor the XLen-domain narrowing (which needs to
+  // know the amount is in range), so leave it alone here. It still reaches
+  // ExpandNode and still asserts; that gap is recorded rather than papered over.
+  if (!isa<ConstantSDNode>(Op.getOperand(1)))
     return SDValue();
 
   SDLoc DL(Op);
   MVT XLenVT = Subtarget.getXLenVT();
+
+  // srl(mul(ext a, ext b), XLen) is the HIGH HALF of a widening multiply, not a
+  // 128-bit shift anyone wrote. On a target where i128 is illegal, DAGCombiner
+  // rewrites this to MULHU/MULHS while legalising the wide type. Here i128 is
+  // LEGAL, because it is the capability carrier, so that combine never runs and a
+  // genuine 128-bit shift survives to legalisation, where ExpandNode has nothing
+  // for it and asserts "Unable to legalize non-vector shift".
+  //
+  // This is how ordinary code reaches it: division by a constant is strength
+  // reduced to mulhu(x, magic) >> s. lib/oofatfs's f_mkfs does exactly that and
+  // crashed the compiler, which is what MICROPY_VFS in a Capstone domain was
+  // blocked on. Nothing in the C source mentions __int128.
+  if (Op.getOpcode() == ISD::SRL && isa<ConstantSDNode>(Op.getOperand(1)) &&
+      Op.getConstantOperandVal(1) == XLenVT.getSizeInBits() &&
+      Op.getOperand(0).getOpcode() == ISD::MUL &&
+      Subtarget.hasStdExtZmmul()) {
+    SDValue Mul = Op.getOperand(0);
+    SDValue A, B;
+    bool IsSigned = false, SignednessKnown = false;
+    if (matchI128WideningMulOperand(Mul.getOperand(0), DAG, XLenVT, A, IsSigned,
+                                    SignednessKnown) &&
+        matchI128WideningMulOperand(Mul.getOperand(1), DAG, XLenVT, B, IsSigned,
+                                    SignednessKnown) &&
+        SignednessKnown)
+      return DAG.getNode(
+          ISD::ZERO_EXTEND, DL, MVT::i128,
+          DAG.getNode(IsSigned ? ISD::MULHS : ISD::MULHU, DL, XLenVT, A, B));
+  }
 
   // A constant shift amount >= XLen shifts every meaningful bit out of the low
   // XLen half.  These i128 values carry an integer only in their low XLen bits
@@ -8281,9 +8358,27 @@ static SDValue lowerScalarI128Shift(SDValue Op, SelectionDAG &DAG,
   // by a full-width constant (the modular inverse an `sdiv exact` lowers to,
   // e.g. dividing a pointer difference by a non-power-of-two element size)
   // became `undef`, leaving an unselectable `or(zext(lo), undef)` at isel.
-  if (Op.getConstantOperandVal(1) >= XLenVT.getSizeInBits())
-    return Op.getOpcode() == ISD::SHL ? DAG.getConstant(0, DL, MVT::i128)
-                                      : SDValue();
+  if (Op.getConstantOperandVal(1) >= XLenVT.getSizeInBits()) {
+    if (Op.getOpcode() == ISD::SHL)
+      return DAG.getConstant(0, DL, MVT::i128);
+    // Returning SDValue() here used to hand the node to the generic legaliser,
+    // which has no expansion for a non-vector 128-bit shift and asserts
+    // "Unable to legalize non-vector shift" -- a compiler crash on valid IR.
+    // The widening-multiply hook above catches the shape that actually occurs in
+    // ordinary code; anything else reaching here wants a real 128-bit right
+    // shift, which this target cannot express because i128 is the capability
+    // carrier and only its low XLen bits are an integer. Say so instead of
+    // asserting.
+    // GenCrashDiag=false: this is a target limitation the user can act on, not an
+    // internal error, and it must exit cleanly rather than abort. That also makes
+    // the limitation TESTABLE: `not llc` succeeds on a clean exit and fails on an
+    // abort, so cap-i128-widening-mul-mixed.ll can tell a diagnostic apart from
+    // the assertion it replaced. With the default GenCrashDiag it could not.
+    report_fatal_error("Capstone PureCap: cannot lower a 128-bit right shift by "
+                       ">= XLen; only the high half of a widening multiply is "
+                       "supported in that form",
+                       /*GenCrashDiag=*/false);
+  }
 
   SDValue ShiftInput = Op.getOperand(0);
   bool IsPointerDifference =
