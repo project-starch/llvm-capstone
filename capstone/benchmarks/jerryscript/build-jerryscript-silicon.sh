@@ -121,7 +121,7 @@ link() {
   sed "s/0x10000 + 0x1000/0x10000 + $1/" "$GPFREE/link-gpfree.ld" > "$lds"
   "$CLANG" -target capstone64-unknown-elf -ffreestanding ${INTERP_EXTRA_CFLAGS:-} \
     -c "$LADDER/start-gp-captable-interp.S" -o "$OBJ_DIR/start.o"
-  "$LD_LLD" -T "$lds" -o "$2" "$OBJ_DIR/start.o" "${OBJS[@]}" "$OBJ_DIR/gct.o"
+  "$LD_LLD" -T "$lds" -o "$2" "$OBJ_DIR/start.o" "${OBJS[@]}" "$OBJ_DIR/gct.o" ${3:-}
 }
 link 0x800000 "$OUT_DIR/pass1.dom"
 TEXT=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$OUT_DIR/pass1.dom" | python3 -c '
@@ -132,5 +132,29 @@ for l in sys.stdin:
 GOFF=$(python3 -c "print(hex(max(0x10000, (($TEXT + 0xFFFF)//0x10000)*0x10000)))")
 echo "   .text = $TEXT bytes -> globals offset $GOFF"
 link "$GOFF" "$OUT_DIR/$DOM_NAME.dom"
+
+# JS_STACK=<bytes> makes the image DECLARE its dom_data requirement rather than leaving
+# the kernel module to infer it from code size. That inference is max(2*code_len, 512K),
+# which for this image reserves 5.9 MB of headroom and hands the domain 12.4 MB of stack
+# -- and is precisely what pushed the region past the buddy allocator's maximum order and
+# made a Linux patch look necessary. Declaring instead gives two right-sized regions that
+# a stock kernel allocates.
+#
+# A third pass, because the declaration depends on the carve and the carve depends on the
+# link. domreq.S is non-alloc, so it must not move a loaded byte; that is checked here
+# rather than assumed.
+if [[ -n "${JS_STACK:-}" ]]; then
+  _carve=$(python3 "$LADDER/domdata-budget.py" "$OUT_DIR/$DOM_NAME.dom" --carve)
+  [[ "$_carve" =~ ^[0-9]+$ ]] || { echo "--carve gave '$_carve'" >&2; exit 1; }
+  _segs() { "$CAPSTONE_LLVM_BIN/llvm-readelf" -lW "$1" | grep -E '^  (LOAD|NULL)'; }
+  _before=$(_segs "$OUT_DIR/$DOM_NAME.dom")
+  "$CLANG" -target capstone64-unknown-elf -ffreestanding \
+    -DCAPSTONE_DOMREQ_DATA=$(( _carve + JS_STACK )) -DCAPSTONE_DOMREQ_STACK=$JS_STACK \
+    -c "$LADDER/../domreq.S" -o "$OBJ_DIR/domreq.o"
+  link "$GOFF" "$OUT_DIR/$DOM_NAME.dom" "$OBJ_DIR/domreq.o"
+  [[ "$_before" == "$(_segs "$OUT_DIR/$DOM_NAME.dom")" ]] || {
+    echo "FAIL: declaring moved a loaded segment" >&2; exit 1; }
+  echo "   declared dom_data >= $(( _carve + JS_STACK )) (carve $_carve + stack $JS_STACK)"
+fi
 echo "== built $OUT_DIR/$DOM_NAME.dom"
 python3 "$LADDER/domdata-budget.py" "$OUT_DIR/$DOM_NAME.dom" || true
