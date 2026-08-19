@@ -51,11 +51,11 @@ snap "capstone-sbi package" capstone/caplifive-buildroot/package/capstone-sbi-do
 snap "SYSTEM opensbi"       capstone/caplifive-system/sw/buildroot/components/opensbi   system-opensbi-component.patch
 snap "SYSTEM capstone-sbi"  capstone/caplifive-system/sw/buildroot/components/opensbi/lib/sbi/capstone-sbi system-opensbi-capstone-sbi.patch
 
-# The kernel side of the domain-image ceiling. Both are committed in their submodules and
-# neither submodule is pushable from here, so these mirrors are the only way the change
-# travels with the parent repo.
-snap "kernel MAX_ORDER cfg"  capstone/caplifive-buildroot                 caplifive-buildroot-kernel-max-order.patch            origin/capstone-bootstrap configs/kernel.config
-snap "riscv MAX_ORDER symbol" capstone/caplifive-buildroot/components/linux transcapstone-linux-riscv-arch-force-max-order.patch origin/master arch/riscv/Kconfig
+# The domain-sizing series. All three repos are committed but none of them accepts a
+# push from this account, so these mirrors are the only way the change travels with the
+# parent. They pass a base so COMMITTED work is captured, not just the working tree.
+snap "domain sizing (module)" capstone/caplifive-buildroot caplifive-buildroot-domain-sizing.patch origin/capstone-bootstrap package/modcapstone Makefile configs
+snap "domain sizing (monitor)" capstone/caplifive-buildroot/components/opensbi/lib/sbi/capstone-sbi capstone-sbi-two-regions.patch origin/master sbi_capstone.c
 
 DIAG="$ROOT/capstone/caplifive-buildroot/package/modcapstone/userspace/capstone-diag.c"
 if [[ -f "$DIAG" ]]; then
