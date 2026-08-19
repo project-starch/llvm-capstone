@@ -15,13 +15,40 @@ source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 
 # MRUBY_WITH_PARSER=1 selects the variant that evaluates Ruby SOURCE. Separate
 # OUT_DIR so the two images never overwrite each other.
-if [[ ${MRUBY_WITH_PARSER:-0} == 1 ]]; then
+# MRUBY_PROBE_MRBTEST=1 runs mruby's own test suite -- test/assert.rb plus all 43
+# files of test/t/*.rb -- instead of the four-line probe chunk. It reaches the
+# same S1-S4 markers first, because the suite is started from the same state
+# after the same sanity check, and then adds its own.
+#
+# TAIL_MARKERS rather than a fixed pass marker: the probe's is
+# __CAPSTONE_MRUBY_PROBE_PASSED__, which the mrbtest arm never prints -- it
+# returns out of capstone_main before that line. Requiring it would have failed
+# every mrbtest run for a reason that has nothing to do with the tests.
+#
+# NOTE WHAT IS *NOT* REQUIRED: that every assertion passed. T4 says all 43 files
+# ran and __CAPSTONE_MRBTEST_COMPLETED__ says the state closed afterwards; the
+# OK/KO counts are the RESULT of the run and belong in the log, not in a gate.
+# A gate on "zero failures" would make a suite that ran perfectly and found real
+# defects indistinguishable from one that never started.
+if [[ ${MRUBY_PROBE_MRBTEST:-0} == 1 ]]; then
+  OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/musl-capstone-mrbtest}
+  PARSER_MARKERS=(--success-marker 'MRBTEST T1: test driver installed'
+                  --success-marker 'MRBTEST T2: assert.rb loaded'
+                  --success-marker 'MRBTEST T3: running core tests'
+                  --success-marker 'MRBTEST T4: all test files ran')
+  TAIL_MARKERS=(--success-marker '__CAPSTONE_MRBTEST_COMPLETED__')
+  # 43 interpreters opened and torn down in sequence, each loading assert.rb, on
+  # a first-fit allocator under TCG. The probe's budget is for one.
+  TIMEOUT_MULTIPLIER=${TIMEOUT_MULTIPLIER:-90}
+elif [[ ${MRUBY_WITH_PARSER:-0} == 1 ]]; then
   OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/musl-capstone-mruby-parser}
   PARSER_MARKERS=(--success-marker 'MRUBY S6: parsing Ruby source'
                   --success-marker 'MRUBY S7: parsed source produced 400')
+  TAIL_MARKERS=(--success-marker '__CAPSTONE_MRUBY_PROBE_PASSED__')
 else
   OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/musl-capstone-mruby}
   PARSER_MARKERS=()
+  TAIL_MARKERS=(--success-marker '__CAPSTONE_MRUBY_PROBE_PASSED__')
 fi
 SHARE_DIR=${SHARE_DIR:-$OUT_DIR/share}
 LOG_FILE=${LOG_FILE:-$CAPSTONE_TMP_ROOT/capstone-mruby-probe.log}
@@ -80,7 +107,7 @@ if ! CAPSTONE_QEMU_LOGIN_TIMEOUT=${CAPSTONE_QEMU_LOGIN_TIMEOUT:-300} \
   --success-marker 'MRUBY S4: t[19] == 400' \
   --success-marker 'MRUBY S5: state closed' \
   "${PARSER_MARKERS[@]}" \
-  --success-marker '__CAPSTONE_MRUBY_PROBE_PASSED__' \
+  "${TAIL_MARKERS[@]}" \
   --success-marker '__CAPSTONE_HOSTCALL_HOST_DONE__ status=0'
 then
   echo "run-mruby-probe.sh FAILED" >&2

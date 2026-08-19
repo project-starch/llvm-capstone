@@ -708,6 +708,74 @@ static int run_cdp(mrb_state *mrb) {
 }
 #endif
 
+#ifdef MRUBY_PROBE_MRBTEST
+/* MRUBY'S OWN TEST SUITE, RUN INSIDE THE DOMAIN.
+ *
+ * The sequence is driver.c's main(), minus the command line: define the test
+ * driver's helpers on Kernel, load test/assert.rb, run the tests, ask for the
+ * report. It is spelled out here rather than calling that main because a domain
+ * has no argv and because mrb_open_allocf is what gives this probe its memory
+ * accounting -- the outer state has to be ours.
+ *
+ * The 43 core test files each get their OWN interpreter, opened by the generated
+ * gem_test.c with mrb_open_core, so mrbgemtest_init is 43 full open/run/close
+ * cycles. That is a considerably harder exercise of the port than the probe
+ * above: every one of them builds a symbol table, a class hierarchy and a GC
+ * arena from scratch and tears them down again.
+ *
+ * REPORTING IS DOUBLE. The suite prints its own progress through t_print, which
+ * is C in driver.c and goes out through stdio -- fine while stdio works. The
+ * stage markers below go through SAY, the raw hostcall, so that a failure INSIDE
+ * stdio or inside the VM still says which stage it reached. The probe above
+ * exists because of exactly that distinction. */
+extern const uint8_t mrbtest_assert_irep[];
+void mrb_init_test_driver(mrb_state *mrb, mrb_bool verbose);
+void mrbgemtest_init(mrb_state *mrb);
+
+static int run_mrbtest(mrb_state *mrb) {
+  mrb_init_test_driver(mrb, 0);
+  if (mrb->exc) {
+    SAY("MRBTEST FAIL: mrb_init_test_driver raised\n");
+    return 20;
+  }
+  SAY("MRBTEST T1: test driver installed\n");
+  say_mem("after-driver");
+
+  mrb_load_irep(mrb, mrbtest_assert_irep);
+  if (mrb->exc) {
+    SAY("MRBTEST FAIL: assert.rb raised\n");
+    return 21;
+  }
+  SAY("MRBTEST T2: assert.rb loaded\n");
+  say_mem("after-assert");
+
+  /* The long one: 43 interpreters. Anything printed between here and T3 is the
+     suite's own per-assertion output. */
+  SAY("MRBTEST T3: running core tests\n");
+  mrbgemtest_init(mrb);
+  if (mrb->exc) {
+    SAY("MRBTEST FAIL: a test file raised out of its own interpreter\n");
+    return 22;
+  }
+  SAY("MRBTEST T4: all test files ran\n");
+  say_mem("after-tests");
+
+  /* `report` prints the Total/OK/KO/Crash block and returns whether everything
+     passed. A false here is a REAL RESULT, not an error: the suite ran and some
+     assertions failed, which is exactly the number this whole exercise is for.
+     So it is reported as its own marker rather than folded into a failure. */
+  mrb_value ok = mrb_funcall(mrb, mrb_top_self(mrb), "report", 0);
+  if (mrb->exc) {
+    SAY("MRBTEST FAIL: report raised\n");
+    return 23;
+  }
+  SAY(mrb_test(ok) ? "MRBTEST T5: report says every assertion passed\n"
+                   : "MRBTEST T5: report says some assertions failed\n");
+  say_mem("at-report");
+  return 0;
+}
+#endif
+
 int capstone_main(void) {
   SAY("MRUBY S1: entered\n");
 
@@ -769,6 +837,16 @@ int capstone_main(void) {
   }
   SAY("MRUBY S4: t[19] == 400\n");
 
+#ifdef MRUBY_PROBE_MRBTEST
+  {
+    int rc = run_mrbtest(mrb);
+    mrb_close(mrb);
+    SAY("MRUBY S5: state closed\n");
+    if (rc == 0)
+      SAY("__CAPSTONE_MRBTEST_COMPLETED__\n");
+    return rc;
+  }
+#endif
 #ifdef MRUBY_PROBE_ROW
   run_row(mrb);
   mrb_close(mrb);
