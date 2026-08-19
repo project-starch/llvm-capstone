@@ -9828,7 +9828,21 @@ bool PointerExprEvaluator::VisitCastExpr(const CastExpr *E) {
       break;
 
     if (Value.isInt()) {
-      unsigned Size = Info.Ctx.getTypeSize(E->getType());
+      // Clamp to 64 bits: `N` is read back with getZExtValue(), which requires
+      // that. On a capability target the pointer's REPRESENTATION is wider than
+      // the address it carries -- Capstone.h sets PointerWidth to 128, the
+      // address is 64 -- so extending a NEGATIVE constant to the full width
+      // sets every high bit and the assert fires. `(void *)-100` reproduces it,
+      // which mattered because AT_FDCWD is -100 and musl casts it in every
+      // *at() wrapper. See ISSUES.md C-21.
+      //
+      // Deliberately a clamp rather than "use the address width": every
+      // upstream target has pointers of at most 64 bits, so this branch is
+      // unreachable for them and their behaviour is provably unchanged.
+      // Substituting uintptr_t's width would NOT be provably unchanged --
+      // targets exist with a 32-bit pointer in one address space and a 64-bit
+      // uintptr_t, and there the extension width would silently move.
+      unsigned Size = std::min<unsigned>(Info.Ctx.getTypeSize(E->getType()), 64);
       uint64_t N = Value.getInt().extOrTrunc(Size).getZExtValue();
       if (N == Info.Ctx.getTargetNullPointerValue(E->getType())) {
         Result.setNull(Info.Ctx, E->getType());
