@@ -64,6 +64,62 @@ WHAT TO DO MEANWHILE: build ports with `-Wall` rather than `-w`, and read
 pointer-to-int/int-to-pointer warnings as a list of places a tag can be lost. Silencing
 them is how this stayed invisible.
 
+## 3. VERDICT (2026-08-20): JerryScript is blocked on the toolchain, not on bugs
+
+With the carve fixed and the compiler fix in, the ladder bisects cleanly from the
+rootfs (domains load in under a second there instead of the 3+ minutes 9p costs):
+
+| stage | does | result |
+|---|---|---|
+| 0 | nothing | returns 0x1E000006, the exact expected marker |
+| 1 | jerry_init + jerry_cleanup | cause 24 in ecma_gc_run, via jerry_heap_gc |
+
+Stage 0 confirms at RUNTIME that both earlier fixes hold: the domain is created,
+entered, runs and returns the right value.
+
+Stage 1 faults in `jmem_decompress_pointer`:
+
+    const uintptr_t heap_start = (uintptr_t) &JERRY_HEAP_CONTEXT (first);
+    uint_ptr <<= JMEM_ALIGNMENT_LOG;
+    uint_ptr += heap_start;
+    return (void *) uint_ptr;
+
+The fault is the missing TAG, not a wrong address -- "Cap mem access requires
+capability" tests rs1->tag regardless of value.
+
+**This is not one function.** 93 distinct source lines across 60 functions rebuild a
+pointer from an integer. JerryScript's object model stores references as compressed
+offsets and reconstructs addresses arithmetically throughout.
+
+**It cannot be fixed in the target.** clang's `TargetInfo::IntType` enum has no
+128-bit member -- the widest is UnsignedLongLong -- so `uintptr_t` cannot be made
+capability-wide. The Capstone target already declares AS0 pointers as 64-bit for
+exactly this reason: InitPreprocessor.cpp asserts uintptr_t width == pointer width,
+and the datalayout comment calls it a "Workaround for Clang consistency check".
+
+**The control that makes this a conclusion rather than a guess:** MicroPython runs.
+Not through luck or effort -- its object word IS a pointer (MICROPY_OBJ_REPR_A), so
+tagging is pointer arithmetic and the capability survives. It had exactly ONE
+uintptr_t site, and the port fixed it with a config knob
+(MICROPY_STREAM_IOCTL_ARG_TYPE = void *). The difference is the object model.
+
+### The three options, honestly
+
+1. **Give the toolchain a capability-carrying integer type** (CHERI's `__intcap`).
+   The real fix, fixes all 93 sites with no source change, benefits every future
+   port -- and it is the same knot as C-23, where i128 is the capability carrier and
+   integer i128 is a low-64-bit approximation. Substantial: it needs clang's IntType
+   enum extended.
+2. **Patch JerryScript's 93 sites** to derive from a live base pointer. Mechanical
+   but large, and it modifies the allocator that is the object of the measurement.
+3. **Choose a second allocator with a pointer-based object model.** mruby qualifies
+   (`boxing_no.h` -- a struct with a union of real pointers) and is already ported:
+   38 commits on musl-capstone-port, eight to nine pinned versions, Rows 12 and 14
+   already measured.
+
+For the benchmark goal -- a second allocator with 25-30 temporal CVEs -- (3) is the
+route that works today. (1) belongs on its own track.
+
 ## Method note
 
 Three "wedges" during this session turned out not to be. The staged probe prints every
