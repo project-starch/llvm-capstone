@@ -1,11 +1,45 @@
 # S-07 Explained: How a Capability Sporadically Comes Back Untagged
 
 > **STATUS: root cause confirmed, and FIXED.** The fix is `5c5f4e3a7` — forbid granule
-> co-residency in the write buffer (section 9). This document explains the defect; the
-> engineering detail, the rejected alternatives and the acceptance criteria are in
-> `rtl/ROOT-CAUSE-AND-FIX-OPTIONS.md`.
+> co-residency in the write buffer (section 8). This document explains the defect and the
+> fix that shipped. The engineering detail, **the alternatives that were considered and
+> rejected**, and the acceptance criteria are in `rtl/ROOT-CAUSE-AND-FIX-OPTIONS.md` — this
+> document deliberately does not carry them.
 
 This document explains the S-07 defect intuitively, using diagrams and step-by-step examples. It focuses on the root cause confirmed in RTL and on silicon: the write buffer treats a capability entry as one word when detecting conflicts, even though it writes two words when drained.
+
+```text
+                    THE WHOLE STORY, AT A GLANCE
+
+   §1-2   a capability = 16 bytes + ONE shared tag,
+          written by an stc that covers BOTH 8-byte words
+                              │
+                              ▼
+   §3     the write buffer COMPARES entries by 64-bit word address,
+          so "plain G+8" and "stc G" look like different addresses
+                              │
+                              ▼
+   §4-5   they are not — they overlap. And the drain arbiter is
+          round-robin, so the OLDER entry can land LAST
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+        tag CLEARED                     scrub DROPPED
+        capability destroyed            capability survives
+        → mcause 25 on next use         → authority outlives
+          (this is what §6 shows           the attempt to
+           SQLite hitting)                 destroy it
+                              │
+                              ▼
+   §7     confirmed by the wb1/wb3 pair: 64 intervening stores
+          separate the two entries in time and the loss goes to ZERO
+                              │
+                              ▼
+   §8     THE FIX — make the overlapping pair impossible to create
+                              │
+                              ▼
+   §10    two adjacent defects this does NOT repair
+```
 
 ## 1. Structure of One Granule
 
@@ -267,15 +301,48 @@ S-07 does not occur: the capability remains intact
 But: the program's own store is silently lost
 ```
 
-**Why this matters more than it first appears.** Ask what that dropped store was *for*. A plain
-store over a granule holding a capability is how software DESTROYS authority it no longer wants
-to hold — `memset`, `explicit_bzero`, a free-list poison, clearing a slot before reuse. When it
-is dropped, **the capability survives the operation intended to destroy it.** That is a failure
-to revoke by overwrite: weaker than fabricating authority, stronger than losing a scalar.
+**Why this matters more than it first appears.** Ask what that dropped store was *for*:
 
-It does **not** forge a capability over attacker-chosen data. Because the capability entry writes
-*both* words, the granule it leaves behind is the original capability, not a tagged mixture — and
-that was measured, with the corrupted-but-tagged outcome empty in both directions.
+```text
+          what a plain store over a capability granule IS
+
+   memset()  explicit_bzero()  free-list poison  clear-before-reuse
+        │            │                │                 │
+        └────────────┴────────┬───────┴─────────────────┘
+                              ▼
+              "software DESTROYS authority it
+                  no longer wants to hold"
+                              │
+                   the store is DROPPED
+                              │
+                              ▼
+        ┌───────────────────────────────────────────────┐
+        │  the capability SURVIVES the operation        │
+        │  intended to destroy it                       │
+        │                                               │
+        │  = failure to revoke by overwrite             │
+        │    weaker than forging authority              │
+        │    stronger than losing a scalar              │
+        └───────────────────────────────────────────────┘
+```
+
+The bound on how bad this gets — **measured**, not argued:
+
+```text
+   outcome                          observed?
+   ─────────────────────────────    ─────────────────────────────
+   capability lost (tag cleared)    YES  — this is S-07
+   capability survives a scrub      YES  — the dropped store
+   TAGGED capability over
+   attacker-chosen data             NO   — empty in BOTH directions
+
+   why: the capability entry writes BOTH words, so what it leaves
+        behind is the ORIGINAL capability, never a tagged mixture
+
+        ┌──────────────┬──────────────┐
+        │   CURSOR     │   METADATA   │   both halves from the same stc
+        └──────────────┴──────────────┘   → intact, or gone. No hybrid.
+```
 
 ---
 
@@ -348,6 +415,26 @@ stc G
 ```
 
 The `pMethods` field is the first member of `sqlite3_file` and occupies the granule `[p+0, p+16)`. A plain store from `memset` that targets the upper half of this granule can therefore be present in the write buffer at the same time as the later capability store to `pMethods`.
+
+```text
+   struct MemJournal  (p = its base)
+
+   p+0                     p+8                    p+16
+    ├───────────────────────┼──────────────────────┤
+    │  pMethods : CURSOR    │  pMethods : METADATA │   ← ONE granule,
+    ├───────────────────────┴──────────────────────┤     ONE tag
+    │  ... the rest of the struct ...              │
+    └──────────────────────────────────────────────┘
+
+   memset(p, 0, sizeof(MemJournal))  writes p+8  ─┐
+                                                  ├─ SAME granule,
+   pJfd->pMethods = ...  (stc)       writes p+0  ─┘  DIFFERENT word
+                                                     → no merge
+                                                     → reorderable
+```
+
+Note that ordinary, entirely correct C is enough to build this: a struct zeroed and then given
+a capability-typed first member. Nothing unusual is required of the source program.
 
 If the older store from `memset` drains last:
 
@@ -433,157 +520,258 @@ The `wb1` versus `wb3` comparison therefore shows that simultaneous residency of
 
 ---
 
-## 8. Why Simply Synchronizing the Tags Is Unsafe
+## 8. The Fix: Forbid Granule Co-Residency
 
-A tempting fix would be:
+Implemented in `5c5f4e3a7` (option B in `rtl/ROOT-CAUSE-AND-FIX-OPTIONS.md`, where the
+alternatives and the reasons they were rejected are recorded).
 
-```text
-If two entries belong to the same granule,
-give both entries the ctag of the youngest store.
-```
-
-This is dangerous.
-
-Suppose the older plain entry is given `ctag = 1` and then drains last:
+### 8.1 The Rule
 
 ```text
-        ┌────────────────────┬────────────────────┐
-        │       CURSOR       │    stale data X    │
-        └────────────────────┴────────────────────┘
-                         TAG = 1
+                    a store request arrives
+                              │
+                              ▼
+             ┌─────────────────────────────────┐
+             │ does a RESIDENT entry sit in    │
+             │ the SAME 16-byte granule but    │
+             │ the OTHER 64-bit word?          │
+             └────────────────┬────────────────┘
+                     no       │       yes
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+        accept as before          ┌────────────────────────────┐
+        (merge or allocate)       │ is EITHER side is_cap = 1? │
+                                  └──────────────┬─────────────┘
+                                        no       │      yes
+                                 ┌───────────────┴──────────┐
+                                 ▼                          ▼
+                           accept as before             ***STALL***
+                        (both write ctag = 0            do not accept
+                         to the same bit —              until the resident
+                         same value, no hazard)         entry has DRAINED
 ```
 
-The system would now have a tagged value with potentially corrupted metadata.
-
-A test that checks only the tag would report:
+Symmetric by construction — it is the *pair* that is forbidden, not an order:
 
 ```text
-PASS: TAG = 1
+   capability G resident, plain G+8 arrives   →  STALL
+   plain G+8 resident, capability G arrives   →  STALL
+
+   so this state is now UNREACHABLE:
+
+     ┌─────────────┐        ┌─────────────────┐
+     │ plain G+8   │   ✗    │ capability G    │      never co-resident
+     └─────────────┘        └─────────────────┘      → no drain order
+                                                        can exist to be wrong
 ```
 
-But the capability could already be invalid or unsafe.
+### 8.2 What It Costs
 
-For that reason, changing only `ctag` is not a valid fix. The implementation must eliminate the existence of two independently drained entries that physically overlap.
+```text
+   lines of RTL      ~10, beside the existing ni_conflict stall
+   new flops         0
+   new comparator    0  — shares all but the low bit of one already
+                          on that path
+   timing            one extra level of logic
+   lint              every counter identical to baseline
+
+   what does NOT stall — deliberately:
+
+     same-word stores ──► merge into the one existing entry, where the
+                          existing rules already give the right answer
+
+     two plain entries ─► both write ctag = 0 to the same tag bit.
+                          Same value. No hazard.
+
+   only "different word of the same granule, capability on one side"
+   stalls — which is rare in ordinary code.
+```
+
+### 8.3 Why This Shape and Not a Cleverer One
+
+The deciding property is that the fix **mutates nothing.** That sounds like a nicety. It is
+not, and here is the reason, which governs every candidate fix and every acceptance test:
+
+```text
+              ctag IS SAMPLED TWICE, NOT ONCE
+
+   wbuffer entry
+        │
+        ├─── at TRANSACTION ISSUE ───► ctag copied ──► AXI ──►  DRAM
+        │      (wt_dcache_wbuffer.sv:298-299)
+        │
+        └─── at TRANSACTION RETURN ──► ctag copied ──►  L1 cache
+               (wt_dcache_wbuffer.sv:415-416)
+
+
+   So a fix that CHANGES a resident entry after its transaction issued:
+
+        ┌──────────────┐                    ┌──────────────┐
+        │  L1: tag = 0 │                    │ DRAM: tag = 1│
+        └──────────────┘                    └──────────────┘
+               ▲                                   ▲
+               │                                   │
+        wins every IMMEDIATE                wins after the line
+        read-back → the test                is EVICTED → the
+        says PASS                           capability COMES BACK
+
+        = a fix that looks perfect and leaves authority resurrectable
+```
+
+```text
+   THE FIX vs THAT TRAP
+
+   stall at ALLOCATION ──► no resident entry is ever touched
+                      ──► the two samples can never disagree
+                      ──► the question does not arise
+```
+
+The corollary is a rule for tests, not just for fixes:
+
+```text
+   ┌────────────────────────────────────────────────────────┐
+   │ EVERY tag acceptance test needs a FORCED-EVICTION      │
+   │ RELOAD leg. An immediate read-back cannot see the      │
+   │ failure mode above.                                    │
+   └────────────────────────────────────────────────────────┘
+```
+
+### 8.4 Liveness — The Risk This Fix Introduces
+
+A stall can wedge. This one cannot, and the argument is that no *cycle* exists:
+
+```text
+   the stall holds off an incoming store
+                    │
+                    ▼
+   it resolves when the resident entry DRAINS
+                    │
+                    ▼
+   draining needs `checked`  ←── rd_req_o & rd_ack_i
+                    │
+                    ▼
+   rd_ack_i comes from a STRICT-PRIORITY arbiter
+   (wt_dcache_mem.sv:186-188) in which this port is
+   the ONLY low-priority one (wt_dcache.sv:297)
+                    │
+                    ▼
+   ...so does resolution depend on other ports going quiet?  YES.
+   Is that a NEW dependency?                                  NO:
+
+     • the LDC being backpressured parks in LDC_CLEAR_WAIT with
+       data_req LOW — the state this stall drives the core into is
+       the one that STOPS competing for the tag-check port
+     • backpressure stalls issue, so the load stream dries up too
+     • the pre-existing `full` and `ni_conflict` stalls resolve
+       through the IDENTICAL path
+
+   → this raises the FREQUENCY of an existing dependency.
+     It does not create a new class of one.
+```
+
+An earlier version of that argument claimed drain/check/evict consult only the buffer's own
+state. An audit **refuted** it — the arbiter dependency above is real — and the RTL comment
+was corrected. A wrong argument for a right conclusion is still wrong.
+
+### 8.5 Validation — Measured, Not Argued
+
+```text
+   TAG CORRECTNESS
+   s07-wbuf-tag-reorder      4 faults → 1    (the 1 is the test's own
+                                              positive control)
+   s07-wbuf-tag-reorder-ctl  1       → 1    (matched control, unchanged
+                                              — one variable between them)
+
+   NO COLLATERAL DAMAGE
+   full 81-test sweep        differs in EXACTLY ONE row: the reproduction.
+                             All 80 others byte-identical — verdict, cycles,
+                             trace hash and fault count.
+
+   LIVENESS, and proof the stall ACTUALLY FIRES
+                             pre-fix RTL        with the stall
+                             ───────────        ──────────────
+   s07-wbuf-liveness           16,998 cyc   →     18,488 cyc    0 faults
+   s07-wbuf-stall-corners       8,362 cyc   →      8,505 cyc    0 faults
+
+                             ▲
+                             │  an UNCHANGED cycle count would have proved
+                             │  only that the test never created the
+                             │  condition. The delta IS the stalling.
+```
+
+`s07-wbuf-stall-corners` covers the two corners an audit named as unreachable by any existing
+test: revocation traffic concurrent with a stall, and the buffer full while the stall is
+asserted.
 
 ---
 
-## 9. The Fix
-
-Two directions were considered. **Option B was implemented** (`5c5f4e3a7`); option A was
-rejected as infeasible. Both are described below, with the reasons, because the reasoning is
-what stops someone re-proposing the rejected one.
-
-### 9.1 Option A: Granule-Aware Merge — REJECTED
-
-```text
-Before:
-
-┌─────────────┐   ┌─────────────────┐
-│ plain G+8   │   │ capability G    │
-└─────────────┘   └─────────────────┘
- two separate entries
-
-
-After:
-
-┌───────────────────────────────────┐
-│ one entry for the entire granule G│
-│                                   │
-│ G+0: capability data              │
-│ G+8: most recently written data   │
-│ TAG: value from the latest store  │
-└───────────────────────────────────┘
-```
-
-The write buffer must recognize that a capability entry at `G` also covers `G+8`. The overlapping stores are then merged into one entry, so the drain order can no longer change the result.
-
-This is the more complete solution in principle, and it is **not implementable here.** The entry
-carries per-byte `valid`/`dirty`/`txblock` masks for the *lower* word only, and the metadata half
-(`user`) has **no byte tracking at all**. "Bytes 8–15 are dirty" therefore cannot be represented,
-and bytes 8–11 would set the same mask bits as bytes 0–3. Making it representable means widening
-those masks and every consumer of them across five files — roughly +224 flops and several hundred
-lines.
-
-Worse, the sketch above would have turned a visible failure into an invisible one. A scrub merged
-into an entry whose transaction has already been issued sets no dirty bits, so the entry is never
-re-drained and is then freed: **L1 ends up correct while DRAM still holds the tagged capability**,
-and the capability reappears the moment that cache line is displaced. A test that reads back
-immediately would report the fix working.
-
-### 9.2 Option B: Forbid Co-Residency — IMPLEMENTED (`5c5f4e3a7`)
-
-```text
-A capability entry for G is already in WBUF
-                    │
-                    ▼
-          a plain store to G+8 arrives
-                    │
-                    ▼
-       detect a conflict at granule level
-                    │
-                    ▼
-       STALL until the capability entry drains
-                    │
-                    ▼
-       only then accept the plain G+8 store
-```
-
-The reverse must also apply. If a plain entry for `G+8` is already resident, a capability entry for `G` must not be allocated until the conflicting entry has drained.
-
-**Why this one won.** It is about ten lines, adds no flops, and shares all but the low bit of a
-comparator already on that path. Crucially it **mutates nothing** — and that turned out to be the
-deciding property rather than a nicety, because `ctag` is sampled *twice*: once at transaction
-issue, which is what reaches DRAM, and again at transaction return, which is what reaches L1. Any
-fix that changes a resident entry after its transaction has issued makes those two disagree, with
-L1 winning every immediate readback and DRAM winning after eviction. Option B never touches a
-resident entry, so the question does not arise.
-
-The synthesis-risk worry about `rdy` was investigated and did not survive: `rdy` has exactly one
-consumer, its entire fan-in is registers, this module carries no combinational-loop warning, and
-the timing-loop criticals cannot arrive through this path because the non-idempotent decode they
-pass through is constant-folded away in this configuration. The measured cost is one extra level
-of logic.
-
-Same-word stores deliberately do **not** stall — they merge into the single existing entry, where
-the existing rules already give the correct answer. Only a *different word of the same granule*
-with a capability on one side stalls, which is rare in ordinary code.
-
-**Validation.**
-
-```text
-s07-wbuf-tag-reorder      4 faults → 1     (the 1 is the test's own positive control)
-s07-wbuf-tag-reorder-ctl  1       → 1     (matched control, unchanged)
-full 81-test sweep        differs in exactly ONE row: the reproduction above.
-                          All 80 others byte-identical — verdict, cycles,
-                          trace hash and fault count.
-s07-wbuf-liveness         18,488 cycles against a 400,000 timeout, 0 faults
-                          → every stall resolved; no deadlock
-```
-
-Liveness was the risk this fix introduces, so it is measured rather than argued.
-
----
-
-## 10. Shortest Possible Explanation
+## 9. Shortest Possible Explanation
 
 > The write buffer treats a capability store as a one-word operation when checking for matching or conflicting entries, but the same entry writes two words when it drains. As a result, the buffer allows two entries that appear different by `wtag` but physically overlap. The round-robin arbiter can then drain them in either order, allowing an older store to overwrite the result of a younger store.
+
+```text
+      COMPARED AS                          DRAINED AS
+   ┌──────────────┐                  ┌──────────────┬──────────────┐
+   │  one WORD    │        vs        │     word     │     word     │
+   │   (8 B)      │                  │      +       │      +       │
+   └──────────────┘                  │        one shared TAG       │
+                                     └──────────────┴──────────────┘
+          └──────────────── the mismatch ─────────────────┘
+
+   THE FIX closes the gap not by making the comparison wider,
+   but by making the overlapping pair IMPOSSIBLE TO CREATE.
+```
 
 The tag loss is the visible symptom. The deeper defect is that **the write buffer tracks and merges an `is_cap` entry as one word even though that entry spans two words**.
 
 ---
 
-## 11. Two Things This Does Not Cover
+## 10. Two Things This Does Not Cover
 
 Neither is fixed by `5c5f4e3a7`, and neither should be credited to it.
 
-**Store-to-load forwarding is word-granular in the same way.** A load that hits the write buffer
-compares at word granularity and selects metadata bytes using the *lower* word's valid mask, so a
-capability load can be answered from a resident entry while a pending store to the other half is
-invisible to it. This exists independently of the drain-order defect. Forbidding co-residency
-makes it unreachable — two conflicting entries can no longer coexist — but it does not repair the
-comparison itself, and it deserves its own investigation rather than a paragraph here.
+```text
+   ┌──────────────────────────────────────────────────────────────┐
+   │ 1. STORE-TO-LOAD FORWARDING — word-granular in the SAME way  │
+   └──────────────────────────────────────────────────────────────┘
 
-**AMO over a capability granule is untouched.** Atomics bypass the write buffer entirely and are
-excluded from the tag path, so an AMO landing on a capability granule leaves the tag set. That is
-a separate, pre-existing residual (invariant I4). Any statement that "tags are correct now" must
-exclude it explicitly.
+     a capability LOAD hits the write buffer
+                    │
+                    ▼
+     compares at WORD granularity, and selects metadata bytes
+     using the LOWER word's valid mask
+                    │
+                    ▼
+     ┌────────────────────────────────────────────────┐
+     │ so a pending store to the OTHER half is        │
+     │ INVISIBLE to the load being answered           │
+     └────────────────────────────────────────────────┘
+
+     this exists INDEPENDENTLY of the drain-order defect
+
+     status:   UNREACHABLE, not REPAIRED
+               ─────────────────────────
+               forbidding co-residency means two conflicting
+               entries can no longer coexist, so nothing reaches
+               the hazard — but the COMPARISON itself is unchanged.
+               Deserves its own investigation.
+```
+
+```text
+   ┌──────────────────────────────────────────────────────────────┐
+   │ 2. AMO OVER A CAPABILITY GRANULE — untouched                 │
+   └──────────────────────────────────────────────────────────────┘
+
+     AMO ──✗── write buffer          (bypassed entirely)
+         ──✗── tag path              (excluded)
+              │
+              ▼
+     an AMO landing on a capability granule LEAVES THE TAG SET
+
+     status:   separate, PRE-EXISTING residual (invariant I4)
+
+     ┌────────────────────────────────────────────────┐
+     │ any statement that "tags are correct now"      │
+     │ MUST exclude this explicitly                   │
+     └────────────────────────────────────────────────┘
+```
