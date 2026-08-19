@@ -129,6 +129,35 @@ commits that exist.
 to push to instead. Until then the fix is validated but unpublished, and the buildroot gitlink is
 dangling.
 
+**2026-08-20 — `caplifive-buildroot` ITSELF now rejects the push too**, which is a change from the
+paragraph above: `1e0be51` really is on `origin/capstone-bootstrap`, so the access existed when
+that was written, and it does not now.
+
+```
+project-starch/caplifive-buildroot.git   403  (dry-run push, so nothing was attempted for real)
+```
+
+What is stranded by it, on branch `xlang-gp-captable-delivery`, four commits:
+
+```
+34281b1  Let a domain declare what it needs, and give it two regions instead of one
+577bf92  Raise the buddy allocator's maximum order so interpreter images fit a domain
+af3c165  Scale the domain region with the image, so an interpreter has room to recurse
+8c7b973  modcapstone: deliver the gp-captable init descriptor into dom_data
+```
+
+`34281b1` is the one that matters and it is validated: mruby runs a full open/execute/close cycle
+against it, and it is what let the MAX_ORDER kernel change in `577bf92` be REVERTED -- the config
+is back to stock, so no Linux patch is needed after all. Every parent branch still records the
+older buildroot (`6912474`), and the gitlink is deliberately NOT bumped: pointing at `34281b1`
+would make every clone reference a commit that does not exist remotely, which is the failure this
+same section already describes one level down.
+
+Practical consequence for anyone else: a fresh clone gets the OLD module, whose fallback rule sizes
+one region as `code_len + 64 KiB + max(2*code_len, 512 KiB)`. At mruby's 1.39 MB image that is
+4,247,440 bytes, rounds to order 11, and `__get_free_pages` returns NULL -- surfacing only as
+`create_dom failed (-1)`, because the reason goes to a `pr_alert` the driver has already muted.
+
 ---
 
 ## 0-PRE. HISTORICAL (2026-08-12) — written while the current bitstream was in synthesis
@@ -137,8 +166,6 @@ Kept for the reasoning, not as instructions. The bitstream described here, `capl
 has been resident since 2026-08-12 and the first-boot sequence below was carried out long ago. The
 `FPGA_BITSTREAM` note at the end is also stale: the drivers now default to the resident bitstream,
 so no override is needed.
-||||||| parent of 133b8ae2cfbe (Record that the parser runs, and put the lane's state where a session will read it)
-## 0-PRE. A NEW BITSTREAM IS IN SYNTHESIS — read this before the first boot on it
 
 ## MUSL / INTERPRETER LANE — mruby runs completely, 2026-08-15
 
