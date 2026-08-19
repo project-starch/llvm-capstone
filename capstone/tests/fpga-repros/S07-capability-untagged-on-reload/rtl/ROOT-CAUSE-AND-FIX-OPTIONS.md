@@ -164,9 +164,12 @@ is `is_cap`. Place it beside `ni_conflict` inside `p_buffer` (`:530, 592-598`), 
 * **The cone concern was mine and it was wrong.** `rdy` has exactly one consumer (`:592`); its
   entire transitive fan-in is registers; `wt_dcache_wbuffer` appears nowhere on the UNOPTFLAT list
   (`wt_dcache_ctrl` is instantiated only for ports 0-2); and the ~100 `config_pkg.sv:413` timing
-  criticals cannot arrive through this path because its only `range_check` call site is `is_ni`,
-  and `NonIdemPotenceEn` is constant 0 in this config, so it folds away. Cost: **+1 logic level**,
-  sharing 52 of 53 bits with a comparator already on the path.
+  criticals do not arrive through this path. **The reason first given for that was wrong and is
+  corrected here:** `range_check` is NOT absent from this module -- `is_nc_miss` (`:226`) calls
+  `is_inside_cacheable_regions`, which is live and does not fold. The correct reason is
+  DISJOINTNESS, not folding: `is_nc_miss` derives from `miss_paddr_o`, i.e. the DRAIN path,
+  while the new term is on the ALLOCATE path, and the two cones do not meet. Cost: **+1 logic
+  level**, sharing 52 of 53 bits with a comparator already on the path.
 * **It covers in-flight entries.** An entry stays `valid` while `txblock` is set (`byteStates`,
   `:712`; `valid` clears only on evict when `dirty==0`, `:560-565`), so the conflict check sees
   transactions still on the bus.
