@@ -209,7 +209,9 @@ takes, each of which has produced a published claim that had to be retracted:
 * a **gate whose condition the mandated control always satisfies**, so it can never fire;
 * a run **parameterised by the wrong variable name**, printing a pass having checked nothing;
 * a tool that renders **"no data" as a zero result**, which reads like a finding;
-* **directed tests that come back clean without ever creating the triggering condition.**
+* **directed tests that come back clean without ever creating the triggering condition;**
+* a check that **fires correctly and still under-determines** — proven to work, and unable
+  to tell apart the two hypotheses actually on the table.
 
 The incident log these were drawn from is in `agent-handoff/`; it is evidence, not rules.
 
@@ -217,6 +219,11 @@ Cheap habits that catch all of the above:
 
 * **Give every detector a positive control.** A gate that has never blocked anything is not a
   passing gate, it is an unproven one. Negative-test it the day you write it.
+* **Ask what the instrument cannot distinguish — before the claim goes out, not after.** A
+  positive control proves a check *can* fire; it does not prove it separates the hypotheses on
+  the table. Both retractions on 2026-08-19 were available to that question in advance: a
+  tag-only detector obviously cannot see corrupt metadata, and a trap PC obviously names the
+  faulting instruction rather than the one that produced its operand.
 * **Never filter between a gate and its exit status.** A pipe replaces `$?` with the last stage's,
   so `gate | tail && commit` commits what the gate rejected. Redirect, never pipe.
 * **Prefer `python3` to `grep`** for anything that must be counted or must return zero meaningfully.
