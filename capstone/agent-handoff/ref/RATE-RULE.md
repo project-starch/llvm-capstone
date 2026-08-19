@@ -1294,7 +1294,7 @@ the evidence in the repo, the healthy reference build's WNS was never read eithe
 deliberate low-effort QoR tradeoff present in both builds, and a design that has been quietly
 missing timing for a long time is the ordinary reading, not the exotic one.
 
-## Two open questions for whoever holds the reports
+## Open questions for whoever holds the reports (one closed the same day)
 
 1. **Which clock.** The **Intra Clock Table** in the routed summary gives per-clock WNS. The
    design carries four MMCM outputs (25 / 125 / 125@90° / 50 MHz) plus the MIG's `ddr_clock_out`.
@@ -1303,10 +1303,12 @@ missing timing for a long time is the ordinary reading, not the exotic one.
    the clk_wiz IP and the MIG's own XDC. A pointer, not a theory: the IP is generated with
    `CONFIG.PRIM_IN_FREQ {200.000}` while `ariane_xilinx.sv:1203` comments its input
    (`ddr_clock_out`) as "100MHz input clock". The Intra Clock Table resolves that in one glance.
-2. **Which report.** The five-number set (WNS/TNS/failing-endpoints/WHS/WPWS) is
-   `report_timing_summary` output, which `run.tcl` never writes — it is Vivado's own run report,
-   and the impl directory holds a post-**place** summary alongside the post-route one. Worth
-   confirming the file read was the `*_routed_*` one.
+2. ~~**Which report.**~~ **CLOSED, same day.** The five-number set is `report_timing_summary`
+   output, which `run.tcl` never writes, so it came from Vivado's own run reports — and the impl
+   directory holds a post-**place** summary alongside the post-route one. Confirmed by the RTL
+   lane: the command that produced the numbers matched on `*timing_summary_routed.rpt`, so the
+   filename pattern itself guarantees the post-**ROUTE** variant. One file matched, one table
+   printed. **−10.629 ns is a routed number.**
 
 **Definitive, if the lead wants it sealed:** re-run implementation on `618f4ce36` unchanged and
 read its WNS. No board, no reflash, ~2h on the machine that has Vivado.
@@ -1316,3 +1318,29 @@ read its WNS. No board, no reflash, ~2h on the machine that has Vivado.
 * S-07, S-09 and S-10 READMEs and the S-07 entry in `ISSUES.md` carry the PROVISIONAL block.
 * **S-10 stays unsent** regardless of how this resolves. A folder that goes out and then needs a
   timing caveat appended is exactly the failure mode the one-link-per-issue rule exists to avoid.
+
+## Cross-checked, and one instrument gap closed
+
+The RTL lane re-derived both structural claims from git independently rather than take them, and
+both hold. It also did the thing this session's own rules demand and I had not done: **put a
+positive control on the port-declaration zero.** A grep returning 0 means nothing until the
+pattern is shown to be able to fire. Re-verified here, both directions:
+
+    diff 618f4ce36..e1140aeea, ^[+-] lines matching input|output|inout   ->   0
+    same pattern against the file body at e1140aeea                      ->  51
+    same pattern in DIFF FORM (whole file diffed against /dev/null)      ->  51
+
+So the zero is a reading, not a silent miss, and the change really is entirely internal to the
+module.
+
+**Precision on the escalation trigger,** which is worth stating before anyone needs it. If
+`WORST_100` does show dcache or write-buffer cells on the worst paths, the differential argument
+collapses and this becomes a candidate regression — but **the S-07 fix would not thereby be
+wrong, only unvalidated on silicon.** The RTL reading, the Verilator matched pair, the
+`ctag_implies_cap` assertion and the 81-row byte-identity sweep are untouched by anything in this
+section. What would be lost is the silicon confirmation, not the fix.
+
+**Recommended order, agreed across lanes:** run the Intra Clock Table and the `WORST_100` grep
+first. Claim 2 above makes the cheap check decisive; re-implementing `618f4ce36` (~2h, another
+machine, no board) is only confirmatory and is worth spending only if the cheap check comes back
+ambiguous.
