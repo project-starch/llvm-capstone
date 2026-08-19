@@ -459,7 +459,32 @@ that row.
 Diagnostic stages 11-15 are committed in `sqlite_capstone_domain.c` and selected at run time
 (`SQLITE_STAGE_DOMS=".../s8.dom:15"`), so none of this has to be rebuilt from scratch.
 
-## S-07 — a capability read back from memory comes back UNTAGGED · `OPEN — the one open silicon issue`
+## S-07 — a capability read back from memory comes back UNTAGGED · `ROOT-CAUSED; FIXED IN RTL; silicon validation PROVISIONAL pending a timing attribution`
+
+**Root cause (2026-08-19):** the write buffer allocates and merges at 64-bit **word**
+granularity but every entry writes the whole 16-byte **granule's** tag bit on drain, and
+drain order is `rr_arb_tree` rotation, not program order. Fixed by forbidding granule
+co-residency at allocation (`wt_dcache_wbuffer.sv`). Siblings: **S-09** is the same reorder
+running the other way (a silently dropped plain store — also fixed), **S-10** is a separate
+transient store-to-load forwarding residual that this fix structurally does not reach.
+
+> **PROVISIONAL — the silicon numbers below are pending a timing attribution (2026-08-20).**
+> The build that produced `caplifive_s07fix.bit` reports post-route **WNS −10.629 ns**, with
+> **96727 of 246476 endpoints failing setup** (hold and pulse width are fine: WHS +0.054, WPWS
+> +0.062). The **mechanism is NOT affected** — it rests on the RTL text, a Verilator matched pair
+> and an assertion, none of which involve a bitstream. The **measured silicon numbers are**, and
+> *all* of them, pre-fix as well as post-fix: the timing environment is byte-identical across both
+> builds, so this caveat cannot honestly be scoped to the fix run. It is expected to resolve in
+> favour of the numbers, because every result here is a **differential** between arms that differ
+> by exactly one thing, and the entire design delta against the last known-healthy build
+> (`618f4ce36`) is one module-internal file — `wt_dcache_wbuffer.sv`, +146/−1, no port changes.
+> That is an argument, not a measurement. Two artifacts settle it and neither needs the board:
+> the **per-clock Intra Clock Table** from the routed timing summary, and a grep of
+> `ariane.timing_WORST_100.rpt` for `i_wt_dcache_wbuffer`. If the worst paths do run through the
+> write buffer, the differential argument collapses and this becomes a candidate regression.
+> Repeatability is deliberately **not** offered as evidence: a setup-failing path at fixed voltage
+> and temperature can fail deterministically. Full record: `agent-handoff/ref/RATE-RULE.md`.
+
 
 Full evidence, refutations and reproduction: `tests/fpga-repros/S07-capability-untagged-on-reload/`.
 Symptom: `mcause 25`, the domain wedges after `SQ: G/enter`. Given a heading here 2026-08-18

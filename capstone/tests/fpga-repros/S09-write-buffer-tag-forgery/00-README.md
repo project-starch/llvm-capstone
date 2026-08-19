@@ -1,5 +1,23 @@
 # S-09 — a capability survives the plain store meant to destroy it
 
+> **PROVISIONAL — the silicon numbers below are pending a timing attribution (2026-08-20).**
+> The build that produced `caplifive_s07fix.bit` reports post-route **WNS −10.629 ns**, with
+> **96727 of 246476 endpoints failing setup** (hold and pulse width are fine: WHS +0.054, WPWS
+> +0.062). The **mechanism is NOT affected** — it rests on the RTL text, a Verilator matched pair
+> and an assertion, none of which involve a bitstream. The **measured silicon numbers are**, and
+> *all* of them, pre-fix as well as post-fix: the timing environment is byte-identical across both
+> builds, so this caveat cannot honestly be scoped to the fix run. It is expected to resolve in
+> favour of the numbers, because every result here is a **differential** between arms that differ
+> by exactly one thing, and the entire design delta against the last known-healthy build
+> (`618f4ce36`) is one module-internal file — `wt_dcache_wbuffer.sv`, +146/−1, no port changes.
+> That is an argument, not a measurement. Two artifacts settle it and neither needs the board:
+> the **per-clock Intra Clock Table** from the routed timing summary, and a grep of
+> `ariane.timing_WORST_100.rpt` for `i_wt_dcache_wbuffer`. If the worst paths do run through the
+> write buffer, the differential argument collapses and this becomes a candidate regression.
+> Repeatability is deliberately **not** offered as evidence: a setup-failing path at fixed voltage
+> and temperature can fail deterministically. Full record: `agent-handoff/ref/RATE-RULE.md`.
+
+
 > # SEVERITY SETTLED 2026-08-19, MEASURED TWO WAYS: A CAPABILITY SURVIVES THE STORE MEANT TO DESTROY IT
 >
 > The final framing is neither of the two above. **This is a failure to revoke by overwrite.**

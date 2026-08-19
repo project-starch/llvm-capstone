@@ -1209,3 +1209,110 @@ synthesis phase only, carries **no** timing summary, and shows a max peak of **4
 in line with the 4958 MB healthy reference but says nothing about the fixed tree.
 
 Neither number needs the board. Both live wherever `caplifive_s07fix.bit` was built.
+
+---
+
+# 2026-08-20 — THE WNS ANSWER CAME BACK, AND IT IS NEGATIVE
+
+Both numbers arrived from the machine that built `caplifive_s07fix.bit`. The build was
+**`e1140aeea`**, RTL-identical to `f231b5af0` — which confirms the stripped-tree deduction above.
+
+## Memory: fine, and the question that started the batching argument is closed
+
+    exit 0, 1h48m, peak 20.94 GB tree-summed RSS against a 40 GB ceiling
+
+Not comparable to the 4958 MB reference figure, which was **single-process RSS**; the same
+reference run reported 13.1 GB PSS and 21.5 GB VSS, so 20.94 GB summed-RSS is the same territory,
+not 4x worse. The strip and the guard both did their job. **The fix synthesises inside a sane
+envelope.**
+
+## Timing: a hard fail, not a marginal one
+
+    WNS                     -10.629 ns
+    TNS                  -438671.250 ns
+    TNS failing endpoints    96727 / 246476   (39%)
+    WHS                      +0.054 ns        hold is FINE -- this is a SETUP failure
+    WPWS                     +0.062 ns
+
+The core clock is `clk_out1` = **25 MHz / 40 ns** (`ariane_xilinx.sv:1196`; the clk_wiz is
+configured `CLKOUT1_REQUESTED_OUT_FREQ {25}` at `xilinx/xlnx_clk_gen/tcl/run.tcl:32`), so that is
+a ~50.6 ns worst path against a 40 ns budget — **if** the failing endpoints are on that clock.
+
+**We said, twice and in writing, that WNS was the bar** (`run.tcl:93-114`: "*WNS < 0 -> DO NOT
+FLASH*", "*ready = synthesis has RUN and CLOSED TIMING*"). It was not checked before the flash.
+That is the process failure here, independent of how the technical question resolves.
+
+## Status of everything measured on this bitstream: PROVISIONAL, not retracted
+
+* **NOT provisional — the mechanism.** The RTL reading, the Verilator matched pair and the
+  `ctag_implies_cap` assertion involve no bitstream at all.
+* **Provisional — every silicon number**, and *all* of them, **pre-fix included**. Scoping the
+  caveat to the post-fix run would be quietly wrong: the timing environment is byte-identical
+  across both builds (next section), so both bitstreams share whatever timing state exists. That
+  covers `wb1 = 1107` and the earlier `k/n` rates as much as `wb1 = 0`.
+
+## What is verifiable locally, and it narrows the question sharply
+
+Between the last measured-healthy reference build **`618f4ce36`** and **`e1140aeea`**:
+
+| checked | result |
+|---|---|
+| `corev_apu/fpga/constraints/*.xdc` | **identical** |
+| `corev_apu/fpga/xilinx/*/tcl/run.tcl` (all IP, incl. the MMCM) | **identical** |
+| `corev_apu/fpga/Makefile`, top-level `CLK_PERIOD_NS` | **identical** |
+| `corev_apu/fpga/scripts/run.tcl` | +28 lines, **0 of them non-comment** |
+| `RETIMING`, `place/route -directive RuntimeOptimized` | **unchanged — both ON in both builds** |
+| **design RTL** (`core/`, `corev_apu/src`, `corev_apu/fpga/src`) | **ONE file**: `wt_dcache_wbuffer.sv`, **+146/−1**, **no port changes** |
+
+Everything else in the diff is testbench, sim logs, `synth-guard.sh` and directed `.S` tests.
+
+    git diff --stat 618f4ce36 e1140aeea -- core corev_apu/src corev_apu/fpga/src corev_apu/tb
+     core/cache_subsystem/wt_dcache_wbuffer.sv | 147 +++++++++++++++++++++++++++++-
+
+**Two consequences.**
+
+1. **The results are DIFFERENTIAL.** `wb1` vs `wb3`, `wb1` 1107→0, `wb2` 15193→16384, `wr6` vs
+   `wr7` — each is a comparison between arms differing by one thing, taken on bitstreams that
+   share their entire timing environment. A setup violation has no reason to track the
+   architectural mechanism arm-for-arm, nor to agree with the cycle-level Verilator behaviour.
+   **Conditional** on the worst paths not running through the write buffer.
+2. **Attribution needs only the WORST_100 report.** Since the *entire* design delta is one
+   module-internal file, "do the worst paths touch `i_wt_dcache_wbuffer`?" is by itself decisive.
+   Hunting an archived `618f4ce36` timing report becomes confirmatory rather than blocking — which
+   matters, because that artifact **does not exist on this machine** (searched `/home`,
+   `/tmp/capstone`, the repo: no `.bit`, no Vivado log, no `.rpt` but spyglass).
+
+**The new logic's own timing cost, for what it is worth as a prior:** `gran_eq / word_ne /
+gran_conflict / gran_hazard` → `data_gnt` is structurally *parallel* to the pre-existing
+`wbuffer_hit_oh → rdy → data_gnt` cone and one reduction level deeper. It can lengthen one path.
+It cannot create 96727 failing endpoints.
+
+**Why "long-standing and never noticed" is the leading branch:** the `run.tcl` block instructing
+anyone to read WNS post-route is **part of this very diff** — it did not exist at `618f4ce36`. On
+the evidence in the repo, the healthy reference build's WNS was never read either. Add
+`place_design` **and** `route_design` both at `-directive RuntimeOptimized` (`run.tcl:132-133`), a
+deliberate low-effort QoR tradeoff present in both builds, and a design that has been quietly
+missing timing for a long time is the ordinary reading, not the exotic one.
+
+## Two open questions for whoever holds the reports
+
+1. **Which clock.** The **Intra Clock Table** in the routed summary gives per-clock WNS. The
+   design carries four MMCM outputs (25 / 125 / 125@90° / 50 MHz) plus the MIG's `ddr_clock_out`.
+   Note that **`CLK_PERIOD_NS` is passed to `corev_apu/fpga` and then never consumed** — verified,
+   no match in that Makefile — so nothing in the flow ever asserted 40 ns; the periods come from
+   the clk_wiz IP and the MIG's own XDC. A pointer, not a theory: the IP is generated with
+   `CONFIG.PRIM_IN_FREQ {200.000}` while `ariane_xilinx.sv:1203` comments its input
+   (`ddr_clock_out`) as "100MHz input clock". The Intra Clock Table resolves that in one glance.
+2. **Which report.** The five-number set (WNS/TNS/failing-endpoints/WHS/WPWS) is
+   `report_timing_summary` output, which `run.tcl` never writes — it is Vivado's own run report,
+   and the impl directory holds a post-**place** summary alongside the post-route one. Worth
+   confirming the file read was the `*_routed_*` one.
+
+**Definitive, if the lead wants it sealed:** re-run implementation on `618f4ce36` unchanged and
+read its WNS. No board, no reflash, ~2h on the machine that has Vivado.
+
+## Consequences already taken
+
+* S-07, S-09 and S-10 READMEs and the S-07 entry in `ISSUES.md` carry the PROVISIONAL block.
+* **S-10 stays unsent** regardless of how this resolves. A folder that goes out and then needs a
+  timing caveat appended is exactly the failure mode the one-link-per-issue rule exists to avoid.
