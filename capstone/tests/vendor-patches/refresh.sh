@@ -4,10 +4,33 @@ set -euo pipefail
 ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../.." && pwd)
 OUT="$ROOT/capstone/tests/vendor-patches"
 
-snap() {  # snap <label> <repo-relative dir> <output file>
-  local label=$1 dir=$2 out=$3
+# snap <label> <repo-relative dir> <output file> [base] [path...]
+#
+# Without <base> this mirrors the WORKING TREE only (git diff). That was right when
+# submodule source was deliberately left uncommitted; since 2026-08-05 the rule is the
+# opposite -- submodule work SHOULD be committed -- and a committed edit is invisible to
+# a bare `git diff`. So entries whose repo can be diffed against its remote pass a <base>
+# and thereby capture committed-but-unpushed work as well. capstone-qemu deliberately
+# does not: its origin/master is upstream QEMU and the fork is ~1M lines ahead, so a
+# remote-based diff there is useless rather than merely large.
+snap() {
+  local label=$1 dir=$2 out=$3 base=${4:-}; shift 4 2>/dev/null || shift $#
   if [[ ! -d "$ROOT/$dir" ]]; then echo "  SKIP $label (missing $dir)"; return; fi
-  git -C "$ROOT/$dir" diff > "$OUT/$out.new" 2>/dev/null || true
+  if [[ -n "$base" ]] && ! git -C "$ROOT/$dir" rev-parse --verify -q "$base" >/dev/null; then
+    echo "  SKIP $label (base $base not resolvable -- fetch first)"; return
+  fi
+  git -C "$ROOT/$dir" diff ${base:+"$base"} ${1:+-- "$@"} > "$OUT/$out.new" 2>/dev/null || true
+  # A mirror is a BACKUP. Replacing a non-empty one with an empty diff is how this tool
+  # would erase what it exists to protect: every mirrored tree was clean on 2026-08-19,
+  # so a run on that day would have blanked all of them at once and reported UPDATED for
+  # each. An empty result now means "nothing to mirror", never "delete the mirror".
+  if [[ ! -s "$OUT/$out.new" && -s "${OUT}/$out" ]]; then
+    rm -f "$OUT/$out.new"
+    echo "  KEPT $label -- diff is now EMPTY but the mirror is not; refusing to blank it."
+    echo "       (the edit was probably committed; give this entry a <base> so committed"
+    echo "        work is captured, or delete the mirror deliberately if it is obsolete)"
+    return
+  fi
   if [[ -f "$OUT/$out" ]] && cmp -s "$OUT/$out" "$OUT/$out.new"; then
     rm -f "$OUT/$out.new"; echo "  same $label"
   else
@@ -27,6 +50,12 @@ snap "capstone-sbi package" capstone/caplifive-buildroot/package/capstone-sbi-do
 # wrong-tree gap that left the FPGA rootfs overlay carrying a day-old SQLite domain.
 snap "SYSTEM opensbi"       capstone/caplifive-system/sw/buildroot/components/opensbi   system-opensbi-component.patch
 snap "SYSTEM capstone-sbi"  capstone/caplifive-system/sw/buildroot/components/opensbi/lib/sbi/capstone-sbi system-opensbi-capstone-sbi.patch
+
+# The kernel side of the domain-image ceiling. Both are committed in their submodules and
+# neither submodule is pushable from here, so these mirrors are the only way the change
+# travels with the parent repo.
+snap "kernel MAX_ORDER cfg"  capstone/caplifive-buildroot                 caplifive-buildroot-kernel-max-order.patch            origin/capstone-bootstrap configs/kernel.config
+snap "riscv MAX_ORDER symbol" capstone/caplifive-buildroot/components/linux transcapstone-linux-riscv-arch-force-max-order.patch origin/master arch/riscv/Kconfig
 
 DIAG="$ROOT/capstone/caplifive-buildroot/package/modcapstone/userspace/capstone-diag.c"
 if [[ -f "$DIAG" ]]; then

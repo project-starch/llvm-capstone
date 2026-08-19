@@ -1,15 +1,20 @@
 # Vendor patches — uncommitted submodule source, mirrored so it cannot be lost
 
-The repo rule is that **submodule source stays uncommitted** (firmware/buildroot/QEMU
-edits are local experiments, and the submodules have their own upstreams). That rule is
-about *where the source of truth lives*. It is not a reason to have no backup: several of
-these edits are load-bearing for every test run, and until 2026-07-28 the only copies of
-some of them lived in `/tmp` and in a peer session's scratchpad — one cleanup away from
-being unrecoverable.
-
-So: the submodules stay dirty and uncommitted as before, and these mirrors exist purely as
-a recovery path. **They are snapshots, not the source of truth.** If you change a
+These mirrors exist as a recovery path for submodule edits that would otherwise live in
+one working tree only. **They are snapshots, not the source of truth.** If you change a
 submodule, re-run `refresh.sh`.
+
+The original reason was that submodule source was deliberately left uncommitted. That rule
+was withdrawn on 2026-08-05 — submodule work SHOULD now be committed — which quietly broke
+this tool twice over, and both were live on 2026-08-19:
+
+* `refresh.sh` mirrored `git diff`, i.e. the WORKING TREE. Every mirrored tree was clean by
+  then, so a run would have replaced all six mirrors with empty files and printed UPDATED
+  for each. It now refuses to blank a non-empty mirror, and entries can pass a base commit
+  so committed-but-unpushed work is captured too.
+* A second reason the mirrors still matter: **not every submodule is pushable.**
+  `caplifive-buildroot` and its nested `components/linux` both reject pushes from this
+  account (403), so a commit there travels with the parent repo only as a patch here.
 
 | file | mirrors | why it matters |
 |---|---|---|
@@ -17,6 +22,8 @@ submodule, re-run `refresh.sh`.
 | `opensbi-component.patch`, `opensbi-capstone-sbi.patch` | `caplifive-buildroot/components/opensbi` | The component copy is what the **QEMU `fw_jump` actually builds from** (`build/local.mk`: `OPENSBI_OVERRIDE_SRCDIR`). The package copy below is *not*. |
 | `buildroot-capstone-sbi-package.patch` | `caplifive-buildroot/package/capstone-sbi-domain/capstone-sbi` | The inert large-RO copy edit. Kept because it records the intended shape of the C-4b change. |
 | `capstone-reentry.c` | `caplifive-buildroot/package/modcapstone/userspace/` | **Untracked** — shares TWO regions, so the domain is entered twice (the share *is* the entry). The only way to exercise the glue's `__test_reentry` path, and the gate for S2. |
+| `caplifive-buildroot-kernel-max-order.patch` | `caplifive-buildroot/configs/kernel.config` | `CONFIG_ARCH_FORCE_MAX_ORDER=13`. A domain region is one `__get_free_pages()` allocation, so the buddy allocator's maximum order caps the domain image size; this lifts it from 1,376,256 to 5,570,560 bytes, which is what an interpreter-scale image needs. |
+| `transcapstone-linux-riscv-arch-force-max-order.patch` | `caplifive-buildroot/components/linux` | The `ARCH_FORCE_MAX_ORDER` Kconfig symbol, which riscv does not carry. Without it the config line above is silently dropped by `olddefconfig` — the value never takes effect and nothing says so. Both patches are needed; neither works alone. |
 | `capstone-diag.c` | `caplifive-buildroot/package/modcapstone/userspace/` | **Untracked** — the I-3 fix. A separate domain loader so a probe can run under QEMU in seconds; deliberately not a change to `capstone-test.c`, which loads the whole QEMU corpus. Nothing but this mirror held it. |
 
 ## Not mirrored here, on purpose
