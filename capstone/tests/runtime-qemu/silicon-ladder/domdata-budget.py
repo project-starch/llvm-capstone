@@ -21,6 +21,22 @@ The arithmetic mirrors, and must stay in step with:
 import sys, struct, subprocess, os, re
 
 PAGE = 4096
+# __get_free_pages(GFP_HIGHUSER, order) caps at MAX_ORDER - 1. This kernel's
+# include/linux/mmzone.h has MAX_ORDER 11, so the largest allocation is 1024 pages.
+MAX_ALLOC_ORDER = 10
+
+
+def largest_code_len():
+    """Biggest code_len the module can still allocate, by the same arithmetic."""
+    lo, hi = 1, (1 << MAX_ALLOC_ORDER) * PAGE
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        need = mid + 4096 * 16 + max(2 * mid, 512 * 1024)
+        if need <= (1 << MAX_ALLOC_ORDER) * PAGE:
+            lo = mid
+        else:
+            hi = mid - 1
+    return lo
 # TWO DIFFERENT CONSTANTS, BOTH NAMED DOMAIN_DATA_SIZE. Conflating them is why the
 # first version of this script reported a 29 KB dom_data where the board showed ~94 KB.
 MODULE_HEADROOM = 4096 * 16         # module/capstone.c:24 -- added before rounding to pow2 pages
@@ -89,9 +105,28 @@ def main():
     # Images below 64 KiB are unchanged; larger ones double. Keep this in step with the
     # module or this predictor silently reports the wrong order and the wrong verdict --
     # which it did, reporting "DOES NOT FIT" for a build the module now gives 4 MiB.
-    dom_tot = code_len + max(code_len, MODULE_HEADROOM)   # capstone.c:83
-    pages = (dom_tot - 1) // PAGE + 1
+    # CORRECTED 2026-08-19 against module/capstone.c:99-123, which is authoritative.
+    # This predictor had drifted twice over and said "fits" for an image the kernel
+    # cannot allocate at all:
+    #   1. the headroom is 2 * code_len, not max(code_len, ...). The module reads
+    #        dom_min_free = max(2 * code_len, DOMAIN_MIN_FREE)
+    #        while (1 << order) * PAGE < code_len + DOMAIN_DATA_SIZE + dom_min_free:
+    #      so a 2.78 MB image needs order 12 where this reported 11.
+    #   2. there is a CEILING and it was never checked. __get_free_pages caps at
+    #      MAX_ORDER - 1, which is 10 in this kernel (mmzone.h: MAX_ORDER 11,
+    #      MAX_ORDER_NR_PAGES = 1 << (MAX_ORDER - 1) = 1024 pages = 4 MiB). Past that
+    #      the allocation returns NULL and domain creation fails -- which reads at the
+    #      console as "Failed to allocate memory for domain", nothing to do with the
+    #      carve arithmetic this script reports on.
+    # Keep BOTH in step with the module. A predictor that cannot say DOES NOT FIT for
+    # an unloadable image is not a predictor.
+    dom_data_size = 4096 * 16                          # DOMAIN_DATA_SIZE
+    dom_min_free = max(2 * code_len, 512 * 1024)       # DOMAIN_MIN_FREE
+    need = code_len + dom_data_size + dom_min_free
+    pages = (code_len + dom_data_size - 1) // PAGE + 1
     order = 0 if pages == 1 else (pages - 1).bit_length()
+    while (1 << order) * PAGE < need:
+        order += 1
     tot_size = (1 << order) * PAGE
     dom_data = tot_size - code_size - MONITOR_SEAL_SIZE
 
@@ -116,6 +151,16 @@ def main():
     print(f"    - cap table   {table:>10}   ({count} globals)")
     print(f"    - storage     {storage:>10}")
     print(f"    = STACK       {stack:>10}")
+    if order > MAX_ALLOC_ORDER:
+        biggest = largest_code_len()
+        print(f"  VERDICT: DOES NOT FIT -- order {order} exceeds the kernel's maximum "
+              f"{MAX_ALLOC_ORDER}.")
+        print(f"           __get_free_pages would return NULL and domain creation fails "
+              f"before anything runs.")
+        print(f"           largest code_len that still fits: {biggest} bytes "
+              f"({biggest / 1048576:.2f} MiB); this image is "
+              f"{code_len / biggest:.2f}x that.")
+        return 1
     if stack <= 0:
         print("  VERDICT: DOES NOT FIT -- the carve overruns dom_data.")
         return 1
