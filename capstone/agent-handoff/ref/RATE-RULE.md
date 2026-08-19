@@ -1080,3 +1080,48 @@ the same morning.
   failure, but these arms are narrow and homogeneous — they exercise a thin slice of the design,
   and a marginal path can be data-dependent and untouched by them. An argument, not a timing
   report.
+
+### "PRE-EXISTING" is now MEASURED — it was structural reasoning when first recorded
+
+The residual was written up as pre-existing in `d96fa6c35d7d` **on reasoning, not measurement**.
+The pair had only ever run on the FIXED RTL, and a pair run on one revision cannot distinguish
+"already there" from "caused by the fix". The RTL lane flagged that themselves and closed it:
+
+    same binaries, pre-fix RTL (a3dbae618) in a worktree
+
+                                       pre-fix a3dbae618      fixed
+      s07-wbuf-forward-residual         9 exc /  9234 cyc     9 exc /  9234 cyc
+      s07-wbuf-forward-residual-ctl    17 exc / 26361 cyc    17 exc / 26361 cyc
+
+Identical in both arms: the fix neither repairs the residual nor worsens it.
+
+**The A/B carries its own model-identity control**, which is what makes identical numbers mean
+something. Identical results are also exactly what running the same model twice produces, so a
+worktree silently reusing the fixed build would have printed this table and looked like
+confirmation. `s07-wbuf-tag-reorder` in that worktree gives 4 exceptions at 9150 cycles — the
+PRE-FIX signature — against 1 at 9138 on the fixed model, plus zero occurrences of
+`gran_conflict` in the worktree source before the run. Committed `dc283fbab`.
+
+### "Transient" must not be read as "edge case"
+
+The window is short-lived but, **while the entry is resident, very nearly certain: 3837 of
+3840, 99.92%.** Short-lived is not the same as unlikely. The operational consequence is
+unchanged — a program cannot trust an immediate re-read to confirm it has destroyed a
+capability, but can trust the destruction once the buffer drains — and the word "transient"
+should not be allowed to carry more reassurance than 99.92% supports.
+
+Quote the silicon number, not the Verilator one. The 8-of-16 seen in simulation is a harness
+artifact: the trap handler runs between legs and drains the write buffer, resetting the phase,
+which is what made that pattern alternate. It was never a probability.
+
+### Aperture note, so a wrong number does not propagate
+
+The provenance aperture is **switch 205** (bank 110, `debug_byte_sel = sw[7:5] = 6`, offset 192,
+reg `5'b01101` = 13). Both lanes agree on that.
+
+A claim that "237 is impossible because the case value is 5 bits, so the highest reachable
+switch is 223" is **wrong**, and only true within one bank. `debug_byte_sel` selects among eight
+banks of 32: bank 110 spans 192-223, **bank 111 spans 224-255**. 237 is bank 111 reg 13 and is
+perfectly reachable — empirically, `sw=230` reads `commit pc[7:0]` in the boot-4 transcript.
+Whether a generation marker lives there is a separate question about which tree was synthesized;
+reachability is not the objection.
