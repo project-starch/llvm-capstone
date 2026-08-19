@@ -453,6 +453,39 @@ if [[ ${MRUBY_PROBE_MRBTEST:-0} == 1 ]]; then
     [[ -f $f ]] || {
       echo "missing $f -- run 'rake test' in $MRUBY_SRC first" >&2; exit 2; }
   done
+  # THE LIBC HEAP HAS TO BE BIG ENOUGH, and this is checked HERE because the
+  # alternative is finding out from the board or from QEMU.
+  #
+  # The suite's sub-interpreters are opened with mrb_open_core(mrb_default_allocf,
+  # ...) -- plain libc malloc, not the probe's instrumented allocator, so the
+  # arena knob does not reach them. At the archive's default 256 KiB the outer
+  # state has already taken about 204 KB and the first mrb_open_core returns
+  # NULL. gem_test.c then prints "Invalid mrb_state, exiting", which reads like
+  # mruby failing rather than like a heap that was never large enough, and it
+  # costs a full boot to learn.
+  #
+  # Build one with:
+  #   OUT_DIR=<dir> CAPSTONE_LIBC_HEAP_BYTES=$((2*1024*1024)) \
+  #     bash ../build-musl-capstone.sh
+  # and pass ARCHIVE=<dir>/libc-capstone.a. A separate archive on purpose: the
+  # heap is .bss, .bss is inside the loaded image, and every other domain would
+  # otherwise grow by the same amount.
+  # NO `exit` IN THE AWK, and no `| head`. This script runs under `set -o
+  # pipefail`, so an early-exiting reader gives llvm-nm SIGPIPE and the whole
+  # build dies with 141 -- which the first negative test of this gate did, on
+  # both a too-small archive AND a correct one. A gate that fails every build
+  # equally is not a gate. Reading to the end costs nothing here.
+  _heap=$("$CAPSTONE_LLVM_BIN/llvm-nm" --print-size --defined-only "$ARCHIVE" \
+          2>/dev/null | awk '$NF=="heap" && !seen {print strtonum("0x"$2); seen=1}')
+  [[ -n $_heap ]] || {
+    echo "cannot read the libc heap size out of $ARCHIVE" >&2; exit 2; }
+  if (( _heap < 1024 * 1024 )); then
+    echo "the libc in $ARCHIVE has a ${_heap}-byte heap; mrbtest needs at least" >&2
+    echo "1 MiB because its sub-interpreters allocate through libc malloc." >&2
+    echo "Build one with CAPSTONE_LIBC_HEAP_BYTES and pass it as ARCHIVE." >&2
+    exit 2
+  fi
+  echo "mrbtest: libc heap $_heap bytes"
   # driver.c carries the command-line entry point beside the two functions this
   # actually wants (mrb_init_test_driver, mrb_t_pass_result). Renaming main
   # rather than deleting it keeps the file byte-identical to the tree's; the

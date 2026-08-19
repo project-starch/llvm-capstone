@@ -167,7 +167,43 @@ has been resident since 2026-08-12 and the first-boot sequence below was carried
 `FPGA_BITSTREAM` note at the end is also stale: the drivers now default to the resident bitstream,
 so no override is needed.
 
-## MUSL / INTERPRETER LANE — mruby runs completely, 2026-08-15
+## MUSL / INTERPRETER LANE — mruby's own TEST SUITE runs, 2026-08-20
+
+**678 assertions from all 43 files of mruby's `test/t/`, executed inside a pure-capability
+domain: 674 OK, 2 skipped, 2 KO, 0 crashes.** The host build of the same suite reports
+1468/1460/0/0 -- larger because it links 39 gems' tests as well as the core ones this domain
+carries. The count is self-checked: assert.rb prints one character per assertion and the
+progress line holds exactly 674 dots, 2 `?` and 2 `F`.
+
+How to reproduce it, both parts required:
+
+```
+OUT_DIR=/tmp/capstone/musl-capstone-build-bigheap CAPSTONE_LIBC_HEAP_BYTES=$((2*1024*1024)) \
+  bash capstone/musl-capstone/build-musl-capstone.sh
+MRUBY_PROBE_MRBTEST=1 ARCHIVE=/tmp/capstone/musl-capstone-build-bigheap/libc-capstone.a \
+  bash capstone/musl-capstone/mruby-probe/run-mruby-probe.sh
+```
+
+The big heap is not optional and the build now refuses without it: the suite's sub-interpreters
+are opened with `mrb_open_core(mrb_default_allocf, ...)`, i.e. through libc malloc, which the
+probe's arena knob does not reach. A separate archive because the heap is `.bss` and `.bss` sits
+inside the loaded image, so every other domain would otherwise grow with it.
+
+**THE TWO FAILURES ARE FLOAT ACCURACY, NOT CAPABILITIES.** `Integer#quo` (`6.quo(5)` against the
+literal `1.2`) and `String#to_f` (`'12345.6789'.to_f` against the literal, plus six more). Both
+compare a value the DOMAIN computed against a literal `mrbc` compiled on the HOST, so the two
+sides come from different float implementations by construction, and neither fails on the host.
+That splits the difference in two: soft-float division (compiler-rt `__divdf3`) and decimal
+parsing (musl `strtod`, whose accumulation wants the long double this target does not have,
+ISSUES.md C-20). **Not yet measured** -- compute `6.0/5.0` in a domain and compare its bits with
+the host's before calling either a root cause.
+
+The domain also had to start declaring its resource requirement (`.capstone_domreq`); without it
+the module's fallback rule asks for order 11 at mruby's image size and the run dies as
+`create_dom failed (-1)`. See the commit; note it needs the buildroot module that is currently
+stranded by the access blocker above.
+
+### Earlier: mruby runs completely, 2026-08-15
 
 **Reference mruby executes Ruby in a pure-capability domain**: mrblib loads, precompiled
 bytecode runs, `mrb_load_string` parses and evaluates SOURCE at runtime, and the GC tears
