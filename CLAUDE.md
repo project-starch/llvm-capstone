@@ -44,6 +44,9 @@ New to the project? See `capstone/agent-handoff/ONBOARDING.md`.
     `~/.claude-c/secrets/name-denylist.txt` (mode 600) — putting the names in a
     committed file would itself break the rule. Keep that file populated; without it
     the script warns and runs only its name-independent heuristics.
+- **Commit result lines, not the capture they came from.** A raw log is contaminated by
+  construction — kernel and driver banners carry account names and emails — so scrubbing is
+  endless and per-log. Twelve result lines beat 1110, and are better evidence.
 - No `Co-Authored-By:` lines in commits.
 - **Commit only your OWN paths: `git commit -o <paths> -F <msgfile>`.** `git add <files>` followed
   by a bare `git commit` commits the ENTIRE index, so a concurrent session's staged work rides
@@ -214,6 +217,8 @@ Cheap habits that catch all of the above:
 
 * **Give every detector a positive control.** A gate that has never blocked anything is not a
   passing gate, it is an unproven one. Negative-test it the day you write it.
+* **Never filter between a gate and its exit status.** A pipe replaces `$?` with the last stage's,
+  so `gate | tail && commit` commits what the gate rejected. Redirect, never pipe.
 * **Prefer `python3` to `grep`** for anything that must be counted or must return zero meaningfully.
 * **Make "no data" an ERROR, not a zero.** A tool that finds nothing should exit non-zero and say
   where it looked, never print an empty result that renders like a finding.
