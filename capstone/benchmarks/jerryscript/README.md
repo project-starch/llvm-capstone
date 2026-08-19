@@ -49,22 +49,35 @@ returns 2.9999999999999996 for `Math.log2(8)`.
 
 ### Where this stands
 
-**The size blocker is GONE (2026-08-19).** It was the binding one and it is resolved
-outside this directory. A domain region is one `__get_free_pages()` allocation covering
-`code_len + 64K + 2*code_len`, which capped at order 10 (4 MiB) and so capped `code_len`
-at 1,376,256 bytes -- this image is 2,965,680. The kernel now sets
-`CONFIG_ARCH_FORCE_MAX_ORDER=13`, giving a 16 MiB block and a ceiling of 5,570,560
-bytes. It needed two changes, because riscv did not carry the `ARCH_FORCE_MAX_ORDER`
-symbol at all and without it the config line is silently discarded by `olddefconfig`.
-Both live as vendor patches on `capstone-domain-port-fixes`
-(`tests/vendor-patches/*max-order*.patch`) rather than as a submodule pointer bump,
-because neither `caplifive-buildroot` nor its nested `components/linux` accepts a push
-from this account.
+**The size blocker is GONE (2026-08-19), and NOT by patching Linux.** A domain region
+was one `__get_free_pages()` allocation covering `code_len + 64K + 2*code_len`, so the
+buddy allocator's maximum order capped `code_len` at 1,376,256 bytes against this
+image's 2,965,680. Raising that ceiling worked but meant carrying a Linux source patch
+that upstream would not take -- riscv has no `ARCH_FORCE_MAX_ORDER` symbol on purpose,
+and neither do x86 or s390.
+
+What replaced it removes the reason instead of the ceiling, in two parts:
+
+* the image DECLARES its `dom_data` requirement in a non-alloc `.capstone_domreq`
+  section (`JS_STACK=<bytes>` in the build script), so the module stops inferring
+  headroom from code size. That inference gave this domain 12.4 MB of stack nobody
+  chose, and it is what made the region too big in the first place;
+* the monitor accepts the domain's code and data as TWO regions instead of splitting
+  one. The coupling was the whole problem: `__split` divides a single capability, so
+  everything had to be one contiguous block.
+
+The result is a 4,194,304-byte code region and a 4,194,304-byte data region, both
+inside a **stock** kernel's reach. Confirmed in the guest: `/proc/buddyinfo` shows 11
+order columns, i.e. no `CONFIG_ARCH_FORCE_MAX_ORDER` at all.
 
 **The domain is now created and ENTERED.** It runs until
 
-    [CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x10426939c,
+    [CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x10226939c,
                tval = 0x0, badaddr = 0x277fe2be8
+
+The same fault appeared at pc 0x10426939c when the region came from the patched
+kernel: same cause, same badaddr, and the pc differs only by the region base, so it is
+the same instruction. Two regions reproduce the single-region behaviour exactly.
 
 which is a tag check, not an allocation failure -- the expected next problem. The
 prime suspects are `jmem_decompress_pointer` and `ecma_get_pointer_from_ecma_value`:
