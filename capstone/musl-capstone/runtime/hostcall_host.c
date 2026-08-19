@@ -29,7 +29,19 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 
-#define HC_HOST_MAX_ROUNDS 256
+/* The bound exists so a domain that never signals DONE cannot spin the host
+ * forever. 256 was enough for every probe written before mruby's test suite, and
+ * it is NOT enough for that: t_print fflushes after every assertion, so each
+ * printed '.' is its own hostcall, and 43 test files come to tens of thousands.
+ * The first run stopped after 34 assertions with "did not reach DONE after 256
+ * serviced" -- a limit of the harness reported as if it were a result.
+ *
+ * Raised to a million, which is still finite. The bound that actually protects a
+ * wedged run is the harness timeout (run-domain-smoke.py, 30 * multiplier
+ * seconds); this one only has to be large enough that no real workload meets it
+ * and small enough to terminate. Reaching it now means something is genuinely
+ * looping, which is what the message should be read as. */
+#define HC_HOST_MAX_ROUNDS 1000000
 #define HC_HOST_REGION_SIZE HOSTCALL_STDOUT_PROBE_REGION_SIZE
 
 /* REV_TRANSFERRED is not in hostcall_stdout_probe.h, which stops at REV_SHARED
