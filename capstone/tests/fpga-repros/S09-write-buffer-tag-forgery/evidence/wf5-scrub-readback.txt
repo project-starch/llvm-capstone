@@ -1,0 +1,22 @@
+wf5 scrub-readback arm -- RESULT LINES ONLY.
+
+The full console transcript is deliberately NOT included. It is a raw Linux boot log and
+carries third-party module-author emails and a user@host controller string from upstream
+banners, which the repository's name/secret rules exclude from committed content. Nothing in
+those lines is evidence about this defect.
+
+Decode: retval - 0xB0000000 gives a 24-bit field; low 12 bits = tags cleared, next 12 bits =
+scrubs dropped. 3840 slots (WBUF_N=256, WBUF_REPS=15).
+
+[fpga] [uart] 'echo \'### RUNG 1/3 wb0 ###\'; /test-domains/lpc wb0 /test-domains/wb0.dom; rc=$\r\r\n?; echo "### RUNG 1 wb0 END rc=$rc ###"; echo D\'\'N_$rc\r\n### RUNG 1/3 wb0 ###\r\nladder-perf: A/pre-create-dom\r\nDBAS:825E0000\r\nDENT:00000000\r\nladder-perf: wb0 domain ID = 0\r\nECSA:00000000\r\nEXTC:12345678\r\nFNCC:00000009\r\nARG1:0000000C\r\nARG4:00000000\r\nSHA0:00000000\r\nRGID:0000000C\r\nAPRM:00000001\r\nAREV:00000002\r\nSHA1:00000007\r\nSHA2:00000000\r\nBASE:8255E000\r\nALEN:00001000\r\nSHA3:00000002\r\nSHA4:00000001\r\nSHA5:00000000\r\nSHA6:00000000\r\nECSZ:00000000\r\nladder-perf: RESULT wb0 retval=2952790016 cycles=3697029 ran=53406\r\n### RUNG 1 wb0 END rc=0 ###\r\nDN_0\r\n# echo \'### RUNG 2/3 wf1 ###\'; /test-domains/lpc wf1 /test-domains/wf1.dom; rc=$\r\r\n?; echo "### RUNG 2 wf1 END rc=$rc ###"; echo D\'\'N_$rc\r\n### RUNG 2/3 wf1 ###\r\nladder-perf: A/pre-create-dom\r\nDBAS:82600000\r\nDENT:00000000\r\nladder-perf: wf1 domain ID = 1\r\nECSA:00000001\r\nEXTC:12345678\r\nFNCC:00000009\r\nARG1:0000000E\r\nARG4:00000000\r\nSHA0:00000001\r\nRGID:0000000E\r\nAPRM:00000001\r\nAREV:00000002\r\nSHA1:00000009\r\nSHA2:00000000\r\nBASE:82591000\r\nALEN:00001000\r\nSHA3:00000002\r\nSHA4:00000001\r\nSHA5:00000001\r\nSHA6:00000001\r\nECSZ:00000000\r\nladder-perf: RESULT wf1 retval=2952790249 cycles=2127266 ran=53406\r\n### RUNG 2 wf1 END rc=0 ###\r\nDN_0\r\n# echo \'### RUNG 3/3 wf2 ###\'; /test-domains/lpc wf2 /test-domains/wf2.dom; rc=$\r\r\n?; echo "### RUNG 3 wf2 END rc=$rc ###"; echo D\'\'N_$rc\r\n### RUNG 3/3 wf2 ###\r\nladder-perf: A/pre-create-dom\r\nDBAS:82620000\r\nDENT:00000000\r\nladder-perf: wf2 domain ID = 2\r\nECSA:00000002\r\nEXTC:12345678\r\nFNCC:00000009\r\nARG1:00000010\r\nARG4:00000000\r\nSHA0:00000002\r\nRGID:00000010\r\nAPRM:00000001\r\nAREV:00000002\r\nSHA1:0000000B\r\nSHA2:00000000\r\nBASE:82567000\r\nALEN:00001000\r\nSHA3:00000002\r\nSHA4:00000001\r\nSHA5:00000002\r\nSHA6:00000002\r\nECSZ:00000000\r\nladder-perf: RESULT wf2 retval=2952793474 cycles=1102338 ran=53406\r\n### RUNG 3 wf2 END rc=0 ###\r\nDN_0\r\n# \x00'
+[baked] booted; running 2 baked rungs from the shell
+[fpga] emit uart_send <- {'text': "echo '### RUNG 1"}
+[fpga] emit uart_send <- {'text': ' echo "### RUNG '}
+[fpga] [uart] '### RUNG 1/2 wb0 ###'
+[fpga] [uart] 'ladder-perf: RESULT wb0 retval=2952790016 cycles=3697174'
+[fpga] [uart] '### RUNG 1 wb0 END rc=0 ###\r\nDN_0\r\n'
+[baked]   wb0: retval=2952790016 oracle=2952790016 OK
+[fpga] emit uart_send <- {'text': "echo '### RUNG 2"}
+[fpga] emit uart_send <- {'text': ' echo "### RUNG '}
+[fpga] [uart] '### RUNG 2 wf5 END rc=0 ###\r\nDN_0\r\n'
+[baked]   wf5: retval=2953514576 oracle=2952790016 MISMATCH/NO-RESULT
