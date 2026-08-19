@@ -129,6 +129,38 @@ fi
 # 4. link
 "$LD_LLD" -T "$LINKER_SCRIPT" -o "$OUT" "$OBJ_DIR/start.o" "$OBJ_DIR/main.o" "$OBJ_DIR/gct.o"
 
+# 4b. DOMAIN_STACK=<bytes> makes the image DECLARE what it needs instead of leaving the
+# module to infer it from code size. Two passes, because the declaration depends on the
+# carve and the carve depends on the link: pass 1 above is measured by domdata-budget.py
+# (--carve = initializer blob + cap table + per-global storage), the declared total is
+# that plus the requested stack, and pass 2 relinks with the section in.
+#
+# domreq.S is non-alloc, so adding it moves nothing in the loaded image -- deliberately,
+# because this project has a documented layout sensitivity where four added instructions
+# flipped a passing rung. Verified below rather than asserted.
+if [[ -n "${DOMAIN_STACK:-}" ]]; then
+  _carve=$(python3 "$SCRIPT_DIR/domdata-budget.py" "$OUT" --carve)
+  [[ "$_carve" =~ ^[0-9]+$ ]] || { echo "FAIL: --carve gave '$_carve'" >&2; exit 1; }
+  _need=$(( _carve + DOMAIN_STACK ))
+  # Compare the SEGMENTS, not readelf's whole -lW text: that text also lists the
+  # section-to-segment mapping, which of course gains a name, so comparing it makes
+  # the gate fire on every declared build. The question is whether any LOADED byte
+  # moved, and that is exactly the LOAD/NULL offsets and sizes.
+  _segs() { "$CAPSTONE_LLVM_BIN/llvm-readelf" -lW "$1" | grep -E '^  (LOAD|NULL)'; }
+  _before=$(_segs "$OUT")
+  "$CLANG" -target capstone64-unknown-elf -ffreestanding \
+    -DCAPSTONE_DOMREQ_DATA=$_need -DCAPSTONE_DOMREQ_STACK=$DOMAIN_STACK \
+    -c "$SCRIPT_DIR/../domreq.S" -o "$OBJ_DIR/domreq.o"
+  "$LD_LLD" -T "$LINKER_SCRIPT" -o "$OUT" \
+    "$OBJ_DIR/start.o" "$OBJ_DIR/main.o" "$OBJ_DIR/gct.o" "$OBJ_DIR/domreq.o"
+  _after=$(_segs "$OUT")
+  [[ "$_before" == "$_after" ]] || {
+    echo "FAIL: declaring a requirement changed the program headers -- the section is" >&2
+    echo "      not behaving as non-alloc and the image is no longer the one measured." >&2
+    exit 1; }
+  echo "declared: dom_data >= $_need (carve $_carve + stack $DOMAIN_STACK)"
+fi
+
 # static gate: silicon ABI = no cjalr, no gp cincoffset/scc-for-globals; globals
 # reached via ldc gp[i] (the compiler emits `ldc rd, imm(gp)`).
 DIS=$("$CAPSTONE_LLVM_BIN/llvm-objdump" -d "$OUT")
