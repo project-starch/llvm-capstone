@@ -138,9 +138,15 @@ define ptr addrspace(200) @test_ptr_add_neg_i64(ptr addrspace(200) %p, i64 %offs
 
 ; C pointer subtraction returns an integer difference between two capability
 ; cursors. Do not select this as full-width i128 scalar subtraction.
+; The address reads are `mv` (PseudoTRUNC_CAP, i.e. addi rd, rs, 0) and NOT
+; `lcc rd, rs, 2`, which is what this test pinned before 2026-08-15. lcc raises
+; "Unexpected operand type (24)" on an untagged operand per
+; capstone-spec/parts/cap-man-insn.adoc:164-168, so it made `NULL - NULL` fault --
+; ordinary C, and what mruby's VM entry does (vm.c:1120). The subject of this test
+; is unchanged by that: see cap-ptrdiff-untagged.ll.
 ; CHECK-LABEL: test_ptrdiff:
-; CHECK-DAG: lcc [[CUR0:a[0-9]+]], a0, 2
-; CHECK-DAG: lcc [[CUR1:a[0-9]+]], a1, 2
+; CHECK-DAG: mv [[CUR0:a[0-9]+]], a0
+; CHECK-DAG: mv [[CUR1:a[0-9]+]], a1
 ; CHECK: sub a0, [[CUR0]], [[CUR1]]
 ; CHECK: cjalr zero, 0(ra)
 define i64 @test_ptrdiff(ptr addrspace(200) %p, ptr addrspace(200) %q) {

@@ -7921,12 +7921,34 @@ static SDValue lowerSUB(SDValue Op, SelectionDAG &DAG,
   SDValue Offset = Op.getOperand(1);
 
   if (!isCapstoneIntegerOffset(Base) && !isCapstoneIntegerOffset(Offset)) {
-    SDValue BaseCursor =
-        getCapstoneCapabilityCursor(Base, DAG, DL, Subtarget.getXLenVT());
-    SDValue OffsetCursor =
-        getCapstoneCapabilityCursor(Offset, DAG, DL, Subtarget.getXLenVT());
-    SDValue Diff = DAG.getNode(ISD::SUB, DL, Subtarget.getXLenVT(), BaseCursor,
-                               OffsetCursor);
+    // POINTER DIFFERENCE MUST NOT REQUIRE A TAG.
+    //
+    // This used to read both addresses with cap_get_cursor, which selects to
+    // `lcc rd, rs, 2`, and the spec makes that instruction raise "Unexpected
+    // operand type (24)" when x[rs1] is not a capability
+    // (capstone-spec/parts/cap-man-insn.adoc:164-168). So `p - q` faulted
+    // whenever either side was null -- and `NULL - NULL` is what ordinary C
+    // does. mruby's VM entry does exactly that:
+    //
+    //     ptrdiff_t cioff = c->ci - c->cibase;   // vm.c:1120, both null on the
+    //     if (!c->stbase) stack_init(mrb);       // first call, initialised here
+    //
+    // which faulted before a single Ruby instruction had executed.
+    //
+    // A plain TRUNCATE is the same address read WITHOUT the tag requirement: it
+    // selects to PseudoTRUNC_CAP, i.e. `addi rd, rs, 0`, and the spec's opening
+    // paragraph for existing instructions says an ordinary RISC-V instruction
+    // reading a capability register uses its cursor. It is also what this
+    // backend already emits for `(uintptr_t)p`, so the two ways of asking for a
+    // pointer's address stop disagreeing.
+    //
+    // One deliberate difference from lcc, for a case C cannot reach: on a
+    // SEALED capability the integer path reads `base` where lcc(2) reads
+    // `cursor`. A pointer difference over sealed capabilities is not a
+    // meaningful C operation, and nothing in the language can produce one.
+    SDValue BaseAddr = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Base);
+    SDValue OffsetAddr = DAG.getNode(ISD::TRUNCATE, DL, XLenVT, Offset);
+    SDValue Diff = DAG.getNode(ISD::SUB, DL, XLenVT, BaseAddr, OffsetAddr);
     return DAG.getNode(ISD::SIGN_EXTEND, DL, MVT::i128, Diff);
   }
 

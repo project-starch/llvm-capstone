@@ -8,9 +8,15 @@
 
 target datalayout = "e-m:e-pf200:128:128:128:64-p:64:64-i64:64-i128:128-n32:64-S128-A200-P200-G200"
 
+; The address reads are `mv` (PseudoTRUNC_CAP, i.e. addi rd, rs, 0) and NOT
+; `lcc rd, rs, 2`, which is what this test pinned before 2026-08-15. lcc raises
+; "Unexpected operand type (24)" on an untagged operand per
+; capstone-spec/parts/cap-man-insn.adoc:164-168, so it made `NULL - NULL` fault --
+; ordinary C, and what mruby's VM entry does (vm.c:1120). The subject of this test
+; is unchanged by that: see cap-ptrdiff-untagged.ll.
 ; CHECK-LABEL: ptrdiff_signed_positive:
-; CHECK-DAG: lcc [[POS_LHS:a[0-9]+]], a0, 2
-; CHECK-DAG: lcc [[POS_RHS:a[0-9]+]], a1, 2
+; CHECK-DAG: mv [[POS_LHS:a[0-9]+]], a0
+; CHECK-DAG: mv [[POS_RHS:a[0-9]+]], a1
 ; CHECK: sub [[POS_DIFF:a[0-9]+]], [[POS_LHS]], [[POS_RHS]]
 ; CHECK-NEXT: srai a0, [[POS_DIFF]], 2
 ; CHECK-NOT: srli
@@ -27,8 +33,8 @@ define i64 @ptrdiff_signed_positive(ptr addrspace(200) %high,
 
 ; Reverse the subtraction operands to represent the negative-result path.
 ; CHECK-LABEL: ptrdiff_signed_negative:
-; CHECK-DAG: lcc [[NEG_HIGH:a[0-9]+]], a0, 2
-; CHECK-DAG: lcc [[NEG_LOW:a[0-9]+]], a1, 2
+; CHECK-DAG: mv [[NEG_HIGH:a[0-9]+]], a0
+; CHECK-DAG: mv [[NEG_LOW:a[0-9]+]], a1
 ; CHECK: sub [[NEG_DIFF:a[0-9]+]], [[NEG_LOW]], [[NEG_HIGH]]
 ; CHECK-NEXT: srai a0, [[NEG_DIFF]], 2
 ; CHECK-NOT: srli
