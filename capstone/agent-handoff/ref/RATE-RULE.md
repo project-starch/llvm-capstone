@@ -1007,3 +1007,76 @@ structurally cannot reproduce it. No amount of QEMU testing could ever have foun
 **The mechanism is confirmed on hardware.** What remains open is the RTL fix and the provenance
 question (whether the `ctag`/`cap_tag_q` path predates the S-06 work), both with the RTL lane, and
 one reproducibility boot for this result.
+
+# THE FIX WORKS — and a SEPARATE, TRANSIENT residual is confirmed on silicon
+
+Bitstream `caplifive_s07fix.bit`. All runs `PREFLIGHT=0`, i.e. **ungated** (the overlay is 22 MB
+against a 20 MB budget), and labelled as such.
+
+## S-07 is fixed. Every arm, including the one built to catch a bad fix.
+
+| arm | pre-fix | post-fix |
+|---|---|---|
+| `wb1` plain `G+8`; `stc G` | 1107 lost | **0** |
+| `wf1` same, field-checked | 233 lost, 0 corrupt | **0 lost, 0 corrupt** |
+| `wf5` scrub + delayed readback | 176 dropped | **0** |
+| `wb2` `stc G`; plain `G+8` | 15193 | **16384 — exactly the oracle** |
+| `wb0` / `wb3` / `wb4` | 0 | 0 |
+
+**`wb2` = 16384 exactly is a POSITIVE IDENTIFICATION OF THE MECHANISM, not merely a
+non-regression.** Option B (forbid co-residency) serialises the two requests, so the plain store
+clears the tag every single time — exactly 16384. Option A (granule-aware merge) would have
+merged them into one entry and resolved the tag by last-writer-wins inside it, which does not
+produce a clean 16384 and would not have needed serialisation at all. The number distinguishes
+which fix shipped.
+
+**The corrupted-but-tagged bucket stayed 0**, before and after. It exists only because the naive
+fix — propagate the youngest tag — would convert loss into corruption while a tag-only test
+certified success. Detector with a demonstrated negative on both sides; whatever shipped is not
+that mistake.
+
+## A SEPARATE, PRE-EXISTING, TRANSIENT residual — do NOT blame the fix for it
+
+    wr6  scrub G+8, then type-query IMMEDIATELY   3837 / 3840  (99.92%) LIVE CAPABILITY
+    wr7  identical + 300-iteration drain             0 / 3840
+    built-in positive control, both arms:   delayed query saw NOT_CAP 3840/3840 -> FIRES
+
+The pair differs by **exactly the delay** — verified in the disassembly, the only
+instruction-level difference is the drain loop.
+
+**Mechanism** (RTL lane): the co-residency fix is an ALLOCATION-time check between two write
+buffer ENTRIES. This residual needs only ONE entry, so the check never fires and a load never
+consults it:
+
+    stc  G, cap     drains to L1, cap_tag_q[G>>4] = 1
+    sd   x, G+8     ONE plain entry, word 1, STILL RESIDENT
+    ldc  G          granule-aligned -> compares WORD 0, misses the word-1 entry,
+                    falls through to the STALE cap_tag_q -> returns a LIVE capability
+
+**Severity, and the distinction that matters:** the pre-fix dropped scrub was **PERSISTENT** — the
+capability survived indefinitely. This one is **TRANSIENT**, closing completely once the entry
+drains. A program cannot rely on an immediate re-read to confirm it has destroyed a capability;
+it can rely on the destruction having happened once the buffer drains.
+
+**Silicon is far worse than simulation here:** Verilator showed 8 of 16 legs, and the trap handler
+draining between legs is what made that alternate. On silicon it is 99.92% — essentially always.
+The sign was what mattered, and the magnitude is much larger.
+
+### Why `wf5` reported 0 and must not be read as exoneration
+
+`wf5` reads back in a **separate loop** after all 256 slots are stored, so it has a long delay
+built in by construction. It measures the same thing `wr7` measures, which is why it reads 0. A
+correct measurement of the wrong question — the exact failure class added to this project's rules
+the same morning.
+
+## Two caveats on the fix result, both open
+
+* **Provenance unconfirmed.** No `.bit`, no synthesis log, no Vivado log on this machine, and the
+  RTL lane's credential 403s on the remote. The attribution rests on: every tree in which `wb1`
+  can be 0 carries option B and only option B (`618f4ce36` and earlier have no fix; `5c5f4e3a7`
+  through `f231b5af0` are byte-identical in synthesizable logic; options A and C were never
+  implemented). That is inference from the result, not a build record.
+* **WNS unknown**, retiming left `true`. Four clean 0/16384 results argue against a *gross* timing
+  failure, but these arms are narrow and homogeneous — they exercise a thin slice of the design,
+  and a marginal path can be data-dependent and untouched by them. An argument, not a timing
+  report.

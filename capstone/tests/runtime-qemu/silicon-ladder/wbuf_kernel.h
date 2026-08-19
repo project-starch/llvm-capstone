@@ -70,6 +70,9 @@
    was already zero, and a zeroing memset is exactly the case of interest. */
 #define WBUF_SCRUB 0xD15CA5DBAD5C2BA1ul
 #endif
+#ifndef WBUF_DRAIN
+#define WBUF_DRAIN 300u         /* iterations between scrub and check, arm 7 only */
+#endif
 #ifndef WBUF_FIELDS
 #define WBUF_FIELDS 0           /* 1 = also verify start/end/perm/cursor on surviving caps */
 #endif
@@ -173,6 +176,38 @@ static unsigned wbuf_compute(void)
          cannot be told from one where the store landed. */
       wbuf_slots[i] = base;            /* stc: the capability the program then tries to destroy */
       *hi = WBUF_SCRUB ^ (unsigned long)i;   /* the scrub -- YOUNGER, so it MUST clobber */
+#elif WBUF_ARM == 6 || WBUF_ARM == 7
+      /* THE TRANSIENT-RESIDUAL PAIR. Arms 6 and 7 differ by EXACTLY ONE THING: the delay
+         between the scrub and the check. Nothing else.
+
+         WHAT THEY TEST, which is NOT the defect the granule co-residency fix repairs. That fix
+         is an ALLOCATION-time check between two write-buffer ENTRIES. The residual needs only
+         ONE entry, so the check never fires and a load never consults it:
+
+             stc  G, cap     drains to L1, cap_tag_q[G>>4] = 1
+             sd   x, G+8     ONE plain entry, word 1, STILL RESIDENT
+             ldc  G          granule-aligned, so it compares WORD 0, misses the word-1 entry,
+                             and falls through to the STALE cap_tag_q -> LIVE CAPABILITY
+
+         So the probe must be the TYPE QUERY taken IMMEDIATELY, in the same iteration. The
+         existing arm 5 reads back in a SEPARATE LOOP after all slots are stored, which builds
+         in a long delay by construction -- it therefore CANNOT distinguish "no residual" from
+         "residual, checked too late", and its zero must not be read as exoneration.
+
+         arm 6 = tight: check immediately.   arm 7 = same, with a drain delay first.
+         6 non-zero and 7 zero  -> transient forwarding residual, a SEPARATE PRE-EXISTING
+                                   defect that granule co-residency does not claim to repair.
+         6 and 7 both zero      -> no residual visible at this scale.
+         6 and 7 both non-zero  -> NOT transient. That would be serious and is not the
+                                   residual described above. */
+      wbuf_slots[i] = base;                  /* the capability the scrub must destroy */
+      *hi = WBUF_SCRUB ^ (unsigned long)i;   /* the scrub -- younger, MUST clobber the tag */
+#if WBUF_ARM == 7
+      for (k = 0; k < WBUF_DRAIN; k++)       /* let the entry drain before looking */
+        wbuf_sink[k & 63] = (unsigned long)k + r;
+#endif
+      if (wbuf_type((void *)wbuf_slots[i]) != 7ul)
+        corrupt++;                           /* tag STILL LIVE after its scrub */
 #else
       wbuf_slots[i] = base;            /* arm 0: no plain store anywhere near */
 #endif
@@ -199,7 +234,7 @@ static unsigned wbuf_compute(void)
         lost++;                        /* selector, which would RAISE on this value.    */
         continue;
       }
-#if WBUF_FIELDS && WBUF_ARM != 5
+#if WBUF_FIELDS && WBUF_ARM != 5 && WBUF_ARM != 6 && WBUF_ARM != 7
       if (wbuf_start(p)  != ref_start ||
           wbuf_end(p)    != ref_end   ||
           wbuf_perm(p)   != ref_perm  ||
