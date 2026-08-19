@@ -85,16 +85,35 @@ SILICON=(-mllvm -capstone-gp-captable
          ${DOMAIN_EXTRA_DEFS:-})
 
 OBJS=()
-echo "== compiling"
-for u in jerryscript jerryscript-math; do
-  "$CLANG" "${COMMON[@]}" "${SILICON[@]}" -c "$AMALGAM_DIR/$u.c" -o "$OBJ_DIR/$u.o"
-  OBJS+=("$OBJ_DIR/$u.o")
-done
-for f in jerry_domain.c capstone_setjmp.c capstone_libc_extra.c; do
-  "$CLANG" "${COMMON[@]}" "${SILICON[@]}" -DCJ_DEFINE_SETJMP=1 \
-    -c "$SCRIPT_DIR/port/$f" -o "$OBJ_DIR/port_${f%.c}.o"
-  OBJS+=("$OBJ_DIR/port_${f%.c}.o")
-done
+# EVERYTHING THAT OWNS A GLOBAL GOES IN ONE TRANSLATION UNIT.
+#
+# -capstone-gp-captable emits its carve descriptor PER TU and only one survives the
+# link -- the reason this port amalgamates at all. What the first version of this
+# script missed is that the rule does not stop at jerry-core: jerryscript-math.c,
+# jerry_domain.c and capstone_libc_extra.c were separate TUs, so their 11 globals
+# (1,784 bytes, jd_out and the setjmp buffer among them) got NO carved storage.
+# .bss is NOLOAD under this ABI, so those globals had no backing at all, and the
+# first access to one faulted with cause 7 on bounds that belonged to nothing.
+#
+# It stayed hidden because nothing touched them early: the domain died elsewhere
+# first. Arming a setjmp in domain_main made it the very first instruction executed.
+echo "== compiling as ONE translation unit"
+cat > "$OBJ_DIR/one_tu.c" <<'TU'
+#include "jerryscript.c"
+#include "jerryscript-math.c"
+#include "jerry_domain.c"
+#include "capstone_libc_extra.c"
+TU
+"$CLANG" "${COMMON[@]}" "${SILICON[@]}" -DCJ_DEFINE_SETJMP=1 \
+  -c "$OBJ_DIR/one_tu.c" -o "$OBJ_DIR/one_tu.o"
+OBJS+=("$OBJ_DIR/one_tu.o")
+
+# capstone_setjmp.c stays its own TU: it owns NO globals (verified -- 0 OBJECT
+# symbols), and it is register-level assembly that has no business being inlined
+# into a 2.8 MB compile.
+"$CLANG" "${COMMON[@]}" "${SILICON[@]}" -DCJ_DEFINE_SETJMP=1 \
+  -c "$SCRIPT_DIR/port/capstone_setjmp.c" -o "$OBJ_DIR/port_capstone_setjmp.o"
+OBJS+=("$OBJ_DIR/port_capstone_setjmp.o")
 BEEBS_STRING=$SCRIPT_DIR/../beebs/adapted/beebs_freestanding_string.c
 "$CLANG" "${COMMON[@]}" "${SILICON[@]}" -DBEEBS_STRING_LINEAR_SAFE=1 \
   -c "$BEEBS_STRING" -o "$OBJ_DIR/beebs_string.o"
@@ -112,6 +131,32 @@ echo "   ${#softfloat_objs[@]} builtins"
 
 "$CLANG" -target capstone64-unknown-elf -ffreestanding \
   -c "$LADDER/../gct-section-end.S" -o "$OBJ_DIR/gct.o"
+
+# GATE: exactly ONE object may own globals.
+#
+# The gp-captable descriptor is emitted PER TRANSLATION UNIT and only one survives
+# the link, so a global in any other TU gets no carved storage at all. Under this
+# ABI .bss is NOLOAD, so such a global has no backing anywhere and the first access
+# to it faults on bounds that belong to something else entirely.
+#
+# It hid for as long as nothing touched one early: this port shipped 11 unbacked
+# globals (jd_out and the setjmp buffer among them) and still got far enough to
+# fault elsewhere first. MicroPython's port satisfies the invariant -- exactly one
+# object with globals -- which is why it runs.
+echo "== gate: only one TU may own globals"
+_owners=()
+for _o in "${OBJS[@]}"; do
+  _n=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -sW "$_o" 2>/dev/null \
+        | awk '$4=="OBJECT" && $3+0>0 && $7!="UND" && $7!="ABS"' | wc -l)
+  [[ "$_n" -gt 0 ]] && _owners+=("$(basename "$_o"):$_n")
+done
+if [[ "${#_owners[@]}" -ne 1 ]]; then
+  echo "FAIL: ${#_owners[@]} objects own globals; the descriptor is per-TU so only one can be backed." >&2
+  printf '       %s\n' "${_owners[@]}" >&2
+  echo "       Fold the offenders into one_tu.c." >&2
+  exit 1
+fi
+echo "   ${_owners[0]}"
 
 echo "== linking, two passes"
 # The globals offset must clear .text, and .text is only known by linking. Pass 1 at a
