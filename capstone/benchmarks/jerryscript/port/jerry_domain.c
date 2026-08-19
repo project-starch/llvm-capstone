@@ -20,16 +20,29 @@
 #include <string.h>
 /* The amalgamation bundles every public header into one, so this is the whole API. */
 #include "jerryscript.h"
+#include "capstone_setjmp.h"
 
 /* ---- the embedder interface, minimal. Every one of these is required to link;
    the ones with no meaning in a domain say so rather than pretending. */
 
 void jerry_port_init (void) {}
 
+/* Set when the runtime gives up, so domain_main can return the reason instead of
+   the domain simply never coming back. */
+static jmp_buf jd_fatal_env;
+static volatile int jd_fatal_armed;
+static volatile unsigned jd_fatal_code;
+
 void jerry_port_fatal (jerry_fatal_code_t code) {
-  /* A domain has no exit(). Spin: the harness classifies a domain that never
-     returns as a wedge, which is the honest report for "the runtime gave up". */
-  (void) code;
+  /* A domain has no exit(). Spinning here was honest but useless: a wedge says
+     "somewhere after the last marker" and costs a whole boot to learn one bit.
+     Longjmp back to domain_main instead, so a runtime that gives up RETURNS the
+     fatal code. If nothing armed the buffer we are before setjmp and there is
+     nowhere to go, so spin as before rather than jump into a stale frame. */
+  jd_fatal_code = (unsigned) code;
+  if (jd_fatal_armed) {
+    longjmp (jd_fatal_env, 1);
+  }
   for (;;) {}
 }
 
@@ -93,12 +106,116 @@ static unsigned jd_hash (void) {
 
 static const char jd_script[] = "1+1";
 
+/* JD_STAGE: how far this build goes before returning. EVERY stage returns a
+   marker, so a run always yields a result rather than a wedge.
+ *
+ *   0  return at once                     -- is the domain entered at all?
+ *   1  jerry_init + jerry_cleanup
+ *   2  ... + eval of a constant
+ *   3  ... + eval of "1+1"  (the default; identical to the unstaged build)
+ *
+ * Kept OUT of the production path deliberately: at the default the code below is
+ * the same code it was, so a bisection is about the build that matters. Marker
+ * layout stays 0x1E......, with the stage in bits 20..23 and 5 in the low nibble
+ * for "runtime gave up", carrying the fatal code in bits 8..15.
+ */
+#ifndef JD_STAGE
+#define JD_STAGE 3
+#endif
+
+/* JD_TESTS: run a slice of JerryScript's OWN suite instead of one expression.
+ * The batch comes from gen-test-batch.py, which also emits JT_EXPECT_THROW so the
+ * tests/jerry/fail/ group is scored the right way round rather than counted as
+ * 107 failures.
+ *
+ * A test that loops forever takes the batch with it and nothing comes back -- that
+ * is inherent, and the answer is the same as everywhere else here: run slices and
+ * bisect the one that does not return. What must NOT happen is a batch that
+ * quietly reports on fewer tests than it was given, so JT_N is what the generator
+ * wrote and the loop runs all of it.
+ */
+#ifdef JD_TESTS
+#include "jt_batch.inc"
+
+static unsigned jt_run (void) {
+  unsigned pass = 0, fail = 0, first_fail = 0xFF;
+  for (unsigned i = 0; i < JT_N; i++) {
+    unsigned n = 0;
+    while (jt_src[i][n]) n++;
+    jerry_value_t v = jerry_eval ((const jerry_char_t *) jt_src[i], n,
+                                  JERRY_PARSE_NO_OPTS);
+    int threw = jerry_value_is_exception (v) ? 1 : 0;
+    jerry_value_free (v);
+    if (threw == JT_EXPECT_THROW) {
+      pass++;
+    } else {
+      if (first_fail == 0xFF) first_fail = i;
+      fail++;
+    }
+  }
+  /* 9 in the stage nibble marks "test batch". */
+  return 0x1E900000u | ((first_fail & 0xFFu) << 16) | ((pass & 0xFFu) << 8)
+         | (fail & 0xFFu);
+}
+#endif
+
+/* Where the result goes, kept where a longjmp cannot lose it.
+ *
+ * `res` is an ordinary parameter, and capstone_setjmp saves only ra, s0-s11 and sp.
+ * If the compiler keeps res in a caller-saved register or a spill slot, its value
+ * after longjmp is indeterminate by the C standard and by this implementation --
+ * so the "the runtime gave up" marker would be written through a pointer that is
+ * whatever survived. A file-scope volatile is not subject to either. */
+static unsigned *volatile jd_res;
+
 void domain_main (unsigned *res, unsigned func) {
   (void) func;
   jd_out_len = 0;
+  jd_res = res;
 
+#ifdef JD_TESTS
+  if (setjmp (jd_fatal_env)) {
+    /* The runtime gave up mid-batch. Report that, with the fatal code, rather
+       than letting the domain hang and cost a boot to learn one bit. */
+    *jd_res = 0x1EA00000u | ((jd_fatal_code & 0xFFu) << 8) | 5u;
+    return;
+  }
+  jd_fatal_armed = 1;
   jerry_init (JERRY_INIT_EMPTY);
+  *res = jt_run ();
+  jerry_cleanup ();
+  return;
+#endif
 
+  if (setjmp (jd_fatal_env)) {
+    *jd_res = 0x1E000005u | (JD_STAGE << 20) | ((jd_fatal_code & 0xFFu) << 8);
+    return;
+  }
+  jd_fatal_armed = 1;
+
+#if JD_STAGE == 0
+  *res = 0x1E000000u | (JD_STAGE << 20) | 6u;
+  return;
+#else
+  jerry_init (JERRY_INIT_EMPTY);
+#if JD_STAGE == 1
+  jerry_cleanup ();
+  *res = 0x1E000000u | (JD_STAGE << 20) | 6u;
+  return;
+#endif
+#if JD_STAGE == 2
+  {
+    jerry_value_t c = jerry_eval ((const jerry_char_t *) "7", 1, JERRY_PARSE_NO_OPTS);
+    unsigned t = jerry_value_is_number (c) ? (unsigned) (int) jerry_value_as_number (c) : 0xEEu;
+    jerry_value_free (c);
+    jerry_cleanup ();
+    *res = 0x1E000000u | (JD_STAGE << 20) | ((t & 0xFFu) << 8) | 6u;
+    return;
+  }
+#endif
+#endif
+
+#if JD_STAGE >= 3
   jerry_value_t v = jerry_eval ((const jerry_char_t *) jd_script,
                                 sizeof (jd_script) - 1,
                                 JERRY_PARSE_NO_OPTS);
@@ -123,4 +240,5 @@ void domain_main (unsigned *res, unsigned func) {
   if (jd_out_len) {
     *res ^= jd_hash () & 0xFFFF0000u;
   }
+#endif /* JD_STAGE >= 3 */
 }
