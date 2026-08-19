@@ -10730,11 +10730,27 @@ SDValue CapstoneTargetLowering::lowerSELECT(SDValue Op, SelectionDAG &DAG) const
         return V;
       if (C->isZero())
         return DAG.getRegister(Capstone::X0, VT);
-      if (C->getAPIntValue().getActiveBits() > XLenVT.getSizeInBits())
+      // getActiveBits() was WRONG here and rejected every negative constant: as an
+      // i128, -4 is 0xFFFF..FFFC and has 128 active bits, so this bailed and the node
+      // reached ISel as an unselectable i128 SELECT_CC. `c ? (__int128)-4 : 0` is
+      // ordinary C -- i128 is the capability carrier, so any ternary on __int128 is a
+      // 128-bit select -- and it crashed the compiler at every optimisation level.
+      // Repro: tests/compiler-repros/C21-i128-select-of-constants/.
+      //
+      // The rule is the one getI128NumericValueOrFatal already uses for exactly this
+      // question: an i128 constant that is really a NUMBER is representable in XLen
+      // under one signedness or the other. Extend back the way it came, so KCap is
+      // equal to the constant it replaces rather than merely congruent to it.
+      const APInt &Val = C->getAPIntValue();
+      unsigned XLen = XLenVT.getSizeInBits();
+      bool FitsUnsigned = Val.isIntN(XLen);
+      bool FitsSigned = Val.isSignedIntN(XLen);
+      if (!FitsUnsigned && !FitsSigned)
         return SDValue();
-      SDValue KCap = DAG.getConstant(
-          C->getAPIntValue().trunc(XLenVT.getSizeInBits()).zext(VT.getSizeInBits()),
-          DL, VT);
+      APInt Trunc = Val.trunc(XLen);
+      SDValue KCap = DAG.getConstant(FitsUnsigned ? Trunc.zext(VT.getSizeInBits())
+                                                  : Trunc.sext(VT.getSizeInBits()),
+                                     DL, VT);
       Register VReg =
           DAG.getMachineFunction().getRegInfo().createVirtualRegister(
               &Capstone::GPRRegClass);
