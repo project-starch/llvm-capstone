@@ -31,16 +31,46 @@ Selected over mruby, duktape and quickjs on the numbers in the sweep that chose 
 many malloc'd pages. Lua was excluded because it does not file bugs on GitHub, so the
 count said something about the search and nothing about Lua.
 
-## State: it compiles. It does not link, and it has not run.
+## State: it compiles AND links. It has not run.
 
-    ./probe-compile.sh      ->  compiled 200    failed 0    (of 200)
+    ./probe-compile.sh             ->  compiled 200    failed 0    (of 200)
+    ./build-jerryscript-silicon.sh ->  .text 1,370,372   VERDICT: fits
 
-That is phase one of three and it is the cheap one. What is NOT done:
+Linking took three rounds, each one enumerated by the linker rather than guessed:
+eleven soft-float builtins (JS numbers are doubles and this domain has no FP ABI),
+then twenty libm functions, then `log2`. The soft-float set is the shared BEEBS one;
+eighteen of the libm functions come from MicroPython's `lib/libm_dbl` -- **the same
+math the MicroPython port measured with**, which is a real coupling to that checkout
+and a deliberate one, since two runtimes being compared should not differ in their
+transcendentals. `fabs`, `cbrt` and `log2` are implemented in
+`port/capstone_libc_extra.c` and each was checked against the host libm before use.
+`log2` splits off the exponent rather than dividing by ln2, because the obvious form
+returns 2.9999999999999996 for `Math.log2(8)`.
 
-- **libm has no bodies.** 26 functions are declared in `adapted/include/math.h` and
-  used by `ecma-builtin-math.c`; only `nextafter` is implemented here. MicroPython
-  solved this by compiling MicroPython's own `lib/libm_dbl`. JerryScript bundles no
-  libm, so this needs a decision, not just work.
+### The next blocker, found by reading the budget rather than by a fault
+
+    - cap table           48   (3 globals)
+    - storage            144
+
+`jerry_global_heap` is 524,288 bytes in `.bss` and it is NOT among those three. Under
+`-capstone-gp-captable` a global that is not carved is not reachable as data, so the
+heap would fault on first use.
+
+The cause is the build shape, and it was confirmed with a control rather than
+inferred: a single translation unit declaring two globals emits a descriptor with
+`02000000` -- two carves. The descriptor is per translation unit, and this build
+compiles 200 separate objects, of which one survives the link. MicroPython does not
+hit this because it **amalgamates** `py/` and its port into one translation unit, and
+gets 232 carves.
+
+So the next step is an amalgamation, the same shape as
+`../micropython/build-micropython-silicon.sh`. That also brings the collision problem
+that port has already solved twice -- two `lib/` headers defining the same typedef, or
+two modules defining the same static -- for which its `EXTMOD_STATICS` renaming
+mechanism is the precedent.
+
+### Still not done beyond that
+
 - **The capability half is untouched.** `jmem_decompress_pointer` and
   `ecma_get_pointer_from_ecma_value` round-trip through `uintptr_t`, which drops the
   tag; every dereference afterwards is a cause-24 fault. All 51 call sites funnel
