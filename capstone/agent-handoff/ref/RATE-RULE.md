@@ -1142,3 +1142,40 @@ banks of 32: bank 110 spans 192-223, **bank 111 spans 224-255**. 237 is bank 111
 perfectly reachable — empirically, `sw=230` reads `commit pc[7:0]` in the boot-4 transcript.
 Whether a generation marker lives there is a separate question about which tree was synthesized;
 reachability is not the objection.
+
+## PROVENANCE RESOLVED: the bitstream is `f231b5af0`, the STRIPPED tree
+
+Read halted on `caplifive_s07fix.bit`, resident bitstream confirmed by `nvbit()`:
+
+    sw 237 = 0x00        the discriminator
+    sw 236 = 0x00
+    sw 230 = 0x7c        internal control -- three apertures, two distinct values, so the
+                         mux IS being addressed and 0x00 is a reading, not a stuck path
+
+**Deduction, combining two independent measurements:**
+
+1. `237 = 0x00`, and `8'hA5` is a **constant** in the instrument trees, so the bitstream is
+   **not** `5c5f4e3a7` and **not** `6175ea654`. It is `618f4ce36` or `f231b5af0`, both of which
+   carry `commit_instr_id_commit[0].pc[63:56]` there — and `0x00` is exactly the high byte of a
+   low or machine-mode PC.
+2. `wb1` = 0, from 1107, **requires option B**, which rules out `618f4ce36` — that tree contains
+   no fix at all.
+
+**Therefore the bitstream is `f231b5af0`: option B present, instrument absent.**
+
+### This CORRECTS the timeline assumption, and the attribution survives it
+
+The prediction was `0xA5`, on the reasoning that the strip landed at 16:58 and `f231b5af0` at
+17:53, both *after* the flash. The reading says otherwise: the flash came from the stripped tree,
+so it happened after `f231b5af0`, not before.
+
+**Nothing about the fix result changes.** The attribution never depended on the aperture — it
+rests on `wb1` being 0 in a tree where only option B exists — and `f231b5af0` carries option B
+with synthesizable logic byte-identical to `5c5f4e3a7`. The S-07 fix validation stands exactly as
+recorded.
+
+**What it does change:** the earlier note that these results came from an instrument-carrying
+tree is wrong. The bitstream has **no** S-07 instrument, which also explains why every aperture
+in the 230-237 range reads as commit-PC bytes rather than as the batch's readers. Any future
+attempt to read the granule addresses or the correlation bit **on this bitstream** will fail, and
+should not be diagnosed as a broken instrument.
