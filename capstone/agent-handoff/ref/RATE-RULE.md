@@ -1114,13 +1114,30 @@ Quote the silicon number, not the Verilator one. The 8-of-16 seen in simulation 
 artifact: the trap handler runs between legs and drains the write buffer, resetting the phase,
 which is what made that pattern alternate. It was never a probability.
 
-### Aperture note, so a wrong number does not propagate
+### Aperture note — CORRECTED. The provenance aperture is switch 237, NOT 205.
 
-The provenance aperture is **switch 205** (bank 110, `debug_byte_sel = sw[7:5] = 6`, offset 192,
-reg `5'b01101` = 13). Both lanes agree on that.
+**Switch 205 discriminates nothing** and would have produced a plausible-looking reading that
+cannot answer the question — the worst kind. Resolved from source across all four candidate
+trees, bank 111 reg `5'b01101` = **switch 237**:
+
+| tree | switch 237 |
+|---|---|
+| `618f4ce36` | `commit_instr_id_commit[0].pc[63:56]` |
+| `5c5f4e3a7` | **`8'hA5`** |
+| `6175ea654` | **`8'hA5`** |
+| `f231b5af0` | `commit_instr_id_commit[0].pc[63:56]` |
+
+    read SWITCH 237
+      0xA5                        -> instrument-carrying tree, 5c5f4e3a7..6175ea654
+      varying commit-PC high bits -> 618f4ce36 or the stripped f231b5af0
+
+An earlier version of this note said 205, from a derivation that took the offset 192 of four
+sample arms (219/221/222/223) — **all of them in bank 110** — and applied it to an arm in bank
+111. A sample uniform in the variable not being controlled for.
 
 A claim that "237 is impossible because the case value is 5 bits, so the highest reachable
-switch is 223" is **wrong**, and only true within one bank. `debug_byte_sel` selects among eight
+switch is 223" is **wrong**, and only true within one bank. 237 is not merely reachable — it is
+the aperture that carries the answer. `debug_byte_sel` selects among eight
 banks of 32: bank 110 spans 192-223, **bank 111 spans 224-255**. 237 is bank 111 reg 13 and is
 perfectly reachable — empirically, `sw=230` reads `commit pc[7:0]` in the boot-4 transcript.
 Whether a generation marker lives there is a separate question about which tree was synthesized;
