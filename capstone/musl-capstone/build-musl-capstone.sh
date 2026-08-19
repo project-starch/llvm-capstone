@@ -92,6 +92,35 @@ for shadowed in src_errno___errno_location.o src_string_strlen.o \
   rm -f "$OBJ_DIR/$shadowed"
 done
 
+# FILES THE SURVEY CANNOT COMPILE AT ITS OWN LEVEL, RESCUED AT -O0.
+#
+# Same shape as the vfprintf case below and for the same underlying reason: the
+# optimiser re-widens 64-bit integer arithmetic to the POINTER width and leaves
+# an i128 operation instruction selection cannot match. src/stdlib/qsort.c dies
+# with "Cannot select: i128 = xor t6, Constant:i128<-1>" at -O1 and compiles
+# clean at -O0 -- measured both ways, not assumed.
+#
+# It matters because qsort_nr.o (which DOES compile) calls __qsort_r, so any
+# program that sorts fails to link with an undefined hidden symbol rather than
+# with anything that names qsort. mruby's gem test suite is what found it.
+#
+# The real fix is in the backend, alongside the other i128-selection gaps; this
+# list is the holding pattern and should shrink, not grow.
+mapfile -t EXT_FLAGS_EARLY < <(python3 "$SCRIPT_DIR/survey-musl-capstone.py" \
+                                       "$MUSL_SRC_DIR" --print-flags)
+RESCUE_O0=()
+for f in "${EXT_FLAGS_EARLY[@]}"; do [[ $f == -O1 ]] && f=-O0; RESCUE_O0+=("$f"); done
+for rescue in src/stdlib/qsort.c; do
+  obj="$OBJ_DIR/src_$(echo "${rescue#src/}" | tr / _ | sed 's/\.c$//').o"
+  [[ -e $obj ]] && {
+    echo "$rescue now compiles at the survey's own level; drop it from the" >&2
+    echo "rescue list rather than shadowing a good object" >&2; exit 2; }
+  "${CAPSTONE_CLANG:?}" "${RESCUE_O0[@]}" -c "$MUSL_SRC_DIR/$rescue" -o "$obj" || {
+    echo "$rescue does not compile even at -O0; the rescue no longer works" >&2
+    exit 2; }
+  echo "rescued at -O0: $rescue"
+done
+
 # Our own sources, built with the SURVEY's flags. --print-flags rather than a
 # second copy of the list: the archive's members and these must agree on the
 # target, the ABI and -fno-jump-tables, and two lists drift.
