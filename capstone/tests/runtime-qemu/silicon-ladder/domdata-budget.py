@@ -21,9 +21,34 @@ The arithmetic mirrors, and must stay in step with:
 import sys, struct, subprocess, os, re
 
 PAGE = 4096
-# __get_free_pages(GFP_HIGHUSER, order) caps at MAX_ORDER - 1. This kernel's
-# include/linux/mmzone.h has MAX_ORDER 11, so the largest allocation is 1024 pages.
-MAX_ALLOC_ORDER = 10
+
+
+def _max_alloc_order():
+    """__get_free_pages(GFP_HIGHUSER, order) caps at MAX_ORDER - 1.
+
+    READ, do not hardcode. This was a literal 10 until 2026-08-19, when the kernel
+    gained CONFIG_ARCH_FORCE_MAX_ORDER=13 and the literal started reporting DOES NOT
+    FIT for images that load fine. A constant duplicating a config value goes stale
+    silently and the staleness looks exactly like a finding.
+    """
+    root = os.environ.get("CAPSTONE_BUILDROOT_DIR")
+    if root is None:
+        root = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            "..", "..", "..", "caplifive-buildroot")
+    cfg = os.path.join(root, "configs", "kernel.config")
+    if not os.path.exists(cfg):
+        sys.exit(f"domdata-budget: cannot read {cfg}. Set CAPSTONE_BUILDROOT_DIR. "
+                 f"Refusing to guess the allocation ceiling.")
+    with open(cfg) as fh:
+        for line in fh:
+            m = re.match(r"^CONFIG_ARCH_FORCE_MAX_ORDER=(\d+)\s*$", line)
+            if m:
+                return int(m.group(1)) - 1
+    # Symbol absent means the kernel default applies, which is MAX_ORDER 11.
+    return 10
+
+
+MAX_ALLOC_ORDER = _max_alloc_order()
 
 
 def largest_code_len():
@@ -88,6 +113,30 @@ def descriptor(path):
     return count, recs
 
 
+def domreq(path):
+    """The image's declared requirement, or None. Same section the loader reads.
+
+    Kept here rather than re-derived, so this predictor and libcapstone cannot drift:
+    they must agree about what a domain asked for or the verdict is about a different
+    allocation than the one the module will make."""
+    out = readelf(path, "-SW")
+    off = size = None
+    for l in out.splitlines():
+        m = re.search(r"\.capstone_domreq\s+PROGBITS\s+\S+\s+(\S+)\s+(\S+)", l)
+        if m:
+            off, size = int(m.group(1), 16), int(m.group(2), 16)
+            break
+    if off is None or size < 24:
+        return None
+    with open(path, "rb") as fh:
+        fh.seek(off)
+        magic, data_min, stack_min = struct.unpack("<QQQ", fh.read(24))
+    if magic != 0x5145524D4F445043:
+        sys.exit(f"domdata-budget: .capstone_domreq has magic {magic:#x}, expected "
+                 f"CPDOMREQ. Refusing to guess what the image asked for.")
+    return data_min, stack_min
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__); return 2
@@ -113,22 +162,40 @@ def main():
     #        while (1 << order) * PAGE < code_len + DOMAIN_DATA_SIZE + dom_min_free:
     #      so a 2.78 MB image needs order 12 where this reported 11.
     #   2. there is a CEILING and it was never checked. __get_free_pages caps at
-    #      MAX_ORDER - 1, which is 10 in this kernel (mmzone.h: MAX_ORDER 11,
-    #      MAX_ORDER_NR_PAGES = 1 << (MAX_ORDER - 1) = 1024 pages = 4 MiB). Past that
+    #      MAX_ORDER - 1, read from configs/kernel.config (CONFIG_ARCH_FORCE_MAX_ORDER,
+    #      absent = the kernel default 11). Past that
     #      the allocation returns NULL and domain creation fails -- which reads at the
     #      console as "Failed to allocate memory for domain", nothing to do with the
     #      carve arithmetic this script reports on.
     # Keep BOTH in step with the module. A predictor that cannot say DOES NOT FIT for
     # an unloadable image is not a predictor.
     dom_data_size = 4096 * 16                          # DOMAIN_DATA_SIZE
-    dom_min_free = max(2 * code_len, 512 * 1024)       # DOMAIN_MIN_FREE
-    need = code_len + dom_data_size + dom_min_free
+    req = domreq(path)
     pages = (code_len + dom_data_size - 1) // PAGE + 1
     order = 0 if pages == 1 else (pages - 1).bit_length()
-    while (1 << order) * PAGE < need:
-        order += 1
-    tot_size = (1 << order) * PAGE
-    dom_data = tot_size - code_size - MONITOR_SEAL_SIZE
+    data_order = None
+    if req is not None:
+        # A declaring image gets TWO regions (module/capstone.c, ioctl_create_dom):
+        # code alone in one, seal + dom_data in the other. The point is that neither
+        # is sized by the other, so an image that needed a single 16 MiB block needs
+        # two 4 MiB ones -- both inside the stock allocator's reach.
+        while (1 << order) * PAGE < code_size:
+            order += 1
+        data_need = MONITOR_SEAL_SIZE + req[0]
+        dpages = (data_need - 1) // PAGE + 1
+        data_order = 0 if dpages == 1 else (dpages - 1).bit_length()
+        while (1 << data_order) * PAGE < data_need:
+            data_order += 1
+        tot_size = (1 << order) * PAGE
+        dom_data = (1 << data_order) * PAGE - MONITOR_SEAL_SIZE
+        need = data_need
+    else:
+        dom_min_free = max(2 * code_len, 512 * 1024)   # DOMAIN_MIN_FREE
+        need = code_len + dom_data_size + dom_min_free
+        while (1 << order) * PAGE < need:
+            order += 1
+        tot_size = (1 << order) * PAGE
+        dom_data = tot_size - code_size - MONITOR_SEAL_SIZE
 
     secs = sections(path)
     gbase = secs.get(".capstone_gp_initdesc", (None,))[0]
@@ -142,18 +209,35 @@ def main():
         count, recs = d
     table = count * 16
     storage = sum(max(16, (s + 15) & ~15) for s, _a, _o in recs)
+
+    if "--carve" in sys.argv:
+        # Everything dom_data must hold BEFORE any stack. A build adds its stack to
+        # this and declares the sum in .capstone_domreq. Printed alone so a build
+        # script can consume it; the arithmetic lives here only.
+        print(blob + table + storage)
+        return 0
+
     stack = dom_data - blob - table - storage
 
+    if req is not None:
+        print(f"  declared        dom_data>={req[0]:>10}  (stack {req[1]})")
+    else:
+        print(f"  declared        nothing -- module falls back to max(2*code_len, 512K)")
     print(f"  image           code_len={code_len:>10}  code_size={code_size:>10}")
-    print(f"  allocation      pages={pages:<6} order={order:<3} tot_size={tot_size:>10}")
+    if data_order is None:
+        print(f"  allocation      pages={pages:<6} order={order:<3} tot_size={tot_size:>10}")
+    else:
+        print(f"  allocation      TWO regions: code order={order} ({tot_size}), "
+              f"data order={data_order} ({(1 << data_order) * PAGE})")
     print(f"  dom_data        {dom_data:>10}")
     print(f"    - blob        {blob:>10}   (globals_off=0x{globals_off:x} .. code_size)")
     print(f"    - cap table   {table:>10}   ({count} globals)")
     print(f"    - storage     {storage:>10}")
     print(f"    = STACK       {stack:>10}")
-    if order > MAX_ALLOC_ORDER:
+    worst = order if data_order is None else max(order, data_order)
+    if worst > MAX_ALLOC_ORDER:
         biggest = largest_code_len()
-        print(f"  VERDICT: DOES NOT FIT -- order {order} exceeds the kernel's maximum "
+        print(f"  VERDICT: DOES NOT FIT -- order {worst} exceeds the kernel's maximum "
               f"{MAX_ALLOC_ORDER}.")
         print(f"           __get_free_pages would return NULL and domain creation fails "
               f"before anything runs.")
