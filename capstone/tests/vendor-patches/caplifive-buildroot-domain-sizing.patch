@@ -1,0 +1,310 @@
+diff --git c/Makefile w/Makefile
+index 8ec73b9..2db6731 100644
+--- c/Makefile
++++ w/Makefile
+@@ -23,8 +23,18 @@ build: $(CAPSTONE_S_OUTPUT)
+ 	fi
+ 
+ 
++# The .c files here are one-line wrappers that #include the real monitor source,
++# CAPSTONE_S_INPUT. Without naming it as a prerequisite, editing the monitor left the
++# generated assembly untouched -- and it is gitignored, so it is a build artifact that
++# the build would not rebuild. The firmware then compiles the OLD monitor and every
++# check downstream passes, because the image is internally consistent and simply does
++# not contain the change. Cost one wrong bisect on 2026-08-19.
++$(CAPSTONE_S_OUTPUT): $(CAPSTONE_S_INPUT)
++
++# $< not $^: the extra prerequisite above would otherwise be passed to the compiler as
++# a second input file.
+ $(CAPSTONE_S_OUTPUT):%.c.S:%.c
+-	cd "$(CAPSTONE_CC_PATH)" && if ! /bin/sh -c 'cargo run -- --abi capstone $^ -- -I"$(CAPSTONE_S_INCLUDE)" -D__riscv_xlen=64 > "$@"'; then \
++	cd "$(CAPSTONE_CC_PATH)" && if ! /bin/sh -c 'cargo run -- --abi capstone $< -- -I"$(CAPSTONE_S_INCLUDE)" -D__riscv_xlen=64 > "$@"'; then \
+ 		rm -f "$@"; \
+ 		echo "Compilation error. Make sure you supply the correct Capstone-C compiler directory path in CAPSTONE_CC_PATH" >&2; \
+ 		false; \
+diff --git c/package/modcapstone/include/capstone.h w/package/modcapstone/include/capstone.h
+index 26dfb29..331bd7b 100644
+--- c/package/modcapstone/include/capstone.h
++++ w/package/modcapstone/include/capstone.h
+@@ -15,12 +15,25 @@ struct ioctl_dom_create_args {
+     void *code_begin;
+     size_t code_len;
+     size_t entry_offset;
++    // gp-captable ("interpreter-scale") domains reach every global through a cap
++    // table the entry glue builds from a descriptor at the front of dom_data. The
++    // monitor does not copy that descriptor into dom_data on this build, so the
++    // module does it: gp_offset is the byte offset of the globals template
++    // (.capstone_gp_initdesc onward) inside the loaded image. 0 for a domain that
++    // owns no gp-captable globals (nothing to copy).
++    size_t gp_offset;
+     void *s_load_begin;
+     size_t s_load_len;
+     size_t s_entry_offset;
+     size_t s_size;
++    /* Declared requirement from the image's optional .capstone_domreq section.
++       dom_data_min is the whole dom_data need (initializer blob + cap table +
++       per-global storage + stack); stack_min is how much of that is stack and is
++       carried for diagnostics only. Both 0 => the image declares nothing and the
++       module keeps its historical max(2 * code_len, 512 KiB) rule. */
++    size_t dom_data_min;
++    size_t stack_min;
+     dom_id_t dom_id;
+-    // TODO: pass info about the required data region size
+ };
+ 
+ struct ioctl_dom_call_args {
+diff --git c/package/modcapstone/module/capstone.c w/package/modcapstone/module/capstone.c
+index 86e82b5..9d0a2a9 100644
+--- c/package/modcapstone/module/capstone.c
++++ w/package/modcapstone/module/capstone.c
+@@ -22,6 +22,22 @@
+ #define DEVICE_FILE_NAME "capstone"
+ 
+ #define DOMAIN_DATA_SIZE (4096 * 16)
++/* Headroom the domain's allocation must leave beyond the image and DOMAIN_DATA_SIZE.
++ *
++ * The buddy allocator rounds up to a power-of-two page count, so an image landing just under
++ * a boundary gets an allocation with almost nothing left for dom_data -- which is where the gp
++ * cap table, every global's carved storage and the domain stack live. A gp-captable domain
++ * with a few hundred globals then has no room and dies before it runs.
++ *
++ * Restored into package/ on 2026-08-16 after a rebuild discarded it as a build/build-only edit
++ * and SQLite regressed from "creates a domain, faults in the entry glue" to "never creates a
++ * domain at all". Keeping it here is what stops the next rebuild dropping it again. */
++#define DOMAIN_MIN_FREE (512 * 1024)
++/* The monitor (sbi_capstone.c) reserves a smaller "seal" region between the code and
++ * dom_data: DOMAIN_DATA_SIZE there is 16 * DOMAIN_DATA_N (96) = 1536. dom_data.base is
++ * therefore at align16(code_len) + 1536 from the region base. This must track the
++ * monitor's value, not this module's (larger) allocation-slack constant above. */
++#define MONITOR_SEAL_SIZE (16 * 96)
+ #define MAP_SIZE_LIMIT 0x10000000
+ 
+ #define SUCCESS 0
+@@ -84,12 +100,89 @@ static void ioctl_create_dom(struct ioctl_dom_create_args* __user args) {
+ 	unsigned long dom_pages = (dom_tot_size - 1) / PAGE_SIZE + 1;
+ 	unsigned long dom_pages_log2 = dom_pages == 1 ? 0 : (ilog2(dom_pages - 1) + 1);
+ 
++	/* Step the order up until the allocation clears the headroom this domain needs.
++	 *
++	 * The headroom is PROPORTIONAL to the image, floored at DOMAIN_MIN_FREE, rather than a flat
++	 * constant. A flat 4 MiB was tried on 2026-08-16 and broke a 4 KB control domain, which the
++	 * rule then inflated to an 8 MiB region: small domains do not want a huge region and one of
++	 * them faulted (cause 5) where it had been passing. Scaling with code_len leaves every
++	 * domain under 256 KB exactly where it was -- the floor dominates for them -- while an
++	 * interpreter-scale image gets room to recurse.
++	 *
++	 * Why an interpreter needs it: at -O0 with 16-byte pointers a stack frame is roughly twice
++	 * the size it is on an ordinary target, and a recursive-descent compiler walking a nested
++	 * scope exhausted a 522 KB stack. The fault was the FIRST instruction of a callee, its
++	 * `cincoffsetimm sp, sp, -0x80` -- a frame that no longer fits. */
++	unsigned long dom_need;
++	unsigned long data_vaddr = 0, data_paddr = 0, data_size = 0;
++	unsigned long data_pages_log2 = 0;
++	if (m_args.dom_data_min) {
++		/* The image DECLARED what it needs (.capstone_domreq), so nothing here is
++		 * inferred: the code region holds align16(code_len) and the data region holds
++		 * the monitor's 1536-byte seal plus the declared dom_data. Note the seal, not
++		 * this module's far coarser DOMAIN_DATA_SIZE -- a declared requirement is only
++		 * worth having if the sizing around it is exact too. */
++		unsigned long code_size = (((m_args.code_len - 1) >> 4) + 1) << 4;
++		/* TWO regions, not one. The monitor splits a single capability into
++		 * code | seal | data, which is why everything had to be one contiguous
++		 * allocation and why the buddy allocator's maximum order became a ceiling on
++		 * image size -- it capped code_len at 1,376,256 bytes and the largest domain
++		 * that ever ran is 1,375,688 of them. Handing the monitor a separate data
++		 * region decouples the two: each is sized for its own role, and an image that
++		 * needed one 16 MiB block now needs two 4 MiB ones, which the stock allocator
++		 * gives without any kernel change at all.
++		 *
++		 * Both stay POWER-OF-TWO deliberately. Capability bounds are compressed
++		 * (cap_compress.c: base and length quantised to 2^(E+3), E = msb(len) - 12,
++		 * base rounding DOWN and end UP), so a 2^k-sized, 2^k-aligned region is exactly
++		 * representable by construction while an arbitrary byte length is not. QEMU
++		 * hides that by shadowing exact bounds in cap_mem_map; silicon cannot. Exact
++		 * sizing is worth having later, but it needs the granule arithmetic with it,
++		 * and it is not what this change is for. */
++		dom_need = code_size;
++		data_size = MONITOR_SEAL_SIZE + m_args.dom_data_min;
++		/* Restart the order search from what the CODE region needs. The value computed
++		 * above starts from code_len + DOMAIN_DATA_SIZE, which is right when one region
++		 * holds everything and one order too large here whenever that 64 KiB is what
++		 * crosses a power-of-two boundary. */
++		{
++			unsigned long cp = (code_size - 1) / PAGE_SIZE + 1;
++			dom_pages_log2 = cp == 1 ? 0 : (ilog2(cp - 1) + 1);
++		}
++		pr_info("domain declares dom_data >= %lu (stack %lu); code %lu + data %lu\n",
++			(unsigned long)m_args.dom_data_min, (unsigned long)m_args.stack_min,
++			dom_need, data_size);
++	} else {
++		unsigned long dom_min_free = 2 * m_args.code_len;
++		if (dom_min_free < DOMAIN_MIN_FREE) {
++			dom_min_free = DOMAIN_MIN_FREE;
++		}
++		dom_need = m_args.code_len + DOMAIN_DATA_SIZE + dom_min_free;
++	}
++	while (((1UL << dom_pages_log2) * PAGE_SIZE) < dom_need) {
++		dom_pages_log2 += 1;
++	}
+ 	unsigned long dom_vaddr = (unsigned long)__get_free_pages(GFP_HIGHUSER, dom_pages_log2);
+ 	if (!dom_vaddr) {
+ 		pr_alert("Failed to allocate memory for domain.\n");
+ 		return;
+ 	}
+ 
++	if (data_size) {
++		unsigned long p = (data_size - 1) / PAGE_SIZE + 1;
++		data_pages_log2 = p == 1 ? 0 : (ilog2(p - 1) + 1);
++		data_vaddr = (unsigned long)__get_free_pages(GFP_HIGHUSER, data_pages_log2);
++		if (!data_vaddr) {
++			free_pages(dom_vaddr, dom_pages_log2);
++			pr_alert("Failed to allocate the domain's data region (%lu bytes).\n",
++				 data_size);
++			return;
++		}
++		data_paddr = __pa(data_vaddr);
++		pr_info("Domain data region vaddr = %lx, paddr = %lx, size = %lx\n",
++			data_vaddr, data_paddr, (1UL << data_pages_log2) * PAGE_SIZE);
++	}
++
+ 	unsigned long dom_paddr = __pa(dom_vaddr);
+ 	// TODO: do we still need to do this on page granularity?
+ 	pr_info("Domain memory region vaddr = %lx, paddr = %lx\n", dom_vaddr, dom_paddr);
+@@ -97,12 +190,33 @@ static void ioctl_create_dom(struct ioctl_dom_create_args* __user args) {
+ 
+ 	copy_from_user((void*)dom_vaddr, m_args.code_begin, m_args.code_len);
+ 
++	/* gp-captable ("interpreter-scale") domains reach every global through a cap table
++	 * the entry glue builds from a descriptor at the FRONT OF dom_data. The monitor
++	 * copies the code image but NOT that descriptor, so the glue reads count==0 from an
++	 * uninitialised dom_data and faults. Deliver it here: copy the globals template
++	 * [gp_offset, code_len) of the freshly-copied image to dom_data.base, which the
++	 * monitor carves at align16(code_len) + MONITOR_SEAL_SIZE. Source and destination
++	 * never overlap (dst starts past code_len; src ends at code_len). Skipped when
++	 * gp_offset==0 (non-gp-captable domain), so all existing domains are unaffected. */
++	if (m_args.gp_offset > 0 && m_args.gp_offset < m_args.code_len) {
++		unsigned long code_size = (((m_args.code_len - 1) >> 4) + 1) << 4;
++		unsigned long tmpl_len = m_args.code_len - m_args.gp_offset;
++		/* dom_data starts MONITOR_SEAL_SIZE into whichever region holds it: the data
++		 * region when there is one, otherwise just past the code as before. */
++		unsigned long dst = data_vaddr ? (data_vaddr + MONITOR_SEAL_SIZE)
++					       : (dom_vaddr + code_size + MONITOR_SEAL_SIZE);
++		memcpy((void*)dst, (void*)(dom_vaddr + m_args.gp_offset), tmpl_len);
++		pr_info("gp-captable: copied %lu-byte globals template from +%lx to %s dom_data\n",
++			tmpl_len, m_args.gp_offset, data_vaddr ? "the data region's" : "the code region's");
++	}
++
+ 	struct sbiret sbi_res = sbi_ecall(SBI_EXT_CAPSTONE, SBI_EXT_CAPSTONE_DOM_CREATE,
+ 		/* base paddr = */ dom_paddr,
+ 		/* code size = */ m_args.code_len,
+-		/* tot size = */ (1 << dom_pages_log2) * PAGE_SIZE, 
++		/* tot size = */ (1UL << dom_pages_log2) * PAGE_SIZE,
+ 		/* entry offset = */ m_args.entry_offset,
+-		0, 0);
++		/* data paddr = */ data_paddr,
++		/* data size = */ data_paddr ? (1UL << data_pages_log2) * PAGE_SIZE : 0);
+ 	if (sbi_res.error) {
+ 		pr_err("DOM_CREATE failed: paddr=%lx code_len=%lu tot_size=%lx entry_offset=%lx error=%ld value=%ld\n",
+ 			dom_paddr, m_args.code_len, (1 << dom_pages_log2) * PAGE_SIZE,
+diff --git c/package/modcapstone/userspace/lib/libcapstone.c w/package/modcapstone/userspace/lib/libcapstone.c
+index 34abcf5..97c474d 100644
+--- c/package/modcapstone/userspace/lib/libcapstone.c
++++ w/package/modcapstone/userspace/lib/libcapstone.c
+@@ -9,6 +9,7 @@
+ #include <sys/mman.h>
+ #include <sys/stat.h>
+ #include <elf.h>
++#include <stdint.h>
+ #include <fcntl.h>
+ #include "libcapstone.h"
+ 
+@@ -29,6 +30,11 @@ struct ElfCode {
+     unsigned long code_start, code_len;
+     unsigned long loadable_size;
+     off_t size, entry_offset;
++    size_t gp_offset;   /* offset of the gp-captable globals template in the image; 0 if none */
++    /* From the optional .capstone_domreq section. 0 => the image declares nothing and
++       the module falls back to its historical max(2 * code_len, 512 KiB) rule. */
++    unsigned long dom_data_min;
++    unsigned long stack_min;
+ };
+ 
+ static int dev_fd;
+@@ -186,6 +192,53 @@ static int load_elf_code(const char *file_name, struct ElfCode *res) {
+                phdrs[ph_idx].p_filesz);
+     }
+ 
++    /* gp-captable domains carry a .capstone_gp_initdesc descriptor at the front of
++     * their globals template; find its image offset so the kernel module can copy
++     * that template into dom_data (the monitor on this build does not). 0 => the
++     * domain owns no gp-captable globals, so there is nothing to copy. MUST run before
++     * the munmap below -- it reads the section headers from the mapped ELF. */
++    res->gp_offset = 0;
++    /* struct ElfCode is an uninitialised stack variable in every caller, so these
++       MUST be cleared here. Left as-is, an image without .capstone_domreq would hand
++       the module a stack-garbage requirement and it would size the region from it. */
++    res->dom_data_min = 0;
++    res->stack_min = 0;
++    {
++        Elf64_Shdr *shdrs = (Elf64_Shdr *)(((void *)elf_header) + elf_header->e_shoff);
++        Elf64_Half shnum = elf_header->e_shnum;
++        const char *shstr = (const char *)elf_header
++                          + shdrs[elf_header->e_shstrndx].sh_offset;
++        int si;
++        for (si = 0; si < shnum; si++) {
++            const char *nm = shstr + shdrs[si].sh_name;
++            if (strcmp(nm, ".capstone_gp_initdesc") == 0) {
++                res->gp_offset = (size_t)(shdrs[si].sh_addr - loadable_start);
++            } else if (strcmp(nm, ".capstone_domreq") == 0) {
++                /* Deliberately read through sh_OFFSET, not sh_addr: the section is
++                   non-alloc so it has no address, which is the point -- declaring a
++                   requirement must not perturb the loaded image. */
++                if (shdrs[si].sh_size >= 24
++                    && shdrs[si].sh_offset + 24 <= (Elf64_Off)file_stat.st_size) {
++                    const uint64_t *q = (const uint64_t *)
++                        ((const unsigned char *)elf_header + shdrs[si].sh_offset);
++                    if (q[0] == 0x5145524d4f445043ULL) {   /* "CPDOMREQ" */
++                        res->dom_data_min = (unsigned long)q[1];
++                        res->stack_min    = (unsigned long)q[2];
++                    } else {
++                        fprintf(stderr, "Ignoring .capstone_domreq: bad magic %llx\n",
++                                (unsigned long long)q[0]);
++                    }
++                } else {
++                    fprintf(stderr, "Ignoring .capstone_domreq: %llu bytes at %llu, "
++                            "want 24 within a %llu-byte file\n",
++                            (unsigned long long)shdrs[si].sh_size,
++                            (unsigned long long)shdrs[si].sh_offset,
++                            (unsigned long long)file_stat.st_size);
++                }
++            }
++        }
++    }
++
+     munmap(elf_header, file_stat.st_size);
+     close(elf_fd);
+ 
+@@ -198,7 +251,12 @@ static int load_elf_code(const char *file_name, struct ElfCode *res) {
+     res->entry_offset = entry_addr - loadable_start;
+     res->loadable_size = image_size;
+ 
+-    printf("Loadable size = %lu\n", res->loadable_size);
++    printf("Loadable size = %lu, gp_offset = %lx\n", res->loadable_size,
++           (unsigned long)res->gp_offset);
++    if (res->dom_data_min) {
++        printf("Declared dom_data = %lu (stack %lu)\n",
++               res->dom_data_min, res->stack_min);
++    }
+ 
+     return 0;
+ 
+@@ -338,6 +396,9 @@ static dom_id_t create_dom_from_elf(const struct ElfCode *c_code,
+         .code_begin = (void *)c_code->code_start,
+         .code_len = c_code->code_len,
+         .entry_offset = c_code->entry_offset,
++        .gp_offset = c_code->gp_offset,
++        .dom_data_min = c_code->dom_data_min,
++        .stack_min = c_code->stack_min,
+         .dom_id = -1
+     };
+     
