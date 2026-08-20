@@ -12,7 +12,31 @@ Last updated 2026-08-09.
 
 ---
 
-## S-02 — SQLite wedges inside `sqlite3_initialize()` in a pure-capability domain · `OPEN`
+## S-02 — SQLite wedges inside `sqlite3_initialize()` in a pure-capability domain · `RESOLVED as observed 2026-08-20 -- the workload now runs end to end; origin never attributed`
+
+> **RE-VERIFIED 2026-08-20 — NO LONGER MANIFESTS. Directly, not by inference.**
+> `XU` ran the base workload 3/3 on `caplifive_s07fix.bit`, control green, and that workload is
+> literally the failure site of both issues (`sqlite_capstone_domain.c:2014-2027`):
+>
+>     sqlite3_initialize();                                              <- S-02's wedge site
+>     sqlite3_open(":memory:", &db);
+>     CREATE TABLE items(name TEXT NOT NULL, value INTEGER NOT NULL);    <- S-05's exact statement
+>     INSERT INTO items VALUES('alpha',11),('beta',22),('gamma',33);
+>
+> The run emitted `row name=alpha value=11`, `beta 22`, `gamma 33`, with the loop's own
+> `row != 3` count assert passing, then `__CAPSTONE_SQLITE_EXTENDED_PASSED__` and `rc=0`.
+>
+> **Attribution.** S-05's recorded root cause is **S-06**, fixed in silicon and verified
+> 2026-08-14 — consistent, and this is the workload-level confirmation that fix was waiting for.
+> S-02's origin was never attributed and still is not; it is plausibly S-06 and/or S-07, both now
+> fixed, but that is **not demonstrated** and should not be written down as though it were.
+>
+> **What this does NOT establish:** S-02's own `rn1`/`rn2` `RUNSTOP` probe builds were not re-run,
+> so this says the symptom is gone from the workload that defines it, not that those specific
+> images would now pass. n=3. And like every silicon number this week it was taken on a bitstream
+> that misses setup (WNS -10.629) — the S-07 fix is exonerated as the cause of that, and the
+> failing cone is domain-switch machinery, but the caveat is recorded project-wide.
+
 
 **The project's headline blocker.** SQLite must RUN on the FPGA; it has never produced a row there.
 
@@ -236,7 +260,31 @@ capability from a stack slot every iteration and on silicon sporadically returns
 silicon defect for another, and the new `rc=21` at `sqlite3_step` may BE that defect resurfacing.
 Treat `-O1`-vs-`-O0` as two different broken configurations, not as a fix.
 
-## S-05 — SQLite fails building the schema · `OPEN -- SQLITE_CORRUPT at CREATE, now measured with NO other known defect in play`
+## S-05 — SQLite fails building the schema · `RESOLVED as observed 2026-08-20 -- the exact failing CREATE now succeeds; root cause S-06 is fixed`
+
+> **RE-VERIFIED 2026-08-20 — NO LONGER MANIFESTS. Directly, not by inference.**
+> `XU` ran the base workload 3/3 on `caplifive_s07fix.bit`, control green, and that workload is
+> literally the failure site of both issues (`sqlite_capstone_domain.c:2014-2027`):
+>
+>     sqlite3_initialize();                                              <- S-02's wedge site
+>     sqlite3_open(":memory:", &db);
+>     CREATE TABLE items(name TEXT NOT NULL, value INTEGER NOT NULL);    <- S-05's exact statement
+>     INSERT INTO items VALUES('alpha',11),('beta',22),('gamma',33);
+>
+> The run emitted `row name=alpha value=11`, `beta 22`, `gamma 33`, with the loop's own
+> `row != 3` count assert passing, then `__CAPSTONE_SQLITE_EXTENDED_PASSED__` and `rc=0`.
+>
+> **Attribution.** S-05's recorded root cause is **S-06**, fixed in silicon and verified
+> 2026-08-14 — consistent, and this is the workload-level confirmation that fix was waiting for.
+> S-02's origin was never attributed and still is not; it is plausibly S-06 and/or S-07, both now
+> fixed, but that is **not demonstrated** and should not be written down as though it were.
+>
+> **What this does NOT establish:** S-02's own `rn1`/`rn2` `RUNSTOP` probe builds were not re-run,
+> so this says the symptom is gone from the workload that defines it, not that those specific
+> images would now pass. n=3. And like every silicon number this week it was taken on a bitstream
+> that misses setup (WNS -10.629) — the S-07 fix is exonerated as the cause of that, and the
+> failing cone is domain-switch machinery, but the caveat is recorded project-wide.
+
 
 ### 2026-08-10 — ROOT CAUSE: untagged `ldc`/`stc` loses the high 64 bits (new issue S-06)
 
