@@ -38,7 +38,14 @@ SETJMP_SRC="$REPO_ROOT/xlang/lua-cdp/capstone-lua/capstone_setjmp.S"
 GPCT=${MRUBY_GPCT:-0}
 LADDER="$REPO_ROOT/capstone/tests/runtime-qemu/silicon-ladder"
 GPFREE="$REPO_ROOT/capstone/tests/runtime-qemu/gp-free-domain"
-if [[ "$GPCT" != "0" ]]; then
+# MRUBY_GPCT=lto is gp-captable PLUS full LTO, and it is the only variant that can
+# actually be correct for a multi-object domain: the descriptor is emitted per MODULE,
+# so separate objects each get their own and the glue reads only the first. LTO
+# presents one module. See gp-free-domain/multi-tu-slot-collision.sh, which shows both
+# halves in one run. MRUBY_GPCT=1 keeps the non-LTO variant for comparison.
+if [[ "$GPCT" == "lto" ]]; then
+  ARCHIVE=${ARCHIVE:-$CAPSTONE_TMP_ROOT/musl-capstone-build-lto/libc-capstone.a}
+elif [[ "$GPCT" != "0" ]]; then
   # A DIFFERENT ARCHIVE, not the same one relinked. Every member has to be compiled
   # with the flag, so pointing at the default archive would link gp-ABI objects into
   # a gp-captable image and fail in a way that looks like a codegen bug.
@@ -182,6 +189,17 @@ fi
 # second exclusion. After the last assignment there is exactly one place to look.
 if [[ "$GPCT" != "0" ]]; then
   MRUBY_FLAGS+=(-mllvm -capstone-gp-captable)
+fi
+# EVERY C OBJECT MUST BE BITCODE IN THIS MODE, with no exceptions. One native object
+# that defines a global would emit its own descriptor fragment and put the collision
+# straight back; stack_reserve.c is the easy one to forget, and it picks this up only
+# because it is compiled with MRUBY_FLAGS like everything else.
+if [[ "$GPCT" == "lto" ]]; then
+  MRUBY_FLAGS+=(-flto)
+  # Codegen happens in the LINKER under LTO, so the pass has to be re-enabled there.
+  LTO_LINK_FLAGS=(--plugin-opt=-capstone-gp-captable)
+else
+  LTO_LINK_FLAGS=()
 fi
 
 rm -rf "$OBJ_DIR"; mkdir -p "$OBJ_DIR"
@@ -640,7 +658,7 @@ if [[ "$GPCT" != "0" ]]; then
   sed "s/0x10000 + 0x1000/0x10000 + 0x800000/" "$GPFREE/link-gpfree.ld" \
     > "$OBJ_DIR/link-probe.ld"
   "$LD_LLD" --gc-sections -T "$OBJ_DIR/link-probe.ld" -o "$OBJ_DIR/pass1.dom" \
-    "${OBJS[@]}" "$ARCHIVE"
+    "${OBJS[@]}" "${LTO_LINK_FLAGS[@]}" "$ARCHIVE"
   _text=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$OBJ_DIR/pass1.dom" 2>/dev/null | python3 -c '
 import sys,re
 for l in sys.stdin:
@@ -680,7 +698,7 @@ printf 'unsigned long __capstone_stack_reserve = %luUL;\n' "$MRUBY_DOMAIN_STACK"
          -o "$OBJ_DIR/stack_reserve.o"
 
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
-          "${OBJS[@]}" "$OBJ_DIR/stack_reserve.o" "$ARCHIVE"
+          "${OBJS[@]}" "$OBJ_DIR/stack_reserve.o" "${LTO_LINK_FLAGS[@]}" "$ARCHIVE"
 
 # DECLARE THE DOMAIN'S RESOURCE REQUIREMENT, because the module's fallback rule
 # no longer fits an image this size.
@@ -719,6 +737,36 @@ printf 'unsigned long __capstone_stack_reserve = %luUL;\n' "$MRUBY_DOMAIN_STACK"
 # the libc through __capstone_stack_reserve. Emitting the reserve from the same
 # variable is the point -- a build that declared one number and linked another
 # would put the two ends of the region on a collision course silently.
+# UNDER gp-captable THE DECLARATION CANNOT BE heap + stack, because there is no
+# separate heap: malloc's storage is a GLOBAL like any other, carved out of dom_data
+# by the entry glue along with the other 2660. What dom_data has to hold is the
+# monitor's blob copy, the cap table, every global's storage, and then the stack. The
+# heap+stack formula under-declared it by ~350 KB and domdata-budget.py said so --
+# "storage 1191728 ... = STACK -349856 ... DOES NOT FIT" -- which is the whole reason
+# that script exists.
+#
+# The numbers come from the script rather than from a second implementation here: it
+# already parses the descriptor the glue will walk, and two calculations of the same
+# thing drift. A parse that finds nothing is a hard error, never a zero.
+if [[ "$GPCT" != "0" ]]; then
+  _budget=$(PATH="$CAPSTONE_LLVM_BIN:$PATH" python3 \
+    "$REPO_ROOT/capstone/tests/runtime-qemu/silicon-ladder/domdata-budget.py" "$OUT_DOM" 2>&1)
+  _carve=$(printf '%s\n' "$_budget" | python3 -c '
+import re,sys
+t=sys.stdin.read()
+got={}
+for k,pat in (("blob",r"- blob\s+(\d+)"),("table",r"- cap table\s+(\d+)"),("storage",r"- storage\s+(\d+)")):
+    m=re.search(pat,t)
+    if not m: sys.exit("domdata-budget.py printed no %s line; refusing to guess" % k)
+    got[k]=int(m.group(1))
+print(got["blob"]+got["table"]+got["storage"])')
+  [[ "${_carve:-0}" -gt 0 ]] || { echo "could not read the carve size from domdata-budget.py" >&2
+                                  printf '%s\n' "$_budget" >&2; exit 2; }
+  MRUBY_DOMAIN_DATA=$(( _carve + MRUBY_DOMAIN_STACK ))
+  printf 'gp-captable: carve %d + stack %d -> dom_data %d\n' \
+         "$_carve" "$MRUBY_DOMAIN_STACK" "$MRUBY_DOMAIN_DATA"
+fi
+
 # (the three size variables and stack_reserve.o are produced above, before the
 # first link -- see the note there on why they cannot live only down here)
 _segs() { "$CAPSTONE_LLVM_READOBJ" --program-headers "$OUT_DOM" \
@@ -732,7 +780,8 @@ _before=$(_segs)
 # SAME variable this declaration uses, so the module's idea of the split and the
 # allocator's cannot drift apart.
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
-          "${OBJS[@]}" "$OBJ_DIR/domreq.o" "$OBJ_DIR/stack_reserve.o" "$ARCHIVE"
+          "${OBJS[@]}" "$OBJ_DIR/domreq.o" "$OBJ_DIR/stack_reserve.o" \
+          "${LTO_LINK_FLAGS[@]}" "$ARCHIVE"
 # The section is non-alloc, so NOTHING LOADED MAY MOVE. Verified rather than
 # asserted: this project has a documented layout sensitivity where four added
 # instructions flipped a passing run, and a diagnostic that perturbs the image is
