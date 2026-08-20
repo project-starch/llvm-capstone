@@ -371,7 +371,16 @@ static unsigned wbuf_compute(void)
      silently reusing their layout would make it unreadable:
         0xB8 | ratio[11:0] << 12 | corrupt[11:0]
      ratio = cyc_cold * 16 / cyc_warm, i.e. FIXED POINT with 16 = 1.0x, so a ratio of exactly
-     16 means cold and warm were indistinguishable and THE ARM TESTED NOTHING. Clamped, and a
+     16 means cold and warm were indistinguishable and THE ARM TESTED NOTHING.
+
+     WHY A RATIO AND NOT AN ABSOLUTE, and this is the transferable part. The property that
+     matters here -- that the arm cannot report a WRONG verdict, only an honest void one --
+     did not come from any of the controls that were argued over. It came from the choice of
+     representation. A ratio CANNOT say "evicted" when nothing was evicted, because the same
+     quantity appears in both terms and cancels. A detector tells you when the instrument was
+     wrong; a representation that cannot express the wrong answer leaves nothing to detect.
+     Where that option exists it beats any control, and it is worth looking for FIRST rather
+     than after five rounds of adding detectors, which is how it was arrived at here. Clamped, and a
      zero warm total also reports 0 rather than dividing by it. */
   {
     unsigned long ratio = cyc_warm ? (cyc_cold * 16ul) / cyc_warm : 0ul;
