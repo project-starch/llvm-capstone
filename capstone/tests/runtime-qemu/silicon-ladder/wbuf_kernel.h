@@ -258,6 +258,20 @@ static unsigned wbuf_compute(void)
          READS, NOT WRITES, for the walk. Reads create the capacity pressure that evicts and add
          no write-buffer traffic of their own -- writing would put the instrument into the very
          structure under test. */
+      /* WHAT PROVES THE SCRUB HAPPENED -- the mirror of the eviction question, and the
+         answer is that TWO existing arms already control for it, so wr8 does not re-measure
+         it. If the scrub never executed or landed elsewhere, the granule legitimately still
+         holds a capability, the reload correctly shows it, and wr8 reads as "the fix only
+         repaired L1" -- a FALSE NEGATIVE that would send someone after a twice-sampled-ctag
+         bug that is not there.
+           * wr5 is the DIRECT control: it reads the granule's high word back as a scalar and
+             compares against the written pattern, so a dropped scrub is counted outright.
+           * wr7 is the INDIRECT one: wr7 == 0 says the scrub reliably destroys the tag once
+             the buffer drains.
+         wr7's discrimination is only valid because the scrub here is BYTE-IDENTICAL to the
+         one in the arm 6/7 block -- same `hi`, declared once for the whole loop, same
+         expression. If either is ever edited alone, wr7 stops being a control for wr8 and
+         this comment becomes false. Keep them together. */
       wbuf_slots[i] = base;                  /* the capability the scrub must destroy */
       *hi = WBUF_SCRUB ^ (unsigned long)i;   /* the scrub */
       {
@@ -361,6 +375,9 @@ static unsigned wbuf_compute(void)
      zero warm total also reports 0 rather than dividing by it. */
   {
     unsigned long ratio = cyc_warm ? (cyc_cold * 16ul) / cyc_warm : 0ul;
+    /* 0xFFF is a PEG, not a measurement: a small cyc_warm saturates the 12-bit field at 255x.
+       It saturates UPWARD, so the failure direction is safe -- a pegged value still reads as
+       "evicted" -- but do not read 0xFFF as a ratio. */
     if (ratio > 0xFFFul) ratio = 0xFFFul;
     if (corrupt > 0xFFFul) corrupt = 0xFFFul;
     return 0xB8000000u | (unsigned)(ratio << 12) | (unsigned)corrupt;
