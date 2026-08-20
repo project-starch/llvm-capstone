@@ -181,6 +181,24 @@ present at `618f4ce36`. It appears **zero** times. So the absence of `gran_*` is
 how synthesis names this class of signal, **not** evidence of being off the cone. A zero from a
 pattern that provably cannot appear separates nothing.
 
+### TWO ZEROS IN THE SAME REPORT, OPPOSITE EPISTEMIC STATUS
+
+This is the sharpest artefact of the whole investigation and the thing worth carrying forward.
+
+| claim | the zero | can the name survive? | status |
+|---|---|---|---|
+| "the fix's `gran_*` logic is on no violated path" | 0 occurrences | **NO** — `gran_*` appears nowhere in the report, and its pre-existing twin `ni_conflict` is equally absent | **UNSUPPORTED** — separates nothing |
+| "the write buffer's own `req_port_o.data_gnt` is on no violated path" | 0 occurrences attributable to the write buffer | **YES** — `data_gnt` survives; all 10 textual occurrences are one net, `rev_node/dcache_req_ports_rev_rd_res[data_gnt]`, the rev-node **read** port | **SUPPORTED** |
+
+Same report, same kind of claim, same shape of evidence — and one is worthless while the other
+is real. **The only thing that distinguishes them is the denominator check**: can the target
+appear in the set at all? Nothing about the matcher, the line class, or the count tells them
+apart. Three progressively better positive controls were written today and all three passed
+while the claim they supported was wrong.
+
+For the record on how this was actually caught: not by a rule, but by a second reader who kept
+handing the zero back to be re-checked. The rule was written afterwards.
+
 ### What IS established, structurally and independent of names
 
 `gran_hazard` has exactly three occurrences in the RTL — a declaration, one `assign`, and **one
