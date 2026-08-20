@@ -74,8 +74,23 @@ Useful `run-domain-smoke.py` flags:
 | `--timeout-multiplier` | raise for long workloads |
 
 A complete worked example, with both halves and a real pass criterion, is
-`capstone/benchmarks/sqlite/run-sqlite-memory.sh`. **Copy its shape.** It builds both
+`capstone/benchmarks/sqlite/run-sqlite-silicon.sh`. **Copy its shape.** It builds both
 halves, runs them, and requires five specific markers.
+
+> **Changed 2026-08-20, and the old pointer would have cost you a build.** This used to name
+> `run-sqlite-memory.sh`, which **no longer runs**: its domain is 3.34 MB and the module has
+> doubled the allocation since `caplifive-buildroot` `37ed834` (2026-08-12), which halved the
+> largest creatable domain to 2.00 MB of code. It dies at `create_dom` before any SQL, with
+> `Failed to allocate memory for domain.` in the guest `dmesg` (see `ISSUES.md` Q-01).
+> `run-sqlite-silicon.sh` is the better model anyway — it builds in the **silicon configuration**,
+> so what you test under QEMU is what the board runs.
+>
+> **Two traps it documents that any copy must keep.** Resolve and export `OUT_DIR` **before**
+> invoking the build scripts — they each default to a *different* directory, so a late `OUT_DIR`
+> silently splits the domain and the host across two trees. And read both the `.dom` **and** the
+> host from that same `OUT_DIR`: the host links `libcapstone`, which packs the globals offset into
+> `entry_offset`, so a mismatched host runs the wrong geometry — either the loud `0xB10B`
+> blob-does-not-fit error or, worse, a plausible run of the wrong binary.
 
 ---
 

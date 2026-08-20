@@ -16,6 +16,23 @@ SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../../tests/capstone-test-env.sh"
 ROOT=$(cd -- "$SCRIPT_DIR/../../.." && pwd)
 
+# OUT_DIR IS RESOLVED AND EXPORTED **BEFORE** THE BUILDS, and that ordering is the fix.
+#
+# It used to be defined below, after both builds had already run, so each build fell back to its
+# OWN default and they did not agree:
+#     build-sqlite-silicon.sh:33   OUT_DIR:-$CAPSTONE_TMP_ROOT/sqlite-silicon
+#     build-sqlite-host.sh:7       OUT_DIR:-$CAPSTONE_TMP_ROOT/sqlite-build
+# The domain landed in sqlite-silicon and the host in sqlite-build, while the run below reads BOTH
+# from $OUT_DIR. Result: `cp: cannot stat '.../sqlite-silicon/sqlite_host.user'` and the script
+# exits 1 having built everything correctly.
+#
+# WORTH KNOWING HOW IT GOT THIS WAY: the block below documents fixing exactly this class of bug for
+# the .dom, and the host READ was fixed with it (:46) -- but the host BUILD was left using its own
+# default. So a fix for the OUT_DIR-OVERRIDE case broke the DEFAULT case, which is why the failure
+# looks like it should never have worked and yet this arm passed on 2026-08-14.
+OUT_DIR=${OUT_DIR:-$CAPSTONE_TMP_ROOT/sqlite-silicon}
+export OUT_DIR
+
 bash "$SCRIPT_DIR/build-sqlite-silicon.sh"
 bash "$SCRIPT_DIR/build-sqlite-host.sh"
 

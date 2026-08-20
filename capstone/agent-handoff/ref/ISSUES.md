@@ -214,11 +214,52 @@ based on a single run is meaningless here — report k of n.
 Measured on `caplifive_s06s08fix_s07tag2_618f4ce.bit`, 2026-08-18: **k=1 wedge in n=7** reps of
 `XU` across two boots (4 pass; then pass, pass, wedge).
 
-## Q-01 — the QEMU SQLite reference arm cannot create its domain · `ROOT-CAUSED 2026-08-20, fix is to shrink the build`
+## Q-01 — `run-sqlite-memory.sh` cannot create its domain · `RESOLVED 2026-08-20 — a WORKING QEMU reference exists and now runs`
+
+> **RESOLUTION, and the framing below was wrong in one important way.**
+>
+> **The QEMU reference works. Verified 2026-08-20**, exit 0 with all five markers in the serial
+> log and zero failure signals: `row name=alpha value=11` / `beta 22` / `gamma 33`,
+> `__CAPSTONE_SQLITE_EXTENDED_PASSED__`, `__CAPSTONE_SQLITE_MEMORY_PASSED__`.
+>
+> **RETRACTED: "we have no reference model to attribute a future silicon failure against."** That
+> was written without checking whether a second QEMU path existed. It does —
+> **`run-sqlite-silicon.sh`** runs the *silicon-config* domain under QEMU with the same five
+> markers, and it is the **better** reference on the merits: same build configuration as the board,
+> which `run-sqlite-memory.sh` never was. Its domain is 1.38 MB and the build's own gate reports
+> `pages=673  order=10  VERDICT: fits`.
+>
+> **It needed one repair of its own**, and it is a good bug. `OUT_DIR` was resolved *after* both
+> builds ran, so each fell back to its own default — domain to `sqlite-silicon/`
+> (`build-sqlite-silicon.sh:33`), host to `sqlite-build/` (`build-sqlite-host.sh:7`) — while the
+> run reads both from `$OUT_DIR`. It died on `cp: cannot stat '.../sqlite_host.user'` having built
+> everything correctly. An earlier fix had corrected how the host path is **read** (`:46`) but not
+> where it is **built**, so **a fix for the OUT_DIR-override case broke the default case**. Fixed
+> by resolving and exporting `OUT_DIR` before the builds.
+>
+> **`run-sqlite-memory.sh` remains broken and that is now a low-priority cleanup**, not a blocker:
+> it is the older, non-silicon build, it is not in the nightly, and the arm we actually want works.
+> Either rebuild it at silicon config or retire it — but `ref/HOW-TO-RUN-ON-QEMU.md` cites it as
+> the shape to copy, so it cannot simply be left rotting.
 
 `run-sqlite-memory.sh` -- the QEMU arm of the SQLite correctness suite -- fails **before any
 SQL runs**. The host loads the ELF, then `create_dom` returns an ioctl error (`SQ: X/fail`,
 `obs=-1`). Not in the nightly rotation, so nothing was guarding it.
+
+**AND IT USED TO WORK — the cause is a dated, deliberate change, not size drift.**
+`caplifive-buildroot` `37ed834` (2026-08-12), *"Match the board's domain geometry, so QEMU is
+usable as an oracle again"*, changed the module's allocation:
+
+    -  dom_tot_size = code_len + DOMAIN_DATA_SIZE;                     /* 64 KiB */
+    +  dom_headroom = code_len > DOMAIN_DATA_SIZE ? code_len : DOMAIN_DATA_SIZE;
+    +  dom_tot_size = code_len + dom_headroom;                         /* DOUBLES it */
+
+That **halved the largest creatable domain: 3.94 MB of code -> 2.00 MB.** The memory build is
+3.34 MB, so it fitted before and does not now. Nothing about SQLite changed.
+
+**Do NOT revert it.** The change is correct for its purpose — it makes QEMU carve domains the way
+the board does, which is the whole point of an oracle. Its own added comment says so. It simply
+halved a ceiling, and the one arm over that ceiling was not in the nightly, so nothing caught it.
 
 **Root cause, from the guest's own `dmesg` rather than inferred:**
 
