@@ -312,7 +312,37 @@ Each step either costs no boot or answers one question.
 
 - [ ] **4c. Root-cause the method-cache fault.** Matched pair: default ABI + LTO.
 
-- [ ] **5. Core mrbtest suite, gp-captable. One boot.**
+- [~] **5. Core mrbtest suite, gp-captable + LTO. RUN 2026-08-21. Gets in, then
+      makes a wild jump.** Reached S1, S2 and T1 through T3 -- driver installed,
+      `assert.rb` loaded, core tests started -- ran **16 assertions**, then:
+
+          [CAPSTONE] domain halted by capability fault: cause = 2,
+                     pc = 0x2033f5978, tval = 0x0, badaddr = 0x101442000
+
+      **A DIFFERENT FAILURE FROM THE METHOD-CACHE ONE.** cause 2 is an illegal
+      instruction, not a capability type error, and the pc is nowhere near the
+      image: code sits around 0x1016xxxxx and dom_data around 0x101aa2000, while
+      0x2033f5978 is outside both. badaddr 0x101442000 is below both regions too.
+      That is a wild control transfer, i.e. a corrupted return address or function
+      pointer, not a bad access through a known-bad pointer.
+
+      Ruled out, cheaply:
+      * **Heap exhaustion.** `fails=0` at every checkpoint, and the last reading is
+        `LIBCHEAP after-assert: used=197168 of=1048576`.
+      * **Stack.** The budget gives this image 280768 bytes of stack after the
+        carve. The default-ABI build passes this same suite with 262144, i.e. LESS.
+        A shortage that only bites the larger allowance is not a shortage.
+
+      gp fabrications: zero again.
+
+      So two distinct failures now sit under gp-captable + LTO on a workload that
+      passes under the default ABI, and **one experiment discriminates for both**:
+      default ABI **with** LTO. If it fails the same ways, the fault is LTO's
+      codegen and gp-captable is exonerated; if it passes, the ABI is implicated.
+      That is step 4c, and it is now the highest-value next run rather than one of
+      several options.
+
+- [ ] **5b. Core mrbtest suite, after 4c.**
       678 assertions, comparable against today's 674 OK / 2 skipped / 2 KO.
 
 ## Acceptance criterion
