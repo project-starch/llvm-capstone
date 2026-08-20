@@ -1,4 +1,21 @@
-# The bitstream misses timing by 10.6 ns — and it is the domain switcher, not the S-07 fix
+# The bitstream misses timing by 10.6 ns — origin is the domain switcher, but the cone runs through the write buffer
+
+> ## THE FILENAME AND THE ORIGINAL TITLE ARE SUPERSEDED — 2026-08-20
+>
+> This note was first committed as *"…not the S-07 fix"* and asserted the fix was **exonerated**.
+> **That claim is WITHDRAWN.** The filename is kept so existing citations resolve; the title above
+> is the corrected one.
+>
+> The violated paths **do** traverse `i_wt_dcache_wbuffer` and `i_wt_dcache_mem` — **44 of 384**
+> distinct netlist resources on the ten violated paths are under the write buffer or the dcache.
+> Every earlier dcache claim in this note matched on `Source:`/`Destination:`, which name only the
+> two **ENDS** of a path and never its interior. The interior is in the netlist-resource column,
+> and nobody looked at it until the third pass.
+>
+> What is now established, and what is not, is set out in **"Is the fix on the cone?"** below.
+> Short version: the *logic-depth* mechanism is refuted structurally; a *placement/congestion*
+> mechanism cannot be excluded from these reports. **The fix is not exonerated — it is
+> undetermined.**
 
 **Date:** 2026-08-20
 **Build analysed:** `fpga-e1140aeea.tar.gz` (archived synthesis output, `/tmp/capstone/_bitstreams`)
@@ -122,14 +139,93 @@ Three independent facts, each verified from git rather than taken on report:
    byte-identical across the range, and `capstone_dom_switcher.anvil` last changed at
    `25035c4c0` (2026-08-14) — an ancestor of `618f4ce36`, the healthy reference.
 
-For the S-07 fix to have caused this, a change confined to the inside of one cache module would
-have to create a 123-level, 50.5 ns path in the domain switcher — or move 96727 endpoints. There
-is no mechanism.
+**None of these three facts comes from the timing reports.** They are properties of the git
+history, checkable without a Vivado machine. They establish that the cone **originates** outside
+the cache, in a module we have not touched since before the healthy reference. They do **not**
+establish that our added logic is off a cone that demonstrably runs *through* our own module.
 
-**None of these three facts comes from the timing reports**, which is why the exoneration is
-unaffected by the retraction above. They are properties of the git history and are checkable
-without a Vivado machine. The retracted figure was corroboration that turned out to be vacuous;
-it was never the argument.
+## Is the fix on the cone?
+
+**The paths do traverse the write buffer.** 44 of 384 distinct netlist resources across the ten
+violated paths are under `i_wt_dcache_wbuffer`, `i_wt_dcache_mem`, `i_wt_dcache_ctrl` or
+`i_wt_dcache_missunit` — real RTL signals, not optimiser debris:
+
+```
+i_wt_dcache_mem/i_rr_arb_tree/rd_req_masked[0]      i_wt_dcache_ctrl/rd_ack[0]
+i_wt_dcache_mem/i_rr_arb_tree/vld_sel_d[0]          i_wt_dcache_ctrl/address_tag_q[43]
+i_wt_dcache_wbuffer/data_rdata_q[63]_i_20/O         i_wt_dcache_mem/rd_hit_oh_q[7]
+```
+
+Every one of these is on the **read / tag-check** side of the write buffer.
+
+### The name-based check is unusable here, and this is provable
+
+```
+distinct netlist resources in the report          4160
+  matching wbuffer|dcache                           44     <- matcher fires
+  matching gran_hazard|gran_conflict|gran_eq|...      0
+  matching ni_conflict                                0     <- THE CONTROL
+  matching wbuffer_wren                               0
+  matching txblock|tx_stat                            0
+```
+
+`ni_conflict` is the fix's **structural twin**: same module, same accept-point expression
+(`if (!ni_conflict && !gran_hazard)`), same kind of signal — and it **pre-dates the fix**, being
+present at `618f4ce36`. It appears **zero** times. So the absence of `gran_*` is a property of
+how synthesis names this class of signal, **not** evidence of being off the cone. A zero from a
+pattern that provably cannot appear separates nothing.
+
+### What IS established, structurally and independent of names
+
+`gran_hazard` has exactly three occurrences in the RTL — a declaration, one `assign`, and **one
+use**:
+
+```
+:213  logic gran_hazard;
+:493  assign gran_hazard = |gran_conflict;
+:722  if (!ni_conflict && !gran_hazard) begin      <- the only use
+:725      req_port_o.data_gnt = 1'b1;              <- and the wbuffer_d next-state writes
+```
+
+Its entire combinational fanout is `req_port_o.data_gnt` on **port 3, the store port**, plus the
+`wbuffer_d` next-state writes. Meanwhile the read side the violated paths traverse is:
+
+```
+:415  assign rd_req_o = |tocheck;
+:486  assign tocheck[k] = (~wbuffer_q[k].checked) & valid[k];     <- wbuffer_q is a REGISTER
+```
+
+**`gran_hazard` reaches `rd_req_o` only through a flop.** It therefore cannot contribute
+combinational depth to the traversed read/tag-check path. Corroborating: the single `data_gnt`
+net anywhere on the violated paths is `rev_node/dcache_req_ports_rev_rd_res[data_gnt]` — the
+rev-node **read** port, a different port from the one `gran_hazard` gates.
+
+### What is NOT established
+
+**A placement and congestion mechanism cannot be excluded from these reports.** 82% of the
+critical path delay is *routing*, not logic, and the device is at ~83% LUT occupancy. Adding
+combinational logic anywhere in a design that full can perturb placement globally and lengthen
+routes in an unrelated cone. That is second-order and speculative — but it is a mechanism, it is
+not addressed by the register-boundary argument above, and nothing in these reports rules it out.
+
+**Verdict: the fix is NOT exonerated. It is undetermined**, with the direct logic-depth mechanism
+refuted and only a second-order placement mechanism surviving.
+
+### The discriminator, which is no longer optional
+
+Re-run implementation on `618f4ce36` **unchanged** (~2h, no board, no reflash) and compare the
+violated cone. If the same `cur_idx_q_reg[1]` cone fails there at a comparable slack, the effect
+is long-standing and not ours. This was previously called moot on the strength of a figure since
+retracted twice; it is now the direct test.
+
+Faster, if anyone has the routed checkpoint:
+
+```tcl
+report_timing -nworst 1 -max_paths 100000 -slack_lesser_than 0 -sort_by slack
+report_timing -through [get_nets -hier *gran_hazard*]
+get_nets -hier -filter {NAME =~ *gran_*}     ;# the positive control for the line above
+get_nets -hier -filter {NAME =~ *ni_conflict*} ;# and the pre-existing twin, for calibration
+```
 
 ## Contributing factor: the design is near capacity
 
@@ -161,7 +257,9 @@ than an RTL change.
 
 ## What this does and does not do to the S-07 results
 
-**Does:** removes the S-07 fix as a candidate cause. The exoneration is decisive.
+**Does NOT exonerate the fix.** That claim was made in the first version of this note and is
+withdrawn — see the banner and "Is the fix on the cone?" above. The direct logic-depth mechanism
+is refuted structurally; a placement/congestion mechanism survives and is untested.
 
 **Does not:** make the results unconditional by itself. They were taken on a bitstream that
 fails setup timing. What supports them is unchanged and independent:
