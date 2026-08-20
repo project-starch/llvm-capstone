@@ -84,7 +84,7 @@ OUT = os.environ.get("PROBE_SCOPED_OUT") or "/tmp/capstone/sqlite-stages.txt"
 # reads: on the gen-3 probe, 220 is the SELFTEST TRIGGER, which injects a synthetic LDC
 # record. Landing on it -- even in passing -- destroys the record the boot exists to read.
 #
-# THE DWELL COUNTER DOES NOT PROTECT AGAINST THIS. ~21 ms of required stability defeats
+# THE DWELL COUNTER DOES NOT PROTECT AGAINST THIS. ~42 ms of required stability defeats
 # contact BOUNCE, which is what it is for. It does not defeat a slow TRANSIT: a value that
 # is merely passed through is held for the same duration class as one deliberately applied,
 # so it fires identically. Time cannot fix it; only ORDER can.
@@ -104,9 +104,12 @@ OUT = os.environ.get("PROBE_SCOPED_OUT") or "/tmp/capstone/sqlite-stages.txt"
 # trigger is unrecoverable for that boot.
 DESTRUCTIVE_SWITCHES = frozenset({220})
 
-# LED PULSE-STRETCHER SETTLE. Each LED bit is held high for 2^20 core cycles (~21 ms at
-# 50 MHz) after it was last driven, so a reading taken sooner is an OR across apertures.
-# 0.5 s is ~24 windows -- generous on purpose, since the cost is seconds per sample and the
+# LED PULSE-STRETCHER SETTLE. Each LED bit is held high for 2^20 core cycles. THAT IS ~42 ms
+# ON THIS BOARD, not ~21: the core clock is clk_out1 at 25 MHz (ariane_xilinx.sv:1196, and the
+# routed summary gives clk_out1_xlnx_clk_gen a 40.000 ns period). The 21 ms figure is the
+# 50 MHz instantiation at :1209, a different board. Held after it was last driven, so a
+# reading taken sooner is an OR across apertures.
+# 0.5 s is ~12 windows at the true 42 ms -- still generous, since the cost is seconds per sample and the
 # failure mode is a decoded verdict that looks entirely plausible.
 # BOTH S-07 RECORDS ROLL. THEY ARE NOT ONE-SHOTS, AND THIS DRIVER USED TO SAY THEY WERE.
 #
@@ -154,7 +157,7 @@ def settled_halted_read(console, C, aperture, parks=(0, 224), settle=None, fresh
     3. THE FIRST EVENT IS THE TRANSIENT, NOT THE ANSWER. Immediately after the walk the byte is
        the OR of the park and the target (the pulse stretcher). The first event therefore
        carries contamination. Wait for it only to prove the path is LIVE, then let the extra
-       bits decay (~21 ms) and take the settled payload.
+       bits decay (~42 ms on this board) and take the settled payload.
 
     Returns None when no park produced an event, which then means genuinely unreadable rather
     than "we were looking the wrong way".
@@ -182,6 +185,10 @@ def settled_halted_read(console, C, aperture, parks=(0, 224), settle=None, fresh
 
 
 
+# One LED pulse-stretcher window: 2^20 core cycles at 25 MHz = 41.9 ms. Named so the
+# figure lives in ONE place -- it was wrong in four comments, all inherited from a
+# 50 MHz board, and a wrong window silently halves every settle derived from it.
+LED_WINDOW_S = 2**20 / 25e6
 LED_SETTLE_S = float(os.environ.get("LED_SETTLE_S") or 0.5)
 # How long to wait for a FRESH led_state payload before falling back to the cached one.
 LED_FRESH_TIMEOUT_S = float(os.environ.get("LED_FRESH_TIMEOUT_S") or 5.0)
@@ -1205,7 +1212,8 @@ def main():
                     """Read one debug-mux aperture, defending against the LED PULSE STRETCHER.
 
                     THE LEDS ARE NOT A SNAPSHOT. `ariane_xilinx.sv:956-979` holds each LED bit
-                    HIGH for 2^20 cycles (~21 ms at 50 MHz) after the last cycle that bit was
+                    HIGH for 2^20 cycles -- ~42 ms at this board's 25 MHz core clock, NOT the
+                    ~21 ms of the 50 MHz variant -- after the last cycle that bit was
                     driven. So a naive read returns the bitwise OR of EVERY aperture displayed
                     in the preceding window -- and the switch walk visits several on the way.
 
@@ -1249,7 +1257,7 @@ def main():
                     # pushes led_state ON CHANGE, and a halted core's mux input is static, so the
                     # value settles and nothing is emitted -- which reads as "unreadable" when it
                     # actually means "clean". Walking to aperture 0 and back ORs in a transient,
-                    # and ~21 ms later the extra bits decay off leaving the target's true value,
+                    # and ~42 ms later the extra bits decay off leaving the target's true value,
                     # which IS a change and so is emitted.
                     def _sample():
                         # THE FORCED TRANSITION MUST HAPPEN AFTER THE MARK, NOT BEFORE IT.
@@ -1267,7 +1275,12 @@ def main():
                         # Each sample now forces its own emit: park at 0, mark, walk back, wait.
                         if _force_emit:
                             set_switch_value(console, 0)
-                            time.sleep(0.05)
+                            # 2 FULL STRETCHER WINDOWS. This was 0.05 s, chosen when the window
+                            # was believed to be ~21 ms (~2.4 windows). At the true ~42 ms it was
+                            # ~1.2 windows -- barely one -- so the "extra bits decay off" step
+                            # this comment describes was not reliably complete before the walk
+                            # back. Lengthening only ever costs time.
+                            time.sleep(LED_WINDOW_S * 2)
                         _mark = console.now()
                         if _force_emit:
                             set_switch_value(console, _sw)
@@ -1870,7 +1883,7 @@ def main():
                             #
                             # `debug_led` has exactly one driver, the cva6 mux, but its inputs
                             # include per-cycle signals (commit pc bytes, GPR/vaddr bytes). Each
-                            # LED bit is then held high for 2^20 cycles (~21 ms) by the pulse
+                            # LED bit is then held high for 2^20 cycles (~42 ms at 25 MHz) by the pulse
                             # stretcher in ariane_xilinx.sv:956-979. A WEDGED core is not idle --
                             # it spins in M-mode, committing continuously -- so those inputs keep
                             # toggling, the stretcher keeps reloading, and the byte saturates.
