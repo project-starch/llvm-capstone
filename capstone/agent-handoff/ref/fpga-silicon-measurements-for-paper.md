@@ -539,9 +539,15 @@ rare; usually honesty costs you something.
 
 ### Caveats — do not drop these
 
-- **This is still an estimate, not a measurement of SQLite.** SQLite has not run on the
-  board. Both rows depend on modelled borrow counts, which is the larger uncertainty —
-  bigger than the CPI input this section fixes.
+- **This is still an estimate, not a measurement of SQLite.** Both rows depend on modelled
+  borrow counts, which is the larger uncertainty — bigger than the CPI input this section
+  fixes.
+  *(UPDATED 2026-08-20. This caveat previously read "SQLite has not run on the board."
+  That is no longer true — SQLite now runs its full self-checking workload on silicon and
+  passes, 3/3, control green. **The caveat itself still stands**, for a different reason:
+  what silicon has demonstrated is CORRECTNESS, not timing. No admissible cycle number
+  exists from those runs, so these rows remain an estimate. Do not read the correctness
+  result as a performance measurement.)*
 - **CPI is workload-dependent**, 2.01–3.15 even across five small kernels. Using ≈2 is
   the conservative choice *within* the measured range; quoting 3.15 would halve the
   overhead again but is not defensible.
@@ -556,7 +562,10 @@ rare; usually honesty costs you something.
 ## 4b. SQLite in the SILICON config — QEMU, 2026-07-28 (NEW)
 
 SQLite had **never been compiled for the silicon ABI** before this date; the paper's
-own text still says "SQLite has not run on the board." Both halves now run under QEMU
+own text still says "SQLite has not run on the board." *(As of 2026-08-20 that sentence in
+the paper is stale and needs the project lead's attention: SQLite has now run on the board
+and passes its correctness workload. Flagged here rather than edited — `capstone/paper/` is
+not ours to change.)* Both halves now run under QEMU
 in the full silicon configuration (`-capstone-gp-captable` + gp-free call/ret +
 shrink off + `-fno-jump-tables`, one module, descriptor-driven entry glue):
 

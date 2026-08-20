@@ -1,6 +1,32 @@
 # Next step
 
-## 0. CURRENT — 2026-08-17. S-07 case (a) is REFUTED on hardware; next step needs a reflash.
+## 0. CURRENT — 2026-08-20. S-07 is FIXED and SQLite passes its correctness workload on silicon.
+
+**Everything below this section is the record of how we got here, not the current state.**
+
+* **S-07 fixed in RTL and validated on silicon.** Directed arms 1107 -> 0; `wb2` returns exactly
+  16384. The fix is **exonerated by measurement** as a cause of the flashed bitstream's timing
+  failure: -6.196 ns through its own nets against a design WNS of -10.629, and the failing cone is
+  `dom_switcher` machinery we never touched.
+* **SQLite runs its full self-checking workload, 3/3, control green** — `EXTENDED_PASSED`,
+  `MEMORY_PASSED`, `rc=0`. **S-02 and S-05 are consequently resolved** and archived out of
+  `ISSUES.md`.
+* **The rate is NOT established.** Three reps only; at the pre-fix ~12.5%/rep,
+  P(0 wedges | still broken) = 0.67. n≈30 (~3 boots, uniform domains) takes that to 0.018.
+* **Correctness, not performance.** No admissible timing number exists from these runs.
+
+**Open, and none of it blocks the others:**
+
+1. **Rate ladder to n≈30** — needs the board, competes with the S-10 reflash.
+2. **Q-01 — the QEMU reference arm is broken** (order-11 allocation; needs `code_len <= 2 MiB`).
+   Board-free. With silicon now *passing*, there is no reference model to attribute a future
+   silicon failure against.
+3. **S-10 / S-10b** — write-buffer route fixed by the RTL lane, store-buffer route still open.
+   `wr8`, the forced-eviction acceptance arm, is built and disassembly-verified.
+4. **Regression-suite claim** — see `plans/sqlite-regression-suite-proposal.md`. What we have is
+   ~18 of our own assertions, NOT SQLite's regression suite.
+
+## 0-2026-08-17 [SUPERSEDED by the section above]. S-07 case (a) is REFUTED on hardware; next step needs a reflash.
 
 **Bitstream: `caplifive_s06s08fix_s07probe_a2ef8eb.bit`** (adds the S-07 displacement sticky bit on
 debug-mux switch 204; every number from before it is baseline-invalid).
@@ -92,6 +118,7 @@ which is the whole report and the single thing to link to the hardware side:
 failure is in the code that writes result rows out through the shared region, not in the database
 engine. The **extended** workload still does not complete; it wedges in `sqlite3DbMallocRawNN`,
 same defect.
+*(NO LONGER TRUE — 2026-08-20: the extended workload passes 3/3 on `caplifive_s07fix.bit`.)*
 
 **What is NOT established.** No timing number may be taken from these runs: the S-06 workarounds
 add ~33 KB of `.text` and a branch per granule, so any figure measures the workaround. Both
@@ -162,6 +189,7 @@ as address 0 — so an old bitstream cannot be misread as a finding.
 2. **`s06lcc`** — re-confirms the S-06 enabler survived synthesis (expect `171`). This is also the
    bitstream-identity check: on RTL without the enabler the plain-data query wedges.
 3. `sqfixoff` — expect `stage=create rc=11 malformed`. Confirms the boot reaches SQLite at all.
+   *(That expectation is DEAD as of 2026-08-20: S-05's `CREATE` now succeeds. A boot-reached-SQLite check must key on something else.)*
 4. `sqwedge` — expected to wedge, LAST. **Then read switches 196..203.**
 
 `FPGA_BITSTREAM` must be set to the new bitstream's name or the driver hard-stops; it defaults to

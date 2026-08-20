@@ -10,10 +10,12 @@ Minimal snapshot. Read first in every session.
 * **S-06: FIXED in silicon and verified.** All §1 software workarounds reverted; lit green and
   14/15 QEMU suites, the 15th being the known inverted `static-cap-globals` probe.
 * **S-08: FIXED by the RTL lane and verified on silicon.**
-* **S-07: the ONE open silicon issue.** SQLite's full extended workload completes with no software
-  workarounds in roughly two runs out of three; the remainder wedge at mcause 25. Deliverable and
-  the ask: `tests/fpga-repros/S07-capability-untagged-on-reload/`. Committed, **not pushed — the
-  project lead pushes, and it reaches the RTL lane only then.**
+* **S-07: ROOT-CAUSED, FIXED IN RTL, AND VALIDATED ON SILICON (2026-08-20).** The write buffer
+  reordered two stores to the same 16-byte granule and the loser's tag won; fixed by forbidding
+  granule co-residency at allocation. On `caplifive_s07fix.bit` the directed arms go 1107 -> 0 and
+  the SQLite workload runs **3/3**, control green. The fix is **exonerated by measurement** as a
+  cause of that bitstream's timing failure (-6.196 ns through its own nets against a design WNS of
+  -10.629). Pushed. Caveat and the full trail: `ref/RATE-RULE.md`.
 * The invariant, the "no software probe can fire" result, and the "mtval unreadable by every
   channel" measurement are in `state/current-next-step.md` §0 — read that before planning any
   S-07 work.
@@ -93,7 +95,7 @@ same tag-through-memory path S-06's fix rebuilds. The fix MAY subsume S-07 on si
 asserted, to be checked on the flashed bitstream. One residual NOT closed: AMO tag resurrection
 (I4), documented with a repro, tracked as a separate follow-up.
 
-## SQLITE RUNS ON SILICON — ~77% of executions complete (2026-08-14)
+## [SUPERSEDED 2026-08-20 — see the section above; with the S-07 fix the rate is 3/3, not ~77%] SQLITE RUNS ON SILICON — ~77% of executions complete (2026-08-14)
 
 The headline changed today. SQLite's basic workload — CREATE, three INSERTs, a SELECT returning all
 three rows, finalize — runs in a pure-capability domain on the FPGA and returns the correct rows,
@@ -106,7 +108,13 @@ The site is fixed per image; only whether it fires is sporadic. Reproducer packa
 over as a single link: `tests/fpga-repros/S07-capability-untagged-on-reload/`.
 
 The **extended** workload still wedges (`sqlite3DbMallocRawNN`, same defect). `output_text` is our
-own harness, not SQLite. No timing number is admissible from these runs — the S-06 workarounds,
+own harness, not SQLite.
+
+> **NO LONGER TRUE as of 2026-08-20.** The extended workload **passes** on `caplifive_s07fix.bit`:
+> `__CAPSTONE_SQLITE_EXTENDED_PASSED__`, `__CAPSTONE_SQLITE_MEMORY_PASSED__`, `rc=0`, 3/3 with the
+> control green. The sentence above described the pre-S-07-fix world and is kept only as the record
+> of it. Still true: no timing number is admissible from these runs — what silicon has demonstrated
+> is **correctness, not performance**. No timing number is admissible from these runs — the S-06 workarounds,
 both confirmed ON in the measured binary, add ~33 KB of `.text` and a branch per granule.
 
 Numbers: `ref/fpga-silicon-measurements-for-paper.md` §4e (which supersedes §4c, "the domain does
