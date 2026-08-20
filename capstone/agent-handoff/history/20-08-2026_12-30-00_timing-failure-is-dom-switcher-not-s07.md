@@ -35,22 +35,60 @@ Every other clock closes. The failure is entirely on the core clock:
 40 ns / 25 MHz, which is exactly what `xlnx_clk_gen` is generated for. The constraint is right;
 the design genuinely does not make 25 MHz.
 
-## Where the failure is — and it is nowhere near our change
+## Where the failure is
 
-**100 of the 100 worst violated paths** run from one register bit in the domain switcher into
-the issue stage:
+> ### RETRACTION, 2026-08-20 — the "0 of 100" figure was TRUE AND VACUOUS
+>
+> This section originally read *"100 of the 100 worst violated paths"* and *"violated paths
+> touching `wbuffer` or `dcache`: 0 of 100, positive-controlled"*. **Both sentences are
+> withdrawn.** Re-measured:
+>
+> | report | path blocks | distinct sources | distinct destinations | distinct (src,dst) |
+> |---|---|---|---|---|
+> | `ariane.timing_WORST_100.rpt` | 100 | **1** | **1** | **1** |
+> | `ariane_xilinx_timing_summary_routed.rpt` | 766 | 193 | 568 | 569 |
+> | `ariane.timing.rpt` | 30 | 27 | 30 | 30 |
+>
+> `report_timing -nworst 100` returns up to 100 paths **per endpoint**, not 100 endpoints.
+> WORST_100 has a single (source, destination) pair and a single slack value, `-10.629`: it
+> characterises **one endpoint pair by 100 different routes**. So "100 of 100" was one endpoint
+> counted a hundred times, and the figure says nothing whatever about the other 96726 failing
+> endpoints.
+>
+> **And the matcher could not have fired.** Across all 896 path blocks in the three reports —
+> 760 distinct endpoint fields, violated and met alike — `wbuffer|dcache` appears in **zero**
+> Source or Destination fields. These are worst-N samples of roughly ten per path group; the
+> dcache is not among the worst, so it never appears in that field class at all. The check
+> cannot separate *"the dcache is clean"* from *"the dcache was never sampled"*.
+>
+> **The lesson, and it is not the one recorded first.** The original control checked that
+> `wbuffer`/`dcache` appear *somewhere in the file*. That was improved to checking the matcher
+> fires on the same *line class* (`issue_stage|scoreboard` returns hits on Source/Destination
+> lines). That improvement was real and **still insufficient**: both controls interrogate the
+> matcher, and the defect was in the **sample**. The question neither control asked is *what is
+> the denominator, and can the target appear in it at all* — here it provably cannot, because
+> the target is absent from the entire field class by construction of the report.
+>
+> Settling dcache coverage properly needs the Vivado machine: re-open the routed `.dcp` and run
+> `report_timing -nworst 1 -max_paths 100000 -slack_lesser_than 0 -sort_by slack`, then group
+> sources by module. That enumerates instead of sampling. The archive has no checkpoint, so it
+> cannot be done from here. **It is not required for the exoneration below**, which never
+> depended on it.
+
+**What survives, from the routed summary — a better report, and a genuine finding.** Its
+violated set is 10 Setup paths from **one** source register bit to **ten distinct**
+destinations:
 
 ```
-Source:       i_ariane/i_cva6/dom_switcher/cur_idx_q_reg[1]/C          (all 100)
-Destination:  i_ariane/i_cva6/issue_stage_i/...                        (all 100)
-              i_issue_read_operands/fu_data_q_reg[0][cap_data][cap_metadata_a][20]/D
-              i_scoreboard/mem_q_reg[N][sbe][rs1][k]/CE
+Source:        i_ariane/i_cva6/dom_switcher/cur_idx_q_reg[1]/C        (1 distinct, all 10)
+Destinations:  i_scoreboard/mem_q_reg[N][sbe][rs1][k]/CE              (8 of 10)
+               i_issue_read_operands/fu_data_q_reg[0][cap_data][cap_metadata_a][20]/D  (2 of 10)
+Slack range:   -10.629 .. -10.565 ns
 ```
 
-**Violated paths touching `wbuffer` or `dcache`: 0 of 100.** Positive control on that zero —
-the same matcher finds 3000 `wbuffer` and 8600 `dcache` mentions elsewhere in the same file, so
-it is a real finding and not a pattern that could not fire. The 10 violated paths detailed in
-the routed summary agree: 0 of 10.
+This is still a **sample**, not an enumeration — it is the worst ten, not the failing 96727.
+What it establishes is that the worst failures are domain-switch machinery. It does not
+establish that nothing else fails.
 
 The worst path in detail:
 
@@ -85,7 +123,13 @@ Three independent facts, each verified from git rather than taken on report:
    `25035c4c0` (2026-08-14) — an ancestor of `618f4ce36`, the healthy reference.
 
 For the S-07 fix to have caused this, a change confined to the inside of one cache module would
-have to create a 123-level, 50.5 ns path in the domain switcher. There is no mechanism.
+have to create a 123-level, 50.5 ns path in the domain switcher — or move 96727 endpoints. There
+is no mechanism.
+
+**None of these three facts comes from the timing reports**, which is why the exoneration is
+unaffected by the retraction above. They are properties of the git history and are checkable
+without a Vivado machine. The retracted figure was corroboration that turned out to be vacuous;
+it was never the argument.
 
 ## Contributing factor: the design is near capacity
 
