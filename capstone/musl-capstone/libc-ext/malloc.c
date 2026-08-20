@@ -38,13 +38,53 @@
 
 #include "cap-copy.h"
 
-/* 256 KiB, the size the Lua probe ran on. Deliberately modest: the heap is .bss,
- * and the domain loader rounds the whole image up to a power of two, so a
- * generous default would silently double a domain that never needed it.
- * Override with -DCAPSTONE_LIBC_HEAP_BYTES at build time. */
+/* WHERE THE HEAP COMES FROM, and there are two answers.
+ *
+ * PREFERRED: dom_data, the domain's second region. The entry glue publishes the
+ * capability it got in cscratch as __capstone_dom_data, and this file carves the
+ * heap out of its low end while the stack grows down from the high end.
+ *
+ * That is not a size trick, it is where the heap belongs. A static array lives
+ * in .bss, .bss is inside the LOADED IMAGE, and the image is covered by the same
+ * capability as the domain's code and rodata -- so every pointer malloc returned
+ * was derived from a capability spanning the code. Derived from dom_data instead,
+ * it spans data only. The image also stops carrying the heap: it is transferred
+ * over 9p and memcpy'd by the loader on every single run, and it competes with
+ * the code for one power-of-two region, which is what stopped mruby's full test
+ * suite fitting (5,521,488 bytes against an order-10 ceiling of 4,194,304).
+ *
+ * FALLBACK: a static array, for domains whose entry glue does not publish
+ * dom_data -- the shared my_first_domain/start.S does not. Default unchanged at
+ * 256 KiB so nothing that works today changes. Set CAPSTONE_LIBC_HEAP_BYTES=0 to
+ * drop the array entirely and require dom_data; that is what buys the image
+ * bytes back, and a domain that asks for it and has old glue gets a null from
+ * the first malloc rather than a silently tiny heap.
+ *
+ * The choice is made at RUNTIME, on the tag: an unpublished __capstone_dom_data
+ * is untagged, and a shrink of an untagged capability is not a thing to attempt.
+ */
 #ifndef CAPSTONE_LIBC_HEAP_BYTES
 #define CAPSTONE_LIBC_HEAP_BYTES (256 * 1024)
 #endif
+
+/* __weak__ and not weak: musl's src/include/features.h defines `weak` as a
+ * MACRO for exactly this attribute, so the plain spelling expands to
+ * __attribute__((__attribute__((__weak__)))) and fails to compile.
+ *
+ * Published by the entry glue (runtime/start-musl.S) from cscratch. Weak, so a
+ * domain linked against older glue still links; it is then untagged and the
+ * static fallback is used. */
+__attribute__((__weak__)) void *__capstone_dom_data;
+
+/* HOW MUCH OF dom_data THE STACK KEEPS. The stack grows down from the top, the
+ * heap up from the bottom, and nothing checks that they do not meet -- the same
+ * arrangement the static heap had with respect to the rest of .bss.
+ *
+ * Weak with a modest default, because only the BUILD knows: it is the same
+ * number it already passes to domreq.S as CAPSTONE_DOMREQ_STACK, so a program
+ * that declares its requirement can define this symbol from the same variable
+ * and the two cannot drift. */
+__attribute__((__weak__)) unsigned long __capstone_stack_reserve = 256 * 1024;
 
 /* 16, not 8: a capability is 16 bytes and must be 16-aligned, so any block that
  * might hold one has to start aligned. malloc's contract is alignment suitable
@@ -58,7 +98,11 @@ struct block {
   int pad;
 };
 
-static char heap[CAPSTONE_LIBC_HEAP_BYTES] __attribute__((aligned(ALIGN)));
+#if CAPSTONE_LIBC_HEAP_BYTES > 0
+static char heap_fallback[CAPSTONE_LIBC_HEAP_BYTES] __attribute__((aligned(ALIGN)));
+#endif
+static char *heap;       /* set by heap_init, from dom_data or the fallback */
+static size_t heap_bytes;
 static struct block *head;
 
 /* HOW MUCH OF THE HEAP WAS EVER REACHED, so "is the heap big enough" is a
@@ -77,14 +121,55 @@ static struct block *head;
 static size_t heap_hwm;
 
 size_t __capstone_libc_heap_hwm(void) { return heap_hwm; }
-size_t __capstone_libc_heap_size(void) { return sizeof heap; }
+size_t __capstone_libc_heap_size(void) { return heap_bytes; }
 
 static size_t round_up(size_t n) { return (n + (ALIGN - 1)) & ~(size_t)(ALIGN - 1); }
 
 static void heap_init(void) {
+  void *dd = __capstone_dom_data;
+
+  /* The TAG is the test, not the address. An unpublished slot reads as a
+     null-ish capability whose base and end are both 0, and asking for its
+     bounds would give a heap of zero bytes that only fails at the first
+     malloc. */
+  if (dd && __builtin_capstone_cap_get_tag(dd)) {
+    unsigned long base = __builtin_capstone_cap_get_base(dd);
+    unsigned long end = __builtin_capstone_cap_get_end(dd);
+    unsigned long reserve = __capstone_stack_reserve;
+
+    /* Leave the stack its reserve, and refuse rather than overlap it. */
+    if (end - base > reserve + sizeof(struct block) + ALIGN) {
+      unsigned long hend = (end - reserve) & ~(unsigned long)(ALIGN - 1);
+      /* SHRINK, so the heap capability spans the heap and not the stack. Every
+         block malloc hands out is derived from this one, so the bound is
+         inherited by every allocation without any per-block work.
+         THEN SET THE CURSOR, because shrink changes the BOUNDS and leaves the
+         cursor alone -- and the cursor it inherits is dom_data's, which the
+         entry glue parked at the top of the region for the stack. Without the
+         scc the very first store through it lands at the upper bound and takes
+         a cause-7 exactly there:
+           Cap mem access OOB: cursor = 101cc0000, size = 16,
+                               bounds = (101c00600, 101cc0000)
+         Two separate properties, two instructions; the bounds being right is
+         not the same as pointing at the start of them. */
+      heap = (char *)__builtin_capstone_cap_scc(
+          __builtin_capstone_cap_shrink(dd, base, hend), base);
+      heap_bytes = hend - base;
+    }
+  }
+
+#if CAPSTONE_LIBC_HEAP_BYTES > 0
+  if (!heap) {
+    heap = heap_fallback;
+    heap_bytes = sizeof heap_fallback;
+  }
+#endif
+  if (!heap)
+    return; /* dom_data unavailable and no fallback: malloc returns null */
+
   head = (struct block *)(void *)heap;
   head->next = 0;
-  head->size = sizeof(heap) - sizeof(struct block);
+  head->size = heap_bytes - sizeof(struct block);
   head->used = 0;
   head->pad = 0;
 }

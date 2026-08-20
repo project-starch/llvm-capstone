@@ -486,39 +486,27 @@ if [[ ${MRUBY_PROBE_MRBTEST:-0} == 1 ]]; then
     [[ -f $f ]] || {
       echo "missing $f -- run 'rake test' in $MRUBY_SRC first" >&2; exit 2; }
   done
-  # THE LIBC HEAP HAS TO BE BIG ENOUGH, and this is checked HERE because the
-  # alternative is finding out from the board or from QEMU.
+  # THE HEAP HAS TO BE BIG ENOUGH, checked HERE because the alternative is
+  # finding out from a boot.
   #
   # The suite's sub-interpreters are opened with mrb_open_core(mrb_default_allocf,
-  # ...) -- plain libc malloc, not the probe's instrumented allocator, so the
-  # arena knob does not reach them. At the archive's default 256 KiB the outer
-  # state has already taken about 204 KB and the first mrb_open_core returns
-  # NULL. gem_test.c then prints "Invalid mrb_state, exiting", which reads like
-  # mruby failing rather than like a heap that was never large enough, and it
-  # costs a full boot to learn.
+  # ...) -- plain libc malloc, not the probe's instrumented arena, so the arena
+  # knob does not reach them. The measured high-water for the CORE suite is
+  # 828,128 bytes (MRUBY LIBCHEAP at-report). Below that, the first
+  # mrb_open_core returns NULL and gem_test.c prints "Invalid mrb_state,
+  # exiting", which reads like mruby failing rather than like a heap that was
+  # never large enough.
   #
-  # Build one with:
-  #   OUT_DIR=<dir> CAPSTONE_LIBC_HEAP_BYTES=$((2*1024*1024)) \
-  #     bash ../build-musl-capstone.sh
-  # and pass ARCHIVE=<dir>/libc-capstone.a. A separate archive on purpose: the
-  # heap is .bss, .bss is inside the loaded image, and every other domain would
-  # otherwise grow by the same amount.
-  # NO `exit` IN THE AWK, and no `| head`. This script runs under `set -o
-  # pipefail`, so an early-exiting reader gives llvm-nm SIGPIPE and the whole
-  # build dies with 141 -- which the first negative test of this gate did, on
-  # both a too-small archive AND a correct one. A gate that fails every build
-  # equally is not a gate. Reading to the end costs nothing here.
-  _heap=$("$CAPSTONE_LLVM_BIN/llvm-nm" --print-size --defined-only "$ARCHIVE" \
-          2>/dev/null | awk '$NF=="heap" && !seen {print strtonum("0x"$2); seen=1}')
-  [[ -n $_heap ]] || {
-    echo "cannot read the libc heap size out of $ARCHIVE" >&2; exit 2; }
-  if (( _heap < 1024 * 1024 )); then
-    echo "the libc in $ARCHIVE has a ${_heap}-byte heap; mrbtest needs at least" >&2
-    echo "1 MiB because its sub-interpreters allocate through libc malloc." >&2
-    echo "Build one with CAPSTONE_LIBC_HEAP_BYTES and pass it as ARCHIVE." >&2
+  # 1 MiB, i.e. the measurement plus room, and the number is now a BUILD
+  # parameter rather than a property of the archive: the heap comes out of
+  # dom_data, so raise it with MRUBY_DOMAIN_HEAP instead of rebuilding a libc.
+  if (( MRUBY_DOMAIN_HEAP < 1024 * 1024 )); then
+    echo "MRUBY_DOMAIN_HEAP is $MRUBY_DOMAIN_HEAP; mrbtest needs at least 1 MiB." >&2
+    echo "The core suite's measured high-water alone is 828128 bytes, and its" >&2
+    echo "sub-interpreters allocate through libc malloc, not the probe arena." >&2
     exit 2
   fi
-  echo "mrbtest: libc heap $_heap bytes"
+  echo "mrbtest: heap $MRUBY_DOMAIN_HEAP, stack $MRUBY_DOMAIN_STACK"
   # driver.c carries the command-line entry point beside the two functions this
   # actually wants (mrb_init_test_driver, mrb_t_pass_result). Renaming main
   # rather than deleting it keeps the file byte-identical to the tree's; the
@@ -633,16 +621,33 @@ OBJS+=("$OBJ_DIR/mruby_probe.o")
 # region minus a 1.39 MB image left it about 701 KB, and it ran. Raise it with
 # MRUBY_DOMAIN_STACK if a deeper workload needs it -- mruby's own test suite
 # will -- and keep the "- 1536" when you do.
-MRUBY_DOMAIN_STACK=${MRUBY_DOMAIN_STACK:-$((1024 * 1024 - 1536))}
+# TWO NUMBERS NOW, because dom_data holds two things.
+#
+# libc-ext/malloc.c takes its heap from the LOW end of dom_data and the stack
+# grows down from the high end, so the declaration is heap + stack and the split
+# has to be told to both sides: to the module through .capstone_domreq, and to
+# the libc through __capstone_stack_reserve. Emitting the reserve from the same
+# variable is the point -- a build that declared one number and linked another
+# would put the two ends of the region on a collision course silently.
+MRUBY_DOMAIN_STACK=${MRUBY_DOMAIN_STACK:-$((256 * 1024))}
+MRUBY_DOMAIN_HEAP=${MRUBY_DOMAIN_HEAP:-$((1024 * 1024 - 1536 - 256 * 1024))}
+MRUBY_DOMAIN_DATA=$(( MRUBY_DOMAIN_HEAP + MRUBY_DOMAIN_STACK ))
 _segs() { "$CAPSTONE_LLVM_READOBJ" --program-headers "$OUT_DOM" \
           | grep -E 'Offset|FileSize|MemSize|VirtualAddress'; }
 _before=$(_segs)
 "$CLANG" -target capstone64-unknown-elf -ffreestanding \
-  -DCAPSTONE_DOMREQ_DATA=$MRUBY_DOMAIN_STACK \
+  -DCAPSTONE_DOMREQ_DATA=$MRUBY_DOMAIN_DATA \
   -DCAPSTONE_DOMREQ_STACK=$MRUBY_DOMAIN_STACK \
   -c "$REPO_ROOT/capstone/tests/runtime-qemu/domreq.S" -o "$OBJ_DIR/domreq.o"
+# The libc's weak default is overridden here, from the SAME variable the
+# declaration above uses, so the module's idea of the split and the allocator's
+# cannot drift apart.
+printf 'unsigned long __capstone_stack_reserve = %luUL;\n' "$MRUBY_DOMAIN_STACK" \
+  > "$OBJ_DIR/stack_reserve.c"
+"$CLANG" "${MRUBY_FLAGS[@]}" -c "$OBJ_DIR/stack_reserve.c" \
+         -o "$OBJ_DIR/stack_reserve.o"
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
-          "${OBJS[@]}" "$OBJ_DIR/domreq.o" "$ARCHIVE"
+          "${OBJS[@]}" "$OBJ_DIR/domreq.o" "$OBJ_DIR/stack_reserve.o" "$ARCHIVE"
 # The section is non-alloc, so NOTHING LOADED MAY MOVE. Verified rather than
 # asserted: this project has a documented layout sensitivity where four added
 # instructions flipped a passing run, and a diagnostic that perturbs the image is
@@ -661,9 +666,10 @@ image=$("$CAPSTONE_LLVM_READOBJ" --program-headers "$OUT_DOM" \
 # like a measurement rather than the leftover it was.
 _code=$(( ((image - 1) / 16 + 1) * 16 ))
 _creg=4096; while (( _creg < _code )); do _creg=$(( _creg * 2 )); done
-_dreg=4096; while (( _dreg < 1536 + MRUBY_DOMAIN_STACK )); do _dreg=$(( _dreg * 2 )); done
-printf 'built %s (image %s -> code region %s, declared dom_data %s -> data region %s)\n' \
-       "$OUT_DOM" "$image" "$_creg" "$MRUBY_DOMAIN_STACK" "$_dreg"
+_dreg=4096; while (( _dreg < 1536 + MRUBY_DOMAIN_DATA )); do _dreg=$(( _dreg * 2 )); done
+printf 'built %s (image %s -> code region %s; dom_data %s = heap %s + stack %s -> data region %s)\n' \
+       "$OUT_DOM" "$image" "$_creg" "$MRUBY_DOMAIN_DATA" "$MRUBY_DOMAIN_HEAP" \
+       "$MRUBY_DOMAIN_STACK" "$_dreg"
 # Both regions come from __get_free_pages, so both are bounded by MAX_ORDER-1 =
 # order 10. Say so HERE rather than letting the guest report `create_dom failed
 # (-1)` with the reason in a muted pr_alert -- which is exactly how the previous
