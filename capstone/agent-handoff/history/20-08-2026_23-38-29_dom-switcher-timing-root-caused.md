@@ -157,6 +157,63 @@ so the round trip is not combinational. The Anvil `syncstate` pattern tolerates 
 by construction (`.anvil.sv:647-649` — level-held wait-until-valid), and the data channel already
 runs that way.
 
+### CORRECTION, same day — the cost figure above was wrong by 4-8x, and both "designer's questions" turned out to be answerable
+
+**A real domain switch iterates 8 indices, not 67.** `is_full` is hardwired `1'b0` at both of its
+only call sites, so `capstone_dom_switcher.anvil:114` always takes the `else` arm, which passes
+`val_n = 7'd7`; `cur_idx` runs 0..7. The 67-index path is the same unreachable branch documented
+in the sibling Anvil-misparse note. `CAPENTER` does not drive the switcher at all (RVFI-verified,
+`history/14-08-2026_18-30-00_s06-rtl-fix-p0-p6.md:118`) - only `cscall` and `csreturn` do.
+
+So the delta is **+17 to +33 cycles per switch** (+2/index if the two channel round trips launch
+from a shared event, +4 if serial; the generated FSM proves the shared-launch case for one phase
+per `process()` inline and leaves the other UNRESOLVED without a directed run), not +134.
+
+**As a fraction of any published number the cost is exactly zero.** Every silicon measurement
+brackets the compute only - `ref/fpga-silicon-measurements-for-paper.md:77`: *"Both counter reads
+sit inside `domain_main`, around the kernel - so domain entry/exit is excluded from both halves"* -
+and the SQLite overhead model has no switch term to perturb.
+
+**Two denominators are MISSING and neither is expensive to get.** (1) The absolute cost of a
+domain switch has never been measured, on silicon or in sim - count cycles from
+`dom_switch_valid_o` (`commit_stage.sv:355`) to `req_en` clearing; the switcher already broadcasts
+`busy_ch.busy`/`busy_ch.idx` every cycle. (2) Boundary-crossing frequency measured as actual
+`cscall`/`csreturn` events does not exist either: the ~1-per-19,000 figure counts capability
+**borrows**, in harnesses that perform no domain switch at all (Tier-1 is native x86 with a
+renaming shim; Tier-2 runs SQLite inside ONE domain and emulates the boundary through a shared
+hostcall region). Under the explicit and unsupported assumption that one borrow implies one
+call/return pair, the delta would be +0.09%..+0.17% on speedtest1 at CPI 2 and +0.6%..+1.2% in
+the boundary-densest scan phase.
+
+**The request-side register already exists in this repository**, on `origin/capt-implementation`
+and `origin/capt-verilator`: `42ff49cf6` (2026-06-24) registered the dom-switch request signals
+for Verilator convergence, and `c09469628` (2026-07-10) upgraded it to a real skid buffer after
+the blind delay corrupted the register walk. On that branch all three responders receive the
+registered copies (`cva6.sv:1314/1551/1972` -> `dom_switch_reg_valid_q`/`dom_switch_reg_req_q`);
+on our line they receive the raw combinational nets (`cva6.sv:1403/1623/2042`). That register sits
+on exactly the path that launches 100% of our failing endpoints. It has never been synthesised,
+it leaves the response side combinational, and its own comment flags the data channel as still a
+blind delay awaiting the same treatment. Merge-base with our line is `6205f6dbb` (2026-05-25);
+47 `core/` files differ.
+
+**The mux was an expedient, and the history says so.** `capstone_dom_switcher.anvil:85`'s
+`// TODO: this is a low-performance implementation` was written in `1db856802` (2025-04-14),
+**one day before** `2e268c771` (2025-04-15) wired the `raddr_pack` mux - and that commit left the
+response unassigned behind `// TODO: obtain the dom switch req response`, filled in two days later
+by `f69e403c5`. Six bring-up commits, all one-line subjects, none describing an interface or a
+trade-off. No response-side register has ever existed on any branch
+(`git log --all -S'dom_switch_reg_resp_q'` returns zero). **And the spec is silent on latency** -
+`capstone-spec` specifies only the byte-exact context layout and the swap semantics, and the Anvil
+channel declaration is a plain latency-agnostic handshake. Registering is architecturally free.
+
+**A correction inside the correction:** the original text below cited `csr_regfile.sv:389`'s
+`// FIXME: a hack` as evidence the same-cycle response was unintended. It is not - that comment
+was added three weeks later (`12b7d49d3`, 2025-05-06) and annotates a widening of the reg_id
+range. The same-cycle assigns two lines below carry no FIXME and never have. The
+`low-performance` TODO still supports the point; the FIXME does not.
+
+### The original text, retained so the correction above has something to correct
+
 The remaining questions are genuinely the designer's, not answerable from RTL:
 
 * is **+1 cycle per index** of switch latency acceptable (67 indices x 2 channel ops)?
