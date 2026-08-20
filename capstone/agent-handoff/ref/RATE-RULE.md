@@ -1653,3 +1653,83 @@ Three claims in a row rested on a matcher that could not have produced the oppos
 Each control was a real improvement on the last and none reached the question. The one that does:
 **before believing a zero, name the set it was counted over and show the target can appear in that
 set.** Not "can the matcher fire" — "can the target be in the denominator".
+
+---
+
+# RESOLUTION OF THE ATTRIBUTION QUESTION: **UNDETERMINED**, with the direct mechanism REFUTED
+
+Cross-checked with the RTL lane, both sides re-deriving from primary source. This is the state to
+put in front of the lead: *not exonerated, not implicated, undetermined* — because "undetermined"
+alone understates how much has been eliminated and "exonerated" overstates it.
+
+## 1. The `gran_*` zero is DEMONSTRATED uninformative, not merely suspected
+
+The calibration is `ni_conflict` — the fix's **structural twin**: same module, same signal class,
+and literally the other half of the same accept expression, `if (!ni_conflict && !gran_hazard)`
+(`:722`). It is present at `618f4ce36` (`:530`, used at `:595`), so it is unquestionably in the
+netlist of both builds. Counted over the whole 7.6 MB routed report:
+
+    gran_hazard    0     ni_conflict    0        wbuffer_hit_oh   20
+    gran_conflict  0     ni_inside      0        data_gnt         10
+    gran_eq        0     wbuffer_wren   0        rd_req          170
+    word_ne        0     tocheck        0        cur_idx          30
+    req_wtag       0     txblock        0
+
+A signal known to exist is equally absent. **The missing `gran_*` names are a naming property of
+that signal class — internal single-bit controls absorbed into LUT equations — not evidence about
+the cone.** That is the "can the target be in the denominator" rule applied to my own zero, and it
+comes out against the zero.
+
+**Contrast, and this is the distinction we kept failing to make:** `data_gnt` DOES survive as a
+name, 10 occurrences — and all 10 are the same net, `rev_node/dcache_req_ports_rev_rd_res[data_gnt]`,
+the rev-node **read** port. So "the write buffer's own `req_port_o.data_gnt` is on no violated
+path" is a **supported** negative, where the `gran_*` one is not.
+
+## 2. The LOGIC-DEPTH mechanism is REFUTED, name-independently
+
+Verified line by line in `wt_dcache_wbuffer.sv`:
+
+    gran_hazard occurs exactly THREE times:
+      :213  logic gran_hazard;                              declaration
+      :493  assign gran_hazard = |gran_conflict;            driver
+      :722  if (!ni_conflict && !gran_hazard)               ONE use -- the accept point
+
+    the read side the violated paths traverse:
+      :415  assign rd_req_o = |tocheck;
+      :486  assign tocheck[k] = (~wbuffer_q[k].checked) & valid[k];
+      :464  assign valid[k]   = |wbuffer_q[k].valid;
+      :782  wbuffer_q <= wbuffer_d;                         <- a REGISTER
+
+`gran_hazard`'s only use gates `wbuffer_wren` and `req_port_o.data_gnt`. It reaches `rd_req_o`
+solely through `wbuffer_q`, i.e. **through a flop**, so it cannot contribute combinational depth
+to any traversed path. This argument depends on no name surviving synthesis.
+
+## 3. What SURVIVES: placement and congestion, second-order
+
+82% of the critical delay is **routing**, not logic, and the device is at **83% LUT occupancy**.
+Adding combinational logic anywhere in a design that full can perturb global placement and
+lengthen routes in a cone it has no logical connection to. Speculative, but it is a mechanism, the
+register-boundary argument does not touch it, and nothing in these reports excludes it.
+
+## 4. Therefore the `618f4ce36` re-implementation is the ONLY test that addresses what is left
+
+Sharpened, and it upgrades the run from "confirmation" to "the discriminator": the checkpoint
+queries settle *which nets are on the cone*; **nothing static can tell us whether adding logic
+MOVED the cone.** Same tree, same flow, one variable. That is the only experiment that reaches the
+surviving mechanism.
+
+**Add one calibration line to the checkpoint queries**, since `gran_*` will return nothing:
+
+    get_nets -hier -filter {NAME =~ *ni_conflict*}
+
+If `ni_conflict` is absent from the netlist too, the name-based route is dead for this signal class
+and the re-implementation is the only way. If `ni_conflict` is present while `gran_*` is not, that
+is genuinely informative.
+
+## 5. How this was actually caught, which is not a method
+
+Three claims in one afternoon rested on a matcher that could not have produced the opposite
+answer, each control a real improvement on the last, none reaching the question. What caught it
+was not a rule — it was **a second reader who kept handing the zero back**. Worth recording as
+plainly as the technical finding: the process that worked here was cross-checking between two
+lanes, and neither lane got there alone.
