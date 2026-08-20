@@ -287,6 +287,18 @@ static unsigned wbuf_compute(void)
          was consulted, which excludes 2 and 3 together. */
       {
         void *p8; unsigned long c0, c1;
+        /* WARM THE BASE CAPABILITY FIRST, or the control can report success without the
+           target ever being evicted.
+           Both timed loads materialise wbuf_slots' base capability from the cap table, so
+           that cost appears in cyc_cold AND cyc_warm and cancels -- UNLESS the walk also
+           displaced the BASE's own line. Then cold carries a cold base plus a possibly-warm
+           target while warm carries a warm base plus a warm target, the ratio comes out well
+           above 16, and it reads as "eviction confirmed" when what was evicted was the base
+           and not the target at all. A false positive in the very control that exists to
+           prevent one, and a spuriously large ratio looks exactly like the evidence wanted.
+           One touch of a NON-TARGET slot fixes it: same array so the same base capability,
+           different granule so the target's residency is undisturbed. */
+        wbuf_sink[2] = (unsigned long)wbuf_slots[WBUF_N + 1];
         c0 = wbuf_mcycle();
         p8 = wbuf_slots[i];                  /* THE ldc under test -- this is what must miss */
         c1 = wbuf_mcycle();
