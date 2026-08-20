@@ -110,7 +110,28 @@ mapfile -t EXT_FLAGS_EARLY < <(python3 "$SCRIPT_DIR/survey-musl-capstone.py" \
                                        "$MUSL_SRC_DIR" --print-flags)
 RESCUE_O0=()
 for f in "${EXT_FLAGS_EARLY[@]}"; do [[ $f == -O1 ]] && f=-O0; RESCUE_O0+=("$f"); done
-for rescue in src/stdlib/qsort.c; do
+# UNDER LTO THE RESCUE CANNOT APPLY, and saying so is more useful than either
+# erroring or silently skipping. With -flto the compile emits bitcode and defers
+# instruction selection to the linker, so qsort.c "compiles" at -O1 and the guard
+# below fires -- but the i128 selection failure has only MOVED. Verified rather
+# than reasoned: running llc over the LTO qsort object reproduces
+# "Cannot select: t48: i128 = xor t6, Constant:i128<-1>  In function: __qsort_r".
+#
+# Rescuing it as a NATIVE -O0 object would work for the compile and reintroduce the
+# problem LTO was chosen to solve: src_stdlib_qsort.o carries its own
+# .capstone_gp_initdesc fragment (224 of the 1346 members do), and a second
+# fragment is exactly the multi-TU slot collision.
+#
+# So under LTO the file is left as bitcode and whether the link succeeds depends on
+# whether the program reaches __qsort_r at all -- LTO drops unreferenced functions
+# before codegen. The real fix remains the backend i128 gap.
+if [[ " ${MUSL_CAPSTONE_EXTRA_CFLAGS:-} " == *" -flto "* ]]; then
+  echo "LTO build: skipping the -O0 rescue list; selection failures move to the link"
+  RESCUE_LIST=()
+else
+  RESCUE_LIST=(src/stdlib/qsort.c)
+fi
+for rescue in "${RESCUE_LIST[@]}"; do
   obj="$OBJ_DIR/src_$(echo "${rescue#src/}" | tr / _ | sed 's/\.c$//').o"
   [[ -e $obj ]] && {
     echo "$rescue now compiles at the survey's own level; drop it from the" >&2
