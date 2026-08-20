@@ -76,6 +76,18 @@
 #ifndef WBUF_FIELDS
 #define WBUF_FIELDS 0           /* 1 = also verify start/end/perm/cursor on surviving caps */
 #endif
+#ifndef WBUF_EVICT_WAYS
+/* ARM 8's eviction walk. The D$ is 32 KiB / 8-way / 16 B lines (capstone_cv64a6_imafdc_sv39
+ * _config_pkg.sv:48-49), so 2048 lines over 256 sets and the set index is paddr[11:4]. To evict
+ * ONE target line you must touch more distinct lines in ITS set than there are ways: 8 + 1 = 9
+ * is the floor, 12 is margin against the replacement policy not being true LRU.
+ *
+ * STRIDE 4096 IS THE POINT, and the reason it works survives translation: the cache is
+ * PHYSICALLY indexed on paddr[11:4], and with 4 KiB pages paddr[11:0] == vaddr[11:0], so a
+ * 4096-byte virtual stride preserves the set index whatever the mapping does. A linear 40 KiB
+ * sweep would also evict, but touches ~2560 lines instead of 12 to achieve the same thing. */
+#define WBUF_EVICT_WAYS 12u
+#endif
 
 #define WBUF_OK    0xB0000000u
 #define WBUF_FAULT 0xEE000000u
@@ -87,6 +99,9 @@
 static void *volatile wbuf_slots[WBUF_N + 2];
 static unsigned wbuf_anchor;
 static unsigned long volatile wbuf_sink[64];
+/* 4096-ALIGNED so that element (k*4096 + setoff) has set index == setoff>>4 for every k, which
+ * is what makes the walk hit ONE set instead of smearing across all of them. */
+static unsigned char volatile wbuf_evict[WBUF_EVICT_WAYS * 4096u] __attribute__((aligned(4096)));
 
 static unsigned long wbuf_type(const void *p) {
   unsigned long v = 0;
@@ -208,6 +223,38 @@ static unsigned wbuf_compute(void)
 #endif
       if (wbuf_type((void *)wbuf_slots[i]) != 7ul)
         corrupt++;                           /* tag STILL LIVE after its scrub */
+#elif WBUF_ARM == 8
+      /* ARM 8 -- THE FORCED-EVICTION LEG, and the one arm that can fail a fix which only
+         repairs L1.
+
+         WHY IT IS NEEDED. ctag is sampled TWICE: at TX ISSUE for DRAM and at TX RETURN for L1
+         (wt_dcache_wbuffer.sv:319-320 and :436-437). Any fix that mutates a resident entry can
+         desynchronise the two, writing one tag value to L1 and another to DRAM. The L1 copy
+         wins every immediate readback and the DRAM copy wins once the line is displaced -- so
+         such a fix looks PERFECT under wr6/wr7 and leaves the capability resurrectable.
+
+         wr6 and wr7 CANNOT see this and it is not a criticism of them: wbuf_sink is 512 bytes
+         cycled k&63, which drains the write buffer -- all it was built for -- and cannot evict
+         anything from a 32 KiB cache. Both arms read back while the line is still resident.
+
+         So: scrub, then FORCE THE LINE OUT, then reload. A fix that repairs only L1 shows a
+         live capability here while showing none in wr6/wr7.
+
+         READS, NOT WRITES, for the walk. Reads create the capacity pressure that evicts and add
+         no write-buffer traffic of their own -- writing would put the instrument into the very
+         structure under test. */
+      wbuf_slots[i] = base;                  /* the capability the scrub must destroy */
+      *hi = WBUF_SCRUB ^ (unsigned long)i;   /* the scrub */
+      {
+        /* Same set as the target: set index is paddr[11:4], so match bits [11:4] of the slot. */
+        unsigned long setoff = ((unsigned long)(void *)&wbuf_slots[i]) & 0xFF0ul;
+        unsigned long acc = 0;
+        for (k = 0; k < WBUF_EVICT_WAYS; k++)
+          acc += *(volatile unsigned long *)(wbuf_evict + k * 4096u + setoff);
+        wbuf_sink[0] = acc;                  /* consume it so the walk cannot be dead-coded */
+      }
+      if (wbuf_type((void *)wbuf_slots[i]) != 7ul)
+        corrupt++;                           /* tag STILL LIVE after eviction+reload */
 #else
       wbuf_slots[i] = base;            /* arm 0: no plain store anywhere near */
 #endif
@@ -234,7 +281,7 @@ static unsigned wbuf_compute(void)
         lost++;                        /* selector, which would RAISE on this value.    */
         continue;
       }
-#if WBUF_FIELDS && WBUF_ARM != 5 && WBUF_ARM != 6 && WBUF_ARM != 7
+#if WBUF_FIELDS && WBUF_ARM != 5 && WBUF_ARM != 6 && WBUF_ARM != 7 && WBUF_ARM != 8
       if (wbuf_start(p)  != ref_start ||
           wbuf_end(p)    != ref_end   ||
           wbuf_perm(p)   != ref_perm  ||
