@@ -12,10 +12,28 @@
 > two **ENDS** of a path and never its interior. The interior is in the netlist-resource column,
 > and nobody looked at it until the third pass.
 >
-> What is now established, and what is not, is set out in **"Is the fix on the cone?"** below.
-> Short version: the *logic-depth* mechanism is refuted structurally; a *placement/congestion*
-> mechanism cannot be excluded from these reports. **The fix is not exonerated — it is
-> undetermined.**
+> **SETTLED FROM THE ROUTED CHECKPOINT, which is the authority — the text reports are samples.**
+> Full enumeration of the `e1140aeea` build:
+>
+> ```
+> FAILING ENDPOINTS TOTAL                     96727
+> by startpoint module                        96727   i_ariane/i_cva6/dom_switcher  (ALL, one module)
+> denominator check: wbuffer cells in netlist 12198
+> FAILING paths through i_wt_dcache_wbuffer   96727   (i.e. ALL of them)
+> FAILING paths through the fix's own nets     2284
+> ```
+>
+> **The fix's own logic is on 2284 failing paths.** It is not a bystander. Every structural
+> argument in this note that concluded otherwise is withdrawn below.
+>
+> Note what the 96727/96727 does NOT mean: because *every* failing path traverses the write
+> buffer, "worst slack through the write buffer = −10.629" is arithmetic on that count, not a
+> second measurement, and it must not be read as "the write buffer is where the delay is".
+>
+> **Status: not exonerated, not convicted — implicated but undetermined.** The deciding number is
+> **worst slack THROUGH the fix's nets** against the design WNS of −10.629; the query returned a
+> count but no slack, so it is still unmeasured. `timing-forensics.tcl` (committed on both
+> branches) produces it.
 
 **Date:** 2026-08-20
 **Build analysed:** `fpga-e1140aeea.tar.gz` (archived synthesis output, `/tmp/capstone/_bitstreams`)
@@ -89,10 +107,11 @@ the design genuinely does not make 25 MHz.
 >
 > Settling dcache coverage properly needs the Vivado machine: re-open the routed `.dcp` and run
 > `report_timing -nworst 1 -max_paths 100000 -slack_lesser_than 0 -sort_by slack`, then group
-> sources by module. That enumerates instead of sampling. The archive has no checkpoint, so it
-> cannot be done from here. It was described here as "not required for the exoneration below".
-> That was written before the netlist column was examined, and it is now the OPPOSITE of the
-> situation: enumerating the failing endpoints is one of the two direct discriminators.
+> sources by module. That enumerates instead of sampling. **This has since been DONE** — see the
+> banner. It was described here as "not required for the exoneration below"; that was written
+> before the netlist column was examined and is the opposite of the truth. It was also claimed
+> here that the archive has no checkpoint: **wrong**, `work-fpga/ariane_xilinx_routed.dcp` is in
+> it, and looking only under `ariane.runs/` is why that was missed.
 
 **What survives, from the routed summary — a better report, and a genuine finding.** Its
 violated set is 10 Setup paths from **one** source register bit to **ten distinct**
@@ -188,7 +207,27 @@ This is the sharpest artefact of the whole investigation and the thing worth car
 | claim | the zero | can the name survive? | status |
 |---|---|---|---|
 | "the fix's `gran_*` logic is on no violated path" | 0 occurrences | **NO** — `gran_*` appears nowhere in the report, and its pre-existing twin `ni_conflict` is equally absent | **UNSUPPORTED** — separates nothing |
-| "the write buffer's own `req_port_o.data_gnt` is on no violated path" | 0 occurrences attributable to the write buffer | **YES** — `data_gnt` survives; all 10 textual occurrences are one net, `rev_node/dcache_req_ports_rev_rd_res[data_gnt]`, the rev-node **read** port | **SUPPORTED** |
+| "the write buffer's own `req_port_o.data_gnt` is on no violated path" | 0 occurrences attributable to the write buffer | irrelevant — see below | ~~SUPPORTED~~ **REFUTED, 2026-08-20** |
+
+> **THE SECOND ROW WAS ALSO WRONG, AND IT WAS THE SHOWPIECE.** It was recorded as the worked
+> example of a *good* zero — proof we could now tell a real negative from a worthless one. It was
+> **sample-bound**: `data_gnt` does survive as a name, but the zero was counted over the ten-path
+> sample in the text reports, not over the design. The routed checkpoint says **2284 of 96727**
+> failing paths pass through the fix's own nets. A wrong worked example teaches the wrong thing
+> more durably than a wrong number does.
+>
+> **And the naming premise in the first row was wrong too, for a third reason.** `gran_*` has
+> **17** surviving nets in the netlist — the names survive perfectly well. `ni_conflict` is absent
+> because `NonIdemPotenceEn` folds to 0 (`NonIdempotentLength` is literally zero), i.e. constant
+> folding, not naming. And `wbuffer_wren` — genuinely live and driven in both revisions, folded by
+> nothing — has **0** surviving nets. Two of four survive; one absence is explicable and one is
+> not.
+>
+> **So the conclusion is neither "this class survives" nor "this class does not":**
+> **NEVER REASON FROM AN ABSENT NAME AT ALL.** Had the fix's signals happened to be named like
+> `wbuffer_wren` rather than `gran_*`, this entire chain would have run identically and produced a
+> confident exoneration with nothing to catch it. The checkpoint query broke the chain only
+> because `gran_*` happened to survive. That is luck, not method.
 
 Same report, same kind of claim, same shape of evidence — and one is worthless while the other
 is real. **The only thing that distinguishes them is the denominator check**: can the target
@@ -219,8 +258,21 @@ Its entire combinational fanout is `req_port_o.data_gnt` on **port 3, the store 
 :486  assign tocheck[k] = (~wbuffer_q[k].checked) & valid[k];     <- wbuffer_q is a REGISTER
 ```
 
-**`gran_hazard` reaches `rd_req_o` only through a flop.** It therefore cannot contribute
-combinational depth to the traversed read/tag-check path. Corroborating: the single `data_gnt`
+**`gran_hazard` reaches `rd_req_o` only through a flop.** That much is true and still holds.
+
+> **BUT THIS ARGUMENT HAD A HOLE AND THE CONCLUSION DRAWN FROM IT IS WITHDRAWN.** `gran_hazard`
+> has **two** outputs. This traced one of them — `rd_req_o` — found a register, and generalised to
+> "the fix is off the path". The other output is `req_port_o.data_gnt` at `:725`, combinational,
+> inside the very block `gran_hazard` gates; and its input `req_wtag` is built from
+> `req_port_i.address_*`, which comes from the store unit and therefore sits on the
+> `sel_dom_switch` cone. The live path is:
+>
+> ```
+> dom_switcher -> sel_dom_switch (fanout 443) -> store-unit address -> req_wtag
+>              -> gran_eq -> gran_conflict -> gran_hazard -> data_gnt -> back out
+> ```
+>
+> The routed checkpoint confirms it: **2284 of 96727 failing paths traverse the fix's own nets.** Corroborating: the single `data_gnt`
 net anywhere on the violated paths is `rev_node/dcache_req_ports_rev_rd_res[data_gnt]` — the
 rev-node **read** port, a different port from the one `gran_hazard` gates.
 
@@ -232,8 +284,9 @@ combinational logic anywhere in a design that full can perturb placement globall
 routes in an unrelated cone. That is second-order and speculative — but it is a mechanism, it is
 not addressed by the register-boundary argument above, and nothing in these reports rules it out.
 
-**Verdict: the fix is NOT exonerated. It is undetermined**, with the direct logic-depth mechanism
-refuted and only a second-order placement mechanism surviving.
+**Verdict: the fix is NOT exonerated and NOT convicted — implicated but undetermined.**
+It is on 2284 of the 96727 failing paths. The remaining question is whether it is on the
+*critical* one, and that is unmeasured.
 
 ### The discriminator, which is no longer optional
 
@@ -282,8 +335,18 @@ than an RTL change.
 ## What this does and does not do to the S-07 results
 
 **Does NOT exonerate the fix.** That claim was made in the first version of this note and is
-withdrawn — see the banner and "Is the fix on the cone?" above. The direct logic-depth mechanism
-is refuted structurally; a placement/congestion mechanism survives and is untested.
+withdrawn — see the banner. The checkpoint puts the fix's own logic on **2284 of 96727** failing
+paths, so it is implicated. It is not convicted: those paths already failed for another reason,
+and being on a failing path is not the same as setting WNS.
+
+The one quantitative bound available: the worst path is 123 logic levels totalling 8.984 ns of
+logic, ≈0.073 ns per level. The fix adds roughly one to two levels — its comparators run in
+*parallel* with the `wbuffer_hit_oh` tree that was already on the `data_gnt` path via
+`rdy = (|wbuffer_hit_oh) | (~full)`, so it is not a new comparison stage. That is ≈0.15 ns against
+a 10.629 ns violation, about 1.4%. **Stated as an estimate with its assumptions visible:** an
+average per level is not the marginal cost of the specific levels added (some are CARRY4), and it
+bounds only the logic term while routing is 41.552 of 50.536 ns — which is exactly where a real
+effect would have to come from and is what no static analysis can bound.
 
 **Does not:** make the results unconditional by itself. They were taken on a bitstream that
 fails setup timing. What supports them is unchanged and independent:
