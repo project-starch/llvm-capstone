@@ -338,11 +338,22 @@ def main() -> int:
                 infra_phase="guest-setup",
             )
 
+            # THE WORKLOAD GETS ITS OWN BUDGET, separate from the multiplier.
+            #
+            # --timeout-multiplier scales EVERY timeout, including the ones that
+            # should stay short. A caller whose workload needs 45 minutes used to
+            # have to raise the multiplier, which also gave a hung BOOT 45
+            # minutes before it was called a flake -- so one bad boot cost the
+            # session most of an hour and produced nothing. Setup should fail
+            # fast; only the workload should be allowed to be slow.
+            command_timeout = env_float_or_default(
+                "CAPSTONE_GUEST_COMMAND_TIMEOUT", 30 * timeout_multiplier
+            )
             for domain_name in guest_domains:
                 output = run_guest_command(
                     qemu,
                     f"{domain_loader} /mnt/host/{domain_name}",
-                    timeout=30 * timeout_multiplier,
+                    timeout=command_timeout,
                 )
                 missing = [marker for marker in DEFAULT_DOMAIN_SUCCESS_MARKERS if marker not in output]
                 if missing:
@@ -354,7 +365,7 @@ def main() -> int:
                 output = run_guest_command(
                     qemu,
                     guest_command,
-                    timeout=30 * timeout_multiplier,
+                    timeout=command_timeout,
                 )
                 if args.success_marker:
                     missing = [marker for marker in args.success_marker if marker not in output]
