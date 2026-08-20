@@ -12,7 +12,34 @@ edit available — *a new signal fed into a cone that already carries a combinat
 
 **Both statements need correcting.**
 
-### 1. The misquoted artefact
+> ## CORRECTION TO THIS NOTE — the same day, one hour later
+>
+> **Section 1 below is WRONG and is withdrawn.** A lint run pinned byte-exactly to HEAD names
+> `cva6.gen_cache_wt.i_cache_subsystem.i_wt_dcache.rd_ctag` — the parent-level net — which is what
+> the original report said. The "brand-new internal signal, weaker signature" reading is dead.
+>
+> **How the mistake happened, because it is the same shape a fourth time.** Three lint captures
+> existed and *none of them was HEAD*: each was taken of a different intermediate formulation
+> during the search for one that avoided the loop. `.lint-withfix` named `wbuffer_gran_clr` at
+> `wt_dcache_mem.sv:139:9`, and HEAD's source really does have `logic wbuffer_gran_clr;` at line
+> 139 column 9 — so the location matched exactly, and the match was a coincidence: the later edit
+> (removing the `2'd3` probe arm) sits *below* line 139 and did not move it. A line:col match was
+> treated as a byte-pin. It is not one.
+>
+> **The rule this yields, and it is narrow enough to be usable:** an artefact is authoritative for
+> a tree only if it was produced *from that tree*. Location matching is not provenance. The two
+> intermediate captures have been deleted so they cannot be re-read as HEAD.
+>
+> **What does NOT change.** Sections 2 through 5 stand, and section 2 is the load-bearing one: it
+> is an argument about `rd_ctag_o` specifically, so it applies directly to the signal that is
+> actually named. The cone's source set is unchanged; 30 combinational loops already exist in a
+> design that completed and routed; the shape differs from the precedents; the cost is ~88 LUT6.
+> **The GO stands, on section 2 rather than on section 1.**
+>
+> Also confirmed by the pinned run: `GONE at HEAD: []` — no pre-existing UNOPTFLAT entry
+> disappeared, so no existing strongly-connected component was restructured. Exactly one added.
+
+### 1. The misquoted artefact — WITHDRAWN, SEE THE CORRECTION ABOVE
 
 Three formulations were linted. The one that is at HEAD is the explicit granule slice, captured in
 `verif/sim/.lint-withfix.txt`, and it names:
