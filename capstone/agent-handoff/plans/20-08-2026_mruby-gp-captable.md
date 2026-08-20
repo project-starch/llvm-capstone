@@ -227,7 +227,7 @@ Each step either costs no boot or answers one question.
       A relocation for the slot index is needed, which is compiler and linker work.
 
       **One cheaper candidate, tried and NOT yet working: LTO.** The descriptor is
-      emitted per MODULE by `CapstoneAsmPrinter::emitGPCapTableInitDesc`, so a full-LTO
+      emitted per MODULE by `CapstoneAsmPrinter::emitGpCaptableInitDesc`, so a full-LTO
       link would present one module and one descriptor with globally unique slots --
       a build-flag change instead of a new relocation. First trial: compiled with
       `-flto -mllvm -capstone-gp-captable` and linked with
