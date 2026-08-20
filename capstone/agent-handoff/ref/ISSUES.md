@@ -532,6 +532,49 @@ based on a single run is meaningless here — report k of n.
 Measured on `caplifive_s06s08fix_s07tag2_618f4ce.bit`, 2026-08-18: **k=1 wedge in n=7** reps of
 `XU` across two boots (4 pass; then pass, pass, wedge).
 
+## Q-01 — the QEMU SQLite reference arm cannot create its domain · `ROOT-CAUSED 2026-08-20, fix is to shrink the build`
+
+`run-sqlite-memory.sh` -- the QEMU arm of the SQLite correctness suite -- fails **before any
+SQL runs**. The host loads the ELF, then `create_dom` returns an ioctl error (`SQ: X/fail`,
+`obs=-1`). Not in the nightly rotation, so nothing was guarding it.
+
+**Root cause, from the guest's own `dmesg` rather than inferred:**
+
+    epc : __alloc_pages+0x4ea      ra : __get_free_pages+0x12
+    a1  : 000000000000000b          <- __alloc_pages(gfp, ORDER, ...): order 11
+    [<...>] device_ioctl+0x214/0xabe [capstone]
+    Failed to allocate memory for domain.
+
+Order 11 is **8 MiB contiguous**, and `__get_free_pages` caps at order 10 (4 MiB). The request
+**can never succeed**, whatever the free memory. It is not a transient OOM.
+
+**The arithmetic, end to end.** The module QEMU loads is `caplifive-buildroot` (per
+`capstone-test-env.sh:17`), and it **doubles the image**:
+
+    capstone.c:103  dom_headroom = code_len > DOMAIN_DATA_SIZE ? code_len : DOMAIN_DATA_SIZE
+    capstone.c:105  dom_tot_size = code_len + dom_headroom
+    code_len = 3,335,591 (readelf: memsz == filesz, no BSS gap)
+      -> tot 6,671,182 = 6.36 MiB -> 1629 pages -> order 11 -> FAILS
+
+**Threshold: order <= 10 needs tot <= 4 MiB, i.e. `code_len <= 2 MiB`.** The silicon domain is
+~1.55 MB and is comfortably under; this QEMU build at 3.18 MiB is over. That is the whole
+difference -- there is no capability bug here.
+
+**WATCH THE COPY.** There are three `modcapstone/module/capstone.c` in the tree and they are
+NOT identical: `caplifive-buildroot` uses `dom_headroom` (doubling), while
+`caplifive-system-dev` uses `code_len + DOMAIN_DATA_SIZE` (no doubling), which gives order 10
+and would have said this works. Reading the wrong copy produced exactly that wrong answer
+before `dmesg` settled it.
+
+**Fix, and it is the right thing on the merits rather than only for size:** build the QEMU arm
+with the **silicon configuration**, which is known to fit. A reference arm that runs a
+different build from the silicon it is a reference for is a weak reference regardless of
+whether it fits.
+
+**Why it matters now.** With silicon PASSING the correctness suite, there is no reference model
+to attribute a FUTURE silicon failure against. That was tolerable while silicon was the thing
+failing; it is not now that it is the thing passing.
+
 ## S-08 — dom-switch CSR clobber · `FIXED in silicon and verified`
 
 Fixed by the RTL lane and verified on silicon (`state/current-state.md`, 2026-08-15). Added here
