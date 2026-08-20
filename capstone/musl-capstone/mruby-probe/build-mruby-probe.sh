@@ -187,6 +187,13 @@ fi
 # REBUILDS MRUBY_FLAGS from a filtered copy -- a flag added at the literal would be
 # carried through by that loop only by luck, and dropped the day the filter grows a
 # second exclusion. After the last assignment there is exactly one place to look.
+# DEFINED HERE, above every reader. They depend on nothing, and the mrbtest block
+# further down dereferences them under `set -u` -- which made that path fail with
+# "MRUBY_DOMAIN_HEAP: unbound variable" unless the caller happened to pass one.
+MRUBY_DOMAIN_STACK=${MRUBY_DOMAIN_STACK:-$((256 * 1024))}
+MRUBY_DOMAIN_HEAP=${MRUBY_DOMAIN_HEAP:-$((1024 * 1024 - 1536 - 256 * 1024))}
+MRUBY_DOMAIN_DATA=$(( MRUBY_DOMAIN_HEAP + MRUBY_DOMAIN_STACK ))
+
 if [[ "$GPCT" != "0" ]]; then
   MRUBY_FLAGS+=(-mllvm -capstone-gp-captable)
 fi
@@ -557,13 +564,24 @@ if [[ ${MRUBY_PROBE_MRBTEST:-0} == 1 ]]; then
   # 1 MiB, i.e. the measurement plus room, and the number is now a BUILD
   # parameter rather than a property of the archive: the heap comes out of
   # dom_data, so raise it with MRUBY_DOMAIN_HEAP instead of rebuilding a libc.
-  if (( MRUBY_DOMAIN_HEAP < 1024 * 1024 )); then
+  # UNDER gp-captable THIS VARIABLE NO LONGER REACHES THE ALLOCATOR, so the check
+  # moves to after the link -- see the heap gate next to the dom_data sizing below.
+  # malloc's storage there is the archive's `heap_fallback` array, fixed when the libc
+  # was built, and the archive is BITCODE under LTO, which carries no symbol sizes at
+  # all (llvm-nm prints 0 for every one of them). The only place the real size exists
+  # is the linked image.
+  if [[ "$GPCT" == "0" ]] && (( MRUBY_DOMAIN_HEAP < 1024 * 1024 )); then
     echo "MRUBY_DOMAIN_HEAP is $MRUBY_DOMAIN_HEAP; mrbtest needs at least 1 MiB." >&2
     echo "The core suite's measured high-water alone is 828128 bytes, and its" >&2
     echo "sub-interpreters allocate through libc malloc, not the probe arena." >&2
     exit 2
   fi
-  echo "mrbtest: heap $MRUBY_DOMAIN_HEAP, stack $MRUBY_DOMAIN_STACK"
+  if [[ "$GPCT" == "0" ]]; then
+    echo "mrbtest: heap $MRUBY_DOMAIN_HEAP, stack $MRUBY_DOMAIN_STACK"
+  else
+    echo "mrbtest: stack $MRUBY_DOMAIN_STACK; heap is fixed in the archive and is"
+    echo "         reported by the domain itself as MRUBY LIBCHEAP"
+  fi
   # driver.c carries the command-line entry point beside the two functions this
   # actually wants (mrb_init_test_driver, mrb_t_pass_result). Renaming main
   # rather than deleting it keeps the file byte-identical to the tree's; the
@@ -689,9 +707,6 @@ fi
 # variables move up with it because it is emitted from them; the definitions are
 # self-defaulting, so an explicit MRUBY_DOMAIN_STACK from the environment still
 # wins and nothing downstream changes.
-MRUBY_DOMAIN_STACK=${MRUBY_DOMAIN_STACK:-$((256 * 1024))}
-MRUBY_DOMAIN_HEAP=${MRUBY_DOMAIN_HEAP:-$((1024 * 1024 - 1536 - 256 * 1024))}
-MRUBY_DOMAIN_DATA=$(( MRUBY_DOMAIN_HEAP + MRUBY_DOMAIN_STACK ))
 printf 'unsigned long __capstone_stack_reserve = %luUL;\n' "$MRUBY_DOMAIN_STACK" \
   > "$OBJ_DIR/stack_reserve.c"
 "$CLANG" "${MRUBY_FLAGS[@]}" -c "$OBJ_DIR/stack_reserve.c" \
@@ -765,6 +780,19 @@ print(got["blob"]+got["table"]+got["storage"])')
   MRUBY_DOMAIN_DATA=$(( _carve + MRUBY_DOMAIN_STACK ))
   printf 'gp-captable: carve %d + stack %d -> dom_data %d\n' \
          "$_carve" "$MRUBY_DOMAIN_STACK" "$MRUBY_DOMAIN_DATA"
+
+  # NO PRE-FLIGHT HEAP GATE HERE, deliberately. Under gp-captable malloc's storage is
+  # the archive's `heap_fallback`, fixed when the libc was built -- and it is reachable
+  # from neither side: the LTO archive is bitcode, which carries no symbol sizes, and
+  # in the image the symbol is static and LTO has internalized it away. Both were
+  # tried; both report 0 or nothing, which is precisely the shape of check this project
+  # keeps getting burned by.
+  #
+  # The domain reports the real number itself, every run:
+  #     MRUBY LIBCHEAP at-exit: used=157232 of=1048576
+  # so the measurement exists where it is trustworthy. mrbtest's high-water is 828128
+  # bytes; a libc built with less will show it there. Raise it by rebuilding the
+  # archive with MUSL_CAPSTONE_EXTRA_CFLAGS=... -DCAPSTONE_LIBC_HEAP_BYTES=...
 fi
 
 # (the three size variables and stack_reserve.o are produced above, before the
