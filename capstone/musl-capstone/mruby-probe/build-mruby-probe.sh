@@ -25,7 +25,27 @@ GUEST_CC=${GUEST_CC:-$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-li
 LIBCAPSTONE_C="$REPO_ROOT/capstone/caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.c"
 SETJMP_SRC="$REPO_ROOT/xlang/lua-cdp/capstone-lua/capstone_setjmp.S"
 
+# MRUBY_GPCT=1 builds the whole domain under the gp-captable ABI: globals are
+# reached through a cap table the entry glue builds from a descriptor, instead of
+# through `gp` as a data capability. The reason is silicon, not tidiness -- under
+# the default ABI QEMU FABRICATES gp from a linear PCC on every use (>=6000 times
+# per mruby run, measured), the RTL never does that, and so mruby as built by the
+# default path cannot run on the board at all.
+#
+# Everything the switch needs already exists: __capstone_yield in the gp-captable
+# glue (behind CAPSTONE_GLUE_YIELD), the init/fini markers in link-gpfree.ld, and
+# malloc.c's runtime choice of heap. See plans/20-08-2026_mruby-gp-captable.md.
+GPCT=${MRUBY_GPCT:-0}
+LADDER="$REPO_ROOT/capstone/tests/runtime-qemu/silicon-ladder"
+GPFREE="$REPO_ROOT/capstone/tests/runtime-qemu/gp-free-domain"
+if [[ "$GPCT" != "0" ]]; then
+  # A DIFFERENT ARCHIVE, not the same one relinked. Every member has to be compiled
+  # with the flag, so pointing at the default archive would link gp-ABI objects into
+  # a gp-captable image and fail in a way that looks like a codegen bug.
+  ARCHIVE=${ARCHIVE:-$CAPSTONE_TMP_ROOT/musl-capstone-build-gpct/libc-capstone.a}
+else
 ARCHIVE=${ARCHIVE:-$CAPSTONE_TMP_ROOT/musl-capstone-build/libc-capstone.a}
+fi
 MUSL_SRC_DIR=${MUSL_SRC_DIR:-$CAPSTONE_TMP_ROOT/musl-src/musl-1.2.5}
 MRUBY_SRC=${MRUBY_SRC:-$HOME/cheri/mruby-purecap}
 
@@ -123,6 +143,47 @@ MRUBY_FLAGS=(
   -O0 -w -Wno-int-conversion -Wno-error=int-conversion
 )
 
+# MRUBY_PROBE_MRBTEST_GEMS=1 widens the suite from core-only to EVERY gem, which
+# needs three changes to the flags above and nothing else.
+#
+# -DMRB_NO_STDIO COMES OUT. It was right when this libc had no stdio; it does
+# now, and three gems refuse to compile with it by design -- mruby-print and
+# mruby-io both `#error "... conflicts 'MRB_NO_STDIO'"`, and mruby-socket needs
+# mruby-io's header. Measured before removing it: mruby's own src/*.c compiles
+# 31/31 either way, so dropping it costs the core nothing.
+#
+# -D_BSD_SOURCE, because musl puts NI_MAXHOST behind it (netdb.h:132) and
+# socket.c uses it. _XOPEN_SOURCE=700 alone does not expose it.
+#
+# mruby-io's include/ on the path, because socket.c includes mruby/ext/io.h and
+# only that gem ships it.
+#
+# Applied ONLY in this mode, so the core-only suite that has already been
+# measured keeps building byte-identically.
+if [[ ${MRUBY_PROBE_MRBTEST_GEMS:-0} == 1 ]]; then
+  _wide=()
+  for f in "${MRUBY_FLAGS[@]}"; do
+    [[ $f == -DMRB_NO_STDIO ]] && continue
+    _wide+=("$f")
+  done
+  MRUBY_FLAGS=("${_wide[@]}" -D_BSD_SOURCE -I"$MRUBY_SRC/mrbgems/mruby-io/include")
+  # mruby-eval is one of the 32 and it CALLS THE PARSER (mrb_parse_nstring,
+  # mrb_generate_code, mrbc_context_new). Without the compiler gem the link ends
+  # with six undefined symbols, so this mode implies it rather than leaving the
+  # caller to discover that. The parser also brings -DMRUBY_PROBE_PARSER, whose
+  # S6/S7 stages sit after the mrbtest hook in capstone_main and are therefore
+  # never reached here.
+  MRUBY_WITH_PARSER=1
+fi
+
+# APPENDED HERE, not inside the array literal, because the mrbtest-gems mode above
+# REBUILDS MRUBY_FLAGS from a filtered copy -- a flag added at the literal would be
+# carried through by that loop only by luck, and dropped the day the filter grows a
+# second exclusion. After the last assignment there is exactly one place to look.
+if [[ "$GPCT" != "0" ]]; then
+  MRUBY_FLAGS+=(-mllvm -capstone-gp-captable)
+fi
+
 rm -rf "$OBJ_DIR"; mkdir -p "$OBJ_DIR"
 
 # The EMBEDDED-STRING length field, widened in a SHADOW of the headers.
@@ -179,9 +240,20 @@ if [[ ${MRUBY_PROBE_STAGE:-0} -ge 7 ]]; then
   done
 fi
 
+if [[ "$GPCT" != "0" ]]; then
+  # The gp-captable glue, with the resumable yield turned on. Same object name so
+  # everything downstream (OBJS, the two links, the size accounting) is untouched.
+  "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+    -ffreestanding -DCAPSTONE_GLUE_YIELD=1 \
+    -c "$LADDER/start-gp-captable-interp.S" -o "$OBJ_DIR/start-musl.o"
+  "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+    -ffreestanding -c "$LADDER/../gct-section-end.S" -o "$OBJ_DIR/gct.o"
+  OBJS+=("$OBJ_DIR/start-musl.o" "$OBJ_DIR/gct.o")
+else
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 -c "$RUNTIME_DIR/start-musl.S" -o "$OBJ_DIR/start-musl.o"
 OBJS+=("$OBJ_DIR/start-musl.o")
+fi
 
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 -c "$SETJMP_SRC" -o "$OBJ_DIR/setjmp.o"
@@ -453,39 +525,27 @@ if [[ ${MRUBY_PROBE_MRBTEST:-0} == 1 ]]; then
     [[ -f $f ]] || {
       echo "missing $f -- run 'rake test' in $MRUBY_SRC first" >&2; exit 2; }
   done
-  # THE LIBC HEAP HAS TO BE BIG ENOUGH, and this is checked HERE because the
-  # alternative is finding out from the board or from QEMU.
+  # THE HEAP HAS TO BE BIG ENOUGH, checked HERE because the alternative is
+  # finding out from a boot.
   #
   # The suite's sub-interpreters are opened with mrb_open_core(mrb_default_allocf,
-  # ...) -- plain libc malloc, not the probe's instrumented allocator, so the
-  # arena knob does not reach them. At the archive's default 256 KiB the outer
-  # state has already taken about 204 KB and the first mrb_open_core returns
-  # NULL. gem_test.c then prints "Invalid mrb_state, exiting", which reads like
-  # mruby failing rather than like a heap that was never large enough, and it
-  # costs a full boot to learn.
+  # ...) -- plain libc malloc, not the probe's instrumented arena, so the arena
+  # knob does not reach them. The measured high-water for the CORE suite is
+  # 828,128 bytes (MRUBY LIBCHEAP at-report). Below that, the first
+  # mrb_open_core returns NULL and gem_test.c prints "Invalid mrb_state,
+  # exiting", which reads like mruby failing rather than like a heap that was
+  # never large enough.
   #
-  # Build one with:
-  #   OUT_DIR=<dir> CAPSTONE_LIBC_HEAP_BYTES=$((2*1024*1024)) \
-  #     bash ../build-musl-capstone.sh
-  # and pass ARCHIVE=<dir>/libc-capstone.a. A separate archive on purpose: the
-  # heap is .bss, .bss is inside the loaded image, and every other domain would
-  # otherwise grow by the same amount.
-  # NO `exit` IN THE AWK, and no `| head`. This script runs under `set -o
-  # pipefail`, so an early-exiting reader gives llvm-nm SIGPIPE and the whole
-  # build dies with 141 -- which the first negative test of this gate did, on
-  # both a too-small archive AND a correct one. A gate that fails every build
-  # equally is not a gate. Reading to the end costs nothing here.
-  _heap=$("$CAPSTONE_LLVM_BIN/llvm-nm" --print-size --defined-only "$ARCHIVE" \
-          2>/dev/null | awk '$NF=="heap" && !seen {print strtonum("0x"$2); seen=1}')
-  [[ -n $_heap ]] || {
-    echo "cannot read the libc heap size out of $ARCHIVE" >&2; exit 2; }
-  if (( _heap < 1024 * 1024 )); then
-    echo "the libc in $ARCHIVE has a ${_heap}-byte heap; mrbtest needs at least" >&2
-    echo "1 MiB because its sub-interpreters allocate through libc malloc." >&2
-    echo "Build one with CAPSTONE_LIBC_HEAP_BYTES and pass it as ARCHIVE." >&2
+  # 1 MiB, i.e. the measurement plus room, and the number is now a BUILD
+  # parameter rather than a property of the archive: the heap comes out of
+  # dom_data, so raise it with MRUBY_DOMAIN_HEAP instead of rebuilding a libc.
+  if (( MRUBY_DOMAIN_HEAP < 1024 * 1024 )); then
+    echo "MRUBY_DOMAIN_HEAP is $MRUBY_DOMAIN_HEAP; mrbtest needs at least 1 MiB." >&2
+    echo "The core suite's measured high-water alone is 828128 bytes, and its" >&2
+    echo "sub-interpreters allocate through libc malloc, not the probe arena." >&2
     exit 2
   fi
-  echo "mrbtest: libc heap $_heap bytes"
+  echo "mrbtest: heap $MRUBY_DOMAIN_HEAP, stack $MRUBY_DOMAIN_STACK"
   # driver.c carries the command-line entry point beside the two functions this
   # actually wants (mrb_init_test_driver, mrb_t_pass_result). Renaming main
   # rather than deleting it keeps the file byte-identical to the tree's; the
@@ -496,21 +556,66 @@ if [[ ${MRUBY_PROBE_MRBTEST:-0} == 1 ]]; then
            -o "$OBJ_DIR/mrbtest_vformat.o"
   "$CLANG" "${MRUBY_FLAGS[@]}" -c "$MRBTEST_GEN/assert.c" \
            -o "$OBJ_DIR/mrbtest_assert.o"
-  "$CLANG" "${MRUBY_FLAGS[@]}" -c "$MRBTEST_GEN/gem_test.c" \
-           -o "$OBJ_DIR/mrbtest_coretests.o"
-  {
-    echo '/* GENERATED by build-mruby-probe.sh -- do not edit. */'
-    echo '#include <mruby.h>'
-    echo 'void GENERATED_TMP_mrb_mruby_test_gem_test(mrb_state *mrb);'
-    echo 'void mrbgemtest_init(mrb_state *mrb) {'
-    echo '  GENERATED_TMP_mrb_mruby_test_gem_test(mrb);'
-    echo '}'
-  } > "$OBJ_DIR/mrbtest_dispatch.c"
-  "$CLANG" "${MRUBY_FLAGS[@]}" -c "$OBJ_DIR/mrbtest_dispatch.c" \
-           -o "$OBJ_DIR/mrbtest_dispatch.o"
   OBJS+=("$OBJ_DIR/mrbtest_driver.o" "$OBJ_DIR/mrbtest_vformat.o"
-         "$OBJ_DIR/mrbtest_assert.o" "$OBJ_DIR/mrbtest_coretests.o"
-         "$OBJ_DIR/mrbtest_dispatch.o")
+         "$OBJ_DIR/mrbtest_assert.o")
+
+  if [[ ${MRUBY_PROBE_MRBTEST_GEMS:-0} == 1 ]]; then
+    # EVERY gem and every gem's tests, using rake's own generated files
+    # throughout: build/host/mrbgems/gem_init.c is the dispatcher that calls each
+    # gem's GENERATED_TMP_..._gem_init in dependency order, and
+    # mruby-test/mrbtest.c is the one that calls each _gem_test. Writing either
+    # by hand would be a second ordering that can disagree with rake's.
+    for gd in "$MRUBY_SRC"/build/host/mrbgems/mruby-*/; do
+      g=$(basename "$gd")
+      for gsrc in "$MRUBY_SRC/mrbgems/$g"/src/*.c; do
+        [[ -e $gsrc ]] || continue
+        "$CLANG" "${MRUBY_FLAGS[@]}" -I"$MRUBY_SRC/mrbgems/$g/include" \
+                 -I"$MRUBY_SRC/mrbgems/mruby-compiler/core" \
+                 -include sys/select.h -include sys/time.h \
+                 -c "$gsrc" -o "$OBJ_DIR/wg_${g}_$(basename "$gsrc" .c).o"
+        OBJS+=("$OBJ_DIR/wg_${g}_$(basename "$gsrc" .c).o")
+      done
+      # A gem's own C-LEVEL test helpers, which are separate from the bytecode in
+      # gem_test.c: mruby-io, mruby-proc-ext and mruby-socket each define an
+      # mrb_mruby_<gem>_gem_test that the generated loader calls. Omitting them
+      # is three undefined symbols at link time, not a quiet loss.
+      for gtest in "$MRUBY_SRC/mrbgems/$g"/test/*.c; do
+        [[ -e $gtest ]] || continue
+        "$CLANG" "${MRUBY_FLAGS[@]}" -I"$MRUBY_SRC/mrbgems/$g/include" \
+                 -I"$MRUBY_SRC/mrbgems/mruby-compiler/core" \
+                 -include sys/select.h -include sys/time.h \
+                 -c "$gtest" -o "$OBJ_DIR/wt_${g}_$(basename "$gtest" .c).o"
+        OBJS+=("$OBJ_DIR/wt_${g}_$(basename "$gtest" .c).o")
+      done
+      for gen in gem_init.c gem_test.c; do
+        [[ -f "$gd/$gen" ]] || continue
+        "$CLANG" "${MRUBY_FLAGS[@]}" -c "$gd/$gen" \
+                 -o "$OBJ_DIR/wg_${g}_${gen%.c}.o"
+        OBJS+=("$OBJ_DIR/wg_${g}_${gen%.c}.o")
+      done
+    done
+    "$CLANG" "${MRUBY_FLAGS[@]}" -c "$MRUBY_SRC/build/host/mrbgems/gem_init.c" \
+             -o "$OBJ_DIR/wg_gem_init_all.o"
+    "$CLANG" "${MRUBY_FLAGS[@]}" -c "$MRBTEST_GEN/mrbtest.c" \
+             -o "$OBJ_DIR/mrbtest_dispatch.o"
+    OBJS+=("$OBJ_DIR/wg_gem_init_all.o" "$OBJ_DIR/mrbtest_dispatch.o")
+    # Drops mruby_probe.c's empty mrb_init_mrbgems, so rake's real one links.
+    PROBE_EXTRA+=(-DMRUBY_PROBE_GEMS)
+  else
+    "$CLANG" "${MRUBY_FLAGS[@]}" -c "$MRBTEST_GEN/gem_test.c" \
+             -o "$OBJ_DIR/mrbtest_coretests.o"
+    {
+      echo '/* GENERATED by build-mruby-probe.sh -- do not edit. */'
+      echo '#include <mruby.h>'
+      echo 'void GENERATED_TMP_mrb_mruby_test_gem_test(mrb_state *mrb);'
+      echo 'void mrbgemtest_init(mrb_state *mrb) {'
+      echo '  GENERATED_TMP_mrb_mruby_test_gem_test(mrb);'
+      echo '}'
+    } > "$OBJ_DIR/mrbtest_dispatch.c"
+    "$CLANG" "${MRUBY_FLAGS[@]}" -c "$OBJ_DIR/mrbtest_dispatch.c" \
+             -o "$OBJ_DIR/mrbtest_dispatch.o"
+    OBJS+=("$OBJ_DIR/mrbtest_coretests.o" "$OBJ_DIR/mrbtest_dispatch.o")
+  fi
   PROBE_EXTRA+=(-DMRUBY_PROBE_MRBTEST)
   # NO single-file knob, on purpose. The suite already reports incrementally --
   # t_print emits one character per assertion and fflushes -- so a run that dies
@@ -524,7 +629,58 @@ fi
          -c "$SCRIPT_DIR/mruby_probe.c" -o "$OBJ_DIR/mruby_probe.o"
 OBJS+=("$OBJ_DIR/mruby_probe.o")
 
-"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" "${OBJS[@]}" "$ARCHIVE"
+if [[ "$GPCT" != "0" ]]; then
+  # link-gpfree.ld places the globals at a FIXED image offset so the monitor can
+  # SPLIT the code image into a code cap and a globals cap with the real SPLIT
+  # instruction. The offset has to clear .text, which is not known until something
+  # is linked, so link once at a provisional 8 MiB purely to measure .text and then
+  # generate the script the two real links below use. Both of them use the same
+  # generated script: the second adds only the non-alloc domreq section, and the
+  # existing guard right after it fails the build if any loaded byte moves.
+  sed "s/0x10000 + 0x1000/0x10000 + 0x800000/" "$GPFREE/link-gpfree.ld" \
+    > "$OBJ_DIR/link-probe.ld"
+  "$LD_LLD" --gc-sections -T "$OBJ_DIR/link-probe.ld" -o "$OBJ_DIR/pass1.dom" \
+    "${OBJS[@]}" "$ARCHIVE"
+  _text=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$OBJ_DIR/pass1.dom" 2>/dev/null | python3 -c '
+import sys,re
+for l in sys.stdin:
+    m=re.match(r"\s*\[\s*\d+\]\s+(\.text)\s+\S+\s+[0-9a-f]+\s+[0-9a-f]+\s+([0-9a-f]+)", l)
+    if m: print(int(m.group(2),16)); break
+else: print(0)')
+  [[ "${_text:-0}" -gt 0 ]] || { echo "could not measure .text for the globals offset" >&2; exit 2; }
+  _goff=$(( ((_text + 0xFFFF) / 0x10000) * 0x10000 ))
+  [[ $_goff -lt 65536 ]] && _goff=65536
+  printf 'gp-captable: .text = %d bytes -> globals offset 0x%x\n' "$_text" "$_goff"
+  LINKER_SCRIPT="$OBJ_DIR/link.ld"
+  sed "s/0x10000 + 0x1000/0x10000 + $(printf '0x%x' $_goff)/" "$GPFREE/link-gpfree.ld" \
+    > "$LINKER_SCRIPT"
+fi
+
+# THE STACK RESERVE IS LINKED INTO **BOTH** LINKS, and that is what keeps the
+# no-loaded-byte-moved check below meaningful.
+#
+# It used to appear only in the second link. Under the default ABI that was
+# invisible: it overrides a weak definition already in the archive, so the object
+# set changed but the layout did not. Under gp-captable it is a GLOBAL, and a new
+# global appends a record to .capstone_gp_initdesc -- which is the first thing in
+# the globals region, so every global behind it shifts. The check then failed
+# naming domreq.S, which had not done anything.
+#
+# Adding it here makes the two links differ by exactly ONE thing, the non-alloc
+# domreq section, which is the thing the check is actually about. The three size
+# variables move up with it because it is emitted from them; the definitions are
+# self-defaulting, so an explicit MRUBY_DOMAIN_STACK from the environment still
+# wins and nothing downstream changes.
+MRUBY_DOMAIN_STACK=${MRUBY_DOMAIN_STACK:-$((256 * 1024))}
+MRUBY_DOMAIN_HEAP=${MRUBY_DOMAIN_HEAP:-$((1024 * 1024 - 1536 - 256 * 1024))}
+MRUBY_DOMAIN_DATA=$(( MRUBY_DOMAIN_HEAP + MRUBY_DOMAIN_STACK ))
+printf 'unsigned long __capstone_stack_reserve = %luUL;\n' "$MRUBY_DOMAIN_STACK" \
+  > "$OBJ_DIR/stack_reserve.c"
+"$CLANG" "${MRUBY_FLAGS[@]}" -c "$OBJ_DIR/stack_reserve.c" \
+         -o "$OBJ_DIR/stack_reserve.o"
+
+"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
+          "${OBJS[@]}" "$OBJ_DIR/stack_reserve.o" "$ARCHIVE"
 
 # DECLARE THE DOMAIN'S RESOURCE REQUIREMENT, because the module's fallback rule
 # no longer fits an image this size.
@@ -555,16 +711,28 @@ OBJS+=("$OBJ_DIR/mruby_probe.o")
 # region minus a 1.39 MB image left it about 701 KB, and it ran. Raise it with
 # MRUBY_DOMAIN_STACK if a deeper workload needs it -- mruby's own test suite
 # will -- and keep the "- 1536" when you do.
-MRUBY_DOMAIN_STACK=${MRUBY_DOMAIN_STACK:-$((1024 * 1024 - 1536))}
+# TWO NUMBERS NOW, because dom_data holds two things.
+#
+# libc-ext/malloc.c takes its heap from the LOW end of dom_data and the stack
+# grows down from the high end, so the declaration is heap + stack and the split
+# has to be told to both sides: to the module through .capstone_domreq, and to
+# the libc through __capstone_stack_reserve. Emitting the reserve from the same
+# variable is the point -- a build that declared one number and linked another
+# would put the two ends of the region on a collision course silently.
+# (the three size variables and stack_reserve.o are produced above, before the
+# first link -- see the note there on why they cannot live only down here)
 _segs() { "$CAPSTONE_LLVM_READOBJ" --program-headers "$OUT_DOM" \
           | grep -E 'Offset|FileSize|MemSize|VirtualAddress'; }
 _before=$(_segs)
 "$CLANG" -target capstone64-unknown-elf -ffreestanding \
-  -DCAPSTONE_DOMREQ_DATA=$MRUBY_DOMAIN_STACK \
+  -DCAPSTONE_DOMREQ_DATA=$MRUBY_DOMAIN_DATA \
   -DCAPSTONE_DOMREQ_STACK=$MRUBY_DOMAIN_STACK \
   -c "$REPO_ROOT/capstone/tests/runtime-qemu/domreq.S" -o "$OBJ_DIR/domreq.o"
+# The libc's weak default is overridden by stack_reserve.o, emitted above from the
+# SAME variable this declaration uses, so the module's idea of the split and the
+# allocator's cannot drift apart.
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
-          "${OBJS[@]}" "$OBJ_DIR/domreq.o" "$ARCHIVE"
+          "${OBJS[@]}" "$OBJ_DIR/domreq.o" "$OBJ_DIR/stack_reserve.o" "$ARCHIVE"
 # The section is non-alloc, so NOTHING LOADED MAY MOVE. Verified rather than
 # asserted: this project has a documented layout sensitivity where four added
 # instructions flipped a passing run, and a diagnostic that perturbs the image is
@@ -583,9 +751,10 @@ image=$("$CAPSTONE_LLVM_READOBJ" --program-headers "$OUT_DOM" \
 # like a measurement rather than the leftover it was.
 _code=$(( ((image - 1) / 16 + 1) * 16 ))
 _creg=4096; while (( _creg < _code )); do _creg=$(( _creg * 2 )); done
-_dreg=4096; while (( _dreg < 1536 + MRUBY_DOMAIN_STACK )); do _dreg=$(( _dreg * 2 )); done
-printf 'built %s (image %s -> code region %s, declared dom_data %s -> data region %s)\n' \
-       "$OUT_DOM" "$image" "$_creg" "$MRUBY_DOMAIN_STACK" "$_dreg"
+_dreg=4096; while (( _dreg < 1536 + MRUBY_DOMAIN_DATA )); do _dreg=$(( _dreg * 2 )); done
+printf 'built %s (image %s -> code region %s; dom_data %s = heap %s + stack %s -> data region %s)\n' \
+       "$OUT_DOM" "$image" "$_creg" "$MRUBY_DOMAIN_DATA" "$MRUBY_DOMAIN_HEAP" \
+       "$MRUBY_DOMAIN_STACK" "$_dreg"
 # Both regions come from __get_free_pages, so both are bounded by MAX_ORDER-1 =
 # order 10. Say so HERE rather than letting the guest report `create_dom failed
 # (-1)` with the reason in a muted pr_alert -- which is exactly how the previous
