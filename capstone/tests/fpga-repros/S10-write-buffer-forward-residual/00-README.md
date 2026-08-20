@@ -21,7 +21,10 @@
 > **The earlier "0 of 100 touch the dcache" was worse than vacuous — the true answer is the
 > opposite.** It came from matching `Source:`/`Destination:` endpoint fields only, which name the
 > two ends of a path and never its interior.
-> **What is NOT established either way: whether the S-07 fix's own logic is on that cone.** The
+> **SUPERSEDED 2026-08-20 by the checkpoint enumeration: the fix's own logic IS on 2284 failing
+> paths (`gran_*` has 17 nets in the netlist; the `gran_*`-absence and `data_gnt` arguments below
+> are both RETRACTED — see `agent-handoff/ref/RATE-RULE.md`). Whether it SETS WNS is unmeasured.**
+> **What was believed at the time — not established either way: whether the fix's logic is on that cone.** The
 > traversed nets are all **read/tag-check side** (`rd_req`, `rd_ack`, `wbuffer_hit_oh`,
 > `data_rdata_q`), while the fix adds logic to the **allocation** side (`gran_hazard` →
 > `data_gnt`/`wbuffer_wren`); and `wbuffer_hit_oh` pre-dates the fix. But a search for

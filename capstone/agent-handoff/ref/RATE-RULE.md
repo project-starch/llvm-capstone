@@ -1733,3 +1733,91 @@ answer, each control a real improvement on the last, none reaching the question.
 was not a rule — it was **a second reader who kept handing the zero back**. Worth recording as
 plainly as the technical finding: the process that worked here was cross-checking between two
 lanes, and neither lane got there alone.
+
+---
+
+# FOURTH RETRACTION — THE FIX'S OWN LOGIC IS ON 2284 FAILING PATHS
+
+The routed checkpoint was queried. **Two claims recorded above are dead, one of them the very
+example held up as the SUPPORTED counter-case**, and the structural argument has a hole I put
+there myself.
+
+## The enumeration (RTL lane, from the `e1140aeea` routed `.dcp` — NOT verified here, no Vivado)
+
+    failing endpoints total                        96727
+    by startpoint module                           96727   i_cva6/dom_switcher -- ALL, one module
+    denominator check, wbuffer cells in netlist    12198
+    failing paths through i_wt_dcache_wbuffer      96727   <- ALL of them
+    nets matching *gran_*                             17   <- the fix's nets DO survive
+    nets matching *ni_conflict*                        0
+    failing paths through the fix's OWN nets        2284
+
+## 1. RETRACTED: the `data_gnt` "supported negative"
+
+Recorded above as the contrast case — the *good* zero, the one that proved we could tell a real
+negative from a worthless one. It was supported **only within the ten-path sample**. The name
+surviving makes the matcher sound; it says nothing about a set that contains ten of 96727 paths.
+The denominator rule was applied to the matcher and not to the sample, in the same paragraph that
+claimed to have learned the difference.
+
+## 2. RETRACTED: the reason behind the `ni_conflict` calibration
+
+Right answer, wrong reason, and the reason is what was being relied on. **`gran_*` names survive
+perfectly well — 17 nets in the netlist.** `ni_conflict` is absent because it is constant-folded,
+verified here from source:
+
+    build_config_pkg.sv:126   NonIdemPotenceEn = (NrNonIdempotentRules > 0) && (NonIdempotentLength > 0)
+    capstone_cv64a6_imafdc_sv39_config_pkg.sv:136-138
+                              NrNonIdempotentRules: 2
+                              NonIdempotentLength:  1024'({64'b0, 64'b0})   <- ZERO
+
+So `NonIdemPotenceEn = 0`, `ni_conflict = 0 && …` folds away, and it is absent for a reason that
+has nothing to do with signal-class naming. The conclusion drawn from it — *"the missing `gran_*`
+names are a naming property of that class"* — is **false**. It pointed the right way only because
+the reports were samples.
+
+## 3. AND IT CUTS THE OTHER WAY, which neither lane noticed
+
+If `ni_conflict` folds to constant 0, then in this configuration the accept condition
+
+    :722   if (!ni_conflict && !gran_hazard)
+
+reduces to `if (!gran_hazard)`. Before the fix it reduced to `if (1)` — **unconditional**.
+So the fix did not add a term alongside an existing one: it converted an *unconditional* accept
+into one gated by an 8-wide OR of granule comparators, and `gran_hazard` is now the **only**
+dynamic term on that path. That makes a timing contribution more plausible, not less.
+
+## 4. The structural argument had a hole, and it was mine
+
+I traced `gran_hazard → rd_req_o`, found `wbuffer_q` between them, and concluded the fix could not
+contribute combinational depth to *any* traversed path. That is a non-sequitur, and the disproof
+was in the same sentence I wrote: `gran_hazard` gates **two** outputs, and I checked one.
+
+    :722   if (!ni_conflict && !gran_hazard) begin
+    :723     wbuffer_wren = 1'b1;
+    :725     req_port_o.data_gnt = 1'b1;      <- COMBINATIONAL, inside the gated block
+    :489   req_wtag = {req_port_i.address_tag, req_port_i.address_index[...]}
+
+`req_wtag` is built from the requester's address, i.e. the store unit, which sits on the
+`sel_dom_switch` cone. So there is a direct path: `dom_switcher → sel_dom_switch → store-unit
+address → req_wtag → gran_eq → gran_conflict → gran_hazard → data_gnt`. Presumably the 2284.
+
+## 5. THE ONLY QUESTION LEFT, and it is a single number
+
+**Being on a failing path is not the same as setting WNS.** All 96727 fail; the fix adds depth to
+2284 that already failed for another reason. The deciding measurement is **worst slack through the
+fix's nets** against the design WNS of **−10.629 ns**:
+
+* **equal** → the fix is on the critical path;
+* **materially better** → it is a passenger on paths that fail without it.
+
+That number was not in the query. `timing-forensics.tcl` (RTL lane, committed on both branches so
+each side is analysed by identical code) produces it against the **existing** checkpoint, no
+rebuild. A control branch `timing-control-618f4ce36` — reference RTL byte-identical, scripts only,
+zero design change — now exists for the A/B.
+
+## Status after four retractions
+
+**NOT exonerated. IMPLICATED but not convicted.** The fix's logic is demonstrably on failing
+paths; whether it *causes* the violation is unmeasured. Everything upstream of this section that
+says otherwise is superseded by it.
