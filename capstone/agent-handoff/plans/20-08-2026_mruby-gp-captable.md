@@ -80,13 +80,56 @@ Each step either costs no boot or answers one question.
       says nothing about whether the code is CORRECT, nor about the gct and glue
       side; that is steps 2 to 5.
 
-- [ ] **2. Transplant the yield into the gp-captable glue. No boot.**
-      `start-gp-captable-interp.S` has `cscratch` (15), `domreturn` (8) and a
-      reentry path, and lacks `__capstone_dom_ret` and `__capstone_tls`. The
-      yield in `start-musl.S` is 31 lines to the resume label plus the restore
-      half, and needs exactly `__capstone_dom_ret`, `cscratch`, `domreturn`.
-      Add the slot, the three-instruction stash at entry, and the yield.
-      Check before any boot: symbols resolve, and `cjalr` stays 0.
+- [x] **2. Transplant the yield into the gp-captable glue. No boot. DONE 2026-08-20.**
+      **The plan as written above was wrong in its central assumption and the
+      correction is the useful part of this step.** It said to add a
+      `__capstone_dom_ret` slot, copying `start-musl.S`, which reaches that slot
+      by gp-relative addressing. In gp-captable `gp` is the cap TABLE, so that
+      addressing mode is not available, and three successive designs for a
+      replacement slot each died on a detail: end-relative and frame-relative
+      offsets do not alias, the exit path does not reset `sp` to the region end,
+      and after the carve `sp` no longer covers the descriptor blob at all.
+
+      The exit from that loop was to stop designing and read how the glue itself
+      already parks a capability. **It has the whole mechanism already:** `test:`
+      does `stc(ra, sp, 48)` -- the entry return capability, in its own frame --
+      and `.Ldomain_returned` reads exactly that slot to `domreturn` through.
+      Under `INTERP_DOMAIN_MTVEC` it also publishes the frame in `cscratch`. So
+      no new slot exists in the final change; the yield reads `cscratch` to reach
+      the frame, takes the capability from `+48`, and refreshes that same slot on
+      resume. One stash location, so there are no two copies that can disagree.
+
+      The edit is three hunks: the `ccsrrw(x0, cscratch, sp)` frame publish moves
+      out of the `INTERP_DOMAIN_MTVEC` guard into
+      `INTERP_DOMAIN_MTVEC || CAPSTONE_GLUE_YIELD` (both gates want the identical
+      store, for reasons that compose); the matching zeroing before
+      `.Ldomain_returned` gets the same condition; and `__capstone_yield` is added
+      under `#ifdef CAPSTONE_GLUE_YIELD`.
+
+      Also learned, from the experiment that ended the design loop: linking the
+      probe against the unmodified glue reports **exactly one** undefined symbol,
+      `__capstone_yield`. `domain_main` and the cap-init range already resolve.
+      One link settled what three rounds of source reading had not.
+
+      Checks run, all before any boot:
+      * the glue object is **byte-identical** to the pre-edit one at
+        `(no flags)`, `INTERP_DOMAIN_MTVEC`, `INTERP_PEEK_SP` and
+        `INTERP_RETURN_PRECALL`, so SQLite, micropython and jerryscript are
+        untouched including in layout. Positive control: the same comparison run
+        **with** `CAPSTONE_GLUE_YIELD` reports a difference, so it can fire.
+      * with the define: links, `__capstone_yield` defined, `cjalr` 0. The
+        `cjalr` count was itself controlled -- the disassembly was confirmed to
+        cover the new routine (47 instructions, one `<unknown>` = `domreturn`)
+        rather than silently rendering nothing there.
+      * the built probe image makes 9 `ldc`-through-`gp` and 2 `cincoffset gp`
+        accesses and carries exactly one `.capstone_gp_table`, so it really does
+        exercise the cap table rather than merely link against the glue.
+      * 6172 loadable bytes, above the 0x1000 the monitor SPLIT needs.
+
+      `YIELD_PROBE_GPCT=1` on `build-yield-probe.sh` selects this variant. The
+      probe source, host program, run script and success markers are shared with
+      the musl-glue build on purpose: a difference in the result is then a
+      difference between the two glues and nothing else.
 
 - [ ] **3. yield-probe on the new glue. One boot.**
       The smallest thing that actually exercises the new path, and the reason it
