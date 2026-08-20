@@ -805,6 +805,31 @@ static int run_mrbtest(mrb_state *mrb) {
 int capstone_main(void) {
   SAY("MRUBY S1: entered\n");
 
+#ifdef MRUBY_PROBE_TP
+  /* DOES THE THREAD POINTER SURVIVE INTO C AT ALL?
+   *
+   * mruby's gem suite halts with a cause-24 in strerror, which is the first
+   * thing in a domain that actually reads tp: libc-ext/errno.c deliberately
+   * avoids it, so nothing before this had ever used it. Two candidates --
+   * musl's accessor dropping the tag (fixed in arch-capstone64/pthread_arch.h)
+   * or tp not being a usable capability in the first place -- and a full suite
+   * run costs ten minutes to distinguish them. This arm answers it in one boot
+   * and RETURNS either way instead of only faulting. */
+  {
+    char b[96];
+    void *tp;
+    __asm__ __volatile__("movc %0, tp" : "=r"(tp));
+    int n = snprintf(b, sizeof b, "MRUBY TP: tag=%d base=%lx cursor=%lx\n",
+                     (int)__builtin_capstone_cap_get_tag(tp),
+                     (unsigned long)__builtin_capstone_cap_get_base(tp),
+                     (unsigned long)__builtin_capstone_cap_get_cursor(tp));
+    if (n > 0) __capstone_hc_write(1, b, (unsigned long)n);
+    extern char *strerror(int);
+    const char *s = strerror(1);
+    SAY(s ? "MRUBY TP: strerror returned\n" : "MRUBY TP: strerror gave null\n");
+  }
+#endif
+
 #if MRUBY_PROBE_STAGE > 0
   return run_stage();
 #endif
