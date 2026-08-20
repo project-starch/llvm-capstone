@@ -1431,6 +1431,37 @@ def main():
                 _w = _read_sw(208, allow_cached=not _halt_reads, _force_emit=_halt_reads)
                 _d = decode_s07_verdict(_w)
 
+                # WHAT A RUNNING READ CAN AND CANNOT ANSWER. Source-verified in capstone-ariane
+                # core/cva6.sv, and it PARTITIONS the apertures -- this is the rule, and the
+                # poison below is only a backstop for when it is broken.
+                #
+                #   STICKY SINGLE BITS  -- safe while running. A bit that only ever goes 0 -> 1
+                #     ORs to itself. s07_stc_storewb_seen_log_q and s07_ldc_loadwb_seen_log_q
+                #     (:1146-1150) and s07_selftest_seen_q (:1155) are `<= 1'b1` under a
+                #     condition and cleared only at reset. THIS IS WHY the 220 selftest read on
+                #     2026-08-20 was trustworthy while the per-domain reads beside it were not.
+                #
+                #   LIVE MULTI-BIT FIELDS -- never safe while running. Aperture 208 is
+                #     {s07_ldc0_valid, s07_ldc0_src, s07_stc_valid, s07_stc_ctag, s07_gran_match,
+                #     s07_stc_clobbered, s07_selftest_seen_q} (:1336). Only the last carries `_q`;
+                #     s07_ldc0_src is `logic [1:0]` (:786) driven combinationally from the LSU
+                #     (:1791). So the stretcher ORs the field across ~42 ms of EXECUTION:
+                #     src=1 on one load ORed with src=2 on a later one gives src=3 from a SINGLE
+                #     aperture, no intermediate involved. That is a simpler account of the
+                #     2026-08-20 reading than cross-aperture contamination, and settling at the
+                #     target cannot fix it -- the target is what is changing. A LONGER settle
+                #     makes it strictly worse: more instructions inside the window.
+                #
+                #   COUNTERS -- never safe, and deceptively so, which is the trap actually hit.
+                #     204 carries s07_ldc_loadwb_cnt_q, a saturating 6-bit counter (:1147-1148).
+                #     The OR of a counter's successive values is not any of them: 60|61|62 = 63.
+                #     So the "count=62" that decoded as INSIDE 204's legal set may itself be an
+                #     OR artifact. The one number in that read that looked like data is the one
+                #     to trust least.
+                #
+                # RULE: a running read answers "did this sticky thing EVER happen". Anything with
+                # a VALUE -- src, count, head pointer -- needs a halted read or it is not evidence.
+                #
                 # CROSS-APERTURE CONTAMINATION POISONING, added 2026-08-20.
                 #
                 # CAUSE CORRECTED the same day. The first version of this comment said the fault
