@@ -1,0 +1,188 @@
+# The domain switcher's timing failure, root-caused — and two corrections to my own numbers
+
+**Date:** 2026-08-20
+**Artifacts:** `synth-39b21639d-exit0.tar.gz` (control), `synth-80843404c-exit0.tar.gz` (S-10).
+Both carry `core/capstone_dom_switcher.anvil.sv` **byte-identical** to the worktree
+(`sha256 82eeea1a4b1f5390da20c26eeffbf61d27644386bd34ae0c5cf558468f769fb6`), so no
+stale-artifact problem: the file analysed below is the file that built both bitstreams.
+
+## The headline, and it is a single register bit
+
+Complete enumeration from each routed checkpoint —
+`get_timing_paths -max_paths 1000000 -nworst 1 -slack_lesser_than 0` (one worst path per
+failing endpoint, not a worst-N sample):
+
+| build | WNS | failing endpoints | startpoints |
+|---|---|---|---|
+| `39b21639d` (control) | −10.629 | 96,727 | **96,727 = 100.0%** `dom_switcher/cur_idx_q_reg[1]` |
+| `80843404c` (S-10) | −16.400 | 102,774 | **102,769 = 100.0%** `dom_switcher/cur_idx_q_reg[3]`; 5 DDR |
+
+Where they land (S-10 / control):
+
+```
+i_tracer            65,442  63.7%   /  65,562  67.8%     debug-only instrumentation
+issue_stage_i       21,728  21.1%   /  19,297  19.9%
+ex_stage_i           8,529   8.3%   /   8,052   8.3%
+cache_subsystem      3,931   3.8%   /   1,625   1.7%
+csr_regfile_i          978   1.0%   /     499   0.5%
+dom_switcher (own)     497           /     234            the mechanism itself
+```
+
+**One 7-bit FSM counter is the startpoint of essentially every failing path in the design.**
+
+## Why — two structural facts, both quoted from source
+
+**1. `cur_idx` is combinationally muxed onto the architectural register file's address port.**
+
+```systemverilog
+// core/issue_read_operands.sv:1537-1540
+if (dom_switch_sel && dom_switch_reg_req_valid_i && !dom_switch_reg_req_i.is_set) begin
+  raddr_pack[i*OPERANDS_PER_INSTR+0] = dom_switch_reg_id;      // = cur_idx - 25
+end else begin
+  raddr_pack[i*OPERANDS_PER_INSTR+0] = ... issue_instr_i[i].rs1[4:0];
+end
+```
+
+Same on the write side (`:1566` `waddr_pack`, `:1609` `cap_waddr_pack`). The regfile read is
+**asynchronous** — `core/ariane_regfile.sv:57`: `assign rdata_o[i] = mem[raddr_i[i]]` — and
+`rdata[0]` is operand_a of the main pipeline. So `cur_idx` is not switcher-local state; it is an
+address into the datapath.
+
+**2. The register channel closes its round trip combinationally, in one cycle.** All three
+responders, and the source says so itself:
+
+```
+core/issue_read_operands.sv:1526   dom_switch_reg_req_ack_o    = dom_switch_sel && dom_switch_reg_req_valid_i;
+core/issue_read_operands.sv:1527   dom_switch_reg_resp_valid_o = dom_switch_reg_req_ack_o;  // same cycle response
+core/csr_regfile.sv:389            // FIXME: a hack
+core/csr_regfile.sv:395-396        dom_switch_reg_req_ack_o = dom_switch_req_en;
+                                   dom_switch_reg_resp_valid_o = dom_switch_req_en;
+core/frontend/frontend.sv:452-453  dom_switch_reg_req_ack_o = 1'b1;  dom_switch_reg_resp_valid_o = 1'b1;
+core/cva6.sv:868-869               the three are OR-ed back into one bus
+```
+
+The **data** channel, by contrast, already has a registered response — `core/store_unit.sv:288`
+gates `dom_switch_data_resp_valid_o` on `sel_dom_switch_last`, registered at `:558`. That is an
+existence proof that the Anvil handshake tolerates response latency.
+
+## Why a 2-cycle exception on `-from cur_idx_q_reg*` is unsound
+
+The FSM consumes a newly written `cur_idx` exactly **one** cycle later:
+
+```
+core/capstone_dom_switcher.anvil.sv:618   EVENTS0[101] = [100]||[93]||[76]||[69]||[51]||[44]||[27]||[20]||[1]
+                                  :617   _thread_0_event_counter_102_1_n = EVENTS0[101]
+                                  :616   EVENTS0[102]  = _thread_0_event_counter_102_1_q
+                                  :779   EVENTS0[0]    = _init_0 || EVENTS0[102]
+                                  :775   EVENTS0[4]    = EVENTS0[3] && thread_0_wire$19   ($19 = f(cur_idx_q))
+```
+
+`cur_idx_q` is written by events 20/44/69/93, which are themselves terms of `EVENTS0[101]`.
+Exactly one registered stage on every writer's return path.
+
+The argument that admits no handshake escape: the FSM state registers clock
+**unconditionally**, no clock enable —
+
+```
+core/capstone_dom_switcher.anvil.sv:1056   _thread_0_event_syncstate_5_q <= _thread_0_event_syncstate_5_n;
+                                    :774   _thread_0_event_syncstate_5_n = (EVENTS0[4] || syncstate_5_q) && !_data_ch_req_ack;
+```
+
+Whatever `ack` does, a combinational function of the new `cur_idx` is captured at the edge
+ending T+1. No value of `ack` makes that capture independent of `cur_idx`.
+
+## TWO CORRECTIONS TO WHAT I PREVIOUSLY WROTE
+
+**Correction 1 — the count in `fb228796e` is mislabelled and understated.** I wrote "129 on
+`data_read_q_reg`, 25 on `_thread_0_event_counter_*`, 1 on the log register = 155". The
+`_thread_0_event_counter_*` glob matches **9**, not 25; 25 was 9 counters + 16
+`_thread_0_event_syncstate_*`. And the list omitted `cur_base_q_reg` (64) and `cur_idx_q_reg`'s
+own self-loop (7), which are just as much single-cycle mechanism registers. Exact by-endpoint
+counts, identical in both builds except `commit_req_q_reg`:
+
+| endpoint group | control | S-10 |
+|---|---|---|
+| `data_read_q_reg[*]` | 129 | 129 |
+| `_thread_0_event_syncstate_*_q_reg` | 16 | 16 |
+| `_thread_0_event_counter_*_q_reg` | 9 | 9 |
+| `cur_base_q_reg[*]` | 64 | 64 |
+| `_thread_0_event_reg_*_q_reg[*]` | 8 | 8 |
+| `cur_idx_q_reg[*]` | 7 | 7 |
+| `req_en_q_reg` | 1 | 1 |
+| `dom_switch_last_data_metadata_en_log_q_reg` | 1 | 1 |
+| `dom_switch_pc_loaded_value_seen_log_q_reg` | 1 | 1 |
+| `commit_req_q_reg[*]` | 0 | 263 |
+| **total under `dom_switcher/`** | **234** | **497** |
+
+**The honest figure is 234 / 497, not 155.** And the broad exception would not have masked
+those alone — it applies to *every* failing path in the design, since all of them launch from
+`cur_idx_q_reg`.
+
+**Correction 2 — "the reg-channel round trip is the critical path" was an inference, and the
+measured evidence points at the DATA channel.** Not one of the 500 worst paths in either build
+touches the reg channel:
+
+```
+grep -c '_reg_ch_req_valid_selector'  worst_500_paths.rpt   ->  0 / 0
+grep -c '_data_ch_req_valid_selector' worst_500_paths.rpt   ->  1500 / 1000
+```
+
+The one fully-detailed failing path available runs `cur_idx_q_reg[1]/Q -> _busy_ch_idx_0 ->
+_thread_0_event_syncstate_78_q_i_4 -> _data_ch_req_valid_selector_q[0]_i_1 ->
+dom_switch_data_req[write_en] -> lsu_bypass_i/sel_dom_switch -> dtlb -> ... ->
+issue_read_operands/fu_data_q_reg[..]/D` — **123 logic levels, 50.536 ns, 82% route delay**.
+
+Both structural facts above are still true and still worth fixing. But *which* channel dominates
+the critical path is **UNRESOLVED**, and the settling measurement is
+`report_timing -to [get_cells */dom_switcher/data_read_q_reg*] -max_paths 20` against
+`work-fpga/ariane_xilinx_routed.dcp` (present in both tarballs). No detailed path report to
+`data_read_q_reg` exists in either archive — it appears only as a one-line summary at ≈ −3.9 to
+−4.1 ns.
+
+## Instrument notes, so the next reader does not repeat a mistake
+
+* `methodology.rpt` caps TIMING-16 at 1000 rows. In the S-10 build those rows are filled by worse
+  `csr_regfile_i` entries, so `data_read_q_reg` appears **zero** times there. **A grep of
+  `methodology.rpt` alone yields a false zero.** The section-3 by-ENDPOINT enumeration in
+  `TIMING-FORENSICS.txt` is the authoritative list.
+* `timing-forensics.tcl:44,47` truncates both grouping keys to path depth 4. `dom_switcher` sits
+  at depth 3 so its per-register names survive; anything deeper collapses to a module name. Do
+  not compute a per-register statistic outside `dom_switcher` from that list.
+
+## What is actually wrong, and what is a question for the hardware side
+
+**Not a constraints problem.** ≥234 endpoints in a cone that requires single-cycle capture are
+failing setup, and no timing exception fixes that. The fix is RTL: register the channel response
+so the round trip is not combinational. The Anvil `syncstate` pattern tolerates the extra latency
+by construction (`.anvil.sv:647-649` — level-held wait-until-valid), and the data channel already
+runs that way.
+
+The remaining questions are genuinely the designer's, not answerable from RTL:
+
+* is **+1 cycle per index** of switch latency acceptable (67 indices x 2 channel ops)?
+* was the combinational regfile-address mux intended? `core/csr_regfile.sv:389` says
+  `// FIXME: a hack` and `core/anvil_build/capstone_dom_switcher.anvil:85` says
+  `// TODO: this is a low-performance implementation`, which suggests not.
+* `core/anvil_build/capstone_dom_switcher.anvil:73` has an explicit `cycle 1` before the `ra`
+  writeback. It reads as a scheduling bubble rather than a latency assumption, but that deserves
+  a directed simulation test before a synthesis run is spent on the change.
+
+## Separate incidental defect found in the same trace — comment contradicts code
+
+`core/controller.sv:220-225`:
+
+```systemverilog
+      // Do not flush EX during a domain switch: the dom_switch_busy signal is
+      // a level (not a pulse), so flush_commit_i stays high for the entire
+      // domain switch operation.  Asserting flush_ex_o here would continuously
+      // kill the d-cache transaction that the domain switcher is waiting for,
+      // causing a deadlock where req_en_q never clears.
+      flush_ex_o             = 1'b1;
+```
+
+A five-line comment explaining precisely why the signal must not be asserted, immediately
+followed by asserting it. Two lines up, `set_pc_commit_o = ~dom_switch_busy_i;` **is** qualified
+by `dom_switch_busy_i`, so the qualification idiom was applied there and not here. Either the
+comment is stale or the line should read `~dom_switch_busy_i`. **UNRESOLVED** — not changed,
+because the design demonstrably does not deadlock today and the reason for that is not
+established. Whoever resolves it should explain why the described deadlock does not occur.
