@@ -67,7 +67,25 @@ if git diff --cached --name-only 2>/dev/null | grep -qxF "$SELF"; then
   echo "NOTE: $SELF is staged and was EXCLUDED from its own scan. Review it by eye."
   echo
 fi
-[[ -n "$MSG_FILE" && -f "$MSG_FILE" ]] && cat "$MSG_FILE" >> "$TMP"
+# A --msg PATH THAT DOES NOT EXIST IS AN ERROR, NOT A SKIP.
+# This was `[[ -n "$MSG_FILE" && -f "$MSG_FILE" ]] && cat ...`, so a typo'd or already-deleted
+# path was silently dropped. The scan then proceeded on whatever else was in the tree, found
+# nothing, and printed CLEAN -- while the commit message, the content most likely to name a
+# person, was never read. Measured 2026-08-20: `--msg /tmp/does-not-exist` exits 0 CLEAN.
+# The caller asked for a file to be scanned; not finding it must never render as a pass.
+if [[ -n "$MSG_FILE" ]]; then
+  if [[ ! -f "$MSG_FILE" ]]; then
+    echo "precommit-scan: ERROR -- --msg file does not exist: $MSG_FILE" >&2
+    echo "  The message was NOT scanned. This is a failure, not a clean result." >&2
+    exit 2
+  fi
+  if [[ ! -s "$MSG_FILE" ]]; then
+    echo "precommit-scan: ERROR -- --msg file is EMPTY: $MSG_FILE" >&2
+    echo "  An empty message file is almost always a heredoc that did not run." >&2
+    exit 2
+  fi
+  cat "$MSG_FILE" >> "$TMP"
+fi
 
 if [[ ! -s "$TMP" ]]; then
   # A gate on an absolute rule must not pass silently when it inspected nothing. This
