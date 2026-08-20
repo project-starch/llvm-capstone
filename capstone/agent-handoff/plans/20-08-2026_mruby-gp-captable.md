@@ -226,17 +226,49 @@ Each step either costs no boot or answers one question.
       therefore fixes nothing; every TU would still address the same low slots.
       A relocation for the slot index is needed, which is compiler and linker work.
 
-      **One cheaper candidate, tried and NOT yet working: LTO.** The descriptor is
-      emitted per MODULE by `CapstoneAsmPrinter::emitGpCaptableInitDesc`, so a full-LTO
-      link would present one module and one descriptor with globally unique slots --
-      a build-flag change instead of a new relocation. First trial: compiled with
-      `-flto -mllvm -capstone-gp-captable` and linked with
-      `--plugin-opt=-capstone-gp-captable`, the link succeeds but the image has an
-      EMPTY descriptor and `reada`/`readb` make no cap-table access at all, i.e. the
-      pass produced nothing rather than producing something wrong. Whether that is
-      flag plumbing into the LTO backend or the pass behaving differently there is
-      NOT established. Worth one focused investigation before committing to the
-      relocation, because it would avoid it entirely.
+      **THE FIX IS LTO, and it works. The line that stood here saying otherwise was
+      wrong and is withdrawn.** The descriptor is emitted per MODULE by
+      `CapstoneAsmPrinter::emitGpCaptableInitDesc`, so a full-LTO link presents one
+      module, one descriptor, and globally unique slots. No relocation, no compiler
+      change. Measured at two files:
+
+          reada  reads cap-table slots [0, 1, 2]
+          readb  reads cap-table slots [3, 4, 5]     one descriptor, count 6
+
+      The first trial reported no cap-table access at all and was read as "the pass
+      did not run". The test case was at fault: three never-written globals, which
+      LTO internalizes, proves all-zero, and folds to `movc a0, zero`. With
+      `volatile` globals and `noinline` functions it works. `multi-tu-slot-collision.sh`
+      now runs both arms and documents that trap at the top, because the failure mode
+      is indistinguishable from a broken pass.
+
+      **mruby builds this way: 1 fragment, 2661 globals, 0 old-ABI `scc gp`
+      accesses, budget "fits" with 698 KB of stack left.** `MRUBY_GPCT=lto`.
+
+      Two things had to change besides the flag:
+
+      * **dom_data cannot be declared as heap + stack.** Under gp-captable the heap
+        IS a global, carved from dom_data with the other 2660. The old formula
+        under-declared by ~350 KB; the declaration now comes from
+        `domdata-budget.py`, and a parse that finds nothing is an error, not a zero.
+      * **The archive must be 100% codegen-clean**, which is the real cost of this
+        route. Without LTO an unselectable member is harmless: pulled only if
+        referenced, and `--gc-sections` drops the unreachable AFTER codegen. With
+        LTO codegen runs first, in the linker, over everything lld keeps -- and lld
+        keeps every standard libm name unconditionally in case the backend emits a
+        libcall. `ld.lld -y acosl` answers `<internal>: reference to acosl`: nothing
+        in mruby or musl asks for it. One bad member kills the whole link, as a bare
+        `LLVM ERROR` with no function named.
+
+        The LTO archive build now verifies each member by running codegen and drops
+        the failures by name with the reason. **32 of 1377 today; 27 are the long
+        double family** and go with `long double` at 64 bits. That count is the
+        honest measure of the backend gap and should reach zero.
+
+      Dead ends, so they are not retried: `--defsym fmodl=fmod` does not stop the
+      cluster being pulled, because the reference is lld's and not floatscan's; and a
+      native `-O0` rescue object reintroduces the collision, since 224 of the 1346
+      members carry their own descriptor.
 
 - [ ] **4b. mruby probe, gp-captable. One boot.** S1 to S5. After 4's blocker.
 
