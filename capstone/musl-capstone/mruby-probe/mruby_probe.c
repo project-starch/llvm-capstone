@@ -805,6 +805,33 @@ static int run_mrbtest(mrb_state *mrb) {
 int capstone_main(void) {
   SAY("MRUBY S1: entered\n");
 
+#ifdef MRUBY_PROBE_SHRINK
+  /* DELIBERATELY SHRINK OUT OF BOUNDS, to check what the emulator does with it.
+   *
+   * The spec (cap-man-insn.adoc:228-230) says a SHRINK whose requested range is
+   * not inside the capability's own raises `Illegal operand value (29)`.
+   * helper_csshrink used to assert() instead, which aborts QEMU: no cause, no
+   * pc, and everything else in the run lost with it. This arm is the difference,
+   * and it is a fault either way -- the question is WHOSE.
+   *
+   * PASS looks like the domain halting with cause 29 and a SHRINK line naming
+   * the two ranges. FAIL looks like "qemu-system-riscv64: ... Assertion ...
+   * failed", which is not a domain fault at all. */
+  {
+    void *p = malloc(64);
+    unsigned long b = (unsigned long)__builtin_capstone_cap_get_base(p);
+    unsigned long e = (unsigned long)__builtin_capstone_cap_get_end(p);
+    char msg[112];
+    int n = snprintf(msg, sizeof msg,
+                     "MRUBY SHRINK: have [%lx,%lx), asking for [%lx,%lx)\n",
+                     b, e, b - 16, e);
+    if (n > 0) __capstone_hc_write(1, msg, (unsigned long)n);
+    void *q = __builtin_capstone_cap_shrink(p, b - 16, e);
+    SAY("MRUBY SHRINK: RETURNED -- no fault was raised at all\n");
+    (void)q;
+  }
+#endif
+
 #ifdef MRUBY_PROBE_TP
   /* DOES THE THREAD POINTER SURVIVE INTO C AT ALL?
    *
