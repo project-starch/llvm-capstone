@@ -1454,3 +1454,106 @@ outward-facing handover is the lead's call, and one folder is already built and 
 
 **The ~2h re-implementation of `618f4ce36` is now moot for attribution** and worth spending only
 if someone disputes the long-standing reading. Claim 2 plus 0-of-100 settles what it was for.
+
+---
+
+# RETRACTION, same day — "0 of 100 paths touch the dcache" is TRUE AND VACUOUS
+
+I stated, and both lanes propagated, that 0 of the 100 worst violated paths touch the write
+buffer or the dcache, positive-controlled. **The control was valid and the claim is worthless.**
+
+## What `-nworst 100` actually means
+
+    Command: report_timing -max_paths 100 -nworst 100 -delay_type max -sort_by slack
+
+`-nworst N` is **paths per endpoint**, not endpoints. Parsed:
+
+    ariane.timing_WORST_100.rpt
+      path blocks              100
+      distinct sources           1
+      distinct destinations      1
+      distinct (src,dst) pairs   1
+      slack range          -10.629 .. -10.629
+
+So `WORST_100` characterises **one endpoint pair by 100 different routes**. It never had 100
+paths to check the dcache against. "0 of 100" means "the single worst endpoint is not in the
+dcache", which is a far smaller statement, and it says nothing about the other 96726 failing
+endpoints — which no archived report enumerates.
+
+## And the matcher provably cannot fire in these reports
+
+    report                        path blocks   src/dst fields matching wbuffer|dcache
+    ariane.timing_WORST_100.rpt          100                                         0
+    ariane_xilinx_..._routed.rpt         766                                         0
+    ariane.timing.rpt                     30                                         0
+
+Zero across **896** paths, violated and met alike. These are worst-N samples (~10 per path group),
+and the dcache is not among the worst, so it never appears. **The check cannot distinguish "the
+dcache is clean" from "the dcache is not in this report."**
+
+My earlier positive control was real — the same matcher on the same `Source:`/`Destination:` line
+class returns 100 hits for `issue_stage|scoreboard`, so it does fire on that line class. It proved
+the matcher works and still could not separate the two hypotheses on the table. That is the exact
+failure named in CLAUDE.md: *a check that fires correctly and still under-determines.* The question
+that would have caught it, before the claim went out rather than after: **what is the denominator,
+and can the target appear in it at all?**
+
+## What actually survives, and it is enough
+
+The routed summary is the better report — 766 paths, 293 distinct sources, 843 distinct
+destinations — and its violated set is genuinely informative:
+
+    VIOLATED paths in the routed summary:   10   (all Setup)
+      distinct sources:        1     dom_switcher/cur_idx_q_reg[1]
+      distinct destinations:  10     scoreboard (8), issue_read_operands (2)
+
+**Every violation the reports show fans out from one register.** Still a worst-N sample, not an
+enumeration.
+
+**The exoneration never depended on the retracted figure** and stands on three things that do not
+involve the reports at all:
+
+1. the design delta is **one module-internal file**, `wt_dcache_wbuffer.sv` +146/−1, no port
+   changes;
+2. `core/anvil_build/` is byte-identical across the range and `capstone_dom_switcher.anvil` last
+   changed at `25035c4c0`, an **ancestor** of the healthy reference build;
+3. a change inside one cache module cannot create a 123-level path out of a domain-switch
+   register, and cannot move 96727 endpoints.
+
+**What would settle dcache coverage properly**, and it needs the Vivado machine because the
+archive contains no `.dcp`: re-open the routed checkpoint and run
+
+    report_timing -nworst 1 -max_paths 100000 -slack_lesser_than 0 -sort_by slack
+
+then group the sources by module. That enumerates failing endpoints instead of sampling them.
+**Not required for attribution** — but it is the only thing that would license the sentence I
+wrote, so the sentence stays retracted until someone runs it.
+
+## Separately: the `fu_data_q` destination looks ARCHITECTURALLY FALSE
+
+Reading the consumer handshake, as promised. Quoted, so it can be re-checked:
+
+* `issue_read_operands.sv:1523-1526` — the dom switcher hijacks the regfile read address port
+  (`raddr_pack`, `:1538`) only while `dom_switch_sel && dom_switch_reg_req_valid_i`.
+* `issue_read_operands.sv:1887` — `fu_data_q[i] <= fu_data_n[i]` fires **only** on
+  `!issue_instr_i[i].ex.valid && issue_instr_valid_i[i] && issue_ack_o[i]`.
+* `commit_stage.sv:494` — `flush_commit_o = flush_commit | dom_switch_busy_i`.
+* `controller.sv:215-224` — under `flush_commit_i`: `flush_unissued_instr_o = 1`, `flush_id_o = 1`,
+  with a comment stating that `dom_switch_busy` is a **level held for the entire domain switch**.
+* `issue_stage.sv:249,299` — that flush reaches both `issue_read_operands` and the scoreboard.
+
+So while the dom switcher drives the read port, ID is flushed and nothing can be acked, and
+`fu_data_q` cannot capture. The corroborating argument is that it *must* be so: if an instruction
+could issue in that window it would read the **wrong register**, which would be a gross and
+constant correctness bug rather than an intermittent one.
+
+**Not established, and these are the two ways it is wrong:** a one-cycle overlap at the start of a
+switch, before `dom_switch_busy` propagates to the flush; and the scoreboard destinations (8 of
+the 10) have not been checked the same way. If the destinations *do* require a same-cycle capture,
+this is a real timing bug in `dom_switcher` and the remedy is pipelining a 123-level cone, not a
+one-line constraint.
+
+**Why the constraint question is worth answering on its own merits**, independent of S-07: if the
+multicycle/false reading is right, then 96727 false violations are not noise, they are a
+**blindfold**. A real timing regression appearing anywhere in this design today would be invisible
+underneath them, and nobody would know.

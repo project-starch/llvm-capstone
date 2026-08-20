@@ -10,10 +10,15 @@
 > (`clk_out2` +0.694, `eth_rxck` +4.140, every MIG-derived clock positive). Hold is fine
 > (WHS +0.054).
 >
-> **It is not this subsystem.** All **100 of 100** worst violated paths share a single source —
-> `i_ariane/i_cva6/dom_switcher/cur_idx_q_reg[1]/C` — and **0 of 100** touch the write buffer or
-> the dcache. That zero is positive-controlled: the same matcher on the same line class finds 100
-> hits for the issue-stage cells, and the file mentions `wbuffer` 3000 times elsewhere. The worst
+> **It is not this subsystem** — but see the correction below on how much the reports can show.
+> Every violated path in every archived report shares a single source,
+> `i_ariane/i_cva6/dom_switcher/cur_idx_q_reg[1]/C`, fanning out to 10 distinct destinations in the
+> scoreboard (8) and `issue_read_operands` (2). **RETRACTED as evidence: the "0 of 100 touch the
+> dcache" figure.** `report_timing -nworst 100` returns up to 100 paths *per endpoint*, and all 100
+> in `WORST_100` share ONE source–destination pair at identical slack; across all three archived
+> reports (896 path blocks) `wbuffer|dcache` appears in **zero** source or destination fields, so
+> that matcher cannot fire there at all and cannot distinguish "the dcache is clean" from "the
+> dcache was never sampled". The exoneration does not rest on it and stands without it. The worst
 > path runs 50.536 ns against 40.000 ns over **123 logic levels with 82% of the delay in routing**,
 > at 169415/203800 LUTs (83%) with place and route both on `-directive RuntimeOptimized`. It is
 > structural, in domain-switch machinery. `core/anvil_build/` is byte-identical across the range
