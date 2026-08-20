@@ -277,10 +277,19 @@ llc = os.environ["CAPSTONE_LLC"]
 objs = sys.argv[1:]
 if not objs:
     sys.exit("no objects to verify")
+BITCODE_MAGIC = bytes.fromhex("4243c0de")   # spelled in hex ON PURPOSE: written as a
+                                           # \\x escape it was once mangled into two UTF-8
+                                           # characters by the tool that generated this
+                                           # block, so nothing ever matched and the whole
+                                           # verification passed 1377 objects having
+                                           # looked at none of them.
+seen_bitcode = 0
 def check(o):
+    global seen_bitcode
     with open(o, "rb") as fh:
-        if fh.read(4) != b"BCÀÞ":     # native objects (compiler-rt) are not ours
+        if fh.read(4) != BITCODE_MAGIC:      # native objects (compiler-rt) are not ours
             return None                      # to codegen and llc cannot read them
+    seen_bitcode += 1
     r = subprocess.run([llc, "-mtriple=capstone64-unknown-elf", "-mattr=+m,+a",
                         "-capstone-gp-captable", "-filetype=obj", o, "-o", os.devnull],
                        capture_output=True)
@@ -290,10 +299,20 @@ def check(o):
     first = next((l for l in err.splitlines()
                   if "LLVM ERROR" in l or "Cannot select" in l or "Assertion" in l), "")
     return "%s\t%s" % (o, first.strip()[:100])
+found = []
 with cf.ThreadPoolExecutor(max_workers=min(16, (os.cpu_count() or 4))) as ex:
     for r in ex.map(check, objs):
         if r:
-            print(r)
+            found.append(r)
+# THE SELF-TEST. Under LTO essentially every member is bitcode, so recognising none of
+# them means the magic test is broken, not that the archive is clean. Without this the
+# previous version reported "all members codegen clean" for an archive with 32 known
+# failures -- a pass produced by never looking.
+if seen_bitcode == 0:
+    sys.exit("verification recognised no bitcode among %d objects; refusing to report "
+             "a clean archive" % len(objs))
+for line in found:
+    print(line)
 VERIFY
 )
   if (( ${#_drop[@]} )); then
