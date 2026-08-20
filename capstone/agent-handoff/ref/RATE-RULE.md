@@ -1182,10 +1182,34 @@ with synthesizable logic byte-identical to `5c5f4e3a7`. The S-07 fix validation 
 recorded.
 
 **What it does change:** the earlier note that these results came from an instrument-carrying
-tree is wrong. The bitstream has **no** S-07 instrument, which also explains why every aperture
-in the 230-237 range reads as commit-PC bytes rather than as the batch's readers. Any future
-attempt to read the granule addresses or the correlation bit **on this bitstream** will fail, and
-should not be diagnosed as a broken instrument.
+tree is wrong for the BATCH's instrument. Every aperture in the 230-237 range reads as commit-PC
+bytes rather than as the batch's readers, so an attempt to read the granule addresses or the
+correlation bit **on this bitstream** will fail and should not be diagnosed as broken hardware.
+
+> **SCOPE CORRECTED 2026-08-20, from a boot rather than an inference.** The sentence originally
+> read "the bitstream has **no** S-07 instrument", full stop. That is too broad and it is wrong.
+> A **generation-1** probe IS present at switches 204/208/220, and its selftest **passes on this
+> silicon**:
+>
+>     [s07] probe generation: 1 (one-shot records)   sw=193 = 0x07
+>     [s07] SELFTEST 220 flag  = 0x01  OK
+>     [s07] SELFTEST post-204  = 0x41  OK: ldc_seen set and count moved by exactly 1
+>     [s07] SELFTEST 208 bit0  = 0xb9  OK: set marked SYNTHETIC
+>     [s07] SELFTEST PASS -- the detector fires on this silicon
+>
+> Both statements are true once scoped: the **gen-1** probe at 204/208/220 is present and its
+> detector fires; the **batch's** gen-2 readers at 230-237 are absent. The original wording would
+> have stopped a future reader from running the 220 selftest at all.
+>
+> **But this boot's per-domain readings are still worthless**, and for a different reason: every
+> post-domain read of 204 and 208 returned `0xfe`, which the driver itself classifies as
+> `INSTRUMENT FAULT: ldc0_src == 3 is not a defined source. The readout is wrong, NOT the core.`
+> `count=62` and `rev-node head = 0xffff` were constant across all four domains, and the
+> `healthy-halt control failed (ActionTimeout)` — the documented `monitor halt`-after-`continue`
+> hang. So the mux carried **no verdict about any domain this boot**.
+>
+> **The SQLite result does not depend on any of it.** That verdict came from the domain's own
+> UART payload — `EXTENDED_PASSED`, `MEMORY_PASSED`, `rc=0` — not from the debug mux.
 
 ## The two numbers that would close the record are NOT on this machine
 
