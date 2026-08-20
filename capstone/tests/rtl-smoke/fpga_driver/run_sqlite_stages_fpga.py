@@ -1280,6 +1280,29 @@ def main():
                             # ~1.2 windows -- barely one -- so the "extra bits decay off" step
                             # this comment describes was not reliably complete before the walk
                             # back. Lengthening only ever costs time.
+                            #
+                            # THIS IS A PARTIAL FIX AND THE REST IS NOT FIXED. It settles what was
+                            # lit BEFORE the park. It cannot touch what the walk back lights AFTER
+                            # it, and set_switch_value steps ONE BIT AT A TIME (:258-260), so
+                            # going 0 -> target selects every intermediate switch value on the
+                            # way. The switches choose which aperture is DISPLAYED and the LEDs
+                            # show that aperture's CONTENTS, so each intermediate ORs arbitrary
+                            # data in -- created after this sleep, and therefore un-waitable by
+                            # lengthening it. safe_switch_bit_order only avoids DESTRUCTIVE
+                            # intermediates (:197-216); contamination was never in its remit.
+                            #
+                            # What parking at 0 does buy is that the visited set becomes
+                            # deterministic and small -- subsets of the target's bit pattern
+                            # rather than of the arbitrary previous aperture. A reduction, not an
+                            # elimination.
+                            #
+                            # THE SHAPE OF THE REAL FIX, unvalidated and deliberately NOT applied
+                            # here without a board run: settle AFTER arriving at the target and
+                            # take the LAST event rather than the first. The target is driven
+                            # continuously so it stays lit, while the intermediates were driven
+                            # for an instant and decay within one window. settled_halted_read
+                            # already works that way -- "the first event is the transient, not the
+                            # answer" -- and this running path does not.
                             time.sleep(LED_WINDOW_S * 2)
                         _mark = console.now()
                         if _force_emit:
