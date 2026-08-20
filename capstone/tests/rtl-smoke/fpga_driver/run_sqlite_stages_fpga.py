@@ -1395,7 +1395,20 @@ def main():
                 _w = _read_sw(208, allow_cached=not _halt_reads, _force_emit=_halt_reads)
                 _d = decode_s07_verdict(_w)
 
-                # READBACK-PATH POISONING, added 2026-08-20 after a boot where this mattered.
+                # CROSS-APERTURE CONTAMINATION POISONING, added 2026-08-20.
+                #
+                # CAUSE CORRECTED the same day. The first version of this comment said the fault
+                # meant "a path that is not in a readable state". That was wrong, and the right
+                # answer was already written 200 lines above in _read_sw's own docstring: on a
+                # RUNNING read the LED pulse stretcher ORs every aperture the switch walk visits,
+                # and `src == 3` is literally `src=1` from one aperture ORed with `src=2` from
+                # another. It is the documented signature of stretcher contamination, first seen
+                # on caplifive_s07debug_18august.bit. HALT_MUX_READS defaults to "0", so the
+                # 2026-08-20 reads were running reads and this is what they hit.
+                #
+                # The existing defence -- two samples a full window apart must AGREE -- does not
+                # catch it, because STABLE contamination agrees with itself. That is why this
+                # second, independent check earns its place.
                 #
                 # 208 carries the one field with an IMPOSSIBLE encoding: ldc0_src == 3.
                 # wt_dcache_mem.sv assigns rd_ctag_src only 2'd0/2'd1/2'd0/2'd2 -- verified on the
@@ -1515,9 +1528,8 @@ def main():
                         # set -- so without the inherited poison it prints as data.
                         _line = (f"  [s07] after {label}: sw=204 displacement VOID "
                                  f"(raw 0x{_v:02x}, self-check {'ALSO faulted' if _fault else 'PASSED'}) "
-                                 f"-- 208 reported INSTRUMENT FAULT on the SAME halted readback, so "
-                                 f"this byte came through a path that is not in a readable state. "
-                                 f"It is NOT data.")
+                                 f"-- 208 decoded as INSTRUMENT FAULT on the SAME readback, so this "
+                                 f"byte carries the same cross-aperture contamination. It is NOT data.")
                     else:
                         _line = (f"  [s07] after {label}: sw=204 displacement "
                                  f"0x{_v:02x} {_v:08b}  seen={{stc:{_stc},ldc:{_ldc}}} count={_cnt}"
