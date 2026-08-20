@@ -60,11 +60,25 @@ So the new ground is exactly the resumable yield, and that is where the work is.
 
 Each step either costs no boot or answers one question.
 
-- [ ] **1. Compile musl and mruby with `-capstone-gp-captable`. No boot.**
-      Counts what breaks. musl is far larger than anything built gp-captable so
-      far, so this is where new codegen cases surface. Also run
-      `libc-ext/scan-cap-base.py` over the output. Decides whether the rest is
-      hours or weeks.
+- [x] **1. Compile musl and mruby with `-capstone-gp-captable`. No boot. DONE.**
+      **The flag costs nothing at compile time.** A/B over the same file set,
+      because comparing against the survey's 40 would have compared different
+      sets:
+
+          musl   1393 sources   1343 ok / 50 fail   both arms, IDENTICAL files
+          mruby    33 sources     32 ok /  1 fail   both arms
+
+      The one mruby failure is `hash.c`, and it is the sweep's omission rather
+      than the flag's doing: the real build compiles that file with `-U__GNUC__`.
+      Identical in both arms either way.
+
+      `scan-cap-base.py` over the gp-captable assembly: no findings, with its
+      self-test passing first, so the zero is a measurement and not a silent
+      instrument.
+
+      So the "hours or weeks" question answers HOURS for the compile stage. This
+      says nothing about whether the code is CORRECT, nor about the gct and glue
+      side; that is steps 2 to 5.
 
 - [ ] **2. Transplant the yield into the gp-captable glue. No boot.**
       `start-gp-captable-interp.S` has `cscratch` (15), `domreturn` (8) and a
