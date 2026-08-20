@@ -349,3 +349,23 @@ __capstone_dom_ret:
   .global __capstone_tls
 __capstone_tls:
   .zero 1024
+
+/* THIS GLUE REQUIRES TWO SYMBOLS IT DOES NOT DEFINE:
+ *
+ *   __capstone_dom_data   a 16-byte slot the entry stores dom_data into
+ *   __capstone_init_tp    called once, to populate the struct tp points at
+ *
+ * libc-capstone.a provides both. A domain that links NO libc -- yield-probe
+ * links start-musl.o and its own domain and no archive at all -- links
+ * runtime/no-libc-stubs.c instead, and gets a link error naming these two if it
+ * forgets.
+ *
+ * A WEAK DEFINITION HERE WOULD BE WORSE THAN THE LINK ERROR, and was tried on
+ * 2026-08-20. It links everywhere, and it is silently wrong: a weak definition
+ * SATISFIES the reference, so the linker never extracts tls.o from the archive,
+ * and the real __capstone_init_tp is dropped. Measured, not reasoned --
+ * `llvm-nm` on the mruby domain showed `W __capstone_init_tp` with size 0, the
+ * stub. __capstone_dom_data survived only because malloc.o is pulled anyway.
+ * The domain then boots, runs, and faults in strerror much later.
+ *
+ * A loud link error naming both symbols is the honest failure here. */

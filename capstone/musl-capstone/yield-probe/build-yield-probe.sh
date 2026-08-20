@@ -69,13 +69,22 @@ else
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 -c "$START_SRC" -o "$OBJ_DIR/start-musl.o"
 
+# start-musl.S asks for __capstone_dom_data and __capstone_init_tp, which
+# libc-capstone.a normally provides. This probe links no archive at all, so it
+# links the stubs instead. Leaving them out fails the link naming both symbols,
+# which is the intended failure -- see the note in start-musl.S about why a weak
+# definition inside the glue would be silently wrong instead.
+"$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+  -ffreestanding -O0 -c "$SCRIPT_DIR/../runtime/no-libc-stubs.c" \
+  -o "$OBJ_DIR/no-libc-stubs.o"
+
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -fno-builtin -fno-jump-tables -fno-optimize-sibling-calls \
   -ffunction-sections -fdata-sections \
   -O1 -c "$SCRIPT_DIR/yield_probe_domain.c" -o "$OBJ_DIR/yield_probe_domain.o"
 
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
-  "$OBJ_DIR/start-musl.o" "$OBJ_DIR/yield_probe_domain.o"
+  "$OBJ_DIR/start-musl.o" "$OBJ_DIR/no-libc-stubs.o" "$OBJ_DIR/yield_probe_domain.o"
 
 fi
 
