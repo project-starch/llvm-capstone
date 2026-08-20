@@ -161,3 +161,127 @@ no bare instance exists in the tree.
 
 Item 1 changes silicon behaviour (SEAL starts rejecting regions it currently accepts), so it
 must not ride along with an unrelated change and needs its own regression run.
+
+---
+
+# AUDIT UPDATE, same day — mechanism SUPPORTED, but three things above are wrong
+
+An adversarial audit was run before this went anywhere. The mechanism survived every attack; all
+eight quoted generated-SV lines re-verified verbatim, and the artifact identity was closed
+(`sha256 b594100a051c...` identical across the worktree and **both** synthesis tarballs; the
+source line has not changed since `304fb5080`, 2025-05-01, so every bitstream since carries it).
+
+## 1. SEVERITY UP — this is a security bug, not a robustness bug
+
+I had guessed the under-enforcement might be harmless because a later access would be
+bounds-checked anyway. **That is refuted.** A sealed-return capability's LDC/STC is bounded
+against constants derived from `start` and **never consults `end`** —
+`capstone_dyn_unit.anvil:322-324`:
+
+```
+    let rs1_end            = rs1.metadata.end - 64'd16          // the NORMAL path uses end
+    let rs1_start_sealedret = rs1.metadata.start + 64'd48        // sealed-return: start only
+    let rs1_end_sealedret   = rs1.metadata.start + 64'd1008      // sealed-return: start only
+```
+
+That check is itself generated correctly (`capstone_dyn_unit.anvil.sv:4032-4033`) — its source
+parenthesises its operands. And it *must* work that way, because the spec says so:
+`capstone-spec/parts/prog-model.adoc:91` — *"`end` … Not applicable when `type = 4` (sealed) or
+`type = 5` (sealed-return)."*
+
+**So SEAL's minimum-size precondition is the only thing standing between a small region and a
+1024-byte access window.** Under-enforce SEAL and a 64-byte linear RW capability becomes ~960
+bytes of read/write authority the holder never had. That is authority amplification, and it
+explains *why* the spec picked 1024: the sealed-return window is exactly `start+48 .. start+1008`.
+
+A second path reaches the same place: `dom_switch_data_req_t` (`core/include/ariane_pkg.sv:219-223`)
+carries a bare `logic [63:0] base_addr` with no bounds and no capability, and nothing downstream
+re-checks the walk against the sealed capability's extent.
+
+## 2. THE CAUSE IS UNRESOLVED — do not write "the Anvil front end mis-parses"
+
+The sibling line `capstone_flu_unit.anvil:165` (`perm&3'd6!=3'd6`) is a bare relational adjacent
+to a bitwise operator and generates **correctly** (`.anvil.sv:2134,2136`). That rules out a simple
+flat/right-associative story. The model consistent with every observation is that **Anvil binds
+logical and bitwise operators TIGHTER than the comparison operators** — the opposite of C, and
+internally self-consistent.
+
+Under that reading the defect is in the **RTL source** — C-precedence assumptions written in a
+language that does not have them — not in the compiler. That distinction decides who owns the fix,
+so it must not be asserted either way yet. Write "the source relies on C operator precedence,
+which Anvil does not use" and cite the netlist as evidence of effect.
+
+Settling it is cheap and blocked only on access: there is no Anvil compiler in-tree
+(`which anvil` is empty; the Makefile says `ANVILC ?= anvil`). Either read the upstream precedence
+table or run `anvil` on a five-line case.
+
+## 3. "SPEC VIOLATION" is not yet a safe label — the tree holds THREE different minimums
+
+| where | minimum |
+|---|---|
+| `capstone-spec` and `capstone-academic-spec` (byte-identical over the `[#seal]` block) | **1024 B** (64 x CLENBYTES) |
+| `capstone-qemu/target/riscv/cap.h:35` | `16 * 33` = **528 B** |
+| `capstone-c/samples/capstone.h:36` | `CAPSTONE_SEALED_REGION_SIZE 36`, used as `runtime->malloc(...)` — **36 B as written** |
+| the Anvil source's intent | 1024 B |
+
+The reference emulator and the reference C runtime were built to different conventions. If the RTL
+were "fixed" to enforce 1024, `capstone-c`'s own samples would start faulting. **Someone has to say
+which number is authoritative before this is labelled a violation of anything.** Also: the RTL
+implements only two of the spec's three `Illegal operand value` conditions — the third, that
+`[base+CLENBYTES, base+2*CLENBYTES)` must contain a capability, is absent from the Anvil source
+entirely.
+
+## 4. My QEMU framing was backwards, and the reachability is stronger than stated
+
+I wrote a table implying a live RTL-vs-QEMU divergence at size 0. Two corrections:
+
+* `size = end - start + 1`, so `size == 0` requires `end == start - 1 (mod 2^64)`. **For any
+  capability with `end >= start` the exception is not merely rare — it is unreachable.** Say that
+  rather than "raises only at size 0", which reads as though a check survives. None does.
+* QEMU's block contains **only** a debug print, where the three preceding checks (`:994`, `:999`,
+  `:1004`) all raise. So QEMU does not enforce this at all, and its constant is 528. There is no
+  reachable divergence to catch; QEMU has its own separate defect deserving its own entry.
+
+## 5. No current caller can trip it — report it as latent, with the amplification noted
+
+The monitor does execute SEAL (`sbi_capstone.c:902`, `__seal(dom_seal)`), on a region of
+`DOMAIN_DATA_SIZE = 16 * 96` = **1536 B** (`sbi_capstone.c:187-188`), growing to 2048 B for a
+2 MiB domain — and `sbi_capstone.c:730-732` already says in-source *"The seal region only grows
+(2048 B), staying above SEAL's 1024-byte minimum."* Someone knew about the minimum and engineered
+around it. Base alignment holds via the granule-aligned `split_size`. **No exploit path from the
+monitor.** `capstone-c/samples` is the outlier and is not what runs on our board.
+
+## 6. No test would have caught it, and the only SEAL test has never had a positive control
+
+`verif/tests/custom/capstone/sealing.S` is the only dedicated SEAL test. It seals
+`.zero 4096*4` = **16384 bytes** (`:73-75`) and exercises only the accept path. Eleven other tests
+issue SEAL as setup for CALL/RETURN. **There is no negative test anywhere.** Exactly the
+"directed tests that come back clean without ever creating the triggering condition" pattern.
+
+The experiment that closes items 1-6 at once, board-free, ~14 s in Verilator: three arms in the
+style of `sealing.S` — a 64-byte region, a `base+8` misaligned region, and a control 16 KiB
+aligned region — asserting `ILLEGAL_OPERAND_VALUE` on the first two and success on the third. It
+is simultaneously the missing negative test and the positive control `sealing.S` has never had.
+
+**Until it runs, this claim is verified at the RTL-source and netlist level ONLY, never
+empirically.** Nobody has executed SEAL with an undersized region on the board, in simulation, or
+in QEMU.
+
+## 7. The domain-switcher collapse gets its OWN issue — and one correction to the audit
+
+Per the one-issue-per-folder rule it must not share a folder with SEAL. But the audit's
+consequence analysis for it (that a full switch would transfer 544 B where ~944 B was intended)
+describes **the unreachable branch**: `is_full` is hardwired `1'b0`, as established above, so the
+`val_n = 7'd66` path never executes. The auditor was not given that finding. The collapse is real;
+its consequence is latent, not live.
+
+## 8. Two instrument failures, both of which silently produce zeros
+
+* **`grep -E` with a character class returns nothing on this box.** Reproduced directly:
+  `grep -c "SEAL" sealing.S` -> **1**; `grep -cE '(^|[^a-z_])SEAL' sealing.S` -> **0**, same file.
+  An entire reachability sweep was void because of this and had to be redone with plain patterns
+  against a positive control. This is the local `grep` being ugrep, already noted in the `rtl-sim`
+  skill for control bytes — it extends to character classes.
+* **`awk '/^enum fu_op/,/^}/' | grep -n` counts comment and blank lines**, giving ordinal 211 =
+  `XNOR`. Parsing with python (stripping comments) gives 211 = `SEAL`, which is correct. Trusting
+  the first would have refuted a true claim on false evidence.
