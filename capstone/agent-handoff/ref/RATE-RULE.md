@@ -1890,3 +1890,61 @@ That is a stronger conclusion than either lane reached and it supersedes both ac
 class survives", not "this class does not", but **never reason from an absent name at all**. Had
 the fix been called `wbuffer_wren`-something, the whole afternoon's chain would have run the same
 way and produced a confident exoneration.
+
+---
+
+# 2026-08-20 — SQLITE PASSES ITS CORRECTNESS SUITE ON SILICON, on `caplifive_s07fix.bit`
+
+First run of the real SQLite workload on the S-07-fixed bitstream. Until now the fix had been
+validated **only** on the `wbuf`/`wr` micro-arms; the workload the defect was found in had never
+been re-run.
+
+**Boot 1, preflight GO** (the first properly gated board run of the day):
+
+    S7T   control   0x57070703            PASS -- see the classification note below
+    XU    rep 1     rows 3/3, EXTENDED_PASSED, MEMORY_PASSED, rc=0     PASS
+    XU    rep 2     EXTENDED_PASSED, MEMORY_PASSED, rc=0               PASS
+    XU    rep 3     EXTENDED_PASSED, MEMORY_PASSED, rc=0               PASS
+
+Every rep shows `SQ: G/enter` **and** `SQ: H/return`. Pre-fix, `XU` wedged after `G/enter` with no
+return at `sqlite3OsRead+0x4c`, mcause 25 — tally k=2 in n=16. That signature is **absent** here.
+
+## What the suite actually checks, because "SQLite ran" is not the claim
+
+`benchmarks/sqlite/sqlite_capstone_domain.c` is self-checking, not a smoke test:
+`BEGIN`/`COMMIT`, `CREATE TABLE`, `CREATE INDEX`, prepared `INSERT`s with typed binding
+(int/text/real), `UPDATE`, `DELETE`, then `COUNT(*)`, `SUM`, `MAX`, `ORDER BY` with a top-row
+assertion, an index-driven range `WHERE`, a two-table `JOIN`, a `GROUP BY` subquery and scalar
+functions. `query_scalar_eq()` returns `SQLITE_MISMATCH` on a wrong answer, so it fails on
+**incorrect results**, not only on crashes.
+
+## TWO CLASSIFICATION TRAPS IN THIS RUN, both of which would have inverted the verdict
+
+**1. The control's PASS is reported by the host as `SQ: X/fail`.** `S7T` is
+`CAPSTONE_S07_CURSOR_SELFTEST`, whose PASS sentinel is **exactly `0x57070703`**
+(`sqlite_capstone_domain.c:116`) — aa=07 and bb=07 are both plants reading NOT_CAP, ff=03 is both
+`ld` readbacks exact. But `sqlite_host.c:151` accepts only `SQLITE_HC_RET_DONE == 0`, so a probe
+returning its own sentinel is printed as `X/fail` + `unexpected domain return`. **Reading the
+host's verdict would have declared the control failed and the whole boot VOID.**
+
+**2. A row line went missing from the echo in two of three reps — and it is TRANSPORT, not a
+dropped row.** Rep 1 printed all three, rep 2 dropped `beta`, rep 3 dropped `alpha`. Settled from
+source rather than by argument: the step loop asserts per-row name *and* value, and then
+`if (rc != SQLITE_DONE || row != 3) return fail("step", ...)` — **the row count is asserted**. A
+rep that printed `__CAPSTONE_SQLITE_EXTENDED_PASSED__` and `rc=0` therefore necessarily saw three
+correct rows. A different row vanishing each time corroborates it: a real defect would not
+rotate.
+
+## WHAT THIS DOES NOT ESTABLISH — stated before anyone asks for a rate
+
+**Three reps cannot establish the fix at the rate level.** At the pre-fix ~12.5%/rep,
+P(0 wedges in 3 | still broken) = 0.875^3 = **0.67**. This boot answers the *qualitative*
+question — the workload now completes, and the specific wedge signature is gone — and nothing
+about the rate. For a rate: n=20 gives P(0|unfixed)=0.069, n=30 gives 0.018. At 12 uniform
+domains per boot that is ~3 boots.
+
+## Also from this boot
+
+Preflight went from BLOCKED to **GO**, and getting there cut the firmware from **23.8 MB to
+17.5 MB** — roughly 150 s less JTAG upload on every boot from here on. 52 stale domains moved to
+`/tmp/capstone/overlay-attic`; nothing deleted.
