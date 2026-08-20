@@ -103,6 +103,16 @@ static unsigned long volatile wbuf_sink[64];
  * is what makes the walk hit ONE set instead of smearing across all of them. */
 static unsigned char volatile wbuf_evict[WBUF_EVICT_WAYS * 4096u] __attribute__((aligned(4096)));
 
+#if WBUF_ARM == 8
+/* mcycle is readable from a domain -- gp_diag_fpga_app.c and regloop_diag_fpga_app.c both do
+ * exactly this. Used ONLY by arm 8's eviction proof. */
+static unsigned long wbuf_mcycle(void) {
+  unsigned long v;
+  __asm__ volatile("csrr %0, mcycle" : "=r"(v));
+  return v;
+}
+#endif
+
 static unsigned long wbuf_type(const void *p) {
   unsigned long v = 0;
   __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(v) : "r"(p));
@@ -152,6 +162,11 @@ static unsigned wbuf_compute(void)
 {
   unsigned long lost = 0, corrupt = 0;
   unsigned i, r, k;
+#if WBUF_ARM == 8
+  /* THE EVICTION PROOF. See the arm-8 block below: without it a green wr8 is produced by
+     three different situations and cannot tell them apart. */
+  unsigned long cyc_cold = 0, cyc_warm = 0;
+#endif
   void *base = (void *)&wbuf_anchor;
 #if WBUF_FIELDS
   /* Captured from a live capability, not assumed. */
@@ -253,8 +268,37 @@ static unsigned wbuf_compute(void)
           acc += *(volatile unsigned long *)(wbuf_evict + k * 4096u + setoff);
         wbuf_sink[0] = acc;                  /* consume it so the walk cannot be dead-coded */
       }
-      if (wbuf_type((void *)wbuf_slots[i]) != 7ul)
-        corrupt++;                           /* tag STILL LIVE after eviction+reload */
+      /* THE EVICTION PROOF, and wr8 carries no verdict without it.
+         A GREEN wr8 -- no live capability -- is produced by THREE situations, and the
+         disassembly proves only that the twelve loads exist, not that they DISPLACED
+         anything:
+           1. the fix is real and DRAM holds tag 0        <- the only one we may conclude
+           2. the walk did not evict, the reload hit L1   -> wr8 silently became wr7
+           3. the scrub had not drained, so the clear     -> wr8 silently became wr6, and
+              fired on a resident entry                      DRAM was never consulted
+         A read miss does NOT force a write-buffer drain, so 3 is not far-fetched: the twelve
+         DRAM round-trips make a drain LIKELY, and "likely" is the standard this project has
+         been burned by repeatedly.
+         So MEASURE it, as a matched pair inside the arm rather than an absolute number that
+         would need calibrating: time the post-eviction ldc, then immediately time a second
+         ldc of the SAME slot, which is now certainly resident because we just loaded it. The
+         RATIO is self-normalising -- no clock constant, no cross-run comparison. Cold/warm
+         near 1 means nothing was evicted and the arm tested nothing; a large ratio means DRAM
+         was consulted, which excludes 2 and 3 together. */
+      {
+        void *p8; unsigned long c0, c1;
+        c0 = wbuf_mcycle();
+        p8 = wbuf_slots[i];                  /* THE ldc under test -- this is what must miss */
+        c1 = wbuf_mcycle();
+        cyc_cold += c1 - c0;
+        if (wbuf_type(p8) != 7ul)
+          corrupt++;                         /* tag STILL LIVE after eviction+reload */
+        c0 = wbuf_mcycle();
+        p8 = wbuf_slots[i];                  /* same slot, now resident: the warm control */
+        c1 = wbuf_mcycle();
+        cyc_warm += c1 - c0;
+        wbuf_sink[1] = (unsigned long)p8;    /* consume, so neither ldc can be elided */
+      }
 #else
       wbuf_slots[i] = base;            /* arm 0: no plain store anywhere near */
 #endif
@@ -296,6 +340,21 @@ static unsigned wbuf_compute(void)
      instead of silently aliasing to a small number. */
   if (lost    > 0xFFFul) lost    = 0xFFFul;
   if (corrupt > 0xFFFul) corrupt = 0xFFFul;
+#if WBUF_ARM == 8
+  /* DISTINCT ENCODING, because arm 8 reports a measurement the other arms do not have and
+     silently reusing their layout would make it unreadable:
+        0xB8 | ratio[11:0] << 12 | corrupt[11:0]
+     ratio = cyc_cold * 16 / cyc_warm, i.e. FIXED POINT with 16 = 1.0x, so a ratio of exactly
+     16 means cold and warm were indistinguishable and THE ARM TESTED NOTHING. Clamped, and a
+     zero warm total also reports 0 rather than dividing by it. */
+  {
+    unsigned long ratio = cyc_warm ? (cyc_cold * 16ul) / cyc_warm : 0ul;
+    if (ratio > 0xFFFul) ratio = 0xFFFul;
+    if (corrupt > 0xFFFul) corrupt = 0xFFFul;
+    return 0xB8000000u | (unsigned)(ratio << 12) | (unsigned)corrupt;
+  }
+#else
   return WBUF_OK | (unsigned)(corrupt << 12) | (unsigned)lost;
+#endif
 }
 #endif
