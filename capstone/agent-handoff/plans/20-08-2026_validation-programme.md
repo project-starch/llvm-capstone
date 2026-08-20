@@ -18,18 +18,41 @@ larger than a single probe is wasted.
 That is why the emulator work comes before the test programme, and why `delin`
 is not hardening for its own sake.
 
-## Phase 0: close the debts from 2026-08-20
+## Phase 0: close the debts from 2026-08-20 -- DONE, and the premise was wrong
 
 `link.ld` moved to `capstone-infra` and the whole stack was rebased onto it. The
 change puts `.gct` before `.bss` (dropping 19.5% of the mruby image, measured, as
-zero padding in the file) and defines the init/fini array markers. It MOVES
-LOADED BYTES, and this script's own `.bss` note records a layout sensitivity that
-has flipped a passing run before.
+zero padding in the file) and defines the init/fini array markers. It moves
+loaded bytes, and this script's own `.bss` note records a layout sensitivity that
+has flipped a passing run before, so it was flagged as needing one validation run
+each of `jerryscript` and `micropython`.
 
-- [ ] one validation run of `jerryscript`
-- [ ] one validation run of `micropython`
+**THAT WAS THE WRONG PAIR.** Those are precisely the two branches that do NOT use
+this linker script: both link gp-free, through
+`tests/runtime-qemu/gp-free-domain/link-gpfree.ld`
+(`build-jerryscript-silicon.sh:166`, `build-micropython-silicon.sh:290`). The
+change cannot reach them.
 
-Until those pass, both branches are unverified on their new base.
+The real consumers are the other 86 scripts that reference
+`my_first_domain/link.ld`, and they were already exercised on 2026-08-20 AFTER
+the change:
+
+- `tests/runtime-qemu/build-domain.sh:13` uses it, and built all ten
+  mrev-codegen probes: 9 PASS plus one rc=75 boot flake that passed on rerun,
+  each asserting a specific fault cause.
+- `musl-capstone/mruby-probe/build-mruby-probe.sh:23` uses it: the mruby probe
+  passed S1-S5, and the core mrbtest suite ran 678 assertions.
+- `musl-capstone/yield-probe/build-yield-probe.sh:17` uses it, and links.
+
+That is more coverage than the two runs originally asked for, and it is on the
+consumers that actually exist. No further action.
+
+**SEPARATE FINDING, not caused by any of this:** `micropython` does not build.
+Pass 1 of its gp-free link ends with two undefined symbols,
+`mp_type_bytearray` and `mp_obj_new_bytearray_by_ref`, i.e. `uctypes` is compiled
+in without the bytearray object type. Proven pre-existing rather than assumed:
+relinking the same objects with the pre-rebase `link.ld` and the new one gives an
+identical result. Left for whoever owns that branch.
 
 ## Phase 1: make failures survivable and visible
 
