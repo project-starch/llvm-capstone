@@ -270,7 +270,47 @@ Each step either costs no boot or answers one question.
       native `-O0` rescue object reintroduces the collision, since 224 of the 1346
       members carry their own descriptor.
 
-- [ ] **4b. mruby probe, gp-captable. One boot.** S1 to S5. After 4's blocker.
+- [x] **4b. mruby probe, gp-captable + LTO. DONE 2026-08-21. S1 TO S5 PASS.**
+
+          MRUBY S1: entered
+          MRUBY S2: mrb_open ok
+          MRUBY S3: irep executed
+          MRUBY S4: t[19] == 400
+          MRUBY S5: state closed
+          __CAPSTONE_MRUBY_PROBE_PASSED__
+          MEM at-exit: requested=158270 peak=158270 calls=755 fails=0
+          LIBCHEAP at-exit: used=157232 of=1048576
+
+      Every stage, the right number out of the interpreter, and a clean GC
+      teardown. **The acceptance criterion is met: ZERO gp fabrications**, against
+      >=6000 per run under the default ABI. The detector is known to fire -- three
+      earlier logs (`capstone-delin.log`, `capstone-delin2.log`,
+      `capstone-oldglue.log`) carry `gp FABRICATED ... pcc.type = 0` lines from the
+      same QEMU build, so the zero is a measurement and not a silent instrument.
+
+      Not over-read: the companion `CINCOFFSET rs1=gp` print is capped at 8 in the
+      helper (`if (++cn <= 8)`), so those 8 lines are an output limit, not an access
+      count. What they do say is that gp was a tagged, non-linear capability every
+      time it was sampled.
+
+      **ONE CAVEAT, and it is the whole remaining gap: `-DMRB_NO_METHOD_CACHE`.**
+      With mruby's method cache compiled in, the domain reaches S1 and runs 256
+      ticks before halting with cause 24. Localized to `mrb_method_search_vm` +0x464,
+      instruction `stc a1, 0x10(a0)` with `a0` untagged, which is the cache fill
+
+          struct mrb_cache_entry *mc = &mrb->cache[h];
+          mc->c = oc; mc->c0 = c; mc->mid = mid; mc->m = m;
+
+      The reported pc (0x2f2ac) is a branch target, i.e. the TB start, not the
+      faulting instruction -- the real one is 0x98 further on. `a0` is live-in to
+      that block, so the untagged value is produced upstream.
+
+      The same C code runs fine in the default-ABI build (678 assertions), and the
+      function's codegen is near-identical between the two (37 `shrink` and 37 `lcc`
+      in both), so the difference is not in this function. The matched pair that
+      would settle it is default ABI **with** LTO: same everything, one variable.
+
+- [ ] **4c. Root-cause the method-cache fault.** Matched pair: default ABI + LTO.
 
 - [ ] **5. Core mrbtest suite, gp-captable. One boot.**
       678 assertions, comparable against today's 674 OK / 2 skipped / 2 KO.
