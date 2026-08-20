@@ -20,8 +20,9 @@
 **Date:** 2026-08-20
 **Build analysed:** `fpga-e1140aeea.tar.gz` (archived synthesis output, `/tmp/capstone/_bitstreams`)
 **Bitstream:** `caplifive_s07fix.bit`, silicon-confirmed as the stripped tree
-**Status:** the S-07 fix is EXONERATED as the cause. The timing failure is real, structural,
-and pre-existing.
+**Status:** the timing failure is real and its worst cone ORIGINATES in the domain switcher.
+Whether the S-07 fix contributes is **UNDETERMINED** — see the banner above. An earlier version
+of this line said EXONERATED; that is withdrawn.
 
 ## The number
 
@@ -89,8 +90,9 @@ the design genuinely does not make 25 MHz.
 > Settling dcache coverage properly needs the Vivado machine: re-open the routed `.dcp` and run
 > `report_timing -nworst 1 -max_paths 100000 -slack_lesser_than 0 -sort_by slack`, then group
 > sources by module. That enumerates instead of sampling. The archive has no checkpoint, so it
-> cannot be done from here. **It is not required for the exoneration below**, which never
-> depended on it.
+> cannot be done from here. It was described here as "not required for the exoneration below".
+> That was written before the netlist column was examined, and it is now the OPPOSITE of the
+> situation: enumerating the failing endpoints is one of the two direct discriminators.
 
 **What survives, from the routed summary — a better report, and a genuine finding.** Its
 violated set is 10 Setup paths from **one** source register bit to **ten distinct**
@@ -118,10 +120,14 @@ Clock Path Skew     -0.069 ns
 ```
 
 **123 logic levels in one 25 MHz cycle**, with 82% of the delay in routing, all fanning out
-from a single register bit. That is a structural property of `capstone_dom_switcher`, not
-something a change elsewhere can induce.
+from a single register bit. The cone's ORIGIN is a structural property of
+`capstone_dom_switcher`. Note carefully what that does and does not say: it is a claim about
+where the path STARTS, not about what it passes through, and an earlier version of this note
+wrongly extended it to "not something a change elsewhere can induce". With 82% of the delay in
+routing on a device at ~83% occupancy, a change elsewhere influencing this path's LENGTH is not
+excluded.
 
-## Why it cannot be ours
+## Why the cone does not ORIGINATE with us
 
 Three independent facts, each verified from git rather than taken on report:
 
