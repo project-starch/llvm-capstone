@@ -1395,6 +1395,24 @@ def main():
                 _w = _read_sw(208, allow_cached=not _halt_reads, _force_emit=_halt_reads)
                 _d = decode_s07_verdict(_w)
 
+                # READBACK-PATH POISONING, added 2026-08-20 after a boot where this mattered.
+                #
+                # 208 carries the one field with an IMPOSSIBLE encoding: ldc0_src == 3.
+                # wt_dcache_mem.sv assigns rd_ctag_src only 2'd0/2'd1/2'd0/2'd2 -- verified on the
+                # flashed tree (e1140aeea :322/:327/:332/:338) AND at HEAD, and positive-controlled
+                # (zero occurrences of 2'd3 in the file, two of 2'd2, so the matcher fires). So a
+                # fault here is never a fact about 208 alone: every aperture sampled through the
+                # SAME halted readback is equally suspect.
+                #
+                # WHY THIS IS NOT REDUNDANT WITH 204's OWN CHECK. On 2026-08-20 both apertures
+                # returned 0xfe. 208 said INSTRUMENT FAULT. 204 decoded 0xfe as ldc_seen=1,
+                # count=62 -- which is INSIDE its legal set (0xC1-0xFF) -- and printed it as data,
+                # on the line directly below. The healthy-halt control had already failed with
+                # ActionTimeout, so nothing had been read from a readable state all boot.
+                #
+                # No data must be an ERROR, never a value that renders like a finding.
+                _readout_void = bool(_d is not None and _d[2])
+
                 _wline = (f"  [s07] after {label}: sw=208 verdict "
                           + ("UNREAD" if _w is None else f"0x{_w:02x} {_w:08b}"))
                 if _d is not None:
@@ -1492,12 +1510,21 @@ def main():
                     # looks exactly like a clean "memory did it" verdict. A count with no
                     # seen-bit is the only pattern that betrays it.
                     _fault = not (_v == 0x00 or _v == 0x80 or (_ldc == 1 and _cnt >= 1))
-                    _line = (f"  [s07] after {label}: sw=204 displacement "
-                             f"0x{_v:02x} {_v:08b}  seen={{stc:{_stc},ldc:{_ldc}}} count={_cnt}"
-                             + ("  <== INSTRUMENT FAULT: count>0 with ldc_seen clear cannot be "
-                                "produced by the design (legal: 0x00, 0x80, or ldc_seen with "
-                                "count>=1); the readout is wrong, NOT the core. Do not treat "
-                                "this byte as data." if _fault else ""))
+                    if _readout_void:
+                        # 204's own encoding cannot betray this one -- 0xfe is INSIDE its legal
+                        # set -- so without the inherited poison it prints as data.
+                        _line = (f"  [s07] after {label}: sw=204 displacement VOID "
+                                 f"(raw 0x{_v:02x}, self-check {'ALSO faulted' if _fault else 'PASSED'}) "
+                                 f"-- 208 reported INSTRUMENT FAULT on the SAME halted readback, so "
+                                 f"this byte came through a path that is not in a readable state. "
+                                 f"It is NOT data.")
+                    else:
+                        _line = (f"  [s07] after {label}: sw=204 displacement "
+                                 f"0x{_v:02x} {_v:08b}  seen={{stc:{_stc},ldc:{_ldc}}} count={_cnt}"
+                                 + ("  <== INSTRUMENT FAULT: count>0 with ldc_seen clear cannot be "
+                                    "produced by the design (legal: 0x00, 0x80, or ldc_seen with "
+                                    "count>=1); the readout is wrong, NOT the core. Do not treat "
+                                    "this byte as data." if _fault else ""))
                 print(_line, flush=True)
                 transcript.append(_line + "\n")
             except Exception as exc:
