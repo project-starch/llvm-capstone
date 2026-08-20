@@ -252,6 +252,89 @@ for builtin in adddf3 subdf3 muldf3 divdf3 comparedf2 fixdfsi fixdfdi fixunsdfsi
 done
 
 objects=("$OBJ_DIR"/*.o)
+
+# UNDER LTO, AN OBJECT THE BACKEND CANNOT SELECT FOR IS NOT A BAD OBJECT, IT IS A
+# BROKEN LINK. Without LTO these members sit in the archive harmlessly: they are only
+# pulled if referenced, and --gc-sections drops what is unreachable AFTER codegen. With
+# LTO codegen runs first, in the linker, over everything lld decided to keep -- and lld
+# keeps every standard libm name unconditionally, because the backend might emit a
+# libcall to it. Traced with `ld.lld -y acosl`, which answers "<internal>: reference to
+# acosl": nothing in mruby or in musl asks for it.
+#
+# So one unselectable member kills the whole link, and the failure arrives as a bare
+# "LLVM ERROR: ..." with no function name attached.
+#
+# This verifies each member the only way that means anything -- by running codegen --
+# and drops the ones that fail, LOUDLY and by name. The count is the honest measure of
+# the backend gap: it should shrink to zero, and when it does this loop becomes a no-op
+# rather than something to remember to remove. 27 of the current failures are the
+# long double math family and go away with long double at 64 bits.
+if [[ " ${MUSL_CAPSTONE_EXTRA_CFLAGS:-} " == *" -flto "* ]]; then
+  echo "LTO build: verifying every member survives codegen"
+  readarray -t _drop < <(CAPSTONE_LLC="$CAPSTONE_LLVM_BIN/llc" python3 - "${objects[@]}" <<'VERIFY'
+import concurrent.futures as cf, os, subprocess, sys
+llc = os.environ["CAPSTONE_LLC"]
+objs = sys.argv[1:]
+if not objs:
+    sys.exit("no objects to verify")
+BITCODE_MAGIC = bytes.fromhex("4243c0de")   # spelled in hex ON PURPOSE: written as a
+                                           # \\x escape it was once mangled into two UTF-8
+                                           # characters by the tool that generated this
+                                           # block, so nothing ever matched and the whole
+                                           # verification passed 1377 objects having
+                                           # looked at none of them.
+seen_bitcode = 0
+def check(o):
+    global seen_bitcode
+    with open(o, "rb") as fh:
+        if fh.read(4) != BITCODE_MAGIC:      # native objects (compiler-rt) are not ours
+            return None                      # to codegen and llc cannot read them
+    seen_bitcode += 1
+    r = subprocess.run([llc, "-mtriple=capstone64-unknown-elf", "-mattr=+m,+a",
+                        "-capstone-gp-captable", "-filetype=obj", o, "-o", os.devnull],
+                       capture_output=True)
+    if r.returncode == 0:
+        return None
+    err = (r.stderr or b"").decode("utf-8", "replace")
+    first = next((l for l in err.splitlines()
+                  if "LLVM ERROR" in l or "Cannot select" in l or "Assertion" in l), "")
+    return "%s\t%s" % (o, first.strip()[:100])
+found = []
+with cf.ThreadPoolExecutor(max_workers=min(16, (os.cpu_count() or 4))) as ex:
+    for r in ex.map(check, objs):
+        if r:
+            found.append(r)
+# THE SELF-TEST. Under LTO essentially every member is bitcode, so recognising none of
+# them means the magic test is broken, not that the archive is clean. Without this the
+# previous version reported "all members codegen clean" for an archive with 32 known
+# failures -- a pass produced by never looking.
+if seen_bitcode == 0:
+    sys.exit("verification recognised no bitcode among %d objects; refusing to report "
+             "a clean archive" % len(objs))
+for line in found:
+    print(line)
+VERIFY
+)
+  if (( ${#_drop[@]} )); then
+    echo "  dropping ${#_drop[@]} member(s) the backend cannot codegen:"
+    _keep=()
+    for o in "${objects[@]}"; do
+      _hit=0
+      # An explicit `if`, NOT `[[ ... ]] && _hit=1 && break`: under `set -e` that
+      # chain returns non-zero on every non-match and aborts the build.
+      for d in "${_drop[@]}"; do
+        if [[ ${d%%$'\t'*} == "$o" ]]; then _hit=1; break; fi
+      done
+      (( _hit )) || _keep+=("$o")
+    done
+    for d in "${_drop[@]}"; do
+      printf '    %-34s %s\n' "$(basename "${d%%$'\t'*}")" "${d#*$'\t'}"
+    done
+    objects=("${_keep[@]}")
+  else
+    echo "  all members codegen clean"
+  fi
+fi
 if [[ ${#objects[@]} -eq 0 || ! -e "${objects[0]}" ]]; then
   echo "no objects produced in $OBJ_DIR" >&2
   exit 2
