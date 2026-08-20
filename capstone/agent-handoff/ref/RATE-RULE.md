@@ -1830,16 +1830,29 @@ second-hand:
 
     FAILING ENDPOINTS TOTAL:                        96727
     FAILING paths through i_wt_dcache_wbuffer:      96727
-      worst slack through it:                      -10.629      <- the MODULE is on the critical path
+      worst slack through it:                      -10.629      <- TAUTOLOGICAL, see below
     fix_gran         nets=17   cells=0   *gran_*
     twin_niconflict  nets=0    cells=0   *ni_conflict*
     twin_wbufwren    nets=0    cells=0   *wbuffer_wren*
     control_hitoh    nets=24   cells=0   *wbuffer_hit_oh*
     FAILING paths through the fix's own nets:        2284
 
-**Note what is NOT there:** the query prints the worst slack through the *module* (−10.629, so the
-write buffer sits on the critical path) but only a *count* for the fix's own nets. **Worst slack
-through the fix's nets is still unmeasured**, and it remains the deciding number.
+**The −10.629 on that line carries NO information, and reading it as a finding was an error.**
+The line above says **96727 of 96727** failing paths pass through the module. If *every* failing
+path traverses it then necessarily the worst one does, so that figure could not have come out any
+other way — it is arithmetic on the count, not a second measurement. It must especially not be read
+as *"the write buffer is where the delay is"*: the path starts at `dom_switcher/cur_idx_q_reg[1]`,
+fans through `sel_dom_switch` (fo=443) across the whole LSU, and traverses the DTLB, PMP,
+`csr_regfile`, load and store units, `rev_node` and the dcache arbiter before returning to issue
+and the scoreboard. The write buffer is **one of many modules on a 123-level path**, and being *on*
+a long path is not being the bottleneck of it.
+
+This is the same error class again in new dress — a number read as informative without first asking
+**what else could have produced it**. It is the denominator question applied to a *result* rather
+than to a set.
+
+**What IS still missing:** the query prints only a *count* for the fix's own nets. **Worst slack
+through the fix's nets is unmeasured**, and it remains the one deciding number.
 
 ### Correction 1 — "the only dynamic term on that path" was overstated
 
