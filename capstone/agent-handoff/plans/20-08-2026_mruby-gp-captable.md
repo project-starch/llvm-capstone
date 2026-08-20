@@ -217,6 +217,27 @@ Each step either costs no boot or answers one question.
       so a few objects are not being compiled with the flag. Latent faults, not
       the blocker.
 
+      **The open question is now CLOSED, and the answer is the expensive one.**
+      `tests/runtime-qemu/gp-free-domain/multi-tu-slot-collision.sh` reproduces it
+      in two files: two TUs with three globals each, and after linking BOTH
+      address slots 0,1,2. The objects carry **no relocation at all** for the gp
+      offsets -- the slot index is an immediate baked in at compile time -- so the
+      linker has nothing to renumber. Merging the descriptor fragments alone
+      therefore fixes nothing; every TU would still address the same low slots.
+      A relocation for the slot index is needed, which is compiler and linker work.
+
+      **One cheaper candidate, tried and NOT yet working: LTO.** The descriptor is
+      emitted per MODULE by `CapstoneAsmPrinter::emitGPCapTableInitDesc`, so a full-LTO
+      link would present one module and one descriptor with globally unique slots --
+      a build-flag change instead of a new relocation. First trial: compiled with
+      `-flto -mllvm -capstone-gp-captable` and linked with
+      `--plugin-opt=-capstone-gp-captable`, the link succeeds but the image has an
+      EMPTY descriptor and `reada`/`readb` make no cap-table access at all, i.e. the
+      pass produced nothing rather than producing something wrong. Whether that is
+      flag plumbing into the LTO backend or the pass behaving differently there is
+      NOT established. Worth one focused investigation before committing to the
+      relocation, because it would avoid it entirely.
+
 - [ ] **4b. mruby probe, gp-captable. One boot.** S1 to S5. After 4's blocker.
 
 - [ ] **5. Core mrbtest suite, gp-captable. One boot.**
