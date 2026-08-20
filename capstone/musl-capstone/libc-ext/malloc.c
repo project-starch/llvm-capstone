@@ -67,18 +67,22 @@
 #define CAPSTONE_LIBC_HEAP_BYTES (256 * 1024)
 #endif
 
-/* __weak__ and not weak: musl's src/include/features.h defines `weak` as a
- * MACRO for exactly this attribute, so the plain spelling expands to
- * __attribute__((__attribute__((__weak__)))) and fails to compile.
+/* Published by the entry glue (runtime/start-musl.S) from cscratch.
  *
- * Published by the entry glue (runtime/start-musl.S) from cscratch. Weak, so a
- * domain linked against older glue still links; it is then untagged and the
- * static fallback is used. */
-__attribute__((__weak__)) void *__capstone_dom_data;
+ * STRONG here, overriding the WEAK fallback slot the glue defines. The glue
+ * needs somewhere to store even when no libc is linked -- yield-probe links
+ * start-musl.o and its own domain and no archive at all -- so it carries a weak
+ * sixteen-byte slot of its own. A domain that links this libc gets ours instead.
+ * Not weak on both sides: two weak definitions leave the choice to the linker. */
+void *__capstone_dom_data;
 
 /* HOW MUCH OF dom_data THE STACK KEEPS. The stack grows down from the top, the
  * heap up from the bottom, and nothing checks that they do not meet -- the same
  * arrangement the static heap had with respect to the rest of .bss.
+ *
+ * __weak__ and not weak: musl's src/include/features.h defines `weak` as a
+ * MACRO for exactly this attribute, so the plain spelling expands to
+ * __attribute__((__attribute__((__weak__)))) and fails to compile.
  *
  * Weak with a modest default, because only the BUILD knows: it is the same
  * number it already passes to domreq.S as CAPSTONE_DOMREQ_STACK, so a program
