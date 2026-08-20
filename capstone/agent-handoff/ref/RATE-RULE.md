@@ -1821,3 +1821,59 @@ zero design change — now exists for the A/B.
 **NOT exonerated. IMPLICATED but not convicted.** The fix's logic is demonstrably on failing
 paths; whether it *causes* the violation is unmeasured. Everything upstream of this section that
 says otherwise is superseded by it.
+
+## Same day, later — the `.dcp` numbers are now VERIFIED HERE, and two corrections
+
+The raw query output is on this machine at `/tmp/capstone/_bitstreams/d.out` (148 lines, the Tcl
+echoed alongside its results). Re-read directly, so the figures above are no longer
+second-hand:
+
+    FAILING ENDPOINTS TOTAL:                        96727
+    FAILING paths through i_wt_dcache_wbuffer:      96727
+      worst slack through it:                      -10.629      <- the MODULE is on the critical path
+    fix_gran         nets=17   cells=0   *gran_*
+    twin_niconflict  nets=0    cells=0   *ni_conflict*
+    twin_wbufwren    nets=0    cells=0   *wbuffer_wren*
+    control_hitoh    nets=24   cells=0   *wbuffer_hit_oh*
+    FAILING paths through the fix's own nets:        2284
+
+**Note what is NOT there:** the query prints the worst slack through the *module* (−10.629, so the
+write buffer sits on the critical path) but only a *count* for the fix's own nets. **Worst slack
+through the fix's nets is still unmeasured**, and it remains the deciding number.
+
+### Correction 1 — "the only dynamic term on that path" was overstated
+
+Verified at `618f4ce36`:
+
+    :444  wbuffer_hit_oh[k] = valid[k] & (wbuffer_q[k].wtag == {req_port_i.address_tag,
+                                          req_port_i.address_index[...]})
+    :458  rdy = (|wbuffer_hit_oh) | (~full);
+    :592  if (req_port_i.data_req && rdy) begin
+
+So an **8-wide comparator tree against the same `req_port_i.address_*` fields was already on the
+`data_gnt` path before the fix**, via the enclosing condition. `gran_eq`/`word_ne` compare the same
+`wtag` fields sliced differently, so they run in **parallel** with an existing tree rather than
+introducing the first comparison stage. `gran_hazard` is the first dynamic term in the **inner**
+`if` — which is what was verified — not the first on the path, which is what was written.
+
+Incremental depth is then the OR-reduction plus one AND: on the order of one to two logic levels.
+At 8.984 ns of logic over 123 levels ≈ **0.073 ns/level**, two levels ≈ 0.15 ns against a 10.629 ns
+violation, ~1.4%. **An estimate with a visible assumption, not a result** — an average per level
+is not the marginal cost of the specific levels added, some of which are `CARRY4`. And it bounds
+only the *logic* term: routing is 41.552 of 50.536 ns, and routing is exactly what no static
+analysis can bound.
+
+**So the structural prior sits between the two positions**: more adverse than "off the cone",
+less adverse than "the only dynamic term".
+
+### Correction 2 — naming survival is not a signal *class* property either
+
+`wbuffer_wren` has **0 nets** and is **not** constant-folded — it is a live, driven signal in both
+revisions. So of four internal write-buffer signals queried, two survive as named nets
+(`gran_*` 17, `wbuffer_hit_oh` 24) and two do not (`ni_conflict` 0 by constant folding,
+`wbuffer_wren` 0 for no reason we can state). Naming survival is **per-signal and unpredictable**.
+
+That is a stronger conclusion than either lane reached and it supersedes both accounts: not "this
+class survives", not "this class does not", but **never reason from an absent name at all**. Had
+the fix been called `wbuffer_wren`-something, the whole afternoon's chain would have run the same
+way and produced a confident exoneration.
