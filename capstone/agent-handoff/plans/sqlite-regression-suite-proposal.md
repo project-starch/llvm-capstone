@@ -38,26 +38,46 @@ assumes.
 **C. Broaden our own workload.** Cheapest. Never supports "passes its regression suite" — it moves
 "18 assertions" to "60 assertions". Worth doing anyway as a by-product, not as the answer.
 
-## THE CENTRAL RISK, and it may bound the claim rather than be solved
+## ~~THE CENTRAL RISK~~ — B0b RAN, AND THE RISK IS VOID
 
-`build-sqlite-silicon.sh` references **15 `SQLITE_OMIT_*` flags**. **The omissions that make SQLite
-fit in a capability domain are the same omissions that make an upstream suite fail.** Enabling them
-grows the image, and the image has a hard 2 MiB ceiling.
+**The feared risk was:** the `SQLITE_OMIT_*` set that makes SQLite fit in a capability domain is
+the same set that makes an upstream suite fail, so the claim would have to be scoped to a crippled
+configuration.
 
-So the achievable claim is probably not "passes the suite" but **"passes N% of SQLLogicTest for the
-configuration under test, with the omitted features enumerated"** — which is defensible and
-checkable, where the unqualified claim is neither.
+**It does not apply. The shipped build carries NO `SQLITE_OMIT_*` flags at all.**
+`build-sqlite-silicon.sh` defines a 14-flag `SILICON_TRIM` array at `:877-897` and then, at `:911`:
 
-*(First task, and it is nearly free: establish which of those 15 are actually active. The script is
-111 KB and heavily commented — `SQLITE_OMIT_SELECT` appears in the grep, which cannot be live since
-the workload does `SELECT`s. So some are discussion, not configuration.)*
+    [[ "${SQLITE_TRIM:-0}" == "1" ]] || SILICON_TRIM=()
+
+`SQLITE_TRIM` defaults to `0`, so the array is emptied. The comment above it is explicit — the trim
+was **measured to break SQLite** (2026-07-31: compiles and links clean, then faults at the domain's
+first entry; the same tree passes end-to-end without it), because SQLite supports `SQLITE_OMIT_*`
+only when building from canonical sources, not against the prebuilt amalgamation. *"Opt in with
+`SQLITE_TRIM=1` only to re-measure the carve count; never for a correctness run."*
+
+**So the SQLite that passed 3/3 on silicon is a feature-complete amalgamation build**, and an
+upstream suite would not be bounded by an omission set. That is a materially better starting
+position than this proposal originally assumed. (The 15th flag, `SQLITE_OMIT_SELECT`, was
+commentary about SQLite's own source — not ours, as suspected.)
+
+## THE REAL CEILING, found in the same place: capability carves, not features
+
+`build-sqlite-silicon.sh:913-919` — one capability carve per global costs one revocation node, and
+**the board's rev-node allocator wraps after 1021**. Untrimmed SQLite needs **1059 carves and
+overflowed the pool on silicon** (measured 2026-07-31, head=74 with the overflow flag set). String
+merging of private read-only literals takes it to **179 carves, ~215 allocations**.
+
+**This is the budget an SLT runner spends against, and it replaces the OMIT risk as B1's principal
+constraint.** A runner plus its buffers adds globals, and globals become carves. Current headroom
+is roughly 179 → 1021. Track carve count, not just image size — and note the two ceilings are
+independent: the 2 MiB image limit (Q-01) and the 1021 rev-node pool.
 
 ## Staged plan — each stage says what it licenses
 
 | # | Work | Board? | What it licenses |
 |---|---|---|---|
 | 0 | **Fix Q-01** — rebuild the QEMU arm at silicon config so `code_len <= 2 MiB` | no | A working reference. Everything below is developed against QEMU; silicon only confirms. |
-| 0b | **Enumerate the live `SQLITE_OMIT_*` set** | no | Knowing in advance which suite sections cannot pass, instead of discovering it as failures. |
+| ~~0b~~ | **DONE 2026-08-20 — the live `SQLITE_OMIT_*` set is EMPTY.** `SILICON_TRIM` is gated off at `build-sqlite-silicon.sh:911` and was measured to break SQLite. Superseded by: **track capability carves against the 1021 rev-node pool** (179 today, 1059 untrimmed). | no | No corpus section is excluded by feature omission. The binding budget is carves, not features. |
 | 1 | **One SLT file end-to-end in-domain** — plumbing only: stream the file through the existing shared region, execute, hash, report | no | That the mechanism works. Licenses nothing about SQLite. |
 | 2 | **A subset corpus under QEMU**, pass rate measured | no | The real number. Every failure here is ours and needs no board. |
 | 3 | **Same corpus on silicon**, compared against the stage-2 baseline | yes, a few boots | Silicon-vs-QEMU divergence — the thing we currently cannot detect at all. |
