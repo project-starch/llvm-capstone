@@ -1,21 +1,36 @@
 # S-07 — a capability read back from memory comes back UNTAGGED, sporadically
 
-> **PROVISIONAL — the silicon numbers below are pending a timing attribution (2026-08-20).**
-> The build that produced `caplifive_s07fix.bit` reports post-route **WNS −10.629 ns**, with
-> **96727 of 246476 endpoints failing setup** (hold and pulse width are fine: WHS +0.054, WPWS
-> +0.062). The **mechanism is NOT affected** — it rests on the RTL text, a Verilator matched pair
-> and an assertion, none of which involve a bitstream. The **measured silicon numbers are**, and
-> *all* of them, pre-fix as well as post-fix: the timing environment is byte-identical across both
-> builds, so this caveat cannot honestly be scoped to the fix run. It is expected to resolve in
-> favour of the numbers, because every result here is a **differential** between arms that differ
-> by exactly one thing, and the entire design delta against the last known-healthy build
-> (`618f4ce36`) is one module-internal file — `wt_dcache_wbuffer.sv`, +146/−1, no port changes.
-> That is an argument, not a measurement. Two artifacts settle it and neither needs the board:
-> the **per-clock Intra Clock Table** from the routed timing summary, and a grep of
-> `ariane.timing_WORST_100.rpt` for `i_wt_dcache_wbuffer`. If the worst paths do run through the
-> write buffer, the differential argument collapses and this becomes a candidate regression.
-> Repeatability is deliberately **not** offered as evidence: a setup-failing path at fixed voltage
-> and temperature can fail deterministically. Full record: `agent-handoff/ref/RATE-RULE.md`.
+> **TIMING CAVEAT, NARROWED 2026-08-20 — this fix is EXONERATED as the cause; the measurement was
+> still taken on a bitstream that misses setup.** Read directly from the archived reports of the
+> build that produced `caplifive_s07fix.bit`, not taken on report.
+>
+> Post-route **WNS −10.629 ns**, and it is **one clock**: `clk_out1_xlnx_clk_gen`, 96727 of 174481
+> endpoints. Its constraint is **correct, not misapplied** — the Clock Summary gives it as
+> 40.000 ns / 25.000 MHz, exactly what `xlnx_clk_gen` is generated for. Every other clock closes
+> (`clk_out2` +0.694, `eth_rxck` +4.140, every MIG-derived clock positive). Hold is fine
+> (WHS +0.054).
+>
+> **It is not this subsystem.** All **100 of 100** worst violated paths share a single source —
+> `i_ariane/i_cva6/dom_switcher/cur_idx_q_reg[1]/C` — and **0 of 100** touch the write buffer or
+> the dcache. That zero is positive-controlled: the same matcher on the same line class finds 100
+> hits for the issue-stage cells, and the file mentions `wbuffer` 3000 times elsewhere. The worst
+> path runs 50.536 ns against 40.000 ns over **123 logic levels with 82% of the delay in routing**,
+> at 169415/203800 LUTs (83%) with place and route both on `-directive RuntimeOptimized`. It is
+> structural, in domain-switch machinery. `core/anvil_build/` is byte-identical across the range
+> and `capstone_dom_switcher.anvil` last changed at `25035c4c0`, an **ancestor** of the healthy
+> reference build. A change confined to the inside of one cache module cannot induce it.
+>
+> **What carries the results is the DIFFERENTIAL structure**, now on firmer ground: every number
+> here is a comparison between arms differing by exactly one thing, on one bitstream, in a
+> subsystem the failing cone does not touch, agreeing with Verilator — which has no timing model
+> at all. Repeatability is deliberately not offered: a setup-failing path at fixed voltage and
+> temperature can fail deterministically.
+>
+> **What remains caveated:** these are absolute numbers taken on a bitstream missing setup, and
+> constraints, flow, directives and the failing module are unchanged back to at least `618f4ce36`
+> — so this build is not special, and very likely **no** silicon measurement this project has ever
+> taken was made on a timing-clean bitstream. That is a separate finding, tracked in
+> `agent-handoff/ref/RATE-RULE.md`, and it is not S-10.
 
 
 > # ROOT CAUSE FOUND AND CONFIRMED ON SILICON — 2026-08-19. THIS SUPERSEDES EVERYTHING BELOW.

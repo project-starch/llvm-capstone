@@ -1344,3 +1344,113 @@ section. What would be lost is the silicon confirmation, not the fix.
 first. Claim 2 above makes the cheap check decisive; re-implementing `618f4ce36` (~2h, another
 machine, no board) is only confirmatory and is worth spending only if the cheap check comes back
 ambiguous.
+
+---
+
+# 2026-08-20, later — THE TIMING FAILURE IS REAL, LONG-STANDING, AND NOT OURS
+
+The lead archived the full build to `/tmp/capstone/_bitstreams`. Every number below was read
+directly from those reports in this session, not taken on report from another lane.
+
+## The instrument question is settled twice over
+
+The archive contains **exactly one** timing summary — `ariane_xilinx_timing_summary_routed.rpt`.
+There is no post-place summary in it to have been confused with. **−10.629 ns is post-route.**
+
+## It is ONE clock, and its constraint is CORRECT
+
+    Intra Clock Table                    WNS(ns)      TNS(ns)   failing / total endpoints
+      clk_out1_xlnx_clk_gen              -10.629  -438671.250      96727 / 174481
+      clk_out2_xlnx_clk_gen               +0.694        0.000          0 /    427
+      eth_rxck                            +4.140        0.000          0 /    612
+      (every MIG-derived clock positive)
+
+    Clock Summary:  clk_out1_xlnx_clk_gen   {0.000 20.000}   40.000 ns   25.0 MHz
+
+Programmatically checked: `clk_out1` is the **only** clock in the intra table with a negative WNS.
+And 40.000 ns / 25 MHz is exactly what `xlnx_clk_gen` is generated for
+(`CLKOUT1_REQUESTED_OUT_FREQ {25}`), fed to the core as `clk` at `ariane_xilinx.sv:1196`.
+
+**So the misconstrained-domain hypothesis is REFUTED. There is no wrong period. The design
+genuinely does not make 25 MHz.**
+
+That also resolves the `CLK_PERIOD_NS` finding without changing anything: it is true that nothing
+in the flow consumes it, but the clk_wiz IP asserts 40 ns itself and Vivado judged the paths
+against exactly that. Every "40 ns budget" statement made in this investigation was **right by
+luck rather than by reading**, which is worth knowing and changes no conclusion here.
+
+## Where it actually is — and it is not the write buffer
+
+    ariane.timing_WORST_100.rpt, all 100 paths VIOLATED
+
+    Source (100 of 100, identical):
+      i_ariane/i_cva6/dom_switcher/cur_idx_q_reg[1]/C
+    Destination (worst path):
+      i_ariane/i_cva6/issue_stage_i/i_issue_read_operands/
+        fu_data_q_reg[0][cap_data][cap_metadata_a][20]/D
+
+    Data Path Delay   50.536 ns   (logic 8.984 = 17.8%,  route 41.552 = 82.2%)
+    Requirement       40.000 ns
+    Logic Levels      123         (CARRY4=30 LUT2=7 LUT3=10 LUT4=8 LUT5=19 LUT6=49)
+
+    Source/Destination lines mentioning wbuffer or dcache:   0 of 100
+
+**The zero is positive-controlled**, because a zero from a matcher means nothing until the matcher
+is shown able to fire:
+
+    same matcher, same line class, pattern issue_stage|scoreboard  ->  100
+    'wbuffer' anywhere in the file 3000,  'dcache' anywhere 8600
+
+So it is a finding, not a pattern that could not fire.
+
+**And the failing module has not been touched in this work at all.** `core/anvil_build/` is
+byte-identical between `618f4ce36` and `e1140aeea`, and `capstone_dom_switcher.anvil` last changed
+at `25035c4c0` — verified an **ancestor** of `618f4ce36`. Contributing factor: 169415 of 203800
+LUTs, **83% occupancy**, with `place_design` and `route_design` both on `-directive
+RuntimeOptimized` in both builds.
+
+**Claim 2 is what makes this decisive.** Since the entire design delta is one module-internal
+file, and none of the 100 worst paths touch that module or its subsystem, the S-07 fix is
+exonerated as the cause. No exoneration-by-elimination was needed.
+
+## What this does and does not license
+
+* **The fix is exonerated as the cause of the timing failure.** It is not implicated, and would
+  not be even if it had been: a change inside one cache module cannot create a 123-level path out
+  of a domain-switch register.
+* **The results still rest on the DIFFERENTIAL structure**, not on this exoneration alone. Each is
+  a comparison between arms differing by exactly one thing, on one bitstream, in a subsystem the
+  failing cone does not touch, agreeing with Verilator — which has no timing model at all. That
+  argument got stronger, because we now know precisely which paths fail and they are not in the
+  mechanism being measured.
+* **Repeatability remains withdrawn** from the reconciliation by both lanes. A setup-violating
+  path at fixed voltage and temperature can fail deterministically.
+
+## Why the board works anyway — HYPOTHESIS, labelled as one
+
+`cur_idx_q` changes only on a domain switch and is then stable for thousands of cycles. If its
+consumers need a *settled* value rather than a same-cycle capture, the path is architecturally
+multicycle while constrained single-cycle, and 50.5 ns resolves comfortably inside two 40 ns
+cycles. That would reconcile a hard setup violation with repeatably correct silicon.
+
+**Not confirmed.** Confirming it means reading the dom-switcher consumer handshake in the issue
+stage. If it holds, the remedy is a `set_multicycle_path` constraint, **not** an RTL change — and
+a correct constraint would also stop the report drowning the real violations, if any, in 96727
+false ones. Recorded as the next question, not as an answer.
+
+## THE FINDING THAT REACHES PAST S-07
+
+Constraints, synthesis flow, implementation directives and the failing module are **all unchanged
+back to at least `618f4ce36`**. So this build is not special, and the reasonable reading is that
+**every silicon measurement this project has ever taken was taken on a bitstream missing timing
+the same way** — the perf numbers and the borrow-cost figures included.
+
+Supporting it: the `run.tcl` block instructing anyone to read WNS post-route is **part of the very
+diff under discussion**. It did not exist at `618f4ce36`. On the evidence in the repo, that
+build's WNS was never read either.
+
+This deserves its own issue to the hardware side. **It is not S-10, and it is not opened here** —
+outward-facing handover is the lead's call, and one folder is already built and unsent.
+
+**The ~2h re-implementation of `618f4ce36` is now moot for attribution** and worth spending only
+if someone disputes the long-standing reading. Claim 2 plus 0-of-100 settles what it was for.
