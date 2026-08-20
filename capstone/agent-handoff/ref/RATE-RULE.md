@@ -1557,3 +1557,99 @@ one-line constraint.
 multicycle/false reading is right, then 96727 false violations are not noise, they are a
 **blindfold**. A real timing regression appearing anywhere in this design today would be invisible
 underneath them, and nobody would know.
+
+---
+
+# SECOND RETRACTION, same day — THE VIOLATED CONE **DOES** TRAVERSE THE WRITE BUFFER
+
+This is the escalation branch both lanes agreed on in advance. It has fired.
+
+## The check that was wrong, and why
+
+`Source:` and `Destination:` name the **two ends** of a path and never its **interior**. Matching
+on them and finding no dcache told us nothing about what the path runs *through*. The correct
+field is the `net (fo=..., routed)` column, which carries RTL signal names — reliable where the
+hierarchy prefixes on optimised cells are not.
+
+Re-parsed on nets, all ten violated paths:
+
+    path -> fu_data_q_reg[0][cap_data][cap_metadata_a][20]/D    nets=129   wbuffer|dcache nets=22
+    path -> mem_q_reg[2][sbe][cap_result][result_metadata][23]/D nets=129  wbuffer|dcache nets=22
+    path -> mem_q_reg[5][sbe][rs1][0..4]/CE     (5 paths)        nets=114   wbuffer|dcache nets=22
+    path -> mem_q_reg[6][sbe][rs1][0,3]/CE      (2 paths)        nets=114   wbuffer|dcache nets=22
+    path -> fu_data_q_reg[0][cap_data][cap_metadata_a][24]/D     nets=129   wbuffer|dcache nets=22
+
+    POSITIVE CONTROL: 220 of 8946 nets in the report match wbuffer|dcache. The matcher fires.
+
+And they are **real RTL signals**, not optimiser debris:
+
+    i_wt_dcache_wbuffer/rd_req[1]                    i_wt_dcache_mem/i_rr_arb_tree/rd_req_masked[0]
+    i_wt_dcache_ctrl/rd_ack[0]                       i_wt_dcache_mem/i_rr_arb_tree/vld_sel_d[0]
+    i_wt_dcache_wbuffer/.../wbuffer_hit_oh[5]        i_wt_dcache_wbuffer/.../wbuffer_hit_idx[0]
+    i_wt_dcache_wbuffer/data_rdata_q[...]            i_wt_dcache_ctrl/dcache_req_ports_ex_cache[1][data_req]
+
+**So "0 of 100 paths touch the write buffer or dcache" was not merely vacuous. The true answer is
+the opposite.** Retracted in that stronger sense, in all four records.
+
+## What the path actually is
+
+    dom_switcher/cur_idx_q_reg[1]/Q
+      -> _busy_ch_idx_0[1]                                          (fo=22)
+      -> dom_switch_data_req_i[write_en]                            (fo=133)
+      -> lsu_bypass_i/sel_dom_switch                                (fo=443)
+      -> DTLB / PMP / csr_regfile / load+store unit / rev_node
+      -> wt_dcache_wbuffer + wt_dcache_mem arbiter  (the 22 nets)
+      -> back into issue_read_operands / scoreboard
+    108-123 logic levels, 82% routing, 50.5 ns against 40.0 ns
+
+`sel_dom_switch`, fanout 443, is the waypoint that turns a domain-switch register into a
+whole-LSU-wide cone.
+
+## Is the S-07 FIX on that cone? UNPROVEN — not exonerated, and not implicated
+
+**Pointing away from the fix:** every traversed write-buffer net is **read/tag-check side** —
+`rd_req`, `rd_ack`, `rd_req_masked`, `vld_sel_d`, `wbuffer_hit_oh`, `wbuffer_hit_idx`,
+`data_rdata_q`. The fix adds logic on the **allocation** side (`gran_hazard` → `data_gnt` /
+`wbuffer_wren`). `wbuffer_hit_oh` pre-dates the fix. The single `data_gnt` net on the path is
+`rev_node/dcache_req_ports_rev_rd_res[data_gnt]` — the **rev-node read port's** grant, a different
+port from the write buffer's `req_port_o.data_gnt`.
+
+**Why that is not enough:**
+
+    search for  gran_hazard|gran_conflict|gran_eq|word_ne|req_wtag
+      -> 0 of 8946 nets, and 'gran_' appears NOWHERE in the report at all
+
+A zero from a pattern that never appears cannot distinguish *"the fix's logic is off the cone"*
+from *"those net names did not survive synthesis"*. **Same failure mode as the two above.** So it
+is recorded as unproven in both directions.
+
+## Consequences, stated plainly
+
+* **The exoneration recorded earlier is withdrawn.** What survives is narrower: the fix is one
+  module-internal file (+146/−1, no ports), `dom_switcher` is unchanged and last changed at an
+  ancestor of the healthy reference, and the failing cone *originates* outside the cache. None of
+  that establishes that the fix is off the cone, because the cone runs through its module.
+* **The ~2h re-implementation of `618f4ce36` is NO LONGER MOOT.** I said it was; that was said on
+  the strength of the retracted figure. Running the same reports on the unchanged tree and
+  comparing the violated cone is now the direct discriminator.
+* **What would settle it faster, on the routed checkpoint:**
+
+      report_timing -nworst 1 -max_paths 100000 -slack_lesser_than 0     # enumerate, not sample
+      report_timing -through [get_nets -hier *gran_hazard*]              # does the logic exist at all
+      get_nets -hier -filter {NAME =~ *gran_*}                           # positive control for the above
+
+* **This goes to the lead**, per the rule both lanes agreed before the answer was known: if the
+  violated cone touches the write buffer, it is not settled between lanes.
+
+## The pattern, third instance in one afternoon
+
+Three claims in a row rested on a matcher that could not have produced the opposite answer:
+
+1. `wbuffer|dcache` over a file — proves the file contains the string;
+2. the same over the `Source:`/`Destination:` **line class** — proves the matcher fires on that
+   line class, and still only ever sees path **endpoints**;
+3. `gran_*` over the net column — a pattern that appears nowhere in the report.
+
+Each control was a real improvement on the last and none reached the question. The one that does:
+**before believing a zero, name the set it was counted over and show the target can appear in that
+set.** Not "can the matcher fire" — "can the target be in the denominator".

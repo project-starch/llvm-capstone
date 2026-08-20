@@ -10,15 +10,25 @@
 > (`clk_out2` +0.694, `eth_rxck` +4.140, every MIG-derived clock positive). Hold is fine
 > (WHS +0.054).
 >
-> **It is not this subsystem** — but see the correction below on how much the reports can show.
+> **RETRACTED: "it is not this subsystem". THE VIOLATED CONE DOES TRAVERSE THE WRITE BUFFER.**
 > Every violated path in every archived report shares a single source,
 > `i_ariane/i_cva6/dom_switcher/cur_idx_q_reg[1]/C`, fanning out to 10 distinct destinations in the
-> scoreboard (8) and `issue_read_operands` (2). **RETRACTED as evidence: the "0 of 100 touch the
-> dcache" figure.** `report_timing -nworst 100` returns up to 100 paths *per endpoint*, and all 100
-> in `WORST_100` share ONE source–destination pair at identical slack; across all three archived
-> reports (896 path blocks) `wbuffer|dcache` appears in **zero** source or destination fields, so
-> that matcher cannot fire there at all and cannot distinguish "the dcache is clean" from "the
-> dcache was never sampled". The exoneration does not rest on it and stands without it. The worst
+> scoreboard (8) and `issue_read_operands` (2) — but each of those 10 paths traverses **22 nets**
+> under `i_wt_dcache_wbuffer` / `wt_dcache_mem`, named after real RTL signals: `rd_req[1]`,
+> `rd_ack[0]`, `rd_req_masked[0]`, `vld_sel_d[0]`, `wbuffer_hit_oh[5]`, `wbuffer_hit_idx[0]`,
+> `data_rdata_q[...]`. Positive-controlled on net names, which are reliable where hierarchy
+> prefixes are not: 220 such nets appear across the report, so the matcher fires.
+> **The earlier "0 of 100 touch the dcache" was worse than vacuous — the true answer is the
+> opposite.** It came from matching `Source:`/`Destination:` endpoint fields only, which name the
+> two ends of a path and never its interior.
+> **What is NOT established either way: whether the S-07 fix's own logic is on that cone.** The
+> traversed nets are all **read/tag-check side** (`rd_req`, `rd_ack`, `wbuffer_hit_oh`,
+> `data_rdata_q`), while the fix adds logic to the **allocation** side (`gran_hazard` →
+> `data_gnt`/`wbuffer_wren`); and `wbuffer_hit_oh` pre-dates the fix. But a search for
+> `gran_hazard|gran_conflict|gran_eq|word_ne|req_wtag` returns **0 of 8946 nets across the whole
+> report**, and `gran_` appears nowhere at all — so that zero cannot distinguish "the fix's logic
+> is off the cone" from "those net names did not survive synthesis". **It is unproven, not
+> exonerated**, and settling it needs the routed checkpoint on the Vivado machine. The worst
 > path runs 50.536 ns against 40.000 ns over **123 logic levels with 82% of the delay in routing**,
 > at 169415/203800 LUTs (83%) with place and route both on `-directive RuntimeOptimized`. It is
 > structural, in domain-switch machinery. `core/anvil_build/` is byte-identical across the range
