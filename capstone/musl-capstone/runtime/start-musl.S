@@ -124,6 +124,30 @@ test:
   cincoffset t0, gp, t0
   stc(ra, t0, 0)
 
+  /* INITIALISE THE pthread STRUCT tp POINTS AT, before any C runs.
+   *
+   * tp on its own is only addressable space; musl expects a struct __pthread
+   * below it with at least `locale` populated, and reads it as a capability.
+   * Zeroed, that read comes back untagged and faults one dereference later --
+   * in strerror, which is the first thing in a domain that ever asked.
+   *
+   * AFTER the domret stash above, not before it: this is a call, so it clobbers
+   * ra, and ra is exactly what that stash stores. Putting it earlier assembles,
+   * links and boots, and breaks the yield -- the domain would return to whatever
+   * this call left in ra. Before the cap-init loop below, so an initializer may
+   * already use the libc.
+   *
+   * Called from the glue rather than from each program because every domain
+   * using THIS glue links libc-capstone.a by construction: the file exists to
+   * carry musl. Same cjalr encoding as the domain_main call further down.
+   *
+   * ra is dead from here to domain_main, which reloads what it needs. */
+  .Lpcrel_init_tp:
+  auipc t0, %pcrel_hi(__capstone_init_tp)
+  addi t0, t0, %pcrel_lo(.Lpcrel_init_tp)
+  cincoffset t0, gp, t0
+  .insn i 0x5b, 0x5, ra, 0(t0)
+
   # Run capability-global initializers before domain_main. A capability tag
   # cannot live in the static image, so initialized capability globals (pointer/
   # string/function tables) load untagged; the compiler emits one initializer per
