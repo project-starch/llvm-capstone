@@ -25,7 +25,27 @@ GUEST_CC=${GUEST_CC:-$CAPSTONE_BUILDROOT_DIR/build/host/bin/riscv64-buildroot-li
 LIBCAPSTONE_C="$REPO_ROOT/capstone/caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.c"
 SETJMP_SRC="$REPO_ROOT/xlang/lua-cdp/capstone-lua/capstone_setjmp.S"
 
+# MRUBY_GPCT=1 builds the whole domain under the gp-captable ABI: globals are
+# reached through a cap table the entry glue builds from a descriptor, instead of
+# through `gp` as a data capability. The reason is silicon, not tidiness -- under
+# the default ABI QEMU FABRICATES gp from a linear PCC on every use (>=6000 times
+# per mruby run, measured), the RTL never does that, and so mruby as built by the
+# default path cannot run on the board at all.
+#
+# Everything the switch needs already exists: __capstone_yield in the gp-captable
+# glue (behind CAPSTONE_GLUE_YIELD), the init/fini markers in link-gpfree.ld, and
+# malloc.c's runtime choice of heap. See plans/20-08-2026_mruby-gp-captable.md.
+GPCT=${MRUBY_GPCT:-0}
+LADDER="$REPO_ROOT/capstone/tests/runtime-qemu/silicon-ladder"
+GPFREE="$REPO_ROOT/capstone/tests/runtime-qemu/gp-free-domain"
+if [[ "$GPCT" != "0" ]]; then
+  # A DIFFERENT ARCHIVE, not the same one relinked. Every member has to be compiled
+  # with the flag, so pointing at the default archive would link gp-ABI objects into
+  # a gp-captable image and fail in a way that looks like a codegen bug.
+  ARCHIVE=${ARCHIVE:-$CAPSTONE_TMP_ROOT/musl-capstone-build-gpct/libc-capstone.a}
+else
 ARCHIVE=${ARCHIVE:-$CAPSTONE_TMP_ROOT/musl-capstone-build/libc-capstone.a}
+fi
 MUSL_SRC_DIR=${MUSL_SRC_DIR:-$CAPSTONE_TMP_ROOT/musl-src/musl-1.2.5}
 MRUBY_SRC=${MRUBY_SRC:-$HOME/cheri/mruby-purecap}
 
@@ -156,6 +176,14 @@ if [[ ${MRUBY_PROBE_MRBTEST_GEMS:-0} == 1 ]]; then
   MRUBY_WITH_PARSER=1
 fi
 
+# APPENDED HERE, not inside the array literal, because the mrbtest-gems mode above
+# REBUILDS MRUBY_FLAGS from a filtered copy -- a flag added at the literal would be
+# carried through by that loop only by luck, and dropped the day the filter grows a
+# second exclusion. After the last assignment there is exactly one place to look.
+if [[ "$GPCT" != "0" ]]; then
+  MRUBY_FLAGS+=(-mllvm -capstone-gp-captable)
+fi
+
 rm -rf "$OBJ_DIR"; mkdir -p "$OBJ_DIR"
 
 # The EMBEDDED-STRING length field, widened in a SHADOW of the headers.
@@ -212,9 +240,20 @@ if [[ ${MRUBY_PROBE_STAGE:-0} -ge 7 ]]; then
   done
 fi
 
+if [[ "$GPCT" != "0" ]]; then
+  # The gp-captable glue, with the resumable yield turned on. Same object name so
+  # everything downstream (OBJS, the two links, the size accounting) is untouched.
+  "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+    -ffreestanding -DCAPSTONE_GLUE_YIELD=1 \
+    -c "$LADDER/start-gp-captable-interp.S" -o "$OBJ_DIR/start-musl.o"
+  "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
+    -ffreestanding -c "$LADDER/../gct-section-end.S" -o "$OBJ_DIR/gct.o"
+  OBJS+=("$OBJ_DIR/start-musl.o" "$OBJ_DIR/gct.o")
+else
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 -c "$RUNTIME_DIR/start-musl.S" -o "$OBJ_DIR/start-musl.o"
 OBJS+=("$OBJ_DIR/start-musl.o")
+fi
 
 "$CLANG" -target capstone64-unknown-elf -Xclang -target-feature -Xclang +m \
   -ffreestanding -O0 -c "$SETJMP_SRC" -o "$OBJ_DIR/setjmp.o"
@@ -590,7 +629,58 @@ fi
          -c "$SCRIPT_DIR/mruby_probe.c" -o "$OBJ_DIR/mruby_probe.o"
 OBJS+=("$OBJ_DIR/mruby_probe.o")
 
-"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" "${OBJS[@]}" "$ARCHIVE"
+if [[ "$GPCT" != "0" ]]; then
+  # link-gpfree.ld places the globals at a FIXED image offset so the monitor can
+  # SPLIT the code image into a code cap and a globals cap with the real SPLIT
+  # instruction. The offset has to clear .text, which is not known until something
+  # is linked, so link once at a provisional 8 MiB purely to measure .text and then
+  # generate the script the two real links below use. Both of them use the same
+  # generated script: the second adds only the non-alloc domreq section, and the
+  # existing guard right after it fails the build if any loaded byte moves.
+  sed "s/0x10000 + 0x1000/0x10000 + 0x800000/" "$GPFREE/link-gpfree.ld" \
+    > "$OBJ_DIR/link-probe.ld"
+  "$LD_LLD" --gc-sections -T "$OBJ_DIR/link-probe.ld" -o "$OBJ_DIR/pass1.dom" \
+    "${OBJS[@]}" "$ARCHIVE"
+  _text=$("$CAPSTONE_LLVM_BIN/llvm-readelf" -SW "$OBJ_DIR/pass1.dom" 2>/dev/null | python3 -c '
+import sys,re
+for l in sys.stdin:
+    m=re.match(r"\s*\[\s*\d+\]\s+(\.text)\s+\S+\s+[0-9a-f]+\s+[0-9a-f]+\s+([0-9a-f]+)", l)
+    if m: print(int(m.group(2),16)); break
+else: print(0)')
+  [[ "${_text:-0}" -gt 0 ]] || { echo "could not measure .text for the globals offset" >&2; exit 2; }
+  _goff=$(( ((_text + 0xFFFF) / 0x10000) * 0x10000 ))
+  [[ $_goff -lt 65536 ]] && _goff=65536
+  printf 'gp-captable: .text = %d bytes -> globals offset 0x%x\n' "$_text" "$_goff"
+  LINKER_SCRIPT="$OBJ_DIR/link.ld"
+  sed "s/0x10000 + 0x1000/0x10000 + $(printf '0x%x' $_goff)/" "$GPFREE/link-gpfree.ld" \
+    > "$LINKER_SCRIPT"
+fi
+
+# THE STACK RESERVE IS LINKED INTO **BOTH** LINKS, and that is what keeps the
+# no-loaded-byte-moved check below meaningful.
+#
+# It used to appear only in the second link. Under the default ABI that was
+# invisible: it overrides a weak definition already in the archive, so the object
+# set changed but the layout did not. Under gp-captable it is a GLOBAL, and a new
+# global appends a record to .capstone_gp_initdesc -- which is the first thing in
+# the globals region, so every global behind it shifts. The check then failed
+# naming domreq.S, which had not done anything.
+#
+# Adding it here makes the two links differ by exactly ONE thing, the non-alloc
+# domreq section, which is the thing the check is actually about. The three size
+# variables move up with it because it is emitted from them; the definitions are
+# self-defaulting, so an explicit MRUBY_DOMAIN_STACK from the environment still
+# wins and nothing downstream changes.
+MRUBY_DOMAIN_STACK=${MRUBY_DOMAIN_STACK:-$((256 * 1024))}
+MRUBY_DOMAIN_HEAP=${MRUBY_DOMAIN_HEAP:-$((1024 * 1024 - 1536 - 256 * 1024))}
+MRUBY_DOMAIN_DATA=$(( MRUBY_DOMAIN_HEAP + MRUBY_DOMAIN_STACK ))
+printf 'unsigned long __capstone_stack_reserve = %luUL;\n' "$MRUBY_DOMAIN_STACK" \
+  > "$OBJ_DIR/stack_reserve.c"
+"$CLANG" "${MRUBY_FLAGS[@]}" -c "$OBJ_DIR/stack_reserve.c" \
+         -o "$OBJ_DIR/stack_reserve.o"
+
+"$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
+          "${OBJS[@]}" "$OBJ_DIR/stack_reserve.o" "$ARCHIVE"
 
 # DECLARE THE DOMAIN'S RESOURCE REQUIREMENT, because the module's fallback rule
 # no longer fits an image this size.
@@ -629,9 +719,8 @@ OBJS+=("$OBJ_DIR/mruby_probe.o")
 # the libc through __capstone_stack_reserve. Emitting the reserve from the same
 # variable is the point -- a build that declared one number and linked another
 # would put the two ends of the region on a collision course silently.
-MRUBY_DOMAIN_STACK=${MRUBY_DOMAIN_STACK:-$((256 * 1024))}
-MRUBY_DOMAIN_HEAP=${MRUBY_DOMAIN_HEAP:-$((1024 * 1024 - 1536 - 256 * 1024))}
-MRUBY_DOMAIN_DATA=$(( MRUBY_DOMAIN_HEAP + MRUBY_DOMAIN_STACK ))
+# (the three size variables and stack_reserve.o are produced above, before the
+# first link -- see the note there on why they cannot live only down here)
 _segs() { "$CAPSTONE_LLVM_READOBJ" --program-headers "$OUT_DOM" \
           | grep -E 'Offset|FileSize|MemSize|VirtualAddress'; }
 _before=$(_segs)
@@ -639,13 +728,9 @@ _before=$(_segs)
   -DCAPSTONE_DOMREQ_DATA=$MRUBY_DOMAIN_DATA \
   -DCAPSTONE_DOMREQ_STACK=$MRUBY_DOMAIN_STACK \
   -c "$REPO_ROOT/capstone/tests/runtime-qemu/domreq.S" -o "$OBJ_DIR/domreq.o"
-# The libc's weak default is overridden here, from the SAME variable the
-# declaration above uses, so the module's idea of the split and the allocator's
-# cannot drift apart.
-printf 'unsigned long __capstone_stack_reserve = %luUL;\n' "$MRUBY_DOMAIN_STACK" \
-  > "$OBJ_DIR/stack_reserve.c"
-"$CLANG" "${MRUBY_FLAGS[@]}" -c "$OBJ_DIR/stack_reserve.c" \
-         -o "$OBJ_DIR/stack_reserve.o"
+# The libc's weak default is overridden by stack_reserve.o, emitted above from the
+# SAME variable this declaration uses, so the module's idea of the split and the
+# allocator's cannot drift apart.
 "$LD_LLD" --gc-sections -T "$LINKER_SCRIPT" -o "$OUT_DOM" \
           "${OBJS[@]}" "$OBJ_DIR/domreq.o" "$OBJ_DIR/stack_reserve.o" "$ARCHIVE"
 # The section is non-alloc, so NOTHING LOADED MAY MOVE. Verified rather than

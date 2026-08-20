@@ -136,7 +136,88 @@ Each step either costs no boot or answers one question.
       goes before mruby: step 2 touches the entry and return edge, which is
       where clobbering `ra` silently broke the yield once already on 2026-08-20.
 
-- [ ] **4. mruby probe, gp-captable. One boot.** S1 to S5.
+- [x] **3. yield-probe on the new glue. One boot. DONE 2026-08-20. PASSES.**
+      Run twice, the second time after `link-gpfree.ld` gained the init/fini
+      markers (see step 4). Both runs identical and all three discriminators say
+      resume rather than restart:
+
+          yield-probe: round 1 before yield
+          yield-probe: round 2 AFTER RESUME, stack intact
+          yield-probe: DONE after 2 serviced request(s), domain entered domain_main 1 time(s)
+          __CAPSTONE_YIELD_PROBE_PASSED__
+
+      Message 1 once, message 2 once, entry counter 1, no MARKER-LOST. So the C
+      frame, the local variable set before the yield, and the cap table all
+      survive a domain round trip on the gp-captable glue.
+
+- [ ] **4. mruby probe, gp-captable. BLOCKED -- and the blocker is upstream of
+      mruby.** Everything needed to BUILD the image now exists and works; the
+      image cannot run, for a reason that belongs to the gp-captable ABI itself.
+
+      **What was built and verified:**
+      * `MUSL_CAPSTONE_EXTRA_CFLAGS` on the musl survey, appended to the flag list
+        rather than replacing it, and a strict no-op when unset (checked against
+        `HEAD`'s `--print-flags`).
+      * The archive under the gp-captable ABI: **1321 of 1361 compiled, exactly
+        the default-ABI baseline**, so at archive scale the flag still costs
+        nothing. Controlled: 392 `.capstone_gp_initdesc` sections in the
+        gp-captable archive against 0 in the default one, and `heap_fallback`
+        0x100000 against 0x40000, so both switches demonstrably took effect.
+      * `MRUBY_GPCT=1` on `build-mruby-probe.sh`: the flag, the gp-captable glue
+        with `CAPSTONE_GLUE_YIELD`, `gct.o`, and the provisional-link pass that
+        measures `.text` to place the globals region. The default path still
+        produces a **byte-identical** `.dom`.
+      * No malloc change was needed. `malloc.c` already picks its heap at RUNTIME
+        on the tag of `__capstone_dom_data`; the gp-captable glue never publishes
+        it, so the static `heap_fallback` is chosen -- and under `link-gpfree.ld`
+        that array is exactly what the glue carves out of dom_data. The
+        dom_data-heap mechanism is the *non*-gp-captable workaround.
+      * One real defect found and fixed on the way: `stack_reserve.o` was linked
+        only into the SECOND link. Under the default ABI that is invisible (it
+        overrides a weak archive definition), but under gp-captable it is a new
+        global, a new descriptor record, and the descriptor is the first thing in
+        the globals region -- so everything behind it shifted and the
+        no-loaded-byte-moved check failed naming `domreq.S`, which had done
+        nothing. It is now in both links, so the two differ by exactly the one
+        thing the check is about.
+
+      **THE BLOCKER: the descriptor is per translation unit, and the glue reads
+      exactly one of them.** Source, `start-gp-captable-interp.S`:
+      `cincoffsetimm(t0, s1, 32)` puts record 0 immediately after the header at
+      offset 0, and the record count comes from that same header. There is no
+      concept of a second fragment.
+
+      Measured in the built images:
+
+          micropython (runs)   1 fragment,  count 232
+          yield-probe (runs)   1 fragment,  count   7
+          mruby                39 fragments, first count 5, total 2670
+
+      So mruby gets storage for **5 of 2670 globals** and the rest are silently
+      uninitialized -- no fault, which is precisely the failure mode
+      `domdata-budget.py` was written for, and it is why that script reports
+      "VERDICT: fits" on this image. The budget line "cap table 80 (5 globals)"
+      is the blocker printing itself, correctly, for anyone who reads it.
+
+      Every gp-captable workload that runs today is a single amalgamated object
+      with globals; mruby plus a 1346-member archive is not, and that difference
+      has not been exercised before.
+
+      **Stated as open, not as known:** which fragment lands first is a link-order
+      accident. Whether the compiler numbers cap-table slots globally or per TU
+      was NOT established -- the obvious measurement, "max slot index", returns
+      127 for micropython and mruby alike because 127 is what the load's immediate
+      field holds (2032/16), not what the code asks for. My earlier reading of 127
+      as evidence about numbering was wrong and is withdrawn. That question
+      decides whether the fix is "make the glue walk all fragments" or "make the
+      linker renumber slots", which is a much larger, compiler-side change.
+
+      Also noted, separately and smaller: 10 sites in the image still use the old
+      `scc <rd>, gp, <rs>` data-base addressing, all under `.Lpcrel_hi*` labels,
+      so a few objects are not being compiled with the flag. Latent faults, not
+      the blocker.
+
+- [ ] **4b. mruby probe, gp-captable. One boot.** S1 to S5. After 4's blocker.
 
 - [ ] **5. Core mrbtest suite, gp-captable. One boot.**
       678 assertions, comparable against today's 674 OK / 2 skipped / 2 KO.

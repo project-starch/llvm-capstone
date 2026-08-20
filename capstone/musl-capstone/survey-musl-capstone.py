@@ -25,6 +25,7 @@ import concurrent.futures
 import os
 import pathlib
 import re
+import shlex
 import subprocess
 import sys
 
@@ -111,6 +112,13 @@ def compile_flags(musl: pathlib.Path) -> list[str]:
         # deliberately cast to a pointer and rides in the cursor. Without this
         # 497 of 1361 files fail on that one diagnostic alone.
         "-Wno-int-conversion", "-Wno-error=int-conversion",
+        # Appended, never substituted, so the flags above stay the definition of
+        # what a musl object is and an experiment can only ADD to them. Used to
+        # build the archive under the gp-captable ABI
+        # (MUSL_CAPSTONE_EXTRA_CFLAGS="-mllvm -capstone-gp-captable") without a
+        # second copy of this list that could drift from it. Empty by default, so
+        # an unset variable reproduces the surveyed archive exactly.
+        *shlex.split(os.environ.get("MUSL_CAPSTONE_EXTRA_CFLAGS", "")),
     ]
 
 
