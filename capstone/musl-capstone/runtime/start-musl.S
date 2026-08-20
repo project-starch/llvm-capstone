@@ -72,6 +72,27 @@ __test_entry:
   .global test
 test:
   delin(gp)
+
+  /* PUBLISH dom_data, so the libc can put its heap there instead of in .bss.
+   *
+   * sp still holds exactly what cscratch gave us: the capability for the
+   * domain's second region. Both entry paths reach here with it -- _start sets
+   * the cursor to the end first, __test_reentry takes it straight from cscratch
+   * -- and the cursor does not matter, because the reader asks for base and end.
+   *
+   * Same three-instruction idiom as __capstone_dom_ret below, deliberately: that
+   * one is proven on every entry of every domain that uses this glue, and the
+   * gp-relative address computation it relies on is not something to re-derive
+   * from scratch for a second symbol.
+   *
+   * The slot is a WEAK definition in libc-ext/malloc.c, so a domain that links
+   * this glue without that libc still assembles and links. */
+  .Lpcrel_domdata_entry:
+  auipc t0, %pcrel_hi(__capstone_dom_data)
+  addi t0, t0, %pcrel_lo(.Lpcrel_domdata_entry)
+  cincoffset t0, gp, t0
+  stc(sp, t0, 0)
+
   cincoffsetimm(sp, sp, -96)
   stc(ra, sp, 48)
   sd a0, 64(sp)
