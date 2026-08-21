@@ -152,3 +152,39 @@ SQLite support is also **N=3**; `RATE-RULE.md:1961` says so itself.
 
 Not blocking: the `cpmp_tag` plumbing, the synthesis risk, and the `pc_metadata` content rule —
 all attacked and all held.
+
+---
+
+## SHARPENING (same day): a privilege gate would not have contained this, and the test I was about to write would have proven nothing
+
+Two facts, read from the RTL before spending a simulation run on the "directed test" this note
+recommended:
+
+* **Domains run at M privilege with capmode on.** `core/commit_stage.sv:208` gates the
+  PC-capability check on `(priv_lvl_i == riscv::PRIV_LVL_M) && capmode_i`, and
+  `core/cva6.sv:85` says the PC metadata is *"valid when capmode && priv_lvl==M"*. Capmode is
+  sticky — `core/csr_regfile.sv:295`: `capmode_d = capmode_q | capmode_set_i`, set by CAPENTER
+  and never cleared.
+* **The four minting ops are register-only.** `CAPCREATE`, `CAPTYPE`, `CAPPERM` and `CAPBOUND`
+  read and write registers and touch no memory, so the CPMP bounds that contain a domain do not
+  constrain them.
+
+**Consequence for how this gets reported.** "`OpcodeCustom3` is M-mode only" is **not** a
+defence: a domain already holds M privilege. Containment for a domain comes from the PC
+capability and the CPMP entries, not from the privilege level — and neither applies to a
+register-only instruction. So the question is not whether a domain can *execute* these; on this
+evidence it can. The question is whether a capability it *builds* is usable for memory access
+the domain was not granted.
+
+**And that question cannot be answered by the bare-metal directed test this note proposed.** A
+bare-metal M-mode test has no domain, no CPMP restriction and therefore no authority boundary to
+violate: every access would succeed, and the run would come back "clean" having created nothing.
+That is exactly the failure mode CLAUDE.md names — *directed tests that come back clean without
+ever creating the triggering condition*. **Do not spend a bare-metal run on this.** Recorded here
+so the next reader does not.
+
+**The right vehicle is a domain**, using the existing `capstone/tests/runtime-qemu/` harness: a
+`.dom` that mints a capability from integer registers, points it outside its granted region, and
+attempts a load. QEMU first because it is cheap; but QEMU is functional-only and permissive in
+places, so a QEMU pass does **not** transfer to silicon and a board arm would be needed before
+any claim leaves this repo.
