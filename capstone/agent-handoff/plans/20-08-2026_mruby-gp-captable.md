@@ -310,7 +310,37 @@ Each step either costs no boot or answers one question.
       in both), so the difference is not in this function. The matched pair that
       would settle it is default ABI **with** LTO: same everything, one variable.
 
-- [ ] **4c. Root-cause the method-cache fault.** Matched pair: default ABI + LTO.
+- [x] **4c. Matched pair: default ABI + LTO. DONE 2026-08-21. THE FAULT IS LTO'S,
+      NOT THE ABI'S.**
+
+          default ABI, no LTO         PASSES (678 assertions)
+          default ABI, LTO            FAILS  mrb_method_search_vm +0x3d0
+          gp-captable, LTO            FAILS  mrb_method_search_vm +0x464
+          gp-captable, LTO, no cache  PASSES (S1-S5)
+
+      Same function, same signature -- `rs1 = x10`, `imm = 16`, cause 24 -- and both
+      stop at exactly TICK 256. The offsets differ only because the two ABIs emit
+      different code sizes. **gp-captable is exonerated for the largest remaining
+      mruby failure; LTO is the variable.**
+
+      The pair was built to be a pair: the first attempt put the image in a 4 MiB
+      allocation (2168496 bytes) purely because the 1 MiB `heap_fallback` is dead
+      weight in `.bss` under `link.ld`, and that is the size class documented to
+      fault on every call. Rebuilt with the stock heap it lands at 1382064, code
+      order 9 and data order 8 -- the same class as the known-good default-ABI
+      image at 1394480 -- so `-flto` is the only difference that remains.
+
+      Incidental confirmation from the same run: the default ABI fabricated gp more
+      than 6000 times, against zero under gp-captable. Both numbers measured in this
+      session, with the same instrumented QEMU.
+
+      **Hypothesis, NOT established:** the mrbtest wild jump (cause 2, step 5) is
+      the same story. It has not been run under default ABI + LTO, so it is a guess
+      until it is.
+
+- [ ] **4d. Reduce the LTO fault.** Same function, LTO the only variable, and it
+      reproduces WITHOUT the capability-specific ABI -- so it is reducible with
+      ordinary tooling rather than through a domain boot.
 
 - [~] **5. Core mrbtest suite, gp-captable + LTO. RUN 2026-08-21. Gets in, then
       makes a wild jump.** Reached S1, S2 and T1 through T3 -- driver installed,
