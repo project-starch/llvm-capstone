@@ -919,10 +919,17 @@ exactly where every carved global lives.
 
 **Two things stop this being a root cause, and both must be resolved before it is called one:**
 
-1. **`privM=1` is not reconciled.** The same halted read reports M-mode, but this PC is inside
-   the *domain's* allocation, not the monitor's (`0x8000xxxx`). Either the mode bit means
-   something other than my by-eye reading of that bitfield, or `commit pc` is latched from
-   before a mode change. Not resolved, and not guessed at.
+1. ~~**`privM=1` is not reconciled.**~~ **WITHDRAWN — this was my misconception, corrected by
+   the RTL lane and verified here against the RTL rather than taken on trust. CAPABILITY
+   DOMAINS RUN AT M PRIVILEGE WITH `capmode` SET**; `CAPENTER` sets capmode and does NOT drop
+   privilege (`core/csr_regfile.sv:295` `capmode_d = capmode_q | capmode_set_i; // set by
+   CAPENTER, sticky`, driven from `capenter_commit` at `core/cva6.sv:2053`;
+   `core/commit_stage.sv:208` gates on `priv_lvl_i == PRIV_LVL_M && capmode_i`;
+   `core/cva6.sv:85` "valid when capmode && priv_lvl==M"). Containment comes from the PC
+   capability and the CPMP entries, NOT from the privilege level. So `privM=1` with a PC inside
+   the domain's own allocation is the normal expected state — and it is **not** evidence that
+   execution ended up in the monitor, which STRENGTHENS the reading that the PC is genuinely in
+   the domain's data. Anyone assuming domains are U-mode will chase a non-existent anomaly.
 2. **The `DBAS` ↔ allocation-offset-0 mapping is the natural reading, not a verified one.**
    The base-relative control supports the scheme as a whole but does not pin the origin.
 
@@ -945,3 +952,34 @@ native-verified first, as every slice so far has been.
 baseline part's −10.629. What weighs against timing here is that the failure is *deterministic
 at a fixed address across three runs and two bases*, which is not the profile `run.tcl` warns
 about ("intermittently and data-dependently").
+
+
+## The `0x180000` lead — SUGGESTIVE, and the tidy version of it does NOT survive
+
+The wedge PC sits exactly four bytes below `0x180000`, which is `code_size` (1,444,112)
+rounded up to a 512 KiB granule. The RTL lane's reading: a last-committed instruction one word
+short of a boundary, at the same offset across two bases, is the shape of execution running
+**forward through** data and halting at the edge of a mapping — rather than a single jump to a
+computed address.
+
+**Attractive, and the obvious mechanism for it fails on inspection.** The monitor asks for a
+code bound far below that: `sbi_capstone.c:298` rounds `code_size` to a **16-byte** granule and
+`dom_code` is split at `base + code_size` = `0x160910`. For the hardware bound to sit at
+`0x180000` instead, capability-bounds compression would have to round `0x160910` up by 128 KiB,
+which requires a **4-bit** bounds mantissa:
+
+    mantissa  4 bits -> granule 0x20000 -> rounds up to 0x180000   <-- only this reaches it
+    mantissa  8 bits -> granule 0x2000  -> rounds up to 0x162000
+    mantissa 14 bits -> granule 0x80    -> rounds up to 0x160980
+
+Four bits is implausibly small for a 128-bit format (CHERI-class formats use ~14). **So the
+"halted at the PC capability's rounded bound" story is NOT adopted.** It is recorded because
+the coincidence is exact and worth one cheap check, not because the evidence supports it.
+
+**The named check, for whoever picks this up:** read the actual bounds field widths in
+`capstone-qemu/target/riscv/cap_compress.c` (and the RTL equivalent). If the granularity at a
+~1.4 MB length is not 128 KiB, this lead is dead and `0x17FFFC` needs a different explanation.
+**The stronger discriminator the RTL lane named:** whether the instructions committed just
+before the wedge are *increasing through data* (ran off the end) or show a *single control
+transfer into* `0x17FFFC` (jumped there). The commit history would separate those; neither of
+us has looked.
