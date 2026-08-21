@@ -105,3 +105,52 @@ assumption that it is.
    the same hardware?
 3. **Should stage C (broaden our own workload) run in parallel?** It is cheap and improves the
    fallback claim if B stalls.
+
+---
+
+# Stage 1 design, settled 2026-08-21 — and the plan's assumption was wrong
+
+**The plan said "stream the file through the existing shared region". That mechanism does not
+exist.** Three findings, in the order they were established:
+
+**1. The shared region is OUTPUT-ONLY and ONE-SHOT.** `sqlite_hostcall.h` defines a
+`{phase, opcode, offset, length, result, error}` block that *looks* like a request/response
+protocol, but the host never dispatches on `opcode` — it is written once as a probe-stage marker
+(`sqlite_host.c:134`), and the payload is read exactly once, **after the domain returns**
+(`:147`). There is no way for the domain to ask the host for data mid-run.
+
+**2. RE-ENTRY DESTROYS DOMAIN STATE.** `ioctl_call_dom` forwards straight to the SBI call with no
+teardown, so a domain *can* be called repeatedly — but the entry glue rebuilds the cap-table
+**"on reentry"** (`start-gp-captable-generic.S:30`), and `BUILD_GP_CAPTABLE` re-runs every
+global's initialiser stores. **An in-memory SQLite database would not survive a second call.** So
+"host feeds chunk N, domain accumulates" is not available either.
+
+**3. But the region size is a PARAMETER, not the 4 KB the header implies.** The host calls
+`create_region(SQLITE_HC_REGION_SIZE)` (`sqlite_host.c:116-125`) and `SQLITE_HC_REGION_SIZE` is
+our own `#define`. The module allocates it with `__get_free_pages(order)`, so it is bounded by the
+same order-10 buddy limit that produced Q-01: **up to ~4 MB**.
+
+## The design that follows
+
+**One large shared region, one `call_dom` per SLT file.** Raise the payload region to the megabyte
+range, have the host write a whole test file into it before the call, let the domain execute that
+file and write results back, and return. Repeat per file.
+
+This sidesteps both problems rather than solving them: no streaming protocol is needed because the
+file arrives whole, and no state preservation is needed because **SLT files are self-contained** —
+each creates its own tables. It uses only existing primitives (`create_region`, `map_region`,
+`shared_region_annotated`, `call_dom`), so stage 1 adds a *runner*, not a *mechanism*.
+
+**Budgets to watch, and they are independent:**
+- the region: ≤ ~4 MB (order-10), so a file larger than that must be split at a test boundary;
+- the domain image: ≤ 2 MiB of code (Q-01's ceiling);
+- capability carves: ≤ 1021, 179 used today — the runner's globals count against it.
+
+## Stage 3 caveat, from the RTL lane 2026-08-21
+
+**8 of 16 legs of the write-buffer residual are LIVE on the flashed `caplifive_s07fix.bit`** (its
+own committed sweep, `s07-strip.txt`: test 9, control 17). A load can hand back a dereferenceable
+capability over memory the program already scrubbed. **If SQLite behaves oddly on this bitstream,
+that is a candidate cause and it is not the runner's bug.** S-10 alone is now measured to close
+that residual (9 → 17 with the control pinned at 17, plus a model-identity control), so stage 3 is
+worth more after the S-10 reflash than before it.
