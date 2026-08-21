@@ -1000,3 +1000,72 @@ there at all.
 wedges and its neighbours do not, the difference between them is a far smaller search space than
 an RVFI trace — and it comes from hardware that already works. Simulation is the fallback if the
 query does not localise it.
+
+
+---
+
+# DEBUGGING THE SILICON WEDGE — instruments calibrated, 2026-08-22
+
+**Framing correction first: SQLLogicTest DOES NOT WORK ON SILICON.** The harness runs there (the
+21-record negative control matches native field for field) but the real corpus wedges inside
+`select1.test`'s first five queries. Earlier text in this document led with the half that worked;
+stage 3 is open.
+
+## 1. Prefix ladders cannot answer the question — isolated queries can
+
+Every slice run so far is a PREFIX (setup + queries 1..N). That bounds where execution stops. It
+**cannot** distinguish:
+
+* query 5 is individually pathological, from
+* queries 1-5 **cumulatively** exhaust something — a leak, an allocator watermark, a rev-node count
+
+Different causes, and the monotone 0/5/25/50 result is void for that question while looking
+conclusive. Same shape as the RTL lane's `wr6`/`wr7` note: two arms agreeing means the variable
+you intended was not the variable you varied.
+
+`q1_only … q5_only` are setup + exactly ONE query, all five verified natively (`query_pass=1`).
+A wedge on one names it; all five clean while the 5-query prefix wedges moves the search to what
+accumulates.
+
+## 2. The VDBE clamp, armed PER QUERY — and calibrated
+
+A wedged core takes the host with it, so nothing in the shared region survives: only a build that
+RETURNS can report. `CAPSTONE_VDBE_CLAMP=n` stops `sqlite3VdbeExec` after n opcodes, returns
+`SQLITE_DONE`, and records the opcode that was about to run.
+
+**Arming it once at entry measures the WRONG STATEMENT, and that mistake was made and caught
+here.** SQLite's opcode counter is cumulative across every `sqlite3VdbeExec`, so a clamp of 20
+armed at domain entry stopped `CREATE TABLE` and reported `no such table: t1` for every
+statement — exactly what `sqlite_capstone_domain.c` already warns about. Found by a QEMU positive
+control, not by a board slot. Now armed and reset per query through `SLT_VDBE_ARM/DISARM`, no-ops
+by default so the runner stays capability-agnostic and the native baseline is untouched.
+
+**BOTH OUTCOMES DEMONSTRATED, which is what makes a clean result readable:**
+
+| clamp | result |
+|---|---|
+| 20 | **fires** — 31 setup statements pass, query truncated, `SLT-VDBE ops=20 lastop=40` (`OP_Next`) |
+| 1000000 | **does not fire** — `query_pass=1 completed=1`, `SLT-VDBE ops=574 lastop=0` |
+
+**Query 1 of `select1.test` executes 574 VDBE opcodes.** That sizes the ladder instead of guessing
+it.
+
+**The default SLT image stays byte-identical** (`b6d1cb1da795f291`, the image whose wedge has
+reproduced three times) because the arming is gated on `CAPSTONE_VDBE_CLAMP`. An instrument that
+moves the failure it is measuring is worse than no instrument.
+
+## Plan, two boots, control-led
+
+    Boot A   control, q1_only, q2_only, q3_only      -> names the query, or shows it is cumulative
+    Boot B   control, q4_only, q5_only, + first clamp arm
+
+Then a clamp ladder on whichever query wedges — ascending over its opcode count (574 for query 1),
+so the first n that fails to return brackets the offending opcode. Every arm before it RETURNS, so
+the bisection converges instead of guessing.
+
+## Housekeeping
+
+A discarded QEMU run showed `EXT4-fs error (device vda): doubly allocated?`, the shared
+`rootfs.ext2` signature. It produced no result and is discarded rather than interpreted; the same
+run repeated cleanly with **zero** EXT4 errors, so the image is sound. Earlier QEMU results stand:
+they were self-consistent and positive-controlled.
