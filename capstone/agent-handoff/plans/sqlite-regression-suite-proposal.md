@@ -568,10 +568,61 @@ verification, recorded in the table above. Re-run the bake if in any doubt: it f
 
 Classify per the `board-run` skill, on `SQ: G/enter`, and read no further than the first
 failure. A wrong VALUE is a result and a good one — it is bisectable where a wedge is not.
-Any board-only divergence must be read against the **8 of 16 legs of the write-buffer
-residual live on the flashed `caplifive_s07fix.bit`**: a load there can return a
-dereferenceable capability over memory the program already scrubbed. That is a candidate
-cause before the runner is.
 
-**No reflash is proposed for this.** S-10 costs −16.4 ns WNS against a design −10.629 and
-buys SQLite nothing; S-10b is dead on a DRC combinational loop.
+## THE BITSTREAM CHANGED UNDER THIS PLAN — 2026-08-21, and two caveats above are now wrong
+
+**The board owner flashed `caplifive_s10fix_80843404c` (name to be read off the board, not
+taken from any message).** Everything below is from the RTL lane, whose lineage checks I have
+not re-derived; treat the attributions as theirs.
+
+**RETRACTED, FORWARD ONLY: "8 of 16 legs of the write-buffer residual are live."** That was
+true of `caplifive_s07fix.bit` and remains true of every result taken on it — **including our
+own 3/3 SQLite baseline**. It is NOT true of this image. The `core/` delta from `f231b5af0`
+(what `s07fix` was built from) to `80843404c` is exactly one file, `wt_dcache_mem.sv`, byte
+-identical to the tree the closure was measured on:
+
+    S-07 only   test  9 exceptions   control 17
+    with S-10   test 17 exceptions   control 17     <- 17 is the ceiling: every leg traps
+
+Control pinned at 17 across both, plus a model-identity control, so the single variable is
+S-10. **Do not carry the residual caveat into a result taken on this image.**
+
+**S-10b is NOT in this bitstream** — dead on `DRC LUTLP-1`, a 69-LUT loop across `rev_node`,
+`load_unit` and `csr_regfile`, reproduced in two builds. Do not describe the image as
+containing it.
+
+### THE CAVEAT THAT REPLACES IT, and it is worse for us than the one it replaces
+
+**The baseline was measured on a −10.629 ns part; this is a −16.400 ns part.** S-10 did not
+improve the timing — it was exonerated by attribution (its own comparator nets sit ~10 ns
+clear of the critical path; essentially all failing paths launch from two single-bit
+registers in `dom_switcher` and the LSU bypass, neither belonging to S-10; and the design
+already failed timing at −10.629 before it). The WNS is still −16.400.
+
+`corev_apu/fpga/scripts/run.tcl:93-99` is explicit that a timing-failing bitstream *"behaves
+intermittently and data-dependently — the exact signature of the S-07 defect under
+investigation, with no way to separate the two afterwards."*
+
+**So a NEW INTERMITTENT OR DATA-DEPENDENT SQLite failure on this image is a candidate timing
+artefact and not necessarily an SLT finding.** That is a fresh confound relative to the
+baseline, it is not separable after the fact, and it is the single most important thing to
+carry into reading this run. A *deterministic* divergence — the same wrong value on repeat —
+is much better evidence than a flaky one.
+
+**THIS BITSTREAM HAS NEVER EXECUTED ON SILICON.** The RTL lane recommended holding — the
+acceptance arms (`wb0-4`, `wf1/wf5`, `wr6/wr7`) were lost when `/tmp` cleared and `wr8` has
+never run, and `wr8`'s carve cost against the 1021-entry pool is uncounted. The owner flashed
+anyway, which is their call, but **this boot may be its first**. Consequence for the session,
+and it overrides the ordinary control rule: **if `sqbase` diverges at all from its known
+pre-SLT behaviour, STOP and treat the boot as VOID.** On a first-run bitstream that is far
+more likely to be the silicon than the harness.
+
+**S-07, S-06 and S-08 all hold** — `f231b5af0` is an ancestor of `80843404c` and the three
+fixes (`5c5f4e3a7`, `25035c4c0`, `9fd5507be`) are all in. The 3/3 workload baseline stays a
+valid comparison point **for functionality**; treat it with care for anything timing-sensitive
+or rate-based, per the paragraph above.
+
+**Read the resident bitstream name OFF THE BOARD.** The RTL lane named only its own local
+copy and cannot confirm what the owner named the flashed artifact; the driver default still
+says `caplifive_s07debug_18august.bit`. Guessing between two recollections is how a launch
+gets burned.
