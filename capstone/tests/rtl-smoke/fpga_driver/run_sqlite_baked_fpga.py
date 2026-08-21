@@ -131,7 +131,10 @@ def assert_firmware_embeds_current_initramfs(fw: pathlib.Path, locals_=None) -> 
 # FPGA_BITSTREAM by hand and one that forgot burned a launch on a HARD STOP. A default that
 # is always overridden trains people to override it, which is how a real mismatch gets waved
 # through.
-BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s07debug_18august.bit")
+# Updated 2026-08-21 to the S-10 image, READ OFF THE BOARD (flash_state.nv_bitstream_name)
+# rather than taken from anyone's recollection -- two agents had two different names for it
+# and neither matched this default.
+BITSTREAM = os.environ.get("FPGA_BITSTREAM", "caplifive_s10fix_80843404c.bit")
 TMP = pathlib.Path(os.environ.get("CAPSTONE_TMP_ROOT", "/tmp/capstone"))
 LOCAL_DOM = TMP / "sqlite-silicon" / "sqlite_silicon.dom"
 LOCAL_HOST = TMP / "sqlite-build" / "sqlite_host.user"

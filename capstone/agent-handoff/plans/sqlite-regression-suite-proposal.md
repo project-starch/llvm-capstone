@@ -626,3 +626,80 @@ or rate-based, per the paragraph above.
 copy and cannot confirm what the owner named the flashed artifact; the driver default still
 says `caplifive_s07debug_18august.bit`. Guessing between two recollections is how a launch
 gets burned.
+
+---
+
+# STAGE 3, FIRST BOOT — VOID, and what it does and does not show (2026-08-21)
+
+**One boot on `caplifive_s10fix_80843404c.bit` (name read off the board from
+`flash_state.nv_bitstream_name`, not from anyone's recollection — two agents had two
+different strings and neither matched the driver default). Four arms, plain-SQLite control
+first. THE CONTROL NEVER RAN, so the boot is VOID and carries no verdict about SQLite.**
+
+Sequence, scoped to this run's own `load_image` (the console replays ~548 KB of the previous
+boot on connect, and the unscoped log shows four `SQ: A/dom-ok` and three `EXTENDED_PASSED`
+that all belong to that replay — none to this run):
+
+    power on -> SBI banner -> Linux 6.4.14 -> shell prompt -> device check DEVOK / DN_0
+    -> driver dispatches TEST 1/4 /test-domains/sqbase.dom
+    -> NOTHING. Then binary garbage on the console.
+
+**The control is not a new artifact.** `sqbase.dom` is `f1214600d0dac351`, byte-identical to
+the plain SQLite build from pre-SLT sources — the domain that previously passed 3/3 — run
+under its matching 4 KiB-region host. The firmware is new but booted to a shell and completed
+a command, so it is not simply broken.
+
+## It is NOT the S-08 "cannot run domains" class — and there is a clean discriminator
+
+S-08 (`fpga-repros/S08-s06fullfix-bitstream-cannot-run-domains/`) is the obvious precedent:
+that bitstream booted perfectly and domains would not run, 4 of 4 boots, because `medeleg`
+came back 0 and **U-mode ecalls stopped being delegated, so every syscall died**. Our symptom
+looked like a superset of it: `Ok, good file` is libcapstone's first line and reaches the
+console through `write(2)`, and shell echo is syscall-mediated too, so both would go silent
+together under exactly that mechanism.
+
+**The discriminator, which needs no extra tooling: the MONITOR runs in M-mode and writes the
+UART directly, so its output does not depend on ecall delegation.** Under the S-08 mechanism
+M-mode markers keep printing while everything user-side goes quiet.
+
+Measured over this run's post-dispatch window, with the same detector run over the replayed
+previous boot as a POSITIVE CONTROL so a zero cannot be an instrument failure:
+
+| | monitor-side (M-mode: `DBAS:`, `ECSA:`, `SHA0-6:`, `EXCX:`, `MCAU:` …) | host-side (U-mode: `Ok, good file`, `LC:`, `SQ:`) |
+|---|---|---|
+| after the control was dispatched | **0** | **0** |
+| replayed previous boot (control) | 164 | 70 |
+
+**Zero M-mode output as well as zero U-mode output.** The core stopped executing altogether —
+it did not even echo the typed command — which is a wedge or a reset, not a delegation
+failure. **So this is not the S-08 signature**, and the S-08 fix (`9fd5507be`) is in this
+lineage anyway.
+
+## What that leaves, in order
+
+1. **TIMING.** This is a −16.400 ns part; the baseline was −10.629. `run.tcl:93-99` says a
+   timing-failing bitstream "behaves intermittently and data-dependently", which fits "boots,
+   completes a shell command, then dies at the first domain dispatch" well.
+2. **Infrastructure.** The control fails roughly 1 in 5 for infra reasons, and `user_count`
+   was 3 — the board owner and at least one other session were on the console — so external
+   interaction is not excluded. **Removing that is the cheapest next step: retry with the
+   console not shared.**
+3. **Something about this image specifically.** It had never executed on silicon before this
+   boot; the RTL lane recommended against flashing it and its acceptance arms do not exist.
+
+**S-10 as the cause is DOWN but not out**, on the RTL lane's source analysis and stated as
+theirs: S-10's only behavioural addition is that a write-buffer granule-mate with `ctag == 0`
+forces a read's tag to zero, and on the reachable path a capability context row never shares
+a granule with a scalar row (rows 0-2 are 16-byte `metadata_en=1`, rows 3-7 are 8-byte
+scalars that pair only with each other, and those are `ctag=0` regardless). That is layout
+analysis, not a proof; it assumes a granule-aligned base and says nothing about the LSU path
+or about timing.
+
+**N=1, AND IT STAYS N=1 UNTIL RETRIED.** One void boot convicts nothing. The retry is: same
+image, same arms, no changes, console not shared, plus a `create_dom`-scoped trap-register
+read (`EXCX:0000E002`, `MCAU:00000008`, `MSTA` with MPP=0 are the S-08 constants to compare
+against). If even monitor-side output stays absent, that is the finding.
+
+**The S-10 acceptance arms are on hold** (`tests/rtl-smoke/wbuf-arms/`, built and
+distinctness-checked). Staging them on an image that may not run domains would produce a
+ladder of void arms that reads like an S-10 result.
