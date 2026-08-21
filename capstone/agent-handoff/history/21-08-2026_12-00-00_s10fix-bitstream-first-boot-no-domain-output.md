@@ -85,3 +85,67 @@ existed and `wr8`'s carve cost had been counted, neither of which was true at fl
 domains would produce a ladder of void arms that looks like an S-10 result — the same failure the
 slot-budget correction just avoided. They live in `tests/rtl-smoke/wbuf-arms/` with
 `READING-RULE.md`; waiting costs nothing.
+
+---
+
+# RESOLVED, same day: the image runs domains. Boot 1 was infrastructure.
+
+**Second boot, same image, same four arms.** Two changes only: the console was confirmed
+**unshared**, and `SQLITE_IDLE_S` was dropped from 1800 to 240.
+
+**Control GREEN, complete marker chain.** `sqbase.dom` — byte-identical to the pre-SLT plain build
+— returned `row name=alpha value=11` / `beta=22` / `gamma=33` / `EXTENDED_PASSED` /
+`MEMORY_PASSED`, `rc=0`, with the full sequence inbound: `Ok, good file`, `DBAS:`/`DENT:`,
+`A/dom-ok`, both region shares with their `LC:`/`ECSA:`/`SHA0-6:` monitor output, `G/enter`,
+`H/return`.
+
+So on `caplifive_s10fix_80843404c.bit`: **SQLite runs, domains run, region sharing works, and both
+M-mode and U-mode output flow.**
+
+## The discriminator worked, and it ruled out the S-08 class
+
+The cheap discriminator proposed above — *any monitor-side marker while user-side is silent
+separates "delegation stopped" from "core wedged"* — was applied by the board lane to the log they
+already had. Boot 1 had **zero M-mode output as well as zero U-mode output**, with a positive
+control proving the matcher fires (164 monitor-side markers in the replayed prior boot). Both
+classes silent is not the S-08 signature, which leaves monitor output intact.
+
+**So boot 1 was neither S-08 nor "cannot run domains"** — the latter now refuted by direct
+demonstration.
+
+## What boot 1 WAS, and what it was not
+
+One void boot out of two, with the console shared during the bad one, sits inside the documented
+~1-in-5 infrastructure control-failure rate. The board lane declined to attribute it to timing
+without a reproduction, which is right: **N=1 with a known infrastructure failure mode available is
+not evidence for anything else.**
+
+One correction they also recorded: at `SQLITE_IDLE_S=1800` the driver would have waited thirty
+minutes before declaring the domain silent and performing its wedge read. Killing it during that
+wait is why no trap registers exist for boot 1. The value is now 240.
+
+## The distinction that must NOT be lost
+
+**The timing hypothesis is retired for BOOT 1. It is not retired.** This image still misses setup
+by 5.8 ns more than the one every prior board result came from, and `run.tcl:93-99` still says a
+timing-failing bitstream behaves intermittently and data-dependently with no way to separate it
+afterwards. That caveat stands for every future anomaly on this image. "Explained once by
+infrastructure" is not "explained".
+
+## Also demonstrated on this silicon, and it is the property this project keeps needing
+
+The SQLLogicTest **negative control passed field for field on hardware**: 21 records, all six
+deliberately-wrong arms fired for the right reasons — wrong value, wrong md5, right-md5-wrong-count,
+too-few-values, statement-ok-that-errors, statement-error-that-succeeds — plus an unparseable record
+counted rather than skipped. The MD5 the board computed over a 500-value result set is bit-identical
+to the host's.
+
+That is exactly the property built into `wb0`/`wb2`: **an instrument proven able to report failure
+before any clean result from it is believed** — and it now has a silicon demonstration.
+
+## Consequence
+
+**The S-10 acceptance arms are UNBLOCKED.** The two-boot plan stands as written — `wb0`/`wb2`
+before `wb1` in one boot, then `wb4`/`wb3`/`wr8` — within the four-slot budget. Nothing here
+establishes anything about S-10's correctness; it establishes only that a control-validated boot is
+achievable on this image.
