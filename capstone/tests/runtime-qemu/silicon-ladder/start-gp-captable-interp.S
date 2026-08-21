@@ -777,6 +777,14 @@ test:
      stash survives it. */
   lla   t0, .Ldomain_trap
   csrw  mtvec, t0
+#endif
+#if defined(INTERP_DOMAIN_MTVEC) || defined(CAPSTONE_GLUE_YIELD)
+  /* PUBLISH THE GLUE FRAME IN cscratch. Two gates need the same store, for reasons that
+     compose rather than conflict: INTERP_DOMAIN_MTVEC's trap handler swaps it back into sp
+     so the shared unwind finds a valid frame, and CAPSTONE_GLUE_YIELD's __capstone_yield
+     reads it to reach the entry return capability stashed at +48. Sited here for the reason
+     the comment above gives -- cscratch is provably free across cap-init -- and that
+     argument is what makes it safe to share. */
   ccsrrw(x0, cscratch, sp)
 #endif
 
@@ -890,7 +898,7 @@ test:
   sw    t0, 0(a0)
 97:
 #endif
-#if defined(INTERP_DOMAIN_MTVEC)
+#if defined(INTERP_DOMAIN_MTVEC) || defined(CAPSTONE_GLUE_YIELD)
   /* Normal return: put cscratch back to zero so .Ldomain_returned sees exactly the state it
      saw before this gate existed. The trap path below arrives at the same state by swapping
      the stashed cap OUT, so both paths converge with identical register and CSR state. */
@@ -1006,6 +1014,101 @@ test:
   ldc(a0, sp, 80)                    /* the shared region cap saved at entry */
   sw    t0, 0(a0)
   j .Ldomain_returned
+#endif
+
+#ifdef CAPSTONE_GLUE_YIELD
+/* void __capstone_yield(void);
+ *
+ * Hand control back to the host and RESUME HERE when it calls again, with the C
+ * frame intact. This is what separates a domain that can carry a libc from one
+ * that cannot: a syscall has to return to the instruction after itself, whereas
+ * every entry into this glue otherwise RESTARTS domain_main.
+ *
+ * IT INVENTS NOTHING. Both halves of the problem were already solved in this file
+ * and the transplant is to reuse them rather than to build a third mechanism:
+ *
+ *   the sealed-return capability  -- `test:` already does `stc(ra, sp, 48)`, and
+ *     .Ldomain_returned already reads exactly that slot to domreturn through. The
+ *     yield reaches the same slot via the frame capability that `test:` publishes
+ *     in cscratch, so there is one stash location, not two that can disagree.
+ *   carrying sp across the boundary -- .Ldomain_returned already ends with
+ *     `ccsrrw(x0, cscratch, sp)` and __test_reentry recovers it. cscratch is the
+ *     designated carrier here; sp does NOT survive a domain boundary by itself
+ *     (measured under QEMU on the musl glue: resume faulted with cause 24 at the
+ *     first sp-relative ldc, rs1 = x2, i.e. sp came back as a plain integer).
+ *
+ * cscratch therefore does double duty, and the ordering below is what keeps that
+ * honest: the glue frame is read OUT before the yield's own sp is swapped IN, and
+ * the resume path puts the glue frame back before returning to C. Every point at
+ * which another part of the glue reads cscratch sees the value that part expects.
+ *
+ * gp is restored from the frame rather than rebuilt. __test_reentry re-runs
+ * BUILD_GP_CAPTABLE_INTERP because it arrives with the register file scrubbed; the
+ * table itself lives in dom_data and is untouched by the round trip, so reloading
+ * the pointer is both cheaper and less to get wrong.
+ *
+ * Callee-saved registers are saved even though gp demonstrably survives on some
+ * paths. Which ones survive is unverified, one wrong guess costs a boot to find,
+ * and 15 stores are free by comparison.
+ *
+ * Deliberately does NOT scrub the register file, unlike .Ldomain_returned: that
+ * path is finished and must not leave capabilities behind, whereas here the
+ * registers ARE the suspended computation.
+ */
+  .text
+  .global __capstone_yield
+__capstone_yield:
+  cincoffsetimm(sp, sp, -256)
+  stc(ra, sp, 0)
+  stc(gp, sp, 16)
+  stc(s0, sp, 32)
+  stc(s1, sp, 48)
+  stc(s2, sp, 64)
+  stc(s3, sp, 80)
+  stc(s4, sp, 96)
+  stc(s5, sp, 112)
+  stc(s6, sp, 128)
+  stc(s7, sp, 144)
+  stc(s8, sp, 160)
+  stc(s9, sp, 176)
+  stc(s10, sp, 192)
+  stc(s11, sp, 208)
+  stc(tp, sp, 224)
+
+  ccsrrw(t3, cscratch, x0)           /* t3 = glue frame, published by `test:`          */
+  stc(t3, sp, 240)                   /* the resume path needs it again                 */
+  ldc(t1, t3, 48)                    /* t1 = entry return cap, the slot `test:` filled */
+  lla t2, .Lyield_resume
+  ccsrrw(x0, cscratch, sp)           /* sp travels in cscratch, as at .Ldomain_returned */
+  domreturn(t1, t2, x0)
+
+.Lyield_resume:
+  ccsrrw(sp, cscratch, x0)
+  ldc(gp, sp, 16)
+
+  /* `ra` holds the FRESH sealed-return capability this entry brought in; the slot at
+     glue-frame+48 still holds the spent one, and BOTH the next yield and the eventual
+     .Ldomain_returned read that slot. Refresh it before the C restore overwrites `ra`. */
+  ldc(t3, sp, 240)
+  stc(ra, t3, 48)
+  ccsrrw(x0, cscratch, t3)           /* put the glue frame back where `test:` left it */
+
+  ldc(ra, sp, 0)
+  ldc(s0, sp, 32)
+  ldc(s1, sp, 48)
+  ldc(s2, sp, 64)
+  ldc(s3, sp, 80)
+  ldc(s4, sp, 96)
+  ldc(s5, sp, 112)
+  ldc(s6, sp, 128)
+  ldc(s7, sp, 144)
+  ldc(s8, sp, 160)
+  ldc(s9, sp, 176)
+  ldc(s10, sp, 192)
+  ldc(s11, sp, 208)
+  ldc(tp, sp, 224)
+  cincoffsetimm(sp, sp, 256)
+  ret
 #endif
 
   .align 4
