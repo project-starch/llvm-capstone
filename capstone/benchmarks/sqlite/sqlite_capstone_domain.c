@@ -5876,6 +5876,12 @@ static void qr_link_via_param_leaf(FuncDef *aDef, int nDef) {
  * why it is a runner and not a mechanism -- create_region/map_region/shared_region/
  * call_dom all already existed and none of them changed.
  */
+#ifdef CAPSTONE_VDBE_CLAMP
+/* Arm the clamp for THE QUERY UNDER TEST, resetting the cumulative opcode counter each time,
+   so a clamp ladder names an opcode inside that query rather than inside CREATE TABLE. */
+#define SLT_VDBE_ARM()    do { capstone_vdbe_ops = 0; capstone_vdbe_armed = 1; } while (0)
+#define SLT_VDBE_DISARM() do { capstone_vdbe_armed = 0; } while (0)
+#endif
 #include "slt/slt_runner.h"
 
 static void capstone_slt_out(void *ctx, const char *text) {
@@ -5922,8 +5928,39 @@ static unsigned capstone_slt_entry(void) {
   if (rc != SQLITE_OK)
     return (unsigned)SQLITE_HC_ERR_INITIALIZE;
 
+#ifdef CAPSTONE_VDBE_CLAMP_UNUSED_ENTRY_ARM
+  /* ARM THE VDBE CLAMP, so a hang becomes a wrong answer that names an opcode.
+   *
+   * The SLT arms wedge inside sqlite3VdbeExec on silicon and a wedged core takes the host
+   * with it, so nothing written to the shared region survives -- only a build that RETURNS
+   * can report anything. The clamp stops the interpreter after N opcodes and returns
+   * SQLITE_DONE, recording the opcode that was ABOUT to run. Laddering N then converts
+   * "somewhere inside the bytecode" into a named instruction.
+   *
+   * GATED ON THE CLAMP BEING COMPILED IN, deliberately: without this #ifdef the store would
+   * perturb the default SLT image, and that image is the one whose wedge has reproduced
+   * three times. An instrument that moves the failure it is measuring is worse than none. */
+  capstone_vdbe_armed = 1;
+#endif
+
   slt_run(input, in_len, capstone_slt_out, 0, SLT_MAX_VALUES, &st);
   slt_report(capstone_slt_out, 0, &st);
+#ifdef CAPSTONE_VDBE_CLAMP
+  /* Reported unconditionally, including the nothing-fired case: whether the clamp was reached
+     at all is part of the measurement, and a missing line would be indistinguishable from an
+     arm that never armed. */
+  capstone_slt_out(0, "SLT-VDBE ops=");
+  { char b[24]; int i = (int)sizeof b; unsigned long v = capstone_vdbe_ops;
+    b[--i] = '\0'; if (!v) b[--i] = '0';
+    while (v) { b[--i] = (char)('0' + v % 10UL); v /= 10UL; }
+    capstone_slt_out(0, b + i); }
+  capstone_slt_out(0, " lastop=");
+  { char b[24]; int i = (int)sizeof b; unsigned long v = capstone_vdbe_lastop;
+    b[--i] = '\0'; if (!v) b[--i] = '0';
+    while (v) { b[--i] = (char)('0' + v % 10UL); v /= 10UL; }
+    capstone_slt_out(0, b + i); }
+  capstone_slt_out(0, "\n");
+#endif
   return (unsigned)SQLITE_HC_SLT_RAN;
 }
 #endif

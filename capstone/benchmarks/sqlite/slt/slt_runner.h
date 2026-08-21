@@ -57,6 +57,21 @@
 #define SLT_MAX_REPORTED 8u
 #endif
 
+/* PER-QUERY INSTRUMENT HOOKS. No-ops by default, so the native baseline and the ordinary
+ * domain build are unaffected and this header stays capability-agnostic.
+ *
+ * They exist because arming an instrument ONCE for the whole file measures the wrong thing:
+ * SQLite's opcode counter is cumulative across every sqlite3VdbeExec, so a clamp armed at
+ * entry stops CREATE TABLE rather than the query under test. Measured, not theorised -- a
+ * clamp of 20 armed at entry reported "no such table: t1" for every statement. Arming and
+ * resetting per query is what makes a clamp ladder point at the query it claims to. */
+#ifndef SLT_VDBE_ARM
+#define SLT_VDBE_ARM()    do { } while (0)
+#endif
+#ifndef SLT_VDBE_DISARM
+#define SLT_VDBE_DISARM() do { } while (0)
+#endif
+
 typedef void (*slt_out_fn)(void *ctx, const char *text);
 
 typedef struct {
@@ -449,6 +464,7 @@ static unsigned slt_run(const char *input, unsigned long input_len,
       }
 
       slt_vals_init(&v);
+      SLT_VDBE_ARM();          /* this query only; see the hook definition above */
       while ((rc = sqlite3_step(s2)) == SQLITE_ROW && !v.overflow) {
         char cell[256];
         for (i = 0; i < ncol; i++) {
@@ -456,6 +472,7 @@ static unsigned slt_run(const char *input, unsigned long input_len,
           slt_vals_push(&v, cell, max_values);
         }
       }
+      SLT_VDBE_DISARM();
       sqlite3_finalize(s2);
 
       if (v.overflow) {                    /* NOT a pass, and counted on its own */
