@@ -255,9 +255,23 @@ after. Silicon, pre-fix, on `caplifive_s07fix.bit`: **3837 of 3840**.
 > **not shipped**. S-10b, the other candidate, is not shippable at all (`DRC LUTLP-1`, see
 > `history/21-08-2026_01-15-00_s10b-is-not-synthesizable.md`).
 >
-> One caveat on the S-10 attribution: no sweep isolates S-10 from S-10b — both `s10-sweep.txt`
-> and `s10b-sweep.txt` sit at or above `c867dfcbb`. "S-10 alone closes it" is PLAUSIBLE-UNPROVEN;
-> one simulation of this test at `4fee13b2d` settles it.
+> **S-10 alone closes it — MEASURED 2026-08-21, no longer an inference.** The earlier caveat was
+> that no committed sweep isolates S-10 from S-10b. That simulation has now been run, in a
+> worktree at `4fee13b2d` (S-10 only):
+>
+> ```
+> s07-wbuf-forward-residual        SUCCESS  9371 cyc   17 exceptions   (shipped tree: 9)
+> s07-wbuf-forward-residual-ctl    SUCCESS 26361 cyc   17 exceptions   (control, pinned)
+> s07-wbuf-tag-reorder             SUCCESS  9138 cyc    1 exception
+> ```
+>
+> 17 is the maximum — 16 legs plus the baseline — so every leg now traps and the window is shut.
+> The control is pinned at 17 exactly as on the shipped tree, so the single variable is S-10.
+> The third row is the **model-identity control**, and it is what makes the other two readable:
+> `s07-wbuf-tag-reorder` returns the post-fix signature (1 exception at 9138 cycles) rather than
+> the pre-fix one (4 at 9150), so the worktree really was built at this revision and did not
+> silently reuse another model. **S-10b is not needed to close this**, which matters because
+> S-10b cannot be built at all.
 >
 > **2. "silicon-validated" for S-07 is not supported as worded**, on two independent grounds.
 > The pre-fix wedge rate was k = 2/16 = 0.125, so P(3 clean reps | defect still live) = 0.875^3 =
