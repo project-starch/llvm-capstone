@@ -802,3 +802,73 @@ point. Board-free to build and native-verify first, as with every slice so far.
   record is a real finding.** Reproducing it is therefore the first thing the bisect buys.
 * The image had never executed on silicon before today, and the RTL lane advised against
   flashing it.
+
+---
+
+# BISECT BOOT 3 — the setup is exonerated, the wedge REPRODUCES, and it is deterministic
+
+Control-green boot (all five markers, 17 s), so these verdicts count.
+
+| slot | arm | queries | result |
+|---|---|---|---|
+| 1 | `sqbase` — control | — | **PASS**, 17 s, five markers |
+| 2 | `s1_31` | **0** | **PASS**, 8 s — `records=31 stmt_pass=31 …` **identical to native** |
+| 3 | `s1_56` | **25** | **WEDGE** — no return within 400 s |
+| 4 | `s1_81` | 50 | not a result: collateral after a wedge |
+
+**Three things established:**
+
+1. **The table setup is NOT the trigger.** `CREATE TABLE` plus 30 `INSERT`s execute correctly
+   in a capability domain on silicon and return a summary matching native field for field.
+2. **The trigger is inside the first 25 queries of `select1.test`.**
+3. **IT REPRODUCES.** Boot 2 wedged on 50 queries; boot 3 wedges on 25 with 0 queries clean in
+   between. Two different inputs, same failure — much harder to explain as a timing flake than a
+   single hang would be.
+
+**And it is not "queries" in general.** The negative control passed on silicon in 12 s with ten
+queries, including a 500-value result set hashed to MD5, all three sort modes and six failure
+paths. The runner executes queries on this hardware. Something specific to `select1`'s query set
+does this — aggregates, `CASE`, correlated subqueries over a 30-row table.
+
+## The wedge state is BYTE-IDENTICAL across both boots
+
+    TRAP LOG sw=255      0x89        seen=1, mcause=9
+    sw=224               0x7f        privM=1 flush=1 ex_commit.valid=0
+    sw=225               0xd5
+    rev_node_head        0x0268      = 616, against a 1021-entry pool
+    commit pc                        0x0000000082d7fffc
+    trap mepc (LATCHED)              0xffffffff800072cc
+
+Identical across two different workloads is consistent with both wedging at the SAME query
+(they share their first 25 queries, so allocation history to that point is identical), i.e. a
+deterministic failure rather than a flake.
+
+**`trap mepc = 0xffffffff800072cc` is a LINUX KERNEL virtual address**, and with `mcause=9`
+(ECALL from S-mode) it is a routine Linux→OpenSBI ecall. So the trap latch is **stale and not a
+capability fault** — the documented 2026-08-01 near-miss, avoided. It doubles as a **positive
+control for the mux readout**: `0xffffffff…` is exactly the right shape for a kernel VA, so the
+readout is returning real data rather than error-slave junk.
+
+## The commit PC is NOT yet trustworthy, and the next boot tests it for free
+
+`commit pc = 0x82d7fffc` minus arm 3's base `0x82C00000` is offset **`0x17FFFC`** — **past the
+1,444,104-byte loadable image**, inside the domain's data region. That is either control-flow
+corruption or a readout artifact, and **`0x82d7fffc` sitting exactly 4 bytes below a 512 KB
+boundary is a reason to suspect the instrument**.
+
+Both wedges so far were at **slot 3**, hence the same base, so a constant reading and a real one
+are indistinguishable. The next bisect boot puts the wedging arm at whatever slot fails first,
+and the slots have different bases:
+
+    slot 2 -> 0x82800000   a real, base-relative PC would read 0x8297fffc
+    slot 3 -> 0x82C00000                                       0x82d7fffc
+    slot 4 -> 0x83000000                                       0x8317fffc
+
+**If the PC tracks the base it is real and `0x17FFFC` is a genuine location; if it stays
+`0x82d7fffc` regardless, the value is a constant artifact and nothing may be inferred from it.**
+Free, because that boot is being run for the bisection anyway.
+
+## Next: control + `s1_36` (5 q) + `s1_43` (12 q) + `s1_50` (19 q), ascending
+
+All three verified clean natively before use. First to fail is the bisection point; all clean
+narrows the trigger to queries 20–25.
