@@ -261,6 +261,43 @@ public:
     return false;
   }
 
+  // __int128 IS NOT AVAILABLE ON capstone64, AND THIS IS A DELIBERATE RESTRICTION.
+  //
+  // MVT::i128 is the machine type this backend uses FOR CAPABILITIES: PtrVT is
+  // MVT::i128 (CapstoneISelDAGToDAG.cpp), i128 is in the GPR register class
+  // (CapstoneISelLowering.cpp, CapstoneRegisterInfo.td), and ADD/SUB/AND/OR/XOR/
+  // shifts/MUL on i128 are custom-lowered as capability operations. There is no
+  // capability MVT to hold them apart, so the backend separates a genuine 128-bit
+  // integer from a capability with heuristics that DEFAULT TO CAPABILITY -- which is
+  // correct, since capabilities are overwhelmingly the common case.
+  //
+  // A source-level `__int128` matches none of those heuristics and is therefore
+  // compiled AS A CAPABILITY. Measured on 2026-08-21, and it is silent:
+  //     unsigned __int128 a + b   ->  cincoffset a0, a1, a0      (cursor increment)
+  //     unsigned __int128 a & b   ->  lcc a0,a0,2 / lcc a1,a1,2 / and
+  // `lcc rd, rs, 2` reads field 2, THE CURSOR, so the high 64 bits are not merely
+  // dropped -- they were never in the computation. Wrong arithmetic that links and
+  // runs is far more dangerous than a diagnostic: it reaches the board and gets
+  // debugged as a hardware fault.
+  //
+  // The base implementation enables __int128 for any target with pointers >= 64 bits,
+  // and capstone64 pointers are 128-bit CAPABILITIES, so it was enabled by accident of
+  // that rule rather than by any decision.
+  //
+  // WHAT THIS DOES NOT AFFECT: uintptr_t round-trips. Those reach the backend as
+  // ptrtoint/inttoptr on ptr addrspace(200), not as a source-level __int128, so
+  // capability arithmetic (cap-i128-*.ll) is untouched. Capstone32 is unaffected too --
+  // its pointers are 32-bit, so the base rule already returns false there.
+  //
+  // WORKAROUND for real 128-bit integer arithmetic: a struct of two uint64_t with an
+  // explicit carry, which compiles correctly (add/add/sltu/add). The high half of a
+  // widening 64x64 multiply is supported directly and lowers to a single mulhu, but
+  // ONLY with the M extension enabled.
+  //
+  // LIFTING THIS means giving capabilities their own MVT, as CHERI-LLVM does, so the
+  // two stay distinguishable all the way down. Until then this returns false.
+  bool hasInt128Type() const override { return false; }
+
   void setMaxAtomicWidth() override {
     MaxAtomicPromoteWidth = 128;
 
