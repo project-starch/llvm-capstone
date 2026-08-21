@@ -1,0 +1,139 @@
+# NEGATIVE CONTROL for the SQLLogicTest runner.
+#
+# EVERY ARM HERE HAS A KNOWN VERDICT, and several are WRONG ON PURPOSE. A runner that
+# reports this file clean is broken -- which is the only way to know the comparator can
+# fail at all. The expected tally is asserted by slt/check-negative-control.sh; this
+# file is only that gate's input.
+#
+# The passing arms were generated from real SQLite, so a failure on one of them is the
+# runner's fault and never a stale fixture. The arms cover, deliberately: NULL and empty
+# text rendering, %.3f floats, all three sort modes, both the value form and the hash
+# form, and the skipif/onlyif conditionals -- select1-5 exercise none of the first three.
+
+statement ok
+CREATE TABLE t1(a INTEGER, b TEXT, c REAL)
+
+statement ok
+INSERT INTO t1 VALUES(3,'ccc',1.5)
+
+statement ok
+INSERT INTO t1 VALUES(1,'aaa',2.25)
+
+statement ok
+INSERT INTO t1 VALUES(2,'',3.0)
+
+statement ok
+INSERT INTO t1 VALUES(4,NULL,NULL)
+
+statement ok
+CREATE TABLE big(x INTEGER)
+
+statement ok
+INSERT INTO big(x) WITH RECURSIVE s(i) AS (SELECT 1 UNION ALL SELECT i+1 FROM s WHERE i<500) SELECT i FROM s
+
+# PASS: integers, nosort, value form
+query I nosort
+SELECT a FROM t1 ORDER BY a
+----
+1
+2
+3
+4
+
+# PASS: text incl. NULL and (empty), rowsort
+query T rowsort
+SELECT b FROM t1
+----
+(empty)
+NULL
+aaa
+ccc
+
+# PASS: floats incl. NULL, valuesort -- %.3f
+query R valuesort
+SELECT c FROM t1
+----
+1.500
+2.250
+3.000
+NULL
+
+# PASS: two columns, rowsort orders whole rows
+query IT rowsort
+SELECT a,b FROM t1
+----
+1
+aaa
+2
+(empty)
+3
+ccc
+4
+NULL
+
+# PASS: 500 values -> hash form
+query I nosort
+SELECT x FROM big ORDER BY x
+----
+500 values hashing to 5705e3c0d0044b724281f9bcc7520d3a
+
+# PASS: 500 values, rowsort -> hash form
+query I rowsort
+SELECT x FROM big
+----
+500 values hashing to e17eb952bdb593962952cb0df4662677
+
+# PASS: a statement that is SUPPOSED to fail
+statement error
+SELECT nosuchfunction(1)
+
+# FAIL 1: statement ok on a statement that errors
+statement ok
+SELECT nosuchcolumn FROM t1
+
+# FAIL 2: statement error on a statement that succeeds
+statement error
+SELECT 1
+
+# FAIL 3: one wrong value
+query I nosort
+SELECT a FROM t1 ORDER BY a
+----
+9999999
+2
+3
+4
+
+# FAIL 4: wrong md5
+query I nosort
+SELECT x FROM big ORDER BY x
+----
+500 values hashing to 00000000000000000000000000000000
+
+# FAIL 5: right md5, wrong count
+query I nosort
+SELECT x FROM big ORDER BY x
+----
+501 values hashing to 5705e3c0d0044b724281f9bcc7520d3a
+
+# FAIL 6: too few expected values
+query I nosort
+SELECT a FROM t1 ORDER BY a
+----
+1
+2
+3
+
+# SKIP 1: skipif our own engine -- must NOT be counted as a pass
+skipif sqlite
+statement ok
+SELECT nosuchcolumn FROM t1
+
+# SKIP 2: onlyif another engine -- must NOT be counted as a pass
+onlyif postgresql
+statement ok
+SELECT nosuchcolumn FROM t1
+
+# PARSE 1: an unknown record type must be COUNTED, never skipped silently
+frobnicate the database
+
