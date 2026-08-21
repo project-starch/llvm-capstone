@@ -147,8 +147,9 @@ Full trail: **`history/20-08-2026_18-04-33_s02-s05-resolved-archived-from-issues
 granularity but every entry writes the whole 16-byte **granule's** tag bit on drain, and
 drain order is `rr_arb_tree` rotation, not program order. Fixed by forbidding granule
 co-residency at allocation (`wt_dcache_wbuffer.sv`). Siblings: **S-09** is the same reorder
-running the other way (a silently dropped plain store — also fixed), **S-10** is a separate
-transient store-to-load forwarding residual that this fix structurally does not reach.
+running the other way (a silently dropped plain store — also fixed), and **S-10 / S-10b** are the
+same root cause in two further structures — see their own entry below. An earlier version of this
+line said the S-07 fix rendered S-10 unreachable; **that was refuted and is withdrawn**.
 
 > **TIMING CAVEAT, NARROWED 2026-08-20 — this fix is EXONERATED as the cause; the measurement was
 > still taken on a bitstream that misses setup.** Read directly from the archived reports of the
@@ -213,6 +214,118 @@ based on a single run is meaningless here — report k of n.
 
 Measured on `caplifive_s06s08fix_s07tag2_618f4ce.bit`, 2026-08-18: **k=1 wedge in n=7** reps of
 `XU` across two boots (4 pass; then pass, pass, wedge).
+
+
+## S-10 / S-10b — a capability survives the store that destroys it, and a store's high word reads back stale · `ALL THREE ROUTES FIXED IN RTL AND REPRODUCED; none synthesised into a flashed bitstream yet`
+
+**Behaviour.** Software destroys authority by overwriting it (`memset`, `bzero`). A capability
+load can miss that store and return the capability **intact and dereferenceable**. Separately, a
+plain load of an `STC`'s HIGH word can read memory the `STC` has not landed in yet.
+
+**One root cause, three structures.** The capability tag and the capability itself are per-16-byte
+**GRANULE** properties; three different places checked them at 64-bit **WORD** granularity. An
+`LDC` is granule-aligned, so it always presents word 0 and never matches a store at word 1.
+
+| | structure | the check | status |
+|---|---|---|---|
+| S-07 | write-buffer **allocation** | `gran_conflict`, `wt_dcache_wbuffer.sv` | fixed in sim; **"silicon-validated" DOWNGRADED — see below** |
+| S-10 | write-buffer **tag lookup** | `wbuffer_hit_oh`, `wt_dcache_mem.sv:287` | fixed, **not yet synthesised into a flashed bitstream** |
+| S-10b | **store-buffer** hazard | `page_offset_matches_o`, `store_buffer.sv:309/317/323` | data route fixed; **tag route open** |
+
+**Repro — S-10 (write-buffer route).** `verif/tests/custom/capstone/s07-wbuf-forward-residual.S`
+with its matched control. **Polarity is inverted**: a trap is the CORRECT outcome and its absence
+is the defect. Simulation 8 of 16 legs handed a live capability before the fix, 16 of 16 correct
+after. Silicon, pre-fix, on `caplifive_s07fix.bit`: **3837 of 3840**.
+
+> **CORRECTION (2026-08-21), from the ship audit.** Two things above need qualifying.
+>
+> **1. The 8-of-16 figure is the SHIPPED tree, and the closer is not in it.** Read straight off
+> the committed sweeps, one row per tree:
+>
+> | tree | test | control |
+> |---|---|---|
+> | `s07-strip.txt` = `f231b5af0`, S-07 only — **what is on the board** | **9** | 17 |
+> | `s10-sweep.txt` (+ S-10) | **17** | 17 |
+> | `s10b-sweep.txt` (+ S-10b) | **17** | 17 |
+>
+> So the before/after across S-10 is real and the control is pinned — that part stands. But it
+> means **8 of 16 legs are live on the bitstream currently flashed**, handing back a
+> dereferenceable capability over memory the program has already scrubbed. The fix that closes
+> them (S-10) is synthesis-proven — `80843404c` reached `write_bitstream` with exit 0 — and is
+> **not shipped**. S-10b, the other candidate, is not shippable at all (`DRC LUTLP-1`, see
+> `history/21-08-2026_01-15-00_s10b-is-not-synthesizable.md`).
+>
+> One caveat on the S-10 attribution: no sweep isolates S-10 from S-10b — both `s10-sweep.txt`
+> and `s10b-sweep.txt` sit at or above `c867dfcbb`. "S-10 alone closes it" is PLAUSIBLE-UNPROVEN;
+> one simulation of this test at `4fee13b2d` settles it.
+>
+> **2. "silicon-validated" for S-07 is not supported as worded**, on two independent grounds.
+> The pre-fix wedge rate was k = 2/16 = 0.125, so P(3 clean reps | defect still live) = 0.875^3 =
+> **0.670** — a likelihood ratio of about **1.5:1**, nearly uninformative. And
+> `timing_summary_routed.rpt:162` for that exact tree reports `WNS -10.629`, `TNS -438671.250`,
+> `96727 of 246476 failing endpoints`, `Timing constraints are not met.` — while `RATE-RULE.md`
+> had **pre-registered** the criterion *"WNS non-negative makes the S-07 validation
+> unconditional; negative means everything measured on this bitstream needs re-reading."* The
+> criterion came back negative and was never applied. The correctness weight sits on the
+> simulation matched pairs; say that instead.
+
+**Repro — S-10b (data route).** Not a new test —
+`verif/tests/custom/capstone/untagged-ldc-stc-fixup.S`, which has been silently working around it
+for as long as it has existed:
+
+```
+pc 0x800000d0   ld x29, 40(a1)      the high word of the granule an STC wrote at offset 32
+  before:  x29 = 0x0000000000000000     STALE
+  after :  x29 = 0xfedcba9876543210     what the STC actually wrote
+```
+
+The test's own source reads `ld t4, 40(a1)  # high half of the DESTINATION as it actually landed`
+followed by a repair branch. **That repair branch is now dead code** — the trace is one
+instruction shorter. Anyone touching that test should know it no longer exercises what it was
+written for.
+
+**Repro — S-10b (TAG route). REPRODUCED 2026-08-20 after three failed attempts.**
+`verif/tests/custom/capstone/s10b-storebuf-primed.S`, a matched pair with
+`s10b-storebuf-residual.S` differing by **one instruction**:
+
+| | pre-fix (`c3ca1b270`) | with S-10b |
+|---|---|---|
+| `s10b-storebuf-primed` | **0 of 8 legs trapped** — eight live capabilities over scrubbed memory | 8 of 8 |
+| `s10b-storebuf-residual` | 8 of 8 | 8 of 8 |
+
+**Why the first two attempts failed, which is the reusable part.** An unprimed `LDC` is a first
+touch and MISSES, so it routes through the miss unit — and `wt_dcache_missunit.sv:242` compares an
+incoming miss against in-flight write TXs at `[PLEN-1:DCACHE_OFFSET_WIDTH]` = `[PLEN-1:4]`, i.e.
+**granule** granularity, stalling the read outright (`:495`). By the time it is released the scrub
+has allocated into the write buffer and S-10's granule tag lookup catches it. The single added
+`ld` primes the line so the `LDC` **hits L1 and never enters the miss unit**, and no collision
+check can fire.
+
+The same mechanism explains why the DATA route reproduced without priming: there, the `STC` is
+still in the *store* buffer when the load issues, so **no write TX exists** and the collision
+check cannot fire either way.
+
+`s10b-storebuf-residual.S` is retained as the *negative* arm and is labelled in its own header as
+a test that does not create its condition — a `SUCCESS` row for it means the condition was never
+created, **not** that the route is closed.
+
+**Cost of the S-10b fix, measured.** Full 85-test sweep: 0 verdict changes, 0 exception-count
+changes, 1 trace-hash change (the fix working, above), 4 rows with cycle changes totalling +1.61%
+on those rows and +0.06% across all 85.
+
+**What is NOT covered, so it cannot be overclaimed:**
+- **AMO over a capability granule** — `wt_axi_adapter.sv:155` omits `ATOMIC_REQ` from `needs_tag`,
+  so an AMO writes neither the DRAM shadow tag nor `cap_tag_q`. Recorded as invariant **I4**;
+- **liveness of the three fixes composed** — S-07 refuses a store's allocation while S-10b stalls
+  loads on the same granule. Read as non-cyclic (the stalled load parks in `WAIT_PAGE_OFFSET`
+  with `data_req` low and stops competing for the port the write buffer needs), but **never
+  observed**, because no test has yet opened that window.
+
+**Blocking, and neither is settleable by reading:** the lint gate is RED by design
+(`UNOPTFLAT 39` baseline against 40 — the S-10 change adds one loop on `wt_dcache.rd_ctag`), and
+the S-10 synthesis regressed WNS from −10.629 to −16.400 ns with the cause **unattributed**. Only
+a synthesis run settles the first; a determinism control of `e1140aeea` settles the second.
+
 
 ## Q-01 — `run-sqlite-memory.sh` cannot create its domain · `RESOLVED 2026-08-20 — a WORKING QEMU reference exists and now runs`
 
