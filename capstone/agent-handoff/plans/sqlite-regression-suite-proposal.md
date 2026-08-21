@@ -700,6 +700,105 @@ image, same arms, no changes, console not shared, plus a `create_dom`-scoped tra
 read (`EXCX:0000E002`, `MCAU:00000008`, `MSTA` with MPP=0 are the S-08 constants to compare
 against). If even monitor-side output stays absent, that is the finding.
 
+## THE TIMING CAVEAT IS RETIRED FOR BOOT 1 ONLY — IT IS NOT RETIRED
+
+Boot 2 was control-green and boot 1 did not reproduce, so **boot 1** is attributed to ordinary
+infrastructure (the control fails ~1 in 5, and the console was shared for that boot). That is
+a statement about boot 1 and nothing else.
+
+**This image still misses setup by 5.8 ns more than the one every prior board result came
+from** (−16.400 against −10.629), and `run.tcl:93-99` still says a timing-failing bitstream
+behaves intermittently and data-dependently with no way to separate it from a real defect
+afterwards. **That caveat stands for every future anomaly on this image**, including anything
+the S-10 acceptance arms turn up. "Explained once by infrastructure" is not "explained".
+
+Concretely, for reading any run on this bitstream: a **deterministic** divergence — the same
+wrong value on repeat — is worth far more than a flaky one, and a one-off should be repeated
+before it is attributed to anything at all.
+
+**A NOTE ON THE IDLE BUDGET, because it cuts both ways.** `SQLITE_IDLE_S=1800` on boot 1 meant
+the driver would have waited thirty minutes before declaring a silent domain idle and taking
+its wedge read — the run was killed during that wait, which is why boot 1 produced no trap
+registers. Boot 2 used 240 s and got its readings. But the SLT arms are **silent by
+construction** between `SQ: G/enter` and `SQ: H/return`, so a long arm can trip a 240 s idle
+and be reported as wedged when it is merely working. Measured QEMU work: 50 queries ≈ 10 s,
+200 queries ≈ 25 s, 500 queries ≈ 370 s; silicon is slower. **An idle-triggered verdict on an
+SLT arm is an instrument artifact until the arm is re-run with a longer budget.**
+
 **The S-10 acceptance arms are on hold** (`tests/rtl-smoke/wbuf-arms/`, built and
 distinctness-checked). Staging them on an image that may not run domains would produce a
 ladder of void arms that reads like an S-10 result.
+
+---
+
+# STAGE 3 RESULT — SQLLogicTest RUNS ON SILICON, and one arm WEDGES (2026-08-21, boot 2)
+
+**Control-green boot, so these verdicts count.** `caplifive_s10fix_80843404c.bit`, four arms,
+one boot.
+
+| # | arm | result |
+|---|---|---|
+| 1 | `sqbase.dom` — plain SQLite workload, **the control** | **PASS, returned in 6 s** — all five markers: `alpha=11`, `beta=22`, `gamma=33`, `EXTENDED_PASSED`, `MEMORY_PASSED`, `rc=0` |
+| 2 | `sqslt.dom --slt slt_neg.test` — 21 records | **PASS, returned in 12 s** — summary IDENTICAL to the QEMU reference, field for field |
+| 3 | `sqslt.dom --slt s1_81.test` — 50 queries | **WEDGED. No return within 1200 s.** |
+| 4 | `s1_231.test` | not run — a wedge takes the core, so everything after arm 3 is collateral |
+
+## What arm 2 establishes, and it is the larger half of this result
+
+    BOARD:    records=21 stmt_pass=9 stmt_fail=2 query_pass=6 query_fail=4 skip_big=0 oom=0 skip_cond=2 parse_err=1 completed=1
+    QEMU ref: records=21 stmt_pass=9 stmt_fail=2 query_pass=6 query_fail=4 skip_big=0 oom=0 skip_cond=2 parse_err=1 completed=1
+
+**SQLLogicTest runs inside a capability domain on real silicon**, and the comparator is proven
+to DISCRIMINATE there rather than return a clean void: all six deliberately-wrong arms fired
+on hardware for the right reasons, the unparseable record was counted rather than skipped, and
+**the MD5 the board computed over a 500-value result set is bit-identical to the host's**. The
+whole 3,577-byte test file crossed into the domain through the shared region (`SQ: slt=3577`),
+and for arm 3 the 16,774-byte file did too, with `BASE:83000000 ALEN:00100000` confirming the
+1 MiB region was created and shared correctly.
+
+## Arm 3 — a REAL wedge, and my first explanation for it was wrong
+
+**I proposed that my own `SQLITE_IDLE_S=240` had cut a legitimately-slow arm short. The log
+refutes that:** the driver reports `NO RETURN within 1200s (ActionTimeout)`, so the binding
+limit was `SQLITE_STAGE_TIMEOUT=1200`, not the idle budget. Against 6 s for the control and
+12 s for 21 records, twenty minutes of silence is two orders of magnitude past any slowness
+explanation.
+
+The domain **entered cleanly** — `A/dom-ok`, both regions created and shared with full monitor
+output, `SQ: slt=16774`, `G/enter` — and never returned.
+
+**Two debug-mux readings must NOT be reported as findings:**
+
+* `TRAP LOG sw=255 = 0x89` is `seen=1, mcause=9` — **ECALL from S-mode, which is not a
+  capability fault.** This is the documented 2026-08-01 near-miss where a `0x89` was nearly
+  written up as an untrapped capability fault and was a stale boot ecall. Capability faults
+  are cause 23+code (24–28).
+* `rev-node head = 65312 (0xff20), delta = -223, "went BACKWARDS"` is a **RUNNING** read, and a
+  running mux read ORs ~42 ms of execution together — anything carrying a VALUE needs a halted
+  read. The halted read at the wedge gives `rev_node_head = 0x0268 = 616`, plausible against a
+  1021-entry pool. Several sibling readings in the same sweep returned VOID / INSTRUMENT FAULT.
+
+What the halted read does say: `privM=1 flush=1 ex_commit.valid=0` — the core is in M-mode with
+nothing committing.
+
+## What separates arm 2 from arm 3 — the bisection target
+
+Arm 2 exercises the runner end to end: parsing, execution, rendering, all three sort modes,
+MD5 over 500 values, and failure reporting. It passes in 12 s. So **the mechanism is not what
+wedges.** Arm 3 differs by running select1.test's actual queries — aggregates, `CASE`,
+correlated subqueries over a 30-row table — 50 of them.
+
+**Next: finer slices** (`s1_31` = the 31 setup statements and no queries, then 5 / 10 / 25
+queries), ascending in one control-led boot. The first that fails to return IS the bisection
+point. Board-free to build and native-verify first, as with every slice so far.
+
+## Caveats that travel with this result
+
+* **N=1 for arm 3.** It has not been reproduced.
+* **This part misses setup by 5.8 ns more than every part our prior results came from**
+  (−16.400 vs −10.629), and `run.tcl:93-99` says such a bitstream behaves intermittently and
+  data-dependently with no way to separate that from a real defect afterwards. **A wedge that
+  does not reproduce is a timing candidate; one that reproduces deterministically at the same
+  record is a real finding.** Reproducing it is therefore the first thing the bisect buys.
+* The image had never executed on silicon before today, and the RTL lane advised against
+  flashing it.
