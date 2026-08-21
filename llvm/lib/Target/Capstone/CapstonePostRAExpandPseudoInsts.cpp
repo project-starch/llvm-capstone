@@ -331,10 +331,36 @@ static bool isScalarByReachingDef(MachineInstr *MI, Register Reg,
   // Treating an already-visited def as satisfied is sound here because the recursion only
   // ever concludes "scalar" when EVERY def on every path is a materialisation -- a cycle
   // adds no new way for a capability to enter.
+  // A REGISTER THAT IS LIVE-IN TO THE FUNCTION CAN NEVER BE PROVEN SCALAR HERE,
+  // because the value it arrives with has no defining MachineInstr and therefore
+  // cannot appear in Defs at all. Without this the proof runs over an incomplete
+  // set, and the `Visited` cycle rule then closes it over nothing:
+  //
+  //     529:  $x9  = MOVC $x10        <- the copy being judged
+  //     580:  $x10 = MOVC $x9         <- reaches 529 via the back-edge
+  //
+  // Those are the ONLY defs of $x10 in mrb_method_search_vm. Judging 529 asks about
+  // $x10, gets 580, which forwards to $x9, whose def is 529 -- already in Visited,
+  // so "already on the path: contributes no new source" returns true. Every path is
+  // the cycle, no path reaches a materialisation, and the rule concludes scalar for
+  // the incoming `mrb`, which is a live capability. The rewritten `mv` drops its tag
+  // and mruby faults with cause 24 at the next store through it (C-14, measured
+  // 2026-08-21 under both ABIs).
+  //
+  // The cycle rule is sound only when some path leaves the cycle and lands on a real
+  // materialisation. For a live-in the only such path is the function entry, which is
+  // exactly what RDA cannot show us -- so refuse.
+  //
+  // computeScalarAddressRegs already disqualifies live-ins for the same reason
+  // (`for (const auto &LI : MF.getRegInfo().liveins()) Disqualified.insert(...)`).
+  // This rule was simply missing the guard its sibling had.
+  if (MI->getMF()->getRegInfo().isLiveIn(Reg))
+    return false;
+
   SmallPtrSet<MachineInstr *, 8> Defs;
   RDA.getGlobalReachingDefs(MI, Reg, Defs);
   if (Defs.empty())
-    return false; // live-in, or not visible: prove nothing
+    return false; // not visible: prove nothing
   for (MachineInstr *Def : Defs)
     if (!isScalarDefChain(Def, RDA, Depth, Visited))
       return false;
