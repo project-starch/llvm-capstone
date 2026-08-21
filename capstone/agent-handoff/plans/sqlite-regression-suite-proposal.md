@@ -478,3 +478,100 @@ Read every board result against the **8 of 16 legs of the write-buffer residual 
 live on the flashed `caplifive_s07fix.bit`**: a load there can hand back a dereferenceable
 capability over scrubbed memory. If SQLite diverges on silicon but not under QEMU, that is
 a candidate cause before the runner is.
+
+---
+
+# STAGE 3 RUNBOOK — the board. Everything below is BAKED and VERIFIED; only the boot remains.
+
+## What is in the image (initramfs 9.1 MB, every artifact hash-checked inside `rootfs.cpio`)
+
+| artifact | sha256 (16) | what it is |
+|---|---|---|
+| `sqbase.dom` | `f1214600d0dac351` | **the control** — the plain SQLite silicon workload, five known markers. Byte-identical to the build made from pre-SLT sources, so the control is provably unperturbed by any of this work. |
+| `sqslt.dom` | `b6d1cb1da795f291` | the SLT runner at board configuration: 1 MiB region, 256 KiB arena |
+| `sqsltr.dom` | `8a0edd2753011386` | identical but for `QR_DRAW=64` — **R-16 redraw insurance** |
+| `sqlite_host_slt.user` | `086f136227af0efa` | host built with the MATCHING region size, under its own name so the existing 4 KiB-region SQLite arms keep working |
+| `slt_neg.test` | `a3c824fb8c95d12e` | 21 records, **known non-zero failures** |
+| `s1_81.test` | `fdeed2acc1d04303` | 50 queries |
+| `s1_231.test` | `2bde6de55edc1435` | 200 queries |
+| `s1_531.test` | `430ec636fce58083` | 500 queries |
+
+## The invocation — ONE boot, six arms, ascending
+
+```bash
+cd capstone/tests/rtl-smoke
+export FPGA_URL="$(cat ~/.claude-c/secrets/fpga-console-url)"   # credential; never commit or echo
+export FPGA_FW=<caplifive-system>/.../opensbi-custom/build/platform/fpga/ariane/firmware/fw_payload.bin
+H=/test-domains/sqlite_host_slt.user
+SQLITE_STAGE_DOMS="\
+/test-domains/sqbase.dom,\
+$H|/test-domains/sqsltr.dom:--slt /test-domains/slt_neg.test,\
+$H|/test-domains/sqslt.dom:--slt /test-domains/slt_neg.test,\
+$H|/test-domains/sqslt.dom:--slt /test-domains/s1_81.test,\
+$H|/test-domains/sqslt.dom:--slt /test-domains/s1_231.test,\
+$H|/test-domains/sqslt.dom:--slt /test-domains/s1_531.test" \
+SQLITE_STAGE_TIMEOUT=2400 SQLITE_IDLE_S=2400 \
+python3 -m fpga_driver.run_sqlite_stages_fpga
+```
+
+No driver change was needed: the `path:selector` suffix is passed to the host verbatim, and
+the `host|path` form supplies the matching host per entry.
+
+## Expected values — the QEMU reference at THE SAME configuration
+
+Taken at 256 KiB arena / 1 MiB region, not the 1 MiB/4 MiB the stage-2 matrix used, so a
+board divergence has no "the configuration differed" escape hatch. Each also equals the
+native baseline field for field.
+
+| arm | expected `SLT-SUMMARY` |
+|---|---|
+| `slt_neg` | `records=21 stmt_pass=9 stmt_fail=2 query_pass=6 query_fail=4 skip_big=0 oom=0 skip_cond=2 parse_err=1 completed=1` |
+| `s1_81` | `records=81 stmt_pass=31 stmt_fail=0 query_pass=50 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1` |
+| `s1_231` | `records=231 stmt_pass=31 stmt_fail=0 query_pass=200 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1` |
+| `s1_531` | `records=531 stmt_pass=31 stmt_fail=0 query_pass=500 query_fail=0 skip_big=0 oom=0 skip_cond=0 parse_err=0 completed=1` |
+
+**`slt_neg` is the arm that matters most, and it is second and third on purpose.** Its two
+statement failures, four query failures, two skips and one parse error are all deliberate.
+An arm that comes back all-zero has not "passed" — it has failed to run the comparator, and
+without this arm every clean result behind it would be unfalsifiable.
+
+## Ordering, and why it is this order
+
+1. **`sqbase` — the control.** A boot whose control fails is VOID and carries no verdict
+   about anything; the control itself fails roughly one time in five.
+2. **`sqsltr` + `slt_neg`** — the redraw variant, on the smallest case. R-16 is **per-image**,
+   so the control proves the boot, not that the SLT image class enters. This arm costs
+   seconds and insures the whole session against a bad draw.
+3. **`sqslt` + `slt_neg`** — the real image, same tiny case, known non-zero failures.
+4.–6. **`s1_81` → `s1_231` → `s1_531`**, ascending. Every arm is expected to RETURN, and the
+   first that does not IS the bisection point.
+
+## Two things that will otherwise produce a wrong verdict
+
+**SILENCE IS EXPECTED, AND IDLE DETECTION CANNOT BE USED HERE.** The domain emits nothing
+between `SQ: G/enter` and `SQ: H/return` — the report accumulates in the shared region and
+the host prints it only after the domain returns. `SQLITE_IDLE_S` therefore has to be set
+equal to the stage budget rather than to its 30 s default, and the ladder ordering is the
+only wedge-bounding mechanism left. Measured wall clock under QEMU: 50 queries ≈ 10 s of
+work, 200 ≈ 25 s, **500 ≈ 370 s**. CVA6 at 25 MHz will be slower than emulation, not faster,
+so `s1_531` may run to tens of minutes and `s1_1031` was deliberately not baked — it exceeded
+even the QEMU harness's 360 s budget and remains UNMEASURED, which is neither a pass nor a
+failure.
+
+**THE FRESHNESS GATE DOES NOT CHECK THE SHARED `.dom`.** With `dom:--slt <file>` specs the
+gate's candidate picker takes the last half naming a staged artifact — the `.test` file — so
+the one artifact every arm shares goes unverified by it. The first spec (`sqbase.dom`) is
+selector-free and is checked; `sqslt.dom` is covered instead by the bake's own cpio hash
+verification, recorded in the table above. Re-run the bake if in any doubt: it fails loudly.
+
+## Reading the result
+
+Classify per the `board-run` skill, on `SQ: G/enter`, and read no further than the first
+failure. A wrong VALUE is a result and a good one — it is bisectable where a wedge is not.
+Any board-only divergence must be read against the **8 of 16 legs of the write-buffer
+residual live on the flashed `caplifive_s07fix.bit`**: a load there can return a
+dereferenceable capability over memory the program already scrubbed. That is a candidate
+cause before the runner is.
+
+**No reflash is proposed for this.** S-10 costs −16.4 ns WNS against a design −10.629 and
+buys SQLite nothing; S-10b is dead on a DRC combinational loop.
