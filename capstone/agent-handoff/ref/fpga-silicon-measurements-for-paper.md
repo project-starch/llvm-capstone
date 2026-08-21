@@ -873,3 +873,71 @@ diagnostic clamp and no feature trim. This is a silicon-only divergence.
 
 Scope: this bounds any domain to ~1021 capability carves, i.e. ~1021 globals with one
 capability per object. It is a property of the prototype board, not of the Capstone design.
+
+---
+
+## §4f — SQLite passes SQLLogicTest in a capability domain: 10,807 records, ZERO divergences (QEMU, 2026-08-21)
+
+**READ THE SCOPE FIRST: this is QEMU, not silicon.** The board attempt is §4g below. Nothing
+here is a silicon result and none of it should be cited as one.
+
+### What was measured, and why it is a DIFFERENCE rather than a rate
+
+`benchmarks/sqlite/slt/slt_runner.h` is a SQLLogicTest runner that compiles **unchanged** for
+the host and for a capability domain, and `slt_native.c` links it against the **same** SQLite
+3.53.3 amalgamation with the **same** semantic build configuration. The result is the
+difference between the two sides.
+
+That design is not tidiness. An absolute pass rate is contaminated by corpus-versus-engine
+artifacts with nothing to do with capabilities, and this corpus contains several — one
+evidence file produces eleven on any machine. With one runner they appear identically on both
+sides and cancel. **It also caught a live instance during bring-up:** the domain build carries
+`-DSQLITE_OMIT_FLOATING_POINT=1`, under which a decimal point is a syntax error, and the first
+domain run failed five statements on `VALUES(3,'ccc',1.5)`. An ordinary configuration
+difference was presenting as a capability defect.
+
+### Result — every field of every summary EQUAL between domain and native
+
+| file | records | queries | verdict |
+|---|---|---|---|
+| `negative-control.test` | 21 | 10 | identical, **including 2 stmt / 4 query deliberate failures, 2 skips, 1 parse error** |
+| `select1.test` | 1031 | 1000 | identical, 0 failures |
+| `select2.test` | 1031 | 1000 | identical, 0 failures |
+| `select3.test` | 3351 | 3320 | identical, 0 failures |
+| `select4.test` | 3857 | 2617 | identical, 0 failures, 215 skipped for size |
+| `select5.test` | 1436 | 732 | identical, 0 failures (needs a 2 MiB arena — see below) |
+| `evidence/slt_lang_aggfunc.test` | 80 | 67 | identical, including 11 shared corpus artifacts |
+| **total** | **10,807** | **8,746** | **zero divergences** |
+
+**7,393 of the query records state their expectation as an MD5 of the entire result set**, so
+this is agreement over hashed full result sets, not over scalars.
+
+**The negative-control row is the load-bearing one.** Six of its arms are wrong on purpose and
+two more must be skipped rather than passed; the domain reproduces every one. Without it,
+"zero failures" everywhere else would be equally consistent with a comparator that cannot fail.
+
+### What this licenses, and what it does not
+
+**Supported:** *"SQLite 3.53.3 executes 10,807 SQLLogicTest records inside a pure-capability
+domain and produces results identical to the same SQLite built natively with the same
+configuration, including MD5 hashes of full result sets, with zero divergences."*
+
+**NOT supported — do not let any of these be dropped:**
+* **QEMU, not silicon.**
+* **A subset** — 7 files of 622.
+* **17 features omitted**, floating point among them, so the R column type is never compared.
+* **Result sets above 4096 values are not compared** — 215 records, all rowsort.
+* **Arena-dependent:** `select1`/`select2`/the negative control fit the silicon 256 KiB arena;
+  `select4` needs 1 MiB and `select5` 2 MiB. Below that they report a clean `oom` bucket, which
+  is counted separately and never as a pass.
+
+### One defect found and NOT attributed
+
+At a 1 MiB arena `select5` faults on a `cincoffset` with an untagged operand at image VA
+`0x644d4` inside **`sqlite3VdbeExec`** — SQLite's own interpreter, not the runner. The operand
+is an all-zero word (`val=0x0`) loaded by the preceding `ldc`, which **excludes** both the S-07
+tag-strip family and the linear move-out family. A poisoned-arena arm returned `0x0` rather
+than `0xa5…`, so something wrote the zero rather than leaving it uninitialised. Whether an
+allocation failed or a stray plain store zeroed a live capability slot is **open**; an earlier
+"allocation failure" root cause was recorded and retracted the same day after audit. Full trail
+in `plans/sqlite-regression-suite-proposal.md`.
