@@ -33,10 +33,20 @@ import sys
 BASELINE_OK = 1270
 
 # A file that MUST compile, and a file that MUST NOT, with the reason it fails.
-# strlen.c fails on `(uintptr_t)s % ALIGN`; when the word-at-a-time string
-# routines get replaced this control has to be retired deliberately.
 CONTROL_MUST_PASS = "src/stdlib/abs.c"
-CONTROL_MUST_FAIL = "src/string/strlen.c"
+# RETIRED 2026-08-21: src/string/strlen.c. It was the MUST_FAIL control on the grounds that
+# `(uintptr_t)s % ALIGN` could not compile -- and it now compiles cleanly, verified by
+# building that one file directly rather than inferred from a survey total. The word-at-a-time
+# string routines it was keyed to were NOT replaced, so it flipped for some other reason and
+# the premise no longer holds. WHY it flipped is not established and is not worth a control
+# that lies in the meantime: a MUST_FAIL arm that always reports ERROR teaches everyone to
+# ignore the survey, which costs more than the drift it was meant to catch.
+#
+# The replacement fails for a reason that is documented and durable: long double lowers to a
+# 128-bit shift, which this target cannot do while MVT::i128 is the capability carrier. It
+# will keep failing until the capability-MVT work (Tier 3) lands, and retiring it then is
+# again a deliberate act rather than a surprise.
+CONTROL_MUST_FAIL = "src/math/fmodl.c"
 
 FOREIGN_ARCH_KEEP = {"riscv64", "capstone64", "generic"}
 
@@ -78,6 +88,13 @@ def bucket(message: str) -> str:
     if "array is too large" in message:
         return "static assert: sizeof(void*) assumption (mallocng)"
     if "Unable to legalize non-vector shift" in message:
+        return "backend: i128 shift (long double)"
+    # SAME BUCKET, NEW TEXT. b8ffedb2bb90 replaced the legalizer's assertion with a real
+    # DiagnosticInfoUnsupported, so the string above stopped matching and 25 files silently
+    # re-bucketed as "other:" -- the failures were unchanged, only their label moved. A
+    # classifier keyed to one spelling of a message it does not own is a standing hazard;
+    # both spellings are matched so the historical numbers stay comparable across that commit.
+    if "cannot lower a 128-bit right shift" in message:
         return "backend: i128 shift (long double)"
     if "Too many bits for" in message:
         return "backend: APInt >64 bits (long double / capability constant)"
