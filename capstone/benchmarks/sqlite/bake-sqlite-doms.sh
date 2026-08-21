@@ -148,7 +148,13 @@ make -C "$BR" build LINUX_PAYLOAD=1 A=opensbi-rebuild \
 
 echo "== verifying each domain against the bytes actually inside $CPIO"
 [[ -f "$CPIO" ]] || { echo "ERROR: $CPIO not found -- the initramfs rebuild produced nothing" >&2; exit 1; }
-python3 - "$CPIO" "${NAMES[@]}" -- "${WANT[@]}" <<'PYVERIFY'
+# FULL FILENAMES, and the extras too. Domains arrive as "<name>.dom" and extras as
+# themselves, so the verifier is handed exactly what it will look up rather than a stem it
+# has to guess a suffix for.
+_vnames=(); for n in "${NAMES[@]}"; do _vnames+=("$n.dom"); done
+_vwant=("${WANT[@]}")
+if ((${#XNAMES[@]})); then _vnames+=("${XNAMES[@]}"); _vwant+=("${XWANT[@]}"); fi
+python3 - "$CPIO" "${_vnames[@]}" -- "${_vwant[@]}" <<'PYVERIFY'
 import sys, hashlib
 cpio = sys.argv[1]
 rest = sys.argv[2:]
