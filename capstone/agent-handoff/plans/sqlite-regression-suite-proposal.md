@@ -38,7 +38,7 @@ assumes.
 **C. Broaden our own workload.** Cheapest. Never supports "passes its regression suite" — it moves
 "18 assertions" to "60 assertions". Worth doing anyway as a by-product, not as the answer.
 
-## ~~THE CENTRAL RISK~~ — B0b RAN, AND THE RISK IS VOID
+## ~~THE CENTRAL RISK~~ — ~~B0b RAN, AND THE RISK IS VOID~~ — **PARTLY RETRACTED 2026-08-21**
 
 **The feared risk was:** the `SQLITE_OMIT_*` set that makes SQLite fit in a capability domain is
 the same set that makes an upstream suite fail, so the claim would have to be scoped to a crippled
@@ -55,10 +55,40 @@ first entry; the same tree passes end-to-end without it), because SQLite support
 only when building from canonical sources, not against the prebuilt amalgamation. *"Opt in with
 `SQLITE_TRIM=1` only to re-measure the carve count; never for a correctness run."*
 
-**So the SQLite that passed 3/3 on silicon is a feature-complete amalgamation build**, and an
-upstream suite would not be bounded by an omission set. That is a materially better starting
-position than this proposal originally assumed. (The 15th flag, `SQLITE_OMIT_SELECT`, was
+~~**So the SQLite that passed 3/3 on silicon is a feature-complete amalgamation build**, and an
+upstream suite would not be bounded by an omission set.~~ (The 15th flag, `SQLITE_OMIT_SELECT`, was
 commentary about SQLite's own source — not ours, as suspected.)
+
+### RETRACTION, 2026-08-21: the build is NOT omission-free
+
+**`SILICON_TRIM` is not the only `SQLITE_OMIT_*` list, and checking only it was the error.**
+`build-sqlite-silicon.sh:848` harvests a *second* list out of `build-sqlite-capstone.sh` —
+`SQLITE_DEFINES`, which is **always active** and carries **seventeen more omissions**, among them:
+
+    -DSQLITE_OMIT_FLOATING_POINT=1   -DSQLITE_OMIT_JSON=1      -DSQLITE_OMIT_FOREIGN_KEY=1
+    -DSQLITE_OMIT_UTF16=1            -DSQLITE_OMIT_EXPLAIN=1   -DSQLITE_DQS=0
+
+Verified by capturing the actual `clang` invocation, not by reading the script — the earlier
+claim was made by reading one variable and stopping.
+
+**How it surfaced, and why that matters more than the error itself.** The first domain run of the
+negative control reported five statement failures the native baseline did not have:
+`INSERT INTO t1 VALUES(3,'ccc',1.5)` → `near ".": syntax error`. With `SQLITE_OMIT_FLOATING_POINT`
+the tokenizer does not accept a decimal point at all. **An ordinary configuration difference was
+presenting as a capability defect** — which is exactly the failure the shared-runner design exists
+to prevent, and it was caught only because the baseline is built from the same source. The native
+baseline now harvests the same define list (`build-slt-native.sh`), and both sides agree.
+
+Consequences for the plan, none of them fatal:
+
+* **The R (real) column type is unreachable in this configuration.** Only one file in all 622 uses
+  it, so the subset loses nothing measurable — but the runner's `%.3f` path is dead code here and
+  must not be described as exercised.
+* **`SQLITE_OMIT_FLOATING_POINT` does not compile as shipped** in 3.53.3: the `#else` arm of
+  `sqlite3AtoF` refers to a `z` declared only in the `#ifndef` arm. `build-sqlite-capstone.sh:66`
+  already patches it; the native baseline applies the identical one-line fix.
+* **The claim must name its configuration.** "Passes N% of SQLLogicTest" is not available;
+  "agrees with its own native build, configuration enumerated" is, and is what stage 4 writes.
 
 ## THE REAL CEILING, found in the same place: capability carves, not features
 
@@ -200,3 +230,165 @@ Type string is per column (`I` integer, `R` real, `T` text); sort mode is `nosor
 `valuesort`; large result sets are compared by hash. Omitting `----` means an empty result is
 expected. This is a few hundred lines of C, not a project — which is the main reason stage 1 is
 smaller than the proposal originally assumed.
+
+---
+
+# STAGES 1 AND 2 ARE DONE — measured 2026-08-21, under QEMU
+
+**The runner exists, it runs inside a capability domain, and it agrees with its own native
+build over 9,371 records.** What follows is the measurement, what it licenses, and the one
+file that does not agree.
+
+## The method, and why it is a DIFFERENCE and not a rate
+
+`slt/slt_runner.h` compiles unchanged for the host and for the domain, and
+`slt/slt_native.c` links it against the same SQLite 3.53.3 amalgamation with the same
+semantic define set. **The result is the difference between the two sides.** An absolute
+pass rate would be contaminated by corpus-versus-engine artifacts that have nothing to do
+with capabilities, and this corpus contains several: `evidence/slt_lang_aggfunc.test` alone
+produces eleven, on any machine. With one runner they appear identically on both sides and
+cancel. With two they would be indistinguishable from a capability defect — which is not a
+hypothetical, it is what the `SQLITE_OMIT_FLOATING_POINT` discovery above looked like for
+the first hour.
+
+## Results — QEMU, silicon configuration, 4 MiB region, 1 MiB arena
+
+Every field of every summary is EQUAL between domain and native unless the row says otherwise.
+
+| file | records | queries | verdict |
+|---|---|---|---|
+| `slt/negative-control.test` | 21 | 10 | **identical**, including 2 `stmt_fail`, 4 `query_fail`, 2 `skip_cond`, 1 `parse_err` |
+| `select1.test` | 1031 | 1000 | **identical**, 0 failures |
+| `select2.test` | 1031 | 1000 | **identical**, 0 failures |
+| `select3.test` | 3351 | 3320 | **identical**, 0 failures |
+| `select4.test` | 3857 | 2617 | **identical**, 0 failures, 215 skipped for size |
+| `evidence/slt_lang_aggfunc.test` | 80 | 67 | **identical**, including 11 shared corpus artifacts |
+| `select5.test` | — | — | **DOMAIN DIES — see below. Not attributed.** |
+
+**9,371 records agree.** 7,393 of the query records state their expectation as an MD5 of the
+entire result set, so this is agreement over hashed result sets, not over scalars.
+
+**The negative-control row is the load-bearing one.** Six of its arms are wrong on purpose
+and two more must be skipped rather than passed. The domain reproduces every one. Without
+it, "0 failures" on select1-5 would be equally consistent with a comparator that cannot
+fail — which is the single most expensive mistake available on this project.
+
+## select5.test — a real divergence, and NOT yet a capability defect
+
+The domain enters, loads all 702,577 bytes, and dies inside the workload:
+
+    qemu-system-riscv64: op_helper.c:627: helper_cscincoffset: Assertion `rs1_v->tag' failed
+
+A `cincoffset` on an **untagged** capability — the S-07 family signature, and the point at
+which silicon would raise `UNEXPECTED_OPERAND` rather than assert. The native baseline runs
+the same file clean: 1436 records, 732 queries, 0 failures.
+
+**Reading 3 — "QEMU is stricter than the hardware" — is REFUTED, from the RTL and not from
+a comment.** `capstone-ariane/core/anvil_build/capstone_flu_unit.anvil`, `func CINCOFFSET`:
+
+    if((data.cap_rs1.metadata.cap_type==cap_type_t::NOT_CAP)||
+       (data.cap_rs2.metadata.cap_type!=cap_type_t::NOT_CAP)){
+        call raise_exception(data.trans_id,ex_code::UNEXPECTED_OPERAND)
+
+Silicon traps on exactly this condition. Only the FAILURE MODE differs — the board would
+raise a guest exception where QEMU aborts the emulator. **So whatever this is, it would
+also fire on the board**, which promotes it from a curiosity to a stage-3 blocker.
+
+**Two readings remain, and the bisect cannot separate them:**
+
+1. a defect in our port, exposed by select5's 64-column, 64-table joins — by a wide margin
+   the most demanding file in the subset;
+2. a bug in `slt_runner.h`, which is the only new code in the frame.
+
+**The bisect locates, it does not attribute.** A record range names which SQL; only the
+guest PC names whose code holds the untagged capability — inside the amalgamation is
+reading 1, inside the runner is reading 2. `CAPSTONE_PRINT_LOAD_BASE` exists to map a fault
+PC back to an image VA and is the right instrument.
+
+**Separately, a capstone-qemu robustness gap worth its own ISSUES.md line:** QEMU
+`abort()`s the emulator on this condition instead of raising a guest exception. That is why
+there is no PC to read in the first place, and it makes every such defect maximally
+expensive to diagnose.
+
+Prefix ladder so far, each slice verified clean natively before use, at the same
+4 MiB region / 1 MiB arena as the failing run:
+
+| slice | records | queries | domain |
+|---|---|---|---|
+| `s5_800` | 800 | 96 | passes, matches native |
+| `s5_1200` | 1200 | 496 | passes, matches native |
+| full | 1436 | 732 | **untagged cincoffset** |
+
+So the trigger lies in records 1200–1436.
+
+## What this does and does not license
+
+**Supported now:** *"SQLite 3.53.3 executes 9,371 SQLLogicTest records inside a pure-capability
+domain and produces results identical to the same SQLite built natively with the same
+configuration, including MD5 hashes of full result sets, with zero divergences."*
+
+**NOT supported, and none of these should be glossed:**
+
+* **This is QEMU, not silicon.** Stage 3 is the board and it has not run.
+* **The corpus is a subset** — 6 files of 622. `select5.test` is excluded by a live failure.
+* **The configuration omits 17 features**, floating point among them, so the R column type
+  is unreachable and no float is ever compared.
+* **Result sets above 4096 values are not compared** — 215 records in select4, all rowsort.
+* **`select4` needs a 1 MiB arena**; at the silicon 256 KiB it reports `oom=2772` and
+  evaluates 1,085 records. select1, select2 and the negative control fit in 256 KiB.
+
+## Stage 3 — the board. Prerequisites, all board-free and all now met
+
+* **The `.test` files must be baked into the initramfs.** There is no 9p mount on the board;
+  they are staged into `overlay/test-domains` like any `.dom`.
+* **No driver change is needed.** `run_sqlite_stages_fpga.py` passes its `path:selector`
+  suffix through to the host verbatim, so `sqlite_slt.dom:--slt /test-domains/s1_81.test`
+  invokes the runner directly.
+* **A slice ladder bounds the runtime**, which is the real unknown on a 25 MHz core:
+  `s1_81`, `s1_231`, `s1_531`, `s1_1031` — 50, 200, 500 and 1000 queries, each keeping all
+  31 setup statements and each verified clean natively before it may be used.
+* **Silence is expected and must not be read as a wedge.** The domain emits nothing between
+  `SQ: G/enter` and `SQ: H/return` — the report accumulates in the shared region and the
+  host prints it only after the domain returns. `SQLITE_IDLE_S` defaults to 30 s and WILL
+  abort a healthy long run; set it from the measured cost of the smallest slice.
+* **Region 1 MiB is enough** for every slice (largest is 258 KiB against a 512 KiB input
+  half) and 1 MiB is already board-relevant, whereas 4 MiB is not yet measured on silicon.
+
+**Board session shape** — one boot, one `.dom`, only the `.test` argument varies, so a single
+firmware rebuild covers every arm:
+
+1. the known-good basic SQLite workload — **control; a boot whose control fails is void**;
+2. `negative-control.test` — 21 records with **known non-zero failures**, so silicon is
+   proven to be running the comparator rather than returning a clean void;
+3. `s1_81`, then `s1_231`, then `s1_531`, then `s1_1031` — ascending, every one expected to
+   RETURN, and the first that does not is the bisection point;
+4. **the MINIMAL select5 reproducer** last — never the 700 KB file. Until the crash is
+   attributed, a select5 slot is either wasted (if it is a runner bug) or spent on a
+   needlessly large arm (if it is a port defect). Reduce the prefix while the crash
+   persists, then bake that; note the reduction may not go to a single record if the
+   trigger is allocation-history-dependent. Per the ordering rule there may be at most one
+   expected-to-wedge arm and it goes at the end.
+
+**Two holes in the session's own failure classes, both cheap to close:**
+
+* **The freshness gate will not check the shared `.dom`.** With `dom:--slt <file>` specs the
+  gate's candidate picker takes the LAST half that names a staged artifact — the `.test`
+  file — so the one artifact every arm shares goes unverified. Add one selector-free spec,
+  or hash the `.dom` bytes inside the decompressed initramfs by hand, before booting.
+* **R-16 is per-image, and the SLT domain is a NEW image.** The control arm proves the
+  boot; it does not prove this image enters. One baked `QR_DRAW` redraw variant costs about
+  eleven seconds of JTAG and insures the session against drawing a 100%-stalling image.
+
+**Timeouts must both be raised, from measurement.** `SQLITE_IDLE_S` (30 s) and
+`SQLITE_STAGE_TIMEOUT` (90 s) will each independently kill a healthy `s1_1031`; set them
+from `s1_81`'s measured wall time, not from a guess.
+
+**The QEMU reference for these arms must be re-taken at BOARD configuration.** The matrix
+above ran at 1 MiB arena / 4 MiB region; the board runs 256 KiB / 1 MiB. Re-running the
+exact arm set at board config removes every "the configuration differed" escape hatch when
+a board number diverges, and costs minutes.
+
+Read every board result against the **8 of 16 legs of the write-buffer residual that are
+live on the flashed `caplifive_s07fix.bit`**: a load there can hand back a dereferenceable
+capability over scrubbed memory. If SQLite diverges on silicon but not under QEMU, that is
+a candidate cause before the runner is.
