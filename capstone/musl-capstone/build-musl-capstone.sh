@@ -271,9 +271,14 @@ objects=("$OBJ_DIR"/*.o)
 # long double math family and go away with long double at 64 bits.
 if [[ " ${MUSL_CAPSTONE_EXTRA_CFLAGS:-} " == *" -flto "* ]]; then
   echo "LTO build: verifying every member survives codegen"
-  readarray -t _drop < <(CAPSTONE_LLC="$CAPSTONE_LLVM_BIN/llc" python3 - "${objects[@]}" <<'VERIFY'
+  readarray -t _drop < <(CAPSTONE_LLC="$CAPSTONE_LLVM_BIN/llc" \
+                         CAPSTONE_ABI_FLAGS="${MUSL_CAPSTONE_EXTRA_CFLAGS:-}" \
+                         python3 - "${objects[@]}" <<'VERIFY'
 import concurrent.futures as cf, os, subprocess, sys
 llc = os.environ["CAPSTONE_LLC"]
+abi_flags = (["-capstone-gp-captable"]
+             if "-capstone-gp-captable" in os.environ.get("CAPSTONE_ABI_FLAGS", "")
+             else [])
 objs = sys.argv[1:]
 if not objs:
     sys.exit("no objects to verify")
@@ -290,8 +295,11 @@ def check(o):
         if fh.read(4) != BITCODE_MAGIC:      # native objects (compiler-rt) are not ours
             return None                      # to codegen and llc cannot read them
     seen_bitcode += 1
+    # THE SAME ABI THE MEMBERS WERE COMPILED FOR, not a hardcoded one. Verifying a
+    # default-ABI archive under -capstone-gp-captable would exercise codegen the link
+    # will never run, and could both miss real failures and invent absent ones.
     r = subprocess.run([llc, "-mtriple=capstone64-unknown-elf", "-mattr=+m,+a",
-                        "-capstone-gp-captable", "-filetype=obj", o, "-o", os.devnull],
+                        *abi_flags, "-filetype=obj", o, "-o", os.devnull],
                        capture_output=True)
     if r.returncode == 0:
         return None
