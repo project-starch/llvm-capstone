@@ -1,0 +1,15 @@
+Verilator, capstone_cv64a6_imafdc_sv39, +time_out=2000000, 2026-08-21.
+Both runs in the same session, same model build.
+
+  sealing.S              *** SUCCESS *** (tohost = 0) after 424 cycles
+  seal-minsize-align.S   *** FAILED ***  (tohost = 5) after 510 cycles
+
+tohost is the fesvr exit code, so 5 = TESTNUM 5 = BOTH the undersized region and the
+misaligned base were accepted by SEAL. The control arm of seal-minsize-align.S passed,
+otherwise TESTNUM would be 1.
+
+sealing.S is the pre-existing SEAL test and is the harness control: it seals a 16 KiB
+aligned region and exercises the accept path only. Its pass shows the harness and the
+accept path both work.
+
+Neither run is near the 2000000-cycle timeout, so both are verdicts rather than hangs.
