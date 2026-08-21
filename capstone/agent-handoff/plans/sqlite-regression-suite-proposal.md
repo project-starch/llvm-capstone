@@ -154,3 +154,49 @@ capability over memory the program already scrubbed. **If SQLite behaves oddly o
 that is a candidate cause and it is not the runner's bug.** S-10 alone is now measured to close
 that residual (9 → 17 with the control pinned at 17, plus a model-identity control), so stage 3 is
 worth more after the S-10 reflash than before it.
+
+## The large-region assumption is now MEASURED, not inferred (2026-08-21)
+
+The design above rests on "the region size is a free parameter up to ~4 MB", which was inferred
+from `create_region(len)` and the allocator's order-10 limit. Inference of exactly that shape has
+been wrong repeatedly, so it was tested by changing the one `#define` both halves share and
+running the real workload end to end:
+
+| `SQLITE_HC_REGION_SIZE` | result |
+|---|---|
+| 4 KiB (as committed) | works |
+| **1 MiB** | **works — all five markers, zero failure signals** |
+| 64 MiB | **FAILS** — `SQ: X/fail`, `map_region failed`, zero markers |
+
+**The 64 MiB arm is the control and it is what makes the 1 MiB arm mean anything.** Without it a
+pass at 1 MiB is equally consistent with the constant not reaching the build at all. It fails at
+`map_region` rather than `create_region`, which is worth knowing: the ceiling bites at map time.
+
+**So a megabyte-scale region is available and proven, and that is the mechanism stage 1 needs.**
+The header is left at 4096 deliberately — raising it belongs with the runner that consumes it,
+not as a change with no consumer.
+
+## Corpus: obtainable, canonical layout
+
+The sqlite.org tarball is behind a login (302 to `/login`), but the GitHub mirror
+`gregrahn/sqllogictest` carries the standard tree — `select1.test` … `select5.test`, plus
+`evidence/`, `index/`, `random/`. Fetch-with-a-SHA, do not vendor: same policy as
+`fetch-sqlite.sh` and `fetch-musl.sh`.
+
+## Format, from the sqlite.org wiki rather than memory
+
+Line-oriented ASCII. Records separated by blank lines; `#` starts a comment; comments do not
+separate records. Two record kinds matter:
+
+    statement ok            statement error
+    <one SQL command, no trailing semicolon>
+
+    query <type-string> <sort-mode> <label>
+    <SQL>
+    ----
+    <expected values, one per line>
+
+Type string is per column (`I` integer, `R` real, `T` text); sort mode is `nosort`, `rowsort` or
+`valuesort`; large result sets are compared by hash. Omitting `----` means an empty result is
+expected. This is a few hundred lines of C, not a project — which is the main reason stage 1 is
+smaller than the proposal originally assumed.
