@@ -290,36 +290,122 @@ a comment.** `capstone-ariane/core/anvil_build/capstone_flu_unit.anvil`, `func C
        (data.cap_rs2.metadata.cap_type!=cap_type_t::NOT_CAP)){
         call raise_exception(data.trans_id,ex_code::UNEXPECTED_OPERAND)
 
-Silicon traps on exactly this condition. Only the FAILURE MODE differs — the board would
-raise a guest exception where QEMU aborts the emulator. **So whatever this is, it would
-also fire on the board**, which promotes it from a curiosity to a stage-3 blocker.
+Silicon traps on exactly this condition; only the failure mode differs. So whatever this
+is, it fires on the board too.
 
-**Two readings remain, and the bisect cannot separate them:**
+## What is ESTABLISHED about select5 — audited 2026-08-21
 
-1. a defect in our port, exposed by select5's 64-column, 64-table joins — by a wide margin
-   the most demanding file in the subset;
-2. a bug in `slt_runner.h`, which is the only new code in the frame.
+**The fault site, and it is not the runner's code.** The emulator now prints the guest pc
+and the untagged value before it aborts (capstone-qemu `29e90c40f8`):
 
-**The bisect locates, it does not attribute.** A record range names which SQL; only the
-guest PC names whose code holds the untagged capability — inside the amalgamation is
-reading 1, inside the runner is reading 2. `CAPSTONE_PRINT_LOAD_BASE` exists to map a fault
-PC back to an image VA and is the right instrument.
+    capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101c544d4 rd=x11 rs1=x10 val=0x0 priv=3
 
-**Separately, a capstone-qemu robustness gap worth its own ISSUES.md line:** QEMU
-`abort()`s the emulator on this condition instead of raising a guest exception. That is why
-there is no PC to read in the first place, and it makes every such defect maximally
-expensive to diagnose.
+* Image VA **0x644d4**, `cincoffset a1, a0, a1`, inside **`sqlite3VdbeExec`**
+  (`0x5436c` + `0x10168`, function size `0x107bc`). SQLite's own bytecode interpreter —
+  `slt_runner.h` never executes there, so **the runner is exonerated**.
+* mmap load base **0x101c00000**.
+* The operand is an **all-zero untagged word**, loaded by the `ldc a0, 0x10(a0)` immediately
+  before it, from inside a validly-bounded, non-revoked capability's memory.
+* **Deterministic, N=2**, across two QEMU builds and a domain rebuild.
+* At a **2 MiB arena the same file passes**: `records=1436 stmt_pass=704 query_pass=732
+  query_fail=0`, matching native exactly. The *record count* is what proves the file was
+  consumed — `completed=1` does not, since a `halt` also sets it (select5 has no `halt`).
 
-Prefix ladder so far, each slice verified clean natively before use, at the same
-4 MiB region / 1 MiB arena as the failing run:
+**This EXCLUDES the two capability families it looked like.** Not an S-07 tag strip: an
+untagged `ldc` result carries the raw memory low word, and a revoked or tag-stripped
+capability would have printed the compressed capability's non-zero low word. Not a
+linear move-out either — those zero the whole register, but `a0`'s producer here is a
+straight-line `ldc` two instructions earlier, and `0x644d4` is the target of no direct
+branch in `.text` (checked with a decoder validated against objdump on 45,988 targets).
+
+### RETRACTED, same day it was written: "an allocation failure reaching a dereference"
+
+**I recorded a causal root cause the evidence does not carry, and an auditor refuted it.**
+"More arena makes it pass" does not establish "an allocation failed", for three reasons,
+each fatal on its own:
+
+1. **The 1 MiB and 2 MiB arms are not a matched pair.** The arena is a static `.bss` array
+   charged against `dom_data`, so changing it rebuilt the image: `.text` differs by 4 bytes
+   and an address-normalised diff of the two disassemblies shows **91,931 differing lines**.
+   "More arena fixes it" and "a different layout hides it" are not separated by that
+   experiment.
+2. **There is no control.** The native baseline deliberately excludes `SQLITE_ENABLE_MEMSYS5`
+   (`build-slt-native.sh:45`), so it runs on system malloc with an unbounded heap. **No
+   non-capability build has ever run select5 under a constrained memsys5 arena.**
+3. **`oom=0` across the entire passing 1300-record prefix** at 1 MiB. Under the retracted
+   claim SQLite would go from never once failing an allocation straight to a fatal unchecked
+   NULL — the opposite of the select4 signature I cited in its support, where the clean OOM
+   bucket recorded 2,772.
+
+**Two slips corrected while I was at it**, both of the kind this project keeps paying for:
+`sqlite3VdbeExec`'s size is 67516 (`0x107bc`) — I had reported 423190, which is that hex
+value read as decimal; and the load base is `0x101c00000`, not the `0x101bf0000` I derived
+by forgetting the segment's own `0x10000` vaddr. **My "the implied base is page-aligned, so
+the mapping is corroborated" was circular** — any candidate passing a low-12-bit filter
+yields a page-aligned difference by construction. The real corroboration is that 3,864 of
+4,096 low-12 buckets contain **no** `cincoffset a1, a0, *` site at all, so a misattributed
+pc would most likely have matched nothing (p ≈ 0.057 of a spurious single hit).
+
+**Four hypotheses survive, and nothing measured so far separates them:**
+
+* **H1** an allocation failed and SQLite dereferenced the NULL without checking;
+* **H2** the slot was never written — an uninitialised read that only reads as zero because
+  QEMU's fresh memory is zero (a blind spot documented at `build-sqlite-silicon.sh:1660`);
+* **H3** a stray plain integer store zeroed a live capability slot — and plain stores are
+  unchecked in this configuration, so nothing would catch it;
+* **H4** a layout-dependent bug the 91,931-line rebuild reshuffles away.
+
+### H2 IS DEAD — the poisoned-arena arm ran, 2026-08-21
+
+`CAPSTONE_POISON_ARENA=1` fills the memsys5 arena with `0xA5` before `SQLITE_CONFIG_HEAP`,
+and carries its own witness gate (a run that failed to arm returns `0xBADA5000` instead of
+executing). The gate did not fire, so the arena really was poisoned. The fault still
+reported:
+
+    capstone-qemu: cincoffset with an UNTAGGED rs1 -- pc=0x101c5458c rd=x11 rs1=x10 val=0x0 priv=3
+
+**`0x0`, not `0xa5a5a5a5a5a5a5a5`. Something WROTE that zero; the slot was not left
+uninitialised.** H2 is refuted.
+
+**And the fault survived a third distinct image.** The poison build shifts the site by
+`0xb8` — image VA `0x6458c`, still inside `sqlite3VdbeExec`, and the seven instructions
+around it are byte-identical to the 1 MiB build's:
+
+    6458c: db 15 b5 18   cincoffset a1, a0, a1
+
+Three separate builds (1 MiB, 1 MiB + pc/value printing, 1 MiB + poison) all fault at the
+same logical site. **H4 — "a layout-dependent bug the rebuild reshuffles away" — is
+substantially weakened**, though not formally excluded.
+
+**The one caveat, stated rather than glossed:** the poison fills `sqlite_heap` only. The
+argument above holds if the faulting slot lies in the arena, which is where SQLite allocates
+its structures — but the load address was not captured, so "in the arena" is inferred, not
+measured. If the slot were in `.bss`, on the stack or in the shared region, the poison says
+nothing about it.
+
+**H1 and H3 both survive.** The experiment that separates them is the remaining one: emit a
+marker on memsys5's NULL-return path (the patch site is already scripted at
+`build-sqlite-silicon.sh:1128`) and re-run at 1 MiB. A NULL return before the fault confirms
+H1; none refutes it and leaves H3, a stray plain integer store zeroing a live capability
+slot — which nothing in this configuration would catch, since plain stores are unchecked.
+
+**NOT A BOARD BLOCKER, and this is why it is being left here.** The board runs a 256 KiB
+arena, at which select4 already returns a CLEAN `oom` bucket (2,772 records, zero failures)
+rather than faulting. select5 at 256 KiB would exhaust the arena long before reaching this
+site. The finding is real and worth finishing, but it does not gate stage 3.
+
+**Bisect, each slice verified clean natively before use, 4 MiB region / 1 MiB arena:**
 
 | slice | records | queries | domain |
 |---|---|---|---|
 | `s5_800` | 800 | 96 | passes, matches native |
 | `s5_1200` | 1200 | 496 | passes, matches native |
-| full | 1436 | 732 | **untagged cincoffset** |
+| `s5_1300` | 1300 | 596 | passes, matches native |
+| `s5_1400` | 1400 | 696 | **INCONCLUSIVE** — entered and returned, no assertion, harness hit its 60 s prompt timeout |
+| full | 1436 | 732 | **untagged cincoffset**, deterministic |
 
-So the trigger lies in records 1200–1436.
+The trigger lies in records 1300–1436. Note the `s5_1400` row is neither a pass nor a
+failure and must not be read as either.
 
 ## What this does and does not license
 
