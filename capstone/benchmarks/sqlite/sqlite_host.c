@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <errno.h>
 
 #include "../../caplifive-buildroot/package/modcapstone/userspace/lib/libcapstone.h"
 #include "sqlite_hostcall.h"
@@ -65,8 +67,15 @@ static int fail_cleanup(const char *message, unsigned long value) {
 }
 
 int main(int argc, char **argv) {
-  if (argc != 2 && argc != 3) {
-    fprintf(stderr, "usage: %s <sqlite-domain.dom> [probe-stage]\n", argv[0]);
+  /* --slt IS AN EXPLICIT FLAG, NOT A THIRD POSITIONAL ARGUMENT. The optional argv[2] is
+     strtoul'd as a probe stage, so a bare path would parse to 0 and quietly publish the
+     stage-0 selector -- a run that looks like a staged probe and tests nothing. */
+  const char *slt_path = 0;
+  if (argc == 4 && !strcmp(argv[2], "--slt")) {
+    slt_path = argv[3];
+  } else if (argc != 2 && argc != 3) {
+    fprintf(stderr, "usage: %s <sqlite-domain.dom> [probe-stage]\n"
+                    "       %s <sqlite-domain.dom> --slt <file.test>\n", argv[0], argv[0]);
     return 2;
   }
   /* RUNTIME PROBE SELECTION (optional 2nd argument).
@@ -128,10 +137,57 @@ int main(int argc, char **argv) {
 
   memset(metadata, 0, SQLITE_HC_REGION_SIZE);
   memset(payload, 0, SQLITE_HC_REGION_SIZE);
+  /* THE REGION SIZE THE HOST ACTUALLY USED, published for the domain to check against its
+     own. Both halves take it from one #define, but they are separate compilations with
+     separate -D flags, and a drift between them is silent and destructive: the host maps
+     N bytes while the domain bounds its writes by M. Written unconditionally so the gate
+     covers every build, not only SLT ones; nothing else reads this field. */
+  metadata->result = (sqlite_hostcall_s64_t)SQLITE_HC_REGION_SIZE;
   /* Publish the probe selector AFTER the memset and BEFORE the domain runs. Magic-guarded so
      an unset region is indistinguishable from today's behaviour. */
   if (have_probe_stage)
     metadata->opcode = 0x5A6E0000UL | (probe_stage & 0xffUL);
+
+  if (slt_path) {
+    /* Load one SQLLogicTest file into the TOP HALF of the payload region. The domain
+       parses it in place; the bottom half is where its report comes back.
+       READ INTO A HEAP BUFFER FIRST, THEN COPY. Reading straight into the mapped region
+       failed on the first read(2) with got=0 -- the kernel declines to write into that
+       mapping, which is a property of the shared-region mapping and not of the file. A
+       plain userspace memcpy into it works, and the file is bounded by the region's input
+       half anyway, so the extra buffer costs nothing that matters. */
+    unsigned long got = 0;
+    char *staging;
+    int fd = open(slt_path, O_RDONLY);
+    if (fd < 0)
+      return fail_cleanup("slt open failed", (unsigned long)errno);
+    staging = (char *)malloc((size_t)SQLITE_HC_SLT_MAX_INPUT);
+    if (!staging) { close(fd); return fail_cleanup("slt malloc failed", 0); }
+    for (;;) {
+      ssize_t n = read(fd, staging + got, (size_t)(SQLITE_HC_SLT_MAX_INPUT - got));
+      if (n < 0) { close(fd); free(staging);
+                   return fail_cleanup("slt read failed", (unsigned long)errno); }
+      if (n == 0) break;
+      got += (unsigned long)n;
+      /* A FILE THAT DOES NOT FIT IS AN ERROR, NEVER A TRUNCATED ONE. Truncation would
+         cut the input mid-record and the domain would report a smaller record count
+         that still looks like a clean pass. */
+      if (got >= SQLITE_HC_SLT_MAX_INPUT) {
+        char probe;
+        ssize_t more = read(fd, &probe, 1);
+        if (more > 0) { close(fd); free(staging);
+                        return fail_cleanup("slt file exceeds the region", got); }
+        break;
+      }
+    }
+    close(fd);
+    if (got == 0) { free(staging); return fail_cleanup("slt file is empty", 0); }
+    memcpy(payload + SQLITE_HC_SLT_INPUT_OFF, staging, (size_t)got);
+    free(staging);
+    metadata->opcode = SQLITE_HC_OP_SLT;
+    metadata->offset = (sqlite_hostcall_u64_t)got;
+    mark_u("SQ: slt=", got);
+  }
   mark("SQ: E/share1\n");
   shared_region_annotated(domain, metadata_region,
                           SQLITE_HC_ANNOTATION_PERM_INOUT,
@@ -148,8 +204,17 @@ int main(int argc, char **argv) {
     (void)write(STDOUT_FILENO, payload, (size_t)metadata->length);
     fflush(stdout);
   }
-  if (result != SQLITE_HC_RET_DONE)
+  /* AN SLT RUN MUST RETURN ITS OWN MARKER, AND NOTHING ELSE COUNTS -- including DONE.
+     DONE here would mean the SLT dispatch never fired and the ordinary workload ran
+     instead, which prints its own markers and would otherwise look like a success. The
+     0x5117BADn values are the runner's refusals-to-start; each means no records were
+     evaluated, and each must fail the run rather than pass it with an empty report. */
+  if (slt_path) {
+    if (result != SQLITE_HC_SLT_RAN)
+      return fail_cleanup("slt did not run", result);
+  } else if (result != SQLITE_HC_RET_DONE) {
     return fail_cleanup("unexpected domain return", result);
+  }
 
   if (capstone_cleanup()) {
     mark("SQ: no-cleanup\n");

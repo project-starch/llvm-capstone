@@ -28,7 +28,14 @@ LIBCAPSTONE_C="$CAPSTONE_REPO_ROOT/capstone/caplifive-buildroot/package/modcapst
 
 mkdir -p "$OUT_DIR"
 
-"$GUEST_CC" -O2 -I"$SCRIPT_DIR" \
+# HOST_EXTRA_DEFS MUST CARRY THE SAME -DSQLITE_HC_REGION_SIZE AS THE DOMAIN BUILD.
+# The two halves are separate compilations sharing one #define; a drift makes the host map
+# N bytes while the domain bounds its writes by M. run-sqlite-slt.sh sets it once for both,
+# and the domain refuses to run on a mismatch (SQLITE_HC_ERR_REGION_MISMATCH) -- the gate
+# is the backstop, the single assignment is the mechanism.
+read -r -a _host_defs <<< "${HOST_EXTRA_DEFS:-}"
+
+"$GUEST_CC" -O2 -I"$SCRIPT_DIR" "${_host_defs[@]}" \
   -o "$OUT_HOST" \
   "$HOST_SRC" \
   "$LIBCAPSTONE_C"

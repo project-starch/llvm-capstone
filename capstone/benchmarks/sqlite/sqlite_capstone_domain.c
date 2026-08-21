@@ -2,6 +2,16 @@
 #include "sqlite_hostcall.h"
 
 #define CAPSTONE_DPI_REGION_SHARE 1U
+
+/* THE OUTPUT CEILING. Ordinarily the whole payload region; for an SLT build the bottom
+   half, because the top half holds the test file the host loaded. Both arms are
+   compile-time constants, so a non-SLT build is BYTE-IDENTICAL to one compiled before
+   this existed -- which is checked by comparing the .dom sha256, not asserted. */
+#ifdef CAPSTONE_SQLITE_SLT
+#define CAPSTONE_OUT_LIMIT SQLITE_HC_SLT_INPUT_OFF
+#else
+#define CAPSTONE_OUT_LIMIT SQLITE_HC_REGION_SIZE
+#endif
 #define STR__(x) #x
 #define STR_(x) STR__(x)
 /* Overridable so the silicon build can shrink it. Under -capstone-gp-captable every
@@ -243,7 +253,7 @@ static void output_text(const char *text) {
          payload -> expect 1 (NONLIN)      offset -> expect 7 (NOT_CAP)
      On a payload anomaly, reload it through its own stack slot and ask again: a TAGGED retry
      means memory was never wrong and the fault is in register delivery. */
-  while (*text && offset + 1 < SQLITE_HC_REGION_SIZE) {
+  while (*text && offset + 1 < CAPSTONE_OUT_LIMIT) {
     unsigned long t_cap_, t_off_;
     __asm__ volatile("" ::: "memory");
     S07_LCC_TYPE(t_cap_, payload);
@@ -261,7 +271,7 @@ static void output_text(const char *text) {
     payload[offset++] = *text++;
   }
 #else
-  while (*text && offset + 1 < SQLITE_HC_REGION_SIZE)
+  while (*text && offset + 1 < CAPSTONE_OUT_LIMIT)
     payload[offset++] = *text++;
 #endif
   hostcall_metadata->length = offset;
@@ -462,7 +472,7 @@ static int capstone_out_reserve(unsigned long need) {
   if (!hostcall_metadata || !hostcall_payload)
     return 0;
   len = hostcall_metadata->length;
-  if (len + need + 16UL < SQLITE_HC_REGION_SIZE)
+  if (len + need + 16UL < CAPSTONE_OUT_LIMIT)
     return 1;
   if (!capstone_trunc_hits) {
     capstone_trunc_hits = 1UL;
@@ -5852,6 +5862,72 @@ static void qr_link_via_param_leaf(FuncDef *aDef, int nDef) {
    semantics. Vary QR_DRAW until the domain enters, and sha256sum the set -- two draws that
    hash the same are the same ticket. Applied EQUALLY to both halves of a level pair, or the
    pair stops being a pair. */
+#ifdef CAPSTONE_SQLITE_SLT
+/* SQLLOGICTEST, RUN INSIDE THE CAPABILITY DOMAIN.
+ *
+ * The runner itself is slt/slt_runner.h and is deliberately NOT domain code: the same
+ * header is compiled natively by slt/slt_native.c against the same SQLite amalgamation,
+ * and the native run is the baseline this one is compared against. Only a DIFFERENCE
+ * between the two is attributable to the capability port -- an absolute pass rate also
+ * carries corpus-versus-engine artifacts, of which this corpus contains at least one.
+ *
+ * Everything domain-specific is in this file and amounts to three things: where the input
+ * comes from, where the report goes, and the heap. That is the whole of stage 1, which is
+ * why it is a runner and not a mechanism -- create_region/map_region/shared_region/
+ * call_dom all already existed and none of them changed.
+ */
+#include "slt/slt_runner.h"
+
+static void capstone_slt_out(void *ctx, const char *text) {
+  (void)ctx;
+  output_text(text);            /* bounded by CAPSTONE_OUT_LIMIT, i.e. the bottom half */
+}
+
+/* Returns a marker, never a pass/fail count. THE COUNTS LIVE IN THE PAYLOAD, because a
+   file runs to thousands of records and would clamp into a return-value byte -- and
+   because a clamped count that happens to read as zero is exactly the "no data renders as
+   a result" failure. The marker only says whether the runner STARTED; every error value
+   below means no records were evaluated at all. */
+static unsigned capstone_slt_entry(void) {
+  slt_stats st;
+  unsigned long in_len;
+  const char *input;
+  int rc;
+
+  /* THE AGREEMENT GATE. Host and domain are separate compilations that must share one
+     region size; the host publishes what it actually created and this refuses to run on
+     a mismatch. Without it a drifted -D would have the host map N bytes while the domain
+     bounds its writes by M -- silent, and destructive in whichever direction it went. */
+  if ((unsigned long)hostcall_metadata->result != (unsigned long)SQLITE_HC_REGION_SIZE)
+    return (unsigned)SQLITE_HC_ERR_REGION_MISMATCH;
+
+  in_len = (unsigned long)hostcall_metadata->offset;
+  if (in_len == 0UL || in_len > SQLITE_HC_SLT_MAX_INPUT)
+    return (unsigned)SQLITE_HC_ERR_BAD_INPUT;
+
+  {
+    /* The input is read IN PLACE out of the shared region -- never copied onto the heap,
+       which on the silicon build is only 256 KiB and is needed for the result sets. */
+    char *base = (char *)hostcall_payload;
+#ifndef CAPSTONE_GP_CAPTABLE_ABI
+    CAPSTONE_DELIN(base);
+#endif
+    input = (const char *)(base + SQLITE_HC_SLT_INPUT_OFF);
+  }
+
+  rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof(sqlite_heap), 64);
+  if (rc != SQLITE_OK)
+    return (unsigned)SQLITE_HC_ERR_CONFIG_HEAP;
+  rc = sqlite3_initialize();
+  if (rc != SQLITE_OK)
+    return (unsigned)SQLITE_HC_ERR_INITIALIZE;
+
+  slt_run(input, in_len, capstone_slt_out, 0, SLT_MAX_VALUES, &st);
+  slt_report(capstone_slt_out, 0, &st);
+  return (unsigned)SQLITE_HC_SLT_RAN;
+}
+#endif
+
 #ifndef QR_DRAW
 #define QR_DRAW 0
 #endif
@@ -5933,6 +6009,17 @@ void domain_main(unsigned *res, unsigned func) {
 #endif
   if (hostcall_metadata)
     hostcall_metadata->length = 0;
+#ifdef CAPSTONE_SQLITE_SLT
+  /* Magic-guarded, like the staged selector beside it: a zeroed region falls through to
+     the ordinary workload, so a build carrying this code behaves exactly as before when
+     the host does not ask for an SLT run. */
+  if (hostcall_metadata &&
+      ((unsigned long)hostcall_metadata->opcode & SQLITE_HC_OP_SLT_MASK)
+          == (unsigned long)SQLITE_HC_OP_SLT) {
+    *res = capstone_slt_entry();
+    return;
+  }
+#endif
 #ifdef CAPSTONE_SQLITE_STAGE
   /* STAGED BISECTION. Run only the first N steps of run_sqlite() and RETURN, writing a
      marker the host can print.

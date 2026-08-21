@@ -42,20 +42,22 @@ check() {  # $1 = label, $2 = expected summary tail, $3 = actual
 
 echo "== negative control, default cap"
 GOT=$(run_summary "")
-# 7 setup statements + 1 `statement error` that correctly errors = 8 passing statements.
+# 7 setup statements + 2 `statement error` arms that correctly error = 9 passing statements.
+# The second of those pins that a float literal is a SYNTAX ERROR under this build's
+# SQLITE_OMIT_FLOATING_POINT; if it ever starts failing, the build gained floating point.
 # FAIL 1 and FAIL 2 are the two statement arms that must fail.
 # 6 query arms must pass (nosort/rowsort/valuesort x value-form/hash-form, NULL, (empty), %.3f).
 # FAIL 3..6 are the four query arms that must fail: wrong value, wrong md5, wrong count,
 # too few expected values. SKIP 1/2 must land in skip_cond, NOT in a pass bucket.
 check "tally" \
-  "records=20 stmt_pass=8 stmt_fail=2 query_pass=6 query_fail=4 skip_big=0 skip_cond=2 parse_err=1 completed=1" \
+  "records=21 stmt_pass=9 stmt_fail=2 query_pass=6 query_fail=4 skip_big=0 oom=0 skip_cond=2 parse_err=1 completed=1" \
   "$GOT"
 
 echo "== negative control, cap=100 -- the skip_big bucket must fire and must NOT read as a pass"
 GOT=$(run_summary 100)
 # The four 500-value arms (2 passing, 2 failing) all move into skip_big.
 check "capped tally" \
-  "records=20 stmt_pass=8 stmt_fail=2 query_pass=4 query_fail=2 skip_big=4 skip_cond=2 parse_err=1 completed=1" \
+  "records=21 stmt_pass=9 stmt_fail=2 query_pass=4 query_fail=2 skip_big=4 oom=0 skip_cond=2 parse_err=1 completed=1" \
   "$GOT"
 
 if [[ $fail -ne 0 ]]; then

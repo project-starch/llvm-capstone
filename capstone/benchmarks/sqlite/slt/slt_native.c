@@ -65,6 +65,7 @@ int main(int argc, char **argv) {
     tot.stmt_pass += st.stmt_pass; tot.stmt_fail += st.stmt_fail;
     tot.query_pass += st.query_pass; tot.query_fail += st.query_fail;
     tot.skip_big += st.skip_big; tot.skip_cond += st.skip_cond;
+    tot.oom += st.oom;
     tot.parse_err += st.parse_err;
     if (!st.completed) tot.completed = 0;
   }

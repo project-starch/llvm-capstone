@@ -64,6 +64,7 @@ typedef struct {
   unsigned stmt_pass, stmt_fail;
   unsigned query_pass, query_fail;
   unsigned skip_big;       /* result set exceeded the cap -- NOT a pass       */
+  unsigned oom;            /* SQLITE_NOMEM -- a RESOURCE limit, NOT a mismatch */
   unsigned skip_cond;      /* skipif/onlyif excluded it -- NOT a pass         */
   unsigned parse_err;      /* unrecognised record -- NOT a pass               */
   unsigned reported;
@@ -268,6 +269,7 @@ static unsigned slt_run(const char *input, unsigned long input_len,
   st->records = st->stmt_pass = st->stmt_fail = 0;
   st->query_pass = st->query_fail = 0;
   st->skip_big = st->skip_cond = st->parse_err = st->reported = 0;
+  st->oom = 0;
   st->completed = 0; st->open_failed = 0;
 
   if (sqlite3_open(":memory:", &db) != SQLITE_OK) {
@@ -307,7 +309,7 @@ static unsigned slt_run(const char *input, unsigned long input_len,
     if (!strcmp(tok, "statement")) {
       char want[16];
       const char *sql; unsigned long sql_start, sql_end;
-      int want_ok, rc, got_ok = 1;
+      int want_ok, rc, got_ok = 1, last_rc = SQLITE_OK;
       sqlite3_stmt *s2 = 0;
       const char *tail;
       if (!slt_field(line, len, 1, want, sizeof want)) { st->parse_err++; continue; }
@@ -328,14 +330,22 @@ static unsigned slt_run(const char *input, unsigned long input_len,
         tail = sql;
         while (nbyte > 0 && got_ok) {
           rc = sqlite3_prepare_v2(db, tail, nbyte, &s2, &tail);
-          if (rc != SQLITE_OK) { got_ok = 0; break; }
+          if (rc != SQLITE_OK) { last_rc = rc; got_ok = 0; break; }
           if (!s2) break;                       /* trailing whitespace/comment only */
           do { rc = sqlite3_step(s2); } while (rc == SQLITE_ROW);
-          if (rc != SQLITE_DONE) got_ok = 0;
+          if (rc != SQLITE_DONE) { last_rc = rc; got_ok = 0; }
           sqlite3_finalize(s2); s2 = 0;
           nbyte = (int)(sql_end - (unsigned long)(tail - input));
         }
       }
+      /* SQLITE_NOMEM IS A RESOURCE LIMIT, NOT A WRONG ANSWER, and scoring it as a failure
+         would be the single most misleading thing this runner could do. The domain's whole
+         SQLite arena is 256 KiB (build-sqlite-silicon.sh:44) while the native baseline has
+         the machine's; select4 exhausts the former around a third of the way in. Counting
+         those as mismatches produced "query_fail=2759" for a build that had not computed a
+         single wrong value. A record that ran out of memory was not evaluated, and goes in
+         its own bucket alongside skip_big -- never into a pass bucket either. */
+      if ((last_rc & 0xff) == SQLITE_NOMEM) { st->oom++; continue; }
       if (got_ok == want_ok) st->stmt_pass++;
       else {
         st->stmt_fail++;
@@ -404,6 +414,11 @@ static unsigned slt_run(const char *input, unsigned long input_len,
       }
 
       rc = sqlite3_prepare_v2(db, input + sql_start, (int)(sql_end - sql_start), &s2, 0);
+      if ((rc & 0xff) == SQLITE_NOMEM) {
+        st->oom++;
+        if (s2) sqlite3_finalize(s2);
+        continue;
+      }
       if (rc != SQLITE_OK || !s2) {
         st->query_fail++;
         if (st->reported < SLT_MAX_REPORTED) {
@@ -448,6 +463,7 @@ static unsigned slt_run(const char *input, unsigned long input_len,
         slt_vals_free(&v);
         continue;
       }
+      if ((rc & 0xff) == SQLITE_NOMEM) { st->oom++; slt_vals_free(&v); continue; }
       if (rc != SQLITE_DONE) {
         st->query_fail++;
         if (st->reported < SLT_MAX_REPORTED) {
@@ -589,6 +605,7 @@ static void slt_report(slt_out_fn out, void *ctx, const slt_stats *st) {
   slt_emit_u(out, ctx, " query_pass=", st->query_pass);
   slt_emit_u(out, ctx, " query_fail=", st->query_fail);
   slt_emit_u(out, ctx, " skip_big=", st->skip_big);
+  slt_emit_u(out, ctx, " oom=", st->oom);
   slt_emit_u(out, ctx, " skip_cond=", st->skip_cond);
   slt_emit_u(out, ctx, " parse_err=", st->parse_err);
   out(ctx, st->completed ? " completed=1" : " completed=0");

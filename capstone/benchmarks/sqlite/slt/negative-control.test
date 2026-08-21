@@ -5,22 +5,28 @@
 # fail at all. The expected tally is asserted by slt/check-negative-control.sh; this
 # file is only that gate's input.
 #
+# THE FIXTURE IS DELIBERATELY FLOAT-FREE. Both the domain build and the config-matched
+# native baseline carry -DSQLITE_OMIT_FLOATING_POINT=1, under which a decimal point is a
+# SYNTAX ERROR -- an earlier version of this file used REAL columns and its 'must pass'
+# arms then failed on both sides for a reason that had nothing to do with the comparator.
+# That behaviour is not swept away, it is PINNED below as an explicit arm.
+#
 # The passing arms were generated from real SQLite, so a failure on one of them is the
-# runner's fault and never a stale fixture. The arms cover, deliberately: NULL and empty
-# text rendering, %.3f floats, all three sort modes, both the value form and the hash
-# form, and the skipif/onlyif conditionals -- select1-5 exercise none of the first three.
+# runner's fault and never a stale fixture. They cover NULL and empty-string rendering,
+# all three sort modes, both the value form and the hash form, and skipif/onlyif --
+# select1-5 exercise none of the first two.
 
 statement ok
-CREATE TABLE t1(a INTEGER, b TEXT, c REAL)
+CREATE TABLE t1(a INTEGER, b TEXT, c INTEGER)
 
 statement ok
-INSERT INTO t1 VALUES(3,'ccc',1.5)
+INSERT INTO t1 VALUES(3,'ccc',30)
 
 statement ok
-INSERT INTO t1 VALUES(1,'aaa',2.25)
+INSERT INTO t1 VALUES(1,'aaa',10)
 
 statement ok
-INSERT INTO t1 VALUES(2,'',3.0)
+INSERT INTO t1 VALUES(2,'',20)
 
 statement ok
 INSERT INTO t1 VALUES(4,NULL,NULL)
@@ -49,13 +55,13 @@ NULL
 aaa
 ccc
 
-# PASS: floats incl. NULL, valuesort -- %.3f
-query R valuesort
+# PASS: integers incl. NULL, valuesort
+query I valuesort
 SELECT c FROM t1
 ----
-1.500
-2.250
-3.000
+10
+20
+30
 NULL
 
 # PASS: two columns, rowsort orders whole rows
@@ -86,6 +92,13 @@ SELECT x FROM big
 # PASS: a statement that is SUPPOSED to fail
 statement error
 SELECT nosuchfunction(1)
+
+# PASS, AND IT PINS A REAL PROPERTY OF THIS CONFIGURATION: with
+# SQLITE_OMIT_FLOATING_POINT the tokenizer rejects a decimal point outright, so a float
+# literal is a syntax error rather than a value. If this arm ever starts FAILING, the
+# build has gained floating point and the corpus subset can be widened to the R type.
+statement error
+SELECT 1.5
 
 # FAIL 1: statement ok on a statement that errors
 statement ok
