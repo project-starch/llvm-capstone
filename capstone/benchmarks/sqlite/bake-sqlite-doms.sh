@@ -22,6 +22,12 @@
 #    every check that looks at the filesystem passed. The cpio is the only thing the board
 #    actually receives, so it is the only thing worth checking.
 #
+# BAKE_EXTRA_FILES="a,b,c" additionally stages arbitrary files by path -- the SQLLogicTest
+# .test corpus slices and the sqlite_host.user binary, which are data rather than domains and
+# so have no <name>:<VAR=VAL> build of their own. They are hash-verified inside the cpio
+# exactly like a domain, and pruned from their OWN manifest by exact name, never by glob:
+# this script still removes only what it can prove it created.
+#
 # Exits non-zero on any mismatch. A missing artifact is an ERROR, never a quiet skip: a bake
 # that silently staged nothing looks exactly like a bake that staged everything.
 set -euo pipefail
@@ -76,6 +82,34 @@ for spec in "$@"; do
   NAMES+=("$name"); WANT+=("$h")
   echo "   $name.dom  $h  ($(stat -c%s "$src") bytes)"
 done
+
+# EXTRA FILES -- data, staged and verified with the same discipline as a domain.
+EXTRAS_MANIFEST="$BR/.sqlite-bake-extras"
+declare -a XNAMES=() XWANT=()
+if [[ -n "${BAKE_EXTRA_FILES:-}" ]]; then
+  IFS=',' read -r -a _extras <<< "$BAKE_EXTRA_FILES"
+  for f in "${_extras[@]}"; do
+    [[ -f "$f" ]] || { echo "ERROR: BAKE_EXTRA_FILES names a missing file: $f" >&2; exit 1; }
+    b=$(basename "$f")
+    h=$(sha256sum "$f" | cut -d' ' -f1)
+    cp -f "$f" "$OVERLAY/$b"
+    cp -f "$f" "$TARGET/$b"
+    XNAMES+=("$b"); XWANT+=("$h")
+    echo "   extra $b  $h  ($(stat -c%s "$f") bytes)"
+  done
+  # Prune extras this script staged before and no longer wants -- by exact name, from its own
+  # manifest, so a file some other tool put in the overlay is invisible to it.
+  if [[ -f "$EXTRAS_MANIFEST" ]]; then
+    while read -r old; do
+      [[ -n "$old" ]] || continue
+      for n in "${XNAMES[@]}"; do [[ "$old" == "$n" ]] && continue 2; done
+      for d in "$OVERLAY" "$TARGET"; do
+        [[ -f "$d/$old" ]] && { rm -f "$d/$old"; echo "   removed extra $old ($(basename "$d"))"; }
+      done
+    done < "$EXTRAS_MANIFEST"
+  fi
+  printf '%s\n' "${XNAMES[@]}" > "$EXTRAS_MANIFEST"
+fi
 
 # Two variants that hash the same are not two variants. This has happened -- a flag that did not
 # reach the compiler leaves an identical image, and the "matched pair" then measures nothing.
@@ -143,13 +177,13 @@ while off + 110 <= len(data):
 
 bad = 0
 for n, w in zip(names, want):
-    got = found.get(n + ".dom")
+    got = found.get(n)   # full filename: domains arrive as "<name>.dom", extras as-is
     if got is None:
-        print("   %-12s NOT IN IMAGE" % n); bad += 1
+        print("   %-22s NOT IN IMAGE" % n); bad += 1
     elif got != w:
-        print("   %-12s STALE  image=%s want=%s" % (n, got[:16], w[:16])); bad += 1
+        print("   %-22s STALE  image=%s want=%s" % (n, got[:16], w[:16])); bad += 1
     else:
-        print("   %-12s MATCH  %s" % (n, got[:16]))
+        print("   %-22s MATCH  %s" % (n, got[:16]))
 if not found:
     sys.exit("ERROR: no cpio members parsed -- the reader, not the image, is what this measured")
 sys.exit(1 if bad else 0)
