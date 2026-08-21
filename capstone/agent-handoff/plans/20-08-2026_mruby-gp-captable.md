@@ -131,11 +131,6 @@ Each step either costs no boot or answers one question.
       the musl-glue build on purpose: a difference in the result is then a
       difference between the two glues and nothing else.
 
-- [ ] **3. yield-probe on the new glue. One boot.**
-      The smallest thing that actually exercises the new path, and the reason it
-      goes before mruby: step 2 touches the entry and return edge, which is
-      where clobbering `ra` silently broke the yield once already on 2026-08-20.
-
 - [x] **3. yield-probe on the new glue. One boot. DONE 2026-08-20. PASSES.**
       Run twice, the second time after `link-gpfree.ld` gained the init/fini
       markers (see step 4). Both runs identical and all three discriminators say
@@ -150,9 +145,11 @@ Each step either costs no boot or answers one question.
       frame, the local variable set before the yield, and the cap table all
       survive a domain round trip on the gp-captable glue.
 
-- [ ] **4. mruby probe, gp-captable. BLOCKED -- and the blocker is upstream of
-      mruby.** Everything needed to BUILD the image now exists and works; the
-      image cannot run, for a reason that belongs to the gp-captable ABI itself.
+- [x] **4. mruby probe, gp-captable. The blocker below was REAL and is now
+      SOLVED by LTO -- see 4b. Kept in full because the diagnosis is what made the
+      solution findable, and because the limitation it describes still governs any
+      non-LTO multi-object domain.** Everything needed to BUILD the image existed
+      and worked; the image could not run, for a reason belonging to the ABI.
 
       **What was built and verified:**
       * `MUSL_CAPSTONE_EXTRA_CFLAGS` on the musl survey, appended to the flag list
@@ -338,9 +335,23 @@ Each step either costs no boot or answers one question.
       the same story. It has not been run under default ABI + LTO, so it is a guess
       until it is.
 
-- [ ] **4d. Reduce the LTO fault.** Same function, LTO the only variable, and it
-      reproduces WITHOUT the capability-specific ABI -- so it is reducible with
-      ordinary tooling rather than through a domain boot.
+- [x] **4d. Reduce and FIX the fault. DONE 2026-08-21.** It reduced all the way
+      out of LTO: `llc -O1` on the one extracted function reproduces it, `-O0` does
+      not, and `-O1 -regalloc=fast` does not either -- so the variable is the
+      register allocator, and LTO merely stopped hiding it by deferring codegen
+      past the `-O0` everything is built with.
+
+      Root cause and fix in
+      `history/21-08-2026_09-30-00_c14-reaching-def-misclassifies-a-capability.md`:
+      `isScalarByReachingDef` proved a live capability scalar by closing a cycle
+      over an incomplete def set, because a live-in has no defining MachineInstr.
+      One guard, mirroring the one its sibling rule already had. Lit test in MIR
+      (an `.ll` version was written first and passed with the fix reverted, i.e.
+      never reproduced), negative-tested both ways, plus a positive control so
+      disabling the rule also fails the file. 60/60 Capstone lit pass.
+
+      NOT YET VALIDATED: the QEMU suites, and the run that matters -- mruby WITH
+      the method cache. Nothing pushed until both.
 
 - [~] **5. Core mrbtest suite, gp-captable + LTO. RUN 2026-08-21. Gets in, then
       makes a wild jump.** Reached S1, S2 and T1 through T3 -- driver installed,
