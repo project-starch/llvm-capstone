@@ -112,10 +112,13 @@ BUILD_OK=1
 if [ "$SKIP_BUILD" -eq 1 ]; then
   log "[build] skipped (--skip-build)"
 else
-  log "[build] clang (incremental, -j$JOBS) ..."
-  if ! cmake --build "$CAPSTONE_LLVM_BUILD_DIR" --target clang -j"$JOBS" \
+  # lld too: under LTO the code generator runs inside the linker, and the runtime
+  # suites link their domains with $LD_LLD. Nothing in clang's dependency closure
+  # pulls lld, so a compiler fix could ship with a linker that lacks it.
+  log "[build] clang + lld (incremental, -j$JOBS) ..."
+  if ! cmake --build "$CAPSTONE_LLVM_BUILD_DIR" --target clang lld -j"$JOBS" \
         >"$OUT/build-clang.log" 2>&1; then
-    BUILD_OK=0; OVERALL_OK=0; log "[build] clang FAILED (see build-clang.log)"
+    BUILD_OK=0; OVERALL_OK=0; log "[build] clang/lld FAILED (see build-clang.log)"
   fi
   # QEMU staleness guard: a default (non---clean) nightly does NOT rebuild
   # qemu-system-riscv64, so a submodule source move (e.g. a new instrumentation op)
@@ -180,6 +183,17 @@ if [ "$BUILD_OK" -eq 1 ]; then
                     2>/dev/null | sort -u | tr '\n' ' ')
   run_one "lit" "$LIT llvm/test/CodeGen/Capstone/ $CLANG_CAP_TESTS"
 
+  # ---- stage 2b: generic LLVM ------------------------------------------------
+  # The stage above covers our target only, but this fork edits shared code
+  # (TargetParser's data layout builder, AsmPrinter), so a regression there has no
+  # gate. RISCV is the nearest relative and shares that code; Generic is the
+  # target-independent core. Not check-llvm: too large to run nightly.
+  #
+  # emutls.ll: known upstream RV32 CHECK mismatch, unexplained. Marked, not
+  # excluded -- if it ever passes, lit reports XPASS and this stage fails, which is
+  # the prompt to drop the marker.
+  run_one "lit-generic" "$LIT --xfail=CodeGen/RISCV/emutls.ll llvm/test/CodeGen/RISCV/ llvm/test/CodeGen/Generic/"
+
   # ---- stage 3: QEMU suites (SERIAL, rootfs lock guarded) ---------------------
   # flock guards against a second nightly; a manual concurrent QEMU run must
   # still be avoided by convention (the suites must be SERIALIZED (never two at once)).
@@ -204,7 +218,7 @@ fi
   echo
   echo "| suite | result | duration | log |"
   echo "|---|---|---|---|"
-  for entry in "lit|" "${SUITES[@]}"; do
+  for entry in "lit|" "lit-generic|" "${SUITES[@]}"; do
     name="${entry%%|*}"
     [ -n "${RESULT[$name]:-}" ] || continue
     echo "| $name | ${RESULT[$name]} | ${DURATION[$name]}s | \`$name.log\` |"
