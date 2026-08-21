@@ -298,6 +298,20 @@ public:
   // two stay distinguishable all the way down. Until then this returns false.
   bool hasInt128Type() const override { return false; }
 
+  // _BitInt IS CAPPED AT XLen FOR THE SAME REASON, and it is a separate hole: disabling
+  // __int128 alone does NOT close it, because _BitInt is a different type that reaches the
+  // same i128 machine type. Measured 2026-08-21, with __int128 already rejected:
+  //     _BitInt(64)   ->  plain `add`                                  correct
+  //     _BitInt(65)   ->  fatal error in the backend
+  //     _BitInt(128)  ->  fatal error in the backend
+  // so the boundary is exactly XLen: at or below it the value lives in an XLen register and
+  // behaves; above it, it is widened into the 128-bit capability register class and collides
+  // with capabilities exactly as __int128 did.
+  //
+  // The WIDTH is capped rather than the type disabled, because _BitInt is a required type in
+  // C23 and the narrow widths are perfectly sound here. hasBitIntType() therefore stays true.
+  size_t getMaxBitIntWidth() const override { return 64; }
+
   void setMaxAtomicWidth() override {
     MaxAtomicPromoteWidth = 128;
 
