@@ -36,6 +36,12 @@ SETJMP_SRC="$REPO_ROOT/xlang/lua-cdp/capstone-lua/capstone_setjmp.S"
 # glue (behind CAPSTONE_GLUE_YIELD), the init/fini markers in link-gpfree.ld, and
 # malloc.c's runtime choice of heap. See plans/20-08-2026_mruby-gp-captable.md.
 GPCT=${MRUBY_GPCT:-0}
+# LTO IS ORTHOGONAL TO THE ABI, and separating them is the point: the pair
+# "default ABI with LTO" is what discriminates an LTO codegen fault from a
+# gp-captable one, and it cannot be expressed while the two are one switch.
+# MRUBY_GPCT=lto stays as the shorthand it always was.
+LTO=${MRUBY_LTO:-0}
+[[ "$GPCT" == "lto" ]] && LTO=1
 LADDER="$REPO_ROOT/capstone/tests/runtime-qemu/silicon-ladder"
 GPFREE="$REPO_ROOT/capstone/tests/runtime-qemu/gp-free-domain"
 # MRUBY_GPCT=lto is gp-captable PLUS full LTO, and it is the only variant that can
@@ -43,8 +49,10 @@ GPFREE="$REPO_ROOT/capstone/tests/runtime-qemu/gp-free-domain"
 # so separate objects each get their own and the glue reads only the first. LTO
 # presents one module. See gp-free-domain/multi-tu-slot-collision.sh, which shows both
 # halves in one run. MRUBY_GPCT=1 keeps the non-LTO variant for comparison.
-if [[ "$GPCT" == "lto" ]]; then
+if [[ "$GPCT" != "0" && "$LTO" == "1" ]]; then
   ARCHIVE=${ARCHIVE:-$CAPSTONE_TMP_ROOT/musl-capstone-build-lto/libc-capstone.a}
+elif [[ "$GPCT" == "0" && "$LTO" == "1" ]]; then
+  ARCHIVE=${ARCHIVE:-$CAPSTONE_TMP_ROOT/musl-capstone-build-lto-defabi/libc-capstone.a}
 elif [[ "$GPCT" != "0" ]]; then
   # A DIFFERENT ARCHIVE, not the same one relinked. Every member has to be compiled
   # with the flag, so pointing at the default archive would link gp-ABI objects into
@@ -201,12 +209,14 @@ fi
 # that defines a global would emit its own descriptor fragment and put the collision
 # straight back; stack_reserve.c is the easy one to forget, and it picks this up only
 # because it is compiled with MRUBY_FLAGS like everything else.
-if [[ "$GPCT" == "lto" ]]; then
+LTO_LINK_FLAGS=()
+if [[ "$LTO" == "1" ]]; then
   MRUBY_FLAGS+=(-flto)
-  # Codegen happens in the LINKER under LTO, so the pass has to be re-enabled there.
-  LTO_LINK_FLAGS=(--plugin-opt=-capstone-gp-captable)
-else
-  LTO_LINK_FLAGS=()
+  # Codegen happens in the LINKER under LTO, so any -mllvm option has to be re-enabled
+  # there; a compile-time one does not reach it. Only the ABI switch is such an option.
+  # Flags like -fno-jump-tables and -fno-optimize-sibling-calls need no repeat: clang
+  # records them as function attributes in the IR, which survives into the LTO backend.
+  [[ "$GPCT" != "0" ]] && LTO_LINK_FLAGS=(--plugin-opt=-capstone-gp-captable)
 fi
 
 rm -rf "$OBJ_DIR"; mkdir -p "$OBJ_DIR"
