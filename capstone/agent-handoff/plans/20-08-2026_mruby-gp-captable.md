@@ -383,7 +383,42 @@ Each step either costs no boot or answers one question.
       That is step 4c, and it is now the highest-value next run rather than one of
       several options.
 
-- [ ] **5b. Core mrbtest suite, after 4c.**
+- [x] **5b. mrbtest after the C-14 fix. RUN 2026-08-21. THE HYPOTHESIS WAS WRONG.**
+      Step 5 recorded, as a guess and not a finding, that the wild jump was
+      probably the same story as the method cache. It is not.
+
+          gp-captable + LTO, no cache, no C-14 fix   16 assertions, cause 2
+          gp-captable + LTO, cache, WITH C-14 fix    16 assertions, cause 2
+
+      Three variables changed, the result identical to the character. The count
+      stops at exactly 16 both times while the heap differs (197168 vs 217648
+      bytes used), so it is not a memory boundary.
+
+- [x] **5c. Matched pair for the suite: default ABI + LTO. THE ANSWER IS THE
+      OPPOSITE OF 4c.**
+
+          default ABI, no LTO    678 / 674 OK / 2 KO      (recorded reference)
+          default ABI, LTO       678 / 674 OK / 2 KO / 0 crash, T1-T4, COMPLETED
+          gp-captable, LTO       dies after 16 assertions
+
+      LTO changes the suite result not at all -- it reproduces the reference
+      figure exactly. **So for the suite, gp-captable is the variable, where for
+      the method cache it was LTO.** Two failures that looked alike had opposite
+      causes, which is the reason the pair is worth running each time rather than
+      generalising from the last one.
+
+      Size class checked BEFORE reading the result, because the default-ABI build
+      needs MRUBY_DOMAIN_HEAP at 1 MiB and that could have pushed it into the
+      4 MiB allocation class that is documented to fault on every call. It did
+      not: both images are code region 2097152 and data region 2097152, so the
+      comparison is valid.
+
+- [ ] **5d. Localize the gp-captable suite failure.** A wild control transfer
+      (cause 2, pc outside both regions) at a deterministic point. The probe image
+      has 2661 globals and works; the suite image has 2761 and does not. mruby's
+      VM dispatches through function pointers, and a function pointer read from a
+      wrong cap-table slot would land exactly here. First thing to check, and it
+      needs no boot: whether the descriptor records are sane at the high indices.
       678 assertions, comparable against today's 674 OK / 2 skipped / 2 KO.
 
 ## Acceptance criterion
