@@ -145,3 +145,76 @@ a slightly larger cone than before. That cannot be bounded statically.
 `/tmp/capstone/_bitstreams/d.out` and the archived `ariane.check_timing.rpt` both contain a shell
 prompt and a `Host:` line carrying a personal account name and a build hostname. **Neither may be
 committed or pasted into shared content.** They live under `/tmp/capstone/` and must stay there.
+
+---
+
+# POST-RUN: the three checks above, finally run — 2026-08-21
+
+They were written before the S-10 synthesis and then not applied. Running them now, prompted by
+the fair question *"if the fix is not on the critical path, why did WNS degrade after it?"*
+
+| check | predicted | measured | verdict |
+|---|---|---|---|
+| 1. `check_timing` loop count | 30 (re-audit if 31) | **16** | **neither — the criterion was violated in an unanticipated direction and was never acted on** |
+| 2. `i_wt_dcache_mem` LUTs | 1206 + ~100 | 1206 + **56** | PASS |
+| 3. `Synth 8-295` set vs reference | unchanged | **identical** | PASS |
+
+Check 3 in full, because it is the one that answers the question. Parsed from both synthesis
+logs (the warning names a `file:line`, not a signal):
+
+```
+control 39b21639d   100 warnings, 2 distinct locations
+S-10    80843404c   100 warnings, 2 distinct locations
+   1 ->    1   core/store_buffer.sv:102
+  99 ->   99   corev_apu/fpga/src/ariane_xilinx.sv:14
+SETS IDENTICAL: True
+```
+
+Matcher liveness: those logs carry 4368 and 4374 `[Synth 8-nnn]` warnings respectively, so a
+match of 100 is a reading and not a silent grep.
+
+**S-10 introduces no new combinational loop at synthesis.** The `check_timing` 30 -> 16 is
+therefore not a netlist change; it is post-place-and-route loop detection over a differently
+optimised design. Item 2 of the original analysis — "no new netlist cycle, only one new member of
+an existing SCC" — survives, by a different route than predicted.
+
+## So why did WNS degrade?
+
+What is established: the fix's own nets are 5.2 ns clear of the critical path (-11.201 against a
+WNS of -16.400); it adds 56 LUTs to the module it edits; it adds no synthesis loop. What is also
+established: the design grew **1746** top-level LUTs, the critical path moved from
+`cur_idx_q_reg[1]` to `[3]`, and WNS fell 5.8 ns.
+
+A 62-line leaf-module edit does not add 1746 LUTs. That pattern is the tool re-solving a
+congestion problem, not the fix being slow — and the worst path is **82% route delay** in a
+design at 84% occupancy where **100% of failing paths launch from one register bit** whose cone
+reaches the architectural regfile and therefore the whole datapath.
+
+**A CORRECTION TO HOW THE CONTROL BUILD WAS READ.** `39b21639d` reproducing `e1140aeea` exactly
+licenses *"the flow is deterministic, so the delta is attributable to S-10"*. It does **not**
+license *"S-10 made the design 5.8 ns worse"*. Those are different claims, and the second was
+asserted from the first. Deterministic means identical inputs give identical outputs; it says
+nothing about whether a delta between **different** inputs reflects design quality or the placer
+landing differently on a pathological cone. The phrase used earlier — *"its only cost is timing,
+which the forensics put on `cur_idx_q`, not on the fix's own nets"* — reads as exoneration and
+should not have; not being the worst path is not the same as not having caused the worst path to
+move.
+
+## The experiment that separates the two, and it is built
+
+`s10-narrow-mcp` (`94606a202`) = `80843404c` RTL byte-identical, plus the destination-scoped
+multicycle exception only. Excuses the pipeline cone; deliberately does **not** excuse the
+switcher's own mechanism registers.
+
+* **WNS near the control's equivalent** -> the 5.8 ns was cone placement, S-10 is sound, and the
+  reflash question becomes purely about acceptance staging.
+* **Still far underwater** -> the fix costs something the forensics did not attribute, and it
+  needs rework before it goes near a bitstream.
+
+It doubles as the post-synthesis check the narrow constraint's own commit mandates: the filters
+must match non-zero, and `dom_switcher/*`, the LSU dom-switch registers and the debug log
+registers must all still appear in the failing list. If they do not, the narrow version is
+unsound for the same reason the broad one was.
+
+The constraint's comment block was corrected in the port: it carried the retracted "25 on
+`_thread_0_event_counter_*`, 155 total" figures, now replaced by the measured 234/497 breakdown.
