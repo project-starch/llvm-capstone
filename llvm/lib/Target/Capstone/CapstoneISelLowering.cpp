@@ -8369,15 +8369,35 @@ static SDValue lowerScalarI128Shift(SDValue Op, SelectionDAG &DAG,
     // shift, which this target cannot express because i128 is the capability
     // carrier and only its low XLen bits are an integer. Say so instead of
     // asserting.
-    // GenCrashDiag=false: this is a target limitation the user can act on, not an
-    // internal error, and it must exit cleanly rather than abort. That also makes
-    // the limitation TESTABLE: `not llc` succeeds on a clean exit and fails on an
-    // abort, so cap-i128-widening-mul-mixed.ll can tell a diagnostic apart from
-    // the assertion it replaced. With the default GenCrashDiag it could not.
-    report_fatal_error("Capstone PureCap: cannot lower a 128-bit right shift by "
-                       ">= XLen; only the high half of a widening multiply is "
-                       "supported in that form",
-                       /*GenCrashDiag=*/false);
+    // A REAL DIAGNOSTIC, NOT report_fatal_error. This used to be
+    // report_fatal_error(..., GenCrashDiag=false), which is clean through `llc`
+    // -- one "LLVM ERROR:" line, exit 1 -- but NOT through clang, where the
+    // driver's own crash handling still prints "PLEASE submit a bug report" and
+    // a full stack dump. Users run clang; the lit tests run llc, so the test
+    // suite could not observe the thing users actually saw.
+    //
+    // WHY THIS MATTERS MORE THAN CLOSING THE ROUTES. Three separate source-level
+    // routes to this point have been found: __int128, _BitInt(65..128), and a
+    // 128-bit _Atomic. The first two are now rejected in the front end
+    // (CapstoneTargetInfo::hasInt128Type / getMaxBitIntWidth); the third is not,
+    // and each time the assumption "no source form reaches this any more" was
+    // recorded it was wrong. There will be a fourth. So the failure mode itself
+    // has to be acceptable rather than merely unreachable.
+    //
+    // diagnose() reports at the source location and lets code generation finish,
+    // so the user gets `error: <message>` like any other compiler error.
+    MachineFunction &MF = DAG.getMachineFunction();
+    DAG.getContext()->diagnose(DiagnosticInfoUnsupported(
+        MF.getFunction(),
+        "Capstone PureCap: cannot lower a 128-bit right shift by >= XLen; only "
+        "the high half of a widening multiply is supported in that form. On "
+        "this target i128 is the capability carrier, so only its low XLen bits "
+        "are an integer -- use two 64-bit halves instead",
+        DL.getDebugLoc()));
+    // A DEFINED value, so codegen completes and the diagnostic above is what the
+    // user sees. Returning SDValue() here would fall back through ExpandNode to
+    // the assertion this replaced.
+    return DAG.getConstant(0, DL, MVT::i128);
   }
 
   SDValue ShiftInput = Op.getOperand(0);
