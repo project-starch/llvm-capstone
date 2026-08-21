@@ -872,3 +872,76 @@ Free, because that boot is being run for the bisection anyway.
 
 All three verified clean natively before use. First to fail is the bisection point; all clean
 narrows the trigger to queries 20–25.
+
+---
+
+# BISECT BOOT 4 — down to FIVE queries, and the commit PC is now TRUSTED
+
+Control-green (5/5 markers, 6 s), so the verdicts count. Fourth consecutive clean plain-SQLite
+run on this bitstream.
+
+| slot | arm | queries | base | result |
+|---|---|---|---|---|
+| 1 | `sqbase` control | — | `0x82400000` | **PASS**, 6 s |
+| 2 | `s1_36` | **5** | `0x82800000` | **WEDGE**, no return in 400 s |
+| 3–4 | `s1_43`, `s1_50` | 12, 19 | — | not results: collateral |
+
+**The trigger is inside the FIRST FIVE queries of `select1.test`**, all five of which pass
+natively under the identical configuration (`query_pass=5`), so this is silicon-specific and
+not a configuration artifact.
+
+## THE COMMIT-PC READING IS REAL — the control fired
+
+Boots 2 and 3 wedged at slot 3 (base `0x82C00000`) and both reported `commit pc = 0x82d7fffc`.
+A constant artifact and a real base-relative address are indistinguishable from that alone. This
+boot wedged at **slot 2**, base `0x82800000`, and reported:
+
+    commit pc = 0x000000008297fffc        predicted if real: 0x82800000 + 0x17FFFC = 0x8297FFFC
+
+**It tracks the base exactly.** So the reading is genuine, and **three wedges across two
+different bases all stop at the same domain offset `0x17FFFC`** — a deterministic failure at a
+fixed location.
+
+## Where `0x17FFFC` is, and it is not code
+
+From the domain's own build report (`sqslt.dom`, 256 KiB arena):
+
+    code            0x000000 .. 0x160910
+    blob            0x160910 .. 0x171220
+    cap table       0x171220 .. 0x171de0
+    global storage  0x171de0 .. 0x1c2070     <== 0x17fffc lands here, 57,884 bytes in
+    stack           0x1c2070 .. 0x400000
+
+`.text` ends at VA `0x153bc8`. **The last committed instruction is ~57 KB inside the domain's
+global-variable storage, far past any executable content in the image** — the signature of
+control flow leaving the code and entering data. Under `-capstone-gp-captable` that storage is
+exactly where every carved global lives.
+
+**Two things stop this being a root cause, and both must be resolved before it is called one:**
+
+1. **`privM=1` is not reconciled.** The same halted read reports M-mode, but this PC is inside
+   the *domain's* allocation, not the monitor's (`0x8000xxxx`). Either the mode bit means
+   something other than my by-eye reading of that bitfield, or `commit pc` is latched from
+   before a mode change. Not resolved, and not guessed at.
+2. **The `DBAS` ↔ allocation-offset-0 mapping is the natural reading, not a verified one.**
+   The base-relative control supports the scheme as a whole but does not pin the origin.
+
+## Cumulative silicon status
+
+**Passing on hardware, matching native field for field:** the negative control (21 records, ten
+queries, a 500-value MD5, all three sort modes, six deliberate failures) and `s1_31` (31 setup
+records). Plus four clean plain-SQLite control runs.
+
+**Wedging on hardware, deterministically, at a fixed address:** any slice containing the first
+five `select1.test` queries — reproduced at 5, 25 and 50 queries.
+
+## Next, and it is one boot
+
+`control + s1_32 (1 q) + s1_33 (2 q) + s1_34 (3 q)`, ascending. Either it names a single query
+outright, or all three pass and the trigger is query 4 or 5. Slices to be built and
+native-verified first, as every slice so far has been.
+
+**The timing caveat still stands** and is not retired by any of this: −16.400 ns against a
+baseline part's −10.629. What weighs against timing here is that the failure is *deterministic
+at a fixed address across three runs and two bases*, which is not the profile `run.tcl` warns
+about ("intermittently and data-dependently").
