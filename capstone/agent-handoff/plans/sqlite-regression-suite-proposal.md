@@ -1069,3 +1069,57 @@ A discarded QEMU run showed `EXT4-fs error (device vda): doubly allocated?`, the
 `rootfs.ext2` signature. It produced no result and is discarded rather than interpreted; the same
 run repeated cleanly with **zero** EXT4 errors, so the image is sound. Earlier QEMU results stand:
 they were self-consistent and positive-controlled.
+
+
+---
+
+# TWO HYPOTHESES KILLED FOR THE SILICON WEDGE (2026-08-22) — both with proven instruments
+
+## 1. HOSTILE UNINITIALISED MEMORY — REFUTED
+
+`CAPSTONE_POISON_ARENA=1` fills the memsys5 arena with `0xA5` before `SQLITE_CONFIG_HEAP` and
+carries its own witness gate. Run on the 5-query case under QEMU: **`query_pass=5 completed=1`**,
+clean. So the wedge is not explained by silicon's fresh memory being hostile where emulation's is
+zero — the standard first suspect for a silicon-only effect here, and documented as an emulation
+blind spot at `build-sqlite-silicon.sh:1660`. **A ruled-out class is a result.**
+
+## 2. REVOCATION-NODE POOL EXHAUSTION — REFUTED, after TWO broken instruments
+
+The hypothesis was strong and documented (`build-sqlite-silicon.sh:851-860`): the RTL allocator's
+head is 10 bits from 3, so allocation ~#1022 wraps to id 0 and reuses LIVE ids; REVOKE_NODE has no
+visit bound or cycle detection and walks a spliced chain forever; and every `stc` blocks on a
+revocation query **with no timeout**, so the next capability store **hangs with no trap**. That is
+our exact signature — hang, no trap, `ex_commit.valid=0`. It also explained the silicon-only part:
+QEMU's pool is `CAP_REV_TREE_SIZE 10000` **with reuse**, so emulation structurally cannot reach
+the wrap.
+
+**Measured: `s1_36` (5 queries) reaches cumulative allocation 128 and not 256 — 128-255 total,
+against a pool of ~1021.** Not close. And that total is dominated by the domain's 188 startup
+carves; the five queries themselves add very little. **Exhaustion is not the mechanism.**
+
+### Three instrument failures on the way, all of the same family
+
+1. **Counted `alloced_n`** — that is QEMU's PEAK CONCURRENT usage, because QEMU reclaims via a
+   free list. Silicon's bump allocator never reclaims, so it spends CUMULATIVE allocations. The
+   check fired correctly and could not have detected the thing it was built to test, at any
+   magnitude. It returned a clean "refutation" that meant nothing.
+2. **Fired only at 1022** — so "allocated 900" and "the counter never incremented" produced
+   identical silence. Replaced with a report at every power of two, which is **self-proving**:
+   any run that allocates at all MUST print 1, 2, 4..., so their absence indicts the instrument
+   rather than exonerating the workload.
+3. **Read the wrong log.** QEMU's stderr goes to `$OUT_DIR/sqlite-slt.log`, not the wrapper's
+   stdout — and I grepped the wrapper's. The milestones were there the whole time.
+
+**Failure 3 was caught only because of the fix for failure 2.** A single-threshold watermark would
+have shown nothing and I would have recorded "does not cross 1022" as a finding. The self-proving
+ladder made the absence of milestone 1 impossible to read as a result about the subject.
+
+## Where that leaves the wedge
+
+Still unexplained, and now with two classes eliminated rather than one guess replaced by another.
+The board experiment that has NOT yet run is the one that matters most:
+
+**`q1_only` … `q5_only` — setup plus exactly ONE query.** Every board slice so far has been a
+PREFIX, which cannot separate "one query is pathological" from "the queries cumulatively exhaust
+something". Both refutations above weaken the cumulative reading — neither poison nor rev-node
+pressure accumulates fast enough — but they do not settle it, and the isolated arms do.
