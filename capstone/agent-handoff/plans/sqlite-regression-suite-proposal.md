@@ -976,10 +976,27 @@ Four bits is implausibly small for a 128-bit format (CHERI-class formats use ~14
 "halted at the PC capability's rounded bound" story is NOT adopted.** It is recorded because
 the coincidence is exact and worth one cheap check, not because the evidence supports it.
 
-**The named check, for whoever picks this up:** read the actual bounds field widths in
-`capstone-qemu/target/riscv/cap_compress.c` (and the RTL equivalent). If the granularity at a
-~1.4 MB length is not 128 KiB, this lead is dead and `0x17FFFC` needs a different explanation.
-**The stronger discriminator the RTL lane named:** whether the instructions committed just
-before the wedge are *increasing through data* (ran off the end) or show a *single control
-transfer into* `0x17FFFC` (jumped there). The commit history would separate those; neither of
-us has looked.
+### The check was run: THE LEAD IS DEAD
+
+Answered from the RTL, which is what the board runs, rather than from QEMU's `cap_compress.c`.
+`core/include/ariane_pkg.sv:674` in `decompress_bounds` declares `logic[13:0] B, T;` with
+`B[13:3] = bounds_full.b` — **a 14-bit mantissa.** The granule is `2^E`, and E is set by the
+region length: `0x160910 / 2^E < 2^14` needs `E >= 7`, so the granule is **`0x80`** and the
+bound rounds to `0x160980`. Reaching `0x180000` would require the 4-bit mantissa this format
+does not have and no 128-bit capability format would.
+
+**So bounds compression cannot produce `0x180000` from `0x160910`, and the arithmetic
+coincidence is just a coincidence.** `0x17FFFC` is therefore **UNEXPLAINED** — which is the
+honest state. What survives is that the offset is REAL: it reproduces across two different
+domain bases, so it is a genuine fixed location and simply not the code bound.
+**The discriminator that remains** — walked forward through data, or a single control transfer
+into `0x17FFFC` — needs RVFI, which is a Verilator instrument. Getting SQLLogicTest running in a
+domain under simulation crosses exactly the fidelity gap the `rtl-sim` skill warns about (bare
+M-mode with no monitor, a `.data` buffer instead of a monitor-carved stack, different cache
+warmth), so a clean simulation would not exonerate the silicon and the wedge might not reproduce
+there at all.
+
+**Cheaper, and it is the next step: name the single offending query on the board.** If one query
+wedges and its neighbours do not, the difference between them is a far smaller search space than
+an RVFI trace — and it comes from hardware that already works. Simulation is the fallback if the
+query does not localise it.
