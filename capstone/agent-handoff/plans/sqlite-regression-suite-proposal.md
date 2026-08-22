@@ -1734,7 +1734,7 @@ plan `SCAN t1, SCAN y`, identical 900-step nested scan, **one output row, no sor
 return natively. If it wedges, the nested scan is the factor and output rows are irrelevant, which
 would also explain why `p10_bigsort` (435 rows, no nested loop) returns.
 
-## Localization update — PROVISIONAL, blocked on an unproven instrument
+## Localization update — instrument now PROVEN, and the localization moved again
 
 Earlier framing (inner loop / two iterating cursors / accumulated rows) is **withdrawn**. The
 clamp ladder that supported it was monotone for a trivial reason: every clamp in it
@@ -1799,3 +1799,49 @@ above -- as UNRESOLVED.
 Next discriminator: clamp 1 (query executes zero opcodes — isolates setup statements from the
 query) and clamp 6 (splits the 1-7 window). Arm 3 of boot #18 was collateral after the wedge and
 carries no verdict.
+
+
+## Boot #19: the clamp is proven, and the fault is in PREPARE, not execution
+
+Control `sqbase.dom` passed, so the boot is valid.
+
+**Arm 2 -- the instrument is proven.** `negative-control.test --clamp 5` RETURNED on silicon
+with a tally bit-identical to the QEMU reference, and clearly different from its own unclamped
+tally:
+
+    silicon clamp 5 : records=21 stmt_pass=9 stmt_fail=2 query_pass=0 query_fail=9 skip_big=1
+                      oom=0 skip_cond=2 parse_err=1 completed=1
+                      M5 oom=0 malloc=1315 free=1315   ops=5 lastop=114
+    QEMU    clamp 5 : IDENTICAL, every field
+    unclamped (both): query_pass=6 query_fail=4 skip_big=0
+
+So the runtime clamp DOES fire on silicon; the ladder is valid. The doubt recorded above is
+resolved in the ladder's favour -- but see the next arm, which makes it moot.
+
+**Arm 3 -- and the ladder was measuring the wrong thing anyway.** `p8_selfjoin --clamp 1`
+entered and WEDGED. Clamp 1 fires on the very first opcode, so the query executes ZERO VDBE
+opcodes -- and it still wedges. The fault is therefore not in the query's bytecode at all.
+
+The mechanism is specific and explains the whole ladder: `slt_runner.h` calls
+`sqlite3_prepare_v2` at line ~440 and only arms the clamp at line 467, AFTER the prepare
+succeeds. **Prepare is entirely unclamped.** The parser, query planner and code generator for
+the self-join run in full for every clamp value, which is exactly why 2000, 500, 125, 30, 8 and
+1 all wedged identically. A monotone ladder, and every rung was reporting the same upstream
+failure -- the failure mode CLAUDE.md warns about, arrived at a second time by a different road.
+
+Confound checked before believing it: p8 wedged in SLOT 2 (boot #18) and SLOT 3 (boot #19),
+while `negative-control` PASSED in slot 2 of boot #19. The wedge follows the workload, not the
+slot position.
+
+**Retired by this result:** every hypothesis about VDBE execution -- join body, two cursors
+iterating, output-row count, accumulation, sorter inserts, and the "arena exhausted -> NULL ->
+UNEXPECTED_OPERAND" chain insofar as it was pinned to execution. `M5 oom=0 malloc=1315
+free=1315` on the returning arm also shows the allocator is healthy and its counters live.
+
+**Next, the minimal repro.** Two new files, QEMU-referenced before they go near the board:
+
+* `slt/p8_trivial.test` -- the identical 31 setup statements, trivial query. Expected to RETURN;
+  a wedge would mean the INSERTs are the trigger.
+* `slt/p8_empty.test --clamp 1` -- the self-join over an EMPTY table, zero query opcodes. A
+  wedge here has no data and no execution left to blame and localizes the fault to
+  `sqlite3_prepare_v2` outright.

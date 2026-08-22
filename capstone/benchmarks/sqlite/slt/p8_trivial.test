@@ -1,0 +1,103 @@
+# ARM A: identical setup to p8_selfjoin, TRIVIAL query. Isolates the 31 setup
+# statements from the self-join. Expected to RETURN; a wedge here would mean the
+# INSERTs are the trigger, not the query.
+# WEDGE PROBE, not a correctness test: expected values are dummy, the signal is
+# RETURNED vs WEDGED, so query_fail=1 counts as a PASS here.
+statement ok
+CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+statement ok
+INSERT INTO t1 VALUES(100,101,102,103,104)
+
+statement ok
+INSERT INTO t1 VALUES(105,106,107,108,109)
+
+statement ok
+INSERT INTO t1 VALUES(110,111,112,113,114)
+
+statement ok
+INSERT INTO t1 VALUES(115,116,117,118,119)
+
+statement ok
+INSERT INTO t1 VALUES(120,121,122,123,124)
+
+statement ok
+INSERT INTO t1 VALUES(125,126,127,128,129)
+
+statement ok
+INSERT INTO t1 VALUES(130,131,132,133,134)
+
+statement ok
+INSERT INTO t1 VALUES(135,136,137,138,139)
+
+statement ok
+INSERT INTO t1 VALUES(140,141,142,143,144)
+
+statement ok
+INSERT INTO t1 VALUES(145,146,147,148,149)
+
+statement ok
+INSERT INTO t1 VALUES(150,151,152,153,154)
+
+statement ok
+INSERT INTO t1 VALUES(155,156,157,158,159)
+
+statement ok
+INSERT INTO t1 VALUES(160,161,162,163,164)
+
+statement ok
+INSERT INTO t1 VALUES(165,166,167,168,169)
+
+statement ok
+INSERT INTO t1 VALUES(170,171,172,173,174)
+
+statement ok
+INSERT INTO t1 VALUES(175,176,177,178,179)
+
+statement ok
+INSERT INTO t1 VALUES(180,181,182,183,184)
+
+statement ok
+INSERT INTO t1 VALUES(185,186,187,188,189)
+
+statement ok
+INSERT INTO t1 VALUES(190,191,192,193,194)
+
+statement ok
+INSERT INTO t1 VALUES(195,196,197,198,199)
+
+statement ok
+INSERT INTO t1 VALUES(200,201,202,203,204)
+
+statement ok
+INSERT INTO t1 VALUES(205,206,207,208,209)
+
+statement ok
+INSERT INTO t1 VALUES(210,211,212,213,214)
+
+statement ok
+INSERT INTO t1 VALUES(215,216,217,218,219)
+
+statement ok
+INSERT INTO t1 VALUES(220,221,222,223,224)
+
+statement ok
+INSERT INTO t1 VALUES(225,226,227,228,229)
+
+statement ok
+INSERT INTO t1 VALUES(230,231,232,233,234)
+
+statement ok
+INSERT INTO t1 VALUES(235,236,237,238,239)
+
+statement ok
+INSERT INTO t1 VALUES(240,241,242,243,244)
+
+statement ok
+INSERT INTO t1 VALUES(245,246,247,248,249)
+
+query I nosort
+SELECT a FROM t1 LIMIT 1
+----
+0
+

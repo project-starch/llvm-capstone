@@ -1,0 +1,12 @@
+# ARM B: the self-join over an EMPTY table. Combined with --clamp 1 the query
+# executes ZERO VDBE opcodes and there is no data, so a wedge here can only come
+# from sqlite3_prepare_v2 -- the parser/planner/code generator, which the clamp
+# cannot reach because slt_runner.h prepares BEFORE it arms.
+statement ok
+CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+query I nosort
+SELECT t1.a FROM t1, t1 AS y WHERE y.b < t1.b ORDER BY 1
+----
+0
+
