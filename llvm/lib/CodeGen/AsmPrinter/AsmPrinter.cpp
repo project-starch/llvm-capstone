@@ -3623,7 +3623,9 @@ const MCExpr *AsmPrinter::lowerConstant(const Constant *CV,
   }
   case Instruction::GetElementPtr: {
     // Generate a symbolic expression for the byte address
-    APInt OffsetAI(getDataLayout().getPointerTypeSizeInBits(CE->getType()), 0);
+    // accumulateConstantOffset asserts the offset width equals the INDEX width,
+    // which differs from the pointer width on targets with fat pointers.
+    APInt OffsetAI(getDataLayout().getIndexTypeSizeInBits(CE->getType()), 0);
     cast<GEPOperator>(CE)->accumulateConstantOffset(getDataLayout(), OffsetAI);
 
     const MCExpr *Base = lowerConstant(CE->getOperand(0));

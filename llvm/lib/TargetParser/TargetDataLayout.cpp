@@ -321,8 +321,8 @@ static std::string computeCapstoneDataLayout(const Triple &TT,
   if (TT.isCapstone64()) {
     // Capstone PureCap mode changes:
     // 1. AS0 set to 64:128 (Legacy/Interop, alignment matches capability)
-    // 2. Add AS200 (p200:128:128:128) for Capabilities
-    Ret += "-p:64:128-p200:128:128:128";
+    // 2. Add AS200 for Capabilities: 128-bit pointer, 64-bit address
+    Ret += "-p:64:128-p200:128:128:128:64";
     Ret += "-i64:64-i128:128";
     Ret += "-n32:64";
   } else {

@@ -238,12 +238,13 @@ public:
     // IMPORTANT: New DataLayout for PureCap mode.
     // p:64:128         -- AS0 is 64-bit but 128-bit aligned
     //                         (Workaround for Clang consistency check)
-    // p200:128:128:128 -- AS200 is 128-bit (Capabilities)
+    // p200:128:128:128:64 -- AS200 is 128-bit (Capabilities), but its ADDRESS
+    //                        is 64-bit, so pointer arithmetic stays in i64
     // ni:200           -- Non-Integral pointers! Prevents unsafe optimizations
     // A200/P200/G200   -- Use AS200 as the default address space for
     //                     alloca/stack (A), program (P), and globals (G).
     resetDataLayout(
-        "e-m:e-p:64:128-p200:128:128:128-i64:64-i128:128-n32:64-S128"
+        "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S128"
         "-ni:200-A200-P200-G200");
   }
 
