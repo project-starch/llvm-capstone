@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
+source "$SCRIPT_DIR/infra-retry.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 SHARE_DIR=${SHARE_DIR:-$TMP_ROOT/capstone-runtime-qemu-share}
@@ -18,7 +19,8 @@ bash "$SCRIPT_DIR/build-domain.sh" \
   "$SCRIPT_DIR/domains/write_42.c" \
   "$SHARE_DIR/write_42.dom"
 
-python3 "$SCRIPT_DIR/run-domain-smoke.py" \
+capstone_retry_infra_flake \
+  python3 "$SCRIPT_DIR/run-domain-smoke.py" \
   --share-dir "$SHARE_DIR" \
   --log-file "$LOG_FILE" \
   --guest-command '/mnt/host/capstone-test.user /mnt/host/write_42.dom' \
