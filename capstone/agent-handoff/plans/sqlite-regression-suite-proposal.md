@@ -1691,3 +1691,45 @@ first-link evidence for the NULL chain — the gap that got an earlier root-caus
 Bisect 0-2,000 with `--clamp 500 / 1000 / 1500` in one boot, one image. The last clamp that
 RETURNS names the faulting opcode in `lastop` and reports whether the allocator had already
 failed.
+
+
+---
+
+# THE FAULT IS IN THE FIRST ~125 VDBE OPCODES — accumulation is dead (sessions 15-17)
+
+Clamp bisection of `p8_selfjoin`, every wedging arm verified to have reached `G/enter` and to
+carry the same signature (trap `0x99` = mcause 25):
+
+    total opcodes   6,715
+    clamp 2000      WEDGE
+    clamp  500      WEDGE
+    clamp  125      WEDGE      <-- current bound
+
+**`p8`'s entire VDBE program is 23 opcodes**, so 125 executions is the setup plus roughly three
+or four inner-loop iterations. **The fault happens almost immediately.**
+
+That retires every remaining accumulation story — rows piling into the sorter, allocator traffic
+building, pool growth — all of which need hundreds or thousands of opcodes. Something goes wrong
+in the **first few passes of the inner scan**.
+
+## AND `p11_smalljoin` WAS NEVER A VALID CONTROL
+
+I claimed "two cursors alone returns" on the strength of `p11`. Reading the plans instead of the
+SQL:
+
+    p8  (y.b < t1.b)   SCAN t1, SCAN y                              true nested loop, 900 steps
+    p11 (y.a = t1.a)   SCAN t1, SEARCH y USING AUTOMATIC COVERING
+                       INDEX (a=?) + BLOOM FILTER                   indexed lookup, ~30 steps
+
+**SQLite silently built an automatic covering index for the equijoin**, so `p11` has two cursors
+but performs no repeated inner scan. It is not the control I described, and the 2x2 built on it is
+confounded a second time — in a way the row counts concealed.
+
+**The lesson is specific and general: on a query engine, "same shape of SQL" is not "same
+execution plan". The plan must be READ, not inferred from the text.** Two of my controls have now
+turned out to execute something structurally different from what I assumed.
+
+`p12_countjoin` is the repaired control: `SELECT count(*) FROM t1, t1 AS y WHERE y.b < t1.b` —
+plan `SCAN t1, SCAN y`, identical 900-step nested scan, **one output row, no sorter**, verified to
+return natively. If it wedges, the nested scan is the factor and output rows are irrelevant, which
+would also explain why `p10_bigsort` (435 rows, no nested loop) returns.
