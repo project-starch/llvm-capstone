@@ -1279,3 +1279,67 @@ so far — `alloced_n` vs cumulative, the single-threshold watermark, the wrong 
 the quote-injecting reassembly — is the same family. **The check could not distinguish its own
 failure from the subject's.** Two of them produced clean-looking results that would have been
 published as findings.
+
+
+---
+
+# THE MINIMAL SQL REPRO IS **ONE QUERY** (2026-08-22, board session 6)
+
+Control-green boot (5/5 with the corrected UART reassembly; the old buggy one read 4/5 and would
+have thrown this boot away).
+
+| arm | result |
+|---|---|
+| `sqbase` control | PASS, 6 s, five markers |
+| `sqheap` — the minimal repro, probe v2 | **`0x4EA0000A` — passA 0, passB 0, tested 10, control fired** |
+| `q1_only` — setup + **exactly ONE query** | **WEDGE**, no return in 400 s |
+| `s1_36` | collateral — not needed, arm 3 already re-established the wedge |
+
+## 1. THE FAILURE IS NOT CUMULATIVE
+
+`q1_only` is the 31 setup statements plus **one** query. It wedges. So there is no accumulation,
+no exhaustion, no watermark — which is what the prefix ladder could never have told us and is why
+the isolated arms were built. **The minimal SQL reproducer is:**
+
+    SELECT CASE WHEN c > (SELECT avg(c) FROM t1) THEN a*2 ELSE b*10 END
+      FROM t1
+     ORDER BY 1
+
+against a 30-row table, in a capability domain, on silicon. Down from 10,807 records to one query.
+
+**It also re-establishes the wedge on the new image** (`577f9f9a`), so the unexplained hash change
+did not matter — arm 4 was unnecessary.
+
+## 2. THE ARENA IS NOT CORRUPTING CAPABILITIES — in the strong form either
+
+Probe v2 on silicon: **pass A 0 failures, pass B 0 failures**, ten slots, control fired. Pass B
+reloads *after* walking the entire 256 KiB arena at cache-line stride, so the stored granules are
+displaced and must come back from DRAM rather than from store-to-load forwarding.
+
+**So capabilities survive both forwarding AND a DRAM round trip through `sqlite_heap`.** The
+"capabilities stored in the arena get corrupted" hypothesis is refuted in its strong form, not
+just its weak one. Whatever diverts control flow into the heap, it is not the arena failing to
+hold a capability.
+
+## 3. THE WEDGE OFFSET IS INVARIANT
+
+    boot 2   s1_81  (50 queries)   base 0x82C00000   commit pc 0x82d7fffc
+    boot 3   s1_56  (25 queries)   base 0x82C00000   commit pc 0x82d7fffc
+    boot 4   s1_36  ( 5 queries)   base 0x82800000   commit pc 0x8297fffc
+    boot 6   q1_only ( 1 query)    base 0x83000000   commit pc 0x8317fffc
+
+**Four wedges, three bases, two images, workloads from 1 to 50 queries — always offset
+`0x17FFFC`.** A data-dependent corruption would move with the workload. An invariant offset says
+the same code path computes the same target every time.
+
+**Three mechanisms for why `0x180000` might be a boundary have now been tested and all are dead:**
+capability-bounds rounding (the RTL mantissa is 14 bits → `0x80` granule, so `0x160910` rounds to
+`0x160980`); the code capability's end (`base + code_size` = `0x160910`); and the `dom_seal`
+region end (`DOMAIN_DATA_N = 96`, so `DOMAIN_DATA_SIZE` is 1536 bytes). The offset stays
+**recorded and unexplained** rather than fitted to a fourth story.
+
+## Next: name the CONSTRUCT, not the address
+
+`p3_avgonly` (`SELECT avg(c) FROM t1`), `p2_nosubq` (the same CASE with a constant instead of the
+subquery), `p1_scalarsub` (the full query), all verified to RETURN natively. Whichever wedges
+names the construct, which narrows the code path — more actionable than the address.
