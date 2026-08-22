@@ -36,6 +36,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
+source "$SCRIPT_DIR/infra-retry.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 OPT_LEVELS=${OPT_LEVELS:--O0 -O1 -O2}
@@ -93,7 +94,8 @@ run_ok() { # $1=share  $2=probe  $3=expected retval  $4=optional "read-arena"
       continue
     fi
     echo "FAIL  $name  (rc=$rc; see $log)" >&2
-    return 1
+    capstone_verdict_or_flake "$log" "intra-domain-mrev-revoke-probe:" 1
+    return $?
   done
 }
 
@@ -124,11 +126,17 @@ run_fault() { # $1=share  $2=probe  $3=expected diagnostic  $4=expected cause
       continue
     fi
     echo "FAIL  $name  (no fault line after $attempt attempts; see $log)" >&2
-    return 1
+    capstone_verdict_or_flake "$log" "intra-domain-mrev-revoke-probe:" 1
+    return $?
   done
 }
 
 fail=0
+infra=0
+# A probe whose guest never ran is not a verdict. Keep the two apart so an
+# incomplete run cannot be published as a capability failure -- and so a real
+# failure is never softened into one either.
+note() { case $1 in 0) ;; 75) infra=1 ;; *) fail=1 ;; esac; }
 for opt in $OPT_LEVELS; do
   share="$TMP_ROOT/intra-domain-mrev-revoke-share$opt"
   rm -rf "$share"
@@ -142,31 +150,33 @@ for opt in $OPT_LEVELS; do
   # The mechanism: a cached alias of a revoked, monitor-granted capability faults.
   want_cause=$(primary_cause "$opt")
   [[ "$want_cause" == 25 ]] && want_msg="$REVOKED" || want_msg="$UNTAGGED"
-  run_fault "$share" held_revoke_fault "$want_msg" "$want_cause" || fail=1
+  run_fault "$share" held_revoke_fault "$want_msg" "$want_cause"; note $?
   # Memory-resident alias: the reload observes the revoked node and drops the tag.
-  run_fault "$share" held_mem_alias_fault "$UNTAGGED" 24 || fail=1
+  run_fault "$share" held_mem_alias_fault "$UNTAGGED" 24; note $?
   # Control for both cause-24 expectations: no revoke, and the deref succeeds.
   # read-arena: the host mmap independently sees the sentinel the domain wrote
   # through the granted capability -- the delivery really lands in the region.
-  run_ok "$share" held_no_revoke_ok 0x2230005e read-arena || fail=1
+  run_ok "$share" held_no_revoke_ok 0x2230005e read-arena; note $?
   # The sweep is not over-broad: unrelated authority survives the domain's revoke.
-  run_ok "$share" held_unrelated_ok 0x22310033 || fail=1
+  run_ok "$share" held_unrelated_ok 0x22310033; note $?
   # Provenance: the arena has NO ambient second path -- a forged address traps.
-  run_fault "$share" held_ambient_miss "$UNTAGGED" 24 || fail=1
+  run_fault "$share" held_ambient_miss "$UNTAGGED" 24; note $?
   # Sub-allocations of one grant are independently revocable (SPLIT, not SHRINK).
   # Only the high half is revoked, so the low half's node keeps regions[] valid.
-  run_ok "$share" held_split_sibling_ok 0x22350044 read-arena || fail=1
+  run_ok "$share" held_split_sibling_ok 0x22350044 read-arena; note $?
 
   # Step-3 scaffold: the SQLite lifecycle. A carved protected value is revoked at
   # "finalize" and the caller's cached handle faults...
-  run_fault "$share" held_protected_value_lifecycle "$want_msg" "$want_cause" || fail=1
+  run_fault "$share" held_protected_value_lifecycle "$want_msg" "$want_cause"; note $?
   # ...while a second live value and the un-carved arena remainder keep working.
-  run_ok "$share" held_arena_survives_revoke 0x22370077 read-arena || fail=1
+  run_ok "$share" held_arena_survives_revoke 0x22370077 read-arena; note $?
 done
 
-if [[ $fail -eq 0 ]]; then
-  echo "__CAPSTONE_INTRA_DOMAIN_MREV_REVOKE_PASSED__"
-else
+if [[ $fail -ne 0 ]]; then
   echo "one or more probes FAILED" >&2
+  exit 1
+elif [[ $infra -ne 0 ]]; then
+  echo "one or more probes never booted; no verdict" >&2
+  exit 75
 fi
-exit $fail
+echo "__CAPSTONE_INTRA_DOMAIN_MREV_REVOKE_PASSED__"

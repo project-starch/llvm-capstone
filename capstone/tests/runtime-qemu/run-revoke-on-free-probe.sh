@@ -19,6 +19,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$SCRIPT_DIR/../capstone-test-env.sh"
+source "$SCRIPT_DIR/infra-retry.sh"
 
 TMP_ROOT=${TMP_ROOT:-$CAPSTONE_TMP_ROOT}
 OPT_LEVELS=${OPT_LEVELS:--O0 -O1 -O2}
@@ -58,7 +59,8 @@ run_ok() { # $1=probe  $2=expected retval
        ! grep -q "revoke-on-free-probe: call retval" "$log" 2>/dev/null; then
       echo "  ...no boot/retval for $name (attempt $attempt), retrying" >&2; continue
     fi
-    echo "FAIL  $name  (rc=$rc; see $log)" >&2; return 1
+    echo "FAIL  $name  (rc=$rc; see $log)" >&2
+    capstone_verdict_or_flake "$log" "revoke-on-free-probe:" 1; return $?
   done
 }
 
@@ -82,11 +84,17 @@ run_fault() { # $1=probe  $2=expected diagnostic  $3=expected cause
       echo "FAIL  $name  (returned instead of faulting; see $log)" >&2; return 1
     fi
     [[ $attempt -le $RETRIES ]] && { echo "  ...no boot/fault for $name (attempt $attempt), retrying" >&2; continue; }
-    echo "FAIL  $name  (no fault after $attempt attempts; see $log)" >&2; return 1
+    echo "FAIL  $name  (no fault after $attempt attempts; see $log)" >&2
+    capstone_verdict_or_flake "$log" "revoke-on-free-probe:" 1; return $?
   done
 }
 
 fail=0
+infra=0
+# A probe whose guest never ran is not a verdict. Keep the two apart so an
+# incomplete run cannot be published as a capability failure -- and so a real
+# failure is never softened into one either.
+note() { case $1 in 0) ;; 75) infra=1 ;; *) fail=1 ;; esac; }
 for opt in $OPT_LEVELS; do
   SHARE="$TMP_ROOT/revoke-on-free-share$opt"
   rm -rf "$SHARE"; mkdir -p "$SHARE"
@@ -97,14 +105,16 @@ for opt in $OPT_LEVELS; do
   echo "== running at $opt (one boot each) =="
   want=$(primary_cause "$opt")
   [[ "$want" == 25 ]] && msg="$REVOKED" || msg="$UNTAGGED"
-  run_fault alloc_use_after_free_fault "$msg" "$want" || fail=1
-  run_ok   alloc_no_free_ok 0x0812005e || fail=1
-  run_ok   alloc_sibling_survives_ok 0x0813003c || fail=1
+    run_fault alloc_use_after_free_fault "$msg" "$want"; note $?
+    run_ok   alloc_no_free_ok 0x0812005e; note $?
+    run_ok   alloc_sibling_survives_ok 0x0813003c; note $?
 done
 
-if [[ $fail -eq 0 ]]; then
-  echo "__CAPSTONE_REVOKE_ON_FREE_PASSED__"
-else
+if [[ $fail -ne 0 ]]; then
   echo "one or more probes FAILED" >&2
+  exit 1
+elif [[ $infra -ne 0 ]]; then
+  echo "one or more probes never booted; no verdict" >&2
+  exit 75
 fi
-exit $fail
+echo "__CAPSTONE_REVOKE_ON_FREE_PASSED__"
