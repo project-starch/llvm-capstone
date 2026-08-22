@@ -538,7 +538,7 @@ static unsigned capstone_heapcap_probe(void) {
     0UL, 4096UL, 14480UL, 14496UL, 14512UL, 32768UL, 65536UL, 131072UL, 262112UL
   };
   void *src = (void *)&capstone_vdbe_ops;      /* a real, known-good capability */
-  unsigned tested = 0, bad = 0, ctl_seen = 0;
+  unsigned tested = 0, bad = 0, bad_b = 0, ctl_seen = 0;
   unsigned long i;
 
   for (i = 0; i < sizeof(offs) / sizeof(offs[0]); i++) {
@@ -557,6 +557,37 @@ static unsigned capstone_heapcap_probe(void) {
       bad++;                                   /* survived as a capability, wrong cursor */
   }
 
+  /* PASS B -- THE SAME SLOTS, BUT RELOADED AFTER FORCED EVICTION.
+   *
+   * Pass A stores and reloads immediately, which is the EASIEST case for the hardware: the
+   * store may still sit in the write buffer and be forwarded straight back, so the capability
+   * need never reach DRAM at all. A clean pass A therefore does NOT show that a capability
+   * survives memory -- only that it survives a forwarded store. The wedge involves heap data
+   * written, displaced by other work, and read back later, which is pass B's shape.
+   *
+   * The walk touches the whole 256 KiB arena at cache-line stride, which is far larger than
+   * L1, so the stored granules are displaced before being read again. It is a plain integer
+   * read, so it cannot itself disturb a tag.
+   *
+   * Reported SEPARATELY from pass A. Folding them together would make "survives forwarding but
+   * not DRAM" -- the interesting answer -- indistinguishable from both passing. */
+  {
+    volatile unsigned long sink = 0;
+    unsigned long w;
+    for (w = 0; w < (unsigned long)sizeof(sqlite_heap); w += 64UL)
+      sink += ((volatile unsigned char *)sqlite_heap)[w];
+    (void)sink;
+    for (i = 0; i < sizeof(offs) / sizeof(offs[0]); i++) {
+      unsigned long o = offs[i] & ~15UL;
+      void *back;
+      if (o + 16UL > (unsigned long)sizeof(sqlite_heap))
+        continue;
+      back = (void *)*(volatile void **)(void *)&sqlite_heap[o];
+      if (cap_q_type(back) == 7UL) bad_b++;
+      else if ((unsigned long)back != (unsigned long)src) bad_b++;
+    }
+  }
+
   /* POSITIVE CONTROL, last so it cannot perturb the subject slots: a plain integer store must
      read back as NOT_CAP. If this is not counted, every zero above is unproven. */
   {
@@ -565,12 +596,17 @@ static unsigned capstone_heapcap_probe(void) {
     iw[0] = 0x5A5A5A5AUL; iw[1] = 0UL;
     back = (void *)*(volatile void **)(void *)&sqlite_heap[4096];
     tested++;
-    if (cap_q_type(back) == 7UL) { ctl_seen = 1; bad++; }
+    /* The control gets its OWN flag and does NOT add to pass A's tally. Counting it into
+       `bad` made a clean QEMU run read as "pass A bad 1", which is exactly the ambiguity
+       this probe exists to avoid -- the sentinel already reports whether it fired. */
+    if (cap_q_type(back) == 7UL) ctl_seen = 1;
   }
   /* Sentinel 0x4EB0 when the control did NOT fire -- distinct from a clean 0x4EA0 run, so a
      broken instrument can never be read as a passing one. */
+  /* 0x4EA0_ABTT : A = pass-A failures (immediate reload), B = pass-B failures (after eviction),
+     TT = slots tested. 0x4EB0 means the positive control did not fire and the run is VOID. */
   return (ctl_seen ? 0x4EA00000u : 0x4EB00000u)
-         | ((tested & 0xffu) << 8) | (bad & 0xffu);
+         | ((bad & 0xfu) << 12) | ((bad_b & 0xfu) << 8) | (tested & 0xffu);
 }
 #endif
 
