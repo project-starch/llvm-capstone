@@ -1,0 +1,14 @@
+# MATCHED PAIR, boot #21. q_one and q_two differ by EXACTLY the second table
+# reference ", t1 AS y" -- no other difference in link address, row count, sort
+# mode or return path. Both tables are EMPTY, so no data is involved either way.
+# ORDER BY is deliberately absent: it is already exonerated (negative-control.test
+# uses it and passes on silicon). If q_one returns and q_two wedges, the join
+# itself is the trigger, inside sqlite3_prepare_v2.
+statement ok
+CREATE TABLE t1(a INTEGER, b INTEGER, c INTEGER, d INTEGER, e INTEGER)
+
+query I nosort
+SELECT t1.a FROM t1
+----
+0
+

@@ -1845,3 +1845,44 @@ free=1315` on the returning arm also shows the allocator is healthy and its coun
 * `slt/p8_empty.test --clamp 1` -- the self-join over an EMPTY table, zero query opcodes. A
   wedge here has no data and no execution left to blame and localizes the fault to
   `sqlite3_prepare_v2` outright.
+
+## Boot #20: the fault is in sqlite3_prepare_v2. Setup statements are exonerated.
+
+Control passed, boot valid.
+
+**Arm 2 -- `p8_trivial.test` (identical 31 setup statements, trivial query) RETURNED**, with a
+tally bit-identical to the QEMU reference:
+
+    records=32 stmt_pass=31 stmt_fail=0 query_pass=0 query_fail=1 skip_big=0 oom=0
+    skip_cond=0 parse_err=0 completed=1     M5 oom=0 malloc=1049 free=1049   ops=10 lastop=0
+
+So `CREATE TABLE` and all 30 `INSERT`s execute correctly on silicon. The setup statements are
+exonerated, and with them the last remaining "data volume" explanation.
+
+**Arm 3 -- `p8_empty.test --clamp 1` WEDGED.** That file is ONE `CREATE TABLE` plus the
+self-join, over an EMPTY table, with the clamp firing on the first opcode so ZERO query opcodes
+execute. No INSERTs, no rows, no bytecode. The only remaining code is `sqlite3_prepare_v2` --
+parser, query planner, code generator.
+
+**Localization: the wedge is at PREPARE time, not execution time.** Reproducer is 465 bytes.
+
+Two exonerations available offline, from workloads already known to pass on silicon:
+
+* **`ORDER BY` is exonerated.** `negative-control.test` contains `SELECT a FROM t1 ORDER BY a`
+  and `SELECT x FROM big ORDER BY x`, and it passes on silicon -- matching native field-for-field
+  unclamped, and matching QEMU field-for-field at clamp 5. The sorter path works.
+* **Joins have NEVER been exercised successfully on silicon.** select1/select2/select3 -- the
+  slices that passed, 5320 SELECTs between them -- contain ZERO multi-table `FROM` clauses.
+  Every silicon success to date is single-table.
+
+That makes the planner's JOIN path the prime suspect. For this query `EXPLAIN QUERY PLAN`
+previously showed `SEARCH y USING AUTOMATIC COVERING INDEX (a=?)` plus a BLOOM FILTER, so
+automatic-index construction at prepare time is the specific mechanism to attack next.
+
+**Next: a matched pair differing by EXACTLY one thing** (`slt/q_one.test`, `slt/q_two.test`):
+
+    q_one:  SELECT t1.a FROM t1
+    q_two:  SELECT t1.a FROM t1, t1 AS y
+
+Same empty table, same sort mode, same return path, no ORDER BY on either side. `diff` between
+the two files is one line. If q_one returns and q_two wedges, the join alone is the trigger.
