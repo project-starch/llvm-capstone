@@ -1886,3 +1886,49 @@ automatic-index construction at prepare time is the specific mechanism to attack
 
 Same empty table, same sort mode, same return path, no ORDER BY on either side. `diff` between
 the two files is one line. If q_one returns and q_two wedges, the join alone is the trigger.
+
+## Boot #21: MINIMAL REPRODUCER -- one extra FROM term wedges the core
+
+Control passed, boot valid. The matched pair separates:
+
+| arm | query (table is EMPTY in both) | silicon |
+|---|---|---|
+| `q_one.test` | `SELECT t1.a FROM t1` | RETURNS -- bit-identical to QEMU: `ops=6`, `M5 oom=0 malloc=236 free=236`, `records=2 stmt_pass=1 stmt_fail=0 query_pass=0 query_fail=1 completed=1` |
+| `q_two.test` | `SELECT t1.a FROM t1, t1 AS y` | **WEDGE** |
+
+`diff q_one.test q_two.test` is ONE line. Same empty table, same sort mode, same return path,
+no ORDER BY on either side, no WHERE on either side, no rows anywhere. On QEMU the pair differs
+by 1 opcode and 5 allocations (6/236 vs 7/241).
+
+**A single additional table reference in the FROM clause is the whole trigger.** 588 bytes.
+
+### What is established, and what is NOT
+
+ESTABLISHED:
+
+* `q_one` vs `q_two`: the trigger is the second FROM term and nothing else. The arms differ in
+  exactly one respect, so the difference between them IS the variable.
+* From boot #20, for the self-join WITH `WHERE` and `ORDER BY`: `p8_empty --clamp 1` wedges with
+  ZERO VDBE opcodes executed, so THAT query's wedge is inside `sqlite3_prepare_v2`.
+* Setup statements, data volume, ORDER BY/the sorter, and the whole VDBE-execution family are
+  retired, each by its own control.
+
+NOT ESTABLISHED -- do not write this down as though it were:
+
+* **Whether `q_two` wedges in prepare or in its 7 opcodes.** `q_two` ran UNCLAMPED. The
+  prepare-time attribution is proven for `p8_empty`, not for `q_two`. `q_two --clamp 1` is the
+  arm that settles it and has not been run.
+* **Whether this is a silicon defect or a codegen bug.** QEMU runs both arms fine, but that is
+  exactly what the gp/`__split` investigation looked like too, where QEMU was permissive and the
+  RTL enforced. "QEMU passes, silicon wedges" is equally consistent with our compiler emitting
+  something the hardware legitimately rejects. Nothing here yet distinguishes the two, and it
+  must not be handed to the hardware side as a silicon defect until something does.
+
+Note the automatic-index theory from boot #20 does NOT survive contact with this result:
+`q_two` has no `WHERE` clause, so the planner builds no automatic index and no bloom filter,
+and it wedges anyway. The trigger is simpler than that.
+
+### Next
+
+1. `q_two --clamp 1` -- prepare vs execution for the minimal case.
+2. `SELECT t1.a FROM t1, t2` (two DISTINCT tables) -- is it a self-join or any second FROM term?
