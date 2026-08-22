@@ -1648,3 +1648,46 @@ differ — `p8` (wedges), `p11` (2 cursors, few rows, returns), `p10` (1 cursor,
 returns). **What differs numerically between a wedging and a passing case is data, where another
 mechanism story would be speculation.** The OOM half of that counter is already built and
 calibrated: it reports 1 at a 64 KiB arena and 0 at 1 MiB, so it discriminates.
+
+
+---
+
+# THE FAULT IS IN THE FIRST 2,000 VDBE OPCODES (session 13)
+
+Control-green boot. `p8_selfjoin` executes **6,715** VDBE opcodes in total. Clamped to **2,000**
+it still **WEDGED**, so the faulting opcode is at or before 2,000 — the window fell by 3.4x on one
+arm.
+
+## Why a clamp, and why it took this long to reach for it
+
+**A wedged domain never returns, so it can never report anything.** Twelve boots of measurement
+have all been *outside* the fault, inferring from what did not happen. The clamp stops
+`sqlite3VdbeExec` after N opcodes and returns `SQLITE_DONE`, so the arm comes back carrying state:
+`lastop` (the opcode it declined to run) and the allocator counters at that moment. That is the
+project's own rule — prefer a diagnostic that converts a hang into a wrong answer over one that
+observes the hang — and it is what finally gets inside the failure.
+
+## The clamp is now RUNTIME-selectable, which changes the economics
+
+As a compile-time constant, each clamp value cost a firmware rebuild plus a boot — about eleven of
+each to reach a single opcode. It now reads from the hostcall block's unused `phase` field
+(`--clamp N` on the host), so **one image answers any value** and a bisection step is a boot
+alone. Verified that the knob moves: with the built-in constant at 99,999,999, `--clamp 100`
+reports `ops=100 lastop=40` (`OP_Next`) and `--clamp 5000` reports `ops=5000 lastop=96`
+(`OP_Column`).
+
+## Allocator traffic, measured at a 256 KiB arena under QEMU
+
+    p11_smalljoin (returns)   malloc=1157  free=1157  oom=0
+    p10_bigsort   (returns)   malloc=1206  free=1206  oom=0
+    p8_selfjoin   (WEDGES)    malloc=1516  free=1516  oom=0
+
+**Balanced, so no leak; `oom=0`, so no allocation failure under emulation.** What differs between
+the wedging and passing cases is traffic volume, not failure. The same counters on silicon are the
+first-link evidence for the NULL chain — the gap that got an earlier root-cause claim retracted.
+
+## Next
+
+Bisect 0-2,000 with `--clamp 500 / 1000 / 1500` in one boot, one image. The last clamp that
+RETURNS names the faulting opcode in `lastop` and reports whether the allocator had already
+failed.
