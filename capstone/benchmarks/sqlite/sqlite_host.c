@@ -210,8 +210,22 @@ int main(int argc, char **argv) {
      0x5117BADn values are the runner's refusals-to-start; each means no records were
      evaluated, and each must fail the run rather than pass it with an empty report. */
   if (slt_path) {
-    if (result != SQLITE_HC_SLT_RAN)
+    /* A DOMAIN-SIDE PROBE MARKER IS A SUCCESSFUL RUN, NOT A FAILURE TO START.
+     *
+     * Probe builds (CAPSTONE_HEAPCAP_PROBE and friends) return their own 0x4EA0/0x4EB0 marker
+     * instead of SQLITE_HC_SLT_RAN, because they deliberately run INSTEAD of the workload.
+     * Treating that as a failure made the host exit 1, and the board driver's "no RESULT
+     * retval= marker plus a non-zero exit" heuristic then declared HARD STOP -- "the domain
+     * almost certainly was not staged" -- and abandoned the remaining arms of the boot. It was
+     * staged and it ran: the monitor echoed the value back as ENT2:4EA00A01. That cost two
+     * arms of a control-validated board session, which is expensive for a classification
+     * error. Print the marker and exit cleanly so the driver reads the arm as what it is. */
+    if ((result & 0xFFF00000UL) == 0x4EA00000UL ||
+        (result & 0xFFF00000UL) == 0x4EB00000UL) {
+      mark_u("SQ: probe=", result);
+    } else if (result != SQLITE_HC_SLT_RAN) {
       return fail_cleanup("slt did not run", result);
+    }
   } else if (result != SQLITE_HC_RET_DONE) {
     return fail_cleanup("unexpected domain return", result);
   }

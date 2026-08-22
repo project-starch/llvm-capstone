@@ -1232,3 +1232,50 @@ cannot be confused with "the wedge went away when the image moved".
 (`5d2a56e85a316deb`) by something other than my bake, whose last run was the previous evening.
 Not a problem in itself — the next bake rebuilds it — but board artifacts are shared state and
 worth checking rather than assuming.
+
+
+---
+
+# BOARD SESSION 5 — the minimal repro RAN, and its simplest form is CLEAN (2026-08-22)
+
+Control-green (5/5, 6 s). **`sqheap` — the minimal repro, no SQLite in the frame — returned
+`0x4EA00A01`:** sentinel `4EA0` (its own positive control fired), 10 slots tested, **1 bad, and
+that one is the deliberately-written plain integer.** The monitor echoed the value back as
+`ENT2:4EA00A01`, so the domain demonstrably ran.
+
+**So capabilities DO survive a store-and-immediate-reload through `sqlite_heap` on silicon**, at
+nine offsets spanning the arena including the wedge site. The hypothesis is refuted in its
+simplest form.
+
+**That is exactly why pass A is not enough, and pass B exists.** An immediate reload is the
+easiest case the hardware can be given: the store may still sit in the write buffer and be
+forwarded straight back, so the capability need never reach DRAM. A clean pass A shows a
+capability survives FORWARDING, not MEMORY. The wedge involves heap data written, displaced by
+other work, and read back later — which is pass B's shape (walk the whole 256 KiB arena at
+cache-line stride, then reload). Probe v2 reports the two separately, because "survives
+forwarding but not DRAM" is the interesting answer and folding them would hide it.
+
+## Two instrument defects, and arms 3-4 lost to one of them
+
+**1. A HARD STOP that was wrong, and it cost two arms of a control-validated boot.** The probe
+returns its own marker instead of `SQLITE_HC_SLT_RAN`, so the host exited 1; the driver's "no
+`RESULT retval=` marker plus a non-zero exit" heuristic then concluded *"the domain almost
+certainly was not staged"* and abandoned the rest of the session. It WAS staged and it DID run.
+Fixed in `sqlite_host.c`: a `0x4EA0`/`0x4EB0` marker is now reported as `SQ: probe=` and exits
+cleanly, so probe arms are first-class rather than tripping a staging heuristic.
+
+**2. MY UART REASSEMBLY NEARLY VOIDED A VALID BOOT.** The control read 4 of 5 markers — which by
+the rule means VOID and stop. The missing one was `row name=alpha value=11`, and the cause was
+that I concatenate console chunks as Python `repr` strings **without stripping their quotes**, so
+every chunk boundary injects `''` into the text:
+
+    row name''=alpha value=11
+
+The board was fine; the extraction was not. Now fixed in one shared helper (`/tmp/capstone/uart.py`
+pattern, folded into the analysis path) rather than re-derived per script.
+
+**The pattern across this investigation, worth more than any single fix:** every instrument defect
+so far — `alloced_n` vs cumulative, the single-threshold watermark, the wrong log file, and now
+the quote-injecting reassembly — is the same family. **The check could not distinguish its own
+failure from the subject's.** Two of them produced clean-looking results that would have been
+published as findings.
