@@ -1551,3 +1551,44 @@ construction. Pass C's zero is explained, not merely observed.
 
 Order: control, `p11` (2), `p10` (3), `p8` (4 — known-wedging, so the slot-4 monitor hazard costs
 nothing).
+
+
+---
+
+# NEITHER FACTOR ALONE — it is the COMBINATION, and it looks like ARENA PRESSURE (session 10)
+
+Control-green. All three returning arms verified to have reached `G/enter`.
+
+| probe | cursors | output rows | slot | result |
+|---|---|---|---|---|
+| `p2_nosubq` | 1 | 30 | (s8) | returns |
+| `p11_smalljoin` | **2** | 30 | 2 | **returns**, 8 s |
+| `p10_bigsort` | 1 | **435** | 3 | **returns**, 9 s |
+| `p8_selfjoin` | **2** | **435** | 2 (s9) | **WEDGES**, mcause 25 |
+
+**"Two concurrent cursors are the trigger" is REFUTED by its own control.** `p11` has two cursors
+and returns. **"Output-row count" is refuted too** — `p10` has 435 rows and returns. Both
+single-factor claims are dead; **the wedge needs both together.**
+
+**And "both together" has a physical reading: `p8` is the most HEAP-HUNGRY of the four** — two
+cursors *and* a 435-row sorter inside a 256 KiB arena. That unifies with a result measured
+earlier and not connected at the time: **select5 crashed at a 1 MiB arena and PASSED at 2 MiB.**
+It also explains why the wedge PC of the `p1`-class failures sits *inside* `sqlite_heap`.
+
+**Next test, and it is a true matched pair:** the same `p8_selfjoin` case, same slot, differing in
+**one** parameter — `SQLITE_HEAP_SIZE` 256 KiB versus 1 MiB, as two domains in one boot. If the
+larger arena returns while the smaller wedges, this is an arena-capacity threshold and neither
+cursors nor SQL constructs are causal.
+
+## SLOT 4 FAILS IN THE MONITOR — now N=2, reproducible, and not about SQL
+
+Session 10's arm 4 reached only `A/dom-ok, B/mkregion1, C/mkregion2` and wedged at commit pc
+`0x80020fbe`, which the firmware symbol table places in **`_split_out_cap`**. That is byte-for-byte
+the same failure as session 7's arm 4, with a different domain and different SQL.
+
+**So the 4th domain of a boot fails in the monitor's region path regardless of what it runs.**
+`preflight-board-run.sh` permits four domains on the basis that the monitor spins near the *fifth*
+`create_dom` — but each SLT arm performs one `create_dom` **and two `create_region`s**, so the
+region path is exercised three times per arm. **The effective budget for region-creating domains
+is THREE readable slots, not four.** Session 7 lost an arm to this and session 10 lost another;
+the rule is now evidenced twice rather than inferred once.
