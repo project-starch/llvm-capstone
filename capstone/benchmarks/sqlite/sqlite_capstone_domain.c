@@ -538,7 +538,7 @@ static unsigned capstone_heapcap_probe(void) {
     0UL, 4096UL, 14480UL, 14496UL, 14512UL, 32768UL, 65536UL, 131072UL, 262112UL
   };
   void *src = (void *)&capstone_vdbe_ops;      /* a real, known-good capability */
-  unsigned tested = 0, bad = 0, bad_b = 0, ctl_seen = 0;
+  unsigned tested = 0, bad = 0, bad_b = 0, bad_c = 0, ctl_seen = 0;
   unsigned long i;
 
   for (i = 0; i < sizeof(offs) / sizeof(offs[0]); i++) {
@@ -588,6 +588,47 @@ static unsigned capstone_heapcap_probe(void) {
     }
   }
 
+  /* PASS C -- ALIASING, which is what two cursors actually do.
+   *
+   * Capstone capabilities are LINEAR: moving one invalidates the source (QEMU's helper does
+   * `if(!captype_is_copyable(...)) *rs1_v = CAPREGVAL_NULL;`). Two BtCursors over one table
+   * alias the SAME pager page pointer, so if that pointer is linear, the second reader's load
+   * could invalidate the first's copy -- and the first cursor's next use would then see
+   * NOT_CAP and raise UNEXPECTED_OPERAND, which is mcause 25, which is exactly what silicon
+   * reported for the self-join.
+   *
+   * Passes A and B never alias: they store and reload ONE slot. This is the first pass that
+   * reproduces the shape of the failing workload. Store to slot 1, COPY slot 1 into slot 2,
+   * then ask whether SLOT 1 is still a capability. */
+  {
+    volatile void **s1 = (volatile void **)(void *)&sqlite_heap[0x1000];
+    volatile void **s2 = (volatile void **)(void *)&sqlite_heap[0x2000];
+    void *back;
+    *s1 = src;
+    *s2 = (void *)*s1;                 /* the alias: load from s1, store into s2 */
+    back = (void *)*s1;                /* is the ORIGINAL still a capability? */
+    if (cap_q_type(back) == 7UL) bad_c++;
+    else if ((unsigned long)back != (unsigned long)src) bad_c++;
+    back = (void *)*s2;                /* and did the copy itself survive? */
+    if (cap_q_type(back) == 7UL) bad_c++;
+  }
+
+  /* REPORT THE OBSERVED CAPABILITY TYPES, because the aliasing question turns on them.
+   * LCC field 1 is the TOTAL type query: 1 = NONLIN, 7 = NOT_CAP; the linear types are the ones
+   * a move invalidates. If heap pointers read back NONLIN then aliasing them is safe by
+   * construction and the linearity hypothesis is dead; if LIN, it is live. Emitted as text so
+   * the actual numbers are visible rather than a verdict. */
+  {
+    void *h = (void *)&sqlite_heap[0x1000];
+    output_text("HEAPCAP types: heapslot=");
+    output_uint((unsigned)cap_q_type((void *)*(volatile void **)h));
+    output_text(" src=");
+    output_uint((unsigned)cap_q_type(src));
+    output_text(" heapbase=");
+    output_uint((unsigned)cap_q_type((const void *)sqlite_heap));
+    output_text(" (1=NONLIN 7=NOT_CAP)\n");
+  }
+
   /* POSITIVE CONTROL, last so it cannot perturb the subject slots: a plain integer store must
      read back as NOT_CAP. If this is not counted, every zero above is unproven. */
   {
@@ -605,8 +646,11 @@ static unsigned capstone_heapcap_probe(void) {
      broken instrument can never be read as a passing one. */
   /* 0x4EA0_ABTT : A = pass-A failures (immediate reload), B = pass-B failures (after eviction),
      TT = slots tested. 0x4EB0 means the positive control did not fire and the run is VOID. */
+  /* 0x4EA0_ABCT : A = pass-A fails, B = pass-B fails, C = pass-C (ALIASING) fails, T = tested/2
+     capped to a nibble each. 0x4EB0 = the control did not fire and the run is VOID. */
   return (ctl_seen ? 0x4EA00000u : 0x4EB00000u)
-         | ((bad & 0xfu) << 12) | ((bad_b & 0xfu) << 8) | (tested & 0xffu);
+         | ((bad & 0xfu) << 12) | ((bad_b & 0xfu) << 8)
+         | ((bad_c & 0xfu) << 4) | (tested & 0xfu);
 }
 #endif
 

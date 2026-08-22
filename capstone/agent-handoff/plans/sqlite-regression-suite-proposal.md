@@ -1513,3 +1513,41 @@ two faults reachable from the same cursor condition, or two different bugs. **No
 * Whether `same table` matters or merely `two cursors`. `p9_subq_other` (two cursors on
   DIFFERENT tables) was collateral when `p8` wedged in slot 2 and still needs a boot.
 * Why `p1`'s wedge has no capability trap at all.
+
+
+---
+
+# QUALIFIED: "two concurrent cursors are the trigger" rests on a CONFOUNDED comparison
+
+**`p8_selfjoin` differs from `p2_nosubq` in TWO ways, not one:**
+
+    p2_nosubq     1 cursor,   30 output rows through ORDER BY   RETURNS
+    p8_selfjoin   2 cursors, 435 output rows through ORDER BY   WEDGES
+
+A second cursor **and** ~14.5x the rows through the sorter. I attributed the wedge to the cursor
+alone. That is the same single-variable discipline I applied correctly to `p1` vs `p2` and failed
+to apply here — and it is the exact shape this project warns about: a ladder measuring whichever
+difference you did not intend.
+
+**The linearity hypothesis is separately DEAD.** Two cursors alias the same pager page, and
+Capstone capabilities are linear — a move invalidates the source — so aliasing looked like a
+mechanism. Measured instead of assumed: an aliasing pass (store, copy to a second slot, re-check
+the ORIGINAL) reports **0 failures**, and the LCC TOTAL type query says why:
+
+    HEAPCAP types: heapslot=1 src=1 heapbase=1   (1 = NONLIN, 7 = NOT_CAP)
+
+**Heap capabilities are NON-LINEAR**, so a move cannot invalidate them and aliasing is safe by
+construction. Pass C's zero is explained, not merely observed.
+
+## The separating probes, built and native-verified
+
+    p11_smalljoin   2 cursors,  30 rows   SELECT t1.a FROM t1, t1 AS y WHERE y.a = t1.a ORDER BY 1
+    p10_bigsort     1 cursor,  435 rows   SELECT a FROM big ORDER BY 1
+
+* `p11` wedges -> **cursor count** is the factor
+* `p10` wedges -> **output-row count / the sorter** is, and "two cursors" is retracted outright
+* both wedge -> two independent triggers
+* neither -> it is the **combination**, which is a narrower answer than either alone
+
+Order: control, `p11` (2), `p10` (3), `p8` (4 — known-wedging, so the slot-4 monitor hazard costs
+nothing).
