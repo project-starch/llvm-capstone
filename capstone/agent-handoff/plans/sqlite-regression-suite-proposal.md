@@ -1343,3 +1343,56 @@ region end (`DOMAIN_DATA_N = 96`, so `DOMAIN_DATA_SIZE` is 1536 bytes). The offs
 `p3_avgonly` (`SELECT avg(c) FROM t1`), `p2_nosubq` (the same CASE with a constant instead of the
 subquery), `p1_scalarsub` (the full query), all verified to RETURN natively. Whichever wedges
 names the construct, which narrows the code path — more actionable than the address.
+
+
+---
+
+# RETRACTED SAME DAY: "the scalar subquery is the trigger" (board session 7)
+
+Control-green boot. `p3_avgonly` returned in 8 s, `p2_nosubq` returned in 8 s, and
+`p1_scalarsub` did not return — which looked like a clean matched pair naming the scalar
+subquery as the trigger.
+
+**It is not, because `p1_scalarsub` NEVER RAN ITS QUERY.** Its UART ends at:
+
+    SQ: A/dom-ok   SQ: B/mkregion1   SQ: C/mkregion2
+    SPLB:0000E010 RGID:0000000A RGNN:00000016 BASE:83300000 ALEN:00100000
+    <garbage>
+
+No `SQ: D/mapped`, no `SQ: G/enter`. It wedged **inside the monitor**, during the second
+`create_region`, before executing any SQL. The commit pc confirms it: `0x80020fbe`, which the
+firmware symbol table places inside **`_split_out_cap`** — whose region path contains two silent
+`while(1)`s (`sbi_capstone.c:236` and `:246`).
+
+**So the construct question is UNRESOLVED.** `p2` and `p3` returning still stands; the failing
+half of the pair does not exist.
+
+## What DOES survive, verified rather than assumed
+
+Every earlier wedge reached `SQ: G/enter`, i.e. entered the domain and wedged inside the workload:
+
+    boot 3  s1_56    A/dom-ok D/mapped slt= G/enter
+    boot 4  s1_36    A/dom-ok D/mapped slt= G/enter
+    boot 5  sqheap   A/dom-ok D/mapped slt= G/enter H/return   (returned, 0x4EA0000A)
+    boot 6  q1_only  A/dom-ok D/mapped slt= G/enter
+
+**So "one query wedges inside the domain" HOLDS** — `q1_only` entered and then wedged. Only
+session 7's arm 4 failed before entry, and it is the only arm that did.
+
+## AND A PRACTICAL RULE THIS BUYS: SLOT 4 IS NOT SAFE FOR THESE DOMAINS
+
+`preflight-board-run.sh` allows four domains, on the basis that the monitor's middle exact-fit
+case spins at roughly the fifth `create_dom`. **But each SLT arm performs one `create_dom` AND
+TWO `create_region` calls**, so the monitor's region path is exercised three times per arm and
+exhausts earlier than the domain count implies. Session 7 lost its fourth arm to exactly that.
+
+**Consequence: for region-creating domains, treat slot 4 as unreliable and put the arm you most
+need to read no later than slot 3.** The invariant-offset observation recorded earlier also needs
+this qualification: it holds for the four wedges that entered the domain, and session 7's arm 4 is
+NOT one of them — its commit pc is in the monitor, not at `base + 0x17FFFC`.
+
+## Re-run, with `p1_scalarsub` in slot 2
+
+    control, p1_scalarsub, p4_subq_where, p5_exists
+
+Same question, asked where the answer can be read.
