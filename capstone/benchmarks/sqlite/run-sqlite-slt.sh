@@ -67,7 +67,7 @@ python3 "$ROOT/capstone/tests/runtime-qemu/run-domain-smoke.py" \
   --log-file "${SLT_LOG_FILE:-$OUT_DIR/sqlite-slt.log}" \
   --timeout-multiplier 12 \
   --guest-command \
-    'cp /mnt/host/sqlite_host.user /tmp/h.user && chmod 0755 /tmp/h.user && /tmp/h.user /mnt/host/sqlite_silicon.dom --slt /mnt/host/case.test' \
+    "cp /mnt/host/sqlite_host.user /tmp/h.user && chmod 0755 /tmp/h.user && /tmp/h.user /mnt/host/sqlite_silicon.dom --slt /mnt/host/case.test${SLT_CLAMP:+ --clamp $SLT_CLAMP}" \
   --success-marker 'SLT-SUMMARY' \
   --success-marker 'completed=1'
 

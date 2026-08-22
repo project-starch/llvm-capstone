@@ -71,11 +71,15 @@ int main(int argc, char **argv) {
      strtoul'd as a probe stage, so a bare path would parse to 0 and quietly publish the
      stage-0 selector -- a run that looks like a staged probe and tests nothing. */
   const char *slt_path = 0;
-  if (argc == 4 && !strcmp(argv[2], "--slt")) {
+  unsigned long clamp_n = 0;
+  if (argc == 6 && !strcmp(argv[2], "--slt") && !strcmp(argv[4], "--clamp")) {
+    slt_path = argv[3];
+    clamp_n = strtoul(argv[5], NULL, 0);
+  } else if (argc == 4 && !strcmp(argv[2], "--slt")) {
     slt_path = argv[3];
   } else if (argc != 2 && argc != 3) {
     fprintf(stderr, "usage: %s <sqlite-domain.dom> [probe-stage]\n"
-                    "       %s <sqlite-domain.dom> --slt <file.test>\n", argv[0], argv[0]);
+                    "       %s <sqlite-domain.dom> --slt <file.test> [--clamp N]\n", argv[0], argv[0]);
     return 2;
   }
   /* RUNTIME PROBE SELECTION (optional 2nd argument).
@@ -143,6 +147,9 @@ int main(int argc, char **argv) {
      N bytes while the domain bounds its writes by M. Written unconditionally so the gate
      covers every build, not only SLT ones; nothing else reads this field. */
   metadata->result = (sqlite_hostcall_s64_t)SQLITE_HC_REGION_SIZE;
+  /* VDBE clamp, published in `phase` -- unused by anything else. Lets one image bisect many
+     clamp values instead of one firmware rebuild per value. */
+  metadata->phase = (sqlite_hostcall_u64_t)clamp_n;
   /* Publish the probe selector AFTER the memset and BEFORE the domain runs. Magic-guarded so
      an unset region is indistinguishable from today's behaviour. */
   if (have_probe_stage)

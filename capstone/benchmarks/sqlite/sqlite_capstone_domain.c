@@ -300,10 +300,21 @@ static void output_uint(unsigned value) {
    ladder measured the wrong statement entirely. The domain arms it immediately before the step
    under test, so the count is that statement's opcodes and nobody else's. */
 unsigned long capstone_vdbe_ops, capstone_vdbe_lastop, capstone_vdbe_armed;
+/* RUNTIME-SELECTABLE CLAMP. Compiled in as a constant, every clamp value needs its own image --
+   so bisecting a 6,715-opcode query to a single opcode would cost ~11 firmware rebuilds and ~11
+   boots. Read from the shared region instead and ONE image answers many values, which is the
+   same reasoning that made the staged probe selector a runtime field. Defaults to the built-in
+   constant when the host publishes nothing, so existing invocations are unchanged. */
+unsigned long capstone_vdbe_clamp_n =
+#ifdef CAPSTONE_VDBE_CLAMP
+    (unsigned long)(CAPSTONE_VDBE_CLAMP);
+#else
+    0UL;
+#endif
 /* memsys5's NULL-return count; written by the CAPSTONE_MEMSYS5_OOM patch inside the
    amalgamation. Defined unconditionally: a global that exists only under the same knob
    as its writer is the defect shape that made capstone_real_db read zero for a boot. */
-unsigned long capstone_m5_oom;
+unsigned long capstone_m5_oom, capstone_m5_malloc, capstone_m5_free;
 unsigned long capstone_memgrow_seen, capstone_amem_seen, capstone_pdest_seen;
 
 
@@ -6054,6 +6065,11 @@ static unsigned capstone_slt_entry(void) {
   if ((unsigned long)hostcall_metadata->result != (unsigned long)SQLITE_HC_REGION_SIZE)
     return (unsigned)SQLITE_HC_ERR_REGION_MISMATCH;
 
+  /* The host may publish a clamp in `phase`, which nothing else uses. Zero leaves the built-in
+     value untouched, so an unset region behaves exactly as before. */
+  if ((unsigned long)hostcall_metadata->phase != 0UL)
+    capstone_vdbe_clamp_n = (unsigned long)hostcall_metadata->phase;
+
   in_len = (unsigned long)hostcall_metadata->offset;
   if (in_len == 0UL || in_len > SQLITE_HC_SLT_MAX_INPUT)
     return (unsigned)SQLITE_HC_ERR_BAD_INPUT;
@@ -6095,12 +6111,18 @@ static unsigned capstone_slt_entry(void) {
   /* REPORTED UNCONDITIONALLY, including zero. Whether the allocator ever returned NULL is the
      first link in the "arena exhausted -> NULL -> untagged operand -> mcause 25" chain, and a
      line that appears only when non-zero cannot distinguish "no OOM" from "not compiled in". */
-  capstone_slt_out(0, "M5-OOM count=");
-  { char b[24]; int i = (int)sizeof b; unsigned long v = capstone_m5_oom;
-    b[--i] = '\0'; if (!v) b[--i] = '0';
-    while (v) { b[--i] = (char)('0' + v % 10UL); v /= 10UL; }
-    capstone_slt_out(0, b + i); }
-  capstone_slt_out(0, "\n");
+  { static const char *const nm[3] = {"M5 oom=", " malloc=", " free="};
+    unsigned long vals[3];
+    int k;
+    vals[0] = capstone_m5_oom; vals[1] = capstone_m5_malloc; vals[2] = capstone_m5_free;
+    for (k = 0; k < 3; k++) {
+      char b[24]; int i = (int)sizeof b; unsigned long v = vals[k];
+      capstone_slt_out(0, nm[k]);
+      b[--i] = '\0'; if (!v) b[--i] = '0';
+      while (v) { b[--i] = (char)('0' + v % 10UL); v /= 10UL; }
+      capstone_slt_out(0, b + i);
+    }
+    capstone_slt_out(0, "\n"); }
 #ifdef CAPSTONE_VDBE_CLAMP
   /* Reported unconditionally, including the nothing-fired case: whether the clamp was reached
      at all is part of the measurement, and a missing line would be indistinguishable from an

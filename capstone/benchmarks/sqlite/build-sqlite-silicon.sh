@@ -1548,10 +1548,22 @@ if NEEDLE not in s:
     sys.exit("MEMSYS5_OOM: exhaustion path not found -- patch shape changed")
 s = s.replace(NEEDLE,
               '    capstone_m5_oom++;\n' + NEEDLE, 1)
+
+# COUNT THE ALLOCATOR TRAFFIC TOO, not just its failures. What differs numerically between a
+# wedging case and a passing one is data; a mechanism story without it is speculation. malloc
+# and free are counted at their unsafe cores so every path through the allocator is seen.
+MAL = "static void *memsys5MallocUnsafe(int nByte){"
+if MAL not in s:
+    sys.exit("MEMSYS5_OOM: malloc core not found")
+s = s.replace(MAL, MAL + "\n  capstone_m5_malloc++;", 1)
+FRE = "static void memsys5FreeUnsafe(void *pOld){"
+if FRE not in s:
+    sys.exit("MEMSYS5_OOM: free core not found")
+s = s.replace(FRE, FRE + "\n  capstone_m5_free++;", 1)
 ANCHOR = "/************** Begin file mem5.c"
 if ANCHOR not in s:
     sys.exit("MEMSYS5_OOM: mem5 section anchor not found")
-s = s.replace(ANCHOR, "extern unsigned long capstone_m5_oom;\n" + ANCHOR, 1)
+s = s.replace(ANCHOR, "extern unsigned long capstone_m5_oom, capstone_m5_malloc, capstone_m5_free;\n" + ANCHOR, 1)
 open(path, "w").write(s)
 print("   MEMSYS5_OOM counter injected at the exhaustion return")
 PYM5
@@ -1585,7 +1597,7 @@ if NEEDLE not in s:
 # `pOp->opcode` is read BEFORE the clamp fires, so the reported opcode is the one that was ABOUT
 # to execute -- the suspect -- not the last one that succeeded.
 clamp = NEEDLE + """
-    if( capstone_vdbe_armed && ++capstone_vdbe_ops >= (unsigned long)(CAPSTONE_VDBE_CLAMP) ){
+    if( capstone_vdbe_armed && ++capstone_vdbe_ops >= capstone_vdbe_clamp_n ){
       capstone_vdbe_lastop = (unsigned long)pOp->opcode;
       rc = SQLITE_DONE;
       goto vdbe_return;
@@ -1595,7 +1607,7 @@ s = s.replace(NEEDLE, clamp, 1)
 ANCHOR = "#define SQLITE_CORE 1\n"
 if ANCHOR not in s:
     sys.exit("VDBE_CLAMP: amalgamation prologue anchor not found")
-s = s.replace(ANCHOR, ANCHOR + "extern unsigned long capstone_vdbe_ops, capstone_vdbe_lastop, capstone_vdbe_armed;\n", 1)
+s = s.replace(ANCHOR, ANCHOR + "extern unsigned long capstone_vdbe_ops, capstone_vdbe_lastop, capstone_vdbe_armed, capstone_vdbe_clamp_n;\n", 1)
 open(path, "w").write(s)
 print("   VDBE clamp injected into sqlite3VdbeExec")
 PYVDBE
