@@ -1396,3 +1396,58 @@ NOT one of them — its commit pc is in the monitor, not at `base + 0x17FFFC`.
     control, p1_scalarsub, p4_subq_where, p5_exists
 
 Same question, asked where the answer can be read.
+
+
+---
+
+# THE CONSTRUCT IS NAMED: a SCALAR SUBQUERY in an expression (board session 8)
+
+Control-green boot, and this time the failing arm ran in **slot 2**, where it can be read.
+
+| arm | slot | reached | result |
+|---|---|---|---|
+| `sqbase` control | 1 | `A/dom-ok D/mapped G/enter H/return` | PASS, 6 s, 5/5 markers |
+| **`p1_scalarsub`** | **2** | `A/dom-ok D/mapped G/enter` | **ENTERED, then WEDGED** |
+
+## The matched pair, with the failing half verified to have executed
+
+    p3_avgonly   SELECT avg(c) FROM t1                      RETURNS (8 s)
+    p2_nosubq    CASE WHEN c>100      THEN a*2 ELSE b*10    RETURNS (8 s)
+    p1_scalarsub CASE WHEN c>(SELECT avg(c) FROM t1) ...    ENTERS, WEDGES
+
+`p2` differs from `p1` by **exactly one thing**: a constant where `p1` has the subquery. `p3` is
+the subquery's own content in isolation. **So the trigger is a scalar subquery in an expression,
+and both of its components are individually exonerated.** This is the pair the retracted session
+lacked, where the "failing" arm had never executed its SQL.
+
+## The offset is invariant, and now across DIFFERENT DATA
+
+    boot 3  s1_56       25 queries  base 0x82C00000  pc 0x82d7fffc
+    boot 4  s1_36        5 queries  base 0x82800000  pc 0x8297fffc
+    boot 6  q1_only       1 query   base 0x83000000  pc 0x8317fffc
+    boot 8  p1_scalarsub  1 query   base 0x82800000  pc 0x8297fffc
+
+**Five in-domain wedges, four bases, two images, always offset `0x17FFFC`** — and `p1_scalarsub`
+runs on synthetic 30-row data of my own, NOT select1's contents. **Different data, same offset.**
+
+## What `p1` adds over `p2`, from the VDBE (39 vs 26 opcodes)
+
+    BeginSubrtn  Return  Once        <- a VDBE-internal control transfer
+    AggStep  AggFinal  Copy  Null  DecrJumpZero
+    OpenRead 1->2  Rewind 1->2  Next 1->2   <- a SECOND concurrent cursor
+
+`p3_avgonly` has the aggregate and a cursor and returns, so the aggregate is out. **Two candidates
+remain and `p1` confounds them:** the VDBE subroutine mechanism, or two concurrent cursors.
+
+## Next boot separates them — probes built and native-verified
+
+    p8_selfjoin    SELECT t1.a FROM t1, t1 AS y WHERE ...  OpenRead=2  BeginSubrtn=0
+    p9_subq_other  ... (SELECT max(x) FROM t2) ...         OpenRead=2  BeginSubrtn=1
+
+* `p8` wedges -> **concurrent cursors**
+* `p8` returns, `p9` wedges -> **the VDBE subroutine**, an internal control transfer matching a
+  control-flow diversion
+* both return -> something specific to `p1` neither factor explains
+
+Order: control, `p8` (2), `p9` (3), `p1` (4 — known-wedging, so the slot-4 monitor hazard costs
+nothing).
