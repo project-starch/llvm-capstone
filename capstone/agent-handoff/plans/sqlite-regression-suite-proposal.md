@@ -1733,3 +1733,69 @@ turned out to execute something structurally different from what I assumed.
 plan `SCAN t1, SCAN y`, identical 900-step nested scan, **one output row, no sorter**, verified to
 return natively. If it wedges, the nested scan is the factor and output rows are irrelevant, which
 would also explain why `p10_bigsort` (435 rows, no nested loop) returns.
+
+## Localization update — PROVISIONAL, blocked on an unproven instrument
+
+Earlier framing (inner loop / two iterating cursors / accumulated rows) is **withdrawn**. The
+clamp ladder that supported it was monotone for a trivial reason: every clamp in it
+(2000/500/125/30) sits far past a fault that happens in the first seven opcodes.
+
+Measured, boot #18 (control `sqbase.dom` passed → boot valid):
+
+| clamp | opcodes executed | QEMU | silicon |
+|---|---|---|---|
+| 8 | 1–7 | returns, `SLT-VDBE ops=8 lastop=36` | **WEDGE** (`G/enter`, `ENT0`, `ENT1`, then nothing) |
+
+Clamp semantics: the injected test is `++ops >= clamp_n`, so clamp N executes **N-1** opcodes
+and `lastop` is the Nth (the one about to run). Verified, not assumed: QEMU clamp 8 reports
+`lastop=36` = `OP_Rewind`, exactly the 8th entry of the execution order below.
+
+`p8_selfjoin.test` query program, in execution order:
+
+    1 Init  2 Transaction  3 Goto  4 SorterOpen  5 OpenRead(c0)  6 OpenRead(c1)  7 Rewind(c0)
+    8 Rewind(c1)  9 Column 10 Column 11 Ge  [12 Column 13 MakeRecord 14 SorterInsert] 15 Next
+
+So the silicon fault is inside opcodes 1-7 — **setup: opening the sorter and the two cursors**.
+`Column`/`Ge`/`MakeRecord`/`SorterInsert` never run. This retires the join-body,
+row-count and accumulation hypotheses directly rather than by inference.
+
+Two instrument facts established while getting here, both of which would have produced a wrong
+reading:
+
+- **The clamp is query-scoped, despite a file-wide pre-arm.** `sqlite_capstone_domain.c:6106`
+  sets `capstone_vdbe_armed = 1` before `slt_run`, and the 31 setup statements never DISARM, so
+  the counter looked like it should include `CREATE TABLE` + 30 `INSERT`s. Measurement says
+  otherwise: `stmt_pass=31 stmt_fail=0`, and the query reached `OP_Rewind`, which requires
+  `OpenRead` to have found a real table. The setup statements are not truncated and the opcode
+  map is against the right program.
+- **`M5 oom=/malloc=/free=` are inert unless `CAPSTONE_MEMSYS5_OOM=1` is compiled in.** The QEMU
+  arm printed `malloc=0`, impossible for a working SQLite — the knob was simply off. The baked
+  board image *does* carry it (`bake16.log:3`), so board `oom=` is meaningful and QEMU's is not.
+  Do not read `oom=0` from a build without the knob as "no allocation failure".
+
+### THE LOCALIZATION ABOVE IS NOT YET SUPPORTED. Read this first.
+
+The runtime clamp has **never been observed to work on silicon**. Every arm of the ladder
+(2000, 500, 125, 30, 8) WEDGED, and a wedged arm prints no `ops=`/`lastop=` -- so on the board
+there is not one instance of the clamp demonstrably firing. Two hypotheses fit every silicon
+datapoint equally well:
+
+* **(a)** the clamp applies, and the fault is inside query opcodes 1-7 (the table above);
+* **(b)** the clamp never applies on silicon -- `metadata->phase` does not survive, or the read
+  at `sqlite_capstone_domain.c:6070` gets something else -- so every arm ran effectively
+  UNCLAMPED and wedged at the real fault, wherever that is. The ladder would then localize
+  nothing at all, and its monotonicity would be an artifact.
+
+QEMU proves the clamp works *in QEMU*. It says nothing about the silicon path, which is the
+one under test. The plumbing (`sqlite_host.c:152` publishes `clamp_n` in `phase`; the domain
+reads it at 6070) is correct by inspection, and inspection is not what is in doubt.
+
+**Positive control required before any clamp result is believed:** clamp a test that is KNOWN
+to return on silicon (`negative-control.test`), at a value that must change its
+`SLT-SUMMARY` in a predicted way, and confirm `ops=` equals the clamp and `lastop=` matches
+the QEMU reference. Until that arm returns, treat the whole ladder -- including the table
+above -- as UNRESOLVED.
+
+Next discriminator: clamp 1 (query executes zero opcodes — isolates setup statements from the
+query) and clamp 6 (splits the 1-7 window). Arm 3 of boot #18 was collateral after the wedge and
+carries no verdict.
