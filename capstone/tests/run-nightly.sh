@@ -41,7 +41,11 @@ LIT="$CAPSTONE_LLVM_BUILD_DIR/bin/llvm-lit"
 # run-all-beebs boots 82 domains serially, so it carries its own long timeout.
 BENCH_DIR="$CAPSTONE_REPO_ROOT/capstone/benchmarks"
 CORE_SUITES=(
-  "authority|bash $SCRIPT_DIR/capstone-authority/run-authority-suite.sh"
+  # 3600 for the same reason as the two below, and this one is self-inflicted:
+  # before stage 1 the suite returned on the first exhausted boot, so it "finished"
+  # in about two minutes without reporting. Now that it carries on it has to boot
+  # all 40 domains -- 27 were done when the 1800 default killed it.
+  "authority|bash $SCRIPT_DIR/capstone-authority/run-authority-suite.sh|3600"
   "smoke|bash $RUNTIME_DIR/run-smoke.sh"
   "coremark|bash $RUNTIME_DIR/run-coremark.sh"
   "rv8|bash $BENCH_DIR/rv8/run-all-rv8.sh|3600"
@@ -51,10 +55,17 @@ CORE_SUITES=(
   "borrow-cost|bash $RUNTIME_DIR/run-borrow-cost-probe.sh"
   "tree-cost-O2|DOMAIN_OPT_LEVEL=-O2 bash $RUNTIME_DIR/run-tree-cost-probe.sh"
   "static-cap-globals|bash $RUNTIME_DIR/run-static-cap-globals-probe.sh"
-  "intra-domain-mrev|bash $RUNTIME_DIR/run-intra-domain-mrev-revoke-probe.sh"
+  # 3600, not the 1800 default: these two boot the guest per arm and the default
+  # was never sized for that. Measured -- intra-domain-mrev is 24 arms and has run
+  # 31 boots in 1130 s (36 s/boot) idle and 31 boots unfinished at 1800 s (58 s/boot)
+  # under load; linear-uninit-corpus is 22 arms, 27 boots in 952 s and 24 boots
+  # unfinished at 1800 s (75 s/boot). Worst observed is 36 x 58 = 2088 s and
+  # 33 x 75 = 2475 s, so 1800 kills healthy runs, which is a false negative rather
+  # than strictness.
+  "intra-domain-mrev|bash $RUNTIME_DIR/run-intra-domain-mrev-revoke-probe.sh|3600"
   "hier-revoke|bash $RUNTIME_DIR/run-hier-revoke-probe.sh"
   "shared-region|bash $RUNTIME_DIR/run-shared-region-probe.sh"
-  "linear-uninit-corpus|bash $RUNTIME_DIR/run-linear-uninit-corpus-probe.sh"
+  "linear-uninit-corpus|bash $RUNTIME_DIR/run-linear-uninit-corpus-probe.sh|3600"
 )
 # Extended tier: need kernel modules / extra setup; opt-in via --extended.
 EXTENDED_SUITES=(
@@ -168,8 +179,13 @@ run_one() { # $1=name  $2=command  $3=timeout(optional, default $TIMEOUT)
   rc=$?
   dur=$(( SECONDS - start ))
   DURATION[$name]=$dur
+  # 75 is the shared infra-flake code: a guest that never reached login, which
+  # says nothing about the compiler. It still fails the run -- an incomplete
+  # suite is not a passing one -- but it must not read as a capability
+  # regression, because that is the one thing this report exists to spot.
   if [ $rc -eq 0 ]; then RESULT[$name]=PASS
   elif [ $rc -eq 124 ]; then RESULT[$name]=TIMEOUT; OVERALL_OK=0
+  elif [ $rc -eq 75 ]; then RESULT[$name]=FLAKE; OVERALL_OK=0
   else RESULT[$name]="FAIL($rc)"; OVERALL_OK=0
   fi
   log "        -> ${RESULT[$name]} (${dur}s)"

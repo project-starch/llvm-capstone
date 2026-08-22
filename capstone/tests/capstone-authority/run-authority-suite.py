@@ -208,39 +208,52 @@ def main():
             child.terminate(force=True)
 
     results = []
+    flaked = []
     write_results_tsv(results_path, results)
     with log_file.open("w", encoding="utf-8") as log:
         for domain, expect, detail in oracle:
-            # Retry once on a transient QEMU boot flake (matches the benchmark
-            # aggregate runners).
+            # Retry a transient QEMU boot flake (matches the benchmark aggregate
+            # runners). A guest that never reaches login says nothing about the
+            # domain, so note it and carry on: returning here discarded every
+            # remaining domain, and one flake per run is frequent enough that the
+            # suite had never once reported a result.
             out = None
-            for attempt in (1, 2):
+            for attempt in (1, 2, 3):
                 try:
                     out = boot_and_run_one(domain, log)
                     break
                 except InfraFlake as exc:
                     log.write(f"\n[infra-flake attempt {attempt}] {exc}\n")
-                    if attempt == 2:
-                        write_results_tsv(results_path, results)
-                        print(f"__CAPSTONE_INFRA_FLAKE__ {exc}", file=sys.stderr)
-                        return INFRA_FLAKE_EXIT_CODE
+            if out is None:
+                flaked.append(domain)
+                print(f"__CAPSTONE_INFRA_FLAKE__ {domain}: boot-login", file=sys.stderr)
+                continue
             passed, observed = classify(expect, detail, out)
             results.append((domain, expect, observed, passed))
             write_results_tsv(results_path, results)
 
-    width = max(len(d) for d, *_ in results)
+    width = max([len(d) for d, *_ in results] + [len(d) for d in flaked] + [6])
     print(f"\n{'DOMAIN'.ljust(width)}  {'EXPECT'.ljust(14)}  {'OBSERVED'.ljust(36)}  RESULT")
     print("-" * (width + 64))
     all_pass = True
     for domain, expect, observed, passed in results:
         all_pass &= passed
         print(f"{domain.ljust(width)}  {expect.ljust(14)}  {observed.ljust(36)}  {'PASS' if passed else 'FAIL'}")
+    for domain in flaked:
+        print(f"{domain.ljust(width)}  {'-'.ljust(14)}  {'never reached login'.ljust(36)}  FLAKE")
     print(f"\nlog: {log_file}")
-    if all_pass:
-        print("__CAPSTONE_AUTHORITY_SUITE_PASSED__")
-        return 0
-    print("__CAPSTONE_AUTHORITY_SUITE_FAILED__", file=sys.stderr)
-    return 1
+
+    # A real mismatch outranks a flake: an incomplete run must never be able to
+    # hide a capability regression behind the softer exit code.
+    if not all_pass:
+        print("__CAPSTONE_AUTHORITY_SUITE_FAILED__", file=sys.stderr)
+        return 1
+    if flaked:
+        print(f"__CAPSTONE_AUTHORITY_SUITE_INCOMPLETE__ {len(flaked)} of "
+              f"{len(results) + len(flaked)} domains never booted", file=sys.stderr)
+        return INFRA_FLAKE_EXIT_CODE
+    print("__CAPSTONE_AUTHORITY_SUITE_PASSED__")
+    return 0
 
 
 if __name__ == "__main__":
