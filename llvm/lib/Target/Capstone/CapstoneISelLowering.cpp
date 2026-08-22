@@ -364,6 +364,11 @@ CapstoneTargetLowering::CapstoneTargetLowering(const TargetMachine &TM,
   //===--------------------------------------------------------------------===//
   // Custom lowering for add of 128-bit numbers
   setOperationAction(ISD::ADD, MVT::i128, Custom);
+  // PTRADD says what an ADD on a capability could only be guessed at: operand 0
+  // is the base, operand 1 is the offset. Lower it to CIncOffset directly, so
+  // everything downstream -- displacement folding, address matching, the
+  // post-RA passes -- sees exactly what it sees today.
+  setOperationAction(ISD::PTRADD, MVT::i128, Custom);
   setOperationAction(ISD::SUB, MVT::i128, Custom);
   setOperationAction(ISD::AND, MVT::i128, Custom);
   setOperationAction({ISD::OR, ISD::XOR}, MVT::i128, Custom);
@@ -7805,12 +7810,33 @@ const char *CapstoneTargetLowering::getTargetNodeName(unsigned Opcode) const {
 #undef NODE_NAME_CASE
 }
 
+bool CapstoneTargetLowering::shouldPreservePtrArith(const Function &F,
+                                                    EVT PtrVT) const {
+  // Only for AS200, whose pointer VT is the capability carrier. AS0 pointers
+  // are ordinary 64-bit integers and gain nothing from PTRADD.
+  return PtrVT == MVT::i128;
+}
+
 bool llvm::isCapstoneIntegerOffset(SDValue V) {
   unsigned Opc = V.getOpcode();
   if (Opc == ISD::SIGN_EXTEND || Opc == ISD::ZERO_EXTEND ||
       Opc == ISD::ANY_EXTEND || Opc == ISD::SIGN_EXTEND_INREG ||
       isa<ConstantSDNode>(V.getNode()))
     return true;
+
+  // The NOT idiom on i128. DAGCombiner expands a negation to `xor x, -1`, and our
+  // i128 logical lowering narrows exactly that to XLen -- but only once it runs.
+  // Legalisation order decides what the CONSUMING add sees: lowered first, the
+  // operand is the sign_extend(...) this function already recognises; lowered
+  // second, it is still a bare `xor i128`, lowerADD read "not an integer offset"
+  // as "capability base", and emitted a cincoffset on an untagged scalar -- which
+  // faults (capstone-qemu raises UNEXP_OP_TYPE on an untagged rs1). Recognising
+  // the shape makes the answer independent of that order.
+  if (Opc == ISD::XOR && V.getValueType() == MVT::i128)
+    if (auto *C = dyn_cast<ConstantSDNode>(V.getOperand(1)))
+      if (C->getAPIntValue().isAllOnes())
+        return isCapstoneIntegerOffset(V.getOperand(0));
+
 
   // A left-shift producing an i128 is a scaled integer offset: a capability is
   // never the operand of a shift, so an `shl i128` is always an offset, not a
@@ -9600,6 +9626,17 @@ SDValue CapstoneTargetLowering::LowerOperation(SDValue Op,
 
     return lowerToScalableOp(Op, DAG);
   }
+  case ISD::PTRADD:
+    // The node already distinguishes base from offset, so unlike ISD::ADD there
+    // is nothing to canonicalise and nothing to infer about which is which.
+    //
+    // Deliberately NO truncation of the offset here. Narrowing it at this point
+    // does not fix the shape that motivated it (the offset expression is already
+    // lowered by then), and it silently turns an out-of-range constant into a
+    // wrapped one: cap-constants-invalid's `gep.ll` adds 2^64 to a pointer and
+    // must ABORT, not quietly return the pointer unchanged.
+    return DAG.getNode(CapstoneISD::CIncOffset, SDLoc(Op), Op.getSimpleValueType(),
+                       Op.getOperand(0), Op.getOperand(1));
   case ISD::ADD:
     return lowerADD(Op, DAG);
   case ISD::SUB:

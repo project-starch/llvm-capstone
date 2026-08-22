@@ -307,6 +307,12 @@ public:
   SDValue LowerCall(TargetLowering::CallLoweringInfo &CLI,
                     SmallVectorImpl<SDValue> &InVals) const override;
 
+  /// AS200 pointers are capabilities and their arithmetic is cincoffset, which
+  /// is exactly what PTRADD models: base is the pointer, offset is an integer.
+  /// Keeping it as PTRADD means nothing downstream has to infer which operand
+  /// is the capability.
+  bool shouldPreservePtrArith(const Function &F, EVT PtrVT) const override;
+
   bool shouldConvertConstantLoadToIntImm(const APInt &Imm,
                                          Type *Ty) const override;
   bool isUsedByReturnOnly(SDNode *N, SDValue &Chain) const override;
