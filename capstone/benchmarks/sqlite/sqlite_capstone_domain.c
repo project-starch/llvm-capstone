@@ -300,6 +300,10 @@ static void output_uint(unsigned value) {
    ladder measured the wrong statement entirely. The domain arms it immediately before the step
    under test, so the count is that statement's opcodes and nobody else's. */
 unsigned long capstone_vdbe_ops, capstone_vdbe_lastop, capstone_vdbe_armed;
+/* memsys5's NULL-return count; written by the CAPSTONE_MEMSYS5_OOM patch inside the
+   amalgamation. Defined unconditionally: a global that exists only under the same knob
+   as its writer is the defect shape that made capstone_real_db read zero for a boot. */
+unsigned long capstone_m5_oom;
 unsigned long capstone_memgrow_seen, capstone_amem_seen, capstone_pdest_seen;
 
 
@@ -6088,6 +6092,15 @@ static unsigned capstone_slt_entry(void) {
 
   slt_run(input, in_len, capstone_slt_out, 0, SLT_MAX_VALUES, &st);
   slt_report(capstone_slt_out, 0, &st);
+  /* REPORTED UNCONDITIONALLY, including zero. Whether the allocator ever returned NULL is the
+     first link in the "arena exhausted -> NULL -> untagged operand -> mcause 25" chain, and a
+     line that appears only when non-zero cannot distinguish "no OOM" from "not compiled in". */
+  capstone_slt_out(0, "M5-OOM count=");
+  { char b[24]; int i = (int)sizeof b; unsigned long v = capstone_m5_oom;
+    b[--i] = '\0'; if (!v) b[--i] = '0';
+    while (v) { b[--i] = (char)('0' + v % 10UL); v /= 10UL; }
+    capstone_slt_out(0, b + i); }
+  capstone_slt_out(0, "\n");
 #ifdef CAPSTONE_VDBE_CLAMP
   /* Reported unconditionally, including the nothing-fired case: whether the clamp was reached
      at all is part of the measurement, and a missing line would be indistinguishable from an

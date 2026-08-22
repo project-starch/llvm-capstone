@@ -1524,6 +1524,40 @@ PYMG
   DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_MEMGROW_PROBE=1"
 fi
 
+# CAPSTONE_MEMSYS5_OOM=1 -- COUNT the allocator's NULL returns, and report them.
+#
+# WHY THIS IS THE MISSING LINK. The silicon wedge is an UNEXPECTED_OPERAND (mcause 25) on an
+# untagged operand, and select5 under QEMU dies on a `cincoffset` whose operand is an ALL-ZERO
+# untagged word. A NULL is exactly that on this hardware: NOT_CAP. So the chain "arena exhausted
+# -> sqlite3_malloc returns NULL -> some path fails to check -> the NULL is used as a pointer ->
+# UNEXPECTED_OPERAND" fits every observation. What has never been shown is the FIRST link: that
+# an allocation actually failed before the fault. An earlier claim of exactly that was recorded
+# and RETRACTED after audit for precisely this gap.
+#
+# memsys5's exhaustion path is unambiguous -- iBin > LOGMAX, log SQLITE_NOMEM, return 0 -- so a
+# counter there answers it directly. Counted, not printed at the site: printing inside the
+# allocator would reenter SQLite. The domain reports the total afterwards.
+if [[ "${CAPSTONE_MEMSYS5_OOM:-0}" == "1" ]]; then
+  python3 - "$OBJ_DIR/sqlite3-capstone.c" <<'PYM5'
+import sys
+path = sys.argv[1]
+s = open(path).read()
+NEEDLE = ('    sqlite3_log(SQLITE_NOMEM, "failed to allocate %u bytes", nByte);\n'
+          '    return 0;')
+if NEEDLE not in s:
+    sys.exit("MEMSYS5_OOM: exhaustion path not found -- patch shape changed")
+s = s.replace(NEEDLE,
+              '    capstone_m5_oom++;\n' + NEEDLE, 1)
+ANCHOR = "/************** Begin file mem5.c"
+if ANCHOR not in s:
+    sys.exit("MEMSYS5_OOM: mem5 section anchor not found")
+s = s.replace(ANCHOR, "extern unsigned long capstone_m5_oom;\n" + ANCHOR, 1)
+open(path, "w").write(s)
+print("   MEMSYS5_OOM counter injected at the exhaustion return")
+PYM5
+  DOMAIN_EXTRA_DEFS="${DOMAIN_EXTRA_DEFS:-} -DCAPSTONE_MEMSYS5_OOM=1"
+fi
+
 # CAPSTONE_VDBE_CLAMP=<n> -- stop sqlite3VdbeExec after n opcodes and return cleanly, recording
 # which opcode was about to run.
 #

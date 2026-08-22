@@ -1592,3 +1592,59 @@ the same failure as session 7's arm 4, with a different domain and different SQL
 region path is exercised three times per arm. **The effective budget for region-creating domains
 is THREE readable slots, not four.** Session 7 lost an arm to this and session 10 lost another;
 the rule is now evidenced twice rather than inferred once.
+
+
+---
+
+# THE ARENA-CAPACITY HYPOTHESIS IS REFUTED (sessions 11-12)
+
+A one-variable matched pair: the same `p8_selfjoin.test`, the same slot order, two domains
+differing only in `SQLITE_HEAP_SIZE`.
+
+    sqbig  1 MiB arena, slot 2   ENTERED, WEDGED   trap 0x99 (mcause 25), commit pc 0x2
+    sqslt  256 KiB arena (s9)    ENTERED, WEDGED   trap 0x99 (mcause 25), commit pc 0x2
+
+**Identical signatures at both sizes. Heap capacity is not the variable.** I had assembled a tidy
+story around it — select5 passing at 2 MiB, the wedge PC inside `sqlite_heap`, mcause 25 being
+what a NULL raises — and the test says no.
+
+**In hindsight the arithmetic never supported it:** `p8` is a 30-row self-join producing 435 small
+rows, which was never going to exhaust 256 KiB, and `p10_bigsort` pushes the same 435 rows through
+the same sorter at 256 KiB and returns in 9 s. The correlation with select5's arena size was real
+but not causal for this case.
+
+**Session 11 was VOID** — its control produced no output at all, not even libcapstone's first
+line, the same total-silence signature as the very first boot of the investigation. Re-run
+unchanged, the control returned 5/5. Two such failures in ~12 boots is consistent with the
+documented ~1-in-5 infrastructure rate, and the rule earned its keep: the void boot cost eight
+minutes and produced no wrong answer.
+
+## Where the root cause stands: six hypotheses dead, each by its own control
+
+| hypothesis | how it died |
+|---|---|
+| hostile uninitialised DRAM | poisoned arena passes, `query_pass=5` |
+| revocation-node pool exhaustion | 128-255 cumulative allocations against a ~1021 pool |
+| arena corrupts capabilities | passA 0 **and** passB 0 (incl. a DRAM round trip) |
+| linear-capability aliasing | heap capabilities read type **1 = NONLIN**; a move cannot invalidate them |
+| two concurrent cursors alone | `p11_smalljoin` (2 cursors, 30 rows) **returns** |
+| output-row count alone | `p10_bigsort` (1 cursor, 435 rows) **returns** |
+| **arena capacity** | **`p8` wedges identically at 256 KiB and 1 MiB** |
+
+## What survives, stated exactly
+
+**`p8_selfjoin` needs BOTH two cursors AND ~435 sorted output rows, and heap size is irrelevant.**
+The fault is `mcause 25` — `UNEXPECTED_OPERAND`, raised when a capability operation gets a
+`NOT_CAP` operand — reproduced twice with identical machine state. Under QEMU the same fault class
+appears for select5 as a `cincoffset` on an all-zero untagged operand inside `sqlite3VdbeExec`.
+
+**So something in a 2-cursor, many-row join produces an untagged pointer, deterministically, and
+it is not memory pressure.**
+
+## Next measurement, and it is quantitative rather than another guess
+
+Instrument memsys5 to count `malloc`, `free` and the OOM return, then run the three cases that
+differ — `p8` (wedges), `p11` (2 cursors, few rows, returns), `p10` (1 cursor, many rows,
+returns). **What differs numerically between a wedging and a passing case is data, where another
+mechanism story would be speculation.** The OOM half of that counter is already built and
+calibrated: it reports 1 at a 64 KiB arena and 0 at 1 MiB, so it discriminates.
