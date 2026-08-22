@@ -1451,3 +1451,65 @@ remain and `p1` confounds them:** the VDBE subroutine mechanism, or two concurre
 
 Order: control, `p8` (2), `p9` (3), `p1` (4 — known-wedging, so the slot-4 monitor hazard costs
 nothing).
+
+
+---
+
+# BREAKTHROUGH: TWO CONCURRENT CURSORS, and a REAL CAPABILITY FAULT (board session 9)
+
+Control-green boot. **`p8_selfjoin` — a plain self-join, no subquery, no aggregate, no `CASE` —
+ENTERED and WEDGED.**
+
+    SELECT t1.a FROM t1, t1 AS y WHERE y.b < t1.b ORDER BY 1     OpenRead=2  BeginSubrtn=0
+
+## 1. The VDBE subroutine is NOT required
+
+    p2_nosubq     1 cursor,  0 subroutines   RETURNS
+    p3_avgonly    1 cursor,  0 subroutines   RETURNS
+    p8_selfjoin   2 cursors, 0 subroutines   WEDGES     <-- no subquery at all
+    p1_scalarsub  2 cursors, 1 subroutine    WEDGES
+
+**The common factor in every wedging case is TWO CONCURRENT CURSORS OVER THE SAME TABLE.** The
+scalar subquery named earlier is a *sufficient* trigger, not the cause — it happens to open a
+second cursor. `p8` reaches the same failure with none of the SQL machinery.
+
+## 2. THE SIGNATURES DIFFER, and `p8`'s is a genuine capability fault
+
+|  | `p1_scalarsub` | `p8_selfjoin` |
+|---|---|---|
+| TRAP LOG | `0x89` -> mcause **9** (stale S-mode ecall) | `0x99` -> mcause **25** |
+| `ex_commit.valid` | **0** | **1** |
+| sw=225 | `0xd5` tbe,wstore,wrev,stall,memwait | `0x80` tbe only |
+| commit pc | base + `0x17FFFC` | `0x2` |
+
+**`mcause 25` = `UNEXPECTED_OPERAND`** (`core/anvil_build/capstone_unit.anvilh:303`), which is
+what `CINCOFFSET` raises when `cap_rs1` is `NOT_CAP`. That is **the same condition QEMU asserted
+on for select5** — `cincoffset` with an untagged `rs1`, `val=0x0`, inside `sqlite3VdbeExec`.
+
+**So emulation and silicon now show the SAME fault class, reached by the same kind of workload:**
+select5's 64-table joins under QEMU (many cursors) and a 2-cursor self-join on hardware.
+
+**CAVEAT ON THE NUMBERING, stated because the source states it:** the enum's own comment warns
+that a nearby block "disagrees with both encoders and with riscv_pkg.sv and looks like an
+off-by-one in its own right". So mcause 25 is `UNEXPECTED_OPERAND`, or under that off-by-one
+`INVALID_CAPABILITY`. **Either way it is a capability fault on an operand**, which is the part
+the argument rests on.
+
+## 3. The likely chain, stated as a chain and not a proof
+
+    two concurrent cursors on one table
+      -> a pointer-shaped value comes back untagged (NOT_CAP)
+      -> a capability op on it raises UNEXPECTED_OPERAND (mcause 25)
+      -> the fault path then wedges (commit pc = 2, the documented M-mode wedge shape)
+
+**`p1_scalarsub` and `p8_selfjoin` are therefore probably NOT the same failure.** `p1` shows no
+capability trap and stops at `0x17FFFC`; `p8` traps with mcause 25 and stops at pc 2. They may be
+two faults reachable from the same cursor condition, or two different bugs. **Not folded together.**
+
+## What this does NOT establish
+
+* WHY two cursors produce an untagged value — the arena probe showed capabilities survive
+  store/reload/evict cycles through `sqlite_heap` cleanly (passA 0, passB 0).
+* Whether `same table` matters or merely `two cursors`. `p9_subq_other` (two cursors on
+  DIFFERENT tables) was collateral when `p8` wedged in slot 2 and still needs a boot.
+* Why `p1`'s wedge has no capability trap at all.
