@@ -1123,3 +1123,60 @@ The board experiment that has NOT yet run is the one that matters most:
 PREFIX, which cannot separate "one query is pathological" from "the queries cumulatively exhaust
 something". Both refutations above weaken the cumulative reading — neither poison nor rev-node
 pressure accumulates fast enough — but they do not settle it, and the isolated arms do.
+
+
+---
+
+# THE WEDGE ADDRESS IS LOCALIZED: it is INSIDE `sqlite_heap` (2026-08-22)
+
+`0x17FFFC` is no longer unexplained. Decoding the domain's own `.capstone_gp_table` descriptor
+(188 records of `{size, align, init_off}` in cap-table index order, per
+`gen-gp-captable-glue.py`) and walking the storage allocation:
+
+    storage base            0x171de0   (code_size + blob + cap table)
+    wedge PC offset         0x17fffc   = 57,884 bytes into storage
+    -> cap-table SLOT 176, a 262,144-byte ZERO-INIT global, 14,508 bytes in
+
+**262,144 is `SQLITE_HEAP_SIZE`, and slot 176 is the only global of that size in the image.**
+That is `sqlite_heap`, the memsys5 arena.
+
+**Corroboration, not assertion:** the same layout model accounts for 327,599 storage bytes
+against the build report's own `storage 328336` — 0.2% apart, which is alignment rounding. If the
+model were wrong about ordering or base, it would not land that close.
+
+## What this means
+
+    dom_code bound (sbi_capstone.c:304, split at base + code_size)   0x160910
+    wedge PC                                                        0x17fffc
+    -> 0x1F6EC = 128,748 bytes BEYOND the code capability's bound
+
+**The core committed an instruction ~128 KB outside its code capability, inside the SQLite
+heap.** Control flow left the code region and entered the memsys5 arena; the resulting
+out-of-bounds instruction fetch then **hung rather than trapping**, which is the wedge.
+
+## It joins up with the select5 finding
+
+select5 (a different file, under QEMU) faulted at a `cincoffset` whose operand was an **all-zero
+untagged word loaded by `ldc a0, 0x10(a0)`** — a pointer field inside a heap structure reading as
+NULL, inside `sqlite3VdbeExec`. This one is a control transfer to an address inside the heap.
+
+**Both are pointer-shaped values living in the memsys5 arena coming back wrong.** That is a single
+theme, and it points at capability round-trips through `sqlite_heap` rather than at SQLite logic.
+
+## The minimal repro this implies — and it does not need SQLite
+
+If capabilities stored into `sqlite_heap` do not survive a store/reload on silicon, then the
+minimal reproducer is **a domain that stores a capability into a 256 KiB carved global, reloads
+it, and compares** — no SQLite, no SQLLogicTest, no VDBE. That is orders of magnitude smaller
+than the current 5-query case and is the right next artifact.
+
+**Why the existing ladder rungs do not already cover it:** they round-trip capabilities through
+small stack and `.data` buffers. `sqlite_heap` is a 256 KiB **carved global** under
+`-capstone-gp-captable`, reached through the cap table, and no rung exercises that shape at that
+size.
+
+**NOT established:** what diverts control flow there. A corrupted function pointer in a heap
+structure is the obvious candidate (SQLite keeps them in `FuncDef`, VDBE and cursor structures,
+and the failing queries are exactly the ones using aggregates and subqueries), but that is a
+hypothesis with a mechanism, not a root cause. The stack is at `0x1c2070+`, so this is not a
+smashed return address landing in the stack.
