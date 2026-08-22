@@ -308,7 +308,7 @@ unsigned long capstone_memgrow_seen, capstone_amem_seen, capstone_pdest_seen;
     defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE) || \
     defined(CAPSTONE_MEMGROW_PROBE) || defined(CAPSTONE_AMEM_PROBE) || \
     defined(CAPSTONE_PDEST_PROBE) || defined(BEEBS_MEMCPY_TAGCHECK) || \
-    defined(CAPSTONE_EVICT_PROBE)
+    defined(CAPSTONE_EVICT_PROBE) || defined(CAPSTONE_HEAPCAP_PROBE)
 /* Shared by both probes. Lived inside the OOB block until the ARG probe needed it too; a
    reporter that cannot print is a reporter that silently reports nothing. */
 static void output_hex64(unsigned long v) {
@@ -433,7 +433,8 @@ void capstone_arg_report(void) {
 #if defined(CAPSTONE_PROBE_LOOKASIDE) || defined(CAPSTONE_DBWHO_PROBE) || \
     defined(CAPSTONE_MEMGROW_PROBE) || defined(CAPSTONE_AMEM_PROBE) || \
     defined(CAPSTONE_PDEST_PROBE) || defined(BEEBS_MEMCPY_TAGCHECK) || \
-    defined(CAPSTONE_EVICT_PROBE)
+    defined(CAPSTONE_EVICT_PROBE) || \
+    defined(CAPSTONE_HEAPCAP_PROBE)
 /* Reports the lookaside small-free head WITHOUT DEREFERENCING IT, and then falls back to the
    general allocator so the run continues instead of wedging.
    
@@ -510,6 +511,68 @@ static unsigned long cap_q_type(const void *p) {
   __asm__ volatile(".insn r 0x5b, 0x1, 0x4, %0, %1, x1" : "=r"(v) : "r"(p));
   return v;
 }
+
+#ifdef CAPSTONE_HEAPCAP_PROBE
+/* MINIMAL REPRO CANDIDATE: does a capability survive a store/reload through `sqlite_heap`?
+ *
+ * WHY THIS EXACT GLOBAL AND NOT A SYNTHETIC ONE. The silicon wedge's last committed instruction
+ * is 14,508 bytes inside cap-table slot 176, which is uniquely the 262,144-byte `sqlite_heap`
+ * -- 128,748 bytes beyond the dom_code capability bound. Separately, select5 faults on an
+ * all-zero untagged pointer loaded from a heap structure. Both are pointer-shaped values in the
+ * memsys5 arena coming back wrong, so the arena itself is the subject and a synthetic buffer
+ * would test a different thing. Under -capstone-gp-captable this is a CARVED GLOBAL reached
+ * through the cap table, a shape no existing ladder rung covers at this size.
+ *
+ * IT ALWAYS RETURNS. Tag loss is detected with the LCC TOTAL type query, which answers 7 for
+ * NOT_CAP instead of raising, so a lost tag is REPORTED rather than wedging the core. That is
+ * the whole point: a probe that hangs yields one bit, a probe that returns yields a count.
+ *
+ * IT CARRIES ITS OWN POSITIVE CONTROL. Slot `ctl` is deliberately written with a plain integer,
+ * so the check MUST flag it. If `bad` comes back without the control counted, the instrument is
+ * broken and the zero means nothing -- which is the failure mode this project pays for most.
+ *
+ * Marker: 0x4EA0_TTBB -- TT = slots tested, BB = slots that failed (control included). */
+static unsigned capstone_heapcap_probe(void) {
+  /* Offsets chosen around the wedge site (14,508) plus a spread across the arena. */
+  static const unsigned long offs[] = {
+    0UL, 4096UL, 14480UL, 14496UL, 14512UL, 32768UL, 65536UL, 131072UL, 262112UL
+  };
+  void *src = (void *)&capstone_vdbe_ops;      /* a real, known-good capability */
+  unsigned tested = 0, bad = 0, ctl_seen = 0;
+  unsigned long i;
+
+  for (i = 0; i < sizeof(offs) / sizeof(offs[0]); i++) {
+    unsigned long o = offs[i] & ~15UL;         /* 16-byte granule, as capabilities require */
+    volatile void **slot;
+    void *back;
+    if (o + 16UL > (unsigned long)sizeof(sqlite_heap))
+      continue;
+    slot = (volatile void **)(void *)&sqlite_heap[o];
+    *slot = src;                               /* stc into the arena  */
+    back  = (void *)*slot;                     /* ldc back out of it  */
+    tested++;
+    if (cap_q_type(back) == 7UL)               /* NOT_CAP => the tag did not survive */
+      bad++;
+    else if ((unsigned long)back != (unsigned long)src)
+      bad++;                                   /* survived as a capability, wrong cursor */
+  }
+
+  /* POSITIVE CONTROL, last so it cannot perturb the subject slots: a plain integer store must
+     read back as NOT_CAP. If this is not counted, every zero above is unproven. */
+  {
+    volatile unsigned long *iw = (volatile unsigned long *)(void *)&sqlite_heap[4096];
+    void *back;
+    iw[0] = 0x5A5A5A5AUL; iw[1] = 0UL;
+    back = (void *)*(volatile void **)(void *)&sqlite_heap[4096];
+    tested++;
+    if (cap_q_type(back) == 7UL) { ctl_seen = 1; bad++; }
+  }
+  /* Sentinel 0x4EB0 when the control did NOT fire -- distinct from a clean 0x4EA0 run, so a
+     broken instrument can never be read as a passing one. */
+  return (ctl_seen ? 0x4EA00000u : 0x4EB00000u)
+         | ((tested & 0xffu) << 8) | (bad & 0xffu);
+}
+#endif
 
 /* Describe the capability a probe actually reads through, so "which address did I read" is
  * MEASURED rather than assumed.
@@ -6046,6 +6109,12 @@ void domain_main(unsigned *res, unsigned func) {
 #endif
   if (hostcall_metadata)
     hostcall_metadata->length = 0;
+#ifdef CAPSTONE_HEAPCAP_PROBE
+  /* Runs INSTEAD of any workload: this is the minimal repro candidate and must be an
+     expected-to-RETURN arm so it can be ordered before anything that may wedge. */
+  *res = capstone_heapcap_probe();
+  return;
+#endif
 #ifdef CAPSTONE_SQLITE_SLT
   /* Magic-guarded, like the staged selector beside it: a zeroed region falls through to
      the ordinary workload, so a build carrying this code behaves exactly as before when

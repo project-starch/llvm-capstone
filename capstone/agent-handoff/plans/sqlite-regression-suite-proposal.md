@@ -1180,3 +1180,55 @@ structure is the obvious candidate (SQLite keeps them in `FuncDef`, VDBE and cur
 and the failing queries are exactly the ones using aggregates and subqueries), but that is a
 hypothesis with a mechanism, not a root cause. The stack is at `0x1c2070+`, so this is not a
 smashed return address landing in the stack.
+
+
+---
+
+# MINIMAL REPRO BUILT AND CALIBRATED — `CAPSTONE_HEAPCAP_PROBE` (2026-08-22)
+
+**No SQLite, no VDBE, no SQLLogicTest.** Store a capability into `sqlite_heap`, load it back, ask
+whether it is still a capability. Nine offsets spanning the arena, chosen around the wedge site
+(14,508) which the descriptor decode placed inside that global.
+
+**It always RETURNS.** Tag loss is detected with the LCC TOTAL type query, which answers 7 for
+NOT_CAP instead of raising — so a lost tag is reported rather than wedging the core. A probe that
+hangs yields one bit; a probe that returns yields a count.
+
+**It carries its own positive control.** One slot is deliberately written with a plain integer and
+must be flagged. The marker sentinel distinguishes the two cases, so a broken instrument can never
+read as a passing one:
+
+    0x4EA0_TTBB   control fired -> the counts are readable
+    0x4EB0_TTBB   CONTROL DID NOT FIRE -> the run is VOID, whatever BB says
+
+**QEMU result: `0x4EA00A01` — sentinel 4EA0, tested 10, bad 1.** The one failure is the
+deliberate control; all nine real offsets round-trip correctly under emulation. So the instrument
+works and emulation shows no arena problem — exactly the setup needed for the silicon arm to mean
+something.
+
+## Why this global and not a synthetic buffer
+
+The wedge PC decodes to cap-table slot 176, uniquely the 262,144-byte `sqlite_heap`. Under
+`-capstone-gp-captable` that is a CARVED GLOBAL reached through the cap table, and no existing
+ladder rung round-trips capabilities through that shape at that size — the rungs use small stack
+and `.data` buffers. A synthetic buffer would test a different thing.
+
+## OPEN ANOMALY, recorded rather than explained: the default build MOVED
+
+After these edits, a default SLT build (`CAPSTONE_HEAPCAP_PROBE` **not** defined — verified, zero
+occurrences in the compiler invocation) hashes `577f9f9a0aa64f3c` where before it was
+`b6d1cb1da795f291`. Same total size, but **4 more instructions** and a 16-byte data-layout shift
+that moves ~20,000 disassembly lines' offsets.
+
+**I have not explained it, and it matters**, because `b6d1cb1da795f291` is the image the wedge
+reproduced on three times, and image perturbation is a documented hazard on this platform (S01).
+
+**Consequence for the next board session, and it is manageable:** the wedge must be RE-ESTABLISHED
+on whatever image is built, not assumed to carry over. The boot therefore needs a known-wedging
+arm (`s1_36`) alongside the isolated single-query arms, so that a clean `q1_only`..`q3_only` result
+cannot be confused with "the wedge went away when the image moved".
+
+**Also noted:** the staged `overlay/test-domains/sqslt.dom` was replaced at 13:05 on 2026-08-22
+(`5d2a56e85a316deb`) by something other than my bake, whose last run was the previous evening.
+Not a problem in itself — the next bake rebuilds it — but board artifacts are shared state and
+worth checking rather than assuming.
