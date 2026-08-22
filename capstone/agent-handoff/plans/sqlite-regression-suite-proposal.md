@@ -1932,3 +1932,58 @@ and it wedges anyway. The trigger is simpler than that.
 
 1. `q_two --clamp 1` -- prepare vs execution for the minimal case.
 2. `SELECT t1.a FROM t1, t2` (two DISTINCT tables) -- is it a self-join or any second FROM term?
+
+## ROOT LOCALIZATION: the faulting instruction, named
+
+The per-arm `PROBE_SCOPED_OUT` files carry a full wedge signature and had not been read. They do.
+Boots #20 and #21 -- two independently constructed reproducers -- have IDENTICAL signatures:
+
+    sw=255 TRAP LOG {seen,mcause[6:0]}   0x99  -> seen=1, mcause 0x19 = 25 UNEXPECTED_OPERAND
+    sw=196..203 trap mepc (LATCHED)      0x0000000082cf499c
+    sw=249/250  rev_node_head            0x0276 = 630   (pool is ~1021: NOT exhaustion)
+    sw=224      privM=1                  (expected: domains run at M with capmode)
+
+`q_two` loaded at `DBAS=0x82C00000`; the loadable segment is VMA 0x10000 size 0x1609E8 and
+`DENT=0`, so VA = 0x10000 + (mepc - DBAS) = **0x10499C**. The domain is an unstripped ELF
+(hash `277b73f08742a71b`, unchanged across four bakes), so the symbol resolves directly:
+
+    0x104910  sqlite3WhereCodeOneLoopStart      <- fault is 0x8C into this function
+
+That is SQLite's **query-planner loop code generator**, which runs at PREPARE time and is called
+once per FROM term. It independently confirms the prepare-time attribution for `q_two`, which
+boot #21 alone could not establish.
+
+The instruction:
+
+    104998: ldc            a4, 0x0(a0)      ; reload a capability from a stack slot
+    10499c: cincoffsetimm  a4, a4, 0xb0     ; <-- TRAPS
+
+From the prologue the incoming arguments spill as `a0->[s0-0x60]`, `a1->[s0-0x50]`,
+`a2->[s0-0x70]`, `a3->[s0-0x74]` (`sw`, an int), `a4->[s0-0x90]`, `a5->[s0-0x98]` (`sd`, a
+64-bit scalar). At 0x104948 `a0 = s0-0x70` and is not reassigned before 0x104998, so the `ldc`
+reloads **the third argument**. The signature confirms the mapping exactly -- arg 4 is
+`int iLevel` (hence `sw`) and arg 6 is `Bitmask notReady` (hence `sd`):
+
+    Bitmask sqlite3WhereCodeOneLoopStart(Parse *pParse, Vdbe *v, WhereInfo *pWInfo,
+                                         int iLevel, WhereLevel *pLevel, Bitmask notReady)
+
+**So: reloading `pWInfo` from its spill slot yields a value that is not a valid capability, and
+`cincoffsetimm` on it raises UNEXPECTED_OPERAND.** mcause 25, not 29 -- this is a tag/type
+failure, NOT a bounds failure. A tag was lost between the `stc` that spilled `pWInfo` and the
+`ldc` that reloaded it, or `pWInfo` was already untagged on entry.
+
+### What this does and does not settle
+
+* It settles prepare-vs-execute for the minimal case: `sqlite3WhereCodeOneLoopStart` is code
+  generation, so `q_two` wedges at prepare, like `p8_empty`.
+* It does NOT yet settle silicon-vs-codegen. QEMU executes the identical path with a tagged
+  value (QEMU asserts on untagged `ldc` via `capstone_report_untagged` and does not fire).
+* A HYPOTHESIS worth testing, not a conclusion: this is the shape of **S-06** (untagged
+  `ldc`/`stc` mishandled in RTL). Whether the flashed bitstream
+  `caplifive_s10fix_80843404c.bit` carries the S-06 fix is unknown here and is a question for
+  the RTL lane. Do not report this to the hardware side as a defect before that is answered --
+  if the fix is absent, this may be a known bug rather than a new one.
+* Still open: whether `pWInfo` is already untagged on ENTRY (pointing upstream to
+  `sqlite3WhereBegin`, which allocates the variable-sized `WhereInfo` -- and its size DOES
+  depend on the number of FROM terms, which is the one thing that differs between q_one and
+  q_two), or whether the tag is lost in the spill slot itself.
