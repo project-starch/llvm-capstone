@@ -1,4 +1,38 @@
-# The SQLite spill/reload wedge looks like writeback-port displacement, not memory
+# The SQLite spill/reload wedge is NOT writeback-port displacement — excluded on a fired control
+
+> **VERDICT, 2026-08-24, added after the body below was written and pushed. Displacement is
+> EXCLUDED.** The board lane already had the reading and did not need a boot: switch 204 reads
+> `0x00` at the wedge on all six recorded boots (21, 22, 24, 25, 26, 29), with the switch-220
+> selftest firing in every one of them — `post-204 = 0x41`, `ldc_seen` set and the count moved
+> by exactly one. So the zero is a **controlled negative**, not an unfired instrument. The
+> localization argued below is wrong; the mechanism it describes did not occur.
+>
+> **Coverage was then checked for holes and there are none.** `include/ariane_pkg.sv:237-243`
+> gives `FLU_WB=0, STORE_WB=1, LOAD_WB=2, FPU_WB=3, CAP_WB=4`. Ports 0 and 4 carry capability
+> data and cannot erase. **Port 3 is the FPU port**, driven by a single direct assignment from
+> the FPU (`cva6.sv:1495-1498`) with no mux and no LSU or DYN path into it, so an LDC cannot
+> land there. Ports 1 and 2 are watched, each for its matching op, and are driven solely by the
+> store and load units respectively. The exclusion is complete, not partial.
+>
+> **Also corrected:** the body says the board carries `caplifive_s07fix.bit`. It carries
+> `caplifive_s10fix_80843404c.bit`, and the detector is present and demonstrably alive in that
+> image — which the selftest proves rather than asserts.
+>
+> **Where it goes next.** With the pipeline excluded, the NOT_CAP came from memory or tag state.
+> The instrument for that is also already synthesized and UART-safe: **switch 208**, the
+> tag-history verdict byte — `[7] ldc0_valid`, `[6:5] ldc0_src` (0 = L1 hit, 1 = miss refill,
+> 2 = wbuffer forward), `[4] stc_valid`, `[3] stc_ctag`, `[2] gran_match`, `[1] stc_clobbered`.
+> `match=1 & stc_ctag=1` means the tag was written and read back zero and `ldc0_src` says by
+> which path; `match=1 & stc_ctag=0` means it was stored untagged and the fault is on the SPILL
+> side, which would move the investigation. **The 220 selftest does not control this byte** —
+> it drives the displacement counter only. But bit 7 is its own liveness check: at a wedge an
+> untagged LDC is known to have occurred, so `ldc0_valid` clear means the recorder never fired
+> and the byte is void.
+>
+> **The body below is kept as written**, because the reasoning was sound and the exclusion is
+> what makes it worth keeping: the signature it matches — correct cursor, NOT_CAP metadata, next
+> capability consumer raising 25 — is genuinely the documented S-07 signature, which is exactly
+> why an argument could not retire it and a controlled negative could.
 
 Written 2026-08-24, connecting the board lane's measurements to a mechanism already named in
 this tree. **This is a localization on quoted RTL, not a confirmed root cause** — the deciding
