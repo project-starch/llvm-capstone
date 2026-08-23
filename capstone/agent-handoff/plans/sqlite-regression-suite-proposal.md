@@ -2259,3 +2259,44 @@ Future QEMU references need a per-run output directory.
 Four arms: `sqbase` control, un-probed `q_two` at **arm 2**, probed `q_two` at **arm 3**, and the
 `li a0,0xBEEF; cincoffsetimm` tval control. If position predicts the outcome, the probe is
 irrelevant and the real variable is domain slot / DBAS / carried-over allocator state.
+
+## POSITION CONFOUND REFUTED. Reproducer restored on controlled evidence.
+
+The audit's arm-position confound was correct to raise and is now settled by measurement, not
+argument. Boots #26 and #28, both with a passing control:
+
+| binary | input | arm | result |
+|---|---|---|---|
+| un-probed | q_one | **2** | completes (#28, `M5 malloc=236`) |
+| un-probed | q_two | **2** | **WEDGES** (#26) |
+| un-probed | q_two | 3 | WEDGES (#21, #22, #24, #25) |
+| probed | q_two | **2** | completes (#25) |
+| probed | q_two | **3** | completes (#28, `WIDTH type=1 notcap=0`) |
+
+Three conclusions, each with position held constant:
+
+* **POSITION IS NOT THE VARIABLE.** The un-probed build wedges at BOTH arm 2 and arm 3; the
+  probed build completes at BOTH. The 5-for-5 correlation was real and is now broken in both
+  directions.
+* **THE INPUT IS A VARIABLE.** `q_one` completes and `q_two` wedges, same binary, same arm 2.
+  The one-line reproducer (`SELECT t1.a FROM t1` vs `SELECT t1.a FROM t1, t1 AS y`, empty table)
+  stands on clean evidence.
+* **THE PROBE IS A VARIABLE.** Probed completes, un-probed wedges, same input, same arm.
+
+The retraction two entries above is therefore itself partly withdrawn: the confound did not hold.
+What does NOT come back is the *interpretation* -- the width story remains unsupported, because
+the 8-byte read cannot see `cap_type`, which is what `CINCOFFSETIMM` actually checks, and because
+probed vs un-probed differ in `stc`->`ldc` distance (19 vs 44 instructions) AND in pre-touching
+the granule. "The probe changes something" is established; "the load path manufactures a zero" is
+not.
+
+**Healthy silicon `ldc` baseline, first ever measured on this bitstream** (probed arm, 3 boots):
+
+    #25 arm2  WIDTH type=1 lo=2197710272 hi=7660733082902  calls=5 notcap=0
+    #28 arm3  WIDTH type=1 lo=2201904576 hi=11337225088278 calls=5 notcap=0
+
+`type=1` both times, `notcap=0`, `M5 oom=0 malloc=241 free=241` matching QEMU exactly.
+
+**Still unvalidated and still blocking any fault interpretation:** the `tval` instrument. Every
+`tval=0` remains no-data until `li a0,0xBEEF; cincoffsetimm a0,a0,8` traps with `tval==0xBEEF`
+AND `mepc` pointing at that control's own instruction.
