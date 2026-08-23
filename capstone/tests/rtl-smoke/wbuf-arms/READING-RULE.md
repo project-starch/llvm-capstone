@@ -91,6 +91,12 @@ verdict about anything).
 
 **Read no further than the first failure in a boot.** The drivers do not reboot between programs
 and a wedged program takes the core, so everything after a failure is collateral rather than
-result. These arms are documented as unable to wedge — a lost tag is counted via `lcc` field 1,
-which returns 7 for `NOT_CAP` without raising — so every arm should return a number. **An arm that
-returns nothing is itself the finding.**
+result. These arms are documented as unable to wedge — a lost tag is counted via `lcc` selector 1, the
+type query, which is **total**: it answers instead of raising on a `NOT_CAP` operand. **I have
+verified the total-ness in the generated netlist, NOT the specific answer.** `$1083 = $1080 &&
+$1082` is a genuine AND of two 1-bit comparisons with both arms consumed
+(`EVENTS1[352]` raise, `EVENTS1[340]` proceed), so selector 1 does not raise — but I could not
+locate the `cap_type - 3'd1` computation that is supposed to make the answer 7, and **an earlier
+version of this file asserted 7 as fact.** Do not key anything on the value 7; key on "differs
+from the healthy baseline", which is decidable from an observed run. So every arm should return a
+number. **An arm that returns nothing is itself the finding.**
