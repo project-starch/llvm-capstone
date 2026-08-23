@@ -2050,3 +2050,60 @@ Whether the word-vs-granule mismatch can run that way is with the RTL lane.
 0x10499C is unconditional prologue code and q_one's single call passes it. That assumed q_two's
 FIRST call behaves like q_one's, which is not guaranteed -- the preceding planning code differs,
 so store-buffer residency can differ. Call #2 is likely but NOT proven, and is not claimed.
+
+## The constraint that any hypothesis must satisfy: 6537 identical pairs work
+
+Counted over the whole 331795-instruction text of the same binary: same-address
+`stc rS, D(rB)` -> `ldc rD, D(rB)` pairs with no redefinition of `rB` between them.
+
+    within 40 instructions : 7807
+    within 18 instructions : 6537     <- 18 is the distance of the FAULTING pair
+
+This binary runs 5320 single-table SELECTs, 10807 SLT records under QEMU, and on SILICON runs
+sqbase, negative-control, p8_trivial and q_one cleanly -- bit-identical to QEMU wherever there
+is a reference. **So a generic "tight same-address stc->ldc reads a stale tag" is refuted by the
+software's own behaviour**: it would fire continuously and nothing would ever run.
+
+Whatever the mechanism is, it must explain why it does NOT fire on 6537 near-identical pairs.
+Candidate distinguishing features of the failing window, ranked:
+
+1. the **two ctag=0 capability entries** (`movc a4, zero` then `stc`, to `s0-0x5a0` and
+   `s0-0x120`) -- most spill sequences have none;
+2. **9 intervening stores**, possibly exceeding a buffer depth and reaching a drain/eviction
+   path shorter windows never touch;
+3. the **mix** (6 tagged stc, 2 ctag=0 stc, 3 scalar) rather than the distance.
+
+### Alignment verified, not assumed
+
+The domain `sp` comes from the monitor's cscratch region and every adjustment is a multiple of
+16 (`-96` in the entry glue, then `cincoffsetimm sp,sp,-0x7f0`, `-0x450`). `s0 = sp` at function
+entry. So `s0-0x70` IS granule-aligned, which CONFIRMS the RTL side's "granule-aligned, one
+write-buffer entry" premise rather than breaking it. Worth stating because if it had been false,
+a capability spill would straddle two granules and several arguments would change.
+
+### Hypothesis ledger
+
+| hypothesis | status | killed by |
+|---|---|---|
+| VDBE execution (join body, cursors, rows, sorter) | DEAD | `p8_selfjoin --clamp 1`, zero opcodes |
+| setup statements / data volume | DEAD | `p8_trivial` returns; `p8_empty` is empty |
+| ORDER BY / sorter | DEAD | negative-control uses it and passes on silicon |
+| rev-node pool exhaustion | DEAD | latched head = 630 of ~1021 |
+| codegen live-range overlap on the spill slot | DEAD | the granule's scalar stores are all AFTER the loop |
+| S-06 untagged ldc/stc | DEAD | `25035c4c0` IS an ancestor of the flashed bitstream |
+| AMO I-4 residual | DEAD | atomics only, and opposite polarity |
+| S-10b store-buffer word-vs-granule | WITHDRAWN | same-address pair matches at `[11:3]` on word 0 |
+| S-10 `wbuffer_gran_clr` | WEAK | entry class DOES exist (ctag=0 `stc`), but addresses do not overlap and the `paddr[55:4]` compare reads as correct |
+| store buffer upstream of the tag path | **SURVIVING** | tag is sourced from write buffer or L1, never the store buffer -- so a store-buffer-resident `stc` leaves `wbuffer_be`=0 and the tag comes from an L1 array the `stc` has not reached |
+
+The RTL lane is building a directed Verilator test of the exact window (offsets above, both
+ctag=0 entries included) with a granule-distance sweep whose same-granule arm is a positive
+control, A/B across S-10 present and absent. Board-free and lock-free.
+
+### Open, needs the project lead
+
+`caplifive_s07fix.bit` differs from the current image by exactly one `core/` file
+(`wt_dcache_mem.sv`, i.e. S-10). Running the 588-byte repro on the S-07 image would say directly
+whether S-10 introduced this. That needs a **reflash, which is ask-first** and the lead's call.
+The earlier 3/3 plain-SQLite baseline on that image is NOT evidence here: it was single-table
+throughout, so it never built a self-join spill layout.
