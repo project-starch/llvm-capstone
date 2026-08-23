@@ -1720,6 +1720,19 @@ s = s.replace(CALLEE, CALLEE + """
     __asm__ volatile ("lcc %0, %1, 1" : "=r"(cap_ty) : "r"(cap_w));  /* total: 7 == NOT_CAP */
     cap_lo = word[0];                 /* 8-byte read, low word of the SAME slot */
     cap_hi = word[1];                 /* 8-byte read, high word */
+    /* POSITIVE CONTROL FOR THE TYPE QUERY ITSELF, and it is nearly free.
+       Two healthy reads both returning 1 are equally consistent with a working query and with a
+       constant -- the query has never been shown to produce the OPPOSITE. Selector 1 is total,
+       so asking it about a plain integer must answer NOT_CAP. The encoding is `cap_type - 3'd1`
+       in THREE bits, which WRAPS (capstone_dyn_unit.anvil:208, and the subtraction survives
+       generation at capstone_dyn_unit.anvil.sv:2631-2634): NOT_CAP(0)-1 = 7, LINEAR(1)-1 = 0,
+       NONLIN(2)-1 = 1. So the healthy baseline of 1 is NONLIN, and 0 is NOT an empty field --
+       it is a healthy LINEAR capability. Control must read 7. */
+    if( capstone_w_calls==0UL ){
+      unsigned long ctl_plain = 0x1234UL, ctl_ty;
+      __asm__ volatile ("lcc %0, %1, 1" : "=r"(ctl_ty) : "r"(ctl_plain));
+      capstone_w_ctl = ctl_ty;
+    }
     capstone_w_calls++;
     /* FIRST call's values, as an on-silicon baseline. Recorded on call 1 only. */
     if( capstone_w_calls==1UL ){
@@ -1746,7 +1759,7 @@ s = s.replace(CALLEE, CALLEE + """
 ANCHOR = "#define SQLITE_CORE 1\n"
 if ANCHOR not in s:
     sys.exit("WIDTH_PAIR: prologue anchor not found")
-s = s.replace(ANCHOR, ANCHOR + "extern unsigned long capstone_w_type, capstone_w_lo, capstone_w_hi, capstone_w_calls, capstone_w_notcap, capstone_w_bad_type, capstone_w_bad_lo, capstone_w_bad_hi, capstone_w_bad_call;\n", 1)
+s = s.replace(ANCHOR, ANCHOR + "extern unsigned long capstone_w_type, capstone_w_lo, capstone_w_hi, capstone_w_calls, capstone_w_notcap, capstone_w_bad_type, capstone_w_bad_lo, capstone_w_bad_hi, capstone_w_bad_call, capstone_w_ctl;\n", 1)
 open(path, "w").write(s)
 print("   WIDTH_PAIR probe injected (ldc-first, total type query, both 8-byte words)")
 PYWIDTH

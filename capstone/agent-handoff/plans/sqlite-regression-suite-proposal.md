@@ -2300,3 +2300,60 @@ not.
 **Still unvalidated and still blocking any fault interpretation:** the `tval` instrument. Every
 `tval=0` remains no-data until `li a0,0xBEEF; cincoffsetimm a0,a0,8` traps with `tval==0xBEEF`
 AND `mepc` pointing at that control's own instruction.
+
+## Producer settled RETROACTIVELY: the FLU, not commit_stage. `cap_type == NOT_CAP`.
+
+`mcause 25` has two producers on this bitstream, and they are different faults with the same
+number. They are separated by ONE comparison that needs `tval` only to be LATCHED, not
+interpretable:
+
+| producer | 25 means | tval holds |
+|---|---|---|
+| FLU, `ex_stage.sv:488` (base 24) | UNEXPECTED_OPERAND -- rs1 is `NOT_CAP` | rs1 **cursor** |
+| commit_stage `:604`+`:226` (base 23) | INVALID_CAPABILITY -- PC cap's revnode invalid | the faulting **PC** |
+
+`tval == mepc` -> commit_stage. `tval != mepc` -> FLU.
+
+**The precondition checked first**, because "latched" is doing the work:
+`git show 80843404c:core/cva6.sv:1126-1136` assigns `recent_nontrivial_mcause_log_q`,
+`..._mepc_log_q` and `..._tval_log_q` **in one `if` block from one event**
+(`ex_commit.valid && cause != 0 && cause != 2`). `mepc` is demonstrably correct in every boot, so
+`tval` was captured from the same trap and `tval=0` is a latched value, not reset state.
+
+    boot 21  mcause 0x99  mepc 0x82cf499c   (tval not yet in the readout)
+    boot 22  mcause 0x99  mepc 0x82cf499c   tval 0
+    boot 24  mcause 0x99  mepc 0x830f4aa8   tval 0
+    boot 25  mcause 0x99  mepc 0x830f4a54   tval 0
+    boot 26  mcause 0x99  mepc 0x82cf4a54   tval 0
+
+`tval != mepc` in all -> **commit_stage EXCLUDED**. The producer is the FLU, and
+`capstone_flu_unit.anvil:57-70` raises there **only** on `cap_type == NOT_CAP`, never consulting
+the cursor.
+
+**ESTABLISHED, with no interpretation of the tval VALUE: the reloaded `pWInfo` had
+`cap_type == NOT_CAP`.** Value-loss with an intact type cannot raise 25 at the FLU. The
+"code capability revoked out from under the domain" line is dead.
+
+This also downgrades the `0xBEEF` control from blocker to nice-to-have: it would tell us whether
+`ex_commit.tval` populates for FLU capability causes, which now only bears on whether the CURSOR
+was also zero. The type finding does not depend on it.
+
+### Two corrections that came out of this
+
+* **DBAS is NOT fixed per arm.** Boot 26's arms took `0x82800000`/`0x82C00000`, not the
+  `0x824/0x828/0x82C` of earlier boots. Read DBAS per arm; assuming it nearly mis-mapped boot 26
+  by 4 MiB. Read correctly, boots 25 and 26 give the IDENTICAL VA `0x104A54` from different
+  bases -> `sqlite3WhereCodeOneLoopStart + 0x8c`, the same source line across **three** binaries
+  and six boots.
+* **`lcc` selector 1 returns `cap_type - 1` in THREE bits, so it WRAPS**
+  (`capstone_dyn_unit.anvil:208`, surviving generation at `capstone_dyn_unit.anvil.sv:2631-2634`):
+  NOT_CAP->7, LINEAR->0, NONLIN->1, REVOKE->2, UNINIT->3, SEALED->4, SEALEDRET->5, EXIT->6.
+  So the healthy baseline `type=1` is **NONLIN, not linear**, and **0 is not an empty field** --
+  it is a healthy LINEAR capability. Both ends are traps for a reader.
+
+### Type-query positive control added
+
+`notcap=0` was an unproven instrument: two healthy reads of 1 are equally consistent with a
+working query and a constant. The probe now issues `lcc` selector 1 against a plain integer and
+reports `CTL(must be 7)`, riding in the returning arm at no cost. If CTL is not 7, `notcap=0`
+means nothing.
